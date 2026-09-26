@@ -77,6 +77,15 @@ func nullableTime(t *time.Time) any {
 	return formatTime(*t)
 }
 
+// nullableBool adapts a *bool domain field to a database/sql argument,
+// mapping nil to SQL NULL.
+func nullableBool(b *bool) any {
+	if b == nil {
+		return nil
+	}
+	return *b
+}
+
 // nullInt64Scanner adapts a *int64 destination field (passed as
 // nullInt64(&field)) to database/sql's Scanner interface, mapping a NULL
 // column value to nil instead of leaving/erroring on a zero value.
@@ -127,6 +136,33 @@ func (n *nullFloatScanner) Scan(src any) error {
 		return err
 	}
 	v := nf.Float64
+	*n.dest = &v
+	return nil
+}
+
+// nullBoolScanner adapts a *bool destination field (passed as
+// nullBool(&field)) to database/sql's Scanner interface, mapping a NULL
+// column value to nil instead of leaving/erroring on a zero value.
+type nullBoolScanner struct {
+	dest **bool
+}
+
+// nullBool wraps dest so it can be passed directly to Row.Scan /
+// Rows.Scan for a nullable BOOLEAN column.
+func nullBool(dest **bool) *nullBoolScanner {
+	return &nullBoolScanner{dest: dest}
+}
+
+func (n *nullBoolScanner) Scan(src any) error {
+	if src == nil {
+		*n.dest = nil
+		return nil
+	}
+	var nb sql.NullBool
+	if err := nb.Scan(src); err != nil {
+		return err
+	}
+	v := nb.Bool
 	*n.dest = &v
 	return nil
 }

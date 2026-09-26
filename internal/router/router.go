@@ -62,11 +62,12 @@ var defaultSymbolRiskParams = handler.SymbolRiskParams{
 }
 
 type options struct {
-	candidateSource  handler.CandidateSource
-	candidateRefresh handler.CandidateRefreshInterval
-	systemEngine     handler.SystemEngine
-	symbolProvider   handler.SymbolProvider
-	symbolRiskParams handler.SymbolRiskParams
+	candidateSource   handler.CandidateSource
+	candidateRefresh  handler.CandidateRefreshInterval
+	systemEngine      handler.SystemEngine
+	symbolProvider    handler.SymbolProvider
+	symbolRiskParams  handler.SymbolRiskParams
+	calibrationSource handler.CalibrationSource
 }
 
 // Option configures New.
@@ -110,6 +111,14 @@ func WithSymbolRiskParams(params handler.SymbolRiskParams) Option {
 	return func(o *options) { o.symbolRiskParams = params }
 }
 
+// WithCalibrationSource overrides `GET /api/v1/calibration`'s backing
+// internal/web/handler.CalibrationSource. Defaults to an empty
+// handler.StaticCalibrationSource until a later sub-scope wires a real
+// internal/service/calibration.Service in.
+func WithCalibrationSource(source handler.CalibrationSource) Option {
+	return func(o *options) { o.calibrationSource = source }
+}
+
 // New builds and returns the shared Gin engine: the placeholder root
 // page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
 // the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
@@ -118,11 +127,12 @@ func WithSymbolRiskParams(params handler.SymbolRiskParams) Option {
 // internal/web/handler) on top of this engine.
 func New(opts ...Option) *gin.Engine {
 	o := options{
-		candidateSource:  handler.StaticCandidateSource{},
-		candidateRefresh: defaultCandidateRefreshInterval,
-		systemEngine:     handler.StaticSystemEngine{},
-		symbolProvider:   handler.StaticSymbolProvider{},
-		symbolRiskParams: defaultSymbolRiskParams,
+		candidateSource:   handler.StaticCandidateSource{},
+		candidateRefresh:  defaultCandidateRefreshInterval,
+		systemEngine:      handler.StaticSystemEngine{},
+		symbolProvider:    handler.StaticSymbolProvider{},
+		symbolRiskParams:  defaultSymbolRiskParams,
+		calibrationSource: handler.StaticCalibrationSource{},
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -151,6 +161,8 @@ func New(opts ...Option) *gin.Engine {
 	engine.POST("/positions/:id/close", symbolHandler.ClosePosition)
 	engine.GET("/ws/symbols/:symbol", symbolHandler.WebSocket)
 
+	calibrationHandler := handler.NewCalibrationHandler(o.calibrationSource)
+
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at
 	// this same openapi.json (handler.SwaggerUI); disable Huma's built-in
@@ -166,6 +178,7 @@ func New(opts ...Option) *gin.Engine {
 	huma.Get(api, "/symbols/{symbol}/candles", symbolHandler.APICandles)
 	huma.Get(api, "/positions", symbolHandler.APIPositions)
 	huma.Get(api, "/orders", symbolHandler.APIOrders)
+	huma.Get(api, "/calibration", calibrationHandler.APICalibration)
 
 	return engine
 }
