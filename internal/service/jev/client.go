@@ -13,6 +13,10 @@ import (
 // DefaultScoutPath is the Jev API endpoint Scout requests are POSTed to.
 const DefaultScoutPath = "/v1/scout"
 
+// DefaultTraderPath is the Jev API endpoint Trader requests are POSTed
+// to.
+const DefaultTraderPath = "/v1/trader"
+
 const (
 	// defaultMaxAttempts bounds the total number of Jev API call
 	// attempts (the initial call plus every retry) before giving up
@@ -93,13 +97,30 @@ func NewClient(cfg Config) *Client {
 // failure wait an exponentially growing backoff (RetryBaseDelay * 2^n,
 // n starting at 0 on the second retry) before the next attempt. Once
 // MaxAttempts is exhausted, Scout returns the last error and the caller
-// records no new jev_decisions entry (継続失敗でnew entry停止).
+// records no new jev_decisions entry (継続失敗でnew entry停止). Trader
+// shares this same retry policy.
 func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, time.Duration, error) {
+	return call[ScoutRequest, ScoutResponse](ctx, c, DefaultScoutPath, "scout", req)
+}
+
+// Trader POSTs req to the Jev Trader endpoint and returns the parsed
+// response together with the total call latency (including retries),
+// following the same retry policy Scout's doc comment describes.
+func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse, time.Duration, error) {
+	return call[TraderRequest, TraderResponse](ctx, c, DefaultTraderPath, "trader", req)
+}
+
+// call POSTs req to path (retrying failed attempts per c's retry
+// policy - see Scout's doc comment) and returns the decoded Resp
+// together with the total call latency. label names the endpoint in the
+// final error message (e.g. "scout", "trader").
+func call[Req, Resp any](ctx context.Context, c *Client, path, label string, req Req) (Resp, time.Duration, error) {
 	start := time.Now()
 
+	var zero Resp
 	var lastErr error
 	for attempt := 1; attempt <= c.maxAttempts; attempt++ {
-		resp, err := c.doScout(ctx, req)
+		resp, err := doCall[Req, Resp](ctx, c, path, req)
 		if err == nil {
 			return resp, time.Since(start), nil
 		}
@@ -114,24 +135,26 @@ func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, ti
 			select {
 			case <-ctx.Done():
 				timer.Stop()
-				return ScoutResponse{}, time.Since(start), ctx.Err()
+				return zero, time.Since(start), ctx.Err()
 			case <-timer.C:
 			}
 		}
 	}
-	return ScoutResponse{}, time.Since(start),
-		fmt.Errorf("jev: scout call failed after %d attempts: %w", c.maxAttempts, lastErr)
+	return zero, time.Since(start),
+		fmt.Errorf("jev: %s call failed after %d attempts: %w", label, c.maxAttempts, lastErr)
 }
 
-func (c *Client) doScout(ctx context.Context, req ScoutRequest) (ScoutResponse, error) {
+func doCall[Req, Resp any](ctx context.Context, c *Client, path string, req Req) (Resp, error) {
+	var zero Resp
+
 	body, err := json.Marshal(req)
 	if err != nil {
-		return ScoutResponse{}, fmt.Errorf("jev: encode scout request: %w", err)
+		return zero, fmt.Errorf("jev: encode request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+DefaultScoutPath, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return ScoutResponse{}, fmt.Errorf("jev: build scout request: %w", err)
+		return zero, fmt.Errorf("jev: build request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
@@ -140,22 +163,22 @@ func (c *Client) doScout(ctx context.Context, req ScoutRequest) (ScoutResponse, 
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return ScoutResponse{}, fmt.Errorf("jev: scout request: %w", err)
+		return zero, fmt.Errorf("jev: request: %w", err)
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
 	respBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
-		return ScoutResponse{}, fmt.Errorf("jev: read scout response body: %w", err)
+		return zero, fmt.Errorf("jev: read response body: %w", err)
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
-		return ScoutResponse{}, &APIError{StatusCode: httpResp.StatusCode, Body: string(respBody)}
+		return zero, &APIError{StatusCode: httpResp.StatusCode, Body: string(respBody)}
 	}
 
-	var out ScoutResponse
+	var out Resp
 	if err := json.Unmarshal(respBody, &out); err != nil {
-		return ScoutResponse{}, fmt.Errorf("jev: decode scout response: %w", err)
+		return zero, fmt.Errorf("jev: decode response: %w", err)
 	}
 	return out, nil
 }

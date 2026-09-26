@@ -140,3 +140,76 @@ func TestClient_Scout_NonOKStatusReturnsAPIError(t *testing.T) {
 		t.Fatal("Scout: want error for a 401 response, got nil")
 	}
 }
+
+func TestClient_Trader_SucceedsOnFirstAttempt(t *testing.T) {
+	var calls int32
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		gotPath = r.URL.Path
+		_ = json.NewEncoder(w).Encode(jev.TraderResponse{
+			Direction: "LONG", Regime: "BREAKOUT", EntryQuality: "strong",
+			Confidence: 0.74, ToxicFlow: 0.18, LiquidityStressed: 0.09, ContinuationProbability: 0.62,
+			ModelID: "jev-trader-test",
+		})
+	}))
+	defer server.Close()
+
+	client := jev.NewClient(jev.Config{BaseURL: server.URL})
+	resp, _, err := client.Trader(context.Background(), jev.TraderRequest{QuestionVersion: "trader-v1"})
+	if err != nil {
+		t.Fatalf("Trader: %v", err)
+	}
+	if resp.Direction != "LONG" || resp.EntryQuality != "strong" || resp.ModelID != "jev-trader-test" {
+		t.Fatalf("Trader() = %+v, want the server's response decoded", resp)
+	}
+	if gotPath != jev.DefaultTraderPath {
+		t.Errorf("request path = %q, want %q", gotPath, jev.DefaultTraderPath)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("server received %d calls, want 1 (no retry on success)", got)
+	}
+}
+
+func TestClient_Trader_RetriesAndEventuallySucceeds(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&calls, 1)
+		if n < 3 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(jev.TraderResponse{Direction: "SHORT", Confidence: 0.7})
+	}))
+	defer server.Close()
+
+	client := jev.NewClient(jev.Config{BaseURL: server.URL, RetryBaseDelay: time.Millisecond})
+	resp, _, err := client.Trader(context.Background(), jev.TraderRequest{})
+	if err != nil {
+		t.Fatalf("Trader: %v", err)
+	}
+	if resp.Direction != "SHORT" {
+		t.Fatalf("Trader() = %+v, want the eventual successful response", resp)
+	}
+	if got := atomic.LoadInt32(&calls); got != 3 {
+		t.Fatalf("server received %d calls, want 3 (2 failures + 1 success)", got)
+	}
+}
+
+func TestClient_Trader_GivesUpAfterMaxAttempts(t *testing.T) {
+	var calls int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 3, RetryBaseDelay: time.Millisecond})
+	_, _, err := client.Trader(context.Background(), jev.TraderRequest{})
+	if err == nil {
+		t.Fatal("Trader: want error once every attempt fails, got nil")
+	}
+	if got := atomic.LoadInt32(&calls); got != 3 {
+		t.Fatalf("server received %d calls, want exactly MaxAttempts=3 (継続失敗でnew entry停止: no further attempts)", got)
+	}
+}

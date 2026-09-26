@@ -65,3 +65,43 @@ type ScoutResponse struct {
 	ModelID          string   `json:"model_id"`
 	RequestCost      *float64 `json:"request_cost,omitempty"`
 }
+
+// TraderRequest is the JSON body POSTed to the Jev Trader endpoint: the
+// same market state format ScoutRequest sends (a Scout-passed candidate
+// is re-evaluated against its current state), which question-set
+// version to evaluate it against (prompt_version.go), and the RAG
+// few-shot context (FR-RAG-3) found for that state.
+type TraderRequest struct {
+	QuestionVersion string      `json:"question_version"`
+	State           ScoutState  `json:"state"`
+	RAGContext      rag.Context `json:"rag_context"`
+}
+
+// TraderResponse is Jev's raw answer to the FR-TRADER-1 question group.
+//
+// Direction is one of domain.JevDirection{Long,Short,None}. Regime is
+// one of domain.JevRegime{Trend,Range,Breakout,Chaotic}. EntryQuality is
+// one of domain.JevEntryQuality{Poor,Fair,Good,Strong,Exceptional}
+// ("poor〜exceptional", functional.md §4.5).
+//
+// ToxicFlow, LiquidityStressed and ContinuationProbability are each a
+// yes-probability in [0, 1], the same "yes/no型だがJevは確信度で答える"
+// convention ScoutResponse's doc comment describes for FR-SCOUT-1.
+//
+// Confidence is Jev's own confidence in Direction. FR-TRADER-2: it must
+// never be treated as a verified probability of an actual price move -
+// only Calibration (functional.md §4.9) may draw that conclusion, by
+// comparing it against calibration_outcomes after the fact. No logic in
+// this package (or its callers, e.g. a later Policy Engine sub-scope)
+// may substitute Confidence for a real outcome probability.
+type TraderResponse struct {
+	Direction               string   `json:"direction"`
+	Regime                  string   `json:"regime"`
+	EntryQuality            string   `json:"entry_quality"`
+	ToxicFlow               float64  `json:"toxic_flow"`
+	LiquidityStressed       float64  `json:"liquidity_stressed"`
+	ContinuationProbability float64  `json:"continuation_probability"`
+	Confidence              float64  `json:"confidence"`
+	ModelID                 string   `json:"model_id"`
+	RequestCost             *float64 `json:"request_cost,omitempty"`
+}
