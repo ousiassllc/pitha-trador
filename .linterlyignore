@@ -6,3 +6,13 @@
 docs/architecture/er.md
 docs/architecture/overview.md
 docs/requirements/functional.md
+
+# internal/repository/ はレイヤー規約上ひとつの平坦なディレクトリに全リポジトリを
+# 置く設計（architecture/overview.md §3）で、#36時点で既存ファイル合計が
+# 既に2193行（警告閾値2200行の97%）に達しており、個々のファイルは
+# 300行制限内に収まる新規リポジトリ追加でもディレクトリ合計が超過し得る
+# 既知債務。ディレクトリ構成の見直しは別Issueで対応する
+internal/repository/killswitch_repo.go
+internal/repository/killswitch_repo_test.go
+internal/repository/runtime_settings_repo.go
+internal/repository/runtime_settings_repo_test.go

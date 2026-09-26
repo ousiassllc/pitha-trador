@@ -160,3 +160,51 @@ func TestNew_StaticRouteServesVendoredAssets(t *testing.T) {
 		t.Fatalf("expected vendored htmx bundle content, got %d bytes", rec.Body.Len())
 	}
 }
+
+func TestNew_SystemStatusRouteDefaultsToRunning(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/system/status", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "running") {
+		t.Fatalf("expected the default Running badge, got %q", rec.Body.String())
+	}
+}
+
+func TestNew_SystemPauseRouteUsesWithSystemEngineOption(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStatePaused}))
+
+	req := httptest.NewRequest(http.MethodPost, "/system/pause", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "paused") {
+		t.Fatalf("expected the Paused badge, got %q", rec.Body.String())
+	}
+}
+
+func TestNew_APISystemKillRouteReturnsJSONState(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStateKilled}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/kill", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d (body=%s)", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"state":"killed"`) {
+		t.Fatalf("expected JSON state=killed, got %q", rec.Body.String())
+	}
+}

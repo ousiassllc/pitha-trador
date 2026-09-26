@@ -55,6 +55,7 @@ var defaultCandidateRefreshInterval = handler.CandidateRefreshInterval{
 type options struct {
 	candidateSource  handler.CandidateSource
 	candidateRefresh handler.CandidateRefreshInterval
+	systemEngine     handler.SystemEngine
 }
 
 // Option configures New.
@@ -74,6 +75,14 @@ func WithCandidateRefreshInterval(interval handler.CandidateRefreshInterval) Opt
 	return func(o *options) { o.candidateRefresh = interval }
 }
 
+// WithSystemEngine overrides the Kill Switch action/API routes' backing
+// internal/web/handler.SystemEngine. Defaults to a Running
+// handler.StaticSystemEngine until a later sub-scope wires a real
+// internal/service/risk.Engine in.
+func WithSystemEngine(engine handler.SystemEngine) Option {
+	return func(o *options) { o.systemEngine = engine }
+}
+
 // New builds and returns the shared Gin engine: the placeholder root
 // page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
 // the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
@@ -84,6 +93,7 @@ func New(opts ...Option) *gin.Engine {
 	o := options{
 		candidateSource:  handler.StaticCandidateSource{},
 		candidateRefresh: defaultCandidateRefreshInterval,
+		systemEngine:     handler.StaticSystemEngine{},
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -100,6 +110,12 @@ func New(opts ...Option) *gin.Engine {
 	engine.GET("/scanner", scannerHandler.Page)
 	engine.GET("/ws/scanner", scannerHandler.WebSocket)
 
+	systemHandler := handler.NewSystemHandler(o.systemEngine)
+	engine.POST("/system/pause", systemHandler.Pause)
+	engine.POST("/system/resume", systemHandler.Resume)
+	engine.POST("/system/kill", systemHandler.Kill)
+	engine.GET("/system/status", systemHandler.Status)
+
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at
 	// this same openapi.json (handler.SwaggerUI); disable Huma's built-in
@@ -107,6 +123,9 @@ func New(opts ...Option) *gin.Engine {
 	apiConfig.DocsPath = ""
 	api := humagin.NewWithGroup(engine, engine.Group("/api/v1"), apiConfig)
 	huma.Get(api, "/scanner", scannerHandler.APIScanner)
+	huma.Post(api, "/system/pause", systemHandler.APIPause)
+	huma.Post(api, "/system/resume", systemHandler.APIResume)
+	huma.Post(api, "/system/kill", systemHandler.APIKill)
 
 	return engine
 }

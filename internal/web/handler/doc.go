@@ -7,6 +7,6 @@
 // docs/architecture/overview.md §3 for the layer dependency rules
 // (handler → service → repository → domain).
 //
-// scanner.go is implemented; the remaining handlers are introduced by
-// later sub-scopes.
+// scanner.go and system.go are implemented; the remaining handlers are
+// introduced by later sub-scopes.
 package handler
