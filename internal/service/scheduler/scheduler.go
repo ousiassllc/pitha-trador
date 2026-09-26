@@ -40,6 +40,10 @@ type Scheduler struct {
 	// wires this in" deferral Start's own doc comment already describes
 	// for the 15-30s/5-15s cycles.
 	outcomeLabels *repository.CalibrationRepository
+	// heartbeatChecker is optional (WithHeartbeatChecker): a nil value
+	// makes CheckOperatorHeartbeat a no-op, the same deferral
+	// outcomeLabels above already documents.
+	heartbeatChecker HeartbeatChecker
 
 	pollInterval time.Duration
 
@@ -65,6 +69,21 @@ func WithPollInterval(d time.Duration) Option {
 // default. *repository.CalibrationRepository implements this directly.
 func WithOutcomeLabelSource(repo *repository.CalibrationRepository) Option {
 	return func(s *Scheduler) { s.outcomeLabels = repo }
+}
+
+// HeartbeatChecker is the internal/service/risk.Engine method
+// CheckOperatorHeartbeat calls (FR-RISK-6 read side). An interface here
+// keeps this package from depending on internal/service/risk directly
+// (package doc.go's layer rule); *risk.Engine implements it directly.
+type HeartbeatChecker interface {
+	CheckHeartbeatTimeout(ctx context.Context) error
+}
+
+// WithHeartbeatChecker enables CheckOperatorHeartbeat's periodic
+// operator-heartbeat dead-man's-switch check (functional.md FR-RISK-6,
+// architecture/overview.md §10.4). Unset by default.
+func WithHeartbeatChecker(checker HeartbeatChecker) Option {
+	return func(s *Scheduler) { s.heartbeatChecker = checker }
 }
 
 // New returns a Scheduler backed by jobs/instruments.
@@ -125,6 +144,31 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 	return len(instruments), nil
 }
 
+// EnqueueEventReevaluation enqueues one jev-scout job for instrumentID,
+// due immediately at now, when triggered is true - bypassing the normal
+// 15-30s candidate-refresh cadence for a symbol whose
+// featureengine.DetectEvent signal fired (FR-SCAN-1). When triggered is
+// false it does nothing, leaving the Jev call for this cycle skipped
+// (FR-SCAN-2 quiet-suppression): the caller (featureengine.EventSignal.
+// Triggered against config/strategy.yaml's scan.event_trigger
+// thresholds, wired in by a later sub-scope alongside Fast Screener's own
+// periodic candidate-refresh enqueue - this package cannot import
+// internal/service/featureengine per doc.go's layer rule) decides
+// triggered.
+func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID int64, symbol string, triggered bool, now time.Time) error {
+	if !triggered {
+		return nil
+	}
+	payload, err := json.Marshal(fullScanPayload{InstrumentID: instrumentID, Symbol: symbol})
+	if err != nil {
+		return fmt.Errorf("scheduler: marshal event-driven reevaluation payload for %q: %w", symbol, err)
+	}
+	if _, err := s.jobs.Enqueue(ctx, repository.JobQueueJevScout, string(payload), now); err != nil {
+		return fmt.Errorf("scheduler: enqueue event-driven jev-scout job for %q: %w", symbol, err)
+	}
+	return nil
+}
+
 // DefaultOutcomeLabelHorizonsMinutes are the judgment horizons Outcome
 // Labeling evaluates each Jev trader decision at (functional.md §4.12,
 // docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/20
@@ -159,6 +203,19 @@ func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (
 		}
 	}
 	return len(pending), nil
+}
+
+// CheckOperatorHeartbeat calls the configured HeartbeatChecker
+// (WithHeartbeatChecker) once (functional.md FR-RISK-6, architecture/
+// overview.md §10.4's periodic 立会時間中 check), or does nothing and
+// returns nil if none is configured - the same deferral
+// EnqueueOutcomeLabeling above already documents for
+// WithOutcomeLabelSource.
+func (s *Scheduler) CheckOperatorHeartbeat(ctx context.Context) error {
+	if s.heartbeatChecker == nil {
+		return nil
+	}
+	return s.heartbeatChecker.CheckHeartbeatTimeout(ctx)
 }
 
 // Start launches one worker goroutine per registered handler's queue plus

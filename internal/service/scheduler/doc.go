@@ -9,8 +9,14 @@
 // market-data/feature-calc work for every active instrument
 // (FR-SCHED-2 前半), optionally drives Outcome Labeling's periodic
 // enqueue trigger (EnqueueOutcomeLabeling, WithOutcomeLabelSource,
-// functional.md FR-CAL-4), and recovers jobs left status='running' by a
-// previous crash back to pending at startup (er.md §jobs).
+// functional.md FR-CAL-4), enqueues an immediate jev-scout job bypassing
+// that cadence when a caller reports an instrument's
+// featureengine.EventSignal fired (EnqueueEventReevaluation,
+// functional.md FR-SCAN-1/FR-SCAN-2), optionally drives the operator
+// heartbeat dead-man's-switch periodic check (CheckOperatorHeartbeat,
+// WithHeartbeatChecker, functional.md FR-RISK-6), and recovers jobs left
+// status='running' by a previous crash back to pending at startup
+// (er.md §jobs).
 //
 // This package MUST depend only on internal/domain and internal/repository
 // (internal/service/doc.go); it does not import internal/service/marketdata

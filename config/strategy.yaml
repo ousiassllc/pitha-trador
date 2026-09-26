@@ -17,6 +17,15 @@ scan:
   # 保有ポジション銘柄を再評価する周期（秒）の範囲。
   held_position_interval_seconds_min: 5
   held_position_interval_seconds_max: 15
+  # FR-SCAN-1/FR-SCAN-2: 通常周期を待たず再評価する（しきい値以上）/
+  # Jev呼び出しをスキップする（すべてしきい値未満かつイベントなし）判定の
+  # しきい値。functional.md §4.3は数値の初期値を定めていないため、他の
+  # しきい値と同様バックテスト後に調整する前提の初期値。
+  event_trigger:
+    return_1m_change_threshold: 0.005
+    volume_ratio_change_threshold: 2.0
+    spread_change_bps_threshold: 10
+    orderbook_imbalance_change_threshold: 0.3
 
 fast_screener:
   # FR-FS-1: Jev API呼び出し前の数値フィルター。
