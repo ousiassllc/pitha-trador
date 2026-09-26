@@ -7,7 +7,7 @@ vendor/
 
 # Node / frontend build
 node_modules/
-static/dist/
+static/src/dist/
 
 # Templ generated
 *_templ.go
