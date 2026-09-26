@@ -1,0 +1,70 @@
+package organisms
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+)
+
+// ScannerTableFallback renders the Scanner Dashboard's candidate table
+// (functional.md §5.1, components/overview.md §3): Symbol, Price, 1m/5m
+// Return, Volume Ratio, VWAP distance, Spread, Jev Direction/Confidence/
+// Entry Quality, and Current Position. It is used both for the initial
+// SSR page load and for the `GET /scanner` HX-Request fragment response
+// (internal/web/handler.ScannerHandler.Page) - and, per its name, for
+// JS-disabled rendering, since `pitha-scanner-table` (a later sub-scope)
+// hydrates over this same markup rather than replacing it.
+templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
+	<section id="scanner-table" data-testid="scanner-table">
+		<table>
+			<caption>{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
+			<thead>
+				<tr>
+					<th>Symbol</th>
+					<th>Price</th>
+					<th>1m Return</th>
+					<th>5m Return</th>
+					<th>Volume Ratio</th>
+					<th>VWAP Distance (bps)</th>
+					<th>Spread (bps)</th>
+					<th>Jev</th>
+					<th>Position</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, c := range candidates {
+					@scannerRow(c)
+				}
+			</tbody>
+		</table>
+	</section>
+}
+
+templ scannerRow(c domain.Candidate) {
+	<tr data-symbol={ c.Symbol }>
+		<td>{ c.Symbol }</td>
+		<td>{ formatFloat(c.Price, 1) }</td>
+		<td>{ formatNilFloat(c.Return1m, 2) }</td>
+		<td>{ formatNilFloat(c.Return5m, 2) }</td>
+		<td>{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
+		<td>{ formatFloat(c.PriceVsVWAPBps, 0) }</td>
+		<td>{ formatNilFloat(c.SpreadBps, 0) }</td>
+		<td>
+			@molecules.SignalBadgeGroup(c.JevDirection, c.JevConfidence, c.EntryQuality)
+		</td>
+		<td>{ formatNilFloat(c.CurrentPosition, 0) }</td>
+	</tr>
+}
+
+func formatFloat(v float64, decimals int) string {
+	return fmt.Sprintf("%.*f", decimals, v)
+}
+
+func formatNilFloat(v *float64, decimals int) string {
+	if v == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.*f", decimals, *v)
+}

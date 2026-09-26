@@ -1,0 +1,21 @@
+package pages
+
+import (
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+// ScannerPage is the Scanner Dashboard full page (functional.md §5.1):
+// layout.Shell around organisms.ScannerTableFallback. `GET /scanner`
+// (internal/web/handler.ScannerHandler.Page) renders this for a normal
+// (non-HX-Request) navigation, and the ScannerTableFallback fragment
+// alone for an HX-Request (docs/api/endpoints.md §3).
+templ ScannerPage(candidates []domain.Candidate, asOf time.Time) {
+	@layout.Shell("Scanner Dashboard") {
+		<h1>Scanner Dashboard</h1>
+		@organisms.ScannerTableFallback(candidates, asOf)
+	}
+}

@@ -4,6 +4,7 @@
 // internal/web/molecules and internal/web/atoms. See
 // docs/components/overview.md §3.
 //
-// Concrete .templ components are introduced by later sub-scopes; this file
-// only establishes the package skeleton.
+// ScannerTableFallback (scanner_table_fallback.templ) is implemented; the
+// remaining organisms are introduced by later sub-scopes as their
+// consuming pages need them.
 package organisms
