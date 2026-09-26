@@ -38,8 +38,12 @@ func TestOpen_AppliesMigrationsAndEnablesRequiredPragmas(t *testing.T) {
 
 	// The embedded db/migrations/*.up.sql migrations must have created
 	// every table introduced so far (docs/architecture/er.md
-	// §instruments, §market_snapshots, §jobs).
-	for _, table := range []string{"instruments", "market_snapshots", "jobs"} {
+	// §instruments, §market_snapshots, §jobs, §paper_orders, §positions,
+	// §kill_switch_events, §runtime_settings).
+	for _, table := range []string{
+		"instruments", "market_snapshots", "jobs",
+		"paper_orders", "positions", "kill_switch_events", "runtime_settings",
+	} {
 		var tableName string
 		err = conn.QueryRow(
 			"SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table,
@@ -93,5 +97,57 @@ func TestOpen_IsIdempotentAcrossReopens(t *testing.T) {
 	}
 	if err := second.Close(); err != nil {
 		t.Fatalf("close second connection: %v", err)
+	}
+}
+
+func TestOpen_PositionsTableAllowsOnlyOneOpenPositionPerInstrument(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+	conn, err := repository.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open(%q) returned error: %v", dbPath, err)
+	}
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("close conn: %v", err)
+		}
+	})
+
+	if _, err := conn.Exec(`INSERT INTO instruments (symbol, name, market) VALUES ('AAPL', 'Apple Inc.', 'NASDAQ')`); err != nil {
+		t.Fatalf("insert instrument: %v", err)
+	}
+	insertOrder := func() int64 {
+		res, err := conn.Exec(`INSERT INTO paper_orders (instrument_id, symbol, side, order_type, quantity, status, submitted_at) VALUES (1, 'AAPL', 'BUY', 'MARKET', 10, 'FILLED', '2026-09-26T00:00:00Z')`)
+		if err != nil {
+			t.Fatalf("insert paper_orders: %v", err)
+		}
+		id, err := res.LastInsertId()
+		if err != nil {
+			t.Fatalf("read paper_orders id: %v", err)
+		}
+		return id
+	}
+	insertPosition := func(entryOrderID int64, openedAt string) error {
+		_, err := conn.Exec(`INSERT INTO positions (instrument_id, entry_order_id, symbol, side, quantity, entry_price, current_price, opened_at) VALUES (1, ?, 'AAPL', 'LONG', 10, 100.0, 100.0, ?)`, entryOrderID, openedAt)
+		return err
+	}
+
+	firstOrderID := insertOrder()
+	if err := insertPosition(firstOrderID, "2026-09-26T00:00:00Z"); err != nil {
+		t.Fatalf("insert first open position: %v", err)
+	}
+
+	// docs/architecture/er.md §positions: `UNIQUE (instrument_id) WHERE
+	// closed_at IS NULL` limits an instrument to one concurrently open
+	// position.
+	secondOrderID := insertOrder()
+	if err := insertPosition(secondOrderID, "2026-09-26T01:00:00Z"); err == nil {
+		t.Fatalf("insert of second concurrently open position succeeded, want partial UNIQUE index violation")
+	}
+
+	if _, err := conn.Exec(`UPDATE positions SET closed_at = '2026-09-26T02:00:00Z' WHERE entry_order_id = ?`, firstOrderID); err != nil {
+		t.Fatalf("close first position: %v", err)
+	}
+	if err := insertPosition(secondOrderID, "2026-09-26T03:00:00Z"); err != nil {
+		t.Fatalf("insert new open position after prior close: %v", err)
 	}
 }
