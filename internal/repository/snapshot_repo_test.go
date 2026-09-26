@@ -179,3 +179,47 @@ func TestSnapshotRepository_InsertBatch_RollsBackOnUniqueViolation(t *testing.T)
 		t.Fatalf("ListByInstrument(%d) = %d rows after rolled-back batch, want 0", inst.ID, len(rows))
 	}
 }
+
+func TestSnapshotRepository_ListByInstrumentRange_AscendingWithinBounds(t *testing.T) {
+	conn := newTestDB(t)
+	instRepo := repository.NewInstrumentRepository(conn)
+	snapRepo := repository.NewSnapshotRepository(conn)
+	ctx := context.Background()
+
+	inst := mustCreateInstrument(t, instRepo, "1306")
+	base := time.Date(2026, 9, 26, 9, 0, 0, 0, time.UTC)
+
+	// Inserted out of chronological order and spanning outside the
+	// queried range, so the test also proves ListByInstrumentRange
+	// re-orders ascending and excludes bars outside [from, to) - the
+	// ordering internal/service/backtest's Walk Forward replay depends
+	// on (FR-BT-2/FR-BT-3).
+	for i, minutesOffset := range []int{4, 0, 2, -1, 5} {
+		ts := base.Add(time.Duration(minutesOffset) * time.Minute)
+		snap := domain.Snapshot{
+			InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: ts,
+			Price: 100 + float64(i), Volume: 1, Turnover: 100, Feature: domain.Feature{VWAP: 100}, RawDataJSON: "{}",
+		}
+		if _, err := snapRepo.Insert(ctx, snap); err != nil {
+			t.Fatalf("Insert(%s): %v", ts, err)
+		}
+	}
+
+	from := base
+	to := base.Add(5 * time.Minute)
+	rows, err := snapRepo.ListByInstrumentRange(ctx, inst.ID, from, to)
+	if err != nil {
+		t.Fatalf("ListByInstrumentRange(%d, %s, %s): %v", inst.ID, from, to, err)
+	}
+
+	wantOffsets := []int{0, 2, 4}
+	if len(rows) != len(wantOffsets) {
+		t.Fatalf("len(rows) = %d, want %d (offsets -1 and 5 fall outside [from, to))", len(rows), len(wantOffsets))
+	}
+	for i, want := range wantOffsets {
+		wantTS := base.Add(time.Duration(want) * time.Minute)
+		if !rows[i].Timestamp.Equal(wantTS) {
+			t.Errorf("rows[%d].Timestamp = %s, want %s (ascending order)", i, rows[i].Timestamp, wantTS)
+		}
+	}
+}

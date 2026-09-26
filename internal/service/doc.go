@@ -1,6 +1,7 @@
 // Package service is the parent package for the application's business
 // logic sub-packages (marketdata, featureengine, screener, jev, rag, policy,
-// risk, execution, calibration, assist, selfimprove, scheduler, ...).
+// backtest, risk, execution, calibration, assist, selfimprove, scheduler,
+// ...).
 //
 // Sub-packages under internal/service MUST depend only on internal/domain
 // and internal/repository. External I/O (HTTP clients for kabu station,
