@@ -6,9 +6,10 @@
 // docs/architecture/overview.md §3 for the layer dependency rules
 // (handler → service → repository → domain).
 //
-// InstrumentRepository, SnapshotRepository and JobRepository are
-// introduced by this sub-scope (instrument_repo.go, snapshot_repo.go,
-// job_repo.go). The remaining concrete repositories (decision_repo.go,
-// signal_repo.go, order_repo.go, position_repo.go, calibration_repo.go,
-// proposal_repo.go) are introduced by later sub-scopes.
+// InstrumentRepository, SnapshotRepository, JobRepository and
+// DecisionRepository are introduced by earlier sub-scopes and this one
+// (instrument_repo.go, snapshot_repo.go, job_repo.go, decision_repo.go).
+// The remaining concrete repositories (signal_repo.go, order_repo.go,
+// position_repo.go, calibration_repo.go, proposal_repo.go) are introduced
+// by later sub-scopes.
 package repository

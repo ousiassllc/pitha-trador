@@ -20,6 +20,15 @@ func TestLoadStrategy_ParsesRepositoryTemplateFile(t *testing.T) {
 	if got, want := cfg.FastScreener.TopN, 20; got != want {
 		t.Errorf("FastScreener.TopN = %d, want %d", got, want)
 	}
+	if got, want := cfg.JevScout.MinInterestingNow, 0.65; got != want {
+		t.Errorf("JevScout.MinInterestingNow = %v, want %v", got, want)
+	}
+	if got, want := cfg.JevScout.MinLiquidityOk, 0.70; got != want {
+		t.Errorf("JevScout.MinLiquidityOk = %v, want %v", got, want)
+	}
+	if got, want := cfg.JevScout.MinAbnormalActivity, 0.55; got != want {
+		t.Errorf("JevScout.MinAbnormalActivity = %v, want %v", got, want)
+	}
 	if got, want := cfg.Policy.Long.MinEntryQuality, "strong"; got != want {
 		t.Errorf("Policy.Long.MinEntryQuality = %q, want %q", got, want)
 	}

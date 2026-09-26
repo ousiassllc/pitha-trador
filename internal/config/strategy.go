@@ -6,6 +6,7 @@ package config
 type StrategyConfig struct {
 	Scan         ScanConfig         `yaml:"scan"`
 	FastScreener FastScreenerConfig `yaml:"fast_screener"`
+	JevScout     JevScoutConfig     `yaml:"jev_scout"`
 	Policy       PolicyConfig       `yaml:"policy"`
 }
 
@@ -41,6 +42,17 @@ type FastScreenerWeights struct {
 	BreakoutStrength    float64 `yaml:"breakout_strength"`
 	OrderbookImbalance  float64 `yaml:"orderbook_imbalance"`
 	VolatilityExpansion float64 `yaml:"volatility_expansion"`
+}
+
+// JevScoutConfig holds the Jev Scout FR-SCOUT-2 pass-condition thresholds:
+// the minimum yes-probability each of the three gating questions must
+// clear (functional.md §4.4). All three are required (AND); values are
+// configurable rather than hardcoded so they can be tuned after
+// backtesting without a code change.
+type JevScoutConfig struct {
+	MinInterestingNow   float64 `yaml:"min_interesting_now"`
+	MinLiquidityOk      float64 `yaml:"min_liquidity_ok"`
+	MinAbnormalActivity float64 `yaml:"min_abnormal_activity"`
 }
 
 // PolicyConfig holds the Policy Engine LONG/SHORT thresholds
