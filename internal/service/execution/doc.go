@@ -8,11 +8,14 @@
 //
 // Engine persists every Entry/Exit as a paper_orders row
 // (repository.OrderRepository) and the resulting held/closed position as
-// a positions row (repository.PositionRepository) - the same tables
-// internal/service/risk's PortfolioProvider/PositionCloser extension
-// points (issue #36) are documented to be backed by once a later
-// sub-scope wires them in; this package only implements Execution itself
-// (FR-ENTRY-1〜2, FR-EXIT-1〜3), not that risk.Engine wiring.
+// a positions row (repository.PositionRepository) - the same
+// positions internal/service/risk's PortfolioProvider extension point
+// (issue #36) is documented to be backed by once a later sub-scope wires
+// it in. Engine's CloseAll (close.go, issue #16) already implements that
+// package's other extension point, PositionCloser (FR-RISK-3): the
+// actual risk.NewEngine(Config{Closer: ...}) construction wiring an
+// *Engine in as that Closer is still that later sub-scope's job, not
+// this package's.
 //
 // Engine only opens positions for signals Policy Engine already passed
 // through Risk Engine (domain.TradeSignal.RiskPassed == true,
