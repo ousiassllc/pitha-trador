@@ -144,9 +144,12 @@ func New(opts ...Option) *gin.Engine {
 	engine.POST("/system/resume", systemHandler.Resume)
 	engine.POST("/system/kill", systemHandler.Kill)
 	engine.GET("/system/status", systemHandler.Status)
+	engine.GET("/ws/system", systemHandler.WebSocket)
 
 	symbolHandler := handler.NewSymbolHandler(o.symbolProvider, o.symbolRiskParams)
+	engine.GET("/symbols/:symbol", symbolHandler.Page)
 	engine.POST("/positions/:id/close", symbolHandler.ClosePosition)
+	engine.GET("/ws/symbols/:symbol", symbolHandler.WebSocket)
 
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at
@@ -158,6 +161,7 @@ func New(opts ...Option) *gin.Engine {
 	huma.Post(api, "/system/pause", systemHandler.APIPause)
 	huma.Post(api, "/system/resume", systemHandler.APIResume)
 	huma.Post(api, "/system/kill", systemHandler.APIKill)
+	huma.Get(api, "/system/status", systemHandler.APIStatus)
 	huma.Get(api, "/symbols/{symbol}", symbolHandler.APISymbol)
 	huma.Get(api, "/symbols/{symbol}/candles", symbolHandler.APICandles)
 	huma.Get(api, "/positions", symbolHandler.APIPositions)

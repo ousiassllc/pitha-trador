@@ -24,3 +24,12 @@ internal/repository/position_repo.go
 internal/repository/position_repo_test.go
 internal/repository/instrument_repo.go
 internal/repository/instrument_repo_test.go
+
+# internal/web/handler/ も同じレイヤー規約上ひとつの平坦なディレクトリに全ハンドラ
+# を置く設計。#38でSymbol Detail/Kill Switchパネル向けに/ws/symbols/{symbol}・
+# /ws/systemを追加した際、WebSocket統合テスト（goroutine起動・タイマー待ち・
+# JSONメッセージ読み取りのため構造的に長くなる）2本の追加分でディレクトリ合計が
+# 上限（2000行）を超過したため除外する。ディレクトリ構成の見直しは
+# internal/repository/ と合わせて別Issueで対応する
+internal/web/handler/symbol_ws_test.go
+internal/web/handler/system_ws_test.go

@@ -37,6 +37,8 @@ type fakeSymbolProvider struct {
 	closeResult domain.Position
 
 	orders []domain.PaperOrder
+
+	decisions []domain.JevDecision
 }
 
 func (f *fakeSymbolProvider) State(context.Context, string) (execution.SymbolState, error) {
@@ -46,6 +48,10 @@ func (f *fakeSymbolProvider) State(context.Context, string) (execution.SymbolSta
 func (f *fakeSymbolProvider) Candles(_ context.Context, _ string, from, to time.Time) ([]domain.Snapshot, error) {
 	f.lastCandlesFrom, f.lastCandlesTo = from, to
 	return f.candles, f.candlesErr
+}
+
+func (f *fakeSymbolProvider) RecentDecisions(context.Context, string, int) ([]domain.JevDecision, error) {
+	return f.decisions, nil
 }
 
 func (f *fakeSymbolProvider) GetPosition(context.Context, int64) (domain.Position, error) {

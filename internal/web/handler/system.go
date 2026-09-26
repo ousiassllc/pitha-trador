@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gin-gonic/gin"
@@ -46,15 +47,27 @@ func (StaticSystemEngine) Kill(context.Context) error   { return nil }
 
 // SystemHandler implements the Kill Switch action/API routes
 // (docs/api/endpoints.md §4 `/system/pause|resume|kill|status`, §5
-// `POST /api/v1/system/pause|resume|kill`).
+// `POST /api/v1/system/pause|resume|kill`) plus `/ws/system`
+// (system_ws.go).
 type SystemHandler struct {
-	engine SystemEngine
+	engine       SystemEngine
+	pollInterval time.Duration
 }
+
+// defaultSystemPollInterval is `/ws/system`'s State polling spacing
+// (system_ws.go). docs/api/endpoints.md §6 does not specify a cadence;
+// 2s matches symbol_ws.go's defaultTickInterval.
+const defaultSystemPollInterval = 2 * time.Second
 
 // NewSystemHandler returns a SystemHandler backed by engine.
 func NewSystemHandler(engine SystemEngine) *SystemHandler {
-	return &SystemHandler{engine: engine}
+	return &SystemHandler{engine: engine, pollInterval: defaultSystemPollInterval}
 }
+
+// SetPollInterval overrides `/ws/system`'s State polling spacing
+// (default defaultSystemPollInterval). Exposed for tests that need a
+// fast interval rather than production callers.
+func (h *SystemHandler) SetPollInterval(d time.Duration) { h.pollInterval = d }
 
 // Pause implements `POST /system/pause`.
 func (h *SystemHandler) Pause(c *gin.Context) {
@@ -142,5 +155,16 @@ func (h *SystemHandler) APIKill(ctx context.Context, _ *struct{}) (*SystemStateO
 	if err := h.engine.Kill(ctx); err != nil {
 		return nil, huma.Error500InternalServerError("kill failed", err)
 	}
+	return h.stateOutput(ctx)
+}
+
+// APIStatus implements `GET /api/v1/system/status`: the read-only JSON
+// twin of `GET /system/status` (which returns an HTML badge fragment for
+// HTMX), used by `pitha-kill-switch-panel`
+// (static/src/components/kill-switch-panel/pitha-kill-switch-panel.ts) to
+// learn the current state on connect, since no SSR page currently
+// threads live internal/service/risk.Engine state into the Header
+// organism the panel is embedded in (organisms.Header's doc comment).
+func (h *SystemHandler) APIStatus(ctx context.Context, _ *struct{}) (*SystemStateOutput, error) {
 	return h.stateOutput(ctx)
 }

@@ -53,3 +53,34 @@ func (e *Engine) ListPositions(ctx context.Context, limit int) ([]domain.Positio
 func (e *Engine) ListOrders(ctx context.Context, status string, limit int) ([]domain.PaperOrder, error) {
 	return e.orders.List(ctx, status, limit)
 }
+
+// RecentDecisions returns up to limit jev_decisions rows for symbol,
+// most recent first, each passed through EnrichDecision (decision.go) so
+// Regime/EntryQuality/ToxicFlow/LiquidityStressed/ContinuationProbability
+// are populated for Trader decisions - the Symbol Detail SSR page's
+// (internal/web/pages.SymbolDetailPage) "Decision history" source. This
+// is a page-rendering read model, not a `GET /api/v1/...` JSON route
+// (docs/api/endpoints.md §5's `/symbols/{symbol}/decisions` belongs to a
+// separate, not-yet-implemented sub-scope).
+func (e *Engine) RecentDecisions(ctx context.Context, symbol string, limit int) ([]domain.JevDecision, error) {
+	if e.instruments == nil || e.decisions == nil {
+		return nil, fmt.Errorf("execution: RecentDecisions requires Deps.Instruments/Decisions to be configured")
+	}
+
+	inst, err := e.instruments.GetBySymbol(ctx, symbol)
+	if err != nil {
+		if errors.Is(err, repository.ErrInstrumentNotFound) {
+			return nil, fmt.Errorf("%w: %s", ErrInstrumentUnknown, symbol)
+		}
+		return nil, fmt.Errorf("execution: look up instrument %q: %w", symbol, err)
+	}
+
+	decisions, err := e.decisions.ListByInstrument(ctx, inst.ID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("execution: recent decisions for %q: %w", symbol, err)
+	}
+	for i, d := range decisions {
+		decisions[i] = EnrichDecision(d)
+	}
+	return decisions, nil
+}

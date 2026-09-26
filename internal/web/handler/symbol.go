@@ -15,6 +15,10 @@ import (
 type SymbolStateProvider interface {
 	State(ctx context.Context, symbol string) (execution.SymbolState, error)
 	Candles(ctx context.Context, symbol string, from, to time.Time) ([]domain.Snapshot, error)
+	// RecentDecisions is the Symbol Detail SSR page's "Decision history"
+	// source (functional.md §5.2) - a page-rendering read, not a JSON
+	// API route (symbol.go's SymbolHandler doc comment).
+	RecentDecisions(ctx context.Context, symbol string, limit int) ([]domain.JevDecision, error)
 }
 
 // PositionExecutor is the subset of internal/service/execution.Engine the
@@ -58,6 +62,10 @@ func (StaticSymbolProvider) Candles(context.Context, string, time.Time, time.Tim
 	return nil, nil
 }
 
+func (StaticSymbolProvider) RecentDecisions(context.Context, string, int) ([]domain.JevDecision, error) {
+	return nil, nil
+}
+
 func (StaticSymbolProvider) GetPosition(context.Context, int64) (domain.Position, error) {
 	return domain.Position{}, repository.ErrPositionNotFound
 }
@@ -95,15 +103,31 @@ type SymbolRiskParams struct {
 // `/symbols/{symbol}`, `/symbols/{symbol}/candles`, `/positions`,
 // `/orders`). Its route handlers are split across this file (scaffold),
 // symbol_detail.go (APISymbol/APICandles), symbol_list.go
-// (APIPositions/APIOrders), and symbol_close.go (ClosePosition).
+// (APIPositions/APIOrders), symbol_close.go (ClosePosition), and
+// symbol_ws.go (WebSocket).
 type SymbolHandler struct {
-	provider   SymbolProvider
-	riskParams SymbolRiskParams
-	now        func() time.Time
+	provider     SymbolProvider
+	riskParams   SymbolRiskParams
+	now          func() time.Time
+	tickInterval time.Duration
 }
+
+// defaultTickInterval is `/ws/symbols/{symbol}`'s push spacing
+// (symbol_ws.go). docs/api/endpoints.md §6 does not specify a cadence
+// for tick messages (unlike `/ws/scanner`'s stated 15-30s candidate
+// refresh); 2s balances a responsive `pitha-price-chart` against
+// needless polling of SymbolProvider.State per connected client.
+const defaultTickInterval = 2 * time.Second
 
 // NewSymbolHandler returns a SymbolHandler backed by provider, reporting
 // riskParams in every `GET /api/v1/symbols/{symbol}` response.
 func NewSymbolHandler(provider SymbolProvider, riskParams SymbolRiskParams) *SymbolHandler {
-	return &SymbolHandler{provider: provider, riskParams: riskParams, now: time.Now}
+	return &SymbolHandler{provider: provider, riskParams: riskParams, now: time.Now, tickInterval: defaultTickInterval}
 }
+
+// SetTickInterval overrides `/ws/symbols/{symbol}`'s push spacing
+// (default defaultTickInterval). Exposed for tests that need a fast
+// interval rather than production callers, mirroring
+// NewScannerHandler's constructor-supplied CandidateRefreshInterval for
+// the same reason.
+func (h *SymbolHandler) SetTickInterval(d time.Duration) { h.tickInterval = d }

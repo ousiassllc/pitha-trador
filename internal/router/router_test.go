@@ -226,6 +226,9 @@ func (f fakeSymbolProvider) State(context.Context, string) (execution.SymbolStat
 func (f fakeSymbolProvider) Candles(context.Context, string, time.Time, time.Time) ([]domain.Snapshot, error) {
 	return nil, nil
 }
+func (f fakeSymbolProvider) RecentDecisions(context.Context, string, int) ([]domain.JevDecision, error) {
+	return nil, nil
+}
 func (f fakeSymbolProvider) GetPosition(context.Context, int64) (domain.Position, error) {
 	return domain.Position{}, repository.ErrPositionNotFound
 }

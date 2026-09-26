@@ -10,7 +10,7 @@ import { html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
-import { WsClient } from '../lib/ws';
+import { resolveWsUrl, WsClient } from '../lib/ws';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner` item shape.
 export interface ScannerItem {
@@ -191,14 +191,6 @@ export class PithaScannerTable extends LitElement {
       this.subscribeWs();
     }
   }
-}
-
-function resolveWsUrl(url: string): string {
-  if (/^wss?:\/\//i.test(url)) {
-    return url;
-  }
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${location.host}${url}`;
 }
 
 function formatNullableNumber(value: number | null): string {

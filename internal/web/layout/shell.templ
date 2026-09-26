@@ -1,12 +1,17 @@
 package layout
 
+import "github.com/ousiassllc/pitha-trador/internal/web/organisms"
+
 // Shell is the shared full-page HTML document skeleton every
 // internal/web/pages component renders into (docs/components/overview.md
 // §2, §3). It links the esbuild/Tailwind build output
 // (static/src/dist/css/app.css, static/src/dist/js/...) and the vendored
 // HTMX runtime (static/src/vendor/htmx.min.js - plain JS, so it does not
 // need the esbuild/TypeScript pipeline), both served by
-// internal/router.New()'s "/static" static file route.
+// internal/router.New()'s "/static" static file route. organisms.Header
+// (nav + StatusDot + `pitha-kill-switch-panel`) is rendered on every
+// page here rather than per-page, since it is "全ページ共通"
+// (components/overview.md §3).
 templ Shell(title string) {
 	<!DOCTYPE html>
 	<html lang="ja">
@@ -16,8 +21,10 @@ templ Shell(title string) {
 			<title>{ title } - pitha-trador</title>
 			<link rel="stylesheet" href="/static/dist/css/app.css"/>
 			<script src="/static/vendor/htmx.min.js"></script>
+			<script type="module" src="/static/dist/js/kill-switch-panel/pitha-kill-switch-panel.js"></script>
 		</head>
 		<body>
+			@organisms.Header()
 			<main>
 				{ children... }
 			</main>
