@@ -58,6 +58,42 @@ func nullableFloat64(f *float64) any {
 	return *f
 }
 
+// nullableInt64 adapts a *int64 domain field to a database/sql argument,
+// mapping nil to SQL NULL.
+func nullableInt64(i *int64) any {
+	if i == nil {
+		return nil
+	}
+	return *i
+}
+
+// nullInt64Scanner adapts a *int64 destination field (passed as
+// nullInt64(&field)) to database/sql's Scanner interface, mapping a NULL
+// column value to nil instead of leaving/erroring on a zero value.
+type nullInt64Scanner struct {
+	dest **int64
+}
+
+// nullInt64 wraps dest so it can be passed directly to Row.Scan /
+// Rows.Scan for a nullable INTEGER column (e.g. a nullable FK).
+func nullInt64(dest **int64) *nullInt64Scanner {
+	return &nullInt64Scanner{dest: dest}
+}
+
+func (n *nullInt64Scanner) Scan(src any) error {
+	if src == nil {
+		*n.dest = nil
+		return nil
+	}
+	var ni sql.NullInt64
+	if err := ni.Scan(src); err != nil {
+		return err
+	}
+	v := ni.Int64
+	*n.dest = &v
+	return nil
+}
+
 // nullFloatScanner adapts a *float64 destination field (passed as
 // nullFloat(&field)) to database/sql's Scanner interface, mapping a NULL
 // column value to nil instead of leaving/erroring on a zero value.

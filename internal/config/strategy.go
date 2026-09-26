@@ -1,5 +1,11 @@
 package config
 
+import (
+	"fmt"
+	"os"
+	"strconv"
+)
+
 // StrategyConfig mirrors config/strategy.yaml: Scheduler周期・Fast Screener
 // しきい値・Policy Engineしきい値（docs/requirements/functional.md §4.2,
 // §4.3, §4.6）。
@@ -73,7 +79,59 @@ type PolicyDirectionThresholds struct {
 }
 
 // LoadStrategy reads and parses the strategy configuration YAML file at
-// path (conventionally DefaultStrategyPath) into a StrategyConfig.
+// path (conventionally DefaultStrategyPath) into a StrategyConfig, then
+// applies any PITHA_POLICY_LONG_*/PITHA_POLICY_SHORT_* environment
+// variable overrides on top of it (FR-POLICY-4: Policy Engine thresholds
+// must be changeable without a code change; env vars are this scope's
+// mechanism - a later self-improvement-loop sub-scope can add a
+// runtime_settings-backed override for the same PolicyConfig fields,
+// docs/architecture/er.md §runtime_settings).
 func LoadStrategy(path string) (*StrategyConfig, error) {
-	return loadYAMLFile[StrategyConfig](path)
+	cfg, err := loadYAMLFile[StrategyConfig](path)
+	if err != nil {
+		return nil, err
+	}
+	if err := applyPolicyEnvOverrides(&cfg.Policy); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func applyPolicyEnvOverrides(cfg *PolicyConfig) error {
+	if err := applyPolicyDirectionEnvOverrides("PITHA_POLICY_LONG_", &cfg.Long); err != nil {
+		return err
+	}
+	return applyPolicyDirectionEnvOverrides("PITHA_POLICY_SHORT_", &cfg.Short)
+}
+
+func applyPolicyDirectionEnvOverrides(prefix string, t *PolicyDirectionThresholds) error {
+	if err := envFloatOverride(prefix+"MIN_PROBABILITY", &t.MinProbability); err != nil {
+		return err
+	}
+	if v, ok := os.LookupEnv(prefix + "MIN_ENTRY_QUALITY"); ok {
+		t.MinEntryQuality = v
+	}
+	if err := envFloatOverride(prefix+"MIN_CONTINUATION_PROBABILITY", &t.MinContinuationProbability); err != nil {
+		return err
+	}
+	if err := envFloatOverride(prefix+"MAX_TOXIC_FLOW", &t.MaxToxicFlow); err != nil {
+		return err
+	}
+	return envFloatOverride(prefix+"MAX_LIQUIDITY_STRESSED", &t.MaxLiquidityStressed)
+}
+
+// envFloatOverride sets *dest to the value of the environment variable
+// key, parsed as a float64, when key is set; it is a no-op when key is
+// unset.
+func envFloatOverride(key string, dest *float64) error {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return nil
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fmt.Errorf("config: parse %s=%q as float: %w", key, v, err)
+	}
+	*dest = f
+	return nil
 }

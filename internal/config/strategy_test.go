@@ -53,6 +53,39 @@ func TestLoadStrategy_ReturnsErrorForInvalidYAML(t *testing.T) {
 	}
 }
 
+func TestLoadStrategy_AppliesPolicyEnvOverrides(t *testing.T) {
+	t.Setenv("PITHA_POLICY_LONG_MIN_PROBABILITY", "0.75")
+	t.Setenv("PITHA_POLICY_LONG_MIN_ENTRY_QUALITY", "exceptional")
+	t.Setenv("PITHA_POLICY_SHORT_MAX_TOXIC_FLOW", "0.20")
+
+	cfg, err := config.LoadStrategy(repoPath(t, config.DefaultStrategyPath))
+	if err != nil {
+		t.Fatalf("LoadStrategy(%q) returned error: %v", config.DefaultStrategyPath, err)
+	}
+
+	if got, want := cfg.Policy.Long.MinProbability, 0.75; got != want {
+		t.Errorf("Policy.Long.MinProbability = %v, want %v (PITHA_POLICY_LONG_MIN_PROBABILITY override)", got, want)
+	}
+	if got, want := cfg.Policy.Long.MinEntryQuality, "exceptional"; got != want {
+		t.Errorf("Policy.Long.MinEntryQuality = %q, want %q (PITHA_POLICY_LONG_MIN_ENTRY_QUALITY override)", got, want)
+	}
+	if got, want := cfg.Policy.Short.MaxToxicFlow, 0.20; got != want {
+		t.Errorf("Policy.Short.MaxToxicFlow = %v, want %v (PITHA_POLICY_SHORT_MAX_TOXIC_FLOW override)", got, want)
+	}
+	// An unset env var must not disturb the YAML-sourced value.
+	if got, want := cfg.Policy.Short.MinProbability, 0.68; got != want {
+		t.Errorf("Policy.Short.MinProbability = %v, want %v (no override set, YAML value must be kept)", got, want)
+	}
+}
+
+func TestLoadStrategy_ReturnsErrorForInvalidPolicyEnvOverride(t *testing.T) {
+	t.Setenv("PITHA_POLICY_LONG_MIN_PROBABILITY", "not-a-number")
+
+	if _, err := config.LoadStrategy(repoPath(t, config.DefaultStrategyPath)); err == nil {
+		t.Fatalf("LoadStrategy(%q) returned nil error, want error for invalid PITHA_POLICY_LONG_MIN_PROBABILITY", config.DefaultStrategyPath)
+	}
+}
+
 // repoPath resolves a path relative to the repository root, so tests keep
 // working regardless of which package directory `go test` runs from.
 func repoPath(t *testing.T, rel string) string {
