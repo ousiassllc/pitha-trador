@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+  pull_request:
+
+env:
+  GOLANGCI_LINT_VERSION: v2.14.0
+  TEMPL_VERSION: v0.3.1020
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install templ
+        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
+
+      - name: Generate templ
+        run: templ generate
+
+      - name: Install golangci-lint
+        run: go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
+
+      - name: golangci-lint run
+        run: golangci-lint run
+
+      - name: Install frontend dependencies
+        run: bun --cwd static install --frozen-lockfile
+
+      - name: biome check
+        run: bunx biome check static/
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install templ
+        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
+
+      - name: Generate templ
+        run: templ generate
+
+      - name: go test
+        run: go test ./...
+
+      - name: Install frontend dependencies
+        run: bun --cwd static install --frozen-lockfile
+
+      - name: bun test
+        run: bun --cwd static test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install templ
+        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
+
+      - name: Generate templ
+        run: templ generate
+
+      - name: Install wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      - name: wails build (windows/amd64)
+        working-directory: cmd/desktop
+        run: wails build -platform windows/amd64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pitha-trador-windows-amd64
+          path: cmd/desktop/build/bin/*.exe

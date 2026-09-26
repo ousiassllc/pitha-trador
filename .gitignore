@@ -8,6 +8,10 @@ vendor/
 # Node / frontend build
 node_modules/
 static/src/dist/
+static/wailsjs/
+
+# Wails build output
+cmd/desktop/build/
 
 # Templ generated
 *_templ.go
