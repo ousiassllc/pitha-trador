@@ -52,10 +52,21 @@ var defaultCandidateRefreshInterval = handler.CandidateRefreshInterval{
 	Max: 30 * time.Second,
 }
 
+// defaultSymbolRiskParams mirrors config/risk.yaml's Paper
+// max_position_per_symbol_pct (2.0) plus FR-EXIT-2's initial
+// stop_loss_pct/take_profit_pct (0.6/1.2).
+var defaultSymbolRiskParams = handler.SymbolRiskParams{
+	AllowedPositionPct: 2.0,
+	StopLossPct:        0.6,
+	TakeProfitPct:      1.2,
+}
+
 type options struct {
 	candidateSource  handler.CandidateSource
 	candidateRefresh handler.CandidateRefreshInterval
 	systemEngine     handler.SystemEngine
+	symbolProvider   handler.SymbolProvider
+	symbolRiskParams handler.SymbolRiskParams
 }
 
 // Option configures New.
@@ -83,6 +94,22 @@ func WithSystemEngine(engine handler.SystemEngine) Option {
 	return func(o *options) { o.systemEngine = engine }
 }
 
+// WithSymbolProvider overrides the Symbol Detail/position/order routes'
+// backing internal/web/handler.SymbolProvider. Defaults to an empty
+// handler.StaticSymbolProvider until a later sub-scope wires a real
+// internal/service/execution.Engine in.
+func WithSymbolProvider(provider handler.SymbolProvider) Option {
+	return func(o *options) { o.symbolProvider = provider }
+}
+
+// WithSymbolRiskParams overrides `GET /api/v1/symbols/{symbol}`'s "risk"
+// section (handler.SymbolRiskParams). Defaults to FR-EXIT-2's initial
+// values (stop_loss_pct=0.6, take_profit_pct=1.2) plus config/risk.yaml's
+// Paper max_position_per_symbol_pct (2.0).
+func WithSymbolRiskParams(params handler.SymbolRiskParams) Option {
+	return func(o *options) { o.symbolRiskParams = params }
+}
+
 // New builds and returns the shared Gin engine: the placeholder root
 // page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
 // the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
@@ -94,6 +121,8 @@ func New(opts ...Option) *gin.Engine {
 		candidateSource:  handler.StaticCandidateSource{},
 		candidateRefresh: defaultCandidateRefreshInterval,
 		systemEngine:     handler.StaticSystemEngine{},
+		symbolProvider:   handler.StaticSymbolProvider{},
+		symbolRiskParams: defaultSymbolRiskParams,
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -116,6 +145,9 @@ func New(opts ...Option) *gin.Engine {
 	engine.POST("/system/kill", systemHandler.Kill)
 	engine.GET("/system/status", systemHandler.Status)
 
+	symbolHandler := handler.NewSymbolHandler(o.symbolProvider, o.symbolRiskParams)
+	engine.POST("/positions/:id/close", symbolHandler.ClosePosition)
+
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at
 	// this same openapi.json (handler.SwaggerUI); disable Huma's built-in
@@ -126,6 +158,10 @@ func New(opts ...Option) *gin.Engine {
 	huma.Post(api, "/system/pause", systemHandler.APIPause)
 	huma.Post(api, "/system/resume", systemHandler.APIResume)
 	huma.Post(api, "/system/kill", systemHandler.APIKill)
+	huma.Get(api, "/symbols/{symbol}", symbolHandler.APISymbol)
+	huma.Get(api, "/symbols/{symbol}/candles", symbolHandler.APICandles)
+	huma.Get(api, "/positions", symbolHandler.APIPositions)
+	huma.Get(api, "/orders", symbolHandler.APIOrders)
 
 	return engine
 }

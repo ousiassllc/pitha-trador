@@ -1,0 +1,77 @@
+package molecules
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// PositionRow renders one positions row (docs/components/overview.md §3
+// "PositionRow"): symbol/side/quantity/entry-current price/P&L/opened-
+// closed timestamps. It is used both for the Symbol Detail position list
+// and as `POST /positions/:id/close`'s response fragment
+// (docs/api/endpoints.md §4: "ポジション行フラグメント").
+templ PositionRow(p domain.Position) {
+	<tr id={ fmt.Sprintf("position-row-%d", p.ID) } data-testid="position-row" data-position-id={ fmt.Sprintf("%d", p.ID) }>
+		<td>{ p.Symbol }</td>
+		<td>@atoms.Badge(positionSideToDirection(p.Side))</td>
+		<td>{ fmt.Sprintf("%d", p.Quantity) }</td>
+		<td>{ fmt.Sprintf("%.2f", p.EntryPrice) }</td>
+		<td>{ fmt.Sprintf("%.2f", p.CurrentPrice) }</td>
+		<td>{ formatPnL(p.UnrealizedPnL) }</td>
+		<td>{ formatNilablePnL(p.RealizedPnL) }</td>
+		<td>{ p.OpenedAt.Format(time.RFC3339) }</td>
+		if p.IsOpen() {
+			<td>—</td>
+			<td>
+				<button
+					type="button"
+					hx-post={ fmt.Sprintf("/positions/%d/close", p.ID) }
+					hx-target={ fmt.Sprintf("#position-row-%d", p.ID) }
+					hx-swap="outerHTML"
+					hx-disabled-elt="this"
+					hx-confirm="このポジションを成行で決済しますか？"
+				>
+					Close
+				</button>
+			</td>
+		} else {
+			<td>{ formatClosedAt(p.ClosedAt) }</td>
+			<td>{ formatExitReason(p.ExitReason) }</td>
+		}
+	</tr>
+}
+
+func positionSideToDirection(side string) atoms.Direction {
+	if side == domain.PositionSideShort {
+		return atoms.DirectionShort
+	}
+	return atoms.DirectionLong
+}
+
+func formatPnL(v float64) string {
+	return fmt.Sprintf("%.2f", v)
+}
+
+func formatNilablePnL(v *float64) string {
+	if v == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.2f", *v)
+}
+
+func formatClosedAt(t *time.Time) string {
+	if t == nil {
+		return "—"
+	}
+	return t.Format(time.RFC3339)
+}
+
+func formatExitReason(r *string) string {
+	if r == nil {
+		return "—"
+	}
+	return *r
+}

@@ -67,6 +67,16 @@ func nullableInt64(i *int64) any {
 	return *i
 }
 
+// nullableTime adapts a *time.Time domain field to a database/sql
+// argument, mapping nil to SQL NULL and a non-nil value through
+// formatTime.
+func nullableTime(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return formatTime(*t)
+}
+
 // nullInt64Scanner adapts a *int64 destination field (passed as
 // nullInt64(&field)) to database/sql's Scanner interface, mapping a NULL
 // column value to nil instead of leaving/erroring on a zero value.
