@@ -72,11 +72,11 @@ func ThresholdsFromStrategy(cfg config.StrategyConfig) Thresholds {
 	}
 }
 
-// RiskChecker reports whether Risk Engine (functional.md §4.7) allows an
-// otherwise-passing LONG/SHORT candidate to become a tradeable signal
-// (FR-POLICY-3 "Risk Engine拒否"). Risk Engine itself is a later
-// sub-scope (#36); this interface is the extension point a real
-// implementation substitutes without changing Engine's own logic.
+// RiskChecker reports whether Risk Engine (functional.md §4.7,
+// internal/service/risk.Engine) allows an otherwise-passing LONG/SHORT
+// candidate to become a tradeable signal (FR-POLICY-3 "Risk Engine拒否").
+// This interface is the extension point a real implementation
+// substitutes without changing Engine's own logic.
 type RiskChecker interface {
 	// Check returns (true, "") when direction (domain.JevDirectionLong or
 	// domain.JevDirectionShort) is allowed for instrumentID, or
@@ -84,10 +84,11 @@ type RiskChecker interface {
 	Check(ctx context.Context, instrumentID int64, direction string) (passed bool, reason string)
 }
 
-// AlwaysPassRiskChecker is the placeholder RiskChecker used until Risk
-// Engine (#36) exists: every candidate passes
-// ("risk_passed（本スコープではRisk Engine未実装のため暫定値...）",
-// issue #33).
+// AlwaysPassRiskChecker is the placeholder RiskChecker used as this
+// package's zero-value default until a later sub-scope's cmd/ wiring
+// constructs and injects a real internal/service/risk.Engine: every
+// candidate passes ("risk_passed（本スコープではRisk Engine未接続のため
+// 暫定値...）", issue #33).
 type AlwaysPassRiskChecker struct{}
 
 // Check always reports passed.

@@ -5,10 +5,10 @@
 // persists every decision - not only the ones that pass - via
 // repository.SignalRepository (FR-POLICY-5).
 //
-// Risk Engine (functional.md §4.7) is a later sub-scope (#36); RiskChecker
-// is this scope's extension point so trade_signals.risk_passed/
-// reject_reason already exist as real, persisted fields while
-// AlwaysPassRiskChecker stands in until Risk Engine exists.
+// Risk Engine (functional.md §4.7, internal/service/risk.Engine) now
+// exists and satisfies RiskChecker; AlwaysPassRiskChecker remains this
+// package's zero-value default until a later sub-scope's cmd/ wiring
+// constructs a real risk.Engine and passes it to NewEngine.
 //
 // handler.go connects Jev Trader and this Engine to the jev-trader queue
 // (repository.JobQueueJevTrader): Handler.HandleJob matches
