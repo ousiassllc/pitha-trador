@@ -140,6 +140,37 @@ func (r *SnapshotRepository) ListByInstrument(ctx context.Context, instrumentID 
 	return out, nil
 }
 
+// ListByInstrumentRange returns every snapshot for instrumentID
+// timestamped in the half-open range [from, to), ascending by timestamp
+// (oldest first). Unlike ListByInstrument (most recent first, capped by
+// limit, for UI/lookback use), this ordering and unlimited row count is
+// what a Walk Forward backtest replay needs to feed
+// internal/service/backtest one bar at a time in chronological order
+// (functional.md FR-BT-2/FR-BT-3).
+func (r *SnapshotRepository) ListByInstrumentRange(ctx context.Context, instrumentID int64, from, to time.Time) ([]domain.Snapshot, error) {
+	rows, err := r.db.QueryContext(ctx,
+		snapshotSelectColumns+` FROM market_snapshots WHERE instrument_id = ? AND timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC`,
+		instrumentID, formatTime(from), formatTime(to),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list snapshots for instrument %d in [%s, %s): %w", instrumentID, from, to, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.Snapshot
+	for rows.Next() {
+		s, err := scanSnapshot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list snapshots for instrument %d in [%s, %s): %w", instrumentID, from, to, err)
+	}
+	return out, nil
+}
+
 const snapshotSelectColumns = `
 SELECT id, instrument_id, symbol, timestamp, price, bid, ask, spread_bps, volume, turnover,
 	return_1m, return_5m, return_15m, vwap, price_vs_vwap_bps, volume_ratio_5m,
