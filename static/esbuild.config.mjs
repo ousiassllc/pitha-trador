@@ -3,8 +3,8 @@
 // into static/src/dist/js/**, mirroring the source subdirectory layout
 // (`outbase`) so each pitha-* component's bundle has a stable, predictable
 // path regardless of how many sibling components/lib files exist. The
-// remaining pitha-* Lit components listed in docs/components/overview.md
-// §5 are added to `entryPoints` by later sub-scopes once they exist.
+// remaining pitha-calibration-heatmap (docs/components/overview.md §5.3)
+// is added to `entryPoints` by a later sub-scope once it exists.
 import * as esbuild from 'esbuild';
 
 const watch = process.argv.includes('--watch');
@@ -15,6 +15,8 @@ const buildOptions = {
     'src/components/lib/ws.ts',
     'src/components/lib/logger.ts',
     'src/components/scanner-table/pitha-scanner-table.ts',
+    'src/components/price-chart/pitha-price-chart.ts',
+    'src/components/kill-switch-panel/pitha-kill-switch-panel.ts',
   ],
   outdir: 'src/dist/js',
   outbase: 'src/components',

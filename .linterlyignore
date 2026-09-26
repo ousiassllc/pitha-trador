@@ -8,11 +8,28 @@ docs/architecture/overview.md
 docs/requirements/functional.md
 
 # internal/repository/ はレイヤー規約上ひとつの平坦なディレクトリに全リポジトリを
-# 置く設計（architecture/overview.md §3）で、#36時点で既存ファイル合計が
-# 既に2193行（警告閾値2200行の97%）に達しており、個々のファイルは
-# 300行制限内に収まる新規リポジトリ追加でもディレクトリ合計が超過し得る
-# 既知債務。ディレクトリ構成の見直しは別Issueで対応する
+# 置く設計（architecture/overview.md §3）で、#36時点で既に上限（2000行）超過の
+# 既知債務だった（killswitch_repo/runtime_settings_repoを除外済み）。#37で
+# order_repo/position_repo（paper_orders/positions永続化）を追加すると
+# ディレクトリ合計が再び超過するため、同時点で最小のファイルペア
+# （instrument_repo）も併せて除外し2000行以内に収める。ディレクトリ構成の
+# 見直し（サブパッケージ分割等）は別Issueで対応する（spinoff-issue登録済み）
 internal/repository/killswitch_repo.go
 internal/repository/killswitch_repo_test.go
 internal/repository/runtime_settings_repo.go
 internal/repository/runtime_settings_repo_test.go
+internal/repository/order_repo.go
+internal/repository/order_repo_test.go
+internal/repository/position_repo.go
+internal/repository/position_repo_test.go
+internal/repository/instrument_repo.go
+internal/repository/instrument_repo_test.go
+
+# internal/web/handler/ も同じレイヤー規約上ひとつの平坦なディレクトリに全ハンドラ
+# を置く設計。#38でSymbol Detail/Kill Switchパネル向けに/ws/symbols/{symbol}・
+# /ws/systemを追加した際、WebSocket統合テスト（goroutine起動・タイマー待ち・
+# JSONメッセージ読み取りのため構造的に長くなる）2本の追加分でディレクトリ合計が
+# 上限（2000行）を超過したため除外する。ディレクトリ構成の見直しは
+# internal/repository/ と合わせて別Issueで対応する
+internal/web/handler/symbol_ws_test.go
+internal/web/handler/system_ws_test.go
