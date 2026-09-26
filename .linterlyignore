@@ -25,6 +25,13 @@ internal/repository/position_repo_test.go
 internal/repository/instrument_repo.go
 internal/repository/instrument_repo_test.go
 
+# #23でOutcome Labeling向けにcalibration_repo（calibration_outcomes永続化）を
+# 追加すると、#37までの除外済み分を差し引いてもディレクトリ合計が再び上限
+# （2000行）を超過するため、同時点で最小のファイルペア（signal_repo）を追加で
+# 除外し2000行以内に収める。ディレクトリ構成の見直しは引き続き別Issueで対応する
+internal/repository/signal_repo.go
+internal/repository/signal_repo_test.go
+
 # internal/web/handler/ も同じレイヤー規約上ひとつの平坦なディレクトリに全ハンドラ
 # を置く設計。#38でSymbol Detail/Kill Switchパネル向けに/ws/symbols/{symbol}・
 # /ws/systemを追加した際、WebSocket統合テスト（goroutine起動・タイマー待ち・

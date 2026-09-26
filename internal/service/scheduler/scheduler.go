@@ -35,6 +35,11 @@ type fullScanPayload struct {
 type Scheduler struct {
 	jobs        *repository.JobRepository
 	instruments *repository.InstrumentRepository
+	// outcomeLabels is optional (WithOutcomeLabelSource): a nil value
+	// makes EnqueueOutcomeLabeling a no-op, the same "later sub-scope
+	// wires this in" deferral Start's own doc comment already describes
+	// for the 15-30s/5-15s cycles.
+	outcomeLabels *repository.CalibrationRepository
 
 	pollInterval time.Duration
 
@@ -53,6 +58,13 @@ type Option func(*Scheduler)
 // (default 200ms).
 func WithPollInterval(d time.Duration) Option {
 	return func(s *Scheduler) { s.pollInterval = d }
+}
+
+// WithOutcomeLabelSource enables EnqueueOutcomeLabeling's periodic
+// outcome-labeling enqueue trigger (functional.md FR-CAL-4). Unset by
+// default. *repository.CalibrationRepository implements this directly.
+func WithOutcomeLabelSource(repo *repository.CalibrationRepository) Option {
+	return func(s *Scheduler) { s.outcomeLabels = repo }
 }
 
 // New returns a Scheduler backed by jobs/instruments.
@@ -111,6 +123,42 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 		}
 	}
 	return len(instruments), nil
+}
+
+// DefaultOutcomeLabelHorizonsMinutes are the judgment horizons Outcome
+// Labeling evaluates each Jev trader decision at (functional.md §4.12,
+// docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/20
+// 等").
+var DefaultOutcomeLabelHorizonsMinutes = []int{5, 10, 20}
+
+// EnqueueOutcomeLabeling enqueues one outcome-labeling job
+// (repository.JobQueueOutcomeLabeling) for every Jev trader decision
+// whose horizon has elapsed as of now but has no calibration_outcomes
+// row yet for that (jev_decision_id, horizon_minutes) pair (functional.md
+// FR-CAL-4). It returns the number of jobs enqueued, or (0, nil) if no
+// OutcomeLabelSource is configured (WithOutcomeLabelSource) - the same
+// deferral Start's own doc comment describes for the 15-30s/5-15s
+// cycles.
+func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (int, error) {
+	if s.outcomeLabels == nil {
+		return 0, nil
+	}
+
+	pending, err := s.outcomeLabels.PendingLabels(ctx, DefaultOutcomeLabelHorizonsMinutes, now)
+	if err != nil {
+		return 0, fmt.Errorf("scheduler: list pending outcome labels: %w", err)
+	}
+
+	for _, p := range pending {
+		payload, err := json.Marshal(repository.OutcomeLabelJobPayload{JevDecisionID: p.JevDecisionID, HorizonMinutes: p.HorizonMinutes})
+		if err != nil {
+			return 0, fmt.Errorf("scheduler: marshal outcome-labeling payload for decision %d: %w", p.JevDecisionID, err)
+		}
+		if _, err := s.jobs.Enqueue(ctx, repository.JobQueueOutcomeLabeling, string(payload), now); err != nil {
+			return 0, fmt.Errorf("scheduler: enqueue outcome-labeling job for decision %d (horizon %dm): %w", p.JevDecisionID, p.HorizonMinutes, err)
+		}
+	}
+	return len(pending), nil
 }
 
 // Start launches one worker goroutine per registered handler's queue plus

@@ -7,7 +7,9 @@
 // market-data/feature-calc; jev-scout and later queues are added by their
 // own scopes), drives the 60-second full-scan cycle that enqueues
 // market-data/feature-calc work for every active instrument
-// (FR-SCHED-2 前半), and recovers jobs left status='running' by a
+// (FR-SCHED-2 前半), optionally drives Outcome Labeling's periodic
+// enqueue trigger (EnqueueOutcomeLabeling, WithOutcomeLabelSource,
+// functional.md FR-CAL-4), and recovers jobs left status='running' by a
 // previous crash back to pending at startup (er.md §jobs).
 //
 // This package MUST depend only on internal/domain and internal/repository
