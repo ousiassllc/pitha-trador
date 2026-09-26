@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
 // Passes reports whether resp clears every FR-SCOUT-2 pass-condition
@@ -44,6 +46,29 @@ func StateFromSnapshot(snap domain.Snapshot) ScoutState {
 	}
 }
 
+// ragFeatureInput maps a ScoutState onto rag.FeatureInput (rag/vector.go
+// §FeatureInput), the named-field shape RAG standardizes into the fixed
+// 14-dimension embedding (FR-RAG-1). ScoutState has no
+// volume_ratio_1m/realized_vol_15m/volatility_expansion_ratio/
+// stock_vs_sector_relative_strength values yet (Feature Engine does not
+// compute them - see rag.FeatureInput's doc comment), so those fields
+// are left nil.
+func ragFeatureInput(state ScoutState) rag.FeatureInput {
+	priceVsVWAPBps := state.PriceVsVWAPBps
+	return rag.FeatureInput{
+		Return1m:           state.Return1m,
+		Return5m:           state.Return5m,
+		Return15m:          state.Return15m,
+		PriceVsVWAPBps:     &priceVsVWAPBps,
+		VolumeRatio5m:      state.VolumeRatio5m,
+		SpreadBps:          state.SpreadBps,
+		OrderbookImbalance: state.OrderbookImbalance,
+		RealizedVol5m:      state.RealizedVol5m,
+		MarketReturn5m:     state.MarketReturn5m,
+		SectorReturn5m:     state.SectorReturn5m,
+	}
+}
+
 // ScoutJobPayload is the jev-scout queue job payload
 // (repository.JobQueueJevScout): it identifies which instrument to
 // evaluate. Handle reads that instrument's latest market_snapshots row
@@ -63,6 +88,7 @@ type Scout struct {
 	decisions  *repository.DecisionRepository
 	snapshots  *repository.SnapshotRepository
 	jobs       *repository.JobRepository
+	rag        *rag.Service
 	thresholds config.JevScoutConfig
 }
 
@@ -71,29 +97,44 @@ type Scout struct {
 // job handled off the jev-scout queue - enqueues a jev-trader job via
 // jobs when a candidate passes FR-SCOUT-2 (functional.md §4.4 sequence:
 // Scout通過銘柄 -> Jev Trader). jobs may be nil if only Evaluate (not
-// HandleJob) will be used.
-func NewScout(client *Client, decisions *repository.DecisionRepository, snapshots *repository.SnapshotRepository, jobs *repository.JobRepository, thresholds config.JevScoutConfig) *Scout {
+// HandleJob) will be used. ragService builds the RAG few-shot context
+// injected into every Scout request and indexes each persisted decision
+// for future searches (functional.md §4.13, FR-RAG-1〜4).
+func NewScout(client *Client, decisions *repository.DecisionRepository, snapshots *repository.SnapshotRepository, jobs *repository.JobRepository, ragService *rag.Service, thresholds config.JevScoutConfig) *Scout {
 	return &Scout{
 		client:     client,
 		decisions:  decisions,
 		snapshots:  snapshots,
 		jobs:       jobs,
+		rag:        ragService,
 		thresholds: thresholds,
 	}
 }
 
-// Evaluate calls Jev Scout for one instrument's current state, persists
-// the resulting jev_decisions row (FR-SCOUT-3), and reports whether the
-// candidate passed FR-SCOUT-2. A Jev API failure (after the Client's
-// retry policy is exhausted) returns an error and persists nothing:
-// overview.md §6 "継続失敗でnew entry停止".
+// Evaluate builds the RAG few-shot context for state (FR-RAG-2, FR-RAG-3),
+// calls Jev Scout for one instrument's current state, persists the
+// resulting jev_decisions row (FR-SCOUT-3) and its standardized feature
+// embedding (FR-RAG-1), and reports whether the candidate passed
+// FR-SCOUT-2. A Jev API failure (after the Client's retry policy is
+// exhausted) returns an error and persists nothing: overview.md §6
+// "継続失敗でnew entry停止". RAG context search/indexing failures are
+// logged, not returned: a technical fault in the RAG side must never
+// block Jev from being called (functional.md FR-RAG-4's cold-start
+// tolerance extends to any RAG failure, not only an empty index).
 func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutState) (domain.JevDecision, bool, error) {
+	featureInput := ragFeatureInput(state)
+
+	ragContext, err := s.rag.Context(ctx, featureInput, rag.DefaultK)
+	if err != nil {
+		slog.Error("jev: build rag context failed, calling Scout without similar-case context", "symbol", state.Symbol, "error", err)
+	}
+
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
 		return domain.JevDecision{}, false, fmt.Errorf("jev: encode scout state for %q: %w", state.Symbol, err)
 	}
 
-	resp, latency, err := s.client.Scout(ctx, ScoutRequest{QuestionVersion: ScoutQuestionVersion, State: state})
+	resp, latency, err := s.client.Scout(ctx, ScoutRequest{QuestionVersion: ScoutQuestionVersion, State: state, RAGContext: ragContext})
 	if err != nil {
 		return domain.JevDecision{}, false, fmt.Errorf("jev: scout evaluation for %q: %w", state.Symbol, err)
 	}
@@ -120,6 +161,10 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 	saved, err := s.decisions.Insert(ctx, decision)
 	if err != nil {
 		return domain.JevDecision{}, false, fmt.Errorf("jev: persist scout decision for %q: %w", state.Symbol, err)
+	}
+
+	if err := s.rag.IndexDecision(ctx, saved.ID, featureInput); err != nil {
+		slog.Error("jev: index decision vector failed", "decision_id", saved.ID, "symbol", state.Symbol, "error", err)
 	}
 
 	return saved, Passes(s.thresholds, resp), nil

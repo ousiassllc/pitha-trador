@@ -3,9 +3,11 @@ package featureengine
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
 // CycleInput is one instrument's data for a single Feature Engine scan
@@ -24,12 +26,16 @@ type CycleInput struct {
 // instruments and persists them to market_snapshots.
 type Engine struct {
 	snapshots *repository.SnapshotRepository
+	rag       *rag.Service
 }
 
 // NewEngine returns an Engine that persists computed snapshots via
-// snapshots.
-func NewEngine(snapshots *repository.SnapshotRepository) *Engine {
-	return &Engine{snapshots: snapshots}
+// snapshots, and - once each cycle's snapshots are committed - indexes
+// their standardized feature embedding into market_snapshot_vectors via
+// ragService for RAG similarity search (functional.md FR-RAG-1,
+// docs/architecture/overview.md §7).
+func NewEngine(snapshots *repository.SnapshotRepository, ragService *rag.Service) *Engine {
+	return &Engine{snapshots: snapshots, rag: ragService}
 }
 
 // RunCycle computes Compute(in.Input) for every element of inputs and
@@ -61,6 +67,17 @@ func (e *Engine) RunCycle(ctx context.Context, inputs []CycleInput) ([]domain.Sn
 	if err != nil {
 		return nil, fmt.Errorf("featureengine: persist cycle snapshots: %w", err)
 	}
+
+	// RAG indexing is a best-effort enrichment (FR-RAG-1): a failure here
+	// must never undo or block the already-committed market_snapshots
+	// rows RunCycle's callers (Fast Screener, Jev Scout) depend on.
+	for _, snap := range saved {
+		in := rag.FeatureInputFromFeature(snap.Feature, snap.SpreadBps)
+		if err := e.rag.IndexSnapshot(ctx, snap.ID, in); err != nil {
+			slog.Error("featureengine: index snapshot vector failed", "snapshot_id", snap.ID, "symbol", snap.Symbol, "error", err)
+		}
+	}
+
 	return saved, nil
 }
 

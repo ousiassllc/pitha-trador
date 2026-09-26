@@ -1,6 +1,10 @@
 package jev
 
-import "time"
+import (
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/rag"
+)
 
 // Momentum quality values FR-SCOUT-1's momentum_quality question can
 // return (functional.md §4.4).
@@ -36,11 +40,13 @@ type ScoutState struct {
 }
 
 // ScoutRequest is the JSON body POSTed to the Jev Scout endpoint: the
-// current market state plus which question-set version to evaluate it
-// against (prompt_version.go).
+// current market state, which question-set version to evaluate it
+// against (prompt_version.go), and the RAG few-shot context (§7,
+// functional.md FR-RAG-3) found for that state.
 type ScoutRequest struct {
-	QuestionVersion string     `json:"question_version"`
-	State           ScoutState `json:"state"`
+	QuestionVersion string      `json:"question_version"`
+	State           ScoutState  `json:"state"`
+	RAGContext      rag.Context `json:"rag_context"`
 }
 
 // ScoutResponse is Jev's raw answer to the FR-SCOUT-1 question group.
