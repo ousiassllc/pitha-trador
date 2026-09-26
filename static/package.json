@@ -1,0 +1,24 @@
+{
+  "name": "pitha-trador-static",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n esbuild,tailwind -c blue,green \"node esbuild.config.mjs --watch\" \"tailwindcss -i ./src/css/app.css -o ./src/dist/css/app.css --watch\"",
+    "build": "node esbuild.config.mjs && tailwindcss -i ./src/css/app.css -o ./src/dist/css/app.css --minify",
+    "lint": "biome check .",
+    "format": "biome format --write src",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@happy-dom/global-registrator": "^20.14.5",
+    "@tailwindcss/cli": "^4.3.3",
+    "@types/bun": "^1.4.2",
+    "concurrently": "^10.0.5",
+    "esbuild": "^0.28.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2"
+  }
+}
