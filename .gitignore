@@ -1,0 +1,24 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+vendor/
+
+# Node / frontend build
+node_modules/
+static/dist/
+
+# Templ generated
+*_templ.go
+
+# Env
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
