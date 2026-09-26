@@ -17,7 +17,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | ページルート | `/scanner`, `/symbols/:symbol` | する | フルページ or フラグメント | Gin |
 | アクションルート | `/system/pause` 等 | しない | フラグメントのみ | Gin |
 | APIルート | `/api/v1/...` | しない | JSON | Huma |
-| WebSocket | `/ws/scanner` 等 | 該当なし | JSONメッセージ | Gin (nhooyr.io/websocket) |
+| WebSocket | `/ws/scanner` 等 | 該当なし | JSONメッセージ | Gin (`github.com/coder/websocket`) |
 
 ## 3. ページルート
 
