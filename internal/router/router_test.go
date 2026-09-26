@@ -34,6 +34,48 @@ func TestNew_RootRouteServesPlaceholderHTML(t *testing.T) {
 	}
 }
 
+func TestNew_SwaggerRouteServesStoplightElementsHTMLByDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/swagger", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	contentType := rec.Header().Get("Content-Type")
+	if !strings.HasPrefix(contentType, "text/html") {
+		t.Fatalf("expected text/html content type, got %q", contentType)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "elements-api") {
+		t.Fatalf("expected body to embed Stoplight Elements, got %q", body)
+	}
+	if !strings.Contains(body, "/api/v1/openapi.json") {
+		t.Fatalf("expected body to reference the OpenAPI spec URL, got %q", body)
+	}
+}
+
+func TestNew_SwaggerRouteDisabledWhenSwaggerEnabledIsFalse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("SWAGGER_ENABLED", "false")
+	engine := router.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/swagger", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d when SWAGGER_ENABLED=false, got %d", http.StatusNotFound, rec.Code)
+	}
+}
+
 func TestNew_ReturnsAWailsIndependentEngine(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New()

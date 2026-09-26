@@ -6,8 +6,11 @@ package router
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
 
 const placeholderHTML = `<!DOCTYPE html>
@@ -34,7 +37,19 @@ const placeholderHTML = `<!DOCTYPE html>
 func New() *gin.Engine {
 	engine := gin.New()
 	engine.GET("/", handlePlaceholder)
+	if swaggerEnabled() {
+		engine.GET("/swagger", handler.SwaggerUI)
+	}
 	return engine
+}
+
+// swaggerEnabled reports whether the `/swagger` route (Stoplight Elements
+// UI, docs/environment/setup.md "Swagger / OpenAPI") should be registered.
+// Controlled by the SWAGGER_ENABLED env var: defaults to true (dev/staging)
+// and is disabled only when explicitly set to "false" (production, Phase 7
+// live trading).
+func swaggerEnabled() bool {
+	return os.Getenv("SWAGGER_ENABLED") != "false"
 }
 
 func handlePlaceholder(c *gin.Context) {
