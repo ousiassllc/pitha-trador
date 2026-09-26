@@ -153,25 +153,41 @@ screen_score =
 
 ### 4.7 Risk Engine
 
-Risk EngineはJevより優先され、Jevから変更できない。
+Risk EngineはJevより優先され、Jevから変更できない。Phase 7（実売買）移行後も人手承認を挟まず自動運用することを前提とし、その代わりPaper運用よりも厳格なLive用リミットと、後述のdead-man's switchで安全側に倒す。
 
-| 項目 | 初期値 |
-|------|--------|
-| max_position_per_symbol_pct | 2.0 |
-| max_total_exposure_pct | 20.0 |
-| max_daily_loss_pct | 1.0 |
-| max_trade_loss_pct | 0.25 |
-| max_open_positions | 5 |
-| max_spread_bps | 30 |
-| max_consecutive_losses | 4 |
-| cooldown_after_loss_minutes | 5 |
-| force_flat_before_market_close_minutes | 10 |
+| 項目 | Paper初期値 | Live初期値（Phase 7） |
+|------|-----------|----------------------|
+| max_position_per_symbol_pct | 2.0 | 1.0 |
+| max_total_exposure_pct | 20.0 | 10.0 |
+| max_daily_loss_pct | 1.0 | 0.5 |
+| max_trade_loss_pct | 0.25 | 0.15 |
+| max_open_positions | 5 | 3 |
+| max_spread_bps | 30 | 20 |
+| max_consecutive_losses | 4 | 3 |
+| cooldown_after_loss_minutes | 5 | 10 |
+| force_flat_before_market_close_minutes | 10 | 15 |
+| heartbeat_timeout_minutes（Live専用） | 対象外 | 120 |
 
 - FR-RISK-1: 上記制限のいずれかに抵触する場合、新規取引を拒否する
-- FR-RISK-2: 以下のいずれかでKill Switch（新規取引停止）を発動する: 日次損失上限到達、連敗上限到達、市場データ停止、Jev API連続失敗、Broker API異常、想定外ポジション発生、約定差異検知、DB書き込み失敗が一定回数継続
+- FR-RISK-2: 以下のいずれかでKill Switch（新規取引停止）を発動する: 日次損失上限到達、連敗上限到達、市場データ停止、Jev API連続失敗、Broker API異常、想定外ポジション発生、約定差異検知、DB書き込み失敗が一定回数継続、operator_heartbeat_timeout（Live専用、FR-RISK-6参照）
 - FR-RISK-3: Kill Switch発動時、必要に応じて保有ポジションをクローズする
-- FR-RISK-4: Kill SwitchはUI（Wailsアプリ）とサーバー内部処理の両方から操作可能とする
-- FR-RISK-5: すべてのRisk拒否・Kill Switch発動を監査ログに記録する
+- FR-RISK-4: Kill SwitchはUI（Wailsアプリ）とサーバー内部処理の両方から操作可能とする。Phase 7の発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）
+- FR-RISK-5: すべてのRisk拒否・Kill Switch発動・自動再開を監査ログ（`kill_switch_events`）に記録する
+- FR-RISK-6（dead-man's switch、Live専用）: Wailsアプリの認証済みUIリクエストを「操作者ハートビート」として記録する。立会時間中に`heartbeat_timeout_minutes`（初期値120分）を超えてハートビートが途絶した場合、Risk Engineは自動的に新規エントリーを停止する（保有ポジションのExitルールは継続）。オペレーターがUIを再度操作した時点でこの停止理由は自動解消する
+- FR-RISK-7（Kill Switch再開の自動/手動分類）: `kill_switch_events.reason`により再開方法を分ける
+
+| 発動理由 | 再開方法 |
+|---------|---------|
+| market_data_down（データ復旧確認後） | 自動再開 |
+| jev_api_down（API復旧確認後） | 自動再開 |
+| operator_heartbeat_timeout（ハートビート再検知） | 自動再開 |
+| cooldown_after_loss経過（連敗後クールダウン） | 自動再開 |
+| daily_loss_limit（日次損失上限到達） | 手動再開のみ |
+| unexpected_position（想定外ポジション） | 手動再開のみ |
+| fill_discrepancy（約定差異） | 手動再開のみ |
+| consecutive_losses（連敗上限到達） | 手動再開のみ |
+| db_write_failure（DB書き込み失敗継続） | 手動再開のみ |
+| broker_api_error（Broker API異常） | 手動再開のみ |
 
 ### 4.8 Entry / Exit
 
@@ -302,3 +318,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
+| 1.1 | 2026-09-26 | Risk Engine（§4.7）にPaper/Live別リミット・dead-man's switch（FR-RISK-6）・Kill Switch再開の自動/手動分類（FR-RISK-7）を追加 | Phase 7も含めた完全自動運用への方針変更 |

@@ -70,7 +70,7 @@ pitha-trador/
 │   ├── router/                    # SSR + API ルーティング定義（Huma登録含む）
 │   └── web/
 │       ├── handler/               # scanner.go, symbol.go, performance.go, calibration.go, system.go
-│       ├── middleware/            # CSRF, ロギング, リカバリ
+│       ├── middleware/            # CSRF, ロギング, リカバリ, 操作者ハートビート記録（§8.4）
 │       ├── atoms/
 │       ├── molecules/
 │       ├── organisms/
@@ -188,7 +188,7 @@ sequenceDiagram
 - `risk-check` は他ジョブと異なり同期的にPolicy Engineの直後で必ず評価され、Risk Engineの承認なしにExecutionへは到達しない
 - `outcome-labeling` / `analytics` は約定・Exit後に非同期実行し、UIの応答性に影響を与えない
 
-### 8.3 Kill Switchフロー
+### 8.3 Kill Switchフロー（発動〜再開）
 
 ```mermaid
 sequenceDiagram
@@ -198,15 +198,45 @@ sequenceDiagram
     participant TRAY as Wails通知/トレイ
     participant SLACK as Slack Webhook
 
-    RE->>RE: 日次損失上限/連敗上限/異常検知を検出
-    RE->>DB: kill_switch状態・監査ログ記録
+    RE->>RE: 日次損失上限/連敗上限/異常検知/ハートビート途絶を検出
+    RE->>DB: kill_switch_events登録（reason, detail_json）
     RE->>EX: 新規エントリー停止指示
     RE->>TRAY: ネイティブ通知発火
-    RE->>SLACK: Webhook通知送信
-    opt 必要な場合
-        RE->>EX: 保有ポジション強制クローズ指示
+    RE->>SLACK: Webhook通知送信（reason・自動/手動再開区分を含む）
+    opt reasonが daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error
+        RE->>EX: 保有ポジション強制クローズ指示（必要な場合）
+    end
+    alt 自動再開対象（market_data_down / jev_api_down / operator_heartbeat_timeout / cooldown経過）
+        RE->>RE: 発動条件の解消を定期監視
+        RE->>DB: kill_switch_events.resolved_at・resolved_by=auto を更新
+        RE->>EX: 新規エントリー再開
+        RE->>SLACK: 自動再開を通知
+    else 手動再開対象（daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error）
+        Note over RE: オペレーターがUI（pitha-kill-switch-panel）で明示的にresumeするまで停止を維持
     end
 ```
+
+### 8.4 操作者ハートビート監視（dead-man's switch、Live専用）
+
+```mermaid
+sequenceDiagram
+    participant MW as 認証済みリクエストMiddleware
+    participant RE as Risk Engine
+    participant DB as PostgreSQL
+
+    MW->>DB: 認証済みUIリクエストのたびに last_ui_heartbeat_at を更新
+    loop 立会時間中、周期チェック(River)
+        RE->>DB: last_ui_heartbeat_at を参照
+        alt now - last_ui_heartbeat_at > heartbeat_timeout_minutes（Live初期値120分）
+            RE->>RE: reason=operator_heartbeat_timeout でKill Switch発動（§8.3へ）
+        else 正常
+            RE->>RE: 何もしない
+        end
+    end
+```
+
+- ハートビートはCSRF保護対象の認証済みリクエスト（ページ/アクション/API呼び出し）であれば種類を問わず更新対象とする
+- Paper Trading運用中は実資金リスクがないためハートビート監視を適用しない（`requirements/functional.md` §4.7 表の heartbeat_timeout_minutes は Live のみ設定）
 
 ## 9. 障害対応方針
 
@@ -223,3 +253,4 @@ sequenceDiagram
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
+| 1.1 | 2026-09-26 | §8.3を発動〜再開フローに拡張し、§8.4操作者ハートビート監視（dead-man's switch）を追加 | Phase 7も含めた完全自動運用への方針変更 |
