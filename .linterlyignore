@@ -1,0 +1,8 @@
+# 自動生成コード（Templが生成するGoコード。手書きソースコードの除外は基本追加しない）
+*_templ.go
+
+# 既存の仕様書（分割済み各Issueで確定した既存内容。300行超過は#27時点の既知債務。
+# 本ファイルはCI非対象・pre-commitのみが対象のためここで除外し、分割は別Issueで対応する）
+docs/architecture/er.md
+docs/architecture/overview.md
+docs/requirements/functional.md
