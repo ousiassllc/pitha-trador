@@ -10,7 +10,8 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver (pure Go, CGO-free)
+	_ "modernc.org/sqlite"     // registers the "sqlite" database/sql driver (pure Go, CGO-free)
+	_ "modernc.org/sqlite/vec" // registers the vec0 virtual table module (sqlite-vec, docs/architecture/er.md §ベクトルインデックス) via sqlite3_auto_extension, for db/migrations' CREATE VIRTUAL TABLE ... USING vec0 statements and internal/service/rag's queries
 
 	"github.com/ousiassllc/pitha-trador/db"
 )

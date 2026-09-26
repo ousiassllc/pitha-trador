@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
 func newTestDB(t *testing.T) *sql.DB {
@@ -37,7 +38,7 @@ func TestEngine_RunCycle_PersistsComputedSnapshots(t *testing.T) {
 	db := newTestDB(t)
 	instruments := repository.NewInstrumentRepository(db)
 	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
 
 	inst := mustCreateInstrument(t, instruments, "7203")
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
@@ -82,7 +83,7 @@ func TestEngine_RunCycle_ComputesSpreadBpsFromBoard(t *testing.T) {
 	db := newTestDB(t)
 	instruments := repository.NewInstrumentRepository(db)
 	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
 
 	inst := mustCreateInstrument(t, instruments, "9433")
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
@@ -115,7 +116,7 @@ func TestEngine_RunCycle_NoBoardDataLeavesSpreadBpsNil(t *testing.T) {
 	db := newTestDB(t)
 	instruments := repository.NewInstrumentRepository(db)
 	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
 
 	inst := mustCreateInstrument(t, instruments, "1301")
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
@@ -142,7 +143,7 @@ func TestEngine_RunCycle_MultipleInstrumentsInOneTransaction(t *testing.T) {
 	db := newTestDB(t)
 	instruments := repository.NewInstrumentRepository(db)
 	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
 
 	a := mustCreateInstrument(t, instruments, "7203")
 	b := mustCreateInstrument(t, instruments, "9433")
@@ -164,7 +165,7 @@ func TestEngine_RunCycle_DuplicateBarRollsBackWholeCycle(t *testing.T) {
 	db := newTestDB(t)
 	instruments := repository.NewInstrumentRepository(db)
 	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
 
 	a := mustCreateInstrument(t, instruments, "7203")
 	b := mustCreateInstrument(t, instruments, "9433")
