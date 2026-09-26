@@ -36,14 +36,41 @@ func TestOpen_AppliesMigrationsAndEnablesRequiredPragmas(t *testing.T) {
 		t.Fatalf("expected PRAGMA journal_mode=wal, got %q", journalMode)
 	}
 
-	// The embedded db/migrations/000001_create_instruments_table.up.sql
-	// migration must have been applied against the empty database file.
-	var tableName string
-	err = conn.QueryRow(
-		"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'instruments'",
-	).Scan(&tableName)
+	// The embedded db/migrations/*.up.sql migrations must have created
+	// every table introduced so far (docs/architecture/er.md
+	// §instruments, §market_snapshots, §jobs).
+	for _, table := range []string{"instruments", "market_snapshots", "jobs"} {
+		var tableName string
+		err = conn.QueryRow(
+			"SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table,
+		).Scan(&tableName)
+		if err != nil {
+			t.Fatalf("expected %s table to exist after migration: %v", table, err)
+		}
+	}
+}
+
+func TestOpen_JobsTableRejectsInvalidStatus(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+
+	conn, err := repository.Open(dbPath)
 	if err != nil {
-		t.Fatalf("expected instruments table to exist after migration: %v", err)
+		t.Fatalf("Open(%q) returned error: %v", dbPath, err)
+	}
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Errorf("close conn: %v", err)
+		}
+	})
+
+	// docs/architecture/er.md §jobs: status has a CHECK constraint
+	// limiting it to pending|running|succeeded|failed.
+	_, err = conn.Exec(
+		`INSERT INTO jobs (queue, payload_json, status, scheduled_at) VALUES (?, ?, ?, ?)`,
+		"market-data", "{}", "bogus-status", "2026-09-26T00:00:00Z",
+	)
+	if err == nil {
+		t.Fatalf("insert with invalid jobs.status succeeded, want CHECK constraint violation")
 	}
 }
 

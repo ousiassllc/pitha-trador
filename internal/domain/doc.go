@@ -6,6 +6,8 @@
 // (repository/service/router/web). See docs/architecture/overview.md §3 for
 // the layer dependency rules (handler → service → repository → domain).
 //
-// Concrete domain types are introduced by later sub-scopes; this file only
-// establishes the package skeleton.
+// Instrument, Snapshot and Feature are introduced by this sub-scope
+// (instrument.go, snapshot.go, feature.go). The remaining concrete domain
+// types (Jev decisions, signals, orders, positions, calibration results,
+// policy proposals) are introduced by later sub-scopes.
 package domain
