@@ -19,11 +19,34 @@ type StrategyConfig struct {
 // ScanConfig holds the Scheduler scan-frequency settings
 // (functional.md §4.3 スキャン頻度・イベント駆動).
 type ScanConfig struct {
-	FullScanIntervalSeconds            int `yaml:"full_scan_interval_seconds"`
-	CandidateRefreshIntervalSecondsMin int `yaml:"candidate_refresh_interval_seconds_min"`
-	CandidateRefreshIntervalSecondsMax int `yaml:"candidate_refresh_interval_seconds_max"`
-	HeldPositionIntervalSecondsMin     int `yaml:"held_position_interval_seconds_min"`
-	HeldPositionIntervalSecondsMax     int `yaml:"held_position_interval_seconds_max"`
+	FullScanIntervalSeconds            int                `yaml:"full_scan_interval_seconds"`
+	CandidateRefreshIntervalSecondsMin int                `yaml:"candidate_refresh_interval_seconds_min"`
+	CandidateRefreshIntervalSecondsMax int                `yaml:"candidate_refresh_interval_seconds_max"`
+	HeldPositionIntervalSecondsMin     int                `yaml:"held_position_interval_seconds_min"`
+	HeldPositionIntervalSecondsMax     int                `yaml:"held_position_interval_seconds_max"`
+	EventTrigger                       EventTriggerConfig `yaml:"event_trigger"`
+}
+
+// EventTriggerConfig holds FR-SCAN-1/FR-SCAN-2's event-driven
+// re-evaluation thresholds (functional.md §4.3): a symbol whose
+// abs(1分リターン), abs(出来高比), abs(スプレッドΔbps) and
+// abs(板インバランスΔ) all stay under their respective threshold, and
+// has no VWAP cross/high-low break/order-flow change/news flag either,
+// is quiet enough that Jev Scout evaluation should be skipped that cycle
+// (FR-SCAN-2); otherwise the symbol is re-evaluated immediately,
+// bypassing the normal candidate-refresh cadence (FR-SCAN-1). The
+// caller translates these into
+// internal/service/featureengine.EventThresholds (that package cannot
+// import internal/config directly, doc.go's layer rule).
+// functional.md §4.3 fixes no numeric default for these - unlike Fast
+// Screener/Risk's thresholds - so config/strategy.yaml's values are this
+// project's own initial tuning pass, adjustable post-backtest like every
+// other threshold in this file.
+type EventTriggerConfig struct {
+	Return1mChangeThreshold           float64 `yaml:"return_1m_change_threshold"`
+	VolumeRatioChangeThreshold        float64 `yaml:"volume_ratio_change_threshold"`
+	SpreadChangeBpsThreshold          float64 `yaml:"spread_change_bps_threshold"`
+	OrderbookImbalanceChangeThreshold float64 `yaml:"orderbook_imbalance_change_threshold"`
 }
 
 // FastScreenerConfig holds the Fast Screener numeric filters and

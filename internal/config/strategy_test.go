@@ -32,6 +32,9 @@ func TestLoadStrategy_ParsesRepositoryTemplateFile(t *testing.T) {
 	if got, want := cfg.Policy.Long.MinEntryQuality, "strong"; got != want {
 		t.Errorf("Policy.Long.MinEntryQuality = %q, want %q", got, want)
 	}
+	if got, want := cfg.Scan.EventTrigger.VolumeRatioChangeThreshold, 2.0; got != want {
+		t.Errorf("Scan.EventTrigger.VolumeRatioChangeThreshold = %v, want %v", got, want)
+	}
 }
 
 func TestLoadStrategy_ReturnsErrorForMissingFile(t *testing.T) {

@@ -105,10 +105,14 @@ func (e *Engine) RecordHeartbeat(ctx context.Context, at time.Time) error {
 // zero HeartbeatTimeoutMinutes, Paper's config/risk.yaml default, disables
 // it entirely): if the operator heartbeat has gone silent for longer than
 // HeartbeatTimeoutMinutes, it raises an operator_heartbeat_timeout Kill
-// Switch (idempotently - see triggerIfNotActive). A later sub-scope's
-// scheduler wiring calls this periodically during立会時間
-// (docs/architecture/overview.md §10.4), same deferred-wiring precedent
-// as AutoResume above.
+// Switch (idempotently - see triggerIfNotActive).
+// internal/service/scheduler.Scheduler.CheckOperatorHeartbeat
+// (WithHeartbeatChecker) is the periodic caller's entry point (*Engine
+// implements scheduler.HeartbeatChecker directly); actually registering a
+// periodic trigger during 立会時間 in the running app
+// (docs/architecture/overview.md §10.4) is still a later composition-root
+// step, same deferred-wiring precedent as AutoResume above (nothing in
+// this build's cmd/ composes any of Scheduler's periodic methods yet).
 func (e *Engine) CheckHeartbeatTimeout(ctx context.Context) error {
 	if e.limits.HeartbeatTimeoutMinutes <= 0 {
 		return nil
