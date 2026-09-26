@@ -1,0 +1,26 @@
+package layout
+
+// Shell is the shared full-page HTML document skeleton every
+// internal/web/pages component renders into (docs/components/overview.md
+// §2, §3). It links the esbuild/Tailwind build output
+// (static/src/dist/css/app.css, static/src/dist/js/...) and the vendored
+// HTMX runtime (static/src/vendor/htmx.min.js - plain JS, so it does not
+// need the esbuild/TypeScript pipeline), both served by
+// internal/router.New()'s "/static" static file route.
+templ Shell(title string) {
+	<!DOCTYPE html>
+	<html lang="ja">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } - pitha-trador</title>
+			<link rel="stylesheet" href="/static/dist/css/app.css"/>
+			<script src="/static/vendor/htmx.min.js"></script>
+		</head>
+		<body>
+			<main>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}

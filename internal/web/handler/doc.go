@@ -7,6 +7,6 @@
 // docs/architecture/overview.md §3 for the layer dependency rules
 // (handler → service → repository → domain).
 //
-// Concrete handlers are introduced by later sub-scopes; this file only
-// establishes the package skeleton.
+// scanner.go is implemented; the remaining handlers are introduced by
+// later sub-scopes.
 package handler
