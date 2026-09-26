@@ -162,7 +162,7 @@ sequenceDiagram
     participant VEC as sqlite-vec (jev_decision_vectors)
     participant JEV as Jev Adapter
 
-    FE->>RAG: 現在の特徴量ベクトル（16次元、標準化済み）
+    FE->>RAG: 現在の特徴量ベクトル（14次元、標準化済み）
     RAG->>VEC: embedding MATCH ? ORDER BY distance LIMIT 5
     VEC-->>RAG: 類似jev_decision_id + distance
     RAG->>RAG: calibration_outcomesと結合し「方向・regime・future_return・was_direction_correct」を要約
@@ -170,7 +170,7 @@ sequenceDiagram
     JEV-->>RAG: Scout/Trader判断
 ```
 
-- 埋め込みはLLM API呼び出しを伴わない標準化済み数値特徴量ベクトル（16次元）。追加のAPIコスト・レイテンシは発生しない（FR-RAG-3）
+- 埋め込みはLLM API呼び出しを伴わない標準化済み数値特徴量ベクトル（14次元、`architecture/er.md` ベクトルインデックス節参照）。追加のAPIコスト・レイテンシは発生しない（FR-RAG-3）
 - `market_snapshots`保存時・`jev_decisions`保存時にそれぞれ`market_snapshot_vectors`/`jev_decision_vectors`（sqlite-vec仮想テーブル）へ同期書き込みする
 - コールドスタート期間（該当データが少ない）は空の検索結果として扱い、Jevは通常通り判断する（FR-RAG-4）
 
@@ -332,3 +332,4 @@ sequenceDiagram
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | §10.3を発動〜再開フローに拡張し、§10.4操作者ハートビート監視（dead-man's switch）を追加 | Phase 7も含めた完全自動運用への方針変更 |
 | 1.2 | 2026-09-26 | §7 RAG連携、§8 自己改善ループ（Sol/Opus連携）を追加。DBをPostgreSQLからSQLiteへ全面移行（Job QueueはRiverから自前Workerへ、pgvectorはsqlite-vecへ） | 自己学習による継続的改善の組み込み、Wails単一exe配布との整合 |
+| 1.3 | 2026-09-26 | §7のベクトル次元表記を16→14（`architecture/er.md`と整合）に修正 | レビュー指摘対応 |
