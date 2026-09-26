@@ -162,6 +162,7 @@ func New(opts ...Option) *gin.Engine {
 	engine.GET("/ws/symbols/:symbol", symbolHandler.WebSocket)
 
 	calibrationHandler := handler.NewCalibrationHandler(o.calibrationSource)
+	engine.GET("/calibration", calibrationHandler.Page)
 
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at

@@ -39,3 +39,29 @@ func TestNew_APICalibrationReturnsMetricsFromWithCalibrationSourceOption(t *test
 		t.Fatalf("expected body to contain the injected calibration metrics, got %q", body)
 	}
 }
+
+func TestNew_CalibrationPageRendersHeatmapIslandAndNavLinksBetweenScannerAndCalibration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/calibration", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(strings.ToLower(body), "<!doctype html>") {
+		t.Fatalf("expected document shell, got %q", body)
+	}
+	for _, want := range []string{
+		"<pitha-calibration-heatmap",
+		`<a href="/scanner">Scanner</a>`,
+		`<a href="/calibration">Calibration</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected body to contain %q, got %q", want, body)
+		}
+	}
+}
