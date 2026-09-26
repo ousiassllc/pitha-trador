@@ -239,10 +239,10 @@ del<T>(path: string): Promise<T>
 ```makefile
 .PHONY: dev
 dev:
-	@concurrently \
+	@bunx concurrently \
 		"wails dev" \
 		"templ generate --watch" \
-		"npm run dev --prefix static"
+		"bun --cwd static run dev"
 ```
 
   - `.templ`編集 → `templ generate --watch`が`_templ.go`を再生成 → `wails dev`がGoファイル変更を検知しプロセス再起動（WebViewは自動リロード）
@@ -273,3 +273,4 @@ dev:
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | §7 Wails統合の配布説明をSQLite（アプリ内蔵）前提に更新 | PostgreSQLからSQLiteへの全面移行 |
 | 1.2 | 2026-09-26 | §7にWindowsクロスビルド（CGO不要）に関する注記を追加 | レビュー指摘対応 |
+| 1.3 | 2026-09-26 | §7のMakefile例を`npm`から`bun`に修正（TypeScript/JavaScriptプロジェクトはbun固定の方針と統一） | 表記統一 |
