@@ -474,7 +474,7 @@ erDiagram
 RAG類似検索（`functional.md` FR-RAG-1〜3）のため、[sqlite-vec](https://github.com/asg017/sqlite-vec)拡張の`vec0`仮想テーブルを用いる。標準化済み特徴量ベクトルは14次元固定（return_1m, return_5m, return_15m, price_vs_vwap_bps, volume_ratio_1m, volume_ratio_5m, spread_bps, orderbook_imbalance, realized_vol_5m, realized_vol_15m, volatility_expansion_ratio, market_return_5m, sector_return_5m, stock_vs_sector_relative_strength の14項目を標準化し結合）。
 
 ```sql
--- 拡張ロード（Go側は sqlite-vec の Go バインディングで自動登録）
+-- 拡張ロード: Go側で `modernc.org/sqlite/vec` をblank importするだけで自動登録される（CGO不要、`modernc.org/sqlite`本体との組み合わせ専用）
 -- CREATE VIRTUAL TABLE は golang-migrate のマイグレーションで実行する
 
 CREATE VIRTUAL TABLE market_snapshot_vectors USING vec0(
@@ -499,3 +499,4 @@ CREATE VIRTUAL TABLE jev_decision_vectors USING vec0(
 | 1.0 | 2026-09-26 | 新規作成（PostgreSQL 16 + pgvector前提） | 初版 |
 | 1.1 | 2026-09-26 | PostgreSQLからSQLite（アプリ内蔵）へ全面移行。pgvector→sqlite-vec仮想テーブル、River→自前`jobs`テーブルに変更 | Wails単一exe配布との整合、外部DBサービス常駐の排除 |
 | 1.2 | 2026-09-26 | ベクトル次元を16→14（実際の特徴量数と一致）に修正。`runtime_settings`に`system.last_ui_heartbeat_at`等の例を明記 | レビュー指摘対応 |
+| 1.3 | 2026-09-26 | sqlite-vecのGoバインディングを`modernc.org/sqlite/vec`（CGO不要のpure Go移植）と明記 | クロスコンパイル可否の正確化 |

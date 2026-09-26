@@ -22,8 +22,8 @@
 pitha-trador/
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml            # push/PR: lint → test → build
-│       └── release.yml       # タグpush時: windows-latestでwails build
+│       ├── ci.yml            # push/PR: lint → test → build（wails build -platform windows/amd64 含む）
+│       └── e2e.yml            # タグpush時: windows-latestで.exeを実起動しPlaywright E2E（任意）
 ├── .golangci.yml              # Go lint設定
 ├── .linterly.yml              # 行数リンター設定
 ├── .linterlyignore
@@ -83,9 +83,9 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 - **ジョブ構成**: `lint` → `test` → `build` の順に実行（前段が失敗したら後段はスキップ）
   - `lint`: `golangci-lint run` ＋ `bunx biome check static/`
   - `test`: `go test ./...` ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
-  - `build`: `go build ./cmd/desktop`（GUI無しの静的解析用ビルド確認）＋ `bun --cwd static run build`（esbuild/Tailwindの静的アセットビルド確認）
-- **実行環境**: `ubuntu-latest`。Wailsの`.exe`パッケージング（WebView2依存）はCIの通常ジョブには含めない
-- **リリース時のみ**: `.github/workflows/release.yml` を別途用意し、タグpush（`v*`）をトリガーに `windows-latest` ランナーで `wails build` を実行し成果物（`.exe`）をGitHub Releasesへ添付する
+  - `build`: `wails build -platform windows/amd64` で実際の`.exe`をビルドしCI Artifactとしてアップロードする
+- **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
+- **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/overview.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途実行する（通常のlint/test/buildフローには含めない）
 
 ## Lint
 
@@ -172,3 +172,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
+| 1.1 | 2026-09-26 | CI構成を修正: `wails build -platform windows/amd64`は`ubuntu-latest`上でクロスビルド可能（Wails Windowsターゲット・`modernc.org/sqlite`系ドライバがいずれもpure GoでCGO不要なため）と判明したため、`build`ジョブに実ビルドを含め、Windowsランナーは実機E2Eテストのみに限定 | ユーザー指摘によるファクトチェック・設計修正 |
