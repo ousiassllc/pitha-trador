@@ -3,7 +3,7 @@
 *.exe
 *.test
 *.out
-vendor/
+/vendor/
 
 # Node / frontend build
 node_modules/
