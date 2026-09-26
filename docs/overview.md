@@ -22,13 +22,15 @@
 - Paper Trading による Entry/Exit・ポジション管理・PnL 集計
 - Jev 判断と将来値動きの紐付け・Calibration（Brier Score 等）
 - Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Performance・Calibration 画面）
+- Jev RAG（過去の類似局面を sqlite-vec で検索し Jev への文脈として注入）による判断品質の継続的な底上げ
+- Sol（振り返り分析）・Opus（改善提案レビュー）による Policy Engine しきい値の自己改善ループ（Risk Engine のリミット値は対象外）
 - 短期モメンタム・出来高急増・ブレイクアウト・VWAP 乖離継続/反転の 4 戦略
 
 ### 含まないもの
 
 - HFT レベルのマイクロ秒売買
-- 完全自律型の資金運用（Risk Engine を経由しない発注）
-- AI（Jev）によるリスクルールそのものの変更
+- 完全自律型の資金運用（Risk Engine を経由しない発注。Phase 7 の実売買も Risk Engine 経由であれば人手承認なしの自動運用を許容する）
+- AI（Jev/Sol/Opus）による Risk Engine のリミット値そのものの変更（Policy Engine しきい値の自己改善は対象内）
 - Jev の confidence をそのまま実勝率として扱うこと
 - 最初から全資金を投入した Live Trading
 - LLM への価格計算・ポジションサイズ計算の委任
@@ -60,11 +62,14 @@ graph TD
             RE["Risk Engine"]
             EX["Execution (Paper / kabu 発注)"]
             CAL["Calibration"]
-            DB[("PostgreSQL")]
+            RAG["RAG Context Builder"]
+            SOL_GOV["Self-Improvement Governor\n(Sol/Opus連携)"]
+            DB[("SQLite\n（アプリ内蔵）")]
         end
         KABU["kabuステーションAPI\n(SBI証券 常駐アプリ)"]
     end
     JEVAPI["Jev API (外部)"]
+    SOLAPI["Sol / Opus / Luna API (外部)"]
 
     UI <--> API
     API --> MD
@@ -73,6 +78,12 @@ graph TD
     JS -->|"通過"| JT
     JS -.->|"API呼び出し"| JEVAPI
     JT -.->|"API呼び出し"| JEVAPI
+    JS <--> RAG
+    JT <--> RAG
+    RAG <--> DB
+    SOL_GOV -.->|"API呼び出し"| SOLAPI
+    SOL_GOV <--> DB
+    SOL_GOV --> PE
     JT --> PE --> RE --> EX
     EX <--> KABU
     EX --> CAL
@@ -94,8 +105,8 @@ graph TD
 |------------|------|------|
 | 機能要件 | `docs/requirements/functional.md` | スキャン〜Jev判定〜Policy/Risk〜Paper執行〜Calibrationのユースケースと画面別機能一覧 |
 | 非機能要件 | `docs/requirements/non-functional.md` | 性能・可用性(24/365目標)・セキュリティ・監視(ログ+Slack)・コンプライアンス前提 |
-| アーキテクチャ設計 | `docs/architecture/overview.md` | Go レイヤードアーキテクチャ、kabuステーションAPI連携、Wails単一プロセス構成、Scheduler/Worker設計 |
-| ER / データモデル | `docs/architecture/er.md` | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes のテーブル定義 |
+| アーキテクチャ設計 | `docs/architecture/overview.md` | Go レイヤードアーキテクチャ、kabuステーションAPI/RAG/自己改善ループ連携、Wails単一プロセス構成、SQLite上の自前Scheduler/Worker設計 |
+| ER / データモデル | `docs/architecture/er.md` | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes/kill_switch_events/runtime_settings/policy_proposals/jobs のSQLiteテーブル定義とsqlite-vecベクトルインデックス |
 | API 仕様 | `docs/api/endpoints.md` | Huma JSON API（/api/v1/...）と HTMX ページ/アクションルートの仕様 |
 | コンポーネント設計 | `docs/components/overview.md` | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
 
@@ -108,8 +119,8 @@ graph TD
 - Phase 2: Jev Scout — Jev API接続、Scout Questions実装、Decision Log保存
 - Phase 3: Jev Trader — LONG/SHORT/NONE判定、Policy Engine
 - Phase 4: Paper Trading — Entry/Exit、Position管理、Paper約定、PnL
-- Phase 5: Calibration — Outcome Labeling、Confidence bucket分析、Brier/Log Loss
-- Phase 6: Continuous Loop — Event-driven refresh、Open position monitoring、Kill Switch、Alert
+- Phase 5: Calibration — Outcome Labeling、Confidence bucket分析、Brier/Log Loss、RAG用embedding索引構築
+- Phase 6: Continuous Loop — Event-driven refresh、Open position monitoring、Kill Switch、Alert、Sol/Opusによる自己改善ループ
 - Phase 7: Small Live — 十分な検証後、法令・証券会社API規約を確認した上でごく小さなサイズから検討
 
 ## 用語集
@@ -132,9 +143,17 @@ graph TD
 | Paper Trading | 実資金を用いず注文・約定を模擬する検証運用 |
 | VWAP | Volume Weighted Average Price（出来高加重平均価格） |
 | ATR | Average True Range（平均真の値幅、ボラティリティ指標） |
+| RAG | Retrieval-Augmented Generation。過去の類似局面をsqlite-vecで検索しJevへのfew-shot文脈として注入する仕組み |
+| sqlite-vec | SQLite上でベクトル類似検索を行う拡張（`vec0`仮想テーブル）。pgvectorのSQLite版に相当 |
+| Luna | ニュース分類・決算要約等を担うリアルタイム補助レイヤー（Sense） |
+| Sol | 負けトレード・Calibration指標を分析しPolicy Engineしきい値の改善提案を生成するレイヤー（Think） |
+| Opus | Solの改善提案をシャドーバックテストで検証し承認/却下するレイヤー（Govern） |
+| dead-man's switch | 操作者のUI操作（ハートビート）が一定時間途絶した場合に新規エントリーを自動停止する安全機構（Live専用） |
+| SQLite | アプリに内蔵される単一ファイルDB。Wailsの単一実行ファイル配布に合わせ採用（外部DBサービス常駐が不要） |
 
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
+| 1.1 | 2026-09-26 | RAG（sqlite-vec）・自己改善ループ（Sol/Opus）を追加、DBをPostgreSQLからSQLiteへ全面移行、Phase 7完全自動運用（dead-man's switch）に対応 | Phase 5/6/7の方針拡張とWails単一exe配布との整合 |

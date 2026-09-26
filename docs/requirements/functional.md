@@ -51,7 +51,7 @@ sequenceDiagram
     participant PE as Policy Engine
     participant RE as Risk Engine
     participant EX as Execution
-    participant DB as PostgreSQL
+    participant DB as SQLite
 
     SCH->>MD: universe snapshot取得（kabuステーションAPI）
     MD->>FE: 生データ
@@ -237,14 +237,36 @@ Paper Trading開始前に最低限以下を検証する。
 - FR-CAL-3: confidence帯（0.50-0.60, 0.60-0.70, 0.70-0.80, 0.80-0.90, 0.90-1.00）ごとに方向一致率と平均future returnを算出する
 - FR-CAL-4: 判定水平線（horizon）ごとに`future_return`, `max_adverse_excursion`, `max_favorable_excursion`, `was_direction_correct`を`calibration_outcomes`に保存する
 
-### 4.13 Luna / Sol 連携（補助・任意）
+### 4.13 Jev RAG（経験ベース文脈拡張）
 
-MVP必須要件ではないが、将来拡張の余地として設計上考慮する。
+Jev Scout/Traderが「今の状態」だけでなく「過去の類似局面で何が起きたか」を踏まえて判断できるよう、過去データを検索し文脈として注入する。
 
-| 役割 | 用途 |
-|------|------|
-| Luna（Sense） | ニュース分類・決算要約・bullish/bearish/neutral分類・イベント抽出。リアルタイム補助処理 |
-| Sol（Think） | 負けトレード分析・相場環境変化分析・Jev誤判定クラスタ分析・戦略改善案。高頻度ループには入れない |
+- FR-RAG-1: `market_snapshots`（全スナップショット）および`jev_decisions`（判断が発生した局面。`calibration_outcomes`と紐付く）の各行に、標準化済み特徴量ベクトル（return_1m/5m/15m, price_vs_vwap_bps, volume_ratio_1m/5m, spread_bps, orderbook_imbalance, realized_vol_5m/15m, volatility_expansion_ratio, market_return_5m, sector_return_5m 等）を`market_snapshot_vectors`/`jev_decision_vectors`（sqlite-vec `vec0`仮想テーブル）に保存する
+- FR-RAG-2: Jev Scout/Trader呼び出し直前に、現在の状態ベクトルに対しsqlite-vecで類似度上位k件（初期値k=5）を`jev_decisions`（`calibration_outcomes`紐付き済みのもの優先）および`market_snapshots`から検索する
+- FR-RAG-3: 検索結果（類似局面の方向・regime・実際のfuture_return・was_direction_correct等の要約）をJevへのプロンプトにfew-shot文脈として注入する。埋め込みはLLM API呼び出しを伴わない数値特徴量ベクトルのみを用い、追加のAPIコスト・レイテンシを発生させない
+- FR-RAG-4: 蓄積データが不十分な期間（コールドスタート）はRAG文脈を空のまま呼び出す（Jevの通常判断のみで動作する）
+- FR-RAG-5: Symbol DetailのDecision historyに、参照した類似局面の件数を付加情報として表示できる（`components/overview.md`参照。UI必須要件ではない）
+
+### 4.14 自己改善ループ（Luna / Sol / Opus 連携）
+
+MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として組み込む。「自己学習しながら継続的に改善する」ことを目的とし、高頻度の売買判断（Jev）とは分離した低頻度の振り返り・改善提案・検証・適用ループを構成する。
+
+| 役割 | 用途 | 呼び出し頻度 |
+|------|------|------------|
+| Luna（Sense） | ニュース分類・決算要約・bullish/bearish/neutral分類・イベント抽出 | リアルタイム補助（高頻度ループ内） |
+| Jev（Decide） | 個別銘柄の売買方向・レジーム判断（RAG文脈込み） | 高頻度（§4.4, §4.5） |
+| Sol（Think） | 負けトレード分析・相場環境変化分析・Jev誤判定クラスタ分析を行い、Policy Engineしきい値の改善提案（rationale付き）を生成する | 低頻度（日次、引け後） |
+| Opus（Govern） | Solの改善提案をレビューし、直近の実績データでシャドーバックテスト検証した上で承認/却下する | Sol提案発生時のみ |
+| Risk Engine（Control） | ポジションサイズ・損失上限等の最終拒否権。Sol/Opusからは変更不可 | 常時 |
+| Execution（Act） | 発注・約定 | 常時 |
+
+- FR-SELFIMPROVE-1: Sol は日次（引け後）に、直近の負けトレード・Calibration指標（Brier Score/ECE/confidence bucket別PnL）を分析し、`policy_proposals`に改善提案（`rationale_json`, `proposed_changes_json`）を記録する
+- FR-SELFIMPROVE-2: Solが変更を提案できる対象は`runtime_settings`の`policy.*`キー（Policy Engineのしきい値）に限定する。`risk.*`キー（Risk Engineのリミット値）および Jev の`prompt_version`/質問セット自体は自己改善ループの対象外とし、人手のみが変更できる（`overview.md` 非目標「AIによるリスクルール変更」を継続遵守）
+- FR-SELFIMPROVE-3: 1提案あたりの変更幅は confidence系しきい値で±0.05、entry_quality等の段階型しきい値で1段階までを上限とする
+- FR-SELFIMPROVE-4: Opusは提案を受け取ると、直近の`trade_signals`/`jev_decisions`/`calibration_outcomes`（直近20営業日相当）に対し提案後しきい値を適用した場合のExpectancy・Max Drawdownをシャドーバックテスト（バックテストエンジン§4.11を再利用）で算出し、既存policy_versionに対しExpectancyが悪化せずMax Drawdownの悪化が許容範囲内（相対10%以内）の場合のみ承認する
+- FR-SELFIMPROVE-5: 承認された提案は新しい`policy_version`として`runtime_settings`に自動適用し、`policy_proposals.status`を`applied`に更新する。却下時は`rejected`として理由を記録する
+- FR-SELFIMPROVE-6: 適用後5営業日相当のExpectancyが適用前より相対20%以上悪化した場合、自動的に直前の`policy_version`へロールバックし、Slack通知する
+- FR-SELFIMPROVE-7: Sol/Opusの提案・レビュー・適用・ロールバックはすべて`policy_proposals`と`runtime_settings`の変更履歴として監査可能な形で保存する
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -286,8 +308,8 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | Phase 2: Jev Scout | Jev API接続、Scout Questions実装、Decision Log保存 |
 | Phase 3: Jev Trader | LONG/SHORT/NONE判定、Policy Engine |
 | Phase 4: Paper Trading | Entry/Exit、Position管理、Paper約定、PnL |
-| Phase 5: Calibration | Outcome Labeling、Confidence bucket分析、Brier/Log Loss |
-| Phase 6: Continuous Loop | Event-driven refresh、Open position monitoring、Kill Switch、Alert |
+| Phase 5: Calibration | Outcome Labeling、Confidence bucket分析、Brier/Log Loss、RAG用embedding索引構築（§4.13） |
+| Phase 6: Continuous Loop | Event-driven refresh、Open position monitoring、Kill Switch、Alert、Sol/Opusによる自己改善ループ（§4.14） |
 | Phase 7: Small Live | 十分な検証後、法令・証券会社API規約を確認した上でごく小さなサイズから検討 |
 
 ## 7. MVP完了条件
@@ -304,6 +326,8 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 - Jev判断と将来リターンを紐付けられる
 - Calibration Dashboardが表示される
 - Kill Switchが動作する
+- RAGが類似局面をJevへの文脈として注入できる（§4.13）
+- Sol/Opusの自己改善提案がシャドーバックテストで検証され、承認された場合のみ自動適用・監査ログ記録される（§4.14、Phase 6スコープ）
 
 ## 8. 実装時の最初の成功基準
 
@@ -319,3 +343,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | Risk Engine（§4.7）にPaper/Live別リミット・dead-man's switch（FR-RISK-6）・Kill Switch再開の自動/手動分類（FR-RISK-7）を追加 | Phase 7も含めた完全自動運用への方針変更 |
+| 1.2 | 2026-09-26 | §4.13 Jev RAG（経験ベース文脈拡張）、§4.14 自己改善ループ（Luna/Sol/Opus連携）を追加。Phase 5/6内容とMVP完了条件を更新 | 自己学習による継続的改善を組み込む方針 |

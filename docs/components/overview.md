@@ -249,7 +249,7 @@ dev:
   - `.ts`編集 → esbuildがバンドル → `static/dist`更新 → WebViewはHTTPキャッシュなし設定のため次回リクエストで反映（手動リロードまたは`hx-boost`遷移で反映）
   - `.css`編集 → TailwindがビルドしてSPAリロード不要で反映
 
-- ビルド・配布: `wails build` で単一のWindows実行ファイル（`.exe`）を生成する。PostgreSQLは同梱せず、開発者環境で事前にインストール・起動済みであることを前提とする（`requirements/non-functional.md` §3）
+- ビルド・配布: `wails build` で単一のWindows実行ファイル（`.exe`）を生成する。DBはSQLite（アプリ内蔵、`modernc.org/sqlite`）のため、Postgres等の外部DBサービスを事前にインストール・起動しておく必要はない。初回起動時に`db/migrations`を自動適用しDBファイルを生成する
 
 ## 8. エラーハンドリング（要約）
 
@@ -271,3 +271,4 @@ dev:
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
+| 1.1 | 2026-09-26 | §7 Wails統合の配布説明をSQLite（アプリ内蔵）前提に更新 | PostgreSQLからSQLiteへの全面移行 |
