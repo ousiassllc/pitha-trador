@@ -36,6 +36,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | POST | `/system/pause` | 新規エントリー一時停止（Kill Switchとは別。手動での一時停止） | システム状態バッジ（OOB） |
 | POST | `/system/resume` | 一時停止解除 | システム状態バッジ（OOB） |
 | POST | `/system/kill` | Kill Switch手動発動（確認モーダル経由） | システム状態バッジ＋トースト（OOB） |
+| GET | `/system/status` | システム状態バッジのフラグメント再取得（Lit→HTMX間接連携: `systemStateChanged`イベント受信時にHeaderが呼び出す） | システム状態バッジ |
 | POST | `/positions/:id/close` | 手動決済（成行Paper Exit） | ポジション行フラグメント |
 
 ### システム状態遷移（アクションルート）
