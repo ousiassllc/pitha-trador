@@ -2,10 +2,13 @@ package handler
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
 // CalibrationSource supplies Calibration's aggregated evaluation metrics
@@ -83,4 +86,18 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, _ *struct{}) (*
 	out.Body.LogLoss = metrics.LogLoss
 	out.Body.ExpectedCalibrationError = metrics.ExpectedCalibrationError
 	return out, nil
+}
+
+// Page implements `GET /calibration` (docs/api/endpoints.md §3): the
+// Calibration page, embedding the `pitha-calibration-heatmap` island
+// (functional.md §5.4, components/overview.md §5.3). Unlike
+// ScannerHandler.Page there is no HX-Request fragment variant - the
+// reliability curve/heatmap is drawn entirely client-side by
+// pitha-calibration-heatmap itself (which fetches
+// GET /api/v1/calibration on its own), so this handler needs no
+// CalibrationSource dependency to render.
+func (h *CalibrationHandler) Page(c *gin.Context) {
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Status(http.StatusOK)
+	_ = pages.CalibrationPage().Render(c.Request.Context(), c.Writer)
 }
