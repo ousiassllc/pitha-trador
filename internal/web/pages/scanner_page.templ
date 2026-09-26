@@ -9,13 +9,18 @@ import (
 )
 
 // ScannerPage is the Scanner Dashboard full page (functional.md §5.1):
-// layout.Shell around organisms.ScannerTableFallback. `GET /scanner`
-// (internal/web/handler.ScannerHandler.Page) renders this for a normal
-// (non-HX-Request) navigation, and the ScannerTableFallback fragment
-// alone for an HX-Request (docs/api/endpoints.md §3).
+// layout.Shell around organisms.ScannerTableFallback, plus the
+// `pitha-scanner-table` Lit component bundle (components/overview.md
+// §5.2) that hydrates over ScannerTableFallback's SSR markup. `GET
+// /scanner` (internal/web/handler.ScannerHandler.Page) renders this for a
+// normal (non-HX-Request) navigation, and the ScannerTableFallback
+// fragment alone for an HX-Request (docs/api/endpoints.md §3) - the
+// fragment doesn't need its own script tag since the bundle is already
+// loaded from the first full-page visit.
 templ ScannerPage(candidates []domain.Candidate, asOf time.Time) {
 	@layout.Shell("Scanner Dashboard") {
 		<h1>Scanner Dashboard</h1>
 		@organisms.ScannerTableFallback(candidates, asOf)
+		<script type="module" src="/static/dist/js/scanner-table/pitha-scanner-table.js"></script>
 	}
 }

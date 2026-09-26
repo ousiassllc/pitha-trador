@@ -7,6 +7,8 @@ package router
 import (
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -28,6 +30,19 @@ const placeholderHTML = `<!DOCTYPE html>
 </body>
 </html>
 `
+
+// staticDir is static/src's absolute path, resolved relative to this
+// source file rather than the process's current working directory so
+// `/static/...` serves the same esbuild/Tailwind output
+// (components/overview.md §2) regardless of whether the caller is `go
+// test`, `cmd/server`, or `wails dev` (each has a different cwd). Once
+// `wails build` packages a single .exe (architecture/overview.md §7), this
+// is replaced by an embed.FS baked in at build time instead of reading
+// from disk.
+var staticDir = func() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "static", "src")
+}()
 
 // defaultCandidateRefreshInterval mirrors config/strategy.yaml's
 // scan.candidate_refresh_interval_seconds_min/max defaults
@@ -75,6 +90,7 @@ func New(opts ...Option) *gin.Engine {
 	}
 
 	engine := gin.New()
+	engine.Static("/static", staticDir)
 	engine.GET("/", handlePlaceholder)
 	if swaggerEnabled() {
 		engine.GET("/swagger", handler.SwaggerUI)

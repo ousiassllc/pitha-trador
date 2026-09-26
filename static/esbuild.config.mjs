@@ -1,8 +1,10 @@
 // esbuild build/watch script for the Lit/TypeScript frontend
-// (docs/components/overview.md §1, §6). Bundles static/src/components/lib
-// into static/src/dist/js/; the four pitha-* Lit components listed in
-// docs/components/overview.md §5 are added to `entryPoints` by the
-// follow-up HALT UI implementation scope once they exist.
+// (docs/components/overview.md §1, §6). Bundles static/src/components/**
+// into static/src/dist/js/**, mirroring the source subdirectory layout
+// (`outbase`) so each pitha-* component's bundle has a stable, predictable
+// path regardless of how many sibling components/lib files exist. The
+// remaining pitha-* Lit components listed in docs/components/overview.md
+// §5 are added to `entryPoints` by later sub-scopes once they exist.
 import * as esbuild from 'esbuild';
 
 const watch = process.argv.includes('--watch');
@@ -12,8 +14,10 @@ const buildOptions = {
     'src/components/lib/api.ts',
     'src/components/lib/ws.ts',
     'src/components/lib/logger.ts',
+    'src/components/scanner-table/pitha-scanner-table.ts',
   ],
   outdir: 'src/dist/js',
+  outbase: 'src/components',
   bundle: true,
   format: 'esm',
   target: 'es2022',

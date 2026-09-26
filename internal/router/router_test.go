@@ -144,3 +144,19 @@ func TestNew_ScannerPageServesFullPageOrFragmentByHXRequestHeader(t *testing.T) 
 		t.Fatalf("fragment: expected candidate symbol, got %q", fragRec.Body.String())
 	}
 }
+
+func TestNew_StaticRouteServesVendoredAssets(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/static/vendor/htmx.min.js", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "htmx") {
+		t.Fatalf("expected vendored htmx bundle content, got %d bytes", rec.Body.Len())
+	}
+}

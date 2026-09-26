@@ -13,32 +13,40 @@ import (
 // Return, Volume Ratio, VWAP distance, Spread, Jev Direction/Confidence/
 // Entry Quality, and Current Position. It is used both for the initial
 // SSR page load and for the `GET /scanner` HX-Request fragment response
-// (internal/web/handler.ScannerHandler.Page) - and, per its name, for
-// JS-disabled rendering, since `pitha-scanner-table` (a later sub-scope)
-// hydrates over this same markup rather than replacing it.
+// (internal/web/handler.ScannerHandler.Page).
+//
+// The table is nested inside a `<pitha-scanner-table>` custom element
+// (static/src/components/scanner-table): before JS loads (or for the
+// no-JS case) browsers render an unknown element as a plain container, so
+// this exact markup already displays correctly; once `pitha-scanner-table`
+// upgrades, it renders into its own light DOM and takes over in place
+// (sorting, `/ws/scanner` live updates), per its "銘柄行は通常の
+// `<a href>` として描画する" contract (components/overview.md §5.2).
 templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 	<section id="scanner-table" data-testid="scanner-table">
-		<table>
-			<caption>{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
-			<thead>
-				<tr>
-					<th>Symbol</th>
-					<th>Price</th>
-					<th>1m Return</th>
-					<th>5m Return</th>
-					<th>Volume Ratio</th>
-					<th>VWAP Distance (bps)</th>
-					<th>Spread (bps)</th>
-					<th>Jev</th>
-					<th>Position</th>
-				</tr>
-			</thead>
-			<tbody>
-				for _, c := range candidates {
-					@scannerRow(c)
-				}
-			</tbody>
-		</table>
+		<pitha-scanner-table api-url="/api/v1/scanner" ws-url="/ws/scanner">
+			<table>
+				<caption>{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
+				<thead>
+					<tr>
+						<th>Symbol</th>
+						<th>Price</th>
+						<th>1m Return</th>
+						<th>5m Return</th>
+						<th>Volume Ratio</th>
+						<th>VWAP Distance (bps)</th>
+						<th>Spread (bps)</th>
+						<th>Jev</th>
+						<th>Position</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, c := range candidates {
+						@scannerRow(c)
+					}
+				</tbody>
+			</table>
+		</pitha-scanner-table>
 	</section>
 }
 
