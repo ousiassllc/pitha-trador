@@ -55,6 +55,45 @@ func (e *Engine) recovered(ctx context.Context, reason string) (bool, error) {
 	}
 }
 
+// CheckMarketDataHealth implements FR-RISK-2's 市場データ停止 detection:
+// if cfg.MarketDataHealth reports unhealthy, it raises a
+// market_data_down Kill Switch (idempotently - see triggerIfNotActive).
+// This is the trigger-side counterpart to recovered's own use of the
+// same HealthChecker for AutoResume's resolution check above - a single
+// health signal drives both halves of FR-RISK-7's market_data_down
+// auto-resume cycle. A later sub-scope's internal/service/marketdata
+// health signal and scheduler wiring calls this periodically
+// (docs/architecture/overview.md §10.3's "日次損失上限/連敗上限/異常検
+// 知を検出"); AlwaysHealthy keeps it inert until that signal exists,
+// same deferred-wiring precedent as CheckHeartbeatTimeout below.
+func (e *Engine) CheckMarketDataHealth(ctx context.Context) error {
+	return e.checkHealthTrigger(ctx, domain.KillReasonMarketDataDown, e.marketDataHealth)
+}
+
+// CheckJevAPIHealth implements FR-RISK-2's Jev API連続失敗 detection: if
+// cfg.JevAPIHealth reports unhealthy, it raises a jev_api_down Kill
+// Switch (idempotently). Same trigger/resolve pairing and deferred-wiring
+// precedent as CheckMarketDataHealth above (a later
+// internal/service/jev sub-scope wires a real HealthChecker in).
+func (e *Engine) CheckJevAPIHealth(ctx context.Context) error {
+	return e.checkHealthTrigger(ctx, domain.KillReasonJevAPIDown, e.jevAPIHealth)
+}
+
+// checkHealthTrigger is CheckMarketDataHealth/CheckJevAPIHealth's shared
+// body: reason fires (idempotently) exactly when checker reports
+// unhealthy.
+func (e *Engine) checkHealthTrigger(ctx context.Context, reason string, checker HealthChecker) error {
+	healthy, err := checker.Healthy(ctx)
+	if err != nil {
+		return fmt.Errorf("risk: check %s health: %w", reason, err)
+	}
+	if healthy {
+		return nil
+	}
+	_, err = e.triggerIfNotActive(ctx, reason, nil)
+	return err
+}
+
 // RecordHeartbeat implements FR-RISK-6's "認証済みUIリクエストのたびに
 // last_ui_heartbeat_at を更新する" write side; internal/web/middleware's
 // Heartbeat middleware calls it once per authenticated request.

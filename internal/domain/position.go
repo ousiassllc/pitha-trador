@@ -10,7 +10,7 @@ const (
 )
 
 // Position exit reason values (functional.md FR-EXIT-1's eight exit
-// conditions, plus manual close). Execution
+// conditions, plus manual close and Kill Switch forced close). Execution
 // (internal/service/execution) sets Position.ExitReason to one of these
 // when it closes a position.
 const (
@@ -23,6 +23,15 @@ const (
 	ExitReasonMaxHolding           = "max_holding"
 	ExitReasonForceFlatBeforeClose = "force_flat_before_close"
 	ExitReasonManual               = "manual"
+	// ExitReasonForceClose is FR-RISK-3's "保有ポジション強制クローズ指
+	// 示" (architecture/overview.md §10.3, er.md §positions.exit_reason's
+	// documented "force_close" example): internal/service/risk.Engine's
+	// PositionCloser calls this when a Kill Switch reason requiring it
+	// fires (closer.go's forceCloseReasons) - the specific reason is
+	// already recorded on the driving kill_switch_events row, so
+	// positions.exit_reason only needs to say "closed by Kill Switch",
+	// not repeat which one.
+	ExitReasonForceClose = "force_close"
 )
 
 // Position mirrors one positions row: a held (or closed) Paper/Live
