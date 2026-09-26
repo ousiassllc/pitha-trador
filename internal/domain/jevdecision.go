@@ -17,6 +17,28 @@ const (
 	JevDirectionNone  = "NONE"
 )
 
+// Jev regime values, set only for JevDecisionTypeTrader decisions
+// (functional.md §4.5 FR-TRADER-1, docs/components/overview.md §3
+// glossary "Regime").
+const (
+	JevRegimeTrend    = "TREND"
+	JevRegimeRange    = "RANGE"
+	JevRegimeBreakout = "BREAKOUT"
+	JevRegimeChaotic  = "CHAOTIC"
+)
+
+// Jev entry quality values, set only for JevDecisionTypeTrader decisions
+// (functional.md §4.5 FR-TRADER-1: "poor〜exceptional"). Ordered from
+// worst to best; Policy Engine's FR-POLICY-1/2 threshold
+// ("entry_quality >= strong") compares this ordering.
+const (
+	JevEntryQualityPoor        = "poor"
+	JevEntryQualityFair        = "fair"
+	JevEntryQualityGood        = "good"
+	JevEntryQualityStrong      = "strong"
+	JevEntryQualityExceptional = "exceptional"
+)
+
 // JevDecision mirrors one jev_decisions row: a single Jev Scout/Trader
 // call's input, raw output, and calibration metadata
 // (docs/architecture/er.md §jev_decisions). It is the persisted audit
@@ -43,9 +65,30 @@ type JevDecision struct {
 	// Direction is one of the JevDirection* constants, set only when
 	// DecisionType == JevDecisionTypeTrader.
 	Direction *string
-	// Confidence is Jev's confidence/probability for Direction, set only
+	// Regime is one of the JevRegime* constants, set only when
+	// DecisionType == JevDecisionTypeTrader.
+	Regime *string
+	// EntryQuality is one of the JevEntryQuality* constants, set only
 	// when DecisionType == JevDecisionTypeTrader.
+	EntryQuality *string
+	// Confidence is Jev's confidence for Direction, set only when
+	// DecisionType == JevDecisionTypeTrader. FR-TRADER-2: this is Jev's
+	// own self-reported confidence, not a verified probability of an
+	// actual price move - Calibration (functional.md §4.9) independently
+	// checks how well it tracks real outcomes.
 	Confidence *float64
+	// ToxicFlow is Jev's yes-probability that current order flow is
+	// toxic to a new entry, set only when DecisionType ==
+	// JevDecisionTypeTrader (functional.md §4.5).
+	ToxicFlow *float64
+	// LiquidityStressed is Jev's yes-probability that liquidity is
+	// currently stressed, set only when DecisionType ==
+	// JevDecisionTypeTrader (functional.md §4.5).
+	LiquidityStressed *float64
+	// ContinuationProbability is Jev's yes-probability that the current
+	// move continues, set only when DecisionType ==
+	// JevDecisionTypeTrader (functional.md §4.5).
+	ContinuationProbability *float64
 	// LatencyMs is how long the Jev call took to complete, in
 	// milliseconds.
 	LatencyMs int
