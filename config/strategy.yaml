@@ -1,8 +1,10 @@
-# strategy.yaml — Scheduler周期・Fast Screenerしきい値・Policy Engineしきい値。
+# strategy.yaml — Scheduler周期・Fast Screenerしきい値・Jev Scoutしきい値・
+# Policy Engineしきい値。
 #
 # internal/config.LoadStrategy が本ファイルを internal/config.StrategyConfig
 # へ読み込む。項目は docs/requirements/functional.md §4.2 Fast Screener /
-# §4.3 スキャン頻度・イベント駆動 / §4.6 Policy Engine の初期値に対応する。
+# §4.3 スキャン頻度・イベント駆動 / §4.4 Jev Scout / §4.6 Policy Engine の
+# 初期値に対応する。
 # しきい値は後続スコープ（Calibration結果に基づく調整、Sol自己改善ループ等）
 # で書き換えられる想定のため、コード側にハードコードしない。
 
@@ -34,6 +36,13 @@ fast_screener:
     breakout_strength: 0.2
     orderbook_imbalance: 0.2
     volatility_expansion: 0.2
+
+jev_scout:
+  # FR-SCOUT-2: 通過条件（初期値。バックテスト後に調整）。
+  # interesting_now >= 0.65 AND liquidity_ok >= 0.70 AND abnormal_activity >= 0.55
+  min_interesting_now: 0.65
+  min_liquidity_ok: 0.70
+  min_abnormal_activity: 0.55
 
 policy:
   # FR-POLICY-1/2: LONG/SHORTそれぞれのPolicy Engine通過しきい値。
