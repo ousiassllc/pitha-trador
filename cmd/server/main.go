@@ -14,6 +14,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 )
@@ -36,6 +37,17 @@ func main() {
 	}
 	defer func() { _ = logWriter.Close() }()
 	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
+
+	// bootstrap.Run opens (creating/migrating) the SQLite DB and loads
+	// config/strategy.yaml + config/risk.yaml (issue #42,
+	// docs/architecture/overview.md §10.1). This entrypoint has no
+	// window at all, so log.Fatal on failure (same as the RotatingWriter
+	// failure above) is the only sensible option.
+	state, err := bootstrap.Run(bootstrap.Config{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = state.Close() }()
 
 	addr := os.Getenv("PITHA_SERVER_ADDR")
 	if addr == "" {
