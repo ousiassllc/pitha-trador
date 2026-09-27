@@ -3,6 +3,7 @@ package repository_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -187,5 +188,70 @@ func TestJobRepository_ResetStuckRunning(t *testing.T) {
 	}
 	if got.StartedAt != nil {
 		t.Fatalf("Get(%d).StartedAt = %v after ResetStuckRunning, want nil", running.ID, got.StartedAt)
+	}
+}
+
+// TestJobRepository_ClaimNext_ConcurrentClaimsDoNotHitSQLiteBusy pits many
+// goroutines against a single JobRepository (and its shared *sql.DB pool)
+// all racing to ClaimNext the same queue at once. ClaimNext runs a SELECT
+// followed by an UPDATE inside one transaction; a deferred BEGIN only
+// acquires SQLite's write lock at that later UPDATE, so two concurrent
+// transactions that both finish their SELECT can race for the write-lock
+// upgrade and fail with SQLITE_BUSY even when PRAGMA busy_timeout is set,
+// unless BEGIN IMMEDIATE (DSN `_txlock=immediate`) forces the write lock
+// to be acquired up front (issue #39). This test asserts every enqueued
+// job is claimed exactly once, with no unexpected errors.
+func TestJobRepository_ClaimNext_ConcurrentClaimsDoNotHitSQLiteBusy(t *testing.T) {
+	repo := repository.NewJobRepository(newTestDB(t))
+	ctx := context.Background()
+	now := time.Date(2026, 9, 26, 9, 0, 0, 0, time.UTC)
+
+	const jobCount = 100
+	for i := 0; i < jobCount; i++ {
+		if _, err := repo.Enqueue(ctx, repository.JobQueueFeatureCalc, "{}", now.Add(-time.Minute)); err != nil {
+			t.Fatalf("Enqueue job %d: %v", i, err)
+		}
+	}
+
+	const workers = 20
+	var (
+		wg         sync.WaitGroup
+		mu         sync.Mutex
+		claimedIDs = make(map[int64]int)
+		unexpected []error
+	)
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				job, err := repo.ClaimNext(ctx, repository.JobQueueFeatureCalc, now)
+				if err != nil {
+					if errors.Is(err, repository.ErrJobNotFound) {
+						return
+					}
+					mu.Lock()
+					unexpected = append(unexpected, err)
+					mu.Unlock()
+					return
+				}
+				mu.Lock()
+				claimedIDs[job.ID]++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+
+	if len(unexpected) > 0 {
+		t.Fatalf("expected all ClaimNext calls to either succeed or return ErrJobNotFound, got %d unexpected error(s), first: %v", len(unexpected), unexpected[0])
+	}
+	if len(claimedIDs) != jobCount {
+		t.Fatalf("expected all %d enqueued jobs to be claimed, got %d distinct jobs claimed", jobCount, len(claimedIDs))
+	}
+	for id, n := range claimedIDs {
+		if n != 1 {
+			t.Fatalf("job %d claimed %d times, want exactly 1", id, n)
+		}
 	}
 }
