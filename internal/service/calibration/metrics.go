@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
@@ -115,4 +116,26 @@ func bucketIndex(ranges []domain.ConfidenceBucketRange, confidence float64) (int
 		}
 	}
 	return 0, false
+}
+
+// DirectionMetricsSince aggregates the labeled outcomes of Jev trader
+// decisions timestamped at or after since into separate LONG and SHORT
+// CalibrationMetrics - the per-direction input Sol's daily analysis
+// (internal/service/selfimprove, FR-SELFIMPROVE-1) weighs against each
+// direction's own policy.* thresholds.
+func (s *Service) DirectionMetricsSince(ctx context.Context, since time.Time) (long, short domain.CalibrationMetrics, err error) {
+	samples, err := s.outcomes.ListLabeledSamplesSince(ctx, since)
+	if err != nil {
+		return domain.CalibrationMetrics{}, domain.CalibrationMetrics{}, fmt.Errorf("calibration: load labeled samples since %s: %w", since, err)
+	}
+	var longSamples, shortSamples []domain.LabeledSample
+	for _, sample := range samples {
+		switch sample.Direction {
+		case domain.JevDirectionLong:
+			longSamples = append(longSamples, sample)
+		case domain.JevDirectionShort:
+			shortSamples = append(shortSamples, sample)
+		}
+	}
+	return Metrics(longSamples), Metrics(shortSamples), nil
 }

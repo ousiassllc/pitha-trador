@@ -27,6 +27,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
+	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 )
 
 // LogDir is the directory every entrypoint's logging.RotatingWriter
@@ -90,6 +91,7 @@ type Services struct {
 	Execution     *execution.Engine
 	Calibration   *calibration.Service
 	Backtest      *BacktestSource
+	Governor      *selfimprove.Governor
 
 	Scheduler *scheduler.Scheduler
 
@@ -101,7 +103,7 @@ type Services struct {
 // of state (bootstrap.Run's DB + config) and secrets (config.LoadSecrets),
 // registering every internal/service/scheduler queue Handler this build
 // wires (market-data, feature-calc, jev-scout, jev-trader,
-// outcome-labeling). notifiers are
+// outcome-labeling, analytics). notifiers are
 // entrypoint-specific extra Risk Engine alert channels (cmd/desktop passes
 // its Wails App for native OS toasts; cmd/server passes none) fanned out
 // alongside the always-on structured log and optional Slack channels
@@ -152,8 +154,19 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 		snapshots:  snapshots,
 		positions:  positions,
 	}, executionEngine, alerts.riskNotifier(notifiers))
-	policyEngine := policy.NewEngine(policy.ThresholdsFromStrategy(*state.Strategy), riskEngine, signals)
+	// runtimePolicy is config/strategy.yaml's policy.* thresholds as
+	// overridden by every Self-Improvement proposal currently applied:
+	// live signals and backtests both read it, so an approved (or
+	// rolled-back) change takes effect on the next evaluation (#52).
+	runtimePolicy := selfimprove.NewRuntimePolicy(settings, state.Strategy.Policy)
+	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
+	policyEngine := policy.NewEngine(thresholds, riskEngine, signals, policy.WithPolicySource(runtimePolicy))
 	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine})
+
+	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
+	calibrationService := calibration.NewService(outcomes)
+	governor := selfimprove.NewGovernor(repository.NewProposalRepository(state.DB), settings, positions,
+		backtestSource, state.Strategy.Policy, selfimprove.WithNotifier(alerts.selfImproveNotifier()))
 
 	sched := scheduler.New(jobs, instruments,
 		scheduler.WithOutcomeLabelSource(outcomes),
@@ -182,8 +195,9 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 		Policy:        policyEngine,
 		Risk:          riskEngine,
 		Execution:     executionEngine,
-		Calibration:   calibration.NewService(outcomes),
-		Backtest:      newBacktestSource(instruments, snapshots, decisions, policy.ThresholdsFromStrategy(*state.Strategy), executionConfig),
+		Calibration:   calibrationService,
+		Governor:      governor,
+		Backtest:      backtestSource,
 		Scheduler:     sched,
 		strategy:      state.Strategy,
 	}
@@ -193,6 +207,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	sched.RegisterHandler(repository.JobQueueJevScout, svc.Scout.HandleJob)
 	sched.RegisterHandler(repository.JobQueueJevTrader, traderHandler.HandleJob)
 	sched.RegisterHandler(repository.JobQueueOutcomeLabeling, calibration.NewLabeler(decisions, snapshots, outcomes).HandleJob)
+	sched.RegisterHandler(repository.JobQueueAnalytics, svc.handleSelfImprove)
 
 	return svc, nil
 }

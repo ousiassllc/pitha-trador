@@ -24,21 +24,26 @@ var backtestCost = backtest.CostModel{SlippageBps: 5, FeeBps: 0}
 // BacktestSource assembles backtest.RunConfig values from the persisted
 // market_snapshots/jev_decisions history of every active instrument, so
 // a Walk Forward backtest (the Performance page) or a shadow backtest
-// replays exactly the data the live pipeline recorded.
+// (selfimprove.ShadowBacktestSource) replays exactly the data the live
+// pipeline recorded, under the policy.* thresholds currently in effect.
 type BacktestSource struct {
 	instruments *repository.InstrumentRepository
 	snapshots   *repository.SnapshotRepository
 	decisions   *repository.DecisionRepository
 	thresholds  policy.Thresholds
+	policy      policy.PolicySource
 	exit        backtest.ExitRule
 }
 
-func newBacktestSource(instruments *repository.InstrumentRepository, snapshots *repository.SnapshotRepository, decisions *repository.DecisionRepository, thresholds policy.Thresholds, exit execution.Config) *BacktestSource {
+// newBacktestSource builds a BacktestSource replaying with thresholds'
+// spread/turnover limits and current's live policy.* thresholds.
+func newBacktestSource(instruments *repository.InstrumentRepository, snapshots *repository.SnapshotRepository, decisions *repository.DecisionRepository, thresholds policy.Thresholds, current policy.PolicySource, exit execution.Config) *BacktestSource {
 	return &BacktestSource{
 		instruments: instruments,
 		snapshots:   snapshots,
 		decisions:   decisions,
 		thresholds:  thresholds,
+		policy:      current,
 		exit: backtest.ExitRule{
 			StopLossPct:   exit.StopLossPct,
 			TakeProfitPct: exit.TakeProfitPct,
@@ -47,7 +52,8 @@ func newBacktestSource(instruments *repository.InstrumentRepository, snapshots *
 	}
 }
 
-// RunConfigs returns one RunConfig per active instrument covering period:
+// RunConfigs returns one RunConfig per active instrument covering period,
+// with the currently-active policy.* thresholds:
 // its market_snapshots in [period.Start, period.End) preceded by the
 // featureengine.HistoryLookbackBars bars before period.Start as
 // look-ahead-check warmup, and its Jev Trader decisions in the same range
@@ -58,6 +64,10 @@ func (b *BacktestSource) RunConfigs(ctx context.Context, period backtest.Period)
 	instruments, err := b.instruments.ListActive(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: list active instruments for backtest: %w", err)
+	}
+	thresholds := b.thresholds
+	if thresholds.Policy, err = b.policy.CurrentThresholds(ctx); err != nil {
+		return nil, fmt.Errorf("bootstrap: current policy thresholds for backtest: %w", err)
 	}
 
 	var configs []backtest.RunConfig
@@ -89,7 +99,7 @@ func (b *BacktestSource) RunConfigs(ctx context.Context, period backtest.Period)
 			Snapshots:    append(warmup, bars...),
 			WarmupBars:   len(warmup),
 			Decisions:    backtest.NewSliceDecisionSource(decisions),
-			Thresholds:   b.thresholds,
+			Thresholds:   thresholds,
 			Exit:         b.exit,
 			Cost:         backtestCost,
 		})

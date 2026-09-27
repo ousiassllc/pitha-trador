@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 )
 
 // alertChannels is every non-functional.md §5.2 alert destination this
@@ -42,6 +43,16 @@ func (c alertChannels) riskNotifier(extra []risk.Notifier) risk.Notifier {
 // Slack when configured (non-functional.md §5.2 lists this alert as
 // Slack-bound, not a native toast), otherwise the structured log.
 func (c alertChannels) jevAlerts() jev.AlertNotifier {
+	if c.slack != nil {
+		return c.slack
+	}
+	return c.log
+}
+
+// selfImproveNotifier returns the selfimprove.Notifier for policy
+// proposal apply/rollback alerts: Slack when configured, otherwise the
+// structured log (same precedence as jevAlerts).
+func (c alertChannels) selfImproveNotifier() selfimprove.Notifier {
 	if c.slack != nil {
 		return c.slack
 	}
