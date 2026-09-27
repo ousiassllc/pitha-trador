@@ -162,9 +162,10 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 
 // Start launches one worker goroutine per registered handler's queue plus
 // the cron-driven full-scan trigger at fullScanInterval
-// (functional.md §4.3) and - when WithLogRotator was given - a @daily
-// log-archival trigger (non-functional.md §5), running until ctx is
-// done or Stop is called.
+// (functional.md §4.3), the daily selfImproveCronSpec Sol-analysis
+// trigger (functional.md §4.14 FR-SELFIMPROVE-1) and - when
+// WithLogRotator was given - a @daily log-archival trigger
+// (non-functional.md §5), running until ctx is done or Stop is called.
 //
 // Only the 60-second full-scan cycle is wired to an actual enqueue here;
 // the 15-30s candidate-refresh and 5-15s held-position cycles
@@ -196,6 +197,15 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 	}); err != nil {
 		cancel()
 		return fmt.Errorf("scheduler: register full scan trigger %q: %w", spec, err)
+	}
+
+	if _, err := s.cron.AddFunc(selfImproveCronSpec, func() {
+		if err := s.EnqueueSelfImprove(runCtx, time.Now().UTC()); err != nil {
+			slog.Error("scheduler: self-improve enqueue failed", "error", err)
+		}
+	}); err != nil {
+		cancel()
+		return fmt.Errorf("scheduler: register self-improve trigger %q: %w", selfImproveCronSpec, err)
 	}
 
 	if s.logRotator != nil {

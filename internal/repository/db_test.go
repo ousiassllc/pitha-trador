@@ -39,10 +39,10 @@ func TestOpen_AppliesMigrationsAndEnablesRequiredPragmas(t *testing.T) {
 	// The embedded db/migrations/*.up.sql migrations must have created
 	// every table introduced so far (docs/architecture/er.md
 	// §instruments, §market_snapshots, §jobs, §paper_orders, §positions,
-	// §kill_switch_events, §runtime_settings).
+	// §kill_switch_events, §runtime_settings, §policy_proposals).
 	for _, table := range []string{
 		"instruments", "market_snapshots", "jobs",
-		"paper_orders", "positions", "kill_switch_events", "runtime_settings",
+		"paper_orders", "positions", "kill_switch_events", "runtime_settings", "policy_proposals",
 	} {
 		var tableName string
 		err = conn.QueryRow(

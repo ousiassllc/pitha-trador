@@ -146,3 +146,27 @@ func (n *SlackNotifier) JevAPIErrorRateExceeded(ctx context.Context, rate, thres
 	)
 	return n.PostMessage(ctx, text)
 }
+
+// ProposalApplied implements internal/service/selfimprove.Notifier:
+// overview.md §8 "GOV->>SLACK: 適用を通知" (FR-SELFIMPROVE-5).
+func (n *SlackNotifier) ProposalApplied(ctx context.Context, proposal domain.PolicyProposal) error {
+	version := ""
+	if proposal.AppliedPolicyVersion != nil {
+		version = *proposal.AppliedPolicyVersion
+	}
+	text := fmt.Sprintf(
+		":white_check_mark: 自己改善ループ: Solの提案(id=%d)がpolicy_version=%sとして適用されました",
+		proposal.ID, version,
+	)
+	return n.PostMessage(ctx, text)
+}
+
+// ProposalRolledBack implements internal/service/selfimprove.Notifier:
+// overview.md §8 "GOV->>SLACK: ロールバックを通知" (FR-SELFIMPROVE-6).
+func (n *SlackNotifier) ProposalRolledBack(ctx context.Context, proposal domain.PolicyProposal, reason string) error {
+	text := fmt.Sprintf(
+		":rotating_light: 自己改善ループ: 提案(id=%d)の適用を自動ロールバックしました: %s",
+		proposal.ID, reason,
+	)
+	return n.PostMessage(ctx, text)
+}

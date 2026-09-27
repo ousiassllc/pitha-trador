@@ -196,27 +196,6 @@ func Run(ctx context.Context, cfg RunConfig, wf WalkForwardConfig) (Result, erro
 	return result, nil
 }
 
-// ShadowBacktest runs a single out-of-sample-period backtest - the
-// "直近N営業日相当・提案後しきい値でのシャドーバックテスト" a
-// Self-Improvement Governor calls (overview.md §8 "GOV->>BT") - reusing
-// Run's exact same look-ahead-safe replay but without a
-// Training/Validation split: the Governor already fixes the proposed
-// policy.Thresholds itself (cfg.Thresholds), so there is nothing left
-// for this call to calibrate. Every bar in period is evaluated with
-// Calibrated=true. The caller compares the returned Metrics'
-// Expectancy/MaxDrawdownPct against its pre-proposal baseline
-// (overview.md §8 "BT-->>GOV: Expectancy / Max Drawdown比較結果").
-func ShadowBacktest(ctx context.Context, cfg RunConfig, period Period) (Metrics, error) {
-	if violations := VerifyNoLookahead(cfg.Snapshots); len(violations) > 0 {
-		return Metrics{}, fmt.Errorf("backtest: %d bar(s) fail FR-BT-3 look-ahead check, e.g. %s", len(violations), violations[0])
-	}
-	trades, err := replay(ctx, cfg, period, true)
-	if err != nil {
-		return Metrics{}, err
-	}
-	return Aggregate(trades), nil
-}
-
 // replay walks cfg.Snapshots forward through window, evaluating Policy
 // Engine at every bar whose Timestamp falls in [window.Start, window.End)
 // (calibrated fixes policy.Input.Calibrated for all of them), opening a

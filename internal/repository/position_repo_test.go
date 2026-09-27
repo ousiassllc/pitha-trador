@@ -238,3 +238,48 @@ func TestPositionRepository_ListOpen_And_List(t *testing.T) {
 		t.Fatalf("List() = %+v, want the single (now closed) position", all)
 	}
 }
+
+func TestPositionRepository_ListClosedBetween(t *testing.T) {
+	positions, orders, instrumentID := openTestPositionRepo(t)
+	ctx := context.Background()
+	base := time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC)
+
+	closeAt := func(offset time.Duration, pnl float64) *domain.Position {
+		entry := insertFilledEntryOrder(t, orders, instrumentID, base.Add(offset))
+		opened, err := positions.Open(ctx, domain.Position{
+			InstrumentID: instrumentID, EntryOrderID: entry.ID, Symbol: "7203",
+			Side: domain.PositionSideLong, Quantity: 100, EntryPrice: 2100, CurrentPrice: 2100, OpenedAt: base.Add(offset),
+		})
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		exitOrder, err := orders.Insert(ctx, domain.PaperOrder{
+			InstrumentID: instrumentID, Symbol: "7203", Side: domain.OrderSideSell,
+			OrderType: domain.OrderTypeMarket, Quantity: 100, Status: domain.OrderStatusFilled, SubmittedAt: base.Add(offset),
+		})
+		if err != nil {
+			t.Fatalf("insert exit order: %v", err)
+		}
+		closedAt := base.Add(offset)
+		closed, err := positions.Close(ctx, opened.ID, exitOrder.ID, 2100+pnl, pnl, domain.ExitReasonManual, closedAt)
+		if err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+		return &closed
+	}
+
+	beforeWindow := closeAt(0, -500.0)
+	inWindow := closeAt(24*time.Hour, 1500.0)
+	afterWindow := closeAt(48*time.Hour, 2000.0)
+
+	windowStart := base.Add(12 * time.Hour)
+	windowEnd := base.Add(36 * time.Hour)
+	closed, err := positions.ListClosedBetween(ctx, windowStart, windowEnd)
+	if err != nil {
+		t.Fatalf("ListClosedBetween: %v", err)
+	}
+	if len(closed) != 1 || closed[0].ID != inWindow.ID {
+		t.Fatalf("ListClosedBetween(%s, %s) = %+v, want exactly the in-window position (ids %d before, %d in, %d after)",
+			windowStart, windowEnd, closed, beforeWindow.ID, inWindow.ID, afterWindow.ID)
+	}
+}
