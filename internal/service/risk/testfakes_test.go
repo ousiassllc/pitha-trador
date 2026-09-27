@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
@@ -66,6 +67,46 @@ type fakeHealth struct {
 }
 
 func (f fakeHealth) Healthy(context.Context) (bool, error) { return f.healthy, nil }
+
+// killSwitchTriggeredCall/killSwitchAutoResumedCall/dailyLossWarningCall
+// record one fakeNotifier method invocation each, for tests asserting on
+// exactly what a Notifier was told.
+type killSwitchTriggeredCall struct {
+	event         domain.KillSwitchEvent
+	autoResumable bool
+}
+
+type dailyLossWarningCall struct {
+	currentPct float64
+	limitPct   float64
+}
+
+// fakeNotifier is a configurable risk.Notifier for tests: every method
+// records its call and returns err (nil unless a test wants to exercise
+// the "notifier failed, caller must not block on it" paths in state.go/
+// autoresume.go/warning.go).
+type fakeNotifier struct {
+	err error
+
+	triggered   []killSwitchTriggeredCall
+	autoResumed []domain.KillSwitchEvent
+	dailyLoss   []dailyLossWarningCall
+}
+
+func (f *fakeNotifier) KillSwitchTriggered(_ context.Context, ev domain.KillSwitchEvent, autoResumable bool) error {
+	f.triggered = append(f.triggered, killSwitchTriggeredCall{event: ev, autoResumable: autoResumable})
+	return f.err
+}
+
+func (f *fakeNotifier) KillSwitchAutoResumed(_ context.Context, ev domain.KillSwitchEvent) error {
+	f.autoResumed = append(f.autoResumed, ev)
+	return f.err
+}
+
+func (f *fakeNotifier) DailyLossWarning(_ context.Context, currentPct, limitPct float64) error {
+	f.dailyLoss = append(f.dailyLoss, dailyLossWarningCall{currentPct: currentPct, limitPct: limitPct})
+	return f.err
+}
 
 func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioProvider, closer risk.PositionCloser, now func() time.Time) (*risk.Engine, *repository.KillSwitchRepository) {
 	t.Helper()

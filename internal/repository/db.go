@@ -35,7 +35,10 @@ func dsn(path string) string {
 // Every connection returned from the pool has foreign key enforcement and
 // WAL journaling enabled (docs/architecture/overview.md §10.1: "マイグレー
 // ション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON,
-// WAL）"). Callers are responsible for closing the returned *sql.DB.
+// WAL）"). Every query/exec issued through it is also logged (query text,
+// duration, error) via dbmw.go's sqlmw-wrapped driver
+// (requirements/non-functional.md §5.1 "DB latency / エラー"). Callers are
+// responsible for closing the returned *sql.DB.
 func Open(path string) (*sql.DB, error) {
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -43,7 +46,8 @@ func Open(path string) (*sql.DB, error) {
 		}
 	}
 
-	conn, err := sql.Open("sqlite", dsn(path))
+	registerInstrumentedDriver()
+	conn, err := sql.Open(instrumentedDriverName, dsn(path))
 	if err != nil {
 		return nil, fmt.Errorf("repository: open sqlite database %q: %w", path, err)
 	}

@@ -234,34 +234,55 @@ func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Boa
 // non-nil) as the JSON request payload, attaching token as X-API-KEY (if
 // non-empty), and decoding a 200 response body into out. Non-200
 // responses are decoded as an ErrorResponse and returned as *APIError.
-func (c *Client) do(ctx context.Context, method, path, token string, body, out any) error {
+//
+// Every call emits a structured JSON log line (method, path, duration,
+// error) satisfying non-functional.md §5.1's "Market data fetch latency
+// / エラー率" and "kabuステーションAPI（Broker）latency / エラー" - both
+// line items name this same client, since Broker order placement (Phase
+// 7) has not started yet and GetBoard/RegisterSymbols/IssueToken already
+// cover every kabuステーションAPI call this build makes.
+func (c *Client) do(ctx context.Context, method, path, token string, body, out any) (err error) {
+	start := time.Now()
+	defer func() {
+		attrs := []any{"method", method, "path", path, "duration_ms", time.Since(start).Milliseconds()}
+		if err != nil {
+			slog.Error("marketdata: api call failed", append(attrs, "error", err)...)
+			return
+		}
+		slog.Info("marketdata: api call completed", attrs...)
+	}()
+
 	var reqBody io.Reader
 	if body != nil {
-		encoded, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("marketdata: encode request body: %w", err)
+		encoded, encodeErr := json.Marshal(body)
+		if encodeErr != nil {
+			err = fmt.Errorf("marketdata: encode request body: %w", encodeErr)
+			return err
 		}
 		reqBody = bytes.NewReader(encoded)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
-	if err != nil {
-		return fmt.Errorf("marketdata: build request: %w", err)
+	req, reqErr := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
+	if reqErr != nil {
+		err = fmt.Errorf("marketdata: build request: %w", reqErr)
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		req.Header.Set("X-API-KEY", token)
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("marketdata: request %s %s: %w", method, path, err)
+	resp, doErr := c.httpClient.Do(req)
+	if doErr != nil {
+		err = fmt.Errorf("marketdata: request %s %s: %w", method, path, doErr)
+		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("marketdata: read response body: %w", err)
+	respBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		err = fmt.Errorf("marketdata: read response body: %w", readErr)
+		return err
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -270,14 +291,16 @@ func (c *Client) do(ctx context.Context, method, path, token string, body, out a
 			Message string `json:"Message"`
 		}
 		_ = json.Unmarshal(respBody, &apiErr)
-		return &APIError{StatusCode: resp.StatusCode, Code: apiErr.Code, Message: apiErr.Message}
+		err = &APIError{StatusCode: resp.StatusCode, Code: apiErr.Code, Message: apiErr.Message}
+		return err
 	}
 
 	if out == nil {
 		return nil
 	}
-	if err := json.Unmarshal(respBody, out); err != nil {
-		return fmt.Errorf("marketdata: decode response body: %w", err)
+	if decodeErr := json.Unmarshal(respBody, out); decodeErr != nil {
+		err = fmt.Errorf("marketdata: decode response body: %w", decodeErr)
+		return err
 	}
 	return nil
 }

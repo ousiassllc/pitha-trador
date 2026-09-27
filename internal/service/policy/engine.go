@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -170,6 +171,14 @@ func NewEngine(thresholds Thresholds, risk RiskChecker, signals *repository.Sign
 // the resulting domain.TradeSignal, unpersisted. Evaluate wraps Decide
 // with persistence (FR-POLICY-5); Decide itself performs no I/O other
 // than the injected RiskChecker.
+//
+// Every call emits a structured JSON log line for non-functional.md
+// §5.1's "Signal count（生成シグナル数）" (counting "policy: trade signal
+// decided" log lines); a Risk Engine rejection additionally emits its
+// own "policy: risk engine rejected signal" line for §5.1's "Risk拒否
+// 件数" (counting those log lines is a narrower count than every
+// direction=none signal, since some become none for other FR-POLICY-1〜3
+// reasons - missing data, calibration exclusion, spread too wide, ...).
 func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
 	sig := domain.TradeSignal{
 		InstrumentID:        in.InstrumentID,
@@ -189,6 +198,8 @@ func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
 	if direction != domain.JevDirectionNone {
 		passed, riskReason := e.risk.Check(ctx, in.InstrumentID, direction)
 		if !passed {
+			slog.Warn("policy: risk engine rejected signal",
+				"instrument_id", in.InstrumentID, "symbol", in.Symbol, "direction", direction, "reason", riskReason)
 			direction = domain.JevDirectionNone
 			score = nil
 			combined := ReasonRiskEngineRejected
@@ -203,6 +214,15 @@ func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
 	sig.Score = score
 	sig.RiskPassed = direction != domain.JevDirectionNone
 	sig.RejectReason = reason
+
+	rejectReason := ""
+	if reason != nil {
+		rejectReason = *reason
+	}
+	slog.Info("policy: trade signal decided",
+		"instrument_id", in.InstrumentID, "symbol", in.Symbol, "direction", sig.Direction,
+		"risk_passed", sig.RiskPassed, "reject_reason", rejectReason)
+
 	return sig
 }
 

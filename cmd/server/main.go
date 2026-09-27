@@ -9,16 +9,30 @@ package main
 
 import (
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 )
 
 const defaultAddr = ":8080"
 
+// logDir is where RotatingWriter writes today's structured JSON log
+// file (requirements/non-functional.md §5); the same relative "logs"
+// directory cmd/desktop's own entrypoint uses.
+const logDir = "logs"
+
 func main() {
+	logWriter, err := logging.NewRotatingWriter(logDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = logWriter.Close() }()
+	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
+
 	addr := os.Getenv("PITHA_SERVER_ADDR")
 	if addr == "" {
 		addr = defaultAddr

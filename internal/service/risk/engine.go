@@ -33,9 +33,10 @@ const (
 // write it without importing internal/repository directly
 // (docs/architecture/overview.md §3 layer rule).
 const (
-	SettingKeyLastUIHeartbeatAt = "system.last_ui_heartbeat_at"
-	settingKeySystemPaused      = "system.paused"
-	settingKeySystemKilled      = "system.killed"
+	SettingKeyLastUIHeartbeatAt          = "system.last_ui_heartbeat_at"
+	settingKeySystemPaused               = "system.paused"
+	settingKeySystemKilled               = "system.killed"
+	settingKeyDailyLossWarningNotifiedAt = "system.daily_loss_warning_notified_at"
 )
 
 // autoResumableReasons is FR-RISK-7's automatic-resume set. Every other
@@ -74,6 +75,9 @@ type Config struct {
 	MarketDataHealth HealthChecker
 	JevAPIHealth     HealthChecker
 
+	// Notifier defaults to NoopNotifier{} (notifier.go).
+	Notifier Notifier
+
 	// Now defaults to time.Now. Tests override it for deterministic
 	// cooldown/heartbeat-timeout checks.
 	Now func() time.Time
@@ -91,6 +95,7 @@ type Engine struct {
 	closer           PositionCloser
 	marketDataHealth HealthChecker
 	jevAPIHealth     HealthChecker
+	notifier         Notifier
 	now              func() time.Time
 }
 
@@ -117,6 +122,9 @@ func NewEngine(cfg Config) *Engine {
 	if cfg.JevAPIHealth == nil {
 		cfg.JevAPIHealth = AlwaysHealthy{}
 	}
+	if cfg.Notifier == nil {
+		cfg.Notifier = NoopNotifier{}
+	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
@@ -129,6 +137,7 @@ func NewEngine(cfg Config) *Engine {
 		closer:           cfg.Closer,
 		marketDataHealth: cfg.MarketDataHealth,
 		jevAPIHealth:     cfg.JevAPIHealth,
+		notifier:         cfg.Notifier,
 		now:              cfg.Now,
 	}
 }

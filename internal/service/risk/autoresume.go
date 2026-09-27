@@ -3,6 +3,7 @@ package risk
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -36,6 +37,15 @@ func (e *Engine) AutoResume(ctx context.Context) (int, error) {
 		}
 		if err := e.killSwitch.Resolve(ctx, ev.ID, resolvedAt, domain.ResolvedByAuto); err != nil {
 			return resolved, fmt.Errorf("risk: auto-resolve kill switch event %d (%s): %w", ev.ID, ev.Reason, err)
+		}
+		// Same best-effort rationale as TriggerKillSwitch's own Notifier
+		// call (state.go): a Slack/Wails outage must not block resolving
+		// the Kill Switch itself.
+		ev.ResolvedAt = &resolvedAt
+		resolvedBy := domain.ResolvedByAuto
+		ev.ResolvedBy = &resolvedBy
+		if err := e.notifier.KillSwitchAutoResumed(ctx, ev); err != nil {
+			slog.Error("risk: kill switch auto-resume notification failed", "reason", ev.Reason, "error", err)
 		}
 		resolved++
 	}
