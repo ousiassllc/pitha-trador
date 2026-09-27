@@ -38,7 +38,7 @@ jobs:
         run: golangci-lint run
 
       - name: Install frontend dependencies
-        run: bun --cwd static install --frozen-lockfile
+        run: bun install --cwd static --frozen-lockfile
 
       - name: biome check
         run: bunx biome check static/
@@ -67,7 +67,7 @@ jobs:
         run: go test ./...
 
       - name: Install frontend dependencies
-        run: bun --cwd static install --frozen-lockfile
+        run: bun install --cwd static --frozen-lockfile
 
       - name: bun test
         run: bun --cwd static test
