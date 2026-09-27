@@ -23,8 +23,8 @@ const selfImproveCronSpec = "30 6 * * 1-5"
 
 // selfImprovePayload is EnqueueSelfImprove's job payload. It carries no
 // fields: the registered repository.JobQueueAnalytics handler
-// (internal/service/selfimprove.Governor.ProposeDaily, wired by a later
-// cmd/ sub-scope) derives "today's" analysis window itself, the same way
+// (internal/bootstrap's handleSelfImprove, running
+// internal/service/selfimprove.Governor.RunDaily) derives "today's" analysis window itself, the same way
 // fullScanPayload's per-instrument jobs need no more than InstrumentID/
 // Symbol.
 type selfImprovePayload struct{}

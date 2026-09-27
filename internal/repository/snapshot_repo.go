@@ -171,6 +171,34 @@ func (r *SnapshotRepository) ListByInstrumentRange(ctx context.Context, instrume
 	return out, nil
 }
 
+// ListByInstrumentBefore returns up to limit snapshots for instrumentID
+// timestamped strictly before before, most recent first - the same
+// history window the live market-data job passed to Feature Engine for a
+// bar at before, which a backtest needs as look-ahead-check warmup.
+func (r *SnapshotRepository) ListByInstrumentBefore(ctx context.Context, instrumentID int64, before time.Time, limit int) ([]domain.Snapshot, error) {
+	rows, err := r.db.QueryContext(ctx,
+		snapshotSelectColumns+` FROM market_snapshots WHERE instrument_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?`,
+		instrumentID, formatTime(before), limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list snapshots for instrument %d before %s: %w", instrumentID, before, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.Snapshot
+	for rows.Next() {
+		s, err := scanSnapshot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list snapshots for instrument %d before %s: %w", instrumentID, before, err)
+	}
+	return out, nil
+}
+
 const snapshotSelectColumns = `
 SELECT id, instrument_id, symbol, timestamp, price, bid, ask, spread_bps, volume, turnover,
 	return_1m, return_5m, return_15m, vwap, price_vs_vwap_bps, volume_ratio_5m,

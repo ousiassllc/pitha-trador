@@ -2,11 +2,9 @@ package selfimprove
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
-	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
@@ -27,11 +25,9 @@ const expectancyDegradationTolerance = 0.20
 // trade_signals/jev_decisions/calibration_outcomes"): one RunConfig per
 // instrument, its Thresholds already set to the *current* (pre-proposal)
 // policy.* values - Governor overrides only RunConfig.Thresholds.Policy
-// for the candidate pass. Mirrors backtest.DecisionSource's own "caller
-// already holds the full decisions" precedent (runner.go): a real
-// production implementation (assembling RunConfig from
-// SnapshotRepository/DecisionRepository) is a later cmd/ wiring
-// concern, same as that package's own documented gap.
+// for the candidate pass. internal/bootstrap's BacktestSource is the
+// production implementation (RunConfigs assembled from the recorded
+// market_snapshots/jev_decisions under RuntimePolicy's thresholds).
 type ShadowBacktestSource interface {
 	RunConfigs(ctx context.Context, period backtest.Period) ([]backtest.RunConfig, error)
 }
@@ -99,23 +95,8 @@ func NewGovernor(
 	return g
 }
 
-// CurrentThresholds returns the currently-active PolicyConfig: g.baseline
-// overridden by every policy.* runtime_settings key that has a value set
-// (FR-POLICY-4's "later self-improvement-loop sub-scope" runtime
-// override, config/strategy.go's LoadStrategy doc comment).
+// CurrentThresholds returns the currently-active PolicyConfig
+// (RuntimePolicy.CurrentThresholds over g.baseline and g.settings).
 func (g *Governor) CurrentThresholds(ctx context.Context) (config.PolicyConfig, error) {
-	current := g.baseline
-	for key := range domain.PolicyProposalKeys {
-		raw, ok, err := g.settings.Get(ctx, key)
-		if err != nil {
-			return config.PolicyConfig{}, fmt.Errorf("selfimprove: read runtime setting %s: %w", key, err)
-		}
-		if !ok {
-			continue
-		}
-		if err := setPolicyField(&current, key, raw); err != nil {
-			return config.PolicyConfig{}, err
-		}
-	}
-	return current, nil
+	return NewRuntimePolicy(g.settings, g.baseline).CurrentThresholds(ctx)
 }

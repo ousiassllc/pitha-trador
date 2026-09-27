@@ -27,12 +27,16 @@ func (v LookaheadViolation) String() string {
 		v.Index, v.Timestamp.Format(time.RFC3339), v.Field, formatFloatPtr(v.Stored), formatFloatPtr(v.Recomputed))
 }
 
-// VerifyNoLookahead checks every bar in bars - which must already be
-// sorted ascending by Timestamp - against featureengine.Compute's own
+// VerifyNoLookahead checks every bar in bars[warmup:] - bars must already
+// be sorted ascending by Timestamp - against featureengine.Compute's own
 // look-ahead-safe logic (FR-FE-1), recomputing each bar's
 // history-dependent Feature values (Return1m/Return5m/Return15m,
-// VolumeRatio5m, RealizedVol5m) using only the bars before it, and
-// reports every bar whose persisted value disagrees (FR-BT-3).
+// VolumeRatio5m, RealizedVol5m) from the featureengine.HistoryLookbackBars
+// bars before it (the same bounded history the live market-data job
+// supplies), and reports every bar whose persisted value disagrees
+// (FR-BT-3). The leading warmup bars are history only: their own Feature
+// values were computed from bars before the slice, so they cannot be
+// recomputed from it.
 //
 // VWAP/PriceVsVWAPBps (derived from the current bar alone, no history
 // dependency) and OrderbookImbalance/MarketReturn5m/SectorReturn5m
@@ -41,13 +45,14 @@ func (v LookaheadViolation) String() string {
 // from bars alone) are outside this check's scope: none of them can leak
 // look-ahead information through bars, since none of them depend on
 // which later bars happen to be present in the slice.
-func VerifyNoLookahead(bars []domain.Snapshot) []LookaheadViolation {
+func VerifyNoLookahead(bars []domain.Snapshot, warmup int) []LookaheadViolation {
 	var violations []LookaheadViolation
-	for i, bar := range bars {
+	for i := max(warmup, 0); i < len(bars); i++ {
+		bar := bars[i]
 		recomputed := featureengine.Compute(featureengine.Input{
 			Timestamp: bar.Timestamp,
 			Current:   readingFromSnapshot(bar),
-			History:   bars[:i],
+			History:   bars[max(0, i-featureengine.HistoryLookbackBars):i],
 		})
 
 		checks := [...]struct {

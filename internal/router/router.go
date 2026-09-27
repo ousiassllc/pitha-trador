@@ -68,6 +68,7 @@ type options struct {
 	symbolProvider    handler.SymbolProvider
 	symbolRiskParams  handler.SymbolRiskParams
 	calibrationSource handler.CalibrationSource
+	backtestRunner    handler.BacktestRunner
 }
 
 // Option configures New.
@@ -88,17 +89,18 @@ func WithCandidateRefreshInterval(interval handler.CandidateRefreshInterval) Opt
 }
 
 // WithSystemEngine overrides the Kill Switch action/API routes' backing
-// internal/web/handler.SystemEngine. Defaults to a Running
-// handler.StaticSystemEngine until a later sub-scope wires a real
-// internal/service/risk.Engine in.
+// internal/web/handler.SystemEngine. cmd/desktop and cmd/server pass
+// internal/bootstrap's real internal/service/risk.Engine; the default
+// Running handler.StaticSystemEngine only serves router-level tests.
 func WithSystemEngine(engine handler.SystemEngine) Option {
 	return func(o *options) { o.systemEngine = engine }
 }
 
 // WithSymbolProvider overrides the Symbol Detail/position/order routes'
-// backing internal/web/handler.SymbolProvider. Defaults to an empty
-// handler.StaticSymbolProvider until a later sub-scope wires a real
-// internal/service/execution.Engine in.
+// backing internal/web/handler.SymbolProvider. cmd/desktop and
+// cmd/server pass internal/bootstrap's real
+// internal/service/execution.Engine; the empty handler.StaticSymbolProvider
+// default only serves router-level tests.
 func WithSymbolProvider(provider handler.SymbolProvider) Option {
 	return func(o *options) { o.symbolProvider = provider }
 }
@@ -112,11 +114,20 @@ func WithSymbolRiskParams(params handler.SymbolRiskParams) Option {
 }
 
 // WithCalibrationSource overrides `GET /api/v1/calibration`'s backing
-// internal/web/handler.CalibrationSource. Defaults to an empty
-// handler.StaticCalibrationSource until a later sub-scope wires a real
-// internal/service/calibration.Service in.
+// internal/web/handler.CalibrationSource. cmd/desktop and cmd/server pass
+// internal/bootstrap's real internal/service/calibration.Service; the
+// empty handler.StaticCalibrationSource default only serves router-level
+// tests.
 func WithCalibrationSource(source handler.CalibrationSource) Option {
 	return func(o *options) { o.calibrationSource = source }
+}
+
+// WithBacktestRunner overrides `GET /performance`'s backing
+// internal/web/handler.BacktestRunner. cmd/desktop and cmd/server pass
+// internal/bootstrap's BacktestSource; the empty
+// handler.StaticBacktestRunner default only serves router-level tests.
+func WithBacktestRunner(runner handler.BacktestRunner) Option {
+	return func(o *options) { o.backtestRunner = runner }
 }
 
 // New builds and returns the shared Gin engine: the placeholder root
@@ -133,6 +144,7 @@ func New(opts ...Option) *gin.Engine {
 		symbolProvider:    handler.StaticSymbolProvider{},
 		symbolRiskParams:  defaultSymbolRiskParams,
 		calibrationSource: handler.StaticCalibrationSource{},
+		backtestRunner:    handler.StaticBacktestRunner{},
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -163,6 +175,9 @@ func New(opts ...Option) *gin.Engine {
 
 	calibrationHandler := handler.NewCalibrationHandler(o.calibrationSource)
 	engine.GET("/calibration", calibrationHandler.Page)
+
+	performanceHandler := handler.NewPerformanceHandler(o.backtestRunner)
+	engine.GET("/performance", performanceHandler.Page)
 
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at

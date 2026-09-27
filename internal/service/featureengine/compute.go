@@ -30,6 +30,15 @@ type Reading struct {
 	AskQty *float64
 }
 
+// HistoryLookbackBars is how many prior market_snapshots bars the live
+// market-data job passes as Input.History for each new bar. Compute's
+// longest window is 15 minutes (Return15m); at the 60s full-scan cadence
+// 20 bars covers that with margin. internal/service/backtest's
+// VerifyNoLookahead recomputes every bar from the same bounded history,
+// since VolumeRatio5m's baseline averages over every history bar
+// supplied and so depends on exactly how many there were.
+const HistoryLookbackBars = 20
+
 // Input bundles everything Compute needs to derive one instrument's
 // Feature values for the bar at Timestamp.
 type Input struct {

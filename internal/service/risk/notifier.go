@@ -9,10 +9,10 @@ import (
 // Notifier is notified of every Kill Switch state transition and
 // threshold-warning event non-functional.md §5.2 requires an immediate
 // Slack alert for that this package can itself observe.
-// internal/service/notify.SlackNotifier is the real implementation (a
-// later composition-root step wires it in - same deferred-wiring
-// precedent as PortfolioProvider/PositionCloser/HealthChecker above);
-// NoopNotifier is the placeholder default.
+// internal/bootstrap fans it out (MultiNotifier) to
+// internal/service/notify's LogNotifier/SlackNotifier and, in the Wails
+// desktop shell, cmd/desktop's App; NoopNotifier is NewEngine's default
+// when Config.Notifier is nil.
 //
 // Five of §5.2's eight alert categories key off KillSwitchTriggered's
 // ev.Reason: market_data_down (市場データ停止), broker_api_error
@@ -34,9 +34,8 @@ type Notifier interface {
 	DailyLossWarning(ctx context.Context, currentPct, limitPct float64) error
 }
 
-// NoopNotifier is the placeholder Notifier used until a later
-// composition-root step wires internal/service/notify.SlackNotifier (and,
-// for the Wails desktop shell, cmd/desktop's own App) in.
+// NoopNotifier is NewEngine's default Notifier when Config.Notifier is
+// nil (tests, or a caller with no alert channel).
 type NoopNotifier struct{}
 
 func (NoopNotifier) KillSwitchTriggered(context.Context, domain.KillSwitchEvent, bool) error {
