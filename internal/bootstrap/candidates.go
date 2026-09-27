@@ -2,18 +2,25 @@ package bootstrap
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
 
 // refreshCandidates recomputes screener.Run over every active
 // instrument's latest snapshot and turnoverTrailingBars-bar trailing
-// turnover, and publishes the result to s.Screener (issue #45) for the
-// Scanner Dashboard (internal/router.WithCandidateSource) to read.
+// turnover, publishes the result to s.Screener (issue #45) for the
+// Scanner Dashboard (internal/router.WithCandidateSource) to read, and -
+// issue #46 - enqueues one jev-scout job per resulting candidate
+// (functional.md §2's main flow: "FS->>JS: 候補銘柄（50〜200）", every
+// scan cycle, not merely on first sight of a symbol - Jev Scout's own
+// FR-SCOUT-1〜3 re-evaluates every still-passing candidate each cycle).
 //
 // An instrument with no market_snapshots rows yet (Feature Engine has not
 // completed a cycle for it) is skipped rather than fabricating a
@@ -57,6 +64,34 @@ func (s *Services) refreshCandidates(ctx context.Context) error {
 
 	candidates := screener.Run(s.strategy.FastScreener, inputs)
 	s.Screener.Set(candidates, time.Now().UTC())
+
+	now := time.Now().UTC()
+	for _, c := range candidates {
+		if err := s.enqueueJevScout(ctx, c.InstrumentID, c.Symbol, now); err != nil {
+			// A single candidate's enqueue failure (DB write error) must
+			// not drop the remaining candidates from this cycle's Jev
+			// Scout pass - the same best-effort precedent
+			// handleMarketData's own RAG-indexing comment follows for a
+			// non-critical per-item side effect alongside a
+			// already-committed primary result (here: the Screener.Set
+			// above, which every candidate already reached regardless).
+			slog.Error("bootstrap: enqueue jev-scout job failed", "instrument_id", c.InstrumentID, "symbol", c.Symbol, "error", err)
+		}
+	}
+
+	return nil
+}
+
+// enqueueJevScout enqueues one jev-scout queue job (jev.ScoutJobPayload)
+// for instrumentID/symbol, due immediately at now.
+func (s *Services) enqueueJevScout(ctx context.Context, instrumentID int64, symbol string, now time.Time) error {
+	payload, err := json.Marshal(jev.ScoutJobPayload{InstrumentID: instrumentID, Symbol: symbol})
+	if err != nil {
+		return fmt.Errorf("bootstrap: encode jev-scout job payload for %q: %w", symbol, err)
+	}
+	if _, err := s.Jobs.Enqueue(ctx, repository.JobQueueJevScout, string(payload), now); err != nil {
+		return fmt.Errorf("bootstrap: enqueue jev-scout job for %q: %w", symbol, err)
+	}
 	return nil
 }
 

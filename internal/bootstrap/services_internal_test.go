@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
@@ -176,6 +177,52 @@ func TestBuildServices_RegistersFeatureCalcHandler(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("feature-calc job status = %q after 3s of Scheduler.Start; want %q (handler not registered/running)", job.Status, "succeeded")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestBuildServices_RegistersJevScoutHandler proves BuildServices
+// registered a real Handler for the jev-scout queue (issue #46), the
+// same way TestBuildServices_RegistersFeatureCalcHandler proves it for
+// feature-calc: enqueue directly, let the real worker claim/process it,
+// and read the resulting status via the read-only Jobs.Get. No Jev API
+// server is stood up here, so the job is expected to fail (a network
+// error dialing the empty/invalid BaseURL) rather than succeed - "failed"
+// still proves a Handler ran (an unregistered queue's job would stay
+// "pending" forever, per Scheduler.Start's own doc comment: it only
+// spins up a worker per *registered* queue).
+func TestBuildServices_RegistersJevScoutHandler(t *testing.T) {
+	svc := newTestServices(t, nil)
+	inst := mustCreateInstrument(t, svc, "7203")
+
+	payload, err := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	enqueued, err := svc.Jobs.Enqueue(context.Background(), repository.JobQueueJevScout, string(payload), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := svc.Scheduler.Start(ctx, time.Hour); err != nil {
+		t.Fatalf("Scheduler.Start: %v", err)
+	}
+	defer svc.Scheduler.Stop()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		job, err := svc.Jobs.Get(context.Background(), enqueued.ID)
+		if err != nil {
+			t.Fatalf("Jobs.Get: %v", err)
+		}
+		if job.Status == "failed" || job.Status == "succeeded" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("jev-scout job status = %q after 3s of Scheduler.Start; want %q or %q (handler not registered/running)", job.Status, "failed", "succeeded")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}

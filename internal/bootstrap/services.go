@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
@@ -72,6 +73,8 @@ type Services struct {
 	MarketData    *marketdata.Client
 	FeatureEngine *featureengine.Engine
 	Screener      *screener.LiveSource
+	Jev           *jev.Client
+	Scout         *jev.Scout
 
 	Scheduler *scheduler.Scheduler
 
@@ -82,9 +85,9 @@ type Services struct {
 // BuildServices constructs the full composition-root service graph on top
 // of state (bootstrap.Run's DB + config) and secrets (config.LoadSecrets),
 // registering every internal/service/scheduler queue Handler this build
-// wires (market-data, feature-calc). It performs no I/O itself (no DB
-// queries beyond what the repository constructors below do, which is
-// none - they only hold *sql.DB) and starts no goroutine; see
+// wires (market-data, feature-calc, jev-scout). It performs no I/O itself
+// (no DB queries beyond what the repository constructors below do, which
+// is none - they only hold *sql.DB) and starts no goroutine; see
 // (*Services).Start.
 func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 	instruments := repository.NewInstrumentRepository(state.DB)
@@ -99,6 +102,15 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 		APIPassword: secrets.KabuAPIPassword,
 	})
 
+	jevClient := jev.NewClient(jev.Config{
+		BaseURL: secrets.JevBaseURL,
+		APIKey:  secrets.JevAPIKey,
+		// Alerts defaults to jev.NoopAlertNotifier{}: wiring Jev API
+		// error-rate alerts to Slack (non-functional.md §5.2) belongs to
+		// issue #48's Notifier fan-out design, not this scope.
+	})
+	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout)
+
 	sched := scheduler.New(jobs, instruments)
 
 	svc := &Services{
@@ -110,12 +122,15 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 		MarketData:    marketDataClient,
 		FeatureEngine: featureEngine,
 		Screener:      screener.NewLiveSource(),
+		Jev:           jevClient,
+		Scout:         scout,
 		Scheduler:     sched,
 		strategy:      state.Strategy,
 	}
 
 	sched.RegisterHandler(repository.JobQueueMarketData, svc.handleMarketData)
 	sched.RegisterHandler(repository.JobQueueFeatureCalc, svc.handleFeatureCalc)
+	sched.RegisterHandler(repository.JobQueueJevScout, svc.Scout.HandleJob)
 
 	return svc, nil
 }
