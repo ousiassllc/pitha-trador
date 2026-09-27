@@ -41,7 +41,12 @@ jobs:
         run: bun install --cwd static --frozen-lockfile
 
       - name: biome check
-        run: bunx biome check static/
+        working-directory: static
+        run: bunx biome check .
+
+      - name: typecheck
+        working-directory: static
+        run: bunx tsc --noEmit
 
   test:
     needs: lint
