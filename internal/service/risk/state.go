@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
@@ -101,6 +102,13 @@ func (e *Engine) TriggerKillSwitch(ctx context.Context, reason string, detail ma
 	})
 	if err != nil {
 		return domain.KillSwitchEvent{}, fmt.Errorf("risk: record kill switch event %q: %w", reason, err)
+	}
+	// A Slack/Wails outage must never block Kill Switch enforcement
+	// itself (non-functional.md §5.2 is best-effort alerting on top of
+	// the enforcement path, not a precondition for it), so a Notifier
+	// failure here is logged, not returned.
+	if err := e.notifier.KillSwitchTriggered(ctx, ev, autoResumableReasons[reason]); err != nil {
+		slog.Error("risk: kill switch notification failed", "reason", reason, "error", err)
 	}
 	if forceCloseReasons[reason] {
 		if err := e.closer.CloseAll(ctx, reason); err != nil {

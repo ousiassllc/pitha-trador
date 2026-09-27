@@ -44,6 +44,10 @@ type Scheduler struct {
 	// makes CheckOperatorHeartbeat a no-op, the same deferral
 	// outcomeLabels above already documents.
 	heartbeatChecker HeartbeatChecker
+	// logRotator is optional (WithLogRotator): a nil value makes Start
+	// skip registering the @daily log-archival cron trigger entirely
+	// (non-functional.md §5 "ログは日次ローテーションし").
+	logRotator LogRotator
 
 	pollInterval time.Duration
 
@@ -69,21 +73,6 @@ func WithPollInterval(d time.Duration) Option {
 // default. *repository.CalibrationRepository implements this directly.
 func WithOutcomeLabelSource(repo *repository.CalibrationRepository) Option {
 	return func(s *Scheduler) { s.outcomeLabels = repo }
-}
-
-// HeartbeatChecker is the internal/service/risk.Engine method
-// CheckOperatorHeartbeat calls (FR-RISK-6 read side). An interface here
-// keeps this package from depending on internal/service/risk directly
-// (package doc.go's layer rule); *risk.Engine implements it directly.
-type HeartbeatChecker interface {
-	CheckHeartbeatTimeout(ctx context.Context) error
-}
-
-// WithHeartbeatChecker enables CheckOperatorHeartbeat's periodic
-// operator-heartbeat dead-man's-switch check (functional.md FR-RISK-6,
-// architecture/overview.md §10.4). Unset by default.
-func WithHeartbeatChecker(checker HeartbeatChecker) Option {
-	return func(s *Scheduler) { s.heartbeatChecker = checker }
 }
 
 // New returns a Scheduler backed by jobs/instruments.
@@ -122,7 +111,8 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 
 // EnqueueFullScan enqueues one market-data job and one feature-calc job
 // per active instrument, due at now (functional.md FR-SCHED-2 前半). It
-// returns the number of instruments enqueued for.
+// returns the number of instruments enqueued for, and logs that count as
+// a structured JSON line (non-functional.md §5.1 "スキャン対象銘柄数").
 func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, error) {
 	instruments, err := s.instruments.ListActive(ctx)
 	if err != nil {
@@ -141,6 +131,7 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 			return 0, fmt.Errorf("scheduler: enqueue feature-calc job for %q: %w", inst.Symbol, err)
 		}
 	}
+	slog.Info("scheduler: full scan enqueued", "instrument_count", len(instruments))
 	return len(instruments), nil
 }
 
@@ -169,58 +160,11 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 	return nil
 }
 
-// DefaultOutcomeLabelHorizonsMinutes are the judgment horizons Outcome
-// Labeling evaluates each Jev trader decision at (functional.md §4.12,
-// docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/20
-// 等").
-var DefaultOutcomeLabelHorizonsMinutes = []int{5, 10, 20}
-
-// EnqueueOutcomeLabeling enqueues one outcome-labeling job
-// (repository.JobQueueOutcomeLabeling) for every Jev trader decision
-// whose horizon has elapsed as of now but has no calibration_outcomes
-// row yet for that (jev_decision_id, horizon_minutes) pair (functional.md
-// FR-CAL-4). It returns the number of jobs enqueued, or (0, nil) if no
-// OutcomeLabelSource is configured (WithOutcomeLabelSource) - the same
-// deferral Start's own doc comment describes for the 15-30s/5-15s
-// cycles.
-func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (int, error) {
-	if s.outcomeLabels == nil {
-		return 0, nil
-	}
-
-	pending, err := s.outcomeLabels.PendingLabels(ctx, DefaultOutcomeLabelHorizonsMinutes, now)
-	if err != nil {
-		return 0, fmt.Errorf("scheduler: list pending outcome labels: %w", err)
-	}
-
-	for _, p := range pending {
-		payload, err := json.Marshal(repository.OutcomeLabelJobPayload{JevDecisionID: p.JevDecisionID, HorizonMinutes: p.HorizonMinutes})
-		if err != nil {
-			return 0, fmt.Errorf("scheduler: marshal outcome-labeling payload for decision %d: %w", p.JevDecisionID, err)
-		}
-		if _, err := s.jobs.Enqueue(ctx, repository.JobQueueOutcomeLabeling, string(payload), now); err != nil {
-			return 0, fmt.Errorf("scheduler: enqueue outcome-labeling job for decision %d (horizon %dm): %w", p.JevDecisionID, p.HorizonMinutes, err)
-		}
-	}
-	return len(pending), nil
-}
-
-// CheckOperatorHeartbeat calls the configured HeartbeatChecker
-// (WithHeartbeatChecker) once (functional.md FR-RISK-6, architecture/
-// overview.md §10.4's periodic 立会時間中 check), or does nothing and
-// returns nil if none is configured - the same deferral
-// EnqueueOutcomeLabeling above already documents for
-// WithOutcomeLabelSource.
-func (s *Scheduler) CheckOperatorHeartbeat(ctx context.Context) error {
-	if s.heartbeatChecker == nil {
-		return nil
-	}
-	return s.heartbeatChecker.CheckHeartbeatTimeout(ctx)
-}
-
 // Start launches one worker goroutine per registered handler's queue plus
 // the cron-driven full-scan trigger at fullScanInterval
-// (functional.md §4.3), running until ctx is done or Stop is called.
+// (functional.md §4.3) and - when WithLogRotator was given - a @daily
+// log-archival trigger (non-functional.md §5), running until ctx is
+// done or Stop is called.
 //
 // Only the 60-second full-scan cycle is wired to an actual enqueue here;
 // the 15-30s candidate-refresh and 5-15s held-position cycles
@@ -253,6 +197,18 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 		cancel()
 		return fmt.Errorf("scheduler: register full scan trigger %q: %w", spec, err)
 	}
+
+	if s.logRotator != nil {
+		if _, err := s.cron.AddFunc("@daily", func() {
+			if err := s.RotateLogs(runCtx); err != nil {
+				slog.Error("scheduler: log rotation failed", "error", err)
+			}
+		}); err != nil {
+			cancel()
+			return fmt.Errorf("scheduler: register log rotation trigger: %w", err)
+		}
+	}
+
 	s.cron.Start()
 
 	return nil

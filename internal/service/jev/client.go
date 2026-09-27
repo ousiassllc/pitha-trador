@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -27,6 +28,12 @@ const (
 	// backoff").
 	defaultRetryBaseDelay = 500 * time.Millisecond
 	defaultHTTPTimeout    = 10 * time.Second
+	// defaultErrorRateWindow/defaultErrorRateThreshold configure the
+	// rolling error-rate alert non-functional.md §5.2 requires ("Jev API
+	// エラー率上昇（しきい値超過）", errorrate.go): the most recent 20
+	// calls, alerting once the failure rate reaches 50%.
+	defaultErrorRateWindow    = 20
+	defaultErrorRateThreshold = 0.5
 )
 
 // Config configures a Client.
@@ -45,6 +52,14 @@ type Config struct {
 	// RetryBaseDelay is the base backoff delay used from the second
 	// retry onward: RetryBaseDelay * 2^n. Defaults to 500ms.
 	RetryBaseDelay time.Duration
+	// Alerts defaults to NoopAlertNotifier{} (errorrate.go).
+	Alerts AlertNotifier
+	// ErrorRateWindow is how many of the most recent calls
+	// errorRateTracker considers. Defaults to 20.
+	ErrorRateWindow int
+	// ErrorRateThreshold is the failure-rate fraction (0-1) that raises
+	// Alerts.JevAPIErrorRateExceeded. Defaults to 0.5 (50%).
+	ErrorRateThreshold float64
 }
 
 // APIError is returned when the Jev API responds with a non-200 status.
@@ -59,11 +74,14 @@ func (e *APIError) Error() string {
 
 // Client is the Jev API HTTP client (architecture/overview.md §6).
 type Client struct {
-	baseURL        string
-	apiKey         string
-	httpClient     *http.Client
-	maxAttempts    int
-	retryBaseDelay time.Duration
+	baseURL            string
+	apiKey             string
+	httpClient         *http.Client
+	maxAttempts        int
+	retryBaseDelay     time.Duration
+	alerts             AlertNotifier
+	errorRate          *errorRateTracker
+	errorRateThreshold float64
 }
 
 // NewClient returns a Client configured by cfg.
@@ -80,12 +98,27 @@ func NewClient(cfg Config) *Client {
 	if retryBaseDelay <= 0 {
 		retryBaseDelay = defaultRetryBaseDelay
 	}
+	alerts := cfg.Alerts
+	if alerts == nil {
+		alerts = NoopAlertNotifier{}
+	}
+	errorRateWindow := cfg.ErrorRateWindow
+	if errorRateWindow <= 0 {
+		errorRateWindow = defaultErrorRateWindow
+	}
+	errorRateThreshold := cfg.ErrorRateThreshold
+	if errorRateThreshold <= 0 {
+		errorRateThreshold = defaultErrorRateThreshold
+	}
 	return &Client{
-		baseURL:        cfg.BaseURL,
-		apiKey:         cfg.APIKey,
-		httpClient:     httpClient,
-		maxAttempts:    maxAttempts,
-		retryBaseDelay: retryBaseDelay,
+		baseURL:            cfg.BaseURL,
+		apiKey:             cfg.APIKey,
+		httpClient:         httpClient,
+		maxAttempts:        maxAttempts,
+		retryBaseDelay:     retryBaseDelay,
+		alerts:             alerts,
+		errorRate:          newErrorRateTracker(errorRateWindow),
+		errorRateThreshold: errorRateThreshold,
 	}
 }
 
@@ -113,18 +146,38 @@ func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse,
 // call POSTs req to path (retrying failed attempts per c's retry
 // policy - see Scout's doc comment) and returns the decoded Resp
 // together with the total call latency. label names the endpoint in the
-// final error message (e.g. "scout", "trader").
-func call[Req, Resp any](ctx context.Context, c *Client, path, label string, req Req) (Resp, time.Duration, error) {
+// final error message (e.g. "scout", "trader") and the structured JSON
+// log line this emits for every call (non-functional.md §5.1 "Jev API
+// latency / エラー率" - counting log lines by label doubles as
+// "Scout呼び出し回数、Trader呼び出し回数" without a separate counter).
+// A call that ultimately fails also feeds c.errorRate; the call that
+// first pushes its rolling error rate to c.errorRateThreshold notifies
+// c.alerts (§5.2 "Jev APIエラー率上昇（しきい値超過）", errorrate.go).
+func call[Req, Resp any](ctx context.Context, c *Client, path, label string, req Req) (resp Resp, latency time.Duration, err error) {
 	start := time.Now()
+	defer func() {
+		latency = time.Since(start)
+		attrs := []any{"label", label, "duration_ms", latency.Milliseconds()}
+		if err != nil {
+			slog.Error("jev: api call failed", append(attrs, "error", err)...)
+		} else {
+			slog.Info("jev: api call completed", attrs...)
+		}
+		if rate, newlyBreached := c.errorRate.record(err != nil, c.errorRateThreshold); newlyBreached {
+			if alertErr := c.alerts.JevAPIErrorRateExceeded(ctx, rate, c.errorRateThreshold); alertErr != nil {
+				slog.Error("jev: error rate alert failed", "error", alertErr)
+			}
+		}
+	}()
 
-	var zero Resp
 	var lastErr error
 	for attempt := 1; attempt <= c.maxAttempts; attempt++ {
-		resp, err := doCall[Req, Resp](ctx, c, path, req)
-		if err == nil {
-			return resp, time.Since(start), nil
+		r, callErr := doCall[Req, Resp](ctx, c, path, req)
+		if callErr == nil {
+			resp = r
+			return resp, 0, nil
 		}
-		lastErr = err
+		lastErr = callErr
 
 		if attempt == c.maxAttempts {
 			break
@@ -135,13 +188,14 @@ func call[Req, Resp any](ctx context.Context, c *Client, path, label string, req
 			select {
 			case <-ctx.Done():
 				timer.Stop()
-				return zero, time.Since(start), ctx.Err()
+				err = ctx.Err()
+				return resp, 0, err
 			case <-timer.C:
 			}
 		}
 	}
-	return zero, time.Since(start),
-		fmt.Errorf("jev: %s call failed after %d attempts: %w", label, c.maxAttempts, lastErr)
+	err = fmt.Errorf("jev: %s call failed after %d attempts: %w", label, c.maxAttempts, lastErr)
+	return resp, 0, err
 }
 
 func doCall[Req, Resp any](ctx context.Context, c *Client, path string, req Req) (Resp, error) {
