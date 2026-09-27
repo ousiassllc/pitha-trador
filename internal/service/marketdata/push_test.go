@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -48,31 +49,49 @@ func TestPushClient_Run_DeliversMessagesAndMarksFresh(t *testing.T) {
 	status := marketdata.NewStatusTracker()
 	client := marketdata.NewPushClient(wsURL, status)
 
-	var received []marketdata.Board
+	// received is written by client.Run's handler callback (invoked on the
+	// goroutine below) and read by this test goroutine's polling loop and
+	// final assertions; mu guards every access so `go test -race` does not
+	// flag the concurrent append/read as a data race.
+	var (
+		mu       sync.Mutex
+		received []marketdata.Board
+	)
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	done := make(chan error, 1)
 	go func() {
 		done <- client.Run(ctx, func(b marketdata.Board) {
+			mu.Lock()
 			received = append(received, b)
+			mu.Unlock()
 		})
 	}()
 
+	receivedCount := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(received)
+	}
+
 	deadline := time.After(1 * time.Second)
-	for len(received) < len(messages) {
+	for receivedCount() < len(messages) {
 		select {
 		case <-deadline:
-			t.Fatalf("timed out waiting for push messages, got %d of %d", len(received), len(messages))
+			t.Fatalf("timed out waiting for push messages, got %d of %d", receivedCount(), len(messages))
 		case <-time.After(5 * time.Millisecond):
 		}
 	}
 
-	if len(received) != len(messages) {
-		t.Fatalf("received %d messages, want %d", len(received), len(messages))
+	mu.Lock()
+	got := append([]marketdata.Board(nil), received...)
+	mu.Unlock()
+	if len(got) != len(messages) {
+		t.Fatalf("received %d messages, want %d", len(got), len(messages))
 	}
-	if received[0].CurrentPrice != 2409.0 || received[1].CurrentPrice != 2410.5 {
-		t.Errorf("received = %+v", received)
+	if got[0].CurrentPrice != 2409.0 || got[1].CurrentPrice != 2410.5 {
+		t.Errorf("received = %+v", got)
 	}
 
 	if status.IsStale("7203") {
