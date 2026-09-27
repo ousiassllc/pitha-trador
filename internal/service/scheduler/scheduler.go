@@ -139,12 +139,11 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 // 15-30s candidate-refresh cadence for a symbol whose
 // featureengine.DetectEvent signal fired (FR-SCAN-1). When triggered is
 // false it does nothing, leaving the Jev call for this cycle skipped
-// (FR-SCAN-2 quiet-suppression): the caller (featureengine.EventSignal.
-// Triggered against config/strategy.yaml's scan.event_trigger
-// thresholds, wired in by a later sub-scope alongside Fast Screener's own
-// periodic candidate-refresh enqueue - this package cannot import
-// internal/service/featureengine per doc.go's layer rule) decides
-// triggered.
+// (FR-SCAN-2 quiet-suppression): the caller (internal/bootstrap's
+// market-data handler, via featureengine.EventSignal.Triggered against
+// config/strategy.yaml's scan.event_trigger thresholds - this package
+// cannot import internal/service/featureengine per doc.go's layer rule)
+// decides triggered.
 func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID int64, symbol string, triggered bool, now time.Time) error {
 	if !triggered {
 		return nil
@@ -163,16 +162,14 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 // the cron-driven full-scan trigger at fullScanInterval
 // (functional.md §4.3), the daily selfImproveCronSpec Sol-analysis
 // trigger (functional.md §4.14 FR-SELFIMPROVE-1) and - when
-// WithOutcomeLabelSource/WithLogRotator were given - the 1-minute
-// Outcome Labeling enqueue trigger (FR-CAL-4) and a @daily log-archival
-// trigger (non-functional.md §5), running until ctx is done or Stop is
-// called.
+// WithOutcomeLabelSource/WithHeartbeatChecker/WithLogRotator were given -
+// the 1-minute Outcome Labeling enqueue (FR-CAL-4) and operator-heartbeat
+// (FR-RISK-6) triggers and a @daily log-archival trigger
+// (non-functional.md §5), running until ctx is done or Stop is called.
 //
-// Only the 60-second full-scan cycle is wired to an actual enqueue here;
-// the 15-30s candidate-refresh and 5-15s held-position cycles
-// (functional.md §4.3) have no jobs to enqueue until the Fast Screener and
-// Jev Scout scopes exist, so their trigger registration is deferred to
-// those scopes rather than registering an empty placeholder here.
+// The 15-30s candidate-refresh cycle (functional.md §4.3) is not a
+// Scheduler trigger: internal/bootstrap's candidateRefreshTicker drives
+// it, since it needs Fast Screener, which this package cannot import.
 func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel

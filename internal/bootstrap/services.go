@@ -2,10 +2,10 @@
 // other split children, #44 onward) is the composition root that builds
 // every internal/service/* instance cmd/desktop and cmd/server share, and
 // registers each internal/service/scheduler queue's Handler. BuildServices
-// only *constructs* everything; nothing in it actually runs a background
-// goroutine (kabuステーションAPI token refresh, Scheduler workers/cron)
-// until a later sub-scope (#51) adds the corresponding cmd/ OnStartup/main
-// call to (*Services).Start (lifecycle.go). Queue Handlers live in
+// only *constructs* everything; nothing in it runs a background goroutine
+// (kabuステーションAPI token refresh, Scheduler workers/cron) until
+// cmd/desktop's Wails OnStartup or cmd/server's main calls
+// (*Services).Start (lifecycle.go). Queue Handlers live in
 // marketdata_job.go; the Scanner Dashboard candidate-refresh cycle lives
 // in candidates.go.
 package bootstrap
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
@@ -27,6 +28,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
+
+// LogDir is the directory every entrypoint's logging.RotatingWriter
+// writes the daily structured JSON log file to, and the Scheduler's
+// @daily logging.Archiver compresses files past their 30-day retention in
+// (requirements/non-functional.md §5).
+const LogDir = "logs"
 
 // defaultTokenRefreshInterval is how often Services.Start reissues the
 // kabuステーションAPI token (marketdata.Client.Start). kabuステーション
@@ -148,7 +155,11 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	policyEngine := policy.NewEngine(policy.ThresholdsFromStrategy(*state.Strategy), riskEngine, signals)
 	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine})
 
-	sched := scheduler.New(jobs, instruments, scheduler.WithOutcomeLabelSource(outcomes))
+	sched := scheduler.New(jobs, instruments,
+		scheduler.WithOutcomeLabelSource(outcomes),
+		scheduler.WithHeartbeatChecker(riskEngine),
+		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
+	)
 
 	svc := &Services{
 		Instruments:   instruments,

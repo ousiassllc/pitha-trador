@@ -18,9 +18,9 @@ type HeartbeatChecker interface {
 	CheckHeartbeatTimeout(ctx context.Context) error
 }
 
-// WithHeartbeatChecker enables CheckOperatorHeartbeat's periodic
-// operator-heartbeat dead-man's-switch check (functional.md FR-RISK-6,
-// architecture/overview.md §10.4). Unset by default.
+// WithHeartbeatChecker enables Start's 1-minute CheckOperatorHeartbeat
+// trigger, the operator-heartbeat dead-man's-switch check (functional.md
+// FR-RISK-6, architecture/overview.md §10.4). Unset by default.
 func WithHeartbeatChecker(checker HeartbeatChecker) Option {
 	return func(s *Scheduler) { s.heartbeatChecker = checker }
 }
@@ -46,6 +46,12 @@ func WithLogRotator(rotator LogRotator) Option {
 // market_snapshots bar, so each 5/10/20-minute horizon is labeled within
 // a minute of elapsing.
 const outcomeLabelingCronSpec = "@every 1m"
+
+// heartbeatCheckCronSpec is how often Start's operator-heartbeat trigger
+// (WithHeartbeatChecker) runs CheckOperatorHeartbeat: once a minute, the
+// finest granularity risk.yaml's heartbeat_timeout_minutes is expressed
+// in (architecture/overview.md §10.4's periodic check).
+const heartbeatCheckCronSpec = "@every 1m"
 
 // outcomeLabelRetryWindow bounds how long after its decision a pending
 // (decision, horizon) pair keeps being re-enqueued. Labeler.HandleJob
@@ -105,6 +111,15 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 			}
 		}); err != nil {
 			return fmt.Errorf("scheduler: register outcome-labeling trigger: %w", err)
+		}
+	}
+	if s.heartbeatChecker != nil {
+		if _, err := s.cron.AddFunc(heartbeatCheckCronSpec, func() {
+			if err := s.CheckOperatorHeartbeat(ctx); err != nil {
+				slog.Error("scheduler: operator heartbeat check failed", "error", err)
+			}
+		}); err != nil {
+			return fmt.Errorf("scheduler: register operator heartbeat trigger: %w", err)
 		}
 	}
 	if s.logRotator != nil {

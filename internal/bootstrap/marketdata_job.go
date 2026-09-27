@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
@@ -93,8 +94,47 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 		if _, err := s.Execution.OnSnapshot(ctx, snap); err != nil {
 			return fmt.Errorf("bootstrap: manage paper position for %q: %w", payload.Symbol, err)
 		}
+		if err := s.enqueueEventReevaluation(ctx, snap, history); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// enqueueEventReevaluation implements FR-SCAN-1/FR-SCAN-2 for one freshly
+// persisted bar: when snap is a current Fast Screener candidate and
+// featureengine.DetectEvent against its previous bar fires, a jev-scout
+// job is enqueued immediately instead of waiting for the next
+// candidate-refresh cycle; otherwise nothing is enqueued (FR-SCAN-2's
+// suppression). Non-candidates are skipped: Jev is only ever consulted for
+// symbols that passed Fast Screener (functional.md §2's main flow).
+// history is snap's prior bars, most recent first. Order-flow/news event
+// sources do not exist in this build, so those two signals stay false.
+func (s *Services) enqueueEventReevaluation(ctx context.Context, snap domain.Snapshot, history []domain.Snapshot) error {
+	if len(history) == 0 || !s.isCandidate(ctx, snap.InstrumentID) {
+		return nil
+	}
+	trigger := s.strategy.Scan.EventTrigger
+	signal := featureengine.DetectEvent(history[0], snap, history, featureengine.EventThresholds{
+		Return1mChange:           trigger.Return1mChangeThreshold,
+		VolumeRatioChange:        trigger.VolumeRatioChangeThreshold,
+		SpreadChangeBps:          trigger.SpreadChangeBpsThreshold,
+		OrderbookImbalanceChange: trigger.OrderbookImbalanceChangeThreshold,
+	}, false, false)
+	if err := s.Scheduler.EnqueueEventReevaluation(ctx, snap.InstrumentID, snap.Symbol, signal.Triggered(), snap.Timestamp); err != nil {
+		return fmt.Errorf("bootstrap: event-driven reevaluation for %q: %w", snap.Symbol, err)
+	}
+	return nil
+}
+
+func (s *Services) isCandidate(ctx context.Context, instrumentID int64) bool {
+	candidates, _, _ := s.Screener.Candidates(ctx)
+	for _, c := range candidates {
+		if c.InstrumentID == instrumentID {
+			return true
+		}
+	}
+	return false
 }
 
 // handleFeatureCalc is the feature-calc queue Handler (issue #44). It is

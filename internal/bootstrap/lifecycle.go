@@ -10,13 +10,12 @@ import (
 // Start launches every background goroutine this build's composition
 // root owns: kabuステーションAPI token issuance/refresh
 // (marketdata.Client.Start), the candidate-refresh ticker (issue #45),
-// and the Scheduler's worker pool + full-scan/self-improve/log-rotation
-// cron triggers (scheduler.Scheduler.Start), after first recovering any
-// job left "running" by a previous crash (scheduler.Scheduler.Recover).
-// All run until ctx is done or Stop is called. Neither cmd/desktop nor
-// cmd/server calls this yet for the Scheduler/token-refresh goroutines
-// (issue #51 wires the first such call site); the candidate-refresh
-// ticker likewise only starts once Start itself is first called.
+// and the Scheduler's worker pool + full-scan/self-improve/
+// outcome-labeling/operator-heartbeat/log-rotation cron triggers
+// (scheduler.Scheduler.Start), after first recovering any job left
+// "running" by a previous crash (scheduler.Scheduler.Recover). All run
+// until ctx is done or Stop is called. cmd/desktop calls it from Wails'
+// OnStartup and cmd/server from main, each stopping it on shutdown.
 func (s *Services) Start(ctx context.Context) error {
 	if _, err := s.Scheduler.Recover(ctx); err != nil {
 		return fmt.Errorf("bootstrap: recover jobs: %w", err)

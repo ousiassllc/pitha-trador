@@ -21,14 +21,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
 
-// logDir is where RotatingWriter writes today's structured JSON log
-// file (requirements/non-functional.md §5). A later composition-root
-// step may make this configurable; every entrypoint (cmd/desktop,
-// cmd/server) uses the same relative "logs" directory today.
-const logDir = "logs"
-
 func main() {
-	logWriter, err := logging.NewRotatingWriter(logDir)
+	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -71,6 +65,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	app.services = services
 
 	engine := router.New(
 		router.WithCandidateSource(services.Screener),
@@ -91,7 +86,8 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Handler: engine,
 		},
-		OnStartup: app.startup,
+		OnStartup:  app.startup,
+		OnShutdown: app.shutdown,
 		Bind: []interface{}{
 			app,
 		},

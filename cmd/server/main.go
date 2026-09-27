@@ -8,10 +8,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
@@ -27,13 +30,12 @@ import (
 // minimize the odds of a port clash with other local services.
 const defaultAddr = ":48080"
 
-// logDir is where RotatingWriter writes today's structured JSON log
-// file (requirements/non-functional.md §5); the same relative "logs"
-// directory cmd/desktop's own entrypoint uses.
-const logDir = "logs"
+// shutdownTimeout bounds how long a SIGINT/SIGTERM waits for in-flight
+// HTTP requests (including open WebSocket streams) before closing them.
+const shutdownTimeout = 10 * time.Second
 
 func main() {
-	logWriter, err := logging.NewRotatingWriter(logDir)
+	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -83,14 +85,40 @@ func main() {
 		}),
 	)
 
+	// ctx is canceled on SIGINT/SIGTERM: the signal that stops the HTTP
+	// server also stops every background goroutine Services.Start owns.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := services.Start(ctx); err != nil {
+		log.Fatal(err)
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           engine,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	serveErr := make(chan error, 1)
+	go func() {
+		log.Printf("pitha-trador server listening on %s", addr)
+		serveErr <- srv.ListenAndServe()
+	}()
 
-	log.Printf("pitha-trador server listening on %s", addr)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	select {
+	case err := <-serveErr:
+		stop()
+		services.Stop()
 		log.Fatalf("server error: %v", err)
+	case <-ctx.Done():
 	}
+
+	log.Print("pitha-trador server shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("server: graceful HTTP shutdown failed", "error", err)
+	}
+	// Blocks until every Scheduler worker (and its in-flight job) has
+	// exited, before the deferred state.Close closes the DB under them.
+	services.Stop()
 }
