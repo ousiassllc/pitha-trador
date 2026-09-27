@@ -37,14 +37,6 @@ import (
 // fullScanInterval (60s) so it never dominates request volume.
 const defaultTokenRefreshInterval = 20 * time.Minute
 
-// snapshotHistoryLookback is how many prior market_snapshots bars
-// handleMarketData fetches per instrument to build
-// featureengine.Input.History. Compute's longest lookback window is
-// Return15m/RealizedVol5m; at a 60s full-scan cadence, 20 bars covers 20
-// minutes of history - comfortably past every window Compute currently
-// uses (functional.md §4.1's longest window is 15m).
-const snapshotHistoryLookback = 20
-
 // defaultKabuExchange is the kabuステーションAPI market code every
 // instrument is queried under. This build's target universe is TSE-listed
 // equities only (docs/requirements, docs/architecture/overview.md do not
@@ -90,6 +82,7 @@ type Services struct {
 	Risk          *risk.Engine
 	Execution     *execution.Engine
 	Calibration   *calibration.Service
+	Backtest      *BacktestSource
 
 	Scheduler *scheduler.Scheduler
 
@@ -136,6 +129,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout)
 	trader := jev.NewTrader(jevClient, decisions, ragService)
 
+	executionConfig := execution.ConfigFromRiskLimits(state.Risk.Paper)
 	executionEngine := execution.NewEngine(execution.Deps{
 		Orders:      orders,
 		Positions:   positions,
@@ -143,7 +137,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 		Decisions:   decisions,
 		Signals:     signals,
 		Instruments: instruments,
-	}, execution.ConfigFromRiskLimits(state.Risk.Paper))
+	}, executionConfig)
 
 	riskEngine := newRiskEngine(state.Risk.Paper, riskRepositories{
 		killSwitch: killSwitch,
@@ -178,6 +172,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 		Risk:          riskEngine,
 		Execution:     executionEngine,
 		Calibration:   calibration.NewService(outcomes),
+		Backtest:      newBacktestSource(instruments, snapshots, decisions, policy.ThresholdsFromStrategy(*state.Strategy), executionConfig),
 		Scheduler:     sched,
 		strategy:      state.Strategy,
 	}

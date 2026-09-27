@@ -24,7 +24,7 @@ type marketDataJobPayload struct {
 
 // handleMarketData is the market-data queue Handler (issue #44): it
 // fetches symbol's current 時価情報・板情報 from kabuステーションAPI,
-// computes its Feature values against snapshotHistoryLookback prior bars,
+// computes its Feature values against featureengine.HistoryLookbackBars prior bars,
 // and persists the result as one market_snapshots row via
 // FeatureEngine.RunCycle (which also indexes it for RAG - FR-RAG-1), then
 // runs Paper Trading's position management against that new bar
@@ -54,7 +54,7 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 		return fmt.Errorf("bootstrap: fetch board for %q: %w", payload.Symbol, err)
 	}
 
-	history, err := s.Snapshots.ListByInstrument(ctx, payload.InstrumentID, snapshotHistoryLookback)
+	history, err := s.Snapshots.ListByInstrument(ctx, payload.InstrumentID, featureengine.HistoryLookbackBars)
 	if err != nil {
 		return fmt.Errorf("bootstrap: list snapshot history for %q: %w", payload.Symbol, err)
 	}

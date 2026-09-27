@@ -114,6 +114,11 @@ type RunConfig struct {
 	// Engine needs to warm up Return5m/15m/RealizedVol5m for the first
 	// bars in that range.
 	Snapshots []domain.Snapshot
+	// WarmupBars is how many leading Snapshots bars are history only:
+	// their own Feature values were computed from bars before the slice,
+	// so VerifyNoLookahead skips them (they must also precede every
+	// evaluated Period, since replay would otherwise trade on them).
+	WarmupBars int
 
 	Decisions DecisionSource
 
@@ -152,48 +157,11 @@ type Result struct {
 	Combined Metrics
 }
 
-// Run executes a full Walk Forward backtest (FR-BT-2) over cfg using
-// wf's fold boundaries. During each fold's Training/Calibration period,
-// every bar is evaluated with policy.Input.Calibrated=false (this
-// instrument/setup has not been calibrated yet, matching
-// policy.ReasonNotCalibrated's live semantics) so it never produces a
-// trade; Validation and Forward bars are evaluated with Calibrated=true.
+// Run executes a full Walk Forward backtest (FR-BT-2) over a single
+// instrument's cfg using wf's fold boundaries - RunPortfolio with one
+// RunConfig.
 func Run(ctx context.Context, cfg RunConfig, wf WalkForwardConfig) (Result, error) {
-	if violations := VerifyNoLookahead(cfg.Snapshots); len(violations) > 0 {
-		return Result{}, fmt.Errorf("backtest: %d bar(s) fail FR-BT-3 look-ahead check, e.g. %s", len(violations), violations[0])
-	}
-
-	splits := wf.Splits()
-	if len(splits) == 0 {
-		return Result{}, fmt.Errorf("backtest: walk forward config produces no folds for [%s, %s)", wf.Start, wf.End)
-	}
-
-	var result Result
-	var combinedTrades []Trade
-	for _, sp := range splits {
-		trainingTrades, err := replay(ctx, cfg, sp.Training, false)
-		if err != nil {
-			return Result{}, err
-		}
-		validationTrades, err := replay(ctx, cfg, sp.Validation, true)
-		if err != nil {
-			return Result{}, err
-		}
-		forwardTrades, err := replay(ctx, cfg, sp.Forward, true)
-		if err != nil {
-			return Result{}, err
-		}
-
-		result.Splits = append(result.Splits, SplitResult{
-			Split:      sp,
-			Training:   Aggregate(trainingTrades),
-			Validation: Aggregate(validationTrades),
-			Forward:    Aggregate(forwardTrades),
-		})
-		combinedTrades = append(combinedTrades, forwardTrades...)
-	}
-	result.Combined = Aggregate(combinedTrades)
-	return result, nil
+	return RunPortfolio(ctx, []RunConfig{cfg}, wf)
 }
 
 // replay walks cfg.Snapshots forward through window, evaluating Policy

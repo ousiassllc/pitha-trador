@@ -68,6 +68,7 @@ type options struct {
 	symbolProvider    handler.SymbolProvider
 	symbolRiskParams  handler.SymbolRiskParams
 	calibrationSource handler.CalibrationSource
+	backtestRunner    handler.BacktestRunner
 }
 
 // Option configures New.
@@ -121,6 +122,14 @@ func WithCalibrationSource(source handler.CalibrationSource) Option {
 	return func(o *options) { o.calibrationSource = source }
 }
 
+// WithBacktestRunner overrides `GET /performance`'s backing
+// internal/web/handler.BacktestRunner. cmd/desktop and cmd/server pass
+// internal/bootstrap's BacktestSource; the empty
+// handler.StaticBacktestRunner default only serves router-level tests.
+func WithBacktestRunner(runner handler.BacktestRunner) Option {
+	return func(o *options) { o.backtestRunner = runner }
+}
+
 // New builds and returns the shared Gin engine: the placeholder root
 // page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
 // the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
@@ -135,6 +144,7 @@ func New(opts ...Option) *gin.Engine {
 		symbolProvider:    handler.StaticSymbolProvider{},
 		symbolRiskParams:  defaultSymbolRiskParams,
 		calibrationSource: handler.StaticCalibrationSource{},
+		backtestRunner:    handler.StaticBacktestRunner{},
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -165,6 +175,9 @@ func New(opts ...Option) *gin.Engine {
 
 	calibrationHandler := handler.NewCalibrationHandler(o.calibrationSource)
 	engine.GET("/calibration", calibrationHandler.Page)
+
+	performanceHandler := handler.NewPerformanceHandler(o.backtestRunner)
+	engine.GET("/performance", performanceHandler.Page)
 
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at

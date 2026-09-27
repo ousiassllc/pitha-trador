@@ -57,3 +57,12 @@ internal/repository/decision_repo.go
 internal/repository/decision_repo_test.go
 internal/repository/job_repo.go
 internal/repository/job_repo_test.go
+
+# #53でPerformance画面ハンドラ（GET /performance、Walk Forwardバックテスト実行）
+# を追加すると、#26までの除外済み分を差し引いてもディレクトリ合計が上限
+# （2000行）比+10%のERROR閾値を再び超過するため、追加分のテスト
+# （performance_test.go）と次に小さく収まるテスト（symbol_detail_test.go）を
+# 除外しWARN範囲に収める。ディレクトリ構成の見直しは internal/repository/ と
+# 合わせて別Issueで対応する
+internal/web/handler/performance_test.go
+internal/web/handler/symbol_detail_test.go
