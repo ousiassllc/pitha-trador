@@ -18,7 +18,11 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/router"
 )
 
-const defaultAddr = ":8080"
+// defaultAddr uses 48080 instead of the far more commonly-claimed 8080
+// (Tomcat/many Node dev servers/etc.) or kabuステーションAPIの18080
+// (internal/service/marketdata, docs/architecture/overview.md §5) to
+// minimize the odds of a port clash with other local services.
+const defaultAddr = ":48080"
 
 // logDir is where RotatingWriter writes today's structured JSON log
 // file (requirements/non-functional.md §5); the same relative "logs"

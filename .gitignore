@@ -27,3 +27,4 @@ cmd/desktop/build/
 # IDE
 .vscode/
 .idea/
+logs/

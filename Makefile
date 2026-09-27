@@ -19,4 +19,4 @@ build:
 
 openapi-export:
 	@mkdir -p docs/api
-	@curl -sf http://localhost:8080/api/v1/openapi.json -o docs/api/openapi.json
+	@curl -sf http://localhost:48080/api/v1/openapi.json -o docs/api/openapi.json
