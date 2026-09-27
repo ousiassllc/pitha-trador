@@ -21,6 +21,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
@@ -70,6 +71,9 @@ type Services struct {
 	Decisions   *repository.DecisionRepository
 	Signals     *repository.SignalRepository
 	Jobs        *repository.JobRepository
+	Positions   *repository.PositionRepository
+	KillSwitch  *repository.KillSwitchRepository
+	Settings    *repository.RuntimeSettingsRepository
 
 	RAG           *rag.Service
 	MarketData    *marketdata.Client
@@ -79,6 +83,7 @@ type Services struct {
 	Scout         *jev.Scout
 	Trader        *jev.Trader
 	Policy        *policy.Engine
+	Risk          *risk.Engine
 
 	Scheduler *scheduler.Scheduler
 
@@ -89,16 +94,23 @@ type Services struct {
 // BuildServices constructs the full composition-root service graph on top
 // of state (bootstrap.Run's DB + config) and secrets (config.LoadSecrets),
 // registering every internal/service/scheduler queue Handler this build
-// wires (market-data, feature-calc, jev-scout, jev-trader). It performs
-// no I/O itself (no DB queries beyond what the repository constructors
-// below do, which is none - they only hold *sql.DB) and starts no
-// goroutine; see (*Services).Start.
-func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
+// wires (market-data, feature-calc, jev-scout, jev-trader). notifiers are
+// entrypoint-specific extra Risk Engine alert channels (cmd/desktop passes
+// its Wails App for native OS toasts; cmd/server passes none) fanned out
+// alongside the always-on structured log and optional Slack channels
+// (risk.go). It performs no I/O itself (no DB queries beyond what the
+// repository constructors below do, which is none - they only hold
+// *sql.DB) and starts no goroutine; see (*Services).Start.
+func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notifier) (*Services, error) {
 	instruments := repository.NewInstrumentRepository(state.DB)
 	snapshots := repository.NewSnapshotRepository(state.DB)
 	decisions := repository.NewDecisionRepository(state.DB)
 	signals := repository.NewSignalRepository(state.DB)
 	jobs := repository.NewJobRepository(state.DB)
+	positions := repository.NewPositionRepository(state.DB)
+	killSwitch := repository.NewKillSwitchRepository(state.DB)
+	settings := repository.NewRuntimeSettingsRepository(state.DB)
+	alerts := newAlertChannels(secrets)
 
 	ragService := rag.NewService(state.DB, decisions, snapshots)
 	featureEngine := featureengine.NewEngine(snapshots, ragService)
@@ -110,18 +122,18 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 	jevClient := jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		APIKey:  secrets.JevAPIKey,
-		// Alerts defaults to jev.NoopAlertNotifier{}: wiring Jev API
-		// error-rate alerts to Slack (non-functional.md §5.2) belongs to
-		// issue #48's Notifier fan-out design, not this scope.
+		Alerts:  alerts.jevAlerts(),
 	})
 	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout)
 	trader := jev.NewTrader(jevClient, decisions, ragService)
 
-	// RiskChecker stays nil (policy.NewEngine's own AlwaysPassRiskChecker
-	// default): wiring a real internal/service/risk.Engine here is issue
-	// #48's scope, which itself depends on Execution's
-	// Position/OrderRepository (#49) to compute exposure.
-	policyEngine := policy.NewEngine(policy.ThresholdsFromStrategy(*state.Strategy), nil, signals)
+	riskEngine := newRiskEngine(state.Risk.Paper, riskRepositories{
+		killSwitch: killSwitch,
+		settings:   settings,
+		snapshots:  snapshots,
+		positions:  positions,
+	}, nil, alerts.riskNotifier(notifiers))
+	policyEngine := policy.NewEngine(policy.ThresholdsFromStrategy(*state.Strategy), riskEngine, signals)
 	traderHandler := policy.NewHandler(trader, snapshots, policyEngine)
 
 	sched := scheduler.New(jobs, instruments)
@@ -132,6 +144,9 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 		Decisions:     decisions,
 		Signals:       signals,
 		Jobs:          jobs,
+		Positions:     positions,
+		KillSwitch:    killSwitch,
+		Settings:      settings,
 		RAG:           ragService,
 		MarketData:    marketDataClient,
 		FeatureEngine: featureEngine,
@@ -140,6 +155,7 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 		Scout:         scout,
 		Trader:        trader,
 		Policy:        policyEngine,
+		Risk:          riskEngine,
 		Scheduler:     sched,
 		strategy:      state.Strategy,
 	}

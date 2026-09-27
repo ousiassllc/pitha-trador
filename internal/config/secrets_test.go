@@ -59,3 +59,27 @@ func TestLoadSecrets_ReturnsErrorForPartiallyMissingVariables(t *testing.T) {
 		t.Errorf("LoadSecrets error %q unexpectedly mentions present variable %q", err, config.EnvJevAPIKey)
 	}
 }
+
+func TestLoadSecrets_SlackWebhookURLIsOptional(t *testing.T) {
+	t.Setenv(config.EnvJevAPIKey, "jev-key")
+	t.Setenv(config.EnvJevBaseURL, "https://jev.example.com")
+	t.Setenv(config.EnvKabuAPIPassword, "kabu-pass")
+	t.Setenv(config.EnvSlackWebhookURL, "")
+
+	secrets, err := config.LoadSecrets()
+	if err != nil {
+		t.Fatalf("LoadSecrets with SLACK_WEBHOOK_URL unset: %v", err)
+	}
+	if secrets.SlackWebhookURL != "" {
+		t.Errorf("SlackWebhookURL = %q, want empty", secrets.SlackWebhookURL)
+	}
+
+	t.Setenv(config.EnvSlackWebhookURL, "https://hooks.slack.com/services/T/B/X")
+	secrets, err = config.LoadSecrets()
+	if err != nil {
+		t.Fatalf("LoadSecrets: %v", err)
+	}
+	if secrets.SlackWebhookURL != "https://hooks.slack.com/services/T/B/X" {
+		t.Errorf("SlackWebhookURL = %q, want the configured webhook URL", secrets.SlackWebhookURL)
+	}
+}

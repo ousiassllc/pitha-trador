@@ -88,9 +88,9 @@ func WithCandidateRefreshInterval(interval handler.CandidateRefreshInterval) Opt
 }
 
 // WithSystemEngine overrides the Kill Switch action/API routes' backing
-// internal/web/handler.SystemEngine. Defaults to a Running
-// handler.StaticSystemEngine until a later sub-scope wires a real
-// internal/service/risk.Engine in.
+// internal/web/handler.SystemEngine. cmd/desktop and cmd/server pass
+// internal/bootstrap's real internal/service/risk.Engine; the default
+// Running handler.StaticSystemEngine only serves router-level tests.
 func WithSystemEngine(engine handler.SystemEngine) Option {
 	return func(o *options) { o.systemEngine = engine }
 }

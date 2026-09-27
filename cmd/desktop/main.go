@@ -63,14 +63,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-	services, err := bootstrap.BuildServices(state, secrets)
+	// app is also the Risk Engine's native OS toast Notifier (notify.go),
+	// fanned out alongside the structured-log and Slack channels
+	// BuildServices always wires (issue #48).
+	app := NewApp()
+	services, err := bootstrap.BuildServices(state, secrets, app)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	app := NewApp()
 	engine := router.New(
 		router.WithCandidateSource(services.Screener),
+		router.WithSystemEngine(services.Risk),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
 			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,
 			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,

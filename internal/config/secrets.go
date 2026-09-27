@@ -21,6 +21,13 @@ const (
 	// the kabuステーションアプリ itself (docs/architecture/overview.md
 	// §5).
 	EnvKabuAPIPassword = "KABU_API_PASSWORD"
+	// EnvSlackWebhookURL supplies internal/service/notify.Config's
+	// WebhookURL (non-functional.md §5.2's immediate alerts). Unlike the
+	// three variables above it is optional: LoadSecrets never reports it
+	// missing, and internal/bootstrap simply skips the Slack channel when
+	// it is empty (Paper Trading has no real-money exposure to alert on,
+	// and a dev machine without a webhook must still be able to start).
+	EnvSlackWebhookURL = "SLACK_WEBHOOK_URL"
 )
 
 // Secrets holds every credential a composition-root sub-scope
@@ -33,6 +40,9 @@ type Secrets struct {
 	JevAPIKey       string
 	JevBaseURL      string
 	KabuAPIPassword string
+	// SlackWebhookURL is optional (see EnvSlackWebhookURL); empty means
+	// "no Slack channel".
+	SlackWebhookURL string
 }
 
 // LoadSecrets reads Secrets from the process environment
@@ -51,6 +61,7 @@ func LoadSecrets() (Secrets, error) {
 		JevAPIKey:       os.Getenv(EnvJevAPIKey),
 		JevBaseURL:      os.Getenv(EnvJevBaseURL),
 		KabuAPIPassword: os.Getenv(EnvKabuAPIPassword),
+		SlackWebhookURL: os.Getenv(EnvSlackWebhookURL),
 	}
 
 	var missing []string
