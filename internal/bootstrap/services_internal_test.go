@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
 
 // newTestServices builds a *Services backed by a fresh temp-dir SQLite DB.
@@ -225,5 +226,68 @@ func TestBuildServices_RegistersJevScoutHandler(t *testing.T) {
 			t.Fatalf("jev-scout job status = %q after 3s of Scheduler.Start; want %q or %q (handler not registered/running)", job.Status, "failed", "succeeded")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestBuildServices_RegistersJevTraderHandler proves BuildServices
+// registered a real Handler for the jev-trader queue (issue #47), the
+// same way TestBuildServices_RegistersJevScoutHandler proves it for
+// jev-scout. policy.Handler.HandleJob requires at least one
+// market_snapshots row for the instrument (it errors otherwise before
+// ever calling Jev Trader), so this test inserts one first; the job
+// itself is still expected to end up "failed" (no real Jev API server
+// here either), which - same as the jev-scout test - is sufficient proof
+// a Handler ran rather than the job staying "pending" forever.
+func TestBuildServices_RegistersJevTraderHandler(t *testing.T) {
+	svc := newTestServices(t, nil)
+	inst := mustCreateInstrument(t, svc, "7203")
+	if _, err := svc.Snapshots.Insert(context.Background(), domain.Snapshot{
+		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: time.Now().UTC(),
+		Price: 2500, Volume: 1000, Turnover: 2_500_000,
+		Feature: domain.Feature{VWAP: 2490, PriceVsVWAPBps: 40},
+	}); err != nil {
+		t.Fatalf("Snapshots.Insert: %v", err)
+	}
+
+	payload, err := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	enqueued, err := svc.Jobs.Enqueue(context.Background(), repository.JobQueueJevTrader, string(payload), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := svc.Scheduler.Start(ctx, time.Hour); err != nil {
+		t.Fatalf("Scheduler.Start: %v", err)
+	}
+	defer svc.Scheduler.Stop()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		job, err := svc.Jobs.Get(context.Background(), enqueued.ID)
+		if err != nil {
+			t.Fatalf("Jobs.Get: %v", err)
+		}
+		if job.Status == "failed" || job.Status == "succeeded" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("jev-trader job status = %q after 3s of Scheduler.Start; want %q or %q (handler not registered/running)", job.Status, "failed", "succeeded")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	signals, err := svc.Signals.ListByInstrument(context.Background(), inst.ID, 10)
+	if err != nil {
+		t.Fatalf("Signals.ListByInstrument: %v", err)
+	}
+	if len(signals) != 1 {
+		t.Fatalf("len(signals) = %d, want 1 (policy.Handler records a trade_signals row even on Jev Trader API error)", len(signals))
+	}
+	if signals[0].PolicyVersion != policy.Version {
+		t.Errorf("signals[0].PolicyVersion = %q, want %q", signals[0].PolicyVersion, policy.Version)
 	}
 }

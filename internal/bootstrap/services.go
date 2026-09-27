@@ -19,6 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
@@ -67,6 +68,7 @@ type Services struct {
 	Instruments *repository.InstrumentRepository
 	Snapshots   *repository.SnapshotRepository
 	Decisions   *repository.DecisionRepository
+	Signals     *repository.SignalRepository
 	Jobs        *repository.JobRepository
 
 	RAG           *rag.Service
@@ -75,6 +77,8 @@ type Services struct {
 	Screener      *screener.LiveSource
 	Jev           *jev.Client
 	Scout         *jev.Scout
+	Trader        *jev.Trader
+	Policy        *policy.Engine
 
 	Scheduler *scheduler.Scheduler
 
@@ -85,14 +89,15 @@ type Services struct {
 // BuildServices constructs the full composition-root service graph on top
 // of state (bootstrap.Run's DB + config) and secrets (config.LoadSecrets),
 // registering every internal/service/scheduler queue Handler this build
-// wires (market-data, feature-calc, jev-scout). It performs no I/O itself
-// (no DB queries beyond what the repository constructors below do, which
-// is none - they only hold *sql.DB) and starts no goroutine; see
-// (*Services).Start.
+// wires (market-data, feature-calc, jev-scout, jev-trader). It performs
+// no I/O itself (no DB queries beyond what the repository constructors
+// below do, which is none - they only hold *sql.DB) and starts no
+// goroutine; see (*Services).Start.
 func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 	instruments := repository.NewInstrumentRepository(state.DB)
 	snapshots := repository.NewSnapshotRepository(state.DB)
 	decisions := repository.NewDecisionRepository(state.DB)
+	signals := repository.NewSignalRepository(state.DB)
 	jobs := repository.NewJobRepository(state.DB)
 
 	ragService := rag.NewService(state.DB, decisions, snapshots)
@@ -110,6 +115,14 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 		// issue #48's Notifier fan-out design, not this scope.
 	})
 	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout)
+	trader := jev.NewTrader(jevClient, decisions, ragService)
+
+	// RiskChecker stays nil (policy.NewEngine's own AlwaysPassRiskChecker
+	// default): wiring a real internal/service/risk.Engine here is issue
+	// #48's scope, which itself depends on Execution's
+	// Position/OrderRepository (#49) to compute exposure.
+	policyEngine := policy.NewEngine(policy.ThresholdsFromStrategy(*state.Strategy), nil, signals)
+	traderHandler := policy.NewHandler(trader, snapshots, policyEngine)
 
 	sched := scheduler.New(jobs, instruments)
 
@@ -117,6 +130,7 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 		Instruments:   instruments,
 		Snapshots:     snapshots,
 		Decisions:     decisions,
+		Signals:       signals,
 		Jobs:          jobs,
 		RAG:           ragService,
 		MarketData:    marketDataClient,
@@ -124,6 +138,8 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 		Screener:      screener.NewLiveSource(),
 		Jev:           jevClient,
 		Scout:         scout,
+		Trader:        trader,
+		Policy:        policyEngine,
 		Scheduler:     sched,
 		strategy:      state.Strategy,
 	}
@@ -131,6 +147,7 @@ func BuildServices(state *State, secrets config.Secrets) (*Services, error) {
 	sched.RegisterHandler(repository.JobQueueMarketData, svc.handleMarketData)
 	sched.RegisterHandler(repository.JobQueueFeatureCalc, svc.handleFeatureCalc)
 	sched.RegisterHandler(repository.JobQueueJevScout, svc.Scout.HandleJob)
+	sched.RegisterHandler(repository.JobQueueJevTrader, traderHandler.HandleJob)
 
 	return svc, nil
 }
