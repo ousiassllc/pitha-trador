@@ -110,9 +110,18 @@ func TestEngine_State_ReflectsLatestSnapshotDecisionsSignalAndPosition(t *testin
 }
 
 func TestEngine_State_ReportsCooldownAfterLosingClose(t *testing.T) {
-	te := newTestEngine(t, execution.Config{CooldownAfterLossMinutes: 5})
-	ctx := context.Background()
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
+	// State() reads Engine's cooldown window via cfg.Now() (state.go),
+	// so this must be pinned like Enter/Close's explicit Now args below
+	// - leaving it nil defaults to real time.Now() (config.go's
+	// withDefaults) and the cooldown (closedAt + 5min) would already
+	// be in the past for any run after 2026-09-27.
+	closedAt := now.Add(time.Minute)
+	te := newTestEngine(t, execution.Config{
+		CooldownAfterLossMinutes: 5,
+		Now:                      func() time.Time { return closedAt.Add(time.Minute) },
+	})
+	ctx := context.Background()
 
 	entry, err := te.engine.Enter(ctx, execution.EntryRequest{
 		Signal: longSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeMarket, Price: 2100.0, Now: now,
@@ -120,7 +129,7 @@ func TestEngine_State_ReportsCooldownAfterLosingClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enter: %v", err)
 	}
-	if _, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 2088.0, now.Add(time.Minute)); err != nil {
+	if _, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 2088.0, closedAt); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
