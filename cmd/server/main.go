@@ -15,8 +15,10 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
 
 // defaultAddr uses 48080 instead of the far more commonly-claimed 8080
@@ -49,12 +51,33 @@ func main() {
 	}
 	defer func() { _ = state.Close() }()
 
+	// config.LoadSecrets reads JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD
+	// (issue #43); a missing value fails startup outright rather than
+	// silently falling back to a mock client (issue #43's own
+	// error-handling decision - internal/bootstrap.BuildServices' real
+	// kabuステーションAPI client wiring, issue #44, depends on it).
+	secrets, err := config.LoadSecrets()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	services, err := bootstrap.BuildServices(state, secrets)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	addr := os.Getenv("PITHA_SERVER_ADDR")
 	if addr == "" {
 		addr = defaultAddr
 	}
 
-	engine := router.New()
+	engine := router.New(
+		router.WithCandidateSource(services.Screener),
+		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
+			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,
+			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,
+		}),
+	)
 
 	srv := &http.Server{
 		Addr:              addr,
