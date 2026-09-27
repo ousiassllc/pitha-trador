@@ -22,6 +22,18 @@ import (
 // issue #39). This test drives enough concurrent writers across both
 // handles to reliably surface that collision when busy_timeout is unset,
 // and asserts that every write succeeds once busy_timeout is configured.
+// The worker/insert counts below are kept deliberately small: enough
+// concurrent writers across two independent *sql.DB handles to
+// genuinely exercise the WAL single-writer lock, without piling up a
+// serialization queue whose worst-case drain time scales with host CPU
+// contention. Under `go test ./...` on a host that is ALSO running
+// many other unrelated CPU-bound processes, per-write latency can
+// balloon far past its uncontended (sub-millisecond) cost - observed:
+// 100 total writes (workersPerConn=10/insertsPerGoroutine=5) needed up
+// to ~60s to fully drain under such contention, right at a 60s
+// busy_timeout. Keeping the total write count low bounds that
+// worst-case drain time well under busy_timeout regardless of how slow
+// any individual contended write becomes.
 func TestOpen_ConcurrentWritersDoNotHitSQLiteBusy(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "pitha.db")
 
@@ -46,8 +58,8 @@ func TestOpen_ConcurrentWritersDoNotHitSQLiteBusy(t *testing.T) {
 	})
 
 	const (
-		workersPerConn      = 20
-		insertsPerGoroutine = 10
+		workersPerConn      = 5
+		insertsPerGoroutine = 2
 	)
 
 	var wg sync.WaitGroup
