@@ -156,3 +156,33 @@ func TestSlackNotifier_JevAPIErrorRateExceeded(t *testing.T) {
 		t.Errorf("message %q missing expected content", got[0])
 	}
 }
+
+func TestSlackNotifier_ProposalApplied(t *testing.T) {
+	var got []string
+	n, closeSrv := captureWebhook(t, &got)
+	defer closeSrv()
+
+	proposal := domain.PolicyProposal{ID: 42, AppliedPolicyVersion: ptr("sol-42")}
+	if err := n.ProposalApplied(context.Background(), proposal); err != nil {
+		t.Fatalf("ProposalApplied: %v", err)
+	}
+	if !strings.Contains(got[0], "sol-42") {
+		t.Errorf("message %q missing expected content", got[0])
+	}
+}
+
+func TestSlackNotifier_ProposalRolledBack(t *testing.T) {
+	var got []string
+	n, closeSrv := captureWebhook(t, &got)
+	defer closeSrv()
+
+	proposal := domain.PolicyProposal{ID: 42}
+	if err := n.ProposalRolledBack(context.Background(), proposal, "expectancy degraded 25%"); err != nil {
+		t.Fatalf("ProposalRolledBack: %v", err)
+	}
+	if !strings.Contains(got[0], "expectancy degraded 25%") {
+		t.Errorf("message %q missing expected content", got[0])
+	}
+}
+
+func ptr[T any](v T) *T { return &v }

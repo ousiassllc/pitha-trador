@@ -161,3 +161,30 @@ func TestCalibrationRepository_ListLabeledSamples(t *testing.T) {
 		t.Fatalf("ListLabeledSamples() = %+v, want exactly the LONG outcome", samples)
 	}
 }
+
+func TestCalibrationRepository_ListLabeledSamplesSince(t *testing.T) {
+	outcomes, decisions, instID := newCalibrationFixtures(t)
+	ctx := context.Background()
+	cutoff := time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)
+
+	old := insertTraderDecision(t, decisions, instID, cutoff.Add(-time.Hour), domain.JevDirectionLong)
+	if _, err := outcomes.Insert(ctx, domain.CalibrationOutcome{
+		JevDecisionID: old.ID, HorizonMinutes: 5, FutureReturn: 0.41, WasDirectionCorrect: ptr(true),
+	}); err != nil {
+		t.Fatalf("seed old outcome: %v", err)
+	}
+	recent := insertTraderDecision(t, decisions, instID, cutoff.Add(time.Hour), domain.JevDirectionShort)
+	if _, err := outcomes.Insert(ctx, domain.CalibrationOutcome{
+		JevDecisionID: recent.ID, HorizonMinutes: 5, FutureReturn: -0.30, WasDirectionCorrect: ptr(true),
+	}); err != nil {
+		t.Fatalf("seed recent outcome: %v", err)
+	}
+
+	samples, err := outcomes.ListLabeledSamplesSince(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("ListLabeledSamplesSince: %v", err)
+	}
+	if len(samples) != 1 || samples[0].Direction != domain.JevDirectionShort || samples[0].FutureReturn != -0.30 {
+		t.Fatalf("ListLabeledSamplesSince(%s) = %+v, want exactly the recent SHORT outcome", cutoff, samples)
+	}
+}

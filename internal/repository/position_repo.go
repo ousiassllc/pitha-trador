@@ -128,6 +128,22 @@ func (r *PositionRepository) ListOpen(ctx context.Context) ([]domain.Position, e
 	return scanPositions(rows)
 }
 
+// ListClosedBetween returns every position closed in [start, end),
+// oldest first, for internal/service/selfimprove.Governor's
+// FR-SELFIMPROVE-6 post-apply realized-Expectancy tracking (comparing
+// the mean realized_pnl of positions closed in the 5-business-day window
+// before/after a proposal's applied_at).
+func (r *PositionRepository) ListClosedBetween(ctx context.Context, start, end time.Time) ([]domain.Position, error) {
+	rows, err := r.db.QueryContext(ctx,
+		positionSelectColumns+` WHERE closed_at IS NOT NULL AND closed_at >= ? AND closed_at < ? ORDER BY closed_at ASC`,
+		formatTime(start), formatTime(end),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list closed positions between %s and %s: %w", start, end, err)
+	}
+	return scanPositions(rows)
+}
+
 // List returns up to limit positions rows (open and closed), most
 // recently opened first, for `GET /api/v1/positions`
 // (docs/api/endpoints.md §5: "現在保有中および直近クローズ済みポジショ
