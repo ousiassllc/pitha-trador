@@ -23,8 +23,30 @@ import (
 // `PRAGMA journal_mode=WAL` every time database/sql opens a new pooled
 // connection, not just the first one (docs/architecture/er.md §型・規約
 // 「外部キー」「同時実行」: "Goのコネクションプール初期化時に必ず設定する").
+//
+// `_busy_timeout=5000` maps to `PRAGMA busy_timeout=5000` (5s). WAL mode
+// allows one writer to run concurrently with readers, but a second writer
+// (e.g. another pooled connection from the same *sql.DB, or a separate
+// process) that finds the write lock already held returns SQLITE_BUSY
+// immediately when busy_timeout is unset (its default is 0). Setting a
+// timeout makes SQLite retry internally for up to 5s instead of failing
+// fast.
+//
+// `_txlock=immediate` makes every non-read-only `BeginTx` issue `BEGIN
+// IMMEDIATE` instead of the default deferred `BEGIN`. Repositories such
+// as JobRepository.ClaimNext and SnapshotRepository run a SELECT followed
+// by an UPDATE/INSERT inside one transaction; a deferred transaction only
+// acquires the write lock at that later write statement, so two
+// concurrent transactions can both finish their SELECT and then race for
+// the upgrade to a write lock. That race returns SQLITE_BUSY even with
+// busy_timeout set, because it is a lock-upgrade conflict rather than a
+// plain "wait for the writer to finish" wait. Acquiring the write lock
+// immediately at BEGIN serializes those transactions through the normal
+// busy_timeout retry path instead. Together, `_busy_timeout` and
+// `_txlock=immediate` eliminate the intermittent "database is locked (5)
+// (SQLITE_BUSY)" failures seen under concurrent writers (issue #39).
 func dsn(path string) string {
-	return fmt.Sprintf("file:%s?_foreign_keys=1&_journal_mode=WAL", path)
+	return fmt.Sprintf("file:%s?_foreign_keys=1&_journal_mode=WAL&_busy_timeout=5000&_txlock=immediate", path)
 }
 
 // Open opens (creating it and its parent directory if necessary) the
