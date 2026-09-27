@@ -113,9 +113,10 @@ func WithSymbolRiskParams(params handler.SymbolRiskParams) Option {
 }
 
 // WithCalibrationSource overrides `GET /api/v1/calibration`'s backing
-// internal/web/handler.CalibrationSource. Defaults to an empty
-// handler.StaticCalibrationSource until a later sub-scope wires a real
-// internal/service/calibration.Service in.
+// internal/web/handler.CalibrationSource. cmd/desktop and cmd/server pass
+// internal/bootstrap's real internal/service/calibration.Service; the
+// empty handler.StaticCalibrationSource default only serves router-level
+// tests.
 func WithCalibrationSource(source handler.CalibrationSource) Option {
 	return func(o *options) { o.calibrationSource = source }
 }

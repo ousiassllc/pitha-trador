@@ -16,6 +16,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
@@ -74,6 +75,7 @@ type Services struct {
 	Jobs        *repository.JobRepository
 	Positions   *repository.PositionRepository
 	Orders      *repository.OrderRepository
+	Outcomes    *repository.CalibrationRepository
 	KillSwitch  *repository.KillSwitchRepository
 	Settings    *repository.RuntimeSettingsRepository
 
@@ -87,6 +89,7 @@ type Services struct {
 	Policy        *policy.Engine
 	Risk          *risk.Engine
 	Execution     *execution.Engine
+	Calibration   *calibration.Service
 
 	Scheduler *scheduler.Scheduler
 
@@ -97,7 +100,8 @@ type Services struct {
 // BuildServices constructs the full composition-root service graph on top
 // of state (bootstrap.Run's DB + config) and secrets (config.LoadSecrets),
 // registering every internal/service/scheduler queue Handler this build
-// wires (market-data, feature-calc, jev-scout, jev-trader). notifiers are
+// wires (market-data, feature-calc, jev-scout, jev-trader,
+// outcome-labeling). notifiers are
 // entrypoint-specific extra Risk Engine alert channels (cmd/desktop passes
 // its Wails App for native OS toasts; cmd/server passes none) fanned out
 // alongside the always-on structured log and optional Slack channels
@@ -112,6 +116,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	jobs := repository.NewJobRepository(state.DB)
 	positions := repository.NewPositionRepository(state.DB)
 	orders := repository.NewOrderRepository(state.DB)
+	outcomes := repository.NewCalibrationRepository(state.DB)
 	killSwitch := repository.NewKillSwitchRepository(state.DB)
 	settings := repository.NewRuntimeSettingsRepository(state.DB)
 	alerts := newAlertChannels(secrets)
@@ -149,7 +154,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	policyEngine := policy.NewEngine(policy.ThresholdsFromStrategy(*state.Strategy), riskEngine, signals)
 	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine})
 
-	sched := scheduler.New(jobs, instruments)
+	sched := scheduler.New(jobs, instruments, scheduler.WithOutcomeLabelSource(outcomes))
 
 	svc := &Services{
 		Instruments:   instruments,
@@ -159,6 +164,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 		Jobs:          jobs,
 		Positions:     positions,
 		Orders:        orders,
+		Outcomes:      outcomes,
 		KillSwitch:    killSwitch,
 		Settings:      settings,
 		RAG:           ragService,
@@ -171,6 +177,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 		Policy:        policyEngine,
 		Risk:          riskEngine,
 		Execution:     executionEngine,
+		Calibration:   calibration.NewService(outcomes),
 		Scheduler:     sched,
 		strategy:      state.Strategy,
 	}
@@ -179,6 +186,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	sched.RegisterHandler(repository.JobQueueFeatureCalc, svc.handleFeatureCalc)
 	sched.RegisterHandler(repository.JobQueueJevScout, svc.Scout.HandleJob)
 	sched.RegisterHandler(repository.JobQueueJevTrader, traderHandler.HandleJob)
+	sched.RegisterHandler(repository.JobQueueOutcomeLabeling, calibration.NewLabeler(decisions, snapshots, outcomes).HandleJob)
 
 	return svc, nil
 }

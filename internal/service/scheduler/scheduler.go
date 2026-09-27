@@ -36,9 +36,8 @@ type Scheduler struct {
 	jobs        *repository.JobRepository
 	instruments *repository.InstrumentRepository
 	// outcomeLabels is optional (WithOutcomeLabelSource): a nil value
-	// makes EnqueueOutcomeLabeling a no-op, the same "later sub-scope
-	// wires this in" deferral Start's own doc comment already describes
-	// for the 15-30s/5-15s cycles.
+	// makes EnqueueOutcomeLabeling a no-op and skips Start's
+	// outcome-labeling trigger.
 	outcomeLabels *repository.CalibrationRepository
 	// heartbeatChecker is optional (WithHeartbeatChecker): a nil value
 	// makes CheckOperatorHeartbeat a no-op, the same deferral
@@ -68,9 +67,9 @@ func WithPollInterval(d time.Duration) Option {
 	return func(s *Scheduler) { s.pollInterval = d }
 }
 
-// WithOutcomeLabelSource enables EnqueueOutcomeLabeling's periodic
-// outcome-labeling enqueue trigger (functional.md FR-CAL-4). Unset by
-// default. *repository.CalibrationRepository implements this directly.
+// WithOutcomeLabelSource enables EnqueueOutcomeLabeling and Start's
+// 1-minute outcome-labeling enqueue trigger (functional.md FR-CAL-4).
+// Unset by default. *repository.CalibrationRepository implements this directly.
 func WithOutcomeLabelSource(repo *repository.CalibrationRepository) Option {
 	return func(s *Scheduler) { s.outcomeLabels = repo }
 }
@@ -164,8 +163,10 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 // the cron-driven full-scan trigger at fullScanInterval
 // (functional.md §4.3), the daily selfImproveCronSpec Sol-analysis
 // trigger (functional.md §4.14 FR-SELFIMPROVE-1) and - when
-// WithLogRotator was given - a @daily log-archival trigger
-// (non-functional.md §5), running until ctx is done or Stop is called.
+// WithOutcomeLabelSource/WithLogRotator were given - the 1-minute
+// Outcome Labeling enqueue trigger (FR-CAL-4) and a @daily log-archival
+// trigger (non-functional.md §5), running until ctx is done or Stop is
+// called.
 //
 // Only the 60-second full-scan cycle is wired to an actual enqueue here;
 // the 15-30s candidate-refresh and 5-15s held-position cycles
@@ -208,15 +209,9 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 		return fmt.Errorf("scheduler: register self-improve trigger %q: %w", selfImproveCronSpec, err)
 	}
 
-	if s.logRotator != nil {
-		if _, err := s.cron.AddFunc("@daily", func() {
-			if err := s.RotateLogs(runCtx); err != nil {
-				slog.Error("scheduler: log rotation failed", "error", err)
-			}
-		}); err != nil {
-			cancel()
-			return fmt.Errorf("scheduler: register log rotation trigger: %w", err)
-		}
+	if err := s.addPeriodicTriggers(runCtx); err != nil {
+		cancel()
+		return err
 	}
 
 	s.cron.Start()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository"
@@ -40,6 +41,20 @@ func WithLogRotator(rotator LogRotator) Option {
 	return func(s *Scheduler) { s.logRotator = rotator }
 }
 
+// outcomeLabelingCronSpec is how often Start's Outcome Labeling trigger
+// (WithOutcomeLabelSource) runs EnqueueOutcomeLabeling: once per 1-minute
+// market_snapshots bar, so each 5/10/20-minute horizon is labeled within
+// a minute of elapsing.
+const outcomeLabelingCronSpec = "@every 1m"
+
+// outcomeLabelRetryWindow bounds how long after its decision a pending
+// (decision, horizon) pair keeps being re-enqueued. Labeler.HandleJob
+// fails (persisting nothing) when the decision's horizon window has no
+// market data, and a gap that old (kabuステーションAPI outage, process
+// downtime) never fills in, so without this bound every such pair would
+// be re-enqueued - and fail - every minute forever.
+const outcomeLabelRetryWindow = 24 * time.Hour
+
 // DefaultOutcomeLabelHorizonsMinutes are the judgment horizons Outcome
 // Labeling evaluates each Jev trader decision at (functional.md §4.12,
 // docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/20
@@ -50,10 +65,9 @@ var DefaultOutcomeLabelHorizonsMinutes = []int{5, 10, 20}
 // (repository.JobQueueOutcomeLabeling) for every Jev trader decision
 // whose horizon has elapsed as of now but has no calibration_outcomes
 // row yet for that (jev_decision_id, horizon_minutes) pair (functional.md
-// FR-CAL-4). It returns the number of jobs enqueued, or (0, nil) if no
-// OutcomeLabelSource is configured (WithOutcomeLabelSource) - the same
-// deferral Start's own doc comment describes for the 15-30s/5-15s
-// cycles.
+// FR-CAL-4), skipping decisions older than outcomeLabelRetryWindow. It
+// returns the number of jobs enqueued, or (0, nil) if no
+// OutcomeLabelSource is configured (WithOutcomeLabelSource).
 func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (int, error) {
 	if s.outcomeLabels == nil {
 		return 0, nil
@@ -64,7 +78,11 @@ func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (
 		return 0, fmt.Errorf("scheduler: list pending outcome labels: %w", err)
 	}
 
+	enqueued := 0
 	for _, p := range pending {
+		if p.DecisionTimestamp.Before(now.Add(-outcomeLabelRetryWindow)) {
+			continue
+		}
 		payload, err := json.Marshal(repository.OutcomeLabelJobPayload{JevDecisionID: p.JevDecisionID, HorizonMinutes: p.HorizonMinutes})
 		if err != nil {
 			return 0, fmt.Errorf("scheduler: marshal outcome-labeling payload for decision %d: %w", p.JevDecisionID, err)
@@ -72,8 +90,33 @@ func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (
 		if _, err := s.jobs.Enqueue(ctx, repository.JobQueueOutcomeLabeling, string(payload), now); err != nil {
 			return 0, fmt.Errorf("scheduler: enqueue outcome-labeling job for decision %d (horizon %dm): %w", p.JevDecisionID, p.HorizonMinutes, err)
 		}
+		enqueued++
 	}
-	return len(pending), nil
+	return enqueued, nil
+}
+
+// addPeriodicTriggers registers Start's optional cron triggers - each
+// only when its Option configured the dependency it drives.
+func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
+	if s.outcomeLabels != nil {
+		if _, err := s.cron.AddFunc(outcomeLabelingCronSpec, func() {
+			if _, err := s.EnqueueOutcomeLabeling(ctx, time.Now().UTC()); err != nil {
+				slog.Error("scheduler: outcome-labeling enqueue failed", "error", err)
+			}
+		}); err != nil {
+			return fmt.Errorf("scheduler: register outcome-labeling trigger: %w", err)
+		}
+	}
+	if s.logRotator != nil {
+		if _, err := s.cron.AddFunc("@daily", func() {
+			if err := s.RotateLogs(ctx); err != nil {
+				slog.Error("scheduler: log rotation failed", "error", err)
+			}
+		}); err != nil {
+			return fmt.Errorf("scheduler: register log rotation trigger: %w", err)
+		}
+	}
+	return nil
 }
 
 // CheckOperatorHeartbeat calls the configured HeartbeatChecker
