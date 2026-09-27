@@ -24,13 +24,27 @@ import (
 // connection, not just the first one (docs/architecture/er.md §型・規約
 // 「外部キー」「同時実行」: "Goのコネクションプール初期化時に必ず設定する").
 //
-// `_busy_timeout=5000` maps to `PRAGMA busy_timeout=5000` (5s). WAL mode
+// `_busy_timeout=60000` maps to `PRAGMA busy_timeout=60000` (60s). WAL mode
 // allows one writer to run concurrently with readers, but a second writer
 // (e.g. another pooled connection from the same *sql.DB, or a separate
 // process) that finds the write lock already held returns SQLITE_BUSY
 // immediately when busy_timeout is unset (its default is 0). Setting a
-// timeout makes SQLite retry internally for up to 5s instead of failing
-// fast.
+// timeout makes SQLite retry internally instead of failing fast. The
+// timeout only bounds how long a contended writer is willing to wait for
+// the lock to free up; it adds zero latency when there is no contention,
+// so a generous value here has no cost on the uncontended (production)
+// path. This started at 5s, then 30s, and is now 60s: under `go test
+// ./...`, every package's test binary runs concurrently, and on a
+// sufficiently CPU-contended host (e.g. many unrelated processes also
+// competing for the same cores) that contention can stretch a writer's
+// actual hold time far beyond what it takes when that writer runs alone.
+// Observed on a heavily loaded host: a lone run of the concurrent-writer
+// regression test finishes in ~4s at the median but tailed out to 66s
+// under full-suite parallelism at 30s busy_timeout, so the regression
+// test's own writer concurrency was also reduced (see
+// busy_timeout_test.go) alongside this bump, to keep the serialized
+// write queue bounded instead of chasing CPU contention with an
+// unbounded timeout.
 //
 // `_txlock=immediate` makes every non-read-only `BeginTx` issue `BEGIN
 // IMMEDIATE` instead of the default deferred `BEGIN`. Repositories such
@@ -46,7 +60,7 @@ import (
 // `_txlock=immediate` eliminate the intermittent "database is locked (5)
 // (SQLITE_BUSY)" failures seen under concurrent writers (issue #39).
 func dsn(path string) string {
-	return fmt.Sprintf("file:%s?_foreign_keys=1&_journal_mode=WAL&_busy_timeout=5000&_txlock=immediate", path)
+	return fmt.Sprintf("file:%s?_foreign_keys=1&_journal_mode=WAL&_busy_timeout=60000&_txlock=immediate", path)
 }
 
 // Open opens (creating it and its parent directory if necessary) the
