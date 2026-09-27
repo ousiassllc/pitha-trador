@@ -96,9 +96,10 @@ func WithSystemEngine(engine handler.SystemEngine) Option {
 }
 
 // WithSymbolProvider overrides the Symbol Detail/position/order routes'
-// backing internal/web/handler.SymbolProvider. Defaults to an empty
-// handler.StaticSymbolProvider until a later sub-scope wires a real
-// internal/service/execution.Engine in.
+// backing internal/web/handler.SymbolProvider. cmd/desktop and
+// cmd/server pass internal/bootstrap's real
+// internal/service/execution.Engine; the empty handler.StaticSymbolProvider
+// default only serves router-level tests.
 func WithSymbolProvider(provider handler.SymbolProvider) Option {
 	return func(o *options) { o.symbolProvider = provider }
 }

@@ -74,6 +74,7 @@ func main() {
 	engine := router.New(
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
+		router.WithSymbolProvider(services.Execution),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
 			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,
 			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,

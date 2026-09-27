@@ -26,7 +26,9 @@ type marketDataJobPayload struct {
 // fetches symbol's current 時価情報・板情報 from kabuステーションAPI,
 // computes its Feature values against snapshotHistoryLookback prior bars,
 // and persists the result as one market_snapshots row via
-// FeatureEngine.RunCycle (which also indexes it for RAG - FR-RAG-1).
+// FeatureEngine.RunCycle (which also indexes it for RAG - FR-RAG-1), then
+// runs Paper Trading's position management against that new bar
+// (execution.Engine.OnSnapshot).
 //
 // This single handler covers both "market data acquisition" and "feature
 // computation": featureengine.Engine only exposes an atomic
@@ -74,13 +76,23 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 		// placeholder) until a later scope introduces one.
 	}
 
-	if _, err := s.FeatureEngine.RunCycle(ctx, []featureengine.CycleInput{{
+	persisted, err := s.FeatureEngine.RunCycle(ctx, []featureengine.CycleInput{{
 		InstrumentID: payload.InstrumentID,
 		Symbol:       payload.Symbol,
 		Input:        input,
 		RawDataJSON:  string(rawJSON),
-	}}); err != nil {
+	}})
+	if err != nil {
 		return fmt.Errorf("bootstrap: run feature engine cycle for %q: %w", payload.Symbol, err)
+	}
+
+	// Paper Trading's per-bar step (issue #49): fill crossed limit
+	// entries, mark the open position to market, and close it when an
+	// FR-EXIT-1 condition triggers against this fresh bar.
+	for _, snap := range persisted {
+		if _, err := s.Execution.OnSnapshot(ctx, snap); err != nil {
+			return fmt.Errorf("bootstrap: manage paper position for %q: %w", payload.Symbol, err)
+		}
 	}
 	return nil
 }

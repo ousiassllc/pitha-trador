@@ -43,11 +43,23 @@ func traderServer(t *testing.T, resp jev.TraderResponse) *httptest.Server {
 // jev-trader queue jobs run through in production once Scheduler
 // registers Handler.HandleJob.
 type handlerFixture struct {
-	db      *sql.DB
-	handler *policy.Handler
-	engine  *policy.Engine
-	signals *repository.SignalRepository
-	jobs    *repository.JobRepository
+	db       *sql.DB
+	handler  *policy.Handler
+	engine   *policy.Engine
+	signals  *repository.SignalRepository
+	jobs     *repository.JobRepository
+	executor *recordingExecutor
+}
+
+// recordingExecutor records every signal Handler hands to its
+// SignalExecutor.
+type recordingExecutor struct {
+	executed []domain.TradeSignal
+}
+
+func (e *recordingExecutor) ExecuteSignal(_ context.Context, signal domain.TradeSignal, _ domain.Snapshot) error {
+	e.executed = append(e.executed, signal)
+	return nil
 }
 
 func newHandlerFixture(t *testing.T, resp jev.TraderResponse) handlerFixture {
@@ -64,9 +76,10 @@ func newHandlerFixture(t *testing.T, resp jev.TraderResponse) handlerFixture {
 	trader := jev.NewTrader(client, decisions, ragService)
 
 	engine := policy.NewEngine(testThresholds(), nil, signals)
-	handler := policy.NewHandler(trader, snapshots, engine)
+	executor := &recordingExecutor{}
+	handler := policy.NewHandler(trader, snapshots, engine, executor)
 
-	return handlerFixture{db: db, handler: handler, engine: engine, signals: signals, jobs: repository.NewJobRepository(db)}
+	return handlerFixture{db: db, handler: handler, engine: engine, signals: signals, jobs: repository.NewJobRepository(db), executor: executor}
 }
 
 func mustCreateInstrumentAndSnapshot(t *testing.T, db *sql.DB, symbol string, spreadBps float64) domain.Instrument {
@@ -126,6 +139,9 @@ func TestHandler_HandleJob_PersistsLongTradeSignalFromRealTraderCall(t *testing.
 	if !signals[0].RiskPassed {
 		t.Fatalf("RiskPassed = false, want true")
 	}
+	if len(f.executor.executed) != 1 || f.executor.executed[0].ID != signals[0].ID {
+		t.Fatalf("executed signals = %+v, want exactly the persisted LONG signal (id %d)", f.executor.executed, signals[0].ID)
+	}
 }
 
 func TestHandler_HandleJob_PersistsNoneTradeSignalWhenSpreadTooWide(t *testing.T) {
@@ -145,6 +161,9 @@ func TestHandler_HandleJob_PersistsNoneTradeSignalWhenSpreadTooWide(t *testing.T
 	if len(signals) != 1 || signals[0].Direction != domain.JevDirectionNone {
 		t.Fatalf("signals = %+v, want a single NONE row", signals)
 	}
+	if len(f.executor.executed) != 0 {
+		t.Fatalf("executed signals = %+v, want none for a NONE signal", f.executor.executed)
+	}
 }
 
 func TestHandler_HandleJob_PersistsNoneTradeSignalAndReturnsErrorOnJevAPIFailure(t *testing.T) {
@@ -162,7 +181,7 @@ func TestHandler_HandleJob_PersistsNoneTradeSignalAndReturnsErrorOnJevAPIFailure
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
 	trader := jev.NewTrader(client, decisions, ragService)
 	engine := policy.NewEngine(testThresholds(), nil, signals)
-	handler := policy.NewHandler(trader, snapshots, engine)
+	handler := policy.NewHandler(trader, snapshots, engine, nil)
 
 	inst := mustCreateInstrumentAndSnapshot(t, db, "7203", 10)
 	payloadJSON, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: "7203"})

@@ -16,6 +16,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
@@ -72,6 +73,7 @@ type Services struct {
 	Signals     *repository.SignalRepository
 	Jobs        *repository.JobRepository
 	Positions   *repository.PositionRepository
+	Orders      *repository.OrderRepository
 	KillSwitch  *repository.KillSwitchRepository
 	Settings    *repository.RuntimeSettingsRepository
 
@@ -84,6 +86,7 @@ type Services struct {
 	Trader        *jev.Trader
 	Policy        *policy.Engine
 	Risk          *risk.Engine
+	Execution     *execution.Engine
 
 	Scheduler *scheduler.Scheduler
 
@@ -108,6 +111,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	signals := repository.NewSignalRepository(state.DB)
 	jobs := repository.NewJobRepository(state.DB)
 	positions := repository.NewPositionRepository(state.DB)
+	orders := repository.NewOrderRepository(state.DB)
 	killSwitch := repository.NewKillSwitchRepository(state.DB)
 	settings := repository.NewRuntimeSettingsRepository(state.DB)
 	alerts := newAlertChannels(secrets)
@@ -127,14 +131,23 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout)
 	trader := jev.NewTrader(jevClient, decisions, ragService)
 
+	executionEngine := execution.NewEngine(execution.Deps{
+		Orders:      orders,
+		Positions:   positions,
+		Snapshots:   snapshots,
+		Decisions:   decisions,
+		Signals:     signals,
+		Instruments: instruments,
+	}, execution.ConfigFromRiskLimits(state.Risk.Paper))
+
 	riskEngine := newRiskEngine(state.Risk.Paper, riskRepositories{
 		killSwitch: killSwitch,
 		settings:   settings,
 		snapshots:  snapshots,
 		positions:  positions,
-	}, nil, alerts.riskNotifier(notifiers))
+	}, executionEngine, alerts.riskNotifier(notifiers))
 	policyEngine := policy.NewEngine(policy.ThresholdsFromStrategy(*state.Strategy), riskEngine, signals)
-	traderHandler := policy.NewHandler(trader, snapshots, policyEngine)
+	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine})
 
 	sched := scheduler.New(jobs, instruments)
 
@@ -145,6 +158,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 		Signals:       signals,
 		Jobs:          jobs,
 		Positions:     positions,
+		Orders:        orders,
 		KillSwitch:    killSwitch,
 		Settings:      settings,
 		RAG:           ragService,
@@ -156,6 +170,7 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 		Trader:        trader,
 		Policy:        policyEngine,
 		Risk:          riskEngine,
+		Execution:     executionEngine,
 		Scheduler:     sched,
 		strategy:      state.Strategy,
 	}

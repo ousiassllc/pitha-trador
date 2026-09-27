@@ -5,9 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 )
+
+// SignalExecutor acts on a persisted trade signal Policy Engine approved
+// (RiskPassed LONG/SHORT): internal/bootstrap passes a Paper Trading
+// adapter over internal/service/execution.Engine (issue #49). snap is
+// the market_snapshots row the signal was evaluated against, supplying
+// the entry reference price.
+type SignalExecutor interface {
+	ExecuteSignal(ctx context.Context, signal domain.TradeSignal, snap domain.Snapshot) error
+}
 
 // Handler connects Jev Trader and Engine to the jev-trader queue
 // (repository.JobQueueJevTrader): HandleJob loads the instrument's latest
@@ -22,13 +32,15 @@ type Handler struct {
 	trader    *jev.Trader
 	snapshots *repository.SnapshotRepository
 	engine    *Engine
+	executor  SignalExecutor
 }
 
 // NewHandler returns a Handler that evaluates jev-trader queue jobs via
 // trader and engine, reading each instrument's latest market_snapshots
-// row via snapshots.
-func NewHandler(trader *jev.Trader, snapshots *repository.SnapshotRepository, engine *Engine) *Handler {
-	return &Handler{trader: trader, snapshots: snapshots, engine: engine}
+// row via snapshots, and hands every approved signal to executor. A nil
+// executor only records signals (no order is ever placed).
+func NewHandler(trader *jev.Trader, snapshots *repository.SnapshotRepository, engine *Engine, executor SignalExecutor) *Handler {
+	return &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor}
 }
 
 // HandleJob processes one jev-trader queue job (jev.ScoutJobPayload: it
@@ -75,7 +87,7 @@ func (h *Handler) HandleJob(ctx context.Context, job repository.Job) error {
 		return err
 	}
 
-	if _, err := h.engine.Evaluate(ctx, Input{
+	signal, err := h.engine.Evaluate(ctx, Input{
 		InstrumentID:        payload.InstrumentID,
 		Symbol:              payload.Symbol,
 		Timestamp:           decision.Timestamp,
@@ -83,8 +95,15 @@ func (h *Handler) HandleJob(ctx context.Context, job repository.Job) error {
 		EntryPriceReference: &snap.Price,
 		SpreadBps:           snap.SpreadBps,
 		Calibrated:          true,
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("policy: evaluate trade signal for %q: %w", payload.Symbol, err)
+	}
+	if h.executor == nil || !signal.RiskPassed || signal.Direction == domain.JevDirectionNone {
+		return nil
+	}
+	if err := h.executor.ExecuteSignal(ctx, signal, snap); err != nil {
+		return fmt.Errorf("policy: execute trade signal for %q: %w", payload.Symbol, err)
 	}
 	return nil
 }
