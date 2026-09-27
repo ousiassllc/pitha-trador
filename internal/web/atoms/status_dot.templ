@@ -1,0 +1,26 @@
+package atoms
+
+// State is the system-wide Running/Paused/Killed state
+// (docs/components/overview.md §3 "atoms": "StatusDot（システム状態:
+// Running=緑 / Paused=黄 / Killed=赤）"), used to pick StatusDot's color.
+type State string
+
+const (
+	StateRunning State = "running"
+	StatePaused  State = "paused"
+	StateKilled  State = "killed"
+)
+
+// StatusDot renders a color-coded system-state indicator: green for
+// Running, yellow for Paused, red for Killed/anything else (Kill Switch
+// is the fail-safe default when state is unrecognized).
+templ StatusDot(state State) {
+	switch state {
+		case StateRunning:
+			<span class="status-dot status-dot-running" data-state="running">Running</span>
+		case StatePaused:
+			<span class="status-dot status-dot-paused" data-state="paused">Paused</span>
+		default:
+			<span class="status-dot status-dot-killed" data-state="killed">Killed</span>
+	}
+}

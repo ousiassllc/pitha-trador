@@ -1,0 +1,131 @@
+package pages
+
+import (
+	"fmt"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+// SymbolDetailProps is SymbolDetailPage's input (docs/components/
+// overview.md §3's "複雑なコンポーネントはProps構造体" convention -
+// SymbolDetailPage has more parameters than a direct-parameter signature
+// stays readable with).
+type SymbolDetailProps struct {
+	Symbol string
+	State  execution.SymbolState
+	// AllowedPositionPct/StopLossPct/TakeProfitPct mirror
+	// internal/web/handler.SymbolRiskParams (duplicated here rather than
+	// imported, to avoid pages importing handler - internal/web/handler
+	// already imports internal/web/pages, so the reverse import would
+	// cycle).
+	AllowedPositionPct float64
+	StopLossPct        float64
+	TakeProfitPct      float64
+	// Decisions is the symbol's recent Jev Scout/Trader decision history,
+	// most recent first (execution.Engine.RecentDecisions) - both this
+	// page's "Decision history" section and its "Jev判定" panel (the
+	// latest Trader decision within it) are derived from it.
+	Decisions []domain.JevDecision
+}
+
+// SymbolDetailPage is the Symbol Detail full page (functional.md §5.2):
+// layout.Shell around the price/Jev/Risk/position panels and Decision
+// history, plus the `pitha-price-chart` island
+// (docs/components/overview.md §5.1) that live-updates over
+// `/ws/symbols/{symbol}`. `GET /symbols/:symbol`
+// (internal/web/handler.SymbolHandler.Page) renders this for a normal
+// navigation.
+templ SymbolDetailPage(props SymbolDetailProps) {
+	@layout.Shell(props.Symbol) {
+		<h1>{ props.Symbol }</h1>
+		<pitha-price-chart
+			symbol={ props.Symbol }
+			candles-url={ fmt.Sprintf("/api/v1/symbols/%s/candles", props.Symbol) }
+			ws-url={ fmt.Sprintf("/ws/symbols/%s", props.Symbol) }
+		></pitha-price-chart>
+		<script type="module" src="/static/dist/js/price-chart/pitha-price-chart.js"></script>
+
+		@jevPanel(latestTraderDecision(props.Decisions))
+		@riskPanel(props)
+		@positionPanel(props.State.Position)
+		@organisms.DecisionHistoryList(props.Decisions)
+	}
+}
+
+// latestTraderDecision returns the first (most recent, decisions is
+// ordered DESC) domain.JevDecisionTypeTrader entry in decisions, or nil
+// if none exists yet (Jev Trader has not evaluated this symbol).
+func latestTraderDecision(decisions []domain.JevDecision) *domain.JevDecision {
+	for i := range decisions {
+		if decisions[i].DecisionType == domain.JevDecisionTypeTrader {
+			return &decisions[i]
+		}
+	}
+	return nil
+}
+
+templ jevPanel(d *domain.JevDecision) {
+	<section id="jev-panel" data-testid="jev-panel">
+		<h2>Jev判定</h2>
+		if d == nil {
+			@molecules.SignalBadgeGroup(nil, nil, nil)
+		} else {
+			@molecules.SignalBadgeGroup(d.Direction, d.Confidence, d.EntryQuality)
+			<dl>
+				<dt>Regime</dt>
+				<dd>{ derefString(d.Regime) }</dd>
+				<dt>Toxic Flow</dt>
+				<dd>{ derefPct(d.ToxicFlow) }</dd>
+				<dt>Liquidity Stress</dt>
+				<dd>{ derefPct(d.LiquidityStressed) }</dd>
+			</dl>
+		}
+	</section>
+}
+
+templ riskPanel(props SymbolDetailProps) {
+	<section id="risk-panel" data-testid="risk-panel">
+		<h2>Risk</h2>
+		<dl>
+			<dt>Allowed Position</dt>
+			<dd>{ fmt.Sprintf("%.2f%%", props.AllowedPositionPct) }</dd>
+			<dt>Stop</dt>
+			<dd>{ fmt.Sprintf("%.2f%%", props.StopLossPct) }</dd>
+			<dt>Take Profit</dt>
+			<dd>{ fmt.Sprintf("%.2f%%", props.TakeProfitPct) }</dd>
+		</dl>
+	</section>
+}
+
+templ positionPanel(position *domain.Position) {
+	<section id="position-panel" data-testid="position-panel">
+		<h2>Position</h2>
+		if position == nil {
+			<p>No open position.</p>
+		} else {
+			<table>
+				<tbody>
+					@molecules.PositionRow(*position)
+				</tbody>
+			</table>
+		}
+	</section>
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return "—"
+	}
+	return *s
+}
+
+func derefPct(f *float64) string {
+	if f == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.2f", *f)
+}
