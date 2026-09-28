@@ -53,9 +53,12 @@ type UpdateChecker interface {
 	CheckForUpdate(ctx context.Context) error
 }
 
-// WithUpdateChecker enables Start's 6-hourly GitHub Releases
-// update-check trigger (issue #65). cmd/desktop only; cmd/server never
-// configures this (it has no installer to run). Unset by default.
+// WithUpdateChecker enables Start's GitHub Releases update-check
+// trigger (issue #65): once immediately when Start is called, then
+// every 6 hours after (issue #71 - robfig/cron/v3's "@every 6h" alone
+// only fires 6h after Start, never on Start itself). cmd/desktop only;
+// cmd/server never configures this (it has no installer to run). Unset
+// by default.
 func WithUpdateChecker(checker UpdateChecker) Option {
 	return func(s *Scheduler) { s.updateChecker = checker }
 }
@@ -157,13 +160,23 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 		}
 	}
 	if s.updateChecker != nil {
-		if _, err := s.cron.AddFunc(updateCheckCronSpec, func() {
+		checkForUpdate := func() {
 			if err := s.CheckForUpdate(ctx); err != nil {
 				slog.Error("scheduler: update check failed", "error", err)
 			}
-		}); err != nil {
+		}
+		if _, err := s.cron.AddFunc(updateCheckCronSpec, checkForUpdate); err != nil {
 			return fmt.Errorf("scheduler: register update-check trigger: %w", err)
 		}
+		// robfig/cron/v3's "@every 6h" (updateCheckCronSpec) computes its
+		// first Next(now) as now.Add(6h), never now itself (issue #71),
+		// so without this immediate run a process whose lifetime never
+		// reaches 6h - cmd/desktop's typical intraday restart cadence -
+		// would never perform a single update check. Runs async (not
+		// inline here) since CheckForUpdate downloads+verifies an
+		// installer on a newer release and must not delay Start/the
+		// caller's startup sequence.
+		go checkForUpdate()
 	}
 	return nil
 }
