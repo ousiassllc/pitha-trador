@@ -64,3 +64,66 @@ func TestScheduler_Start_UpdateCheckerRunsImmediately(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// blockingUpdateChecker is a scheduler.UpdateChecker whose CheckForUpdate
+// signals Started and then blocks until Release is closed, so a test can
+// observe "the check is in flight" and control exactly when it finishes.
+type blockingUpdateChecker struct {
+	Started chan struct{}
+	Release chan struct{}
+}
+
+func newBlockingUpdateChecker() *blockingUpdateChecker {
+	return &blockingUpdateChecker{Started: make(chan struct{}), Release: make(chan struct{})}
+}
+
+func (c *blockingUpdateChecker) CheckForUpdate(ctx context.Context) error {
+	close(c.Started)
+	<-c.Release
+	return nil
+}
+
+// TestScheduler_Stop_WaitsForImmediateUpdateCheck regresses the immediate
+// update check (issue #71) being a bare `go checkForUpdate()` untracked by
+// s.wg: Stop's doc comment promises "blocking until the workers have
+// exited", but a plain goroutine outside s.wg would let Stop (and thus a
+// caller about to os.Exit) return while an installer download/verification
+// is still in flight. The immediate check must be tracked on s.wg like
+// runWorker's goroutines so Stop actually waits for it.
+func TestScheduler_Stop_WaitsForImmediateUpdateCheck(t *testing.T) {
+	db := newTestDB(t)
+	instruments := repository.NewInstrumentRepository(db)
+	jobs := repository.NewJobRepository(db)
+	checker := newBlockingUpdateChecker()
+
+	s := scheduler.New(jobs, instruments, scheduler.WithUpdateChecker(checker))
+	if err := s.Start(context.Background(), 1*time.Hour); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	select {
+	case <-checker.Started:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for the immediate update check to start")
+	}
+
+	stopped := make(chan struct{})
+	go func() {
+		s.Stop()
+		close(stopped)
+	}()
+
+	select {
+	case <-stopped:
+		t.Fatal("Stop returned while the immediate update check was still in flight")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(checker.Release)
+
+	select {
+	case <-stopped:
+	case <-time.After(1 * time.Second):
+		t.Fatal("Stop did not return after the immediate update check finished")
+	}
+}

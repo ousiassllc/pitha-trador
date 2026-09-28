@@ -175,8 +175,15 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 		// would never perform a single update check. Runs async (not
 		// inline here) since CheckForUpdate downloads+verifies an
 		// installer on a newer release and must not delay Start/the
-		// caller's startup sequence.
-		go checkForUpdate()
+		// caller's startup sequence. Tracked on s.wg (like runWorker's
+		// goroutines) so Stop's `s.wg.Wait()` blocks until this check has
+		// actually returned, instead of Stop reporting done while an
+		// installer download/verification is still in flight.
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			checkForUpdate()
+		}()
 	}
 	return nil
 }
