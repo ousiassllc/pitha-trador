@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
+	configdefaults "github.com/ousiassllc/pitha-trador/config"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 )
@@ -38,19 +38,14 @@ const (
 	EnvRiskPath     = "PITHA_RISK_PATH"
 )
 
-// repoRoot is this source file's repository root (internal/bootstrap/../..),
-// resolved relative to the source file itself rather than the process's
-// current working directory - the same precedent internal/router.go's
-// staticDir documents (its own doc comment: "regardless of whether the
-// caller is `go test`, `cmd/server`, or `wails dev`, each has a different
-// cwd"). Once `wails build` packages a single .exe, this - like
-// staticDir - needs revisiting (e.g. an executable-relative path via
-// os.Executable, or embedding config/*.yaml as a compiled-in default);
-// this build only targets `wails dev`/`go run`/`go test` so far.
-var repoRoot = func() string {
-	_, thisFile, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(thisFile), "..", "..")
-}()
+// embeddedConfigSource is the ResolvedPaths.StrategyPath/RiskPath value
+// Run reports when it fell back to configdefaults' compiled-in YAML
+// rather than reading any file from disk - i.e. none of an explicit
+// bootstrap.Config field, the PITHA_STRATEGY_PATH/PITHA_RISK_PATH
+// environment variable, nor a config/*.yaml next to the running
+// executable (loadConfigOrEmbedded's steps 1-3) applied
+// (docs/architecture/overview.md §7, issue #59).
+const embeddedConfigSource = "(embedded default)"
 
 // DefaultDBPath returns the conventional per-user SQLite database file
 // location: os.UserConfigDir()'s "pitha-trador/pitha.db" subpath. On
@@ -68,9 +63,12 @@ func DefaultDBPath() (string, error) {
 }
 
 // Config selects the DB/config file paths Run opens. Every field left
-// empty falls back through the corresponding Env* environment variable
-// to its documented default (DefaultDBPath, config.DefaultStrategyPath,
-// config.DefaultRiskPath).
+// empty falls back, in order, to: the corresponding PITHA_*_PATH
+// environment variable (Env* below), a config/*.yaml next to the running
+// executable (os.Executable), then finally DefaultDBPath/the
+// configdefaults package's compiled-in strategy.yaml/risk.yaml
+// (loadConfigOrEmbedded's four steps, issue #59). DBPath has no
+// executable-relative or embedded step - see DefaultDBPath.
 type Config struct {
 	DBPath       string
 	StrategyPath string
@@ -99,9 +97,13 @@ type State struct {
 
 // Run opens (creating + migrating if necessary) the SQLite database and
 // loads config/strategy.yaml + config/risk.yaml, applying cfg's path
-// overrides (falling back to the Env* environment variables, in turn
-// falling back to DefaultDBPath/config.DefaultStrategyPath/
-// config.DefaultRiskPath resolved under repoRoot).
+// overrides. DBPath falls back through EnvDBPath to DefaultDBPath
+// (resolveDBPath); StrategyPath/RiskPath fall back through
+// EnvStrategyPath/EnvRiskPath, then a config/*.yaml next to the running
+// executable, then a compiled-in default (loadConfigOrEmbedded) - see
+// Config's doc comment for the full four-step precedence issue #59
+// introduced so a `wails build`/`go build ./cmd/server` .exe distributed
+// with no accompanying config/ directory still starts.
 //
 // Callers (cmd/desktop, cmd/server) treat any returned error as fatal: an
 // unopenable DB or unparsable config file leaves the process with no
@@ -114,24 +116,28 @@ func Run(cfg Config) (*State, error) {
 	if err != nil {
 		return nil, err
 	}
-	strategyPath := resolvePath(cfg.StrategyPath, EnvStrategyPath, filepath.Join(repoRoot, config.DefaultStrategyPath))
-	riskPath := resolvePath(cfg.RiskPath, EnvRiskPath, filepath.Join(repoRoot, config.DefaultRiskPath))
 
 	db, err := repository.Open(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: open db %q: %w", dbPath, err)
 	}
 
-	strategy, err := config.LoadStrategy(strategyPath)
+	strategy, strategyPath, err := loadConfigOrEmbedded(
+		cfg.StrategyPath, EnvStrategyPath, config.DefaultStrategyPath,
+		configdefaults.DefaultStrategyYAML, config.LoadStrategy, config.LoadStrategyBytes,
+	)
 	if err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("bootstrap: load strategy config %q: %w", strategyPath, err)
+		return nil, err
 	}
 
-	riskCfg, err := config.LoadRisk(riskPath)
+	riskCfg, riskPath, err := loadConfigOrEmbedded(
+		cfg.RiskPath, EnvRiskPath, config.DefaultRiskPath,
+		configdefaults.DefaultRiskYAML, config.LoadRisk, config.LoadRiskBytes,
+	)
 	if err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("bootstrap: load risk config %q: %w", riskPath, err)
+		return nil, err
 	}
 
 	return &State{
@@ -166,12 +172,59 @@ func resolveDBPath(explicit string) (string, error) {
 	return DefaultDBPath()
 }
 
-func resolvePath(explicit, envVar, fallback string) string {
+// loadConfigOrEmbedded resolves and loads one of strategy.yaml/risk.yaml,
+// returning the parsed value alongside the source path Run reports on
+// State.Paths (embeddedConfigSource when step 4 - the embedded fallback -
+// was used). explicit/envVar/defaultRelPath/embedded/loadFile/loadBytes
+// mirror resolveConfigPath's parameters plus the two internal/config
+// loader functions (config.LoadStrategy+config.LoadStrategyBytes, or
+// config.LoadRisk+config.LoadRiskBytes) for the config type T in
+// question.
+func loadConfigOrEmbedded[T any](
+	explicit, envVar, defaultRelPath string,
+	embedded []byte,
+	loadFile func(string) (*T, error),
+	loadBytes func([]byte) (*T, error),
+) (*T, string, error) {
+	if path, ok := resolveConfigPath(explicit, envVar, defaultRelPath); ok {
+		v, err := loadFile(path)
+		if err != nil {
+			return nil, "", fmt.Errorf("bootstrap: load config %q: %w", path, err)
+		}
+		return v, path, nil
+	}
+
+	v, err := loadBytes(embedded)
+	if err != nil {
+		return nil, "", fmt.Errorf("bootstrap: load embedded default config: %w", err)
+	}
+	return v, embeddedConfigSource, nil
+}
+
+// resolveConfigPath resolves a strategy.yaml/risk.yaml path following
+// issue #59's precedence: explicit (Config's own StrategyPath/RiskPath
+// field) first, then envVar (EnvStrategyPath/EnvRiskPath), then
+// defaultRelPath (config.DefaultStrategyPath/config.DefaultRiskPath, e.g.
+// "config/strategy.yaml") resolved next to the running executable
+// (os.Executable) - but only if that file actually exists there, so a
+// bare `go build`/`wails build` .exe with no accompanying config/
+// directory doesn't get a nonexistent-file error. ok is false when none
+// of the three apply; loadConfigOrEmbedded then falls back to its
+// compiled-in embedded default (step 4) instead.
+func resolveConfigPath(explicit, envVar, defaultRelPath string) (path string, ok bool) {
 	if explicit != "" {
-		return explicit
+		return explicit, true
 	}
 	if v, ok := os.LookupEnv(envVar); ok && v != "" {
-		return v
+		return v, true
 	}
-	return fallback
+	exe, err := os.Executable()
+	if err != nil {
+		return "", false
+	}
+	candidate := filepath.Join(filepath.Dir(exe), defaultRelPath)
+	if _, err := os.Stat(candidate); err != nil {
+		return "", false
+	}
+	return candidate, true
 }

@@ -7,8 +7,6 @@ package router
 import (
 	"net/http"
 	"os"
-	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -16,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	staticassets "github.com/ousiassllc/pitha-trador/static/src"
 )
 
 const placeholderHTML = `<!DOCTYPE html>
@@ -31,18 +30,16 @@ const placeholderHTML = `<!DOCTYPE html>
 </html>
 `
 
-// staticDir is static/src's absolute path, resolved relative to this
-// source file rather than the process's current working directory so
-// `/static/...` serves the same esbuild/Tailwind output
-// (components/overview.md §2) regardless of whether the caller is `go
-// test`, `cmd/server`, or `wails dev` (each has a different cwd). Once
-// `wails build` packages a single .exe (architecture/overview.md §7), this
-// is replaced by an embed.FS baked in at build time instead of reading
-// from disk.
-var staticDir = func() string {
-	_, thisFile, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(thisFile), "..", "..", "static", "src")
-}()
+// staticFS serves `/static/...` from staticassets.FS - dist/ (esbuild/
+// Tailwind output, components/overview.md §2) and vendor/ (htmx.min.js) -
+// embedded at compile time rather than read from static/src on disk, so
+// the same bytes ship inside a packaged `wails build`/`go build ./cmd/server`
+// .exe regardless of the process's cwd or the source tree's location
+// (architecture/overview.md §7). `wails dev`/`bun --cwd static run dev`'s
+// own live-reload plumbing is unaffected: only this Gin route is
+// embed-backed, and `make dev` still runs `bun run dev` in the background
+// so `go build`'s next embed snapshot stays current.
+var staticFS = http.FS(staticassets.FS)
 
 // defaultCandidateRefreshInterval mirrors config/strategy.yaml's
 // scan.candidate_refresh_interval_seconds_min/max defaults
@@ -162,7 +159,7 @@ func New(opts ...Option) *gin.Engine {
 	}
 
 	engine := gin.New()
-	engine.Static("/static", staticDir)
+	engine.StaticFS("/static", staticFS)
 	engine.GET("/", handlePlaceholder)
 	if swaggerEnabled() {
 		engine.GET("/swagger", handler.SwaggerUI)

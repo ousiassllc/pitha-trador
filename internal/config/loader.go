@@ -15,6 +15,17 @@ const (
 	DefaultRiskPath     = "config/risk.yaml"
 )
 
+// loadYAMLBytes decodes data as YAML into a new value of type T. desc
+// identifies the source (a file path, or a sentinel like "(embedded
+// default)") for the wrapped error message only.
+func loadYAMLBytes[T any](data []byte, desc string) (*T, error) {
+	var v T
+	if err := yaml.Unmarshal(data, &v); err != nil {
+		return nil, fmt.Errorf("config: parse %q: %w", desc, err)
+	}
+	return &v, nil
+}
+
 // loadYAMLFile reads the file at path and decodes it as YAML into a new
 // value of type T.
 func loadYAMLFile[T any](path string) (*T, error) {
@@ -23,10 +34,5 @@ func loadYAMLFile[T any](path string) (*T, error) {
 		return nil, fmt.Errorf("config: read %q: %w", path, err)
 	}
 
-	var v T
-	if err := yaml.Unmarshal(data, &v); err != nil {
-		return nil, fmt.Errorf("config: parse %q: %w", path, err)
-	}
-
-	return &v, nil
+	return loadYAMLBytes[T](data, path)
 }

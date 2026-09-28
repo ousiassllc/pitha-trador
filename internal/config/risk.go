@@ -32,3 +32,13 @@ type RiskLimits struct {
 func LoadRisk(path string) (*RiskConfig, error) {
 	return loadYAMLFile[RiskConfig](path)
 }
+
+// LoadRiskBytes parses data (conventionally an embedded copy of
+// config/risk.yaml, github.com/ousiassllc/pitha-trador/config's
+// configdefaults.DefaultRiskYAML) as a RiskConfig. internal/bootstrap
+// falls back to this when no risk.yaml is found on disk (explicit path,
+// PITHA_RISK_PATH, nor next to the running executable) so a distributed
+// .exe with no accompanying config/ directory still starts.
+func LoadRiskBytes(data []byte) (*RiskConfig, error) {
+	return loadYAMLBytes[RiskConfig](data, "(embedded default)")
+}
