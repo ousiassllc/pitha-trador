@@ -1,0 +1,25 @@
+package atoms
+
+// Direction is a Jev Trader directional call (functional.md §4.5),
+// used to pick Badge's color (docs/components/overview.md §3
+// "コンポーネントインターフェース規約").
+type Direction string
+
+const (
+	DirectionLong  Direction = "LONG"
+	DirectionShort Direction = "SHORT"
+	DirectionNone  Direction = "NONE"
+)
+
+// Badge renders a color-coded direction label: green for LONG, red for
+// SHORT, gray for NONE/anything else.
+templ Badge(direction Direction) {
+	switch direction {
+		case DirectionLong:
+			<span class="badge badge-long">LONG</span>
+		case DirectionShort:
+			<span class="badge badge-short">SHORT</span>
+		default:
+			<span class="badge badge-none">NONE</span>
+	}
+}

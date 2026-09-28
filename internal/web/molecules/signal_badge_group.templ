@@ -1,0 +1,49 @@
+package molecules
+
+import (
+	"fmt"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// SignalBadgeGroup renders the direction + confidence + entry_quality
+// combination for one candidate (docs/components/overview.md §3). Any nil
+// field means Jev Trader has not evaluated the candidate yet (a later
+// sub-scope populates domain.Candidate's Jev* fields) - rendered as
+// "pending" rather than a fabricated value.
+templ SignalBadgeGroup(direction *string, confidence *float64, entryQuality *string) {
+	if direction == nil {
+		<span class="signal-badge-group signal-pending">pending</span>
+	} else {
+		<span class="signal-badge-group">
+			@atoms.Badge(toDirection(*direction))
+			<span class="signal-confidence">{ formatConfidence(confidence) }</span>
+			<span class="signal-entry-quality">{ formatEntryQuality(entryQuality) }</span>
+		</span>
+	}
+}
+
+func toDirection(s string) atoms.Direction {
+	switch atoms.Direction(s) {
+	case atoms.DirectionLong:
+		return atoms.DirectionLong
+	case atoms.DirectionShort:
+		return atoms.DirectionShort
+	default:
+		return atoms.DirectionNone
+	}
+}
+
+func formatConfidence(v *float64) string {
+	if v == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.0f%%", *v*100)
+}
+
+func formatEntryQuality(v *string) string {
+	if v == nil {
+		return "—"
+	}
+	return *v
+}

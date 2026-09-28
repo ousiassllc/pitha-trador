@@ -1,0 +1,27 @@
+package organisms
+
+import (
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// toAtomState maps domain.SystemState to atoms.State, keeping atoms
+// decoupled from internal/domain (docs/components/overview.md §3;
+// mirrors molecules.SignalBadgeGroup's own domain->atoms mapping).
+func toAtomState(state domain.SystemState) atoms.State {
+	switch state {
+	case domain.SystemStateRunning:
+		return atoms.StateRunning
+	case domain.SystemStatePaused:
+		return atoms.StatePaused
+	default:
+		return atoms.StateKilled
+	}
+}
+
+// SystemStatusBadge renders the system-state atoms.StatusDot fragment
+// docs/api/endpoints.md §4's `/system/pause|resume|kill|status` action
+// routes return ("システム状態バッジ").
+templ SystemStatusBadge(state domain.SystemState) {
+	@atoms.StatusDot(toAtomState(state))
+}

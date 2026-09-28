@@ -1,0 +1,9 @@
+/* Tailwind entry point (docs/components/overview.md §1, §7). Built by the
+   Tailwind CLI (v4) into static/src/dist/css/app.css; Templ layouts link
+   that output, not this source file. */
+@import "tailwindcss";
+
+/* internal/web (Templ templates) lives outside static/, so it falls
+   outside Tailwind's automatic content detection root; register it
+   explicitly (docs/components/overview.md §2 directory layout). */
+@source "../../../internal/web";

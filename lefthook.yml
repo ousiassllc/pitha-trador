@@ -1,0 +1,15 @@
+pre-commit:
+  commands:
+    golangci-lint:
+      glob: "*.go"
+      run: golangci-lint run
+    biome:
+      glob: "static/src/**/*.{ts,css}"
+      run: bunx biome check {staged_files}
+    linterly:
+      run: linterly check
+
+pre-push:
+  commands:
+    go-test:
+      run: go test ./...

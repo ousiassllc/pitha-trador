@@ -1,0 +1,44 @@
+package organisms
+
+import "github.com/ousiassllc/pitha-trador/internal/domain"
+
+// Header is the global navigation + system-state indicator rendered on
+// every page (docs/components/overview.md §3 "Header（ナビゲーション＋
+// StatusDot。Kill Switch状態のOOB更新対象）"). No page handler tracks
+// internal/service/risk.Engine's live state today (only
+// internal/web/handler.SystemHandler's own action/API routes do), so
+// Header always SSRs a domain.SystemStateRunning placeholder for
+// `#header-status` and `pitha-kill-switch-panel`'s initial attributes,
+// then self-corrects via `hx-trigger="load"` calling the already-live
+// `GET /system/status` (a few-millisecond flash at worst, not a
+// user-visible staleness window) - `pitha-kill-switch-panel` does the
+// same on its own connectedCallback (static/src/components/
+// kill-switch-panel/pitha-kill-switch-panel.ts) since no JSON "current
+// system state" endpoint exists to inject real attributes at render
+// time (only POST /api/v1/system/pause|resume|kill, each returning
+// state as a side effect of an action, functional.md FR-RISK-4).
+//
+// `#header-status`'s `hx-trigger` also listens for `systemStateChanged`
+// bubbling from `.header-container` (components/overview.md §5.4's
+// `HeaderWithKillSwitch` pattern): `pitha-kill-switch-panel` dispatches
+// that event after every successful `/api/v1/system/*` call, keeping
+// this StatusDot in sync with actions Lit itself performed.
+templ Header() {
+	<header class="header-container">
+		<nav>
+			<a href="/scanner">Scanner</a>
+			<a href="/performance">Performance</a>
+			<a href="/calibration">Calibration</a>
+		</nav>
+		<div
+			id="header-status"
+			hx-get="/system/status"
+			hx-trigger="load, systemStateChanged from:closest .header-container"
+			hx-target="this"
+			hx-swap="innerHTML"
+		>
+			@SystemStatusBadge(domain.SystemStateRunning)
+		</div>
+		<pitha-kill-switch-panel status="running" can-pause can-kill></pitha-kill-switch-panel>
+	</header>
+}

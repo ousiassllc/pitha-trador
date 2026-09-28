@@ -3,11 +3,15 @@
 *.exe
 *.test
 *.out
-vendor/
+/vendor/
 
 # Node / frontend build
 node_modules/
-static/dist/
+static/src/dist/
+static/wailsjs/
+
+# Wails build output
+cmd/desktop/build/
 
 # Templ generated
 *_templ.go
@@ -15,6 +19,7 @@ static/dist/
 # Env
 .env
 .env.*
+!.env.example
 
 # OS
 .DS_Store
@@ -22,3 +27,4 @@ static/dist/
 # IDE
 .vscode/
 .idea/
+logs/
