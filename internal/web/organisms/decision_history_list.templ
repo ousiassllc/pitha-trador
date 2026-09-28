@@ -1,0 +1,64 @@
+package organisms
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+)
+
+// DecisionHistoryList renders a symbol's Jev Scout/Trader decision
+// history, most recent first (docs/components/overview.md §3
+// "DecisionHistoryList（Jev判断履歴の時系列リスト）", functional.md §5.2
+// Symbol Detail "Decision history"). Regime/EntryQuality are shown only
+// for Trader decisions (Scout decisions leave them nil - see
+// internal/service/execution.EnrichDecision's doc comment on why a
+// caller must enrich a repository-read domain.JevDecision before it has
+// these fields).
+templ DecisionHistoryList(decisions []domain.JevDecision) {
+	<section id="decision-history" data-testid="decision-history">
+		<h2>Decision history</h2>
+		<table>
+			<thead>
+				<tr>
+					<th>Time</th>
+					<th>Type</th>
+					<th>Direction</th>
+					<th>Confidence</th>
+					<th>Regime</th>
+					<th>Entry Quality</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, d := range decisions {
+					@decisionRow(d)
+				}
+			</tbody>
+		</table>
+	</section>
+}
+
+templ decisionRow(d domain.JevDecision) {
+	<tr data-decision-id={ fmt.Sprintf("%d", d.ID) }>
+		<td>{ d.Timestamp.Format(time.RFC3339) }</td>
+		<td>{ d.DecisionType }</td>
+		<td>{ nilableString(d.Direction) }</td>
+		<td>{ nilableFloatStr(d.Confidence) }</td>
+		<td>{ nilableString(d.Regime) }</td>
+		<td>{ nilableString(d.EntryQuality) }</td>
+	</tr>
+}
+
+func nilableString(s *string) string {
+	if s == nil {
+		return "—"
+	}
+	return *s
+}
+
+func nilableFloatStr(f *float64) string {
+	if f == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.2f", *f)
+}

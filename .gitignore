@@ -3,11 +3,19 @@
 *.exe
 *.test
 *.out
-vendor/
+/vendor/
 
 # Node / frontend build
 node_modules/
-static/dist/
+static/src/dist/
+static/wailsjs/
+
+# Wails build output - except our customized NSIS installer template
+# (issue #65: silent-install auto-relaunch, cmd/desktop/build/windows/
+# installer/project.nsi), which is force-added (`git add -f`) and
+# tracked despite this rule - a `!` negation cannot re-include a file
+# under an already-excluded parent directory.
+cmd/desktop/build/
 
 # Templ generated
 *_templ.go
@@ -15,6 +23,7 @@ static/dist/
 # Env
 .env
 .env.*
+!.env.example
 
 # OS
 .DS_Store
@@ -22,3 +31,4 @@ static/dist/
 # IDE
 .vscode/
 .idea/
+logs/

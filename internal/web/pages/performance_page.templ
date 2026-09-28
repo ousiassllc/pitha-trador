@@ -1,0 +1,91 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+// PerformanceForm is the Performance page's Walk Forward backtest
+// request, echoed back into the form so a rerun starts from the last
+// submitted values. From/To are YYYY-MM-DD dates (To inclusive).
+type PerformanceForm struct {
+	From           string
+	To             string
+	TrainingDays   int
+	ValidationDays int
+	ForwardDays    int
+}
+
+// PerformanceProps is PerformancePage's input. Result is nil until a
+// backtest has been run; Error carries a validation or run failure.
+type PerformanceProps struct {
+	Form   PerformanceForm
+	Result *backtest.Result
+	Error  string
+}
+
+// PerformancePage is the Performance full page (functional.md §5.3,
+// UC-12): a Walk Forward backtest (FR-BT-2) request form over the
+// recorded market_snapshots/jev_decisions history, and - once run - the
+// out-of-sample Combined Forward metrics plus each fold's Forward
+// metrics (FR-BT-1). `GET /performance`
+// (internal/web/handler.PerformanceHandler.Page) renders it.
+templ PerformancePage(props PerformanceProps) {
+	@layout.Shell("Performance") {
+		<h1>Performance</h1>
+		<form method="get" action="/performance" data-testid="backtest-form">
+			<label>From <input type="date" name="from" value={ props.Form.From } required/></label>
+			<label>To <input type="date" name="to" value={ props.Form.To } required/></label>
+			<label>Training days <input type="number" name="training_days" min="1" value={ fmt.Sprintf("%d", props.Form.TrainingDays) }/></label>
+			<label>Validation days <input type="number" name="validation_days" min="1" value={ fmt.Sprintf("%d", props.Form.ValidationDays) }/></label>
+			<label>Forward days <input type="number" name="forward_days" min="1" value={ fmt.Sprintf("%d", props.Form.ForwardDays) }/></label>
+			<button type="submit">Run backtest</button>
+		</form>
+		if props.Error != "" {
+			<p role="alert" data-testid="backtest-error">{ props.Error }</p>
+		}
+		if props.Result != nil {
+			@organisms.PerformanceSummaryPanel("Walk Forward (Forward periods combined)", props.Result.Combined)
+			@foldTable(props.Result.Splits)
+		}
+	}
+}
+
+templ foldTable(splits []backtest.SplitResult) {
+	<section data-testid="backtest-folds">
+		<h2>Folds</h2>
+		<table>
+			<thead>
+				<tr>
+					<th>Forward period</th>
+					<th>Trades</th>
+					<th>Win Rate</th>
+					<th>Expectancy</th>
+					<th>Max Drawdown</th>
+					<th>Net PnL</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, sp := range splits {
+					<tr>
+						<td>{ sp.Split.Forward.Start.Format("2006-01-02") } – { lastDay(sp.Split.Forward) }</td>
+						<td>{ fmt.Sprintf("%d", sp.Forward.TradeCount) }</td>
+						<td>{ fmt.Sprintf("%.1f%%", sp.Forward.WinRate*100) }</td>
+						<td>{ fmt.Sprintf("%.2f%%", sp.Forward.Expectancy) }</td>
+						<td>{ fmt.Sprintf("%.2f%%", sp.Forward.MaxDrawdownPct) }</td>
+						<td>{ fmt.Sprintf("%.2f%%", sp.Forward.NetPnLPct) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</section>
+}
+
+// lastDay renders a day-granular half-open Period's final (inclusive) day.
+func lastDay(p backtest.Period) string {
+	return p.End.Add(-time.Nanosecond).Format("2006-01-02")
+}

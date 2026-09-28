@@ -1,0 +1,122 @@
+package config_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/ousiassllc/pitha-trador/internal/config"
+)
+
+// fakeSecretsRepo is a config.SecretsRepository backed by an in-memory
+// map, standing in for internal/repository.SecretsRepository (which
+// itself requires a SQLite database) in these unit tests.
+type fakeSecretsRepo map[string]string
+
+func (f fakeSecretsRepo) Get(_ context.Context, key string) (string, bool, error) {
+	value, ok := f[key]
+	return value, ok, nil
+}
+
+// erroringSecretsRepo always fails, simulating an actual DB error.
+type erroringSecretsRepo struct{ err error }
+
+func (e erroringSecretsRepo) Get(context.Context, string) (string, bool, error) {
+	return "", false, e.err
+}
+
+func TestLoadSecretsFromDB_ReturnsValuesFromRepository(t *testing.T) {
+	repo := fakeSecretsRepo{
+		config.KeyJevAPIKey:       "jev-key",
+		config.KeyJevBaseURL:      "https://jev.example.com",
+		config.KeyKabuAPIPassword: "kabu-pass",
+	}
+
+	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Errorf("missing = %v, want empty", missing)
+	}
+	if secrets.JevAPIKey != "jev-key" {
+		t.Errorf("JevAPIKey = %q, want %q", secrets.JevAPIKey, "jev-key")
+	}
+	if secrets.JevBaseURL != "https://jev.example.com" {
+		t.Errorf("JevBaseURL = %q, want %q", secrets.JevBaseURL, "https://jev.example.com")
+	}
+	if secrets.KabuAPIPassword != "kabu-pass" {
+		t.Errorf("KabuAPIPassword = %q, want %q", secrets.KabuAPIPassword, "kabu-pass")
+	}
+}
+
+func TestLoadSecretsFromDB_ReportsEveryMissingRequiredKey(t *testing.T) {
+	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), fakeSecretsRepo{})
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB: %v", err)
+	}
+	if secrets != (config.Secrets{}) {
+		t.Errorf("secrets = %+v, want zero value", secrets)
+	}
+	want := []string{config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyKabuAPIPassword}
+	if len(missing) != len(want) {
+		t.Fatalf("missing = %v, want %v", missing, want)
+	}
+	for i, key := range want {
+		if missing[i] != key {
+			t.Errorf("missing[%d] = %q, want %q", i, missing[i], key)
+		}
+	}
+}
+
+func TestLoadSecretsFromDB_ReportsOnlyPartiallyMissingKeys(t *testing.T) {
+	repo := fakeSecretsRepo{
+		config.KeyJevAPIKey:       "jev-key",
+		config.KeyKabuAPIPassword: "kabu-pass",
+	}
+
+	_, missing, err := config.LoadSecretsFromDB(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB: %v", err)
+	}
+	if len(missing) != 1 || missing[0] != config.KeyJevBaseURL {
+		t.Errorf("missing = %v, want [%q]", missing, config.KeyJevBaseURL)
+	}
+}
+
+func TestLoadSecretsFromDB_SlackWebhookURLIsOptional(t *testing.T) {
+	repo := fakeSecretsRepo{
+		config.KeyJevAPIKey:       "jev-key",
+		config.KeyJevBaseURL:      "https://jev.example.com",
+		config.KeyKabuAPIPassword: "kabu-pass",
+	}
+
+	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB without SLACK_WEBHOOK_URL: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Errorf("missing = %v, want empty (SLACK_WEBHOOK_URL must not count)", missing)
+	}
+	if secrets.SlackWebhookURL != "" {
+		t.Errorf("SlackWebhookURL = %q, want empty", secrets.SlackWebhookURL)
+	}
+
+	repo[config.KeySlackWebhookURL] = "https://hooks.slack.com/services/T/B/X"
+	secrets, _, err = config.LoadSecretsFromDB(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB: %v", err)
+	}
+	if secrets.SlackWebhookURL != "https://hooks.slack.com/services/T/B/X" {
+		t.Errorf("SlackWebhookURL = %q, want the configured webhook URL", secrets.SlackWebhookURL)
+	}
+}
+
+func TestLoadSecretsFromDB_PropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("db is locked")
+
+	_, _, err := config.LoadSecretsFromDB(context.Background(), erroringSecretsRepo{err: wantErr})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("LoadSecretsFromDB error = %v, want it to wrap %v", err, wantErr)
+	}
+}

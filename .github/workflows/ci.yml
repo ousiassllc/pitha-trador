@@ -1,0 +1,197 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+    tags:
+      - "v*"
+  pull_request:
+
+env:
+  GOLANGCI_LINT_VERSION: v2.14.0
+  TEMPL_VERSION: v0.3.1020
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --cwd static --frozen-lockfile
+
+      # go build/go vet (and therefore golangci-lint) now require
+      # static/src/embed.go's `//go:embed dist vendor` target to exist
+      # (issue #59) - dist/ is `.gitignore`'d and only produced by this
+      # build step, so it must run before golangci-lint.
+      - name: Build frontend assets
+        run: bun run --cwd static build
+
+      - name: Install templ
+        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
+
+      - name: Generate templ
+        run: templ generate
+
+      - name: Install golangci-lint
+        run: go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
+
+      - name: golangci-lint run
+        run: golangci-lint run
+
+      - name: biome check
+        working-directory: static
+        run: bunx biome check .
+
+      - name: typecheck
+        working-directory: static
+        run: bunx tsc --noEmit
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --cwd static --frozen-lockfile
+
+      # go test needs static/src/embed.go's embedded dist/vendor target
+      # to exist (issue #59), same as the lint job.
+      - name: Build frontend assets
+        run: bun run --cwd static build
+
+      - name: Install templ
+        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
+
+      - name: Generate templ
+        run: templ generate
+
+      - name: go test
+        run: go test ./...
+
+      - name: bun test
+        run: bun --cwd static test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --cwd static --frozen-lockfile
+
+      # wails build's AssetServer.Handler (internal/router.New via
+      # cmd/desktop) embeds static/src/embed.go's dist/vendor at compile
+      # time (issue #59), so the frontend must be built - and this step
+      # must run - before `wails build` below.
+      - name: Build frontend assets
+        run: bun run --cwd static build
+
+      - name: Install templ
+        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
+
+      - name: Generate templ
+        run: templ generate
+
+      - name: Install wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
+
+      - name: Install nsis
+        run: sudo apt-get -y update && sudo apt-get -y install nsis
+
+      - name: Determine version
+        # internal/version.Version's zero value ("dev") is already
+        # correct for branch/PR builds - this step only overrides it on a
+        # tag push, embedding the pushed tag name itself (issue #65:
+        # "タグ名がそのままsemver、例: v0.1.1").
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: wails build (windows/amd64, NSIS installer)
+        working-directory: cmd/desktop
+        # config.LoadSecretsFromDB (internal/config/secrets.go, issue #57)
+        # reads JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD from the secrets
+        # DB table rather than the environment, and never fails startup on
+        # an unset value - no placeholder env vars are needed here anymore
+        # for Wails' bindings generator (it builds cmd/desktop with the
+        # "bindings" tag and actually runs it to introspect the App bound
+        # in wails.Run()).
+        # -nsis generates a Setup.exe installer (via makensis, installed
+        # above) instead of a plain portable .exe (issue #64). -installscope
+        # user installs to the current user's AppData (no admin/UAC
+        # required), which issue #64's fully unattended auto-update depends
+        # on; the Wails default (-installscope machine, Program Files)
+        # requires UAC elevation and would break unattended updates.
+        # -ldflags embeds internal/version.Version (issue #65) - the
+        # previous step's Determine version resolves it to "dev" on every
+        # branch/PR build, so this is a no-op change from the pre-#65
+        # unversioned build there.
+        run: wails build -platform windows/amd64 -nsis -installscope user -ldflags "-X github.com/ousiassllc/pitha-trador/internal/version.Version=${{ steps.version.outputs.value }}"
+
+      - name: List build output
+        working-directory: cmd/desktop
+        run: ls -la build/bin/
+
+      - name: Generate checksums
+        working-directory: cmd/desktop
+        run: sha256sum build/bin/*-installer.exe > build/bin/checksums.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pitha-trador-windows-amd64
+          path: |
+            cmd/desktop/build/bin/*-installer.exe
+            cmd/desktop/build/bin/checksums.txt
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pitha-trador-windows-amd64
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*-installer.exe
+            dist/checksums.txt
+          generate_release_notes: true
+          draft: false
