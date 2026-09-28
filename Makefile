@@ -7,9 +7,18 @@
 # precedence over its compiled-in embedded default, which is only a
 # build-time snapshot and would otherwise make `make dev` no longer
 # reflect config/risk.yaml edits without a rebuild.
+#
+# PITHA_STATIC_DIR similarly points at static/src so internal/router's
+# `/static/...` route serves straight from disk instead of its go:embed
+# snapshot: `wails dev`'s file watcher only rebuilds the Go binary on `.go`
+# changes by default, so without this override `bun run dev`'s esbuild/
+# Tailwind watch output would never become visible short of restarting
+# `make dev` (issue #59's embed made this a regression - static assets used
+# to be read from disk on every request, live, before that fix).
 dev:
 	@PITHA_STRATEGY_PATH=$(CURDIR)/config/strategy.yaml \
 	PITHA_RISK_PATH=$(CURDIR)/config/risk.yaml \
+	PITHA_STATIC_DIR=$(CURDIR)/static/src \
 	bunx concurrently \
 		"cd cmd/desktop && wails dev" \
 		"templ generate --watch" \

@@ -3,6 +3,7 @@ package router_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
 
-func TestNew_RootRouteServesPlaceholderHTML(t *testing.T) {
+func TestNew_RootRouteRedirectsToScannerDashboard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New()
 
@@ -23,17 +24,11 @@ func TestNew_RootRouteServesPlaceholderHTML(t *testing.T) {
 
 	engine.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected status %d, got %d", http.StatusFound, rec.Code)
 	}
-
-	contentType := rec.Header().Get("Content-Type")
-	if !strings.HasPrefix(contentType, "text/html") {
-		t.Fatalf("expected text/html content type, got %q", contentType)
-	}
-
-	if !strings.Contains(rec.Body.String(), "pitha-trador") {
-		t.Fatalf("expected body to mention pitha-trador, got %q", rec.Body.String())
+	if loc := rec.Header().Get("Location"); loc != "/scanner" {
+		t.Fatalf("expected redirect to /scanner, got %q", loc)
 	}
 }
 
@@ -158,6 +153,30 @@ func TestNew_StaticRouteServesVendoredAssets(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "htmx") {
 		t.Fatalf("expected vendored htmx bundle content, got %d bytes", rec.Body.Len())
+	}
+}
+
+func TestNew_StaticRouteServesFromDiskWhenEnvStaticDirIsSet(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dir := t.TempDir()
+	if err := os.MkdirAll(dir+"/vendor", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(dir+"/vendor/htmx.min.js", []byte("// dev-mode marker, not the real bundle"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv(router.EnvStaticDir, dir)
+	engine := router.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/static/vendor/htmx.min.js", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "dev-mode marker") {
+		t.Fatalf("expected disk-backed content to take precedence over the embedded bundle, got %q", rec.Body.String())
 	}
 }
 

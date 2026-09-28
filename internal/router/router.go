@@ -17,29 +17,34 @@ import (
 	staticassets "github.com/ousiassllc/pitha-trador/static/src"
 )
 
-const placeholderHTML = `<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8">
-  <title>pitha-trador</title>
-</head>
-<body>
-  <h1>pitha-trador</h1>
-  <p>Backend skeleton is running.</p>
-</body>
-</html>
-`
+// EnvStaticDir names the env var that, when set to an existing directory,
+// makes `/static/...` serve straight from disk instead of the embedded
+// staticassets.FS snapshot below. `make dev` sets this to static/src so
+// `bun --cwd static run dev`'s esbuild/Tailwind watch rebuilds are visible
+// on the next page reload with no Go rebuild required. `wails dev`'s
+// built-in file watcher only rebuilds/relaunches the Go binary on changes
+// to files with a `.go` extension by default (Wails "Application
+// Development" guide), so it does not react to static/src/dist's .js/.css
+// output changing - an embed-only static handler would keep serving a
+// stale compile-time snapshot for the rest of the `make dev` session
+// without this override.
+const EnvStaticDir = "PITHA_STATIC_DIR"
 
-// staticFS serves `/static/...` from staticassets.FS - dist/ (esbuild/
-// Tailwind output, components/overview.md §2) and vendor/ (htmx.min.js) -
-// embedded at compile time rather than read from static/src on disk, so
-// the same bytes ship inside a packaged `wails build`/`go build ./cmd/server`
-// .exe regardless of the process's cwd or the source tree's location
-// (architecture/overview.md §7). `wails dev`/`bun --cwd static run dev`'s
-// own live-reload plumbing is unaffected: only this Gin route is
-// embed-backed, and `make dev` still runs `bun run dev` in the background
-// so `go build`'s next embed snapshot stays current.
-var staticFS = http.FS(staticassets.FS)
+// staticFS serves `/static/...`. It falls back to staticassets.FS - dist/
+// (esbuild/Tailwind output, components/overview.md §2) and vendor/
+// (htmx.min.js) - embedded at compile time, so the same bytes ship inside a
+// packaged `wails build`/`go build ./cmd/server` .exe regardless of the
+// process's cwd or the source tree's location (architecture/overview.md
+// §7). See EnvStaticDir above for the dev-mode disk-backed override this
+// embedded snapshot is a fallback from.
+func staticFS() http.FileSystem {
+	if dir := os.Getenv(EnvStaticDir); dir != "" {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return http.Dir(dir)
+		}
+	}
+	return http.FS(staticassets.FS)
+}
 
 // defaultCandidateRefreshInterval mirrors config/strategy.yaml's
 // scan.candidate_refresh_interval_seconds_min/max defaults
@@ -159,8 +164,14 @@ func New(opts ...Option) *gin.Engine {
 	}
 
 	engine := gin.New()
-	engine.StaticFS("/static", staticFS)
-	engine.GET("/", handlePlaceholder)
+	engine.StaticFS("/static", staticFS())
+	// Scanner Dashboard is the app's home page (organisms/header.templ's nav
+	// lists it first); `/` used to serve a static "Backend skeleton is
+	// running." placeholder left over from #2's initial scaffold, which is
+	// what a freshly launched cmd/desktop window (Wails has no configured
+	// start URL, so it loads "/") or `go run ./cmd/server` + browser would
+	// show instead of any real screen.
+	engine.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/scanner") })
 	if swaggerEnabled() {
 		engine.GET("/swagger", handler.SwaggerUI)
 	}
@@ -219,8 +230,4 @@ func New(opts ...Option) *gin.Engine {
 // live trading).
 func swaggerEnabled() bool {
 	return os.Getenv("SWAGGER_ENABLED") != "false"
-}
-
-func handlePlaceholder(c *gin.Context) {
-	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(placeholderHTML))
 }
