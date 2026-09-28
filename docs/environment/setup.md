@@ -8,7 +8,7 @@
 - フロントエンド（リッチアイランドのみ）: Lit + TypeScript、ビルドは esbuild、パッケージマネージャは **bun** に固定
 - スタイリング: Tailwind CSS
 - DB: SQLite（`modernc.org/sqlite`、アプリ内蔵）+ golang-migrate + sqlite-vec（ベクトル検索）
-- 外部API: kabuステーションAPI（SBI証券）、Jev / Sol / Opus / Luna API
+- 外部API: kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券）、Jev / Sol / Opus / Luna API
 
 技術スタックの詳細は `docs/architecture/overview.md` §2 技術スタック、レイヤー構造は同§3 を参照。本ドキュメントは開発環境・CI/CD・Lint/Format/Linterly/Git Hooks/Swagger の構築方針のみを扱う。
 
@@ -54,7 +54,7 @@ pitha-trador/
 | golang-migrate CLI | v4（`go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest`） | マイグレーションファイルの手動生成・確認用（アプリ起動時は自動適用） |
 | golangci-lint | 最新 | Go lint |
 | Lefthook | 最新（`go install github.com/evilmartians/lefthook@latest` または `bun add -D lefthook`） | Git Hooks |
-| kabuステーションAPI | SBI証券提供 | Windows実機での市場データ・発注検証（開発時はモックサーバーで代替可） |
+| kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）提供 | Windows実機での市場データ・発注検証（開発時はモックサーバーで代替可） |
 
 ### 初回セットアップ手順
 
