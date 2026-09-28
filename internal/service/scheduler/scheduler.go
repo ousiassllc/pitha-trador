@@ -36,9 +36,8 @@ type Scheduler struct {
 	jobs        *repository.JobRepository
 	instruments *repository.InstrumentRepository
 	// outcomeLabels is optional (WithOutcomeLabelSource): a nil value
-	// makes EnqueueOutcomeLabeling a no-op, the same "later sub-scope
-	// wires this in" deferral Start's own doc comment already describes
-	// for the 15-30s/5-15s cycles.
+	// makes EnqueueOutcomeLabeling a no-op and skips Start's
+	// outcome-labeling trigger.
 	outcomeLabels *repository.CalibrationRepository
 	// heartbeatChecker is optional (WithHeartbeatChecker): a nil value
 	// makes CheckOperatorHeartbeat a no-op, the same deferral
@@ -68,9 +67,9 @@ func WithPollInterval(d time.Duration) Option {
 	return func(s *Scheduler) { s.pollInterval = d }
 }
 
-// WithOutcomeLabelSource enables EnqueueOutcomeLabeling's periodic
-// outcome-labeling enqueue trigger (functional.md FR-CAL-4). Unset by
-// default. *repository.CalibrationRepository implements this directly.
+// WithOutcomeLabelSource enables EnqueueOutcomeLabeling and Start's
+// 1-minute outcome-labeling enqueue trigger (functional.md FR-CAL-4).
+// Unset by default. *repository.CalibrationRepository implements this directly.
 func WithOutcomeLabelSource(repo *repository.CalibrationRepository) Option {
 	return func(s *Scheduler) { s.outcomeLabels = repo }
 }
@@ -140,12 +139,11 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 // 15-30s candidate-refresh cadence for a symbol whose
 // featureengine.DetectEvent signal fired (FR-SCAN-1). When triggered is
 // false it does nothing, leaving the Jev call for this cycle skipped
-// (FR-SCAN-2 quiet-suppression): the caller (featureengine.EventSignal.
-// Triggered against config/strategy.yaml's scan.event_trigger
-// thresholds, wired in by a later sub-scope alongside Fast Screener's own
-// periodic candidate-refresh enqueue - this package cannot import
-// internal/service/featureengine per doc.go's layer rule) decides
-// triggered.
+// (FR-SCAN-2 quiet-suppression): the caller (internal/bootstrap's
+// market-data handler, via featureengine.EventSignal.Triggered against
+// config/strategy.yaml's scan.event_trigger thresholds - this package
+// cannot import internal/service/featureengine per doc.go's layer rule)
+// decides triggered.
 func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID int64, symbol string, triggered bool, now time.Time) error {
 	if !triggered {
 		return nil
@@ -164,14 +162,14 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 // the cron-driven full-scan trigger at fullScanInterval
 // (functional.md §4.3), the daily selfImproveCronSpec Sol-analysis
 // trigger (functional.md §4.14 FR-SELFIMPROVE-1) and - when
-// WithLogRotator was given - a @daily log-archival trigger
+// WithOutcomeLabelSource/WithHeartbeatChecker/WithLogRotator were given -
+// the 1-minute Outcome Labeling enqueue (FR-CAL-4) and operator-heartbeat
+// (FR-RISK-6) triggers and a @daily log-archival trigger
 // (non-functional.md §5), running until ctx is done or Stop is called.
 //
-// Only the 60-second full-scan cycle is wired to an actual enqueue here;
-// the 15-30s candidate-refresh and 5-15s held-position cycles
-// (functional.md §4.3) have no jobs to enqueue until the Fast Screener and
-// Jev Scout scopes exist, so their trigger registration is deferred to
-// those scopes rather than registering an empty placeholder here.
+// The 15-30s candidate-refresh cycle (functional.md §4.3) is not a
+// Scheduler trigger: internal/bootstrap's candidateRefreshTicker drives
+// it, since it needs Fast Screener, which this package cannot import.
 func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
@@ -208,15 +206,9 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 		return fmt.Errorf("scheduler: register self-improve trigger %q: %w", selfImproveCronSpec, err)
 	}
 
-	if s.logRotator != nil {
-		if _, err := s.cron.AddFunc("@daily", func() {
-			if err := s.RotateLogs(runCtx); err != nil {
-				slog.Error("scheduler: log rotation failed", "error", err)
-			}
-		}); err != nil {
-			cancel()
-			return fmt.Errorf("scheduler: register log rotation trigger: %w", err)
-		}
+	if err := s.addPeriodicTriggers(runCtx); err != nil {
+		cancel()
+		return err
 	}
 
 	s.cron.Start()

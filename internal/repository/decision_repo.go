@@ -94,6 +94,33 @@ func (r *DecisionRepository) ListByInstrument(ctx context.Context, instrumentID 
 	return out, nil
 }
 
+// ListByInstrumentRange returns every decisionType jev_decisions row for
+// instrumentID timestamped in the half-open range [from, to), oldest
+// first - a backtest replay's historical Jev decision feed.
+func (r *DecisionRepository) ListByInstrumentRange(ctx context.Context, instrumentID int64, decisionType string, from, to time.Time) ([]domain.JevDecision, error) {
+	rows, err := r.db.QueryContext(ctx,
+		decisionSelectColumns+` FROM jev_decisions WHERE instrument_id = ? AND decision_type = ? AND timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC`,
+		instrumentID, decisionType, formatTime(from), formatTime(to),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list %s jev decisions for instrument %d in [%s, %s): %w", decisionType, instrumentID, from, to, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.JevDecision
+	for rows.Next() {
+		d, err := scanDecision(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list %s jev decisions for instrument %d in [%s, %s): %w", decisionType, instrumentID, from, to, err)
+	}
+	return out, nil
+}
+
 const decisionSelectColumns = `
 SELECT id, instrument_id, symbol, timestamp, decision_type, state_hash, state_json,
 	question_version, response_json, direction, confidence, latency_ms,

@@ -8,17 +8,16 @@ import (
 
 // PositionCloser closes every open position when Kill Switch fires for a
 // reason requiring it (docs/architecture/overview.md §10.3's forced-close
-// list, functional.md FR-RISK-3). Execution (a later sub-scope; this
-// package's own scope note: "実際のクローズ実行はExecution issueと連携する
-// インターフェースを定義する") provides the real implementation;
-// NoopPositionCloser is the placeholder default.
+// list, functional.md FR-RISK-3). internal/service/execution.Engine is
+// the real implementation internal/bootstrap wires in; NoopPositionCloser
+// is NewEngine's default when Config.Closer is nil.
 type PositionCloser interface {
 	CloseAll(ctx context.Context, reason string) error
 }
 
-// NoopPositionCloser is the placeholder PositionCloser used until
-// Execution wires a real implementation in: it records nothing and does
-// nothing, since there are no open positions to close yet.
+// NoopPositionCloser is NewEngine's default PositionCloser when
+// Config.Closer is nil (tests, or a caller with no Execution engine): it
+// records nothing and does nothing.
 type NoopPositionCloser struct{}
 
 func (NoopPositionCloser) CloseAll(context.Context, string) error { return nil }

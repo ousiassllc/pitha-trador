@@ -16,7 +16,7 @@ import (
 // Expectancy/MaxDrawdownPct against its pre-proposal baseline
 // (overview.md §8 "BT-->>GOV: Expectancy / Max Drawdown比較結果").
 func ShadowBacktest(ctx context.Context, cfg RunConfig, period Period) (Metrics, error) {
-	if violations := VerifyNoLookahead(cfg.Snapshots); len(violations) > 0 {
+	if violations := VerifyNoLookahead(cfg.Snapshots, cfg.WarmupBars); len(violations) > 0 {
 		return Metrics{}, fmt.Errorf("backtest: %d bar(s) fail FR-BT-3 look-ahead check, e.g. %s", len(violations), violations[0])
 	}
 	trades, err := replay(ctx, cfg, period, true)
@@ -37,7 +37,7 @@ func ShadowBacktest(ctx context.Context, cfg RunConfig, period Period) (Metrics,
 // trades combined in chronological order, not each instrument averaged
 // in isolation).
 func ShadowBacktestTrades(ctx context.Context, cfg RunConfig, period Period) ([]Trade, error) {
-	if violations := VerifyNoLookahead(cfg.Snapshots); len(violations) > 0 {
+	if violations := VerifyNoLookahead(cfg.Snapshots, cfg.WarmupBars); len(violations) > 0 {
 		return nil, fmt.Errorf("backtest: %d bar(s) fail FR-BT-3 look-ahead check, e.g. %s", len(violations), violations[0])
 	}
 	return replay(ctx, cfg, period, true)

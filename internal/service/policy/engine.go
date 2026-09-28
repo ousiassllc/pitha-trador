@@ -155,16 +155,21 @@ type Engine struct {
 	thresholds Thresholds
 	risk       RiskChecker
 	signals    *repository.SignalRepository
+	policy     PolicySource // optional, see WithPolicySource
 }
 
 // NewEngine returns an Engine using thresholds and risk to decide, and
 // signals to persist every decision. risk defaults to
 // AlwaysPassRiskChecker when nil.
-func NewEngine(thresholds Thresholds, risk RiskChecker, signals *repository.SignalRepository) *Engine {
+func NewEngine(thresholds Thresholds, risk RiskChecker, signals *repository.SignalRepository, opts ...Option) *Engine {
 	if risk == nil {
 		risk = AlwaysPassRiskChecker{}
 	}
-	return &Engine{thresholds: thresholds, risk: risk, signals: signals}
+	e := &Engine{thresholds: thresholds, risk: risk, signals: signals}
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e
 }
 
 // Decide evaluates in against every FR-POLICY-1〜3 condition and returns
@@ -180,6 +185,10 @@ func NewEngine(thresholds Thresholds, risk RiskChecker, signals *repository.Sign
 // direction=none signal, since some become none for other FR-POLICY-1〜3
 // reasons - missing data, calibration exclusion, spread too wide, ...).
 func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
+	return e.decide(ctx, in, e.thresholds)
+}
+
+func (e *Engine) decide(ctx context.Context, in Input, th Thresholds) domain.TradeSignal {
 	sig := domain.TradeSignal{
 		InstrumentID:        in.InstrumentID,
 		Symbol:              in.Symbol,
@@ -193,7 +202,7 @@ func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
 		sig.JevDecisionID = &id
 	}
 
-	direction, score, reason := e.decideDirection(in)
+	direction, score, reason := e.decideDirection(in, th)
 
 	if direction != domain.JevDirectionNone {
 		passed, riskReason := e.risk.Check(ctx, in.InstrumentID, direction)
@@ -226,10 +235,15 @@ func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
 	return sig
 }
 
-// Evaluate calls Decide and persists the result via the Engine's
+// Evaluate decides in against the currently-active thresholds
+// (currentThresholds) and persists the result via the Engine's
 // SignalRepository (FR-POLICY-5).
 func (e *Engine) Evaluate(ctx context.Context, in Input) (domain.TradeSignal, error) {
-	sig := e.Decide(ctx, in)
+	th, err := e.currentThresholds(ctx)
+	if err != nil {
+		return domain.TradeSignal{}, err
+	}
+	sig := e.decide(ctx, in, th)
 	saved, err := e.signals.Insert(ctx, sig)
 	if err != nil {
 		return domain.TradeSignal{}, fmt.Errorf("policy: persist trade signal for %q: %w", in.Symbol, err)
@@ -241,7 +255,7 @@ func (e *Engine) Evaluate(ctx context.Context, in Input) (domain.TradeSignal, er
 // API失敗 -> データ欠損/未評価 -> キャリブレーション対象外 -> スプレッド/
 // 流動性 -> Jevのdirection別しきい値評価. It does not consult
 // RiskChecker; Decide applies that as the final gate.
-func (e *Engine) decideDirection(in Input) (direction string, score *float64, reason *string) {
+func (e *Engine) decideDirection(in Input, th Thresholds) (direction string, score *float64, reason *string) {
 	if in.APIErr != nil {
 		return domain.JevDirectionNone, nil, reasonf("%s: %v", ReasonAPIError, in.APIErr)
 	}
@@ -254,11 +268,11 @@ func (e *Engine) decideDirection(in Input) (direction string, score *float64, re
 	if in.SpreadBps == nil {
 		return domain.JevDirectionNone, nil, reasonf(ReasonMissingData)
 	}
-	if *in.SpreadBps > e.thresholds.MaxSpreadBps {
-		return domain.JevDirectionNone, nil, reasonf("%s: spread_bps=%.2f > max=%.2f", ReasonSpreadTooWide, *in.SpreadBps, e.thresholds.MaxSpreadBps)
+	if *in.SpreadBps > th.MaxSpreadBps {
+		return domain.JevDirectionNone, nil, reasonf("%s: spread_bps=%.2f > max=%.2f", ReasonSpreadTooWide, *in.SpreadBps, th.MaxSpreadBps)
 	}
-	if in.Turnover5mJPY != nil && *in.Turnover5mJPY < e.thresholds.MinTurnover5mJPY {
-		return domain.JevDirectionNone, nil, reasonf("%s: turnover_5m_jpy=%.0f < min=%.0f", ReasonThinLiquidity, *in.Turnover5mJPY, e.thresholds.MinTurnover5mJPY)
+	if in.Turnover5mJPY != nil && *in.Turnover5mJPY < th.MinTurnover5mJPY {
+		return domain.JevDirectionNone, nil, reasonf("%s: turnover_5m_jpy=%.0f < min=%.0f", ReasonThinLiquidity, *in.Turnover5mJPY, th.MinTurnover5mJPY)
 	}
 
 	d := in.Decision
@@ -269,9 +283,9 @@ func (e *Engine) decideDirection(in Input) (direction string, score *float64, re
 
 	switch *d.Direction {
 	case domain.JevDirectionLong:
-		return e.evaluateThreshold(domain.JevDirectionLong, e.thresholds.Policy.Long, d)
+		return e.evaluateThreshold(domain.JevDirectionLong, th.Policy.Long, d)
 	case domain.JevDirectionShort:
-		return e.evaluateThreshold(domain.JevDirectionShort, e.thresholds.Policy.Short, d)
+		return e.evaluateThreshold(domain.JevDirectionShort, th.Policy.Short, d)
 	default:
 		return domain.JevDirectionNone, nil, reasonf(ReasonJevNone)
 	}

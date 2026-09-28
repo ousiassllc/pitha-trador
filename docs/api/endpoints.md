@@ -26,7 +26,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/` | `/scanner` へリダイレクト |
 | GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却 |
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
-| GET | `/performance` | Performance画面 |
+| GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400 |
 | GET | `/calibration` | Calibration画面 |
 
 ## 4. アクションルート
@@ -214,3 +214,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
+| 1.1 | 2026-09-28 | §3 `/performance` にWalk Forwardバックテスト実行クエリを追記 | #53 バックテスト実行導線 |

@@ -1,0 +1,56 @@
+package organisms
+
+import (
+	"fmt"
+	"math"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+)
+
+// PerformanceSummaryPanel renders one backtest.Metrics set - FR-BT-1's
+// trade count, win rate, average profit/loss, Profit Factor, Expectancy,
+// Max Drawdown and gross/slippage/fee/net PnL (docs/components/
+// overview.md §3 "PerformanceSummaryPanel"). Return figures are
+// percentage returns summed over trades, the unit backtest.Trade uses.
+templ PerformanceSummaryPanel(title string, m backtest.Metrics) {
+	<section class="performance-summary" data-testid="performance-summary">
+		<h2>{ title }</h2>
+		<dl>
+			<dt>Trades</dt>
+			<dd data-metric="trade_count">{ fmt.Sprintf("%d", m.TradeCount) }</dd>
+			<dt>Win Rate</dt>
+			<dd data-metric="win_rate">{ fmt.Sprintf("%.1f%%", m.WinRate*100) }</dd>
+			<dt>Avg Profit</dt>
+			<dd>{ pct(m.AvgProfit) }</dd>
+			<dt>Avg Loss</dt>
+			<dd>{ pct(m.AvgLoss) }</dd>
+			<dt>Profit Factor</dt>
+			<dd data-metric="profit_factor">{ profitFactor(m.ProfitFactor) }</dd>
+			<dt>Expectancy</dt>
+			<dd data-metric="expectancy">{ pct(m.Expectancy) }</dd>
+			<dt>Max Drawdown</dt>
+			<dd data-metric="max_drawdown_pct">{ pct(m.MaxDrawdownPct) }</dd>
+			<dt>Gross PnL</dt>
+			<dd>{ pct(m.GrossPnLPct) }</dd>
+			<dt>PnL (slippage)</dt>
+			<dd>{ pct(m.SlippagePnLPct) }</dd>
+			<dt>PnL (fees)</dt>
+			<dd>{ pct(m.FeePnLPct) }</dd>
+			<dt>Net PnL</dt>
+			<dd data-metric="net_pnl_pct">{ pct(m.NetPnLPct) }</dd>
+		</dl>
+	</section>
+}
+
+func pct(v float64) string {
+	return fmt.Sprintf("%.2f%%", v)
+}
+
+// profitFactor renders +Inf (wins with no losses, backtest.Aggregate's
+// documented value) as "∞" instead of Go's "+Inf".
+func profitFactor(v float64) string {
+	if math.IsInf(v, 1) {
+		return "∞"
+	}
+	return fmt.Sprintf("%.2f", v)
+}

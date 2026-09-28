@@ -7,7 +7,8 @@
     "root": ".."
   },
   "files": {
-    "ignoreUnknown": false
+    "ignoreUnknown": false,
+    "includes": ["**", "!**/vendor/**/*.*"]
   },
   "formatter": {
     "enabled": true,

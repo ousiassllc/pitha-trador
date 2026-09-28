@@ -100,9 +100,7 @@ func (e *Engine) CloseAll(ctx context.Context, reason string) error {
 }
 
 // var _ risk.PositionCloser assertion below keeps CloseAll's signature
-// pinned to the interface it exists to satisfy - once a later wiring
-// layer passes an *Engine as risk.Config.Closer (engine.go's own doc
-// comment), a signature drift here would otherwise only surface as a
-// compile error at that distant, not-yet-written call site instead of
-// here.
+// pinned to the interface it exists to satisfy (internal/bootstrap passes
+// an *Engine as risk.Config.Closer), so a signature drift surfaces here
+// rather than at that distant call site.
 var _ risk.PositionCloser = (*Engine)(nil)

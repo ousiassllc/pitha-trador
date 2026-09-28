@@ -4,7 +4,7 @@
 // internal/web/molecules and internal/web/atoms. See
 // docs/components/overview.md §3.
 //
-// ScannerTableFallback (scanner_table_fallback.templ) is implemented; the
-// remaining organisms are introduced by later sub-scopes as their
-// consuming pages need them.
+// Header, SystemStatusBadge, ScannerTableFallback, DecisionHistoryList
+// and PerformanceSummaryPanel are implemented; the remaining organisms are
+// introduced as their consuming pages need them.
 package organisms
