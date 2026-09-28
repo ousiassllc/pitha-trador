@@ -76,7 +76,7 @@ lefthook install
 # 設定するため（Makefileが自動設定）、それらを編集して再起動すればすぐ反映される
 make dev
 
-`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`は`.env`では設定しない（issue #57）。アプリ起動後、Settings画面（`/settings`）から入力する。詳細は`docs/architecture/overview.md` §5・§6を参照。
+`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§12）。アプリ起動後、Settings画面（`/settings`）から入力する。詳細は`docs/architecture/overview.md` §5・§6・§8・§12を参照。
 
 ## CI/CD
 
@@ -180,3 +180,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.3 | 2026-09-28 | CI `lint`/`test`/`build`各ジョブにフロントエンドビルドステップ（`bun install --cwd static --frozen-lockfile` + `bun run --cwd static build`）を最初のGoコンパイル系ステップより前に追加。`config`/静的アセットの`go:embed`化（issue #59）により未ビルド状態では`go build`自体が失敗するようになったための対応。`make dev`の`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`設定についても追記 | issue #59実装（配布可能な.exeへの対応） |
 | 1.4 | 2026-09-28 | 配布形式をポータブルexeからNSISインストーラーへ変更（issue #64）。`build`ジョブに`sudo apt-get install nsis`を追加し、`wails build -platform windows/amd64 -nsis -installscope user`でインストーラーをビルド（`-installscope user`はUAC不要の完全自動更新の前提）。SHA256チェックサムを生成し、`release`ジョブでインストーラー・チェックサムをGitHub Releaseに添付するよう変更 | issue #64実装（自動更新の前提となるインストーラー配布への移行） |
 | 1.5 | 2026-09-28 | `main`へのpush（＝PRマージ）ごとに自動でバージョンを1つ繰り上げてGitHub Releaseを公開するよう`release`ジョブを拡張。従来の手動`git tag vX.Y.Z && git push`によるリリースも引き続き可能（両方とも同じ`release`ジョブを通る） | ユーザー要望（mainマージのたびに自動リリース） |
+| 1.6 | 2026-09-29 | `LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`をSettings画面経由の入力対象に追加 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |

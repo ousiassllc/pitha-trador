@@ -23,7 +23,8 @@
 - Jev 判断と将来値動きの紐付け・Calibration（Brier Score 等）
 - Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Performance・Calibration 画面）
 - Jev RAG（過去の類似局面を sqlite-vec で検索し Jev への文脈として注入）による判断品質の継続的な底上げ
-- Sol（振り返り分析）・Opus（改善提案レビュー）による Policy Engine しきい値の自己改善ループ（Risk Engine のリミット値は対象外）
+- Luna（ニュース分類・イベント抽出。News Ingestが取得した見出し・本文を実際の外部AI APIへ送信し、bullish/bearish/neutralとイベント種別を判定）による市場コンテキストの補助的拡張
+- Sol（振り返り分析）・Opus（改善提案レビュー）を実際の外部AI API呼び出しとして実装し、Policy Engineしきい値を自己改善するループ（Risk Engineのリミット値は対象外。Opusの承認は既存の決定的バックテストしきい値との併用条件とし、AIは追加の拒否権としてのみ働く）
 - 短期モメンタム・出来高急増・ブレイクアウト・VWAP 乖離継続/反転の 4 戦略
 
 ### 含まないもの
@@ -120,7 +121,7 @@ graph TD
 - Phase 3: Jev Trader — LONG/SHORT/NONE判定、Policy Engine
 - Phase 4: Paper Trading — Entry/Exit、Position管理、Paper約定、PnL
 - Phase 5: Calibration — Outcome Labeling、Confidence bucket分析、Brier/Log Loss、RAG用embedding索引構築
-- Phase 6: Continuous Loop — Event-driven refresh、Open position monitoring、Kill Switch、Alert、Sol/Opusによる自己改善ループ
+- Phase 6: Continuous Loop — Event-driven refresh、Open position monitoring、Kill Switch、Alert、Luna/Sol/Opusを実際の外部AI API接続として実装する自己改善ループ
 - Phase 7: Small Live — 十分な検証後、法令・証券会社API規約を確認した上でごく小さなサイズから検討
 
 ## 用語集
@@ -157,3 +158,4 @@ graph TD
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | RAG（sqlite-vec）・自己改善ループ（Sol/Opus）を追加、DBをPostgreSQLからSQLiteへ全面移行、Phase 7完全自動運用（dead-man's switch）に対応 | Phase 5/6/7の方針拡張とWails単一exe配布との整合 |
+| 1.2 | 2026-09-29 | スコープ「含むもの」にLunaの実装（News Ingest経由の外部AI API呼び出し）を明記し、Sol/Opusを実際の外部AI API呼び出しとして実装する方針に更新（Opusはシャドーバックテストの決定的しきい値とAIレビューの併用条件）。Phase 6の説明を更新 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
