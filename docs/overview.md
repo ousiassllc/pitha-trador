@@ -66,7 +66,7 @@ graph TD
             SOL_GOV["Self-Improvement Governor\n(Sol/Opus連携)"]
             DB[("SQLite\n（アプリ内蔵）")]
         end
-        KABU["kabuステーションAPI\n(SBI証券 常駐アプリ)"]
+        KABU["kabuステーションAPI\n(auカブコム証券 常駐アプリ)"]
     end
     JEVAPI["Jev API (外部)"]
     SOLAPI["Sol / Opus / Luna API (外部)"]
@@ -137,7 +137,7 @@ graph TD
 | Regime | Jev Traderが判定する相場状態（TREND / RANGE / BREAKOUT / CHAOTIC） |
 | Toxic Flow | 現在の板/約定フローがエントリーに対して不利・不安定であることを示す指標 |
 | Calibration | Jevのconfidence/probabilityと実際の市場結果の対応関係を検証するプロセス（Brier Score等） |
-| kabuステーションAPI | SBI証券が提供する、Windows常駐アプリ経由のローカルREST API。市場データ取得・発注に使用 |
+| kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）が提供する、Windows常駐アプリ経由のローカルREST API。市場データ取得・発注に使用 |
 | HALT | HTMX + Atomic Design + Lit + Templ によるサーバー内蔵型フロントエンドアーキテクチャ |
 | Wails | Goバックエンドと Web 技術によるUIを単一のネイティブデスクトップアプリとしてパッケージするフレームワーク |
 | Paper Trading | 実資金を用いず注文・約定を模擬する検証運用 |

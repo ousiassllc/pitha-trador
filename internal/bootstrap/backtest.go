@@ -15,10 +15,11 @@ import (
 )
 
 // backtestCost is the slippage/fee assumption every backtest this build
-// runs applies (FR-BT-1's スリッページ込み/手数料込みPnL). SBI証券's
-// online domestic-equity trades carry no commission (ゼロ革命), so FeeBps
-// is 0; 5bps of slippage per side is a conservative allowance for
-// crossing half of a typical liquid-TSE-stock spread with a market order.
+// runs applies (FR-BT-1's スリッページ込み/手数料込みPnL). kabuステーションAPI
+// を提供する三菱UFJ eスマート証券（旧auカブコム証券）の国内株式現物取引手数料は
+// 2026-05-18の改定以降無料のため、FeeBps is 0; 5bps of slippage per side is a
+// conservative allowance for crossing half of a typical liquid-TSE-stock
+// spread with a market order.
 var backtestCost = backtest.CostModel{SlippageBps: 5, FeeBps: 0}
 
 // BacktestSource assembles backtest.RunConfig values from the persisted
