@@ -2,7 +2,11 @@ pre-commit:
   commands:
     golangci-lint:
       glob: "*.go"
-      run: golangci-lint run
+      # `make generate` (templ generate + bun run --cwd static build)
+      # must run first: static/src/embed.go's `//go:embed dist vendor`
+      # (issue #59) won't even compile without it, so golangci-lint run
+      # fails outright on a clean checkout otherwise.
+      run: make generate && golangci-lint run
     biome:
       glob: "static/src/**/*.{ts,css}"
       run: bunx biome check {staged_files}
@@ -12,4 +16,8 @@ pre-commit:
 pre-push:
   commands:
     go-test:
-      run: go test ./...
+      # Same reasoning as pre-commit's golangci-lint above: go test
+      # needs *_templ.go and static/src/dist/ regenerated first, or it
+      # either fails to compile (clean checkout) or silently runs
+      # against a stale build (issue #74's internal/web/style_test.go).
+      run: make generate && go test ./...
