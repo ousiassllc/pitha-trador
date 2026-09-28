@@ -200,7 +200,7 @@ export class PithaKillSwitchPanel extends LitElement {
 // Templ側: Lit の外側でCustomEventをHTMXがリッスンし、Header全体を再取得する
 templ HeaderWithKillSwitch(state SystemState) {
     <div hx-get="/system/status"
-         hx-trigger="systemStateChanged from:closest .header-container"
+         hx-trigger="systemStateChanged from:closest header"
          hx-target="#header-status">
         <div id="header-status">
             @organisms.Header(state)
@@ -278,3 +278,4 @@ dev:
 | 1.2 | 2026-09-26 | §7にWindowsクロスビルド（CGO不要）に関する注記を追加 | レビュー指摘対応 |
 | 1.3 | 2026-09-26 | §7のMakefile例を`npm`から`bun`に修正（TypeScript/JavaScriptプロジェクトはbun固定の方針と統一） | 表記統一 |
 | 1.4 | 2026-09-28 | organisms/pagesに`SecretsBanner`/`SettingsPage`を追加、§4に`/settings`ルートと未設定バナーのHTMXパターンを追記 | issue #57実装 |
+| 1.5 | 2026-09-28 | §5.4の`HeaderWithKillSwitch`例の`hx-trigger`セレクタを`.header-container`から`header`要素セレクタに修正 | issue #74実装でHeaderのTailwindユーティリティクラス化に伴い`header-container`クラスを廃止したことへの追随 |
