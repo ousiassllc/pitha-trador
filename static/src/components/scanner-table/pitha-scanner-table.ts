@@ -77,10 +77,22 @@ const COLUMNS: Column[] = [
 export class PithaScannerTable extends LitElement {
   // Render into light DOM rather than a shadow root: the server already
   // renders this exact table as `pitha-scanner-table`'s children
-  // (organisms.ScannerTableFallback), so on first render this replaces
-  // that SSR fallback markup in place instead of duplicating it inside a
-  // separate shadow tree.
+  // (organisms.ScannerTableFallback), and `scanner_page.templ`'s
+  // `<script type="module">` loads after (deferred by default), so this
+  // element is upgraded - not freshly constructed - with that SSR
+  // `<table>` already attached as a child by the time this constructor
+  // (and createRenderRoot, called from it) runs. Merely returning `this`
+  // here does NOT replace that markup: lit-html's render() only manages
+  // content from a marker comment it inserts onward and leaves
+  // pre-existing children alone, so without clearing them first here,
+  // Lit's own first render() appended a second <table> right after the
+  // SSR fallback's instead of taking its place - confirmed by
+  // reproduction with the same upgrade-after-existing-children timing;
+  // a naive repro that imports this module before inserting the SSR
+  // markup does NOT reproduce it, since that constructs a fresh element
+  // before the parser has appended any children to clear.
   protected override createRenderRoot(): HTMLElement {
+    this.innerHTML = '';
     return this;
   }
 
