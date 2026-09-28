@@ -1,3 +1,10 @@
+# logs/（.gitignoreの `logs/` パターンでリポジトリルート・cmd/desktop/両方が
+# 対象）はアプリ実行時に生成されるランタイムログで、ソースコードではない。
+# linterly は .gitignore を参照しないため明示的に除外する（issue-sweep実行中、
+# ローカルでの動作確認で溜まった数十万行のログが pre-commit の golangci-lint /
+# linterly をブロックした事例より）。
+**/logs/**
+
 # 自動生成コード（Templが生成するGoコード。手書きソースコードの除外は基本追加しない）
 *_templ.go
 
