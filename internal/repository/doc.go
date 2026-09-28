@@ -6,6 +6,13 @@
 // docs/architecture/overview.md §3 for the layer dependency rules
 // (handler → service → repository → domain).
 //
+// The one documented exception is SecretsRepository (secrets_repo.go,
+// issue #57), which additionally imports internal/config for its
+// AES-256-GCM helpers (config.EncryptSecret/DecryptSecret). config has
+// no internal dependencies of its own (its own doc.go), so this does not
+// introduce a layering cycle - every other repository here still only
+// touches domain.
+//
 // InstrumentRepository, SnapshotRepository, JobRepository,
 // DecisionRepository, SignalRepository, KillSwitchRepository and
 // RuntimeSettingsRepository are introduced by earlier sub-scopes and this

@@ -61,6 +61,25 @@ func TestClient_IssueToken_ResultCodeError(t *testing.T) {
 	}
 }
 
+// TestNewClient_EmptyConfigDoesNotPanic proves internal/bootstrap.
+// BuildServices can safely construct a Client even when
+// config.Secrets.KabuAPIPassword is empty (issue #57: the Settings
+// screen lets an operator leave it unset until the app is restarted, so
+// BuildServices must not panic on a zero-value marketdata.Config - it
+// should simply fail every kabuステーションAPI call at runtime instead).
+func TestNewClient_EmptyConfigDoesNotPanic(t *testing.T) {
+	client := marketdata.NewClient(marketdata.Config{})
+	if client == nil {
+		t.Fatal("NewClient(Config{}) returned nil")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	if _, err := client.IssueToken(ctx); err == nil {
+		t.Fatal("IssueToken: expected an error with no kabuステーションAPI listening at DefaultBaseURL, got nil")
+	}
+}
+
 func TestClient_RegisterSymbols_RequiresToken(t *testing.T) {
 	client := marketdata.NewClient(marketdata.Config{BaseURL: "http://unused.invalid"})
 	if _, err := client.RegisterSymbols(context.Background(), nil); err != marketdata.ErrNoToken {

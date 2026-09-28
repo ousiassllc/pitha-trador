@@ -81,6 +81,7 @@ static/
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
 - `PerformanceSummaryPanel`
 - `CalibrationBucketTable`
+- `SecretsBanner`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD未設定時の全ページ共通警告バナー。`Header`内`#config-banner`が`GET /system/secrets-status`をhx-trigger="load"で自己補正取得する、issue #57）
 
 ### pages
 
@@ -88,6 +89,7 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
+- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL入力フォーム。値は再表示せず設定済み状態のみ表示、`POST /settings`で`secrets`テーブルへ暗号化保存する。issue #57）
 
 ### コンポーネントインターフェース規約
 
@@ -116,11 +118,12 @@ const (
 
 `api/endpoints.md` §2〜4 のルーティング定義に対応する。要点のみ再掲する。
 
-- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`）はHX-Requestヘッダで フルページ/フラグメント を分岐する
+- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/settings`）はHX-Requestヘッダで フルページ/フラグメント を分岐する
 - アクションルート（`/system/pause`, `/system/resume`, `/system/kill`, `/positions/:id/close`）は常にフラグメントを返す
 - **OOB更新**: システム状態変更（pause/resume/kill）はメインレスポンスに加え、Headerの`StatusDot`をOOBスワップで更新する。用途はこの「副作用の反映」のみに限定する
 - **ローディング**: Kill Switch実行ボタンは`hx-disabled-elt="this"`で二重発動を防止し、`hx-indicator`でスピナーを表示する。スケルトンスクリーンは使わない
 - **エラー表示**: `response-targets`拡張を使い、422（バリデーション）と5xx（予期しないエラー）で表示先を分離する
+- **未設定バナー**: `Header`内`#config-banner`は`GET /system/secrets-status`を`hx-trigger="load"`で取得し、`SecretsBanner`（未設定キー一覧＋`/settings`リンク）またはnothingを描く。`#header-status`と同じSSR空→自己補正パターン（issue #57）
 
 ## 5. Lit Web Components 仕様
 
@@ -274,3 +277,4 @@ dev:
 | 1.1 | 2026-09-26 | §7 Wails統合の配布説明をSQLite（アプリ内蔵）前提に更新 | PostgreSQLからSQLiteへの全面移行 |
 | 1.2 | 2026-09-26 | §7にWindowsクロスビルド（CGO不要）に関する注記を追加 | レビュー指摘対応 |
 | 1.3 | 2026-09-26 | §7のMakefile例を`npm`から`bun`に修正（TypeScript/JavaScriptプロジェクトはbun固定の方針と統一） | 表記統一 |
+| 1.4 | 2026-09-28 | organisms/pagesに`SecretsBanner`/`SettingsPage`を追加、§4に`/settings`ルートと未設定バナーのHTMXパターンを追記 | issue #57実装 |

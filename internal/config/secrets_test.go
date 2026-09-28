@@ -1,20 +1,43 @@
 package config_test
 
 import (
-	"strings"
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 )
 
-func TestLoadSecrets_ReturnsValuesFromEnvironment(t *testing.T) {
-	t.Setenv(config.EnvJevAPIKey, "jev-key")
-	t.Setenv(config.EnvJevBaseURL, "https://jev.example.com")
-	t.Setenv(config.EnvKabuAPIPassword, "kabu-pass")
+// fakeSecretsRepo is a config.SecretsRepository backed by an in-memory
+// map, standing in for internal/repository.SecretsRepository (which
+// itself requires a SQLite database) in these unit tests.
+type fakeSecretsRepo map[string]string
 
-	secrets, err := config.LoadSecrets()
+func (f fakeSecretsRepo) Get(_ context.Context, key string) (string, bool, error) {
+	value, ok := f[key]
+	return value, ok, nil
+}
+
+// erroringSecretsRepo always fails, simulating an actual DB error.
+type erroringSecretsRepo struct{ err error }
+
+func (e erroringSecretsRepo) Get(context.Context, string) (string, bool, error) {
+	return "", false, e.err
+}
+
+func TestLoadSecretsFromDB_ReturnsValuesFromRepository(t *testing.T) {
+	repo := fakeSecretsRepo{
+		config.KeyJevAPIKey:       "jev-key",
+		config.KeyJevBaseURL:      "https://jev.example.com",
+		config.KeyKabuAPIPassword: "kabu-pass",
+	}
+
+	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), repo)
 	if err != nil {
-		t.Fatalf("LoadSecrets: %v", err)
+		t.Fatalf("LoadSecretsFromDB: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Errorf("missing = %v, want empty", missing)
 	}
 	if secrets.JevAPIKey != "jev-key" {
 		t.Errorf("JevAPIKey = %q, want %q", secrets.JevAPIKey, "jev-key")
@@ -27,59 +50,73 @@ func TestLoadSecrets_ReturnsValuesFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestLoadSecrets_ReturnsErrorNamingEveryMissingVariable(t *testing.T) {
-	t.Setenv(config.EnvJevAPIKey, "")
-	t.Setenv(config.EnvJevBaseURL, "")
-	t.Setenv(config.EnvKabuAPIPassword, "")
-
-	_, err := config.LoadSecrets()
-	if err == nil {
-		t.Fatal("LoadSecrets: expected an error when all variables are unset, got nil")
+func TestLoadSecretsFromDB_ReportsEveryMissingRequiredKey(t *testing.T) {
+	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), fakeSecretsRepo{})
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB: %v", err)
 	}
-	for _, envVar := range []string{config.EnvJevAPIKey, config.EnvJevBaseURL, config.EnvKabuAPIPassword} {
-		if !strings.Contains(err.Error(), envVar) {
-			t.Errorf("LoadSecrets error %q does not mention missing variable %q", err, envVar)
+	if secrets != (config.Secrets{}) {
+		t.Errorf("secrets = %+v, want zero value", secrets)
+	}
+	want := []string{config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyKabuAPIPassword}
+	if len(missing) != len(want) {
+		t.Fatalf("missing = %v, want %v", missing, want)
+	}
+	for i, key := range want {
+		if missing[i] != key {
+			t.Errorf("missing[%d] = %q, want %q", i, missing[i], key)
 		}
 	}
 }
 
-func TestLoadSecrets_ReturnsErrorForPartiallyMissingVariables(t *testing.T) {
-	t.Setenv(config.EnvJevAPIKey, "jev-key")
-	t.Setenv(config.EnvJevBaseURL, "")
-	t.Setenv(config.EnvKabuAPIPassword, "kabu-pass")
+func TestLoadSecretsFromDB_ReportsOnlyPartiallyMissingKeys(t *testing.T) {
+	repo := fakeSecretsRepo{
+		config.KeyJevAPIKey:       "jev-key",
+		config.KeyKabuAPIPassword: "kabu-pass",
+	}
 
-	_, err := config.LoadSecrets()
-	if err == nil {
-		t.Fatal("LoadSecrets: expected an error when JEV_BASE_URL is unset, got nil")
+	_, missing, err := config.LoadSecretsFromDB(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB: %v", err)
 	}
-	if !strings.Contains(err.Error(), config.EnvJevBaseURL) {
-		t.Errorf("LoadSecrets error %q does not mention missing variable %q", err, config.EnvJevBaseURL)
-	}
-	if strings.Contains(err.Error(), config.EnvJevAPIKey) {
-		t.Errorf("LoadSecrets error %q unexpectedly mentions present variable %q", err, config.EnvJevAPIKey)
+	if len(missing) != 1 || missing[0] != config.KeyJevBaseURL {
+		t.Errorf("missing = %v, want [%q]", missing, config.KeyJevBaseURL)
 	}
 }
 
-func TestLoadSecrets_SlackWebhookURLIsOptional(t *testing.T) {
-	t.Setenv(config.EnvJevAPIKey, "jev-key")
-	t.Setenv(config.EnvJevBaseURL, "https://jev.example.com")
-	t.Setenv(config.EnvKabuAPIPassword, "kabu-pass")
-	t.Setenv(config.EnvSlackWebhookURL, "")
+func TestLoadSecretsFromDB_SlackWebhookURLIsOptional(t *testing.T) {
+	repo := fakeSecretsRepo{
+		config.KeyJevAPIKey:       "jev-key",
+		config.KeyJevBaseURL:      "https://jev.example.com",
+		config.KeyKabuAPIPassword: "kabu-pass",
+	}
 
-	secrets, err := config.LoadSecrets()
+	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), repo)
 	if err != nil {
-		t.Fatalf("LoadSecrets with SLACK_WEBHOOK_URL unset: %v", err)
+		t.Fatalf("LoadSecretsFromDB without SLACK_WEBHOOK_URL: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Errorf("missing = %v, want empty (SLACK_WEBHOOK_URL must not count)", missing)
 	}
 	if secrets.SlackWebhookURL != "" {
 		t.Errorf("SlackWebhookURL = %q, want empty", secrets.SlackWebhookURL)
 	}
 
-	t.Setenv(config.EnvSlackWebhookURL, "https://hooks.slack.com/services/T/B/X")
-	secrets, err = config.LoadSecrets()
+	repo[config.KeySlackWebhookURL] = "https://hooks.slack.com/services/T/B/X"
+	secrets, _, err = config.LoadSecretsFromDB(context.Background(), repo)
 	if err != nil {
-		t.Fatalf("LoadSecrets: %v", err)
+		t.Fatalf("LoadSecretsFromDB: %v", err)
 	}
 	if secrets.SlackWebhookURL != "https://hooks.slack.com/services/T/B/X" {
 		t.Errorf("SlackWebhookURL = %q, want the configured webhook URL", secrets.SlackWebhookURL)
+	}
+}
+
+func TestLoadSecretsFromDB_PropagatesRepositoryError(t *testing.T) {
+	wantErr := errors.New("db is locked")
+
+	_, _, err := config.LoadSecretsFromDB(context.Background(), erroringSecretsRepo{err: wantErr})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("LoadSecretsFromDB error = %v, want it to wrap %v", err, wantErr)
 	}
 }

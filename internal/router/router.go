@@ -69,6 +69,7 @@ type options struct {
 	symbolRiskParams  handler.SymbolRiskParams
 	calibrationSource handler.CalibrationSource
 	backtestRunner    handler.BacktestRunner
+	secretsStore      handler.SecretsStore
 }
 
 // Option configures New.
@@ -130,6 +131,15 @@ func WithBacktestRunner(runner handler.BacktestRunner) Option {
 	return func(o *options) { o.backtestRunner = runner }
 }
 
+// WithSecretsStore overrides the Settings screen/secrets-status banner's
+// backing internal/web/handler.SecretsStore. cmd/desktop and cmd/server
+// pass internal/bootstrap's real *repository.SecretsRepository; the
+// empty handler.StaticSecretsStore default only serves router-level
+// tests.
+func WithSecretsStore(store handler.SecretsStore) Option {
+	return func(o *options) { o.secretsStore = store }
+}
+
 // New builds and returns the shared Gin engine: the placeholder root
 // page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
 // the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
@@ -145,6 +155,7 @@ func New(opts ...Option) *gin.Engine {
 		symbolRiskParams:  defaultSymbolRiskParams,
 		calibrationSource: handler.StaticCalibrationSource{},
 		backtestRunner:    handler.StaticBacktestRunner{},
+		secretsStore:      handler.StaticSecretsStore{},
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -178,6 +189,11 @@ func New(opts ...Option) *gin.Engine {
 
 	performanceHandler := handler.NewPerformanceHandler(o.backtestRunner)
 	engine.GET("/performance", performanceHandler.Page)
+
+	settingsHandler := handler.NewSettingsHandler(o.secretsStore)
+	engine.GET("/settings", settingsHandler.Page)
+	engine.POST("/settings", settingsHandler.Save)
+	engine.GET("/system/secrets-status", settingsHandler.Status)
 
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at

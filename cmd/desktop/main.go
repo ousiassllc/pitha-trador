@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"log/slog"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
+	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
@@ -47,14 +49,23 @@ func main() {
 	}
 	defer func() { _ = state.Close() }()
 
-	// config.LoadSecrets reads JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD
-	// (issue #43); a missing value fails startup outright rather than
-	// silently falling back to a mock client (issue #43's own
-	// error-handling decision - internal/bootstrap.BuildServices' real
-	// kabuステーションAPI client wiring, issue #44, depends on it).
-	secrets, err := config.LoadSecrets()
+	// config.LoadSecretsFromDB reads JEV_API_KEY/JEV_BASE_URL/
+	// KABU_API_PASSWORD/SLACK_WEBHOOK_URL from the secrets table (issue
+	// #57 - `.env`/environment variables are no longer a supported input
+	// for these at all). Unlike the old env-var-based LoadSecrets, a
+	// missing value is never fatal: the app starts regardless, missing
+	// only drives a startup warning log and the Settings screen's
+	// (`/settings`) header banner - BuildServices' Jev/kabuステーション
+	// API client wiring simply receives empty strings for anything
+	// unset (both marketdata.NewClient/jev.NewClient tolerate that) until
+	// an operator fills them in and restarts (no hot-reload).
+	secretsRepo := repository.NewSecretsRepository(state.DB)
+	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), secretsRepo)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if len(missing) > 0 {
+		slog.Warn("bootstrap: secrets not yet configured; configure them at /settings and restart", "missing", missing)
 	}
 
 	// app is also the Risk Engine's native OS toast Notifier (notify.go),
@@ -73,6 +84,7 @@ func main() {
 		router.WithSymbolProvider(services.Execution),
 		router.WithCalibrationSource(services.Calibration),
 		router.WithBacktestRunner(services.Backtest),
+		router.WithSecretsStore(secretsRepo),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
 			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,
 			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,

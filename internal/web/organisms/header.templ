@@ -23,13 +23,30 @@ import "github.com/ousiassllc/pitha-trador/internal/domain"
 // `HeaderWithKillSwitch` pattern): `pitha-kill-switch-panel` dispatches
 // that event after every successful `/api/v1/system/*` call, keeping
 // this StatusDot in sync with actions Lit itself performed.
+//
+// `#config-banner` follows the exact same self-correcting pattern for
+// issue #57's Settings feature: it SSRs empty (Header takes no
+// parameters, so it cannot know secrets-table state at render time
+// either) and immediately calls `GET /system/secrets-status`
+// (internal/web/handler.SettingsHandler.Status), which renders
+// organisms.SecretsBanner listing any still-unset required key
+// (JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD) with a link to
+// `/settings`, or nothing once every one is configured.
 templ Header() {
 	<header class="header-container">
 		<nav>
 			<a href="/scanner">Scanner</a>
 			<a href="/performance">Performance</a>
 			<a href="/calibration">Calibration</a>
+			<a href="/settings">Settings</a>
 		</nav>
+		<div
+			id="config-banner"
+			hx-get="/system/secrets-status"
+			hx-trigger="load"
+			hx-target="this"
+			hx-swap="innerHTML"
+		></div>
 		<div
 			id="header-status"
 			hx-get="/system/status"
