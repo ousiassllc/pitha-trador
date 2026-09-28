@@ -28,6 +28,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
 | GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400 |
 | GET | `/calibration` | Calibration画面 |
+| GET | `/settings` | Settings画面。フィールドごとの入力欄＋保存ボタンを表示（`components/overview.md` `SettingsPage`） |
 
 ## 4. アクションルート
 
@@ -38,6 +39,9 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | POST | `/system/kill` | Kill Switch手動発動（確認モーダル経由） | システム状態バッジ＋トースト（OOB） |
 | GET | `/system/status` | システム状態バッジのフラグメント再取得（Lit→HTMX間接連携: `systemStateChanged`イベント受信時にHeaderが呼び出す） | システム状態バッジ |
 | POST | `/positions/:id/close` | 手動決済（成行Paper Exit） | ポジション行フラグメント |
+| GET | `/system/secrets-status` | 未設定の認証情報キー一覧を返す（`components/overview.md` `SecretsBanner`が`hx-trigger="load"`で取得） | `SecretsBanner`フラグメント（未設定キーが無ければ空） |
+| POST | `/settings/:key` | 認証情報1件を保存（`requirements/functional.md` FR-SETTINGS-1〜4）。`:key`は許可キー一覧（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`等）に限定し、一覧に無いキーは400。他キーの値には一切影響しない | `SecretFieldRow`フラグメント（設定済みバッジ） |
+| DELETE | `/settings/:key` | 認証情報1件を削除。他キーの値には一切影響しない | `SecretFieldRow`フラグメント（未設定バッジ） |
 
 ### システム状態遷移（アクションルート）
 
@@ -215,3 +219,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-28 | §3 `/performance` にWalk Forwardバックテスト実行クエリを追記 | #53 バックテスト実行導線 |
+| 1.2 | 2026-09-29 | §3に`GET /settings`、§4に`GET /system/secrets-status`・`POST/DELETE /settings/:key`を追記（従来issue #57実装済みだが未文書化だったため補完し、フィールド単位保存に更新） | 一部のenvだけでも変更できるUI（環境設定UI拡張） |

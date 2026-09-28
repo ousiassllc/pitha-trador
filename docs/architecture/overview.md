@@ -143,7 +143,7 @@ handler → service → repository → domain
 - **銘柄登録・PUSH購読**: スキャン対象銘柄をkabuステーションAPIの銘柄登録エンドポイントに登録し、価格・板情報はPUSH WebSocket（kabuステーションが提供するローカルWebSocket）で受信する。これによりREST側の60秒ポーリングに依存せず、Feature Engineが各サイクル開始時点の最新スナップショットを参照できるようにする
 - **発注**: Paper Trading中はExecutionサービス内でシミュレーションのみ行い、kabuステーションAPIへは発注しない。Phase 7（実売買移行）で初めてkabuステーションAPIの注文エンドポイントを呼び出す
 - **異常時**: kabuステーションAPI無応答・エラー時は該当銘柄を stale data 判定し新規取引を禁止する（`requirements/functional.md` にある障害対応方針と整合）
-- **認証情報の入力経路**: `APIPassword`は`.env`/環境変数ではなく、アプリ内のSettings画面（`/settings`）から入力し、`secrets`テーブル（`internal/repository.SecretsRepository`、AES-256-GCMで暗号化）にDB保存する（issue #57）。未設定でもアプリは起動し、Jev/kabuステーションAPI依存機能はエラーログを出しつつ動作を継続する（全ページ共通バナーで案内）。設定変更はアプリ再起動後に反映される（ホットリロードは範囲外）
+- **認証情報の入力経路**: `APIPassword`は`.env`/環境変数ではなく、アプリ内のSettings画面（`/settings`）から入力し、`secrets`テーブル（`internal/repository.SecretsRepository`、AES-256-GCMで暗号化）にDB保存する（issue #57）。保存・削除は`POST /settings/:key`/`DELETE /settings/:key`によりキー単位で行い、他のキーの値には一切影響しない（`requirements/functional.md` §4.15、`api/endpoints.md` §4）。未設定でもアプリは起動し、Jev/kabuステーションAPI依存機能はエラーログを出しつつ動作を継続する（全ページ共通バナーで案内）。設定変更はアプリ再起動後に反映される（ホットリロードは範囲外）
 
 ## 6. Jev API連携
 
@@ -341,3 +341,4 @@ sequenceDiagram
 | 1.5 | 2026-09-27 | リアルタイムPushライブラリを`nhooyr.io/websocket`から後継の`github.com/coder/websocket`へ変更（旧パッケージはメンテナ自身がdeprecated宣言、APIは互換） | golangci-lint（staticcheck SA1019）指摘対応 |
 | 1.6 | 2026-09-28 | §3レイヤー依存ルールに`SecretsRepository`の`internal/config`依存という例外を明記。§5/§6にJEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDの入力経路をSettings画面（`/settings`）・DB保存（`secrets`テーブル、AES-256-GCM暗号化）へ変更した旨を追記（issue #57、`.env`/環境変数からの入力を廃止） | issue #57実装 |
 | 1.7 | 2026-09-28 | §9に config/strategy.yaml・config/risk.yaml・静的アセットの`go:embed`埋め込みと4段階の解決優先順位（明示パス→環境変数→実行ファイル隣接→埋め込み既定値）を追記。`runtime.Caller(0)`ベースの`repoRoot`/`staticDir`（ビルドマシンの絶対パス依存で配布先では動作しなかった）を廃止 | issue #59実装（配布可能な.exeへの対応） |
+| 1.8 | 2026-09-29 | §5の認証情報入力経路に、キー単位保存（`POST/DELETE /settings/:key`）の説明を追記 | Settings画面をフィールドごとの個別保存に変更（環境設定UI拡張） |

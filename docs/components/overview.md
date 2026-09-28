@@ -72,6 +72,7 @@ static/
 - `SignalBadgeGroup`（direction + confidence + entry_quality の組み合わせ表示）
 - `PositionRow`, `OrderRow`
 - `ConfidenceBucketBar`（Calibration帯別バーの単純表示。詳細な曲線描画は`pitha-calibration-heatmap`側）
+- `SecretFieldRow`（ラベル＋input＋保存ボタン＋設定済みバッジ、必要に応じ削除ボタン。1行が`POST /settings/:key`/`DELETE /settings/:key`を単独で発行するHTMXフォーム）
 
 ### organisms
 
@@ -89,7 +90,7 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
-- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL入力フォーム。値は再表示せず設定済み状態のみ表示、`POST /settings`で`secrets`テーブルへ暗号化保存する。issue #57）
+- `SettingsPage`（`SecretFieldRow`を`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`等のフィールド数だけ並べる。各行が独立して`POST /settings/:key`で保存する（値は再表示せず設定済み状態のみ表示）。issue #57、フィールド単位保存への変更は`requirements/functional.md` §4.15）
 
 ### コンポーネントインターフェース規約
 
@@ -124,6 +125,7 @@ const (
 - **ローディング**: Kill Switch実行ボタンは`hx-disabled-elt="this"`で二重発動を防止し、`hx-indicator`でスピナーを表示する。スケルトンスクリーンは使わない
 - **エラー表示**: `response-targets`拡張を使い、422（バリデーション）と5xx（予期しないエラー）で表示先を分離する
 - **未設定バナー**: `Header`内`#config-banner`は`GET /system/secrets-status`を`hx-trigger="load"`で取得し、`SecretsBanner`（未設定キー一覧＋`/settings`リンク）またはnothingを描く。`#header-status`と同じSSR空→自己補正パターン（issue #57）
+- **フィールド単位保存**: Settings画面の`SecretFieldRow`は1行=1フォームとし、`hx-post="/settings/:key"`で自身のみを保存する。他フィールドの入力値は送信対象に含めないため、1フィールドの保存・削除が他フィールドへ影響しない（`requirements/functional.md` FR-SETTINGS-2）。削除は`hx-delete="/settings/:key"`で行い、保存後は当該行のバッジのみを差し替える
 
 ## 5. Lit Web Components 仕様
 
@@ -279,3 +281,4 @@ dev:
 | 1.3 | 2026-09-26 | §7のMakefile例を`npm`から`bun`に修正（TypeScript/JavaScriptプロジェクトはbun固定の方針と統一） | 表記統一 |
 | 1.4 | 2026-09-28 | organisms/pagesに`SecretsBanner`/`SettingsPage`を追加、§4に`/settings`ルートと未設定バナーのHTMXパターンを追記 | issue #57実装 |
 | 1.5 | 2026-09-28 | §5.4の`HeaderWithKillSwitch`例の`hx-trigger`セレクタを`.header-container`から`header`要素セレクタに修正 | issue #74実装でHeaderのTailwindユーティリティクラス化に伴い`header-container`クラスを廃止したことへの追随 |
+| 1.6 | 2026-09-29 | molecules に`SecretFieldRow`を追加。`SettingsPage`をフィールド単位保存に変更（§4「フィールド単位保存」パターン追記） | 一部のenvだけでも変更できるUI（環境設定UI拡張） |

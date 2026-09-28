@@ -16,6 +16,7 @@
 | UC-10 | キャリブレーション確認 | 個人トレーダー | Calibration画面でconfidence帯別の的中率・平均リターンを確認する |
 | UC-11 | Kill Switch操作 | 個人トレーダー | UIまたはサーバーから新規取引停止・強制決済を行う |
 | UC-12 | バックテスト実行 | 個人トレーダー | Paper Trading開始前に過去データで戦略を検証する |
+| UC-13 | 環境設定変更 | 個人トレーダー | Settings画面で認証情報をフィールドごとに保存・削除する |
 
 ```mermaid
 graph TD
@@ -36,6 +37,7 @@ graph TD
     User --> UC10
     User --> UC11[Kill Switch操作]
     User --> UC12[バックテスト実行]
+    User --> UC13[環境設定変更]
 ```
 
 ## 2. 主要処理フロー
@@ -268,6 +270,15 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 - FR-SELFIMPROVE-6: 適用後5営業日相当のExpectancyが適用前より相対20%以上悪化した場合、自動的に直前の`policy_version`へロールバックし、Slack通知する
 - FR-SELFIMPROVE-7: Sol/Opusの提案・レビュー・適用・ロールバックはすべて`policy_proposals`と`runtime_settings`の変更履歴として監査可能な形で保存する
 
+### 4.15 環境設定（Settings）
+
+Jev/kabuステーションAPI/Slack等の認証情報をUIから設定する。`components/overview.md` §3 `SettingsPage`、`api/endpoints.md` §4の実装詳細。
+
+- FR-SETTINGS-1: Settings画面は認証情報フィールド（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`、および将来追加される外部AI連携キー）をフィールドごとに独立した保存フォームとして表示する
+- FR-SETTINGS-2: 1フィールドの保存・削除は他フィールドの値に一切影響しない。1回のリクエストは常に単一キーのみを対象とする（従来の全フィールド一括POSTで空欄送信すると他フィールドまで削除されていた問題を解消）
+- FR-SETTINGS-3: 保存済みの値は再表示せず「設定済み」バッジのみ表示する（既存方針を継続、issue #57）
+- FR-SETTINGS-4: 対象フィールドは`internal/config`側の許可キー一覧（allow-list）で定義する。一覧に無いキー名を指定するリクエストは400を返す
+
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
 ```mermaid
@@ -298,6 +309,10 @@ Total PnL, Daily PnL, Win Rate, Profit Factor, Expectancy, Max Drawdown, Average
 ### 5.4 Calibration
 
 confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。
+
+### 5.5 Settings
+
+対象フィールド（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`等）をフィールドごとの入力欄＋保存ボタン＋（設定済みの場合）削除ボタンとして表示する。1フィールドの保存・削除は他フィールドに影響しない（§4.15）。
 
 ## 6. MVPフェーズ
 
@@ -344,3 +359,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | Risk Engine（§4.7）にPaper/Live別リミット・dead-man's switch（FR-RISK-6）・Kill Switch再開の自動/手動分類（FR-RISK-7）を追加 | Phase 7も含めた完全自動運用への方針変更 |
 | 1.2 | 2026-09-26 | §4.13 Jev RAG（経験ベース文脈拡張）、§4.14 自己改善ループ（Luna/Sol/Opus連携）を追加。Phase 5/6内容とMVP完了条件を更新 | 自己学習による継続的改善を組み込む方針 |
+| 1.3 | 2026-09-29 | UC-13・§4.15 環境設定（Settings）（FR-SETTINGS-1〜4）・§5.5 Settings画面を追加。フィールドごとの個別保存・削除に仕様を明確化 | 一部のenvだけでも変更できるUI（環境設定UI拡張） |
