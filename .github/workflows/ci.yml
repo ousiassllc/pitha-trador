@@ -102,17 +102,13 @@ jobs:
 
       - name: wails build (windows/amd64)
         working-directory: cmd/desktop
-        # config.LoadSecrets requires these three (internal/config/secrets.go)
-        # to be set or cmd/desktop's main() calls log.Fatal before ever
-        # reaching wails.Run(), which Wails' bindings generator depends on
-        # (it builds cmd/desktop with the "bindings" tag and actually runs
-        # it to introspect the App bound in wails.Run()). Placeholder
-        # values are safe: bootstrap.BuildServices performs no I/O, so
-        # binding generation never makes a real Jev/kabuステーションAPI call.
-        env:
-          JEV_API_KEY: ci-placeholder
-          JEV_BASE_URL: https://ci-placeholder.invalid
-          KABU_API_PASSWORD: ci-placeholder
+        # config.LoadSecretsFromDB (internal/config/secrets.go, issue #57)
+        # reads JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD from the secrets
+        # DB table rather than the environment, and never fails startup on
+        # an unset value - no placeholder env vars are needed here anymore
+        # for Wails' bindings generator (it builds cmd/desktop with the
+        # "bindings" tag and actually runs it to introspect the App bound
+        # in wails.Run()).
         run: wails build -platform windows/amd64
 
       - uses: actions/upload-artifact@v4

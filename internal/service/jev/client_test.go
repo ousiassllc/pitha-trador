@@ -61,6 +61,26 @@ func TestClient_Scout_RetriesAndEventuallySucceeds(t *testing.T) {
 	}
 }
 
+// TestNewClient_EmptyConfigDoesNotPanic proves internal/bootstrap.
+// BuildServices can safely construct a Client even when
+// config.Secrets.JevBaseURL/JevAPIKey are both empty (issue #57: the
+// Settings screen lets an operator leave them unset until the app is
+// restarted, so BuildServices must not panic on a zero-value
+// jev.Config - it should simply fail every Jev API call at runtime
+// instead).
+func TestNewClient_EmptyConfigDoesNotPanic(t *testing.T) {
+	client := jev.NewClient(jev.Config{RetryBaseDelay: time.Millisecond})
+	if client == nil {
+		t.Fatal("NewClient(Config{}) returned nil")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, _, err := client.Scout(ctx, jev.ScoutRequest{}); err == nil {
+		t.Fatal("Scout: expected an error with BaseURL empty, got nil")
+	}
+}
+
 func TestClient_Scout_GivesUpAfterMaxAttempts(t *testing.T) {
 	var calls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

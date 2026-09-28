@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
+	"github.com/ousiassllc/pitha-trador/internal/config"
 )
 
 func TestRun_OpensDBAndLoadsConfigFromRepoDefaults(t *testing.T) {
@@ -76,5 +77,33 @@ func TestDefaultDBPath_ReturnsPithaTradorSubpath(t *testing.T) {
 	}
 	if filepath.Base(filepath.Dir(path)) != "pitha-trador" {
 		t.Errorf("DefaultDBPath: parent dir = %q, want %q", filepath.Base(filepath.Dir(path)), "pitha-trador")
+	}
+}
+
+// TestBuildServices_EmptySecretsDoesNotPanic is the direct proof for
+// issue #57's acceptance criterion that an unset JEV_API_KEY/
+// JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL must never fail
+// startup: config.LoadSecretsFromDB returns a zero-value config.Secrets
+// whenever the operator has not yet visited the Settings screen, and
+// BuildServices must construct every internal/service/marketdata.Client
+// and internal/service/jev.Client (and simply skip the optional Slack
+// channel) from that zero value without panicking.
+func TestBuildServices_EmptySecretsDoesNotPanic(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+	state, err := bootstrap.Run(bootstrap.Config{DBPath: dbPath})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	t.Cleanup(func() { _ = state.Close() })
+
+	svc, err := bootstrap.BuildServices(state, config.Secrets{})
+	if err != nil {
+		t.Fatalf("BuildServices: %v", err)
+	}
+	if svc.MarketData == nil {
+		t.Error("BuildServices: Services.MarketData is nil")
+	}
+	if svc.Jev == nil {
+		t.Error("BuildServices: Services.Jev is nil")
 	}
 }

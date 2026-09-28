@@ -75,6 +75,8 @@ lefthook install
 make dev
 ```
 
+`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`は`.env`では設定しない（issue #57）。アプリ起動後、Settings画面（`/settings`）から入力する。詳細は`docs/architecture/overview.md` §5・§6を参照。
+
 ## CI/CD
 
 GitHub Actions（`.github/workflows/ci.yml`）。
@@ -171,5 +173,5 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
-| 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | CI構成を修正: `wails build -platform windows/amd64`は`ubuntu-latest`上でクロスビルド可能（Wails Windowsターゲット・`modernc.org/sqlite`系ドライバがいずれもpure GoでCGO不要なため）と判明したため、`build`ジョブに実ビルドを含め、Windowsランナーは実機E2Eテストのみに限定 | ユーザー指摘によるファクトチェック・設計修正 |
+| 1.2 | 2026-09-28 | `JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`の入力経路をSettings画面（`/settings`）へ変更（issue #57）。`.env`からの入力を廃止したのに合わせ、初回セットアップ手順に案内を追記 | issue #57実装 |
