@@ -9,6 +9,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 - 起動時にWailsプロセスがランダムなローカルセッショントークンを生成し、Cookie（`HttpOnly`, `SameSite=Strict`）としてWebViewに設定する。全ての状態変更リクエスト（アクションルート・Huma APIのPOST/PUT/PATCH/DELETE）はこのセッションCookie必須とする
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
 - 実売買（Phase 7）移行時は、Kill Switch解除・発注確定操作にOS認証の追加確認を導入する（`requirements/non-functional.md` §4）
+- **Setup Guard**: 必須認証情報（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`）のいずれかが未設定の場合、Middlewareが`/setup`・`POST/DELETE /settings/:key`・静的アセット配信以外への全リクエストを`/setup`へ302リダイレクトする（`requirements/functional.md` FR-SETUP-1、`architecture/overview.md` §10.5）
 
 ## 2. ルーティング概要
 
@@ -28,6 +29,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
 | GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400 |
 | GET | `/calibration` | Calibration画面 |
+| GET | `/setup` | 初回セットアップ画面。必須認証情報未設定時は他の全ページからここへリダイレクトされる |
 
 ## 4. アクションルート
 
@@ -215,3 +217,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-28 | §3 `/performance` にWalk Forwardバックテスト実行クエリを追記 | #53 バックテスト実行導線 |
+| 1.2 | 2026-09-29 | §1にSetup Guardの説明を追記。§3に`GET /setup`を追加 | 環境設定項目未入力時のセットアップ画面誘導 |

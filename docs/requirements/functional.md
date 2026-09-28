@@ -16,6 +16,7 @@
 | UC-10 | キャリブレーション確認 | 個人トレーダー | Calibration画面でconfidence帯別の的中率・平均リターンを確認する |
 | UC-11 | Kill Switch操作 | 個人トレーダー | UIまたはサーバーから新規取引停止・強制決済を行う |
 | UC-12 | バックテスト実行 | 個人トレーダー | Paper Trading開始前に過去データで戦略を検証する |
+| UC-13 | 初回セットアップ | 個人トレーダー | 必須認証情報が未設定の場合、Setup画面で入力してからアプリを使い始める |
 
 ```mermaid
 graph TD
@@ -36,6 +37,7 @@ graph TD
     User --> UC10
     User --> UC11[Kill Switch操作]
     User --> UC12[バックテスト実行]
+    User --> UC13[初回セットアップ]
 ```
 
 ## 2. 主要処理フロー
@@ -268,11 +270,23 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 - FR-SELFIMPROVE-6: 適用後5営業日相当のExpectancyが適用前より相対20%以上悪化した場合、自動的に直前の`policy_version`へロールバックし、Slack通知する
 - FR-SELFIMPROVE-7: Sol/Opusの提案・レビュー・適用・ロールバックはすべて`policy_proposals`と`runtime_settings`の変更履歴として監査可能な形で保存する
 
+### 4.15 初回セットアップ誘導
+
+アプリ初回起動時（または認証情報未設定のまま再起動した場合）に、通常画面の代わりにセットアップ専用画面へ誘導する。`architecture/overview.md` §10.5の実装詳細。
+
+- FR-SETUP-1: 全ページ共通のMiddlewareが、必須認証情報（`JEV_API_KEY`, `JEV_BASE_URL`, `KABU_API_PASSWORD`）のいずれかが未設定の場合、`/setup`・保存用アクションルート・静的アセット配信以外への全リクエストを`/setup`へリダイレクトする
+- FR-SETUP-2: `/setup`画面は必須3フィールドを個別入力欄＋保存ボタンで表示する。`SLACK_WEBHOOK_URL`は任意項目として同画面下部に表示し、未入力のままでもセットアップ完了扱いにできる
+- FR-SETUP-3: 必須3フィールドすべてが設定済みになった時点で、以降のリクエストは通常どおり`/scanner`等へアクセスできる（次回リクエストからリダイレクトが解除される）
+- FR-SETUP-4: `/setup`はSettings画面（issue #79で追加する`POST/DELETE /settings/:key`）と同じ保存の仕組みを再利用し、専用の別実装を持たない
+- FR-SETUP-5: `SecretsBanner`は必須3キーの警告表示を行わない（`/setup`への強制リダイレクトで代替される）。`SLACK_WEBHOOK_URL`等の任意キー未設定の案内のみを引き続き担当する
+
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ScannerDashboard
+    [*] --> Setup: 必須認証情報未設定
+    [*] --> ScannerDashboard: 必須認証情報設定済み
+    Setup --> ScannerDashboard: 必須3フィールド保存完了
     ScannerDashboard --> SymbolDetail: 銘柄選択
     SymbolDetail --> ScannerDashboard: 戻る
     ScannerDashboard --> Performance: メニュー
@@ -298,6 +312,10 @@ Total PnL, Daily PnL, Win Rate, Profit Factor, Expectancy, Max Drawdown, Average
 ### 5.4 Calibration
 
 confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。
+
+### 5.5 Setup
+
+必須3フィールド（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`）を個別入力欄＋保存ボタンで表示する。`SLACK_WEBHOOK_URL`は任意項目として表示する。必須3フィールドが揃うまでは他画面への遷移はできない（本節冒頭の初回セットアップ誘導を参照）。
 
 ## 6. MVPフェーズ
 
@@ -344,3 +362,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | Risk Engine（§4.7）にPaper/Live別リミット・dead-man's switch（FR-RISK-6）・Kill Switch再開の自動/手動分類（FR-RISK-7）を追加 | Phase 7も含めた完全自動運用への方針変更 |
 | 1.2 | 2026-09-26 | §4.13 Jev RAG（経験ベース文脈拡張）、§4.14 自己改善ループ（Luna/Sol/Opus連携）を追加。Phase 5/6内容とMVP完了条件を更新 | 自己学習による継続的改善を組み込む方針 |
+| 1.3 | 2026-09-29 | UC-13・§4.15 初回セットアップ誘導（FR-SETUP-1〜5）・§5.5 Setup画面を追加。状態遷移図に`Setup`ノードを追加 | 環境設定項目未入力時のセットアップ画面誘導 |

@@ -133,7 +133,7 @@ handler → service → repository → domain
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7） | `internal/service/selfimprove` |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
-| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10） | `internal/service/scheduler` |
+| Setup Guard Middleware | 必須認証情報（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`）未設定時に`/setup`以外への全リクエストをリダイレクト（§10.5、FR-SETUP-1） | `internal/web/middleware` |
 | Web (HTMX/Templ/Lit) | UI提供（`components/overview.md`） | `internal/web` |
 
 ## 5. kabuステーションAPI連携
@@ -319,6 +319,29 @@ sequenceDiagram
 - ハートビートはCSRF保護対象の認証済みリクエスト（ページ/アクション/API呼び出し）であれば種類を問わず更新対象とする
 - Paper Trading運用中は実資金リスクがないためハートビート監視を適用しない（`requirements/functional.md` §4.7 表の heartbeat_timeout_minutes は Live のみ設定）
 
+### 10.5 初回セットアップ誘導
+
+`requirements/functional.md` §4.15（FR-SETUP-1〜5）の実装詳細。
+
+```mermaid
+sequenceDiagram
+    participant MW as Setup Guard Middleware
+    participant DB as secrets テーブル
+    participant SETUP as /setup
+    participant APP as 他の全ページ/アクション/APIルート
+
+    MW->>DB: JEV_API_KEY / JEV_BASE_URL / KABU_API_PASSWORD の設定有無を確認
+    alt いずれか未設定 かつ リクエスト先が/setup系ルート・静的アセット以外
+        MW->>SETUP: 302リダイレクト
+    else 全て設定済み、または/setup系ルート・静的アセットへのリクエスト
+        MW->>APP: 通常どおり処理を継続
+    end
+```
+
+- Setup Guard Middlewareは`internal/web/middleware`に実装し、`GET /setup`・`POST/DELETE /settings/:key`・静的アセット配信ルートのみをリダイレクト対象外とする（`requirements/functional.md` FR-SETUP-1）
+- `/setup`画面は`components/overview.md`の`SecretFieldRow`（issue #79）を必須3フィールドのみに絞って再利用し、専用の保存エンドポイントは持たない。保存は`POST /settings/:key`、削除は`DELETE /settings/:key`をそのまま使う（FR-SETUP-4）
+- 必須3キーが揃った時点で以降のリクエストからリダイレクトが解除される。同一リクエスト内での即時遷移は行わない（FR-SETUP-3）
+
 ## 11. 障害対応方針
 
 | 障害 | 対応 |
@@ -341,3 +364,4 @@ sequenceDiagram
 | 1.5 | 2026-09-27 | リアルタイムPushライブラリを`nhooyr.io/websocket`から後継の`github.com/coder/websocket`へ変更（旧パッケージはメンテナ自身がdeprecated宣言、APIは互換） | golangci-lint（staticcheck SA1019）指摘対応 |
 | 1.6 | 2026-09-28 | §3レイヤー依存ルールに`SecretsRepository`の`internal/config`依存という例外を明記。§5/§6にJEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDの入力経路をSettings画面（`/settings`）・DB保存（`secrets`テーブル、AES-256-GCM暗号化）へ変更した旨を追記（issue #57、`.env`/環境変数からの入力を廃止） | issue #57実装 |
 | 1.7 | 2026-09-28 | §9に config/strategy.yaml・config/risk.yaml・静的アセットの`go:embed`埋め込みと4段階の解決優先順位（明示パス→環境変数→実行ファイル隣接→埋め込み既定値）を追記。`runtime.Caller(0)`ベースの`repoRoot`/`staticDir`（ビルドマシンの絶対パス依存で配布先では動作しなかった）を廃止 | issue #59実装（配布可能な.exeへの対応） |
+| 1.8 | 2026-09-29 | Setup Guard Middlewareを§4コンポーネント責務表に追加。§10.5 初回セットアップ誘導を新設 | 環境設定項目未入力時のセットアップ画面誘導 |

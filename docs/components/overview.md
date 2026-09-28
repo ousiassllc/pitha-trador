@@ -30,7 +30,7 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 ```text
 internal/web/
 ├── handler/            # scanner.go, symbol.go, performance.go, calibration.go, system.go
-├── middleware/         # CSRF, ロギング, リカバリ
+├── middleware/         # CSRF, ロギング, リカバリ, Setup Guard（未設定時/setupへリダイレクト、§4.15）
 ├── atoms/
 ├── molecules/
 ├── organisms/
@@ -81,7 +81,7 @@ static/
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
 - `PerformanceSummaryPanel`
 - `CalibrationBucketTable`
-- `SecretsBanner`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD未設定時の全ページ共通警告バナー。`Header`内`#config-banner`が`GET /system/secrets-status`をhx-trigger="load"で自己補正取得する、issue #57）
+- `SecretsBanner`（`SLACK_WEBHOOK_URL`等、任意の認証情報キー未設定時の全ページ共通警告バナー。必須3キー（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）は`/setup`への強制リダイレクトで担保するため対象外。`Header`内`#config-banner`が`GET /system/secrets-status`をhx-trigger="load"で自己補正取得する、issue #57・#80）
 
 ### pages
 
@@ -89,7 +89,8 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
-- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL入力フォーム。値は再表示せず設定済み状態のみ表示、`POST /settings`で`secrets`テーブルへ暗号化保存する。issue #57）
+- `SettingsPage`（issue #57・#79で定義するフィールド単位保存フォーム。値は再表示せず設定済み状態のみ表示）
+- `SetupPage`（`SettingsPage`と同じ`SecretFieldRow`を必須3フィールド[`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`]のみに絞って表示、`SLACK_WEBHOOK_URL`は任意項目として追加表示する。必須3フィールド未設定時に全ページからここへ強制リダイレクトされる。issue #80）
 
 ### コンポーネントインターフェース規約
 
@@ -279,3 +280,4 @@ dev:
 | 1.3 | 2026-09-26 | §7のMakefile例を`npm`から`bun`に修正（TypeScript/JavaScriptプロジェクトはbun固定の方針と統一） | 表記統一 |
 | 1.4 | 2026-09-28 | organisms/pagesに`SecretsBanner`/`SettingsPage`を追加、§4に`/settings`ルートと未設定バナーのHTMXパターンを追記 | issue #57実装 |
 | 1.5 | 2026-09-28 | §5.4の`HeaderWithKillSwitch`例の`hx-trigger`セレクタを`.header-container`から`header`要素セレクタに修正 | issue #74実装でHeaderのTailwindユーティリティクラス化に伴い`header-container`クラスを廃止したことへの追随 |
+| 1.6 | 2026-09-29 | pagesに`SetupPage`を追加。`middleware/`にSetup Guardを追記、`SecretsBanner`を任意キーのみ対象に縮小 | 環境設定項目未入力時のセットアップ画面誘導 |
