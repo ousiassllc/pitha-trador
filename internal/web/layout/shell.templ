@@ -23,9 +23,9 @@ templ Shell(title string) {
 			<script src="/static/vendor/htmx.min.js"></script>
 			<script type="module" src="/static/dist/js/kill-switch-panel/pitha-kill-switch-panel.js"></script>
 		</head>
-		<body>
+		<body class="min-h-screen bg-slate-50 text-slate-900">
 			@organisms.Header()
-			<main>
+			<main class="mx-auto max-w-6xl px-6 py-8">
 				{ children... }
 			</main>
 		</body>

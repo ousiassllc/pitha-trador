@@ -39,7 +39,7 @@ func TestSymbolHandler_Page_RendersDetailPanelsAndPriceChartIsland(t *testing.T)
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"<h1>7203</h1>",
+		">7203</h1>",
 		`<pitha-price-chart`,
 		`candles-url="/api/v1/symbols/7203/candles"`,
 		`ws-url="/ws/symbols/7203"`,

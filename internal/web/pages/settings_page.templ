@@ -30,21 +30,24 @@ type SettingsProps struct {
 // comment records this choice.
 templ SettingsPage(props SettingsProps) {
 	@layout.Shell("Settings") {
-		<h1>Settings</h1>
+		<h1 class="text-2xl font-bold text-slate-900">Settings</h1>
 		if props.Saved {
-			<p role="status" data-testid="settings-saved">保存しました。反映にはアプリの再起動が必要です。</p>
+			<p class="mt-4 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="settings-saved">保存しました。反映にはアプリの再起動が必要です。</p>
 		}
-		<form method="post" action="/settings" data-testid="settings-form">
-			<p>
+		<form class="mt-4 flex flex-col gap-4" method="post" action="/settings" data-testid="settings-form">
+			<p class="text-sm text-slate-600">
 				空欄のまま保存すると、その項目は未設定に戻ります。既存の値を維持したい場合は同じ値を再入力してください（保存済みの値はセキュリティのため画面上に表示されません）。
 			</p>
 			for _, field := range props.Fields {
-				<label>
-					{ field.Label }
-					if field.Configured {
-						<span data-testid={ "configured-" + field.Key }>(設定済み)</span>
-					}
+				<label class="flex flex-col gap-1 text-sm text-slate-600">
+					<span class="flex items-center gap-2">
+						{ field.Label }
+						if field.Configured {
+							<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600" data-testid={ "configured-" + field.Key }>(設定済み)</span>
+						}
+					</span>
 					<input
+						class="rounded-md border border-slate-300 px-3 py-1"
 						type="password"
 						name={ field.Key }
 						autocomplete="off"
@@ -52,7 +55,7 @@ templ SettingsPage(props SettingsProps) {
 					/>
 				</label>
 			}
-			<button type="submit">保存</button>
+			<button class="self-start rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" type="submit">保存</button>
 		</form>
 	}
 }

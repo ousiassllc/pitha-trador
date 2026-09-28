@@ -16,17 +16,17 @@ import (
 // caller must enrich a repository-read domain.JevDecision before it has
 // these fields).
 templ DecisionHistoryList(decisions []domain.JevDecision) {
-	<section id="decision-history" data-testid="decision-history">
-		<h2>Decision history</h2>
-		<table>
+	<section class="mt-8" id="decision-history" data-testid="decision-history">
+		<h2 class="text-lg font-semibold text-slate-900">Decision history</h2>
+		<table class="mt-4 w-full border-collapse text-left text-sm">
 			<thead>
-				<tr>
-					<th>Time</th>
-					<th>Type</th>
-					<th>Direction</th>
-					<th>Confidence</th>
-					<th>Regime</th>
-					<th>Entry Quality</th>
+				<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
+					<th class="px-3 py-2">Time</th>
+					<th class="px-3 py-2">Type</th>
+					<th class="px-3 py-2">Direction</th>
+					<th class="px-3 py-2">Confidence</th>
+					<th class="px-3 py-2">Regime</th>
+					<th class="px-3 py-2">Entry Quality</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -39,13 +39,13 @@ templ DecisionHistoryList(decisions []domain.JevDecision) {
 }
 
 templ decisionRow(d domain.JevDecision) {
-	<tr data-decision-id={ fmt.Sprintf("%d", d.ID) }>
-		<td>{ d.Timestamp.Format(time.RFC3339) }</td>
-		<td>{ d.DecisionType }</td>
-		<td>{ nilableString(d.Direction) }</td>
-		<td>{ nilableFloatStr(d.Confidence) }</td>
-		<td>{ nilableString(d.Regime) }</td>
-		<td>{ nilableString(d.EntryQuality) }</td>
+	<tr class="border-b border-slate-100" data-decision-id={ fmt.Sprintf("%d", d.ID) }>
+		<td class="px-3 py-2">{ d.Timestamp.Format(time.RFC3339) }</td>
+		<td class="px-3 py-2">{ d.DecisionType }</td>
+		<td class="px-3 py-2">{ nilableString(d.Direction) }</td>
+		<td class="px-3 py-2">{ nilableFloatStr(d.Confidence) }</td>
+		<td class="px-3 py-2">{ nilableString(d.Regime) }</td>
+		<td class="px-3 py-2">{ nilableString(d.EntryQuality) }</td>
 	</tr>
 }
 
