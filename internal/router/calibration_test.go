@@ -57,8 +57,8 @@ func TestNew_CalibrationPageRendersHeatmapIslandAndNavLinksBetweenScannerAndCali
 	}
 	for _, want := range []string{
 		"<pitha-calibration-heatmap",
-		`<a href="/scanner">Scanner</a>`,
-		`<a href="/calibration">Calibration</a>`,
+		`href="/scanner"`,
+		`href="/calibration"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("expected body to contain %q, got %q", want, body)

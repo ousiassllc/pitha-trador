@@ -13,12 +13,12 @@ import (
 // "pending" rather than a fabricated value.
 templ SignalBadgeGroup(direction *string, confidence *float64, entryQuality *string) {
 	if direction == nil {
-		<span class="signal-badge-group signal-pending">pending</span>
+		<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">pending</span>
 	} else {
-		<span class="signal-badge-group">
+		<span class="inline-flex items-center gap-2">
 			@atoms.Badge(toDirection(*direction))
-			<span class="signal-confidence">{ formatConfidence(confidence) }</span>
-			<span class="signal-entry-quality">{ formatEntryQuality(entryQuality) }</span>
+			<span class="text-xs text-slate-600">{ formatConfidence(confidence) }</span>
+			<span class="text-xs font-medium text-slate-800">{ formatEntryQuality(entryQuality) }</span>
 		</span>
 	}
 }

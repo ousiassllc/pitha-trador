@@ -1,4 +1,4 @@
-.PHONY: dev lint test build openapi-export
+.PHONY: dev lint test build openapi-export generate
 
 # PITHA_STRATEGY_PATH/PITHA_RISK_PATH point at the repo's own config/*.yaml
 # (absolute, via $(CURDIR), since `wails dev` runs with cmd/desktop as its
@@ -24,15 +24,33 @@ dev:
 		"templ generate --watch" \
 		"bun --cwd=static run dev"
 
-lint:
+# templ generate produces *_templ.go and `bun run --cwd static build`
+# produces static/src/dist/{css,js} - both are `.gitignore`'d, and
+# static/src/embed.go's `//go:embed dist vendor` (issue #59) refuses to
+# compile at all until dist/ exists with actual files in it, so `go
+# vet`/golangci-lint/go test/wails build all fail outright on a clean
+# checkout without this having run first (or silently run against a
+# stale dist/*_templ.go left over from a previous `make dev`/build
+# otherwise, as happened with issue #74's `internal/web/style_test.go`
+# locally testing green against Tailwind CSS output older than the
+# .templ source it was meant to catch drift against). CI's lint/test/
+# build jobs each run these two steps first for the same reason; `lint`/
+# `test`/`build` below depend on this target so every local invocation
+# - and lefthook's pre-commit/pre-push hooks, which shell out to `make
+# generate` - stays in the same order.
+generate:
+	templ generate
+	bun run --cwd static build
+
+lint: generate
 	golangci-lint run
 	bunx biome check static/
 
-test:
+test: generate
 	go test ./...
 	bun --cwd=static test
 
-build:
+build: generate
 	cd cmd/desktop && wails build -platform windows/amd64
 
 openapi-export:
