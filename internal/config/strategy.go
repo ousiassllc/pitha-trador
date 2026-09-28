@@ -120,6 +120,25 @@ func LoadStrategy(path string) (*StrategyConfig, error) {
 	return cfg, nil
 }
 
+// LoadStrategyBytes parses data (conventionally an embedded copy of
+// config/strategy.yaml, github.com/ousiassllc/pitha-trador/config's
+// configdefaults.DefaultStrategyYAML) as a StrategyConfig, applying the
+// same PITHA_POLICY_LONG_*/PITHA_POLICY_SHORT_* environment overrides as
+// LoadStrategy. internal/bootstrap falls back to this when no
+// strategy.yaml is found on disk (explicit path, PITHA_STRATEGY_PATH, nor
+// next to the running executable) so a distributed .exe with no
+// accompanying config/ directory still starts.
+func LoadStrategyBytes(data []byte) (*StrategyConfig, error) {
+	cfg, err := loadYAMLBytes[StrategyConfig](data, "(embedded default)")
+	if err != nil {
+		return nil, err
+	}
+	if err := applyPolicyEnvOverrides(&cfg.Policy); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
 func applyPolicyEnvOverrides(cfg *PolicyConfig) error {
 	if err := applyPolicyDirectionEnvOverrides("PITHA_POLICY_LONG_", &cfg.Long); err != nil {
 		return err

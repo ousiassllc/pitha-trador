@@ -1,7 +1,16 @@
 .PHONY: dev lint test build openapi-export
 
+# PITHA_STRATEGY_PATH/PITHA_RISK_PATH point at the repo's own config/*.yaml
+# (absolute, via $(CURDIR), since `wails dev` runs with cmd/desktop as its
+# cwd) so editing either file and restarting `make dev` picks up the change
+# immediately: internal/bootstrap.Run's env-var step (issue #59) takes
+# precedence over its compiled-in embedded default, which is only a
+# build-time snapshot and would otherwise make `make dev` no longer
+# reflect config/risk.yaml edits without a rebuild.
 dev:
-	@bunx concurrently \
+	@PITHA_STRATEGY_PATH=$(CURDIR)/config/strategy.yaml \
+	PITHA_RISK_PATH=$(CURDIR)/config/risk.yaml \
+	bunx concurrently \
 		"cd cmd/desktop && wails dev" \
 		"templ generate --watch" \
 		"bun --cwd=static run dev"

@@ -25,6 +25,16 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install frontend dependencies
+        run: bun install --cwd static --frozen-lockfile
+
+      # go build/go vet (and therefore golangci-lint) now require
+      # static/src/embed.go's `//go:embed dist vendor` target to exist
+      # (issue #59) - dist/ is `.gitignore`'d and only produced by this
+      # build step, so it must run before golangci-lint.
+      - name: Build frontend assets
+        run: bun run --cwd static build
+
       - name: Install templ
         run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
 
@@ -36,9 +46,6 @@ jobs:
 
       - name: golangci-lint run
         run: golangci-lint run
-
-      - name: Install frontend dependencies
-        run: bun install --cwd static --frozen-lockfile
 
       - name: biome check
         working-directory: static
@@ -62,6 +69,14 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install frontend dependencies
+        run: bun install --cwd static --frozen-lockfile
+
+      # go test needs static/src/embed.go's embedded dist/vendor target
+      # to exist (issue #59), same as the lint job.
+      - name: Build frontend assets
+        run: bun run --cwd static build
+
       - name: Install templ
         run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
 
@@ -70,9 +85,6 @@ jobs:
 
       - name: go test
         run: go test ./...
-
-      - name: Install frontend dependencies
-        run: bun install --cwd static --frozen-lockfile
 
       - name: bun test
         run: bun --cwd static test
@@ -90,6 +102,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Install frontend dependencies
+        run: bun install --cwd static --frozen-lockfile
+
+      # wails build's AssetServer.Handler (internal/router.New via
+      # cmd/desktop) embeds static/src/embed.go's dist/vendor at compile
+      # time (issue #59), so the frontend must be built - and this step
+      # must run - before `wails build` below.
+      - name: Build frontend assets
+        run: bun run --cwd static build
 
       - name: Install templ
         run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"

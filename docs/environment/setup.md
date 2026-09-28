@@ -72,8 +72,9 @@ cp .env.example .env
 lefthook install
 
 # 開発起動（templ generate --watch / esbuild watch / wails dev を並行起動）
+# PITHA_STRATEGY_PATH/PITHA_RISK_PATH をリポジトリ内の config/*.yaml へ
+# 設定するため（Makefileが自動設定）、それらを編集して再起動すればすぐ反映される
 make dev
-```
 
 `JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`は`.env`では設定しない（issue #57）。アプリ起動後、Settings画面（`/settings`）から入力する。詳細は`docs/architecture/overview.md` §5・§6を参照。
 
@@ -83,9 +84,10 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 
 - **トリガー**: `push`（main, feat/**）、`pull_request`
 - **ジョブ構成**: `lint` → `test` → `build` の順に実行（前段が失敗したら後段はスキップ）
-  - `lint`: `golangci-lint run` ＋ `bunx biome check static/`
-  - `test`: `go test ./...` ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
-  - `build`: `wails build -platform windows/amd64` で実際の`.exe`をビルドしCI Artifactとしてアップロードする
+  - `lint`: フロントエンドビルド（`bun install --cwd static --frozen-lockfile` + `bun run --cwd static build`）→ `golangci-lint run` ＋ `bunx biome check static/`
+  - `test`: フロントエンドビルド → `go test ./...` ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
+  - `build`: フロントエンドビルド → `wails build -platform windows/amd64` で実際の`.exe`をビルドしCI Artifactとしてアップロードする
+  - `config/strategy.yaml`・`config/risk.yaml`・静的アセット（`static/src/dist`・`static/src/vendor`）は`go:embed`でバイナリに埋め込む（`architecture/overview.md` §9）。`static/src/embed.go`は空/未ビルドの`dist`を埋め込もうとすると`go build`自体がコンパイルエラーになるため、`lint`/`test`/`build`いずれのジョブも上記フロントエンドビルドを最初のGoコンパイル系ステップより前に実行する必要がある
 - **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
 - **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/overview.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途実行する（通常のlint/test/buildフローには含めない）
 
@@ -175,3 +177,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 |----|------|---------|---------|
 | 1.1 | 2026-09-26 | CI構成を修正: `wails build -platform windows/amd64`は`ubuntu-latest`上でクロスビルド可能（Wails Windowsターゲット・`modernc.org/sqlite`系ドライバがいずれもpure GoでCGO不要なため）と判明したため、`build`ジョブに実ビルドを含め、Windowsランナーは実機E2Eテストのみに限定 | ユーザー指摘によるファクトチェック・設計修正 |
 | 1.2 | 2026-09-28 | `JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`の入力経路をSettings画面（`/settings`）へ変更（issue #57）。`.env`からの入力を廃止したのに合わせ、初回セットアップ手順に案内を追記 | issue #57実装 |
+| 1.3 | 2026-09-28 | CI `lint`/`test`/`build`各ジョブにフロントエンドビルドステップ（`bun install --cwd static --frozen-lockfile` + `bun run --cwd static build`）を最初のGoコンパイル系ステップより前に追加。`config`/静的アセットの`go:embed`化（issue #59）により未ビルド状態では`go build`自体が失敗するようになったための対応。`make dev`の`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`設定についても追記 | issue #59実装（配布可能な.exeへの対応） |

@@ -1,6 +1,8 @@
 package bootstrap_test
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -64,6 +66,74 @@ func TestRun_ReturnsErrorAndClosesDBOnUnparsableStrategyConfig(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("Run: expected an error for a missing strategy config file, got nil")
+	}
+}
+
+// TestRun_FallsBackToEmbeddedDefaultsWhenNoConfigFileIsFound is issue
+// #59's step-4 proof: with no explicit bootstrap.Config field, no
+// PITHA_STRATEGY_PATH/PITHA_RISK_PATH set, and (in this `go test`
+// process) no config/*.yaml next to the test binary either, Run must
+// still succeed by parsing the compiled-in configdefaults.
+// DefaultStrategyYAML/DefaultRiskYAML rather than failing outright - the
+// scenario a distributed .exe with no accompanying config/ directory
+// hits.
+func TestRun_FallsBackToEmbeddedDefaultsWhenNoConfigFileIsFound(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+
+	state, err := bootstrap.Run(bootstrap.Config{DBPath: dbPath})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	t.Cleanup(func() { _ = state.Close() })
+
+	if state.Strategy == nil || state.Strategy.FastScreener.TopN == 0 {
+		t.Fatal("Run: State.Strategy was not populated from the embedded default")
+	}
+	if state.Risk == nil || state.Risk.Paper.MaxOpenPositions == 0 {
+		t.Fatal("Run: State.Risk was not populated from the embedded default")
+	}
+	if state.Paths.StrategyPath == "" || state.Paths.RiskPath == "" {
+		t.Error("Run: State.Paths.StrategyPath/RiskPath must still report a source even when embedded")
+	}
+}
+
+// TestRun_ExecutableDirectoryConfigTakesPrecedenceOverEmbeddedDefault is
+// issue #59's other explicit acceptance criterion: a config/strategy.yaml
+// placed next to the running executable (os.Executable) must be read in
+// preference to the compiled-in embedded default, so an operator can
+// hand-edit a distributed .exe's configuration without recompiling.
+func TestRun_ExecutableDirectoryConfigTakesPrecedenceOverEmbeddedDefault(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	configDir := filepath.Join(filepath.Dir(exe), "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q): %v", configDir, err)
+	}
+	strategyPath := filepath.Join(configDir, "strategy.yaml")
+	t.Cleanup(func() {
+		_ = os.Remove(strategyPath)
+		_ = os.Remove(configDir) // no-op unless this test left it empty
+	})
+
+	const wantTopN = 4242
+	if err := os.WriteFile(strategyPath, fmt.Appendf(nil, "fast_screener:\n  top_n: %d\n", wantTopN), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q): %v", strategyPath, err)
+	}
+
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+	state, err := bootstrap.Run(bootstrap.Config{DBPath: dbPath})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	t.Cleanup(func() { _ = state.Close() })
+
+	if got := state.Strategy.FastScreener.TopN; got != wantTopN {
+		t.Errorf("Run: State.Strategy.FastScreener.TopN = %d, want %d (from executable-directory config/strategy.yaml, not the embedded default)", got, wantTopN)
+	}
+	if state.Paths.StrategyPath != strategyPath {
+		t.Errorf("Run: Paths.StrategyPath = %q, want %q", state.Paths.StrategyPath, strategyPath)
 	}
 }
 
