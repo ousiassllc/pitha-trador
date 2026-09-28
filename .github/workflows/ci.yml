@@ -124,7 +124,10 @@ jobs:
       - name: Install wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
 
-      - name: wails build (windows/amd64)
+      - name: Install nsis
+        run: sudo apt-get -y update && sudo apt-get -y install nsis
+
+      - name: wails build (windows/amd64, NSIS installer)
         working-directory: cmd/desktop
         # config.LoadSecretsFromDB (internal/config/secrets.go, issue #57)
         # reads JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD from the secrets
@@ -133,12 +136,28 @@ jobs:
         # for Wails' bindings generator (it builds cmd/desktop with the
         # "bindings" tag and actually runs it to introspect the App bound
         # in wails.Run()).
-        run: wails build -platform windows/amd64
+        # -nsis generates a Setup.exe installer (via makensis, installed
+        # above) instead of a plain portable .exe (issue #64). -installscope
+        # user installs to the current user's AppData (no admin/UAC
+        # required), which issue #64's fully unattended auto-update depends
+        # on; the Wails default (-installscope machine, Program Files)
+        # requires UAC elevation and would break unattended updates.
+        run: wails build -platform windows/amd64 -nsis -installscope user
+
+      - name: List build output
+        working-directory: cmd/desktop
+        run: ls -la build/bin/
+
+      - name: Generate checksums
+        working-directory: cmd/desktop
+        run: sha256sum build/bin/*-installer.exe > build/bin/checksums.txt
 
       - uses: actions/upload-artifact@v4
         with:
           name: pitha-trador-windows-amd64
-          path: cmd/desktop/build/bin/*.exe
+          path: |
+            cmd/desktop/build/bin/*-installer.exe
+            cmd/desktop/build/bin/checksums.txt
 
   release:
     needs: build
@@ -154,6 +173,8 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.exe
+          files: |
+            dist/*-installer.exe
+            dist/checksums.txt
           generate_release_notes: true
           draft: false
