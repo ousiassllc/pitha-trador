@@ -12,9 +12,11 @@ static/wailsjs/
 
 # Wails build output - except our customized NSIS installer template
 # (issue #65: silent-install auto-relaunch, cmd/desktop/build/windows/
-# installer/project.nsi), which is force-added (`git add -f`) and
-# tracked despite this rule - a `!` negation cannot re-include a file
-# under an already-excluded parent directory.
+# installer/project.nsi) and the app icon source asset
+# (cmd/desktop/build/appicon.png - consumed by `wails build` to generate
+# icon.ico/.icns, not produced by it), both of which are force-added
+# (`git add -f`) and tracked despite this rule - a `!` negation cannot
+# re-include a file under an already-excluded parent directory.
 cmd/desktop/build/
 
 # Templ generated
