@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -70,13 +71,14 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 }
 
 // Page implements `GET /settings`: each field shows only whether a value
-// is currently stored, never the value itself (issue #57's decision).
+// is currently stored, never the value itself (issue #57's decision). A
+// per-key SecretsStore.Get error (e.g. an unreadable/corrupted stored
+// value) no longer 500s the whole screen (issue #70: "設定画面が開かず、
+// エラーになる" - a single bad row must not permanently lock the operator
+// out of the one screen that could fix it) - h.props degrades that key to
+// "unset" instead, so the screen still renders and accepts a fresh value.
 func (h *SettingsHandler) Page(c *gin.Context) {
-	props, err := h.props(c.Request.Context(), false)
-	if err != nil {
-		c.Status(http.StatusInternalServerError)
-		return
-	}
+	props := h.props(c.Request.Context(), false)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	_ = pages.SettingsPage(props).Render(c.Request.Context(), c.Writer)
@@ -97,11 +99,7 @@ func (h *SettingsHandler) Save(c *gin.Context) {
 		}
 	}
 
-	props, err := h.props(ctx, true)
-	if err != nil {
-		c.Status(http.StatusInternalServerError)
-		return
-	}
+	props := h.props(ctx, true)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	_ = pages.SettingsPage(props).Render(ctx, c.Writer)
@@ -110,40 +108,46 @@ func (h *SettingsHandler) Save(c *gin.Context) {
 // Status implements `GET /system/secrets-status`: the header's
 // `#config-banner` fragment (organisms.Header's doc comment, mirroring
 // `#header-status`'s own `hx-get`/`hx-trigger="load"` self-correcting
-// pattern). It renders nothing once every required key is configured.
+// pattern). It renders nothing once every required key is configured. A
+// per-key SecretsStore.Get error degrades that key to "missing" (issue
+// #70) rather than 500ing the banner on every page.
 func (h *SettingsHandler) Status(c *gin.Context) {
-	missing, err := h.missingRequiredKeys(c.Request.Context())
-	if err != nil {
-		c.Status(http.StatusInternalServerError)
-		return
-	}
+	missing := h.missingRequiredKeys(c.Request.Context())
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	_ = organisms.SecretsBanner(missing).Render(c.Request.Context(), c.Writer)
 }
 
-func (h *SettingsHandler) props(ctx context.Context, saved bool) (pages.SettingsProps, error) {
+func (h *SettingsHandler) props(ctx context.Context, saved bool) pages.SettingsProps {
 	fields := make([]pages.SettingsField, len(settingsFields))
 	for i, field := range settingsFields {
 		_, ok, err := h.store.Get(ctx, field.key)
 		if err != nil {
-			return pages.SettingsProps{}, err
+			// issue #70: an unreadable stored value (e.g. a corrupted/
+			// undecryptable row, or a transient "database is locked")
+			// must not brick the whole Settings screen - treat it as
+			// unset instead so the operator can still open Settings and
+			// re-save it (self-healing: Save's plain Set overwrites
+			// whatever was there).
+			slog.Error("settings: read stored secret; treating as unset so the screen still renders", "key", field.key, "error", err)
+			ok = false
 		}
 		fields[i] = pages.SettingsField{Key: field.key, Label: field.label, Configured: ok}
 	}
-	return pages.SettingsProps{Fields: fields, Saved: saved}, nil
+	return pages.SettingsProps{Fields: fields, Saved: saved}
 }
 
-func (h *SettingsHandler) missingRequiredKeys(ctx context.Context) ([]string, error) {
+func (h *SettingsHandler) missingRequiredKeys(ctx context.Context) []string {
 	var missing []string
 	for _, key := range requiredSettingsKeys {
 		_, ok, err := h.store.Get(ctx, key)
 		if err != nil {
-			return nil, err
+			slog.Error("settings: read stored secret for secrets-status banner; treating as unset", "key", key, "error", err)
+			ok = false
 		}
 		if !ok {
 			missing = append(missing, key)
 		}
 	}
-	return missing, nil
+	return missing
 }
