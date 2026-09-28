@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
+	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 )
 
 // App is the Wails-bound application struct. It holds the Wails runtime
@@ -21,6 +23,12 @@ type App struct {
 	// first).
 	services *bootstrap.Services
 	cancel   context.CancelFunc
+
+	// mu guards pendingInstaller: QuitForUpdate (issue #65) runs on
+	// internal/service/scheduler's own cron goroutine, while shutdown
+	// runs on Wails' separate shutdown goroutine.
+	mu               sync.Mutex
+	pendingInstaller string
 }
 
 // NewApp creates a new App instance.
@@ -51,13 +59,45 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
+// QuitForUpdate implements internal/service/updater.Quitter (issue #65):
+// internal/bootstrap's updater.SchedulerAdapter calls this once
+// updater.Checker.CheckForUpdate has downloaded and verified a newer
+// installer. It records installerPath for shutdown (below) to launch,
+// then triggers Wails' normal graceful-quit path (runtime.Quit) - the
+// same path startup's own error case above already uses - so shutdown
+// blocks on Services.Stop() before the installer ever runs, and no
+// in-flight job or DB write races the restart.
+func (a *App) QuitForUpdate(installerPath string) {
+	a.mu.Lock()
+	a.pendingInstaller = installerPath
+	a.mu.Unlock()
+	runtime.Quit(a.ctx)
+}
+
 // shutdown is Wails' OnShutdown hook: it cancels the context startup
 // passed to Services.Start and blocks until every background goroutine
 // (and in-flight Scheduler job) has exited, so main's deferred DB close
-// never races a running job.
+// never races a running job. Once every goroutine has stopped, if
+// QuitForUpdate recorded a verified installer (issue #65), it launches it
+// fully unattended (`installer.exe /S`) as a detached process; the NSIS
+// installer itself (build/windows/installer/project.nsi's silent-launch
+// customization) restarts the new pitha-trador.exe once installation
+// completes.
 func (a *App) shutdown(context.Context) {
 	if a.cancel != nil {
 		a.cancel()
 	}
 	a.services.Stop()
+
+	a.mu.Lock()
+	installerPath := a.pendingInstaller
+	a.mu.Unlock()
+	if installerPath == "" {
+		return
+	}
+	if err := updater.BuildSilentInstallCommand(installerPath).Start(); err != nil {
+		slog.Error("desktop: launch self-update installer failed", "installer", installerPath, "error", err)
+		return
+	}
+	slog.Info("desktop: self-update installer launched", "installer", installerPath)
 }

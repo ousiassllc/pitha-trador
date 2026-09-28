@@ -28,6 +28,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
+	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 )
 
 // LogDir is the directory every entrypoint's logging.RotatingWriter
@@ -103,14 +104,14 @@ type Services struct {
 // of state (bootstrap.Run's DB + config) and secrets (config.LoadSecrets),
 // registering every internal/service/scheduler queue Handler this build
 // wires (market-data, feature-calc, jev-scout, jev-trader,
-// outcome-labeling, analytics). notifiers are
-// entrypoint-specific extra Risk Engine alert channels (cmd/desktop passes
-// its Wails App for native OS toasts; cmd/server passes none) fanned out
-// alongside the always-on structured log and optional Slack channels
-// (risk.go). It performs no I/O itself (no DB queries beyond what the
-// repository constructors below do, which is none - they only hold
-// *sql.DB) and starts no goroutine; see (*Services).Start.
-func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notifier) (*Services, error) {
+// outcome-labeling, analytics). notifiers are entrypoint-specific extra
+// Risk Engine alert channels (cmd/desktop's Wails App; cmd/server none),
+// and autoUpdate (issue #65) wires internal/service/updater's periodic
+// self-update check onto Scheduler when non-nil (cmd/desktop only). It
+// performs no I/O itself (no DB queries beyond what the repository
+// constructors below do, which is none - they only hold *sql.DB) and
+// starts no goroutine; see (*Services).Start.
+func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quitter, notifiers ...risk.Notifier) (*Services, error) {
 	instruments := repository.NewInstrumentRepository(state.DB)
 	snapshots := repository.NewSnapshotRepository(state.DB)
 	decisions := repository.NewDecisionRepository(state.DB)
@@ -168,11 +169,17 @@ func BuildServices(state *State, secrets config.Secrets, notifiers ...risk.Notif
 	governor := selfimprove.NewGovernor(repository.NewProposalRepository(state.DB), settings, positions,
 		backtestSource, state.Strategy.Policy, selfimprove.WithNotifier(alerts.selfImproveNotifier()))
 
-	sched := scheduler.New(jobs, instruments,
+	schedOpts := []scheduler.Option{
 		scheduler.WithOutcomeLabelSource(outcomes),
 		scheduler.WithHeartbeatChecker(riskEngine),
 		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
-	)
+	}
+	if autoUpdate != nil { // cmd/desktop only (issue #65); cmd/server passes nil
+		gate := updater.SafeGate{Positions: risk.NewRepositoryPortfolioProvider(positions), State: riskEngine, Orders: executionEngine}
+		checker := updater.NewChecker(updater.Config{Owner: "ousiassllc", Repo: "pitha-trador", Gate: gate})
+		schedOpts = append(schedOpts, scheduler.WithUpdateChecker(updater.SchedulerAdapter{Checker: checker, Quitter: autoUpdate}))
+	}
+	sched := scheduler.New(jobs, instruments, schedOpts...)
 
 	svc := &Services{
 		Instruments:   instruments,

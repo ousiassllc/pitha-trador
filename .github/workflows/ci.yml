@@ -127,6 +127,19 @@ jobs:
       - name: Install nsis
         run: sudo apt-get -y update && sudo apt-get -y install nsis
 
+      - name: Determine version
+        # internal/version.Version's zero value ("dev") is already
+        # correct for branch/PR builds - this step only overrides it on a
+        # tag push, embedding the pushed tag name itself (issue #65:
+        # "タグ名がそのままsemver、例: v0.1.1").
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=dev" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: wails build (windows/amd64, NSIS installer)
         working-directory: cmd/desktop
         # config.LoadSecretsFromDB (internal/config/secrets.go, issue #57)
@@ -142,7 +155,11 @@ jobs:
         # required), which issue #64's fully unattended auto-update depends
         # on; the Wails default (-installscope machine, Program Files)
         # requires UAC elevation and would break unattended updates.
-        run: wails build -platform windows/amd64 -nsis -installscope user
+        # -ldflags embeds internal/version.Version (issue #65) - the
+        # previous step's Determine version resolves it to "dev" on every
+        # branch/PR build, so this is a no-op change from the pre-#65
+        # unversioned build there.
+        run: wails build -platform windows/amd64 -nsis -installscope user -ldflags "-X github.com/ousiassllc/pitha-trador/internal/version.Version=${{ steps.version.outputs.value }}"
 
       - name: List build output
         working-directory: cmd/desktop

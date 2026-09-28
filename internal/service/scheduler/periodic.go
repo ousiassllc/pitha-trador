@@ -41,6 +41,25 @@ func WithLogRotator(rotator LogRotator) Option {
 	return func(s *Scheduler) { s.logRotator = rotator }
 }
 
+// UpdateChecker is internal/service/updater's periodic entrypoint
+// (issue #65's automatic GitHub Releases update check). An interface
+// here keeps this package from depending on internal/service/updater
+// directly (mirrors HeartbeatChecker/LogRotator's own precedent above,
+// package doc.go's layer rule); internal/bootstrap's cmd/desktop-only
+// adapter wraps *updater.Checker.CheckForUpdate plus the Wails-specific
+// quit-and-relaunch trigger neither this package nor
+// internal/service/updater may import.
+type UpdateChecker interface {
+	CheckForUpdate(ctx context.Context) error
+}
+
+// WithUpdateChecker enables Start's 6-hourly GitHub Releases
+// update-check trigger (issue #65). cmd/desktop only; cmd/server never
+// configures this (it has no installer to run). Unset by default.
+func WithUpdateChecker(checker UpdateChecker) Option {
+	return func(s *Scheduler) { s.updateChecker = checker }
+}
+
 // outcomeLabelingCronSpec is how often Start's Outcome Labeling trigger
 // (WithOutcomeLabelSource) runs EnqueueOutcomeLabeling: once per 1-minute
 // market_snapshots bar, so each 5/10/20-minute horizon is labeled within
@@ -52,6 +71,12 @@ const outcomeLabelingCronSpec = "@every 1m"
 // finest granularity risk.yaml's heartbeat_timeout_minutes is expressed
 // in (architecture/overview.md §10.4's periodic check).
 const heartbeatCheckCronSpec = "@every 1m"
+
+// updateCheckCronSpec is how often Start's WithUpdateChecker trigger
+// (issue #65) polls GitHub Releases for a newer version: every 6 hours,
+// far coarser than every other trigger here since a new release is a
+// rare, human-paced event rather than a market-data-paced one.
+const updateCheckCronSpec = "@every 6h"
 
 // outcomeLabelRetryWindow bounds how long after its decision a pending
 // (decision, horizon) pair keeps being re-enqueued. Labeler.HandleJob
@@ -131,6 +156,15 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 			return fmt.Errorf("scheduler: register log rotation trigger: %w", err)
 		}
 	}
+	if s.updateChecker != nil {
+		if _, err := s.cron.AddFunc(updateCheckCronSpec, func() {
+			if err := s.CheckForUpdate(ctx); err != nil {
+				slog.Error("scheduler: update check failed", "error", err)
+			}
+		}); err != nil {
+			return fmt.Errorf("scheduler: register update-check trigger: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -156,4 +190,15 @@ func (s *Scheduler) RotateLogs(ctx context.Context) error {
 		return nil
 	}
 	return s.logRotator.Rotate(ctx)
+}
+
+// CheckForUpdate calls the configured UpdateChecker (WithUpdateChecker,
+// issue #65) once, or does nothing and returns nil if none is configured
+// - the same deferral CheckOperatorHeartbeat/RotateLogs above already
+// document.
+func (s *Scheduler) CheckForUpdate(ctx context.Context) error {
+	if s.updateChecker == nil {
+		return nil
+	}
+	return s.updateChecker.CheckForUpdate(ctx)
 }

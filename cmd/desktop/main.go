@@ -70,9 +70,12 @@ func main() {
 
 	// app is also the Risk Engine's native OS toast Notifier (notify.go),
 	// fanned out alongside the structured-log and Slack channels
-	// BuildServices always wires (issue #48).
+	// BuildServices always wires (issue #48), and cmd/desktop's
+	// internal/service/updater.Quitter (app.go's QuitForUpdate) - issue
+	// #65's unattended self-update, which cmd/server never wires in at
+	// all.
 	app := NewApp()
-	services, err := bootstrap.BuildServices(state, secrets, app)
+	services, err := bootstrap.BuildServices(state, secrets, app, app)
 	if err != nil {
 		log.Fatal(err)
 	}
