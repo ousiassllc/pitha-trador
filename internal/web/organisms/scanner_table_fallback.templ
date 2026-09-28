@@ -23,21 +23,21 @@ import (
 // (sorting, `/ws/scanner` live updates), per its "銘柄行は通常の
 // `<a href>` として描画する" contract (components/overview.md §5.2).
 templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
-	<section id="scanner-table" data-testid="scanner-table">
+	<section class="mt-6" id="scanner-table" data-testid="scanner-table">
 		<pitha-scanner-table api-url="/api/v1/scanner" ws-url="/ws/scanner">
-			<table>
-				<caption>{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
+			<table class="w-full border-collapse text-left text-sm">
+				<caption class="mb-2 text-left text-sm text-slate-500">{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
 				<thead>
-					<tr>
-						<th>Symbol</th>
-						<th>Price</th>
-						<th>1m Return</th>
-						<th>5m Return</th>
-						<th>Volume Ratio</th>
-						<th>VWAP Distance (bps)</th>
-						<th>Spread (bps)</th>
-						<th>Jev</th>
-						<th>Position</th>
+					<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
+						<th class="px-3 py-2">Symbol</th>
+						<th class="px-3 py-2">Price</th>
+						<th class="px-3 py-2">1m Return</th>
+						<th class="px-3 py-2">5m Return</th>
+						<th class="px-3 py-2">Volume Ratio</th>
+						<th class="px-3 py-2">VWAP Distance (bps)</th>
+						<th class="px-3 py-2">Spread (bps)</th>
+						<th class="px-3 py-2">Jev</th>
+						<th class="px-3 py-2">Position</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -51,18 +51,18 @@ templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 }
 
 templ scannerRow(c domain.Candidate) {
-	<tr data-symbol={ c.Symbol }>
-		<td>{ c.Symbol }</td>
-		<td>{ formatFloat(c.Price, 1) }</td>
-		<td>{ formatNilFloat(c.Return1m, 2) }</td>
-		<td>{ formatNilFloat(c.Return5m, 2) }</td>
-		<td>{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
-		<td>{ formatFloat(c.PriceVsVWAPBps, 0) }</td>
-		<td>{ formatNilFloat(c.SpreadBps, 0) }</td>
-		<td>
+	<tr class="border-b border-slate-100" data-symbol={ c.Symbol }>
+		<td class="px-3 py-2 font-medium text-slate-900">{ c.Symbol }</td>
+		<td class="px-3 py-2">{ formatFloat(c.Price, 1) }</td>
+		<td class="px-3 py-2">{ formatNilFloat(c.Return1m, 2) }</td>
+		<td class="px-3 py-2">{ formatNilFloat(c.Return5m, 2) }</td>
+		<td class="px-3 py-2">{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
+		<td class="px-3 py-2">{ formatFloat(c.PriceVsVWAPBps, 0) }</td>
+		<td class="px-3 py-2">{ formatNilFloat(c.SpreadBps, 0) }</td>
+		<td class="px-3 py-2">
 			@molecules.SignalBadgeGroup(c.JevDirection, c.JevConfidence, c.EntryQuality)
 		</td>
-		<td>{ formatNilFloat(c.CurrentPosition, 0) }</td>
+		<td class="px-3 py-2">{ formatNilFloat(c.CurrentPosition, 0) }</td>
 	</tr>
 }
 

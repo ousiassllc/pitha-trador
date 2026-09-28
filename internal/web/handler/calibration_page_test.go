@@ -26,7 +26,7 @@ func TestCalibrationHandler_Page_RendersHeatmapIsland(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"<h1>Calibration</h1>",
+		">Calibration</h1>",
 		"<pitha-calibration-heatmap",
 		`src="/static/dist/js/calibration-heatmap/pitha-calibration-heatmap.js"`,
 	} {

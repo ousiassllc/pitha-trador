@@ -13,31 +13,53 @@ import (
 // overview.md §3 "PerformanceSummaryPanel"). Return figures are
 // percentage returns summed over trades, the unit backtest.Trade uses.
 templ PerformanceSummaryPanel(title string, m backtest.Metrics) {
-	<section class="performance-summary" data-testid="performance-summary">
-		<h2>{ title }</h2>
-		<dl>
-			<dt>Trades</dt>
-			<dd data-metric="trade_count">{ fmt.Sprintf("%d", m.TradeCount) }</dd>
-			<dt>Win Rate</dt>
-			<dd data-metric="win_rate">{ fmt.Sprintf("%.1f%%", m.WinRate*100) }</dd>
-			<dt>Avg Profit</dt>
-			<dd>{ pct(m.AvgProfit) }</dd>
-			<dt>Avg Loss</dt>
-			<dd>{ pct(m.AvgLoss) }</dd>
-			<dt>Profit Factor</dt>
-			<dd data-metric="profit_factor">{ profitFactor(m.ProfitFactor) }</dd>
-			<dt>Expectancy</dt>
-			<dd data-metric="expectancy">{ pct(m.Expectancy) }</dd>
-			<dt>Max Drawdown</dt>
-			<dd data-metric="max_drawdown_pct">{ pct(m.MaxDrawdownPct) }</dd>
-			<dt>Gross PnL</dt>
-			<dd>{ pct(m.GrossPnLPct) }</dd>
-			<dt>PnL (slippage)</dt>
-			<dd>{ pct(m.SlippagePnLPct) }</dd>
-			<dt>PnL (fees)</dt>
-			<dd>{ pct(m.FeePnLPct) }</dd>
-			<dt>Net PnL</dt>
-			<dd data-metric="net_pnl_pct">{ pct(m.NetPnLPct) }</dd>
+	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="performance-summary">
+		<h2 class="text-lg font-semibold text-slate-900">{ title }</h2>
+		<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+			<div>
+				<dt class="text-sm text-slate-500">Trades</dt>
+				<dd class="text-sm font-medium text-slate-900" data-metric="trade_count">{ fmt.Sprintf("%d", m.TradeCount) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">Win Rate</dt>
+				<dd class="text-sm font-medium text-slate-900" data-metric="win_rate">{ fmt.Sprintf("%.1f%%", m.WinRate*100) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">Avg Profit</dt>
+				<dd class="text-sm font-medium text-slate-900">{ pct(m.AvgProfit) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">Avg Loss</dt>
+				<dd class="text-sm font-medium text-slate-900">{ pct(m.AvgLoss) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">Profit Factor</dt>
+				<dd class="text-sm font-medium text-slate-900" data-metric="profit_factor">{ profitFactor(m.ProfitFactor) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">Expectancy</dt>
+				<dd class="text-sm font-medium text-slate-900" data-metric="expectancy">{ pct(m.Expectancy) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">Max Drawdown</dt>
+				<dd class="text-sm font-medium text-slate-900" data-metric="max_drawdown_pct">{ pct(m.MaxDrawdownPct) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">Gross PnL</dt>
+				<dd class="text-sm font-medium text-slate-900">{ pct(m.GrossPnLPct) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">PnL (slippage)</dt>
+				<dd class="text-sm font-medium text-slate-900">{ pct(m.SlippagePnLPct) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">PnL (fees)</dt>
+				<dd class="text-sm font-medium text-slate-900">{ pct(m.FeePnLPct) }</dd>
+			</div>
+			<div>
+				<dt class="text-sm text-slate-500">Net PnL</dt>
+				<dd class="text-sm font-medium text-slate-900" data-metric="net_pnl_pct">{ pct(m.NetPnLPct) }</dd>
+			</div>
 		</dl>
 	</section>
 }

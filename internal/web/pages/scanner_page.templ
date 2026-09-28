@@ -19,7 +19,7 @@ import (
 // loaded from the first full-page visit.
 templ ScannerPage(candidates []domain.Candidate, asOf time.Time) {
 	@layout.Shell("Scanner Dashboard") {
-		<h1>Scanner Dashboard</h1>
+		<h1 class="text-2xl font-bold text-slate-900">Scanner Dashboard</h1>
 		@organisms.ScannerTableFallback(candidates, asOf)
 		<script type="module" src="/static/dist/js/scanner-table/pitha-scanner-table.js"></script>
 	}
