@@ -47,6 +47,11 @@ type Scheduler struct {
 	// skip registering the @daily log-archival cron trigger entirely
 	// (non-functional.md §5 "ログは日次ローテーションし").
 	logRotator LogRotator
+	// updateChecker is optional (WithUpdateChecker, issue #65): a nil
+	// value makes CheckForUpdate a no-op and skips Start's update-check
+	// trigger entirely (cmd/server never configures it - it has no
+	// installer concept).
+	updateChecker UpdateChecker
 
 	pollInterval time.Duration
 

@@ -12,6 +12,7 @@ require (
 	github.com/ngrok/sqlmw v0.0.0-20220520173518-97c9c04efc79
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/wailsapp/wails/v2 v2.16.0
+	golang.org/x/mod v0.38.0
 	modernc.org/sqlite v1.59.0
 )
 

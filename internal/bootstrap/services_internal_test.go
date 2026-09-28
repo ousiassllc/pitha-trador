@@ -30,7 +30,7 @@ func newTestServices(t *testing.T, kabuServer *httptest.Server) *Services {
 	}
 	t.Cleanup(func() { _ = state.Close() })
 
-	svc, err := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password"})
+	svc, err := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password"}, nil)
 	if err != nil {
 		t.Fatalf("BuildServices: %v", err)
 	}

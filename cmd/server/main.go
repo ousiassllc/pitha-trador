@@ -74,7 +74,9 @@ func main() {
 		slog.Warn("bootstrap: secrets not yet configured; configure them at /settings and restart", "missing", missing)
 	}
 
-	services, err := bootstrap.BuildServices(state, secrets)
+	// nil: cmd/server is headless and has no installer to run, so
+	// issue #65's unattended self-update never wires in here.
+	services, err := bootstrap.BuildServices(state, secrets, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
