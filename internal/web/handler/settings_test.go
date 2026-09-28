@@ -20,8 +20,11 @@ import (
 // internal/repository.SecretsRepository (which needs a *sql.DB).
 type fakeSecretsStore struct {
 	values map[string]string
-	getErr error
-	setErr error
+	// getErr, if non-nil, makes Get fail for getErrKey (or every key when
+	// getErrKey is empty).
+	getErr    error
+	getErrKey string
+	setErr    error
 }
 
 func newFakeSecretsStore() *fakeSecretsStore {
@@ -29,7 +32,7 @@ func newFakeSecretsStore() *fakeSecretsStore {
 }
 
 func (f *fakeSecretsStore) Get(_ context.Context, key string) (string, bool, error) {
-	if f.getErr != nil {
+	if f.getErr != nil && (f.getErrKey == "" || f.getErrKey == key) {
 		return "", false, f.getErr
 	}
 	value, ok := f.values[key]
@@ -177,10 +180,19 @@ func TestSettingsHandler_Status_RendersNothingWhenEverythingConfigured(t *testin
 	}
 }
 
-func TestSettingsHandler_Page_StoreErrorReturns500(t *testing.T) {
+// issue #70 ("設定画面が開かず、エラーになる"): a single unreadable
+// stored value (e.g. corrupted/undecryptable, or a transient "database
+// is locked") must not 500 the whole Settings screen - it used to,
+// permanently locking the operator out of the one screen that could fix
+// it. Page now degrades just that field to "not configured" so the
+// screen still renders (and the operator can re-save it).
+func TestSettingsHandler_Page_StoreErrorDegradesGracefully(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := newFakeSecretsStore()
+	store.values[config.KeyJevAPIKey] = "jev-key"
+	store.values[config.KeyJevBaseURL] = "https://jev.example.com"
 	store.getErr = errors.New("db is locked")
+	store.getErrKey = config.KeyJevBaseURL
 	h := handler.NewSettingsHandler(store)
 	engine := gin.New()
 	engine.GET("/settings", h.Page)
@@ -189,8 +201,42 @@ func TestSettingsHandler_Page_StoreErrorReturns500(t *testing.T) {
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (a broken key must not 500 the whole screen)", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-testid="configured-`+config.KeyJevAPIKey+`"`) {
+		t.Fatalf("healthy key JEV_API_KEY not shown as configured; body=%s", body)
+	}
+	if strings.Contains(body, `data-testid="configured-`+config.KeyJevBaseURL+`"`) {
+		t.Fatalf("broken key JEV_BASE_URL shown as configured; want it degraded to unset; body=%s", body)
+	}
+}
+
+// issue #70: the same per-key error must not 500 the header's
+// secrets-status banner either (it renders on every page, not just
+// Settings) - the broken required key is reported as missing instead.
+func TestSettingsHandler_Status_StoreErrorDegradesGracefully(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	store.values[config.KeyJevAPIKey] = "jev-key"
+	store.values[config.KeyJevBaseURL] = "https://jev.example.com"
+	store.values[config.KeyKabuAPIPassword] = "kabu-pass"
+	store.getErr = errors.New("db is locked")
+	store.getErrKey = config.KeyKabuAPIPassword
+	h := handler.NewSettingsHandler(store)
+	engine := gin.New()
+	engine.GET("/system/secrets-status", h.Status)
+
+	req := httptest.NewRequest(http.MethodGet, "/system/secrets-status", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (a broken key must not 500 the banner)", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), config.KeyKabuAPIPassword) {
+		t.Fatalf("banner does not report broken required key as missing; body=%s", rec.Body.String())
 	}
 }
 
