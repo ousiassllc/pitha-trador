@@ -94,8 +94,15 @@ jobs:
   build:
     needs: test
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
     steps:
+      # fetch-depth: 0 (full history incl. tags) so the "Determine
+      # version" step below can see every existing vX.Y.Z tag when
+      # computing the next release version on a plain main push.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
@@ -129,13 +136,32 @@ jobs:
 
       - name: Determine version
         # internal/version.Version's zero value ("dev") is already
-        # correct for branch/PR builds - this step only overrides it on a
-        # tag push, embedding the pushed tag name itself (issue #65:
-        # "タグ名がそのままsemver、例: v0.1.1").
+        # correct for feat/**-branch and PR builds. A tag push (manual
+        # release) embeds the pushed tag name itself (issue #65: "タグ名
+        # がそのままsemver、例: v0.1.1"). A plain push to main (i.e. every
+        # merged PR) computes the *next* patch version from the latest
+        # existing vX.Y.Z release tag instead - this is what the
+        # `release` job below then actually publishes as a new tag+
+        # GitHub Release (auto-release-on-main), so the version embedded
+        # in the exe here must already match it exactly: issue #65's
+        # self-updater compares internal/version.Version against the
+        # latest published release tag, and embedding "dev" (or a stale
+        # version) here would make every running copy think an update is
+        # perpetually available.
         id: version
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_REF}" == "refs/heads/main" && "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            latest=$(git tag -l 'v*' --sort=-v:refname | head -1)
+            if [[ -z "$latest" ]]; then
+              next="v0.1.0"
+            else
+              ver="${latest#v}"
+              IFS='.' read -r major minor patch <<< "$ver"
+              next="v${major}.${minor}.$((patch + 1))"
+            fi
+            echo "value=${next}" >> "$GITHUB_OUTPUT"
           else
             echo "value=dev" >> "$GITHUB_OUTPUT"
           fi
@@ -176,9 +202,19 @@ jobs:
             cmd/desktop/build/bin/*-installer.exe
             cmd/desktop/build/bin/checksums.txt
 
+  # Publishes a GitHub Release either for a manual `git push` of a
+  # `vX.Y.Z` tag, or automatically for every plain push to main (i.e.
+  # every merged PR) - the latter is what makes "merge to main ->
+  # released" happen without a human ever running `git tag`/`git push`
+  # --tags by hand. Both cases reuse the exact same build job artifact;
+  # the `tag_name` input is always taken from that job's own computed
+  # `version` output (rather than defaulting to `github.ref_name`, which
+  # for a main push would literally be the string "main") so the tag
+  # this creates always matches what the exe embedded (see "Determine
+  # version" above).
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && github.event_name == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -190,6 +226,7 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.build.outputs.version }}
           files: |
             dist/*-installer.exe
             dist/checksums.txt
