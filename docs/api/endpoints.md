@@ -173,6 +173,30 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 }
 ```
 
+### GET /api/v1/activity
+
+System Activity Log向けの直近アクティビティ・キュー状況スナップショット（`requirements/functional.md` §4.15/§5.5）。`jobs`/`jev_decisions`/`kill_switch_events`を集約する読み取り専用API。新規永続テーブルは持たない。
+
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `limit` | integer | フィード件数（既定200、最大500） |
+| `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー） |
+| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch`（省略時は全種別） |
+
+```json
+// Output（抜粋）
+{
+  "queues": [
+    { "queue": "jev-scout", "pending": 3, "running": 1, "failed_recent": 0 }
+  ],
+  "events": [
+    { "type": "jev_trader", "timestamp": "2026-09-29T01:15:00Z", "symbol": "7203", "detail": "direction=LONG confidence=0.74", "latency_ms": 820 },
+    { "type": "kill_switch", "timestamp": "2026-09-29T01:10:00Z", "detail": "reason=daily_loss_limit" }
+  ],
+  "as_of": "2026-09-29T01:15:03Z"
+}
+```
+
 ### POST /api/v1/system/pause / resume / kill
 
 アクションルート（`/system/...`）のJSON版。外部監視ツール・スクリプトからの操作用に提供する（HTMX UIは同機能をアクションルート経由で呼ぶ）。
@@ -195,6 +219,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 | POST | `/api/v1/system/resume` | 再開 |
 | POST | `/api/v1/system/kill` | Kill Switch発動 |
 | GET | `/api/v1/openapi.json` | OpenAPI 3.1スペック（Huma自動生成） |
+| GET | `/api/v1/activity` | System Activity Log向けキュー状況・直近アクティビティ |
 
 ## 6. WebSocket
 
@@ -203,6 +228,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 | `/ws/scanner` | Scanner Dashboardのライブ更新（`pitha-scanner-table`） | `{"type":"scanner_update","items":[...]}` |
 | `/ws/symbols/{symbol}` | Symbol Detailのライブ更新（`pitha-price-chart`, Jev判定パネル） | `{"type":"tick","price":2831.5,...}` / `{"type":"jev_update","direction":"LONG",...}` |
 | `/ws/system` | Kill Switch発動等のシステムイベント通知（ヘッダーバッジ用、OOBの代替としてLit非経由でも利用可） | `{"type":"kill_switch","reason":"daily_loss_limit"}` |
+| `/ws/activity` | System Activity Logのライブ更新（`pitha-activity-feed`） | `{"type":"job_update","queue":"jev-scout","pending":2,"running":1}` / `{"type":"activity_event","event":{"type":"jev_scout","timestamp":"...","symbol":"7203"}}` |
 
 WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（自動再接続、指数バックオフ）を必ず経由する。
 
@@ -219,3 +245,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-28 | §3 `/performance` にWalk Forwardバックテスト実行クエリを追記 | #53 バックテスト実行導線 |
 | 1.2 | 2026-09-29 | §4に`/system/update-status`・`/system/update-panel`・`/system/update-check`を追加 | issue #76実装 |
+| 1.3 | 2026-09-29 | §5 `/api/v1/activity`・§6 `/ws/activity`を追加（System Activity Log画面向け、`requirements/functional.md` §4.15） | 実行中処理を可視化するログ画面の追加要望 |
