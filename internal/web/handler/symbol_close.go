@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
@@ -25,7 +24,7 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	ctx := c.Request.Context()
 	position, err := h.provider.GetPosition(ctx, id)
 	if err != nil {
-		if errors.Is(err, repository.ErrPositionNotFound) {
+		if errors.Is(err, domain.ErrPositionNotFound) {
 			c.Status(http.StatusNotFound)
 			return
 		}

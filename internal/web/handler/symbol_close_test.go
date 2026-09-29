@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
@@ -68,7 +67,7 @@ func TestSymbolHandler_ClosePosition_AlreadyClosedReturns409(t *testing.T) {
 
 func TestSymbolHandler_ClosePosition_NotFoundReturns404(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	provider := &fakeSymbolProvider{positionErr: repository.ErrPositionNotFound}
+	provider := &fakeSymbolProvider{positionErr: domain.ErrPositionNotFound}
 	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
 	router := gin.New()
 	router.POST("/positions/:id/close", h.ClosePosition)

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 )
 
@@ -67,7 +66,7 @@ func (StaticSymbolProvider) RecentDecisions(context.Context, string, int) ([]dom
 }
 
 func (StaticSymbolProvider) GetPosition(context.Context, int64) (domain.Position, error) {
-	return domain.Position{}, repository.ErrPositionNotFound
+	return domain.Position{}, domain.ErrPositionNotFound
 }
 
 func (StaticSymbolProvider) ListPositions(context.Context, int) ([]domain.Position, error) {
@@ -75,7 +74,7 @@ func (StaticSymbolProvider) ListPositions(context.Context, int) ([]domain.Positi
 }
 
 func (StaticSymbolProvider) Close(context.Context, int64, string, float64, time.Time) (domain.Position, error) {
-	return domain.Position{}, repository.ErrPositionNotFound
+	return domain.Position{}, domain.ErrPositionNotFound
 }
 
 func (StaticSymbolProvider) ListOrders(context.Context, string, int) ([]domain.PaperOrder, error) {

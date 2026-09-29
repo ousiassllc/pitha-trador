@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
@@ -86,7 +85,7 @@ func TestStaticSymbolProvider_DefaultsAreEmpty(t *testing.T) {
 	if orders, err := p.ListOrders(ctx, "", 10); err != nil || len(orders) != 0 {
 		t.Fatalf("ListOrders = %+v, %v, want empty/nil error", orders, err)
 	}
-	if _, err := p.GetPosition(ctx, 1); !errors.Is(err, repository.ErrPositionNotFound) {
+	if _, err := p.GetPosition(ctx, 1); !errors.Is(err, domain.ErrPositionNotFound) {
 		t.Fatalf("GetPosition error = %v, want ErrPositionNotFound", err)
 	}
 }

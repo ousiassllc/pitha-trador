@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
@@ -35,13 +34,13 @@ func (f fakeSymbolProvider) RecentDecisions(context.Context, string, int) ([]dom
 	return nil, nil
 }
 func (f fakeSymbolProvider) GetPosition(context.Context, int64) (domain.Position, error) {
-	return domain.Position{}, repository.ErrPositionNotFound
+	return domain.Position{}, domain.ErrPositionNotFound
 }
 func (f fakeSymbolProvider) ListPositions(context.Context, int) ([]domain.Position, error) {
 	return f.positions, nil
 }
 func (f fakeSymbolProvider) Close(context.Context, int64, string, float64, time.Time) (domain.Position, error) {
-	return domain.Position{}, repository.ErrPositionNotFound
+	return domain.Position{}, domain.ErrPositionNotFound
 }
 func (f fakeSymbolProvider) ListOrders(context.Context, string, int) ([]domain.PaperOrder, error) {
 	return nil, nil

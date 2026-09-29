@@ -115,7 +115,7 @@ func (e *Engine) State(ctx context.Context, symbol string) (SymbolState, error) 
 	switch {
 	case err == nil:
 		state.Position = &position
-	case errors.Is(err, repository.ErrPositionNotFound):
+	case errors.Is(err, domain.ErrPositionNotFound):
 		// no open position: state.Position stays nil
 	default:
 		return SymbolState{}, fmt.Errorf("execution: open position for %q: %w", symbol, err)

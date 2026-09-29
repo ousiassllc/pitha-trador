@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 )
 
 // pendingOrderScanLimit bounds how many of an instrument's most recent
@@ -49,7 +48,7 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	result := SnapshotResult{Filled: filled}
 
 	position, err := e.positions.GetOpenByInstrument(ctx, snap.InstrumentID)
-	if errors.Is(err, repository.ErrPositionNotFound) {
+	if errors.Is(err, domain.ErrPositionNotFound) {
 		return result, nil
 	}
 	if err != nil {

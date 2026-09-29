@@ -104,7 +104,7 @@ func TestPositionRepository_GetOpenByInstrument_NotFound(t *testing.T) {
 	positions, _, instrumentID := openTestPositionRepo(t)
 
 	_, err := positions.GetOpenByInstrument(context.Background(), instrumentID)
-	if !errors.Is(err, repository.ErrPositionNotFound) {
+	if !errors.Is(err, domain.ErrPositionNotFound) {
 		t.Fatalf("GetOpenByInstrument(no open position) error = %v, want ErrPositionNotFound", err)
 	}
 }
@@ -175,7 +175,7 @@ func TestPositionRepository_Close_SetsExitFieldsAndUnsetsOpenState(t *testing.T)
 	// Closing frees the instrument to open a new position
 	// (positions_open_instrument_uq only rejects a second concurrently
 	// open row).
-	if _, err := positions.GetOpenByInstrument(ctx, instrumentID); !errors.Is(err, repository.ErrPositionNotFound) {
+	if _, err := positions.GetOpenByInstrument(ctx, instrumentID); !errors.Is(err, domain.ErrPositionNotFound) {
 		t.Fatalf("GetOpenByInstrument() after Close error = %v, want ErrPositionNotFound", err)
 	}
 }
@@ -184,7 +184,7 @@ func TestPositionRepository_Close_NotFound(t *testing.T) {
 	positions, _, _ := openTestPositionRepo(t)
 
 	_, err := positions.Close(context.Background(), 999999, 1, 100, 0, domain.ExitReasonManual, time.Now())
-	if !errors.Is(err, repository.ErrPositionNotFound) {
+	if !errors.Is(err, domain.ErrPositionNotFound) {
 		t.Fatalf("Close(unknown) error = %v, want ErrPositionNotFound", err)
 	}
 }

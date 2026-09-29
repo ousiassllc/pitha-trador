@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 )
 
 // EntryRequest is Enter's input: a Risk-Engine-approved trade signal
@@ -63,7 +62,7 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 
 	if _, err := e.positions.GetOpenByInstrument(ctx, req.Signal.InstrumentID); err == nil {
 		return EntryResult{}, ErrPositionAlreadyOpen
-	} else if !errors.Is(err, repository.ErrPositionNotFound) {
+	} else if !errors.Is(err, domain.ErrPositionNotFound) {
 		return EntryResult{}, fmt.Errorf("execution: check open position for instrument %d: %w", req.Signal.InstrumentID, err)
 	}
 
