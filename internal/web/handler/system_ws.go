@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"time"
 
 	"github.com/coder/websocket"
@@ -31,36 +32,22 @@ const defaultManualKillReason = "manual"
 // reflect that state even when the transition did not originate from its
 // own POST call.
 func (h *SystemHandler) WebSocket(c *gin.Context) {
-	conn, err := websocket.Accept(c.Writer, c.Request, nil)
-	if err != nil {
-		return
-	}
-	defer func() { _ = conn.CloseNow() }()
-
-	ctx := c.Request.Context()
 	wasKilled := false
-
-	for {
+	pollWebSocket(c, func() time.Duration { return h.pollInterval }, func(ctx context.Context, conn *websocket.Conn) error {
 		state, events, err := h.engine.State(ctx)
 		if err != nil {
-			return
+			return err
 		}
 
 		if state == domain.SystemStateKilled && !wasKilled {
 			msg := systemKillSwitchMessage{Type: "kill_switch", Reason: activeUnresolvedReason(events)}
 			if err := writeJSON(ctx, conn, msg); err != nil {
-				return
+				return err
 			}
 		}
 		wasKilled = state == domain.SystemStateKilled
-
-		select {
-		case <-ctx.Done():
-			_ = conn.Close(websocket.StatusNormalClosure, "")
-			return
-		case <-time.After(h.pollInterval):
-		}
-	}
+		return nil
+	})
 }
 
 // activeUnresolvedReason returns the first still-unresolved event's
