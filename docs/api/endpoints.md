@@ -8,11 +8,16 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
   - `cmd/server`の既定待受は`127.0.0.1:48080`。`PITHA_SERVER_ADDR`でloopback以外（`:48080`・`0.0.0.0`・LAN IP等）を指定すると起動を拒否する。意図的に公開する場合のみ`PITHA_SERVER_ALLOW_NON_LOOPBACK=1`を併用する（issue #91/#99）
 - 単一ユーザー・単一デスクトップアプリのため、外部IdP連携やユーザーログイン画面は持たない
 - 起動時にWailsプロセスがランダムなローカルセッショントークンを生成し、Cookie（`HttpOnly`, `SameSite=Strict`）としてWebViewに設定する。全ての状態変更リクエスト（アクションルート・Huma APIのPOST/PUT/PATCH/DELETE）はこのセッションCookie必須とする
-  - 実装（`internal/web/middleware/session.go`）: Ginエンジン全体（`/static`を除く）に最初のミドルウェアとして適用し、Setup Guardより前に評価する。プロセス起動ごとにセッショントークンとCSRFトークンを別々に乱数生成し、Cookie（名前`pitha_session`）は有効なCookieを持たない安全なリクエスト（GET/HEAD/OPTIONS、WebSocketアップグレードを除く）の応答で発行する
+  - 実装（`internal/web/middleware/session.go`）: `RequestLog`・`Recovery`・（後述の）Host検証の**後**、Setup Guardより**前**にGinエンジン全体（`/static`を除く）へ適用する。適用順は`internal/router/router_middleware.go`のとおり `RequestLog → Recovery → HostGuard（許可リスト設定時） → Session → Heartbeat（recorderがあれば） → Setup Guard（secrets storeがあれば） → SystemState`（RequestLog/RecoveryをSessionより前に置くのは、Sessionの403拒否もアクセスログに残し、panicを500として回復するため。issue #109/#122）。プロセス起動ごとにセッショントークンとCSRFトークンを別々に乱数生成し、Cookie（名前`pitha_session`）は有効なCookieを持たない安全なリクエスト（GET/HEAD/OPTIONS、WebSocketアップグレードを除く）の応答で発行する
   - POST/PUT/PATCH/DELETE等の状態変更メソッドは、有効なセッションCookieと、CSRFトークンに一致する`X-CSRF-Token`ヘッダの両方が無ければ403を返す。WebSocketアップグレード（`/ws/...`）は有効なセッションCookieが無ければ403を返す
+  - **CSRF拒否の識別（issue #138）**: トークンは起動ごとに再生成されるため、アプリ再起動前に開いたままのページは旧Cookie/旧CSRFトークンを持ち続ける。Cookie無効・CSRFトークン不一致による403には`X-CSRF-Reject: stale`ヘッダを付け、`lib/api.ts`は`StaleSessionError`（Kill Switchパネル等に表示）、`pitha-htmx-errors`は同内容のトーストで「ページを再読み込みしてください」と案内する。再読み込みで新しいCookieとトークンが配布される
+  - **`_csrf`フォームフィールド（issue #142）**: ヘッダを付けられない素のHTMLフォーム送信（JS無効・htmx読込失敗時の`SecretFieldRow`フォールバック）のため、`Content-Type: application/x-www-form-urlencoded`のボディの隠しフィールド`_csrf`も`X-CSRF-Token`ヘッダの代わりに受け付ける（ヘッダがあればヘッダを優先）。セッションCookieは引き続き必須
+- **Host/Origin検証（DNS rebinding対策、issue #136）**: `internal/web/middleware/host_guard.go`の`HostGuard`をSessionの前段に置き、Hostヘッダ（ポート・大文字小文字・末尾ドット・IPv6括弧は無視）が許可リストに無いリクエストは`/static`を含め全て403（Cookie・CSRFトークンも発行しない）。状態変更リクエストとWebSocketアップグレードは、`Origin`ヘッダがあれば同じ許可リストに含まれるホストであることも必須（`null`や外部ホストは403、Originなしの非ブラウザクライアントは通す）。許可リストは`router.WithAllowedHosts`で与える
+  - `cmd/server`: `localhost`/`127.0.0.1`/`::1`。`PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ、`PITHA_SERVER_ADDR`のバインドホスト（ワイルドカード以外）と`PITHA_SERVER_ALLOWED_HOSTS`（カンマ区切り）を追加する
+  - `cmd/desktop`: Wails AssetServerのHost（`wails.localhost`（Windows）・`wails`（macOS/Linuxの`wails://wails/`））
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
-  - `layout.Shell`/`SetupShell`が`<meta name="csrf-token">`を出力し、`<body hx-headers>`でHTMX全リクエストに`X-CSRF-Token`を付与する。Litコンポーネントは`lib/api.ts`が同metaから読み取って送信する
-- 実売買（Phase 7）移行時は、Kill Switch解除・発注確定操作にOS認証の追加確認を導入する（`requirements/non-functional.md` §4）
+  - `layout.Shell`/`SetupShell`が`<meta name="csrf-token">`を出力し、`<body hx-headers>`でHTMX全リクエストに`X-CSRF-Token`を付与する。Litコンポーネントは`lib/api.ts`が同metaから読み取って送信する。`SecretFieldRow`のフォームは上記フォールバック用に隠しフィールド`_csrf`も持つ
+- 実売買（Phase 7）へ移行しても、Kill Switch解除・発注確定操作に人手の追加認証は要求しない（完全自動運用。`requirements/non-functional.md` §4、FR-RISK-4）。実装（`internal/web/handler/system.go`）にも追加認証は無く、`pitha-kill-switch-panel`が確認ダイアログ（`window.confirm`）を出すのはKill操作のみで、Resume（Killedからの手動解除を含む）は確認なしで`POST /api/v1/system/resume`を呼ぶ
 - **Setup Guard**: 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）のいずれかが`secrets`テーブルに未設定の間は、`GET /setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエスト（ページ・アクション・`/api/v1`・WebSocket含む）を`/setup`へ誘導する。誘導方法はリクエスト種別で応答を分ける（ページ遷移: `/setup`へ302、HTMX（`HX-Request: true`）: `204`＋`HX-Redirect: /setup`、`/api/v1`: `503` JSON `{"setup_required":true,"setup_url":"/setup"}`、WebSocketアップグレード: `403`。302をスクリプト系リクエストが追従して`/setup`のHTML全体を受け取らないため、issue #140）。判定はリクエストごとに行うため、3キーが揃った次のリクエストから解除される（issue #80）
 
 ## 2. ルーティング概要
@@ -59,241 +64,12 @@ stateDiagram-v2
     Paused --> Running: POST /system/resume
     Running --> Killed: POST /system/kill\nまたはRisk Engine自動発動
     Paused --> Killed: POST /system/kill\nまたはRisk Engine自動発動
-    Killed --> Running: 手動解除（要確認operation, Phase 7以降追加認証）
+    Killed --> Running: POST /system/resume\n（手動解除。追加認証・確認ゲートなし、FR-RISK-4）
 ```
 
 ## 5. API ルート（Huma, `/api/v1`）
 
-Huma が OpenAPI 3.1 スペックを `/api/v1/openapi.json` に自動生成する。以下は主要エンドポイント。
-
-### GET /api/v1/scanner
-
-Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。Scanner Dashboardの初期ロード・`pitha-scanner-table`のフォールバック取得に使用（ライブ更新は`/ws/scanner`）。
-
-```json
-// Output（抜粋）
-{
-  "items": [
-    {
-      "symbol": "7203",
-      "price": 2831.5,
-      "return_1m": 0.12,
-      "return_5m": 0.42,
-      "volume_ratio_5m": 3.4,
-      "price_vs_vwap_bps": 38,
-      "spread_bps": 7,
-      "jev_direction": "LONG",
-      "jev_confidence": 0.74,
-      "entry_quality": "strong",
-      "current_position": null
-    }
-  ],
-  "as_of": "2026-09-26T10:15:00+09:00"
-}
-```
-
-### GET /api/v1/symbols/{symbol}
-
-Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
-
-```json
-// Output（抜粋）
-{
-  "symbol": "7203",
-  "price": 2831.5,
-  "vwap": 2823.0,
-  "jev": {
-    "direction": "LONG",
-    "confidence": 0.74,
-    "regime": "BREAKOUT",
-    "entry_quality": "strong",
-    "toxic_flow": 0.18,
-    "liquidity_stressed": 0.09
-  },
-  "risk": {
-    "allowed_position_pct": 1.4,
-    "stop_loss_pct": 0.6,
-    "take_profit_pct": 1.2
-  },
-  "current_position": null
-}
-```
-
-### GET /api/v1/symbols/{symbol}/candles
-
-`pitha-price-chart`（lightweight-charts）用ローソク足＋VWAP＋出来高系列。
-
-| クエリ | 型 | 説明 |
-|-------|-----|------|
-| `from` | string(RFC3339) | 取得開始時刻（省略時は`to`の6時間前） |
-| `to` | string(RFC3339) | 取得終了時刻（省略時は現在） |
-| `interval` | string | `1m` 固定（MVP。`1m`以外は422） |
-
-パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、`/symbols/{symbol}`系ルート共通）。`from`/`to`がRFC3339でない場合、`symbol`/`interval`が範囲外の場合はいずれも422。
-
-### GET /api/v1/symbols/{symbol}/decisions
-
-Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）。新しい順。未登録銘柄は404。
-
-| クエリ | 型 | 説明 |
-|-------|-----|------|
-| `limit` | integer | 件数上限（既定100） |
-
-出力は`{"symbol": "7203", "items": [...]}`。各itemは`id`/`symbol`/`timestamp`（RFC3339）/`decision_type`（`scout`/`trader`）/`direction`/`confidence`/`regime`/`entry_quality`/`toxic_flow`/`liquidity_stressed`/`continuation_probability`/`question_version`/`model_id`/`latency_ms`。
-
-`direction`〜`continuation_probability`は`decision_type`が`trader`の行のみ値を持ち、`scout`行では`null`。
-
-### GET /api/v1/signals / GET /api/v1/signals/{symbol}
-
-`trade_signals`の一覧・銘柄別履歴（`risk_passed`, `reject_reason`含む）。新しい順。`/signals/{symbol}`の未登録銘柄は404。クエリ `limit`（既定100）。
-
-```json
-// Output（抜粋）
-{
-  "items": [
-    {
-      "id": 3, "symbol": "7203", "timestamp": "2026-09-27T09:31:00Z",
-      "direction": "LONG", "score": 0.74, "entry_price_reference": 2831.5,
-      "policy_version": "v1", "risk_passed": false, "reject_reason": "spread_too_wide",
-      "jev_decision_id": 2
-    }
-  ]
-}
-```
-
-### GET /api/v1/positions
-
-現在保有中および直近クローズ済みポジション一覧。
-
-| クエリ | 型 | 説明 |
-|-------|-----|------|
-| `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
-
-### GET /api/v1/orders
-
-`paper_orders`一覧（ステータスフィルタ `?status=` 対応）。
-
-| クエリ | 型 | 説明 |
-|-------|-----|------|
-| `status` | string | `PENDING`/`FILLED`/`CANCELLED`/`REJECTED`でフィルタ（省略時は全件。それ以外は422） |
-| `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
-
-### GET /api/v1/performance
-
-全クローズ済みポジション（`positions.closed_at`あり）の実績集計。`total_pnl`/`daily_pnl`は`realized_pnl`の合計（`daily_pnl`はJST当日0時以降にクローズしたもの）。`win_rate`/`expectancy`/`max_drawdown_pct`はバックテスト（`internal/service/backtest.Aggregate`）と同じ定義で、各ポジションのエントリー約定額に対する損益率（%）から算出する。`profit_factor`は総利益÷総損失（損失なしは`null`）、`sharpe_ref`/`sortino_ref`はトレードごとリターンの平均÷標準偏差／下方偏差（年率換算なし、算出不能時は`null`）、`signal_count`はLONG/SHORTの`trade_signals`件数。
-
-```json
-// Output（抜粋）
-{
-  "total_pnl": 128340,
-  "daily_pnl": 15200,
-  "win_rate": 0.57,
-  "profit_factor": 1.82,
-  "expectancy": 0.34,
-  "max_drawdown_pct": 4.1,
-  "average_hold_time_minutes": 14.2,
-  "sharpe_ref": 1.1,
-  "sortino_ref": 1.6,
-  "trade_count": 12,
-  "signal_count": 342
-}
-```
-
-### GET /api/v1/calibration
-
-```json
-// Output（抜粋）
-{
-  "buckets": [
-    { "range": "0.50-0.60", "direction_accuracy": 0.51, "avg_future_return_pct": -0.05 },
-    { "range": "0.60-0.70", "direction_accuracy": 0.55, "avg_future_return_pct": 0.02 },
-    { "range": "0.70-0.80", "direction_accuracy": 0.63, "avg_future_return_pct": 0.11 },
-    { "range": "0.80-0.90", "direction_accuracy": 0.71, "avg_future_return_pct": 0.24 },
-    { "range": "0.90-1.00", "direction_accuracy": 0.78, "avg_future_return_pct": 0.39 }
-  ],
-  "brier_score": 0.19,
-  "log_loss": 0.52,
-  "expected_calibration_error": 0.06
-}
-```
-
-### GET /api/v1/policy-proposals
-
-Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読み取り専用API。`policy_proposals`の提案・レビュー・適用・ロールバック履歴を返す。UIページは持たず、外部監視・手動確認用に提供する（実際の外部AI API呼び出しの結果を追跡できるようにするため、`requirements/functional.md` FR-SELFIMPROVE-7〜9）。
-
-| クエリ | 型 | 説明 |
-|-------|-----|------|
-| `status` | string | `pending`/`approved`/`rejected`/`applied`/`rolled_back`でフィルタ（省略時は全件） |
-| `limit` | integer | 件数上限（既定50、最大200） |
-
-```json
-// Output（抜粋）
-{
-  "items": [
-    {
-      "id": 42,
-      "proposed_at": "2026-09-28T15:00:00Z",
-      "proposed_by": "sol",
-      "status": "applied",
-      "proposed_changes": { "policy.long.min_confidence": 0.68 },
-      "backtest_result": { "expectancy_delta_pct": 2.1, "max_drawdown_delta_pct": -3.4 },
-      "reviewed_by": "opus",
-      "review": { "verdict": "approve", "reason": "..." },
-      "applied_policy_version": "v12"
-    }
-  ]
-}
-```
-
-### GET /api/v1/activity
-
-System Activity Log向けの直近アクティビティ・キュー状況スナップショット（`requirements/functional.md` §4.15/§5.5）。`jobs`/`jev_decisions`/`kill_switch_events`を集約する読み取り専用API。新規永続テーブルは持たない。
-
-| クエリ | 型 | 説明 |
-|-------|-----|------|
-| `limit` | integer | フィード件数（既定200、1〜500。範囲外は422） |
-| `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー）。`job`イベントのみが対象で、指定時は`jev_scout`/`jev_trader`/`kill_switch`イベントは含まれない |
-| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch`（省略時は全種別） |
-
-```json
-// Output（抜粋）
-{
-  "queues": [
-    { "queue": "jev-scout", "pending": 3, "running": 1, "failed_recent": 0 }
-  ],
-  "events": [
-    { "type": "jev_trader", "timestamp": "2026-09-29T01:15:00Z", "symbol": "7203", "detail": "direction=LONG confidence=0.74", "latency_ms": 820 },
-    { "type": "kill_switch", "timestamp": "2026-09-29T01:10:00Z", "detail": "reason=daily_loss_limit" }
-  ],
-  "as_of": "2026-09-29T01:15:03Z"
-}
-```
-
-### GET /api/v1/system/status / POST /api/v1/system/pause / resume / kill
-
-Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kill-switch-panel`が再接続・自動発動通知後の再同期に`GET`を、`window.confirm`確認後の操作に`POST`を呼ぶ（外部スクリプトからも利用可）。HTMX用の同名アクションルートは持たない。どれも`{"state":"running","can_pause":true,"can_resume":false,"can_kill":true}`の形式で（`POST`は更新後の）状態を返す。`state`は`running`/`paused`/`killed`、`can_*`は現在の`state`から各`POST`が有効な遷移か。
-
-### エンドポイント一覧表
-
-| メソッド | パス | 概要 |
-|---------|------|------|
-| GET | `/api/v1/scanner` | 候補銘柄一覧 |
-| GET | `/api/v1/symbols/{symbol}` | 銘柄詳細 |
-| GET | `/api/v1/symbols/{symbol}/candles` | チャート用系列データ |
-| GET | `/api/v1/symbols/{symbol}/decisions` | Jev判断履歴 |
-| GET | `/api/v1/signals` | トレードシグナル一覧 |
-| GET | `/api/v1/signals/{symbol}` | 銘柄別シグナル履歴 |
-| GET | `/api/v1/positions` | ポジション一覧 |
-| GET | `/api/v1/orders` | 注文一覧 |
-| GET | `/api/v1/performance` | 実績集計 |
-| GET | `/api/v1/calibration` | Calibrationバケット集計 |
-| GET | `/api/v1/policy-proposals` | Sol/Opus自己改善ループの提案・レビュー履歴（監査用） |
-| GET | `/api/v1/system/status` | システム状態と許可される操作の取得（読み取り専用） |
-| POST | `/api/v1/system/pause` | 一時停止 |
-| POST | `/api/v1/system/resume` | 再開 |
-| POST | `/api/v1/system/kill` | Kill Switch発動 |
-| GET | `/api/v1/openapi.json` | OpenAPI 3.1スペック（Huma自動生成） |
-| GET | `/api/v1/activity` | System Activity Log向けキュー状況・直近アクティビティ |
+全文は `docs/api/endpoints/huma-api.md`（§5、節番号・内容は分割前と同一）に分割した。
 
 ## 6. WebSocket
 
@@ -328,3 +104,5 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.9 | 2026-09-29 | §5 `/symbols/{symbol}/decisions`・`/signals`・`/signals/{symbol}`・`/performance`の出力スキーマ・クエリ・集計定義を追記（実装済み） | issue #92実装 |
 | 1.10 | 2026-09-29 | §7 アクションルートのエラー応答を`atoms.Toast`フラグメント＋4xx/5xxステータスに統一、`/settings/:key`の非HTMX成功応答を303リダイレクトと明記 | issue #110/#121実装 |
 | 1.11 | 2026-09-29 | §4から未使用の`POST /system/pause\|resume\|kill`を削除。§5に`GET /api/v1/system/status`、アクセスログ（slog）とpanic回復（500）を`internal/web/middleware`に実装。§1 Setup Guardの応答をリクエスト種別別（302/HX-Redirect/503 JSON/403）に変更、§7にSSRページ失敗時の`ErrorPage`を追記 | issue #108/#109/#122/#124/#140/#143 |
+| 1.12 | 2026-09-29 | §1のSessionミドルウェア適用順を実装どおり（RequestLog→Recovery→HostGuard→Session→Heartbeat→Setup Guard→SystemState）に訂正。Phase 7の追加認証記述（§1・状態遷移図）を非機能要件§4/FR-RISK-4に合わせて削除。Host/Origin検証（DNS rebinding対策）、CSRF拒否の`X-CSRF-Reject: stale`識別、`_csrf`フォームフィールドを追記 | issue #136/#138/#142/#149 |
+| 1.13 | 2026-09-29 | §5を`docs/api/endpoints/huma-api.md`へ分割（300行/ファイル制限）。節番号・内容は変更なし | issue #136/#149 |

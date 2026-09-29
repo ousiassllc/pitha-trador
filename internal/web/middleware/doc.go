@@ -1,4 +1,5 @@
-// Package middleware contains Gin middleware (CSRF protection, structured
+// Package middleware contains Gin middleware (Host/Origin validation against
+// DNS rebinding (host_guard.go), session cookie + CSRF protection, structured
 // request logging, panic recovery, operator heartbeat recording, ...) shared
 // across the routes registered by internal/router.
 //

@@ -16,6 +16,11 @@ func useMiddleware(engine *gin.Engine, o options) handler.SecretsStore {
 	// First, so Recovery's logged 500 is what RequestLog records and even
 	// Session's rejections are logged (issues #109/#122).
 	engine.Use(middleware.RequestLog(), middleware.Recovery())
+	// Before Session, so a DNS-rebinding request is refused before it can
+	// receive the session cookie or a CSRF token (issue #136).
+	if o.allowedHosts != nil {
+		engine.Use(middleware.HostGuard(o.allowedHosts))
+	}
 	// Registered next, before SetupGuard, so it covers every route
 	// (`/static` excepted inside): the session cookie + CSRF token are
 	// required for all state-changing methods and WebSocket upgrades, and

@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -157,5 +158,59 @@ func TestSession_TokensDifferPerInstance(t *testing.T) {
 	_, csrf := login(t, engine)
 	if rec := do(engine, request(http.MethodPost, "/act", a, csrf)); rec.Code != http.StatusForbidden {
 		t.Fatalf("cookie from another Session: status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+// Issue #138: after an app restart the still-open page holds the previous
+// process's tokens; its rejection must be recognisable as "reload the page".
+func TestSession_TokenRejectionsCarryStaleMarker(t *testing.T) {
+	engine := sessionEngine(t)
+	cookie, csrf := login(t, engine)
+	oldProcess, _ := login(t, sessionEngine(t))
+
+	for name, req := range map[string]*http.Request{
+		"stale cookie":     request(http.MethodPost, "/act", oldProcess, csrf),
+		"stale csrf":       request(http.MethodPost, "/act", cookie, "old-token"),
+		"missing csrf":     request(http.MethodDelete, "/act", cookie, ""),
+		"no cookie at all": request(http.MethodPost, "/act", nil, csrf),
+	} {
+		rec := do(engine, req)
+		if rec.Code != http.StatusForbidden || rec.Header().Get(middleware.CSRFRejectHeader) != middleware.CSRFRejectStale {
+			t.Errorf("%s: status=%d %s=%q, want 403 and %q", name, rec.Code, middleware.CSRFRejectHeader, rec.Header().Get(middleware.CSRFRejectHeader), middleware.CSRFRejectStale)
+		}
+	}
+}
+
+// Issue #142: a plain HTML form (no JS, no htmx) cannot set the CSRF
+// header and sends the token as a hidden `_csrf` field instead.
+func TestSession_UrlencodedFormMayCarryCSRFTokenInFormField(t *testing.T) {
+	engine := sessionEngine(t)
+	cookie, csrf := login(t, engine)
+
+	post := func(c *http.Cookie, body, contentType string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/act", strings.NewReader(body))
+		req.Header.Set("Content-Type", contentType)
+		if c != nil {
+			req.AddCookie(c)
+		}
+		return do(engine, req)
+	}
+	form := "value=x&" + middleware.CSRFFormField + "="
+	const urlencoded = "application/x-www-form-urlencoded"
+
+	if rec := post(cookie, form+csrf, urlencoded); rec.Code != http.StatusOK {
+		t.Errorf("form with valid %s: status = %d, want 200", middleware.CSRFFormField, rec.Code)
+	}
+	if rec := post(cookie, form+"wrong", urlencoded); rec.Code != http.StatusForbidden {
+		t.Errorf("form with wrong %s: status = %d, want 403", middleware.CSRFFormField, rec.Code)
+	}
+	if rec := post(cookie, "value=x", urlencoded); rec.Code != http.StatusForbidden {
+		t.Errorf("form without %s: status = %d, want 403", middleware.CSRFFormField, rec.Code)
+	}
+	if rec := post(nil, form+csrf, urlencoded); rec.Code != http.StatusForbidden {
+		t.Errorf("form with token but no cookie: status = %d, want 403", rec.Code)
+	}
+	if rec := post(cookie, form+csrf, "text/plain"); rec.Code != http.StatusForbidden {
+		t.Errorf("non-form body carrying %s: status = %d, want 403", middleware.CSRFFormField, rec.Code)
 	}
 }
