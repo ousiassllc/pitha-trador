@@ -73,7 +73,7 @@ func (h *UpdateHandler) Panel(c *gin.Context) {
 // Status) rather than as an HTTP error, so HTMX still swaps the fragment.
 func (h *UpdateHandler) Check(c *gin.Context) {
 	if h.controller == nil {
-		c.Status(http.StatusNotFound)
+		respondActionError(c, http.StatusNotFound, "アップデート機能は利用できません。")
 		return
 	}
 	err := h.controller.CheckForUpdate(c.Request.Context())

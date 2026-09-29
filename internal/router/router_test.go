@@ -156,6 +156,20 @@ func TestNew_StaticRouteServesVendoredAssets(t *testing.T) {
 	}
 }
 
+// layout.Shell loads the HTMX error-toast module (issue #110); a missing
+// esbuild entry would 404 it silently in the browser.
+func TestNew_StaticRouteServesHTMXErrorsBundle(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/dist/js/htmx-errors/pitha-htmx-errors.js", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
 func TestNew_StaticRouteServesFromDiskWhenEnvStaticDirIsSet(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	dir := t.TempDir()

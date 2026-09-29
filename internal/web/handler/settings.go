@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
 
@@ -133,19 +134,19 @@ func (h *SettingsHandler) SetupPage(c *gin.Context) {
 func (h *SettingsHandler) Save(c *gin.Context) {
 	key := c.Param("key")
 	if !config.IsAllowedSecretKey(key) {
-		c.String(http.StatusBadRequest, "unknown settings key")
+		respondActionError(c, http.StatusBadRequest, "不明な設定キーです。")
 		return
 	}
 	value := c.PostForm("value")
 	if value == "" {
-		c.String(http.StatusBadRequest, "value is required (use DELETE to remove a stored value)")
+		respondActionError(c, http.StatusBadRequest, "値を入力してください（保存済みの値を消す場合は削除を使ってください）。")
 		return
 	}
 
 	ctx := c.Request.Context()
 	if err := h.store.Set(ctx, key, value); err != nil {
 		slog.Error("settings: save secret", "key", key, "error", err)
-		c.Status(http.StatusInternalServerError)
+		respondActionError(c, http.StatusInternalServerError, "保存に失敗しました。")
 		return
 	}
 	h.renderRow(c, key, "保存しました。反映にはアプリの再起動が必要です。")
@@ -158,13 +159,13 @@ func (h *SettingsHandler) Save(c *gin.Context) {
 func (h *SettingsHandler) Delete(c *gin.Context) {
 	key := c.Param("key")
 	if !config.IsAllowedSecretKey(key) {
-		c.String(http.StatusBadRequest, "unknown settings key")
+		respondActionError(c, http.StatusBadRequest, "不明な設定キーです。")
 		return
 	}
 
 	if err := h.store.Delete(c.Request.Context(), key); err != nil {
 		slog.Error("settings: delete secret", "key", key, "error", err)
-		c.Status(http.StatusInternalServerError)
+		respondActionError(c, http.StatusInternalServerError, "削除に失敗しました。")
 		return
 	}
 	h.renderRow(c, key, "削除しました。反映にはアプリの再起動が必要です。")
@@ -186,7 +187,16 @@ func (h *SettingsHandler) Status(c *gin.Context) {
 	_ = organisms.SecretsBanner(missing).Render(c.Request.Context(), c.Writer)
 }
 
+// renderRow answers a successful Save/Delete. An HTMX request gets the
+// refreshed SecretFieldRow fragment; the row form's plain `method="post"`
+// fallback (JS disabled) would otherwise render a bare fragment as the
+// whole page, so it is redirected back to the screen it came from instead
+// (the notice is only shown on the HTMX path).
 func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
+	if c.GetHeader("HX-Request") != "true" {
+		c.Redirect(http.StatusSeeOther, settingsReturnPath(c))
+		return
+	}
 	ctx := c.Request.Context()
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
@@ -234,4 +244,14 @@ func (h *SettingsHandler) unsetKeys(ctx context.Context, keys []string) []string
 		}
 	}
 	return missing
+}
+
+// settingsReturnPath is where a non-HTMX Save/Delete goes back to: `/setup`
+// when the form was submitted from the Setup screen, `/settings` otherwise.
+// Only these two fixed paths are ever returned, never the raw Referer.
+func settingsReturnPath(c *gin.Context) string {
+	if ref, err := url.Parse(c.GetHeader("Referer")); err == nil && ref.Path == "/setup" {
+		return "/setup"
+	}
+	return "/settings"
 }

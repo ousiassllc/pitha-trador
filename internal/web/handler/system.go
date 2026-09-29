@@ -72,7 +72,7 @@ func (h *SystemHandler) SetPollInterval(d time.Duration) { h.pollInterval = d }
 // Pause implements `POST /system/pause`.
 func (h *SystemHandler) Pause(c *gin.Context) {
 	if err := h.engine.Pause(c.Request.Context()); err != nil {
-		c.Status(http.StatusInternalServerError)
+		respondActionError(c, http.StatusInternalServerError, "一時停止に失敗しました。")
 		return
 	}
 	h.renderBadge(c)
@@ -81,7 +81,7 @@ func (h *SystemHandler) Pause(c *gin.Context) {
 // Resume implements `POST /system/resume`.
 func (h *SystemHandler) Resume(c *gin.Context) {
 	if err := h.engine.Resume(c.Request.Context()); err != nil {
-		c.Status(http.StatusInternalServerError)
+		respondActionError(c, http.StatusInternalServerError, "一時停止の解除に失敗しました。")
 		return
 	}
 	h.renderBadge(c)
@@ -90,7 +90,7 @@ func (h *SystemHandler) Resume(c *gin.Context) {
 // Kill implements `POST /system/kill`.
 func (h *SystemHandler) Kill(c *gin.Context) {
 	if err := h.engine.Kill(c.Request.Context()); err != nil {
-		c.Status(http.StatusInternalServerError)
+		respondActionError(c, http.StatusInternalServerError, "Kill Switch の発動に失敗しました。")
 		return
 	}
 	h.renderBadge(c)
@@ -108,7 +108,7 @@ func (h *SystemHandler) Status(c *gin.Context) {
 func (h *SystemHandler) renderBadge(c *gin.Context) {
 	state, _, err := h.engine.State(c.Request.Context())
 	if err != nil {
-		c.Status(http.StatusInternalServerError)
+		respondActionError(c, http.StatusInternalServerError, "システム状態の取得に失敗しました。")
 		return
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")

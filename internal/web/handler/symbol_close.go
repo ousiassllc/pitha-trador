@@ -17,7 +17,7 @@ import (
 func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.Status(http.StatusBadRequest)
+		respondActionError(c, http.StatusBadRequest, "ポジション ID が不正です。")
 		return
 	}
 
@@ -25,14 +25,14 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	position, err := h.provider.GetPosition(ctx, id)
 	if err != nil {
 		if errors.Is(err, domain.ErrPositionNotFound) {
-			c.Status(http.StatusNotFound)
+			respondActionError(c, http.StatusNotFound, "ポジションが見つかりません。")
 			return
 		}
-		c.Status(http.StatusInternalServerError)
+		respondActionError(c, http.StatusInternalServerError, "ポジションの取得に失敗しました。")
 		return
 	}
 	if !position.IsOpen() {
-		c.Status(http.StatusConflict)
+		respondActionError(c, http.StatusConflict, "このポジションは既に決済済みです。")
 		return
 	}
 
@@ -43,7 +43,7 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 
 	closed, err := h.provider.Close(ctx, id, domain.ExitReasonManual, exitPrice, h.now())
 	if err != nil {
-		c.Status(http.StatusInternalServerError)
+		respondActionError(c, http.StatusInternalServerError, "ポジションの決済に失敗しました。")
 		return
 	}
 

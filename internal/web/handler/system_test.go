@@ -136,6 +136,9 @@ func TestSystemHandler_Pause_EngineErrorReturns500(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
+	if !strings.Contains(rec.Body.String(), `data-toast`) {
+		t.Fatalf("body = %q, want an atoms.Toast fragment (issue #110)", rec.Body.String())
+	}
 }
 
 func TestSystemHandler_APIPause_ReturnsCurrentState(t *testing.T) {
