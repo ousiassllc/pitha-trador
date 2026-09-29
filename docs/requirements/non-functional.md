@@ -71,7 +71,7 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 - Signal count（生成シグナル数）
 - Risk拒否件数
 - kabuステーションAPI（Broker）latency / エラー
-- DB latency / エラー
+- DB latency / エラー（エラーはERROR、100ms以上の低速クエリはWARN、それ未満の正常クエリはDEBUG。ワーカーのアイドルポーリングでログが肥大化しないよう、正常クエリはINFOで記録しない）
 
 ### 5.2 即時Slack通知対象
 
