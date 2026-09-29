@@ -19,7 +19,7 @@ func approvedLongSignal(inst domain.Instrument) domain.TradeSignal {
 
 func mustOpenPaperPosition(t *testing.T, svc *Services, inst domain.Instrument, price float64) domain.Position {
 	t.Helper()
-	executor := paperExecutor{engine: svc.Execution}
+	executor := paperExecutor{engine: svc.Execution, sizer: svc.Risk}
 	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: price, Timestamp: time.Now().UTC()}
 	if err := executor.ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
 		t.Fatalf("ExecuteSignal: %v", err)
@@ -31,19 +31,19 @@ func mustOpenPaperPosition(t *testing.T, svc *Services, inst domain.Instrument, 
 	return position
 }
 
-func TestPaperExecutor_OpensOneTradingUnitAndSkipsRepeatEntry(t *testing.T) {
+func TestPaperExecutor_SizesEntryFromRiskLimitsAndSkipsRepeatEntry(t *testing.T) {
 	svc := newTestServices(t, nil)
 	inst := mustCreateInstrument(t, svc, "7203")
 
 	position := mustOpenPaperPosition(t, svc, inst, 2500)
-	if position.Quantity != paperEntryQuantity || position.EntryPrice != 2500 || position.Side != domain.PositionSideLong {
-		t.Fatalf("opened position = %+v, want LONG %d shares at 2500", position, paperEntryQuantity)
+	if position.Quantity != 200 || position.EntryPrice != 2500 || position.Side != domain.PositionSideLong {
+		t.Fatalf("opened position = %+v, want LONG %d shares at 2500", position, 200)
 	}
 
 	// A second approved signal while the position is still open is not an
 	// error for the jev-trader job, and must not open a second position.
 	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 2510, Timestamp: time.Now().UTC()}
-	if err := (paperExecutor{engine: svc.Execution}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
+	if err := (paperExecutor{engine: svc.Execution, sizer: svc.Risk}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
 		t.Fatalf("second ExecuteSignal = %v, want nil (skipped)", err)
 	}
 	orders, err := svc.Orders.List(context.Background(), "", 10)

@@ -41,7 +41,7 @@
 // instead (the same pattern internal/service/scheduler/periodic.go's own
 // HeartbeatChecker interface already established for the identical
 // reason), and internal/bootstrap wires the very same
-// *risk.RepositoryPortfolioProvider/*risk.Engine/*execution.Engine
+// *repoportfolio.Provider/*risk.Engine/*execution.Engine
 // instances it already builds in as those interfaces - so position/order
 // aggregation is never re-implemented here.
 package updater

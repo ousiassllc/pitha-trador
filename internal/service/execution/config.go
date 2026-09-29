@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
 // Config is Engine's Entry/Exit rule set. NewEngine only fills in Now
@@ -59,7 +60,7 @@ type Config struct {
 // (5/10).
 func DefaultConfig() Config {
 	return Config{
-		StopLossPct:                       0.6,
+		StopLossPct:                       sizing.DefaultStopLossPct, // Risk Engine sizes positions against this same stop
 		TakeProfitPct:                     1.2,
 		TrailingStopPct:                   0.5,
 		MaxHoldingMinutes:                 20,

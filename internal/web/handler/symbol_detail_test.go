@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -182,5 +183,33 @@ func TestSymbolHandler_SymbolRoutes_RejectInvalidInput(t *testing.T) {
 	}
 	if resp := api.Get("/symbols/130A/candles?interval=1m"); resp.Code != http.StatusOK {
 		t.Fatalf("alphanumeric symbol + interval=1m status = %d, want 200", resp.Code)
+	}
+}
+
+func TestSymbolHandler_APISymbol_ReportsSizingDerivedAllowedPositionAtLastPrice(t *testing.T) {
+	provider := &fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastPrice: 2500}}
+	var gotPrice float64
+	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{
+		AllowedPositionPct: 2.0, // static ceiling: must be overridden
+		AllowedPositionPctFor: func(_ context.Context, price float64) float64 {
+			gotPrice = price
+			return 1.67
+		},
+	})
+	_, api := humatest.New(t)
+	huma.Get(api, "/symbols/{symbol}", h.APISymbol)
+
+	resp := api.Get("/symbols/7203")
+
+	var body struct {
+		Risk struct {
+			AllowedPositionPct float64 `json:"allowed_position_pct"`
+		} `json:"risk"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("Unmarshal: %v (body=%s)", err, resp.Body.String())
+	}
+	if gotPrice != 2500 || body.Risk.AllowedPositionPct != 1.67 {
+		t.Fatalf("allowed_position_pct = %v (sized at price %v), want 1.67 sized at 2500", body.Risk.AllowedPositionPct, gotPrice)
 	}
 }

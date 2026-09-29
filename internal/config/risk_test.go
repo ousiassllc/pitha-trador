@@ -46,3 +46,29 @@ func TestLoadRisk_ReturnsErrorForInvalidYAML(t *testing.T) {
 		t.Fatalf("LoadRisk(%q) returned nil error, want error", invalid)
 	}
 }
+
+func TestLoadRisk_TemplateDefinesPaperInitialCapital(t *testing.T) {
+	cfg, err := config.LoadRisk(repoPath(t, config.DefaultRiskPath))
+	if err != nil {
+		t.Fatalf("LoadRisk: %v", err)
+	}
+	if got := cfg.Paper.InitialCapital; got != config.DefaultPaperInitialCapital {
+		t.Errorf("Paper.InitialCapital = %v, want %v (shipped default)", got, float64(config.DefaultPaperInitialCapital))
+	}
+	if got := cfg.Live.InitialCapital; got != 0 {
+		t.Errorf("Live.InitialCapital = %v, want 0 (operator must set the real capital before going Live)", got)
+	}
+}
+
+func TestLoadRiskBytes_MissingPaperInitialCapitalGetsDefaultButLiveDoesNot(t *testing.T) {
+	cfg, err := config.LoadRiskBytes([]byte("paper:\n  max_open_positions: 5\nlive:\n  max_open_positions: 3\n"))
+	if err != nil {
+		t.Fatalf("LoadRiskBytes: %v", err)
+	}
+	if got := cfg.Paper.InitialCapital; got != config.DefaultPaperInitialCapital {
+		t.Errorf("Paper.InitialCapital = %v, want default %v", got, float64(config.DefaultPaperInitialCapital))
+	}
+	if got := cfg.Live.InitialCapital; got != 0 {
+		t.Errorf("Live.InitialCapital = %v, want 0 (no default: Risk Engine must reject trades until configured)", got)
+	}
+}

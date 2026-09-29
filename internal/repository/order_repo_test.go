@@ -241,3 +241,59 @@ func TestOrderRepository_List_FiltersByStatus(t *testing.T) {
 		t.Fatalf("List(\"\") returned %d rows, want 2", len(all))
 	}
 }
+
+func fillEntryPosition(instrumentID int64, now time.Time) domain.Position {
+	return domain.Position{InstrumentID: instrumentID, Symbol: "7203", Side: domain.PositionSideLong,
+		Quantity: 100, EntryPrice: 2100, CurrentPrice: 2100, OpenedAt: now}
+}
+
+func pendingOrder(t *testing.T, orders *repository.OrderRepository, instrumentID int64, now time.Time) domain.PaperOrder {
+	t.Helper()
+	o, err := orders.Insert(context.Background(), domain.PaperOrder{InstrumentID: instrumentID, Symbol: "7203",
+		Side: domain.OrderSideBuy, OrderType: domain.OrderTypeMarket, Quantity: 100, Status: domain.OrderStatusPending, SubmittedAt: now})
+	if err != nil {
+		t.Fatalf("Insert order: %v", err)
+	}
+	return o
+}
+
+// Regression (#158): a failed position open must not leave the order FILLED.
+func TestOrderRepository_FillEntry_AtomicOrderFillAndPositionOpen(t *testing.T) {
+	positions, orders, instrumentID := openTestPositionRepo(t)
+	ctx, now := context.Background(), time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC)
+	first := pendingOrder(t, orders, instrumentID, now)
+	filled, position, err := orders.FillEntry(ctx, first.ID, 2100, nil, now, fillEntryPosition(instrumentID, now))
+	if err != nil || filled.Status != domain.OrderStatusFilled || position.EntryOrderID != first.ID {
+		t.Fatalf("FillEntry = (%+v, %+v, %v), want FILLED order + linked position", filled, position, err)
+	}
+
+	second := pendingOrder(t, orders, instrumentID, now)
+	if _, _, err := orders.FillEntry(ctx, second.ID, 2110, nil, now, fillEntryPosition(instrumentID, now)); err == nil {
+		t.Fatal("FillEntry with an open position = nil error, want the unique-constraint failure")
+	}
+	if got, err := orders.Get(ctx, second.ID); err != nil || got.Status != domain.OrderStatusPending || got.FilledAt != nil {
+		t.Errorf("order after failed FillEntry = (%+v, %v), want untouched PENDING", got, err)
+	}
+	if open, _ := positions.ListOpen(ctx); len(open) != 1 {
+		t.Errorf("ListOpen = %d positions, want only the first", len(open))
+	}
+}
+
+func TestOrderRepository_ListFilledWithoutPosition_FindsOnlyUnlinkedFillsBeforeCutoff(t *testing.T) {
+	_, orders, instrumentID := openTestPositionRepo(t)
+	ctx, now := context.Background(), time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC)
+	linked := pendingOrder(t, orders, instrumentID, now)
+	if _, _, err := orders.FillEntry(ctx, linked.ID, 2100, nil, now, fillEntryPosition(instrumentID, now)); err != nil {
+		t.Fatal(err)
+	}
+	orphan := insertFilledEntryOrder(t, orders, instrumentID, now) // bare Fill: the pre-#158 failure state
+	pendingOrder(t, orders, instrumentID, now)                     // PENDING: not a fill
+
+	got, err := orders.ListFilledWithoutPosition(ctx, now.Add(-time.Hour), now.Add(time.Minute))
+	if err != nil || len(got) != 1 || got[0].ID != orphan.ID {
+		t.Fatalf("ListFilledWithoutPosition = (%+v, %v), want only order %d", got, err, orphan.ID)
+	}
+	if got, err := orders.ListFilledWithoutPosition(ctx, now.Add(-time.Hour), now); err != nil || len(got) != 0 {
+		t.Fatalf("ListFilledWithoutPosition(before=fill time) = (%+v, %v), want none", got, err)
+	}
+}

@@ -34,12 +34,18 @@ INSERT INTO positions (
 // positions_open_instrument_uq rejects opening a second position for the
 // same instrument while one is already open.
 func (r *PositionRepository) Open(ctx context.Context, p domain.Position) (domain.Position, error) {
+	return openPosition(ctx, r.db, p)
+}
+
+// openPosition is Open's body over any sqlExecutor, so
+// OrderRepository.FillEntry can run it inside its own transaction.
+func openPosition(ctx context.Context, x sqlExecutor, p domain.Position) (domain.Position, error) {
 	now := p.CreatedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 
-	res, err := r.db.ExecContext(ctx, insertPositionSQL,
+	res, err := x.ExecContext(ctx, insertPositionSQL,
 		p.InstrumentID, p.EntryOrderID, nullableInt64(p.ExitOrderID), p.Symbol, p.Side, p.Quantity,
 		p.EntryPrice, p.CurrentPrice, p.UnrealizedPnL, nullableFloat64(p.RealizedPnL), formatTime(p.OpenedAt),
 		nullableTime(p.ClosedAt), nullableString(p.ExitReason), formatTime(now), formatTime(now),

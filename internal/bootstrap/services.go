@@ -35,6 +35,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/retention"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/repoportfolio"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
@@ -203,7 +204,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	policyEngine := policy.NewEngine(thresholds, riskEngine, signals, policy.WithPolicySource(runtimePolicy))
 	calibrationService := calibration.NewService(outcomes, decisiontrade.New(state.DB))
-	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine}, policy.WithCalibration(calibrationService))
+	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine, sizer: riskEngine}, policy.WithCalibration(calibrationService))
 
 	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
 	// Sol/Opus (issue #82, FR-SELFIMPROVE-8/9) are real external LLM API
@@ -235,7 +236,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	}
 	var updateAdapter *updater.SchedulerAdapter
 	if autoUpdate != nil { // cmd/desktop only (issue #65); cmd/server passes nil
-		gate := updater.SafeGate{Positions: risk.NewRepositoryPortfolioProvider(positions), State: riskEngine, Orders: executionEngine}
+		gate := updater.SafeGate{Positions: repoportfolio.New(positions, state.Risk.Paper.InitialCapital), State: riskEngine, Orders: executionEngine}
 		checker := updater.NewChecker(updater.Config{Owner: "ousiassllc", Repo: "pitha-trador", Gate: gate})
 		updateAdapter = &updater.SchedulerAdapter{Checker: checker, Quitter: autoUpdate}
 		schedOpts = append(schedOpts, scheduler.WithUpdateChecker(updateAdapter))

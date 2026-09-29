@@ -1,13 +1,13 @@
 package risk
 
 import (
-	"context"
 	"fmt"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
 // FR-RISK-1 rejection reasons: internal/service/policy.RiskChecker's
@@ -21,11 +21,15 @@ const (
 	ReasonKillSwitchActive        = "kill_switch_active"
 	ReasonCooldownAfterLoss       = "cooldown_after_loss"
 	ReasonMaxOpenPositions        = "max_open_positions"
-	ReasonMaxTotalExposurePct     = "max_total_exposure_pct"
-	ReasonMaxPositionPerSymbolPct = "max_position_per_symbol_pct"
+	ReasonMaxTotalExposurePct     = sizing.ReasonMaxTotalExposurePct
+	ReasonMaxPositionPerSymbolPct = sizing.ReasonMaxPositionPerSymbolPct
 	ReasonMaxDailyLossPct         = "max_daily_loss_pct"
 	ReasonMaxConsecutiveLosses    = "max_consecutive_losses"
 	ReasonMaxSpreadBps            = "max_spread_bps"
+	ReasonMaxTradeLossPct         = sizing.ReasonMaxTradeLossPct
+	// ReasonRiskEngineError is the fail-closed rejection when Check cannot
+	// read the state a limit needs (DB error, missing snapshot/spread).
+	ReasonRiskEngineError = "risk_engine_error"
 )
 
 // runtime_settings keys this package owns (er.md §runtime_settings).
@@ -62,10 +66,16 @@ type Config struct {
 	KillSwitch *repository.KillSwitchRepository
 	Settings   *repository.RuntimeSettingsRepository
 
-	// Snapshots supplies the latest spread for FR-RISK-1's
-	// max_spread_bps check. A nil Snapshots skips that one check (no
-	// snapshot data to check against).
+	// Snapshots supplies the latest price/spread for FR-RISK-1's
+	// max_spread_bps and max_trade_loss_pct (position sizing) checks. A
+	// nil Snapshots skips those two checks (no snapshot data to check
+	// against); a non-nil one rejects an instrument with no usable
+	// snapshot (fail closed).
 	Snapshots *repository.SnapshotRepository
+
+	// StopLossPct is the FR-EXIT-2 initial stop distance (percent)
+	// position sizing assumes; defaults to sizing.DefaultStopLossPct.
+	StopLossPct float64
 
 	// Portfolio defaults to ZeroPortfolioProvider{} (portfolio.go).
 	Portfolio PortfolioProvider
@@ -108,6 +118,7 @@ type Engine struct {
 	killSwitch       *repository.KillSwitchRepository
 	settings         *repository.RuntimeSettingsRepository
 	snapshots        *repository.SnapshotRepository
+	stopLossPct      float64
 	portfolio        PortfolioProvider
 	closer           PositionCloser
 	marketDataHealth HealthChecker
@@ -151,6 +162,9 @@ func NewEngine(cfg Config) *Engine {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.StopLossPct <= 0 {
+		cfg.StopLossPct = sizing.DefaultStopLossPct
+	}
 	if cfg.FailureThreshold <= 0 {
 		cfg.FailureThreshold = DefaultFailureThreshold
 	}
@@ -159,6 +173,7 @@ func NewEngine(cfg Config) *Engine {
 		killSwitch:        cfg.KillSwitch,
 		settings:          cfg.Settings,
 		snapshots:         cfg.Snapshots,
+		stopLossPct:       cfg.StopLossPct,
 		portfolio:         cfg.Portfolio,
 		closer:            cfg.Closer,
 		marketDataHealth:  cfg.MarketDataHealth,
@@ -173,89 +188,8 @@ func NewEngine(cfg Config) *Engine {
 	}
 }
 
-// Limits returns the Paper/Live threshold set this Engine enforces, for
-// callers (e.g. a later Execution sub-scope's position sizing) that need
-// max_trade_loss_pct: Check does not enforce it itself, since no order
-// size/stop-loss distance is available at Check's (instrumentID,
-// direction) call site (FR-RISK-1's table lists it, but as a
-// sizing input rather than a pre-trade reject condition).
+// Limits returns the Paper/Live threshold set this Engine enforces.
 func (e *Engine) Limits() config.RiskLimits { return e.limits }
-
-// Check implements internal/service/policy.RiskChecker: Risk Engine's
-// final say over every Policy Engine trade candidate (FR-RISK-1).
-//
-// Rejection reasons are: ReasonKillSwitchActive/ReasonSystemPaused (Kill
-// Switch/manual-pause active, FR-RISK-2/FR-RISK-4), ReasonCooldownAfterLoss
-// (risk.yaml cooldown_after_loss_minutes has not elapsed since the most
-// recent loss - a lightweight, time-based gate that is not itself logged
-// to kill_switch_events, unlike consecutive_losses reaching
-// max_consecutive_losses below), then each FR-RISK-1 limit in the table's
-// order except max_trade_loss_pct (see Limits's doc comment).
-//
-// Breaching max_daily_loss_pct or max_consecutive_losses also raises a
-// Kill Switch (FR-RISK-2), latching the rejection in place for every
-// subsequent candidate (via the Kill Switch state check above) rather
-// than only this one.
-func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string) (bool, string) {
-	state, events, err := e.State(ctx)
-	if err != nil {
-		return false, fmt.Sprintf("risk_engine_error: %v", err)
-	}
-	switch state {
-	case domain.SystemStateKilled:
-		return false, fmt.Sprintf("%s: %s", ReasonKillSwitchActive, activeReasons(events))
-	case domain.SystemStatePaused:
-		return false, ReasonSystemPaused
-	}
-
-	now := e.now()
-	if lastLoss, err := e.portfolio.LastLossAt(ctx); err == nil && !lastLoss.IsZero() {
-		cooldown := time.Duration(e.limits.CooldownAfterLossMinutes) * time.Minute
-		if resumeAt := lastLoss.Add(cooldown); now.Before(resumeAt) {
-			return false, fmt.Sprintf("%s: retry_after=%s", ReasonCooldownAfterLoss, resumeAt.Format(time.RFC3339))
-		}
-	}
-
-	if count, err := e.portfolio.OpenPositionCount(ctx); err == nil && count >= e.limits.MaxOpenPositions {
-		return false, fmt.Sprintf("%s: count=%d max=%d", ReasonMaxOpenPositions, count, e.limits.MaxOpenPositions)
-	}
-	if pct, err := e.portfolio.TotalExposurePct(ctx); err == nil && pct >= e.limits.MaxTotalExposurePct {
-		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", ReasonMaxTotalExposurePct, pct, e.limits.MaxTotalExposurePct)
-	}
-	if pct, err := e.portfolio.SymbolExposurePct(ctx, instrumentID); err == nil && pct >= e.limits.MaxPositionPerSymbolPct {
-		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", ReasonMaxPositionPerSymbolPct, pct, e.limits.MaxPositionPerSymbolPct)
-	}
-
-	if pct, err := e.portfolio.DailyLossPct(ctx); err == nil && pct >= e.limits.MaxDailyLossPct {
-		_, _ = e.triggerIfNotActive(ctx, domain.KillReasonDailyLossLimit, map[string]any{
-			"daily_loss_pct": pct, "max_daily_loss_pct": e.limits.MaxDailyLossPct,
-		})
-		return false, fmt.Sprintf("%s: daily_loss_pct=%.4f max=%.4f", ReasonMaxDailyLossPct, pct, e.limits.MaxDailyLossPct)
-	}
-	if losses, err := e.portfolio.ConsecutiveLosses(ctx); err == nil && losses >= e.limits.MaxConsecutiveLosses {
-		_, _ = e.triggerIfNotActive(ctx, domain.KillReasonConsecutiveLosses, map[string]any{
-			"consecutive_losses": losses, "max_consecutive_losses": e.limits.MaxConsecutiveLosses,
-		})
-		return false, fmt.Sprintf("%s: consecutive_losses=%d max=%d", ReasonMaxConsecutiveLosses, losses, e.limits.MaxConsecutiveLosses)
-	}
-
-	if spreadBps, ok := e.latestSpreadBps(ctx, instrumentID); ok && spreadBps > e.limits.MaxSpreadBps {
-		return false, fmt.Sprintf("%s: spread_bps=%.2f max=%.2f", ReasonMaxSpreadBps, spreadBps, e.limits.MaxSpreadBps)
-	}
-
-	return true, ""
-}
-
-func (e *Engine) latestSpreadBps(ctx context.Context, instrumentID int64) (float64, bool) {
-	if e.snapshots == nil {
-		return 0, false
-	}
-	snapshots, err := e.snapshots.ListByInstrument(ctx, instrumentID, 1)
-	if err != nil || len(snapshots) == 0 || snapshots[0].SpreadBps == nil {
-		return 0, false
-	}
-	return *snapshots[0].SpreadBps, true
-}
 
 func activeReasons(events []domain.KillSwitchEvent) string {
 	reasons := make([]string, len(events))

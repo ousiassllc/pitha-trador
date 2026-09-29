@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/repoportfolio"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 )
 
@@ -87,7 +88,7 @@ func newRiskEngine(limits config.RiskLimits, repos riskRepositories, signals ris
 		KillSwitch:        repos.killSwitch,
 		Settings:          repos.settings,
 		Snapshots:         repos.snapshots,
-		Portfolio:         risk.NewRepositoryPortfolioProvider(repos.positions),
+		Portfolio:         repoportfolio.New(repos.positions, limits.InitialCapital),
 		Positions:         repos.positions,
 		Orders:            repos.orders,
 		MarketDataHealth:  signals.marketData,
