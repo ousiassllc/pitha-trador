@@ -9,6 +9,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 - 起動時にWailsプロセスがランダムなローカルセッショントークンを生成し、Cookie（`HttpOnly`, `SameSite=Strict`）としてWebViewに設定する。全ての状態変更リクエスト（アクションルート・Huma APIのPOST/PUT/PATCH/DELETE）はこのセッションCookie必須とする
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
 - 実売買（Phase 7）移行時は、Kill Switch解除・発注確定操作にOS認証の追加確認を導入する（`requirements/non-functional.md` §4）
+- **Setup Guard**: 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）のいずれかが`secrets`テーブルに未設定の間は、`GET /setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエスト（ページ・アクション・`/api/v1`・WebSocket含む）を`/setup`へ302リダイレクトする。判定はリクエストごとに行うため、3キーが揃った次のリクエストから解除される（issue #80）
 
 ## 2. ルーティング概要
 
@@ -29,6 +30,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400 |
 | GET | `/calibration` | Calibration画面 |
 | GET | `/settings` | Settings画面。許可キー（`internal/config`のallow-list）ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ。保存済みの値は再表示せず「設定済み」バッジのみ表示する（issue #57/#79） |
+| GET | `/setup` | 初回セットアップ画面。必須3キー（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）と任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80） |
 | GET | `/activity` | System Activity Log画面。`<pitha-activity-feed>`アイランド（SSRフォールバック: キュー状況＋アクティビティ一覧）を埋め込んだフルページ |
 
 ## 4. アクションルート
@@ -44,7 +46,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | POST | `/system/update-check` | 「今すぐアップデートを確認」。スケジューラーと同じ`CheckForUpdate`を即時実行し、`HX-Trigger: updateStatusChanged`付きで`UpdatePanel`を返す。確認失敗もパネル内表示（HTTP 200）。アップデーター未搭載なら404 | `UpdatePanel` |
 | POST | `/settings/:key` | 単一キーの保存（フォーム項目`value`）。他キーには一切影響しない。`:key`が許可キー一覧（`internal/config`のallow-list: JEV_*/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_*/NEWS_FEED_*/SOL_*/OPUS_*）に無い場合、または`value`が空の場合は400（空入力で保存済みの値が消えることはない）。反映はアプリ再起動後（issue #79） | 更新後の`SecretFieldRow`フラグメント |
 | DELETE | `/settings/:key` | 単一キーの削除。他キーには一切影響しない。`:key`が許可キー一覧に無い場合は400（issue #79） | 更新後の`SecretFieldRow`フラグメント |
-| GET | `/system/secrets-status` | 必須キー（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）の未設定を知らせる全ページ共通バナー（`Header`の`#config-banner`が`load`で取得）のフラグメント。全て設定済みなら空 | `SecretsBanner` |
+| GET | `/system/secrets-status` | 任意キー（SLACK_WEBHOOK_URL等）の未設定を知らせる全ページ共通バナー（`Header`の`#config-banner`が`load`で取得）のフラグメント。必須3キーはSetup Guardが`/setup`へ誘導するため対象外。全て設定済みなら空 | `SecretsBanner` |
 | POST | `/positions/:id/close` | 手動決済（成行Paper Exit） | ポジション行フラグメント |
 
 ### システム状態遷移（アクションルート）
@@ -283,3 +285,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.4 | 2026-09-29 | §3に`GET /activity`ページルートを追加 | issue #77実装（System Activity Log） |
 | 1.5 | 2026-09-29 | §5に`GET /api/v1/policy-proposals`（Sol/Opus実AI呼び出しの監査用読み取り専用API）を追加 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
 | 1.6 | 2026-09-29 | §3に`GET /settings`、§4に`POST`/`DELETE /settings/:key`・`GET /system/secrets-status`を追加（一括`POST /settings`は廃止しフィールド単位の保存・削除へ変更） | issue #79実装 |
+| 1.7 | 2026-09-29 | §1にSetup Guard、§3に`GET /setup`を追加。§4 `GET /system/secrets-status`を任意キーのみの案内へ縮小 | issue #80実装 |

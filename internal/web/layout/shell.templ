@@ -13,6 +13,29 @@ import "github.com/ousiassllc/pitha-trador/internal/web/organisms"
 // page here rather than per-page, since it is "全ページ共通"
 // (components/overview.md §3).
 templ Shell(title string) {
+	@document(title) {
+		@organisms.Header()
+		<main class="mx-auto max-w-6xl px-6 py-8">
+			{ children... }
+		</main>
+	}
+}
+
+// SetupShell is Shell without organisms.Header, for the first-run Setup
+// screen (issue #80). Setup Guard redirects every route but `/setup`,
+// `/static/...` and `/settings/:key` writes while a required secret is
+// unset, so Header's `hx-get` fragments (`/system/status`,
+// `/system/secrets-status`, ...) and its nav links would all bounce back
+// to `/setup` and swap a whole page into `#header-status`.
+templ SetupShell(title string) {
+	@document(title) {
+		<main class="mx-auto max-w-3xl px-6 py-8">
+			{ children... }
+		</main>
+	}
+}
+
+templ document(title string) {
 	<!DOCTYPE html>
 	<html lang="ja">
 		<head>
@@ -24,10 +47,7 @@ templ Shell(title string) {
 			<script type="module" src="/static/dist/js/kill-switch-panel/pitha-kill-switch-panel.js"></script>
 		</head>
 		<body class="min-h-screen bg-slate-50 text-slate-900">
-			@organisms.Header()
-			<main class="mx-auto max-w-6xl px-6 py-8">
-				{ children... }
-			</main>
+			{ children... }
 		</body>
 	</html>
 }

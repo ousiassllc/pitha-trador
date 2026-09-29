@@ -68,15 +68,14 @@ var settingsFields = []struct {
 	{config.KeyOpusBaseURL, "OPUS_BASE_URL（任意）"},
 }
 
-// requiredSettingsKeys mirrors config.LoadSecretsFromDB's own required
-// set (SLACK_WEBHOOK_URL excluded) - both the secrets-status banner and
-// Settings' "missing" reporting must agree with what actually makes
-// BuildServices' Jev/kabuステーションAPI clients functional.
-var requiredSettingsKeys = []string{config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyKabuAPIPassword}
+// setupOptionalKeys are the optional fields the Setup screen (`GET
+// /setup`, issue #80) offers next to the three required ones.
+var setupOptionalKeys = []string{config.KeySlackWebhookURL}
 
-// SettingsHandler implements `GET /settings`, `POST`/`DELETE
+// SettingsHandler implements `GET /settings`, `GET /setup`, `POST`/`DELETE
 // /settings/:key` and `GET /system/secrets-status` (issue #57 スコープ
-// items 6-7, per-key save/delete from issue #79).
+// items 6-7, per-key save/delete from issue #79, Setup screen from issue
+// #80).
 type SettingsHandler struct {
 	store SecretsStore
 }
@@ -103,6 +102,27 @@ func (h *SettingsHandler) Page(c *gin.Context) {
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	_ = pages.SettingsPage(pages.SettingsProps{Fields: fields}).Render(ctx, c.Writer)
+}
+
+// SetupPage implements `GET /setup` (issue #80, FR-SETUP-2): the three
+// required keys plus setupOptionalKeys as molecules.SecretFieldRow forms
+// that post to the very same `POST`/`DELETE /settings/:key` routes
+// Settings uses - Setup has no save/delete implementation of its own.
+// Complete reports whether every required key is stored, so the page can
+// offer the way on to the normal screens (Setup Guard, middleware.
+// SetupGuard, stops redirecting as soon as they are). `/setup` itself
+// stays reachable after setup for re-entering values.
+func (h *SettingsHandler) SetupPage(c *gin.Context) {
+	ctx := c.Request.Context()
+	keys := append(config.RequiredSecretKeys(), setupOptionalKeys...)
+	fields := make([]molecules.SecretFieldRowProps, len(keys))
+	for i, key := range keys {
+		fields[i] = h.row(ctx, key, settingsLabel(key), "")
+	}
+	complete := len(h.unsetKeys(ctx, config.RequiredSecretKeys())) == 0
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	c.Status(http.StatusOK)
+	_ = pages.SetupPage(pages.SetupProps{Fields: fields, Complete: complete}).Render(ctx, c.Writer)
 }
 
 // Save implements `POST /settings/:key`: it stores the form's `value`
@@ -153,11 +173,14 @@ func (h *SettingsHandler) Delete(c *gin.Context) {
 // Status implements `GET /system/secrets-status`: the header's
 // `#config-banner` fragment (organisms.Header's doc comment, mirroring
 // `#header-status`'s own `hx-get`/`hx-trigger="load"` self-correcting
-// pattern). It renders nothing once every required key is configured. A
-// per-key SecretsStore.Get error degrades that key to "missing" (issue
-// #70) rather than 500ing the banner on every page.
+// pattern). It only guides toward unset optional keys (SLACK_WEBHOOK_URL
+// etc.): the required keys are enforced by Setup Guard's redirect to
+// `/setup` instead (issue #80), so they never appear here. It renders
+// nothing once every optional key is configured. A per-key
+// SecretsStore.Get error degrades that key to "unset" (issue #70) rather
+// than 500ing the banner on every page.
 func (h *SettingsHandler) Status(c *gin.Context) {
-	missing := h.missingRequiredKeys(c.Request.Context())
+	missing := h.unsetKeys(c.Request.Context(), config.OptionalSecretKeys())
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	_ = organisms.SecretsBanner(missing).Render(c.Request.Context(), c.Writer)
@@ -196,12 +219,14 @@ func settingsLabel(key string) string {
 	return key
 }
 
-func (h *SettingsHandler) missingRequiredKeys(ctx context.Context) []string {
+// unsetKeys returns the subset of keys with no stored value, in order. A
+// Get error counts as unset (issue #70).
+func (h *SettingsHandler) unsetKeys(ctx context.Context, keys []string) []string {
 	var missing []string
-	for _, key := range requiredSettingsKeys {
+	for _, key := range keys {
 		_, ok, err := h.store.Get(ctx, key)
 		if err != nil {
-			slog.Error("settings: read stored secret for secrets-status banner; treating as unset", "key", key, "error", err)
+			slog.Error("settings: read stored secret; treating as unset", "key", key, "error", err)
 			ok = false
 		}
 		if !ok {

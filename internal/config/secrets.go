@@ -64,6 +64,18 @@ var requiredSecretKeys = []string{KeyJevAPIKey, KeyJevBaseURL, KeyKabuAPIPasswor
 var optionalSecretKeys = []string{KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey,
 	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL}
 
+// RequiredSecretKeys returns the keys whose absence keeps the app
+// unusable (JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD): the Setup Guard
+// redirects to `/setup` until every one is stored (issue #80).
+func RequiredSecretKeys() []string {
+	return append([]string{}, requiredSecretKeys...)
+}
+
+// OptionalSecretKeys returns every allowed key that is not required.
+func OptionalSecretKeys() []string {
+	return append([]string{}, optionalSecretKeys...)
+}
+
 // AllowedSecretKeys returns every secrets-table key the Settings screen
 // may save or delete (`POST`/`DELETE /settings/:key`): the required keys
 // followed by the optional ones. It is the single allow-list for the

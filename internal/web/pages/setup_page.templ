@@ -1,0 +1,47 @@
+package pages
+
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+)
+
+// SetupProps is SetupPage's input: the required fields followed by the
+// optional ones (internal/web/handler.SettingsHandler.SetupPage), and
+// whether every required key is already stored.
+type SetupProps struct {
+	Fields   []molecules.SecretFieldRowProps
+	Complete bool
+}
+
+// SetupPage is the first-run Setup screen (issue #80, FR-SETUP-2).
+// middleware.SetupGuard redirects every other route here until
+// JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD are all stored. Each field is
+// the same molecules.SecretFieldRow Settings uses, posting to `POST`/
+// `DELETE /settings/:key`; SLACK_WEBHOOK_URL is offered as an optional
+// extra. It renders in layout.SetupShell (no Header) so nothing on the
+// page fetches a guarded fragment. The "続ける" link is a plain `/scanner`
+// navigation: while a required key is unset the guard sends it straight
+// back here.
+templ SetupPage(props SetupProps) {
+	@layout.SetupShell("Setup") {
+		<h1 class="text-2xl font-bold text-slate-900">初期セットアップ</h1>
+		<div class="mt-4 flex flex-col gap-4" data-testid="setup-form">
+			<p class="text-sm text-slate-600">
+				利用を始めるには、JEV_API_KEY・JEV_BASE_URL・KABU_API_PASSWORD をすべて入力して保存してください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+			</p>
+			for _, field := range props.Fields {
+				@molecules.SecretFieldRow(field)
+			}
+		</div>
+		if props.Complete {
+			<p class="mt-6 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="setup-complete">
+				必須項目はすべて設定済みです。
+			</p>
+		} else {
+			<p class="mt-6 text-sm text-slate-600" data-testid="setup-incomplete">
+				必須項目をすべて保存すると、通常の画面へ進めます。
+			</p>
+		}
+		<a class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" href="/scanner" data-testid="setup-continue">続ける</a>
+	}
+}
