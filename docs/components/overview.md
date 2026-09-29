@@ -29,6 +29,7 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 
 ```text
 internal/web/
+├── apierror/           # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
 ├── handler/            # scanner.go, symbol*.go, performance.go, calibration.go, system.go, settings.go, activity.go, update.go, policy_proposals.go, action_error.go（Toast/ErrorPage応答）ほか（*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
 ├── middleware/         # HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState
@@ -167,3 +168,4 @@ const (
 | 1.13 | 2026-09-29 | Setup Guardの応答種別、Shadow DOMコンポーネントのスタイル方針、本番sourcemap無効化を追記 | issue #140/#145/#146実装 |
 | 1.14 | 2026-09-29 | §1・§5.4の`architecture/overview.md`節参照を実在する§9・`overview/flows.md` §10.3へ修正、§2の`lib/`に`ws-status.ts`/`styles.ts`を追加 | issue #153/#155 |
 | 1.15 | 2026-09-29 | §5〜§9を`lit.md`（§5〜§6）・`runtime.md`（§7〜§9）へ分割（節番号・内容は変更なし）。§2のhandler/middleware/atoms〜layout一覧、§3のorganismsに`SystemStatusBadge`・pagesに`ErrorPage`を実装に合わせて追記 | issue #182（300行/ファイル制限の解消・実装追従） |
+| 1.16 | 2026-09-29 | §2の`internal/web/`ツリーに`apierror/`を追加 | issue #215/#219 |
