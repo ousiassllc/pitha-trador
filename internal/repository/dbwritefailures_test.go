@@ -1,7 +1,10 @@
 package repository_test
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository"
@@ -62,5 +65,37 @@ func TestDBWriteFailures_CountsStorageFailuresOnly(t *testing.T) {
 	}
 	if got := streak.ConsecutiveFailures(); got != 0 {
 		t.Fatalf("streak after recovery = %d, want 0", got)
+	}
+}
+
+// TestDBQueryLogLevel pins the level the sqlmw interceptor logs at: a fast
+// successful query must stay below INFO (idle scheduler polling issues
+// ~30 of them per second), a slow one is WARN and a failed one is ERROR.
+func TestDBQueryLogLevel(t *testing.T) {
+	db := newTestDB(t)
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	ctx := context.Background()
+	_, _ = db.ExecContext(ctx, "SELECT 1 /* fast */")
+	_, _ = db.ExecContext(ctx, "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x < 5000000) SELECT count(*) FROM c /* slow */")
+	_, _ = db.ExecContext(ctx, "SELECT * FROM no_such_table /* failing */")
+
+	levels := map[string]string{}
+	for _, line := range strings.Split(buf.String(), "\n") {
+		for _, tag := range []string{"fast", "slow", "failing"} {
+			if strings.Contains(line, "/* "+tag+" */") {
+				levels[tag] = strings.Fields(strings.SplitN(line, "level=", 2)[1])[0]
+			}
+		}
+	}
+	want := map[string]string{"fast": "DEBUG", "slow": "WARN", "failing": "ERROR"}
+	for tag, lvl := range want {
+		if levels[tag] != lvl {
+			t.Errorf("%s query logged at %q, want %q\nlog:\n%s", tag, levels[tag], lvl, buf.String())
+		}
 	}
 }
