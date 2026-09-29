@@ -1,7 +1,8 @@
 -- jobs: 自前ワーカーキュー（River代替）。market-data/feature-calc/jev-scout/
--- jev-trader/risk-check/paper-execution/outcome-labeling/analyticsの8キューを
--- このテーブルとinternal/service/schedulerのGoワーカープールで実現する
--- （docs/architecture/er.md §jobs）
+-- jev-trader/outcome-labeling/analyticsの6キューをこのテーブルと
+-- internal/service/schedulerのGoワーカープールで実現する。Risk判定・Paper発注は
+-- 専用キューを持たずjev-traderジョブ内で同期実行される（FR-SCHED-1、
+-- docs/architecture/er/tables-system.md §jobs）
 CREATE TABLE jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     queue VARCHAR(30) NOT NULL,
