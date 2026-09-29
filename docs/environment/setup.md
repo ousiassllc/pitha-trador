@@ -106,7 +106,7 @@ make dev
 |---|---|
 | `make dev` | `wails dev`・`templ generate --watch`・`bun --cwd=static run dev`を並行起動 |
 | `make generate` | `templ generate`と`bun run --cwd static build`。`lint`/`test`/`build`の前提 |
-| `make lint` | `generate`後に`golangci-lint run`と`bunx biome check static/`。CIの`lint`ジョブが実行する`linterly check`と`bunx tsc --noEmit`は含まない（`linterly check`はlefthookのpre-commitで、`tsc --noEmit`はCIのみで実行される） |
+| `make lint` | `generate`後に`golangci-lint run`と`bun run --cwd static lint`（`static/`で`biome check .`を実行。ルートで`bunx biome`を実行すると`@biomejs/biome`ではなく無関係なnpmパッケージ`biome`を解決して何も検査しないため、`static/`から実行する）。CIの`lint`ジョブが実行する`linterly check`と`bunx tsc --noEmit`は含まない（`linterly check`はlefthookのpre-commitで、`tsc --noEmit`はCIのみで実行される） |
 | `make test` | `generate`後に`go test ./...`と`bun --cwd=static test` |
 | `make build` | `generate`後に`wails build -platform windows/amd64` |
 | `make openapi-export` | 起動中サーバー（`127.0.0.1:48080`）から`docs/api/openapi.json`を書き出す（任意タスク。ファイルは未コミット） |
@@ -201,7 +201,8 @@ pre-commit:
       glob: "*.go"
       run: make generate && golangci-lint run
     biome:
-      glob: "static/src/**/*.{ts,css}"
+      root: static/
+      glob: "**/*.{ts,css}"
       run: bunx biome check {staged_files}
     linterly:
       run: linterly check
@@ -211,6 +212,8 @@ pre-push:
     go-test:
       run: make generate && go test ./...
 ```
+
+`biome`は`root: static/`で`static/`をカレントにして実行する（`@biomejs/biome`は`static/package.json`のdevDependencyであり、リポジトリルートの`bunx biome`は無関係なnpmパッケージ`biome`を解決してしまうため）。`root`指定時、`{staged_files}`は`static/`配下のステージ済みファイルのみが`static/`相対パスで渡され、`glob`もその相対パスに対して評価される。
 
 `golangci-lint`と`go-test`の前に`make generate`を実行するのは、`*_templ.go`と`static/src/dist/`が未生成だと`go:embed`でコンパイルできない（または古い生成物に対して実行してしまう）ため。`linterly check`は`{staged_files}`を渡さずリポジトリ全体を検査する（ディレクトリ単位の行数上限のため）。
 

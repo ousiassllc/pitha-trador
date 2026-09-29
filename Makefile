@@ -22,7 +22,7 @@ generate: ## templ生成とフロントエンドビルド（lint/test/buildの�
 
 lint: generate ## golangci-lint と biome check
 	golangci-lint run
-	bunx biome check static/
+	bun run --cwd static lint
 
 test: generate ## go test と bun test
 	go test ./...

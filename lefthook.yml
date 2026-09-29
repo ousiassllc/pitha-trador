@@ -8,7 +8,12 @@ pre-commit:
       # fails outright on a clean checkout otherwise.
       run: make generate && golangci-lint run
     biome:
-      glob: "static/src/**/*.{ts,css}"
+      # bunx at repo root resolves an unrelated npm `biome@0.3.3` (issue
+      # #232): @biomejs/biome is only a devDependency of static/, so run
+      # from there. With `root`, lefthook passes only static/ files, as
+      # paths relative to static/.
+      root: static/
+      glob: "**/*.{ts,css}"
       run: bunx biome check {staged_files}
     linterly:
       run: linterly check
