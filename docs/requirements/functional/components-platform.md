@@ -9,7 +9,7 @@
 - FR-SCHED-3: 15〜30秒周期でshortlist銘柄を再評価する
 - FR-SCHED-4: 5〜15秒周期で保有ポジションのExit条件を評価する（`scan.held_position_interval_seconds_min/max` の範囲でランダムに揺らした周期で、保有銘柄のみ板を取得し `execution.Engine.OnSnapshot` を呼ぶ。立会時間外は行わない）
 - FR-SCHED-5: Workerはポーリングごとに期限到来済みのjobを空になるまで連続処理する（1ポーリング1jobに制限しない）
-- FR-SCHED-6: ハンドラ・cronトリガー・バックグラウンドgoroutineがpanicしてもプロセスを落とさず、該当jobは`failed`（`last_error`に`handler panic: ...`）として記録し、スタックトレースをログに出力する。常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）は`internal/safego`で1サイクル単位にpanicを回復し、ループを継続する
+- FR-SCHED-6: ハンドラ・cronトリガー・バックグラウンドgoroutineがpanicしてもプロセスを落とさず、該当jobは`failed`（`last_error`に`handler panic: ...`）として記録し、スタックトレースをログに出力する。常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）は`internal/safego`で1サイクル単位にpanicを回復し、ループを継続する（保有監視は銘柄単位でも回復し、1銘柄のpanicで後続ポジションのExit評価を止めない）
 
 ### 4.11 バックテスト
 
