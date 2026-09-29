@@ -81,7 +81,7 @@ func (h *Handler) SymbolSignals(ctx context.Context, in *SymbolSignalsInput) (*S
 	signals, err := h.provider.RecentSignals(ctx, in.Symbol, in.Limit)
 	if err != nil {
 		if errors.Is(err, execution.ErrInstrumentUnknown) {
-			return nil, huma.Error404NotFound("unknown symbol", err)
+			return nil, huma.Error404NotFound("unknown symbol")
 		}
 		return nil, huma.Error500InternalServerError("list signals failed", err)
 	}

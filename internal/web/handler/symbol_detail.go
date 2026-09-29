@@ -57,7 +57,7 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 	state, err := h.provider.State(ctx, in.Symbol)
 	if err != nil {
 		if errors.Is(err, execution.ErrInstrumentUnknown) {
-			return nil, huma.Error404NotFound("unknown symbol", err)
+			return nil, huma.Error404NotFound("unknown symbol")
 		}
 		return nil, huma.Error500InternalServerError("read symbol state failed", err)
 	}
@@ -146,7 +146,7 @@ func (h *SymbolHandler) APICandles(ctx context.Context, in *CandlesInput) (*Cand
 	snapshots, err := h.provider.Candles(ctx, in.Symbol, from, to)
 	if err != nil {
 		if errors.Is(err, execution.ErrInstrumentUnknown) {
-			return nil, huma.Error404NotFound("unknown symbol", err)
+			return nil, huma.Error404NotFound("unknown symbol")
 		}
 		return nil, huma.Error500InternalServerError("read candles failed", err)
 	}

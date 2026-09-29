@@ -7,6 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/web/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 )
@@ -77,6 +78,8 @@ func registerPages(engine *gin.Engine, o options, settingsStore handler.SecretsS
 
 // registerAPI registers the Huma-based `/api/v1` JSON API on engine.
 func registerAPI(engine *gin.Engine, o options, h handlers) {
+	// 5xx bodies carry only the fixed message; causes go to slog (issue #215).
+	apierror.Install()
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at
 	// this same openapi.json (handler.SwaggerUI); disable Huma's built-in

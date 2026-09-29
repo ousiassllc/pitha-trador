@@ -55,7 +55,7 @@ func (h *Handler) Decisions(ctx context.Context, in *DecisionsInput) (*Decisions
 	decisions, err := h.provider.RecentDecisions(ctx, in.Symbol, in.Limit)
 	if err != nil {
 		if errors.Is(err, execution.ErrInstrumentUnknown) {
-			return nil, huma.Error404NotFound("unknown symbol", err)
+			return nil, huma.Error404NotFound("unknown symbol")
 		}
 		return nil, huma.Error500InternalServerError("list decisions failed", err)
 	}
