@@ -6,20 +6,32 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 )
 
-// selfImproveCronSpec is FR-SELFIMPROVE-1's "日次（引け後）" trigger: TSE's
-// 15:30 JST close (non-functional.md §39 "9:00-11:30 / 12:30-15:30 JST"),
-// expressed as 06:30 UTC (JST is UTC+9, no DST), weekdays only (the
-// market is closed Sat/Sun, so there is nothing new to analyze). Like
-// fullScanInterval's own trading-calendar gap (this package's Start doc
-// comment, execution.MarketContext.MarketCloseAt's "no trading-calendar
-// concept exists yet"), this does not account for JP market holidays: an
-// occasional holiday run simply re-analyzes a day with no new Calibration
-// data, producing no proposal (assist.Sol.Analyze's own "nothing
-// actionable" outcome) rather than an incorrect one.
-const selfImproveCronSpec = "30 6 * * 1-5"
+// selfImproveCronSpec is FR-SELFIMPROVE-1's "日次（引け後）" trigger: 15:40
+// JST (10 minutes after TSE's 15:30 close, non-functional.md §3), weekdays
+// only, interpreted in selfImproveLocation, NOT the host's time.Local
+// (robfig/cron's default). Holidays are not modelled: a holiday run yields
+// no new Calibration data and so no proposal.
+const selfImproveCronSpec = "40 15 * * 1-5"
+
+// selfImproveLocation is JST (UTC+9, no DST): a fixed zone like
+// marketcalendar.JST (not importable here, doc.go), so no IANA tzdata needed.
+var selfImproveLocation = time.FixedZone("JST", 9*60*60)
+
+// selfImproveSchedule parses selfImproveCronSpec pinned to selfImproveLocation;
+// the other cron entries (e.g. the 16:00 backup) keep time.Local.
+func selfImproveSchedule() (cron.Schedule, error) {
+	sched, err := cron.ParseStandard(selfImproveCronSpec)
+	if err != nil {
+		return nil, err
+	}
+	sched.(*cron.SpecSchedule).Location = selfImproveLocation // a plain 5-field spec is always a *SpecSchedule
+	return sched, nil
+}
 
 // selfImprovePayload is EnqueueSelfImprove's job payload. It carries no
 // fields: the registered repository.JobQueueAnalytics handler

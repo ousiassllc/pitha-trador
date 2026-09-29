@@ -231,14 +231,16 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 		return fmt.Errorf("scheduler: register full scan trigger %q: %w", spec, err)
 	}
 
-	if _, err := s.cron.AddFunc(selfImproveCronSpec, func() {
+	selfImprove, err := selfImproveSchedule()
+	if err != nil {
+		cancel()
+		return fmt.Errorf("scheduler: parse self-improve trigger %q: %w", selfImproveCronSpec, err)
+	}
+	s.cron.Schedule(selfImprove, cron.FuncJob(func() {
 		if err := s.EnqueueSelfImprove(runCtx, time.Now().UTC()); err != nil {
 			slog.Error("scheduler: self-improve enqueue failed", "error", err)
 		}
-	}); err != nil {
-		cancel()
-		return fmt.Errorf("scheduler: register self-improve trigger %q: %w", selfImproveCronSpec, err)
-	}
+	}))
 
 	if err := s.addPeriodicTriggers(runCtx); err != nil {
 		cancel()

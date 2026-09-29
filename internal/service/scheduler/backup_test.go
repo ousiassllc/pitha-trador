@@ -3,6 +3,7 @@ package scheduler_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -61,17 +62,29 @@ func TestScheduler_Start_RegistersDailyDatabaseBackupTrigger(t *testing.T) {
 	s.Stop()
 }
 
-// settingsStub is an in-memory maintenance.State.
-type settingsStub struct{ m map[string]string }
+// settingsStub is an in-memory maintenance.State; mutex-guarded since Start's
+// catch-up goroutine writes while tests poll.
+type settingsStub struct {
+	mu sync.Mutex
+	m  map[string]string
+}
 
 func (s *settingsStub) Get(_ context.Context, key string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	v, ok := s.m[key]
 	return v, ok, nil
 }
 
 func (s *settingsStub) Set(_ context.Context, key, value string, _ time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.m[key] = value
 	return nil
+}
+func (s *settingsStub) value(key string) (v string) {
+	v, _, _ = s.Get(context.Background(), key)
+	return
 }
 
 const backupStateKey = "system.maintenance.database_backup.last_success_date"
@@ -89,11 +102,11 @@ func TestScheduler_Start_CatchesUpMissedBackupImmediately(t *testing.T) {
 	defer s.Stop()
 
 	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) && state.m[backupStateKey] == `"`+yesterday+`"` {
+	for time.Now().Before(deadline) && state.value(backupStateKey) == `"`+yesterday+`"` {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if want := `"` + time.Now().Format("2006-01-02") + `"`; state.m[backupStateKey] != want {
-		t.Fatalf("last success = %s, want %s (catch-up did not run right after Start)", state.m[backupStateKey], want)
+	if got, want := state.value(backupStateKey), `"`+time.Now().Format("2006-01-02")+`"`; got != want {
+		t.Fatalf("last success = %s, want %s (catch-up did not run right after Start)", got, want)
 	}
 }
 
