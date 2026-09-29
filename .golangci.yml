@@ -7,6 +7,17 @@ linters:
     - staticcheck
     - errcheck
     - ineffassign
+    - depguard
+  settings:
+    depguard:
+      rules:
+        # docs/architecture/overview.md §3: web/ depends on service/domain only.
+        web-no-repository:
+          files:
+            - "**/internal/web/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/repository
+              desc: web layer must not import repository; use service/domain (architecture/overview.md §3)
   exclusions:
     generated: lax
 

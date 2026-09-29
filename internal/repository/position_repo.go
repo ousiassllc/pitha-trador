@@ -10,10 +10,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
-// ErrPositionNotFound is returned by PositionRepository methods when no
-// matching positions row exists.
-var ErrPositionNotFound = errors.New("repository: position not found")
-
 // PositionRepository persists positions rows: held (or closed) Paper/Live
 // positions, Entry/Exit order-linked (docs/architecture/er.md
 // §positions, functional.md §4.9 状態管理's per-symbol "position" field).
@@ -92,7 +88,7 @@ func (r *PositionRepository) Mark(ctx context.Context, id int64, currentPrice, u
 		return domain.Position{}, fmt.Errorf("repository: mark position %d: %w", id, err)
 	}
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
-		return domain.Position{}, ErrPositionNotFound
+		return domain.Position{}, domain.ErrPositionNotFound
 	}
 	return r.Get(ctx, id)
 }
@@ -112,7 +108,7 @@ func (r *PositionRepository) Close(ctx context.Context, id, exitOrderID int64, e
 		return domain.Position{}, fmt.Errorf("repository: close position %d: %w", id, err)
 	}
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
-		return domain.Position{}, ErrPositionNotFound
+		return domain.Position{}, domain.ErrPositionNotFound
 	}
 	return r.Get(ctx, id)
 }
@@ -196,7 +192,7 @@ func scanPosition(row rowScanner) (domain.Position, error) {
 		&closedAt, &exitReason, &createdAt, &updatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Position{}, ErrPositionNotFound
+		return domain.Position{}, domain.ErrPositionNotFound
 	}
 	if err != nil {
 		return domain.Position{}, fmt.Errorf("repository: scan position: %w", err)
