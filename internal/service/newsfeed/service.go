@@ -1,5 +1,5 @@
 // Package newsfeed implements News Ingest (docs/architecture/overview.md
-// §12, functional.md §4.15 FR-LUNA-1〜5): it periodically fetches news
+// §13, functional.md §4.16 FR-LUNA-1〜5): it periodically fetches news
 // for every active instrument from the external news feed, classifies each
 // new item with Luna, and keeps the results in an in-memory, TTL-bounded
 // per-symbol cache. Nothing is persisted: the cache is read by Jev

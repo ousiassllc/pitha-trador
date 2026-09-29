@@ -1,6 +1,6 @@
 // Package assist implements the external-AI adapters of the
 // docs/architecture/overview.md §2 "Luna/Sol/Opusアダプタ | 独自HTTPクライ
-// アント": Luna (Sense, §12: news classification, FR-LUNA-2), Sol (Think,
+// アント": Luna (Sense, §13: news classification, FR-LUNA-2), Sol (Think,
 // §8: daily threshold-change proposals, FR-SELFIMPROVE-1) and Opus
 // (Govern, §8: qualitative proposal review, FR-SELFIMPROVE-9). Each is a
 // thin wrapper over Client, a JSON-over-HTTP client with Bearer

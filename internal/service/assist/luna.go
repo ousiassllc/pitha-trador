@@ -39,7 +39,7 @@ type Classification struct {
 
 // Luna is the Sense adapter: it classifies a news item into
 // sentiment/event_type/summary by calling the external Luna AI API
-// (FR-LUNA-2, overview.md §12). Its output is auxiliary context for Jev
+// (FR-LUNA-2, overview.md §13). Its output is auxiliary context for Jev
 // only (FR-LUNA-5).
 type Luna struct {
 	client *Client

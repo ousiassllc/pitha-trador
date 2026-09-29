@@ -13,6 +13,7 @@ const buildOptions = {
     'src/components/lib/ws.ts',
     'src/components/lib/logger.ts',
     'src/components/scanner-table/pitha-scanner-table.ts',
+    'src/components/activity-feed/pitha-activity-feed.ts',
     'src/components/price-chart/pitha-price-chart.ts',
     'src/components/kill-switch-panel/pitha-kill-switch-panel.ts',
     'src/components/calibration-heatmap/pitha-calibration-heatmap.ts',

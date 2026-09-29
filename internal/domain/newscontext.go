@@ -2,14 +2,14 @@ package domain
 
 import "time"
 
-// Luna sentiment values (functional.md §4.15 FR-LUNA-2).
+// Luna sentiment values (functional.md §4.16 FR-LUNA-2).
 const (
 	NewsSentimentBullish = "bullish"
 	NewsSentimentBearish = "bearish"
 	NewsSentimentNeutral = "neutral"
 )
 
-// Luna event_type values (functional.md §4.15 FR-LUNA-2:
+// Luna event_type values (functional.md §4.16 FR-LUNA-2:
 // 決算/業績修正/M&A/規制/その他).
 const (
 	NewsEventEarnings   = "決算"

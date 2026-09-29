@@ -89,6 +89,7 @@ func main() {
 		router.WithCalibrationSource(services.Calibration),
 		router.WithPolicyProposalSource(services.Proposals),
 		router.WithBacktestRunner(services.Backtest),
+		router.WithActivitySource(services.Activity),
 		router.WithSecretsStore(secretsRepo),
 		router.WithUpdateController(services.Updater),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
