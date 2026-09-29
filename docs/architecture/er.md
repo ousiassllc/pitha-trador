@@ -29,6 +29,7 @@ erDiagram
     trade_signals ||--o{ paper_orders : "発注の根拠になる"
     paper_orders ||--o| positions : "エントリー約定になる"
     paper_orders ||--o| positions : "Exit約定になる"
+    kill_switch_events ||--o| kill_switch_resolutions : "解除される"
 ```
 
 ## テーブル定義
@@ -343,7 +344,7 @@ erDiagram
 
 ### kill_switch_events
 
-Risk EngineのKill Switch発動・解除履歴（監査ログ）。
+Risk EngineのKill Switch発動履歴（監査ログ）。**追記専用**であり、`UPDATE`/`DELETE`はDBトリガー（`kill_switch_events_no_update` / `kill_switch_events_no_delete`、マイグレーション000014）が`ABORT`で拒否する。解除は本テーブルを更新せず、`kill_switch_resolutions`へ行を追記して記録する。
 
 ```mermaid
 erDiagram
@@ -352,8 +353,6 @@ erDiagram
         text triggered_at
         varchar reason
         text detail_json
-        text resolved_at
-        varchar resolved_by "auto | manual"
         text created_at
     }
 ```
@@ -364,11 +363,35 @@ erDiagram
 | triggered_at | text | NOT NULL | |
 | reason | varchar(100) | NOT NULL, CHECK IN ('daily_loss_limit','consecutive_losses','market_data_down','jev_api_down','broker_api_error','unexpected_position','fill_discrepancy','db_write_failure','operator_heartbeat_timeout') | `functional.md` FR-RISK-2, FR-RISK-6 |
 | detail_json | text | NOT NULL | 発動時のRisk状態スナップショット（JSON文字列） |
-| resolved_at | text | NULL可 | |
-| resolved_by | varchar(50) | NULL可, CHECK IN ('auto','manual') | |
 | created_at | text | NOT NULL | |
 
-インデックス: `INDEX (triggered_at DESC)`, `INDEX (resolved_at)`
+インデックス: `INDEX (triggered_at DESC)`
+
+トリガー: `BEFORE UPDATE` / `BEFORE DELETE` → `RAISE(ABORT, 'kill_switch_events is append-only: ...')`
+
+### kill_switch_resolutions
+
+Kill Switch解除の監査ログ（追記専用）。`kill_switch_events`の1行につき高々1行を追記する。`kill_switch_events`に対応する行が無いイベントは未解除（Kill Switch継続中）を表し、Repositoryは`LEFT JOIN`で`resolved_at`/`resolved_by`を導出する。マイグレーション000014以前に解除済みだった行は本テーブルへ移行済み（旧`kill_switch_events.resolved_at`/`resolved_by`列は廃止）。`UPDATE`/`DELETE`は`kill_switch_resolutions_no_update` / `kill_switch_resolutions_no_delete`トリガーが拒否する。
+
+```mermaid
+erDiagram
+    kill_switch_events ||--o| kill_switch_resolutions : "解除される"
+    kill_switch_resolutions {
+        integer id PK
+        integer kill_switch_event_id FK,UK
+        text resolved_at
+        varchar resolved_by "auto | manual"
+        text created_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK（AUTOINCREMENT） | |
+| kill_switch_event_id | integer | FK → kill_switch_events.id, UNIQUE, NOT NULL | 1イベントにつき解除は1回のみ |
+| resolved_at | text | NOT NULL | |
+| resolved_by | varchar(50) | NOT NULL, CHECK IN ('auto','manual') | |
+| created_at | text | NOT NULL | |
 
 ### runtime_settings
 
@@ -387,6 +410,25 @@ erDiagram
 |-------|-----|------|------|
 | key | varchar(100) | PK | 例: `screener.min_price`（Fast Screener全キー: `screener.{min_price,max_price,min_turnover_5m_jpy,max_spread_bps,min_volume_ratio,min_abs_return_5m_pct,min_realized_volatility,top_n}`、`screener.weights.{volume_ratio,abs_return_5m,breakout_strength,orderbook_imbalance,volatility_expansion}`。値は数値のJSON。DB値は環境変数・`config/strategy.yaml`より優先し、候補更新ごとに読み込む）, `policy.long.min_confidence`, `risk.max_daily_loss_pct`, `risk.live.heartbeat_timeout_minutes`, `system.last_ui_heartbeat_at`（認証済みUIリクエストのたびにMiddlewareが更新、FR-RISK-6） |
 | value | text | NOT NULL | JSON文字列 |
+| updated_at | text | NOT NULL | |
+
+### secrets
+
+Settings画面（`/settings`、`functional.md` §4.17）から入力する認証情報（`JEV_API_KEY` / `JEV_BASE_URL` / `KABU_API_PASSWORD` / `SLACK_WEBHOOK_URL` など）のKey-Valueストア（マイグレーション000013）。値は`internal/repository.SecretsRepository`が`internal/config.EncryptSecret`（AES-256-GCM）で暗号化して保存し、呼び出し側は平文のみ扱う。鍵はアプリに埋め込みの固定シードから導出されるため、保護対象はDBファイル単体の複製・共有時の平文流出であり、コンパイル済みバイナリを実行・解析できる攻撃者に対する防御ではない（詳細は`config.EncryptSecret`のコメント参照）。
+
+```mermaid
+erDiagram
+    secrets {
+        varchar key PK
+        text encrypted_value
+        text updated_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| key | varchar(100) | PK | 例: `JEV_API_KEY`, `JEV_BASE_URL`, `KABU_API_PASSWORD`, `SLACK_WEBHOOK_URL`（キー定数は`internal/config/secrets.go`） |
+| encrypted_value | text | NOT NULL | AES-256-GCMで暗号化した値。先頭にランダムnonceを連結しbase64（StdEncoding）でエンコードした文字列 |
 | updated_at | text | NOT NULL | |
 
 ### policy_proposals
@@ -500,3 +542,4 @@ CREATE VIRTUAL TABLE jev_decision_vectors USING vec0(
 | 1.1 | 2026-09-26 | PostgreSQLからSQLite（アプリ内蔵）へ全面移行。pgvector→sqlite-vec仮想テーブル、River→自前`jobs`テーブルに変更 | Wails単一exe配布との整合、外部DBサービス常駐の排除 |
 | 1.2 | 2026-09-26 | ベクトル次元を16→14（実際の特徴量数と一致）に修正。`runtime_settings`に`system.last_ui_heartbeat_at`等の例を明記 | レビュー指摘対応 |
 | 1.3 | 2026-09-26 | sqlite-vecのGoバインディングを`modernc.org/sqlite/vec`（CGO不要のpure Go移植）と明記 | クロスコンパイル可否の正確化 |
+| 1.4 | 2026-09-29 | `kill_switch_events`を追記専用化（UPDATE/DELETE拒否トリガー、マイグレーション000014）し、解除を`kill_switch_resolutions`へ分離。`secrets`テーブル（マイグレーション000013）を追記 | 監査ログの追記専用要件（non-functional.md §4）との整合、ER仕様の乖離解消（#102, #104） |

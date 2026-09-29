@@ -299,7 +299,7 @@ sequenceDiagram
     end
     alt 自動再開対象（market_data_down / jev_api_down / operator_heartbeat_timeout / cooldown経過）
         RE->>RE: 発動条件の解消を定期監視
-        RE->>DB: kill_switch_events.resolved_at・resolved_by=auto を更新
+        RE->>DB: kill_switch_resolutions に resolved_by=auto の解除行を追記
         RE->>EX: 新規エントリー再開
         RE->>SLACK: 自動再開を通知
     else 手動再開対象（daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error）
