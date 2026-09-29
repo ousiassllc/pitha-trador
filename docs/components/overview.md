@@ -43,6 +43,7 @@ static/
     │   ├── price-chart/           pitha-price-chart.ts
     │   ├── scanner-table/         pitha-scanner-table.ts
     │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts
+    │   ├── activity-feed/         pitha-activity-feed.ts
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   └── lib/
     │       ├── api.ts
@@ -133,13 +134,14 @@ const (
 
 ## 5. Lit Web Components 仕様
 
-命名規則: `pitha-{feature-name}`。以下4種を実装する（HTMXでは実現できないCanvas描画・高頻度WebSocket更新を要するため）。
+命名規則: `pitha-{feature-name}`。以下5種を実装する（HTMXでは実現できないCanvas描画・高頻度WebSocket更新を要するため）。
 
 | コンポーネント | 用途 | 埋め込みページ | データソース |
 |---------------|------|---------------|------------|
 | `pitha-price-chart` | ローソク足＋VWAP＋出来高チャート、Jevシグナルのマーカー表示 | Symbol Detail | `GET /api/v1/symbols/{symbol}/candles`（初期）＋ `/ws/symbols/{symbol}`（ライブ） |
 | `pitha-scanner-table` | 候補銘柄のソート可能なライブテーブル | Scanner Dashboard | `GET /api/v1/scanner`（初期）＋ `/ws/scanner`（15〜30秒更新） |
 | `pitha-calibration-heatmap` | confidence帯別 reliability curve / 的中率ヒートマップ | Calibration | `GET /api/v1/calibration` |
+| `pitha-activity-feed` | キュー別pending/running/failed件数・直近アクティビティ一覧・直近Kill Switchイベントのライブ表示（type/queueフィルタ付き） | System Activity Log | `GET /api/v1/activity`（初期・フィルタ変更時）＋ `/ws/activity`（ライブ） |
 | `pitha-kill-switch-panel` | システム状態表示・Kill Switch発動/解除操作 | 全ページ共通（Header内アイランド） | `GET/POST /api/v1/system/*` |
 
 ### 5.1 pitha-price-chart
@@ -223,6 +225,13 @@ templ HeaderWithKillSwitch(state SystemState) {
 
 - Kill Switch発動はRisk Engineからも直接トリガーされうる（`architecture/overview.md` §8.3）。この場合はサーバー側が`/ws/system`経由で`kill_switch`イベントを配信し、`pitha-kill-switch-panel`が受信して`status`をローカルに反映しつつ、同様に`systemStateChanged`を発火してHeaderと同期させる
 
+### 5.5 pitha-activity-feed
+
+- 初期データを`GET /api/v1/activity`で取得しレンダリングし、以後`/ws/activity`の`job_update`（該当キューの件数のみ置換）・`activity_event`（フィード先頭に追加、最大500件で切り詰め）を反映する
+- type/queueセレクトの変更時は`GET /api/v1/activity?type=&queue=`で再取得する（サーバー側フィルタ。`queue`指定は当該キューの`job`イベントのみに一致）。WS受信イベントも同じ条件でクライアント側で絞り込む
+- 直近Kill Switchイベントは`?type=kill_switch&limit=10`で別途取得し、WSの`kill_switch`イベントで先頭に追加する
+- SSRフォールバック（`QueueStatusPanel` + `ActivityFeedFallback`）を子要素として持ち、ハイドレーション時に置き換える（`pitha-scanner-table`と同じ light DOM 方式）
+
 ## 6. API クライアント / WebSocket（`lib/`）
 
 `lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース）:
@@ -286,3 +295,4 @@ dev:
 | 1.4 | 2026-09-28 | organisms/pagesに`SecretsBanner`/`SettingsPage`を追加、§4に`/settings`ルートと未設定バナーのHTMXパターンを追記 | issue #57実装 |
 | 1.5 | 2026-09-28 | §5.4の`HeaderWithKillSwitch`例の`hx-trigger`セレクタを`.header-container`から`header`要素セレクタに修正 | issue #74実装でHeaderのTailwindユーティリティクラス化に伴い`header-container`クラスを廃止したことへの追随 |
 | 1.6 | 2026-09-29 | organismsに`UpdateBanner`/`UpdatePanel`を追加、§4にアップデート通知のHTMXパターンを追記 | issue #76実装 |
+| 1.7 | 2026-09-29 | organisms/pagesに`QueueStatusPanel`/`ActivityFeedFallback`/`ActivityLogPage`、Litに`pitha-activity-feed`（§5.5）を追加 | issue #77実装（System Activity Log） |

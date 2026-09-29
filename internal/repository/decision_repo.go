@@ -18,8 +18,21 @@ var ErrDecisionNotFound = errors.New("repository: jev decision not found")
 // call's input, raw output, and calibration metadata
 // (docs/architecture/er.md §jev_decisions).
 type DecisionRepository struct {
-	db *sql.DB
+	db       *sql.DB
+	observer DecisionObserver
 }
+
+// DecisionObserver is notified after every committed Insert with the
+// stored row (docs/architecture/overview.md §12). It runs synchronously
+// on the writer's goroutine after the write has committed and cannot fail
+// the write, so it must return quickly.
+type DecisionObserver func(ctx context.Context, d domain.JevDecision)
+
+// SetObserver registers fn to be called after every committed Insert,
+// replacing any previous observer. It is not safe to call concurrently
+// with other DecisionRepository methods; wire it once during
+// composition.
+func (r *DecisionRepository) SetObserver(fn DecisionObserver) { r.observer = fn }
 
 // NewDecisionRepository returns a DecisionRepository backed by db.
 func NewDecisionRepository(db *sql.DB) *DecisionRepository {
@@ -57,6 +70,9 @@ func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (
 
 	d.ID = id
 	d.CreatedAt = createdAt
+	if r.observer != nil {
+		r.observer(ctx, d)
+	}
 	return d, nil
 }
 
@@ -90,6 +106,33 @@ func (r *DecisionRepository) ListByInstrument(ctx context.Context, instrumentID 
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("repository: list jev decisions for instrument %d: %w", instrumentID, err)
+	}
+	return out, nil
+}
+
+// ListRecent returns up to limit jev_decisions rows across every
+// instrument, most recent first, optionally restricted to decisionType
+// ("" = both Scout and Trader) - System Activity Log's Jev call feed.
+func (r *DecisionRepository) ListRecent(ctx context.Context, decisionType string, limit int) ([]domain.JevDecision, error) {
+	rows, err := r.db.QueryContext(ctx,
+		decisionSelectColumns+` FROM jev_decisions WHERE (? = '' OR decision_type = ?) ORDER BY timestamp DESC, id DESC LIMIT ?`,
+		decisionType, decisionType, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list recent jev decisions (type=%q): %w", decisionType, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.JevDecision
+	for rows.Next() {
+		d, err := scanDecision(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list recent jev decisions (type=%q): %w", decisionType, err)
 	}
 	return out, nil
 }

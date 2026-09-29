@@ -19,8 +19,21 @@ var ErrKillSwitchEventNotFound = errors.New("repository: kill switch event not f
 // Kill Switch activation/resolution audit log
 // (docs/architecture/er.md §kill_switch_events, functional.md FR-RISK-5).
 type KillSwitchRepository struct {
-	db *sql.DB
+	db       *sql.DB
+	observer KillSwitchObserver
 }
+
+// KillSwitchObserver is notified after every committed Insert with the
+// stored row (docs/architecture/overview.md §12). It runs synchronously
+// on the writer's goroutine after the write has committed and cannot fail
+// the write, so it must return quickly.
+type KillSwitchObserver func(ctx context.Context, ev domain.KillSwitchEvent)
+
+// SetObserver registers fn to be called after every committed Insert,
+// replacing any previous observer. It is not safe to call concurrently
+// with other KillSwitchRepository methods; wire it once during
+// composition.
+func (r *KillSwitchRepository) SetObserver(fn KillSwitchObserver) { r.observer = fn }
 
 // NewKillSwitchRepository returns a KillSwitchRepository backed by db.
 func NewKillSwitchRepository(db *sql.DB) *KillSwitchRepository {
@@ -59,7 +72,35 @@ func (r *KillSwitchRepository) Insert(ctx context.Context, ev domain.KillSwitchE
 	ev.CreatedAt = createdAt
 	ev.ResolvedAt = nil
 	ev.ResolvedBy = nil
+	if r.observer != nil {
+		r.observer(ctx, ev)
+	}
 	return ev, nil
+}
+
+// ListRecent returns up to limit kill_switch_events rows, most recently
+// triggered first, resolved or not - System Activity Log's Kill Switch
+// feed.
+func (r *KillSwitchRepository) ListRecent(ctx context.Context, limit int) ([]domain.KillSwitchEvent, error) {
+	rows, err := r.db.QueryContext(ctx,
+		killSwitchSelectColumns+` ORDER BY triggered_at DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list recent kill switch events: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.KillSwitchEvent
+	for rows.Next() {
+		ev, err := scanKillSwitchEvent(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list recent kill switch events: %w", err)
+	}
+	return out, nil
 }
 
 const killSwitchSelectColumns = `

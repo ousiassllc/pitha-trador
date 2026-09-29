@@ -71,6 +71,7 @@ type options struct {
 	symbolRiskParams  handler.SymbolRiskParams
 	calibrationSource handler.CalibrationSource
 	backtestRunner    handler.BacktestRunner
+	activitySource    handler.ActivitySource
 	secretsStore      handler.SecretsStore
 	updateController  handler.UpdateController
 }
@@ -126,6 +127,15 @@ func WithCalibrationSource(source handler.CalibrationSource) Option {
 	return func(o *options) { o.calibrationSource = source }
 }
 
+// WithActivitySource overrides System Activity Log's backing
+// internal/web/handler.ActivitySource (`GET /activity`,
+// `GET /api/v1/activity`, `/ws/activity`). cmd/desktop and cmd/server pass
+// internal/bootstrap's internal/service/activityfeed.Service; the idle
+// handler.StaticActivitySource default only serves router-level tests.
+func WithActivitySource(source handler.ActivitySource) Option {
+	return func(o *options) { o.activitySource = source }
+}
+
 // WithBacktestRunner overrides `GET /performance`'s backing
 // internal/web/handler.BacktestRunner. cmd/desktop and cmd/server pass
 // internal/bootstrap's BacktestSource; the empty
@@ -168,6 +178,7 @@ func New(opts ...Option) *gin.Engine {
 		symbolRiskParams:  defaultSymbolRiskParams,
 		calibrationSource: handler.StaticCalibrationSource{},
 		backtestRunner:    handler.StaticBacktestRunner{},
+		activitySource:    handler.StaticActivitySource{},
 		secretsStore:      handler.StaticSecretsStore{},
 	}
 	for _, opt := range opts {
@@ -209,6 +220,10 @@ func New(opts ...Option) *gin.Engine {
 	performanceHandler := handler.NewPerformanceHandler(o.backtestRunner)
 	engine.GET("/performance", performanceHandler.Page)
 
+	activityHandler := handler.NewActivityHandler(o.activitySource)
+	engine.GET("/activity", activityHandler.Page)
+	engine.GET("/ws/activity", activityHandler.WebSocket)
+
 	settingsHandler := handler.NewSettingsHandler(o.secretsStore)
 	engine.GET("/settings", settingsHandler.Page)
 	engine.POST("/settings", settingsHandler.Save)
@@ -235,6 +250,7 @@ func New(opts ...Option) *gin.Engine {
 	huma.Get(api, "/positions", symbolHandler.APIPositions)
 	huma.Get(api, "/orders", symbolHandler.APIOrders)
 	huma.Get(api, "/calibration", calibrationHandler.APICalibration)
+	huma.Get(api, "/activity", activityHandler.APIActivity)
 
 	return engine
 }
