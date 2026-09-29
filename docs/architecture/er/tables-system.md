@@ -17,7 +17,7 @@ erDiagram
 
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
-| key | varchar(100) | PK | 例: `screener.min_price`（Fast Screener全キー: `screener.{min_price,max_price,min_turnover_5m_jpy,max_spread_bps,min_volume_ratio,min_abs_return_5m_pct,min_realized_volatility,top_n}`、`screener.weights.{volume_ratio,abs_return_5m,breakout_strength,orderbook_imbalance,volatility_expansion}`。値は数値のJSON。DB値は環境変数・`config/strategy.yaml`より優先し、候補更新ごとに読み込む）, `policy.long.min_confidence`, `risk.max_daily_loss_pct`, `risk.live.heartbeat_timeout_minutes`, `system.last_ui_heartbeat_at`（認証済みUIリクエストのたびにMiddlewareが更新、FR-RISK-6） |
+| key | varchar(100) | PK | 例: `screener.min_price`（Fast Screener全キー: `screener.{min_price,max_price,min_turnover_5m_jpy,max_spread_bps,min_volume_ratio,min_abs_return_5m_pct,min_realized_volatility,top_n}`、`screener.weights.{volume_ratio,abs_return_5m,breakout_strength,orderbook_imbalance,volatility_expansion}`。値は数値のJSON。DB値は環境変数・`config/strategy.yaml`より優先し、候補更新ごとに読み込む）, `policy.long.min_probability`（policy.{long,short}.* の許可キーは `internal/domain/policyproposal.go` 参照）, `system.last_ui_heartbeat_at`（認証済みUIリクエストのたびにMiddlewareが更新、FR-RISK-6）。Riskの閾値（`max_daily_loss_pct`・`heartbeat_timeout_minutes` 等）は `config/risk.yaml` のみで、`risk.*` キーは持たない |
 | value | text | NOT NULL | JSON文字列 |
 | updated_at | text | NOT NULL | |
 

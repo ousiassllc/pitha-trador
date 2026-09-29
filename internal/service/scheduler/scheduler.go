@@ -52,15 +52,15 @@ type Scheduler struct {
 	// full-scan/event-driven triggers ungated (session.go).
 	sessionOpen func(time.Time) bool
 	// logRotator is optional (WithLogRotator): a nil value makes Start
-	// skip registering the @daily log-archival cron trigger entirely
+	// skip registering the log-archival maintenance task entirely
 	// (non-functional.md §5 "ログは日次ローテーションし").
 	logRotator LogRotator
 	// databaseBackuper is optional (WithDatabaseBackuper): a nil value
-	// makes Start skip registering the @daily database-backup cron
-	// trigger entirely (non-functional.md §3).
+	// makes Start skip registering the database-backup maintenance task
+	// (and its 16:00 cron trigger) entirely (non-functional.md §3).
 	databaseBackuper DatabaseBackuper
 	// dataPurger is optional (WithDataPurger): a nil value makes Start
-	// skip the @daily retention purge trigger (non-functional.md §3).
+	// skip the retention-purge maintenance task (non-functional.md §3).
 	dataPurger DataPurger
 	// updateChecker is optional (WithUpdateChecker, issue #65): a nil
 	// value makes CheckForUpdate a no-op and skips Start's update-check
@@ -196,8 +196,10 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 // trigger (functional.md §4.14 FR-SELFIMPROVE-1) and - when
 // WithOutcomeLabelSource/WithHeartbeatChecker/WithLogRotator were given -
 // the 1-minute Outcome Labeling enqueue (FR-CAL-4) and operator-heartbeat
-// (FR-RISK-6) triggers and a @daily log-archival trigger
-// (non-functional.md §5), running until ctx is done or Stop is called.
+// (FR-RISK-6) triggers and the daily maintenance tasks (database backup,
+// retention purge, log archival) run on start and on every 10-minute
+// catch-up tick until each has succeeded today (maintenance.go;
+// non-functional.md §3, §5), running until ctx is done or Stop is called.
 //
 // The 15-30s candidate-refresh cycle (functional.md §4.3) is not a
 // Scheduler trigger: internal/bootstrap's candidateRefreshTicker drives

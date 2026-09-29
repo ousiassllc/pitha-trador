@@ -19,12 +19,10 @@ const DefaultRetentionDays = 30
 // dir/<YYYY-MM-DD>.log file - RotatingWriter's own naming convention -
 // whose date is older than RetentionDays, leaving a
 // "<YYYY-MM-DD>.log.gz" file in its place.
-// internal/service/scheduler.Scheduler.Start registers Rotate as a @daily
-// cron job (scheduler.WithLogRotator) once a later composition-root step
-// constructs an Archiver over the same directory a RotatingWriter writes
-// to; nothing in this build does that wiring yet (mirrors this
-// codebase's other deferred-wiring extension points, e.g.
-// internal/service/risk.Config's PortfolioProvider/PositionCloser).
+// internal/bootstrap wires an Archiver over the directory a RotatingWriter
+// writes to via scheduler.WithLogRotator; the Scheduler then runs Rotate as
+// the "log_rotation" task of its maintenance.Runner (once per day, on start
+// and on every 10-minute catch-up tick until it has succeeded today).
 type Archiver struct {
 	dir           string
 	retentionDays int
