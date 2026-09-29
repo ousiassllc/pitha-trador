@@ -30,8 +30,9 @@ const (
 	// defaultHTTPTimeout is the per-attempt HTTP timeout
 	// (non-functional.md §2.2 "Jev Scout/Trader 1回呼び出し ... タイムアウト5秒").
 	// With defaultMaxAttempts and the backoff above, a fully failing call
-	// is bounded by 4*5s + 0.5s + 1s = 21.5s, inside the 30s re-evaluation
-	// cycle (§2.1).
+	// is bounded by 4*5s + 0.5s + 1s = 21.5s. That can exceed the 15-30s
+	// re-evaluation cycle (§2.1), which is fine: Scout/Trader calls run as
+	// asynchronous jobs and do not block the cycle.
 	defaultHTTPTimeout = 5 * time.Second
 	// defaultErrorRateWindow/defaultErrorRateThreshold configure the
 	// rolling error-rate alert non-functional.md §5.2 requires ("Jev API

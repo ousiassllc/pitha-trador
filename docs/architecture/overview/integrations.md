@@ -16,7 +16,7 @@
 - Jevアダプタ（`internal/service/jev`）はAPIキーをGoプロセス内のみで保持し、HTTP経由でJev APIを呼び出す
 - Scout/Traderそれぞれの質問セット（`requirements/functional.md` §4.4, §4.5）をリクエストスキーマ（`schemas.go`）として定義し、レスポンスをdomainモデルへマッピングする
 - `prompt_version.go` でプロンプト/質問セットのバージョンを管理し、`jev_decisions.question_version` に記録する（`architecture/er.md` 参照）
-- 失敗時は1回目リトライ、2回目以降exponential backoff、継続失敗でnew entry停止。既存ポジションはRisk Engine/Executionのコードベースルールで管理を継続する
+- 失敗時は1回目リトライ、2回目以降exponential backoff、継続失敗でnew entry停止。実装（`client.go`の`defaultMaxAttempts`/`defaultRetryBaseDelay`）は最大4試行（初回＋リトライ3回）、1回目リトライは即時、2回目・3回目リトライは500ms・1秒のバックオフで、HTTPタイムアウトは1試行あたり5秒（全試行失敗時の最悪所要時間21.5秒、`requirements/non-functional.md` §2.2）。既存ポジションはRisk Engine/Executionのコードベースルールで管理を継続する
 - **認証情報の入力経路**: `APIKey`/`BaseURL`は§5と同じくSettings画面（`/settings`）経由でDB保存する（issue #57）。詳細は§5「認証情報の入力経路」参照
 
 ## 7. RAG連携（経験ベース文脈拡張）
