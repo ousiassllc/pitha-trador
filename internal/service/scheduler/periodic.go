@@ -182,6 +182,7 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer recoverPanic("update check")
 			checkForUpdate()
 		}()
 	}
