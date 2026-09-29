@@ -21,6 +21,7 @@ type Thresholds struct {
 	VolumeRatioChange        float64
 	SpreadChangeBps          float64
 	OrderbookImbalanceChange float64
+	TradeFlowImbalanceChange float64
 }
 
 // Signal is one instrument's FR-SCAN-1 event-driven re-evaluation
@@ -53,15 +54,15 @@ type Signal struct {
 	// history (a fresh session high) or falls under every price in
 	// history (a fresh session low).
 	HighLowBreak bool
-	// OrderFlowChange and NewsFlag are pass-through caller inputs
-	// (Detect's orderFlowChange/newsFlag parameters): no
-	// tick-level buy/sell aggressor classification or news-feed
-	// integration exists yet in this codebase, the same "later
-	// sub-scope wires this in" deferral MarketReturn5m/SectorReturn5m
-	// (compute.go's Input) already use for signals this package cannot
-	// derive from Reading/domain.Feature alone.
+	// OrderFlowChange is
+	// abs(curr.Feature.TradeFlowImbalance - prev.Feature.
+	// TradeFlowImbalance) >= th.TradeFlowImbalanceChange (either nil,
+	// i.e. no tick data for that bar - FR-FE-2 - treated as no signal).
 	OrderFlowChange bool
-	NewsFlag        bool
+	// NewsFlag is a pass-through caller input (Detect's newsFlag
+	// parameter): News Ingest's per-symbol flag, which this package
+	// cannot derive from domain.Snapshot alone.
+	NewsFlag bool
 }
 
 // Triggered reports whether sig warrants an immediate re-evaluation per
@@ -82,16 +83,12 @@ func (sig Signal) Triggered() bool {
 
 // Detect computes prev→curr's Signal for one instrument against
 // th (functional.md §4.3 FR-SCAN-1's eight event conditions, minus
-// OrderFlowChange/NewsFlag which orderFlowChange/newsFlag supply directly
-// - see Signal's doc). history is this instrument's prior bars (any
+// NewsFlag which newsFlag supplies directly - see Signal's doc). history is this instrument's prior bars (any
 // bars at or before prev's Timestamp; curr must not be included), used
 // for the high/low breakout check - the same look-ahead-safe convention
 // Input.History uses in Compute (FR-FE-1).
-func Detect(prev, curr domain.Snapshot, history []domain.Snapshot, th Thresholds, orderFlowChange, newsFlag bool) Signal {
-	sig := Signal{
-		OrderFlowChange: orderFlowChange,
-		NewsFlag:        newsFlag,
-	}
+func Detect(prev, curr domain.Snapshot, history []domain.Snapshot, th Thresholds, newsFlag bool) Signal {
+	sig := Signal{NewsFlag: newsFlag}
 
 	if curr.Feature.Return1m != nil {
 		sig.Return1mChangeExceeded = math.Abs(*curr.Feature.Return1m) >= th.Return1mChange
@@ -104,6 +101,9 @@ func Detect(prev, curr domain.Snapshot, history []domain.Snapshot, th Thresholds
 	}
 	if curr.Feature.OrderbookImbalance != nil && prev.Feature.OrderbookImbalance != nil {
 		sig.OrderbookImbalanceChanged = math.Abs(*curr.Feature.OrderbookImbalance-*prev.Feature.OrderbookImbalance) >= th.OrderbookImbalanceChange
+	}
+	if curr.Feature.TradeFlowImbalance != nil && prev.Feature.TradeFlowImbalance != nil {
+		sig.OrderFlowChange = math.Abs(*curr.Feature.TradeFlowImbalance-*prev.Feature.TradeFlowImbalance) >= th.TradeFlowImbalanceChange
 	}
 
 	prevSign := prev.Feature.PriceVsVWAPBps >= 0
