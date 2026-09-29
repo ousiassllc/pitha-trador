@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -125,7 +126,8 @@ func (h *ActivityHandler) APIActivity(ctx context.Context, in *ActivityAPIInput)
 func (h *ActivityHandler) Page(c *gin.Context) {
 	snap, err := h.source.Snapshot(c.Request.Context(), activityfeed.Query{})
 	if err != nil {
-		c.Status(http.StatusInternalServerError)
+		slog.ErrorContext(c.Request.Context(), "handler: activity page snapshot", "error", err)
+		respondPageError(c, http.StatusInternalServerError, "アクティビティログの取得に失敗しました。")
 		return
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")

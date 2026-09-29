@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -90,7 +91,8 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 			case errors.Is(err, context.DeadlineExceeded):
 				status, props.Error = http.StatusServiceUnavailable, fmt.Sprintf("backtest timed out after %s; narrow the range", backtestTimeout)
 			case err != nil:
-				status, props.Error = http.StatusInternalServerError, "backtest failed: "+err.Error()
+				slog.ErrorContext(ctx, "handler: performance backtest", "error", err)
+				status, props.Error = http.StatusInternalServerError, "バックテストの実行に失敗しました。"
 			default:
 				props.Result = &result
 			}

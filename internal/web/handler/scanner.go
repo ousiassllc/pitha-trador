@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"time"
@@ -140,7 +141,8 @@ func (h *ScannerHandler) APIScanner(ctx context.Context, _ *struct{}) (*ScannerA
 func (h *ScannerHandler) Page(c *gin.Context) {
 	candidates, asOf, err := h.source.Candidates(c.Request.Context())
 	if err != nil {
-		c.Status(http.StatusInternalServerError)
+		slog.ErrorContext(c.Request.Context(), "handler: scanner page candidates", "error", err)
+		respondPageError(c, http.StatusInternalServerError, "候補一覧の取得に失敗しました。")
 		return
 	}
 

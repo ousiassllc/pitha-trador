@@ -2,9 +2,11 @@ package middleware_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -55,6 +57,52 @@ func TestSetupGuard_Exemptions(t *testing.T) {
 		if got := rec.Code == http.StatusFound && rec.Header().Get("Location") == "/setup"; got != tc.redirected {
 			t.Errorf("%s %s redirected=%v (code %d), want %v", tc.method, tc.path, got, rec.Code, tc.redirected)
 		}
+	}
+}
+
+// Script-driven requests must not be handed the /setup HTML page through a
+// followed 302 (issue #140): HTMX gets HX-Redirect, /api/v1 gets JSON, a
+// WebSocket upgrade gets 403.
+func TestSetupGuard_NonNavigationRequestsGetProtocolAppropriateResponses(t *testing.T) {
+	unset := stubSecrets{values: map[string]string{"A": "x"}}
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	engine.Use(middleware.SetupGuard(unset, []string{"A", "B"}))
+
+	do := func(method, path string, headers map[string]string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, nil)
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		return rec
+	}
+
+	hx := do(http.MethodGet, "/system/status", map[string]string{"HX-Request": "true"})
+	if hx.Code != http.StatusNoContent || hx.Header().Get("HX-Redirect") != "/setup" || hx.Header().Get("Location") != "" || hx.Body.Len() != 0 {
+		t.Errorf("HX-Request = %d HX-Redirect=%q Location=%q body=%q, want 204 + HX-Redirect only", hx.Code, hx.Header().Get("HX-Redirect"), hx.Header().Get("Location"), hx.Body.String())
+	}
+
+	for _, path := range []string{"/api/v1/scanner", "/api/v1"} {
+		api := do(http.MethodGet, path, nil)
+		if api.Code != http.StatusServiceUnavailable || !strings.HasPrefix(api.Header().Get("Content-Type"), "application/json") {
+			t.Fatalf("GET %s = %d %q, want 503 JSON", path, api.Code, api.Header().Get("Content-Type"))
+		}
+		var body map[string]any
+		if err := json.Unmarshal(api.Body.Bytes(), &body); err != nil || body["setup_required"] != true || body["setup_url"] != "/setup" {
+			t.Errorf("GET %s body = %q (err %v), want setup_required JSON", path, api.Body.String(), err)
+		}
+	}
+
+	ws := do(http.MethodGet, "/ws/system", map[string]string{"Upgrade": "websocket", "Connection": "Upgrade"})
+	if ws.Code != http.StatusForbidden || ws.Header().Get("Location") != "" {
+		t.Errorf("WebSocket upgrade = %d Location=%q, want 403", ws.Code, ws.Header().Get("Location"))
+	}
+
+	page := do(http.MethodGet, "/scanner", nil)
+	if page.Code != http.StatusFound || page.Header().Get("Location") != "/setup" {
+		t.Errorf("page navigation = %d Location=%q, want 302 to /setup", page.Code, page.Header().Get("Location"))
 	}
 }
 

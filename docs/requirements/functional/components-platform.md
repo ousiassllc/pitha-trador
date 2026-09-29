@@ -91,7 +91,7 @@ Settings画面（`GET /settings`）で認証情報を管理する。値は`secre
 
 必須認証情報が未設定のままアプリを使い始められないよう、専用のSetup画面（`GET /setup`）へ強制的に誘導する。
 
-- FR-SETUP-1: JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDのいずれかが未設定の間、Setup Guard Middlewareは`/setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエストを`/setup`へ302リダイレクトする。判定はリクエストごとにDBを参照するため、3キーがすべて設定された次のリクエストからリダイレクトは解除される。保存済みの値を読み出せない場合は未設定として扱う
+- FR-SETUP-1: JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDのいずれかが未設定の間、Setup Guard Middlewareは`/setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエストを`/setup`へ誘導する。ページ遷移は302、HTMXリクエストは`204`＋`HX-Redirect: /setup`、`/api/v1`は`503`のJSON、WebSocketアップグレードは`403`とし、スクリプト系リクエストに`/setup`のHTML全体を返さない。判定はリクエストごとにDBを参照するため、3キーがすべて設定された次のリクエストからリダイレクトは解除される。保存済みの値を読み出せない場合は未設定として扱う
 - FR-SETUP-2: `GET /setup`は必須3項目を個別の入力欄＋保存ボタン（`SecretFieldRow`）で表示し、任意項目としてSLACK_WEBHOOK_URLを表示する
 - FR-SETUP-3: `/setup`の保存・削除は`POST`/`DELETE /settings/:key`（FR-SETTINGS-2/3）をそのまま使い、専用の別実装を持たない
 - FR-SETUP-4: 必須3項目がすべて設定済みなら、Setup画面は完了を表示し、通常画面（`/scanner`）へ進むリンクを出す

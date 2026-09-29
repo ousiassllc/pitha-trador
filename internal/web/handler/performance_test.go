@@ -105,15 +105,19 @@ func TestPerformanceHandler_Page_RejectsInvalidInputWithoutRunning(t *testing.T)
 	}
 }
 
-func TestPerformanceHandler_Page_ShowsRunFailure(t *testing.T) {
+func TestPerformanceHandler_Page_ShowsFixedMessageOnRunFailure(t *testing.T) {
 	runner := &recordingBacktestRunner{err: errors.New("look-ahead check failed")}
 	rec := servePerformance(t, runner, "/performance?from=2026-09-01&to=2026-09-10")
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "look-ahead check failed") {
-		t.Errorf("body should include the run failure")
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-testid="backtest-error"`) {
+		t.Errorf("body should show a run failure message")
+	}
+	if strings.Contains(body, "look-ahead check failed") {
+		t.Errorf("body leaks the internal run error: %s", body)
 	}
 }
 

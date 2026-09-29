@@ -183,6 +183,9 @@ func TestActivityHandler_Page_SourceErrorIs500(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}
+	if !strings.Contains(rec.Body.String(), `data-testid="error-page"`) || strings.Contains(rec.Body.String(), "db down") {
+		t.Fatalf("500 should render the error page without the raw error, got %q", rec.Body.String())
+	}
 }
 
 func TestActivityHandler_WebSocket_ForwardsBusMessagesAndUnsubscribesOnDisconnect(t *testing.T) {

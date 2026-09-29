@@ -40,7 +40,10 @@ const buildOptions = {
   splitting: true,
   chunkNames: 'chunks/[name]-[hash]',
   target: 'es2022',
-  sourcemap: true,
+  // Dev (--watch) only: production output is go:embed'ed and served under
+  // /static, so shipping .map files would bloat the binary and expose the TS
+  // sources (issue #146). PITHA_STATIC_DIR dev serving still gets them.
+  sourcemap: watch,
   minify: !watch,
 };
 

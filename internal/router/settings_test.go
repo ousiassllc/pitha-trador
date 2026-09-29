@@ -150,8 +150,6 @@ func TestNew_SetupGuardRedirectsEveryGuardedRouteWhileRequiredKeyIsUnset(t *test
 		{http.MethodGet, "/scanner"},
 		{http.MethodGet, "/settings"},
 		{http.MethodGet, "/system/secrets-status"},
-		{http.MethodGet, "/api/v1/scanner"},
-		{http.MethodPost, "/api/v1/system/kill"},
 		{http.MethodPost, "/settings"},
 		{http.MethodGet, "/no-such-route"},
 	} {
@@ -159,6 +157,34 @@ func TestNew_SetupGuardRedirectsEveryGuardedRouteWhileRequiredKeyIsUnset(t *test
 		engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(tc.method, tc.path, nil)))
 		if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/setup" {
 			t.Errorf("%s %s = %d Location=%q, want 302 to /setup", tc.method, tc.path, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+}
+
+// issue #140: script-driven requests get a machine-readable answer, not the
+// /setup HTML page.
+func TestNew_SetupGuardAnswersHTMXAndAPIRequestsWithoutHTML(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := requiredSecretsStore()
+	delete(store, "KABU_API_PASSWORD")
+	engine := router.New(router.WithSecretsStore(store))
+
+	hx := httptest.NewRequest(http.MethodGet, "/system/status", nil)
+	hx.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, authorize(t, engine, hx))
+	if rec.Code != http.StatusNoContent || rec.Header().Get("HX-Redirect") != "/setup" {
+		t.Errorf("HTMX GET /system/status = %d HX-Redirect=%q, want 204 + /setup", rec.Code, rec.Header().Get("HX-Redirect"))
+	}
+
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/scanner"},
+		{http.MethodPost, "/api/v1/system/kill"},
+	} {
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(tc.method, tc.path, nil)))
+		if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), `"setup_required":true`) {
+			t.Errorf("%s %s = %d %q, want 503 setup_required JSON", tc.method, tc.path, rec.Code, rec.Body.String())
 		}
 	}
 }
