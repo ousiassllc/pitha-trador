@@ -9,11 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
 
 // DefaultBaseURL is kabuステーションAPIの既定ローカルエンドポイント
@@ -143,11 +143,6 @@ func (c *Client) Start(ctx context.Context, interval time.Duration) error {
 	}
 
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("marketdata: token reissue loop panicked", "panic", r, "stack", string(debug.Stack()))
-			}
-		}()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -155,7 +150,12 @@ func (c *Client) Start(ctx context.Context, interval time.Duration) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if _, err := c.IssueToken(ctx); err != nil {
+				// Per-cycle guard: a panic is logged and the loop keeps reissuing.
+				err := safego.Try("marketdata token reissue", func() error {
+					_, err := c.IssueToken(ctx)
+					return err
+				})
+				if err != nil {
 					slog.Error("marketdata: token reissue failed, keeping previous token", "error", err)
 				}
 			}

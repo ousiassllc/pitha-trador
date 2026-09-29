@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
@@ -154,18 +155,7 @@ func (s *Services) candidateRefreshTicker(ctx context.Context) {
 		max: time.Duration(s.strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,
 	}
 
-	for {
-		timer := time.NewTimer(interval.next())
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-			if err := s.refreshCandidates(ctx); err != nil {
-				slog.Error("bootstrap: candidate refresh cycle failed", "error", err)
-			}
-		}
-	}
+	safego.Loop(ctx, "candidate refresh", interval.next, s.refreshCandidates)
 }
 
 // candidateRefreshInterval mirrors internal/web/handler.

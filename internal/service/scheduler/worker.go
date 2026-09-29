@@ -79,15 +79,6 @@ func safeHandle(ctx context.Context, handler Handler, job repository.Job) (err e
 	return handler(ctx, job)
 }
 
-// recoverPanic is deferred at the top of a background goroutine so a
-// panic there is logged instead of terminating the process.
-func recoverPanic(what string) {
-	if r := recover(); r != nil {
-		slog.Error("scheduler: background task panicked",
-			"task", what, "panic", r, "stack", string(debug.Stack()))
-	}
-}
-
 // cronSlogLogger adapts robfig/cron's Logger to slog, for cron.Recover.
 type cronSlogLogger struct{}
 

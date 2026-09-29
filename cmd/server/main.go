@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
 
@@ -125,7 +126,8 @@ func main() {
 	serveErr := make(chan error, 1)
 	go func() {
 		log.Printf("pitha-trador server listening on %s", addr)
-		serveErr <- srv.ListenAndServe()
+		err := safego.Try("http server", srv.ListenAndServe)
+		serveErr <- err
 	}()
 
 	select {

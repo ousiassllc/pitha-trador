@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
@@ -93,14 +94,19 @@ func (f *Feed) Run(ctx context.Context) {
 	push := marketdata.NewPushClient(f.URL, f.Broker.Status())
 	retry := retryMin
 	for ctx.Err() == nil {
-		err := f.RegisterUniverse(ctx)
-		if err == nil {
+		// A panic (register, PUSH read, board callback) is logged and
+		// handled like any failed attempt: back off, then re-subscribe.
+		err := safego.Try("pushfeed subscription", func() error {
+			if err := f.RegisterUniverse(ctx); err != nil {
+				return err
+			}
 			connectedAt := time.Now()
-			err = push.Run(ctx, func(b marketdata.Board) { f.boards.Put(b, time.Now()) })
+			err := push.Run(ctx, func(b marketdata.Board) { f.boards.Put(b, time.Now()) })
 			if time.Since(connectedAt) >= retryMax { // was stable: restart the backoff
 				retry = retryMin
 			}
-		}
+			return err
+		})
 		if ctx.Err() != nil {
 			return
 		}
