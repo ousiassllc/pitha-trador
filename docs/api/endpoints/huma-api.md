@@ -59,6 +59,8 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 }
 ```
 
+`risk`は固定値ではなく稼働中エンジンの実設定から取得する。`allowed_position_pct`は`config/risk.yaml`の`max_position_per_symbol_pct`（Risk Engineが使用中の区分）、`stop_loss_pct`/`take_profit_pct`は`execution.Config`（Exit条件）の値。
+
 ### GET /api/v1/symbols/{symbol}/candles
 
 `pitha-price-chart`（lightweight-charts）用ローソク足＋VWAP＋出来高系列。
@@ -77,7 +79,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 
 | クエリ | 型 | 説明 |
 |-------|-----|------|
-| `limit` | integer | 件数上限（既定100） |
+| `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
 
 出力は`{"symbol": "7203", "items": [...]}`。各itemは`id`/`symbol`/`timestamp`（RFC3339）/`decision_type`（`scout`/`trader`）/`direction`/`confidence`/`regime`/`entry_quality`/`toxic_flow`/`liquidity_stressed`/`continuation_probability`/`question_version`/`model_id`/`latency_ms`。
 
@@ -85,7 +87,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 
 ### GET /api/v1/signals / GET /api/v1/signals/{symbol}
 
-`trade_signals`の一覧・銘柄別履歴（`risk_passed`, `reject_reason`含む）。新しい順。`/signals/{symbol}`の未登録銘柄は404。クエリ `limit`（既定100）。
+`trade_signals`の一覧・銘柄別履歴（`risk_passed`, `reject_reason`含む）。新しい順。`/signals/{symbol}`の未登録銘柄は404。クエリ `limit`（既定100、1〜500。範囲外は422）。パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、違反は422）。
 
 ```json
 // Output（抜粋）
@@ -145,17 +147,28 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 // Output（抜粋）
 {
   "buckets": [
-    { "range": "0.50-0.60", "direction_accuracy": 0.51, "avg_future_return_pct": -0.05 },
-    { "range": "0.60-0.70", "direction_accuracy": 0.55, "avg_future_return_pct": 0.02 },
-    { "range": "0.70-0.80", "direction_accuracy": 0.63, "avg_future_return_pct": 0.11 },
-    { "range": "0.80-0.90", "direction_accuracy": 0.71, "avg_future_return_pct": 0.24 },
-    { "range": "0.90-1.00", "direction_accuracy": 0.78, "avg_future_return_pct": 0.39 }
+    { "range": "0.50-0.60", "avg_confidence": 0.55, "direction_accuracy": 0.51, "avg_future_return_pct": -0.05,
+      "sample_count": 80, "trade_count": 6, "total_pnl": -1800, "avg_pnl_pct": -0.21 },
+    { "range": "0.60-0.70", "avg_confidence": 0.65, "direction_accuracy": 0.55, "avg_future_return_pct": 0.02,
+      "sample_count": 64, "trade_count": 9, "total_pnl": 400, "avg_pnl_pct": 0.03 },
+    { "range": "0.70-0.80", "avg_confidence": 0.75, "direction_accuracy": 0.63, "avg_future_return_pct": 0.11,
+      "sample_count": 41, "trade_count": 12, "total_pnl": 5200, "avg_pnl_pct": 0.18 },
+    { "range": "0.80-0.90", "avg_confidence": 0.85, "direction_accuracy": 0.71, "avg_future_return_pct": 0.24,
+      "sample_count": 22, "trade_count": 7, "total_pnl": 6100, "avg_pnl_pct": 0.31 },
+    { "range": "0.90-1.00", "avg_confidence": 0.94, "direction_accuracy": 0.78, "avg_future_return_pct": 0.39,
+      "sample_count": 9, "trade_count": 3, "total_pnl": 3300, "avg_pnl_pct": 0.42 }
+  ],
+  "by_direction": [
+    { "direction": "LONG", "sample_count": 120, "direction_accuracy": 0.62, "avg_future_return_pct": 0.14 },
+    { "direction": "SHORT", "sample_count": 96, "direction_accuracy": 0.58, "avg_future_return_pct": 0.09 }
   ],
   "brier_score": 0.19,
   "log_loss": 0.52,
   "expected_calibration_error": 0.06
 }
 ```
+
+`by_direction`は予測方向（`LONG`/`SHORT`、常に両方を返す）別の方向別平均リターン（`avg_future_return_pct`は方向調整済み＝SHORTは下落が正）と的中率（FR-CAL-2）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`はconfidence bucket別PnL（FR-CAL-2）で、`positions.entry_order_id` → `paper_orders.trade_signal_id` → `trade_signals.jev_decision_id`で辿れるTrader判断由来のクローズ済みポジションの件数・実現損益合計（JPY）・エントリー金額に対する平均リターン（%）。手動エントリーは含まない。
 
 ### GET /api/v1/policy-proposals
 

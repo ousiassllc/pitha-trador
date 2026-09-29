@@ -6,13 +6,19 @@ type HeatmapElement = HTMLElement & { updateComplete: Promise<boolean> };
 
 const bucket = (overrides: Partial<CalibrationBucket> = {}): CalibrationBucket => ({
   range: '0.70-0.80',
+  avg_confidence: 0.75,
   direction_accuracy: 0.63,
   avg_future_return_pct: 0.11,
+  sample_count: 20,
+  trade_count: 0,
+  total_pnl: 0,
+  avg_pnl_pct: 0,
   ...overrides,
 });
 
 const response = (overrides: Partial<CalibrationAPIResponse> = {}): CalibrationAPIResponse => ({
   buckets: [bucket()],
+  by_direction: [],
   brier_score: 0.19,
   log_loss: 0.52,
   expected_calibration_error: 0.06,
@@ -84,6 +90,39 @@ describe('pitha-calibration-heatmap', () => {
     expect(el.shadowRoot?.textContent).toContain('51.0%');
     expect(el.shadowRoot?.textContent).toContain('0.190'); // brier_score
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/calibration');
+  });
+
+  test('renders per-bucket PnL and the per-direction average return', async () => {
+    const { el } = await mount(
+      response({
+        buckets: [
+          bucket({ trade_count: 3, total_pnl: 1200, avg_pnl_pct: 0.4, avg_confidence: 0.76 }),
+        ],
+        by_direction: [
+          {
+            direction: 'LONG',
+            sample_count: 10,
+            direction_accuracy: 0.6,
+            avg_future_return_pct: 0.12,
+          },
+          {
+            direction: 'SHORT',
+            sample_count: 4,
+            direction_accuracy: 0.5,
+            avg_future_return_pct: -0.3,
+          },
+        ],
+      }),
+    );
+
+    const text = el.shadowRoot?.textContent ?? '';
+    expect(text).toContain('3 trades');
+    expect(text).toContain('+1,200 JPY');
+    expect(text).toContain('conf 0.76');
+    const rows = el.shadowRoot?.querySelectorAll('[data-testid="calibration-direction-row"]');
+    expect(rows?.length).toBe(2);
+    expect(rows?.[1]?.textContent).toContain('SHORT');
+    expect(rows?.[1]?.textContent).toContain('-0.30%');
   });
 
   test('the refresh button re-fetches calibration-url without opening a WebSocket', async () => {

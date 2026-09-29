@@ -2,8 +2,6 @@ package insightapi
 
 import "github.com/danielgtaylor/huma/v2"
 
-const defaultListLimit = 100
-
 // Handler implements the routes documented in the package comment.
 type Handler struct {
 	provider Provider

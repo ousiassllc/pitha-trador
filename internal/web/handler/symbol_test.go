@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
@@ -91,3 +92,17 @@ func TestStaticSymbolProvider_DefaultsAreEmpty(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+func TestNewSymbolRiskParams_UsesConfiguredLimitsAndExitRule(t *testing.T) {
+	limits := config.RiskLimits{MaxPositionPerSymbolPct: 1.0}
+	exit := execution.DefaultConfig()
+	exit.StopLossPct = 0.4
+	exit.TakeProfitPct = 0.9
+
+	got := handler.NewSymbolRiskParams(limits, exit)
+
+	want := handler.SymbolRiskParams{AllowedPositionPct: 1.0, StopLossPct: 0.4, TakeProfitPct: 0.9}
+	if got != want {
+		t.Fatalf("NewSymbolRiskParams() = %+v, want %+v", got, want)
+	}
+}

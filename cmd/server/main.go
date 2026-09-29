@@ -96,6 +96,7 @@ func main() {
 		router.WithSystemEngine(services.Risk),
 		router.WithHeartbeatRecorder(services.Risk),
 		router.WithSymbolProvider(services.Execution),
+		router.WithSymbolRiskParams(handler.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config())),
 		router.WithInsightProvider(services.Insight),
 		router.WithCalibrationSource(services.Calibration),
 		router.WithPolicyProposalSource(services.Proposals),

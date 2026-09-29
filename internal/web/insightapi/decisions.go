@@ -43,8 +43,8 @@ type DecisionsAPIOutput struct {
 // DecisionsInput is `GET /api/v1/symbols/{symbol}/decisions`'s
 // path+query parameters.
 type DecisionsInput struct {
-	Symbol string `path:"symbol" doc:"Instrument symbol (e.g. 7203)."`
-	Limit  int    `query:"limit" default:"100" doc:"Maximum number of decisions to return."`
+	Symbol string `path:"symbol" minLength:"1" maxLength:"16" pattern:"^[0-9A-Za-z]+$" doc:"Instrument symbol (alphanumeric, e.g. 7203)."`
+	Limit  int    `query:"limit" default:"100" minimum:"1" maximum:"500" doc:"Maximum number of decisions to return (1-500)."`
 }
 
 // Decisions implements `GET /api/v1/symbols/{symbol}/decisions`
@@ -52,11 +52,7 @@ type DecisionsInput struct {
 // and Trader decisions interleaved and distinguished by decision_type,
 // most recent first.
 func (h *Handler) Decisions(ctx context.Context, in *DecisionsInput) (*DecisionsAPIOutput, error) {
-	limit := in.Limit
-	if limit <= 0 {
-		limit = defaultListLimit
-	}
-	decisions, err := h.provider.RecentDecisions(ctx, in.Symbol, limit)
+	decisions, err := h.provider.RecentDecisions(ctx, in.Symbol, in.Limit)
 	if err != nil {
 		if errors.Is(err, execution.ErrInstrumentUnknown) {
 			return nil, huma.Error404NotFound("unknown symbol", err)

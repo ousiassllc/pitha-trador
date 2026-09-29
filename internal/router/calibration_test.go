@@ -18,7 +18,10 @@ func TestNew_APICalibrationReturnsMetricsFromWithCalibrationSourceOption(t *test
 	source := handler.StaticCalibrationSource{
 		Metrics_: domain.CalibrationMetrics{
 			Buckets: []domain.ConfidenceBucket{
-				{Range: "0.50-0.60", DirectionAccuracy: 0.51, AvgFutureReturnPct: -0.05},
+				{Range: "0.50-0.60", AvgConfidence: 0.55, DirectionAccuracy: 0.51, AvgFutureReturnPct: -0.05, TradeCount: 3, TotalPnL: -1200, AvgPnLPct: -0.4},
+			},
+			ByDirection: []domain.DirectionMetric{
+				{Direction: domain.JevDirectionLong, SampleCount: 10, DirectionAccuracy: 0.6, AvgFutureReturnPct: 0.12},
 			},
 			BrierScore:               0.19,
 			LogLoss:                  0.52,
@@ -37,6 +40,14 @@ func TestNew_APICalibrationReturnsMetricsFromWithCalibrationSourceOption(t *test
 	body := rec.Body.String()
 	if !strings.Contains(body, `"range":"0.50-0.60"`) || !strings.Contains(body, `"brier_score":0.19`) {
 		t.Fatalf("expected body to contain the injected calibration metrics, got %q", body)
+	}
+	for _, want := range []string{
+		`"avg_confidence":0.55`, `"trade_count":3`, `"total_pnl":-1200`, `"avg_pnl_pct":-0.4`,
+		`"by_direction":[{"direction":"LONG","sample_count":10,"direction_accuracy":0.6,"avg_future_return_pct":0.12}`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected body to contain %q, got %q", want, body)
+		}
 	}
 }
 

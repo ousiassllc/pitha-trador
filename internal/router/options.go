@@ -16,15 +16,6 @@ var defaultCandidateRefreshInterval = handler.CandidateRefreshInterval{
 	Max: 30 * time.Second,
 }
 
-// defaultSymbolRiskParams mirrors config/risk.yaml's Paper
-// max_position_per_symbol_pct (2.0) plus FR-EXIT-2's initial
-// stop_loss_pct/take_profit_pct (0.6/1.2).
-var defaultSymbolRiskParams = handler.SymbolRiskParams{
-	AllowedPositionPct: 2.0,
-	StopLossPct:        0.6,
-	TakeProfitPct:      1.2,
-}
-
 type options struct {
 	candidateSource   handler.CandidateSource
 	candidateRefresh  handler.CandidateRefreshInterval
@@ -77,9 +68,9 @@ func WithSymbolProvider(provider handler.SymbolProvider) Option {
 }
 
 // WithSymbolRiskParams overrides `GET /api/v1/symbols/{symbol}`'s "risk"
-// section (handler.SymbolRiskParams). Defaults to FR-EXIT-2's initial
-// values (stop_loss_pct=0.6, take_profit_pct=1.2) plus config/risk.yaml's
-// Paper max_position_per_symbol_pct (2.0).
+// section (handler.SymbolRiskParams). cmd/* build it from the real
+// risk.Engine/execution.Engine settings via handler.NewSymbolRiskParams;
+// without this option the section reports zero values.
 func WithSymbolRiskParams(params handler.SymbolRiskParams) Option {
 	return func(o *options) { o.symbolRiskParams = params }
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -172,6 +173,44 @@ func TestSymbolHandler_APIPerformance_ProviderErrorReturns500(t *testing.T) {
 	}
 }
 
+func TestHandler_InvalidInput_Returns422WithoutQueryingProvider(t *testing.T) {
+	for _, path := range []string{
+		"/signals?limit=0", "/signals?limit=-1", "/signals?limit=501", "/signals?limit=100000",
+		"/signals/7203?limit=0", "/signals/7203?limit=501", "/signals/..x",
+		"/symbols/7203/decisions?limit=0", "/symbols/7203/decisions?limit=501",
+		"/symbols/abcdefghijklmnopq/decisions", "/symbols/72-03/decisions",
+	} {
+		t.Run(path, func(t *testing.T) {
+			provider := &fakeProvider{}
+			_, api := humatest.New(t)
+			insightapi.New(provider).Register(api)
+
+			resp := api.Get(path)
+
+			if resp.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want %d (body=%s)", resp.Code, http.StatusUnprocessableEntity, resp.Body.String())
+			}
+			if provider.calls != 0 {
+				t.Fatalf("provider called %d times, want 0", provider.calls)
+			}
+		})
+	}
+}
+
+func TestHandler_LimitBoundaries_PassedThrough(t *testing.T) {
+	for _, limit := range []string{"1", "500"} {
+		provider := &fakeProvider{}
+		_, api := humatest.New(t)
+		insightapi.New(provider).Register(api)
+
+		resp := api.Get("/signals?limit=" + limit)
+
+		if resp.Code != http.StatusOK || strconv.Itoa(provider.lastSignalsLimit) != limit {
+			t.Fatalf("limit=%s: status/limit = %d/%d, want 200 and the same limit", limit, resp.Code, provider.lastSignalsLimit)
+		}
+	}
+}
+
 func floatPtr(f float64) *float64 { return &f }
 func strPtr(s string) *string     { return &s }
 
@@ -182,21 +221,25 @@ type fakeProvider struct {
 	signals          []domain.TradeSignal
 	signalsErr       error
 	lastSignalsLimit int
+	calls            int
 
 	performance insight.Performance
 	perfErr     error
 }
 
 func (f *fakeProvider) RecentDecisions(context.Context, string, int) ([]domain.JevDecision, error) {
+	f.calls++
 	return f.decisions, f.decisionsErr
 }
 
 func (f *fakeProvider) ListSignals(_ context.Context, limit int) ([]domain.TradeSignal, error) {
+	f.calls++
 	f.lastSignalsLimit = limit
 	return f.signals, f.signalsErr
 }
 
 func (f *fakeProvider) RecentSignals(_ context.Context, _ string, limit int) ([]domain.TradeSignal, error) {
+	f.calls++
 	f.lastSignalsLimit = limit
 	return f.signals, f.signalsErr
 }

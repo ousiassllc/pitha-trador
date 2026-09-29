@@ -26,7 +26,6 @@ func New(opts ...Option) *gin.Engine {
 		systemEngine:      handler.StaticSystemEngine{},
 		symbolProvider:    handler.StaticSymbolProvider{},
 		insightProvider:   insightapi.StaticProvider{},
-		symbolRiskParams:  defaultSymbolRiskParams,
 		calibrationSource: handler.StaticCalibrationSource{},
 		proposalSource:    handler.StaticPolicyProposalSource{},
 		backtestRunner:    handler.StaticBacktestRunner{},

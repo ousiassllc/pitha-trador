@@ -66,6 +66,11 @@ type Deps struct {
 	Instruments *repository.InstrumentRepository
 }
 
+// Config returns the Entry/Exit rule set Engine was built with (Now
+// defaulted), e.g. for the Symbol Detail Risk section to report the
+// stop-loss/take-profit exit thresholds actually in effect.
+func (e *Engine) Config() Config { return e.cfg }
+
 // NewEngine returns an Engine backed by deps, applying cfg's documented
 // defaults (Config.withDefaults) for every zero-valued field. It panics
 // if deps.Orders or deps.Positions is nil - both are required for every
