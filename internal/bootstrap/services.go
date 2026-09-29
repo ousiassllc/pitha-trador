@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
@@ -117,6 +119,7 @@ type Services struct {
 	wg       sync.WaitGroup
 
 	newsEnabled bool
+	sessionOpen func(time.Time) bool // trading-session predicate (session.go)
 }
 
 // BuildServices constructs the full composition-root service graph on top
@@ -141,7 +144,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	outcomes := repository.NewCalibrationRepository(state.DB)
 	killSwitch := repository.NewKillSwitchRepository(state.DB)
 	settings := repository.NewRuntimeSettingsRepository(state.DB)
-	alerts := newAlertChannels(secrets)
+	alertChannels := alerts.New(secrets)
 
 	// System Activity Log (functional.md §4.15): reads the pipeline's own
 	// repositories; their post-commit observers feed `/ws/activity`.
@@ -160,7 +163,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	jevClient := jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		APIKey:  secrets.JevAPIKey,
-		Alerts:  alerts.jevAlerts(),
+		Alerts:  alertChannels.JevAlerts(),
 	})
 	// News Ingest (issue #81, FR-LUNA-1〜5): the external news feed and
 	// Luna are both optional secrets; unless both are configured the
@@ -175,7 +178,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout, jev.WithNewsSource(newsService))
 	trader := jev.NewTrader(jevClient, decisions, ragService, jev.WithNewsSource(newsService))
 
-	executionConfig := execution.ConfigFromRiskLimits(state.Risk.Paper)
+	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(state.Risk.Paper))
 	executionEngine := execution.NewEngine(execution.Deps{
 		Orders:      orders,
 		Positions:   positions,
@@ -196,7 +199,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		jevAPI:     jevClient,
 		brokerAPI:  marketDataClient.BrokerFailures(),
 		dbWrite:    repository.DBWriteFailures,
-	}, executionEngine, alerts.riskNotifier(notifiers))
+	}, executionEngine, alertChannels.RiskNotifier(notifiers))
 	// runtimePolicy is strategy.yaml's policy.* thresholds overridden by every
 	// applied Self-Improvement proposal; signals and backtests both read it, so
 	// an approved (or rolled-back) change applies on the next evaluation (#52).
@@ -204,7 +207,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	policyEngine := policy.NewEngine(thresholds, riskEngine, signals, policy.WithPolicySource(runtimePolicy))
 	calibrationService := calibration.NewService(outcomes, decisiontrade.New(state.DB))
-	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine, sizer: riskEngine}, policy.WithCalibration(calibrationService))
+	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperexec.Executor{Engine: executionEngine, Sizer: riskEngine}, policy.WithCalibration(calibrationService))
 
 	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
 	// Sol/Opus (issue #82, FR-SELFIMPROVE-8/9) are real external LLM API
@@ -216,18 +219,18 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	proposals := repository.NewProposalRepository(state.DB)
 	governor := selfimprove.NewGovernor(proposals, settings, positions,
 		backtestSource, state.Strategy.Policy,
-		selfimprove.WithNotifier(alerts.selfImproveNotifier()),
+		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()),
 		selfimprove.WithSol(assist.NewSol(solClient)),
 		selfimprove.WithOpus(assist.NewOpus(opusClient)))
 
 	schedOpts := []scheduler.Option{
 		scheduler.WithOutcomeLabelSource(outcomes),
-		scheduler.WithHeartbeatChecker(riskEngine),
+		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(riskEngine),
 		scheduler.WithRiskMonitor(riskEngine),
 		scheduler.WithAutoResumer(riskEngine),
 		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
 		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
-		scheduler.WithMaintenanceState(settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alerts.log, alerts.slack)),
+		scheduler.WithMaintenanceState(settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
 	if dir := os.Getenv(EnvBackupDir); dir != "" {
 		schedOpts = append(schedOpts, scheduler.WithDatabaseBackuper(backup.New(state.DB, dir, 0)))
@@ -275,6 +278,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Scheduler:     sched,
 		Updater:       updateAdapter,
 		strategy:      state.Strategy,
+		sessionOpen:   marketcalendarOpen,
 	}
 
 	sched.RegisterHandler(repository.JobQueueMarketData, svc.handleMarketData)

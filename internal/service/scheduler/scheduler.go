@@ -48,6 +48,9 @@ type Scheduler struct {
 	// no-ops and skip their Start triggers.
 	riskMonitor RiskMonitor
 	autoResumer AutoResumer
+	// sessionOpen is optional (WithSessionGate): a nil value leaves the
+	// full-scan/event-driven triggers ungated (session.go).
+	sessionOpen func(time.Time) bool
 	// logRotator is optional (WithLogRotator): a nil value makes Start
 	// skip registering the @daily log-archival cron trigger entirely
 	// (non-functional.md §5 "ログは日次ローテーションし").
@@ -135,7 +138,13 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 // per active instrument, due at now (functional.md FR-SCHED-2 前半). It
 // returns the number of instruments enqueued for, and logs that count as
 // a structured JSON line (non-functional.md §5.1 "スキャン対象銘柄数").
+//
+// Outside a trading session (WithSessionGate) it enqueues nothing and
+// returns (0, nil): no market data is fetched off-hours.
 func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, error) {
+	if !s.inSession(now) {
+		return 0, nil
+	}
 	instruments, err := s.instruments.ListActive(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("scheduler: list active instruments for full scan: %w", err)
@@ -168,7 +177,7 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 // cannot import internal/service/featureengine per doc.go's layer rule)
 // decides triggered.
 func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID int64, symbol string, triggered bool, now time.Time) error {
-	if !triggered {
+	if !triggered || !s.inSession(now) {
 		return nil
 	}
 	payload, err := json.Marshal(fullScanPayload{InstrumentID: instrumentID, Symbol: symbol})

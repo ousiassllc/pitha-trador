@@ -1,4 +1,4 @@
-package risk_test
+package multinotify_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/multinotify"
 )
 
 // countingNotifier records how many times each risk.Notifier method was
@@ -31,11 +31,11 @@ func (n *countingNotifier) DailyLossWarning(context.Context, float64, float64) e
 	return n.failWith
 }
 
-func TestMultiNotifier_FailingChannelDoesNotSuppressOthers(t *testing.T) {
+func TestNotifier_FailingChannelDoesNotSuppressOthers(t *testing.T) {
 	slackDown := errors.New("slack webhook unreachable")
 	failing := &countingNotifier{failWith: slackDown}
 	healthy := &countingNotifier{}
-	multi := risk.NewMultiNotifier(failing, healthy)
+	multi := multinotify.New(failing, healthy)
 	ctx := context.Background()
 
 	err := multi.KillSwitchTriggered(ctx, domain.KillSwitchEvent{Reason: domain.KillReasonMarketDataDown}, true)
@@ -51,10 +51,10 @@ func TestMultiNotifier_FailingChannelDoesNotSuppressOthers(t *testing.T) {
 	}
 }
 
-func TestMultiNotifier_JoinsEveryChannelError(t *testing.T) {
+func TestNotifier_JoinsEveryChannelError(t *testing.T) {
 	first := errors.New("first channel down")
 	second := errors.New("second channel down")
-	multi := risk.NewMultiNotifier(&countingNotifier{failWith: first}, &countingNotifier{failWith: second})
+	multi := multinotify.New(&countingNotifier{failWith: first}, &countingNotifier{failWith: second})
 
 	err := multi.DailyLossWarning(context.Background(), 2.5, 3.0)
 	if !errors.Is(err, first) || !errors.Is(err, second) {

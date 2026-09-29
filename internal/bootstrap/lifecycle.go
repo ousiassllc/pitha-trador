@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/heldposition"
 )
 
 // Start launches every background goroutine this build's composition
@@ -39,6 +41,16 @@ func (s *Services) Start(ctx context.Context) error {
 
 	s.wg.Add(1)
 	go s.candidateRefreshTicker(ctx)
+
+	s.wg.Add(1)
+	go func() { // FR-SCHED-4 / issue #156
+		defer s.wg.Done()
+		scan := s.strategy.Scan
+		heldposition.Monitor{
+			Positions: s.Positions, Boards: s.MarketData, Exits: s.Execution,
+			Exchange: defaultKabuExchange, Open: marketcalendarOpen,
+		}.Run(ctx, time.Duration(scan.HeldPositionIntervalSecondsMin)*time.Second, time.Duration(scan.HeldPositionIntervalSecondsMax)*time.Second)
+	}()
 
 	if s.newsEnabled {
 		s.wg.Add(1)

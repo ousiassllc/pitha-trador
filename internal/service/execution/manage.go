@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 )
 
 // pendingOrderScanLimit bounds how many of an instrument's most recent
@@ -39,6 +40,8 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	if e.decisions == nil {
 		return SnapshotResult{}, fmt.Errorf("execution: OnSnapshot requires Deps.Decisions to be configured")
 	}
+	e.snapshotMu.Lock()
+	defer e.snapshotMu.Unlock()
 	now := snap.Timestamp
 
 	filled, err := e.fillPendingEntries(ctx, snap)
@@ -65,7 +68,7 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	if err != nil {
 		return SnapshotResult{}, err
 	}
-	mkt := MarketContext{Price: snap.Price, Decision: decision, Now: now}
+	mkt := MarketContext{Price: snap.Price, Decision: decision, MarketCloseAt: e.marketCloseAt(now), Now: now}
 	if snap.Feature.VWAP > 0 {
 		vwap := snap.Feature.VWAP
 		mkt.VWAP = &vwap
@@ -118,7 +121,7 @@ func (e *Engine) fillPendingEntries(ctx context.Context, snap domain.Snapshot) (
 }
 
 // latestTraderDecision returns instrumentID's most recent Jev Trader
-// decision (EnrichDecision-populated, as EvaluateExit requires), or nil
+// decision (enrich.Decision-populated, as EvaluateExit requires), or nil
 // when none exists - which disables only the two Jev-derived exit
 // conditions (FR-EXIT-3).
 func (e *Engine) latestTraderDecision(ctx context.Context, instrumentID int64) (*domain.JevDecision, error) {
@@ -128,7 +131,7 @@ func (e *Engine) latestTraderDecision(ctx context.Context, instrumentID int64) (
 	}
 	for _, d := range decisions {
 		if d.DecisionType == domain.JevDecisionTypeTrader {
-			enriched := EnrichDecision(d)
+			enriched := enrich.Decision(d)
 			return &enriched, nil
 		}
 	}

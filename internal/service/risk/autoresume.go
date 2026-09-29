@@ -87,8 +87,13 @@ func (e *Engine) CheckJevAPIHealth(ctx context.Context) error {
 
 // checkHealthTrigger is CheckMarketDataHealth/CheckJevAPIHealth's shared
 // body: reason fires (idempotently) exactly when checker reports
-// unhealthy.
+// unhealthy. Outside a trading session it does nothing: no board is
+// fetched and no Jev call is made off-hours (non-functional.md §3), so the
+// health signal would say nothing about a real outage.
 func (e *Engine) checkHealthTrigger(ctx context.Context, reason string, checker HealthChecker) error {
+	if !e.inSession(e.now()) {
+		return nil
+	}
 	healthy, err := checker.Healthy(ctx)
 	if err != nil {
 		return fmt.Errorf("risk: check %s health: %w", reason, err)
@@ -117,7 +122,7 @@ func (e *Engine) RecordHeartbeat(ctx context.Context, at time.Time) error {
 // implements scheduler.HeartbeatChecker directly), run every minute
 // (docs/architecture/overview.md §10.4).
 func (e *Engine) CheckHeartbeatTimeout(ctx context.Context) error {
-	if e.limits.HeartbeatTimeoutMinutes <= 0 {
+	if e.limits.HeartbeatTimeoutMinutes <= 0 || !e.inSession(e.now()) {
 		return nil
 	}
 	fresh, err := e.heartbeatFresh(ctx)
@@ -142,5 +147,5 @@ func (e *Engine) heartbeatFresh(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	timeout := time.Duration(e.limits.HeartbeatTimeoutMinutes) * time.Minute
-	return e.now().Sub(last) <= timeout, nil
+	return e.now().Sub(e.sessionHeartbeat(last, e.now())) <= timeout, nil
 }

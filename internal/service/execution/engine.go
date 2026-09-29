@@ -49,6 +49,9 @@ type Engine struct {
 
 	mu        sync.Mutex
 	cooldowns map[string]time.Time // symbol -> cooldown_until (functional.md §4.9)
+
+	// snapshotMu serialises OnSnapshot (per-bar job vs held-position monitor).
+	snapshotMu sync.Mutex
 }
 
 // Deps is every repository Engine reads/writes. Snapshots/Decisions/

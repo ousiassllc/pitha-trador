@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
@@ -97,7 +98,7 @@ func TestPaperExecutor_SkipsEntryWhenNoLotFitsLimits(t *testing.T) {
 	svc := newTestServices(t, nil)
 	inst := mustCreateInstrument(t, svc, "7203")
 	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 400_000, Timestamp: time.Now().UTC()}
-	if err := (paperExecutor{engine: svc.Execution, sizer: svc.Risk}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
+	if err := (paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
 		t.Fatalf("ExecuteSignal = %v, want nil (skipped)", err)
 	}
 	if orders, err := svc.Orders.List(context.Background(), "", 10); err != nil || len(orders) != 0 {
