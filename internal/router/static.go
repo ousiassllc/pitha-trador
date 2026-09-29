@@ -25,7 +25,7 @@ const EnvStaticDir = "PITHA_STATIC_DIR"
 // (htmx.min.js) - embedded at compile time, so the same bytes ship inside a
 // packaged `wails build`/`go build ./cmd/server` .exe regardless of the
 // process's cwd or the source tree's location (architecture/overview.md
-// §7). See EnvStaticDir above for the dev-mode disk-backed override this
+// §9). See EnvStaticDir above for the dev-mode disk-backed override this
 // embedded snapshot is a fallback from.
 func staticFS() http.FileSystem {
 	if dir := os.Getenv(EnvStaticDir); dir != "" {

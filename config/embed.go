@@ -1,7 +1,7 @@
 // Package configdefaults embeds config/strategy.yaml and config/risk.yaml
 // so a packaged .exe still has a usable default configuration even when
 // distributed with no accompanying config/ directory next to it
-// (docs/architecture/overview.md §7, issue #59).
+// (docs/architecture/overview.md §9, issue #59).
 //
 // internal/bootstrap.Run resolves each config file's path in four steps:
 // an explicit bootstrap.Config field, then the PITHA_STRATEGY_PATH/

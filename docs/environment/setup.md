@@ -106,7 +106,7 @@ make dev
 |---|---|
 | `make dev` | `wails dev`・`templ generate --watch`・`bun --cwd=static run dev`を並行起動 |
 | `make generate` | `templ generate`と`bun run --cwd static build`。`lint`/`test`/`build`の前提 |
-| `make lint` | `generate`後に`golangci-lint run`と`bunx biome check static/` |
+| `make lint` | `generate`後に`golangci-lint run`と`bunx biome check static/`。CIの`lint`ジョブが実行する`linterly check`と`bunx tsc --noEmit`は含まない（`linterly check`はlefthookのpre-commitで、`tsc --noEmit`はCIのみで実行される） |
 | `make test` | `generate`後に`go test ./...`と`bun --cwd=static test` |
 | `make build` | `generate`後に`wails build -platform windows/amd64` |
 | `make openapi-export` | 起動中サーバー（`127.0.0.1:48080`）から`docs/api/openapi.json`を書き出す（任意タスク。ファイルは未コミット） |
@@ -137,14 +137,15 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 | Go | golangci-lint | `.golangci.yml` |
 | フロントエンド（Lit/TypeScript） | Biome | `static/biome.json` |
 
-- `.golangci.yml`には標準的なlinter（`govet`, `staticcheck`, `errcheck`, `ineffassign`, `gosimple`, `gofmt`）を有効化する
+- `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
+- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`へのimportを拒否してレイヤー規約（`architecture/overview.md` §3）をlintで強制する
 - Biomeはlintとformatを1ツールで兼ねるため、`static/`配下は追加のESLint/Prettier設定を持たない
 
 ## Format
 
 | 対象 | ツール | コマンド |
 |---|---|---|
-| Go | gofmt（標準、golangci-lintの`gofmt`linterでCI検証も兼ねる） | `go fmt ./...` |
+| Go | gofmt（標準、`.golangci.yml`の`formatters:`で有効化されCI検証も兼ねる） | `go fmt ./...` |
 | フロントエンド | Biome | `bunx biome format --write static/src` |
 
 ## Linterly
@@ -169,20 +170,23 @@ language: ja
 #   - "**/*_templ.go"
 ```
 
-`.linterlyignore`:
+`.linterlyignore`（抜粋。実ファイルの全文が正）:
 
 ```text
 # 実行時ログ（ソースコードではない）
 **/logs/**
 
-# 自動生成コード（Templが生成するGoコード。手書きソースコードの除外は基本追加しない）
+# 自動生成コード（Templが生成するGoコード）
 *_templ.go
 
 # 既知債務（手書きソース）: ディレクトリ2000行上限の暫定除外（issue #134 で追跡）。
 # internal/repository/・internal/web/handler/・internal/bootstrap/・
-# internal/service/risk/ の個別ファイルのみ。新規追加は禁止
-# （必要になった時点でサブパッケージ分割を先に行う）
+# internal/service/risk/ の手書きソース（テスト含む）を個別ファイル単位で列挙している。
+# 新規追加は禁止（必要になった時点でサブパッケージ分割を先に行う）
 ```
+
+- 個別ファイル列挙の除外はすべて上記の既知債務で、issue #134でサブパッケージ分割により解消するまでの暫定措置である。生成物・ログ以外の除外パターンを新たに追加してはならない
+- 除外中のファイルも1ファイル300行以内に保つ（現時点の唯一の例外は`internal/web/handler/settings_test.go`）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
 
@@ -195,18 +199,20 @@ pre-commit:
   commands:
     golangci-lint:
       glob: "*.go"
-      run: golangci-lint run
+      run: make generate && golangci-lint run
     biome:
       glob: "static/src/**/*.{ts,css}"
       run: bunx biome check {staged_files}
     linterly:
-      run: linterly check {staged_files}
+      run: linterly check
 
 pre-push:
   commands:
     go-test:
-      run: go test ./...
+      run: make generate && go test ./...
 ```
+
+`golangci-lint`と`go-test`の前に`make generate`を実行するのは、`*_templ.go`と`static/src/dist/`が未生成だと`go:embed`でコンパイルできない（または古い生成物に対して実行してしまう）ため。`linterly check`は`{staged_files}`を渡さずリポジトリ全体を検査する（ディレクトリ単位の行数上限のため）。
 
 ## Swagger / OpenAPI
 
@@ -235,3 +241,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.11 | 2026-09-29 | 環境変数表に`PITHA_BACKUP_DIR`（SQLite日次バックアップの退避先）を追加 | issue #97（DB日次バックアップ未実装の解消） |
 | 1.12 | 2026-09-29 | 環境変数表に`PITHA_SERVER_ALLOWED_HOSTS`（Host検証の追加許可ホスト）を追加 | issue #136 |
 | 1.13 | 2026-09-29 | `PITHA_BACKUP_DIR`の説明を更新（`secrets`除外・パーミッション・週次52週保持・退避先必須・catch-up実行） | issue #137/#152/#159 |
+| 1.14 | 2026-09-29 | Lint/Format/Linterly/Git Hooks節を実ファイル（`.golangci.yml`の有効linterとdepguard、`lefthook.yml`、`.linterlyignore`）に合わせて是正。`make lint`とCI `lint`ジョブの差分を明記。`.env.example`に`PITHA_SERVER_ALLOW_NON_LOOPBACK`/`PITHA_SERVER_ALLOWED_HOSTS`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`の雛形を追加 | issue #154 |

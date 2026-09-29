@@ -28,7 +28,7 @@ const defaultManualKillReason = "manual"
 // components/overview.md §5.4): pushes a `kill_switch` message the
 // moment SystemEngine.State transitions into domain.SystemStateKilled -
 // whether triggered by `POST /system/kill` or directly by Risk Engine
-// (architecture/overview.md §8.3) - so `pitha-kill-switch-panel` can
+// (architecture/overview.md §10.3) - so `pitha-kill-switch-panel` can
 // reflect that state even when the transition did not originate from its
 // own POST call.
 func (h *SystemHandler) WebSocket(c *gin.Context) {
