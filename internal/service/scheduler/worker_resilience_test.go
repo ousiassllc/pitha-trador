@@ -11,6 +11,25 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
+// runOnePoll starts a scheduler whose worker polls only when told to, and
+// returns once exactly one poll has finished. The poll channel is unbuffered,
+// so the second send is accepted only after poll #1's drain loop is done:
+// everything handled by then was handled by that ONE poll, with no wall-clock
+// timing involved.
+func runOnePoll(t *testing.T, jobs *repository.JobRepository, instruments *repository.InstrumentRepository, h scheduler.Handler) {
+	t.Helper()
+	polls := make(chan time.Time)
+	s := scheduler.New(jobs, instruments, scheduler.WithPollSignalForTest(polls))
+	s.RegisterHandler(repository.JobQueueMarketData, h)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() { cancel(); s.Stop() })
+	if err := s.Start(ctx, time.Hour); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	polls <- time.Now()
+	polls <- time.Now()
+}
+
 func TestScheduler_Start_HandlerPanicMarksJobFailedAndKeepsWorkerAlive(t *testing.T) {
 	db := newTestDB(t)
 	instruments := repository.NewInstrumentRepository(db)
@@ -26,42 +45,26 @@ func TestScheduler_Start_HandlerPanicMarksJobFailedAndKeepsWorkerAlive(t *testin
 		t.Fatalf("Enqueue ok job: %v", err)
 	}
 
-	s := scheduler.New(jobs, instruments, scheduler.WithPollInterval(5*time.Millisecond))
-	s.RegisterHandler(repository.JobQueueMarketData, func(_ context.Context, j repository.Job) error {
+	runOnePoll(t, jobs, instruments, func(_ context.Context, j repository.Job) error {
 		if j.ID == panicJob.ID {
 			var payload []int
 			_ = payload[len(j.PayloadJSON)] // index out of range: panics
 		}
 		return nil
 	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	if err := s.Start(ctx, time.Hour); err != nil {
-		t.Fatalf("Start: %v", err)
+	gotPanic, err := jobs.Get(context.Background(), panicJob.ID)
+	if err != nil {
+		t.Fatalf("Get panic job: %v", err)
 	}
-	defer s.Stop()
-
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		gotPanic, err := jobs.Get(context.Background(), panicJob.ID)
-		if err != nil {
-			t.Fatalf("Get panic job: %v", err)
-		}
-		gotOK, err := jobs.Get(context.Background(), okJob.ID)
-		if err != nil {
-			t.Fatalf("Get ok job: %v", err)
-		}
-		if gotPanic.Status == repository.JobStatusFailed && gotOK.Status == repository.JobStatusSucceeded {
-			if gotPanic.LastError == nil || !strings.Contains(*gotPanic.LastError, "handler panic") {
-				t.Errorf("LastError = %v, want it to mention the handler panic", gotPanic.LastError)
-			}
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("panic job status = %q, following job status = %q; want failed and succeeded", gotPanic.Status, gotOK.Status)
-		}
-		time.Sleep(2 * time.Millisecond)
+	gotOK, err := jobs.Get(context.Background(), okJob.ID)
+	if err != nil {
+		t.Fatalf("Get ok job: %v", err)
+	}
+	if gotPanic.Status != repository.JobStatusFailed || gotOK.Status != repository.JobStatusSucceeded {
+		t.Fatalf("panic job status = %q, following job status = %q; want failed and succeeded", gotPanic.Status, gotOK.Status)
+	}
+	if gotPanic.LastError == nil || !strings.Contains(*gotPanic.LastError, "handler panic") {
+		t.Errorf("LastError = %v, want it to mention the handler panic", gotPanic.LastError)
 	}
 }
 
@@ -79,26 +82,11 @@ func TestScheduler_Start_DrainsBacklogWithinOnePoll(t *testing.T) {
 	}
 
 	var processed atomic.Int64
-	s := scheduler.New(jobs, instruments, scheduler.WithPollInterval(50*time.Millisecond))
-	s.RegisterHandler(repository.JobQueueMarketData, func(context.Context, repository.Job) error {
+	runOnePoll(t, jobs, instruments, func(context.Context, repository.Job) error {
 		processed.Add(1)
 		return nil
 	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	if err := s.Start(ctx, time.Hour); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	defer s.Stop()
-
-	// Handling one job per 50ms tick would take 2s for 40 jobs; draining
-	// finishes them all within the first tick.
-	deadline := time.Now().Add(1 * time.Second)
-	for processed.Load() < total {
-		if time.Now().After(deadline) {
-			t.Fatalf("processed %d of %d jobs within 1s; worker is not draining the backlog per poll", processed.Load(), total)
-		}
-		time.Sleep(2 * time.Millisecond)
+	if got := processed.Load(); got != total {
+		t.Fatalf("processed %d of %d jobs in a single poll; worker is not draining the backlog per poll", got, total)
 	}
 }
