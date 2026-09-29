@@ -8,7 +8,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 )
 
-// Lock file names, stored next to the SQLite DB (bootstrap.LockPath).
+// Lock file names, stored next to the SQLite DB (see lockPath).
 // The app and the --supervise watcher take separate locks: the autostart
 // watcher and the app it spawns are different processes that both run at
 // once, while two watchers (or two apps) must never coexist.
