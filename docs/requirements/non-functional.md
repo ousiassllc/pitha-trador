@@ -51,7 +51,7 @@
 - Wailsアプリが内部で起動するHTTPサーバーは`127.0.0.1`にのみバインドし、外部ネットワークからアクセス不可とする
 - HTMXフォームにはCSRFトークンを付与する（HALT標準構成に準拠。ローカル単一ユーザーでも実装は省略しない）
 - 実売買（Phase 7）へ移行しても、発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）。安全性はRisk Engine側のLive専用の厳格なリミット（`requirements/functional.md` §4.7）と、操作者ハートビートが一定時間途絶した場合に自動で新規エントリーを停止するdead-man's switch（FR-RISK-6）で担保する
-- Risk Engineの拒否・Kill Switch発動・実売買発注はすべて監査ログ（改ざん検知可能な追記専用ログ）に記録する
+- Risk Engineの拒否・Kill Switch発動・実売買発注はすべて監査ログ（追記専用ログ）に記録する。`kill_switch_events` / `kill_switch_resolutions`はDBトリガーで`UPDATE`/`DELETE`を拒否して追記専用を強制する（`architecture/er.md` §kill_switch_events）。ハッシュチェーン等によるDBファイル自体の改ざん検知は行わない
 
 ## 5. 監視・アラート
 

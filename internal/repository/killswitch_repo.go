@@ -83,7 +83,7 @@ func (r *KillSwitchRepository) Insert(ctx context.Context, ev domain.KillSwitchE
 // feed.
 func (r *KillSwitchRepository) ListRecent(ctx context.Context, limit int) ([]domain.KillSwitchEvent, error) {
 	rows, err := r.db.QueryContext(ctx,
-		killSwitchSelectColumns+` ORDER BY triggered_at DESC, id DESC LIMIT ?`, limit)
+		killSwitchSelectColumns+` ORDER BY e.triggered_at DESC, e.id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list recent kill switch events: %w", err)
 	}
@@ -103,13 +103,18 @@ func (r *KillSwitchRepository) ListRecent(ctx context.Context, limit int) ([]dom
 	return out, nil
 }
 
+// killSwitchSelectColumns joins each event with its (at most one)
+// kill_switch_resolutions row, so resolved_at/resolved_by are NULL while
+// the event is still unresolved. Callers append WHERE/ORDER BY clauses
+// qualified with the e./r. aliases.
 const killSwitchSelectColumns = `
-SELECT id, triggered_at, reason, detail_json, resolved_at, resolved_by, created_at
-FROM kill_switch_events`
+SELECT e.id, e.triggered_at, e.reason, e.detail_json, r.resolved_at, r.resolved_by, e.created_at
+FROM kill_switch_events e
+LEFT JOIN kill_switch_resolutions r ON r.kill_switch_event_id = e.id`
 
 // Get returns the kill_switch_events row with the given id.
 func (r *KillSwitchRepository) Get(ctx context.Context, id int64) (domain.KillSwitchEvent, error) {
-	row := r.db.QueryRowContext(ctx, killSwitchSelectColumns+` WHERE id = ?`, id)
+	row := r.db.QueryRowContext(ctx, killSwitchSelectColumns+` WHERE e.id = ?`, id)
 	return scanKillSwitchEvent(row)
 }
 
@@ -118,7 +123,7 @@ func (r *KillSwitchRepository) Get(ctx context.Context, id int64) (domain.KillSw
 // result means the system is not currently Kill-Switched.
 func (r *KillSwitchRepository) ListUnresolved(ctx context.Context) ([]domain.KillSwitchEvent, error) {
 	rows, err := r.db.QueryContext(ctx,
-		killSwitchSelectColumns+` WHERE resolved_at IS NULL ORDER BY triggered_at DESC`)
+		killSwitchSelectColumns+` WHERE r.id IS NULL ORDER BY e.triggered_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list unresolved kill switch events: %w", err)
 	}
@@ -138,13 +143,17 @@ func (r *KillSwitchRepository) ListUnresolved(ctx context.Context) ([]domain.Kil
 	return out, nil
 }
 
-// Resolve marks the still-unresolved kill_switch_events row id resolved
-// at resolvedAt by resolvedBy (domain.ResolvedByAuto or
-// domain.ResolvedByManual). It returns ErrKillSwitchEventNotFound when id
-// does not exist or was already resolved.
+// Resolve records that the still-unresolved kill_switch_events row id was
+// resolved at resolvedAt by resolvedBy (domain.ResolvedByAuto or
+// domain.ResolvedByManual). kill_switch_events is append-only (migration
+// 000014), so the resolution is appended to kill_switch_resolutions rather
+// than updating the event row. It returns ErrKillSwitchEventNotFound when
+// id does not exist or was already resolved.
 func (r *KillSwitchRepository) Resolve(ctx context.Context, id int64, resolvedAt time.Time, resolvedBy string) error {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE kill_switch_events SET resolved_at = ?, resolved_by = ? WHERE id = ? AND resolved_at IS NULL`,
+	res, err := r.db.ExecContext(ctx, `
+INSERT INTO kill_switch_resolutions (kill_switch_event_id, resolved_at, resolved_by)
+SELECT id, ?, ? FROM kill_switch_events WHERE id = ?
+ON CONFLICT (kill_switch_event_id) DO NOTHING`,
 		formatTime(resolvedAt), resolvedBy, id)
 	if err != nil {
 		return fmt.Errorf("repository: resolve kill switch event %d: %w", id, err)

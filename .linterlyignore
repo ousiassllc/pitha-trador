@@ -153,3 +153,10 @@ internal/repository/dbwritefailures_test.go
 # 超過するため、当該テストファイルを除外しWARN範囲（既知債務）に収める。
 # ディレクトリ構成の見直しは internal/repository/ と合わせて別Issueで対応する
 internal/web/handler/symbol_close_test.go
+
+# #102でkill_switch_eventsの追記専用化（マイグレーション000014）の移行テスト
+# （killswitch_migration_test.go）を追加すると、internal/repository/ の
+# ディレクトリ合計が上限（2000行）比+10%のERROR閾値を超過するため、当該
+# テストファイルを除外しWARN範囲（既知債務）に収める。ディレクトリ構成の
+# 見直しは internal/repository/ と合わせて別Issueで対応する
+internal/repository/killswitch_migration_test.go

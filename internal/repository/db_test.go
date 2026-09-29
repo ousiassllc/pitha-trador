@@ -42,7 +42,7 @@ func TestOpen_AppliesMigrationsAndEnablesRequiredPragmas(t *testing.T) {
 	// §kill_switch_events, §runtime_settings, §policy_proposals).
 	for _, table := range []string{
 		"instruments", "market_snapshots", "jobs",
-		"paper_orders", "positions", "kill_switch_events", "runtime_settings", "policy_proposals",
+		"paper_orders", "positions", "kill_switch_events", "kill_switch_resolutions", "runtime_settings", "policy_proposals",
 	} {
 		var tableName string
 		err = conn.QueryRow(
