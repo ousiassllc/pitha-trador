@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -137,6 +138,11 @@ func (c *Client) Start(ctx context.Context, interval time.Duration) error {
 	}
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("marketdata: token reissue loop panicked", "panic", r, "stack", string(debug.Stack()))
+			}
+		}()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {

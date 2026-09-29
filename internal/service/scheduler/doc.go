@@ -1,6 +1,6 @@
 // Package scheduler is the self-hosted worker pool + periodic trigger
 // that stands in for River (docs/architecture/overview.md §2 "Job Queue /
-// Scheduler", §4.10 Scheduler/Worker, functional.md §4.10 FR-SCHED-1〜4).
+// Scheduler", §4.10 Scheduler/Worker, functional.md §4.10 FR-SCHED-1〜6).
 //
 // Scheduler claims jobs.Job rows off each registered queue and invokes the
 // Handler registered for that queue (this scope only registers
