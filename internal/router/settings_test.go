@@ -61,6 +61,7 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	form := url.Values{"value": {"new-jev-key"}}
 	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -72,7 +73,7 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil)))
+	engine.ServeHTTP(rec, hxDelete(t, engine, "/settings/JEV_API_KEY"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("DELETE status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
@@ -188,6 +189,7 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 	form := url.Values{"value": {"jev-key"}}
 	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
 	rec = httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || store["JEV_API_KEY"] != "jev-key" {
@@ -195,7 +197,7 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil)))
+	engine.ServeHTTP(rec, hxDelete(t, engine, "/settings/JEV_API_KEY"))
 	if rec.Code != http.StatusOK || len(store) != 0 {
 		t.Fatalf("DELETE /settings/JEV_API_KEY = %d store=%v, want 200 and the key removed", rec.Code, store)
 	}
@@ -219,6 +221,7 @@ func TestNew_SetupGuardLiftsOnceLastRequiredKeyIsSaved(t *testing.T) {
 	form := url.Values{"value": {"https://jev.example.com"}}
 	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_BASE_URL", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
 	rec = httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -288,4 +291,12 @@ func TestNew_SettingsAndHeaderEmbedUpdateSlots(t *testing.T) {
 			t.Errorf("Settings page missing %s; body=%s", want, body)
 		}
 	}
+}
+
+// hxDelete builds an authorized `DELETE path` the way htmx sends it.
+func hxDelete(t *testing.T, engine *gin.Engine, path string) *http.Request {
+	t.Helper()
+	req := authorize(t, engine, httptest.NewRequest(http.MethodDelete, path, nil))
+	req.Header.Set("HX-Request", "true")
+	return req
 }

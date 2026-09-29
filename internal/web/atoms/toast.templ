@@ -1,0 +1,15 @@
+package atoms
+
+// Toast renders one error notice (docs/components/overview.md §3 "Toast",
+// §4 "エラー表示"). Action handlers answer a failed HTMX request with this
+// fragment and a 4xx/5xx status; layout.Shell's `htmx-config` swaps it into
+// the page-wide `#toast-region` instead of the request's own target, and
+// static/src/components/htmx-errors/pitha-htmx-errors.ts dismisses it (the
+// `data-toast-*` hooks below) and clones it from layout's `#toast-template`
+// for failures that carry no fragment (network errors, empty bodies).
+templ Toast(message string) {
+	<div class="pointer-events-auto flex items-start gap-3 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 shadow" role="alert" data-toast data-testid="toast">
+		<span class="flex-1" data-toast-message>{ message }</span>
+		<button class="font-semibold text-red-700" type="button" aria-label="閉じる" data-toast-dismiss>×</button>
+	</div>
+}

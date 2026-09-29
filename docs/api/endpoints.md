@@ -312,7 +312,7 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 
 - Huma APIのバリデーションエラーはRFC 7807 Problem Details形式で自動生成される（`components/overview.md` Huma APIパターン参照）
 - ビジネスエラー（例: Risk Engine拒否によりKill Switch解除不可）はカスタムエラーも同じProblem Details形式に統一する
-- アクションルート（HTMX）のエラーはフォーム再レンダリング（422）またはOOBトースト（403/5xx）で返す（`components/overview.md` エラーハンドリング節）
+- アクションルート（HTMX）の失敗（4xx/5xx）は該当ステータスと`atoms.Toast`フラグメントを返し、クライアントが`#toast-region`へ表示する（`components/overview.md` §4「エラー表示」）。`POST`/`DELETE /settings/:key`の成功応答は、HTMXリクエスト（`HX-Request: true`）には行フラグメント、それ以外（JS無効のフォーム送信）には送信元画面（`/setup`または`/settings`）への303リダイレクトを返す
 
 ## 改訂履歴
 
@@ -328,3 +328,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.7 | 2026-09-29 | §1にSetup Guard、§3に`GET /setup`を追加。§4 `GET /system/secrets-status`を任意キーのみの案内へ縮小 | issue #80実装 |
 | 1.8 | 2026-09-29 | §3 `/performance` に入力上限（`*_days`≤366・範囲≤1830日・Fold≤1000で400）と実行タイムアウト（60秒で503）を追記 | issue #128実装 |
 | 1.9 | 2026-09-29 | §5 `/symbols/{symbol}/decisions`・`/signals`・`/signals/{symbol}`・`/performance`の出力スキーマ・クエリ・集計定義を追記（実装済み） | issue #92実装 |
+| 1.10 | 2026-09-29 | §7 アクションルートのエラー応答を`atoms.Toast`フラグメント＋4xx/5xxステータスに統一、`/settings/:key`の非HTMX成功応答を303リダイレクトと明記 | issue #110/#121実装 |

@@ -115,3 +115,35 @@ func TestSymbolHandler_ClosePosition_CloseErrorReturns500(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
+
+// Every failure status carries an atoms.Toast fragment so the Close
+// button's failure is visible (issue #110): htmx would otherwise drop the
+// empty 4xx/5xx body and leave the row untouched with no feedback.
+func TestSymbolHandler_ClosePosition_FailuresRenderToastFragment(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	closedAt := time.Now().UTC()
+	for name, tc := range map[string]struct {
+		path     string
+		provider *fakeSymbolProvider
+		want     int
+	}{
+		"invalid id":     {"/positions/x/close", &fakeSymbolProvider{}, http.StatusBadRequest},
+		"not found":      {"/positions/1/close", &fakeSymbolProvider{positionErr: domain.ErrPositionNotFound}, http.StatusNotFound},
+		"lookup failure": {"/positions/1/close", &fakeSymbolProvider{positionErr: errors.New("db")}, http.StatusInternalServerError},
+		"already closed": {"/positions/1/close", &fakeSymbolProvider{position: domain.Position{ID: 1, ClosedAt: &closedAt}}, http.StatusConflict},
+		"close failure":  {"/positions/1/close", &fakeSymbolProvider{position: domain.Position{ID: 1}, closeErr: errors.New("db")}, http.StatusInternalServerError},
+	} {
+		router := gin.New()
+		router.POST("/positions/:id/close", handler.NewSymbolHandler(tc.provider, handler.SymbolRiskParams{}).ClosePosition)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, tc.path, nil))
+
+		if rec.Code != tc.want {
+			t.Errorf("%s: status = %d, want %d", name, rec.Code, tc.want)
+		}
+		if !strings.Contains(rec.Body.String(), `data-toast`) {
+			t.Errorf("%s: body = %q, want an atoms.Toast fragment", name, rec.Body.String())
+		}
+	}
+}
