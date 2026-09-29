@@ -184,6 +184,12 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		settings:   settings,
 		snapshots:  snapshots,
 		positions:  positions,
+		orders:     orders,
+	}, riskSignals{
+		marketData: marketDataClient,
+		jevAPI:     jevClient,
+		brokerAPI:  marketDataClient.BrokerFailures(),
+		dbWrite:    repository.DBWriteFailures,
 	}, executionEngine, alerts.riskNotifier(notifiers))
 	// runtimePolicy is config/strategy.yaml's policy.* thresholds as
 	// overridden by every Self-Improvement proposal currently applied:
@@ -212,6 +218,8 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	schedOpts := []scheduler.Option{
 		scheduler.WithOutcomeLabelSource(outcomes),
 		scheduler.WithHeartbeatChecker(riskEngine),
+		scheduler.WithRiskMonitor(riskEngine),
+		scheduler.WithAutoResumer(riskEngine),
 		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
 	}
 	var updateAdapter *updater.SchedulerAdapter

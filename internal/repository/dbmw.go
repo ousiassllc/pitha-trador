@@ -4,12 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/ngrok/sqlmw"
 	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
 // instrumentedDriverName is the database/sql driver name Open registers
@@ -54,6 +58,7 @@ func (loggingInterceptor) ConnExecContext(ctx context.Context, conn driver.Exece
 	start := time.Now()
 	res, err := conn.ExecContext(ctx, query, args)
 	logDBCall(query, start, err)
+	recordDBWrite(err)
 	return res, err
 }
 
@@ -68,6 +73,7 @@ func (loggingInterceptor) StmtExecContext(ctx context.Context, stmt driver.StmtE
 	start := time.Now()
 	res, err := stmt.ExecContext(ctx, args)
 	logDBCall(query, start, err)
+	recordDBWrite(err)
 	return res, err
 }
 
@@ -92,4 +98,39 @@ func logDBCall(query string, start time.Time, err error) {
 		return
 	}
 	slog.Info("db: query completed", attrs...)
+}
+
+// DBWriteFailures is the process-wide consecutive DB write failure streak
+// (FR-RISK-2 "DB書き込み失敗が一定回数継続") every Exec on an Open'd
+// database feeds. It is process-global because the sqlmw-wrapped driver
+// (registerInstrumentedDriver) is; internal/service/risk.Engine polls it
+// via Config.DBWriteFailures.
+var DBWriteFailures = &domain.FailureStreak{}
+
+// recordDBWrite feeds one Exec outcome into DBWriteFailures. Only genuine
+// storage failures (busy/locked/read-only/IO/full/corrupt) count: a
+// constraint violation or malformed statement is an application-level
+// error, not evidence the database cannot be written, and a cancelled
+// caller context is not a database fault at all.
+func recordDBWrite(err error) {
+	switch {
+	case err == nil:
+		DBWriteFailures.Succeed()
+	case isStorageFailure(err):
+		DBWriteFailures.Fail()
+	}
+}
+
+func isStorageFailure(err error) bool {
+	var sqliteErr *sqlite.Error
+	if !errors.As(err, &sqliteErr) {
+		return false
+	}
+	switch sqliteErr.Code() & 0xff { // primary result code
+	case sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED, sqlite3.SQLITE_READONLY,
+		sqlite3.SQLITE_IOERR, sqlite3.SQLITE_FULL, sqlite3.SQLITE_CANTOPEN,
+		sqlite3.SQLITE_CORRUPT, sqlite3.SQLITE_NOTADB:
+		return true
+	}
+	return false
 }

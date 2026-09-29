@@ -75,6 +75,23 @@ type Config struct {
 	MarketDataHealth HealthChecker
 	JevAPIHealth     HealthChecker
 
+	// BrokerAPIFailures/DBWriteFailures are the consecutive-failure
+	// streaks of the Broker (kabuステーション) API and of DB writes that
+	// drive the broker_api_error/db_write_failure Kill Switches once they
+	// reach FailureThreshold (monitor.go). A nil counter disables that one
+	// check.
+	BrokerAPIFailures FailureCounter
+	DBWriteFailures   FailureCounter
+	// FailureThreshold is the streak length at which those two counters
+	// trigger FR-RISK-2's "一定回数継続". Defaults to
+	// DefaultFailureThreshold.
+	FailureThreshold int
+
+	// Positions and Orders enable CheckPositionReconciliation
+	// (unexpected_position/fill_discrepancy). Either being nil disables it.
+	Positions *repository.PositionRepository
+	Orders    *repository.OrderRepository
+
 	// Notifier defaults to NoopNotifier{} (notifier.go).
 	Notifier Notifier
 
@@ -95,8 +112,14 @@ type Engine struct {
 	closer           PositionCloser
 	marketDataHealth HealthChecker
 	jevAPIHealth     HealthChecker
-	notifier         Notifier
-	now              func() time.Time
+
+	brokerAPIFailures FailureCounter
+	dbWriteFailures   FailureCounter
+	failureThreshold  int
+	positions         *repository.PositionRepository
+	orders            *repository.OrderRepository
+	notifier          Notifier
+	now               func() time.Time
 }
 
 // NewEngine returns an Engine built from cfg, applying every documented
@@ -128,17 +151,25 @@ func NewEngine(cfg Config) *Engine {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.FailureThreshold <= 0 {
+		cfg.FailureThreshold = DefaultFailureThreshold
+	}
 	return &Engine{
-		limits:           cfg.Limits,
-		killSwitch:       cfg.KillSwitch,
-		settings:         cfg.Settings,
-		snapshots:        cfg.Snapshots,
-		portfolio:        cfg.Portfolio,
-		closer:           cfg.Closer,
-		marketDataHealth: cfg.MarketDataHealth,
-		jevAPIHealth:     cfg.JevAPIHealth,
-		notifier:         cfg.Notifier,
-		now:              cfg.Now,
+		limits:            cfg.Limits,
+		killSwitch:        cfg.KillSwitch,
+		settings:          cfg.Settings,
+		snapshots:         cfg.Snapshots,
+		portfolio:         cfg.Portfolio,
+		closer:            cfg.Closer,
+		marketDataHealth:  cfg.MarketDataHealth,
+		jevAPIHealth:      cfg.JevAPIHealth,
+		brokerAPIFailures: cfg.BrokerAPIFailures,
+		dbWriteFailures:   cfg.DBWriteFailures,
+		failureThreshold:  cfg.FailureThreshold,
+		positions:         cfg.Positions,
+		orders:            cfg.Orders,
+		notifier:          cfg.Notifier,
+		now:               cfg.Now,
 	}
 }
 
