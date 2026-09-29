@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"log/slog"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 	"github.com/ousiassllc/pitha-trador/internal/supervisor"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -42,6 +44,21 @@ func main() {
 	}
 	defer func() { _ = logWriter.Close() }()
 	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
+
+	// Single-instance guard, taken before bootstrap.Run/BuildServices so a
+	// second launch (desktop icon while the --supervise autostart instance
+	// runs) never recovers the first instance's running jobs or starts a
+	// second Scheduler/Kill Switch/order flow against the shared DB. Exit
+	// code 0 also ends a supervisor that spawned this process.
+	lock, err := acquireInstanceLock(appLockName)
+	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
+		slog.Info("desktop: another instance is already running; exiting")
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = lock.Release() }()
 
 	// bootstrap.Run opens (creating/migrating) the SQLite DB and loads
 	// config/strategy.yaml + config/risk.yaml (issue #42,
@@ -143,6 +160,17 @@ func superviseSelf(childArgs []string) {
 	}
 	defer func() { _ = logWriter.Close() }()
 	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
+
+	// A second watcher would spawn a second app instance on every crash.
+	lock, err := acquireInstanceLock(supervisorLockName)
+	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
+		slog.Info("supervisor: another supervisor is already running; exiting")
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = lock.Release() }()
 
 	exe, err := os.Executable()
 	if err != nil {
