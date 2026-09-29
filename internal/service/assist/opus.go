@@ -37,11 +37,14 @@ const backtestMagnitudeEpsilon = 1e-9
 // review - deliberately plain float64 fields rather than
 // backtest.Metrics itself, so this package does not need to know that
 // internal package's full shape.
+//
+// The json tags are the policy_proposals.backtest_result_json storage
+// format `GET /api/v1/policy-proposals` reads back.
 type BacktestComparison struct {
-	BaselineExpectancy      float64
-	CandidateExpectancy     float64
-	BaselineMaxDrawdownPct  float64
-	CandidateMaxDrawdownPct float64
+	BaselineExpectancy      float64 `json:"baseline_expectancy"`
+	CandidateExpectancy     float64 `json:"candidate_expectancy"`
+	BaselineMaxDrawdownPct  float64 `json:"baseline_max_drawdown_pct"`
+	CandidateMaxDrawdownPct float64 `json:"candidate_max_drawdown_pct"`
 }
 
 // OpusReviewInput is everything Opus reviews for one proposal: Sol's

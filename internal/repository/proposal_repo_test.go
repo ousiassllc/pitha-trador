@@ -182,3 +182,55 @@ func TestProposalRepository_UpdateBacktestResult_NotFound(t *testing.T) {
 		t.Fatalf("UpdateBacktestResult(unknown) error = %v, want ErrPolicyProposalNotFound", err)
 	}
 }
+
+func TestProposalRepository_List_FiltersByStatusOrdersNewestFirstAndCapsLimit(t *testing.T) {
+	proposals := repository.NewProposalRepository(newTestDB(t))
+	ctx := context.Background()
+	base := time.Date(2026, 9, 27, 15, 0, 0, 0, time.UTC)
+	insert := func(dayOffset int, status string) domain.PolicyProposal {
+		t.Helper()
+		p, err := proposals.Insert(ctx, domain.PolicyProposal{
+			ProposedAt: base.AddDate(0, 0, dayOffset), RationaleJSON: `{}`, ProposedChangesJSON: `[]`, Status: status,
+		})
+		if err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+		return p
+	}
+	oldest := insert(0, domain.PolicyProposalStatusRejected)
+	middle := insert(1, domain.PolicyProposalStatusApplied)
+	newest := insert(2, domain.PolicyProposalStatusRejected)
+
+	all, err := proposals.List(ctx, "", 10)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(all) != 3 || all[0].ID != newest.ID || all[1].ID != middle.ID || all[2].ID != oldest.ID {
+		t.Fatalf("List(all) ids = %v, want newest first [%d %d %d]", ids(all), newest.ID, middle.ID, oldest.ID)
+	}
+
+	rejected, err := proposals.List(ctx, domain.PolicyProposalStatusRejected, 10)
+	if err != nil {
+		t.Fatalf("List(rejected): %v", err)
+	}
+	if len(rejected) != 2 || rejected[0].ID != newest.ID || rejected[1].ID != oldest.ID {
+		t.Fatalf("List(rejected) ids = %v, want [%d %d]", ids(rejected), newest.ID, oldest.ID)
+	}
+
+	capped, err := proposals.List(ctx, "", 1)
+	if err != nil || len(capped) != 1 || capped[0].ID != newest.ID {
+		t.Fatalf("List(limit 1) = %v, %v, want only the newest", ids(capped), err)
+	}
+
+	if _, err := proposals.List(ctx, "", 0); err == nil {
+		t.Fatal("List(limit 0) succeeded, want an error")
+	}
+}
+
+func ids(ps []domain.PolicyProposal) []int64 {
+	out := make([]int64, len(ps))
+	for i, p := range ps {
+		out[i] = p.ID
+	}
+	return out
+}

@@ -112,6 +112,43 @@ func (r *ProposalRepository) ListByStatus(ctx context.Context, status string) ([
 	return out, nil
 }
 
+// List returns policy_proposals rows, most recently proposed first
+// (id descending breaks ties), for `GET /api/v1/policy-proposals`. A
+// non-empty status keeps only rows with that status; limit caps the
+// number of rows returned and must be positive.
+func (r *ProposalRepository) List(ctx context.Context, status string, limit int) ([]domain.PolicyProposal, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("repository: list policy proposals: limit must be positive, got %d", limit)
+	}
+	query := proposalSelectColumns + ` FROM policy_proposals`
+	var args []any
+	if status != "" {
+		query += ` WHERE status = ?`
+		args = append(args, status)
+	}
+	query += ` ORDER BY proposed_at DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list policy proposals: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.PolicyProposal
+	for rows.Next() {
+		p, err := scanProposal(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list policy proposals: %w", err)
+	}
+	return out, nil
+}
+
 // UpdateBacktestResult records Opus's shadow-backtest Expectancy/
 // MaxDrawdown comparison for a still-pending proposal (FR-SELFIMPROVE-4),
 // without changing its status.

@@ -85,6 +85,7 @@ type Services struct {
 	Outcomes    *repository.CalibrationRepository
 	KillSwitch  *repository.KillSwitchRepository
 	Settings    *repository.RuntimeSettingsRepository
+	Proposals   *repository.ProposalRepository
 
 	RAG           *rag.Service
 	MarketData    *marketdata.Client
@@ -192,7 +193,8 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	// blocking start-up.
 	solClient := assist.NewClient(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey})
 	opusClient := assist.NewClient(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey})
-	governor := selfimprove.NewGovernor(repository.NewProposalRepository(state.DB), settings, positions,
+	proposals := repository.NewProposalRepository(state.DB)
+	governor := selfimprove.NewGovernor(proposals, settings, positions,
 		backtestSource, state.Strategy.Policy,
 		selfimprove.WithNotifier(alerts.selfImproveNotifier()),
 		selfimprove.WithSol(assist.NewSol(solClient)),
@@ -223,6 +225,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Outcomes:      outcomes,
 		KillSwitch:    killSwitch,
 		Settings:      settings,
+		Proposals:     proposals,
 		RAG:           ragService,
 		MarketData:    marketDataClient,
 		FeatureEngine: featureEngine,

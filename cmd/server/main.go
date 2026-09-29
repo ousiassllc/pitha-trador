@@ -92,6 +92,7 @@ func main() {
 		router.WithSystemEngine(services.Risk),
 		router.WithSymbolProvider(services.Execution),
 		router.WithCalibrationSource(services.Calibration),
+		router.WithPolicyProposalSource(services.Proposals),
 		router.WithBacktestRunner(services.Backtest),
 		router.WithSecretsStore(secretsRepo),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
