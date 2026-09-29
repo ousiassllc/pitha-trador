@@ -17,11 +17,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
@@ -63,6 +65,10 @@ const defaultKabuExchange = marketdata.ExchangeTSE
 // screener.PassesFilter's liquidity floor expects.
 const turnoverTrailingBars = 5
 
+// newsPollInterval is how often News Ingest polls the external news feed
+// for every active instrument (FR-LUNA-1).
+const newsPollInterval = time.Minute
+
 // Services holds every internal/service/* instance the composition root
 // builds, plus the repositories they share. cmd/desktop and cmd/server
 // both call BuildServices once (after bootstrap.Run) and derive their
@@ -87,6 +93,7 @@ type Services struct {
 	Jev           *jev.Client
 	Scout         *jev.Scout
 	Trader        *jev.Trader
+	News          *newsfeed.Service
 	Policy        *policy.Engine
 	Risk          *risk.Engine
 	Execution     *execution.Engine
@@ -99,6 +106,8 @@ type Services struct {
 
 	strategy *config.StrategyConfig
 	wg       sync.WaitGroup
+
+	newsEnabled bool
 }
 
 // BuildServices constructs the full composition-root service graph on top
@@ -137,8 +146,18 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		APIKey:  secrets.JevAPIKey,
 		Alerts:  alerts.jevAlerts(),
 	})
-	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout)
-	trader := jev.NewTrader(jevClient, decisions, ragService)
+	// News Ingest (issue #81, FR-LUNA-1〜5): the external news feed and
+	// Luna are both optional secrets; unless both are configured the
+	// service still exists (its cache is simply always empty, so no
+	// news_context is injected and no news flag is raised) but its
+	// polling loop is not started.
+	lunaClient := assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey})
+	newsFeed := newsfeed.NewFeedClient(newsfeed.FeedConfig{URL: secrets.NewsFeedURL, APIKey: secrets.NewsFeedAPIKey})
+	newsEnabled := lunaClient.Configured() && newsFeed.Configured()
+	newsService := newsfeed.NewService(newsFeed, assist.NewLuna(lunaClient), instruments)
+
+	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout, jev.WithNewsSource(newsService))
+	trader := jev.NewTrader(jevClient, decisions, ragService, jev.WithNewsSource(newsService))
 
 	executionConfig := execution.ConfigFromRiskLimits(state.Risk.Paper)
 	executionEngine := execution.NewEngine(execution.Deps{
@@ -202,6 +221,8 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Jev:           jevClient,
 		Scout:         scout,
 		Trader:        trader,
+		News:          newsService,
+		newsEnabled:   newsEnabled,
 		Policy:        policyEngine,
 		Risk:          riskEngine,
 		Execution:     executionEngine,

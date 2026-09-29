@@ -250,3 +250,35 @@ func TestStaticSecretsStore_EverythingUnsetAndSetIsNoOp(t *testing.T) {
 		t.Fatalf("Set: %v", err)
 	}
 }
+
+func TestSettingsHandler_Save_StoresAIAndNewsFeedCredentials(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	h := handler.NewSettingsHandler(store)
+	engine := gin.New()
+	engine.POST("/settings", h.Save)
+
+	want := map[string]string{
+		config.KeyLunaAPIKey:     "luna-key",
+		config.KeyLunaBaseURL:    "https://luna.example.com",
+		config.KeyNewsFeedURL:    "https://news.example.com/feed",
+		config.KeyNewsFeedAPIKey: "news-key",
+	}
+	form := url.Values{}
+	for key, value := range want {
+		form.Set(key, value)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	for key, value := range want {
+		if got := store.values[key]; got != value {
+			t.Errorf("stored %s = %q, want %q", key, got, value)
+		}
+	}
+}

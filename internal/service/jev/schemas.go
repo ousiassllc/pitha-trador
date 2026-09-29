@@ -3,6 +3,7 @@ package jev
 import (
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -37,6 +38,11 @@ type ScoutState struct {
 	RealizedVol5m      *float64  `json:"realized_vol_5m,omitempty"`
 	MarketReturn5m     *float64  `json:"market_return_5m,omitempty"`
 	SectorReturn5m     *float64  `json:"sector_return_5m,omitempty"`
+	// NewsContext is the symbol's recent Luna-classified news (FR-LUNA-3),
+	// injected by Scout/Trader from their NewsSource. nil means no news
+	// context - Luna disabled, failing, or nothing recent. It is auxiliary
+	// context only; it never overrides Jev's judgment (FR-LUNA-5).
+	NewsContext *domain.NewsContext `json:"news_context,omitempty"`
 }
 
 // ScoutRequest is the JSON body POSTed to the Jev Scout endpoint: the

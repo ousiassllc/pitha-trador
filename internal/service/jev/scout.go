@@ -90,6 +90,7 @@ type Scout struct {
 	jobs       *repository.JobRepository
 	rag        *rag.Service
 	thresholds config.JevScoutConfig
+	news       NewsSource
 }
 
 // NewScout returns a Scout that calls client, persists decisions via
@@ -100,7 +101,8 @@ type Scout struct {
 // HandleJob) will be used. ragService builds the RAG few-shot context
 // injected into every Scout request and indexes each persisted decision
 // for future searches (functional.md §4.13, FR-RAG-1〜4).
-func NewScout(client *Client, decisions *repository.DecisionRepository, snapshots *repository.SnapshotRepository, jobs *repository.JobRepository, ragService *rag.Service, thresholds config.JevScoutConfig) *Scout {
+func NewScout(client *Client, decisions *repository.DecisionRepository, snapshots *repository.SnapshotRepository, jobs *repository.JobRepository, ragService *rag.Service, thresholds config.JevScoutConfig, opts ...Option) *Scout {
+	o := newOptions(opts)
 	return &Scout{
 		client:     client,
 		decisions:  decisions,
@@ -108,6 +110,7 @@ func NewScout(client *Client, decisions *repository.DecisionRepository, snapshot
 		jobs:       jobs,
 		rag:        ragService,
 		thresholds: thresholds,
+		news:       o.news,
 	}
 }
 
@@ -122,6 +125,7 @@ func NewScout(client *Client, decisions *repository.DecisionRepository, snapshot
 // block Jev from being called (functional.md FR-RAG-4's cold-start
 // tolerance extends to any RAG failure, not only an empty index).
 func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutState) (domain.JevDecision, bool, error) {
+	state = withNewsContext(state, s.news)
 	featureInput := ragFeatureInput(state)
 
 	ragContext, err := s.rag.Context(ctx, featureInput, rag.DefaultK)

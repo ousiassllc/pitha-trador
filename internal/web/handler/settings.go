@@ -38,7 +38,7 @@ type StaticSecretsStore struct{}
 func (StaticSecretsStore) Get(context.Context, string) (string, bool, error) { return "", false, nil }
 func (StaticSecretsStore) Set(context.Context, string, string) error         { return nil }
 
-// settingsFields is the Settings screen's four managed keys in display
+// settingsFields is the Settings screen's managed keys in display
 // order (issue #57 スコープ item 6). Label doubles as the `<input name>`
 // (config.Key* constants), matching the literal names operators
 // previously set in `.env` so the migration away from it stays
@@ -51,6 +51,10 @@ var settingsFields = []struct {
 	{config.KeyJevBaseURL, "JEV_BASE_URL"},
 	{config.KeyKabuAPIPassword, "KABU_API_PASSWORD"},
 	{config.KeySlackWebhookURL, "SLACK_WEBHOOK_URL（任意）"},
+	{config.KeyLunaAPIKey, "LUNA_API_KEY（任意）"},
+	{config.KeyLunaBaseURL, "LUNA_BASE_URL（任意）"},
+	{config.KeyNewsFeedURL, "NEWS_FEED_URL（任意）"},
+	{config.KeyNewsFeedAPIKey, "NEWS_FEED_API_KEY（任意）"},
 }
 
 // requiredSettingsKeys mirrors config.LoadSecretsFromDB's own required
