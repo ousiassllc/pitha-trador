@@ -53,6 +53,10 @@ type Scheduler struct {
 	// skip registering the @daily log-archival cron trigger entirely
 	// (non-functional.md §5 "ログは日次ローテーションし").
 	logRotator LogRotator
+	// databaseBackuper is optional (WithDatabaseBackuper): a nil value
+	// makes Start skip registering the @daily database-backup cron
+	// trigger entirely (non-functional.md §3).
+	databaseBackuper DatabaseBackuper
 	// updateChecker is optional (WithUpdateChecker, issue #65): a nil
 	// value makes CheckForUpdate a no-op and skips Start's update-check
 	// trigger entirely (cmd/server never configures it - it has no

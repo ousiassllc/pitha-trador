@@ -11,6 +11,8 @@
 package bootstrap
 
 import (
+	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
+	"github.com/ousiassllc/pitha-trador/internal/service/backup"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
@@ -40,6 +43,12 @@ import (
 // @daily logging.Archiver compresses files past their 30-day retention in
 // (requirements/non-functional.md §5).
 const LogDir = "logs"
+
+// EnvBackupDir names the environment variable holding the destination
+// directory of the daily SQLite backup (requirements/non-functional.md §3):
+// a location outside the local application disk (external drive / synced
+// cloud folder). Unset or empty disables the backup job.
+const EnvBackupDir = "PITHA_BACKUP_DIR"
 
 // defaultTokenRefreshInterval is how often Services.Start reissues the
 // kabuステーションAPI token (marketdata.Client.Start). kabuステーション
@@ -223,6 +232,11 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		scheduler.WithRiskMonitor(riskEngine),
 		scheduler.WithAutoResumer(riskEngine),
 		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
+	}
+	if dir := os.Getenv(EnvBackupDir); dir != "" {
+		schedOpts = append(schedOpts, scheduler.WithDatabaseBackuper(backup.New(state.DB, dir, 0)))
+	} else {
+		slog.Warn("bootstrap: daily database backup disabled: " + EnvBackupDir + " is not set (requirements/non-functional.md §3)")
 	}
 	var updateAdapter *updater.SchedulerAdapter
 	if autoUpdate != nil { // cmd/desktop only (issue #65); cmd/server passes nil
