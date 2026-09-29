@@ -1,0 +1,32 @@
+package organisms
+
+import "github.com/ousiassllc/pitha-trador/internal/domain"
+
+// Kill Switch panel endpoints injected as attributes so the Lit component
+// carries no URL of its own (HATEOAS, issue #106).
+const (
+	killSwitchPauseURL  = "/api/v1/system/pause"
+	killSwitchResumeURL = "/api/v1/system/resume"
+	killSwitchKillURL   = "/api/v1/system/kill"
+	killSwitchStatusURL = "/api/v1/system/status"
+	killSwitchWSURL     = "/ws/system"
+)
+
+// KillSwitchPanel renders the `pitha-kill-switch-panel` island
+// (docs/components/overview.md §5.4) for state: `status`, the
+// `can-pause`/`can-resume`/`can-kill` action flags from
+// domain.SystemState.CanPause/CanResume/CanKill (so the client never
+// re-implements the transition table), and every URL the component calls.
+templ KillSwitchPanel(state domain.SystemState) {
+	<pitha-kill-switch-panel
+		status={ string(state) }
+		can-pause?={ state.CanPause() }
+		can-resume?={ state.CanResume() }
+		can-kill?={ state.CanKill() }
+		pause-url={ killSwitchPauseURL }
+		resume-url={ killSwitchResumeURL }
+		kill-url={ killSwitchKillURL }
+		status-url={ killSwitchStatusURL }
+		ws-url={ killSwitchWSURL }
+	></pitha-kill-switch-panel>
+}

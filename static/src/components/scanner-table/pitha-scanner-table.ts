@@ -10,7 +10,8 @@ import { html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
-import { resolveWsUrl, WsClient } from '../lib/ws';
+import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { renderWsDisconnected } from '../lib/ws-status';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner` item shape.
 export interface ScannerItem {
@@ -103,6 +104,7 @@ export class PithaScannerTable extends LitElement {
   @state() private sortKey: SortKey = 'symbol';
   @state() private sortDirection: SortDirection = 'asc';
   @state() private error: string | null = null;
+  @state() private wsStatus: WsStatus = 'connecting';
 
   private wsClient: WsClient<ScannerUpdateMessage> | null = null;
 
@@ -131,6 +133,9 @@ export class PithaScannerTable extends LitElement {
 
   private subscribeWs(): void {
     this.wsClient = new WsClient<ScannerUpdateMessage>(resolveWsUrl(this.wsUrl), {
+      onStatusChange: (status) => {
+        this.wsStatus = status;
+      },
       onMessage: (message) => {
         if (message.type === 'scanner_update') {
           this.items = message.items;
@@ -193,6 +198,7 @@ export class PithaScannerTable extends LitElement {
           )}
         </tbody>
       </table>
+      ${renderWsDisconnected(this.wsStatus)}
       ${this.error ? html`<p class="pitha-scanner-table-error" role="alert">${this.error}</p>` : ''}
     `;
   }

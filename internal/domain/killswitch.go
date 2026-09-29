@@ -54,3 +54,15 @@ const (
 	SystemStatePaused  SystemState = "paused"
 	SystemStateKilled  SystemState = "killed"
 )
+
+// CanPause reports whether POST /system/pause is a valid transition from
+// s (docs/api/endpoints.md §4's state diagram: Running only).
+func (s SystemState) CanPause() bool { return s == SystemStateRunning }
+
+// CanResume reports whether POST /system/resume is a valid transition
+// from s (Paused or Killed).
+func (s SystemState) CanResume() bool { return s == SystemStatePaused || s == SystemStateKilled }
+
+// CanKill reports whether POST /system/kill is a valid transition from s
+// (Running or Paused).
+func (s SystemState) CanKill() bool { return s == SystemStateRunning || s == SystemStatePaused }

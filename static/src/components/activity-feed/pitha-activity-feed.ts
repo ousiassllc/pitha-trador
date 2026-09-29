@@ -11,7 +11,8 @@ import { html, LitElement, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
-import { resolveWsUrl, WsClient } from '../lib/ws';
+import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { renderWsDisconnected } from '../lib/ws-status';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/activity` shapes.
 export interface QueueStatus {
@@ -78,6 +79,7 @@ export class PithaActivityFeed extends LitElement {
   @state() private typeFilter = '';
   @state() private queueFilter = '';
   @state() private error: string | null = null;
+  @state() private wsStatus: WsStatus = 'connecting';
 
   private wsClient: WsClient<ActivityWsMessage> | null = null;
 
@@ -127,6 +129,9 @@ export class PithaActivityFeed extends LitElement {
 
   private subscribeWs(): void {
     this.wsClient = new WsClient<ActivityWsMessage>(resolveWsUrl(this.wsUrl), {
+      onStatusChange: (status) => {
+        this.wsStatus = status;
+      },
       onMessage: (message) => this.onWsMessage(message),
     });
   }
@@ -258,6 +263,7 @@ export class PithaActivityFeed extends LitElement {
           </tbody>
         </table>
       </section>
+      ${renderWsDisconnected(this.wsStatus)}
       ${this.error ? html`<p class="pitha-activity-feed-error" role="alert">${this.error}</p>` : nothing}
     `;
   }

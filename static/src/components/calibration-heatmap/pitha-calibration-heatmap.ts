@@ -60,7 +60,7 @@ function heatmapColor(directionAccuracy: number): string {
 
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
-  @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '/api/v1/calibration';
+  @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 
   @state() private buckets: CalibrationBucket[] = [];
   @state() private brierScore: number | null = null;
