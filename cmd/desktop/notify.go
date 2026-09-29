@@ -24,16 +24,14 @@ var _ risk.Notifier = (*App)(nil)
 var errWailsNotStarted = errors.New("desktop: native notification unavailable before Wails startup")
 
 // killSwitchTriggeredEvent/killSwitchResumedEvent/dailyLossWarningEvent
-// are the runtime.EventsEmit channel names the frontend (Lit
-// pitha-kill-switch-panel, docs/components/overview.md) subscribes to
-// for its in-window status indicator. architecture/overview.md §9/§10.3
-// call this a "システムトレイアイコン変化", but Wails v2's runtime
-// package (github.com/wailsapp/wails/v2/pkg/runtime) has no OS-level
-// system-tray API - only SendNotification (a native OS toast) and
-// EventsEmit exist. This build therefore drives the in-window status
-// indicator via EventsEmit; a literal OS system-tray icon would need
-// either Wails v3 or a third-party systray library, neither of which
-// this sub-issue introduces.
+// are the runtime.EventsEmit channel names. Nothing in the frontend
+// subscribes to them yet (no EventsOn / window.runtime consumer): the Lit
+// pitha-kill-switch-panel updates from /ws/system and the
+// GET /api/v1/system/status resync instead. Wails v2's runtime package
+// (github.com/wailsapp/wails/v2/pkg/runtime) has no OS-level system-tray
+// API - only SendNotification (a native OS toast) and EventsEmit exist -
+// so there is no system-tray icon change; one would need either Wails v3
+// or a third-party systray library.
 const (
 	killSwitchTriggeredEvent = "kill-switch:triggered"
 	killSwitchResumedEvent   = "kill-switch:auto-resumed"
