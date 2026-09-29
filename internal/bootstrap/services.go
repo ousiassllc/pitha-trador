@@ -202,10 +202,10 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	runtimePolicy := selfimprove.NewRuntimePolicy(settings, state.Strategy.Policy)
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	policyEngine := policy.NewEngine(thresholds, riskEngine, signals, policy.WithPolicySource(runtimePolicy))
-	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine}, policy.WithCalibration(calibration.NewService(outcomes)))
+	calibrationService := calibration.NewService(outcomes, decisiontrade.New(state.DB))
+	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine}, policy.WithCalibration(calibrationService))
 
 	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
-	calibrationService := calibration.NewService(outcomes, decisiontrade.New(state.DB))
 	// Sol/Opus (issue #82, FR-SELFIMPROVE-8/9) are real external LLM API
 	// clients built from the optional SOL_*/OPUS_* secrets. Left unset,
 	// each stage is skipped every day (assist.ErrNotConfigured) instead of
