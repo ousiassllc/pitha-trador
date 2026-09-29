@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
@@ -58,7 +59,7 @@ func newBacktestSource(instruments *repository.InstrumentRepository, snapshots *
 // its market_snapshots in [period.Start, period.End) preceded by the
 // featureengine.HistoryLookbackBars bars before period.Start as
 // look-ahead-check warmup, and its Jev Trader decisions in the same range
-// (EnrichDecision-populated, since Policy Engine needs fields
+// (enrich.Decision-populated, since Policy Engine needs fields
 // jev_decisions only stores inside response_json). Instruments with no
 // bars in period are omitted.
 func (b *BacktestSource) RunConfigs(ctx context.Context, period backtest.Period) ([]backtest.RunConfig, error) {
@@ -91,7 +92,7 @@ func (b *BacktestSource) RunConfigs(ctx context.Context, period backtest.Period)
 			return nil, err
 		}
 		for i := range decisions {
-			decisions[i] = execution.EnrichDecision(decisions[i])
+			decisions[i] = enrich.Decision(decisions[i])
 		}
 
 		configs = append(configs, backtest.RunConfig{

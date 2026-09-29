@@ -9,7 +9,7 @@ import (
 // Notifier is notified of every Kill Switch state transition and
 // threshold-warning event non-functional.md §5.2 requires an immediate
 // Slack alert for that this package can itself observe.
-// internal/bootstrap fans it out (MultiNotifier) to
+// internal/bootstrap fans it out (multinotify.Notifier) to
 // internal/service/notify's LogNotifier/SlackNotifier and, in the Wails
 // desktop shell, cmd/desktop's App; NoopNotifier is NewEngine's default
 // when Config.Notifier is nil.

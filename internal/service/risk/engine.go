@@ -105,6 +105,11 @@ type Config struct {
 	// Notifier defaults to NoopNotifier{} (notifier.go).
 	Notifier Notifier
 
+	// Calendar gates the operator-heartbeat timeout and the market-data/
+	// Jev API health detectors to 東証立会時間 (session.go). nil leaves
+	// them running around the clock.
+	Calendar MarketCalendar
+
 	// Now defaults to time.Now. Tests override it for deterministic
 	// cooldown/heartbeat-timeout checks.
 	Now func() time.Time
@@ -131,6 +136,7 @@ type Engine struct {
 	orders            *repository.OrderRepository
 	notifier          Notifier
 	now               func() time.Time
+	calendar          MarketCalendar
 }
 
 // NewEngine returns an Engine built from cfg, applying every documented
@@ -185,6 +191,7 @@ func NewEngine(cfg Config) *Engine {
 		orders:            cfg.Orders,
 		notifier:          cfg.Notifier,
 		now:               cfg.Now,
+		calendar:          cfg.Calendar,
 	}
 }
 

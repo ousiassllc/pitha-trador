@@ -81,6 +81,12 @@ func (s *Services) refreshCandidates(ctx context.Context) error {
 	s.Screener.Set(candidates, time.Now().UTC())
 
 	now := time.Now().UTC()
+	if !s.inSession(now) {
+		// Jev Scout is billed per call: off-hours the candidate list still
+		// refreshes from stored data, but nothing is sent to Jev
+		// (non-functional.md §3).
+		return nil
+	}
 	for _, c := range candidates {
 		if err := s.enqueueJevScout(ctx, c.InstrumentID, c.Symbol, now); err != nil {
 			// A single candidate's enqueue failure (DB write error) must

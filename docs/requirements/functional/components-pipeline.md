@@ -96,7 +96,7 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 - FR-RISK-3: Kill Switch発動時、必要に応じて保有ポジションをクローズする
 - FR-RISK-4: Kill SwitchはUI（Wailsアプリ）とサーバー内部処理の両方から操作可能とする。Phase 7の発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）
 - FR-RISK-5: すべてのRisk拒否・Kill Switch発動・自動再開を監査ログ（`kill_switch_events`・`kill_switch_resolutions`、追記専用）に記録する
-- FR-RISK-6（dead-man's switch、Live専用）: Wailsアプリの認証済みUIリクエストを「操作者ハートビート」として記録する。立会時間中に`heartbeat_timeout_minutes`（初期値120分）を超えてハートビートが途絶した場合、Risk Engineは自動的に新規エントリーを停止する（保有ポジションのExitルールは継続）。オペレーターがUIを再度操作した時点でこの停止理由は自動解消する。画面が自動で発火する再同期・ポーリング・WebSocket再接続はオペレーターの操作ではないためハートビートに数えない（`architecture/overview/flows.md` §10.4）
+- FR-RISK-6（dead-man's switch、Live専用）: Wailsアプリの認証済みUIリクエストを「操作者ハートビート」として記録する。立会時間中に`heartbeat_timeout_minutes`（初期値120分）を超えてハートビートが途絶した場合（最後のハートビートがその営業日の寄り付き前なら、寄り付き（9:00 JST）からの経過時間で判定する。立会時間外（昼休みを含む）は判定しない）、Risk Engineは自動的に新規エントリーを停止する（保有ポジションのExitルールは継続）。オペレーターがUIを再度操作した時点でこの停止理由は自動解消する。画面が自動で発火する再同期・ポーリング・WebSocket再接続はオペレーターの操作ではないためハートビートに数えない（`architecture/overview/flows.md` §10.4）
 - FR-RISK-7（Kill Switch再開の自動/手動分類）: `kill_switch_events.reason`により再開方法を分ける
 
 | 発動理由 | 再開方法 |
@@ -132,7 +132,7 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
   - 総エクスポージャ残枠: `initial_capital × (max_total_exposure_pct − 現在の総エクスポージャ率) ÷ 価格`
   - `GET /api/v1/symbols/{symbol}`の`risk.allowed_position_pct`は、直近価格で同サイジングを行った結果の数量が占める`initial_capital`比（%、発注不可なら0）
 - FR-ENTRY-4（約定の原子性）: Entry注文の約定（`paper_orders`のFILLED化）とポジション作成（`positions`）は単一のDBトランザクションで行う。失敗時は注文をFILLEDにせず、約定済み注文がどのポジションにも紐付かない状態（孤児約定）はRisk Engineの照合が`fill_discrepancy`として検知する（§4.7）
-- FR-EXIT-1: 以下のExit条件を併用する: 固定Stop Loss、固定Take Profit、Trailing Stop、Jev方向反転、continuation_probability低下、VWAP逆クロス、最大保有時間到達、引け前強制決済
+- FR-EXIT-1: 以下のExit条件を併用する: 固定Stop Loss、固定Take Profit、Trailing Stop、Jev方向反転、continuation_probability低下、VWAP逆クロス、最大保有時間到達、引け前強制決済（`force_flat_before_market_close_minutes` 分前から、大引け15:30 JSTを基準に判定する。前場終了11:30は対象外）
 - FR-EXIT-2: 初期値: `stop_loss_pct=0.6`, `take_profit_pct=1.2`, `trailing_stop_pct=0.5`, `max_holding_minutes=20`
 - FR-EXIT-3: Jev API不応答時も、既存ポジションはコードベースのExit Ruleで管理を継続する（Jev不応答を理由にリスク管理を停止しない）
 

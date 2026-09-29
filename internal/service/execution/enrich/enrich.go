@@ -1,4 +1,11 @@
-package execution
+// Package enrich fills the Jev Trader response fields (regime,
+// entry_quality, toxic_flow, liquidity_stressed, continuation_probability)
+// that jev_decisions stores only inside response_json back onto a
+// repository-read domain.JevDecision. It is a sub-package of
+// internal/service/execution (which uses it for FR-EXIT-1's Jev-derived
+// exit conditions) so callers such as internal/bootstrap and the Symbol
+// Detail API can share it.
+package enrich
 
 import (
 	"encoding/json"
@@ -22,7 +29,7 @@ type traderResponseFields struct {
 	ContinuationProbability float64 `json:"continuation_probability"`
 }
 
-// EnrichDecision fills in Regime/EntryQuality/ToxicFlow/
+// Decision fills in Regime/EntryQuality/ToxicFlow/
 // LiquidityStressed/ContinuationProbability on a
 // repository.DecisionRepository-read domain.JevDecision by parsing its
 // stored ResponseJSON, for callers (EvaluateExit, Symbol Detail's API
@@ -35,7 +42,7 @@ type traderResponseFields struct {
 // malformed/legacy row must not make an otherwise-valid decision
 // unusable - FR-EXIT-3's "Jev API不応答時も...継続動作" spirit extends to
 // a bad stored response too).
-func EnrichDecision(decision domain.JevDecision) domain.JevDecision {
+func Decision(decision domain.JevDecision) domain.JevDecision {
 	if decision.DecisionType != domain.JevDecisionTypeTrader || decision.ResponseJSON == "" {
 		return decision
 	}

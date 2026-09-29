@@ -48,6 +48,10 @@ type Config struct {
 	CooldownAfterLossMinutes          int
 	ForceFlatBeforeMarketCloseMinutes int
 
+	// Calendar gates new entries to 東証立会時間 and supplies the 大引け time
+	// for 引け前強制決済 (calendar.go); nil disables both.
+	Calendar MarketCalendar
+
 	// Now defaults to time.Now. Tests override it for deterministic
 	// max-holding/force-flat/cooldown checks.
 	Now func() time.Time

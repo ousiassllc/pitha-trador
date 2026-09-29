@@ -22,13 +22,12 @@ type MarketContext struct {
 	// 動作"). Its Direction/ContinuationProbability drive the Jev方向反
 	// 転/continuation_probability低下 conditions; a caller reading a
 	// decision back from repository.DecisionRepository must first pass it
-	// through EnrichDecision (decision.go) to populate
+	// through enrich.Decision to populate
 	// ContinuationProbability, which is not one of that repository's
 	// queryable columns.
 	Decision *domain.JevDecision
-	// MarketCloseAt is today's market close time, or nil to disable the
-	// 引け前強制決済 condition (no trading-calendar concept exists yet
-	// to derive it from).
+	// MarketCloseAt is today's 大引け time (OnSnapshot: Config.Calendar);
+	// nil disables the 引け前強制決済 condition.
 	MarketCloseAt *time.Time
 	// Now defaults to time.Now() when zero. Tests set it explicitly for
 	// deterministic max-holding/force-flat-before-close checks.

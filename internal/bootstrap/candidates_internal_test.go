@@ -67,6 +67,7 @@ func TestRefreshCandidates_PublishesTopScreenedInstrumentsToScreenerSource(t *te
 
 func TestRefreshCandidates_EnqueuesJevScoutJobForEachCandidate(t *testing.T) {
 	svc := newTestServices(t, nil)
+	svc.sessionOpen = func(time.Time) bool { return true } // not wall-clock dependent
 	svc.strategy.FastScreener = config.FastScreenerConfig{
 		MinPrice: 0, MaxPrice: 1_000_000,
 		MinTurnover5mJPY: 0, MaxSpreadBps: 100,
@@ -130,5 +131,33 @@ func TestCandidateRefreshInterval_NextReturnsMinWhenMaxNotGreater(t *testing.T) 
 	r := candidateRefreshInterval{min: 20 * time.Second, max: 20 * time.Second}
 	if d := r.next(); d != r.min {
 		t.Errorf("next() = %v, want %v when max <= min", d, r.min)
+	}
+}
+
+// Issue #139: off-hours the candidate list still refreshes from stored
+// data, but no Jev Scout job (a billed Jev call) is enqueued.
+func TestRefreshCandidates_DoesNotEnqueueJevScoutOutsideSession(t *testing.T) {
+	svc := newTestServices(t, nil)
+	svc.sessionOpen = func(time.Time) bool { return false }
+	svc.strategy.FastScreener = config.FastScreenerConfig{
+		MinPrice: 0, MaxPrice: 1_000_000, MaxSpreadBps: 100, TopN: 10,
+	}
+	inst := mustCreateInstrument(t, svc, "7203")
+	if _, err := svc.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
+		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: time.Now().UTC(),
+		Price: 2500, Volume: 1000, Turnover: 2_500_000, SpreadBps: ptrF(10),
+		Feature: domain.Feature{VWAP: 2490, PriceVsVWAPBps: 40, VolumeRatio5m: ptrF(1.5), Return5m: ptrF(0.5), RealizedVol5m: ptrF(0.01)},
+	}}); err != nil {
+		t.Fatalf("InsertBatch: %v", err)
+	}
+
+	if err := svc.refreshCandidates(context.Background()); err != nil {
+		t.Fatalf("refreshCandidates: %v", err)
+	}
+	if got, _, err := svc.Screener.Candidates(context.Background()); err != nil || len(got) != 1 {
+		t.Fatalf("candidates = %d, want 1 (list still refreshes off-hours)", len(got))
+	}
+	if _, err := svc.Jobs.ClaimNext(context.Background(), repository.JobQueueJevScout, time.Now().UTC().Add(time.Second)); err == nil {
+		t.Fatal("a jev-scout job was enqueued outside the trading session")
 	}
 }

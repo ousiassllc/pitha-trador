@@ -46,6 +46,8 @@ type EntryResult struct {
 // Enter implements Paper Entry (FR-ENTRY-1〜2): submits a market or limit
 // paper_orders row for req.Signal's direction/instrument, filling and
 // opening a positions row immediately when the order type/price allow it.
+// With Config.Calendar set, entries outside 東証立会時間 fail with
+// ErrOutsideTradingSession.
 func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, error) {
 	direction := req.Signal.Direction
 	if direction != domain.JevDirectionLong && direction != domain.JevDirectionShort {
@@ -58,6 +60,9 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 	now := req.Now
 	if now.IsZero() {
 		now = e.cfg.Now()
+	}
+	if !e.sessionOpen(now) {
+		return EntryResult{}, ErrOutsideTradingSession
 	}
 
 	if _, err := e.positions.GetOpenByInstrument(ctx, req.Signal.InstrumentID); err == nil {
