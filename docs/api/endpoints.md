@@ -180,8 +180,8 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 
 | クエリ | 型 | 説明 |
 |-------|-----|------|
-| `limit` | integer | フィード件数（既定200、最大500） |
-| `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー） |
+| `limit` | integer | フィード件数（既定200、1〜500。範囲外は422） |
+| `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー）。`job`イベントのみが対象で、指定時は`jev_scout`/`jev_trader`/`kill_switch`イベントは含まれない |
 | `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch`（省略時は全種別） |
 
 ```json
@@ -229,7 +229,7 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 | `/ws/scanner` | Scanner Dashboardのライブ更新（`pitha-scanner-table`） | `{"type":"scanner_update","items":[...]}` |
 | `/ws/symbols/{symbol}` | Symbol Detailのライブ更新（`pitha-price-chart`, Jev判定パネル） | `{"type":"tick","price":2831.5,...}` / `{"type":"jev_update","direction":"LONG",...}` |
 | `/ws/system` | Kill Switch発動等のシステムイベント通知（ヘッダーバッジ用、OOBの代替としてLit非経由でも利用可） | `{"type":"kill_switch","reason":"daily_loss_limit"}` |
-| `/ws/activity` | System Activity Logのライブ更新（`pitha-activity-feed`） | `{"type":"job_update","queue":"jev-scout","pending":2,"running":1}` / `{"type":"activity_event","event":{"type":"jev_scout","timestamp":"...","symbol":"7203"}}` |
+| `/ws/activity` | System Activity Logのライブ更新（`pitha-activity-feed`） | `{"type":"job_update","queue":"jev-scout","pending":2,"running":1,"failed_recent":0}` / `{"type":"activity_event","event":{"type":"jev_scout","timestamp":"...","symbol":"7203"}}`。接続直後の送信はなく、初期状態は`GET /api/v1/activity`から取得する |
 
 WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（自動再接続、指数バックオフ）を必ず経由する。
 
