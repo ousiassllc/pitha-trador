@@ -104,6 +104,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 - 初期データを`GET /api/v1/activity`で取得しレンダリングし、以後`/ws/activity`の`job_update`（該当キューの件数のみ置換）・`activity_event`（フィード先頭に追加、最大500件で切り詰め）を反映する
 - type/queueセレクトの変更時は`GET /api/v1/activity?type=&queue=`で再取得する（サーバー側フィルタ。`queue`指定は当該キューの`job`イベントのみに一致）。WS受信イベントも同じ条件でクライアント側で絞り込む
 - 直近Kill Switchイベントは`?type=kill_switch&limit=10`で別途取得し、WSの`kill_switch`イベントで先頭に追加する
+- WebSocketが切断後に再接続（`open`へ復帰）した時は、切断中に失ったイベントを補うため`GET /api/v1/activity`（現在のフィルタ付き）と`?type=kill_switch&limit=10`を再取得する（#221）。これは操作者不在でも発火するため`background: true`で送り、ハートビートに数えさせない（§6、FR-RISK-6）。初回・フィルタ変更時の取得は操作者操作のため`background`を付けない
 - SSRフォールバック（`QueueStatusPanel` + `ActivityFeedFallback`）を子要素として持ち、ハイドレーション時に置き換える（`pitha-scanner-table`と同じ light DOM 方式）
 
 ## 6. API クライアント / WebSocket（`lib/`）
@@ -118,7 +119,7 @@ patch<T>(path: string, body?): Promise<T>
 del<T>(path: string): Promise<T>
 ```
 
-`get` の `background: true` は自動発火のリクエスト（`pitha-kill-switch-panel` の再同期）に `X-Pitha-Background: 1` を付け、操作者ハートビートとして数えさせない（`architecture/overview/flows.md` §10.4、FR-RISK-6）。
+`get` の `background: true` は自動発火のリクエスト（`pitha-kill-switch-panel` の再同期、`pitha-activity-feed` のWebSocket再接続後のスナップショット再取得）に `X-Pitha-Background: 1` を付け、操作者ハートビートとして数えさせない（`architecture/overview/flows.md` §10.4、FR-RISK-6）。
 
 `lib/ws.ts`（自動再接続、指数バックオフ（〜30秒）、JSONメッセージパース（不正なJSONは`logger.warn`して破棄）、`onOpen`/`onMessage`/`onClose`/`onStatusChange`コールバック）。`onStatusChange`は`connecting`/`open`/`reconnecting`/`failed`を通知する。`failed`は連続10回の再接続失敗後で、以降も30秒間隔で無期限に再試行する。`WsClient`を持つ`pitha-kill-switch-panel`/`pitha-scanner-table`/`pitha-activity-feed`は`reconnecting`/`failed`の間、`lib/ws-status.ts`の「接続が切れています」通知（`role="status"`）を表示する（issue #133）。5種のLitコンポーネントは共通してこの2ファイルのみを経由し、`fetch()`/`new WebSocket()`を直接呼ばない。
 
