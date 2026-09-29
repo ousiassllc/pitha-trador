@@ -4,7 +4,7 @@
 
 ## 5. API ルート（Huma, `/api/v1`）
 
-Huma が OpenAPI 3.1 スペックを `/api/v1/openapi.json` に自動生成する。以下は主要エンドポイント。
+Huma が OpenAPI 3.1 スペックを `/api/v1/openapi.json` に自動生成する。スペックの `servers` は `[{"url": "/api/v1"}]` を宣言し、`paths` は `/scanner` のようにサーバー URL からの相対で表す（Stoplight Elements の "Try It" は `/api/v1/scanner` へリクエストする）。全 JSON 応答の `$schema` と `Link: rel="describedBy"` は `/api/v1/schemas/*.json` を指す。以下は主要エンドポイント。
 
 ### GET /api/v1/scanner
 

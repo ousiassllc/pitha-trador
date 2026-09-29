@@ -76,6 +76,9 @@ func registerPages(engine *gin.Engine, o options, settingsStore handler.SecretsS
 	return h
 }
 
+// apiBasePath is the mount point of the Huma JSON API.
+const apiBasePath = "/api/v1"
+
 // registerAPI registers the Huma-based `/api/v1` JSON API on engine.
 func registerAPI(engine *gin.Engine, o options, h handlers) {
 	// 5xx bodies carry only the fixed message; causes go to slog (issue #215).
@@ -85,7 +88,11 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	// this same openapi.json (handler.SwaggerUI); disable Huma's built-in
 	// docs route so there isn't a second, unlinked copy.
 	apiConfig.DocsPath = ""
-	api := humagin.NewWithGroup(engine, engine.Group("/api/v1"), apiConfig)
+	// The group mounts the API under /api/v1; Servers tells Huma (and OpenAPI
+	// clients such as Elements "Try It") about that base URL so the spec,
+	// `$schema` and `Link: rel="describedBy"` include the prefix (issue #234).
+	apiConfig.Servers = []*huma.Server{{URL: apiBasePath}}
+	api := humagin.NewWithGroup(engine, engine.Group(apiBasePath), apiConfig)
 	huma.Get(api, "/scanner", h.scanner.APIScanner)
 	huma.Post(api, "/system/pause", h.system.APIPause)
 	huma.Post(api, "/system/resume", h.system.APIResume)
