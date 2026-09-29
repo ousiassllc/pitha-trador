@@ -78,8 +78,9 @@ func TestBackup_CopiesUnflushedWALContentsIntoDailyFile(t *testing.T) {
 	if exists(daily + ".tmp") {
 		t.Error("temporary file left behind")
 	}
-	if entries, _ := os.ReadDir(filepath.Join(dir, "weekly")); len(entries) != 0 {
-		t.Errorf("weekly archive written on a Tuesday: %v", entries)
+	// The week's archive is created by its first backup, whatever the weekday.
+	if entries, _ := os.ReadDir(filepath.Join(dir, "weekly")); len(entries) != 1 || entries[0].Name() != "pitha-2026-09-28.db.gz" {
+		t.Errorf("weekly entries on a Tuesday = %v, want only pitha-2026-09-28.db.gz (that ISO week's Monday)", entries)
 	}
 
 	// Re-running on the same day replaces the copy instead of failing.
@@ -142,7 +143,7 @@ func TestBackup_WritesWeeklyGzipArchiveOnSunday(t *testing.T) {
 		t.Fatalf("Backup: %v", err)
 	}
 
-	archive := filepath.Join(dir, "weekly", "pitha-2026-09-27.db.gz")
+	archive := filepath.Join(dir, "weekly", "pitha-2026-09-21.db.gz") // Monday of the ISO week ending 09-27
 	f, err := os.Open(archive)
 	if err != nil {
 		t.Fatalf("weekly archive missing: %v", err)
@@ -246,7 +247,7 @@ func TestBackup_ScrubsSecretsAndRestrictsPermissions(t *testing.T) {
 		filepath.Join(dir, "daily"):  0o700,
 		filepath.Join(dir, "weekly"): 0o700,
 		daily:                        0o600,
-		filepath.Join(dir, "weekly", "pitha-2026-09-27.db.gz"): 0o600,
+		filepath.Join(dir, "weekly", "pitha-2026-09-21.db.gz"): 0o600,
 	} {
 		info, err := os.Stat(path)
 		if err != nil {

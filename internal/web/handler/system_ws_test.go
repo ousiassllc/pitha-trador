@@ -1,8 +1,12 @@
 package handler_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
@@ -207,5 +211,22 @@ func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
 				t.Fatalf("handler still running 3s after client close (interval %v)", longInterval)
 			}
 		})
+	}
+}
+
+// #178: the status badge's 500 logs the engine error via slog.
+func TestSystemHandler_Status_500LogsCause(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	defer slog.SetDefault(prev)
+	router := gin.New()
+	router.GET("/system/status", handler.NewSystemHandler(&fakeSystemEngine{stateErr: errors.New("state cause")}).Status)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/status", nil))
+
+	if rec.Code != http.StatusInternalServerError || !strings.Contains(logs.String(), "state cause") {
+		t.Errorf("status = %d, log = %q; want 500 with the cause logged", rec.Code, logs.String())
 	}
 }

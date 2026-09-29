@@ -6,7 +6,7 @@ import (
 )
 
 // ErrOutsideTradingSession is returned by Enter when Config.Calendar says
-// the entry time is outside 東証立会時間 (non-functional.md §3).
+// the entry time is outside 東証立会時間 (non-functional.md §3) or inside the 引け前強制決済 window.
 var ErrOutsideTradingSession = errors.New("execution: outside trading session")
 
 // MarketCalendar is what Engine needs of internal/service/marketcalendar.
@@ -28,7 +28,13 @@ func (e *Engine) marketCloseAt(now time.Time) *time.Time {
 	return nil
 }
 
-// sessionOpen: new entries are allowed at now (always without a Calendar).
+// sessionOpen: new entries are allowed at now (always without a Calendar):
+// in session and before the force-flat time (else it would be flatted at once).
 func (e *Engine) sessionOpen(now time.Time) bool {
-	return e.cfg.Calendar == nil || e.cfg.Calendar.IsOpen(now)
+	if e.cfg.Calendar == nil {
+		return true
+	}
+	closeAt := e.marketCloseAt(now)
+	return e.cfg.Calendar.IsOpen(now) &&
+		(closeAt == nil || now.Before(closeAt.Add(-time.Duration(e.cfg.ForceFlatBeforeMarketCloseMinutes)*time.Minute)))
 }

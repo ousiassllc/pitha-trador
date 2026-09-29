@@ -7,7 +7,8 @@
 // Layout under the destination directory (which must already exist):
 //
 //	daily/pitha-YYYY-MM-DD.db      one full copy per day, pruned after 90 days
-//	weekly/pitha-YYYY-MM-DD.db.gz  gzip of every Sunday's copy, pruned after 52 weeks
+//	weekly/pitha-YYYY-MM-DD.db.gz  gzip of the first copy of each ISO week (named by that
+//	                               week's Monday), pruned after 52 weeks
 //
 // Every copy is scrubbed of the secrets table (credentials are only
 // encrypted with the application-embedded key, so they must not leave the
@@ -73,8 +74,9 @@ func New(db *sql.DB, dir string, retentionDays int) *Service {
 }
 
 // Backup performs one pass: checkpoint + consistent, scrubbed and
-// verified copy into daily/, a weekly gzip archive when today is a
-// Sunday, then pruning of daily copies older than the retention window
+// verified copy into daily/, a weekly gzip archive when the current ISO
+// week has none yet (so a machine that only runs on weekdays still gets
+// one per week), then pruning of daily copies older than the retention window
 // and weekly archives older than the weekly window. Re-running on the
 // same day replaces that day's copy. A failed prune does not undo (or
 // mask the success of) the backup itself; it is returned after the copy
@@ -110,8 +112,11 @@ func (s *Service) Backup(ctx context.Context) error {
 		return err
 	}
 
-	if now.Weekday() == time.Sunday {
-		if err := archiveWeekly(dailyPath, filepath.Join(weekly, filePrefix+day+weeklySfx)); err != nil {
+	monday := isoWeekMonday(now)
+	if has, err := hasWeeklyArchive(weekly, monday); err != nil {
+		return err
+	} else if !has {
+		if err := archiveWeekly(dailyPath, filepath.Join(weekly, filePrefix+monday.Format(dayLayout)+weeklySfx)); err != nil {
 			return err
 		}
 	}

@@ -82,3 +82,36 @@ func prune(ctx context.Context, dir, suffix string, cutoff time.Time) error {
 	}
 	return errors.Join(errs...)
 }
+
+// isoWeekMonday returns the (midnight, same location) Monday of t's ISO
+// week, the key weekly archives are named and de-duplicated by.
+func isoWeekMonday(t time.Time) time.Time {
+	daysSinceMonday := (int(t.Weekday()) + 6) % 7
+	return time.Date(t.Year(), t.Month(), t.Day()-daysSinceMonday, 0, 0, 0, 0, t.Location())
+}
+
+// hasWeeklyArchive reports whether dir already holds a weekly archive dated
+// within the ISO week starting at monday (any day of that week, so archives
+// written under the earlier Sunday-only naming still count).
+func hasWeeklyArchive(dir string, monday time.Time) (bool, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, fmt.Errorf("backup: read %q: %w", dir, err)
+	}
+	first, next := monday.Format(dayLayout), monday.AddDate(0, 0, 7).Format(dayLayout)
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, filePrefix) || !strings.HasSuffix(name, weeklySfx) {
+			continue
+		}
+		day := strings.TrimSuffix(strings.TrimPrefix(name, filePrefix), weeklySfx)
+		if _, err := time.Parse(dayLayout, day); err != nil {
+			continue
+		}
+		// ISO dates order lexicographically.
+		if day >= first && day < next {
+			return true, nil
+		}
+	}
+	return false, nil
+}
