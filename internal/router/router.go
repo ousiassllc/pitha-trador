@@ -326,9 +326,9 @@ func New(opts ...Option) *gin.Engine {
 
 // swaggerEnabled reports whether the `/swagger` route (Stoplight Elements
 // UI, docs/environment/setup.md "Swagger / OpenAPI") should be registered.
-// Controlled by the SWAGGER_ENABLED env var: defaults to true (dev/staging)
-// and is disabled only when explicitly set to "false" (production, Phase 7
-// live trading).
+// Controlled by the SWAGGER_ENABLED env var: opt-in, so the docs UI is
+// disabled unless explicitly set to "true" (`make dev` does; production
+// and Phase 7 live trading never expose it, issue #112).
 func swaggerEnabled() bool {
-	return os.Getenv("SWAGGER_ENABLED") != "false"
+	return os.Getenv("SWAGGER_ENABLED") == "true"
 }

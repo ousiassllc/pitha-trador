@@ -55,3 +55,21 @@ if (watch) {
   await esbuild.build(buildOptions);
   console.log('esbuild: build complete');
 }
+
+// Vendor Stoplight Elements (the `/swagger` UI, docs/environment/setup.md
+// "Swagger / OpenAPI") from the bun-installed `@stoplight/elements` package
+// into dist/vendor/, so it is embedded and served same-origin at
+// /static/dist/vendor/stoplight-elements/ instead of an unpinned, SRI-less CDN
+// script (issues #112/#117). The version is pinned by static/bun.lock.
+const elementsSrc = 'node_modules/@stoplight/elements';
+const elementsOut = 'src/dist/vendor/stoplight-elements';
+fs.rmSync(elementsOut, { recursive: true, force: true });
+fs.mkdirSync(elementsOut, { recursive: true });
+for (const file of [
+  'web-components.min.js',
+  'web-components.min.js.LICENSE.txt',
+  'styles.min.css',
+  'LICENSE',
+]) {
+  fs.copyFileSync(path.join(elementsSrc, file), path.join(elementsOut, file));
+}
