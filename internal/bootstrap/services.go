@@ -196,7 +196,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		jevAPI:     jevClient,
 		brokerAPI:  marketDataClient.BrokerFailures(),
 		dbWrite:    repository.DBWriteFailures,
-	}, executionEngine, alerts.riskNotifier(notifiers), executionConfig.StopLossPct)
+	}, executionEngine, alerts.riskNotifier(notifiers))
 	// runtimePolicy is strategy.yaml's policy.* thresholds overridden by every
 	// applied Self-Improvement proposal; signals and backtests both read it, so
 	// an approved (or rolled-back) change applies on the next evaluation (#52).

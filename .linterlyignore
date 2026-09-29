@@ -37,7 +37,6 @@ internal/repository/killswitch_migration_test.go
 internal/repository/killswitch_repo.go
 internal/repository/killswitch_repo_test.go
 internal/repository/order_repo.go
-internal/repository/order_fill_entry_test.go
 internal/repository/order_repo_test.go
 internal/repository/position_repo.go
 internal/repository/position_repo_test.go
@@ -67,7 +66,6 @@ internal/web/handler/update_test.go
 internal/bootstrap/activity_internal_test.go
 internal/bootstrap/candidates_screener_internal_test.go
 internal/bootstrap/event_internal_test.go
-internal/bootstrap/execution_internal_test.go
 internal/bootstrap/selfimprove_internal_test.go
 
 # internal/service/risk/（全体 約2.5k行。Engineのメソッド群でパッケージ内結合が強い）

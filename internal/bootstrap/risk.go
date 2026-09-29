@@ -82,7 +82,7 @@ type riskSignals struct {
 
 // newRiskEngine builds the Paper Trading Risk Engine (this build only
 // runs Paper Trading, so config/risk.yaml's paper limits apply).
-func newRiskEngine(limits config.RiskLimits, repos riskRepositories, signals riskSignals, closer risk.PositionCloser, notifier risk.Notifier, stopLossPct float64) *risk.Engine {
+func newRiskEngine(limits config.RiskLimits, repos riskRepositories, signals riskSignals, closer risk.PositionCloser, notifier risk.Notifier) *risk.Engine {
 	return risk.NewEngine(risk.Config{
 		Limits:            limits,
 		KillSwitch:        repos.killSwitch,
@@ -97,6 +97,5 @@ func newRiskEngine(limits config.RiskLimits, repos riskRepositories, signals ris
 		DBWriteFailures:   signals.dbWrite,
 		Closer:            closer,
 		Notifier:          notifier,
-		StopLossPct:       stopLossPct, // sizing must assume the stop Execution really uses
 	})
 }

@@ -31,15 +31,13 @@ func mustOpenPaperPosition(t *testing.T, svc *Services, inst domain.Instrument, 
 	return position
 }
 
-const paperSizedQuantity = 200 // 30M yen x 2% / 2500 yen = 240 -> two lots
-
 func TestPaperExecutor_SizesEntryFromRiskLimitsAndSkipsRepeatEntry(t *testing.T) {
 	svc := newTestServices(t, nil)
 	inst := mustCreateInstrument(t, svc, "7203")
 
 	position := mustOpenPaperPosition(t, svc, inst, 2500)
-	if position.Quantity != paperSizedQuantity || position.EntryPrice != 2500 || position.Side != domain.PositionSideLong {
-		t.Fatalf("opened position = %+v, want LONG %d shares at 2500", position, paperSizedQuantity)
+	if position.Quantity != 200 || position.EntryPrice != 2500 || position.Side != domain.PositionSideLong {
+		t.Fatalf("opened position = %+v, want LONG %d shares at 2500", position, 200)
 	}
 
 	// A second approved signal while the position is still open is not an
