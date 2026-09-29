@@ -215,14 +215,8 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 			return fmt.Errorf("scheduler: register log rotation trigger: %w", err)
 		}
 	}
-	if s.databaseBackuper != nil {
-		if _, err := s.cron.AddFunc("@daily", func() {
-			if err := s.BackupDatabase(ctx); err != nil {
-				slog.Error("scheduler: database backup failed", "error", err)
-			}
-		}); err != nil {
-			return fmt.Errorf("scheduler: register database backup trigger: %w", err)
-		}
+	if err := s.addDataMaintenanceTriggers(ctx); err != nil {
+		return err
 	}
 	if s.updateChecker != nil {
 		checkForUpdate := func() {

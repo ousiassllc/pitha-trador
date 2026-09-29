@@ -120,6 +120,8 @@ erDiagram
 
 再起動時の回復: プロセス起動時に`status='running'`のまま残っている行（クラッシュで中断されたジョブ）を`pending`へ戻し再実行する。
 
+保持期間: 完了行のみを対象に、Schedulerの`@daily`ジョブ（`internal/service/retention`）が`succeeded`は`finished_at`から7日、`failed`は30日経過後にバッチ削除する。`pending`/`running`は削除しない。`ClaimNext`や`QueueCounts`の集計コストとDBファイルの肥大を抑えるための措置で、Activity Logが参照する直近の行は保持期間内に残る（`non-functional.md` §3）。
+
 ## ベクトルインデックス（sqlite-vec）
 
 RAG類似検索（`functional.md` FR-RAG-1〜3）のため、[sqlite-vec](https://github.com/asg017/sqlite-vec)拡張の`vec0`仮想テーブルを用いる。標準化済み特徴量ベクトルは14次元固定（return_1m, return_5m, return_15m, price_vs_vwap_bps, volume_ratio_1m, volume_ratio_5m, spread_bps, orderbook_imbalance, realized_vol_5m, realized_vol_15m, volatility_expansion_ratio, market_return_5m, sector_return_5m, stock_vs_sector_relative_strength の14項目を標準化し結合）。
