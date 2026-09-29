@@ -95,6 +95,8 @@ templ KillSwitchPanel(state domain.SystemState) {
 
 - 操作可否は`domain.SystemState.CanPause/CanResume/CanKill`（Running→pause/kill可、Paused→resume/kill可、Killed→resumeのみ）が唯一の定義で、`GET/POST /api/v1/system/*`の応答も`can_pause`/`can_resume`/`can_kill`として返す。状態を読み出せないとき`Header`は操作ボタンを描画せず（`status=""`）、パネルが`status-url`から自己補正する
 - 操作後は`systemStateChanged`を発火し、`Header`の`#header-status`（`hx-trigger="systemStateChanged from:closest header"`）がStatusDotを再取得する
+- Killの確認ダイアログ（`window.confirm`）は、Killが新規エントリー停止に加えて保有中の全ポジションを強制決済する（`Engine.Kill` → `closer.CloseAll`、FR-RISK-3 / UC-11）ことを文言で伝える（issue #194）
+- 操作（Pause/Resume/Kill）のPOSTが失敗したときはエラーを表示したうえで`status-url`から状態を再同期し、`systemStateChanged`も発火する。Killは`system.killed`を先に立ててから強制決済するため、強制決済失敗（500）でもサーバーはKilledのままで、UIが`running`のまま残らないようにする（issue #195）
 - Kill Switch発動はRisk Engineからも直接トリガーされうる（`architecture/overview/flows.md` §10.3）。この場合はサーバー側が`/ws/system`経由で`kill_switch`イベントを配信し、`pitha-kill-switch-panel`が受信して`status`をローカルに反映（操作可否は`status-url`から再取得）しつつ、同様に`systemStateChanged`を発火してHeaderと同期させる。`/ws/system`が切断されている間は「接続が切れています」を表示し、再接続後に`status-url`から再同期する（§6）
 
 ### 5.5 pitha-activity-feed

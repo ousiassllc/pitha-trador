@@ -18,8 +18,8 @@ import { css, html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get, post } from '../lib/api';
 import { logger } from '../lib/logger';
-import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { buttonStyles, noticeStyles } from '../lib/styles';
+import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 
 export type SystemStatus = 'running' | 'paused' | 'killed';
@@ -42,7 +42,10 @@ interface KillSwitchMessage {
   reason: string;
 }
 
-const KILL_CONFIRM_MESSAGE = 'Kill Switchを発動しますか？新規エントリーが停止します。';
+// Kill force-closes every open position (Engine.Kill → closer.CloseAll,
+// FR-RISK-3 / UC-11), so the only safety net must say so (issue #194).
+const KILL_CONFIRM_MESSAGE =
+  'Kill Switchを発動しますか？新規エントリーが停止し、保有中の全ポジションが強制決済されます。';
 
 @customElement('pitha-kill-switch-panel')
 export class PithaKillSwitchPanel extends LitElement {
@@ -186,8 +189,13 @@ export class PithaKillSwitchPanel extends LitElement {
       this.applyState(await post<SystemStateResponse>(url));
       this.error = null;
     } catch (err) {
-      this.error = err instanceof Error ? err.message : String(err);
       logger.error(`pitha-kill-switch-panel: ${url} failed`, { error: err });
+      // The server may have changed state despite the failure (Kill sets
+      // killed before it liquidates, so a failed liquidation still leaves
+      // the system killed - issue #195): resync, then keep the action's
+      // own error visible over whatever resync() left in `error`.
+      await this.resync();
+      this.error = err instanceof Error ? err.message : String(err);
     } finally {
       this.busy = false;
     }

@@ -62,7 +62,9 @@ async function flush(el: HeatmapElement): Promise<void> {
 }
 
 async function mount(body: CalibrationAPIResponse) {
-  const fetchMock = mock(() => Promise.resolve(new Response(JSON.stringify(body))));
+  const fetchMock = mock((_input: RequestInfo | URL) =>
+    Promise.resolve(new Response(JSON.stringify(body))),
+  );
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 
   const el = document.createElement('pitha-calibration-heatmap') as HeatmapElement;
