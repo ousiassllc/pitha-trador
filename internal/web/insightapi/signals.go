@@ -50,25 +50,21 @@ type SignalsAPIOutput struct {
 
 // SignalsInput is `GET /api/v1/signals`'s query parameters.
 type SignalsInput struct {
-	Limit int `query:"limit" default:"100" doc:"Maximum number of signals to return."`
+	Limit int `query:"limit" default:"100" minimum:"1" maximum:"500" doc:"Maximum number of signals to return (1-500)."`
 }
 
 // SymbolSignalsInput is `GET /api/v1/signals/{symbol}`'s path+query
 // parameters.
 type SymbolSignalsInput struct {
-	Symbol string `path:"symbol" doc:"Instrument symbol (e.g. 7203)."`
-	Limit  int    `query:"limit" default:"100" doc:"Maximum number of signals to return."`
+	Symbol string `path:"symbol" minLength:"1" maxLength:"16" pattern:"^[0-9A-Za-z]+$" doc:"Instrument symbol (alphanumeric, e.g. 7203)."`
+	Limit  int    `query:"limit" default:"100" minimum:"1" maximum:"500" doc:"Maximum number of signals to return (1-500)."`
 }
 
 // Signals implements `GET /api/v1/signals` (docs/api/endpoints.md §5):
 // trade_signals across every symbol (LONG/SHORT/NONE, whether or not Risk
 // Engine passed them), most recent first.
 func (h *Handler) Signals(ctx context.Context, in *SignalsInput) (*SignalsAPIOutput, error) {
-	limit := in.Limit
-	if limit <= 0 {
-		limit = defaultListLimit
-	}
-	signals, err := h.provider.ListSignals(ctx, limit)
+	signals, err := h.provider.ListSignals(ctx, in.Limit)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("list signals failed", err)
 	}
@@ -82,11 +78,7 @@ func (h *Handler) Signals(ctx context.Context, in *SignalsInput) (*SignalsAPIOut
 // (docs/api/endpoints.md §5): one symbol's trade_signals history, most
 // recent first, including risk_passed/reject_reason.
 func (h *Handler) SymbolSignals(ctx context.Context, in *SymbolSignalsInput) (*SignalsAPIOutput, error) {
-	limit := in.Limit
-	if limit <= 0 {
-		limit = defaultListLimit
-	}
-	signals, err := h.provider.RecentSignals(ctx, in.Symbol, limit)
+	signals, err := h.provider.RecentSignals(ctx, in.Symbol, in.Limit)
 	if err != nil {
 		if errors.Is(err, execution.ErrInstrumentUnknown) {
 			return nil, huma.Error404NotFound("unknown symbol", err)

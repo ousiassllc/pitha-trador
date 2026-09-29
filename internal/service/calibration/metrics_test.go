@@ -118,3 +118,62 @@ func TestMetrics_PerfectCalibrationHasZeroECE(t *testing.T) {
 		t.Fatalf("ExpectedCalibrationError = %v, want ~0.1 (|accuracy 0.8 - confidence 0.9| * weight 1.0)", got.ExpectedCalibrationError)
 	}
 }
+
+func TestMetrics_AvgConfidenceAndByDirection(t *testing.T) {
+	samples := []domain.LabeledSample{
+		{Direction: domain.JevDirectionLong, Confidence: 0.82, FutureReturn: 1.0, WasDirectionCorrect: true},
+		{Direction: domain.JevDirectionLong, Confidence: 0.88, FutureReturn: -0.4, WasDirectionCorrect: false},
+		{Direction: domain.JevDirectionShort, Confidence: 0.65, FutureReturn: -2.0, WasDirectionCorrect: true},
+	}
+	got := calibration.Metrics(samples)
+
+	byRange := map[string]domain.ConfidenceBucket{}
+	for _, b := range got.Buckets {
+		byRange[b.Range] = b
+	}
+	if !almostEqual(byRange["0.80-0.90"].AvgConfidence, 0.85) || !almostEqual(byRange["0.60-0.70"].AvgConfidence, 0.65) {
+		t.Fatalf("AvgConfidence = %v/%v, want 0.85/0.65", byRange["0.80-0.90"].AvgConfidence, byRange["0.60-0.70"].AvgConfidence)
+	}
+	if len(got.ByDirection) != 2 || got.ByDirection[0].Direction != domain.JevDirectionLong || got.ByDirection[1].Direction != domain.JevDirectionShort {
+		t.Fatalf("ByDirection = %+v, want [LONG SHORT]", got.ByDirection)
+	}
+	long, short := got.ByDirection[0], got.ByDirection[1]
+	if long.SampleCount != 2 || !almostEqual(long.DirectionAccuracy, 0.5) || !almostEqual(long.AvgFutureReturnPct, 0.3) {
+		t.Fatalf("LONG = %+v, want 2 samples, accuracy 0.5, avg return 0.3", long)
+	}
+	// SHORT's future return is direction-adjusted: price fell 2% => +2%.
+	if short.SampleCount != 1 || !almostEqual(short.DirectionAccuracy, 1) || !almostEqual(short.AvgFutureReturnPct, 2.0) {
+		t.Fatalf("SHORT = %+v, want 1 sample, accuracy 1, avg return +2.0", short)
+	}
+}
+
+func TestMetrics_ByDirectionAlwaysListsBothDirections(t *testing.T) {
+	got := calibration.Metrics(nil)
+	if len(got.ByDirection) != 2 || got.ByDirection[0].SampleCount != 0 || got.ByDirection[1].SampleCount != 0 {
+		t.Fatalf("ByDirection = %+v, want LONG and SHORT with zero samples", got.ByDirection)
+	}
+}
+
+func TestWithTradePnL_AggregatesPerBucketAndIgnoresOutOfRange(t *testing.T) {
+	metrics := calibration.Metrics(nil)
+	trades := []domain.DecisionTrade{
+		{Confidence: 0.85, RealizedPnL: 1000, ReturnPct: 1.0},
+		{Confidence: 0.82, RealizedPnL: -400, ReturnPct: -0.4},
+		{Confidence: 0.95, RealizedPnL: 300, ReturnPct: 0.3},
+		{Confidence: 0.30, RealizedPnL: 9999, ReturnPct: 9},
+	}
+
+	got := calibration.WithTradePnL(metrics, trades)
+
+	byRange := map[string]domain.ConfidenceBucket{}
+	for _, b := range got.Buckets {
+		byRange[b.Range] = b
+	}
+	b := byRange["0.80-0.90"]
+	if b.TradeCount != 2 || !almostEqual(b.TotalPnL, 600) || !almostEqual(b.AvgPnLPct, 0.3) {
+		t.Fatalf("0.80-0.90 = %+v, want 2 trades, total 600, avg 0.3%%", b)
+	}
+	if byRange["0.90-1.00"].TradeCount != 1 || byRange["0.50-0.60"].TradeCount != 0 || byRange["0.50-0.60"].AvgPnLPct != 0 {
+		t.Fatalf("buckets = %+v, want 1 trade in 0.90-1.00 and none below 0.50 counted", got.Buckets)
+	}
+}

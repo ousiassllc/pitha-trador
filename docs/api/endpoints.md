@@ -106,3 +106,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.11 | 2026-09-29 | §4から未使用の`POST /system/pause\|resume\|kill`を削除。§5に`GET /api/v1/system/status`、アクセスログ（slog）とpanic回復（500）を`internal/web/middleware`に実装。§1 Setup Guardの応答をリクエスト種別別（302/HX-Redirect/503 JSON/403）に変更、§7にSSRページ失敗時の`ErrorPage`を追記 | issue #108/#109/#122/#124/#140/#143 |
 | 1.12 | 2026-09-29 | §1のSessionミドルウェア適用順を実装どおり（RequestLog→Recovery→HostGuard→Session→Heartbeat→Setup Guard→SystemState）に訂正。Phase 7の追加認証記述（§1・状態遷移図）を非機能要件§4/FR-RISK-4に合わせて削除。Host/Origin検証（DNS rebinding対策）、CSRF拒否の`X-CSRF-Reject: stale`識別、`_csrf`フォームフィールドを追記 | issue #136/#138/#142/#149 |
 | 1.13 | 2026-09-29 | §5を`docs/api/endpoints/huma-api.md`へ分割（300行/ファイル制限）。節番号・内容は変更なし | issue #136/#149 |
+| 1.14 | 2026-09-29 | `/calibration`に`by_direction`・バケット別`avg_confidence`/`sample_count`/PnLを追加、`/symbols/{symbol}`の`risk`を実設定連動と明記、`/decisions`・`/signals`の`limit`（1〜500）・`{symbol}`検証を追記 | issue #141/#164/#148/#162実装 |

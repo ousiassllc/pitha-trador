@@ -23,6 +23,20 @@ import { buttonStyles, noticeStyles } from '../lib/styles';
 // shape (internal/web/handler.calibrationBucketOutput).
 export interface CalibrationBucket {
   range: string;
+  avg_confidence: number;
+  direction_accuracy: number;
+  avg_future_return_pct: number;
+  sample_count: number;
+  trade_count: number;
+  total_pnl: number;
+  avg_pnl_pct: number;
+}
+
+// Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `by_direction[]`
+// item shape (internal/web/handler.calibrationDirectionOutput).
+export interface CalibrationDirection {
+  direction: 'LONG' | 'SHORT';
+  sample_count: number;
   direction_accuracy: number;
   avg_future_return_pct: number;
 }
@@ -31,6 +45,7 @@ export interface CalibrationBucket {
 // (internal/web/handler.CalibrationAPIOutput).
 export interface CalibrationAPIResponse {
   buckets: CalibrationBucket[];
+  by_direction: CalibrationDirection[];
   brier_score: number;
   log_loss: number;
   expected_calibration_error: number;
@@ -57,6 +72,12 @@ function bucketMidpointPct(range: string): number {
 function heatmapColor(directionAccuracy: number): string {
   const hue = Math.max(0, Math.min(1, directionAccuracy)) * 120;
   return `hsl(${hue}, 70%, 45%)`;
+}
+
+// formatYen renders a signed JPY amount, e.g. "+1,200 JPY" / "-400 JPY".
+function formatYen(amount: number): string {
+  const sign = amount > 0 ? '+' : '';
+  return `${sign}${Math.round(amount).toLocaleString('en-US')} JPY`;
 }
 
 @customElement('pitha-calibration-heatmap')
@@ -121,6 +142,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 
   @state() private buckets: CalibrationBucket[] = [];
+  @state() private byDirection: CalibrationDirection[] = [];
   @state() private brierScore: number | null = null;
   @state() private logLoss: number | null = null;
   @state() private expectedCalibrationError: number | null = null;
@@ -173,6 +195,7 @@ export class PithaCalibrationHeatmap extends LitElement {
     try {
       const response = await get<CalibrationAPIResponse>(this.calibrationUrl);
       this.buckets = response.buckets;
+      this.byDirection = response.by_direction;
       this.brierScore = response.brier_score;
       this.logLoss = response.log_loss;
       this.expectedCalibrationError = response.expected_calibration_error;
@@ -229,10 +252,31 @@ export class PithaCalibrationHeatmap extends LitElement {
                 <span class="range">${b.range}</span>
                 <span class="accuracy">${(b.direction_accuracy * 100).toFixed(1)}%</span>
                 <span class="avg-return">${b.avg_future_return_pct.toFixed(2)}%</span>
+                <span class="avg-confidence">conf ${b.avg_confidence.toFixed(2)}</span>
+                <span class="bucket-pnl">
+                  ${b.trade_count} trades / ${formatYen(b.total_pnl)} (${b.avg_pnl_pct.toFixed(2)}%)
+                </span>
               </li>
             `,
           )}
         </ul>
+        <table class="pitha-calibration-heatmap-directions" data-testid="calibration-direction-table">
+          <thead>
+            <tr><th>Direction</th><th>Samples</th><th>Accuracy</th><th>Avg return</th></tr>
+          </thead>
+          <tbody>
+            ${this.byDirection.map(
+              (d) => html`
+                <tr data-testid="calibration-direction-row">
+                  <td>${d.direction}</td>
+                  <td>${d.sample_count}</td>
+                  <td>${(d.direction_accuracy * 100).toFixed(1)}%</td>
+                  <td>${d.avg_future_return_pct.toFixed(2)}%</td>
+                </tr>
+              `,
+            )}
+          </tbody>
+        </table>
         ${
           this.brierScore !== null
             ? html`

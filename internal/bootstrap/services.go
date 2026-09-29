@@ -19,6 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 	"github.com/ousiassllc/pitha-trador/internal/service/backup"
@@ -204,17 +205,16 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		brokerAPI:  marketDataClient.BrokerFailures(),
 		dbWrite:    repository.DBWriteFailures,
 	}, executionEngine, alerts.riskNotifier(notifiers))
-	// runtimePolicy is config/strategy.yaml's policy.* thresholds as
-	// overridden by every Self-Improvement proposal currently applied:
-	// live signals and backtests both read it, so an approved (or
-	// rolled-back) change takes effect on the next evaluation (#52).
+	// runtimePolicy is strategy.yaml's policy.* thresholds overridden by every
+	// applied Self-Improvement proposal; signals and backtests both read it, so
+	// an approved (or rolled-back) change applies on the next evaluation (#52).
 	runtimePolicy := selfimprove.NewRuntimePolicy(settings, state.Strategy.Policy)
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	policyEngine := policy.NewEngine(thresholds, riskEngine, signals, policy.WithPolicySource(runtimePolicy))
 	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine})
 
 	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
-	calibrationService := calibration.NewService(outcomes)
+	calibrationService := calibration.NewService(outcomes, decisiontrade.New(state.DB))
 	// Sol/Opus (issue #82, FR-SELFIMPROVE-8/9) are real external LLM API
 	// clients built from the optional SOL_*/OPUS_* secrets. Left unset,
 	// each stage is skipped every day (assist.ErrNotConfigured) instead of

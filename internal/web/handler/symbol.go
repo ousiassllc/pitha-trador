@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 )
@@ -95,6 +96,20 @@ type SymbolRiskParams struct {
 	AllowedPositionPct float64
 	StopLossPct        float64
 	TakeProfitPct      float64
+}
+
+// NewSymbolRiskParams builds the Risk section's values from the limits the
+// engines actually enforce: limits is the config/risk.yaml section passed
+// to risk.NewEngine (Risk Engine's Limits()), exit the execution.Engine's
+// Config() (its stop-loss/take-profit exit rule). cmd/desktop and
+// cmd/server pass the result to router.WithSymbolRiskParams so the
+// Symbol Detail screen and API never show values the engines don't use.
+func NewSymbolRiskParams(limits config.RiskLimits, exit execution.Config) SymbolRiskParams {
+	return SymbolRiskParams{
+		AllowedPositionPct: limits.MaxPositionPerSymbolPct,
+		StopLossPct:        exit.StopLossPct,
+		TakeProfitPct:      exit.TakeProfitPct,
+	}
 }
 
 // SymbolHandler implements the Symbol Detail API/action routes

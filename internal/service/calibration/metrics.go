@@ -19,15 +19,24 @@ const probabilityEpsilon = 1e-9
 // /api/v1/calibration).
 type Service struct {
 	outcomes *repository.CalibrationRepository
+	trades   TradeSource
 }
 
-// NewService returns a Service backed by outcomes.
-func NewService(outcomes *repository.CalibrationRepository) *Service {
-	return &Service{outcomes: outcomes}
+// TradeSource lists the closed positions traced back to the Jev trader
+// decision that opened them (*decisiontrade.Repository).
+type TradeSource interface {
+	List(ctx context.Context) ([]domain.DecisionTrade, error)
+}
+
+// NewService returns a Service backed by outcomes and trades.
+func NewService(outcomes *repository.CalibrationRepository, trades TradeSource) *Service {
+	return &Service{outcomes: outcomes, trades: trades}
 }
 
 // Metrics loads every labeled Jev trader decision/horizon outcome and
-// aggregates them via the package-level Metrics function (FR-CAL-2/3). It
+// aggregates them via the package-level Metrics function, then adds each
+// confidence bucket's realized PnL from the closed positions those
+// decisions opened (WithTradePnL, FR-CAL-2/3). It
 // matches internal/web/handler.CalibrationSource's signature, so a
 // *Service can be passed directly to
 // internal/router.WithCalibrationSource.
@@ -36,7 +45,11 @@ func (s *Service) Metrics(ctx context.Context) (domain.CalibrationMetrics, error
 	if err != nil {
 		return domain.CalibrationMetrics{}, fmt.Errorf("calibration: load labeled samples: %w", err)
 	}
-	return Metrics(samples), nil
+	trades, err := s.trades.List(ctx)
+	if err != nil {
+		return domain.CalibrationMetrics{}, fmt.Errorf("calibration: load decision trades: %w", err)
+	}
+	return WithTradePnL(Metrics(samples), trades), nil
 }
 
 // Metrics computes Calibration's evaluation metrics (functional.md
@@ -53,6 +66,9 @@ func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 	bucketConfidenceSum := make([]float64, len(ranges))
 	bucketCorrectSum := make([]float64, len(ranges))
 	bucketReturnSum := make([]float64, len(ranges))
+	dirCorrect := map[string]float64{}
+	dirReturn := map[string]float64{}
+	dirCount := map[string]int{}
 	for i, r := range ranges {
 		buckets[i].Range = r.Range
 	}
@@ -73,6 +89,10 @@ func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 		if sample.Direction == domain.JevDirectionShort {
 			signedReturn = -signedReturn
 		}
+
+		dirCount[sample.Direction]++
+		dirCorrect[sample.Direction] += outcome
+		dirReturn[sample.Direction] += signedReturn
 
 		if idx, ok := bucketIndex(ranges, sample.Confidence); ok {
 			buckets[idx].SampleCount++
@@ -96,12 +116,20 @@ func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 		n := float64(buckets[i].SampleCount)
 		buckets[i].DirectionAccuracy = bucketCorrectSum[i] / n
 		buckets[i].AvgFutureReturnPct = bucketReturnSum[i] / n
-		if len(samples) > 0 {
-			avgConfidence := bucketConfidenceSum[i] / n
-			eceSum += n / float64(len(samples)) * math.Abs(buckets[i].DirectionAccuracy-avgConfidence)
-		}
+		buckets[i].AvgConfidence = bucketConfidenceSum[i] / n
+		eceSum += n / float64(len(samples)) * math.Abs(buckets[i].DirectionAccuracy-buckets[i].AvgConfidence)
 	}
 	metrics.ExpectedCalibrationError = eceSum
+
+	for _, direction := range []string{domain.JevDirectionLong, domain.JevDirectionShort} {
+		dm := domain.DirectionMetric{Direction: direction, SampleCount: dirCount[direction]}
+		if dm.SampleCount > 0 {
+			n := float64(dm.SampleCount)
+			dm.DirectionAccuracy = dirCorrect[direction] / n
+			dm.AvgFutureReturnPct = dirReturn[direction] / n
+		}
+		metrics.ByDirection = append(metrics.ByDirection, dm)
+	}
 
 	return metrics
 }
