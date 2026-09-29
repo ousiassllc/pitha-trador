@@ -117,6 +117,16 @@ func (e *Engine) Resume(ctx context.Context) error {
 // request, or Engine's own AutoResume/CheckHeartbeatTimeout below (the
 // "Risk Engine内部トリガー" of the three FR-RISK-4 routes).
 func (e *Engine) TriggerKillSwitch(ctx context.Context, reason string, detail map[string]any) (domain.KillSwitchEvent, error) {
+	ev, err := e.recordKillSwitch(ctx, reason, detail)
+	if err != nil {
+		return domain.KillSwitchEvent{}, err
+	}
+	return ev, e.enforceKillSwitch(ctx, ev)
+}
+
+// recordKillSwitch inserts the kill_switch_events row (FR-RISK-5) without
+// notifying or closing anything.
+func (e *Engine) recordKillSwitch(ctx context.Context, reason string, detail map[string]any) (domain.KillSwitchEvent, error) {
 	detailJSON, err := json.Marshal(detail)
 	if err != nil {
 		return domain.KillSwitchEvent{}, fmt.Errorf("risk: encode kill switch detail for %q: %w", reason, err)
@@ -129,6 +139,13 @@ func (e *Engine) TriggerKillSwitch(ctx context.Context, reason string, detail ma
 	if err != nil {
 		return domain.KillSwitchEvent{}, fmt.Errorf("risk: record kill switch event %q: %w", reason, err)
 	}
+	return ev, nil
+}
+
+// enforceKillSwitch notifies about ev and, for forceCloseReasons, closes
+// every open position (FR-RISK-3).
+func (e *Engine) enforceKillSwitch(ctx context.Context, ev domain.KillSwitchEvent) error {
+	reason := ev.Reason
 	// A Slack/Wails outage must never block Kill Switch enforcement
 	// itself (non-functional.md §5.2 is best-effort alerting on top of
 	// the enforcement path, not a precondition for it), so a Notifier
@@ -138,10 +155,10 @@ func (e *Engine) TriggerKillSwitch(ctx context.Context, reason string, detail ma
 	}
 	if forceCloseReasons[reason] {
 		if err := e.closer.CloseAll(ctx, reason); err != nil {
-			return ev, fmt.Errorf("risk: close positions after kill switch %q: %w", reason, err)
+			return fmt.Errorf("risk: close positions after kill switch %q: %w", reason, err)
 		}
 	}
-	return ev, nil
+	return nil
 }
 
 // triggerIfNotActive is TriggerKillSwitch, made idempotent per reason: it
@@ -149,15 +166,33 @@ func (e *Engine) TriggerKillSwitch(ctx context.Context, reason string, detail ma
 // kill_switch_events row for reason already exists, so a limit that stays
 // breached across many consecutive Check calls raises exactly one event
 // rather than one per call.
+//
+// The "unresolved row for reason?" check and the insert run under
+// triggerMu, so concurrent triggers of the same reason (Policy Engine's
+// Check, the cron RunPeriodicChecks, POST /system/kill) record one row and
+// notify / force-close once. Notification and CloseAll run after the lock
+// is released: the row is already visible to later callers, and a slow
+// CloseAll must not block unrelated triggers.
 func (e *Engine) triggerIfNotActive(ctx context.Context, reason string, detail map[string]any) (domain.KillSwitchEvent, error) {
+	ev, existing, err := e.recordIfNotActive(ctx, reason, detail)
+	if err != nil || existing {
+		return ev, err
+	}
+	return ev, e.enforceKillSwitch(ctx, ev)
+}
+
+func (e *Engine) recordIfNotActive(ctx context.Context, reason string, detail map[string]any) (domain.KillSwitchEvent, bool, error) {
+	e.triggerMu.Lock()
+	defer e.triggerMu.Unlock()
 	events, err := e.killSwitch.ListUnresolved(ctx)
 	if err != nil {
-		return domain.KillSwitchEvent{}, fmt.Errorf("risk: list unresolved kill switch events: %w", err)
+		return domain.KillSwitchEvent{}, false, fmt.Errorf("risk: list unresolved kill switch events: %w", err)
 	}
 	for _, ev := range events {
 		if ev.Reason == reason {
-			return ev, nil
+			return ev, true, nil
 		}
 	}
-	return e.TriggerKillSwitch(ctx, reason, detail)
+	ev, err := e.recordKillSwitch(ctx, reason, detail)
+	return ev, false, err
 }
