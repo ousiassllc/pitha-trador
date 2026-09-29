@@ -75,6 +75,7 @@ type Scheduler struct {
 	maintenanceNotifier maintenance.Notifier
 
 	pollInterval time.Duration
+	pollSignal   <-chan time.Time // test seam (export_test.go); overrides the ticker
 
 	mu       sync.Mutex
 	handlers map[string]Handler

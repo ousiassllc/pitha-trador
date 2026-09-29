@@ -22,3 +22,8 @@ func TestSelfImproveSchedule_FiresAfterCloseInJSTRegardlessOfHostZone(t *testing
 		}
 	}
 }
+
+// WithPollSignalForTest makes workers poll only when ch delivers a value.
+func WithPollSignalForTest(ch <-chan time.Time) Option {
+	return func(s *Scheduler) { s.pollSignal = ch }
+}

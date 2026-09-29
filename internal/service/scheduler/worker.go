@@ -18,14 +18,18 @@ func (s *Scheduler) runWorker(ctx context.Context, queue string) {
 	handler := s.handlers[queue]
 	s.mu.Unlock()
 
-	ticker := time.NewTicker(s.pollInterval)
-	defer ticker.Stop()
+	polls := s.pollSignal
+	if polls == nil {
+		t := time.NewTicker(s.pollInterval)
+		defer t.Stop()
+		polls = t.C
+	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-polls:
 			// Drain the backlog: waiting for the next tick between jobs
 			// would cap throughput at 1 job per pollInterval per queue.
 			for ctx.Err() == nil && s.processNext(ctx, queue, handler) {
