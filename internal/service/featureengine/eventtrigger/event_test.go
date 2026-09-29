@@ -1,15 +1,17 @@
-package featureengine_test
+package eventtrigger_test
 
 import (
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
 )
 
-func quietThresholds() featureengine.EventThresholds {
-	return featureengine.EventThresholds{
+func ptr(v float64) *float64 { return &v }
+
+func quietThresholds() eventtrigger.Thresholds {
+	return eventtrigger.Thresholds{
 		Return1mChange:           0.01,
 		VolumeRatioChange:        2.0,
 		SpreadChangeBps:          10,
@@ -46,7 +48,7 @@ func TestDetectEvent_QuietCycleSuppresses(t *testing.T) {
 	}
 	history := []domain.Snapshot{{Price: 1990}, {Price: 2010}}
 
-	sig := featureengine.DetectEvent(prev, curr, history, quietThresholds(), false, false)
+	sig := eventtrigger.Detect(prev, curr, history, quietThresholds(), false, false)
 
 	if sig.Triggered() {
 		t.Fatalf("Triggered() = true, want false (sig = %+v)", sig)
@@ -60,7 +62,7 @@ func TestDetectEvent_Return1mChangeExceededTriggers(t *testing.T) {
 	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 2000, Feature: domain.Feature{Return1m: ptr(0.001), PriceVsVWAPBps: 10}}
 	curr := domain.Snapshot{Timestamp: now, Price: 2050, Feature: domain.Feature{Return1m: ptr(0.02), PriceVsVWAPBps: 10}}
 
-	sig := featureengine.DetectEvent(prev, curr, nil, quietThresholds(), false, false)
+	sig := eventtrigger.Detect(prev, curr, nil, quietThresholds(), false, false)
 
 	if !sig.Return1mChangeExceeded {
 		t.Errorf("Return1mChangeExceeded = false, want true")
@@ -77,7 +79,7 @@ func TestDetectEvent_VolumeRatioChangeExceededTriggers(t *testing.T) {
 	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 2000, Feature: domain.Feature{VolumeRatio5m: ptr(1.0), PriceVsVWAPBps: 10}}
 	curr := domain.Snapshot{Timestamp: now, Price: 2000, Feature: domain.Feature{VolumeRatio5m: ptr(3.5), PriceVsVWAPBps: 10}}
 
-	sig := featureengine.DetectEvent(prev, curr, nil, quietThresholds(), false, false)
+	sig := eventtrigger.Detect(prev, curr, nil, quietThresholds(), false, false)
 
 	if !sig.VolumeRatioChangeExceeded || !sig.Triggered() {
 		t.Errorf("sig = %+v, want VolumeRatioChangeExceeded/Triggered true", sig)
@@ -91,7 +93,7 @@ func TestDetectEvent_SpreadChangeExceededTriggers(t *testing.T) {
 	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 2000, SpreadBps: ptr(5), Feature: domain.Feature{PriceVsVWAPBps: 10}}
 	curr := domain.Snapshot{Timestamp: now, Price: 2000, SpreadBps: ptr(40), Feature: domain.Feature{PriceVsVWAPBps: 10}}
 
-	sig := featureengine.DetectEvent(prev, curr, nil, quietThresholds(), false, false)
+	sig := eventtrigger.Detect(prev, curr, nil, quietThresholds(), false, false)
 
 	if !sig.SpreadChangeExceeded || !sig.Triggered() {
 		t.Errorf("sig = %+v, want SpreadChangeExceeded/Triggered true", sig)
@@ -105,7 +107,7 @@ func TestDetectEvent_OrderbookImbalanceChangedTriggers(t *testing.T) {
 	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 2000, Feature: domain.Feature{OrderbookImbalance: ptr(0.05), PriceVsVWAPBps: 10}}
 	curr := domain.Snapshot{Timestamp: now, Price: 2000, Feature: domain.Feature{OrderbookImbalance: ptr(0.8), PriceVsVWAPBps: 10}}
 
-	sig := featureengine.DetectEvent(prev, curr, nil, quietThresholds(), false, false)
+	sig := eventtrigger.Detect(prev, curr, nil, quietThresholds(), false, false)
 
 	if !sig.OrderbookImbalanceChanged || !sig.Triggered() {
 		t.Errorf("sig = %+v, want OrderbookImbalanceChanged/Triggered true", sig)
@@ -119,7 +121,7 @@ func TestDetectEvent_VWAPCrossedTriggers(t *testing.T) {
 	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 1990, Feature: domain.Feature{PriceVsVWAPBps: -5}}
 	curr := domain.Snapshot{Timestamp: now, Price: 2010, Feature: domain.Feature{PriceVsVWAPBps: 5}}
 
-	sig := featureengine.DetectEvent(prev, curr, nil, quietThresholds(), false, false)
+	sig := eventtrigger.Detect(prev, curr, nil, quietThresholds(), false, false)
 
 	if !sig.VWAPCrossed || !sig.Triggered() {
 		t.Errorf("sig = %+v, want VWAPCrossed/Triggered true", sig)
@@ -134,7 +136,7 @@ func TestDetectEvent_HighLowBreakTriggers(t *testing.T) {
 	curr := domain.Snapshot{Timestamp: now, Price: 2100, Feature: domain.Feature{PriceVsVWAPBps: 10}}
 	history := []domain.Snapshot{{Price: 1990}, {Price: 2010}, {Price: 2005}}
 
-	sig := featureengine.DetectEvent(prev, curr, history, quietThresholds(), false, false)
+	sig := eventtrigger.Detect(prev, curr, history, quietThresholds(), false, false)
 
 	if !sig.HighLowBreak || !sig.Triggered() {
 		t.Errorf("sig = %+v, want HighLowBreak/Triggered true", sig)
@@ -149,12 +151,12 @@ func TestDetectEvent_OrderFlowChangeAndNewsFlagPassThrough(t *testing.T) {
 	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 2000, Feature: domain.Feature{PriceVsVWAPBps: 10}}
 	curr := domain.Snapshot{Timestamp: now, Price: 2000, Feature: domain.Feature{PriceVsVWAPBps: 10}}
 
-	orderFlow := featureengine.DetectEvent(prev, curr, nil, quietThresholds(), true, false)
+	orderFlow := eventtrigger.Detect(prev, curr, nil, quietThresholds(), true, false)
 	if !orderFlow.OrderFlowChange || !orderFlow.Triggered() {
 		t.Errorf("orderFlow = %+v, want OrderFlowChange/Triggered true", orderFlow)
 	}
 
-	news := featureengine.DetectEvent(prev, curr, nil, quietThresholds(), false, true)
+	news := eventtrigger.Detect(prev, curr, nil, quietThresholds(), false, true)
 	if !news.NewsFlag || !news.Triggered() {
 		t.Errorf("news = %+v, want NewsFlag/Triggered true", news)
 	}
@@ -168,7 +170,7 @@ func TestDetectEvent_NilFeatureValuesTreatedAsNoSignal(t *testing.T) {
 	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 2000, Feature: domain.Feature{PriceVsVWAPBps: 10}}
 	curr := domain.Snapshot{Timestamp: now, Price: 2000, Feature: domain.Feature{PriceVsVWAPBps: 10}}
 
-	sig := featureengine.DetectEvent(prev, curr, nil, quietThresholds(), false, false)
+	sig := eventtrigger.Detect(prev, curr, nil, quietThresholds(), false, false)
 
 	if sig.Triggered() {
 		t.Fatalf("Triggered() = true, want false (sig = %+v)", sig)

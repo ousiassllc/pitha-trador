@@ -36,7 +36,7 @@ type ScanConfig struct {
 // (FR-SCAN-2); otherwise the symbol is re-evaluated immediately,
 // bypassing the normal candidate-refresh cadence (FR-SCAN-1). The
 // caller translates these into
-// internal/service/featureengine.EventThresholds (that package cannot
+// internal/service/featureengine/eventtrigger.Thresholds (that package cannot
 // import internal/config directly, doc.go's layer rule).
 // functional.md §4.3 fixes no numeric default for these - unlike Fast
 // Screener/Risk's thresholds - so config/strategy.yaml's values are this

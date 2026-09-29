@@ -22,6 +22,9 @@ import (
 // from internal/service/risk.Engine's own portfolio-wide
 // cooldown_after_loss_minutes check (config.go's doc comment).
 func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exitPrice float64, now time.Time) (domain.Position, error) {
+	if !validPrice(exitPrice) {
+		return domain.Position{}, fmt.Errorf("execution: close position %d: %w (got %v)", positionID, ErrInvalidPrice, exitPrice)
+	}
 	e.closeMu.Lock()
 	defer e.closeMu.Unlock()
 	position, err := e.positions.Get(ctx, positionID)

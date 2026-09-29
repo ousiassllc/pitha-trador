@@ -3,7 +3,7 @@ package featureengine
 import "time"
 
 func returnOverWindow(series []point, at time.Time, currentPrice float64, window time.Duration) *float64 {
-	ref, ok := atOrBefore(series, at.Add(-window))
+	ref, ok := windowRef(series, at, window)
 	if !ok || ref.price == 0 {
 		return nil
 	}
@@ -44,7 +44,7 @@ func distanceTo(price float64, reference *float64) *float64 {
 // vwap / (VWAP at-or-before at-window) - 1. nil without such a bar or
 // with a zero reference/current VWAP.
 func vwapSlope(series []point, at time.Time, vwap float64, window time.Duration) *float64 {
-	ref, ok := atOrBefore(series, at.Add(-window))
+	ref, ok := windowRef(series, at, window)
 	if !ok || ref.vwap <= 0 || vwap <= 0 {
 		return nil
 	}
@@ -55,7 +55,8 @@ func vwapSlope(series []point, at time.Time, vwap float64, window time.Duration)
 // vwapCrossDirection is +1 when price crossed from below VWAP on the
 // previous bar to above it now, -1 for the reverse, 0 when it did not
 // cross (including when price sits exactly on VWAP). nil without a
-// previous bar or a usable VWAP on either bar.
+// previous bar (one older than minRefTolerance is a session/outage gap,
+// not the previous bar) or a usable VWAP on either bar.
 func vwapCrossDirection(series []point, at time.Time, price, vwap float64) *int64 {
 	var prev point
 	found := false
@@ -65,7 +66,7 @@ func vwapCrossDirection(series []point, at time.Time, price, vwap float64) *int6
 		}
 		prev, found = p, true
 	}
-	if !found || prev.vwap <= 0 || vwap <= 0 {
+	if !found || at.Sub(prev.ts) > minRefTolerance || prev.vwap <= 0 || vwap <= 0 {
 		return nil
 	}
 	dir := int64(0)

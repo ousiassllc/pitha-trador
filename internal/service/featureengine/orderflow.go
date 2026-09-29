@@ -12,7 +12,7 @@ import "time"
 // volume went backwards, are unclassified. All three are nil unless some
 // volume was classified (FR-FE-2).
 func tradeFlow(series []point, at time.Time, window time.Duration) (buyRatio, sellRatio, imbalance *float64) {
-	ref, ok := atOrBefore(series, at.Add(-window))
+	ref, ok := windowRef(series, at, window)
 	if !ok {
 		return nil, nil, nil
 	}

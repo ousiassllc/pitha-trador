@@ -11,7 +11,7 @@
 // enqueue trigger (EnqueueOutcomeLabeling, WithOutcomeLabelSource,
 // functional.md FR-CAL-4), enqueues an immediate jev-scout job bypassing
 // that cadence when a caller reports an instrument's
-// featureengine.EventSignal fired (EnqueueEventReevaluation,
+// eventtrigger.Signal fired (EnqueueEventReevaluation,
 // functional.md FR-SCAN-1/FR-SCAN-2), optionally drives the operator
 // heartbeat dead-man's-switch periodic check (CheckOperatorHeartbeat,
 // WithHeartbeatChecker, functional.md FR-RISK-6), and recovers jobs left

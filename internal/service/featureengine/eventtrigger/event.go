@@ -1,4 +1,4 @@
-package featureengine
+package eventtrigger
 
 import (
 	"math"
@@ -6,29 +6,29 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
-// EventThresholds are FR-SCAN-1/FR-SCAN-2's `threshold` cutoffs for
-// DetectEvent's continuous signals (functional.md §4.3): a symbol whose
+// Thresholds are FR-SCAN-1/FR-SCAN-2's `threshold` cutoffs for
+// Detect's continuous signals (functional.md §4.3): a symbol whose
 // abs(Return1mChange), abs(VolumeRatioChange), abs(SpreadChangeBps) and
 // abs(OrderbookImbalanceChange) all fall under their respective
-// threshold, and has none of EventSignal's remaining boolean events set
+// threshold, and has none of Signal's remaining boolean events set
 // either, is the "no_event" quiet case FR-SCAN-2 skips the Jev call for.
 // functional.md §4.3 fixes no numeric default for these - unlike Fast
 // Screener/Risk's thresholds - so callers source them from
 // config/strategy.yaml's scan.event_trigger (internal/config.
 // EventTriggerConfig), this package's own initial tuning pass.
-type EventThresholds struct {
+type Thresholds struct {
 	Return1mChange           float64
 	VolumeRatioChange        float64
 	SpreadChangeBps          float64
 	OrderbookImbalanceChange float64
 }
 
-// EventSignal is one instrument's FR-SCAN-1 event-driven re-evaluation
-// signal, as DetectEvent derives it by comparing curr against prev and
+// Signal is one instrument's FR-SCAN-1 event-driven re-evaluation
+// signal, as Detect derives it by comparing curr against prev and
 // th. Every field independently satisfying FR-SCAN-1 means an immediate
 // re-evaluation is warranted (Triggered reports the combined result);
 // when none do, FR-SCAN-2's suppression applies instead.
-type EventSignal struct {
+type Signal struct {
 	// Return1mChangeExceeded is abs(curr.Feature.Return1m) >=
 	// th.Return1mChange (curr.Feature.Return1m == nil, i.e. insufficient
 	// history - FR-FE-2 - is treated as no signal, not an exceedance).
@@ -54,7 +54,7 @@ type EventSignal struct {
 	// history (a fresh session low).
 	HighLowBreak bool
 	// OrderFlowChange and NewsFlag are pass-through caller inputs
-	// (DetectEvent's orderFlowChange/newsFlag parameters): no
+	// (Detect's orderFlowChange/newsFlag parameters): no
 	// tick-level buy/sell aggressor classification or news-feed
 	// integration exists yet in this codebase, the same "later
 	// sub-scope wires this in" deferral MarketReturn5m/SectorReturn5m
@@ -69,7 +69,7 @@ type EventSignal struct {
 // holds instead (false: every continuous signal stayed under its
 // threshold and no boolean event fired, so the Jev call for this cycle
 // should be skipped).
-func (sig EventSignal) Triggered() bool {
+func (sig Signal) Triggered() bool {
 	return sig.Return1mChangeExceeded ||
 		sig.VolumeRatioChangeExceeded ||
 		sig.SpreadChangeExceeded ||
@@ -80,15 +80,15 @@ func (sig EventSignal) Triggered() bool {
 		sig.NewsFlag
 }
 
-// DetectEvent computes prev→curr's EventSignal for one instrument against
+// Detect computes prev→curr's Signal for one instrument against
 // th (functional.md §4.3 FR-SCAN-1's eight event conditions, minus
 // OrderFlowChange/NewsFlag which orderFlowChange/newsFlag supply directly
-// - see EventSignal's doc). history is this instrument's prior bars (any
+// - see Signal's doc). history is this instrument's prior bars (any
 // bars at or before prev's Timestamp; curr must not be included), used
 // for the high/low breakout check - the same look-ahead-safe convention
 // Input.History uses in Compute (FR-FE-1).
-func DetectEvent(prev, curr domain.Snapshot, history []domain.Snapshot, th EventThresholds, orderFlowChange, newsFlag bool) EventSignal {
-	sig := EventSignal{
+func Detect(prev, curr domain.Snapshot, history []domain.Snapshot, th Thresholds, orderFlowChange, newsFlag bool) Signal {
+	sig := Signal{
 		OrderFlowChange: orderFlowChange,
 		NewsFlag:        newsFlag,
 	}

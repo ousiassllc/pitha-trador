@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
 )
 
 // newTestServices builds a *Services backed by a fresh temp-dir SQLite DB.
@@ -39,6 +40,7 @@ func newTestServices(t *testing.T, kabuServer *httptest.Server) *Services {
 			BaseURL:     kabuServer.URL,
 			APIPassword: "test-password",
 		})
+		svc.PushFeed = pushfeed.New(svc.Instruments, svc.MarketData, marketdata.DefaultPushURL, defaultKabuExchange)
 	}
 	return svc
 }

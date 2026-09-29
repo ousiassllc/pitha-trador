@@ -87,6 +87,8 @@ pitha-trador/
 │   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
 │   │   ├── featureengine/        # 特徴量算出
+│   │   │   └── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
+│   │   ├── pushfeed/             # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き）
 │   │   ├── screener/             # Fast Screener・screen_score算出
 │   │   ├── jev/                  # Jevアダプタ（client.go, scout.go, trader.go, schemas.go, prompt_version.go）
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）

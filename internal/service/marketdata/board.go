@@ -3,6 +3,7 @@ package marketdata
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 )
@@ -98,6 +99,14 @@ type Board struct {
 type BoardLevel struct {
 	Price float64 `json:"Price"`
 	Qty   float64 `json:"Qty"`
+}
+
+// HasPrice reports whether CurrentPrice is a usable last price. kabuステーション
+// API leaves it 0 (decoded from 0 or null) while it is unresolved (寄り付き前・
+// 未約定銘柄), so anything not finite and positive means "missing", never a
+// price of 0 (issue #173).
+func (b Board) HasPrice() bool {
+	return b.CurrentPrice > 0 && !math.IsInf(b.CurrentPrice, 0)
 }
 
 // SellDepth is the total quantity across the reported Sell levels, and

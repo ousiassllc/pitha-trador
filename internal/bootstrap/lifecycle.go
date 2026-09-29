@@ -12,7 +12,7 @@ import (
 // Start launches every background goroutine this build's composition
 // root owns: kabuステーションAPI token issuance/refresh
 // (marketdata.Client.Start), the candidate-refresh ticker (issue #45),
-// and the Scheduler's worker pool + full-scan/self-improve/
+// the PUSH subscription (pushfeed), and the Scheduler's worker pool + full-scan/self-improve/
 // outcome-labeling/operator-heartbeat/log-rotation cron triggers
 // (scheduler.Scheduler.Start), after first recovering any job left
 // "running" by a previous crash (scheduler.Scheduler.Recover). All run
@@ -51,6 +51,9 @@ func (s *Services) Start(ctx context.Context) error {
 			Exchange: defaultKabuExchange, Open: marketcalendarOpen,
 		}.Run(ctx, time.Duration(scan.HeldPositionIntervalSecondsMin)*time.Second, time.Duration(scan.HeldPositionIntervalSecondsMax)*time.Second)
 	}()
+
+	s.wg.Add(1) // startup symbol registration + PUSH subscription (flows.md §10.1)
+	go func() { defer s.wg.Done(); s.PushFeed.Run(ctx) }()
 
 	if s.newsEnabled {
 		s.wg.Add(1)

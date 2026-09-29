@@ -40,6 +40,9 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	if e.decisions == nil {
 		return SnapshotResult{}, fmt.Errorf("execution: OnSnapshot requires Deps.Decisions to be configured")
 	}
+	if !validPrice(snap.Price) {
+		return SnapshotResult{}, fmt.Errorf("execution: snapshot for %q: %w (got %v)", snap.Symbol, ErrInvalidPrice, snap.Price)
+	}
 	e.snapshotMu.Lock()
 	defer e.snapshotMu.Unlock()
 	now := snap.Timestamp
