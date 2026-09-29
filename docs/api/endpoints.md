@@ -128,9 +128,11 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
 | クエリ | 型 | 説明 |
 |-------|-----|------|
-| `from` | string(RFC3339) | 取得開始時刻 |
+| `from` | string(RFC3339) | 取得開始時刻（省略時は`to`の6時間前） |
 | `to` | string(RFC3339) | 取得終了時刻（省略時は現在） |
-| `interval` | string | `1m` 固定（MVP） |
+| `interval` | string | `1m` 固定（MVP。`1m`以外は422） |
+
+パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、`/symbols/{symbol}`系ルート共通）。`from`/`to`がRFC3339でない場合、`symbol`/`interval`が範囲外の場合はいずれも422。
 
 ### GET /api/v1/symbols/{symbol}/decisions
 
@@ -144,9 +146,18 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 
 現在保有中および直近クローズ済みポジション一覧。
 
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
+
 ### GET /api/v1/orders
 
 `paper_orders`一覧（ステータスフィルタ `?status=` 対応）。
+
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `status` | string | `PENDING`/`FILLED`/`CANCELLED`/`REJECTED`でフィルタ（省略時は全件。それ以外は422） |
+| `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
 
 ### GET /api/v1/performance
 

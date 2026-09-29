@@ -45,22 +45,16 @@ type PositionsAPIOutput struct {
 	}
 }
 
-const defaultListLimit = 100
-
 // PositionsInput is `GET /api/v1/positions`'s query parameters.
 type PositionsInput struct {
-	Limit int `query:"limit" default:"100" doc:"Maximum number of positions to return."`
+	Limit int `query:"limit" default:"100" minimum:"1" maximum:"500" doc:"Maximum number of positions to return (1-500)."`
 }
 
 // APIPositions implements `GET /api/v1/positions` (docs/api/endpoints.md
 // §5): current and recently-closed positions, most recently opened
 // first.
 func (h *SymbolHandler) APIPositions(ctx context.Context, in *PositionsInput) (*PositionsAPIOutput, error) {
-	limit := in.Limit
-	if limit <= 0 {
-		limit = defaultListLimit
-	}
-	positions, err := h.provider.ListPositions(ctx, limit)
+	positions, err := h.provider.ListPositions(ctx, in.Limit)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("list positions failed", err)
 	}
@@ -99,19 +93,15 @@ type OrdersAPIOutput struct {
 // OrdersInput is `GET /api/v1/orders`'s query parameters
 // (docs/api/endpoints.md §5: "ステータスフィルタ `?status=` 対応").
 type OrdersInput struct {
-	Status string `query:"status" doc:"Filter by order status (PENDING, FILLED, CANCELLED, REJECTED). Empty returns every status."`
-	Limit  int    `query:"limit" default:"100" doc:"Maximum number of orders to return."`
+	Status string `query:"status" enum:"PENDING,FILLED,CANCELLED,REJECTED" doc:"Filter by order status. Empty returns every status."`
+	Limit  int    `query:"limit" default:"100" minimum:"1" maximum:"500" doc:"Maximum number of orders to return (1-500)."`
 }
 
 // APIOrders implements `GET /api/v1/orders` (docs/api/endpoints.md §5):
 // paper_orders, most recently submitted first, optionally filtered by
 // status.
 func (h *SymbolHandler) APIOrders(ctx context.Context, in *OrdersInput) (*OrdersAPIOutput, error) {
-	limit := in.Limit
-	if limit <= 0 {
-		limit = defaultListLimit
-	}
-	orders, err := h.provider.ListOrders(ctx, in.Status, limit)
+	orders, err := h.provider.ListOrders(ctx, in.Status, in.Limit)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("list orders failed", err)
 	}
