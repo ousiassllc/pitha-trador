@@ -59,7 +59,7 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	engine := router.New(router.WithSecretsStore(store))
 
 	form := url.Values{"value": {"new-jev-key"}}
-	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode()))
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -72,7 +72,7 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil))
+	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("DELETE status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
@@ -81,7 +81,7 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/NOT_A_KEY", nil))
+	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodDelete, "/settings/NOT_A_KEY", nil)))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("DELETE unknown key status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
@@ -92,7 +92,7 @@ func TestNew_BulkSettingsPostIsGone(t *testing.T) {
 	store := requiredSecretsStore()
 	engine := router.New(router.WithSecretsStore(store))
 
-	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader("JEV_API_KEY=x"))
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader("JEV_API_KEY=x")))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -156,7 +156,7 @@ func TestNew_SetupGuardRedirectsEveryGuardedRouteWhileRequiredKeyIsUnset(t *test
 		{http.MethodGet, "/no-such-route"},
 	} {
 		rec := httptest.NewRecorder()
-		engine.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+		engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(tc.method, tc.path, nil)))
 		if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/setup" {
 			t.Errorf("%s %s = %d Location=%q, want 302 to /setup", tc.method, tc.path, rec.Code, rec.Header().Get("Location"))
 		}
@@ -186,7 +186,7 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 	}
 
 	form := url.Values{"value": {"jev-key"}}
-	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode()))
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec = httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -195,7 +195,7 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil))
+	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil)))
 	if rec.Code != http.StatusOK || len(store) != 0 {
 		t.Fatalf("DELETE /settings/JEV_API_KEY = %d store=%v, want 200 and the key removed", rec.Code, store)
 	}
@@ -217,7 +217,7 @@ func TestNew_SetupGuardLiftsOnceLastRequiredKeyIsSaved(t *testing.T) {
 	}
 
 	form := url.Values{"value": {"https://jev.example.com"}}
-	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_BASE_URL", strings.NewReader(form.Encode()))
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_BASE_URL", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec = httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -262,7 +262,7 @@ func TestNew_UpdateRoutesAreRegistered(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/system/update-check", nil))
+	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodPost, "/system/update-check", nil)))
 	if rec.Code != http.StatusOK || controller.checks != 1 {
 		t.Fatalf("POST /system/update-check = %d with %d checks, want 200 with 1", rec.Code, controller.checks)
 	}
@@ -270,8 +270,9 @@ func TestNew_UpdateRoutesAreRegistered(t *testing.T) {
 
 func TestNew_UpdateCheckRouteIs404WithoutUpdater(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	engine := router.New()
 	rec := httptest.NewRecorder()
-	router.New().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/system/update-check", nil))
+	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodPost, "/system/update-check", nil)))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (cmd/server has no updater)", rec.Code)
 	}

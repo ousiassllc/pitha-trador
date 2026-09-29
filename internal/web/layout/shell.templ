@@ -1,6 +1,9 @@
 package layout
 
-import "github.com/ousiassllc/pitha-trador/internal/web/organisms"
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
 
 // Shell is the shared full-page HTML document skeleton every
 // internal/web/pages component renders into (docs/components/overview.md
@@ -41,12 +44,13 @@ templ document(title string) {
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="csrf-token" content={ middleware.CSRFToken(ctx) }/>
 			<title>{ title } - pitha-trador</title>
 			<link rel="stylesheet" href="/static/dist/css/app.css"/>
 			<script src="/static/vendor/htmx.min.js"></script>
 			<script type="module" src="/static/dist/js/kill-switch-panel/pitha-kill-switch-panel.js"></script>
 		</head>
-		<body class="min-h-screen bg-slate-50 text-slate-900">
+		<body class="min-h-screen bg-slate-50 text-slate-900" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
 			{ children... }
 		</body>
 	</html>

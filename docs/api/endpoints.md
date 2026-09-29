@@ -5,9 +5,13 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 ## 1. 認証・アクセス制御
 
 - Wailsアプリ内蔵HTTPサーバーは `127.0.0.1` にのみバインドし、外部ネットワークからは到達不能（`requirements/non-functional.md` §4）
+  - `cmd/server`の既定待受は`127.0.0.1:48080`。`PITHA_SERVER_ADDR`でloopback以外（`:48080`・`0.0.0.0`・LAN IP等）を指定すると起動を拒否する。意図的に公開する場合のみ`PITHA_SERVER_ALLOW_NON_LOOPBACK=1`を併用する（issue #91/#99）
 - 単一ユーザー・単一デスクトップアプリのため、外部IdP連携やユーザーログイン画面は持たない
 - 起動時にWailsプロセスがランダムなローカルセッショントークンを生成し、Cookie（`HttpOnly`, `SameSite=Strict`）としてWebViewに設定する。全ての状態変更リクエスト（アクションルート・Huma APIのPOST/PUT/PATCH/DELETE）はこのセッションCookie必須とする
+  - 実装（`internal/web/middleware/session.go`）: Ginエンジン全体（`/static`を除く）に最初のミドルウェアとして適用し、Setup Guardより前に評価する。プロセス起動ごとにセッショントークンとCSRFトークンを別々に乱数生成し、Cookie（名前`pitha_session`）は有効なCookieを持たない安全なリクエスト（GET/HEAD/OPTIONS、WebSocketアップグレードを除く）の応答で発行する
+  - POST/PUT/PATCH/DELETE等の状態変更メソッドは、有効なセッションCookieと、CSRFトークンに一致する`X-CSRF-Token`ヘッダの両方が無ければ403を返す。WebSocketアップグレード（`/ws/...`）は有効なセッションCookieが無ければ403を返す
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
+  - `layout.Shell`/`SetupShell`が`<meta name="csrf-token">`を出力し、`<body hx-headers>`でHTMX全リクエストに`X-CSRF-Token`を付与する。Litコンポーネントは`lib/api.ts`が同metaから読み取って送信する
 - 実売買（Phase 7）移行時は、Kill Switch解除・発注確定操作にOS認証の追加確認を導入する（`requirements/non-functional.md` §4）
 - **Setup Guard**: 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）のいずれかが`secrets`テーブルに未設定の間は、`GET /setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエスト（ページ・アクション・`/api/v1`・WebSocket含む）を`/setup`へ302リダイレクトする。判定はリクエストごとに行うため、3キーが揃った次のリクエストから解除される（issue #80）
 

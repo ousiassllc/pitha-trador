@@ -200,7 +200,7 @@ func TestNew_SystemPauseRouteUsesWithSystemEngineOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStatePaused}))
 
-	req := httptest.NewRequest(http.MethodPost, "/system/pause", nil)
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/system/pause", nil))
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -216,7 +216,7 @@ func TestNew_APISystemKillRouteReturnsJSONState(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStateKilled}))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/kill", nil)
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/api/v1/system/kill", nil))
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
