@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -128,18 +129,25 @@ func (h *SettingsHandler) SetupPage(c *gin.Context) {
 
 // Save implements `POST /settings/:key`: it stores the form's `value`
 // under the single key in the path and touches no other key (issue #79).
-// A key outside config.AllowedSecretKeys or an empty value is a 400 and
-// leaves the store untouched - blanking a field never deletes it; that is
-// Delete's job. It responds with the refreshed SecretFieldRow fragment.
+// The value is trimmed and validated per key (config.NormalizeSecretValue,
+// issue #235: URL keys need an http/https URL with a host, credentials no
+// control characters). A key outside config.AllowedSecretKeys, an empty
+// value or an invalid value is a 400 and leaves the store untouched -
+// blanking a field never deletes it; that is Delete's job. It responds
+// with the refreshed SecretFieldRow fragment.
 func (h *SettingsHandler) Save(c *gin.Context) {
 	key := c.Param("key")
 	if !config.IsAllowedSecretKey(key) {
 		respondPageError(c, http.StatusBadRequest, "不明な設定キーです。")
 		return
 	}
-	value := c.PostForm("value")
-	if value == "" {
+	value, err := config.NormalizeSecretValue(key, c.PostForm("value"))
+	if errors.Is(err, config.ErrEmptySecretValue) {
 		respondPageError(c, http.StatusBadRequest, "値を入力してください（保存済みの値を消す場合は削除を使ってください）。")
+		return
+	}
+	if err != nil {
+		respondPageError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
