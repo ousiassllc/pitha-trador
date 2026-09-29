@@ -1,7 +1,10 @@
 package router_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -185,5 +188,37 @@ func TestNew_APISystemKillRouteReturnsJSONState(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"state":"killed"`) {
 		t.Fatalf("expected JSON state=killed, got %q", rec.Body.String())
+	}
+}
+
+type failingSystemEngine struct{ handler.StaticSystemEngine }
+
+func (failingSystemEngine) Kill(context.Context) error {
+	return errors.New("sqlite: disk I/O error at /var/lib/pitha/secret.db")
+}
+
+// TestNew_APIInternalErrorHidesCause is issue #215's regression test: a
+// failing engine must not reach the client through errors[].message, and the
+// cause must land in slog.
+func TestNew_APIInternalErrorHidesCause(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	engine := router.New(router.WithSystemEngine(failingSystemEngine{}))
+
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/api/v1/system/kill", nil))
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 (body=%s)", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "secret.db") || strings.Contains(rec.Body.String(), "sqlite") {
+		t.Fatalf("response leaks cause: %s", rec.Body.String())
+	}
+	if !strings.Contains(logs.String(), "secret.db") {
+		t.Fatalf("cause missing from slog: %q", logs.String())
 	}
 }
