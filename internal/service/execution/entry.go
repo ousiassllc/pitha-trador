@@ -10,8 +10,8 @@ import (
 )
 
 // EntryRequest is Enter's input: a Risk-Engine-approved trade signal
-// (FR-POLICY-3/5) plus the sizing/order-type decision a caller (a later
-// Scheduler paper-execution job, or a test) has already made. Execution
+// (FR-POLICY-3/5) plus the sizing/order-type decision a caller
+// (internal/bootstrap/paperexec, or a test) has already made. Execution
 // does not compute Quantity itself - no position-sizing formula is
 // defined by functional.md §4.8 (only Risk Engine's exposure limits,
 // which Policy Engine already checked before RiskPassed became true).

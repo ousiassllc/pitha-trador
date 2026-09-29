@@ -25,9 +25,9 @@ sequenceDiagram
 
 `requirements/functional.md` §2 主要処理フロー（シーケンス図）を参照。アーキテクチャ上の要点は以下。
 
-- Scheduler（自前Worker、`jobs`テーブル）が `market-data` → `feature-calc` → `jev-scout` → `jev-trader` → `risk-check` → `paper-execution` の順にジョブをenqueueし、各Serviceがdomainモデルを介して疎結合に連携する
+- Scheduler（自前Worker、`jobs`テーブル）が `market-data` → `feature-calc` → `jev-scout` → `jev-trader` の順にジョブをenqueueし、各Serviceがdomainモデルを介して疎結合に連携する
 - `jev-scout`/`jev-trader`の直前にRAG Context Builder（§7）が類似局面を検索し文脈を付与する
-- `risk-check` は他ジョブと異なり同期的にPolicy Engineの直後で必ず評価され、Risk Engineの承認なしにExecutionへは到達しない
+- Risk判定・Paper発注は独立したキュー（ジョブ）を持たず、`jev-trader`ジョブ内でPolicy Engine → Risk Engine → Execution（Paper）を同期実行する。Risk Engineは必ずPolicy Engineの直後に評価され、Risk Engineの承認なしにExecutionへは到達しない
 - `outcome-labeling` / `analytics` は約定・Exit後に非同期実行し、UIの応答性に影響を与えない
 
 ### 10.3 Kill Switchフロー（発動〜再開）

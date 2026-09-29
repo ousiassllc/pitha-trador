@@ -7,6 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
 // pendingOrderScanLimit bounds how many of an instrument's most recent
@@ -75,11 +76,17 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	if snap.Feature.VWAP > 0 {
 		vwap := snap.Feature.VWAP
 		mkt.VWAP = &vwap
+		if prev, ok := e.vwapObs.Previous(snap.InstrumentID, position.ID); ok {
+			mkt.PrevVWAP = &prev
+		}
 	}
 
 	reason, exit, err := e.EvaluateExit(ctx, position, mkt)
 	if err != nil {
 		return SnapshotResult{}, fmt.Errorf("execution: evaluate exit for position %d: %w", position.ID, err)
+	}
+	if mkt.VWAP != nil {
+		e.vwapObs.Record(snap.InstrumentID, vwapcross.Observation{PositionID: position.ID, Price: snap.Price, VWAP: *mkt.VWAP})
 	}
 	if !exit {
 		result.Position = &position

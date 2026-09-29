@@ -107,8 +107,8 @@ func TestJobRepository_Observer_SeesEveryCommittedTransition(t *testing.T) {
 	var seen []string
 	repo.SetObserver(func(_ context.Context, j repository.Job) { seen = append(seen, j.Status) })
 
-	j, _ := repo.Enqueue(ctx, repository.JobQueueRiskCheck, "{}", now)
-	if _, err := repo.ClaimNext(ctx, repository.JobQueueRiskCheck, now); err != nil {
+	j, _ := repo.Enqueue(ctx, repository.JobQueueJevTrader, "{}", now)
+	if _, err := repo.ClaimNext(ctx, repository.JobQueueJevTrader, now); err != nil {
 		t.Fatalf("ClaimNext: %v", err)
 	}
 	if err := repo.MarkFailed(ctx, j.ID, now, "boom"); err != nil {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
 func openLongPosition(t *testing.T, te testEngine, entryPrice float64, openedAt time.Time) domain.Position {
@@ -25,7 +26,8 @@ func TestEngine_EvaluateExit(t *testing.T) {
 	openedAt := time.Date(2026, 9, 27, 9, 30, 0, 0, time.UTC)
 	marketClose := time.Date(2026, 9, 27, 15, 0, 0, 0, time.UTC)
 	short, long := domain.JevDirectionShort, domain.JevDirectionLong
-	lowContinuation, vwap := 0.40, 2101.0 // LONG position, price below VWAP => 逆クロス
+	lowContinuation, vwap := 0.40, 2101.0 // entry (2100) is below this VWAP: an adverse-side entry for a LONG
+	entryAboveVWAP := 2099.0
 	base := execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2}
 	cfg := func(mut func(*execution.Config)) execution.Config { c := base; mut(&c); return c }
 
@@ -50,7 +52,15 @@ func TestEngine_EvaluateExit(t *testing.T) {
 		// FR-EXIT-3: a nil Decision (Jev API unresponsive) must not stop Stop Loss.
 		{"stop loss still works without a Jev decision", base,
 			execution.MarketContext{Price: 2100.0 * (1 - 0.01), Decision: nil}, domain.ExitReasonStopLoss},
-		{"vwap reverse cross", base, execution.MarketContext{Price: 2100.5, VWAP: &vwap}, domain.ExitReasonVWAPCross},
+		// VWAP逆クロス (FR-EXIT-1) needs a previous-vs-current relation change.
+		{"vwap cross: above VWAP previously, below now", base,
+			execution.MarketContext{Price: 2100.5, VWAP: &vwap, PrevVWAP: &vwapcross.Observation{Price: 2102, VWAP: vwap}}, domain.ExitReasonVWAPCross},
+		{"vwap: staying below VWAP is not a cross", base,
+			execution.MarketContext{Price: 2100.5, VWAP: &vwap, PrevVWAP: &vwapcross.Observation{Price: 2100, VWAP: vwap}}, ""},
+		{"vwap: entered below VWAP, first evaluation does not exit", base,
+			execution.MarketContext{Price: 2100.5, VWAP: &vwap}, ""},
+		{"vwap cross: entered above VWAP, first evaluation now below", base,
+			execution.MarketContext{Price: 2098.5, VWAP: &entryAboveVWAP}, domain.ExitReasonVWAPCross},
 		{"trailing stop without meaningful retrace", cfg(func(c *execution.Config) { c.StopLossPct, c.TakeProfitPct, c.TrailingStopPct = 5, 5, 0.5 }),
 			execution.MarketContext{Price: 2100.0 * (1 + 0.002)}, ""},
 	}

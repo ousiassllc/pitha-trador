@@ -85,7 +85,7 @@ func toActivityEventOutput(e domain.ActivityEvent) activityEventOutput {
 // ActivityAPIInput is `GET /api/v1/activity`'s query.
 type ActivityAPIInput struct {
 	Limit int    `query:"limit" default:"200" minimum:"1" maximum:"500" doc:"Feed size (default 200, max 500)."`
-	Queue string `query:"queue" enum:"market-data,feature-calc,jev-scout,jev-trader,risk-check,paper-execution,outcome-labeling,analytics" doc:"Only job events on this jobs.queue."`
+	Queue string `query:"queue" enum:"market-data,feature-calc,jev-scout,jev-trader,outcome-labeling,analytics" doc:"Only job events on this jobs.queue."`
 	Type  string `query:"type" enum:"job,jev_scout,jev_trader,kill_switch" doc:"Only events of this type."`
 }
 

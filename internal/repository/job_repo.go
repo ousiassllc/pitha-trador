@@ -11,16 +11,15 @@ import (
 // Job queue names (docs/architecture/er.md §jobs, overview.md §2 "Job
 // Queue / Scheduler"). internal/service/scheduler enqueues and drains
 // jobs on these queues in this pipeline order:
-// market-data → feature-calc → jev-scout → jev-trader → risk-check →
-// paper-execution, with outcome-labeling/analytics running asynchronously
-// afterward.
+// market-data → feature-calc → jev-scout → jev-trader, with
+// outcome-labeling/analytics running asynchronously afterward. Risk
+// check and Paper execution are not queues: they run synchronously
+// inside the jev-trader job (FR-SCHED-1).
 const (
 	JobQueueMarketData      = "market-data"
 	JobQueueFeatureCalc     = "feature-calc"
 	JobQueueJevScout        = "jev-scout"
 	JobQueueJevTrader       = "jev-trader"
-	JobQueueRiskCheck       = "risk-check"
-	JobQueuePaperExecution  = "paper-execution"
 	JobQueueOutcomeLabeling = "outcome-labeling"
 	JobQueueAnalytics       = "analytics"
 )

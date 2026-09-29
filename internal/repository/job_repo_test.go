@@ -95,11 +95,11 @@ func TestJobRepository_MarkSucceeded(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	job, err := repo.Enqueue(ctx, repository.JobQueueRiskCheck, "{}", now)
+	job, err := repo.Enqueue(ctx, repository.JobQueueJevTrader, "{}", now)
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
-	if _, err := repo.ClaimNext(ctx, repository.JobQueueRiskCheck, now); err != nil {
+	if _, err := repo.ClaimNext(ctx, repository.JobQueueJevTrader, now); err != nil {
 		t.Fatalf("ClaimNext: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestJobRepository_MarkFailed_RecordsLastError(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
 
-	job, err := repo.Enqueue(ctx, repository.JobQueuePaperExecution, "{}", now)
+	job, err := repo.Enqueue(ctx, repository.JobQueueJevScout, "{}", now)
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}

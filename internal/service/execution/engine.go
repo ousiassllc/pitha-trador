@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
 // Errors Enter/Close return for an invalid request, distinguishable from
@@ -63,6 +64,9 @@ type Engine struct {
 	closeMu sync.Mutex
 	// snapshotMu serialises OnSnapshot (per-bar job vs held-position monitor).
 	snapshotMu sync.Mutex
+	// vwapObs is each open position's previous price/VWAP (VWAP逆クロス
+	// baseline); guarded by snapshotMu.
+	vwapObs vwapcross.Tracker
 }
 
 // Deps is every repository Engine reads/writes. Snapshots/Decisions/
