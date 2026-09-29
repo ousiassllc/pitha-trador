@@ -29,21 +29,26 @@ type PortfolioProvider interface {
 	// DailyLossPct returns today's realized+unrealized loss as a
 	// percentage of account equity (0 or negative when there is no net
 	// loss), for FR-RISK-1's max_daily_loss_pct and FR-RISK-2's
-	// daily_loss_limit Kill Switch trigger.
-	DailyLossPct(ctx context.Context) (float64, error)
+	// daily_loss_limit Kill Switch trigger. Realized P&L counts only
+	// positions closed after since (the manual-resume baseline,
+	// baseline.go); a zero since counts all of today.
+	DailyLossPct(ctx context.Context, since time.Time) (float64, error)
 
 	// ConsecutiveLosses returns how many losing trades were closed most
 	// recently in a row (reset to 0 by the next winning trade), for
 	// FR-RISK-1's max_consecutive_losses and FR-RISK-2's
-	// consecutive_losses Kill Switch trigger.
-	ConsecutiveLosses(ctx context.Context) (int, error)
+	// consecutive_losses Kill Switch trigger. Only positions closed after
+	// since (the manual-resume baseline, baseline.go) are counted; a zero
+	// since counts the whole history.
+	ConsecutiveLosses(ctx context.Context, since time.Time) (int, error)
 
 	// LastLossAt returns the closed_at timestamp of the most recent
-	// losing trade, or the zero time if there has never been one, for the
+	// losing trade closed after since (the manual-resume baseline), or
+	// the zero time if there has been none, for the
 	// cooldown_after_loss_minutes gate (functional.md §4.7's table; see
 	// engine.go's Check doc comment for why this is not a
 	// kill_switch_events row).
-	LastLossAt(ctx context.Context) (time.Time, error)
+	LastLossAt(ctx context.Context, since time.Time) (time.Time, error)
 }
 
 // ZeroPortfolioProvider is NewEngine's default PortfolioProvider when
@@ -61,10 +66,12 @@ func (ZeroPortfolioProvider) SymbolExposurePct(context.Context, int64) (float64,
 	return 0, nil
 }
 
-func (ZeroPortfolioProvider) DailyLossPct(context.Context) (float64, error) { return 0, nil }
+func (ZeroPortfolioProvider) DailyLossPct(context.Context, time.Time) (float64, error) { return 0, nil }
 
-func (ZeroPortfolioProvider) ConsecutiveLosses(context.Context) (int, error) { return 0, nil }
+func (ZeroPortfolioProvider) ConsecutiveLosses(context.Context, time.Time) (int, error) {
+	return 0, nil
+}
 
-func (ZeroPortfolioProvider) LastLossAt(context.Context) (time.Time, error) {
+func (ZeroPortfolioProvider) LastLossAt(context.Context, time.Time) (time.Time, error) {
 	return time.Time{}, nil
 }

@@ -4,11 +4,11 @@ import "time"
 
 // Kill Switch trigger reasons (docs/requirements/functional.md FR-RISK-2,
 // FR-RISK-6; docs/architecture/er.md §kill_switch_events.reason CHECK
-// constraint). These nine values are the only ones the database schema
-// accepts. A manually-triggered Kill Switch (FR-RISK-4's
-// `POST /system/kill`) does not fit this automatic-detection list and is
-// tracked separately (internal/service/risk.Engine's `system.killed`
-// runtime_settings flag), not as a kill_switch_events row.
+// constraint). These ten values are the only ones the database schema
+// accepts. KillReasonOperatorManual is the operator's own
+// `POST /system/kill` (FR-RISK-4, UC-11): recorded like an automatic
+// trigger so the audit log (FR-RISK-5) shows it, force-closes positions
+// and is manual-resume-only.
 const (
 	KillReasonDailyLossLimit           = "daily_loss_limit"
 	KillReasonConsecutiveLosses        = "consecutive_losses"
@@ -19,6 +19,7 @@ const (
 	KillReasonFillDiscrepancy          = "fill_discrepancy"
 	KillReasonDBWriteFailure           = "db_write_failure"
 	KillReasonOperatorHeartbeatTimeout = "operator_heartbeat_timeout"
+	KillReasonOperatorManual           = "operator_manual"
 )
 
 // resolved_by values (er.md §kill_switch_events).

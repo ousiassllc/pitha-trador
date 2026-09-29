@@ -1,4 +1,4 @@
-package risk_test
+package killswitchflow_test
 
 import (
 	"context"
@@ -132,7 +132,9 @@ func TestEngine_CheckHeartbeatTimeout_TriggersWhenStale_ClearsAfterRecordHeartbe
 		t.Fatalf("ListUnresolved = %+v, want exactly one operator_heartbeat_timeout event", events)
 	}
 
-	// Operator re-operates the UI: RecordHeartbeat, then AutoResume clears it.
+	// Operator re-operates the UI (after the event fired): RecordHeartbeat,
+	// then AutoResume clears it.
+	clock = clock.Add(time.Minute)
 	if err := e.RecordHeartbeat(ctx, clock); err != nil {
 		t.Fatalf("RecordHeartbeat: %v", err)
 	}
@@ -150,5 +152,78 @@ func TestEngine_CheckHeartbeatTimeout_TriggersWhenStale_ClearsAfterRecordHeartbe
 	}
 	if state != domain.SystemStateRunning {
 		t.Fatalf("State = %q, want %q", state, domain.SystemStateRunning)
+	}
+}
+
+// Issue #167: before the session opens, a stale heartbeat clamped up to the
+// open used to look "fresh" (negative elapsed time), releasing the Kill
+// Switch every morning with no operator present.
+func TestEngine_AutoResume_HeartbeatTimeout_NotReleasedBeforeOpenWithoutNewHeartbeat(t *testing.T) {
+	clock := jstTime(2026, 9, 29, 11, 1)
+	e, ks := newSessionEngine(t, &clock, fakeHealth{healthy: true})
+	ctx := context.Background()
+	if err := e.RecordHeartbeat(ctx, jstTime(2026, 9, 29, 8, 50)); err != nil { // stale: 131 min before 11:01
+		t.Fatalf("RecordHeartbeat: %v", err)
+	}
+	if err := e.CheckHeartbeatTimeout(ctx); err != nil {
+		t.Fatalf("CheckHeartbeatTimeout: %v", err)
+	}
+	if got := unresolvedReasons(t, ks); len(got) != 1 || got[0] != domain.KillReasonOperatorHeartbeatTimeout {
+		t.Fatalf("unresolved = %v, want [operator_heartbeat_timeout]", got)
+	}
+
+	for _, at := range []time.Time{
+		jstTime(2026, 9, 30, 0, 0),
+		jstTime(2026, 9, 30, 8, 59),
+		jstTime(2026, 9, 30, 9, 0),
+		jstTime(2026, 9, 30, 9, 30),
+		jstTime(2026, 10, 3, 10, 0), // weekend
+	} {
+		clock = at
+		if n, err := e.AutoResume(ctx); err != nil || n != 0 {
+			t.Fatalf("AutoResume at %v = (%d, %v), want (0, nil): released with no operator heartbeat", at, n, err)
+		}
+	}
+	if got := unresolvedReasons(t, ks); len(got) != 1 {
+		t.Fatalf("unresolved = %v, want the heartbeat timeout still active", got)
+	}
+
+	// A real UI heartbeat after the event releases it on the next AutoResume.
+	clock = jstTime(2026, 10, 5, 9, 10)
+	if err := e.RecordHeartbeat(ctx, clock); err != nil {
+		t.Fatalf("RecordHeartbeat: %v", err)
+	}
+	if n, err := e.AutoResume(ctx); err != nil || n != 1 {
+		t.Fatalf("AutoResume after heartbeat = (%d, %v), want (1, nil)", n, err)
+	}
+	if got := unresolvedReasons(t, ks); len(got) != 0 {
+		t.Fatalf("unresolved = %v, want none", got)
+	}
+}
+
+// A heartbeat recorded before the event fired (or a fresh one that has
+// itself gone stale again) must not count as the operator's return.
+func TestEngine_AutoResume_HeartbeatTimeout_IgnoresHeartbeatOlderThanEventOrTimeout(t *testing.T) {
+	clock := jstTime(2026, 9, 29, 11, 1)
+	e, ks := newSessionEngine(t, &clock, fakeHealth{healthy: true})
+	ctx := context.Background()
+	if err := e.RecordHeartbeat(ctx, jstTime(2026, 9, 29, 9, 0)); err != nil {
+		t.Fatalf("RecordHeartbeat: %v", err)
+	}
+	if err := e.CheckHeartbeatTimeout(ctx); err != nil {
+		t.Fatalf("CheckHeartbeatTimeout: %v", err)
+	}
+
+	// Heartbeat after the event but already older than the timeout at the
+	// time AutoResume runs: still silent.
+	if err := e.RecordHeartbeat(ctx, jstTime(2026, 9, 29, 11, 2)); err != nil {
+		t.Fatalf("RecordHeartbeat: %v", err)
+	}
+	clock = jstTime(2026, 9, 29, 13, 30)
+	if n, err := e.AutoResume(ctx); err != nil || n != 0 {
+		t.Fatalf("AutoResume = (%d, %v), want (0, nil)", n, err)
+	}
+	if got := unresolvedReasons(t, ks); len(got) != 1 {
+		t.Fatalf("unresolved = %v, want the event still active", got)
 	}
 }

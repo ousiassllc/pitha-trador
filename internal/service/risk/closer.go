@@ -32,4 +32,5 @@ var forceCloseReasons = map[string]bool{
 	domain.KillReasonConsecutiveLosses:  true,
 	domain.KillReasonDBWriteFailure:     true,
 	domain.KillReasonBrokerAPIError:     true,
+	domain.KillReasonOperatorManual:     true,
 }

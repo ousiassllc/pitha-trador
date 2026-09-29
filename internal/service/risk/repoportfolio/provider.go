@@ -123,7 +123,11 @@ func (p *Provider) SymbolExposurePct(ctx context.Context, instrumentID int64) (f
 // DailyLossPct is today's (JST) net loss as a percentage of initialCapital:
 // the realized P&L of positions closed today plus the unrealized P&L of
 // every position still open. Negative when today is net profitable.
-func (p *Provider) DailyLossPct(ctx context.Context) (float64, error) {
+// Realized P&L counts only positions closed after since (the manual-resume
+// baseline: see risk.PortfolioProvider), so a Resume after a
+// daily_loss_limit Kill Switch is not undone by the losses that caused it;
+// open positions' unrealized P&L always counts.
+func (p *Provider) DailyLossPct(ctx context.Context, since time.Time) (float64, error) {
 	if p.initialCapital <= 0 {
 		return 0, ErrNoInitialCapital
 	}
@@ -139,7 +143,7 @@ func (p *Provider) DailyLossPct(ctx context.Context) (float64, error) {
 	}
 	var pnl float64
 	for _, pos := range closed {
-		if pos.RealizedPnL != nil {
+		if pos.RealizedPnL != nil && pos.ClosedAt != nil && pos.ClosedAt.After(since) {
 			pnl += *pos.RealizedPnL
 		}
 	}
@@ -150,9 +154,9 @@ func (p *Provider) DailyLossPct(ctx context.Context) (float64, error) {
 }
 
 // recentClosedPositions returns positions.List's recentClosedPositionsLimit
-// most-recently-opened rows, filtered to closed ones only and sorted
-// most-recently-closed first.
-func (p *Provider) recentClosedPositions(ctx context.Context) ([]closedPosition, error) {
+// most-recently-opened rows, filtered to those closed after since and
+// sorted most-recently-closed first.
+func (p *Provider) recentClosedPositions(ctx context.Context, since time.Time) ([]closedPosition, error) {
 	rows, err := p.positions.List(ctx, recentClosedPositionsLimit)
 	if err != nil {
 		return nil, err
@@ -160,7 +164,7 @@ func (p *Provider) recentClosedPositions(ctx context.Context) ([]closedPosition,
 
 	closed := make([]closedPosition, 0, len(rows))
 	for _, row := range rows {
-		if row.ClosedAt == nil || row.RealizedPnL == nil {
+		if row.ClosedAt == nil || row.RealizedPnL == nil || !row.ClosedAt.After(since) {
 			continue
 		}
 		closed = append(closed, closedPosition{closedAt: *row.ClosedAt, realizedPnL: *row.RealizedPnL})
@@ -174,8 +178,10 @@ type closedPosition struct {
 	realizedPnL float64
 }
 
-func (p *Provider) ConsecutiveLosses(ctx context.Context) (int, error) {
-	closed, err := p.recentClosedPositions(ctx)
+// ConsecutiveLosses counts the losing trades closed after since in a row,
+// newest first, until the first winner.
+func (p *Provider) ConsecutiveLosses(ctx context.Context, since time.Time) (int, error) {
+	closed, err := p.recentClosedPositions(ctx, since)
 	if err != nil {
 		return 0, err
 	}
@@ -190,8 +196,10 @@ func (p *Provider) ConsecutiveLosses(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-func (p *Provider) LastLossAt(ctx context.Context) (time.Time, error) {
-	closed, err := p.recentClosedPositions(ctx)
+// LastLossAt is the close time of the most recent losing trade closed
+// after since, or the zero time if there is none.
+func (p *Provider) LastLossAt(ctx context.Context, since time.Time) (time.Time, error) {
+	closed, err := p.recentClosedPositions(ctx, since)
 	if err != nil {
 		return time.Time{}, err
 	}

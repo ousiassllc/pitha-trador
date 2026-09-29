@@ -42,18 +42,31 @@ func (e *Engine) State(ctx context.Context) (domain.SystemState, []domain.KillSw
 // manual, Kill-Switch-independent new-entry stop the operator can lift
 // with Resume at any time.
 func (e *Engine) Pause(ctx context.Context) error {
-	return e.setBoolSetting(ctx, settingKeySystemPaused, true)
+	if err := e.setBoolSetting(ctx, settingKeySystemPaused, true); err != nil {
+		return err
+	}
+	slog.Info("risk: audit: manual pause")
+	return nil
 }
 
-// Kill implements POST /system/kill (docs/api/endpoints.md §4): an
-// immediate, manually-triggered Kill Switch. Unlike the FR-RISK-2
-// automatic triggers below, this is not logged to kill_switch_events -
-// none of its nine reason values fit an operator's own, unspecified
-// reason for pulling the switch (see domain.KillSwitchEvent's doc
-// comment) - but it blocks new entries exactly like an automatic one
-// until Resume.
+// Kill implements POST /system/kill (docs/api/endpoints.md §4, UC-11): an
+// immediate, manually-triggered Kill Switch. It is raised like any other
+// trigger (TriggerKillSwitch with domain.KillReasonOperatorManual), so it
+// is written to the kill_switch_events audit log (FR-RISK-5), notified
+// (non-functional.md §5.2) and force-closes every open position
+// (FR-RISK-3, UC-11 "強制決済"); it is manual-resume-only.
+//
+// The system.killed flag is set first: the block on new entries must hold
+// even if the audit write or the force-close fails (Kill then returns
+// that error, but the system stays Killed). It is idempotent per reason
+// (triggerIfNotActive), so a repeated Kill while operator_manual is still
+// unresolved adds no second row and no second flatten.
 func (e *Engine) Kill(ctx context.Context) error {
-	return e.setBoolSetting(ctx, settingKeySystemKilled, true)
+	if err := e.setBoolSetting(ctx, settingKeySystemKilled, true); err != nil {
+		return err
+	}
+	_, err := e.triggerIfNotActive(ctx, domain.KillReasonOperatorManual, map[string]any{"source": "POST /api/v1/system/kill"})
+	return err
 }
 
 // Resume implements POST /system/resume (docs/api/endpoints.md §4): the
@@ -62,6 +75,9 @@ func (e *Engine) Kill(ctx context.Context) error {
 // active or whether FR-RISK-7 classifies them auto- or manual-resume-only
 // - a human explicitly resuming always wins (FR-RISK-4: "人手の追加認証は
 // 要求しない", i.e. no extra confirmation gate beyond this call itself).
+// Resolving a consecutive_losses or daily_loss_limit event also records a
+// baseline (baseline.go), so those limits count only from this moment on
+// and the Kill Switch does not re-fire on the very history that caused it.
 func (e *Engine) Resume(ctx context.Context) error {
 	if err := e.setBoolSetting(ctx, settingKeySystemPaused, false); err != nil {
 		return err
@@ -74,15 +90,25 @@ func (e *Engine) Resume(ctx context.Context) error {
 		return fmt.Errorf("risk: list unresolved kill switch events: %w", err)
 	}
 	resolvedAt := e.now()
+	// The baselines are written before the events are resolved: a crash in
+	// between then leaves the Kill Switch active (safe, Resume can be
+	// retried) rather than resolved without a baseline (which would re-fire
+	// at once, baseline.go).
+	if err := e.recordResumeBaselines(ctx, events, resolvedAt); err != nil {
+		return err
+	}
+	reasons := make([]string, 0, len(events))
 	for _, ev := range events {
 		if err := e.killSwitch.Resolve(ctx, ev.ID, resolvedAt, domain.ResolvedByManual); err != nil {
 			return fmt.Errorf("risk: manually resolve kill switch event %d (%s): %w", ev.ID, ev.Reason, err)
 		}
+		reasons = append(reasons, ev.Reason)
 	}
+	slog.Info("risk: audit: manual resume", "resolved_reasons", reasons)
 	return nil
 }
 
-// TriggerKillSwitch records reason (one of the nine domain.KillReason*
+// TriggerKillSwitch records reason (one of the ten domain.KillReason*
 // values) as a new kill_switch_events row (FR-RISK-2, FR-RISK-5), then -
 // when reason is in the forceCloseReasons set (architecture/overview.md
 // §10.3) - closes every open position via Closer (FR-RISK-3). Any caller

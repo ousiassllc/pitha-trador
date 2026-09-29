@@ -221,13 +221,13 @@ func (e erroring) TotalExposurePct(ctx context.Context) (float64, error) {
 func (e erroring) SymbolExposurePct(ctx context.Context, _ int64) (float64, error) {
 	return 0, e.fail("SymbolExposurePct")
 }
-func (e erroring) DailyLossPct(ctx context.Context) (float64, error) {
+func (e erroring) DailyLossPct(ctx context.Context, _ time.Time) (float64, error) {
 	return 0, e.fail("DailyLossPct")
 }
-func (e erroring) ConsecutiveLosses(ctx context.Context) (int, error) {
+func (e erroring) ConsecutiveLosses(ctx context.Context, _ time.Time) (int, error) {
 	return 0, e.fail("ConsecutiveLosses")
 }
-func (e erroring) LastLossAt(ctx context.Context) (time.Time, error) {
+func (e erroring) LastLossAt(ctx context.Context, _ time.Time) (time.Time, error) {
 	return time.Time{}, e.fail("LastLossAt")
 }
 
