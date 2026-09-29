@@ -27,7 +27,12 @@ const (
 	// from the second retry onward (overview.md §6 "2回目以降exponential
 	// backoff").
 	defaultRetryBaseDelay = 500 * time.Millisecond
-	defaultHTTPTimeout    = 10 * time.Second
+	// defaultHTTPTimeout is the per-attempt HTTP timeout
+	// (non-functional.md §2.2 "Jev Scout/Trader 1回呼び出し ... タイムアウト5秒").
+	// With defaultMaxAttempts and the backoff above, a fully failing call
+	// is bounded by 4*5s + 0.5s + 1s = 21.5s, inside the 30s re-evaluation
+	// cycle (§2.1).
+	defaultHTTPTimeout = 5 * time.Second
 	// defaultErrorRateWindow/defaultErrorRateThreshold configure the
 	// rolling error-rate alert non-functional.md §5.2 requires ("Jev API
 	// エラー率上昇（しきい値超過）", errorrate.go): the most recent 20
@@ -44,7 +49,7 @@ type Config struct {
 	// Client and is never written to disk (overview.md §6).
 	APIKey string
 	// HTTPClient is the HTTP client used for calls. Defaults to
-	// &http.Client{Timeout: 10 * time.Second}.
+	// &http.Client{Timeout: 5 * time.Second} (per attempt).
 	HTTPClient *http.Client
 	// MaxAttempts bounds the total number of attempts (initial call +
 	// retries) per Client.Scout call. Defaults to 4.
