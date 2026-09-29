@@ -50,6 +50,7 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 | Execution（Act） | 発注・約定 | 常時 |
 
 - FR-SELFIMPROVE-1: Sol は日次（引け後）に、直近の負けトレード・Calibration指標（Brier Score/ECE/confidence bucket別PnL）を分析し、`policy_proposals`に改善提案（`rationale_json`, `proposed_changes_json`）を記録する
+  - 「引け後」は平日15:40 JST（大引け15:30の10分後）に固定する。cron式はホストのタイムゾーン（`time.Local`）ではなくJST固定ゾーンで解釈するため、ホストTZに依存しない（`internal/service/scheduler/selfimprove.go`）。祝日は考慮せず、祝日実行時は新規Calibrationデータなしで提案なしとなる
 - FR-SELFIMPROVE-2: Solが変更を提案できる対象は`runtime_settings`の`policy.*`キー（Policy Engineのしきい値）に限定する。`risk.*`キー（Risk Engineのリミット値）および Jev の`prompt_version`/質問セット自体は自己改善ループの対象外とし、人手のみが変更できる（`docs/overview.md`「含まないもの」の「AI（Jev/Sol/Opus）による Risk Engine のリミット値そのものの変更」を継続遵守）
 - FR-SELFIMPROVE-3: 1提案あたりの変更幅は confidence系しきい値で±0.05、entry_quality等の段階型しきい値で1段階までを上限とする
 - FR-SELFIMPROVE-4: Opusは提案を受け取ると、直近の`trade_signals`/`jev_decisions`/`calibration_outcomes`（直近20営業日相当）に対し提案後しきい値を適用した場合のExpectancy・Max Drawdownをシャドーバックテスト（バックテストエンジン§4.11を再利用）で算出し、既存policy_versionに対しExpectancyが悪化せずMax Drawdownの悪化が許容範囲内（相対10%以内）の場合のみ承認する

@@ -48,7 +48,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant SCHED as Scheduler（日次、引け後）
+    participant SCHED as Scheduler（平日15:40 JST、引け後）
     participant SOL as Sol Adapter
     participant GOV as Self-Improvement Governor
     participant OPUS as Opus Adapter

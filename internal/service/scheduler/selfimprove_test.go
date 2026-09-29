@@ -44,10 +44,7 @@ func TestScheduler_Start_RegistersDailySelfImproveTrigger(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start must register the daily self-improve cron entry
-	// (selfImproveCronSpec) without error; waiting for a real cron fire
-	// is exercised by TestScheduler_EnqueueSelfImprove_EnqueuesOneAnalyticsJob
-	// above instead.
+	// Start must register the daily self-improve cron entry without error.
 	if err := s.Start(ctx, 24*time.Hour); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
