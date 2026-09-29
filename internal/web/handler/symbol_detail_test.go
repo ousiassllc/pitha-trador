@@ -153,7 +153,7 @@ func TestSymbolHandler_APICandles_RespectsExplicitFromTo(t *testing.T) {
 	}
 }
 
-func TestSymbolHandler_APICandles_InvalidFromReturns400(t *testing.T) {
+func TestSymbolHandler_APICandles_InvalidFromReturns422(t *testing.T) {
 	provider := &fakeSymbolProvider{}
 	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
 	_, api := humatest.New(t)
@@ -161,7 +161,26 @@ func TestSymbolHandler_APICandles_InvalidFromReturns400(t *testing.T) {
 
 	resp := api.Get("/symbols/7203/candles?from=not-a-date")
 
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d (body=%s)", resp.Code, http.StatusBadRequest, resp.Body.String())
+	if resp.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d (body=%s)", resp.Code, http.StatusUnprocessableEntity, resp.Body.String())
+	}
+}
+
+func TestSymbolHandler_SymbolRoutes_RejectInvalidInput(t *testing.T) {
+	h := handler.NewSymbolHandler(&fakeSymbolProvider{}, handler.SymbolRiskParams{})
+	_, api := humatest.New(t)
+	huma.Get(api, "/symbols/{symbol}", h.APISymbol)
+	huma.Get(api, "/symbols/{symbol}/candles", h.APICandles)
+
+	for _, path := range []string{
+		"/symbols/72.03", "/symbols/7203-x", "/symbols/12345678901234567",
+		"/symbols/7203/candles?to=2026-09-27", "/symbols/7203/candles?interval=5m", "/symbols/72.03/candles",
+	} {
+		if resp := api.Get(path); resp.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("GET %s status = %d, want 422 (body=%s)", path, resp.Code, resp.Body.String())
+		}
+	}
+	if resp := api.Get("/symbols/130A/candles?interval=1m"); resp.Code != http.StatusOK {
+		t.Fatalf("alphanumeric symbol + interval=1m status = %d, want 200", resp.Code)
 	}
 }
