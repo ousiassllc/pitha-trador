@@ -28,8 +28,10 @@ import (
 // defaultAddr uses 48080 instead of the far more commonly-claimed 8080
 // (Tomcat/many Node dev servers/etc.) or kabuステーションAPIの18080
 // (internal/service/marketdata, docs/architecture/overview.md §5) to
-// minimize the odds of a port clash with other local services.
-const defaultAddr = ":48080"
+// minimize the odds of a port clash with other local services. The host is
+// 127.0.0.1 so the server is unreachable from other machines
+// (docs/api/endpoints.md §1); see EnvAllowNonLoopback in addr.go.
+const defaultAddr = "127.0.0.1:48080"
 
 // shutdownTimeout bounds how long a SIGINT/SIGTERM waits for in-flight
 // HTTP requests (including open WebSocket streams) before closing them.
@@ -82,9 +84,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	addr := os.Getenv("PITHA_SERVER_ADDR")
-	if addr == "" {
-		addr = defaultAddr
+	addr, err := resolveListenAddr(os.Getenv("PITHA_SERVER_ADDR"), os.Getenv(EnvAllowNonLoopback) == "1")
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	engine := router.New(

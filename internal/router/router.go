@@ -202,6 +202,12 @@ func New(opts ...Option) *gin.Engine {
 	}
 
 	engine := gin.New()
+	// Registered first, before SetupGuard, so it covers every route
+	// (`/static` excepted inside): the session cookie + CSRF token are
+	// required for all state-changing methods and WebSocket upgrades, and
+	// the Setup screen's `POST`/`DELETE /settings/:key` (which SetupGuard
+	// lets through unauthenticated) are protected too (issues #90/#98/#99).
+	engine.Use(middleware.NewSession().Handler())
 	settingsStore := o.secretsStore
 	if settingsStore == nil {
 		settingsStore = handler.StaticSecretsStore{}

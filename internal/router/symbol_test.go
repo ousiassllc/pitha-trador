@@ -105,7 +105,7 @@ func TestNew_ClosePositionActionRouteIsRegistered(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New()
 
-	req := httptest.NewRequest(http.MethodPost, "/positions/1/close", nil)
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/positions/1/close", nil))
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
