@@ -21,6 +21,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
 func main() {
@@ -83,6 +84,7 @@ func main() {
 	app.services = services
 
 	engine := router.New(
+		router.WithAllowedHosts(middleware.WailsHosts()...),
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
 		router.WithHeartbeatRecorder(services.Risk),

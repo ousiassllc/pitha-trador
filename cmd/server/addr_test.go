@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"slices"
 	"testing"
 )
 
@@ -41,6 +42,27 @@ func TestResolveListenAddr(t *testing.T) {
 		}
 		if err == nil && got != tc.addr {
 			t.Errorf("resolveListenAddr(%q, %v) = %q, want unchanged", tc.addr, tc.allowNonLB, got)
+		}
+	}
+}
+
+func TestAllowedHosts(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		addr       string
+		allowNonLB bool
+		extra      string
+		want       []string
+	}{
+		{"loopback bind", "127.0.0.1:48080", false, "", []string{"localhost", "127.0.0.1", "::1"}},
+		{"extra hosts ignored without opt-in", "127.0.0.1:48080", false, "lan.example", []string{"localhost", "127.0.0.1", "::1"}},
+		{"wildcard bind adds nothing", "0.0.0.0:48080", true, "", []string{"localhost", "127.0.0.1", "::1"}},
+		{"empty-host bind adds nothing", ":48080", true, "", []string{"localhost", "127.0.0.1", "::1"}},
+		{"LAN bind and extras", "192.168.1.10:48080", true, " pitha.lan, ,other.lan", []string{"localhost", "127.0.0.1", "::1", "192.168.1.10", "pitha.lan", "other.lan"}},
+	} {
+		got := allowedHosts(tc.addr, tc.allowNonLB, tc.extra)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: allowedHosts(%q, %v, %q) = %v, want %v", tc.name, tc.addr, tc.allowNonLB, tc.extra, got, tc.want)
 		}
 	}
 }

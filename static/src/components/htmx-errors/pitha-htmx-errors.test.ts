@@ -8,8 +8,16 @@ beforeEach(() => {
   document.body.innerHTML = `<div id="toast-region"></div><template id="toast-template">${TOAST_HTML}</template>`;
 });
 
-function fakeXhr(status: number, responseText: string): XMLHttpRequest {
-  return { status, responseText } as XMLHttpRequest;
+function fakeXhr(
+  status: number,
+  responseText: string,
+  headers: Record<string, string> = {},
+): XMLHttpRequest {
+  return {
+    status,
+    responseText,
+    getResponseHeader: (name: string) => headers[name] ?? null,
+  } as XMLHttpRequest;
 }
 
 function fire(name: string, detail: Record<string, unknown> = {}): Record<string, unknown> {
@@ -25,7 +33,10 @@ function toastTexts(): string[] {
 
 describe('htmx:beforeSwap', () => {
   test('blocks an error response that carries no toast fragment', () => {
-    const detail = fire('htmx:beforeSwap', { xhr: fakeXhr(500, '404 page not found'), shouldSwap: true });
+    const detail = fire('htmx:beforeSwap', {
+      xhr: fakeXhr(500, '404 page not found'),
+      shouldSwap: true,
+    });
     expect(detail.shouldSwap).toBe(false);
   });
 
@@ -49,6 +60,19 @@ describe('htmx:responseError', () => {
   test('shows a generic 4xx toast when the body is empty', () => {
     fire('htmx:responseError', { xhr: fakeXhr(409, '') });
     expect(toastTexts()).toEqual(['操作を完了できませんでした（HTTP 409）。']);
+  });
+
+  test('asks for a page reload when the server marks a 403 as stale', () => {
+    fire('htmx:responseError', {
+      xhr: fakeXhr(403, 'forbidden: missing or invalid CSRF token', { 'X-CSRF-Reject': 'stale' }),
+    });
+    expect(toastTexts()).toHaveLength(1);
+    expect(toastTexts()[0]).toContain('再読み込み');
+  });
+
+  test('an unmarked 403 keeps the generic toast', () => {
+    fire('htmx:responseError', { xhr: fakeXhr(403, 'forbidden: host not allowed') });
+    expect(toastTexts()).toEqual(['操作を完了できませんでした（HTTP 403）。']);
   });
 
   test('adds nothing when the server already sent a toast fragment', () => {

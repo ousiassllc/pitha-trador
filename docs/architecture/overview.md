@@ -84,7 +84,7 @@ pitha-trador/
 │   ├── router/                    # SSR + API ルーティング定義（Huma登録含む）
 │   └── web/
 │       ├── handler/               # scanner.go, symbol.go, performance.go, calibration.go, system.go
-│       ├── middleware/            # CSRF, ロギング, リカバリ, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）
+│       ├── middleware/            # HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState
 │       ├── atoms/
 │       ├── molecules/
 │       ├── organisms/
@@ -170,3 +170,4 @@ handler → service → repository → domain
 | 1.14 | 2026-09-29 | §5の発注方針にBroker認証情報のProduction/Paper分離をPhase 7で実施する旨を追記 | issue #103対応 |
 | 1.15 | 2026-09-29 | §5〜§13を`docs/architecture/overview/`配下の章別ファイル（integrations/flows）へ分割。節番号・内容は変更なし | issue #119（300行/ファイル制限の形骸化解消） |
 | 1.16 | 2026-09-29 | §4 Setup Guardの応答をリクエスト種別別に変更 | issue #140実装 |
+| 1.17 | 2026-09-29 | §3 middleware/にHostGuard・Session・RequestLog・Recovery・SystemStateの名称を反映（適用順は`api/endpoints.md` §1） | issue #136/#149 |

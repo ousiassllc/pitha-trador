@@ -13,6 +13,21 @@ export interface GetOptions {
   background?: boolean;
 }
 
+/** Response header the server sets on a 403 caused by a stale session cookie/CSRF token (middleware.CSRFRejectHeader). */
+export const CSRF_REJECT_HEADER = 'X-CSRF-Reject';
+export const CSRF_REJECT_STALE = 'stale';
+/** Shown when the page was opened before an app restart: its tokens are gone, only a reload fetches new ones. */
+export const STALE_SESSION_MESSAGE =
+  'アプリが再起動されたためこのページの認証情報が失効しました。ページを再読み込みしてください。';
+
+/** A request refused because the page's session cookie/CSRF token predates the running server. */
+export class StaleSessionError extends Error {
+  constructor() {
+    super(STALE_SESSION_MESSAGE);
+    this.name = 'StaleSessionError';
+  }
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -40,6 +55,9 @@ async function request<T>(
   }
 
   const response = await fetch(path, init);
+  if (response.status === 403 && response.headers.get(CSRF_REJECT_HEADER) === CSRF_REJECT_STALE) {
+    throw new StaleSessionError();
+  }
   if (!response.ok) {
     throw new Error(`${method} ${path} failed with status ${response.status}`);
   }

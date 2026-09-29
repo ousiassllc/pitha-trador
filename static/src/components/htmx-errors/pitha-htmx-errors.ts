@@ -5,10 +5,13 @@
 //   - error responses that carry no toast fragment (empty body, a plain
 //     text/proxy error page) must not be swapped in raw, and get a generic
 //     toast instead (`htmx:beforeSwap` / `htmx:responseError`);
+//   - a 403 marked stale by the server (page opened before an app restart)
+//     gets a "reload the page" toast;
 //   - requests that never got a response (`htmx:sendError`, `htmx:timeout`);
 //   - dismissing toasts (close button, auto-dismiss).
 // The toast markup lives only in templ (`#toast-template`, atoms.Toast).
 
+import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
 import { logger } from '../lib/logger';
 
 const TOAST_MARKER = 'data-toast';
@@ -66,6 +69,11 @@ export function onBeforeSwap(event: Event): void {
 export function onResponseError(event: Event): void {
   const xhr = (event as CustomEvent<ResponseDetail>).detail.xhr;
   logger.warn('htmx response error', { status: xhr?.status });
+  if (xhr?.status === 403 && xhr.getResponseHeader?.(CSRF_REJECT_HEADER) === CSRF_REJECT_STALE) {
+    // Page opened before an app restart: its cookie/CSRF token is stale (issue #138).
+    showToast(STALE_SESSION_MESSAGE);
+    return;
+  }
   if (!carriesToast(xhr)) showToast(statusMessage(xhr?.status ?? 0));
 }
 

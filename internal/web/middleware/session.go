@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"mime"
 	"net/http"
 	"strings"
 
@@ -18,6 +19,16 @@ const (
 	// carry the CSRF token in (htmx via `<body hx-headers>`, Lit components
 	// via static/src/components/lib/api.ts).
 	CSRFHeader = "X-CSRF-Token"
+	// CSRFFormField is the hidden form field that stands in for CSRFHeader
+	// on a plain `application/x-www-form-urlencoded` form submission (the
+	// no-JS fallback of the Settings/Setup forms, which cannot set headers).
+	CSRFFormField = "_csrf"
+	// CSRFRejectHeader marks a 403 caused by a missing/invalid session
+	// cookie or CSRF token, the state a page that was opened before an app
+	// restart is left in (tokens are regenerated per process). Its value
+	// is CSRFRejectStale; clients tell the operator to reload the page.
+	CSRFRejectHeader = "X-CSRF-Reject"
+	CSRFRejectStale  = "stale"
 )
 
 type (
@@ -75,7 +86,8 @@ func NewSession() *Session {
 //     this app served.
 //   - Every other method (POST/PUT/PATCH/DELETE, ...) and every WebSocket
 //     upgrade needs the session cookie; state-changing methods also need
-//     CSRFHeader to match the CSRF token. Failures answer 403.
+//     CSRFHeader (or, for a urlencoded form body, CSRFFormField) to match
+//     the CSRF token. Failures answer 403 with CSRFRejectHeader set.
 //
 // Install it before SetupGuard so the Setup screen and its `POST`/`DELETE
 // /settings/:key` routes, which the guard lets through, are protected too.
@@ -95,10 +107,10 @@ func (s *Session) Handler() gin.HandlerFunc {
 				s.setCookie(c)
 			}
 		case !hasCookie:
-			forbid(c, "missing or invalid session cookie")
+			forbidStale(c, "missing or invalid session cookie")
 			return
-		case !isSafeMethod(c.Request.Method) && !tokensEqual(c.GetHeader(CSRFHeader), s.csrfToken):
-			forbid(c, "missing or invalid CSRF token")
+		case !isSafeMethod(c.Request.Method) && !tokensEqual(submittedCSRFToken(c.Request), s.csrfToken):
+			forbidStale(c, "missing or invalid CSRF token")
 			return
 		}
 		c.Next()
@@ -114,6 +126,28 @@ func (s *Session) setCookie(c *gin.Context) {
 func forbid(c *gin.Context, reason string) {
 	c.String(http.StatusForbidden, "forbidden: "+reason)
 	c.Abort()
+}
+
+// forbidStale is forbid plus CSRFRejectHeader, for rejections a reload of
+// the page (which delivers a fresh cookie and CSRF token) resolves.
+func forbidStale(c *gin.Context, reason string) {
+	c.Header(CSRFRejectHeader, CSRFRejectStale)
+	forbid(c, reason)
+}
+
+// submittedCSRFToken is the CSRFHeader value, or when there is none the
+// CSRFFormField of a urlencoded body.
+func submittedCSRFToken(r *http.Request) string {
+	if token := r.Header.Get(CSRFHeader); token != "" {
+		return token
+	}
+	if mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mediaType != "application/x-www-form-urlencoded" {
+		return ""
+	}
+	if err := r.ParseForm(); err != nil {
+		return ""
+	}
+	return r.PostForm.Get(CSRFFormField)
 }
 
 func cookieValue(r *http.Request) string {

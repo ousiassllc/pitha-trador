@@ -39,6 +39,7 @@ type options struct {
 	secretsStore      handler.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
 	updateController  handler.UpdateController
 	heartbeatRecorder middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
+	allowedHosts      []string                     // nil until WithAllowedHosts: no Host/Origin validation
 }
 
 // Option configures New.
@@ -160,4 +161,15 @@ func WithUpdateController(controller handler.UpdateController) Option {
 // would fire spuriously if a Live build ran without it.
 func WithHeartbeatRecorder(recorder middleware.HeartbeatRecorder) Option {
 	return func(o *options) { o.heartbeatRecorder = recorder }
+}
+
+// WithAllowedHosts installs middleware.HostGuard with hosts: every request
+// whose Host header (and, on state-changing requests and WebSocket
+// upgrades, Origin header) names another host is answered 403 before
+// Session sees it, defeating DNS rebinding (issue #136). cmd/server passes
+// its loopback/configured hosts, cmd/desktop middleware.WailsHosts();
+// without it (router-level tests only, whose httptest requests carry
+// `example.com`) nothing is validated.
+func WithAllowedHosts(hosts ...string) Option {
+	return func(o *options) { o.allowedHosts = append([]string{}, hosts...) } // non-nil even for zero hosts: reject everything
 }

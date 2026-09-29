@@ -84,12 +84,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	addr, err := resolveListenAddr(os.Getenv("PITHA_SERVER_ADDR"), os.Getenv(EnvAllowNonLoopback) == "1")
+	allowNonLoopback := os.Getenv(EnvAllowNonLoopback) == "1"
+	addr, err := resolveListenAddr(os.Getenv("PITHA_SERVER_ADDR"), allowNonLoopback)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	engine := router.New(
+		router.WithAllowedHosts(allowedHosts(addr, allowNonLoopback, os.Getenv(EnvAllowedHosts))...),
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
 		router.WithHeartbeatRecorder(services.Risk),
