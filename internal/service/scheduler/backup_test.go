@@ -60,3 +60,55 @@ func TestScheduler_Start_RegistersDailyDatabaseBackupTrigger(t *testing.T) {
 	}
 	s.Stop()
 }
+
+// settingsStub is an in-memory maintenance.State.
+type settingsStub struct{ m map[string]string }
+
+func (s *settingsStub) Get(_ context.Context, key string) (string, bool, error) {
+	v, ok := s.m[key]
+	return v, ok, nil
+}
+
+func (s *settingsStub) Set(_ context.Context, key, value string, _ time.Time) error {
+	s.m[key] = value
+	return nil
+}
+
+const backupStateKey = "system.maintenance.database_backup.last_success_date"
+
+func TestScheduler_Start_CatchesUpMissedBackupImmediately(t *testing.T) {
+	db := newTestDB(t)
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	state := &settingsStub{m: map[string]string{backupStateKey: `"` + yesterday + `"`}}
+	b := &fakeBackuper{}
+	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db),
+		scheduler.WithDatabaseBackuper(b), scheduler.WithMaintenanceState(state))
+	if err := s.Start(context.Background(), 24*time.Hour); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer s.Stop()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && state.m[backupStateKey] == `"`+yesterday+`"` {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if want := `"` + time.Now().Format("2006-01-02") + `"`; state.m[backupStateKey] != want {
+		t.Fatalf("last success = %s, want %s (catch-up did not run right after Start)", state.m[backupStateKey], want)
+	}
+}
+
+func TestScheduler_Start_SkipsBackupAlreadyDoneToday(t *testing.T) {
+	db := newTestDB(t)
+	today := time.Now().Format("2006-01-02")
+	state := &settingsStub{m: map[string]string{backupStateKey: `"` + today + `"`}}
+	b := &fakeBackuper{}
+	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db),
+		scheduler.WithDatabaseBackuper(b), scheduler.WithMaintenanceState(state))
+	if err := s.Start(context.Background(), 24*time.Hour); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	s.Stop() // waits for the immediate catch-up goroutine
+	if b.calls != 0 {
+		t.Fatalf("backuper.calls = %d, want 0 (already succeeded today)", b.calls)
+	}
+}

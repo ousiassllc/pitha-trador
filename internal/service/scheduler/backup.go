@@ -11,8 +11,8 @@ type DatabaseBackuper interface {
 	Backup(ctx context.Context) error
 }
 
-// WithDatabaseBackuper enables Start's @daily database-backup cron
-// trigger (non-functional.md §3). Unset by default.
+// WithDatabaseBackuper enables Start's daily database-backup trigger
+// (catch-up on start plus a fixed 16:00 run) (non-functional.md §3). Unset by default.
 func WithDatabaseBackuper(backuper DatabaseBackuper) Option {
 	return func(s *Scheduler) { s.databaseBackuper = backuper }
 }

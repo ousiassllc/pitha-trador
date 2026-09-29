@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
@@ -93,17 +94,18 @@ func TestBackup_CopiesUnflushedWALContentsIntoDailyFile(t *testing.T) {
 	}
 }
 
-func TestBackup_PrunesDailyOlderThanRetentionButKeepsWeeklyArchives(t *testing.T) {
+func TestBackup_PrunesDailyOlderThanRetentionAndWeeklyOlderThan52Weeks(t *testing.T) {
 	conn := openTestDB(t)
 	dir := t.TempDir()
 	s := New(conn, dir, 90)
 	s.now = func() time.Time { return time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC) }
 
 	daily := filepath.Join(dir, "daily")
-	touch(t, filepath.Join(daily, "pitha-2026-06-30.db")) // 91 days old -> pruned
-	touch(t, filepath.Join(daily, "pitha-2026-07-01.db")) // exactly 90 days old -> kept
-	touch(t, filepath.Join(daily, "notes.txt"))           // foreign file -> untouched
-	touch(t, filepath.Join(dir, "weekly", "pitha-2025-01-05.db.gz"))
+	touch(t, filepath.Join(daily, "pitha-2026-06-30.db"))            // 91 days old -> pruned
+	touch(t, filepath.Join(daily, "pitha-2026-07-01.db"))            // exactly 90 days old -> kept
+	touch(t, filepath.Join(daily, "notes.txt"))                      // foreign file -> untouched
+	touch(t, filepath.Join(dir, "weekly", "pitha-2025-09-27.db.gz")) // 367 days old -> pruned
+	touch(t, filepath.Join(dir, "weekly", "pitha-2025-09-30.db.gz")) // 364 days old (52 weeks) -> kept
 
 	if err := s.Backup(context.Background()); err != nil {
 		t.Fatalf("Backup: %v", err)
@@ -112,11 +114,14 @@ func TestBackup_PrunesDailyOlderThanRetentionButKeepsWeeklyArchives(t *testing.T
 	if exists(filepath.Join(daily, "pitha-2026-06-30.db")) {
 		t.Error("91-day-old daily backup should be pruned")
 	}
+	if exists(filepath.Join(dir, "weekly", "pitha-2025-09-27.db.gz")) {
+		t.Error("weekly archive older than 52 weeks should be pruned")
+	}
 	for _, keep := range []string{
 		filepath.Join(daily, "pitha-2026-07-01.db"),
 		filepath.Join(daily, "notes.txt"),
 		filepath.Join(daily, "pitha-2026-09-29.db"),
-		filepath.Join(dir, "weekly", "pitha-2025-01-05.db.gz"),
+		filepath.Join(dir, "weekly", "pitha-2025-09-30.db.gz"),
 	} {
 		if !exists(keep) {
 			t.Errorf("%s should be kept", keep)
@@ -181,5 +186,109 @@ func TestBackup_ReturnsErrorWhenDestinationIsNotADirectory(t *testing.T) {
 
 	if err := New(conn, file, 0).Backup(context.Background()); err == nil {
 		t.Fatal("Backup should fail when the destination path is a file")
+	}
+}
+
+func TestBackup_ScrubsSecretsAndRestrictsPermissions(t *testing.T) {
+	conn := openTestDB(t)
+	if _, err := conn.Exec(`INSERT INTO secrets (key, encrypted_value, updated_at) VALUES ('KABU_API_PASSWORD', 'topsecretcipher', '2026-09-29T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO runtime_settings (key, value, updated_at) VALUES ('keep.me', '"v"', '2026-09-29T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	// A pre-existing world-readable destination layout must be tightened.
+	if err := os.MkdirAll(filepath.Join(dir, "daily"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := New(conn, dir, 0)
+	s.now = func() time.Time { return time.Date(2026, 9, 27, 3, 0, 0, 0, time.UTC) } // Sunday
+
+	if err := s.Backup(context.Background()); err != nil {
+		t.Fatalf("Backup: %v", err)
+	}
+
+	daily := filepath.Join(dir, "daily", "pitha-2026-09-27.db")
+	backup, err := sql.Open("sqlite", "file:"+daily)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = backup.Close() }()
+	var secrets, settings int
+	if err := backup.QueryRow("SELECT count(*) FROM secrets").Scan(&secrets); err != nil {
+		t.Fatal(err)
+	}
+	if err := backup.QueryRow("SELECT count(*) FROM runtime_settings WHERE key = 'keep.me'").Scan(&settings); err != nil {
+		t.Fatal(err)
+	}
+	if secrets != 0 {
+		t.Errorf("backup secrets rows = %d, want 0", secrets)
+	}
+	if settings != 1 {
+		t.Errorf("non-secret data must survive the scrub: runtime_settings rows = %d, want 1", settings)
+	}
+	raw, err := os.ReadFile(daily)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("topsecretcipher")) {
+		t.Error("secret ciphertext still present in the backup file (free pages not rewritten)")
+	}
+	// The live database keeps its secrets.
+	var live int
+	if err := conn.QueryRow("SELECT count(*) FROM secrets").Scan(&live); err != nil || live != 1 {
+		t.Errorf("live secrets rows = %d (err %v), want 1", live, err)
+	}
+
+	for path, want := range map[string]os.FileMode{
+		filepath.Join(dir, "daily"):  0o700,
+		filepath.Join(dir, "weekly"): 0o700,
+		daily:                        0o600,
+		filepath.Join(dir, "weekly", "pitha-2026-09-27.db.gz"): 0o600,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%s mode = %o, want %o", path, got, want)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(dir, "daily")); len(entries) != 1 {
+		t.Errorf("sidecar files left in daily/: %v", entries)
+	}
+}
+
+func TestBackup_FailsWithoutCreatingMissingDestination(t *testing.T) {
+	conn := openTestDB(t)
+	dir := filepath.Join(t.TempDir(), "unmounted")
+
+	if err := New(conn, dir, 0).Backup(context.Background()); err == nil {
+		t.Fatal("Backup should fail when the destination directory does not exist")
+	}
+	if exists(dir) {
+		t.Error("Backup must not create the missing destination directory")
+	}
+}
+
+func TestBackup_LeavesNoTemporaryFileWhenFinalizeFails(t *testing.T) {
+	conn := openTestDB(t)
+	dir := t.TempDir()
+	// A directory squatting on the final name makes finalizing fail after
+	// the copy; nothing may be left behind under the temporary name.
+	final := filepath.Join(dir, "daily", "pitha-2026-09-29.db")
+	if err := os.MkdirAll(filepath.Join(final, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := New(conn, dir, 0)
+	s.now = func() time.Time { return time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC) }
+
+	if err := s.Backup(context.Background()); err == nil {
+		t.Fatal("Backup should fail when the copy cannot be finalized")
+	}
+	if exists(final + ".tmp") {
+		t.Error("temporary file left behind after a failed backup")
 	}
 }

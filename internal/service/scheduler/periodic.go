@@ -206,16 +206,7 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 			return fmt.Errorf("scheduler: register kill switch auto-resume trigger: %w", err)
 		}
 	}
-	if s.logRotator != nil {
-		if _, err := s.cron.AddFunc("@daily", func() {
-			if err := s.RotateLogs(ctx); err != nil {
-				slog.Error("scheduler: log rotation failed", "error", err)
-			}
-		}); err != nil {
-			return fmt.Errorf("scheduler: register log rotation trigger: %w", err)
-		}
-	}
-	if err := s.addDataMaintenanceTriggers(ctx); err != nil {
+	if err := s.addMaintenanceTriggers(ctx); err != nil {
 		return err
 	}
 	if s.updateChecker != nil {
