@@ -45,7 +45,7 @@ func TestScheduler_RiskMonitorAndAutoResume_DetectNotifyRecover(t *testing.T) {
 	notifier := &recordingNotifier{}
 	killSwitch := repository.NewKillSwitchRepository(db)
 	engine := risk.NewEngine(risk.Config{
-		Limits:           config.RiskLimits{MaxDailyLossPct: 1.0},
+		Limits:           config.RiskLimits{MaxDailyLossPct: 1.0, MaxConsecutiveLosses: 4},
 		KillSwitch:       killSwitch,
 		Settings:         repository.NewRuntimeSettingsRepository(db),
 		MarketDataHealth: health,

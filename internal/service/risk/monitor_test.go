@@ -223,6 +223,11 @@ func TestEngine_CheckPositionReconciliation(t *testing.T) {
 	}
 }
 
+// mutableHealth is a HealthChecker whose answer can flip after construction.
+type mutableHealth struct{ healthy bool }
+
+func (h *mutableHealth) Healthy(context.Context) (bool, error) { return h.healthy, nil }
+
 func TestEngine_RunPeriodicChecks_RunsEveryDetectorAndJoinsNoErrors(t *testing.T) {
 	market := &mutableHealth{healthy: false}
 	jev := &mutableHealth{healthy: false}

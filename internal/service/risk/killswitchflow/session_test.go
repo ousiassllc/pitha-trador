@@ -1,4 +1,4 @@
-package risk_test
+package killswitchflow_test
 
 import (
 	"context"
@@ -6,45 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
-
-func jstTime(y int, m time.Month, d, hh, mm int) time.Time {
-	return time.Date(y, m, d, hh, mm, 0, 0, marketcalendar.JST)
-}
-
-func newSessionEngine(t *testing.T, clock *time.Time, md risk.HealthChecker) (*risk.Engine, *repository.KillSwitchRepository) {
-	t.Helper()
-	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
-	limits := testLimits()
-	limits.HeartbeatTimeoutMinutes = 120
-	e := risk.NewEngine(risk.Config{
-		Limits:           limits,
-		KillSwitch:       killSwitch,
-		Settings:         repository.NewRuntimeSettingsRepository(db),
-		Portfolio:        risk.ZeroPortfolioProvider{},
-		MarketDataHealth: md,
-		Calendar:         marketcalendar.TSE,
-		Now:              func() time.Time { return *clock },
-	})
-	return e, killSwitch
-}
-
-func unresolvedReasons(t *testing.T, ks *repository.KillSwitchRepository) []string {
-	t.Helper()
-	events, err := ks.ListUnresolved(context.Background())
-	if err != nil {
-		t.Fatalf("ListUnresolved: %v", err)
-	}
-	var reasons []string
-	for _, ev := range events {
-		reasons = append(reasons, ev.Reason)
-	}
-	return reasons
-}
 
 func TestEngine_SessionGate_HealthAndHeartbeatChecksSkipOffHours(t *testing.T) {
 	clock := jstTime(2026, 10, 3, 10, 0) // Saturday

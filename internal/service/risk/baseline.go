@@ -18,13 +18,19 @@ import (
 // So when Resume resolves one of those events it records the resume time,
 // and the matching limit is then measured only from positions closed after
 // it:
+//
 //   - consecutive_losses: the loss streak (and the cooldown_after_loss gate
 //     derived from the latest loss) restarts from zero at the resume.
 //     The streak otherwise carries across trading days.
+//
 //   - daily_loss_limit: realized loss counts only positions closed after
 //     the resume; the unrealized loss of positions still open always
 //     counts, so a real drawdown still re-fires. The day rollover resets
 //     it anyway.
+//
+//   - fill_discrepancy: orphan fills older than the resume are ignored;
+//     a position whose entry order contradicts it is still checked (the
+//     forced liquidation already closed it).
 //
 // The baselines are independent: resuming from a streak does not forgive
 // the day's realized loss, and vice versa. Resuming from Paused or from a
@@ -32,6 +38,12 @@ import (
 const (
 	settingKeyLossStreakBaselineAt = "system.loss_streak_baseline_at"
 	settingKeyDailyLossBaselineAt  = "system.daily_loss_baseline_at"
+	// settingKeyFillDiscrepancyBaselineAt (issue #185): orphan FILLED
+	// orders (CheckPositionReconciliation's reverse direction) filled
+	// before this time no longer raise fill_discrepancy, so a Resume is
+	// not undone by the same orphan while it is still inside
+	// orphanFillLookback.
+	settingKeyFillDiscrepancyBaselineAt = "system.fill_discrepancy_baseline_at"
 )
 
 // baselineKeyForReason maps a manual-resume limit reason to the baseline
@@ -39,6 +51,7 @@ const (
 var baselineKeyForReason = map[string]string{
 	domain.KillReasonConsecutiveLosses: settingKeyLossStreakBaselineAt,
 	domain.KillReasonDailyLossLimit:    settingKeyDailyLossBaselineAt,
+	domain.KillReasonFillDiscrepancy:   settingKeyFillDiscrepancyBaselineAt,
 }
 
 // baselineAt returns the recorded baseline for key, or the zero time when
