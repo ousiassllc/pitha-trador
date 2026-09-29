@@ -1,0 +1,57 @@
+package organisms
+
+// UpdatePanelProps is UpdatePanel's input. CurrentVersion is the running
+// build's internal/version.Version; CheckedAt is the last check's
+// human-readable finish time, empty before the first check completes.
+type UpdatePanelProps struct {
+	CurrentVersion string
+	CheckedAt      string
+	// DevBuild: the last check was skipped since this is a non-release
+	// build. Failed: the last check errored (details are in the log).
+	DevBuild bool
+	Failed   bool
+	// Available/Version: a newer release exists (UpdateBannerProps).
+	Available bool
+	Version   string
+}
+
+// UpdatePanel renders the Settings screen's アップデート section (issue
+// #76): the running version, the last check's outcome, and a button that
+// runs a check immediately via `POST /system/update-check` (which returns
+// this same fragment, swapped into Settings' `#update-panel`), instead of
+// waiting for the scheduler's startup + every-6-hours checks.
+templ UpdatePanel(props UpdatePanelProps) {
+	<section class="mt-8 flex flex-col gap-2 text-sm text-slate-600" data-testid="update-panel">
+		<h2 class="text-lg font-semibold text-slate-900">アップデート</h2>
+		<p>現在のバージョン: { props.CurrentVersion }</p>
+		<p role="status" data-testid="update-check-result">
+			switch {
+				case props.Available:
+					新バージョン { props.Version } が利用可能です。
+				case props.Failed:
+					アップデートの確認に失敗しました（詳細はログを参照してください）。
+				case props.DevBuild:
+					開発ビルドのため、アップデートの確認は行われません。
+				case props.CheckedAt != "":
+					最新バージョンです。
+				default:
+					まだ確認していません。
+			}
+			if props.CheckedAt != "" {
+				（最終確認: { props.CheckedAt }）
+			}
+		</p>
+		if props.Failed && props.Available {
+			<p class="text-red-700" data-testid="update-check-error">直近の自動更新の準備に失敗しました（詳細はログを参照してください）。</p>
+		}
+		<button
+			class="self-start rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+			type="button"
+			hx-post="/system/update-check"
+			hx-target="#update-panel"
+			hx-swap="innerHTML"
+			hx-disabled-elt="this"
+			data-testid="update-check-button"
+		>今すぐアップデートを確認</button>
+	</section>
+}

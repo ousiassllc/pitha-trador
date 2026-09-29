@@ -88,6 +88,7 @@ func main() {
 		router.WithCalibrationSource(services.Calibration),
 		router.WithBacktestRunner(services.Backtest),
 		router.WithSecretsStore(secretsRepo),
+		router.WithUpdateController(services.Updater),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
 			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,
 			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,

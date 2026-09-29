@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/mod/semver"
 
@@ -78,6 +80,15 @@ type Checker struct {
 	gate        SafeGate
 	httpClient  *http.Client
 	baseURL     string
+
+	// checkMu serializes CheckForUpdate: the scheduler's periodic tick
+	// and the Settings screen's manual "今すぐ確認" (issue #76) may
+	// otherwise download the installer and trigger the quit twice.
+	checkMu sync.Mutex
+
+	// statusMu guards status (Status).
+	statusMu sync.Mutex
+	status   Status
 }
 
 // NewChecker returns a Checker configured by cfg.
@@ -102,10 +113,23 @@ func NewChecker(cfg Config) *Checker {
 // CheckForUpdate runs the full pipeline the package doc comment
 // describes: skip entirely on a non-release ("dev") build, fetch the
 // latest release, semver-compare it against internal/version.Version,
-// check SafeGate.SafeToUpdate, then download+verify the installer.
+// check SafeGate.SafeToUpdate, then download+verify the installer. Every
+// outcome is also recorded for Status (issue #76).
 func (c *Checker) CheckForUpdate(ctx context.Context) (Result, error) {
+	c.checkMu.Lock()
+	defer c.checkMu.Unlock()
+
+	result, err := c.check(ctx)
+	if err != nil {
+		c.setStatusError(err)
+	}
+	return result, err
+}
+
+func (c *Checker) check(ctx context.Context) (Result, error) {
 	if !semver.IsValid(version.Version) {
 		slog.Debug("updater: skipping check on a non-release (dev) build", "version", version.Version)
+		c.setStatus(Status{CheckedAt: time.Now(), DevBuild: true})
 		return Result{}, nil
 	}
 
@@ -117,15 +141,20 @@ func (c *Checker) CheckForUpdate(ctx context.Context) (Result, error) {
 		return Result{}, fmt.Errorf("updater: latest release tag_name %q is not valid semver", release.TagName)
 	}
 	if semver.Compare(release.TagName, version.Version) <= 0 {
-		return Result{}, nil // already up to date
+		c.setStatus(Status{CheckedAt: time.Now()}) // already up to date
+		return Result{}, nil
 	}
 
+	status := Status{CheckedAt: time.Now(), Available: true, Version: release.TagName}
 	safe, reason := c.gate.SafeToUpdate(ctx)
 	if !safe {
 		slog.Info("updater: newer release available but not safe to update yet",
 			"current", version.Version, "latest", release.TagName, "reason", reason)
+		status.Blocked = true
+		c.setStatus(status)
 		return Result{}, nil
 	}
+	c.setStatus(status)
 
 	installerAsset, checksumAsset, err := selectAssets(release.Assets)
 	if err != nil {
@@ -138,6 +167,8 @@ func (c *Checker) CheckForUpdate(ctx context.Context) (Result, error) {
 	}
 
 	slog.Info("updater: new release downloaded and verified", "version", release.TagName, "installer", installerPath)
+	status.Ready = true
+	c.setStatus(status)
 	return Result{Ready: true, Version: release.TagName, InstallerPath: installerPath}, nil
 }
 

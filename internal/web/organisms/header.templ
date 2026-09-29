@@ -36,6 +36,13 @@ import "github.com/ousiassllc/pitha-trador/internal/domain"
 // organisms.SecretsBanner listing any still-unset required key
 // (JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD) with a link to
 // `/settings`, or nothing once every one is configured.
+//
+// `#update-banner` is the same pattern for issue #76's update
+// notification: `GET /system/update-status` (internal/web/handler.
+// UpdateHandler.Status) renders organisms.UpdateBanner when a newer
+// release exists (also re-polled every 60s, and immediately on the
+// `updateStatusChanged` event the manual check response fires), or
+// nothing otherwise - including on cmd/server, which has no updater.
 templ Header() {
 	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
 		<nav class="flex gap-4 text-sm font-medium text-slate-600">
@@ -48,6 +55,14 @@ templ Header() {
 			id="config-banner"
 			hx-get="/system/secrets-status"
 			hx-trigger="load"
+			hx-target="this"
+			hx-swap="innerHTML"
+		></div>
+		<div
+			id="update-banner"
+			class="order-last w-full empty:hidden"
+			hx-get="/system/update-status"
+			hx-trigger="load, every 60s, updateStatusChanged from:body"
 			hx-target="this"
 			hx-swap="innerHTML"
 		></div>
