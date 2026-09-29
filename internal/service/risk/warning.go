@@ -22,10 +22,8 @@ const dailyLossWarningThresholdPct = 0.8
 // since this is a warning rather than a Kill Switch trigger and today's
 // loss itself resets at midnight.
 //
-// A later sub-scope's scheduler wiring calls this periodically (same
-// deferred-wiring precedent as AutoResume/CheckHeartbeatTimeout,
-// autoresume.go); nothing in this build registers that periodic trigger
-// yet.
+// RunPeriodicChecks (monitor.go) calls this every minute via
+// internal/service/scheduler.Scheduler.CheckRisk.
 func (e *Engine) CheckDailyLossWarning(ctx context.Context) error {
 	pct, err := e.portfolio.DailyLossPct(ctx)
 	if err != nil {

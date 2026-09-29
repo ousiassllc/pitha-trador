@@ -12,6 +12,8 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
 // DefaultBaseURL is kabuステーションAPIの既定ローカルエンドポイント
@@ -59,6 +61,9 @@ type Client struct {
 	apiPassword string
 	httpClient  *http.Client
 	status      *StatusTracker
+
+	boardFailures  domain.FailureStreak
+	brokerFailures domain.FailureStreak
 
 	mu    sync.RWMutex
 	token string
@@ -223,6 +228,7 @@ type Board struct {
 func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Board, error) {
 	token, ok := c.Token()
 	if !ok {
+		c.boardFailures.Fail()
 		return Board{}, ErrNoToken
 	}
 
@@ -230,9 +236,11 @@ func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Boa
 	path := fmt.Sprintf("/board/%s@%d", symbol, exchange)
 	if err := c.do(ctx, http.MethodGet, path, token, nil, &board); err != nil {
 		c.status.MarkStale(symbol, err)
+		c.boardFailures.Fail()
 		return Board{}, err
 	}
 	c.status.MarkFresh(symbol, time.Now().UTC())
+	c.boardFailures.Succeed()
 	return board, nil
 }
 
@@ -251,6 +259,7 @@ func (c *Client) do(ctx context.Context, method, path, token string, body, out a
 	start := time.Now()
 	defer func() {
 		attrs := []any{"method", method, "path", path, "duration_ms", time.Since(start).Milliseconds()}
+		c.recordBrokerOutcome(err)
 		if err != nil {
 			slog.Error("marketdata: api call failed", append(attrs, "error", err)...)
 			return

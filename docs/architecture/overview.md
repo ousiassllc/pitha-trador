@@ -307,6 +307,8 @@ sequenceDiagram
     end
 ```
 
+検知（市場データ停止・Jev API異常・Broker API異常・想定外ポジション・約定差異・DB書き込み失敗・日次損失接近）と自動再開の解消監視は、SchedulerのCronトリガー（各1分周期、`WithRiskMonitor`/`WithAutoResumer`）が`risk.Engine.RunPeriodicChecks`/`AutoResume`を呼ぶことで実行する。判定基準の詳細は`requirements/functional.md` FR-RISK-2/FR-RISK-7を参照。
+
 ### 10.4 操作者ハートビート監視（dead-man's switch、Live専用）
 
 ```mermaid

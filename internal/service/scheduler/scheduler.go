@@ -44,6 +44,11 @@ type Scheduler struct {
 	// makes CheckOperatorHeartbeat a no-op, the same deferral
 	// outcomeLabels above already documents.
 	heartbeatChecker HeartbeatChecker
+	// riskMonitor/autoResumer are optional (WithRiskMonitor/
+	// WithAutoResumer): nil values make CheckRisk/AutoResumeKillSwitches
+	// no-ops and skip their Start triggers.
+	riskMonitor RiskMonitor
+	autoResumer AutoResumer
 	// logRotator is optional (WithLogRotator): a nil value makes Start
 	// skip registering the @daily log-archival cron trigger entirely
 	// (non-functional.md §5 "ログは日次ローテーションし").

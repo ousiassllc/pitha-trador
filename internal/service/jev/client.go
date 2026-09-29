@@ -122,6 +122,16 @@ func NewClient(cfg Config) *Client {
 	}
 }
 
+// Healthy implements internal/service/risk.HealthChecker for the
+// jev_api_down Kill Switch (FR-RISK-2 "Jev API連続失敗" trigger, FR-RISK-7
+// auto-resume check): Jev API counts as down while its rolling call error
+// rate is at or above ErrorRateThreshold (errorrate.go, the same signal
+// as the §5.2 Slack alert) and as recovered once the window drops back
+// below it.
+func (c *Client) Healthy(context.Context) (bool, error) {
+	return !c.errorRate.isBreached(), nil
+}
+
 // Scout POSTs req to the Jev Scout endpoint and returns the parsed
 // response together with the total call latency (including retries).
 //

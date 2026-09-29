@@ -65,18 +65,36 @@ type riskRepositories struct {
 	settings   *repository.RuntimeSettingsRepository
 	snapshots  *repository.SnapshotRepository
 	positions  *repository.PositionRepository
+	orders     *repository.OrderRepository
+}
+
+// riskSignals are the live health/failure signals the Risk Engine's
+// FR-RISK-2 detectors poll: the market-data and Jev API HealthCheckers
+// (also FR-RISK-7's auto-resume recovery checks) and the consecutive
+// Broker API/DB write failure streaks.
+type riskSignals struct {
+	marketData risk.HealthChecker
+	jevAPI     risk.HealthChecker
+	brokerAPI  risk.FailureCounter
+	dbWrite    risk.FailureCounter
 }
 
 // newRiskEngine builds the Paper Trading Risk Engine (this build only
 // runs Paper Trading, so config/risk.yaml's paper limits apply).
-func newRiskEngine(limits config.RiskLimits, repos riskRepositories, closer risk.PositionCloser, notifier risk.Notifier) *risk.Engine {
+func newRiskEngine(limits config.RiskLimits, repos riskRepositories, signals riskSignals, closer risk.PositionCloser, notifier risk.Notifier) *risk.Engine {
 	return risk.NewEngine(risk.Config{
-		Limits:     limits,
-		KillSwitch: repos.killSwitch,
-		Settings:   repos.settings,
-		Snapshots:  repos.snapshots,
-		Portfolio:  risk.NewRepositoryPortfolioProvider(repos.positions),
-		Closer:     closer,
-		Notifier:   notifier,
+		Limits:            limits,
+		KillSwitch:        repos.killSwitch,
+		Settings:          repos.settings,
+		Snapshots:         repos.snapshots,
+		Portfolio:         risk.NewRepositoryPortfolioProvider(repos.positions),
+		Positions:         repos.positions,
+		Orders:            repos.orders,
+		MarketDataHealth:  signals.marketData,
+		JevAPIHealth:      signals.jevAPI,
+		BrokerAPIFailures: signals.brokerAPI,
+		DBWriteFailures:   signals.dbWrite,
+		Closer:            closer,
+		Notifier:          notifier,
 	})
 }

@@ -12,11 +12,10 @@ import (
 // AutoResume resolves every unresolved kill_switch_events row whose
 // reason is FR-RISK-7 auto-resumable (market_data_down, jev_api_down,
 // operator_heartbeat_timeout) and whose recovery condition currently
-// holds, returning how many it resolved. A later sub-scope's scheduler
-// wiring calls this periodically (docs/architecture/overview.md §10.3's
-// "発動条件の解消を定期監視"); nothing in this build registers that
-// periodic trigger yet (mirrors internal/service/scheduler.Scheduler.
-// Start's own deferred-wiring precedent for cycles with no producer yet).
+// holds, returning how many it resolved.
+// internal/service/scheduler.Scheduler.AutoResumeKillSwitches
+// (WithAutoResumer) calls this every minute (docs/architecture/
+// overview.md §10.3's "発動条件の解消を定期監視").
 func (e *Engine) AutoResume(ctx context.Context) (int, error) {
 	events, err := e.killSwitch.ListUnresolved(ctx)
 	if err != nil {
@@ -71,20 +70,17 @@ func (e *Engine) recovered(ctx context.Context, reason string) (bool, error) {
 // This is the trigger-side counterpart to recovered's own use of the
 // same HealthChecker for AutoResume's resolution check above - a single
 // health signal drives both halves of FR-RISK-7's market_data_down
-// auto-resume cycle. A later sub-scope's internal/service/marketdata
-// health signal and scheduler wiring calls this periodically
-// (docs/architecture/overview.md §10.3's "日次損失上限/連敗上限/異常検
-// 知を検出"); AlwaysHealthy keeps it inert until that signal exists,
-// same deferred-wiring precedent as CheckHeartbeatTimeout below.
+// auto-resume cycle. internal/service/scheduler.Scheduler.CheckRisk
+// calls it every minute via RunPeriodicChecks (docs/architecture/
+// overview.md §10.3's "日次損失上限/連敗上限/異常検知を検出").
 func (e *Engine) CheckMarketDataHealth(ctx context.Context) error {
 	return e.checkHealthTrigger(ctx, domain.KillReasonMarketDataDown, e.marketDataHealth)
 }
 
 // CheckJevAPIHealth implements FR-RISK-2's Jev API連続失敗 detection: if
 // cfg.JevAPIHealth reports unhealthy, it raises a jev_api_down Kill
-// Switch (idempotently). Same trigger/resolve pairing and deferred-wiring
-// precedent as CheckMarketDataHealth above (a later
-// internal/service/jev sub-scope wires a real HealthChecker in).
+// Switch (idempotently). Same trigger/resolve pairing and periodic
+// caller as CheckMarketDataHealth above.
 func (e *Engine) CheckJevAPIHealth(ctx context.Context) error {
 	return e.checkHealthTrigger(ctx, domain.KillReasonJevAPIDown, e.jevAPIHealth)
 }
@@ -118,11 +114,8 @@ func (e *Engine) RecordHeartbeat(ctx context.Context, at time.Time) error {
 // Switch (idempotently - see triggerIfNotActive).
 // internal/service/scheduler.Scheduler.CheckOperatorHeartbeat
 // (WithHeartbeatChecker) is the periodic caller's entry point (*Engine
-// implements scheduler.HeartbeatChecker directly); actually registering a
-// periodic trigger during 立会時間 in the running app
-// (docs/architecture/overview.md §10.4) is still a later composition-root
-// step, same deferred-wiring precedent as AutoResume above (nothing in
-// this build's cmd/ composes any of Scheduler's periodic methods yet).
+// implements scheduler.HeartbeatChecker directly), run every minute
+// (docs/architecture/overview.md §10.4).
 func (e *Engine) CheckHeartbeatTimeout(ctx context.Context) error {
 	if e.limits.HeartbeatTimeoutMinutes <= 0 {
 		return nil
