@@ -170,3 +170,14 @@ func (n *SlackNotifier) ProposalRolledBack(ctx context.Context, proposal domain.
 	)
 	return n.PostMessage(ctx, text)
 }
+
+// AIStageSkipped implements internal/service/selfimprove.Notifier:
+// overview.md §8 "API失敗時は当該日のSol提案生成/Opusレビューをスキップし、
+// Slack通知のうえ翌営業日に再試行する".
+func (n *SlackNotifier) AIStageSkipped(ctx context.Context, stage string, cause error) error {
+	text := fmt.Sprintf(
+		":warning: 自己改善ループ: %sのAPI呼び出しに失敗したため本日分をスキップしました（翌営業日に再試行）: %v",
+		stage, cause,
+	)
+	return n.PostMessage(ctx, text)
+}

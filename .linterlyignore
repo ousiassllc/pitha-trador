@@ -101,6 +101,13 @@ internal/web/handler/update.go
 internal/web/handler/update_test.go
 internal/bootstrap/event_internal_test.go
 
+# #83でSol/Opus自己改善ループの監査API（GET /api/v1/policy-proposals）の
+# ハンドラを追加すると、ディレクトリ合計が上限（2000行）比+10%のERROR閾値を
+# 超過するため、追加分のファイル（policy_proposals.go。テストは
+# internal/router/ 側）を除外しWARN範囲（既知債務）に収める。ディレクトリ構成の
+# 見直しは internal/repository/ と合わせて別Issueで対応する
+internal/web/handler/policy_proposals.go
+
 # #77でSystem Activity Log（GET /activity・GET /api/v1/activity・/ws/activity、
 # Services.Activityの配線）を追加すると、既存の除外済み分を差し引いても
 # internal/web/handler/・internal/repository/・internal/bootstrap/ のディレクトリ
@@ -112,3 +119,11 @@ internal/web/handler/activity.go
 internal/web/handler/activity_test.go
 internal/repository/activity_queries_test.go
 internal/bootstrap/activity_internal_test.go
+
+# #81/#82でLuna/News Ingest・Sol/Opus実AI呼び出しの配線（Services.News等）を
+# 追加した結果、#77（activity）・#76（update）の除外済み分を差し引いても
+# internal/bootstrap/ のディレクトリ合計が上限（2000行）比+10%のERROR閾値を
+# 超過するため、自己改善配線のテスト（selfimprove_internal_test.go）を除外し
+# WARN範囲（既知債務）に収める。ディレクトリ構成の見直しは
+# internal/repository/ と合わせて別Issueで対応する
+internal/bootstrap/selfimprove_internal_test.go

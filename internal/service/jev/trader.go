@@ -28,14 +28,15 @@ type Trader struct {
 	client    *Client
 	decisions *repository.DecisionRepository
 	rag       *rag.Service
+	news      NewsSource
 }
 
 // NewTrader returns a Trader that calls client, persists decisions via
 // decisions, and builds/indexes the RAG few-shot context via ragService
 // - the same roles Scout's fields play for Jev Scout (functional.md
 // §4.13, FR-RAG-1〜4).
-func NewTrader(client *Client, decisions *repository.DecisionRepository, ragService *rag.Service) *Trader {
-	return &Trader{client: client, decisions: decisions, rag: ragService}
+func NewTrader(client *Client, decisions *repository.DecisionRepository, ragService *rag.Service, opts ...Option) *Trader {
+	return &Trader{client: client, decisions: decisions, rag: ragService, news: newOptions(opts).news}
 }
 
 // Evaluate builds the RAG few-shot context for state (FR-RAG-2, FR-RAG-3),
@@ -52,6 +53,7 @@ func NewTrader(client *Client, decisions *repository.DecisionRepository, ragServ
 // FR-RAG-4's cold-start tolerance extends to any RAG failure, not only
 // an empty index).
 func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutState) (domain.JevDecision, error) {
+	state = withNewsContext(state, t.news)
 	featureInput := ragFeatureInput(state)
 
 	ragContext, err := t.rag.Context(ctx, featureInput, rag.DefaultK)

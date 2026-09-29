@@ -14,7 +14,9 @@ import (
 // EvaluateProposal runs FR-SELFIMPROVE-4's shadow backtest for a pending
 // proposal, has Opus review the comparison, and - on approval - applies
 // it immediately (FR-SELFIMPROVE-5). It returns the approve/reject
-// outcome.
+// outcome. Approval needs both the deterministic thresholds and the Opus
+// API's approval (FR-SELFIMPROVE-9). An Opus API failure returns an
+// *aiStageError for stage "opus" and leaves the proposal pending.
 func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool, error) {
 	proposal, err := g.proposals.Get(ctx, proposalID)
 	if err != nil {
@@ -67,9 +69,15 @@ func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool
 		return false, fmt.Errorf("selfimprove: store backtest result for proposal %d: %w", proposalID, err)
 	}
 
-	approved, reviewJSON, err := g.opus.Review(cmp)
+	approved, reviewJSON, err := g.opus.Review(ctx, assist.OpusReviewInput{
+		RationaleJSON: proposal.RationaleJSON,
+		Changes:       changes,
+		Comparison:    cmp,
+	})
 	if err != nil {
-		return false, fmt.Errorf("selfimprove: opus review for proposal %d: %w", proposalID, err)
+		// The proposal stays pending (its backtest result is already
+		// stored); RunDaily retries the review the next business day.
+		return false, &aiStageError{stage: stageOpus, err: fmt.Errorf("selfimprove: opus review for proposal %d: %w", proposalID, err)}
 	}
 
 	if !approved {

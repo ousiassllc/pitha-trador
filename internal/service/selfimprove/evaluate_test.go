@@ -18,7 +18,7 @@ func TestGovernor_EvaluateProposal_ApprovesAndAppliesWhenCandidateDoesNotWorsenO
 	baseline := baselinePolicyConfig(0.60)
 	source := newUptrendSource(f.instrument.ID, base, baseline)
 	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline,
-		selfimprove.WithNow(func() time.Time { return now }))
+		newFakeAI(t).options(selfimprove.WithNow(func() time.Time { return now }))...)
 
 	changesJSON, err := domain.EncodePolicyChanges([]domain.PolicyChange{
 		{Key: domain.PolicyKeyLongMinProbability, OldValue: `0.60`, NewValue: `0.65`}, // still well under the 0.80-confidence decision
@@ -79,7 +79,7 @@ func TestGovernor_EvaluateProposal_RejectsWhenCandidateEliminatesEveryTrade(t *t
 	baseline := baselinePolicyConfig(0.76)
 	source := newUptrendSource(f.instrument.ID, base, baseline)
 	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline,
-		selfimprove.WithNow(func() time.Time { return now }))
+		newFakeAI(t).options(selfimprove.WithNow(func() time.Time { return now }))...)
 
 	changesJSON, err := domain.EncodePolicyChanges([]domain.PolicyChange{
 		// 0.76 -> 0.81 exceeds the fixture decision's 0.80 confidence:
@@ -123,7 +123,7 @@ func TestGovernor_EvaluateProposal_RejectsAndNeverWritesRiskOrPromptVersionKeys(
 	ctx := context.Background()
 	baseline := baselinePolicyConfig(0.60)
 	source := newUptrendSource(f.instrument.ID, time.Now().UTC(), baseline)
-	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline)
+	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline, newFakeAI(t).options()...)
 
 	for _, key := range []string{"risk.max_position_size", "risk.daily_loss_limit_jpy", "jev.prompt_version"} {
 		changesJSON, err := domain.EncodePolicyChanges([]domain.PolicyChange{

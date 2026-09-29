@@ -22,7 +22,8 @@ type SettingsProps struct {
 }
 
 // SettingsPage is the Settings screen (issue #57 スコープ item 6):
-// JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL input
+// JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL plus the
+// optional LUNA_*/NEWS_FEED_*/SOL_*/OPUS_* AI/News API credentials input
 // form, `POST /settings` (internal/web/handler.SettingsHandler.Save)'d
 // back here. Submitting a field blank clears its stored value (see the
 // note rendered in the form itself) rather than leaving the existing

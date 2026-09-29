@@ -7,6 +7,16 @@
 // internal/repository.ProposalRepository/RuntimeSettingsRepository/
 // PositionRepository together.
 //
+// Sol and Opus are real external LLM API calls (FR-SELFIMPROVE-8/9). The
+// Governor treats their output as untrusted: Sol's proposed changes are
+// validated mechanically (policy.* keys only, change-width caps) and a
+// violation is recorded as status=rejected with
+// review_json.reason=llm_output_out_of_bounds without any backtest or
+// Opus call; Opus can veto a proposal that met the deterministic
+// FR-SELFIMPROVE-4 thresholds but can never approve one that missed them.
+// An API failure skips that stage for the day (Notifier.AIStageSkipped)
+// and RunDaily retries it the next business day.
+//
 // Governor is the only place in this codebase that writes
 // runtime_settings' policy.* keys on Sol/Opus's behalf, and it never
 // accepts an arbitrary runtime_settings key/value pair to do so - only a

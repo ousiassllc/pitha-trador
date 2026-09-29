@@ -94,7 +94,7 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
-- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL入力フォーム。値は再表示せず設定済み状態のみ表示、`POST /settings`で`secrets`テーブルへ暗号化保存する。issue #57）
+- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URLに加え、任意のLUNA_*/NEWS_FEED_*（およびSOL_*/OPUS_*）入力フォーム。値は再表示せず設定済み状態のみ表示、`POST /settings`で`secrets`テーブルへ暗号化保存する。issue #57）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
 
 ### コンポーネントインターフェース規約

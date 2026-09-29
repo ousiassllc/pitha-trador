@@ -40,6 +40,11 @@ func (s *Services) Start(ctx context.Context) error {
 	s.wg.Add(1)
 	go s.candidateRefreshTicker(ctx)
 
+	if s.newsEnabled {
+		s.wg.Add(1)
+		go s.newsIngestTicker(ctx)
+	}
+
 	return nil
 }
 
@@ -53,4 +58,26 @@ func (s *Services) Start(ctx context.Context) error {
 func (s *Services) Stop() {
 	s.Scheduler.Stop()
 	s.wg.Wait()
+}
+
+// newsIngestTicker runs one News Ingest cycle (newsfeed.Service.Poll)
+// every newsPollInterval until ctx is done, starting with an immediate
+// cycle (FR-LUNA-1). A failed cycle is logged and the ticker carries on:
+// News Ingest problems must never affect the rest of the system
+// (FR-LUNA-4).
+func (s *Services) newsIngestTicker(ctx context.Context) {
+	defer s.wg.Done()
+
+	ticker := time.NewTicker(newsPollInterval)
+	defer ticker.Stop()
+	for {
+		if err := s.News.Poll(ctx); err != nil && ctx.Err() == nil {
+			slog.Error("bootstrap: news ingest cycle failed", "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }

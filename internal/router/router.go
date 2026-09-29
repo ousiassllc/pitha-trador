@@ -70,6 +70,7 @@ type options struct {
 	symbolProvider    handler.SymbolProvider
 	symbolRiskParams  handler.SymbolRiskParams
 	calibrationSource handler.CalibrationSource
+	proposalSource    handler.PolicyProposalSource
 	backtestRunner    handler.BacktestRunner
 	activitySource    handler.ActivitySource
 	secretsStore      handler.SecretsStore
@@ -127,6 +128,15 @@ func WithCalibrationSource(source handler.CalibrationSource) Option {
 	return func(o *options) { o.calibrationSource = source }
 }
 
+// WithPolicyProposalSource overrides `GET /api/v1/policy-proposals`'s
+// backing internal/web/handler.PolicyProposalSource. cmd/desktop and
+// cmd/server pass internal/bootstrap's *repository.ProposalRepository; the
+// empty handler.StaticPolicyProposalSource default only serves
+// router-level tests.
+func WithPolicyProposalSource(source handler.PolicyProposalSource) Option {
+	return func(o *options) { o.proposalSource = source }
+}
+
 // WithActivitySource overrides System Activity Log's backing
 // internal/web/handler.ActivitySource (`GET /activity`,
 // `GET /api/v1/activity`, `/ws/activity`). cmd/desktop and cmd/server pass
@@ -177,6 +187,7 @@ func New(opts ...Option) *gin.Engine {
 		symbolProvider:    handler.StaticSymbolProvider{},
 		symbolRiskParams:  defaultSymbolRiskParams,
 		calibrationSource: handler.StaticCalibrationSource{},
+		proposalSource:    handler.StaticPolicyProposalSource{},
 		backtestRunner:    handler.StaticBacktestRunner{},
 		activitySource:    handler.StaticActivitySource{},
 		secretsStore:      handler.StaticSecretsStore{},
@@ -250,6 +261,7 @@ func New(opts ...Option) *gin.Engine {
 	huma.Get(api, "/positions", symbolHandler.APIPositions)
 	huma.Get(api, "/orders", symbolHandler.APIOrders)
 	huma.Get(api, "/calibration", calibrationHandler.APICalibration)
+	huma.Get(api, "/policy-proposals", handler.NewPolicyProposalHandler(o.proposalSource).APIPolicyProposals)
 	huma.Get(api, "/activity", activityHandler.APIActivity)
 
 	return engine

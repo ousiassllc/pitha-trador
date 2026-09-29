@@ -174,6 +174,34 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 }
 ```
 
+### GET /api/v1/policy-proposals
+
+Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読み取り専用API。`policy_proposals`の提案・レビュー・適用・ロールバック履歴を返す。UIページは持たず、外部監視・手動確認用に提供する（実際の外部AI API呼び出しの結果を追跡できるようにするため、`requirements/functional.md` FR-SELFIMPROVE-7〜9）。
+
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `status` | string | `pending`/`approved`/`rejected`/`applied`/`rolled_back`でフィルタ（省略時は全件） |
+| `limit` | integer | 件数上限（既定50、最大200） |
+
+```json
+// Output（抜粋）
+{
+  "items": [
+    {
+      "id": 42,
+      "proposed_at": "2026-09-28T15:00:00Z",
+      "proposed_by": "sol",
+      "status": "applied",
+      "proposed_changes": { "policy.long.min_confidence": 0.68 },
+      "backtest_result": { "expectancy_delta_pct": 2.1, "max_drawdown_delta_pct": -3.4 },
+      "reviewed_by": "opus",
+      "review": { "verdict": "approve", "reason": "..." },
+      "applied_policy_version": "v12"
+    }
+  ]
+}
+```
+
 ### GET /api/v1/activity
 
 System Activity Log向けの直近アクティビティ・キュー状況スナップショット（`requirements/functional.md` §4.15/§5.5）。`jobs`/`jev_decisions`/`kill_switch_events`を集約する読み取り専用API。新規永続テーブルは持たない。
@@ -216,6 +244,7 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 | GET | `/api/v1/orders` | 注文一覧 |
 | GET | `/api/v1/performance` | 実績集計 |
 | GET | `/api/v1/calibration` | Calibrationバケット集計 |
+| GET | `/api/v1/policy-proposals` | Sol/Opus自己改善ループの提案・レビュー履歴（監査用） |
 | POST | `/api/v1/system/pause` | 一時停止 |
 | POST | `/api/v1/system/resume` | 再開 |
 | POST | `/api/v1/system/kill` | Kill Switch発動 |
@@ -248,3 +277,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.2 | 2026-09-29 | §4に`/system/update-status`・`/system/update-panel`・`/system/update-check`を追加 | issue #76実装 |
 | 1.3 | 2026-09-29 | §5 `/api/v1/activity`・§6 `/ws/activity`を追加（System Activity Log画面向け、`requirements/functional.md` §4.15） | 実行中処理を可視化するログ画面の追加要望 |
 | 1.4 | 2026-09-29 | §3に`GET /activity`ページルートを追加 | issue #77実装（System Activity Log） |
+| 1.5 | 2026-09-29 | §5に`GET /api/v1/policy-proposals`（Sol/Opus実AI呼び出しの監査用読み取り専用API）を追加 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |

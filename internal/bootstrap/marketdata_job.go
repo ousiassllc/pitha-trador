@@ -108,8 +108,10 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 // candidate-refresh cycle; otherwise nothing is enqueued (FR-SCAN-2's
 // suppression). Non-candidates are skipped: Jev is only ever consulted for
 // symbols that passed Fast Screener (functional.md §2's main flow).
-// history is snap's prior bars, most recent first. Order-flow/news event
-// sources do not exist in this build, so those two signals stay false.
+// history is snap's prior bars, most recent first. The news signal is
+// News Ingest's per-symbol flag (FR-LUNA-3; consumed here so each new
+// article triggers one re-evaluation); order-flow has no source in this
+// build, so that signal stays false.
 func (s *Services) enqueueEventReevaluation(ctx context.Context, snap domain.Snapshot, history []domain.Snapshot) error {
 	if len(history) == 0 || !s.isCandidate(ctx, snap.InstrumentID) {
 		return nil
@@ -120,7 +122,7 @@ func (s *Services) enqueueEventReevaluation(ctx context.Context, snap domain.Sna
 		VolumeRatioChange:        trigger.VolumeRatioChangeThreshold,
 		SpreadChangeBps:          trigger.SpreadChangeBpsThreshold,
 		OrderbookImbalanceChange: trigger.OrderbookImbalanceChangeThreshold,
-	}, false, false)
+	}, false, s.News.TakeNewsFlag(snap.Symbol))
 	if err := s.Scheduler.EnqueueEventReevaluation(ctx, snap.InstrumentID, snap.Symbol, signal.Triggered(), snap.Timestamp); err != nil {
 		return fmt.Errorf("bootstrap: event-driven reevaluation for %q: %w", snap.Symbol, err)
 	}

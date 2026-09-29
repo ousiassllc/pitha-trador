@@ -251,7 +251,7 @@ Jev Scout/Traderが「今の状態」だけでなく「過去の類似局面で�
 
 ### 4.14 自己改善ループ（Luna / Sol / Opus 連携）
 
-MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として組み込む。「自己学習しながら継続的に改善する」ことを目的とし、高頻度の売買判断（Jev）とは分離した低頻度の振り返り・改善提案・検証・適用ループを構成する。
+MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として組み込む。「自己学習しながら継続的に改善する」ことを目的とし、高頻度の売買判断（Jev）とは分離した低頻度の振り返り・改善提案・検証・適用ループを構成する。Luna/Sol/Opusはいずれも実際の外部AI API呼び出しとして実装する（コード側のルールのみに依存しない、`architecture/overview.md` §8）。
 
 | 役割 | 用途 | 呼び出し頻度 |
 |------|------|------------|
@@ -269,6 +269,8 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 - FR-SELFIMPROVE-5: 承認された提案は新しい`policy_version`として`runtime_settings`に自動適用し、`policy_proposals.status`を`applied`に更新する。却下時は`rejected`として理由を記録する
 - FR-SELFIMPROVE-6: 適用後5営業日相当のExpectancyが適用前より相対20%以上悪化した場合、自動的に直前の`policy_version`へロールバックし、Slack通知する
 - FR-SELFIMPROVE-7: Sol/Opusの提案・レビュー・適用・ロールバックはすべて`policy_proposals`と`runtime_settings`の変更履歴として監査可能な形で保存する
+- FR-SELFIMPROVE-8: Solが生成した`proposed_changes_json`は、`selfimprove`サービスがFR-SELFIMPROVE-2（対象キーは`policy.*`のみ）・FR-SELFIMPROVE-3（変更幅上限）を機械的に検証する。逸脱する提案は`policy_proposals.status=rejected`（`review_json.reason=llm_output_out_of_bounds`）として却下し、LLM出力の内容を無条件に信用しない
+- FR-SELFIMPROVE-9: Opusの承認判定は、既存の決定的シャドーバックテストしきい値（FR-SELFIMPROVE-4）とOpus APIによる定性レビューの両方を満たした場合にのみ`approved`とする。Opus APIは決定的しきい値を満たす提案を追加で却下できる（安全側の拒否権）が、決定的しきい値を満たさない提案を承認へ覆すことはできない
 
 ### 4.15 System Activity Feed
 
@@ -278,6 +280,16 @@ Scheduler/Jev/Risk Engineが「現在何を実行しているか」をUIから�
 - FR-ACT-2: `jobs`の状態遷移、`jev_decisions`の新規登録（Scout/Trader呼び出し）、`kill_switch_events`の発生を時刻順にマージした単一のアクティビティフィードを提供する
 - FR-ACT-3: フィードの1回の取得・配信件数はデフォルト200件、`limit`クエリで最大500件まで指定可能とする。この上限はSystem Activity Log画面向けの表示制限であり、参照元テーブル（`jobs`/`jev_decisions`/`kill_switch_events`）自体の保持期間・行数には影響しない（既存のCalibration・監査用途を継続利用できるようにするため）
 - FR-ACT-4: 新規イベント発生時にWebSocket（`api/endpoints.md` `/ws/activity`）でリアルタイムに配信する。初期表示は`GET /api/v1/activity`のスナップショットを用いる
+
+### 4.16 Luna ニュース分類・News Ingest
+
+News Ingest（`internal/service/newsfeed`）が対象銘柄に関連するニュース見出し・本文を外部ニュースフィードから取得し、Luna（外部AI API）へ送信して市場コンテキストを補強する。永続化は既存カラムの範囲内で行い、新規テーブルは追加しない。
+
+- FR-LUNA-1: News Ingestは`instruments`テーブルの`is_active`銘柄を対象に、設定可能な外部ニュースフィード（`environment/setup.md`の`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`）から見出し・本文を定期取得する
+- FR-LUNA-2: 取得したニュース1件ごとにLuna API（`LUNA_API_KEY`/`LUNA_BASE_URL`）へ送信し、`sentiment`（bullish/bearish/neutral）・`event_type`（決算/業績修正/M&A/規制/その他）・`summary`を受け取る
+- FR-LUNA-3: Luna応答は当該銘柄の直近ニュース文脈としてインメモリキャッシュ（直近N件、TTL付き、DB非永続）に保持し、Jev Scout/Trader呼び出し時に`jev_decisions.state_json`（既存カラム）内の`news_context`フィールドとして注入する。これによりFR-SCAN-1の「ニュースフラグ発生」トリガーを実装する
+- FR-LUNA-4: Luna API失敗時はニュースフラグを立てず、通常のFast Screener/Jevフローに影響を与えない（Jev同様、失敗時は機能低下のみでシステム全体を止めないフェイルセーフ）
+- FR-LUNA-5: Lunaの分類結果はJevの判断そのものを上書きしない。あくまでJev Scout/Traderへの補助的な文脈情報としてのみ用いる（`architecture/overview.md` §8「Lunaは高頻度側の補助コンポーネント」の方針を継続）
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -363,3 +375,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.1 | 2026-09-26 | Risk Engine（§4.7）にPaper/Live別リミット・dead-man's switch（FR-RISK-6）・Kill Switch再開の自動/手動分類（FR-RISK-7）を追加 | Phase 7も含めた完全自動運用への方針変更 |
 | 1.2 | 2026-09-26 | §4.13 Jev RAG（経験ベース文脈拡張）、§4.14 自己改善ループ（Luna/Sol/Opus連携）を追加。Phase 5/6内容とMVP完了条件を更新 | 自己学習による継続的改善を組み込む方針 |
 | 1.3 | 2026-09-29 | UC-13・§4.15 System Activity Feed・§5.5 System Activity Log画面を追加。既存jobs/jev_decisions/kill_switch_eventsを集約する読み取り専用フィードとし、新規永続テーブルは追加しない | 実行中処理を可視化するログ画面の追加要望 |
+| 1.4 | 2026-09-29 | §4.14にFR-SELFIMPROVE-8/9（LLM出力の機械的検証、決定的しきい値とAIレビューの併用）を追加。§4.16 Luna ニュース分類・News Ingest（FR-LUNA-1〜5）を新設。新規テーブルは追加せず既存カラム（jev_decisions.state_json等）を利用 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |

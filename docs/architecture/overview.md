@@ -77,6 +77,7 @@ pitha-trador/
 │   │   │   ├── luna.go
 │   │   │   ├── sol.go
 │   │   │   └── opus.go
+│   │   ├── newsfeed/              # News Ingest: 外部ニュースフィード定期取得→Luna呼び出し（§13）
 │   │   ├── selfimprove/           # Sol提案生成〜Opusレビュー〜適用/ロールバック（§8）
 │   │   ├── activityfeed/          # jobs/jev_decisions/kill_switch_events集約の読み取り専用フィード（System Activity Log向け、§12）
 │   │   └── scheduler/             # 自前Workerプール定義・周期ジョブ登録
@@ -194,12 +195,14 @@ sequenceDiagram
 
     SCHED->>SOL: 直近の負けトレード・Calibration指標を渡し分析依頼
     SOL-->>GOV: 改善提案（rationale + proposed_changes: policy.*キーのみ）
+    GOV->>GOV: 提案の対象キー・変更幅を機械的に検証（FR-SELFIMPROVE-8。逸脱時はstatus=rejectedとして以降の処理をスキップ）
     GOV->>DB: policy_proposals挿入（status=pending）
     GOV->>BT: 直近20営業日相当のシャドーバックテスト実行（提案後しきい値）
     BT-->>GOV: Expectancy / Max Drawdown比較結果
-    GOV->>OPUS: 提案 + シャドーバックテスト結果でレビュー依頼
-    OPUS-->>GOV: 承認 or 却下（review_json）
-    alt 承認（Expectancy非悪化 かつ Max Drawdown悪化が相対10%以内）
+    GOV->>GOV: 決定的しきい値判定（Expectancy非悪化 かつ Max Drawdown悪化が相対10%以内、FR-SELFIMPROVE-4）
+    GOV->>OPUS: 提案 + シャドーバックテスト結果 + 決定的判定結果でレビュー依頼（Opus API、実際の外部AI呼び出し）
+    OPUS-->>GOV: 定性レビュー結果（approve/reject, review_json）
+    alt 決定的しきい値を満たす かつ Opus APIがapprove（FR-SELFIMPROVE-9）
         GOV->>DB: runtime_settings（policy.*）更新、policy_proposals.status=applied
         GOV->>SLACK: 適用を通知
         GOV->>GOV: 適用後5営業日相当のExpectancyを追跡
@@ -207,13 +210,16 @@ sequenceDiagram
             GOV->>DB: 直前policy_versionへロールバック、policy_proposals.status=rolled_back
             GOV->>SLACK: ロールバックを通知
         end
-    else 却下
+    else 却下（決定的しきい値未達 または Opus APIがreject）
         GOV->>DB: policy_proposals.status=rejected
     end
 ```
 
 - Solが変更を提案できる対象は`runtime_settings`の`policy.*`キーに限定する。`risk.*`キーとJevの`prompt_version`は`selfimprove`サービスに書き込みAPIそのものを持たせないことで技術的に強制する（§1 設計方針）
 - Luna（Sense）は本ループとは独立し、高頻度側（Feature Engine/Jev呼び出しの前段）でニュース分類等を提供する補助コンポーネントとして`internal/service/assist/luna.go`に実装する
+- **外部AI API契約（`internal/service/assist`）**: いずれも`POST {BASE_URL}<path>`（`Authorization: Bearer {API_KEY}`、JSON、200以外はエラー扱い）。Sol `/v1/analyze`（リクエスト: 方向別`thresholds`/`calibration`と`constraints`、レスポンス: `{"rationale":{...},"proposed_changes":[{"key","new_value"}]}`。変更なしは空配列）、Opus `/v1/review`（リクエスト: `proposal`/`backtest`/`deterministic`、レスポンス: `{"verdict":"approve|reject","reason":"..."}`）。決定的しきい値を満たさない提案ではOpus APIを呼ばずに却下する。`policy_proposals.review_json`は`verdict`/`approved`/`deterministic_passed`/`llm_reviewed`/`reason`等を含む。
+- 未処理（`pending`）の提案がある日は、Opusレビューの再試行のみ行い新規のSol分析は行わない（同一しきい値への提案の競合防止）
+- Sol/Opusはいずれも`internal/service/assist`のHTTPクライアントを介し、Jevアダプタ（§6）と同様の認証情報の入力経路（Settings画面→`secrets`テーブル、`SOL_API_KEY`/`SOL_BASE_URL`、`OPUS_API_KEY`/`OPUS_BASE_URL`）とリトライ/exponential backoff方針に従う実際の外部AI API呼び出しとして実装する。API失敗時は当該日のSol提案生成/Opusレビューをスキップし、Slack通知のうえ翌営業日に再試行する（銘柄単位の売買判断ではないためnew entry停止のような取引影響は発生しない）
 
 ## 9. Wails統合（デスクトップシェル）
 
@@ -341,6 +347,37 @@ sequenceDiagram
 - 新規イベント（`jobs`の状態遷移、`jev_decisions`挿入、`kill_switch_events`挿入）はrepository層のコミット直後にactivityfeedのイベントバス（プロセス内channel、DB永続化なし）へ通知し、`/ws/activity`購読者へ配信する。プロセス再起動時はイベントバスの未配信分は破棄され、次回`GET /api/v1/activity`のスナップショットから再開する（監査要件はjobs/jev_decisions/kill_switch_events自体が引き続き担う）
 - フィード件数上限（既定200、最大500）はAPI/WS配信側の制限であり、参照元テーブルの保持期間・行数（`architecture/er.md`各テーブルの運用注記）には影響しない
 
+## 13. Luna ニュース分類・News Ingest連携
+
+`requirements/functional.md` §4.16（FR-LUNA-1〜5）の実装詳細。
+
+```mermaid
+sequenceDiagram
+    participant NF as News Ingest (internal/service/newsfeed)
+    participant FEED as 外部ニュースフィード
+    participant LUNA as Luna Adapter (internal/service/assist/luna.go)
+    participant CACHE as インメモリキャッシュ（直近N件、TTL付き）
+    participant SCOUT as Jev Scout
+
+    loop 定期ポーリング
+        NF->>FEED: 対象銘柄（instruments.is_active）関連ニュース取得
+        FEED-->>NF: 見出し・本文
+        NF->>LUNA: ニュース本文（Luna API、実際の外部AI呼び出し）
+        LUNA-->>NF: sentiment / event_type / summary
+        NF->>CACHE: 銘柄別に格納（TTL経過分は破棄）
+    end
+    SCOUT->>CACHE: 対象銘柄のnews_context取得
+    CACHE-->>SCOUT: 直近sentiment/event_type/summary（該当なしは空）
+    SCOUT->>SCOUT: jev_decisions.state_jsonへnews_contextとして注入
+```
+
+- 永続化は`jev_decisions.state_json`（既存カラム）のみを利用し、新規テーブル・マイグレーションは追加しない（キャッシュはプロセスメモリ内のみでDB非永続）
+- **認証情報の入力経路**: `LUNA_API_KEY`/`LUNA_BASE_URL`、`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は§5・§6と同じくSettings画面（`/settings`）経由で`secrets`テーブルへ保存する
+- **外部API契約**: ニュースフィードは`GET {NEWS_FEED_URL}?symbol={銘柄コード}`（`Authorization: Bearer {NEWS_FEED_API_KEY}`）で`{"items":[{"id","headline","body","published_at"}]}`を返す。Lunaは`POST {LUNA_BASE_URL}/v1/classify`（リクエスト: `symbol`/`headline`/`body`/`published_at`、レスポンス: `{"sentiment":"bullish|bearish|neutral","event_type":"決算|業績修正|M&A|規制|その他","summary":"..."}`）。値域外の応答は失敗として扱う
+- News Ingestは1分周期でポーリングし、記事ID（無ければ見出し）単位で重複排除して1件ずつLunaへ送信する。キャッシュは銘柄ごと直近5件・TTL 6時間（公開時刻基準）。新規に分類された記事は銘柄単位のニュースフラグを立て、Fast Screener候補であればイベント再評価（FR-SCAN-1）で1回だけ消費される
+- LUNA/NEWS_FEEDのどちらかが未設定の間はNews Ingestを起動しない（`news_context`は注入されずニュースフラグも立たない）。SOL/OPUS未設定時は各段階を毎日スキップする
+- Luna/News Ingest API失敗時はニュースフラグを立てず、Fast Screener/Jevの通常フローに影響を与えない（FR-LUNA-4、Jevと同様のフェイルセーフ）
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -355,3 +392,5 @@ sequenceDiagram
 | 1.7 | 2026-09-28 | §9に config/strategy.yaml・config/risk.yaml・静的アセットの`go:embed`埋め込みと4段階の解決優先順位（明示パス→環境変数→実行ファイル隣接→埋め込み既定値）を追記。`runtime.Caller(0)`ベースの`repoRoot`/`staticDir`（ビルドマシンの絶対パス依存で配布先では動作しなかった）を廃止 | issue #59実装（配布可能な.exeへの対応） |
 | 1.8 | 2026-09-29 | §9に自動アップデートの検知状態（`Checker.Status()`）とUI通知・手動確認導線を追記 | issue #76実装 |
 | 1.9 | 2026-09-29 | §4に`Activity Feed`コンポーネント（`internal/service/activityfeed`）を追加、§12 System Activity Feed連携を新設。既存jobs/jev_decisions/kill_switch_eventsの読み取り専用集約で新規テーブルなし | 実行中処理を可視化するログ画面の追加要望 |
+| 1.10 | 2026-09-29 | §8のシーケンス図にFR-SELFIMPROVE-8（LLM出力の機械的検証）・FR-SELFIMPROVE-9（決定的しきい値とOpus APIレビューの併用）を反映。§13 Luna ニュース分類・News Ingest連携を新設、`internal/service/newsfeed`を追加 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
+| 1.11 | 2026-09-29 | §8・§13に外部AI API/ニュースフィードの契約（エンドポイント・リクエスト/レスポンス・キャッシュ/ポーリング仕様・未設定時の挙動）を追記 | #81/#82実装で確定した外部API契約の仕様書反映 |

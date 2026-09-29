@@ -31,12 +31,37 @@ const (
 	// it is empty (Paper Trading has no real-money exposure to alert on,
 	// and a dev machine without a webhook must still be able to start).
 	KeySlackWebhookURL = "SLACK_WEBHOOK_URL"
+	// KeyLunaAPIKey/KeyLunaBaseURL supply internal/service/assist's Luna
+	// adapter (ニュース分類, FR-LUNA-2). KeyNewsFeedURL/KeyNewsFeedAPIKey
+	// supply internal/service/newsfeed's external news feed client
+	// (FR-LUNA-1). All four are optional like KeySlackWebhookURL: with
+	// any unset, News Ingest simply does not run and no news flag is ever
+	// raised (FR-LUNA-4).
+	KeyLunaAPIKey     = "LUNA_API_KEY"
+	KeyLunaBaseURL    = "LUNA_BASE_URL"
+	KeyNewsFeedURL    = "NEWS_FEED_URL"
+	KeyNewsFeedAPIKey = "NEWS_FEED_API_KEY"
+	// KeySolAPIKey/KeySolBaseURL and KeyOpusAPIKey/KeyOpusBaseURL supply
+	// internal/service/assist's Sol (daily analysis) and Opus (proposal
+	// review) adapters (FR-SELFIMPROVE-8/9). Optional like the Luna keys:
+	// with either pair unset the matching self-improvement stage is
+	// skipped each day and no proposal can be approved without Opus.
+	KeySolAPIKey   = "SOL_API_KEY"
+	KeySolBaseURL  = "SOL_BASE_URL"
+	KeyOpusAPIKey  = "OPUS_API_KEY"
+	KeyOpusBaseURL = "OPUS_BASE_URL"
 )
 
 // requiredSecretKeys are the Settings fields whose absence
 // LoadSecretsFromDB reports in its missing return value. KeySlackWebhookURL
-// is intentionally excluded - see Secrets.SlackWebhookURL.
+// and the Luna/News Feed keys are intentionally excluded - see
+// optionalSecretKeys.
 var requiredSecretKeys = []string{KeyJevAPIKey, KeyJevBaseURL, KeyKabuAPIPassword}
+
+// optionalSecretKeys are loaded like requiredSecretKeys but never reported
+// as missing.
+var optionalSecretKeys = []string{KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey,
+	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL}
 
 // Secrets holds every credential internal/bootstrap.BuildServices passes
 // into internal/service/marketdata.Config and internal/service/jev.Config
@@ -51,6 +76,18 @@ type Secrets struct {
 	// SlackWebhookURL is optional (see KeySlackWebhookURL); empty means
 	// "no Slack channel".
 	SlackWebhookURL string
+	// LunaAPIKey/LunaBaseURL and NewsFeedURL/NewsFeedAPIKey are optional
+	// (see KeyLunaAPIKey); empty means News Ingest/Luna are disabled.
+	LunaAPIKey     string
+	LunaBaseURL    string
+	NewsFeedURL    string
+	NewsFeedAPIKey string
+	// SolAPIKey/SolBaseURL and OpusAPIKey/OpusBaseURL are optional (see
+	// KeySolAPIKey).
+	SolAPIKey   string
+	SolBaseURL  string
+	OpusAPIKey  string
+	OpusBaseURL string
 }
 
 // SecretsRepository is the subset of internal/repository.SecretsRepository's
@@ -82,8 +119,8 @@ type SecretsRepository interface {
 // still wires the value it was given exactly once). err is non-nil only
 // for an actual repository/DB failure.
 func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []string, error) {
-	values := make(map[string]string, len(requiredSecretKeys)+1)
-	for _, key := range append(append([]string{}, requiredSecretKeys...), KeySlackWebhookURL) {
+	values := make(map[string]string, len(requiredSecretKeys)+len(optionalSecretKeys))
+	for _, key := range append(append([]string{}, requiredSecretKeys...), optionalSecretKeys...) {
 		value, _, err := repo.Get(ctx, key)
 		if err != nil {
 			return Secrets{}, nil, fmt.Errorf("config: load secret %q: %w", key, err)
@@ -103,5 +140,13 @@ func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []
 		JevBaseURL:      values[KeyJevBaseURL],
 		KabuAPIPassword: values[KeyKabuAPIPassword],
 		SlackWebhookURL: values[KeySlackWebhookURL],
+		LunaAPIKey:      values[KeyLunaAPIKey],
+		LunaBaseURL:     values[KeyLunaBaseURL],
+		NewsFeedURL:     values[KeyNewsFeedURL],
+		NewsFeedAPIKey:  values[KeyNewsFeedAPIKey],
+		SolAPIKey:       values[KeySolAPIKey],
+		SolBaseURL:      values[KeySolBaseURL],
+		OpusAPIKey:      values[KeyOpusAPIKey],
+		OpusBaseURL:     values[KeyOpusBaseURL],
 	}, missing, nil
 }

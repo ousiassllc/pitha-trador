@@ -100,3 +100,21 @@ func TestEntryQualityRank_OrdersWorstToBest(t *testing.T) {
 		t.Fatalf("EntryQualityRank(unknown) ok = true, want false")
 	}
 }
+
+func TestValidatePolicyChanges_RejectsOutOfRangeConfidenceAndDuplicateKeys(t *testing.T) {
+	tests := map[string][]domain.PolicyChange{
+		"above 1": {{Key: domain.PolicyKeyLongMinProbability, OldValue: "0.98", NewValue: "1.02"}},
+		"below 0": {{Key: domain.PolicyKeyLongMaxToxicFlow, OldValue: "0.02", NewValue: "-0.02"}},
+		"duplicate key": {
+			{Key: domain.PolicyKeyLongMinProbability, OldValue: "0.6", NewValue: "0.62"},
+			{Key: domain.PolicyKeyLongMinProbability, OldValue: "0.6", NewValue: "0.64"},
+		},
+	}
+	for name, changes := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := domain.ValidatePolicyChanges(changes); err == nil {
+				t.Errorf("ValidatePolicyChanges(%+v) = nil, want an error", changes)
+			}
+		})
+	}
+}

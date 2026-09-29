@@ -56,3 +56,8 @@ func (n *LogNotifier) ProposalRolledBack(ctx context.Context, proposal domain.Po
 	n.logger.WarnContext(ctx, "alert: policy proposal rolled back", "proposal_id", proposal.ID, "reason", reason)
 	return nil
 }
+
+func (n *LogNotifier) AIStageSkipped(ctx context.Context, stage string, cause error) error {
+	n.logger.WarnContext(ctx, "alert: self-improvement AI stage skipped, retry next business day", "stage", stage, "error", cause)
+	return nil
+}

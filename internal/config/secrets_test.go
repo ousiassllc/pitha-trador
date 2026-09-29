@@ -120,3 +120,41 @@ func TestLoadSecretsFromDB_PropagatesRepositoryError(t *testing.T) {
 		t.Fatalf("LoadSecretsFromDB error = %v, want it to wrap %v", err, wantErr)
 	}
 }
+
+func TestLoadSecretsFromDB_AIAndNewsFeedKeysAreOptionalAndLoaded(t *testing.T) {
+	repo := fakeSecretsRepo{
+		config.KeyJevAPIKey:       "jev-key",
+		config.KeyJevBaseURL:      "https://jev.example.com",
+		config.KeyKabuAPIPassword: "kabu-pass",
+	}
+
+	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Errorf("missing = %v, want empty (Luna/News Feed keys must not count)", missing)
+	}
+	if secrets.LunaAPIKey != "" || secrets.NewsFeedURL != "" {
+		t.Errorf("unset optional keys loaded as %+v, want empty", secrets)
+	}
+
+	repo[config.KeyLunaAPIKey] = "luna-key"
+	repo[config.KeyLunaBaseURL] = "https://luna.example.com"
+	repo[config.KeyNewsFeedURL] = "https://news.example.com/feed"
+	repo[config.KeyNewsFeedAPIKey] = "news-key"
+	repo[config.KeySolAPIKey] = "sol-key"
+	repo[config.KeySolBaseURL] = "https://sol.example.com"
+	repo[config.KeyOpusAPIKey] = "opus-key"
+	repo[config.KeyOpusBaseURL] = "https://opus.example.com"
+	secrets, _, err = config.LoadSecretsFromDB(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("LoadSecretsFromDB: %v", err)
+	}
+	if secrets.LunaAPIKey != "luna-key" || secrets.LunaBaseURL != "https://luna.example.com" ||
+		secrets.NewsFeedURL != "https://news.example.com/feed" || secrets.NewsFeedAPIKey != "news-key" ||
+		secrets.SolAPIKey != "sol-key" || secrets.SolBaseURL != "https://sol.example.com" ||
+		secrets.OpusAPIKey != "opus-key" || secrets.OpusBaseURL != "https://opus.example.com" {
+		t.Errorf("secrets = %+v, want the configured Luna/News Feed values", secrets)
+	}
+}
