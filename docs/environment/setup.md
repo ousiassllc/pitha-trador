@@ -171,8 +171,16 @@ language: ja
 `.linterlyignore`:
 
 ```text
+# 実行時ログ（ソースコードではない）
+**/logs/**
+
 # 自動生成コード（Templが生成するGoコード。手書きソースコードの除外は基本追加しない）
 *_templ.go
+
+# 既知債務（手書きソース）: ディレクトリ2000行上限の暫定除外（issue #134 で追跡）。
+# internal/repository/・internal/web/handler/・internal/bootstrap/・
+# internal/service/risk/ の個別ファイルのみ。新規追加は禁止
+# （必要になった時点でサブパッケージ分割を先に行う）
 ```
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
