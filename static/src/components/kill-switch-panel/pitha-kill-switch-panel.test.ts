@@ -123,6 +123,22 @@ describe('pitha-kill-switch-panel', () => {
     expect(buttons).not.toContain('Resume');
   });
 
+  // Tailwind does not cross the shadow boundary (issue #145): the panel's
+  // own styles must reach the shadow root and make Kill look dangerous.
+  test('styles the Kill button distinctly from Pause inside the shadow root', async () => {
+    const { el } = await mount('running');
+
+    const [pause, kill] = ['Pause', 'Kill'].map((label) =>
+      Array.from(el.shadowRoot?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === label,
+      ),
+    );
+    expect(pause && kill).toBeTruthy();
+    const killBg = getComputedStyle(kill as Element).backgroundColor;
+    expect(killBg).not.toBe('');
+    expect(killBg).not.toBe(getComputedStyle(pause as Element).backgroundColor);
+  });
+
   test('renders Resume instead of Pause/Kill when already paused', async () => {
     const { el } = await mount('paused');
 

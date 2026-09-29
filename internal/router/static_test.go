@@ -1,6 +1,7 @@
 package router_test
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	staticassets "github.com/ousiassllc/pitha-trador/static/src"
 )
 
 func TestNew_StaticRouteServesVendoredAssets(t *testing.T) {
@@ -39,6 +41,21 @@ func TestNew_StaticRouteServesHTMXErrorsBundle(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+// The production esbuild output is go:embed'ed and served; sourcemaps are
+// dev-only (`--watch`) so the binary neither bloats nor exposes the TS
+// sources (issue #146). `make test` rebuilds via `make generate` first.
+func TestEmbeddedStaticAssetsContainNoSourcemaps(t *testing.T) {
+	err := fs.WalkDir(staticassets.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && strings.HasSuffix(path, ".map") && !strings.HasPrefix(path, "dist/vendor/") {
+			t.Errorf("embedded static asset %s is a sourcemap; production esbuild output must not emit them", path)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatalf("WalkDir: %v", err)
 	}
 }
 

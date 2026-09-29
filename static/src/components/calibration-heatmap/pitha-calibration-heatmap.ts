@@ -12,11 +12,12 @@ import {
   LineStyle,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { html, LitElement } from 'lit';
+import { css, html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
+import { buttonStyles, noticeStyles } from '../lib/styles';
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `buckets[]` item
 // shape (internal/web/handler.calibrationBucketOutput).
@@ -60,6 +61,63 @@ function heatmapColor(directionAccuracy: number): string {
 
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
+  // Shadow DOM: Tailwind does not reach in here, so style locally.
+  static override styles = [
+    buttonStyles,
+    noticeStyles,
+    css`
+      :host {
+        display: block;
+      }
+      .pitha-calibration-heatmap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .pitha-calibration-heatmap-chart {
+        width: 100%;
+        height: ${CHART_HEIGHT}px;
+      }
+      .pitha-calibration-heatmap button {
+        align-self: flex-start;
+      }
+      .pitha-calibration-heatmap-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+        gap: 0.5rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .pitha-calibration-heatmap-cell {
+        display: flex;
+        flex-direction: column;
+        border-radius: 0.375rem;
+        padding: 0.5rem;
+        font-size: 0.75rem;
+        color: #0f172a;
+      }
+      .pitha-calibration-heatmap-cell .accuracy {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      .pitha-calibration-heatmap-summary {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.25rem 1rem;
+        margin: 0;
+        font-size: 0.875rem;
+      }
+      .pitha-calibration-heatmap-summary dt {
+        color: #475569;
+      }
+      .pitha-calibration-heatmap-summary dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+    `,
+  ];
+
   @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 
   @state() private buckets: CalibrationBucket[] = [];
@@ -92,9 +150,9 @@ export class PithaCalibrationHeatmap extends LitElement {
     const container = this.containerRef.value;
     if (!container) return;
 
+    // autoSize: follow the container (height is fixed in `static styles`).
     this.chart = createChart(container, {
-      width: container.clientWidth || 600,
-      height: CHART_HEIGHT,
+      autoSize: true,
       timeScale: { visible: false },
     });
     this.perfectSeries = this.chart.addLineSeries({

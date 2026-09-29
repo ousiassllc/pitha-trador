@@ -99,7 +99,7 @@ sequenceDiagram
     UI->>SG: 任意のリクエスト（例: GET /scanner）
     SG->>DB: JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDの有無を確認
     alt いずれか未設定（または読み出し失敗）
-        SG-->>UI: 302 /setup
+        SG-->>UI: 302 /setup（HTMXは204+HX-Redirect、/api/v1は503 JSON、WebSocketは403）
         UI->>SET: GET /setup
         UI->>SET: POST /settings/:key（`SecretFieldRow`の保存。`/setup`・`/static/...`と同じくガード対象外）
         SET->>DB: 暗号化保存

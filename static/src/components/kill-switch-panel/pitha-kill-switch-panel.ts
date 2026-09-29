@@ -14,11 +14,12 @@
 // `systemStateChanged` so Header's HTMX-driven StatusDot
 // (organisms.Header) re-fetches and stays in sync (HTMX↔Lit boundary:
 // Lit notifies via CustomEvent, HTMX reacts via hx-trigger).
-import { html, LitElement } from 'lit';
+import { css, html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get, post } from '../lib/api';
 import { logger } from '../lib/logger';
 import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { buttonStyles, noticeStyles } from '../lib/styles';
 import { renderWsDisconnected } from '../lib/ws-status';
 
 export type SystemStatus = 'running' | 'paused' | 'killed';
@@ -45,6 +46,50 @@ const KILL_CONFIRM_MESSAGE = 'Kill Switchを発動しますか？新規エント
 
 @customElement('pitha-kill-switch-panel')
 export class PithaKillSwitchPanel extends LitElement {
+  // Shadow DOM: Tailwind does not reach in here, so style locally. Kill is
+  // red so the dangerous action stands apart from Pause / Resume.
+  static override styles = [
+    buttonStyles,
+    noticeStyles,
+    css`
+      .pitha-kill-switch-panel {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .pitha-kill-switch-panel-status {
+        border-radius: 9999px;
+        background: #e2e8f0;
+        padding: 0.125rem 0.625rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+      [data-status='running'] .pitha-kill-switch-panel-status {
+        background: #dcfce7;
+        color: #166534;
+      }
+      [data-status='paused'] .pitha-kill-switch-panel-status {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      [data-status='killed'] .pitha-kill-switch-panel-status {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      button.pitha-kill-switch-panel-kill {
+        border-color: #b91c1c;
+        background: #dc2626;
+        color: #ffffff;
+        font-weight: 600;
+      }
+      button.pitha-kill-switch-panel-kill:hover:not(:disabled) {
+        background: #b91c1c;
+      }
+    `,
+  ];
+
   // Injected by organisms.KillSwitchPanel ('' while the server could not
   // read the state); refreshed from the server's responses afterwards.
   @property({ type: String }) status: SystemStatus | '' = '';
@@ -167,7 +212,7 @@ export class PithaKillSwitchPanel extends LitElement {
         <span class="pitha-kill-switch-panel-status">${this.status}</span>
         ${this.canPause ? html`<button type="button" ?disabled=${this.busy} @click=${this.onPause}>Pause</button>` : ''}
         ${this.canResume ? html`<button type="button" ?disabled=${this.busy} @click=${this.onResume}>Resume</button>` : ''}
-        ${this.canKill ? html`<button type="button" ?disabled=${this.busy} @click=${this.onKill}>Kill</button>` : ''}
+        ${this.canKill ? html`<button type="button" class="pitha-kill-switch-panel-kill" ?disabled=${this.busy} @click=${this.onKill}>Kill</button>` : ''}
         ${renderWsDisconnected(this.wsStatus)}
         ${this.error ? html`<p class="pitha-kill-switch-panel-error" role="alert">${this.error}</p>` : ''}
       </div>

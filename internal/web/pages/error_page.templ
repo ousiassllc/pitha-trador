@@ -1,0 +1,23 @@
+package pages
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+)
+
+// ErrorPage is the full-page error screen SSR handlers render instead of an
+// empty-bodied status (issue #143): layout.Shell (Header included) around
+// the status code and a fixed, user-facing message. message MUST be a
+// fixed string, never err.Error() - internal detail (SQL, paths) belongs in
+// the slog line, not on screen.
+templ ErrorPage(status int, message string) {
+	@layout.Shell(strconv.Itoa(status) + " " + http.StatusText(status)) {
+		<section class="flex flex-col gap-3" data-testid="error-page">
+			<h1 class="text-2xl font-bold text-slate-900">{ strconv.Itoa(status) } { http.StatusText(status) }</h1>
+			<p class="text-sm text-slate-700" role="alert">{ message }</p>
+			<p><a class="text-sm text-blue-700 underline" href="/scanner">Scanner に戻る</a></p>
+		</section>
+	}
+}

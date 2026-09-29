@@ -12,11 +12,12 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { html, LitElement, type PropertyValues } from 'lit';
+import { css, html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
+import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient } from '../lib/ws';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/symbols/{symbol}/candles`
@@ -61,6 +62,20 @@ function toUTCTimestamp(iso: string): UTCTimestamp {
 
 @customElement('pitha-price-chart')
 export class PithaPriceChart extends LitElement {
+  // Shadow DOM: Tailwind does not reach in here, so style locally.
+  static override styles = [
+    noticeStyles,
+    css`
+      :host {
+        display: block;
+      }
+      .pitha-price-chart-container {
+        width: 100%;
+        height: ${CHART_HEIGHT}px;
+      }
+    `,
+  ];
+
   @property({ type: String, attribute: 'symbol' }) symbol = '';
   @property({ type: String, attribute: 'candles-url' }) candlesUrl = '';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
@@ -97,10 +112,10 @@ export class PithaPriceChart extends LitElement {
     const container = this.containerRef.value;
     if (!container) return;
 
-    this.chart = createChart(container, {
-      width: container.clientWidth || 600,
-      height: CHART_HEIGHT,
-    });
+    // autoSize makes the chart follow its container (the CSS below fixes the
+    // container's height, and width is 100% of the host); it ignores
+    // explicit width/height options.
+    this.chart = createChart(container, { autoSize: true });
     this.candleSeries = this.chart.addCandlestickSeries();
     this.vwapSeries = this.chart.addLineSeries({ color: '#2962ff', lineWidth: 1 });
     this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', color: '#9ca3af' });
