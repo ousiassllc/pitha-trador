@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
@@ -99,6 +100,7 @@ type Services struct {
 	Policy        *policy.Engine
 	Risk          *risk.Engine
 	Execution     *execution.Engine
+	Insight       *insight.Reader
 	Calibration   *calibration.Service
 	Backtest      *BacktestSource
 	Activity      *activityfeed.Service
@@ -255,6 +257,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Policy:        policyEngine,
 		Risk:          riskEngine,
 		Execution:     executionEngine,
+		Insight:       insight.NewReader(executionEngine, instruments, signals, positions),
 		Calibration:   calibrationService,
 		Governor:      governor,
 		Backtest:      backtestSource,

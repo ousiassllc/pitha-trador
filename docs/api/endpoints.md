@@ -136,11 +136,33 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
 ### GET /api/v1/symbols/{symbol}/decisions
 
-Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）。
+Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）。新しい順。未登録銘柄は404。
+
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `limit` | integer | 件数上限（既定100） |
+
+出力は`{"symbol": "7203", "items": [...]}`。各itemは`id`/`symbol`/`timestamp`（RFC3339）/`decision_type`（`scout`/`trader`）/`direction`/`confidence`/`regime`/`entry_quality`/`toxic_flow`/`liquidity_stressed`/`continuation_probability`/`question_version`/`model_id`/`latency_ms`。
+
+`direction`〜`continuation_probability`は`decision_type`が`trader`の行のみ値を持ち、`scout`行では`null`。
 
 ### GET /api/v1/signals / GET /api/v1/signals/{symbol}
 
-`trade_signals`の一覧・銘柄別履歴（`risk_passed`, `reject_reason`含む）。
+`trade_signals`の一覧・銘柄別履歴（`risk_passed`, `reject_reason`含む）。新しい順。`/signals/{symbol}`の未登録銘柄は404。クエリ `limit`（既定100）。
+
+```json
+// Output（抜粋）
+{
+  "items": [
+    {
+      "id": 3, "symbol": "7203", "timestamp": "2026-09-27T09:31:00Z",
+      "direction": "LONG", "score": 0.74, "entry_price_reference": 2831.5,
+      "policy_version": "v1", "risk_passed": false, "reject_reason": "spread_too_wide",
+      "jev_decision_id": 2
+    }
+  ]
+}
+```
 
 ### GET /api/v1/positions
 
@@ -161,6 +183,8 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 
 ### GET /api/v1/performance
 
+全クローズ済みポジション（`positions.closed_at`あり）の実績集計。`total_pnl`/`daily_pnl`は`realized_pnl`の合計（`daily_pnl`はJST当日0時以降にクローズしたもの）。`win_rate`/`expectancy`/`max_drawdown_pct`はバックテスト（`internal/service/backtest.Aggregate`）と同じ定義で、各ポジションのエントリー約定額に対する損益率（%）から算出する。`profit_factor`は総利益÷総損失（損失なしは`null`）、`sharpe_ref`/`sortino_ref`はトレードごとリターンの平均÷標準偏差／下方偏差（年率換算なし、算出不能時は`null`）、`signal_count`はLONG/SHORTの`trade_signals`件数。
+
 ```json
 // Output（抜粋）
 {
@@ -173,6 +197,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
   "average_hold_time_minutes": 14.2,
   "sharpe_ref": 1.1,
   "sortino_ref": 1.6,
+  "trade_count": 12,
   "signal_count": 342
 }
 ```
@@ -302,3 +327,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.6 | 2026-09-29 | §3に`GET /settings`、§4に`POST`/`DELETE /settings/:key`・`GET /system/secrets-status`を追加（一括`POST /settings`は廃止しフィールド単位の保存・削除へ変更） | issue #79実装 |
 | 1.7 | 2026-09-29 | §1にSetup Guard、§3に`GET /setup`を追加。§4 `GET /system/secrets-status`を任意キーのみの案内へ縮小 | issue #80実装 |
 | 1.8 | 2026-09-29 | §3 `/performance` に入力上限（`*_days`≤366・範囲≤1830日・Fold≤1000で400）と実行タイムアウト（60秒で503）を追記 | issue #128実装 |
+| 1.9 | 2026-09-29 | §5 `/symbols/{symbol}/decisions`・`/signals`・`/signals/{symbol}`・`/performance`の出力スキーマ・クエリ・集計定義を追記（実装済み） | issue #92実装 |

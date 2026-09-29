@@ -188,3 +188,68 @@ func TestSignalRepository_ListByInstrument_MostRecentFirstAndRespectsLimit(t *te
 		t.Fatalf("ListByInstrument()[1].Timestamp = %v, want second most recent", got[1].Timestamp)
 	}
 }
+
+func TestSignalRepository_ListRecent_SpansInstrumentsMostRecentFirstAndRespectsLimit(t *testing.T) {
+	f := newSignalRepoFixture(t)
+	ctx := context.Background()
+	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+
+	other, err := repository.NewInstrumentRepository(f.db).Create(ctx, domain.Instrument{
+		Symbol: "6758", Name: "ソニーグループ", Market: "TSE Prime", IsActive: true,
+	})
+	if err != nil {
+		t.Fatalf("create second instrument: %v", err)
+	}
+
+	insert := func(instrumentID int64, symbol string, offset time.Duration) {
+		t.Helper()
+		_, err := f.signals.Insert(ctx, domain.TradeSignal{
+			InstrumentID: instrumentID, Symbol: symbol, Timestamp: base.Add(offset),
+			Direction: domain.JevDirectionNone, PolicyVersion: "policy-v1",
+		})
+		if err != nil {
+			t.Fatalf("Insert(%s, %v): %v", symbol, offset, err)
+		}
+	}
+	insert(f.instrumentID, "7203", 0)
+	insert(other.ID, "6758", time.Minute)
+	insert(f.instrumentID, "7203", 2*time.Minute)
+
+	got, err := f.signals.ListRecent(ctx, 2)
+	if err != nil {
+		t.Fatalf("ListRecent: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(ListRecent()) = %d, want 2 (limit)", len(got))
+	}
+	if got[0].Symbol != "7203" || !got[0].Timestamp.Equal(base.Add(2*time.Minute)) {
+		t.Fatalf("ListRecent()[0] = %s@%v, want 7203 at most recent", got[0].Symbol, got[0].Timestamp)
+	}
+	if got[1].Symbol != "6758" || !got[1].Timestamp.Equal(base.Add(time.Minute)) {
+		t.Fatalf("ListRecent()[1] = %s@%v, want 6758 second most recent", got[1].Symbol, got[1].Timestamp)
+	}
+}
+
+func TestSignalRepository_CountDirectional_ExcludesNoneSignals(t *testing.T) {
+	f := newSignalRepoFixture(t)
+	ctx := context.Background()
+	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+
+	for i, dir := range []string{domain.JevDirectionLong, domain.JevDirectionShort, domain.JevDirectionNone, domain.JevDirectionNone} {
+		_, err := f.signals.Insert(ctx, domain.TradeSignal{
+			InstrumentID: f.instrumentID, Symbol: "7203", Timestamp: base.Add(time.Duration(i) * time.Minute),
+			Direction: dir, PolicyVersion: "policy-v1",
+		})
+		if err != nil {
+			t.Fatalf("Insert(%s): %v", dir, err)
+		}
+	}
+
+	got, err := f.signals.CountDirectional(ctx)
+	if err != nil {
+		t.Fatalf("CountDirectional: %v", err)
+	}
+	if got != 2 {
+		t.Fatalf("CountDirectional() = %d, want 2 (LONG+SHORT only)", got)
+	}
+}
