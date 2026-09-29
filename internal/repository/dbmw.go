@@ -108,7 +108,7 @@ func logDBCall(query string, start time.Time, err error) {
 var DBWriteFailures = &domain.FailureStreak{}
 
 // recordDBWrite feeds one Exec outcome into DBWriteFailures. Only genuine
-// storage failures (busy/locked/read-only/IO/full/corrupt) count: a
+// storage failures (busy/locked/read-only/IO/full/cantopen/corrupt/notadb) count: a
 // constraint violation or malformed statement is an application-level
 // error, not evidence the database cannot be written, and a cancelled
 // caller context is not a database fault at all.

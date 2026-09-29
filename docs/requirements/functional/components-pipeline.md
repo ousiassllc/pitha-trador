@@ -50,8 +50,8 @@ screen_score =
 | ポジション保有銘柄 | 5〜15秒ごと |
 
 - FR-SCAN-1: 以下のいずれかを満たした銘柄は通常周期を待たず再評価する: 1分リターン急変、出来高急増、スプレッド急拡大、板インバランス急変、VWAPクロス、高値/安値ブレイク、約定フロー急変（直近2バーの`trade_flow_imbalance`の差の絶対値が`config/strategy.yaml`の`scan.event_trigger.trade_flow_imbalance_change_threshold`以上。どちらかが欠損の場合は無信号）、ニュースフラグ発生
-- FR-SCAN-2（再評価抑制）: `abs(return_1m_change) < threshold AND volume_ratio_change < threshold AND spread_change < threshold AND no_event` の場合はJev呼び出しをスキップし、APIコストとレイテンシを削減する
-  - 各thresholdは`config/strategy.yaml`の`scan.event_trigger.*`（`return_1m_change_threshold` / `volume_ratio_change_threshold` / `spread_change_bps_threshold` / `orderbook_imbalance_change_threshold` / `trade_flow_imbalance_change_threshold`）で設定する。判定は`abs(変化) >= threshold`のため、thresholdが0以下だと全バーでFR-SCAN-1が発火しFR-SCAN-2が無効化される。キー欠落（新キー追加前の古い`strategy.yaml`等）や0以下の値は設定ローダー（`LoadStrategy` / `LoadStrategyBytes`）が同梱既定値（`config/strategy.yaml`の値）で補完し、警告ログを出す
+- FR-SCAN-2（再評価抑制）: `abs(return_1m) < threshold AND abs(volume_ratio_5m) < threshold AND abs(spread_change) < threshold AND no_event` の場合はJev呼び出しをスキップし、APIコストとレイテンシを削減する
+  - 各thresholdは`config/strategy.yaml`の`scan.event_trigger.*`（`return_1m_change_threshold` / `volume_ratio_change_threshold` / `spread_change_bps_threshold` / `orderbook_imbalance_change_threshold` / `trade_flow_imbalance_change_threshold`）で設定する。判定は`abs(値) >= threshold`で、`return_1m_change_threshold`は1分リターン(`return_1m`)の絶対値、`volume_ratio_change_threshold`は5分出来高比率(`volume_ratio_5m`)の絶対値（前バーとの差ではなく現在値の水準判定。`volume_ratio_5m`は通常1.0前後の比率のため既定2.0は「5分出来高が平均の2倍以上」を意味する）、`spread_change_bps_threshold` / `orderbook_imbalance_change_threshold` / `trade_flow_imbalance_change_threshold`は直近2バーの差の絶対値と比較する。したがって、thresholdが0以下だと全バーでFR-SCAN-1が発火しFR-SCAN-2が無効化される。キー欠落（新キー追加前の古い`strategy.yaml`等）や0以下の値は設定ローダー（`LoadStrategy` / `LoadStrategyBytes`）が同梱既定値（`config/strategy.yaml`の値）で補完し、警告ログを出す
 
 ### 4.4 Jev Scout
 
@@ -123,7 +123,7 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
 - market_data_down: kabuステーションAPIの板取得（`GetBoard`）が5回連続で失敗（成功1回で復旧、自動再開）
 - jev_api_down: Jev APIの直近呼び出しエラー率がしきい値（既定50%、直近20件、最小5件）以上（しきい値未満に戻るか、5分間呼び出しが無ければ復旧、自動再開）。Slack通知（§5.2）と同じ信号を使う
 - broker_api_error: kabuステーションAPIがHTTP 5xxを5回連続で返す（手動再開のみ）。4xx・通信エラーは対象外（通信エラーは市場データ停止側で扱う）
-- db_write_failure: SQLiteの書き込みがストレージ起因（BUSY/LOCKED/READONLY/IOERR/FULL/CANTOPEN/CORRUPT）で5回連続失敗（手動再開のみ）。制約違反は対象外
+- db_write_failure: SQLiteの書き込みがストレージ起因（BUSY/LOCKED/READONLY/IOERR/FULL/CANTOPEN/CORRUPT/NOTADB。NOTADBはDBファイルがSQLite形式でない状態で、破損の一種として扱う）で5回連続失敗（手動再開のみ）。制約違反は対象外
 - unexpected_position / fill_discrepancy: Paper Tradingでは外部Brokerが無いため、保有中ポジションを起点となる`paper_orders`の約定記録と突合する。起点注文が存在しない・未約定・銘柄/売買方向が不一致なら`unexpected_position`、約定数量・約定価格がポジションと不一致、または指値を超えた約定なら`fill_discrepancy`（手動再開のみ）。逆方向の照合として、直近15分内（約定直後の1分は猶予）にFILLEDとなった注文がどのポジションのEntry/Exit注文にもなっていない場合も`fill_discrepancy`とする
 - cooldown_after_loss: クールダウンはRisk Engineの時間ベースの新規取引ゲート（FR-RISK-1、`kill_switch_events`には記録しない）であり、経過で自動的に解除される
 - daily_loss_limit / consecutive_losses: 新規シグナルに対するRisk Engineの判定（`Check`）に加え、この1分周期の検知でも同じ判定（再開ベースライン考慮）を行う。シグナルが出なくても、日次損失（含み損込み）が上限に達した、または連敗上限に達した時点でKill Switchの発動・通知・保有ポジション強制決済（FR-RISK-3）を行う（手動再開のみ）

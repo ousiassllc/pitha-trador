@@ -41,8 +41,11 @@ type ScanConfig struct {
 // functional.md §4.3 fixes no numeric default for these - unlike Fast
 // Screener/Risk's thresholds - so config/strategy.yaml's values are this
 // project's own initial tuning pass, adjustable post-backtest like every
-// other threshold in this file. Detect fires on abs(change) >= threshold,
-// so an unset (0) threshold would fire on every bar; the loaders replace
+// other threshold in this file. Detect compares Return1mChangeThreshold
+// with abs(return_1m) and VolumeRatioChangeThreshold with
+// abs(volume_ratio_5m) - current levels, not bar-to-bar deltas - and the
+// spread/orderbook/trade-flow thresholds with abs(curr - prev). Either way it
+// fires on >= threshold, so an unset (0) threshold would fire on every bar; the loaders replace
 // unset/non-positive values with the shipped defaults
 // (withEventTriggerDefaults).
 type EventTriggerConfig struct {
