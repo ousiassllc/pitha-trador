@@ -57,6 +57,10 @@ templ SettingsPage(props SettingsProps) {
 			}
 			<button class="self-start rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" type="submit">保存</button>
 		</form>
+		// Filled in by `GET /system/update-panel` (organisms.UpdatePanel)
+		// on load, and swapped in place by its "今すぐアップデートを確認"
+		// button; stays empty on cmd/server (no updater wired).
+		<div id="update-panel" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 	}
 }
 

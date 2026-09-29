@@ -1,0 +1,41 @@
+package organisms
+
+// UpdateBannerProps is UpdateBanner's input, mirroring the fields of
+// internal/service/updater.Status the banner needs (organisms stay
+// decoupled from internal/service, like SecretsBanner takes a plain
+// []string).
+type UpdateBannerProps struct {
+	// Available is true while a release newer than the running version
+	// exists; Version is that release's tag_name.
+	Available bool
+	Version   string
+	// Blocked is true while installing it is held back by the updater's
+	// safety gate (open positions / Kill Switch active / recent order).
+	Blocked bool
+	// Ready is true once the installer was downloaded and verified, i.e.
+	// the app is about to restart itself.
+	Ready bool
+}
+
+// UpdateBanner renders the 全ページ共通アップデート通知 (issue #76):
+// Header's `#update-banner` fetches it via `GET /system/update-status`
+// (hx-trigger="load", then periodically and on `updateStatusChanged`),
+// the same self-correcting pattern `#config-banner` uses for
+// SecretsBanner. It renders nothing unless a newer release exists.
+templ UpdateBanner(props UpdateBannerProps) {
+	if props.Available {
+		<div class="rounded-md border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-800" role="status" data-testid="update-banner">
+			<p>
+				新バージョン { props.Version } が利用可能です。
+				switch {
+					case props.Ready:
+						ダウンロードが完了しました。まもなく自動的に再起動して更新します。
+					case props.Blocked:
+						ポジション解消・Kill Switch解除・直近発注から5分経過の安全条件が揃い次第、自動的に更新・再起動されます。
+					default:
+						自動更新の準備をしています。
+				}
+			</p>
+		</div>
+	}
+}

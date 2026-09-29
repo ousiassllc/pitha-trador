@@ -72,6 +72,7 @@ type options struct {
 	calibrationSource handler.CalibrationSource
 	backtestRunner    handler.BacktestRunner
 	secretsStore      handler.SecretsStore
+	updateController  handler.UpdateController
 }
 
 // Option configures New.
@@ -142,6 +143,16 @@ func WithSecretsStore(store handler.SecretsStore) Option {
 	return func(o *options) { o.secretsStore = store }
 }
 
+// WithUpdateController enables the update notification routes (`GET
+// /system/update-status`, `GET /system/update-panel`, `POST
+// /system/update-check`, issue #76) backed by controller. cmd/desktop
+// passes internal/bootstrap's updater.SchedulerAdapter; without it (cmd/
+// server, which never self-updates) the two GET routes render nothing and
+// the POST route 404s.
+func WithUpdateController(controller handler.UpdateController) Option {
+	return func(o *options) { o.updateController = controller }
+}
+
 // New builds and returns the shared Gin engine: the placeholder root
 // page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
 // the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
@@ -202,6 +213,11 @@ func New(opts ...Option) *gin.Engine {
 	engine.GET("/settings", settingsHandler.Page)
 	engine.POST("/settings", settingsHandler.Save)
 	engine.GET("/system/secrets-status", settingsHandler.Status)
+
+	updateHandler := handler.NewUpdateHandler(o.updateController)
+	engine.GET("/system/update-status", updateHandler.Status)
+	engine.GET("/system/update-panel", updateHandler.Panel)
+	engine.POST("/system/update-check", updateHandler.Check)
 
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at

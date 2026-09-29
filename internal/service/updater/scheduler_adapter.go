@@ -34,3 +34,9 @@ func (a SchedulerAdapter) CheckForUpdate(ctx context.Context) error {
 	}
 	return nil
 }
+
+// Status returns Checker's most recent check outcome (issue #76), for the
+// UI's update banner/Settings panel.
+func (a SchedulerAdapter) Status() Status {
+	return a.Checker.Status()
+}

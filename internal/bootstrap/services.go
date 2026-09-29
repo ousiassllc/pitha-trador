@@ -95,6 +95,7 @@ type Services struct {
 	Governor      *selfimprove.Governor
 
 	Scheduler *scheduler.Scheduler
+	Updater   *updater.SchedulerAdapter // nil on cmd/server (issue #76)
 
 	strategy *config.StrategyConfig
 	wg       sync.WaitGroup
@@ -107,10 +108,10 @@ type Services struct {
 // outcome-labeling, analytics). notifiers are entrypoint-specific extra
 // Risk Engine alert channels (cmd/desktop's Wails App; cmd/server none),
 // and autoUpdate (issue #65) wires internal/service/updater's periodic
-// self-update check onto Scheduler when non-nil (cmd/desktop only). It
-// performs no I/O itself (no DB queries beyond what the repository
-// constructors below do, which is none - they only hold *sql.DB) and
-// starts no goroutine; see (*Services).Start.
+// self-update check onto Scheduler when non-nil (cmd/desktop only), also
+// exposed as Services.Updater for the UI (issue #76). It performs no I/O
+// itself (the repository constructors only hold *sql.DB) and starts no
+// goroutine; see (*Services).Start.
 func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quitter, notifiers ...risk.Notifier) (*Services, error) {
 	instruments := repository.NewInstrumentRepository(state.DB)
 	snapshots := repository.NewSnapshotRepository(state.DB)
@@ -174,10 +175,12 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		scheduler.WithHeartbeatChecker(riskEngine),
 		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
 	}
+	var updateAdapter *updater.SchedulerAdapter
 	if autoUpdate != nil { // cmd/desktop only (issue #65); cmd/server passes nil
 		gate := updater.SafeGate{Positions: risk.NewRepositoryPortfolioProvider(positions), State: riskEngine, Orders: executionEngine}
 		checker := updater.NewChecker(updater.Config{Owner: "ousiassllc", Repo: "pitha-trador", Gate: gate})
-		schedOpts = append(schedOpts, scheduler.WithUpdateChecker(updater.SchedulerAdapter{Checker: checker, Quitter: autoUpdate}))
+		updateAdapter = &updater.SchedulerAdapter{Checker: checker, Quitter: autoUpdate}
+		schedOpts = append(schedOpts, scheduler.WithUpdateChecker(updateAdapter))
 	}
 	sched := scheduler.New(jobs, instruments, schedOpts...)
 
@@ -206,6 +209,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Governor:      governor,
 		Backtest:      backtestSource,
 		Scheduler:     sched,
+		Updater:       updateAdapter,
 		strategy:      state.Strategy,
 	}
 
