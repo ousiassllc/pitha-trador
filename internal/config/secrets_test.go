@@ -158,3 +158,23 @@ func TestLoadSecretsFromDB_AIAndNewsFeedKeysAreOptionalAndLoaded(t *testing.T) {
 		t.Errorf("secrets = %+v, want the configured Luna/News Feed values", secrets)
 	}
 }
+
+func TestIsAllowedSecretKey_AcceptsEveryConfigKeyAndNothingElse(t *testing.T) {
+	for _, key := range []string{
+		config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyKabuAPIPassword, config.KeySlackWebhookURL,
+		config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey,
+		config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
+	} {
+		if !config.IsAllowedSecretKey(key) {
+			t.Errorf("IsAllowedSecretKey(%q) = false, want true", key)
+		}
+	}
+	for _, key := range []string{"", "jev_api_key", "PITHA_ENCRYPTION_KEY", "JEV_API_KEY ", "../JEV_API_KEY"} {
+		if config.IsAllowedSecretKey(key) {
+			t.Errorf("IsAllowedSecretKey(%q) = true, want false", key)
+		}
+	}
+	if got := len(config.AllowedSecretKeys()); got != 12 {
+		t.Errorf("len(AllowedSecretKeys()) = %d, want 12", got)
+	}
+}

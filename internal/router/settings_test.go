@@ -25,11 +25,12 @@ func (f fakeSecretsStore) Get(_ context.Context, key string) (string, bool, erro
 }
 
 func (f fakeSecretsStore) Set(_ context.Context, key, plaintext string) error {
-	if plaintext == "" {
-		delete(f, key)
-		return nil
-	}
 	f[key] = plaintext
+	return nil
+}
+
+func (f fakeSecretsStore) Delete(_ context.Context, key string) error {
+	delete(f, key)
 	return nil
 }
 
@@ -49,22 +50,52 @@ func TestNew_SettingsPageRouteIsRegistered(t *testing.T) {
 	}
 }
 
-func TestNew_SettingsSaveRouteUsesWithSecretsStoreOption(t *testing.T) {
+func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	store := fakeSecretsStore{}
+	store := fakeSecretsStore{"KABU_API_PASSWORD": "kabu"}
 	engine := router.New(router.WithSecretsStore(store))
 
-	form := url.Values{"JEV_API_KEY": {"new-jev-key"}}
-	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(form.Encode()))
+	form := url.Values{"value": {"new-jev-key"}}
+	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
+		t.Fatalf("POST status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if store["JEV_API_KEY"] != "new-jev-key" {
-		t.Fatalf("WithSecretsStore's store was not written by POST /settings: %v", store)
+	if store["JEV_API_KEY"] != "new-jev-key" || store["KABU_API_PASSWORD"] != "kabu" {
+		t.Fatalf("POST /settings/JEV_API_KEY did not write only that key: %v", store)
+	}
+
+	rec = httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DELETE status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if _, ok := store["JEV_API_KEY"]; ok || store["KABU_API_PASSWORD"] != "kabu" {
+		t.Fatalf("DELETE /settings/JEV_API_KEY did not remove only that key: %v", store)
+	}
+
+	rec = httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/NOT_A_KEY", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("DELETE unknown key status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestNew_BulkSettingsPostIsGone(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := fakeSecretsStore{}
+	engine := router.New(router.WithSecretsStore(store))
+
+	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader("JEV_API_KEY=x"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound || len(store) != 0 {
+		t.Fatalf("POST /settings = %d with store %v, want 404 and no writes", rec.Code, store)
 	}
 }
 

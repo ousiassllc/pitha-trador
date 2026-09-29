@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -66,7 +67,7 @@ func TestSecretsRepository_Set_OverwritesExistingKey(t *testing.T) {
 	}
 }
 
-func TestSecretsRepository_Set_EmptyPlaintextClearsTheKey(t *testing.T) {
+func TestSecretsRepository_Set_RejectsEmptyPlaintextAndKeepsStoredValue(t *testing.T) {
 	db := newTestDB(t)
 	repo := repository.NewSecretsRepository(db)
 	ctx := context.Background()
@@ -74,16 +75,41 @@ func TestSecretsRepository_Set_EmptyPlaintextClearsTheKey(t *testing.T) {
 	if err := repo.Set(ctx, "SLACK_WEBHOOK_URL", "https://hooks.slack.com/services/T/B/X"); err != nil {
 		t.Fatalf("first Set: %v", err)
 	}
-	if err := repo.Set(ctx, "SLACK_WEBHOOK_URL", ""); err != nil {
-		t.Fatalf("clearing Set: %v", err)
+	if err := repo.Set(ctx, "SLACK_WEBHOOK_URL", ""); !errors.Is(err, repository.ErrEmptySecret) {
+		t.Fatalf("empty Set error = %v, want repository.ErrEmptySecret", err)
 	}
 
-	_, ok, err := repo.Get(ctx, "SLACK_WEBHOOK_URL")
+	value, ok, err := repo.Get(ctx, "SLACK_WEBHOOK_URL")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if ok {
-		t.Fatalf("Get: ok = true after clearing with an empty Set, want false")
+	if !ok || value != "https://hooks.slack.com/services/T/B/X" {
+		t.Fatalf("Get after rejected empty Set: value = %q, ok = %v, want the original value kept", value, ok)
+	}
+}
+
+func TestSecretsRepository_Delete_RemovesOnlyTheGivenKey(t *testing.T) {
+	db := newTestDB(t)
+	repo := repository.NewSecretsRepository(db)
+	ctx := context.Background()
+
+	for key, value := range map[string]string{"SLACK_WEBHOOK_URL": "https://hooks.example.com", "JEV_API_KEY": "jev-key"} {
+		if err := repo.Set(ctx, key, value); err != nil {
+			t.Fatalf("Set %s: %v", key, err)
+		}
+	}
+	if err := repo.Delete(ctx, "SLACK_WEBHOOK_URL"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if err := repo.Delete(ctx, "SLACK_WEBHOOK_URL"); err != nil {
+		t.Fatalf("Delete of an already-unset key: %v", err)
+	}
+
+	if _, ok, err := repo.Get(ctx, "SLACK_WEBHOOK_URL"); err != nil || ok {
+		t.Fatalf("Get deleted key: ok = %v, err = %v, want false, nil", ok, err)
+	}
+	if value, ok, err := repo.Get(ctx, "JEV_API_KEY"); err != nil || !ok || value != "jev-key" {
+		t.Fatalf("Get untouched key: value = %q, ok = %v, err = %v, want jev-key, true, nil", value, ok, err)
 	}
 }
 

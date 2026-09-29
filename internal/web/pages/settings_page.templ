@@ -1,75 +1,37 @@
 package pages
 
-import "github.com/ousiassllc/pitha-trador/internal/web/layout"
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+)
 
-// SettingsField mirrors one secrets-table row the Settings screen
-// manages: Key is the DB row key (config.KeyJevAPIKey etc., also used as
-// this field's `<input name>`), Label is the human-readable heading, and
-// Configured reports whether a value is currently stored. `GET
-// /settings` never re-displays the value itself, only whether one
-// exists (issue #57's decision).
-type SettingsField struct {
-	Key        string
-	Label      string
-	Configured bool
-}
-
-// SettingsProps is SettingsPage's input. Saved is true right after a
-// successful `POST /settings` (internal/web/handler.SettingsHandler.Save).
+// SettingsProps is SettingsPage's input: one SecretFieldRow per managed
+// key (internal/web/handler.SettingsHandler.Page).
 type SettingsProps struct {
-	Fields []SettingsField
-	Saved  bool
+	Fields []molecules.SecretFieldRowProps
 }
 
-// SettingsPage is the Settings screen (issue #57 スコープ item 6):
-// JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL plus the
-// optional LUNA_*/NEWS_FEED_*/SOL_*/OPUS_* AI/News API credentials input
-// form, `POST /settings` (internal/web/handler.SettingsHandler.Save)'d
-// back here. Submitting a field blank clears its stored value (see the
-// note rendered in the form itself) rather than leaving the existing
-// value untouched - internal/repository.SecretsRepository.Set's own doc
-// comment records this choice.
+// SettingsPage is the Settings screen (issue #57 スコープ item 6, issue
+// #79): JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL plus
+// the optional LUNA_*/NEWS_FEED_*/SOL_*/OPUS_* AI/News API credentials,
+// each as its own molecules.SecretFieldRow with an independent save
+// (`POST /settings/:key`) and delete (`DELETE /settings/:key`) form
+// (internal/web/handler.SettingsHandler.Save/Delete) - a blank or
+// untouched field can never clear another field's stored value.
 templ SettingsPage(props SettingsProps) {
 	@layout.Shell("Settings") {
 		<h1 class="text-2xl font-bold text-slate-900">Settings</h1>
-		if props.Saved {
-			<p class="mt-4 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="settings-saved">保存しました。反映にはアプリの再起動が必要です。</p>
-		}
-		<form class="mt-4 flex flex-col gap-4" method="post" action="/settings" data-testid="settings-form">
+		<div class="mt-4 flex flex-col gap-4" data-testid="settings-form">
 			<p class="text-sm text-slate-600">
-				空欄のまま保存すると、その項目は未設定に戻ります。既存の値を維持したい場合は同じ値を再入力してください（保存済みの値はセキュリティのため画面上に表示されません）。
+				項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。保存・削除の反映にはアプリの再起動が必要です。
 			</p>
 			for _, field := range props.Fields {
-				<label class="flex flex-col gap-1 text-sm text-slate-600">
-					<span class="flex items-center gap-2">
-						{ field.Label }
-						if field.Configured {
-							<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600" data-testid={ "configured-" + field.Key }>(設定済み)</span>
-						}
-					</span>
-					<input
-						class="rounded-md border border-slate-300 px-3 py-1"
-						type="password"
-						name={ field.Key }
-						autocomplete="off"
-						placeholder={ settingsPlaceholder(field.Configured) }
-					/>
-				</label>
+				@molecules.SecretFieldRow(field)
 			}
-			<button class="self-start rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" type="submit">保存</button>
-		</form>
+		</div>
 		// Filled in by `GET /system/update-panel` (organisms.UpdatePanel)
 		// on load, and swapped in place by its "今すぐアップデートを確認"
 		// button; stays empty on cmd/server (no updater wired).
 		<div id="update-panel" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 	}
-}
-
-// settingsPlaceholder hints at each field's current state without ever
-// rendering the stored value itself.
-func settingsPlaceholder(configured bool) string {
-	if configured {
-		return "変更する場合のみ入力"
-	}
-	return "未設定"
 }
