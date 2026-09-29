@@ -15,7 +15,7 @@ func hostGuardEngine(t *testing.T, allowed ...string) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(middleware.HostGuard(allowed), middleware.NewSession().Handler())
+	engine.Use(middleware.HostGuard(allowed), middleware.NewSession(nil).Handler())
 	engine.GET("/page", func(c *gin.Context) { c.String(http.StatusOK, middleware.CSRFToken(c.Request.Context())) })
 	engine.GET("/static/x", func(c *gin.Context) { c.String(http.StatusOK, "asset") })
 	engine.GET("/ws", func(c *gin.Context) { c.String(http.StatusOK, "upgraded") })

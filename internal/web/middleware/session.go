@@ -65,11 +65,14 @@ func Authenticated(ctx context.Context) bool {
 type Session struct {
 	sessionToken string
 	csrfToken    string
+	renderError  ErrorPageRenderer
 }
 
-// NewSession generates a fresh Session with new random tokens.
-func NewSession() *Session {
-	return &Session{sessionToken: rand.Text(), csrfToken: rand.Text()}
+// NewSession generates a fresh Session with new random tokens. render (may
+// be nil) draws the 403 page for plain page navigations and no-JS form
+// submissions (issue #171); all other clients get the plain-text 403.
+func NewSession(render ErrorPageRenderer) *Session {
+	return &Session{sessionToken: rand.Text(), csrfToken: rand.Text(), renderError: render}
 }
 
 // Handler returns Gin middleware enforcing the Session on every route
@@ -107,10 +110,10 @@ func (s *Session) Handler() gin.HandlerFunc {
 				s.setCookie(c)
 			}
 		case !hasCookie:
-			forbidStale(c, "missing or invalid session cookie")
+			s.forbidStale(c, "missing or invalid session cookie")
 			return
 		case !isSafeMethod(c.Request.Method) && !tokensEqual(submittedCSRFToken(c.Request), s.csrfToken):
-			forbidStale(c, "missing or invalid CSRF token")
+			s.forbidStale(c, "missing or invalid CSRF token")
 			return
 		}
 		c.Next()
@@ -129,11 +132,14 @@ func forbid(c *gin.Context, reason string) {
 }
 
 // forbidStale is forbid plus CSRFRejectHeader, for rejections a reload of
-// the page (which delivers a fresh cookie and CSRF token) resolves.
-func forbidStale(c *gin.Context, reason string) {
+// the page (which delivers a fresh cookie and CSRF token) resolves. A page
+// navigation gets the rendered 403 page (issue #171) instead of plain text.
+func (s *Session) forbidStale(c *gin.Context, reason string) {
 	c.Header(CSRFRejectHeader, CSRFRejectStale)
-	forbid(c, reason)
+	respondError(c, s.renderError, http.StatusForbidden, staleSessionMessage, func() { forbid(c, reason) })
 }
+
+const staleSessionMessage = "セッションが無効または期限切れです。ページを再読み込みしてください。"
 
 // submittedCSRFToken is the CSRFHeader value, or when there is none the
 // CSRFFormField of a urlencoded body.

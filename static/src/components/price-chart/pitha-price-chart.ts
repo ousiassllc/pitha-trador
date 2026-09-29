@@ -202,11 +202,14 @@ export class PithaPriceChart extends LitElement {
     `;
   }
 
+  // `changed.get(...) !== undefined` skips the first update cycle, whose
+  // recorded old value is undefined: firstUpdated has already loaded the
+  // candles and opened the socket, and redoing both would double them.
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.has('candlesUrl') && this.hasUpdated && this.candleSeries) {
+    if (changed.get('candlesUrl') !== undefined && this.candleSeries) {
       this.loadInitial();
     }
-    if (changed.has('wsUrl') && this.wsClient) {
+    if (changed.get('wsUrl') !== undefined && this.wsClient) {
       this.wsClient.close();
       this.subscribeWs();
     }

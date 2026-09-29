@@ -170,4 +170,16 @@ describe('pitha-scanner-table', () => {
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain('500');
   });
+
+  // The first update cycle used to close and reopen the socket (issue #170).
+  test('opens a single WebSocket on mount and reconnects once when ws-url changes', async () => {
+    const { el } = await mount([item()]);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    el.setAttribute('ws-url', '/ws/scanner-2');
+    await el.updateComplete;
+
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(FakeWebSocket.instances[1].url).toContain('/ws/scanner-2');
+  });
 });

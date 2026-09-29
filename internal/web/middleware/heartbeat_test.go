@@ -37,7 +37,7 @@ func heartbeatEngineWith(t *testing.T, heartbeat gin.HandlerFunc) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(middleware.NewSession().Handler())
+	engine.Use(middleware.NewSession(nil).Handler())
 	engine.Use(heartbeat)
 	ok := func(c *gin.Context) { c.Status(http.StatusOK) }
 	engine.GET("/page", func(c *gin.Context) { c.String(http.StatusOK, middleware.CSRFToken(c.Request.Context())) })

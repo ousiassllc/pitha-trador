@@ -268,8 +268,10 @@ export class PithaActivityFeed extends LitElement {
     `;
   }
 
+  // Skip the first update cycle (old value undefined): connectedCallback
+  // already subscribed, and reconnecting would open a second socket.
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.has('wsUrl') && this.wsClient) {
+    if (changed.get('wsUrl') !== undefined && this.wsClient) {
       this.wsClient.close();
       this.subscribeWs();
     }

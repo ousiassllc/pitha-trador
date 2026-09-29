@@ -103,3 +103,36 @@ func TestNew_PagesEmbedCSRFTokenForHTMXAndLit(t *testing.T) {
 		}
 	}
 }
+
+// A cookie-less form POST from a page navigation used to get a bare
+// "forbidden: ..." text body; it now gets the ErrorPage (issue #171) while
+// keeping the stale-session marker header. Non-navigation requests are
+// unchanged.
+func TestNew_SessionRejectionOfPageNavigationRendersErrorPage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStateKilled}))
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", nil)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `data-testid="error-page"`) {
+		t.Errorf("body has no error page: %q", rec.Body.String())
+	}
+	if got := rec.Header().Get(middleware.CSRFRejectHeader); got != middleware.CSRFRejectStale {
+		t.Errorf("%s = %q, want %q", middleware.CSRFRejectHeader, got, middleware.CSRFRejectStale)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", nil)
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("Accept", "text/html")
+	rec = httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || strings.Contains(rec.Body.String(), `data-testid="error-page"`) {
+		t.Errorf("htmx: status=%d body=%q, want 403 without the error page", rec.Code, rec.Body.String())
+	}
+}
