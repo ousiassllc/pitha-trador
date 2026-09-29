@@ -237,7 +237,8 @@ func New(opts ...Option) *gin.Engine {
 
 	settingsHandler := handler.NewSettingsHandler(o.secretsStore)
 	engine.GET("/settings", settingsHandler.Page)
-	engine.POST("/settings", settingsHandler.Save)
+	engine.POST("/settings/:key", settingsHandler.Save)
+	engine.DELETE("/settings/:key", settingsHandler.Delete)
 	engine.GET("/system/secrets-status", settingsHandler.Status)
 
 	updateHandler := handler.NewUpdateHandler(o.updateController)

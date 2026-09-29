@@ -3,11 +3,12 @@ package config
 import (
 	"context"
 	"fmt"
+	"slices"
 )
 
 // Key* are the secrets table row keys internal/repository.SecretsRepository
-// stores and internal/web/handler's Settings screen (`GET`/`POST
-// /settings`) reads and writes. Before issue #57 these were environment
+// stores and internal/web/handler's Settings screen (`GET /settings`, `POST`/`DELETE
+// /settings/:key`) reads and writes. Before issue #57 these were environment
 // variable names (JEV_API_KEY etc., read by the now-removed LoadSecrets
 // via os.Getenv); the string values are kept identical across that
 // migration so the existing .env.example history and the Settings
@@ -62,6 +63,19 @@ var requiredSecretKeys = []string{KeyJevAPIKey, KeyJevBaseURL, KeyKabuAPIPasswor
 // as missing.
 var optionalSecretKeys = []string{KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey,
 	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL}
+
+// AllowedSecretKeys returns every secrets-table key the Settings screen
+// may save or delete (`POST`/`DELETE /settings/:key`): the required keys
+// followed by the optional ones. It is the single allow-list for the
+// per-key Settings routes; any other key name is rejected with 400.
+func AllowedSecretKeys() []string {
+	return append(append([]string{}, requiredSecretKeys...), optionalSecretKeys...)
+}
+
+// IsAllowedSecretKey reports whether key is in AllowedSecretKeys.
+func IsAllowedSecretKey(key string) bool {
+	return slices.Contains(requiredSecretKeys, key) || slices.Contains(optionalSecretKeys, key)
+}
 
 // Secrets holds every credential internal/bootstrap.BuildServices passes
 // into internal/service/marketdata.Config and internal/service/jev.Config
@@ -120,7 +134,7 @@ type SecretsRepository interface {
 // for an actual repository/DB failure.
 func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []string, error) {
 	values := make(map[string]string, len(requiredSecretKeys)+len(optionalSecretKeys))
-	for _, key := range append(append([]string{}, requiredSecretKeys...), optionalSecretKeys...) {
+	for _, key := range AllowedSecretKeys() {
 		value, _, err := repo.Get(ctx, key)
 		if err != nil {
 			return Secrets{}, nil, fmt.Errorf("config: load secret %q: %w", key, err)

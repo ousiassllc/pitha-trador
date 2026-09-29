@@ -70,6 +70,7 @@ static/
 ### molecules
 
 - `Card`, `Modal`（Kill Switch確認モーダル）
+- `SecretFieldRow`（Settings画面の1項目。ラベル・「設定済み」バッジ・値入力（`type=password`）と保存ボタン・削除ボタン（設定済みのときのみ）・直近の保存/削除結果の通知を持ち、保存は`POST /settings/:key`、削除は`DELETE /settings/:key`で行の`outerHTML`のみ差し替える。他項目の値には影響しない。issue #79）
 - `SignalBadgeGroup`（direction + confidence + entry_quality の組み合わせ表示）
 - `PositionRow`, `OrderRow`
 - `ConfidenceBucketBar`（Calibration帯別バーの単純表示。詳細な曲線描画は`pitha-calibration-heatmap`側）
@@ -94,7 +95,7 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
-- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URLに加え、任意のLUNA_*/NEWS_FEED_*（およびSOL_*/OPUS_*）入力フォーム。値は再表示せず設定済み状態のみ表示、`POST /settings`で`secrets`テーブルへ暗号化保存する。issue #57）
+- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URLに加え、任意のLUNA_*/NEWS_FEED_*（およびSOL_*/OPUS_*）入力項目を`SecretFieldRow`でフィールド数だけ縦に並べる。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。issue #57/#79）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
 
 ### コンポーネントインターフェース規約
@@ -130,6 +131,7 @@ const (
 - **ローディング**: Kill Switch実行ボタンは`hx-disabled-elt="this"`で二重発動を防止し、`hx-indicator`でスピナーを表示する。スケルトンスクリーンは使わない
 - **エラー表示**: `response-targets`拡張を使い、422（バリデーション）と5xx（予期しないエラー）で表示先を分離する
 - **アップデート通知**: `Header`内`#update-banner`は`GET /system/update-status`を`load`・60秒周期・`updateStatusChanged`イベントで取得し、`UpdateBanner`または何も描かない。Settings画面の`#update-panel`は「今すぐアップデートを確認」（`POST /system/update-check`）の応答で置き換わり、応答の`HX-Trigger: updateStatusChanged`でHeaderのバナーも即時更新される（issue #76）
+- **フィールド単位保存**: Settings画面は1つの一括フォームではなく、`SecretFieldRow`ごとの独立フォームで保存（`hx-post="/settings/:key"`）・削除（`hx-delete="/settings/:key"`、`hx-confirm`で確認）し、応答の行フラグメントで当該行のみを差し替える。空入力の保存は400で、値の削除は明示的な削除操作でのみ行う（issue #79）
 - **未設定バナー**: `Header`内`#config-banner`は`GET /system/secrets-status`を`hx-trigger="load"`で取得し、`SecretsBanner`（未設定キー一覧＋`/settings`リンク）またはnothingを描く。`#header-status`と同じSSR空→自己補正パターン（issue #57）
 
 ## 5. Lit Web Components 仕様
@@ -296,3 +298,4 @@ dev:
 | 1.5 | 2026-09-28 | §5.4の`HeaderWithKillSwitch`例の`hx-trigger`セレクタを`.header-container`から`header`要素セレクタに修正 | issue #74実装でHeaderのTailwindユーティリティクラス化に伴い`header-container`クラスを廃止したことへの追随 |
 | 1.6 | 2026-09-29 | organismsに`UpdateBanner`/`UpdatePanel`を追加、§4にアップデート通知のHTMXパターンを追記 | issue #76実装 |
 | 1.7 | 2026-09-29 | organisms/pagesに`QueueStatusPanel`/`ActivityFeedFallback`/`ActivityLogPage`、Litに`pitha-activity-feed`（§5.5）を追加 | issue #77実装（System Activity Log） |
+| 1.8 | 2026-09-29 | moleculesに`SecretFieldRow`を追加、`SettingsPage`をフィールド単位の保存・削除へ変更、§4に「フィールド単位保存」パターンを追記 | issue #79実装 |

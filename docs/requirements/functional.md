@@ -17,6 +17,7 @@
 | UC-11 | Kill Switch操作 | 個人トレーダー | UIまたはサーバーから新規取引停止・強制決済を行う |
 | UC-12 | バックテスト実行 | 個人トレーダー | Paper Trading開始前に過去データで戦略を検証する |
 | UC-13 | システムアクティビティ確認 | 個人トレーダー | Log画面でジョブキュー実行状況・直近のJev呼び出し・Kill Switch関連イベントをリアルタイムに確認する |
+| UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/kabuステーション/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する |
 
 ```mermaid
 graph TD
@@ -291,6 +292,15 @@ News Ingest（`internal/service/newsfeed`）が対象銘柄に関連するニュ
 - FR-LUNA-4: Luna API失敗時はニュースフラグを立てず、通常のFast Screener/Jevフローに影響を与えない（Jev同様、失敗時は機能低下のみでシステム全体を止めないフェイルセーフ）
 - FR-LUNA-5: Lunaの分類結果はJevの判断そのものを上書きしない。あくまでJev Scout/Traderへの補助的な文脈情報としてのみ用いる（`architecture/overview.md` §8「Lunaは高頻度側の補助コンポーネント」の方針を継続）
 
+### 4.17 環境設定（Settings）
+
+Settings画面（`GET /settings`）で認証情報を管理する。値は`secrets`テーブルにAES-256-GCMで暗号化して保存する。
+
+- FR-SETTINGS-1: 設定項目は`internal/config`の許可キー一覧（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_API_KEY/LUNA_BASE_URL/NEWS_FEED_URL/NEWS_FEED_API_KEY/SOL_API_KEY/SOL_BASE_URL/OPUS_API_KEY/OPUS_BASE_URL）に限定する。画面は項目ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ
+- FR-SETTINGS-2: `POST /settings/:key`は指定キー1件のみを保存し、他キーの値に一切影響しない。空値の送信は400とし、保存済みの値を空入力で消すことはできない
+- FR-SETTINGS-3: `DELETE /settings/:key`は指定キー1件のみを削除し、他キーの値に一切影響しない。許可キー一覧に無いキー名は保存・削除とも400を返す
+- FR-SETTINGS-4: 保存済みの値は画面に再表示せず「設定済み」バッジのみ表示する。必須キー（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）が未設定の間は全ページ共通バナー（`GET /system/secrets-status`）で案内する。設定変更の反映にはアプリ再起動が必要
+
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
 ```mermaid
@@ -376,3 +386,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.2 | 2026-09-26 | §4.13 Jev RAG（経験ベース文脈拡張）、§4.14 自己改善ループ（Luna/Sol/Opus連携）を追加。Phase 5/6内容とMVP完了条件を更新 | 自己学習による継続的改善を組み込む方針 |
 | 1.3 | 2026-09-29 | UC-13・§4.15 System Activity Feed・§5.5 System Activity Log画面を追加。既存jobs/jev_decisions/kill_switch_eventsを集約する読み取り専用フィードとし、新規永続テーブルは追加しない | 実行中処理を可視化するログ画面の追加要望 |
 | 1.4 | 2026-09-29 | §4.14にFR-SELFIMPROVE-8/9（LLM出力の機械的検証、決定的しきい値とAIレビューの併用）を追加。§4.16 Luna ニュース分類・News Ingest（FR-LUNA-1〜5）を新設。新規テーブルは追加せず既存カラム（jev_decisions.state_json等）を利用 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
+| 1.5 | 2026-09-29 | UC-14・§4.17 環境設定（FR-SETTINGS-1〜4）を追加。Settings画面をキー単位の保存・削除へ変更 | issue #79実装 |

@@ -10,6 +10,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 )
 
+// ErrEmptySecret is returned by SecretsRepository.Set for an empty
+// plaintext; use Delete to remove a value.
+var ErrEmptySecret = errors.New("empty secret value")
+
 // SecretsRepository persists secrets table rows: JEV_API_KEY/
 // JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL entered via the
 // Settings screen (`/settings`, internal/web/handler.SettingsHandler),
@@ -50,17 +54,12 @@ func (r *SecretsRepository) Get(ctx context.Context, key string) (string, bool, 
 }
 
 // Set encrypts plaintext and upserts it under key, stamping updated_at.
-// An empty plaintext clears the stored value (deletes the row) instead
-// of persisting an encrypted empty string, so a subsequent Get reports
-// it as unset again - the Settings screen's chosen behavior for a field
-// submitted blank (internal/web/pages.SettingsPage's doc comment records
-// this as the one the operator sees on the form itself).
+// An empty plaintext is rejected: removing a value is the explicit Delete
+// operation, so a blank input can never wipe a stored secret by accident
+// (issue #79).
 func (r *SecretsRepository) Set(ctx context.Context, key, plaintext string) error {
 	if plaintext == "" {
-		if _, err := r.db.ExecContext(ctx, `DELETE FROM secrets WHERE key = ?`, key); err != nil {
-			return fmt.Errorf("repository: clear secret %q: %w", key, err)
-		}
-		return nil
+		return fmt.Errorf("repository: set secret %q: %w", key, ErrEmptySecret)
 	}
 
 	encrypted, err := config.EncryptSecret(plaintext)
@@ -73,6 +72,15 @@ ON CONFLICT(key) DO UPDATE SET encrypted_value = excluded.encrypted_value, updat
 		key, encrypted, formatTime(time.Now()))
 	if err != nil {
 		return fmt.Errorf("repository: set secret %q: %w", key, err)
+	}
+	return nil
+}
+
+// Delete removes key's stored value so a subsequent Get reports it as
+// unset. Deleting a key that has no row is not an error.
+func (r *SecretsRepository) Delete(ctx context.Context, key string) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM secrets WHERE key = ?`, key); err != nil {
+		return fmt.Errorf("repository: delete secret %q: %w", key, err)
 	}
 	return nil
 }
