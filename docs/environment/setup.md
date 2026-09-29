@@ -89,7 +89,7 @@ make dev
 |---|---|---|
 | `PITHA_SERVER_ADDR` | `cmd/server` | HTTPサーバー（ヘッドレス起動）の待受アドレス。既定`127.0.0.1:48080`。loopback以外（`:48080`・`0.0.0.0`・LAN IP等）は起動を拒否する。`cmd/desktop`（Wails）はネットワークポートを待ち受けない |
 | `PITHA_SERVER_ALLOW_NON_LOOPBACK` | `cmd/server` | `1`のときのみ`PITHA_SERVER_ADDR`にloopback以外を許可する（意図的な公開用） |
-| `SWAGGER_ENABLED` | `internal/router` | `false`のとき`/swagger`を無効化。未設定・それ以外は有効（後述「Swagger / OpenAPI」） |
+| `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
 | `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`） |
 | `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
 | `PITHA_STATIC_DIR` | `internal/router` | 設定すると`/static/...`を`go:embed`ではなく指定ディレクトリ（存在するディレクトリのみ有効。`make dev`は`static/src`）から配信する。未設定・不正パスは埋め込みにフォールバック |
@@ -204,8 +204,8 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 
 - **Spec生成ツール**: Huma組み込みの自動生成（`swag`等のアノテーション方式は不要）。Go構造体のリフレクションからリクエスト起動時に都度OpenAPI 3.1スペックを生成するため、実装とspecがずれることが構造的にない
 - **エンドポイント**: `/api/v1/openapi.json`（Huma生成のspec本体）
-- **UI**: Stoplight Elements（`@stoplight/elements`、bunで導入）。`/swagger`固定エンドポイントで、`<elements-api apiDescriptionUrl="/api/v1/openapi.json">` を埋め込んだ静的HTML 1枚を返す。Swagger UI用の追加ミドルウェアは不要
-- **環境変数**: `SWAGGER_ENABLED`（`true`/`false`）で`/swagger`ルートの有効/無効を切り替える。開発・ステージングは`true`（デフォルト）、本番（Phase 7実売買時）は`false`
+- **UI**: Stoplight Elements（`@stoplight/elements`、bunで導入）。`static/package.json`の依存として`bun.lock`でバージョンを固定し、`static/esbuild.config.mjs`が`web-components.min.js`/`styles.min.css`を`static/src/dist/vendor/stoplight-elements/`へコピーして`go:embed`でバイナリに同梱、`/static/dist/vendor/stoplight-elements/`から同一オリジン配信する（CDN読み込みはしない。取引操作APIを持つオリジンでサードパーティスクリプトを実行しないため）。`/swagger`固定エンドポイントで、`<elements-api apiDescriptionUrl="/api/v1/openapi.json">` を埋め込んだ静的HTML 1枚を返す。Swagger UI用の追加ミドルウェアは不要
+- **環境変数**: `SWAGGER_ENABLED`（`true`のときのみ`/swagger`ルートを有効化。未設定・`true`以外は無効＝オプトイン）。`/api/v1/openapi.json`は本変数に関わらず常に公開される。`make dev`は`true`を設定し、本番（Phase 7実売買時）を含むそれ以外は未設定（無効）とする
 - **CI連携**: Huma生成spec方式のため「生成し忘れによるdrift」が構造的に発生しない。よってswag方式で一般的な`swag init && git diff --exit-code`のようなdrift検知CIステップは不要。外部ツール（Postman等）向けにspecファイルをエクスポートしたい場合のみ、任意タスクとして`make openapi-export`（`docs/api/openapi.json`へ書き出し）を用意する
 
 ## 改訂履歴
@@ -221,3 +221,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.7 | 2026-09-29 | 必須3キー（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`）は未設定だと全画面が`/setup`へリダイレクトされる旨を追記 | issue #80実装 |
 | 1.8 | 2026-09-29 | CI/CD節のジョブ構成・トリガーに`release`ジョブとタグ`v*`トリガーを追記（issue #115）。bunを`.bun-version`で固定、`lint`ジョブに`linterly check`を追加、`concurrency`で版番号採番の競合を防止（issue #132） | code-review・doc-driftレビュー指摘 |
 | 1.9 | 2026-09-29 | グリーンフィールド記述を削除し実装済みの現状に更新、Goを1.25+（`go.mod`準拠）に修正、環境変数一覧（`PITHA_SERVER_ADDR`/`PITHA_DB_PATH`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`等）とMakefileターゲット節（`make`既定は`help`）を追加、ビルド成果物パスを`static/src/dist`に統一、`e2e.yml`は未作成と明記 | issue #113/#114/#116/#118/#131 doc-drift・code-reviewレビュー指摘 |
+| 1.10 | 2026-09-29 | Swagger UIをunpkg CDN読み込みから、bunで導入した`@stoplight/elements`のvendor同梱・同一オリジン配信へ変更し、`SWAGGER_ENABLED`を`true`のみ有効のオプトインに変更（`make dev`が設定）。`.env.example`の説明を`/swagger`のみの切替に是正（issue #112, #117） | セキュリティ指摘（未固定・SRIなしCDNスクリプト）・doc-drift指摘 |

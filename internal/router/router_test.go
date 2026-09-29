@@ -32,8 +32,9 @@ func TestNew_RootRouteRedirectsToScannerDashboard(t *testing.T) {
 	}
 }
 
-func TestNew_SwaggerRouteServesStoplightElementsHTMLByDefault(t *testing.T) {
+func TestNew_SwaggerRouteServesStoplightElementsHTMLWhenSwaggerEnabledIsTrue(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Setenv("SWAGGER_ENABLED", "true")
 	engine := router.New()
 
 	req := httptest.NewRequest(http.MethodGet, "/swagger", nil)
@@ -56,6 +57,46 @@ func TestNew_SwaggerRouteServesStoplightElementsHTMLByDefault(t *testing.T) {
 	}
 	if !strings.Contains(body, "/api/v1/openapi.json") {
 		t.Fatalf("expected body to reference the OpenAPI spec URL, got %q", body)
+	}
+	if strings.Contains(body, "unpkg.com") || strings.Contains(body, "https://") {
+		t.Fatalf("expected body to load Elements same-origin, not from a CDN, got %q", body)
+	}
+}
+
+func TestNew_SwaggerRouteServesVendoredElementsAssets(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	for path, wantType := range map[string]string{
+		"/static/dist/vendor/stoplight-elements/web-components.min.js": "javascript",
+		"/static/dist/vendor/stoplight-elements/styles.min.css":        "css",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+
+		engine.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: expected status %d, got %d", path, http.StatusOK, rec.Code)
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, wantType) {
+			t.Fatalf("%s: expected content type containing %q, got %q", path, wantType, ct)
+		}
+	}
+}
+
+func TestNew_SwaggerRouteDisabledByDefault(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("SWAGGER_ENABLED", "")
+	engine := router.New()
+
+	req := httptest.NewRequest(http.MethodGet, "/swagger", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d when SWAGGER_ENABLED is unset, got %d", http.StatusNotFound, rec.Code)
 	}
 }
 
