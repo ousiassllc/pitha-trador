@@ -88,3 +88,24 @@ func TestPeriod_Contains(t *testing.T) {
 		t.Error("Contains(Start+1h) = false, want true")
 	}
 }
+
+// SplitCount must agree with len(Splits()) - it is what bounds a request's
+// cost before Splits() allocates - including the default step, a custom
+// step, exact fit, one short of fit, and invalid periods.
+func TestWalkForwardConfig_SplitCount_MatchesSplits(t *testing.T) {
+	const day = 24 * time.Hour
+	start := mustParse(t, "2026-01-01T00:00:00Z")
+	for name, wf := range map[string]backtest.WalkForwardConfig{
+		"default step":      {Start: start, End: start.Add(20 * day), TrainingPeriod: 5 * day, ValidationPeriod: 2 * day, ForwardPeriod: day},
+		"custom step":       {Start: start, End: start.Add(20 * day), TrainingPeriod: 5 * day, ValidationPeriod: 2 * day, ForwardPeriod: day, StepPeriod: 3 * day},
+		"exact single fold": {Start: start, End: start.Add(8 * day), TrainingPeriod: 5 * day, ValidationPeriod: 2 * day, ForwardPeriod: day},
+		"one short of fold": {Start: start, End: start.Add(8*day - time.Nanosecond), TrainingPeriod: 5 * day, ValidationPeriod: 2 * day, ForwardPeriod: day},
+		"non-positive":      {Start: start, End: start.Add(20 * day), TrainingPeriod: 5 * day, ValidationPeriod: 0, ForwardPeriod: day},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, want := wf.SplitCount(), len(wf.Splits()); got != want {
+				t.Errorf("SplitCount() = %d, want len(Splits()) = %d", got, want)
+			}
+		})
+	}
+}
