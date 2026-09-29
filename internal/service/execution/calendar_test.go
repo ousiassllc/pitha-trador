@@ -31,13 +31,13 @@ func TestEngine_Enter_RejectsOutsideTradingSession(t *testing.T) {
 	te := calendarEngine(t)
 	for name, at := range map[string]time.Time{
 		"night": jstAt(29, 20, 0), "lunch": jstAt(29, 12, 0), "close": jstAt(29, 15, 30),
-		"saturday": jstAt(26, 10, 0), "holiday (国民の休日)": jstAt(22, 10, 0),
+		"force-flat window": jstAt(29, 15, 20), "saturday": jstAt(26, 10, 0), "holiday (国民の休日)": jstAt(22, 10, 0),
 	} {
 		if _, err := enterAt(te, at); !errors.Is(err, execution.ErrOutsideTradingSession) {
 			t.Errorf("%s: Enter err = %v, want ErrOutsideTradingSession", name, err)
 		}
 	}
-	if _, err := enterAt(te, jstAt(29, 10, 0)); err != nil {
+	if _, err := enterAt(te, jstAt(29, 15, 19)); err != nil { // last minute before the window
 		t.Fatalf("in-session Enter: %v", err)
 	}
 }

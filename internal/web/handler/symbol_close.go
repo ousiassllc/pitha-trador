@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -28,6 +29,7 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 			respondActionError(c, http.StatusNotFound, "ポジションが見つかりません。")
 			return
 		}
+		slog.ErrorContext(ctx, "handler: close position get", "position_id", id, "error", err)
 		respondActionError(c, http.StatusInternalServerError, "ポジションの取得に失敗しました。")
 		return
 	}
@@ -43,6 +45,12 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 
 	closed, err := h.provider.Close(ctx, id, domain.ExitReasonManual, exitPrice, h.now())
 	if err != nil {
+		// A concurrent exit (Exit monitor / CloseAll / another click) won the race.
+		if errors.Is(err, domain.ErrPositionAlreadyClosed) {
+			respondActionError(c, http.StatusConflict, "このポジションは既に決済済みです。")
+			return
+		}
+		slog.ErrorContext(ctx, "handler: close position", "position_id", id, "error", err)
 		respondActionError(c, http.StatusInternalServerError, "ポジションの決済に失敗しました。")
 		return
 	}

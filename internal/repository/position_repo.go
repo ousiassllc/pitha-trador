@@ -104,7 +104,13 @@ func (r *PositionRepository) Mark(ctx context.Context, id int64, currentPrice, u
 // final current_price. It returns ErrPositionNotFound if id does not
 // exist or is already closed.
 func (r *PositionRepository) Close(ctx context.Context, id, exitOrderID int64, exitPrice, realizedPnL float64, exitReason string, now time.Time) (domain.Position, error) {
-	res, err := r.db.ExecContext(ctx,
+	return closePosition(ctx, r.db, id, exitOrderID, exitPrice, realizedPnL, exitReason, now)
+}
+
+// closePosition is Close's body over any sqlExecutor, so
+// OrderRepository.FillExit can run it inside its own transaction.
+func closePosition(ctx context.Context, x sqlExecutor, id, exitOrderID int64, exitPrice, realizedPnL float64, exitReason string, now time.Time) (domain.Position, error) {
+	res, err := x.ExecContext(ctx,
 		`UPDATE positions
 		 SET exit_order_id = ?, current_price = ?, realized_pnl = ?, closed_at = ?, exit_reason = ?, updated_at = ?
 		 WHERE id = ? AND closed_at IS NULL`,
@@ -116,7 +122,38 @@ func (r *PositionRepository) Close(ctx context.Context, id, exitOrderID int64, e
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
 		return domain.Position{}, domain.ErrPositionNotFound
 	}
-	return r.Get(ctx, id)
+	return scanPosition(x.QueryRowContext(ctx, positionSelectColumns+` WHERE id = ?`, id))
+}
+
+// CloseWithExitOrder submits exitOrder (PENDING), fills it at price/now and
+// closes positionID with it in ONE transaction: afterwards either the FILLED
+// exit order and the closed position both exist, or neither. A concurrent
+// close of the same position matches no open row (domain.ErrPositionNotFound)
+// and rolls its order insert back, so no orphan FILLED exit order is left for
+// risk.Engine's reconciliation to report as a fill discrepancy (issue #174).
+func (r *PositionRepository) CloseWithExitOrder(ctx context.Context, exitOrder domain.PaperOrder, price float64, positionID int64, realizedPnL float64, exitReason string, now time.Time) (domain.Position, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Position{}, fmt.Errorf("repository: begin close transaction for position %d: %w", positionID, err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	inserted, err := insertOrder(ctx, tx, exitOrder)
+	if err != nil {
+		return domain.Position{}, err
+	}
+	filled, err := fillOrder(ctx, tx, inserted.ID, price, nil, now)
+	if err != nil {
+		return domain.Position{}, err
+	}
+	closed, err := closePosition(ctx, tx, positionID, filled.ID, price, realizedPnL, exitReason, now)
+	if err != nil {
+		return domain.Position{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.Position{}, fmt.Errorf("repository: commit close transaction for position %d: %w", positionID, err)
+	}
+	return closed, nil
 }
 
 // ListOpen returns every currently open position (ClosedAt == nil),

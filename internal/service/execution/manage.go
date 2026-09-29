@@ -84,6 +84,9 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	}
 
 	closed, err := e.Close(ctx, position.ID, reason, snap.Price, now)
+	if errors.Is(err, domain.ErrPositionAlreadyClosed) {
+		return result, nil // a concurrent manual close / CloseAll won
+	}
 	if err != nil {
 		return SnapshotResult{}, err
 	}

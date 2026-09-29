@@ -50,6 +50,8 @@ type Engine struct {
 	mu        sync.Mutex
 	cooldowns map[string]time.Time // symbol -> cooldown_until (functional.md §4.9)
 
+	// closeMu serialises Close: one exit per position (issue #174).
+	closeMu sync.Mutex
 	// snapshotMu serialises OnSnapshot (per-bar job vs held-position monitor).
 	snapshotMu sync.Mutex
 }

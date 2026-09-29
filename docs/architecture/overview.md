@@ -181,7 +181,7 @@ handler → service → repository → domain
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
 | Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9） | `internal/service/updater` |
 | Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |
-| Backup | 日次SQLiteバックアップ（daily 90日保持 + 日曜分のweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
+| Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
 | Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先） | `internal/bootstrap`（`heldposition`, `paperexec`, `alerts`） |
 | Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ（`requirements/non-functional.md` §5） | `internal/logging` |

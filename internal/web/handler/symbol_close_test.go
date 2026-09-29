@@ -1,7 +1,9 @@
 package handler_test
 
 import (
+	"bytes"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -97,25 +99,6 @@ func TestSymbolHandler_ClosePosition_InvalidIDReturns400(t *testing.T) {
 	}
 }
 
-func TestSymbolHandler_ClosePosition_CloseErrorReturns500(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	provider := &fakeSymbolProvider{
-		position: domain.Position{ID: 42, Symbol: "7203"},
-		closeErr: errors.New("db unavailable"),
-	}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
-	router := gin.New()
-	router.POST("/positions/:id/close", h.ClosePosition)
-
-	req := httptest.NewRequest(http.MethodPost, "/positions/42/close", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
-	}
-}
-
 // Every failure status carries an atoms.Toast fragment so the Close
 // button's failure is visible (issue #110): htmx would otherwise drop the
 // empty 4xx/5xx body and leave the row untouched with no feedback.
@@ -132,6 +115,7 @@ func TestSymbolHandler_ClosePosition_FailuresRenderToastFragment(t *testing.T) {
 		"lookup failure": {"/positions/1/close", &fakeSymbolProvider{positionErr: errors.New("db")}, http.StatusInternalServerError},
 		"already closed": {"/positions/1/close", &fakeSymbolProvider{position: domain.Position{ID: 1, ClosedAt: &closedAt}}, http.StatusConflict},
 		"close failure":  {"/positions/1/close", &fakeSymbolProvider{position: domain.Position{ID: 1}, closeErr: errors.New("db")}, http.StatusInternalServerError},
+		"lost race":      {"/positions/1/close", &fakeSymbolProvider{position: domain.Position{ID: 1}, closeErr: domain.ErrPositionAlreadyClosed}, http.StatusConflict},
 	} {
 		router := gin.New()
 		router.POST("/positions/:id/close", handler.NewSymbolHandler(tc.provider, handler.SymbolRiskParams{}).ClosePosition)
@@ -144,6 +128,28 @@ func TestSymbolHandler_ClosePosition_FailuresRenderToastFragment(t *testing.T) {
 		}
 		if !strings.Contains(rec.Body.String(), `data-toast`) {
 			t.Errorf("%s: body = %q, want an atoms.Toast fragment", name, rec.Body.String())
+		}
+	}
+}
+
+// #178: a 500 hides the cause from the client but logs it via slog.
+func TestSymbolHandler_ClosePosition_500LogsCause(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for name, provider := range map[string]*fakeSymbolProvider{
+		"lookup": {positionErr: errors.New("secret lookup cause")},
+		"close":  {position: domain.Position{ID: 42}, closeErr: errors.New("secret close cause")},
+	} {
+		var logs bytes.Buffer
+		prev := slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+		router := gin.New()
+		router.POST("/positions/:id/close", handler.NewSymbolHandler(provider, handler.SymbolRiskParams{}).ClosePosition)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/positions/42/close", nil))
+		slog.SetDefault(prev)
+
+		if strings.Contains(rec.Body.String(), "secret") || !strings.Contains(logs.String(), "secret "+name+" cause") {
+			t.Errorf("%s: body = %q, log = %q; want cause logged only", name, rec.Body.String(), logs.String())
 		}
 	}
 }

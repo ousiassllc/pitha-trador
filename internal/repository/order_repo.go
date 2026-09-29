@@ -14,6 +14,11 @@ import (
 // matching paper_orders row exists.
 var ErrOrderNotFound = errors.New("repository: paper order not found")
 
+// ErrOrderNotPending is returned by Fill/FillEntry when the order
+// exists but is no longer PENDING (already FILLED/CANCELLED/REJECTED), so a
+// second fill can never double-execute it (issue #174).
+var ErrOrderNotPending = errors.New("repository: paper order is not pending")
+
 // OrderRepository persists paper_orders rows: every Paper Trading (将来
 // は実発注) order/fill Execution submits (docs/architecture/er.md
 // §paper_orders, functional.md §4.8 Entry/Exit).
@@ -35,12 +40,18 @@ INSERT INTO paper_orders (
 
 // Insert writes a single paper_orders row.
 func (r *OrderRepository) Insert(ctx context.Context, o domain.PaperOrder) (domain.PaperOrder, error) {
+	return insertOrder(ctx, r.db, o)
+}
+
+// insertOrder is Insert's body over any sqlExecutor, so FillExit can run it
+// inside its own transaction.
+func insertOrder(ctx context.Context, x sqlExecutor, o domain.PaperOrder) (domain.PaperOrder, error) {
 	createdAt := o.CreatedAt
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()
 	}
 
-	res, err := r.db.ExecContext(ctx, insertOrderSQL,
+	res, err := x.ExecContext(ctx, insertOrderSQL,
 		o.InstrumentID, nullableInt64(o.TradeSignalID), o.Symbol, o.Side, o.OrderType, o.Quantity,
 		nullableFloat64(o.LimitPrice), o.Status, formatTime(o.SubmittedAt), nullableTime(o.FilledAt),
 		nullableFloat64(o.FilledPrice), o.Fees, nullableFloat64(o.SlippageBps), formatTime(createdAt),
@@ -70,7 +81,7 @@ func (r *OrderRepository) Get(ctx context.Context, id int64) (domain.PaperOrder,
 // Fill marks a PENDING order FILLED at price/now (Paper Entry/Exit
 // execution, functional.md FR-ENTRY-1), recording slippageBps versus the
 // order's reference price. It returns ErrOrderNotFound if id does not
-// exist.
+// exist and ErrOrderNotPending if the order was already filled/cancelled.
 func (r *OrderRepository) Fill(ctx context.Context, id int64, price float64, slippageBps *float64, now time.Time) (domain.PaperOrder, error) {
 	return fillOrder(ctx, r.db, id, price, slippageBps, now)
 }
@@ -79,14 +90,18 @@ func (r *OrderRepository) Fill(ctx context.Context, id int64, price float64, sli
 // inside its own transaction.
 func fillOrder(ctx context.Context, x sqlExecutor, id int64, price float64, slippageBps *float64, now time.Time) (domain.PaperOrder, error) {
 	res, err := x.ExecContext(ctx,
-		`UPDATE paper_orders SET status = ?, filled_at = ?, filled_price = ?, slippage_bps = ? WHERE id = ?`,
-		domain.OrderStatusFilled, formatTime(now), price, nullableFloat64(slippageBps), id,
+		`UPDATE paper_orders SET status = ?, filled_at = ?, filled_price = ?, slippage_bps = ? WHERE id = ? AND status = ?`,
+		domain.OrderStatusFilled, formatTime(now), price, nullableFloat64(slippageBps), id, domain.OrderStatusPending,
 	)
 	if err != nil {
 		return domain.PaperOrder{}, fmt.Errorf("repository: fill paper order %d: %w", id, err)
 	}
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
-		return domain.PaperOrder{}, ErrOrderNotFound
+		// Distinguish a missing row from one that is no longer PENDING.
+		if _, err := scanOrder(x.QueryRowContext(ctx, orderSelectColumns+` WHERE id = ?`, id)); err != nil {
+			return domain.PaperOrder{}, err
+		}
+		return domain.PaperOrder{}, ErrOrderNotPending
 	}
 	return scanOrder(x.QueryRowContext(ctx, orderSelectColumns+` WHERE id = ?`, id))
 }

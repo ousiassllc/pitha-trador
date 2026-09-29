@@ -22,20 +22,24 @@ import (
 // from internal/service/risk.Engine's own portfolio-wide
 // cooldown_after_loss_minutes check (config.go's doc comment).
 func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exitPrice float64, now time.Time) (domain.Position, error) {
+	e.closeMu.Lock()
+	defer e.closeMu.Unlock()
 	position, err := e.positions.Get(ctx, positionID)
 	if err != nil {
 		return domain.Position{}, fmt.Errorf("execution: get position %d: %w", positionID, err)
 	}
 	if !position.IsOpen() {
-		return domain.Position{}, fmt.Errorf("execution: position %d is already closed", positionID)
+		return domain.Position{}, fmt.Errorf("%w: position %d", domain.ErrPositionAlreadyClosed, positionID)
 	}
 
 	exitSide := domain.OrderSideSell
 	if position.Side == domain.PositionSideShort {
 		exitSide = domain.OrderSideBuy
 	}
+	realizedPnL := positionSign(position.Side) * float64(position.Quantity) * (exitPrice - position.EntryPrice)
 
-	exitOrder, err := e.orders.Insert(ctx, domain.PaperOrder{
+	// Submit, fill and close in one transaction: no orphan FILLED exit order.
+	closed, err := e.positions.CloseWithExitOrder(ctx, domain.PaperOrder{
 		InstrumentID: position.InstrumentID,
 		Symbol:       position.Symbol,
 		Side:         exitSide,
@@ -43,19 +47,12 @@ func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exi
 		Quantity:     position.Quantity,
 		Status:       domain.OrderStatusPending,
 		SubmittedAt:  now,
-	})
-	if err != nil {
-		return domain.Position{}, fmt.Errorf("execution: submit exit order for position %d: %w", positionID, err)
+	}, exitPrice, positionID, realizedPnL, reason, now)
+	if errors.Is(err, domain.ErrPositionNotFound) {
+		return domain.Position{}, fmt.Errorf("%w: position %d", domain.ErrPositionAlreadyClosed, positionID)
 	}
-	if _, err := e.orders.Fill(ctx, exitOrder.ID, exitPrice, nil, now); err != nil {
-		return domain.Position{}, fmt.Errorf("execution: fill exit order %d for position %d: %w", exitOrder.ID, positionID, err)
-	}
-
-	realizedPnL := positionSign(position.Side) * float64(position.Quantity) * (exitPrice - position.EntryPrice)
-
-	closed, err := e.positions.Close(ctx, positionID, exitOrder.ID, exitPrice, realizedPnL, reason, now)
 	if err != nil {
-		return domain.Position{}, fmt.Errorf("execution: close position %d: %w", positionID, err)
+		return domain.Position{}, fmt.Errorf("execution: exit position %d: %w", positionID, err)
 	}
 
 	if realizedPnL < 0 {
@@ -92,7 +89,7 @@ func (e *Engine) CloseAll(ctx context.Context, reason string) error {
 	now := e.cfg.Now()
 	var errs []error
 	for _, position := range open {
-		if _, err := e.Close(ctx, position.ID, domain.ExitReasonForceClose, position.CurrentPrice, now); err != nil {
+		if _, err := e.Close(ctx, position.ID, domain.ExitReasonForceClose, position.CurrentPrice, now); err != nil && !errors.Is(err, domain.ErrPositionAlreadyClosed) {
 			errs = append(errs, fmt.Errorf("execution: force-close position %d for kill switch %q: %w", position.ID, reason, err))
 		}
 	}

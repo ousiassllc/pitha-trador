@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -81,6 +82,7 @@ func (h *SystemHandler) Status(c *gin.Context) {
 func (h *SystemHandler) renderBadge(c *gin.Context) {
 	state, _, err := h.engine.State(c.Request.Context())
 	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "handler: system status badge", "error", err)
 		respondActionError(c, http.StatusInternalServerError, "システム状態の取得に失敗しました。")
 		return
 	}
