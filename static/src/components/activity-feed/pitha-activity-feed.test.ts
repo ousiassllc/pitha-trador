@@ -264,4 +264,37 @@ describe('pitha-activity-feed', () => {
     expect(FakeWebSocket.instances).toHaveLength(2);
     expect(FakeWebSocket.instances[1].url).toContain('/ws/activity-2');
   });
+
+  // Events missed while the socket was down only return via re-fetch (#221).
+  test('re-fetches the snapshot and kill switch events once the WebSocket reconnects', async () => {
+    const { el, fetchMock } = await mount([queue()], []);
+    FakeWebSocket.instances[0].emit('open'); // first connect: no re-fetch
+    await flush(el);
+    expect(fetchMock.mock.calls.length).toBe(2);
+    FakeWebSocket.instances[0].emit('close', { code: 1006 });
+    await el.updateComplete;
+
+    const missed = event({ type: 'kill_switch', detail: 'missed while offline' });
+    fetchMock.mockClear();
+    fetchMock.mockImplementation((() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ queues: [queue({ pending: 9 })], events: [missed], as_of: 'y' }),
+        ),
+      )) as never);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    FakeWebSocket.instances[1].emit('open');
+    await flush(el);
+
+    const urls = fetchMock.mock.calls.map((c) => c[0] as string);
+    expect(urls).toHaveLength(2);
+    expect(urls.some((u) => u.includes('type=kill_switch'))).toBe(true);
+    expect(el.querySelector('#queue-status tbody tr td:nth-child(2)')?.textContent).toBe('9');
+    expect(el.querySelector('#activity-feed tbody tr td:nth-child(4)')?.textContent).toBe(
+      'missed while offline',
+    );
+    expect(el.querySelector('#kill-switch-events li')?.textContent).toContain(
+      'missed while offline',
+    );
+  });
 });
