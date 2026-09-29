@@ -15,12 +15,12 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 
 | レイヤー | 技術 | 役割 |
 |---------|------|------|
-| デスクトップシェル | Wails v2 | ネイティブウィンドウ・トレイ・通知（本ドキュメントでは§7で詳述） |
+| デスクトップシェル | Wails v2 | ネイティブウィンドウ・トレイ・通知（§7で詳述（`runtime.md`）） |
 | サーバーフレームワーク | Gin | ルーティング＋SSR |
 | APIフレームワーク | Huma | `/api/v1/...` のJSON API・OpenAPI 3.1自動生成 |
 | テンプレートエンジン | Templ | 型安全なGo HTMLテンプレート |
 | インタラクション | HTMX | サーバー駆動のDOM更新 |
-| リッチUI | Lit (Web Components) | `pitha-price-chart` 等5種（§5） |
+| リッチUI | Lit (Web Components) | `pitha-price-chart` 等5種（§5、`lit.md`） |
 | チャート描画 | lightweight-charts (TradingView製) | ローソク足・VWAP・出来高・信頼性曲線 |
 | スタイリング | Tailwind CSS | ユーティリティファーストCSS |
 | ビルド | esbuild | Lit/TypeScriptバンドル |
@@ -29,13 +29,14 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 
 ```text
 internal/web/
-├── handler/            # scanner.go, symbol.go, performance.go, calibration.go, system.go
-├── middleware/         # CSRF, ロギング, リカバリ, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）
-├── atoms/
-├── molecules/
-├── organisms/
-├── pages/
-└── layout/
+├── handler/            # scanner.go, symbol*.go, performance.go, calibration.go, system.go, settings.go, activity.go, update.go, policy_proposals.go, action_error.go（Toast/ErrorPage応答）ほか（*_ws.goはWebSocket）
+├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
+├── middleware/         # HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState
+├── atoms/              # Badge, StatusDot, Toast
+├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow
+├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）
+├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
+└── layout/             # Shell, SetupShell
 
 static/
 └── src/
@@ -64,7 +65,7 @@ static/
 ### atoms
 
 - `Badge`（Direction: LONG/SHORT/NONE、Regime: TREND/RANGE/BREAKOUT/CHAOTIC の色分け表示）
-- `StatusDot`（システム状態: Running=緑 / Paused=黄 / Killed=赤）
+- `StatusDot`（システム状態: Running=緑 / Paused=黄 / Killed=赤。organismsの`SystemStatusBadge`が`domain.SystemState`から`atoms.State`へ変換して描画する）
 - `Toast`（HTMXアクション失敗のエラー通知。`role="alert"`＋閉じるボタンを持ち、`#toast-region`へswapされる。§4「エラー表示」、issue #110/#121）
 
 > **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Button`/`Input`/`Select`/`Spinner`/`Card`/`Modal`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（ボタン・入力はTailwindユーティリティを各テンプレートに直接記述、Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が`Button`/`Input`等の切り出しの目安）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
@@ -77,7 +78,8 @@ static/
 
 ### organisms
 
-- `Header`（ナビゲーション＋`StatusDot`。Kill Switch状態のOOB更新対象。`middleware.SystemStateFrom`の現在状態から`KillSwitchPanel`を描画する）
+- `Header`（ナビゲーション＋`SystemStatusBadge`（`StatusDot`）。Kill Switch状態のOOB更新対象。`middleware.SystemStateFrom`の現在状態から`KillSwitchPanel`を描画する）
+- `SystemStatusBadge`（システム状態の`StatusDot`フラグメント。`Header`内`#header-status`と`GET /system/status`が返す。`domain.SystemState`→`atoms.State`の変換を担い、atomsを`internal/domain`から切り離す）
 - `KillSwitchPanel`（`pitha-kill-switch-panel`を、現在状態に基づく`status`/`can-pause`/`can-resume`/`can-kill`と各URL属性付きで出力する。issue #106）
 - `ScannerTableFallback`（JS無効時/初回SSR描画用の候補銘柄テーブル。ハイドレーション後は`pitha-scanner-table`が引き継ぐ）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
@@ -96,6 +98,7 @@ static/
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
 - `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URLに加え、任意のLUNA_*/NEWS_FEED_*（およびSOL_*/OPUS_*）入力項目を`SecretFieldRow`でフィールド数だけ縦に並べる。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。issue #57/#79）
 - `SetupPage`（初回セットアップ画面。必須3キー＋任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須3キーがすべて設定済みなら完了表示と`/scanner`へのリンクを出す。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80）
+- `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`handler.respondPageError`が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
 
 ### コンポーネントインターフェース規約
@@ -135,161 +138,14 @@ const (
 - **未設定バナー**: `Header`内`#config-banner`は`GET /system/secrets-status`を`hx-trigger="load"`で取得し、`SecretsBanner`（任意キー（SLACK_WEBHOOK_URL等）の未設定一覧＋`/settings`リンク）またはnothingを描く。必須3キーはバナーではなくSetup Guardの`/setup`リダイレクトで扱う。`#header-status`と同じSSR空→自己補正パターン（issue #57/#80）
 - **初回セットアップ誘導**: Setup Guard Middlewareが必須3キー未設定の間`/setup`以外（`POST`/`DELETE /settings/:key`・`/static/...`を除く）を`/setup`へ送る（ページ遷移は302、HTMXは`204`＋`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。issue #140）。`SetupPage`は`Header`を持たない`layout.SetupShell`で描画し、ガード対象の`hx-get`フラグメントを発火させない。保存はSettingsと同じ`SecretFieldRow`の`hx-post="/settings/:key"`を使い、3キーが揃った時点で完了表示と`/scanner`への「続ける」リンクを出す（issue #80）
 
-## 5. Lit Web Components 仕様
+## 5〜9. 分割章
 
-命名規則: `pitha-{feature-name}`。以下5種を実装する（HTMXでは実現できないCanvas描画・高頻度WebSocket更新を要するため）。
+以降の章は `.linterly.yml` の300行/ファイル制限のため別ファイルに分割している（節番号・内容は分割前と同一）。
 
-| コンポーネント | 用途 | 埋め込みページ | データソース |
-|---------------|------|---------------|------------|
-| `pitha-price-chart` | ローソク足＋VWAP＋出来高チャート、Jevシグナルのマーカー表示 | Symbol Detail | `GET /api/v1/symbols/{symbol}/candles`（初期）＋ `/ws/symbols/{symbol}`（ライブ） |
-| `pitha-scanner-table` | 候補銘柄のソート可能なライブテーブル | Scanner Dashboard | `GET /api/v1/scanner`（初期）＋ `/ws/scanner`（15〜30秒更新） |
-| `pitha-calibration-heatmap` | confidence帯別 reliability curve / 的中率ヒートマップ | Calibration | `GET /api/v1/calibration` |
-| `pitha-activity-feed` | キュー別pending/running/failed件数・直近アクティビティ一覧・直近Kill Switchイベントのライブ表示（type/queueフィルタ付き） | System Activity Log | `GET /api/v1/activity`（初期・フィルタ変更時）＋ `/ws/activity`（ライブ） |
-| `pitha-kill-switch-panel` | システム状態表示・Kill Switch発動/解除操作 | 全ページ共通（Header内アイランド） | `GET/POST /api/v1/system/*` |
-
-### 5.1 pitha-price-chart
-
-```typescript
-@customElement('pitha-price-chart')
-export class PithaPriceChart extends LitElement {
-  @property({ type: String, attribute: 'symbol' }) symbol = '';
-  @property({ type: String, attribute: 'candles-url' }) candlesUrl = '';
-  @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
-
-  @state() private chart: IChartApi | null = null;
-  @state() private error: string | null = null;
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.initChart();   // lightweight-charts でローソク足/VWAPライン/出来高ヒストグラムペインを初期化
-    this.loadInitial();  // candlesUrl から初期系列を取得（lib/api.ts経由）
-    this.subscribeWs();  // wsUrl から tick / jev_update を受信し系列・マーカーを更新
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.chart?.remove();
-    this.wsClient?.close();
-  }
-}
-```
-
-- Jevの`direction`変化・`entry_quality`更新はチャート上のマーカー（例: LONG転換で上向き矢印）として描画する
-- `symbol`属性が変化した場合（同一ページ内で銘柄を切り替えるUIを将来追加する場合）は`updated()`ライフサイクルで再購読する
-
-### 5.2 pitha-scanner-table
-
-- 初期データを`GET /api/v1/scanner`で取得しレンダリング、以後`/ws/scanner`のPUSHで行を更新・ソート順を再計算する
-- 列ヘッダクリックでクライアント内ソート（サーバー往復不要）
-- 銘柄行は通常の `<a href="/symbols/{symbol}">` として描画する（Litはハイパーメディアリンクの外側に出ず、通常のブラウザナビゲーションとしてページ遷移する。HTMXリクエストは発火しない = HTMX↔Lit境界ルール§「Litは HTMXリクエストをトリガーしない」に準拠）
-
-### 5.3 pitha-calibration-heatmap
-
-- `GET /api/v1/calibration`のバケット別データからreliability curve（lightweight-chartsのラインシリーズ）とconfidence帯別カラーヒートマップを描画する
-- リアルタイム性は不要なため WebSocket は使用しない。ページ再訪問時・手動更新ボタン押下時に再フェッチする
-
-> **Shadow DOMのスタイル（issue #145）**: Tailwindはdocument CSSでShadow Rootを越えない。`pitha-kill-switch-panel`/`pitha-price-chart`/`pitha-calibration-heatmap`は既定のShadow DOMを使うため、各自`static styles`（共通部品は`lib/styles.ts`）を持つ。`pitha-scanner-table`/`pitha-activity-feed`はLight DOMで描画しTailwindをそのまま使う。`pitha-price-chart`は`autoSize`でコンテナ幅に追従する。
-
-### 5.4 pitha-kill-switch-panel
-
-```typescript
-@customElement('pitha-kill-switch-panel')
-export class PithaKillSwitchPanel extends LitElement {
-  // HATEOAS: サーバーが現在の状態・操作可否・呼び出すURLを属性で注入する。
-  // コンポーネントはURLも遷移表も持たない（操作後・再同期後はAPI応答の can_* を採用する）
-  @property({ type: String }) status: 'running' | 'paused' | 'killed' | '' = '';
-  @property({ type: Boolean, attribute: 'can-pause' }) canPause = false;
-  @property({ type: Boolean, attribute: 'can-resume' }) canResume = false;
-  @property({ type: Boolean, attribute: 'can-kill' }) canKill = false;
-  @property({ type: String, attribute: 'pause-url' }) pauseUrl = '';
-  @property({ type: String, attribute: 'resume-url' }) resumeUrl = '';
-  @property({ type: String, attribute: 'kill-url' }) killUrl = '';
-  @property({ type: String, attribute: 'status-url' }) statusUrl = '';
-  @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
-}
-```
-
-```go
-// Templ側（organisms.Header → organisms.KillSwitchPanel）。
-// state は middleware.SystemStateFrom(ctx)（domain.SystemState、読み出せない場合は ""）
-templ KillSwitchPanel(state domain.SystemState) {
-    <pitha-kill-switch-panel
-        status={ string(state) }
-        can-pause?={ state.CanPause() }
-        can-resume?={ state.CanResume() }
-        can-kill?={ state.CanKill() }
-        pause-url="/api/v1/system/pause" resume-url="/api/v1/system/resume"
-        kill-url="/api/v1/system/kill" status-url="/api/v1/system/status"
-        ws-url="/ws/system">
-    </pitha-kill-switch-panel>
-}
-```
-
-- 操作可否は`domain.SystemState.CanPause/CanResume/CanKill`（Running→pause/kill可、Paused→resume/kill可、Killed→resumeのみ）が唯一の定義で、`GET/POST /api/v1/system/*`の応答も`can_pause`/`can_resume`/`can_kill`として返す。状態を読み出せないとき`Header`は操作ボタンを描画せず（`status=""`）、パネルが`status-url`から自己補正する
-- 操作後は`systemStateChanged`を発火し、`Header`の`#header-status`（`hx-trigger="systemStateChanged from:closest header"`）がStatusDotを再取得する
-- Kill Switch発動はRisk Engineからも直接トリガーされうる（`architecture/overview/flows.md` §10.3）。この場合はサーバー側が`/ws/system`経由で`kill_switch`イベントを配信し、`pitha-kill-switch-panel`が受信して`status`をローカルに反映（操作可否は`status-url`から再取得）しつつ、同様に`systemStateChanged`を発火してHeaderと同期させる。`/ws/system`が切断されている間は「接続が切れています」を表示し、再接続後に`status-url`から再同期する（§6）
-
-### 5.5 pitha-activity-feed
-
-- 初期データを`GET /api/v1/activity`で取得しレンダリングし、以後`/ws/activity`の`job_update`（該当キューの件数のみ置換）・`activity_event`（フィード先頭に追加、最大500件で切り詰め）を反映する
-- type/queueセレクトの変更時は`GET /api/v1/activity?type=&queue=`で再取得する（サーバー側フィルタ。`queue`指定は当該キューの`job`イベントのみに一致）。WS受信イベントも同じ条件でクライアント側で絞り込む
-- 直近Kill Switchイベントは`?type=kill_switch&limit=10`で別途取得し、WSの`kill_switch`イベントで先頭に追加する
-- SSRフォールバック（`QueueStatusPanel` + `ActivityFeedFallback`）を子要素として持ち、ハイドレーション時に置き換える（`pitha-scanner-table`と同じ light DOM 方式）
-
-## 6. API クライアント / WebSocket（`lib/`）
-
-`lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース）:
-
-```typescript
-get<T>(path: string, options?: { background?: boolean }): Promise<T>
-post<T>(path: string, body?): Promise<T>
-put<T>(path: string, body?): Promise<T>
-patch<T>(path: string, body?): Promise<T>
-del<T>(path: string): Promise<T>
-```
-
-`get` の `background: true` は自動発火のリクエスト（`pitha-kill-switch-panel` の再同期）に `X-Pitha-Background: 1` を付け、操作者ハートビートとして数えさせない（`architecture/overview/flows.md` §10.4、FR-RISK-6）。
-
-`lib/ws.ts`（自動再接続、指数バックオフ（〜30秒）、JSONメッセージパース（不正なJSONは`logger.warn`して破棄）、`onOpen`/`onMessage`/`onClose`/`onStatusChange`コールバック）。`onStatusChange`は`connecting`/`open`/`reconnecting`/`failed`を通知する。`failed`は連続10回の再接続失敗後で、以降も30秒間隔で無期限に再試行する。`WsClient`を持つ`pitha-kill-switch-panel`/`pitha-scanner-table`/`pitha-activity-feed`は`reconnecting`/`failed`の間、`lib/ws-status.ts`の「接続が切れています」通知（`role="status"`）を表示する（issue #133）。5種のLitコンポーネントは共通してこの2ファイルのみを経由し、`fetch()`/`new WebSocket()`を直接呼ばない。
-
-`lib/logger.ts`: 構造化ログをブラウザ（WebView）コンソールへ出力し、致命的エラーは将来的にGoバックエンドへ送信できるようフックポイントを用意する（MVPではコンソール出力のみ）。
-
-## 7. Wails統合
-
-- `cmd/desktop/main.go` がGin Engineを組み立て、`options.App.AssetServer.Handler` に注入してWailsを起動する。フロントエンドは通常のWailsテンプレート（`frontend/`ディレクトリ・独自バインディング）を使わず、`static/src`のビルド成果物をGinの`Static()`で配信する
-- Kill Switch発動等、サーバー内部イベントをネイティブ通知として表示する処理（`runtime.EventsEmit`, OSトースト, トレイアイコン変更）は `internal/web/handler` ではなく `internal/service/risk` からWailsランタイムを直接呼び出す薄いアダプタ（`internal/service/notify`）を介して行う
-- 開発ワークフロー（3種のウォッチプロセスを並行起動、`Makefile dev`ターゲット）:
-
-```makefile
-.PHONY: dev
-dev:
-	@bunx concurrently \
-		"wails dev" \
-		"templ generate --watch" \
-		"bun --cwd static run dev"
-```
-
-  - `.templ`編集 → `templ generate --watch`が`_templ.go`を再生成 → `wails dev`がGoファイル変更を検知しプロセス再起動（WebViewは自動リロード）
-  - `.ts`編集 → esbuildがバンドル → `static/src/dist`更新 → WebViewはHTTPキャッシュなし設定のため次回リクエストで反映（手動リロードまたは`hx-boost`遷移で反映）
-  - esbuildのエントリは`static/src/components/*/pitha-*.ts`をglobで自動列挙し（`lib/*.ts`は各コンポーネントからimportされるためエントリにしない）、本番ビルドはsourcemapを出さず（`go:embed`されて`/static`で配信されるため。`--watch`のみ出力、issue #146）、`splitting: true`（ESM）でLit等の共有コードを`dist/js/chunks/`へ切り出す。全ページ共通の`pitha-kill-switch-panel`と各ページのコンポーネントでLitが二重にロードされることはない
-  - `.css`編集 → TailwindがビルドしてSPAリロード不要で反映
-
-- ビルド・配布: `wails build` で単一のWindows実行ファイル（`.exe`）を生成する。DBはSQLite（アプリ内蔵、`modernc.org/sqlite`）のため、Postgres等の外部DBサービスを事前にインストール・起動しておく必要はない。初回起動時に`db/migrations`を自動適用しDBファイルを生成する。Wails v2のWindowsターゲットとDBドライバ（`modernc.org/sqlite`, `modernc.org/sqlite/vec`）はいずれもpure Go実装のためCGO不要であり、`wails build -platform windows/amd64`はLinux CIランナー上でもそのままクロスビルドできる（`environment/setup.md` §CI/CD参照）
-
-## 8. エラーハンドリング（要約）
-
-- HTMX: サーバーがエラーUIもHTMLで返す（4xx/5xxは`atoms.Toast`フラグメントを`#toast-region`へswap。フラグメントの無い失敗・応答なしはグローバル`htmx:responseError`/`htmx:sendError`リスナーが汎用トースト。§4「エラー表示」参照）
-- Lit: JSON APIを使うため自前でtry/catchしコンポーネント内にエラー状態をレンダリングする
-- Huma API: バリデーションエラーはRFC 7807 Problem Details形式で自動生成される
-
-## 9. テスト戦略
-
-| レイヤー | テスト手法 | 検証内容 |
-|---------|----------|---------|
-| Go ハンドラ | `httptest` + HTMLアサーション | 正しいHTMLフラグメント/フルページ・ステータスコード |
-| Templ テンプレート | `Render()` → HTML文字列アサーション | atoms/molecules/organisms/pagesの出力 |
-| Lit コンポーネント | `@open-wc/testing` + `@web/test-runner` | チャート初期化・WS再接続・Kill Switch操作等の単体挙動 |
-| E2E | Playwright（Wailsアプリのwebview、またはビルド前は`wails dev`のブラウザアクセスモード） | Scanner→Symbol Detail遷移、Kill Switch操作フロー全体 |
+| 節 | ファイル |
+|----|----------|
+| §5 Lit Web Components 仕様（§5.1〜§5.5）/ §6 API クライアント / WebSocket（`lib/`） | `docs/components/lit.md` |
+| §7 Wails統合 / §8 エラーハンドリング（要約）/ §9 テスト戦略 | `docs/components/runtime.md` |
 
 ## 改訂履歴
 
@@ -310,3 +166,4 @@ dev:
 | 1.12 | 2026-09-29 | `middleware/`にリクエストログ（`RequestLog`）とpanicリカバリ（`Recovery`）を実装し、未使用のHTMXアクション`POST /system/pause\|resume\|kill`を削除（Kill Switch操作は`/api/v1/system/*`に一本化） | issue #108/#109/#122 |
 | 1.13 | 2026-09-29 | Setup Guardの応答種別、Shadow DOMコンポーネントのスタイル方針、本番sourcemap無効化を追記 | issue #140/#145/#146実装 |
 | 1.14 | 2026-09-29 | §1・§5.4の`architecture/overview.md`節参照を実在する§9・`overview/flows.md` §10.3へ修正、§2の`lib/`に`ws-status.ts`/`styles.ts`を追加 | issue #153/#155 |
+| 1.15 | 2026-09-29 | §5〜§9を`lit.md`（§5〜§6）・`runtime.md`（§7〜§9）へ分割（節番号・内容は変更なし）。§2のhandler/middleware/atoms〜layout一覧、§3のorganismsに`SystemStatusBadge`・pagesに`ErrorPage`を実装に合わせて追記 | issue #182（300行/ファイル制限の解消・実装追従） |

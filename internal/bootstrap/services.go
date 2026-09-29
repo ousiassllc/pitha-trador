@@ -46,8 +46,8 @@ import (
 
 // LogDir is the directory every entrypoint's logging.RotatingWriter
 // writes the daily structured JSON log file to, and the Scheduler's
-// @daily logging.Archiver compresses files past their 30-day retention in
-// (requirements/non-functional.md §5).
+// maintenance task (logging.Archiver) compresses files past their 30-day
+// retention in (requirements/non-functional.md §5).
 const LogDir = "logs"
 
 // EnvBackupDir names the environment variable holding the destination

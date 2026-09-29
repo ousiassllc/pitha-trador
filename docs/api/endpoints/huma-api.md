@@ -188,7 +188,7 @@ Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読
       "proposed_at": "2026-09-28T15:00:00Z",
       "proposed_by": "sol",
       "status": "applied",
-      "proposed_changes": { "policy.long.min_confidence": 0.68 },
+      "proposed_changes": { "policy.long.min_probability": 0.68 },
       "backtest_result": { "expectancy_delta_pct": 2.1, "max_drawdown_delta_pct": -3.4 },
       "reviewed_by": "opus",
       "review": { "verdict": "approve", "reason": "..." },
