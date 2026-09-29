@@ -60,7 +60,7 @@ templ Header() {
 		></div>
 		<div
 			id="update-banner"
-			class="w-full empty:hidden"
+			class="order-last w-full empty:hidden"
 			hx-get="/system/update-status"
 			hx-trigger="load, every 60s, updateStatusChanged from:body"
 			hx-target="this"
