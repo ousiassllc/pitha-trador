@@ -60,6 +60,7 @@ async function mount(body: CalibrationAPIResponse) {
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 
   const el = document.createElement('pitha-calibration-heatmap') as HeatmapElement;
+  el.setAttribute('calibration-url', '/api/v1/calibration');
   document.body.appendChild(el);
   await flush(el);
   return { el, fetchMock };
@@ -67,7 +68,7 @@ async function mount(body: CalibrationAPIResponse) {
 
 describe('pitha-calibration-heatmap', () => {
   test('loads calibration metrics from calibration-url and renders a heatmap cell per bucket', async () => {
-    const { el } = await mount(
+    const { el, fetchMock } = await mount(
       response({
         buckets: [
           bucket({ range: '0.50-0.60', direction_accuracy: 0.51, avg_future_return_pct: -0.05 }),
@@ -82,6 +83,7 @@ describe('pitha-calibration-heatmap', () => {
     expect(el.shadowRoot?.textContent).toContain('0.90-1.00');
     expect(el.shadowRoot?.textContent).toContain('51.0%');
     expect(el.shadowRoot?.textContent).toContain('0.190'); // brier_score
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/calibration');
   });
 
   test('the refresh button re-fetches calibration-url without opening a WebSocket', async () => {
@@ -107,6 +109,7 @@ describe('pitha-calibration-heatmap', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const el = document.createElement('pitha-calibration-heatmap') as HeatmapElement;
+    el.setAttribute('calibration-url', '/api/v1/calibration');
     document.body.appendChild(el);
     await flush(el);
 

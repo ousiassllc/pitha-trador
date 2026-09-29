@@ -120,7 +120,10 @@ func (h *SystemHandler) renderBadge(c *gin.Context) {
 // `POST /api/v1/system/pause|resume|kill` (docs/api/endpoints.md §5).
 type SystemStateOutput struct {
 	Body struct {
-		State string `json:"state" doc:"Overall system state: running, paused, or killed."`
+		State     string `json:"state" doc:"Overall system state: running, paused, or killed."`
+		CanPause  bool   `json:"can_pause" doc:"Whether POST /api/v1/system/pause is a valid transition from state."`
+		CanResume bool   `json:"can_resume" doc:"Whether POST /api/v1/system/resume is a valid transition from state."`
+		CanKill   bool   `json:"can_kill" doc:"Whether POST /api/v1/system/kill is a valid transition from state."`
 	}
 }
 
@@ -131,6 +134,9 @@ func (h *SystemHandler) stateOutput(ctx context.Context) (*SystemStateOutput, er
 	}
 	out := &SystemStateOutput{}
 	out.Body.State = string(state)
+	out.Body.CanPause = state.CanPause()
+	out.Body.CanResume = state.CanResume()
+	out.Body.CanKill = state.CanKill()
 	return out, nil
 }
 
@@ -162,9 +168,9 @@ func (h *SystemHandler) APIKill(ctx context.Context, _ *struct{}) (*SystemStateO
 // twin of `GET /system/status` (which returns an HTML badge fragment for
 // HTMX), used by `pitha-kill-switch-panel`
 // (static/src/components/kill-switch-panel/pitha-kill-switch-panel.ts) to
-// learn the current state on connect, since no SSR page currently
-// threads live internal/service/risk.Engine state into the Header
-// organism the panel is embedded in (organisms.Header's doc comment).
+// resync its state (and which actions the server currently allows) after
+// a Risk-Engine push or a WebSocket reconnect; the initial state is
+// already SSR'd into the panel's attributes (organisms.Header).
 func (h *SystemHandler) APIStatus(ctx context.Context, _ *struct{}) (*SystemStateOutput, error) {
 	return h.stateOutput(ctx)
 }

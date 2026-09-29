@@ -62,27 +62,24 @@ static/
 
 ### atoms
 
-- `Button`, `Input`, `Select`
 - `Badge`（Direction: LONG/SHORT/NONE、Regime: TREND/RANGE/BREAKOUT/CHAOTIC の色分け表示）
 - `StatusDot`（システム状態: Running=緑 / Paused=黄 / Killed=赤）
-- `Spinner`, `Toast`
+
+> **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Button`/`Input`/`Select`/`Spinner`/`Toast`/`Card`/`Modal`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（ボタン・入力はTailwindユーティリティを各テンプレートに直接記述、Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が`Button`/`Input`等の切り出しの目安）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
 
 ### molecules
 
-- `Card`, `Modal`（Kill Switch確認モーダル）
 - `SecretFieldRow`（Settings画面の1項目。ラベル・「設定済み」バッジ・値入力（`type=password`）と保存ボタン・削除ボタン（設定済みのときのみ）・直近の保存/削除結果の通知を持ち、保存は`POST /settings/:key`、削除は`DELETE /settings/:key`で行の`outerHTML`のみ差し替える。他項目の値には影響しない。issue #79）
 - `SignalBadgeGroup`（direction + confidence + entry_quality の組み合わせ表示）
-- `PositionRow`, `OrderRow`
-- `ConfidenceBucketBar`（Calibration帯別バーの単純表示。詳細な曲線描画は`pitha-calibration-heatmap`側）
+- `PositionRow`
 
 ### organisms
 
-- `Header`（ナビゲーション＋`StatusDot`。Kill Switch状態のOOB更新対象）
-- `Sidebar`
+- `Header`（ナビゲーション＋`StatusDot`。Kill Switch状態のOOB更新対象。`middleware.SystemStateFrom`の現在状態から`KillSwitchPanel`を描画する）
+- `KillSwitchPanel`（`pitha-kill-switch-panel`を、現在状態に基づく`status`/`can-pause`/`can-resume`/`can-kill`と各URL属性付きで出力する。issue #106）
 - `ScannerTableFallback`（JS無効時/初回SSR描画用の候補銘柄テーブル。ハイドレーション後は`pitha-scanner-table`が引き継ぐ）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
 - `PerformanceSummaryPanel`
-- `CalibrationBucketTable`
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
 - `UpdatePanel`（Settings画面の「アップデート」節。現在バージョン・最終確認結果・「今すぐアップデートを確認」ボタン（`POST /system/update-check`、`#update-panel`をinnerHTMLスワップ）、issue #76）
 - `SecretsBanner`（SLACK_WEBHOOK_URL等の任意キー未設定時の全ページ共通案内バナー。必須3キーはSetup Guardが`/setup`へ誘導するため対象外。`Header`内`#config-banner`が`GET /system/secrets-status`をhx-trigger="load"で自己補正取得する、issue #57/#80）
@@ -194,40 +191,39 @@ export class PithaPriceChart extends LitElement {
 ```typescript
 @customElement('pitha-kill-switch-panel')
 export class PithaKillSwitchPanel extends LitElement {
-  // HATEOAS: サーバーが現在の状態・操作可否を属性で注入する
-  @property({ type: String }) status: 'running' | 'paused' | 'killed' = 'running';
+  // HATEOAS: サーバーが現在の状態・操作可否・呼び出すURLを属性で注入する。
+  // コンポーネントはURLも遷移表も持たない（操作後・再同期後はAPI応答の can_* を採用する）
+  @property({ type: String }) status: 'running' | 'paused' | 'killed' | '' = '';
   @property({ type: Boolean, attribute: 'can-pause' }) canPause = false;
   @property({ type: Boolean, attribute: 'can-resume' }) canResume = false;
   @property({ type: Boolean, attribute: 'can-kill' }) canKill = false;
-
-  private async onKill() {
-    await api.post('/api/v1/system/kill');
-    // サーバーを経由してHTMX側（Header StatusDot）へ反映するためCustomEventを発火
-    this.dispatchEvent(new CustomEvent('systemStateChanged', { bubbles: true, composed: true }));
-  }
+  @property({ type: String, attribute: 'pause-url' }) pauseUrl = '';
+  @property({ type: String, attribute: 'resume-url' }) resumeUrl = '';
+  @property({ type: String, attribute: 'kill-url' }) killUrl = '';
+  @property({ type: String, attribute: 'status-url' }) statusUrl = '';
+  @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
 }
 ```
 
 ```go
-// Templ側: Lit の外側でCustomEventをHTMXがリッスンし、Header全体を再取得する
-templ HeaderWithKillSwitch(state SystemState) {
-    <div hx-get="/system/status"
-         hx-trigger="systemStateChanged from:closest header"
-         hx-target="#header-status">
-        <div id="header-status">
-            @organisms.Header(state)
-        </div>
-        <pitha-kill-switch-panel
-            status={ state.Status }
-            can-pause?={ state.CanPause }
-            can-resume?={ state.CanResume }
-            can-kill?={ state.CanKill }>
-        </pitha-kill-switch-panel>
-    </div>
+// Templ側（organisms.Header → organisms.KillSwitchPanel）。
+// state は middleware.SystemStateFrom(ctx)（domain.SystemState、読み出せない場合は ""）
+templ KillSwitchPanel(state domain.SystemState) {
+    <pitha-kill-switch-panel
+        status={ string(state) }
+        can-pause?={ state.CanPause() }
+        can-resume?={ state.CanResume() }
+        can-kill?={ state.CanKill() }
+        pause-url="/api/v1/system/pause" resume-url="/api/v1/system/resume"
+        kill-url="/api/v1/system/kill" status-url="/api/v1/system/status"
+        ws-url="/ws/system">
+    </pitha-kill-switch-panel>
 }
 ```
 
-- Kill Switch発動はRisk Engineからも直接トリガーされうる（`architecture/overview.md` §8.3）。この場合はサーバー側が`/ws/system`経由で`kill_switch`イベントを配信し、`pitha-kill-switch-panel`が受信して`status`をローカルに反映しつつ、同様に`systemStateChanged`を発火してHeaderと同期させる
+- 操作可否は`domain.SystemState.CanPause/CanResume/CanKill`（Running→pause/kill可、Paused→resume/kill可、Killed→resumeのみ）が唯一の定義で、`GET/POST /api/v1/system/*`の応答も`can_pause`/`can_resume`/`can_kill`として返す。状態を読み出せないとき`Header`は操作ボタンを描画せず（`status=""`）、パネルが`status-url`から自己補正する
+- 操作後は`systemStateChanged`を発火し、`Header`の`#header-status`（`hx-trigger="systemStateChanged from:closest header"`）がStatusDotを再取得する
+- Kill Switch発動はRisk Engineからも直接トリガーされうる（`architecture/overview.md` §8.3）。この場合はサーバー側が`/ws/system`経由で`kill_switch`イベントを配信し、`pitha-kill-switch-panel`が受信して`status`をローカルに反映（操作可否は`status-url`から再取得）しつつ、同様に`systemStateChanged`を発火してHeaderと同期させる。`/ws/system`が切断されている間は「接続が切れています」を表示し、再接続後に`status-url`から再同期する（§6）
 
 ### 5.5 pitha-activity-feed
 
@@ -248,7 +244,7 @@ patch<T>(path: string, body?): Promise<T>
 del<T>(path: string): Promise<T>
 ```
 
-`lib/ws.ts`（自動再接続、指数バックオフ、最大10回リトライ、JSONメッセージパース、`onOpen`/`onMessage`/`onClose`コールバック）。4種のLitコンポーネントは共通してこの2ファイルのみを経由し、`fetch()`/`new WebSocket()`を直接呼ばない。
+`lib/ws.ts`（自動再接続、指数バックオフ（〜30秒）、JSONメッセージパース（不正なJSONは`logger.warn`して破棄）、`onOpen`/`onMessage`/`onClose`/`onStatusChange`コールバック）。`onStatusChange`は`connecting`/`open`/`reconnecting`/`failed`を通知する。`failed`は連続10回の再接続失敗後で、以降も30秒間隔で無期限に再試行する。`WsClient`を持つ`pitha-kill-switch-panel`/`pitha-scanner-table`/`pitha-activity-feed`は`reconnecting`/`failed`の間、`lib/ws-status.ts`の「接続が切れています」通知（`role="status"`）を表示する（issue #133）。4種のLitコンポーネントは共通してこの2ファイルのみを経由し、`fetch()`/`new WebSocket()`を直接呼ばない。
 
 `lib/logger.ts`: 構造化ログをブラウザ（WebView）コンソールへ出力し、致命的エラーは将来的にGoバックエンドへ送信できるようフックポイントを用意する（MVPではコンソール出力のみ）。
 
@@ -302,3 +298,4 @@ dev:
 | 1.7 | 2026-09-29 | organisms/pagesに`QueueStatusPanel`/`ActivityFeedFallback`/`ActivityLogPage`、Litに`pitha-activity-feed`（§5.5）を追加 | issue #77実装（System Activity Log） |
 | 1.8 | 2026-09-29 | moleculesに`SecretFieldRow`を追加、`SettingsPage`をフィールド単位の保存・削除へ変更、§4に「フィールド単位保存」パターンを追記 | issue #79実装 |
 | 1.9 | 2026-09-29 | `middleware/`にSetup Guard、pagesに`SetupPage`（`layout.SetupShell`）を追加。`SecretsBanner`の対象を任意キーのみへ縮小し、§4に初回セットアップ誘導パターンを追記 | issue #80実装 |
+| 1.10 | 2026-09-29 | §3から未使用のatoms/molecules/organisms（`Button`/`Input`/`Select`/`Spinner`/`Toast`/`Card`/`Modal`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`）を除き、「利用箇所が生じた時点で追加する」方針を明記。`KillSwitchPanel`を追加し§5.4を状態・URL属性のSSR注入に更新、§6に`WsClient`の`onStatusChange`と切断表示を追記 | issue #106/#120/#133実装 |

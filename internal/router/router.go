@@ -216,6 +216,10 @@ func New(opts ...Option) *gin.Engine {
 		// `/api/v1` group; StaticFS below is exempt inside the guard.
 		engine.Use(middleware.SetupGuard(settingsStore, config.RequiredSecretKeys()))
 	}
+	// Header (every full page) SSRs the Kill Switch panel's state and
+	// allowed actions from this; it reads lazily, so /static, fragments,
+	// APIs and WebSockets pay nothing.
+	engine.Use(middleware.SystemState(o.systemEngine))
 	engine.StaticFS("/static", staticFS())
 	// Scanner Dashboard is the app's home page (organisms/header.templ's nav
 	// lists it first); `/` used to serve a static "Backend skeleton is

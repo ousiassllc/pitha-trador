@@ -1,8 +1,8 @@
-// Package molecules holds Atomic Design molecules (Card, Modal,
-// SignalBadgeGroup, PositionRow, OrderRow, ConfidenceBucketBar, ...)
-// composed from internal/web/atoms. See docs/components/overview.md §3.
+// Package molecules holds Atomic Design molecules (SignalBadgeGroup,
+// PositionRow, SecretFieldRow) composed from internal/web/atoms. See
+// docs/components/overview.md §3.
 //
-// SignalBadgeGroup (signal_badge_group.templ) is implemented; the
-// remaining molecules are introduced by later sub-scopes as their
-// consuming pages need them.
+// Card/Modal/OrderRow/ConfidenceBucketBar are deliberately absent: no page
+// needs them yet (issue #120), so each is added here when a consuming
+// page does.
 package molecules

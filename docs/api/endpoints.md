@@ -43,7 +43,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 |---------|------|------|------|
 | POST | `/system/pause` | 新規エントリー一時停止（Kill Switchとは別。手動での一時停止） | システム状態バッジ（OOB） |
 | POST | `/system/resume` | 一時停止解除 | システム状態バッジ（OOB） |
-| POST | `/system/kill` | Kill Switch手動発動（確認モーダル経由） | システム状態バッジ＋トースト（OOB） |
+| POST | `/system/kill` | Kill Switch手動発動（`pitha-kill-switch-panel`の`window.confirm`による確認経由） | システム状態バッジ＋トースト（OOB） |
 | GET | `/system/status` | システム状態バッジのフラグメント再取得（Lit→HTMX間接連携: `systemStateChanged`イベント受信時にHeaderが呼び出す） | システム状態バッジ |
 | GET | `/system/update-status` | 新バージョン検知バナーのフラグメント再取得（Headerの`#update-banner`が`load`・60秒周期・`updateStatusChanged`イベントで呼び出す）。新バージョンが無い/アップデーター未搭載（`cmd/server`）なら空 | `UpdateBanner`（安全ゲート待ち/再起動直前の状態を明示） |
 | GET | `/system/update-panel` | Settings画面`#update-panel`のフラグメント取得（現在バージョン・最終確認結果・確認ボタン） | `UpdatePanel` |
