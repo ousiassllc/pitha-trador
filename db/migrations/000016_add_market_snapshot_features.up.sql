@@ -1,0 +1,27 @@
+-- market_snapshots: 仕様§4.1の特徴量のうち未永続化だった列を追加（すべてNULL可、FR-FE-2）
+ALTER TABLE market_snapshots ADD COLUMN return_3m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN return_30m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN high_distance_5m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN low_distance_5m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN session_high_distance NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN session_low_distance NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN vwap_slope NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN vwap_cross_direction INTEGER;
+ALTER TABLE market_snapshots ADD COLUMN volume_1m INTEGER;
+ALTER TABLE market_snapshots ADD COLUMN volume_5m INTEGER;
+ALTER TABLE market_snapshots ADD COLUMN volume_ratio_1m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN turnover_1m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN turnover_5m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN atr_1m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN atr_5m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN realized_vol_15m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN volatility_expansion_ratio NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN bid_depth NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN ask_depth NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN buy_trade_ratio NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN sell_trade_ratio NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN trade_flow_imbalance NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN microprice NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN market_return_1m NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN stock_vs_sector_relative_strength NUMERIC;
+ALTER TABLE market_snapshots ADD COLUMN market_breadth NUMERIC;

@@ -62,6 +62,66 @@ type Board struct {
 	BidQty        *float64 `json:"BidQty"`
 	AskPrice      *float64 `json:"AskPrice"`
 	AskQty        *float64 `json:"AskQty"`
+
+	// HighPrice/LowPrice are the session (当日) high/low; nil when the API
+	// has not resolved them yet.
+	HighPrice *float64 `json:"HighPrice"`
+	LowPrice  *float64 `json:"LowPrice"`
+
+	// Sell1..Sell10 / Buy1..Buy10 are the ten displayed book levels.
+	// Sell levels sit on the same side as BidPrice/BidQty and Buy levels
+	// on the AskPrice/AskQty side (see the swapped-naming note above).
+	Sell1  *BoardLevel `json:"Sell1"`
+	Sell2  *BoardLevel `json:"Sell2"`
+	Sell3  *BoardLevel `json:"Sell3"`
+	Sell4  *BoardLevel `json:"Sell4"`
+	Sell5  *BoardLevel `json:"Sell5"`
+	Sell6  *BoardLevel `json:"Sell6"`
+	Sell7  *BoardLevel `json:"Sell7"`
+	Sell8  *BoardLevel `json:"Sell8"`
+	Sell9  *BoardLevel `json:"Sell9"`
+	Sell10 *BoardLevel `json:"Sell10"`
+	Buy1   *BoardLevel `json:"Buy1"`
+	Buy2   *BoardLevel `json:"Buy2"`
+	Buy3   *BoardLevel `json:"Buy3"`
+	Buy4   *BoardLevel `json:"Buy4"`
+	Buy5   *BoardLevel `json:"Buy5"`
+	Buy6   *BoardLevel `json:"Buy6"`
+	Buy7   *BoardLevel `json:"Buy7"`
+	Buy8   *BoardLevel `json:"Buy8"`
+	Buy9   *BoardLevel `json:"Buy9"`
+	Buy10  *BoardLevel `json:"Buy10"`
+}
+
+// BoardLevel is one displayed book level
+// (kabu_STATION_API.yaml BoardSuccess.Sell1..Sell10/Buy1..Buy10).
+type BoardLevel struct {
+	Price float64 `json:"Price"`
+	Qty   float64 `json:"Qty"`
+}
+
+// SellDepth is the total quantity across the reported Sell levels, and
+// false when the API reported none.
+func (b Board) SellDepth() (float64, bool) {
+	return levelDepth(b.Sell1, b.Sell2, b.Sell3, b.Sell4, b.Sell5, b.Sell6, b.Sell7, b.Sell8, b.Sell9, b.Sell10)
+}
+
+// BuyDepth is the total quantity across the reported Buy levels, and
+// false when the API reported none.
+func (b Board) BuyDepth() (float64, bool) {
+	return levelDepth(b.Buy1, b.Buy2, b.Buy3, b.Buy4, b.Buy5, b.Buy6, b.Buy7, b.Buy8, b.Buy9, b.Buy10)
+}
+
+func levelDepth(levels ...*BoardLevel) (float64, bool) {
+	var total float64
+	found := false
+	for _, l := range levels {
+		if l != nil {
+			total += l.Qty
+			found = true
+		}
+	}
+	return total, found
 }
 
 // GetBoard fetches 時価情報・板情報 (current price, session VWAP,

@@ -17,6 +17,8 @@
 
 - FR-FE-1: すべての特徴量は判定時点までのデータのみで算出する（look-ahead防止、§9 バックテスト参照）
 - FR-FE-2: 板・約定特徴量はkabuステーションAPIから取得できない銘柄・時間帯では欠損値として扱い、依存するJev入力/スコアから除外する
+- FR-FE-3: `volume`/`turnover`はkabuステーションAPIの当日累積値である。`volume_1m/5m`・`turnover_1m/5m`は「現在の累積値 − 窓の開始時点の累積値」で算出し、足の合算はしない。Fast Screenerの`min_turnover_5m_jpy`とPolicy Engineの「板が薄い」判定は同じ`turnover_5m`（`featureengine.TurnoverOverWindow`）を用いる
+- FR-FE-4: 市場コンテキストは`instruments.kind`で区別した追跡銘柄から算出する。`market_index`（TOPIX/Nikkei225等）のreturn平均を`market_return_1m/5m`、銘柄の`sector`と一致する`sector_index`のreturnを`sector_return_5m`とし、`stock_vs_sector_relative_strength = return_5m − sector_return_5m`、`market_breadth`は直近3分以内の全アクティブ株式の最新return_5mの（上昇数−下落数）/銘柄数とする。追跡銘柄が未登録・更新が3分以上停止・履歴不足の場合は欠損値とする（FR-FE-2と同じ扱い）
 
 ### 4.2 Fast Screener
 
@@ -65,7 +67,7 @@ screen_score =
 
 - FR-POLICY-1: LONG条件: `direction == LONG AND P(LONG) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
 - FR-POLICY-2: SHORT条件: `direction == SHORT AND P(SHORT) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
-- FR-POLICY-3: 以下のいずれかに該当する場合はNONE（取引しない）: JevがNONE、確信度不足、スプレッド過大、板が薄い、Risk Engine拒否、データ欠損、API異常、キャリブレーション対象外
+- FR-POLICY-3: 以下のいずれかに該当する場合はNONE（取引しない）: JevがNONE、確信度不足、スプレッド過大、板が薄い（スナップショットの`turnover_5m`が`min_turnover_5m_jpy`未満。履歴不足で算出不能な場合は判定しない）、Risk Engine拒否、データ欠損、API異常、キャリブレーション対象外（Jev decisionのconfidenceが属する信頼度バケットのラベル付きCalibrationサンプル数が`policy.min_calibration_samples`未満。0で無効）
 - FR-POLICY-4: しきい値はCalibration結果に基づき調整する。プロンプト変更より先にポリシー側のしきい値調整を優先する
 - FR-POLICY-5: 生成したトレードシグナルを`trade_signals`に保存する（policy_version、risk_passed、reject_reasonを含む）
 

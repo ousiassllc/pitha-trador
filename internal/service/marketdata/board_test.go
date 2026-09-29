@@ -178,3 +178,19 @@ func TestClient_GetBoard_RequiresToken(t *testing.T) {
 		t.Errorf("GetBoard before token issuance: err = %v, want %v", err, marketdata.ErrNoToken)
 	}
 }
+
+func TestBoard_DepthSumsReportedLevels(t *testing.T) {
+	b := marketdata.Board{
+		Sell1: &marketdata.BoardLevel{Price: 2101, Qty: 300}, Sell3: &marketdata.BoardLevel{Price: 2103, Qty: 200},
+		Buy1: &marketdata.BoardLevel{Price: 2099, Qty: 100},
+	}
+	if d, ok := b.SellDepth(); !ok || d != 500 {
+		t.Errorf("SellDepth = %v, %v; want 500, true", d, ok)
+	}
+	if d, ok := b.BuyDepth(); !ok || d != 100 {
+		t.Errorf("BuyDepth = %v, %v; want 100, true", d, ok)
+	}
+	if _, ok := (marketdata.Board{}).SellDepth(); ok {
+		t.Error("SellDepth ok = true with no levels, want false (FR-FE-2)")
+	}
+}

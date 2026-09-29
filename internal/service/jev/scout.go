@@ -43,16 +43,41 @@ func StateFromSnapshot(snap domain.Snapshot) ScoutState {
 		RealizedVol5m:      snap.Feature.RealizedVol5m,
 		MarketReturn5m:     snap.Feature.MarketReturn5m,
 		SectorReturn5m:     snap.Feature.SectorReturn5m,
+
+		Return3m:                      snap.Feature.Return3m,
+		Return30m:                     snap.Feature.Return30m,
+		HighDistance5m:                snap.Feature.HighDistance5m,
+		LowDistance5m:                 snap.Feature.LowDistance5m,
+		SessionHighDistance:           snap.Feature.SessionHighDistance,
+		SessionLowDistance:            snap.Feature.SessionLowDistance,
+		VWAPSlope:                     snap.Feature.VWAPSlope,
+		VWAPCrossDirection:            snap.Feature.VWAPCrossDirection,
+		Volume1m:                      snap.Feature.Volume1m,
+		Volume5m:                      snap.Feature.Volume5m,
+		VolumeRatio1m:                 snap.Feature.VolumeRatio1m,
+		Turnover1m:                    snap.Feature.Turnover1m,
+		Turnover5m:                    snap.Feature.Turnover5m,
+		ATR1m:                         snap.Feature.ATR1m,
+		ATR5m:                         snap.Feature.ATR5m,
+		RealizedVol15m:                snap.Feature.RealizedVol15m,
+		VolatilityExpansionRatio:      snap.Feature.VolatilityExpansionRatio,
+		BestBid:                       snap.Bid,
+		BestAsk:                       snap.Ask,
+		BidDepth:                      snap.Feature.BidDepth,
+		AskDepth:                      snap.Feature.AskDepth,
+		BuyTradeRatio:                 snap.Feature.BuyTradeRatio,
+		SellTradeRatio:                snap.Feature.SellTradeRatio,
+		TradeFlowImbalance:            snap.Feature.TradeFlowImbalance,
+		Microprice:                    snap.Feature.Microprice,
+		MarketReturn1m:                snap.Feature.MarketReturn1m,
+		StockVsSectorRelativeStrength: snap.Feature.StockVsSectorRelativeStrength,
+		MarketBreadth:                 snap.Feature.MarketBreadth,
 	}
 }
 
 // ragFeatureInput maps a ScoutState onto rag.FeatureInput (rag/vector.go
 // §FeatureInput), the named-field shape RAG standardizes into the fixed
-// 14-dimension embedding (FR-RAG-1). ScoutState has no
-// volume_ratio_1m/realized_vol_15m/volatility_expansion_ratio/
-// stock_vs_sector_relative_strength values yet (Feature Engine does not
-// compute them - see rag.FeatureInput's doc comment), so those fields
-// are left nil.
+// 14-dimension embedding (FR-RAG-1).
 func ragFeatureInput(state ScoutState) rag.FeatureInput {
 	priceVsVWAPBps := state.PriceVsVWAPBps
 	return rag.FeatureInput{
@@ -60,12 +85,17 @@ func ragFeatureInput(state ScoutState) rag.FeatureInput {
 		Return5m:           state.Return5m,
 		Return15m:          state.Return15m,
 		PriceVsVWAPBps:     &priceVsVWAPBps,
+		VolumeRatio1m:      state.VolumeRatio1m,
 		VolumeRatio5m:      state.VolumeRatio5m,
 		SpreadBps:          state.SpreadBps,
 		OrderbookImbalance: state.OrderbookImbalance,
 		RealizedVol5m:      state.RealizedVol5m,
-		MarketReturn5m:     state.MarketReturn5m,
-		SectorReturn5m:     state.SectorReturn5m,
+		RealizedVol15m:     state.RealizedVol15m,
+
+		VolatilityExpansionRatio:      state.VolatilityExpansionRatio,
+		MarketReturn5m:                state.MarketReturn5m,
+		SectorReturn5m:                state.SectorReturn5m,
+		StockVsSectorRelativeStrength: state.StockVsSectorRelativeStrength,
 	}
 }
 

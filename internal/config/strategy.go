@@ -89,6 +89,12 @@ type JevScoutConfig struct {
 type PolicyConfig struct {
 	Long  PolicyDirectionThresholds `yaml:"long"`
 	Short PolicyDirectionThresholds `yaml:"short"`
+
+	// MinCalibrationSamples is the fewest labeled Calibration samples the
+	// confidence bucket of a Jev decision must hold for that decision to
+	// count as calibrated; below it FR-POLICY-3's "キャリブレーション
+	// 対象外" applies and the signal is NONE. 0 disables the check.
+	MinCalibrationSamples int `yaml:"min_calibration_samples"`
 }
 
 // PolicyDirectionThresholds holds the thresholds a Jev Trader decision must

@@ -125,22 +125,17 @@ type Input struct {
 	// rather than passing it through.
 	SpreadBps *float64
 
-	// Turnover5mJPY is the trailing 5-minute turnover, re-checked against
-	// the same Fast Screener min_turnover_5m_jpy limit (FR-POLICY-3 "板
-	// が薄い"). It is not yet computed anywhere in this codebase (Feature
-	// Engine does not derive it - see internal/service/screener.Input's
-	// own doc comment for the same gap), so real jev-trader queue jobs
-	// leave it nil, which skips this check rather than failing the
-	// candidate; a later sub-scope that wires a real value in makes the
-	// check take effect. Unit tests set it directly to exercise the "板
-	// が薄い" branch.
+	// Turnover5mJPY is the trailing 5-minute turnover (Feature.Turnover5m:
+	// the difference of kabuステーションAPI's cumulative session turnover
+	// over 5 minutes), re-checked against the same Fast Screener
+	// min_turnover_5m_jpy limit (FR-POLICY-3 "板が薄い"). nil means it
+	// could not be computed (insufficient history) and skips this check.
 	Turnover5mJPY *float64
 
-	// Calibrated is false for an instrument/setup Calibration
-	// (functional.md §4.9, a separate later sub-scope) has not yet
-	// covered (FR-POLICY-3 "キャリブレーション対象外"). Real jev-trader
-	// queue jobs default this true until Calibration exists to say
-	// otherwise.
+	// Calibrated is false when Calibration (functional.md §4.9) does not
+	// yet cover the decision - its confidence bucket has too few labeled
+	// samples (FR-POLICY-3 "キャリブレーション対象外"). Handler derives it
+	// via WithCalibration.
 	Calibrated bool
 
 	// APIErr is set by the caller when the Jev Trader call itself failed

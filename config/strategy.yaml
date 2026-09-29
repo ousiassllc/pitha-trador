@@ -54,6 +54,10 @@ jev_scout:
   min_abnormal_activity: 0.55
 
 policy:
+  # FR-POLICY-3「キャリブレーション対象外」: Jev decision の confidence が属する
+  # 信頼度バケットのラベル付き Calibration サンプル数がこの値未満なら NONE。
+  # 0 で無効化。
+  min_calibration_samples: 20
   # FR-POLICY-1/2: LONG/SHORTそれぞれのPolicy Engine通過しきい値。
   long:
     min_probability: 0.68

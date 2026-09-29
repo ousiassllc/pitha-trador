@@ -118,3 +118,50 @@ func TestRefreshCandidates_ReturnsErrorForMalformedRuntimeSetting(t *testing.T) 
 		t.Fatal("refreshCandidates returned nil error, want error for a non-numeric screener.top_n")
 	}
 }
+
+// Regression for #163: turnover_5m is a cumulative difference, not a sum.
+func TestRefreshCandidates_Turnover5mIsCumulativeDifference(t *testing.T) {
+	svc := newTestServices(t, nil)
+	cfg := lenientFastScreener()
+	cfg.MinTurnover5mJPY = 30_000_000
+	svc.strategy.FastScreener = cfg
+
+	now := time.Now().UTC().Truncate(time.Minute)
+	series := func(inst domain.Instrument, cumulativeAt func(minutesAgo int) float64) {
+		var bars []domain.Snapshot
+		for m := 6; m >= 0; m-- {
+			bars = append(bars, domain.Snapshot{
+				InstrumentID: inst.ID, Symbol: inst.Symbol,
+				Timestamp: now.Add(-time.Duration(m) * time.Minute), Price: 2000, Volume: 1000,
+				Turnover: cumulativeAt(m), SpreadBps: ptrF(10),
+				Feature: domain.Feature{VWAP: 2000, VolumeRatio5m: ptrF(1), Return5m: ptrF(0.01), RealizedVol5m: ptrF(0.01)},
+			})
+		}
+		if _, err := svc.Snapshots.InsertBatch(context.Background(), bars); err != nil {
+			t.Fatalf("InsertBatch: %v", err)
+		}
+	}
+	// Illiquid: cumulative 1e9, nothing traded (a 5-bar sum reads 5e9).
+	series(mustCreateInstrument(t, svc, "1111"), func(int) float64 { return 1e9 })
+	liquid := func(m int) float64 { return 1e9 - float64(m)*10e6 }
+	series(mustCreateInstrument(t, svc, "2222"), liquid)
+	// Index instruments are never screened.
+	topix, err := svc.Instruments.Create(context.Background(), domain.Instrument{
+		Symbol: "TOPIX", Name: "TOPIX", Market: "TSE", Kind: domain.InstrumentKindMarketIndex, IsActive: true,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	series(topix, liquid)
+
+	if err := svc.refreshCandidates(context.Background()); err != nil {
+		t.Fatalf("refreshCandidates: %v", err)
+	}
+	candidates, _, err := svc.Screener.Candidates(context.Background())
+	if err != nil {
+		t.Fatalf("Candidates: %v", err)
+	}
+	if len(candidates) != 1 || candidates[0].Symbol != "2222" {
+		t.Fatalf("candidates = %+v, want only the liquid stock 2222", candidates)
+	}
+}
