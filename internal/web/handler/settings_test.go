@@ -536,3 +536,38 @@ func TestSettingsHandler_NonHTMXSaveAndDelete_RedirectBackToOriginScreen(t *test
 		t.Errorf("JEV_API_KEY still stored after DELETE")
 	}
 }
+
+// The row form's plain `method="post"` fallback (no JS/htmx) used to get a
+// bare Toast fragment as the whole page on failure (issue #184); it must get
+// the full pages.ErrorPage instead.
+func TestSettingsHandler_NonHTMXFailures_RenderFullErrorPage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	store.deleteErr = http.ErrAbortHandler
+	engine := settingsRouter(handler.NewSettingsHandler(store))
+
+	form := url.Values{"value": {""}, "_csrf": {"token"}}
+	post := httptest.NewRequest(http.MethodPost, "/settings/"+config.KeyJevAPIKey, strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	postRec := httptest.NewRecorder()
+	engine.ServeHTTP(postRec, post)
+
+	deleteRec := httptest.NewRecorder()
+	engine.ServeHTTP(deleteRec, httptest.NewRequest(http.MethodDelete, "/settings/"+config.KeyJevAPIKey, nil))
+
+	for name, tc := range map[string]struct {
+		rec  *httptest.ResponseRecorder
+		want int
+	}{
+		"empty value": {postRec, http.StatusBadRequest},
+		"delete 500":  {deleteRec, http.StatusInternalServerError},
+	} {
+		body := tc.rec.Body.String()
+		if tc.rec.Code != tc.want {
+			t.Errorf("%s: status = %d, want %d", name, tc.rec.Code, tc.want)
+		}
+		if !strings.Contains(body, `data-testid="error-page"`) || !strings.Contains(body, "<html") {
+			t.Errorf("%s: body = %q, want the full error page", name, body)
+		}
+	}
+}

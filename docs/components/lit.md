@@ -26,8 +26,8 @@ export class PithaPriceChart extends LitElement {
   @state() private chart: IChartApi | null = null;
   @state() private error: string | null = null;
 
-  connectedCallback() {
-    super.connectedCallback();
+  // connectedCallback ではなく firstUpdated: createChart には描画済みの DOM 要素が必要（issue #170）
+  firstUpdated() {
     this.initChart();   // lightweight-charts でローソク足/VWAPライン/出来高ヒストグラムペインを初期化
     this.loadInitial();  // candlesUrl から初期系列を取得（lib/api.ts経由）
     this.subscribeWs();  // wsUrl から tick / jev_update を受信し系列・マーカーを更新
@@ -41,6 +41,7 @@ export class PithaPriceChart extends LitElement {
 }
 ```
 
+- `tick`は1分足に集約する: 現在の分（`floor(now/60)*60`、または最新バー時刻）のバーの`high/low/close`を更新し、分が変わったときのみ新しいバーを追加する。`price <= 0`の`tick`は無視する（サーバー側も`LastPrice <= 0`の間は`tick`を送らない。issue #183）
 - Jevの`direction`変化・`entry_quality`更新はチャート上のマーカー（例: LONG転換で上向き矢印）として描画する
 - `symbol`属性が変化した場合（同一ページ内で銘柄を切り替えるUIを将来追加する場合）は`updated()`ライフサイクルで再購読する
 

@@ -133,3 +133,50 @@ func TestSymbolHandler_WebSocket_NoJevUpdateWhenNoSignalYet(t *testing.T) {
 
 	_ = conn.Close(websocket.StatusNormalClosure, "")
 }
+
+// A symbol without any snapshot has LastPrice 0; sending tick{price:0} made
+// pitha-price-chart autoscale down to 0 (issue #183).
+func TestSymbolHandler_WebSocket_SkipsTickWhileNoPrice(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	provider := &fakeSymbolProvider{state: execution.SymbolState{
+		Symbol: "7203", LastPrice: 0, LastSignal: domain.JevDirectionLong, LastSignalConfidence: 0.5,
+	}}
+	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h.SetTickInterval(20 * time.Millisecond)
+
+	engine := gin.New()
+	engine.GET("/ws/symbols/:symbol", h.WebSocket)
+	server := httptest.NewServer(engine)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/symbols/7203"
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket.Dial() error = %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+
+	// Several intervals elapse; the only message is the jev_update.
+	readCtx, readCancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer readCancel()
+	var types []string
+	for {
+		_, data, err := conn.Read(readCtx)
+		if err != nil {
+			break
+		}
+		var got struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatalf("json.Unmarshal() error = %v, data = %s", err, data)
+		}
+		types = append(types, got.Type)
+	}
+	if len(types) != 1 || types[0] != "jev_update" {
+		t.Fatalf("messages = %v, want only [jev_update] (no tick while LastPrice is 0)", types)
+	}
+}

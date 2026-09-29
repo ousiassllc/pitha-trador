@@ -134,19 +134,19 @@ func (h *SettingsHandler) SetupPage(c *gin.Context) {
 func (h *SettingsHandler) Save(c *gin.Context) {
 	key := c.Param("key")
 	if !config.IsAllowedSecretKey(key) {
-		respondActionError(c, http.StatusBadRequest, "不明な設定キーです。")
+		respondPageError(c, http.StatusBadRequest, "不明な設定キーです。")
 		return
 	}
 	value := c.PostForm("value")
 	if value == "" {
-		respondActionError(c, http.StatusBadRequest, "値を入力してください（保存済みの値を消す場合は削除を使ってください）。")
+		respondPageError(c, http.StatusBadRequest, "値を入力してください（保存済みの値を消す場合は削除を使ってください）。")
 		return
 	}
 
 	ctx := c.Request.Context()
 	if err := h.store.Set(ctx, key, value); err != nil {
 		slog.Error("settings: save secret", "key", key, "error", err)
-		respondActionError(c, http.StatusInternalServerError, "保存に失敗しました。")
+		respondPageError(c, http.StatusInternalServerError, "保存に失敗しました。")
 		return
 	}
 	h.renderRow(c, key, "保存しました。反映にはアプリの再起動が必要です。")
@@ -159,13 +159,13 @@ func (h *SettingsHandler) Save(c *gin.Context) {
 func (h *SettingsHandler) Delete(c *gin.Context) {
 	key := c.Param("key")
 	if !config.IsAllowedSecretKey(key) {
-		respondActionError(c, http.StatusBadRequest, "不明な設定キーです。")
+		respondPageError(c, http.StatusBadRequest, "不明な設定キーです。")
 		return
 	}
 
 	if err := h.store.Delete(c.Request.Context(), key); err != nil {
 		slog.Error("settings: delete secret", "key", key, "error", err)
-		respondActionError(c, http.StatusInternalServerError, "削除に失敗しました。")
+		respondPageError(c, http.StatusInternalServerError, "削除に失敗しました。")
 		return
 	}
 	h.renderRow(c, key, "削除しました。反映にはアプリの再起動が必要です。")
