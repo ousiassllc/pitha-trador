@@ -93,7 +93,7 @@ erDiagram
 | realized_pnl | numeric(14,2) | NULL可 | クローズ時に確定 |
 | opened_at | text | NOT NULL | |
 | closed_at | text | NULL可 | |
-| exit_reason | varchar(50) | NULL可 | 例: stop_loss/take_profit/trailing_stop/jev_reversal/max_holding/force_close |
+| exit_reason | varchar(50) | NULL可 | 値は `internal/domain/position.go` の `ExitReason*` 定数（`functional.md` FR-EXIT-1 の8条件＋手動決済＋Kill Switch強制クローズ）: `stop_loss`（固定Stop Loss）/ `take_profit`（固定Take Profit）/ `trailing_stop`（Trailing Stop）/ `jev_direction_reversed`（Jev方向反転）/ `continuation_probability_dropped`（continuation_probability低下）/ `vwap_cross`（VWAP逆クロス）/ `max_holding`（最大保有時間到達）/ `force_flat_before_close`（引け前強制決済）/ `manual`（手動決済 `POST /positions/:id/close`）/ `force_close`（Kill Switchによる強制クローズ） |
 | created_at / updated_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id)`, `UNIQUE (instrument_id) WHERE closed_at IS NULL`（部分インデックス。SQLite 3.8+対応。同一銘柄の同時保有は1ポジションに制限し、状態管理§4.9の `position` フィールドと整合させる）
