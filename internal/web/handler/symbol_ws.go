@@ -42,8 +42,12 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 			return err
 		}
 
-		if err := writeJSON(ctx, conn, symbolTickMessage{Type: "tick", Price: state.LastPrice}); err != nil {
-			return err
+		// No snapshot yet (LastPrice == 0): a price-0 tick would drag the
+		// chart's autoscale to 0, so send nothing until a price exists.
+		if state.LastPrice > 0 {
+			if err := writeJSON(ctx, conn, symbolTickMessage{Type: "tick", Price: state.LastPrice}); err != nil {
+				return err
+			}
 		}
 
 		direction := jevDirectionOrNil(state.LastSignal)
