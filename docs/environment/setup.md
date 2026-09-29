@@ -2,7 +2,7 @@
 
 ## 概要
 
-- 言語: Go 1.23+（バックエンド・Scheduler・アダプタ全般）
+- 言語: Go 1.25+（`go.mod`の`go 1.25.11`に準拠。バックエンド・Scheduler・アダプタ全般）
 - デスクトップシェル: Wails v2（WebView2、ネイティブウィンドウ/トレイ/通知）
 - サーバー: Gin + Huma（`/api/v1/...`）、Templ + HTMX（SSR）
 - フロントエンド（リッチアイランドのみ）: Lit + TypeScript、ビルドは esbuild、パッケージマネージャは **bun** に固定
@@ -12,7 +12,7 @@
 
 技術スタックの詳細は `docs/architecture/overview.md` §2 技術スタック、レイヤー構造は同§3 を参照。本ドキュメントは開発環境・CI/CD・Lint/Format/Linterly/Git Hooks/Swagger の構築方針のみを扱う。
 
-現時点でこのリポジトリに既存のコード・設定ファイルは無い（仕様書のみのグリーンフィールド状態）。以下は新規導入する構成である。
+アプリケーション本体・CI（`.github/workflows/ci.yml`）・`Makefile`・`lefthook.yml`・`.golangci.yml`・`.linterly.yml`・`static/package.json`等の環境構築用ファイルはいずれも実装済みである。本ドキュメントはその現状の構成と方針を記述する。
 
 ## ディレクトリ構造
 
@@ -22,8 +22,8 @@
 pitha-trador/
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml            # push/PR/タグ: lint → test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
-│       └── e2e.yml            # タグpush時: windows-latestで.exeを実起動しPlaywright E2E（任意）
+│       └── ci.yml            # push/PR/タグ: lint → test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
+├── .env.example               # 環境変数の一覧と説明（`cp .env.example .env`）
 ├── .bun-version               # CIで使うbunバージョン固定（setup-bunの`bun-version-file`）
 ├── .golangci.yml              # Go lint設定
 ├── .linterly.yml              # 行数リンター設定
@@ -40,6 +40,7 @@ pitha-trador/
 ```
 
 - Goモジュールのルートは`pitha-trador/`直下（`go.mod`）
+- `.github/workflows/`には現状`ci.yml`のみが存在する。`e2e.yml`（実機E2E用）は未作成であり、必要になった時点で追加する（後述「CI/CD」節の注意を参照）
 - フロントエンド（Lit/TypeScript）の依存管理は`static/`配下に閉じ、bunで管理する（Goモジュールとは独立）
 
 ## 開発環境セットアップ
@@ -48,7 +49,7 @@ pitha-trador/
 
 | ツール | バージョン目安 | 用途 |
 |---|---|---|
-| Go | 1.23+ | バックエンド全般 |
+| Go | 1.25+（`go.mod`準拠） | バックエンド全般 |
 | Wails CLI | v2 (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`) | デスクトップアプリのビルド・`wails dev` |
 | WebView2 Runtime | 最新（Windows 10/11は通常プリインストール済み） | Wailsのネイティブウィンドウ描画（Windows実機/`wails dev`時に必要） |
 | bun | `.bun-version`記載のバージョン（CIと同一） | フロントエンド（Lit/TypeScript）の依存管理・ビルド |
@@ -76,8 +77,40 @@ lefthook install
 # PITHA_STRATEGY_PATH/PITHA_RISK_PATH をリポジトリ内の config/*.yaml へ
 # 設定するため（Makefileが自動設定）、それらを編集して再起動すればすぐ反映される
 make dev
+```
 
 `JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。必須3キー（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`）が未設定の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
+
+### 環境変数
+
+アプリ本体は`.env`を自動では読み込まない。以下はプロセス環境変数として設定する（一覧の雛形は`.env.example`）。API/Secret系（上記のJev/kabu/Slack/Luna/Sol/Opus/News）はSettings画面で入力するため対象外。
+
+| 変数 | 参照元 | 既定値・挙動 |
+|---|---|---|
+| `PITHA_SERVER_ADDR` | `cmd/server` | HTTPサーバー（ヘッドレス起動）の待受アドレス。既定`127.0.0.1:48080`。loopback以外（`:48080`・`0.0.0.0`・LAN IP等）は起動を拒否する。`cmd/desktop`（Wails）はネットワークポートを待ち受けない |
+| `PITHA_SERVER_ALLOW_NON_LOOPBACK` | `cmd/server` | `1`のときのみ`PITHA_SERVER_ADDR`にloopback以外を許可する（意図的な公開用） |
+| `SWAGGER_ENABLED` | `internal/router` | `false`のとき`/swagger`を無効化。未設定・それ以外は有効（後述「Swagger / OpenAPI」） |
+| `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`） |
+| `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
+| `PITHA_STATIC_DIR` | `internal/router` | 設定すると`/static/...`を`go:embed`ではなく指定ディレクトリ（存在するディレクトリのみ有効。`make dev`は`static/src`）から配信する。未設定・不正パスは埋め込みにフォールバック |
+| `PITHA_POLICY_LONG_*` / `PITHA_POLICY_SHORT_*` | `internal/config` | `config/strategy.yaml`の`policy.long`/`policy.short`のしきい値を起動時に上書きする（FR-POLICY-4）。サフィックスは`MIN_PROBABILITY`・`MIN_ENTRY_QUALITY`・`MIN_CONTINUATION_PROBABILITY`・`MAX_TOXIC_FLOW`・`MAX_LIQUIDITY_STRESSED`。数値は不正値だと起動エラー |
+| `PITHA_FAST_SCREENER_*` | `internal/config` | `fast_screener`のフィルター・重みを起動時に上書きする（FR-FS-1/FR-FS-3、名前は`.env.example`と`requirements/functional.md`参照）。DB `runtime_settings`の`screener.*`が最優先 |
+
+### Makefileターゲット
+
+`make`（引数なし）または`make help`でコマンド一覧を表示する（既定ターゲットは`help`）。
+
+| ターゲット | 内容 |
+|---|---|
+| `make dev` | `wails dev`・`templ generate --watch`・`bun --cwd=static run dev`を並行起動 |
+| `make generate` | `templ generate`と`bun run --cwd static build`。`lint`/`test`/`build`の前提 |
+| `make lint` | `generate`後に`golangci-lint run`と`bunx biome check static/` |
+| `make test` | `generate`後に`go test ./...`と`bun --cwd=static test` |
+| `make build` | `generate`後に`wails build -platform windows/amd64` |
+| `make openapi-export` | 起動中サーバー（`127.0.0.1:48080`）から`docs/api/openapi.json`を書き出す（任意タスク。ファイルは未コミット） |
+
+- **`make dev`の環境変数**: `wails dev`は`cmd/desktop`をカレントとして動くため、`Makefile`は`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`を`$(CURDIR)/config/*.yaml`（絶対パス）に設定する。`internal/bootstrap.Run`は環境変数を埋め込み既定値より優先するため、`config/risk.yaml`等を編集して`make dev`を再起動すれば再ビルドなしで反映される（埋め込み既定値はビルド時のスナップショット）。`PITHA_STATIC_DIR`は`static/src`に設定し、`/static/...`をディスクから配信する。`wails dev`のファイル監視は既定で`.go`変更時のみGoバイナリを再ビルドするため、この上書きが無いと`bun run dev`（esbuild/Tailwind watch）の出力がgo:embedのスナップショットに阻まれ`make dev`再起動まで反映されない
+- **`generate`が前提となる理由**: `templ generate`が`*_templ.go`を、`bun run --cwd static build`が`static/src/dist/{css,js}`を生成する。どちらも`.gitignore`対象であり、`static/src/embed.go`の`//go:embed dist vendor`は`dist/`が空だとコンパイル自体が失敗する。そのためクリーンなチェックアウトでは、生成前に`go vet`/golangci-lint/`go test`/`wails build`のいずれも実行できない（古い生成物が残っていると陳腐化した出力に対して実行してしまう）。CIの`lint`/`test`/`build`各ジョブも同じ2ステップを先に実行し、`lefthook`のpre-commit/pre-pushも`make generate`を呼ぶ
 
 ## CI/CD
 
@@ -93,7 +126,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 - **バージョン固定**: bunは`.bun-version`（`oven-sh/setup-bun`の`bun-version-file`）、templ・wails・golangci-lint・linterlyはワークフロー内でバージョンを固定する。`latest`は使わない
 - **同時実行制御**: ワークフロー全体に`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: false }`を設定する。版番号の採番（`build`）とタグ作成（`release`）が別ジョブのため、`main`への連続pushで並行実行されると同じ版番号を算出してタグが衝突しうる。同一refの実行を直列化して防ぐ
 - **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
-- **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/overview.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途実行する（通常のlint/test/buildフローには含めない）
+- **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/overview.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`（**現状は未作成**）をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途追加して実行する（通常のlint/test/buildフローには含めない）
 
 ## Lint
 
@@ -141,7 +174,7 @@ language: ja
 *_templ.go
 ```
 
-`static/dist/`（esbuildビルド成果物）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
+`static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
 
 ## Git Hooks
 
@@ -187,3 +220,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.6 | 2026-09-29 | `LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`をSettings画面経由の入力対象に追加 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
 | 1.7 | 2026-09-29 | 必須3キー（`JEV_API_KEY`/`JEV_BASE_URL`/`KABU_API_PASSWORD`）は未設定だと全画面が`/setup`へリダイレクトされる旨を追記 | issue #80実装 |
 | 1.8 | 2026-09-29 | CI/CD節のジョブ構成・トリガーに`release`ジョブとタグ`v*`トリガーを追記（issue #115）。bunを`.bun-version`で固定、`lint`ジョブに`linterly check`を追加、`concurrency`で版番号採番の競合を防止（issue #132） | code-review・doc-driftレビュー指摘 |
+| 1.9 | 2026-09-29 | グリーンフィールド記述を削除し実装済みの現状に更新、Goを1.25+（`go.mod`準拠）に修正、環境変数一覧（`PITHA_SERVER_ADDR`/`PITHA_DB_PATH`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`等）とMakefileターゲット節（`make`既定は`help`）を追加、ビルド成果物パスを`static/src/dist`に統一、`e2e.yml`は未作成と明記 | issue #113/#114/#116/#118/#131 doc-drift・code-reviewレビュー指摘 |
