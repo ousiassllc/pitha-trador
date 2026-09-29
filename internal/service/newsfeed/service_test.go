@@ -190,3 +190,20 @@ func TestFeedClient_FetchFailsOnNon200(t *testing.T) {
 		t.Error("Fetch succeeded on a 502, want an error")
 	}
 }
+
+func TestPoll_ArticleWithoutPublishedAtIsClassifiedOnceAndDedupedByHeadline(t *testing.T) {
+	undated := assist.NewsItem{Symbol: "7203", Headline: "日付なし速報"}
+	feed := &fakeFeed{items: map[string][]assist.NewsItem{"7203": {undated}}}
+	luna := &fakeLuna{}
+	svc := newService(feed, luna)
+
+	_ = svc.Poll(context.Background())
+	_ = svc.Poll(context.Background())
+
+	if luna.calls != 1 {
+		t.Errorf("Luna calls = %d, want 1 (an undated article is new once, then deduped)", luna.calls)
+	}
+	if ctx, ok := svc.NewsContext("7203"); !ok || len(ctx.Items) != 1 {
+		t.Errorf("NewsContext = %+v, %v, want the undated article cached", ctx, ok)
+	}
+}

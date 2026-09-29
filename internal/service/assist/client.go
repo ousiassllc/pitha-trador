@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -91,7 +92,7 @@ func NewClient(cfg Config) *Client {
 	}
 	return &Client{
 		label:          cfg.Label,
-		baseURL:        cfg.BaseURL,
+		baseURL:        strings.TrimRight(cfg.BaseURL, "/"),
 		apiKey:         cfg.APIKey,
 		httpClient:     httpClient,
 		maxAttempts:    maxAttempts,

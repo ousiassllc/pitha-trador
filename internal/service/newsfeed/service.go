@@ -140,6 +140,11 @@ func (s *Service) pollSymbol(ctx context.Context, symbol string) {
 	}
 	for _, item := range items {
 		now := s.now()
+		if item.PublishedAt.IsZero() {
+			// A feed that omits published_at: treat the article as new
+			// (itemKey then dedupes it by id/headline, not by time).
+			item.PublishedAt = now
+		}
 		if now.Sub(item.PublishedAt) >= s.ttl || s.alreadySeen(symbol, item) {
 			continue
 		}
@@ -159,7 +164,7 @@ func itemKey(item assist.NewsItem) string {
 	if item.ID != "" {
 		return item.ID
 	}
-	return item.Headline + "|" + item.PublishedAt.UTC().Format(time.RFC3339Nano)
+	return item.Headline
 }
 
 func (s *Service) alreadySeen(symbol string, item assist.NewsItem) bool {

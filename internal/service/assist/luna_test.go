@@ -84,3 +84,20 @@ func TestLuna_Classify_UnconfiguredFailsWithoutNetwork(t *testing.T) {
 		t.Errorf("Classify error = %v, want ErrNotConfigured", err)
 	}
 }
+
+func TestClient_TrailingSlashInBaseURLDoesNotDoubleTheSlash(t *testing.T) {
+	var gotPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		_ = json.NewEncoder(w).Encode(assist.Classification{Sentiment: "neutral", EventType: "その他", Summary: "x"})
+	}))
+	t.Cleanup(server.Close)
+
+	luna := assist.NewLuna(assist.NewClient(assist.Config{Label: "luna", BaseURL: server.URL + "/"}))
+	if _, err := luna.Classify(context.Background(), assist.NewsItem{Symbol: "7203"}); err != nil {
+		t.Fatalf("Classify: %v", err)
+	}
+	if gotPath != assist.LunaClassifyPath {
+		t.Errorf("request path = %q, want %q", gotPath, assist.LunaClassifyPath)
+	}
+}
