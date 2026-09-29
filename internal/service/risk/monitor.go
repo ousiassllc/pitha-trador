@@ -27,8 +27,9 @@ type FailureCounter interface {
 	ConsecutiveFailures() int
 }
 
-// RunPeriodicChecks runs every FR-RISK-2 detector and the §5.2 daily-loss
-// warning once. internal/service/scheduler.Scheduler calls it every
+// RunPeriodicChecks runs every FR-RISK-2 detector (including the
+// daily-loss/consecutive-loss limits, issue #191), the §5.2 daily-loss
+// warning and the forced-liquidation retry (RetryForceClose) once. internal/service/scheduler.Scheduler calls it every
 // minute (WithRiskMonitor); every check runs even if an earlier one
 // fails, and the failures are joined.
 func (e *Engine) RunPeriodicChecks(ctx context.Context) error {
@@ -38,7 +39,11 @@ func (e *Engine) RunPeriodicChecks(ctx context.Context) error {
 		e.CheckBrokerAPIHealth(ctx),
 		e.CheckDBWriteHealth(ctx),
 		e.CheckPositionReconciliation(ctx),
+		e.CheckDailyLossLimit(ctx),
+		e.CheckConsecutiveLosses(ctx),
 		e.CheckDailyLossWarning(ctx),
+		// Last: also retries the flatten a detector above just failed.
+		e.RetryForceClose(ctx),
 	)
 }
 
@@ -119,8 +124,8 @@ func (e *Engine) CheckPositionReconciliation(ctx context.Context) error {
 const (
 	// orphanFillLookback bounds how far back checkFilledOrdersWithoutPosition
 	// looks: long enough for several 1-minute scheduler ticks to notice a
-	// fresh orphan, short enough that an operator-resolved one stops
-	// re-triggering the Kill Switch after Resume.
+	// fresh orphan. Orphans filled before the last manual Resume are also
+	// ignored (baseline.go), so Resume is not undone within this window.
 	orphanFillLookback = 15 * time.Minute
 	// orphanFillGrace skips fills this recent: an exit order is filled
 	// just before its position row is closed (execution.Engine.Close), so a
@@ -134,7 +139,15 @@ const (
 // position it should have opened, raising fill_discrepancy.
 func (e *Engine) checkFilledOrdersWithoutPosition(ctx context.Context) error {
 	now := e.now()
-	orphans, err := e.orders.ListFilledWithoutPosition(ctx, now.Add(-orphanFillLookback), now.Add(-orphanFillGrace))
+	since := now.Add(-orphanFillLookback)
+	baseline, err := e.baselineAt(ctx, settingKeyFillDiscrepancyBaselineAt)
+	if err != nil {
+		return err
+	}
+	if baseline.After(since) {
+		since = baseline
+	}
+	orphans, err := e.orders.ListFilledWithoutPosition(ctx, since, now.Add(-orphanFillGrace))
 	if err != nil {
 		return fmt.Errorf("risk: list filled orders without position for reconciliation: %w", err)
 	}

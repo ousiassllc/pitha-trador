@@ -43,10 +43,14 @@ type fakeTrade struct {
 }
 
 // fakePortfolio is a risk.PortfolioProvider over trades (oldest first);
-// with no trades it behaves like risk.ZeroPortfolioProvider.
-type fakePortfolio struct{ trades []fakeTrade }
+// with no trades and openPositions 0 it behaves like
+// risk.ZeroPortfolioProvider.
+type fakePortfolio struct {
+	trades        []fakeTrade
+	openPositions int
+}
 
-func (fakePortfolio) OpenPositionCount(context.Context) (int, error)            { return 0, nil }
+func (f fakePortfolio) OpenPositionCount(context.Context) (int, error)          { return f.openPositions, nil }
 func (fakePortfolio) TotalExposurePct(context.Context) (float64, error)         { return 0, nil }
 func (fakePortfolio) SymbolExposurePct(context.Context, int64) (float64, error) { return 0, nil }
 

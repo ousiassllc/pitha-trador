@@ -105,7 +105,6 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 | market_data_down（データ復旧確認後） | 自動再開 |
 | jev_api_down（API復旧確認後） | 自動再開 |
 | operator_heartbeat_timeout（ハートビート再検知） | 自動再開 |
-| cooldown_after_loss経過（連敗後クールダウン） | 自動再開 |
 | daily_loss_limit（日次損失上限到達） | 手動再開のみ |
 | unexpected_position（想定外ポジション） | 手動再開のみ |
 | fill_discrepancy（約定差異） | 手動再開のみ |
@@ -114,7 +113,9 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 | broker_api_error（Broker API異常） | 手動再開のみ |
 | operator_manual（オペレーターの手動Kill） | 手動再開のみ |
 
-- 再開ベースライン（FR-RISK-2/FR-RISK-7）: `consecutive_losses`・`daily_loss_limit`は手動再開のみだが、発動の原因となったクローズ済みポジションは履歴に残り続ける。再開直後に同じ履歴で再発動して復帰不能になるのを防ぐため、手動Resumeがこれらのイベントを解除した時刻を`runtime_settings`にベースラインとして記録する（`system.loss_streak_baseline_at`・`system.daily_loss_baseline_at`）。以後、連敗数・クールダウン起点（`cooldown_after_loss`）はベースライン以降にクローズしたポジションのみ、日次損失率の実現損益もベースライン以降にクローズした分のみを対象とする（保有中ポジションの含み損は常に算入するため、実際に損失が拡大すれば再発動する）。2つのベースラインは独立で、連敗Resumeは当日の実現損失を帳消しにせず、日次損失Resumeは連敗数をリセットしない。手動Kill・Pauseなど他理由のResumeはどちらも動かさない。ベースラインより後に上限回数の敗北（連敗）または上限を超える損失（日次）が再び発生した場合のみ再発動する。連敗数は営業日をまたいで持ち越す（日次リセットしない）が、Resumeでリセットされる。
+`cooldown_after_loss`（連敗後クールダウン）は`kill_switch_events`に記録しない時間ベースの新規取引ゲート（FR-RISK-1）であり、本表の対象外（下記判定基準を参照）。
+
+- 再開ベースライン（FR-RISK-2/FR-RISK-7）: `consecutive_losses`・`daily_loss_limit`は手動再開のみだが、発動の原因となったクローズ済みポジションは履歴に残り続ける。再開直後に同じ履歴で再発動して復帰不能になるのを防ぐため、手動Resumeがこれらのイベントを解除した時刻を`runtime_settings`にベースラインとして記録する（`system.loss_streak_baseline_at`・`system.daily_loss_baseline_at`）。`fill_discrepancy`のResumeも同様に`system.fill_discrepancy_baseline_at`を記録し、逆方向の孤児約定照合はResume時刻より前にFILLEDとなった注文を対象外とする（直近15分の照合窓内の同じ孤児注文で再発動して再度全ポジションを強制決済するのを防ぐ。ポジション起点の突合は対象外）。以後、連敗数・クールダウン起点（`cooldown_after_loss`）はベースライン以降にクローズしたポジションのみ、日次損失率の実現損益もベースライン以降にクローズした分のみを対象とする（保有中ポジションの含み損は常に算入するため、実際に損失が拡大すれば再発動する）。2つのベースラインは独立で、連敗Resumeは当日の実現損失を帳消しにせず、日次損失Resumeは連敗数をリセットしない。手動Kill・Pauseなど他理由のResumeはどちらも動かさない。ベースラインより後に上限回数の敗北（連敗）または上限を超える損失（日次）が再び発生した場合のみ再発動する。連敗数は営業日をまたいで持ち越す（日次リセットしない）が、Resumeでリセットされる。
 
 FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行する（`internal/service/scheduler`の`WithRiskMonitor`/`WithAutoResumer`）。判定基準は以下。
 
@@ -124,6 +125,8 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
 - db_write_failure: SQLiteの書き込みがストレージ起因（BUSY/LOCKED/READONLY/IOERR/FULL/CANTOPEN/CORRUPT）で5回連続失敗（手動再開のみ）。制約違反は対象外
 - unexpected_position / fill_discrepancy: Paper Tradingでは外部Brokerが無いため、保有中ポジションを起点となる`paper_orders`の約定記録と突合する。起点注文が存在しない・未約定・銘柄/売買方向が不一致なら`unexpected_position`、約定数量・約定価格がポジションと不一致、または指値を超えた約定なら`fill_discrepancy`（手動再開のみ）。逆方向の照合として、直近15分内（約定直後の1分は猶予）にFILLEDとなった注文がどのポジションのEntry/Exit注文にもなっていない場合も`fill_discrepancy`とする
 - cooldown_after_loss: クールダウンはRisk Engineの時間ベースの新規取引ゲート（FR-RISK-1、`kill_switch_events`には記録しない）であり、経過で自動的に解除される
+- daily_loss_limit / consecutive_losses: 新規シグナルに対するRisk Engineの判定（`Check`）に加え、この1分周期の検知でも同じ判定（再開ベースライン考慮）を行う。シグナルが出なくても、日次損失（含み損込み）が上限に達した、または連敗上限に達した時点でKill Switchの発動・通知・保有ポジション強制決済（FR-RISK-3）を行う（手動再開のみ）
+- 強制決済の再試行: 強制決済対象reason（`architecture/overview/flows.md` §10.3）のKill Switchが未解除のまま保有ポジションが残っている場合、同じ1分周期で全ポジションの強制決済を再実行する（発動時の一度きりの決済が一時的に失敗しても、Killed状態のまま建玉が残り続けないようにする。決済は冪等）
 - 日次損失上限の80%到達時のSlack通知（`non-functional.md` §5.2）も同じ1分周期の検知で行う
 
 ### 4.8 Entry / Exit

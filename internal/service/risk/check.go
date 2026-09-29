@@ -32,7 +32,8 @@ import (
 // Breaching max_daily_loss_pct or max_consecutive_losses also raises a
 // Kill Switch (FR-RISK-2), latching the rejection in place for every
 // subsequent candidate (via the Kill Switch state check above) rather
-// than only this one. Both limits are measured from the manual-resume
+// than only this one; RunPeriodicChecks evaluates the same two limits
+// (losslimit.go) so they fire without waiting for a candidate. Both limits are measured from the manual-resume
 // baseline (baseline.go), so a Resume is not immediately undone by the
 // history that caused the Kill Switch.
 func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string) (bool, string) {
@@ -51,10 +52,6 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	streakSince, err := e.baselineAt(ctx, settingKeyLossStreakBaselineAt)
 	if err != nil {
 		return e.failClosed("read loss streak baseline", err)
-	}
-	dailySince, err := e.baselineAt(ctx, settingKeyDailyLossBaselineAt)
-	if err != nil {
-		return e.failClosed("read daily loss baseline", err)
 	}
 	lastLoss, err := e.portfolio.LastLossAt(ctx, streakSince)
 	if err != nil {
@@ -89,24 +86,24 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", ReasonMaxPositionPerSymbolPct, symbolPct, e.limits.MaxPositionPerSymbolPct)
 	}
 
-	dailyLossPct, err := e.portfolio.DailyLossPct(ctx, dailySince)
+	dailyLossPct, breached, err := e.dailyLossBreached(ctx)
 	if err != nil {
 		return e.failClosed("read daily loss", err)
 	}
-	if dailyLossPct >= e.limits.MaxDailyLossPct {
-		_, _ = e.triggerIfNotActive(ctx, domain.KillReasonDailyLossLimit, map[string]any{
-			"daily_loss_pct": dailyLossPct, "max_daily_loss_pct": e.limits.MaxDailyLossPct,
-		})
+	if breached {
+		if err := e.triggerDailyLoss(ctx, dailyLossPct); err != nil {
+			slog.Error("risk: daily_loss_limit kill switch failed", "error", err)
+		}
 		return false, fmt.Sprintf("%s: daily_loss_pct=%.4f max=%.4f", ReasonMaxDailyLossPct, dailyLossPct, e.limits.MaxDailyLossPct)
 	}
-	losses, err := e.portfolio.ConsecutiveLosses(ctx, streakSince)
+	losses, breached, err := e.consecutiveLossesBreached(ctx, streakSince)
 	if err != nil {
 		return e.failClosed("read consecutive losses", err)
 	}
-	if losses >= e.limits.MaxConsecutiveLosses {
-		_, _ = e.triggerIfNotActive(ctx, domain.KillReasonConsecutiveLosses, map[string]any{
-			"consecutive_losses": losses, "max_consecutive_losses": e.limits.MaxConsecutiveLosses,
-		})
+	if breached {
+		if err := e.triggerConsecutiveLosses(ctx, losses); err != nil {
+			slog.Error("risk: consecutive_losses kill switch failed", "error", err)
+		}
 		return false, fmt.Sprintf("%s: consecutive_losses=%d max=%d", ReasonMaxConsecutiveLosses, losses, e.limits.MaxConsecutiveLosses)
 	}
 

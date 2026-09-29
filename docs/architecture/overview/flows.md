@@ -46,9 +46,9 @@ sequenceDiagram
     RE->>TRAY: ネイティブ通知発火
     RE->>SLACK: Webhook通知送信（reason・自動/手動再開区分を含む）
     opt reasonが daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error / operator_manual
-        RE->>EX: 保有ポジション強制クローズ指示（必要な場合）
+        RE->>EX: 保有ポジション強制クローズ指示（必要な場合。未解除かつ建玉が残る間は1分周期で再実行する）
     end
-    alt 自動再開対象（market_data_down / jev_api_down / operator_heartbeat_timeout / cooldown経過）
+    alt 自動再開対象（market_data_down / jev_api_down / operator_heartbeat_timeout）
         RE->>RE: 発動条件の解消を定期監視
         RE->>DB: kill_switch_resolutions に resolved_by=auto の解除行を追記
         RE->>EX: 新規エントリー再開

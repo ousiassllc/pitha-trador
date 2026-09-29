@@ -1,4 +1,4 @@
-package risk_test
+package killswitchflow_test
 
 import (
 	"context"
