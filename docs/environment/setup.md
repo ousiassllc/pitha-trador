@@ -92,7 +92,7 @@ make dev
 | `PITHA_SERVER_ALLOWED_HOSTS` | `cmd/server` | `PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ有効。Hostヘッダとして受け付ける追加ホスト名（カンマ区切り、DNS rebinding対策のHost検証。loopback名（`localhost`/`127.0.0.1`/`::1`）とワイルドカード以外の`PITHA_SERVER_ADDR`のホストは常に許可） |
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
 | `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`） |
-| `PITHA_BACKUP_DIR` | `internal/bootstrap` | SQLite DBの日次バックアップ（`requirements/non-functional.md` §3）の退避先ディレクトリ。ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）を指定する。Schedulerの`@daily`ジョブが`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し、90日超の日次分は削除、日曜分は`weekly/pitha-YYYY-MM-DD.db.gz`として無期限に保持する。未設定・空のときはバックアップ無効（起動ログに警告）。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換える |
+| `PITHA_BACKUP_DIR` | `internal/bootstrap` | SQLite DBの日次バックアップ（`requirements/non-functional.md` §3）の退避先ディレクトリ。ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）を指定する。ディレクトリ自体は事前に存在している必要がある（作成しない。未マウントの場合はバックアップが失敗しSlack/ログで通知される）。Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、日曜分は`weekly/pitha-YYYY-MM-DD.db.gz`として52週保持する。未設定・空のときはバックアップ無効（起動ログに警告）。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する |
 | `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
 | `PITHA_STATIC_DIR` | `internal/router` | 設定すると`/static/...`を`go:embed`ではなく指定ディレクトリ（存在するディレクトリのみ有効。`make dev`は`static/src`）から配信する。未設定・不正パスは埋め込みにフォールバック |
 | `PITHA_POLICY_LONG_*` / `PITHA_POLICY_SHORT_*` | `internal/config` | `config/strategy.yaml`の`policy.long`/`policy.short`のしきい値を起動時に上書きする（FR-POLICY-4）。サフィックスは`MIN_PROBABILITY`・`MIN_ENTRY_QUALITY`・`MIN_CONTINUATION_PROBABILITY`・`MAX_TOXIC_FLOW`・`MAX_LIQUIDITY_STRESSED`。数値は不正値だと起動エラー |
@@ -234,3 +234,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.10 | 2026-09-29 | Swagger UIをunpkg CDN読み込みから、bunで導入した`@stoplight/elements`のvendor同梱・同一オリジン配信へ変更し、`SWAGGER_ENABLED`を`true`のみ有効のオプトインに変更（`make dev`が設定）。`.env.example`の説明を`/swagger`のみの切替に是正（issue #112, #117） | セキュリティ指摘（未固定・SRIなしCDNスクリプト）・doc-drift指摘 |
 | 1.11 | 2026-09-29 | 環境変数表に`PITHA_BACKUP_DIR`（SQLite日次バックアップの退避先）を追加 | issue #97（DB日次バックアップ未実装の解消） |
 | 1.12 | 2026-09-29 | 環境変数表に`PITHA_SERVER_ALLOWED_HOSTS`（Host検証の追加許可ホスト）を追加 | issue #136 |
+| 1.13 | 2026-09-29 | `PITHA_BACKUP_DIR`の説明を更新（`secrets`除外・パーミッション・週次52週保持・退避先必須・catch-up実行） | issue #137/#152/#159 |

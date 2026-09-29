@@ -3,6 +3,7 @@ package notify_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -186,3 +187,16 @@ func TestSlackNotifier_ProposalRolledBack(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+func TestSlackNotifier_MaintenanceFailed_PostsTaskAndCount(t *testing.T) {
+	var got []string
+	n, closeSrv := captureWebhook(t, &got)
+	defer closeSrv()
+
+	if err := n.MaintenanceFailed(context.Background(), "DBバックアップ", 3, errors.New("drive not mounted")); err != nil {
+		t.Fatalf("MaintenanceFailed: %v", err)
+	}
+	if len(got) != 1 || !strings.Contains(got[0], "DBバックアップ") || !strings.Contains(got[0], "3回連続") || !strings.Contains(got[0], "drive not mounted") {
+		t.Fatalf("got = %v", got)
+	}
+}

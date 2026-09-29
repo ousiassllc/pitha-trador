@@ -137,8 +137,9 @@ func migrateUp(conn *sql.DB) error {
 // copy of the .db file would be torn if another pooled connection wrote
 // or auto-checkpointed mid-copy; VACUUM INTO reads a single snapshot and
 // so is safe while the application keeps writing. destPath MUST NOT
-// already exist (SQLite refuses to overwrite it) and its parent
-// directory MUST exist.
+// already hold data (SQLite refuses to overwrite a non-empty file; an
+// empty file is accepted, which lets the caller pre-create it with
+// restrictive permissions) and its parent directory MUST exist.
 //
 // A checkpoint that cannot fully complete (busy != 0: a concurrent
 // reader/writer blocked the TRUNCATE) is not an error - the snapshot

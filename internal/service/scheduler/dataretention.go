@@ -1,10 +1,6 @@
 package scheduler
 
-import (
-	"context"
-	"fmt"
-	"log/slog"
-)
+import "context"
 
 // DataPurger deletes rows past their retention window from the
 // high-frequency tables (jobs, market_snapshots; non-functional.md §3
@@ -15,7 +11,7 @@ type DataPurger interface {
 	Purge(ctx context.Context) error
 }
 
-// WithDataPurger enables Start's @daily data-retention purge trigger
+// WithDataPurger enables Start's daily data-retention purge (catch-up) trigger
 // (non-functional.md §3). Unset by default.
 func WithDataPurger(purger DataPurger) Option {
 	return func(s *Scheduler) { s.dataPurger = purger }
@@ -29,29 +25,4 @@ func (s *Scheduler) PurgeExpiredData(ctx context.Context) error {
 		return nil
 	}
 	return s.dataPurger.Purge(ctx)
-}
-
-// addDataMaintenanceTriggers registers the @daily database-backup and
-// data-retention purge triggers, each only when its Option configured the
-// dependency it drives.
-func (s *Scheduler) addDataMaintenanceTriggers(ctx context.Context) error {
-	if s.databaseBackuper != nil {
-		if _, err := s.cron.AddFunc("@daily", func() {
-			if err := s.BackupDatabase(ctx); err != nil {
-				slog.Error("scheduler: database backup failed", "error", err)
-			}
-		}); err != nil {
-			return fmt.Errorf("scheduler: register database backup trigger: %w", err)
-		}
-	}
-	if s.dataPurger != nil {
-		if _, err := s.cron.AddFunc("@daily", func() {
-			if err := s.PurgeExpiredData(ctx); err != nil {
-				slog.Error("scheduler: data retention purge failed", "error", err)
-			}
-		}); err != nil {
-			return fmt.Errorf("scheduler: register data retention purge trigger: %w", err)
-		}
-	}
-	return nil
 }

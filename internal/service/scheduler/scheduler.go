@@ -11,6 +11,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
 // defaultPollInterval is how often an idle worker re-polls its queue for
@@ -63,6 +64,12 @@ type Scheduler struct {
 	// trigger entirely (cmd/server never configures it - it has no
 	// installer concept).
 	updateChecker UpdateChecker
+	// maintenanceState/maintenanceNotifier are optional
+	// (WithMaintenanceState/WithMaintenanceNotifier): they persist the
+	// daily maintenance tasks' last success date and report repeated
+	// failures (maintenance.go).
+	maintenanceState    maintenance.State
+	maintenanceNotifier maintenance.Notifier
 
 	pollInterval time.Duration
 

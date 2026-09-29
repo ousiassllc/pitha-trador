@@ -41,8 +41,9 @@
 - Windowsホスト起動時にkabuステーションアプリ・Wailsアプリを自動起動する（Windowsタスクスケジューラ等を利用）
 - kabuステーションAPIまたはWailsアプリがクラッシュした場合、既存ポジションの安全（Exitルール継続）を優先し、プロセス監視により自動再起動を試みる。再起動中は新規エントリーを停止する
 - SQLiteのDBファイル（アプリ内蔵）を日次でバックアップし、ローカルディスク外（外部ストレージ/クラウド）へ退避する。保持期間は直近90日分のフルバックアップ＋週次アーカイブ。バックアップ時はWALチェックポイント（`PRAGMA wal_checkpoint(TRUNCATE)`）を実行してから複製する
-  - 実装: Schedulerの`@daily`ジョブ（`internal/service/backup`）。退避先は環境変数`PITHA_BACKUP_DIR`（`environment/setup.md`）で指定し、未設定時は無効（起動ログに警告）。書き込み中の生ファイルコピーは不整合になり得るため、複製はチェックポイント後の`VACUUM INTO`（単一スナップショット）で行う。日次分は`daily/pitha-YYYY-MM-DD.db`に保存し90日超を削除、日曜分は`weekly/pitha-YYYY-MM-DD.db.gz`（gzip）として無期限に保持する
-- 高頻度書き込みテーブルはDBの無制限な肥大を防ぐため保持期間を設け、Schedulerの`@daily`ジョブで期限切れ行を削除する（`internal/service/retention`）。`jobs`は完了行のみ対象で`succeeded`は7日・`failed`は30日（`pending`/`running`は削除しない）、`market_snapshots`は90日（対応する`market_snapshot_vectors`行も同時に削除）。削除は1000行単位のバッチで行い、ワーカーの書き込みを長時間ブロックしない。監査対象テーブル（`kill_switch_events`/`kill_switch_resolutions`/`jev_decisions`/`orders`等）は削除対象外。削除済みページは以後の書き込みで再利用されるためファイルは増え続けないが縮小はしない（バックアップの`VACUUM INTO`は縮小済みで出力される）
+  - 実装: Schedulerの日次ジョブ（`internal/service/backup`）。退避先は環境変数`PITHA_BACKUP_DIR`（`environment/setup.md`）で指定し、未設定時は無効（起動ログに警告）。退避先ディレクトリ自体は作成せず、存在しない場合（外付けドライブ/クラウド同期フォルダ未マウント等）はローカルディスクへ静かに退避せずエラーにする。書き込み中の生ファイルコピーは不整合になり得るため、複製はチェックポイント後の`VACUUM INTO`（単一スナップショット）で行い、確定前に`secrets`テーブル（アプリ埋め込み鍵で暗号化されたAPIキー/パスワード）を空にして`PRAGMA integrity_check`で検証する。復元後はSetup画面で秘密情報を再入力する。ディレクトリは`0700`、ファイルは`0600`で作成する。日次分は`daily/pitha-YYYY-MM-DD.db`に保存し90日超を削除、日曜分は`weekly/pitha-YYYY-MM-DD.db.gz`（gzip）として52週保持し超過分を削除する
+  - 実行タイミング: デスクトップアプリは日中のみ起動する運用のため、深夜0時固定のcronは実行されない。バックアップ・データ保持パージ・ログアーカイブは、最終成功日を`runtime_settings`（`system.maintenance.<task>.last_success_date`）に保存し、起動直後および10分ごとに「本日未成功なら実行」（catch-up）する。バックアップは加えて毎日16:00（ローカル時刻）にも実行する。失敗時は30分後に再試行し、3回連続で失敗した時点でSlack（未設定時は構造化ログ）へ通知する
+- 高頻度書き込みテーブルはDBの無制限な肥大を防ぐため保持期間を設け、Schedulerの日次ジョブ（上記catch-up方式）で期限切れ行を削除する（`internal/service/retention`）。`jobs`は完了行のみ対象で`succeeded`は7日・`failed`は30日（`pending`/`running`は削除しない）、`market_snapshots`は90日（対応する`market_snapshot_vectors`行も同時に削除）。削除は1000行単位のバッチで行い、ワーカーの書き込みを長時間ブロックしない。監査対象テーブル（`kill_switch_events`/`kill_switch_resolutions`/`jev_decisions`/`orders`等）は削除対象外。削除済みページは以後の書き込みで再利用されるためファイルは増え続けないが縮小はしない（バックアップの`VACUUM INTO`は縮小済みで出力される）
 
 ## 4. セキュリティ
 
@@ -99,3 +100,4 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.2 | 2026-09-29 | §4のBroker認証情報の分離について、Phase 7までは単一の`KABU_API_PASSWORD`を市場データ読み取り専用とし、Production/Paper別キーへの分離はPhase 7で注文エンドポイント実装前に行うと明記 | issue #103対応（仕様と実装の乖離解消） |
 | 1.3 | 2026-09-29 | §3にDB日次バックアップの実装方式（Schedulerジョブ・`PITHA_BACKUP_DIR`・`VACUUM INTO`・日次/週次の保持）を追記 | issue #97対応（仕様と実装の乖離解消） |
 | 1.4 | 2026-09-29 | §3に高頻度書き込みテーブル（`jobs`/`market_snapshots`）の保持期間と日次パージ、監査テーブルの削除対象外を追記 | issue #129対応（DB無制限増大の解消） |
+| 1.5 | 2026-09-29 | §3のバックアップ/パージ/ログアーカイブを起動時catch-up方式に変更、バックアップからの`secrets`除外・`0700`/`0600`・週次52週保持・退避先必須・連続失敗通知を追記 | issue #137/#152/#159対応 |
