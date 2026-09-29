@@ -23,7 +23,10 @@ const (
 	// KeyKabuAPIPassword supplies internal/service/marketdata.Config's
 	// APIPassword field. It must match the APIPassword configured inside
 	// the kabuステーションアプリ itself (docs/architecture/overview.md
-	// §5).
+	// §5). Until Phase 7 it is the single, market-data-only kabu credential
+	// (no order endpoint is ever called); the Production/Paper split
+	// required by docs/requirements/non-functional.md §4 is added together
+	// with the order endpoints, not before.
 	KeyKabuAPIPassword = "KABU_API_PASSWORD"
 	// KeySlackWebhookURL supplies internal/service/notify.Config's
 	// WebhookURL (non-functional.md §5.2's immediate alerts). Unlike the
