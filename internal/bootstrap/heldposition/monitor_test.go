@@ -148,3 +148,31 @@ func TestMonitor_RunSurvivesPanickingCycle(t *testing.T) {
 		t.Fatalf("evaluations after the panicking cycle = %d, want >= 2", len(exits.snaps))
 	}
 }
+
+// panicOnSymbolExits panics for one symbol and records the rest.
+type panicOnSymbolExits struct {
+	fakeExits
+	symbol string
+}
+
+func (f *panicOnSymbolExits) OnSnapshot(ctx context.Context, snap domain.Snapshot) (execution.SnapshotResult, error) {
+	if snap.Symbol == f.symbol {
+		panic("exit evaluation blew up")
+	}
+	return f.fakeExits.OnSnapshot(ctx, snap)
+}
+
+// FR-SCHED-6: a position whose evaluation always panics must not starve
+// the positions after it of exit judgement.
+func TestMonitor_CycleContinuesPastPanickingPosition(t *testing.T) {
+	boards := &fakeBoards{boards: map[string]marketdata.Board{
+		"7203": {CurrentPrice: 2400}, "6758": {CurrentPrice: 900}, "9984": {CurrentPrice: 8000},
+	}}
+	exits := &panicOnSymbolExits{symbol: "7203"}
+	m := monitor(true, fakePositions{open: []domain.Position{held(1, "7203"), held(2, "6758"), held(3, "9984")}}, boards, &fakeExits{})
+	m.Exits = exits
+	n, err := m.Cycle(context.Background())
+	if err != nil || n != 2 || len(exits.snaps) != 2 || exits.snaps[0].Symbol != "6758" || exits.snaps[1].Symbol != "9984" {
+		t.Fatalf("Cycle = (%d, %v), snaps %+v; want 6758 and 9984 evaluated", n, err, exits.snaps)
+	}
+}
