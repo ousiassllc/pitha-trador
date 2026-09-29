@@ -41,7 +41,10 @@ type ScanConfig struct {
 // functional.md §4.3 fixes no numeric default for these - unlike Fast
 // Screener/Risk's thresholds - so config/strategy.yaml's values are this
 // project's own initial tuning pass, adjustable post-backtest like every
-// other threshold in this file.
+// other threshold in this file. Detect fires on abs(change) >= threshold,
+// so an unset (0) threshold would fire on every bar; the loaders replace
+// unset/non-positive values with the shipped defaults
+// (withEventTriggerDefaults).
 type EventTriggerConfig struct {
 	Return1mChangeThreshold           float64 `yaml:"return_1m_change_threshold"`
 	VolumeRatioChangeThreshold        float64 `yaml:"volume_ratio_change_threshold"`
@@ -124,6 +127,7 @@ func LoadStrategy(path string) (*StrategyConfig, error) {
 	if err := applyEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
+	withEventTriggerDefaults(&cfg.Scan.EventTrigger)
 	return cfg, nil
 }
 
@@ -142,6 +146,7 @@ func LoadStrategyBytes(data []byte) (*StrategyConfig, error) {
 	if err := applyEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
+	withEventTriggerDefaults(&cfg.Scan.EventTrigger)
 	return cfg, nil
 }
 

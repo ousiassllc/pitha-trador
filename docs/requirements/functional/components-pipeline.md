@@ -51,6 +51,7 @@ screen_score =
 
 - FR-SCAN-1: 以下のいずれかを満たした銘柄は通常周期を待たず再評価する: 1分リターン急変、出来高急増、スプレッド急拡大、板インバランス急変、VWAPクロス、高値/安値ブレイク、約定フロー急変（直近2バーの`trade_flow_imbalance`の差の絶対値が`config/strategy.yaml`の`scan.event_trigger.trade_flow_imbalance_change_threshold`以上。どちらかが欠損の場合は無信号）、ニュースフラグ発生
 - FR-SCAN-2（再評価抑制）: `abs(return_1m_change) < threshold AND volume_ratio_change < threshold AND spread_change < threshold AND no_event` の場合はJev呼び出しをスキップし、APIコストとレイテンシを削減する
+  - 各thresholdは`config/strategy.yaml`の`scan.event_trigger.*`（`return_1m_change_threshold` / `volume_ratio_change_threshold` / `spread_change_bps_threshold` / `orderbook_imbalance_change_threshold` / `trade_flow_imbalance_change_threshold`）で設定する。判定は`abs(変化) >= threshold`のため、thresholdが0以下だと全バーでFR-SCAN-1が発火しFR-SCAN-2が無効化される。キー欠落（新キー追加前の古い`strategy.yaml`等）や0以下の値は設定ローダー（`LoadStrategy` / `LoadStrategyBytes`）が同梱既定値（`config/strategy.yaml`の値）で補完し、警告ログを出す
 
 ### 4.4 Jev Scout
 
