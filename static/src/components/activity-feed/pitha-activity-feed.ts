@@ -102,9 +102,11 @@ export class PithaActivityFeed extends LitElement {
     return query ? `${this.apiUrl}?${query}` : this.apiUrl;
   }
 
-  private async loadSnapshot(): Promise<void> {
+  // `background` marks a resync the page fires by itself (WS reconnect), so
+  // it is not counted as operator activity (FR-RISK-6, flows.md §10.4).
+  private async loadSnapshot(background = false): Promise<void> {
     try {
-      const response = await get<ActivityAPIResponse>(this.feedUrl());
+      const response = await get<ActivityAPIResponse>(this.feedUrl(), { background });
       this.queues = response.queues;
       this.events = response.events;
       this.error = null;
@@ -114,10 +116,11 @@ export class PithaActivityFeed extends LitElement {
     }
   }
 
-  private async loadKillSwitchEvents(): Promise<void> {
+  private async loadKillSwitchEvents(background = false): Promise<void> {
     try {
       const response = await get<ActivityAPIResponse>(
         `${this.apiUrl}?type=kill_switch&limit=${KILL_SWITCH_LIMIT}`,
+        { background },
       );
       this.killSwitchEvents = response.events;
     } catch (err) {
@@ -136,8 +139,8 @@ export class PithaActivityFeed extends LitElement {
           wasDisconnected = true;
         } else if (status === 'open' && wasDisconnected) {
           wasDisconnected = false;
-          void this.loadSnapshot();
-          void this.loadKillSwitchEvents();
+          void this.loadSnapshot(true);
+          void this.loadKillSwitchEvents(true);
         }
       },
       onMessage: (message) => this.onWsMessage(message),
