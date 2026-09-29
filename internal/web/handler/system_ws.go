@@ -17,11 +17,11 @@ type systemKillSwitchMessage struct {
 	Reason string `json:"reason"`
 }
 
-// defaultManualKillReason is pushed when the system is Killed but has no
-// active kill_switch_events row - a manual `POST /system/kill`
-// (FR-RISK-4) is tracked only via the `system.killed` runtime_settings
-// flag, not a kill_switch_events row (domain.KillSwitchEvent's doc
-// comment).
+// defaultManualKillReason is the fallback pushed when the system is Killed
+// but has no unresolved kill_switch_events row. A manual `POST /system/kill`
+// (FR-RISK-4) normally records an operator_manual row (risk.Engine.Kill), so
+// this is only reached when the system.killed runtime_settings flag was set
+// but recording the kill_switch_events row failed.
 const defaultManualKillReason = "manual"
 
 // WebSocket implements `/ws/system` (docs/api/endpoints.md §6,
@@ -51,8 +51,7 @@ func (h *SystemHandler) WebSocket(c *gin.Context) {
 }
 
 // activeUnresolvedReason returns the first still-unresolved event's
-// reason, or defaultManualKillReason if events has none (a manual Kill
-// Switch).
+// reason, or defaultManualKillReason if events has none unresolved.
 func activeUnresolvedReason(events []domain.KillSwitchEvent) string {
 	for _, ev := range events {
 		if ev.ResolvedAt == nil {
