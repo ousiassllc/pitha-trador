@@ -20,7 +20,10 @@ const (
 	CSRFHeader = "X-CSRF-Token"
 )
 
-type csrfContextKey struct{}
+type (
+	csrfContextKey          struct{}
+	authenticatedContextKey struct{}
+)
 
 // CSRFToken returns the CSRF token Session put on ctx (the request context
 // of a request that went through Session.Handler), or "" when there is
@@ -29,6 +32,16 @@ type csrfContextKey struct{}
 func CSRFToken(ctx context.Context) string {
 	token, _ := ctx.Value(csrfContextKey{}).(string)
 	return token
+}
+
+// Authenticated reports whether ctx belongs to a request that carried the
+// valid session cookie of a Session.Handler, i.e. one issued by this
+// process to the operator's browser/WebView (FR-RISK-6 "認証済みUIリクエスト").
+// A request that merely receives the cookie on its first response does not
+// count, and neither does one that never went through Session.Handler.
+func Authenticated(ctx context.Context) bool {
+	ok, _ := ctx.Value(authenticatedContextKey{}).(bool)
+	return ok
 }
 
 // Session holds the random tokens generated at startup (issues #90, #98,
@@ -51,7 +64,9 @@ func NewSession() *Session {
 // Handler returns Gin middleware enforcing the Session on every route
 // except `/static/...`:
 //
-//   - The context always receives the CSRF token (see CSRFToken).
+//   - The context always receives the CSRF token (see CSRFToken) and
+//     whether the request carried a valid session cookie (see
+//     Authenticated).
 //   - Safe requests (GET/HEAD/OPTIONS) without a valid session cookie are
 //     answered normally and receive the cookie: this is how the browser or
 //     WebView obtains it on its first page load, including after an app
@@ -70,10 +85,10 @@ func (s *Session) Handler() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		ctx := context.WithValue(c.Request.Context(), csrfContextKey{}, s.csrfToken)
-		c.Request = c.Request.WithContext(ctx)
-
 		hasCookie := tokensEqual(cookieValue(c.Request), s.sessionToken)
+		ctx := context.WithValue(c.Request.Context(), csrfContextKey{}, s.csrfToken)
+		ctx = context.WithValue(ctx, authenticatedContextKey{}, hasCookie)
+		c.Request = c.Request.WithContext(ctx)
 		switch {
 		case isSafeMethod(c.Request.Method) && !isWebSocketUpgrade(c.Request):
 			if !hasCookie {

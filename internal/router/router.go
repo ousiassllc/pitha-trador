@@ -79,6 +79,7 @@ type options struct {
 	activitySource    handler.ActivitySource
 	secretsStore      handler.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
 	updateController  handler.UpdateController
+	heartbeatRecorder middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
 }
 
 // Option configures New.
@@ -190,6 +191,18 @@ func WithUpdateController(controller handler.UpdateController) Option {
 	return func(o *options) { o.updateController = controller }
 }
 
+// WithHeartbeatRecorder enables operator heartbeat recording (FR-RISK-6,
+// middleware.Heartbeat): every authenticated UI request (session cookie
+// present; `/static`, WebSocket upgrades and background timer polls
+// excepted) calls recorder.RecordHeartbeat. cmd/desktop and cmd/server
+// pass internal/bootstrap's real internal/service/risk.Engine; without it
+// (router-level tests only) no heartbeat is written. Live's dead-man's
+// switch (Engine.CheckHeartbeatTimeout, run every minute by the Scheduler)
+// would fire spuriously if a Live build ran without it.
+func WithHeartbeatRecorder(recorder middleware.HeartbeatRecorder) Option {
+	return func(o *options) { o.heartbeatRecorder = recorder }
+}
+
 // New builds and returns the shared Gin engine: the placeholder root
 // page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
 // the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
@@ -220,6 +233,12 @@ func New(opts ...Option) *gin.Engine {
 	// the Setup screen's `POST`/`DELETE /settings/:key` (which SetupGuard
 	// lets through unauthenticated) are protected too (issues #90/#98/#99).
 	engine.Use(middleware.NewSession().Handler())
+	// After Session (needs its Authenticated flag) and before SetupGuard, so
+	// a page that only redirects to `/setup` still counts as operator
+	// activity.
+	if o.heartbeatRecorder != nil {
+		engine.Use(middleware.Heartbeat(o.heartbeatRecorder))
+	}
 	settingsStore := o.secretsStore
 	if settingsStore == nil {
 		settingsStore = handler.StaticSecretsStore{}
