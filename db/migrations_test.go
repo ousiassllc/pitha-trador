@@ -9,6 +9,7 @@ import (
 	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite/vec"
 
 	"github.com/ousiassllc/pitha-trador/db"
 )
