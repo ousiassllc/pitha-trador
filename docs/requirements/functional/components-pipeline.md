@@ -49,7 +49,7 @@ screen_score =
 | 候補銘柄更新 | 15〜30秒ごと |
 | ポジション保有銘柄 | 5〜15秒ごと |
 
-- FR-SCAN-1: 以下のいずれかを満たした銘柄は通常周期を待たず再評価する: 1分リターン急変、出来高急増、スプレッド急拡大、板インバランス急変、VWAPクロス、高値/安値ブレイク、約定フロー急変、ニュースフラグ発生
+- FR-SCAN-1: 以下のいずれかを満たした銘柄は通常周期を待たず再評価する: 1分リターン急変、出来高急増、スプレッド急拡大、板インバランス急変、VWAPクロス、高値/安値ブレイク、約定フロー急変（直近2バーの`trade_flow_imbalance`の差の絶対値が`config/strategy.yaml`の`scan.event_trigger.trade_flow_imbalance_change_threshold`以上。どちらかが欠損の場合は無信号）、ニュースフラグ発生
 - FR-SCAN-2（再評価抑制）: `abs(return_1m_change) < threshold AND volume_ratio_change < threshold AND spread_change < threshold AND no_event` の場合はJev呼び出しをスキップし、APIコストとレイテンシを削減する
 
 ### 4.4 Jev Scout

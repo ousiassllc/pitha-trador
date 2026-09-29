@@ -30,8 +30,8 @@ type ScanConfig struct {
 // EventTriggerConfig holds FR-SCAN-1/FR-SCAN-2's event-driven
 // re-evaluation thresholds (functional.md §4.3): a symbol whose
 // abs(1分リターン), abs(出来高比), abs(スプレッドΔbps) and
-// abs(板インバランスΔ) all stay under their respective threshold, and
-// has no VWAP cross/high-low break/order-flow change/news flag either,
+// abs(板インバランスΔ) and abs(約定フロー不均衡Δ) all stay under their
+// respective threshold, and has no VWAP cross/high-low break/news flag either,
 // is quiet enough that Jev Scout evaluation should be skipped that cycle
 // (FR-SCAN-2); otherwise the symbol is re-evaluated immediately,
 // bypassing the normal candidate-refresh cadence (FR-SCAN-1). The
@@ -47,6 +47,7 @@ type EventTriggerConfig struct {
 	VolumeRatioChangeThreshold        float64 `yaml:"volume_ratio_change_threshold"`
 	SpreadChangeBpsThreshold          float64 `yaml:"spread_change_bps_threshold"`
 	OrderbookImbalanceChangeThreshold float64 `yaml:"orderbook_imbalance_change_threshold"`
+	TradeFlowImbalanceChangeThreshold float64 `yaml:"trade_flow_imbalance_change_threshold"`
 }
 
 // FastScreenerConfig holds the Fast Screener numeric filters and

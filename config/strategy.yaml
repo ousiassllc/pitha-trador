@@ -26,6 +26,8 @@ scan:
     volume_ratio_change_threshold: 2.0
     spread_change_bps_threshold: 10
     orderbook_imbalance_change_threshold: 0.3
+    # 約定フロー急変: 直近2バーのtrade_flow_imbalance(-1〜1)の差の絶対値。
+    trade_flow_imbalance_change_threshold: 0.4
 
 fast_screener:
   # FR-FS-1: Jev API呼び出し前の数値フィルター。
