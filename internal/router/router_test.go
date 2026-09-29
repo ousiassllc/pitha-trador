@@ -1,6 +1,7 @@
 package router_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -251,20 +252,62 @@ func TestNew_SystemStatusRouteDefaultsToRunning(t *testing.T) {
 	}
 }
 
-func TestNew_SystemPauseRouteUsesWithSystemEngineOption(t *testing.T) {
+func TestNew_SystemStatusRoutesUseWithSystemEngineOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStatePaused}))
 
-	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/system/pause", nil))
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
+	for _, tc := range []struct{ path, want string }{
+		{"/system/status", "paused"},
+		{"/api/v1/system/status", `"state":"paused"`},
+	} {
+		req := authorize(t, engine, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: expected status %d, got %d", tc.path, http.StatusOK, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), tc.want) {
+			t.Fatalf("GET %s: expected %q, got %q", tc.path, tc.want, rec.Body.String())
+		}
 	}
-	if !strings.Contains(rec.Body.String(), "paused") {
-		t.Fatalf("expected the Paused badge, got %q", rec.Body.String())
+}
+
+// The Kill Switch panel drives /api/v1/system/* only; the HTMX action
+// routes were unused and removed (issue #108), so they must stay gone.
+func TestNew_RemovedHTMXSystemActionRoutesReturn404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	for _, path := range []string{"/system/pause", "/system/resume", "/system/kill"} {
+		req := authorize(t, engine, httptest.NewRequest(http.MethodPost, path, nil))
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("POST %s = %d, want 404", path, rec.Code)
+		}
 	}
+}
+
+func TestNew_PanickingRouteReturns500InsteadOfCrashing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(panickingSystemEngine{}))
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/status", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// panickingSystemEngine panics from State, which SystemState middleware and
+// the /system/status handler call, to exercise the router's Recovery.
+type panickingSystemEngine struct{ handler.StaticSystemEngine }
+
+func (panickingSystemEngine) State(context.Context) (domain.SystemState, []domain.KillSwitchEvent, error) {
+	panic("state exploded")
 }
 
 func TestNew_APISystemKillRouteReturnsJSONState(t *testing.T) {

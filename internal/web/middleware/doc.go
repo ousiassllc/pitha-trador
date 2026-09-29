@@ -9,6 +9,7 @@
 // session middleware.
 // session.go implements the local session token cookie and CSRF protection
 // (docs/api/endpoints.md §1). setup_guard.go implements the first-run Setup
-// Guard. The remaining concrete middleware (structured request logging,
-// panic recovery) is introduced by later sub-scopes.
+// Guard. request_log.go writes one structured slog access-log record per
+// request and recovery.go converts handler panics into a logged 500; both
+// are installed first by internal/router.New (RequestLog before Recovery).
 package middleware

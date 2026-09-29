@@ -38,7 +38,7 @@ func TestNew_WithHeartbeatRecorderRecordsAuthenticatedPageAndActionRequests(t *t
 	for _, tc := range []struct{ method, path string }{
 		{http.MethodGet, "/scanner"},
 		{http.MethodGet, "/api/v1/scanner"},
-		{http.MethodPost, "/system/pause"},
+		{http.MethodPost, "/api/v1/system/pause"},
 	} {
 		before := recorder.calls
 		r := httptest.NewRequest(tc.method, tc.path, nil)

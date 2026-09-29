@@ -45,10 +45,10 @@ func (StaticSystemEngine) Pause(context.Context) error  { return nil }
 func (StaticSystemEngine) Resume(context.Context) error { return nil }
 func (StaticSystemEngine) Kill(context.Context) error   { return nil }
 
-// SystemHandler implements the Kill Switch action/API routes
-// (docs/api/endpoints.md §4 `/system/pause|resume|kill|status`, §5
-// `POST /api/v1/system/pause|resume|kill`) plus `/ws/system`
-// (system_ws.go).
+// SystemHandler implements the Kill Switch routes: `GET /system/status`
+// (docs/api/endpoints.md §4, HTMX badge fragment), `GET|POST
+// /api/v1/system/status|pause|resume|kill` (§5, JSON, driven by the Lit
+// pitha-kill-switch-panel) and `/ws/system` (system_ws.go).
 type SystemHandler struct {
 	engine       SystemEngine
 	pollInterval time.Duration
@@ -69,36 +69,9 @@ func NewSystemHandler(engine SystemEngine) *SystemHandler {
 // fast interval rather than production callers.
 func (h *SystemHandler) SetPollInterval(d time.Duration) { h.pollInterval = d }
 
-// Pause implements `POST /system/pause`.
-func (h *SystemHandler) Pause(c *gin.Context) {
-	if err := h.engine.Pause(c.Request.Context()); err != nil {
-		respondActionError(c, http.StatusInternalServerError, "一時停止に失敗しました。")
-		return
-	}
-	h.renderBadge(c)
-}
-
-// Resume implements `POST /system/resume`.
-func (h *SystemHandler) Resume(c *gin.Context) {
-	if err := h.engine.Resume(c.Request.Context()); err != nil {
-		respondActionError(c, http.StatusInternalServerError, "一時停止の解除に失敗しました。")
-		return
-	}
-	h.renderBadge(c)
-}
-
-// Kill implements `POST /system/kill`.
-func (h *SystemHandler) Kill(c *gin.Context) {
-	if err := h.engine.Kill(c.Request.Context()); err != nil {
-		respondActionError(c, http.StatusInternalServerError, "Kill Switch の発動に失敗しました。")
-		return
-	}
-	h.renderBadge(c)
-}
-
 // Status implements `GET /system/status`: the system status badge
-// fragment alone, for the (later sub-scope's) Kill Switch panel to poll
-// or re-fetch on demand.
+// fragment alone, which Header's StatusDot re-fetches (hx-get) on the
+// `systemStateChanged` event.
 func (h *SystemHandler) Status(c *gin.Context) {
 	h.renderBadge(c)
 }
@@ -117,7 +90,8 @@ func (h *SystemHandler) renderBadge(c *gin.Context) {
 }
 
 // SystemStateOutput is the Huma response body for
-// `POST /api/v1/system/pause|resume|kill` (docs/api/endpoints.md §5).
+// `GET /api/v1/system/status` and `POST /api/v1/system/pause|resume|kill`
+// (docs/api/endpoints.md §5).
 type SystemStateOutput struct {
 	Body struct {
 		State     string `json:"state" doc:"Overall system state: running, paused, or killed."`

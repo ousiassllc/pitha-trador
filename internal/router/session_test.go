@@ -42,9 +42,6 @@ func TestNew_StateChangingRoutesRejectRequestsWithoutSessionCookieAndCSRFToken(t
 	)
 
 	for _, tc := range []struct{ method, path string }{
-		{http.MethodPost, "/system/pause"},
-		{http.MethodPost, "/system/resume"},
-		{http.MethodPost, "/system/kill"},
 		{http.MethodPost, "/positions/1/close"},
 		{http.MethodPost, "/settings/JEV_API_KEY"},
 		{http.MethodDelete, "/settings/JEV_API_KEY"},
