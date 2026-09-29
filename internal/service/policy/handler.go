@@ -33,14 +33,19 @@ type Handler struct {
 	snapshots *repository.SnapshotRepository
 	engine    *Engine
 	executor  SignalExecutor
+	calib     CalibrationSource // optional, see WithCalibration
 }
 
 // NewHandler returns a Handler that evaluates jev-trader queue jobs via
 // trader and engine, reading each instrument's latest market_snapshots
 // row via snapshots, and hands every approved signal to executor. A nil
 // executor only records signals (no order is ever placed).
-func NewHandler(trader *jev.Trader, snapshots *repository.SnapshotRepository, engine *Engine, executor SignalExecutor) *Handler {
-	return &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor}
+func NewHandler(trader *jev.Trader, snapshots *repository.SnapshotRepository, engine *Engine, executor SignalExecutor, opts ...HandlerOption) *Handler {
+	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
 }
 
 // HandleJob processes one jev-trader queue job (jev.ScoutJobPayload: it
@@ -51,14 +56,12 @@ func NewHandler(trader *jev.Trader, snapshots *repository.SnapshotRepository, en
 // once the Scheduler wiring itself is built (a later sub-scope):
 // scheduler.RegisterHandler(repository.JobQueueJevTrader, handler.HandleJob).
 //
-// Calibrated defaults to true: Calibration (functional.md §4.9) is a
-// separate later sub-scope, so no real signal yet says an
-// instrument/setup is excluded from it (FR-POLICY-3 "キャリブレーション
-// 対象外"). Turnover5mJPY is left nil for the same reason
-// internal/service/screener.Input's own doc comment gives: Feature
-// Engine does not compute a trailing 5-minute turnover value yet, so
-// FR-POLICY-3's "板が薄い" check does not yet apply via this real path
-// (Engine.Decide's unit tests exercise it directly).
+// Turnover5mJPY is the snapshot's trailing 5-minute turnover
+// (Feature.Turnover5m: a difference of cumulative session turnover, see
+// featureengine.TurnoverOverWindow), so FR-POLICY-3's "板が薄い" check
+// applies on this path; nil (insufficient history) skips it. Calibrated
+// comes from the CalibrationSource set via WithCalibration (see
+// calibrated); without one every decision counts as calibrated.
 func (h *Handler) HandleJob(ctx context.Context, job repository.Job) error {
 	var payload jev.ScoutJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
@@ -87,6 +90,11 @@ func (h *Handler) HandleJob(ctx context.Context, job repository.Job) error {
 		return err
 	}
 
+	calibrated, err := h.calibrated(ctx, decision)
+	if err != nil {
+		return fmt.Errorf("policy: calibration check for %q: %w", payload.Symbol, err)
+	}
+
 	signal, err := h.engine.Evaluate(ctx, Input{
 		InstrumentID:        payload.InstrumentID,
 		Symbol:              payload.Symbol,
@@ -94,7 +102,8 @@ func (h *Handler) HandleJob(ctx context.Context, job repository.Job) error {
 		Decision:            &decision,
 		EntryPriceReference: &snap.Price,
 		SpreadBps:           snap.SpreadBps,
-		Calibrated:          true,
+		Turnover5mJPY:       snap.Feature.Turnover5m,
+		Calibrated:          calibrated,
 	})
 	if err != nil {
 		return fmt.Errorf("policy: evaluate trade signal for %q: %w", payload.Symbol, err)

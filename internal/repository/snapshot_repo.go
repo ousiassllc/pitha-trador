@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/snapshotcols"
 )
 
 // ErrSnapshotNotFound is returned by SnapshotRepository methods when no
@@ -32,13 +34,14 @@ type execer interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
-const insertSnapshotSQL = `
+// insertSnapshotSQL lists the fixed columns, then snapshotcols.Columns,
+// then raw_data_json/created_at.
+var insertSnapshotSQL = `
 INSERT INTO market_snapshots (
 	instrument_id, symbol, timestamp, price, bid, ask, spread_bps, volume, turnover,
-	return_1m, return_5m, return_15m, vwap, price_vs_vwap_bps, volume_ratio_5m,
-	orderbook_imbalance, realized_vol_5m, market_return_5m, sector_return_5m,
+	` + snapshotcols.Names() + `,
 	raw_data_json, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ` + strings.Repeat("?, ", len(snapshotcols.Columns)) + `?, ?)`
 
 // Insert writes a single snapshot row.
 func (r *SnapshotRepository) Insert(ctx context.Context, s domain.Snapshot) (domain.Snapshot, error) {
@@ -82,16 +85,15 @@ func insertSnapshot(ctx context.Context, exec execer, s domain.Snapshot) (domain
 		createdAt = time.Now().UTC()
 	}
 
-	res, err := exec.ExecContext(ctx, insertSnapshotSQL,
+	args := []any{
 		s.InstrumentID, s.Symbol, formatTime(s.Timestamp), s.Price,
 		nullableFloat64(s.Bid), nullableFloat64(s.Ask), nullableFloat64(s.SpreadBps),
 		s.Volume, s.Turnover,
-		nullableFloat64(s.Feature.Return1m), nullableFloat64(s.Feature.Return5m), nullableFloat64(s.Feature.Return15m),
-		s.Feature.VWAP, s.Feature.PriceVsVWAPBps, nullableFloat64(s.Feature.VolumeRatio5m),
-		nullableFloat64(s.Feature.OrderbookImbalance), nullableFloat64(s.Feature.RealizedVol5m),
-		nullableFloat64(s.Feature.MarketReturn5m), nullableFloat64(s.Feature.SectorReturn5m),
-		s.RawDataJSON, formatTime(createdAt),
-	)
+	}
+	args = append(args, snapshotcols.Args(&s)...)
+	args = append(args, s.RawDataJSON, formatTime(createdAt))
+
+	res, err := exec.ExecContext(ctx, insertSnapshotSQL, args...)
 	if err != nil {
 		return domain.Snapshot{}, fmt.Errorf(
 			"repository: insert market snapshot for instrument %d at %s: %w", s.InstrumentID, s.Timestamp, err)
@@ -199,10 +201,9 @@ func (r *SnapshotRepository) ListByInstrumentBefore(ctx context.Context, instrum
 	return out, nil
 }
 
-const snapshotSelectColumns = `
+var snapshotSelectColumns = `
 SELECT id, instrument_id, symbol, timestamp, price, bid, ask, spread_bps, volume, turnover,
-	return_1m, return_5m, return_15m, vwap, price_vs_vwap_bps, volume_ratio_5m,
-	orderbook_imbalance, realized_vol_5m, market_return_5m, sector_return_5m,
+	` + snapshotcols.Names() + `,
 	raw_data_json, created_at`
 
 func scanSnapshot(row rowScanner) (domain.Snapshot, error) {
@@ -212,16 +213,15 @@ func scanSnapshot(row rowScanner) (domain.Snapshot, error) {
 		createdAt string
 	)
 
-	err := row.Scan(
+	dest := []any{
 		&s.ID, &s.InstrumentID, &s.Symbol, &timestamp, &s.Price,
 		nullFloat(&s.Bid), nullFloat(&s.Ask), nullFloat(&s.SpreadBps),
 		&s.Volume, &s.Turnover,
-		nullFloat(&s.Feature.Return1m), nullFloat(&s.Feature.Return5m), nullFloat(&s.Feature.Return15m),
-		&s.Feature.VWAP, &s.Feature.PriceVsVWAPBps, nullFloat(&s.Feature.VolumeRatio5m),
-		nullFloat(&s.Feature.OrderbookImbalance), nullFloat(&s.Feature.RealizedVol5m),
-		nullFloat(&s.Feature.MarketReturn5m), nullFloat(&s.Feature.SectorReturn5m),
-		&s.RawDataJSON, &createdAt,
-	)
+	}
+	dest = append(dest, snapshotcols.Dests(&s)...)
+	dest = append(dest, &s.RawDataJSON, &createdAt)
+
+	err := row.Scan(dest...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Snapshot{}, ErrSnapshotNotFound
 	}

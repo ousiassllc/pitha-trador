@@ -14,6 +14,7 @@ erDiagram
         varchar name "銘柄名"
         varchar market "市場区分（例: TSE Prime）"
         varchar sector "業種"
+        varchar kind "stock / market_index / sector_index"
         boolean is_active "スキャン対象フラグ"
         text created_at
         text updated_at
@@ -26,7 +27,8 @@ erDiagram
 | symbol | varchar(10) | UNIQUE, NOT NULL | 証券コード |
 | name | varchar(255) | NOT NULL | 銘柄名 |
 | market | varchar(50) | NOT NULL | 市場区分 |
-| sector | varchar(100) | NULL可 | 業種（sector_return_5m算出に利用） |
+| sector | varchar(100) | NULL可 | 業種。株式の業種と`kind=sector_index`銘柄の`sector`が一致すると、その指数がsector_return_5m算出に使われる |
+| kind | varchar(20) | NOT NULL, DEFAULT 'stock', CHECK IN ('stock','market_index','sector_index') | `stock`のみスクリーニング/売買対象。`market_index`（TOPIX/Nikkei225等）と`sector_index`（業種指数）は市場コンテキスト特徴量（market_return_1m/5m, sector_return_5m）の入力としてだけ追跡し、Fast Screener・バックテスト対象外 |
 | is_active | boolean | NOT NULL, DEFAULT 1 | 0の場合Fast Screener対象外 |
 | created_at | text | NOT NULL, DEFAULT (RFC3339 now) | |
 | updated_at | text | NOT NULL, DEFAULT (RFC3339 now) | |
@@ -83,7 +85,23 @@ erDiagram
 | volume_ratio_5m | numeric(8,4) | NULL可 | |
 | orderbook_imbalance | numeric(6,4) | NULL可 | |
 | realized_vol_5m | numeric(8,4) | NULL可 | |
-| market_return_5m / sector_return_5m | numeric(8,4) | NULL可 | TOPIX/業種指数から算出 |
+| market_return_1m / market_return_5m | numeric | NULL可 | `kind=market_index`銘柄（TOPIX/Nikkei225）のreturnの平均 |
+| sector_return_5m | numeric | NULL可 | 銘柄の`sector`と一致する`kind=sector_index`銘柄のreturn。該当指数なしはNULL |
+| stock_vs_sector_relative_strength | numeric | NULL可 | return_5m − sector_return_5m |
+| market_breadth | numeric | NULL可 | 直近3分以内の全アクティブ株式の最新return_5mのうち（上昇数−下落数）/銘柄数。[-1, 1] |
+| return_3m / return_30m | numeric | NULL可 | 履歴不足時はNULL |
+| high_distance_5m / low_distance_5m | numeric | NULL可 | 直近5分の高値/安値に対する `price/x − 1` |
+| session_high_distance / session_low_distance | numeric | NULL可 | kabuの当日高値/安値（HighPrice/LowPrice）に対する `price/x − 1` |
+| vwap_slope | numeric | NULL可 | 5分前のVWAPに対するVWAPの変化率 |
+| vwap_cross_direction | integer | NULL可 | 直前の足からVWAPを下→上に抜けた場合+1、上→下は−1、クロスなしは0 |
+| volume_1m / volume_5m | integer | NULL可 | 累積`TradingVolume`の差分（窓内出来高） |
+| volume_ratio_1m | numeric | NULL可 | volume_ratio_5mと同じ算出の1分版 |
+| turnover_1m / turnover_5m | numeric | NULL可 | 累積`turnover`の差分（窓内売買代金・円）。**`turnover`は当日累積値のため合算してはならない**。Fast Screenerの`min_turnover_5m_jpy`とPolicy Engineの「板が薄い」判定は同じturnover_5mを使う（`featureengine.TurnoverOverWindow`） |
+| atr_1m / atr_5m | numeric | NULL可 | 真の値幅の平均（円）。サンプリング価格から作った足（1分×5本/5分×3本）に基づく |
+| realized_vol_15m / volatility_expansion_ratio | numeric | NULL可 | 後者は realized_vol_5m / realized_vol_15m |
+| bid_depth / ask_depth | numeric | NULL可 | 板の`Sell1..10`（bid側）/`Buy1..10`（ask側）の合計数量 |
+| buy_trade_ratio / sell_trade_ratio / trade_flow_imbalance | numeric | NULL可 | 直近5分の出来高増分をティックルール（価格上昇=買い、下落=売り、同値=直前方向）で分類した比率と(買−売)/(買+売) |
+| microprice | numeric | NULL可 | (bid×askQty + ask×bidQty)/(bidQty+askQty) |
 | raw_data_json | text | NOT NULL | kabuステーションAPI生レスポンス（JSON文字列、再計算・監査用） |
 | created_at | text | NOT NULL | |
 

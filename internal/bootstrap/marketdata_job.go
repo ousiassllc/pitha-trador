@@ -12,12 +12,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
-// marketDataJobPayload mirrors internal/service/scheduler's own unexported
-// fullScanPayload: {"instrument_id":..,"symbol":".."}, the JSON body
-// EnqueueFullScan enqueues onto both the market-data and feature-calc
-// queues (scheduler.go). Kept as a separate type here (rather than an
-// exported one in scheduler) since only the JSON shape, not the Go type
-// itself, is the real contract between enqueuer and handler.
+// marketDataJobPayload mirrors scheduler's unexported fullScanPayload
+// ({"instrument_id":..,"symbol":".."}); only the JSON shape is the contract.
 type marketDataJobPayload struct {
 	InstrumentID int64  `json:"instrument_id"`
 	Symbol       string `json:"symbol"`
@@ -31,19 +27,12 @@ type marketDataJobPayload struct {
 // runs Paper Trading's position management against that new bar
 // (execution.Engine.OnSnapshot).
 //
-// This single handler covers both "market data acquisition" and "feature
-// computation": featureengine.Engine only exposes an atomic
-// fetch-translate-compute-persist step (doc.go), so there is no
-// intermediate persisted state a genuinely separate feature-calc handler
-// could compute from. See handleFeatureCalc's own doc comment.
+// It covers both acquisition and feature computation (see
+// handleFeatureCalc's doc comment).
 //
-// A GetBoard failure (kabuステーションAPI not running on a dev machine,
-// auth error, network error, ...) is returned as-is: Scheduler's Handler
-// contract already marks the job failed and moves on to the next one
-// (scheduler.go's processNext) without crashing the process or the other
-// queues' workers, satisfying issue #44's "接続失敗時にプロセス全体が
-// クラッシュしないことが必須" requirement without this handler needing to
-// swallow the error itself.
+// A GetBoard failure is returned as-is: Scheduler marks the job failed and
+// moves on without crashing the process (issue #44 "接続失敗時にプロセス全体が
+// クラッシュしないことが必須").
 func (s *Services) handleMarketData(ctx context.Context, job repository.Job) error {
 	var payload marketDataJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
@@ -65,16 +54,21 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 		return fmt.Errorf("bootstrap: encode raw board data for %q: %w", payload.Symbol, err)
 	}
 
+	inst, err := s.Instruments.Get(ctx, payload.InstrumentID)
+	if err != nil {
+		return fmt.Errorf("bootstrap: load instrument %q: %w", payload.Symbol, err)
+	}
+
 	now := time.Now().UTC()
+	mc := featureengine.NewMarketContextLoader(s.Instruments, s.Snapshots).Load(ctx, inst, now)
 	input := featureengine.Input{
-		Timestamp: now,
-		Current:   readingFromBoard(board),
-		History:   history,
-		// MarketReturn5m/SectorReturn5m require a tracked market/sector
-		// index instrument (TOPIX/Nikkei225/sector index); no such
-		// instrument-tracking convention exists yet in this codebase, so
-		// both stay nil (FR-FE-2's "missing data" nil, not a fabricated
-		// placeholder) until a later scope introduces one.
+		Timestamp:      now,
+		Current:        readingFromBoard(board),
+		History:        history,
+		MarketReturn1m: mc.MarketReturn1m,
+		MarketReturn5m: mc.MarketReturn5m,
+		SectorReturn5m: mc.SectorReturn5m,
+		MarketBreadth:  mc.MarketBreadth,
 	}
 
 	persisted, err := s.FeatureEngine.RunCycle(ctx, []featureengine.CycleInput{{
@@ -158,14 +152,24 @@ func (s *Services) handleFeatureCalc(context.Context, repository.Job) error {
 // featureengine.Reading Compute expects (doc.go: "Callers translate
 // marketdata.Board into the featureengine.Reading this package expects").
 func readingFromBoard(board marketdata.Board) featureengine.Reading {
-	return featureengine.Reading{
-		Price:    board.CurrentPrice,
-		VWAP:     board.VWAP,
-		Volume:   int64(board.TradingVolume),
-		Turnover: board.TradingValue,
-		Bid:      board.BidPrice,
-		Ask:      board.AskPrice,
-		BidQty:   board.BidQty,
-		AskQty:   board.AskQty,
+	r := featureengine.Reading{
+		Price:       board.CurrentPrice,
+		VWAP:        board.VWAP,
+		Volume:      int64(board.TradingVolume),
+		Turnover:    board.TradingValue,
+		SessionHigh: board.HighPrice,
+		SessionLow:  board.LowPrice,
+		Bid:         board.BidPrice,
+		Ask:         board.AskPrice,
+		BidQty:      board.BidQty,
+		AskQty:      board.AskQty,
 	}
+	// Sell levels sit with BidPrice/BidQty, Buy levels with AskPrice/AskQty.
+	if d, ok := board.SellDepth(); ok {
+		r.BidDepth = &d
+	}
+	if d, ok := board.BuyDepth(); ok {
+		r.AskDepth = &d
+	}
+	return r
 }

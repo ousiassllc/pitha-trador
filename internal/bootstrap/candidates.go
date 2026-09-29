@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
@@ -16,7 +17,7 @@ import (
 )
 
 // refreshCandidates recomputes screener.Run over every active
-// instrument's latest snapshot and turnoverTrailingBars-bar trailing
+// instrument's latest snapshot and trailing 5-minute
 // turnover, publishes the result to s.Screener (issue #45) for the
 // Scanner Dashboard (internal/router.WithCandidateSource) to read, and -
 // issue #46 - enqueues one jev-scout job per resulting candidate
@@ -30,7 +31,7 @@ import (
 // fabricated" precedent handleMarketData's own History/MarketReturn5m
 // comment already follows.
 func (s *Services) refreshCandidates(ctx context.Context) error {
-	actives, err := s.Instruments.ListActive(ctx)
+	actives, err := s.Instruments.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
 		return fmt.Errorf("bootstrap: list active instruments: %w", err)
 	}
@@ -53,10 +54,12 @@ func (s *Services) refreshCandidates(ctx context.Context) error {
 			continue
 		}
 
-		// ListByInstrument orders most-recent-first.
+		// Snapshot.Turnover is cumulative, so 5 minutes is a difference
+		// (featureengine.TurnoverOverWindow), never a sum; unknown counts
+		// as 0 and fails the liquidity floor (FR-FS-1).
 		var turnover5m float64
-		for _, bar := range bars[:min(len(bars), turnoverTrailingBars)] {
-			turnover5m += bar.Turnover
+		if t := featureengine.TurnoverOverWindow(bars[0].Timestamp, bars[0].Turnover, bars[1:], 5*time.Minute); t != nil {
+			turnover5m = *t
 		}
 
 		// FR-FS-2's breakout_strength / volatility_expansion. A nil

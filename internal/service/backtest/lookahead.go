@@ -30,8 +30,9 @@ func (v LookaheadViolation) String() string {
 // VerifyNoLookahead checks every bar in bars[warmup:] - bars must already
 // be sorted ascending by Timestamp - against featureengine.Compute's own
 // look-ahead-safe logic (FR-FE-1), recomputing each bar's
-// history-dependent Feature values (Return1m/Return5m/Return15m,
-// VolumeRatio5m, RealizedVol5m) from the featureengine.HistoryLookbackBars
+// history-dependent Feature values (Return1m/3m/5m/15m/30m,
+// VolumeRatio1m/5m, Turnover5m, RealizedVol5m/15m,
+// VolatilityExpansionRatio) from the featureengine.HistoryLookbackBars
 // bars before it (the same bounded history the live market-data job
 // supplies), and reports every bar whose persisted value disagrees
 // (FR-BT-3). The leading warmup bars are history only: their own Feature
@@ -39,8 +40,8 @@ func (v LookaheadViolation) String() string {
 // recomputed from it.
 //
 // VWAP/PriceVsVWAPBps (derived from the current bar alone, no history
-// dependency) and OrderbookImbalance/MarketReturn5m/SectorReturn5m
-// (board quantities and other-instrument index history that
+// dependency) and the board-depth, session high/low and market-context
+// features (board data and other-instrument history that
 // domain.Snapshot does not retain, so this package cannot recompute them
 // from bars alone) are outside this check's scope: none of them can leak
 // look-ahead information through bars, since none of them depend on
@@ -62,8 +63,14 @@ func VerifyNoLookahead(bars []domain.Snapshot, warmup int) []LookaheadViolation 
 			{"Return1m", bar.Feature.Return1m, recomputed.Return1m},
 			{"Return5m", bar.Feature.Return5m, recomputed.Return5m},
 			{"Return15m", bar.Feature.Return15m, recomputed.Return15m},
+			{"Return3m", bar.Feature.Return3m, recomputed.Return3m},
+			{"Return30m", bar.Feature.Return30m, recomputed.Return30m},
+			{"VolumeRatio1m", bar.Feature.VolumeRatio1m, recomputed.VolumeRatio1m},
 			{"VolumeRatio5m", bar.Feature.VolumeRatio5m, recomputed.VolumeRatio5m},
+			{"Turnover5m", bar.Feature.Turnover5m, recomputed.Turnover5m},
 			{"RealizedVol5m", bar.Feature.RealizedVol5m, recomputed.RealizedVol5m},
+			{"RealizedVol15m", bar.Feature.RealizedVol15m, recomputed.RealizedVol15m},
+			{"VolatilityExpansionRatio", bar.Feature.VolatilityExpansionRatio, recomputed.VolatilityExpansionRatio},
 		}
 		for _, c := range checks {
 			if !floatPtrEqual(c.stored, c.recomputed) {

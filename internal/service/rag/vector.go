@@ -32,13 +32,6 @@ type Vector [Dimensions]float64
 // (functional.md FR-FE-2) and standardizes to 0 - the center of a
 // standardized feature - rather than skewing the distance calculation
 // with a placeholder magnitude.
-//
-// VolumeRatio1m, RealizedVol15m, VolatilityExpansionRatio and
-// StockVsSectorRelativeStrength are part of the 14-dimension schema
-// (er.md) but internal/service/featureengine does not compute them yet
-// (internal/domain.Feature has no such fields as of #4/#15). Callers
-// leave these nil until Feature Engine adds them; Build treats a nil
-// exactly like any other missing value.
 type FeatureInput struct {
 	Return1m                      *float64
 	Return5m                      *float64
@@ -67,12 +60,17 @@ func FeatureInputFromFeature(f domain.Feature, spreadBps *float64) FeatureInput 
 		Return5m:           f.Return5m,
 		Return15m:          f.Return15m,
 		PriceVsVWAPBps:     &priceVsVWAPBps,
+		VolumeRatio1m:      f.VolumeRatio1m,
 		VolumeRatio5m:      f.VolumeRatio5m,
 		SpreadBps:          spreadBps,
 		OrderbookImbalance: f.OrderbookImbalance,
 		RealizedVol5m:      f.RealizedVol5m,
-		MarketReturn5m:     f.MarketReturn5m,
-		SectorReturn5m:     f.SectorReturn5m,
+		RealizedVol15m:     f.RealizedVol15m,
+
+		VolatilityExpansionRatio:      f.VolatilityExpansionRatio,
+		MarketReturn5m:                f.MarketReturn5m,
+		SectorReturn5m:                f.SectorReturn5m,
+		StockVsSectorRelativeStrength: f.StockVsSectorRelativeStrength,
 	}
 }
 

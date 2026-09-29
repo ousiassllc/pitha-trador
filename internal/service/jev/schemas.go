@@ -38,6 +38,38 @@ type ScoutState struct {
 	RealizedVol5m      *float64  `json:"realized_vol_5m,omitempty"`
 	MarketReturn5m     *float64  `json:"market_return_5m,omitempty"`
 	SectorReturn5m     *float64  `json:"sector_return_5m,omitempty"`
+
+	// The remaining functional.md §4.1 features (best_bid/best_ask through
+	// market_breadth), same nil-means-missing convention as above.
+	Return3m                      *float64 `json:"return_3m,omitempty"`
+	Return30m                     *float64 `json:"return_30m,omitempty"`
+	HighDistance5m                *float64 `json:"high_distance_5m,omitempty"`
+	LowDistance5m                 *float64 `json:"low_distance_5m,omitempty"`
+	SessionHighDistance           *float64 `json:"session_high_distance,omitempty"`
+	SessionLowDistance            *float64 `json:"session_low_distance,omitempty"`
+	VWAPSlope                     *float64 `json:"vwap_slope,omitempty"`
+	VWAPCrossDirection            *int64   `json:"vwap_cross_direction,omitempty"`
+	Volume1m                      *int64   `json:"volume_1m,omitempty"`
+	Volume5m                      *int64   `json:"volume_5m,omitempty"`
+	VolumeRatio1m                 *float64 `json:"volume_ratio_1m,omitempty"`
+	Turnover1m                    *float64 `json:"turnover_1m,omitempty"`
+	Turnover5m                    *float64 `json:"turnover_5m,omitempty"`
+	ATR1m                         *float64 `json:"atr_1m,omitempty"`
+	ATR5m                         *float64 `json:"atr_5m,omitempty"`
+	RealizedVol15m                *float64 `json:"realized_vol_15m,omitempty"`
+	VolatilityExpansionRatio      *float64 `json:"volatility_expansion_ratio,omitempty"`
+	BestBid                       *float64 `json:"best_bid,omitempty"`
+	BestAsk                       *float64 `json:"best_ask,omitempty"`
+	BidDepth                      *float64 `json:"bid_depth,omitempty"`
+	AskDepth                      *float64 `json:"ask_depth,omitempty"`
+	BuyTradeRatio                 *float64 `json:"buy_trade_ratio,omitempty"`
+	SellTradeRatio                *float64 `json:"sell_trade_ratio,omitempty"`
+	TradeFlowImbalance            *float64 `json:"trade_flow_imbalance,omitempty"`
+	Microprice                    *float64 `json:"microprice,omitempty"`
+	MarketReturn1m                *float64 `json:"market_return_1m,omitempty"`
+	StockVsSectorRelativeStrength *float64 `json:"stock_vs_sector_relative_strength,omitempty"`
+	MarketBreadth                 *float64 `json:"market_breadth,omitempty"`
+
 	// NewsContext is the symbol's recent Luna-classified news (FR-LUNA-3),
 	// injected by Scout/Trader from their NewsSource. nil means no news
 	// context - Luna disabled, failing, or nothing recent. It is auxiliary

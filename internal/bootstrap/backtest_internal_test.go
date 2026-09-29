@@ -26,20 +26,22 @@ func recordLiveBars(t *testing.T, svc *Services, inst domain.Instrument, base ti
 	})
 	direction, confidence := domain.JevDirectionLong, 0.8
 	var volume int64
+	var turnover float64
 	for i := 0; i < n; i++ {
 		ts := base.Add(time.Duration(i) * time.Minute)
 		price := 2000 * (1 + 0.002*float64(i))
 		volume += int64(1000 + (i*i%13)*400)
+		turnover += 5_000_000 // cumulative session value; 25M per 5 minutes clears min_turnover_5m_jpy
 		history, err := svc.Snapshots.ListByInstrument(ctx, inst.ID, featureengine.HistoryLookbackBars)
 		if err != nil {
 			t.Fatalf("ListByInstrument: %v", err)
 		}
 		feature := featureengine.Compute(featureengine.Input{
-			Timestamp: ts, Current: featureengine.Reading{Price: price, VWAP: price, Volume: volume}, History: history,
+			Timestamp: ts, Current: featureengine.Reading{Price: price, VWAP: price, Volume: volume, Turnover: turnover}, History: history,
 		})
 		if _, err := svc.Snapshots.Insert(ctx, domain.Snapshot{
 			InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: ts, Price: price,
-			SpreadBps: &spread, Volume: volume, Feature: feature,
+			SpreadBps: &spread, Volume: volume, Turnover: turnover, Feature: feature,
 		}); err != nil {
 			t.Fatalf("insert snapshot %d: %v", i, err)
 		}

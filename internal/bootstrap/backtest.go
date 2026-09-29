@@ -62,7 +62,7 @@ func newBacktestSource(instruments *repository.InstrumentRepository, snapshots *
 // jev_decisions only stores inside response_json). Instruments with no
 // bars in period are omitted.
 func (b *BacktestSource) RunConfigs(ctx context.Context, period backtest.Period) ([]backtest.RunConfig, error) {
-	instruments, err := b.instruments.ListActive(ctx)
+	instruments, err := b.instruments.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: list active instruments for backtest: %w", err)
 	}

@@ -70,15 +70,6 @@ const defaultTokenRefreshInterval = 20 * time.Minute
 // exchange code; every symbol uses marketdata.ExchangeTSE.
 const defaultKabuExchange = marketdata.ExchangeTSE
 
-// turnoverTrailingBars is how many of the most recent 1-minute
-// market_snapshots bars refreshCandidates sums to build
-// screener.Input.Turnover5mJPY. Snapshot.Turnover is itself a per-bar (not
-// cumulative-session) value (domain/snapshot.go: "the raw market data
-// captured for one Instrument at one 1-minute-bar Timestamp"), so summing
-// the most recent 5 bars is exactly the trailing-5-minute turnover
-// screener.PassesFilter's liquidity floor expects.
-const turnoverTrailingBars = 5
-
 // newsPollInterval is how often News Ingest polls the external news feed
 // for every active instrument (FR-LUNA-1).
 const newsPollInterval = time.Minute
@@ -211,7 +202,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	runtimePolicy := selfimprove.NewRuntimePolicy(settings, state.Strategy.Policy)
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	policyEngine := policy.NewEngine(thresholds, riskEngine, signals, policy.WithPolicySource(runtimePolicy))
-	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine})
+	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine}, policy.WithCalibration(calibration.NewService(outcomes)))
 
 	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
 	calibrationService := calibration.NewService(outcomes, decisiontrade.New(state.DB))
