@@ -11,7 +11,7 @@ import { html, LitElement, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
-import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/activity` shapes.
@@ -126,9 +126,19 @@ export class PithaActivityFeed extends LitElement {
   }
 
   private subscribeWs(): void {
+    // The server sends nothing on connect, so events emitted while the
+    // socket was down are lost unless the snapshots are re-fetched (#221).
+    let wasDisconnected = false;
     this.wsClient = new WsClient<ActivityWsMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;
+        if (isWsDisconnected(status)) {
+          wasDisconnected = true;
+        } else if (status === 'open' && wasDisconnected) {
+          wasDisconnected = false;
+          void this.loadSnapshot();
+          void this.loadKillSwitchEvents();
+        }
       },
       onMessage: (message) => this.onWsMessage(message),
     });
