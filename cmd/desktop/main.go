@@ -9,6 +9,8 @@ import (
 	"context"
 	"log"
 	"log/slog"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/wailsapp/wails/v2"
@@ -20,11 +22,20 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/supervisor"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
 func main() {
+	// The installer's Startup shortcut launches `pitha-trador.exe
+	// --supervise` (docs/requirements/non-functional.md §3): that process
+	// only supervises, restarting the real app after a crash.
+	if childArgs, ok := supervisor.ChildArgs(os.Args[1:]); ok {
+		superviseSelf(childArgs)
+		return
+	}
+
 	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
 	if err != nil {
 		log.Fatal(err)
@@ -118,4 +129,26 @@ func main() {
 	}); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// superviseSelf re-executes this binary (without --supervise) and restarts
+// it after every abnormal exit. It returns once the child exits cleanly
+// (operator quit / self-update) or the supervisor itself is interrupted.
+func superviseSelf(childArgs []string) {
+	// The child appends to the same daily JSON log file (O_APPEND), so
+	// crash/restart records land next to the child's own output.
+	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = logWriter.Close() }()
+	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
+
+	exe, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	_ = supervisor.Run(ctx, supervisor.Config{}, supervisor.ExecRun(exe, childArgs...))
 }
