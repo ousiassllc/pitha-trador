@@ -19,7 +19,8 @@ func (s *Services) handleSelfImprove(ctx context.Context, _ repository.Job) erro
 		proposalID = result.Proposal.ID
 	}
 	slog.InfoContext(ctx, "bootstrap: self-improvement daily batch finished",
-		"rolled_back_proposal_ids", result.RolledBack, "proposal_id", proposalID, "applied", result.Applied)
+		"rolled_back_proposal_ids", result.RolledBack, "retried_applied_proposal_ids", result.RetriedApplied,
+		"proposal_id", proposalID, "applied", result.Applied, "skipped_ai_stages", result.SkippedStages)
 	if err != nil {
 		return fmt.Errorf("bootstrap: self-improvement daily batch: %w", err)
 	}

@@ -1,32 +1,19 @@
 package assist
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
-// Sol thresholds (FR-SELFIMPROVE-1): a direction's currently-active
-// confidence bucket is "weak" - and Sol proposes tightening
-// min_probability - when its FR-CAL-3 bucket accuracy falls below
-// targetDirectionAccuracy or its average direction-adjusted future
-// return is negative, provided the bucket has at least
-// minBucketSampleCount labeled samples (a smaller sample is too noisy to
-// act on). Overall miscalibration (ExpectedCalibrationError above
-// targetExpectedCalibrationError) additionally proposes tightening
-// min_entry_quality by one rank. Every proposed step uses
-// maxConfidenceThresholdStep/1 rank - FR-SELFIMPROVE-3's own caps - since
-// tightening by less than the allowed maximum leaves a known weakness
-// only partially addressed.
-const (
-	targetDirectionAccuracy        = 0.55
-	minBucketSampleCount           = 20
-	targetExpectedCalibrationError = 0.10
-	maxConfidenceThresholdStep     = 0.05
-	maxMinProbability              = 0.99
-)
+// SolAnalyzePath is the Sol API endpoint the daily analysis request is
+// POSTed to.
+const SolAnalyzePath = "/v1/analyze"
 
 // DirectionCalibration bundles one direction's (LONG or SHORT)
 // currently-active Policy Engine thresholds with the Calibration metrics
@@ -45,174 +32,157 @@ type SolAnalysisInput struct {
 	Short DirectionCalibration
 }
 
-// SolProposal is Sol's daily output when it finds an actionable weakness
-// (FR-SELFIMPROVE-1): RationaleJSON/ProposedChangesJSON are stored
-// verbatim as policy_proposals.rationale_json/proposed_changes_json.
+// SolChange is one threshold change the Sol API proposes. NewValue is the
+// raw JSON scalar exactly as the LLM produced it: Sol does not validate it
+// (the LLM output is untrusted). internal/service/selfimprove.Governor
+// turns it into a domain.PolicyChange and machine-checks the key and change
+// width before anything is recorded as a real proposal
+// (FR-SELFIMPROVE-8).
+type SolChange struct {
+	Key      string          `json:"key"`
+	NewValue json.RawMessage `json:"new_value"`
+}
+
+// SolResponse is the JSON body the Sol API answers with. An empty
+// ProposedChanges means "no actionable weakness today".
+type SolResponse struct {
+	Rationale       json.RawMessage `json:"rationale"`
+	ProposedChanges []SolChange     `json:"proposed_changes"`
+}
+
+// SolProposal is Sol's daily output when the LLM proposes a change
+// (FR-SELFIMPROVE-1): RationaleJSON is stored verbatim as
+// policy_proposals.rationale_json; Changes are validated by the caller
+// before they become proposed_changes_json.
 type SolProposal struct {
-	RationaleJSON       string
-	ProposedChangesJSON string
+	RationaleJSON string
+	Changes       []SolChange
 }
 
-// directionFinding is one direction's rationale entry (marshaled into
-// SolProposal.RationaleJSON's "long"/"short" fields): the bucket
-// statistics Sol evaluated and what action, if any, they triggered.
-type directionFinding struct {
-	Direction                string   `json:"direction"`
-	ConfidenceBucketRange    string   `json:"confidence_bucket_range,omitempty"`
-	BucketDirectionAccuracy  float64  `json:"bucket_direction_accuracy,omitempty"`
-	BucketAvgFutureReturnPct float64  `json:"bucket_avg_future_return_pct,omitempty"`
-	BucketSampleCount        int      `json:"bucket_sample_count,omitempty"`
-	BrierScore               float64  `json:"brier_score"`
-	ExpectedCalibrationError float64  `json:"expected_calibration_error"`
-	SampleCount              int      `json:"sample_count"`
-	Actions                  []string `json:"actions,omitempty"`
+// Sol is the Think adapter: it sends the recent Calibration metrics to the
+// external Sol LLM API and returns the threshold changes it proposes
+// (FR-SELFIMPROVE-1, FR-SELFIMPROVE-8).
+type Sol struct {
+	client *Client
 }
 
-type solRationale struct {
-	Long  directionFinding `json:"long"`
-	Short directionFinding `json:"short"`
+// NewSol returns a Sol adapter that calls client (SOL_API_KEY/SOL_BASE_URL).
+func NewSol(client *Client) *Sol {
+	return &Sol{client: client}
 }
 
-// Sol is the Think adapter: it analyzes recent Calibration metrics and
-// proposes Policy Engine threshold tightenings when it finds a weak
-// confidence bucket or poor overall calibration (FR-SELFIMPROVE-1).
-type Sol struct{}
-
-// NewSol returns a Sol adapter.
-func NewSol() *Sol {
-	return &Sol{}
+type solRequest struct {
+	Task        string         `json:"task"`
+	Long        solDirection   `json:"long"`
+	Short       solDirection   `json:"short"`
+	Constraints solConstraints `json:"constraints"`
 }
 
-// Analyze runs Sol's daily analysis (FR-SELFIMPROVE-1). It returns
-// (proposal, true, nil) when at least one direction's thresholds warrant
-// a change, or (SolProposal{}, false, nil) when nothing does - a
-// perfectly calibrated/healthy day produces no proposal, which is a
-// valid outcome the caller (internal/service/selfimprove.Governor) does
-// not record as a policy_proposals row.
-func (s *Sol) Analyze(in SolAnalysisInput) (SolProposal, bool, error) {
-	longFinding, longChanges := analyzeDirection(domain.JevDirectionLong, domain.PolicyKeyLongMinProbability, domain.PolicyKeyLongMinEntryQuality, in.Long)
-	shortFinding, shortChanges := analyzeDirection(domain.JevDirectionShort, domain.PolicyKeyShortMinProbability, domain.PolicyKeyShortMinEntryQuality, in.Short)
+type solDirection struct {
+	Thresholds  solThresholds  `json:"thresholds"`
+	Calibration solCalibration `json:"calibration"`
+}
 
-	changes := append(longChanges, shortChanges...)
-	if len(changes) == 0 {
+type solThresholds struct {
+	MinProbability             float64 `json:"min_probability"`
+	MinEntryQuality            string  `json:"min_entry_quality"`
+	MinContinuationProbability float64 `json:"min_continuation_probability"`
+	MaxToxicFlow               float64 `json:"max_toxic_flow"`
+	MaxLiquidityStressed       float64 `json:"max_liquidity_stressed"`
+}
+
+type solCalibration struct {
+	Buckets                  []solBucket `json:"buckets"`
+	BrierScore               float64     `json:"brier_score"`
+	LogLoss                  float64     `json:"log_loss"`
+	ExpectedCalibrationError float64     `json:"expected_calibration_error"`
+	SampleCount              int         `json:"sample_count"`
+}
+
+type solBucket struct {
+	Range              string  `json:"range"`
+	DirectionAccuracy  float64 `json:"direction_accuracy"`
+	AvgFutureReturnPct float64 `json:"avg_future_return_pct"`
+	SampleCount        int     `json:"sample_count"`
+}
+
+// solConstraints tells the LLM the rules its output will be machine-checked
+// against (FR-SELFIMPROVE-2/3). They are guidance only: enforcement is
+// selfimprove.Governor's.
+type solConstraints struct {
+	AllowedKeys          []string `json:"allowed_keys"`
+	MaxConfidenceStep    float64  `json:"max_confidence_step"`
+	MaxEntryQualityRanks int      `json:"max_entry_quality_ranks"`
+	EntryQualityOrder    []string `json:"entry_quality_order"`
+}
+
+func newSolRequest(in SolAnalysisInput) solRequest {
+	keys := make([]string, 0, len(domain.PolicyProposalKeys))
+	for key := range domain.PolicyProposalKeys {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return solRequest{
+		Task:  "propose_policy_threshold_changes",
+		Long:  newSolDirection(in.Long),
+		Short: newSolDirection(in.Short),
+		Constraints: solConstraints{
+			AllowedKeys:          keys,
+			MaxConfidenceStep:    domain.MaxConfidenceThresholdStep,
+			MaxEntryQualityRanks: domain.MaxEntryQualityStepRanks,
+			EntryQualityOrder: []string{
+				domain.JevEntryQualityPoor, domain.JevEntryQualityFair, domain.JevEntryQualityGood,
+				domain.JevEntryQualityStrong, domain.JevEntryQualityExceptional,
+			},
+		},
+	}
+}
+
+func newSolDirection(dc DirectionCalibration) solDirection {
+	buckets := make([]solBucket, 0, len(dc.Calibration.Buckets))
+	for _, b := range dc.Calibration.Buckets {
+		buckets = append(buckets, solBucket{
+			Range: b.Range, DirectionAccuracy: b.DirectionAccuracy,
+			AvgFutureReturnPct: b.AvgFutureReturnPct, SampleCount: b.SampleCount,
+		})
+	}
+	return solDirection{
+		Thresholds: solThresholds{
+			MinProbability:             dc.Thresholds.MinProbability,
+			MinEntryQuality:            dc.Thresholds.MinEntryQuality,
+			MinContinuationProbability: dc.Thresholds.MinContinuationProbability,
+			MaxToxicFlow:               dc.Thresholds.MaxToxicFlow,
+			MaxLiquidityStressed:       dc.Thresholds.MaxLiquidityStressed,
+		},
+		Calibration: solCalibration{
+			Buckets:                  buckets,
+			BrierScore:               dc.Calibration.BrierScore,
+			LogLoss:                  dc.Calibration.LogLoss,
+			ExpectedCalibrationError: dc.Calibration.ExpectedCalibrationError,
+			SampleCount:              dc.Calibration.SampleCount,
+		},
+	}
+}
+
+// Analyze runs Sol's daily analysis (FR-SELFIMPROVE-1) by calling the Sol
+// API. It returns (proposal, true, nil) when the LLM proposes at least one
+// change, or (SolProposal{}, false, nil) when it proposes none - a valid
+// outcome the caller does not record as a policy_proposals row. An API
+// failure (including ErrNotConfigured) is returned as an error: the daily
+// analysis is skipped and retried the next business day (overview.md §8).
+func (s *Sol) Analyze(ctx context.Context, in SolAnalysisInput) (SolProposal, bool, error) {
+	var resp SolResponse
+	if err := s.client.PostJSON(ctx, SolAnalyzePath, newSolRequest(in), &resp); err != nil {
+		return SolProposal{}, false, fmt.Errorf("assist: sol analyze: %w", err)
+	}
+	if len(resp.ProposedChanges) == 0 {
 		return SolProposal{}, false, nil
 	}
 
-	rationale := solRationale{Long: longFinding, Short: shortFinding}
-	rationaleJSON, err := json.Marshal(rationale)
-	if err != nil {
-		return SolProposal{}, false, fmt.Errorf("assist: sol: encode rationale: %w", err)
+	rationale := bytes.TrimSpace(resp.Rationale)
+	if len(rationale) == 0 || bytes.Equal(rationale, []byte("null")) {
+		rationale = []byte("{}")
 	}
-	changesJSON, err := domain.EncodePolicyChanges(changes)
-	if err != nil {
-		return SolProposal{}, false, fmt.Errorf("assist: sol: encode proposed changes: %w", err)
-	}
-	return SolProposal{RationaleJSON: string(rationaleJSON), ProposedChangesJSON: changesJSON}, true, nil
-}
-
-// analyzeDirection applies Sol's heuristic (this file's doc comment) to
-// one direction, returning its rationale entry and zero, one, or two
-// domain.PolicyChange (min_probability, min_entry_quality).
-func analyzeDirection(direction, minProbabilityKey, minEntryQualityKey string, dc DirectionCalibration) (directionFinding, []domain.PolicyChange) {
-	finding := directionFinding{
-		Direction:                direction,
-		BrierScore:               dc.Calibration.BrierScore,
-		ExpectedCalibrationError: dc.Calibration.ExpectedCalibrationError,
-		SampleCount:              dc.Calibration.SampleCount,
-	}
-
-	var changes []domain.PolicyChange
-
-	if bucket, ok := findActiveBucket(dc.Calibration.Buckets, dc.Thresholds.MinProbability); ok {
-		finding.ConfidenceBucketRange = bucket.Range
-		finding.BucketDirectionAccuracy = bucket.DirectionAccuracy
-		finding.BucketAvgFutureReturnPct = bucket.AvgFutureReturnPct
-		finding.BucketSampleCount = bucket.SampleCount
-
-		weak := bucket.SampleCount >= minBucketSampleCount &&
-			(bucket.DirectionAccuracy < targetDirectionAccuracy || bucket.AvgFutureReturnPct < 0)
-		if weak {
-			newMinProbability := dc.Thresholds.MinProbability + maxConfidenceThresholdStep
-			if newMinProbability > maxMinProbability {
-				newMinProbability = maxMinProbability
-			}
-			if newMinProbability > dc.Thresholds.MinProbability {
-				changes = append(changes, mustFloatChange(minProbabilityKey, dc.Thresholds.MinProbability, newMinProbability))
-				finding.Actions = append(finding.Actions, "raise_min_probability")
-			}
-		}
-	}
-
-	if dc.Calibration.SampleCount >= minBucketSampleCount && dc.Calibration.ExpectedCalibrationError > targetExpectedCalibrationError {
-		if newQuality, ok := stepEntryQualityUp(dc.Thresholds.MinEntryQuality); ok {
-			changes = append(changes, mustStringChange(minEntryQualityKey, dc.Thresholds.MinEntryQuality, newQuality))
-			finding.Actions = append(finding.Actions, "raise_min_entry_quality")
-		}
-	}
-
-	return finding, changes
-}
-
-// findActiveBucket returns the ConfidenceBucket covering probability
-// (domain.DefaultConfidenceBucketRanges' [Low, High) ranges, last range
-// inclusive of High), or (zero value, false) if buckets has no entry for
-// that range (no labeled samples fell in it yet).
-func findActiveBucket(buckets []domain.ConfidenceBucket, probability float64) (domain.ConfidenceBucket, bool) {
-	for _, r := range domain.DefaultConfidenceBucketRanges {
-		if probability < r.Low || (probability >= r.High && r.High < 1.0) {
-			continue
-		}
-		for _, b := range buckets {
-			if b.Range == r.Range {
-				return b, true
-			}
-		}
-		return domain.ConfidenceBucket{}, false
-	}
-	return domain.ConfidenceBucket{}, false
-}
-
-// stepEntryQualityUp returns the entry_quality one rank above current,
-// or (current, false) if current is already the best rank
-// (JevEntryQualityExceptional) or unrecognized.
-func stepEntryQualityUp(current string) (string, bool) {
-	currentRank, ok := domain.EntryQualityRank(current)
-	if !ok || currentRank+1 >= len(entryQualityByRank) {
-		return current, false
-	}
-	return entryQualityByRank[currentRank+1], true
-}
-
-// entryQualityByRank is domain.EntryQualityRank's inverse (index ==
-// rank), for stepEntryQualityUp.
-var entryQualityByRank = []string{
-	domain.JevEntryQualityPoor,
-	domain.JevEntryQualityFair,
-	domain.JevEntryQualityGood,
-	domain.JevEntryQualityStrong,
-	domain.JevEntryQualityExceptional,
-}
-
-func mustFloatChange(key string, oldValue, newValue float64) domain.PolicyChange {
-	old, err := json.Marshal(oldValue)
-	if err != nil {
-		panic(fmt.Sprintf("assist: sol: encode float %v: %v", oldValue, err))
-	}
-	next, err := json.Marshal(newValue)
-	if err != nil {
-		panic(fmt.Sprintf("assist: sol: encode float %v: %v", newValue, err))
-	}
-	return domain.PolicyChange{Key: key, OldValue: string(old), NewValue: string(next)}
-}
-
-func mustStringChange(key, oldValue, newValue string) domain.PolicyChange {
-	old, err := json.Marshal(oldValue)
-	if err != nil {
-		panic(fmt.Sprintf("assist: sol: encode string %q: %v", oldValue, err))
-	}
-	next, err := json.Marshal(newValue)
-	if err != nil {
-		panic(fmt.Sprintf("assist: sol: encode string %q: %v", newValue, err))
-	}
-	return domain.PolicyChange{Key: key, OldValue: string(old), NewValue: string(next)}
+	return SolProposal{RationaleJSON: string(rationale), Changes: resp.ProposedChanges}, true, nil
 }

@@ -14,7 +14,9 @@ func TestGovernor_ProposeDaily_InsertsProposalForWeakBucket(t *testing.T) {
 	ctx := context.Background()
 	baseline := baselinePolicyConfig(0.60)
 	source := newUptrendSource(f.instrument.ID, time.Now().UTC(), baseline)
-	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline)
+	ai := newFakeAI(t)
+	ai.solBody = solProposesLongMinProbability065
+	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline, ai.options()...)
 
 	weakLong := domain.CalibrationMetrics{
 		Buckets: []domain.ConfidenceBucket{
@@ -52,6 +54,13 @@ func TestGovernor_ProposeDaily_InsertsProposalForWeakBucket(t *testing.T) {
 	if err := domain.ValidatePolicyChanges(changes); err != nil {
 		t.Fatalf("ValidatePolicyChanges(stored proposal) = %v, want nil", err)
 	}
+	// old_value comes from the thresholds in effect, not from the LLM.
+	if len(changes) != 1 || changes[0].OldValue != "0.6" || changes[0].NewValue != "0.65" {
+		t.Errorf("stored changes = %+v, want min_probability 0.6 -> 0.65", changes)
+	}
+	if stored.RationaleJSON != `{"why":"weak 0.60-0.70 bucket"}` {
+		t.Errorf("RationaleJSON = %q, want Sol's rationale", stored.RationaleJSON)
+	}
 }
 
 func TestGovernor_ProposeDaily_NoProposalWhenCalibrationHealthy(t *testing.T) {
@@ -59,7 +68,7 @@ func TestGovernor_ProposeDaily_NoProposalWhenCalibrationHealthy(t *testing.T) {
 	ctx := context.Background()
 	baseline := baselinePolicyConfig(0.60)
 	source := newUptrendSource(f.instrument.ID, time.Now().UTC(), baseline)
-	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline)
+	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline, newFakeAI(t).options()...)
 
 	healthy := domain.CalibrationMetrics{
 		Buckets: []domain.ConfidenceBucket{

@@ -186,8 +186,17 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 
 	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
 	calibrationService := calibration.NewService(outcomes)
+	// Sol/Opus (issue #82, FR-SELFIMPROVE-8/9) are real external LLM API
+	// clients built from the optional SOL_*/OPUS_* secrets. Left unset,
+	// each stage is skipped every day (assist.ErrNotConfigured) instead of
+	// blocking start-up.
+	solClient := assist.NewClient(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey})
+	opusClient := assist.NewClient(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey})
 	governor := selfimprove.NewGovernor(repository.NewProposalRepository(state.DB), settings, positions,
-		backtestSource, state.Strategy.Policy, selfimprove.WithNotifier(alerts.selfImproveNotifier()))
+		backtestSource, state.Strategy.Policy,
+		selfimprove.WithNotifier(alerts.selfImproveNotifier()),
+		selfimprove.WithSol(assist.NewSol(solClient)),
+		selfimprove.WithOpus(assist.NewOpus(opusClient)))
 
 	schedOpts := []scheduler.Option{
 		scheduler.WithOutcomeLabelSource(outcomes),

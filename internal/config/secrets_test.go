@@ -143,12 +143,18 @@ func TestLoadSecretsFromDB_AIAndNewsFeedKeysAreOptionalAndLoaded(t *testing.T) {
 	repo[config.KeyLunaBaseURL] = "https://luna.example.com"
 	repo[config.KeyNewsFeedURL] = "https://news.example.com/feed"
 	repo[config.KeyNewsFeedAPIKey] = "news-key"
+	repo[config.KeySolAPIKey] = "sol-key"
+	repo[config.KeySolBaseURL] = "https://sol.example.com"
+	repo[config.KeyOpusAPIKey] = "opus-key"
+	repo[config.KeyOpusBaseURL] = "https://opus.example.com"
 	secrets, _, err = config.LoadSecretsFromDB(context.Background(), repo)
 	if err != nil {
 		t.Fatalf("LoadSecretsFromDB: %v", err)
 	}
 	if secrets.LunaAPIKey != "luna-key" || secrets.LunaBaseURL != "https://luna.example.com" ||
-		secrets.NewsFeedURL != "https://news.example.com/feed" || secrets.NewsFeedAPIKey != "news-key" {
+		secrets.NewsFeedURL != "https://news.example.com/feed" || secrets.NewsFeedAPIKey != "news-key" ||
+		secrets.SolAPIKey != "sol-key" || secrets.SolBaseURL != "https://sol.example.com" ||
+		secrets.OpusAPIKey != "opus-key" || secrets.OpusBaseURL != "https://opus.example.com" {
 		t.Errorf("secrets = %+v, want the configured Luna/News Feed values", secrets)
 	}
 }

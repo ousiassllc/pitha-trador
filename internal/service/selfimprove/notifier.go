@@ -16,6 +16,10 @@ import (
 type Notifier interface {
 	ProposalApplied(ctx context.Context, proposal domain.PolicyProposal) error
 	ProposalRolledBack(ctx context.Context, proposal domain.PolicyProposal, reason string) error
+	// AIStageSkipped reports that the external Sol/Opus API failed and
+	// the named stage ("sol"/"opus") was skipped for today; the daily
+	// batch retries it the next business day (overview.md §8).
+	AIStageSkipped(ctx context.Context, stage string, cause error) error
 }
 
 // NoopNotifier is Notifier's do-nothing default.
@@ -28,3 +32,6 @@ func (NoopNotifier) ProposalApplied(context.Context, domain.PolicyProposal) erro
 func (NoopNotifier) ProposalRolledBack(context.Context, domain.PolicyProposal, string) error {
 	return nil
 }
+
+// AIStageSkipped does nothing.
+func (NoopNotifier) AIStageSkipped(context.Context, string, error) error { return nil }

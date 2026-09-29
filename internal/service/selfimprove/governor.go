@@ -62,6 +62,20 @@ func WithNotifier(n Notifier) Option {
 	return func(g *Governor) { g.notifier = n }
 }
 
+// WithSol sets the Sol adapter (the external Sol LLM API client). Without
+// it Sol is unconfigured: every daily analysis is skipped with
+// assist.ErrNotConfigured.
+func WithSol(sol *assist.Sol) Option {
+	return func(g *Governor) { g.sol = sol }
+}
+
+// WithOpus sets the Opus adapter (the external Opus LLM API client).
+// Without it Opus is unconfigured: no proposal that meets the
+// deterministic thresholds can be approved.
+func WithOpus(opus *assist.Opus) Option {
+	return func(g *Governor) { g.opus = opus }
+}
+
 // WithNow overrides time.Now (tests).
 func WithNow(now func() time.Time) Option {
 	return func(g *Governor) { g.now = now }
@@ -83,8 +97,8 @@ func NewGovernor(
 		settings:  settings,
 		positions: positions,
 		source:    source,
-		sol:       assist.NewSol(),
-		opus:      assist.NewOpus(),
+		sol:       assist.NewSol(assist.NewClient(assist.Config{Label: "sol"})),
+		opus:      assist.NewOpus(assist.NewClient(assist.Config{Label: "opus"})),
 		notifier:  NoopNotifier{},
 		now:       func() time.Time { return time.Now().UTC() },
 		baseline:  baseline,

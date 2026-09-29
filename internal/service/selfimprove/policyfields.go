@@ -52,6 +52,42 @@ func setPolicyField(cfg *config.PolicyConfig, key, jsonValue string) error {
 	}
 }
 
+// policyFieldJSON returns cfg's current value for key as a JSON-encoded
+// scalar (PolicyChange.OldValue's convention), or ok=false when key is not
+// one of domain.PolicyProposalKeys.
+func policyFieldJSON(cfg config.PolicyConfig, key string) (string, bool) {
+	var value any
+	switch key {
+	case domain.PolicyKeyLongMinProbability:
+		value = cfg.Long.MinProbability
+	case domain.PolicyKeyLongMinEntryQuality:
+		value = cfg.Long.MinEntryQuality
+	case domain.PolicyKeyLongMinContinuationProbability:
+		value = cfg.Long.MinContinuationProbability
+	case domain.PolicyKeyLongMaxToxicFlow:
+		value = cfg.Long.MaxToxicFlow
+	case domain.PolicyKeyLongMaxLiquidityStressed:
+		value = cfg.Long.MaxLiquidityStressed
+	case domain.PolicyKeyShortMinProbability:
+		value = cfg.Short.MinProbability
+	case domain.PolicyKeyShortMinEntryQuality:
+		value = cfg.Short.MinEntryQuality
+	case domain.PolicyKeyShortMinContinuationProbability:
+		value = cfg.Short.MinContinuationProbability
+	case domain.PolicyKeyShortMaxToxicFlow:
+		value = cfg.Short.MaxToxicFlow
+	case domain.PolicyKeyShortMaxLiquidityStressed:
+		value = cfg.Short.MaxLiquidityStressed
+	default:
+		return "", false
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return "", false
+	}
+	return string(data), true
+}
+
 func setFloatField(dest *float64, key, jsonValue string) error {
 	var v float64
 	if err := json.Unmarshal([]byte(jsonValue), &v); err != nil {

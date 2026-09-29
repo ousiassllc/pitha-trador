@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 )
 
 // DirectionCalibrationSource supplies the recent per-direction Calibration
@@ -20,25 +22,41 @@ type DirectionCalibrationSource interface {
 type DailyResult struct {
 	// RolledBack lists applied proposals FR-SELFIMPROVE-6 reverted today.
 	RolledBack []int64
-	// Proposal is today's new Sol proposal, nil when Sol proposed
-	// nothing.
+	// RetriedApplied lists earlier pending proposals (whose Opus review
+	// failed on a previous day) that today's retry approved and applied.
+	RetriedApplied []int64
+	// Proposal is today's new Sol proposal, nil when Sol proposed nothing
+	// (or its API was skipped). It may be status=rejected
+	// (FR-SELFIMPROVE-8).
 	Proposal *domain.PolicyProposal
 	// Applied reports whether Opus approved (and Governor applied)
 	// Proposal.
 	Applied bool
+	// SkippedStages lists the AI stages ("sol"/"opus") skipped today
+	// because their external API failed or is not configured; they are
+	// retried the next business day.
+	SkippedStages []string
 }
 
 // RunDaily is the Continuous Loop's daily post-close batch
 // (functional.md §4.14, overview.md §8): it first runs
 // FR-SELFIMPROVE-6's post-apply check on every applied proposal (reverting
-// degraded ones), then has Sol analyze the last shadowBacktestLookbackDays
-// business days of Calibration data per direction (FR-SELFIMPROVE-1) and,
-// when Sol proposes a change, runs the shadow backtest + Opus review and
-// applies an approved proposal immediately (FR-SELFIMPROVE-4/5).
+// degraded ones), retries the Opus review of any proposal an earlier Opus
+// API failure left pending, then has Sol analyze the last
+// shadowBacktestLookbackDays business days of Calibration data per
+// direction (FR-SELFIMPROVE-1) and, when Sol proposes a change that passes
+// FR-SELFIMPROVE-8's machine validation, runs the shadow backtest + Opus
+// review and applies an approved proposal immediately
+// (FR-SELFIMPROVE-4/5/9).
 //
 // Rollback runs first so today's analysis starts from the thresholds that
-// actually remain in effect. A single proposal's rollback-check failure is
-// joined into the returned error without stopping the rest of the batch.
+// actually remain in effect. A Sol/Opus API failure skips only that stage
+// for today: it is recorded in DailyResult.SkippedStages, notified via
+// Notifier.AIStageSkipped, and is not an error. While a proposal remains
+// pending at the start of a run, that run only retries them and does not
+// start a new Sol analysis, so two proposals never compete for the same
+// thresholds. A single proposal's failure is joined into the
+// returned error without stopping the rest of the batch.
 func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibrationSource) (DailyResult, error) {
 	var result DailyResult
 
@@ -58,6 +76,27 @@ func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibratio
 		}
 	}
 
+	pending, err := g.proposals.ListByStatus(ctx, domain.PolicyProposalStatusPending)
+	if err != nil {
+		return result, errors.Join(append(errs, fmt.Errorf("selfimprove: list pending proposals: %w", err))...)
+	}
+	for _, p := range pending {
+		approved, err := g.EvaluateProposal(ctx, p.ID)
+		if err != nil {
+			errs = g.skipOrCollect(ctx, &result, errs, err)
+			continue
+		}
+		if approved {
+			result.RetriedApplied = append(result.RetriedApplied, p.ID)
+		}
+	}
+	if len(pending) > 0 {
+		// Today's slot went to clearing the backlog: a fresh Sol
+		// analysis waits until nothing is pending at the start of a
+		// run, so two proposals never compete for the same thresholds.
+		return result, errors.Join(errs...)
+	}
+
 	since := businessDaysBefore(g.now(), shadowBacktestLookbackDays)
 	long, short, err := calibration.DirectionMetricsSince(ctx, since)
 	if err != nil {
@@ -65,17 +104,40 @@ func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibratio
 	}
 	proposal, ok, err := g.ProposeDaily(ctx, long, short)
 	if err != nil {
-		return result, errors.Join(append(errs, err)...)
+		return result, errors.Join(g.skipOrCollect(ctx, &result, errs, err)...)
 	}
 	if !ok {
 		return result, errors.Join(errs...)
 	}
 	result.Proposal = &proposal
+	if proposal.Status != domain.PolicyProposalStatusPending {
+		return result, errors.Join(errs...)
+	}
 
 	approved, err := g.EvaluateProposal(ctx, proposal.ID)
 	if err != nil {
-		return result, errors.Join(append(errs, err)...)
+		return result, errors.Join(g.skipOrCollect(ctx, &result, errs, err)...)
 	}
 	result.Applied = approved
 	return result, errors.Join(errs...)
+}
+
+// skipOrCollect handles one batch step's error: an external AI API failure
+// (*aiStageError) is recorded as a skipped stage and, unless the API is
+// simply not configured, notified; any other error is appended to errs.
+func (g *Governor) skipOrCollect(ctx context.Context, result *DailyResult, errs []error, err error) []error {
+	var stageErr *aiStageError
+	if !errors.As(err, &stageErr) {
+		return append(errs, err)
+	}
+	result.SkippedStages = append(result.SkippedStages, stageErr.stage)
+	if errors.Is(err, assist.ErrNotConfigured) {
+		slog.InfoContext(ctx, "selfimprove: AI stage not configured, skipped", "stage", stageErr.stage)
+		return errs
+	}
+	slog.ErrorContext(ctx, "selfimprove: AI stage failed, skipped until next business day", "stage", stageErr.stage, "error", err)
+	if notifyErr := g.notifier.AIStageSkipped(ctx, stageErr.stage, stageErr.err); notifyErr != nil {
+		slog.ErrorContext(ctx, "selfimprove: notify skipped AI stage failed", "stage", stageErr.stage, "error", notifyErr)
+	}
+	return errs
 }

@@ -113,19 +113,19 @@ var PolicyProposalKeys = map[string]bool{
 	PolicyKeyShortMaxLiquidityStressed:       true,
 }
 
-// maxConfidenceThresholdStep is FR-SELFIMPROVE-3's per-proposal cap for
+// MaxConfidenceThresholdStep is FR-SELFIMPROVE-3's per-proposal cap for
 // every confidence-type policy.* key (min_probability,
 // min_continuation_probability, max_toxic_flow, max_liquidity_stressed):
 // "confidence系しきい値で±0.05".
-const maxConfidenceThresholdStep = 0.05
+const MaxConfidenceThresholdStep = 0.05
 
-// maxEntryQualityStepRanks is FR-SELFIMPROVE-3's per-proposal cap for
+// MaxEntryQualityStepRanks is FR-SELFIMPROVE-3's per-proposal cap for
 // policy.{long,short}.min_entry_quality: "段階型しきい値で1段階まで".
-const maxEntryQualityStepRanks = 1
+const MaxEntryQualityStepRanks = 1
 
 // floatMagnitudeEpsilon absorbs float64 round-trip noise
 // (json.Marshal/Unmarshal of e.g. 0.05) so a change exactly at
-// maxConfidenceThresholdStep is never spuriously rejected.
+// MaxConfidenceThresholdStep is never spuriously rejected.
 const floatMagnitudeEpsilon = 1e-9
 
 // entryQualityRank orders JevEntryQuality* from worst (0) to best,
@@ -182,10 +182,15 @@ func ValidatePolicyChanges(changes []PolicyChange) error {
 	if len(changes) == 0 {
 		return fmt.Errorf("domain: policy proposal has no changes")
 	}
+	seen := make(map[string]bool, len(changes))
 	for _, c := range changes {
 		if !PolicyProposalKeys[c.Key] {
 			return fmt.Errorf("domain: policy change key %q is not a policy.* threshold key Sol/Opus may change (FR-SELFIMPROVE-2)", c.Key)
 		}
+		if seen[c.Key] {
+			return fmt.Errorf("domain: policy change key %q appears more than once", c.Key)
+		}
+		seen[c.Key] = true
 		if entryQualityPolicyKeys[c.Key] {
 			if err := validateEntryQualityStep(c); err != nil {
 				return err
@@ -216,8 +221,8 @@ func validateEntryQualityStep(c PolicyChange) error {
 	if !ok {
 		return fmt.Errorf("domain: policy change %q new_value %q is not a recognized entry_quality", c.Key, newQuality)
 	}
-	if step := newRank - oldRank; step > maxEntryQualityStepRanks || step < -maxEntryQualityStepRanks {
-		return fmt.Errorf("domain: policy change %q steps entry_quality by %d rank(s), exceeding FR-SELFIMPROVE-3's %d-step cap", c.Key, step, maxEntryQualityStepRanks)
+	if step := newRank - oldRank; step > MaxEntryQualityStepRanks || step < -MaxEntryQualityStepRanks {
+		return fmt.Errorf("domain: policy change %q steps entry_quality by %d rank(s), exceeding FR-SELFIMPROVE-3's %d-step cap", c.Key, step, MaxEntryQualityStepRanks)
 	}
 	return nil
 }
@@ -231,8 +236,11 @@ func validateConfidenceStep(c PolicyChange) error {
 	if err != nil {
 		return fmt.Errorf("domain: policy change %q new_value: %w", c.Key, err)
 	}
-	if magnitude := math.Abs(newValue - oldValue); magnitude > maxConfidenceThresholdStep+floatMagnitudeEpsilon {
-		return fmt.Errorf("domain: policy change %q moves value by %.4f, exceeding FR-SELFIMPROVE-3's ±%.2f cap", c.Key, magnitude, maxConfidenceThresholdStep)
+	if newValue < 0 || newValue > 1 {
+		return fmt.Errorf("domain: policy change %q new_value %v is outside the [0, 1] confidence range", c.Key, newValue)
+	}
+	if magnitude := math.Abs(newValue - oldValue); magnitude > MaxConfidenceThresholdStep+floatMagnitudeEpsilon {
+		return fmt.Errorf("domain: policy change %q moves value by %.4f, exceeding FR-SELFIMPROVE-3's ±%.2f cap", c.Key, magnitude, MaxConfidenceThresholdStep)
 	}
 	return nil
 }

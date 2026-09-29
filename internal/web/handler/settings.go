@@ -55,6 +55,10 @@ var settingsFields = []struct {
 	{config.KeyLunaBaseURL, "LUNA_BASE_URL（任意）"},
 	{config.KeyNewsFeedURL, "NEWS_FEED_URL（任意）"},
 	{config.KeyNewsFeedAPIKey, "NEWS_FEED_API_KEY（任意）"},
+	{config.KeySolAPIKey, "SOL_API_KEY（任意）"},
+	{config.KeySolBaseURL, "SOL_BASE_URL（任意）"},
+	{config.KeyOpusAPIKey, "OPUS_API_KEY（任意）"},
+	{config.KeyOpusBaseURL, "OPUS_BASE_URL（任意）"},
 }
 
 // requiredSettingsKeys mirrors config.LoadSecretsFromDB's own required

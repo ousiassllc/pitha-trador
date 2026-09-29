@@ -41,6 +41,15 @@ const (
 	KeyLunaBaseURL    = "LUNA_BASE_URL"
 	KeyNewsFeedURL    = "NEWS_FEED_URL"
 	KeyNewsFeedAPIKey = "NEWS_FEED_API_KEY"
+	// KeySolAPIKey/KeySolBaseURL and KeyOpusAPIKey/KeyOpusBaseURL supply
+	// internal/service/assist's Sol (daily analysis) and Opus (proposal
+	// review) adapters (FR-SELFIMPROVE-8/9). Optional like the Luna keys:
+	// with either pair unset the matching self-improvement stage is
+	// skipped each day and no proposal can be approved without Opus.
+	KeySolAPIKey   = "SOL_API_KEY"
+	KeySolBaseURL  = "SOL_BASE_URL"
+	KeyOpusAPIKey  = "OPUS_API_KEY"
+	KeyOpusBaseURL = "OPUS_BASE_URL"
 )
 
 // requiredSecretKeys are the Settings fields whose absence
@@ -51,7 +60,8 @@ var requiredSecretKeys = []string{KeyJevAPIKey, KeyJevBaseURL, KeyKabuAPIPasswor
 
 // optionalSecretKeys are loaded like requiredSecretKeys but never reported
 // as missing.
-var optionalSecretKeys = []string{KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey}
+var optionalSecretKeys = []string{KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey,
+	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL}
 
 // Secrets holds every credential internal/bootstrap.BuildServices passes
 // into internal/service/marketdata.Config and internal/service/jev.Config
@@ -72,6 +82,12 @@ type Secrets struct {
 	LunaBaseURL    string
 	NewsFeedURL    string
 	NewsFeedAPIKey string
+	// SolAPIKey/SolBaseURL and OpusAPIKey/OpusBaseURL are optional (see
+	// KeySolAPIKey).
+	SolAPIKey   string
+	SolBaseURL  string
+	OpusAPIKey  string
+	OpusBaseURL string
 }
 
 // SecretsRepository is the subset of internal/repository.SecretsRepository's
@@ -128,5 +144,9 @@ func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []
 		LunaBaseURL:     values[KeyLunaBaseURL],
 		NewsFeedURL:     values[KeyNewsFeedURL],
 		NewsFeedAPIKey:  values[KeyNewsFeedAPIKey],
+		SolAPIKey:       values[KeySolAPIKey],
+		SolBaseURL:      values[KeySolBaseURL],
+		OpusAPIKey:      values[KeyOpusAPIKey],
+		OpusBaseURL:     values[KeyOpusBaseURL],
 	}, missing, nil
 }

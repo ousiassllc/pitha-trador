@@ -40,8 +40,10 @@ func TestGovernor_RunDaily_ProposesEvaluatesAndAppliesToRuntimePolicy(t *testing
 	base := time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC) // a Monday
 	now := base.Add(10 * time.Minute)
 	baseline := baselinePolicyConfig(0.60)
+	ai := newFakeAI(t)
+	ai.solBody = solProposesLongMinProbability065
 	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, newUptrendSource(f.instrument.ID, base, baseline), baseline,
-		selfimprove.WithNow(func() time.Time { return now }))
+		ai.options(selfimprove.WithNow(func() time.Time { return now }))...)
 
 	calibration := weakLongCalibration()
 	result, err := g.RunDaily(ctx, calibration)
@@ -81,7 +83,7 @@ func TestGovernor_RunDaily_ProposesEvaluatesAndAppliesToRuntimePolicy(t *testing
 func TestGovernor_RunDaily_NoProposalWhenCalibrationHealthy(t *testing.T) {
 	f := newGovernorFixtures(t)
 	baseline := baselinePolicyConfig(0.60)
-	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, newUptrendSource(f.instrument.ID, time.Now().UTC(), baseline), baseline)
+	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, newUptrendSource(f.instrument.ID, time.Now().UTC(), baseline), baseline, newFakeAI(t).options()...)
 
 	healthy := weakLongCalibration()
 	healthy.long = healthy.short
