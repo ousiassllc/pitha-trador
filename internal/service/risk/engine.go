@@ -2,6 +2,7 @@ package risk
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -137,6 +138,9 @@ type Engine struct {
 	notifier          Notifier
 	now               func() time.Time
 	calendar          MarketCalendar
+
+	// triggerMu serializes triggerIfNotActive's check-then-insert (state.go).
+	triggerMu sync.Mutex
 }
 
 // NewEngine returns an Engine built from cfg, applying every documented
