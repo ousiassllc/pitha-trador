@@ -37,7 +37,7 @@ sequenceDiagram
     participant RE as Risk Engine
     participant EX as Execution
     participant DB as SQLite
-    participant TRAY as Wails通知/トレイ
+    participant TRAY as Wails通知
     participant SLACK as Slack Webhook
 
     RE->>RE: 日次損失上限/連敗上限/異常検知/ハートビート途絶を検出

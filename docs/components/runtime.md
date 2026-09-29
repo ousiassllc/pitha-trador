@@ -5,7 +5,8 @@
 ## 7. Wails統合
 
 - `cmd/desktop/main.go` がGin Engineを組み立て、`options.App.AssetServer.Handler` に注入してWailsを起動する。フロントエンドは通常のWailsテンプレート（`frontend/`ディレクトリ・独自バインディング）を使わず、`static/src`のビルド成果物をGinの`Static()`で配信する
-- Kill Switch発動等、サーバー内部イベントをネイティブ通知として表示する処理（`runtime.EventsEmit`, OSトースト, トレイアイコン変更）は `internal/web/handler` ではなく `internal/service/risk` からWailsランタイムを直接呼び出す薄いアダプタ（`internal/service/notify`）を介して行う
+- Kill Switch発動等、サーバー内部イベントをネイティブ通知として表示する処理（`runtime.SendNotification`によるOSトースト、`runtime.EventsEmit`）は `internal/web/handler` ではなく、`cmd/desktop/notify.go` の `App` が `risk.Notifier` を実装して行う（`internal/service/risk` はインターフェース越しに呼び出し、`bootstrap.BuildServices` がSlack・構造化ログと並べて束ねる）。`internal/service/notify` はSlack Webhook・構造化ログ・メンテナンス通知のみでWailsに依存しない
+- OSのシステムトレイ（トレイアイコン変更）は未対応: Wails v2の`runtime`パッケージにトレイAPIが無く、Wails v3または外部systrayライブラリが必要となるため。現状はネイティブトーストと`EventsEmit`（`kill-switch:triggered`等）のみを提供する。`EventsEmit`のフロントエンド購読者は未実装で、Kill Switchパネルは`/ws/system`と`GET /api/v1/system/status`の再同期で状態を更新する
 - 開発ワークフロー（3種のウォッチプロセスを並行起動、`Makefile dev`ターゲット）:
 
 ```makefile
@@ -36,5 +37,5 @@ dev:
 |---------|----------|---------|
 | Go ハンドラ | `httptest` + HTMLアサーション | 正しいHTMLフラグメント/フルページ・ステータスコード |
 | Templ テンプレート | `Render()` → HTML文字列アサーション | atoms/molecules/organisms/pagesの出力 |
-| Lit コンポーネント | `@open-wc/testing` + `@web/test-runner` | チャート初期化・WS再接続・Kill Switch操作等の単体挙動 |
-| E2E | Playwright（Wailsアプリのwebview、またはビルド前は`wails dev`のブラウザアクセスモード） | Scanner→Symbol Detail遷移、Kill Switch操作フロー全体 |
+| Lit コンポーネント | `bun test`（`bun:test`）+ happy-dom（`@happy-dom/global-registrator`、`static/bunfig.toml`が`test/setup.ts`をpreload） | チャート初期化・WS再接続・Kill Switch操作等の単体挙動 |
+| E2E | **未整備**（`tests/`は雛形でREADMEのみ。CIにもE2Eジョブは無い。導入時はPlaywrightを想定: Wailsアプリのwebview、またはビルド前は`wails dev`のブラウザアクセスモード） | （導入時）Scanner→Symbol Detail遷移、Kill Switch操作フロー全体 |
