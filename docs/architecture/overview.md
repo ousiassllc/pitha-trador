@@ -4,9 +4,9 @@
 
 - **単一プロセス・単一バイナリ**: Wails によりネイティブデスクトップアプリとして単一の Go プロセスに全機能（HTTP/HTMXサーバー、Scheduler/Worker、kabuステーションAPI連携、Jevアダプタ）を同居させる。単一Windowsホスト構成（`requirements/non-functional.md` §1）に合わせ、ネットワーク越しの分散構成は取らない
 - **バックエンドファースト（HALT思想）**: フロントエンドはAPIサーバー（Gin）に内蔵し、SPAを作らない。判断に迷ったらサーバー側に寄せる。詳細は `components/overview.md`
-- **計算とJev判断の分離**: 価格・リターン・VWAP・ATR・板インバランス等の計算可能な値はGoコードで計算する。Jevは解釈（regime/direction/toxic flow等）のみを担当する（`overview.md` §2.2 最重要原則）
+- **計算とJev判断の分離**: 価格・リターン・VWAP・ATR・板インバランス等の計算可能な値はGoコードで計算する。Jevは解釈（regime/direction/toxic flow等）のみを担当する（`docs/overview.md`「含まないもの」の「LLMへの価格計算・ポジションサイズ計算の委任」を継続遵守）
 - **SQLite中心のインフラ最小化**: Postgres/Redis/BullMQ/Celeryのような別プロセスのミドルウェアを一切持ち込まず、DB・Job Queue・ベクトル検索インデックスをすべて**単一のSQLiteファイル**（アプリ内蔵）で完結させる。Wailsの単一実行ファイル配布と最も相性がよく、Windowsホストへの事前インストール作業をゼロにする
-- **AI自己改善ループの境界**: Sol/Opus（§8）は`runtime_settings`の`policy.*`キー（Policy Engineしきい値）のみ変更可能。`risk.*`キー（Risk Engineのリミット値）およびJevの`prompt_version`/質問セット自体は自己改善ループの対象外とし、人手のみが変更できる。これはアプリケーション層のアクセス制御（governorサービスが`risk.*`への書き込みAPIを持たない）で技術的に強制する（`overview.md` 非目標「AIによるリスクルール変更」を継続遵守）
+- **AI自己改善ループの境界**: Sol/Opus（§8）は`runtime_settings`の`policy.*`キー（Policy Engineしきい値）のみ変更可能。`risk.*`キー（Risk Engineのリミット値）およびJevの`prompt_version`/質問セット自体は自己改善ループの対象外とし、人手のみが変更できる。これはアプリケーション層のアクセス制御（governorサービスが`risk.*`への書き込みAPIを持たない）で技術的に強制する（`docs/overview.md`「含まないもの」の「AIによるRisk Engineのリミット値そのものの変更」を継続遵守）
 - **差し替え可能性**: 各レイヤーはインターフェースを介して疎結合にする。`internal/domain`・`internal/repository`・`internal/service` はWailsプロセスの存在を前提にしない。将来スキャン対象拡大や複数戦略運用でプロセス分離が必要になった場合に備える
 
 ## 2. 技術スタック
@@ -23,7 +23,7 @@
 | チャート描画 | lightweight-charts | ローソク足・VWAP・出来高チャート |
 | スタイリング | Tailwind CSS | ユーティリティファーストCSS |
 | ビルド | esbuild | Lit/TypeScriptバンドル |
-| DB | **SQLite**（`modernc.org/sqlite`、アプリ内蔵） | 全永続データ（§4 ER参照）。exeに同梱、外部サービスのインストール不要 |
+| DB | **SQLite**（`modernc.org/sqlite`、アプリ内蔵） | 全永続データ（`architecture/er.md`参照）。exeに同梱、外部サービスのインストール不要 |
 | DBアクセス | database/sql + sqlc（sqlite3方言） | 型安全なSQLクエリ生成。ORMは使わずSQLを直接管理 |
 | マイグレーション | golang-migrate（sqlite3ドライバ） | `db/migrations` のSQLマイグレーション管理 |
 | ベクトル検索 | `modernc.org/sqlite/vec`（sqlite-vecのpure Go移植、`vec0`仮想テーブル） | RAG類似検索（§7）。pgvector相当の機能をSQLite上で実現。CGO不要でクロスコンパイル可能（`environment/setup.md` §CI/CD参照） |
@@ -34,26 +34,36 @@
 | Jevアダプタ | 独自HTTPクライアント | Jev API（外部LLM判断レイヤー）呼び出し |
 | Luna/Sol/Opusアダプタ | 独自HTTPクライアント | ニュース分類（Luna）・振り返り分析（Sol）・改善提案レビュー（Opus）呼び出し（§8） |
 | ロギング | slog（構造化JSON） | `requirements/non-functional.md` §5 準拠 |
-| アラート | Slack Incoming Webhook | 即時通知（§5.2） |
+| アラート | Slack Incoming Webhook | 即時通知（`requirements/non-functional.md` §5.2） |
 
 ## 3. ディレクトリ構成・レイヤー構造
 
 ```text
 pitha-trador/
 ├── cmd/
-│   └── desktop/                  # Wailsエントリーポイント（main.go, wails.json, app.go）
+│   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, wails.json）
+│   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go。CI・WebView2が動かない環境向け）
 ├── internal/
+│   ├── bootstrap/                # 両エントリーポイント共通の起動処理（DB open+マイグレーション、config/*.yamlの4段階解決、各サービスの組み立て・ジョブ登録）
+│   ├── config/                   # config/*.yamlの型付きローダー、AES-256-GCM秘密情報ヘルパー（他の内部パッケージに依存しない）
+│   ├── logging/                  # slog JSON出力の日次ローテーション（rotate.go）・30日超のgzipアーカイブ（archive.go。`requirements/non-functional.md` §5）
+│   ├── version/                  # ビルド時に埋め込むバージョン文字列（`ldflags -X`。自動アップデート判定で使用）
 │   ├── domain/                   # ドメインモデル（他レイヤーに非依存）
 │   │   ├── instrument.go
 │   │   ├── snapshot.go           # market_snapshots相当
 │   │   ├── feature.go
+│   │   ├── candidate.go          # Fast Screener候補
 │   │   ├── jevdecision.go
+│   │   ├── newscontext.go        # Luna分類結果（news_context）
 │   │   ├── signal.go             # trade_signals相当
 │   │   ├── order.go              # paper_orders相当
 │   │   ├── position.go
+│   │   ├── killswitch.go         # SystemState・KillSwitchEvent
+│   │   ├── failurestreak.go
+│   │   ├── activity.go           # System Activity Feedのイベント型
 │   │   ├── calibration.go
 │   │   └── policyproposal.go     # policy_proposals相当
-│   ├── repository/               # domainのみに依存。sqlc生成コードを内包
+│   ├── repository/               # domainのみに依存（例外: `internal/config`のAES-256-GCMヘルパー）。SQLite接続・マイグレーション（db.go）を含む
 │   │   ├── instrument_repo.go
 │   │   ├── snapshot_repo.go
 │   │   ├── decision_repo.go
@@ -62,7 +72,12 @@ pitha-trador/
 │   │   ├── position_repo.go
 │   │   ├── calibration_repo.go
 │   │   ├── job_repo.go           # jobsテーブル（自前Worker用）
-│   │   └── proposal_repo.go      # policy_proposals
+│   │   ├── proposal_repo.go      # policy_proposals
+│   │   ├── killswitch_repo.go    # kill_switch_events / kill_switch_resolutions
+│   │   ├── runtime_settings_repo.go # runtime_settings（policy.*/system.*）
+│   │   ├── secrets_repo.go       # secrets（AES-256-GCM暗号化）
+│   │   ├── dbmw.go               # DB書き込み失敗の検知フック
+│   │   └── timeconv.go           # 時刻のSQLite表現との相互変換
 │   ├── service/                  # domain, repositoryに依存
 │   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS）
 │   │   ├── featureengine/        # 特徴量算出
@@ -73,17 +88,30 @@ pitha-trador/
 │   │   ├── risk/                  # Risk Engine（Kill Switch含む）
 │   │   ├── execution/             # Paper/kabu発注実行
 │   │   ├── calibration/           # Outcome labeling・Brier/Log Loss算出
+│   │   ├── backtest/              # Backtest Engine（Walk Forward評価・Governor用シャドーバックテスト）
 │   │   ├── assist/                # Luna/Sol/Opusアダプタ
 │   │   │   ├── luna.go
 │   │   │   ├── sol.go
 │   │   │   └── opus.go
 │   │   ├── newsfeed/              # News Ingest: 外部ニュースフィード定期取得→Luna呼び出し（§13）
 │   │   ├── selfimprove/           # Sol提案生成〜Opusレビュー〜適用/ロールバック（§8）
+│   │   ├── notify/                # Slack Incoming Webhookによる即時アラート送信
+│   │   ├── updater/               # GitHub Releases自動アップデート（検知・安全ゲート・検証、desktopのみ配線、§9）
 │   │   ├── activityfeed/          # jobs/jev_decisions/kill_switch_events集約の読み取り専用フィード（System Activity Log向け、§12）
+│   │   ├── insight/               # 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）
+│   │   ├── backup/                # 日次SQLiteバックアップ（daily 90日 + weekly gzip、`requirements/non-functional.md` §3）
+│   │   ├── retention/             # jobs / market_snapshotsの期限切れ行パージ（`requirements/non-functional.md` §3）
 │   │   └── scheduler/             # 自前Workerプール定義・周期ジョブ登録
+│   │       └── maintenance/       # 日次ハウスキーピング（バックアップ・データ保持パージ・ログアーカイブ）のcatch-up実行。最終成功日をruntime_settingsへ保持し、起動時と10分ごとに未実行分を実行
 │   ├── router/                    # SSR + API ルーティング定義（Huma登録含む）
+│   │   ├── options.go             # Option群（依存注入）
+│   │   ├── router.go              # New（Gin Engine組み立て）
+│   │   ├── router_middleware.go   # middlewareの適用順
+│   │   ├── router_routes.go       # ルート登録
+│   │   └── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
 │   └── web/
-│       ├── handler/               # scanner.go, symbol.go, performance.go, calibration.go, system.go
+│       ├── handler/               # scanner.go, symbol*.go, performance.go, calibration.go, system.go, settings.go, activity.go, update.go, policy_proposals.go ほか（*_ws.goはWebSocket）
+│       ├── insightapi/            # decisions/signals/performance の読み取り専用JSON API（Huma登録、`service/insight`を使用）
 │       ├── middleware/            # HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState
 │       ├── atoms/
 │       ├── molecules/
@@ -93,14 +121,15 @@ pitha-trador/
 ├── static/
 │   └── src/
 │       ├── components/            # Lit Web Components（pitha-* 、詳細は components/overview.md）
-│       │   └── lib/               # api.ts, ws.ts, logger.ts
+│       │   └── lib/               # api.ts, ws.ts, ws-status.ts, logger.ts, styles.ts
 │       ├── css/
 │       └── dist/                  # ビルド成果物
 ├── db/
 │   └── migrations/                # golang-migrate SQLマイグレーション（SQLite方言、vec0仮想テーブル作成含む）
 ├── config/
 │   ├── strategy.yaml               # スキャン頻度・Fast Screenerしきい値・Policy Engineしきい値
-│   └── risk.yaml                   # Risk Engine制限値（§7 Risk Engine参照）
+│   ├── risk.yaml                   # Risk Engine制限値（`requirements/functional.md` §4.7参照）
+│   └── embed.go                    # 上記YAMLのgo:embed（配布exe用の既定値、§9）
 └── tests/
 ```
 
@@ -137,6 +166,15 @@ handler → service → repository → domain
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
 | Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10） | `internal/service/scheduler` |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12） | `internal/service/activityfeed` |
+| Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8） | `internal/service/backtest` |
+| Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
+| Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9） | `internal/service/updater` |
+| Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |
+| Backup | 日次SQLiteバックアップ（daily 90日保持 + 日曜分のweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
+| Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
+| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、サービス組み立て・ジョブ登録。§10.1） | `internal/bootstrap` |
+| Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ（`requirements/non-functional.md` §5） | `internal/logging` |
+| Headless Server | Wailsに依存しない`net/http`エントリーポイント（Updater非配線。§9） | `cmd/server` |
 | Setup Guard Middleware | 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）が未設定の間、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`以外の全リクエストを`/setup`へ誘導する（ページ遷移は302、HTMXは`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。§10.5、FR-SETUP-1） | `internal/web/middleware` |
 | Web (HTMX/Templ/Lit) | UI提供（`components/overview.md`） | `internal/web` |
 
@@ -171,3 +209,4 @@ handler → service → repository → domain
 | 1.15 | 2026-09-29 | §5〜§13を`docs/architecture/overview/`配下の章別ファイル（integrations/flows）へ分割。節番号・内容は変更なし | issue #119（300行/ファイル制限の形骸化解消） |
 | 1.16 | 2026-09-29 | §4 Setup Guardの応答をリクエスト種別別に変更 | issue #140実装 |
 | 1.17 | 2026-09-29 | §3 middleware/にHostGuard・Session・RequestLog・Recovery・SystemStateの名称を反映（適用順は`api/endpoints.md` §1） | issue #136/#149 |
+| 1.18 | 2026-09-29 | §3ディレクトリ構成に`cmd/server`・`internal/bootstrap`・`config`・`logging`・`version`・`backtest`・`notify`・`updater`・`insight`・`backup`・`retention`・`insightapi`等の実在パッケージを反映、§4にBacktest/Notifier/Updater/Insight/Backup/Retention/Bootstrap/Logging/Headless Serverを追加。実在しない節番号参照（`overview.md` §2.2・非目標・§4 ER・§5.2）を実際の参照先へ修正 | issue #153/#155 |

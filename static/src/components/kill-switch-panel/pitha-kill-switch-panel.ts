@@ -8,7 +8,7 @@
 // `can_pause`/`can_resume`/`can_kill` from the server's response. It
 // listens on `/ws/system` for a `kill_switch` event pushed when Risk
 // Engine triggers a Kill Switch directly (rather than through this
-// panel's own Kill button) - overview.md §8.3 - and resyncs from
+// panel's own Kill button) - overview.md §10.3 - and resyncs from
 // `status-url` then, and after a WebSocket reconnect (a push may have been
 // missed while disconnected). Every state change dispatches
 // `systemStateChanged` so Header's HTMX-driven StatusDot
