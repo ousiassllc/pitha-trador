@@ -152,7 +152,7 @@ func TestNew_SetupGuardRedirectsEveryGuardedRouteWhileRequiredKeyIsUnset(t *test
 		{http.MethodGet, "/settings"},
 		{http.MethodGet, "/system/secrets-status"},
 		{http.MethodGet, "/api/v1/scanner"},
-		{http.MethodPost, "/system/kill"},
+		{http.MethodPost, "/api/v1/system/kill"},
 		{http.MethodPost, "/settings"},
 		{http.MethodGet, "/no-such-route"},
 	} {

@@ -20,7 +20,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | パターン | 例 | HX-Request分岐 | 返却 | 登録先 |
 |---------|-----|----------------|------|--------|
 | ページルート | `/scanner`, `/symbols/:symbol` | する | フルページ or フラグメント | Gin |
-| アクションルート | `/system/pause` 等 | しない | フラグメントのみ | Gin |
+| アクションルート | `/system/update-check` 等 | しない | フラグメントのみ | Gin |
 | APIルート | `/api/v1/...` | しない | JSON | Huma |
 | WebSocket | `/ws/scanner` 等 | 該当なし | JSONメッセージ | Gin (`github.com/coder/websocket`) |
 
@@ -41,10 +41,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 
 | メソッド | パス | 説明 | 返却 |
 |---------|------|------|------|
-| POST | `/system/pause` | 新規エントリー一時停止（Kill Switchとは別。手動での一時停止） | システム状態バッジ（OOB） |
-| POST | `/system/resume` | 一時停止解除 | システム状態バッジ（OOB） |
-| POST | `/system/kill` | Kill Switch手動発動（`pitha-kill-switch-panel`の`window.confirm`による確認経由） | システム状態バッジ＋トースト（OOB） |
-| GET | `/system/status` | システム状態バッジのフラグメント再取得（Lit→HTMX間接連携: `systemStateChanged`イベント受信時にHeaderが呼び出す） | システム状態バッジ |
+| GET | `/system/status` | システム状態バッジのフラグメント再取得（Lit→HTMX間接連携: `systemStateChanged`イベント受信時にHeaderが呼び出す）。Kill Switchの操作（pause/resume/kill）はHTMXアクションルートを持たず、`pitha-kill-switch-panel`が§5の`/api/v1/system/*`を呼ぶ（issue #108） | システム状態バッジ |
 | GET | `/system/update-status` | 新バージョン検知バナーのフラグメント再取得（Headerの`#update-banner`が`load`・60秒周期・`updateStatusChanged`イベントで呼び出す）。新バージョンが無い/アップデーター未搭載（`cmd/server`）なら空 | `UpdateBanner`（安全ゲート待ち/再起動直前の状態を明示） |
 | GET | `/system/update-panel` | Settings画面`#update-panel`のフラグメント取得（現在バージョン・最終確認結果・確認ボタン） | `UpdatePanel` |
 | POST | `/system/update-check` | 「今すぐアップデートを確認」。スケジューラーと同じ`CheckForUpdate`を即時実行し、`HX-Trigger: updateStatusChanged`付きで`UpdatePanel`を返す。確認失敗もパネル内表示（HTTP 200）。アップデーター未搭載なら404 | `UpdatePanel` |
@@ -53,7 +50,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/system/secrets-status` | 任意キー（SLACK_WEBHOOK_URL等）の未設定を知らせる全ページ共通バナー（`Header`の`#config-banner`が`load`で取得）のフラグメント。必須3キーはSetup Guardが`/setup`へ誘導するため対象外。全て設定済みなら空 | `SecretsBanner` |
 | POST | `/positions/:id/close` | 手動決済（成行Paper Exit） | ポジション行フラグメント |
 
-### システム状態遷移（アクションルート）
+### システム状態遷移（`POST /api/v1/system/*`）
 
 ```mermaid
 stateDiagram-v2
@@ -272,9 +269,9 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 }
 ```
 
-### POST /api/v1/system/pause / resume / kill
+### GET /api/v1/system/status / POST /api/v1/system/pause / resume / kill
 
-アクションルート（`/system/...`）のJSON版。外部監視ツール・スクリプトからの操作用に提供する（HTMX UIは同機能をアクションルート経由で呼ぶ）。
+Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kill-switch-panel`が再接続・自動発動通知後の再同期に`GET`を、`window.confirm`確認後の操作に`POST`を呼ぶ（外部スクリプトからも利用可）。HTMX用の同名アクションルートは持たない。どれも`{"state":"running","can_pause":true,"can_resume":false,"can_kill":true}`の形式で（`POST`は更新後の）状態を返す。`state`は`running`/`paused`/`killed`、`can_*`は現在の`state`から各`POST`が有効な遷移か。
 
 ### エンドポイント一覧表
 
@@ -291,6 +288,7 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 | GET | `/api/v1/performance` | 実績集計 |
 | GET | `/api/v1/calibration` | Calibrationバケット集計 |
 | GET | `/api/v1/policy-proposals` | Sol/Opus自己改善ループの提案・レビュー履歴（監査用） |
+| GET | `/api/v1/system/status` | システム状態と許可される操作の取得（読み取り専用） |
 | POST | `/api/v1/system/pause` | 一時停止 |
 | POST | `/api/v1/system/resume` | 再開 |
 | POST | `/api/v1/system/kill` | Kill Switch発動 |
@@ -329,3 +327,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.8 | 2026-09-29 | §3 `/performance` に入力上限（`*_days`≤366・範囲≤1830日・Fold≤1000で400）と実行タイムアウト（60秒で503）を追記 | issue #128実装 |
 | 1.9 | 2026-09-29 | §5 `/symbols/{symbol}/decisions`・`/signals`・`/signals/{symbol}`・`/performance`の出力スキーマ・クエリ・集計定義を追記（実装済み） | issue #92実装 |
 | 1.10 | 2026-09-29 | §7 アクションルートのエラー応答を`atoms.Toast`フラグメント＋4xx/5xxステータスに統一、`/settings/:key`の非HTMX成功応答を303リダイレクトと明記 | issue #110/#121実装 |
+| 1.11 | 2026-09-29 | §4から未使用の`POST /system/pause\|resume\|kill`を削除。§5に`GET /api/v1/system/status`、アクセスログ（slog）とpanic回復（500）を`internal/web/middleware`に実装 | issue #108/#109/#122/#124 |
