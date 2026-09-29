@@ -103,18 +103,18 @@ type PolicyDirectionThresholds struct {
 
 // LoadStrategy reads and parses the strategy configuration YAML file at
 // path (conventionally DefaultStrategyPath) into a StrategyConfig, then
-// applies any PITHA_POLICY_LONG_*/PITHA_POLICY_SHORT_* environment
-// variable overrides on top of it (FR-POLICY-4: Policy Engine thresholds
-// must be changeable without a code change; env vars are this scope's
-// mechanism - a later self-improvement-loop sub-scope can add a
-// runtime_settings-backed override for the same PolicyConfig fields,
-// docs/architecture/er.md §runtime_settings).
+// applies any PITHA_POLICY_LONG_*/PITHA_POLICY_SHORT_* (FR-POLICY-4) and
+// PITHA_FAST_SCREENER_* (FR-FS-1/FR-FS-3) environment variable overrides
+// on top of it. runtime_settings-backed overrides are layered on top of
+// this result at read time: policy.* by internal/service/selfimprove.
+// RuntimePolicy, screener.* by ApplyFastScreenerSetting
+// (docs/architecture/er.md §runtime_settings).
 func LoadStrategy(path string) (*StrategyConfig, error) {
 	cfg, err := loadYAMLFile[StrategyConfig](path)
 	if err != nil {
 		return nil, err
 	}
-	if err := applyPolicyEnvOverrides(&cfg.Policy); err != nil {
+	if err := applyEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
 	return cfg, nil
@@ -123,8 +123,7 @@ func LoadStrategy(path string) (*StrategyConfig, error) {
 // LoadStrategyBytes parses data (conventionally an embedded copy of
 // config/strategy.yaml, github.com/ousiassllc/pitha-trador/config's
 // configdefaults.DefaultStrategyYAML) as a StrategyConfig, applying the
-// same PITHA_POLICY_LONG_*/PITHA_POLICY_SHORT_* environment overrides as
-// LoadStrategy. internal/bootstrap falls back to this when no
+// same environment overrides as LoadStrategy. internal/bootstrap falls back to this when no
 // strategy.yaml is found on disk (explicit path, PITHA_STRATEGY_PATH, nor
 // next to the running executable) so a distributed .exe with no
 // accompanying config/ directory still starts.
@@ -133,10 +132,17 @@ func LoadStrategyBytes(data []byte) (*StrategyConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := applyPolicyEnvOverrides(&cfg.Policy); err != nil {
+	if err := applyEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func applyEnvOverrides(cfg *StrategyConfig) error {
+	if err := applyPolicyEnvOverrides(&cfg.Policy); err != nil {
+		return err
+	}
+	return applyFastScreenerEnvOverrides(&cfg.FastScreener)
 }
 
 func applyPolicyEnvOverrides(cfg *PolicyConfig) error {

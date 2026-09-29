@@ -207,12 +207,18 @@ func orderbookImbalance(r Reading) *float64 {
 }
 
 // realizedVol5m is the sample standard deviation of up to five
+// consecutive 1-minute returns ending at at (see realizedVol).
+func realizedVol5m(series []point, at time.Time) *float64 {
+	return realizedVol(series, at, 5)
+}
+
+// realizedVol is the sample standard deviation of up to minutes
 // consecutive 1-minute returns ending at at, using the closest available
 // bar at or before each minute mark to tolerate small gaps. nil unless at
 // least two such returns can be computed.
-func realizedVol5m(series []point, at time.Time) *float64 {
+func realizedVol(series []point, at time.Time, minutes int) *float64 {
 	var returns []float64
-	for k := range 5 {
+	for k := range minutes {
 		newer, ok1 := atOrBefore(series, at.Add(-time.Duration(k)*time.Minute))
 		older, ok2 := atOrBefore(series, at.Add(-time.Duration(k+1)*time.Minute))
 		if !ok1 || !ok2 || older.price == 0 || !newer.ts.After(older.ts) {

@@ -8,7 +8,9 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
@@ -33,9 +35,17 @@ func (s *Services) refreshCandidates(ctx context.Context) error {
 		return fmt.Errorf("bootstrap: list active instruments: %w", err)
 	}
 
+	cfg, err := s.fastScreenerConfig(ctx)
+	if err != nil {
+		return err
+	}
+
 	inputs := make([]screener.Input, 0, len(actives))
 	for _, inst := range actives {
-		bars, err := s.Snapshots.ListByInstrument(ctx, inst.ID, turnoverTrailingBars)
+		// The latest bar plus featureengine.HistoryLookbackBars prior
+		// bars: enough for both the trailing turnover and
+		// ComputeScreenSignals' 15-minute volatility window.
+		bars, err := s.Snapshots.ListByInstrument(ctx, inst.ID, featureengine.HistoryLookbackBars+1)
 		if err != nil {
 			return fmt.Errorf("bootstrap: list snapshots for %q: %w", inst.Symbol, err)
 		}
@@ -43,26 +53,28 @@ func (s *Services) refreshCandidates(ctx context.Context) error {
 			continue
 		}
 
+		// ListByInstrument orders most-recent-first.
 		var turnover5m float64
-		for _, bar := range bars {
+		for _, bar := range bars[:min(len(bars), turnoverTrailingBars)] {
 			turnover5m += bar.Turnover
 		}
 
+		// FR-FS-2's breakout_strength / volatility_expansion. A nil
+		// signal (insufficient history) is dropped from screen_score
+		// rather than scored as zero.
+		signals := featureengine.ComputeScreenSignals(bars[0], bars[1:])
+
 		inputs = append(inputs, screener.Input{
-			InstrumentID:  inst.ID,
-			Symbol:        inst.Symbol,
-			Snapshot:      bars[0], // ListByInstrument orders most-recent-first
-			Turnover5mJPY: turnover5m,
-			// BreakoutStrength/VolatilityExpansion have no computation
-			// source yet (neither Feature Engine's Feature struct nor any
-			// other service in this build computes them); ScreenScore
-			// already treats a nil term as "drop from the sum", not
-			// "zero" (screener.go's own doc comment), so leaving them nil
-			// here is correct rather than a placeholder.
+			InstrumentID:        inst.ID,
+			Symbol:              inst.Symbol,
+			Snapshot:            bars[0],
+			Turnover5mJPY:       turnover5m,
+			BreakoutStrength:    signals.BreakoutStrength,
+			VolatilityExpansion: signals.VolatilityExpansion,
 		})
 	}
 
-	candidates := screener.Run(s.strategy.FastScreener, inputs)
+	candidates := screener.Run(cfg, inputs)
 	s.Screener.Set(candidates, time.Now().UTC())
 
 	now := time.Now().UTC()
@@ -80,6 +92,29 @@ func (s *Services) refreshCandidates(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// fastScreenerConfig returns the FR-FS-1/FR-FS-3 filter/weight settings
+// for this cycle: s.strategy.FastScreener (config/strategy.yaml with
+// PITHA_FAST_SCREENER_* env overrides already applied by
+// config.LoadStrategy) overridden by every screener.* runtime_settings
+// key currently in the DB. It is read per cycle so a DB change takes
+// effect on the next refresh without a restart.
+func (s *Services) fastScreenerConfig(ctx context.Context) (config.FastScreenerConfig, error) {
+	cfg := s.strategy.FastScreener
+	for _, key := range config.FastScreenerSettingKeys() {
+		raw, ok, err := s.Settings.Get(ctx, key)
+		if err != nil {
+			return config.FastScreenerConfig{}, fmt.Errorf("bootstrap: read runtime setting %s: %w", key, err)
+		}
+		if !ok {
+			continue
+		}
+		if err := config.ApplyFastScreenerSetting(&cfg, key, raw); err != nil {
+			return config.FastScreenerConfig{}, fmt.Errorf("bootstrap: %w", err)
+		}
+	}
+	return cfg, nil
 }
 
 // enqueueJevScout enqueues one jev-scout queue job (jev.ScoutJobPayload)

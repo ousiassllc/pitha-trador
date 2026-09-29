@@ -16,11 +16,12 @@ import (
 // domain.Snapshot/domain.Feature: Turnover5mJPY is a trailing 5-minute
 // aggregate (Snapshot.Turnover is the raw per-bar/cumulative-session
 // value reported by kabuステーションAPI), and BreakoutStrength /
-// VolatilityExpansion are not yet computed by Feature Engine. They are
-// supplied here as opaque inputs that a later sub-scope wires from
-// Market Data / Feature Engine; BreakoutStrength and VolatilityExpansion
-// are nil until that happens, which - like Feature's other nullable
-// fields (FR-FE-2) - means "excluded from screen_score", not "zero".
+// VolatilityExpansion are derived from price history by
+// featureengine.ComputeScreenSignals. They are supplied here as inputs
+// wired by internal/bootstrap; BreakoutStrength and VolatilityExpansion
+// are nil when history is insufficient to compute them, which - like
+// Feature's other nullable fields (FR-FE-2) - means "excluded from
+// screen_score", not "zero".
 type Input struct {
 	InstrumentID int64
 	Symbol       string
