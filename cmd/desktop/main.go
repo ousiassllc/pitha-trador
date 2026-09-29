@@ -85,6 +85,7 @@ func main() {
 	engine := router.New(
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
+		router.WithHeartbeatRecorder(services.Risk),
 		router.WithSymbolProvider(services.Execution),
 		router.WithCalibrationSource(services.Calibration),
 		router.WithPolicyProposalSource(services.Proposals),
