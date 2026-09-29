@@ -65,14 +65,14 @@ func fixtures() (*fakeJobs, *fakeDecisions, *fakeKillSwitch) {
 		}}, &fakeKillSwitch{events: []domain.KillSwitchEvent{{ID: 1, TriggeredAt: t0.Add(4 * time.Minute), Reason: domain.KillReasonDailyLossLimit}}}
 }
 
-func TestService_Snapshot_ReportsAllEightQueuesInPipelineOrder(t *testing.T) {
+func TestService_Snapshot_ReportsAllSixQueuesInPipelineOrder(t *testing.T) {
 	jobs, decisions, kill := fixtures()
 	snap, err := activityfeed.New(jobs, decisions, kill).Snapshot(context.Background(), activityfeed.Query{})
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
 
-	want := []string{"market-data", "feature-calc", "jev-scout", "jev-trader", "risk-check", "paper-execution", "outcome-labeling", "analytics"}
+	want := []string{"market-data", "feature-calc", "jev-scout", "jev-trader", "outcome-labeling", "analytics"}
 	if len(snap.Queues) != len(want) {
 		t.Fatalf("queues = %+v, want %d entries", snap.Queues, len(want))
 	}
@@ -85,7 +85,7 @@ func TestService_Snapshot_ReportsAllEightQueuesInPipelineOrder(t *testing.T) {
 	if scout.Pending != 3 || scout.Running != 1 || scout.FailedRecent != 2 {
 		t.Fatalf("jev-scout = %+v, want pending=3 running=1 failedRecent=2", scout)
 	}
-	if idle := snap.Queues[7]; idle.Pending != 0 || idle.Running != 0 || idle.FailedRecent != 0 {
+	if idle := snap.Queues[5]; idle.Pending != 0 || idle.Running != 0 || idle.FailedRecent != 0 {
 		t.Fatalf("analytics (no rows) = %+v, want zeroes", idle)
 	}
 }

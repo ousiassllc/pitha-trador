@@ -4,7 +4,7 @@
 
 ### 4.10 Scheduler / Worker
 
-- FR-SCHED-1: 以下のQueueで非同期処理する: market-data, feature-calc, jev-scout, jev-trader, risk-check, paper-execution, outcome-labeling, analytics
+- FR-SCHED-1: 以下の6 Queueで非同期処理する: market-data, feature-calc, jev-scout, jev-trader, outcome-labeling, analytics。Risk判定とPaper発注は独立Queueを持たず、`jev-trader`ジョブ内でPolicy Engineの直後に同期実行する（Risk Engineの承認なしにExecutionへ到達しない不変条件を、ジョブ間の非同期境界で崩さないため）
 - FR-SCHED-2: 60秒周期でuniverse snapshot取得・特徴量算出・screen・Jev Scout enqueueを行う
 - FR-SCHED-3: 15〜30秒周期でshortlist銘柄を再評価する
 - FR-SCHED-4: 5〜15秒周期で保有ポジションのExit条件を評価する（`scan.held_position_interval_seconds_min/max` の範囲でランダムに揺らした周期で、保有銘柄のみ板を取得し `execution.Engine.OnSnapshot` を呼ぶ。立会時間外は行わない）
@@ -63,7 +63,7 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 
 Scheduler/Jev/Risk Engineが「現在何を実行しているか」をUIから確認できるよう、既存テーブル（`jobs`, `jev_decisions`, `kill_switch_events`）を集約したリアルタイムフィードを提供する。Calibration/監査で使う既存データの保持方針（`non-functional.md` §5.1のログローテーション、各テーブル自体の保持期間）は変更しない。新規の永続テーブルは追加しない。
 
-- FR-ACT-1: `jobs`テーブルをキュー別（`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`risk-check`/`paper-execution`/`outcome-labeling`/`analytics`）に集計し、`pending`/`running`/直近`failed`件数を提供する
+- FR-ACT-1: `jobs`テーブルをキュー別（`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6キュー）に集計し、`pending`/`running`/直近`failed`件数を提供する
 - FR-ACT-2: `jobs`の状態遷移、`jev_decisions`の新規登録（Scout/Trader呼び出し）、`kill_switch_events`の発生を時刻順にマージした単一のアクティビティフィードを提供する
 - FR-ACT-3: フィードの1回の取得・配信件数はデフォルト200件、`limit`クエリで最大500件まで指定可能とする。この上限はSystem Activity Log画面向けの表示制限であり、参照元テーブル（`jobs`/`jev_decisions`/`kill_switch_events`）自体の保持期間・行数には影響しない（既存のCalibration・監査用途を継続利用できるようにするため）
 - FR-ACT-4: 新規イベント発生時にWebSocket（`api/endpoints.md` `/ws/activity`）でリアルタイムに配信する。初期表示は`GET /api/v1/activity`のスナップショットを用いる

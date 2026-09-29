@@ -48,8 +48,6 @@ const QUEUES = [
   'feature-calc',
   'jev-scout',
   'jev-trader',
-  'risk-check',
-  'paper-execution',
   'outcome-labeling',
   'analytics',
 ] as const;
