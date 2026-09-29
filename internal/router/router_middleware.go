@@ -15,7 +15,7 @@ import (
 func useMiddleware(engine *gin.Engine, o options) handler.SecretsStore {
 	// First, so Recovery's logged 500 is what RequestLog records and even
 	// Session's rejections are logged (issues #109/#122).
-	engine.Use(middleware.RequestLog(), middleware.Recovery())
+	engine.Use(middleware.RequestLog(), middleware.Recovery(handler.RenderErrorPage))
 	// Before Session, so a DNS-rebinding request is refused before it can
 	// receive the session cookie or a CSRF token (issue #136).
 	if o.allowedHosts != nil {
@@ -26,7 +26,7 @@ func useMiddleware(engine *gin.Engine, o options) handler.SecretsStore {
 	// required for all state-changing methods and WebSocket upgrades, and
 	// the Setup screen's `POST`/`DELETE /settings/:key` (which SetupGuard
 	// lets through unauthenticated) are protected too (issues #90/#98/#99).
-	engine.Use(middleware.NewSession().Handler())
+	engine.Use(middleware.NewSession(handler.RenderErrorPage).Handler())
 	// After Session (needs its Authenticated flag) and before SetupGuard, so
 	// a page that only redirects to `/setup` still counts as operator
 	// activity.

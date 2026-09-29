@@ -21,8 +21,9 @@ import (
 // status is written, as it can no longer be changed.
 //
 // Install it after RequestLog so the recovered 500 is what RequestLog
-// records.
-func Recovery() gin.HandlerFunc {
+// records. A plain page navigation (see wantsHTMLPage) gets render's error
+// page instead of an empty body (issue #171); render may be nil.
+func Recovery(render ErrorPageRenderer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			r := recover()
@@ -41,8 +42,12 @@ func Recovery() gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-			c.AbortWithStatus(http.StatusInternalServerError)
+			respondError(c, render, http.StatusInternalServerError, recoveredPanicMessage, func() {
+				c.AbortWithStatus(http.StatusInternalServerError)
+			})
 		}()
 		c.Next()
 	}
 }
+
+const recoveredPanicMessage = "サーバー内部でエラーが発生しました。ページを再読み込みしてください。"

@@ -17,7 +17,7 @@ func sessionEngine(t *testing.T) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(middleware.NewSession().Handler())
+	engine.Use(middleware.NewSession(nil).Handler())
 	engine.GET("/page", func(c *gin.Context) { c.String(http.StatusOK, middleware.CSRFToken(c.Request.Context())) })
 	engine.GET("/ws", func(c *gin.Context) { c.String(http.StatusOK, "upgraded") })
 	engine.GET("/static/x", func(c *gin.Context) { c.String(http.StatusOK, "asset") })

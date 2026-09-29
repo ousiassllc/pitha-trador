@@ -41,7 +41,7 @@ func captureLogs(t *testing.T) func() []map[string]any {
 func loggedEngine() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(middleware.RequestLog(), middleware.Recovery())
+	engine.Use(middleware.RequestLog(), middleware.Recovery(nil))
 	engine.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 	engine.GET("/missing", func(c *gin.Context) { c.Status(http.StatusNotFound) })
 	engine.GET("/boom", func(*gin.Context) { panic("kaboom") })

@@ -29,6 +29,14 @@ func respondPageError(c *gin.Context, status int, message string) {
 		respondActionError(c, status, message)
 		return
 	}
+	RenderErrorPage(c, status, message)
+}
+
+// RenderErrorPage writes pages.ErrorPage with status. It is also the
+// middleware.ErrorPageRenderer internal/router injects into Recovery and
+// Session (issue #171), which sit outside the handler chain and cannot
+// import pages themselves.
+func RenderErrorPage(c *gin.Context, status int, message string) {
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(status)
 	_ = pages.ErrorPage(status, message).Render(c.Request.Context(), c.Writer)
