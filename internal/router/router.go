@@ -15,6 +15,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 	staticassets "github.com/ousiassllc/pitha-trador/static/src"
 )
@@ -71,6 +72,7 @@ type options struct {
 	systemEngine      handler.SystemEngine
 	symbolProvider    handler.SymbolProvider
 	symbolRiskParams  handler.SymbolRiskParams
+	insightProvider   insightapi.Provider
 	calibrationSource handler.CalibrationSource
 	proposalSource    handler.PolicyProposalSource
 	backtestRunner    handler.BacktestRunner
@@ -119,6 +121,15 @@ func WithSymbolProvider(provider handler.SymbolProvider) Option {
 // Paper max_position_per_symbol_pct (2.0).
 func WithSymbolRiskParams(params handler.SymbolRiskParams) Option {
 	return func(o *options) { o.symbolRiskParams = params }
+}
+
+// WithInsightProvider overrides the decisions/signals/performance API
+// routes' backing internal/web/insightapi.Provider. cmd/desktop and
+// cmd/server pass internal/bootstrap's real internal/service/insight.Reader;
+// the empty insightapi.StaticProvider default only serves router-level
+// tests.
+func WithInsightProvider(provider insightapi.Provider) Option {
+	return func(o *options) { o.insightProvider = provider }
 }
 
 // WithCalibrationSource overrides `GET /api/v1/calibration`'s backing
@@ -191,6 +202,7 @@ func New(opts ...Option) *gin.Engine {
 		candidateRefresh:  defaultCandidateRefreshInterval,
 		systemEngine:      handler.StaticSystemEngine{},
 		symbolProvider:    handler.StaticSymbolProvider{},
+		insightProvider:   insightapi.StaticProvider{},
 		symbolRiskParams:  defaultSymbolRiskParams,
 		calibrationSource: handler.StaticCalibrationSource{},
 		proposalSource:    handler.StaticPolicyProposalSource{},
@@ -285,6 +297,7 @@ func New(opts ...Option) *gin.Engine {
 	huma.Get(api, "/symbols/{symbol}/candles", symbolHandler.APICandles)
 	huma.Get(api, "/positions", symbolHandler.APIPositions)
 	huma.Get(api, "/orders", symbolHandler.APIOrders)
+	insightapi.New(o.insightProvider).Register(api)
 	huma.Get(api, "/calibration", calibrationHandler.APICalibration)
 	huma.Get(api, "/policy-proposals", handler.NewPolicyProposalHandler(o.proposalSource).APIPolicyProposals)
 	huma.Get(api, "/activity", activityHandler.APIActivity)

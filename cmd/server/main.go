@@ -93,6 +93,7 @@ func main() {
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
 		router.WithSymbolProvider(services.Execution),
+		router.WithInsightProvider(services.Insight),
 		router.WithCalibrationSource(services.Calibration),
 		router.WithPolicyProposalSource(services.Proposals),
 		router.WithBacktestRunner(services.Backtest),

@@ -91,6 +91,47 @@ func (r *SignalRepository) ListByInstrument(ctx context.Context, instrumentID in
 	return signals, nil
 }
 
+// ListRecent returns up to limit trade_signals rows across every
+// instrument, most recent first, for `GET /api/v1/signals`
+// (docs/api/endpoints.md §5).
+func (r *SignalRepository) ListRecent(ctx context.Context, limit int) ([]domain.TradeSignal, error) {
+	rows, err := r.db.QueryContext(ctx,
+		signalSelectColumns+` ORDER BY timestamp DESC, id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list recent trade signals: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var signals []domain.TradeSignal
+	for rows.Next() {
+		s, err := scanSignal(rows)
+		if err != nil {
+			return nil, err
+		}
+		signals = append(signals, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list recent trade signals: %w", err)
+	}
+	return signals, nil
+}
+
+// CountDirectional returns how many trade_signals rows carry a LONG or
+// SHORT direction (NONE rows, which only log why no trade was
+// proposed, are excluded), for `GET /api/v1/performance`'s
+// `signal_count`.
+func (r *SignalRepository) CountDirectional(ctx context.Context) (int64, error) {
+	var n int64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM trade_signals WHERE direction IN (?, ?)`,
+		domain.JevDirectionLong, domain.JevDirectionShort,
+	).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("repository: count directional trade signals: %w", err)
+	}
+	return n, nil
+}
+
 const signalSelectColumns = `
 SELECT id, instrument_id, jev_decision_id, symbol, timestamp, direction, score,
 	entry_price_reference, policy_version, risk_passed, reject_reason, created_at
