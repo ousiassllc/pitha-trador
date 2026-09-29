@@ -16,6 +16,7 @@
 | UC-10 | キャリブレーション確認 | 個人トレーダー | Calibration画面でconfidence帯別の的中率・平均リターンを確認する |
 | UC-11 | Kill Switch操作 | 個人トレーダー | UIまたはサーバーから新規取引停止・強制決済を行う |
 | UC-12 | バックテスト実行 | 個人トレーダー | Paper Trading開始前に過去データで戦略を検証する |
+| UC-13 | システムアクティビティ確認 | 個人トレーダー | Log画面でジョブキュー実行状況・直近のJev呼び出し・Kill Switch関連イベントをリアルタイムに確認する |
 
 ```mermaid
 graph TD
@@ -36,6 +37,7 @@ graph TD
     User --> UC10
     User --> UC11[Kill Switch操作]
     User --> UC12[バックテスト実行]
+    User --> UC13[システムアクティビティ確認]
 ```
 
 ## 2. 主要処理フロー
@@ -268,6 +270,15 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 - FR-SELFIMPROVE-6: 適用後5営業日相当のExpectancyが適用前より相対20%以上悪化した場合、自動的に直前の`policy_version`へロールバックし、Slack通知する
 - FR-SELFIMPROVE-7: Sol/Opusの提案・レビュー・適用・ロールバックはすべて`policy_proposals`と`runtime_settings`の変更履歴として監査可能な形で保存する
 
+### 4.15 System Activity Feed
+
+Scheduler/Jev/Risk Engineが「現在何を実行しているか」をUIから確認できるよう、既存テーブル（`jobs`, `jev_decisions`, `kill_switch_events`）を集約したリアルタイムフィードを提供する。Calibration/監査で使う既存データの保持方針（`non-functional.md` §5.1のログローテーション、各テーブル自体の保持期間）は変更しない。新規の永続テーブルは追加しない。
+
+- FR-ACT-1: `jobs`テーブルをキュー別（`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`risk-check`/`paper-execution`/`outcome-labeling`/`analytics`）に集計し、`pending`/`running`/直近`failed`件数を提供する
+- FR-ACT-2: `jobs`の状態遷移、`jev_decisions`の新規登録（Scout/Trader呼び出し）、`kill_switch_events`の発生を時刻順にマージした単一のアクティビティフィードを提供する
+- FR-ACT-3: フィードの1回の取得・配信件数はデフォルト200件、`limit`クエリで最大500件まで指定可能とする。この上限はSystem Activity Log画面向けの表示制限であり、参照元テーブル（`jobs`/`jev_decisions`/`kill_switch_events`）自体の保持期間・行数には影響しない（既存のCalibration・監査用途を継続利用できるようにするため）
+- FR-ACT-4: 新規イベント発生時にWebSocket（`api/endpoints.md` `/ws/activity`）でリアルタイムに配信する。初期表示は`GET /api/v1/activity`のスナップショットを用いる
+
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
 ```mermaid
@@ -277,8 +288,10 @@ stateDiagram-v2
     SymbolDetail --> ScannerDashboard: 戻る
     ScannerDashboard --> Performance: メニュー
     ScannerDashboard --> Calibration: メニュー
+    ScannerDashboard --> ActivityLog: メニュー
     Performance --> ScannerDashboard: メニュー
     Calibration --> ScannerDashboard: メニュー
+    ActivityLog --> ScannerDashboard: メニュー
     ScannerDashboard --> KillSwitchConfirm: Kill Switch操作
     KillSwitchConfirm --> ScannerDashboard: 確定/キャンセル
 ```
@@ -298,6 +311,10 @@ Total PnL, Daily PnL, Win Rate, Profit Factor, Expectancy, Max Drawdown, Average
 ### 5.4 Calibration
 
 confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。
+
+### 5.5 System Activity Log
+
+表示項目: キュー別（8キュー）の`pending`/`running`/直近`failed`件数、直近アクティビティ一覧（時刻・種別 [job/jev_scout/jev_trader/kill_switch]・対象銘柄・詳細・latency_ms）、直近Kill Switchイベント。キュー種別・イベント種別でフィルタ可能とする。新規イベント発生に応じて`/ws/activity`経由でライブ更新する（§4.15）。
 
 ## 6. MVPフェーズ
 
@@ -328,6 +345,7 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 - Kill Switchが動作する
 - RAGが類似局面をJevへの文脈として注入できる（§4.13）
 - Sol/Opusの自己改善提案がシャドーバックテストで検証され、承認された場合のみ自動適用・監査ログ記録される（§4.14、Phase 6スコープ）
+- System Activity Log画面でジョブキュー実行状況・直近アクティビティをリアルタイム確認できる（§4.15）
 
 ## 8. 実装時の最初の成功基準
 
@@ -344,3 +362,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | Risk Engine（§4.7）にPaper/Live別リミット・dead-man's switch（FR-RISK-6）・Kill Switch再開の自動/手動分類（FR-RISK-7）を追加 | Phase 7も含めた完全自動運用への方針変更 |
 | 1.2 | 2026-09-26 | §4.13 Jev RAG（経験ベース文脈拡張）、§4.14 自己改善ループ（Luna/Sol/Opus連携）を追加。Phase 5/6内容とMVP完了条件を更新 | 自己学習による継続的改善を組み込む方針 |
+| 1.3 | 2026-09-29 | UC-13・§4.15 System Activity Feed・§5.5 System Activity Log画面を追加。既存jobs/jev_decisions/kill_switch_eventsを集約する読み取り専用フィードとし、新規永続テーブルは追加しない | 実行中処理を可視化するログ画面の追加要望 |

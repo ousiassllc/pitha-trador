@@ -1,0 +1,26 @@
+package pages
+
+import (
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+// ActivityLogPage is the System Activity Log full page (functional.md
+// §5.5): layout.Shell around the `pitha-activity-feed` island
+// (components/overview.md §5.5), whose children are the SSR fallback
+// (organisms.QueueStatusPanel + organisms.ActivityFeedFallback) that the
+// island replaces in place once it hydrates - the same fallback-inside-
+// custom-element pattern as ScannerPage. `GET /activity`
+// (internal/web/handler.ActivityHandler.Page) renders this for every
+// request.
+templ ActivityLogPage(snapshot domain.ActivitySnapshot) {
+	@layout.Shell("System Activity Log") {
+		<h1 class="text-2xl font-bold text-slate-900">System Activity Log</h1>
+		<pitha-activity-feed api-url="/api/v1/activity" ws-url="/ws/activity">
+			@organisms.QueueStatusPanel(snapshot.Queues)
+			@organisms.ActivityFeedFallback(snapshot.Events, snapshot.AsOf)
+		</pitha-activity-feed>
+		<script type="module" src="/static/dist/js/activity-feed/pitha-activity-feed.js"></script>
+	}
+}

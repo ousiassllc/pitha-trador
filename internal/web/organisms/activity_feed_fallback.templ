@@ -1,0 +1,57 @@
+package organisms
+
+import (
+	"strconv"
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+)
+
+// ActivityFeedFallback renders System Activity Log's activity table
+// (functional.md §5.5, components/overview.md §3): Time, Type, Symbol,
+// Detail, and Latency (ms), newest first. It is the SSR/no-JS
+// rendering that `<pitha-activity-feed>` (static/src/components/
+// activity-feed) replaces in place once it hydrates, adding type/queue
+// filters and `/ws/activity` live updates.
+templ ActivityFeedFallback(events []domain.ActivityEvent, asOf time.Time) {
+	<section class="mt-6" id="activity-feed" data-testid="activity-feed">
+		<h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Activity</h2>
+		<table class="w-full border-collapse text-left text-sm">
+			<caption class="mb-2 text-left text-sm text-slate-500">{ "as of " + asOf.Format(time.RFC3339) }</caption>
+			<thead>
+				<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
+					<th class="px-3 py-2">Time</th>
+					<th class="px-3 py-2">Type</th>
+					<th class="px-3 py-2">Symbol</th>
+					<th class="px-3 py-2">Detail</th>
+					<th class="px-3 py-2">Latency (ms)</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, e := range events {
+					<tr class="border-b border-slate-100" data-event-type={ e.Type }>
+						<td class="px-3 py-2">{ e.Timestamp.Format(time.RFC3339) }</td>
+						<td class="px-3 py-2 font-medium text-slate-900">{ e.Type }</td>
+						<td class="px-3 py-2">{ dashIfEmpty(e.Symbol) }</td>
+						<td class="px-3 py-2">{ e.Detail }</td>
+						<td class="px-3 py-2">{ latencyText(e.LatencyMs) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</section>
+}
+
+func dashIfEmpty(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
+}
+
+func latencyText(ms *int) string {
+	if ms == nil {
+		return "—"
+	}
+	return strconv.Itoa(*ms)
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
@@ -92,6 +93,7 @@ type Services struct {
 	Execution     *execution.Engine
 	Calibration   *calibration.Service
 	Backtest      *BacktestSource
+	Activity      *activityfeed.Service
 	Governor      *selfimprove.Governor
 
 	Scheduler *scheduler.Scheduler
@@ -124,6 +126,13 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	killSwitch := repository.NewKillSwitchRepository(state.DB)
 	settings := repository.NewRuntimeSettingsRepository(state.DB)
 	alerts := newAlertChannels(secrets)
+
+	// System Activity Log (functional.md §4.15): reads the pipeline's own
+	// repositories; their post-commit observers feed `/ws/activity`.
+	activity := activityfeed.New(jobs, decisions, killSwitch)
+	jobs.SetObserver(activity.ObserveJob)
+	decisions.SetObserver(activity.ObserveDecision)
+	killSwitch.SetObserver(activity.ObserveKillSwitch)
 
 	ragService := rag.NewService(state.DB, decisions, snapshots)
 	featureEngine := featureengine.NewEngine(snapshots, ragService)
@@ -208,6 +217,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Calibration:   calibrationService,
 		Governor:      governor,
 		Backtest:      backtestSource,
+		Activity:      activity,
 		Scheduler:     sched,
 		Updater:       updateAdapter,
 		strategy:      state.Strategy,
