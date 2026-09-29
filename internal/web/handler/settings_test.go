@@ -83,10 +83,12 @@ func TestSettingsHandler_Page_ShowsConfiguredStateNotValues(t *testing.T) {
 	}
 }
 
-func TestSettingsHandler_Status_ListsMissingRequiredKeysOnly(t *testing.T) {
+// The banner only guides toward unset optional keys (issue #80): the
+// required keys are handled by the Setup Guard redirect, never here.
+func TestSettingsHandler_Status_ListsUnsetOptionalKeysOnly(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := newFakeSecretsStore()
-	store.values[config.KeyJevAPIKey] = "jev-key"
+	store.values[config.KeyLunaAPIKey] = "luna-key"
 	h := handler.NewSettingsHandler(store)
 	engine := gin.New()
 	engine.GET("/system/secrets-status", h.Status)
@@ -99,23 +101,25 @@ func TestSettingsHandler_Status_ListsMissingRequiredKeysOnly(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, config.KeyJevBaseURL) || !strings.Contains(body, config.KeyKabuAPIPassword) {
-		t.Fatalf("banner does not list missing required keys; body=%s", body)
+	if !strings.Contains(body, config.KeySlackWebhookURL) {
+		t.Fatalf("banner does not list unset optional SLACK_WEBHOOK_URL; body=%s", body)
 	}
-	if strings.Contains(body, config.KeyJevAPIKey) {
-		t.Fatalf("banner lists JEV_API_KEY even though it is configured; body=%s", body)
+	if strings.Contains(body, config.KeyLunaAPIKey) {
+		t.Fatalf("banner lists LUNA_API_KEY even though it is configured; body=%s", body)
 	}
-	if strings.Contains(body, config.KeySlackWebhookURL) {
-		t.Fatalf("banner lists optional SLACK_WEBHOOK_URL; body=%s", body)
+	for _, key := range config.RequiredSecretKeys() {
+		if strings.Contains(body, key) {
+			t.Fatalf("banner warns about required key %s (unset here); Setup Guard owns that; body=%s", key, body)
+		}
 	}
 }
 
-func TestSettingsHandler_Status_RendersNothingWhenEverythingConfigured(t *testing.T) {
+func TestSettingsHandler_Status_RendersNothingWhenEveryOptionalKeyConfigured(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := newFakeSecretsStore()
-	store.values[config.KeyJevAPIKey] = "jev-key"
-	store.values[config.KeyJevBaseURL] = "https://jev.example.com"
-	store.values[config.KeyKabuAPIPassword] = "kabu-pass"
+	for _, key := range config.OptionalSecretKeys() {
+		store.values[key] = "configured"
+	}
 	h := handler.NewSettingsHandler(store)
 	engine := gin.New()
 	engine.GET("/system/secrets-status", h.Status)
@@ -128,7 +132,7 @@ func TestSettingsHandler_Status_RendersNothingWhenEverythingConfigured(t *testin
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	if strings.TrimSpace(rec.Body.String()) != "" {
-		t.Fatalf("banner rendered non-empty body once every required key is configured: %q", rec.Body.String())
+		t.Fatalf("banner rendered non-empty body once every optional key is configured: %q", rec.Body.String())
 	}
 }
 
@@ -167,15 +171,15 @@ func TestSettingsHandler_Page_StoreErrorDegradesGracefully(t *testing.T) {
 
 // issue #70: the same per-key error must not 500 the header's
 // secrets-status banner either (it renders on every page, not just
-// Settings) - the broken required key is reported as missing instead.
+// Settings) - the broken optional key is reported as unset instead.
 func TestSettingsHandler_Status_StoreErrorDegradesGracefully(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := newFakeSecretsStore()
-	store.values[config.KeyJevAPIKey] = "jev-key"
-	store.values[config.KeyJevBaseURL] = "https://jev.example.com"
-	store.values[config.KeyKabuAPIPassword] = "kabu-pass"
+	for _, key := range config.OptionalSecretKeys() {
+		store.values[key] = "configured"
+	}
 	store.getErr = errors.New("db is locked")
-	store.getErrKey = config.KeyKabuAPIPassword
+	store.getErrKey = config.KeySlackWebhookURL
 	h := handler.NewSettingsHandler(store)
 	engine := gin.New()
 	engine.GET("/system/secrets-status", h.Status)
@@ -187,8 +191,73 @@ func TestSettingsHandler_Status_StoreErrorDegradesGracefully(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d (a broken key must not 500 the banner)", rec.Code, http.StatusOK)
 	}
-	if !strings.Contains(rec.Body.String(), config.KeyKabuAPIPassword) {
-		t.Fatalf("banner does not report broken required key as missing; body=%s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), config.KeySlackWebhookURL) {
+		t.Fatalf("banner does not report broken optional key as unset; body=%s", rec.Body.String())
+	}
+}
+
+func TestSettingsHandler_SetupPage_ShowsRequiredFieldsAndOptionalSlack(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	store.values[config.KeyJevAPIKey] = "super-secret-value"
+	h := handler.NewSettingsHandler(store)
+	engine := gin.New()
+	engine.GET("/setup", h.SetupPage)
+
+	req := httptest.NewRequest(http.MethodGet, "/setup", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, key := range append(config.RequiredSecretKeys(), config.KeySlackWebhookURL) {
+		if !strings.Contains(body, `data-testid="secret-field-row-`+key+`"`) {
+			t.Errorf("Setup lacks a field row for %s", key)
+		}
+		if !strings.Contains(body, `data-testid="save-`+key+`"`) {
+			t.Errorf("Setup lacks a save button for %s", key)
+		}
+		// Same forms as Settings: they post to the shared per-key route.
+		if !strings.Contains(body, `hx-post="/settings/`+key+`"`) {
+			t.Errorf("Setup row for %s does not post to /settings/%s", key, key)
+		}
+	}
+	if strings.Contains(body, `data-testid="secret-field-row-`+config.KeyLunaAPIKey+`"`) {
+		t.Errorf("Setup offers optional %s; only SLACK_WEBHOOK_URL belongs on it", config.KeyLunaAPIKey)
+	}
+	if strings.Contains(body, "super-secret-value") {
+		t.Fatalf("Setup rendered the stored plaintext value; body=%s", body)
+	}
+	if !strings.Contains(body, `data-testid="configured-`+config.KeyJevAPIKey+`"`) {
+		t.Errorf("Setup does not mark stored JEV_API_KEY as configured")
+	}
+	if !strings.Contains(body, `data-testid="setup-incomplete"`) || strings.Contains(body, `data-testid="setup-complete"`) {
+		t.Errorf("Setup with unset required keys must show the incomplete hint only; body=%s", body)
+	}
+	if strings.Contains(body, `id="config-banner"`) {
+		t.Errorf("Setup renders the global Header; its guarded hx-get fragments would redirect back to /setup")
+	}
+}
+
+func TestSettingsHandler_SetupPage_ReportsCompleteOnceRequiredKeysAreSet(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	for _, key := range config.RequiredSecretKeys() {
+		store.values[key] = "configured"
+	}
+	h := handler.NewSettingsHandler(store)
+	engine := gin.New()
+	engine.GET("/setup", h.SetupPage)
+
+	req := httptest.NewRequest(http.MethodGet, "/setup", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, `data-testid="setup-complete"`) {
+		t.Fatalf("Setup after configuring every required key = %d, want 200 with the complete notice; body=%s", rec.Code, body)
 	}
 }
 

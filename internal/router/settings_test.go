@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 )
@@ -34,6 +35,8 @@ func (f fakeSecretsStore) Delete(_ context.Context, key string) error {
 	return nil
 }
 
+// Without WithSecretsStore (router-level tests) no Setup Guard is
+// installed, so the Settings page renders even though every key is unset.
 func TestNew_SettingsPageRouteIsRegistered(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New()
@@ -86,7 +89,7 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 
 func TestNew_BulkSettingsPostIsGone(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	store := fakeSecretsStore{}
+	store := requiredSecretsStore()
 	engine := router.New(router.WithSecretsStore(store))
 
 	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader("JEV_API_KEY=x"))
@@ -94,29 +97,145 @@ func TestNew_BulkSettingsPostIsGone(t *testing.T) {
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotFound || len(store) != 0 {
+	if rec.Code != http.StatusNotFound || store["JEV_API_KEY"] != "jev-key" {
 		t.Fatalf("POST /settings = %d with store %v, want 404 and no writes", rec.Code, store)
 	}
 }
 
 func TestNew_SecretsStatusRouteReflectsWithSecretsStoreOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	store := fakeSecretsStore{
+	store := requiredSecretsStore()
+	engine := router.New(router.WithSecretsStore(store))
+
+	get := func() string {
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/secrets-status", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+		return rec.Body.String()
+	}
+	if body := get(); !strings.Contains(body, "SLACK_WEBHOOK_URL") {
+		t.Fatalf("secrets-status banner does not list unset optional SLACK_WEBHOOK_URL: %q", body)
+	}
+	for _, key := range config.OptionalSecretKeys() {
+		store[key] = "configured"
+	}
+	if body := get(); strings.TrimSpace(body) != "" {
+		t.Fatalf("secrets-status banner non-empty though every key is configured: %q", body)
+	}
+}
+
+// requiredSecretsStore returns a store with every required key (and no
+// optional one) configured, i.e. one the Setup Guard lets through.
+func requiredSecretsStore() fakeSecretsStore {
+	return fakeSecretsStore{
 		"JEV_API_KEY":       "jev-key",
 		"JEV_BASE_URL":      "https://jev.example.com",
 		"KABU_API_PASSWORD": "kabu-pass",
 	}
+}
+
+// issue #80 (FR-SETUP-1): while any required key is unset, every route
+// except `/setup`, `POST`/`DELETE /settings/:key` and `/static/...`
+// redirects to `/setup`.
+func TestNew_SetupGuardRedirectsEveryGuardedRouteWhileRequiredKeyIsUnset(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := requiredSecretsStore()
+	delete(store, "KABU_API_PASSWORD")
 	engine := router.New(router.WithSecretsStore(store))
 
-	req := httptest.NewRequest(http.MethodGet, "/system/secrets-status", nil)
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/"},
+		{http.MethodGet, "/scanner"},
+		{http.MethodGet, "/settings"},
+		{http.MethodGet, "/system/secrets-status"},
+		{http.MethodGet, "/api/v1/scanner"},
+		{http.MethodPost, "/system/kill"},
+		{http.MethodPost, "/settings"},
+		{http.MethodGet, "/no-such-route"},
+	} {
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+		if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/setup" {
+			t.Errorf("%s %s = %d Location=%q, want 302 to /setup", tc.method, tc.path, rec.Code, rec.Header().Get("Location"))
+		}
 	}
-	if strings.TrimSpace(rec.Body.String()) != "" {
-		t.Fatalf("secrets-status banner non-empty though every required key is configured: %q", rec.Body.String())
+}
+
+func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := fakeSecretsStore{}
+	engine := router.New(router.WithSecretsStore(store))
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/setup", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /setup = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
+	}
+	for _, key := range []string{"JEV_API_KEY", "JEV_BASE_URL", "KABU_API_PASSWORD", "SLACK_WEBHOOK_URL"} {
+		if !strings.Contains(rec.Body.String(), `data-testid="secret-field-row-`+key+`"`) {
+			t.Errorf("GET /setup lacks the %s field", key)
+		}
+	}
+
+	rec = httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/vendor/htmx.min.js", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /static/vendor/htmx.min.js = %d, want 200", rec.Code)
+	}
+
+	form := url.Values{"value": {"jev-key"}}
+	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || store["JEV_API_KEY"] != "jev-key" {
+		t.Fatalf("POST /settings/JEV_API_KEY = %d store=%v, want 200 and the key stored", rec.Code, store)
+	}
+
+	rec = httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil))
+	if rec.Code != http.StatusOK || len(store) != 0 {
+		t.Fatalf("DELETE /settings/JEV_API_KEY = %d store=%v, want 200 and the key removed", rec.Code, store)
+	}
+}
+
+// The guard reads the store on every request, so saving the last required
+// key through the Setup screen's own route lifts the redirect from the
+// next request on, and `/setup` stays reachable afterwards.
+func TestNew_SetupGuardLiftsOnceLastRequiredKeyIsSaved(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := requiredSecretsStore()
+	delete(store, "JEV_BASE_URL")
+	engine := router.New(router.WithSecretsStore(store))
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/scanner", nil))
+	if rec.Code != http.StatusFound {
+		t.Fatalf("GET /scanner before setup = %d, want 302", rec.Code)
+	}
+
+	form := url.Values{"value": {"https://jev.example.com"}}
+	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_BASE_URL", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST /settings/JEV_BASE_URL = %d, want 200", rec.Code)
+	}
+
+	for _, path := range []string{"/scanner", "/settings", "/setup"} {
+		rec = httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET %s after setup = %d, want 200", path, rec.Code)
+		}
+	}
+	rec = httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/setup", nil))
+	if !strings.Contains(rec.Body.String(), `data-testid="setup-complete"`) {
+		t.Errorf("GET /setup after setup does not report completion")
 	}
 }
 

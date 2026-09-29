@@ -18,6 +18,7 @@
 | UC-12 | バックテスト実行 | 個人トレーダー | Paper Trading開始前に過去データで戦略を検証する |
 | UC-13 | システムアクティビティ確認 | 個人トレーダー | Log画面でジョブキュー実行状況・直近のJev呼び出し・Kill Switch関連イベントをリアルタイムに確認する |
 | UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/kabuステーション/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する |
+| UC-15 | 初回セットアップ | 個人トレーダー | 必須認証情報（Jev/kabuステーション）が未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
 
 ```mermaid
 graph TD
@@ -299,7 +300,17 @@ Settings画面（`GET /settings`）で認証情報を管理する。値は`secre
 - FR-SETTINGS-1: 設定項目は`internal/config`の許可キー一覧（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_API_KEY/LUNA_BASE_URL/NEWS_FEED_URL/NEWS_FEED_API_KEY/SOL_API_KEY/SOL_BASE_URL/OPUS_API_KEY/OPUS_BASE_URL）に限定する。画面は項目ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ
 - FR-SETTINGS-2: `POST /settings/:key`は指定キー1件のみを保存し、他キーの値に一切影響しない。空値の送信は400とし、保存済みの値を空入力で消すことはできない
 - FR-SETTINGS-3: `DELETE /settings/:key`は指定キー1件のみを削除し、他キーの値に一切影響しない。許可キー一覧に無いキー名は保存・削除とも400を返す
-- FR-SETTINGS-4: 保存済みの値は画面に再表示せず「設定済み」バッジのみ表示する。必須キー（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）が未設定の間は全ページ共通バナー（`GET /system/secrets-status`）で案内する。設定変更の反映にはアプリ再起動が必要
+- FR-SETTINGS-4: 保存済みの値は画面に再表示せず「設定済み」バッジのみ表示する。全ページ共通バナー（`GET /system/secrets-status`）は任意キー（SLACK_WEBHOOK_URL等）の未設定のみ案内する（必須キーはSetup Guard、§4.18が`/setup`へ誘導する）。設定変更の反映にはアプリ再起動が必要
+
+### 4.18 初回セットアップ誘導（Setup）
+
+必須認証情報が未設定のままアプリを使い始められないよう、専用のSetup画面（`GET /setup`）へ強制的に誘導する。
+
+- FR-SETUP-1: JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDのいずれかが未設定の間、Setup Guard Middlewareは`/setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエストを`/setup`へ302リダイレクトする。判定はリクエストごとにDBを参照するため、3キーがすべて設定された次のリクエストからリダイレクトは解除される。保存済みの値を読み出せない場合は未設定として扱う
+- FR-SETUP-2: `GET /setup`は必須3項目を個別の入力欄＋保存ボタン（`SecretFieldRow`）で表示し、任意項目としてSLACK_WEBHOOK_URLを表示する
+- FR-SETUP-3: `/setup`の保存・削除は`POST`/`DELETE /settings/:key`（FR-SETTINGS-2/3）をそのまま使い、専用の別実装を持たない
+- FR-SETUP-4: 必須3項目がすべて設定済みなら、Setup画面は完了を表示し、通常画面（`/scanner`）へ進むリンクを出す
+- FR-SETUP-5: `/setup`はセットアップ完了後も直接アクセスでき、Settings画面と同様に再設定できる
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -387,3 +398,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.3 | 2026-09-29 | UC-13・§4.15 System Activity Feed・§5.5 System Activity Log画面を追加。既存jobs/jev_decisions/kill_switch_eventsを集約する読み取り専用フィードとし、新規永続テーブルは追加しない | 実行中処理を可視化するログ画面の追加要望 |
 | 1.4 | 2026-09-29 | §4.14にFR-SELFIMPROVE-8/9（LLM出力の機械的検証、決定的しきい値とAIレビューの併用）を追加。§4.16 Luna ニュース分類・News Ingest（FR-LUNA-1〜5）を新設。新規テーブルは追加せず既存カラム（jev_decisions.state_json等）を利用 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
 | 1.5 | 2026-09-29 | UC-14・§4.17 環境設定（FR-SETTINGS-1〜4）を追加。Settings画面をキー単位の保存・削除へ変更 | issue #79実装 |
+| 1.6 | 2026-09-29 | UC-15・§4.18 初回セットアップ誘導（FR-SETUP-1〜5）を追加。FR-SETTINGS-4の必須キー警告バナーを廃止し任意キーのみの案内へ縮小 | issue #80実装 |

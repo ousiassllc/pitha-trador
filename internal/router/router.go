@@ -13,7 +13,9 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 	staticassets "github.com/ousiassllc/pitha-trador/static/src"
 )
 
@@ -73,7 +75,7 @@ type options struct {
 	proposalSource    handler.PolicyProposalSource
 	backtestRunner    handler.BacktestRunner
 	activitySource    handler.ActivitySource
-	secretsStore      handler.SecretsStore
+	secretsStore      handler.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
 	updateController  handler.UpdateController
 }
 
@@ -154,11 +156,15 @@ func WithBacktestRunner(runner handler.BacktestRunner) Option {
 	return func(o *options) { o.backtestRunner = runner }
 }
 
-// WithSecretsStore overrides the Settings screen/secrets-status banner's
-// backing internal/web/handler.SecretsStore. cmd/desktop and cmd/server
-// pass internal/bootstrap's real *repository.SecretsRepository; the
-// empty handler.StaticSecretsStore default only serves router-level
-// tests.
+// WithSecretsStore sets the Settings/Setup screens' and secrets-status
+// banner's backing internal/web/handler.SecretsStore, and enables the
+// Setup Guard (middleware.SetupGuard, issue #80): while any required key
+// is unset in store, every route except `/setup`, `POST`/`DELETE
+// /settings/:key` and `/static/...` redirects to `/setup`. cmd/desktop
+// and cmd/server pass internal/bootstrap's real
+// *repository.SecretsRepository. Without this option (router-level tests
+// only) the handlers use the empty handler.StaticSecretsStore and no
+// guard is installed, so unrelated route tests need not seed secrets.
 func WithSecretsStore(store handler.SecretsStore) Option {
 	return func(o *options) { o.secretsStore = store }
 }
@@ -190,13 +196,20 @@ func New(opts ...Option) *gin.Engine {
 		proposalSource:    handler.StaticPolicyProposalSource{},
 		backtestRunner:    handler.StaticBacktestRunner{},
 		activitySource:    handler.StaticActivitySource{},
-		secretsStore:      handler.StaticSecretsStore{},
 	}
 	for _, opt := range opts {
 		opt(&o)
 	}
 
 	engine := gin.New()
+	settingsStore := o.secretsStore
+	if settingsStore == nil {
+		settingsStore = handler.StaticSecretsStore{}
+	} else {
+		// Registered before any route so it also covers NoRoute and the
+		// `/api/v1` group; StaticFS below is exempt inside the guard.
+		engine.Use(middleware.SetupGuard(settingsStore, config.RequiredSecretKeys()))
+	}
 	engine.StaticFS("/static", staticFS())
 	// Scanner Dashboard is the app's home page (organisms/header.templ's nav
 	// lists it first); `/` used to serve a static "Backend skeleton is
@@ -235,7 +248,8 @@ func New(opts ...Option) *gin.Engine {
 	engine.GET("/activity", activityHandler.Page)
 	engine.GET("/ws/activity", activityHandler.WebSocket)
 
-	settingsHandler := handler.NewSettingsHandler(o.secretsStore)
+	settingsHandler := handler.NewSettingsHandler(settingsStore)
+	engine.GET("/setup", settingsHandler.SetupPage)
 	engine.GET("/settings", settingsHandler.Page)
 	engine.POST("/settings/:key", settingsHandler.Save)
 	engine.DELETE("/settings/:key", settingsHandler.Delete)
