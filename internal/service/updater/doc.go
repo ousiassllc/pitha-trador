@@ -15,6 +15,18 @@
 // installer asset, verify it against the published checksums.txt (issue
 // #64), and report the verified local path back in its Result.
 //
+// Fetch hardening (issue #126): every request carries a context deadline
+// (Config.MetadataTimeout for the release lookup, Config.DownloadTimeout
+// for the whole download phase), so a stalled connection cannot hold
+// Checker's checkMu forever. Asset downloads are size-capped
+// (maxInstallerBytes/maxChecksumsBytes, tightened to Asset.Size when GitHub
+// reports one) and Asset.BrowserDownloadURL must live under
+// https://github.com/<owner>/<repo>/releases/download/. Known limitation:
+// checksums.txt comes from the same release as the installer, so SHA256
+// only detects corruption, not a replaced release; installer code signing
+// or a detached release signature verified against an embedded public key
+// is not implemented yet.
+//
 // Checker itself never runs the installer or quits the process: that is
 // SchedulerAdapter's Quitter's job (cmd/desktop/app.go's QuitForUpdate -
 // Wails' runtime.Quit, then its shutdown spawns

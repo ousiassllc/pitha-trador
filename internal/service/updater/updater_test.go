@@ -85,6 +85,8 @@ func newChecker(server *httptest.Server, gate updater.SafeGate) *updater.Checker
 		Gate:       gate,
 		HTTPClient: server.Client(),
 		BaseURL:    server.URL,
+		// newGitHubMock serves assets under /download/ on the same server.
+		DownloadURLPrefix: server.URL + "/download/",
 	})
 }
 
