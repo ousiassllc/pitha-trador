@@ -25,7 +25,11 @@ const dailyLossWarningThresholdPct = 0.8
 // RunPeriodicChecks (monitor.go) calls this every minute via
 // internal/service/scheduler.Scheduler.CheckRisk.
 func (e *Engine) CheckDailyLossWarning(ctx context.Context) error {
-	pct, err := e.portfolio.DailyLossPct(ctx)
+	since, err := e.baselineAt(ctx, settingKeyDailyLossBaselineAt)
+	if err != nil {
+		return err
+	}
+	pct, err := e.portfolio.DailyLossPct(ctx, since)
 	if err != nil {
 		return fmt.Errorf("risk: read daily loss pct: %w", err)
 	}

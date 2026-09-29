@@ -27,7 +27,7 @@ func (e *Engine) AutoResume(ctx context.Context) (int, error) {
 		if !autoResumableReasons[ev.Reason] {
 			continue
 		}
-		recovered, err := e.recovered(ctx, ev.Reason)
+		recovered, err := e.recovered(ctx, ev)
 		if err != nil {
 			return resolved, err
 		}
@@ -51,14 +51,15 @@ func (e *Engine) AutoResume(ctx context.Context) (int, error) {
 	return resolved, nil
 }
 
-func (e *Engine) recovered(ctx context.Context, reason string) (bool, error) {
-	switch reason {
+// recovered reports whether ev's trigger condition has cleared.
+func (e *Engine) recovered(ctx context.Context, ev domain.KillSwitchEvent) (bool, error) {
+	switch ev.Reason {
 	case domain.KillReasonMarketDataDown:
 		return e.marketDataHealth.Healthy(ctx)
 	case domain.KillReasonJevAPIDown:
 		return e.jevAPIHealth.Healthy(ctx)
 	case domain.KillReasonOperatorHeartbeatTimeout:
-		return e.heartbeatFresh(ctx)
+		return e.heartbeatRecovered(ctx, ev.TriggeredAt)
 	default:
 		return false, nil
 	}
@@ -148,4 +149,24 @@ func (e *Engine) heartbeatFresh(ctx context.Context) (bool, error) {
 	}
 	timeout := time.Duration(e.limits.HeartbeatTimeoutMinutes) * time.Minute
 	return e.now().Sub(e.sessionHeartbeat(last, e.now())) <= timeout, nil
+}
+
+// heartbeatRecovered is FR-RISK-7's "ハートビート再検知" for an
+// operator_heartbeat_timeout event: the operator has touched the UI again,
+// i.e. a real heartbeat was recorded after the event fired and it is still
+// within HeartbeatTimeoutMinutes. It must not use heartbeatFresh: that
+// clamps a stale heartbeat up to the session open, which before the open
+// makes the elapsed time negative and would release the Kill Switch every
+// morning with no operator present (issue #167). The clamp is right for
+// deciding to fire (silence during the session only), not for releasing.
+func (e *Engine) heartbeatRecovered(ctx context.Context, triggeredAt time.Time) (bool, error) {
+	last, ok, err := e.getTimeSetting(ctx, SettingKeyLastUIHeartbeatAt)
+	if err != nil {
+		return false, err
+	}
+	if !ok || !last.After(triggeredAt) {
+		return false, nil
+	}
+	timeout := time.Duration(e.limits.HeartbeatTimeoutMinutes) * time.Minute
+	return e.now().Sub(last) <= timeout, nil
 }

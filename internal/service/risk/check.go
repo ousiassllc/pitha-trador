@@ -32,7 +32,9 @@ import (
 // Breaching max_daily_loss_pct or max_consecutive_losses also raises a
 // Kill Switch (FR-RISK-2), latching the rejection in place for every
 // subsequent candidate (via the Kill Switch state check above) rather
-// than only this one.
+// than only this one. Both limits are measured from the manual-resume
+// baseline (baseline.go), so a Resume is not immediately undone by the
+// history that caused the Kill Switch.
 func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string) (bool, string) {
 	state, events, err := e.State(ctx)
 	if err != nil {
@@ -46,7 +48,15 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	}
 
 	now := e.now()
-	lastLoss, err := e.portfolio.LastLossAt(ctx)
+	streakSince, err := e.baselineAt(ctx, settingKeyLossStreakBaselineAt)
+	if err != nil {
+		return e.failClosed("read loss streak baseline", err)
+	}
+	dailySince, err := e.baselineAt(ctx, settingKeyDailyLossBaselineAt)
+	if err != nil {
+		return e.failClosed("read daily loss baseline", err)
+	}
+	lastLoss, err := e.portfolio.LastLossAt(ctx, streakSince)
 	if err != nil {
 		return e.failClosed("read last loss time", err)
 	}
@@ -79,7 +89,7 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", ReasonMaxPositionPerSymbolPct, symbolPct, e.limits.MaxPositionPerSymbolPct)
 	}
 
-	dailyLossPct, err := e.portfolio.DailyLossPct(ctx)
+	dailyLossPct, err := e.portfolio.DailyLossPct(ctx, dailySince)
 	if err != nil {
 		return e.failClosed("read daily loss", err)
 	}
@@ -89,7 +99,7 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		})
 		return false, fmt.Sprintf("%s: daily_loss_pct=%.4f max=%.4f", ReasonMaxDailyLossPct, dailyLossPct, e.limits.MaxDailyLossPct)
 	}
-	losses, err := e.portfolio.ConsecutiveLosses(ctx)
+	losses, err := e.portfolio.ConsecutiveLosses(ctx, streakSince)
 	if err != nil {
 		return e.failClosed("read consecutive losses", err)
 	}

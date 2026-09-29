@@ -45,7 +45,7 @@ sequenceDiagram
     RE->>EX: 新規エントリー停止指示
     RE->>TRAY: ネイティブ通知発火
     RE->>SLACK: Webhook通知送信（reason・自動/手動再開区分を含む）
-    opt reasonが daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error
+    opt reasonが daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error / operator_manual
         RE->>EX: 保有ポジション強制クローズ指示（必要な場合）
     end
     alt 自動再開対象（market_data_down / jev_api_down / operator_heartbeat_timeout / cooldown経過）
@@ -53,8 +53,8 @@ sequenceDiagram
         RE->>DB: kill_switch_resolutions に resolved_by=auto の解除行を追記
         RE->>EX: 新規エントリー再開
         RE->>SLACK: 自動再開を通知
-    else 手動再開対象（daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error）
-        Note over RE: オペレーターがUI（pitha-kill-switch-panel）で明示的にresumeするまで停止を維持
+    else 手動再開対象（daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error / operator_manual）
+        Note over RE: オペレーターがUI（pitha-kill-switch-panel）で明示的にresumeするまで停止を維持。consecutive_losses / daily_loss_limit のResumeは再開ベースラインを記録し、以後の連敗数・日次実現損失はその時刻以降のクローズ分のみで判定する（再発動ループの防止。`requirements/functional/components-pipeline.md` FR-RISK-7）
     end
 ```
 
@@ -79,6 +79,7 @@ sequenceDiagram
     end
 ```
 
+- 自動再開（解消）は発動時刻より後に記録された本物のハートビートが`heartbeat_timeout_minutes`以内にあることを条件とする。発動判定の寄り付きクランプ（最後のハートビートを当日の寄り付きに切り上げる）は解消判定には使わない（寄り付き前は経過時間が負になり、操作者不在でも毎朝解消されてしまうため）
 - ハートビートは有効なセッションCookieを持つ認証済みリクエスト（ページ/アクション/API呼び出し）を更新対象とする（`internal/router.WithHeartbeatRecorder` でSessionミドルウェアの直後に登録）。Cookieを持たないリクエストは対象外とし、外部からの無認証GETでdead-man's switchを延命できないようにする
 - 操作者の操作ではないリクエストは更新対象外とする: `/static/...`、WebSocketのUpgrade（画面が自動で再接続する）、画面が自動ポーリングするルート（現状 `GET /system/update-status`、`hx-trigger="every 60s"`）
 - 自動発火の再同期リクエストも更新対象外とする（FR-RISK-6）。`pitha-kill-switch-panel` の再同期（初回・`kill_switch` push受信時・WebSocket再接続後の `GET /api/v1/system/status`）と、`systemStateChanged` を契機とするHeaderの `#header-status`（`GET /system/status`）は専用ヘッダ `X-Pitha-Background: 1`（`middleware.BackgroundHeader`、Lit側は `lib/api.ts` の `get(path, { background: true })`、htmx側は `hx-headers`）を付け、Heartbeatミドルウェアが除外する。これらは操作者不在でも発火するため、`operator_heartbeat_timeout` のKill Switch発動後のpushが自らハートビートを更新し、`AutoResume` が無人のまま解除してしまうことを防ぐ

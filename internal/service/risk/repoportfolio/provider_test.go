@@ -104,7 +104,7 @@ func TestRepositoryPortfolioProvider_ConsecutiveLosses_CountsFromMostRecentClose
 	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
 	now := time.Now().UTC()
 
-	if count, err := provider.ConsecutiveLosses(context.Background()); err != nil || count != 0 {
+	if count, err := provider.ConsecutiveLosses(context.Background(), time.Time{}); err != nil || count != 0 {
 		t.Fatalf("ConsecutiveLosses (no history) = (%d, %v), want (0, nil)", count, err)
 	}
 
@@ -119,7 +119,7 @@ func TestRepositoryPortfolioProvider_ConsecutiveLosses_CountsFromMostRecentClose
 	p3 := mustOpenPosition(t, positions, orders, instrumentID, now.Add(4*time.Minute))
 	mustClosePosition(t, positions, orders, p3, -200, now.Add(5*time.Minute))
 
-	count, err := provider.ConsecutiveLosses(context.Background())
+	count, err := provider.ConsecutiveLosses(context.Background(), time.Time{})
 	if err != nil {
 		t.Fatalf("ConsecutiveLosses: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestRepositoryPortfolioProvider_LastLossAt_ReturnsZeroTimeWhenNeverLost(t *
 	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
 	now := time.Now().UTC()
 
-	if at, err := provider.LastLossAt(context.Background()); err != nil || !at.IsZero() {
+	if at, err := provider.LastLossAt(context.Background(), time.Time{}); err != nil || !at.IsZero() {
 		t.Fatalf("LastLossAt (no history) = (%v, %v), want (zero time, nil)", at, err)
 	}
 
@@ -140,7 +140,7 @@ func TestRepositoryPortfolioProvider_LastLossAt_ReturnsZeroTimeWhenNeverLost(t *
 	closedAt := now.Add(time.Minute)
 	mustClosePosition(t, positions, orders, opened, -400, closedAt)
 
-	at, err := provider.LastLossAt(context.Background())
+	at, err := provider.LastLossAt(context.Background(), time.Time{})
 	if err != nil {
 		t.Fatalf("LastLossAt: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestRepositoryPortfolioProvider_DailyLossPct_CountsTodaysRealizedAndUnreali
 	today := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow.Add(-2*time.Hour))
 	mustClosePosition(t, positions, orders, today, -10_000, portfolioTestNow.Add(-time.Hour))
 
-	got, err := provider.DailyLossPct(ctx)
+	got, err := provider.DailyLossPct(ctx, time.Time{})
 	if err != nil || math.Abs(got-1) > 1e-9 {
 		t.Fatalf("DailyLossPct = (%v, %v), want (1, nil): only today's -10,000 of 1,000,000", got, err)
 	}
@@ -189,7 +189,7 @@ func TestRepositoryPortfolioProvider_DailyLossPct_CountsTodaysRealizedAndUnreali
 	if _, err := positions.Mark(ctx, open.ID, open.EntryPrice-50, -5_000, portfolioTestNow); err != nil {
 		t.Fatalf("UpdateMark: %v", err)
 	}
-	got, err = provider.DailyLossPct(ctx)
+	got, err = provider.DailyLossPct(ctx, time.Time{})
 	if err != nil || math.Abs(got-1.5) > 1e-9 {
 		t.Fatalf("DailyLossPct with unrealized = (%v, %v), want (1.5, nil)", got, err)
 	}
@@ -206,7 +206,44 @@ func TestRepositoryPortfolioProvider_NoInitialCapital_FailsInsteadOfReportingZer
 	if _, err := provider.SymbolExposurePct(ctx, instrumentID); !errors.Is(err, repoportfolio.ErrNoInitialCapital) {
 		t.Errorf("SymbolExposurePct err = %v, want ErrNoInitialCapital", err)
 	}
-	if _, err := provider.DailyLossPct(ctx); !errors.Is(err, repoportfolio.ErrNoInitialCapital) {
+	if _, err := provider.DailyLossPct(ctx, time.Time{}); !errors.Is(err, repoportfolio.ErrNoInitialCapital) {
 		t.Errorf("DailyLossPct err = %v, want ErrNoInitialCapital", err)
+	}
+}
+
+// The manual-resume baseline (#165/#172): losses closed at or before it must
+// not count toward the streak, the cooldown gate or the day's realized loss.
+func TestRepositoryPortfolioProvider_Since_IgnoresPositionsClosedBeforeBaseline(t *testing.T) {
+	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
+	ctx := context.Background()
+
+	for i, pnl := range []float64{-100, -200} {
+		opened := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow.Add(time.Duration(-40+i)*time.Minute))
+		mustClosePosition(t, positions, orders, opened, pnl, portfolioTestNow.Add(time.Duration(-30+i)*time.Minute))
+	}
+	baseline := portfolioTestNow.Add(-10 * time.Minute)
+
+	if n, err := provider.ConsecutiveLosses(ctx, baseline); err != nil || n != 0 {
+		t.Fatalf("ConsecutiveLosses(since baseline) = (%d, %v), want (0, nil)", n, err)
+	}
+	if at, err := provider.LastLossAt(ctx, baseline); err != nil || !at.IsZero() {
+		t.Fatalf("LastLossAt(since baseline) = (%v, %v), want (zero, nil)", at, err)
+	}
+	if got, err := provider.DailyLossPct(ctx, baseline); err != nil || got != 0 {
+		t.Fatalf("DailyLossPct(since baseline) = (%v, %v), want (0, nil)", got, err)
+	}
+
+	// A loss after the baseline counts again, alone.
+	opened := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow.Add(-8*time.Minute))
+	closedAt := portfolioTestNow.Add(-5 * time.Minute)
+	mustClosePosition(t, positions, orders, opened, -1000, closedAt)
+	if n, err := provider.ConsecutiveLosses(ctx, baseline); err != nil || n != 1 {
+		t.Fatalf("ConsecutiveLosses after new loss = (%d, %v), want (1, nil)", n, err)
+	}
+	if at, err := provider.LastLossAt(ctx, baseline); err != nil || !at.Equal(closedAt) {
+		t.Fatalf("LastLossAt after new loss = (%v, %v), want %v", at, err, closedAt)
+	}
+	if got, err := provider.DailyLossPct(ctx, baseline); err != nil || math.Abs(got-0.1) > 1e-9 {
+		t.Fatalf("DailyLossPct after new loss = (%v, %v), want (0.1, nil)", got, err)
 	}
 }

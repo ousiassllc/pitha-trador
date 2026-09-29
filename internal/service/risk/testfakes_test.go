@@ -49,11 +49,15 @@ func (f fakePortfolio) TotalExposurePct(context.Context) (float64, error) {
 func (f fakePortfolio) SymbolExposurePct(context.Context, int64) (float64, error) {
 	return f.symbolExposurePct, nil
 }
-func (f fakePortfolio) DailyLossPct(context.Context) (float64, error) { return f.dailyLossPct, nil }
-func (f fakePortfolio) ConsecutiveLosses(context.Context) (int, error) {
+func (f fakePortfolio) DailyLossPct(context.Context, time.Time) (float64, error) {
+	return f.dailyLossPct, nil
+}
+func (f fakePortfolio) ConsecutiveLosses(context.Context, time.Time) (int, error) {
 	return f.consecutiveLosses, nil
 }
-func (f fakePortfolio) LastLossAt(context.Context) (time.Time, error) { return f.lastLossAt, nil }
+func (f fakePortfolio) LastLossAt(context.Context, time.Time) (time.Time, error) {
+	return f.lastLossAt, nil
+}
 
 type fakeCloser struct {
 	closed []string

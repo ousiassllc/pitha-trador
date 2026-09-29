@@ -132,7 +132,7 @@ erDiagram
 
 ## kill_switch_events
 
-Risk EngineのKill Switch発動履歴（監査ログ）。**追記専用**であり、`UPDATE`/`DELETE`はDBトリガー（`kill_switch_events_no_update` / `kill_switch_events_no_delete`、マイグレーション000014）が`ABORT`で拒否する。解除は本テーブルを更新せず、`kill_switch_resolutions`へ行を追記して記録する。
+Risk EngineのKill Switch発動履歴（監査ログ）。**追記専用**であり、`UPDATE`/`DELETE`はDBトリガー（`kill_switch_events_no_update` / `kill_switch_events_no_delete`、マイグレーション000014）が`ABORT`で拒否する（`operator_manual`を許すCHECK拡張のためテーブルを作り直したマイグレーション000017でも同トリガーを再作成している）。解除は本テーブルを更新せず、`kill_switch_resolutions`へ行を追記して記録する。
 
 ```mermaid
 erDiagram
@@ -149,7 +149,7 @@ erDiagram
 |-------|-----|------|------|
 | id | integer | PK（AUTOINCREMENT） | |
 | triggered_at | text | NOT NULL | |
-| reason | varchar(100) | NOT NULL, CHECK IN ('daily_loss_limit','consecutive_losses','market_data_down','jev_api_down','broker_api_error','unexpected_position','fill_discrepancy','db_write_failure','operator_heartbeat_timeout') | `functional.md` FR-RISK-2, FR-RISK-6 |
+| reason | varchar(100) | NOT NULL, CHECK IN ('daily_loss_limit','consecutive_losses','market_data_down','jev_api_down','broker_api_error','unexpected_position','fill_discrepancy','db_write_failure','operator_heartbeat_timeout','operator_manual') | `functional.md` FR-RISK-2, FR-RISK-6 |
 | detail_json | text | NOT NULL | 発動時のRisk状態スナップショット（JSON文字列） |
 | created_at | text | NOT NULL | |
 
