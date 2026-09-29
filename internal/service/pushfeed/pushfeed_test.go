@@ -169,3 +169,40 @@ func TestLatest_RejectsBoardWithoutCurrentPrice(t *testing.T) {
 		t.Fatalf("Latest err = %v, want ErrPriceUnavailable", err)
 	}
 }
+
+// panicOnceUniverse panics on its first ListActiveByKind call.
+type panicOnceUniverse struct {
+	fakeUniverse
+	mu    sync.Mutex
+	calls int
+}
+
+func (u *panicOnceUniverse) ListActiveByKind(ctx context.Context, kind string) ([]domain.Instrument, error) {
+	u.mu.Lock()
+	u.calls++
+	first := u.calls == 1
+	u.mu.Unlock()
+	if first {
+		panic("universe lookup blew up")
+	}
+	return u.fakeUniverse.ListActiveByKind(ctx, kind)
+}
+
+// FR-SCHED-6: a panic during a subscription attempt is logged and treated
+// like any failed attempt: Run backs off and re-subscribes.
+func TestRun_SurvivesPanicAndResubscribes(t *testing.T) {
+	f := newFakeKabu(t, marketdata.Board{Symbol: "1000", CurrentPrice: 1})
+	feed := pushfeed.New(&panicOnceUniverse{fakeUniverse: fakeUniverse{stocks(1)}}, f.client, f.wsURL(), 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { feed.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	deadline := time.Now().Add(10 * time.Second) // first retry backoff is 2s
+	for len(f.registrations()) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("Run never re-registered the universe after the panic")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

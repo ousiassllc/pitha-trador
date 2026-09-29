@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
@@ -115,20 +116,14 @@ func (m Monitor) Run(ctx context.Context, min, max time.Duration) {
 	if min <= 0 {
 		min, max = DefaultInterval, DefaultInterval
 	}
-	for {
-		wait := min
+	wait := func() time.Duration {
 		if max > min {
-			wait += time.Duration(rand.Int64N(int64(max - min)))
+			return min + time.Duration(rand.Int64N(int64(max-min)))
 		}
-		timer := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-			if _, err := m.Cycle(ctx); err != nil && ctx.Err() == nil {
-				slog.Error("heldposition: cycle failed", "error", err)
-			}
-		}
+		return min
 	}
+	safego.Loop(ctx, "held position monitor", wait, func(ctx context.Context) error {
+		_, err := m.Cycle(ctx)
+		return err
+	})
 }

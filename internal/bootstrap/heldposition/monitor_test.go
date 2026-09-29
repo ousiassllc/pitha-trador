@@ -115,3 +115,36 @@ func TestMonitor_CycleSkipsBoardWithoutCurrentPrice(t *testing.T) {
 		t.Fatalf("Cycle = (%d, %v), snaps %+v; want only 6758 evaluated", n, err, exits.snaps)
 	}
 }
+
+// panicOnceExits panics on its first OnSnapshot call, then records.
+type panicOnceExits struct {
+	fakeExits
+	calls int
+}
+
+func (f *panicOnceExits) OnSnapshot(ctx context.Context, snap domain.Snapshot) (execution.SnapshotResult, error) {
+	f.calls++
+	if f.calls == 1 {
+		panic("exit evaluation blew up")
+	}
+	return f.fakeExits.OnSnapshot(ctx, snap)
+}
+
+// FR-SCHED-6: a panic inside one cycle is logged, not fatal, and the
+// monitor keeps evaluating on the following cycles.
+func TestMonitor_RunSurvivesPanickingCycle(t *testing.T) {
+	boards := &fakeBoards{boards: map[string]marketdata.Board{"7203": {CurrentPrice: 2500}}}
+	exits := &panicOnceExits{}
+	m := monitor(true, fakePositions{open: []domain.Position{held(1, "7203")}}, boards, &fakeExits{})
+	m.Exits = exits
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { m.Run(ctx, 5*time.Millisecond, 10*time.Millisecond); close(done) }()
+	time.Sleep(200 * time.Millisecond)
+	cancel()
+	<-done
+	if len(exits.snaps) < 2 {
+		t.Fatalf("evaluations after the panicking cycle = %d, want >= 2", len(exits.snaps))
+	}
+}

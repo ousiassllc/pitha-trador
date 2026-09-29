@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
@@ -77,7 +78,7 @@ func (s *Scheduler) addMaintenanceTriggers(ctx context.Context) error {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
-		defer recoverPanic("maintenance catch-up")
+		defer safego.Recover("maintenance catch-up")
 		runner.CatchUp(ctx)
 	}()
 	return nil

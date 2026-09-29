@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/heldposition"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
 
 // Start launches every background goroutine this build's composition
@@ -83,16 +84,10 @@ func (s *Services) Stop() {
 func (s *Services) newsIngestTicker(ctx context.Context) {
 	defer s.wg.Done()
 
-	ticker := time.NewTicker(newsPollInterval)
-	defer ticker.Stop()
-	for {
-		if err := s.News.Poll(ctx); err != nil && ctx.Err() == nil {
-			slog.Error("bootstrap: news ingest cycle failed", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
+	wait := time.Duration(0) // the first cycle runs immediately
+	safego.Loop(ctx, "news ingest", func() time.Duration {
+		d := wait
+		wait = newsPollInterval
+		return d
+	}, s.News.Poll)
 }
