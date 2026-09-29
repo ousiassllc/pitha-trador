@@ -59,6 +59,7 @@ ManifestDPIAware true
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
+!insertmacro MUI_PAGE_COMPONENTS # Optional components (autostart) page.
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
@@ -83,8 +84,15 @@ OutFile "..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the inst
 !endif # Default installing folder ($PROGRAMFILES is Program Files folder).
 ShowInstDetails show # This will always show the installation details.
 
+# Set to 1 by .onInit when the executable is already installed (an upgrade,
+# including the unattended self-update of issue #65).
+Var IsUpgrade
+
 Function .onInit
    !insertmacro wails.checkArchitecture
+
+   IfFileExists "$INSTDIR\${PRODUCT_EXECUTABLE}" 0 +2
+       StrCpy $IsUpgrade 1
 FunctionEnd
 
 Section
@@ -103,21 +111,48 @@ Section
     !insertmacro wails.associateCustomProtocols
 
     !insertmacro wails.writeUninstaller
-
-    # issue #65: unattended self-update support. cmd/desktop's auto-
-    # updater relaunches this exact installer as `installer.exe /S` right
-    # before quitting the old process, expecting the newly installed
-    # pitha-trador.exe to start itself back up once installation
-    # completes. NSIS entirely skips every page - including the
-    # interactive finish page's "Launch application" checkbox
-    # (MUI_FINISHPAGE_RUN) - during a /S install, so that checkbox alone
-    # can never restart a silently-updated app; this explicit IfSilent
-    # branch is the only way a silent install ever does.
-    IfSilent runAfterSilentInstall skipRunAfterSilentInstall
-    runAfterSilentInstall:
-        Exec '"$INSTDIR\${PRODUCT_EXECUTABLE}"'
-    skipRunAfterSilentInstall:
 SectionEnd
+
+# docs/requirements/non-functional.md §3: start at login and restart after
+# a crash. The Startup shortcut runs the app with --supervise, which makes
+# cmd/desktop supervise itself (internal/supervisor): the real app runs as
+# a child process that is relaunched after every abnormal exit, and a clean
+# exit (operator quit, self-update) ends supervision. Selected by default;
+# an operator can untick it on the components page.
+Section "Start at login and restart after a crash" SecAutostart
+    !insertmacro wails.setShellContext
+
+    # An unattended self-update (installer.exe /S) has no components page:
+    # keep whatever the operator chose at the original install instead of
+    # re-creating a shortcut they removed.
+    IfSilent 0 createAutostart
+    StrCmp $IsUpgrade 1 skipAutostart
+
+    createAutostart:
+    CreateShortCut "$SMSTARTUP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}" "--supervise"
+    skipAutostart:
+SectionEnd
+
+# issue #65: unattended self-update support. cmd/desktop's auto-updater
+# relaunches this exact installer as `installer.exe /S` right before
+# quitting the old process, expecting the newly installed
+# pitha-trador.exe to start itself back up once installation completes.
+# NSIS entirely skips every page - including the interactive finish page's
+# "Launch application" checkbox (MUI_FINISHPAGE_RUN) - during a /S install,
+# so that checkbox alone can never restart a silently-updated app; this
+# explicit IfSilent branch is the only way a silent install ever does.
+# It runs in .onInstSuccess (after every section) so it sees the final
+# Startup shortcut: an autostart install relaunches under --supervise so
+# crash restarts keep working after an update.
+Function .onInstSuccess
+    IfSilent 0 done
+    IfFileExists "$SMSTARTUP\${INFO_PRODUCTNAME}.lnk" 0 runPlain
+        Exec '"$INSTDIR\${PRODUCT_EXECUTABLE}" --supervise'
+        Goto done
+    runPlain:
+        Exec '"$INSTDIR\${PRODUCT_EXECUTABLE}"'
+    done:
+FunctionEnd
 
 Section "uninstall"
     !insertmacro wails.setShellContext
@@ -128,6 +163,7 @@ Section "uninstall"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
+    Delete "$SMSTARTUP\${INFO_PRODUCTNAME}.lnk"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
