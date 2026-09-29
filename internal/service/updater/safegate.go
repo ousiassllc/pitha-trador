@@ -18,7 +18,7 @@ const defaultMinIdleAfterOrder = 5 * time.Minute
 // SafeToUpdate's "ポジション数0" gate. This mirrors
 // internal/service/risk.PortfolioProvider.OpenPositionCount's exact
 // signature (package doc.go's layer rule forbids importing that package
-// directly); *risk.RepositoryPortfolioProvider - the same instance
+// directly); *repoportfolio.Provider - the same instance
 // internal/bootstrap already wires into risk.Engine - implements it
 // directly, so position aggregation is never re-implemented here.
 type PositionCounter interface {

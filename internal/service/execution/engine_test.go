@@ -226,3 +226,73 @@ func TestEngine_Enter_RejectsLimitOrderWithoutLimitPrice(t *testing.T) {
 		t.Fatalf("Enter(LIMIT, no LimitPrice) error = %v, want ErrLimitPriceRequired", err)
 	}
 }
+
+// Regression test for issue #158: an entry whose position cannot be opened
+// must leave no FILLED order behind.
+func TestEngine_Enter_PositionOpenFailureLeavesNoFilledOrder(t *testing.T) {
+	db := newTestDB(t)
+	if _, err := db.Exec(`CREATE TRIGGER positions_block BEFORE INSERT ON positions BEGIN SELECT RAISE(ABORT, 'disk full'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+	instruments := repository.NewInstrumentRepository(db)
+	inst, err := instruments.Create(context.Background(), domain.Instrument{Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true})
+	if err != nil {
+		t.Fatalf("create instrument: %v", err)
+	}
+	orders := repository.NewOrderRepository(db)
+	engine := execution.NewEngine(execution.Deps{Orders: orders, Positions: repository.NewPositionRepository(db)}, execution.Config{})
+
+	_, err = engine.Enter(context.Background(), execution.EntryRequest{
+		Signal: longSignal(inst.ID), Quantity: 100, OrderType: domain.OrderTypeMarket, Price: 2100,
+		Now: time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC),
+	})
+	if err == nil {
+		t.Fatal("Enter = nil error, want the position insert failure")
+	}
+
+	all, err := orders.List(context.Background(), "", 10)
+	if err != nil {
+		t.Fatalf("List orders: %v", err)
+	}
+	if len(all) != 1 || all[0].Status != domain.OrderStatusRejected || all[0].FilledAt != nil {
+		t.Fatalf("orders after failed Enter = %+v, want exactly one REJECTED, never FILLED", all)
+	}
+}
+
+func TestEngine_TryFillPending_PositionOpenFailureKeepsOrderPending(t *testing.T) {
+	te := newTestEngine(t, execution.Config{})
+	ctx := context.Background()
+	now := time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC)
+	limit := 2000.0
+
+	result, err := te.engine.Enter(ctx, execution.EntryRequest{
+		Signal: longSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeLimit,
+		LimitPrice: &limit, Price: 2100, Now: now,
+	})
+	if err != nil || result.Order.Status != domain.OrderStatusPending {
+		t.Fatalf("Enter limit = (%+v, %v), want PENDING order", result, err)
+	}
+	// Another position appears for the instrument before the limit crosses.
+	other, err := te.orders.Insert(ctx, domain.PaperOrder{
+		InstrumentID: te.instrument.ID, Symbol: "7203", Side: domain.OrderSideBuy, OrderType: domain.OrderTypeMarket,
+		Quantity: 100, Status: domain.OrderStatusFilled, SubmittedAt: now,
+	})
+	if err != nil {
+		t.Fatalf("insert competing order: %v", err)
+	}
+	if _, err := te.positions.Open(ctx, domain.Position{
+		InstrumentID: te.instrument.ID, EntryOrderID: other.ID, Symbol: "7203", Side: domain.PositionSideLong,
+		Quantity: 100, EntryPrice: 2100, CurrentPrice: 2100, OpenedAt: now,
+	}); err != nil {
+		t.Fatalf("open competing position: %v", err)
+	}
+
+	if _, ok, err := te.engine.TryFillPending(ctx, result.Order.ID, domain.JevDirectionLong, 1990, now); err == nil || ok {
+		t.Fatalf("TryFillPending = (ok=%v, err=%v), want error", ok, err)
+	}
+
+	got, err := te.orders.Get(ctx, result.Order.ID)
+	if err != nil || got.Status != domain.OrderStatusPending {
+		t.Fatalf("order after failed TryFillPending = (%+v, %v), want PENDING", got, err)
+	}
+}

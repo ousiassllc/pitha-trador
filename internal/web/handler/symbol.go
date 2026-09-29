@@ -85,17 +85,27 @@ func (StaticSymbolProvider) ListOrders(context.Context, string, int) ([]domain.P
 // SymbolRiskParams is the Risk Engine limit set `GET
 // /api/v1/symbols/{symbol}`'s "risk" section reports
 // (functional.md §4.7's table, §4.8's FR-EXIT-2 initial values).
-// AllowedPositionPct is Risk Engine's max_position_per_symbol_pct limit
-// itself (the ceiling every symbol shares), not a computed per-symbol
-// remaining headroom - no account-equity/exposure computation exists yet
-// outside internal/service/risk's own placeholder PortfolioProvider
-// (issue #36's ZeroPortfolioProvider), so reporting a dynamically
-// "remaining" value would fabricate data this sub-scope has no source
-// for.
+// AllowedPositionPct is the static fallback ceiling
+// (max_position_per_symbol_pct); when AllowedPositionPctFor is set it is
+// used instead, computed from Risk Engine's position sizing at the
+// symbol's last price (issue #160), so the API reports the size an entry
+// could really take now.
 type SymbolRiskParams struct {
 	AllowedPositionPct float64
-	StopLossPct        float64
-	TakeProfitPct      float64
+	// AllowedPositionPctFor returns the currently allowed position size
+	// (percent of account equity) for an entry at price. Optional.
+	AllowedPositionPctFor func(ctx context.Context, price float64) float64
+	StopLossPct           float64
+	TakeProfitPct         float64
+}
+
+// allowedPositionPct is the "allowed_position_pct" value for an entry at
+// price: the sizing-derived figure when configured, else the static limit.
+func (p SymbolRiskParams) allowedPositionPct(ctx context.Context, price float64) float64 {
+	if p.AllowedPositionPctFor != nil {
+		return p.AllowedPositionPctFor(ctx, price)
+	}
+	return p.AllowedPositionPct
 }
 
 // NewSymbolRiskParams builds the Risk section's values from the limits the
@@ -104,11 +114,15 @@ type SymbolRiskParams struct {
 // Config() (its stop-loss/take-profit exit rule). cmd/desktop and
 // cmd/server pass the result to router.WithSymbolRiskParams so the
 // Symbol Detail screen and API never show values the engines don't use.
-func NewSymbolRiskParams(limits config.RiskLimits, exit execution.Config) SymbolRiskParams {
+// allowedFor (risk.Engine.AllowedPositionPct) makes allowed_position_pct
+// the sizing-derived allowance at the symbol's last price (#160); nil
+// falls back to the static max_position_per_symbol_pct ceiling.
+func NewSymbolRiskParams(limits config.RiskLimits, exit execution.Config, allowedFor func(ctx context.Context, price float64) float64) SymbolRiskParams {
 	return SymbolRiskParams{
-		AllowedPositionPct: limits.MaxPositionPerSymbolPct,
-		StopLossPct:        exit.StopLossPct,
-		TakeProfitPct:      exit.TakeProfitPct,
+		AllowedPositionPct:    limits.MaxPositionPerSymbolPct,
+		AllowedPositionPctFor: allowedFor,
+		StopLossPct:           exit.StopLossPct,
+		TakeProfitPct:         exit.TakeProfitPct,
 	}
 }
 

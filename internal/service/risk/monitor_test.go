@@ -245,3 +245,46 @@ func TestEngine_RunPeriodicChecks_RunsEveryDetectorAndJoinsNoErrors(t *testing.T
 		t.Fatalf("daily-loss warnings = %d, want 1 (85%% of the limit is past the 80%% threshold)", len(f.notifier.dailyLoss))
 	}
 }
+
+// insertOrphanFill records a FILLED order at filledAt that no position
+// references: the partial-failure state issue #158 describes.
+func (f *monitorFixture) insertOrphanFill(t *testing.T, filledAt time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	order, err := f.orders.Insert(ctx, domain.PaperOrder{
+		InstrumentID: f.instrID, Symbol: "7203", Side: domain.OrderSideBuy, OrderType: domain.OrderTypeMarket,
+		Quantity: 100, Status: domain.OrderStatusPending, SubmittedAt: filledAt,
+	})
+	if err != nil {
+		t.Fatalf("insert order: %v", err)
+	}
+	if _, err := f.orders.Fill(ctx, order.ID, 2100, nil, filledAt); err != nil {
+		t.Fatalf("fill order: %v", err)
+	}
+}
+
+func TestEngine_CheckPositionReconciliation_TriggersOnFilledOrderWithoutPosition(t *testing.T) {
+	f := newMonitorFixture(t, nil)
+	f.insertOrphanFill(t, time.Now().UTC().Add(-5*time.Minute))
+
+	if err := f.engine.CheckPositionReconciliation(context.Background()); err != nil {
+		t.Fatalf("CheckPositionReconciliation: %v", err)
+	}
+
+	assertReasons(t, f.unresolvedReasons(t), domain.KillReasonFillDiscrepancy)
+}
+
+func TestEngine_CheckPositionReconciliation_IgnoresJustFilledOrderAndLinkedOrders(t *testing.T) {
+	f := newMonitorFixture(t, nil)
+	// Filled a few seconds ago: an exit order is filled just before its
+	// position row is closed, so it gets a grace period.
+	f.insertOrphanFill(t, time.Now().UTC().Add(-5*time.Second))
+	// A properly linked entry fill is never an orphan.
+	f.openPosition(t, filledOrder(domain.OrderSideBuy, 100, 2100), longPosition(100, 2100))
+
+	if err := f.engine.CheckPositionReconciliation(context.Background()); err != nil {
+		t.Fatalf("CheckPositionReconciliation: %v", err)
+	}
+
+	assertReasons(t, f.unresolvedReasons(t))
+}

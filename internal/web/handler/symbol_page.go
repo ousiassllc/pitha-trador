@@ -48,7 +48,7 @@ func (h *SymbolHandler) Page(c *gin.Context) {
 	_ = pages.SymbolDetailPage(pages.SymbolDetailProps{
 		Symbol:             symbol,
 		State:              state,
-		AllowedPositionPct: h.riskParams.AllowedPositionPct,
+		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
 		StopLossPct:        h.riskParams.StopLossPct,
 		TakeProfitPct:      h.riskParams.TakeProfitPct,
 		Decisions:          decisions,

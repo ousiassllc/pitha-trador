@@ -89,6 +89,9 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 | heartbeat_timeout_minutes（Live専用） | 対象外 | 120 |
 
 - FR-RISK-1: 上記制限のいずれかに抵触する場合、新規取引を拒否する
+  - 「口座資産に対する%」の各上限（max_position_per_symbol_pct / max_total_exposure_pct / max_daily_loss_pct / max_trade_loss_pct）の分母は`config/risk.yaml`の`initial_capital`（想定資金・円。Paper初期値3,000万円、Liveは実運用資金を設定必須）とする。総エクスポージャ・銘柄エクスポージャは保有中ポジションの評価額（数量×現在値）、日次損失率は当日（JST）にクローズしたポジションの実現損益と保有中ポジションの含み損益の合計損失を分母で割った値
+  - `initial_capital`が未設定（0以下）、またはRisk Engineが判定に必要な状態（ポジション・注文・最新スナップショット・スプレッド）を読み取れない場合は、判定をスキップせず`risk_engine_error`で拒否する（fail-closed。スプレッド欠損は「データ欠損」、FR-POLICY-3）
+  - `max_trade_loss_pct`はポジションサイジングで強制する（§4.8 FR-ENTRY-3）。1単元（100株）でもStop Lossに掛かった時の損失が上限を超える場合は`max_trade_loss_pct`理由で拒否する
 - FR-RISK-2: 以下のいずれかでKill Switch（新規取引停止）を発動する: 日次損失上限到達、連敗上限到達、市場データ停止、Jev API連続失敗、Broker API異常、想定外ポジション発生、約定差異検知、DB書き込み失敗が一定回数継続、operator_heartbeat_timeout（Live専用、FR-RISK-6参照）
 - FR-RISK-3: Kill Switch発動時、必要に応じて保有ポジションをクローズする
 - FR-RISK-4: Kill SwitchはUI（Wailsアプリ）とサーバー内部処理の両方から操作可能とする。Phase 7の発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）
@@ -115,7 +118,7 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
 - jev_api_down: Jev APIの直近呼び出しエラー率がしきい値（既定50%、直近20件、最小5件）以上（しきい値未満に戻るか、5分間呼び出しが無ければ復旧、自動再開）。Slack通知（§5.2）と同じ信号を使う
 - broker_api_error: kabuステーションAPIがHTTP 5xxを5回連続で返す（手動再開のみ）。4xx・通信エラーは対象外（通信エラーは市場データ停止側で扱う）
 - db_write_failure: SQLiteの書き込みがストレージ起因（BUSY/LOCKED/READONLY/IOERR/FULL/CANTOPEN/CORRUPT）で5回連続失敗（手動再開のみ）。制約違反は対象外
-- unexpected_position / fill_discrepancy: Paper Tradingでは外部Brokerが無いため、保有中ポジションを起点となる`paper_orders`の約定記録と突合する。起点注文が存在しない・未約定・銘柄/売買方向が不一致なら`unexpected_position`、約定数量・約定価格がポジションと不一致、または指値を超えた約定なら`fill_discrepancy`（手動再開のみ）
+- unexpected_position / fill_discrepancy: Paper Tradingでは外部Brokerが無いため、保有中ポジションを起点となる`paper_orders`の約定記録と突合する。起点注文が存在しない・未約定・銘柄/売買方向が不一致なら`unexpected_position`、約定数量・約定価格がポジションと不一致、または指値を超えた約定なら`fill_discrepancy`（手動再開のみ）。逆方向の照合として、直近15分内（約定直後の1分は猶予）にFILLEDとなった注文がどのポジションのEntry/Exit注文にもなっていない場合も`fill_discrepancy`とする
 - cooldown_after_loss: クールダウンはRisk Engineの時間ベースの新規取引ゲート（FR-RISK-1、`kill_switch_events`には記録しない）であり、経過で自動的に解除される
 - 日次損失上限の80%到達時のSlack通知（`non-functional.md` §5.2）も同じ1分周期の検知で行う
 
@@ -123,6 +126,12 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
 
 - FR-ENTRY-1: 成行想定Paper Entry・指値Paper Entryの両方を選択可能とする
 - FR-ENTRY-2: 実売買へ移行する場合は原則として指値を優先する
+- FR-ENTRY-3（ポジションサイジング）: Paper Entryの発注数量は、次の3つの上限株数の最小値を単元（100株）単位に切り下げた値とする。1単元にも満たない場合は発注せず、拘束した制限（`max_trade_loss_pct` / `max_position_per_symbol_pct` / `max_total_exposure_pct`）を理由に見送る
+  - 1トレード最大損失: `initial_capital × max_trade_loss_pct ÷ (価格 × stop_loss_pct)`
+  - 銘柄上限: `initial_capital × max_position_per_symbol_pct ÷ 価格`
+  - 総エクスポージャ残枠: `initial_capital × (max_total_exposure_pct − 現在の総エクスポージャ率) ÷ 価格`
+  - `GET /api/v1/symbols/{symbol}`の`risk.allowed_position_pct`は、直近価格で同サイジングを行った結果の数量が占める`initial_capital`比（%、発注不可なら0）
+- FR-ENTRY-4（約定の原子性）: Entry注文の約定（`paper_orders`のFILLED化）とポジション作成（`positions`）は単一のDBトランザクションで行う。失敗時は注文をFILLEDにせず、約定済み注文がどのポジションにも紐付かない状態（孤児約定）はRisk Engineの照合が`fill_discrepancy`として検知する（§4.7）
 - FR-EXIT-1: 以下のExit条件を併用する: 固定Stop Loss、固定Take Profit、Trailing Stop、Jev方向反転、continuation_probability低下、VWAP逆クロス、最大保有時間到達、引け前強制決済
 - FR-EXIT-2: 初期値: `stop_loss_pct=0.6`, `take_profit_pct=1.2`, `trailing_stop_pct=0.5`, `max_holding_minutes=20`
 - FR-EXIT-3: Jev API不応答時も、既存ポジションはコードベースのExit Ruleで管理を継続する（Jev不応答を理由にリスク管理を停止しない）

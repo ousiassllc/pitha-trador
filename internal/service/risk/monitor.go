@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
@@ -80,7 +81,8 @@ func (e *Engine) checkFailureStreak(ctx context.Context, reason string, counter 
 //     SELL <-> SHORT) - a position no recorded fill explains.
 //   - fill_discrepancy: the entry order was filled, but with a quantity or
 //     price different from the position it opened, or (LIMIT) at a price
-//     worse than its limit.
+//     worse than its limit; or (reverse direction) a recently FILLED order
+//     that no position references at all (checkFilledOrdersWithoutPosition).
 //
 // It does nothing unless Config.Positions and Config.Orders are set.
 func (e *Engine) CheckPositionReconciliation(ctx context.Context) error {
@@ -90,6 +92,9 @@ func (e *Engine) CheckPositionReconciliation(ctx context.Context) error {
 	open, err := e.positions.ListOpen(ctx)
 	if err != nil {
 		return fmt.Errorf("risk: list open positions for reconciliation: %w", err)
+	}
+	if err := e.checkFilledOrdersWithoutPosition(ctx); err != nil {
+		return err
 	}
 	for _, p := range open {
 		reason, detail, err := e.reconcile(ctx, p)
@@ -109,6 +114,38 @@ func (e *Engine) CheckPositionReconciliation(ctx context.Context) error {
 		return nil
 	}
 	return nil
+}
+
+const (
+	// orphanFillLookback bounds how far back checkFilledOrdersWithoutPosition
+	// looks: long enough for several 1-minute scheduler ticks to notice a
+	// fresh orphan, short enough that an operator-resolved one stops
+	// re-triggering the Kill Switch after Resume.
+	orphanFillLookback = 15 * time.Minute
+	// orphanFillGrace skips fills this recent: an exit order is filled
+	// just before its position row is closed (execution.Engine.Close), so a
+	// just-filled exit order legitimately has no link yet.
+	orphanFillGrace = time.Minute
+)
+
+// checkFilledOrdersWithoutPosition is CheckPositionReconciliation's
+// reverse direction (issue #158): a FILLED order that is neither any
+// position's entry nor exit order means a fill was recorded without the
+// position it should have opened, raising fill_discrepancy.
+func (e *Engine) checkFilledOrdersWithoutPosition(ctx context.Context) error {
+	now := e.now()
+	orphans, err := e.orders.ListFilledWithoutPosition(ctx, now.Add(-orphanFillLookback), now.Add(-orphanFillGrace))
+	if err != nil {
+		return fmt.Errorf("risk: list filled orders without position for reconciliation: %w", err)
+	}
+	if len(orphans) == 0 {
+		return nil
+	}
+	first := orphans[0]
+	_, err = e.triggerIfNotActive(ctx, domain.KillReasonFillDiscrepancy, map[string]any{
+		"problem": "filled_order_without_position", "order_id": first.ID, "symbol": first.Symbol, "orphan_count": len(orphans),
+	})
+	return err
 }
 
 // reconcile returns the Kill Switch reason p's entry order contradicts

@@ -66,7 +66,7 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 	out.Body.Symbol = state.Symbol
 	out.Body.Price = state.LastPrice
 	out.Body.Risk = symbolRiskOutput{
-		AllowedPositionPct: h.riskParams.AllowedPositionPct,
+		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
 		StopLossPct:        h.riskParams.StopLossPct,
 		TakeProfitPct:      h.riskParams.TakeProfitPct,
 	}

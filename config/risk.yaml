@@ -8,7 +8,15 @@
 # docs/architecture/overview.md §1「AI自己改善ループの境界」の方針により
 # Sol/Opusの自己改善ループの対象外とする。人手のみが変更できる。
 
+# initial_capital は「口座資産に対する%」で表す各上限
+# （max_position_per_symbol_pct / max_total_exposure_pct / max_daily_loss_pct /
+# max_trade_loss_pct）の分母となる想定資金（円）であり、ポジションサイズ算出
+# の基準でもある（functional.md §4.7 / §4.8）。0以下は未設定扱い:
+# Paperは起動時に警告してデフォルト（3,000万円）を使い、Liveは実資金額の設定が必須
+# （未設定のままではRisk Engineが全新規取引をfail-closedで拒否する）。
+
 paper:
+  initial_capital: 30000000
   max_position_per_symbol_pct: 2.0
   max_total_exposure_pct: 20.0
   max_daily_loss_pct: 1.0
@@ -22,6 +30,8 @@ paper:
   heartbeat_timeout_minutes: 0
 
 live:
+  # Live移行前に実際の運用資金（円）へ設定すること（未設定=新規取引は全拒否）。
+  initial_capital: 0
   max_position_per_symbol_pct: 1.0
   max_total_exposure_pct: 10.0
   max_daily_loss_pct: 0.5

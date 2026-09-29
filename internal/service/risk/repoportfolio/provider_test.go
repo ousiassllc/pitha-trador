@@ -1,21 +1,28 @@
-package risk_test
+package repoportfolio_test
 
 import (
 	"context"
+	"errors"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/repoportfolio"
 )
+
+const portfolioTestCapital = 1_000_000
+
+// portfolioTestNow is midday JST on a fixed day, so "today" is stable.
+var portfolioTestNow = time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC)
 
 // newPortfolioTestFixtures returns a RepositoryPortfolioProvider plus the
 // PositionRepository/OrderRepository/instrumentID it is backed by,
 // mirroring internal/repository/position_repo_test.go's own
 // openTestPositionRepo/insertFilledEntryOrder helpers (unexported there,
 // so not reusable from this package).
-func newPortfolioTestFixtures(t *testing.T) (*risk.RepositoryPortfolioProvider, *repository.PositionRepository, *repository.OrderRepository, int64) {
+func newPortfolioTestFixtures(t *testing.T) (*repoportfolio.Provider, *repository.PositionRepository, *repository.OrderRepository, int64) {
 	t.Helper()
 	db := newTestDB(t)
 
@@ -29,7 +36,7 @@ func newPortfolioTestFixtures(t *testing.T) (*risk.RepositoryPortfolioProvider, 
 
 	positions := repository.NewPositionRepository(db)
 	orders := repository.NewOrderRepository(db)
-	return risk.NewRepositoryPortfolioProvider(positions), positions, orders, inst.ID
+	return repoportfolio.New(positions, portfolioTestCapital, repoportfolio.WithClock(func() time.Time { return portfolioTestNow })), positions, orders, inst.ID
 }
 
 func mustOpenPosition(t *testing.T, positions *repository.PositionRepository, orders *repository.OrderRepository, instrumentID int64, now time.Time) domain.Position {
@@ -139,5 +146,67 @@ func TestRepositoryPortfolioProvider_LastLossAt_ReturnsZeroTimeWhenNeverLost(t *
 	}
 	if !at.Equal(closedAt) {
 		t.Errorf("LastLossAt = %v, want %v", at, closedAt)
+	}
+}
+
+func TestRepositoryPortfolioProvider_Exposure_MeasuresOpenNotionalAgainstCapital(t *testing.T) {
+	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
+	ctx := context.Background()
+
+	mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow) // 100 x 2100 = 210,000 of 1,000,000
+
+	total, err := provider.TotalExposurePct(ctx)
+	if err != nil || math.Abs(total-21) > 1e-9 {
+		t.Fatalf("TotalExposurePct = (%v, %v), want (21, nil)", total, err)
+	}
+	same, err := provider.SymbolExposurePct(ctx, instrumentID)
+	if err != nil || math.Abs(same-21) > 1e-9 {
+		t.Fatalf("SymbolExposurePct(held) = (%v, %v), want (21, nil)", same, err)
+	}
+	other, err := provider.SymbolExposurePct(ctx, instrumentID+1)
+	if err != nil || other != 0 {
+		t.Fatalf("SymbolExposurePct(other) = (%v, %v), want (0, nil)", other, err)
+	}
+}
+
+func TestRepositoryPortfolioProvider_DailyLossPct_CountsTodaysRealizedAndUnrealizedLoss(t *testing.T) {
+	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
+	ctx := context.Background()
+
+	// A loss closed yesterday (JST) must not count; today's -10,000 does.
+	yesterday := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow.Add(-26*time.Hour))
+	mustClosePosition(t, positions, orders, yesterday, -50_000, portfolioTestNow.Add(-25*time.Hour))
+	today := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow.Add(-2*time.Hour))
+	mustClosePosition(t, positions, orders, today, -10_000, portfolioTestNow.Add(-time.Hour))
+
+	got, err := provider.DailyLossPct(ctx)
+	if err != nil || math.Abs(got-1) > 1e-9 {
+		t.Fatalf("DailyLossPct = (%v, %v), want (1, nil): only today's -10,000 of 1,000,000", got, err)
+	}
+
+	// An open position marked down 5,000 adds unrealized loss.
+	open := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow)
+	if _, err := positions.Mark(ctx, open.ID, open.EntryPrice-50, -5_000, portfolioTestNow); err != nil {
+		t.Fatalf("UpdateMark: %v", err)
+	}
+	got, err = provider.DailyLossPct(ctx)
+	if err != nil || math.Abs(got-1.5) > 1e-9 {
+		t.Fatalf("DailyLossPct with unrealized = (%v, %v), want (1.5, nil)", got, err)
+	}
+}
+
+func TestRepositoryPortfolioProvider_NoInitialCapital_FailsInsteadOfReportingZero(t *testing.T) {
+	_, positions, _, instrumentID := newPortfolioTestFixtures(t)
+	provider := repoportfolio.New(positions, 0)
+	ctx := context.Background()
+
+	if _, err := provider.TotalExposurePct(ctx); !errors.Is(err, repoportfolio.ErrNoInitialCapital) {
+		t.Errorf("TotalExposurePct err = %v, want ErrNoInitialCapital", err)
+	}
+	if _, err := provider.SymbolExposurePct(ctx, instrumentID); !errors.Is(err, repoportfolio.ErrNoInitialCapital) {
+		t.Errorf("SymbolExposurePct err = %v, want ErrNoInitialCapital", err)
+	}
+	if _, err := provider.DailyLossPct(ctx); !errors.Is(err, repoportfolio.ErrNoInitialCapital) {
+		t.Errorf("DailyLossPct err = %v, want ErrNoInitialCapital", err)
 	}
 }

@@ -99,10 +99,11 @@ func TestNewSymbolRiskParams_UsesConfiguredLimitsAndExitRule(t *testing.T) {
 	exit.StopLossPct = 0.4
 	exit.TakeProfitPct = 0.9
 
-	got := handler.NewSymbolRiskParams(limits, exit)
+	got := handler.NewSymbolRiskParams(limits, exit, nil)
 
 	want := handler.SymbolRiskParams{AllowedPositionPct: 1.0, StopLossPct: 0.4, TakeProfitPct: 0.9}
-	if got != want {
+	if got.AllowedPositionPct != want.AllowedPositionPct || got.StopLossPct != want.StopLossPct ||
+		got.TakeProfitPct != want.TakeProfitPct || got.AllowedPositionPctFor != nil {
 		t.Fatalf("NewSymbolRiskParams() = %+v, want %+v", got, want)
 	}
 }

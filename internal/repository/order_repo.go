@@ -72,7 +72,13 @@ func (r *OrderRepository) Get(ctx context.Context, id int64) (domain.PaperOrder,
 // order's reference price. It returns ErrOrderNotFound if id does not
 // exist.
 func (r *OrderRepository) Fill(ctx context.Context, id int64, price float64, slippageBps *float64, now time.Time) (domain.PaperOrder, error) {
-	res, err := r.db.ExecContext(ctx,
+	return fillOrder(ctx, r.db, id, price, slippageBps, now)
+}
+
+// fillOrder is Fill's body over any sqlExecutor, so FillEntry can run it
+// inside its own transaction.
+func fillOrder(ctx context.Context, x sqlExecutor, id int64, price float64, slippageBps *float64, now time.Time) (domain.PaperOrder, error) {
+	res, err := x.ExecContext(ctx,
 		`UPDATE paper_orders SET status = ?, filled_at = ?, filled_price = ?, slippage_bps = ? WHERE id = ?`,
 		domain.OrderStatusFilled, formatTime(now), price, nullableFloat64(slippageBps), id,
 	)
@@ -82,7 +88,7 @@ func (r *OrderRepository) Fill(ctx context.Context, id int64, price float64, sli
 	if n, err := res.RowsAffected(); err == nil && n == 0 {
 		return domain.PaperOrder{}, ErrOrderNotFound
 	}
-	return r.Get(ctx, id)
+	return scanOrder(x.QueryRowContext(ctx, orderSelectColumns+` WHERE id = ?`, id))
 }
 
 // UpdateStatus sets a paper_orders row's status (e.g. to
@@ -190,4 +196,60 @@ func scanOrder(row rowScanner) (domain.PaperOrder, error) {
 		return domain.PaperOrder{}, err
 	}
 	return o, nil
+}
+
+// sqlExecutor is satisfied by both *sql.DB and *sql.Tx, letting a
+// repository statement run standalone or inside a caller's transaction.
+type sqlExecutor interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// FillEntry marks the PENDING entry order orderID FILLED at price/now and
+// opens position (whose EntryOrderID is set to orderID) in ONE database
+// transaction: either both the FILLED order and its positions row exist
+// afterwards, or neither is written and the order stays as it was. Without
+// this, a failure between the two writes (positions_open_instrument_uq
+// violation, SQLITE_BUSY, process exit) left a FILLED order with no
+// position, which nothing retries (issue #158).
+func (r *OrderRepository) FillEntry(ctx context.Context, orderID int64, price float64, slippageBps *float64, now time.Time, position domain.Position) (domain.PaperOrder, domain.Position, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.PaperOrder{}, domain.Position{}, fmt.Errorf("repository: begin fill-entry transaction for order %d: %w", orderID, err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	filled, err := fillOrder(ctx, tx, orderID, price, slippageBps, now)
+	if err != nil {
+		return domain.PaperOrder{}, domain.Position{}, err
+	}
+
+	position.EntryOrderID = orderID
+	opened, err := openPosition(ctx, tx, position)
+	if err != nil {
+		return domain.PaperOrder{}, domain.Position{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return domain.PaperOrder{}, domain.Position{}, fmt.Errorf("repository: commit fill-entry transaction for order %d: %w", orderID, err)
+	}
+	return filled, opened, nil
+}
+
+// ListFilledWithoutPosition returns FILLED orders that were filled in
+// [filledSince, filledBefore) yet are neither the entry nor the exit
+// order of any positions row - a fill no position explains (issue #158's
+// reverse reconciliation: risk.Engine.CheckPositionReconciliation only
+// walked position -> order). filledBefore lets a caller skip fills so
+// recent that their exit-side position link may still be in flight.
+func (r *OrderRepository) ListFilledWithoutPosition(ctx context.Context, filledSince, filledBefore time.Time) ([]domain.PaperOrder, error) {
+	rows, err := r.db.QueryContext(ctx,
+		orderSelectColumns+` AS o WHERE o.status = ? AND o.filled_at >= ? AND o.filled_at < ?
+		AND NOT EXISTS (SELECT 1 FROM positions p WHERE p.entry_order_id = o.id OR p.exit_order_id = o.id)
+		ORDER BY o.filled_at ASC`,
+		domain.OrderStatusFilled, formatTime(filledSince), formatTime(filledBefore))
+	if err != nil {
+		return nil, fmt.Errorf("repository: list filled orders without position: %w", err)
+	}
+	return scanOrders(rows)
 }
