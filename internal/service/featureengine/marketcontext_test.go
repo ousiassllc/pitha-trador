@@ -67,6 +67,7 @@ func TestMarketContextLoader_DerivesContextFromTrackedIndices(t *testing.T) {
 	idxBars := func(then, latest float64) []domain.Snapshot {
 		return []domain.Snapshot{
 			{Timestamp: now.Add(-6 * time.Minute), Price: then},
+			{Timestamp: now.Add(-2 * time.Minute), Price: then}, // 1m reference for the -1m bar
 			{Timestamp: now.Add(-1 * time.Minute), Price: latest},
 		}
 	}

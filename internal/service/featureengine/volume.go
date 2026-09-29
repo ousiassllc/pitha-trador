@@ -7,7 +7,7 @@ import "time"
 // trailing window ending at at), or false if no bar exists that far back
 // or the cumulative value went backwards (new session).
 func volumeDelta(series []point, at time.Time, currentVolume int64, window time.Duration) (float64, bool) {
-	ref, ok := atOrBefore(series, at.Add(-window))
+	ref, ok := windowRef(series, at, window)
 	if !ok || currentVolume < ref.volume {
 		return 0, false
 	}
@@ -28,7 +28,7 @@ func volumeOverWindow(series []point, at time.Time, currentVolume int64, window 
 // at or before at-window. nil if no bar reaches back that far or the
 // cumulative value went backwards (new session).
 func turnoverOverWindow(series []point, at time.Time, currentTurnover float64, window time.Duration) *float64 {
-	ref, ok := atOrBefore(series, at.Add(-window))
+	ref, ok := windowRef(series, at, window)
 	if !ok || currentTurnover < ref.turnover {
 		return nil
 	}

@@ -88,6 +88,11 @@ func (m Monitor) Cycle(ctx context.Context) (int, error) {
 			slog.Warn("heldposition: board fetch failed", "symbol", p.Symbol, "error", err)
 			continue
 		}
+		if !board.HasPrice() {
+			// 寄り付き前・未約定: price 0 would stop out / close at a bogus -100%.
+			slog.Warn("heldposition: board has no current price, skipping", "symbol", p.Symbol, "current_price", board.CurrentPrice)
+			continue
+		}
 		// A transient snapshot (never persisted: market_snapshots stays
 		// the 1-minute bar series): just the price and session VWAP the
 		// exit conditions read.

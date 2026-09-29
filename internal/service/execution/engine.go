@@ -2,6 +2,7 @@ package execution
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -32,7 +33,15 @@ var (
 	// ErrLimitPriceRequired is returned by Enter when the resolved order
 	// type is LIMIT but req.LimitPrice is nil.
 	ErrLimitPriceRequired = errors.New("execution: limit order requires a limit price")
+	// ErrInvalidPrice is returned by OnSnapshot, TryFillPending and Close
+	// when the price to fill/mark/close at is not finite and positive: a
+	// missing board price (0) must never become a fill, a mark or an exit
+	// (issue #173).
+	ErrInvalidPrice = errors.New("execution: price must be positive")
 )
+
+// validPrice reports whether p can be used to fill, mark or close at.
+func validPrice(p float64) bool { return p > 0 && !math.IsInf(p, 0) }
 
 // Engine implements Paper Trading Execution (functional.md §4.8, §4.9):
 // Paper Entry/Exit against repository.OrderRepository/PositionRepository

@@ -106,3 +106,12 @@ func TestMonitor_RunCyclesOnTheConfiguredInterval(t *testing.T) {
 		t.Fatalf("Run evaluated %d times in 200ms at a 5-10ms interval, want >= 3", len(boards.calls))
 	}
 }
+
+func TestMonitor_CycleSkipsBoardWithoutCurrentPrice(t *testing.T) {
+	boards := &fakeBoards{boards: map[string]marketdata.Board{"7203": {CurrentPrice: 0}, "6758": {CurrentPrice: 900}}}
+	exits := &fakeExits{}
+	n, err := monitor(true, fakePositions{open: []domain.Position{held(1, "7203"), held(2, "6758")}}, boards, exits).Cycle(context.Background())
+	if err != nil || n != 1 || len(exits.snaps) != 1 || exits.snaps[0].Symbol != "6758" {
+		t.Fatalf("Cycle = (%d, %v), snaps %+v; want only 6758 evaluated", n, err, exits.snaps)
+	}
+}

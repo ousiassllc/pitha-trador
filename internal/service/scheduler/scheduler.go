@@ -169,10 +169,10 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 // EnqueueEventReevaluation enqueues one jev-scout job for instrumentID,
 // due immediately at now, when triggered is true - bypassing the normal
 // 15-30s candidate-refresh cadence for a symbol whose
-// featureengine.DetectEvent signal fired (FR-SCAN-1). When triggered is
+// eventtrigger.Detect signal fired (FR-SCAN-1). When triggered is
 // false it does nothing, leaving the Jev call for this cycle skipped
 // (FR-SCAN-2 quiet-suppression): the caller (internal/bootstrap's
-// market-data handler, via featureengine.EventSignal.Triggered against
+// market-data handler, via eventtrigger.Signal.Triggered against
 // config/strategy.yaml's scan.event_trigger thresholds - this package
 // cannot import internal/service/featureengine per doc.go's layer rule)
 // decides triggered.

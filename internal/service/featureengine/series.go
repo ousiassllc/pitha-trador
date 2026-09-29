@@ -50,6 +50,39 @@ func atOrBefore(series []point, at time.Time) (point, bool) {
 	return best, found
 }
 
+// minRefTolerance is the least a window's reference bar may lag the
+// window start. Bars are ~60s samples, so one missed/late bar (or a few
+// seconds of scan jitter) must not blank every short-window feature.
+const minRefTolerance = 90 * time.Second
+
+// refTolerance is how far before the window start (at-window) a
+// reference bar may sit and still be "the value window ago": half the
+// window, but at least minRefTolerance.
+func refTolerance(window time.Duration) time.Duration {
+	return max(window/2, minRefTolerance)
+}
+
+// freshAtOrBefore is atOrBefore that also rejects a point older than
+// tolerance before t, so a stale bar is never mistaken for the value at t.
+func freshAtOrBefore(series []point, t time.Time, tolerance time.Duration) (point, bool) {
+	p, ok := atOrBefore(series, t)
+	if !ok || t.Sub(p.ts) > tolerance {
+		return point{}, false
+	}
+	return p, true
+}
+
+// windowRef is the reference bar for the trailing window ending at at:
+// the latest bar at or before at-window that is no more than
+// refTolerance(window) older than at-window. A gap larger than that
+// (previous session's bar at the open, pre-lunch bar after 12:30, a
+// restart or outage) is missing history, not an N-minute move: the
+// caller reports nil instead of an overnight/lunch gap as momentum
+// (FR-FE-1/FR-FE-2, issues #166/#176).
+func windowRef(series []point, at time.Time, window time.Duration) (point, bool) {
+	return freshAtOrBefore(series, at.Add(-window), refTolerance(window))
+}
+
 // inWindow returns the points with at-window < ts <= at, in ascending
 // order.
 func inWindow(series []point, at time.Time, window time.Duration) []point {

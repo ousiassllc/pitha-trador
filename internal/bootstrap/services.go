@@ -34,6 +34,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/retention"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
@@ -97,6 +98,7 @@ type Services struct {
 
 	RAG           *rag.Service
 	MarketData    *marketdata.Client
+	PushFeed      *pushfeed.Feed // startup registration + PUSH subscription (flows.md §10.1)
 	FeatureEngine *featureengine.Engine
 	Screener      *screener.LiveSource
 	Jev           *jev.Client
@@ -278,6 +280,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Scheduler:     sched,
 		Updater:       updateAdapter,
 		strategy:      state.Strategy,
+		PushFeed:      pushfeed.New(instruments, marketDataClient, marketdata.DefaultPushURL, defaultKabuExchange),
 		sessionOpen:   marketcalendarOpen,
 	}
 

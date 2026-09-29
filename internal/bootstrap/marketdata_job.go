@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
@@ -20,17 +21,15 @@ type marketDataJobPayload struct {
 }
 
 // handleMarketData is the market-data queue Handler (issue #44): it
-// fetches symbol's current 時価情報・板情報 from kabuステーションAPI,
-// computes its Feature values against featureengine.HistoryLookbackBars prior bars,
-// and persists the result as one market_snapshots row via
-// FeatureEngine.RunCycle (which also indexes it for RAG - FR-RAG-1), then
-// runs Paper Trading's position management against that new bar
-// (execution.Engine.OnSnapshot).
+// fetches symbol's current 時価情報・板情報 (the fresh PUSH board else a REST
+// poll; never a price-0 board - PushFeed.Latest), computes its Feature
+// values against featureengine.HistoryLookbackBars prior bars, persists
+// one market_snapshots row via FeatureEngine.RunCycle (which also indexes
+// it for RAG - FR-RAG-1), then runs Paper Trading's position management
+// against that bar (execution.Engine.OnSnapshot). It covers both
+// acquisition and feature computation (see handleFeatureCalc).
 //
-// It covers both acquisition and feature computation (see
-// handleFeatureCalc's doc comment).
-//
-// A GetBoard failure is returned as-is: Scheduler marks the job failed and
+// A board failure is returned as-is: Scheduler marks the job failed and
 // moves on without crashing the process (issue #44 "接続失敗時にプロセス全体が
 // クラッシュしないことが必須").
 func (s *Services) handleMarketData(ctx context.Context, job repository.Job) error {
@@ -39,7 +38,7 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 		return fmt.Errorf("bootstrap: decode market-data job payload: %w", err)
 	}
 
-	board, err := s.MarketData.GetBoard(ctx, payload.Symbol, defaultKabuExchange)
+	board, err := s.PushFeed.Latest(ctx, payload.Symbol)
 	if err != nil {
 		return fmt.Errorf("bootstrap: fetch board for %q: %w", payload.Symbol, err)
 	}
@@ -97,7 +96,7 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 
 // enqueueEventReevaluation implements FR-SCAN-1/FR-SCAN-2 for one freshly
 // persisted bar: when snap is a current Fast Screener candidate and
-// featureengine.DetectEvent against its previous bar fires, a jev-scout
+// eventtrigger.Detect against its previous bar fires, a jev-scout
 // job is enqueued immediately instead of waiting for the next
 // candidate-refresh cycle; otherwise nothing is enqueued (FR-SCAN-2's
 // suppression). Non-candidates are skipped: Jev is only ever consulted for
@@ -111,7 +110,7 @@ func (s *Services) enqueueEventReevaluation(ctx context.Context, snap domain.Sna
 		return nil
 	}
 	trigger := s.strategy.Scan.EventTrigger
-	signal := featureengine.DetectEvent(history[0], snap, history, featureengine.EventThresholds{
+	signal := eventtrigger.Detect(history[0], snap, history, eventtrigger.Thresholds{
 		Return1mChange:           trigger.Return1mChangeThreshold,
 		VolumeRatioChange:        trigger.VolumeRatioChangeThreshold,
 		SpreadChangeBps:          trigger.SpreadChangeBpsThreshold,
@@ -133,17 +132,10 @@ func (s *Services) isCandidate(ctx context.Context, instrumentID int64) bool {
 	return false
 }
 
-// handleFeatureCalc is the feature-calc queue Handler (issue #44). It is
-// an intentional no-op: EnqueueFullScan (scheduler.go, already
-// implemented/tested before issue #41) enqueues one feature-calc job
-// alongside every market-data job, but handleMarketData above already
-// computes and persists Feature as part of its own atomic
-// fetch-compute-persist step, since featureengine.Engine.RunCycle exposes
-// no separate "compute from an already-persisted raw reading" entry
-// point. Registering a handler that simply succeeds (rather than leaving
-// the queue unregistered) keeps its jobs from piling up as permanently
-// "pending" rows; a future scope that splits Engine into distinct raw/
-// compute phases would give this handler real work to do.
+// handleFeatureCalc is the feature-calc queue Handler (issue #44), an
+// intentional no-op: handleMarketData already computes and persists
+// Feature atomically; a succeeding handler keeps the feature-calc jobs
+// EnqueueFullScan adds from piling up as "pending" rows.
 func (s *Services) handleFeatureCalc(context.Context, repository.Job) error {
 	return nil
 }

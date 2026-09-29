@@ -17,13 +17,15 @@ const (
 
 // realizedVol is the sample standard deviation of up to minutes
 // consecutive 1-minute returns ending at at, using the closest available
-// bar at or before each minute mark to tolerate small gaps. nil unless at
+// bar at or before each minute mark to tolerate small gaps (a bar more
+// than minRefTolerance older than its mark, e.g. the previous session's,
+// leaves that return out). nil unless at
 // least two such returns can be computed.
 func realizedVol(series []point, at time.Time, minutes int) *float64 {
 	var returns []float64
 	for k := range minutes {
-		newer, ok1 := atOrBefore(series, at.Add(-time.Duration(k)*time.Minute))
-		older, ok2 := atOrBefore(series, at.Add(-time.Duration(k+1)*time.Minute))
+		newer, ok1 := freshAtOrBefore(series, at.Add(-time.Duration(k)*time.Minute), minRefTolerance)
+		older, ok2 := freshAtOrBefore(series, at.Add(-time.Duration(k+1)*time.Minute), minRefTolerance)
 		if !ok1 || !ok2 || older.price == 0 || !newer.ts.After(older.ts) {
 			continue
 		}

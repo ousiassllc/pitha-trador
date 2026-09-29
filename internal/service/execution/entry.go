@@ -130,6 +130,9 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 // initial check). It returns ok=false without error if orderID is not a
 // PENDING limit order or currentPrice has not crossed yet.
 func (e *Engine) TryFillPending(ctx context.Context, orderID int64, direction string, currentPrice float64, now time.Time) (EntryResult, bool, error) {
+	if !validPrice(currentPrice) {
+		return EntryResult{}, false, fmt.Errorf("execution: fill pending order %d: %w (got %v)", orderID, ErrInvalidPrice, currentPrice)
+	}
 	order, err := e.orders.Get(ctx, orderID)
 	if err != nil {
 		return EntryResult{}, false, fmt.Errorf("execution: get pending order %d: %w", orderID, err)

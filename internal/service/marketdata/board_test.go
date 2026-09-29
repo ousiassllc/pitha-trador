@@ -3,9 +3,11 @@ package marketdata_test
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
@@ -192,5 +194,38 @@ func TestBoard_DepthSumsReportedLevels(t *testing.T) {
 	}
 	if _, ok := (marketdata.Board{}).SellDepth(); ok {
 		t.Error("SellDepth ok = true with no levels, want false (FR-FE-2)")
+	}
+}
+
+func TestBoard_HasPrice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		price float64
+		want  bool
+	}{"positive": {2500, true}, "zero": {0, false}, "negative": {-1, false}, "nan": {math.NaN(), false}, "inf": {math.Inf(1), false}} {
+		if got := (marketdata.Board{CurrentPrice: tc.price}).HasPrice(); got != tc.want {
+			t.Errorf("%s: HasPrice() = %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
+func TestBoardCache_FreshnessAndMissingPrice(t *testing.T) {
+	cache := marketdata.NewBoardCache()
+	at := time.Date(2026, 9, 29, 9, 30, 0, 0, time.UTC)
+
+	cache.Put(marketdata.Board{Symbol: "7203", CurrentPrice: 2500}, at)
+	if b, ok := cache.Fresh("7203", at.Add(10*time.Second), 30*time.Second); !ok || b.CurrentPrice != 2500 {
+		t.Fatalf("Fresh within maxAge = (%+v, %v), want the cached board", b, ok)
+	}
+	if _, ok := cache.Fresh("7203", at.Add(31*time.Second), 30*time.Second); ok {
+		t.Error("Fresh beyond maxAge = true, want false")
+	}
+	if _, ok := cache.Fresh("6758", at, time.Minute); ok {
+		t.Error("Fresh for unseen symbol = true, want false")
+	}
+
+	// A price-less PUSH message must not replace the last good board.
+	cache.Put(marketdata.Board{Symbol: "7203", CurrentPrice: 0}, at.Add(time.Second))
+	if b, ok := cache.Fresh("7203", at.Add(2*time.Second), 30*time.Second); !ok || b.CurrentPrice != 2500 {
+		t.Errorf("after price-0 Put, Fresh = (%+v, %v), want the earlier 2500 board", b, ok)
 	}
 }
