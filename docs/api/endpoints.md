@@ -109,3 +109,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.13 | 2026-09-29 | §5を`docs/api/endpoints/huma-api.md`へ分割（300行/ファイル制限）。節番号・内容は変更なし | issue #136/#149 |
 | 1.14 | 2026-09-29 | `/calibration`に`by_direction`・バケット別`avg_confidence`/`sample_count`/PnLを追加、`/symbols/{symbol}`の`risk`を実設定連動と明記、`/decisions`・`/signals`の`limit`（1〜500）・`{symbol}`検証を追記 | issue #141/#164/#148/#162実装 |
 | 1.15 | 2026-09-29 | §1 Session拒否（403）とRecoveryのpanic 500を、ページ遷移にはErrorPageで返すよう変更（HTMX/API/WebSocketは従来どおり） | issue #171 |
+| 1.16 | 2026-09-29 | §7に`/api/v1`の5xx固定メッセージ化（原因はslogへ、`internal/web/apierror`）を反映済みであることを変更履歴へ記録 | issue #215/#219 |

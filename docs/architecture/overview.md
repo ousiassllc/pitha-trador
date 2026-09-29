@@ -127,6 +127,7 @@ pitha-trador/
 │   │   ├── router_routes.go       # ルート登録
 │   │   └── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
 │   └── web/
+│       ├── apierror/              # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
 │       ├── handler/               # scanner.go, symbol*.go, performance.go, calibration.go, system.go, settings.go, activity.go, update.go, policy_proposals.go ほか（*_ws.goはWebSocket）
 │       ├── insightapi/            # decisions/signals/performance の読み取り専用JSON API（Huma登録、`service/insight`を使用）
 │       ├── middleware/            # HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState
@@ -198,6 +199,7 @@ handler → service → repository → domain
 | Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。2つ目の起動は`bootstrap.Run`に到達する前に終了コード0で終了し、Scheduler・Kill Switch・発注の二重稼働を防ぐ | `internal/singleinstance` |
 | Headless Server | Wailsに依存しない`net/http`エントリーポイント（Updater非配線。§9） | `cmd/server` |
 | Setup Guard Middleware | 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）が未設定の間、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`以外の全リクエストを`/setup`へ誘導する（ページ遷移は302、HTMXは`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。§10.5、FR-SETUP-1） | `internal/web/middleware` |
+| API Error Formatter | `/api/v1` のエラーボディ整形。`registerAPI`から`apierror.Install()`で`huma.NewError`を上書きし、4xxはバリデーション詳細を`errors[]`に残し、5xxは固定メッセージのみ返して原因を`slog`へ記録する（`api/endpoints.md` §7、issue #215） | `internal/web/apierror` |
 | Web (HTMX/Templ/Lit) | UI提供（`components/overview.md`） | `internal/web` |
 
 ## 5〜13. 分割章
@@ -235,3 +237,4 @@ handler → service → repository → domain
 | 1.19 | 2026-09-29 | §3ツリーに`marketcalendar`・`bootstrap/{heldposition,paperexec,alerts}`・`risk/{sizing,repoportfolio,multinotify}`・`execution/enrich`・`repository/{decisiontrade,snapshotcols}`を追加。§4にMarket Calendar行を新設し、Risk/Execution/Bootstrapの実装場所にサブパッケージを追記 | issue #179 |
 | 1.20 | 2026-09-29 | §3ツリーに`execution/{vwapcross,closerace}`・`risk/killswitchflow`を追加（`closerace`・`killswitchflow`はテスト専用ディレクトリ）。§4のRisk/Execution行に`vwapcross`・`killswitchflow`・`closerace`を追記 | issue #199 |
 | 1.21 | 2026-09-29 | §3ツリーに`internal/supervisor`・`internal/singleinstance`と`cmd/desktop`の`--supervise`起動・インストーラー自動起動を追記、§4にSupervisor・Single Instance Guardを追加 | issue #208/#210 |
+| 1.22 | 2026-09-29 | §3の`internal/web/`ツリーに`apierror/`を追加、§4にAPI Error Formatter行を新設 | issue #215/#219 |
