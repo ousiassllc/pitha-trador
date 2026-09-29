@@ -76,11 +76,14 @@ export class PithaKillSwitchPanel extends LitElement {
     this.wsClient = null;
   }
 
-  // resync re-reads the state and allowed actions from status-url.
+  // resync re-reads the state and allowed actions from status-url. It is
+  // always auto-fired (initial load, Kill Switch push, WS reconnect), never
+  // an operator action, so it is sent as a background request that must not
+  // refresh the operator heartbeat (FR-RISK-6 dead-man's switch).
   private async resync(): Promise<void> {
     if (!this.statusUrl) return;
     try {
-      this.applyState(await get<SystemStateResponse>(this.statusUrl));
+      this.applyState(await get<SystemStateResponse>(this.statusUrl, { background: true }));
       this.error = null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : String(err);

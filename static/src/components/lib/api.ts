@@ -3,8 +3,26 @@
 // module instead of calling `fetch()` directly, so CSRF handling and error
 // behavior stay consistent across `pitha-*` components.
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+// Marks a request the page fires by itself (not an operator action), so the
+// server's Heartbeat middleware does not count it as operator activity
+// (FR-RISK-6). Must match middleware.BackgroundHeader.
+const BACKGROUND_HEADER = 'X-Pitha-Background';
+
+export interface GetOptions {
+  /** True for auto-fired requests (resync after a push / WS reconnect). */
+  background?: boolean;
+}
+
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options: GetOptions = {},
+): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
+  if (options.background) {
+    headers[BACKGROUND_HEADER] = '1';
+  }
   const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? null;
   if (token) {
     headers['X-CSRF-Token'] = token;
@@ -29,8 +47,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await response.json()) as T;
 }
 
-export function get<T>(path: string): Promise<T> {
-  return request<T>('GET', path);
+export function get<T>(path: string, options?: GetOptions): Promise<T> {
+  return request<T>('GET', path, undefined, options);
 }
 
 export function post<T>(path: string, body?: unknown): Promise<T> {

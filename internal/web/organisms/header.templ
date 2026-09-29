@@ -79,6 +79,7 @@ templ Header(state domain.SystemState) {
 			id="header-status"
 			class="flex items-center gap-3"
 			hx-get="/system/status"
+			hx-headers='{"X-Pitha-Background":"1"}'
 			hx-trigger={ headerStatusTrigger(state) }
 			hx-target="this"
 			hx-swap="innerHTML"

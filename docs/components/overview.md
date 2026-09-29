@@ -239,12 +239,14 @@ templ KillSwitchPanel(state domain.SystemState) {
 `lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース）:
 
 ```typescript
-get<T>(path: string): Promise<T>
+get<T>(path: string, options?: { background?: boolean }): Promise<T>
 post<T>(path: string, body?): Promise<T>
 put<T>(path: string, body?): Promise<T>
 patch<T>(path: string, body?): Promise<T>
 del<T>(path: string): Promise<T>
 ```
+
+`get` の `background: true` は自動発火のリクエスト（`pitha-kill-switch-panel` の再同期）に `X-Pitha-Background: 1` を付け、操作者ハートビートとして数えさせない（`architecture/overview/flows.md` §10.4、FR-RISK-6）。
 
 `lib/ws.ts`（自動再接続、指数バックオフ（〜30秒）、JSONメッセージパース（不正なJSONは`logger.warn`して破棄）、`onOpen`/`onMessage`/`onClose`/`onStatusChange`コールバック）。`onStatusChange`は`connecting`/`open`/`reconnecting`/`failed`を通知する。`failed`は連続10回の再接続失敗後で、以降も30秒間隔で無期限に再試行する。`WsClient`を持つ`pitha-kill-switch-panel`/`pitha-scanner-table`/`pitha-activity-feed`は`reconnecting`/`failed`の間、`lib/ws-status.ts`の「接続が切れています」通知（`role="status"`）を表示する（issue #133）。5種のLitコンポーネントは共通してこの2ファイルのみを経由し、`fetch()`/`new WebSocket()`を直接呼ばない。
 
