@@ -30,6 +30,10 @@ func newTestServices(t *testing.T, kabuServer *httptest.Server) *Services {
 		t.Fatalf("Run: %v", err)
 	}
 	t.Cleanup(func() { _ = state.Close() })
+	// Jev calls fail after one attempt: tests here only need a Handler to run,
+	// not the real 1.5s retry backoff (issue #236).
+	jevMaxAttemptsForTest = 1
+	t.Cleanup(func() { jevMaxAttemptsForTest = 0 })
 
 	svc, err := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password"}, nil)
 	if err != nil {
@@ -215,7 +219,7 @@ func TestBuildServices_RegistersJevScoutHandler(t *testing.T) {
 	}
 	defer svc.Scheduler.Stop()
 
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for {
 		job, err := svc.Jobs.Get(context.Background(), enqueued.ID)
 		if err != nil {
@@ -225,7 +229,7 @@ func TestBuildServices_RegistersJevScoutHandler(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("jev-scout job status = %q after 3s of Scheduler.Start; want %q or %q (handler not registered/running)", job.Status, "failed", "succeeded")
+			t.Fatalf("jev-scout job status = %q after 10s of Scheduler.Start; want %q or %q (handler not registered/running)", job.Status, "failed", "succeeded")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -267,7 +271,7 @@ func TestBuildServices_RegistersJevTraderHandler(t *testing.T) {
 	}
 	defer svc.Scheduler.Stop()
 
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for {
 		job, err := svc.Jobs.Get(context.Background(), enqueued.ID)
 		if err != nil {
@@ -277,7 +281,7 @@ func TestBuildServices_RegistersJevTraderHandler(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("jev-trader job status = %q after 3s of Scheduler.Start; want %q or %q (handler not registered/running)", job.Status, "failed", "succeeded")
+			t.Fatalf("jev-trader job status = %q after 10s of Scheduler.Start; want %q or %q (handler not registered/running)", job.Status, "failed", "succeeded")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}

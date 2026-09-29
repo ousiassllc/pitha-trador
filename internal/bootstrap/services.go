@@ -57,6 +57,9 @@ const LogDir = "logs"
 // cloud folder). Unset or empty disables the backup job.
 const EnvBackupDir = "PITHA_BACKUP_DIR"
 
+// jevMaxAttemptsForTest lets in-package tests cap the Jev client's attempts (no real backoff); 0 = production default.
+var jevMaxAttemptsForTest int
+
 // defaultTokenRefreshInterval is how often Services.Start reissues the
 // kabuステーションAPI token (marketdata.Client.Start). kabuステーション
 // API's own reference does not publish an exact token TTL
@@ -166,6 +169,8 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		BaseURL: secrets.JevBaseURL,
 		APIKey:  secrets.JevAPIKey,
 		Alerts:  alertChannels.JevAlerts(),
+		// 0 keeps the production retry policy (jev.defaultMaxAttempts).
+		MaxAttempts: jevMaxAttemptsForTest,
 	})
 	// News Ingest (issue #81, FR-LUNA-1〜5): the external news feed and
 	// Luna are both optional secrets; unless both are configured the
