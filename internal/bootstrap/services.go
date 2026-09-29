@@ -31,6 +31,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
+	"github.com/ousiassllc/pitha-trador/internal/service/retention"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
@@ -232,6 +233,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		scheduler.WithRiskMonitor(riskEngine),
 		scheduler.WithAutoResumer(riskEngine),
 		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
+		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
 	}
 	if dir := os.Getenv(EnvBackupDir); dir != "" {
 		schedOpts = append(schedOpts, scheduler.WithDatabaseBackuper(backup.New(state.DB, dir, 0)))

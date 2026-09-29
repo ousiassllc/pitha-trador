@@ -55,6 +55,9 @@ type Scheduler struct {
 	// makes Start skip registering the @daily database-backup cron
 	// trigger entirely (non-functional.md §3).
 	databaseBackuper DatabaseBackuper
+	// dataPurger is optional (WithDataPurger): a nil value makes Start
+	// skip the @daily retention purge trigger (non-functional.md §3).
+	dataPurger DataPurger
 	// updateChecker is optional (WithUpdateChecker, issue #65): a nil
 	// value makes CheckForUpdate a no-op and skips Start's update-check
 	// trigger entirely (cmd/server never configures it - it has no
