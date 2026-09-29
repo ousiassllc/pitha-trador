@@ -44,6 +44,15 @@ const (
 	defaultRangeDays      = 20
 )
 
+// Limits (issue #128): exceeding one is a 400 (huge day counts overflow
+// time.Duration; tiny folds yield millions of Splits); a slow run is a 503.
+const (
+	maxFoldDays     = 366
+	maxRangeDays    = 5 * 366
+	maxSplits       = 1000
+	backtestTimeout = 60 * time.Second
+)
+
 const dateLayout = "2006-01-02"
 
 // PerformanceHandler implements `GET /performance` (docs/api/endpoints.md
@@ -74,10 +83,15 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 		case err != nil:
 			status, props.Error = http.StatusBadRequest, err.Error()
 		default:
-			result, err := h.runner.RunWalkForward(c.Request.Context(), wf)
-			if err != nil {
+			ctx, cancel := context.WithTimeout(c.Request.Context(), backtestTimeout)
+			defer cancel()
+			result, err := h.runner.RunWalkForward(ctx, wf)
+			switch {
+			case errors.Is(err, context.DeadlineExceeded):
+				status, props.Error = http.StatusServiceUnavailable, fmt.Sprintf("backtest timed out after %s; narrow the range", backtestTimeout)
+			case err != nil:
 				status, props.Error = http.StatusInternalServerError, "backtest failed: "+err.Error()
-			} else {
+			default:
 				props.Result = &result
 			}
 		}
@@ -112,8 +126,8 @@ func parseBacktestForm(c *gin.Context) (pages.PerformanceForm, backtest.WalkForw
 			return fallback
 		}
 		n, err := strconv.Atoi(raw)
-		if err != nil || n < 1 {
-			errs = append(errs, fmt.Errorf("%s must be a positive integer, got %q", key, raw))
+		if err != nil || n < 1 || n > maxFoldDays {
+			errs = append(errs, fmt.Errorf("%s must be an integer in 1..%d, got %q", key, maxFoldDays, raw))
 			return fallback
 		}
 		return n
@@ -130,13 +144,17 @@ func parseBacktestForm(c *gin.Context) (pages.PerformanceForm, backtest.WalkForw
 	if err != nil {
 		errs = append(errs, fmt.Errorf("to must be a YYYY-MM-DD date, got %q", form.To))
 	}
-	if len(errs) == 0 && to.Before(from) {
-		errs = append(errs, fmt.Errorf("to (%s) must not be before from (%s)", form.To, form.From))
+	if len(errs) == 0 {
+		// int64 seconds: extreme dates must not overflow time.Duration.
+		if days := (to.Unix()-from.Unix())/(24*60*60) + 1; to.Before(from) {
+			errs = append(errs, fmt.Errorf("to (%s) must not be before from (%s)", form.To, form.From))
+		} else if days > maxRangeDays {
+			errs = append(errs, fmt.Errorf("from..to spans %d days, at most %d are allowed", days, maxRangeDays))
+		}
 	}
 	if len(errs) > 0 {
 		return form, backtest.WalkForwardConfig{}, errors.Join(errs...)
 	}
-
 	wf := backtest.WalkForwardConfig{
 		Start:            from,
 		End:              to.AddDate(0, 0, 1),
@@ -144,9 +162,12 @@ func parseBacktestForm(c *gin.Context) (pages.PerformanceForm, backtest.WalkForw
 		ValidationPeriod: time.Duration(form.ValidationDays) * 24 * time.Hour,
 		ForwardPeriod:    time.Duration(form.ForwardDays) * 24 * time.Hour,
 	}
-	if len(wf.Splits()) == 0 {
+	switch n := wf.SplitCount(); {
+	case n == 0:
 		return form, backtest.WalkForwardConfig{}, fmt.Errorf("%s..%s is too short for one %d+%d+%d-day Training/Validation/Forward fold",
 			form.From, form.To, form.TrainingDays, form.ValidationDays, form.ForwardDays)
+	case n > maxSplits:
+		return form, backtest.WalkForwardConfig{}, fmt.Errorf("%d folds would run, at most %d are allowed; lengthen forward_days or shorten the range", n, maxSplits)
 	}
 	return form, wf, nil
 }

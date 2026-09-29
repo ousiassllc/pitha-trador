@@ -75,3 +75,21 @@ func (wf WalkForwardConfig) Splits() []Split {
 	}
 	return splits
 }
+
+// SplitCount returns len(wf.Splits()) without materializing the folds, so
+// callers can bound a request's cost before running it. Range lengths past
+// time.Duration's ~292 years saturate; callers should cap the range.
+func (wf WalkForwardConfig) SplitCount() int {
+	step := wf.StepPeriod
+	if step <= 0 {
+		step = wf.ForwardPeriod
+	}
+	if wf.TrainingPeriod <= 0 || wf.ValidationPeriod <= 0 || wf.ForwardPeriod <= 0 || step <= 0 {
+		return 0
+	}
+	slack := wf.End.Sub(wf.Start) - wf.TrainingPeriod - wf.ValidationPeriod - wf.ForwardPeriod
+	if slack < 0 {
+		return 0
+	}
+	return int(slack/step) + 1
+}
