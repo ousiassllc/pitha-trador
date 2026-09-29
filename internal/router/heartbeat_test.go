@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
 type countingRecorder struct{ calls int }
@@ -24,7 +25,9 @@ func (r *countingRecorder) RecordHeartbeat(context.Context, time.Time) error {
 	return nil
 }
 
-func TestNew_WithHeartbeatRecorderRecordsAuthenticatedPageAndActionRequests(t *testing.T) {
+// A burst of authenticated page/API/action requests (what one page view
+// fires) persists a single heartbeat: Heartbeat throttles writes (#147).
+func TestNew_WithHeartbeatRecorderRecordsAuthenticatedBurstOnce(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := &countingRecorder{}
 	engine := router.New(router.WithHeartbeatRecorder(recorder))
@@ -40,14 +43,12 @@ func TestNew_WithHeartbeatRecorderRecordsAuthenticatedPageAndActionRequests(t *t
 		{http.MethodGet, "/api/v1/scanner"},
 		{http.MethodPost, "/api/v1/system/pause"},
 	} {
-		before := recorder.calls
 		r := httptest.NewRequest(tc.method, tc.path, nil)
 		r.Header = req.Header.Clone() // session cookie + CSRF token
-		rec := httptest.NewRecorder()
-		engine.ServeHTTP(rec, r)
-		if recorder.calls != before+1 {
-			t.Errorf("%s %s (status %d) recorded %d heartbeats, want 1", tc.method, tc.path, rec.Code, recorder.calls-before)
-		}
+		engine.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	if recorder.calls != 1 {
+		t.Fatalf("burst of authenticated requests recorded %d heartbeats, want 1 (throttled)", recorder.calls)
 	}
 }
 
@@ -67,11 +68,17 @@ func TestNew_WithHeartbeatRecorderSkipsNonOperatorTraffic(t *testing.T) {
 	ws.AddCookie(authed.Cookies()[0])
 	engine.ServeHTTP(httptest.NewRecorder(), ws)
 
+	// Auto-fired resync (kill_switch push / WS reconnect) flagged by the panel.
+	resync := httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil)
+	resync.Header.Set(middleware.BackgroundHeader, "1")
+	resync.AddCookie(authed.Cookies()[0])
+	engine.ServeHTTP(httptest.NewRecorder(), resync)
+
 	// Unauthenticated (no cookie) page GET.
 	engine.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/scanner", nil))
 
 	if recorder.calls != 0 {
-		t.Fatalf("recorded %d heartbeats for polls/static/websocket/unauthenticated traffic, want 0", recorder.calls)
+		t.Fatalf("recorded %d heartbeats for polls/static/websocket/background/unauthenticated traffic, want 0", recorder.calls)
 	}
 }
 

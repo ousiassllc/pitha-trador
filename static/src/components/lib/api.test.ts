@@ -30,6 +30,24 @@ describe('get', () => {
   });
 });
 
+describe('get background', () => {
+  test('marks auto-fired requests with X-Pitha-Background only when asked', async () => {
+    const fetchMock = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await api.get('/api/v1/system/status');
+    await api.get('/api/v1/system/status', { background: true });
+
+    const headersOf = (n: number) =>
+      (fetchMock.mock.calls[n] as unknown as [string, RequestInit])[1].headers as Record<
+        string,
+        string
+      >;
+    expect(headersOf(0)['X-Pitha-Background']).toBeUndefined();
+    expect(headersOf(1)['X-Pitha-Background']).toBe('1');
+  });
+});
+
 describe('post', () => {
   test('sends the CSRF token from the meta tag and a JSON body', async () => {
     const meta = document.createElement('meta');

@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
 // TestNew_HeaderSSRsKillSwitchPanelFromSystemState is issue #106's
@@ -118,5 +119,21 @@ func TestNew_HeaderRendersNoActionsWhenSystemStateUnreadable(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `hx-trigger="load, systemStateChanged from:closest header"`) {
 		t.Errorf("#header-status must self-correct on load, got %q", rec.Body.String())
+	}
+}
+
+// #header-status is refreshed by systemStateChanged (panel push/resync/
+// action), never by the operator directly, so its request must carry the
+// background marker or it would extend the dead-man's switch (FR-RISK-6).
+func TestNew_HeaderStatusRefreshIsMarkedBackground(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(failingStateEngine{}))
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/calibration", nil))
+
+	want := `hx-headers="{&#34;` + middleware.BackgroundHeader + `&#34;:&#34;1&#34;}"`
+	alt := `hx-headers='{"` + middleware.BackgroundHeader + `":"1"}'`
+	if body := rec.Body.String(); !strings.Contains(body, want) && !strings.Contains(body, alt) {
+		t.Errorf("#header-status must send %s, got %q", middleware.BackgroundHeader, body)
 	}
 }

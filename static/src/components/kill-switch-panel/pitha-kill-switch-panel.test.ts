@@ -245,4 +245,22 @@ describe('pitha-kill-switch-panel', () => {
     expect(el.shadowRoot?.querySelector('[data-ws-status]')).toBeNull();
     expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore);
   });
+
+  test('sends every resync (initial, push, reconnect) as a background request, never the operator heartbeat', async () => {
+    const { el, fetchMock } = await mount('running');
+    const isBackground = (call: unknown): boolean => {
+      const init = (call as [unknown, RequestInit])[1];
+      return (init.headers as Record<string, string>)['X-Pitha-Background'] === '1';
+    };
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.every(isBackground)).toBe(true);
+
+    fetchMock.mockClear();
+    FakeWebSocket.instances[0].emit('message', {
+      data: JSON.stringify({ type: 'kill_switch', reason: 'operator_heartbeat_timeout' }),
+    });
+    await flush(el);
+    expect(fetchMock.mock.calls.length).toBe(1);
+    expect(isBackground(fetchMock.mock.calls[0])).toBe(true);
+  });
 });
