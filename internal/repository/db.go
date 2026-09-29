@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -126,4 +127,30 @@ func migrateUp(conn *sql.DB) error {
 	}
 
 	return nil
+}
+
+// BackupTo writes a transactionally consistent copy of the database
+// behind conn to destPath (docs/requirements/non-functional.md §3 "DB
+// バックアップ"). It first runs `PRAGMA wal_checkpoint(TRUNCATE)` so the
+// WAL's contents are folded into the main database file and the -wal
+// file is emptied, then `VACUUM INTO` produces the copy. A plain file
+// copy of the .db file would be torn if another pooled connection wrote
+// or auto-checkpointed mid-copy; VACUUM INTO reads a single snapshot and
+// so is safe while the application keeps writing. destPath MUST NOT
+// already exist (SQLite refuses to overwrite it) and its parent
+// directory MUST exist.
+//
+// A checkpoint that cannot fully complete (busy != 0: a concurrent
+// reader/writer blocked the TRUNCATE) is not an error - the snapshot
+// taken by VACUUM INTO remains consistent - but is reported via the
+// returned checkpointBusy flag so the caller can log it.
+func BackupTo(ctx context.Context, conn *sql.DB, destPath string) (checkpointBusy bool, err error) {
+	var busy, walFrames, checkpointed int
+	if err := conn.QueryRowContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &walFrames, &checkpointed); err != nil {
+		return false, fmt.Errorf("repository: wal checkpoint before backup: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, "VACUUM INTO ?", destPath); err != nil {
+		return busy != 0, fmt.Errorf("repository: vacuum into %q: %w", destPath, err)
+	}
+	return busy != 0, nil
 }
