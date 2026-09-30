@@ -44,10 +44,10 @@ pitha-trador/
 │   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, instance_lock.go, wails.json）。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
 │   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go。CI・WebView2が動かない環境向け）
 ├── internal/
-│   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, lifecycle.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）のみ
+│   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, lifecycle.go）、定数（constants.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）のみ
 │   │   ├── candidates/           # 候補銘柄の定期更新（Fast Screener実行・jev-scoutのenqueue・更新間隔ティッカー。#246）
 │   │   ├── marketdatajob/        # market-data / feature-calc ジョブハンドラ（板→Reading変換・イベント再評価enqueue。#246）
-│   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`BacktestSource`。#246）
+│   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`backtestsource.Source`。#246）
 │   │   ├── heldposition/         # FR-SCHED-4 保有ポジション監視・Exit評価ループ（5〜15秒周期、最新板で再評価）
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
 │   │   └── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
@@ -160,7 +160,7 @@ pitha-trador/
 
 レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
-`repository`（#244）と`web/handler`（#245）は分割済み。`bootstrap`/`service/risk`は分割後（#134、実装は#246・#247）の**目標構成**を上のツリーに記載している。実装は各Issueで順次反映するため、それぞれのマージまでは実ディレクトリがフラットな構成のままで、ツリーとの差異は意図したものである（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
+`repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）は分割済み。`service/risk`は分割後（#134、実装は#247）の**目標構成**を上のツリーに記載している。実装はIssueごとに順次反映するため、#247のマージまでは`service/risk`の実ディレクトリがフラットな構成のままで、ツリーとの差異は意図したものである（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
 
 - 兄弟サブパッケージ同士はimportしない。共有コードは`sqlutil`/`sqlitedb`/`handler/shared`のようなリーフ・ヘルパー用サブパッケージへ切り出す。リソース群を跨ぐ読み取りは`decisiontrade`のように専用サブパッケージ（`repository`ではリーフ・ヘルパーとdomainのみに依存）へ置く
 - サブパッケージは親パッケージをimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る
@@ -174,7 +174,7 @@ pitha-trador/
 |-----------|---------|---------|
 | `repository`（#244） | テーブルの結合度でリソース群に分ける（`market`/`jobqueue`/`judgement`/`trading`/`system`）。各リポジトリ型はそのテーブルを所有する群に置き、群内のファイル名は`*_repo.go`を維持する。`formatTime`/`nullable*`/`rowScanner`/`execer`/`sqlExecutor`は`sqlutil`へ（公開名にする）、`db.go`・`dbmw.go`は`sqlitedb`へ。既存の`decisiontrade`/`snapshotcols`は現位置を維持 | 群 → `sqlutil`・`domain`。`sqlitedb` → `domain`。群同士・本番コードでの群→`sqlitedb`は禁止（テストのDB準備のみ`_test.go`から`sqlitedb.Open`可）。`system`のみ`internal/config`も可 |
 | `web/handler`（#245） | 画面/APIの責務別に`symbol`/`system`/`settings`/`activity`へ分け、小さい一覧・分析系ハンドラは直下に残す。`settings/`のテストは表示・保存・削除・セットアップの観点でファイルを分割している（共通のフェイクは`testutil_test.go`）。`action_error.go`・`ws_poll.go`（と各WebSocketハンドラが共用していた`writeJSON`）は`shared`へ移し公開名にした（直下・全サブパッケージ・`router`が共用。`RespondActionError`/`RespondPageError`/`PollWebSocket`/`WriteJSON`/`RenderErrorPage`）。クライアント切断で即終了する回帰テスト（#127）は各WebSocketハンドラを所有するパッケージ（直下`scanner_test.go`・`symbol`・`system`）が個別に持ち、テストが兄弟を跨がない | 直下・サブパッケージ → `service`・`domain`・`shared`・Templ（`web/atoms`・`web/pages`等）。`shared` → Templ のみ（handler・`service`に依存しない）。`repository/**`は不可。サブパッケージ同士・直下への逆import禁止。`router` → 直下・`shared`・全サブパッケージ |
-| `bootstrap`（#246） | 直下は組み立て役（`Run`/`State`/`Services`/`BuildServices`/`Start`/`Stop`）のみ。ジョブ/ループ単位の責務を`candidates`/`marketdatajob`/`backtestsource`へ切り出す（既存の`heldposition`/`paperexec`/`alerts`と同格）。切り出し先は`Services`ではなく必要な依存だけをフィールドに持つ構造体に対するメソッドとして実装する | 直下 → 全サブパッケージ・`service`・`repository`・`sqlitedb`。サブパッケージ → `service`・`domain`・`repository`群のみ。親・兄弟への依存禁止 |
+| `bootstrap`（#246） | 直下は組み立て役（`Run`/`State`/`Services`/`BuildServices`/`Start`/`Stop`）のみ。ジョブ/ループ単位の責務を`candidates`/`marketdatajob`/`backtestsource`へ切り出す（既存の`heldposition`/`paperexec`/`alerts`と同格）。切り出し先は`Services`ではなく必要な依存だけをフィールドに持つ構造体（`candidates.Refresher`・`marketdatajob.Handler`・`backtestsource.Source`）に対するメソッドとして実装し、直下の`BuildServices`が引数で組み立てる（`marketdatajob.BoardSource`のような小さなインターフェース経由で依存を受ける）。テストは各サブパッケージ内で最小のフェイク/実DBを組み立て、`Services`全体には依存しない。直下のテストは`BuildServices`の配線検証のみ | 直下 → 全サブパッケージ・`service`・`repository`・`sqlitedb`。サブパッケージ → `service`・`domain`・`repository`群のみ。親・兄弟への依存禁止 |
 | `service/risk`（#247） | `Engine`のメソッド群（`check.go`のCheck・`state.go`の状態遷移・`losslimit.go`の損失上限・`monitor.go`の定期監視・`warning.go`の日次損失警告・`autoresume.go`・`baseline.go`・`session.go`・`settings.go`・`sizing.go`）は`Engine`のunexported状態を共有するため**分割せず**`risk`直下に保つ（本番コードのみで約1.6k行＝ディレクトリ上限内）。行数上限は、`package risk_test`の外部テスト（現状936行）を`killswitchflow`に倣ってテスト専用サブパッケージ（`checkflow`=Check、`monitorflow`=監視・警告・Notifier）へ移して満たす | テスト専用サブパッケージ → `risk`（公開API）のみ。本番の依存方向（`risk` → `domain`・`repository/**`・`config`）は変更しない |
 
 ### レイヤー依存ルール（HALT準拠）
@@ -270,3 +270,4 @@ handler → service → repository → domain
 | 1.25 | 2026-09-30 | §9に自動アップデート周期確認の再試行（取得失敗・安全ゲート保留は指数バックオフで再試行）を追記 | issue #240 |
 | 1.26 | 2026-09-30 | §3の`repository`を実装に合わせて分割済みと明記（`sqlutil`/`sqlitedb`/`market`/`jobqueue`/`judgement`/`trading`/`system`。直下のファイルは廃止）。テストDB準備のみ`_test.go`から`sqlitedb.Open`可・他リソース群のデータはSQLで直接用意する（兄弟import禁止の維持） | issue #244 |
 | 1.27 | 2026-09-30 | §3の`web/handler`を実装に合わせて分割済みと明記（`shared`/`symbol`/`system`/`settings`/`activity`。`shared`の公開ヘルパー名、`settings`テストの分割、`router`テストの統合によるディレクトリ行数維持） | issue #245 |
+| 1.28 | 2026-09-30 | §3の`bootstrap`を実装に合わせて分割済みと明記（`candidates`/`marketdatajob`/`backtestsource`を追加し、直下に`constants.go`を新設。`BacktestSource`は`backtestsource.Source`、`Services`メソッドは各サブパッケージの構造体メソッドへ移動）。テストは対象サブパッケージへ移設 | issue #246 |

@@ -27,7 +27,7 @@ const expectancyDegradationTolerance = 0.20
 // trade_signals/jev_decisions/calibration_outcomes"): one RunConfig per
 // instrument, its Thresholds already set to the *current* (pre-proposal)
 // policy.* values - Governor overrides only RunConfig.Thresholds.Policy
-// for the candidate pass. internal/bootstrap's BacktestSource is the
+// for the candidate pass. internal/bootstrap/backtestsource's Source is the
 // production implementation (RunConfigs assembled from the recorded
 // market_snapshots/jev_decisions under RuntimePolicy's thresholds).
 type ShadowBacktestSource interface {

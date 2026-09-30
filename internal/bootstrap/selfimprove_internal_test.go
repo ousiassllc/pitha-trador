@@ -12,7 +12,7 @@ import (
 )
 
 func TestBuildServices_AppliedPolicySettingReachesLivePolicyEngine(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 	ctx := context.Background()
 	at := time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC)
@@ -55,7 +55,7 @@ func TestBuildServices_AppliedPolicySettingReachesLivePolicyEngine(t *testing.T)
 }
 
 func TestBuildServices_RegistersSelfImproveHandler(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	ctx := context.Background()
 	job, err := svc.Jobs.Enqueue(ctx, jobqueue.JobQueueAnalytics, "{}", time.Now().UTC())
 	if err != nil {
@@ -95,7 +95,7 @@ func TestBuildServices_RegistersSelfImproveHandler(t *testing.T) {
 // Not one lot fits max_position_per_symbol_pct (600,000 yen) at 400,000 yen:
 // no order is submitted.
 func TestPaperExecutor_SkipsEntryWhenNoLotFitsLimits(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 400_000, Timestamp: time.Now().UTC()}
 	if err := (paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {

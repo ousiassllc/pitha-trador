@@ -1,4 +1,4 @@
-package bootstrap
+package candidates
 
 import (
 	"context"
@@ -18,13 +18,13 @@ func lenientFastScreener() config.FastScreenerConfig {
 	}
 }
 
-func TestRefreshCandidates_ScreenScoreIncludesBreakoutStrengthFromSnapshotHistory(t *testing.T) {
-	svc := newTestServices(t, nil)
+func TestRefresh_ScreenScoreIncludesBreakoutStrengthFromSnapshotHistory(t *testing.T) {
+	refresher := newTestRefresher(t)
 	cfg := lenientFastScreener()
 	cfg.Weights = config.FastScreenerWeights{BreakoutStrength: 1}
-	svc.strategy.FastScreener = cfg
+	refresher.Strategy.FastScreener = cfg
 
-	inst := mustCreateInstrument(t, svc, "7203")
+	inst := mustCreateInstrument(t, refresher, "7203")
 	now := time.Now().UTC().Truncate(time.Minute)
 	bar := func(minutesAgo int, price float64) domain.Snapshot {
 		return domain.Snapshot{
@@ -37,17 +37,17 @@ func TestRefreshCandidates_ScreenScoreIncludesBreakoutStrengthFromSnapshotHistor
 		}
 	}
 	// Prior 5 minutes peak at 2000; the latest bar prints 2100.
-	if _, err := svc.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{
+	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{
 		bar(3, 1990), bar(2, 2000), bar(1, 1995), bar(0, 2100),
 	}); err != nil {
 		t.Fatalf("InsertBatch: %v", err)
 	}
 
-	if err := svc.refreshCandidates(context.Background()); err != nil {
-		t.Fatalf("refreshCandidates: %v", err)
+	if err := refresher.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
 	}
 
-	candidates, _, err := svc.Screener.Candidates(context.Background())
+	candidates, _, err := refresher.Screener.Candidates(context.Background())
 	if err != nil {
 		t.Fatalf("Candidates: %v", err)
 	}
@@ -59,12 +59,12 @@ func TestRefreshCandidates_ScreenScoreIncludesBreakoutStrengthFromSnapshotHistor
 	}
 }
 
-func TestRefreshCandidates_RuntimeSettingsOverrideStrategyFilters(t *testing.T) {
-	svc := newTestServices(t, nil)
-	svc.strategy.FastScreener = lenientFastScreener()
+func TestRefresh_RuntimeSettingsOverrideStrategyFilters(t *testing.T) {
+	refresher := newTestRefresher(t)
+	refresher.Strategy.FastScreener = lenientFastScreener()
 
-	inst := mustCreateInstrument(t, svc, "7203")
-	if _, err := svc.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
+	inst := mustCreateInstrument(t, refresher, "7203")
+	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: time.Now().UTC(),
 		Price: 2500, Volume: 1000, Turnover: 2_500_000, SpreadBps: ptrF(10),
 		Feature: domain.Feature{
@@ -77,10 +77,10 @@ func TestRefreshCandidates_RuntimeSettingsOverrideStrategyFilters(t *testing.T) 
 
 	count := func() int {
 		t.Helper()
-		if err := svc.refreshCandidates(ctx); err != nil {
-			t.Fatalf("refreshCandidates: %v", err)
+		if err := refresher.Refresh(ctx); err != nil {
+			t.Fatalf("Refresh: %v", err)
 		}
-		candidates, _, err := svc.Screener.Candidates(ctx)
+		candidates, _, err := refresher.Screener.Candidates(ctx)
 		if err != nil {
 			t.Fatalf("Candidates: %v", err)
 		}
@@ -92,15 +92,15 @@ func TestRefreshCandidates_RuntimeSettingsOverrideStrategyFilters(t *testing.T) 
 	}
 
 	// FR-FS-3: a DB value raises min_price above the price and takes
-	// effect on the very next refresh, without touching svc.strategy.
-	if err := svc.Settings.Set(ctx, "screener.min_price", "3000", time.Now().UTC()); err != nil {
+	// effect on the very next refresh, without touching refresher.Strategy.
+	if err := refresher.Settings.Set(ctx, "screener.min_price", "3000", time.Now().UTC()); err != nil {
 		t.Fatalf("Settings.Set: %v", err)
 	}
 	if got := count(); got != 0 {
 		t.Errorf("candidates with screener.min_price=3000 = %d, want 0", got)
 	}
 
-	if err := svc.Settings.Set(ctx, "screener.min_price", "1000", time.Now().UTC()); err != nil {
+	if err := refresher.Settings.Set(ctx, "screener.min_price", "1000", time.Now().UTC()); err != nil {
 		t.Fatalf("Settings.Set: %v", err)
 	}
 	if got := count(); got != 1 {
@@ -108,23 +108,23 @@ func TestRefreshCandidates_RuntimeSettingsOverrideStrategyFilters(t *testing.T) 
 	}
 }
 
-func TestRefreshCandidates_ReturnsErrorForMalformedRuntimeSetting(t *testing.T) {
-	svc := newTestServices(t, nil)
-	if err := svc.Settings.Set(context.Background(), "screener.top_n", `"many"`, time.Now().UTC()); err != nil {
+func TestRefresh_ReturnsErrorForMalformedRuntimeSetting(t *testing.T) {
+	refresher := newTestRefresher(t)
+	if err := refresher.Settings.Set(context.Background(), "screener.top_n", `"many"`, time.Now().UTC()); err != nil {
 		t.Fatalf("Settings.Set: %v", err)
 	}
 
-	if err := svc.refreshCandidates(context.Background()); err == nil {
-		t.Fatal("refreshCandidates returned nil error, want error for a non-numeric screener.top_n")
+	if err := refresher.Refresh(context.Background()); err == nil {
+		t.Fatal("Refresh returned nil error, want error for a non-numeric screener.top_n")
 	}
 }
 
 // Regression for #163: turnover_5m is a cumulative difference, not a sum.
-func TestRefreshCandidates_Turnover5mIsCumulativeDifference(t *testing.T) {
-	svc := newTestServices(t, nil)
+func TestRefresh_Turnover5mIsCumulativeDifference(t *testing.T) {
+	refresher := newTestRefresher(t)
 	cfg := lenientFastScreener()
 	cfg.MinTurnover5mJPY = 30_000_000
-	svc.strategy.FastScreener = cfg
+	refresher.Strategy.FastScreener = cfg
 
 	now := time.Now().UTC().Truncate(time.Minute)
 	series := func(inst domain.Instrument, cumulativeAt func(minutesAgo int) float64) {
@@ -137,16 +137,16 @@ func TestRefreshCandidates_Turnover5mIsCumulativeDifference(t *testing.T) {
 				Feature: domain.Feature{VWAP: 2000, VolumeRatio5m: ptrF(1), Return5m: ptrF(0.01), RealizedVol5m: ptrF(0.01)},
 			})
 		}
-		if _, err := svc.Snapshots.InsertBatch(context.Background(), bars); err != nil {
+		if _, err := refresher.Snapshots.InsertBatch(context.Background(), bars); err != nil {
 			t.Fatalf("InsertBatch: %v", err)
 		}
 	}
 	// Illiquid: cumulative 1e9, nothing traded (a 5-bar sum reads 5e9).
-	series(mustCreateInstrument(t, svc, "1111"), func(int) float64 { return 1e9 })
+	series(mustCreateInstrument(t, refresher, "1111"), func(int) float64 { return 1e9 })
 	liquid := func(m int) float64 { return 1e9 - float64(m)*10e6 }
-	series(mustCreateInstrument(t, svc, "2222"), liquid)
+	series(mustCreateInstrument(t, refresher, "2222"), liquid)
 	// Index instruments are never screened.
-	topix, err := svc.Instruments.Create(context.Background(), domain.Instrument{
+	topix, err := refresher.Instruments.Create(context.Background(), domain.Instrument{
 		Symbol: "TOPIX", Name: "TOPIX", Market: "TSE", Kind: domain.InstrumentKindMarketIndex, IsActive: true,
 	})
 	if err != nil {
@@ -154,10 +154,10 @@ func TestRefreshCandidates_Turnover5mIsCumulativeDifference(t *testing.T) {
 	}
 	series(topix, liquid)
 
-	if err := svc.refreshCandidates(context.Background()); err != nil {
-		t.Fatalf("refreshCandidates: %v", err)
+	if err := refresher.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
 	}
-	candidates, _, err := svc.Screener.Candidates(context.Background())
+	candidates, _, err := refresher.Screener.Candidates(context.Background())
 	if err != nil {
 		t.Fatalf("Candidates: %v", err)
 	}

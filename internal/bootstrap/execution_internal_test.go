@@ -2,13 +2,11 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
 
@@ -38,7 +36,7 @@ func mustOpenPaperPosition(t *testing.T, svc *Services, inst domain.Instrument, 
 }
 
 func TestPaperExecutor_SizesEntryFromRiskLimitsAndSkipsRepeatEntry(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 
 	position := mustOpenPaperPosition(t, svc, inst, 2500)
@@ -62,7 +60,7 @@ func TestPaperExecutor_SizesEntryFromRiskLimitsAndSkipsRepeatEntry(t *testing.T)
 }
 
 func TestBuildServices_KillSwitchForceClosesOpenPaperPositions(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 	position := mustOpenPaperPosition(t, svc, inst, 2500)
 
@@ -79,39 +77,10 @@ func TestBuildServices_KillSwitchForceClosesOpenPaperPositions(t *testing.T) {
 	}
 }
 
-func TestHandleMarketData_ClosesPaperPositionWhenNewBarHitsStopLoss(t *testing.T) {
-	server := kabuFakeServer(t, map[string]any{
-		"Symbol": "7203", "CurrentPrice": 2400.0, "VWAP": 2450.0,
-		"TradingVolume": 1000000.0, "TradingValue": 2.4e9,
-	})
-	defer server.Close()
-
-	svc := newTestServices(t, server)
-	inst := mustCreateInstrument(t, svc, "7203")
-	position := mustOpenPaperPosition(t, svc, inst, 2500)
-	if _, err := svc.MarketData.IssueToken(context.Background()); err != nil {
-		t.Fatalf("IssueToken: %v", err)
-	}
-
-	payload, _ := json.Marshal(marketDataJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
-	if err := svc.handleMarketData(context.Background(), jobqueue.Job{PayloadJSON: string(payload)}); err != nil {
-		t.Fatalf("handleMarketData: %v", err)
-	}
-
-	closed, err := svc.Positions.Get(context.Background(), position.ID)
-	if err != nil {
-		t.Fatalf("Get position: %v", err)
-	}
-	// 2500 -> 2400 is -4%, past config/risk.yaml-derived stop_loss_pct=0.6.
-	if closed.IsOpen() || closed.ExitReason == nil || *closed.ExitReason != domain.ExitReasonStopLoss {
-		t.Errorf("position after -4%% bar = %+v, want closed with %q", closed, domain.ExitReasonStopLoss)
-	}
-}
-
 // Wiring: the Engine BuildServices builds gates entries to 東証立会時間,
 // and a signal arriving after the close is dropped rather than retried.
 func TestPaperExecutor_DropsEntryOutsideTradingSession(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 	night := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 2500, Timestamp: tradingHours.Add(11 * time.Hour)}
 	executor := paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}

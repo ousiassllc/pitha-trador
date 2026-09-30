@@ -30,7 +30,7 @@ func (s *Services) Start(ctx context.Context) error {
 		// scope note) must not prevent the rest of the process (Scanner
 		// Dashboard, API, other queues) from starting: log and continue
 		// with no token. Every subsequent GetBoard call simply fails
-		// (ErrNoToken or a request error) and handleMarketData's own
+		// (ErrNoToken or a request error) and marketdatajob.Handler's own
 		// per-job error handling already covers that.
 		slog.Error("bootstrap: kabuステーションAPI initial token issuance failed, continuing without a token", "error", err)
 	}
@@ -41,7 +41,7 @@ func (s *Services) Start(ctx context.Context) error {
 	}
 
 	s.wg.Add(1)
-	go s.candidateRefreshTicker(ctx)
+	go func() { defer s.wg.Done(); s.candidates.Run(ctx) }()
 
 	s.wg.Add(1)
 	go func() { // FR-SCHED-4 / issue #156
@@ -66,11 +66,12 @@ func (s *Services) Start(ctx context.Context) error {
 
 // Stop stops the Scheduler's worker pool and cron triggers
 // (scheduler.Scheduler.Stop) and waits for every extra goroutine Start
-// launched (currently: candidateRefreshTicker) to exit. Those extra
-// goroutines are tied to the ctx passed to Start, not to this method:
-// callers cancel that same ctx (e.g. via context.WithCancel in
-// main/OnStartup, canceled from OnShutdown) to stop them, then call Stop
-// to block until they (and the Scheduler) have actually exited.
+// launched (the candidate-refresh ticker, held-position monitor, PUSH
+// feed, news ingest) to exit. Those extra goroutines are tied to the ctx
+// passed to Start, not to this method: callers cancel that same ctx (e.g.
+// via context.WithCancel in main/OnStartup, canceled from OnShutdown) to
+// stop them, then call Stop to block until they (and the Scheduler) have
+// actually exited.
 func (s *Services) Stop() {
 	s.Scheduler.Stop()
 	s.wg.Wait()

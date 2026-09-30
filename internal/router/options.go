@@ -117,7 +117,7 @@ func WithActivitySource(source activity.ActivitySource) Option {
 
 // WithBacktestRunner overrides `GET /performance`'s backing
 // internal/web/handler.BacktestRunner. cmd/desktop and cmd/server pass
-// internal/bootstrap's BacktestSource; the empty
+// internal/bootstrap/backtestsource's Source; the empty
 // handler.StaticBacktestRunner default only serves router-level tests.
 func WithBacktestRunner(runner handler.BacktestRunner) Option {
 	return func(o *options) { o.backtestRunner = runner }
