@@ -48,7 +48,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 |---------|------|------|------|
 | GET | `/system/status` | システム状態バッジのフラグメント再取得（Lit→HTMX間接連携: `systemStateChanged`イベント受信時にHeaderが呼び出す）。Kill Switchの操作（pause/resume/kill）はHTMXアクションルートを持たず、`pitha-kill-switch-panel`が§5の`/api/v1/system/*`を呼ぶ（issue #108） | システム状態バッジ |
 | GET | `/system/update-status` | 新バージョン検知バナーのフラグメント再取得（Headerの`#update-banner`が`load`・60秒周期・`updateStatusChanged`イベントで呼び出す）。新バージョンが無い/アップデーター未搭載（`cmd/server`）なら空 | `UpdateBanner`（安全ゲート待ち/再起動直前の状態を明示） |
-| GET | `/system/update-panel` | Settings画面`#update-panel`のフラグメント取得（現在バージョン・最終確認結果・確認ボタン） | `UpdatePanel` |
+| GET | `/system/update-panel` | Settings画面`#update-panel`のフラグメント取得（現在バージョン・最終確認結果・安全ゲート保留の理由・失敗の種別・確認ボタン）。アップデーター未搭載（`cmd/server`）ではその旨の説明のみ返す（確認ボタンなし） | `UpdatePanel` |
 | POST | `/system/update-check` | 「今すぐアップデートを確認」。スケジューラーと同じ`CheckForUpdate`を即時実行し、`HX-Trigger: updateStatusChanged`付きで`UpdatePanel`を返す。確認失敗もパネル内表示（HTTP 200）。アップデーター未搭載なら404 | `UpdatePanel` |
 | POST | `/settings/:key` | 単一キーの保存（フォーム項目`value`）。他キーには一切影響しない。`:key`が許可キー一覧（`internal/config`のallow-list: JEV_*/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_*/NEWS_FEED_*/SOL_*/OPUS_*）に無い場合、または`value`が前後空白トリム後に空の場合は400（空入力で保存済みの値が消えることはない）。`value`は保存前に前後空白をトリムし、キー別に検証する（URL系6キー: `http`/`https`かつホスト非空、その他: 制御文字・改行を含まない）。違反は400で保存せず、Setup Guardも解除されない。反映はアプリ再起動後（issue #79/#235） | 更新後の`SecretFieldRow`フラグメント |
 | DELETE | `/settings/:key` | 単一キーの削除。他キーには一切影響しない。`:key`が許可キー一覧に無い場合は400（issue #79） | 更新後の`SecretFieldRow`フラグメント |
@@ -110,3 +110,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.14 | 2026-09-29 | `/calibration`に`by_direction`・バケット別`avg_confidence`/`sample_count`/PnLを追加、`/symbols/{symbol}`の`risk`を実設定連動と明記、`/decisions`・`/signals`の`limit`（1〜500）・`{symbol}`検証を追記 | issue #141/#164/#148/#162実装 |
 | 1.15 | 2026-09-29 | §1 Session拒否（403）とRecoveryのpanic 500を、ページ遷移にはErrorPageで返すよう変更（HTMX/API/WebSocketは従来どおり） | issue #171 |
 | 1.16 | 2026-09-29 | §7に`/api/v1`の5xx固定メッセージ化（原因はslogへ、`internal/web/apierror`）を反映済みであることを変更履歴へ記録 | issue #215/#219 |
+| 1.17 | 2026-09-30 | `/system/update-panel`が保留理由・失敗種別を表示し、アップデーター未搭載時は説明を返すよう変更 | issue #241 |

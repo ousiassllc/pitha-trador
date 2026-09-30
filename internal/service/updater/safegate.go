@@ -75,35 +75,58 @@ func (g SafeGate) minIdle() time.Duration {
 	return defaultMinIdleAfterOrder
 }
 
+// BlockKind identifies which SafeGate condition held an installation back,
+// so the UI can name it (issue #241). The zero value means "not blocked".
+type BlockKind string
+
+const (
+	// BlockOpenPositions: at least one open position exists.
+	BlockOpenPositions BlockKind = "open_positions"
+	// BlockKillSwitch: the Kill Switch is active.
+	BlockKillSwitch BlockKind = "kill_switch"
+	// BlockRecentOrder: an order was submitted too recently.
+	BlockRecentOrder BlockKind = "recent_order"
+	// BlockCheckFailed: a gate's own lookup failed, so safety could not be
+	// established (fail closed).
+	BlockCheckFailed BlockKind = "check_failed"
+)
+
+// BlockReason is why SafeToUpdate rejected an installation: Kind for the
+// UI, Detail (English, with counts/durations) for the log.
+type BlockReason struct {
+	Kind   BlockKind
+	Detail string
+}
+
 // SafeToUpdate reports whether every gate passes, and - when it does not
-// - a human-readable reason identifying the first failing gate (checked
-// in the order: open positions, Kill Switch, then a too-recent order).
-func (g SafeGate) SafeToUpdate(ctx context.Context) (bool, string) {
+// - the reason identifying the first failing gate (checked in the order:
+// open positions, Kill Switch, then a too-recent order).
+func (g SafeGate) SafeToUpdate(ctx context.Context) (bool, BlockReason) {
 	count, err := g.Positions.OpenPositionCount(ctx)
 	if err != nil {
-		return false, fmt.Sprintf("open position count check failed: %v", err)
+		return false, BlockReason{BlockCheckFailed, fmt.Sprintf("open position count check failed: %v", err)}
 	}
 	if count > 0 {
-		return false, fmt.Sprintf("open positions: count=%d", count)
+		return false, BlockReason{BlockOpenPositions, fmt.Sprintf("open positions: count=%d", count)}
 	}
 
 	state, events, err := g.State.State(ctx)
 	if err != nil {
-		return false, fmt.Sprintf("system state check failed: %v", err)
+		return false, BlockReason{BlockCheckFailed, fmt.Sprintf("system state check failed: %v", err)}
 	}
 	if state == domain.SystemStateKilled {
-		return false, fmt.Sprintf("kill switch active: %d unresolved event(s)", len(events))
+		return false, BlockReason{BlockKillSwitch, fmt.Sprintf("kill switch active: %d unresolved event(s)", len(events))}
 	}
 
 	orders, err := g.Orders.ListOrders(ctx, "", 1)
 	if err != nil {
-		return false, fmt.Sprintf("recent order check failed: %v", err)
+		return false, BlockReason{BlockCheckFailed, fmt.Sprintf("recent order check failed: %v", err)}
 	}
 	if len(orders) > 0 {
 		if elapsed := g.now().Sub(orders[0].SubmittedAt); elapsed < g.minIdle() {
-			return false, fmt.Sprintf("recent order: submitted %s ago, need %s", elapsed, g.minIdle())
+			return false, BlockReason{BlockRecentOrder, fmt.Sprintf("recent order: submitted %s ago, need %s", elapsed, g.minIdle())}
 		}
 	}
 
-	return true, ""
+	return true, BlockReason{}
 }

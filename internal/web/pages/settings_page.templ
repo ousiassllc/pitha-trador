@@ -21,6 +21,14 @@ type SettingsProps struct {
 templ SettingsPage(props SettingsProps) {
 	@layout.Shell("Settings") {
 		<h1 class="text-2xl font-bold text-slate-900">Settings</h1>
+		// Header's version link lands here (`/settings#update-panel`), so it
+		// sits right under the title, inside the first screen, instead of
+		// below the secret-field rows where the anchor could not scroll it
+		// into view; `:target` rings it once arrived. Filled in by `GET
+		// /system/update-panel` (organisms.UpdatePanel) on load and swapped
+		// in place by its "今すぐアップデートを確認" button; `empty:hidden`
+		// keeps the not-yet-loaded wrapper from showing a bare ring.
+		<div id="update-panel" class="mt-4 scroll-mt-4 rounded-md target:ring-2 target:ring-blue-500 empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 		<div class="mt-4 flex flex-col gap-4" data-testid="settings-form">
 			<p class="text-sm text-slate-600">
 				項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。保存・削除の反映にはアプリの再起動が必要です。
@@ -29,9 +37,5 @@ templ SettingsPage(props SettingsProps) {
 				@molecules.SecretFieldRow(field)
 			}
 		</div>
-		// Filled in by `GET /system/update-panel` (organisms.UpdatePanel)
-		// on load, and swapped in place by its "今すぐアップデートを確認"
-		// button; stays empty on cmd/server (no updater wired).
-		<div id="update-panel" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 	}
 }

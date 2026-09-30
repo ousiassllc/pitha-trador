@@ -267,3 +267,4 @@ handler → service → repository → domain
 | 1.22 | 2026-09-29 | §3の`internal/web/`ツリーに`apierror/`を追加、§4にAPI Error Formatter行を新設 | issue #215/#219 |
 | 1.23 | 2026-09-29 | §3ツリーに`internal/safego`を追加、§4にBackground Task Guard行を新設、§3レイヤー依存ルールに基盤パッケージとして`safego`を追記 | issue #226/#229 |
 | 1.24 | 2026-09-30 | §3の「ディレクトリ＝レイヤー」規約を「サブパッケージ単位の責務」規約へ改め、`repository`（`sqlutil`/`sqlitedb`/`market`/`jobqueue`/`judgement`/`trading`/`system`）・`web/handler`（`shared`/`symbol`/`system`/`settings`/`activity`）・`bootstrap`（`candidates`/`marketdatajob`/`backtestsource`）・`service/risk`（Engine集約＋テスト専用`checkflow`/`monitorflow`）の分割後構成とサブパッケージ間の依存方向を確定。レイヤー依存ルールをサブツリー全体（depguardのプレフィックス一致）へ適用する形に更新し、`.linterlyignore`の手書きソース除外を全廃する方針（許容は`*_templ.go`と`**/logs/**`のみ）を明記 | issue #243（#134の先行仕様更新） |
+| 1.25 | 2026-09-30 | §9に自動アップデート周期確認の再試行（取得失敗・安全ゲート保留は指数バックオフで再試行）を追記 | issue #240 |

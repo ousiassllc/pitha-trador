@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository"
-	"github.com/ousiassllc/pitha-trador/internal/safego"
+	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/updatecheck"
 )
 
 // HeartbeatChecker is the internal/service/risk.Engine method
@@ -82,12 +82,20 @@ type UpdateChecker interface {
 	CheckForUpdate(ctx context.Context) error
 }
 
+// WithUpdateRetryBackoff overrides the delays between retries of a failed
+// or held update check (defaults: updatecheck.DefaultInitial doubling up to
+// updatecheck.DefaultMax).
+func WithUpdateRetryBackoff(initial, maxDelay time.Duration) Option {
+	return func(s *Scheduler) { s.updateBackoff.initial, s.updateBackoff.max = initial, maxDelay }
+}
+
 // WithUpdateChecker enables Start's GitHub Releases update-check
 // trigger (issue #65): once immediately when Start is called, then
 // every 6 hours after (issue #71 - robfig/cron/v3's "@every 6h" alone
-// only fires 6h after Start, never on Start itself). cmd/desktop only;
-// cmd/server never configures this (it has no installer to run). Unset
-// by default.
+// only fires 6h after Start, never on Start itself), retrying a failed or
+// safety-gate-held check with backoff in between (issue #240;
+// updatecheck/). cmd/desktop only; cmd/server never configures this (it
+// has no installer to run). Unset by default.
 func WithUpdateChecker(checker UpdateChecker) Option {
 	return func(s *Scheduler) { s.updateChecker = checker }
 }
@@ -211,14 +219,6 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 		return err
 	}
 	if s.updateChecker != nil {
-		checkForUpdate := func() {
-			if err := s.CheckForUpdate(ctx); err != nil {
-				slog.Error("scheduler: update check failed", "error", err)
-			}
-		}
-		if _, err := s.cron.AddFunc(updateCheckCronSpec, checkForUpdate); err != nil {
-			return fmt.Errorf("scheduler: register update-check trigger: %w", err)
-		}
 		// robfig/cron/v3's "@every 6h" (updateCheckCronSpec) computes its
 		// first Next(now) as now.Add(6h), never now itself (issue #71),
 		// so without this immediate run a process whose lifetime never
@@ -226,16 +226,15 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 		// would never perform a single update check. Runs async (not
 		// inline here) since CheckForUpdate downloads+verifies an
 		// installer on a newer release and must not delay Start/the
-		// caller's startup sequence. Tracked on s.wg (like runWorker's
-		// goroutines) so Stop's `s.wg.Wait()` blocks until this check has
-		// actually returned, instead of Stop reporting done while an
-		// installer download/verification is still in flight.
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
-			defer safego.Recover("update check")
-			checkForUpdate()
-		}()
+		// caller's startup sequence. A failed or safety-gate-held check
+		// is retried with backoff instead of waiting for the next 6h
+		// tick (issue #240; updatecheck/).
+		runner := updatecheck.New(s.updateChecker, s.updateBackoff.initial, s.updateBackoff.max)
+		start := func() { runner.Start(ctx, &s.wg) }
+		if _, err := s.cron.AddFunc(updateCheckCronSpec, start); err != nil {
+			return fmt.Errorf("scheduler: register update-check trigger: %w", err)
+		}
+		start()
 	}
 	return nil
 }

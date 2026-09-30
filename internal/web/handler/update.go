@@ -26,8 +26,9 @@ type UpdateController interface {
 
 // UpdateHandler implements `GET /system/update-status`, `GET
 // /system/update-panel` and `POST /system/update-check` (issue #76). A nil
-// controller means this build has no updater (cmd/server): the two GET
-// routes render nothing and the POST route 404s.
+// controller means this build has no updater (cmd/server): the status GET
+// renders nothing, the panel GET renders a notice saying so (issue #241),
+// and the POST route 404s.
 type UpdateHandler struct {
 	controller UpdateController
 }
@@ -62,7 +63,8 @@ func (h *UpdateHandler) Status(c *gin.Context) {
 }
 
 // Panel implements `GET /system/update-panel`: Settings' `#update-panel`
-// fragment (organisms.UpdatePanel), empty when there is no updater.
+// fragment (organisms.UpdatePanel); without an updater it only says the
+// build has none.
 func (h *UpdateHandler) Panel(c *gin.Context) {
 	h.renderPanel(c, false)
 }
@@ -88,6 +90,10 @@ func (h *UpdateHandler) renderPanel(c *gin.Context, failed bool) {
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	if h.controller == nil {
+		_ = organisms.UpdatePanel(organisms.UpdatePanelProps{
+			CurrentVersion: version.Version,
+			Unavailable:    true,
+		}).Render(c.Request.Context(), c.Writer)
 		return
 	}
 	status := h.controller.Status()
@@ -97,9 +103,52 @@ func (h *UpdateHandler) renderPanel(c *gin.Context, failed bool) {
 		Failed:         failed || status.LastError != "",
 		Available:      status.Available,
 		Version:        status.Version,
+		Blocked:        status.Blocked,
+		Ready:          status.Ready,
+	}
+	if props.Failed {
+		props.ErrorReason = errorReason(status.ErrorKind)
+	}
+	if props.Blocked {
+		props.BlockedReason = blockedReason(status.BlockedKind)
 	}
 	if !status.CheckedAt.IsZero() {
 		props.CheckedAt = status.CheckedAt.In(time.Local).Format("2006-01-02 15:04")
 	}
 	_ = organisms.UpdatePanel(props).Render(c.Request.Context(), c.Writer)
+}
+
+// blockedReason words the safety-gate condition holding a newer release
+// back (issue #241); the gate's own log detail stays in the log.
+func blockedReason(kind updater.BlockKind) string {
+	switch kind {
+	case updater.BlockOpenPositions:
+		return "ポジションを保有しているため"
+	case updater.BlockKillSwitch:
+		return "Kill Switch が発動しているため"
+	case updater.BlockRecentOrder:
+		return "直近に発注があったため"
+	case updater.BlockCheckFailed:
+		return "安全条件を確認できなかったため"
+	default:
+		return "理由を特定できません"
+	}
+}
+
+// errorReason words why a check failed (issue #241) without exposing the
+// raw error text, which may carry URLs or local paths; that stays in the
+// log.
+func errorReason(kind updater.ErrorKind) string {
+	switch kind {
+	case updater.ErrorNetwork:
+		return "ネットワークに接続できませんでした"
+	case updater.ErrorRateLimit:
+		return "GitHub API のレート制限に達しました"
+	case updater.ErrorVerification:
+		return "ダウンロードしたインストーラーの検証に失敗しました（更新は中止されました）"
+	case updater.ErrorRelease:
+		return "リリース情報を取得できない、または内容が不正です"
+	default:
+		return "原因を特定できませんでした（詳細はログを参照してください）"
+	}
 }

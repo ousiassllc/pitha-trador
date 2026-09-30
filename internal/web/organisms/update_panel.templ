@@ -6,52 +6,95 @@ package organisms
 type UpdatePanelProps struct {
 	CurrentVersion string
 	CheckedAt      string
+	// Unavailable: this build has no updater (cmd/server), so nothing can
+	// be checked and the panel only says so.
+	Unavailable bool
 	// DevBuild: the last check was skipped since this is a non-release
-	// build. Failed: the last check errored (details are in the log).
-	DevBuild bool
-	Failed   bool
+	// build. Failed: the last check errored; ErrorReason says why in
+	// operator-facing words (never the raw error text).
+	DevBuild    bool
+	Failed      bool
+	ErrorReason string
 	// Available/Version: a newer release exists (UpdateBannerProps).
-	Available bool
-	Version   string
+	// Blocked/BlockedReason: it is being held back by the safety gate, and
+	// which condition holds it. Ready: its installer is verified and the
+	// app is about to restart into it.
+	Available     bool
+	Version       string
+	Blocked       bool
+	BlockedReason string
+	Ready         bool
 }
 
 // UpdatePanel renders the Settings screen's アップデート section (issue
-// #76): the running version, the last check's outcome, and a button that
-// runs a check immediately via `POST /system/update-check` (which returns
-// this same fragment, swapped into Settings' `#update-panel`), instead of
-// waiting for the scheduler's startup + every-6-hours checks.
+// #76/#241): the running version, the last check's outcome - including why
+// an install is held back or a check failed - and a button that runs a
+// check immediately via `POST /system/update-check` (which returns this
+// same fragment, swapped into Settings' `#update-panel`), instead of
+// waiting for the scheduler's startup + retry/every-6-hours checks. While
+// the request runs the button is disabled and `#update-check-progress`
+// shows, since a check that finds an installer downloads it before the app
+// restarts.
 templ UpdatePanel(props UpdatePanelProps) {
-	<section class="mt-8 flex flex-col gap-2 text-sm text-slate-600" data-testid="update-panel">
+	<section class="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="update-panel">
 		<h2 class="text-lg font-semibold text-slate-900">アップデート</h2>
 		<p>現在のバージョン: { props.CurrentVersion }</p>
-		<p role="status" data-testid="update-check-result">
-			switch {
-				case props.Available:
-					新バージョン { props.Version } が利用可能です。
-				case props.Failed:
-					アップデートの確認に失敗しました（詳細はログを参照してください）。
-				case props.DevBuild:
-					開発ビルドのため、アップデートの確認は行われません。
-				case props.CheckedAt != "":
-					最新バージョンです。
-				default:
-					まだ確認していません。
+		if props.Unavailable {
+			<p role="status" data-testid="update-unavailable">このビルドにはアップデート機能がないため、アップデートの確認は行えません（サーバー版は自動更新に対応していません）。</p>
+		} else {
+			<p role="status" data-testid="update-check-result">
+				switch {
+					case props.Available:
+						新バージョン { props.Version } が利用可能です。
+					case props.Failed:
+						アップデートの確認に失敗しました。
+					case props.DevBuild:
+						開発ビルドのため、アップデートの確認は行われません。
+					case props.CheckedAt != "":
+						最新バージョンです。
+					default:
+						まだ確認していません。
+				}
+				if props.CheckedAt != "" {
+					（最終確認: { props.CheckedAt }）
+				}
+			</p>
+			if props.Ready {
+				<p class="text-emerald-700" data-testid="update-ready">インストーラーの検証が完了しました。まもなくアプリが再起動して更新されます。</p>
+			} else if props.Blocked {
+				<p class="text-amber-700" data-testid="update-blocked">
+					安全条件が揃っていないため更新を保留しています（{ props.BlockedReason }）。条件が揃い次第、自動的に更新・再起動されます（保留中は自動で再確認します）。
+				</p>
 			}
-			if props.CheckedAt != "" {
-				（最終確認: { props.CheckedAt }）
+			if props.Failed {
+				<p class="text-red-700" data-testid="update-check-error">
+					if props.Available {
+						直近の更新の準備に失敗しました（原因: { props.ErrorReason }）。自動で再試行します。
+					} else {
+						原因: { props.ErrorReason }
+					}
+				</p>
 			}
-		</p>
-		if props.Failed && props.Available {
-			<p class="text-red-700" data-testid="update-check-error">直近の自動更新の準備に失敗しました（詳細はログを参照してください）。</p>
+			<div class="flex items-center gap-3">
+				<button
+					class="self-start rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+					type="button"
+					hx-post="/system/update-check"
+					hx-target="#update-panel"
+					hx-swap="innerHTML"
+					hx-disabled-elt="this"
+					hx-indicator="#update-check-progress"
+					hx-sync="this:drop"
+					data-testid="update-check-button"
+				>今すぐアップデートを確認</button>
+				<span
+					id="update-check-progress"
+					class="hidden text-slate-500 [&.htmx-request]:inline"
+					role="status"
+					aria-live="polite"
+					data-testid="update-check-progress"
+				>確認中です…（新バージョンがあるとインストーラーを取得するため、時間がかかることがあります）</span>
+			</div>
 		}
-		<button
-			class="self-start rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-			type="button"
-			hx-post="/system/update-check"
-			hx-target="#update-panel"
-			hx-swap="innerHTML"
-			hx-disabled-elt="this"
-			data-testid="update-check-button"
-		>今すぐアップデートを確認</button>
 	</section>
 }
