@@ -8,22 +8,24 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 
-func mustCreateInstrument(t *testing.T, repo *repository.InstrumentRepository, symbol string) domain.Instrument {
+func mustCreateInstrument(t *testing.T, repo *market.InstrumentRepository, symbol string) domain.Instrument {
 	t.Helper()
 	inst, err := repo.Create(context.Background(), domain.Instrument{
 		Symbol: symbol, Name: symbol + " Inc.", Market: "TSE Prime", IsActive: true,
@@ -36,9 +38,9 @@ func mustCreateInstrument(t *testing.T, repo *repository.InstrumentRepository, s
 
 func TestEngine_RunCycle_PersistsComputedSnapshots(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, judgement.NewDecisionRepository(db), snapshots))
 
 	inst := mustCreateInstrument(t, instruments, "7203")
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
@@ -81,9 +83,9 @@ func TestEngine_RunCycle_PersistsComputedSnapshots(t *testing.T) {
 
 func TestEngine_RunCycle_ComputesSpreadBpsFromBoard(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, judgement.NewDecisionRepository(db), snapshots))
 
 	inst := mustCreateInstrument(t, instruments, "9433")
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
@@ -114,9 +116,9 @@ func TestEngine_RunCycle_ComputesSpreadBpsFromBoard(t *testing.T) {
 
 func TestEngine_RunCycle_NoBoardDataLeavesSpreadBpsNil(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, judgement.NewDecisionRepository(db), snapshots))
 
 	inst := mustCreateInstrument(t, instruments, "1301")
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
@@ -141,9 +143,9 @@ func TestEngine_RunCycle_NoBoardDataLeavesSpreadBpsNil(t *testing.T) {
 
 func TestEngine_RunCycle_MultipleInstrumentsInOneTransaction(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, judgement.NewDecisionRepository(db), snapshots))
 
 	a := mustCreateInstrument(t, instruments, "7203")
 	b := mustCreateInstrument(t, instruments, "9433")
@@ -163,9 +165,9 @@ func TestEngine_RunCycle_MultipleInstrumentsInOneTransaction(t *testing.T) {
 
 func TestEngine_RunCycle_DuplicateBarRollsBackWholeCycle(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	engine := featureengine.NewEngine(snapshots, rag.NewService(db, repository.NewDecisionRepository(db), snapshots))
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	engine := featureengine.NewEngine(snapshots, rag.NewService(db, judgement.NewDecisionRepository(db), snapshots))
 
 	a := mustCreateInstrument(t, instruments, "7203")
 	b := mustCreateInstrument(t, instruments, "9433")

@@ -11,7 +11,11 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
@@ -19,9 +23,9 @@ import (
 
 func newHandlerTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
@@ -46,8 +50,8 @@ type handlerFixture struct {
 	db       *sql.DB
 	handler  *policy.Handler
 	engine   *policy.Engine
-	signals  *repository.SignalRepository
-	jobs     *repository.JobRepository
+	signals  *trading.SignalRepository
+	jobs     *jobqueue.JobRepository
 	executor *recordingExecutor
 }
 
@@ -66,9 +70,9 @@ func newHandlerFixture(t *testing.T, resp jev.TraderResponse) handlerFixture {
 	t.Helper()
 	db := newHandlerTestDB(t)
 
-	decisions := repository.NewDecisionRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	signals := repository.NewSignalRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	signals := trading.NewSignalRepository(db)
 	ragService := rag.NewService(db, decisions, snapshots)
 
 	server := traderServer(t, resp)
@@ -79,19 +83,19 @@ func newHandlerFixture(t *testing.T, resp jev.TraderResponse) handlerFixture {
 	executor := &recordingExecutor{}
 	handler := policy.NewHandler(trader, snapshots, engine, executor)
 
-	return handlerFixture{db: db, handler: handler, engine: engine, signals: signals, jobs: repository.NewJobRepository(db), executor: executor}
+	return handlerFixture{db: db, handler: handler, engine: engine, signals: signals, jobs: jobqueue.NewJobRepository(db), executor: executor}
 }
 
 func mustCreateInstrumentAndSnapshot(t *testing.T, db *sql.DB, symbol string, spreadBps float64) domain.Instrument {
 	t.Helper()
-	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: symbol, Name: symbol + " Inc", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
 		t.Fatalf("create instrument fixture: %v", err)
 	}
 
-	_, err = repository.NewSnapshotRepository(db).Insert(context.Background(), domain.Snapshot{
+	_, err = market.NewSnapshotRepository(db).Insert(context.Background(), domain.Snapshot{
 		InstrumentID: inst.ID, Symbol: symbol,
 		Timestamp: time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC),
 		Price:     2110.5, SpreadBps: ptr(spreadBps), Volume: 1000, Turnover: 2_110_500,
@@ -119,7 +123,7 @@ func TestHandler_HandleJob_PersistsLongTradeSignalFromRealTraderCall(t *testing.
 		t.Fatalf("marshal job payload: %v", err)
 	}
 
-	if err := f.handler.HandleJob(context.Background(), repository.Job{PayloadJSON: string(payloadJSON)}); err != nil {
+	if err := f.handler.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payloadJSON)}); err != nil {
 		t.Fatalf("HandleJob: %v", err)
 	}
 
@@ -150,7 +154,7 @@ func TestHandler_HandleJob_PersistsNoneTradeSignalWhenSpreadTooWide(t *testing.T
 
 	payloadJSON, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: "7203"})
 
-	if err := f.handler.HandleJob(context.Background(), repository.Job{PayloadJSON: string(payloadJSON)}); err != nil {
+	if err := f.handler.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payloadJSON)}); err != nil {
 		t.Fatalf("HandleJob: %v", err)
 	}
 
@@ -173,9 +177,9 @@ func TestHandler_HandleJob_PersistsNoneTradeSignalAndReturnsErrorOnJevAPIFailure
 	defer server.Close()
 
 	db := newHandlerTestDB(t)
-	decisions := repository.NewDecisionRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	signals := repository.NewSignalRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	signals := trading.NewSignalRepository(db)
 	ragService := rag.NewService(db, decisions, snapshots)
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
@@ -186,7 +190,7 @@ func TestHandler_HandleJob_PersistsNoneTradeSignalAndReturnsErrorOnJevAPIFailure
 	inst := mustCreateInstrumentAndSnapshot(t, db, "7203", 10)
 	payloadJSON, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: "7203"})
 
-	err := handler.HandleJob(context.Background(), repository.Job{PayloadJSON: string(payloadJSON)})
+	err := handler.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payloadJSON)})
 	if err == nil {
 		t.Fatal("HandleJob: want error when the Jev API call fails, got nil")
 	}

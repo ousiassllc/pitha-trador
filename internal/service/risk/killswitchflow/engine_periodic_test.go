@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -199,22 +201,22 @@ func TestEngine_RunPeriodicChecks_NoForceCloseRetryForNonForceCloseOrResolved(t 
 // not re-fire fill_discrepancy (and re-liquidate) after a manual Resume.
 func TestEngine_Resume_FillDiscrepancy_OrphanDoesNotRefire(t *testing.T) {
 	db := newTestDB(t)
-	orders := repository.NewOrderRepository(db)
-	ks := repository.NewKillSwitchRepository(db)
+	orders := trading.NewOrderRepository(db)
+	ks := system.NewKillSwitchRepository(db)
 	clock := time.Now().UTC()
 	closer := &fakeCloser{}
 	e := risk.NewEngine(risk.Config{
 		Limits:     testLimits(),
 		KillSwitch: ks,
-		Settings:   repository.NewRuntimeSettingsRepository(db),
-		Positions:  repository.NewPositionRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
+		Positions:  trading.NewPositionRepository(db),
 		Orders:     orders,
 		Closer:     closer,
 		Now:        func() time.Time { return clock },
 	})
 	ctx := context.Background()
 
-	inst, err := repository.NewInstrumentRepository(db).Create(ctx, domain.Instrument{
+	inst, err := market.NewInstrumentRepository(db).Create(ctx, domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {

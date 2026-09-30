@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
@@ -58,19 +61,19 @@ func TestTracker_PreviousIsScopedToThePosition(t *testing.T) {
 func newLongEngine(t *testing.T) (*execution.Engine, int64, time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	inst, err := repository.NewInstrumentRepository(db).Create(ctx, domain.Instrument{Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true})
+	inst, err := market.NewInstrumentRepository(db).Create(ctx, domain.Instrument{Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	engine := execution.NewEngine(execution.Deps{
-		Orders: repository.NewOrderRepository(db), Positions: repository.NewPositionRepository(db),
-		Snapshots: repository.NewSnapshotRepository(db), Decisions: repository.NewDecisionRepository(db),
-		Signals: repository.NewSignalRepository(db), Instruments: repository.NewInstrumentRepository(db),
+		Orders: trading.NewOrderRepository(db), Positions: trading.NewPositionRepository(db),
+		Snapshots: market.NewSnapshotRepository(db), Decisions: judgement.NewDecisionRepository(db),
+		Signals: trading.NewSignalRepository(db), Instruments: market.NewInstrumentRepository(db),
 	}, execution.DefaultConfig())
 	opened := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
 	if _, err := engine.Enter(ctx, execution.EntryRequest{

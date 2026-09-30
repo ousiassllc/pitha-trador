@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/repoportfolio"
 )
 
@@ -19,14 +20,14 @@ var portfolioTestNow = time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC)
 
 // newPortfolioTestFixtures returns a RepositoryPortfolioProvider plus the
 // PositionRepository/OrderRepository/instrumentID it is backed by,
-// mirroring internal/repository/position_repo_test.go's own
+// mirroring internal/repository/trading/position_repo_test.go's own
 // openTestPositionRepo/insertFilledEntryOrder helpers (unexported there,
 // so not reusable from this package).
-func newPortfolioTestFixtures(t *testing.T) (*repoportfolio.Provider, *repository.PositionRepository, *repository.OrderRepository, int64) {
+func newPortfolioTestFixtures(t *testing.T) (*repoportfolio.Provider, *trading.PositionRepository, *trading.OrderRepository, int64) {
 	t.Helper()
 	db := newTestDB(t)
 
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst, err := instruments.Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true,
 	})
@@ -34,12 +35,12 @@ func newPortfolioTestFixtures(t *testing.T) (*repoportfolio.Provider, *repositor
 		t.Fatalf("create instrument fixture: %v", err)
 	}
 
-	positions := repository.NewPositionRepository(db)
-	orders := repository.NewOrderRepository(db)
+	positions := trading.NewPositionRepository(db)
+	orders := trading.NewOrderRepository(db)
 	return repoportfolio.New(positions, portfolioTestCapital, repoportfolio.WithClock(func() time.Time { return portfolioTestNow })), positions, orders, inst.ID
 }
 
-func mustOpenPosition(t *testing.T, positions *repository.PositionRepository, orders *repository.OrderRepository, instrumentID int64, now time.Time) domain.Position {
+func mustOpenPosition(t *testing.T, positions *trading.PositionRepository, orders *trading.OrderRepository, instrumentID int64, now time.Time) domain.Position {
 	t.Helper()
 	ctx := context.Background()
 	entry, err := orders.Insert(ctx, domain.PaperOrder{
@@ -59,7 +60,7 @@ func mustOpenPosition(t *testing.T, positions *repository.PositionRepository, or
 	return opened
 }
 
-func mustClosePosition(t *testing.T, positions *repository.PositionRepository, orders *repository.OrderRepository, opened domain.Position, realizedPnL float64, closedAt time.Time) {
+func mustClosePosition(t *testing.T, positions *trading.PositionRepository, orders *trading.OrderRepository, opened domain.Position, realizedPnL float64, closedAt time.Time) {
 	t.Helper()
 	ctx := context.Background()
 	exit, err := orders.Insert(ctx, domain.PaperOrder{

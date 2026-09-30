@@ -9,21 +9,23 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 
-func mustCreateInstrument(t *testing.T, repo *repository.InstrumentRepository, symbol string, active bool) domain.Instrument {
+func mustCreateInstrument(t *testing.T, repo *market.InstrumentRepository, symbol string, active bool) domain.Instrument {
 	t.Helper()
 	inst, err := repo.Create(context.Background(), domain.Instrument{
 		Symbol: symbol, Name: symbol + " Inc.", Market: "TSE Prime", IsActive: active,
@@ -36,8 +38,8 @@ func mustCreateInstrument(t *testing.T, repo *repository.InstrumentRepository, s
 
 func TestScheduler_EnqueueFullScan_OnlyActiveInstruments(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	mustCreateInstrument(t, instruments, "7203", true)
 	mustCreateInstrument(t, instruments, "9433", true)
@@ -54,11 +56,11 @@ func TestScheduler_EnqueueFullScan_OnlyActiveInstruments(t *testing.T) {
 		t.Fatalf("EnqueueFullScan count = %d, want 2 (inactive instrument excluded)", count)
 	}
 
-	for _, queue := range []string{repository.JobQueueMarketData, repository.JobQueueFeatureCalc} {
+	for _, queue := range []string{jobqueue.JobQueueMarketData, jobqueue.JobQueueFeatureCalc} {
 		claimed := 0
 		for {
 			if _, err := jobs.ClaimNext(context.Background(), queue, now); err != nil {
-				if errors.Is(err, repository.ErrJobNotFound) {
+				if errors.Is(err, jobqueue.ErrJobNotFound) {
 					break
 				}
 				t.Fatalf("ClaimNext(%q): %v", queue, err)
@@ -73,15 +75,15 @@ func TestScheduler_EnqueueFullScan_OnlyActiveInstruments(t *testing.T) {
 
 func TestScheduler_Recover_ResetsStuckRunningJobs(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	now := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
-	job, err := jobs.Enqueue(context.Background(), repository.JobQueueMarketData, `{}`, now)
+	job, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueMarketData, `{}`, now)
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
-	if _, err := jobs.ClaimNext(context.Background(), repository.JobQueueMarketData, now); err != nil {
+	if _, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueMarketData, now); err != nil {
 		t.Fatalf("ClaimNext: %v", err)
 	}
 
@@ -98,25 +100,25 @@ func TestScheduler_Recover_ResetsStuckRunningJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.Status != repository.JobStatusPending {
-		t.Errorf("job status after Recover = %q, want %q", got.Status, repository.JobStatusPending)
+	if got.Status != jobqueue.JobStatusPending {
+		t.Errorf("job status after Recover = %q, want %q", got.Status, jobqueue.JobStatusPending)
 	}
 }
 
 func TestScheduler_Start_RunsRegisteredHandlerAndMarksSucceeded(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	now := time.Now().UTC()
-	job, err := jobs.Enqueue(context.Background(), repository.JobQueueMarketData, `{"symbol":"7203"}`, now)
+	job, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueMarketData, `{"symbol":"7203"}`, now)
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
-	processed := make(chan repository.Job, 1)
+	processed := make(chan jobqueue.Job, 1)
 	s := scheduler.New(jobs, instruments, scheduler.WithPollInterval(5*time.Millisecond))
-	s.RegisterHandler(repository.JobQueueMarketData, func(_ context.Context, j repository.Job) error {
+	s.RegisterHandler(jobqueue.JobQueueMarketData, func(_ context.Context, j jobqueue.Job) error {
 		processed <- j
 		return nil
 	})
@@ -145,11 +147,11 @@ func TestScheduler_Start_RunsRegisteredHandlerAndMarksSucceeded(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
-		if got.Status == repository.JobStatusSucceeded {
+		if got.Status == jobqueue.JobStatusSucceeded {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("job status = %q, want %q", got.Status, repository.JobStatusSucceeded)
+			t.Fatalf("job status = %q, want %q", got.Status, jobqueue.JobStatusSucceeded)
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
@@ -157,17 +159,17 @@ func TestScheduler_Start_RunsRegisteredHandlerAndMarksSucceeded(t *testing.T) {
 
 func TestScheduler_Start_HandlerErrorMarksJobFailed(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	now := time.Now().UTC()
-	job, err := jobs.Enqueue(context.Background(), repository.JobQueueMarketData, `{}`, now)
+	job, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueMarketData, `{}`, now)
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 
 	s := scheduler.New(jobs, instruments, scheduler.WithPollInterval(5*time.Millisecond))
-	s.RegisterHandler(repository.JobQueueMarketData, func(context.Context, repository.Job) error {
+	s.RegisterHandler(jobqueue.JobQueueMarketData, func(context.Context, jobqueue.Job) error {
 		return errors.New("kabu station api unreachable")
 	})
 
@@ -184,14 +186,14 @@ func TestScheduler_Start_HandlerErrorMarksJobFailed(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
-		if got.Status == repository.JobStatusFailed {
+		if got.Status == jobqueue.JobStatusFailed {
 			if got.LastError == nil || *got.LastError != "kabu station api unreachable" {
 				t.Errorf("LastError = %v, want the handler's error message", got.LastError)
 			}
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("job status = %q, want %q", got.Status, repository.JobStatusFailed)
+			t.Fatalf("job status = %q, want %q", got.Status, jobqueue.JobStatusFailed)
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
@@ -199,8 +201,8 @@ func TestScheduler_Start_HandlerErrorMarksJobFailed(t *testing.T) {
 
 func TestScheduler_Start_FullScanTriggerEnqueuesOnSchedule(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	mustCreateInstrument(t, instruments, "7203", true)
 
@@ -214,9 +216,9 @@ func TestScheduler_Start_FullScanTriggerEnqueuesOnSchedule(t *testing.T) {
 
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		if _, err := jobs.ClaimNext(context.Background(), repository.JobQueueMarketData, time.Now().UTC()); err == nil {
+		if _, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueMarketData, time.Now().UTC()); err == nil {
 			return
-		} else if !errors.Is(err, repository.ErrJobNotFound) {
+		} else if !errors.Is(err, jobqueue.ErrJobNotFound) {
 			t.Fatalf("ClaimNext: %v", err)
 		}
 		if time.Now().After(deadline) {
@@ -224,4 +226,45 @@ func TestScheduler_Start_FullScanTriggerEnqueuesOnSchedule(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+func TestScheduler_EnqueueSelfImprove_EnqueuesOneAnalyticsJob(t *testing.T) {
+	db := newTestDB(t)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
+
+	s := scheduler.New(jobs, instruments)
+	now := time.Date(2026, 9, 27, 6, 30, 0, 0, time.UTC)
+
+	if err := s.EnqueueSelfImprove(context.Background(), now); err != nil {
+		t.Fatalf("EnqueueSelfImprove: %v", err)
+	}
+
+	job, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueAnalytics, now)
+	if err != nil {
+		t.Fatalf("ClaimNext(%q): %v", jobqueue.JobQueueAnalytics, err)
+	}
+	if job.PayloadJSON != "{}" {
+		t.Fatalf("job.PayloadJSON = %q, want {}", job.PayloadJSON)
+	}
+
+	if _, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueAnalytics, now); !errors.Is(err, jobqueue.ErrJobNotFound) {
+		t.Fatalf("ClaimNext second call error = %v, want ErrJobNotFound (only one job enqueued)", err)
+	}
+}
+
+func TestScheduler_Start_RegistersDailySelfImproveTrigger(t *testing.T) {
+	db := newTestDB(t)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
+
+	s := scheduler.New(jobs, instruments)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start must register the daily self-improve cron entry without error.
+	if err := s.Start(ctx, 24*time.Hour); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	s.Stop()
 }

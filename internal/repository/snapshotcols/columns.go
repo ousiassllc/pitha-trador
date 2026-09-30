@@ -1,7 +1,7 @@
 // Package snapshotcols maps the market_snapshots Feature columns to
 // domain.Feature fields for SnapshotRepository's INSERT and SELECT. It is a
 // separate package so the one-line-per-column table does not grow
-// internal/repository past its directory size limit.
+// internal/repository/market past its directory size limit.
 package snapshotcols
 
 import (

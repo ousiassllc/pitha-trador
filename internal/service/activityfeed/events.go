@@ -5,10 +5,10 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
-func jobEvent(job repository.Job) domain.ActivityEvent {
+func jobEvent(job jobqueue.Job) domain.ActivityEvent {
 	ts := job.CreatedAt
 	switch {
 	case job.FinishedAt != nil:

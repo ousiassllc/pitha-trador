@@ -12,7 +12,8 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -88,16 +89,16 @@ func TestNew_WithHeartbeatRecorderSkipsNonOperatorTraffic(t *testing.T) {
 // and 120+ idle minutes afterwards raise it.
 func TestNew_LiveDeadMansSwitchStaysQuietWhileOperatorUsesTheUI(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	db, err := repository.Open(filepath.Join(t.TempDir(), "router_heartbeat.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "router_heartbeat.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	clock := time.Now()
 	engineRisk := risk.NewEngine(risk.Config{
 		Limits:     config.RiskLimits{HeartbeatTimeoutMinutes: 120},
-		KillSwitch: repository.NewKillSwitchRepository(db),
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		KillSwitch: system.NewKillSwitchRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Now:        func() time.Time { return clock },
 	})
 	engine := router.New(router.WithSystemEngine(engineRisk), router.WithHeartbeatRecorder(engineRisk))

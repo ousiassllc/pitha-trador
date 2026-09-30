@@ -181,7 +181,7 @@ language: ja
 ```
 
 - 許容する除外は上記の`*_templ.go`と`**/logs/**`のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
-- 現状の`.linterlyignore`には、サブパッケージ分割前の暫定除外（`internal/repository/`・`internal/web/handler/`・`internal/bootstrap/`・`internal/service/risk/`の個別ファイル列挙）が残っている。これは#134の子Issue（#244〜#247）で各パッケージを分割する際に順次削除し、#248で全廃を確認する。暫定除外へ新規ファイルを追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
+- 現状の`.linterlyignore`には、サブパッケージ分割前の暫定除外（`internal/web/handler/`・`internal/bootstrap/`・`internal/service/risk/`の個別ファイル列挙）が残っている。これは#134の子Issue（#245〜#247）で各パッケージを分割する際に順次削除し、#248で全廃を確認する（`internal/repository/`は#244で削除済み）。暫定除外へ新規ファイルを追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
 

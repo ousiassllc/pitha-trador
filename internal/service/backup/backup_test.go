@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
 func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	conn, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

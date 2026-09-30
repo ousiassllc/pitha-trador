@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -25,7 +25,7 @@ type CycleInput struct {
 // Engine computes Feature values for a full scan cycle's worth of
 // instruments and persists them to market_snapshots.
 type Engine struct {
-	snapshots *repository.SnapshotRepository
+	snapshots *market.SnapshotRepository
 	rag       *rag.Service
 }
 
@@ -34,7 +34,7 @@ type Engine struct {
 // their standardized feature embedding into market_snapshot_vectors via
 // ragService for RAG similarity search (functional.md FR-RAG-1,
 // docs/architecture/overview.md §7).
-func NewEngine(snapshots *repository.SnapshotRepository, ragService *rag.Service) *Engine {
+func NewEngine(snapshots *market.SnapshotRepository, ragService *rag.Service) *Engine {
 	return &Engine{snapshots: snapshots, rag: ragService}
 }
 

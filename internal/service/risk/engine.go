@@ -7,7 +7,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
@@ -64,15 +66,15 @@ type Config struct {
 	// mode: the dead-man's switch is Live-only).
 	Limits config.RiskLimits
 
-	KillSwitch *repository.KillSwitchRepository
-	Settings   *repository.RuntimeSettingsRepository
+	KillSwitch *system.KillSwitchRepository
+	Settings   *system.RuntimeSettingsRepository
 
 	// Snapshots supplies the latest price/spread for FR-RISK-1's
 	// max_spread_bps and max_trade_loss_pct (position sizing) checks. A
 	// nil Snapshots skips those two checks (no snapshot data to check
 	// against); a non-nil one rejects an instrument with no usable
 	// snapshot (fail closed).
-	Snapshots *repository.SnapshotRepository
+	Snapshots *market.SnapshotRepository
 
 	// StopLossPct is the FR-EXIT-2 initial stop distance (percent)
 	// position sizing assumes; defaults to sizing.DefaultStopLossPct.
@@ -100,8 +102,8 @@ type Config struct {
 
 	// Positions and Orders enable CheckPositionReconciliation
 	// (unexpected_position/fill_discrepancy). Either being nil disables it.
-	Positions *repository.PositionRepository
-	Orders    *repository.OrderRepository
+	Positions *trading.PositionRepository
+	Orders    *trading.OrderRepository
 
 	// Notifier defaults to NoopNotifier{} (notifier.go).
 	Notifier Notifier
@@ -121,9 +123,9 @@ type Config struct {
 // system state machine (FR-RISK-2〜7, state.go/autoresume.go).
 type Engine struct {
 	limits           config.RiskLimits
-	killSwitch       *repository.KillSwitchRepository
-	settings         *repository.RuntimeSettingsRepository
-	snapshots        *repository.SnapshotRepository
+	killSwitch       *system.KillSwitchRepository
+	settings         *system.RuntimeSettingsRepository
+	snapshots        *market.SnapshotRepository
 	stopLossPct      float64
 	portfolio        PortfolioProvider
 	closer           PositionCloser
@@ -133,8 +135,8 @@ type Engine struct {
 	brokerAPIFailures FailureCounter
 	dbWriteFailures   FailureCounter
 	failureThreshold  int
-	positions         *repository.PositionRepository
-	orders            *repository.OrderRepository
+	positions         *trading.PositionRepository
+	orders            *trading.OrderRepository
 	notifier          Notifier
 	now               func() time.Time
 	calendar          MarketCalendar

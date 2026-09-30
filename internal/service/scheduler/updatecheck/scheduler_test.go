@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
@@ -15,14 +17,14 @@ import (
 // through the real Scheduler.Start: a startup check that failed must be
 // retried within the backoff, not left to the @every 6h cron tick.
 func TestScheduler_Start_RetriesFailedStartupUpdateCheck(t *testing.T) {
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	checker := &scriptedChecker{errs: []error{errors.New("network unreachable"), errors.New("rate limited")}}
 
-	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db),
+	s := scheduler.New(jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db),
 		scheduler.WithUpdateChecker(checker),
 		scheduler.WithUpdateRetryBackoff(5*time.Millisecond, 20*time.Millisecond))
 	// A 1h full-scan interval keeps that unrelated trigger from firing.

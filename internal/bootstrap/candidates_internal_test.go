@@ -7,7 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
 func ptrF(v float64) *float64 { return &v }
@@ -91,7 +91,7 @@ func TestRefreshCandidates_EnqueuesJevScoutJobForEachCandidate(t *testing.T) {
 		t.Fatalf("refreshCandidates: %v", err)
 	}
 
-	job, err := svc.Jobs.ClaimNext(context.Background(), repository.JobQueueJevScout, time.Now().UTC().Add(time.Second))
+	job, err := svc.Jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, time.Now().UTC().Add(time.Second))
 	if err != nil {
 		t.Fatalf("ClaimNext(jev-scout): %v, want one enqueued job", err)
 	}
@@ -157,7 +157,7 @@ func TestRefreshCandidates_DoesNotEnqueueJevScoutOutsideSession(t *testing.T) {
 	if got, _, err := svc.Screener.Candidates(context.Background()); err != nil || len(got) != 1 {
 		t.Fatalf("candidates = %d, want 1 (list still refreshes off-hours)", len(got))
 	}
-	if _, err := svc.Jobs.ClaimNext(context.Background(), repository.JobQueueJevScout, time.Now().UTC().Add(time.Second)); err == nil {
+	if _, err := svc.Jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, time.Now().UTC().Add(time.Second)); err == nil {
 		t.Fatal("a jev-scout job was enqueued outside the trading session")
 	}
 }

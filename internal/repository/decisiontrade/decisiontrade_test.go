@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 )
 
 // openDecisionTrade seeds decision -> trade_signal -> filled entry order
@@ -63,7 +66,7 @@ func openDecisionTrade(t *testing.T, db *repositoryDB, decision domain.JevDecisi
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	conn, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -73,7 +76,7 @@ func newTestDB(t *testing.T) *sql.DB {
 
 // insertTraderDecision inserts a decision_type=trader jev_decisions row
 // with confidence 0.82.
-func insertTraderDecision(t *testing.T, decisions *repository.DecisionRepository, instID int64, timestamp time.Time, direction string) domain.JevDecision {
+func insertTraderDecision(t *testing.T, decisions *judgement.DecisionRepository, instID int64, timestamp time.Time, direction string) domain.JevDecision {
 	t.Helper()
 	confidence := 0.82
 	saved, err := decisions.Insert(context.Background(), domain.JevDecision{
@@ -88,14 +91,14 @@ func insertTraderDecision(t *testing.T, decisions *repository.DecisionRepository
 }
 
 type repositoryDB struct {
-	signals   *repository.SignalRepository
-	orders    *repository.OrderRepository
-	positions *repository.PositionRepository
+	signals   *trading.SignalRepository
+	orders    *trading.OrderRepository
+	positions *trading.PositionRepository
 }
 
 func TestCalibrationRepository_ListDecisionTrades(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst, err := instruments.Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true,
 	})
@@ -103,10 +106,10 @@ func TestCalibrationRepository_ListDecisionTrades(t *testing.T) {
 		t.Fatalf("create instrument: %v", err)
 	}
 	trades := decisiontrade.New(db)
-	decisions := repository.NewDecisionRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
 	seed := &repositoryDB{
-		signals: repository.NewSignalRepository(db), orders: repository.NewOrderRepository(db),
-		positions: repository.NewPositionRepository(db),
+		signals: trading.NewSignalRepository(db), orders: trading.NewOrderRepository(db),
+		positions: trading.NewPositionRepository(db),
 	}
 	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
 

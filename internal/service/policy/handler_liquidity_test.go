@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
@@ -30,9 +33,9 @@ func (f fakeCalibration) Metrics(context.Context) (domain.CalibrationMetrics, er
 func runHandleJob(t *testing.T, turnover5m *float64, calib policy.CalibrationSource) domain.TradeSignal {
 	t.Helper()
 	db := newHandlerTestDB(t)
-	decisions := repository.NewDecisionRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	signals := repository.NewSignalRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	signals := trading.NewSignalRepository(db)
 	client := jev.NewClient(jev.Config{BaseURL: traderServer(t, passingTraderResponse(domain.JevDirectionLong)).URL, MaxAttempts: 1})
 	trader := jev.NewTrader(client, decisions, rag.NewService(db, decisions, snapshots))
 
@@ -44,7 +47,7 @@ func runHandleJob(t *testing.T, turnover5m *float64, calib policy.CalibrationSou
 	}
 	handler := policy.NewHandler(trader, snapshots, policy.NewEngine(th, nil, signals), nil, opts...)
 
-	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
@@ -59,7 +62,7 @@ func runHandleJob(t *testing.T, turnover5m *float64, calib policy.CalibrationSou
 	}
 
 	payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: "7203"})
-	if err := handler.HandleJob(context.Background(), repository.Job{PayloadJSON: string(payload)}); err != nil {
+	if err := handler.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payload)}); err != nil {
 		t.Fatalf("HandleJob: %v", err)
 	}
 	got, err := signals.ListByInstrument(context.Background(), inst.ID, 10)

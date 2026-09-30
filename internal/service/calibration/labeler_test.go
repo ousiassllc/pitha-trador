@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 )
 
@@ -18,9 +21,9 @@ func ptr[T any](v T) *T { return &v }
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
@@ -31,16 +34,16 @@ func newTestDB(t *testing.T) *sql.DB {
 type labelerFixtures struct {
 	db         *sql.DB
 	labeler    *calibration.Labeler
-	decisions  *repository.DecisionRepository
-	snapshots  *repository.SnapshotRepository
-	outcomes   *repository.CalibrationRepository
+	decisions  *judgement.DecisionRepository
+	snapshots  *market.SnapshotRepository
+	outcomes   *judgement.CalibrationRepository
 	instrument domain.Instrument
 }
 
 func newLabelerFixtures(t *testing.T) labelerFixtures {
 	t.Helper()
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst, err := instruments.Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true,
 	})
@@ -48,9 +51,9 @@ func newLabelerFixtures(t *testing.T) labelerFixtures {
 		t.Fatalf("create instrument: %v", err)
 	}
 
-	decisions := repository.NewDecisionRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	outcomes := repository.NewCalibrationRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	outcomes := judgement.NewCalibrationRepository(db)
 	return labelerFixtures{
 		db:         db,
 		labeler:    calibration.NewLabeler(decisions, snapshots, outcomes),
@@ -91,15 +94,15 @@ func (f labelerFixtures) insertSnapshots(t *testing.T, prices map[time.Duration]
 
 func (f labelerFixtures) handleJob(t *testing.T, decisionID int64, horizonMinutes int) error {
 	t.Helper()
-	payload, err := json.Marshal(repository.OutcomeLabelJobPayload{JevDecisionID: decisionID, HorizonMinutes: horizonMinutes})
+	payload, err := json.Marshal(judgement.OutcomeLabelJobPayload{JevDecisionID: decisionID, HorizonMinutes: horizonMinutes})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	return f.labeler.HandleJob(context.Background(), repository.Job{PayloadJSON: string(payload)})
+	return f.labeler.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payload)})
 }
 
 // getOutcome reads one calibration_outcomes row directly (bypassing
-// repository.CalibrationRepository, which intentionally has no
+// judgement.CalibrationRepository, which intentionally has no
 // query-by-decision method) for these tests to assert Labeler.HandleJob's
 // computed values against.
 func (f labelerFixtures) getOutcome(t *testing.T, decisionID int64, horizonMinutes int) domain.CalibrationOutcome {
@@ -228,7 +231,7 @@ func TestLabeler_HandleJob_InsufficientDataReturnsError(t *testing.T) {
 func TestLabeler_HandleJob_UnknownDecisionReturnsError(t *testing.T) {
 	f := newLabelerFixtures(t)
 	err := f.handleJob(t, 999999, 5)
-	if err == nil || !errors.Is(err, repository.ErrDecisionNotFound) {
+	if err == nil || !errors.Is(err, judgement.ErrDecisionNotFound) {
 		t.Fatalf("HandleJob(unknown decision) error = %v, want wrapping ErrDecisionNotFound", err)
 	}
 }

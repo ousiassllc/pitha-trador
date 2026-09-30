@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 )
 
 // DefaultHorizonsMinutes are the judgment horizons Outcome Labeling
@@ -22,24 +24,24 @@ var DefaultHorizonsMinutes = []int{5, 10, 20}
 // max_favorable_excursion, and was_direction_correct, computed from the
 // market_snapshots bars between the decision and horizon_minutes later.
 type Labeler struct {
-	decisions *repository.DecisionRepository
-	snapshots *repository.SnapshotRepository
-	outcomes  *repository.CalibrationRepository
+	decisions *judgement.DecisionRepository
+	snapshots *market.SnapshotRepository
+	outcomes  *judgement.CalibrationRepository
 }
 
 // NewLabeler returns a Labeler that loads decisions via decisions, market
 // data via snapshots, and persists calibration_outcomes rows via outcomes.
-func NewLabeler(decisions *repository.DecisionRepository, snapshots *repository.SnapshotRepository, outcomes *repository.CalibrationRepository) *Labeler {
+func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, outcomes *judgement.CalibrationRepository) *Labeler {
 	return &Labeler{decisions: decisions, snapshots: snapshots, outcomes: outcomes}
 }
 
 // HandleJob processes one outcome-labeling queue job
-// (repository.OutcomeLabelJobPayload): it loads the identified
+// (judgement.OutcomeLabelJobPayload): it loads the identified
 // jev_decisions row, the market_snapshots bars from the decision's
 // timestamp through horizon_minutes later, computes and persists the
 // resulting calibration_outcomes row (FR-CAL-4). Its signature matches
 // internal/service/scheduler.Handler, so it can be registered directly:
-// scheduler.RegisterHandler(repository.JobQueueOutcomeLabeling,
+// scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling,
 // labeler.HandleJob).
 //
 // If fewer than horizon_minutes' worth of market_snapshots bars have been
@@ -49,8 +51,8 @@ func NewLabeler(decisions *repository.DecisionRepository, snapshots *repository.
 // recorded a calibration_outcomes row for it yet either, so its next
 // periodic scan re-enqueues this same (jev_decision_id, horizon_minutes)
 // pair - no separate retry queue is needed.
-func (l *Labeler) HandleJob(ctx context.Context, job repository.Job) error {
-	var payload repository.OutcomeLabelJobPayload
+func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
+	var payload judgement.OutcomeLabelJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return fmt.Errorf("calibration: decode outcome-labeling job payload: %w", err)
 	}

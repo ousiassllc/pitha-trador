@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 )
 
@@ -26,14 +27,14 @@ type DecisionSource interface {
 // repositories.
 type Reader struct {
 	decisions   DecisionSource
-	instruments *repository.InstrumentRepository
-	signals     *repository.SignalRepository
-	positions   *repository.PositionRepository
+	instruments *market.InstrumentRepository
+	signals     *trading.SignalRepository
+	positions   *trading.PositionRepository
 }
 
 // NewReader returns a Reader. Every argument is required.
-func NewReader(decisions DecisionSource, instruments *repository.InstrumentRepository,
-	signals *repository.SignalRepository, positions *repository.PositionRepository) *Reader {
+func NewReader(decisions DecisionSource, instruments *market.InstrumentRepository,
+	signals *trading.SignalRepository, positions *trading.PositionRepository) *Reader {
 	return &Reader{decisions: decisions, instruments: instruments, signals: signals, positions: positions}
 }
 
@@ -48,7 +49,7 @@ func (r *Reader) RecentDecisions(ctx context.Context, symbol string, limit int) 
 func (r *Reader) RecentSignals(ctx context.Context, symbol string, limit int) ([]domain.TradeSignal, error) {
 	inst, err := r.instruments.GetBySymbol(ctx, symbol)
 	if err != nil {
-		if errors.Is(err, repository.ErrInstrumentNotFound) {
+		if errors.Is(err, market.ErrInstrumentNotFound) {
 			return nil, fmt.Errorf("%w: %s", execution.ErrInstrumentUnknown, symbol)
 		}
 		return nil, fmt.Errorf("insight: look up instrument %q: %w", symbol, err)

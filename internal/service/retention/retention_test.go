@@ -10,16 +10,17 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
 var fixedNow = time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 
 func newService(t *testing.T, policy Policy) (*Service, *sql.DB) {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	s := New(db, policy)
@@ -111,7 +112,7 @@ func TestPurge_CustomPolicy(t *testing.T) {
 
 func insertSnapshotWithVector(t *testing.T, db *sql.DB, instrumentID int64, ts time.Time) int64 {
 	t.Helper()
-	snap, err := repository.NewSnapshotRepository(db).Insert(context.Background(), domain.Snapshot{
+	snap, err := market.NewSnapshotRepository(db).Insert(context.Background(), domain.Snapshot{
 		InstrumentID: instrumentID, Symbol: "7203", Timestamp: ts,
 		Price: 100, Volume: 1, Turnover: 100, RawDataJSON: "{}",
 		Feature: domain.Feature{VWAP: 100},
@@ -139,7 +140,7 @@ func count(t *testing.T, db *sql.DB, query string) int {
 func TestPurge_SnapshotsAndTheirVectors(t *testing.T) {
 	s, db := newService(t, Policy{})
 	s.batchSize = 2
-	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
@@ -174,7 +175,7 @@ func TestPurge_SnapshotsAndTheirVectors(t *testing.T) {
 
 func TestPurge_LeavesAuditTablesAlone(t *testing.T) {
 	s, db := newService(t, Policy{})
-	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
@@ -202,13 +203,13 @@ func TestPurge_ReturnsErrorFromFailingTableAndStillRunsOthers(t *testing.T) {
 	if _, err := db.Exec(`DROP TABLE market_snapshot_vectors`); err != nil {
 		t.Fatal(err)
 	}
-	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.NewSnapshotRepository(db).Insert(context.Background(), domain.Snapshot{
+	if _, err := market.NewSnapshotRepository(db).Insert(context.Background(), domain.Snapshot{
 		InstrumentID: inst.ID, Symbol: "7203", Timestamp: fixedNow.AddDate(0, 0, -200),
 		Price: 1, Volume: 1, Turnover: 1, RawDataJSON: "{}", Feature: domain.Feature{VWAP: 1},
 	}); err != nil {

@@ -7,7 +7,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
@@ -43,15 +45,15 @@ func TestScheduler_RiskMonitorAndAutoResume_DetectNotifyRecover(t *testing.T) {
 	db := newTestDB(t)
 	health := &switchableHealth{healthy: false}
 	notifier := &recordingNotifier{}
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	engine := risk.NewEngine(risk.Config{
 		Limits:           config.RiskLimits{MaxDailyLossPct: 1.0, MaxConsecutiveLosses: 4},
 		KillSwitch:       killSwitch,
-		Settings:         repository.NewRuntimeSettingsRepository(db),
+		Settings:         system.NewRuntimeSettingsRepository(db),
 		MarketDataHealth: health,
 		Notifier:         notifier,
 	})
-	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db),
+	s := scheduler.New(jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db),
 		scheduler.WithRiskMonitor(engine), scheduler.WithAutoResumer(engine))
 	ctx := context.Background()
 
@@ -106,7 +108,7 @@ func (f failingAutoResumer) AutoResume(context.Context) (int, error) { return 0,
 
 func TestScheduler_RiskEntryPoints_NoOpWithoutDependenciesAndPropagateErrors(t *testing.T) {
 	db := newTestDB(t)
-	jobs, instruments := repository.NewJobRepository(db), repository.NewInstrumentRepository(db)
+	jobs, instruments := jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db)
 	ctx := context.Background()
 
 	bare := scheduler.New(jobs, instruments)

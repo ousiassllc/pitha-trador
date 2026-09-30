@@ -8,7 +8,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
 func (s *Scheduler) runWorker(ctx context.Context, queue string) {
@@ -45,7 +45,7 @@ func (s *Scheduler) runWorker(ctx context.Context, queue string) {
 func (s *Scheduler) processNext(ctx context.Context, queue string, handler Handler) bool {
 	job, err := s.jobs.ClaimNext(ctx, queue, time.Now().UTC())
 	if err != nil {
-		if !errors.Is(err, repository.ErrJobNotFound) {
+		if !errors.Is(err, jobqueue.ErrJobNotFound) {
 			slog.Error("scheduler: claim job failed", "queue", queue, "error", err)
 		}
 		return false
@@ -68,7 +68,7 @@ func (s *Scheduler) processNext(ctx context.Context, queue string, handler Handl
 // stack), so one bad job is marked failed instead of crashing the whole
 // process - and, since a crash would leave the job status='running' for
 // Recover to reset, instead of crash-looping on restart.
-func safeHandle(ctx context.Context, handler Handler, job repository.Job) (err error) {
+func safeHandle(ctx context.Context, handler Handler, job jobqueue.Job) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("scheduler: job handler panicked",

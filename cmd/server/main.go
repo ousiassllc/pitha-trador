@@ -20,7 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
@@ -69,7 +69,7 @@ func main() {
 	// anything unset (both marketdata.NewClient/jev.NewClient tolerate
 	// that) until an operator fills them in and restarts (no
 	// hot-reload).
-	secretsRepo := repository.NewSecretsRepository(state.DB)
+	secretsRepo := system.NewSecretsRepository(state.DB)
 	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), secretsRepo)
 	if err != nil {
 		log.Fatal(err)

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
 // Subscribe registers a new bus subscriber. cancel unregisters it and
@@ -42,9 +42,9 @@ func (s *Service) publish(msg Message) {
 	}
 }
 
-// ObserveJob is a repository.JobObserver: it publishes the transition as
+// ObserveJob is a jobqueue.JobObserver: it publishes the transition as
 // an activity event plus the queue's new depth.
-func (s *Service) ObserveJob(ctx context.Context, job repository.Job) {
+func (s *Service) ObserveJob(ctx context.Context, job jobqueue.Job) {
 	if !s.hasSubscribers() {
 		return
 	}
@@ -64,7 +64,7 @@ func (s *Service) ObserveJob(ctx context.Context, job repository.Job) {
 	s.publish(Message{QueueUpdate: &update})
 }
 
-// ObserveDecision is a repository.DecisionObserver.
+// ObserveDecision is a judgement.DecisionObserver.
 func (s *Service) ObserveDecision(_ context.Context, d domain.JevDecision) {
 	if !s.hasSubscribers() {
 		return
@@ -73,7 +73,7 @@ func (s *Service) ObserveDecision(_ context.Context, d domain.JevDecision) {
 	s.publish(Message{Event: &ev})
 }
 
-// ObserveKillSwitch is a repository.KillSwitchObserver.
+// ObserveKillSwitch is a system.KillSwitchObserver.
 func (s *Service) ObserveKillSwitch(_ context.Context, ke domain.KillSwitchEvent) {
 	if !s.hasSubscribers() {
 		return

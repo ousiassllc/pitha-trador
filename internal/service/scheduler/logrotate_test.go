@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
@@ -22,8 +23,8 @@ func (f *fakeLogRotator) Rotate(ctx context.Context) error {
 
 func TestScheduler_RotateLogs_NoOpWithoutRotator(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	s := scheduler.New(jobs, instruments)
 	if err := s.RotateLogs(context.Background()); err != nil {
@@ -33,8 +34,8 @@ func TestScheduler_RotateLogs_NoOpWithoutRotator(t *testing.T) {
 
 func TestScheduler_RotateLogs_CallsConfiguredRotator(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	rotator := &fakeLogRotator{}
 
 	s := scheduler.New(jobs, instruments, scheduler.WithLogRotator(rotator))
@@ -48,8 +49,8 @@ func TestScheduler_RotateLogs_CallsConfiguredRotator(t *testing.T) {
 
 func TestScheduler_RotateLogs_PropagatesRotatorError(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	rotator := &fakeLogRotator{err: errors.New("disk full")}
 
 	s := scheduler.New(jobs, instruments, scheduler.WithLogRotator(rotator))
@@ -60,8 +61,8 @@ func TestScheduler_RotateLogs_PropagatesRotatorError(t *testing.T) {
 
 func TestScheduler_Start_RegistersDailyLogRotationTrigger(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	rotator := &fakeLogRotator{}
 
 	s := scheduler.New(jobs, instruments, scheduler.WithLogRotator(rotator))

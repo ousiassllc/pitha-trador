@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-// Key* are the secrets table row keys internal/repository.SecretsRepository
+// Key* are the secrets table row keys internal/repository/system.SecretsRepository
 // stores and internal/web/handler's Settings screen (`GET /settings`, `POST`/`DELETE
 // /settings/:key`) reads and writes. Before issue #57 these were environment
 // variable names (JEV_API_KEY etc., read by the now-removed LoadSecrets
@@ -119,11 +119,11 @@ type Secrets struct {
 	OpusBaseURL string
 }
 
-// SecretsRepository is the subset of internal/repository.SecretsRepository's
+// SecretsRepository is the subset of internal/repository/system.SecretsRepository's
 // methods LoadSecretsFromDB needs. An interface here - rather than
 // importing internal/repository's concrete type - keeps this package
 // dependency-free (see doc.go: config MUST NOT depend on any other
-// internal package); *repository.SecretsRepository implements it without
+// internal package); *system.SecretsRepository implements it without
 // either package needing to import the other, the same
 // interface-at-the-consumer pattern internal/web/handler already uses
 // for its own SystemEngine/CalibrationSource types wrapping concrete

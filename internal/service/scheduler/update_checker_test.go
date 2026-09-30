@@ -5,7 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
@@ -21,8 +22,8 @@ func (f *fakeUpdateChecker) CheckForUpdate(ctx context.Context) error {
 
 func TestScheduler_CheckForUpdate_NoOpWithoutChecker(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	s := scheduler.New(jobs, instruments)
 	if err := s.CheckForUpdate(context.Background()); err != nil {
@@ -32,8 +33,8 @@ func TestScheduler_CheckForUpdate_NoOpWithoutChecker(t *testing.T) {
 
 func TestScheduler_CheckForUpdate_CallsConfiguredChecker(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	checker := &fakeUpdateChecker{}
 
 	s := scheduler.New(jobs, instruments, scheduler.WithUpdateChecker(checker))
@@ -47,8 +48,8 @@ func TestScheduler_CheckForUpdate_CallsConfiguredChecker(t *testing.T) {
 
 func TestScheduler_CheckForUpdate_PropagatesCheckerError(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	wantErr := errors.New("github api unavailable")
 	checker := &fakeUpdateChecker{err: wantErr}
 

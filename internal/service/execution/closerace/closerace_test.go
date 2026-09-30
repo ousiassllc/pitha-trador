@@ -14,7 +14,10 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 )
 
@@ -22,28 +25,28 @@ var now = time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC)
 
 type fixture struct {
 	engine    *execution.Engine
-	orders    *repository.OrderRepository
-	positions *repository.PositionRepository
+	orders    *trading.OrderRepository
+	positions *trading.PositionRepository
 	position  domain.Position
 }
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
 	ctx := context.Background()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	inst, err := repository.NewInstrumentRepository(db).Create(ctx, domain.Instrument{Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true})
+	inst, err := market.NewInstrumentRepository(db).Create(ctx, domain.Instrument{Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := fixture{orders: repository.NewOrderRepository(db), positions: repository.NewPositionRepository(db)}
+	f := fixture{orders: trading.NewOrderRepository(db), positions: trading.NewPositionRepository(db)}
 	f.engine = execution.NewEngine(execution.Deps{
-		Orders: f.orders, Positions: f.positions, Snapshots: repository.NewSnapshotRepository(db),
-		Decisions: repository.NewDecisionRepository(db), Signals: repository.NewSignalRepository(db),
-		Instruments: repository.NewInstrumentRepository(db),
+		Orders: f.orders, Positions: f.positions, Snapshots: market.NewSnapshotRepository(db),
+		Decisions: judgement.NewDecisionRepository(db), Signals: trading.NewSignalRepository(db),
+		Instruments: market.NewInstrumentRepository(db),
 	}, execution.Config{})
 	entry, err := f.engine.Enter(ctx, execution.EntryRequest{
 		Signal:   domain.TradeSignal{InstrumentID: inst.ID, Symbol: "7203", Direction: domain.JevDirectionLong, RiskPassed: true, PolicyVersion: "v1"},
@@ -121,7 +124,7 @@ func TestPositionRepository_CloseWithExitOrder_LosingCloseRollsBackOrder(t *test
 
 func TestOrderRepository_Fill_RejectsAlreadyFilledOrder(t *testing.T) {
 	f := newFixture(t)
-	if _, err := f.orders.Fill(context.Background(), f.position.EntryOrderID, 9999, nil, now); !errors.Is(err, repository.ErrOrderNotPending) {
+	if _, err := f.orders.Fill(context.Background(), f.position.EntryOrderID, 9999, nil, now); !errors.Is(err, trading.ErrOrderNotPending) {
 		t.Fatalf("Fill on FILLED entry order err = %v, want ErrOrderNotPending", err)
 	}
 }

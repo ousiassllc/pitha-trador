@@ -7,7 +7,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
 
@@ -24,7 +26,7 @@ func (s *mutablePolicySource) CurrentThresholds(context.Context) (config.PolicyC
 
 func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
 	db := newHandlerTestDB(t)
-	instrument, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	instrument, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
@@ -32,7 +34,7 @@ func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
 	}
 	in := passingInput(domain.JevDirectionLong) // confidence exactly 0.68
 	in.InstrumentID = instrument.ID
-	saved, err := repository.NewDecisionRepository(db).Insert(context.Background(), domain.JevDecision{
+	saved, err := judgement.NewDecisionRepository(db).Insert(context.Background(), domain.JevDecision{
 		InstrumentID: instrument.ID, Symbol: "7203", Timestamp: in.Timestamp, DecisionType: domain.JevDecisionTypeTrader,
 		StateHash: "hash", StateJSON: "{}", QuestionVersion: "v1", ResponseJSON: "{}", ModelID: "test-model",
 	})
@@ -42,7 +44,7 @@ func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
 	in.Decision.ID = saved.ID
 
 	source := &mutablePolicySource{current: testThresholds().Policy}
-	engine := policy.NewEngine(testThresholds(), nil, repository.NewSignalRepository(db), policy.WithPolicySource(source))
+	engine := policy.NewEngine(testThresholds(), nil, trading.NewSignalRepository(db), policy.WithPolicySource(source))
 
 	first, err := engine.Evaluate(context.Background(), in)
 	if err != nil {
@@ -65,7 +67,7 @@ func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
 
 func TestEngine_Evaluate_PolicySourceErrorFailsWithoutPersisting(t *testing.T) {
 	db := newHandlerTestDB(t)
-	signals := repository.NewSignalRepository(db)
+	signals := trading.NewSignalRepository(db)
 	readErr := errors.New("runtime_settings unavailable")
 	engine := policy.NewEngine(testThresholds(), nil, signals, policy.WithPolicySource(&mutablePolicySource{err: readErr}))
 

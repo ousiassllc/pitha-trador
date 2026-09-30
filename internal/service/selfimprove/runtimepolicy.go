@@ -6,7 +6,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 )
 
 // RuntimePolicy is the read side of the policy.* runtime_settings keys
@@ -16,14 +16,14 @@ import (
 // backtest/shadow-backtest RunConfigs read it, so an approved change
 // reaches every consumer on its next read and a rollback likewise.
 type RuntimePolicy struct {
-	settings *repository.RuntimeSettingsRepository
+	settings *system.RuntimeSettingsRepository
 	baseline config.PolicyConfig
 }
 
 // NewRuntimePolicy returns a RuntimePolicy over settings, falling back to
 // baseline (config.LoadStrategy's PolicyConfig) for every policy.* key
 // runtime_settings has no value for.
-func NewRuntimePolicy(settings *repository.RuntimeSettingsRepository, baseline config.PolicyConfig) RuntimePolicy {
+func NewRuntimePolicy(settings *system.RuntimeSettingsRepository, baseline config.PolicyConfig) RuntimePolicy {
 	return RuntimePolicy{settings: settings, baseline: baseline}
 }
 

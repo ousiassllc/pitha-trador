@@ -12,16 +12,19 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
@@ -42,7 +45,7 @@ func scoutServer(t *testing.T, resp jev.ScoutResponse) *httptest.Server {
 	return server
 }
 
-func mustCreateInstrument(t *testing.T, instruments *repository.InstrumentRepository, symbol string) domain.Instrument {
+func mustCreateInstrument(t *testing.T, instruments *market.InstrumentRepository, symbol string) domain.Instrument {
 	t.Helper()
 	inst, err := instruments.Create(context.Background(), domain.Instrument{
 		Symbol: symbol, Name: symbol + " Inc", Market: "TSE Prime", IsActive: true,
@@ -80,13 +83,13 @@ func TestScout_Evaluate_PersistsDecisionAndReportsPass(t *testing.T) {
 	})
 
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	decisions := repository.NewDecisionRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
 	inst := mustCreateInstrument(t, instruments, "7203")
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL})
-	ragService := rag.NewService(db, decisions, repository.NewSnapshotRepository(db))
-	scout := jev.NewScout(client, decisions, repository.NewSnapshotRepository(db), nil, ragService, testThresholds())
+	ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
+	scout := jev.NewScout(client, decisions, market.NewSnapshotRepository(db), nil, ragService, testThresholds())
 
 	state := jev.ScoutState{Symbol: "7203", Timestamp: time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC), Price: 2100}
 	decision, passed, err := scout.Evaluate(context.Background(), inst.ID, state)
@@ -125,12 +128,12 @@ func TestScout_Evaluate_FailsToPassBelowThreshold(t *testing.T) {
 	server := scoutServer(t, jev.ScoutResponse{InterestingNow: 0.5, LiquidityOk: 0.9, AbnormalActivity: 0.9})
 
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	decisions := repository.NewDecisionRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
 	inst := mustCreateInstrument(t, instruments, "9433")
 
-	ragService := rag.NewService(db, decisions, repository.NewSnapshotRepository(db))
-	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), decisions, repository.NewSnapshotRepository(db), nil, ragService, testThresholds())
+	ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
+	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), decisions, market.NewSnapshotRepository(db), nil, ragService, testThresholds())
 
 	_, passed, err := scout.Evaluate(context.Background(), inst.ID, jev.ScoutState{Symbol: "9433"})
 	if err != nil {
@@ -148,13 +151,13 @@ func TestScout_Evaluate_APIFailurePersistsNothing(t *testing.T) {
 	defer server.Close()
 
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	decisions := repository.NewDecisionRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
 	inst := mustCreateInstrument(t, instruments, "1301")
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
-	ragService := rag.NewService(db, decisions, repository.NewSnapshotRepository(db))
-	scout := jev.NewScout(client, decisions, repository.NewSnapshotRepository(db), nil, ragService, testThresholds())
+	ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
+	scout := jev.NewScout(client, decisions, market.NewSnapshotRepository(db), nil, ragService, testThresholds())
 
 	_, _, err := scout.Evaluate(context.Background(), inst.ID, jev.ScoutState{Symbol: "1301"})
 	if err == nil {
@@ -174,9 +177,9 @@ func TestScout_HandleJob_EnqueuesJevTraderJobOnPass(t *testing.T) {
 	server := scoutServer(t, jev.ScoutResponse{InterestingNow: 0.9, LiquidityOk: 0.9, AbnormalActivity: 0.9})
 
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	inst := mustCreateInstrument(t, instruments, "7203")
 
 	if _, err := snapshots.Insert(context.Background(), domain.Snapshot{
@@ -189,14 +192,14 @@ func TestScout_HandleJob_EnqueuesJevTraderJobOnPass(t *testing.T) {
 		t.Fatalf("insert snapshot fixture: %v", err)
 	}
 
-	ragService := rag.NewService(db, repository.NewDecisionRepository(db), snapshots)
-	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), repository.NewDecisionRepository(db), snapshots, jobs, ragService, testThresholds())
+	ragService := rag.NewService(db, judgement.NewDecisionRepository(db), snapshots)
+	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), judgement.NewDecisionRepository(db), snapshots, jobs, ragService, testThresholds())
 
 	payload, err := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	job, err := jobs.Enqueue(context.Background(), repository.JobQueueJevScout, string(payload), time.Now().UTC())
+	job, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueJevScout, string(payload), time.Now().UTC())
 	if err != nil {
 		t.Fatalf("enqueue scout job: %v", err)
 	}
@@ -205,7 +208,7 @@ func TestScout_HandleJob_EnqueuesJevTraderJobOnPass(t *testing.T) {
 		t.Fatalf("HandleJob: %v", err)
 	}
 
-	traderJob, err := jobs.ClaimNext(context.Background(), repository.JobQueueJevTrader, time.Now().UTC())
+	traderJob, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevTrader, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("ClaimNext(jev-trader): %v, want an enqueued jev-trader job after a Scout pass", err)
 	}
@@ -222,9 +225,9 @@ func TestScout_HandleJob_NoJevTraderJobOnFail(t *testing.T) {
 	server := scoutServer(t, jev.ScoutResponse{InterestingNow: 0.1, LiquidityOk: 0.1, AbnormalActivity: 0.1})
 
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	inst := mustCreateInstrument(t, instruments, "9433")
 
 	if _, err := snapshots.Insert(context.Background(), domain.Snapshot{
@@ -237,11 +240,11 @@ func TestScout_HandleJob_NoJevTraderJobOnFail(t *testing.T) {
 		t.Fatalf("insert snapshot fixture: %v", err)
 	}
 
-	ragService := rag.NewService(db, repository.NewDecisionRepository(db), snapshots)
-	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), repository.NewDecisionRepository(db), snapshots, jobs, ragService, testThresholds())
+	ragService := rag.NewService(db, judgement.NewDecisionRepository(db), snapshots)
+	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), judgement.NewDecisionRepository(db), snapshots, jobs, ragService, testThresholds())
 
 	payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
-	job, err := jobs.Enqueue(context.Background(), repository.JobQueueJevScout, string(payload), time.Now().UTC())
+	job, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueJevScout, string(payload), time.Now().UTC())
 	if err != nil {
 		t.Fatalf("enqueue scout job: %v", err)
 	}
@@ -250,7 +253,7 @@ func TestScout_HandleJob_NoJevTraderJobOnFail(t *testing.T) {
 		t.Fatalf("HandleJob: %v", err)
 	}
 
-	if _, err := jobs.ClaimNext(context.Background(), repository.JobQueueJevTrader, time.Now().UTC()); err == nil {
+	if _, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevTrader, time.Now().UTC()); err == nil {
 		t.Fatal("ClaimNext(jev-trader) succeeded, want no job enqueued after a Scout fail")
 	}
 }
@@ -259,20 +262,20 @@ func TestScout_HandleJob_NoSnapshotReturnsError(t *testing.T) {
 	server := scoutServer(t, jev.ScoutResponse{})
 
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst := mustCreateInstrument(t, instruments, "1301")
 
-	ragService := rag.NewService(db, repository.NewDecisionRepository(db), repository.NewSnapshotRepository(db))
+	ragService := rag.NewService(db, judgement.NewDecisionRepository(db), market.NewSnapshotRepository(db))
 	scout := jev.NewScout(
 		jev.NewClient(jev.Config{BaseURL: server.URL}),
-		repository.NewDecisionRepository(db),
-		repository.NewSnapshotRepository(db),
-		repository.NewJobRepository(db),
+		judgement.NewDecisionRepository(db),
+		market.NewSnapshotRepository(db),
+		jobqueue.NewJobRepository(db),
 		ragService,
 		testThresholds(),
 	)
 	payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
-	err := scout.HandleJob(context.Background(), repository.Job{PayloadJSON: string(payload)})
+	err := scout.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payload)})
 	if err == nil {
 		t.Fatal("HandleJob: want error when no market_snapshots row exists yet, got nil")
 	}

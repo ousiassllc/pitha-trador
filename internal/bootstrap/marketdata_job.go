@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
@@ -32,7 +32,7 @@ type marketDataJobPayload struct {
 // A board failure is returned as-is: Scheduler marks the job failed and
 // moves on without crashing the process (issue #44 "接続失敗時にプロセス全体が
 // クラッシュしないことが必須").
-func (s *Services) handleMarketData(ctx context.Context, job repository.Job) error {
+func (s *Services) handleMarketData(ctx context.Context, job jobqueue.Job) error {
 	var payload marketDataJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return fmt.Errorf("bootstrap: decode market-data job payload: %w", err)
@@ -136,7 +136,7 @@ func (s *Services) isCandidate(ctx context.Context, instrumentID int64) bool {
 // intentional no-op: handleMarketData already computes and persists
 // Feature atomically; a succeeding handler keeps the feature-calc jobs
 // EnqueueFullScan adds from piling up as "pending" rows.
-func (s *Services) handleFeatureCalc(context.Context, repository.Job) error {
+func (s *Services) handleFeatureCalc(context.Context, jobqueue.Job) error {
 	return nil
 }
 

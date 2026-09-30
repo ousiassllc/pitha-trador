@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -62,14 +62,14 @@ func (p dailyLossPortfolio) DailyLossPct(context.Context, time.Time) (float64, e
 	return p.pct, nil
 }
 
-func newRecordingEngine(t *testing.T, portfolio risk.PortfolioProvider, rec *syncRecorder) (*risk.Engine, *repository.KillSwitchRepository) {
+func newRecordingEngine(t *testing.T, portfolio risk.PortfolioProvider, rec *syncRecorder) (*risk.Engine, *system.KillSwitchRepository) {
 	t.Helper()
 	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	e := risk.NewEngine(risk.Config{
 		Limits:     testLimits(),
 		KillSwitch: killSwitch,
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Portfolio:  portfolio,
 		Closer:     rec,
 		Notifier:   rec,

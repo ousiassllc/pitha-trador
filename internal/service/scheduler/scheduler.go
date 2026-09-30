@@ -10,7 +10,9 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
@@ -19,8 +21,8 @@ import (
 const defaultPollInterval = 200 * time.Millisecond
 
 // Handler processes a single claimed job. A non-nil error marks the job
-// failed (repository.JobRepository.MarkFailed); nil marks it succeeded.
-type Handler func(ctx context.Context, job repository.Job) error
+// failed (jobqueue.JobRepository.MarkFailed); nil marks it succeeded.
+type Handler func(ctx context.Context, job jobqueue.Job) error
 
 // fullScanPayload is the JSON body enqueued onto the market-data and
 // feature-calc queues once per active instrument, each full-scan cycle
@@ -33,12 +35,12 @@ type fullScanPayload struct {
 // Scheduler is the jobs-table-backed worker pool + cron-driven full-scan
 // trigger described in package doc.go.
 type Scheduler struct {
-	jobs        *repository.JobRepository
-	instruments *repository.InstrumentRepository
+	jobs        *jobqueue.JobRepository
+	instruments *market.InstrumentRepository
 	// outcomeLabels is optional (WithOutcomeLabelSource): a nil value
 	// makes EnqueueOutcomeLabeling a no-op and skips Start's
 	// outcome-labeling trigger.
-	outcomeLabels *repository.CalibrationRepository
+	outcomeLabels *judgement.CalibrationRepository
 	// heartbeatChecker is optional (WithHeartbeatChecker): a nil value
 	// makes CheckOperatorHeartbeat a no-op, the same deferral
 	// outcomeLabels above already documents.
@@ -99,13 +101,13 @@ func WithPollInterval(d time.Duration) Option {
 
 // WithOutcomeLabelSource enables EnqueueOutcomeLabeling and Start's
 // 1-minute outcome-labeling enqueue trigger (functional.md FR-CAL-4).
-// Unset by default. *repository.CalibrationRepository implements this directly.
-func WithOutcomeLabelSource(repo *repository.CalibrationRepository) Option {
+// Unset by default. *judgement.CalibrationRepository implements this directly.
+func WithOutcomeLabelSource(repo *judgement.CalibrationRepository) Option {
 	return func(s *Scheduler) { s.outcomeLabels = repo }
 }
 
 // New returns a Scheduler backed by jobs/instruments.
-func New(jobs *repository.JobRepository, instruments *repository.InstrumentRepository, opts ...Option) *Scheduler {
+func New(jobs *jobqueue.JobRepository, instruments *market.InstrumentRepository, opts ...Option) *Scheduler {
 	s := &Scheduler{
 		jobs:         jobs,
 		instruments:  instruments,
@@ -159,10 +161,10 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 		if err != nil {
 			return 0, fmt.Errorf("scheduler: marshal full scan payload for %q: %w", inst.Symbol, err)
 		}
-		if _, err := s.jobs.Enqueue(ctx, repository.JobQueueMarketData, string(payload), now); err != nil {
+		if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueMarketData, string(payload), now); err != nil {
 			return 0, fmt.Errorf("scheduler: enqueue market-data job for %q: %w", inst.Symbol, err)
 		}
-		if _, err := s.jobs.Enqueue(ctx, repository.JobQueueFeatureCalc, string(payload), now); err != nil {
+		if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueFeatureCalc, string(payload), now); err != nil {
 			return 0, fmt.Errorf("scheduler: enqueue feature-calc job for %q: %w", inst.Symbol, err)
 		}
 	}
@@ -188,7 +190,7 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 	if err != nil {
 		return fmt.Errorf("scheduler: marshal event-driven reevaluation payload for %q: %w", symbol, err)
 	}
-	if _, err := s.jobs.Enqueue(ctx, repository.JobQueueJevScout, string(payload), now); err != nil {
+	if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueJevScout, string(payload), now); err != nil {
 		return fmt.Errorf("scheduler: enqueue event-driven jev-scout job for %q: %w", symbol, err)
 	}
 	return nil

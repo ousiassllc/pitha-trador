@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
@@ -23,7 +24,7 @@ func (f *fakeBackuper) Backup(ctx context.Context) error {
 
 func TestScheduler_BackupDatabase_NoOpWithoutBackuper(t *testing.T) {
 	db := newTestDB(t)
-	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db))
+	s := scheduler.New(jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db))
 	if err := s.BackupDatabase(context.Background()); err != nil {
 		t.Fatalf("BackupDatabase: %v (want nil, no WithDatabaseBackuper configured)", err)
 	}
@@ -31,8 +32,8 @@ func TestScheduler_BackupDatabase_NoOpWithoutBackuper(t *testing.T) {
 
 func TestScheduler_BackupDatabase_CallsBackuperAndPropagatesError(t *testing.T) {
 	db := newTestDB(t)
-	jobs := repository.NewJobRepository(db)
-	instruments := repository.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 
 	ok := &fakeBackuper{}
 	s := scheduler.New(jobs, instruments, scheduler.WithDatabaseBackuper(ok))
@@ -52,7 +53,7 @@ func TestScheduler_BackupDatabase_CallsBackuperAndPropagatesError(t *testing.T) 
 
 func TestScheduler_Start_RegistersDailyDatabaseBackupTrigger(t *testing.T) {
 	db := newTestDB(t)
-	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db),
+	s := scheduler.New(jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db),
 		scheduler.WithDatabaseBackuper(&fakeBackuper{}))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -94,7 +95,7 @@ func TestScheduler_Start_CatchesUpMissedBackupImmediately(t *testing.T) {
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	state := &settingsStub{m: map[string]string{backupStateKey: `"` + yesterday + `"`}}
 	b := &fakeBackuper{}
-	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db),
+	s := scheduler.New(jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db),
 		scheduler.WithDatabaseBackuper(b), scheduler.WithMaintenanceState(state))
 	if err := s.Start(context.Background(), 24*time.Hour); err != nil {
 		t.Fatalf("Start: %v", err)
@@ -115,7 +116,7 @@ func TestScheduler_Start_SkipsBackupAlreadyDoneToday(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 	state := &settingsStub{m: map[string]string{backupStateKey: `"` + today + `"`}}
 	b := &fakeBackuper{}
-	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db),
+	s := scheduler.New(jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db),
 		scheduler.WithDatabaseBackuper(b), scheduler.WithMaintenanceState(state))
 	if err := s.Start(context.Background(), 24*time.Hour); err != nil {
 		t.Fatalf("Start: %v", err)

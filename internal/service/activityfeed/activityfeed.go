@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
 const (
@@ -37,30 +37,30 @@ const (
 // constants), the fixed row set of Snapshot.Queues.
 func Queues() []string {
 	return []string{
-		repository.JobQueueMarketData,
-		repository.JobQueueFeatureCalc,
-		repository.JobQueueJevScout,
-		repository.JobQueueJevTrader,
-		repository.JobQueueOutcomeLabeling,
-		repository.JobQueueAnalytics,
+		jobqueue.JobQueueMarketData,
+		jobqueue.JobQueueFeatureCalc,
+		jobqueue.JobQueueJevScout,
+		jobqueue.JobQueueJevTrader,
+		jobqueue.JobQueueOutcomeLabeling,
+		jobqueue.JobQueueAnalytics,
 	}
 }
 
 // JobSource is the jobs table access Service needs
-// (repository.JobRepository).
+// (jobqueue.JobRepository).
 type JobSource interface {
-	QueueCounts(ctx context.Context, failedSince time.Time) ([]repository.JobQueueCount, error)
-	ListRecent(ctx context.Context, queue string, limit int) ([]repository.Job, error)
+	QueueCounts(ctx context.Context, failedSince time.Time) ([]jobqueue.JobQueueCount, error)
+	ListRecent(ctx context.Context, queue string, limit int) ([]jobqueue.Job, error)
 }
 
 // DecisionSource is the jev_decisions table access Service needs
-// (repository.DecisionRepository).
+// (judgement.DecisionRepository).
 type DecisionSource interface {
 	ListRecent(ctx context.Context, decisionType string, limit int) ([]domain.JevDecision, error)
 }
 
 // KillSwitchSource is the kill_switch_events table access Service needs
-// (repository.KillSwitchRepository).
+// (system.KillSwitchRepository).
 type KillSwitchSource interface {
 	ListRecent(ctx context.Context, limit int) ([]domain.KillSwitchEvent, error)
 }
@@ -150,7 +150,7 @@ func (s *Service) queueStatuses(ctx context.Context, asOf time.Time) ([]domain.Q
 	if err != nil {
 		return nil, fmt.Errorf("activityfeed: queue counts: %w", err)
 	}
-	byQueue := make(map[string]repository.JobQueueCount, len(counts))
+	byQueue := make(map[string]jobqueue.JobQueueCount, len(counts))
 	for _, c := range counts {
 		byQueue[c.Queue] = c
 	}

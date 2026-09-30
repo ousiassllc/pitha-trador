@@ -7,7 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
 
@@ -57,7 +57,7 @@ func TestBuildServices_AppliedPolicySettingReachesLivePolicyEngine(t *testing.T)
 func TestBuildServices_RegistersSelfImproveHandler(t *testing.T) {
 	svc := newTestServices(t, nil)
 	ctx := context.Background()
-	job, err := svc.Jobs.Enqueue(ctx, repository.JobQueueAnalytics, "{}", time.Now().UTC())
+	job, err := svc.Jobs.Enqueue(ctx, jobqueue.JobQueueAnalytics, "{}", time.Now().UTC())
 	if err != nil {
 		t.Fatalf("Enqueue analytics job: %v", err)
 	}
@@ -76,9 +76,9 @@ func TestBuildServices_RegistersSelfImproveHandler(t *testing.T) {
 			t.Fatalf("Get job: %v", err)
 		}
 		switch got.Status {
-		case repository.JobStatusSucceeded:
+		case jobqueue.JobStatusSucceeded:
 			return
-		case repository.JobStatusFailed:
+		case jobqueue.JobStatusFailed:
 			lastErr := ""
 			if got.LastError != nil {
 				lastErr = *got.LastError

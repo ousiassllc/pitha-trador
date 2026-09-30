@@ -8,7 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
 
@@ -94,7 +94,7 @@ func TestHandleMarketData_ClosesPaperPositionWhenNewBarHitsStopLoss(t *testing.T
 	}
 
 	payload, _ := json.Marshal(marketDataJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
-	if err := svc.handleMarketData(context.Background(), repository.Job{PayloadJSON: string(payload)}); err != nil {
+	if err := svc.handleMarketData(context.Background(), jobqueue.Job{PayloadJSON: string(payload)}); err != nil {
 		t.Fatalf("handleMarketData: %v", err)
 	}
 

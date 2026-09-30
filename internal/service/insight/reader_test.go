@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 )
@@ -21,30 +23,30 @@ func (f fakeDecisions) RecentDecisions(context.Context, string, int) ([]domain.J
 
 type readerFixture struct {
 	reader       *insight.Reader
-	signals      *repository.SignalRepository
-	positions    *repository.PositionRepository
-	orders       *repository.OrderRepository
+	signals      *trading.SignalRepository
+	positions    *trading.PositionRepository
+	orders       *trading.OrderRepository
 	instrumentID int64
 }
 
 func newReaderFixture(t *testing.T) readerFixture {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst, err := instruments.Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
 		t.Fatalf("create instrument: %v", err)
 	}
-	signals := repository.NewSignalRepository(db)
-	positions := repository.NewPositionRepository(db)
-	orders := repository.NewOrderRepository(db)
+	signals := trading.NewSignalRepository(db)
+	positions := trading.NewPositionRepository(db)
+	orders := trading.NewOrderRepository(db)
 	return readerFixture{
 		reader:  insight.NewReader(fakeDecisions{}, instruments, signals, positions),
 		signals: signals, positions: positions, orders: orders, instrumentID: inst.ID,

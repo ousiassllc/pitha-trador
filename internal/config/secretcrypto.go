@@ -21,7 +21,7 @@ import (
 const secretsEncryptionKeySeed = "pitha-trador secrets store v1"
 
 // secretsEncryptionKey is the AES-256 key EncryptSecret/DecryptSecret use
-// to encrypt internal/repository.SecretsRepository's secrets-table rows
+// to encrypt internal/repository/system.SecretsRepository's secrets-table rows
 // (JEV_API_KEY, JEV_BASE_URL, KABU_API_PASSWORD, SLACK_WEBHOOK_URL).
 //
 // Threat model - read this before assuming more than it provides: this

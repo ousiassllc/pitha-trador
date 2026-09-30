@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
@@ -16,11 +17,11 @@ import (
 // so the second send is accepted only after poll #1's drain loop is done:
 // everything handled by then was handled by that ONE poll, with no wall-clock
 // timing involved.
-func runOnePoll(t *testing.T, jobs *repository.JobRepository, instruments *repository.InstrumentRepository, h scheduler.Handler) {
+func runOnePoll(t *testing.T, jobs *jobqueue.JobRepository, instruments *market.InstrumentRepository, h scheduler.Handler) {
 	t.Helper()
 	polls := make(chan time.Time)
 	s := scheduler.New(jobs, instruments, scheduler.WithPollSignalForTest(polls))
-	s.RegisterHandler(repository.JobQueueMarketData, h)
+	s.RegisterHandler(jobqueue.JobQueueMarketData, h)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() { cancel(); s.Stop() })
 	if err := s.Start(ctx, time.Hour); err != nil {
@@ -32,20 +33,20 @@ func runOnePoll(t *testing.T, jobs *repository.JobRepository, instruments *repos
 
 func TestScheduler_Start_HandlerPanicMarksJobFailedAndKeepsWorkerAlive(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	now := time.Now().UTC()
-	panicJob, err := jobs.Enqueue(context.Background(), repository.JobQueueMarketData, `{"boom":true}`, now)
+	panicJob, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueMarketData, `{"boom":true}`, now)
 	if err != nil {
 		t.Fatalf("Enqueue panic job: %v", err)
 	}
-	okJob, err := jobs.Enqueue(context.Background(), repository.JobQueueMarketData, `{"boom":false}`, now.Add(time.Millisecond))
+	okJob, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueMarketData, `{"boom":false}`, now.Add(time.Millisecond))
 	if err != nil {
 		t.Fatalf("Enqueue ok job: %v", err)
 	}
 
-	runOnePoll(t, jobs, instruments, func(_ context.Context, j repository.Job) error {
+	runOnePoll(t, jobs, instruments, func(_ context.Context, j jobqueue.Job) error {
 		if j.ID == panicJob.ID {
 			var payload []int
 			_ = payload[len(j.PayloadJSON)] // index out of range: panics
@@ -60,7 +61,7 @@ func TestScheduler_Start_HandlerPanicMarksJobFailedAndKeepsWorkerAlive(t *testin
 	if err != nil {
 		t.Fatalf("Get ok job: %v", err)
 	}
-	if gotPanic.Status != repository.JobStatusFailed || gotOK.Status != repository.JobStatusSucceeded {
+	if gotPanic.Status != jobqueue.JobStatusFailed || gotOK.Status != jobqueue.JobStatusSucceeded {
 		t.Fatalf("panic job status = %q, following job status = %q; want failed and succeeded", gotPanic.Status, gotOK.Status)
 	}
 	if gotPanic.LastError == nil || !strings.Contains(*gotPanic.LastError, "handler panic") {
@@ -70,19 +71,19 @@ func TestScheduler_Start_HandlerPanicMarksJobFailedAndKeepsWorkerAlive(t *testin
 
 func TestScheduler_Start_DrainsBacklogWithinOnePoll(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	const total = 40
 	now := time.Now().UTC()
 	for range total {
-		if _, err := jobs.Enqueue(context.Background(), repository.JobQueueMarketData, `{}`, now); err != nil {
+		if _, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueMarketData, `{}`, now); err != nil {
 			t.Fatalf("Enqueue: %v", err)
 		}
 	}
 
 	var processed atomic.Int64
-	runOnePoll(t, jobs, instruments, func(context.Context, repository.Job) error {
+	runOnePoll(t, jobs, instruments, func(context.Context, jobqueue.Job) error {
 		processed.Add(1)
 		return nil
 	})

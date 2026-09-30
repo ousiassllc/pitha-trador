@@ -29,7 +29,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
 // DefaultRetentionDays is non-functional.md §3's "直近90日分のフルバック
@@ -147,7 +147,7 @@ func (s *Service) copyDatabase(ctx context.Context, dst string) error {
 		return fmt.Errorf("backup: close temporary file %q: %w", tmp, err)
 	}
 
-	busy, err := repository.BackupTo(ctx, s.db, tmp)
+	busy, err := sqlitedb.BackupTo(ctx, s.db, tmp)
 	if busy {
 		slog.Warn("backup: wal checkpoint could not fully truncate the WAL; the copy is still a consistent snapshot")
 	}

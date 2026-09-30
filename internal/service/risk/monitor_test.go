@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -20,8 +22,8 @@ type monitorFixture struct {
 	notifier  *fakeNotifier
 	closer    *fakeCloser
 	instrID   int64
-	orders    *repository.OrderRepository
-	positions *repository.PositionRepository
+	orders    *trading.OrderRepository
+	positions *trading.PositionRepository
 }
 
 func newMonitorFixture(t *testing.T, cfg func(*risk.Config)) *monitorFixture {
@@ -30,10 +32,10 @@ func newMonitorFixture(t *testing.T, cfg func(*risk.Config)) *monitorFixture {
 	f := &monitorFixture{
 		notifier:  &fakeNotifier{},
 		closer:    &fakeCloser{},
-		orders:    repository.NewOrderRepository(db),
-		positions: repository.NewPositionRepository(db),
+		orders:    trading.NewOrderRepository(db),
+		positions: trading.NewPositionRepository(db),
 	}
-	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
@@ -42,8 +44,8 @@ func newMonitorFixture(t *testing.T, cfg func(*risk.Config)) *monitorFixture {
 	f.instrID = inst.ID
 	c := risk.Config{
 		Limits:     testLimits(),
-		KillSwitch: repository.NewKillSwitchRepository(db),
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		KillSwitch: system.NewKillSwitchRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Portfolio:  risk.ZeroPortfolioProvider{},
 		Positions:  f.positions,
 		Orders:     f.orders,

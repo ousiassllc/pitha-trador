@@ -6,23 +6,23 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 )
 
 type fakeJobs struct {
-	counts    []repository.JobQueueCount
-	jobs      []repository.Job
+	counts    []jobqueue.JobQueueCount
+	jobs      []jobqueue.Job
 	gotQueue  string
 	gotLimit  int
 	listCalls int
 }
 
-func (f *fakeJobs) QueueCounts(context.Context, time.Time) ([]repository.JobQueueCount, error) {
+func (f *fakeJobs) QueueCounts(context.Context, time.Time) ([]jobqueue.JobQueueCount, error) {
 	return f.counts, nil
 }
 
-func (f *fakeJobs) ListRecent(_ context.Context, queue string, limit int) ([]repository.Job, error) {
+func (f *fakeJobs) ListRecent(_ context.Context, queue string, limit int) ([]jobqueue.Job, error) {
 	f.listCalls++
 	f.gotQueue, f.gotLimit = queue, limit
 	return f.jobs, nil
@@ -54,10 +54,10 @@ func fixtures() (*fakeJobs, *fakeDecisions, *fakeKillSwitch) {
 	started, finished := t0.Add(2*time.Minute), t0.Add(2*time.Minute+1500*time.Millisecond)
 	dir, conf := domain.JevDirectionLong, 0.74
 	return &fakeJobs{
-			counts: []repository.JobQueueCount{{Queue: repository.JobQueueJevScout, Pending: 3, Running: 1, FailedSince: 2}},
-			jobs: []repository.Job{{
-				ID: 1, Queue: repository.JobQueueMarketData, PayloadJSON: `{"symbol":"7203"}`,
-				Status: repository.JobStatusSucceeded, Attempts: 1, CreatedAt: t0, StartedAt: &started, FinishedAt: &finished,
+			counts: []jobqueue.JobQueueCount{{Queue: jobqueue.JobQueueJevScout, Pending: 3, Running: 1, FailedSince: 2}},
+			jobs: []jobqueue.Job{{
+				ID: 1, Queue: jobqueue.JobQueueMarketData, PayloadJSON: `{"symbol":"7203"}`,
+				Status: jobqueue.JobStatusSucceeded, Attempts: 1, CreatedAt: t0, StartedAt: &started, FinishedAt: &finished,
 			}},
 		}, &fakeDecisions{byType: map[string][]domain.JevDecision{
 			domain.JevDecisionTypeScout:  {{Symbol: "6758", Timestamp: t0.Add(time.Minute), DecisionType: domain.JevDecisionTypeScout, QuestionVersion: "scout-v1", LatencyMs: 300}},
@@ -112,7 +112,7 @@ func TestService_Snapshot_MergesSourcesNewestFirst(t *testing.T) {
 		t.Fatalf("trader event = %+v", trader)
 	}
 	job := snap.Events[2]
-	if job.Queue != repository.JobQueueMarketData || job.Symbol != "7203" || job.LatencyMs == nil || *job.LatencyMs != 1500 {
+	if job.Queue != jobqueue.JobQueueMarketData || job.Symbol != "7203" || job.LatencyMs == nil || *job.LatencyMs != 1500 {
 		t.Fatalf("job event = %+v, want queue/symbol from the row and latency = finished-started", job)
 	}
 	if kill := snap.Events[0]; kill.Detail != "reason=daily_loss_limit" || kill.Symbol != "" || kill.LatencyMs != nil {
@@ -138,11 +138,11 @@ func TestService_Snapshot_TypeFilterQueriesOnlyThatSource(t *testing.T) {
 
 func TestService_Snapshot_QueueFilterReturnsOnlyJobsOnThatQueue(t *testing.T) {
 	jobs, decisions, kill := fixtures()
-	snap, err := activityfeed.New(jobs, decisions, kill).Snapshot(context.Background(), activityfeed.Query{Queue: repository.JobQueueMarketData})
+	snap, err := activityfeed.New(jobs, decisions, kill).Snapshot(context.Background(), activityfeed.Query{Queue: jobqueue.JobQueueMarketData})
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
-	if jobs.gotQueue != repository.JobQueueMarketData {
+	if jobs.gotQueue != jobqueue.JobQueueMarketData {
 		t.Fatalf("job source queried with queue %q, want market-data", jobs.gotQueue)
 	}
 	if len(snap.Events) != 1 || snap.Events[0].Type != domain.ActivityTypeJob {
@@ -154,7 +154,7 @@ func TestService_Snapshot_QueueFilterReturnsOnlyJobsOnThatQueue(t *testing.T) {
 
 	// A queue filter combined with a non-job type can match nothing.
 	snap, err = activityfeed.New(jobs, decisions, kill).Snapshot(context.Background(),
-		activityfeed.Query{Queue: repository.JobQueueMarketData, Type: domain.ActivityTypeKillSwitch})
+		activityfeed.Query{Queue: jobqueue.JobQueueMarketData, Type: domain.ActivityTypeKillSwitch})
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestService_Observers_PublishToSubscribersOnly(t *testing.T) {
 
 	svc.ObserveKillSwitch(context.Background(), domain.KillSwitchEvent{TriggeredAt: t0, Reason: domain.KillReasonDailyLossLimit})
 	svc.ObserveDecision(context.Background(), domain.JevDecision{Symbol: "7203", Timestamp: t0, DecisionType: domain.JevDecisionTypeScout})
-	svc.ObserveJob(context.Background(), repository.Job{ID: 9, Queue: repository.JobQueueJevScout, Status: repository.JobStatusRunning, CreatedAt: t0})
+	svc.ObserveJob(context.Background(), jobqueue.Job{ID: 9, Queue: jobqueue.JobQueueJevScout, Status: jobqueue.JobStatusRunning, CreatedAt: t0})
 
 	next := func() activityfeed.Message {
 		t.Helper()
@@ -221,11 +221,11 @@ func TestService_Observers_PublishToSubscribersOnly(t *testing.T) {
 	if m := next(); m.Event == nil || m.Event.Type != domain.ActivityTypeJevScout || m.Event.Symbol != "7203" {
 		t.Fatalf("message 2 = %+v, want jev_scout event for 7203", m)
 	}
-	if m := next(); m.Event == nil || m.Event.Type != domain.ActivityTypeJob || m.Event.Queue != repository.JobQueueJevScout {
+	if m := next(); m.Event == nil || m.Event.Type != domain.ActivityTypeJob || m.Event.Queue != jobqueue.JobQueueJevScout {
 		t.Fatalf("message 3 = %+v, want job event on jev-scout", m)
 	}
 	m := next()
-	if m.QueueUpdate == nil || m.QueueUpdate.Queue != repository.JobQueueJevScout ||
+	if m.QueueUpdate == nil || m.QueueUpdate.Queue != jobqueue.JobQueueJevScout ||
 		m.QueueUpdate.Pending != 3 || m.QueueUpdate.Running != 1 || m.QueueUpdate.FailedRecent != 2 {
 		t.Fatalf("message 4 = %+v, want jev-scout queue update pending=3 running=1 failedRecent=2", m)
 	}

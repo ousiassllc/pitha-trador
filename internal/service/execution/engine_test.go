@@ -7,22 +7,24 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 )
 
 // testEngine bundles a real (in-memory-SQLite-backed) Engine plus its
 // underlying instrument fixture, mirroring the pattern
-// internal/service/risk's tests use for a real repository.KillSwitchRepository
+// internal/service/risk's tests use for a real system.KillSwitchRepository
 // (rather than a hand-rolled fake).
 type testEngine struct {
 	engine      *execution.Engine
-	orders      *repository.OrderRepository
-	positions   *repository.PositionRepository
-	instruments *repository.InstrumentRepository
-	snapshots   *repository.SnapshotRepository
-	decisions   *repository.DecisionRepository
-	signals     *repository.SignalRepository
+	orders      *trading.OrderRepository
+	positions   *trading.PositionRepository
+	instruments *market.InstrumentRepository
+	snapshots   *market.SnapshotRepository
+	decisions   *judgement.DecisionRepository
+	signals     *trading.SignalRepository
 	instrument  domain.Instrument
 }
 
@@ -30,7 +32,7 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	t.Helper()
 	db := newTestDB(t)
 
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst, err := instruments.Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true,
 	})
@@ -38,11 +40,11 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 		t.Fatalf("create instrument fixture: %v", err)
 	}
 
-	orders := repository.NewOrderRepository(db)
-	positions := repository.NewPositionRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	decisions := repository.NewDecisionRepository(db)
-	signals := repository.NewSignalRepository(db)
+	orders := trading.NewOrderRepository(db)
+	positions := trading.NewPositionRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
+	signals := trading.NewSignalRepository(db)
 
 	engine := execution.NewEngine(execution.Deps{
 		Orders:      orders,
@@ -234,13 +236,13 @@ func TestEngine_Enter_PositionOpenFailureLeavesNoFilledOrder(t *testing.T) {
 	if _, err := db.Exec(`CREATE TRIGGER positions_block BEFORE INSERT ON positions BEGIN SELECT RAISE(ABORT, 'disk full'); END`); err != nil {
 		t.Fatalf("create trigger: %v", err)
 	}
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst, err := instruments.Create(context.Background(), domain.Instrument{Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true})
 	if err != nil {
 		t.Fatalf("create instrument: %v", err)
 	}
-	orders := repository.NewOrderRepository(db)
-	engine := execution.NewEngine(execution.Deps{Orders: orders, Positions: repository.NewPositionRepository(db)}, execution.Config{})
+	orders := trading.NewOrderRepository(db)
+	engine := execution.NewEngine(execution.Deps{Orders: orders, Positions: trading.NewPositionRepository(db)}, execution.Config{})
 
 	_, err = engine.Enter(context.Background(), execution.EntryRequest{
 		Signal: longSignal(inst.ID), Quantity: 100, OrderType: domain.OrderTypeMarket, Price: 2100,

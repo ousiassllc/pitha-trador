@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -52,11 +52,11 @@ func TestEngine_Resume_ClearsPausedKilledAndResolvesAllUnresolvedEvents(t *testi
 
 func TestEngine_AutoResume_ResolvesOnlyRecoveredAutoResumableReasons(t *testing.T) {
 	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	e := risk.NewEngine(risk.Config{
 		Limits:           testLimits(),
 		KillSwitch:       killSwitch,
-		Settings:         repository.NewRuntimeSettingsRepository(db),
+		Settings:         system.NewRuntimeSettingsRepository(db),
 		Portfolio:        risk.ZeroPortfolioProvider{},
 		MarketDataHealth: fakeHealth{healthy: true},
 		JevAPIHealth:     fakeHealth{healthy: false},

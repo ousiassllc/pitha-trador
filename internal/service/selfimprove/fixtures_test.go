@@ -9,7 +9,11 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
@@ -19,9 +23,9 @@ func ptr[T any](v T) *T { return &v }
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
@@ -31,17 +35,17 @@ func newTestDB(t *testing.T) *sql.DB {
 // database's real ProposalRepository/RuntimeSettingsRepository/
 // PositionRepository, with one instrument already created.
 type governorFixtures struct {
-	proposals  *repository.ProposalRepository
-	settings   *repository.RuntimeSettingsRepository
-	positions  *repository.PositionRepository
-	orders     *repository.OrderRepository
+	proposals  *judgement.ProposalRepository
+	settings   *system.RuntimeSettingsRepository
+	positions  *trading.PositionRepository
+	orders     *trading.OrderRepository
 	instrument domain.Instrument
 }
 
 func newGovernorFixtures(t *testing.T) governorFixtures {
 	t.Helper()
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst, err := instruments.Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true,
 	})
@@ -49,10 +53,10 @@ func newGovernorFixtures(t *testing.T) governorFixtures {
 		t.Fatalf("create instrument: %v", err)
 	}
 	return governorFixtures{
-		proposals:  repository.NewProposalRepository(db),
-		settings:   repository.NewRuntimeSettingsRepository(db),
-		positions:  repository.NewPositionRepository(db),
-		orders:     repository.NewOrderRepository(db),
+		proposals:  judgement.NewProposalRepository(db),
+		settings:   system.NewRuntimeSettingsRepository(db),
+		positions:  trading.NewPositionRepository(db),
+		orders:     trading.NewOrderRepository(db),
 		instrument: inst,
 	}
 }

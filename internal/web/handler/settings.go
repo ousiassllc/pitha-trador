@@ -15,12 +15,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
-// SecretsStore is the subset of internal/repository.SecretsRepository's
+// SecretsStore is the subset of internal/repository/system.SecretsRepository's
 // methods the Settings screen and the header's secrets-status banner
 // need. An interface here - rather than importing internal/repository's
 // concrete type - keeps this package's dependency direction unchanged
 // (docs/architecture/overview.md §3: "web/handler: service, domainに依存。
-// repositoryを直接使わない"); *repository.SecretsRepository implements it
+// repositoryを直接使わない"); *system.SecretsRepository implements it
 // without either package needing to name the other, the same pattern
 // CalibrationSource/SystemEngine/BacktestRunner already use for their own
 // concrete internal/service types.
@@ -30,7 +30,7 @@ type SecretsStore interface {
 	// renders whether ok is true) - see SettingsHandler.Page.
 	Get(ctx context.Context, key string) (plaintext string, ok bool, err error)
 	// Set stores plaintext under key. It rejects an empty plaintext:
-	// removal is the explicit Delete (internal/repository.SecretsRepository
+	// removal is the explicit Delete (internal/repository/system.SecretsRepository
 	// .Set's doc comment).
 	Set(ctx context.Context, key, plaintext string) error
 	// Delete removes key's stored value; deleting an unset key is not an

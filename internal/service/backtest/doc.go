@@ -2,7 +2,7 @@
 // functional.md §4.11, docs/architecture/overview.md §4 "Backtest Engine
 // （§4.11再利用）"): it replays Feature Engine (internal/service/
 // featureengine) and Policy Engine (internal/service/policy) logic over
-// historical market_snapshots data (internal/repository.
+// historical market_snapshots data (internal/repository/market.
 // SnapshotRepository.ListByInstrumentRange), computes trade-level
 // outcomes, and aggregates them into the metrics FR-BT-1 requires
 // (trade count, win rate, average profit/loss, Profit Factor,

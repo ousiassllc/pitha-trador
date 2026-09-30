@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -19,8 +19,8 @@ func newEngineWithNotifier(t *testing.T, portfolio risk.PortfolioProvider, notif
 	}
 	return risk.NewEngine(risk.Config{
 		Limits:     testLimits(),
-		KillSwitch: repository.NewKillSwitchRepository(db),
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		KillSwitch: system.NewKillSwitchRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Portfolio:  portfolio,
 		Notifier:   notifier,
 		Now:        now,

@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
@@ -45,16 +47,16 @@ var (
 func validPrice(p float64) bool { return p > 0 && !math.IsInf(p, 0) }
 
 // Engine implements Paper Trading Execution (functional.md §4.8, §4.9):
-// Paper Entry/Exit against repository.OrderRepository/PositionRepository
+// Paper Entry/Exit against trading.OrderRepository/PositionRepository
 // (entry.go/close.go), FR-EXIT-1's exit-condition evaluation
 // (exitrule.go), and the per-symbol state read model (state.go).
 type Engine struct {
-	orders      *repository.OrderRepository
-	positions   *repository.PositionRepository
-	snapshots   *repository.SnapshotRepository
-	decisions   *repository.DecisionRepository
-	signals     *repository.SignalRepository
-	instruments *repository.InstrumentRepository
+	orders      *trading.OrderRepository
+	positions   *trading.PositionRepository
+	snapshots   *market.SnapshotRepository
+	decisions   *judgement.DecisionRepository
+	signals     *trading.SignalRepository
+	instruments *market.InstrumentRepository
 	cfg         Config
 
 	mu        sync.Mutex
@@ -76,12 +78,12 @@ type Engine struct {
 // may leave them nil; the methods that need them document the resulting
 // no-op/degraded behavior.
 type Deps struct {
-	Orders      *repository.OrderRepository
-	Positions   *repository.PositionRepository
-	Snapshots   *repository.SnapshotRepository
-	Decisions   *repository.DecisionRepository
-	Signals     *repository.SignalRepository
-	Instruments *repository.InstrumentRepository
+	Orders      *trading.OrderRepository
+	Positions   *trading.PositionRepository
+	Snapshots   *market.SnapshotRepository
+	Decisions   *judgement.DecisionRepository
+	Signals     *trading.SignalRepository
+	Instruments *market.InstrumentRepository
 }
 
 // Config returns the Entry/Exit rule set Engine was built with (Now

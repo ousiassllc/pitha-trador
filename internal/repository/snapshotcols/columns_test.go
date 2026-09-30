@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
 // fullFeature sets every nullable Feature field to a distinct value so a
@@ -33,7 +34,7 @@ func fullFeature() domain.Feature {
 
 func openDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	conn, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -43,7 +44,7 @@ func openDB(t *testing.T) *sql.DB {
 
 func mustInstrument(t *testing.T, conn *sql.DB) domain.Instrument {
 	t.Helper()
-	inst, err := repository.NewInstrumentRepository(conn).Create(context.Background(), domain.Instrument{
+	inst, err := market.NewInstrumentRepository(conn).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
@@ -55,7 +56,7 @@ func mustInstrument(t *testing.T, conn *sql.DB) domain.Instrument {
 func TestColumns_RoundTripEveryFeatureField(t *testing.T) {
 	conn := openDB(t)
 	inst := mustInstrument(t, conn)
-	repo := repository.NewSnapshotRepository(conn)
+	repo := market.NewSnapshotRepository(conn)
 	ctx := context.Background()
 
 	want := fullFeature()

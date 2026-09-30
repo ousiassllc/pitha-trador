@@ -8,7 +8,8 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -114,19 +115,19 @@ func (f *fakeNotifier) DailyLossWarning(_ context.Context, currentPct, limitPct 
 	return f.err
 }
 
-func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioProvider, closer risk.PositionCloser, now func() time.Time) (*risk.Engine, *repository.KillSwitchRepository) {
+func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioProvider, closer risk.PositionCloser, now func() time.Time) (*risk.Engine, *system.KillSwitchRepository) {
 	t.Helper()
 	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	if now == nil {
 		now = time.Now
 	}
-	snapshots := repository.NewSnapshotRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
 	seedSnapshot(t, db, snapshots, 2000, 5)
 	e := risk.NewEngine(risk.Config{
 		Limits:     limits,
 		KillSwitch: killSwitch,
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Snapshots:  snapshots,
 		Portfolio:  portfolio,
 		Closer:     closer,
@@ -138,9 +139,9 @@ func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioP
 // seedSnapshot creates instrument 1 (the id Check tests use) with one
 // latest snapshot at price/spreadBps; Check fails closed without one.
 // A negative spreadBps stores a NULL spread.
-func seedSnapshot(t *testing.T, db *sql.DB, snapshots *repository.SnapshotRepository, price, spreadBps float64) {
+func seedSnapshot(t *testing.T, db *sql.DB, snapshots *market.SnapshotRepository, price, spreadBps float64) {
 	t.Helper()
-	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {

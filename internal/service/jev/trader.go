@@ -7,7 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -26,7 +26,7 @@ import (
 // this type is what keeps FR-TRADER-2 true as the codebase grows.
 type Trader struct {
 	client    *Client
-	decisions *repository.DecisionRepository
+	decisions *judgement.DecisionRepository
 	rag       *rag.Service
 	news      NewsSource
 }
@@ -35,7 +35,7 @@ type Trader struct {
 // decisions, and builds/indexes the RAG few-shot context via ragService
 // - the same roles Scout's fields play for Jev Scout (functional.md
 // §4.13, FR-RAG-1〜4).
-func NewTrader(client *Client, decisions *repository.DecisionRepository, ragService *rag.Service, opts ...Option) *Trader {
+func NewTrader(client *Client, decisions *judgement.DecisionRepository, ragService *rag.Service, opts ...Option) *Trader {
 	return &Trader{client: client, decisions: decisions, rag: ragService, news: newOptions(opts).news}
 }
 

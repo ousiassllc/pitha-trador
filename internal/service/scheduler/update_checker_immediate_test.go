@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
@@ -42,8 +43,8 @@ func (c *syncUpdateChecker) Calls() int {
 // intraday restart cadence).
 func TestScheduler_Start_UpdateCheckerRunsImmediately(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	checker := &syncUpdateChecker{}
 
 	s := scheduler.New(jobs, instruments, scheduler.WithUpdateChecker(checker))
@@ -92,8 +93,8 @@ func (c *blockingUpdateChecker) CheckForUpdate(ctx context.Context) error {
 // runWorker's goroutines so Stop actually waits for it.
 func TestScheduler_Stop_WaitsForImmediateUpdateCheck(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	checker := newBlockingUpdateChecker()
 
 	s := scheduler.New(jobs, instruments, scheduler.WithUpdateChecker(checker))

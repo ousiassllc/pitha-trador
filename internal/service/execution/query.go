@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 )
 
@@ -22,7 +22,7 @@ func (e *Engine) Candles(ctx context.Context, symbol string, from, to time.Time)
 
 	inst, err := e.instruments.GetBySymbol(ctx, symbol)
 	if err != nil {
-		if errors.Is(err, repository.ErrInstrumentNotFound) {
+		if errors.Is(err, market.ErrInstrumentNotFound) {
 			return nil, fmt.Errorf("%w: %s", ErrInstrumentUnknown, symbol)
 		}
 		return nil, fmt.Errorf("execution: look up instrument %q: %w", symbol, err)
@@ -36,21 +36,21 @@ func (e *Engine) Candles(ctx context.Context, symbol string, from, to time.Time)
 }
 
 // GetPosition returns the positions row with the given id
-// (repository.PositionRepository.Get), for `POST /positions/:id/close`
+// (trading.PositionRepository.Get), for `POST /positions/:id/close`
 // to read the position it is about to close.
 func (e *Engine) GetPosition(ctx context.Context, id int64) (domain.Position, error) {
 	return e.positions.Get(ctx, id)
 }
 
 // ListPositions returns up to limit positions rows, most recently opened
-// first (repository.PositionRepository.List), for `GET
+// first (trading.PositionRepository.List), for `GET
 // /api/v1/positions`.
 func (e *Engine) ListPositions(ctx context.Context, limit int) ([]domain.Position, error) {
 	return e.positions.List(ctx, limit)
 }
 
 // ListOrders returns up to limit paper_orders rows, optionally filtered
-// to status (repository.OrderRepository.List), for `GET /api/v1/orders`.
+// to status (trading.OrderRepository.List), for `GET /api/v1/orders`.
 func (e *Engine) ListOrders(ctx context.Context, status string, limit int) ([]domain.PaperOrder, error) {
 	return e.orders.List(ctx, status, limit)
 }
@@ -70,7 +70,7 @@ func (e *Engine) RecentDecisions(ctx context.Context, symbol string, limit int) 
 
 	inst, err := e.instruments.GetBySymbol(ctx, symbol)
 	if err != nil {
-		if errors.Is(err, repository.ErrInstrumentNotFound) {
+		if errors.Is(err, market.ErrInstrumentNotFound) {
 			return nil, fmt.Errorf("%w: %s", ErrInstrumentUnknown, symbol)
 		}
 		return nil, fmt.Errorf("execution: look up instrument %q: %w", symbol, err)

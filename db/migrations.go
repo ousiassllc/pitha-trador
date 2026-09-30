@@ -15,7 +15,7 @@ package db
 import "embed"
 
 // MigrationsFS holds every SQL migration file under migrations/, embedded
-// at build time so internal/repository.Open can apply them via
+// at build time so internal/repository/sqlitedb.Open can apply them via
 // golang-migrate without depending on the filesystem layout at runtime.
 //
 //go:embed migrations/*.sql

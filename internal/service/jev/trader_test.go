@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
@@ -58,12 +59,12 @@ func TestTrader_Evaluate_PersistsDecisionWithAllFields(t *testing.T) {
 			server := traderServer(t, resp)
 
 			db := newTestDB(t)
-			instruments := repository.NewInstrumentRepository(db)
-			decisions := repository.NewDecisionRepository(db)
+			instruments := market.NewInstrumentRepository(db)
+			decisions := judgement.NewDecisionRepository(db)
 			inst := mustCreateInstrument(t, instruments, "7203")
 
 			client := jev.NewClient(jev.Config{BaseURL: server.URL})
-			ragService := rag.NewService(db, decisions, repository.NewSnapshotRepository(db))
+			ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
 			trader := jev.NewTrader(client, decisions, ragService)
 
 			state := jev.ScoutState{Symbol: "7203", Timestamp: time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC), Price: 2100}
@@ -120,12 +121,12 @@ func TestTrader_Evaluate_APIFailurePersistsNothing(t *testing.T) {
 	defer server.Close()
 
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	decisions := repository.NewDecisionRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
 	inst := mustCreateInstrument(t, instruments, "1301")
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
-	ragService := rag.NewService(db, decisions, repository.NewSnapshotRepository(db))
+	ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
 	trader := jev.NewTrader(client, decisions, ragService)
 
 	_, err := trader.Evaluate(context.Background(), inst.ID, jev.ScoutState{Symbol: "1301"})
