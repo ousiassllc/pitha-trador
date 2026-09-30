@@ -7,7 +7,7 @@ import (
 )
 
 // Key* are the secrets table row keys internal/repository/system.SecretsRepository
-// stores and internal/web/handler's Settings screen (`GET /settings`, `POST`/`DELETE
+// stores and internal/web/handler/settings's Settings screen (`GET /settings`, `POST`/`DELETE
 // /settings/:key`) reads and writes. Before issue #57 these were environment
 // variable names (JEV_API_KEY etc., read by the now-removed LoadSecrets
 // via os.Getenv); the string values are kept identical across that

@@ -39,8 +39,8 @@ import (
 // `/settings`, or nothing once every one is configured.
 //
 // `#update-banner` is the same pattern for issue #76's update
-// notification: `GET /system/update-status` (internal/web/handler.
-// UpdateHandler.Status) renders organisms.UpdateBanner when a newer
+// notification: `GET /system/update-status`
+// (internal/web/handler/system.UpdateHandler.Status) renders organisms.UpdateBanner when a newer
 // release exists (also re-polled every 60s, and immediately on the
 // `updateStatusChanged` event the manual check response fires), or
 // nothing otherwise - including on cmd/server, which has no updater.
@@ -71,7 +71,7 @@ func headerStatusTrigger(state domain.SystemState) string {
 
 templ Header(state domain.SystemState) {
 	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
-		<div class="flex items-center gap-6">
+		<div class="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
 			<a
 				id="header-logo"
 				class="flex shrink-0 items-center gap-2 text-sm font-semibold text-slate-900"
@@ -81,7 +81,7 @@ templ Header(state domain.SystemState) {
 				<img class="h-8 w-8" src="/static/img/logo.svg" width="32" height="32" alt=""/>
 				<span>Pitha Trador</span>
 			</a>
-			<nav class="flex gap-4 text-sm font-medium text-slate-600">
+			<nav aria-label="メインナビゲーション" class="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
 				<a class="hover:text-slate-900" href="/scanner">Scanner</a>
 				<a class="hover:text-slate-900" href="/performance">Performance</a>
 				<a class="hover:text-slate-900" href="/calibration">Calibration</a>

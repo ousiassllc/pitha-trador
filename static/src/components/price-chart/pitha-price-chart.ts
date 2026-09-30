@@ -21,7 +21,7 @@ import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient } from '../lib/ws';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/symbols/{symbol}/candles`
-// item shape (internal/web/handler.candleOutput).
+// item shape (internal/web/handler/symbol.candleOutput).
 export interface Candle {
   time: string;
   open: number;
@@ -38,7 +38,7 @@ interface CandlesAPIResponse {
 }
 
 // Mirrors docs/api/endpoints.md §6's `/ws/symbols/{symbol}` message
-// shapes (internal/web/handler.symbolTickMessage/symbolJevUpdateMessage).
+// shapes (internal/web/handler/symbol.symbolTickMessage/symbolJevUpdateMessage).
 interface TickMessage {
   type: 'tick';
   price: number;

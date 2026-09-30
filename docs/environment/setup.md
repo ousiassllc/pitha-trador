@@ -138,7 +138,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 | フロントエンド（Lit/TypeScript） | Biome | `static/biome.json` |
 
 - `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
-- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否してレイヤー規約（`architecture/overview.md` §3）をlintで強制する。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
+- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否する（レイヤー規約`architecture/overview.md` §3のうちlintで強制するのは`web` → `repository/**`のみで、サブパッケージ間のimport規約はレビューで担保する）。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
 - Biomeはlintとformatを1ツールで兼ねるため、`static/`配下は追加のESLint/Prettier設定を持たない
 
 ## Format
@@ -245,3 +245,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.17 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/bootstrap/`を削除（`bootstrap`のサブパッケージ分割完了）。残りは`internal/service/risk/` | issue #246 |
 | 1.18 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/service/risk/`を削除（`service/risk`のテスト専用サブパッケージへの分割完了）。手書きソースの暫定除外は残っていない | issue #247 |
 | 1.19 | 2026-09-30 | `.linterlyignore`の最終確認（除外は`*_templ.go`と`**/logs/**`のみで、既知債務コメント・手書きソース除外なし）を反映し、「#248で全廃を確認する」の予定表現を確認済みの記述へ改めた | issue #248 |
+| 1.20 | 2026-09-30 | depguardの強制範囲（`web` → `repository/**`のみ）を明記。lefthook/CIコメントの`go:embed`対象を`dist img vendor`へ更新 | 分割後レビュー指摘 |
