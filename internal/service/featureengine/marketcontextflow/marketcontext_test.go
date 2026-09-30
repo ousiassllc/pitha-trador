@@ -1,7 +1,12 @@
-package featureengine_test
+// Package marketcontextflow_test holds the MarketContextLoader tests of
+// featureengine (FR-FE market context). They only use featureengine's
+// exported API and live in their own directory to keep
+// internal/service/featureengine under the linterly line budget (#248).
+package marketcontextflow_test
 
 import (
 	"context"
+	"math"
 	"path/filepath"
 	"testing"
 	"time"
@@ -51,6 +56,18 @@ func (f loaderFixture) bars(t *testing.T, inst domain.Instrument, bars ...domain
 }
 
 func strPtr(s string) *string { return &s }
+
+func ptr(v float64) *float64 { return &v }
+
+func wantValue(t *testing.T, name string, got *float64, want float64) {
+	t.Helper()
+	if got == nil {
+		t.Fatalf("%s = nil, want %v", name, want)
+	}
+	if math.Abs(*got-want) >= 1e-9 {
+		t.Errorf("%s = %v, want %v", name, *got, want)
+	}
+}
 
 // Regression for #144: market_return_1m/5m, sector_return_5m and
 // market_breadth were never populated.

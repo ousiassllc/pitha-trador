@@ -1,4 +1,4 @@
-package scheduler_test
+package maintenanceflow_test
 
 import (
 	"context"

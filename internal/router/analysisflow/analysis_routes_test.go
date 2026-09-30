@@ -1,4 +1,7 @@
-package router_test
+// Package analysisflow_test holds the analysis-route (policy proposals) tests
+// of router. They only use router's exported API and live in their own
+// directory to keep internal/router under the linterly line budget (#248).
+package analysisflow_test
 
 import (
 	"encoding/json"

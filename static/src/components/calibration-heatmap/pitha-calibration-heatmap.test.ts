@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import './pitha-calibration-heatmap';
-import type { CalibrationAPIResponse, CalibrationBucket } from './pitha-calibration-heatmap';
+import type { CalibrationAPIResponse, CalibrationBucket } from './calibration-view';
 
 type HeatmapElement = HTMLElement & { updateComplete: Promise<boolean> };
 
