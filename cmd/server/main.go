@@ -24,6 +24,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
 // defaultAddr uses 48080 instead of the far more commonly-claimed 8080
@@ -97,7 +98,7 @@ func main() {
 		router.WithSystemEngine(services.Risk),
 		router.WithHeartbeatRecorder(services.Risk),
 		router.WithSymbolProvider(services.Execution),
-		router.WithSymbolRiskParams(handler.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config(), services.Risk.AllowedPositionPct)),
+		router.WithSymbolRiskParams(symbol.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config(), services.Risk.AllowedPositionPct)),
 		router.WithInsightProvider(services.Insight),
 		router.WithCalibrationSource(services.Calibration),
 		router.WithPolicyProposalSource(services.Proposals),

@@ -9,6 +9,10 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 )
 
@@ -16,15 +20,15 @@ import (
 // (registerPages) and the `/api/v1` JSON API (registerAPI).
 type handlers struct {
 	scanner     *handler.ScannerHandler
-	system      *handler.SystemHandler
-	symbol      *handler.SymbolHandler
+	system      *system.SystemHandler
+	symbol      *symbol.SymbolHandler
 	calibration *handler.CalibrationHandler
-	activity    *handler.ActivityHandler
+	activity    *activity.ActivityHandler
 }
 
 // registerPages registers the static assets and every SSR/WebSocket route
 // on engine and returns the handlers registerAPI reuses.
-func registerPages(engine *gin.Engine, o options, settingsStore handler.SecretsStore) handlers {
+func registerPages(engine *gin.Engine, o options, settingsStore settings.SecretsStore) handlers {
 	engine.StaticFS("/static", staticFS())
 	// Scanner Dashboard is the app's home page (organisms/header.templ's nav
 	// lists it first); `/` used to serve a static "Backend skeleton is
@@ -38,10 +42,10 @@ func registerPages(engine *gin.Engine, o options, settingsStore handler.SecretsS
 	}
 	h := handlers{
 		scanner:     handler.NewScannerHandler(o.candidateSource, o.candidateRefresh),
-		system:      handler.NewSystemHandler(o.systemEngine),
-		symbol:      handler.NewSymbolHandler(o.symbolProvider, o.symbolRiskParams),
+		system:      system.NewSystemHandler(o.systemEngine),
+		symbol:      symbol.NewSymbolHandler(o.symbolProvider, o.symbolRiskParams),
 		calibration: handler.NewCalibrationHandler(o.calibrationSource),
-		activity:    handler.NewActivityHandler(o.activitySource),
+		activity:    activity.NewActivityHandler(o.activitySource),
 	}
 	engine.GET("/scanner", h.scanner.Page)
 	engine.GET("/ws/scanner", h.scanner.WebSocket)
@@ -61,14 +65,14 @@ func registerPages(engine *gin.Engine, o options, settingsStore handler.SecretsS
 	engine.GET("/activity", h.activity.Page)
 	engine.GET("/ws/activity", h.activity.WebSocket)
 
-	settingsHandler := handler.NewSettingsHandler(settingsStore)
+	settingsHandler := settings.NewSettingsHandler(settingsStore)
 	engine.GET("/setup", settingsHandler.SetupPage)
 	engine.GET("/settings", settingsHandler.Page)
 	engine.POST("/settings/:key", settingsHandler.Save)
 	engine.DELETE("/settings/:key", settingsHandler.Delete)
 	engine.GET("/system/secrets-status", settingsHandler.Status)
 
-	updateHandler := handler.NewUpdateHandler(o.updateController)
+	updateHandler := system.NewUpdateHandler(o.updateController)
 	engine.GET("/system/update-status", updateHandler.Status)
 	engine.GET("/system/update-panel", updateHandler.Panel)
 	engine.POST("/system/update-check", updateHandler.Check)

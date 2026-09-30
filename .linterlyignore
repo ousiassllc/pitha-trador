@@ -18,25 +18,8 @@
 # import 書き換え）が必要なため、issue #119 では個別に対応せず
 # issue #134 で追跡する。新規ファイルをここへ追加してはならない
 # （追加が必要になった時点でサブパッケージ分割を先に行う）。
-# 除外中のファイルも1ファイル300行以内に保つこと。現時点の唯一の例外は
-# internal/web/handler/settings_test.go（538行）で、並行ブランチの編集と
-# 競合するため分割を同 Issue に持ち越している。
+# 除外中のファイルも1ファイル300行以内に保つこと。
 # ---------------------------------------------------------------------------
-
-# internal/web/handler/（全体 約4.7k行）
-internal/web/handler/activity.go
-internal/web/handler/activity_test.go
-internal/web/handler/performance_test.go
-internal/web/handler/policy_proposals.go
-internal/web/handler/settings.go
-internal/web/handler/settings_test.go
-internal/web/handler/swagger_test.go
-internal/web/handler/symbol_close_test.go
-internal/web/handler/symbol_detail_test.go
-internal/web/handler/symbol_ws_test.go
-internal/web/handler/system_ws_test.go
-internal/web/handler/update.go
-internal/web/handler/update_test.go
 
 # internal/bootstrap/（全体 約2.6k行）
 internal/bootstrap/activity_internal_test.go

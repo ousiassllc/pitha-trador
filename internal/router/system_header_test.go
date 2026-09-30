@@ -12,7 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
@@ -34,7 +34,7 @@ func TestNew_HeaderSSRsKillSwitchPanelFromSystemState(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(string(tc.state), func(t *testing.T) {
-			engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: tc.state}))
+			engine := router.New(router.WithSystemEngine(system.StaticSystemEngine{State_: tc.state}))
 			rec := httptest.NewRecorder()
 			engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/calibration", nil))
 
@@ -85,7 +85,7 @@ func panelTag(t *testing.T, body string) string {
 
 func TestNew_APISystemStatusReportsAllowedActions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStatePaused}))
+	engine := router.New(router.WithSystemEngine(system.StaticSystemEngine{State_: domain.SystemStatePaused}))
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/system/status", nil))
 
@@ -96,7 +96,7 @@ func TestNew_APISystemStatusReportsAllowedActions(t *testing.T) {
 	}
 }
 
-type failingStateEngine struct{ handler.StaticSystemEngine }
+type failingStateEngine struct{ system.StaticSystemEngine }
 
 func (failingStateEngine) State(context.Context) (domain.SystemState, []domain.KillSwitchEvent, error) {
 	return "", nil, errors.New("state unavailable")

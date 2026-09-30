@@ -11,7 +11,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
@@ -37,7 +37,7 @@ func authorize(t *testing.T, engine *gin.Engine, req *http.Request) *http.Reques
 func TestNew_StateChangingRoutesRejectRequestsWithoutSessionCookieAndCSRFToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(
-		router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStateKilled}),
+		router.WithSystemEngine(system.StaticSystemEngine{State_: domain.SystemStateKilled}),
 		router.WithSecretsStore(requiredSecretsStore()),
 	)
 
@@ -110,7 +110,7 @@ func TestNew_PagesEmbedCSRFTokenForHTMXAndLit(t *testing.T) {
 // unchanged.
 func TestNew_SessionRejectionOfPageNavigationRendersErrorPage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStateKilled}))
+	engine := router.New(router.WithSystemEngine(system.StaticSystemEngine{State_: domain.SystemStateKilled}))
 
 	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", nil)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")

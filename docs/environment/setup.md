@@ -181,7 +181,7 @@ language: ja
 ```
 
 - 許容する除外は上記の`*_templ.go`と`**/logs/**`のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
-- 現状の`.linterlyignore`には、サブパッケージ分割前の暫定除外（`internal/web/handler/`・`internal/bootstrap/`・`internal/service/risk/`の個別ファイル列挙）が残っている。これは#134の子Issue（#245〜#247）で各パッケージを分割する際に順次削除し、#248で全廃を確認する（`internal/repository/`は#244で削除済み）。暫定除外へ新規ファイルを追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
+- 現状の`.linterlyignore`には、サブパッケージ分割前の暫定除外（`internal/bootstrap/`・`internal/service/risk/`の個別ファイル列挙）が残っている。これは#134の子Issue（#246・#247）で各パッケージを分割する際に順次削除し、#248で全廃を確認する（`internal/repository/`は#244、`internal/web/handler/`は#245で削除済み）。暫定除外へ新規ファイルを追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
 
@@ -241,3 +241,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.13 | 2026-09-29 | `PITHA_BACKUP_DIR`の説明を更新（`secrets`除外・パーミッション・週次52週保持・退避先必須・catch-up実行） | issue #137/#152/#159 |
 | 1.14 | 2026-09-29 | Lint/Format/Linterly/Git Hooks節を実ファイル（`.golangci.yml`の有効linterとdepguard、`lefthook.yml`、`.linterlyignore`）に合わせて是正。`make lint`とCI `lint`ジョブの差分を明記。`.env.example`に`PITHA_SERVER_ALLOW_NON_LOOPBACK`/`PITHA_SERVER_ALLOWED_HOSTS`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`の雛形を追加 | issue #154 |
 | 1.15 | 2026-09-30 | `depguard`がサブパッケージも拒否対象であることを明記。`.linterlyignore`の方針を「手書きソースの除外全廃（許容は`*_templ.go`と`**/logs/**`のみ）」へ改め、現行の暫定除外は#134の子Issueで解消する旨を記載 | issue #243 |
+| 1.16 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/web/handler/`を削除（`web/handler`のサブパッケージ分割完了）。残りは`internal/bootstrap/`・`internal/service/risk/` | issue #245 |
