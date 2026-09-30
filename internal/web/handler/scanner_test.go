@@ -154,7 +154,8 @@ func TestCandidateRefreshInterval_MaxNotAfterMinReturnsMin(t *testing.T) {
 
 func TestScannerHandler_WebSocket_PushesScannerUpdateMessages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	source := handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}
+	asOf := time.Date(2026, 9, 26, 10, 15, 0, 0, time.FixedZone("JST", 9*60*60))
+	source := handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: asOf}
 	h := handler.NewScannerHandler(source, handler.CandidateRefreshInterval{
 		Min: 20 * time.Millisecond, Max: 30 * time.Millisecond,
 	})
@@ -176,6 +177,7 @@ func TestScannerHandler_WebSocket_PushesScannerUpdateMessages(t *testing.T) {
 
 	var got struct {
 		Type  string `json:"type"`
+		AsOf  string `json:"as_of"`
 		Items []struct {
 			Symbol string `json:"symbol"`
 		} `json:"items"`
@@ -197,6 +199,11 @@ func TestScannerHandler_WebSocket_PushesScannerUpdateMessages(t *testing.T) {
 		}
 		if len(got.Items) != 2 || got.Items[0].Symbol != "7203" {
 			t.Fatalf("message[%d].Items = %+v, want fixtureCandidates()", i, got.Items)
+		}
+		// Same RFC 3339 string (offset preserved) that GET /api/v1/scanner
+		// and the SSR caption show, not a UTC "Z" conversion.
+		if want := "2026-09-26T10:15:00+09:00"; got.AsOf != want {
+			t.Fatalf("message[%d].as_of = %q, want %q", i, got.AsOf, want)
 		}
 	}
 

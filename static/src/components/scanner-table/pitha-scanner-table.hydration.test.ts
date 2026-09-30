@@ -33,7 +33,6 @@ import { PithaScannerTable } from './pitha-scanner-table';
 // second name) is required: the Custom Elements spec's `define()`
 // algorithm rejects reusing a constructor that already has a
 // definition, even under a different tag name.
-class PithaScannerTableUnderTest extends PithaScannerTable {}
 const TAG = 'pitha-scanner-table-hydration-test';
 
 type ScannerTableElement = HTMLElement & { updateComplete: Promise<boolean> };
@@ -76,6 +75,36 @@ async function flush(el: ScannerTableElement): Promise<void> {
   await el.updateComplete;
 }
 
+// Upgrades already-parsed SSR markup (see the file comment above) into a
+// <pitha-scanner-table>. Each test needs the tag to be undefined while the
+// markup is inserted, and custom element definitions can't be removed, so
+// the first call defines the tag and later calls create a fresh element
+// via document.createElement + innerHTML and an explicit upgrade.
+const SSR_MARKUP = `
+  <details data-testid="scanner-column-help"><summary>列の意味</summary></details>
+  <table>
+    <caption>Scanner Dashboard — as of 2026-09-28T00:00:00+09:00</caption>
+    <thead><tr><th>銘柄</th></tr></thead>
+    <tbody><tr data-symbol="SSR1"><td>SSR1</td></tr></tbody>
+  </table>
+`;
+
+// Every call registers a fresh subclass under a new tag name: definitions
+// can't be removed, and reusing an already-defined tag would construct the
+// element before the parser attaches its children (fresh construction),
+// which is not the upgrade case under test.
+let tagCounter = 0;
+function mountSsr(): ScannerTableElement {
+  const tag = `${TAG}-${tagCounter++}`;
+  document.body.innerHTML = `<${tag} api-url="/api/v1/scanner" ws-url="/ws/scanner">${SSR_MARKUP}</${tag}>`;
+  // Defining the tag now - after the markup above already exists -
+  // synchronously triggers the custom-element *upgrade* reaction on
+  // that already-connected, already-childed node (spec: "upgrade an
+  // element"), matching a deferred module script's real timing.
+  customElements.define(tag, class extends PithaScannerTable {});
+  return document.querySelector(tag) as ScannerTableElement;
+}
+
 test('replaces the server-rendered fallback table in place instead of duplicating it', async () => {
   globalThis.fetch = mock(() =>
     Promise.resolve(
@@ -83,35 +112,60 @@ test('replaces the server-rendered fallback table in place instead of duplicatin
     ),
   ) as unknown as typeof fetch;
 
-  // organisms.ScannerTableFallback's exact server-rendered markup. TAG
-  // is not yet a defined custom element at this point, so this is
-  // inserted as a plain, undefined element with the <table> fully
-  // attached as its child - exactly what a real page load looks like
-  // before scanner_page.templ's deferred module script executes.
-  document.body.innerHTML = `
-    <${TAG} api-url="/api/v1/scanner" ws-url="/ws/scanner">
-      <table>
-        <caption>Scanner Dashboard — as of 2026-09-28T00:00:00Z</caption>
-        <thead>
-          <tr>
-            <th>Symbol</th><th>Price</th><th>1m Return</th><th>5m Return</th>
-            <th>Volume Ratio</th><th>VWAP Distance (bps)</th><th>Spread (bps)</th>
-            <th>Jev</th><th>Position</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </${TAG}>
-  `;
-
-  // Defining the tag now - after the markup above already exists -
-  // synchronously triggers the custom-element *upgrade* reaction on
-  // that already-connected, already-childed node (spec: "upgrade an
-  // element"), matching a deferred module script's real timing.
-  customElements.define(TAG, PithaScannerTableUnderTest);
-
-  const el = document.querySelector(TAG) as ScannerTableElement;
+  const el = mountSsr();
   await flush(el);
 
   expect(el.querySelectorAll('table').length).toBe(1);
+  expect(el.querySelector('tr[data-symbol="SSR1"]')).toBeNull();
+});
+
+test('keeps the server-rendered table visible until the first data arrives', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+
+  const el = mountSsr();
+  await el.updateComplete;
+
+  expect(el.querySelectorAll('table').length).toBe(1);
+  expect(el.querySelector('tr[data-symbol="SSR1"]')).not.toBeNull();
+});
+
+test('keeps the server-rendered table when the initial fetch fails', async () => {
+  globalThis.fetch = mock(() =>
+    Promise.resolve(new Response('', { status: 500 })),
+  ) as unknown as typeof fetch;
+
+  const el = mountSsr();
+  await flush(el);
+
+  expect(el.querySelector('tr[data-symbol="SSR1"]')).not.toBeNull();
+  expect(el.querySelectorAll('table').length).toBe(1);
+  expect(el.querySelector('[role="alert"]')?.textContent).toContain('500');
+});
+
+test('keeps the column help open across the SSR to Lit swap when the user opened it', async () => {
+  globalThis.fetch = mock(() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ items: [], as_of: '2026-09-26T10:15:00+09:00' })),
+    ),
+  ) as unknown as typeof fetch;
+
+  const el = mountSsr();
+  (el.querySelector('details') as HTMLDetailsElement).open = true;
+  await flush(el);
+
+  expect(el.querySelectorAll('details')).toHaveLength(1);
+  expect(el.querySelector('details')?.open).toBe(true);
+});
+
+test('leaves the column help closed across the swap when the user did not open it', async () => {
+  globalThis.fetch = mock(() =>
+    Promise.resolve(
+      new Response(JSON.stringify({ items: [], as_of: '2026-09-26T10:15:00+09:00' })),
+    ),
+  ) as unknown as typeof fetch;
+
+  const el = mountSsr();
+  await flush(el);
+
+  expect(el.querySelector('details')?.open).toBe(false);
 });

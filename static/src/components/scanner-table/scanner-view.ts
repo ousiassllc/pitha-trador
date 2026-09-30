@@ -36,7 +36,7 @@ export const COLUMNS: Column[] = [
   {
     key: 'symbol',
     label: '銘柄',
-    hint: '銘柄コード。Lit描画後は列見出しクリックで並べ替え、行のコードクリックで銘柄詳細へ移動します',
+    hint: '銘柄コード。行のコードをクリックすると銘柄詳細へ移動します',
     numeric: false,
   },
   { key: 'price', label: '現在値', hint: '直近の価格', numeric: true },
@@ -138,8 +138,33 @@ export function formatNullable(value: number | null, decimals: number): string {
 }
 
 // Explicit "+" for positive values (negative values already carry "-").
+// Zero carries no sign, like formatSignedFloat in
+// internal/web/organisms/scanner_table_fallback.templ.
 export function formatSigned(value: number, decimals: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(decimals)}`;
+}
+
+// 0..1 confidence as a whole percent. Math.round and Go's math.Round both
+// round halves up for non-negative values (Go's %.0f would round to even).
+export function formatConfidence(value: number | null): string {
+  return value === null ? '—' : `${Math.round(value * 100)}%`;
+}
+
+// Symbol detail path segment: everything except RFC 3986 unreserved
+// characters is percent-escaped, the same set as symbolHref in
+// internal/web/organisms/scanner_table_fallback.templ.
+export function encodeSymbol(symbol: string): string {
+  return encodeURIComponent(symbol).replace(
+    /[!'()*]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+// The server's RFC 3339 timestamp without fractional seconds, matching the
+// SSR caption (Go's time.RFC3339); `as_of` values from the API/WebSocket
+// carry nanoseconds (RFC3339Nano) but the same offset.
+export function formatAsOf(asOf: string): string {
+  return asOf.replace(/\.\d+/, '');
 }
 
 export function formatSignedNullable(value: number | null, decimals: number): string {

@@ -1,0 +1,108 @@
+{
+  "columns": [
+    {"label": "銘柄", "hint": "銘柄コード。行のコードをクリックすると銘柄詳細へ移動します", "numeric": false},
+    {"label": "現在値", "hint": "直近の価格", "numeric": true},
+    {"label": "1分騰落率(%)", "hint": "直近1分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落", "numeric": true},
+    {"label": "5分騰落率(%)", "hint": "直近5分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落", "numeric": true},
+    {"label": "出来高倍率", "hint": "直近5分の出来高が平常時の何倍か。大きいほど売買が活発", "numeric": true},
+    {"label": "VWAP乖離(bps)", "hint": "現在値とVWAP(出来高加重平均価格)の差。1bps=0.01%。プラスはVWAPより高い", "numeric": true},
+    {"label": "スプレッド(bps)", "hint": "売り気配と買い気配の差。1bps=0.01%。小さいほど売買コストが低い", "numeric": true},
+    {"label": "Jev方向", "hint": "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り、pending=判定待ち", "numeric": false},
+    {"label": "確信度", "hint": "Jev判定の確信度。高いほど判定に自信がある", "numeric": true},
+    {"label": "エントリー品質", "hint": "エントリー好適度。poor < fair < good < strong < exceptional の順に良い", "numeric": false},
+    {"label": "保有", "hint": "現在の保有ポジション(株数)。未保有は—", "numeric": true}
+  ],
+  "emptyMessage": "現在、条件を満たす候補銘柄はありません。候補は15〜30秒ごとに更新され、見つかり次第ここに表示されます。",
+  "rows": [
+    {
+      "name": "positive returns, LONG / strong",
+      "item": {"symbol": "7203", "price": 2831.5, "return_1m": 0.12, "return_5m": -0.3, "volume_ratio_5m": 3.4, "price_vs_vwap_bps": 38, "spread_bps": 7, "jev_direction": "LONG", "jev_confidence": 0.74, "entry_quality": "strong", "current_position": 100},
+      "href": "/symbols/7203",
+      "cells": ["7203", "2831.5", "+0.12", "-0.30", "3.40", "+38", "7", "LONG", "74%", "strong", "100"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-green-700", "px-3 py-2 text-right font-medium tabular-nums text-red-700"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-green-100 text-green-800",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-green-100 text-green-800"
+    },
+    {
+      "name": "negative values, SHORT / exceptional, confidence rounds half up",
+      "item": {"symbol": "6758", "price": 1500.2, "return_1m": -1.234, "return_5m": 2.5, "volume_ratio_5m": 0.85, "price_vs_vwap_bps": -12.4, "spread_bps": 1.6, "jev_direction": "SHORT", "jev_confidence": 0.745, "entry_quality": "exceptional", "current_position": -200},
+      "href": "/symbols/6758",
+      "cells": ["6758", "1500.2", "-1.23", "+2.50", "0.85", "-12", "2", "SHORT", "75%", "exceptional", "-200"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-red-700", "px-3 py-2 text-right font-medium tabular-nums text-green-700"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-red-100 text-red-800",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-emerald-600 text-white"
+    },
+    {
+      "name": "all zero values carry no sign and a neutral color",
+      "item": {"symbol": "0000", "price": 100, "return_1m": 0, "return_5m": 0, "volume_ratio_5m": 0, "price_vs_vwap_bps": 0, "spread_bps": 0, "jev_direction": "NONE", "jev_confidence": 0, "entry_quality": "poor", "current_position": 0},
+      "href": "/symbols/0000",
+      "cells": ["0000", "100.0", "0.00", "0.00", "0.00", "0", "0", "NONE", "0%", "poor", "0"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-slate-500", "px-3 py-2 text-right font-medium tabular-nums text-slate-500"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600"
+    },
+    {
+      "name": "not yet evaluated: nulls render as em dash, direction as pending",
+      "item": {"symbol": "9984", "price": 7000, "return_1m": null, "return_5m": null, "volume_ratio_5m": null, "price_vs_vwap_bps": 0, "spread_bps": null, "jev_direction": null, "jev_confidence": null, "entry_quality": null, "current_position": null},
+      "href": "/symbols/9984",
+      "cells": ["9984", "7000.0", "—", "—", "—", "0", "—", "pending", "—", "—", "—"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-slate-500", "px-3 py-2 text-right font-medium tabular-nums text-slate-500"],
+      "directionClass": "inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500",
+      "qualityClass": "text-slate-400"
+    },
+    {
+      "name": "unknown direction falls back to NONE, unknown quality passes through",
+      "item": {"symbol": "1111", "price": 50, "return_1m": null, "return_5m": null, "volume_ratio_5m": null, "price_vs_vwap_bps": 1, "spread_bps": null, "jev_direction": "", "jev_confidence": 0.5, "entry_quality": "weird", "current_position": null},
+      "href": "/symbols/1111",
+      "cells": ["1111", "50.0", "—", "—", "—", "+1", "—", "NONE", "50%", "weird", "—"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-slate-500", "px-3 py-2 text-right font-medium tabular-nums text-slate-500"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600"
+    },
+    {
+      "name": "reserved characters in the symbol are percent-escaped identically, fair quality",
+      "item": {"symbol": "A&B+C D/é'", "price": 10, "return_1m": null, "return_5m": null, "volume_ratio_5m": null, "price_vs_vwap_bps": 0, "spread_bps": null, "jev_direction": "LONG", "jev_confidence": null, "entry_quality": "fair", "current_position": null},
+      "href": "/symbols/A%26B%2BC%20D%2F%C3%A9%27",
+      "cells": ["A&B+C D/é'", "10.0", "—", "—", "—", "0", "—", "LONG", "—", "fair", "—"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-slate-500", "px-3 py-2 text-right font-medium tabular-nums text-slate-500"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-green-100 text-green-800",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800"
+    },
+    {
+      "name": "good quality",
+      "item": {"symbol": "8306", "price": 1234.56, "return_1m": 0.004, "return_5m": -0.004, "volume_ratio_5m": 1, "price_vs_vwap_bps": 0.4, "spread_bps": 0.4, "jev_direction": "LONG", "jev_confidence": 0.999, "entry_quality": "good", "current_position": 10},
+      "href": "/symbols/8306",
+      "cells": ["8306", "1234.6", "+0.00", "-0.00", "1.00", "+0", "0", "LONG", "100%", "good", "10"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-green-700", "px-3 py-2 text-right font-medium tabular-nums text-red-700"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-green-100 text-green-800",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-sky-100 text-sky-800"
+    },
+    {
+      "name": "exact decimal ties round away from zero in every column (JS toFixed), not to even",
+      "item": {"symbol": "TIE1", "price": 100.25, "return_1m": 0.125, "return_5m": -0.125, "volume_ratio_5m": 0.375, "price_vs_vwap_bps": 12.5, "spread_bps": 2.5, "jev_direction": "LONG", "jev_confidence": 0.125, "entry_quality": "good", "current_position": 2.5},
+      "href": "/symbols/TIE1",
+      "cells": ["TIE1", "100.3", "+0.13", "-0.13", "0.38", "+13", "3", "LONG", "13%", "good", "3"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-green-700", "px-3 py-2 text-right font-medium tabular-nums text-red-700"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-green-100 text-green-800",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-sky-100 text-sky-800"
+    },
+    {
+      "name": "negative exact ties and 0.5 round away from zero",
+      "item": {"symbol": "TIE2", "price": 0.25, "return_1m": -0.375, "return_5m": 0.625, "volume_ratio_5m": 1.125, "price_vs_vwap_bps": -2.5, "spread_bps": 0.5, "jev_direction": "SHORT", "jev_confidence": 0.995, "entry_quality": "fair", "current_position": -2.5},
+      "href": "/symbols/TIE2",
+      "cells": ["TIE2", "0.3", "-0.38", "+0.63", "1.13", "-3", "1", "SHORT", "100%", "fair", "-3"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-red-700", "px-3 py-2 text-right font-medium tabular-nums text-green-700"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-red-100 text-red-800",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800"
+    },
+    {
+      "name": "negative zero is rendered without a sign or color, like zero",
+      "item": {"symbol": "NEGZ", "price": 10, "return_1m": -0, "return_5m": -0, "volume_ratio_5m": -0, "price_vs_vwap_bps": -0, "spread_bps": -0, "jev_direction": "NONE", "jev_confidence": -0, "entry_quality": "poor", "current_position": -0},
+      "href": "/symbols/NEGZ",
+      "cells": ["NEGZ", "10.0", "0.00", "0.00", "0.00", "0", "0", "NONE", "0%", "poor", "0"],
+      "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-slate-500", "px-3 py-2 text-right font-medium tabular-nums text-slate-500"],
+      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600",
+      "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600"
+    }
+  ]
+}
