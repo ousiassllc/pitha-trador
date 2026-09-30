@@ -1,7 +1,8 @@
 // Package killswitchflow_test holds the Resume / AutoResume / Kill flow
 // tests of risk.Engine (FR-RISK-2/4/5/6/7). They live in their own
 // directory to keep internal/service/risk under the linterly line budget;
-// the helpers below mirror the ones in the parent package's tests.
+// the helpers below are this package's own (sibling test packages such as
+// checkflow and monitorflow do not import each other).
 package killswitchflow_test
 
 import (

@@ -1,4 +1,4 @@
-package risk_test
+package checkflow_test
 
 import (
 	"context"
