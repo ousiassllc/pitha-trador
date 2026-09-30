@@ -92,15 +92,40 @@ func TestShell_HeaderShowsVersionLinkedToSettingsUpdatePanel(t *testing.T) {
 }
 
 // Every page shows the app logo (issue #238) in the header, linking to the
-// app's start page, ahead of the nav without displacing it.
+// app's start page, ahead of the nav without displacing the version /
+// StatusDot / Kill Switch items that follow it.
 func TestShell_HeaderShowsLogoBeforeNav(t *testing.T) {
 	out := render(t, layout.Shell("t"))
 
-	if !regexp.MustCompile(`<a[^>]*id="header-logo"[^>]*href="/scanner"[^>]*>\s*<img[^>]*src="/static/img/logo\.svg"`).MatchString(out) {
-		t.Fatalf("Shell header has no logo link with /static/img/logo.svg; body=%s", out)
+	logoLink := regexp.MustCompile(`(?s)<a\b[^>]*\bid="header-logo"[^>]*>.*?</a>`).FindString(out)
+	if logoLink == "" {
+		t.Fatalf("Shell header has no #header-logo link; body=%s", out)
 	}
-	logo, nav := strings.Index(out, `id="header-logo"`), strings.Index(out, "<nav")
-	if logo < 0 || nav < 0 || logo > nav {
-		t.Errorf("logo must precede <nav>; logo=%d nav=%d", logo, nav)
+	if !regexp.MustCompile(`\bhref="/scanner"`).MatchString(logoLink) {
+		t.Errorf("logo link must go to /scanner; link=%s", logoLink)
+	}
+	img := regexp.MustCompile(`<img\b[^>]*>`).FindString(logoLink)
+	if !strings.Contains(img, `src="/static/img/logo.svg"`) || !strings.Contains(img, `alt=""`) {
+		t.Errorf("logo must be /static/img/logo.svg with empty alt (the adjacent text names the app); img=%s", img)
+	}
+	if !strings.Contains(logoLink, "Pitha Trador") {
+		t.Errorf("logo link must show the app name; link=%s", logoLink)
+	}
+
+	// Document order: logo, nav, then the justify-between items (version,
+	// the StatusDot container, the Kill Switch panel) are all still there.
+	last, lastName := -1, ""
+	for _, marker := range []string{`id="header-logo"`, `<nav `, `id="header-version"`, `id="header-status"`, `<pitha-kill-switch-panel`} {
+		at := strings.Index(out, marker)
+		if at < 0 {
+			t.Fatalf("Shell header lacks %s; body=%s", marker, out)
+		}
+		if at < last {
+			t.Errorf("%s must come after %s in the header; body=%s", marker, lastName, out)
+		}
+		last, lastName = at, marker
+	}
+	if !regexp.MustCompile(`<nav\b[^>]*\baria-label="[^"]+"`).MatchString(out) {
+		t.Errorf("header <nav> must carry an aria-label; body=%s", out)
 	}
 }

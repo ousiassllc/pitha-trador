@@ -25,7 +25,7 @@ import { renderWsDisconnected } from '../lib/ws-status';
 export type SystemStatus = 'running' | 'paused' | 'killed';
 
 // Mirrors docs/api/endpoints.md §5's response shape
-// (internal/web/handler.SystemStateOutput), shared by
+// (internal/web/handler/system.SystemStateOutput), shared by
 // `GET /api/v1/system/status` and every `POST /api/v1/system/*` action.
 interface SystemStateResponse {
   state: SystemStatus;
@@ -36,7 +36,7 @@ interface SystemStateResponse {
 
 // Mirrors docs/api/endpoints.md §6's `/ws/system`
 // `{"type":"kill_switch","reason":"..."}` message
-// (internal/web/handler.systemKillSwitchMessage).
+// (internal/web/handler/system.systemKillSwitchMessage).
 interface KillSwitchMessage {
   type: string;
   reason: string;

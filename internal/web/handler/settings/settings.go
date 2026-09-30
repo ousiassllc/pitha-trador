@@ -52,7 +52,7 @@ func (StaticSecretsStore) Delete(context.Context, string) error              { r
 // order (issue #57 スコープ item 6). Label matches the literal names
 // operators previously set in `.env` so the migration away from it stays
 // recognizable. Every key here must be in config.AllowedSecretKeys (the
-// per-key routes' allow-list), which settings_test.go asserts.
+// per-key routes' allow-list), which settings_display_test.go asserts.
 var settingsFields = []struct {
 	key   string
 	label string

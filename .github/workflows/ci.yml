@@ -42,7 +42,7 @@ jobs:
         run: bun install --cwd static --frozen-lockfile
 
       # go build/go vet (and therefore golangci-lint) now require
-      # static/src/embed.go's `//go:embed dist vendor` target to exist
+      # static/src/embed.go's `//go:embed dist img vendor` target to exist
       # (issue #59) - dist/ is `.gitignore`'d and only produced by this
       # build step, so it must run before golangci-lint.
       - name: Build frontend assets
@@ -93,7 +93,7 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --cwd static --frozen-lockfile
 
-      # go test needs static/src/embed.go's embedded dist/vendor target
+      # go test needs static/src/embed.go's embedded dist/img/vendor target
       # to exist (issue #59), same as the lint job.
       - name: Build frontend assets
         run: bun run --cwd static build
@@ -135,7 +135,7 @@ jobs:
         run: bun install --cwd static --frozen-lockfile
 
       # wails build's AssetServer.Handler (internal/router.New via
-      # cmd/desktop) embeds static/src/embed.go's dist/vendor at compile
+      # cmd/desktop) embeds static/src/embed.go's dist/img/vendor at compile
       # time (issue #59), so the frontend must be built - and this step
       # must run - before `wails build` below.
       - name: Build frontend assets
