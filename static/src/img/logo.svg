@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Pitha Trador">
+  <title>Pitha Trador</title>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <path fill="#0b1b33" fill-rule="evenodd" d="M19 16h16c7.5 0 12 4 12 10.5S42 37.5 35 37.5h-3V47h4v3H19v-3h4V19h-4zM32 19v15.5h3c4.5 0 7-3.5 7-8s-2.5-7.5-7-7.5z"/>
+</svg>

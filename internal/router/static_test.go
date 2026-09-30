@@ -165,3 +165,23 @@ func TestNew_SwaggerRouteDisabledWhenSwaggerEnabledIsFalse(t *testing.T) {
 		t.Fatalf("expected status %d when SWAGGER_ENABLED=false, got %d", http.StatusNotFound, rec.Code)
 	}
 }
+
+// layout.Shell's header logo (issue #238) is served from the embedded
+// static/src/img; a missing go:embed target would 404 it silently.
+func TestNew_StaticRouteServesLogo(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/img/logo.svg", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "image/svg+xml") {
+		t.Errorf("Content-Type = %q, want image/svg+xml", ct)
+	}
+	if !strings.Contains(rec.Body.String(), "<svg") {
+		t.Errorf("body is not an SVG document: %q", rec.Body.String())
+	}
+}

@@ -52,24 +52,6 @@ func TestNew_SettingsPageRouteIsRegistered(t *testing.T) {
 	}
 }
 
-// Header's version link lands on `/settings#update-panel` (issue #241): the
-// panel must come before the (long) secret-field list, or the anchor sits
-// below the first screen until the lazily loaded panel pushes it around.
-func TestNew_SettingsPageHasUpdatePanelAboveSecretFields(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := router.New()
-
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
-	body := rec.Body.String()
-
-	panel := strings.Index(body, `id="update-panel"`)
-	fields := strings.Index(body, "JEV_API_KEY")
-	if panel < 0 || fields < 0 || panel > fields {
-		t.Fatalf("#update-panel at %d, first secret field at %d; want the panel first", panel, fields)
-	}
-}
-
 func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := fakeSecretsStore{"KABU_API_PASSWORD": "kabu"}

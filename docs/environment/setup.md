@@ -112,7 +112,7 @@ make dev
 | `make openapi-export` | 起動中サーバー（`127.0.0.1:48080`）から`docs/api/openapi.json`を書き出す（任意タスク。ファイルは未コミット） |
 
 - **`make dev`の環境変数**: `wails dev`は`cmd/desktop`をカレントとして動くため、`Makefile`は`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`を`$(CURDIR)/config/*.yaml`（絶対パス）に設定する。`internal/bootstrap.Run`は環境変数を埋め込み既定値より優先するため、`config/risk.yaml`等を編集して`make dev`を再起動すれば再ビルドなしで反映される（埋め込み既定値はビルド時のスナップショット）。`PITHA_STATIC_DIR`は`static/src`に設定し、`/static/...`をディスクから配信する。`wails dev`のファイル監視は既定で`.go`変更時のみGoバイナリを再ビルドするため、この上書きが無いと`bun run dev`（esbuild/Tailwind watch）の出力がgo:embedのスナップショットに阻まれ`make dev`再起動まで反映されない
-- **`generate`が前提となる理由**: `templ generate`が`*_templ.go`を、`bun run --cwd static build`が`static/src/dist/{css,js}`を生成する。どちらも`.gitignore`対象であり、`static/src/embed.go`の`//go:embed dist vendor`は`dist/`が空だとコンパイル自体が失敗する。そのためクリーンなチェックアウトでは、生成前に`go vet`/golangci-lint/`go test`/`wails build`のいずれも実行できない（古い生成物が残っていると陳腐化した出力に対して実行してしまう）。CIの`lint`/`test`/`build`各ジョブも同じ2ステップを先に実行し、`lefthook`のpre-commit/pre-pushも`make generate`を呼ぶ
+- **`generate`が前提となる理由**: `templ generate`が`*_templ.go`を、`bun run --cwd static build`が`static/src/dist/{css,js}`を生成する。どちらも`.gitignore`対象であり、`static/src/embed.go`の`//go:embed dist img vendor`は`dist/`が空だとコンパイル自体が失敗する。そのためクリーンなチェックアウトでは、生成前に`go vet`/golangci-lint/`go test`/`wails build`のいずれも実行できない（古い生成物が残っていると陳腐化した出力に対して実行してしまう）。CIの`lint`/`test`/`build`各ジョブも同じ2ステップを先に実行し、`lefthook`のpre-commit/pre-pushも`make generate`を呼ぶ
 
 ## CI/CD
 
@@ -124,7 +124,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。
   - `test`: フロントエンドビルド → `go test ./...` ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
   - `build`: フロントエンドビルド → `wails build -platform windows/amd64 -nsis -installscope user` でNSISインストーラー（`.exe`、ユーザースコープインストール）をビルドしCI Artifactとしてアップロードする。SHA256チェックサムも同時に生成する。バージョンは`main`へのpushでは既存の最新`vX.Y.Z`タグのパッチ+1、タグpushではタグ名、それ以外（PR・`feat/**`）は`dev`を`-ldflags`で埋め込む
   - `release`: `build`の成果物（インストーラー・`checksums.txt`）を`softprops/action-gh-release@v2`でGitHub Releaseとして公開する。`main`へのpush（＝PRマージ、次パッチ版を自動採番）またはタグ`v*`のpush（手動リリース）でのみ実行され、`tag_name`は`build`ジョブが算出した版番号を使う
-  - `config/strategy.yaml`・`config/risk.yaml`・静的アセット（`static/src/dist`・`static/src/vendor`）は`go:embed`でバイナリに埋め込む（`architecture/overview.md` §9）。`static/src/embed.go`は空/未ビルドの`dist`を埋め込もうとすると`go build`自体がコンパイルエラーになるため、`lint`/`test`/`build`いずれのジョブも上記フロントエンドビルドを最初のGoコンパイル系ステップより前に実行する必要がある
+  - `config/strategy.yaml`・`config/risk.yaml`・静的アセット（`static/src/dist`・`static/src/img`・`static/src/vendor`）は`go:embed`でバイナリに埋め込む（`architecture/overview.md` §9）。`static/src/embed.go`は空/未ビルドの`dist`を埋め込もうとすると`go build`自体がコンパイルエラーになるため、`lint`/`test`/`build`いずれのジョブも上記フロントエンドビルドを最初のGoコンパイル系ステップより前に実行する必要がある
 - **バージョン固定**: bunは`.bun-version`（`oven-sh/setup-bun`の`bun-version-file`）、templ・wails・golangci-lint・linterlyはワークフロー内でバージョンを固定する。`latest`は使わない
 - **同時実行制御**: ワークフロー全体に`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: false }`を設定する。版番号の採番（`build`）とタグ作成（`release`）が別ジョブのため、`main`への連続pushで並行実行されると同じ版番号を算出してタグが衝突しうる。同一refの実行を直列化して防ぐ
 - **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
@@ -138,7 +138,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 | フロントエンド（Lit/TypeScript） | Biome | `static/biome.json` |
 
 - `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
-- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`へのimportを拒否してレイヤー規約（`architecture/overview.md` §3）をlintで強制する
+- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否してレイヤー規約（`architecture/overview.md` §3）をlintで強制する。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
 - Biomeはlintとformatを1ツールで兼ねるため、`static/`配下は追加のESLint/Prettier設定を持たない
 
 ## Format
@@ -170,7 +170,7 @@ language: ja
 #   - "**/*_templ.go"
 ```
 
-`.linterlyignore`（抜粋。実ファイルの全文が正）:
+`.linterlyignore`の方針（`architecture/overview.md` §3「サブパッケージ単位の責務規約」）:
 
 ```text
 # 実行時ログ（ソースコードではない）
@@ -178,15 +178,10 @@ language: ja
 
 # 自動生成コード（Templが生成するGoコード）
 *_templ.go
-
-# 既知債務（手書きソース）: ディレクトリ2000行上限の暫定除外（issue #134 で追跡）。
-# internal/repository/・internal/web/handler/・internal/bootstrap/・
-# internal/service/risk/ の手書きソース（テスト含む）を個別ファイル単位で列挙している。
-# 新規追加は禁止（必要になった時点でサブパッケージ分割を先に行う）
 ```
 
-- 個別ファイル列挙の除外はすべて上記の既知債務で、issue #134でサブパッケージ分割により解消するまでの暫定措置である。生成物・ログ以外の除外パターンを新たに追加してはならない
-- 除外中のファイルも1ファイル300行以内に保つ（現時点の唯一の例外は`internal/web/handler/settings_test.go`）
+- 許容する除外は上記の`*_templ.go`と`**/logs/**`のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
+- 現状の`.linterlyignore`には、サブパッケージ分割前の暫定除外（`internal/repository/`・`internal/web/handler/`・`internal/bootstrap/`・`internal/service/risk/`の個別ファイル列挙）が残っている。これは#134の子Issue（#244〜#247）で各パッケージを分割する際に順次削除し、#248で全廃を確認する。暫定除外へ新規ファイルを追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
 
@@ -245,3 +240,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.12 | 2026-09-29 | 環境変数表に`PITHA_SERVER_ALLOWED_HOSTS`（Host検証の追加許可ホスト）を追加 | issue #136 |
 | 1.13 | 2026-09-29 | `PITHA_BACKUP_DIR`の説明を更新（`secrets`除外・パーミッション・週次52週保持・退避先必須・catch-up実行） | issue #137/#152/#159 |
 | 1.14 | 2026-09-29 | Lint/Format/Linterly/Git Hooks節を実ファイル（`.golangci.yml`の有効linterとdepguard、`lefthook.yml`、`.linterlyignore`）に合わせて是正。`make lint`とCI `lint`ジョブの差分を明記。`.env.example`に`PITHA_SERVER_ALLOW_NON_LOOPBACK`/`PITHA_SERVER_ALLOWED_HOSTS`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`の雛形を追加 | issue #154 |
+| 1.15 | 2026-09-30 | `depguard`がサブパッケージも拒否対象であることを明記。`.linterlyignore`の方針を「手書きソースの除外全廃（許容は`*_templ.go`と`**/logs/**`のみ）」へ改め、現行の暫定除外は#134の子Issueで解消する旨を記載 | issue #243 |
