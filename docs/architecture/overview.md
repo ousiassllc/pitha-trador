@@ -44,7 +44,10 @@ pitha-trador/
 │   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, instance_lock.go, wails.json）。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
 │   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go。CI・WebView2が動かない環境向け）
 ├── internal/
-│   ├── bootstrap/                # 両エントリーポイント共通の起動処理（DB open+マイグレーション、config/*.yamlの4段階解決、各サービスの組み立て・ジョブ登録）
+│   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, lifecycle.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）のみ
+│   │   ├── candidates/           # 候補銘柄の定期更新（Fast Screener実行・jev-scoutのenqueue・更新間隔ティッカー。#246）
+│   │   ├── marketdatajob/        # market-data / feature-calc ジョブハンドラ（板→Reading変換・イベント再評価enqueue。#246）
+│   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`BacktestSource`。#246）
 │   │   ├── heldposition/         # FR-SCHED-4 保有ポジション監視・Exit評価ループ（5〜15秒周期、最新板で再評価）
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
 │   │   └── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
@@ -69,23 +72,16 @@ pitha-trador/
 │   │   ├── activity.go           # System Activity Feedのイベント型
 │   │   ├── calibration.go
 │   │   └── policyproposal.go     # policy_proposals相当
-│   ├── repository/               # domainのみに依存（例外: `internal/config`のAES-256-GCMヘルパー）。SQLite接続・マイグレーション（db.go）を含む
-│   │   ├── instrument_repo.go
-│   │   ├── snapshot_repo.go
-│   │   ├── decision_repo.go
-│   │   ├── signal_repo.go
-│   │   ├── order_repo.go
-│   │   ├── position_repo.go
-│   │   ├── decisiontrade/        # クローズ済みポジションと開始時のJev判断の結合読み取り（FR-CAL-2の帯別PnL用）
-│   │   ├── snapshotcols/         # market_snapshotsのFeature列とdomain.Featureの対応表（INSERT/SELECT用）
-│   │   ├── calibration_repo.go
-│   │   ├── job_repo.go           # jobsテーブル（自前Worker用）
-│   │   ├── proposal_repo.go      # policy_proposals
-│   │   ├── killswitch_repo.go    # kill_switch_events / kill_switch_resolutions
-│   │   ├── runtime_settings_repo.go # runtime_settings（policy.*/system.*）
-│   │   ├── secrets_repo.go       # secrets（AES-256-GCM暗号化）
-│   │   ├── dbmw.go               # DB書き込み失敗の検知フック
-│   │   └── timeconv.go           # 時刻のSQLite表現との相互変換
+│   ├── repository/               # domainのみに依存（例外: `system`の`SecretsRepository`のみ`internal/config`のAES-256-GCMヘルパー）。直下にはファイルを置かず、リソース群ごとのサブパッケージ（#244）
+│   │   ├── sqlutil/              # 共有ヘルパー: 時刻のSQLite表現変換（`FormatTime`/`ParseTime`）・`Nullable*`/`Null*`スキャナ・`RowScanner`/`Execer`インターフェース。domain・標準ライブラリのみに依存するリーフ
+│   │   ├── sqlitedb/             # SQLite接続（`Open`）・golang-migrateマイグレーション・`BackupTo`・sqlmw計装ドライバ・DB書き込み失敗検知フック（`DBWriteFailures`）。domainのみに依存するリーフ
+│   │   ├── market/               # instruments / market_snapshots（`InstrumentRepository`, `SnapshotRepository`）
+│   │   ├── jobqueue/             # jobsテーブル・キュー名/状態定数（`Job`, `JobRepository`, `ErrJobNotFound`）
+│   │   ├── judgement/            # jev_decisions / calibration_outcomes / policy_proposals（`DecisionRepository`, `CalibrationRepository`, `ProposalRepository`）
+│   │   ├── trading/              # trade_signals / paper_orders / positions（`SignalRepository`, `OrderRepository`, `PositionRepository`）
+│   │   ├── system/               # kill_switch_events / runtime_settings / secrets（`KillSwitchRepository`, `RuntimeSettingsRepository`, `SecretsRepository`）
+│   │   ├── decisiontrade/        # クローズ済みポジションと開始時のJev判断の結合読み取り（FR-CAL-2の帯別PnL用。複数リソース群を跨ぐ読み取りの置き場）
+│   │   └── snapshotcols/         # market_snapshotsのFeature列とdomain.Featureの対応表（INSERT/SELECT用）
 │   ├── service/                  # domain, repositoryに依存
 │   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
@@ -96,11 +92,13 @@ pitha-trador/
 │   │   ├── jev/                  # Jevアダプタ（client.go, scout.go, trader.go, schemas.go, prompt_version.go）
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）
 │   │   ├── policy/                # Policy Engine
-│   │   ├── risk/                  # Risk Engine（Kill Switch含む）
+│   │   ├── risk/                  # Risk Engine（Kill Switch含む）。`Engine`のメソッド群（Check・状態遷移・監視・警告）は結合が強いため直下の1パッケージに保つ（#247）
 │   │   │   ├── sizing/            # FR-ENTRY-3 ポジションサイズ算出（リスク上限からの純関数）
 │   │   │   ├── repoportfolio/     # risk.PortfolioProviderの本番実装（positionsから建玉・日次損失・連敗を導出）
 │   │   │   ├── multinotify/       # risk.Notifierを複数チャネルへ扇状に配信
-│   │   │   └── killswitchflow/    # テスト専用: Kill Switch発動〜再開フローの回帰テスト（行数上限のためriskから分離）
+│   │   │   ├── killswitchflow/    # テスト専用: Kill Switch発動〜再開フローの回帰テスト（行数上限のためriskから分離）
+│   │   │   ├── checkflow/         # テスト専用: `Engine.Check`（FR-RISK-1）の回帰テスト（#247）
+│   │   │   └── monitorflow/       # テスト専用: 定期監視・日次損失警告・Notifierの回帰テスト（#247）
 │   │   ├── execution/             # Paper/kabu発注実行
 │   │   │   ├── enrich/            # jev_decisionsのresponse_json内のJev Trader応答項目（regime等）をJevDecisionへ復元（Exit条件・Symbol Detail共用）
 │   │   │   ├── vwapcross/         # FR-EXIT-1 VWAP逆クロスのクロス判定・前回観測トラッカー（execution.Engineが依存する本番コード）
@@ -129,7 +127,12 @@ pitha-trador/
 │   │   └── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
 │   └── web/
 │       ├── apierror/              # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
-│       ├── handler/               # scanner.go, symbol*.go, performance.go, calibration.go, system.go, settings.go, activity.go, update.go, policy_proposals.go ほか（*_ws.goはWebSocket）
+│       ├── handler/               # Ginハンドラ。直下は scanner.go, performance.go, calibration.go, policy_proposals.go, swagger.go（一覧・分析系）。それ以外は責務別サブパッケージ（#245）
+│       │   ├── shared/            # 共有ヘルパー（`action_error.go`のアクションエラー整形・`ws_poll.go`のWebSocketポーリング）。domain・標準ライブラリのみに依存するリーフ
+│       │   ├── symbol/            # Symbol List/Detail/Page/Close と `/ws/symbol/...`（symbol*.go）
+│       │   ├── system/            # System状態・Kill Switch操作・`/ws/system`・自動アップデートUI（system.go, system_ws.go, update.go）
+│       │   ├── settings/          # `/settings`・認証情報の保存/削除（settings.go）
+│       │   └── activity/          # System Activity Log（`GET /api/v1/activity`・`/ws/activity`）
 │       ├── insightapi/            # decisions/signals/performance の読み取り専用JSON API（Huma登録、`service/insight`を使用）
 │       ├── middleware/            # HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState
 │       ├── atoms/
@@ -152,11 +155,30 @@ pitha-trador/
 └── tests/
 ```
 
-ツリーの`service/`配下サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`risk/killswitchflow`）は、linterlyのディレクトリ/ファイル行数上限を満たすためにテストを分離したもので、本番コードではない。
+### サブパッケージ単位の責務規約
+
+レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
+
+`repository`/`web/handler`/`bootstrap`/`service/risk`は分割後（#134、実装は#244〜#247）の構成を上のツリーに記載している。**サブパッケージ共通の規約**:
+
+- 兄弟サブパッケージ同士はimportしない。共有コードは`sqlutil`/`sqlitedb`/`handler/shared`のようなリーフ・ヘルパー用サブパッケージへ切り出す。リソース群を跨ぐ読み取りは`decisiontrade`のように専用サブパッケージ（`repository`ではリーフ・ヘルパーとdomainのみに依存）へ置く
+- サブパッケージは親パッケージをimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る
+- 分割後の呼び出し元はサブパッケージ名で修飾する（例: `jobqueue.Job`、`sqlitedb.Open`）。センチネルエラーは返すパッケージが定義する（他レイヤーが分類する必要がある場合は従来どおり`domain/`に置く）
+- テストは対象コードと同じサブパッケージへ移設する。`service/risk`のようにパッケージ内結合が強くコードを分割できない場合のみ、外部テスト（`package risk_test`）をテスト専用サブパッケージへ分離する
+- `.linterlyignore`に手書きソースの除外を置かない。許容するのは自動生成物`*_templ.go`と実行時ログ`**/logs/**`のみ（詳細は`environment/setup.md`）
+
+#### 分割後の構成（後続Issueの設計判断）
+
+| パッケージ | 分割方針 | 依存方向 |
+|-----------|---------|---------|
+| `repository`（#244） | テーブルの結合度でリソース群に分ける（`market`/`jobqueue`/`judgement`/`trading`/`system`）。各リポジトリ型はそのテーブルを所有する群に置き、群内のファイル名は`*_repo.go`を維持する。`formatTime`/`nullable*`/`rowScanner`/`execer`/`sqlExecutor`は`sqlutil`へ（公開名にする）、`db.go`・`dbmw.go`は`sqlitedb`へ。既存の`decisiontrade`/`snapshotcols`は現位置を維持 | 群 → `sqlutil`・`domain`。`sqlitedb` → `domain`。群同士・本番コードでの群→`sqlitedb`は禁止（テストのDB準備のみ`_test.go`から`sqlitedb.Open`可）。`system`のみ`internal/config`も可 |
+| `web/handler`（#245） | 画面/APIの責務別に`symbol`/`system`/`settings`/`activity`へ分け、小さい一覧・分析系ハンドラは直下に残す。`settings_test.go`（538行）は設定の保存・削除・表示の観点でファイルを分割する。`action_error.go`・`ws_poll.go`は`shared`へ | サブパッケージ → `service`・`domain`・`shared`・Templ（`web/pages`等）。`repository`は不可。サブパッケージ同士・直下への逆import禁止。`router` → 直下と全サブパッケージ |
+| `bootstrap`（#246） | 直下は組み立て役（`Run`/`State`/`Services`/`BuildServices`/`Start`/`Stop`）のみ。ジョブ/ループ単位の責務を`candidates`/`marketdatajob`/`backtestsource`へ切り出す（既存の`heldposition`/`paperexec`/`alerts`と同格）。切り出し先は`Services`ではなく必要な依存だけをフィールドに持つ構造体に対するメソッドとして実装する | 直下 → 全サブパッケージ・`service`・`repository`・`sqlitedb`。サブパッケージ → `service`・`domain`・`repository`群のみ。親・兄弟への依存禁止 |
+| `service/risk`（#247） | `Engine`のメソッド群（`check.go`のCheck・`state.go`の状態遷移・`losslimit.go`の損失上限・`monitor.go`の定期監視・`warning.go`の日次損失警告・`autoresume.go`・`baseline.go`・`session.go`・`settings.go`・`sizing.go`）は`Engine`のunexported状態を共有するため**分割せず**`risk`直下に保つ（本番コードのみで約1.6k行＝ディレクトリ上限内）。行数上限は、`package risk_test`の外部テスト（現状936行）を`killswitchflow`に倣ってテスト専用サブパッケージ（`checkflow`=Check、`monitorflow`=監視・警告・Notifier）へ移して満たす | テスト専用サブパッケージ → `risk`（公開API）のみ。本番の依存方向（`risk` → `domain`・`repository/**`・`config`）は変更しない |
 
 ### レイヤー依存ルール（HALT準拠）
 
-依存は上から下への一方向のみ。逆方向のimportは禁止。
+依存は上から下への一方向のみ。逆方向のimportは禁止。**ルールはレイヤーのサブツリー全体（サブパッケージを含む）に適用する。**
 
 ```text
 handler → service → repository → domain
@@ -165,11 +187,12 @@ handler → service → repository → domain
 ```
 
 - `domain/`: 他レイヤーに依存しない。純粋なビジネスロジック（例: Risk Engineのしきい値判定ロジック自体はdomainに置き、DB/HTTPアクセスはrepository/serviceに分離）
-- `repository/`: `domain/` のみに依存。例外として`SecretsRepository`（issue #57）のみ`internal/config`のAES-256-GCMヘルパー（依存を持たない、`domain`と同格の基盤パッケージ）にも依存する
+- `repository/**`: `domain/` のみに依存（`sqlutil`・`sqlitedb`は標準ライブラリ・外部ライブラリ・`domain`のみ）。例外として`SecretsRepository`（issue #57、`repository/system`）のみ`internal/config`のAES-256-GCMヘルパー（依存を持たない、`domain`と同格の基盤パッケージ）にも依存する。この例外は`system`パッケージ内に閉じ、`sqlutil`等の共有サブパッケージや他のサブパッケージへ広げない。サブパッケージ間の依存方向は前節の規約に従う
 - `internal/safego`: 標準ライブラリのみに依存し、`internal/config`・`domain`と同格の基盤パッケージ。`service/`・`bootstrap`・`cmd/server`のいずれからも参照できる（常駐goroutineのpanic回復、FR-SCHED-6）
-- `service/`: `domain/`, `repository/` に依存。`marketdata`/`jev`/`assist`など外部I/OはこのレイヤーでHTTPクライアントとして実装する
-- `web/handler/`: `service/`, `domain/` に依存。`repository/` を直接使わない（`.golangci.yml` の depguard が `internal/web/**` から `internal/repository` への import を lint で拒否する）。repositoryが返すセンチネルエラーのうちhandlerが分類する必要があるもの（例: `domain.ErrPositionNotFound`）は`domain/`に定義し、repositoryはそれを返す
-- `router/`: `handler/` を参照してルートを定義
+- `service/**`: `domain/`, `repository/**` に依存。`marketdata`/`jev`/`assist`など外部I/OはこのレイヤーでHTTPクライアントとして実装する
+- `web/**`（`web/handler/**`を含む）: `service/`, `domain/` に依存。`repository/**` を直接使わない（`.golangci.yml` の depguard `web-no-repository` が `internal/web/**` から `internal/repository` **および全サブパッケージ**（`pkg`はプレフィックス一致）への import を lint で拒否する。サブパッケージ追加でルールの書き換えは不要）。repositoryが返すセンチネルエラーのうちhandlerが分類する必要があるもの（例: `domain.ErrPositionNotFound`）は`domain/`に定義し、repositoryはそれを返す
+- `bootstrap/**`・`cmd/*`: 組み立て役として全レイヤー（`repository/**`含む）を参照してよい。`bootstrap`の子パッケージは親を参照しない
+- `router/`: `web/handler/**` を参照してルートを定義
 
 ## 4. コンポーネント責務
 
@@ -182,7 +205,7 @@ handler → service → repository → domain
 | RAG Context Builder | 現在の状態ベクトルからsqlite-vecで類似過去局面を検索し、Jevへのfew-shot文脈を構築する（§7、FR-RAG-1〜5） | `internal/service/rag` |
 | Policy Engine | Jev出力をトレードシグナルへ変換（§4.6） | `internal/service/policy` |
 | Market Calendar | 東証の立会時間（前場/後場）・祝日判定。立会時間外の市場データ取得・Jev呼び出し・新規発注停止（Scheduler SessionGate）、FR-RISK-6のハートビート判定、FR-EXIT-1の引け前強制決済が参照する（`requirements/non-functional.md` §3） | `internal/service/marketcalendar` |
-| Risk Engine | ポジションサイズ・損失上限・Kill Switch（§4.7）。全レイヤーの中で最終拒否権を持つ。サイズ算出（FR-ENTRY-3）・ポートフォリオ状態の導出・複数チャネル通知はサブパッケージ。`killswitchflow`はテスト専用 | `internal/service/risk`（`sizing`, `repoportfolio`, `multinotify`, `killswitchflow`） |
+| Risk Engine | ポジションサイズ・損失上限・Kill Switch（§4.7）。全レイヤーの中で最終拒否権を持つ。サイズ算出（FR-ENTRY-3）・ポートフォリオ状態の導出・複数チャネル通知はサブパッケージ。`killswitchflow`・`checkflow`・`monitorflow`はテスト専用 | `internal/service/risk`（`sizing`, `repoportfolio`, `multinotify`, `killswitchflow`, `checkflow`, `monitorflow`） |
 | Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時）。Jev Trader応答項目の復元は`enrich`、FR-EXIT-1 VWAP逆クロス判定は`vwapcross`。`closerace`はテスト専用 | `internal/service/execution`（`enrich`, `vwapcross`, `closerace`） |
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7） | `internal/service/selfimprove` |
@@ -196,7 +219,7 @@ handler → service → repository → domain
 | Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
 | Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/heldposition`・`service/marketdata`・`service/pushfeed`・`service/scheduler`から使う | `internal/safego` |
-| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先） | `internal/bootstrap`（`heldposition`, `paperexec`, `alerts`） |
+| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-data/feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `paperexec`, `alerts`） |
 | Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ（`requirements/non-functional.md` §5） | `internal/logging` |
 | Supervisor | 子プロセスの異常終了時の指数バックオフ再起動（1秒〜5分、1分安定でリセット）。終了コード0で監視終了。`cmd/desktop`の`--supervise`起動でのみ使う（`requirements/non-functional.md` §3） | `internal/supervisor` |
 | Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。2つ目の起動は`bootstrap.Run`に到達する前に終了コード0で終了し、Scheduler・Kill Switch・発注の二重稼働を防ぐ | `internal/singleinstance` |
@@ -242,3 +265,4 @@ handler → service → repository → domain
 | 1.21 | 2026-09-29 | §3ツリーに`internal/supervisor`・`internal/singleinstance`と`cmd/desktop`の`--supervise`起動・インストーラー自動起動を追記、§4にSupervisor・Single Instance Guardを追加 | issue #208/#210 |
 | 1.22 | 2026-09-29 | §3の`internal/web/`ツリーに`apierror/`を追加、§4にAPI Error Formatter行を新設 | issue #215/#219 |
 | 1.23 | 2026-09-29 | §3ツリーに`internal/safego`を追加、§4にBackground Task Guard行を新設、§3レイヤー依存ルールに基盤パッケージとして`safego`を追記 | issue #226/#229 |
+| 1.24 | 2026-09-30 | §3の「ディレクトリ＝レイヤー」規約を「サブパッケージ単位の責務」規約へ改め、`repository`（`sqlutil`/`sqlitedb`/`market`/`jobqueue`/`judgement`/`trading`/`system`）・`web/handler`（`shared`/`symbol`/`system`/`settings`/`activity`）・`bootstrap`（`candidates`/`marketdatajob`/`backtestsource`）・`service/risk`（Engine集約＋テスト専用`checkflow`/`monitorflow`）の分割後構成とサブパッケージ間の依存方向を確定。レイヤー依存ルールをサブツリー全体（depguardのプレフィックス一致）へ適用する形に更新し、`.linterlyignore`の手書きソース除外を全廃する方針（許容は`*_templ.go`と`**/logs/**`のみ）を明記 | issue #243（#134の先行仕様更新） |
