@@ -86,7 +86,8 @@ pitha-trador/
 │   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
 │   │   ├── featureengine/        # 特徴量算出
-│   │   │   └── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
+│   │   │   ├── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
+│   │   │   └── marketcontextflow/ # テスト専用: `MarketContextLoader`の回帰テスト（行数上限のためfeatureengineから分離、#248）
 │   │   ├── pushfeed/             # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き）
 │   │   ├── screener/             # Fast Screener・screen_score算出
 │   │   ├── jev/                  # Jevアダプタ（client.go, scout.go, trader.go, schemas.go, prompt_version.go）
@@ -102,7 +103,8 @@ pitha-trador/
 │   │   ├── execution/             # Paper/kabu発注実行
 │   │   │   ├── enrich/            # jev_decisionsのresponse_json内のJev Trader応答項目（regime等）をJevDecisionへ復元（Exit条件・Symbol Detail共用）
 │   │   │   ├── vwapcross/         # FR-EXIT-1 VWAP逆クロスのクロス判定・前回観測トラッカー（execution.Engineが依存する本番コード）
-│   │   │   └── closerace/         # テスト専用: 決済競合（手動決済/CloseAll/Exitモニタ）の回帰テスト（行数上限のためexecutionから分離）
+│   │   │   ├── closerace/         # テスト専用: 決済競合（手動決済/CloseAll/Exitモニタ）の回帰テスト（行数上限のためexecutionから分離）
+│   │   │   └── closeflow/         # テスト専用: `Engine.Close`/`CloseAll`の回帰テスト（行数上限のためexecutionから分離、#248）
 │   │   ├── calibration/           # Outcome labeling・Brier/Log Loss算出
 │   │   ├── backtest/              # Backtest Engine（Walk Forward評価・Governor用シャドーバックテスト）
 │   │   ├── assist/                # Luna/Sol/Opusアダプタ
@@ -118,13 +120,15 @@ pitha-trador/
 │   │   ├── backup/                # 日次SQLiteバックアップ（daily 90日 + weekly gzip、`requirements/non-functional.md` §3）
 │   │   ├── retention/             # jobs / market_snapshotsの期限切れ行パージ（`requirements/non-functional.md` §3）
 │   │   └── scheduler/             # 自前Workerプール定義・周期ジョブ登録
-│   │       └── maintenance/       # 日次ハウスキーピング（バックアップ・データ保持パージ・ログアーカイブ）のcatch-up実行。最終成功日をruntime_settingsへ保持し、起動時と10分ごとに未実行分を実行
+│   │       ├── maintenance/       # 日次ハウスキーピング（バックアップ・データ保持パージ・ログアーカイブ）のcatch-up実行。最終成功日をruntime_settingsへ保持し、起動時と10分ごとに未実行分を実行
+│   │       └── maintenanceflow/   # テスト専用: バックアップ・データ保持パージ・ログローテーションの各ジョブ呼び出しの回帰テスト（行数上限のためschedulerから分離、#248）
 │   ├── router/                    # SSR + API ルーティング定義（Huma登録含む）
 │   │   ├── options.go             # Option群（依存注入）
 │   │   ├── router.go              # New（Gin Engine組み立て）
 │   │   ├── router_middleware.go   # middlewareの適用順
 │   │   ├── router_routes.go       # ルート登録
-│   │   └── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
+│   │   ├── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
+│   │   └── analysisflow/          # テスト専用: 分析系ルート（ポリシー提案）の回帰テスト（行数上限のためrouterから分離、#248）
 │   └── web/
 │       ├── apierror/              # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
 │       ├── handler/               # Ginハンドラ。直下は scanner.go, performance.go, calibration.go, policy_proposals.go, swagger.go（一覧・分析系）。それ以外は責務別サブパッケージ（#245）
@@ -165,7 +169,7 @@ pitha-trador/
 - 兄弟サブパッケージ同士はimportしない。共有コードは`sqlutil`/`sqlitedb`/`handler/shared`のようなリーフ・ヘルパー用サブパッケージへ切り出す。リソース群を跨ぐ読み取りは`decisiontrade`のように専用サブパッケージ（`repository`ではリーフ・ヘルパーとdomainのみに依存）へ置く
 - サブパッケージは親パッケージをimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る
 - 分割後の呼び出し元はサブパッケージ名で修飾する（例: `jobqueue.Job`、`sqlitedb.Open`）。センチネルエラーは返すパッケージが定義する（他レイヤーが分類する必要がある場合は従来どおり`domain/`に置く）
-- テストは対象コードと同じサブパッケージへ移設する。`service/risk`のようにパッケージ内結合が強くコードを分割できない場合のみ、外部テスト（`package risk_test`）をテスト専用サブパッケージへ分離する
+- テストは対象コードと同じサブパッケージへ移設する。`service/risk`のようにパッケージ内結合が強くコードを分割できない場合、または本番コードは上限内でも外部テスト（`package X_test`）を足すとディレクトリ2000行を超える場合のみ、外部テストをテスト専用サブパッケージ（`*flow`等）へ分離する。各テスト専用サブパッケージは自前のヘルパーを持ち、兄弟テストパッケージ同士はimportしない
 - `.linterlyignore`に手書きソースの除外を置かない。許容するのは自動生成物`*_templ.go`と実行時ログ`**/logs/**`のみ（詳細は`environment/setup.md`）
 
 #### 分割後の構成（後続Issueの設計判断）
@@ -200,18 +204,18 @@ handler → service → repository → domain
 | コンポーネント | 責務 | 実装場所 |
 |---------------|------|---------|
 | Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理 | `internal/service/marketdata` |
-| Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1） | `internal/service/featureengine` |
+| Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1）。`marketcontextflow`はテスト専用 | `internal/service/featureengine`（`eventtrigger`, `marketcontextflow`） |
 | Fast Screener | 数値フィルター・screen_score算出・上位N銘柄選定（§4.2） | `internal/service/screener` |
 | Jev Adapter (Scout/Trader) | 構造化状態をJev APIへ送信し、choice/score/yes-no型の判断を受け取る（§4.4, §4.5） | `internal/service/jev` |
 | RAG Context Builder | 現在の状態ベクトルからsqlite-vecで類似過去局面を検索し、Jevへのfew-shot文脈を構築する（§7、FR-RAG-1〜5） | `internal/service/rag` |
 | Policy Engine | Jev出力をトレードシグナルへ変換（§4.6） | `internal/service/policy` |
 | Market Calendar | 東証の立会時間（前場/後場）・祝日判定。立会時間外の市場データ取得・Jev呼び出し・新規発注停止（Scheduler SessionGate）、FR-RISK-6のハートビート判定、FR-EXIT-1の引け前強制決済が参照する（`requirements/non-functional.md` §3） | `internal/service/marketcalendar` |
 | Risk Engine | ポジションサイズ・損失上限・Kill Switch（§4.7）。全レイヤーの中で最終拒否権を持つ。サイズ算出（FR-ENTRY-3）・ポートフォリオ状態の導出・複数チャネル通知はサブパッケージ。`killswitchflow`・`checkflow`・`monitorflow`はテスト専用 | `internal/service/risk`（`sizing`, `repoportfolio`, `multinotify`, `killswitchflow`, `checkflow`, `monitorflow`） |
-| Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時）。Jev Trader応答項目の復元は`enrich`、FR-EXIT-1 VWAP逆クロス判定は`vwapcross`。`closerace`はテスト専用 | `internal/service/execution`（`enrich`, `vwapcross`, `closerace`） |
+| Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時）。Jev Trader応答項目の復元は`enrich`、FR-EXIT-1 VWAP逆クロス判定は`vwapcross`。`closerace`・`closeflow`はテスト専用 | `internal/service/execution`（`enrich`, `vwapcross`, `closerace`, `closeflow`） |
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7） | `internal/service/selfimprove` |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
-| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10） | `internal/service/scheduler` |
+| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`maintenanceflow`はテスト専用 | `internal/service/scheduler`（`maintenance`, `maintenanceflow`） |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12） | `internal/service/activityfeed` |
 | Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8） | `internal/service/backtest` |
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
@@ -272,3 +276,4 @@ handler → service → repository → domain
 | 1.27 | 2026-09-30 | §3の`web/handler`を実装に合わせて分割済みと明記（`shared`/`symbol`/`system`/`settings`/`activity`。`shared`の公開ヘルパー名、`settings`テストの分割、`router`テストの統合によるディレクトリ行数維持） | issue #245 |
 | 1.28 | 2026-09-30 | §3の`bootstrap`を実装に合わせて分割済みと明記（`candidates`/`marketdatajob`/`backtestsource`を追加し、直下に`constants.go`を新設。`BacktestSource`は`backtestsource.Source`、`Services`メソッドは各サブパッケージの構造体メソッドへ移動）。テストは対象サブパッケージへ移設 | issue #246 |
 | 1.29 | 2026-09-30 | §3の`service/risk`を実装に合わせて分割済みと明記（`Engine`本体は直下に維持し、`package risk_test`の外部テストをテスト専用`checkflow`/`monitorflow`へ移設。各々が自前のフェイク・テストDBヘルパーを持つ）。§4のBackground Task Guard行の利用元に`bootstrap/candidates`・`scheduler/updatecheck`を反映 | issue #247 |
+| 1.30 | 2026-09-30 | §3のツリーに、行数上限（300行/ファイル・2000行/ディレクトリ）を満たすために外部テストを移したテスト専用サブパッケージ`featureengine/marketcontextflow`・`execution/closeflow`・`scheduler/maintenanceflow`・`router/analysisflow`を追記（各々が自前のヘルパーを持つ）。`.linterlyignore`が`*_templ.go`と`**/logs/**`のみであることを最終確認 | issue #248 |

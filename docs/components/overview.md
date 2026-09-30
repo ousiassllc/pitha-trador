@@ -44,7 +44,7 @@ static/
     ├── components/
     │   ├── price-chart/           pitha-price-chart.ts
     │   ├── scanner-table/         pitha-scanner-table.ts
-    │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts
+    │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）
     │   ├── activity-feed/         pitha-activity-feed.ts
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
@@ -179,3 +179,4 @@ const (
 | 1.19 | 2026-09-30 | Scanner Dashboardの見た目を整備: atomsに`EntryQualityBadge`を追加、`ScannerTableFallback`に候補件数・空状態・日本語列見出し（ツールチップ）・符号色分けを追加し、`pitha-scanner-table`のLit描画を同一スタイルに揃えた | issue #239 |
 | 1.20 | 2026-09-30 | `UpdatePanel`に保留理由・失敗種別・確認中の進行表示・アップデーター未搭載の表示を追加、`#update-panel`を`SettingsPage`の見出し直下へ移動 | issue #241 |
 | 1.21 | 2026-09-30 | §2の`handler/`をサブパッケージ構成（`shared`/`symbol`/`system`/`settings`/`activity`）へ更新 | issue #245 |
+| 1.22 | 2026-09-30 | §2の`calibration-heatmap/`に、行数上限（300行/ファイル）のため型と純粋ヘルパーを分離した`calibration-view.ts`を追記 | issue #248 |

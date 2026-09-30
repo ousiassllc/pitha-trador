@@ -181,7 +181,7 @@ language: ja
 ```
 
 - 許容する除外は上記の`*_templ.go`と`**/logs/**`のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
-- サブパッケージ分割前の暫定除外（`internal/repository/`は#244、`internal/web/handler/`は#245、`internal/bootstrap/`は#246、`internal/service/risk/`は#247）は全て削除済みで、#248で全廃を確認する。手書きソースの除外を新規に追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
+- サブパッケージ分割前の暫定除外（`internal/repository/`は#244、`internal/web/handler/`は#245、`internal/bootstrap/`は#246、`internal/service/risk/`は#247）は全て削除済みで、#248で全廃を確認した。手書きソースの除外を新規に追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
 
@@ -244,3 +244,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.16 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/web/handler/`を削除（`web/handler`のサブパッケージ分割完了）。残りは`internal/bootstrap/`・`internal/service/risk/` | issue #245 |
 | 1.17 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/bootstrap/`を削除（`bootstrap`のサブパッケージ分割完了）。残りは`internal/service/risk/` | issue #246 |
 | 1.18 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/service/risk/`を削除（`service/risk`のテスト専用サブパッケージへの分割完了）。手書きソースの暫定除外は残っていない | issue #247 |
+| 1.19 | 2026-09-30 | `.linterlyignore`の最終確認（除外は`*_templ.go`と`**/logs/**`のみで、既知債務コメント・手書きソース除外なし）を反映し、「#248で全廃を確認する」の予定表現を確認済みの記述へ改めた | issue #248 |
