@@ -13,10 +13,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
-// fakeSymbolProvider is a minimal handler.SymbolProvider for
+// fakeSymbolProvider is a minimal symbol.SymbolProvider for
 // router-wiring tests (router_test cannot reuse internal/web/handler's
 // own unexported test fake across packages).
 type fakeSymbolProvider struct {
@@ -85,7 +85,7 @@ func TestNew_APISymbolReportsWithSymbolRiskParamsOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(
 		router.WithSymbolProvider(fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastSignal: domain.JevDirectionNone}}),
-		router.WithSymbolRiskParams(handler.SymbolRiskParams{AllowedPositionPct: 1.0, StopLossPct: 0.4, TakeProfitPct: 0.9}),
+		router.WithSymbolRiskParams(symbol.SymbolRiskParams{AllowedPositionPct: 1.0, StopLossPct: 0.4, TakeProfitPct: 0.9}),
 	)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/symbols/7203", nil)

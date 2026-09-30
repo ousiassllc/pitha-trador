@@ -1,4 +1,4 @@
-package handler_test
+package symbol_test
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
 func TestSymbolHandler_ClosePosition_ClosesAtLatestKnownPriceAndRendersRow(t *testing.T) {
@@ -28,7 +28,7 @@ func TestSymbolHandler_ClosePosition_ClosesAtLatestKnownPriceAndRendersRow(t *te
 			EntryPrice: 2100.0, CurrentPrice: 2110.0, ClosedAt: &closedAt, ExitReason: strPtr(domain.ExitReasonManual),
 		},
 	}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	router := gin.New()
 	router.POST("/positions/:id/close", h.ClosePosition)
 
@@ -51,7 +51,7 @@ func TestSymbolHandler_ClosePosition_AlreadyClosedReturns409(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	closedAt := time.Now().UTC()
 	provider := &fakeSymbolProvider{position: domain.Position{ID: 42, Symbol: "7203", ClosedAt: &closedAt}}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	router := gin.New()
 	router.POST("/positions/:id/close", h.ClosePosition)
 
@@ -70,7 +70,7 @@ func TestSymbolHandler_ClosePosition_AlreadyClosedReturns409(t *testing.T) {
 func TestSymbolHandler_ClosePosition_NotFoundReturns404(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	provider := &fakeSymbolProvider{positionErr: domain.ErrPositionNotFound}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	router := gin.New()
 	router.POST("/positions/:id/close", h.ClosePosition)
 
@@ -86,7 +86,7 @@ func TestSymbolHandler_ClosePosition_NotFoundReturns404(t *testing.T) {
 func TestSymbolHandler_ClosePosition_InvalidIDReturns400(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	provider := &fakeSymbolProvider{}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	router := gin.New()
 	router.POST("/positions/:id/close", h.ClosePosition)
 
@@ -118,7 +118,7 @@ func TestSymbolHandler_ClosePosition_FailuresRenderToastFragment(t *testing.T) {
 		"lost race":      {"/positions/1/close", &fakeSymbolProvider{position: domain.Position{ID: 1}, closeErr: domain.ErrPositionAlreadyClosed}, http.StatusConflict},
 	} {
 		router := gin.New()
-		router.POST("/positions/:id/close", handler.NewSymbolHandler(tc.provider, handler.SymbolRiskParams{}).ClosePosition)
+		router.POST("/positions/:id/close", symbol.NewSymbolHandler(tc.provider, symbol.SymbolRiskParams{}).ClosePosition)
 
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, tc.path, nil))
@@ -143,7 +143,7 @@ func TestSymbolHandler_ClosePosition_500LogsCause(t *testing.T) {
 		prev := slog.Default()
 		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 		router := gin.New()
-		router.POST("/positions/:id/close", handler.NewSymbolHandler(provider, handler.SymbolRiskParams{}).ClosePosition)
+		router.POST("/positions/:id/close", symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{}).ClosePosition)
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/positions/42/close", nil))
 		slog.SetDefault(prev)

@@ -1,4 +1,4 @@
-package handler_test
+package symbol_test
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
 func TestSymbolHandler_APISymbol_ReturnsStateAndRiskParams(t *testing.T) {
@@ -21,7 +21,7 @@ func TestSymbolHandler_APISymbol_ReturnsStateAndRiskParams(t *testing.T) {
 		Symbol: "7203", LastPrice: 2831.5, LastSignal: domain.JevDirectionLong, LastSignalConfidence: confidence,
 		Position: &domain.Position{Side: domain.PositionSideLong, Quantity: 100},
 	}}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{AllowedPositionPct: 2.0, StopLossPct: 0.6, TakeProfitPct: 1.2})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{AllowedPositionPct: 2.0, StopLossPct: 0.6, TakeProfitPct: 1.2})
 	_, api := humatest.New(t)
 	huma.Get(api, "/symbols/{symbol}", h.APISymbol)
 
@@ -66,7 +66,7 @@ func TestSymbolHandler_APISymbol_ShortPositionReportsNegativeSize(t *testing.T) 
 		Symbol: "7203", LastSignal: domain.JevDirectionNone,
 		Position: &domain.Position{Side: domain.PositionSideShort, Quantity: 50},
 	}}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/symbols/{symbol}", h.APISymbol)
 
@@ -85,7 +85,7 @@ func TestSymbolHandler_APISymbol_ShortPositionReportsNegativeSize(t *testing.T) 
 
 func TestSymbolHandler_APISymbol_UnknownSymbolReturns404(t *testing.T) {
 	provider := &fakeSymbolProvider{stateErr: execution.ErrInstrumentUnknown}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/symbols/{symbol}", h.APISymbol)
 
@@ -100,7 +100,7 @@ func TestSymbolHandler_APICandles_DefaultsToSixHourLookback(t *testing.T) {
 	provider := &fakeSymbolProvider{candles: []domain.Snapshot{
 		{Timestamp: time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC), Price: 2105.0, Volume: 1000, Feature: domain.Feature{VWAP: 2100.0}},
 	}}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/symbols/{symbol}/candles", h.APICandles)
 
@@ -138,7 +138,7 @@ func TestSymbolHandler_APICandles_DefaultsToSixHourLookback(t *testing.T) {
 
 func TestSymbolHandler_APICandles_RespectsExplicitFromTo(t *testing.T) {
 	provider := &fakeSymbolProvider{}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/symbols/{symbol}/candles", h.APICandles)
 
@@ -156,7 +156,7 @@ func TestSymbolHandler_APICandles_RespectsExplicitFromTo(t *testing.T) {
 
 func TestSymbolHandler_APICandles_InvalidFromReturns422(t *testing.T) {
 	provider := &fakeSymbolProvider{}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/symbols/{symbol}/candles", h.APICandles)
 
@@ -168,7 +168,7 @@ func TestSymbolHandler_APICandles_InvalidFromReturns422(t *testing.T) {
 }
 
 func TestSymbolHandler_SymbolRoutes_RejectInvalidInput(t *testing.T) {
-	h := handler.NewSymbolHandler(&fakeSymbolProvider{}, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(&fakeSymbolProvider{}, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/symbols/{symbol}", h.APISymbol)
 	huma.Get(api, "/symbols/{symbol}/candles", h.APICandles)
@@ -189,7 +189,7 @@ func TestSymbolHandler_SymbolRoutes_RejectInvalidInput(t *testing.T) {
 func TestSymbolHandler_APISymbol_ReportsSizingDerivedAllowedPositionAtLastPrice(t *testing.T) {
 	provider := &fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastPrice: 2500}}
 	var gotPrice float64
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{
 		AllowedPositionPct: 2.0, // static ceiling: must be overridden
 		AllowedPositionPctFor: func(_ context.Context, price float64) float64 {
 			gotPrice = price

@@ -1,4 +1,4 @@
-package handler_test
+package symbol_test
 
 import (
 	"net/http"
@@ -10,14 +10,14 @@ import (
 	"github.com/danielgtaylor/huma/v2/humatest"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
 func TestSymbolHandler_APIPositions_ReturnsItems(t *testing.T) {
 	provider := &fakeSymbolProvider{positions: []domain.Position{
 		{ID: 1, Symbol: "7203", Side: domain.PositionSideLong, Quantity: 100, EntryPrice: 2100, CurrentPrice: 2110, OpenedAt: time.Now().UTC()},
 	}}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/positions", h.APIPositions)
 
@@ -35,7 +35,7 @@ func TestSymbolHandler_APIOrders_FiltersByStatus(t *testing.T) {
 	provider := &fakeSymbolProvider{orders: []domain.PaperOrder{
 		{ID: 1, Symbol: "7203", Side: domain.OrderSideBuy, OrderType: domain.OrderTypeMarket, Quantity: 100, Status: domain.OrderStatusFilled, SubmittedAt: time.Now().UTC()},
 	}}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/orders", h.APIOrders)
 
@@ -50,7 +50,7 @@ func TestSymbolHandler_APIOrders_FiltersByStatus(t *testing.T) {
 }
 
 func TestSymbolHandler_ListEndpoints_RejectInvalidQuery(t *testing.T) {
-	h := handler.NewSymbolHandler(&fakeSymbolProvider{}, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(&fakeSymbolProvider{}, symbol.SymbolRiskParams{})
 	_, api := humatest.New(t)
 	huma.Get(api, "/positions", h.APIPositions)
 	huma.Get(api, "/orders", h.APIOrders)

@@ -4,6 +4,10 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
@@ -19,16 +23,16 @@ var defaultCandidateRefreshInterval = handler.CandidateRefreshInterval{
 type options struct {
 	candidateSource   handler.CandidateSource
 	candidateRefresh  handler.CandidateRefreshInterval
-	systemEngine      handler.SystemEngine
-	symbolProvider    handler.SymbolProvider
-	symbolRiskParams  handler.SymbolRiskParams
+	systemEngine      system.SystemEngine
+	symbolProvider    symbol.SymbolProvider
+	symbolRiskParams  symbol.SymbolRiskParams
 	insightProvider   insightapi.Provider
 	calibrationSource handler.CalibrationSource
 	proposalSource    handler.PolicyProposalSource
 	backtestRunner    handler.BacktestRunner
-	activitySource    handler.ActivitySource
-	secretsStore      handler.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
-	updateController  handler.UpdateController
+	activitySource    activity.ActivitySource
+	secretsStore      settings.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
+	updateController  system.UpdateController
 	heartbeatRecorder middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
 	allowedHosts      []string                     // nil until WithAllowedHosts: no Host/Origin validation
 }
@@ -51,27 +55,27 @@ func WithCandidateRefreshInterval(interval handler.CandidateRefreshInterval) Opt
 }
 
 // WithSystemEngine overrides the Kill Switch action/API routes' backing
-// internal/web/handler.SystemEngine. cmd/desktop and cmd/server pass
+// internal/web/handler/system.SystemEngine. cmd/desktop and cmd/server pass
 // internal/bootstrap's real internal/service/risk.Engine; the default
-// Running handler.StaticSystemEngine only serves router-level tests.
-func WithSystemEngine(engine handler.SystemEngine) Option {
+// Running system.StaticSystemEngine only serves router-level tests.
+func WithSystemEngine(engine system.SystemEngine) Option {
 	return func(o *options) { o.systemEngine = engine }
 }
 
 // WithSymbolProvider overrides the Symbol Detail/position/order routes'
-// backing internal/web/handler.SymbolProvider. cmd/desktop and
+// backing internal/web/handler/symbol.SymbolProvider. cmd/desktop and
 // cmd/server pass internal/bootstrap's real
-// internal/service/execution.Engine; the empty handler.StaticSymbolProvider
+// internal/service/execution.Engine; the empty symbol.StaticSymbolProvider
 // default only serves router-level tests.
-func WithSymbolProvider(provider handler.SymbolProvider) Option {
+func WithSymbolProvider(provider symbol.SymbolProvider) Option {
 	return func(o *options) { o.symbolProvider = provider }
 }
 
 // WithSymbolRiskParams overrides `GET /api/v1/symbols/{symbol}`'s "risk"
-// section (handler.SymbolRiskParams). cmd/* build it from the real
-// risk.Engine/execution.Engine settings via handler.NewSymbolRiskParams;
+// section (symbol.SymbolRiskParams). cmd/* build it from the real
+// risk.Engine/execution.Engine settings via symbol.NewSymbolRiskParams;
 // without this option the section reports zero values.
-func WithSymbolRiskParams(params handler.SymbolRiskParams) Option {
+func WithSymbolRiskParams(params symbol.SymbolRiskParams) Option {
 	return func(o *options) { o.symbolRiskParams = params }
 }
 
@@ -103,11 +107,11 @@ func WithPolicyProposalSource(source handler.PolicyProposalSource) Option {
 }
 
 // WithActivitySource overrides System Activity Log's backing
-// internal/web/handler.ActivitySource (`GET /activity`,
+// internal/web/handler/activity.ActivitySource (`GET /activity`,
 // `GET /api/v1/activity`, `/ws/activity`). cmd/desktop and cmd/server pass
 // internal/bootstrap's internal/service/activityfeed.Service; the idle
-// handler.StaticActivitySource default only serves router-level tests.
-func WithActivitySource(source handler.ActivitySource) Option {
+// activity.StaticActivitySource default only serves router-level tests.
+func WithActivitySource(source activity.ActivitySource) Option {
 	return func(o *options) { o.activitySource = source }
 }
 
@@ -120,15 +124,15 @@ func WithBacktestRunner(runner handler.BacktestRunner) Option {
 }
 
 // WithSecretsStore sets the Settings/Setup screens' and secrets-status
-// banner's backing internal/web/handler.SecretsStore, and enables the
+// banner's backing internal/web/handler/settings.SecretsStore, and enables the
 // Setup Guard (middleware.SetupGuard, issue #80): while any required key
 // is unset in store, every route except `/setup`, `POST`/`DELETE
 // /settings/:key` and `/static/...` redirects to `/setup`. cmd/desktop
 // and cmd/server pass internal/bootstrap's real
 // *system.SecretsRepository. Without this option (router-level tests
-// only) the handlers use the empty handler.StaticSecretsStore and no
+// only) the handlers use the empty settings.StaticSecretsStore and no
 // guard is installed, so unrelated route tests need not seed secrets.
-func WithSecretsStore(store handler.SecretsStore) Option {
+func WithSecretsStore(store settings.SecretsStore) Option {
 	return func(o *options) { o.secretsStore = store }
 }
 
@@ -138,7 +142,7 @@ func WithSecretsStore(store handler.SecretsStore) Option {
 // passes internal/bootstrap's updater.SchedulerAdapter; without it (cmd/
 // server, which never self-updates) the two GET routes render nothing and
 // the POST route 404s.
-func WithUpdateController(controller handler.UpdateController) Option {
+func WithUpdateController(controller system.UpdateController) Option {
 	return func(o *options) { o.updateController = controller }
 }
 

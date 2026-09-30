@@ -1,4 +1,4 @@
-package handler
+package activity
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -127,7 +128,7 @@ func (h *ActivityHandler) Page(c *gin.Context) {
 	snap, err := h.source.Snapshot(c.Request.Context(), activityfeed.Query{})
 	if err != nil {
 		slog.ErrorContext(c.Request.Context(), "handler: activity page snapshot", "error", err)
-		respondPageError(c, http.StatusInternalServerError, "アクティビティログの取得に失敗しました。")
+		shared.RespondPageError(c, http.StatusInternalServerError, "アクティビティログの取得に失敗しました。")
 		return
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")
@@ -182,7 +183,7 @@ func (h *ActivityHandler) WebSocket(c *gin.Context) {
 			if !ok {
 				return
 			}
-			if err := writeJSON(ctx, conn, activityWSPayload(msg)); err != nil {
+			if err := shared.WriteJSON(ctx, conn, activityWSPayload(msg)); err != nil {
 				return
 			}
 		}

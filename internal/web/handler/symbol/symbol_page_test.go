@@ -1,4 +1,4 @@
-package handler_test
+package symbol_test
 
 import (
 	"errors"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
 func TestSymbolHandler_Page_RendersDetailPanelsAndPriceChartIsland(t *testing.T) {
@@ -27,7 +27,7 @@ func TestSymbolHandler_Page_RendersDetailPanelsAndPriceChartIsland(t *testing.T)
 			Direction: &direction, Confidence: &confidence, Regime: &regime, EntryQuality: &entryQuality,
 		}},
 	}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{AllowedPositionPct: 2.0, StopLossPct: 0.6, TakeProfitPct: 1.2})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{AllowedPositionPct: 2.0, StopLossPct: 0.6, TakeProfitPct: 1.2})
 	router := gin.New()
 	router.GET("/symbols/:symbol", h.Page)
 
@@ -59,7 +59,7 @@ func TestSymbolHandler_Page_RendersDetailPanelsAndPriceChartIsland(t *testing.T)
 func TestSymbolHandler_Page_UnknownSymbolReturns404(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	provider := &fakeSymbolProvider{stateErr: execution.ErrInstrumentUnknown}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	router := gin.New()
 	router.GET("/symbols/:symbol", h.Page)
 
@@ -80,7 +80,7 @@ func TestSymbolHandler_Page_UnknownSymbolReturns404(t *testing.T) {
 func TestSymbolHandler_Page_OtherStateErrorReturns500ErrorPageWithoutLeakingDetail(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	provider := &fakeSymbolProvider{stateErr: errors.New("sqlite: database is locked /var/db/pitha.db")}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	router := gin.New()
 	router.GET("/symbols/:symbol", h.Page)
 
@@ -102,7 +102,7 @@ func TestSymbolHandler_Page_OtherStateErrorReturns500ErrorPageWithoutLeakingDeta
 // An HTMX request gets the toast fragment, not a nested full page.
 func TestSymbolHandler_Page_HXRequestErrorGetsToastFragment(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := handler.NewSymbolHandler(&fakeSymbolProvider{stateErr: execution.ErrInstrumentUnknown}, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(&fakeSymbolProvider{stateErr: execution.ErrInstrumentUnknown}, symbol.SymbolRiskParams{})
 	router := gin.New()
 	router.GET("/symbols/:symbol", h.Page)
 
@@ -119,7 +119,7 @@ func TestSymbolHandler_Page_HXRequestErrorGetsToastFragment(t *testing.T) {
 func TestSymbolHandler_Page_NoOpenPositionShowsPlaceholder(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	provider := &fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastSignal: domain.JevDirectionNone}}
-	h := handler.NewSymbolHandler(provider, handler.SymbolRiskParams{})
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	router := gin.New()
 	router.GET("/symbols/:symbol", h.Page)
 

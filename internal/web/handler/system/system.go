@@ -1,4 +1,4 @@
-package handler
+package system
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -83,7 +84,7 @@ func (h *SystemHandler) renderBadge(c *gin.Context) {
 	state, _, err := h.engine.State(c.Request.Context())
 	if err != nil {
 		slog.ErrorContext(c.Request.Context(), "handler: system status badge", "error", err)
-		respondActionError(c, http.StatusInternalServerError, "システム状態の取得に失敗しました。")
+		shared.RespondActionError(c, http.StatusInternalServerError, "システム状態の取得に失敗しました。")
 		return
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")

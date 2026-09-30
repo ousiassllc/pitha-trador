@@ -10,6 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 )
 
@@ -23,13 +26,13 @@ func New(opts ...Option) *gin.Engine {
 	o := options{
 		candidateSource:   handler.StaticCandidateSource{},
 		candidateRefresh:  defaultCandidateRefreshInterval,
-		systemEngine:      handler.StaticSystemEngine{},
-		symbolProvider:    handler.StaticSymbolProvider{},
+		systemEngine:      system.StaticSystemEngine{},
+		symbolProvider:    symbol.StaticSymbolProvider{},
 		insightProvider:   insightapi.StaticProvider{},
 		calibrationSource: handler.StaticCalibrationSource{},
 		proposalSource:    handler.StaticPolicyProposalSource{},
 		backtestRunner:    handler.StaticBacktestRunner{},
-		activitySource:    handler.StaticActivitySource{},
+		activitySource:    activity.StaticActivitySource{},
 	}
 	for _, opt := range opts {
 		opt(&o)

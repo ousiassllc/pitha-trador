@@ -1,4 +1,4 @@
-package handler_test
+package system_test
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
-// fakeSystemEngine is a configurable handler.SystemEngine for tests. Each
+// fakeSystemEngine is a configurable system.SystemEngine for tests. Each
 // call is recorded so tests can assert the handler invoked the right
 // Engine method.
 type fakeSystemEngine struct {
@@ -39,7 +39,7 @@ func (f *fakeSystemEngine) Kill(context.Context) error   { f.killCalls++; return
 func TestSystemHandler_Status_DoesNotMutateState(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := &fakeSystemEngine{state: domain.SystemStateRunning}
-	h := handler.NewSystemHandler(engine)
+	h := system.NewSystemHandler(engine)
 	router := gin.New()
 	router.GET("/system/status", h.Status)
 
@@ -57,7 +57,7 @@ func TestSystemHandler_Status_DoesNotMutateState(t *testing.T) {
 
 func TestSystemHandler_APIPause_ReturnsCurrentState(t *testing.T) {
 	engine := &fakeSystemEngine{state: domain.SystemStatePaused}
-	h := handler.NewSystemHandler(engine)
+	h := system.NewSystemHandler(engine)
 	_, api := humatest.New(t)
 	huma.Post(api, "/system/pause", h.APIPause)
 
@@ -82,7 +82,7 @@ func TestSystemHandler_APIPause_ReturnsCurrentState(t *testing.T) {
 
 func TestSystemHandler_APIKill_EngineErrorReturnsProblemDetails(t *testing.T) {
 	engine := &fakeSystemEngine{opErr: errors.New("db unavailable")}
-	h := handler.NewSystemHandler(engine)
+	h := system.NewSystemHandler(engine)
 	_, api := humatest.New(t)
 	huma.Post(api, "/system/kill", h.APIKill)
 
@@ -94,7 +94,7 @@ func TestSystemHandler_APIKill_EngineErrorReturnsProblemDetails(t *testing.T) {
 }
 
 func TestStaticSystemEngine_DefaultsToRunning(t *testing.T) {
-	state, events, err := (handler.StaticSystemEngine{}).State(context.Background())
+	state, events, err := (system.StaticSystemEngine{}).State(context.Background())
 	if err != nil {
 		t.Fatalf("State: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestStaticSystemEngine_DefaultsToRunning(t *testing.T) {
 	if len(events) != 0 {
 		t.Fatalf("events = %+v, want empty", events)
 	}
-	if err := (handler.StaticSystemEngine{}).Pause(context.Background()); err != nil {
+	if err := (system.StaticSystemEngine{}).Pause(context.Background()); err != nil {
 		t.Fatalf("Pause: %v", err)
 	}
 }

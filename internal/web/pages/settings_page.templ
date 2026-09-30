@@ -6,7 +6,7 @@ import (
 )
 
 // SettingsProps is SettingsPage's input: one SecretFieldRow per managed
-// key (internal/web/handler.SettingsHandler.Page).
+// key (internal/web/handler/settings.SettingsHandler.Page).
 type SettingsProps struct {
 	Fields []molecules.SecretFieldRowProps
 }
@@ -16,7 +16,7 @@ type SettingsProps struct {
 // the optional LUNA_*/NEWS_FEED_*/SOL_*/OPUS_* AI/News API credentials,
 // each as its own molecules.SecretFieldRow with an independent save
 // (`POST /settings/:key`) and delete (`DELETE /settings/:key`) form
-// (internal/web/handler.SettingsHandler.Save/Delete) - a blank or
+// (internal/web/handler/settings.SettingsHandler.Save/Delete) - a blank or
 // untouched field can never clear another field's stored value.
 templ SettingsPage(props SettingsProps) {
 	@layout.Shell("Settings") {

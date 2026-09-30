@@ -30,7 +30,7 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 ```text
 internal/web/
 ├── apierror/           # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
-├── handler/            # scanner.go, symbol*.go, performance.go, calibration.go, system.go, settings.go, activity.go, update.go, policy_proposals.go, action_error.go（Toast/ErrorPage応答）ほか（*_ws.goはWebSocket）
+├── handler/            # 直下: scanner.go, performance.go, calibration.go, policy_proposals.go, swagger.go。責務別サブパッケージ: symbol/（symbol*.go）, system/（system.go, update.go ほか）, settings/, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
 ├── middleware/         # HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState
 ├── atoms/              # Badge, StatusDot, Toast
@@ -178,3 +178,4 @@ const (
 | 1.18 | 2026-09-30 | `Header`に`#header-logo`（アプリロゴ`static/src/img/logo.svg`とアプリ名）を追加し、§2の`static/src`ツリーに`img/`を追記、§4にロゴ表示パターンを追記 | issue #238 |
 | 1.19 | 2026-09-30 | Scanner Dashboardの見た目を整備: atomsに`EntryQualityBadge`を追加、`ScannerTableFallback`に候補件数・空状態・日本語列見出し（ツールチップ）・符号色分けを追加し、`pitha-scanner-table`のLit描画を同一スタイルに揃えた | issue #239 |
 | 1.20 | 2026-09-30 | `UpdatePanel`に保留理由・失敗種別・確認中の進行表示・アップデーター未搭載の表示を追加、`#update-panel`を`SettingsPage`の見出し直下へ移動 | issue #241 |
+| 1.21 | 2026-09-30 | §2の`handler/`をサブパッケージ構成（`shared`/`symbol`/`system`/`settings`/`activity`）へ更新 | issue #245 |

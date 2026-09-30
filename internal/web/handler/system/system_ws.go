@@ -1,4 +1,4 @@
-package handler
+package system
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 )
 
 // systemKillSwitchMessage mirrors docs/api/endpoints.md §6's
@@ -33,7 +34,7 @@ const defaultManualKillReason = "manual"
 // own POST call.
 func (h *SystemHandler) WebSocket(c *gin.Context) {
 	wasKilled := false
-	pollWebSocket(c, func() time.Duration { return h.pollInterval }, func(ctx context.Context, conn *websocket.Conn) error {
+	shared.PollWebSocket(c, func() time.Duration { return h.pollInterval }, func(ctx context.Context, conn *websocket.Conn) error {
 		state, events, err := h.engine.State(ctx)
 		if err != nil {
 			return err
@@ -41,7 +42,7 @@ func (h *SystemHandler) WebSocket(c *gin.Context) {
 
 		if state == domain.SystemStateKilled && !wasKilled {
 			msg := systemKillSwitchMessage{Type: "kill_switch", Reason: activeUnresolvedReason(events)}
-			if err := writeJSON(ctx, conn, msg); err != nil {
+			if err := shared.WriteJSON(ctx, conn, msg); err != nil {
 				return err
 			}
 		}

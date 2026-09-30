@@ -1,4 +1,4 @@
-package handler_test
+package symbol_test
 
 import (
 	"context"
@@ -9,10 +9,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
-// fakeSymbolProvider is a configurable handler.SymbolProvider for tests
+// fakeSymbolProvider is a configurable symbol.SymbolProvider for tests
 // (symbol_detail_test.go, symbol_list_test.go, symbol_close_test.go).
 type fakeSymbolProvider struct {
 	state    execution.SymbolState
@@ -73,7 +73,7 @@ func (f *fakeSymbolProvider) ListOrders(context.Context, string, int) ([]domain.
 }
 
 func TestStaticSymbolProvider_DefaultsAreEmpty(t *testing.T) {
-	p := handler.StaticSymbolProvider{}
+	p := symbol.StaticSymbolProvider{}
 	ctx := context.Background()
 
 	state, err := p.State(ctx, "7203")
@@ -99,9 +99,9 @@ func TestNewSymbolRiskParams_UsesConfiguredLimitsAndExitRule(t *testing.T) {
 	exit.StopLossPct = 0.4
 	exit.TakeProfitPct = 0.9
 
-	got := handler.NewSymbolRiskParams(limits, exit, nil)
+	got := symbol.NewSymbolRiskParams(limits, exit, nil)
 
-	want := handler.SymbolRiskParams{AllowedPositionPct: 1.0, StopLossPct: 0.4, TakeProfitPct: 0.9}
+	want := symbol.SymbolRiskParams{AllowedPositionPct: 1.0, StopLossPct: 0.4, TakeProfitPct: 0.9}
 	if got.AllowedPositionPct != want.AllowedPositionPct || got.StopLossPct != want.StopLossPct ||
 		got.TakeProfitPct != want.TakeProfitPct || got.AllowedPositionPctFor != nil {
 		t.Fatalf("NewSymbolRiskParams() = %+v, want %+v", got, want)

@@ -1,4 +1,4 @@
-package handler_test
+package activity_test
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 )
 
 type fakeActivitySource struct {
@@ -60,7 +60,7 @@ func sampleActivitySnapshot() domain.ActivitySnapshot {
 	}
 }
 
-func newActivityAPI(t *testing.T, h *handler.ActivityHandler) humatest.TestAPI {
+func newActivityAPI(t *testing.T, h *activity.ActivityHandler) humatest.TestAPI {
 	t.Helper()
 	_, api := humatest.New(t, huma.DefaultConfig("test", "0.0.0"))
 	huma.Get(api, "/api/v1/activity", h.APIActivity)
@@ -69,7 +69,7 @@ func newActivityAPI(t *testing.T, h *handler.ActivityHandler) humatest.TestAPI {
 
 func TestActivityHandler_APIActivity_ReturnsSnapshotShapeAndPassesFilters(t *testing.T) {
 	source := newFakeActivitySource(sampleActivitySnapshot())
-	api := newActivityAPI(t, handler.NewActivityHandler(source))
+	api := newActivityAPI(t, activity.NewActivityHandler(source))
 
 	resp := api.Get("/api/v1/activity?limit=50&queue=jev-scout&type=job")
 	if resp.Code != http.StatusOK {
@@ -114,7 +114,7 @@ func TestActivityHandler_APIActivity_ReturnsSnapshotShapeAndPassesFilters(t *tes
 }
 
 func TestActivityHandler_APIActivity_RejectsOutOfRangeLimitAndUnknownFilters(t *testing.T) {
-	api := newActivityAPI(t, handler.NewActivityHandler(newFakeActivitySource(sampleActivitySnapshot())))
+	api := newActivityAPI(t, activity.NewActivityHandler(newFakeActivitySource(sampleActivitySnapshot())))
 
 	for _, q := range []string{"limit=501", "limit=0", "type=bogus", "queue=bogus"} {
 		if resp := api.Get("/api/v1/activity?" + q); resp.Code != http.StatusUnprocessableEntity {
@@ -123,7 +123,7 @@ func TestActivityHandler_APIActivity_RejectsOutOfRangeLimitAndUnknownFilters(t *
 	}
 	// Omitted limit defaults to the API default (functional.md FR-ACT-3).
 	source := newFakeActivitySource(sampleActivitySnapshot())
-	api = newActivityAPI(t, handler.NewActivityHandler(source))
+	api = newActivityAPI(t, activity.NewActivityHandler(source))
 	if resp := api.Get("/api/v1/activity"); resp.Code != http.StatusOK {
 		t.Fatalf("status = %d", resp.Code)
 	}
@@ -135,7 +135,7 @@ func TestActivityHandler_APIActivity_RejectsOutOfRangeLimitAndUnknownFilters(t *
 func TestActivityHandler_APIActivity_SourceErrorIs500(t *testing.T) {
 	source := newFakeActivitySource(domain.ActivitySnapshot{})
 	source.err = errors.New("db down")
-	api := newActivityAPI(t, handler.NewActivityHandler(source))
+	api := newActivityAPI(t, activity.NewActivityHandler(source))
 
 	if resp := api.Get("/api/v1/activity"); resp.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", resp.Code)
@@ -145,7 +145,7 @@ func TestActivityHandler_APIActivity_SourceErrorIs500(t *testing.T) {
 func TestActivityHandler_Page_RendersIslandWithServerRenderedFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.GET("/activity", handler.NewActivityHandler(newFakeActivitySource(sampleActivitySnapshot())).Page)
+	engine.GET("/activity", activity.NewActivityHandler(newFakeActivitySource(sampleActivitySnapshot())).Page)
 
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/activity", nil))
@@ -176,7 +176,7 @@ func TestActivityHandler_Page_SourceErrorIs500(t *testing.T) {
 	source := newFakeActivitySource(domain.ActivitySnapshot{})
 	source.err = errors.New("db down")
 	engine := gin.New()
-	engine.GET("/activity", handler.NewActivityHandler(source).Page)
+	engine.GET("/activity", activity.NewActivityHandler(source).Page)
 
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/activity", nil))
@@ -192,7 +192,7 @@ func TestActivityHandler_WebSocket_ForwardsBusMessagesAndUnsubscribesOnDisconnec
 	gin.SetMode(gin.TestMode)
 	source := newFakeActivitySource(domain.ActivitySnapshot{})
 	engine := gin.New()
-	engine.GET("/ws/activity", handler.NewActivityHandler(source).WebSocket)
+	engine.GET("/ws/activity", activity.NewActivityHandler(source).WebSocket)
 	server := httptest.NewServer(engine)
 	defer server.Close()
 
@@ -247,7 +247,7 @@ func TestActivityHandler_WebSocket_ForwardsBusMessagesAndUnsubscribesOnDisconnec
 }
 
 func TestStaticActivitySource_ReportsAllQueuesIdle(t *testing.T) {
-	snap, err := handler.StaticActivitySource{}.Snapshot(context.Background(), activityfeed.Query{})
+	snap, err := activity.StaticActivitySource{}.Snapshot(context.Background(), activityfeed.Query{})
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}

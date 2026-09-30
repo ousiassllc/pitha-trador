@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
@@ -142,7 +143,7 @@ func (h *ScannerHandler) Page(c *gin.Context) {
 	candidates, asOf, err := h.source.Candidates(c.Request.Context())
 	if err != nil {
 		slog.ErrorContext(c.Request.Context(), "handler: scanner page candidates", "error", err)
-		respondPageError(c, http.StatusInternalServerError, "候補一覧の取得に失敗しました。")
+		shared.RespondPageError(c, http.StatusInternalServerError, "候補一覧の取得に失敗しました。")
 		return
 	}
 
@@ -167,11 +168,11 @@ type scannerUpdateMessage struct {
 // `scanner_update` message on every connect, then again every
 // h.interval.Next() (15-30s by default) until the client disconnects.
 func (h *ScannerHandler) WebSocket(c *gin.Context) {
-	pollWebSocket(c, h.interval.Next, func(ctx context.Context, conn *websocket.Conn) error {
+	shared.PollWebSocket(c, h.interval.Next, func(ctx context.Context, conn *websocket.Conn) error {
 		candidates, _, err := h.source.Candidates(ctx)
 		if err != nil {
 			return err
 		}
-		return writeJSON(ctx, conn, scannerUpdateMessage{Type: "scanner_update", Items: toScannerItems(candidates)})
+		return shared.WriteJSON(ctx, conn, scannerUpdateMessage{Type: "scanner_update", Items: toScannerItems(candidates)})
 	})
 }

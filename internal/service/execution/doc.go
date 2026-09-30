@@ -4,7 +4,7 @@
 // (fixed Stop Loss, fixed Take Profit, Trailing Stop, Jev方向反転,
 // continuation_probability低下, VWAP逆クロス, max holding time, 引け前強
 // 制決済), and the per-symbol state read model (§4.9) Symbol Detail's API
-// (internal/web/handler.SymbolHandler) serves.
+// (internal/web/handler/symbol.SymbolHandler) serves.
 //
 // Engine persists every Entry/Exit as a paper_orders row
 // (trading.OrderRepository) and the resulting held/closed position as

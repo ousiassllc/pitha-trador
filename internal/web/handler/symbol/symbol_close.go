@@ -1,4 +1,4 @@
-package handler
+package symbol
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
@@ -18,7 +19,7 @@ import (
 func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		respondActionError(c, http.StatusBadRequest, "ポジション ID が不正です。")
+		shared.RespondActionError(c, http.StatusBadRequest, "ポジション ID が不正です。")
 		return
 	}
 
@@ -26,15 +27,15 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	position, err := h.provider.GetPosition(ctx, id)
 	if err != nil {
 		if errors.Is(err, domain.ErrPositionNotFound) {
-			respondActionError(c, http.StatusNotFound, "ポジションが見つかりません。")
+			shared.RespondActionError(c, http.StatusNotFound, "ポジションが見つかりません。")
 			return
 		}
 		slog.ErrorContext(ctx, "handler: close position get", "position_id", id, "error", err)
-		respondActionError(c, http.StatusInternalServerError, "ポジションの取得に失敗しました。")
+		shared.RespondActionError(c, http.StatusInternalServerError, "ポジションの取得に失敗しました。")
 		return
 	}
 	if !position.IsOpen() {
-		respondActionError(c, http.StatusConflict, "このポジションは既に決済済みです。")
+		shared.RespondActionError(c, http.StatusConflict, "このポジションは既に決済済みです。")
 		return
 	}
 
@@ -47,11 +48,11 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	if err != nil {
 		// A concurrent exit (Exit monitor / CloseAll / another click) won the race.
 		if errors.Is(err, domain.ErrPositionAlreadyClosed) {
-			respondActionError(c, http.StatusConflict, "このポジションは既に決済済みです。")
+			shared.RespondActionError(c, http.StatusConflict, "このポジションは既に決済済みです。")
 			return
 		}
 		slog.ErrorContext(ctx, "handler: close position", "position_id", id, "error", err)
-		respondActionError(c, http.StatusInternalServerError, "ポジションの決済に失敗しました。")
+		shared.RespondActionError(c, http.StatusInternalServerError, "ポジションの決済に失敗しました。")
 		return
 	}
 

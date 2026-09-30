@@ -1,4 +1,4 @@
-package handler_test
+package system_test
 
 import (
 	"bytes"
@@ -17,8 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
 // transitioningSystemEngine reports domain.SystemStateRunning for its
@@ -43,7 +42,7 @@ func (f *transitioningSystemEngine) Kill(context.Context) error   { return nil }
 func TestSystemHandler_WebSocket_PushesKillSwitchOnTransition(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := &transitioningSystemEngine{reason: domain.KillReasonDailyLossLimit}
-	h := handler.NewSystemHandler(engine)
+	h := system.NewSystemHandler(engine)
 	h.SetPollInterval(20 * time.Millisecond)
 
 	ginEngine := gin.New()
@@ -80,7 +79,7 @@ func TestSystemHandler_WebSocket_PushesKillSwitchOnTransition(t *testing.T) {
 func TestSystemHandler_WebSocket_ManualKillReportsManualReason(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := &fakeSystemEngine{state: domain.SystemStateKilled, events: nil}
-	h := handler.NewSystemHandler(engine)
+	h := system.NewSystemHandler(engine)
 	h.SetPollInterval(20 * time.Millisecond)
 
 	ginEngine := gin.New()
@@ -117,7 +116,7 @@ func TestSystemHandler_WebSocket_ManualKillReportsManualReason(t *testing.T) {
 func TestSystemHandler_WebSocket_NoPushWhileRunning(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := &fakeSystemEngine{state: domain.SystemStateRunning}
-	h := handler.NewSystemHandler(engine)
+	h := system.NewSystemHandler(engine)
 	h.SetPollInterval(20 * time.Millisecond)
 
 	ginEngine := gin.New()
@@ -141,79 +140,6 @@ func TestSystemHandler_WebSocket_NoPushWhileRunning(t *testing.T) {
 	}
 }
 
-// TestWebSocket_ClientCloseEndsHandlerPromptly guards issue #127: the
-// polling WebSocket handlers must end as soon as the client closes,
-// rather than waiting out their (here: one hour) polling interval for the
-// next write to fail.
-func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	const longInterval = time.Hour
-
-	scanner := handler.NewScannerHandler(
-		handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()},
-		handler.CandidateRefreshInterval{Min: longInterval, Max: longInterval},
-	)
-	system := handler.NewSystemHandler(&fakeSystemEngine{state: domain.SystemStateRunning})
-	system.SetPollInterval(longInterval)
-	symbol := handler.NewSymbolHandler(
-		&fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastPrice: 1}},
-		handler.SymbolRiskParams{},
-	)
-	symbol.SetTickInterval(longInterval)
-
-	tests := []struct {
-		name    string
-		route   string
-		path    string
-		handler gin.HandlerFunc
-	}{
-		{"scanner", "/ws/scanner", "/ws/scanner", scanner.WebSocket},
-		{"system", "/ws/system", "/ws/system", system.WebSocket},
-		{"symbol", "/ws/symbols/:symbol", "/ws/symbols/7203", symbol.WebSocket},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			returned := make(chan struct{})
-			engine := gin.New()
-			engine.GET(tt.route, func(c *gin.Context) {
-				defer close(returned)
-				tt.handler(c)
-			})
-			server := httptest.NewServer(engine)
-			defer server.Close()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + tt.path
-			conn, _, err := websocket.Dial(ctx, wsURL, nil)
-			if err != nil {
-				t.Fatalf("websocket.Dial() error = %v", err)
-			}
-			defer func() { _ = conn.CloseNow() }()
-
-			// Complete the handshake with the handler idling in its
-			// interval wait before closing (CloseRead is what lets the
-			// server see the Close frame at all).
-			time.Sleep(50 * time.Millisecond)
-			go func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
-			// Drain so the client side can finish the close handshake.
-			go func() {
-				for {
-					if _, _, err := conn.Read(ctx); err != nil {
-						return
-					}
-				}
-			}()
-
-			select {
-			case <-returned:
-			case <-time.After(3 * time.Second):
-				t.Fatalf("handler still running 3s after client close (interval %v)", longInterval)
-			}
-		})
-	}
-}
-
 // #178: the status badge's 500 logs the engine error via slog.
 func TestSystemHandler_Status_500LogsCause(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -222,11 +148,60 @@ func TestSystemHandler_Status_500LogsCause(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 	defer slog.SetDefault(prev)
 	router := gin.New()
-	router.GET("/system/status", handler.NewSystemHandler(&fakeSystemEngine{stateErr: errors.New("state cause")}).Status)
+	router.GET("/system/status", system.NewSystemHandler(&fakeSystemEngine{stateErr: errors.New("state cause")}).Status)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/status", nil))
 
 	if rec.Code != http.StatusInternalServerError || !strings.Contains(logs.String(), "state cause") {
 		t.Errorf("status = %d, log = %q; want 500 with the cause logged", rec.Code, logs.String())
+	}
+}
+
+// TestWebSocket_ClientCloseEndsHandlerPromptly guards issue #127: the
+// handler must end as soon as the client closes, rather than waiting out its
+// (here: one hour) polling interval for the next write to fail.
+func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const longInterval = time.Hour
+
+	h := system.NewSystemHandler(&fakeSystemEngine{state: domain.SystemStateRunning})
+	h.SetPollInterval(longInterval)
+
+	returned := make(chan struct{})
+	engine := gin.New()
+	engine.GET("/ws/system", func(c *gin.Context) {
+		defer close(returned)
+		h.WebSocket(c)
+	})
+	server := httptest.NewServer(engine)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/system"
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket.Dial() error = %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+
+	// Complete the handshake with the handler idling in its interval wait
+	// before closing (CloseRead is what lets the server see the Close frame
+	// at all).
+	time.Sleep(50 * time.Millisecond)
+	go func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
+	// Drain so the client side can finish the close handshake.
+	go func() {
+		for {
+			if _, _, err := conn.Read(ctx); err != nil {
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("handler still running 3s after client close (interval %v)", longInterval)
 	}
 }

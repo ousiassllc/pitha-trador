@@ -1,4 +1,4 @@
-package handler_test
+package system_test
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
-// fakeUpdateController is a handler.UpdateController whose CheckForUpdate
+// fakeUpdateController is a system.UpdateController whose CheckForUpdate
 // replaces status with afterCheck (the way the real Checker records its
 // outcome) and counts calls.
 type fakeUpdateController struct {
@@ -33,9 +33,9 @@ func (f *fakeUpdateController) CheckForUpdate(context.Context) error {
 	return f.checkErr
 }
 
-func newUpdateEngine(controller handler.UpdateController) *gin.Engine {
+func newUpdateEngine(controller system.UpdateController) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	h := handler.NewUpdateHandler(controller)
+	h := system.NewUpdateHandler(controller)
 	engine := gin.New()
 	engine.GET("/system/update-status", h.Status)
 	engine.GET("/system/update-panel", h.Panel)

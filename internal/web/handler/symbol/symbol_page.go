@@ -1,4 +1,4 @@
-package handler
+package symbol
 
 import (
 	"errors"
@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -28,18 +29,18 @@ func (h *SymbolHandler) Page(c *gin.Context) {
 
 	state, err := h.provider.State(ctx, symbol)
 	if errors.Is(err, execution.ErrInstrumentUnknown) {
-		respondPageError(c, http.StatusNotFound, "指定された銘柄は見つかりません。")
+		shared.RespondPageError(c, http.StatusNotFound, "指定された銘柄は見つかりません。")
 		return
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "handler: symbol page state", "symbol", symbol, "error", err)
-		respondPageError(c, http.StatusInternalServerError, "銘柄の状態の取得に失敗しました。")
+		shared.RespondPageError(c, http.StatusInternalServerError, "銘柄の状態の取得に失敗しました。")
 		return
 	}
 	decisions, err := h.provider.RecentDecisions(ctx, symbol, defaultDecisionHistoryLimit)
 	if err != nil {
 		slog.ErrorContext(ctx, "handler: symbol page decisions", "symbol", symbol, "error", err)
-		respondPageError(c, http.StatusInternalServerError, "判断履歴の取得に失敗しました。")
+		shared.RespondPageError(c, http.StatusInternalServerError, "判断履歴の取得に失敗しました。")
 		return
 	}
 

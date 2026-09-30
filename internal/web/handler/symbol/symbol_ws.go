@@ -1,14 +1,14 @@
-package handler
+package symbol
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 )
 
 // symbolTickMessage mirrors docs/api/endpoints.md §6's
@@ -36,7 +36,7 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 	var lastDirection *string
 	var lastConfidence *float64
 
-	pollWebSocket(c, func() time.Duration { return h.tickInterval }, func(ctx context.Context, conn *websocket.Conn) error {
+	shared.PollWebSocket(c, func() time.Duration { return h.tickInterval }, func(ctx context.Context, conn *websocket.Conn) error {
 		state, err := h.provider.State(ctx, symbol)
 		if err != nil {
 			return err
@@ -45,7 +45,7 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 		// No snapshot yet (LastPrice == 0): a price-0 tick would drag the
 		// chart's autoscale to 0, so send nothing until a price exists.
 		if state.LastPrice > 0 {
-			if err := writeJSON(ctx, conn, symbolTickMessage{Type: "tick", Price: state.LastPrice}); err != nil {
+			if err := shared.WriteJSON(ctx, conn, symbolTickMessage{Type: "tick", Price: state.LastPrice}); err != nil {
 				return err
 			}
 		}
@@ -55,7 +55,7 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 		changed := directionChanged(lastDirection, direction) || lastConfidence == nil || *lastConfidence != confidence
 		if direction != nil && changed {
 			msg := symbolJevUpdateMessage{Type: "jev_update", Direction: direction, Confidence: &confidence}
-			if err := writeJSON(ctx, conn, msg); err != nil {
+			if err := shared.WriteJSON(ctx, conn, msg); err != nil {
 				return err
 			}
 			lastDirection, lastConfidence = direction, &confidence
@@ -79,12 +79,4 @@ func directionChanged(prev, next *string) bool {
 		return prev != next
 	}
 	return *prev != *next
-}
-
-func writeJSON(ctx context.Context, conn *websocket.Conn, v any) error {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return conn.Write(ctx, websocket.MessageText, data)
 }

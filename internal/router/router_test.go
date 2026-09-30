@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
 func TestNew_RootRouteRedirectsToScannerDashboard(t *testing.T) {
@@ -119,7 +120,7 @@ func TestNew_SystemStatusRouteDefaultsToRunning(t *testing.T) {
 
 func TestNew_SystemStatusRoutesUseWithSystemEngineOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStatePaused}))
+	engine := router.New(router.WithSystemEngine(system.StaticSystemEngine{State_: domain.SystemStatePaused}))
 
 	for _, tc := range []struct{ path, want string }{
 		{"/system/status", "paused"},
@@ -169,7 +170,7 @@ func TestNew_PanickingRouteReturns500InsteadOfCrashing(t *testing.T) {
 
 // panickingSystemEngine panics from State, which SystemState middleware and
 // the /system/status handler call, to exercise the router's Recovery.
-type panickingSystemEngine struct{ handler.StaticSystemEngine }
+type panickingSystemEngine struct{ system.StaticSystemEngine }
 
 func (panickingSystemEngine) State(context.Context) (domain.SystemState, []domain.KillSwitchEvent, error) {
 	panic("state exploded")
@@ -177,7 +178,7 @@ func (panickingSystemEngine) State(context.Context) (domain.SystemState, []domai
 
 func TestNew_APISystemKillRouteReturnsJSONState(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStateKilled}))
+	engine := router.New(router.WithSystemEngine(system.StaticSystemEngine{State_: domain.SystemStateKilled}))
 
 	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/api/v1/system/kill", nil))
 	rec := httptest.NewRecorder()
@@ -191,7 +192,7 @@ func TestNew_APISystemKillRouteReturnsJSONState(t *testing.T) {
 	}
 }
 
-type failingSystemEngine struct{ handler.StaticSystemEngine }
+type failingSystemEngine struct{ system.StaticSystemEngine }
 
 func (failingSystemEngine) Kill(context.Context) error {
 	return errors.New("sqlite: disk I/O error at /var/lib/pitha/secret.db")

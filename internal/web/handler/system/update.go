@@ -1,4 +1,4 @@
-package handler
+package system
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 	"github.com/ousiassllc/pitha-trador/internal/version"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -75,7 +76,7 @@ func (h *UpdateHandler) Panel(c *gin.Context) {
 // Status) rather than as an HTTP error, so HTMX still swaps the fragment.
 func (h *UpdateHandler) Check(c *gin.Context) {
 	if h.controller == nil {
-		respondActionError(c, http.StatusNotFound, "アップデート機能は利用できません。")
+		shared.RespondActionError(c, http.StatusNotFound, "アップデート機能は利用できません。")
 		return
 	}
 	err := h.controller.CheckForUpdate(c.Request.Context())

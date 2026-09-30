@@ -1,4 +1,4 @@
-package handler
+package settings
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
@@ -138,23 +139,23 @@ func (h *SettingsHandler) SetupPage(c *gin.Context) {
 func (h *SettingsHandler) Save(c *gin.Context) {
 	key := c.Param("key")
 	if !config.IsAllowedSecretKey(key) {
-		respondPageError(c, http.StatusBadRequest, "不明な設定キーです。")
+		shared.RespondPageError(c, http.StatusBadRequest, "不明な設定キーです。")
 		return
 	}
 	value, err := config.NormalizeSecretValue(key, c.PostForm("value"))
 	if errors.Is(err, config.ErrEmptySecretValue) {
-		respondPageError(c, http.StatusBadRequest, "値を入力してください（保存済みの値を消す場合は削除を使ってください）。")
+		shared.RespondPageError(c, http.StatusBadRequest, "値を入力してください（保存済みの値を消す場合は削除を使ってください）。")
 		return
 	}
 	if err != nil {
-		respondPageError(c, http.StatusBadRequest, err.Error())
+		shared.RespondPageError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	ctx := c.Request.Context()
 	if err := h.store.Set(ctx, key, value); err != nil {
 		slog.Error("settings: save secret", "key", key, "error", err)
-		respondPageError(c, http.StatusInternalServerError, "保存に失敗しました。")
+		shared.RespondPageError(c, http.StatusInternalServerError, "保存に失敗しました。")
 		return
 	}
 	h.renderRow(c, key, "保存しました。反映にはアプリの再起動が必要です。")
@@ -167,13 +168,13 @@ func (h *SettingsHandler) Save(c *gin.Context) {
 func (h *SettingsHandler) Delete(c *gin.Context) {
 	key := c.Param("key")
 	if !config.IsAllowedSecretKey(key) {
-		respondPageError(c, http.StatusBadRequest, "不明な設定キーです。")
+		shared.RespondPageError(c, http.StatusBadRequest, "不明な設定キーです。")
 		return
 	}
 
 	if err := h.store.Delete(c.Request.Context(), key); err != nil {
 		slog.Error("settings: delete secret", "key", key, "error", err)
-		respondPageError(c, http.StatusInternalServerError, "削除に失敗しました。")
+		shared.RespondPageError(c, http.StatusInternalServerError, "削除に失敗しました。")
 		return
 	}
 	h.renderRow(c, key, "削除しました。反映にはアプリの再起動が必要です。")

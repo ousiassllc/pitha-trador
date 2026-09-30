@@ -14,7 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/router"
 )
 
-// fakeSecretsStore is a minimal handler.SecretsStore for router-wiring
+// fakeSecretsStore is a minimal settings.SecretsStore for router-wiring
 // tests (router_test cannot reuse internal/web/handler's own unexported
 // test fake across packages, mirroring fakeSymbolProvider above).
 type fakeSecretsStore map[string]string

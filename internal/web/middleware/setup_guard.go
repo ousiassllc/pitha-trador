@@ -13,7 +13,7 @@ import (
 // redirects to.
 const SetupPath = "/setup"
 
-// SecretsReader is the subset of internal/web/handler.SecretsStore the
+// SecretsReader is the subset of internal/web/handler/settings.SecretsStore the
 // Setup Guard needs. An interface here keeps internal/web/middleware from
 // depending on internal/repository directly (docs/architecture/overview.md
 // §3 layer rule).

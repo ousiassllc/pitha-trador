@@ -17,7 +17,7 @@ var ErrEmptySecret = errors.New("empty secret value")
 
 // SecretsRepository persists secrets table rows: JEV_API_KEY/
 // JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL entered via the
-// Settings screen (`/settings`, internal/web/handler.SettingsHandler),
+// Settings screen (`/settings`, internal/web/handler/settings.SettingsHandler),
 // replacing the `.env`/environment-variable input path issue #43
 // originally used (removed entirely by issue #57).
 //

@@ -33,7 +33,7 @@ import (
 // issue #57's Settings feature: it SSRs empty (Header only knows the
 // system state, so it cannot know secrets-table state at render time
 // either) and immediately calls `GET /system/secrets-status`
-// (internal/web/handler.SettingsHandler.Status), which renders
+// (internal/web/handler/settings.SettingsHandler.Status), which renders
 // organisms.SecretsBanner listing any still-unset required key
 // (JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD) with a link to
 // `/settings`, or nothing once every one is configured.
