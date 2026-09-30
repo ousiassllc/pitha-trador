@@ -5,7 +5,7 @@
 // errors[].message, which would leak SQLite messages and internal paths
 // from `huma.Error500InternalServerError("…", err)` call sites. The SSR
 // side already answers with a fixed message and logs the cause
-// (handler.respondPageError, #143); this package gives the JSON API the
+// (shared.RespondPageError, #143); this package gives the JSON API the
 // same contract.
 package apierror
 

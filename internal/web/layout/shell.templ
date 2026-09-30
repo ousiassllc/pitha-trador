@@ -10,7 +10,7 @@ import (
 // nothing by default; its native `responseHandling` (the htmx 2 successor
 // of the response-targets extension, docs/components/overview.md §4
 // "エラー表示") sends those responses' fragment (atoms.Toast, see
-// handler.respondActionError) into `#toast-region` instead of the
+// shared.RespondActionError) into `#toast-region` instead of the
 // request's own target, and still fires `htmx:responseError`.
 const htmxConfig = `{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true,"target":"#toast-region","swapOverride":"beforeend"}]}`
 

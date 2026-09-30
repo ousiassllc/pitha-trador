@@ -18,7 +18,7 @@ type SymbolDetailProps struct {
 	Symbol string
 	State  execution.SymbolState
 	// AllowedPositionPct/StopLossPct/TakeProfitPct mirror
-	// internal/web/handler.SymbolRiskParams (duplicated here rather than
+	// internal/web/handler/symbol.SymbolRiskParams (duplicated here rather than
 	// imported, to avoid pages importing handler - internal/web/handler
 	// already imports internal/web/pages, so the reverse import would
 	// cycle).
@@ -37,7 +37,7 @@ type SymbolDetailProps struct {
 // history, plus the `pitha-price-chart` island
 // (docs/components/overview.md §5.1) that live-updates over
 // `/ws/symbols/{symbol}`. `GET /symbols/:symbol`
-// (internal/web/handler.SymbolHandler.Page) renders this for a normal
+// (internal/web/handler/symbol.SymbolHandler.Page) renders this for a normal
 // navigation.
 templ SymbolDetailPage(props SymbolDetailProps) {
 	@layout.Shell(props.Symbol) {
