@@ -112,7 +112,7 @@ make dev
 | `make openapi-export` | 起動中サーバー（`127.0.0.1:48080`）から`docs/api/openapi.json`を書き出す（任意タスク。ファイルは未コミット） |
 
 - **`make dev`の環境変数**: `wails dev`は`cmd/desktop`をカレントとして動くため、`Makefile`は`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`を`$(CURDIR)/config/*.yaml`（絶対パス）に設定する。`internal/bootstrap.Run`は環境変数を埋め込み既定値より優先するため、`config/risk.yaml`等を編集して`make dev`を再起動すれば再ビルドなしで反映される（埋め込み既定値はビルド時のスナップショット）。`PITHA_STATIC_DIR`は`static/src`に設定し、`/static/...`をディスクから配信する。`wails dev`のファイル監視は既定で`.go`変更時のみGoバイナリを再ビルドするため、この上書きが無いと`bun run dev`（esbuild/Tailwind watch）の出力がgo:embedのスナップショットに阻まれ`make dev`再起動まで反映されない
-- **`generate`が前提となる理由**: `templ generate`が`*_templ.go`を、`bun run --cwd static build`が`static/src/dist/{css,js}`を生成する。どちらも`.gitignore`対象であり、`static/src/embed.go`の`//go:embed dist vendor`は`dist/`が空だとコンパイル自体が失敗する。そのためクリーンなチェックアウトでは、生成前に`go vet`/golangci-lint/`go test`/`wails build`のいずれも実行できない（古い生成物が残っていると陳腐化した出力に対して実行してしまう）。CIの`lint`/`test`/`build`各ジョブも同じ2ステップを先に実行し、`lefthook`のpre-commit/pre-pushも`make generate`を呼ぶ
+- **`generate`が前提となる理由**: `templ generate`が`*_templ.go`を、`bun run --cwd static build`が`static/src/dist/{css,js}`を生成する。どちらも`.gitignore`対象であり、`static/src/embed.go`の`//go:embed dist img vendor`は`dist/`が空だとコンパイル自体が失敗する。そのためクリーンなチェックアウトでは、生成前に`go vet`/golangci-lint/`go test`/`wails build`のいずれも実行できない（古い生成物が残っていると陳腐化した出力に対して実行してしまう）。CIの`lint`/`test`/`build`各ジョブも同じ2ステップを先に実行し、`lefthook`のpre-commit/pre-pushも`make generate`を呼ぶ
 
 ## CI/CD
 
@@ -124,7 +124,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。
   - `test`: フロントエンドビルド → `go test ./...` ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
   - `build`: フロントエンドビルド → `wails build -platform windows/amd64 -nsis -installscope user` でNSISインストーラー（`.exe`、ユーザースコープインストール）をビルドしCI Artifactとしてアップロードする。SHA256チェックサムも同時に生成する。バージョンは`main`へのpushでは既存の最新`vX.Y.Z`タグのパッチ+1、タグpushではタグ名、それ以外（PR・`feat/**`）は`dev`を`-ldflags`で埋め込む
   - `release`: `build`の成果物（インストーラー・`checksums.txt`）を`softprops/action-gh-release@v2`でGitHub Releaseとして公開する。`main`へのpush（＝PRマージ、次パッチ版を自動採番）またはタグ`v*`のpush（手動リリース）でのみ実行され、`tag_name`は`build`ジョブが算出した版番号を使う
-  - `config/strategy.yaml`・`config/risk.yaml`・静的アセット（`static/src/dist`・`static/src/vendor`）は`go:embed`でバイナリに埋め込む（`architecture/overview.md` §9）。`static/src/embed.go`は空/未ビルドの`dist`を埋め込もうとすると`go build`自体がコンパイルエラーになるため、`lint`/`test`/`build`いずれのジョブも上記フロントエンドビルドを最初のGoコンパイル系ステップより前に実行する必要がある
+  - `config/strategy.yaml`・`config/risk.yaml`・静的アセット（`static/src/dist`・`static/src/img`・`static/src/vendor`）は`go:embed`でバイナリに埋め込む（`architecture/overview.md` §9）。`static/src/embed.go`は空/未ビルドの`dist`を埋め込もうとすると`go build`自体がコンパイルエラーになるため、`lint`/`test`/`build`いずれのジョブも上記フロントエンドビルドを最初のGoコンパイル系ステップより前に実行する必要がある
 - **バージョン固定**: bunは`.bun-version`（`oven-sh/setup-bun`の`bun-version-file`）、templ・wails・golangci-lint・linterlyはワークフロー内でバージョンを固定する。`latest`は使わない
 - **同時実行制御**: ワークフロー全体に`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: false }`を設定する。版番号の採番（`build`）とタグ作成（`release`）が別ジョブのため、`main`への連続pushで並行実行されると同じ版番号を算出してタグが衝突しうる。同一refの実行を直列化して防ぐ
 - **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
