@@ -191,7 +191,7 @@ func formatConfidence(v *float64) string {
 	if v == nil {
 		return "—"
 	}
-	return strconv.FormatFloat(math.Round(*v*100), 'f', 0, 64) + "%"
+	return formatFloat(math.Round(*v*100), 0) + "%" // formatFloat drops the sign of -0, like `${-0}` in JS
 }
 
 // symbolHref is the symbol detail link. Everything except RFC 3986

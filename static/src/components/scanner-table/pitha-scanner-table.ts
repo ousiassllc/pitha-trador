@@ -82,12 +82,18 @@ export class PithaScannerTable extends LitElement {
 
   protected override willUpdate(): void {
     if (this.loaded && this.ssrNodes.length > 0) {
+      // Keep the column-help <details> open if the user opened it in the
+      // SSR markup, since Lit's own copy replaces it below.
+      this.helpOpen =
+        this.querySelector<HTMLDetailsElement>('details[data-testid="scanner-column-help"]')
+          ?.open ?? false;
       for (const node of this.ssrNodes) node.remove();
       this.ssrNodes = [];
     }
   }
 
   private ssrNodes: ChildNode[] = [];
+  private helpOpen = false;
 
   @property({ type: String, attribute: 'api-url' }) apiUrl = '/api/v1/scanner';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '/ws/scanner';
@@ -210,7 +216,7 @@ export class PithaScannerTable extends LitElement {
   // markup in organisms.ScannerTableFallback.
   private renderHelp() {
     return html`
-      <details class="mb-3 text-sm text-slate-600" data-testid="scanner-column-help">
+      <details class="mb-3 text-sm text-slate-600" data-testid="scanner-column-help" ?open=${this.helpOpen}>
         <summary class="cursor-pointer select-none text-xs font-medium text-slate-700">列の意味</summary>
         <dl class="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_1fr]">
           ${COLUMNS.map((column) => html`<dt class="font-medium text-slate-700">${column.label}</dt><dd>${column.hint}</dd>`)}

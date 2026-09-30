@@ -39,5 +39,11 @@
         "organizeImports": "on"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["**/scanner-table/scanner-contract.json"],
+      "formatter": { "enabled": false }
+    }
+  ]
 }
