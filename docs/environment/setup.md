@@ -138,7 +138,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 | フロントエンド（Lit/TypeScript） | Biome | `static/biome.json` |
 
 - `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
-- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`へのimportを拒否してレイヤー規約（`architecture/overview.md` §3）をlintで強制する
+- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否してレイヤー規約（`architecture/overview.md` §3）をlintで強制する。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
 - Biomeはlintとformatを1ツールで兼ねるため、`static/`配下は追加のESLint/Prettier設定を持たない
 
 ## Format
@@ -170,7 +170,7 @@ language: ja
 #   - "**/*_templ.go"
 ```
 
-`.linterlyignore`（抜粋。実ファイルの全文が正）:
+`.linterlyignore`の方針（`architecture/overview.md` §3「サブパッケージ単位の責務規約」）:
 
 ```text
 # 実行時ログ（ソースコードではない）
@@ -178,15 +178,10 @@ language: ja
 
 # 自動生成コード（Templが生成するGoコード）
 *_templ.go
-
-# 既知債務（手書きソース）: ディレクトリ2000行上限の暫定除外（issue #134 で追跡）。
-# internal/repository/・internal/web/handler/・internal/bootstrap/・
-# internal/service/risk/ の手書きソース（テスト含む）を個別ファイル単位で列挙している。
-# 新規追加は禁止（必要になった時点でサブパッケージ分割を先に行う）
 ```
 
-- 個別ファイル列挙の除外はすべて上記の既知債務で、issue #134でサブパッケージ分割により解消するまでの暫定措置である。生成物・ログ以外の除外パターンを新たに追加してはならない
-- 除外中のファイルも1ファイル300行以内に保つ（現時点の唯一の例外は`internal/web/handler/settings_test.go`）
+- 許容する除外は上記の`*_templ.go`と`**/logs/**`のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
+- 現状の`.linterlyignore`には、サブパッケージ分割前の暫定除外（`internal/repository/`・`internal/web/handler/`・`internal/bootstrap/`・`internal/service/risk/`の個別ファイル列挙）が残っている。これは#134の子Issue（#244〜#247）で各パッケージを分割する際に順次削除し、#248で全廃を確認する。暫定除外へ新規ファイルを追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
 
@@ -245,3 +240,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.12 | 2026-09-29 | 環境変数表に`PITHA_SERVER_ALLOWED_HOSTS`（Host検証の追加許可ホスト）を追加 | issue #136 |
 | 1.13 | 2026-09-29 | `PITHA_BACKUP_DIR`の説明を更新（`secrets`除外・パーミッション・週次52週保持・退避先必須・catch-up実行） | issue #137/#152/#159 |
 | 1.14 | 2026-09-29 | Lint/Format/Linterly/Git Hooks節を実ファイル（`.golangci.yml`の有効linterとdepguard、`lefthook.yml`、`.linterlyignore`）に合わせて是正。`make lint`とCI `lint`ジョブの差分を明記。`.env.example`に`PITHA_SERVER_ALLOW_NON_LOOPBACK`/`PITHA_SERVER_ALLOWED_HOSTS`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`の雛形を追加 | issue #154 |
+| 1.15 | 2026-09-30 | `depguard`がサブパッケージも拒否対象であることを明記。`.linterlyignore`の方針を「手書きソースの除外全廃（許容は`*_templ.go`と`**/logs/**`のみ）」へ改め、現行の暫定除外は#134の子Issueで解消する旨を記載 | issue #243 |

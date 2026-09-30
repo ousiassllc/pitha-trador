@@ -23,7 +23,7 @@ erDiagram
 
 ## secrets
 
-Settings画面（`/settings`、`functional.md` §4.17）から入力する認証情報（`JEV_API_KEY` / `JEV_BASE_URL` / `KABU_API_PASSWORD` / `SLACK_WEBHOOK_URL` など）のKey-Valueストア（マイグレーション000013）。値は`internal/repository.SecretsRepository`が`internal/config.EncryptSecret`（AES-256-GCM）で暗号化して保存し、呼び出し側は平文のみ扱う。鍵はアプリに埋め込みの固定シードから導出されるため、保護対象はDBファイル単体の複製・共有時の平文流出であり、コンパイル済みバイナリを実行・解析できる攻撃者に対する防御ではない（詳細は`config.EncryptSecret`のコメント参照）。
+Settings画面（`/settings`、`functional.md` §4.17）から入力する認証情報（`JEV_API_KEY` / `JEV_BASE_URL` / `KABU_API_PASSWORD` / `SLACK_WEBHOOK_URL` など）のKey-Valueストア（マイグレーション000013）。値は`internal/repository/system.SecretsRepository`が`internal/config.EncryptSecret`（AES-256-GCM）で暗号化して保存し、呼び出し側は平文のみ扱う。鍵はアプリに埋め込みの固定シードから導出されるため、保護対象はDBファイル単体の複製・共有時の平文流出であり、コンパイル済みバイナリを実行・解析できる攻撃者に対する防御ではない（詳細は`config.EncryptSecret`のコメント参照）。
 
 ```mermaid
 erDiagram
