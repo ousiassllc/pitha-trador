@@ -1,6 +1,9 @@
 package organisms
 
-import "github.com/ousiassllc/pitha-trador/internal/domain"
+import (
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/version"
+)
 
 // Header is the global navigation + system-state indicator rendered on
 // every page (docs/components/overview.md §3 "Header（ナビゲーション＋
@@ -41,6 +44,13 @@ import "github.com/ousiassllc/pitha-trador/internal/domain"
 // release exists (also re-polled every 60s, and immediately on the
 // `updateStatusChanged` event the manual check response fires), or
 // nothing otherwise - including on cmd/server, which has no updater.
+//
+// `#header-version` shows the running build's internal/version.Version on
+// every page and links to Settings' アップデート section (`/settings#update-
+// panel`), where the version is detailed and the manual update check
+// lives. The check button itself is deliberately not in the header: a
+// verified installer found by a check restarts the app, so it stays on a
+// single, explicit Settings screen.
 // headerStatusTrigger is `#header-status`'s hx-trigger: an unknown state
 // (see Header) additionally fetches the badge on `load`.
 func headerStatusTrigger(state domain.SystemState) string {
@@ -75,6 +85,13 @@ templ Header(state domain.SystemState) {
 			hx-target="this"
 			hx-swap="innerHTML"
 		></div>
+		<a
+			id="header-version"
+			class="text-xs text-slate-500 hover:text-slate-900"
+			href="/settings#update-panel"
+			title="アップデートの確認（設定）"
+			data-testid="header-version"
+		>{ version.Version }</a>
 		<div
 			id="header-status"
 			class="flex items-center gap-3"

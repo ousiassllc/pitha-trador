@@ -10,6 +10,7 @@ import (
 
 	"github.com/a-h/templ"
 
+	"github.com/ousiassllc/pitha-trador/internal/version"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 )
 
@@ -69,5 +70,23 @@ func TestShells_WireHTMXErrorToasts(t *testing.T) {
 				t.Errorf("%s: output lacks %q", name, want)
 			}
 		}
+	}
+}
+
+// Every page shows the running build's version in the header and links it
+// to Settings' アップデート section, but the header never carries the
+// update-check button (a check that finds an installer restarts the app).
+func TestShell_HeaderShowsVersionLinkedToSettingsUpdatePanel(t *testing.T) {
+	original := version.Version
+	version.Version = "v1.2.3"
+	t.Cleanup(func() { version.Version = original })
+
+	out := render(t, layout.Shell("t"))
+
+	if !regexp.MustCompile(`<a[^>]*id="header-version"[^>]*href="/settings#update-panel"[^>]*>v1\.2\.3</a>`).MatchString(out) {
+		t.Errorf("Shell header has no version link to /settings#update-panel; body=%s", out)
+	}
+	if strings.Contains(out, "/system/update-check") {
+		t.Errorf("Shell must not carry the update-check button; body=%s", out)
 	}
 }
