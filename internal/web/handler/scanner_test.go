@@ -202,3 +202,54 @@ func TestScannerHandler_WebSocket_PushesScannerUpdateMessages(t *testing.T) {
 
 	_ = conn.Close(websocket.StatusNormalClosure, "")
 }
+
+// TestWebSocket_ClientCloseEndsHandlerPromptly guards issue #127: the
+// handler must end as soon as the client closes, rather than waiting out its
+// (here: one hour) polling interval for the next write to fail.
+func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const longInterval = time.Hour
+
+	h := handler.NewScannerHandler(
+		handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()},
+		handler.CandidateRefreshInterval{Min: longInterval, Max: longInterval},
+	)
+
+	returned := make(chan struct{})
+	engine := gin.New()
+	engine.GET("/ws/scanner", func(c *gin.Context) {
+		defer close(returned)
+		h.WebSocket(c)
+	})
+	server := httptest.NewServer(engine)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/scanner"
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("websocket.Dial() error = %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+
+	// Complete the handshake with the handler idling in its interval wait
+	// before closing (CloseRead is what lets the server see the Close frame
+	// at all).
+	time.Sleep(50 * time.Millisecond)
+	go func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
+	// Drain so the client side can finish the close handshake.
+	go func() {
+		for {
+			if _, _, err := conn.Read(ctx); err != nil {
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("handler still running 3s after client close (interval %v)", longInterval)
+	}
+}
