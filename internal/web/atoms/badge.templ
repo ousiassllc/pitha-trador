@@ -23,3 +23,24 @@ templ Badge(direction Direction) {
 			<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">NONE</span>
 	}
 }
+
+// EntryQualityBadge renders a JevEntryQuality* value (domain/jevdecision.go)
+// as a color-coded label so entry quality is comparable at a glance:
+// poor (gray) < fair (yellow) < good (sky) < strong (green) <
+// exceptional (solid emerald). Unknown values fall back to gray. The
+// class map is mirrored by `pitha-scanner-table`'s Lit render
+// (static/src/components/scanner-table) so SSR and hydrated views match.
+templ EntryQualityBadge(quality string) {
+	switch quality {
+		case "exceptional":
+			<span class="inline-flex items-center rounded-full bg-emerald-600 px-2 py-1 text-xs font-semibold text-white">{ quality }</span>
+		case "strong":
+			<span class="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">{ quality }</span>
+		case "good":
+			<span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-800">{ quality }</span>
+		case "fair":
+			<span class="inline-flex items-center rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">{ quality }</span>
+		default:
+			<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">{ quality }</span>
+	}
+}
