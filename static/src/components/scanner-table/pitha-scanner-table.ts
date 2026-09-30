@@ -12,6 +12,17 @@ import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
+import {
+  COLUMNS,
+  type Column,
+  directionBadge,
+  entryQualityBadge,
+  formatNullable,
+  formatSigned,
+  formatSignedNullable,
+  returnClass,
+  type SortKey,
+} from './scanner-view';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner` item shape.
 export interface ScannerItem {
@@ -39,40 +50,7 @@ interface ScannerUpdateMessage {
   items: ScannerItem[];
 }
 
-type SortKey = keyof Pick<
-  ScannerItem,
-  | 'symbol'
-  | 'price'
-  | 'return_1m'
-  | 'return_5m'
-  | 'volume_ratio_5m'
-  | 'price_vs_vwap_bps'
-  | 'spread_bps'
-  | 'jev_direction'
-  | 'jev_confidence'
-  | 'entry_quality'
-  | 'current_position'
->;
 type SortDirection = 'asc' | 'desc';
-
-interface Column {
-  key: SortKey;
-  label: string;
-}
-
-const COLUMNS: Column[] = [
-  { key: 'symbol', label: 'Symbol' },
-  { key: 'price', label: 'Price' },
-  { key: 'return_1m', label: '1m Return' },
-  { key: 'return_5m', label: '5m Return' },
-  { key: 'volume_ratio_5m', label: 'Volume Ratio' },
-  { key: 'price_vs_vwap_bps', label: 'VWAP Distance (bps)' },
-  { key: 'spread_bps', label: 'Spread (bps)' },
-  { key: 'jev_direction', label: 'Jev Direction' },
-  { key: 'jev_confidence', label: 'Jev Confidence' },
-  { key: 'entry_quality', label: 'Entry Quality' },
-  { key: 'current_position', label: 'Position' },
-];
 
 @customElement('pitha-scanner-table')
 export class PithaScannerTable extends LitElement {
@@ -101,6 +79,10 @@ export class PithaScannerTable extends LitElement {
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '/ws/scanner';
 
   @state() private items: ScannerItem[] = [];
+  // False until the first data (initial fetch or WS push) arrives, so an
+  // empty list before loading is not mistaken for "no candidates".
+  @state() private loaded = false;
+  @state() private asOf: string | null = null;
   @state() private sortKey: SortKey = 'symbol';
   @state() private sortDirection: SortDirection = 'asc';
   @state() private error: string | null = null;
@@ -124,6 +106,8 @@ export class PithaScannerTable extends LitElement {
     try {
       const response = await get<ScannerAPIResponse>(this.apiUrl);
       this.items = response.items;
+      this.asOf = response.as_of;
+      this.loaded = true;
       this.error = null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : String(err);
@@ -139,6 +123,9 @@ export class PithaScannerTable extends LitElement {
       onMessage: (message) => {
         if (message.type === 'scanner_update') {
           this.items = message.items;
+          // scanner_update carries no as_of; the push itself is the latest snapshot.
+          this.asOf = new Date().toISOString();
+          this.loaded = true;
         }
       },
     });
@@ -162,44 +149,74 @@ export class PithaScannerTable extends LitElement {
   protected override render() {
     const items = this.sortedItems();
     return html`
-      <table>
-        <thead>
-          <tr>
-            ${COLUMNS.map(
-              (column) => html`
-                <th
-                  scope="col"
-                  aria-sort=${this.sortKey === column.key ? (this.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  @click=${() => this.onHeaderClick(column.key)}
-                >
-                  ${column.label}
-                </th>
-              `,
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          ${items.map(
-            (item) => html`
-              <tr data-symbol=${item.symbol}>
-                <td><a href=${`/symbols/${item.symbol}`}>${item.symbol}</a></td>
-                <td>${item.price.toFixed(2)}</td>
-                <td>${formatNullableNumber(item.return_1m)}</td>
-                <td>${formatNullableNumber(item.return_5m)}</td>
-                <td>${formatNullableNumber(item.volume_ratio_5m)}</td>
-                <td>${item.price_vs_vwap_bps.toFixed(2)}</td>
-                <td>${formatNullableNumber(item.spread_bps)}</td>
-                <td>${item.jev_direction ?? '—'}</td>
-                <td>${formatNullableNumber(item.jev_confidence)}</td>
-                <td>${item.entry_quality ?? '—'}</td>
-                <td>${formatNullableNumber(item.current_position)}</td>
-              </tr>
-            `,
-          )}
-        </tbody>
-      </table>
+      <p class="mb-3 text-sm text-slate-600" data-testid="scanner-count">
+        候補
+        <span class="text-lg font-semibold text-slate-900">${this.loaded ? items.length : '—'}</span>
+        件
+      </p>
+      <div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
+        <table class="w-full border-collapse text-left text-sm">
+          ${
+            this.asOf
+              ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">Scanner Dashboard — as of ${this.asOf}</caption>`
+              : ''
+          }
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+              ${COLUMNS.map((column) => this.renderHeader(column))}
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map((item) => this.renderRow(item))}
+          </tbody>
+        </table>
+      </div>
+      ${
+        this.loaded && items.length === 0
+          ? html`<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500" role="status" data-testid="scanner-empty">
+              現在、条件を満たす候補銘柄はありません。候補は15〜30秒ごとに更新され、見つかり次第ここに表示されます。
+            </p>`
+          : ''
+      }
       ${renderWsDisconnected(this.wsStatus)}
       ${this.error ? html`<p class="pitha-scanner-table-error" role="alert">${this.error}</p>` : ''}
+    `;
+  }
+
+  private renderHeader(column: Column) {
+    const active = this.sortKey === column.key;
+    const indicator = active ? (this.sortDirection === 'asc' ? ' ▲' : ' ▼') : '';
+    return html`
+      <th
+        scope="col"
+        class="cursor-pointer select-none whitespace-nowrap px-3 py-2 hover:text-slate-900 ${column.numeric ? 'text-right' : ''}"
+        title=${column.hint}
+        aria-sort=${active ? (this.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+        @click=${() => this.onHeaderClick(column.key)}
+      >
+        ${column.label}${indicator}
+      </th>
+    `;
+  }
+
+  private renderRow(item: ScannerItem) {
+    const numeric = 'px-3 py-2 text-right tabular-nums';
+    return html`
+      <tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" data-symbol=${item.symbol}>
+        <td class="px-3 py-2 font-medium">
+          <a class="text-sky-700 underline-offset-2 hover:underline" href=${`/symbols/${encodeURIComponent(item.symbol)}`}>${item.symbol}</a>
+        </td>
+        <td class=${numeric}>${item.price.toFixed(1)}</td>
+        <td class=${returnClass(item.return_1m)}>${formatSignedNullable(item.return_1m, 2)}</td>
+        <td class=${returnClass(item.return_5m)}>${formatSignedNullable(item.return_5m, 2)}</td>
+        <td class=${numeric}>${formatNullable(item.volume_ratio_5m, 2)}</td>
+        <td class=${numeric}>${formatSigned(item.price_vs_vwap_bps, 0)}</td>
+        <td class=${numeric}>${formatNullable(item.spread_bps, 0)}</td>
+        <td class="px-3 py-2">${directionBadge(item.jev_direction)}</td>
+        <td class=${numeric}>${item.jev_confidence === null ? '—' : `${Math.round(item.jev_confidence * 100)}%`}</td>
+        <td class="px-3 py-2">${entryQualityBadge(item.entry_quality)}</td>
+        <td class=${numeric}>${formatNullable(item.current_position, 0)}</td>
+      </tr>
     `;
   }
 
@@ -211,10 +228,6 @@ export class PithaScannerTable extends LitElement {
       this.subscribeWs();
     }
   }
-}
-
-function formatNullableNumber(value: number | null): string {
-  return value === null ? '—' : value.toFixed(2);
 }
 
 // compareValues orders nulls first (regardless of column direction, they

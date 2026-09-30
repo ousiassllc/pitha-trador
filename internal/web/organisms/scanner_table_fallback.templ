@@ -2,68 +2,134 @@ package organisms
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 )
 
-// ScannerTableFallback renders the Scanner Dashboard's candidate table
-// (functional.md §5.1, components/overview.md §3): Symbol, Price, 1m/5m
-// Return, Volume Ratio, VWAP distance, Spread, Jev Direction/Confidence/
-// Entry Quality, and Current Position. It is used both for the initial
-// SSR page load and for the `GET /scanner` HX-Request fragment response
-// (internal/web/handler.ScannerHandler.Page).
+// ScannerTableFallback renders the Scanner Dashboard's candidate list
+// (functional.md §5.1, components/overview.md §3): a candidate count, then
+// a table of Symbol, Price, 1m/5m Return, Volume Ratio, VWAP distance,
+// Spread, Jev Direction / Confidence / Entry Quality, and Current
+// Position, or an empty-state notice when there are no candidates. It is
+// used both for the initial SSR page load and for the `GET /scanner`
+// HX-Request fragment response (internal/web/handler.ScannerHandler.Page).
 //
-// The table is nested inside a `<pitha-scanner-table>` custom element
+// The markup is nested inside a `<pitha-scanner-table>` custom element
 // (static/src/components/scanner-table): before JS loads (or for the
 // no-JS case) browsers render an unknown element as a plain container, so
 // this exact markup already displays correctly; once `pitha-scanner-table`
 // upgrades, it renders into its own light DOM and takes over in place
 // (sorting, `/ws/scanner` live updates), per its "銘柄行は通常の
 // `<a href>` として描画する" contract (components/overview.md §5.2).
+//
+// Column labels/hints, number formats, sign coloring and badge colors are
+// mirrored by that Lit component's render(); keep the two in sync so the
+// hydrated view does not differ from the SSR one (issue #239).
 templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 	<section class="mt-6" id="scanner-table" data-testid="scanner-table">
 		<pitha-scanner-table api-url="/api/v1/scanner" ws-url="/ws/scanner">
-			<table class="w-full border-collapse text-left text-sm">
-				<caption class="mb-2 text-left text-sm text-slate-500">{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
-				<thead>
-					<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-						<th class="px-3 py-2">Symbol</th>
-						<th class="px-3 py-2">Price</th>
-						<th class="px-3 py-2">1m Return</th>
-						<th class="px-3 py-2">5m Return</th>
-						<th class="px-3 py-2">Volume Ratio</th>
-						<th class="px-3 py-2">VWAP Distance (bps)</th>
-						<th class="px-3 py-2">Spread (bps)</th>
-						<th class="px-3 py-2">Jev</th>
-						<th class="px-3 py-2">Position</th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, c := range candidates {
-						@scannerRow(c)
-					}
-				</tbody>
-			</table>
+			<p class="mb-3 text-sm text-slate-600" data-testid="scanner-count">
+				候補
+				<span class="text-lg font-semibold text-slate-900">{ strconv.Itoa(len(candidates)) }</span>
+				件
+			</p>
+			<div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
+				<table class="w-full border-collapse text-left text-sm">
+					<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
+					<thead>
+						<tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+							for _, col := range scannerColumns {
+								<th scope="col" class={ "cursor-help whitespace-nowrap px-3 py-2", templ.KV("text-right", col.Numeric) } title={ col.Hint }>{ col.Label }</th>
+							}
+						</tr>
+					</thead>
+					<tbody>
+						for _, c := range candidates {
+							@scannerRow(c)
+						}
+					</tbody>
+				</table>
+			</div>
+			if len(candidates) == 0 {
+				<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500" role="status" data-testid="scanner-empty">
+					現在、条件を満たす候補銘柄はありません。候補は15〜30秒ごとに更新され、見つかり次第ここに表示されます。
+				</p>
+			}
 		</pitha-scanner-table>
 	</section>
 }
 
+// scannerColumn is one column header: its Japanese label, the tooltip
+// (`title`) explaining what the column means, and whether the column
+// holds numbers (right-aligned).
+type scannerColumn struct {
+	Label   string
+	Hint    string
+	Numeric bool
+}
+
+// scannerColumns must stay in the same order/wording as COLUMNS in
+// static/src/components/scanner-table/pitha-scanner-table.ts.
+var scannerColumns = []scannerColumn{
+	{"銘柄", "銘柄コード。Lit描画後は列見出しクリックで並べ替え、行のコードクリックで銘柄詳細へ移動します", false},
+	{"現在値", "直近の価格", true},
+	{"1分騰落率(%)", "直近1分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落", true},
+	{"5分騰落率(%)", "直近5分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落", true},
+	{"出来高倍率", "直近5分の出来高が平常時の何倍か。大きいほど売買が活発", true},
+	{"VWAP乖離(bps)", "現在値とVWAP(出来高加重平均価格)の差。1bps=0.01%。プラスはVWAPより高い", true},
+	{"スプレッド(bps)", "売り気配と買い気配の差。1bps=0.01%。小さいほど売買コストが低い", true},
+	{"Jev方向", "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り、pending=判定待ち", false},
+	{"確信度", "Jev判定の確信度。高いほど判定に自信がある", true},
+	{"エントリー品質", "エントリー好適度。poor < fair < good < strong < exceptional の順に良い", false},
+	{"保有", "現在の保有ポジション(株数)。未保有は—", true},
+}
+
 templ scannerRow(c domain.Candidate) {
-	<tr class="border-b border-slate-100" data-symbol={ c.Symbol }>
-		<td class="px-3 py-2 font-medium text-slate-900">{ c.Symbol }</td>
-		<td class="px-3 py-2">{ formatFloat(c.Price, 1) }</td>
-		<td class="px-3 py-2">{ formatNilFloat(c.Return1m, 2) }</td>
-		<td class="px-3 py-2">{ formatNilFloat(c.Return5m, 2) }</td>
-		<td class="px-3 py-2">{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
-		<td class="px-3 py-2">{ formatFloat(c.PriceVsVWAPBps, 0) }</td>
-		<td class="px-3 py-2">{ formatNilFloat(c.SpreadBps, 0) }</td>
-		<td class="px-3 py-2">
-			@molecules.SignalBadgeGroup(c.JevDirection, c.JevConfidence, c.EntryQuality)
+	<tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" data-symbol={ c.Symbol }>
+		<td class="px-3 py-2 font-medium">
+			<a class="text-sky-700 underline-offset-2 hover:underline" href={ templ.SafeURL("/symbols/" + url.PathEscape(c.Symbol)) }>{ c.Symbol }</a>
 		</td>
-		<td class="px-3 py-2">{ formatNilFloat(c.CurrentPosition, 0) }</td>
+		<td class="px-3 py-2 text-right tabular-nums">{ formatFloat(c.Price, 1) }</td>
+		<td class={ returnClass(c.Return1m) }>{ formatSignedNilFloat(c.Return1m, 2) }</td>
+		<td class={ returnClass(c.Return5m) }>{ formatSignedNilFloat(c.Return5m, 2) }</td>
+		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
+		<td class="px-3 py-2 text-right tabular-nums">{ formatSignedFloat(c.PriceVsVWAPBps, 0) }</td>
+		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.SpreadBps, 0) }</td>
+		<td class="px-3 py-2">
+			if c.JevDirection == nil {
+				<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">pending</span>
+			} else {
+				@atoms.Badge(atoms.Direction(*c.JevDirection))
+			}
+		</td>
+		<td class="px-3 py-2 text-right tabular-nums">{ formatConfidence(c.JevConfidence) }</td>
+		<td class="px-3 py-2">
+			if c.EntryQuality == nil {
+				<span class="text-slate-400">—</span>
+			} else {
+				@atoms.EntryQualityBadge(*c.EntryQuality)
+			}
+		</td>
+		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.CurrentPosition, 0) }</td>
 	</tr>
+}
+
+// returnClass colors a return cell: green when positive, red when
+// negative, neutral for zero or a missing value.
+func returnClass(v *float64) string {
+	const base = "px-3 py-2 text-right font-medium tabular-nums "
+	switch {
+	case v == nil || *v == 0:
+		return base + "text-slate-500"
+	case *v > 0:
+		return base + "text-green-700"
+	default:
+		return base + "text-red-700"
+	}
 }
 
 func formatFloat(v float64, decimals int) string {
@@ -75,4 +141,24 @@ func formatNilFloat(v *float64, decimals int) string {
 		return "—"
 	}
 	return fmt.Sprintf("%.*f", decimals, *v)
+}
+
+// formatSignedFloat is formatFloat with an explicit "+" for positive
+// values (negative values already carry "-").
+func formatSignedFloat(v float64, decimals int) string {
+	return fmt.Sprintf("%+.*f", decimals, v)
+}
+
+func formatSignedNilFloat(v *float64, decimals int) string {
+	if v == nil {
+		return "—"
+	}
+	return formatSignedFloat(*v, decimals)
+}
+
+func formatConfidence(v *float64) string {
+	if v == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.0f%%", *v*100)
 }
