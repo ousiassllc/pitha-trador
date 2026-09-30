@@ -13,7 +13,7 @@ import (
 
 const testErrorPageMarker = "test-error-page"
 
-// renderTestPage stands in for handler.RenderErrorPage (pages imports
+// renderTestPage stands in for shared.RenderErrorPage (pages imports
 // middleware, so these tests cannot use the real one).
 func renderTestPage(c *gin.Context, status int, message string) {
 	c.Header("Content-Type", "text/html; charset=utf-8")

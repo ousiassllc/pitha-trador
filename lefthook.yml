@@ -3,7 +3,7 @@ pre-commit:
     golangci-lint:
       glob: "*.go"
       # `make generate` (templ generate + bun run --cwd static build)
-      # must run first: static/src/embed.go's `//go:embed dist vendor`
+      # must run first: static/src/embed.go's `//go:embed dist img vendor`
       # (issue #59) won't even compile without it, so golangci-lint run
       # fails outright on a clean checkout otherwise.
       run: make generate && golangci-lint run
