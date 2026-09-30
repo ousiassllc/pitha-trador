@@ -16,7 +16,10 @@ import {
   COLUMNS,
   type Column,
   directionBadge,
+  encodeSymbol,
   entryQualityBadge,
+  formatAsOf,
+  formatConfidence,
   formatNullable,
   formatSigned,
   formatSignedNullable,
@@ -48,6 +51,8 @@ interface ScannerAPIResponse {
 interface ScannerUpdateMessage {
   type: string;
   items: ScannerItem[];
+  // Same RFC 3339 scan-cycle timestamp as ScannerAPIResponse.as_of.
+  as_of: string;
 }
 
 type SortDirection = 'asc' | 'desc';
@@ -59,21 +64,30 @@ export class PithaScannerTable extends LitElement {
   // (organisms.ScannerTableFallback), and `scanner_page.templ`'s
   // `<script type="module">` loads after (deferred by default), so this
   // element is upgraded - not freshly constructed - with that SSR
-  // `<table>` already attached as a child by the time this constructor
-  // (and createRenderRoot, called from it) runs. Merely returning `this`
-  // here does NOT replace that markup: lit-html's render() only manages
-  // content from a marker comment it inserts onward and leaves
-  // pre-existing children alone, so without clearing them first here,
-  // Lit's own first render() appended a second <table> right after the
-  // SSR fallback's instead of taking its place - confirmed by
-  // reproduction with the same upgrade-after-existing-children timing;
-  // a naive repro that imports this module before inserting the SSR
-  // markup does NOT reproduce it, since that constructs a fresh element
-  // before the parser has appended any children to clear.
+  // markup already attached as children by the time createRenderRoot
+  // (called from connectedCallback) runs. lit-html's render() only
+  // manages content from a marker comment it inserts onward and leaves
+  // pre-existing children alone, so the SSR nodes are remembered here
+  // and removed once the first data arrives (willUpdate) - otherwise
+  // Lit's own first render() would append a second <table> beside the
+  // SSR one. Until then (and if the initial fetch fails) they stay
+  // visible, so hydration never blanks the page. A naive repro that
+  // imports this module before inserting the SSR markup does NOT
+  // reproduce the duplicate: that constructs a fresh element before the
+  // parser has appended any children.
   protected override createRenderRoot(): HTMLElement {
-    this.innerHTML = '';
+    this.ssrNodes = Array.from(this.childNodes);
     return this;
   }
+
+  protected override willUpdate(): void {
+    if (this.loaded && this.ssrNodes.length > 0) {
+      for (const node of this.ssrNodes) node.remove();
+      this.ssrNodes = [];
+    }
+  }
+
+  private ssrNodes: ChildNode[] = [];
 
   @property({ type: String, attribute: 'api-url' }) apiUrl = '/api/v1/scanner';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '/ws/scanner';
@@ -123,9 +137,9 @@ export class PithaScannerTable extends LitElement {
       onMessage: (message) => {
         if (message.type === 'scanner_update') {
           this.items = message.items;
-          // scanner_update carries no as_of; the push itself is the latest snapshot.
-          this.asOf = new Date().toISOString();
+          this.asOf = message.as_of;
           this.loaded = true;
+          this.error = null;
         }
       },
     });
@@ -147,18 +161,26 @@ export class PithaScannerTable extends LitElement {
   }
 
   protected override render() {
+    const notices = html`
+      ${renderWsDisconnected(this.wsStatus)}
+      ${this.error ? html`<p class="pitha-scanner-table-error" role="alert">${this.error}</p>` : ''}
+    `;
+    // Until the first data arrives the server-rendered table stays in
+    // place (see createRenderRoot); only the notices are added beside it.
+    if (!this.loaded) return notices;
+
     const items = this.sortedItems();
     return html`
       <p class="mb-3 text-sm text-slate-600" data-testid="scanner-count">
         候補
-        <span class="text-lg font-semibold text-slate-900">${this.loaded ? items.length : '—'}</span>
+        <span class="text-lg font-semibold text-slate-900">${items.length}</span>
         件
       </p>
       <div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
         <table class="w-full border-collapse text-left text-sm">
           ${
             this.asOf
-              ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">Scanner Dashboard — as of ${this.asOf}</caption>`
+              ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">Scanner Dashboard — as of ${formatAsOf(this.asOf)}</caption>`
               : ''
           }
           <thead>
@@ -172,29 +194,38 @@ export class PithaScannerTable extends LitElement {
         </table>
       </div>
       ${
-        this.loaded && items.length === 0
+        items.length === 0
           ? html`<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500" role="status" data-testid="scanner-empty">
               現在、条件を満たす候補銘柄はありません。候補は15〜30秒ごとに更新され、見つかり次第ここに表示されます。
             </p>`
           : ''
       }
-      ${renderWsDisconnected(this.wsStatus)}
-      ${this.error ? html`<p class="pitha-scanner-table-error" role="alert">${this.error}</p>` : ''}
+      ${notices}
     `;
   }
 
+  // Each header is a real <button> so sorting works with Tab + Enter/Space,
+  // and the column hint (which the mouse-only `title` tooltip can't offer
+  // keyboard/touch/screen-reader users) is exposed as visually hidden text
+  // the button is described by.
   private renderHeader(column: Column) {
     const active = this.sortKey === column.key;
     const indicator = active ? (this.sortDirection === 'asc' ? ' ▲' : ' ▼') : '';
+    const hintId = `scanner-hint-${column.key}`;
     return html`
       <th
         scope="col"
-        class="cursor-pointer select-none whitespace-nowrap px-3 py-2 hover:text-slate-900 ${column.numeric ? 'text-right' : ''}"
+        class="whitespace-nowrap px-3 py-2 ${column.numeric ? 'text-right' : ''}"
         title=${column.hint}
         aria-sort=${active ? (this.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-        @click=${() => this.onHeaderClick(column.key)}
       >
-        ${column.label}${indicator}
+        <button
+          type="button"
+          class="cursor-pointer select-none hover:text-slate-900"
+          aria-describedby=${hintId}
+          @click=${() => this.onHeaderClick(column.key)}
+        >${column.label}${indicator}</button>
+        <span id=${hintId} class="sr-only">${column.hint}</span>
       </th>
     `;
   }
@@ -204,7 +235,7 @@ export class PithaScannerTable extends LitElement {
     return html`
       <tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" data-symbol=${item.symbol}>
         <td class="px-3 py-2 font-medium">
-          <a class="text-sky-700 underline-offset-2 hover:underline" href=${`/symbols/${encodeURIComponent(item.symbol)}`}>${item.symbol}</a>
+          <a class="text-sky-700 underline-offset-2 hover:underline" href=${`/symbols/${encodeSymbol(item.symbol)}`}>${item.symbol}</a>
         </td>
         <td class=${numeric}>${item.price.toFixed(1)}</td>
         <td class=${returnClass(item.return_1m)}>${formatSignedNullable(item.return_1m, 2)}</td>
@@ -213,7 +244,7 @@ export class PithaScannerTable extends LitElement {
         <td class=${numeric}>${formatSigned(item.price_vs_vwap_bps, 0)}</td>
         <td class=${numeric}>${formatNullable(item.spread_bps, 0)}</td>
         <td class="px-3 py-2">${directionBadge(item.jev_direction)}</td>
-        <td class=${numeric}>${item.jev_confidence === null ? '—' : `${Math.round(item.jev_confidence * 100)}%`}</td>
+        <td class=${numeric}>${formatConfidence(item.jev_confidence)}</td>
         <td class="px-3 py-2">${entryQualityBadge(item.entry_quality)}</td>
         <td class=${numeric}>${formatNullable(item.current_position, 0)}</td>
       </tr>

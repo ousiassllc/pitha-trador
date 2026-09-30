@@ -12,35 +12,31 @@ import (
 
 func ptr[T any](v T) *T { return &v }
 
-func renderScannerTable(t *testing.T, candidates []domain.Candidate) string {
+func renderScannerTableAt(t *testing.T, candidates []domain.Candidate, asOf time.Time) string {
 	t.Helper()
 	var sb strings.Builder
-	if err := organisms.ScannerTableFallback(candidates, time.Now()).Render(context.Background(), &sb); err != nil {
+	if err := organisms.ScannerTableFallback(candidates, asOf).Render(context.Background(), &sb); err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
 	return sb.String()
 }
 
-func TestScannerTableFallback_ShowsCountSignedReturnsAndBadges(t *testing.T) {
-	body := renderScannerTable(t, []domain.Candidate{
-		{
-			Symbol: "7203", Price: 2831.5,
-			Return1m: ptr(0.12), Return5m: ptr(-0.3),
-			JevDirection: ptr("LONG"), JevConfidence: ptr(0.74), EntryQuality: ptr("strong"),
-		},
-		{Symbol: "9984", Price: 7000}, // no Jev evaluation yet
-	})
+func renderScannerTable(t *testing.T, candidates []domain.Candidate) string {
+	t.Helper()
+	return renderScannerTableAt(t, candidates, time.Now())
+}
+
+// Per-cell formatting, colors, badges, links and column definitions are
+// pinned against the Lit component by scanner_table_contract_test.go.
+
+func TestScannerTableFallback_ShowsCountAndRFC3339AsOfCaption(t *testing.T) {
+	asOf := time.Date(2026, 9, 26, 10, 15, 0, 0, time.FixedZone("JST", 9*60*60))
+	body := renderScannerTableAt(t, []domain.Candidate{{Symbol: "7203", Price: 1}, {Symbol: "9984", Price: 2}}, asOf)
 
 	for _, want := range []string{
 		`data-testid="scanner-count"`,
-		">2</span>",      // candidate count
-		"+0.12", "-0.30", // signed returns
-		"text-green-700", "text-red-700", // sign colors
-		"bg-green-100", // LONG badge / strong entry-quality badge
-		"74%",
-		"pending", // 9984 has no Jev evaluation
-		`href="/symbols/7203"`,
-		`title="`, // header tooltips
+		">2</span>",
+		"Scanner Dashboard — as of 2026-09-26T10:15:00+09:00</caption>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("expected table to contain %q, got %q", want, body)
