@@ -40,3 +40,11 @@ func (a SchedulerAdapter) CheckForUpdate(ctx context.Context) error {
 func (a SchedulerAdapter) Status() Status {
 	return a.Checker.Status()
 }
+
+// UpdatePending implements internal/service/scheduler.UpdatePendingReporter
+// (issue #240): true when the last check found a newer release that
+// SafeGate is holding back. That outcome is a nil-error CheckForUpdate, so
+// the scheduler needs this to retry it sooner than its 6h cron tick.
+func (a SchedulerAdapter) UpdatePending() bool {
+	return a.Checker.Status().Blocked
+}

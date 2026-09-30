@@ -5,8 +5,10 @@
 // BuildServices only does so when its autoUpdate parameter is non-nil).
 //
 // Checker.CheckForUpdate runs the full read-only-until-verified pipeline
-// on every internal/service/scheduler @every-6h tick
-// (scheduler.WithUpdateChecker, via SchedulerAdapter below): fetch the
+// once at startup and on every internal/service/scheduler @every-6h tick
+// (scheduler.WithUpdateChecker, via SchedulerAdapter below; the scheduler
+// also retries a failed or safety-gate-held check with backoff, issue
+// #240): fetch the
 // latest GitHub release, compare its tag_name against
 // internal/version.Version (golang.org/x/mod/semver - no hand-rolled
 // semver parsing), and - only once SafeGate.SafeToUpdate's three-part

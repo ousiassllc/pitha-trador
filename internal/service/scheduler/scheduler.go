@@ -67,6 +67,9 @@ type Scheduler struct {
 	// trigger entirely (cmd/server never configures it - it has no
 	// installer concept).
 	updateChecker UpdateChecker
+	// updateBackoff overrides updatecheck's retry delays
+	// (WithUpdateRetryBackoff); zero values mean the defaults.
+	updateBackoff struct{ initial, max time.Duration }
 	// maintenanceState/maintenanceNotifier are optional
 	// (WithMaintenanceState/WithMaintenanceNotifier): they persist the
 	// daily maintenance tasks' last success date and report repeated
