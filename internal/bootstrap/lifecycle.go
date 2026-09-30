@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/heldposition"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
 
 // Start launches every background goroutine this build's composition
 // root owns: kabuステーションAPI token issuance/refresh
 // (marketdata.Client.Start), the candidate-refresh ticker (issue #45),
-// and the Scheduler's worker pool + full-scan/self-improve/
+// the PUSH subscription (pushfeed), and the Scheduler's worker pool + full-scan/self-improve/
 // outcome-labeling/operator-heartbeat/log-rotation cron triggers
 // (scheduler.Scheduler.Start), after first recovering any job left
 // "running" by a previous crash (scheduler.Scheduler.Recover). All run
@@ -40,6 +43,19 @@ func (s *Services) Start(ctx context.Context) error {
 	s.wg.Add(1)
 	go s.candidateRefreshTicker(ctx)
 
+	s.wg.Add(1)
+	go func() { // FR-SCHED-4 / issue #156
+		defer s.wg.Done()
+		scan := s.strategy.Scan
+		heldposition.Monitor{
+			Positions: s.Positions, Boards: s.MarketData, Exits: s.Execution,
+			Exchange: defaultKabuExchange, Open: marketcalendarOpen,
+		}.Run(ctx, time.Duration(scan.HeldPositionIntervalSecondsMin)*time.Second, time.Duration(scan.HeldPositionIntervalSecondsMax)*time.Second)
+	}()
+
+	s.wg.Add(1) // startup symbol registration + PUSH subscription (flows.md §10.1)
+	go func() { defer s.wg.Done(); s.PushFeed.Run(ctx) }()
+
 	if s.newsEnabled {
 		s.wg.Add(1)
 		go s.newsIngestTicker(ctx)
@@ -68,16 +84,10 @@ func (s *Services) Stop() {
 func (s *Services) newsIngestTicker(ctx context.Context) {
 	defer s.wg.Done()
 
-	ticker := time.NewTicker(newsPollInterval)
-	defer ticker.Stop()
-	for {
-		if err := s.News.Poll(ctx); err != nil && ctx.Err() == nil {
-			slog.Error("bootstrap: news ingest cycle failed", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
+	wait := time.Duration(0) // the first cycle runs immediately
+	safego.Loop(ctx, "news ingest", func() time.Duration {
+		d := wait
+		wait = newsPollInterval
+		return d
+	}, s.News.Poll)
 }

@@ -68,9 +68,9 @@ func TestScheduler_Start_RegistersDailyLogRotationTrigger(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start must succeed (i.e. the @daily cron entry registers without
-	// error) whether or not a LogRotator is configured; actually waiting
-	// for a real day boundary to fire it is exercised by
+	// Start must succeed (i.e. the maintenance catch-up cron entry
+	// registers without error) whether or not a LogRotator is configured; the
+	// rotation itself is exercised by
 	// TestScheduler_RotateLogs_CallsConfiguredRotator above instead.
 	if err := s.Start(ctx, 24*time.Hour); err != nil {
 		t.Fatalf("Start: %v", err)

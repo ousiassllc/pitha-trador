@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
 // pendingOrderScanLimit bounds how many of an instrument's most recent
@@ -40,6 +41,11 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	if e.decisions == nil {
 		return SnapshotResult{}, fmt.Errorf("execution: OnSnapshot requires Deps.Decisions to be configured")
 	}
+	if !validPrice(snap.Price) {
+		return SnapshotResult{}, fmt.Errorf("execution: snapshot for %q: %w (got %v)", snap.Symbol, ErrInvalidPrice, snap.Price)
+	}
+	e.snapshotMu.Lock()
+	defer e.snapshotMu.Unlock()
 	now := snap.Timestamp
 
 	filled, err := e.fillPendingEntries(ctx, snap)
@@ -49,7 +55,7 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	result := SnapshotResult{Filled: filled}
 
 	position, err := e.positions.GetOpenByInstrument(ctx, snap.InstrumentID)
-	if errors.Is(err, repository.ErrPositionNotFound) {
+	if errors.Is(err, domain.ErrPositionNotFound) {
 		return result, nil
 	}
 	if err != nil {
@@ -66,15 +72,21 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	if err != nil {
 		return SnapshotResult{}, err
 	}
-	mkt := MarketContext{Price: snap.Price, Decision: decision, Now: now}
+	mkt := MarketContext{Price: snap.Price, Decision: decision, MarketCloseAt: e.marketCloseAt(now), Now: now}
 	if snap.Feature.VWAP > 0 {
 		vwap := snap.Feature.VWAP
 		mkt.VWAP = &vwap
+		if prev, ok := e.vwapObs.Previous(snap.InstrumentID, position.ID); ok {
+			mkt.PrevVWAP = &prev
+		}
 	}
 
 	reason, exit, err := e.EvaluateExit(ctx, position, mkt)
 	if err != nil {
 		return SnapshotResult{}, fmt.Errorf("execution: evaluate exit for position %d: %w", position.ID, err)
+	}
+	if mkt.VWAP != nil {
+		e.vwapObs.Record(snap.InstrumentID, vwapcross.Observation{PositionID: position.ID, Price: snap.Price, VWAP: *mkt.VWAP})
 	}
 	if !exit {
 		result.Position = &position
@@ -82,6 +94,9 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	}
 
 	closed, err := e.Close(ctx, position.ID, reason, snap.Price, now)
+	if errors.Is(err, domain.ErrPositionAlreadyClosed) {
+		return result, nil // a concurrent manual close / CloseAll won
+	}
 	if err != nil {
 		return SnapshotResult{}, err
 	}
@@ -119,7 +134,7 @@ func (e *Engine) fillPendingEntries(ctx context.Context, snap domain.Snapshot) (
 }
 
 // latestTraderDecision returns instrumentID's most recent Jev Trader
-// decision (EnrichDecision-populated, as EvaluateExit requires), or nil
+// decision (enrich.Decision-populated, as EvaluateExit requires), or nil
 // when none exists - which disables only the two Jev-derived exit
 // conditions (FR-EXIT-3).
 func (e *Engine) latestTraderDecision(ctx context.Context, instrumentID int64) (*domain.JevDecision, error) {
@@ -129,7 +144,7 @@ func (e *Engine) latestTraderDecision(ctx context.Context, instrumentID int64) (
 	}
 	for _, d := range decisions {
 		if d.DecisionType == domain.JevDecisionTypeTrader {
-			enriched := EnrichDecision(d)
+			enriched := enrich.Decision(d)
 			return &enriched, nil
 		}
 	}

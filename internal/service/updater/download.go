@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -20,7 +22,10 @@ import (
 // temp directory) on any error - including a checksum mismatch - so a
 // failed/tampered download never lingers on disk (issue #65: "不一致な
 // ら更新を中止しエラーログのみ").
-func (c *Checker) downloadAndVerify(ctx context.Context, installerAsset, checksumAsset Asset) (path string, err error) {
+func (c *Checker) downloadAndVerify(ctx context.Context, installerAsset, checksumAsset Asset) (installerPath string, err error) {
+	ctx, cancel := context.WithTimeout(ctx, c.downloadTimeout)
+	defer cancel()
+
 	dir, err := os.MkdirTemp("", "pitha-trador-update-*")
 	if err != nil {
 		return "", fmt.Errorf("create temp dir: %w", err)
@@ -32,12 +37,12 @@ func (c *Checker) downloadAndVerify(ctx context.Context, installerAsset, checksu
 	}()
 
 	checksumsPath := filepath.Join(dir, checksumsAssetName)
-	if err = c.downloadTo(ctx, checksumAsset.BrowserDownloadURL, checksumsPath); err != nil {
+	if err = c.downloadTo(ctx, checksumAsset, checksumsPath, maxChecksumsBytes); err != nil {
 		return "", fmt.Errorf("download %s: %w", checksumAsset.Name, err)
 	}
 
-	installerPath := filepath.Join(dir, installerAsset.Name)
-	if err = c.downloadTo(ctx, installerAsset.BrowserDownloadURL, installerPath); err != nil {
+	installerPath = filepath.Join(dir, filepath.Base(installerAsset.Name))
+	if err = c.downloadTo(ctx, installerAsset, installerPath, maxInstallerBytes); err != nil {
 		return "", fmt.Errorf("download %s: %w", installerAsset.Name, err)
 	}
 
@@ -59,9 +64,40 @@ func (c *Checker) downloadAndVerify(ctx context.Context, installerAsset, checksu
 	return installerPath, nil
 }
 
-// downloadTo streams url's response body to dest.
-func (c *Checker) downloadTo(ctx context.Context, url, dest string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// checkDownloadURL rejects any asset URL outside c.downloadURLPrefix (the
+// repository's own release-download path), so a tampered release JSON
+// cannot point the unattended installer download at an arbitrary host.
+func (c *Checker) checkDownloadURL(raw string) error {
+	want, err := url.Parse(c.downloadURLPrefix)
+	if err != nil {
+		return fmt.Errorf("parse download prefix: %w", err)
+	}
+	got, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("parse download url: %w", err)
+	}
+	if got.Scheme != want.Scheme || got.Host != want.Host || got.User != nil ||
+		!strings.HasPrefix(path.Clean(got.Path), strings.TrimSuffix(want.Path, "/")+"/") {
+		return fmt.Errorf("download url %q is outside %s", raw, c.downloadURLPrefix)
+	}
+	return nil
+}
+
+// downloadTo streams asset's body to dest after validating its URL, and
+// fails once the body exceeds maxBytes (or asset.Size, when GitHub reports
+// one) instead of filling the disk.
+func (c *Checker) downloadTo(ctx context.Context, asset Asset, dest string, maxBytes int64) error {
+	if err := c.checkDownloadURL(asset.BrowserDownloadURL); err != nil {
+		return err
+	}
+	if asset.Size > maxBytes {
+		return fmt.Errorf("asset size %d exceeds limit %d", asset.Size, maxBytes)
+	}
+	if asset.Size > 0 {
+		maxBytes = asset.Size
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, asset.BrowserDownloadURL, nil)
 	if err != nil {
 		return err
 	}
@@ -80,8 +116,17 @@ func (c *Checker) downloadTo(ctx context.Context, url, dest string) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	_, err = io.Copy(f, resp.Body)
-	return err
+	n, err := io.Copy(f, io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return err
+	}
+	if n > maxBytes {
+		return fmt.Errorf("response body exceeds limit %d bytes", maxBytes)
+	}
+	if asset.Size > 0 && n != asset.Size {
+		return fmt.Errorf("response body is %d bytes, want %d", n, asset.Size)
+	}
+	return nil
 }
 
 // readChecksum finds name's hash in a `sha256sum`-formatted file (each

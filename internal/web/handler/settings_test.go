@@ -287,14 +287,17 @@ func settingsRouter(h *handler.SettingsHandler) *gin.Engine {
 func postSetting(engine *gin.Engine, key string, form url.Values) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/settings/"+key, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 	return rec
 }
 
 func deleteSetting(engine *gin.Engine, key string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodDelete, "/settings/"+key, nil)
+	req.Header.Set("HX-Request", "true")
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/"+key, nil))
+	engine.ServeHTTP(rec, req)
 	return rec
 }
 
@@ -464,5 +467,189 @@ func TestSettingsHandler_SaveAndDelete_StoreErrorIs500(t *testing.T) {
 	}
 	if rec := deleteSetting(engine, config.KeyJevAPIKey); rec.Code != http.StatusInternalServerError {
 		t.Errorf("DELETE status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// Failed HTMX actions answer with an atoms.Toast fragment, which
+// layout.Shell's htmx-config swaps into `#toast-region` (issue #110).
+func TestSettingsHandler_SaveAndDelete_FailuresRenderToastFragment(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	store.setErr = errors.New("db is locked")
+	store.deleteErr = errors.New("db is locked")
+	engine := settingsRouter(handler.NewSettingsHandler(store))
+
+	for name, rec := range map[string]*httptest.ResponseRecorder{
+		"save 500":       postSetting(engine, config.KeyJevAPIKey, url.Values{"value": {"x"}}),
+		"save 400":       postSetting(engine, config.KeyJevAPIKey, url.Values{"value": {""}}),
+		"save unknown":   postSetting(engine, "NOT_A_KEY", url.Values{"value": {"x"}}),
+		"delete 500":     deleteSetting(engine, config.KeyJevAPIKey),
+		"delete unknown": deleteSetting(engine, "NOT_A_KEY"),
+	} {
+		body := rec.Body.String()
+		if !strings.Contains(body, `data-toast`) || !strings.Contains(body, `role="alert"`) {
+			t.Errorf("%s: body = %q, want an atoms.Toast fragment", name, body)
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+			t.Errorf("%s: Content-Type = %q, want text/html", name, ct)
+		}
+	}
+}
+
+// The row form's plain `method="post"` fallback (no JS) must not get a
+// bare SecretFieldRow fragment as a whole page: it is redirected back to
+// the screen it was submitted from (issue #110), after the write went
+// through.
+func TestSettingsHandler_NonHTMXSaveAndDelete_RedirectBackToOriginScreen(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	engine := settingsRouter(handler.NewSettingsHandler(store))
+
+	for _, tc := range []struct{ referer, want string }{
+		{"", "/settings"},
+		{"http://127.0.0.1:48080/settings", "/settings"},
+		{"http://127.0.0.1:48080/setup", "/setup"},
+		{"https://evil.example/anything", "/settings"},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/settings/"+config.KeyJevAPIKey, strings.NewReader(url.Values{"value": {"v"}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if tc.referer != "" {
+			req.Header.Set("Referer", tc.referer)
+		}
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != tc.want {
+			t.Errorf("referer %q: status/Location = %d/%q, want 303/%q", tc.referer, rec.Code, rec.Header().Get("Location"), tc.want)
+		}
+		if store.values[config.KeyJevAPIKey] != "v" {
+			t.Errorf("referer %q: JEV_API_KEY = %q, want the value stored despite the redirect", tc.referer, store.values[config.KeyJevAPIKey])
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/"+config.KeyJevAPIKey, nil))
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("DELETE status = %d, want 303", rec.Code)
+	}
+	if _, ok := store.values[config.KeyJevAPIKey]; ok {
+		t.Errorf("JEV_API_KEY still stored after DELETE")
+	}
+}
+
+// The row form's plain `method="post"` fallback (no JS/htmx) used to get a
+// bare Toast fragment as the whole page on failure (issue #184); it must get
+// the full pages.ErrorPage instead.
+func TestSettingsHandler_NonHTMXFailures_RenderFullErrorPage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	store.deleteErr = http.ErrAbortHandler
+	engine := settingsRouter(handler.NewSettingsHandler(store))
+
+	form := url.Values{"value": {""}, "_csrf": {"token"}}
+	post := httptest.NewRequest(http.MethodPost, "/settings/"+config.KeyJevAPIKey, strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	postRec := httptest.NewRecorder()
+	engine.ServeHTTP(postRec, post)
+
+	deleteRec := httptest.NewRecorder()
+	engine.ServeHTTP(deleteRec, httptest.NewRequest(http.MethodDelete, "/settings/"+config.KeyJevAPIKey, nil))
+
+	for name, tc := range map[string]struct {
+		rec  *httptest.ResponseRecorder
+		want int
+	}{
+		"empty value": {postRec, http.StatusBadRequest},
+		"delete 500":  {deleteRec, http.StatusInternalServerError},
+	} {
+		body := tc.rec.Body.String()
+		if tc.rec.Code != tc.want {
+			t.Errorf("%s: status = %d, want %d", name, tc.rec.Code, tc.want)
+		}
+		if !strings.Contains(body, `data-testid="error-page"`) || !strings.Contains(body, "<html") {
+			t.Errorf("%s: body = %q, want the full error page", name, body)
+		}
+	}
+}
+
+// issue #235: surrounding whitespace pasted with a value must not be stored.
+func TestSettingsHandler_Save_TrimsWhitespaceBeforeStoring(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	engine := settingsRouter(handler.NewSettingsHandler(store))
+
+	for key, tc := range map[string]struct{ raw, want string }{
+		config.KeyJevAPIKey:       {" jev-key\n", "jev-key"},
+		config.KeySlackWebhookURL: {"http://127.0.0.1:1 ", "http://127.0.0.1:1"},
+	} {
+		if rec := postSetting(engine, key, url.Values{"value": {tc.raw}}); rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, want 200 (body=%s)", key, rec.Code, rec.Body.String())
+		}
+		if store.values[key] != tc.want {
+			t.Errorf("stored %s = %q, want %q", key, store.values[key], tc.want)
+		}
+	}
+}
+
+// A whitespace-only value is empty after trimming: rejected like a blank
+// one, keeping the stored value.
+func TestSettingsHandler_Save_WhitespaceOnlyIsRejected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	store.values[config.KeyJevAPIKey] = "old"
+	engine := settingsRouter(handler.NewSettingsHandler(store))
+
+	if rec := postSetting(engine, config.KeyJevAPIKey, url.Values{"value": {" \n\t"}}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if store.values[config.KeyJevAPIKey] != "old" {
+		t.Fatalf("JEV_API_KEY = %q, want old kept", store.values[config.KeyJevAPIKey])
+	}
+}
+
+// Invalid values are a 400 and never reach the store - in particular an
+// invalid JEV_BASE_URL must not satisfy the required-key check that
+// releases the Setup Guard.
+func TestSettingsHandler_Save_InvalidValuesAre400AndStoreUntouched(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct{ name, key, value string }{
+		{"not a url", config.KeyJevBaseURL, "notaurl"},
+		{"ftp scheme", config.KeySlackWebhookURL, "ftp://x"},
+		{"javascript scheme", config.KeySlackWebhookURL, "javascript:alert(1)"},
+		{"no host", config.KeyLunaBaseURL, "https:///path"},
+		{"newline in api key", config.KeyJevAPIKey, "ab\ncd"},
+		{"tab in password", config.KeyKabuAPIPassword, "ab\tcd"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newFakeSecretsStore()
+			engine := settingsRouter(handler.NewSettingsHandler(store))
+
+			rec := postSetting(engine, tc.key, url.Values{"value": {tc.value}})
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+			}
+			if len(store.values) != 0 {
+				t.Fatalf("store = %v, want untouched", store.values)
+			}
+			if body := rec.Body.String(); !strings.Contains(body, `data-toast`) || !strings.Contains(body, `role="alert"`) {
+				t.Errorf("HTMX body = %q, want an atoms.Toast fragment", body)
+			}
+			if strings.Contains(rec.Body.String(), tc.value) {
+				t.Errorf("error response echoes the rejected value: %q", rec.Body.String())
+			}
+
+			// Non-JS form post: full error page, not a bare fragment.
+			req := httptest.NewRequest(http.MethodPost, "/settings/"+tc.key, strings.NewReader(url.Values{"value": {tc.value}}.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			plain := httptest.NewRecorder()
+			engine.ServeHTTP(plain, req)
+			if plain.Code != http.StatusBadRequest || !strings.Contains(plain.Body.String(), `data-testid="error-page"`) ||
+				!strings.Contains(plain.Body.String(), "<html") {
+				t.Errorf("non-HTMX: status = %d body = %q, want 400 full error page", plain.Code, plain.Body.String())
+			}
+			if len(store.values) != 0 {
+				t.Fatalf("store = %v after non-HTMX post, want untouched", store.values)
+			}
+		})
 	}
 }

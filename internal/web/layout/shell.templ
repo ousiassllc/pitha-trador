@@ -1,6 +1,18 @@
 package layout
 
-import "github.com/ousiassllc/pitha-trador/internal/web/organisms"
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+// htmxConfig is the `htmx-config` meta content. htmx 2 swaps 4xx/5xx by
+// nothing by default; its native `responseHandling` (the htmx 2 successor
+// of the response-targets extension, docs/components/overview.md §4
+// "エラー表示") sends those responses' fragment (atoms.Toast, see
+// handler.respondActionError) into `#toast-region` instead of the
+// request's own target, and still fires `htmx:responseError`.
+const htmxConfig = `{"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true,"target":"#toast-region","swapOverride":"beforeend"}]}`
 
 // Shell is the shared full-page HTML document skeleton every
 // internal/web/pages component renders into (docs/components/overview.md
@@ -14,7 +26,7 @@ import "github.com/ousiassllc/pitha-trador/internal/web/organisms"
 // (components/overview.md §3).
 templ Shell(title string) {
 	@document(title) {
-		@organisms.Header()
+		@organisms.Header(middleware.SystemStateFrom(ctx))
 		<main class="mx-auto max-w-6xl px-6 py-8">
 			{ children... }
 		</main>
@@ -41,13 +53,20 @@ templ document(title string) {
 		<head>
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="csrf-token" content={ middleware.CSRFToken(ctx) }/>
 			<title>{ title } - pitha-trador</title>
+			<meta name="htmx-config" content={ htmxConfig }/>
 			<link rel="stylesheet" href="/static/dist/css/app.css"/>
 			<script src="/static/vendor/htmx.min.js"></script>
 			<script type="module" src="/static/dist/js/kill-switch-panel/pitha-kill-switch-panel.js"></script>
+			<script type="module" src="/static/dist/js/htmx-errors/pitha-htmx-errors.js"></script>
 		</head>
-		<body class="min-h-screen bg-slate-50 text-slate-900">
+		<body class="min-h-screen bg-slate-50 text-slate-900" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
 			{ children... }
+			<div id="toast-region" class="pointer-events-none fixed right-4 top-4 z-50 flex w-96 max-w-full flex-col gap-2" aria-live="assertive"></div>
+			<template id="toast-template">
+				@atoms.Toast("")
+			</template>
 		</body>
 	</html>
 }

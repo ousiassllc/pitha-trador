@@ -48,24 +48,40 @@ func NewCalibrationHandler(source CalibrationSource) *CalibrationHandler {
 // item shape.
 type calibrationBucketOutput struct {
 	Range              string  `json:"range" doc:"Confidence band, e.g. \"0.50-0.60\"."`
+	AvgConfidence      float64 `json:"avg_confidence" doc:"Mean predicted confidence of labeled decisions in this band (the reliability curve's x-axis value)."`
 	DirectionAccuracy  float64 `json:"direction_accuracy" doc:"Share of labeled decisions in this band whose predicted direction matched the realized future return."`
 	AvgFutureReturnPct float64 `json:"avg_future_return_pct" doc:"Average direction-adjusted future return (%) among labeled decisions in this band."`
+	SampleCount        int     `json:"sample_count" doc:"Number of labeled decision/horizon outcomes in this band."`
+	TradeCount         int     `json:"trade_count" doc:"Number of closed positions entered on a signal derived from a decision in this band."`
+	TotalPnL           float64 `json:"total_pnl" doc:"Sum of realized PnL (JPY) of those closed positions."`
+	AvgPnLPct          float64 `json:"avg_pnl_pct" doc:"Average realized return (%) of those closed positions relative to their entry notional."`
+}
+
+// calibrationDirectionOutput mirrors docs/api/endpoints.md's
+// `by_direction[]` item shape (FR-CAL-2 "方向別平均リターン").
+type calibrationDirectionOutput struct {
+	Direction          string  `json:"direction" enum:"LONG,SHORT" doc:"Predicted direction."`
+	SampleCount        int     `json:"sample_count" doc:"Number of labeled decision/horizon outcomes with this direction."`
+	DirectionAccuracy  float64 `json:"direction_accuracy" doc:"Share of those outcomes whose predicted direction matched the realized future return."`
+	AvgFutureReturnPct float64 `json:"avg_future_return_pct" doc:"Average direction-adjusted future return (%) over those outcomes."`
 }
 
 // CalibrationAPIOutput is the Huma response body for
 // `GET /api/v1/calibration` (docs/api/endpoints.md).
 type CalibrationAPIOutput struct {
 	Body struct {
-		Buckets                  []calibrationBucketOutput `json:"buckets"`
-		BrierScore               float64                   `json:"brier_score" doc:"Mean squared error between confidence and realized outcome (0=perfect, 0.25=random-guess baseline)."`
-		LogLoss                  float64                   `json:"log_loss" doc:"Mean binary cross-entropy between confidence and realized outcome."`
-		ExpectedCalibrationError float64                   `json:"expected_calibration_error" doc:"Weighted average gap between each bucket's confidence and observed accuracy."`
+		Buckets                  []calibrationBucketOutput    `json:"buckets"`
+		ByDirection              []calibrationDirectionOutput `json:"by_direction"`
+		BrierScore               float64                      `json:"brier_score" doc:"Mean squared error between confidence and realized outcome (0=perfect, 0.25=random-guess baseline)."`
+		LogLoss                  float64                      `json:"log_loss" doc:"Mean binary cross-entropy between confidence and realized outcome."`
+		ExpectedCalibrationError float64                      `json:"expected_calibration_error" doc:"Weighted average gap between each bucket's confidence and observed accuracy."`
 	}
 }
 
 // APICalibration implements `GET /api/v1/calibration`
-// (docs/api/endpoints.md): every confidence bucket's direction accuracy
-// and average future return, plus Brier Score, Log Loss, and Expected
+// (docs/api/endpoints.md): every confidence bucket's direction accuracy,
+// average confidence, average future return and realized PnL, the
+// per-direction average return, plus Brier Score, Log Loss, and Expected
 // Calibration Error (functional.md FR-CAL-2/3).
 func (h *CalibrationHandler) APICalibration(ctx context.Context, _ *struct{}) (*CalibrationAPIOutput, error) {
 	metrics, err := h.source.Metrics(ctx)
@@ -78,8 +94,22 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, _ *struct{}) (*
 	for i, b := range metrics.Buckets {
 		out.Body.Buckets[i] = calibrationBucketOutput{
 			Range:              b.Range,
+			AvgConfidence:      b.AvgConfidence,
 			DirectionAccuracy:  b.DirectionAccuracy,
 			AvgFutureReturnPct: b.AvgFutureReturnPct,
+			SampleCount:        b.SampleCount,
+			TradeCount:         b.TradeCount,
+			TotalPnL:           b.TotalPnL,
+			AvgPnLPct:          b.AvgPnLPct,
+		}
+	}
+	out.Body.ByDirection = make([]calibrationDirectionOutput, len(metrics.ByDirection))
+	for i, d := range metrics.ByDirection {
+		out.Body.ByDirection[i] = calibrationDirectionOutput{
+			Direction:          d.Direction,
+			SampleCount:        d.SampleCount,
+			DirectionAccuracy:  d.DirectionAccuracy,
+			AvgFutureReturnPct: d.AvgFutureReturnPct,
 		}
 	}
 	out.Body.BrierScore = metrics.BrierScore

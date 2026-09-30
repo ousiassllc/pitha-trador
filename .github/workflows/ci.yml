@@ -9,8 +9,19 @@ on:
       - "v*"
   pull_request:
 
+# Serialise runs per ref. The build job computes the next release version
+# from the existing tags and only the release job creates that tag, so two
+# overlapping main-push runs would compute the same version and collide on
+# the same tag. cancel-in-progress stays false so a run that is already
+# releasing is never killed half-way (a superseded *pending* run is dropped,
+# which is fine: the newer run builds a superset of its commits).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   GOLANGCI_LINT_VERSION: v2.14.0
+  LINTERLY_VERSION: v0.3.3
   TEMPL_VERSION: v0.3.1020
 
 jobs:
@@ -25,7 +36,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - name: Install frontend dependencies
         run: bun install --cwd static --frozen-lockfile
@@ -49,6 +60,14 @@ jobs:
       - name: golangci-lint run
         run: golangci-lint run
 
+      # Enforces the line-count limits in CI as well; lefthook's
+      # pre-commit alone is bypassable via --no-verify / web commits.
+      - name: Install linterly
+        run: go install "github.com/ousiassllc/linterly/cmd/linterly@${LINTERLY_VERSION}"
+
+      - name: linterly check
+        run: linterly check --no-update-check
+
       - name: biome check
         working-directory: static
         run: bunx biome check .
@@ -69,7 +88,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - name: Install frontend dependencies
         run: bun install --cwd static --frozen-lockfile
@@ -110,7 +129,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - name: Install frontend dependencies
         run: bun install --cwd static --frozen-lockfile

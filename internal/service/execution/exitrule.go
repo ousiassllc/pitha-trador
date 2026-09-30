@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
 // MarketContext is EvaluateExit's per-tick input: the position's
@@ -22,14 +23,18 @@ type MarketContext struct {
 	// 動作"). Its Direction/ContinuationProbability drive the Jev方向反
 	// 転/continuation_probability低下 conditions; a caller reading a
 	// decision back from repository.DecisionRepository must first pass it
-	// through EnrichDecision (decision.go) to populate
+	// through enrich.Decision to populate
 	// ContinuationProbability, which is not one of that repository's
 	// queryable columns.
 	Decision *domain.JevDecision
-	// MarketCloseAt is today's market close time, or nil to disable the
-	// 引け前強制決済 condition (no trading-calendar concept exists yet
-	// to derive it from).
+	// MarketCloseAt is today's 大引け time (OnSnapshot: Config.Calendar);
+	// nil disables the 引け前強制決済 condition.
 	MarketCloseAt *time.Time
+	// PrevVWAP is the price/VWAP observed at this position's previous
+	// evaluation, the baseline for VWAP逆クロス (a cross, not a stay on
+	// the adverse side). nil on the first evaluation (e.g. after a
+	// restart): EntryPrice vs the current VWAP is used instead.
+	PrevVWAP *vwapcross.Observation
 	// Now defaults to time.Now() when zero. Tests set it explicitly for
 	// deterministic max-holding/force-flat-before-close checks.
 	Now time.Time
@@ -84,8 +89,14 @@ func (e *Engine) EvaluateExit(ctx context.Context, position domain.Position, mkt
 		}
 	}
 
-	if mkt.VWAP != nil && vwapCrossedAgainst(position.Side, mkt.Price, *mkt.VWAP) {
-		return domain.ExitReasonVWAPCross, true, nil
+	if mkt.VWAP != nil {
+		prevPrice, prevVWAP := position.EntryPrice, *mkt.VWAP // no previous evaluation: entry price vs current VWAP
+		if mkt.PrevVWAP != nil {
+			prevPrice, prevVWAP = mkt.PrevVWAP.Price, mkt.PrevVWAP.VWAP
+		}
+		if vwapcross.Crossed(position.Side, prevPrice, prevVWAP, mkt.Price, *mkt.VWAP) {
+			return domain.ExitReasonVWAPCross, true, nil
+		}
 	}
 
 	if e.cfg.MaxHoldingMinutes > 0 {
@@ -150,14 +161,4 @@ func reversed(positionSide string, jevDirection *string) bool {
 	default:
 		return false
 	}
-}
-
-// vwapCrossedAgainst reports whether price is now on the side of vwap
-// that works against positionSide (a LONG position with price below
-// VWAP, or a SHORT position with price above it) - VWAP逆クロス.
-func vwapCrossedAgainst(positionSide string, price, vwap float64) bool {
-	if positionSide == domain.PositionSideLong {
-		return price < vwap
-	}
-	return price > vwap
 }

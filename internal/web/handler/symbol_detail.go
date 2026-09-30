@@ -44,12 +44,12 @@ type SymbolAPIOutput struct {
 
 // SymbolPathInput is every Symbol Detail route's path parameter.
 type SymbolPathInput struct {
-	Symbol string `path:"symbol" doc:"Instrument symbol (e.g. 7203)."`
+	Symbol string `path:"symbol" minLength:"1" maxLength:"16" pattern:"^[0-9A-Za-z]+$" doc:"Instrument symbol (alphanumeric, e.g. 7203)."`
 }
 
 // APISymbol implements `GET /api/v1/symbols/{symbol}` (docs/api/endpoints.md
 // §5): the latest price/VWAP, latest Jev Trader decision (parsed via
-// execution.EnrichDecision when read back from repository.DecisionRepository
+// enrich.Decision when read back from repository.DecisionRepository
 // - see internal/service/execution/state.go), the shared Risk Engine
 // parameters, and the currently open position size (signed: positive for
 // LONG, negative for SHORT), or nil when flat.
@@ -57,7 +57,7 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 	state, err := h.provider.State(ctx, in.Symbol)
 	if err != nil {
 		if errors.Is(err, execution.ErrInstrumentUnknown) {
-			return nil, huma.Error404NotFound("unknown symbol", err)
+			return nil, huma.Error404NotFound("unknown symbol")
 		}
 		return nil, huma.Error500InternalServerError("read symbol state failed", err)
 	}
@@ -66,7 +66,7 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 	out.Body.Symbol = state.Symbol
 	out.Body.Price = state.LastPrice
 	out.Body.Risk = symbolRiskOutput{
-		AllowedPositionPct: h.riskParams.AllowedPositionPct,
+		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
 		StopLossPct:        h.riskParams.StopLossPct,
 		TakeProfitPct:      h.riskParams.TakeProfitPct,
 	}
@@ -119,44 +119,34 @@ type CandlesAPIOutput struct {
 const defaultCandlesLookback = 6 * time.Hour
 
 // CandlesInput is `GET /api/v1/symbols/{symbol}/candles`'s path+query
-// parameters (docs/api/endpoints.md §5). Interval is accepted but not
-// validated: `1m` is this MVP's only supported/native granularity
-// (market_snapshots' own bar size), so any value is served at that same
-// granularity.
+// parameters (docs/api/endpoints.md §5). `1m` is this MVP's only
+// supported/native granularity (market_snapshots' own bar size), so
+// Interval only admits that value. From/To are RFC3339 (`format:
+// date-time`) validated by Huma; the zero time means "not provided".
 type CandlesInput struct {
-	Symbol   string `path:"symbol"`
-	From     string `query:"from" doc:"RFC3339 start time; defaults to 6 hours before to."`
-	To       string `query:"to" doc:"RFC3339 end time; defaults to now."`
-	Interval string `query:"interval" doc:"Fixed at 1m for this MVP."`
+	Symbol   string    `path:"symbol" minLength:"1" maxLength:"16" pattern:"^[0-9A-Za-z]+$" doc:"Instrument symbol (alphanumeric, e.g. 7203)."`
+	From     time.Time `query:"from" doc:"RFC3339 start time; defaults to 6 hours before to."`
+	To       time.Time `query:"to" doc:"RFC3339 end time; defaults to now."`
+	Interval string    `query:"interval" enum:"1m" default:"1m" doc:"Fixed at 1m for this MVP."`
 }
 
 // APICandles implements `GET /api/v1/symbols/{symbol}/candles`
 // (docs/api/endpoints.md §5): `pitha-price-chart`'s initial candlestick+
-// VWAP+volume series. From/To are plain RFC3339 strings rather than
-// *time.Time (huma v2 does not support pointer query parameters); an
-// empty string means "not provided".
+// VWAP+volume series.
 func (h *SymbolHandler) APICandles(ctx context.Context, in *CandlesInput) (*CandlesAPIOutput, error) {
 	to := h.now().UTC()
-	if in.To != "" {
-		parsed, err := time.Parse(time.RFC3339, in.To)
-		if err != nil {
-			return nil, huma.Error400BadRequest("invalid to: must be RFC3339", err)
-		}
-		to = parsed
+	if !in.To.IsZero() {
+		to = in.To
 	}
 	from := to.Add(-defaultCandlesLookback)
-	if in.From != "" {
-		parsed, err := time.Parse(time.RFC3339, in.From)
-		if err != nil {
-			return nil, huma.Error400BadRequest("invalid from: must be RFC3339", err)
-		}
-		from = parsed
+	if !in.From.IsZero() {
+		from = in.From
 	}
 
 	snapshots, err := h.provider.Candles(ctx, in.Symbol, from, to)
 	if err != nil {
 		if errors.Is(err, execution.ErrInstrumentUnknown) {
-			return nil, huma.Error404NotFound("unknown symbol", err)
+			return nil, huma.Error404NotFound("unknown symbol")
 		}
 		return nil, huma.Error500InternalServerError("read candles failed", err)
 	}

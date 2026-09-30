@@ -1,6 +1,14 @@
 package marketdata
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrPriceUnavailable is returned by callers that need a usable last price
+// when a Board reports none (CurrentPrice 0/NaN: before the opening auction,
+// no trade yet, or null in the response). See Board.HasPrice.
+var ErrPriceUnavailable = errors.New("marketdata: current price unavailable")
 
 // APIError represents a kabuステーションAPI error response
 // (kabu_STATION_API.yaml components.schemas.ErrorResponse: {"Code": int,

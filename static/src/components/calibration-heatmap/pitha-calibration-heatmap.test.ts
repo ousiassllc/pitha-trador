@@ -6,13 +6,19 @@ type HeatmapElement = HTMLElement & { updateComplete: Promise<boolean> };
 
 const bucket = (overrides: Partial<CalibrationBucket> = {}): CalibrationBucket => ({
   range: '0.70-0.80',
+  avg_confidence: 0.75,
   direction_accuracy: 0.63,
   avg_future_return_pct: 0.11,
+  sample_count: 20,
+  trade_count: 0,
+  total_pnl: 0,
+  avg_pnl_pct: 0,
   ...overrides,
 });
 
 const response = (overrides: Partial<CalibrationAPIResponse> = {}): CalibrationAPIResponse => ({
   buckets: [bucket()],
+  by_direction: [],
   brier_score: 0.19,
   log_loss: 0.52,
   expected_calibration_error: 0.06,
@@ -56,10 +62,13 @@ async function flush(el: HeatmapElement): Promise<void> {
 }
 
 async function mount(body: CalibrationAPIResponse) {
-  const fetchMock = mock(() => Promise.resolve(new Response(JSON.stringify(body))));
+  const fetchMock = mock((_input: RequestInfo | URL) =>
+    Promise.resolve(new Response(JSON.stringify(body))),
+  );
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 
   const el = document.createElement('pitha-calibration-heatmap') as HeatmapElement;
+  el.setAttribute('calibration-url', '/api/v1/calibration');
   document.body.appendChild(el);
   await flush(el);
   return { el, fetchMock };
@@ -67,7 +76,7 @@ async function mount(body: CalibrationAPIResponse) {
 
 describe('pitha-calibration-heatmap', () => {
   test('loads calibration metrics from calibration-url and renders a heatmap cell per bucket', async () => {
-    const { el } = await mount(
+    const { el, fetchMock } = await mount(
       response({
         buckets: [
           bucket({ range: '0.50-0.60', direction_accuracy: 0.51, avg_future_return_pct: -0.05 }),
@@ -82,6 +91,40 @@ describe('pitha-calibration-heatmap', () => {
     expect(el.shadowRoot?.textContent).toContain('0.90-1.00');
     expect(el.shadowRoot?.textContent).toContain('51.0%');
     expect(el.shadowRoot?.textContent).toContain('0.190'); // brier_score
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/calibration');
+  });
+
+  test('renders per-bucket PnL and the per-direction average return', async () => {
+    const { el } = await mount(
+      response({
+        buckets: [
+          bucket({ trade_count: 3, total_pnl: 1200, avg_pnl_pct: 0.4, avg_confidence: 0.76 }),
+        ],
+        by_direction: [
+          {
+            direction: 'LONG',
+            sample_count: 10,
+            direction_accuracy: 0.6,
+            avg_future_return_pct: 0.12,
+          },
+          {
+            direction: 'SHORT',
+            sample_count: 4,
+            direction_accuracy: 0.5,
+            avg_future_return_pct: -0.3,
+          },
+        ],
+      }),
+    );
+
+    const text = el.shadowRoot?.textContent ?? '';
+    expect(text).toContain('3 trades');
+    expect(text).toContain('+1,200 JPY');
+    expect(text).toContain('conf 0.76');
+    const rows = el.shadowRoot?.querySelectorAll('[data-testid="calibration-direction-row"]');
+    expect(rows?.length).toBe(2);
+    expect(rows?.[1]?.textContent).toContain('SHORT');
+    expect(rows?.[1]?.textContent).toContain('-0.30%');
   });
 
   test('the refresh button re-fetches calibration-url without opening a WebSocket', async () => {
@@ -107,6 +150,7 @@ describe('pitha-calibration-heatmap', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const el = document.createElement('pitha-calibration-heatmap') as HeatmapElement;
+    el.setAttribute('calibration-url', '/api/v1/calibration');
     document.body.appendChild(el);
     await flush(el);
 

@@ -33,7 +33,7 @@ const (
 	subscriberBuffer = 64
 )
 
-// Queues lists the 8 job queues in pipeline order (repository job queue
+// Queues lists the 6 job queues in pipeline order (repository job queue
 // constants), the fixed row set of Snapshot.Queues.
 func Queues() []string {
 	return []string{
@@ -41,8 +41,6 @@ func Queues() []string {
 		repository.JobQueueFeatureCalc,
 		repository.JobQueueJevScout,
 		repository.JobQueueJevTrader,
-		repository.JobQueueRiskCheck,
-		repository.JobQueuePaperExecution,
 		repository.JobQueueOutcomeLabeling,
 		repository.JobQueueAnalytics,
 	}
@@ -116,7 +114,7 @@ func New(jobs JobSource, decisions DecisionSource, killSwitch KillSwitchSource) 
 	}
 }
 
-// Snapshot returns the current per-queue depth (all 8 queues, zeroes when
+// Snapshot returns the current per-queue depth (all 6 queues, zeroes when
 // idle) and the newest-first merged event list matching q.
 func (s *Service) Snapshot(ctx context.Context, q Query) (domain.ActivitySnapshot, error) {
 	limit := q.Limit

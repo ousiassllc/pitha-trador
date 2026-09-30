@@ -51,28 +51,63 @@ var DefaultConfidenceBucketRanges = []ConfidenceBucketRange{
 }
 
 // ConfidenceBucket is one ConfidenceBucketRange's aggregated calibration
-// outcomes (functional.md FR-CAL-3, docs/api/endpoints.md §GET
+// outcomes (functional.md FR-CAL-2/3, docs/api/endpoints.md §GET
 // /api/v1/calibration "buckets"): how often the predicted Direction was
 // correct and the average direction-adjusted future return, among every
 // labeled trader decision/horizon outcome whose Confidence fell in Range.
+// AvgConfidence is those outcomes' mean Confidence (the Reliability
+// Curve's x-axis value). TradeCount/TotalPnL/AvgPnLPct are FR-CAL-2's
+// "confidence bucket別PnL": the closed positions entered on a signal
+// derived from a trader decision whose Confidence fell in Range (see
+// DecisionTrade), independent of SampleCount, which counts outcome
+// horizons.
 type ConfidenceBucket struct {
 	Range              string
+	AvgConfidence      float64
 	DirectionAccuracy  float64
 	AvgFutureReturnPct float64
 	SampleCount        int
+	TradeCount         int
+	TotalPnL           float64
+	AvgPnLPct          float64
+}
+
+// DirectionMetric is one predicted direction's (LONG or SHORT) aggregated
+// outcomes (functional.md FR-CAL-2 "方向別平均リターン"): the share of
+// labeled outcomes graded correct and the average direction-adjusted
+// future return, over every labeled outcome with that Direction.
+type DirectionMetric struct {
+	Direction          string
+	SampleCount        int
+	DirectionAccuracy  float64
+	AvgFutureReturnPct float64
 }
 
 // CalibrationMetrics is Calibration's full evaluation result (functional.md
 // FR-CAL-2, docs/api/endpoints.md §GET /api/v1/calibration): the
 // Reliability Curve (Buckets) plus Brier Score, Log Loss, and Expected
 // Calibration Error computed over every labeled trader decision/horizon
-// outcome.
+// outcome, and the per-direction (LONG, SHORT) breakdown in ByDirection.
 type CalibrationMetrics struct {
 	Buckets                  []ConfidenceBucket
+	ByDirection              []DirectionMetric
 	BrierScore               float64
 	LogLoss                  float64
 	ExpectedCalibrationError float64
 	SampleCount              int
+}
+
+// DecisionTrade is one closed position joined back to the Jev trader
+// decision that produced its entry (positions.entry_order_id ->
+// paper_orders.trade_signal_id -> trade_signals.jev_decision_id), for
+// internal/service/calibration.WithTradePnL to fold into each
+// ConfidenceBucket's PnL. RealizedPnL is positions.realized_pnl (JPY);
+// ReturnPct is RealizedPnL relative to the entry notional
+// (entry_price*quantity), in percent.
+type DecisionTrade struct {
+	Confidence  float64
+	RealizedPnL float64
+	ReturnPct   float64
 }
 
 // LabeledSample is one labeled Jev trader decision/horizon outcome, joined

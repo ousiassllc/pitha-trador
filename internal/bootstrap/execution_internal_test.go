@@ -6,9 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
+
+// tradingHours is a fixed instant inside the 前場 (2026-09-29 10:00 JST):
+// paper entries are session-gated, so tests must not enter at time.Now().
+var tradingHours = time.Date(2026, 9, 29, 10, 0, 0, 0, marketcalendar.JST)
 
 func approvedLongSignal(inst domain.Instrument) domain.TradeSignal {
 	return domain.TradeSignal{
@@ -19,8 +25,8 @@ func approvedLongSignal(inst domain.Instrument) domain.TradeSignal {
 
 func mustOpenPaperPosition(t *testing.T, svc *Services, inst domain.Instrument, price float64) domain.Position {
 	t.Helper()
-	executor := paperExecutor{engine: svc.Execution}
-	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: price, Timestamp: time.Now().UTC()}
+	executor := paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}
+	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: price, Timestamp: tradingHours}
 	if err := executor.ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
 		t.Fatalf("ExecuteSignal: %v", err)
 	}
@@ -31,19 +37,19 @@ func mustOpenPaperPosition(t *testing.T, svc *Services, inst domain.Instrument, 
 	return position
 }
 
-func TestPaperExecutor_OpensOneTradingUnitAndSkipsRepeatEntry(t *testing.T) {
+func TestPaperExecutor_SizesEntryFromRiskLimitsAndSkipsRepeatEntry(t *testing.T) {
 	svc := newTestServices(t, nil)
 	inst := mustCreateInstrument(t, svc, "7203")
 
 	position := mustOpenPaperPosition(t, svc, inst, 2500)
-	if position.Quantity != paperEntryQuantity || position.EntryPrice != 2500 || position.Side != domain.PositionSideLong {
-		t.Fatalf("opened position = %+v, want LONG %d shares at 2500", position, paperEntryQuantity)
+	if position.Quantity != 200 || position.EntryPrice != 2500 || position.Side != domain.PositionSideLong {
+		t.Fatalf("opened position = %+v, want LONG %d shares at 2500", position, 200)
 	}
 
 	// A second approved signal while the position is still open is not an
 	// error for the jev-trader job, and must not open a second position.
-	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 2510, Timestamp: time.Now().UTC()}
-	if err := (paperExecutor{engine: svc.Execution}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
+	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 2510, Timestamp: tradingHours}
+	if err := (paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
 		t.Fatalf("second ExecuteSignal = %v, want nil (skipped)", err)
 	}
 	orders, err := svc.Orders.List(context.Background(), "", 10)
@@ -99,5 +105,20 @@ func TestHandleMarketData_ClosesPaperPositionWhenNewBarHitsStopLoss(t *testing.T
 	// 2500 -> 2400 is -4%, past config/risk.yaml-derived stop_loss_pct=0.6.
 	if closed.IsOpen() || closed.ExitReason == nil || *closed.ExitReason != domain.ExitReasonStopLoss {
 		t.Errorf("position after -4%% bar = %+v, want closed with %q", closed, domain.ExitReasonStopLoss)
+	}
+}
+
+// Wiring: the Engine BuildServices builds gates entries to 東証立会時間,
+// and a signal arriving after the close is dropped rather than retried.
+func TestPaperExecutor_DropsEntryOutsideTradingSession(t *testing.T) {
+	svc := newTestServices(t, nil)
+	inst := mustCreateInstrument(t, svc, "7203")
+	night := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 2500, Timestamp: tradingHours.Add(11 * time.Hour)}
+	executor := paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}
+	if err := executor.ExecuteSignal(context.Background(), approvedLongSignal(inst), night); err != nil {
+		t.Fatalf("ExecuteSignal at 21:00 JST = %v, want nil (dropped)", err)
+	}
+	if _, err := svc.Positions.GetOpenByInstrument(context.Background(), inst.ID); err == nil {
+		t.Fatal("a position was opened outside the trading session")
 	}
 }

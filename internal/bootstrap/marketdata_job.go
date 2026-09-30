@@ -9,48 +9,36 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
-// marketDataJobPayload mirrors internal/service/scheduler's own unexported
-// fullScanPayload: {"instrument_id":..,"symbol":".."}, the JSON body
-// EnqueueFullScan enqueues onto both the market-data and feature-calc
-// queues (scheduler.go). Kept as a separate type here (rather than an
-// exported one in scheduler) since only the JSON shape, not the Go type
-// itself, is the real contract between enqueuer and handler.
+// marketDataJobPayload mirrors scheduler's unexported fullScanPayload
+// ({"instrument_id":..,"symbol":".."}); only the JSON shape is the contract.
 type marketDataJobPayload struct {
 	InstrumentID int64  `json:"instrument_id"`
 	Symbol       string `json:"symbol"`
 }
 
 // handleMarketData is the market-data queue Handler (issue #44): it
-// fetches symbol's current 時価情報・板情報 from kabuステーションAPI,
-// computes its Feature values against featureengine.HistoryLookbackBars prior bars,
-// and persists the result as one market_snapshots row via
-// FeatureEngine.RunCycle (which also indexes it for RAG - FR-RAG-1), then
-// runs Paper Trading's position management against that new bar
-// (execution.Engine.OnSnapshot).
+// fetches symbol's current 時価情報・板情報 (the fresh PUSH board else a REST
+// poll; never a price-0 board - PushFeed.Latest), computes its Feature
+// values against featureengine.HistoryLookbackBars prior bars, persists
+// one market_snapshots row via FeatureEngine.RunCycle (which also indexes
+// it for RAG - FR-RAG-1), then runs Paper Trading's position management
+// against that bar (execution.Engine.OnSnapshot). It covers both
+// acquisition and feature computation (see handleFeatureCalc).
 //
-// This single handler covers both "market data acquisition" and "feature
-// computation": featureengine.Engine only exposes an atomic
-// fetch-translate-compute-persist step (doc.go), so there is no
-// intermediate persisted state a genuinely separate feature-calc handler
-// could compute from. See handleFeatureCalc's own doc comment.
-//
-// A GetBoard failure (kabuステーションAPI not running on a dev machine,
-// auth error, network error, ...) is returned as-is: Scheduler's Handler
-// contract already marks the job failed and moves on to the next one
-// (scheduler.go's processNext) without crashing the process or the other
-// queues' workers, satisfying issue #44's "接続失敗時にプロセス全体が
-// クラッシュしないことが必須" requirement without this handler needing to
-// swallow the error itself.
+// A board failure is returned as-is: Scheduler marks the job failed and
+// moves on without crashing the process (issue #44 "接続失敗時にプロセス全体が
+// クラッシュしないことが必須").
 func (s *Services) handleMarketData(ctx context.Context, job repository.Job) error {
 	var payload marketDataJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return fmt.Errorf("bootstrap: decode market-data job payload: %w", err)
 	}
 
-	board, err := s.MarketData.GetBoard(ctx, payload.Symbol, defaultKabuExchange)
+	board, err := s.PushFeed.Latest(ctx, payload.Symbol)
 	if err != nil {
 		return fmt.Errorf("bootstrap: fetch board for %q: %w", payload.Symbol, err)
 	}
@@ -65,16 +53,21 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 		return fmt.Errorf("bootstrap: encode raw board data for %q: %w", payload.Symbol, err)
 	}
 
+	inst, err := s.Instruments.Get(ctx, payload.InstrumentID)
+	if err != nil {
+		return fmt.Errorf("bootstrap: load instrument %q: %w", payload.Symbol, err)
+	}
+
 	now := time.Now().UTC()
+	mc := featureengine.NewMarketContextLoader(s.Instruments, s.Snapshots).Load(ctx, inst, now)
 	input := featureengine.Input{
-		Timestamp: now,
-		Current:   readingFromBoard(board),
-		History:   history,
-		// MarketReturn5m/SectorReturn5m require a tracked market/sector
-		// index instrument (TOPIX/Nikkei225/sector index); no such
-		// instrument-tracking convention exists yet in this codebase, so
-		// both stay nil (FR-FE-2's "missing data" nil, not a fabricated
-		// placeholder) until a later scope introduces one.
+		Timestamp:      now,
+		Current:        readingFromBoard(board),
+		History:        history,
+		MarketReturn1m: mc.MarketReturn1m,
+		MarketReturn5m: mc.MarketReturn5m,
+		SectorReturn5m: mc.SectorReturn5m,
+		MarketBreadth:  mc.MarketBreadth,
 	}
 
 	persisted, err := s.FeatureEngine.RunCycle(ctx, []featureengine.CycleInput{{
@@ -103,26 +96,26 @@ func (s *Services) handleMarketData(ctx context.Context, job repository.Job) err
 
 // enqueueEventReevaluation implements FR-SCAN-1/FR-SCAN-2 for one freshly
 // persisted bar: when snap is a current Fast Screener candidate and
-// featureengine.DetectEvent against its previous bar fires, a jev-scout
+// eventtrigger.Detect against its previous bar fires, a jev-scout
 // job is enqueued immediately instead of waiting for the next
 // candidate-refresh cycle; otherwise nothing is enqueued (FR-SCAN-2's
 // suppression). Non-candidates are skipped: Jev is only ever consulted for
 // symbols that passed Fast Screener (functional.md §2's main flow).
 // history is snap's prior bars, most recent first. The news signal is
 // News Ingest's per-symbol flag (FR-LUNA-3; consumed here so each new
-// article triggers one re-evaluation); order-flow has no source in this
-// build, so that signal stays false.
+// article triggers one re-evaluation).
 func (s *Services) enqueueEventReevaluation(ctx context.Context, snap domain.Snapshot, history []domain.Snapshot) error {
 	if len(history) == 0 || !s.isCandidate(ctx, snap.InstrumentID) {
 		return nil
 	}
 	trigger := s.strategy.Scan.EventTrigger
-	signal := featureengine.DetectEvent(history[0], snap, history, featureengine.EventThresholds{
+	signal := eventtrigger.Detect(history[0], snap, history, eventtrigger.Thresholds{
 		Return1mChange:           trigger.Return1mChangeThreshold,
 		VolumeRatioChange:        trigger.VolumeRatioChangeThreshold,
 		SpreadChangeBps:          trigger.SpreadChangeBpsThreshold,
 		OrderbookImbalanceChange: trigger.OrderbookImbalanceChangeThreshold,
-	}, false, s.News.TakeNewsFlag(snap.Symbol))
+		TradeFlowImbalanceChange: trigger.TradeFlowImbalanceChangeThreshold,
+	}, s.News.TakeNewsFlag(snap.Symbol))
 	if err := s.Scheduler.EnqueueEventReevaluation(ctx, snap.InstrumentID, snap.Symbol, signal.Triggered(), snap.Timestamp); err != nil {
 		return fmt.Errorf("bootstrap: event-driven reevaluation for %q: %w", snap.Symbol, err)
 	}
@@ -139,17 +132,10 @@ func (s *Services) isCandidate(ctx context.Context, instrumentID int64) bool {
 	return false
 }
 
-// handleFeatureCalc is the feature-calc queue Handler (issue #44). It is
-// an intentional no-op: EnqueueFullScan (scheduler.go, already
-// implemented/tested before issue #41) enqueues one feature-calc job
-// alongside every market-data job, but handleMarketData above already
-// computes and persists Feature as part of its own atomic
-// fetch-compute-persist step, since featureengine.Engine.RunCycle exposes
-// no separate "compute from an already-persisted raw reading" entry
-// point. Registering a handler that simply succeeds (rather than leaving
-// the queue unregistered) keeps its jobs from piling up as permanently
-// "pending" rows; a future scope that splits Engine into distinct raw/
-// compute phases would give this handler real work to do.
+// handleFeatureCalc is the feature-calc queue Handler (issue #44), an
+// intentional no-op: handleMarketData already computes and persists
+// Feature atomically; a succeeding handler keeps the feature-calc jobs
+// EnqueueFullScan adds from piling up as "pending" rows.
 func (s *Services) handleFeatureCalc(context.Context, repository.Job) error {
 	return nil
 }
@@ -158,14 +144,24 @@ func (s *Services) handleFeatureCalc(context.Context, repository.Job) error {
 // featureengine.Reading Compute expects (doc.go: "Callers translate
 // marketdata.Board into the featureengine.Reading this package expects").
 func readingFromBoard(board marketdata.Board) featureengine.Reading {
-	return featureengine.Reading{
-		Price:    board.CurrentPrice,
-		VWAP:     board.VWAP,
-		Volume:   int64(board.TradingVolume),
-		Turnover: board.TradingValue,
-		Bid:      board.BidPrice,
-		Ask:      board.AskPrice,
-		BidQty:   board.BidQty,
-		AskQty:   board.AskQty,
+	r := featureengine.Reading{
+		Price:       board.CurrentPrice,
+		VWAP:        board.VWAP,
+		Volume:      int64(board.TradingVolume),
+		Turnover:    board.TradingValue,
+		SessionHigh: board.HighPrice,
+		SessionLow:  board.LowPrice,
+		Bid:         board.BidPrice,
+		Ask:         board.AskPrice,
+		BidQty:      board.BidQty,
+		AskQty:      board.AskQty,
 	}
+	// Sell levels sit with BidPrice/BidQty, Buy levels with AskPrice/AskQty.
+	if d, ok := board.SellDepth(); ok {
+		r.BidDepth = &d
+	}
+	if d, ok := board.BuyDepth(); ok {
+		r.AskDepth = &d
+	}
+	return r
 }

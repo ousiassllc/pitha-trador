@@ -8,17 +8,19 @@ import (
 
 // swaggerHTML embeds Stoplight Elements (docs/environment/setup.md
 // "Swagger / OpenAPI") pointed at the Huma-generated OpenAPI 3.1 spec.
-// Elements is loaded from a CDN so no build-time frontend dependency is
-// required; the spec endpoint (/api/v1/openapi.json) is registered by a
-// later Huma sub-scope and may 404 until then, but this page itself still
-// renders.
+// Elements is vendored from the bun-installed `@stoplight/elements`
+// package (static/esbuild.config.mjs copies it to dist/vendor/) and served
+// same-origin from the embedded /static/dist/vendor/stoplight-elements/, so
+// no third-party CDN script runs on the origin that exposes the Kill Switch
+// and settings APIs (issues #112/#117). The spec endpoint
+// (/api/v1/openapi.json) is registered by the Huma routes.
 const swaggerHTML = `<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
   <title>pitha-trador API Docs</title>
-  <script src="https://unpkg.com/@stoplight/elements/web-components.min.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
+  <script src="/static/dist/vendor/stoplight-elements/web-components.min.js"></script>
+  <link rel="stylesheet" href="/static/dist/vendor/stoplight-elements/styles.min.css">
   <style>html, body { height: 100%; margin: 0; }</style>
 </head>
 <body>

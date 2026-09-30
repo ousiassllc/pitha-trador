@@ -1,6 +1,20 @@
 package domain
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+// ErrPositionNotFound is returned (wrapped or bare) when a lookup or update
+// finds no matching position. It lives in domain so that the web handler
+// layer can classify it without importing repository
+// (architecture/overview.md §3).
+var ErrPositionNotFound = errors.New("domain: position not found")
+
+// ErrPositionAlreadyClosed is returned when a close loses the race against a
+// concurrent close of the same position (manual close, kill-switch CloseAll,
+// Exit monitor) or targets an already-closed one.
+var ErrPositionAlreadyClosed = errors.New("domain: position is already closed")
 
 // Position side values (docs/architecture/er.md §positions CHECK
 // constraint).

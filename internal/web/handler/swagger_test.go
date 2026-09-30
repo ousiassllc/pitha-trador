@@ -37,4 +37,15 @@ func TestSwaggerUI_ServesStoplightElementsHTML(t *testing.T) {
 	if !strings.Contains(body, `apiDescriptionUrl="/api/v1/openapi.json"`) {
 		t.Fatalf("expected body to point apiDescriptionUrl at /api/v1/openapi.json, got %q", body)
 	}
+	for _, asset := range []string{
+		`src="/static/dist/vendor/stoplight-elements/web-components.min.js"`,
+		`href="/static/dist/vendor/stoplight-elements/styles.min.css"`,
+	} {
+		if !strings.Contains(body, asset) {
+			t.Fatalf("expected body to load vendored asset %s, got %q", asset, body)
+		}
+	}
+	if strings.Contains(body, "unpkg.com") || strings.Contains(body, "https://") {
+		t.Fatalf("expected no third-party CDN reference, got %q", body)
+	}
 }

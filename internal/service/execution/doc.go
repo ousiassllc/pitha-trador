@@ -9,7 +9,7 @@
 // Engine persists every Entry/Exit as a paper_orders row
 // (repository.OrderRepository) and the resulting held/closed position as
 // a positions row (repository.PositionRepository) - the same
-// positions internal/service/risk's RepositoryPortfolioProvider reads.
+// positions internal/service/risk/repoportfolio.Provider reads.
 // Engine's CloseAll (close.go) implements that package's PositionCloser
 // (FR-RISK-3); internal/bootstrap passes the same *Engine to
 // risk.NewEngine as its Closer. OnSnapshot (manage.go) is the per-bar

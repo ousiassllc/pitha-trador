@@ -35,6 +35,9 @@ func TestLoadStrategy_ParsesRepositoryTemplateFile(t *testing.T) {
 	if got, want := cfg.Scan.EventTrigger.VolumeRatioChangeThreshold, 2.0; got != want {
 		t.Errorf("Scan.EventTrigger.VolumeRatioChangeThreshold = %v, want %v", got, want)
 	}
+	if got, want := cfg.Scan.EventTrigger.TradeFlowImbalanceChangeThreshold, 0.4; got != want {
+		t.Errorf("Scan.EventTrigger.TradeFlowImbalanceChangeThreshold = %v, want %v", got, want)
+	}
 }
 
 func TestLoadStrategy_ReturnsErrorForMissingFile(t *testing.T) {

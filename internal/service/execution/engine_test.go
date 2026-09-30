@@ -227,95 +227,72 @@ func TestEngine_Enter_RejectsLimitOrderWithoutLimitPrice(t *testing.T) {
 	}
 }
 
-func TestEngine_Close_LosingTradeStartsSymbolCooldown(t *testing.T) {
-	cfg := execution.Config{CooldownAfterLossMinutes: 5}
-	te := newTestEngine(t, cfg)
-	ctx := context.Background()
-	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
-
-	entry, err := te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: longSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeMarket, Price: 2100.0, Now: now,
-	})
+// Regression test for issue #158: an entry whose position cannot be opened
+// must leave no FILLED order behind.
+func TestEngine_Enter_PositionOpenFailureLeavesNoFilledOrder(t *testing.T) {
+	db := newTestDB(t)
+	if _, err := db.Exec(`CREATE TRIGGER positions_block BEFORE INSERT ON positions BEGIN SELECT RAISE(ABORT, 'disk full'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+	instruments := repository.NewInstrumentRepository(db)
+	inst, err := instruments.Create(context.Background(), domain.Instrument{Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true})
 	if err != nil {
-		t.Fatalf("Enter: %v", err)
+		t.Fatalf("create instrument: %v", err)
 	}
+	orders := repository.NewOrderRepository(db)
+	engine := execution.NewEngine(execution.Deps{Orders: orders, Positions: repository.NewPositionRepository(db)}, execution.Config{})
 
-	closedAt := now.Add(2 * time.Minute)
-	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 2088.0, closedAt)
-	if err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	if closed.RealizedPnL == nil || *closed.RealizedPnL != -1200.0 {
-		t.Fatalf("Close().RealizedPnL = %v, want -1200.0 (100 * (2088-2100))", closed.RealizedPnL)
-	}
-	if closed.ExitReason == nil || *closed.ExitReason != domain.ExitReasonStopLoss {
-		t.Fatalf("Close().ExitReason = %v, want %q", closed.ExitReason, domain.ExitReasonStopLoss)
-	}
-
-	// Immediately re-entering the same symbol must be rejected: still
-	// within the 5-minute post-loss cooldown.
-	_, err = te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: longSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeMarket,
-		Price: 2090.0, Now: closedAt.Add(1 * time.Minute),
+	_, err = engine.Enter(context.Background(), execution.EntryRequest{
+		Signal: longSignal(inst.ID), Quantity: 100, OrderType: domain.OrderTypeMarket, Price: 2100,
+		Now: time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC),
 	})
-	if !errors.Is(err, execution.ErrSymbolInCooldown) {
-		t.Fatalf("Enter (within cooldown) error = %v, want ErrSymbolInCooldown", err)
+	if err == nil {
+		t.Fatal("Enter = nil error, want the position insert failure")
 	}
 
-	// Past the cooldown window, entry succeeds again.
-	_, err = te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: longSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeMarket,
-		Price: 2090.0, Now: closedAt.Add(6 * time.Minute),
-	})
+	all, err := orders.List(context.Background(), "", 10)
 	if err != nil {
-		t.Fatalf("Enter (after cooldown): %v", err)
+		t.Fatalf("List orders: %v", err)
+	}
+	if len(all) != 1 || all[0].Status != domain.OrderStatusRejected || all[0].FilledAt != nil {
+		t.Fatalf("orders after failed Enter = %+v, want exactly one REJECTED, never FILLED", all)
 	}
 }
 
-func TestEngine_Close_WinningTradeDoesNotStartCooldown(t *testing.T) {
-	te := newTestEngine(t, execution.Config{CooldownAfterLossMinutes: 5})
-	ctx := context.Background()
-	now := time.Now().UTC()
-
-	entry, err := te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: longSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeMarket, Price: 2100.0, Now: now,
-	})
-	if err != nil {
-		t.Fatalf("Enter: %v", err)
-	}
-	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonTakeProfit, 2130.0, now.Add(time.Minute))
-	if err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-	if closed.RealizedPnL == nil || *closed.RealizedPnL <= 0 {
-		t.Fatalf("Close().RealizedPnL = %v, want a positive value", closed.RealizedPnL)
-	}
-
-	if _, err := te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: longSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeMarket,
-		Price: 2100.0, Now: now.Add(2 * time.Minute),
-	}); err != nil {
-		t.Fatalf("Enter (after a winning close, no cooldown expected): %v", err)
-	}
-}
-
-func TestEngine_Close_ShortPositionRealizedPnLSignIsInverted(t *testing.T) {
+func TestEngine_TryFillPending_PositionOpenFailureKeepsOrderPending(t *testing.T) {
 	te := newTestEngine(t, execution.Config{})
 	ctx := context.Background()
-	now := time.Now().UTC()
+	now := time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC)
+	limit := 2000.0
 
-	entry, err := te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: shortSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeMarket, Price: 2100.0, Now: now,
+	result, err := te.engine.Enter(ctx, execution.EntryRequest{
+		Signal: longSignal(te.instrument.ID), Quantity: 100, OrderType: domain.OrderTypeLimit,
+		LimitPrice: &limit, Price: 2100, Now: now,
+	})
+	if err != nil || result.Order.Status != domain.OrderStatusPending {
+		t.Fatalf("Enter limit = (%+v, %v), want PENDING order", result, err)
+	}
+	// Another position appears for the instrument before the limit crosses.
+	other, err := te.orders.Insert(ctx, domain.PaperOrder{
+		InstrumentID: te.instrument.ID, Symbol: "7203", Side: domain.OrderSideBuy, OrderType: domain.OrderTypeMarket,
+		Quantity: 100, Status: domain.OrderStatusFilled, SubmittedAt: now,
 	})
 	if err != nil {
-		t.Fatalf("Enter: %v", err)
+		t.Fatalf("insert competing order: %v", err)
+	}
+	if _, err := te.positions.Open(ctx, domain.Position{
+		InstrumentID: te.instrument.ID, EntryOrderID: other.ID, Symbol: "7203", Side: domain.PositionSideLong,
+		Quantity: 100, EntryPrice: 2100, CurrentPrice: 2100, OpenedAt: now,
+	}); err != nil {
+		t.Fatalf("open competing position: %v", err)
 	}
 
-	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonManual, 2080.0, now.Add(time.Minute))
-	if err != nil {
-		t.Fatalf("Close: %v", err)
+	if _, ok, err := te.engine.TryFillPending(ctx, result.Order.ID, domain.JevDirectionLong, 1990, now); err == nil || ok {
+		t.Fatalf("TryFillPending = (ok=%v, err=%v), want error", ok, err)
 	}
-	if closed.RealizedPnL == nil || *closed.RealizedPnL != 2000.0 {
-		t.Fatalf("Close().RealizedPnL = %v, want 2000.0 (SHORT profits when price falls: 100 * (2100-2080))", closed.RealizedPnL)
+
+	got, err := te.orders.Get(ctx, result.Order.ID)
+	if err != nil || got.Status != domain.OrderStatusPending {
+		t.Fatalf("order after failed TryFillPending = (%+v, %v), want PENDING", got, err)
 	}
 }

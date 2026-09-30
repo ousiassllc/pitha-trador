@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
@@ -29,6 +30,12 @@ func TestBuildServices_AppliedPolicySettingReachesLivePolicyEngine(t *testing.T)
 	decision.EntryQuality, decision.ContinuationProbability = &entryQuality, &continuation
 	decision.ToxicFlow, decision.LiquidityStressed = &toxic, &stressed
 	spread, price := 5.0, 2500.0
+	// Risk Engine fails closed without the instrument's latest snapshot.
+	if _, err := svc.Snapshots.Insert(ctx, domain.Snapshot{
+		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at, Price: price, SpreadBps: &spread, RawDataJSON: "{}",
+	}); err != nil {
+		t.Fatalf("insert snapshot: %v", err)
+	}
 	in := policy.Input{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at, Decision: &decision,
 		SpreadBps: &spread, EntryPriceReference: &price, Calibrated: true,
@@ -82,5 +89,19 @@ func TestBuildServices_RegistersSelfImproveHandler(t *testing.T) {
 			t.Fatalf("analytics job status = %q after 10s, want the registered self-improvement handler to run it", got.Status)
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// Not one lot fits max_position_per_symbol_pct (600,000 yen) at 400,000 yen:
+// no order is submitted.
+func TestPaperExecutor_SkipsEntryWhenNoLotFitsLimits(t *testing.T) {
+	svc := newTestServices(t, nil)
+	inst := mustCreateInstrument(t, svc, "7203")
+	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 400_000, Timestamp: time.Now().UTC()}
+	if err := (paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
+		t.Fatalf("ExecuteSignal = %v, want nil (skipped)", err)
+	}
+	if orders, err := svc.Orders.List(context.Background(), "", 10); err != nil || len(orders) != 0 {
+		t.Fatalf("orders = (%+v, %v), want none submitted", orders, err)
 	}
 }

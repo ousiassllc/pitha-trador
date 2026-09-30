@@ -27,6 +27,7 @@ var reasonLabels = map[string]string{
 	domain.KillReasonFillDiscrepancy:          "約定差異検知",
 	domain.KillReasonDBWriteFailure:           "DB書き込み失敗継続",
 	domain.KillReasonOperatorHeartbeatTimeout: "操作者ハートビートタイムアウト",
+	domain.KillReasonOperatorManual:           "オペレーターによる手動Kill",
 }
 
 func reasonLabel(reason string) string {

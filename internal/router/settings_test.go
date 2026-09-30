@@ -12,7 +12,6 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 )
 
 // fakeSecretsStore is a minimal handler.SecretsStore for router-wiring
@@ -59,8 +58,9 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	engine := router.New(router.WithSecretsStore(store))
 
 	form := url.Values{"value": {"new-jev-key"}}
-	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode()))
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -72,7 +72,7 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil))
+	engine.ServeHTTP(rec, hxDelete(t, engine, "/settings/JEV_API_KEY"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("DELETE status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
@@ -81,7 +81,7 @@ func TestNew_SettingsPerKeyRoutesUseWithSecretsStoreOption(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/NOT_A_KEY", nil))
+	engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(http.MethodDelete, "/settings/NOT_A_KEY", nil)))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("DELETE unknown key status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
@@ -92,7 +92,7 @@ func TestNew_BulkSettingsPostIsGone(t *testing.T) {
 	store := requiredSecretsStore()
 	engine := router.New(router.WithSecretsStore(store))
 
-	req := httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader("JEV_API_KEY=x"))
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader("JEV_API_KEY=x")))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
@@ -150,15 +150,41 @@ func TestNew_SetupGuardRedirectsEveryGuardedRouteWhileRequiredKeyIsUnset(t *test
 		{http.MethodGet, "/scanner"},
 		{http.MethodGet, "/settings"},
 		{http.MethodGet, "/system/secrets-status"},
-		{http.MethodGet, "/api/v1/scanner"},
-		{http.MethodPost, "/system/kill"},
 		{http.MethodPost, "/settings"},
 		{http.MethodGet, "/no-such-route"},
 	} {
 		rec := httptest.NewRecorder()
-		engine.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+		engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(tc.method, tc.path, nil)))
 		if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/setup" {
 			t.Errorf("%s %s = %d Location=%q, want 302 to /setup", tc.method, tc.path, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+}
+
+// issue #140: script-driven requests get a machine-readable answer, not the
+// /setup HTML page.
+func TestNew_SetupGuardAnswersHTMXAndAPIRequestsWithoutHTML(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := requiredSecretsStore()
+	delete(store, "KABU_API_PASSWORD")
+	engine := router.New(router.WithSecretsStore(store))
+
+	hx := httptest.NewRequest(http.MethodGet, "/system/status", nil)
+	hx.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, authorize(t, engine, hx))
+	if rec.Code != http.StatusNoContent || rec.Header().Get("HX-Redirect") != "/setup" {
+		t.Errorf("HTMX GET /system/status = %d HX-Redirect=%q, want 204 + /setup", rec.Code, rec.Header().Get("HX-Redirect"))
+	}
+
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/scanner"},
+		{http.MethodPost, "/api/v1/system/kill"},
+	} {
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, authorize(t, engine, httptest.NewRequest(tc.method, tc.path, nil)))
+		if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), `"setup_required":true`) {
+			t.Errorf("%s %s = %d %q, want 503 setup_required JSON", tc.method, tc.path, rec.Code, rec.Body.String())
 		}
 	}
 }
@@ -186,8 +212,9 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 	}
 
 	form := url.Values{"value": {"jev-key"}}
-	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode()))
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_API_KEY", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
 	rec = httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || store["JEV_API_KEY"] != "jev-key" {
@@ -195,7 +222,7 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/settings/JEV_API_KEY", nil))
+	engine.ServeHTTP(rec, hxDelete(t, engine, "/settings/JEV_API_KEY"))
 	if rec.Code != http.StatusOK || len(store) != 0 {
 		t.Fatalf("DELETE /settings/JEV_API_KEY = %d store=%v, want 200 and the key removed", rec.Code, store)
 	}
@@ -217,8 +244,9 @@ func TestNew_SetupGuardLiftsOnceLastRequiredKeyIsSaved(t *testing.T) {
 	}
 
 	form := url.Values{"value": {"https://jev.example.com"}}
-	req := httptest.NewRequest(http.MethodPost, "/settings/JEV_BASE_URL", strings.NewReader(form.Encode()))
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_BASE_URL", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("HX-Request", "true")
 	rec = httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -239,52 +267,10 @@ func TestNew_SetupGuardLiftsOnceLastRequiredKeyIsSaved(t *testing.T) {
 	}
 }
 
-type fakeUpdateController struct{ checks int }
-
-func (f *fakeUpdateController) Status() updater.Status {
-	return updater.Status{Available: true, Version: "v9.9.9", Blocked: true}
-}
-
-func (f *fakeUpdateController) CheckForUpdate(context.Context) error {
-	f.checks++
-	return nil
-}
-
-func TestNew_UpdateRoutesAreRegistered(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	controller := &fakeUpdateController{}
-	engine := router.New(router.WithUpdateController(controller))
-
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/update-status", nil))
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "v9.9.9") {
-		t.Fatalf("GET /system/update-status = %d %q, want 200 with the available version", rec.Code, rec.Body.String())
-	}
-
-	rec = httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/system/update-check", nil))
-	if rec.Code != http.StatusOK || controller.checks != 1 {
-		t.Fatalf("POST /system/update-check = %d with %d checks, want 200 with 1", rec.Code, controller.checks)
-	}
-}
-
-func TestNew_UpdateCheckRouteIs404WithoutUpdater(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	rec := httptest.NewRecorder()
-	router.New().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/system/update-check", nil))
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404 (cmd/server has no updater)", rec.Code)
-	}
-}
-
-func TestNew_SettingsAndHeaderEmbedUpdateSlots(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	rec := httptest.NewRecorder()
-	router.New().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
-	body := rec.Body.String()
-	for _, want := range []string{`id="update-banner"`, `id="update-panel"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("Settings page missing %s; body=%s", want, body)
-		}
-	}
+// hxDelete builds an authorized `DELETE path` the way htmx sends it.
+func hxDelete(t *testing.T, engine *gin.Engine, path string) *http.Request {
+	t.Helper()
+	req := authorize(t, engine, httptest.NewRequest(http.MethodDelete, path, nil))
+	req.Header.Set("HX-Request", "true")
+	return req
 }

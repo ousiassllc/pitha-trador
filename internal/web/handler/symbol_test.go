@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
@@ -86,9 +86,24 @@ func TestStaticSymbolProvider_DefaultsAreEmpty(t *testing.T) {
 	if orders, err := p.ListOrders(ctx, "", 10); err != nil || len(orders) != 0 {
 		t.Fatalf("ListOrders = %+v, %v, want empty/nil error", orders, err)
 	}
-	if _, err := p.GetPosition(ctx, 1); !errors.Is(err, repository.ErrPositionNotFound) {
+	if _, err := p.GetPosition(ctx, 1); !errors.Is(err, domain.ErrPositionNotFound) {
 		t.Fatalf("GetPosition error = %v, want ErrPositionNotFound", err)
 	}
 }
 
 func strPtr(s string) *string { return &s }
+
+func TestNewSymbolRiskParams_UsesConfiguredLimitsAndExitRule(t *testing.T) {
+	limits := config.RiskLimits{MaxPositionPerSymbolPct: 1.0}
+	exit := execution.DefaultConfig()
+	exit.StopLossPct = 0.4
+	exit.TakeProfitPct = 0.9
+
+	got := handler.NewSymbolRiskParams(limits, exit, nil)
+
+	want := handler.SymbolRiskParams{AllowedPositionPct: 1.0, StopLossPct: 0.4, TakeProfitPct: 0.9}
+	if got.AllowedPositionPct != want.AllowedPositionPct || got.StopLossPct != want.StopLossPct ||
+		got.TakeProfitPct != want.TakeProfitPct || got.AllowedPositionPctFor != nil {
+		t.Fatalf("NewSymbolRiskParams() = %+v, want %+v", got, want)
+	}
+}

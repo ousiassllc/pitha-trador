@@ -30,6 +30,24 @@ describe('get', () => {
   });
 });
 
+describe('get background', () => {
+  test('marks auto-fired requests with X-Pitha-Background only when asked', async () => {
+    const fetchMock = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await api.get('/api/v1/system/status');
+    await api.get('/api/v1/system/status', { background: true });
+
+    const headersOf = (n: number) =>
+      (fetchMock.mock.calls[n] as unknown as [string, RequestInit])[1].headers as Record<
+        string,
+        string
+      >;
+    expect(headersOf(0)['X-Pitha-Background']).toBeUndefined();
+    expect(headersOf(1)['X-Pitha-Background']).toBe('1');
+  });
+});
+
 describe('post', () => {
   test('sends the CSRF token from the meta tag and a JSON body', async () => {
     const meta = document.createElement('meta');
@@ -57,6 +75,32 @@ describe('error handling', () => {
 
     await expect(api.del('/api/v1/positions/1')).rejects.toThrow(
       'DELETE /api/v1/positions/1 failed with status 500',
+    );
+  });
+});
+
+describe('stale session', () => {
+  test('a 403 marked stale by the server throws StaleSessionError asking for a reload', async () => {
+    const fetchMock = mock(() =>
+      Promise.resolve(
+        new Response('forbidden', { status: 403, headers: { 'X-CSRF-Reject': 'stale' } }),
+      ),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const error = await api.post('/api/v1/system/kill').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(api.StaleSessionError);
+    expect((error as Error).message).toContain('再読み込み');
+  });
+
+  test('a plain 403 stays a generic status error', async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response('', { status: 403 })),
+    ) as unknown as typeof fetch;
+
+    await expect(api.post('/api/v1/system/kill')).rejects.toThrow(
+      'POST /api/v1/system/kill failed with status 403',
     );
   });
 });

@@ -12,16 +12,31 @@ import {
   LineStyle,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { html, LitElement } from 'lit';
+import { css, html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
+import { buttonStyles, noticeStyles } from '../lib/styles';
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `buckets[]` item
 // shape (internal/web/handler.calibrationBucketOutput).
 export interface CalibrationBucket {
   range: string;
+  avg_confidence: number;
+  direction_accuracy: number;
+  avg_future_return_pct: number;
+  sample_count: number;
+  trade_count: number;
+  total_pnl: number;
+  avg_pnl_pct: number;
+}
+
+// Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `by_direction[]`
+// item shape (internal/web/handler.calibrationDirectionOutput).
+export interface CalibrationDirection {
+  direction: 'LONG' | 'SHORT';
+  sample_count: number;
   direction_accuracy: number;
   avg_future_return_pct: number;
 }
@@ -30,6 +45,7 @@ export interface CalibrationBucket {
 // (internal/web/handler.CalibrationAPIOutput).
 export interface CalibrationAPIResponse {
   buckets: CalibrationBucket[];
+  by_direction: CalibrationDirection[];
   brier_score: number;
   log_loss: number;
   expected_calibration_error: number;
@@ -58,11 +74,75 @@ function heatmapColor(directionAccuracy: number): string {
   return `hsl(${hue}, 70%, 45%)`;
 }
 
+// formatYen renders a signed JPY amount, e.g. "+1,200 JPY" / "-400 JPY".
+function formatYen(amount: number): string {
+  const sign = amount > 0 ? '+' : '';
+  return `${sign}${Math.round(amount).toLocaleString('en-US')} JPY`;
+}
+
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
-  @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '/api/v1/calibration';
+  // Shadow DOM: Tailwind does not reach in here, so style locally.
+  static override styles = [
+    buttonStyles,
+    noticeStyles,
+    css`
+      :host {
+        display: block;
+      }
+      .pitha-calibration-heatmap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .pitha-calibration-heatmap-chart {
+        width: 100%;
+        height: ${CHART_HEIGHT}px;
+      }
+      .pitha-calibration-heatmap button {
+        align-self: flex-start;
+      }
+      .pitha-calibration-heatmap-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+        gap: 0.5rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .pitha-calibration-heatmap-cell {
+        display: flex;
+        flex-direction: column;
+        border-radius: 0.375rem;
+        padding: 0.5rem;
+        font-size: 0.75rem;
+        color: #0f172a;
+      }
+      .pitha-calibration-heatmap-cell .accuracy {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+      .pitha-calibration-heatmap-summary {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.25rem 1rem;
+        margin: 0;
+        font-size: 0.875rem;
+      }
+      .pitha-calibration-heatmap-summary dt {
+        color: #475569;
+      }
+      .pitha-calibration-heatmap-summary dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+      }
+    `,
+  ];
+
+  @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 
   @state() private buckets: CalibrationBucket[] = [];
+  @state() private byDirection: CalibrationDirection[] = [];
   @state() private brierScore: number | null = null;
   @state() private logLoss: number | null = null;
   @state() private expectedCalibrationError: number | null = null;
@@ -92,9 +172,9 @@ export class PithaCalibrationHeatmap extends LitElement {
     const container = this.containerRef.value;
     if (!container) return;
 
+    // autoSize: follow the container (height is fixed in `static styles`).
     this.chart = createChart(container, {
-      width: container.clientWidth || 600,
-      height: CHART_HEIGHT,
+      autoSize: true,
       timeScale: { visible: false },
     });
     this.perfectSeries = this.chart.addLineSeries({
@@ -115,6 +195,7 @@ export class PithaCalibrationHeatmap extends LitElement {
     try {
       const response = await get<CalibrationAPIResponse>(this.calibrationUrl);
       this.buckets = response.buckets;
+      this.byDirection = response.by_direction;
       this.brierScore = response.brier_score;
       this.logLoss = response.log_loss;
       this.expectedCalibrationError = response.expected_calibration_error;
@@ -171,10 +252,31 @@ export class PithaCalibrationHeatmap extends LitElement {
                 <span class="range">${b.range}</span>
                 <span class="accuracy">${(b.direction_accuracy * 100).toFixed(1)}%</span>
                 <span class="avg-return">${b.avg_future_return_pct.toFixed(2)}%</span>
+                <span class="avg-confidence">conf ${b.avg_confidence.toFixed(2)}</span>
+                <span class="bucket-pnl">
+                  ${b.trade_count} trades / ${formatYen(b.total_pnl)} (${b.avg_pnl_pct.toFixed(2)}%)
+                </span>
               </li>
             `,
           )}
         </ul>
+        <table class="pitha-calibration-heatmap-directions" data-testid="calibration-direction-table">
+          <thead>
+            <tr><th>Direction</th><th>Samples</th><th>Accuracy</th><th>Avg return</th></tr>
+          </thead>
+          <tbody>
+            ${this.byDirection.map(
+              (d) => html`
+                <tr data-testid="calibration-direction-row">
+                  <td>${d.direction}</td>
+                  <td>${d.sample_count}</td>
+                  <td>${(d.direction_accuracy * 100).toFixed(1)}%</td>
+                  <td>${d.avg_future_return_pct.toFixed(2)}%</td>
+                </tr>
+              `,
+            )}
+          </tbody>
+        </table>
         ${
           this.brierScore !== null
             ? html`

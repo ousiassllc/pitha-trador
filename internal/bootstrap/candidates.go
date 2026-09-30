@@ -8,13 +8,17 @@ import (
 	"math/rand/v2"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
 
 // refreshCandidates recomputes screener.Run over every active
-// instrument's latest snapshot and turnoverTrailingBars-bar trailing
+// instrument's latest snapshot and trailing 5-minute
 // turnover, publishes the result to s.Screener (issue #45) for the
 // Scanner Dashboard (internal/router.WithCandidateSource) to read, and -
 // issue #46 - enqueues one jev-scout job per resulting candidate
@@ -28,14 +32,22 @@ import (
 // fabricated" precedent handleMarketData's own History/MarketReturn5m
 // comment already follows.
 func (s *Services) refreshCandidates(ctx context.Context) error {
-	actives, err := s.Instruments.ListActive(ctx)
+	actives, err := s.Instruments.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
 		return fmt.Errorf("bootstrap: list active instruments: %w", err)
 	}
 
+	cfg, err := s.fastScreenerConfig(ctx)
+	if err != nil {
+		return err
+	}
+
 	inputs := make([]screener.Input, 0, len(actives))
 	for _, inst := range actives {
-		bars, err := s.Snapshots.ListByInstrument(ctx, inst.ID, turnoverTrailingBars)
+		// The latest bar plus featureengine.HistoryLookbackBars prior
+		// bars: enough for both the trailing turnover and
+		// ComputeScreenSignals' 15-minute volatility window.
+		bars, err := s.Snapshots.ListByInstrument(ctx, inst.ID, featureengine.HistoryLookbackBars+1)
 		if err != nil {
 			return fmt.Errorf("bootstrap: list snapshots for %q: %w", inst.Symbol, err)
 		}
@@ -43,29 +55,39 @@ func (s *Services) refreshCandidates(ctx context.Context) error {
 			continue
 		}
 
+		// Snapshot.Turnover is cumulative, so 5 minutes is a difference
+		// (featureengine.TurnoverOverWindow), never a sum; unknown counts
+		// as 0 and fails the liquidity floor (FR-FS-1).
 		var turnover5m float64
-		for _, bar := range bars {
-			turnover5m += bar.Turnover
+		if t := featureengine.TurnoverOverWindow(bars[0].Timestamp, bars[0].Turnover, bars[1:], 5*time.Minute); t != nil {
+			turnover5m = *t
 		}
 
+		// FR-FS-2's breakout_strength / volatility_expansion. A nil
+		// signal (insufficient history) is dropped from screen_score
+		// rather than scored as zero.
+		signals := featureengine.ComputeScreenSignals(bars[0], bars[1:])
+
 		inputs = append(inputs, screener.Input{
-			InstrumentID:  inst.ID,
-			Symbol:        inst.Symbol,
-			Snapshot:      bars[0], // ListByInstrument orders most-recent-first
-			Turnover5mJPY: turnover5m,
-			// BreakoutStrength/VolatilityExpansion have no computation
-			// source yet (neither Feature Engine's Feature struct nor any
-			// other service in this build computes them); ScreenScore
-			// already treats a nil term as "drop from the sum", not
-			// "zero" (screener.go's own doc comment), so leaving them nil
-			// here is correct rather than a placeholder.
+			InstrumentID:        inst.ID,
+			Symbol:              inst.Symbol,
+			Snapshot:            bars[0],
+			Turnover5mJPY:       turnover5m,
+			BreakoutStrength:    signals.BreakoutStrength,
+			VolatilityExpansion: signals.VolatilityExpansion,
 		})
 	}
 
-	candidates := screener.Run(s.strategy.FastScreener, inputs)
+	candidates := screener.Run(cfg, inputs)
 	s.Screener.Set(candidates, time.Now().UTC())
 
 	now := time.Now().UTC()
+	if !s.inSession(now) {
+		// Jev Scout is billed per call: off-hours the candidate list still
+		// refreshes from stored data, but nothing is sent to Jev
+		// (non-functional.md §3).
+		return nil
+	}
 	for _, c := range candidates {
 		if err := s.enqueueJevScout(ctx, c.InstrumentID, c.Symbol, now); err != nil {
 			// A single candidate's enqueue failure (DB write error) must
@@ -80,6 +102,29 @@ func (s *Services) refreshCandidates(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// fastScreenerConfig returns the FR-FS-1/FR-FS-3 filter/weight settings
+// for this cycle: s.strategy.FastScreener (config/strategy.yaml with
+// PITHA_FAST_SCREENER_* env overrides already applied by
+// config.LoadStrategy) overridden by every screener.* runtime_settings
+// key currently in the DB. It is read per cycle so a DB change takes
+// effect on the next refresh without a restart.
+func (s *Services) fastScreenerConfig(ctx context.Context) (config.FastScreenerConfig, error) {
+	cfg := s.strategy.FastScreener
+	for _, key := range config.FastScreenerSettingKeys() {
+		raw, ok, err := s.Settings.Get(ctx, key)
+		if err != nil {
+			return config.FastScreenerConfig{}, fmt.Errorf("bootstrap: read runtime setting %s: %w", key, err)
+		}
+		if !ok {
+			continue
+		}
+		if err := config.ApplyFastScreenerSetting(&cfg, key, raw); err != nil {
+			return config.FastScreenerConfig{}, fmt.Errorf("bootstrap: %w", err)
+		}
+	}
+	return cfg, nil
 }
 
 // enqueueJevScout enqueues one jev-scout queue job (jev.ScoutJobPayload)
@@ -110,18 +155,7 @@ func (s *Services) candidateRefreshTicker(ctx context.Context) {
 		max: time.Duration(s.strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,
 	}
 
-	for {
-		timer := time.NewTimer(interval.next())
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-			if err := s.refreshCandidates(ctx); err != nil {
-				slog.Error("bootstrap: candidate refresh cycle failed", "error", err)
-			}
-		}
-	}
+	safego.Loop(ctx, "candidate refresh", interval.next, s.refreshCandidates)
 }
 
 // candidateRefreshInterval mirrors internal/web/handler.

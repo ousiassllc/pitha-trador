@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -12,6 +11,7 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
 // defaultPollInterval is how often an idle worker re-polls its queue for
@@ -43,17 +43,39 @@ type Scheduler struct {
 	// makes CheckOperatorHeartbeat a no-op, the same deferral
 	// outcomeLabels above already documents.
 	heartbeatChecker HeartbeatChecker
+	// riskMonitor/autoResumer are optional (WithRiskMonitor/
+	// WithAutoResumer): nil values make CheckRisk/AutoResumeKillSwitches
+	// no-ops and skip their Start triggers.
+	riskMonitor RiskMonitor
+	autoResumer AutoResumer
+	// sessionOpen is optional (WithSessionGate): a nil value leaves the
+	// full-scan/event-driven triggers ungated (session.go).
+	sessionOpen func(time.Time) bool
 	// logRotator is optional (WithLogRotator): a nil value makes Start
-	// skip registering the @daily log-archival cron trigger entirely
+	// skip registering the log-archival maintenance task entirely
 	// (non-functional.md §5 "ログは日次ローテーションし").
 	logRotator LogRotator
+	// databaseBackuper is optional (WithDatabaseBackuper): a nil value
+	// makes Start skip registering the database-backup maintenance task
+	// (and its 16:00 cron trigger) entirely (non-functional.md §3).
+	databaseBackuper DatabaseBackuper
+	// dataPurger is optional (WithDataPurger): a nil value makes Start
+	// skip the retention-purge maintenance task (non-functional.md §3).
+	dataPurger DataPurger
 	// updateChecker is optional (WithUpdateChecker, issue #65): a nil
 	// value makes CheckForUpdate a no-op and skips Start's update-check
 	// trigger entirely (cmd/server never configures it - it has no
 	// installer concept).
 	updateChecker UpdateChecker
+	// maintenanceState/maintenanceNotifier are optional
+	// (WithMaintenanceState/WithMaintenanceNotifier): they persist the
+	// daily maintenance tasks' last success date and report repeated
+	// failures (maintenance.go).
+	maintenanceState    maintenance.State
+	maintenanceNotifier maintenance.Notifier
 
 	pollInterval time.Duration
+	pollSignal   <-chan time.Time // test seam (export_test.go); overrides the ticker
 
 	mu       sync.Mutex
 	handlers map[string]Handler
@@ -117,7 +139,13 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 // per active instrument, due at now (functional.md FR-SCHED-2 前半). It
 // returns the number of instruments enqueued for, and logs that count as
 // a structured JSON line (non-functional.md §5.1 "スキャン対象銘柄数").
+//
+// Outside a trading session (WithSessionGate) it enqueues nothing and
+// returns (0, nil): no market data is fetched off-hours.
 func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, error) {
+	if !s.inSession(now) {
+		return 0, nil
+	}
 	instruments, err := s.instruments.ListActive(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("scheduler: list active instruments for full scan: %w", err)
@@ -142,15 +170,15 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 // EnqueueEventReevaluation enqueues one jev-scout job for instrumentID,
 // due immediately at now, when triggered is true - bypassing the normal
 // 15-30s candidate-refresh cadence for a symbol whose
-// featureengine.DetectEvent signal fired (FR-SCAN-1). When triggered is
+// eventtrigger.Detect signal fired (FR-SCAN-1). When triggered is
 // false it does nothing, leaving the Jev call for this cycle skipped
 // (FR-SCAN-2 quiet-suppression): the caller (internal/bootstrap's
-// market-data handler, via featureengine.EventSignal.Triggered against
+// market-data handler, via eventtrigger.Signal.Triggered against
 // config/strategy.yaml's scan.event_trigger thresholds - this package
 // cannot import internal/service/featureengine per doc.go's layer rule)
 // decides triggered.
 func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID int64, symbol string, triggered bool, now time.Time) error {
-	if !triggered {
+	if !triggered || !s.inSession(now) {
 		return nil
 	}
 	payload, err := json.Marshal(fullScanPayload{InstrumentID: instrumentID, Symbol: symbol})
@@ -169,8 +197,10 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 // trigger (functional.md §4.14 FR-SELFIMPROVE-1) and - when
 // WithOutcomeLabelSource/WithHeartbeatChecker/WithLogRotator were given -
 // the 1-minute Outcome Labeling enqueue (FR-CAL-4) and operator-heartbeat
-// (FR-RISK-6) triggers and a @daily log-archival trigger
-// (non-functional.md §5), running until ctx is done or Stop is called.
+// (FR-RISK-6) triggers and the daily maintenance tasks (database backup,
+// retention purge, log archival) run on start and on every 10-minute
+// catch-up tick until each has succeeded today (maintenance.go;
+// non-functional.md §3, §5), running until ctx is done or Stop is called.
 //
 // The 15-30s candidate-refresh cycle (functional.md §4.3) is not a
 // Scheduler trigger: internal/bootstrap's candidateRefreshTicker drives
@@ -191,7 +221,7 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 		go s.runWorker(runCtx, q)
 	}
 
-	s.cron = cron.New()
+	s.cron = cron.New(cron.WithChain(cron.Recover(cronSlogLogger{})))
 	spec := fmt.Sprintf("@every %s", fullScanInterval)
 	if _, err := s.cron.AddFunc(spec, func() {
 		if _, err := s.EnqueueFullScan(runCtx, time.Now().UTC()); err != nil {
@@ -202,14 +232,16 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 		return fmt.Errorf("scheduler: register full scan trigger %q: %w", spec, err)
 	}
 
-	if _, err := s.cron.AddFunc(selfImproveCronSpec, func() {
+	selfImprove, err := selfImproveSchedule()
+	if err != nil {
+		cancel()
+		return fmt.Errorf("scheduler: parse self-improve trigger %q: %w", selfImproveCronSpec, err)
+	}
+	s.cron.Schedule(selfImprove, cron.FuncJob(func() {
 		if err := s.EnqueueSelfImprove(runCtx, time.Now().UTC()); err != nil {
 			slog.Error("scheduler: self-improve enqueue failed", "error", err)
 		}
-	}); err != nil {
-		cancel()
-		return fmt.Errorf("scheduler: register self-improve trigger %q: %w", selfImproveCronSpec, err)
-	}
+	}))
 
 	if err := s.addPeriodicTriggers(runCtx); err != nil {
 		cancel()
@@ -231,45 +263,4 @@ func (s *Scheduler) Stop() {
 		<-s.cron.Stop().Done()
 	}
 	s.wg.Wait()
-}
-
-func (s *Scheduler) runWorker(ctx context.Context, queue string) {
-	defer s.wg.Done()
-
-	s.mu.Lock()
-	handler := s.handlers[queue]
-	s.mu.Unlock()
-
-	ticker := time.NewTicker(s.pollInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.processNext(ctx, queue, handler)
-		}
-	}
-}
-
-func (s *Scheduler) processNext(ctx context.Context, queue string, handler Handler) {
-	job, err := s.jobs.ClaimNext(ctx, queue, time.Now().UTC())
-	if err != nil {
-		if !errors.Is(err, repository.ErrJobNotFound) {
-			slog.Error("scheduler: claim job failed", "queue", queue, "error", err)
-		}
-		return
-	}
-
-	if err := handler(ctx, job); err != nil {
-		if markErr := s.jobs.MarkFailed(ctx, job.ID, time.Now().UTC(), err.Error()); markErr != nil {
-			slog.Error("scheduler: mark job failed", "job_id", job.ID, "error", markErr)
-		}
-		return
-	}
-
-	if err := s.jobs.MarkSucceeded(ctx, job.ID, time.Now().UTC()); err != nil {
-		slog.Error("scheduler: mark job succeeded", "job_id", job.ID, "error", err)
-	}
 }

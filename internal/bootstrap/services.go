@@ -11,23 +11,34 @@
 package bootstrap
 
 import (
+	"log/slog"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
+	"github.com/ousiassllc/pitha-trador/internal/service/backup"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/notify"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
+	"github.com/ousiassllc/pitha-trador/internal/service/retention"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/repoportfolio"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
@@ -36,9 +47,18 @@ import (
 
 // LogDir is the directory every entrypoint's logging.RotatingWriter
 // writes the daily structured JSON log file to, and the Scheduler's
-// @daily logging.Archiver compresses files past their 30-day retention in
-// (requirements/non-functional.md §5).
+// maintenance task (logging.Archiver) compresses files past their 30-day
+// retention in (requirements/non-functional.md §5).
 const LogDir = "logs"
+
+// EnvBackupDir names the environment variable holding the destination
+// directory of the daily SQLite backup (requirements/non-functional.md §3):
+// a location outside the local application disk (external drive / synced
+// cloud folder). Unset or empty disables the backup job.
+const EnvBackupDir = "PITHA_BACKUP_DIR"
+
+// jevMaxAttemptsForTest lets in-package tests cap the Jev client's attempts (no real backoff); 0 = production default.
+var jevMaxAttemptsForTest int
 
 // defaultTokenRefreshInterval is how often Services.Start reissues the
 // kabuステーションAPI token (marketdata.Client.Start). kabuステーション
@@ -56,15 +76,6 @@ const defaultTokenRefreshInterval = 20 * time.Minute
 // display string such as "TSE Prime") is not translated into a per-row
 // exchange code; every symbol uses marketdata.ExchangeTSE.
 const defaultKabuExchange = marketdata.ExchangeTSE
-
-// turnoverTrailingBars is how many of the most recent 1-minute
-// market_snapshots bars refreshCandidates sums to build
-// screener.Input.Turnover5mJPY. Snapshot.Turnover is itself a per-bar (not
-// cumulative-session) value (domain/snapshot.go: "the raw market data
-// captured for one Instrument at one 1-minute-bar Timestamp"), so summing
-// the most recent 5 bars is exactly the trailing-5-minute turnover
-// screener.PassesFilter's liquidity floor expects.
-const turnoverTrailingBars = 5
 
 // newsPollInterval is how often News Ingest polls the external news feed
 // for every active instrument (FR-LUNA-1).
@@ -90,6 +101,7 @@ type Services struct {
 
 	RAG           *rag.Service
 	MarketData    *marketdata.Client
+	PushFeed      *pushfeed.Feed // startup registration + PUSH subscription (flows.md §10.1)
 	FeatureEngine *featureengine.Engine
 	Screener      *screener.LiveSource
 	Jev           *jev.Client
@@ -99,6 +111,7 @@ type Services struct {
 	Policy        *policy.Engine
 	Risk          *risk.Engine
 	Execution     *execution.Engine
+	Insight       *insight.Reader
 	Calibration   *calibration.Service
 	Backtest      *BacktestSource
 	Activity      *activityfeed.Service
@@ -111,6 +124,7 @@ type Services struct {
 	wg       sync.WaitGroup
 
 	newsEnabled bool
+	sessionOpen func(time.Time) bool // trading-session predicate (session.go)
 }
 
 // BuildServices constructs the full composition-root service graph on top
@@ -135,7 +149,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	outcomes := repository.NewCalibrationRepository(state.DB)
 	killSwitch := repository.NewKillSwitchRepository(state.DB)
 	settings := repository.NewRuntimeSettingsRepository(state.DB)
-	alerts := newAlertChannels(secrets)
+	alertChannels := alerts.New(secrets)
 
 	// System Activity Log (functional.md §4.15): reads the pipeline's own
 	// repositories; their post-commit observers feed `/ws/activity`.
@@ -154,7 +168,9 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	jevClient := jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		APIKey:  secrets.JevAPIKey,
-		Alerts:  alerts.jevAlerts(),
+		Alerts:  alertChannels.JevAlerts(),
+		// 0 keeps the production retry policy (jev.defaultMaxAttempts).
+		MaxAttempts: jevMaxAttemptsForTest,
 	})
 	// News Ingest (issue #81, FR-LUNA-1〜5): the external news feed and
 	// Luna are both optional secrets; unless both are configured the
@@ -169,7 +185,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout, jev.WithNewsSource(newsService))
 	trader := jev.NewTrader(jevClient, decisions, ragService, jev.WithNewsSource(newsService))
 
-	executionConfig := execution.ConfigFromRiskLimits(state.Risk.Paper)
+	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(state.Risk.Paper))
 	executionEngine := execution.NewEngine(execution.Deps{
 		Orders:      orders,
 		Positions:   positions,
@@ -184,18 +200,23 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		settings:   settings,
 		snapshots:  snapshots,
 		positions:  positions,
-	}, executionEngine, alerts.riskNotifier(notifiers))
-	// runtimePolicy is config/strategy.yaml's policy.* thresholds as
-	// overridden by every Self-Improvement proposal currently applied:
-	// live signals and backtests both read it, so an approved (or
-	// rolled-back) change takes effect on the next evaluation (#52).
+		orders:     orders,
+	}, riskSignals{
+		marketData: marketDataClient,
+		jevAPI:     jevClient,
+		brokerAPI:  marketDataClient.BrokerFailures(),
+		dbWrite:    repository.DBWriteFailures,
+	}, executionEngine, alertChannels.RiskNotifier(notifiers))
+	// runtimePolicy is strategy.yaml's policy.* thresholds overridden by every
+	// applied Self-Improvement proposal; signals and backtests both read it, so
+	// an approved (or rolled-back) change applies on the next evaluation (#52).
 	runtimePolicy := selfimprove.NewRuntimePolicy(settings, state.Strategy.Policy)
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	policyEngine := policy.NewEngine(thresholds, riskEngine, signals, policy.WithPolicySource(runtimePolicy))
-	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperExecutor{engine: executionEngine})
+	calibrationService := calibration.NewService(outcomes, decisiontrade.New(state.DB))
+	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperexec.Executor{Engine: executionEngine, Sizer: riskEngine}, policy.WithCalibration(calibrationService))
 
 	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
-	calibrationService := calibration.NewService(outcomes)
 	// Sol/Opus (issue #82, FR-SELFIMPROVE-8/9) are real external LLM API
 	// clients built from the optional SOL_*/OPUS_* secrets. Left unset,
 	// each stage is skipped every day (assist.ErrNotConfigured) instead of
@@ -205,18 +226,27 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	proposals := repository.NewProposalRepository(state.DB)
 	governor := selfimprove.NewGovernor(proposals, settings, positions,
 		backtestSource, state.Strategy.Policy,
-		selfimprove.WithNotifier(alerts.selfImproveNotifier()),
+		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()),
 		selfimprove.WithSol(assist.NewSol(solClient)),
 		selfimprove.WithOpus(assist.NewOpus(opusClient)))
 
 	schedOpts := []scheduler.Option{
 		scheduler.WithOutcomeLabelSource(outcomes),
-		scheduler.WithHeartbeatChecker(riskEngine),
+		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(riskEngine),
+		scheduler.WithRiskMonitor(riskEngine),
+		scheduler.WithAutoResumer(riskEngine),
 		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
+		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
+		scheduler.WithMaintenanceState(settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
+	}
+	if dir := os.Getenv(EnvBackupDir); dir != "" {
+		schedOpts = append(schedOpts, scheduler.WithDatabaseBackuper(backup.New(state.DB, dir, 0)))
+	} else {
+		slog.Warn("bootstrap: daily database backup disabled: " + EnvBackupDir + " is not set (requirements/non-functional.md §3)")
 	}
 	var updateAdapter *updater.SchedulerAdapter
 	if autoUpdate != nil { // cmd/desktop only (issue #65); cmd/server passes nil
-		gate := updater.SafeGate{Positions: risk.NewRepositoryPortfolioProvider(positions), State: riskEngine, Orders: executionEngine}
+		gate := updater.SafeGate{Positions: repoportfolio.New(positions, state.Risk.Paper.InitialCapital), State: riskEngine, Orders: executionEngine}
 		checker := updater.NewChecker(updater.Config{Owner: "ousiassllc", Repo: "pitha-trador", Gate: gate})
 		updateAdapter = &updater.SchedulerAdapter{Checker: checker, Quitter: autoUpdate}
 		schedOpts = append(schedOpts, scheduler.WithUpdateChecker(updateAdapter))
@@ -247,6 +277,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Policy:        policyEngine,
 		Risk:          riskEngine,
 		Execution:     executionEngine,
+		Insight:       insight.NewReader(executionEngine, instruments, signals, positions),
 		Calibration:   calibrationService,
 		Governor:      governor,
 		Backtest:      backtestSource,
@@ -254,6 +285,8 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Scheduler:     sched,
 		Updater:       updateAdapter,
 		strategy:      state.Strategy,
+		PushFeed:      pushfeed.New(instruments, marketDataClient, marketdata.DefaultPushURL, defaultKabuExchange),
+		sessionOpen:   marketcalendarOpen,
 	}
 
 	sched.RegisterHandler(repository.JobQueueMarketData, svc.handleMarketData)

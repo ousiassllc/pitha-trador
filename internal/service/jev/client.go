@@ -27,7 +27,13 @@ const (
 	// from the second retry onward (overview.md §6 "2回目以降exponential
 	// backoff").
 	defaultRetryBaseDelay = 500 * time.Millisecond
-	defaultHTTPTimeout    = 10 * time.Second
+	// defaultHTTPTimeout is the per-attempt HTTP timeout
+	// (non-functional.md §2.2 "Jev Scout/Trader 1回呼び出し ... タイムアウト5秒").
+	// With defaultMaxAttempts and the backoff above, a fully failing call
+	// is bounded by 4*5s + 0.5s + 1s = 21.5s. That can exceed the 15-30s
+	// re-evaluation cycle (§2.1), which is fine: Scout/Trader calls run as
+	// asynchronous jobs and do not block the cycle.
+	defaultHTTPTimeout = 5 * time.Second
 	// defaultErrorRateWindow/defaultErrorRateThreshold configure the
 	// rolling error-rate alert non-functional.md §5.2 requires ("Jev API
 	// エラー率上昇（しきい値超過）", errorrate.go): the most recent 20
@@ -44,7 +50,7 @@ type Config struct {
 	// Client and is never written to disk (overview.md §6).
 	APIKey string
 	// HTTPClient is the HTTP client used for calls. Defaults to
-	// &http.Client{Timeout: 10 * time.Second}.
+	// &http.Client{Timeout: 5 * time.Second} (per attempt).
 	HTTPClient *http.Client
 	// MaxAttempts bounds the total number of attempts (initial call +
 	// retries) per Client.Scout call. Defaults to 4.
@@ -120,6 +126,16 @@ func NewClient(cfg Config) *Client {
 		errorRate:          newErrorRateTracker(errorRateWindow),
 		errorRateThreshold: errorRateThreshold,
 	}
+}
+
+// Healthy implements internal/service/risk.HealthChecker for the
+// jev_api_down Kill Switch (FR-RISK-2 "Jev API連続失敗" trigger, FR-RISK-7
+// auto-resume check): Jev API counts as down while its rolling call error
+// rate is at or above ErrorRateThreshold (errorrate.go, the same signal
+// as the §5.2 Slack alert) and as recovered once the window drops back
+// below it.
+func (c *Client) Healthy(context.Context) (bool, error) {
+	return !c.errorRate.isBreached(), nil
 }
 
 // Scout POSTs req to the Jev Scout endpoint and returns the parsed

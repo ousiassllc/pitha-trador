@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,5 +128,72 @@ func TestKillSwitchRepository_Resolve_AlreadyResolvedReturnsNotFound(t *testing.
 	}
 	if got.ResolvedAt == nil || got.ResolvedBy == nil || *got.ResolvedBy != domain.ResolvedByManual {
 		t.Fatalf("Get after resolve: ResolvedAt/ResolvedBy = %v/%v", got.ResolvedAt, got.ResolvedBy)
+	}
+}
+
+func TestKillSwitchRepository_Resolve_MissingEventReturnsNotFound(t *testing.T) {
+	repo := repository.NewKillSwitchRepository(newTestDB(t))
+
+	err := repo.Resolve(context.Background(), 999, time.Now(), domain.ResolvedByAuto)
+	if err != repository.ErrKillSwitchEventNotFound {
+		t.Fatalf("Resolve missing id: err = %v, want ErrKillSwitchEventNotFound", err)
+	}
+}
+
+func TestKillSwitchRepository_Resolve_RejectsInvalidResolvedBy(t *testing.T) {
+	db := newTestDB(t)
+	repo := repository.NewKillSwitchRepository(db)
+	ctx := context.Background()
+
+	ev, err := repo.Insert(ctx, domain.KillSwitchEvent{Reason: domain.KillReasonBrokerAPIError, DetailJSON: `{}`})
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	if err := repo.Resolve(ctx, ev.ID, time.Now(), "someone"); err == nil || err == repository.ErrKillSwitchEventNotFound {
+		t.Fatalf("Resolve with invalid resolved_by: err = %v, want constraint error", err)
+	}
+	got, err := repo.Get(ctx, ev.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ResolvedAt != nil {
+		t.Fatalf("event marked resolved despite rejected Resolve: %v", got.ResolvedAt)
+	}
+}
+
+// The audit log must be append-only (non-functional.md §4, issue #102):
+// neither events nor their resolutions can be updated or deleted, even by
+// raw SQL that bypasses KillSwitchRepository.
+func TestKillSwitchAuditLog_IsAppendOnly(t *testing.T) {
+	db := newTestDB(t)
+	repo := repository.NewKillSwitchRepository(db)
+	ctx := context.Background()
+
+	ev, err := repo.Insert(ctx, domain.KillSwitchEvent{Reason: domain.KillReasonDailyLossLimit, DetailJSON: `{"a":1}`})
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	if err := repo.Resolve(ctx, ev.ID, time.Now(), domain.ResolvedByManual); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	for _, stmt := range []string{
+		`UPDATE kill_switch_events SET detail_json = '{}'`,
+		`DELETE FROM kill_switch_events`,
+		`UPDATE kill_switch_resolutions SET resolved_by = 'auto'`,
+		`DELETE FROM kill_switch_resolutions`,
+	} {
+		_, err := db.ExecContext(ctx, stmt)
+		if err == nil || !strings.Contains(err.Error(), "append-only") {
+			t.Errorf("%q: err = %v, want append-only violation", stmt, err)
+		}
+	}
+
+	got, err := repo.Get(ctx, ev.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.DetailJSON != `{"a":1}` || got.ResolvedBy == nil || *got.ResolvedBy != domain.ResolvedByManual {
+		t.Fatalf("audit log changed: %+v", got)
 	}
 }

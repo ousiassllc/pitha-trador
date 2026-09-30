@@ -2,10 +2,12 @@ package execution
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
 // Errors Enter/Close return for an invalid request, distinguishable from
@@ -32,7 +34,15 @@ var (
 	// ErrLimitPriceRequired is returned by Enter when the resolved order
 	// type is LIMIT but req.LimitPrice is nil.
 	ErrLimitPriceRequired = errors.New("execution: limit order requires a limit price")
+	// ErrInvalidPrice is returned by OnSnapshot, TryFillPending and Close
+	// when the price to fill/mark/close at is not finite and positive: a
+	// missing board price (0) must never become a fill, a mark or an exit
+	// (issue #173).
+	ErrInvalidPrice = errors.New("execution: price must be positive")
 )
+
+// validPrice reports whether p can be used to fill, mark or close at.
+func validPrice(p float64) bool { return p > 0 && !math.IsInf(p, 0) }
 
 // Engine implements Paper Trading Execution (functional.md §4.8, §4.9):
 // Paper Entry/Exit against repository.OrderRepository/PositionRepository
@@ -49,6 +59,14 @@ type Engine struct {
 
 	mu        sync.Mutex
 	cooldowns map[string]time.Time // symbol -> cooldown_until (functional.md §4.9)
+
+	// closeMu serialises Close: one exit per position (issue #174).
+	closeMu sync.Mutex
+	// snapshotMu serialises OnSnapshot (per-bar job vs held-position monitor).
+	snapshotMu sync.Mutex
+	// vwapObs is each open position's previous price/VWAP (VWAP逆クロス
+	// baseline); guarded by snapshotMu.
+	vwapObs vwapcross.Tracker
 }
 
 // Deps is every repository Engine reads/writes. Snapshots/Decisions/
@@ -65,6 +83,11 @@ type Deps struct {
 	Signals     *repository.SignalRepository
 	Instruments *repository.InstrumentRepository
 }
+
+// Config returns the Entry/Exit rule set Engine was built with (Now
+// defaulted), e.g. for the Symbol Detail Risk section to report the
+// stop-loss/take-profit exit thresholds actually in effect.
+func (e *Engine) Config() Config { return e.cfg }
 
 // NewEngine returns an Engine backed by deps, applying cfg's documented
 // defaults (Config.withDefaults) for every zero-valued field. It panics

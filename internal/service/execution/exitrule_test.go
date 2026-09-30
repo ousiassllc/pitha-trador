@@ -7,6 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
 func openLongPosition(t *testing.T, te testEngine, entryPrice float64, openedAt time.Time) domain.Position {
@@ -21,153 +22,60 @@ func openLongPosition(t *testing.T, te testEngine, entryPrice float64, openedAt 
 	return *result.Position
 }
 
-func TestEngine_EvaluateExit_StopLossTriggers(t *testing.T) {
-	te := newTestEngine(t, execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2})
-	position := openLongPosition(t, te, 2100.0, time.Now().UTC())
-
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2100.0 * (1 - 0.007), // -0.7% > 0.6% stop loss threshold
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if !triggered || reason != domain.ExitReasonStopLoss {
-		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true)", reason, triggered, domain.ExitReasonStopLoss)
-	}
-}
-
-func TestEngine_EvaluateExit_TakeProfitTriggers(t *testing.T) {
-	te := newTestEngine(t, execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2})
-	position := openLongPosition(t, te, 2100.0, time.Now().UTC())
-
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2100.0 * 1.015, // +1.5% > 1.2% take profit threshold
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if !triggered || reason != domain.ExitReasonTakeProfit {
-		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true)", reason, triggered, domain.ExitReasonTakeProfit)
-	}
-}
-
-func TestEngine_EvaluateExit_NoConditionTriggeredYet(t *testing.T) {
-	te := newTestEngine(t, execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2, MaxHoldingMinutes: 20})
-	openedAt := time.Now().UTC()
-	position := openLongPosition(t, te, 2100.0, openedAt)
-
-	_, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2101.0, Now: openedAt.Add(1 * time.Minute),
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if triggered {
-		t.Fatalf("EvaluateExit() triggered = true, want false (price within every threshold)")
-	}
-}
-
-func TestEngine_EvaluateExit_MaxHoldingTriggers(t *testing.T) {
-	te := newTestEngine(t, execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2, MaxHoldingMinutes: 20})
+func TestEngine_EvaluateExit(t *testing.T) {
 	openedAt := time.Date(2026, 9, 27, 9, 30, 0, 0, time.UTC)
-	position := openLongPosition(t, te, 2100.0, openedAt)
-
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2101.0, Now: openedAt.Add(21 * time.Minute),
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if !triggered || reason != domain.ExitReasonMaxHolding {
-		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true)", reason, triggered, domain.ExitReasonMaxHolding)
-	}
-}
-
-func TestEngine_EvaluateExit_ForceFlatBeforeMarketCloseTriggers(t *testing.T) {
-	te := newTestEngine(t, execution.Config{
-		StopLossPct: 0.6, TakeProfitPct: 1.2, MaxHoldingMinutes: 0, ForceFlatBeforeMarketCloseMinutes: 10,
-	})
-	openedAt := time.Date(2026, 9, 27, 9, 30, 0, 0, time.UTC)
-	position := openLongPosition(t, te, 2100.0, openedAt)
 	marketClose := time.Date(2026, 9, 27, 15, 0, 0, 0, time.UTC)
+	short, long := domain.JevDirectionShort, domain.JevDirectionLong
+	lowContinuation, vwap := 0.40, 2101.0 // entry (2100) is below this VWAP: an adverse-side entry for a LONG
+	entryAboveVWAP := 2099.0
+	base := execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2}
+	cfg := func(mut func(*execution.Config)) execution.Config { c := base; mut(&c); return c }
 
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2101.0, Now: marketClose.Add(-9 * time.Minute), MarketCloseAt: &marketClose,
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
+	tests := []struct {
+		name   string
+		cfg    execution.Config
+		mkt    execution.MarketContext
+		reason string // "" = no exit
+	}{
+		{"stop loss (-0.7% > 0.6%)", base, execution.MarketContext{Price: 2100.0 * (1 - 0.007)}, domain.ExitReasonStopLoss},
+		{"take profit (+1.5% > 1.2%)", base, execution.MarketContext{Price: 2100.0 * 1.015}, domain.ExitReasonTakeProfit},
+		{"nothing triggered", cfg(func(c *execution.Config) { c.MaxHoldingMinutes = 20 }),
+			execution.MarketContext{Price: 2101.0, Now: openedAt.Add(time.Minute)}, ""},
+		{"max holding", cfg(func(c *execution.Config) { c.MaxHoldingMinutes = 20 }),
+			execution.MarketContext{Price: 2101.0, Now: openedAt.Add(21 * time.Minute)}, domain.ExitReasonMaxHolding},
+		{"force flat before close", cfg(func(c *execution.Config) { c.ForceFlatBeforeMarketCloseMinutes = 10 }),
+			execution.MarketContext{Price: 2101.0, Now: marketClose.Add(-9 * time.Minute), MarketCloseAt: &marketClose}, domain.ExitReasonForceFlatBeforeClose},
+		{"jev direction reversal", base,
+			execution.MarketContext{Price: 2101.0, Decision: &domain.JevDecision{Direction: &short}}, domain.ExitReasonJevDirectionReversed},
+		{"continuation probability drop", cfg(func(c *execution.Config) { c.MinContinuationProbability = 0.60 }),
+			execution.MarketContext{Price: 2101.0, Decision: &domain.JevDecision{Direction: &long, ContinuationProbability: &lowContinuation}}, domain.ExitReasonContinuationProbDrop},
+		// FR-EXIT-3: a nil Decision (Jev API unresponsive) must not stop Stop Loss.
+		{"stop loss still works without a Jev decision", base,
+			execution.MarketContext{Price: 2100.0 * (1 - 0.01), Decision: nil}, domain.ExitReasonStopLoss},
+		// VWAP逆クロス (FR-EXIT-1) needs a previous-vs-current relation change.
+		{"vwap cross: above VWAP previously, below now", base,
+			execution.MarketContext{Price: 2100.5, VWAP: &vwap, PrevVWAP: &vwapcross.Observation{Price: 2102, VWAP: vwap}}, domain.ExitReasonVWAPCross},
+		{"vwap: staying below VWAP is not a cross", base,
+			execution.MarketContext{Price: 2100.5, VWAP: &vwap, PrevVWAP: &vwapcross.Observation{Price: 2100, VWAP: vwap}}, ""},
+		{"vwap: entered below VWAP, first evaluation does not exit", base,
+			execution.MarketContext{Price: 2100.5, VWAP: &vwap}, ""},
+		{"vwap cross: entered above VWAP, first evaluation now below", base,
+			execution.MarketContext{Price: 2098.5, VWAP: &entryAboveVWAP}, domain.ExitReasonVWAPCross},
+		{"trailing stop without meaningful retrace", cfg(func(c *execution.Config) { c.StopLossPct, c.TakeProfitPct, c.TrailingStopPct = 5, 5, 0.5 }),
+			execution.MarketContext{Price: 2100.0 * (1 + 0.002)}, ""},
 	}
-	if !triggered || reason != domain.ExitReasonForceFlatBeforeClose {
-		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true)", reason, triggered, domain.ExitReasonForceFlatBeforeClose)
-	}
-}
-
-func TestEngine_EvaluateExit_JevDirectionReversalTriggers(t *testing.T) {
-	te := newTestEngine(t, execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2})
-	position := openLongPosition(t, te, 2100.0, time.Now().UTC())
-	short := domain.JevDirectionShort
-
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2101.0, Decision: &domain.JevDecision{Direction: &short},
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if !triggered || reason != domain.ExitReasonJevDirectionReversed {
-		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true)", reason, triggered, domain.ExitReasonJevDirectionReversed)
-	}
-}
-
-func TestEngine_EvaluateExit_ContinuationProbabilityDropTriggers(t *testing.T) {
-	te := newTestEngine(t, execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2, MinContinuationProbability: 0.60})
-	position := openLongPosition(t, te, 2100.0, time.Now().UTC())
-	long := domain.JevDirectionLong
-	lowContinuation := 0.40
-
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2101.0,
-		Decision: &domain.JevDecision{
-			Direction: &long, ContinuationProbability: &lowContinuation,
-		},
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if !triggered || reason != domain.ExitReasonContinuationProbDrop {
-		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true)", reason, triggered, domain.ExitReasonContinuationProbDrop)
-	}
-}
-
-func TestEngine_EvaluateExit_JevAPIUnavailable_OtherConditionsStillWork(t *testing.T) {
-	// FR-EXIT-3: a nil Decision (Jev API unresponsive) must not stop
-	// Stop Loss from still working.
-	te := newTestEngine(t, execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2})
-	position := openLongPosition(t, te, 2100.0, time.Now().UTC())
-
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2100.0 * (1 - 0.01), Decision: nil,
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if !triggered || reason != domain.ExitReasonStopLoss {
-		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true) even with Decision == nil", reason, triggered, domain.ExitReasonStopLoss)
-	}
-}
-
-func TestEngine_EvaluateExit_VWAPCrossTriggers(t *testing.T) {
-	te := newTestEngine(t, execution.Config{StopLossPct: 0.6, TakeProfitPct: 1.2})
-	position := openLongPosition(t, te, 2100.0, time.Now().UTC())
-	vwap := 2101.0 // LONG position, price below VWAP => 逆クロス
-
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2100.5, VWAP: &vwap,
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if !triggered || reason != domain.ExitReasonVWAPCross {
-		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true)", reason, triggered, domain.ExitReasonVWAPCross)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			te := newTestEngine(t, tc.cfg)
+			position := openLongPosition(t, te, 2100.0, openedAt)
+			reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, tc.mkt)
+			if err != nil {
+				t.Fatalf("EvaluateExit: %v", err)
+			}
+			if reason != tc.reason || triggered != (tc.reason != "") {
+				t.Fatalf("EvaluateExit() = (%q, %v), want (%q, %v)", reason, triggered, tc.reason, tc.reason != "")
+			}
+		})
 	}
 }
 
@@ -200,21 +108,5 @@ func TestEngine_EvaluateExit_TrailingStopTriggersAfterRetraceFromPeak(t *testing
 	}
 	if !triggered || reason != domain.ExitReasonTrailingStop {
 		t.Fatalf("EvaluateExit() = (%q, %v), want (%q, true) after retracing from the recorded peak", reason, triggered, domain.ExitReasonTrailingStop)
-	}
-}
-
-func TestEngine_EvaluateExit_TrailingStopDoesNotTriggerWithoutRetrace(t *testing.T) {
-	te := newTestEngine(t, execution.Config{StopLossPct: 5, TakeProfitPct: 5, TrailingStopPct: 0.5})
-	openedAt := time.Now().UTC()
-	position := openLongPosition(t, te, 2100.0, openedAt)
-
-	reason, triggered, err := te.engine.EvaluateExit(context.Background(), position, execution.MarketContext{
-		Price: 2100.0 * (1 + 0.002),
-	})
-	if err != nil {
-		t.Fatalf("EvaluateExit: %v", err)
-	}
-	if triggered {
-		t.Fatalf("EvaluateExit() triggered = true (%q), want false with no meaningful retrace from entry", reason)
 	}
 }

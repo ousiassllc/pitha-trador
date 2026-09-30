@@ -50,3 +50,20 @@ func TestFeatureInputFromFeature_CarriesSpreadBpsFromSnapshotNotFeature(t *testi
 		t.Errorf("FeatureInputFromFeature(...).PriceVsVWAPBps = %v, want 25", in.PriceVsVWAPBps)
 	}
 }
+
+func TestFeatureInputFromFeature_CarriesFormerlyMissingDimensions(t *testing.T) {
+	f := domain.Feature{
+		VolumeRatio1m: ptr(1.5), RealizedVol15m: ptr(0.02), VolatilityExpansionRatio: ptr(1.2),
+		MarketReturn5m: ptr(0.001), SectorReturn5m: ptr(0.002), StockVsSectorRelativeStrength: ptr(0.03),
+	}
+	in := rag.FeatureInputFromFeature(f, nil)
+	for name, got := range map[string]*float64{
+		"VolumeRatio1m": in.VolumeRatio1m, "RealizedVol15m": in.RealizedVol15m,
+		"VolatilityExpansionRatio": in.VolatilityExpansionRatio, "MarketReturn5m": in.MarketReturn5m,
+		"SectorReturn5m": in.SectorReturn5m, "StockVsSectorRelativeStrength": in.StockVsSectorRelativeStrength,
+	} {
+		if got == nil {
+			t.Errorf("%s = nil, want the Feature value carried into the RAG input", name)
+		}
+	}
+}

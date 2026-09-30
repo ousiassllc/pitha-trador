@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
 
 // HeartbeatChecker is the internal/service/risk.Engine method
@@ -23,6 +24,34 @@ type HeartbeatChecker interface {
 // FR-RISK-6, architecture/overview.md §10.4). Unset by default.
 func WithHeartbeatChecker(checker HeartbeatChecker) Option {
 	return func(s *Scheduler) { s.heartbeatChecker = checker }
+}
+
+// RiskMonitor is internal/service/risk.Engine's RunPeriodicChecks: the
+// FR-RISK-2 detectors (市場データ停止, Jev API連続失敗, Broker API異常,
+// 想定外ポジション/約定差異, DB書き込み失敗継続) plus the non-functional.md
+// §5.2 日次損失接近 warning. An interface here keeps this package from
+// depending on internal/service/risk (mirrors HeartbeatChecker).
+type RiskMonitor interface {
+	RunPeriodicChecks(ctx context.Context) error
+}
+
+// WithRiskMonitor enables Start's 1-minute CheckRisk trigger. Unset by
+// default.
+func WithRiskMonitor(monitor RiskMonitor) Option {
+	return func(s *Scheduler) { s.riskMonitor = monitor }
+}
+
+// AutoResumer is internal/service/risk.Engine's AutoResume: it resolves
+// every FR-RISK-7 auto-resumable Kill Switch whose recovery condition
+// holds and returns how many it resolved.
+type AutoResumer interface {
+	AutoResume(ctx context.Context) (int, error)
+}
+
+// WithAutoResumer enables Start's 1-minute AutoResumeKillSwitches
+// trigger (FR-RISK-7). Unset by default.
+func WithAutoResumer(resumer AutoResumer) Option {
+	return func(s *Scheduler) { s.autoResumer = resumer }
 }
 
 // LogRotator archives log files past their local-retention window
@@ -74,6 +103,16 @@ const outcomeLabelingCronSpec = "@every 1m"
 // finest granularity risk.yaml's heartbeat_timeout_minutes is expressed
 // in (architecture/overview.md §10.4's periodic check).
 const heartbeatCheckCronSpec = "@every 1m"
+
+// riskCheckCronSpec is how often Start's WithRiskMonitor trigger runs
+// CheckRisk: once a minute, matching heartbeatCheckCronSpec and the
+// 1-minute market_snapshots bar cadence the detectors' inputs update at.
+const riskCheckCronSpec = "@every 1m"
+
+// autoResumeCronSpec is how often Start's WithAutoResumer trigger runs
+// AutoResumeKillSwitches (architecture/overview.md §10.3's "発動条件の
+// 解消を定期監視").
+const autoResumeCronSpec = "@every 1m"
 
 // updateCheckCronSpec is how often Start's WithUpdateChecker trigger
 // (issue #65) polls GitHub Releases for a newer version: every 6 hours,
@@ -150,14 +189,26 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 			return fmt.Errorf("scheduler: register operator heartbeat trigger: %w", err)
 		}
 	}
-	if s.logRotator != nil {
-		if _, err := s.cron.AddFunc("@daily", func() {
-			if err := s.RotateLogs(ctx); err != nil {
-				slog.Error("scheduler: log rotation failed", "error", err)
+	if s.riskMonitor != nil {
+		if _, err := s.cron.AddFunc(riskCheckCronSpec, func() {
+			if err := s.CheckRisk(ctx); err != nil {
+				slog.Error("scheduler: risk checks failed", "error", err)
 			}
 		}); err != nil {
-			return fmt.Errorf("scheduler: register log rotation trigger: %w", err)
+			return fmt.Errorf("scheduler: register risk-check trigger: %w", err)
 		}
+	}
+	if s.autoResumer != nil {
+		if _, err := s.cron.AddFunc(autoResumeCronSpec, func() {
+			if err := s.AutoResumeKillSwitches(ctx); err != nil {
+				slog.Error("scheduler: kill switch auto-resume failed", "error", err)
+			}
+		}); err != nil {
+			return fmt.Errorf("scheduler: register kill switch auto-resume trigger: %w", err)
+		}
+	}
+	if err := s.addMaintenanceTriggers(ctx); err != nil {
+		return err
 	}
 	if s.updateChecker != nil {
 		checkForUpdate := func() {
@@ -182,43 +233,9 @@ func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
+			defer safego.Recover("update check")
 			checkForUpdate()
 		}()
 	}
 	return nil
-}
-
-// CheckOperatorHeartbeat calls the configured HeartbeatChecker
-// (WithHeartbeatChecker) once (functional.md FR-RISK-6, architecture/
-// overview.md §10.4's periodic 立会時間中 check), or does nothing and
-// returns nil if none is configured - the same deferral
-// EnqueueOutcomeLabeling above already documents for
-// WithOutcomeLabelSource.
-func (s *Scheduler) CheckOperatorHeartbeat(ctx context.Context) error {
-	if s.heartbeatChecker == nil {
-		return nil
-	}
-	return s.heartbeatChecker.CheckHeartbeatTimeout(ctx)
-}
-
-// RotateLogs calls the configured LogRotator (WithLogRotator) once
-// (non-functional.md §5), or does nothing and returns nil if none is
-// configured - the same deferral EnqueueOutcomeLabeling/
-// CheckOperatorHeartbeat above already document.
-func (s *Scheduler) RotateLogs(ctx context.Context) error {
-	if s.logRotator == nil {
-		return nil
-	}
-	return s.logRotator.Rotate(ctx)
-}
-
-// CheckForUpdate calls the configured UpdateChecker (WithUpdateChecker,
-// issue #65) once, or does nothing and returns nil if none is configured
-// - the same deferral CheckOperatorHeartbeat/RotateLogs above already
-// document.
-func (s *Scheduler) CheckForUpdate(ctx context.Context) error {
-	if s.updateChecker == nil {
-		return nil
-	}
-	return s.updateChecker.CheckForUpdate(ctx)
 }

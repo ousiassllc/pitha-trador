@@ -21,11 +21,20 @@ scan:
   # Jev呼び出しをスキップする（すべてしきい値未満かつイベントなし）判定の
   # しきい値。functional.md §4.3は数値の初期値を定めていないため、他の
   # しきい値と同様バックテスト後に調整する前提の初期値。
+  # 判定の基準: return_1m_change_threshold は1分リターン(return_1m)の絶対値、
+  # volume_ratio_change_threshold は5分出来高比率(volume_ratio_5m)の絶対値と
+  # 比較する（前バーとの差ではなく現在値の水準判定。volume_ratio_5mは通常
+  # 1.0前後なので2.0は「平均の2倍以上」）。spread/orderbook/trade_flowの3つは
+  # 直近2バーの差の絶対値と比較する。
+  # 各値は正の数であること。未設定/0以下は設定ローダーが下記の同梱既定値で
+  # 補完する（0だと全バーで再評価が発火しFR-SCAN-2が無効化されるため）。
   event_trigger:
     return_1m_change_threshold: 0.005
     volume_ratio_change_threshold: 2.0
     spread_change_bps_threshold: 10
     orderbook_imbalance_change_threshold: 0.3
+    # 約定フロー急変: 直近2バーのtrade_flow_imbalance(-1〜1)の差の絶対値。
+    trade_flow_imbalance_change_threshold: 0.4
 
 fast_screener:
   # FR-FS-1: Jev API呼び出し前の数値フィルター。
@@ -54,6 +63,10 @@ jev_scout:
   min_abnormal_activity: 0.55
 
 policy:
+  # FR-POLICY-3「キャリブレーション対象外」: Jev decision の confidence が属する
+  # 信頼度バケットのラベル付き Calibration サンプル数がこの値未満なら NONE。
+  # 0 で無効化。
+  min_calibration_samples: 20
   # FR-POLICY-1/2: LONG/SHORTそれぞれのPolicy Engine通過しきい値。
   long:
     min_probability: 0.68

@@ -12,15 +12,15 @@ import (
 // the Scheduler from Market Data / Feature Engine output, for Fast
 // Screener filtering and scoring (functional.md §4.2).
 //
-// Turnover5mJPY, BreakoutStrength and VolatilityExpansion are not part of
-// domain.Snapshot/domain.Feature: Turnover5mJPY is a trailing 5-minute
-// aggregate (Snapshot.Turnover is the raw per-bar/cumulative-session
-// value reported by kabuステーションAPI), and BreakoutStrength /
-// VolatilityExpansion are not yet computed by Feature Engine. They are
-// supplied here as opaque inputs that a later sub-scope wires from
-// Market Data / Feature Engine; BreakoutStrength and VolatilityExpansion
-// are nil until that happens, which - like Feature's other nullable
-// fields (FR-FE-2) - means "excluded from screen_score", not "zero".
+// Turnover5mJPY, BreakoutStrength and VolatilityExpansion are supplied as
+// inputs wired by internal/bootstrap: Turnover5mJPY is the trailing
+// 5-minute traded value (a difference of Snapshot.Turnover, kabuステーション
+// API's cumulative session value - featureengine.TurnoverOverWindow, 0 when
+// unknown), and BreakoutStrength / VolatilityExpansion are derived from
+// price history by featureengine.ComputeScreenSignals; BreakoutStrength and VolatilityExpansion
+// are nil when history is insufficient to compute them, which - like
+// Feature's other nullable fields (FR-FE-2) - means "excluded from
+// screen_score", not "zero".
 type Input struct {
 	InstrumentID int64
 	Symbol       string

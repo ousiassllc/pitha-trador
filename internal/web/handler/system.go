@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -45,10 +46,10 @@ func (StaticSystemEngine) Pause(context.Context) error  { return nil }
 func (StaticSystemEngine) Resume(context.Context) error { return nil }
 func (StaticSystemEngine) Kill(context.Context) error   { return nil }
 
-// SystemHandler implements the Kill Switch action/API routes
-// (docs/api/endpoints.md §4 `/system/pause|resume|kill|status`, §5
-// `POST /api/v1/system/pause|resume|kill`) plus `/ws/system`
-// (system_ws.go).
+// SystemHandler implements the Kill Switch routes: `GET /system/status`
+// (docs/api/endpoints.md §4, HTMX badge fragment), `GET|POST
+// /api/v1/system/status|pause|resume|kill` (§5, JSON, driven by the Lit
+// pitha-kill-switch-panel) and `/ws/system` (system_ws.go).
 type SystemHandler struct {
 	engine       SystemEngine
 	pollInterval time.Duration
@@ -69,36 +70,9 @@ func NewSystemHandler(engine SystemEngine) *SystemHandler {
 // fast interval rather than production callers.
 func (h *SystemHandler) SetPollInterval(d time.Duration) { h.pollInterval = d }
 
-// Pause implements `POST /system/pause`.
-func (h *SystemHandler) Pause(c *gin.Context) {
-	if err := h.engine.Pause(c.Request.Context()); err != nil {
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-	h.renderBadge(c)
-}
-
-// Resume implements `POST /system/resume`.
-func (h *SystemHandler) Resume(c *gin.Context) {
-	if err := h.engine.Resume(c.Request.Context()); err != nil {
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-	h.renderBadge(c)
-}
-
-// Kill implements `POST /system/kill`.
-func (h *SystemHandler) Kill(c *gin.Context) {
-	if err := h.engine.Kill(c.Request.Context()); err != nil {
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-	h.renderBadge(c)
-}
-
 // Status implements `GET /system/status`: the system status badge
-// fragment alone, for the (later sub-scope's) Kill Switch panel to poll
-// or re-fetch on demand.
+// fragment alone, which Header's StatusDot re-fetches (hx-get) on the
+// `systemStateChanged` event.
 func (h *SystemHandler) Status(c *gin.Context) {
 	h.renderBadge(c)
 }
@@ -108,7 +82,8 @@ func (h *SystemHandler) Status(c *gin.Context) {
 func (h *SystemHandler) renderBadge(c *gin.Context) {
 	state, _, err := h.engine.State(c.Request.Context())
 	if err != nil {
-		c.Status(http.StatusInternalServerError)
+		slog.ErrorContext(c.Request.Context(), "handler: system status badge", "error", err)
+		respondActionError(c, http.StatusInternalServerError, "システム状態の取得に失敗しました。")
 		return
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")
@@ -117,10 +92,14 @@ func (h *SystemHandler) renderBadge(c *gin.Context) {
 }
 
 // SystemStateOutput is the Huma response body for
-// `POST /api/v1/system/pause|resume|kill` (docs/api/endpoints.md §5).
+// `GET /api/v1/system/status` and `POST /api/v1/system/pause|resume|kill`
+// (docs/api/endpoints.md §5).
 type SystemStateOutput struct {
 	Body struct {
-		State string `json:"state" doc:"Overall system state: running, paused, or killed."`
+		State     string `json:"state" doc:"Overall system state: running, paused, or killed."`
+		CanPause  bool   `json:"can_pause" doc:"Whether POST /api/v1/system/pause is a valid transition from state."`
+		CanResume bool   `json:"can_resume" doc:"Whether POST /api/v1/system/resume is a valid transition from state."`
+		CanKill   bool   `json:"can_kill" doc:"Whether POST /api/v1/system/kill is a valid transition from state."`
 	}
 }
 
@@ -131,6 +110,9 @@ func (h *SystemHandler) stateOutput(ctx context.Context) (*SystemStateOutput, er
 	}
 	out := &SystemStateOutput{}
 	out.Body.State = string(state)
+	out.Body.CanPause = state.CanPause()
+	out.Body.CanResume = state.CanResume()
+	out.Body.CanKill = state.CanKill()
 	return out, nil
 }
 
@@ -162,9 +144,9 @@ func (h *SystemHandler) APIKill(ctx context.Context, _ *struct{}) (*SystemStateO
 // twin of `GET /system/status` (which returns an HTML badge fragment for
 // HTMX), used by `pitha-kill-switch-panel`
 // (static/src/components/kill-switch-panel/pitha-kill-switch-panel.ts) to
-// learn the current state on connect, since no SSR page currently
-// threads live internal/service/risk.Engine state into the Header
-// organism the panel is embedded in (organisms.Header's doc comment).
+// resync its state (and which actions the server currently allows) after
+// a Risk-Engine push or a WebSocket reconnect; the initial state is
+// already SSR'd into the panel's attributes (organisms.Header).
 func (h *SystemHandler) APIStatus(ctx context.Context, _ *struct{}) (*SystemStateOutput, error) {
 	return h.stateOutput(ctx)
 }

@@ -2,7 +2,7 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"time"
@@ -141,7 +141,8 @@ func (h *ScannerHandler) APIScanner(ctx context.Context, _ *struct{}) (*ScannerA
 func (h *ScannerHandler) Page(c *gin.Context) {
 	candidates, asOf, err := h.source.Candidates(c.Request.Context())
 	if err != nil {
-		c.Status(http.StatusInternalServerError)
+		slog.ErrorContext(c.Request.Context(), "handler: scanner page candidates", "error", err)
+		respondPageError(c, http.StatusInternalServerError, "候補一覧の取得に失敗しました。")
 		return
 	}
 
@@ -166,32 +167,11 @@ type scannerUpdateMessage struct {
 // `scanner_update` message on every connect, then again every
 // h.interval.Next() (15-30s by default) until the client disconnects.
 func (h *ScannerHandler) WebSocket(c *gin.Context) {
-	conn, err := websocket.Accept(c.Writer, c.Request, nil)
-	if err != nil {
-		return
-	}
-	defer func() { _ = conn.CloseNow() }()
-
-	ctx := c.Request.Context()
-	for {
+	pollWebSocket(c, h.interval.Next, func(ctx context.Context, conn *websocket.Conn) error {
 		candidates, _, err := h.source.Candidates(ctx)
 		if err != nil {
-			return
+			return err
 		}
-		msg := scannerUpdateMessage{Type: "scanner_update", Items: toScannerItems(candidates)}
-		data, err := json.Marshal(msg)
-		if err != nil {
-			return
-		}
-		if err := conn.Write(ctx, websocket.MessageText, data); err != nil {
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			_ = conn.Close(websocket.StatusNormalClosure, "")
-			return
-		case <-time.After(h.interval.Next()):
-		}
-	}
+		return writeJSON(ctx, conn, scannerUpdateMessage{Type: "scanner_update", Items: toScannerItems(candidates)})
+	})
 }

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -37,72 +36,6 @@ func (f *fakeSystemEngine) Pause(context.Context) error  { f.pauseCalls++; retur
 func (f *fakeSystemEngine) Resume(context.Context) error { f.resumeCalls++; return f.opErr }
 func (f *fakeSystemEngine) Kill(context.Context) error   { f.killCalls++; return f.opErr }
 
-func TestSystemHandler_Pause_CallsEngineAndRendersBadge(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := &fakeSystemEngine{state: domain.SystemStatePaused}
-	h := handler.NewSystemHandler(engine)
-	router := gin.New()
-	router.POST("/system/pause", h.Pause)
-
-	req := httptest.NewRequest(http.MethodPost, "/system/pause", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	if engine.pauseCalls != 1 {
-		t.Fatalf("Pause calls = %d, want 1", engine.pauseCalls)
-	}
-	if !strings.Contains(rec.Body.String(), "paused") {
-		t.Fatalf("body = %q, want it to contain the paused state", rec.Body.String())
-	}
-}
-
-func TestSystemHandler_Resume_CallsEngineAndRendersRunningBadge(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := &fakeSystemEngine{state: domain.SystemStateRunning}
-	h := handler.NewSystemHandler(engine)
-	router := gin.New()
-	router.POST("/system/resume", h.Resume)
-
-	req := httptest.NewRequest(http.MethodPost, "/system/resume", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if engine.resumeCalls != 1 {
-		t.Fatalf("Resume calls = %d, want 1", engine.resumeCalls)
-	}
-	if !strings.Contains(rec.Body.String(), "running") {
-		t.Fatalf("body = %q, want it to contain the running state", rec.Body.String())
-	}
-}
-
-func TestSystemHandler_Kill_CallsEngineAndRendersKilledBadge(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := &fakeSystemEngine{state: domain.SystemStateKilled}
-	h := handler.NewSystemHandler(engine)
-	router := gin.New()
-	router.POST("/system/kill", h.Kill)
-
-	req := httptest.NewRequest(http.MethodPost, "/system/kill", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if engine.killCalls != 1 {
-		t.Fatalf("Kill calls = %d, want 1", engine.killCalls)
-	}
-	if !strings.Contains(rec.Body.String(), "killed") {
-		t.Fatalf("body = %q, want it to contain the killed state", rec.Body.String())
-	}
-}
-
 func TestSystemHandler_Status_DoesNotMutateState(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := &fakeSystemEngine{state: domain.SystemStateRunning}
@@ -119,22 +52,6 @@ func TestSystemHandler_Status_DoesNotMutateState(t *testing.T) {
 	}
 	if engine.pauseCalls != 0 || engine.resumeCalls != 0 || engine.killCalls != 0 {
 		t.Fatalf("Status must not call Pause/Resume/Kill: %+v", engine)
-	}
-}
-
-func TestSystemHandler_Pause_EngineErrorReturns500(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := &fakeSystemEngine{opErr: errors.New("db unavailable")}
-	h := handler.NewSystemHandler(engine)
-	router := gin.New()
-	router.POST("/system/pause", h.Pause)
-
-	req := httptest.NewRequest(http.MethodPost, "/system/pause", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
 }
 

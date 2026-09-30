@@ -1,0 +1,146 @@
+# ER / データモデル: テーブル定義（運用設定・ジョブ・ベクトル）
+
+`docs/architecture/er.md` から分割した章。対象: `runtime_settings` / `secrets` / `policy_proposals` / `jobs` とsqlite-vecベクトルインデックス。型・規約と全体ER図は `docs/architecture/er.md` を参照。
+
+## runtime_settings
+
+Fast Screener/Policy/Risk のしきい値をコード再デプロイなしで変更するためのKey-Valueストア（`config/*.yaml` の初期値をDBへロードし、以降はDBを正とする）。操作者ハートビート（dead-man's switch、`architecture/overview.md` §10.4）の`system.last_ui_heartbeat_at`のような高頻度更新の単一値もこのテーブルで保持する。
+
+```mermaid
+erDiagram
+    runtime_settings {
+        varchar key PK
+        text value
+        text updated_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| key | varchar(100) | PK | 例: `screener.min_price`（Fast Screener全キー: `screener.{min_price,max_price,min_turnover_5m_jpy,max_spread_bps,min_volume_ratio,min_abs_return_5m_pct,min_realized_volatility,top_n}`、`screener.weights.{volume_ratio,abs_return_5m,breakout_strength,orderbook_imbalance,volatility_expansion}`。値は数値のJSON。DB値は環境変数・`config/strategy.yaml`より優先し、候補更新ごとに読み込む）, `policy.long.min_probability`（policy.{long,short}.* の許可キーは `internal/domain/policyproposal.go` 参照）, `system.last_ui_heartbeat_at`（認証済みUIリクエストのたびにMiddlewareが更新、FR-RISK-6）, `system.loss_streak_baseline_at` / `system.daily_loss_baseline_at` / `system.fill_discrepancy_baseline_at`（手動Resumeが連敗/日次損失/約定差異のKill Switchを解除した時刻。以後の連敗数・日次実現損失はこれ以降のクローズ分のみ、孤児約定の照合はこれ以降にFILLEDとなった注文のみ対象、FR-RISK-7）, `system.paused` / `system.killed`（Pause/Killの状態そのもの。値は真偽値のJSON、`internal/service/risk`）, `system.daily_loss_warning_notified_at`（日次損失警告の通知重複抑止用に最後に通知した時刻。値はRFC3339のJSON文字列）, `system.maintenance.<task>.last_success_date`（`<task>`は`database_backup` / `data_retention_purge` / `log_rotation`。各メンテナンスタスクの最終成功日で、起動直後・10分ごとの未実行検出（`non-functional.md` §3）の状態保持先。値は`YYYY-MM-DD`のJSON文字列、`internal/service/scheduler/maintenance`）。Riskの閾値（`max_daily_loss_pct`・`heartbeat_timeout_minutes` 等）は `config/risk.yaml` のみで、`risk.*` キーは持たない |
+| value | text | NOT NULL | JSON文字列 |
+| updated_at | text | NOT NULL | |
+
+## secrets
+
+Settings画面（`/settings`、`functional.md` §4.17）から入力する認証情報（`JEV_API_KEY` / `JEV_BASE_URL` / `KABU_API_PASSWORD` / `SLACK_WEBHOOK_URL` など）のKey-Valueストア（マイグレーション000013）。値は`internal/repository.SecretsRepository`が`internal/config.EncryptSecret`（AES-256-GCM）で暗号化して保存し、呼び出し側は平文のみ扱う。鍵はアプリに埋め込みの固定シードから導出されるため、保護対象はDBファイル単体の複製・共有時の平文流出であり、コンパイル済みバイナリを実行・解析できる攻撃者に対する防御ではない（詳細は`config.EncryptSecret`のコメント参照）。
+
+```mermaid
+erDiagram
+    secrets {
+        varchar key PK
+        text encrypted_value
+        text updated_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| key | varchar(100) | PK | 例: `JEV_API_KEY`, `JEV_BASE_URL`, `KABU_API_PASSWORD`, `SLACK_WEBHOOK_URL`（キー定数は`internal/config/secrets.go`） |
+| encrypted_value | text | NOT NULL | AES-256-GCMで暗号化した値。先頭にランダムnonceを連結しbase64（StdEncoding）でエンコードした文字列 |
+| updated_at | text | NOT NULL | |
+
+## policy_proposals
+
+Sol（Think）が生成しOpus（Govern）がレビューする、Policy Engineしきい値の自己改善提案・審査・適用履歴（`functional.md` §4.14）。
+
+```mermaid
+erDiagram
+    policy_proposals {
+        integer id PK
+        text proposed_at
+        varchar proposed_by
+        text rationale_json
+        text proposed_changes_json
+        varchar status
+        text backtest_result_json
+        varchar reviewed_by
+        text review_json
+        varchar applied_policy_version
+        text applied_at
+        text rolled_back_at
+        varchar rolled_back_reason
+        text created_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK（AUTOINCREMENT） | |
+| proposed_at | text | NOT NULL | |
+| proposed_by | varchar(20) | NOT NULL, DEFAULT 'sol' | 提案元 |
+| rationale_json | text | NOT NULL | Solによる分析根拠（負けトレード分析・Calibration指標等、JSON文字列） |
+| proposed_changes_json | text | NOT NULL | `runtime_settings`の`policy.*`キーに対する変更差分のみ（`risk.*`キーは対象外、`functional.md` FR-SELFIMPROVE-2） |
+| status | varchar(20) | NOT NULL, CHECK IN ('pending','approved','rejected','applied','rolled_back'), DEFAULT 'pending' | |
+| backtest_result_json | text | NULL可 | Opusによるシャドーバックテスト結果（Expectancy/Max Drawdown比較、FR-SELFIMPROVE-4） |
+| reviewed_by | varchar(20) | NULL可, DEFAULT 'opus' | |
+| review_json | text | NULL可 | Opusの承認/却下理由 |
+| applied_policy_version | varchar(20) | NULL可 | 適用時に採番する`policy_version` |
+| applied_at | text | NULL可 | |
+| rolled_back_at | text | NULL可 | |
+| rolled_back_reason | varchar(255) | NULL可 | FR-SELFIMPROVE-6によるロールバック理由 |
+| created_at | text | NOT NULL | |
+
+インデックス: `INDEX (status)`, `INDEX (proposed_at DESC)`
+
+## jobs（自前ワーカーキュー、River代替）
+
+SQLiteはRiver（Postgres専用ジョブキュー）を利用できないため、`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6キューをこのテーブルと`internal/service/scheduler`のGoワーカープールで実現する（`architecture/overview.md` §2, §8参照）。Risk判定・Paper発注は`jev-trader`ジョブ内で同期実行され、専用キューは持たない（FR-SCHED-1）。
+
+```mermaid
+erDiagram
+    jobs {
+        integer id PK
+        varchar queue "market-data|feature-calc|jev-scout|jev-trader|outcome-labeling|analytics"
+        text payload_json
+        varchar status "pending|running|succeeded|failed"
+        integer attempts
+        text scheduled_at
+        text started_at
+        text finished_at
+        text last_error
+        text created_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK（AUTOINCREMENT） | |
+| queue | varchar(30) | NOT NULL | キュー名 |
+| payload_json | text | NOT NULL | ジョブ引数（JSON文字列） |
+| status | varchar(20) | NOT NULL, CHECK IN ('pending','running','succeeded','failed'), DEFAULT 'pending' | |
+| attempts | integer | NOT NULL, DEFAULT 0 | リトライ回数 |
+| scheduled_at | text | NOT NULL | 実行予定時刻 |
+| started_at | text | NULL可 | |
+| finished_at | text | NULL可 | |
+| last_error | text | NULL可 | |
+| created_at | text | NOT NULL | |
+
+インデックス: `INDEX (queue, status, scheduled_at)`
+
+再起動時の回復: プロセス起動時に`status='running'`のまま残っている行（クラッシュで中断されたジョブ）を`pending`へ戻し再実行する。
+
+保持期間: 完了行のみを対象に、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`succeeded`は`finished_at`から7日、`failed`は30日経過後にバッチ削除する。`pending`/`running`は削除しない。`ClaimNext`や`QueueCounts`の集計コストとDBファイルの肥大を抑えるための措置で、Activity Logが参照する直近の行は保持期間内に残る（`non-functional.md` §3）。
+
+## ベクトルインデックス（sqlite-vec）
+
+RAG類似検索（`functional.md` FR-RAG-1〜3）のため、[sqlite-vec](https://github.com/asg017/sqlite-vec)拡張の`vec0`仮想テーブルを用いる。標準化済み特徴量ベクトルは14次元固定（return_1m, return_5m, return_15m, price_vs_vwap_bps, volume_ratio_1m, volume_ratio_5m, spread_bps, orderbook_imbalance, realized_vol_5m, realized_vol_15m, volatility_expansion_ratio, market_return_5m, sector_return_5m, stock_vs_sector_relative_strength の14項目を標準化し結合）。
+
+```sql
+-- 拡張ロード: Go側で `modernc.org/sqlite/vec` をblank importするだけで自動登録される（CGO不要、`modernc.org/sqlite`本体との組み合わせ専用）
+-- CREATE VIRTUAL TABLE は golang-migrate のマイグレーションで実行する
+
+CREATE VIRTUAL TABLE market_snapshot_vectors USING vec0(
+  snapshot_id INTEGER PRIMARY KEY,
+  embedding FLOAT[14]
+);
+
+CREATE VIRTUAL TABLE jev_decision_vectors USING vec0(
+  decision_id INTEGER PRIMARY KEY,
+  embedding FLOAT[14]
+);
+```
+
+- `snapshot_id` / `decision_id` は `market_snapshots.id` / `jev_decisions.id` を参照する（仮想テーブルのためFK制約は付与できず、アプリ層で整合性を保証する）
+- 類似検索は `SELECT decision_id, distance FROM jev_decision_vectors WHERE embedding MATCH ? ORDER BY distance LIMIT 5` の形式で行う（k=5、`functional.md` FR-RAG-2）
+- コールドスタート期間（該当テーブルの行数が少ない間）は検索結果0件として扱い、FR-RAG-4の通りRAG文脈なしでJevを呼び出す

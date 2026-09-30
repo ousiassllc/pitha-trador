@@ -12,11 +12,12 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { html, LitElement, type PropertyValues } from 'lit';
+import { css, html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
+import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient } from '../lib/ws';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/symbols/{symbol}/candles`
@@ -52,6 +53,15 @@ interface JevUpdateMessage {
 type SymbolMessage = TickMessage | JevUpdateMessage;
 
 const CHART_HEIGHT = 400;
+const BAR_SECONDS = 60;
+
+interface Bar {
+  time: UTCTimestamp;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
 const LONG_MARKER_COLOR = '#16a34a';
 const SHORT_MARKER_COLOR = '#dc2626';
 
@@ -61,6 +71,20 @@ function toUTCTimestamp(iso: string): UTCTimestamp {
 
 @customElement('pitha-price-chart')
 export class PithaPriceChart extends LitElement {
+  // Shadow DOM: Tailwind does not reach in here, so style locally.
+  static override styles = [
+    noticeStyles,
+    css`
+      :host {
+        display: block;
+      }
+      .pitha-price-chart-container {
+        width: 100%;
+        height: ${CHART_HEIGHT}px;
+      }
+    `,
+  ];
+
   @property({ type: String, attribute: 'symbol' }) symbol = '';
   @property({ type: String, attribute: 'candles-url' }) candlesUrl = '';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
@@ -75,6 +99,9 @@ export class PithaPriceChart extends LitElement {
   private wsClient: WsClient<SymbolMessage> | null = null;
   private markers: SeriesMarker<Time>[] = [];
   private lastDirection: string | null = null;
+  // The newest 1-minute bar on the chart (loaded or tick-built): ticks fold
+  // into it instead of stacking new bars.
+  private lastBar: Bar | null = null;
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
@@ -97,10 +124,10 @@ export class PithaPriceChart extends LitElement {
     const container = this.containerRef.value;
     if (!container) return;
 
-    this.chart = createChart(container, {
-      width: container.clientWidth || 600,
-      height: CHART_HEIGHT,
-    });
+    // autoSize makes the chart follow its container (the CSS below fixes the
+    // container's height, and width is 100% of the host); it ignores
+    // explicit width/height options.
+    this.chart = createChart(container, { autoSize: true });
     this.candleSeries = this.chart.addCandlestickSeries();
     this.vwapSeries = this.chart.addLineSeries({ color: '#2962ff', lineWidth: 1 });
     this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', color: '#9ca3af' });
@@ -119,15 +146,15 @@ export class PithaPriceChart extends LitElement {
 
   private applyCandles(candles: Candle[]): void {
     if (!this.candleSeries || !this.vwapSeries || !this.volumeSeries) return;
-    this.candleSeries.setData(
-      candles.map((c) => ({
-        time: toUTCTimestamp(c.time),
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      })),
-    );
+    const bars: Bar[] = candles.map((c) => ({
+      time: toUTCTimestamp(c.time),
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    }));
+    this.candleSeries.setData(bars);
+    this.lastBar = bars.at(-1) ?? null;
     this.vwapSeries.setData(candles.map((c) => ({ time: toUTCTimestamp(c.time), value: c.vwap })));
     this.volumeSeries.setData(
       candles.map((c) => ({ time: toUTCTimestamp(c.time), value: c.volume })),
@@ -146,16 +173,27 @@ export class PithaPriceChart extends LitElement {
     });
   }
 
+  // applyTick folds a price tick into the current 1-minute bar (a new bar
+  // only when the minute changes), matching the candles endpoint's
+  // resolution. A non-positive price means the server has no snapshot yet
+  // and would drag the chart's autoscale to 0, so it is ignored.
   private applyTick(message: TickMessage): void {
-    if (!this.candleSeries) return;
-    const time = Math.floor(Date.now() / 1000) as UTCTimestamp;
-    this.candleSeries.update({
-      time,
-      open: message.price,
-      high: message.price,
-      low: message.price,
-      close: message.price,
-    });
+    if (!this.candleSeries || !(message.price > 0)) return;
+    const price = message.price;
+    // Never go back in time: series.update rejects a bar older than the last.
+    const minute = Math.floor(Date.now() / 1000 / BAR_SECONDS) * BAR_SECONDS;
+    const time = Math.max(minute, this.lastBar?.time ?? 0) as UTCTimestamp;
+    const bar: Bar =
+      this.lastBar && this.lastBar.time === time
+        ? {
+            ...this.lastBar,
+            high: Math.max(this.lastBar.high, price),
+            low: Math.min(this.lastBar.low, price),
+            close: price,
+          }
+        : { time, open: price, high: price, low: price, close: price };
+    this.lastBar = bar;
+    this.candleSeries.update(bar);
   }
 
   // applyJevUpdate draws an up/down arrow marker on direction changes
@@ -187,11 +225,14 @@ export class PithaPriceChart extends LitElement {
     `;
   }
 
+  // `changed.get(...) !== undefined` skips the first update cycle, whose
+  // recorded old value is undefined: firstUpdated has already loaded the
+  // candles and opened the socket, and redoing both would double them.
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.has('candlesUrl') && this.hasUpdated && this.candleSeries) {
+    if (changed.get('candlesUrl') !== undefined && this.candleSeries) {
       this.loadInitial();
     }
-    if (changed.has('wsUrl') && this.wsClient) {
+    if (changed.get('wsUrl') !== undefined && this.wsClient) {
       this.wsClient.close();
       this.subscribeWs();
     }

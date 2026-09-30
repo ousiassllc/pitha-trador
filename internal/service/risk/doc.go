@@ -8,8 +8,8 @@
 //
 // Position/order data (open position count, consecutive losses, last
 // loss) comes through PortfolioProvider (portfolio.go), backed in
-// production by RepositoryPortfolioProvider over the positions table
-// Paper Trading Execution writes. Actually closing positions when Kill
+// production by repoportfolio.Provider (internal/service/risk/repoportfolio)
+// over the positions table Paper Trading Execution writes. Actually closing positions when Kill
 // Switch fires is Execution's job (closer.go's PositionCloser,
 // internal/service/execution.Engine in production). Detecting
 // kabuステーションAPI/Jev API health is internal/service/marketdata's

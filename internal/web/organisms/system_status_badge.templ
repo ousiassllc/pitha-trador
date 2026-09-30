@@ -20,8 +20,8 @@ func toAtomState(state domain.SystemState) atoms.State {
 }
 
 // SystemStatusBadge renders the system-state atoms.StatusDot fragment
-// docs/api/endpoints.md §4's `/system/pause|resume|kill|status` action
-// routes return ("システム状態バッジ").
+// docs/api/endpoints.md §4's `GET /system/status` route returns
+// ("システム状態バッジ").
 templ SystemStatusBadge(state domain.SystemState) {
 	@atoms.StatusDot(toAtomState(state))
 }

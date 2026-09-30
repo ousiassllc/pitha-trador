@@ -194,6 +194,7 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 			Timestamp:           bar.Timestamp,
 			EntryPriceReference: &bar.Price,
 			SpreadBps:           bar.SpreadBps,
+			Turnover5mJPY:       bar.Feature.Turnover5m,
 			Calibrated:          calibrated,
 		}
 		if ok {

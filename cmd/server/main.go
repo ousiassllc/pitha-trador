@@ -22,14 +22,17 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
 
 // defaultAddr uses 48080 instead of the far more commonly-claimed 8080
 // (Tomcat/many Node dev servers/etc.) or kabuステーションAPIの18080
 // (internal/service/marketdata, docs/architecture/overview.md §5) to
-// minimize the odds of a port clash with other local services.
-const defaultAddr = ":48080"
+// minimize the odds of a port clash with other local services. The host is
+// 127.0.0.1 so the server is unreachable from other machines
+// (docs/api/endpoints.md §1); see EnvAllowNonLoopback in addr.go.
+const defaultAddr = "127.0.0.1:48080"
 
 // shutdownTimeout bounds how long a SIGINT/SIGTERM waits for in-flight
 // HTTP requests (including open WebSocket streams) before closing them.
@@ -82,15 +85,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	addr := os.Getenv("PITHA_SERVER_ADDR")
-	if addr == "" {
-		addr = defaultAddr
+	allowNonLoopback := os.Getenv(EnvAllowNonLoopback) == "1"
+	addr, err := resolveListenAddr(os.Getenv("PITHA_SERVER_ADDR"), allowNonLoopback)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	engine := router.New(
+		router.WithAllowedHosts(allowedHosts(addr, allowNonLoopback, os.Getenv(EnvAllowedHosts))...),
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
+		router.WithHeartbeatRecorder(services.Risk),
 		router.WithSymbolProvider(services.Execution),
+		router.WithSymbolRiskParams(handler.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config(), services.Risk.AllowedPositionPct)),
+		router.WithInsightProvider(services.Insight),
 		router.WithCalibrationSource(services.Calibration),
 		router.WithPolicyProposalSource(services.Proposals),
 		router.WithBacktestRunner(services.Backtest),
@@ -118,7 +126,8 @@ func main() {
 	serveErr := make(chan error, 1)
 	go func() {
 		log.Printf("pitha-trador server listening on %s", addr)
-		serveErr <- srv.ListenAndServe()
+		err := safego.Try("http server", srv.ListenAndServe)
+		serveErr <- err
 	}()
 
 	select {

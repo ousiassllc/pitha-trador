@@ -3,6 +3,7 @@ package jev
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 // AlertNotifier is notified when Jev API's rolling error rate crosses
@@ -40,6 +41,7 @@ type errorRateTracker struct {
 	window   []bool
 	size     int
 	breached bool
+	lastCall time.Time
 }
 
 func newErrorRateTracker(size int) *errorRateTracker {
@@ -50,6 +52,7 @@ func (t *errorRateTracker) record(failed bool, threshold float64) (rate float64,
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	t.lastCall = time.Now()
 	t.window = append(t.window, failed)
 	if len(t.window) > t.size {
 		t.window = t.window[1:]
@@ -74,4 +77,21 @@ func (t *errorRateTracker) record(failed bool, threshold float64) (rate float64,
 	newlyBreached = isBreach && !t.breached
 	t.breached = isBreach
 	return rate, newlyBreached
+}
+
+// breachStaleAfter is how long a breach stays "current" without any new
+// call: once Jev API calls stop (e.g. the Kill Switch the breach raised
+// halts new Scout/Trader work), the window can no longer show recovery, so
+// a breach with no call for this long is treated as cleared and the next
+// failed call re-establishes it.
+const breachStaleAfter = 5 * time.Minute
+
+// isBreached reports whether the rolling error rate is currently at or
+// above its threshold: the most recent evaluated window breached and a
+// call was recorded within breachStaleAfter. False until
+// minErrorRateSamples calls are seen.
+func (t *errorRateTracker) isBreached() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.breached && time.Since(t.lastCall) < breachStaleAfter
 }

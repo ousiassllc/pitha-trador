@@ -4,19 +4,17 @@ import "github.com/ousiassllc/pitha-trador/internal/domain"
 
 // Header is the global navigation + system-state indicator rendered on
 // every page (docs/components/overview.md §3 "Header（ナビゲーション＋
-// StatusDot。Kill Switch状態のOOB更新対象）"). No page handler tracks
-// internal/service/risk.Engine's live state today (only
-// internal/web/handler.SystemHandler's own action/API routes do), so
-// Header always SSRs a domain.SystemStateRunning placeholder for
-// `#header-status` and `pitha-kill-switch-panel`'s initial attributes,
-// then self-corrects via `hx-trigger="load"` calling the already-live
-// `GET /system/status` (a few-millisecond flash at worst, not a
-// user-visible staleness window) - `pitha-kill-switch-panel` does the
-// same on its own connectedCallback (static/src/components/
-// kill-switch-panel/pitha-kill-switch-panel.ts) since no JSON "current
-// system state" endpoint exists to inject real attributes at render
-// time (only POST /api/v1/system/pause|resume|kill, each returning
-// state as a side effect of an action, functional.md FR-RISK-4).
+// StatusDot。Kill Switch状態のOOB更新対象）"). HATEOAS (issue #106): the
+// caller (layout.Shell, from middleware.SystemStateFrom) passes the live
+// domain.SystemState, and Header SSRs `#header-status` and
+// `pitha-kill-switch-panel` from it - the panel's `status`, which of
+// `can-pause`/`can-resume`/`can-kill` are set (domain.SystemState.
+// CanPause/CanResume/CanKill, the server-side transition rules), and every
+// URL it calls (KillSwitchPanel). state "" means unknown (state not
+// readable): Header then renders no StatusDot/action buttons and
+// `#header-status` self-corrects via `hx-trigger="load"` calling the
+// already-live `GET /system/status`, while the panel fetches
+// `GET /api/v1/system/status` on its own connectedCallback.
 //
 // `#header-status`'s `hx-trigger` also listens for `systemStateChanged`
 // bubbling from the enclosing `<header>` element (components/overview.md
@@ -29,8 +27,8 @@ import "github.com/ousiassllc/pitha-trador/internal/domain"
 // sync with actions Lit itself performed.
 //
 // `#config-banner` follows the exact same self-correcting pattern for
-// issue #57's Settings feature: it SSRs empty (Header takes no
-// parameters, so it cannot know secrets-table state at render time
+// issue #57's Settings feature: it SSRs empty (Header only knows the
+// system state, so it cannot know secrets-table state at render time
 // either) and immediately calls `GET /system/secrets-status`
 // (internal/web/handler.SettingsHandler.Status), which renders
 // organisms.SecretsBanner listing any still-unset required key
@@ -43,7 +41,17 @@ import "github.com/ousiassllc/pitha-trador/internal/domain"
 // release exists (also re-polled every 60s, and immediately on the
 // `updateStatusChanged` event the manual check response fires), or
 // nothing otherwise - including on cmd/server, which has no updater.
-templ Header() {
+// headerStatusTrigger is `#header-status`'s hx-trigger: an unknown state
+// (see Header) additionally fetches the badge on `load`.
+func headerStatusTrigger(state domain.SystemState) string {
+	const onChange = "systemStateChanged from:closest header"
+	if state == "" {
+		return "load, " + onChange
+	}
+	return onChange
+}
+
+templ Header(state domain.SystemState) {
 	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
 		<nav class="flex gap-4 text-sm font-medium text-slate-600">
 			<a class="hover:text-slate-900" href="/scanner">Scanner</a>
@@ -71,12 +79,15 @@ templ Header() {
 			id="header-status"
 			class="flex items-center gap-3"
 			hx-get="/system/status"
-			hx-trigger="load, systemStateChanged from:closest header"
+			hx-headers='{"X-Pitha-Background":"1"}'
+			hx-trigger={ headerStatusTrigger(state) }
 			hx-target="this"
 			hx-swap="innerHTML"
 		>
-			@SystemStatusBadge(domain.SystemStateRunning)
+			if state != "" {
+				@SystemStatusBadge(state)
+			}
 		</div>
-		<pitha-kill-switch-panel status="running" can-pause can-kill></pitha-kill-switch-panel>
+		@KillSwitchPanel(state)
 	</header>
 }

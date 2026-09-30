@@ -4,17 +4,17 @@
 
 - **単一プロセス・単一バイナリ**: Wails によりネイティブデスクトップアプリとして単一の Go プロセスに全機能（HTTP/HTMXサーバー、Scheduler/Worker、kabuステーションAPI連携、Jevアダプタ）を同居させる。単一Windowsホスト構成（`requirements/non-functional.md` §1）に合わせ、ネットワーク越しの分散構成は取らない
 - **バックエンドファースト（HALT思想）**: フロントエンドはAPIサーバー（Gin）に内蔵し、SPAを作らない。判断に迷ったらサーバー側に寄せる。詳細は `components/overview.md`
-- **計算とJev判断の分離**: 価格・リターン・VWAP・ATR・板インバランス等の計算可能な値はGoコードで計算する。Jevは解釈（regime/direction/toxic flow等）のみを担当する（`overview.md` §2.2 最重要原則）
+- **計算とJev判断の分離**: 価格・リターン・VWAP・ATR・板インバランス等の計算可能な値はGoコードで計算する。Jevは解釈（regime/direction/toxic flow等）のみを担当する（`docs/overview.md`「含まないもの」の「LLMへの価格計算・ポジションサイズ計算の委任」を継続遵守）
 - **SQLite中心のインフラ最小化**: Postgres/Redis/BullMQ/Celeryのような別プロセスのミドルウェアを一切持ち込まず、DB・Job Queue・ベクトル検索インデックスをすべて**単一のSQLiteファイル**（アプリ内蔵）で完結させる。Wailsの単一実行ファイル配布と最も相性がよく、Windowsホストへの事前インストール作業をゼロにする
-- **AI自己改善ループの境界**: Sol/Opus（§8）は`runtime_settings`の`policy.*`キー（Policy Engineしきい値）のみ変更可能。`risk.*`キー（Risk Engineのリミット値）およびJevの`prompt_version`/質問セット自体は自己改善ループの対象外とし、人手のみが変更できる。これはアプリケーション層のアクセス制御（governorサービスが`risk.*`への書き込みAPIを持たない）で技術的に強制する（`overview.md` 非目標「AIによるリスクルール変更」を継続遵守）
+- **AI自己改善ループの境界**: Sol/Opus（§8）は`runtime_settings`の`policy.*`キー（Policy Engineしきい値）のみ変更可能。`risk.*`キー（Risk Engineのリミット値）およびJevの`prompt_version`/質問セット自体は自己改善ループの対象外とし、人手のみが変更できる。これはアプリケーション層のアクセス制御（governorサービスが`risk.*`への書き込みAPIを持たない）で技術的に強制する（`docs/overview.md`「含まないもの」の「AIによるRisk Engineのリミット値そのものの変更」を継続遵守）
 - **差し替え可能性**: 各レイヤーはインターフェースを介して疎結合にする。`internal/domain`・`internal/repository`・`internal/service` はWailsプロセスの存在を前提にしない。将来スキャン対象拡大や複数戦略運用でプロセス分離が必要になった場合に備える
 
 ## 2. 技術スタック
 
 | レイヤー | 技術 | 役割 |
 |---------|------|------|
-| 言語 | Go 1.23+ | バックエンド・Scheduler・アダプタ全般を単一言語で実装 |
-| デスクトップシェル | Wails v2 | ネイティブウィンドウ（WebView2）・システムトレイ・ネイティブ通知・単一実行ファイル配布 |
+| 言語 | Go 1.25+ | バックエンド・Scheduler・アダプタ全般を単一言語で実装 |
+| デスクトップシェル | Wails v2 | ネイティブウィンドウ（WebView2）・ネイティブ通知（OSシステムトレイは未対応）・単一実行ファイル配布 |
 | サーバーフレームワーク | Gin | ルーティング＋SSR。WailsのAssetServer.Handlerとして注入 |
 | APIフレームワーク | Huma | OpenAPI 3.1自動生成、入出力バリデーション（`/api/v1/...`） |
 | テンプレートエンジン | Templ | 型安全なGo HTMLテンプレート |
@@ -23,68 +23,115 @@
 | チャート描画 | lightweight-charts | ローソク足・VWAP・出来高チャート |
 | スタイリング | Tailwind CSS | ユーティリティファーストCSS |
 | ビルド | esbuild | Lit/TypeScriptバンドル |
-| DB | **SQLite**（`modernc.org/sqlite`、アプリ内蔵） | 全永続データ（§4 ER参照）。exeに同梱、外部サービスのインストール不要 |
+| DB | **SQLite**（`modernc.org/sqlite`、アプリ内蔵） | 全永続データ（`architecture/er.md`参照）。exeに同梱、外部サービスのインストール不要 |
 | DBアクセス | database/sql + sqlc（sqlite3方言） | 型安全なSQLクエリ生成。ORMは使わずSQLを直接管理 |
 | マイグレーション | golang-migrate（sqlite3ドライバ） | `db/migrations` のSQLマイグレーション管理 |
 | ベクトル検索 | `modernc.org/sqlite/vec`（sqlite-vecのpure Go移植、`vec0`仮想テーブル） | RAG類似検索（§7）。pgvector相当の機能をSQLite上で実現。CGO不要でクロスコンパイル可能（`environment/setup.md` §CI/CD参照） |
-| Job Queue / Scheduler | 自前Workerプール（`jobs`テーブル + goroutine） | market-data, feature-calc, jev-scout, jev-trader, risk-check, paper-execution, outcome-labeling, analytics の8キュー。単一プロセス前提のためRedis/River等の外部キューは不要。`architecture/er.md` の`jobs`テーブルで永続化・再起動時リカバリ |
+| Job Queue / Scheduler | 自前Workerプール（`jobs`テーブル + goroutine） | market-data, feature-calc, jev-scout, jev-trader, outcome-labeling, analytics の6キュー（Risk判定・Paper発注は`jev-trader`内で同期実行しキューを持たない）。単一プロセス前提のためRedis/River等の外部キューは不要。`architecture/er.md` の`jobs`テーブルで永続化・再起動時リカバリ |
 | 周期実行 | robfig/cron | 60秒/15-30秒/5-15秒サイクルのトリガー |
 | リアルタイムPush | `github.com/coder/websocket` | Scanner Dashboard/Symbol DetailへのUI即時反映（`nhooyr.io/websocket`はメンテナがcoder/websocketへ移管し非推奨化されたため、フォーク後継のcoder/websocketを採用） |
 | 市場データ・発注 | kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券） | 1分足・板・発注（REST + PUSH WebSocket） |
 | Jevアダプタ | 独自HTTPクライアント | Jev API（外部LLM判断レイヤー）呼び出し |
 | Luna/Sol/Opusアダプタ | 独自HTTPクライアント | ニュース分類（Luna）・振り返り分析（Sol）・改善提案レビュー（Opus）呼び出し（§8） |
 | ロギング | slog（構造化JSON） | `requirements/non-functional.md` §5 準拠 |
-| アラート | Slack Incoming Webhook | 即時通知（§5.2） |
+| アラート | Slack Incoming Webhook | 即時通知（`requirements/non-functional.md` §5.2） |
 
 ## 3. ディレクトリ構成・レイヤー構造
 
 ```text
 pitha-trador/
 ├── cmd/
-│   └── desktop/                  # Wailsエントリーポイント（main.go, wails.json, app.go）
+│   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, instance_lock.go, wails.json）。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
+│   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go。CI・WebView2が動かない環境向け）
 ├── internal/
+│   ├── bootstrap/                # 両エントリーポイント共通の起動処理（DB open+マイグレーション、config/*.yamlの4段階解決、各サービスの組み立て・ジョブ登録）
+│   │   ├── heldposition/         # FR-SCHED-4 保有ポジション監視・Exit評価ループ（5〜15秒周期、最新板で再評価）
+│   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
+│   │   └── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
+│   ├── config/                   # config/*.yamlの型付きローダー、AES-256-GCM秘密情報ヘルパー（他の内部パッケージに依存しない）
+│   ├── safego/                   # FR-SCHED-6 常駐goroutineのpanic回復（`Recover`/`Run`/`Try`/`Loop`。panicをスタック付きでslogに記録し、ループは次サイクルへ継続。他の内部パッケージに依存しない）
+│   ├── logging/                  # slog JSON出力の日次ローテーション（rotate.go）・30日超のgzipアーカイブ（archive.go。`requirements/non-functional.md` §5）
+│   ├── supervisor/               # --supervise起動時の子プロセス監視・指数バックオフ再起動（cmd/desktopのみが利用。非機能§3）
+│   ├── singleinstance/           # ファイルロックによる多重起動ガード（cmd/desktopのみが利用。OSがプロセス終了時にロックを解放）
+│   ├── version/                  # ビルド時に埋め込むバージョン文字列（`ldflags -X`。自動アップデート判定で使用）
 │   ├── domain/                   # ドメインモデル（他レイヤーに非依存）
 │   │   ├── instrument.go
 │   │   ├── snapshot.go           # market_snapshots相当
 │   │   ├── feature.go
+│   │   ├── candidate.go          # Fast Screener候補
 │   │   ├── jevdecision.go
+│   │   ├── newscontext.go        # Luna分類結果（news_context）
 │   │   ├── signal.go             # trade_signals相当
 │   │   ├── order.go              # paper_orders相当
 │   │   ├── position.go
+│   │   ├── killswitch.go         # SystemState・KillSwitchEvent
+│   │   ├── failurestreak.go
+│   │   ├── activity.go           # System Activity Feedのイベント型
 │   │   ├── calibration.go
 │   │   └── policyproposal.go     # policy_proposals相当
-│   ├── repository/               # domainのみに依存。sqlc生成コードを内包
+│   ├── repository/               # domainのみに依存（例外: `internal/config`のAES-256-GCMヘルパー）。SQLite接続・マイグレーション（db.go）を含む
 │   │   ├── instrument_repo.go
 │   │   ├── snapshot_repo.go
 │   │   ├── decision_repo.go
 │   │   ├── signal_repo.go
 │   │   ├── order_repo.go
 │   │   ├── position_repo.go
+│   │   ├── decisiontrade/        # クローズ済みポジションと開始時のJev判断の結合読み取り（FR-CAL-2の帯別PnL用）
+│   │   ├── snapshotcols/         # market_snapshotsのFeature列とdomain.Featureの対応表（INSERT/SELECT用）
 │   │   ├── calibration_repo.go
 │   │   ├── job_repo.go           # jobsテーブル（自前Worker用）
-│   │   └── proposal_repo.go      # policy_proposals
+│   │   ├── proposal_repo.go      # policy_proposals
+│   │   ├── killswitch_repo.go    # kill_switch_events / kill_switch_resolutions
+│   │   ├── runtime_settings_repo.go # runtime_settings（policy.*/system.*）
+│   │   ├── secrets_repo.go       # secrets（AES-256-GCM暗号化）
+│   │   ├── dbmw.go               # DB書き込み失敗の検知フック
+│   │   └── timeconv.go           # 時刻のSQLite表現との相互変換
 │   ├── service/                  # domain, repositoryに依存
 │   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS）
+│   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
 │   │   ├── featureengine/        # 特徴量算出
+│   │   │   └── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
+│   │   ├── pushfeed/             # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き）
 │   │   ├── screener/             # Fast Screener・screen_score算出
 │   │   ├── jev/                  # Jevアダプタ（client.go, scout.go, trader.go, schemas.go, prompt_version.go）
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）
 │   │   ├── policy/                # Policy Engine
 │   │   ├── risk/                  # Risk Engine（Kill Switch含む）
+│   │   │   ├── sizing/            # FR-ENTRY-3 ポジションサイズ算出（リスク上限からの純関数）
+│   │   │   ├── repoportfolio/     # risk.PortfolioProviderの本番実装（positionsから建玉・日次損失・連敗を導出）
+│   │   │   ├── multinotify/       # risk.Notifierを複数チャネルへ扇状に配信
+│   │   │   └── killswitchflow/    # テスト専用: Kill Switch発動〜再開フローの回帰テスト（行数上限のためriskから分離）
 │   │   ├── execution/             # Paper/kabu発注実行
+│   │   │   ├── enrich/            # jev_decisionsのresponse_json内のJev Trader応答項目（regime等）をJevDecisionへ復元（Exit条件・Symbol Detail共用）
+│   │   │   ├── vwapcross/         # FR-EXIT-1 VWAP逆クロスのクロス判定・前回観測トラッカー（execution.Engineが依存する本番コード）
+│   │   │   └── closerace/         # テスト専用: 決済競合（手動決済/CloseAll/Exitモニタ）の回帰テスト（行数上限のためexecutionから分離）
 │   │   ├── calibration/           # Outcome labeling・Brier/Log Loss算出
+│   │   ├── backtest/              # Backtest Engine（Walk Forward評価・Governor用シャドーバックテスト）
 │   │   ├── assist/                # Luna/Sol/Opusアダプタ
 │   │   │   ├── luna.go
 │   │   │   ├── sol.go
 │   │   │   └── opus.go
 │   │   ├── newsfeed/              # News Ingest: 外部ニュースフィード定期取得→Luna呼び出し（§13）
 │   │   ├── selfimprove/           # Sol提案生成〜Opusレビュー〜適用/ロールバック（§8）
+│   │   ├── notify/                # Slack Incoming Webhookによる即時アラート送信
+│   │   ├── updater/               # GitHub Releases自動アップデート（検知・安全ゲート・検証、desktopのみ配線、§9）
 │   │   ├── activityfeed/          # jobs/jev_decisions/kill_switch_events集約の読み取り専用フィード（System Activity Log向け、§12）
+│   │   ├── insight/               # 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）
+│   │   ├── backup/                # 日次SQLiteバックアップ（daily 90日 + weekly gzip、`requirements/non-functional.md` §3）
+│   │   ├── retention/             # jobs / market_snapshotsの期限切れ行パージ（`requirements/non-functional.md` §3）
 │   │   └── scheduler/             # 自前Workerプール定義・周期ジョブ登録
+│   │       └── maintenance/       # 日次ハウスキーピング（バックアップ・データ保持パージ・ログアーカイブ）のcatch-up実行。最終成功日をruntime_settingsへ保持し、起動時と10分ごとに未実行分を実行
 │   ├── router/                    # SSR + API ルーティング定義（Huma登録含む）
+│   │   ├── options.go             # Option群（依存注入）
+│   │   ├── router.go              # New（Gin Engine組み立て）
+│   │   ├── router_middleware.go   # middlewareの適用順
+│   │   ├── router_routes.go       # ルート登録
+│   │   └── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
 │   └── web/
-│       ├── handler/               # scanner.go, symbol.go, performance.go, calibration.go, system.go
-│       ├── middleware/            # CSRF, ロギング, リカバリ, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）
+│       ├── apierror/              # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
+│       ├── handler/               # scanner.go, symbol*.go, performance.go, calibration.go, system.go, settings.go, activity.go, update.go, policy_proposals.go ほか（*_ws.goはWebSocket）
+│       ├── insightapi/            # decisions/signals/performance の読み取り専用JSON API（Huma登録、`service/insight`を使用）
+│       ├── middleware/            # HostGuard（Host/Origin検証）, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（§10.4）, Setup Guard（§10.5）, SystemState
 │       ├── atoms/
 │       ├── molecules/
 │       ├── organisms/
@@ -93,16 +140,19 @@ pitha-trador/
 ├── static/
 │   └── src/
 │       ├── components/            # Lit Web Components（pitha-* 、詳細は components/overview.md）
-│       │   └── lib/               # api.ts, ws.ts, logger.ts
+│       │   └── lib/               # api.ts, ws.ts, ws-status.ts, logger.ts, styles.ts
 │       ├── css/
 │       └── dist/                  # ビルド成果物
 ├── db/
 │   └── migrations/                # golang-migrate SQLマイグレーション（SQLite方言、vec0仮想テーブル作成含む）
 ├── config/
 │   ├── strategy.yaml               # スキャン頻度・Fast Screenerしきい値・Policy Engineしきい値
-│   └── risk.yaml                   # Risk Engine制限値（§7 Risk Engine参照）
+│   ├── risk.yaml                   # Risk Engine制限値（`requirements/functional.md` §4.7参照）
+│   └── embed.go                    # 上記YAMLのgo:embed（配布exe用の既定値、§9）
 └── tests/
 ```
+
+ツリーの`service/`配下サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`risk/killswitchflow`）は、linterlyのディレクトリ/ファイル行数上限を満たすためにテストを分離したもので、本番コードではない。
 
 ### レイヤー依存ルール（HALT準拠）
 
@@ -116,8 +166,9 @@ handler → service → repository → domain
 
 - `domain/`: 他レイヤーに依存しない。純粋なビジネスロジック（例: Risk Engineのしきい値判定ロジック自体はdomainに置き、DB/HTTPアクセスはrepository/serviceに分離）
 - `repository/`: `domain/` のみに依存。例外として`SecretsRepository`（issue #57）のみ`internal/config`のAES-256-GCMヘルパー（依存を持たない、`domain`と同格の基盤パッケージ）にも依存する
+- `internal/safego`: 標準ライブラリのみに依存し、`internal/config`・`domain`と同格の基盤パッケージ。`service/`・`bootstrap`・`cmd/server`のいずれからも参照できる（常駐goroutineのpanic回復、FR-SCHED-6）
 - `service/`: `domain/`, `repository/` に依存。`marketdata`/`jev`/`assist`など外部I/OはこのレイヤーでHTTPクライアントとして実装する
-- `web/handler/`: `service/`, `domain/` に依存。`repository/` を直接使わない
+- `web/handler/`: `service/`, `domain/` に依存。`repository/` を直接使わない（`.golangci.yml` の depguard が `internal/web/**` から `internal/repository` への import を lint で拒否する）。repositoryが返すセンチネルエラーのうちhandlerが分類する必要があるもの（例: `domain.ErrPositionNotFound`）は`domain/`に定義し、repositoryはそれを返す
 - `router/`: `handler/` を参照してルートを定義
 
 ## 4. コンポーネント責務
@@ -130,282 +181,38 @@ handler → service → repository → domain
 | Jev Adapter (Scout/Trader) | 構造化状態をJev APIへ送信し、choice/score/yes-no型の判断を受け取る（§4.4, §4.5） | `internal/service/jev` |
 | RAG Context Builder | 現在の状態ベクトルからsqlite-vecで類似過去局面を検索し、Jevへのfew-shot文脈を構築する（§7、FR-RAG-1〜5） | `internal/service/rag` |
 | Policy Engine | Jev出力をトレードシグナルへ変換（§4.6） | `internal/service/policy` |
-| Risk Engine | ポジションサイズ・損失上限・Kill Switch（§4.7）。全レイヤーの中で最終拒否権を持つ | `internal/service/risk` |
-| Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時） | `internal/service/execution` |
+| Market Calendar | 東証の立会時間（前場/後場）・祝日判定。立会時間外の市場データ取得・Jev呼び出し・新規発注停止（Scheduler SessionGate）、FR-RISK-6のハートビート判定、FR-EXIT-1の引け前強制決済が参照する（`requirements/non-functional.md` §3） | `internal/service/marketcalendar` |
+| Risk Engine | ポジションサイズ・損失上限・Kill Switch（§4.7）。全レイヤーの中で最終拒否権を持つ。サイズ算出（FR-ENTRY-3）・ポートフォリオ状態の導出・複数チャネル通知はサブパッケージ。`killswitchflow`はテスト専用 | `internal/service/risk`（`sizing`, `repoportfolio`, `multinotify`, `killswitchflow`） |
+| Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時）。Jev Trader応答項目の復元は`enrich`、FR-EXIT-1 VWAP逆クロス判定は`vwapcross`。`closerace`はテスト専用 | `internal/service/execution`（`enrich`, `vwapcross`, `closerace`） |
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7） | `internal/service/selfimprove` |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
 | Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10） | `internal/service/scheduler` |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12） | `internal/service/activityfeed` |
-| Setup Guard Middleware | 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）が未設定の間、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`以外の全リクエストを`/setup`へ302リダイレクトする（§10.5、FR-SETUP-1） | `internal/web/middleware` |
+| Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8） | `internal/service/backtest` |
+| Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
+| Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9） | `internal/service/updater` |
+| Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |
+| Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
+| Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
+| Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/heldposition`・`service/marketdata`・`service/pushfeed`・`service/scheduler`から使う | `internal/safego` |
+| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先） | `internal/bootstrap`（`heldposition`, `paperexec`, `alerts`） |
+| Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ（`requirements/non-functional.md` §5） | `internal/logging` |
+| Supervisor | 子プロセスの異常終了時の指数バックオフ再起動（1秒〜5分、1分安定でリセット）。終了コード0で監視終了。`cmd/desktop`の`--supervise`起動でのみ使う（`requirements/non-functional.md` §3） | `internal/supervisor` |
+| Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。2つ目の起動は`bootstrap.Run`に到達する前に終了コード0で終了し、Scheduler・Kill Switch・発注の二重稼働を防ぐ | `internal/singleinstance` |
+| Headless Server | Wailsに依存しない`net/http`エントリーポイント（Updater非配線。§9） | `cmd/server` |
+| Setup Guard Middleware | 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）が未設定の間、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`以外の全リクエストを`/setup`へ誘導する（ページ遷移は302、HTMXは`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。§10.5、FR-SETUP-1） | `internal/web/middleware` |
+| API Error Formatter | `/api/v1` のエラーボディ整形。`registerAPI`から`apierror.Install()`で`huma.NewError`を上書きし、4xxはバリデーション詳細を`errors[]`に残し、5xxは固定メッセージのみ返して原因を`slog`へ記録する（`api/endpoints.md` §7、issue #215） | `internal/web/apierror` |
 | Web (HTMX/Templ/Lit) | UI提供（`components/overview.md`） | `internal/web` |
 
-## 5. kabuステーションAPI連携
+## 5〜13. 分割章
 
-- kabuステーションは三菱UFJ eスマート証券（旧auカブコム証券）が提供するWindows常駐アプリで、`http://localhost:18080`（既定）にローカルRESTを公開する。Go側の `internal/service/marketdata` はこれをHTTPクライアントでラップする
-- **トークン発行**: アプリ起動時に `/kabusapi/token` へAPIパスワードでPOSTしトークンを取得。トークンは有効期限があるため、Wailsアプリ起動時および定期的に再発行し、メモリ上にのみ保持する（ディスクへは保存しない）
-- **銘柄登録・PUSH購読**: スキャン対象銘柄をkabuステーションAPIの銘柄登録エンドポイントに登録し、価格・板情報はPUSH WebSocket（kabuステーションが提供するローカルWebSocket）で受信する。これによりREST側の60秒ポーリングに依存せず、Feature Engineが各サイクル開始時点の最新スナップショットを参照できるようにする
-- **発注**: Paper Trading中はExecutionサービス内でシミュレーションのみ行い、kabuステーションAPIへは発注しない。Phase 7（実売買移行）で初めてkabuステーションAPIの注文エンドポイントを呼び出す
-- **異常時**: kabuステーションAPI無応答・エラー時は該当銘柄を stale data 判定し新規取引を禁止する（`requirements/functional.md` にある障害対応方針と整合）
-- **認証情報の入力経路**: `APIPassword`は`.env`/環境変数ではなく、アプリ内のSettings画面（`/settings`）から入力し、`secrets`テーブル（`internal/repository.SecretsRepository`、AES-256-GCMで暗号化）にDB保存する（issue #57）。必須3キー（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）が未設定でもアプリは起動するが、Setup Guard（§10.5）が全ページを`/setup`へ誘導する。Jev/kabuステーションAPI依存機能はエラーログを出しつつ動作を継続する。入力はキー単位で保存・削除する（`POST`/`DELETE /settings/:key`、`internal/config`のallow-list外のキーは400）ため、あるキーの操作が他キーの値に影響することはない（issue #79）。設定変更はアプリ再起動後に反映される（ホットリロードは範囲外）
+以降の章は `.linterly.yml` の300行/ファイル制限のため別ファイルに分割している（節番号・内容は分割前と同一）。
 
-## 6. Jev API連携
-
-- Jevアダプタ（`internal/service/jev`）はAPIキーをGoプロセス内のみで保持し、HTTP経由でJev APIを呼び出す
-- Scout/Traderそれぞれの質問セット（`requirements/functional.md` §4.4, §4.5）をリクエストスキーマ（`schemas.go`）として定義し、レスポンスをdomainモデルへマッピングする
-- `prompt_version.go` でプロンプト/質問セットのバージョンを管理し、`jev_decisions.question_version` に記録する（`architecture/er.md` 参照）
-- 失敗時は1回目リトライ、2回目以降exponential backoff、継続失敗でnew entry停止。既存ポジションはRisk Engine/Executionのコードベースルールで管理を継続する
-- **認証情報の入力経路**: `APIKey`/`BaseURL`は§5と同じくSettings画面（`/settings`）経由でDB保存する（issue #57）。詳細は§5「認証情報の入力経路」参照
-
-## 7. RAG連携（経験ベース文脈拡張）
-
-`requirements/functional.md` §4.13 の実装詳細。
-
-```mermaid
-sequenceDiagram
-    participant FE as Feature Engine
-    participant RAG as RAG Context Builder
-    participant VEC as sqlite-vec (jev_decision_vectors)
-    participant JEV as Jev Adapter
-
-    FE->>RAG: 現在の特徴量ベクトル（14次元、標準化済み）
-    RAG->>VEC: embedding MATCH ? ORDER BY distance LIMIT 5
-    VEC-->>RAG: 類似jev_decision_id + distance
-    RAG->>RAG: calibration_outcomesと結合し「方向・regime・future_return・was_direction_correct」を要約
-    RAG->>JEV: few-shot文脈（類似局面の要約）+ 現在の状態
-    JEV-->>RAG: Scout/Trader判断
-```
-
-- 埋め込みはLLM API呼び出しを伴わない標準化済み数値特徴量ベクトル（14次元、`architecture/er.md` ベクトルインデックス節参照）。追加のAPIコスト・レイテンシは発生しない（FR-RAG-3）
-- `market_snapshots`保存時・`jev_decisions`保存時にそれぞれ`market_snapshot_vectors`/`jev_decision_vectors`（sqlite-vec仮想テーブル）へ同期書き込みする
-- コールドスタート期間（該当データが少ない）は空の検索結果として扱い、Jevは通常通り判断する（FR-RAG-4）
-
-## 8. 自己改善ループ（Sol / Opus 連携）
-
-`requirements/functional.md` §4.14 の実装詳細。Sol/Opusは高頻度の売買判断ループ（§4, §9）とは別の低頻度バッチとして動作し、Policy Engineのしきい値のみを対象に自己改善する。
-
-```mermaid
-sequenceDiagram
-    participant SCHED as Scheduler（日次、引け後）
-    participant SOL as Sol Adapter
-    participant GOV as Self-Improvement Governor
-    participant OPUS as Opus Adapter
-    participant BT as Backtest Engine（§4.11再利用）
-    participant DB as SQLite（runtime_settings, policy_proposals）
-    participant SLACK as Slack Webhook
-
-    SCHED->>SOL: 直近の負けトレード・Calibration指標を渡し分析依頼
-    SOL-->>GOV: 改善提案（rationale + proposed_changes: policy.*キーのみ）
-    GOV->>GOV: 提案の対象キー・変更幅を機械的に検証（FR-SELFIMPROVE-8。逸脱時はstatus=rejectedとして以降の処理をスキップ）
-    GOV->>DB: policy_proposals挿入（status=pending）
-    GOV->>BT: 直近20営業日相当のシャドーバックテスト実行（提案後しきい値）
-    BT-->>GOV: Expectancy / Max Drawdown比較結果
-    GOV->>GOV: 決定的しきい値判定（Expectancy非悪化 かつ Max Drawdown悪化が相対10%以内、FR-SELFIMPROVE-4）
-    GOV->>OPUS: 提案 + シャドーバックテスト結果 + 決定的判定結果でレビュー依頼（Opus API、実際の外部AI呼び出し）
-    OPUS-->>GOV: 定性レビュー結果（approve/reject, review_json）
-    alt 決定的しきい値を満たす かつ Opus APIがapprove（FR-SELFIMPROVE-9）
-        GOV->>DB: runtime_settings（policy.*）更新、policy_proposals.status=applied
-        GOV->>SLACK: 適用を通知
-        GOV->>GOV: 適用後5営業日相当のExpectancyを追跡
-        opt 相対20%以上悪化
-            GOV->>DB: 直前policy_versionへロールバック、policy_proposals.status=rolled_back
-            GOV->>SLACK: ロールバックを通知
-        end
-    else 却下（決定的しきい値未達 または Opus APIがreject）
-        GOV->>DB: policy_proposals.status=rejected
-    end
-```
-
-- Solが変更を提案できる対象は`runtime_settings`の`policy.*`キーに限定する。`risk.*`キーとJevの`prompt_version`は`selfimprove`サービスに書き込みAPIそのものを持たせないことで技術的に強制する（§1 設計方針）
-- Luna（Sense）は本ループとは独立し、高頻度側（Feature Engine/Jev呼び出しの前段）でニュース分類等を提供する補助コンポーネントとして`internal/service/assist/luna.go`に実装する
-- **外部AI API契約（`internal/service/assist`）**: いずれも`POST {BASE_URL}<path>`（`Authorization: Bearer {API_KEY}`、JSON、200以外はエラー扱い）。Sol `/v1/analyze`（リクエスト: 方向別`thresholds`/`calibration`と`constraints`、レスポンス: `{"rationale":{...},"proposed_changes":[{"key","new_value"}]}`。変更なしは空配列）、Opus `/v1/review`（リクエスト: `proposal`/`backtest`/`deterministic`、レスポンス: `{"verdict":"approve|reject","reason":"..."}`）。決定的しきい値を満たさない提案ではOpus APIを呼ばずに却下する。`policy_proposals.review_json`は`verdict`/`approved`/`deterministic_passed`/`llm_reviewed`/`reason`等を含む。
-- 未処理（`pending`）の提案がある日は、Opusレビューの再試行のみ行い新規のSol分析は行わない（同一しきい値への提案の競合防止）
-- Sol/Opusはいずれも`internal/service/assist`のHTTPクライアントを介し、Jevアダプタ（§6）と同様の認証情報の入力経路（Settings画面→`secrets`テーブル、`SOL_API_KEY`/`SOL_BASE_URL`、`OPUS_API_KEY`/`OPUS_BASE_URL`）とリトライ/exponential backoff方針に従う実際の外部AI API呼び出しとして実装する。API失敗時は当該日のSol提案生成/Opusレビューをスキップし、Slack通知のうえ翌営業日に再試行する（銘柄単位の売買判断ではないためnew entry停止のような取引影響は発生しない）
-
-## 9. Wails統合（デスクトップシェル）
-
-```mermaid
-graph TD
-    subgraph Process["単一Goプロセス（Wailsアプリ）"]
-        WV["WebView2 (ネイティブウィンドウ)"]
-        AS["Wails AssetServer.Handler = Gin Engine"]
-        GIN["Gin Router\n(SSR: Templ/HTMX, API: Huma)"]
-        SCHED["自前Worker / Scheduler"]
-        SVC["各Service（marketdata/featureengine/screener/jev/rag/policy/risk/execution/calibration/selfimprove）"]
-        TRAY["システムトレイ・ネイティブ通知"]
-    end
-    WV <--> AS
-    AS --> GIN
-    GIN --> SVC
-    SCHED --> SVC
-    SVC -.Kill Switch発動時.-> TRAY
-    SVC --> SQLITE[("SQLite（アプリ内蔵ファイル）")]
-```
-
-- Wails v2 の `options.App.AssetServer.Handler` に Gin の `http.Handler` をそのまま渡し、WebViewは常に `http://wails.localhost/` 相当の内部プロトコル経由でGinが返すHTML/HTMXフラグメント/静的アセットを描画する。外部ネットワークポートを開かない（`requirements/non-functional.md` §4 セキュリティに整合）
-- Risk EngineがKill Switchを発動した際は、同一プロセス内であるためネットワーク越しの通知APIを介さず、直接Wailsランタイム（`runtime.EventsEmit` / ネイティブ通知API）を呼び出してOSレベルのトースト通知とシステムトレイアイコン変化を発生させる
-- Windows起動時の自動起動は、Wails実行ファイルへのショートカットをWindowsスタートアップフォルダまたはタスクスケジューラに登録することで実現する
-- SQLiteファイルはWailsアプリの起動時に存在確認・マイグレーション適用を行う。Postgresのような別プロセスの起動待ち合わせは不要
-- 将来ヘッドレス運用（例: CI・テスト環境）が必要な場合に備え、`cmd/desktop`とは別に`cmd/server`（Wailsを使わずGinのみを`net/http`でリッスンするエントリーポイント）を用意できるよう、`internal/router`はWailsに依存しない形で実装する
-- 自動アップデート（`internal/service/updater`、`cmd/desktop`のみ）は検知結果を`Checker.Status()`（最終確認時刻・新バージョン有無・安全ゲート保留・インストーラー準備済み・直近エラー）として保持し、`bootstrap.Services.Updater`→`router.WithUpdateController`経由でHandlerへ渡す。UIはHeaderの`UpdateBanner`で新バージョンと保留状態を通知し、Settings画面の「今すぐアップデートを確認」（`POST /system/update-check`）でスケジューラーと同じ`CheckForUpdate`を手動実行できる。`CheckForUpdate`は排他制御され、周期実行と手動実行が同時にインストーラーをダウンロード/終了要求することはない。`cmd/server`はアップデーター未搭載のためバナー/パネルは空、確認ルートは404（issue #76）
-- `config/strategy.yaml`・`config/risk.yaml`・`/static/...`で配信する静的アセット（`static/src/dist`のesbuild/Tailwindビルド出力＋`static/src/vendor`のhtmx.min.js）は、いずれも`go:embed`でバイナリに埋め込み、`wails build`/`go build ./cmd/server`が生成する単一`.exe`だけで（外部ファイル・ソースツリー一切無しに）起動できる。config 2種は`internal/bootstrap.Run`が (1) 明示パス指定 (2) `PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`環境変数 (3) 実行ファイルと同じディレクトリの`config/*.yaml`（`os.Executable()`基準。配布先で手編集する運用向け） (4) 埋め込み既定値、の優先順位で解決する（issue #59）。静的アセットは`internal/router.New`が常に埋め込みから配信する
-- `make dev`実行時は`Makefile`が`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`をリポジトリ内の生ファイルへ設定するため、上記(2)が常に選ばれ、`config/risk.yaml`等を編集して再起動すれば即座に反映される（埋め込みはコンパイル時スナップショットのため、(4)経由では反映されない）
-
-## 10. 通信フロー
-
-### 10.1 起動時フロー
-
-```mermaid
-sequenceDiagram
-    participant App as Wailsアプリ起動
-    participant KABU as kabuステーションAPI
-    participant DB as SQLite
-    participant SCHED as Scheduler（自前Worker）
-
-    App->>DB: マイグレーション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON, WAL）
-    App->>KABU: /kabusapi/token でトークン発行
-    KABU-->>App: token
-    App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始
-    App->>SCHED: 周期ジョブ登録（60s/15-30s/5-15s）。前回クラッシュ時の`running`状態ジョブを`pending`へ復帰
-    App->>App: WebView起動・Scanner Dashboard表示
-```
-
-### 10.2 スキャン〜発注フロー
-
-`requirements/functional.md` §2 主要処理フロー（シーケンス図）を参照。アーキテクチャ上の要点は以下。
-
-- Scheduler（自前Worker、`jobs`テーブル）が `market-data` → `feature-calc` → `jev-scout` → `jev-trader` → `risk-check` → `paper-execution` の順にジョブをenqueueし、各Serviceがdomainモデルを介して疎結合に連携する
-- `jev-scout`/`jev-trader`の直前にRAG Context Builder（§7）が類似局面を検索し文脈を付与する
-- `risk-check` は他ジョブと異なり同期的にPolicy Engineの直後で必ず評価され、Risk Engineの承認なしにExecutionへは到達しない
-- `outcome-labeling` / `analytics` は約定・Exit後に非同期実行し、UIの応答性に影響を与えない
-
-### 10.3 Kill Switchフロー（発動〜再開）
-
-```mermaid
-sequenceDiagram
-    participant RE as Risk Engine
-    participant EX as Execution
-    participant DB as SQLite
-    participant TRAY as Wails通知/トレイ
-    participant SLACK as Slack Webhook
-
-    RE->>RE: 日次損失上限/連敗上限/異常検知/ハートビート途絶を検出
-    RE->>DB: kill_switch_events登録（reason, detail_json）
-    RE->>EX: 新規エントリー停止指示
-    RE->>TRAY: ネイティブ通知発火
-    RE->>SLACK: Webhook通知送信（reason・自動/手動再開区分を含む）
-    opt reasonが daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error
-        RE->>EX: 保有ポジション強制クローズ指示（必要な場合）
-    end
-    alt 自動再開対象（market_data_down / jev_api_down / operator_heartbeat_timeout / cooldown経過）
-        RE->>RE: 発動条件の解消を定期監視
-        RE->>DB: kill_switch_events.resolved_at・resolved_by=auto を更新
-        RE->>EX: 新規エントリー再開
-        RE->>SLACK: 自動再開を通知
-    else 手動再開対象（daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error）
-        Note over RE: オペレーターがUI（pitha-kill-switch-panel）で明示的にresumeするまで停止を維持
-    end
-```
-
-### 10.4 操作者ハートビート監視（dead-man's switch、Live専用）
-
-```mermaid
-sequenceDiagram
-    participant MW as 認証済みリクエストMiddleware
-    participant RE as Risk Engine
-    participant DB as SQLite
-
-    MW->>DB: 認証済みUIリクエストのたびに last_ui_heartbeat_at を更新
-    loop 立会時間中、周期チェック（自前Worker）
-        RE->>DB: last_ui_heartbeat_at を参照
-        alt now - last_ui_heartbeat_at > heartbeat_timeout_minutes（Live初期値120分）
-            RE->>RE: reason=operator_heartbeat_timeout でKill Switch発動（§10.3へ）
-        else 正常
-            RE->>RE: 何もしない
-        end
-    end
-```
-
-- ハートビートはCSRF保護対象の認証済みリクエスト（ページ/アクション/API呼び出し）であれば種類を問わず更新対象とする
-- Paper Trading運用中は実資金リスクがないためハートビート監視を適用しない（`requirements/functional.md` §4.7 表の heartbeat_timeout_minutes は Live のみ設定）
-
-### 10.5 初回セットアップ誘導
-
-`requirements/functional.md` §4.18（FR-SETUP-1〜5）の実装詳細。
-
-```mermaid
-sequenceDiagram
-    participant UI as WebView
-    participant SG as Setup Guard Middleware
-    participant DB as secrets テーブル
-    participant SET as /setup（Settings Handler）
-
-    UI->>SG: 任意のリクエスト（例: GET /scanner）
-    SG->>DB: JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDの有無を確認
-    alt いずれか未設定（または読み出し失敗）
-        SG-->>UI: 302 /setup
-        UI->>SET: GET /setup
-        UI->>SET: POST /settings/:key（`SecretFieldRow`の保存。`/setup`・`/static/...`と同じくガード対象外）
-        SET->>DB: 暗号化保存
-    else 3キーとも設定済み
-        SG->>SG: 通常のルートへ委譲（リダイレクトなし）
-    end
-```
-
-- ガードは全ルート（ページ・アクション・`/api/v1`・WebSocket・404含む）の手前に置き、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`のみ通す。判定はリクエストごとにDBを参照し、状態を保持しないため、3キーが揃った次のリクエストから自動で解除される（アプリ再起動は不要）
-- `/setup`はSettings画面と同じ`SecretFieldRow`・同じ`POST`/`DELETE /settings/:key`を使い、専用の保存実装を持たない。完了後も直接アクセスして再設定できる
-- `/setup`は`Header`（ガード対象の`hx-get`フラグメントを持つ）を含まない専用レイアウト（`SetupShell`）で描画する
-- 各種サービスは従来通り起動時の値を読むため、保存した認証情報の反映にはアプリ再起動が必要（§5）
-
-## 11. 障害対応方針
-
-| 障害 | 対応 |
-|------|------|
-| Jev API失敗 | 1回目リトライ→2回目以降exponential backoff→継続失敗でnew entry停止。既存ポジションはコードベースExit Ruleで継続管理 |
-| Market Data欠損 | stale data判定→該当銘柄の新規取引禁止 |
-| kabuステーションAPI異常 | Kill Switch発動条件に該当。新規取引停止、必要に応じ強制決済 |
-| DB書き込み失敗継続 | Kill Switch発動条件に該当 |
-| Wailsプロセスクラッシュ | プロセス監視による自動再起動。再起動中は新規エントリー停止（既存ポジションはkabuステーション側の待機注文/手動介入を前提）。再起動後、`jobs`テーブルの中断ジョブを`pending`へ復帰させ処理を再開する |
-
-## 12. System Activity Feed連携
-
-`requirements/functional.md` §4.15/§5.5の実装詳細。既存テーブル（`jobs`, `jev_decisions`, `kill_switch_events`）への読み取り専用集約であり、新規の永続テーブル・マイグレーションは追加しない。
-
-- `internal/service/activityfeed`が`internal/repository`の`job_repo`/`decision_repo`/`killswitch_repo`を横断的に参照し、キュー別集計（pending/running/直近failed件数）と時刻順マージ済みイベント一覧を組み立てる
-- `internal/web/handler`に`activity.go`を追加し、`GET /api/v1/activity`（`api/endpoints.md` §5）と`/ws/activity`（同§6）を提供する
-- 新規イベント（`jobs`の状態遷移、`jev_decisions`挿入、`kill_switch_events`挿入）はrepository層のコミット直後にactivityfeedのイベントバス（プロセス内channel、DB永続化なし）へ通知し、`/ws/activity`購読者へ配信する。プロセス再起動時はイベントバスの未配信分は破棄され、次回`GET /api/v1/activity`のスナップショットから再開する（監査要件はjobs/jev_decisions/kill_switch_events自体が引き続き担う）
-- フィード件数上限（既定200、最大500）はAPI/WS配信側の制限であり、参照元テーブルの保持期間・行数（`architecture/er.md`各テーブルの運用注記）には影響しない
-
-## 13. Luna ニュース分類・News Ingest連携
-
-`requirements/functional.md` §4.16（FR-LUNA-1〜5）の実装詳細。
-
-```mermaid
-sequenceDiagram
-    participant NF as News Ingest (internal/service/newsfeed)
-    participant FEED as 外部ニュースフィード
-    participant LUNA as Luna Adapter (internal/service/assist/luna.go)
-    participant CACHE as インメモリキャッシュ（直近N件、TTL付き）
-    participant SCOUT as Jev Scout
-
-    loop 定期ポーリング
-        NF->>FEED: 対象銘柄（instruments.is_active）関連ニュース取得
-        FEED-->>NF: 見出し・本文
-        NF->>LUNA: ニュース本文（Luna API、実際の外部AI呼び出し）
-        LUNA-->>NF: sentiment / event_type / summary
-        NF->>CACHE: 銘柄別に格納（TTL経過分は破棄）
-    end
-    SCOUT->>CACHE: 対象銘柄のnews_context取得
-    CACHE-->>SCOUT: 直近sentiment/event_type/summary（該当なしは空）
-    SCOUT->>SCOUT: jev_decisions.state_jsonへnews_contextとして注入
-```
-
-- 永続化は`jev_decisions.state_json`（既存カラム）のみを利用し、新規テーブル・マイグレーションは追加しない（キャッシュはプロセスメモリ内のみでDB非永続）
-- **認証情報の入力経路**: `LUNA_API_KEY`/`LUNA_BASE_URL`、`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は§5・§6と同じくSettings画面（`/settings`）経由で`secrets`テーブルへ保存する
-- **外部API契約**: ニュースフィードは`GET {NEWS_FEED_URL}?symbol={銘柄コード}`（`Authorization: Bearer {NEWS_FEED_API_KEY}`）で`{"items":[{"id","headline","body","published_at"}]}`を返す。Lunaは`POST {LUNA_BASE_URL}/v1/classify`（リクエスト: `symbol`/`headline`/`body`/`published_at`、レスポンス: `{"sentiment":"bullish|bearish|neutral","event_type":"決算|業績修正|M&A|規制|その他","summary":"..."}`）。値域外の応答は失敗として扱う
-- News Ingestは1分周期でポーリングし、記事ID（無ければ見出し）単位で重複排除して1件ずつLunaへ送信する。キャッシュは銘柄ごと直近5件・TTL 6時間（公開時刻基準）。新規に分類された記事は銘柄単位のニュースフラグを立て、Fast Screener候補であればイベント再評価（FR-SCAN-1）で1回だけ消費される
-- LUNA/NEWS_FEEDのどちらかが未設定の間はNews Ingestを起動しない（`news_context`は注入されずニュースフラグも立たない）。SOL/OPUS未設定時は各段階を毎日スキップする
-- Luna/News Ingest API失敗時はニュースフラグを立てず、Fast Screener/Jevの通常フローに影響を与えない（FR-LUNA-4、Jevと同様のフェイルセーフ）
+| 節 | ファイル |
+|----|----------|
+| §5 kabuステーションAPI連携 / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 | `docs/architecture/overview/integrations.md` |
+| §10 通信フロー（§10.1〜§10.5）/ §11 障害対応方針 | `docs/architecture/overview/flows.md` |
 
 ## 改訂履歴
 
@@ -425,3 +232,13 @@ sequenceDiagram
 | 1.11 | 2026-09-29 | §8・§13に外部AI API/ニュースフィードの契約（エンドポイント・リクエスト/レスポンス・キャッシュ/ポーリング仕様・未設定時の挙動）を追記 | #81/#82実装で確定した外部API契約の仕様書反映 |
 | 1.12 | 2026-09-29 | §5の認証情報入力経路をキー単位の保存・削除（`POST`/`DELETE /settings/:key`、allow-list外は400）と明記 | issue #79実装 |
 | 1.13 | 2026-09-29 | §3 middleware/にSetup Guardを追記、§4にSetup Guard Middleware行、§5の未設定時挙動をSetup Guardへの誘導へ変更、§10.5初回セットアップ誘導を追加 | issue #80実装 |
+| 1.14 | 2026-09-29 | §5の発注方針にBroker認証情報のProduction/Paper分離をPhase 7で実施する旨を追記 | issue #103対応 |
+| 1.15 | 2026-09-29 | §5〜§13を`docs/architecture/overview/`配下の章別ファイル（integrations/flows）へ分割。節番号・内容は変更なし | issue #119（300行/ファイル制限の形骸化解消） |
+| 1.16 | 2026-09-29 | §4 Setup Guardの応答をリクエスト種別別に変更 | issue #140実装 |
+| 1.17 | 2026-09-29 | §3 middleware/にHostGuard・Session・RequestLog・Recovery・SystemStateの名称を反映（適用順は`api/endpoints.md` §1） | issue #136/#149 |
+| 1.18 | 2026-09-29 | §3ディレクトリ構成に`cmd/server`・`internal/bootstrap`・`config`・`logging`・`version`・`backtest`・`notify`・`updater`・`insight`・`backup`・`retention`・`insightapi`等の実在パッケージを反映、§4にBacktest/Notifier/Updater/Insight/Backup/Retention/Bootstrap/Logging/Headless Serverを追加。実在しない節番号参照（`overview.md` §2.2・非目標・§4 ER・§5.2）を実際の参照先へ修正 | issue #153/#155 |
+| 1.19 | 2026-09-29 | §3ツリーに`marketcalendar`・`bootstrap/{heldposition,paperexec,alerts}`・`risk/{sizing,repoportfolio,multinotify}`・`execution/enrich`・`repository/{decisiontrade,snapshotcols}`を追加。§4にMarket Calendar行を新設し、Risk/Execution/Bootstrapの実装場所にサブパッケージを追記 | issue #179 |
+| 1.20 | 2026-09-29 | §3ツリーに`execution/{vwapcross,closerace}`・`risk/killswitchflow`を追加（`closerace`・`killswitchflow`はテスト専用ディレクトリ）。§4のRisk/Execution行に`vwapcross`・`killswitchflow`・`closerace`を追記 | issue #199 |
+| 1.21 | 2026-09-29 | §3ツリーに`internal/supervisor`・`internal/singleinstance`と`cmd/desktop`の`--supervise`起動・インストーラー自動起動を追記、§4にSupervisor・Single Instance Guardを追加 | issue #208/#210 |
+| 1.22 | 2026-09-29 | §3の`internal/web/`ツリーに`apierror/`を追加、§4にAPI Error Formatter行を新設 | issue #215/#219 |
+| 1.23 | 2026-09-29 | §3ツリーに`internal/safego`を追加、§4にBackground Task Guard行を新設、§3レイヤー依存ルールに基盤パッケージとして`safego`を追記 | issue #226/#229 |

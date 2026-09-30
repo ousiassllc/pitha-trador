@@ -33,24 +33,21 @@ type symbolJevUpdateMessage struct {
 // source.
 func (h *SymbolHandler) WebSocket(c *gin.Context) {
 	symbol := c.Param("symbol")
-	conn, err := websocket.Accept(c.Writer, c.Request, nil)
-	if err != nil {
-		return
-	}
-	defer func() { _ = conn.CloseNow() }()
-
-	ctx := c.Request.Context()
 	var lastDirection *string
 	var lastConfidence *float64
 
-	for {
+	pollWebSocket(c, func() time.Duration { return h.tickInterval }, func(ctx context.Context, conn *websocket.Conn) error {
 		state, err := h.provider.State(ctx, symbol)
 		if err != nil {
-			return
+			return err
 		}
 
-		if err := writeJSON(ctx, conn, symbolTickMessage{Type: "tick", Price: state.LastPrice}); err != nil {
-			return
+		// No snapshot yet (LastPrice == 0): a price-0 tick would drag the
+		// chart's autoscale to 0, so send nothing until a price exists.
+		if state.LastPrice > 0 {
+			if err := writeJSON(ctx, conn, symbolTickMessage{Type: "tick", Price: state.LastPrice}); err != nil {
+				return err
+			}
 		}
 
 		direction := jevDirectionOrNil(state.LastSignal)
@@ -59,18 +56,12 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 		if direction != nil && changed {
 			msg := symbolJevUpdateMessage{Type: "jev_update", Direction: direction, Confidence: &confidence}
 			if err := writeJSON(ctx, conn, msg); err != nil {
-				return
+				return err
 			}
 			lastDirection, lastConfidence = direction, &confidence
 		}
-
-		select {
-		case <-ctx.Done():
-			_ = conn.Close(websocket.StatusNormalClosure, "")
-			return
-		case <-time.After(h.tickInterval):
-		}
-	}
+		return nil
+	})
 }
 
 // jevDirectionOrNil returns nil for domain.JevDirectionNone (no signal

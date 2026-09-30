@@ -2,6 +2,7 @@ package risk_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 func testLimits() config.RiskLimits {
 	return config.RiskLimits{
+		InitialCapital:                    30_000_000,
 		MaxPositionPerSymbolPct:           2.0,
 		MaxTotalExposurePct:               20.0,
 		MaxDailyLossPct:                   1.0,
@@ -47,11 +49,15 @@ func (f fakePortfolio) TotalExposurePct(context.Context) (float64, error) {
 func (f fakePortfolio) SymbolExposurePct(context.Context, int64) (float64, error) {
 	return f.symbolExposurePct, nil
 }
-func (f fakePortfolio) DailyLossPct(context.Context) (float64, error) { return f.dailyLossPct, nil }
-func (f fakePortfolio) ConsecutiveLosses(context.Context) (int, error) {
+func (f fakePortfolio) DailyLossPct(context.Context, time.Time) (float64, error) {
+	return f.dailyLossPct, nil
+}
+func (f fakePortfolio) ConsecutiveLosses(context.Context, time.Time) (int, error) {
 	return f.consecutiveLosses, nil
 }
-func (f fakePortfolio) LastLossAt(context.Context) (time.Time, error) { return f.lastLossAt, nil }
+func (f fakePortfolio) LastLossAt(context.Context, time.Time) (time.Time, error) {
+	return f.lastLossAt, nil
+}
 
 type fakeCloser struct {
 	closed []string
@@ -115,14 +121,36 @@ func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioP
 	if now == nil {
 		now = time.Now
 	}
+	snapshots := repository.NewSnapshotRepository(db)
+	seedSnapshot(t, db, snapshots, 2000, 5)
 	e := risk.NewEngine(risk.Config{
 		Limits:     limits,
 		KillSwitch: killSwitch,
 		Settings:   repository.NewRuntimeSettingsRepository(db),
-		Snapshots:  repository.NewSnapshotRepository(db),
+		Snapshots:  snapshots,
 		Portfolio:  portfolio,
 		Closer:     closer,
 		Now:        now,
 	})
 	return e, killSwitch
+}
+
+// seedSnapshot creates instrument 1 (the id Check tests use) with one
+// latest snapshot at price/spreadBps; Check fails closed without one.
+// A negative spreadBps stores a NULL spread.
+func seedSnapshot(t *testing.T, db *sql.DB, snapshots *repository.SnapshotRepository, price, spreadBps float64) {
+	t.Helper()
+	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
+	})
+	if err != nil {
+		t.Fatalf("create instrument: %v", err)
+	}
+	snap := domain.Snapshot{InstrumentID: inst.ID, Timestamp: time.Now(), Price: price, RawDataJSON: "{}"}
+	if spreadBps >= 0 {
+		snap.SpreadBps = &spreadBps
+	}
+	if _, err := snapshots.Insert(context.Background(), snap); err != nil {
+		t.Fatalf("insert snapshot: %v", err)
+	}
 }

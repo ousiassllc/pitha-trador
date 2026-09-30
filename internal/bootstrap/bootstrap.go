@@ -44,7 +44,7 @@ const (
 // bootstrap.Config field, the PITHA_STRATEGY_PATH/PITHA_RISK_PATH
 // environment variable, nor a config/*.yaml next to the running
 // executable (loadConfigOrEmbedded's steps 1-3) applied
-// (docs/architecture/overview.md §7, issue #59).
+// (docs/architecture/overview.md §9, issue #59).
 const embeddedConfigSource = "(embedded default)"
 
 // DefaultDBPath returns the conventional per-user SQLite database file

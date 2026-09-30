@@ -28,6 +28,8 @@
 | Paper発注〜約定シミュレーション | 200ms以内 |
 | UI（Scanner Dashboard）へのライブ反映 | WebSocket経由で1秒以内 |
 
+- Jev API（Scout/Trader）の「タイムアウト5秒」は**HTTP 1試行あたり**の上限とする（`internal/service/jev` の `defaultHTTPTimeout`）。失敗時は最大4試行（初回＋リトライ3回。1回目リトライは即時、2回目以降は500ms・1秒の指数バックオフ）で、全試行失敗時の1呼び出しあたり最悪所要時間は 4×5秒＋1.5秒 = 21.5秒。候補再評価周期（15〜30秒、§2.1）の下限を超え得るが、Scout/TraderのJev呼び出しはJobキュー（`jev-scout`/`jev-trader`）経由の非同期処理で周期を塞がない（両呼び出しがともに全試行失敗した場合の合計は最悪43秒）。「最大4試行・1回目リトライは即時・500ms/1秒バックオフ」は実装（`internal/service/jev/client.go` の `defaultMaxAttempts`/`defaultRetryBaseDelay`）の値であり、`architecture/overview/integrations.md` §6 にも同内容を明記する
+
 ### 2.3 スループット・スケーラビリティ
 
 - 対象ユニバースは東証上場銘柄（最大 約4,000銘柄）を想定し、Fast Screener段階まで全銘柄を60秒サイクルで処理できること
@@ -38,20 +40,26 @@
 
 - 目標: 24/365常時稼働（夜間・週末を含む）。ただし発注・新規エントリーは東証立会時間（9:00-11:30 / 12:30-15:30 JST）のみ行う
 - 立会時間外は市場データ取得・Jev呼び出し・新規発注を停止し、Scheduler/Workerは待機状態に入る（無駄なAPI課金を避ける）
-- Windowsホスト起動時にkabuステーションアプリ・Wailsアプリを自動起動する（Windowsタスクスケジューラ等を利用）
-- kabuステーションAPIまたはWailsアプリがクラッシュした場合、既存ポジションの安全（Exitルール継続）を優先し、プロセス監視により自動再起動を試みる。再起動中は新規エントリーを停止する
-- SQLiteのDBファイル（アプリ内蔵）を日次でファイルコピーによりバックアップし、ローカルディスク外（外部ストレージ/クラウド）へ退避する。保持期間は直近90日分のフルバックアップ＋週次アーカイブ。バックアップ時はWALチェックポイント（`PRAGMA wal_checkpoint(TRUNCATE)`）を実行してから複製する
+  - 引け前強制決済ウィンドウ（大引け − `force_flat_before_market_close_minutes` 以降）でも新規発注は停止する（建てた直後に強制決済されるため。`execution.ErrOutsideTradingSession`）
+- 立会時間の判定は `internal/service/marketcalendar`（東証カレンダー）が行う: 前場 9:00-11:30・後場 12:30-15:30 JST（開始時刻を含み終了時刻を含まない。11:30-12:30の昼休みは立会外）。土日・国民の祝日（振替休日・国民の休日を含む。2020年以降の祝日法に基づく判定）・年末年始休場（12/31, 1/1-1/3）は終日立会外とする。臨時休場（システム障害等）は扱わない
+- 立会時間外に停止する対象: フルスキャン・イベント再評価のenqueue、候補更新に伴うJev Scoutのenqueue、保有ポジション監視の板取得、新規エントリー（`execution.ErrOutsideTradingSession`）、市場データ停止/Jev API停止の検知、操作者ハートビート判定。バックアップ・データ削除・ログローテーション等のメンテナンスジョブとOutcome Labelingは保存済みデータのみを扱うため立会時間外も実行する
+- Windowsへのログイン時にWailsアプリを自動起動し、クラッシュ時は自動再起動する。実装: NSISインストーラー（`cmd/desktop/build/windows/installer/project.nsi`）のコンポーネントページ「Start at login and restart after a crash」（既定でON）が、スタートアップフォルダに`--supervise`付きのショートカットを作成する（アンインストールで削除。無人自動更新`/S`では初回インストール時の選択を維持する）。`--supervise`で起動した`pitha-trador.exe`は自身を子プロセスとして再実行して監視し（`internal/supervisor`）、終了コードが非0またはkillされた場合に指数バックオフ（1秒〜最大5分、1分以上安定稼働したらリセット）で再起動する。終了コード0（操作者による終了・自動更新による終了・起動失敗ダイアログ後の終了）では監視を終了し、意図した停止と競合しない。再起動中はプロセスごと停止しているためSchedulerによる新規エントリーは行われず、再起動後は既存ポジションのExitルールが再開する。Wailsアプリはデスクトップセッションを要するため、起動契機は「Windowsホスト起動」ではなく「ユーザーログイン」であり、ホスト再起動後の無人復帰にはWindowsの自動ログオン設定を前提とする。自動起動とデスクトップアイコン起動の併存による二重稼働（Scheduler・Kill Switch・発注の重複）を防ぐため、アプリ本体・`--supervise`監視プロセスはそれぞれDBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`。`internal/singleinstance`）を`bootstrap.Run`より前に取得し、取得できない2つ目の起動は終了コード0で即終了する（OSがプロセス終了時にロックを解放するため、クラッシュ後の残留ロック解除は不要）
+- kabuステーションアプリ本体はサードパーティ製でログイン操作を要するため、pitha-trador側からは起動・再起動しない。自動起動はkabuステーション自身の設定（またはオペレーターによるWindowsタスクスケジューラ登録）で行う。kabuステーションAPIの停止・異常はKill Switch発動条件（`architecture/overview/flows.md` §11）として扱う
+- SQLiteのDBファイル（アプリ内蔵）を日次でバックアップし、ローカルディスク外（外部ストレージ/クラウド）へ退避する。保持期間は直近90日分のフルバックアップ＋週次アーカイブ。バックアップ時はWALチェックポイント（`PRAGMA wal_checkpoint(TRUNCATE)`）を実行してから複製する
+  - 実装: Schedulerの日次ジョブ（`internal/service/backup`）。退避先は環境変数`PITHA_BACKUP_DIR`（`environment/setup.md`）で指定し、未設定時は無効（起動ログに警告）。退避先ディレクトリ自体は作成せず、存在しない場合（外付けドライブ/クラウド同期フォルダ未マウント等）はローカルディスクへ静かに退避せずエラーにする。書き込み中の生ファイルコピーは不整合になり得るため、複製はチェックポイント後の`VACUUM INTO`（単一スナップショット）で行い、確定前に`secrets`テーブル（アプリ埋め込み鍵で暗号化されたAPIキー/パスワード）を空にして`PRAGMA integrity_check`で検証する。復元後はSetup画面で秘密情報を再入力する。ディレクトリは`0700`、ファイルは`0600`で作成する。日次分は`daily/pitha-YYYY-MM-DD.db`に保存し90日超を削除、各ISO週の最初のバックアップ（起動が平日のみでも週1つ生成される。週の月曜日付）を`weekly/pitha-YYYY-MM-DD.db.gz`（gzip）として52週保持し超過分を削除する
+  - 実行タイミング: デスクトップアプリは日中のみ起動する運用のため、深夜0時固定のcronは実行されない。バックアップ・データ保持パージ・ログアーカイブは、最終成功日を`runtime_settings`（`system.maintenance.<task>.last_success_date`）に保存し、起動直後および10分ごとに「本日未成功なら実行」（catch-up）する。バックアップは加えて毎日16:00（ローカル時刻）にも実行する。失敗時は30分後に再試行し、3回連続で失敗した時点でSlack（未設定時は構造化ログ）へ通知する
+- 高頻度書き込みテーブルはDBの無制限な肥大を防ぐため保持期間を設け、Schedulerの日次ジョブ（上記catch-up方式）で期限切れ行を削除する（`internal/service/retention`）。`jobs`は完了行のみ対象で`succeeded`は7日・`failed`は30日（`pending`/`running`は削除しない）、`market_snapshots`は90日（対応する`market_snapshot_vectors`行も同時に削除）。削除は1000行単位のバッチで行い、ワーカーの書き込みを長時間ブロックしない。監査対象テーブル（`kill_switch_events`/`kill_switch_resolutions`/`jev_decisions`/`orders`等）は削除対象外。削除済みページは以後の書き込みで再利用されるためファイルは増え続けないが縮小はしない（バックアップの`VACUUM INTO`は縮小済みで出力される）
 
 ## 4. セキュリティ
 
 - Jev APIキーはGoバックエンドプロセス内のみで保持し、フロントエンド（Templ/HTMX/Lit）に露出させない
 - kabuステーションAPIのAPIパスワード・発行トークンは暗号化して設定ストア（OS資格情報ストアまたは暗号化ファイル）に保存する
-- Broker（kabuステーション）APIキー/パスワードはProduction用とPaper Trading用を分離して管理する
+- Broker（kabuステーション）APIキー/パスワードはProduction用とPaper Trading用を分離して管理する。Phase 7（実売買）までは、`KABU_API_PASSWORD`（単一キー）はkabuステーションAPIのトークン発行・銘柄登録・板情報取得（市場データ読み取り）にのみ使用し、注文エンドポイント（発注・取消）は呼び出さないため発注可能な認証情報は保持しない。Phase 7で注文エンドポイントを呼び出す前に、Production用とPaper Trading用のキー・接続先（Base URL）を別々のsecretsキーとして追加し、Paper Tradingが実口座の認証情報を参照できない構成にする（現時点では未実装）
 - Secrets（APIキー・パスワード・DB接続情報）はGitに保存しない。`.env`はコミット対象外とし、`.env.example`のみをリポジトリに含める
 - Wailsアプリが内部で起動するHTTPサーバーは`127.0.0.1`にのみバインドし、外部ネットワークからアクセス不可とする
 - HTMXフォームにはCSRFトークンを付与する（HALT標準構成に準拠。ローカル単一ユーザーでも実装は省略しない）
 - 実売買（Phase 7）へ移行しても、発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）。安全性はRisk Engine側のLive専用の厳格なリミット（`requirements/functional.md` §4.7）と、操作者ハートビートが一定時間途絶した場合に自動で新規エントリーを停止するdead-man's switch（FR-RISK-6）で担保する
-- Risk Engineの拒否・Kill Switch発動・実売買発注はすべて監査ログ（改ざん検知可能な追記専用ログ）に記録する
+- Risk Engineの拒否・Kill Switch発動・実売買発注はすべて監査ログ（追記専用ログ）に記録する。`kill_switch_events` / `kill_switch_resolutions`はDBトリガーで`UPDATE`/`DELETE`を拒否して追記専用を強制する（`architecture/er.md` §kill_switch_events）。ハッシュチェーン等によるDBファイル自体の改ざん検知は行わない
 
 ## 5. 監視・アラート
 
@@ -65,7 +73,7 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 - Signal count（生成シグナル数）
 - Risk拒否件数
 - kabuステーションAPI（Broker）latency / エラー
-- DB latency / エラー
+- DB latency / エラー（エラーはERROR、100ms以上の低速クエリはWARN、それ未満の正常クエリはDEBUG。ワーカーのアイドルポーリングでログが肥大化しないよう、正常クエリはINFOで記録しない）
 
 ### 5.2 即時Slack通知対象
 
@@ -94,3 +102,8 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 |----|------|---------|---------|
 | 1.0 | 2026-09-26 | 新規作成 | 初版 |
 | 1.1 | 2026-09-26 | §4セキュリティのPhase 7追加認証要件を撤廃し、dead-man's switch/Live専用厳格リミットに置換。§5.2にハートビート/再開通知を追加 | Phase 7も含めた完全自動運用への方針変更 |
+| 1.2 | 2026-09-29 | §4のBroker認証情報の分離について、Phase 7までは単一の`KABU_API_PASSWORD`を市場データ読み取り専用とし、Production/Paper別キーへの分離はPhase 7で注文エンドポイント実装前に行うと明記 | issue #103対応（仕様と実装の乖離解消） |
+| 1.3 | 2026-09-29 | §3にDB日次バックアップの実装方式（Schedulerジョブ・`PITHA_BACKUP_DIR`・`VACUUM INTO`・日次/週次の保持）を追記 | issue #97対応（仕様と実装の乖離解消） |
+| 1.4 | 2026-09-29 | §3に高頻度書き込みテーブル（`jobs`/`market_snapshots`）の保持期間と日次パージ、監査テーブルの削除対象外を追記 | issue #129対応（DB無制限増大の解消） |
+| 1.5 | 2026-09-29 | §3のバックアップ/パージ/ログアーカイブを起動時catch-up方式に変更、バックアップからの`secrets`除外・`0700`/`0600`・週次52週保持・退避先必須・連続失敗通知を追記 | issue #137/#152/#159対応 |
+| 1.6 | 2026-09-29 | §3の自動起動・クラッシュ時再起動の実装方式（スタートアップショートカット＋`--supervise`セルフ監視）とkabuステーションアプリの対象外を明記 | issue #204対応（仕様と実装の乖離解消） |

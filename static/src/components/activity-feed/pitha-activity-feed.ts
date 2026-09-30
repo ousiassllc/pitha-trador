@@ -11,7 +11,8 @@ import { html, LitElement, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
-import { resolveWsUrl, WsClient } from '../lib/ws';
+import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { renderWsDisconnected } from '../lib/ws-status';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/activity` shapes.
 export interface QueueStatus {
@@ -47,8 +48,6 @@ const QUEUES = [
   'feature-calc',
   'jev-scout',
   'jev-trader',
-  'risk-check',
-  'paper-execution',
   'outcome-labeling',
   'analytics',
 ] as const;
@@ -78,6 +77,7 @@ export class PithaActivityFeed extends LitElement {
   @state() private typeFilter = '';
   @state() private queueFilter = '';
   @state() private error: string | null = null;
+  @state() private wsStatus: WsStatus = 'connecting';
 
   private wsClient: WsClient<ActivityWsMessage> | null = null;
 
@@ -102,9 +102,11 @@ export class PithaActivityFeed extends LitElement {
     return query ? `${this.apiUrl}?${query}` : this.apiUrl;
   }
 
-  private async loadSnapshot(): Promise<void> {
+  // `background` marks a resync the page fires by itself (WS reconnect), so
+  // it is not counted as operator activity (FR-RISK-6, flows.md §10.4).
+  private async loadSnapshot(background = false): Promise<void> {
     try {
-      const response = await get<ActivityAPIResponse>(this.feedUrl());
+      const response = await get<ActivityAPIResponse>(this.feedUrl(), { background });
       this.queues = response.queues;
       this.events = response.events;
       this.error = null;
@@ -114,10 +116,11 @@ export class PithaActivityFeed extends LitElement {
     }
   }
 
-  private async loadKillSwitchEvents(): Promise<void> {
+  private async loadKillSwitchEvents(background = false): Promise<void> {
     try {
       const response = await get<ActivityAPIResponse>(
         `${this.apiUrl}?type=kill_switch&limit=${KILL_SWITCH_LIMIT}`,
+        { background },
       );
       this.killSwitchEvents = response.events;
     } catch (err) {
@@ -126,7 +129,20 @@ export class PithaActivityFeed extends LitElement {
   }
 
   private subscribeWs(): void {
+    // The server sends nothing on connect, so events emitted while the
+    // socket was down are lost unless the snapshots are re-fetched (#221).
+    let wasDisconnected = false;
     this.wsClient = new WsClient<ActivityWsMessage>(resolveWsUrl(this.wsUrl), {
+      onStatusChange: (status) => {
+        this.wsStatus = status;
+        if (isWsDisconnected(status)) {
+          wasDisconnected = true;
+        } else if (status === 'open' && wasDisconnected) {
+          wasDisconnected = false;
+          void this.loadSnapshot(true);
+          void this.loadKillSwitchEvents(true);
+        }
+      },
       onMessage: (message) => this.onWsMessage(message),
     });
   }
@@ -258,12 +274,15 @@ export class PithaActivityFeed extends LitElement {
           </tbody>
         </table>
       </section>
+      ${renderWsDisconnected(this.wsStatus)}
       ${this.error ? html`<p class="pitha-activity-feed-error" role="alert">${this.error}</p>` : nothing}
     `;
   }
 
+  // Skip the first update cycle (old value undefined): connectedCallback
+  // already subscribed, and reconnecting would open a second socket.
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.has('wsUrl') && this.wsClient) {
+    if (changed.get('wsUrl') !== undefined && this.wsClient) {
       this.wsClient.close();
       this.subscribeWs();
     }

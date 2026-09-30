@@ -1,6 +1,6 @@
 // Package scheduler is the self-hosted worker pool + periodic trigger
 // that stands in for River (docs/architecture/overview.md §2 "Job Queue /
-// Scheduler", §4.10 Scheduler/Worker, functional.md §4.10 FR-SCHED-1〜4).
+// Scheduler", §4.10 Scheduler/Worker, functional.md §4.10 FR-SCHED-1〜6).
 //
 // Scheduler claims jobs.Job rows off each registered queue and invokes the
 // Handler registered for that queue (this scope only registers
@@ -11,7 +11,7 @@
 // enqueue trigger (EnqueueOutcomeLabeling, WithOutcomeLabelSource,
 // functional.md FR-CAL-4), enqueues an immediate jev-scout job bypassing
 // that cadence when a caller reports an instrument's
-// featureengine.EventSignal fired (EnqueueEventReevaluation,
+// eventtrigger.Signal fired (EnqueueEventReevaluation,
 // functional.md FR-SCAN-1/FR-SCAN-2), optionally drives the operator
 // heartbeat dead-man's-switch periodic check (CheckOperatorHeartbeat,
 // WithHeartbeatChecker, functional.md FR-RISK-6), and recovers jobs left

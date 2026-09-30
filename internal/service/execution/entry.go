@@ -7,12 +7,11 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 )
 
 // EntryRequest is Enter's input: a Risk-Engine-approved trade signal
-// (FR-POLICY-3/5) plus the sizing/order-type decision a caller (a later
-// Scheduler paper-execution job, or a test) has already made. Execution
+// (FR-POLICY-3/5) plus the sizing/order-type decision a caller
+// (internal/bootstrap/paperexec, or a test) has already made. Execution
 // does not compute Quantity itself - no position-sizing formula is
 // defined by functional.md §4.8 (only Risk Engine's exposure limits,
 // which Policy Engine already checked before RiskPassed became true).
@@ -47,6 +46,8 @@ type EntryResult struct {
 // Enter implements Paper Entry (FR-ENTRY-1〜2): submits a market or limit
 // paper_orders row for req.Signal's direction/instrument, filling and
 // opening a positions row immediately when the order type/price allow it.
+// With Config.Calendar set, entries outside 東証立会時間 fail with
+// ErrOutsideTradingSession.
 func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, error) {
 	direction := req.Signal.Direction
 	if direction != domain.JevDirectionLong && direction != domain.JevDirectionShort {
@@ -60,10 +61,13 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 	if now.IsZero() {
 		now = e.cfg.Now()
 	}
+	if !e.sessionOpen(now) {
+		return EntryResult{}, ErrOutsideTradingSession
+	}
 
 	if _, err := e.positions.GetOpenByInstrument(ctx, req.Signal.InstrumentID); err == nil {
 		return EntryResult{}, ErrPositionAlreadyOpen
-	} else if !errors.Is(err, repository.ErrPositionNotFound) {
+	} else if !errors.Is(err, domain.ErrPositionNotFound) {
 		return EntryResult{}, fmt.Errorf("execution: check open position for instrument %d: %w", req.Signal.InstrumentID, err)
 	}
 
@@ -104,7 +108,18 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 	}
 
 	if orderType == domain.OrderTypeMarket || limitCrosses(side, *req.LimitPrice, req.Price) {
-		return e.fillEntry(ctx, order, direction, req.Price, now)
+		result, err := e.fillEntry(ctx, order, direction, req.Price, now)
+		if err != nil {
+			// fillEntry rolled back, so the order is still PENDING and
+			// nothing retries a market order: reject it instead of
+			// leaving it dangling (a concurrent Enter for the same
+			// instrument lands here via positions_open_instrument_uq).
+			if _, rejectErr := e.orders.UpdateStatus(ctx, order.ID, domain.OrderStatusRejected); rejectErr != nil {
+				err = errors.Join(err, fmt.Errorf("execution: reject unfilled entry order %d: %w", order.ID, rejectErr))
+			}
+			return EntryResult{}, err
+		}
+		return result, nil
 	}
 	return EntryResult{Order: order}, nil
 }
@@ -115,6 +130,9 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 // initial check). It returns ok=false without error if orderID is not a
 // PENDING limit order or currentPrice has not crossed yet.
 func (e *Engine) TryFillPending(ctx context.Context, orderID int64, direction string, currentPrice float64, now time.Time) (EntryResult, bool, error) {
+	if !validPrice(currentPrice) {
+		return EntryResult{}, false, fmt.Errorf("execution: fill pending order %d: %w (got %v)", orderID, ErrInvalidPrice, currentPrice)
+	}
 	order, err := e.orders.Get(ctx, orderID)
 	if err != nil {
 		return EntryResult{}, false, fmt.Errorf("execution: get pending order %d: %w", orderID, err)
@@ -133,30 +151,27 @@ func (e *Engine) TryFillPending(ctx context.Context, orderID int64, direction st
 	return result, true, nil
 }
 
-// fillEntry fills order at price/now and opens the resulting position.
+// fillEntry fills order at price/now and opens the resulting position in a
+// single transaction (OrderRepository.FillEntry): a failure opening the
+// position leaves the order un-filled rather than FILLED with no position
+// (issue #158).
 func (e *Engine) fillEntry(ctx context.Context, order domain.PaperOrder, direction string, price float64, now time.Time) (EntryResult, error) {
-	filled, err := e.orders.Fill(ctx, order.ID, price, nil, now)
-	if err != nil {
-		return EntryResult{}, fmt.Errorf("execution: fill entry order %d for %q: %w", order.ID, order.Symbol, err)
-	}
-
 	positionSide := domain.PositionSideLong
 	if direction == domain.JevDirectionShort {
 		positionSide = domain.PositionSideShort
 	}
 
-	position, err := e.positions.Open(ctx, domain.Position{
-		InstrumentID: filled.InstrumentID,
-		EntryOrderID: filled.ID,
-		Symbol:       filled.Symbol,
+	filled, position, err := e.orders.FillEntry(ctx, order.ID, price, nil, now, domain.Position{
+		InstrumentID: order.InstrumentID,
+		Symbol:       order.Symbol,
 		Side:         positionSide,
-		Quantity:     filled.Quantity,
+		Quantity:     order.Quantity,
 		EntryPrice:   price,
 		CurrentPrice: price,
 		OpenedAt:     now,
 	})
 	if err != nil {
-		return EntryResult{}, fmt.Errorf("execution: open position for filled order %d (%q): %w", filled.ID, filled.Symbol, err)
+		return EntryResult{}, fmt.Errorf("execution: fill entry order %d and open position for %q: %w", order.ID, order.Symbol, err)
 	}
 	return EntryResult{Order: filled, Position: &position}, nil
 }

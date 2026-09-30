@@ -105,14 +105,62 @@ func TestPerformanceHandler_Page_RejectsInvalidInputWithoutRunning(t *testing.T)
 	}
 }
 
-func TestPerformanceHandler_Page_ShowsRunFailure(t *testing.T) {
+func TestPerformanceHandler_Page_ShowsFixedMessageOnRunFailure(t *testing.T) {
 	runner := &recordingBacktestRunner{err: errors.New("look-ahead check failed")}
 	rec := servePerformance(t, runner, "/performance?from=2026-09-01&to=2026-09-10")
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "look-ahead check failed") {
-		t.Errorf("body should include the run failure")
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-testid="backtest-error"`) {
+		t.Errorf("body should show a run failure message")
+	}
+	if strings.Contains(body, "look-ahead check failed") {
+		t.Errorf("body leaks the internal run error: %s", body)
+	}
+}
+
+func dayQuery(days int, extra string) string {
+	from := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := from.AddDate(0, 0, days-1)
+	return "from=" + from.Format("2006-01-02") + "&to=" + to.Format("2006-01-02") + extra
+}
+
+func TestPerformanceHandler_Page_EnforcesInputBounds(t *testing.T) {
+	for name, tc := range map[string]struct {
+		query    string
+		wantCode int
+	}{
+		"fold days at limit":     {"from=2026-01-01&to=2027-12-31&training_days=366&validation_days=1&forward_days=1", http.StatusOK},
+		"fold days over limit":   {"from=2026-01-01&to=2026-12-31&training_days=367", http.StatusBadRequest},
+		"duration overflow days": {"from=2026-01-01&to=2026-12-31&training_days=106752", http.StatusBadRequest},
+		"int64 max days":         {"from=2026-01-01&to=2026-12-31&forward_days=9223372036854775807", http.StatusBadRequest},
+		"range at limit":         {dayQuery(1830, "&forward_days=366"), http.StatusOK},
+		"range over limit":       {dayQuery(1831, "&forward_days=366"), http.StatusBadRequest},
+		"full calendar range":    {"from=0001-01-01&to=9999-12-31&training_days=1&validation_days=1&forward_days=1", http.StatusBadRequest},
+		"splits at limit":        {dayQuery(1002, "&training_days=1&validation_days=1&forward_days=1"), http.StatusOK},
+		"splits over limit":      {dayQuery(1003, "&training_days=1&validation_days=1&forward_days=1"), http.StatusBadRequest},
+	} {
+		t.Run(name, func(t *testing.T) {
+			runner := &recordingBacktestRunner{}
+			rec := servePerformance(t, runner, "/performance?"+tc.query)
+
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d (body=%s)", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if ran := len(runner.calls) == 1; ran != (tc.wantCode == http.StatusOK) {
+				t.Errorf("RunWalkForward calls = %d for status %d", len(runner.calls), rec.Code)
+			}
+		})
+	}
+}
+
+func TestPerformanceHandler_Page_TimeoutReturns503(t *testing.T) {
+	runner := &recordingBacktestRunner{err: context.DeadlineExceeded}
+	rec := servePerformance(t, runner, "/performance?from=2026-09-01&to=2026-09-10")
+
+	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), `data-testid="backtest-error"`) {
+		t.Errorf("status = %d, want 503 with the error shown", rec.Code)
 	}
 }

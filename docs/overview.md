@@ -104,12 +104,12 @@ graph TD
 
 | ドキュメント | パス | 概要 |
 |------------|------|------|
-| 機能要件 | `docs/requirements/functional.md` | スキャン〜Jev判定〜Policy/Risk〜Paper執行〜Calibrationのユースケースと画面別機能一覧 |
+| 機能要件 | `docs/requirements/functional.md`（§4は `docs/requirements/functional/` に分割） | スキャン〜Jev判定〜Policy/Risk〜Paper執行〜Calibrationのユースケースと画面別機能一覧 |
 | 非機能要件 | `docs/requirements/non-functional.md` | 性能・可用性(24/365目標)・セキュリティ・監視(ログ+Slack)・コンプライアンス前提 |
-| アーキテクチャ設計 | `docs/architecture/overview.md` | Go レイヤードアーキテクチャ、kabuステーションAPI/RAG/自己改善ループ連携、Wails単一プロセス構成、SQLite上の自前Scheduler/Worker設計 |
-| ER / データモデル | `docs/architecture/er.md` | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes/kill_switch_events/runtime_settings/policy_proposals/jobs のSQLiteテーブル定義とsqlite-vecベクトルインデックス |
+| アーキテクチャ設計 | `docs/architecture/overview.md`（§5〜§13は `docs/architecture/overview/` に分割） | Go レイヤードアーキテクチャ、kabuステーションAPI/RAG/自己改善ループ連携、Wails単一プロセス構成、SQLite上の自前Scheduler/Worker設計 |
+| ER / データモデル | `docs/architecture/er.md`（テーブル定義は `docs/architecture/er/` に分割） | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes/kill_switch_events/kill_switch_resolutions/runtime_settings/secrets/policy_proposals/jobs のSQLiteテーブル定義とsqlite-vecベクトルインデックス |
 | API 仕様 | `docs/api/endpoints.md` | Huma JSON API（/api/v1/...）と HTMX ページ/アクションルートの仕様 |
-| コンポーネント設計 | `docs/components/overview.md` | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
+| コンポーネント設計 | `docs/components/overview.md`（§5〜§9は `docs/components/lit.md`・`runtime.md` に分割） | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
 
 ## マイルストーン / リリース計画
 

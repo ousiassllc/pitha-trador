@@ -4,37 +4,34 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/ngrok/sqlmw"
 	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
 // instrumentedDriverName is the database/sql driver name Open registers
-// (once) and opens against: modernc.org/sqlite's own "sqlite" driver
-// wrapped with loggingInterceptor via github.com/ngrok/sqlmw, so every
-// query/exec this package's repositories issue emits the DB latency/error
-// structured log line non-functional.md §5.1 requires ("DB latency /
-// エラー") without every *_repo.go file needing its own timing code.
-//
-// A package-level sync.Once guards the sql.Register call: sql.Register
-// panics if the same name is registered twice, and Open (this package's
-// only caller of registerInstrumentedDriver) may run more than once per
-// process (every repository_test.go helper calls repository.Open against
-// its own t.TempDir() database).
+// (once) and opens against: modernc.org/sqlite's "sqlite" driver wrapped
+// with loggingInterceptor via github.com/ngrok/sqlmw, so every query/exec
+// emits the DB latency/error structured log line non-functional.md §5.1
+// requires. registerInstrumentedDriverOnce guards sql.Register, which
+// panics on a duplicate name while Open may run many times per process.
 const instrumentedDriverName = "sqlite-instrumented"
 
 var registerInstrumentedDriverOnce sync.Once
 
+const slowQueryThreshold = 100 * time.Millisecond
+
 // registerInstrumentedDriver registers instrumentedDriverName the first
 // time it is called; later calls are no-ops. modernc.org/sqlite's vec0
-// virtual table module (registered by this package's blank
-// modernc.org/sqlite/vec import) is process-global, so a locally
-// constructed sqlite.Driver{} still sees it (modernc.org/sqlite's own
-// Driver doc comment: "Virtual table modules registered through the
-// package-level path are held process-globally and reach every Driver").
+// module is process-global, so a locally constructed sqlite.Driver{} still
+// sees it.
 func registerInstrumentedDriver() {
 	registerInstrumentedDriverOnce.Do(func() {
 		sql.Register(instrumentedDriverName, sqlmw.Driver(&sqlite.Driver{}, loggingInterceptor{}))
@@ -54,6 +51,7 @@ func (loggingInterceptor) ConnExecContext(ctx context.Context, conn driver.Exece
 	start := time.Now()
 	res, err := conn.ExecContext(ctx, query, args)
 	logDBCall(query, start, err)
+	recordDBWrite(err)
 	return res, err
 }
 
@@ -68,6 +66,7 @@ func (loggingInterceptor) StmtExecContext(ctx context.Context, stmt driver.StmtE
 	start := time.Now()
 	res, err := stmt.ExecContext(ctx, args)
 	logDBCall(query, start, err)
+	recordDBWrite(err)
 	return res, err
 }
 
@@ -81,15 +80,57 @@ func (loggingInterceptor) StmtQueryContext(ctx context.Context, stmt driver.Stmt
 // logDBCall emits one structured JSON log line per DB call (query text,
 // not args - args may carry business data that does not belong in logs).
 // driver.ErrSkip is not a real failure (it tells database/sql to fall
-// back to a slower path), so it is not logged as an error.
+// back to a slower path), so it is not logged as an error. Failure is
+// ERROR, a success taking >= slowQueryThreshold is WARN, any other success
+// is DEBUG: idle scheduler workers poll every 200ms per queue, so INFO
+// here bloats the daily log by hundreds of MB.
 func logDBCall(query string, start time.Time, err error) {
 	if err == driver.ErrSkip {
 		return
 	}
-	attrs := []any{"query", query, "duration_ms", time.Since(start).Milliseconds()}
-	if err != nil {
+	elapsed := time.Since(start)
+	attrs := []any{"query", query, "duration_ms", elapsed.Milliseconds()}
+	switch {
+	case err != nil:
 		slog.Error("db: query failed", append(attrs, "error", err)...)
-		return
+	case elapsed >= slowQueryThreshold:
+		slog.Warn("db: slow query", attrs...)
+	default:
+		slog.Debug("db: query completed", attrs...)
 	}
-	slog.Info("db: query completed", attrs...)
+}
+
+// DBWriteFailures is the process-wide consecutive DB write failure streak
+// (FR-RISK-2 "DB書き込み失敗が一定回数継続") every Exec on an Open'd
+// database feeds. It is process-global because the sqlmw-wrapped driver
+// (registerInstrumentedDriver) is; internal/service/risk.Engine polls it
+// via Config.DBWriteFailures.
+var DBWriteFailures = &domain.FailureStreak{}
+
+// recordDBWrite feeds one Exec outcome into DBWriteFailures. Only genuine
+// storage failures (busy/locked/read-only/IO/full/cantopen/corrupt/notadb) count: a
+// constraint violation or malformed statement is an application-level
+// error, not evidence the database cannot be written, and a cancelled
+// caller context is not a database fault at all.
+func recordDBWrite(err error) {
+	switch {
+	case err == nil:
+		DBWriteFailures.Succeed()
+	case isStorageFailure(err):
+		DBWriteFailures.Fail()
+	}
+}
+
+func isStorageFailure(err error) bool {
+	var sqliteErr *sqlite.Error
+	if !errors.As(err, &sqliteErr) {
+		return false
+	}
+	switch sqliteErr.Code() & 0xff { // primary result code
+	case sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED, sqlite3.SQLITE_READONLY,
+		sqlite3.SQLITE_IOERR, sqlite3.SQLITE_FULL, sqlite3.SQLITE_CANTOPEN,
+		sqlite3.SQLITE_CORRUPT, sqlite3.SQLITE_NOTADB:
+		return true
+	}
+	return false
 }

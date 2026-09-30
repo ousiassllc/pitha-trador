@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
 // Config is Engine's Entry/Exit rule set. NewEngine only fills in Now
@@ -47,6 +48,10 @@ type Config struct {
 	CooldownAfterLossMinutes          int
 	ForceFlatBeforeMarketCloseMinutes int
 
+	// Calendar gates new entries to 東証立会時間 and supplies the 大引け time
+	// for 引け前強制決済 (calendar.go); nil disables both.
+	Calendar MarketCalendar
+
 	// Now defaults to time.Now. Tests override it for deterministic
 	// max-holding/force-flat/cooldown checks.
 	Now func() time.Time
@@ -59,7 +64,7 @@ type Config struct {
 // (5/10).
 func DefaultConfig() Config {
 	return Config{
-		StopLossPct:                       0.6,
+		StopLossPct:                       sizing.DefaultStopLossPct, // Risk Engine sizes positions against this same stop
 		TakeProfitPct:                     1.2,
 		TrailingStopPct:                   0.5,
 		MaxHoldingMinutes:                 20,

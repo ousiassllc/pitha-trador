@@ -48,3 +48,24 @@ func TestSymbolHandler_APIOrders_FiltersByStatus(t *testing.T) {
 		t.Fatalf("body = %s, want it to contain the fake order", resp.Body.String())
 	}
 }
+
+func TestSymbolHandler_ListEndpoints_RejectInvalidQuery(t *testing.T) {
+	h := handler.NewSymbolHandler(&fakeSymbolProvider{}, handler.SymbolRiskParams{})
+	_, api := humatest.New(t)
+	huma.Get(api, "/positions", h.APIPositions)
+	huma.Get(api, "/orders", h.APIOrders)
+
+	for _, path := range []string{
+		"/positions?limit=0", "/positions?limit=-1", "/positions?limit=501", "/positions?limit=abc",
+		"/orders?limit=0", "/orders?limit=-5", "/orders?limit=501", "/orders?status=BOGUS", "/orders?status=filled",
+	} {
+		if resp := api.Get(path); resp.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("GET %s status = %d, want 422", path, resp.Code)
+		}
+	}
+	for _, path := range []string{"/positions?limit=500", "/orders?limit=1&status=REJECTED", "/orders?status=PENDING"} {
+		if resp := api.Get(path); resp.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, want 200", path, resp.Code)
+		}
+	}
+}

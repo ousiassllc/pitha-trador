@@ -9,15 +9,15 @@ import "github.com/ousiassllc/pitha-trador/internal/web/layout"
 // price-chart`, a canvas-drawn reliability curve has nothing meaningful
 // to show before JS/Lit loads - and unlike SymbolDetailPage's per-symbol
 // `candles-url`/`ws-url`, `pitha-calibration-heatmap` needs no per-page
-// attributes: it defaults its own `calibration-url` to
-// `GET /api/v1/calibration` and fetches it directly (no WebSocket,
+// attributes beyond `calibration-url`, injected here (the component has no
+// built-in default URL) as `GET /api/v1/calibration` and fetched directly (no WebSocket,
 // components/overview.md §5.3 "リアルタイム性は不要"). `GET /calibration`
 // (internal/web/handler.CalibrationHandler.Page) renders this for every
 // request.
 templ CalibrationPage() {
 	@layout.Shell("Calibration") {
 		<h1 class="text-2xl font-bold text-slate-900">Calibration</h1>
-		<pitha-calibration-heatmap></pitha-calibration-heatmap>
+		<pitha-calibration-heatmap calibration-url="/api/v1/calibration"></pitha-calibration-heatmap>
 		<script type="module" src="/static/dist/js/calibration-heatmap/pitha-calibration-heatmap.js"></script>
 	}
 }

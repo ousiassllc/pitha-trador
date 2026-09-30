@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 )
 
 // Candles returns symbol's market_snapshots rows in [from, to), ascending
@@ -55,7 +56,7 @@ func (e *Engine) ListOrders(ctx context.Context, status string, limit int) ([]do
 }
 
 // RecentDecisions returns up to limit jev_decisions rows for symbol,
-// most recent first, each passed through EnrichDecision (decision.go) so
+// most recent first, each passed through enrich.Decision so
 // Regime/EntryQuality/ToxicFlow/LiquidityStressed/ContinuationProbability
 // are populated for Trader decisions - the Symbol Detail SSR page's
 // (internal/web/pages.SymbolDetailPage) "Decision history" source. This
@@ -80,7 +81,7 @@ func (e *Engine) RecentDecisions(ctx context.Context, symbol string, limit int) 
 		return nil, fmt.Errorf("execution: recent decisions for %q: %w", symbol, err)
 	}
 	for i, d := range decisions {
-		decisions[i] = EnrichDecision(d)
+		decisions[i] = enrich.Decision(d)
 	}
 	return decisions, nil
 }

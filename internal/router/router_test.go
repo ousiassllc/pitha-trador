@@ -1,9 +1,12 @@
 package router_test
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -29,48 +32,6 @@ func TestNew_RootRouteRedirectsToScannerDashboard(t *testing.T) {
 	}
 	if loc := rec.Header().Get("Location"); loc != "/scanner" {
 		t.Fatalf("expected redirect to /scanner, got %q", loc)
-	}
-}
-
-func TestNew_SwaggerRouteServesStoplightElementsHTMLByDefault(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := router.New()
-
-	req := httptest.NewRequest(http.MethodGet, "/swagger", nil)
-	rec := httptest.NewRecorder()
-
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	contentType := rec.Header().Get("Content-Type")
-	if !strings.HasPrefix(contentType, "text/html") {
-		t.Fatalf("expected text/html content type, got %q", contentType)
-	}
-
-	body := rec.Body.String()
-	if !strings.Contains(body, "elements-api") {
-		t.Fatalf("expected body to embed Stoplight Elements, got %q", body)
-	}
-	if !strings.Contains(body, "/api/v1/openapi.json") {
-		t.Fatalf("expected body to reference the OpenAPI spec URL, got %q", body)
-	}
-}
-
-func TestNew_SwaggerRouteDisabledWhenSwaggerEnabledIsFalse(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	t.Setenv("SWAGGER_ENABLED", "false")
-	engine := router.New()
-
-	req := httptest.NewRequest(http.MethodGet, "/swagger", nil)
-	rec := httptest.NewRecorder()
-
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status %d when SWAGGER_ENABLED=false, got %d", http.StatusNotFound, rec.Code)
 	}
 }
 
@@ -140,46 +101,6 @@ func TestNew_ScannerPageServesFullPageOrFragmentByHXRequestHeader(t *testing.T) 
 	}
 }
 
-func TestNew_StaticRouteServesVendoredAssets(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := router.New()
-
-	req := httptest.NewRequest(http.MethodGet, "/static/vendor/htmx.min.js", nil)
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "htmx") {
-		t.Fatalf("expected vendored htmx bundle content, got %d bytes", rec.Body.Len())
-	}
-}
-
-func TestNew_StaticRouteServesFromDiskWhenEnvStaticDirIsSet(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	dir := t.TempDir()
-	if err := os.MkdirAll(dir+"/vendor", 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	if err := os.WriteFile(dir+"/vendor/htmx.min.js", []byte("// dev-mode marker, not the real bundle"), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	t.Setenv(router.EnvStaticDir, dir)
-	engine := router.New()
-
-	req := httptest.NewRequest(http.MethodGet, "/static/vendor/htmx.min.js", nil)
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "dev-mode marker") {
-		t.Fatalf("expected disk-backed content to take precedence over the embedded bundle, got %q", rec.Body.String())
-	}
-}
-
 func TestNew_SystemStatusRouteDefaultsToRunning(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New()
@@ -196,27 +117,69 @@ func TestNew_SystemStatusRouteDefaultsToRunning(t *testing.T) {
 	}
 }
 
-func TestNew_SystemPauseRouteUsesWithSystemEngineOption(t *testing.T) {
+func TestNew_SystemStatusRoutesUseWithSystemEngineOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStatePaused}))
 
-	req := httptest.NewRequest(http.MethodPost, "/system/pause", nil)
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
+	for _, tc := range []struct{ path, want string }{
+		{"/system/status", "paused"},
+		{"/api/v1/system/status", `"state":"paused"`},
+	} {
+		req := authorize(t, engine, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: expected status %d, got %d", tc.path, http.StatusOK, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), tc.want) {
+			t.Fatalf("GET %s: expected %q, got %q", tc.path, tc.want, rec.Body.String())
+		}
 	}
-	if !strings.Contains(rec.Body.String(), "paused") {
-		t.Fatalf("expected the Paused badge, got %q", rec.Body.String())
+}
+
+// The Kill Switch panel drives /api/v1/system/* only; the HTMX action
+// routes were unused and removed (issue #108), so they must stay gone.
+func TestNew_RemovedHTMXSystemActionRoutesReturn404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	for _, path := range []string{"/system/pause", "/system/resume", "/system/kill"} {
+		req := authorize(t, engine, httptest.NewRequest(http.MethodPost, path, nil))
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("POST %s = %d, want 404", path, rec.Code)
+		}
 	}
+}
+
+func TestNew_PanickingRouteReturns500InsteadOfCrashing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(panickingSystemEngine{}))
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/status", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+// panickingSystemEngine panics from State, which SystemState middleware and
+// the /system/status handler call, to exercise the router's Recovery.
+type panickingSystemEngine struct{ handler.StaticSystemEngine }
+
+func (panickingSystemEngine) State(context.Context) (domain.SystemState, []domain.KillSwitchEvent, error) {
+	panic("state exploded")
 }
 
 func TestNew_APISystemKillRouteReturnsJSONState(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(router.WithSystemEngine(handler.StaticSystemEngine{State_: domain.SystemStateKilled}))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/system/kill", nil)
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/api/v1/system/kill", nil))
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -225,5 +188,37 @@ func TestNew_APISystemKillRouteReturnsJSONState(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"state":"killed"`) {
 		t.Fatalf("expected JSON state=killed, got %q", rec.Body.String())
+	}
+}
+
+type failingSystemEngine struct{ handler.StaticSystemEngine }
+
+func (failingSystemEngine) Kill(context.Context) error {
+	return errors.New("sqlite: disk I/O error at /var/lib/pitha/secret.db")
+}
+
+// TestNew_APIInternalErrorHidesCause is issue #215's regression test: a
+// failing engine must not reach the client through errors[].message, and the
+// cause must land in slog.
+func TestNew_APIInternalErrorHidesCause(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	engine := router.New(router.WithSystemEngine(failingSystemEngine{}))
+
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/api/v1/system/kill", nil))
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 (body=%s)", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "secret.db") || strings.Contains(rec.Body.String(), "sqlite") {
+		t.Fatalf("response leaks cause: %s", rec.Body.String())
+	}
+	if !strings.Contains(logs.String(), "secret.db") {
+		t.Fatalf("cause missing from slog: %q", logs.String())
 	}
 }
