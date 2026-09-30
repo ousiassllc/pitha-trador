@@ -90,3 +90,17 @@ func TestShell_HeaderShowsVersionLinkedToSettingsUpdatePanel(t *testing.T) {
 		t.Errorf("Shell must not carry the update-check button; body=%s", out)
 	}
 }
+
+// Every page shows the app logo (issue #238) in the header, linking to the
+// app's start page, ahead of the nav without displacing it.
+func TestShell_HeaderShowsLogoBeforeNav(t *testing.T) {
+	out := render(t, layout.Shell("t"))
+
+	if !regexp.MustCompile(`<a[^>]*id="header-logo"[^>]*href="/scanner"[^>]*>\s*<img[^>]*src="/static/img/logo\.svg"`).MatchString(out) {
+		t.Fatalf("Shell header has no logo link with /static/img/logo.svg; body=%s", out)
+	}
+	logo, nav := strings.Index(out, `id="header-logo"`), strings.Index(out, "<nav")
+	if logo < 0 || nav < 0 || logo > nav {
+		t.Errorf("logo must precede <nav>; logo=%d nav=%d", logo, nav)
+	}
+}
