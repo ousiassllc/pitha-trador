@@ -15,7 +15,7 @@ import (
 // must read the same repositories the pipeline writes, and each
 // repository's write must reach `/ws/activity` subscribers.
 func TestBuildServices_ActivityFeedAggregatesRealRepositoriesAndReceivesLiveWrites(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 	ctx := context.Background()
 

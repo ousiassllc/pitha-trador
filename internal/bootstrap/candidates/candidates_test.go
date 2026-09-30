@@ -1,4 +1,4 @@
-package bootstrap
+package candidates
 
 import (
 	"context"
@@ -10,24 +10,22 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
-func ptrF(v float64) *float64 { return &v }
-
-func TestRefreshCandidates_PublishesTopScreenedInstrumentsToScreenerSource(t *testing.T) {
-	svc := newTestServices(t, nil)
+func TestRefresh_PublishesTopScreenedInstrumentsToScreenerSource(t *testing.T) {
+	refresher := newTestRefresher(t)
 	// Override every screener.PassesFilter threshold to lenient values so
 	// this test only depends on the Input this test builds, not on
 	// config/strategy.yaml's own real (stricter) production thresholds.
-	svc.strategy.FastScreener = config.FastScreenerConfig{
+	refresher.Strategy.FastScreener = config.FastScreenerConfig{
 		MinPrice: 0, MaxPrice: 1_000_000,
 		MinTurnover5mJPY: 0, MaxSpreadBps: 100,
 		MinVolumeRatio: 0, MinAbsReturn5mPct: 0, MinRealizedVolatility: 0,
 		TopN: 10,
 	}
 
-	inst := mustCreateInstrument(t, svc, "7203")
+	inst := mustCreateInstrument(t, refresher, "7203")
 	now := time.Now().UTC()
 
-	if _, err := svc.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
+	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
 		InstrumentID: inst.ID,
 		Symbol:       inst.Symbol,
 		Timestamp:    now,
@@ -43,11 +41,11 @@ func TestRefreshCandidates_PublishesTopScreenedInstrumentsToScreenerSource(t *te
 		t.Fatalf("InsertBatch: %v", err)
 	}
 
-	if err := svc.refreshCandidates(context.Background()); err != nil {
-		t.Fatalf("refreshCandidates: %v", err)
+	if err := refresher.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
 	}
 
-	candidates, asOf, err := svc.Screener.Candidates(context.Background())
+	candidates, asOf, err := refresher.Screener.Candidates(context.Background())
 	if err != nil {
 		t.Fatalf("Candidates: %v", err)
 	}
@@ -65,18 +63,18 @@ func TestRefreshCandidates_PublishesTopScreenedInstrumentsToScreenerSource(t *te
 	}
 }
 
-func TestRefreshCandidates_EnqueuesJevScoutJobForEachCandidate(t *testing.T) {
-	svc := newTestServices(t, nil)
-	svc.sessionOpen = func(time.Time) bool { return true } // not wall-clock dependent
-	svc.strategy.FastScreener = config.FastScreenerConfig{
+func TestRefresh_EnqueuesJevScoutJobForEachCandidate(t *testing.T) {
+	refresher := newTestRefresher(t)
+	refresher.InSession = func(time.Time) bool { return true } // not wall-clock dependent
+	refresher.Strategy.FastScreener = config.FastScreenerConfig{
 		MinPrice: 0, MaxPrice: 1_000_000,
 		MinTurnover5mJPY: 0, MaxSpreadBps: 100,
 		MinVolumeRatio: 0, MinAbsReturn5mPct: 0, MinRealizedVolatility: 0,
 		TopN: 10,
 	}
 
-	inst := mustCreateInstrument(t, svc, "7203")
-	if _, err := svc.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
+	inst := mustCreateInstrument(t, refresher, "7203")
+	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: time.Now().UTC(),
 		Price: 2500, Volume: 1000, Turnover: 2_500_000, SpreadBps: ptrF(10),
 		Feature: domain.Feature{
@@ -87,11 +85,11 @@ func TestRefreshCandidates_EnqueuesJevScoutJobForEachCandidate(t *testing.T) {
 		t.Fatalf("InsertBatch: %v", err)
 	}
 
-	if err := svc.refreshCandidates(context.Background()); err != nil {
-		t.Fatalf("refreshCandidates: %v", err)
+	if err := refresher.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
 	}
 
-	job, err := svc.Jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, time.Now().UTC().Add(time.Second))
+	job, err := refresher.Jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, time.Now().UTC().Add(time.Second))
 	if err != nil {
 		t.Fatalf("ClaimNext(jev-scout): %v, want one enqueued job", err)
 	}
@@ -100,15 +98,15 @@ func TestRefreshCandidates_EnqueuesJevScoutJobForEachCandidate(t *testing.T) {
 	}
 }
 
-func TestRefreshCandidates_SkipsInstrumentsWithNoSnapshotsYet(t *testing.T) {
-	svc := newTestServices(t, nil)
-	mustCreateInstrument(t, svc, "9999") // no snapshots inserted
+func TestRefresh_SkipsInstrumentsWithNoSnapshotsYet(t *testing.T) {
+	refresher := newTestRefresher(t)
+	mustCreateInstrument(t, refresher, "9999") // no snapshots inserted
 
-	if err := svc.refreshCandidates(context.Background()); err != nil {
-		t.Fatalf("refreshCandidates: %v", err)
+	if err := refresher.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
 	}
 
-	candidates, _, err := svc.Screener.Candidates(context.Background())
+	candidates, _, err := refresher.Screener.Candidates(context.Background())
 	if err != nil {
 		t.Fatalf("Candidates: %v", err)
 	}
@@ -136,14 +134,14 @@ func TestCandidateRefreshInterval_NextReturnsMinWhenMaxNotGreater(t *testing.T) 
 
 // Issue #139: off-hours the candidate list still refreshes from stored
 // data, but no Jev Scout job (a billed Jev call) is enqueued.
-func TestRefreshCandidates_DoesNotEnqueueJevScoutOutsideSession(t *testing.T) {
-	svc := newTestServices(t, nil)
-	svc.sessionOpen = func(time.Time) bool { return false }
-	svc.strategy.FastScreener = config.FastScreenerConfig{
+func TestRefresh_DoesNotEnqueueJevScoutOutsideSession(t *testing.T) {
+	refresher := newTestRefresher(t)
+	refresher.InSession = func(time.Time) bool { return false }
+	refresher.Strategy.FastScreener = config.FastScreenerConfig{
 		MinPrice: 0, MaxPrice: 1_000_000, MaxSpreadBps: 100, TopN: 10,
 	}
-	inst := mustCreateInstrument(t, svc, "7203")
-	if _, err := svc.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
+	inst := mustCreateInstrument(t, refresher, "7203")
+	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: time.Now().UTC(),
 		Price: 2500, Volume: 1000, Turnover: 2_500_000, SpreadBps: ptrF(10),
 		Feature: domain.Feature{VWAP: 2490, PriceVsVWAPBps: 40, VolumeRatio5m: ptrF(1.5), Return5m: ptrF(0.5), RealizedVol5m: ptrF(0.01)},
@@ -151,13 +149,13 @@ func TestRefreshCandidates_DoesNotEnqueueJevScoutOutsideSession(t *testing.T) {
 		t.Fatalf("InsertBatch: %v", err)
 	}
 
-	if err := svc.refreshCandidates(context.Background()); err != nil {
-		t.Fatalf("refreshCandidates: %v", err)
+	if err := refresher.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
 	}
-	if got, _, err := svc.Screener.Candidates(context.Background()); err != nil || len(got) != 1 {
+	if got, _, err := refresher.Screener.Candidates(context.Background()); err != nil || len(got) != 1 {
 		t.Fatalf("candidates = %d, want 1 (list still refreshes off-hours)", len(got))
 	}
-	if _, err := svc.Jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, time.Now().UTC().Add(time.Second)); err == nil {
+	if _, err := refresher.Jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, time.Now().UTC().Add(time.Second)); err == nil {
 		t.Fatal("a jev-scout job was enqueued outside the trading session")
 	}
 }

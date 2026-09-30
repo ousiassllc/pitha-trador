@@ -10,7 +10,7 @@ import (
 )
 
 func TestBuildServices_OutcomeLabelingFeedsCalibrationMetrics(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 	ctx := context.Background()
 

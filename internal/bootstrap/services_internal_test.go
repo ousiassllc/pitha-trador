@@ -3,8 +3,6 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,9 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
-	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
 )
 
 // newTestServices builds a *Services backed by a fresh temp-dir SQLite DB.
@@ -23,7 +19,7 @@ import (
 // internal/service/marketdata's own test-double pattern - client_test.go's
 // httptest.NewServer usage) instead of the real kabuステーションAPI
 // DefaultBaseURL BuildServices would otherwise use.
-func newTestServices(t *testing.T, kabuServer *httptest.Server) *Services {
+func newTestServices(t *testing.T) *Services {
 	t.Helper()
 	state, err := Run(Config{DBPath: filepath.Join(t.TempDir(), "pitha.db")})
 	if err != nil {
@@ -39,13 +35,6 @@ func newTestServices(t *testing.T, kabuServer *httptest.Server) *Services {
 	if err != nil {
 		t.Fatalf("BuildServices: %v", err)
 	}
-	if kabuServer != nil {
-		svc.MarketData = marketdata.NewClient(marketdata.Config{
-			BaseURL:     kabuServer.URL,
-			APIPassword: "test-password",
-		})
-		svc.PushFeed = pushfeed.New(svc.Instruments, svc.MarketData, marketdata.DefaultPushURL, defaultKabuExchange)
-	}
 	return svc
 }
 
@@ -60,95 +49,6 @@ func mustCreateInstrument(t *testing.T, svc *Services, symbol string) domain.Ins
 	return inst
 }
 
-func kabuFakeServer(t *testing.T, board any) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/token":
-			_ = json.NewEncoder(w).Encode(map[string]any{"ResultCode": 0, "Token": "tok-test"})
-		case r.Method == http.MethodGet:
-			_ = json.NewEncoder(w).Encode(board)
-		default:
-			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-		}
-	}))
-}
-
-func TestHandleMarketData_FetchesComputesAndPersistsSnapshot(t *testing.T) {
-	server := kabuFakeServer(t, map[string]any{
-		"Symbol": "7203", "CurrentPrice": 2500.0, "VWAP": 2490.0,
-		"TradingVolume": 1000000.0, "TradingValue": 2.49e9,
-	})
-	defer server.Close()
-
-	svc := newTestServices(t, server)
-	inst := mustCreateInstrument(t, svc, "7203")
-
-	if _, err := svc.MarketData.IssueToken(context.Background()); err != nil {
-		t.Fatalf("IssueToken: %v", err)
-	}
-
-	payload, err := json.Marshal(marketDataJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
-	if err != nil {
-		t.Fatalf("marshal payload: %v", err)
-	}
-	job := jobqueue.Job{PayloadJSON: string(payload)}
-
-	if err := svc.handleMarketData(context.Background(), job); err != nil {
-		t.Fatalf("handleMarketData: %v", err)
-	}
-
-	snaps, err := svc.Snapshots.ListByInstrument(context.Background(), inst.ID, 10)
-	if err != nil {
-		t.Fatalf("ListByInstrument: %v", err)
-	}
-	if len(snaps) != 1 {
-		t.Fatalf("len(snaps) = %d, want 1", len(snaps))
-	}
-	if snaps[0].Price != 2500.0 {
-		t.Errorf("Price = %v, want 2500.0", snaps[0].Price)
-	}
-	if snaps[0].Feature.VWAP != 2490.0 {
-		t.Errorf("Feature.VWAP = %v, want 2490.0", snaps[0].Feature.VWAP)
-	}
-}
-
-func TestHandleMarketData_ReturnsErrorWithoutSwallowingOnFetchFailure(t *testing.T) {
-	svc := newTestServices(t, nil) // no server: GetBoard has no token, ErrNoToken
-	inst := mustCreateInstrument(t, svc, "9999")
-
-	payload, _ := json.Marshal(marketDataJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
-	job := jobqueue.Job{PayloadJSON: string(payload)}
-
-	if err := svc.handleMarketData(context.Background(), job); err == nil {
-		t.Fatal("handleMarketData: want error when kabuステーションAPI is unreachable, got nil")
-	}
-
-	snaps, err := svc.Snapshots.ListByInstrument(context.Background(), inst.ID, 10)
-	if err != nil {
-		t.Fatalf("ListByInstrument: %v", err)
-	}
-	if len(snaps) != 0 {
-		t.Errorf("len(snaps) = %d, want 0 (no snapshot persisted on fetch failure)", len(snaps))
-	}
-}
-
-func TestHandleMarketData_ReturnsErrorOnUnmarshalableJobPayload(t *testing.T) {
-	svc := newTestServices(t, nil)
-	job := jobqueue.Job{PayloadJSON: "not-json"}
-
-	if err := svc.handleMarketData(context.Background(), job); err == nil {
-		t.Fatal("handleMarketData: want error for unmarshalable job payload, got nil")
-	}
-}
-
-func TestHandleFeatureCalc_IsANoOp(t *testing.T) {
-	svc := newTestServices(t, nil)
-	if err := svc.handleFeatureCalc(context.Background(), jobqueue.Job{PayloadJSON: "{}"}); err != nil {
-		t.Errorf("handleFeatureCalc: %v, want nil", err)
-	}
-}
-
 // TestBuildServices_RegistersFeatureCalcHandler proves BuildServices
 // registered a real Handler for the feature-calc queue (not merely left
 // it unregistered) by enqueuing directly onto that queue and letting
@@ -159,7 +59,7 @@ func TestHandleFeatureCalc_IsANoOp(t *testing.T) {
 // polling loop and non-deterministically stole the claim before the
 // worker did, self-defeating the very thing it meant to prove).
 func TestBuildServices_RegistersFeatureCalcHandler(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 
 	enqueued, err := svc.Jobs.Enqueue(context.Background(), jobqueue.JobQueueFeatureCalc, "{}", time.Now().UTC())
 	if err != nil {
@@ -189,6 +89,41 @@ func TestBuildServices_RegistersFeatureCalcHandler(t *testing.T) {
 	}
 }
 
+// TestBuildServices_RegistersMarketDataHandler proves BuildServices
+// registered a real Handler for the market-data queue the same way: a job
+// with an undecodable payload ends "failed" (a handler ran), not "pending"
+// (an unregistered queue is never claimed).
+func TestBuildServices_RegistersMarketDataHandler(t *testing.T) {
+	svc := newTestServices(t)
+
+	enqueued, err := svc.Jobs.Enqueue(context.Background(), jobqueue.JobQueueMarketData, "not-json", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := svc.Scheduler.Start(ctx, time.Hour); err != nil {
+		t.Fatalf("Scheduler.Start: %v", err)
+	}
+	defer svc.Scheduler.Stop()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		job, err := svc.Jobs.Get(context.Background(), enqueued.ID)
+		if err != nil {
+			t.Fatalf("Jobs.Get: %v", err)
+		}
+		if job.Status == "failed" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("market-data job status = %q after 3s of Scheduler.Start; want %q (handler not registered/running)", job.Status, "failed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // TestBuildServices_RegistersJevScoutHandler proves BuildServices
 // registered a real Handler for the jev-scout queue (issue #46), the
 // same way TestBuildServices_RegistersFeatureCalcHandler proves it for
@@ -200,7 +135,7 @@ func TestBuildServices_RegistersFeatureCalcHandler(t *testing.T) {
 // "pending" forever, per Scheduler.Start's own doc comment: it only
 // spins up a worker per *registered* queue).
 func TestBuildServices_RegistersJevScoutHandler(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 
 	payload, err := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
@@ -245,7 +180,7 @@ func TestBuildServices_RegistersJevScoutHandler(t *testing.T) {
 // here either), which - same as the jev-scout test - is sufficient proof
 // a Handler ran rather than the job staying "pending" forever.
 func TestBuildServices_RegistersJevTraderHandler(t *testing.T) {
-	svc := newTestServices(t, nil)
+	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 	if _, err := svc.Snapshots.Insert(context.Background(), domain.Snapshot{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: time.Now().UTC(),

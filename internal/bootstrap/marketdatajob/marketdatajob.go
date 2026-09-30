@@ -1,4 +1,10 @@
-package bootstrap
+// Package marketdatajob holds the market-data and feature-calc scheduler
+// queue handlers (issue #44): fetch the latest board, compute and persist
+// the Feature snapshot, run Paper Trading's per-bar step and enqueue
+// FR-SCAN-1's event-driven re-evaluation. It lives under internal/bootstrap
+// as composition-root glue; Handler takes only the dependencies it uses
+// (docs/architecture/overview.md §3).
+package marketdatajob
 
 import (
 	"context"
@@ -6,12 +12,38 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
+	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
+
+// BoardSource returns the latest board for a symbol (*pushfeed.Feed).
+type BoardSource interface {
+	Latest(ctx context.Context, symbol string) (marketdata.Board, error)
+}
+
+// Handler is the market-data queue Handler over the dependencies it uses.
+type Handler struct {
+	Boards        BoardSource
+	Instruments   *market.InstrumentRepository
+	Snapshots     *market.SnapshotRepository
+	FeatureEngine *featureengine.Engine
+	Execution     *execution.Engine
+	Screener      *screener.LiveSource
+	News          *newsfeed.Service
+	Scheduler     *scheduler.Scheduler
+	// EventTrigger holds FR-SCAN-1/FR-SCAN-2's thresholds
+	// (config/strategy.yaml scan.event_trigger).
+	EventTrigger config.EventTriggerConfig
+}
 
 // marketDataJobPayload mirrors scheduler's unexported fullScanPayload
 // ({"instrument_id":..,"symbol":".."}); only the JSON shape is the contract.
@@ -20,46 +52,46 @@ type marketDataJobPayload struct {
 	Symbol       string `json:"symbol"`
 }
 
-// handleMarketData is the market-data queue Handler (issue #44): it
+// HandleMarketData is the market-data queue Handler (issue #44): it
 // fetches symbol's current 時価情報・板情報 (the fresh PUSH board else a REST
-// poll; never a price-0 board - PushFeed.Latest), computes its Feature
+// poll; never a price-0 board - Boards.Latest), computes its Feature
 // values against featureengine.HistoryLookbackBars prior bars, persists
 // one market_snapshots row via FeatureEngine.RunCycle (which also indexes
 // it for RAG - FR-RAG-1), then runs Paper Trading's position management
 // against that bar (execution.Engine.OnSnapshot). It covers both
-// acquisition and feature computation (see handleFeatureCalc).
+// acquisition and feature computation (see HandleFeatureCalc).
 //
 // A board failure is returned as-is: Scheduler marks the job failed and
 // moves on without crashing the process (issue #44 "接続失敗時にプロセス全体が
 // クラッシュしないことが必須").
-func (s *Services) handleMarketData(ctx context.Context, job jobqueue.Job) error {
+func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error {
 	var payload marketDataJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
-		return fmt.Errorf("bootstrap: decode market-data job payload: %w", err)
+		return fmt.Errorf("marketdatajob: decode market-data job payload: %w", err)
 	}
 
-	board, err := s.PushFeed.Latest(ctx, payload.Symbol)
+	board, err := h.Boards.Latest(ctx, payload.Symbol)
 	if err != nil {
-		return fmt.Errorf("bootstrap: fetch board for %q: %w", payload.Symbol, err)
+		return fmt.Errorf("marketdatajob: fetch board for %q: %w", payload.Symbol, err)
 	}
 
-	history, err := s.Snapshots.ListByInstrument(ctx, payload.InstrumentID, featureengine.HistoryLookbackBars)
+	history, err := h.Snapshots.ListByInstrument(ctx, payload.InstrumentID, featureengine.HistoryLookbackBars)
 	if err != nil {
-		return fmt.Errorf("bootstrap: list snapshot history for %q: %w", payload.Symbol, err)
+		return fmt.Errorf("marketdatajob: list snapshot history for %q: %w", payload.Symbol, err)
 	}
 
 	rawJSON, err := json.Marshal(board)
 	if err != nil {
-		return fmt.Errorf("bootstrap: encode raw board data for %q: %w", payload.Symbol, err)
+		return fmt.Errorf("marketdatajob: encode raw board data for %q: %w", payload.Symbol, err)
 	}
 
-	inst, err := s.Instruments.Get(ctx, payload.InstrumentID)
+	inst, err := h.Instruments.Get(ctx, payload.InstrumentID)
 	if err != nil {
-		return fmt.Errorf("bootstrap: load instrument %q: %w", payload.Symbol, err)
+		return fmt.Errorf("marketdatajob: load instrument %q: %w", payload.Symbol, err)
 	}
 
 	now := time.Now().UTC()
-	mc := featureengine.NewMarketContextLoader(s.Instruments, s.Snapshots).Load(ctx, inst, now)
+	mc := featureengine.NewMarketContextLoader(h.Instruments, h.Snapshots).Load(ctx, inst, now)
 	input := featureengine.Input{
 		Timestamp:      now,
 		Current:        readingFromBoard(board),
@@ -70,24 +102,24 @@ func (s *Services) handleMarketData(ctx context.Context, job jobqueue.Job) error
 		MarketBreadth:  mc.MarketBreadth,
 	}
 
-	persisted, err := s.FeatureEngine.RunCycle(ctx, []featureengine.CycleInput{{
+	persisted, err := h.FeatureEngine.RunCycle(ctx, []featureengine.CycleInput{{
 		InstrumentID: payload.InstrumentID,
 		Symbol:       payload.Symbol,
 		Input:        input,
 		RawDataJSON:  string(rawJSON),
 	}})
 	if err != nil {
-		return fmt.Errorf("bootstrap: run feature engine cycle for %q: %w", payload.Symbol, err)
+		return fmt.Errorf("marketdatajob: run feature engine cycle for %q: %w", payload.Symbol, err)
 	}
 
 	// Paper Trading's per-bar step (issue #49): fill crossed limit
 	// entries, mark the open position to market, and close it when an
 	// FR-EXIT-1 condition triggers against this fresh bar.
 	for _, snap := range persisted {
-		if _, err := s.Execution.OnSnapshot(ctx, snap); err != nil {
-			return fmt.Errorf("bootstrap: manage paper position for %q: %w", payload.Symbol, err)
+		if _, err := h.Execution.OnSnapshot(ctx, snap); err != nil {
+			return fmt.Errorf("marketdatajob: manage paper position for %q: %w", payload.Symbol, err)
 		}
-		if err := s.enqueueEventReevaluation(ctx, snap, history); err != nil {
+		if err := h.enqueueEventReevaluation(ctx, snap, history); err != nil {
 			return err
 		}
 	}
@@ -104,26 +136,26 @@ func (s *Services) handleMarketData(ctx context.Context, job jobqueue.Job) error
 // history is snap's prior bars, most recent first. The news signal is
 // News Ingest's per-symbol flag (FR-LUNA-3; consumed here so each new
 // article triggers one re-evaluation).
-func (s *Services) enqueueEventReevaluation(ctx context.Context, snap domain.Snapshot, history []domain.Snapshot) error {
-	if len(history) == 0 || !s.isCandidate(ctx, snap.InstrumentID) {
+func (h *Handler) enqueueEventReevaluation(ctx context.Context, snap domain.Snapshot, history []domain.Snapshot) error {
+	if len(history) == 0 || !h.isCandidate(ctx, snap.InstrumentID) {
 		return nil
 	}
-	trigger := s.strategy.Scan.EventTrigger
+	trigger := h.EventTrigger
 	signal := eventtrigger.Detect(history[0], snap, history, eventtrigger.Thresholds{
 		Return1mChange:           trigger.Return1mChangeThreshold,
 		VolumeRatioChange:        trigger.VolumeRatioChangeThreshold,
 		SpreadChangeBps:          trigger.SpreadChangeBpsThreshold,
 		OrderbookImbalanceChange: trigger.OrderbookImbalanceChangeThreshold,
 		TradeFlowImbalanceChange: trigger.TradeFlowImbalanceChangeThreshold,
-	}, s.News.TakeNewsFlag(snap.Symbol))
-	if err := s.Scheduler.EnqueueEventReevaluation(ctx, snap.InstrumentID, snap.Symbol, signal.Triggered(), snap.Timestamp); err != nil {
-		return fmt.Errorf("bootstrap: event-driven reevaluation for %q: %w", snap.Symbol, err)
+	}, h.News.TakeNewsFlag(snap.Symbol))
+	if err := h.Scheduler.EnqueueEventReevaluation(ctx, snap.InstrumentID, snap.Symbol, signal.Triggered(), snap.Timestamp); err != nil {
+		return fmt.Errorf("marketdatajob: event-driven reevaluation for %q: %w", snap.Symbol, err)
 	}
 	return nil
 }
 
-func (s *Services) isCandidate(ctx context.Context, instrumentID int64) bool {
-	candidates, _, _ := s.Screener.Candidates(ctx)
+func (h *Handler) isCandidate(ctx context.Context, instrumentID int64) bool {
+	candidates, _, _ := h.Screener.Candidates(ctx)
 	for _, c := range candidates {
 		if c.InstrumentID == instrumentID {
 			return true
@@ -132,11 +164,11 @@ func (s *Services) isCandidate(ctx context.Context, instrumentID int64) bool {
 	return false
 }
 
-// handleFeatureCalc is the feature-calc queue Handler (issue #44), an
-// intentional no-op: handleMarketData already computes and persists
+// HandleFeatureCalc is the feature-calc queue Handler (issue #44), an
+// intentional no-op: Handler.HandleMarketData already computes and persists
 // Feature atomically; a succeeding handler keeps the feature-calc jobs
 // EnqueueFullScan adds from piling up as "pending" rows.
-func (s *Services) handleFeatureCalc(context.Context, jobqueue.Job) error {
+func HandleFeatureCalc(context.Context, jobqueue.Job) error {
 	return nil
 }
 

@@ -1,4 +1,10 @@
-package bootstrap
+// Package backtestsource reads the persisted market_snapshots/jev_decisions
+// history from the DB and assembles the backtest.RunConfig values the
+// Backtest Engine replays (FR-BT-1/FR-BT-2). It lives under
+// internal/bootstrap as composition-root glue between internal/repository
+// and internal/service/backtest, selfimprove and the Performance page's
+// backtest runner (docs/architecture/overview.md §3).
+package backtestsource
 
 import (
 	"context"
@@ -24,12 +30,12 @@ import (
 // spread with a market order.
 var backtestCost = backtest.CostModel{SlippageBps: 5, FeeBps: 0}
 
-// BacktestSource assembles backtest.RunConfig values from the persisted
+// Source assembles backtest.RunConfig values from the persisted
 // market_snapshots/jev_decisions history of every active instrument, so
 // a Walk Forward backtest (the Performance page) or a shadow backtest
 // (selfimprove.ShadowBacktestSource) replays exactly the data the live
 // pipeline recorded, under the policy.* thresholds currently in effect.
-type BacktestSource struct {
+type Source struct {
 	instruments *market.InstrumentRepository
 	snapshots   *market.SnapshotRepository
 	decisions   *judgement.DecisionRepository
@@ -38,10 +44,10 @@ type BacktestSource struct {
 	exit        backtest.ExitRule
 }
 
-// newBacktestSource builds a BacktestSource replaying with thresholds'
-// spread/turnover limits and current's live policy.* thresholds.
-func newBacktestSource(instruments *market.InstrumentRepository, snapshots *market.SnapshotRepository, decisions *judgement.DecisionRepository, thresholds policy.Thresholds, current policy.PolicySource, exit execution.Config) *BacktestSource {
-	return &BacktestSource{
+// New builds a Source replaying with thresholds' spread/turnover limits and
+// current's live policy.* thresholds.
+func New(instruments *market.InstrumentRepository, snapshots *market.SnapshotRepository, decisions *judgement.DecisionRepository, thresholds policy.Thresholds, current policy.PolicySource, exit execution.Config) *Source {
+	return &Source{
 		instruments: instruments,
 		snapshots:   snapshots,
 		decisions:   decisions,
@@ -63,14 +69,14 @@ func newBacktestSource(instruments *market.InstrumentRepository, snapshots *mark
 // (enrich.Decision-populated, since Policy Engine needs fields
 // jev_decisions only stores inside response_json). Instruments with no
 // bars in period are omitted.
-func (b *BacktestSource) RunConfigs(ctx context.Context, period backtest.Period) ([]backtest.RunConfig, error) {
+func (b *Source) RunConfigs(ctx context.Context, period backtest.Period) ([]backtest.RunConfig, error) {
 	instruments, err := b.instruments.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap: list active instruments for backtest: %w", err)
+		return nil, fmt.Errorf("backtestsource: list active instruments for backtest: %w", err)
 	}
 	thresholds := b.thresholds
 	if thresholds.Policy, err = b.policy.CurrentThresholds(ctx); err != nil {
-		return nil, fmt.Errorf("bootstrap: current policy thresholds for backtest: %w", err)
+		return nil, fmt.Errorf("backtestsource: current policy thresholds for backtest: %w", err)
 	}
 
 	var configs []backtest.RunConfig
@@ -112,7 +118,7 @@ func (b *BacktestSource) RunConfigs(ctx context.Context, period backtest.Period)
 
 // RunWalkForward runs a Walk Forward backtest (FR-BT-2) over every active
 // instrument's recorded history in [wf.Start, wf.End).
-func (b *BacktestSource) RunWalkForward(ctx context.Context, wf backtest.WalkForwardConfig) (backtest.Result, error) {
+func (b *Source) RunWalkForward(ctx context.Context, wf backtest.WalkForwardConfig) (backtest.Result, error) {
 	configs, err := b.RunConfigs(ctx, backtest.Period{Start: wf.Start, End: wf.End})
 	if err != nil {
 		return backtest.Result{}, err

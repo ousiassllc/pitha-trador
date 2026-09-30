@@ -16,8 +16,8 @@ import (
 )
 
 // BacktestRunner runs a Walk Forward backtest (functional.md FR-BT-2) over
-// the recorded history in [wf.Start, wf.End). internal/bootstrap's
-// BacktestSource implements it.
+// the recorded history in [wf.Start, wf.End). internal/bootstrap/backtestsource's
+// Source implements it.
 type BacktestRunner interface {
 	RunWalkForward(ctx context.Context, wf backtest.WalkForwardConfig) (backtest.Result, error)
 }

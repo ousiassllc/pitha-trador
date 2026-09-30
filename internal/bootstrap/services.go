@@ -5,18 +5,20 @@
 // only *constructs* everything; nothing in it runs a background goroutine
 // (kabuステーションAPI token refresh, Scheduler workers/cron) until
 // cmd/desktop's Wails OnStartup or cmd/server's main calls
-// (*Services).Start (lifecycle.go). Queue Handlers live in
-// marketdata_job.go; the Scanner Dashboard candidate-refresh cycle lives
-// in candidates.go.
+// (*Services).Start (lifecycle.go). Queue Handlers live in the
+// marketdatajob subpackage; the Scanner Dashboard candidate-refresh cycle
+// lives in candidates.
 package bootstrap
 
 import (
 	"log/slog"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
@@ -50,38 +52,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 )
 
-// LogDir is the directory every entrypoint's logging.RotatingWriter
-// writes the daily structured JSON log file to, and the Scheduler's
-// maintenance task (logging.Archiver) compresses files past their 30-day
-// retention in (requirements/non-functional.md §5).
-const LogDir = "logs"
-
-// EnvBackupDir names the environment variable holding the destination
-// directory of the daily SQLite backup (requirements/non-functional.md §3):
-// a location outside the local application disk (external drive / synced
-// cloud folder). Unset or empty disables the backup job.
-const EnvBackupDir = "PITHA_BACKUP_DIR"
-
-// jevMaxAttemptsForTest lets in-package tests cap the Jev client's attempts (no real backoff); 0 = production default.
-var jevMaxAttemptsForTest int
-
-// defaultTokenRefreshInterval is how often Services.Start reissues the
-// kabuステーションAPI token (marketdata.Client.Start). The API does not
-// publish an exact token TTL (docs/architecture/overview.md §5), so 20
-// minutes is a conservative guess: well before any plausible expiry, well
-// above fullScanInterval (60s).
-const defaultTokenRefreshInterval = 20 * time.Minute
-
-// defaultKabuExchange is the kabuステーションAPI market code every
-// instrument is queried under: the target universe is TSE-listed equities
-// only, so instruments.Market (free text such as "TSE Prime") is not
-// translated per row.
-const defaultKabuExchange = marketdata.ExchangeTSE
-
-// newsPollInterval is how often News Ingest polls the external news feed
-// for every active instrument (FR-LUNA-1).
-const newsPollInterval = time.Minute
-
 // Services holds every internal/service/* instance the composition root
 // builds, plus the repositories they share. cmd/desktop and cmd/server
 // both call BuildServices once (after bootstrap.Run) and derive their
@@ -114,7 +84,7 @@ type Services struct {
 	Execution     *execution.Engine
 	Insight       *insight.Reader
 	Calibration   *calibration.Service
-	Backtest      *BacktestSource
+	Backtest      *backtestsource.Source
 	Activity      *activityfeed.Service
 	Governor      *selfimprove.Governor
 
@@ -125,7 +95,7 @@ type Services struct {
 	wg       sync.WaitGroup
 
 	newsEnabled bool
-	sessionOpen func(time.Time) bool // trading-session predicate (session.go)
+	candidates  *candidates.Refresher
 }
 
 // BuildServices constructs the full composition-root service graph on top
@@ -216,7 +186,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	calibrationService := calibration.NewService(outcomes, decisiontrade.New(state.DB))
 	traderHandler := policy.NewHandler(trader, snapshots, policyEngine, paperexec.Executor{Engine: executionEngine, Sizer: riskEngine}, policy.WithCalibration(calibrationService))
 
-	backtestSource := newBacktestSource(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
+	backtestSource := backtestsource.New(instruments, snapshots, decisions, thresholds, runtimePolicy, executionConfig)
 	// Sol/Opus (issue #82, FR-SELFIMPROVE-8/9) are real external LLM API
 	// clients built from the optional SOL_*/OPUS_* secrets. Left unset,
 	// each stage is skipped every day (assist.ErrNotConfigured) instead of
@@ -253,6 +223,14 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	}
 	sched := scheduler.New(jobs, instruments, schedOpts...)
 
+	screenerSource := screener.NewLiveSource()
+	pushFeed := pushfeed.New(instruments, marketDataClient, marketdata.DefaultPushURL, defaultKabuExchange)
+	marketDataHandler := &marketdatajob.Handler{
+		Boards: pushFeed, Instruments: instruments, Snapshots: snapshots, FeatureEngine: featureEngine,
+		Execution: executionEngine, Screener: screenerSource, News: newsService, Scheduler: sched,
+		EventTrigger: state.Strategy.Scan.EventTrigger,
+	}
+
 	svc := &Services{
 		Instruments:   instruments,
 		Snapshots:     snapshots,
@@ -268,7 +246,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		RAG:           ragService,
 		MarketData:    marketDataClient,
 		FeatureEngine: featureEngine,
-		Screener:      screener.NewLiveSource(),
+		Screener:      screenerSource,
 		Jev:           jevClient,
 		Scout:         scout,
 		Trader:        trader,
@@ -285,12 +263,15 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Scheduler:     sched,
 		Updater:       updateAdapter,
 		strategy:      state.Strategy,
-		PushFeed:      pushfeed.New(instruments, marketDataClient, marketdata.DefaultPushURL, defaultKabuExchange),
-		sessionOpen:   marketcalendarOpen,
+		PushFeed:      pushFeed,
+		candidates: &candidates.Refresher{
+			Instruments: instruments, Snapshots: snapshots, Settings: settings, Jobs: jobs,
+			Screener: screenerSource, Strategy: state.Strategy, InSession: marketcalendarOpen,
+		},
 	}
 
-	sched.RegisterHandler(jobqueue.JobQueueMarketData, svc.handleMarketData)
-	sched.RegisterHandler(jobqueue.JobQueueFeatureCalc, svc.handleFeatureCalc)
+	sched.RegisterHandler(jobqueue.JobQueueMarketData, marketDataHandler.HandleMarketData)
+	sched.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)
 	sched.RegisterHandler(jobqueue.JobQueueJevScout, svc.Scout.HandleJob)
 	sched.RegisterHandler(jobqueue.JobQueueJevTrader, traderHandler.HandleJob)
 	sched.RegisterHandler(jobqueue.JobQueueOutcomeLabeling, calibration.NewLabeler(decisions, snapshots, outcomes).HandleJob)

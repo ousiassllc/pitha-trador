@@ -21,12 +21,6 @@
 # 除外中のファイルも1ファイル300行以内に保つこと。
 # ---------------------------------------------------------------------------
 
-# internal/bootstrap/（全体 約2.6k行）
-internal/bootstrap/activity_internal_test.go
-internal/bootstrap/candidates_screener_internal_test.go
-internal/bootstrap/event_internal_test.go
-internal/bootstrap/selfimprove_internal_test.go
-
 # internal/service/risk/（全体 約2.5k行。Engineのメソッド群でパッケージ内結合が強い）
 internal/service/risk/monitor_test.go
 internal/service/risk/warning.go

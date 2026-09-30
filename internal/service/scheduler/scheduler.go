@@ -208,7 +208,7 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 // non-functional.md §3, §5), running until ctx is done or Stop is called.
 //
 // The 15-30s candidate-refresh cycle (functional.md §4.3) is not a
-// Scheduler trigger: internal/bootstrap's candidateRefreshTicker drives
+// Scheduler trigger: internal/bootstrap/candidates' Refresher.Run drives
 // it, since it needs Fast Screener, which this package cannot import.
 func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) error {
 	runCtx, cancel := context.WithCancel(ctx)
