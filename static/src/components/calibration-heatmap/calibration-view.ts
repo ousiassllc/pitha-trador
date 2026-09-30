@@ -38,7 +38,7 @@ export interface CalibrationAPIResponse {
 // real date, but lightweight-charts requires an increasing numeric `Time`
 // for every series point - the midpoint, scaled to an integer percent,
 // doubles as that x-axis value while the time-scale's date labels stay
-// hidden (see initChart below).
+// hidden (see initChart in pitha-calibration-heatmap.ts).
 export function bucketMidpointPct(range: string): number {
   const [low, high] = range.split('-').map(Number);
   return Math.round(((low + high) / 2) * 100);
