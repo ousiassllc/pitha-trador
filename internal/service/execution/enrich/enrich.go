@@ -14,7 +14,7 @@ import (
 )
 
 // traderResponseFields mirrors internal/service/jev.TraderResponse's JSON
-// shape for the fields repository.DecisionRepository does not decode into
+// shape for the fields judgement.DecisionRepository does not decode into
 // queryable columns (regime/entry_quality/toxic_flow/liquidity_stressed/
 // continuation_probability - jev_decisions has no such columns; see
 // doc.go). Declared locally instead of importing internal/service/jev to
@@ -31,7 +31,7 @@ type traderResponseFields struct {
 
 // Decision fills in Regime/EntryQuality/ToxicFlow/
 // LiquidityStressed/ContinuationProbability on a
-// repository.DecisionRepository-read domain.JevDecision by parsing its
+// judgement.DecisionRepository-read domain.JevDecision by parsing its
 // stored ResponseJSON, for callers (EvaluateExit, Symbol Detail's API
 // handler) that need those fields from a decision read back on a later
 // request rather than the same in-memory value

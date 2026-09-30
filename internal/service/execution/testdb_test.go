@@ -5,15 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
 // newTestDB opens a fresh, fully migrated SQLite database in a temporary
 // directory for a single test, closing it on cleanup (mirrors
-// internal/repository's own test helper of the same name).
+// internal/repository/*'s own test helper of the same name).
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	conn, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

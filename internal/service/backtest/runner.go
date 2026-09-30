@@ -13,11 +13,11 @@ import (
 // DecisionSource supplies the historical Jev Trader decision Policy
 // Engine needs to evaluate the bar at ts for instrumentID (functional.md
 // §4.5/§4.6). Backtest replay is decoupled from exactly how decisions
-// were captured: repository.DecisionRepository's current schema
+// were captured: judgement.DecisionRepository's current schema
 // (db/migrations/000004_create_jev_decisions_table.up.sql) does not
 // persist every domain.JevDecision field a Policy Engine decision needs
 // (EntryQuality/ContinuationProbability/ToxicFlow/LiquidityStressed -
-// internal/repository/decision_repo.go only round-trips
+// internal/repository/judgement/decision_repo.go only round-trips
 // Direction/Confidence on re-read), so a caller supplies a source built
 // from decisions it already holds in full (e.g. a Self-Improvement
 // Governor replaying its own recent jev.Trader.Evaluate results for a
@@ -108,7 +108,7 @@ type RunConfig struct {
 	// Snapshots is the exact, caller-resolved ascending-by-Timestamp
 	// Snapshot series to replay - the "look-ahead防止のためのデータ供給
 	// 境界" this package's own doc.go describes. A caller typically
-	// builds this via repository.SnapshotRepository.ListByInstrumentRange
+	// builds this via market.SnapshotRepository.ListByInstrumentRange
 	// covering at least the full range any Period passed to
 	// Run/ShadowBacktest spans, plus whatever leading history Feature
 	// Engine needs to warm up Return5m/15m/RealizedVol5m for the first

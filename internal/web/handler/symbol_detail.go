@@ -49,7 +49,7 @@ type SymbolPathInput struct {
 
 // APISymbol implements `GET /api/v1/symbols/{symbol}` (docs/api/endpoints.md
 // §5): the latest price/VWAP, latest Jev Trader decision (parsed via
-// enrich.Decision when read back from repository.DecisionRepository
+// enrich.Decision when read back from judgement.DecisionRepository
 // - see internal/service/execution/state.go), the shared Risk Engine
 // parameters, and the currently open position size (signed: positive for
 // LONG, negative for SHORT), or nil when flat.

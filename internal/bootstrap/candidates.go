@@ -10,7 +10,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
@@ -134,7 +134,7 @@ func (s *Services) enqueueJevScout(ctx context.Context, instrumentID int64, symb
 	if err != nil {
 		return fmt.Errorf("bootstrap: encode jev-scout job payload for %q: %w", symbol, err)
 	}
-	if _, err := s.Jobs.Enqueue(ctx, repository.JobQueueJevScout, string(payload), now); err != nil {
+	if _, err := s.Jobs.Enqueue(ctx, jobqueue.JobQueueJevScout, string(payload), now); err != nil {
 		return fmt.Errorf("bootstrap: enqueue jev-scout job for %q: %w", symbol, err)
 	}
 	return nil

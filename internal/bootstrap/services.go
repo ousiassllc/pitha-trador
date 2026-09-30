@@ -20,8 +20,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
 	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 	"github.com/ousiassllc/pitha-trador/internal/service/backup"
@@ -61,20 +66,16 @@ const EnvBackupDir = "PITHA_BACKUP_DIR"
 var jevMaxAttemptsForTest int
 
 // defaultTokenRefreshInterval is how often Services.Start reissues the
-// kabuステーションAPI token (marketdata.Client.Start). kabuステーション
-// API's own reference does not publish an exact token TTL
-// (docs/architecture/overview.md §5 only says "有効期限があるため...
-// 定期的に再発行"); 20 minutes is a conservative guess that comfortably
-// reissues well before any plausible expiry while staying well above
-// fullScanInterval (60s) so it never dominates request volume.
+// kabuステーションAPI token (marketdata.Client.Start). The API does not
+// publish an exact token TTL (docs/architecture/overview.md §5), so 20
+// minutes is a conservative guess: well before any plausible expiry, well
+// above fullScanInterval (60s).
 const defaultTokenRefreshInterval = 20 * time.Minute
 
 // defaultKabuExchange is the kabuステーションAPI market code every
-// instrument is queried under. This build's target universe is TSE-listed
-// equities only (docs/requirements, docs/architecture/overview.md do not
-// describe multi-exchange support), so instruments.Market (a free-text
-// display string such as "TSE Prime") is not translated into a per-row
-// exchange code; every symbol uses marketdata.ExchangeTSE.
+// instrument is queried under: the target universe is TSE-listed equities
+// only, so instruments.Market (free text such as "TSE Prime") is not
+// translated per row.
 const defaultKabuExchange = marketdata.ExchangeTSE
 
 // newsPollInterval is how often News Ingest polls the external news feed
@@ -87,17 +88,17 @@ const newsPollInterval = time.Minute
 // internal/router.New options and Wails/http lifecycle hooks from the
 // returned *Services.
 type Services struct {
-	Instruments *repository.InstrumentRepository
-	Snapshots   *repository.SnapshotRepository
-	Decisions   *repository.DecisionRepository
-	Signals     *repository.SignalRepository
-	Jobs        *repository.JobRepository
-	Positions   *repository.PositionRepository
-	Orders      *repository.OrderRepository
-	Outcomes    *repository.CalibrationRepository
-	KillSwitch  *repository.KillSwitchRepository
-	Settings    *repository.RuntimeSettingsRepository
-	Proposals   *repository.ProposalRepository
+	Instruments *market.InstrumentRepository
+	Snapshots   *market.SnapshotRepository
+	Decisions   *judgement.DecisionRepository
+	Signals     *trading.SignalRepository
+	Jobs        *jobqueue.JobRepository
+	Positions   *trading.PositionRepository
+	Orders      *trading.OrderRepository
+	Outcomes    *judgement.CalibrationRepository
+	KillSwitch  *system.KillSwitchRepository
+	Settings    *system.RuntimeSettingsRepository
+	Proposals   *judgement.ProposalRepository
 
 	RAG           *rag.Service
 	MarketData    *marketdata.Client
@@ -135,20 +136,19 @@ type Services struct {
 // Risk Engine alert channels (cmd/desktop's Wails App; cmd/server none),
 // and autoUpdate (issue #65) wires internal/service/updater's periodic
 // self-update check onto Scheduler when non-nil (cmd/desktop only), also
-// exposed as Services.Updater for the UI (issue #76). It performs no I/O
-// itself (the repository constructors only hold *sql.DB) and starts no
-// goroutine; see (*Services).Start.
+// exposed as Services.Updater (issue #76). It performs no I/O itself and
+// starts no goroutine; see (*Services).Start.
 func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quitter, notifiers ...risk.Notifier) (*Services, error) {
-	instruments := repository.NewInstrumentRepository(state.DB)
-	snapshots := repository.NewSnapshotRepository(state.DB)
-	decisions := repository.NewDecisionRepository(state.DB)
-	signals := repository.NewSignalRepository(state.DB)
-	jobs := repository.NewJobRepository(state.DB)
-	positions := repository.NewPositionRepository(state.DB)
-	orders := repository.NewOrderRepository(state.DB)
-	outcomes := repository.NewCalibrationRepository(state.DB)
-	killSwitch := repository.NewKillSwitchRepository(state.DB)
-	settings := repository.NewRuntimeSettingsRepository(state.DB)
+	instruments := market.NewInstrumentRepository(state.DB)
+	snapshots := market.NewSnapshotRepository(state.DB)
+	decisions := judgement.NewDecisionRepository(state.DB)
+	signals := trading.NewSignalRepository(state.DB)
+	jobs := jobqueue.NewJobRepository(state.DB)
+	positions := trading.NewPositionRepository(state.DB)
+	orders := trading.NewOrderRepository(state.DB)
+	outcomes := judgement.NewCalibrationRepository(state.DB)
+	killSwitch := system.NewKillSwitchRepository(state.DB)
+	settings := system.NewRuntimeSettingsRepository(state.DB)
 	alertChannels := alerts.New(secrets)
 
 	// System Activity Log (functional.md §4.15): reads the pipeline's own
@@ -205,7 +205,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		marketData: marketDataClient,
 		jevAPI:     jevClient,
 		brokerAPI:  marketDataClient.BrokerFailures(),
-		dbWrite:    repository.DBWriteFailures,
+		dbWrite:    sqlitedb.DBWriteFailures,
 	}, executionEngine, alertChannels.RiskNotifier(notifiers))
 	// runtimePolicy is strategy.yaml's policy.* thresholds overridden by every
 	// applied Self-Improvement proposal; signals and backtests both read it, so
@@ -223,7 +223,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	// blocking start-up.
 	solClient := assist.NewClient(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey})
 	opusClient := assist.NewClient(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey})
-	proposals := repository.NewProposalRepository(state.DB)
+	proposals := judgement.NewProposalRepository(state.DB)
 	governor := selfimprove.NewGovernor(proposals, settings, positions,
 		backtestSource, state.Strategy.Policy,
 		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()),
@@ -289,12 +289,12 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		sessionOpen:   marketcalendarOpen,
 	}
 
-	sched.RegisterHandler(repository.JobQueueMarketData, svc.handleMarketData)
-	sched.RegisterHandler(repository.JobQueueFeatureCalc, svc.handleFeatureCalc)
-	sched.RegisterHandler(repository.JobQueueJevScout, svc.Scout.HandleJob)
-	sched.RegisterHandler(repository.JobQueueJevTrader, traderHandler.HandleJob)
-	sched.RegisterHandler(repository.JobQueueOutcomeLabeling, calibration.NewLabeler(decisions, snapshots, outcomes).HandleJob)
-	sched.RegisterHandler(repository.JobQueueAnalytics, svc.handleSelfImprove)
+	sched.RegisterHandler(jobqueue.JobQueueMarketData, svc.handleMarketData)
+	sched.RegisterHandler(jobqueue.JobQueueFeatureCalc, svc.handleFeatureCalc)
+	sched.RegisterHandler(jobqueue.JobQueueJevScout, svc.Scout.HandleJob)
+	sched.RegisterHandler(jobqueue.JobQueueJevTrader, traderHandler.HandleJob)
+	sched.RegisterHandler(jobqueue.JobQueueOutcomeLabeling, calibration.NewLabeler(decisions, snapshots, outcomes).HandleJob)
+	sched.RegisterHandler(jobqueue.JobQueueAnalytics, svc.handleSelfImprove)
 
 	return svc, nil
 }

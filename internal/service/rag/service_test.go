@@ -8,13 +8,15 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -22,7 +24,7 @@ func newTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func mustCreateInstrument(t *testing.T, instruments *repository.InstrumentRepository, symbol string) domain.Instrument {
+func mustCreateInstrument(t *testing.T, instruments *market.InstrumentRepository, symbol string) domain.Instrument {
 	t.Helper()
 	inst, err := instruments.Create(context.Background(), domain.Instrument{
 		Symbol: symbol, Name: "Test " + symbol, Market: "TSE Prime", IsActive: true,
@@ -35,7 +37,7 @@ func mustCreateInstrument(t *testing.T, instruments *repository.InstrumentReposi
 
 func TestService_Context_ColdStartReturnsEmptyNotError(t *testing.T) {
 	db := newTestDB(t)
-	svc := rag.NewService(db, repository.NewDecisionRepository(db), repository.NewSnapshotRepository(db))
+	svc := rag.NewService(db, judgement.NewDecisionRepository(db), market.NewSnapshotRepository(db))
 
 	got, err := svc.Context(context.Background(), rag.FeatureInput{Return1m: ptr(0.01)}, rag.DefaultK)
 	if err != nil {
@@ -48,9 +50,9 @@ func TestService_Context_ColdStartReturnsEmptyNotError(t *testing.T) {
 
 func TestService_IndexSnapshot_ThenContextFindsItAsMarketSnapshotCase(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	svc := rag.NewService(db, repository.NewDecisionRepository(db), snapshots)
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	svc := rag.NewService(db, judgement.NewDecisionRepository(db), snapshots)
 
 	inst := mustCreateInstrument(t, instruments, "7203")
 	ts := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
@@ -87,9 +89,9 @@ func TestService_IndexSnapshot_ThenContextFindsItAsMarketSnapshotCase(t *testing
 
 func TestService_Context_PrioritizesDecisionsOverSnapshotsAndBackfillsToK(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	snapshots := repository.NewSnapshotRepository(db)
-	decisions := repository.NewDecisionRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
 	svc := rag.NewService(db, decisions, snapshots)
 
 	inst := mustCreateInstrument(t, instruments, "9433")

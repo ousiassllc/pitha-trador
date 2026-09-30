@@ -21,7 +21,7 @@ const (
 // PolicyProposalSource supplies the Sol/Opus self-improvement audit
 // history for `GET /api/v1/policy-proposals`. List returns proposals most
 // recent first, optionally restricted to one status, at most limit rows.
-// *internal/repository.ProposalRepository implements it directly.
+// *internal/repository/judgement.ProposalRepository implements it directly.
 type PolicyProposalSource interface {
 	List(ctx context.Context, status string, limit int) ([]domain.PolicyProposal, error)
 }

@@ -17,7 +17,7 @@ import (
 
 // fakeSecretsStore is a configurable handler.SecretsStore for tests,
 // backed by an in-memory map instead of a real
-// internal/repository.SecretsRepository (which needs a *sql.DB).
+// internal/repository/system.SecretsRepository (which needs a *sql.DB).
 type fakeSecretsStore struct {
 	values map[string]string
 	// getErr, if non-nil, makes Get fail for getErrKey (or every key when

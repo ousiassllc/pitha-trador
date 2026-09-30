@@ -11,7 +11,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -100,7 +102,7 @@ func ragFeatureInput(state ScoutState) rag.FeatureInput {
 }
 
 // ScoutJobPayload is the jev-scout queue job payload
-// (repository.JobQueueJevScout): it identifies which instrument to
+// (jobqueue.JobQueueJevScout): it identifies which instrument to
 // evaluate. Handle reads that instrument's latest market_snapshots row
 // for the current ScoutState, mirroring internal/service/scheduler's
 // fullScanPayload convention of carrying only IDs - not precomputed data -
@@ -115,9 +117,9 @@ type ScoutJobPayload struct {
 // (decision_type=scout, FR-SCOUT-3).
 type Scout struct {
 	client     *Client
-	decisions  *repository.DecisionRepository
-	snapshots  *repository.SnapshotRepository
-	jobs       *repository.JobRepository
+	decisions  *judgement.DecisionRepository
+	snapshots  *market.SnapshotRepository
+	jobs       *jobqueue.JobRepository
 	rag        *rag.Service
 	thresholds config.JevScoutConfig
 	news       NewsSource
@@ -131,7 +133,7 @@ type Scout struct {
 // HandleJob) will be used. ragService builds the RAG few-shot context
 // injected into every Scout request and indexes each persisted decision
 // for future searches (functional.md §4.13, FR-RAG-1〜4).
-func NewScout(client *Client, decisions *repository.DecisionRepository, snapshots *repository.SnapshotRepository, jobs *repository.JobRepository, ragService *rag.Service, thresholds config.JevScoutConfig, opts ...Option) *Scout {
+func NewScout(client *Client, decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, jobs *jobqueue.JobRepository, ragService *rag.Service, thresholds config.JevScoutConfig, opts ...Option) *Scout {
 	o := newOptions(opts)
 	return &Scout{
 		client:     client,
@@ -210,8 +212,8 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 // payload so Jev Trader (a later sub-scope) picks up the candidate next
 // (functional.md §4.4). Its signature matches
 // internal/service/scheduler.Handler, so it can be registered directly:
-// scheduler.RegisterHandler(repository.JobQueueJevScout, scout.HandleJob).
-func (s *Scout) HandleJob(ctx context.Context, job repository.Job) error {
+// scheduler.RegisterHandler(jobqueue.JobQueueJevScout, scout.HandleJob).
+func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	var payload ScoutJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return fmt.Errorf("jev: decode scout job payload: %w", err)
@@ -237,7 +239,7 @@ func (s *Scout) HandleJob(ctx context.Context, job repository.Job) error {
 	if err != nil {
 		return fmt.Errorf("jev: encode jev-trader job payload for %q: %w", payload.Symbol, err)
 	}
-	if _, err := s.jobs.Enqueue(ctx, repository.JobQueueJevTrader, string(traderPayload), time.Now().UTC()); err != nil {
+	if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueJevTrader, string(traderPayload), time.Now().UTC()); err != nil {
 		return fmt.Errorf("jev: enqueue jev-trader job for %q: %w", payload.Symbol, err)
 	}
 	return nil

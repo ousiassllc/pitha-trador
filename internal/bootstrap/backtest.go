@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
@@ -29,9 +30,9 @@ var backtestCost = backtest.CostModel{SlippageBps: 5, FeeBps: 0}
 // (selfimprove.ShadowBacktestSource) replays exactly the data the live
 // pipeline recorded, under the policy.* thresholds currently in effect.
 type BacktestSource struct {
-	instruments *repository.InstrumentRepository
-	snapshots   *repository.SnapshotRepository
-	decisions   *repository.DecisionRepository
+	instruments *market.InstrumentRepository
+	snapshots   *market.SnapshotRepository
+	decisions   *judgement.DecisionRepository
 	thresholds  policy.Thresholds
 	policy      policy.PolicySource
 	exit        backtest.ExitRule
@@ -39,7 +40,7 @@ type BacktestSource struct {
 
 // newBacktestSource builds a BacktestSource replaying with thresholds'
 // spread/turnover limits and current's live policy.* thresholds.
-func newBacktestSource(instruments *repository.InstrumentRepository, snapshots *repository.SnapshotRepository, decisions *repository.DecisionRepository, thresholds policy.Thresholds, current policy.PolicySource, exit execution.Config) *BacktestSource {
+func newBacktestSource(instruments *market.InstrumentRepository, snapshots *market.SnapshotRepository, decisions *judgement.DecisionRepository, thresholds policy.Thresholds, current policy.PolicySource, exit execution.Config) *BacktestSource {
 	return &BacktestSource{
 		instruments: instruments,
 		snapshots:   snapshots,

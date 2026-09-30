@@ -74,7 +74,7 @@ pitha-trador/
 │   │   └── policyproposal.go     # policy_proposals相当
 │   ├── repository/               # domainのみに依存（例外: `system`の`SecretsRepository`のみ`internal/config`のAES-256-GCMヘルパー）。直下にはファイルを置かず、リソース群ごとのサブパッケージ（#244）
 │   │   ├── sqlutil/              # 共有ヘルパー: 時刻のSQLite表現変換（`FormatTime`/`ParseTime`）・`Nullable*`/`Null*`スキャナ・`RowScanner`/`Execer`インターフェース。domain・標準ライブラリのみに依存するリーフ
-│   │   ├── sqlitedb/             # SQLite接続（`Open`）・golang-migrateマイグレーション・`BackupTo`・sqlmw計装ドライバ・DB書き込み失敗検知フック（`DBWriteFailures`）。domainのみに依存するリーフ
+│   │   ├── sqlitedb/             # SQLite接続（`Open`）・golang-migrateマイグレーション・`BackupTo`・sqlmw計装ドライバ・DB書き込み失敗検知フック（`DBWriteFailures`）。`domain`とマイグレーションSQLの`go:embed`元`db`のみに依存するリーフ
 │   │   ├── market/               # instruments / market_snapshots（`InstrumentRepository`, `SnapshotRepository`）
 │   │   ├── jobqueue/             # jobsテーブル・キュー名/状態定数（`Job`, `JobRepository`, `ErrJobNotFound`）
 │   │   ├── judgement/            # jev_decisions / calibration_outcomes / policy_proposals（`DecisionRepository`, `CalibrationRepository`, `ProposalRepository`）
@@ -160,7 +160,7 @@ pitha-trador/
 
 レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
-`repository`/`web/handler`/`bootstrap`/`service/risk`は分割後（#134、実装は#244〜#247）の**目標構成**を上のツリーに記載している。実装は各Issueで順次反映するため、それぞれのマージまでは実ディレクトリがフラットな構成のままで、ツリーとの差異は意図したものである（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
+`repository`は#244で分割済み。`web/handler`/`bootstrap`/`service/risk`は分割後（#134、実装は#245〜#247）の**目標構成**を上のツリーに記載している。実装は各Issueで順次反映するため、それぞれのマージまでは実ディレクトリがフラットな構成のままで、ツリーとの差異は意図したものである（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
 
 - 兄弟サブパッケージ同士はimportしない。共有コードは`sqlutil`/`sqlitedb`/`handler/shared`のようなリーフ・ヘルパー用サブパッケージへ切り出す。リソース群を跨ぐ読み取りは`decisiontrade`のように専用サブパッケージ（`repository`ではリーフ・ヘルパーとdomainのみに依存）へ置く
 - サブパッケージは親パッケージをimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る
@@ -268,3 +268,4 @@ handler → service → repository → domain
 | 1.23 | 2026-09-29 | §3ツリーに`internal/safego`を追加、§4にBackground Task Guard行を新設、§3レイヤー依存ルールに基盤パッケージとして`safego`を追記 | issue #226/#229 |
 | 1.24 | 2026-09-30 | §3の「ディレクトリ＝レイヤー」規約を「サブパッケージ単位の責務」規約へ改め、`repository`（`sqlutil`/`sqlitedb`/`market`/`jobqueue`/`judgement`/`trading`/`system`）・`web/handler`（`shared`/`symbol`/`system`/`settings`/`activity`）・`bootstrap`（`candidates`/`marketdatajob`/`backtestsource`）・`service/risk`（Engine集約＋テスト専用`checkflow`/`monitorflow`）の分割後構成とサブパッケージ間の依存方向を確定。レイヤー依存ルールをサブツリー全体（depguardのプレフィックス一致）へ適用する形に更新し、`.linterlyignore`の手書きソース除外を全廃する方針（許容は`*_templ.go`と`**/logs/**`のみ）を明記 | issue #243（#134の先行仕様更新） |
 | 1.25 | 2026-09-30 | §9に自動アップデート周期確認の再試行（取得失敗・安全ゲート保留は指数バックオフで再試行）を追記 | issue #240 |
+| 1.26 | 2026-09-30 | §3の`repository`を実装に合わせて分割済みと明記（`sqlutil`/`sqlitedb`/`market`/`jobqueue`/`judgement`/`trading`/`system`。直下のファイルは廃止）。テストDB準備のみ`_test.go`から`sqlitedb.Open`可・他リソース群のデータはSQLで直接用意する（兄弟import禁止の維持） | issue #244 |

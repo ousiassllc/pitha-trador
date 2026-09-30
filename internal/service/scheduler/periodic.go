@@ -7,7 +7,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/updatecheck"
 )
 
@@ -143,7 +144,7 @@ const outcomeLabelRetryWindow = 24 * time.Hour
 var DefaultOutcomeLabelHorizonsMinutes = []int{5, 10, 20}
 
 // EnqueueOutcomeLabeling enqueues one outcome-labeling job
-// (repository.JobQueueOutcomeLabeling) for every Jev trader decision
+// (jobqueue.JobQueueOutcomeLabeling) for every Jev trader decision
 // whose horizon has elapsed as of now but has no calibration_outcomes
 // row yet for that (jev_decision_id, horizon_minutes) pair (functional.md
 // FR-CAL-4), skipping decisions older than outcomeLabelRetryWindow. It
@@ -164,11 +165,11 @@ func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (
 		if p.DecisionTimestamp.Before(now.Add(-outcomeLabelRetryWindow)) {
 			continue
 		}
-		payload, err := json.Marshal(repository.OutcomeLabelJobPayload{JevDecisionID: p.JevDecisionID, HorizonMinutes: p.HorizonMinutes})
+		payload, err := json.Marshal(judgement.OutcomeLabelJobPayload{JevDecisionID: p.JevDecisionID, HorizonMinutes: p.HorizonMinutes})
 		if err != nil {
 			return 0, fmt.Errorf("scheduler: marshal outcome-labeling payload for decision %d: %w", p.JevDecisionID, err)
 		}
-		if _, err := s.jobs.Enqueue(ctx, repository.JobQueueOutcomeLabeling, string(payload), now); err != nil {
+		if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueOutcomeLabeling, string(payload), now); err != nil {
 			return 0, fmt.Errorf("scheduler: enqueue outcome-labeling job for decision %d (horizon %dm): %w", p.JevDecisionID, p.HorizonMinutes, err)
 		}
 		enqueued++

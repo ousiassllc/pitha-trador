@@ -13,7 +13,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
@@ -99,9 +101,9 @@ func (f fakeHealth) Healthy(context.Context) (bool, error) { return f.healthy, n
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "flow_test.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "flow_test.db"))
 	if err != nil {
-		t.Fatalf("repository.Open: %v", err)
+		t.Fatalf("sqlitedb.Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	return db
@@ -113,15 +115,15 @@ func jstTime(y int, m time.Month, d, hh, mm int) time.Time {
 
 // newEngine builds an Engine on a fresh migrated DB. Check needs a latest
 // snapshot for instrument 1, so one is seeded.
-func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioProvider, closer risk.PositionCloser, now func() time.Time) (*risk.Engine, *repository.KillSwitchRepository) {
+func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioProvider, closer risk.PositionCloser, now func() time.Time) (*risk.Engine, *system.KillSwitchRepository) {
 	t.Helper()
 	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	if now == nil {
 		now = time.Now
 	}
-	snapshots := repository.NewSnapshotRepository(db)
-	inst, err := repository.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+	snapshots := market.NewSnapshotRepository(db)
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
 	if err != nil {
@@ -136,7 +138,7 @@ func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioP
 	e := risk.NewEngine(risk.Config{
 		Limits:     limits,
 		KillSwitch: killSwitch,
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Snapshots:  snapshots,
 		Portfolio:  portfolio,
 		Closer:     closer,
@@ -147,16 +149,16 @@ func newEngine(t *testing.T, limits config.RiskLimits, portfolio risk.PortfolioP
 
 // newSessionEngine is an Engine with a TSE Calendar, Live heartbeat timeout
 // (120 min) and a caller-controlled clock.
-func newSessionEngine(t *testing.T, clock *time.Time, md risk.HealthChecker) (*risk.Engine, *repository.KillSwitchRepository) {
+func newSessionEngine(t *testing.T, clock *time.Time, md risk.HealthChecker) (*risk.Engine, *system.KillSwitchRepository) {
 	t.Helper()
 	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	limits := testLimits()
 	limits.HeartbeatTimeoutMinutes = 120
 	e := risk.NewEngine(risk.Config{
 		Limits:           limits,
 		KillSwitch:       killSwitch,
-		Settings:         repository.NewRuntimeSettingsRepository(db),
+		Settings:         system.NewRuntimeSettingsRepository(db),
 		Portfolio:        risk.ZeroPortfolioProvider{},
 		MarketDataHealth: md,
 		Calendar:         marketcalendar.TSE,
@@ -165,7 +167,7 @@ func newSessionEngine(t *testing.T, clock *time.Time, md risk.HealthChecker) (*r
 	return e, killSwitch
 }
 
-func unresolvedReasons(t *testing.T, ks *repository.KillSwitchRepository) []string {
+func unresolvedReasons(t *testing.T, ks *system.KillSwitchRepository) []string {
 	t.Helper()
 	events, err := ks.ListUnresolved(context.Background())
 	if err != nil {

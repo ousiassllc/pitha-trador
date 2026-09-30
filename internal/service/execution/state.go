@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 )
 
 // SymbolState mirrors functional.md §4.9's per-symbol JSON shape:
@@ -58,7 +58,7 @@ func (e *Engine) State(ctx context.Context, symbol string) (SymbolState, error) 
 
 	inst, err := e.instruments.GetBySymbol(ctx, symbol)
 	if err != nil {
-		if errors.Is(err, repository.ErrInstrumentNotFound) {
+		if errors.Is(err, market.ErrInstrumentNotFound) {
 			return SymbolState{}, fmt.Errorf("%w: %s", ErrInstrumentUnknown, symbol)
 		}
 		return SymbolState{}, fmt.Errorf("execution: look up instrument %q: %w", symbol, err)

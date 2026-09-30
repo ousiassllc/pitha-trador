@@ -7,24 +7,25 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 )
 
 type loaderFixture struct {
-	instruments *repository.InstrumentRepository
-	snapshots   *repository.SnapshotRepository
+	instruments *market.InstrumentRepository
+	snapshots   *market.SnapshotRepository
 	loader      *featureengine.MarketContextLoader
 }
 
 func newLoaderFixture(t *testing.T) loaderFixture {
 	t.Helper()
-	db, err := repository.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	instruments, snapshots := repository.NewInstrumentRepository(db), repository.NewSnapshotRepository(db)
+	instruments, snapshots := market.NewInstrumentRepository(db), market.NewSnapshotRepository(db)
 	return loaderFixture{instruments, snapshots, featureengine.NewMarketContextLoader(instruments, snapshots)}
 }
 

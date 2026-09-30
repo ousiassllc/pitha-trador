@@ -39,7 +39,7 @@ const (
 )
 
 // State persists each task's last successful run date.
-// *repository.RuntimeSettingsRepository implements it.
+// *system.RuntimeSettingsRepository implements it.
 type State interface {
 	Get(ctx context.Context, key string) (string, bool, error)
 	Set(ctx context.Context, key, value string, updatedAt time.Time) error

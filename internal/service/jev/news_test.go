@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
@@ -48,10 +49,10 @@ func TestScout_Evaluate_InjectsNewsContextIntoStateJSONAndRequest(t *testing.T) 
 	t.Cleanup(server.Close)
 
 	db := newTestDB(t)
-	decisions := repository.NewDecisionRepository(db)
-	inst := mustCreateInstrument(t, repository.NewInstrumentRepository(db), "7203")
-	ragService := rag.NewService(db, decisions, repository.NewSnapshotRepository(db))
-	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), decisions, repository.NewSnapshotRepository(db), nil, ragService, testThresholds(), jev.WithNewsSource(newsFor7203()))
+	decisions := judgement.NewDecisionRepository(db)
+	inst := mustCreateInstrument(t, market.NewInstrumentRepository(db), "7203")
+	ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
+	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), decisions, market.NewSnapshotRepository(db), nil, ragService, testThresholds(), jev.WithNewsSource(newsFor7203()))
 
 	decision, passed, err := scout.Evaluate(context.Background(), inst.ID, jev.ScoutState{Symbol: "7203"})
 	if err != nil {
@@ -73,10 +74,10 @@ func TestScout_Evaluate_InjectsNewsContextIntoStateJSONAndRequest(t *testing.T) 
 func TestScout_Evaluate_NoNewsForSymbolLeavesStateWithoutNewsContext(t *testing.T) {
 	server := scoutServer(t, jev.ScoutResponse{InterestingNow: 0.8, LiquidityOk: 0.9, AbnormalActivity: 0.6})
 	db := newTestDB(t)
-	decisions := repository.NewDecisionRepository(db)
-	inst := mustCreateInstrument(t, repository.NewInstrumentRepository(db), "9433")
-	ragService := rag.NewService(db, decisions, repository.NewSnapshotRepository(db))
-	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), decisions, repository.NewSnapshotRepository(db), nil, ragService, testThresholds(), jev.WithNewsSource(newsFor7203()))
+	decisions := judgement.NewDecisionRepository(db)
+	inst := mustCreateInstrument(t, market.NewInstrumentRepository(db), "9433")
+	ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
+	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), decisions, market.NewSnapshotRepository(db), nil, ragService, testThresholds(), jev.WithNewsSource(newsFor7203()))
 
 	decision, _, err := scout.Evaluate(context.Background(), inst.ID, jev.ScoutState{Symbol: "9433"})
 	if err != nil {
@@ -96,9 +97,9 @@ func TestTrader_Evaluate_InjectsNewsContextWithoutChangingJevJudgment(t *testing
 	t.Cleanup(server.Close)
 
 	db := newTestDB(t)
-	decisions := repository.NewDecisionRepository(db)
-	inst := mustCreateInstrument(t, repository.NewInstrumentRepository(db), "7203")
-	ragService := rag.NewService(db, decisions, repository.NewSnapshotRepository(db))
+	decisions := judgement.NewDecisionRepository(db)
+	inst := mustCreateInstrument(t, market.NewInstrumentRepository(db), "7203")
+	ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
 	trader := jev.NewTrader(jev.NewClient(jev.Config{BaseURL: server.URL}), decisions, ragService, jev.WithNewsSource(newsFor7203()))
 
 	decision, err := trader.Evaluate(context.Background(), inst.ID, jev.ScoutState{Symbol: "7203"})

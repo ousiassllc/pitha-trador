@@ -12,7 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
 func eventTestBars(inst domain.Instrument, prevVWAPBps, currVWAPBps float64) (domain.Snapshot, []domain.Snapshot) {
@@ -24,11 +24,11 @@ func eventTestBars(inst domain.Instrument, prevVWAPBps, currVWAPBps float64) (do
 	return curr, []domain.Snapshot{prev}
 }
 
-func claimJevScout(t *testing.T, svc *Services) (repository.Job, bool) {
+func claimJevScout(t *testing.T, svc *Services) (jobqueue.Job, bool) {
 	t.Helper()
-	job, err := svc.Jobs.ClaimNext(context.Background(), repository.JobQueueJevScout, time.Date(2026, 9, 28, 2, 0, 0, 0, time.UTC))
-	if errors.Is(err, repository.ErrJobNotFound) {
-		return repository.Job{}, false
+	job, err := svc.Jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, time.Date(2026, 9, 28, 2, 0, 0, 0, time.UTC))
+	if errors.Is(err, jobqueue.ErrJobNotFound) {
+		return jobqueue.Job{}, false
 	}
 	if err != nil {
 		t.Fatalf("ClaimNext: %v", err)

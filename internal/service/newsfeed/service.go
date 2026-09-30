@@ -43,7 +43,7 @@ type Classifier interface {
 }
 
 // InstrumentSource lists the instruments News Ingest polls
-// (repository.InstrumentRepository).
+// (market.InstrumentRepository).
 type InstrumentSource interface {
 	ListActive(ctx context.Context) ([]domain.Instrument, error)
 }

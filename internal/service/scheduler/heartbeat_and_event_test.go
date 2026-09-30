@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
@@ -23,8 +24,8 @@ func (f *fakeHeartbeatChecker) CheckHeartbeatTimeout(ctx context.Context) error 
 
 func TestScheduler_CheckOperatorHeartbeat_NoOpWithoutChecker(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	s := scheduler.New(jobs, instruments)
 	if err := s.CheckOperatorHeartbeat(context.Background()); err != nil {
@@ -34,8 +35,8 @@ func TestScheduler_CheckOperatorHeartbeat_NoOpWithoutChecker(t *testing.T) {
 
 func TestScheduler_CheckOperatorHeartbeat_CallsConfiguredChecker(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	checker := &fakeHeartbeatChecker{}
 
 	s := scheduler.New(jobs, instruments, scheduler.WithHeartbeatChecker(checker))
@@ -49,8 +50,8 @@ func TestScheduler_CheckOperatorHeartbeat_CallsConfiguredChecker(t *testing.T) {
 
 func TestScheduler_CheckOperatorHeartbeat_PropagatesCheckerError(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	wantErr := errors.New("kill switch already active")
 	checker := &fakeHeartbeatChecker{err: wantErr}
 
@@ -62,8 +63,8 @@ func TestScheduler_CheckOperatorHeartbeat_PropagatesCheckerError(t *testing.T) {
 
 func TestScheduler_EnqueueEventReevaluation_NoOpWhenNotTriggered(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	inst := mustCreateInstrument(t, instruments, "7203", true)
 	now := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
 
@@ -72,15 +73,15 @@ func TestScheduler_EnqueueEventReevaluation_NoOpWhenNotTriggered(t *testing.T) {
 		t.Fatalf("EnqueueEventReevaluation: %v", err)
 	}
 
-	if _, err := jobs.ClaimNext(context.Background(), repository.JobQueueJevScout, now); !errors.Is(err, repository.ErrJobNotFound) {
+	if _, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, now); !errors.Is(err, jobqueue.ErrJobNotFound) {
 		t.Fatalf("ClaimNext(jev-scout) error = %v, want ErrJobNotFound (FR-SCAN-2 suppression: no job enqueued)", err)
 	}
 }
 
 func TestScheduler_EnqueueEventReevaluation_EnqueuesImmediatelyWhenTriggered(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 	inst := mustCreateInstrument(t, instruments, "7203", true)
 	now := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
 
@@ -89,7 +90,7 @@ func TestScheduler_EnqueueEventReevaluation_EnqueuesImmediatelyWhenTriggered(t *
 		t.Fatalf("EnqueueEventReevaluation: %v", err)
 	}
 
-	job, err := jobs.ClaimNext(context.Background(), repository.JobQueueJevScout, now)
+	job, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueJevScout, now)
 	if err != nil {
 		t.Fatalf("ClaimNext(jev-scout): %v", err)
 	}

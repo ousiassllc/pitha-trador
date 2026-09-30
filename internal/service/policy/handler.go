@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 )
 
@@ -20,7 +21,7 @@ type SignalExecutor interface {
 }
 
 // Handler connects Jev Trader and Engine to the jev-trader queue
-// (repository.JobQueueJevTrader): HandleJob loads the instrument's latest
+// (jobqueue.JobQueueJevTrader): HandleJob loads the instrument's latest
 // market state, calls Jev Trader, then Engine, persisting a trade_signals
 // row for every outcome (FR-POLICY-5) - including a NONE row when the Jev
 // Trader call itself fails (FR-POLICY-3 "API異常"). This differs from
@@ -30,7 +31,7 @@ type SignalExecutor interface {
 // Engine still records that no signal was generated and why.
 type Handler struct {
 	trader    *jev.Trader
-	snapshots *repository.SnapshotRepository
+	snapshots *market.SnapshotRepository
 	engine    *Engine
 	executor  SignalExecutor
 	calib     CalibrationSource // optional, see WithCalibration
@@ -40,7 +41,7 @@ type Handler struct {
 // trader and engine, reading each instrument's latest market_snapshots
 // row via snapshots, and hands every approved signal to executor. A nil
 // executor only records signals (no order is ever placed).
-func NewHandler(trader *jev.Trader, snapshots *repository.SnapshotRepository, engine *Engine, executor SignalExecutor, opts ...HandlerOption) *Handler {
+func NewHandler(trader *jev.Trader, snapshots *market.SnapshotRepository, engine *Engine, executor SignalExecutor, opts ...HandlerOption) *Handler {
 	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor}
 	for _, opt := range opts {
 		opt(h)
@@ -54,7 +55,7 @@ func NewHandler(trader *jev.Trader, snapshots *repository.SnapshotRepository, en
 // payload shape onto this queue). Its signature matches
 // internal/service/scheduler.Handler, so it can be registered directly
 // once the Scheduler wiring itself is built (a later sub-scope):
-// scheduler.RegisterHandler(repository.JobQueueJevTrader, handler.HandleJob).
+// scheduler.RegisterHandler(jobqueue.JobQueueJevTrader, handler.HandleJob).
 //
 // Turnover5mJPY is the snapshot's trailing 5-minute turnover
 // (Feature.Turnover5m: a difference of cumulative session turnover, see
@@ -62,7 +63,7 @@ func NewHandler(trader *jev.Trader, snapshots *repository.SnapshotRepository, en
 // applies on this path; nil (insufficient history) skips it. Calibrated
 // comes from the CalibrationSource set via WithCalibration (see
 // calibrated); without one every decision counts as calibrated.
-func (h *Handler) HandleJob(ctx context.Context, job repository.Job) error {
+func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	var payload jev.ScoutJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return fmt.Errorf("policy: decode jev-trader job payload: %w", err)

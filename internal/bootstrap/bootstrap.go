@@ -22,7 +22,7 @@ import (
 
 	configdefaults "github.com/ousiassllc/pitha-trador/config"
 	"github.com/ousiassllc/pitha-trador/internal/config"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
 // Env* are the environment variables that override the default DB/config
@@ -117,7 +117,7 @@ func Run(cfg Config) (*State, error) {
 		return nil, err
 	}
 
-	db, err := repository.Open(dbPath)
+	db, err := sqlitedb.Open(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: open db %q: %w", dbPath, err)
 	}

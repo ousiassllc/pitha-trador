@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 )
 
 // recentClosedPositionsLimit bounds how many of the most-recently-opened
@@ -39,14 +39,14 @@ var ErrNoInitialCapital = errors.New("risk: initial_capital is not configured (c
 var tradingDayZone = time.FixedZone("JST", 9*60*60)
 
 // Provider is the real PortfolioProvider backed by
-// internal/repository.PositionRepository (issue #48).
+// internal/trading.PositionRepository (issue #48).
 //
 // TotalExposurePct/SymbolExposurePct/DailyLossPct measure against the
 // account-equity baseline initialCapital (config/risk.yaml's
 // initial_capital, the same value Execution's position sizing uses); with
 // no baseline they return ErrNoInitialCapital.
 type Provider struct {
-	positions      *repository.PositionRepository
+	positions      *trading.PositionRepository
 	initialCapital float64
 	now            func() time.Time
 }
@@ -62,7 +62,7 @@ func WithClock(now func() time.Time) Option {
 // New returns a Provider
 // backed by positions, measuring exposure/loss against initialCapital
 // (JPY).
-func New(positions *repository.PositionRepository, initialCapital float64, opts ...Option) *Provider {
+func New(positions *trading.PositionRepository, initialCapital float64, opts ...Option) *Provider {
 	p := &Provider{positions: positions, initialCapital: initialCapital, now: time.Now}
 	for _, opt := range opts {
 		opt(p)

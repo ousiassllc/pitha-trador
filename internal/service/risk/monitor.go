@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 )
 
 // DefaultFailureThreshold is Config.FailureThreshold's default: FR-RISK-2's
@@ -165,7 +165,7 @@ func (e *Engine) checkFilledOrdersWithoutPosition(ctx context.Context) error {
 // (empty if consistent) with the detail to record.
 func (e *Engine) reconcile(ctx context.Context, p domain.Position) (string, map[string]any, error) {
 	order, err := e.orders.Get(ctx, p.EntryOrderID)
-	if errors.Is(err, repository.ErrOrderNotFound) {
+	if errors.Is(err, trading.ErrOrderNotFound) {
 		return domain.KillReasonUnexpectedPosition, map[string]any{"problem": "entry_order_missing", "entry_order_id": p.EntryOrderID}, nil
 	}
 	if err != nil {

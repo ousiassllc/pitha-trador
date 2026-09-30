@@ -8,7 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 )
 
 // Version identifies this build's Policy Engine threshold-evaluation
@@ -149,14 +149,14 @@ type Input struct {
 type Engine struct {
 	thresholds Thresholds
 	risk       RiskChecker
-	signals    *repository.SignalRepository
+	signals    *trading.SignalRepository
 	policy     PolicySource // optional, see WithPolicySource
 }
 
 // NewEngine returns an Engine using thresholds and risk to decide, and
 // signals to persist every decision. risk defaults to
 // AlwaysPassRiskChecker when nil.
-func NewEngine(thresholds Thresholds, risk RiskChecker, signals *repository.SignalRepository, opts ...Option) *Engine {
+func NewEngine(thresholds Thresholds, risk RiskChecker, signals *trading.SignalRepository, opts ...Option) *Engine {
 	if risk == nil {
 		risk = AlwaysPassRiskChecker{}
 	}

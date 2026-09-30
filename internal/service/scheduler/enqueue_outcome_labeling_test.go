@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
-func mustInsertTraderDecision(t *testing.T, decisions *repository.DecisionRepository, instID int64, symbol string, timestamp time.Time) domain.JevDecision {
+func mustInsertTraderDecision(t *testing.T, decisions *judgement.DecisionRepository, instID int64, symbol string, timestamp time.Time) domain.JevDecision {
 	t.Helper()
 	direction := domain.JevDirectionLong
 	confidence := 0.8
@@ -29,8 +31,8 @@ func mustInsertTraderDecision(t *testing.T, decisions *repository.DecisionReposi
 
 func TestScheduler_EnqueueOutcomeLabeling_NoOpWithoutSource(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
 
 	s := scheduler.New(jobs, instruments)
 	count, err := s.EnqueueOutcomeLabeling(context.Background(), time.Now().UTC())
@@ -44,10 +46,10 @@ func TestScheduler_EnqueueOutcomeLabeling_NoOpWithoutSource(t *testing.T) {
 
 func TestScheduler_EnqueueOutcomeLabeling_EnqueuesDueDecisions(t *testing.T) {
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
-	jobs := repository.NewJobRepository(db)
-	decisions := repository.NewDecisionRepository(db)
-	outcomes := repository.NewCalibrationRepository(db)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
+	outcomes := judgement.NewCalibrationRepository(db)
 
 	inst := mustCreateInstrument(t, instruments, "7203", true)
 	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
@@ -69,14 +71,14 @@ func TestScheduler_EnqueueOutcomeLabeling_EnqueuesDueDecisions(t *testing.T) {
 
 	seenHorizons := make(map[int]bool)
 	for {
-		job, err := jobs.ClaimNext(context.Background(), repository.JobQueueOutcomeLabeling, now)
+		job, err := jobs.ClaimNext(context.Background(), jobqueue.JobQueueOutcomeLabeling, now)
 		if err != nil {
-			if errors.Is(err, repository.ErrJobNotFound) {
+			if errors.Is(err, jobqueue.ErrJobNotFound) {
 				break
 			}
-			t.Fatalf("ClaimNext(%q): %v", repository.JobQueueOutcomeLabeling, err)
+			t.Fatalf("ClaimNext(%q): %v", jobqueue.JobQueueOutcomeLabeling, err)
 		}
-		var payload repository.OutcomeLabelJobPayload
+		var payload judgement.OutcomeLabelJobPayload
 		if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 			t.Fatalf("unmarshal payload: %v", err)
 		}
@@ -89,5 +91,29 @@ func TestScheduler_EnqueueOutcomeLabeling_EnqueuesDueDecisions(t *testing.T) {
 		if !seenHorizons[h] {
 			t.Errorf("missing enqueued outcome-labeling job for horizon %dm", h)
 		}
+	}
+}
+
+func TestScheduler_EnqueueOutcomeLabeling_StopsRetryingDecisionsPastRetryWindow(t *testing.T) {
+	db := newTestDB(t)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
+	decisions := judgement.NewDecisionRepository(db)
+	outcomes := judgement.NewCalibrationRepository(db)
+
+	inst := mustCreateInstrument(t, instruments, "7203", true)
+	now := time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC)
+	// Never labeled (e.g. its horizon window had no market data), and
+	// decided more than a day ago: it must no longer be re-enqueued.
+	mustInsertTraderDecision(t, decisions, inst.ID, "7203", now.Add(-25*time.Hour))
+	recent := mustInsertTraderDecision(t, decisions, inst.ID, "7203", now.Add(-30*time.Minute))
+
+	s := scheduler.New(jobs, instruments, scheduler.WithOutcomeLabelSource(outcomes))
+	count, err := s.EnqueueOutcomeLabeling(context.Background(), now)
+	if err != nil {
+		t.Fatalf("EnqueueOutcomeLabeling: %v", err)
+	}
+	if want := len(scheduler.DefaultOutcomeLabelHorizonsMinutes); count != want {
+		t.Fatalf("EnqueueOutcomeLabeling count = %d, want %d (only decision %d's horizons)", count, want, recent.ID)
 	}
 }

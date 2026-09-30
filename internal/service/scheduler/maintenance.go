@@ -28,7 +28,7 @@ const (
 // WithMaintenanceState persists the daily maintenance tasks' (database
 // backup, retention purge, log archival) last success date, so a restart
 // does not repeat a task that already succeeded today.
-// *repository.RuntimeSettingsRepository implements it. Without it the
+// *system.RuntimeSettingsRepository implements it. Without it the
 // dates are only kept in memory.
 func WithMaintenanceState(state maintenance.State) Option {
 	return func(s *Scheduler) { s.maintenanceState = state }

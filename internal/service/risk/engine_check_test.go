@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -165,13 +166,13 @@ func TestEngine_Check_MaxConsecutiveLosses_RejectsAndTriggersKillSwitch(t *testi
 func TestEngine_Check_RejectsOnMaxSpreadBps(t *testing.T) {
 	limits := testLimits()
 	db := newTestDB(t)
-	instruments := repository.NewInstrumentRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 	inst, err := instruments.Create(context.Background(), domain.Instrument{Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true})
 	if err != nil {
 		t.Fatalf("Create instrument: %v", err)
 	}
 
-	snapshots := repository.NewSnapshotRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
 	wideSpread := limits.MaxSpreadBps + 1
 	if _, err := snapshots.Insert(context.Background(), domain.Snapshot{
 		InstrumentID: inst.ID,
@@ -184,8 +185,8 @@ func TestEngine_Check_RejectsOnMaxSpreadBps(t *testing.T) {
 
 	e := risk.NewEngine(risk.Config{
 		Limits:     limits,
-		KillSwitch: repository.NewKillSwitchRepository(db),
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		KillSwitch: system.NewKillSwitchRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Snapshots:  snapshots,
 		Portfolio:  risk.ZeroPortfolioProvider{},
 	})
@@ -257,12 +258,12 @@ func TestEngine_Check_FailsClosedOnMissingSnapshotOrSpread(t *testing.T) {
 
 	// Latest snapshot has a NULL spread (FR-POLICY-3 データ欠損).
 	db := newTestDB(t)
-	snapshots := repository.NewSnapshotRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
 	seedSnapshot(t, db, snapshots, 2000, -1)
 	e = risk.NewEngine(risk.Config{
 		Limits:     testLimits(),
-		KillSwitch: repository.NewKillSwitchRepository(db),
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		KillSwitch: system.NewKillSwitchRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Snapshots:  snapshots,
 		Portfolio:  risk.ZeroPortfolioProvider{},
 	})
@@ -279,12 +280,12 @@ func TestEngine_Check_RejectsWhenNoLotFitsMaxTradeLoss(t *testing.T) {
 	limits.MaxPositionPerSymbolPct = 100
 	limits.MaxTotalExposurePct = 100
 	db := newTestDB(t)
-	snapshots := repository.NewSnapshotRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
 	seedSnapshot(t, db, snapshots, 300_000, 5)
 	e := risk.NewEngine(risk.Config{
 		Limits:     limits,
-		KillSwitch: repository.NewKillSwitchRepository(db),
-		Settings:   repository.NewRuntimeSettingsRepository(db),
+		KillSwitch: system.NewKillSwitchRepository(db),
+		Settings:   system.NewRuntimeSettingsRepository(db),
 		Snapshots:  snapshots,
 		Portfolio:  risk.ZeroPortfolioProvider{},
 	})

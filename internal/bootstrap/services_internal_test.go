@@ -11,7 +11,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
@@ -92,7 +92,7 @@ func TestHandleMarketData_FetchesComputesAndPersistsSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	job := repository.Job{PayloadJSON: string(payload)}
+	job := jobqueue.Job{PayloadJSON: string(payload)}
 
 	if err := svc.handleMarketData(context.Background(), job); err != nil {
 		t.Fatalf("handleMarketData: %v", err)
@@ -118,7 +118,7 @@ func TestHandleMarketData_ReturnsErrorWithoutSwallowingOnFetchFailure(t *testing
 	inst := mustCreateInstrument(t, svc, "9999")
 
 	payload, _ := json.Marshal(marketDataJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
-	job := repository.Job{PayloadJSON: string(payload)}
+	job := jobqueue.Job{PayloadJSON: string(payload)}
 
 	if err := svc.handleMarketData(context.Background(), job); err == nil {
 		t.Fatal("handleMarketData: want error when kabuステーションAPI is unreachable, got nil")
@@ -135,7 +135,7 @@ func TestHandleMarketData_ReturnsErrorWithoutSwallowingOnFetchFailure(t *testing
 
 func TestHandleMarketData_ReturnsErrorOnUnmarshalableJobPayload(t *testing.T) {
 	svc := newTestServices(t, nil)
-	job := repository.Job{PayloadJSON: "not-json"}
+	job := jobqueue.Job{PayloadJSON: "not-json"}
 
 	if err := svc.handleMarketData(context.Background(), job); err == nil {
 		t.Fatal("handleMarketData: want error for unmarshalable job payload, got nil")
@@ -144,7 +144,7 @@ func TestHandleMarketData_ReturnsErrorOnUnmarshalableJobPayload(t *testing.T) {
 
 func TestHandleFeatureCalc_IsANoOp(t *testing.T) {
 	svc := newTestServices(t, nil)
-	if err := svc.handleFeatureCalc(context.Background(), repository.Job{PayloadJSON: "{}"}); err != nil {
+	if err := svc.handleFeatureCalc(context.Background(), jobqueue.Job{PayloadJSON: "{}"}); err != nil {
 		t.Errorf("handleFeatureCalc: %v, want nil", err)
 	}
 }
@@ -161,7 +161,7 @@ func TestHandleFeatureCalc_IsANoOp(t *testing.T) {
 func TestBuildServices_RegistersFeatureCalcHandler(t *testing.T) {
 	svc := newTestServices(t, nil)
 
-	enqueued, err := svc.Jobs.Enqueue(context.Background(), repository.JobQueueFeatureCalc, "{}", time.Now().UTC())
+	enqueued, err := svc.Jobs.Enqueue(context.Background(), jobqueue.JobQueueFeatureCalc, "{}", time.Now().UTC())
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestBuildServices_RegistersJevScoutHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	enqueued, err := svc.Jobs.Enqueue(context.Background(), repository.JobQueueJevScout, string(payload), time.Now().UTC())
+	enqueued, err := svc.Jobs.Enqueue(context.Background(), jobqueue.JobQueueJevScout, string(payload), time.Now().UTC())
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestBuildServices_RegistersJevTraderHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	enqueued, err := svc.Jobs.Enqueue(context.Background(), repository.JobQueueJevTrader, string(payload), time.Now().UTC())
+	enqueued, err := svc.Jobs.Enqueue(context.Background(), jobqueue.JobQueueJevTrader, string(payload), time.Now().UTC())
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}

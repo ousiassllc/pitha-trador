@@ -2,7 +2,9 @@ package bootstrap
 
 import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/repoportfolio"
@@ -10,11 +12,11 @@ import (
 
 // riskRepositories are the tables the Risk Engine reads and writes.
 type riskRepositories struct {
-	killSwitch *repository.KillSwitchRepository
-	settings   *repository.RuntimeSettingsRepository
-	snapshots  *repository.SnapshotRepository
-	positions  *repository.PositionRepository
-	orders     *repository.OrderRepository
+	killSwitch *system.KillSwitchRepository
+	settings   *system.RuntimeSettingsRepository
+	snapshots  *market.SnapshotRepository
+	positions  *trading.PositionRepository
+	orders     *trading.OrderRepository
 }
 
 // riskSignals are the live health/failure signals the Risk Engine's

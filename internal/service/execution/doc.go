@@ -7,8 +7,8 @@
 // (internal/web/handler.SymbolHandler) serves.
 //
 // Engine persists every Entry/Exit as a paper_orders row
-// (repository.OrderRepository) and the resulting held/closed position as
-// a positions row (repository.PositionRepository) - the same
+// (trading.OrderRepository) and the resulting held/closed position as
+// a positions row (trading.PositionRepository) - the same
 // positions internal/service/risk/repoportfolio.Provider reads.
 // Engine's CloseAll (close.go) implements that package's PositionCloser
 // (FR-RISK-3); internal/bootstrap passes the same *Engine to
@@ -24,7 +24,7 @@
 //
 // Trailing Stop has no dedicated positions column for a running peak/
 // trough price; Engine derives it on demand from
-// repository.SnapshotRepository.ListByInstrumentRange over
+// market.SnapshotRepository.ListByInstrumentRange over
 // [position.OpenedAt, now) instead of requiring a schema change outside
 // this sub-scope's target files.
 //
@@ -34,5 +34,5 @@
 // DecisionSource doc comment for the same limitation), so EvaluateExit
 // takes a caller-supplied *domain.JevDecision with those fields already
 // populated (parsed from response_json via EnrichDecision, decision.go)
-// rather than reading repository.DecisionRepository itself.
+// rather than reading judgement.DecisionRepository itself.
 package execution

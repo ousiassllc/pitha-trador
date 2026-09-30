@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 )
 
@@ -22,7 +22,7 @@ func TestBuildServices_ActivityFeedAggregatesRealRepositoriesAndReceivesLiveWrit
 	messages, cancel := svc.Activity.Subscribe()
 	defer cancel()
 
-	if _, err := svc.Jobs.Enqueue(ctx, repository.JobQueueJevScout, `{"symbol":"7203"}`, time.Now().UTC().Add(time.Hour)); err != nil {
+	if _, err := svc.Jobs.Enqueue(ctx, jobqueue.JobQueueJevScout, `{"symbol":"7203"}`, time.Now().UTC().Add(time.Hour)); err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
 	if _, err := svc.Decisions.Insert(ctx, domain.JevDecision{
@@ -54,7 +54,7 @@ func TestBuildServices_ActivityFeedAggregatesRealRepositoriesAndReceivesLiveWrit
 	if len(events) != 3 || events[0] != domain.ActivityTypeJob || events[1] != domain.ActivityTypeJevScout || events[2] != domain.ActivityTypeKillSwitch {
 		t.Fatalf("bus events = %v, want [job jev_scout kill_switch]", events)
 	}
-	if update == nil || update.Queue != repository.JobQueueJevScout || update.Pending != 1 {
+	if update == nil || update.Queue != jobqueue.JobQueueJevScout || update.Pending != 1 {
 		t.Fatalf("queue update = %+v, want jev-scout pending=1", update)
 	}
 
@@ -62,7 +62,7 @@ func TestBuildServices_ActivityFeedAggregatesRealRepositoriesAndReceivesLiveWrit
 	if err != nil {
 		t.Fatalf("Snapshot: %v", err)
 	}
-	if got := snap.Queues[2]; got.Queue != repository.JobQueueJevScout || got.Pending != 1 {
+	if got := snap.Queues[2]; got.Queue != jobqueue.JobQueueJevScout || got.Pending != 1 {
 		t.Fatalf("snapshot jev-scout = %+v, want pending=1", got)
 	}
 	seen := map[string]bool{}

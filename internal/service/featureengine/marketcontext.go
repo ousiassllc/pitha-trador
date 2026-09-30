@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 )
 
 // marketContextMaxStale is how old an index instrument's latest bar (or a
@@ -27,12 +27,12 @@ type MarketContext struct {
 // MarketContextLoader reads the tracked index instruments and the stock
 // universe from the database to build each stock's MarketContext.
 type MarketContextLoader struct {
-	instruments *repository.InstrumentRepository
-	snapshots   *repository.SnapshotRepository
+	instruments *market.InstrumentRepository
+	snapshots   *market.SnapshotRepository
 }
 
 // NewMarketContextLoader returns a loader reading via the given repositories.
-func NewMarketContextLoader(instruments *repository.InstrumentRepository, snapshots *repository.SnapshotRepository) *MarketContextLoader {
+func NewMarketContextLoader(instruments *market.InstrumentRepository, snapshots *market.SnapshotRepository) *MarketContextLoader {
 	return &MarketContextLoader{instruments: instruments, snapshots: snapshots}
 }
 

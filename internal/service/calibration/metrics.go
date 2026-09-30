@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 )
 
 // probabilityEpsilon keeps Log Loss finite when a sample's Confidence is
@@ -18,7 +18,7 @@ const probabilityEpsilon = 1e-9
 // data with Metrics's aggregation logic (docs/api/endpoints.md §GET
 // /api/v1/calibration).
 type Service struct {
-	outcomes *repository.CalibrationRepository
+	outcomes *judgement.CalibrationRepository
 	trades   TradeSource
 }
 
@@ -29,7 +29,7 @@ type TradeSource interface {
 }
 
 // NewService returns a Service backed by outcomes and trades.
-func NewService(outcomes *repository.CalibrationRepository, trades TradeSource) *Service {
+func NewService(outcomes *judgement.CalibrationRepository, trades TradeSource) *Service {
 	return &Service{outcomes: outcomes, trades: trades}
 }
 

@@ -4,7 +4,7 @@
 // Opus review -> runtime_settings apply -> post-apply rollback pipeline
 // tying internal/service/assist's Sol/Opus adapters,
 // internal/service/backtest's reusable engine, and
-// internal/repository.ProposalRepository/RuntimeSettingsRepository/
+// internal/repository/judgement.ProposalRepository/RuntimeSettingsRepository/
 // PositionRepository together.
 //
 // Sol and Opus are real external LLM API calls (FR-SELFIMPROVE-8/9). The

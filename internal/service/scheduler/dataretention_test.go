@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
@@ -22,7 +23,7 @@ func (f *fakePurger) Purge(ctx context.Context) error {
 
 func TestScheduler_PurgeExpiredData_NoOpWithoutPurger(t *testing.T) {
 	db := newTestDB(t)
-	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db))
+	s := scheduler.New(jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db))
 	if err := s.PurgeExpiredData(context.Background()); err != nil {
 		t.Fatalf("PurgeExpiredData: %v (want nil, no WithDataPurger configured)", err)
 	}
@@ -30,8 +31,8 @@ func TestScheduler_PurgeExpiredData_NoOpWithoutPurger(t *testing.T) {
 
 func TestScheduler_PurgeExpiredData_CallsPurgerAndPropagatesError(t *testing.T) {
 	db := newTestDB(t)
-	jobs := repository.NewJobRepository(db)
-	instruments := repository.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
+	instruments := market.NewInstrumentRepository(db)
 
 	ok := &fakePurger{}
 	s := scheduler.New(jobs, instruments, scheduler.WithDataPurger(ok))
@@ -51,7 +52,7 @@ func TestScheduler_PurgeExpiredData_CallsPurgerAndPropagatesError(t *testing.T) 
 
 func TestScheduler_Start_RegistersDailyDataPurgeTrigger(t *testing.T) {
 	db := newTestDB(t)
-	s := scheduler.New(repository.NewJobRepository(db), repository.NewInstrumentRepository(db),
+	s := scheduler.New(jobqueue.NewJobRepository(db), market.NewInstrumentRepository(db),
 		scheduler.WithDataPurger(&fakePurger{}))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

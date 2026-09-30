@@ -5,7 +5,9 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 )
@@ -37,9 +39,9 @@ type ShadowBacktestSource interface {
 // proposals to runtime_settings, and rolls back proposals whose
 // post-apply realized Expectancy degrades (FR-SELFIMPROVE-1〜7).
 type Governor struct {
-	proposals *repository.ProposalRepository
-	settings  *repository.RuntimeSettingsRepository
-	positions *repository.PositionRepository
+	proposals *judgement.ProposalRepository
+	settings  *system.RuntimeSettingsRepository
+	positions *trading.PositionRepository
 	source    ShadowBacktestSource
 
 	sol      *assist.Sol
@@ -85,9 +87,9 @@ func WithNow(now func() time.Time) Option {
 // PolicyConfig (config.LoadStrategy's result), the fallback for any
 // policy.* key runtime_settings has no override for.
 func NewGovernor(
-	proposals *repository.ProposalRepository,
-	settings *repository.RuntimeSettingsRepository,
-	positions *repository.PositionRepository,
+	proposals *judgement.ProposalRepository,
+	settings *system.RuntimeSettingsRepository,
+	positions *trading.PositionRepository,
 	source ShadowBacktestSource,
 	baseline config.PolicyConfig,
 	opts ...Option,

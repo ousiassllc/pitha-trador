@@ -95,7 +95,7 @@ func WithCalibrationSource(source handler.CalibrationSource) Option {
 
 // WithPolicyProposalSource overrides `GET /api/v1/policy-proposals`'s
 // backing internal/web/handler.PolicyProposalSource. cmd/desktop and
-// cmd/server pass internal/bootstrap's *repository.ProposalRepository; the
+// cmd/server pass internal/bootstrap's *judgement.ProposalRepository; the
 // empty handler.StaticPolicyProposalSource default only serves
 // router-level tests.
 func WithPolicyProposalSource(source handler.PolicyProposalSource) Option {
@@ -125,7 +125,7 @@ func WithBacktestRunner(runner handler.BacktestRunner) Option {
 // is unset in store, every route except `/setup`, `POST`/`DELETE
 // /settings/:key` and `/static/...` redirects to `/setup`. cmd/desktop
 // and cmd/server pass internal/bootstrap's real
-// *repository.SecretsRepository. Without this option (router-level tests
+// *system.SecretsRepository. Without this option (router-level tests
 // only) the handlers use the empty handler.StaticSecretsStore and no
 // guard is installed, so unrelated route tests need not seed secrets.
 func WithSecretsStore(store handler.SecretsStore) Option {

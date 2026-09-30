@@ -1,7 +1,8 @@
 // Package decisiontrade reads closed positions joined back to the Jev
 // trader decision that opened them, for Calibration's confidence-bucket
-// PnL (functional.md FR-CAL-2). It lives beside, not inside,
-// internal/repository to keep that directory under the 2000-line rule.
+// PnL (functional.md FR-CAL-2). It spans the judgement and trading resource
+// groups, so it is its own package rather than part of either (sibling
+// packages under internal/repository never import each other).
 package decisiontrade
 
 import (

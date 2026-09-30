@@ -11,7 +11,7 @@ func TestDecision_ParsesResponseJSONFieldsForTraderDecision(t *testing.T) {
 	direction := domain.JevDirectionLong
 	decision := domain.JevDecision{
 		DecisionType: domain.JevDecisionTypeTrader,
-		Direction:    &direction, // already round-tripped by repository.DecisionRepository
+		Direction:    &direction, // already round-tripped by judgement.DecisionRepository
 		ResponseJSON: `{
 			"direction": "LONG", "regime": "BREAKOUT", "entry_quality": "strong",
 			"toxic_flow": 0.18, "liquidity_stressed": 0.09, "continuation_probability": 0.72,

@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
 // handleSelfImprove is the analytics queue Handler: the daily
 // Continuous Loop batch Scheduler's post-close selfImproveCronSpec trigger
 // enqueues (functional.md §4.14). It runs Governor.RunDaily over the
 // recorded Calibration outcomes and logs what changed.
-func (s *Services) handleSelfImprove(ctx context.Context, _ repository.Job) error {
+func (s *Services) handleSelfImprove(ctx context.Context, _ jobqueue.Job) error {
 	result, err := s.Governor.RunDaily(ctx, s.Calibration)
 	var proposalID int64
 	if result.Proposal != nil {

@@ -22,7 +22,7 @@ type MarketContext struct {
 	// nil when Jev is unavailable (FR-EXIT-3: "Jev API不応答時も...継続
 	// 動作"). Its Direction/ContinuationProbability drive the Jev方向反
 	// 転/continuation_probability低下 conditions; a caller reading a
-	// decision back from repository.DecisionRepository must first pass it
+	// decision back from judgement.DecisionRepository must first pass it
 	// through enrich.Decision to populate
 	// ContinuationProbability, which is not one of that repository's
 	// queryable columns.
@@ -119,7 +119,7 @@ func (e *Engine) EvaluateExit(ctx context.Context, position domain.Position, mkt
 // trailingStopTriggered reports whether position's price has retraced
 // TrailingStopPct from the best price reached since OpenedAt (the peak
 // for a LONG, the trough for a SHORT), derived from
-// repository.SnapshotRepository.ListByInstrumentRange rather than a
+// market.SnapshotRepository.ListByInstrumentRange rather than a
 // dedicated positions column (doc.go). It returns false without error
 // when Engine has no SnapshotRepository configured (Deps.Snapshots was
 // left nil).

@@ -28,7 +28,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
 // Default retention windows, in days.
@@ -86,10 +86,10 @@ func (s *Service) Purge(ctx context.Context) error {
 		run  func() (int64, error)
 	}{
 		{"succeeded jobs", func() (int64, error) {
-			return s.purgeJobs(ctx, repository.JobStatusSucceeded, cutoff(s.policy.SucceededJobDays))
+			return s.purgeJobs(ctx, jobqueue.JobStatusSucceeded, cutoff(s.policy.SucceededJobDays))
 		}},
 		{"failed jobs", func() (int64, error) {
-			return s.purgeJobs(ctx, repository.JobStatusFailed, cutoff(s.policy.FailedJobDays))
+			return s.purgeJobs(ctx, jobqueue.JobStatusFailed, cutoff(s.policy.FailedJobDays))
 		}},
 		{"market snapshots", func() (int64, error) {
 			return s.purgeSnapshots(ctx, cutoff(s.policy.SnapshotDays))

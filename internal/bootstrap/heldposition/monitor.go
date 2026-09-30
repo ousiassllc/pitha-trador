@@ -32,7 +32,7 @@ import (
 // FR-SCHED-4's 5〜15秒.
 const DefaultInterval = 15 * time.Second
 
-// Positions lists the currently open positions (repository.PositionRepository).
+// Positions lists the currently open positions (trading.PositionRepository).
 type Positions interface {
 	ListOpen(ctx context.Context) ([]domain.Position, error)
 }

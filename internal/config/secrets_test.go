@@ -9,7 +9,7 @@ import (
 )
 
 // fakeSecretsRepo is a config.SecretsRepository backed by an in-memory
-// map, standing in for internal/repository.SecretsRepository (which
+// map, standing in for internal/repository/system.SecretsRepository (which
 // itself requires a SQLite database) in these unit tests.
 type fakeSecretsRepo map[string]string
 

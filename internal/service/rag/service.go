@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 )
 
 // DefaultK is FR-RAG-2's initial top-k similarity search size.
@@ -20,16 +21,16 @@ const DefaultK = 5
 // entity with its own CRUD surface.
 type Service struct {
 	db        *sql.DB
-	decisions *repository.DecisionRepository
-	snapshots *repository.SnapshotRepository
+	decisions *judgement.DecisionRepository
+	snapshots *market.SnapshotRepository
 }
 
 // NewService returns a Service backed by db (which must have
-// modernc.org/sqlite/vec registered - internal/repository/db.go does
+// modernc.org/sqlite/vec registered - internal/repository/sqlitedb/db.go does
 // this via a blank import before Open applies db/migrations' vec0
 // CREATE VIRTUAL TABLE statements) and used to hydrate similarity-search
 // hits into SimilarCase summaries via decisions/snapshots.
-func NewService(db *sql.DB, decisions *repository.DecisionRepository, snapshots *repository.SnapshotRepository) *Service {
+func NewService(db *sql.DB, decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository) *Service {
 	return &Service{db: db, decisions: decisions, snapshots: snapshots}
 }
 

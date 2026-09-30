@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -19,11 +19,11 @@ func (h *mutableHealth) Healthy(context.Context) (bool, error) { return h.health
 
 func TestEngine_CheckMarketDataHealth_TriggersOnceWhenUnhealthy(t *testing.T) {
 	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	e := risk.NewEngine(risk.Config{
 		Limits:           testLimits(),
 		KillSwitch:       killSwitch,
-		Settings:         repository.NewRuntimeSettingsRepository(db),
+		Settings:         system.NewRuntimeSettingsRepository(db),
 		Portfolio:        risk.ZeroPortfolioProvider{},
 		MarketDataHealth: fakeHealth{healthy: false},
 	})
@@ -70,11 +70,11 @@ func TestEngine_CheckMarketDataHealth_NoOpWhenHealthy(t *testing.T) {
 
 func TestEngine_CheckJevAPIHealth_TriggersWhenUnhealthy(t *testing.T) {
 	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	e := risk.NewEngine(risk.Config{
 		Limits:       testLimits(),
 		KillSwitch:   killSwitch,
-		Settings:     repository.NewRuntimeSettingsRepository(db),
+		Settings:     system.NewRuntimeSettingsRepository(db),
 		Portfolio:    risk.ZeroPortfolioProvider{},
 		JevAPIHealth: fakeHealth{healthy: false},
 	})
@@ -102,12 +102,12 @@ func TestEngine_CheckJevAPIHealth_TriggersWhenUnhealthy(t *testing.T) {
 // row of functional.md §4.7's table describes).
 func TestEngine_MarketDataDown_FullDetectAutoResumeCycle(t *testing.T) {
 	db := newTestDB(t)
-	killSwitch := repository.NewKillSwitchRepository(db)
+	killSwitch := system.NewKillSwitchRepository(db)
 	health := &mutableHealth{healthy: false}
 	e := risk.NewEngine(risk.Config{
 		Limits:           testLimits(),
 		KillSwitch:       killSwitch,
-		Settings:         repository.NewRuntimeSettingsRepository(db),
+		Settings:         system.NewRuntimeSettingsRepository(db),
 		Portfolio:        risk.ZeroPortfolioProvider{},
 		MarketDataHealth: health,
 	})
