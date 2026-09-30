@@ -1,8 +1,9 @@
 // Package staticassets embeds the frontend assets internal/router.New
 // serves at `/static/...`: dist/ (esbuild's JS bundles + Tailwind's
-// compiled app.css, docs/components/overview.md §1, §6) and vendor/
-// (the checked-in htmx.min.js). Embedding them lets cmd/server and
-// cmd/desktop serve `/static/...` from a single self-contained binary
+// compiled app.css, docs/components/overview.md §1, §6), img/ (the app
+// logo, issue #238) and vendor/ (the checked-in htmx.min.js). Embedding
+// them lets cmd/server and cmd/desktop serve `/static/...` from a single
+// self-contained binary
 // once packaged, without depending on static/src's absolute path on disk
 // (internal/router.go's now-removed staticDir, issue #59).
 //
@@ -19,5 +20,5 @@ package staticassets
 
 import "embed"
 
-//go:embed dist vendor
+//go:embed dist img vendor
 var FS embed.FS

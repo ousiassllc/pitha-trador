@@ -142,6 +142,7 @@ pitha-trador/
 │       ├── components/            # Lit Web Components（pitha-* 、詳細は components/overview.md）
 │       │   └── lib/               # api.ts, ws.ts, ws-status.ts, logger.ts, styles.ts
 │       ├── css/
+│       ├── img/                   # logo.svg（Header表示用、go:embed対象）
 │       └── dist/                  # ビルド成果物
 ├── db/
 │   └── migrations/                # golang-migrate SQLマイグレーション（SQLite方言、vec0仮想テーブル作成含む）

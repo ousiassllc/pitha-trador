@@ -51,6 +51,14 @@ import (
 // lives. The check button itself is deliberately not in the header: a
 // verified installer found by a check restarts the app, so it stays on a
 // single, explicit Settings screen.
+//
+// `#header-logo` (issue #238) is the app logo (`/static/img/logo.svg`,
+// go:embed'ed from static/src/img, same "P" mark as the desktop icon
+// cmd/desktop/build/appicon.png) plus the app name, leading the nav in
+// one flex group so the `justify-between` spacing of the version /
+// StatusDot / Kill Switch items is unchanged. The `<img>` has an empty
+// alt since the adjacent text already names the app.
+//
 // headerStatusTrigger is `#header-status`'s hx-trigger: an unknown state
 // (see Header) additionally fetches the badge on `load`.
 func headerStatusTrigger(state domain.SystemState) string {
@@ -63,13 +71,24 @@ func headerStatusTrigger(state domain.SystemState) string {
 
 templ Header(state domain.SystemState) {
 	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
-		<nav class="flex gap-4 text-sm font-medium text-slate-600">
-			<a class="hover:text-slate-900" href="/scanner">Scanner</a>
-			<a class="hover:text-slate-900" href="/performance">Performance</a>
-			<a class="hover:text-slate-900" href="/calibration">Calibration</a>
-			<a class="hover:text-slate-900" href="/activity">Activity</a>
-			<a class="hover:text-slate-900" href="/settings">Settings</a>
-		</nav>
+		<div class="flex items-center gap-6">
+			<a
+				id="header-logo"
+				class="flex shrink-0 items-center gap-2 text-sm font-semibold text-slate-900"
+				href="/scanner"
+				data-testid="header-logo"
+			>
+				<img class="h-8 w-8" src="/static/img/logo.svg" width="32" height="32" alt=""/>
+				<span>Pitha Trador</span>
+			</a>
+			<nav class="flex gap-4 text-sm font-medium text-slate-600">
+				<a class="hover:text-slate-900" href="/scanner">Scanner</a>
+				<a class="hover:text-slate-900" href="/performance">Performance</a>
+				<a class="hover:text-slate-900" href="/calibration">Calibration</a>
+				<a class="hover:text-slate-900" href="/activity">Activity</a>
+				<a class="hover:text-slate-900" href="/settings">Settings</a>
+			</nav>
+		</div>
 		<div
 			id="config-banner"
 			hx-get="/system/secrets-status"
