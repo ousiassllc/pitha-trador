@@ -57,7 +57,7 @@ func (c *Checker) downloadAndVerify(ctx context.Context, installerAsset, checksu
 		return "", fmt.Errorf("hash %s: %w", installerAsset.Name, err)
 	}
 	if !strings.EqualFold(wantHash, gotHash) {
-		err = fmt.Errorf("checksum mismatch for %s: want %s, got %s", installerAsset.Name, wantHash, gotHash)
+		err = kindErrorf(ErrorVerification, "checksum mismatch for %s: want %s, got %s", installerAsset.Name, wantHash, gotHash)
 		return "", err
 	}
 
@@ -88,10 +88,10 @@ func (c *Checker) checkDownloadURL(raw string) error {
 // one) instead of filling the disk.
 func (c *Checker) downloadTo(ctx context.Context, asset Asset, dest string, maxBytes int64) error {
 	if err := c.checkDownloadURL(asset.BrowserDownloadURL); err != nil {
-		return err
+		return withKind(ErrorVerification, err)
 	}
 	if asset.Size > maxBytes {
-		return fmt.Errorf("asset size %d exceeds limit %d", asset.Size, maxBytes)
+		return kindErrorf(ErrorVerification, "asset size %d exceeds limit %d", asset.Size, maxBytes)
 	}
 	if asset.Size > 0 {
 		maxBytes = asset.Size
@@ -103,11 +103,11 @@ func (c *Checker) downloadTo(ctx context.Context, asset Asset, dest string, maxB
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return withKind(ErrorNetwork, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d", resp.StatusCode)
+		return kindErrorf(ErrorNetwork, "unexpected status %d", resp.StatusCode)
 	}
 
 	f, err := os.Create(dest)
@@ -118,13 +118,13 @@ func (c *Checker) downloadTo(ctx context.Context, asset Asset, dest string, maxB
 
 	n, err := io.Copy(f, io.LimitReader(resp.Body, maxBytes+1))
 	if err != nil {
-		return err
+		return withKind(ErrorNetwork, err)
 	}
 	if n > maxBytes {
-		return fmt.Errorf("response body exceeds limit %d bytes", maxBytes)
+		return kindErrorf(ErrorVerification, "response body exceeds limit %d bytes", maxBytes)
 	}
 	if asset.Size > 0 && n != asset.Size {
-		return fmt.Errorf("response body is %d bytes, want %d", n, asset.Size)
+		return kindErrorf(ErrorVerification, "response body is %d bytes, want %d", n, asset.Size)
 	}
 	return nil
 }
@@ -152,7 +152,7 @@ func readChecksum(checksumsPath, name string) (string, error) {
 	if err := scanner.Err(); err != nil {
 		return "", fmt.Errorf("read checksums file: %w", err)
 	}
-	return "", fmt.Errorf("no checksum entry for %s", name)
+	return "", kindErrorf(ErrorVerification, "no checksum entry for %s", name)
 }
 
 func sha256File(path string) (string, error) {

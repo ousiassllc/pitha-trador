@@ -55,7 +55,7 @@ func TestSafeGate_SafeToUpdate_AllClear(t *testing.T) {
 
 	safe, reason := gate.SafeToUpdate(context.Background())
 	if !safe {
-		t.Fatalf("SafeToUpdate() = false, reason=%q; want true", reason)
+		t.Fatalf("SafeToUpdate() = false, reason=%+v; want true", reason)
 	}
 }
 
@@ -67,8 +67,8 @@ func TestSafeGate_SafeToUpdate_BlockedByOpenPositions(t *testing.T) {
 	if safe {
 		t.Fatalf("SafeToUpdate() = true, want false (open positions)")
 	}
-	if reason == "" {
-		t.Fatal("SafeToUpdate() reason is empty, want an explanation")
+	if reason.Kind != updater.BlockOpenPositions || reason.Detail == "" {
+		t.Fatalf("SafeToUpdate() reason = %+v, want Kind BlockOpenPositions with a detail", reason)
 	}
 }
 
@@ -80,8 +80,8 @@ func TestSafeGate_SafeToUpdate_BlockedByKillSwitch(t *testing.T) {
 	if safe {
 		t.Fatalf("SafeToUpdate() = true, want false (kill switch active)")
 	}
-	if reason == "" {
-		t.Fatal("SafeToUpdate() reason is empty, want an explanation")
+	if reason.Kind != updater.BlockKillSwitch || reason.Detail == "" {
+		t.Fatalf("SafeToUpdate() reason = %+v, want Kind BlockKillSwitch with a detail", reason)
 	}
 }
 
@@ -94,7 +94,7 @@ func TestSafeGate_SafeToUpdate_PausedDoesNotBlock(t *testing.T) {
 
 	safe, reason := gate.SafeToUpdate(context.Background())
 	if !safe {
-		t.Fatalf("SafeToUpdate() = false, reason=%q; want true (paused alone is not a gate condition)", reason)
+		t.Fatalf("SafeToUpdate() = false, reason=%+v; want true (paused alone is not a gate condition)", reason)
 	}
 }
 
@@ -107,8 +107,8 @@ func TestSafeGate_SafeToUpdate_BlockedByRecentOrder(t *testing.T) {
 	if safe {
 		t.Fatalf("SafeToUpdate() = true, want false (order 1m ago, default min idle is 5m)")
 	}
-	if reason == "" {
-		t.Fatal("SafeToUpdate() reason is empty, want an explanation")
+	if reason.Kind != updater.BlockRecentOrder || reason.Detail == "" {
+		t.Fatalf("SafeToUpdate() reason = %+v, want Kind BlockRecentOrder with a detail", reason)
 	}
 }
 
@@ -119,7 +119,7 @@ func TestSafeGate_SafeToUpdate_AllowsAfterMinIdleElapsed(t *testing.T) {
 
 	safe, reason := gate.SafeToUpdate(context.Background())
 	if !safe {
-		t.Fatalf("SafeToUpdate() = false, reason=%q; want true (order 10m ago, past 5m default)", reason)
+		t.Fatalf("SafeToUpdate() = false, reason=%+v; want true (order 10m ago, past 5m default)", reason)
 	}
 }
 
@@ -131,6 +131,6 @@ func TestSafeGate_SafeToUpdate_CustomMinIdleAfterOrder(t *testing.T) {
 
 	safe, reason := gate.SafeToUpdate(context.Background())
 	if !safe {
-		t.Fatalf("SafeToUpdate() = false, reason=%q; want true (2m elapsed, custom 1m gate)", reason)
+		t.Fatalf("SafeToUpdate() = false, reason=%+v; want true (2m elapsed, custom 1m gate)", reason)
 	}
 }

@@ -185,7 +185,7 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 		return Result{}, fmt.Errorf("updater: fetch latest release: %w", err)
 	}
 	if !semver.IsValid(release.TagName) {
-		return Result{}, fmt.Errorf("updater: latest release tag_name %q is not valid semver", release.TagName)
+		return Result{}, kindErrorf(ErrorRelease, "updater: latest release tag_name %q is not valid semver", release.TagName)
 	}
 	if semver.Compare(release.TagName, version.Version) <= 0 {
 		c.setStatus(Status{CheckedAt: time.Now()}) // already up to date
@@ -196,8 +196,9 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 	safe, reason := c.gate.SafeToUpdate(ctx)
 	if !safe {
 		slog.Info("updater: newer release available but not safe to update yet",
-			"current", version.Version, "latest", release.TagName, "reason", reason)
+			"current", version.Version, "latest", release.TagName, "reason", reason.Detail)
 		status.Blocked = true
+		status.BlockedKind = reason.Kind
 		c.setStatus(status)
 		return Result{}, nil
 	}
@@ -205,7 +206,7 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 
 	installerAsset, checksumAsset, err := selectAssets(release.Assets)
 	if err != nil {
-		return Result{}, fmt.Errorf("updater: %s: %w", release.TagName, err)
+		return Result{}, withKind(ErrorRelease, fmt.Errorf("updater: %s: %w", release.TagName, err))
 	}
 
 	installerPath, err := c.downloadAndVerify(ctx, installerAsset, checksumAsset)
@@ -233,17 +234,22 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return Release{}, err
+		return Release{}, withKind(ErrorNetwork, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return Release{}, fmt.Errorf("unexpected status %d", resp.StatusCode)
+		// GitHub signals a rate limit as 429, or 403 with no quota left.
+		if resp.StatusCode == http.StatusTooManyRequests ||
+			(resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0") {
+			return Release{}, kindErrorf(ErrorRateLimit, "rate limited: status %d", resp.StatusCode)
+		}
+		return Release{}, kindErrorf(ErrorRelease, "unexpected status %d", resp.StatusCode)
 	}
 
 	var release Release
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxReleaseJSONBytes)).Decode(&release); err != nil {
-		return Release{}, fmt.Errorf("decode response: %w", err)
+		return Release{}, kindErrorf(ErrorRelease, "decode response: %w", err)
 	}
 	return release, nil
 }

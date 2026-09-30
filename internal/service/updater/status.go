@@ -21,6 +21,9 @@ type Status struct {
 	// the installation on the last check (retried on the next one), so
 	// the app keeps running until the gate passes.
 	Blocked bool
+	// BlockedKind is which gate held the installation back, set exactly
+	// when Blocked (issue #241).
+	BlockedKind BlockKind
 	// Ready is true once the newer installer was downloaded and verified
 	// (the caller is about to quit and run it).
 	Ready bool
@@ -29,6 +32,9 @@ type Status struct {
 	// Blocked, since the failure says nothing about whether the newer
 	// release still exists.
 	LastError string
+	// ErrorKind classifies LastError, empty when it succeeded (issue
+	// #241).
+	ErrorKind ErrorKind
 }
 
 // Status returns the most recent check's outcome.
@@ -50,4 +56,5 @@ func (c *Checker) setStatusError(err error) {
 	defer c.statusMu.Unlock()
 	c.status.CheckedAt = time.Now()
 	c.status.LastError = err.Error()
+	c.status.ErrorKind = errorKind(err)
 }
