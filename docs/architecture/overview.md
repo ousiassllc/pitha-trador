@@ -128,7 +128,7 @@ pitha-trador/
 │   └── web/
 │       ├── apierror/              # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
 │       ├── handler/               # Ginハンドラ。直下は scanner.go, performance.go, calibration.go, policy_proposals.go, swagger.go（一覧・分析系）。それ以外は責務別サブパッケージ（#245）
-│       │   ├── shared/            # 共有ヘルパー（`action_error.go`のアクションエラー整形・`ws_poll.go`のWebSocketポーリング）。domain・標準ライブラリのみに依存するリーフ
+│       │   ├── shared/            # 共有ヘルパー（`action_error.go`のアクションエラー整形・`RenderErrorPage`（routerのmiddlewareも使用）・`ws_poll.go`のWebSocketポーリング）。Templ（`web/atoms`・`web/pages`）・標準/外部ライブラリのみに依存するリーフで、他のhandlerサブパッケージに依存しない
 │       │   ├── symbol/            # Symbol List/Detail/Page/Close と `/ws/symbol/...`（symbol*.go）
 │       │   ├── system/            # System状態・Kill Switch操作・`/ws/system`・自動アップデートUI（system.go, system_ws.go, update.go）
 │       │   ├── settings/          # `/settings`・認証情報の保存/削除（settings.go）
@@ -172,7 +172,7 @@ pitha-trador/
 | パッケージ | 分割方針 | 依存方向 |
 |-----------|---------|---------|
 | `repository`（#244） | テーブルの結合度でリソース群に分ける（`market`/`jobqueue`/`judgement`/`trading`/`system`）。各リポジトリ型はそのテーブルを所有する群に置き、群内のファイル名は`*_repo.go`を維持する。`formatTime`/`nullable*`/`rowScanner`/`execer`/`sqlExecutor`は`sqlutil`へ（公開名にする）、`db.go`・`dbmw.go`は`sqlitedb`へ。既存の`decisiontrade`/`snapshotcols`は現位置を維持 | 群 → `sqlutil`・`domain`。`sqlitedb` → `domain`。群同士・本番コードでの群→`sqlitedb`は禁止（テストのDB準備のみ`_test.go`から`sqlitedb.Open`可）。`system`のみ`internal/config`も可 |
-| `web/handler`（#245） | 画面/APIの責務別に`symbol`/`system`/`settings`/`activity`へ分け、小さい一覧・分析系ハンドラは直下に残す。`settings_test.go`（538行）は設定の保存・削除・表示の観点でファイルを分割する。`action_error.go`・`ws_poll.go`は`shared`へ | サブパッケージ → `service`・`domain`・`shared`・Templ（`web/pages`等）。`repository`は不可。サブパッケージ同士・直下への逆import禁止。`router` → 直下と全サブパッケージ |
+| `web/handler`（#245） | 画面/APIの責務別に`symbol`/`system`/`settings`/`activity`へ分け、小さい一覧・分析系ハンドラは直下に残す。`settings_test.go`（538行）は設定の保存・削除・表示の観点でファイルを分割する。`action_error.go`・`ws_poll.go`は`shared`へ移し公開名にする（直下・全サブパッケージ・`router`が共用） | 直下・サブパッケージ → `service`・`domain`・`shared`・Templ（`web/atoms`・`web/pages`等）。`shared` → Templ のみ（handler・`service`に依存しない）。`repository/**`は不可。サブパッケージ同士・直下への逆import禁止。`router` → 直下・`shared`・全サブパッケージ |
 | `bootstrap`（#246） | 直下は組み立て役（`Run`/`State`/`Services`/`BuildServices`/`Start`/`Stop`）のみ。ジョブ/ループ単位の責務を`candidates`/`marketdatajob`/`backtestsource`へ切り出す（既存の`heldposition`/`paperexec`/`alerts`と同格）。切り出し先は`Services`ではなく必要な依存だけをフィールドに持つ構造体に対するメソッドとして実装する | 直下 → 全サブパッケージ・`service`・`repository`・`sqlitedb`。サブパッケージ → `service`・`domain`・`repository`群のみ。親・兄弟への依存禁止 |
 | `service/risk`（#247） | `Engine`のメソッド群（`check.go`のCheck・`state.go`の状態遷移・`losslimit.go`の損失上限・`monitor.go`の定期監視・`warning.go`の日次損失警告・`autoresume.go`・`baseline.go`・`session.go`・`settings.go`・`sizing.go`）は`Engine`のunexported状態を共有するため**分割せず**`risk`直下に保つ（本番コードのみで約1.6k行＝ディレクトリ上限内）。行数上限は、`package risk_test`の外部テスト（現状936行）を`killswitchflow`に倣ってテスト専用サブパッケージ（`checkflow`=Check、`monitorflow`=監視・警告・Notifier）へ移して満たす | テスト専用サブパッケージ → `risk`（公開API）のみ。本番の依存方向（`risk` → `domain`・`repository/**`・`config`）は変更しない |
 
