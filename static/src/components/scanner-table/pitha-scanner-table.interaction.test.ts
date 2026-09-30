@@ -7,6 +7,7 @@ import {
   mount,
   type ScannerTableElement,
 } from './scanner-test-support';
+import { COLUMNS } from './scanner-view';
 
 installFakes();
 
@@ -34,21 +35,30 @@ describe('pitha-scanner-table interaction', () => {
   });
 
   // The header <button> is what makes sorting reachable with Tab and
-  // Enter/Space (native button behavior); its description carries the
-  // column hint, which the mouse-only `title` tooltip can't offer
-  // keyboard/touch/screen-reader users.
-  test('sortable headers are focusable buttons described by their hint', async () => {
+  // Enter/Space (native button behavior). The mouse-only `title` tooltip
+  // is complemented by a visible <details> listing every column's hint,
+  // which keyboard/touch/screen-reader users can open.
+  test('sortable headers are focusable buttons and every hint is listed in the column help', async () => {
     const { el } = await mount([item()]);
 
-    for (const th of el.querySelectorAll('thead th')) {
+    const headers = [...el.querySelectorAll('thead th')];
+    for (const th of headers) {
       const button = th.querySelector('button');
       expect(button).not.toBeNull();
       expect(button?.getAttribute('type')).toBe('button');
-      const describedBy = button?.getAttribute('aria-describedby') as string;
-      expect(th.querySelector(`#${describedBy}`)?.textContent).toBe(
-        th.getAttribute('title') ?? undefined,
-      );
+      // One announcement per hint: no aria-describedby duplicating `title`.
+      expect(button?.hasAttribute('aria-describedby')).toBe(false);
+      expect(th.querySelector('.sr-only')).toBeNull();
     }
+
+    const help = el.querySelector('details[data-testid="scanner-column-help"]');
+    expect(help?.querySelector('summary')?.textContent).toBe('列の意味');
+    expect(help?.hasAttribute('open')).toBe(false);
+    const terms = [...(help?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent);
+    const descriptions = [...(help?.querySelectorAll('dd') ?? [])].map((dd) => dd.textContent);
+    expect(terms).toEqual(COLUMNS.map((c) => c.label));
+    expect(descriptions).toEqual(COLUMNS.map((c) => c.hint));
+    expect(headers.map((th) => th.getAttribute('title'))).toEqual(COLUMNS.map((c) => c.hint));
 
     const priceButton = el.querySelectorAll('thead th')[1].querySelector('button') as HTMLElement;
     priceButton.click();

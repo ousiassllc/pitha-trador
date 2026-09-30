@@ -66,6 +66,18 @@ describe('SSR/Lit scanner contract', () => {
     });
   });
 
+  test('column help lists the golden labels and hints in order', async () => {
+    const el = await render([]);
+
+    const help = el.querySelector('[data-testid="scanner-column-help"]');
+    expect([...(help?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent)).toEqual(
+      contract.columns.map((c) => c.label),
+    );
+    expect([...(help?.querySelectorAll('dd') ?? [])].map((dd) => dd.textContent)).toEqual(
+      contract.columns.map((c) => c.hint),
+    );
+  });
+
   for (const row of contract.rows) {
     test(`row renders the golden cells: ${row.name}`, async () => {
       const el = await render([row.item as ScannerItem]);

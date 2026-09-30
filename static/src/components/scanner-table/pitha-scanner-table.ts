@@ -176,6 +176,7 @@ export class PithaScannerTable extends LitElement {
         <span class="text-lg font-semibold text-slate-900">${items.length}</span>
         件
       </p>
+      ${this.renderHelp()}
       <div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
         <table class="w-full border-collapse text-left text-sm">
           ${
@@ -204,14 +205,26 @@ export class PithaScannerTable extends LitElement {
     `;
   }
 
-  // Each header is a real <button> so sorting works with Tab + Enter/Space,
-  // and the column hint (which the mouse-only `title` tooltip can't offer
-  // keyboard/touch/screen-reader users) is exposed as visually hidden text
-  // the button is described by.
+  // Visible, focusable explanation of every column (a <details> works with
+  // keyboard and touch, unlike hover-only tooltips). Mirrors the SSR
+  // markup in organisms.ScannerTableFallback.
+  private renderHelp() {
+    return html`
+      <details class="mb-3 text-sm text-slate-600" data-testid="scanner-column-help">
+        <summary class="cursor-pointer select-none text-xs font-medium text-slate-700">列の意味</summary>
+        <dl class="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_1fr]">
+          ${COLUMNS.map((column) => html`<dt class="font-medium text-slate-700">${column.label}</dt><dd>${column.hint}</dd>`)}
+        </dl>
+      </details>
+    `;
+  }
+
+  // Each header is a real <button> so sorting works with Tab + Enter/Space.
+  // The `title` tooltip only helps mouse users; keyboard/touch/screen-reader
+  // users read the same hints in the visible column-help list (renderHelp).
   private renderHeader(column: Column) {
     const active = this.sortKey === column.key;
     const indicator = active ? (this.sortDirection === 'asc' ? ' ▲' : ' ▼') : '';
-    const hintId = `scanner-hint-${column.key}`;
     return html`
       <th
         scope="col"
@@ -222,10 +235,8 @@ export class PithaScannerTable extends LitElement {
         <button
           type="button"
           class="cursor-pointer select-none hover:text-slate-900"
-          aria-describedby=${hintId}
           @click=${() => this.onHeaderClick(column.key)}
         >${column.label}${indicator}</button>
-        <span id=${hintId} class="sr-only">${column.hint}</span>
       </th>
     `;
   }

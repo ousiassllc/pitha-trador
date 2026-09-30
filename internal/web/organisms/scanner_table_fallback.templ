@@ -1,7 +1,6 @@
 package organisms
 
 import (
-	"fmt"
 	"math"
 	"net/url"
 	"strconv"
@@ -39,6 +38,15 @@ templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 				<span class="text-lg font-semibold text-slate-900">{ strconv.Itoa(len(candidates)) }</span>
 				件
 			</p>
+			<details class="mb-3 text-sm text-slate-600" data-testid="scanner-column-help">
+				<summary class="cursor-pointer select-none text-xs font-medium text-slate-700">列の意味</summary>
+				<dl class="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_1fr]">
+					for _, col := range scannerColumns {
+						<dt class="font-medium text-slate-700">{ col.Label }</dt>
+						<dd>{ col.Hint }</dd>
+					}
+				</dl>
+			</details>
 			<div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
 				<table class="w-full border-collapse text-left text-sm">
 					<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
@@ -134,25 +142,39 @@ func returnClass(v *float64) string {
 	}
 }
 
+// formatFloat renders v with the given decimals like JavaScript's
+// Number.prototype.toFixed in scanner-view.ts: exact decimal ties round
+// away from zero (12.5 -> "13"), whereas fmt's %f rounds them to even
+// (12.5 -> "12"). Non-tie values round identically in both. Zero is
+// rendered without a sign.
 func formatFloat(v float64, decimals int) string {
-	return fmt.Sprintf("%.*f", decimals, v)
+	if v == 0 {
+		v = 0 // normalizes -0
+	}
+	// v*10^d is a half-integer (an exact tie) iff v*2^(d+1) is an odd
+	// integer: v is dyadic, so the odd factor 5^d cannot change that.
+	// Scaling by a power of two is exact.
+	if scaled := math.Ldexp(v, decimals+1); scaled == math.Trunc(scaled) && math.Mod(scaled, 2) != 0 {
+		v = math.Nextafter(v, math.Copysign(math.Inf(1), v)) // step past the tie, away from zero
+	}
+	return strconv.FormatFloat(v, 'f', decimals, 64)
 }
 
 func formatNilFloat(v *float64, decimals int) string {
 	if v == nil {
 		return "—"
 	}
-	return fmt.Sprintf("%.*f", decimals, *v)
+	return formatFloat(*v, decimals)
 }
 
 // formatSignedFloat is formatFloat with an explicit "+" for positive
 // values (negative values already carry "-"). Zero carries no sign, like
 // formatSigned in static/src/components/scanner-table/scanner-view.ts.
 func formatSignedFloat(v float64, decimals int) string {
-	if v == 0 {
-		return fmt.Sprintf("%.*f", decimals, 0.0) // also normalizes -0
+	if v > 0 {
+		return "+" + formatFloat(v, decimals)
 	}
-	return fmt.Sprintf("%+.*f", decimals, v)
+	return formatFloat(v, decimals)
 }
 
 func formatSignedNilFloat(v *float64, decimals int) string {

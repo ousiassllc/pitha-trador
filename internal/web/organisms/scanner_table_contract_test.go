@@ -137,6 +137,28 @@ func TestScannerTableFallback_MatchesLitContract_Columns(t *testing.T) {
 	}
 }
 
+func TestScannerTableFallback_MatchesLitContract_ColumnHelp(t *testing.T) {
+	contract := loadScannerContract(t)
+	doc := parseHTML(t, renderScannerTable(t, nil))
+
+	help := findAll(doc, func(n *html.Node) bool { return attr(n, "data-testid") == "scanner-column-help" })
+	if len(help) != 1 {
+		t.Fatalf("got %d column-help blocks, want 1", len(help))
+	}
+	dts, dds := findAll(help[0], tag("dt")), findAll(help[0], tag("dd"))
+	if len(dts) != len(contract.Columns) || len(dds) != len(contract.Columns) {
+		t.Fatalf("got %d <dt>/%d <dd>, want %d each", len(dts), len(dds), len(contract.Columns))
+	}
+	for i, want := range contract.Columns {
+		if got := text(dts[i]); got != want.Label {
+			t.Errorf("help term %d = %q, want %q", i, got, want.Label)
+		}
+		if got := text(dds[i]); got != want.Hint {
+			t.Errorf("help description %d = %q, want %q", i, got, want.Hint)
+		}
+	}
+}
+
 func TestScannerTableFallback_MatchesLitContract_Rows(t *testing.T) {
 	contract := loadScannerContract(t)
 	for _, row := range contract.Rows {
