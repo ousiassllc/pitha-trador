@@ -10,6 +10,7 @@ package updatecheck
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -44,8 +45,19 @@ type PendingReporter interface {
 	UpdatePending() bool
 }
 
+// permanentError is optionally implemented (found with errors.As) by a
+// check failure that retrying cannot fix, such as a broken release or a
+// checksum mismatch (internal/service/updater's kinded errors). Retrying
+// those with backoff would only repeat the request, and for a rejected
+// asset re-download the whole installer, every hour (issue #259); the next
+// @every-6h cron tick still looks again in case a fixed release was
+// published.
+type permanentError interface {
+	Permanent() bool
+}
+
 // Runner runs a Checker once and keeps retrying with exponential backoff
-// while the check fails or its result is held back.
+// while the check fails with a transient error or its result is held back.
 type Runner struct {
 	checker Checker
 	initial time.Duration
@@ -101,6 +113,11 @@ func (r *Runner) run(ctx context.Context) {
 func (r *Runner) needsRetry(ctx context.Context) bool {
 	if err := r.checker.CheckForUpdate(ctx); err != nil {
 		if ctx.Err() != nil {
+			return false
+		}
+		var perm permanentError
+		if errors.As(err, &perm) && perm.Permanent() {
+			slog.Error("scheduler: update check failed, not retrying until the next scheduled check", "error", err)
 			return false
 		}
 		slog.Error("scheduler: update check failed, retrying with backoff", "error", err)

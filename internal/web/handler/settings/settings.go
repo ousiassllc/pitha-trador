@@ -69,6 +69,7 @@ var settingsFields = []struct {
 	{config.KeySolBaseURL, "SOL_BASE_URL（任意）"},
 	{config.KeyOpusAPIKey, "OPUS_API_KEY（任意）"},
 	{config.KeyOpusBaseURL, "OPUS_BASE_URL（任意）"},
+	{config.KeyUpdateGitHubToken, "UPDATE_GITHUB_TOKEN（任意）"},
 }
 
 // setupOptionalKeys are the optional fields the Setup screen (`GET

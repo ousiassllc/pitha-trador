@@ -3,6 +3,7 @@ package updatecheck_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -68,6 +69,25 @@ func TestRunner_RetriesFailedCheckUntilItSucceeds(t *testing.T) {
 	runToCompletion(t, checker)
 	if got := checker.Calls(); got != 3 {
 		t.Fatalf("calls = %d, want 3 (2 failures then 1 success)", got)
+	}
+}
+
+// permanentError is an error a retry cannot fix (updater's broken release,
+// rejected checksum, refused lookup).
+type permanentError struct{ error }
+
+func (permanentError) Permanent() bool { return true }
+
+// TestRunner_DoesNotRetryPermanentFailure regresses issue #259: a broken
+// release or a checksum mismatch was retried every backoff step (re-
+// downloading the whole installer each time) although it cannot fix itself;
+// only the next @every-6h cron tick should look again.
+func TestRunner_DoesNotRetryPermanentFailure(t *testing.T) {
+	wrapped := fmt.Errorf("updater: download/verify v0.2.0: %w", permanentError{errors.New("checksum mismatch")})
+	checker := &scriptedChecker{errs: []error{wrapped, wrapped, wrapped}}
+	runToCompletion(t, checker)
+	if got := checker.Calls(); got != 1 {
+		t.Fatalf("calls = %d, want 1: a permanent failure must not be retried with backoff", got)
 	}
 }
 

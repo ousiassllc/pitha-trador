@@ -63,13 +63,13 @@ templ UpdatePanel(props UpdatePanelProps) {
 				<p class="text-emerald-700" data-testid="update-ready">インストーラーの検証が完了しました。まもなくアプリが再起動して更新されます。</p>
 			} else if props.Blocked {
 				<p class="text-amber-700" data-testid="update-blocked">
-					安全条件が揃っていないため更新を保留しています（{ props.BlockedReason }）。条件が揃い次第、自動的に更新・再起動されます（保留中は自動で再確認します）。
+					安全条件が揃っていないため更新を保留しています（{ props.BlockedReason }）。条件が揃い次第、自動的に更新・再起動されます（6時間ごとの定期確認で再確認します。「今すぐアップデートを確認」でも確認できます）。
 				</p>
 			}
 			if props.Failed {
 				<p class="text-red-700" data-testid="update-check-error">
 					if props.Available {
-						直近の更新の準備に失敗しました（原因: { props.ErrorReason }）。自動で再試行します。
+						直近の更新の準備に失敗しました（原因: { props.ErrorReason }）。6時間ごとの定期確認で再試行します。
 					} else {
 						原因: { props.ErrorReason }
 					}

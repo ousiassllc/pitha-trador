@@ -53,7 +53,11 @@ type Release struct {
 
 // Asset is one GitHub release asset.
 type Asset struct {
-	Name               string `json:"name"`
+	Name string `json:"name"`
+	// URL is the asset's API endpoint; with Config.Token it is the only
+	// download path that works for a private repository (issue #265), where
+	// BrowserDownloadURL answers 404.
+	URL                string `json:"url,omitempty"`
 	BrowserDownloadURL string `json:"browser_download_url"`
 	// Size is the asset's byte size as reported by GitHub. When positive it
 	// must not exceed the download cap and the downloaded body must match it.
@@ -86,6 +90,14 @@ type Config struct {
 	// before any download is attempted.
 	Gate SafeGate
 
+	// Token is an optional GitHub token with read access to the repository
+	// (the Settings screen's UPDATE_GITHUB_TOKEN, config.KeyUpdateGitHubToken).
+	// A private repository answers an unauthenticated release lookup with
+	// 404 (issue #265); with a token the lookup and the asset downloads go
+	// through the authenticated API instead. It is only ever sent to
+	// BaseURL; surrounding whitespace is ignored.
+	Token string
+
 	// HTTPClient defaults to a plain http.Client; request deadlines come
 	// from MetadataTimeout/DownloadTimeout, not from the client.
 	HTTPClient *http.Client
@@ -106,6 +118,7 @@ type Config struct {
 type Checker struct {
 	owner, repo string
 	gate        SafeGate
+	token       string
 	httpClient  *http.Client
 	baseURL     string
 
@@ -149,6 +162,7 @@ func NewChecker(cfg Config) *Checker {
 		owner:             cfg.Owner,
 		repo:              cfg.Repo,
 		gate:              cfg.Gate,
+		token:             strings.TrimSpace(cfg.Token),
 		httpClient:        httpClient,
 		baseURL:           baseURL,
 		downloadURLPrefix: downloadURLPrefix,
@@ -231,6 +245,7 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	c.authorize(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -239,12 +254,26 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		// GitHub signals a rate limit as 429, or 403 with no quota left.
+		// GitHub signals a rate limit (primary or secondary) as 429, or as
+		// 403 with no quota left or a Retry-After: transient, unlike a
+		// refused lookup.
 		if resp.StatusCode == http.StatusTooManyRequests ||
-			(resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0") {
+			(resp.StatusCode == http.StatusForbidden &&
+				(resp.Header.Get("X-RateLimit-Remaining") == "0" || resp.Header.Get("Retry-After") != "")) {
 			return Release{}, kindErrorf(ErrorRateLimit, "rate limited: status %d", resp.StatusCode)
 		}
-		return Release{}, kindErrorf(ErrorRelease, "unexpected status %d", resp.StatusCode)
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+			// Without a token that usually means a private repository; with
+			// one, the token itself was rejected (expired, wrong scope, no
+			// access to this repository).
+			kind := ErrorAccess
+			if c.token != "" {
+				kind = ErrorAuth
+			}
+			return Release{}, kindErrorf(kind, "release lookup refused: status %d (token configured: %t)", resp.StatusCode, c.token != "")
+		}
+		return Release{}, kindErrorf(ErrorNetwork, "unexpected status %d", resp.StatusCode)
 	}
 
 	var release Release
@@ -252,25 +281,4 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 		return Release{}, kindErrorf(ErrorRelease, "decode response: %w", err)
 	}
 	return release, nil
-}
-
-// selectAssets finds the NSIS installer and its checksums.txt among
-// assets (issue #64's naming: `*-installer.exe` + `checksums.txt`).
-func selectAssets(assets []Asset) (installer, checksums Asset, err error) {
-	var foundInstaller, foundChecksums bool
-	for _, a := range assets {
-		switch {
-		case strings.HasSuffix(a.Name, installerAssetSuffix):
-			installer, foundInstaller = a, true
-		case a.Name == checksumsAssetName:
-			checksums, foundChecksums = a, true
-		}
-	}
-	if !foundInstaller {
-		return Asset{}, Asset{}, fmt.Errorf("no %s asset found", installerAssetSuffix)
-	}
-	if !foundChecksums {
-		return Asset{}, Asset{}, fmt.Errorf("no %s asset found", checksumsAssetName)
-	}
-	return installer, checksums, nil
 }
