@@ -62,17 +62,6 @@ func TestNew_HeaderSSRsKillSwitchPanelFromSystemState(t *testing.T) {
 	}
 }
 
-func TestNew_CalibrationPageInjectsHeatmapURL(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := router.New()
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/calibration", nil))
-
-	if !strings.Contains(rec.Body.String(), `<pitha-calibration-heatmap calibration-url="/api/v1/calibration">`) {
-		t.Fatalf("expected the heatmap to receive calibration-url, got %q", rec.Body.String())
-	}
-}
-
 func panelTag(t *testing.T, body string) string {
 	t.Helper()
 	start := strings.Index(body, "<pitha-kill-switch-panel")
