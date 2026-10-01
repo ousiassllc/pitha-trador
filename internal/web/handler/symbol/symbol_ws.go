@@ -2,12 +2,14 @@ package symbol
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 )
 
@@ -38,8 +40,11 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 
 	shared.PollWebSocket(c, func() time.Duration { return h.tickInterval }, func(ctx context.Context, conn *websocket.Conn) error {
 		state, err := h.provider.State(ctx, symbol)
+		if errors.Is(err, execution.ErrInstrumentUnknown) {
+			return err // never recovers: end the connection
+		}
 		if err != nil {
-			return err
+			return shared.Transient(err)
 		}
 
 		// No snapshot yet (LastPrice == 0): a price-0 tick would drag the

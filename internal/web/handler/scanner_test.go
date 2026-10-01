@@ -3,9 +3,11 @@ package handler_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -258,5 +260,58 @@ func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
 	case <-returned:
 	case <-time.After(3 * time.Second):
 		t.Fatalf("handler still running 3s after client close (interval %v)", longInterval)
+	}
+}
+
+// flakyCandidateSource fails its first failures Candidates calls.
+type flakyCandidateSource struct {
+	failures int64
+	calls    atomic.Int64
+}
+
+func (f *flakyCandidateSource) Candidates(context.Context) ([]domain.Candidate, time.Time, error) {
+	if f.calls.Add(1) <= f.failures {
+		return nil, time.Time{}, errors.New("database is locked")
+	}
+	return fixtureCandidates(), time.Now(), nil
+}
+
+func dialScannerWS(t *testing.T, source handler.CandidateSource) (context.Context, *websocket.Conn) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	h := handler.NewScannerHandler(source, handler.CandidateRefreshInterval{Min: 10 * time.Millisecond, Max: 10 * time.Millisecond})
+	engine := gin.New()
+	engine.GET("/ws/scanner", h.WebSocket)
+	server := httptest.NewServer(engine)
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	t.Cleanup(cancel)
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/scanner", nil)
+	if err != nil {
+		t.Fatalf("websocket.Dial() error = %v", err)
+	}
+	t.Cleanup(func() { _ = conn.CloseNow() })
+	return ctx, conn
+}
+
+// Issue #266: a failed Candidates read must not drop the connection.
+func TestScannerHandler_WebSocket_SourceErrorKeepsConnectionOpen(t *testing.T) {
+	ctx, conn := dialScannerWS(t, &flakyCandidateSource{failures: 2})
+
+	_, data, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("conn.Read() error = %v, want the scanner_update pushed after the transient errors", err)
+	}
+	if !strings.Contains(string(data), `"scanner_update"`) {
+		t.Fatalf("message = %s, want scanner_update", data)
+	}
+}
+
+func TestScannerHandler_WebSocket_PersistentSourceErrorClosesConnection(t *testing.T) {
+	ctx, conn := dialScannerWS(t, &flakyCandidateSource{failures: 1 << 30})
+
+	if _, _, err := conn.Read(ctx); err == nil || ctx.Err() != nil {
+		t.Fatalf("conn.Read() error = %v (ctx err %v), want the server to give up and close", err, ctx.Err())
 	}
 }

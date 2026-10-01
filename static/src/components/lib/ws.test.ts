@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
-import { isWsDisconnected, WsClient, type WsStatus } from './ws';
+import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from './ws';
 
 type Listener = (event: unknown) => void;
 
@@ -134,5 +134,34 @@ describe('WsClient', () => {
     expect(
       (['connecting', 'open', 'reconnecting', 'failed'] as const).map(isWsDisconnected),
     ).toEqual([false, false, true, true]);
+  });
+});
+
+describe('resolveWsUrl', () => {
+  afterEach(() => {
+    document.head.innerHTML = '';
+  });
+
+  function setWsBase(content: string): void {
+    const meta = document.createElement('meta');
+    meta.name = 'ws-base';
+    meta.content = content;
+    document.head.appendChild(meta);
+  }
+
+  test('uses the page origin without a ws-base meta', () => {
+    expect(resolveWsUrl('/ws/scanner')).toBe(`ws://${location.host}/ws/scanner`);
+  });
+
+  // Issue #266: in the desktop app the WebSocket listener is not the
+  // page's origin; resolving against location.host never connects.
+  test('uses the ws-base meta the server renders when WebSockets live elsewhere', () => {
+    setWsBase('ws://wails.localhost:51234');
+    expect(resolveWsUrl('/ws/scanner')).toBe('ws://wails.localhost:51234/ws/scanner');
+  });
+
+  test('returns an absolute URL unchanged', () => {
+    setWsBase('ws://wails.localhost:51234');
+    expect(resolveWsUrl('wss://example.test/ws/x')).toBe('wss://example.test/ws/x');
   });
 });

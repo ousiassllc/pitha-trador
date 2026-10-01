@@ -36,6 +36,7 @@ type options struct {
 	errorLogExporter  system.ErrorLogExporter
 	heartbeatRecorder middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
 	allowedHosts      []string                     // nil until WithAllowedHosts: no Host/Origin validation
+	wsBase            string                       // "" until WithWebSocketBase: WebSockets use the page's own origin
 }
 
 // Option configures New.
@@ -176,4 +177,13 @@ func WithHeartbeatRecorder(recorder middleware.HeartbeatRecorder) Option {
 // `example.com`) nothing is validated.
 func WithAllowedHosts(hosts ...string) Option {
 	return func(o *options) { o.allowedHosts = append([]string{}, hosts...) } // non-nil even for zero hosts: reject everything
+}
+
+// WithWebSocketBase makes every full page tell its Lit components to open
+// WebSockets at base (e.g. `ws://wails.localhost:51234`) instead of the
+// page's own origin. cmd/desktop passes its WebSocket-only loopback
+// listener's address, because the Wails AssetServer cannot carry WebSockets
+// (issue #266); cmd/server leaves it unset.
+func WithWebSocketBase(base string) Option {
+	return func(o *options) { o.wsBase = base }
 }

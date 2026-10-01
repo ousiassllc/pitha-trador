@@ -175,7 +175,7 @@ func (h *ScannerHandler) WebSocket(c *gin.Context) {
 	shared.PollWebSocket(c, h.interval.Next, func(ctx context.Context, conn *websocket.Conn) error {
 		candidates, asOf, err := h.source.Candidates(ctx)
 		if err != nil {
-			return err
+			return shared.Transient(err)
 		}
 		return shared.WriteJSON(ctx, conn, scannerUpdateMessage{Type: "scanner_update", Items: toScannerItems(candidates), AsOf: asOf})
 	})

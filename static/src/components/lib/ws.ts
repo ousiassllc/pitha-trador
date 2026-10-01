@@ -15,13 +15,20 @@ const INITIAL_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
 
 // resolveWsUrl turns a possibly-relative WebSocket path (e.g. `/ws/scanner`)
-// into an absolute `ws://`/`wss://` URL matching the current page's
-// protocol/host, or returns url unchanged if it is already absolute.
+// into an absolute `ws://`/`wss://` URL, or returns url unchanged if it is
+// already absolute. The base is the `<meta name="ws-base">` the server
+// renders when WebSockets are served from another origin than the page
+// (the desktop app: the Wails AssetServer cannot carry WebSockets, issue
+// #266), else the current page's protocol/host.
 // Shared by every `pitha-*` component that takes a `ws-url` attribute, so
 // each one does not re-derive this independently.
 export function resolveWsUrl(url: string): string {
   if (/^wss?:\/\//i.test(url)) {
     return url;
+  }
+  const base = document.querySelector<HTMLMetaElement>('meta[name="ws-base"]')?.content;
+  if (base) {
+    return `${base.replace(/\/$/, '')}${url}`;
   }
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${location.host}${url}`;

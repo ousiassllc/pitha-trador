@@ -112,7 +112,10 @@ func main() {
 	}
 	app.services = services
 
+	wsListener, wsBase := listenWebSocket()
+
 	engine := router.New(
+		router.WithWebSocketBase(wsBase),
 		router.WithAllowedHosts(middleware.WailsHosts()...),
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
@@ -132,6 +135,10 @@ func main() {
 			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,
 		}),
 	)
+
+	if wsListener != nil {
+		defer serveWebSocket(wsListener, engine)()
+	}
 
 	if err := wails.Run(&options.App{
 		Title:  "pitha-trador",
