@@ -90,7 +90,7 @@ pitha-trador/
 │   │   │   └── marketcontextflow/ # テスト専用: `MarketContextLoader`の回帰テスト（行数上限のためfeatureengineから分離、#248）
 │   │   ├── pushfeed/             # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き）
 │   │   ├── screener/             # Fast Screener・screen_score算出
-│   │   ├── jev/                  # Jevアダプタ（client.go, scout.go, trader.go, schemas.go, prompt_version.go）
+│   │   ├── jev/                  # Jevアダプタ（client.go, evaluate.go, scout.go, trader.go, schemas.go, questions*.go, prompt_version.go, systemone/=ワイヤ層, jevtest/=テスト用フェイク, clientflow/=Clientテスト）
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）
 │   │   ├── policy/                # Policy Engine
 │   │   ├── risk/                  # Risk Engine（Kill Switch含む）。`Engine`のメソッド群（Check・状態遷移・監視・警告）は結合が強いため直下の1パッケージに保つ（#247）
@@ -207,7 +207,7 @@ handler → service → repository → domain
 | Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理 | `internal/service/marketdata` |
 | Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1）。`marketcontextflow`はテスト専用 | `internal/service/featureengine`（`eventtrigger`, `marketcontextflow`） |
 | Fast Screener | 数値フィルター・screen_score算出・上位N銘柄選定（§4.2） | `internal/service/screener` |
-| Jev Adapter (Scout/Trader) | 構造化状態をJev APIへ送信し、choice/score/yes-no型の判断を受け取る（§4.4, §4.5） | `internal/service/jev` |
+| Jev Adapter (Scout/Trader) | 構造化状態と型付き質問（`noul`/`choice`）をTypeSafe AI公式API（`POST /v1/systemone`）へ送信し、回答をScoutResponse/TraderResponseへ変換する（§4.4, §4.5, §6） | `internal/service/jev` |
 | RAG Context Builder | 現在の状態ベクトルからsqlite-vecで類似過去局面を検索し、Jevへのfew-shot文脈を構築する（§7、FR-RAG-1〜5） | `internal/service/rag` |
 | Policy Engine | Jev出力をトレードシグナルへ変換（§4.6） | `internal/service/policy` |
 | Market Calendar | 東証の立会時間（前場/後場）・祝日判定。立会時間外の市場データ取得・Jev呼び出し・新規発注停止（Scheduler SessionGate）、FR-RISK-6のハートビート判定、FR-EXIT-1の引け前強制決済が参照する（`requirements/non-functional.md` §3） | `internal/service/marketcalendar` |
@@ -280,3 +280,4 @@ handler → service → repository → domain
 | 1.29 | 2026-09-30 | §3の`service/risk`を実装に合わせて分割済みと明記（`Engine`本体は直下に維持し、`package risk_test`の外部テストをテスト専用`checkflow`/`monitorflow`へ移設。各々が自前のフェイク・テストDBヘルパーを持つ）。§4のBackground Task Guard行の利用元に`bootstrap/candidates`・`scheduler/updatecheck`を反映 | issue #247 |
 | 1.30 | 2026-09-30 | §3のツリーに、行数上限（300行/ファイル・2000行/ディレクトリ）を満たすために外部テストを移したテスト専用サブパッケージ`featureengine/marketcontextflow`・`execution/closeflow`・`scheduler/maintenanceflow`・`router/analysisflow`を追記（各々が自前のヘルパーを持つ）。`.linterlyignore`が`*_templ.go`と`**/logs/**`のみであることを最終確認 | issue #248 |
 | 1.31 | 2026-09-30 | 分割後レビュー指摘を反映: §3で本番コードの兄弟import例外（`market` → `snapshotcols`）とテスト専用のクロスリソース読み取り例外（`decisiontrade`・`snapshotcols`の`_test.go`）を明記、depguardの強制範囲（`web` → `repository/**`のみ）を明記、`sqlutil`/`sqlitedb`・`web`・`bootstrap`・`router`の実import先（`config`・`version`・`safego`・`db`・`web/apierror`等）と`settings/`の`/setup`担当・テスト専用ディレクトリ一覧・`job_queries.go`/`doc.go`・旧外部テスト行数（940行）を実装に合わせて訂正、§4に`Repository`行と`web/handler`サブパッケージの実装場所を追加。なお1.24の「分割後構成を確定」は当時の目標構成を指し、実装は1.26〜1.30で適用済み。`integrations.md` §12（`internal/web/handler/activity`）・`er/tables-system.md`（`secrets`の実装パス）は#249で本文を更新済みだが自身に改訂履歴を持たないため本表で記録する | 分割後レビュー（#249〜#256） |
+| 1.32 | 2026-10-01 | §6（`integrations.md`）をTypeSafe AI公式API（`POST {BaseURL}/v1/systemone`、型付き`questions`→`answers`）に合わせて書き直し: リクエスト/応答形式、Scout/Traderの質問表、厳格な応答検証、`question_version`の`scout-v2`/`trader-v2`、429/529はbackoff付き再試行・401/422は即失敗、`request_cost`はNULL、`BaseURL`はホスト名のみ | issue #263（旧実装は存在しない`/v1/scout`・`/v1/trader`を想定していた） |

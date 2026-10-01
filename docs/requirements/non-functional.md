@@ -28,7 +28,7 @@
 | Paper発注〜約定シミュレーション | 200ms以内 |
 | UI（Scanner Dashboard）へのライブ反映 | WebSocket経由で1秒以内 |
 
-- Jev API（Scout/Trader）の「タイムアウト5秒」は**HTTP 1試行あたり**の上限とする（`internal/service/jev` の `defaultHTTPTimeout`）。失敗時は最大4試行（初回＋リトライ3回。1回目リトライは即時、2回目以降は500ms・1秒の指数バックオフ）で、全試行失敗時の1呼び出しあたり最悪所要時間は 4×5秒＋1.5秒 = 21.5秒。候補再評価周期（15〜30秒、§2.1）の下限を超え得るが、Scout/TraderのJev呼び出しはJobキュー（`jev-scout`/`jev-trader`）経由の非同期処理で周期を塞がない（両呼び出しがともに全試行失敗した場合の合計は最悪43秒）。「最大4試行・1回目リトライは即時・500ms/1秒バックオフ」は実装（`internal/service/jev/client.go` の `defaultMaxAttempts`/`defaultRetryBaseDelay`）の値であり、`architecture/overview/integrations.md` §6 にも同内容を明記する
+- Jev API（Scout/Trader）の「タイムアウト5秒」は**HTTP 1試行あたり**の上限とする（`internal/service/jev` の `defaultHTTPTimeout`）。失敗時は最大4試行（初回＋リトライ3回。1回目リトライは即時、2回目以降は500ms・1秒の指数バックオフ）で、全試行失敗時の1呼び出しあたり最悪所要時間は 4×5秒＋1.5秒 = 21.5秒。候補再評価周期（15〜30秒、§2.1）の下限を超え得るが、Scout/TraderのJev呼び出しはJobキュー（`jev-scout`/`jev-trader`）経由の非同期処理で周期を塞がない（両呼び出しがともに全試行失敗した場合の合計は最悪43秒）。「最大4試行・1回目リトライは即時・500ms/1秒バックオフ」は実装（`internal/service/jev/client.go` の `defaultMaxAttempts`/`defaultRetryBaseDelay`）の値であり、`architecture/overview/integrations.md` §6 にも同内容を明記する 429（レート制限）/529（過負荷）は即時再試行せず1回目リトライからbackoff（500ms・1秒・2秒）するため最悪 4×5秒＋3.5秒 = 23.5秒。401/422と不正応答は再試行しない（`architecture/overview/integrations.md` §6）。
 
 ### 2.3 スループット・スケーラビリティ
 
@@ -107,3 +107,4 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.4 | 2026-09-29 | §3に高頻度書き込みテーブル（`jobs`/`market_snapshots`）の保持期間と日次パージ、監査テーブルの削除対象外を追記 | issue #129対応（DB無制限増大の解消） |
 | 1.5 | 2026-09-29 | §3のバックアップ/パージ/ログアーカイブを起動時catch-up方式に変更、バックアップからの`secrets`除外・`0700`/`0600`・週次52週保持・退避先必須・連続失敗通知を追記 | issue #137/#152/#159対応 |
 | 1.6 | 2026-09-29 | §3の自動起動・クラッシュ時再起動の実装方式（スタートアップショートカット＋`--supervise`セルフ監視）とkabuステーションアプリの対象外を明記 | issue #204対応（仕様と実装の乖離解消） |
+| 1.7 | 2026-10-01 | Jev APIの再試行を公式API（`/v1/systemone`）に合わせ、429/529は1回目リトライからbackoff・401/422は即失敗と追記 | issue #263 |

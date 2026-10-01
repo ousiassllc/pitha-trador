@@ -77,14 +77,17 @@ type ScoutState struct {
 	NewsContext *domain.NewsContext `json:"news_context,omitempty"`
 }
 
-// ScoutRequest is the JSON body POSTed to the Jev Scout endpoint: the
-// current market state, which question-set version to evaluate it
-// against (prompt_version.go), and the RAG few-shot context (§7,
-// functional.md FR-RAG-3) found for that state.
+// ScoutRequest is the input of Client.Scout: the current market state,
+// the question-set version it is recorded under (prompt_version.go),
+// and the RAG few-shot context (§7, functional.md FR-RAG-3) found for
+// that state. It is not the wire body: Client.Scout sends the state as
+// {"market", "similar_past_cases"} next to the typed questions
+// (questions.go). QuestionVersion is bookkeeping only; the questions
+// sent are the ones ScoutQuestionVersion names.
 type ScoutRequest struct {
-	QuestionVersion string      `json:"question_version"`
-	State           ScoutState  `json:"state"`
-	RAGContext      rag.Context `json:"rag_context"`
+	QuestionVersion string
+	State           ScoutState
+	RAGContext      rag.Context
 }
 
 // ScoutResponse is Jev's raw answer to the FR-SCOUT-1 question group.
@@ -104,15 +107,17 @@ type ScoutResponse struct {
 	RequestCost      *float64 `json:"request_cost,omitempty"`
 }
 
-// TraderRequest is the JSON body POSTed to the Jev Trader endpoint: the
-// same market state format ScoutRequest sends (a Scout-passed candidate
-// is re-evaluated against its current state), which question-set
-// version to evaluate it against (prompt_version.go), and the RAG
-// few-shot context (FR-RAG-3) found for that state.
+// TraderRequest is the input of Client.Trader: the same market state
+// format ScoutRequest carries (a Scout-passed candidate is re-evaluated
+// against its current state), the question-set version it is recorded
+// under (prompt_version.go), and the RAG few-shot context (FR-RAG-3)
+// found for that state. It is not the wire body: Client.Trader sends
+// the state as {"market", "similar_past_cases"} next to the typed
+// questions (questions_trader.go).
 type TraderRequest struct {
-	QuestionVersion string      `json:"question_version"`
-	State           ScoutState  `json:"state"`
-	RAGContext      rag.Context `json:"rag_context"`
+	QuestionVersion string
+	State           ScoutState
+	RAGContext      rag.Context
 }
 
 // TraderResponse is Jev's raw answer to the FR-TRADER-1 question group.

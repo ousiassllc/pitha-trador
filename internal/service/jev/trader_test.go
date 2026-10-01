@@ -2,7 +2,6 @@ package jev_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -19,9 +19,7 @@ import (
 // every Jev Trader call.
 func traderServer(t *testing.T, resp jev.TraderResponse) *httptest.Server {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	server := httptest.NewServer(jevtest.TraderHandler(resp))
 	t.Cleanup(server.Close)
 	return server
 }

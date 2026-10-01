@@ -1,22 +1,20 @@
 package jev
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 )
 
-// DefaultScoutPath is the Jev API endpoint Scout requests are POSTed to.
-const DefaultScoutPath = "/v1/scout"
+// Endpoint is the TypeSafe AI evaluation endpoint (appended to
+// Config.BaseURL) that both Scout and Trader requests are POSTed to.
+const Endpoint = "/v1/systemone"
 
-// DefaultTraderPath is the Jev API endpoint Trader requests are POSTed
-// to.
-const DefaultTraderPath = "/v1/trader"
+// ModelAlias is the model sent with every request; the response reports
+// the concrete model that served it (e.g. "jev-1.13.0").
+const ModelAlias = "jev-latest"
 
 const (
 	// defaultMaxAttempts bounds the total number of Jev API call
@@ -25,12 +23,13 @@ const (
 	defaultMaxAttempts = 4
 	// defaultRetryBaseDelay is the base exponential-backoff delay used
 	// from the second retry onward (overview.md §6 "2回目以降exponential
-	// backoff").
+	// backoff"), or from the first retry for 429/529 (evaluate.go).
 	defaultRetryBaseDelay = 500 * time.Millisecond
 	// defaultHTTPTimeout is the per-attempt HTTP timeout
 	// (non-functional.md §2.2 "Jev Scout/Trader 1回呼び出し ... タイムアウト5秒").
 	// With defaultMaxAttempts and the backoff above, a fully failing call
-	// is bounded by 4*5s + 0.5s + 1s = 21.5s. That can exceed the 15-30s
+	// is bounded by 4*5s + 0.5s + 1s = 21.5s (23.5s for 429/529, which
+	// back off from the first retry: 0.5s + 1s + 2s). That can exceed the 15-30s
 	// re-evaluation cycle (§2.1), which is fine: Scout/Trader calls run as
 	// asynchronous jobs and do not block the cycle.
 	defaultHTTPTimeout = 5 * time.Second
@@ -44,7 +43,10 @@ const (
 
 // Config configures a Client.
 type Config struct {
-	// BaseURL is the Jev API base URL, e.g. "https://api.jev.example.com".
+	// BaseURL is the Jev API host, without a path, e.g.
+	// "https://api.typesafe.ai"; Endpoint is appended to it. Trailing
+	// slashes are trimmed; a path prefix (e.g. a reverse proxy at
+	// "https://host/api") is kept as is and Endpoint is appended after it.
 	BaseURL string
 	// APIKey authenticates every request. It is held only in-memory by
 	// Client and is never written to disk (overview.md §6).
@@ -53,10 +55,11 @@ type Config struct {
 	// &http.Client{Timeout: 5 * time.Second} (per attempt).
 	HTTPClient *http.Client
 	// MaxAttempts bounds the total number of attempts (initial call +
-	// retries) per Client.Scout call. Defaults to 4.
+	// retries) per Client.Scout/Trader call. Defaults to 4.
 	MaxAttempts int
-	// RetryBaseDelay is the base backoff delay used from the second
-	// retry onward: RetryBaseDelay * 2^n. Defaults to 500ms.
+	// RetryBaseDelay is the base backoff delay: RetryBaseDelay * 2^n,
+	// where n starts at 0 on the second retry for transport errors and
+	// 5xx, and on the first retry for 429/529. Defaults to 500ms.
 	RetryBaseDelay time.Duration
 	// Alerts defaults to NoopAlertNotifier{} (errorrate.go).
 	Alerts AlertNotifier
@@ -117,7 +120,7 @@ func NewClient(cfg Config) *Client {
 		errorRateThreshold = defaultErrorRateThreshold
 	}
 	return &Client{
-		baseURL:            cfg.BaseURL,
+		baseURL:            strings.TrimRight(cfg.BaseURL, "/"),
 		apiKey:             cfg.APIKey,
 		httpClient:         httpClient,
 		maxAttempts:        maxAttempts,
@@ -136,119 +139,4 @@ func NewClient(cfg Config) *Client {
 // below it.
 func (c *Client) Healthy(context.Context) (bool, error) {
 	return !c.errorRate.isBreached(), nil
-}
-
-// Scout POSTs req to the Jev Scout endpoint and returns the parsed
-// response together with the total call latency (including retries).
-//
-// A failed attempt is retried per overview.md §6: the first failure is
-// retried immediately (no delay), the second and every subsequent
-// failure wait an exponentially growing backoff (RetryBaseDelay * 2^n,
-// n starting at 0 on the second retry) before the next attempt. Once
-// MaxAttempts is exhausted, Scout returns the last error and the caller
-// records no new jev_decisions entry (継続失敗でnew entry停止). Trader
-// shares this same retry policy.
-func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, time.Duration, error) {
-	return call[ScoutRequest, ScoutResponse](ctx, c, DefaultScoutPath, "scout", req)
-}
-
-// Trader POSTs req to the Jev Trader endpoint and returns the parsed
-// response together with the total call latency (including retries),
-// following the same retry policy Scout's doc comment describes.
-func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse, time.Duration, error) {
-	return call[TraderRequest, TraderResponse](ctx, c, DefaultTraderPath, "trader", req)
-}
-
-// call POSTs req to path (retrying failed attempts per c's retry
-// policy - see Scout's doc comment) and returns the decoded Resp
-// together with the total call latency. label names the endpoint in the
-// final error message (e.g. "scout", "trader") and the structured JSON
-// log line this emits for every call (non-functional.md §5.1 "Jev API
-// latency / エラー率" - counting log lines by label doubles as
-// "Scout呼び出し回数、Trader呼び出し回数" without a separate counter).
-// A call that ultimately fails also feeds c.errorRate; the call that
-// first pushes its rolling error rate to c.errorRateThreshold notifies
-// c.alerts (§5.2 "Jev APIエラー率上昇（しきい値超過）", errorrate.go).
-func call[Req, Resp any](ctx context.Context, c *Client, path, label string, req Req) (resp Resp, latency time.Duration, err error) {
-	start := time.Now()
-	defer func() {
-		latency = time.Since(start)
-		attrs := []any{"label", label, "duration_ms", latency.Milliseconds()}
-		if err != nil {
-			slog.Error("jev: api call failed", append(attrs, "error", err)...)
-		} else {
-			slog.Info("jev: api call completed", attrs...)
-		}
-		if rate, newlyBreached := c.errorRate.record(err != nil, c.errorRateThreshold); newlyBreached {
-			if alertErr := c.alerts.JevAPIErrorRateExceeded(ctx, rate, c.errorRateThreshold); alertErr != nil {
-				slog.Error("jev: error rate alert failed", "error", alertErr)
-			}
-		}
-	}()
-
-	var lastErr error
-	for attempt := 1; attempt <= c.maxAttempts; attempt++ {
-		r, callErr := doCall[Req, Resp](ctx, c, path, req)
-		if callErr == nil {
-			resp = r
-			return resp, 0, nil
-		}
-		lastErr = callErr
-
-		if attempt == c.maxAttempts {
-			break
-		}
-		if attempt >= 2 {
-			backoff := c.retryBaseDelay * time.Duration(1<<uint(attempt-2))
-			timer := time.NewTimer(backoff)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				err = ctx.Err()
-				return resp, 0, err
-			case <-timer.C:
-			}
-		}
-	}
-	err = fmt.Errorf("jev: %s call failed after %d attempts: %w", label, c.maxAttempts, lastErr)
-	return resp, 0, err
-}
-
-func doCall[Req, Resp any](ctx context.Context, c *Client, path string, req Req) (Resp, error) {
-	var zero Resp
-
-	body, err := json.Marshal(req)
-	if err != nil {
-		return zero, fmt.Errorf("jev: encode request: %w", err)
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
-	if err != nil {
-		return zero, fmt.Errorf("jev: build request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if c.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
-
-	httpResp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return zero, fmt.Errorf("jev: request: %w", err)
-	}
-	defer func() { _ = httpResp.Body.Close() }()
-
-	respBody, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return zero, fmt.Errorf("jev: read response body: %w", err)
-	}
-
-	if httpResp.StatusCode != http.StatusOK {
-		return zero, &APIError{StatusCode: httpResp.StatusCode, Body: string(respBody)}
-	}
-
-	var out Resp
-	if err := json.Unmarshal(respBody, &out); err != nil {
-		return zero, fmt.Errorf("jev: decode response: %w", err)
-	}
-	return out, nil
 }
