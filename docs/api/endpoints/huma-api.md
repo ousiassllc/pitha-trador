@@ -226,6 +226,31 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 
 Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kill-switch-panel`が再接続・自動発動通知後の再同期に`GET`を、操作に`POST`を呼ぶ。確認ダイアログ（`window.confirm`）を出すのはKillのみで、Pause/Resumeは確認なしで`POST`する（外部スクリプトからも利用可）。HTMX用の同名アクションルートは持たない。どれも`{"state":"running","can_pause":true,"can_resume":false,"can_kill":true}`の形式で（`POST`は更新後の）状態を返す。`state`は`running`/`paused`/`killed`、`can_*`は現在の`state`から各`POST`が有効な遷移か。
 
+### GET /api/v1/logs/errors
+
+エラーログのダウンロード（`requirements/functional/components-platform.md` §4.19 / FR-ERRLOG-1〜7）。ログディレクトリ（`logs/`）の日次ログ（`<YYYY-MM-DD>.log`、30日超は`.log.gz`）から対象レベルのslogレコードを抽出し、NDJSONの添付ファイルとして返す読み取り専用API。Settings画面`#error-log-panel`のフォームが`GET`で直接呼ぶ（JSを介さないブラウザ標準のダウンロード）。新規テーブル・ログ出力は持たない。
+
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `days` | integer | 対象期間（UTC日付、当日を含む直近N日。既定7、1〜90。範囲外は422） |
+| `level` | string | `error`（既定。`ERROR`のみ）/ `warn`（`WARN`と`ERROR`）。それ以外は422 |
+
+応答（200）は抽出の完了後に送信する（ヘッダに件数を載せるため。最大10MiBをメモリに保持）:
+
+| ヘッダ | 内容 |
+|-------|------|
+| `Content-Type` | `application/x-ndjson; charset=utf-8` |
+| `Content-Disposition` | `attachment; filename="pitha-error-logs-20261001-123045.ndjson"`（UTCの取得時刻） |
+| `X-Pitha-Record-Count` | 出力した記録数（0件でも200・空ボディ） |
+| `X-Pitha-Truncated` | 10MiB超で古い側を切り捨てたときのみ`true` |
+
+```
+// Body（1行1レコード。元のslog JSONのまま、秘密情報のみマスク済み）
+{"time":"2026-10-01T11:36:02.123Z","level":"ERROR","msg":"update check failed","error":"Get \"https://example.invalid/releases\": dial tcp: lookup failed"}
+```
+
+5xxは固定メッセージのみ（`api/endpoints.md` §7）。Setup Guardの対象で、必須認証情報が未設定の間は503 JSON。
+
 ### エンドポイント一覧表
 
 | メソッド | パス | 概要 |
@@ -247,3 +272,4 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 | POST | `/api/v1/system/kill` | Kill Switch発動 |
 | GET | `/api/v1/openapi.json` | OpenAPI 3.1スペック（Huma自動生成） |
 | GET | `/api/v1/activity` | System Activity Log向けキュー状況・直近アクティビティ |
+| GET | `/api/v1/logs/errors` | エラーログのダウンロード（NDJSON添付、秘密情報マスク済み） |
