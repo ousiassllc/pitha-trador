@@ -106,6 +106,7 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	huma.Get(api, "/symbols/{symbol}/candles", h.symbol.APICandles)
 	huma.Get(api, "/positions", h.symbol.APIPositions)
 	huma.Get(api, "/orders", h.symbol.APIOrders)
+	huma.Get(api, "/logs/errors", system.NewErrorLogHandler(o.errorLogExporter).APIErrorLogs)
 	insightapi.New(o.insightProvider).Register(api)
 	huma.Get(api, "/calibration", h.calibration.APICalibration)
 	huma.Get(api, "/policy-proposals", handler.NewPolicyProposalHandler(o.proposalSource).APIPolicyProposals)

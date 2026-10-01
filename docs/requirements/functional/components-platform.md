@@ -1,6 +1,6 @@
-# 機能要件: コンポーネント別機能要件（§4.10〜§4.18 基盤・運用）
+# 機能要件: コンポーネント別機能要件（§4.10〜§4.19 基盤・運用）
 
-`docs/requirements/functional.md` §4 から分割した章。§4.10 Scheduler / Worker / §4.11 バックテスト / §4.12 Jevキャリブレーション / §4.13 Jev RAG / §4.14 自己改善ループ / §4.15 System Activity Feed / §4.16 Luna ニュース分類・News Ingest / §4.17 環境設定 / §4.18 初回セットアップ誘導。節番号・FR-ID は分割前と同一。
+`docs/requirements/functional.md` §4 から分割した章。§4.10 Scheduler / Worker / §4.11 バックテスト / §4.12 Jevキャリブレーション / §4.13 Jev RAG / §4.14 自己改善ループ / §4.15 System Activity Feed / §4.16 Luna ニュース分類・News Ingest / §4.17 環境設定 / §4.18 初回セットアップ誘導 / §4.19 エラーログのダウンロード。節番号・FR-ID は分割前と同一。
 
 ### 4.10 Scheduler / Worker
 
@@ -97,3 +97,15 @@ Settings画面（`GET /settings`）で認証情報を管理する。値は`secre
 - FR-SETUP-3: `/setup`の保存・削除は`POST`/`DELETE /settings/:key`（FR-SETTINGS-2/3）をそのまま使い、専用の別実装を持たない
 - FR-SETUP-4: 必須3項目がすべて設定済みなら、Setup画面は完了を表示し、通常画面（`/scanner`）へ進むリンクを出す
 - FR-SETUP-5: `/setup`はセットアップ完了後も直接アクセスでき、Settings画面と同様に再設定できる
+
+### 4.19 エラーログのダウンロード
+
+運用者がエラー発生時の調査材料（開発者への共有・Issue添付）を、ログディレクトリを手で探さずUIから取得できるようにする。既存の構造化ログ（`non-functional.md` §5.1、`internal/logging`）を読み出すだけで、新規テーブル・新規ログ出力は追加しない。
+
+- FR-ERRLOG-1: Settings画面（`GET /settings`）に「エラーログ」節（`#error-log-panel`）を置き、対象期間（直近1/7/30/90日、既定7日）とレベル（`ERROR`のみ（既定）/`WARN`以上）を選んで「ダウンロード」できる。`/setup`には置かない
+- FR-ERRLOG-2: ダウンロードは`GET /api/v1/logs/errors`（`api/endpoints/huma-api.md`）を呼ぶ。`logs/<YYYY-MM-DD>.log`と30日超の`.log.gz`アーカイブから、対象期間（UTC日付、当日を含む。ファイル名と同じ基準）のうち対象レベルのslogレコードを抽出し、時刻順のNDJSON（1行1レコード、元のslog JSONのまま）を添付ファイルとして返す。JSONとして解釈できない行・`level`が対象外の行・1MiBを超える行は含めない
+- FR-ERRLOG-3: 共有を前提に、出力時のみ秘密情報をマスクする（ログファイル自体は変更しない）。(a) キー名が`api_key`/`apikey`/`api-key`/`password`/`passwd`/`token`/`secret`/`authorization`/`webhook`のいずれかを（大文字小文字を無視して）含む属性は、ネストしたオブジェクトも含め値を`"[REDACTED]"`に置換する。(b) 文字列値中のSlack Webhook URL（`https://hooks.slack.com/services/...`）、`Bearer <値>`、URLクエリの`token=`/`apikey=`/`password=`の値を`[REDACTED]`に置換する（`url.Error`が`error`文字列にURL全体を含めるため）。`secrets`テーブルの値は読まず、パターン照合のみで行う。ログ出力側で秘密情報を出さない方針は維持し、マスクは多層防御とする
+- FR-ERRLOG-4: 出力は合計10MiBを上限とし、新しい記録を優先して古い側から切り捨てる。切り捨てが発生した場合は応答ヘッダ`X-Pitha-Truncated: true`で示す
+- FR-ERRLOG-5: 該当0件でも`200`と空ファイルを返す（フォーム送信が無反応に見えないため）。`days`/`level`が範囲外・不正なら422。ログディレクトリを読めない場合は500（固定メッセージ。原因はslogへ。`api/endpoints.md` §7）
+- FR-ERRLOG-6: 読み取り専用で、日次ローテーション・アーカイブ（`non-functional.md` §5）と並行実行できる。書き込み中の当日ファイルは読み取り時点までのスナップショットとし、末尾の不完全な行は捨てる。有効なセッションCookieを必須とし、操作者の操作として操作者ハートビート（FR-RISK-6）の更新対象になる
+- FR-ERRLOG-7（実装時確認）: Wails（WebView2）が`Content-Disposition: attachment`の応答を保存できるかはWindows実機で確認して確定する。保存できない場合は`cmd/desktop`が保存ダイアログ経由で同一内容を保存する経路を追加する

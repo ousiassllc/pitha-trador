@@ -90,6 +90,7 @@ static/
 - `PerformanceSummaryPanel`
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
 - `UpdatePanel`（Settings画面の「アップデート」節。現在バージョン・最終確認結果・安全ゲート保留中はその旨と理由（ポジション保有/Kill Switch/直近発注）・失敗時は原因の種別（ネットワーク/レート制限/検証失敗など。生のエラー文言は出さない）・「今すぐアップデートを確認」ボタン（`POST /system/update-check`、`#update-panel`をinnerHTMLスワップ。確認中は`hx-disabled-elt`で無効化・`hx-sync="this:drop"`で二重送信を破棄し、`#update-check-progress`に進行表示）。`cmd/server`（アップデーター未搭載）ではアップデート機能が無い旨を表示しボタンは出さない。issue #76/#241）
+- `ErrorLogPanel`（Settings画面の「エラーログ」節`#error-log-panel`。対象期間（直近1/7/30/90日、既定7日）とレベル（ERRORのみ/WARN以上）の`<select>`と「ダウンロード」ボタンを持つ`<form method="get" action="/api/v1/logs/errors">`をSSRで描画する。ブラウザ標準のダウンロードに任せるため`hx-disable`を付けHTMXの差し替えと`lib/api.ts`は使わず、応答の`Content-Disposition: attachment`で保存される。秘密情報はマスク済み・最大10MiBである旨を注記する。`requirements/functional/components-platform.md` §4.19、issue #267）
 - `SecretsBanner`（SLACK_WEBHOOK_URL等の任意キー未設定時の全ページ共通案内バナー。必須3キーはSetup Guardが`/setup`へ誘導するため対象外。`Header`内`#config-banner`が`GET /system/secrets-status`をhx-trigger="load"で自己補正取得する、issue #57/#80）
 - `QueueStatusPanel`（`jobs`テーブルのキュー別pending/running/直近failed件数を表示。System Activity Logのほか、将来Headerへの常時表示も想定）
 - `ActivityFeedFallback`（JS無効時/初回SSR描画用のアクティビティ一覧テーブル。ハイドレーション後は`pitha-activity-feed`が引き継ぐ）
@@ -100,7 +101,7 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
-- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URLに加え、任意のLUNA_*/NEWS_FEED_*（およびSOL_*/OPUS_*/UPDATE_GITHUB_TOKEN）入力項目を`SecretFieldRow`でフィールド数だけ縦に並べる。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。issue #57/#79）
+- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URLに加え、任意のLUNA_*/NEWS_FEED_*（およびSOL_*/OPUS_*/UPDATE_GITHUB_TOKEN）入力項目を`SecretFieldRow`でフィールド数だけ縦に並べる。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。末尾に`ErrorLogPanel`を置く。issue #57/#79/#267）
 - `SetupPage`（初回セットアップ画面。必須3キー＋任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須3キーがすべて設定済みなら完了表示と`/scanner`へのリンクを出す。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80）
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
@@ -183,3 +184,4 @@ const (
 | 1.23 | 2026-09-30 | 分割後の参照名を訂正（`handler.respondPageError`/`respondActionError` → `shared.RespondPageError`/`RespondActionError`）。ヘッダーのロゴ+`nav`グループに`flex-wrap`/`min-w-0`を、`<nav>`に`aria-label`を追加（§4ロゴ表示） | issue #238/#245 |
 | 1.24 | 2026-09-30 | Scanner: `ScannerTableFallback`とLit描画の表記統一（0は符号なし・確信度丸め・URLエスケープ・見出しスタイル）、共有ゴールデンによる契約テスト、`ScannerPage`の説明文/凡例を記載 | issue #239 レビュー指摘 |
 | 1.25 | 2026-09-30 | Scanner: 小数丸めをGo/JSで統一（中間値は0から遠い方へ）、列の説明を`<details>`で常時参照可能にし`aria-describedby`/sr-only を廃止 | issue #239 レビュー指摘 |
+| 1.26 | 2026-10-01 | organismsに`ErrorLogPanel`を追加し、`SettingsPage`の末尾にエラーログのダウンロード節を置く | issue #267 |

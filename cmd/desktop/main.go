@@ -126,6 +126,7 @@ func main() {
 		router.WithActivitySource(services.Activity),
 		router.WithSecretsStore(secretsRepo),
 		router.WithUpdateController(services.Updater),
+		router.WithErrorLogExporter(services.ErrorLogs),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
 			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,
 			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,

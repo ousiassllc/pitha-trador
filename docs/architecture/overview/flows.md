@@ -1,6 +1,6 @@
 # アーキテクチャ設計: 通信フロー・障害対応（§10〜§11）
 
-`docs/architecture/overview.md` から分割した章。§10 通信フロー（§10.1〜§10.5）/ §11 障害対応方針。節番号は分割前と同一で、コードコメント等の `overview.md §<番号>` は本ファイルの同番号の節を指す。
+`docs/architecture/overview.md` から分割した章。§10 通信フロー（§10.1〜§10.6）/ §11 障害対応方針。節番号は分割前と同一で、コードコメント等の `overview.md §<番号>` は本ファイルの同番号の節を指す。
 
 ## 10. 通信フロー
 
@@ -113,6 +113,29 @@ sequenceDiagram
 - `/setup`はSettings画面と同じ`SecretFieldRow`・同じ`POST`/`DELETE /settings/:key`を使い、専用の保存実装を持たない。完了後も直接アクセスして再設定できる
 - `/setup`は`Header`（ガード対象の`hx-get`フラグメントを持つ）を含まない専用レイアウト（`SetupShell`）で描画する
 - 各種サービスは従来通り起動時の値を読むため、保存した認証情報の反映にはアプリ再起動が必要（§5）
+
+### 10.6 エラーログエクスポート
+
+`requirements/functional/components-platform.md` §4.19（FR-ERRLOG-1〜7）の実装詳細。
+
+```mermaid
+sequenceDiagram
+    participant UI as WebView（Settings #error-log-panel）
+    participant API as GET /api/v1/logs/errors
+    participant EXP as logging.Exporter
+    participant FS as logs/（日次.log・.log.gz）
+
+    UI->>API: フォーム送信（days, level）。セッションCookie必須
+    API->>EXP: Export(days, level)
+    EXP->>FS: 対象期間の<YYYY-MM-DD>.log / .log.gz を新しい日から読む
+    EXP->>EXP: レベル抽出・秘密情報マスク・合計10MiBまで新しい記録を優先
+    EXP-->>API: 記録（時刻順）・件数・切り捨て有無
+    API-->>UI: 200 NDJSON（Content-Disposition: attachment）
+```
+
+- `internal/logging`に読み取り専用のExporterを置き、`web/handler/system`がインターフェース越しに呼ぶ（`bootstrap`が`LogDir`を渡して組み立て、`router`のOptionで注入する。`web` → `repository/**`の禁止は変わらない）。書き込み側の`RotatingWriter`・`Archiver`とは独立で、ログファイルを変更しない
+- 当日の書き込み中ファイルは読み取り時点までを対象とし、末尾の不完全行は捨てる。`.log.gz`は透過的に展開する
+- マスク規則と上限は FR-ERRLOG-3/4 に従う。ダウンロード操作は操作者の操作としてハートビート更新対象（§10.4）
 
 ## 11. 障害対応方針
 
