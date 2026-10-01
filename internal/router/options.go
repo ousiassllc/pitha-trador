@@ -33,6 +33,7 @@ type options struct {
 	activitySource    activity.ActivitySource
 	secretsStore      settings.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
 	updateController  system.UpdateController
+	errorLogExporter  system.ErrorLogExporter
 	heartbeatRecorder middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
 	allowedHosts      []string                     // nil until WithAllowedHosts: no Host/Origin validation
 	wsBase            string                       // "" until WithWebSocketBase: WebSockets use the page's own origin
@@ -145,6 +146,14 @@ func WithSecretsStore(store settings.SecretsStore) Option {
 // the POST route 404s.
 func WithUpdateController(controller system.UpdateController) Option {
 	return func(o *options) { o.updateController = controller }
+}
+
+// WithErrorLogExporter overrides `GET /api/v1/logs/errors`'s backing
+// system.ErrorLogExporter (FR-ERRLOG-2). cmd/desktop and cmd/server pass
+// internal/bootstrap's *logging.Exporter over the log directory; the empty
+// system.StaticErrorLogExporter default only serves router-level tests.
+func WithErrorLogExporter(exporter system.ErrorLogExporter) Option {
+	return func(o *options) { o.errorLogExporter = exporter }
 }
 
 // WithHeartbeatRecorder enables operator heartbeat recording (FR-RISK-6,

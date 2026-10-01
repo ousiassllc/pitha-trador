@@ -3,6 +3,7 @@ package pages
 import (
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
 // SettingsProps is SettingsPage's input: one SecretFieldRow per managed
@@ -37,5 +38,6 @@ templ SettingsPage(props SettingsProps) {
 				@molecules.SecretFieldRow(field)
 			}
 		</div>
+		@organisms.ErrorLogPanel()
 	}
 }
