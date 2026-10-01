@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -43,7 +44,9 @@ const (
 // Config configures a Client.
 type Config struct {
 	// BaseURL is the Jev API host, without a path, e.g.
-	// "https://api.typesafe.ai"; Endpoint is appended to it.
+	// "https://api.typesafe.ai"; Endpoint is appended to it. Trailing
+	// slashes are trimmed; a path prefix (e.g. a reverse proxy at
+	// "https://host/api") is kept as is and Endpoint is appended after it.
 	BaseURL string
 	// APIKey authenticates every request. It is held only in-memory by
 	// Client and is never written to disk (overview.md §6).
@@ -117,7 +120,7 @@ func NewClient(cfg Config) *Client {
 		errorRateThreshold = defaultErrorRateThreshold
 	}
 	return &Client{
-		baseURL:            cfg.BaseURL,
+		baseURL:            strings.TrimRight(cfg.BaseURL, "/"),
 		apiKey:             cfg.APIKey,
 		httpClient:         httpClient,
 		maxAttempts:        maxAttempts,

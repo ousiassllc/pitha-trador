@@ -220,3 +220,22 @@ func TestClient_Trader_MapsOfficialResponseWithDirectionConfidence(t *testing.T)
 		t.Errorf("Trader() = %+v, want %+v", resp, want)
 	}
 }
+
+// BaseURL is the host (the Settings screen asks for it without a path):
+// a trailing slash must not produce "//v1/systemone", and a path prefix
+// is kept in front of the endpoint.
+func TestClient_Scout_NormalizesBaseURLTrailingSlash(t *testing.T) {
+	for name, suffix := range map[string]string{"trailing slash": "/", "path prefix": "/api", "path prefix with slash": "/api/"} {
+		t.Run(name, func(t *testing.T) {
+			server, got := captureServer(t, scoutWireResponse)
+			client := jev.NewClient(jev.Config{BaseURL: server.URL + suffix})
+			if _, _, err := client.Scout(context.Background(), jev.ScoutRequest{}); err != nil {
+				t.Fatalf("Scout: %v", err)
+			}
+			want := strings.TrimRight(suffix, "/") + "/v1/systemone"
+			if got.Path != want {
+				t.Errorf("request path = %q, want %q", got.Path, want)
+			}
+		})
+	}
+}

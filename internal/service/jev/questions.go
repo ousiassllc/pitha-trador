@@ -25,7 +25,7 @@ const stateGuide = "Context: `market` is the current intraday snapshot of one st
 	"A field that is absent from `market` could not be computed this cycle: treat it as unknown, never as zero. " +
 	"`market.news_context`, when present, is auxiliary context and never outweighs price, volume and order-book evidence. " +
 	"`similar_past_cases.cases` lists past states similar to this one (smaller `distance` = more similar); their `direction` and `confidence` are what Jev said back then, " +
-	"not realized outcomes, so use them only as weak context. An empty `cases` means there is no history."
+	"not realized outcomes, so use them only as weak context. When `cases` is absent or empty there is no history."
 
 // withStateGuide returns question followed by stateGuide.
 func withStateGuide(question string) string { return question + "\n\n" + stateGuide }
