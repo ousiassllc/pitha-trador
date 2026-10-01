@@ -2,6 +2,7 @@ package updater_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -80,8 +81,11 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 		{"unreachable API", unreachable, updater.ErrorNetwork},
 		{"429 rate limit", apiStatus(http.StatusTooManyRequests, nil), updater.ErrorRateLimit},
 		{"403 with no quota left", apiStatus(http.StatusForbidden, http.Header{"X-Ratelimit-Remaining": {"0"}}), updater.ErrorRateLimit},
-		{"plain 403", apiStatus(http.StatusForbidden, nil), updater.ErrorRelease},
-		{"API 500", apiStatus(http.StatusInternalServerError, nil), updater.ErrorRelease},
+		{"plain 403", apiStatus(http.StatusForbidden, nil), updater.ErrorAccess},
+		{"401 bad token", apiStatus(http.StatusUnauthorized, nil), updater.ErrorAccess},
+		{"404 private repo or unpublished", apiStatus(http.StatusNotFound, nil), updater.ErrorAccess},
+		{"API 500", apiStatus(http.StatusInternalServerError, nil), updater.ErrorNetwork},
+		{"200 with undecodable body", apiStatus(http.StatusOK, nil), updater.ErrorRelease},
 		{"non-semver tag", newGitHubMock(t, "latest", ""), updater.ErrorRelease},
 		{"checksum mismatch", newGitHubMock(t, "v0.2.0", badChecksums), updater.ErrorVerification},
 		{"checksum entry missing", newGitHubMock(t, "v0.2.0", "\n"), updater.ErrorVerification},
@@ -115,5 +119,45 @@ func TestChecker_Status_SuccessClearsErrorKind(t *testing.T) {
 	}
 	if got := checker.Status(); got.ErrorKind != "" || got.LastError != "" {
 		t.Fatalf("Status = %+v, want no error after a successful check", got)
+	}
+}
+
+// Issue #259: the scheduler's retry loop must be able to tell failures that
+// only a new release/configuration can fix from ones that clear by
+// themselves, through the optional Permanent() marker on the error chain.
+func TestChecker_CheckForUpdate_ErrorPermanence(t *testing.T) {
+	setVersion(t, "v0.1.0")
+	badChecksums := fmt.Sprintf("%064d  %s\n", 0, installerName)
+	status := func(code int) *httptest.Server {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(code) }))
+		t.Cleanup(server.Close)
+		return server
+	}
+	unreachable := newGitHubMock(t, "v0.2.0", "")
+	unreachable.Close()
+
+	cases := []struct {
+		name          string
+		server        *httptest.Server
+		wantPermanent bool
+	}{
+		{"unreachable API", unreachable, false},
+		{"rate limit", status(http.StatusTooManyRequests), false},
+		{"API 500", status(http.StatusInternalServerError), false},
+		{"access refused", status(http.StatusNotFound), true},
+		{"non-semver tag", newGitHubMock(t, "latest", ""), true},
+		{"checksum mismatch", newGitHubMock(t, "v0.2.0", badChecksums), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := newChecker(tc.server, allowGate()).CheckForUpdate(context.Background())
+			if err == nil {
+				t.Fatal("CheckForUpdate err = nil, want a failure")
+			}
+			var p interface{ Permanent() bool }
+			if got := errors.As(err, &p) && p.Permanent(); got != tc.wantPermanent {
+				t.Fatalf("permanent = %v, want %v (err: %v)", got, tc.wantPermanent, err)
+			}
+		})
 	}
 }

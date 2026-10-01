@@ -21,6 +21,11 @@ import (
 // httptest.Server instead).
 const defaultBaseURL = "https://api.github.com"
 
+// EnvGitHubToken names the environment variable holding the optional GitHub
+// token Config.Token is read from (internal/bootstrap). Required while the
+// repository is private (issue #265).
+const EnvGitHubToken = "PITHA_UPDATE_GITHUB_TOKEN"
+
 // installerAssetSuffix/checksumsAssetName match .github/workflows/ci.yml's
 // `wails build -nsis` output naming (issue #64:
 // `sha256sum build/bin/*-installer.exe > build/bin/checksums.txt`).
@@ -53,7 +58,11 @@ type Release struct {
 
 // Asset is one GitHub release asset.
 type Asset struct {
-	Name               string `json:"name"`
+	Name string `json:"name"`
+	// URL is the asset's API endpoint; with Config.Token it is the only
+	// download path that works for a private repository (issue #265), where
+	// BrowserDownloadURL answers 404.
+	URL                string `json:"url,omitempty"`
 	BrowserDownloadURL string `json:"browser_download_url"`
 	// Size is the asset's byte size as reported by GitHub. When positive it
 	// must not exceed the download cap and the downloaded body must match it.
@@ -86,6 +95,13 @@ type Config struct {
 	// before any download is attempted.
 	Gate SafeGate
 
+	// Token is an optional GitHub token with read access to the repository.
+	// A private repository answers an unauthenticated release lookup with
+	// 404 (issue #265); with a token the lookup and the asset downloads go
+	// through the authenticated API instead. It is only ever sent to
+	// BaseURL.
+	Token string
+
 	// HTTPClient defaults to a plain http.Client; request deadlines come
 	// from MetadataTimeout/DownloadTimeout, not from the client.
 	HTTPClient *http.Client
@@ -106,6 +122,7 @@ type Config struct {
 type Checker struct {
 	owner, repo string
 	gate        SafeGate
+	token       string
 	httpClient  *http.Client
 	baseURL     string
 
@@ -149,6 +166,7 @@ func NewChecker(cfg Config) *Checker {
 		owner:             cfg.Owner,
 		repo:              cfg.Repo,
 		gate:              cfg.Gate,
+		token:             cfg.Token,
 		httpClient:        httpClient,
 		baseURL:           baseURL,
 		downloadURLPrefix: downloadURLPrefix,
@@ -231,6 +249,7 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	c.authorize(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -244,7 +263,11 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 			(resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0") {
 			return Release{}, kindErrorf(ErrorRateLimit, "rate limited: status %d", resp.StatusCode)
 		}
-		return Release{}, kindErrorf(ErrorRelease, "unexpected status %d", resp.StatusCode)
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+			return Release{}, kindErrorf(ErrorAccess, "release lookup refused: status %d (private repository without a token, or no release published)", resp.StatusCode)
+		}
+		return Release{}, kindErrorf(ErrorNetwork, "unexpected status %d", resp.StatusCode)
 	}
 
 	var release Release

@@ -12,17 +12,24 @@ type ErrorKind string
 
 const (
 	// ErrorNetwork: the GitHub API or an asset download could not be
-	// reached, timed out, or the transfer broke off.
+	// reached, timed out, the transfer broke off, or GitHub answered with
+	// a server-side error status.
 	ErrorNetwork ErrorKind = "network"
 	// ErrorRateLimit: GitHub rejected the release lookup for rate limiting.
 	ErrorRateLimit ErrorKind = "rate_limit"
+	// ErrorAccess: GitHub refused the release lookup - 401/403 (bad or
+	// missing credentials) or 404 (the repository is private and the
+	// request is unauthenticated, or no release is published). Issue #265:
+	// this used to be reported as ErrorRelease, indistinguishable from
+	// invalid release content.
+	ErrorAccess ErrorKind = "access"
 	// ErrorVerification: a downloaded asset was rejected - checksum
 	// mismatch or missing entry, size limit, or a URL outside the
 	// repository's release-download path.
 	ErrorVerification ErrorKind = "verification"
-	// ErrorRelease: the release itself is unusable - unexpected API
-	// status, undecodable JSON, non-semver tag, or missing installer /
-	// checksums asset.
+	// ErrorRelease: the release was fetched but its content is unusable -
+	// undecodable JSON, non-semver tag, or missing installer / checksums
+	// asset.
 	ErrorRelease ErrorKind = "release"
 	// ErrorOther: anything else (e.g. local temp-file failures).
 	ErrorOther ErrorKind = "other"
@@ -37,6 +44,22 @@ type kindedError struct {
 
 func (e *kindedError) Error() string { return e.err.Error() }
 func (e *kindedError) Unwrap() error { return e.err }
+
+// Permanent implements the optional interface scheduler/updatecheck.Runner
+// consults (issue #259): a broken release, a rejected asset or a refused
+// lookup stays broken until the release or the configuration changes, so
+// retrying it every backoff step (and re-downloading the whole installer
+// for a checksum mismatch) is wasted work; the next @every-6h tick covers
+// the case that it was fixed meanwhile. Network, rate-limit and other
+// errors may clear by themselves and are retried with backoff.
+func (e *kindedError) Permanent() bool {
+	switch e.kind {
+	case ErrorAccess, ErrorVerification, ErrorRelease:
+		return true
+	default:
+		return false
+	}
+}
 
 func withKind(kind ErrorKind, err error) error {
 	if err == nil {

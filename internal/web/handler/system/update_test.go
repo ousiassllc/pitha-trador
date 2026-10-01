@@ -196,10 +196,11 @@ func TestUpdateHandler_Panel_BlockedNamesTheGateCondition(t *testing.T) {
 // ...) in the panel, and never the raw error text (issue #241).
 func TestUpdateHandler_Panel_FailureNamesTheErrorKind(t *testing.T) {
 	cases := map[updater.ErrorKind]string{
-		updater.ErrorNetwork:      "ネットワークに接続できませんでした",
+		updater.ErrorNetwork:      "接続できませんでした",
 		updater.ErrorRateLimit:    "レート制限",
+		updater.ErrorAccess:       "アクセスできません",
 		updater.ErrorVerification: "検証に失敗しました",
-		updater.ErrorRelease:      "リリース情報",
+		updater.ErrorRelease:      "内容が不正です",
 		updater.ErrorOther:        "原因を特定できませんでした",
 	}
 	for kind, want := range cases {
@@ -211,6 +212,44 @@ func TestUpdateHandler_Panel_FailureNamesTheErrorKind(t *testing.T) {
 			}
 			if strings.Contains(body, "secret.example") {
 				t.Errorf("panel leaks the raw error message; body=%s", body)
+			}
+		})
+	}
+}
+
+// Issue #265: a refused lookup (private repository) and invalid release
+// content used to share one message, so the operator could not tell which
+// it was; the access message must also say how to fix it.
+func TestUpdateHandler_Panel_AccessAndInvalidReleaseAreDistinguishable(t *testing.T) {
+	panel := func(kind updater.ErrorKind) string {
+		status := updater.Status{CheckedAt: time.Now(), LastError: "x", ErrorKind: kind}
+		return serve(newUpdateEngine(&fakeUpdateController{status: status}), http.MethodGet, "/system/update-panel").Body.String()
+	}
+	access, invalid := panel(updater.ErrorAccess), panel(updater.ErrorRelease)
+	if !strings.Contains(access, updater.EnvGitHubToken) {
+		t.Errorf("access failure does not name %s; body=%s", updater.EnvGitHubToken, access)
+	}
+	if strings.Contains(access, "内容が不正") || strings.Contains(invalid, "アクセスできません") {
+		t.Errorf("access and invalid-release messages overlap; access=%s invalid=%s", access, invalid)
+	}
+}
+
+// Issue #258: only the scheduler's Runner retries soon, and only after its
+// own check. A panel rendered after a manual check cannot know that, so the
+// promise it makes must be the one that always holds: the 6-hourly check.
+func TestUpdateHandler_Check_RetryWordingMatchesTheSixHourlySchedule(t *testing.T) {
+	cases := map[string]updater.Status{
+		"blocked": {CheckedAt: time.Now(), Available: true, Version: "v0.3.0", Blocked: true, BlockedKind: updater.BlockOpenPositions},
+		"failed":  {CheckedAt: time.Now(), Available: true, Version: "v0.3.0", LastError: "x", ErrorKind: updater.ErrorVerification},
+	}
+	for name, after := range cases {
+		t.Run(name, func(t *testing.T) {
+			body := serve(newUpdateEngine(&fakeUpdateController{afterCheck: after}), http.MethodPost, "/system/update-check").Body.String()
+			if !strings.Contains(body, "6時間ごとの定期確認") {
+				t.Errorf("panel does not name the 6-hourly check as the next automatic attempt; body=%s", body)
+			}
+			if strings.Contains(body, "保留中は自動で再確認します") || strings.Contains(body, "。自動で再試行します") {
+				t.Errorf("panel promises an unconditional immediate automatic retry; body=%s", body)
 			}
 		})
 	}

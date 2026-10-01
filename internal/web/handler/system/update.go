@@ -142,13 +142,15 @@ func blockedReason(kind updater.BlockKind) string {
 func errorReason(kind updater.ErrorKind) string {
 	switch kind {
 	case updater.ErrorNetwork:
-		return "ネットワークに接続できませんでした"
+		return "ネットワークまたは GitHub 側の問題で接続できませんでした"
 	case updater.ErrorRateLimit:
 		return "GitHub API のレート制限に達しました"
+	case updater.ErrorAccess:
+		return "GitHub のリリース情報にアクセスできません（リポジトリが非公開の場合は環境変数 " + updater.EnvGitHubToken + " にアクセストークンを設定してください）"
 	case updater.ErrorVerification:
 		return "ダウンロードしたインストーラーの検証に失敗しました（更新は中止されました）"
 	case updater.ErrorRelease:
-		return "リリース情報を取得できない、または内容が不正です"
+		return "取得したリリース情報の内容が不正です（タグ名またはインストーラー資産を確認してください）"
 	default:
 		return "原因を特定できませんでした（詳細はログを参照してください）"
 	}

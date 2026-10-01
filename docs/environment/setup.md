@@ -93,6 +93,7 @@ make dev
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
 | `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`） |
 | `PITHA_BACKUP_DIR` | `internal/bootstrap` | SQLite DBの日次バックアップ（`requirements/non-functional.md` §3）の退避先ディレクトリ。ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）を指定する。ディレクトリ自体は事前に存在している必要がある（作成しない。未マウントの場合はバックアップが失敗しSlack/ログで通知される）。Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。未設定・空のときはバックアップ無効（起動ログに警告）。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する |
+| `PITHA_UPDATE_GITHUB_TOKEN` | `internal/bootstrap`（`internal/service/updater`） | 自動アップデート（`cmd/desktop`のみ）がGitHub Releasesを取得する際に使う、リポジトリの読み取り権限を持つトークン（任意）。リポジトリが非公開の間は、未認証だとリリース取得が404になり更新確認が`ErrorAccess`で失敗するため必須。設定するとリリース取得とアセットのダウンロードをAPI経由の認証付きで行う（トークンは`api.github.com`以外へは送らない）。公開リポジトリでは不要 |
 | `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
 | `PITHA_STATIC_DIR` | `internal/router` | 設定すると`/static/...`を`go:embed`ではなく指定ディレクトリ（存在するディレクトリのみ有効。`make dev`は`static/src`）から配信する。未設定・不正パスは埋め込みにフォールバック |
 | `PITHA_POLICY_LONG_*` / `PITHA_POLICY_SHORT_*` | `internal/config` | `config/strategy.yaml`の`policy.long`/`policy.short`のしきい値を起動時に上書きする（FR-POLICY-4）。サフィックスは`MIN_PROBABILITY`・`MIN_ENTRY_QUALITY`・`MIN_CONTINUATION_PROBABILITY`・`MAX_TOXIC_FLOW`・`MAX_LIQUIDITY_STRESSED`。数値は不正値だと起動エラー |
@@ -246,3 +247,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.18 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/service/risk/`を削除（`service/risk`のテスト専用サブパッケージへの分割完了）。手書きソースの暫定除外は残っていない | issue #247 |
 | 1.19 | 2026-09-30 | `.linterlyignore`の最終確認（除外は`*_templ.go`と`**/logs/**`のみで、既知債務コメント・手書きソース除外なし）を反映し、「#248で全廃を確認する」の予定表現を確認済みの記述へ改めた | issue #248 |
 | 1.20 | 2026-09-30 | depguardの強制範囲（`web` → `repository/**`のみ）を明記。lefthook/CIコメントの`go:embed`対象を`dist img vendor`へ更新 | 分割後レビュー指摘 |
+| 1.21 | 2026-10-01 | 環境変数表に`PITHA_UPDATE_GITHUB_TOKEN`（非公開リポジトリのリリース取得用トークン）を追加 | issue #265 |

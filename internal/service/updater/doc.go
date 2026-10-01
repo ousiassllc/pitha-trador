@@ -29,6 +29,17 @@
 // or a detached release signature verified against an embedded public key
 // is not implemented yet.
 //
+// Private repository (issue #265): GitHub answers an unauthenticated
+// release lookup of a private repository with 404, and its
+// browser_download_url assets are not downloadable either. With
+// Config.Token (the PITHA_UPDATE_GITHUB_TOKEN environment variable, EnvGitHubToken) the lookup
+// carries the token and assets are downloaded from their API URL
+// (Asset.URL, Accept: application/octet-stream); the token is only sent to
+// Config.BaseURL's own asset path. A refused lookup (401/403/404) is
+// ErrorAccess, distinct from ErrorRelease (fetched but unusable content).
+// ErrorAccess/ErrorVerification/ErrorRelease errors report Permanent() so
+// the scheduler's backoff does not retry them (issue #259).
+//
 // Checker itself never runs the installer or quits the process: that is
 // SchedulerAdapter's Quitter's job (cmd/desktop/app.go's QuitForUpdate -
 // Wails' runtime.Quit, then its shutdown spawns
