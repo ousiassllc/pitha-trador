@@ -138,6 +138,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 
 	jevClient := jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
+		Model:   secrets.JevModel,
 		APIKey:  secrets.JevAPIKey,
 		Alerts:  alertChannels.JevAlerts(),
 		// 0 keeps the production retry policy (jev.defaultMaxAttempts).

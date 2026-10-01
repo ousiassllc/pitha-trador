@@ -55,6 +55,10 @@ func TestSettingsHandler_Page_ShowsJevBaseURLHint(t *testing.T) {
 	if !strings.Contains(body, `data-testid="hint-JEV_BASE_URL"`) || !strings.Contains(body, "https://api.typesafe.ai") {
 		t.Fatalf("Page does not show the JEV_BASE_URL hint https://api.typesafe.ai; body=%s", body)
 	}
+	// issue #274: the model alias default is shown the same way.
+	if !strings.Contains(body, `data-testid="hint-JEV_MODEL"`) || !strings.Contains(body, "jev-latest") {
+		t.Fatalf("Page does not show the JEV_MODEL hint jev-latest; body=%s", body)
+	}
 	if strings.Contains(body, `data-testid="hint-JEV_API_KEY"`) {
 		t.Fatalf("Page shows a hint for JEV_API_KEY; only keys with a format to explain have one")
 	}

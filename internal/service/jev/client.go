@@ -12,9 +12,15 @@ import (
 // Config.BaseURL) that both Scout and Trader requests are POSTed to.
 const Endpoint = "/v1/systemone"
 
-// ModelAlias is the model sent with every request; the response reports
-// the concrete model that served it (e.g. "jev-1.13.0").
-const ModelAlias = "jev-latest"
+// DefaultBaseURL is the production TypeSafe AI host, used when
+// Config.BaseURL is empty (issue #271; the same pattern as
+// marketdata.DefaultBaseURL).
+const DefaultBaseURL = "https://api.typesafe.ai"
+
+// DefaultModel is the model alias sent with every request when
+// Config.Model is empty; the response reports the concrete model that
+// served it (e.g. "jev-1.13.0").
+const DefaultModel = "jev-latest"
 
 const (
 	// defaultMaxAttempts bounds the total number of Jev API call
@@ -44,13 +50,17 @@ const (
 // Config configures a Client.
 type Config struct {
 	// BaseURL is the Jev API host, without a path, e.g.
-	// "https://api.typesafe.ai"; Endpoint is appended to it. Trailing
+	// "https://api.typesafe.ai" (DefaultBaseURL, used when empty);
+	// Endpoint is appended to it. Trailing
 	// slashes are trimmed; a path prefix (e.g. a reverse proxy at
 	// "https://host/api") is kept as is and Endpoint is appended after it.
 	BaseURL string
 	// APIKey authenticates every request. It is held only in-memory by
 	// Client and is never written to disk (overview.md §6).
 	APIKey string
+	// Model is the model alias sent with every request. Defaults to
+	// DefaultModel when empty.
+	Model string
 	// HTTPClient is the HTTP client used for calls. Defaults to
 	// &http.Client{Timeout: 5 * time.Second} (per attempt).
 	HTTPClient *http.Client
@@ -84,6 +94,7 @@ func (e *APIError) Error() string {
 // Client is the Jev API HTTP client (architecture/overview.md §6).
 type Client struct {
 	baseURL            string
+	model              string
 	apiKey             string
 	httpClient         *http.Client
 	maxAttempts        int
@@ -119,8 +130,17 @@ func NewClient(cfg Config) *Client {
 	if errorRateThreshold <= 0 {
 		errorRateThreshold = defaultErrorRateThreshold
 	}
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = DefaultBaseURL
+	}
+	model := cfg.Model
+	if model == "" {
+		model = DefaultModel
+	}
 	return &Client{
-		baseURL:            strings.TrimRight(cfg.BaseURL, "/"),
+		baseURL:            strings.TrimRight(baseURL, "/"),
+		model:              model,
 		apiKey:             cfg.APIKey,
 		httpClient:         httpClient,
 		maxAttempts:        maxAttempts,

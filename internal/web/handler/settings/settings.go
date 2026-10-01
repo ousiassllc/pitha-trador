@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
@@ -48,32 +50,8 @@ func (StaticSecretsStore) Get(context.Context, string) (string, bool, error) { r
 func (StaticSecretsStore) Set(context.Context, string, string) error         { return nil }
 func (StaticSecretsStore) Delete(context.Context, string) error              { return nil }
 
-// settingsFields is the Settings screen's managed keys in display
-// order (issue #57 スコープ item 6). Label matches the literal names
-// operators previously set in `.env` so the migration away from it stays
-// recognizable. Every key here must be in config.AllowedSecretKeys (the
-// per-key routes' allow-list), which settings_display_test.go asserts.
-var settingsFields = []struct {
-	key   string
-	label string
-}{
-	{config.KeyJevAPIKey, "JEV_API_KEY"},
-	{config.KeyJevBaseURL, "JEV_BASE_URL"},
-	{config.KeyKabuAPIPassword, "KABU_API_PASSWORD"},
-	{config.KeySlackWebhookURL, "SLACK_WEBHOOK_URL（任意）"},
-	{config.KeyLunaAPIKey, "LUNA_API_KEY（任意）"},
-	{config.KeyLunaBaseURL, "LUNA_BASE_URL（任意）"},
-	{config.KeyNewsFeedURL, "NEWS_FEED_URL（任意）"},
-	{config.KeyNewsFeedAPIKey, "NEWS_FEED_API_KEY（任意）"},
-	{config.KeySolAPIKey, "SOL_API_KEY（任意）"},
-	{config.KeySolBaseURL, "SOL_BASE_URL（任意）"},
-	{config.KeyOpusAPIKey, "OPUS_API_KEY（任意）"},
-	{config.KeyOpusBaseURL, "OPUS_BASE_URL（任意）"},
-	{config.KeyUpdateGitHubToken, "UPDATE_GITHUB_TOKEN（任意）"},
-}
-
 // setupOptionalKeys are the optional fields the Setup screen (`GET
-// /setup`, issue #80) offers next to the three required ones.
+// /setup`, issue #80) offers next to the two required ones.
 var setupOptionalKeys = []string{config.KeySlackWebhookURL}
 
 // SettingsHandler implements `GET /settings`, `GET /setup`, `POST`/`DELETE
@@ -90,8 +68,9 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 }
 
 // Page implements `GET /settings`: one molecules.SecretFieldRow per
-// field, each showing only whether a value is currently stored, never the
-// value itself (issue #57's decision). A per-key SecretsStore.Get error
+// field - settingsFields first, advancedSettingsFields in the collapsed
+// 詳細設定 section (issue #272) - each showing only whether a value is
+// currently stored, never the value itself (issue #57's decision). A per-key SecretsStore.Get error
 // (e.g. an unreadable/corrupted stored value) no longer 500s the whole
 // screen (issue #70: "設定画面が開かず、エラーになる" - a single bad row
 // must not permanently lock the operator out of the one screen that could
@@ -99,16 +78,16 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 // still renders and accepts a fresh value.
 func (h *SettingsHandler) Page(c *gin.Context) {
 	ctx := c.Request.Context()
-	fields := make([]molecules.SecretFieldRowProps, len(settingsFields))
-	for i, field := range settingsFields {
-		fields[i] = h.row(ctx, field.key, field.label, "")
+	props := pages.SettingsProps{
+		Fields:         h.rows(ctx, settingsFields),
+		AdvancedFields: h.rows(ctx, advancedSettingsFields),
 	}
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
-	_ = pages.SettingsPage(pages.SettingsProps{Fields: fields}).Render(ctx, c.Writer)
+	_ = pages.SettingsPage(props).Render(ctx, c.Writer)
 }
 
-// SetupPage implements `GET /setup` (issue #80, FR-SETUP-2): the three
+// SetupPage implements `GET /setup` (issue #80, FR-SETUP-2): the two
 // required keys plus setupOptionalKeys as molecules.SecretFieldRow forms
 // that post to the very same `POST`/`DELETE /settings/:key` routes
 // Settings uses - Setup has no save/delete implementation of its own.
@@ -185,13 +164,19 @@ func (h *SettingsHandler) Delete(c *gin.Context) {
 // `#config-banner` fragment (organisms.Header's doc comment, mirroring
 // `#header-status`'s own `hx-get`/`hx-trigger="load"` self-correcting
 // pattern). It only guides toward unset optional keys (SLACK_WEBHOOK_URL
-// etc.): the required keys are enforced by Setup Guard's redirect to
-// `/setup` instead (issue #80), so they never appear here. It renders
+// etc.; not defaultedKeys, whose unset state is normal): the required
+// keys are enforced by Setup Guard's redirect to `/setup` instead (issue #80), so they never appear here. It renders
 // nothing once every optional key is configured. A per-key
 // SecretsStore.Get error degrades that key to "unset" (issue #70) rather
 // than 500ing the banner on every page.
 func (h *SettingsHandler) Status(c *gin.Context) {
-	missing := h.unsetKeys(c.Request.Context(), config.OptionalSecretKeys())
+	var keys []string
+	for _, key := range config.OptionalSecretKeys() {
+		if !slices.Contains(defaultedKeys, key) {
+			keys = append(keys, key)
+		}
+	}
+	missing := h.unsetKeys(c.Request.Context(), keys)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	_ = organisms.SecretsBanner(missing).Render(c.Request.Context(), c.Writer)
@@ -213,6 +198,14 @@ func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
 	_ = molecules.SecretFieldRow(h.row(ctx, key, settingsLabel(key), notice)).Render(ctx, c.Writer)
 }
 
+func (h *SettingsHandler) rows(ctx context.Context, fields []settingsField) []molecules.SecretFieldRowProps {
+	rows := make([]molecules.SecretFieldRowProps, len(fields))
+	for i, field := range fields {
+		rows[i] = h.row(ctx, field.key, field.label, "")
+	}
+	return rows
+}
+
 func (h *SettingsHandler) row(ctx context.Context, key, label, notice string) molecules.SecretFieldRowProps {
 	_, ok, err := h.store.Get(ctx, key)
 	if err != nil {
@@ -231,13 +224,14 @@ func (h *SettingsHandler) row(ctx context.Context, key, label, notice string) mo
 // settingsHints is the per-key input guidance shown under a Settings
 // field. Only keys whose expected format is easy to get wrong have one.
 var settingsHints = map[string]string{
-	config.KeyJevBaseURL: "例: https://api.typesafe.ai（ホスト名のみ。/v1/systemone などのパスは付けないでください）",
+	config.KeyJevBaseURL: "未設定の場合は既定値 " + jev.DefaultBaseURL + " を使用します。上書きする場合はホスト名のみ入力してください（/v1/systemone などのパスは付けないでください）。",
+	config.KeyJevModel:   "未設定の場合は既定値 " + jev.DefaultModel + " を使用します。",
 }
 
 // settingsLabel returns key's display label; key must be in
 // config.AllowedSecretKeys.
 func settingsLabel(key string) string {
-	for _, field := range settingsFields {
+	for _, field := range slices.Concat(settingsFields, advancedSettingsFields) {
 		if field.key == key {
 			return field.label
 		}

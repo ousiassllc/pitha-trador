@@ -18,7 +18,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
   - `layout.Shell`/`SetupShell`が`<meta name="csrf-token">`を出力し、`<body hx-headers>`でHTMX全リクエストに`X-CSRF-Token`を付与する。Litコンポーネントは`lib/api.ts`が同metaから読み取って送信する。`SecretFieldRow`のフォームは上記フォールバック用に隠しフィールド`_csrf`も持つ
 - 実売買（Phase 7）へ移行しても、Kill Switch解除・発注確定操作に人手の追加認証は要求しない（完全自動運用。`requirements/non-functional.md` §4、FR-RISK-4）。実装（`internal/web/handler/system/system.go`）にも追加認証は無く、`pitha-kill-switch-panel`が確認ダイアログ（`window.confirm`）を出すのはKill操作のみで、Resume（Killedからの手動解除を含む）は確認なしで`POST /api/v1/system/resume`を呼ぶ
-- **Setup Guard**: 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）のいずれかが`secrets`テーブルに未設定の間は、`GET /setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエスト（ページ・アクション・`/api/v1`・WebSocket含む）を`/setup`へ誘導する。誘導方法はリクエスト種別で応答を分ける（ページ遷移: `/setup`へ302、HTMX（`HX-Request: true`）: `204`＋`HX-Redirect: /setup`、`/api/v1`: `503` JSON `{"setup_required":true,"setup_url":"/setup"}`、WebSocketアップグレード: `403`。302をスクリプト系リクエストが追従して`/setup`のHTML全体を受け取らないため、issue #140）。判定はリクエストごとに行うため、3キーが揃った次のリクエストから解除される（issue #80）
+- **Setup Guard**: 必須認証情報（JEV_API_KEY/KABU_API_PASSWORD）のいずれかが`secrets`テーブルに未設定の間は、`GET /setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエスト（ページ・アクション・`/api/v1`・WebSocket含む）を`/setup`へ誘導する。誘導方法はリクエスト種別で応答を分ける（ページ遷移: `/setup`へ302、HTMX（`HX-Request: true`）: `204`＋`HX-Redirect: /setup`、`/api/v1`: `503` JSON `{"setup_required":true,"setup_url":"/setup"}`、WebSocketアップグレード: `403`。302をスクリプト系リクエストが追従して`/setup`のHTML全体を受け取らないため、issue #140）。判定はリクエストごとに行うため、3キーが揃った次のリクエストから解除される（issue #80）
 
 ## 2. ルーティング概要
 
@@ -39,7 +39,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
 | GET | `/calibration` | Calibration画面 |
 | GET | `/settings` | Settings画面。許可キー（`internal/config`のallow-list）ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ。保存済みの値は再表示せず「設定済み」バッジのみ表示する。エラーログのダウンロード節（`#error-log-panel`、`GET /api/v1/logs/errors`を呼ぶフォーム。FR-ERRLOG-1）を持つ（issue #57/#79/#267） |
-| GET | `/setup` | 初回セットアップ画面。必須3キー（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）と任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80） |
+| GET | `/setup` | 初回セットアップ画面。必須2キー（JEV_API_KEY/KABU_API_PASSWORD）と任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80） |
 | GET | `/activity` | System Activity Log画面。`<pitha-activity-feed>`アイランド（SSRフォールバック: キュー状況＋アクティビティ一覧）を埋め込んだフルページ |
 
 ## 4. アクションルート

@@ -131,7 +131,6 @@ func TestNew_SecretsStatusRouteReflectsWithSecretsStoreOption(t *testing.T) {
 func requiredSecretsStore() fakeSecretsStore {
 	return fakeSecretsStore{
 		"JEV_API_KEY":       "jev-key",
-		"JEV_BASE_URL":      "https://jev.example.com",
 		"KABU_API_PASSWORD": "kabu-pass",
 	}
 }
@@ -199,10 +198,14 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /setup = %d, want 200 (body=%s)", rec.Code, rec.Body.String())
 	}
-	for _, key := range []string{"JEV_API_KEY", "JEV_BASE_URL", "KABU_API_PASSWORD", "SLACK_WEBHOOK_URL"} {
+	for _, key := range []string{"JEV_API_KEY", "KABU_API_PASSWORD", "SLACK_WEBHOOK_URL"} {
 		if !strings.Contains(rec.Body.String(), `data-testid="secret-field-row-`+key+`"`) {
 			t.Errorf("GET /setup lacks the %s field", key)
 		}
+	}
+	// issue #271: JEV_BASE_URL has a default, so Setup does not ask for it.
+	if strings.Contains(rec.Body.String(), `data-testid="secret-field-row-JEV_BASE_URL"`) {
+		t.Errorf("GET /setup offers JEV_BASE_URL, want it left to the Settings 詳細設定 section")
 	}
 
 	rec = httptest.NewRecorder()
@@ -234,7 +237,7 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 func TestNew_SetupGuardLiftsOnceLastRequiredKeyIsSaved(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := requiredSecretsStore()
-	delete(store, "JEV_BASE_URL")
+	delete(store, "KABU_API_PASSWORD")
 	engine := router.New(router.WithSecretsStore(store))
 
 	rec := httptest.NewRecorder()
@@ -243,14 +246,14 @@ func TestNew_SetupGuardLiftsOnceLastRequiredKeyIsSaved(t *testing.T) {
 		t.Fatalf("GET /scanner before setup = %d, want 302", rec.Code)
 	}
 
-	form := url.Values{"value": {"https://jev.example.com"}}
-	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/JEV_BASE_URL", strings.NewReader(form.Encode())))
+	form := url.Values{"value": {"kabu-pass"}}
+	req := authorize(t, engine, httptest.NewRequest(http.MethodPost, "/settings/KABU_API_PASSWORD", strings.NewReader(form.Encode())))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("HX-Request", "true")
 	rec = httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("POST /settings/JEV_BASE_URL = %d, want 200", rec.Code)
+		t.Fatalf("POST /settings/KABU_API_PASSWORD = %d, want 200", rec.Code)
 	}
 
 	for _, path := range []string{"/scanner", "/settings", "/setup"} {

@@ -36,7 +36,7 @@ type systemOneState struct {
 func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, time.Duration, error) {
 	result, latency, err := c.evaluate(ctx, "scout", systemone.Request{
 		State:     systemOneState{Market: req.State, SimilarPastCases: req.RAGContext},
-		Model:     ModelAlias,
+		Model:     c.model,
 		Questions: scoutQuestions,
 	})
 	if err != nil {
@@ -59,7 +59,7 @@ func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, ti
 func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse, time.Duration, error) {
 	result, latency, err := c.evaluate(ctx, "trader", systemone.Request{
 		State:     systemOneState{Market: req.State, SimilarPastCases: req.RAGContext},
-		Model:     ModelAlias,
+		Model:     c.model,
 		Questions: traderQuestions,
 	})
 	if err != nil {

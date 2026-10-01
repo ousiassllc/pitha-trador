@@ -15,7 +15,7 @@ type SetupProps struct {
 
 // SetupPage is the first-run Setup screen (issue #80, FR-SETUP-2).
 // middleware.SetupGuard redirects every other route here until
-// JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD are all stored. Each field is
+// JEV_API_KEY/KABU_API_PASSWORD are both stored. Each field is
 // the same molecules.SecretFieldRow Settings uses, posting to `POST`/
 // `DELETE /settings/:key`; SLACK_WEBHOOK_URL is offered as an optional
 // extra. It renders in layout.SetupShell (no Header) so nothing on the
@@ -27,7 +27,10 @@ templ SetupPage(props SetupProps) {
 		<h1 class="text-2xl font-bold text-slate-900">初期セットアップ</h1>
 		<div class="mt-4 flex flex-col gap-4" data-testid="setup-form">
 			<p class="text-sm text-slate-600">
-				利用を始めるには、JEV_API_KEY・JEV_BASE_URL・KABU_API_PASSWORD をすべて入力して保存してください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+				利用を始めるには、JEV_API_KEY・KABU_API_PASSWORD の 2 項目を入力して保存してください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+			</p>
+			<p class="text-sm text-slate-600" data-testid="setup-advanced-note">
+				接続先 URL やモデル名などは未入力で既定値が使われます。変更したい場合は、セットアップ後に設定画面の「詳細設定（任意）」から上書きできます。
 			</p>
 			for _, field := range props.Fields {
 				@molecules.SecretFieldRow(field)

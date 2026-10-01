@@ -91,7 +91,7 @@ static/
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
 - `UpdatePanel`（Settings画面の「アップデート」節。現在バージョン・最終確認結果・安全ゲート保留中はその旨と理由（ポジション保有/Kill Switch/直近発注）・失敗時は原因の種別（ネットワーク/レート制限/検証失敗など。生のエラー文言は出さない）・「今すぐアップデートを確認」ボタン（`POST /system/update-check`、`#update-panel`をinnerHTMLスワップ。確認中は`hx-disabled-elt`で無効化・`hx-sync="this:drop"`で二重送信を破棄し、`#update-check-progress`に進行表示）。`cmd/server`（アップデーター未搭載）ではアップデート機能が無い旨を表示しボタンは出さない。issue #76/#241）
 - `ErrorLogPanel`（Settings画面の「エラーログ」節`#error-log-panel`。対象期間（直近1/7/30/90日、既定7日）とレベル（ERRORのみ/WARN以上）の`<select>`と「ダウンロード」ボタンを持つ`<form method="get" action="/api/v1/logs/errors">`をSSRで描画する。ブラウザ標準のダウンロードに任せるため`hx-disable`を付けHTMXの差し替えと`lib/api.ts`は使わず、応答の`Content-Disposition: attachment`で保存される。秘密情報はマスク済み・最大10MiBである旨を注記する。`requirements/functional/components-platform.md` §4.19、issue #267）
-- `SecretsBanner`（SLACK_WEBHOOK_URL等の任意キー未設定時の全ページ共通案内バナー。必須3キーはSetup Guardが`/setup`へ誘導するため対象外。`Header`内`#config-banner`が`GET /system/secrets-status`をhx-trigger="load"で自己補正取得する、issue #57/#80）
+- `SecretsBanner`（SLACK_WEBHOOK_URL等の任意キー未設定時の全ページ共通案内バナー。必須2キーはSetup Guardが`/setup`へ誘導するため対象外。`Header`内`#config-banner`が`GET /system/secrets-status`をhx-trigger="load"で自己補正取得する、issue #57/#80）
 - `QueueStatusPanel`（`jobs`テーブルのキュー別pending/running/直近failed件数を表示。System Activity Logのほか、将来Headerへの常時表示も想定）
 - `ActivityFeedFallback`（JS無効時/初回SSR描画用のアクティビティ一覧テーブル。ハイドレーション後は`pitha-activity-feed`が引き継ぐ）
 
@@ -101,8 +101,8 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
-- `SettingsPage`（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URLに加え、任意のLUNA_*/NEWS_FEED_*（およびSOL_*/OPUS_*/UPDATE_GITHUB_TOKEN）入力項目を`SecretFieldRow`でフィールド数だけ縦に並べる。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。末尾に`ErrorLogPanel`を置く。issue #57/#79/#267）
-- `SetupPage`（初回セットアップ画面。必須3キー＋任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須3キーがすべて設定済みなら完了表示と`/scanner`へのリンクを出す。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80）
+- `SettingsPage`（JEV_API_KEY/KABU_API_PASSWORD/SLACK_WEBHOOK_URLと各APIキーの入力項目を`SecretFieldRow`で縦に並べ、URL・モデル名・UPDATE_GITHUB_TOKENなど任意の上書き項目（JEV_BASE_URL/JEV_MODEL/LUNA_BASE_URL/NEWS_FEED_URL/SOL_BASE_URL/OPUS_BASE_URL/UPDATE_GITHUB_TOKEN）は折りたたみの「詳細設定（任意）」（`<details>`、保存済みの上書き値があるときは開いた状態）に置く。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。末尾に`ErrorLogPanel`を置く。issue #57/#79/#267）
+- `SetupPage`（初回セットアップ画面。必須2キー＋任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須2キーがすべて設定済みなら完了表示と`/scanner`へのリンクを出す。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80）
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
 
@@ -142,8 +142,8 @@ const (
 - **バージョン表示**: `Header`内`#header-version`が`internal/version.Version`（リリースビルドはタグ名、ブランチ/PRビルドは`dev`）を全ページで表示し、`/settings#update-panel`へリンクする。手動の「今すぐアップデートを確認」ボタンはHeaderに置かず、Settings画面に一本化する（確認でインストーラーが検証済みになるとアプリが自動再起動するため、全ページ常設の押下導線にしない）。リンク先の`#update-panel`は`SettingsPage`の見出し直下（秘密情報入力欄より上）に置き、遷移後は`:target`のリングで強調して初回表示領域内に着地させる（issue #241）
 - **ロゴ表示**: `Header`内`#header-logo`が`/static/img/logo.svg`（`static/src/img/logo.svg`。`go:embed`でバイナリに同梱、`make dev`では`PITHA_STATIC_DIR`経由でディスクから配信）とアプリ名を`nav`の直前に表示し、`/scanner`へリンクする。`nav`（`aria-label="メインナビゲーション"`）と同じflexグループ内に置き、狭い幅ではグループ内で折り返す（`flex-wrap`/`min-w-0`）。バージョン・StatusDot・Kill Switchパネルの`justify-between`配置は変わらない。ロゴの「P」マークは`cmd/desktop/build/appicon.png`（Wailsデスクトップアイコン）と同じ意匠（白地の角丸＋ネイビーのセリフ体P）で揃える。`<img>`は隣接するアプリ名テキストが代替になるため`alt=""`（issue #238）
 - **フィールド単位保存**: Settings画面は1つの一括フォームではなく、`SecretFieldRow`ごとの独立フォームで保存（`hx-post="/settings/:key"`）・削除（`hx-delete="/settings/:key"`、`hx-confirm`で確認）し、応答の行フラグメントで当該行のみを差し替える。空入力の保存は400で、値の削除は明示的な削除操作でのみ行う（issue #79）
-- **未設定バナー**: `Header`内`#config-banner`は`GET /system/secrets-status`を`hx-trigger="load"`で取得し、`SecretsBanner`（任意キー（SLACK_WEBHOOK_URL等）の未設定一覧＋`/settings`リンク）またはnothingを描く。必須3キーはバナーではなくSetup Guardの`/setup`リダイレクトで扱う。`#header-status`と同じSSR空→自己補正パターン（issue #57/#80）
-- **初回セットアップ誘導**: Setup Guard Middlewareが必須3キー未設定の間`/setup`以外（`POST`/`DELETE /settings/:key`・`/static/...`を除く）を`/setup`へ送る（ページ遷移は302、HTMXは`204`＋`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。issue #140）。`SetupPage`は`Header`を持たない`layout.SetupShell`で描画し、ガード対象の`hx-get`フラグメントを発火させない。保存はSettingsと同じ`SecretFieldRow`の`hx-post="/settings/:key"`を使い、3キーが揃った時点で完了表示と`/scanner`への「続ける」リンクを出す（issue #80）
+- **未設定バナー**: `Header`内`#config-banner`は`GET /system/secrets-status`を`hx-trigger="load"`で取得し、`SecretsBanner`（任意キー（SLACK_WEBHOOK_URL等）の未設定一覧＋`/settings`リンク）またはnothingを描く。必須2キーはバナーではなくSetup Guardの`/setup`リダイレクトで扱う。`#header-status`と同じSSR空→自己補正パターン（issue #57/#80）
+- **初回セットアップ誘導**: Setup Guard Middlewareが必須2キー未設定の間`/setup`以外（`POST`/`DELETE /settings/:key`・`/static/...`を除く）を`/setup`へ送る（ページ遷移は302、HTMXは`204`＋`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。issue #140）。`SetupPage`は`Header`を持たない`layout.SetupShell`で描画し、ガード対象の`hx-get`フラグメントを発火させない。保存はSettingsと同じ`SecretFieldRow`の`hx-post="/settings/:key"`を使い、2キーが揃った時点で完了表示と`/scanner`への「続ける」リンクを出す（issue #80）
 
 ## 5〜9. 分割章
 

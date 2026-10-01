@@ -98,18 +98,18 @@ sequenceDiagram
     participant SET as /setup（Settings Handler）
 
     UI->>SG: 任意のリクエスト（例: GET /scanner）
-    SG->>DB: JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDの有無を確認
+    SG->>DB: JEV_API_KEY/KABU_API_PASSWORDの有無を確認
     alt いずれか未設定（または読み出し失敗）
         SG-->>UI: 302 /setup（HTMXは204+HX-Redirect、/api/v1は503 JSON、WebSocketは403）
         UI->>SET: GET /setup
         UI->>SET: POST /settings/:key（`SecretFieldRow`の保存。`/setup`・`/static/...`と同じくガード対象外）
         SET->>DB: 暗号化保存
-    else 3キーとも設定済み
+    else 2キーとも設定済み
         SG->>SG: 通常のルートへ委譲（リダイレクトなし）
     end
 ```
 
-- ガードは全ルート（ページ・アクション・`/api/v1`・WebSocket・404含む）の手前に置き、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`のみ通す。判定はリクエストごとにDBを参照し、状態を保持しないため、3キーが揃った次のリクエストから自動で解除される（アプリ再起動は不要）
+- ガードは全ルート（ページ・アクション・`/api/v1`・WebSocket・404含む）の手前に置き、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`のみ通す。判定はリクエストごとにDBを参照し、状態を保持しないため、2キーが揃った次のリクエストから自動で解除される（アプリ再起動は不要）
 - `/setup`はSettings画面と同じ`SecretFieldRow`・同じ`POST`/`DELETE /settings/:key`を使い、専用の保存実装を持たない。完了後も直接アクセスして再設定できる
 - `/setup`は`Header`（ガード対象の`hx-get`フラグメントを持つ）を含まない専用レイアウト（`SetupShell`）で描画する
 - 各種サービスは従来通り起動時の値を読むため、保存した認証情報の反映にはアプリ再起動が必要（§5）
