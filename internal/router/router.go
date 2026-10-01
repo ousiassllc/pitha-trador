@@ -33,6 +33,7 @@ func New(opts ...Option) *gin.Engine {
 		proposalSource:    handler.StaticPolicyProposalSource{},
 		backtestRunner:    handler.StaticBacktestRunner{},
 		activitySource:    activity.StaticActivitySource{},
+		errorLogExporter:  system.StaticErrorLogExporter{},
 	}
 	for _, opt := range opts {
 		opt(&o)

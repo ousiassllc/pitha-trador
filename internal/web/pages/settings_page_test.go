@@ -27,3 +27,26 @@ func TestSettingsPage_UpdatePanelPrecedesSecretFields(t *testing.T) {
 		t.Fatalf("#update-panel at %d, first secret field at %d; want the panel first", panel, field)
 	}
 }
+
+// The エラーログ section is a plain GET form to the download API (FR-ERRLOG-1):
+// 7 days and ERROR-only preselected, HTMX kept out via hx-disable.
+func TestSettingsPage_ErrorLogPanelIsPlainDownloadForm(t *testing.T) {
+	var buf bytes.Buffer
+	if err := pages.SettingsPage(pages.SettingsProps{}).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	body := buf.String()
+
+	for _, want := range []string{
+		`id="error-log-panel"`,
+		`<form method="get" action="/api/v1/logs/errors" hx-disable`,
+		`<option value="7" selected>`,
+		`<option value="error" selected>`,
+		`<option value="warn">`,
+		`<option value="90">`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SettingsPage lacks %q", want)
+		}
+	}
+}

@@ -87,6 +87,7 @@ type Services struct {
 	Backtest      *backtestsource.Source
 	Activity      *activityfeed.Service
 	Governor      *selfimprove.Governor
+	ErrorLogs     *logging.Exporter // read-only export of LogDir (FR-ERRLOG-2)
 
 	Scheduler *scheduler.Scheduler
 	Updater   *updater.SchedulerAdapter // nil on cmd/server (issue #76)
@@ -258,6 +259,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 		Insight:       insight.NewReader(executionEngine, instruments, signals, positions),
 		Calibration:   calibrationService,
 		Governor:      governor,
+		ErrorLogs:     logging.NewExporter(LogDir),
 		Backtest:      backtestSource,
 		Activity:      activity,
 		Scheduler:     sched,

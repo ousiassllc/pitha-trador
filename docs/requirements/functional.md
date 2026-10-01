@@ -19,6 +19,7 @@
 | UC-13 | システムアクティビティ確認 | 個人トレーダー | Log画面でジョブキュー実行状況・直近のJev呼び出し・Kill Switch関連イベントをリアルタイムに確認する |
 | UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/kabuステーション/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する |
 | UC-15 | 初回セットアップ | 個人トレーダー | 必須認証情報（Jev/kabuステーション）が未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
+| UC-16 | エラーログ取得 | 個人トレーダー（運用者） | Settings画面から期間・レベルを指定してエラーログをダウンロードし、調査・共有に使う |
 
 ```mermaid
 graph TD
@@ -40,6 +41,7 @@ graph TD
     User --> UC11[Kill Switch操作]
     User --> UC12[バックテスト実行]
     User --> UC13[システムアクティビティ確認]
+    User --> UC16[エラーログ取得]
 ```
 
 ## 2. 主要処理フロー
@@ -97,7 +99,7 @@ sequenceDiagram
 | 節 | ファイル |
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
-| §4.10〜§4.18（Scheduler/Worker〜初回セットアップ誘導） | `docs/requirements/functional/components-platform.md` |
+| §4.10〜§4.19（Scheduler/Worker〜エラーログのダウンロード） | `docs/requirements/functional/components-platform.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -189,3 +191,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.7 | 2026-09-29 | §4.7にFR-RISK-2/FR-RISK-7の検知基準（market_data_down/jev_api_down/broker_api_error/db_write_failure/unexpected_position/fill_discrepancy）と1分周期の自動検知・自動再開を追記 | issue #93/#94/#95実装 |
 | 1.8 | 2026-09-29 | §4を`docs/requirements/functional/`配下の章別ファイル（components-pipeline/components-platform）へ分割。節番号・FR-IDは変更なし | issue #119（300行/ファイル制限の形骸化解消） |
 | 1.9 | 2026-10-01 | §4.4/§4.5のJev質問を公式APIの型（`noul`/`choice`）で明記。FR-SCOUT-3のコスト保存を「APIが課金額を返さないためNULL」へ訂正し、`question_version`の現行値を追記 | issue #263 |
+| 1.10 | 2026-10-01 | UC-16・§4.19 エラーログのダウンロード（FR-ERRLOG-1〜7）を追加。既存のslogログ（`logs/`）を読み出す読み取り専用機能とし、新規永続テーブルは追加しない | issue #267 |

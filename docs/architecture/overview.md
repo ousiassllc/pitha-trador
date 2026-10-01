@@ -53,7 +53,7 @@ pitha-trador/
 │   │   └── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
 │   ├── config/                   # config/*.yamlの型付きローダー、AES-256-GCM秘密情報ヘルパー（他の内部パッケージに依存しない）
 │   ├── safego/                   # FR-SCHED-6 常駐goroutineのpanic回復（`Recover`/`Run`/`Try`/`Loop`。panicをスタック付きでslogに記録し、ループは次サイクルへ継続。他の内部パッケージに依存しない）
-│   ├── logging/                  # slog JSON出力の日次ローテーション（rotate.go）・30日超のgzipアーカイブ（archive.go。`requirements/non-functional.md` §5）
+│   ├── logging/                  # slog JSON出力の日次ローテーション（rotate.go）・30日超のgzipアーカイブ（archive.go）・エラーログの抽出とマスク（export.go・export_mask.go、読み取り専用。`requirements/non-functional.md` §5・§5.3）
 │   ├── supervisor/               # --supervise起動時の子プロセス監視・指数バックオフ再起動（cmd/desktopのみが利用。非機能§3）
 │   ├── singleinstance/           # ファイルロックによる多重起動ガード（cmd/desktopのみが利用。OSがプロセス終了時にロックを解放）
 │   ├── version/                  # ビルド時に埋め込むバージョン文字列（`ldflags -X`。自動アップデート判定で使用）
@@ -226,14 +226,14 @@ handler → service → repository → domain
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
 | Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/candidates`・`bootstrap/heldposition`・`service/marketdata`・`service/pushfeed`・`service/scheduler`（`updatecheck`含む）から使う | `internal/safego` |
 | Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-data/feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `paperexec`, `alerts`） |
-| Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ（`requirements/non-functional.md` §5） | `internal/logging` |
+| Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ・エラーログのエクスポート（`requirements/non-functional.md` §5・§5.3、フローは`overview/flows.md` §10.6） | `internal/logging` |
 | Supervisor | 子プロセスの異常終了時の指数バックオフ再起動（1秒〜5分、1分安定でリセット）。終了コード0で監視終了。`cmd/desktop`の`--supervise`起動でのみ使う（`requirements/non-functional.md` §3） | `internal/supervisor` |
 | Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。2つ目の起動は`bootstrap.Run`に到達する前に終了コード0で終了し、Scheduler・Kill Switch・発注の二重稼働を防ぐ | `internal/singleinstance` |
 | Headless Server | Wailsに依存しない`net/http`エントリーポイント（Updater非配線。§9） | `cmd/server` |
 | Setup Guard Middleware | 必須認証情報（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD）が未設定の間、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`以外の全リクエストを`/setup`へ誘導する（ページ遷移は302、HTMXは`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。§10.5、FR-SETUP-1） | `internal/web/middleware` |
 | API Error Formatter | `/api/v1` のエラーボディ整形。`registerAPI`から`apierror.Install()`で`huma.NewError`を上書きし、4xxはバリデーション詳細を`errors[]`に残し、5xxは固定メッセージのみ返して原因を`slog`へ記録する（`api/endpoints.md` §7、issue #215） | `internal/web/apierror` |
 | Repository | SQLiteの永続化（テーブルを所有するリソース群`market`/`jobqueue`/`judgement`/`trading`/`system`、共有ヘルパー`sqlutil`・接続`sqlitedb`、複数リソースの読み取り`decisiontrade`・列対応表`snapshotcols`。§3） | `internal/repository`（サブパッケージ群） |
-| Web (HTMX/Templ/Lit) | UI提供（`components/overview.md`）。画面/APIハンドラは責務別サブパッケージ: `symbol`（Symbol List/Detail/Close・`/ws/symbols/:symbol`）、`system`（System状態・Kill Switch・`/ws/system`・自動アップデートUI）、`settings`（`/settings`・`/setup`画面。Setup Guard Middlewareの誘導先）、`activity`（Activity Feed画面/API）、`shared`（共通ヘルパー） | `internal/web`（`handler/{shared,symbol,system,settings,activity}`） |
+| Web (HTMX/Templ/Lit) | UI提供（`components/overview.md`）。画面/APIハンドラは責務別サブパッケージ: `symbol`（Symbol List/Detail/Close・`/ws/symbols/:symbol`）、`system`（System状態・Kill Switch・`/ws/system`・自動アップデートUI・エラーログのダウンロード`/api/v1/logs/errors`）、`settings`（`/settings`・`/setup`画面。Setup Guard Middlewareの誘導先）、`activity`（Activity Feed画面/API）、`shared`（共通ヘルパー） | `internal/web`（`handler/{shared,symbol,system,settings,activity}`） |
 
 ## 5〜13. 分割章
 
@@ -242,7 +242,7 @@ handler → service → repository → domain
 | 節 | ファイル |
 |----|----------|
 | §5 kabuステーションAPI連携 / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 | `docs/architecture/overview/integrations.md` |
-| §10 通信フロー（§10.1〜§10.5）/ §11 障害対応方針 | `docs/architecture/overview/flows.md` |
+| §10 通信フロー（§10.1〜§10.6）/ §11 障害対応方針 | `docs/architecture/overview/flows.md` |
 
 ## 改訂履歴
 
@@ -281,3 +281,4 @@ handler → service → repository → domain
 | 1.30 | 2026-09-30 | §3のツリーに、行数上限（300行/ファイル・2000行/ディレクトリ）を満たすために外部テストを移したテスト専用サブパッケージ`featureengine/marketcontextflow`・`execution/closeflow`・`scheduler/maintenanceflow`・`router/analysisflow`を追記（各々が自前のヘルパーを持つ）。`.linterlyignore`が`*_templ.go`と`**/logs/**`のみであることを最終確認 | issue #248 |
 | 1.31 | 2026-09-30 | 分割後レビュー指摘を反映: §3で本番コードの兄弟import例外（`market` → `snapshotcols`）とテスト専用のクロスリソース読み取り例外（`decisiontrade`・`snapshotcols`の`_test.go`）を明記、depguardの強制範囲（`web` → `repository/**`のみ）を明記、`sqlutil`/`sqlitedb`・`web`・`bootstrap`・`router`の実import先（`config`・`version`・`safego`・`db`・`web/apierror`等）と`settings/`の`/setup`担当・テスト専用ディレクトリ一覧・`job_queries.go`/`doc.go`・旧外部テスト行数（940行）を実装に合わせて訂正、§4に`Repository`行と`web/handler`サブパッケージの実装場所を追加。なお1.24の「分割後構成を確定」は当時の目標構成を指し、実装は1.26〜1.30で適用済み。`integrations.md` §12（`internal/web/handler/activity`）・`er/tables-system.md`（`secrets`の実装パス）は#249で本文を更新済みだが自身に改訂履歴を持たないため本表で記録する | 分割後レビュー（#249〜#256） |
 | 1.32 | 2026-10-01 | §6（`integrations.md`）をTypeSafe AI公式API（`POST {BaseURL}/v1/systemone`、型付き`questions`→`answers`）に合わせて書き直し: リクエスト/応答形式、Scout/Traderの質問表、厳格な応答検証、`question_version`の`scout-v2`/`trader-v2`、429/529はbackoff付き再試行・401/422は即失敗、`request_cost`はNULL、`BaseURL`はホスト名のみ | issue #263（旧実装は存在しない`/v1/scout`・`/v1/trader`を想定していた） |
+| 1.33 | 2026-10-01 | §3の`logging/`にエラーログExporter、§4のLogging/Web行にエラーログのエクスポートを追記し、`overview/flows.md`に§10.6を新設 | issue #267 |
