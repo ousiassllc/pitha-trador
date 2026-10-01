@@ -16,10 +16,16 @@ import (
 // calls os.Getenv for any of them anymore - they are DB row keys now,
 // not env var names.
 const (
-	// KeyJevAPIKey and KeyJevBaseURL supply internal/service/jev.Config's
-	// APIKey/BaseURL fields (docs/architecture/overview.md §6).
-	KeyJevAPIKey  = "JEV_API_KEY"
+	// KeyJevAPIKey supplies internal/service/jev.Config's APIKey
+	// (docs/architecture/overview.md §6). It is required.
+	KeyJevAPIKey = "JEV_API_KEY"
+	// KeyJevBaseURL and KeyJevModel supply internal/service/jev.Config's
+	// BaseURL/Model overrides (issues #271, #274). Both are optional: an
+	// unset (or empty) value makes the jev client use its own default
+	// (jev.DefaultBaseURL / jev.DefaultModel), and a stored value takes
+	// precedence over that default until it is deleted.
 	KeyJevBaseURL = "JEV_BASE_URL"
+	KeyJevModel   = "JEV_MODEL"
 	// KeyKabuAPIPassword supplies internal/service/marketdata.Config's
 	// APIPassword field. It must match the APIPassword configured inside
 	// the kabuステーションアプリ itself (docs/architecture/overview.md
@@ -29,8 +35,8 @@ const (
 	// with the order endpoints, not before.
 	KeyKabuAPIPassword = "KABU_API_PASSWORD"
 	// KeySlackWebhookURL supplies internal/service/notify.Config's
-	// WebhookURL (non-functional.md §5.2's immediate alerts). Unlike the
-	// three keys above it is optional: LoadSecretsFromDB never reports it
+	// WebhookURL (non-functional.md §5.2's immediate alerts). Unlike
+	// KeyJevAPIKey and KeyKabuAPIPassword it is optional: LoadSecretsFromDB never reports it
 	// missing, and internal/bootstrap simply skips the Slack channel when
 	// it is empty (Paper Trading has no real-money exposure to alert on,
 	// and a dev machine without a webhook must still be able to start).
@@ -65,16 +71,16 @@ const (
 // LoadSecretsFromDB reports in its missing return value. KeySlackWebhookURL
 // and the Luna/News Feed keys are intentionally excluded - see
 // optionalSecretKeys.
-var requiredSecretKeys = []string{KeyJevAPIKey, KeyJevBaseURL, KeyKabuAPIPassword}
+var requiredSecretKeys = []string{KeyJevAPIKey, KeyKabuAPIPassword}
 
 // optionalSecretKeys are loaded like requiredSecretKeys but never reported
 // as missing.
-var optionalSecretKeys = []string{KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey,
+var optionalSecretKeys = []string{KeyJevBaseURL, KeyJevModel, KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey,
 	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL, KeyUpdateGitHubToken}
 
 // RequiredSecretKeys returns the keys whose absence keeps the app
-// unusable (JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD): the Setup Guard
-// redirects to `/setup` until every one is stored (issue #80).
+// unusable (JEV_API_KEY/KABU_API_PASSWORD): the Setup Guard redirects to
+// `/setup` until every one is stored (issues #80, #271).
 func RequiredSecretKeys() []string {
 	return append([]string{}, requiredSecretKeys...)
 }
@@ -104,8 +110,11 @@ func IsAllowedSecretKey(key string) bool {
 // #57); this struct itself never touches disk or the process environment
 // directly.
 type Secrets struct {
-	JevAPIKey       string
+	JevAPIKey string
+	// JevBaseURL and JevModel are optional overrides (see KeyJevBaseURL);
+	// empty means "use the jev client's default".
 	JevBaseURL      string
+	JevModel        string
 	KabuAPIPassword string
 	// SlackWebhookURL is optional (see KeySlackWebhookURL); empty means
 	// "no Slack channel".
@@ -146,7 +155,7 @@ type SecretsRepository interface {
 // (env-var support was removed entirely by issue #57: `.env` no longer
 // carries JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL).
 // Unlike LoadSecrets, an unset value is never an error: missing names
-// every key among KeyJevAPIKey/KeyJevBaseURL/KeyKabuAPIPassword that has
+// every key among KeyJevAPIKey/KeyKabuAPIPassword that has
 // no stored value yet, letting the caller (cmd/desktop, cmd/server) log
 // a warning and start anyway - Jev/kabuステーションAPI-dependent
 // features simply error at call time until an operator fills them in
@@ -174,6 +183,7 @@ func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []
 	return Secrets{
 		JevAPIKey:       values[KeyJevAPIKey],
 		JevBaseURL:      values[KeyJevBaseURL],
+		JevModel:        values[KeyJevModel],
 		KabuAPIPassword: values[KeyKabuAPIPassword],
 		SlackWebhookURL: values[KeySlackWebhookURL],
 		LunaAPIKey:      values[KeyLunaAPIKey],

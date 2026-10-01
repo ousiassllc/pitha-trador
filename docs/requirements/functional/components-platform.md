@@ -83,7 +83,7 @@ News Ingest（`internal/service/newsfeed`）が対象銘柄に関連するニュ
 
 Settings画面（`GET /settings`）で認証情報を管理する。値は`secrets`テーブルにAES-256-GCMで暗号化して保存する。
 
-- FR-SETTINGS-1: 設定項目は`internal/config`の許可キー一覧（JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_API_KEY/LUNA_BASE_URL/NEWS_FEED_URL/NEWS_FEED_API_KEY/SOL_API_KEY/SOL_BASE_URL/OPUS_API_KEY/OPUS_BASE_URL/UPDATE_GITHUB_TOKEN）に限定する。画面は項目ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ
+- FR-SETTINGS-1: 設定項目は`internal/config`の許可キー一覧（JEV_API_KEY/JEV_BASE_URL/JEV_MODEL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_API_KEY/LUNA_BASE_URL/NEWS_FEED_URL/NEWS_FEED_API_KEY/SOL_API_KEY/SOL_BASE_URL/OPUS_API_KEY/OPUS_BASE_URL/UPDATE_GITHUB_TOKEN）に限定する。画面は項目ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ。APIキー／パスワード類を通常入力として先に並べ、URL・モデル名などの上書き項目（JEV_BASE_URL/JEV_MODEL/LUNA_BASE_URL/NEWS_FEED_URL/SOL_BASE_URL/OPUS_BASE_URL/UPDATE_GITHUB_TOKEN）は折りたたみの「詳細設定（任意）」にまとめる（保存済みの上書き値があるときは開いた状態で表示）。空欄は既定値を意味し、保存済みの上書き値は項目ごとの削除で既定値へ戻せる（JEV_BASE_URLの既定は`https://api.typesafe.ai`、JEV_MODELの既定は`jev-latest`）
 - FR-SETTINGS-2: `POST /settings/:key`は指定キー1件のみを保存し、他キーの値に一切影響しない。値は前後空白をトリムしてから検証する。トリム後に空の値は400とし、保存済みの値を空入力で消すことはできない。URL系キー（JEV_BASE_URL/SLACK_WEBHOOK_URL/LUNA_BASE_URL/NEWS_FEED_URL/SOL_BASE_URL/OPUS_BASE_URL）は`http`/`https`スキームかつホスト非空、その他の認証情報は制御文字（改行・タブ等）を含まないことを要求し、違反は400で保存しない（HTMXはトースト、非JSはエラーページ。Setup Guardは有効な必須値でのみ解除される）
 - FR-SETTINGS-3: `DELETE /settings/:key`は指定キー1件のみを削除し、他キーの値に一切影響しない。許可キー一覧に無いキー名は保存・削除とも400を返す
 - FR-SETTINGS-4: 保存済みの値は画面に再表示せず「設定済み」バッジのみ表示する。全ページ共通バナー（`GET /system/secrets-status`）は任意キー（SLACK_WEBHOOK_URL等）の未設定のみ案内する（必須キーはSetup Guard、§4.18が`/setup`へ誘導する）。設定変更の反映にはアプリ再起動が必要
@@ -92,10 +92,10 @@ Settings画面（`GET /settings`）で認証情報を管理する。値は`secre
 
 必須認証情報が未設定のままアプリを使い始められないよう、専用のSetup画面（`GET /setup`）へ強制的に誘導する。
 
-- FR-SETUP-1: JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORDのいずれかが未設定の間、Setup Guard Middlewareは`/setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエストを`/setup`へ誘導する。ページ遷移は302、HTMXリクエストは`204`＋`HX-Redirect: /setup`、`/api/v1`は`503`のJSON、WebSocketアップグレードは`403`とし、スクリプト系リクエストに`/setup`のHTML全体を返さない。判定はリクエストごとにDBを参照するため、3キーがすべて設定された次のリクエストからリダイレクトは解除される。保存済みの値を読み出せない場合は未設定として扱う
-- FR-SETUP-2: `GET /setup`は必須3項目を個別の入力欄＋保存ボタン（`SecretFieldRow`）で表示し、任意項目としてSLACK_WEBHOOK_URLを表示する
+- FR-SETUP-1: JEV_API_KEY/KABU_API_PASSWORDのいずれかが未設定の間、Setup Guard Middlewareは`/setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエストを`/setup`へ誘導する。ページ遷移は302、HTMXリクエストは`204`＋`HX-Redirect: /setup`、`/api/v1`は`503`のJSON、WebSocketアップグレードは`403`とし、スクリプト系リクエストに`/setup`のHTML全体を返さない。判定はリクエストごとにDBを参照するため、2キーがすべて設定された次のリクエストからリダイレクトは解除される。保存済みの値を読み出せない場合は未設定として扱う
+- FR-SETUP-2: `GET /setup`は必須2項目を個別の入力欄＋保存ボタン（`SecretFieldRow`）で表示し、任意項目としてSLACK_WEBHOOK_URLを表示する
 - FR-SETUP-3: `/setup`の保存・削除は`POST`/`DELETE /settings/:key`（FR-SETTINGS-2/3）をそのまま使い、専用の別実装を持たない
-- FR-SETUP-4: 必須3項目がすべて設定済みなら、Setup画面は完了を表示し、通常画面（`/scanner`）へ進むリンクを出す
+- FR-SETUP-4: 必須2項目がすべて設定済みなら、Setup画面は完了を表示し、通常画面（`/scanner`）へ進むリンクを出す
 - FR-SETUP-5: `/setup`はセットアップ完了後も直接アクセスでき、Settings画面と同様に再設定できる
 
 ### 4.19 エラーログのダウンロード

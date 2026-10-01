@@ -31,7 +31,9 @@ func newTestServices(t *testing.T) *Services {
 	jevMaxAttemptsForTest = 1
 	t.Cleanup(func() { jevMaxAttemptsForTest = 0 })
 
-	svc, err := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password"}, nil)
+	// JevBaseURL points at a closed local port: an empty one would fall back
+	// to the production host (issue #271) and make these tests dial it.
+	svc, err := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"}, nil)
 	if err != nil {
 		t.Fatalf("BuildServices: %v", err)
 	}
@@ -130,7 +132,7 @@ func TestBuildServices_RegistersMarketDataHandler(t *testing.T) {
 // feature-calc: enqueue directly, let the real worker claim/process it,
 // and read the resulting status via the read-only Jobs.Get. No Jev API
 // server is stood up here, so the job is expected to fail (a network
-// error dialing the empty/invalid BaseURL) rather than succeed - "failed"
+// error dialing the unreachable BaseURL newTestServices sets) rather than succeed - "failed"
 // still proves a Handler ran (an unregistered queue's job would stay
 // "pending" forever, per Scheduler.Start's own doc comment: it only
 // spins up a worker per *registered* queue).

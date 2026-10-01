@@ -54,7 +54,7 @@ func TestNormalizeSecretValue_URLKeysRequireHTTPOrHTTPSWithHost(t *testing.T) {
 func TestNormalizeSecretValue_CredentialKeysRejectControlCharacters(t *testing.T) {
 	credentialKeys := []string{
 		config.KeyJevAPIKey, config.KeyKabuAPIPassword, config.KeyLunaAPIKey,
-		config.KeyNewsFeedAPIKey, config.KeySolAPIKey, config.KeyOpusAPIKey,
+		config.KeyNewsFeedAPIKey, config.KeySolAPIKey, config.KeyOpusAPIKey, config.KeyJevModel,
 	}
 	for _, key := range credentialKeys {
 		for _, bad := range []string{"ab\ncd", "ab\r\ncd", "ab\tcd", "ab\x00cd", "ab\x7fcd"} {

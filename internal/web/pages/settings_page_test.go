@@ -50,3 +50,31 @@ func TestSettingsPage_ErrorLogPanelIsPlainDownloadForm(t *testing.T) {
 		}
 	}
 }
+
+// issue #272: AdvancedFields render inside a <details> that is collapsed
+// unless a stored override is present.
+func TestSettingsPage_AdvancedFieldsLiveInDetailsOpenedByStoredValue(t *testing.T) {
+	render := func(configured bool) string {
+		props := pages.SettingsProps{
+			Fields:         []molecules.SecretFieldRowProps{{Key: "k1", Label: "FRONT_LABEL"}},
+			AdvancedFields: []molecules.SecretFieldRowProps{{Key: "k2", Label: "ADVANCED_LABEL", Configured: configured}},
+		}
+		var buf bytes.Buffer
+		if err := pages.SettingsPage(props).Render(context.Background(), &buf); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return buf.String()
+	}
+
+	for _, configured := range []bool{false, true} {
+		body := render(configured)
+		start, end := strings.Index(body, "<details"), strings.Index(body, "</details>")
+		front, adv := strings.Index(body, "FRONT_LABEL"), strings.Index(body, "ADVANCED_LABEL")
+		if start < 0 || front < 0 || adv < 0 || front >= start || start >= adv || adv >= end {
+			t.Fatalf("configured=%v: front=%d details=%d advanced=%d end=%d; want FRONT_LABEL before <details> holding ADVANCED_LABEL", configured, front, start, adv, end)
+		}
+		if open := strings.Contains(body[start:strings.Index(body[start:], ">")+start], " open"); open != configured {
+			t.Errorf("configured=%v: <details> open = %v", configured, open)
+		}
+	}
+}

@@ -7,15 +7,19 @@ import (
 )
 
 // SettingsProps is SettingsPage's input: one SecretFieldRow per managed
-// key (internal/web/handler/settings.SettingsHandler.Page).
+// key (internal/web/handler/settings.SettingsHandler.Page). Fields are the
+// always-visible credentials; AdvancedFields go into the collapsed
+// 「詳細設定（任意）」 section (issue #272).
 type SettingsProps struct {
-	Fields []molecules.SecretFieldRowProps
+	Fields         []molecules.SecretFieldRowProps
+	AdvancedFields []molecules.SecretFieldRowProps
 }
 
 // SettingsPage is the Settings screen (issue #57 スコープ item 6, issue
-// #79): JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL plus
-// the optional LUNA_*/NEWS_FEED_*/SOL_*/OPUS_* AI/News API credentials,
-// each as its own molecules.SecretFieldRow with an independent save
+// #79): JEV_API_KEY/KABU_API_PASSWORD/SLACK_WEBHOOK_URL plus the optional
+// LUNA_*/NEWS_FEED_*/SOL_*/OPUS_* AI/News API keys up front, and the
+// URL/model overrides (JEV_BASE_URL, JEV_MODEL, *_BASE_URL, ...) in a
+// collapsed 詳細設定（任意） section (issue #272), each as its own molecules.SecretFieldRow with an independent save
 // (`POST /settings/:key`) and delete (`DELETE /settings/:key`) form
 // (internal/web/handler/settings.SettingsHandler.Save/Delete) - a blank or
 // untouched field can never clear another field's stored value.
@@ -37,7 +41,29 @@ templ SettingsPage(props SettingsProps) {
 			for _, field := range props.Fields {
 				@molecules.SecretFieldRow(field)
 			}
+			<details class="rounded-md border border-slate-200 px-4 py-3" data-testid="settings-advanced" open?={ anyConfigured(props.AdvancedFields) }>
+				<summary class="cursor-pointer text-sm font-semibold text-slate-800">詳細設定（任意）</summary>
+				<div class="mt-3 flex flex-col gap-4">
+					<p class="text-sm text-slate-600" data-testid="settings-advanced-note">
+						空欄（未設定）の項目は既定値を使用します。保存済みの上書き値は「削除」で既定値に戻せます。
+					</p>
+					for _, field := range props.AdvancedFields {
+						@molecules.SecretFieldRow(field)
+					}
+				</div>
+			</details>
 		</div>
 		@organisms.ErrorLogPanel()
 	}
+}
+
+// anyConfigured reports whether any row holds a stored value; the advanced
+// section then renders open so existing overrides are visible.
+func anyConfigured(rows []molecules.SecretFieldRowProps) bool {
+	for _, row := range rows {
+		if row.Configured {
+			return true
+		}
+	}
+	return false
 }
