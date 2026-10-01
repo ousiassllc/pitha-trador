@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -41,10 +42,15 @@ func stateJSONNewsContext(t *testing.T, stateJSON string) *domain.NewsContext {
 }
 
 func TestScout_Evaluate_InjectsNewsContextIntoStateJSONAndRequest(t *testing.T) {
-	var sent jev.ScoutRequest
+	var sent struct {
+		State struct {
+			Market jev.ScoutState `json:"market"`
+		} `json:"state"`
+	}
+	reply := jevtest.ScoutHandler(jev.ScoutResponse{InterestingNow: 0.8, LiquidityOk: 0.9, AbnormalActivity: 0.6})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&sent)
-		_ = json.NewEncoder(w).Encode(jev.ScoutResponse{InterestingNow: 0.8, LiquidityOk: 0.9, AbnormalActivity: 0.6})
+		reply(w, r)
 	}))
 	t.Cleanup(server.Close)
 
@@ -66,7 +72,7 @@ func TestScout_Evaluate_InjectsNewsContextIntoStateJSONAndRequest(t *testing.T) 
 	if got == nil || len(got.Items) != 1 || got.Items[0].Summary != "上方修正" {
 		t.Errorf("state_json news_context = %+v, want the injected Luna item", got)
 	}
-	if sent.State.NewsContext == nil {
+	if sent.State.Market.NewsContext == nil {
 		t.Error("Jev request state has no news_context, want it injected")
 	}
 }
@@ -90,9 +96,9 @@ func TestScout_Evaluate_NoNewsForSymbolLeavesStateWithoutNewsContext(t *testing.
 
 func TestTrader_Evaluate_InjectsNewsContextWithoutChangingJevJudgment(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(jev.TraderResponse{
+		jevtest.TraderHandler(jev.TraderResponse{
 			Direction: domain.JevDirectionShort, Regime: domain.JevRegimeTrend, EntryQuality: domain.JevEntryQualityGood, Confidence: 0.7,
-		})
+		})(w, r)
 	}))
 	t.Cleanup(server.Close)
 

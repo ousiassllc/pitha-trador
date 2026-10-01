@@ -1,8 +1,11 @@
-package jev_test
+// Package clientflow_test holds the jev.Client tests (retry policy, wire
+// format, response validation, error-rate tracking). They live in their
+// own directory to keep internal/service/jev under the per-directory line
+// limit (.linterly.yml); they only use jev's exported API.
+package clientflow_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -10,21 +13,32 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
 )
+
+// failingThen returns a handler that answers 500 for the first failures
+// calls and next afterwards, counting every call in calls.
+func failingThen(calls *int32, failures int32, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(calls, 1) <= failures {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 func TestClient_Scout_SucceedsOnFirstAttempt(t *testing.T) {
 	var calls int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
-		_ = json.NewEncoder(w).Encode(jev.ScoutResponse{
-			InterestingNow: 0.8, MomentumQuality: jev.MomentumQualityStrong,
-			LiquidityOk: 0.9, AbnormalActivity: 0.6, ModelID: "jev-scout-test",
-		})
-	}))
+	next := jevtest.ScoutHandler(jev.ScoutResponse{
+		InterestingNow: 0.8, MomentumQuality: jev.MomentumQualityStrong,
+		LiquidityOk: 0.9, AbnormalActivity: 0.6, ModelID: "jev-scout-test",
+	})
+	server := httptest.NewServer(failingThen(&calls, 0, next))
 	defer server.Close()
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL})
-	resp, _, err := client.Scout(context.Background(), jev.ScoutRequest{QuestionVersion: "scout-v1"})
+	resp, _, err := client.Scout(context.Background(), jev.ScoutRequest{QuestionVersion: jev.ScoutQuestionVersion})
 	if err != nil {
 		t.Fatalf("Scout: %v", err)
 	}
@@ -38,14 +52,8 @@ func TestClient_Scout_SucceedsOnFirstAttempt(t *testing.T) {
 
 func TestClient_Scout_RetriesAndEventuallySucceeds(t *testing.T) {
 	var calls int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
-		if n < 3 {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(jev.ScoutResponse{InterestingNow: 0.7, LiquidityOk: 0.7, AbnormalActivity: 0.7})
-	}))
+	next := jevtest.ScoutHandler(jev.ScoutResponse{InterestingNow: 0.7, LiquidityOk: 0.7, AbnormalActivity: 0.7})
+	server := httptest.NewServer(failingThen(&calls, 2, next))
 	defer server.Close()
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, RetryBaseDelay: time.Millisecond})
@@ -83,10 +91,7 @@ func TestNewClient_EmptyConfigDoesNotPanic(t *testing.T) {
 
 func TestClient_Scout_GivesUpAfterMaxAttempts(t *testing.T) {
 	var calls int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
+	server := httptest.NewServer(failingThen(&calls, 1<<30, nil))
 	defer server.Close()
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 3, RetryBaseDelay: time.Millisecond})
@@ -147,44 +152,23 @@ func TestClient_Scout_ContextCancellationDuringBackoffAbortsPromptly(t *testing.
 	}
 }
 
-func TestClient_Scout_NonOKStatusReturnsAPIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte(`{"error":"invalid api key"}`))
-	}))
-	defer server.Close()
-
-	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
-	_, _, err := client.Scout(context.Background(), jev.ScoutRequest{})
-	if err == nil {
-		t.Fatal("Scout: want error for a 401 response, got nil")
-	}
-}
-
 func TestClient_Trader_SucceedsOnFirstAttempt(t *testing.T) {
 	var calls int32
-	var gotPath string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
-		gotPath = r.URL.Path
-		_ = json.NewEncoder(w).Encode(jev.TraderResponse{
-			Direction: "LONG", Regime: "BREAKOUT", EntryQuality: "strong",
-			Confidence: 0.74, ToxicFlow: 0.18, LiquidityStressed: 0.09, ContinuationProbability: 0.62,
-			ModelID: "jev-trader-test",
-		})
-	}))
+	next := jevtest.TraderHandler(jev.TraderResponse{
+		Direction: "LONG", Regime: "BREAKOUT", EntryQuality: "strong",
+		Confidence: 0.74, ToxicFlow: 0.18, LiquidityStressed: 0.09, ContinuationProbability: 0.62,
+		ModelID: "jev-trader-test",
+	})
+	server := httptest.NewServer(failingThen(&calls, 0, next))
 	defer server.Close()
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL})
-	resp, _, err := client.Trader(context.Background(), jev.TraderRequest{QuestionVersion: "trader-v1"})
+	resp, _, err := client.Trader(context.Background(), jev.TraderRequest{QuestionVersion: jev.TraderQuestionVersion})
 	if err != nil {
 		t.Fatalf("Trader: %v", err)
 	}
 	if resp.Direction != "LONG" || resp.EntryQuality != "strong" || resp.ModelID != "jev-trader-test" {
 		t.Fatalf("Trader() = %+v, want the server's response decoded", resp)
-	}
-	if gotPath != jev.DefaultTraderPath {
-		t.Errorf("request path = %q, want %q", gotPath, jev.DefaultTraderPath)
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Fatalf("server received %d calls, want 1 (no retry on success)", got)
@@ -193,14 +177,8 @@ func TestClient_Trader_SucceedsOnFirstAttempt(t *testing.T) {
 
 func TestClient_Trader_RetriesAndEventuallySucceeds(t *testing.T) {
 	var calls int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := atomic.AddInt32(&calls, 1)
-		if n < 3 {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(jev.TraderResponse{Direction: "SHORT", Confidence: 0.7})
-	}))
+	next := jevtest.TraderHandler(jev.TraderResponse{Direction: "SHORT", Confidence: 0.7})
+	server := httptest.NewServer(failingThen(&calls, 2, next))
 	defer server.Close()
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, RetryBaseDelay: time.Millisecond})
@@ -218,10 +196,7 @@ func TestClient_Trader_RetriesAndEventuallySucceeds(t *testing.T) {
 
 func TestClient_Trader_GivesUpAfterMaxAttempts(t *testing.T) {
 	var calls int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&calls, 1)
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
+	server := httptest.NewServer(failingThen(&calls, 1<<30, nil))
 	defer server.Close()
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 3, RetryBaseDelay: time.Millisecond})

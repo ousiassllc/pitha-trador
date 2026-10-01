@@ -224,7 +224,13 @@ func (h *SettingsHandler) row(ctx context.Context, key, label, notice string) mo
 		slog.Error("settings: read stored secret; treating as unset so the screen still renders", "key", key, "error", err)
 		ok = false
 	}
-	return molecules.SecretFieldRowProps{Key: key, Label: label, Configured: ok, Notice: notice}
+	return molecules.SecretFieldRowProps{Key: key, Label: label, Hint: settingsHints[key], Configured: ok, Notice: notice}
+}
+
+// settingsHints is the per-key input guidance shown under a Settings
+// field. Only keys whose expected format is easy to get wrong have one.
+var settingsHints = map[string]string{
+	config.KeyJevBaseURL: "例: https://api.typesafe.ai（ホスト名のみ。/v1/systemone などのパスは付けないでください）",
 }
 
 // settingsLabel returns key's display label; key must be in

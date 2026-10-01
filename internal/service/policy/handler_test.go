@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
@@ -35,9 +36,7 @@ func newHandlerTestDB(t *testing.T) *sql.DB {
 // every Jev Trader call.
 func traderServer(t *testing.T, resp jev.TraderResponse) *httptest.Server {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	server := httptest.NewServer(jevtest.TraderHandler(resp))
 	t.Cleanup(server.Close)
 	return server
 }

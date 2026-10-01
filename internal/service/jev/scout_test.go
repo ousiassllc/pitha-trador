@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -38,9 +39,7 @@ func testThresholds() config.JevScoutConfig {
 // Jev Scout call.
 func scoutServer(t *testing.T, resp jev.ScoutResponse) *httptest.Server {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	server := httptest.NewServer(jevtest.ScoutHandler(resp))
 	t.Cleanup(server.Close)
 	return server
 }

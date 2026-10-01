@@ -1,14 +1,14 @@
-package jev_test
+package clientflow_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
 )
 
 // fakeAlertNotifier records every JevAPIErrorRateExceeded call.
@@ -36,6 +36,7 @@ func (f *fakeAlertNotifier) count() int {
 func scriptedServer(t *testing.T, fail []bool) *httptest.Server {
 	t.Helper()
 	i := 0
+	ok := jevtest.ScoutHandler(jev.ScoutResponse{InterestingNow: 0.8, ModelID: "test"})
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		shouldFail := fail[i]
 		if i < len(fail)-1 {
@@ -46,7 +47,7 @@ func scriptedServer(t *testing.T, fail []bool) *httptest.Server {
 			_, _ = w.Write([]byte(`{"error":"forced failure"}`))
 			return
 		}
-		_ = json.NewEncoder(w).Encode(jev.ScoutResponse{InterestingNow: 0.8, ModelID: "test"})
+		ok(w, r)
 	}))
 }
 

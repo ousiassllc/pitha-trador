@@ -40,6 +40,26 @@ func TestSettingsHandler_Page_ShowsConfiguredStateNotValues(t *testing.T) {
 	}
 }
 
+// JEV_BASE_URL takes the API host only: the client appends /v1/systemone
+// itself, so the screen must show the expected format.
+func TestSettingsHandler_Page_ShowsJevBaseURLHint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := settings.NewSettingsHandler(newFakeSecretsStore())
+	engine := gin.New()
+	engine.GET("/settings", h.Page)
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-testid="hint-JEV_BASE_URL"`) || !strings.Contains(body, "https://api.typesafe.ai") {
+		t.Fatalf("Page does not show the JEV_BASE_URL hint https://api.typesafe.ai; body=%s", body)
+	}
+	if strings.Contains(body, `data-testid="hint-JEV_API_KEY"`) {
+		t.Fatalf("Page shows a hint for JEV_API_KEY; only keys with a format to explain have one")
+	}
+}
+
 // The banner only guides toward unset optional keys (issue #80): the
 // required keys are handled by the Setup Guard redirect, never here.
 func TestSettingsHandler_Status_ListsUnsetOptionalKeysOnly(t *testing.T) {

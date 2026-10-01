@@ -146,13 +146,13 @@ erDiagram
 | decision_type | varchar(10) | NOT NULL, CHECK IN ('scout','trader') | |
 | state_hash | varchar(64) | NOT NULL | 入力状態のハッシュ。再評価抑制の判定に使用（`functional.md` FR-SCAN-2） |
 | state_json | text | NOT NULL | Jevへの入力（JSON文字列、`functional.md` §4.4/4.5参照） |
-| question_version | varchar(20) | NOT NULL | プロンプト/質問セットのバージョン |
+| question_version | varchar(20) | NOT NULL | プロンプト/質問セットのバージョン（例: `scout-v2`/`trader-v2`。`scout-v1`/`trader-v1`は旧独自スキーマ時代の値） |
 | response_json | text | NOT NULL | Jevからの生レスポンス（JSON文字列） |
 | direction | varchar(10) | NULL可, CHECK IN ('LONG','SHORT','NONE') | decision_type=trader時のみ設定 |
 | confidence | numeric(5,4) | NULL可 | |
 | latency_ms | integer | NOT NULL | |
 | model_id | varchar(100) | NOT NULL | |
-| request_cost | numeric(10,6) | NULL可 | API課金額（USD等） |
+| request_cost | numeric(10,6) | NULL可 | API課金額（USD等）。TypeSafe AI公式API（`/v1/systemone`）は課金額を返さず`usage`のトークン数のみのため、現行実装は常にNULL |
 | created_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id, timestamp DESC)`, `INDEX (decision_type)`, `INDEX (state_hash)`
