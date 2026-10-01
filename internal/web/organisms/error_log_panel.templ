@@ -1,0 +1,41 @@
+package organisms
+
+// ErrorLogPanel renders the Settings screen's エラーログ section
+// (`#error-log-panel`, FR-ERRLOG-1): a plain GET form to
+// `/api/v1/logs/errors`, whose `Content-Disposition: attachment` response
+// the browser/WebView saves as a file. `hx-disable` keeps HTMX out of it -
+// a swapped-in download would show nothing - and no script is involved, so
+// `lib/api.ts` is not used either. The two selects mirror the endpoint's
+// `days` (1/7/30/90, default 7) and `level` (error = ERROR only, default;
+// warn = WARN and ERROR) query parameters.
+templ ErrorLogPanel() {
+	<section id="error-log-panel" class="mt-4 flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="error-log-panel">
+		<h2 class="text-lg font-semibold text-slate-900">エラーログ</h2>
+		<p>
+			調査や共有のために、ログ（NDJSON 形式）をダウンロードできます。API キー・パスワード・トークン・Slack Webhook URL などの秘密情報は <code>[REDACTED]</code> に置き換えられます。出力は最大 10 MiB で、超えた場合は古い記録から切り捨てられます。
+		</p>
+		<form method="get" action="/api/v1/logs/errors" hx-disable class="flex flex-wrap items-end gap-3" data-testid="error-log-form">
+			<label class="flex flex-col gap-1">
+				<span class="font-medium text-slate-700">期間</span>
+				<select name="days" class="rounded-md border border-slate-300 bg-white px-3 py-2" data-testid="error-log-days">
+					<option value="1">直近 1 日</option>
+					<option value="7" selected>直近 7 日</option>
+					<option value="30">直近 30 日</option>
+					<option value="90">直近 90 日</option>
+				</select>
+			</label>
+			<label class="flex flex-col gap-1">
+				<span class="font-medium text-slate-700">レベル</span>
+				<select name="level" class="rounded-md border border-slate-300 bg-white px-3 py-2" data-testid="error-log-level">
+					<option value="error" selected>ERROR のみ</option>
+					<option value="warn">WARN 以上</option>
+				</select>
+			</label>
+			<button
+				class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+				type="submit"
+				data-testid="error-log-download"
+			>ダウンロード</button>
+		</form>
+	</section>
+}
