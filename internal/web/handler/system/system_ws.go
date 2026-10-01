@@ -37,7 +37,7 @@ func (h *SystemHandler) WebSocket(c *gin.Context) {
 	shared.PollWebSocket(c, func() time.Duration { return h.pollInterval }, func(ctx context.Context, conn *websocket.Conn) error {
 		state, events, err := h.engine.State(ctx)
 		if err != nil {
-			return err
+			return shared.Transient(err)
 		}
 
 		if state == domain.SystemStateKilled && !wasKilled {

@@ -73,6 +73,8 @@ stateDiagram-v2
 
 ## 6. WebSocket
 
+接続中のデータ取得失敗（DBの一時的なロック等）では接続を閉じない。サーバーは`slog`にWarnを出して次のポーリングで再試行する（閉じるとブラウザが再接続を始め、実際には接続できているのに「接続が切れています」が出るため。issue #266）。書き込み失敗（クライアント切断）と存在しない銘柄（`/ws/symbols/{symbol}`）のみ接続を終了する（`internal/web/handler/shared/ws_poll.go`の`Transient`）。
+
 | パス | 用途 | 送信メッセージ例 |
 |------|------|-----------------|
 | `/ws/scanner` | Scanner Dashboardのライブ更新（`pitha-scanner-table`） | `{"type":"scanner_update","items":[...],"as_of":"2026-09-26T10:15:00+09:00"}`（`as_of`は`GET /api/v1/scanner`と同じスキャン時刻・RFC 3339） |
@@ -113,3 +115,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.17 | 2026-09-30 | `/system/update-panel`が保留理由・失敗種別を表示し、アップデーター未搭載時は説明を返すよう変更 | issue #241 |
 | 1.18 | 2026-09-30 | ハンドラ分割（#245）に伴い実装パスの参照を更新（Kill Switch操作の実装を`internal/web/handler/system/system.go`へ、CSRF拒否ページの描画を`shared.RenderErrorPage`へ）。API仕様自体は変更なし | issue #245/#249 |
 | 1.19 | 2026-09-30 | §6 `/ws/scanner`のメッセージに`as_of`を追加（REST/SSRとキャプションの時刻表記を統一） | issue #239 レビュー指摘 |
+| 1.20 | 2026-10-01 | §6 WebSocketのデータ取得失敗時は接続を閉じず次のポーリングで再試行すると明記 | issue #266 |
