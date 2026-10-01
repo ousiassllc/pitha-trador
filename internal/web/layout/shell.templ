@@ -54,6 +54,9 @@ templ document(title string) {
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<meta name="csrf-token" content={ middleware.CSRFToken(ctx) }/>
+			if wsBase := middleware.WebSocketBaseURL(ctx); wsBase != "" {
+				<meta name="ws-base" content={ wsBase }/>
+			}
 			<title>{ title } - pitha-trador</title>
 			<meta name="htmx-config" content={ htmxConfig }/>
 			<link rel="stylesheet" href="/static/dist/css/app.css"/>

@@ -205,3 +205,63 @@ func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
 		t.Fatalf("handler still running 3s after client close (interval %v)", longInterval)
 	}
 }
+
+// flakySystemEngine fails its first failures State calls, then reports
+// Killed.
+type flakySystemEngine struct {
+	failures int64
+	calls    atomic.Int64
+}
+
+func (f *flakySystemEngine) State(context.Context) (domain.SystemState, []domain.KillSwitchEvent, error) {
+	if f.calls.Add(1) <= f.failures {
+		return "", nil, errors.New("database is locked")
+	}
+	return domain.SystemStateKilled, []domain.KillSwitchEvent{{Reason: domain.KillReasonDailyLossLimit}}, nil
+}
+func (f *flakySystemEngine) Pause(context.Context) error  { return nil }
+func (f *flakySystemEngine) Resume(context.Context) error { return nil }
+func (f *flakySystemEngine) Kill(context.Context) error   { return nil }
+
+func dialSystemWS(t *testing.T, engine system.SystemEngine) (context.Context, *websocket.Conn) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	h := system.NewSystemHandler(engine)
+	h.SetPollInterval(10 * time.Millisecond)
+	ginEngine := gin.New()
+	ginEngine.GET("/ws/system", h.WebSocket)
+	server := httptest.NewServer(ginEngine)
+	t.Cleanup(server.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	t.Cleanup(cancel)
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws/system", nil)
+	if err != nil {
+		t.Fatalf("websocket.Dial() error = %v", err)
+	}
+	t.Cleanup(func() { _ = conn.CloseNow() })
+	return ctx, conn
+}
+
+// Issue #266: a failed State read must not drop the connection, and the
+// kill_switch notification must still arrive once reads recover.
+func TestSystemHandler_WebSocket_StateErrorKeepsConnectionOpen(t *testing.T) {
+	ctx, conn := dialSystemWS(t, &flakySystemEngine{failures: 2})
+
+	_, data, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatalf("conn.Read() error = %v, want the kill_switch push after the transient errors", err)
+	}
+	if !strings.Contains(string(data), `"kill_switch"`) {
+		t.Fatalf("message = %s, want kill_switch", data)
+	}
+}
+
+func TestSystemHandler_WebSocket_PersistentStateErrorClosesConnection(t *testing.T) {
+	engine := &flakySystemEngine{failures: 1 << 30}
+	ctx, conn := dialSystemWS(t, engine)
+
+	if _, _, err := conn.Read(ctx); err == nil || ctx.Err() != nil {
+		t.Fatalf("conn.Read() error = %v (ctx err %v), want the server to give up and close", err, ctx.Err())
+	}
+}

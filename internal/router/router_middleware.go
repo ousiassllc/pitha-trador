@@ -17,6 +17,9 @@ func useMiddleware(engine *gin.Engine, o options) settings.SecretsStore {
 	// First, so Recovery's logged 500 is what RequestLog records and even
 	// Session's rejections are logged (issues #109/#122).
 	engine.Use(middleware.RequestLog(), middleware.Recovery(shared.RenderErrorPage))
+	if o.wsBase != "" {
+		engine.Use(middleware.WebSocketBase(o.wsBase))
+	}
 	// Before Session, so a DNS-rebinding request is refused before it can
 	// receive the session cookie or a CSRF token (issue #136).
 	if o.allowedHosts != nil {

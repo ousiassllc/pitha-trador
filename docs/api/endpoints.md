@@ -73,7 +73,9 @@ stateDiagram-v2
 
 ## 6. WebSocket
 
-接続中のデータ取得失敗（DBの一時的なロック等）では接続を閉じない。サーバーは`slog`にWarnを出して次のポーリングで再試行する（閉じるとブラウザが再接続を始め、実際には接続できているのに「接続が切れています」が出るため。issue #266）。書き込み失敗（クライアント切断）と存在しない銘柄（`/ws/symbols/{symbol}`）のみ接続を終了する（`internal/web/handler/shared/ws_poll.go`の`Transient`）。
+データ取得（`engine.State`等）が失敗しても、直ちには接続を閉じない（閉じるとブラウザが再接続を始め、接続自体は生きているのに「接続が切れています」が出るため。issue #266）。サーバーは最初の失敗を`slog`にWarnで記録して次のポーリングで再試行し、連続`MaxConsecutiveTransientErrors`（5）回失敗したら閉じる。回復時はInfoを記録する。書き込み失敗（クライアント切断）と存在しない銘柄（`/ws/symbols/{symbol}`）は即座に接続を終了する（`internal/web/handler/shared/ws_poll.go`の`Transient`）。
+
+デスクトップ版（Windows）はWails AssetServerがWebSocketを扱えない（Upgradeに501を返す）ため、`cmd/desktop`が`/ws/...`のUpgradeだけを受けるループバックの別リスナー（`router.WebSocketOnly`）を起動し、全画面の`<meta name="ws-base">`でそのアドレス（`ws://wails.localhost:<port>`）をLitコンポーネントに伝える（`lib/ws.ts`の`resolveWsUrl`が参照）。`cmd/server`ではmetaを出さず、従来どおりページと同じオリジンへ接続する。
 
 | パス | 用途 | 送信メッセージ例 |
 |------|------|-----------------|
@@ -115,4 +117,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.17 | 2026-09-30 | `/system/update-panel`が保留理由・失敗種別を表示し、アップデーター未搭載時は説明を返すよう変更 | issue #241 |
 | 1.18 | 2026-09-30 | ハンドラ分割（#245）に伴い実装パスの参照を更新（Kill Switch操作の実装を`internal/web/handler/system/system.go`へ、CSRF拒否ページの描画を`shared.RenderErrorPage`へ）。API仕様自体は変更なし | issue #245/#249 |
 | 1.19 | 2026-09-30 | §6 `/ws/scanner`のメッセージに`as_of`を追加（REST/SSRとキャプションの時刻表記を統一） | issue #239 レビュー指摘 |
-| 1.20 | 2026-10-01 | §6 WebSocketのデータ取得失敗時は接続を閉じず次のポーリングで再試行すると明記 | issue #266 |
+| 1.20 | 2026-10-01 | §6 WebSocketのデータ取得失敗時は即座に閉じず再試行（連続失敗で終了）、デスクトップ版は`ws-base`の別リスナーでWebSocketを提供すると明記 | issue #266 |

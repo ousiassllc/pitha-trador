@@ -68,3 +68,40 @@ func TestPollWebSocket_PlainStepErrorClosesConnection(t *testing.T) {
 		t.Fatalf("conn.Read() error = %v (ctx err %v), want the server to close the connection", err, ctx.Err())
 	}
 }
+
+// A Transient error that never clears must not keep the connection open
+// forever with no updates: after MaxConsecutiveTransientErrors it closes.
+func TestPollWebSocket_PersistentTransientErrorClosesConnection(t *testing.T) {
+	var calls atomic.Int64
+	ctx, conn := dialPoll(t, func(context.Context, *websocket.Conn) error {
+		calls.Add(1)
+		return shared.Transient(errors.New("still broken"))
+	})
+
+	if _, _, err := conn.Read(ctx); err == nil || ctx.Err() != nil {
+		t.Fatalf("conn.Read() error = %v (ctx err %v), want the server to give up and close", err, ctx.Err())
+	}
+	if got := calls.Load(); got != shared.MaxConsecutiveTransientErrors {
+		t.Fatalf("step calls = %d, want %d", got, shared.MaxConsecutiveTransientErrors)
+	}
+}
+
+// Failures only count while consecutive: a success resets the budget.
+func TestPollWebSocket_SuccessResetsTransientErrorBudget(t *testing.T) {
+	var calls atomic.Int64
+	ctx, conn := dialPoll(t, func(ctx context.Context, conn *websocket.Conn) error {
+		// Fail MaxConsecutiveTransientErrors-1 times, succeed, repeat: never
+		// reaches the limit, so every success message must arrive.
+		n := calls.Add(1)
+		if n%shared.MaxConsecutiveTransientErrors != 0 {
+			return shared.Transient(errors.New("flaky"))
+		}
+		return shared.WriteJSON(ctx, conn, map[string]int64{"n": n})
+	})
+
+	for i := 0; i < 3; i++ {
+		if _, _, err := conn.Read(ctx); err != nil {
+			t.Fatalf("conn.Read() #%d error = %v, want the connection to stay open", i, err)
+		}
+	}
+}

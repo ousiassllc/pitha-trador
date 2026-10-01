@@ -20,6 +20,13 @@ func WriteJSON(ctx context.Context, conn *websocket.Conn, v any) error {
 	return conn.Write(ctx, websocket.MessageText, data)
 }
 
+// MaxConsecutiveTransientErrors is how many consecutive Transient step
+// failures PollWebSocket tolerates before it gives up and closes the
+// connection. A failure that persists (e.g. a missing dependency) must not
+// leave the page looking connected while it never receives an update: the
+// close makes the browser show the disconnect notice, which is then true.
+const MaxConsecutiveTransientErrors = 5
+
 // transientError marks a step failure that must not end the connection.
 type transientError struct{ err error }
 
@@ -27,12 +34,13 @@ func (e transientError) Error() string { return e.err.Error() }
 func (e transientError) Unwrap() error { return e.err }
 
 // Transient marks err, a failure to read the data a PollWebSocket step
-// pushes (e.g. a momentarily busy database), as recoverable: PollWebSocket
-// logs it and retries on the next poll instead of closing the connection.
-// Closing would make the browser report a lost connection and reconnect
-// even though the connection itself is fine (issue #266). Errors that are
-// not marked (a failed write: the peer is gone; an unknown symbol: it will
-// never recover) still end the connection. Transient(nil) is nil.
+// pushes, as possibly recoverable: PollWebSocket logs it and retries on the
+// next poll instead of closing the connection, up to
+// MaxConsecutiveTransientErrors in a row. Closing on the first failure
+// makes the browser report a lost connection and reconnect although the
+// connection itself is fine (issue #266). Errors that are not marked (a
+// failed write: the peer is gone; an unknown symbol: it will never recover)
+// still end the connection at once. Transient(nil) is nil.
 func Transient(err error) error {
 	if err == nil {
 		return nil
@@ -42,8 +50,10 @@ func Transient(err error) error {
 
 // PollWebSocket accepts a WebSocket upgrade on c and calls step once
 // immediately, then again after each next() delay, until step returns an
-// error that is not Transient or the client goes away. A Transient error
-// is logged and the connection is kept open.
+// error that is not Transient, MaxConsecutiveTransientErrors Transient
+// errors occur in a row, or the client goes away. Only the first failure of
+// a run is logged (Warn) so a persistent one does not flood the log; the
+// recovery is logged at Info.
 //
 // The clients of these endpoints never send, so the connection is put in
 // CloseRead mode: control frames (Ping/Close) are handled and the ctx
@@ -58,6 +68,8 @@ func PollWebSocket(c *gin.Context, next func() time.Duration, step func(ctx cont
 	defer func() { _ = conn.CloseNow() }()
 
 	ctx := conn.CloseRead(c.Request.Context())
+	path := c.Request.URL.Path
+	failures := 0
 
 	for {
 		if err := step(ctx, conn); err != nil {
@@ -65,7 +77,18 @@ func PollWebSocket(c *gin.Context, next func() time.Duration, step func(ctx cont
 			if !errors.As(err, &transient) || ctx.Err() != nil {
 				return
 			}
-			slog.Warn("ws: poll step failed, keeping connection open", "path", c.Request.URL.Path, "error", err)
+			failures++
+			if failures >= MaxConsecutiveTransientErrors {
+				slog.Error("ws: poll step kept failing, closing connection", "path", path, "failures", failures, "error", err)
+				_ = conn.Close(websocket.StatusInternalError, "data unavailable")
+				return
+			}
+			if failures == 1 {
+				slog.Warn("ws: poll step failed, keeping connection open", "path", path, "error", err)
+			}
+		} else if failures > 0 {
+			slog.Info("ws: poll step recovered", "path", path, "failures", failures)
+			failures = 0
 		}
 
 		timer := time.NewTimer(next())
