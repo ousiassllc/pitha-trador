@@ -59,14 +59,15 @@ func TestSettingsHandler_Save_StoresAIAndNewsFeedCredentials(t *testing.T) {
 	engine := settingsRouter(settings.NewSettingsHandler(store))
 
 	want := map[string]string{
-		config.KeyLunaAPIKey:     "luna-key",
-		config.KeyLunaBaseURL:    "https://luna.example.com",
-		config.KeyNewsFeedURL:    "https://news.example.com/feed",
-		config.KeyNewsFeedAPIKey: "news-key",
-		config.KeySolAPIKey:      "sol-key",
-		config.KeySolBaseURL:     "https://sol.example.com",
-		config.KeyOpusAPIKey:     "opus-key",
-		config.KeyOpusBaseURL:    "https://opus.example.com",
+		config.KeyLunaAPIKey:        "luna-key",
+		config.KeyLunaBaseURL:       "https://luna.example.com",
+		config.KeyNewsFeedURL:       "https://news.example.com/feed",
+		config.KeyNewsFeedAPIKey:    "news-key",
+		config.KeySolAPIKey:         "sol-key",
+		config.KeySolBaseURL:        "https://sol.example.com",
+		config.KeyOpusAPIKey:        "opus-key",
+		config.KeyOpusBaseURL:       "https://opus.example.com",
+		config.KeyUpdateGitHubToken: "ghp_token",
 	}
 	for key, value := range want {
 		if rec := postSetting(engine, key, url.Values{"value": {value}}); rec.Code != http.StatusOK {

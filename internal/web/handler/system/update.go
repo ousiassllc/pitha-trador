@@ -146,7 +146,9 @@ func errorReason(kind updater.ErrorKind) string {
 	case updater.ErrorRateLimit:
 		return "GitHub API のレート制限に達しました"
 	case updater.ErrorAccess:
-		return "GitHub のリリース情報にアクセスできません（リポジトリが非公開の場合は環境変数 " + updater.EnvGitHubToken + " にアクセストークンを設定してください）"
+		return "GitHub のリリース情報にアクセスできません（リポジトリが非公開の場合は、設定画面の UPDATE_GITHUB_TOKEN にアクセストークンを保存して再起動してください）"
+	case updater.ErrorAuth:
+		return "GitHub が設定済みの UPDATE_GITHUB_TOKEN を受け付けませんでした（有効期限・権限・対象リポジトリへのアクセス権を確認してください）"
 	case updater.ErrorVerification:
 		return "ダウンロードしたインストーラーの検証に失敗しました（更新は中止されました）"
 	case updater.ErrorRelease:

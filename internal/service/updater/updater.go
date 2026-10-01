@@ -21,11 +21,6 @@ import (
 // httptest.Server instead).
 const defaultBaseURL = "https://api.github.com"
 
-// EnvGitHubToken names the environment variable holding the optional GitHub
-// token Config.Token is read from (internal/bootstrap). Required while the
-// repository is private (issue #265).
-const EnvGitHubToken = "PITHA_UPDATE_GITHUB_TOKEN"
-
 // installerAssetSuffix/checksumsAssetName match .github/workflows/ci.yml's
 // `wails build -nsis` output naming (issue #64:
 // `sha256sum build/bin/*-installer.exe > build/bin/checksums.txt`).
@@ -95,11 +90,12 @@ type Config struct {
 	// before any download is attempted.
 	Gate SafeGate
 
-	// Token is an optional GitHub token with read access to the repository.
+	// Token is an optional GitHub token with read access to the repository
+	// (the Settings screen's UPDATE_GITHUB_TOKEN, config.KeyUpdateGitHubToken).
 	// A private repository answers an unauthenticated release lookup with
 	// 404 (issue #265); with a token the lookup and the asset downloads go
 	// through the authenticated API instead. It is only ever sent to
-	// BaseURL.
+	// BaseURL; surrounding whitespace is ignored.
 	Token string
 
 	// HTTPClient defaults to a plain http.Client; request deadlines come
@@ -166,7 +162,7 @@ func NewChecker(cfg Config) *Checker {
 		owner:             cfg.Owner,
 		repo:              cfg.Repo,
 		gate:              cfg.Gate,
-		token:             cfg.Token,
+		token:             strings.TrimSpace(cfg.Token),
 		httpClient:        httpClient,
 		baseURL:           baseURL,
 		downloadURLPrefix: downloadURLPrefix,
@@ -258,14 +254,24 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		// GitHub signals a rate limit as 429, or 403 with no quota left.
+		// GitHub signals a rate limit (primary or secondary) as 429, or as
+		// 403 with no quota left or a Retry-After: transient, unlike a
+		// refused lookup.
 		if resp.StatusCode == http.StatusTooManyRequests ||
-			(resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0") {
+			(resp.StatusCode == http.StatusForbidden &&
+				(resp.Header.Get("X-RateLimit-Remaining") == "0" || resp.Header.Get("Retry-After") != "")) {
 			return Release{}, kindErrorf(ErrorRateLimit, "rate limited: status %d", resp.StatusCode)
 		}
 		switch resp.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
-			return Release{}, kindErrorf(ErrorAccess, "release lookup refused: status %d (private repository without a token, or no release published)", resp.StatusCode)
+			// Without a token that usually means a private repository; with
+			// one, the token itself was rejected (expired, wrong scope, no
+			// access to this repository).
+			kind := ErrorAccess
+			if c.token != "" {
+				kind = ErrorAuth
+			}
+			return Release{}, kindErrorf(kind, "release lookup refused: status %d (token configured: %t)", resp.StatusCode, c.token != "")
 		}
 		return Release{}, kindErrorf(ErrorNetwork, "unexpected status %d", resp.StatusCode)
 	}
@@ -275,25 +281,4 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 		return Release{}, kindErrorf(ErrorRelease, "decode response: %w", err)
 	}
 	return release, nil
-}
-
-// selectAssets finds the NSIS installer and its checksums.txt among
-// assets (issue #64's naming: `*-installer.exe` + `checksums.txt`).
-func selectAssets(assets []Asset) (installer, checksums Asset, err error) {
-	var foundInstaller, foundChecksums bool
-	for _, a := range assets {
-		switch {
-		case strings.HasSuffix(a.Name, installerAssetSuffix):
-			installer, foundInstaller = a, true
-		case a.Name == checksumsAssetName:
-			checksums, foundChecksums = a, true
-		}
-	}
-	if !foundInstaller {
-		return Asset{}, Asset{}, fmt.Errorf("no %s asset found", installerAssetSuffix)
-	}
-	if !foundChecksums {
-		return Asset{}, Asset{}, fmt.Errorf("no %s asset found", checksumsAssetName)
-	}
-	return installer, checksums, nil
 }

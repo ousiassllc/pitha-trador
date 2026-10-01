@@ -199,6 +199,7 @@ func TestUpdateHandler_Panel_FailureNamesTheErrorKind(t *testing.T) {
 		updater.ErrorNetwork:      "接続できませんでした",
 		updater.ErrorRateLimit:    "レート制限",
 		updater.ErrorAccess:       "アクセスできません",
+		updater.ErrorAuth:         "受け付けませんでした",
 		updater.ErrorVerification: "検証に失敗しました",
 		updater.ErrorRelease:      "内容が不正です",
 		updater.ErrorOther:        "原因を特定できませんでした",
@@ -226,8 +227,11 @@ func TestUpdateHandler_Panel_AccessAndInvalidReleaseAreDistinguishable(t *testin
 		return serve(newUpdateEngine(&fakeUpdateController{status: status}), http.MethodGet, "/system/update-panel").Body.String()
 	}
 	access, invalid := panel(updater.ErrorAccess), panel(updater.ErrorRelease)
-	if !strings.Contains(access, updater.EnvGitHubToken) {
-		t.Errorf("access failure does not name %s; body=%s", updater.EnvGitHubToken, access)
+	if !strings.Contains(access, "UPDATE_GITHUB_TOKEN") || !strings.Contains(access, "設定画面") {
+		t.Errorf("access failure does not point to the Settings field UPDATE_GITHUB_TOKEN; body=%s", access)
+	}
+	if auth := panel(updater.ErrorAuth); !strings.Contains(auth, "受け付けませんでした") || strings.Contains(auth, "非公開") {
+		t.Errorf("auth failure must say the configured token was rejected, not suggest setting one; body=%s", auth)
 	}
 	if strings.Contains(access, "内容が不正") || strings.Contains(invalid, "アクセスできません") {
 		t.Errorf("access and invalid-release messages overlap; access=%s invalid=%s", access, invalid)

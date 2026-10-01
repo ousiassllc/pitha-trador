@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
@@ -76,17 +77,19 @@ func TestChecker_CheckForUpdate_PrivateRepoWithToken(t *testing.T) {
 	}
 }
 
-// Without a token the private repository's 404 must be reported as an
-// access problem, not as invalid release content (issue #265).
-func TestChecker_CheckForUpdate_PrivateRepoWithoutTokenIsAccessError(t *testing.T) {
+// A private repository's 404 must be reported as an access problem, not as
+// invalid release content (issue #265) - and, when the token itself is
+// rejected, as its own failure: the operator must fix the token, not set one.
+func TestChecker_CheckForUpdate_PrivateRepoRefusalKinds(t *testing.T) {
 	setVersion(t, "v0.1.0")
-	checker := privateRepoChecker(newPrivateRepoMock(t), "")
-
-	if _, err := checker.CheckForUpdate(context.Background()); err == nil {
-		t.Fatal("CheckForUpdate err = nil, want a failure")
-	}
-	if got := checker.Status().ErrorKind; got != updater.ErrorAccess {
-		t.Fatalf("ErrorKind = %q, want %q", got, updater.ErrorAccess)
+	for token, want := range map[string]updater.ErrorKind{"": updater.ErrorAccess, "ghp_wrong_token": updater.ErrorAuth} {
+		checker := privateRepoChecker(newPrivateRepoMock(t), token)
+		if _, err := checker.CheckForUpdate(context.Background()); err == nil {
+			t.Fatalf("token %q: CheckForUpdate err = nil, want a failure", token)
+		}
+		if got := checker.Status().ErrorKind; got != want {
+			t.Errorf("token %q: ErrorKind = %q, want %q", token, got, want)
+		}
 	}
 }
 
@@ -114,5 +117,64 @@ func TestChecker_CheckForUpdate_TokenNotSentToForeignAssetURL(t *testing.T) {
 	}
 	if got := checker.Status().ErrorKind; got != updater.ErrorVerification {
 		t.Fatalf("ErrorKind = %q, want %q", got, updater.ErrorVerification)
+	}
+}
+
+func TestChecker_CheckForUpdate_TokenIsTrimmed(t *testing.T) {
+	setVersion(t, "v0.1.0")
+	checker := privateRepoChecker(newPrivateRepoMock(t), " \t"+privateRepoToken+"\n")
+	if result, err := checker.CheckForUpdate(context.Background()); err != nil || !result.Ready {
+		t.Fatalf("CheckForUpdate = %+v, %v; want Ready", result, err)
+	}
+}
+
+// GitHub answers the API asset request with a 302 to a signed URL on another
+// host (objects.githubusercontent.com). The token must not follow it there:
+// net/http drops Authorization on a cross-host redirect, and this pins that
+// the download still works that way.
+func TestChecker_CheckForUpdate_TokenNotForwardedToCrossHostRedirect(t *testing.T) {
+	setVersion(t, "v0.1.0")
+	checksums := fmt.Sprintf("%s  %s\n", installerChecksum(t), installerName)
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			t.Errorf("CDN received Authorization=%q", r.Header.Get("Authorization"))
+		}
+		if r.URL.Path == "/checksums" {
+			_, _ = w.Write([]byte(checksums))
+			return
+		}
+		_, _ = w.Write([]byte(installerBody))
+	}))
+	t.Cleanup(cdn.Close)
+	// Same loopback IP, but a different hostname: a different "host" for
+	// net/http's redirect header policy.
+	cdnHost := strings.Replace(cdn.URL, "127.0.0.1", "localhost", 1)
+
+	var serverURL string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/ousiassllc/pitha-trador/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(updater.Release{TagName: "v0.2.0", Assets: []updater.Asset{
+			{Name: installerName, URL: serverURL + "/repos/ousiassllc/pitha-trador/releases/assets/1"},
+			{Name: "checksums.txt", URL: serverURL + "/repos/ousiassllc/pitha-trador/releases/assets/2"},
+		}})
+	})
+	redirect := func(path string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") != "Bearer "+privateRepoToken {
+				http.NotFound(w, r)
+				return
+			}
+			http.Redirect(w, r, cdnHost+path, http.StatusFound)
+		}
+	}
+	mux.HandleFunc("/repos/ousiassllc/pitha-trador/releases/assets/1", redirect("/installer"))
+	mux.HandleFunc("/repos/ousiassllc/pitha-trador/releases/assets/2", redirect("/checksums"))
+	server := httptest.NewServer(mux)
+	serverURL = server.URL
+	t.Cleanup(server.Close)
+
+	result, err := privateRepoChecker(server, privateRepoToken).CheckForUpdate(context.Background())
+	if err != nil || !result.Ready {
+		t.Fatalf("CheckForUpdate = %+v, %v; want Ready", result, err)
 	}
 }
