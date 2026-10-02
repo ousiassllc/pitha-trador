@@ -17,15 +17,11 @@ const (
 	ErrorNetwork ErrorKind = "network"
 	// ErrorRateLimit: GitHub rejected the release lookup for rate limiting.
 	ErrorRateLimit ErrorKind = "rate_limit"
-	// ErrorAccess: GitHub refused an unauthenticated release lookup - 401/403
-	// or 404 (the repository is private, or no release is published). Issue #265:
+	// ErrorAccess: GitHub refused the release lookup - 401/403 or 404 (no
+	// release is published, or the release is not accessible). Issue #265:
 	// this used to be reported as ErrorRelease, indistinguishable from
 	// invalid release content.
 	ErrorAccess ErrorKind = "access"
-	// ErrorAuth: like ErrorAccess, but a token is configured, so GitHub
-	// rejected the token itself (expired, insufficient scope, or no access
-	// to this repository).
-	ErrorAuth ErrorKind = "auth"
 	// ErrorVerification: a downloaded asset was rejected - checksum
 	// mismatch or missing entry, size limit, or a URL outside the
 	// repository's release-download path.
@@ -57,7 +53,7 @@ func (e *kindedError) Unwrap() error { return e.err }
 // errors may clear by themselves and are retried with backoff.
 func (e *kindedError) Permanent() bool {
 	switch e.kind {
-	case ErrorAccess, ErrorAuth, ErrorVerification, ErrorRelease:
+	case ErrorAccess, ErrorVerification, ErrorRelease:
 		return true
 	default:
 		return false

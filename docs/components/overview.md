@@ -101,7 +101,7 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
-- `SettingsPage`（JEV_API_KEY/KABU_API_PASSWORD/SLACK_WEBHOOK_URLと各APIキーの入力項目を`SecretFieldRow`で縦に並べ、URL・モデル名・UPDATE_GITHUB_TOKENなど任意の上書き項目（JEV_BASE_URL/JEV_MODEL/LUNA_BASE_URL/NEWS_FEED_URL/SOL_BASE_URL/OPUS_BASE_URL/UPDATE_GITHUB_TOKEN）は折りたたみの「詳細設定（任意）」（`<details>`、保存済みの上書き値があるときは開いた状態）に置く。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。末尾に`ErrorLogPanel`を置く。issue #57/#79/#267）
+- `SettingsPage`（JEV_API_KEY/KABU_API_PASSWORD/SLACK_WEBHOOK_URLと各APIキーの入力項目を`SecretFieldRow`で縦に並べ、URL・モデル名などの任意の上書き項目（JEV_BASE_URL/JEV_MODEL/LUNA_BASE_URL/NEWS_FEED_URL/SOL_BASE_URL/OPUS_BASE_URL）は折りたたみの「詳細設定（任意）」（`<details>`、保存済みの上書き値があるときは開いた状態）に置く。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。末尾に`ErrorLogPanel`を置く。issue #57/#79/#267）
 - `SetupPage`（初回セットアップ画面。必須2キー＋任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須2キーがすべて設定済みなら完了表示と`/scanner`へのリンクを出す。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80）
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
@@ -185,3 +185,4 @@ const (
 | 1.24 | 2026-09-30 | Scanner: `ScannerTableFallback`とLit描画の表記統一（0は符号なし・確信度丸め・URLエスケープ・見出しスタイル）、共有ゴールデンによる契約テスト、`ScannerPage`の説明文/凡例を記載 | issue #239 レビュー指摘 |
 | 1.25 | 2026-09-30 | Scanner: 小数丸めをGo/JSで統一（中間値は0から遠い方へ）、列の説明を`<details>`で常時参照可能にし`aria-describedby`/sr-only を廃止 | issue #239 レビュー指摘 |
 | 1.26 | 2026-10-01 | organismsに`ErrorLogPanel`を追加し、`SettingsPage`の末尾にエラーログのダウンロード節を置く | issue #267 |
+| 1.27 | 2026-10-02 | `SettingsPage`の「詳細設定（任意）」から`UPDATE_GITHUB_TOKEN`を削除（更新確認用トークン機能の廃止） | 更新確認用トークン機能の廃止 |

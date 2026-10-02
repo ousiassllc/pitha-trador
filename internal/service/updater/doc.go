@@ -29,15 +29,10 @@
 // or a detached release signature verified against an embedded public key
 // is not implemented yet.
 //
-// Private repository (issue #265): an unauthenticated lookup of a private
-// repository gets 404, and browser_download_url assets are not downloadable.
-// With Config.Token (the Settings screen's UPDATE_GITHUB_TOKEN) the lookup
-// carries the token and assets come from their API URL (Asset.URL, Accept:
-// application/octet-stream); the token only goes to Config.BaseURL's asset
-// path. A refused lookup is ErrorAccess (no token) or ErrorAuth (token
-// rejected), distinct from ErrorRelease (fetched but unusable content).
-// ErrorAccess/ErrorAuth/ErrorVerification/ErrorRelease report Permanent() so
-// the scheduler's backoff does not retry them (issue #259).
+// A refused lookup (401/403/404) is ErrorAccess, distinct from ErrorRelease
+// (fetched but unusable content); a rate-limited one is ErrorRateLimit.
+// ErrorAccess/ErrorVerification/ErrorRelease report Permanent() so the
+// scheduler's backoff does not retry them (issue #259).
 //
 // Checker itself never runs the installer or quits the process: that is
 // SchedulerAdapter's Quitter's job (cmd/desktop/app.go's QuitForUpdate -

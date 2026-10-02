@@ -188,7 +188,6 @@ func TestLoadSecretsFromDB_AIAndNewsFeedKeysAreOptionalAndLoaded(t *testing.T) {
 	repo[config.KeySolBaseURL] = "https://sol.example.com"
 	repo[config.KeyOpusAPIKey] = "opus-key"
 	repo[config.KeyOpusBaseURL] = "https://opus.example.com"
-	repo[config.KeyUpdateGitHubToken] = "ghp_token"
 	secrets, _, err = config.LoadSecretsFromDB(context.Background(), repo)
 	if err != nil {
 		t.Fatalf("LoadSecretsFromDB: %v", err)
@@ -196,8 +195,7 @@ func TestLoadSecretsFromDB_AIAndNewsFeedKeysAreOptionalAndLoaded(t *testing.T) {
 	if secrets.LunaAPIKey != "luna-key" || secrets.LunaBaseURL != "https://luna.example.com" ||
 		secrets.NewsFeedURL != "https://news.example.com/feed" || secrets.NewsFeedAPIKey != "news-key" ||
 		secrets.SolAPIKey != "sol-key" || secrets.SolBaseURL != "https://sol.example.com" ||
-		secrets.OpusAPIKey != "opus-key" || secrets.OpusBaseURL != "https://opus.example.com" ||
-		secrets.UpdateGitHubToken != "ghp_token" {
+		secrets.OpusAPIKey != "opus-key" || secrets.OpusBaseURL != "https://opus.example.com" {
 		t.Errorf("secrets = %+v, want the configured Luna/News Feed values", secrets)
 	}
 }
@@ -206,7 +204,7 @@ func TestIsAllowedSecretKey_AcceptsEveryConfigKeyAndNothingElse(t *testing.T) {
 	for _, key := range []string{
 		config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyJevModel, config.KeyKabuAPIPassword, config.KeySlackWebhookURL,
 		config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey,
-		config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL, config.KeyUpdateGitHubToken,
+		config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
 	} {
 		if !config.IsAllowedSecretKey(key) {
 			t.Errorf("IsAllowedSecretKey(%q) = false, want true", key)
@@ -217,7 +215,7 @@ func TestIsAllowedSecretKey_AcceptsEveryConfigKeyAndNothingElse(t *testing.T) {
 			t.Errorf("IsAllowedSecretKey(%q) = true, want false", key)
 		}
 	}
-	if got := len(config.AllowedSecretKeys()); got != 14 {
-		t.Errorf("len(AllowedSecretKeys()) = %d, want 14", got)
+	if got := len(config.AllowedSecretKeys()); got != 13 {
+		t.Errorf("len(AllowedSecretKeys()) = %d, want 13", got)
 	}
 }

@@ -64,31 +64,9 @@ func (c *Checker) downloadAndVerify(ctx context.Context, installerAsset, checksu
 	return installerPath, nil
 }
 
-// authorize adds the token (when configured) to a request bound for
-// c.baseURL.
-func (c *Checker) authorize(req *http.Request) {
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-}
-
-// assetSource returns where asset is downloaded from, the only URL prefix
-// that location may live under, and whether the request carries the token.
-// Without a token that is the public browser_download_url under
-// c.downloadURLPrefix; with one it is the asset's API URL under
-// c.baseURL's own asset path, the only download route a private repository
-// serves (issue #265).
-func (c *Checker) assetSource(asset Asset) (rawURL, prefix string, authenticated bool) {
-	if c.token != "" && asset.URL != "" {
-		return asset.URL, fmt.Sprintf("%s/repos/%s/%s/releases/assets/", c.baseURL, c.owner, c.repo), true
-	}
-	return asset.BrowserDownloadURL, c.downloadURLPrefix, false
-}
-
 // checkDownloadURL rejects any asset URL outside prefix (the repository's
-// own release-download or API asset path), so a tampered release JSON
-// cannot point the unattended installer download - or the token - at an
-// arbitrary host.
+// own release-download path), so a tampered release JSON cannot point the
+// unattended installer download at an arbitrary host.
 func checkDownloadURL(raw, prefix string) error {
 	want, err := url.Parse(prefix)
 	if err != nil {
@@ -109,8 +87,7 @@ func checkDownloadURL(raw, prefix string) error {
 // fails once the body exceeds maxBytes (or asset.Size, when GitHub reports
 // one) instead of filling the disk.
 func (c *Checker) downloadTo(ctx context.Context, asset Asset, dest string, maxBytes int64) error {
-	rawURL, prefix, authenticated := c.assetSource(asset)
-	if err := checkDownloadURL(rawURL, prefix); err != nil {
+	if err := checkDownloadURL(asset.BrowserDownloadURL, c.downloadURLPrefix); err != nil {
 		return withKind(ErrorVerification, err)
 	}
 	if asset.Size > maxBytes {
@@ -120,13 +97,9 @@ func (c *Checker) downloadTo(ctx context.Context, asset Asset, dest string, maxB
 		maxBytes = asset.Size
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, asset.BrowserDownloadURL, nil)
 	if err != nil {
 		return err
-	}
-	if authenticated {
-		req.Header.Set("Accept", "application/octet-stream")
-		c.authorize(req)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
