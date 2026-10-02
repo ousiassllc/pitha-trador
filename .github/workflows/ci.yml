@@ -188,7 +188,7 @@ jobs:
       - name: wails build (windows/amd64, NSIS installer)
         working-directory: cmd/desktop
         # config.LoadSecretsFromDB (internal/config/secrets.go, issue #57)
-        # reads JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD from the secrets
+        # reads the required JEV_API_KEY/KABU_API_PASSWORD from the secrets
         # DB table rather than the environment, and never fails startup on
         # an unset value - no placeholder env vars are needed here anymore
         # for Wails' bindings generator (it builds cmd/desktop with the

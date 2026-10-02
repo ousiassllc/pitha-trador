@@ -13,6 +13,11 @@ type Status struct {
 	// DevBuild is true when the last check was skipped because this is a
 	// non-release ("dev") build (internal/version.Version is not semver).
 	DevBuild bool
+	// NoRelease is true when the last check got 404 for the latest release:
+	// none is published yet, or the repository is not accessible without
+	// credentials. It is a successful check (LastError empty, no retry
+	// backoff), not a failure (issue #296).
+	NoRelease bool
 	// Available is true while a release newer than the running version
 	// exists; Version is that release's tag_name.
 	Available bool

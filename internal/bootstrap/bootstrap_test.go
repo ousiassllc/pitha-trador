@@ -152,7 +152,8 @@ func TestDefaultDBPath_ReturnsPithaTradorSubpath(t *testing.T) {
 
 // TestBuildServices_EmptySecretsDoesNotPanic is the direct proof for
 // issue #57's acceptance criterion that an unset JEV_API_KEY/
-// JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL must never fail
+// KABU_API_PASSWORD (the required keys) or optional key (JEV_BASE_URL/
+// JEV_MODEL/SLACK_WEBHOOK_URL etc.) must never fail
 // startup: config.LoadSecretsFromDB returns a zero-value config.Secrets
 // whenever the operator has not yet visited the Settings screen, and
 // BuildServices must construct every internal/service/marketdata.Client

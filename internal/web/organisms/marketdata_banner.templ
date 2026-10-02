@@ -1,0 +1,22 @@
+package organisms
+
+// MarketDataBanner renders the 全ページ共通の市況データ接続エラー通知
+// (issue #295): Header's `#marketdata-banner` fetches it via
+// `GET /system/marketdata-status` (hx-trigger="load, every 30s"), the same
+// self-correcting pattern `#update-banner` uses. guidance is the operator
+// facing cause + remedy of the last failed kabuステーションAPI token
+// issuance (marketdata.TokenStatus.Guidance), or "" while the token is
+// fine, in which case nothing is rendered. issue is the cause's machine
+// name (marketdata.TokenIssue), exposed as `data-issue` for tests/styling.
+templ MarketDataBanner(issue, guidance string) {
+	if guidance != "" {
+		<div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="marketdata-banner" data-issue={ issue }>
+			<p>
+				<span class="font-semibold">市況データを取得できません。</span>
+				{ guidance }
+				自動的に再試行します。
+				<a class="font-semibold underline" href="/settings">設定画面</a>
+			</p>
+		</div>
+	}
+}

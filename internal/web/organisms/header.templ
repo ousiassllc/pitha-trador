@@ -34,8 +34,9 @@ import (
 // system state, so it cannot know secrets-table state at render time
 // either) and immediately calls `GET /system/secrets-status`
 // (internal/web/handler/settings.SettingsHandler.Status), which renders
-// organisms.SecretsBanner listing any still-unset required key
-// (JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD) with a link to
+// organisms.SecretsBanner listing the still-unset optional keys
+// (SLACK_WEBHOOK_URL etc.; the two required keys JEV_API_KEY/
+// KABU_API_PASSWORD are Setup Guard's business) with a link to
 // `/settings`, or nothing once every one is configured.
 //
 // `#update-banner` is the same pattern for issue #76's update
@@ -44,6 +45,13 @@ import (
 // release exists (also re-polled every 60s, and immediately on the
 // `updateStatusChanged` event the manual check response fires), or
 // nothing otherwise - including on cmd/server, which has no updater.
+//
+// `#marketdata-banner` (issue #295) is the same pattern for the kabuステー
+// ションAPI token: `GET /system/marketdata-status`
+// (internal/web/handler/system.MarketDataHandler.Status) renders
+// organisms.MarketDataBanner with the cause and remedy (not running / not
+// logged in / wrong API password, ...) while the last token issuance
+// failed, and nothing otherwise (re-polled every 30s).
 //
 // `#header-version` shows the running build's internal/version.Version on
 // every page and links to Settings' アップデート section (`/settings#update-
@@ -101,6 +109,14 @@ templ Header(state domain.SystemState) {
 			class="order-last w-full empty:hidden"
 			hx-get="/system/update-status"
 			hx-trigger="load, every 60s, updateStatusChanged from:body"
+			hx-target="this"
+			hx-swap="innerHTML"
+		></div>
+		<div
+			id="marketdata-banner"
+			class="order-last w-full empty:hidden"
+			hx-get="/system/marketdata-status"
+			hx-trigger="load, every 30s"
 			hx-target="this"
 			hx-swap="innerHTML"
 		></div>

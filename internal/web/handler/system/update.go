@@ -101,6 +101,7 @@ func (h *UpdateHandler) renderPanel(c *gin.Context, failed bool) {
 	props := organisms.UpdatePanelProps{
 		CurrentVersion: version.Version,
 		DevBuild:       status.DevBuild,
+		NoRelease:      status.NoRelease,
 		Failed:         failed || status.LastError != "",
 		Available:      status.Available,
 		Version:        status.Version,

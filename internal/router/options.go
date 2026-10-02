@@ -33,6 +33,7 @@ type options struct {
 	activitySource    activity.ActivitySource
 	secretsStore      settings.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
 	updateController  system.UpdateController
+	marketDataStatus  system.MarketDataStatusSource
 	errorLogExporter  system.ErrorLogExporter
 	heartbeatRecorder middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
 	allowedHosts      []string                     // nil until WithAllowedHosts: no Host/Origin validation
@@ -148,10 +149,20 @@ func WithUpdateController(controller system.UpdateController) Option {
 	return func(o *options) { o.updateController = controller }
 }
 
+// WithMarketDataStatus enables `GET /system/marketdata-status` (issue
+// #295), the header banner telling the operator why the kabuステーション
+// API token could not be issued. cmd/desktop and cmd/server pass
+// internal/bootstrap's *marketdata.Client; without it the route renders
+// nothing.
+func WithMarketDataStatus(source system.MarketDataStatusSource) Option {
+	return func(o *options) { o.marketDataStatus = source }
+}
+
 // WithErrorLogExporter overrides `GET /api/v1/logs/errors`'s backing
 // system.ErrorLogExporter (FR-ERRLOG-2). cmd/desktop and cmd/server pass
-// internal/bootstrap's *logging.Exporter over the log directory; the empty
-// system.StaticErrorLogExporter default only serves router-level tests.
+// internal/bootstrap's *logging.Exporter over the log directory. Without it
+// the route answers 500 (system.UnconfiguredErrorLogExporter) so a missing
+// wiring is noticed rather than served as an empty log.
 func WithErrorLogExporter(exporter system.ErrorLogExporter) Option {
 	return func(o *options) { o.errorLogExporter = exporter }
 }

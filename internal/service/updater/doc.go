@@ -29,8 +29,13 @@
 // or a detached release signature verified against an embedded public key
 // is not implemented yet.
 //
-// A refused lookup (401/403/404) is ErrorAccess, distinct from ErrorRelease
-// (fetched but unusable content); a rate-limited one is ErrorRateLimit.
+// A 404 on the latest-release lookup (no release published, or repository
+// not accessible) is not a failure: the check succeeds with Status.NoRelease
+// set, is logged at Info and is not retried with backoff (issue #296).
+// A refused lookup (401/403) or asset download (401/403/404) is ErrorAccess, distinct
+// from ErrorRelease
+// (fetched but unusable content); a rate-limited one (429, or 403 with
+// Retry-After) is ErrorRateLimit.
 // ErrorAccess/ErrorVerification/ErrorRelease report Permanent() so the
 // scheduler's backoff does not retry them (issue #259).
 //

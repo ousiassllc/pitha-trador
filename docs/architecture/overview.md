@@ -284,3 +284,5 @@ handler → service → repository → domain
 | 1.33 | 2026-10-01 | §3の`logging/`にエラーログExporter、§4のLogging/Web行にエラーログのエクスポートを追記し、`overview/flows.md`に§10.6を新設 | issue #267 |
 | 1.34 | 2026-10-01 | §5・§6: `JEV_BASE_URL`を任意の上書きにして既定値`https://api.typesafe.ai`を導入し、Setup Guardの必須キーを`JEV_API_KEY`・`KABU_API_PASSWORD`の2つに変更（保存済みの値は既定値より優先、移行処理なし）。Settings画面の入力項目を通常入力と折りたたみの「詳細設定（任意）」に再構成し、Jevモデル名の任意上書き`JEV_MODEL`（既定`jev-latest`）を追加。§4 Setup Guard Middleware行を更新 | issue #271・#272・#274 |
 | 1.35 | 2026-10-02 | §8（`overview/integrations.md`）: 自動アップデートの更新確認用GitHubトークン（`UPDATE_GITHUB_TOKEN`、APIアセット取得、`ErrorAuth`）を削除し、`browser_download_url`の直接取得へ戻した。401/403/404は`ErrorAccess`（再試行なし）、`Retry-After`付き403・429は`ErrorRateLimit`（一時エラー）の分類は維持 | 更新確認用トークン機能の廃止（リポジトリのpublic化） |
+| 1.36 | 2026-10-02 | §8（`overview/integrations.md`）: 最新リリース取得の404（リリース未公開／アクセス不可）を`ErrorAccess`のエラーから`Status.NoRelease`（成功扱い・Infoログのみ・再試行なし）へ変更し、Settings画面に「公開されているリリースが見つかりませんでした」を表示。リリース取得の401/403とアセット取得の401/403/404は`ErrorAccess`のまま | issue #296（リリース未公開期間にERRORログとバックオフ再試行が連打されていた） |
+| 1.37 | 2026-10-02 | §6（`integrations.md`）: kabuステーションAPIトークン発行失敗時の継続起動・バックグラウンド再試行・エラーコード別の原因表示（市況データ接続バナー）を追記 | issue #295 |

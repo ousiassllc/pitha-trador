@@ -146,7 +146,7 @@ type SecretsRepository interface {
 // LoadSecretsFromDB reads Secrets from repo's secrets table instead of
 // the process environment issue #43's original LoadSecrets used
 // (env-var support was removed entirely by issue #57: `.env` no longer
-// carries JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL).
+// carries the secrets-table keys such as JEV_API_KEY/KABU_API_PASSWORD).
 // Unlike LoadSecrets, an unset value is never an error: missing names
 // every key among KeyJevAPIKey/KeyKabuAPIPassword that has
 // no stored value yet, letting the caller (cmd/desktop, cmd/server) log
