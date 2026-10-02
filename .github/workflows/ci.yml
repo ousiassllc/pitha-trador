@@ -21,6 +21,13 @@ concurrency:
 
 env:
   GOLANGCI_LINT_VERSION: v2.14.0
+  # actions/setup-go v6+ exports GOTOOLCHAIN=local whenever go-version(-file)
+  # is given (unless GOTOOLCHAIN is already set), which disables Go's
+  # automatic toolchain download. `go install` of tools that require a newer
+  # Go than go.mod's (e.g. golangci-lint v2.14.0 needs go >= 1.26.0) then
+  # fails with "requires go >= ...; GOTOOLCHAIN=local". Pin auto (the setup-go
+  # v5 behaviour) so those installs switch toolchains again.
+  GOTOOLCHAIN: auto
   LINTERLY_VERSION: v0.3.3
   TEMPL_VERSION: v0.3.1020
 
