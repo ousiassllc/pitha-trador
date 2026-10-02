@@ -21,13 +21,6 @@ concurrency:
 
 env:
   GOLANGCI_LINT_VERSION: v2.14.0
-  # actions/setup-go v6+ exports GOTOOLCHAIN=local whenever go-version(-file)
-  # is given (unless GOTOOLCHAIN is already set), which disables Go's
-  # automatic toolchain download. `go install` of tools that require a newer
-  # Go than go.mod's (e.g. golangci-lint v2.14.0 needs go >= 1.26.0) then
-  # fails with "requires go >= ...; GOTOOLCHAIN=local". Pin auto (the setup-go
-  # v5 behaviour) so those installs switch toolchains again.
-  GOTOOLCHAIN: auto
   LINTERLY_VERSION: v0.3.3
   TEMPL_VERSION: v0.3.1020
 
@@ -61,7 +54,16 @@ jobs:
       - name: Generate templ
         run: templ generate
 
+      # actions/setup-go (v6+) unconditionally exports GOTOOLCHAIN=local via
+      # $GITHUB_ENV, which overrides workflow/job-level `env:` for every later
+      # step; only a step-level `env:` takes precedence over it. golangci-lint
+      # v2.14.0 requires go >= 1.26.0 (newer than go.mod's), so without
+      # GOTOOLCHAIN=auto here `go install` fails with "requires go >= 1.26.0
+      # (running go 1.25.x; GOTOOLCHAIN=local)". `golangci-lint run` itself
+      # needs no override: it drives the go.mod toolchain via `go list`.
       - name: Install golangci-lint
+        env:
+          GOTOOLCHAIN: auto
         run: go install "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}"
 
       - name: golangci-lint run
@@ -69,7 +71,11 @@ jobs:
 
       # Enforces the line-count limits in CI as well; lefthook's
       # pre-commit alone is bypassable via --no-verify / web commits.
+      # linterly v0.3.3 also requires go >= 1.26, so it needs the same
+      # step-level GOTOOLCHAIN=auto as "Install golangci-lint" above.
       - name: Install linterly
+        env:
+          GOTOOLCHAIN: auto
         run: go install "github.com/ousiassllc/linterly/cmd/linterly@${LINTERLY_VERSION}"
 
       - name: linterly check
