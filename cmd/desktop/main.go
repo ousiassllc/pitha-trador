@@ -112,7 +112,7 @@ func main() {
 	}
 	app.services = services
 
-	wsListener, wsBase := listenWebSocket()
+	wsListeners, wsBase := listenWebSocket()
 
 	engine := router.New(
 		router.WithWebSocketBase(wsBase),
@@ -137,8 +137,8 @@ func main() {
 		}),
 	)
 
-	if wsListener != nil {
-		defer serveWebSocket(wsListener, engine)()
+	if len(wsListeners) > 0 {
+		defer serveWebSocket(wsListeners, engine)()
 	}
 
 	if err := wails.Run(&options.App{
