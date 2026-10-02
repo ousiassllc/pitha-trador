@@ -1,0 +1,40 @@
+package organisms
+
+import "github.com/ousiassllc/pitha-trador/internal/web/molecules"
+
+// ConnectionList is the connection list shared by Settings and the
+// first-run Setup screen (issue #302): one molecules.SettingsCard per
+// connection with its 設定済み/未設定 status, plus one molecules.Modal per
+// connection holding that connection's molecules.SecretFieldRow forms - the
+// key, URL and model name together. Every row keeps its own independent
+// `POST`/`DELETE /settings/:key` forms (issue #79), so editing one field
+// never touches another's stored value, and a save/delete refreshes the
+// card's status out-of-band (handler/settings.SettingsHandler.renderRow).
+// The modals open through the `pitha-modal` script, which the hosting page
+// must load.
+templ ConnectionList(connections []molecules.ConnectionProps) {
+	<ul class="flex flex-col gap-3" data-testid="connection-list">
+		for _, connection := range connections {
+			@molecules.SettingsCard(molecules.SettingsCardProps{
+				ID:          connection.ID,
+				ModalID:     connection.ModalID(),
+				Name:        connection.Name,
+				Description: connection.Description,
+				ActionLabel: "設定する",
+				Status:      molecules.ConnectionStatus(connection, false),
+			})
+		}
+	</ul>
+	for _, connection := range connections {
+		@molecules.Modal(connection.ModalID(), connection.Name) {
+			<p class="text-sm text-slate-600">{ connection.Description }</p>
+			<p class="text-sm text-slate-600">項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。保存・削除の反映にはアプリの再起動が必要です。</p>
+			if len(connection.Fields) > 1 {
+				<p class="text-sm text-slate-600" data-testid={ connection.ModalID() + "-defaults-note" }>URL やモデル名などの上書き項目は、空欄（未設定）のとき既定値を使用します。保存済みの上書き値は「削除」で既定値に戻せます。</p>
+			}
+			for _, field := range connection.Fields {
+				@molecules.SecretFieldRow(field)
+			}
+		}
+	}
+}

@@ -9,8 +9,8 @@ package organisms
 // `days` (1/7/30/90, default 7) and `level` (error = ERROR only, default;
 // warn = WARN and ERROR) query parameters.
 templ ErrorLogPanel() {
-	<section id="error-log-panel" class="mt-4 flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="error-log-panel">
-		<h2 class="text-lg font-semibold text-slate-900">エラーログ</h2>
+	<section id="error-log-panel" class="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="error-log-panel">
+		<h3 class="sr-only">エラーログ</h3>
 		<p>
 			調査や共有のために、ログ（NDJSON 形式）をダウンロードできます。API キー・パスワード・トークン・Slack Webhook URL などの秘密情報は <code>[REDACTED]</code> に置き換えられます。出力は最大 10 MiB で、超えた場合は古い記録から切り捨てられます。
 		</p>

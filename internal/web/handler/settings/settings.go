@@ -50,10 +50,6 @@ func (StaticSecretsStore) Get(context.Context, string) (string, bool, error) { r
 func (StaticSecretsStore) Set(context.Context, string, string) error         { return nil }
 func (StaticSecretsStore) Delete(context.Context, string) error              { return nil }
 
-// setupOptionalKeys are the optional fields the Setup screen (`GET
-// /setup`, issue #80) offers next to the two required ones.
-var setupOptionalKeys = []string{config.KeySlackWebhookURL}
-
 // SettingsHandler implements `GET /settings`, `GET /setup`, `POST`/`DELETE
 // /settings/:key` and `GET /system/secrets-status` (issue #57 スコープ
 // items 6-7, per-key save/delete from issue #79, Setup screen from issue
@@ -67,45 +63,38 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 	return &SettingsHandler{store: store}
 }
 
-// Page implements `GET /settings`: one molecules.SecretFieldRow per
-// field - settingsFields first, advancedSettingsFields in the collapsed
-// 詳細設定 section (issue #272) - each showing only whether a value is
-// currently stored, never the value itself (issue #57's decision). A per-key SecretsStore.Get error
-// (e.g. an unreadable/corrupted stored value) no longer 500s the whole
-// screen (issue #70: "設定画面が開かず、エラーになる" - a single bad row
-// must not permanently lock the operator out of the one screen that could
-// fix it) - h.row degrades that key to "unset" instead, so the screen
-// still renders and accepts a fresh value.
+// Page implements `GET /settings`: one molecules.ConnectionProps per
+// connection in settingsConnections (issue #302), each holding all of that
+// service's keys as SecretFieldRow forms for its modal and showing only
+// whether a value is stored, never the value (issue #57). A per-key
+// SecretsStore.Get error no longer 500s the screen (issue #70): h.row
+// degrades that key to "unset" so it still renders and accepts a value.
 func (h *SettingsHandler) Page(c *gin.Context) {
 	ctx := c.Request.Context()
-	props := pages.SettingsProps{
-		Fields:         h.rows(ctx, settingsFields),
-		AdvancedFields: h.rows(ctx, advancedSettingsFields),
-	}
+	props := pages.SettingsProps{Connections: h.connections(ctx, settingsConnections)}
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	_ = pages.SettingsPage(props).Render(ctx, c.Writer)
 }
 
-// SetupPage implements `GET /setup` (issue #80, FR-SETUP-2): the two
-// required keys plus setupOptionalKeys as molecules.SecretFieldRow forms
-// that post to the very same `POST`/`DELETE /settings/:key` routes
-// Settings uses - Setup has no save/delete implementation of its own.
-// Complete reports whether every required key is stored, so the page can
-// offer the way on to the normal screens (Setup Guard, middleware.
-// SetupGuard, stops redirecting as soon as they are). `/setup` itself
-// stays reachable after setup for re-entering values.
+// SetupPage implements `GET /setup` (issue #80, FR-SETUP-2): the
+// connections in setupConnectionIDs (Jev and
+// kabuステーション, holding the required keys, plus the optional Slack) in
+// the same organisms.ConnectionList as Settings (issue #302), posting to
+// the same `POST`/`DELETE /settings/:key` routes. Complete reports whether
+// every required key is stored; `/setup` stays reachable afterwards.
 func (h *SettingsHandler) SetupPage(c *gin.Context) {
 	ctx := c.Request.Context()
-	keys := append(config.RequiredSecretKeys(), setupOptionalKeys...)
-	fields := make([]molecules.SecretFieldRowProps, len(keys))
-	for i, key := range keys {
-		fields[i] = h.row(ctx, key, settingsLabel(key), "")
+	var offered []connection
+	for _, id := range setupConnectionIDs {
+		if conn, ok := connectionByID(id); ok {
+			offered = append(offered, conn)
+		}
 	}
 	complete := len(h.unsetKeys(ctx, config.RequiredSecretKeys())) == 0
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
-	_ = pages.SetupPage(pages.SetupProps{Fields: fields, Complete: complete}).Render(ctx, c.Writer)
+	_ = pages.SetupPage(pages.SetupProps{Connections: h.connections(ctx, offered), Complete: complete}).Render(ctx, c.Writer)
 }
 
 // Save implements `POST /settings/:key`: it stores the form's `value`
@@ -183,10 +172,12 @@ func (h *SettingsHandler) Status(c *gin.Context) {
 }
 
 // renderRow answers a successful Save/Delete. An HTMX request gets the
-// refreshed SecretFieldRow fragment; the row form's plain `method="post"`
-// fallback (JS disabled) would otherwise render a bare fragment as the
-// whole page, so it is redirected back to the screen it came from instead
-// (the notice is only shown on the HTMX path).
+// refreshed SecretFieldRow fragment plus an out-of-band copy of the owning
+// connection's status badge, so the list behind the open modal shows the
+// new 設定済み/未設定 state (issue #302). The row form's plain
+// `method="post"` fallback (JS disabled) would otherwise render a bare
+// fragment as the whole page, so it is redirected back to the screen it
+// came from instead (the notice is only shown on the HTMX path).
 func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
 	if c.GetHeader("HX-Request") != "true" {
 		c.Redirect(http.StatusSeeOther, settingsReturnPath(c))
@@ -196,14 +187,31 @@ func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Status(http.StatusOK)
 	_ = molecules.SecretFieldRow(h.row(ctx, key, settingsLabel(key), notice)).Render(ctx, c.Writer)
+	if conn, ok := connectionByKey(key); ok {
+		_ = molecules.ConnectionStatus(h.connectionProps(ctx, conn), true).Render(ctx, c.Writer)
+	}
 }
 
-func (h *SettingsHandler) rows(ctx context.Context, fields []settingsField) []molecules.SecretFieldRowProps {
-	rows := make([]molecules.SecretFieldRowProps, len(fields))
-	for i, field := range fields {
-		rows[i] = h.row(ctx, field.key, field.label, "")
+// connections builds the props of every connection in conns, in order.
+func (h *SettingsHandler) connections(ctx context.Context, conns []connection) []molecules.ConnectionProps {
+	props := make([]molecules.ConnectionProps, len(conns))
+	for i, conn := range conns {
+		props[i] = h.connectionProps(ctx, conn)
 	}
-	return rows
+	return props
+}
+
+// connectionProps builds one connection's props; it is Required when it
+// holds a key of config.RequiredSecretKeys.
+func (h *SettingsHandler) connectionProps(ctx context.Context, conn connection) molecules.ConnectionProps {
+	props := molecules.ConnectionProps{ID: conn.id, Name: conn.name, Description: conn.description}
+	for _, field := range conn.fields {
+		props.Fields = append(props.Fields, h.row(ctx, field.key, field.label, ""))
+		if slices.Contains(config.RequiredSecretKeys(), field.key) {
+			props.Required = true
+		}
+	}
+	return props
 }
 
 func (h *SettingsHandler) row(ctx context.Context, key, label, notice string) molecules.SecretFieldRowProps {
@@ -231,12 +239,34 @@ var settingsHints = map[string]string{
 // settingsLabel returns key's display label; key must be in
 // config.AllowedSecretKeys.
 func settingsLabel(key string) string {
-	for _, field := range slices.Concat(settingsFields, advancedSettingsFields) {
-		if field.key == key {
-			return field.label
+	if conn, ok := connectionByKey(key); ok {
+		for _, field := range conn.fields {
+			if field.key == key {
+				return field.label
+			}
 		}
 	}
 	return key
+}
+
+// connectionByKey returns the connection whose modal holds key.
+func connectionByKey(key string) (connection, bool) {
+	for _, conn := range settingsConnections {
+		if slices.ContainsFunc(conn.fields, func(f settingsField) bool { return f.key == key }) {
+			return conn, true
+		}
+	}
+	return connection{}, false
+}
+
+// connectionByID returns the connection with the given slug.
+func connectionByID(id string) (connection, bool) {
+	for _, conn := range settingsConnections {
+		if conn.id == id {
+			return conn, true
+		}
+	}
+	return connection{}, false
 }
 
 // unsetKeys returns the subset of keys with no stored value, in order. A

@@ -13,7 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 )
 
-func TestSettingsHandler_SetupPage_ShowsRequiredFieldsAndOptionalSlack(t *testing.T) {
+func TestSettingsHandler_SetupPage_ShowsRequiredConnectionsAndOptionalSlack(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := newFakeSecretsStore()
 	store.values[config.KeyJevAPIKey] = "super-secret-value"
@@ -29,6 +29,17 @@ func TestSettingsHandler_SetupPage_ShowsRequiredFieldsAndOptionalSlack(t *testin
 		t.Fatalf("status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
+	// issue #302: Setup is the Settings connection list restricted to Jev,
+	// kabuステーション and Slack - each as a card opening a modal with the
+	// connection's fields, the required ones marked 必須 while unset.
+	for _, id := range []string{"jev", "kabu", "slack"} {
+		if !strings.Contains(body, `data-testid="settings-card-`+id+`"`) || !strings.Contains(body, `<dialog id="modal-`+id+`"`) {
+			t.Errorf("Setup lacks the %s card/modal", id)
+		}
+	}
+	if !strings.Contains(body, `data-testid="connection-status-kabu"`) || !strings.Contains(body, ">必須<") {
+		t.Errorf("Setup does not flag the unset required kabu connection as 必須; body=%s", body)
+	}
 	for _, key := range append(config.RequiredSecretKeys(), config.KeySlackWebhookURL) {
 		if !strings.Contains(body, `data-testid="secret-field-row-`+key+`"`) {
 			t.Errorf("Setup lacks a field row for %s", key)
@@ -42,7 +53,7 @@ func TestSettingsHandler_SetupPage_ShowsRequiredFieldsAndOptionalSlack(t *testin
 		}
 	}
 	if strings.Contains(body, `data-testid="secret-field-row-`+config.KeyLunaAPIKey+`"`) {
-		t.Errorf("Setup offers optional %s; only SLACK_WEBHOOK_URL belongs on it", config.KeyLunaAPIKey)
+		t.Errorf("Setup offers optional %s; Luna/Sol/Opus/News Feed are configured later on Settings", config.KeyLunaAPIKey)
 	}
 	if strings.Contains(body, "super-secret-value") {
 		t.Fatalf("Setup rendered the stored plaintext value; body=%s", body)

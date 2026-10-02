@@ -6,64 +6,68 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
-// SettingsProps is SettingsPage's input: one SecretFieldRow per managed
-// key (internal/web/handler/settings.SettingsHandler.Page). Fields are the
-// always-visible credentials; AdvancedFields go into the collapsed
-// 「詳細設定（任意）」 section (issue #272).
+// SettingsProps is SettingsPage's input: one molecules.ConnectionProps per
+// external service (internal/web/handler/settings.SettingsHandler.Page),
+// each carrying all of that service's keys.
 type SettingsProps struct {
-	Fields         []molecules.SecretFieldRowProps
-	AdvancedFields []molecules.SecretFieldRowProps
+	Connections []molecules.ConnectionProps
 }
 
 // SettingsPage is the Settings screen (issue #57 スコープ item 6, issue
-// #79): JEV_API_KEY/KABU_API_PASSWORD/SLACK_WEBHOOK_URL plus the optional
-// LUNA_*/NEWS_FEED_*/SOL_*/OPUS_* AI/News API keys up front, and the
-// URL/model overrides (JEV_BASE_URL, JEV_MODEL, *_BASE_URL, ...) in a
-// collapsed 詳細設定（任意） section (issue #272), each as its own molecules.SecretFieldRow with an independent save
-// (`POST /settings/:key`) and delete (`DELETE /settings/:key`) form
-// (internal/web/handler/settings.SettingsHandler.Save/Delete) - a blank or
-// untouched field can never clear another field's stored value.
+// #79, reorganised by issue #302): a list of connections - Jev,
+// kabuステーション, Slack, Luna, ニュースフィード, Sol, Opus - each showing
+// whether it is configured and opening a modal with all of that
+// connection's keys, URL and model name (organisms.ConnectionList), plus a
+// システム section whose アップデート and エラーログ entries open the
+// UpdatePanel and ErrorLogPanel in modals of their own. Every field keeps
+// its own independent save (`POST /settings/:key`) and delete (`DELETE
+// /settings/:key`) form (internal/web/handler/settings.SettingsHandler.
+// Save/Delete) - a blank or untouched field can never clear another
+// field's stored value.
 templ SettingsPage(props SettingsProps) {
 	@layout.Shell("Settings") {
 		<h1 class="text-2xl font-bold text-slate-900">Settings</h1>
-		// Header's version link lands here (`/settings#update-panel`), so it
-		// sits right under the title, inside the first screen, instead of
-		// below the secret-field rows where the anchor could not scroll it
-		// into view; `:target` rings it once arrived. Filled in by `GET
-		// /system/update-panel` (organisms.UpdatePanel) on load and swapped
-		// in place by its "今すぐアップデートを確認" button; `empty:hidden`
-		// keeps the not-yet-loaded wrapper from showing a bare ring.
-		<div id="update-panel" class="mt-4 scroll-mt-4 rounded-md target:ring-2 target:ring-blue-500 empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
-		<div class="mt-4 flex flex-col gap-4" data-testid="settings-form">
+		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form">
 			<p class="text-sm text-slate-600">
-				項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。保存・削除の反映にはアプリの再起動が必要です。
+				接続先を選ぶと、その接続先のキー・URL・モデル名を編集できます。項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。保存・削除の反映にはアプリの再起動が必要です。
 			</p>
-			for _, field := range props.Fields {
-				@molecules.SecretFieldRow(field)
-			}
-			<details class="rounded-md border border-slate-200 px-4 py-3" data-testid="settings-advanced" open?={ anyConfigured(props.AdvancedFields) }>
-				<summary class="cursor-pointer text-sm font-semibold text-slate-800">詳細設定（任意）</summary>
-				<div class="mt-3 flex flex-col gap-4">
-					<p class="text-sm text-slate-600" data-testid="settings-advanced-note">
-						空欄（未設定）の項目は既定値を使用します。保存済みの上書き値は「削除」で既定値に戻せます。
-					</p>
-					for _, field := range props.AdvancedFields {
-						@molecules.SecretFieldRow(field)
-					}
-				</div>
-			</details>
+			<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
+				<h2 id="settings-connections-heading" class="text-lg font-semibold text-slate-900">接続先</h2>
+				@organisms.ConnectionList(props.Connections)
+			</section>
+			<section class="flex flex-col gap-3" aria-labelledby="settings-system-heading">
+				<h2 id="settings-system-heading" class="text-lg font-semibold text-slate-900">システム</h2>
+				<ul class="flex flex-col gap-3" data-testid="system-list">
+					@molecules.SettingsCard(molecules.SettingsCardProps{
+						ID:          "update",
+						ModalID:     "modal-update",
+						Name:        "アップデート",
+						Description: "現在のバージョンと最終確認結果を確認し、新しいバージョンを今すぐ確認できます。",
+						ActionLabel: "開く",
+					})
+					@molecules.SettingsCard(molecules.SettingsCardProps{
+						ID:          "error-log",
+						ModalID:     "modal-error-log",
+						Name:        "エラーログ",
+						Description: "調査や共有のために、エラーログをダウンロードできます。",
+						ActionLabel: "開く",
+					})
+				</ul>
+			</section>
 		</div>
-		@organisms.ErrorLogPanel()
-	}
-}
-
-// anyConfigured reports whether any row holds a stored value; the advanced
-// section then renders open so existing overrides are visible.
-func anyConfigured(rows []molecules.SecretFieldRowProps) bool {
-	for _, row := range rows {
-		if row.Configured {
-			return true
+		@molecules.Modal("modal-update", "アップデート") {
+			// Header's version link lands here (`/settings#update-panel`):
+			// pitha-modal opens the dialog containing the hash target, and
+			// `:target` rings the panel once arrived. Filled in by `GET
+			// /system/update-panel` (organisms.UpdatePanel) on load and
+			// swapped in place by its "今すぐアップデートを確認" button;
+			// `empty:hidden` keeps the not-yet-loaded wrapper from showing a
+			// bare ring.
+			<div id="update-panel" class="scroll-mt-4 rounded-md target:ring-2 target:ring-blue-500 empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 		}
+		@molecules.Modal("modal-error-log", "エラーログ") {
+			@organisms.ErrorLogPanel()
+		}
+		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}
-	return false
 }
