@@ -15,6 +15,9 @@ type UpdatePanelProps struct {
 	DevBuild    bool
 	Failed      bool
 	ErrorReason string
+	// NoRelease: the last check found no release (none published, or the
+	// repository is not accessible); not a failure (issue #296).
+	NoRelease bool
 	// Available/Version: a newer release exists (UpdateBannerProps).
 	// Blocked/BlockedReason: it is being held back by the safety gate, and
 	// which condition holds it. Ready: its installer is verified and the
@@ -48,6 +51,8 @@ templ UpdatePanel(props UpdatePanelProps) {
 						新バージョン { props.Version } が利用可能です。
 					case props.Failed:
 						アップデートの確認に失敗しました。
+					case props.NoRelease:
+						公開されているリリースが見つかりませんでした（リリースが未公開か、リポジトリにアクセスできません）。
 					case props.DevBuild:
 						開発ビルドのため、アップデートの確認は行われません。
 					case props.CheckedAt != "":
