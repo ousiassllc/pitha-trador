@@ -27,14 +27,18 @@ func isSensitiveKey(key string) bool {
 // String-value patterns (FR-ERRLOG-3 (b)); url.Error puts the whole request
 // URL into the logged error string.
 var (
-	slackWebhookRe = regexp.MustCompile(`https://hooks\.slack\.com/services/[A-Za-z0-9/_\-]+`)
+	slackWebhookRe = regexp.MustCompile(`https?://hooks\.slack\.com/services/[A-Za-z0-9/_\-]+`)
 	bearerRe       = regexp.MustCompile(`(?i)(\bBearer\s+)[A-Za-z0-9\-._~+/]+=*`)
-	queryRe        = regexp.MustCompile(`(?i)((?:token|api[_-]?key|password)=)[^&\s"'#]+`)
+	// basicAuthRe covers "Authorization: Basic <base64>" (and the other
+	// non-Bearer schemes); the scheme stays, like Bearer's.
+	basicAuthRe = regexp.MustCompile(`(?i)(\bauthorization\s*[:=]\s*(?:basic|digest|negotiate)\s+)[^\s&"'#,;]+`)
+	queryRe     = regexp.MustCompile(`(?i)((?:token|api[_-]?key|password|passwd|secret|authorization)=)[^&\s"'#]+`)
 )
 
 func maskString(s string) string {
 	s = slackWebhookRe.ReplaceAllLiteralString(s, redacted)
 	s = bearerRe.ReplaceAllString(s, "${1}"+redacted)
+	s = basicAuthRe.ReplaceAllString(s, "${1}"+redacted)
 	return queryRe.ReplaceAllString(s, "${1}"+redacted)
 }
 
