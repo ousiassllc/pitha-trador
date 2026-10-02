@@ -168,6 +168,28 @@ func TestUpdateHandler_Panel_DevBuildAndNeverChecked(t *testing.T) {
 	}
 }
 
+// Issue #296: "no release" is reported as its own outcome, not as a failed
+// check, and says why it may happen.
+func TestUpdateHandler_Panel_NoReleaseIsNotAFailure(t *testing.T) {
+	status := updater.Status{CheckedAt: time.Now(), NoRelease: true}
+	rec := serve(newUpdateEngine(&fakeUpdateController{status: status}), http.MethodGet, "/system/update-panel")
+	body := rec.Body.String()
+	if !strings.Contains(body, "公開されているリリースが見つかりませんでした") || !strings.Contains(body, "アクセスできません") {
+		t.Errorf("panel missing the no-release notice; body=%s", body)
+	}
+	if strings.Contains(body, "確認に失敗") || strings.Contains(body, "update-check-error") || strings.Contains(body, "最新バージョンです") {
+		t.Errorf("panel reports a failure or up-to-date for no release; body=%s", body)
+	}
+
+	// A manual check that ends in NoRelease returns nil, so the POST path
+	// renders the same notice.
+	controller := &fakeUpdateController{afterCheck: status}
+	rec = serve(newUpdateEngine(controller), http.MethodPost, "/system/update-check")
+	if !strings.Contains(rec.Body.String(), "公開されているリリースが見つかりませんでした") || strings.Contains(rec.Body.String(), "update-check-error") {
+		t.Errorf("manual check panel wrong; body=%s", rec.Body.String())
+	}
+}
+
 // A newer release held by the safety gate must show that it is held and
 // which condition holds it (issue #241).
 func TestUpdateHandler_Panel_BlockedNamesTheGateCondition(t *testing.T) {

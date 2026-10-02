@@ -118,7 +118,6 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 		{"403 with Retry-After", apiStatus(http.StatusForbidden, http.Header{"Retry-After": {"60"}}), updater.ErrorRateLimit},
 		{"plain 403", apiStatus(http.StatusForbidden, nil), updater.ErrorAccess},
 		{"401 unauthorized", apiStatus(http.StatusUnauthorized, nil), updater.ErrorAccess},
-		{"404 private repo or unpublished", apiStatus(http.StatusNotFound, nil), updater.ErrorAccess},
 		{"API 500", apiStatus(http.StatusInternalServerError, nil), updater.ErrorNetwork},
 		{"200 with undecodable body", apiStatus(http.StatusOK, nil), updater.ErrorRelease},
 		{"non-semver tag", newGitHubMock(t, "latest", ""), updater.ErrorRelease},
@@ -160,5 +159,37 @@ func TestChecker_Status_SuccessClearsErrorKind(t *testing.T) {
 	}
 	if got := checker.Status(); got.ErrorKind != "" || got.LastError != "" {
 		t.Fatalf("Status = %+v, want no error after a successful check", got)
+	}
+}
+
+// Issue #296: a 404 on the latest-release lookup (nothing published yet, or
+// the repository is not visible) is not a failure - no error for the
+// scheduler to log at ERROR and retry with backoff - but Status.NoRelease for
+// the Settings panel. A later published release clears it.
+func TestChecker_Status_NoReleaseIsNotAnError(t *testing.T) {
+	setVersion(t, "v0.1.0")
+	notFound := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(notFound.Close)
+	checker := newChecker(notFound, allowGate())
+
+	result, err := checker.CheckForUpdate(context.Background())
+	if err != nil {
+		t.Fatalf("CheckForUpdate err = %v, want nil for a 404 release lookup", err)
+	}
+	if result.Ready {
+		t.Fatal("result.Ready = true, want false")
+	}
+	got := checker.Status()
+	if !got.NoRelease || got.CheckedAt.IsZero() || got.LastError != "" || got.ErrorKind != "" || got.Available {
+		t.Fatalf("Status = %+v, want NoRelease with CheckedAt set and no error", got)
+	}
+
+	published := newGitHubMock(t, "v0.1.0", "")
+	checker = newChecker(published, allowGate())
+	if _, err := checker.CheckForUpdate(context.Background()); err != nil {
+		t.Fatalf("CheckForUpdate: %v", err)
+	}
+	if checker.Status().NoRelease {
+		t.Fatal("NoRelease still set after a release became available")
 	}
 }

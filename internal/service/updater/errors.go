@@ -19,8 +19,8 @@ const (
 	// download for rate limiting.
 	ErrorRateLimit ErrorKind = "rate_limit"
 	// ErrorAccess: GitHub refused the release lookup or an asset download -
-	// 401/403 or 404 (no release is published, the release is not
-	// accessible, or its asset was removed). Issue #265:
+	// 401/403, or 404 on an asset (removed). A 404 on the release lookup
+	// itself is not an error but Status.NoRelease (issue #296). Issue #265:
 	// this used to be reported as ErrorRelease, indistinguishable from
 	// invalid release content.
 	ErrorAccess ErrorKind = "access"

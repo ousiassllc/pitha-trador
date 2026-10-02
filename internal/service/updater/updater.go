@@ -3,6 +3,7 @@ package updater
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -180,6 +181,15 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 	}
 
 	release, err := c.latestRelease(ctx)
+	if errors.Is(err, errNoRelease) {
+		// Not a failure: nothing is published yet (or the repository is not
+		// visible), so there is nothing to update to. Surfacing it as an
+		// error would log at ERROR and retry with backoff every tick
+		// (issue #296); Status.NoRelease lets the Settings panel say so.
+		slog.Info("updater: no release found (none published, or repository not accessible)", "owner", c.owner, "repo", c.repo)
+		c.setStatus(Status{CheckedAt: time.Now(), NoRelease: true})
+		return Result{}, nil
+	}
 	if err != nil {
 		return Result{}, fmt.Errorf("updater: fetch latest release: %w", err)
 	}
@@ -219,7 +229,12 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 	return Result{Ready: true, Version: release.TagName, InstallerPath: installerPath}, nil
 }
 
-// latestRelease calls `GET /repos/{owner}/{repo}/releases/latest`.
+// errNoRelease is latestRelease's result when GitHub reports 404 for the
+// latest release.
+var errNoRelease = errors.New("no release found")
+
+// latestRelease calls `GET /repos/{owner}/{repo}/releases/latest`; it
+// returns errNoRelease when GitHub answers 404.
 func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.metadataTimeout)
 	defer cancel()
@@ -237,6 +252,13 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// GitHub answers 404 when the repository has no published release, and
+	// also for a repository the caller cannot see; both mean "no release to
+	// install" rather than a broken lookup. (An asset download's 404 is still
+	// a refusal: its release exists.)
+	if resp.StatusCode == http.StatusNotFound {
+		return Release{}, errNoRelease
+	}
 	if err := statusError(resp, "release lookup"); err != nil {
 		return Release{}, err
 	}
