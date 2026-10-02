@@ -65,8 +65,9 @@ type Client struct {
 	boardFailures  domain.FailureStreak
 	brokerFailures domain.FailureStreak
 
-	mu    sync.RWMutex
-	token string
+	mu          sync.RWMutex
+	token       string
+	tokenStatus TokenStatus
 }
 
 // NewClient returns a Client configured by cfg. The returned Client holds
@@ -117,6 +118,18 @@ type tokenResponse struct {
 // token in memory only (never persisted to disk, overview.md §5). It
 // returns the newly issued token.
 func (c *Client) IssueToken(ctx context.Context) (string, error) {
+	token, err := c.issueToken(ctx)
+	status := classifyTokenError(err)
+	c.mu.Lock()
+	c.tokenStatus = status
+	if err == nil {
+		c.token = token
+	}
+	c.mu.Unlock()
+	return token, err
+}
+
+func (c *Client) issueToken(ctx context.Context) (string, error) {
 	var resp tokenResponse
 	if err := c.do(ctx, http.MethodPost, "/token", "", tokenRequest{APIPassword: c.apiPassword}, &resp); err != nil {
 		return "", err
@@ -124,43 +137,77 @@ func (c *Client) IssueToken(ctx context.Context) (string, error) {
 	if resp.ResultCode != 0 {
 		return "", &APIError{StatusCode: http.StatusOK, Code: resp.ResultCode}
 	}
-
-	c.mu.Lock()
-	c.token = resp.Token
-	c.mu.Unlock()
 	return resp.Token, nil
 }
 
+// TokenStatus reports the outcome of the most recent token issuance:
+// which cause (kabuステーション未起動 / 未ログイン / APIパスワード不正 ...)
+// a failure had, so the UI can say what to fix (issue #295).
+func (c *Client) TokenStatus() TokenStatus {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.tokenStatus
+}
+
+// tokenRetryInitial is the first wait before retrying a failed token
+// issuance while no token is held (Start); it doubles per failure up to
+// the reissue interval.
+const tokenRetryInitial = 30 * time.Second
+
 // Start issues an initial token synchronously, then reissues it every
 // interval in a background goroutine until ctx is done (overview.md §5
-// "有効期限があるため...定期的に再発行"). If a reissue fails, Start keeps
-// the previous token in memory and logs the error rather than clearing
-// it, since the previous token remains usable until kabuステーション
+// "有効期限があるため...定期的に再発行"). If the initial issuance fails
+// (kabuステーション not running or logged in yet, issue #295), Start
+// returns that error but still launches the goroutine, which retries with
+// a doubling delay (tokenRetryInitial, capped at interval) until a token is
+// obtained, so starting kabuステーション after this app recovers without a
+// restart. If a reissue fails while a token is held, Start keeps the
+// previous token in memory and logs the error rather than clearing it,
+// since the previous token remains usable until kabuステーション
 // invalidates it.
 func (c *Client) Start(ctx context.Context, interval time.Duration) error {
-	if _, err := c.IssueToken(ctx); err != nil {
-		return fmt.Errorf("marketdata: initial token issuance: %w", err)
-	}
+	_, initialErr := c.IssueToken(ctx)
 
 	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+		retry := min(tokenRetryInitial, interval)
+		wait := interval
+		if initialErr != nil {
+			wait = retry
+		}
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-timer.C:
 				// Per-cycle guard: a panic is logged and the loop keeps reissuing.
 				err := safego.Try("marketdata token reissue", func() error {
 					_, err := c.IssueToken(ctx)
 					return err
 				})
-				if err != nil {
-					slog.Error("marketdata: token reissue failed, keeping previous token", "error", err)
+				switch _, held := c.Token(); {
+				case err == nil:
+					retry = min(tokenRetryInitial, interval)
+					wait = interval
+				case held:
+					status := c.TokenStatus()
+					slog.Error("marketdata: token reissue failed, keeping previous token", "issue", status.Issue, "guidance", status.Guidance(), "error", err)
+					wait = interval
+				default:
+					status := c.TokenStatus()
+					slog.Error("marketdata: token issuance failed, will retry", "issue", status.Issue, "guidance", status.Guidance(), "retry_in", retry.String(), "error", err)
+					wait = retry
+					retry = min(retry*2, interval)
 				}
+				timer.Reset(wait)
 			}
 		}
 	}()
+
+	if initialErr != nil {
+		return fmt.Errorf("marketdata: initial token issuance: %w", initialErr)
+	}
 	return nil
 }
 

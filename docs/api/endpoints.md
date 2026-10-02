@@ -53,6 +53,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | POST | `/settings/:key` | 単一キーの保存（フォーム項目`value`）。他キーには一切影響しない。`:key`が許可キー一覧（`internal/config`のallow-list: JEV_*/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_*/NEWS_FEED_*/SOL_*/OPUS_*）に無い場合、または`value`が前後空白トリム後に空の場合は400（空入力で保存済みの値が消えることはない）。`value`は保存前に前後空白をトリムし、キー別に検証する（URL系6キー: `http`/`https`かつホスト非空、その他: 制御文字・改行を含まない）。違反は400で保存せず、Setup Guardも解除されない。反映はアプリ再起動後（issue #79/#235） | 更新後の`SecretFieldRow`フラグメント |
 | DELETE | `/settings/:key` | 単一キーの削除。他キーには一切影響しない。`:key`が許可キー一覧に無い場合は400（issue #79） | 更新後の`SecretFieldRow`フラグメント |
 | GET | `/system/secrets-status` | 任意キー（SLACK_WEBHOOK_URL等）の未設定を知らせる全ページ共通バナー（`Header`の`#config-banner`が`load`で取得）のフラグメント。必須3キーはSetup Guardが`/setup`へ誘導するため対象外。全て設定済みなら空 | `SecretsBanner` |
+| GET | `/system/marketdata-status` | 市況データ接続エラーを知らせる全ページ共通バナー（`Header`の`#marketdata-banner`が`load`・30秒周期で取得）のフラグメント。kabuステーションAPIのトークン発行が失敗している間だけ、原因（未起動・API未有効 / 未ログイン `4001007`・`4001017` / API利用不可 `4001008` / APIパスワード不正 `4001013`）と対処を表示。トークン取得済みなら空 | `MarketDataBanner` |
 | POST | `/positions/:id/close` | 手動決済（成行Paper Exit） | ポジション行フラグメント |
 
 ### システム状態遷移（`POST /api/v1/system/*`）
@@ -120,3 +121,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.20 | 2026-10-01 | §5に`GET /api/v1/logs/errors`（エラーログのダウンロード）を追加（`api/endpoints/huma-api.md`）。§3の`/settings`にエラーログ節を追記 | issue #267 |
 | 1.21 | 2026-10-01 | §6 WebSocketのデータ取得失敗時は即座に閉じず再試行（連続失敗で終了）、デスクトップ版は`ws-base`の別リスナーでWebSocketを提供すると明記 | issue #266 |
 | 1.22 | 2026-10-02 | `POST /settings/:key`の許可キーから`UPDATE_GITHUB_TOKEN`を削除（リポジトリのpublic化に伴い更新確認用トークン機能を廃止） | 更新確認用トークン機能の廃止 |
+| 1.23 | 2026-10-02 | §4に`GET /system/marketdata-status`を追加 | issue #295 |

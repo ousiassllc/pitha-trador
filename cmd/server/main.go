@@ -105,6 +105,7 @@ func main() {
 		router.WithBacktestRunner(services.Backtest),
 		router.WithActivitySource(services.Activity),
 		router.WithSecretsStore(secretsRepo),
+		router.WithMarketDataStatus(services.MarketData),
 		router.WithErrorLogExporter(services.ErrorLogs),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
 			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,

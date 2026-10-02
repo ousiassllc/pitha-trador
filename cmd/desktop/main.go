@@ -128,6 +128,7 @@ func main() {
 		router.WithBacktestRunner(services.Backtest),
 		router.WithActivitySource(services.Activity),
 		router.WithSecretsStore(secretsRepo),
+		router.WithMarketDataStatus(services.MarketData),
 		router.WithUpdateController(services.Updater),
 		router.WithErrorLogExporter(services.ErrorLogs),
 		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
