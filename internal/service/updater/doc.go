@@ -29,8 +29,10 @@
 // or a detached release signature verified against an embedded public key
 // is not implemented yet.
 //
-// A refused lookup (401/403/404) is ErrorAccess, distinct from ErrorRelease
-// (fetched but unusable content); a rate-limited one is ErrorRateLimit.
+// A refused lookup or asset download (401/403/404) is ErrorAccess, distinct
+// from ErrorRelease
+// (fetched but unusable content); a rate-limited one (429, or 403 with
+// Retry-After) is ErrorRateLimit.
 // ErrorAccess/ErrorVerification/ErrorRelease report Permanent() so the
 // scheduler's backoff does not retry them (issue #259).
 //

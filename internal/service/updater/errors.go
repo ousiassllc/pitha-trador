@@ -15,10 +15,12 @@ const (
 	// reached, timed out, the transfer broke off, or GitHub answered with
 	// a server-side error status.
 	ErrorNetwork ErrorKind = "network"
-	// ErrorRateLimit: GitHub rejected the release lookup for rate limiting.
+	// ErrorRateLimit: GitHub rejected the release lookup or an asset
+	// download for rate limiting.
 	ErrorRateLimit ErrorKind = "rate_limit"
-	// ErrorAccess: GitHub refused the release lookup - 401/403 or 404 (no
-	// release is published, or the release is not accessible). Issue #265:
+	// ErrorAccess: GitHub refused the release lookup or an asset download -
+	// 401/403 or 404 (no release is published, the release is not
+	// accessible, or its asset was removed). Issue #265:
 	// this used to be reported as ErrorRelease, indistinguishable from
 	// invalid release content.
 	ErrorAccess ErrorKind = "access"

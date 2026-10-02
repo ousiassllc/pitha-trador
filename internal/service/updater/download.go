@@ -106,8 +106,8 @@ func (c *Checker) downloadTo(ctx context.Context, asset Asset, dest string, maxB
 		return withKind(ErrorNetwork, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return kindErrorf(ErrorNetwork, "unexpected status %d", resp.StatusCode)
+	if err := statusError(resp, "asset download"); err != nil {
+		return err
 	}
 
 	f, err := os.Create(dest)
