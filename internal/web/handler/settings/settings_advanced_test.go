@@ -3,6 +3,8 @@ package settings_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,6 +13,18 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 )
+
+var rowKeyPattern = regexp.MustCompile(`data-testid="secret-field-row-([A-Z_]+)"`)
+
+// rowKeys returns the sorted keys of every secret-field row in markup.
+func rowKeys(markup string) []string {
+	var keys []string
+	for _, m := range rowKeyPattern.FindAllStringSubmatch(markup, -1) {
+		keys = append(keys, m[1])
+	}
+	slices.Sort(keys)
+	return keys
+}
 
 // advancedSection returns the Settings page's 「詳細設定（任意）」 <details>
 // element (opening tag included) and the markup before it.
@@ -24,8 +38,10 @@ func advancedSection(t *testing.T, body string) (before, section string) {
 	return body[:start], body[start : end+len(`</details>`)]
 }
 
-// issue #272: the override keys (URLs, model, update token) live in a
-// collapsed 詳細設定 section; only the credentials stay up front.
+// issue #272/#292: the override keys (URLs, model) live in a collapsed
+// 詳細設定 section; the always-visible set is pinned exactly so that adding
+// or moving a key is a deliberate test change. The Luna/Sol/Opus/News Feed
+// API keys and Slack stay up front until the human decision in #273.
 func TestSettingsHandler_Page_GroupsOverridesIntoCollapsedAdvancedSection(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore()))
@@ -40,27 +56,31 @@ func TestSettingsHandler_Page_GroupsOverridesIntoCollapsedAdvancedSection(t *tes
 	if strings.Contains(section[:strings.Index(section, ">")], " open") {
 		t.Errorf("advanced section is open although no override is stored: %s", section[:strings.Index(section, ">")])
 	}
-	advancedKeys := []string{
+
+	wantVisible := []string{
+		config.KeyJevAPIKey, config.KeyKabuAPIPassword, config.KeySlackWebhookURL,
+		config.KeyLunaAPIKey, config.KeyNewsFeedAPIKey, config.KeySolAPIKey, config.KeyOpusAPIKey,
+	}
+	wantAdvanced := []string{
 		config.KeyJevBaseURL, config.KeyJevModel, config.KeyLunaBaseURL, config.KeyNewsFeedURL,
 		config.KeySolBaseURL, config.KeyOpusBaseURL,
 	}
-	for _, key := range advancedKeys {
-		row := `data-testid="secret-field-row-` + key + `"`
-		if !strings.Contains(section, row) || strings.Contains(before, row) {
-			t.Errorf("%s is not (only) inside the 詳細設定 section", key)
-		}
+	slices.Sort(wantVisible)
+	slices.Sort(wantAdvanced)
+	if got := rowKeys(before); !slices.Equal(got, wantVisible) {
+		t.Errorf("always-visible keys = %v, want %v", got, wantVisible)
 	}
-	for _, key := range []string{
-		config.KeyJevAPIKey, config.KeyKabuAPIPassword, config.KeySlackWebhookURL,
-		config.KeyLunaAPIKey, config.KeyNewsFeedAPIKey, config.KeySolAPIKey, config.KeyOpusAPIKey,
-	} {
-		row := `data-testid="secret-field-row-` + key + `"`
-		if !strings.Contains(before, row) || strings.Contains(section, row) {
-			t.Errorf("%s is not shown outside the 詳細設定 section", key)
-		}
+	if got := rowKeys(section); !slices.Equal(got, wantAdvanced) {
+		t.Errorf("詳細設定 keys = %v, want %v", got, wantAdvanced)
 	}
-	if got := strings.Count(before, `data-testid="secret-field-row-`); got != len(config.AllowedSecretKeys())-len(advancedKeys) {
-		t.Errorf("%d rows visible up front, want %d (every key except the 詳細設定 ones)", got, len(config.AllowedSecretKeys())-len(advancedKeys))
+
+	// Together the two groups cover the allow-list exactly once.
+	all := slices.Concat(wantVisible, wantAdvanced)
+	slices.Sort(all)
+	allowed := config.AllowedSecretKeys()
+	slices.Sort(allowed)
+	if !slices.Equal(all, allowed) {
+		t.Errorf("visible+advanced keys = %v, want AllowedSecretKeys %v", all, allowed)
 	}
 }
 

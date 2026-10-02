@@ -15,7 +15,9 @@ type settingsField struct {
 // stays recognizable. Every key here and in advancedSettingsFields must be
 // in config.AllowedSecretKeys (the per-key routes' allow-list), and
 // together they must cover it exactly, which settings_display_test.go
-// asserts.
+// asserts. settings_advanced_test.go pins the exact always-visible set; the
+// Slack and Luna/Sol/Opus/News Feed API keys stay here until issue #273
+// (human decision) settles whether they move into the collapsed section.
 var settingsFields = []settingsField{
 	{config.KeyJevAPIKey, "JEV_API_KEY"},
 	{config.KeyKabuAPIPassword, "KABU_API_PASSWORD"},
@@ -29,8 +31,9 @@ var settingsFields = []settingsField{
 // advancedSettingsFields is the collapsed 「詳細設定（任意）」 section
 // (issue #272): endpoint/model overrides and other rarely needed values.
 // Leaving one unset means "use the default" and a stored override is
-// reverted by its own delete button. The Luna/Sol/Opus/News Feed keys stay
-// here as they are until issue #273 decides their final treatment.
+// reverted by its own delete button. Only the base URL/feed URL overrides of
+// Luna/Sol/Opus/News Feed live here; their API keys stay always visible
+// (see settingsFields).
 var advancedSettingsFields = []settingsField{
 	{config.KeyJevBaseURL, "JEV_BASE_URL（任意）"},
 	{config.KeyJevModel, "JEV_MODEL（任意）"},
