@@ -88,6 +88,7 @@ static/
 - `SystemStatusBadge`（システム状態の`StatusDot`フラグメント。`Header`内`#header-status`と`GET /system/status`が返す。`domain.SystemState`→`atoms.State`の変換を担い、atomsを`internal/domain`から切り離す）
 - `KillSwitchPanel`（`pitha-kill-switch-panel`を、現在状態に基づく`status`/`can-pause`/`can-resume`/`can-kill`と各URL属性付きで出力する。issue #106）
 - `ScannerTableFallback`（JS無効時/初回SSR描画用の候補件数＋候補銘柄テーブル＋0件時の空状態。日本語列見出し＋ツールチップ、符号付きReturnの色分け、Jev方向/エントリー品質バッジ。ハイドレーション後は同一の見た目で`pitha-scanner-table`が引き継ぐ。列定義・書式・配色・空状態文言はGo側`scannerColumns`とLit側`COLUMNS`/`scanner-view.ts`で二重管理のため、共有ゴールデン`static/src/components/scanner-table/scanner-contract.json`を`scanner_table_contract_test.go`と`scanner-contract.test.ts`の双方が検証して乖離を防ぐ。小数の丸めはJSの`toFixed`に揃え、ちょうど中間の値は0から遠い方へ丸める（Goの`%f`は偶数丸めのため`formatFloat`で補正。例: 12.5→13）。符号は正のみ`+`（0は符号なし）、確信度は四捨五入（half away from zero）、銘柄リンクは非予約文字以外をパーセントエンコード。表の上に列の意味を`<details data-testid="scanner-column-help">`（`<dl>`）で常時表示可能にし、hover専用の`title`を補う。SSRの空状態は初回描画のため`role="status"`を持たない。issue #239）
+- `ScanPanel`（Scanner Dashboardのスキャン状況パネル`#scan-panel`。最新サイクルのファネル件数（`scan-funnel-*`）・時刻/所要時間・「更新」（`scan-refresh`）・「スキャン対象を見る」（`scan-open`）、開くと検索/状態/理由フィルターとページング付きの銘柄一覧（`scan-table`、行は`data-status`/`data-reason`）。サイクル未実行は空状態`scan-empty`。操作はすべて`hx-get="/scanner/scan"`で`#scan-panel`を`outerHTML`差し替えし、`/ws/scanner`・Lit描画は使わない。`requirements/functional.md` §5.1、issue #303）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
 - `PerformanceSummaryPanel`
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
@@ -100,7 +101,7 @@ static/
 
 ### pages
 
-- `ScannerPage`（`layout.Shell`＋見出し、説明文`data-testid="scanner-description"`、色の凡例`data-testid="scanner-legend"`（緑=プラス/LONG・赤=マイナス/SHORT・エントリー品質の序列を文言で明記）、`ScannerTableFallback`、`pitha-scanner-table`バンドル）
+- `ScannerPage`（`layout.Shell`＋見出し、説明文`data-testid="scanner-description"`、色の凡例`data-testid="scanner-legend"`（緑=プラス/LONG・赤=マイナス/SHORT・エントリー品質の序列を文言で明記）、`ScanPanel`、`ScannerTableFallback`、`pitha-scanner-table`バンドル）
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
@@ -195,3 +196,4 @@ const (
 | 1.28 | 2026-10-02 | organismsに`MarketDataBanner`を追加し、`Header`に`#marketdata-banner`を置く | issue #295 |
 | 1.29 | 2026-10-02 | `SecretsBanner`・`SetupPage`・§4の未設定バナー／初回セットアップ誘導の必須キー表記を3キーから2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）へ更新し、`SettingsPage`の「詳細設定（任意）」に`JEV_BASE_URL`/`JEV_MODEL`を追加 | issue #271/#291 |
 | 1.30 | 2026-10-03 | molecules に`Modal`・`SettingsCard`（`ConnectionStatus`）、organisms に`ConnectionList`を追加し、`SettingsPage`/`SetupPage`を接続先別の一覧＋モーダル構成へ変更（「詳細設定（任意）」を廃止）。§4にモーダルのパターン、`static/src/components/modal/pitha-modal.ts`を追記 | issue #302 |
+| 1.31 | 2026-10-03 | organismsに`ScanPanel`を追加し、`ScannerPage`にスキャン状況パネル（ファネル件数・銘柄一覧・除外/欠損理由・手動更新）を置く | issue #303 |

@@ -32,6 +32,29 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。Sca
 }
 ```
 
+### GET /api/v1/scanner/scan
+
+最新のスキャンサイクル（`internal/bootstrap/candidates`の候補更新サイクル）の結果を返す。ファネル件数・状態別/理由別の件数・銘柄ごとの判定（絞り込み＋ページング）。Scanner Dashboardのスキャン状況パネル（`GET /scanner/scan`）と同じデータで、メモリ上の最新1サイクル分のみを読む（`GET /api/v1/scanner`・`/ws/scanner`の経路は共有しない）。サイクル未実行なら`has_cycle=false`で他は空。
+クエリ: `q`（銘柄コード/名称の部分一致、大文字小文字無視）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード。未知の値は400）, `page`（1始まり。範囲外は最終ページに丸める）, `page_size`（既定50、最大200）。
+
+```json
+// Output（抜粋）
+{
+  "has_cycle": true,
+  "started_at": "2026-10-03T09:00:00Z", "finished_at": "2026-10-03T09:00:01.5Z", "duration_ms": 1500,
+  "funnel": {"universe": 3800, "feature_computed": 3650, "fast_screener_passed": 80, "scout_evaluated": 42, "scout_passed": 11},
+  "passed": 80, "excluded": 3570, "missing": 150,
+  "reason_counts": [{"code": "min_price", "label": "現在値が下限未満（min_price）", "kind": "threshold", "count": 210}],
+  "total": 3570, "page": 1, "page_size": 50, "pages": 72,
+  "items": [{"symbol": "1301", "name": "極洋", "market": "プライム", "status": "excluded", "scout": null,
+             "reasons": [{"code": "max_spread_bps", "label": "スプレッドが上限超過（max_spread_bps）"}]}]
+}
+```
+
+- `status`: `passed`=Fast Screener候補、`excluded`=閾値で落ちた／上位N件の外（`top_n_cutoff`）、`missing`=値を算出できず判定不能（欠損理由が1つでもあれば`missing`を優先）
+- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
+- `funnel.scout_*`は候補に対するJev Scoutの判定済み件数（サイクル公開後にジョブが完了するたび増える。`scout`が`null`=候補外または判定待ち、`error`=Jev呼び出し失敗）
+
 ### GET /api/v1/symbols/{symbol}
 
 Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
@@ -256,6 +279,7 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 | メソッド | パス | 概要 |
 |---------|------|------|
 | GET | `/api/v1/scanner` | 候補銘柄一覧 |
+| GET | `/api/v1/scanner/scan` | 最新スキャンサイクルのファネル件数・銘柄別の判定（通過/除外/欠損と理由） |
 | GET | `/api/v1/symbols/{symbol}` | 銘柄詳細 |
 | GET | `/api/v1/symbols/{symbol}/candles` | チャート用系列データ |
 | GET | `/api/v1/symbols/{symbol}/decisions` | Jev判断履歴 |

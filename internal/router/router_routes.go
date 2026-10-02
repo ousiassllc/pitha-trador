@@ -48,6 +48,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 		activity:    activity.NewActivityHandler(o.activitySource),
 	}
 	engine.GET("/scanner", h.scanner.Page)
+	engine.GET("/scanner/scan", h.scanner.ScanView)
 	engine.GET("/ws/scanner", h.scanner.WebSocket)
 
 	engine.GET("/system/status", h.system.Status)
@@ -100,6 +101,7 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	apiConfig.Servers = []*huma.Server{{URL: apiBasePath}}
 	api := humagin.NewWithGroup(engine, engine.Group(apiBasePath), apiConfig)
 	huma.Get(api, "/scanner", h.scanner.APIScanner)
+	huma.Get(api, "/scanner/scan", h.scanner.APIScannerScan)
 	huma.Post(api, "/system/pause", h.system.APIPause)
 	huma.Post(api, "/system/resume", h.system.APIResume)
 	huma.Post(api, "/system/kill", h.system.APIKill)

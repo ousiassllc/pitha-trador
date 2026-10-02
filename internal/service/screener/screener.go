@@ -27,6 +27,10 @@ type Input struct {
 	Snapshot     domain.Snapshot
 
 	Turnover5mJPY float64
+	// TurnoverMissing marks Turnover5mJPY (counted as 0) as unknown
+	// (insufficient history) rather than a genuine 0. The filter outcome is
+	// unchanged; only the reason reported when the floor is not met differs.
+	TurnoverMissing bool
 
 	BreakoutStrength    *float64
 	VolatilityExpansion *float64
@@ -39,25 +43,54 @@ type Input struct {
 // stale/incomplete reading (architecture/overview.md §5 "異常時" applies
 // the same conservative rule to stale market data).
 func PassesFilter(cfg config.FastScreenerConfig, in Input) bool {
-	if in.Snapshot.Price < cfg.MinPrice || in.Snapshot.Price > cfg.MaxPrice {
-		return false
+	return FilterReasons(cfg, in) == 0
+}
+
+// FilterReasons returns every FR-FS-1 filter in cfg that in fails, or the
+// empty set if it clears them all. Unlike a short-circuiting check it
+// evaluates every filter so the Scanner Dashboard can show all reasons an
+// instrument is out (issue #303); a missing value is reported as its
+// missing-data reason, not as a threshold failure. It does not allocate.
+func FilterReasons(cfg config.FastScreenerConfig, in Input) domain.ScreenReasons {
+	var r domain.ScreenReasons
+	if in.Snapshot.Price < cfg.MinPrice {
+		r = r.Add(domain.ScreenReasonMinPrice)
+	}
+	if in.Snapshot.Price > cfg.MaxPrice {
+		r = r.Add(domain.ScreenReasonMaxPrice)
 	}
 	if in.Turnover5mJPY < cfg.MinTurnover5mJPY {
-		return false
+		if in.TurnoverMissing {
+			r = r.Add(domain.ScreenReasonMissingTurnover)
+		} else {
+			r = r.Add(domain.ScreenReasonMinTurnover)
+		}
 	}
-	if in.Snapshot.SpreadBps == nil || *in.Snapshot.SpreadBps > cfg.MaxSpreadBps {
-		return false
+	switch {
+	case in.Snapshot.SpreadBps == nil:
+		r = r.Add(domain.ScreenReasonMissingSpread)
+	case *in.Snapshot.SpreadBps > cfg.MaxSpreadBps:
+		r = r.Add(domain.ScreenReasonMaxSpread)
 	}
-	if in.Snapshot.Feature.VolumeRatio5m == nil || *in.Snapshot.Feature.VolumeRatio5m < cfg.MinVolumeRatio {
-		return false
+	switch {
+	case in.Snapshot.Feature.VolumeRatio5m == nil:
+		r = r.Add(domain.ScreenReasonMissingVolumeRatio)
+	case *in.Snapshot.Feature.VolumeRatio5m < cfg.MinVolumeRatio:
+		r = r.Add(domain.ScreenReasonMinVolumeRatio)
 	}
-	if in.Snapshot.Feature.Return5m == nil || math.Abs(*in.Snapshot.Feature.Return5m) < cfg.MinAbsReturn5mPct {
-		return false
+	switch {
+	case in.Snapshot.Feature.Return5m == nil:
+		r = r.Add(domain.ScreenReasonMissingReturn5m)
+	case math.Abs(*in.Snapshot.Feature.Return5m) < cfg.MinAbsReturn5mPct:
+		r = r.Add(domain.ScreenReasonMinAbsReturn5m)
 	}
-	if in.Snapshot.Feature.RealizedVol5m == nil || *in.Snapshot.Feature.RealizedVol5m < cfg.MinRealizedVolatility {
-		return false
+	switch {
+	case in.Snapshot.Feature.RealizedVol5m == nil:
+		r = r.Add(domain.ScreenReasonMissingRealizedVol)
+	case *in.Snapshot.Feature.RealizedVol5m < cfg.MinRealizedVolatility:
+		r = r.Add(domain.ScreenReasonMinRealizedVol)
 	}
-	return true
+	return r
 }
 
 // ScreenScore computes FR-FS-2's weighted score for in. Terms whose
@@ -89,6 +122,18 @@ func ScreenScore(weights config.FastScreenerWeights, in Input) float64 {
 	return score
 }
 
+// Result is Screen's output: the candidates plus, for every input, why it
+// is not one.
+type Result struct {
+	// Candidates is Run's return value: the top cfg.TopN by screen_score.
+	Candidates []domain.Candidate
+	// Reasons is parallel to the inputs passed to Screen: the empty set
+	// for an input that became a candidate, otherwise every reason it did
+	// not (FilterReasons, plus domain.ScreenReasonRankedOut for one that
+	// cleared the filters but fell below the top-N cut).
+	Reasons []domain.ScreenReasons
+}
+
 // Run applies PassesFilter to every element of inputs, scores the
 // survivors with ScreenScore, and returns the top cfg.TopN by descending
 // score as domain.Candidate values ready for Jev Scout / the Scanner
@@ -98,12 +143,24 @@ func ScreenScore(weights config.FastScreenerWeights, in Input) float64 {
 // later sub-scopes that populate them once a candidate reaches those
 // stages.
 func Run(cfg config.FastScreenerConfig, inputs []Input) []domain.Candidate {
-	passed := make([]domain.Candidate, 0, len(inputs))
-	for _, in := range inputs {
-		if !PassesFilter(cfg, in) {
+	return Screen(cfg, inputs).Candidates
+}
+
+// Screen is Run that also reports each input's exclusion reasons, for the
+// Scanner Dashboard's per-symbol view (issue #303). It adds only a
+// two-byte-per-input Reasons slice over Run.
+func Screen(cfg config.FastScreenerConfig, inputs []Input) Result {
+	type ranked struct {
+		idx       int
+		candidate domain.Candidate
+	}
+	reasons := make([]domain.ScreenReasons, len(inputs))
+	passed := make([]ranked, 0, len(inputs))
+	for i, in := range inputs {
+		if reasons[i] = FilterReasons(cfg, in); reasons[i] != 0 {
 			continue
 		}
-		passed = append(passed, domain.Candidate{
+		passed = append(passed, ranked{i, domain.Candidate{
 			InstrumentID:   in.InstrumentID,
 			Symbol:         in.Symbol,
 			Price:          in.Snapshot.Price,
@@ -114,15 +171,22 @@ func Run(cfg config.FastScreenerConfig, inputs []Input) []domain.Candidate {
 			SpreadBps:      in.Snapshot.SpreadBps,
 			ScreenScore:    ScreenScore(cfg.Weights, in),
 			AsOf:           in.Snapshot.Timestamp,
-		})
+		}})
 	}
 
 	sort.SliceStable(passed, func(i, j int) bool {
-		return passed[i].ScreenScore > passed[j].ScreenScore
+		return passed[i].candidate.ScreenScore > passed[j].candidate.ScreenScore
 	})
 
 	if len(passed) > cfg.TopN {
+		for _, p := range passed[cfg.TopN:] {
+			reasons[p.idx] = reasons[p.idx].Add(domain.ScreenReasonRankedOut)
+		}
 		passed = passed[:cfg.TopN]
 	}
-	return passed
+	candidates := make([]domain.Candidate, len(passed))
+	for i, p := range passed {
+		candidates[i] = p.candidate
+	}
+	return Result{Candidates: candidates, Reasons: reasons}
 }

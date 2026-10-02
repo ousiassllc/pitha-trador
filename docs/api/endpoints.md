@@ -34,7 +34,8 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/` | `/scanner` へリダイレクト |
-| GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却 |
+| GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却。ページ上部にスキャン状況パネル（ファネル件数・最終サイクル時刻/所要時間・「スキャン対象を見る」「更新」）を含む（フルページのみ） |
+| GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。issue #303 |
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
 | GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
 | GET | `/calibration` | Calibration画面 |
@@ -127,3 +128,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.26 | 2026-10-02 | `GET /api/v1/logs/errors`（`api/endpoints/huma-api.md`）にエクスポータ未注入時（組み立て漏れ）とログディレクトリ読取不可時の500を明記（FR-ERRLOG-5と一致） | issue #299 |
 | 1.27 | 2026-10-02 | §1のWailsアプリのバインド記述を、Windowsのみ`/ws/...`専用ループバックリスナー（`127.0.0.1`と`[::1]`）を起動する実態に合わせて修正（「内蔵HTTPサーバーは`127.0.0.1`にのみバインド」を是正） | issue #300（#266/#285の実装との乖離解消） |
 | 1.28 | 2026-10-03 | §3の`/settings`・`/setup`を接続先別の一覧＋モーダル構成に更新。`POST`/`DELETE /settings/:key`のHTMX応答は行に加えて接続先の状態バッジ（`hx-swap-oob`）を返す | issue #302 |
+| 1.29 | 2026-10-03 | §3 に `GET /scanner/scan`（スキャン状況パネル）を追加、`GET /scanner` にスキャン状況パネルを追記 | issue #303 |

@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
 func renderScannerPage(t *testing.T, candidates []domain.Candidate) string {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := pages.ScannerPage(candidates, time.Now()).Render(context.Background(), &buf); err != nil {
+	if err := pages.ScannerPage(candidates, time.Now(), organisms.ScanPanelView{}).Render(context.Background(), &buf); err != nil {
 		t.Fatalf("render: %v", err)
 	}
 	return buf.String()
