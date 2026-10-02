@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -18,13 +19,19 @@ type ErrorLogExporter interface {
 	Export(ctx context.Context, days int, minLevel slog.Level) (logging.ExportResult, error)
 }
 
-// StaticErrorLogExporter always reports an empty log, used as
-// internal/router.New()'s default until a real *logging.Exporter is wired in
-// (router-level tests only).
-type StaticErrorLogExporter struct{}
+// ErrErrorLogExporterNotConfigured is what UnconfiguredErrorLogExporter
+// returns.
+var ErrErrorLogExporterNotConfigured = errors.New("system: error log exporter not configured (missing router.WithErrorLogExporter)")
 
-func (StaticErrorLogExporter) Export(context.Context, int, slog.Level) (logging.ExportResult, error) {
-	return logging.ExportResult{}, nil
+// UnconfiguredErrorLogExporter fails every export, used as
+// internal/router.New()'s default until a real *logging.Exporter is wired
+// in: an entry point that forgets router.WithErrorLogExporter gets a 500
+// (cause in the slog) instead of an empty 200 download that looks like "no
+// errors".
+type UnconfiguredErrorLogExporter struct{}
+
+func (UnconfiguredErrorLogExporter) Export(context.Context, int, slog.Level) (logging.ExportResult, error) {
+	return logging.ExportResult{}, ErrErrorLogExporterNotConfigured
 }
 
 // ErrorLogHandler implements `GET /api/v1/logs/errors`

@@ -51,6 +51,23 @@ func TestSettingsPage_ErrorLogPanelIsPlainDownloadForm(t *testing.T) {
 	}
 }
 
+// FR-ERRLOG-1: the エラーログ section lives on Settings only; the first-run
+// Setup screen (no Header, no session-guarded fragments) must not offer it.
+func TestSetupPage_HasNoErrorLogPanel(t *testing.T) {
+	for _, complete := range []bool{false, true} {
+		var buf bytes.Buffer
+		if err := pages.SetupPage(pages.SetupProps{Complete: complete}).Render(context.Background(), &buf); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		body := buf.String()
+		for _, unwanted := range []string{`error-log-panel`, `/api/v1/logs/errors`} {
+			if strings.Contains(body, unwanted) {
+				t.Errorf("complete=%v: SetupPage contains %q, want the error log panel on Settings only", complete, unwanted)
+			}
+		}
+	}
+}
+
 // issue #272: AdvancedFields render inside a <details> that is collapsed
 // unless a stored override is present.
 func TestSettingsPage_AdvancedFieldsLiveInDetailsOpenedByStoredValue(t *testing.T) {
