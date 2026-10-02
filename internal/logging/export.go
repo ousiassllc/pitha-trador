@@ -86,7 +86,7 @@ func (e *Exporter) Export(ctx context.Context, days int, minLevel slog.Level) (E
 			return ExportResult{}, err
 		}
 		day := today.AddDate(0, 0, -i).Format(dailyFileLayout)
-		records, dropped, err := e.collectDay(day, minLevel, remaining)
+		records, dropped, err := e.collectDay(ctx, day, minLevel, remaining)
 		if err != nil {
 			return ExportResult{}, err
 		}
@@ -115,8 +115,10 @@ func (e *Exporter) Export(ctx context.Context, days int, minLevel slog.Level) (E
 
 // collectDay reads one day's file (plain if present, else gzip archive) and
 // returns its matching records, at most budget bytes of them: when more
-// match, the oldest are dropped (dropped = true).
-func (e *Exporter) collectDay(day string, minLevel slog.Level, budget int) (records []exportedRecord, dropped bool, err error) {
+// match, the oldest are dropped (dropped = true). With no budget left it
+// only looks for a first matching record (dropped = true) and stops there
+// instead of reading the rest of the file. ctx is checked while reading.
+func (e *Exporter) collectDay(ctx context.Context, day string, minLevel slog.Level, budget int) (records []exportedRecord, dropped bool, err error) {
 	r, err := e.openDay(day)
 	if err != nil {
 		return nil, false, err
@@ -128,10 +130,14 @@ func (e *Exporter) collectDay(day string, minLevel slog.Level, budget int) (reco
 
 	var size int
 	last := time.Time{}
-	err = readCompleteLines(r, func(line []byte) {
+	err = readCompleteLines(ctx, r, func(line []byte) (stop bool) {
 		rec, ok := maskedRecord(line, minLevel)
 		if !ok {
-			return
+			return false
+		}
+		if budget <= 0 {
+			dropped = true
+			return true
 		}
 		if rec.at.IsZero() {
 			rec.at = last
@@ -145,6 +151,7 @@ func (e *Exporter) collectDay(day string, minLevel slog.Level, budget int) (reco
 			records = records[1:]
 			dropped = true
 		}
+		return false
 	})
 	if err != nil {
 		return nil, false, fmt.Errorf("logging: read log for %s: %w", day, err)
@@ -195,14 +202,18 @@ func (g *gzipFile) Close() error {
 }
 
 // readCompleteLines calls fn with every newline-terminated line of r
-// (terminator removed) that is at most maxExportLineBytes long. A trailing
-// line without a newline is dropped: in a file still being written it may be
-// cut mid-record (FR-ERRLOG-6).
-func readCompleteLines(r io.Reader, fn func(line []byte)) error {
+// (terminator removed) that is at most maxExportLineBytes long, until fn
+// returns true. A trailing line without a newline is dropped: in a file
+// still being written it may be cut mid-record (FR-ERRLOG-6). It returns
+// ctx's error as soon as ctx is done.
+func readCompleteLines(ctx context.Context, r io.Reader, fn func(line []byte) (stop bool)) error {
 	br := bufio.NewReaderSize(r, 64<<10)
 	var line []byte
 	skipping := false
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		frag, err := br.ReadSlice('\n')
 		if !skipping {
 			line = append(line, frag...)
@@ -214,8 +225,8 @@ func readCompleteLines(r io.Reader, fn func(line []byte)) error {
 		switch {
 		case err == nil:
 			if !skipping {
-				if trimmed := bytes.TrimRight(line, "\r\n"); len(trimmed) <= maxExportLineBytes {
-					fn(trimmed)
+				if trimmed := bytes.TrimRight(line, "\r\n"); len(trimmed) <= maxExportLineBytes && fn(trimmed) {
+					return nil
 				}
 			}
 			line, skipping = line[:0], false
