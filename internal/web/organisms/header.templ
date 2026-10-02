@@ -34,8 +34,9 @@ import (
 // system state, so it cannot know secrets-table state at render time
 // either) and immediately calls `GET /system/secrets-status`
 // (internal/web/handler/settings.SettingsHandler.Status), which renders
-// organisms.SecretsBanner listing any still-unset required key
-// (JEV_API_KEY/JEV_BASE_URL/KABU_API_PASSWORD) with a link to
+// organisms.SecretsBanner listing the still-unset optional keys
+// (SLACK_WEBHOOK_URL etc.; the two required keys JEV_API_KEY/
+// KABU_API_PASSWORD are Setup Guard's business) with a link to
 // `/settings`, or nothing once every one is configured.
 //
 // `#update-banner` is the same pattern for issue #76's update

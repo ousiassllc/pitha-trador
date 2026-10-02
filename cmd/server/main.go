@@ -58,8 +58,9 @@ func main() {
 	}
 	defer func() { _ = state.Close() }()
 
-	// config.LoadSecretsFromDB reads JEV_API_KEY/JEV_BASE_URL/
-	// KABU_API_PASSWORD/SLACK_WEBHOOK_URL (plus the optional LUNA_*/NEWS_FEED_*/SOL_*/OPUS_*
+	// config.LoadSecretsFromDB reads the required JEV_API_KEY/
+	// KABU_API_PASSWORD (plus the optional JEV_BASE_URL/JEV_MODEL/
+	// SLACK_WEBHOOK_URL and LUNA_*/NEWS_FEED_*/SOL_*/OPUS_*
 	// AI/News API credentials) from the secrets table (issue
 	// #57 - `.env`/environment variables are no longer a supported input
 	// for these at all). Unlike the old env-var-based LoadSecrets, a
