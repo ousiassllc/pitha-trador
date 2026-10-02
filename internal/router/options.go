@@ -150,8 +150,9 @@ func WithUpdateController(controller system.UpdateController) Option {
 
 // WithErrorLogExporter overrides `GET /api/v1/logs/errors`'s backing
 // system.ErrorLogExporter (FR-ERRLOG-2). cmd/desktop and cmd/server pass
-// internal/bootstrap's *logging.Exporter over the log directory; the empty
-// system.StaticErrorLogExporter default only serves router-level tests.
+// internal/bootstrap's *logging.Exporter over the log directory. Without it
+// the route answers 500 (system.UnconfiguredErrorLogExporter) so a missing
+// wiring is noticed rather than served as an empty log.
 func WithErrorLogExporter(exporter system.ErrorLogExporter) Option {
 	return func(o *options) { o.errorLogExporter = exporter }
 }
