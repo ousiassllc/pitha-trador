@@ -159,3 +159,86 @@ func TestRefresh_DoesNotEnqueueJevScoutOutsideSession(t *testing.T) {
 		t.Fatal("a jev-scout job was enqueued outside the trading session")
 	}
 }
+
+func TestRefresh_RetainsPerSymbolScanResultsAndFunnel(t *testing.T) {
+	refresher := newTestRefresher(t)
+	refresher.Strategy.FastScreener = config.FastScreenerConfig{
+		MinPrice: 100, MaxPrice: 1_000_000,
+		MinTurnover5mJPY: 0, MaxSpreadBps: 50,
+		MinVolumeRatio: 0, MinAbsReturn5mPct: 0, MinRealizedVolatility: 0,
+		TopN: 10,
+	}
+	now := time.Now().UTC()
+	insert := func(symbol string, price float64, spread *float64) {
+		inst := mustCreateInstrument(t, refresher, symbol)
+		if spread == nil && price == 0 { // no snapshot at all
+			return
+		}
+		if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
+			InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: now, Price: price, Turnover: 1_000,
+			SpreadBps: spread,
+			Feature:   domain.Feature{VolumeRatio5m: ptrF(1), Return5m: ptrF(1), RealizedVol5m: ptrF(0.01)},
+		}}); err != nil {
+			t.Fatalf("InsertBatch %s: %v", symbol, err)
+		}
+	}
+	insert("1001", 1000, ptrF(10)) // passes
+	insert("1002", 50, ptrF(10))   // min_price
+	insert("1003", 1000, nil)      // no order book -> missing spread
+	insert("1004", 0, nil)         // no snapshot yet
+
+	if err := refresher.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	cycle, ok, err := refresher.Screener.Scan(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("Scan() ok=%v err=%v", ok, err)
+	}
+	if cycle.Funnel.Universe != 4 || cycle.Funnel.FeatureComputed != 3 || cycle.Funnel.FastScreenerPassed != 1 {
+		t.Errorf("funnel = %+v, want universe 4 / features 3 / fast 1", cycle.Funnel)
+	}
+	if cycle.StartedAt.IsZero() || cycle.FinishedAt.Before(cycle.StartedAt) {
+		t.Errorf("cycle times = %v .. %v", cycle.StartedAt, cycle.FinishedAt)
+	}
+	if len(cycle.Symbols) != 4 {
+		t.Fatalf("len(Symbols) = %d, want 4 (every universe instrument)", len(cycle.Symbols))
+	}
+	bySymbol := map[string]domain.ScanSymbol{}
+	for _, s := range cycle.Symbols {
+		bySymbol[s.Symbol] = s
+	}
+	if s := bySymbol["1001"]; s.Status() != domain.ScanStatusPassed || s.Name != "1001 Inc." || s.Market != "TSE Prime" {
+		t.Errorf("1001 = %+v", s)
+	}
+	if s := bySymbol["1002"]; !s.Reasons.Has(domain.ScreenReasonMinPrice) || s.Status() != domain.ScanStatusExcluded {
+		t.Errorf("1002 reasons = %v", s.Reasons.List())
+	}
+	if s := bySymbol["1003"]; !s.Reasons.Has(domain.ScreenReasonMissingSpread) || s.Status() != domain.ScanStatusMissing {
+		t.Errorf("1003 reasons = %v", s.Reasons.List())
+	}
+	if s := bySymbol["1004"]; !s.Reasons.Has(domain.ScreenReasonNoSnapshot) || s.Status() != domain.ScanStatusMissing {
+		t.Errorf("1004 reasons = %v", s.Reasons.List())
+	}
+}
+
+func TestRefresh_ScanMarksUnknownTurnoverAsMissing(t *testing.T) {
+	refresher := newTestRefresher(t)
+	refresher.Strategy.FastScreener = config.FastScreenerConfig{MaxPrice: 1_000_000, MinTurnover5mJPY: 5_000_000, MaxSpreadBps: 50, TopN: 10}
+	inst := mustCreateInstrument(t, refresher, "2001")
+	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
+		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: time.Now().UTC(), Price: 1000, Turnover: 1,
+		SpreadBps: ptrF(1), Feature: domain.Feature{VolumeRatio5m: ptrF(1), Return5m: ptrF(1), RealizedVol5m: ptrF(1)},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := refresher.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	cycle, _, _ := refresher.Screener.Scan(context.Background())
+	got := cycle.Symbols[0].Reasons
+	// One bar of history cannot give a 5-minute turnover: that is a data
+	// gap (missing_turnover), not a below-the-floor reading.
+	if !got.Has(domain.ScreenReasonMissingTurnover) || got.Has(domain.ScreenReasonMinTurnover) {
+		t.Fatalf("reasons = %v, want only missing_turnover", got.List())
+	}
+}

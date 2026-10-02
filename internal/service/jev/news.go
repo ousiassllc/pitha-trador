@@ -13,7 +13,21 @@ type NewsSource interface {
 type Option func(*options)
 
 type options struct {
-	news NewsSource
+	news     NewsSource
+	recorder ScoutRecorder
+}
+
+// ScoutRecorder is told each Jev Scout verdict as it is reached, so the
+// Scanner Dashboard can show the Scout stage of the scan funnel (issue
+// #303). *internal/service/screener.LiveSource implements it.
+type ScoutRecorder interface {
+	RecordScout(symbol string, outcome domain.ScoutOutcome)
+}
+
+// WithScoutRecorder makes Scout report every FR-SCOUT-2 verdict (and Jev
+// call failure) for a job handled via HandleJob to r. Scout only.
+func WithScoutRecorder(r ScoutRecorder) Option {
+	return func(o *options) { o.recorder = r }
 }
 
 // WithNewsSource makes Scout/Trader inject news_context into every state

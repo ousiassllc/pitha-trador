@@ -203,9 +203,16 @@ func TestNew_SetupGuardLetsSetupSettingsWritesAndStaticThrough(t *testing.T) {
 			t.Errorf("GET /setup lacks the %s field", key)
 		}
 	}
-	// issue #271: JEV_BASE_URL has a default, so Setup does not ask for it.
-	if strings.Contains(rec.Body.String(), `data-testid="secret-field-row-JEV_BASE_URL"`) {
-		t.Errorf("GET /setup offers JEV_BASE_URL, want it left to the Settings 詳細設定 section")
+	// issue #271/#302: JEV_BASE_URL has a default, so it is offered only as
+	// an optional override inside the Jev connection's modal, and Luna and
+	// the other optional connections are left to Settings.
+	for _, want := range []string{`<dialog id="modal-jev"`, `data-testid="secret-field-row-JEV_BASE_URL"`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("GET /setup lacks %q", want)
+		}
+	}
+	if strings.Contains(rec.Body.String(), `data-testid="secret-field-row-LUNA_API_KEY"`) {
+		t.Errorf("GET /setup offers LUNA_API_KEY, want it left to Settings")
 	}
 
 	rec = httptest.NewRecorder()

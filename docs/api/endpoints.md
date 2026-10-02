@@ -4,7 +4,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 
 ## 1. 認証・アクセス制御
 
-- Wailsアプリ内蔵HTTPサーバーは `127.0.0.1` にのみバインドし、外部ネットワークからは到達不能（`requirements/non-functional.md` §4）
+- Wailsアプリのページ・APIはWails AssetServer（ネットワークポートなし）経由でのみ配信する。Windows（WebView2）のみ、`/ws/...`のUpgradeだけを受ける専用のループバックリスナー（`127.0.0.1`と`[::1]`の同一ランダムポート。`[::1]`が使えない環境は`127.0.0.1`のみ。他のパスは404）を追加で起動する。いずれもループバックにのみバインドし、外部ネットワークからは到達不能（§6、`requirements/non-functional.md` §4、`cmd/desktop/ws_listener.go`）
   - `cmd/server`の既定待受は`127.0.0.1:48080`。`PITHA_SERVER_ADDR`でloopback以外（`:48080`・`0.0.0.0`・LAN IP等）を指定すると起動を拒否する。意図的に公開する場合のみ`PITHA_SERVER_ALLOW_NON_LOOPBACK=1`を併用する（issue #91/#99）
 - 単一ユーザー・単一デスクトップアプリのため、外部IdP連携やユーザーログイン画面は持たない
 - 起動時にWailsプロセスがランダムなローカルセッショントークンを生成し、Cookie（`HttpOnly`, `SameSite=Strict`）としてWebViewに設定する。全ての状態変更リクエスト（アクションルート・Huma APIのPOST/PUT/PATCH/DELETE）はこのセッションCookie必須とする
@@ -34,12 +34,13 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/` | `/scanner` へリダイレクト |
-| GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却 |
+| GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却。ページ上部にスキャン状況パネル（ファネル件数・最終サイクル時刻/所要時間・「スキャン対象を見る」「更新」）を含む（フルページのみ） |
+| GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。issue #303 |
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
 | GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
 | GET | `/calibration` | Calibration画面 |
-| GET | `/settings` | Settings画面。許可キー（`internal/config`のallow-list）ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ。保存済みの値は再表示せず「設定済み」バッジのみ表示する。エラーログのダウンロード節（`#error-log-panel`、`GET /api/v1/logs/errors`を呼ぶフォーム。FR-ERRLOG-1）を持つ（issue #57/#79/#267） |
-| GET | `/setup` | 初回セットアップ画面。必須2キー（JEV_API_KEY/KABU_API_PASSWORD）と任意のSLACK_WEBHOOK_URLを`SecretFieldRow`で表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80） |
+| GET | `/settings` | Settings画面。接続先別（Jev/kabuステーション/Slack/Luna/ニュースフィード/Sol/Opus）の一覧で、各接続先のモーダルに許可キー（`internal/config`のallow-list）の`SecretFieldRow`をまとめ、各行が独立した保存・削除フォームを持つ。保存済みの値は再表示せず「設定済み」バッジのみ表示する。「システム」節からアップデート（`#update-panel`）とエラーログのダウンロード（`#error-log-panel`、`GET /api/v1/logs/errors`を呼ぶフォーム。FR-ERRLOG-1）のモーダルを開く（issue #57/#79/#267/#302） |
+| GET | `/setup` | 初回セットアップ画面。Settingsと同じ接続先一覧・モーダルで、必須2キー（JEV_API_KEY/KABU_API_PASSWORD）を持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80/#302） |
 | GET | `/activity` | System Activity Log画面。`<pitha-activity-feed>`アイランド（SSRフォールバック: キュー状況＋アクティビティ一覧）を埋め込んだフルページ |
 
 ## 4. アクションルート
@@ -124,3 +125,7 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.23 | 2026-10-02 | §4に`GET /system/marketdata-status`を追加 | issue #295 |
 | 1.24 | 2026-10-02 | §6 デスクトップ版WebSocketの機構記述を実態に修正（WebView2は`ws://`をAssetServerへ回さず無リスナーで失敗／Windowsのみ対応）、別リスナーが`127.0.0.1`と`::1`の両方で待ち受けること・Originのポート差の扱いを追記 | issue #285/#286 |
 | 1.25 | 2026-10-02 | Setup Guardの必須キー（`JEV_API_KEY`/`KABU_API_PASSWORD`の2つ）への変更（`JEV_BASE_URL`は任意の上書き）に合わせ、`/system/secrets-status`の説明に残っていた「必須3キー」表現を更新 | issue #271/#291 |
+| 1.26 | 2026-10-02 | `GET /api/v1/logs/errors`（`api/endpoints/huma-api.md`）にエクスポータ未注入時（組み立て漏れ）とログディレクトリ読取不可時の500を明記（FR-ERRLOG-5と一致） | issue #299 |
+| 1.27 | 2026-10-02 | §1のWailsアプリのバインド記述を、Windowsのみ`/ws/...`専用ループバックリスナー（`127.0.0.1`と`[::1]`）を起動する実態に合わせて修正（「内蔵HTTPサーバーは`127.0.0.1`にのみバインド」を是正） | issue #300（#266/#285の実装との乖離解消） |
+| 1.28 | 2026-10-03 | §3の`/settings`・`/setup`を接続先別の一覧＋モーダル構成に更新。`POST`/`DELETE /settings/:key`のHTMX応答は行に加えて接続先の状態バッジ（`hx-swap-oob`）を返す | issue #302 |
+| 1.29 | 2026-10-03 | §3 に `GET /scanner/scan`（スキャン状況パネル）を追加、`GET /scanner` にスキャン状況パネルを追記 | issue #303 |

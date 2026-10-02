@@ -87,7 +87,7 @@ make dev
 
 | 変数 | 参照元 | 既定値・挙動 |
 |---|---|---|
-| `PITHA_SERVER_ADDR` | `cmd/server` | HTTPサーバー（ヘッドレス起動）の待受アドレス。既定`127.0.0.1:48080`。loopback以外（`:48080`・`0.0.0.0`・LAN IP等）は起動を拒否する。`cmd/desktop`（Wails）はネットワークポートを待ち受けない |
+| `PITHA_SERVER_ADDR` | `cmd/server` | HTTPサーバー（ヘッドレス起動）の待受アドレス。既定`127.0.0.1:48080`。loopback以外（`:48080`・`0.0.0.0`・LAN IP等）は起動を拒否する。`cmd/desktop`（Wails）のページ・APIはAssetServer経由で配信され、ネットワークポートを待ち受けない。例外としてWindows（WebView2）のみ、`/ws/...`のUpgradeだけを受ける専用のループバックリスナーをランダムポートで起動する（`127.0.0.1`と`[::1]`の同一ポート。`[::1]`が使えない環境では`127.0.0.1`のみ。本変数の対象外、`cmd/desktop/ws_listener.go`。`api/endpoints.md` §6） |
 | `PITHA_SERVER_ALLOW_NON_LOOPBACK` | `cmd/server` | `1`のときのみ`PITHA_SERVER_ADDR`にloopback以外を許可する（意図的な公開用） |
 | `PITHA_SERVER_ALLOWED_HOSTS` | `cmd/server` | `PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ有効。Hostヘッダとして受け付ける追加ホスト名（カンマ区切り、DNS rebinding対策のHost検証。loopback名（`localhost`/`127.0.0.1`/`::1`）とワイルドカード以外の`PITHA_SERVER_ADDR`のホストは常に許可） |
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
@@ -123,9 +123,10 @@ GitHub Actions（`.github/workflows/ci.yml`）。
   - `lint`: フロントエンドビルド（`bun install --cwd static --frozen-lockfile` + `bun run --cwd static build`）→ `golangci-lint run` ＋ `linterly check`（行数制限。lefthookの`--no-verify`回避対策）＋ `bunx biome check .`（`working-directory: static`） ＋ `bunx tsc --noEmit`（`working-directory: static`）
   - `test`: フロントエンドビルド → `go test ./...` ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
   - `build`: フロントエンドビルド → `wails build -platform windows/amd64 -nsis -installscope user` でNSISインストーラー（`.exe`、ユーザースコープインストール）をビルドしCI Artifactとしてアップロードする。SHA256チェックサムも同時に生成する。バージョンは`main`へのpushでは既存の最新`vX.Y.Z`タグのパッチ+1、タグpushではタグ名、それ以外（PR・`feat/**`）は`dev`を`-ldflags`で埋め込む
-  - `release`: `build`の成果物（インストーラー・`checksums.txt`）を`softprops/action-gh-release@v2`でGitHub Releaseとして公開する。`main`へのpush（＝PRマージ、次パッチ版を自動採番）またはタグ`v*`のpush（手動リリース）でのみ実行され、`tag_name`は`build`ジョブが算出した版番号を使う
+  - `release`: `build`の成果物（インストーラー・`checksums.txt`）を`softprops/action-gh-release@v3`でGitHub Releaseとして公開する。`main`へのpush（＝PRマージ、次パッチ版を自動採番）またはタグ`v*`のpush（手動リリース）でのみ実行され、`tag_name`は`build`ジョブが算出した版番号を使う
   - `config/strategy.yaml`・`config/risk.yaml`・静的アセット（`static/src/dist`・`static/src/img`・`static/src/vendor`）は`go:embed`でバイナリに埋め込む（`architecture/overview.md` §9）。`static/src/embed.go`は空/未ビルドの`dist`を埋め込もうとすると`go build`自体がコンパイルエラーになるため、`lint`/`test`/`build`いずれのジョブも上記フロントエンドビルドを最初のGoコンパイル系ステップより前に実行する必要がある
 - **バージョン固定**: bunは`.bun-version`（`oven-sh/setup-bun`の`bun-version-file`）、templ・wails・golangci-lint・linterlyはワークフロー内でバージョンを固定する。`latest`は使わない
+- **Goツールチェーンの自動切替**: `go.mod`のGo（1.25.x）より新しいGoを要求するツールの`go install`ステップ（`Install golangci-lint`・`Install linterly`。どちらも`go >= 1.26`が必要）に、**ステップレベル**の`env: GOTOOLCHAIN: auto`を設定する。`actions/setup-go`はv6以降、無条件に`GOTOOLCHAIN=local`を`$GITHUB_ENV`経由でエクスポートし、これはワークフロー/ジョブレベルの`env`を上書きする（ステップレベルの`env`のみがそれより優先される）。そのままでは`requires go >= 1.26.0 (running go 1.25.11; GOTOOLCHAIN=local)`と失敗する。`golangci-lint run`・`linterly check`等の実行ステップは`go.mod`のGoで動くため上書き不要
 - **同時実行制御**: ワークフロー全体に`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: false }`を設定する。版番号の採番（`build`）とタグ作成（`release`）が別ジョブのため、`main`への連続pushで並行実行されると同じ版番号を算出してタグが衝突しうる。同一refの実行を直列化して防ぐ
 - **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
 - **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/runtime.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`（**現状は未作成**）をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途追加して実行する（通常のlint/test/buildフローには含めない）
@@ -249,3 +250,6 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.21 | 2026-10-01 | Settings画面経由の入力対象に`UPDATE_GITHUB_TOKEN`（非公開リポジトリのリリース取得用、任意）を追加 | issue #265 |
 | 1.22 | 2026-10-02 | Settings画面経由の入力対象から`UPDATE_GITHUB_TOKEN`を削除（リポジトリのpublic化に伴い更新確認用トークン機能を廃止） | 更新確認用トークン機能の廃止 |
 | 1.23 | 2026-10-02 | Settings画面経由の入力対象に`JEV_MODEL`を追加し、必須キーを`JEV_API_KEY`/`KABU_API_PASSWORD`の2つへ更新（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`付きの任意上書き）。履歴1.7の「必須3キー」は当時の記録 | issue #271/#291 |
+| 1.24 | 2026-10-02 | 環境変数表`PITHA_SERVER_ADDR`の「`cmd/desktop`はネットワークポートを待ち受けない」を、Windowsのみ`/ws/...`専用のループバックリスナー（`127.0.0.1`と`[::1]`、ランダムポート）を起動する実態に合わせて修正 | issue #300（#266/#285の実装との乖離解消） |
+| 1.25 | 2026-10-03 | CI/CD節に`GOTOOLCHAIN: auto`の設定理由を追記（`actions/setup-go` v7が`GOTOOLCHAIN=local`を設定し、`golangci-lint`の`go install`が失敗していた） | PR #304 CI `lint`ジョブ失敗の修正 |
+| 1.26 | 2026-10-03 | `GOTOOLCHAIN: auto`の設定箇所をワークフロー全体から`Install golangci-lint`/`Install linterly`のステップレベルへ訂正（`actions/setup-go`の`$GITHUB_ENV`エクスポートがワークフローレベル`env`を上書きし、1.25の設定は効かなかった） | PR #304 CI `lint`ジョブ失敗の再修正 |

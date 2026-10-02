@@ -3,38 +3,39 @@ package pages
 import (
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
-// SetupProps is SetupPage's input: the required fields followed by the
-// optional ones (internal/web/handler/settings.SettingsHandler.SetupPage), and
-// whether every required key is already stored.
+// SetupProps is SetupPage's input: the connections to offer
+// (internal/web/handler/settings.SettingsHandler.SetupPage) - the ones
+// holding the required keys plus the optional Slack one - and whether every
+// required key is already stored.
 type SetupProps struct {
-	Fields   []molecules.SecretFieldRowProps
-	Complete bool
+	Connections []molecules.ConnectionProps
+	Complete    bool
 }
 
 // SetupPage is the first-run Setup screen (issue #80, FR-SETUP-2).
 // middleware.SetupGuard redirects every other route here until
-// JEV_API_KEY/KABU_API_PASSWORD are both stored. Each field is
-// the same molecules.SecretFieldRow Settings uses, posting to `POST`/
-// `DELETE /settings/:key`; SLACK_WEBHOOK_URL is offered as an optional
-// extra. It renders in layout.SetupShell (no Header) so nothing on the
-// page fetches a guarded fragment. The "続ける" link is a plain `/scanner`
-// navigation: while a required key is unset the guard sends it straight
-// back here.
+// JEV_API_KEY/KABU_API_PASSWORD are both stored. Since issue #302 it uses
+// the same organisms.ConnectionList as Settings - a list of connections,
+// each opening a modal of its keys - restricted to Jev, kabuステーション
+// and the optional Slack; saving and deleting post to the same `POST`/
+// `DELETE /settings/:key` routes. It renders in layout.SetupShell (no
+// Header) so nothing on the page fetches a guarded fragment. The "続ける"
+// link is a plain `/scanner` navigation: while a required key is unset the
+// guard sends it straight back here.
 templ SetupPage(props SetupProps) {
 	@layout.SetupShell("Setup") {
 		<h1 class="text-2xl font-bold text-slate-900">初期セットアップ</h1>
 		<div class="mt-4 flex flex-col gap-4" data-testid="setup-form">
 			<p class="text-sm text-slate-600">
-				利用を始めるには、JEV_API_KEY・KABU_API_PASSWORD の 2 項目を入力して保存してください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+				利用を始めるには、「必須」と表示された接続先（Jev の JEV_API_KEY と kabuステーションの KABU_API_PASSWORD）を開いて保存してください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
 			</p>
 			<p class="text-sm text-slate-600" data-testid="setup-advanced-note">
-				接続先 URL やモデル名などは未入力で既定値が使われます。変更したい場合は、セットアップ後に設定画面の「詳細設定（任意）」から上書きできます。
+				接続先 URL やモデル名は未入力で既定値が使われます。Luna・Sol・Opus・ニュースフィードなどの接続先は、セットアップ後に設定画面から追加できます。
 			</p>
-			for _, field := range props.Fields {
-				@molecules.SecretFieldRow(field)
-			}
+			@organisms.ConnectionList(props.Connections)
 		</div>
 		if props.Complete {
 			<p class="mt-6 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="setup-complete">
@@ -46,5 +47,6 @@ templ SetupPage(props SetupProps) {
 			</p>
 		}
 		<a class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" href="/scanner" data-testid="setup-continue">続ける</a>
+		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}
 }

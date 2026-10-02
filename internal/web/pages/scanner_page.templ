@@ -9,7 +9,8 @@ import (
 )
 
 // ScannerPage is the Scanner Dashboard full page (functional.md §5.1):
-// layout.Shell around organisms.ScannerTableFallback, plus the
+// layout.Shell around organisms.ScanPanel (scan funnel, issue #303) and
+// organisms.ScannerTableFallback, plus the
 // `pitha-scanner-table` Lit component bundle (components/overview.md
 // §5.2) that hydrates over ScannerTableFallback's SSR markup. `GET
 // /scanner` (internal/web/handler.ScannerHandler.Page) renders this for a
@@ -17,7 +18,7 @@ import (
 // fragment alone for an HX-Request (docs/api/endpoints.md §3) - the
 // fragment doesn't need its own script tag since the bundle is already
 // loaded from the first full-page visit.
-templ ScannerPage(candidates []domain.Candidate, asOf time.Time) {
+templ ScannerPage(candidates []domain.Candidate, asOf time.Time, scan organisms.ScanPanelView) {
 	@layout.Shell("Scanner Dashboard") {
 		<h1 class="text-2xl font-bold text-slate-900">Scanner Dashboard</h1>
 		<p class="mt-1 text-sm text-slate-600" data-testid="scanner-description">
@@ -28,6 +29,7 @@ templ ScannerPage(candidates []domain.Candidate, asOf time.Time) {
 			<li><span class="font-medium text-red-700">赤</span> = マイナス / SHORT</li>
 			<li>エントリー品質: poor &lt; fair &lt; good &lt; strong &lt; exceptional</li>
 		</ul>
+		@organisms.ScanPanel(scan)
 		@organisms.ScannerTableFallback(candidates, asOf)
 		<script type="module" src="/static/dist/js/scanner-table/pitha-scanner-table.js"></script>
 	}

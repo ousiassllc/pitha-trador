@@ -1,0 +1,133 @@
+package molecules
+
+import "strconv"
+
+// ConnectionState is a connection's overall configured state shown on its
+// SettingsCard.
+type ConnectionState string
+
+const (
+	// ConnectionConfigured: the connection's main key (its first field) is
+	// stored.
+	ConnectionConfigured ConnectionState = "configured"
+	// ConnectionPartial: only optional overrides are stored; the main key is
+	// still unset.
+	ConnectionPartial ConnectionState = "partial"
+	// ConnectionUnset: nothing is stored.
+	ConnectionUnset ConnectionState = "unset"
+)
+
+// ConnectionProps is one external service on the Settings/Setup screens
+// (issue #302): ID is a stable slug (also the card/modal id suffix), Name
+// and Description what the operator sees in the list, Required whether the
+// connection holds a key the app cannot start without, and Fields the keys
+// edited in its modal - the main credential first, then optional URL/model
+// overrides.
+type ConnectionProps struct {
+	ID          string
+	Name        string
+	Description string
+	Required    bool
+	Fields      []SecretFieldRowProps
+}
+
+// ModalID is the id of the connection's Modal; the card's open button
+// targets it.
+func (p ConnectionProps) ModalID() string { return "modal-" + p.ID }
+
+// StatusID is the id of the connection's ConnectionStatus; Save/Delete
+// answer with an out-of-band copy carrying the same id so the list stays
+// current while the modal is open.
+func (p ConnectionProps) StatusID() string { return "connection-status-" + p.ID }
+
+// State derives the connection's status from its fields: configured when
+// the main key (first field) is stored, partial when only later overrides
+// are, unset otherwise.
+func (p ConnectionProps) State() ConnectionState {
+	if len(p.Fields) > 0 && p.Fields[0].Configured {
+		return ConnectionConfigured
+	}
+	if p.ConfiguredCount() > 0 {
+		return ConnectionPartial
+	}
+	return ConnectionUnset
+}
+
+// ConfiguredCount is how many of the connection's fields hold a stored
+// value.
+func (p ConnectionProps) ConfiguredCount() int {
+	n := 0
+	for _, field := range p.Fields {
+		if field.Configured {
+			n++
+		}
+	}
+	return n
+}
+
+// SettingsCardProps is SettingsCard's input: ModalID the dialog the button
+// opens, Name/Description the heading and explanation, ActionLabel the
+// button text, and Status an optional badge next to the name (nil for the
+// system cards, which have none).
+type SettingsCardProps struct {
+	ID          string
+	ModalID     string
+	Name        string
+	Description string
+	ActionLabel string
+	Status      templ.Component
+}
+
+// SettingsCard is one row of the Settings/Setup list (issue #302): name,
+// optional status badge, description and a button that opens the matching
+// Modal. The button carries `aria-haspopup="dialog"`; the list item is
+// addressed in tests by `settings-card-<ID>`.
+templ SettingsCard(props SettingsCardProps) {
+	<li class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-4" data-testid={ "settings-card-" + props.ID }>
+		<div class="flex min-w-0 flex-1 flex-col gap-1">
+			<span class="flex flex-wrap items-center gap-2 font-semibold text-slate-900">
+				{ props.Name }
+				if props.Status != nil {
+					@props.Status
+				}
+			</span>
+			<p class="text-sm text-slate-600">{ props.Description }</p>
+		</div>
+		<button
+			class="rounded-md border border-blue-600 px-4 py-1 text-sm font-semibold text-blue-700"
+			type="button"
+			aria-haspopup="dialog"
+			data-modal-open={ props.ModalID }
+			data-testid={ "open-" + props.ID }
+		>{ props.ActionLabel }</button>
+	</li>
+}
+
+// ConnectionStatus is the connection's status badge: 設定済み / 一部設定済み
+// / 未設定, an extra 必須 badge while a required connection is unset, and
+// how many of its fields are stored. oob renders it as an
+// `hx-swap-oob="true"` fragment (replacing the element with the same id),
+// which Save/Delete append to their row response.
+templ ConnectionStatus(props ConnectionProps, oob bool) {
+	<span id={ props.StatusID() } class="inline-flex flex-wrap items-center gap-1" data-state={ string(props.State()) } data-testid={ props.StatusID() } { oobAttrs(oob)... }>
+		switch props.State() {
+			case ConnectionConfigured:
+				<span class="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">設定済み</span>
+			case ConnectionPartial:
+				<span class="rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800">一部設定済み</span>
+			default:
+				<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">未設定</span>
+		}
+		if props.Required && props.State() != ConnectionConfigured {
+			<span class="rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800">必須</span>
+		}
+		<span class="text-xs font-normal text-slate-500">{ strconv.Itoa(props.ConfiguredCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
+	</span>
+}
+
+func oobAttrs(oob bool) templ.Attributes {
+	if oob {
+		return templ.Attributes{"hx-swap-oob": "true"}
+	}
+	return nil
+}
