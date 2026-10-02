@@ -237,20 +237,8 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		// GitHub signals a rate limit (primary or secondary) as 429, or as
-		// 403 with no quota left or a Retry-After: transient, unlike a
-		// refused lookup.
-		if resp.StatusCode == http.StatusTooManyRequests ||
-			(resp.StatusCode == http.StatusForbidden &&
-				(resp.Header.Get("X-RateLimit-Remaining") == "0" || resp.Header.Get("Retry-After") != "")) {
-			return Release{}, kindErrorf(ErrorRateLimit, "rate limited: status %d", resp.StatusCode)
-		}
-		switch resp.StatusCode {
-		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
-			return Release{}, kindErrorf(ErrorAccess, "release lookup refused: status %d", resp.StatusCode)
-		}
-		return Release{}, kindErrorf(ErrorNetwork, "unexpected status %d", resp.StatusCode)
+	if err := statusError(resp, "release lookup"); err != nil {
+		return Release{}, err
 	}
 
 	var release Release
@@ -258,4 +246,26 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 		return Release{}, kindErrorf(ErrorRelease, "decode response: %w", err)
 	}
 	return release, nil
+}
+
+// statusError classifies a non-200 GitHub response to what (the release
+// lookup or an asset download), so both fetches report the same ErrorKind
+// and Permanent() verdict. It returns nil for 200.
+func statusError(resp *http.Response, what string) error {
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	// GitHub signals a rate limit (primary or secondary) as 429, or as
+	// 403 with no quota left or a Retry-After: transient, unlike a
+	// refused request.
+	if resp.StatusCode == http.StatusTooManyRequests ||
+		(resp.StatusCode == http.StatusForbidden &&
+			(resp.Header.Get("X-RateLimit-Remaining") == "0" || resp.Header.Get("Retry-After") != "")) {
+		return kindErrorf(ErrorRateLimit, "%s rate limited: status %d", what, resp.StatusCode)
+	}
+	switch resp.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+		return kindErrorf(ErrorAccess, "%s refused: status %d", what, resp.StatusCode)
+	}
+	return kindErrorf(ErrorNetwork, "%s: unexpected status %d", what, resp.StatusCode)
 }

@@ -2,6 +2,7 @@ package updater_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -80,6 +81,29 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 		return server
 	}
 
+	// assetStatus serves a healthy release whose asset downloads all answer
+	// with code (issue #280).
+	assetStatus := func(code int, header http.Header) *httptest.Server {
+		var serverURL string
+		mux := http.NewServeMux()
+		mux.HandleFunc("/repos/ousiassllc/pitha-trador/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(updater.Release{TagName: "v0.2.0", Assets: []updater.Asset{
+				{Name: installerName, BrowserDownloadURL: serverURL + "/download/installer.exe"},
+				{Name: "checksums.txt", BrowserDownloadURL: serverURL + "/download/checksums.txt"},
+			}})
+		})
+		mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
+			for k, v := range header {
+				w.Header()[k] = v
+			}
+			w.WriteHeader(code)
+		})
+		server := httptest.NewServer(mux)
+		serverURL = server.URL
+		t.Cleanup(server.Close)
+		return server
+	}
+
 	unreachable := newGitHubMock(t, "v0.2.0", "")
 	unreachable.Close()
 
@@ -98,6 +122,12 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 		{"API 500", apiStatus(http.StatusInternalServerError, nil), updater.ErrorNetwork},
 		{"200 with undecodable body", apiStatus(http.StatusOK, nil), updater.ErrorRelease},
 		{"non-semver tag", newGitHubMock(t, "latest", ""), updater.ErrorRelease},
+		{"asset 429 rate limit", assetStatus(http.StatusTooManyRequests, nil), updater.ErrorRateLimit},
+		{"asset 403 with Retry-After", assetStatus(http.StatusForbidden, http.Header{"Retry-After": {"60"}}), updater.ErrorRateLimit},
+		{"asset plain 403", assetStatus(http.StatusForbidden, nil), updater.ErrorAccess},
+		{"asset 401 unauthorized", assetStatus(http.StatusUnauthorized, nil), updater.ErrorAccess},
+		{"asset 404 removed", assetStatus(http.StatusNotFound, nil), updater.ErrorAccess},
+		{"asset 500", assetStatus(http.StatusInternalServerError, nil), updater.ErrorNetwork},
 		{"checksum mismatch", newGitHubMock(t, "v0.2.0", badChecksums), updater.ErrorVerification},
 		{"checksum entry missing", newGitHubMock(t, "v0.2.0", "\n"), updater.ErrorVerification},
 	}
