@@ -160,7 +160,7 @@ type activityEventMessage struct {
 // client takes its initial state from `GET /api/v1/activity` (functional.md
 // FR-ACT-4).
 func (h *ActivityHandler) WebSocket(c *gin.Context) {
-	conn, err := websocket.Accept(c.Writer, c.Request, nil)
+	conn, err := shared.AcceptWebSocket(c)
 	if err != nil {
 		return
 	}

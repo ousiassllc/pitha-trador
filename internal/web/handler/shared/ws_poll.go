@@ -61,7 +61,7 @@ func Transient(err error) error {
 // of the handler lingering until the next write fails (up to a full
 // polling interval).
 func PollWebSocket(c *gin.Context, next func() time.Duration, step func(ctx context.Context, conn *websocket.Conn) error) {
-	conn, err := websocket.Accept(c.Writer, c.Request, nil)
+	conn, err := AcceptWebSocket(c)
 	if err != nil {
 		return
 	}

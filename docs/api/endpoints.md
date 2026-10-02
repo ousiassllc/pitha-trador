@@ -76,7 +76,7 @@ stateDiagram-v2
 
 データ取得（`engine.State`等）が失敗しても、直ちには接続を閉じない（閉じるとブラウザが再接続を始め、接続自体は生きているのに「接続が切れています」が出るため。issue #266）。サーバーは最初の失敗を`slog`にWarnで記録して次のポーリングで再試行し、連続`MaxConsecutiveTransientErrors`（5）回失敗したら閉じる。回復時はInfoを記録する。書き込み失敗（クライアント切断）と存在しない銘柄（`/ws/symbols/{symbol}`）は即座に接続を終了する（`internal/web/handler/shared/ws_poll.go`の`Transient`）。
 
-デスクトップ版（Windows）はWails AssetServerがWebSocketを扱えない（Upgradeに501を返す）ため、`cmd/desktop`が`/ws/...`のUpgradeだけを受けるループバックの別リスナー（`router.WebSocketOnly`）を起動し、全画面の`<meta name="ws-base">`でそのアドレス（`ws://wails.localhost:<port>`）をLitコンポーネントに伝える（`lib/ws.ts`の`resolveWsUrl`が参照）。`cmd/server`ではmetaを出さず、従来どおりページと同じオリジンへ接続する。
+デスクトップ版はWindows（WebView2）のみ対応する。Wails AssetServerはWebSocketを扱えず、WebView2は`http(s)://wails.localhost/...`以外（`ws://`）をAssetServerへ回さずネットワークへ直接送るため、待ち受けが無いと接続が失敗する。そこで`cmd/desktop`は`/ws/...`のUpgradeだけを受けるループバックの別リスナー（`router.WebSocketOnly`）をランダムポートで起動し、全画面の`<meta name="ws-base">`でそのアドレス（`ws://wails.localhost:<port>`）をLitコンポーネントに伝える（`lib/ws.ts`の`resolveWsUrl`が参照）。`*.localhost`は`::1`にも解決され得るため、リスナーは`127.0.0.1`と`[::1]`の同一ポートの両方で待ち受ける（IPv6ループバックが無い環境のみIPv4のみ。`::1`側が使用中なら別ポートで再試行）。ホストは`wails.localhost`のためセッションCookie（ポートを区別しない）とHostGuardのOrigin検査（ホスト名のみ比較）はHTTPルートと同じく働き、Origin（`http://wails.localhost`）とHost（`wails.localhost:<port>`）のポート差はws-baseのホスト名に限って許可する（`shared.AcceptWebSocket`）。Windows以外のデスクトップ版（`wails://wails/`）にはこのリスナーがなく、ページ自身のオリジンではWebSocketを張れないためライブ更新は機能しない（未対応）。`cmd/server`ではmetaを出さず、従来どおりページと同じオリジンへ接続する。
 
 | パス | 用途 | 送信メッセージ例 |
 |------|------|-----------------|
@@ -122,3 +122,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.21 | 2026-10-01 | §6 WebSocketのデータ取得失敗時は即座に閉じず再試行（連続失敗で終了）、デスクトップ版は`ws-base`の別リスナーでWebSocketを提供すると明記 | issue #266 |
 | 1.22 | 2026-10-02 | `POST /settings/:key`の許可キーから`UPDATE_GITHUB_TOKEN`を削除（リポジトリのpublic化に伴い更新確認用トークン機能を廃止） | 更新確認用トークン機能の廃止 |
 | 1.23 | 2026-10-02 | §4に`GET /system/marketdata-status`を追加 | issue #295 |
+| 1.24 | 2026-10-02 | §6 デスクトップ版WebSocketの機構記述を実態に修正（WebView2は`ws://`をAssetServerへ回さず無リスナーで失敗／Windowsのみ対応）、別リスナーが`127.0.0.1`と`::1`の両方で待ち受けること・Originのポート差の扱いを追記 | issue #285/#286 |
