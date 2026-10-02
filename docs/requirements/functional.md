@@ -122,6 +122,13 @@ stateDiagram-v2
 
 表示項目: Symbol, Price, 1m/5m Return, Volume Ratio, VWAP距離, Spread, Jev Direction, Jev Confidence, Entry Quality, Current Position。候補銘柄更新周期（15〜30秒）に応じてライブ更新する。
 
+候補表の上に**スキャン状況パネル**を置く（issue #303。動作確認・「なぜこの銘柄が候補に出ないか」の調査用）:
+
+- FR-SCAN-3: 最新サイクルの**ファネル件数**（ユニバース → 特徴量算出 → Fast Screener通過 → Scout通過）と、最終サイクルの時刻・所要時間を表示する。Scout通過は候補に対するJev Scoutの判定が済んだ分までの件数（判定済み件数も併記）
+- FR-SCAN-4: 「スキャン対象を見る」で、ユニバース全銘柄（最大約4,000）のコード・名称・市場・状態（通過/除外/データ欠損）・理由・Scout結果を一覧する。検索（コード/名称）、状態・理由での絞り込み、ページング（既定50件・最大200件）を備え、1回に描画する行数を抑える
+- FR-SCAN-5: 除外は落ちた条件（FR-FS-1の閾値名＋上位N件の外）を、欠損は取得できなかった値（板情報なし・履歴不足（FR-FE-5）・市況データ未取得）を、理由コードと人が読めるラベルで示す。全フィルターを評価し複数の理由を併記する
+- FR-SCAN-6: 結果は**開いた時点のスナップショット**で、「更新」ボタン・絞り込み・ページ送りで再取得する（`/ws/scanner`には流さず、その挙動は変えない）。保持は最新1サイクル分のメモリ上のみで、再起動後・初回サイクル完了前は「まだスキャンサイクルが実行されていません」の空状態を表示する
+
 ### 5.2 Symbol Detail
 
 チャート（Price/VWAP/Volume）、Jev判定（Direction/Confidence/Regime/Entry Quality/Toxic Flow/Liquidity Stress）、Risk（Allowed Position/Stop/Take Profit）、Decision historyを表示する。
@@ -197,3 +204,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.13 | 2026-10-02 | FR-ERRLOG-3のマスク対象を拡張（`http://`のSlack URL、`Authorization: Basic/Digest/Negotiate`、queryの`passwd`/`secret`/`authorization`）、FR-ERRLOG-4に予算消化後の打ち切りを明記、FR-ERRLOG-5にExporter未注入時は500を明記（`functional/components-platform.md`） | issue #288/#289/#290 |
 | 1.14 | 2026-10-02 | §4.17にFR-SETTINGS-5（kabuトークン発行失敗時の継続起動・自動再試行と、原因別案内を示す市況データ接続バナー）、FR-SETTINGS-6（公開リリースが無い場合を失敗ではなく専用文言で表示）を追加（`functional/components-platform.md`） | issue #295/#296（要件側の記述漏れを解消: issue #298） |
 | 1.15 | 2026-10-03 | FR-SETTINGS-1/4・FR-SETUP-2を接続先別の一覧＋モーダル構成へ変更（「詳細設定（任意）」の折りたたみを廃止し、キー・URL・モデル名を接続先ごとに集約。アップデート／エラーログは「システム」節のモーダル。`functional/components-platform.md`） | issue #302 |
+| 1.16 | 2026-10-03 | §5.1 にスキャン状況パネル（FR-SCAN-3〜6: ファネル件数・ユニバース銘柄一覧・除外/欠損理由・手動更新）を追加 | issue #303 |

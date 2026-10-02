@@ -23,7 +23,7 @@
 
 ### 4.2 Fast Screener
 
-- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する
+- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-1〜4）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する）
 - FR-FS-2: 通過銘柄に対し以下のスコアを算出し、上位N銘柄のみJev Scoutへ送る
 
 ```text

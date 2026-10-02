@@ -123,6 +123,7 @@ type Scout struct {
 	rag        *rag.Service
 	thresholds config.JevScoutConfig
 	news       NewsSource
+	recorder   ScoutRecorder
 }
 
 // NewScout returns a Scout that calls client, persists decisions via
@@ -143,6 +144,7 @@ func NewScout(client *Client, decisions *judgement.DecisionRepository, snapshots
 		rag:        ragService,
 		thresholds: thresholds,
 		news:       o.news,
+		recorder:   o.recorder,
 	}
 }
 
@@ -228,6 +230,7 @@ func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 
 	_, passed, err := s.Evaluate(ctx, payload.InstrumentID, StateFromSnapshot(snapshots[0]))
+	s.record(payload.Symbol, passed, err)
 	if err != nil {
 		return err
 	}
@@ -243,6 +246,21 @@ func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		return fmt.Errorf("jev: enqueue jev-trader job for %q: %w", payload.Symbol, err)
 	}
 	return nil
+}
+
+// record reports a job's verdict to the optional recorder.
+func (s *Scout) record(symbol string, passed bool, err error) {
+	if s.recorder == nil {
+		return
+	}
+	switch {
+	case err != nil:
+		s.recorder.RecordScout(symbol, domain.ScoutError)
+	case passed:
+		s.recorder.RecordScout(symbol, domain.ScoutPassed)
+	default:
+		s.recorder.RecordScout(symbol, domain.ScoutFailed)
+	}
 }
 
 func hashState(stateJSON []byte) string {

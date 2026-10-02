@@ -154,7 +154,8 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	newsEnabled := lunaClient.Configured() && newsFeed.Configured()
 	newsService := newsfeed.NewService(newsFeed, assist.NewLuna(lunaClient), instruments)
 
-	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout, jev.WithNewsSource(newsService))
+	screenerSource := screener.NewLiveSource()
+	scout := jev.NewScout(jevClient, decisions, snapshots, jobs, ragService, state.Strategy.JevScout, jev.WithNewsSource(newsService), jev.WithScoutRecorder(screenerSource))
 	trader := jev.NewTrader(jevClient, decisions, ragService, jev.WithNewsSource(newsService))
 
 	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(state.Risk.Paper))
@@ -225,7 +226,6 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	}
 	sched := scheduler.New(jobs, instruments, schedOpts...)
 
-	screenerSource := screener.NewLiveSource()
 	pushFeed := pushfeed.New(instruments, marketDataClient, marketdata.DefaultPushURL, defaultKabuExchange)
 	marketDataHandler := &marketdatajob.Handler{
 		Boards: pushFeed, Instruments: instruments, Snapshots: snapshots, FeatureEngine: featureEngine,

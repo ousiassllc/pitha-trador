@@ -59,6 +59,7 @@ func (r *Refresher) inSession(t time.Time) bool {
 // fabricated" precedent marketdatajob's own History/MarketReturn5m
 // comment already follows.
 func (r *Refresher) Refresh(ctx context.Context) error {
+	startedAt := time.Now().UTC()
 	actives, err := r.Instruments.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
 		return fmt.Errorf("candidates: list active instruments: %w", err)
@@ -69,8 +70,15 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 		return err
 	}
 
+	// symbols is the Scanner Dashboard's per-symbol view of this cycle
+	// (issue #303), one entry per active instrument in actives' (symbol)
+	// order; symbols[inputSlot[i]] is inputs[i]'s entry.
+	symbols := make([]domain.ScanSymbol, len(actives))
+	inputSlot := make([]int, 0, len(actives))
+	funnel := domain.ScanFunnel{Universe: len(actives)}
 	inputs := make([]screener.Input, 0, len(actives))
-	for _, inst := range actives {
+	for slot, inst := range actives {
+		symbols[slot] = domain.ScanSymbol{InstrumentID: inst.ID, Symbol: inst.Symbol, Name: inst.Name, Market: inst.Market}
 		// The latest bar plus featureengine.HistoryLookbackBars prior
 		// bars: enough for both the trailing turnover and
 		// ComputeScreenSignals' 15-minute volatility window.
@@ -79,14 +87,17 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 			return fmt.Errorf("candidates: list snapshots for %q: %w", inst.Symbol, err)
 		}
 		if len(bars) == 0 {
+			symbols[slot].Reasons = symbols[slot].Reasons.Add(domain.ScreenReasonNoSnapshot)
 			continue
 		}
+		funnel.FeatureComputed++
 
 		// Snapshot.Turnover is cumulative, so 5 minutes is a difference
 		// (featureengine.TurnoverOverWindow), never a sum; unknown counts
 		// as 0 and fails the liquidity floor (FR-FS-1).
 		var turnover5m float64
-		if t := featureengine.TurnoverOverWindow(bars[0].Timestamp, bars[0].Turnover, bars[1:], 5*time.Minute); t != nil {
+		t := featureengine.TurnoverOverWindow(bars[0].Timestamp, bars[0].Turnover, bars[1:], 5*time.Minute)
+		if t != nil {
 			turnover5m = *t
 		}
 
@@ -100,15 +111,23 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 			Symbol:              inst.Symbol,
 			Snapshot:            bars[0],
 			Turnover5mJPY:       turnover5m,
+			TurnoverMissing:     t == nil,
 			BreakoutStrength:    signals.BreakoutStrength,
 			VolatilityExpansion: signals.VolatilityExpansion,
 		})
+		inputSlot = append(inputSlot, slot)
 	}
 
-	candidates := screener.Run(cfg, inputs)
-	r.Screener.Set(candidates, time.Now().UTC())
-
+	result := screener.Screen(cfg, inputs)
+	candidates := result.Candidates
+	for i, reasons := range result.Reasons {
+		symbols[inputSlot[i]].Reasons = reasons
+	}
+	funnel.FastScreenerPassed = len(candidates)
 	now := time.Now().UTC()
+	r.Screener.Set(candidates, now)
+	r.Screener.SetScan(domain.ScanCycle{StartedAt: startedAt, FinishedAt: now, Funnel: funnel, Symbols: symbols})
+
 	if !r.inSession(now) {
 		// Jev Scout is billed per call: off-hours the candidate list still
 		// refreshes from stored data, but nothing is sent to Jev

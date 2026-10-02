@@ -53,3 +53,43 @@ func TestLiveSource_CandidatesReturnsMostRecentSet(t *testing.T) {
 		t.Errorf("asOf = %v, want %v", asOf, later)
 	}
 }
+
+func TestLiveSource_Scan_EmptyBeforeFirstCycle(t *testing.T) {
+	_, ok, err := screener.NewLiveSource().Scan(context.Background())
+	if err != nil || ok {
+		t.Fatalf("Scan() ok=%v err=%v, want ok=false", ok, err)
+	}
+}
+
+func TestLiveSource_Scan_RetainsLatestCycleAndFoldsScoutOutcomes(t *testing.T) {
+	src := screener.NewLiveSource()
+	src.Set([]domain.Candidate{{Symbol: "A"}, {Symbol: "B"}, {Symbol: "C"}}, time.Now())
+	src.SetScan(domain.ScanCycle{Funnel: domain.ScanFunnel{Universe: 9, FastScreenerPassed: 3}, Symbols: []domain.ScanSymbol{{Symbol: "A"}}})
+
+	src.RecordScout("A", domain.ScoutPassed)
+	src.RecordScout("B", domain.ScoutFailed)
+	src.RecordScout("C", domain.ScoutError) // error: not a verdict, not counted as evaluated
+	src.RecordScout("OLD", domain.ScoutPassed)
+
+	cycle, ok, _ := src.Scan(context.Background())
+	if !ok || cycle.Funnel.Universe != 9 {
+		t.Fatalf("Scan() = %+v ok=%v", cycle, ok)
+	}
+	if cycle.Funnel.ScoutEvaluated != 2 || cycle.Funnel.ScoutPassed != 1 {
+		t.Errorf("scout funnel = %+v, want evaluated 2 / passed 1", cycle.Funnel)
+	}
+	if _, stale := cycle.Scout["OLD"]; stale || cycle.Scout["C"] != domain.ScoutError {
+		t.Errorf("Scout map = %v", cycle.Scout)
+	}
+
+	// Scan returns a copy: mutating it cannot leak into the source, and a
+	// new cycle drops the old outcomes.
+	cycle.Scout["A"] = domain.ScoutFailed
+	if again, _, _ := src.Scan(context.Background()); again.Scout["A"] != domain.ScoutPassed {
+		t.Error("Scan() leaked its Scout map")
+	}
+	src.SetScan(domain.ScanCycle{})
+	if next, _, _ := src.Scan(context.Background()); len(next.Scout) != 0 || next.Funnel.ScoutPassed != 0 {
+		t.Errorf("new cycle kept stale scout outcomes: %+v", next)
+	}
+}
