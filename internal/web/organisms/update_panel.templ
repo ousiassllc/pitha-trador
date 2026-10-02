@@ -40,7 +40,7 @@ type UpdatePanelProps struct {
 // restarts.
 templ UpdatePanel(props UpdatePanelProps) {
 	<section class="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="update-panel">
-		<h2 class="text-lg font-semibold text-slate-900">アップデート</h2>
+		<h3 class="sr-only">アップデート</h3>
 		<p>現在のバージョン: { props.CurrentVersion }</p>
 		if props.Unavailable {
 			<p role="status" data-testid="update-unavailable">このビルドにはアップデート機能がないため、アップデートの確認は行えません（サーバー版は自動更新に対応していません）。</p>
