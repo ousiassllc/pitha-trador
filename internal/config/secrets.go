@@ -60,11 +60,6 @@ const (
 	KeySolBaseURL  = "SOL_BASE_URL"
 	KeyOpusAPIKey  = "OPUS_API_KEY"
 	KeyOpusBaseURL = "OPUS_BASE_URL"
-	// KeyUpdateGitHubToken supplies internal/service/updater.Config's Token:
-	// a GitHub token with read access to the repository, needed by the
-	// desktop app's automatic update check while the repository is private
-	// (issue #265). Optional: unset means unauthenticated requests.
-	KeyUpdateGitHubToken = "UPDATE_GITHUB_TOKEN"
 )
 
 // requiredSecretKeys are the Settings fields whose absence
@@ -76,7 +71,7 @@ var requiredSecretKeys = []string{KeyJevAPIKey, KeyKabuAPIPassword}
 // optionalSecretKeys are loaded like requiredSecretKeys but never reported
 // as missing.
 var optionalSecretKeys = []string{KeyJevBaseURL, KeyJevModel, KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey,
-	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL, KeyUpdateGitHubToken}
+	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL}
 
 // RequiredSecretKeys returns the keys whose absence keeps the app
 // unusable (JEV_API_KEY/KABU_API_PASSWORD): the Setup Guard redirects to
@@ -131,8 +126,6 @@ type Secrets struct {
 	SolBaseURL  string
 	OpusAPIKey  string
 	OpusBaseURL string
-	// UpdateGitHubToken is optional (see KeyUpdateGitHubToken).
-	UpdateGitHubToken string
 }
 
 // SecretsRepository is the subset of internal/repository/system.SecretsRepository's
@@ -194,7 +187,5 @@ func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []
 		SolBaseURL:      values[KeySolBaseURL],
 		OpusAPIKey:      values[KeyOpusAPIKey],
 		OpusBaseURL:     values[KeyOpusBaseURL],
-
-		UpdateGitHubToken: values[KeyUpdateGitHubToken],
 	}, missing, nil
 }

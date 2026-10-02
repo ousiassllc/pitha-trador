@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -53,11 +52,7 @@ type Release struct {
 
 // Asset is one GitHub release asset.
 type Asset struct {
-	Name string `json:"name"`
-	// URL is the asset's API endpoint; with Config.Token it is the only
-	// download path that works for a private repository (issue #265), where
-	// BrowserDownloadURL answers 404.
-	URL                string `json:"url,omitempty"`
+	Name               string `json:"name"`
 	BrowserDownloadURL string `json:"browser_download_url"`
 	// Size is the asset's byte size as reported by GitHub. When positive it
 	// must not exceed the download cap and the downloaded body must match it.
@@ -90,14 +85,6 @@ type Config struct {
 	// before any download is attempted.
 	Gate SafeGate
 
-	// Token is an optional GitHub token with read access to the repository
-	// (the Settings screen's UPDATE_GITHUB_TOKEN, config.KeyUpdateGitHubToken).
-	// A private repository answers an unauthenticated release lookup with
-	// 404 (issue #265); with a token the lookup and the asset downloads go
-	// through the authenticated API instead. It is only ever sent to
-	// BaseURL; surrounding whitespace is ignored.
-	Token string
-
 	// HTTPClient defaults to a plain http.Client; request deadlines come
 	// from MetadataTimeout/DownloadTimeout, not from the client.
 	HTTPClient *http.Client
@@ -118,7 +105,6 @@ type Config struct {
 type Checker struct {
 	owner, repo string
 	gate        SafeGate
-	token       string
 	httpClient  *http.Client
 	baseURL     string
 
@@ -162,7 +148,6 @@ func NewChecker(cfg Config) *Checker {
 		owner:             cfg.Owner,
 		repo:              cfg.Repo,
 		gate:              cfg.Gate,
-		token:             strings.TrimSpace(cfg.Token),
 		httpClient:        httpClient,
 		baseURL:           baseURL,
 		downloadURLPrefix: downloadURLPrefix,
@@ -245,7 +230,6 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	c.authorize(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -264,14 +248,7 @@ func (c *Checker) latestRelease(ctx context.Context) (Release, error) {
 		}
 		switch resp.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
-			// Without a token that usually means a private repository; with
-			// one, the token itself was rejected (expired, wrong scope, no
-			// access to this repository).
-			kind := ErrorAccess
-			if c.token != "" {
-				kind = ErrorAuth
-			}
-			return Release{}, kindErrorf(kind, "release lookup refused: status %d (token configured: %t)", resp.StatusCode, c.token != "")
+			return Release{}, kindErrorf(ErrorAccess, "release lookup refused: status %d", resp.StatusCode)
 		}
 		return Release{}, kindErrorf(ErrorNetwork, "unexpected status %d", resp.StatusCode)
 	}

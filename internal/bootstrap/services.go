@@ -219,7 +219,7 @@ func BuildServices(state *State, secrets config.Secrets, autoUpdate updater.Quit
 	var updateAdapter *updater.SchedulerAdapter
 	if autoUpdate != nil { // cmd/desktop only (issue #65); cmd/server passes nil
 		gate := updater.SafeGate{Positions: repoportfolio.New(positions, state.Risk.Paper.InitialCapital), State: riskEngine, Orders: executionEngine}
-		checker := updater.NewChecker(updater.Config{Owner: "ousiassllc", Repo: "pitha-trador", Gate: gate, Token: secrets.UpdateGitHubToken})
+		checker := updater.NewChecker(updater.Config{Owner: "ousiassllc", Repo: "pitha-trador", Gate: gate})
 		updateAdapter = &updater.SchedulerAdapter{Checker: checker, Quitter: autoUpdate}
 		schedOpts = append(schedOpts, scheduler.WithUpdateChecker(updateAdapter))
 	}

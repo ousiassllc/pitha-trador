@@ -38,7 +38,6 @@ var advancedSettingsFields = []settingsField{
 	{config.KeyNewsFeedURL, "NEWS_FEED_URL（任意）"},
 	{config.KeySolBaseURL, "SOL_BASE_URL（任意）"},
 	{config.KeyOpusBaseURL, "OPUS_BASE_URL（任意）"},
-	{config.KeyUpdateGitHubToken, "UPDATE_GITHUB_TOKEN（任意）"},
 }
 
 // defaultedKeys are the override-only keys whose unset state is the normal

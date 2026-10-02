@@ -54,7 +54,7 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 	// Issue #259: the scheduler's retry loop skips failures that only a new
 	// release or configuration can fix, via the error's Permanent() marker.
 	permanent := map[updater.ErrorKind]bool{
-		updater.ErrorAccess: true, updater.ErrorAuth: true, updater.ErrorVerification: true, updater.ErrorRelease: true,
+		updater.ErrorAccess: true, updater.ErrorVerification: true, updater.ErrorRelease: true,
 	}
 	status := func(t *testing.T, server *httptest.Server, want updater.ErrorKind) updater.Status {
 		t.Helper()
@@ -93,7 +93,7 @@ func TestChecker_Status_ErrorKindClassifiesFailures(t *testing.T) {
 		{"403 with no quota left", apiStatus(http.StatusForbidden, http.Header{"X-Ratelimit-Remaining": {"0"}}), updater.ErrorRateLimit},
 		{"403 with Retry-After", apiStatus(http.StatusForbidden, http.Header{"Retry-After": {"60"}}), updater.ErrorRateLimit},
 		{"plain 403", apiStatus(http.StatusForbidden, nil), updater.ErrorAccess},
-		{"401 bad token", apiStatus(http.StatusUnauthorized, nil), updater.ErrorAccess},
+		{"401 unauthorized", apiStatus(http.StatusUnauthorized, nil), updater.ErrorAccess},
 		{"404 private repo or unpublished", apiStatus(http.StatusNotFound, nil), updater.ErrorAccess},
 		{"API 500", apiStatus(http.StatusInternalServerError, nil), updater.ErrorNetwork},
 		{"200 with undecodable body", apiStatus(http.StatusOK, nil), updater.ErrorRelease},

@@ -86,3 +86,57 @@ func TestMigration000017_AddsOperatorManualReasonKeepingHistoryAndTriggers(t *te
 		t.Fatalf("resolutions after down = %d, err = %v, want 1", n, err)
 	}
 }
+
+// Migration 000018 removes the stored UPDATE_GITHUB_TOKEN secret (the key is
+// no longer in the Settings allow-list, so the user could not delete it
+// anymore) and nothing else.
+func TestMigration000018_DeletesOnlyTheUpdateGitHubTokenSecret(t *testing.T) {
+	conn, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	src, err := iofs.New(db.MigrationsFS, "migrations")
+	if err != nil {
+		t.Fatalf("iofs: %v", err)
+	}
+	drv, err := migratesqlite.WithInstance(conn, &migratesqlite.Config{})
+	if err != nil {
+		t.Fatalf("driver: %v", err)
+	}
+	m, err := migrate.NewWithInstance("iofs", src, "sqlite", drv)
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := m.Migrate(17); err != nil {
+		t.Fatalf("migrate to 17: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO secrets (key, encrypted_value, updated_at) VALUES
+		('UPDATE_GITHUB_TOKEN', 'enc-token', '2026-10-01T00:00:00Z'),
+		('JEV_API_KEY', 'enc-key', '2026-10-01T00:00:00Z')`); err != nil {
+		t.Fatalf("seed secrets: %v", err)
+	}
+
+	if err := m.Migrate(18); err != nil {
+		t.Fatalf("migrate to 18: %v", err)
+	}
+	rows, err := conn.Query(`SELECT key FROM secrets`)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var keys []string
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		keys = append(keys, k)
+	}
+	if len(keys) != 1 || keys[0] != "JEV_API_KEY" {
+		t.Fatalf("secrets after migration 18 = %v, want only JEV_API_KEY", keys)
+	}
+	if err := m.Migrate(17); err != nil {
+		t.Fatalf("migrate down to 17: %v", err)
+	}
+}

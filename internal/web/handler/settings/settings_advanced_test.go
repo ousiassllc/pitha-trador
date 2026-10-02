@@ -40,10 +40,11 @@ func TestSettingsHandler_Page_GroupsOverridesIntoCollapsedAdvancedSection(t *tes
 	if strings.Contains(section[:strings.Index(section, ">")], " open") {
 		t.Errorf("advanced section is open although no override is stored: %s", section[:strings.Index(section, ">")])
 	}
-	for _, key := range []string{
+	advancedKeys := []string{
 		config.KeyJevBaseURL, config.KeyJevModel, config.KeyLunaBaseURL, config.KeyNewsFeedURL,
-		config.KeySolBaseURL, config.KeyOpusBaseURL, config.KeyUpdateGitHubToken,
-	} {
+		config.KeySolBaseURL, config.KeyOpusBaseURL,
+	}
+	for _, key := range advancedKeys {
 		row := `data-testid="secret-field-row-` + key + `"`
 		if !strings.Contains(section, row) || strings.Contains(before, row) {
 			t.Errorf("%s is not (only) inside the 詳細設定 section", key)
@@ -58,8 +59,8 @@ func TestSettingsHandler_Page_GroupsOverridesIntoCollapsedAdvancedSection(t *tes
 			t.Errorf("%s is not shown outside the 詳細設定 section", key)
 		}
 	}
-	if got := strings.Count(before, `data-testid="secret-field-row-`); got >= len(config.AllowedSecretKeys())/2+1 {
-		t.Errorf("%d rows visible up front, want clearly fewer than the %d keys", got, len(config.AllowedSecretKeys()))
+	if got := strings.Count(before, `data-testid="secret-field-row-`); got != len(config.AllowedSecretKeys())-len(advancedKeys) {
+		t.Errorf("%d rows visible up front, want %d (every key except the 詳細設定 ones)", got, len(config.AllowedSecretKeys())-len(advancedKeys))
 	}
 }
 
