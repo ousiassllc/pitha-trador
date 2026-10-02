@@ -26,7 +26,7 @@ type connection struct {
 // order. Labels match the literal names operators previously set in `.env`
 // so the migration away from it stays recognizable. Every key here must be
 // in config.AllowedSecretKeys (the per-key routes' allow-list), and the
-// groups together must cover it exactly once, which settings_display_test.go
+// groups together must cover it exactly once, which settings_groups_test.go
 // asserts. Luna/Sol/Opus/News Feed are shown as optional until issue #273
 // (human decision) settles their default/hidden policy.
 var settingsConnections = []connection{
