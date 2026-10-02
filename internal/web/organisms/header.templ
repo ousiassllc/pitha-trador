@@ -45,6 +45,13 @@ import (
 // `updateStatusChanged` event the manual check response fires), or
 // nothing otherwise - including on cmd/server, which has no updater.
 //
+// `#marketdata-banner` (issue #295) is the same pattern for the kabuステー
+// ションAPI token: `GET /system/marketdata-status`
+// (internal/web/handler/system.MarketDataHandler.Status) renders
+// organisms.MarketDataBanner with the cause and remedy (not running / not
+// logged in / wrong API password, ...) while the last token issuance
+// failed, and nothing otherwise (re-polled every 30s).
+//
 // `#header-version` shows the running build's internal/version.Version on
 // every page and links to Settings' アップデート section (`/settings#update-
 // panel`), where the version is detailed and the manual update check
@@ -101,6 +108,14 @@ templ Header(state domain.SystemState) {
 			class="order-last w-full empty:hidden"
 			hx-get="/system/update-status"
 			hx-trigger="load, every 60s, updateStatusChanged from:body"
+			hx-target="this"
+			hx-swap="innerHTML"
+		></div>
+		<div
+			id="marketdata-banner"
+			class="order-last w-full empty:hidden"
+			hx-get="/system/marketdata-status"
+			hx-trigger="load, every 30s"
 			hx-target="this"
 			hx-swap="innerHTML"
 		></div>

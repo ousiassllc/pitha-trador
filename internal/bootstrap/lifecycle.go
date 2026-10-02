@@ -29,10 +29,15 @@ func (s *Services) Start(ctx context.Context) error {
 		// without the kabuステーションアプリ running, issue #44's own
 		// scope note) must not prevent the rest of the process (Scanner
 		// Dashboard, API, other queues) from starting: log and continue
-		// with no token. Every subsequent GetBoard call simply fails
-		// (ErrNoToken or a request error) and marketdatajob.Handler's own
-		// per-job error handling already covers that.
-		slog.Error("bootstrap: kabuステーションAPI initial token issuance failed, continuing without a token", "error", err)
+		// with no token. MarketData.Start keeps retrying in the background
+		// (issue #295) and the header banner (`/system/marketdata-status`)
+		// tells the operator the cause. Every GetBoard call until a token
+		// is obtained simply fails (ErrNoToken or a request error) and
+		// marketdatajob.Handler's own per-job error handling already
+		// covers that.
+		status := s.MarketData.TokenStatus()
+		slog.Error("bootstrap: kabuステーションAPI initial token issuance failed, continuing without a token",
+			"issue", status.Issue, "guidance", status.Guidance(), "error", err)
 	}
 
 	fullScanInterval := time.Duration(s.strategy.Scan.FullScanIntervalSeconds) * time.Second
