@@ -124,4 +124,5 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.23 | 2026-10-02 | §4に`GET /system/marketdata-status`を追加 | issue #295 |
 | 1.24 | 2026-10-02 | §6 デスクトップ版WebSocketの機構記述を実態に修正（WebView2は`ws://`をAssetServerへ回さず無リスナーで失敗／Windowsのみ対応）、別リスナーが`127.0.0.1`と`::1`の両方で待ち受けること・Originのポート差の扱いを追記 | issue #285/#286 |
 | 1.25 | 2026-10-02 | Setup Guardの必須キー（`JEV_API_KEY`/`KABU_API_PASSWORD`の2つ）への変更（`JEV_BASE_URL`は任意の上書き）に合わせ、`/system/secrets-status`の説明に残っていた「必須3キー」表現を更新 | issue #271/#291 |
+| 1.26 | 2026-10-02 | `GET /api/v1/logs/errors`（`api/endpoints/huma-api.md`）にエクスポータ未注入時（組み立て漏れ）とログディレクトリ読取不可時の500を明記（FR-ERRLOG-5と一致） | issue #299 |
 | 1.27 | 2026-10-02 | §1のWailsアプリのバインド記述を、Windowsのみ`/ws/...`専用ループバックリスナー（`127.0.0.1`と`[::1]`）を起動する実態に合わせて修正（「内蔵HTTPサーバーは`127.0.0.1`にのみバインド」を是正） | issue #300（#266/#285の実装との乖離解消） |

@@ -249,7 +249,7 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 {"time":"2026-10-01T11:36:02.123Z","level":"ERROR","msg":"update check failed","error":"Get \"https://example.invalid/releases\": dial tcp: lookup failed"}
 ```
 
-5xxは固定メッセージのみ（`api/endpoints.md` §7）。Setup Guardの対象で、必須認証情報が未設定の間は503 JSON。
+500（いずれも固定メッセージ。原因はslogへ。`api/endpoints.md` §7）は、ログディレクトリを読めないとき、およびエクスポータ未注入のとき（`router.WithErrorLogExporter`の組み立て漏れ。`router.New()`の既定は常に失敗するエクスポータで、空の200ダウンロードが「エラー0件」に見えるのを避ける）。Setup Guardの対象で、必須認証情報が未設定の間は503 JSON。
 
 ### エンドポイント一覧表
 
