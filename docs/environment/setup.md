@@ -87,7 +87,7 @@ make dev
 
 | 変数 | 参照元 | 既定値・挙動 |
 |---|---|---|
-| `PITHA_SERVER_ADDR` | `cmd/server` | HTTPサーバー（ヘッドレス起動）の待受アドレス。既定`127.0.0.1:48080`。loopback以外（`:48080`・`0.0.0.0`・LAN IP等）は起動を拒否する。`cmd/desktop`（Wails）はネットワークポートを待ち受けない |
+| `PITHA_SERVER_ADDR` | `cmd/server` | HTTPサーバー（ヘッドレス起動）の待受アドレス。既定`127.0.0.1:48080`。loopback以外（`:48080`・`0.0.0.0`・LAN IP等）は起動を拒否する。`cmd/desktop`（Wails）のページ・APIはAssetServer経由で配信され、ネットワークポートを待ち受けない。例外としてWindows（WebView2）のみ、`/ws/...`のUpgradeだけを受ける専用のループバックリスナーをランダムポートで起動する（`127.0.0.1`と`[::1]`の同一ポート。`[::1]`が使えない環境では`127.0.0.1`のみ。本変数の対象外、`cmd/desktop/ws_listener.go`。`api/endpoints.md` §6） |
 | `PITHA_SERVER_ALLOW_NON_LOOPBACK` | `cmd/server` | `1`のときのみ`PITHA_SERVER_ADDR`にloopback以外を許可する（意図的な公開用） |
 | `PITHA_SERVER_ALLOWED_HOSTS` | `cmd/server` | `PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ有効。Hostヘッダとして受け付ける追加ホスト名（カンマ区切り、DNS rebinding対策のHost検証。loopback名（`localhost`/`127.0.0.1`/`::1`）とワイルドカード以外の`PITHA_SERVER_ADDR`のホストは常に許可） |
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
@@ -249,3 +249,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.21 | 2026-10-01 | Settings画面経由の入力対象に`UPDATE_GITHUB_TOKEN`（非公開リポジトリのリリース取得用、任意）を追加 | issue #265 |
 | 1.22 | 2026-10-02 | Settings画面経由の入力対象から`UPDATE_GITHUB_TOKEN`を削除（リポジトリのpublic化に伴い更新確認用トークン機能を廃止） | 更新確認用トークン機能の廃止 |
 | 1.23 | 2026-10-02 | Settings画面経由の入力対象に`JEV_MODEL`を追加し、必須キーを`JEV_API_KEY`/`KABU_API_PASSWORD`の2つへ更新（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`付きの任意上書き）。履歴1.7の「必須3キー」は当時の記録 | issue #271/#291 |
+| 1.24 | 2026-10-02 | 環境変数表`PITHA_SERVER_ADDR`の「`cmd/desktop`はネットワークポートを待ち受けない」を、Windowsのみ`/ws/...`専用のループバックリスナー（`127.0.0.1`と`[::1]`、ランダムポート）を起動する実態に合わせて修正 | issue #300（#266/#285の実装との乖離解消） |
