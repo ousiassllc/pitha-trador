@@ -1,6 +1,7 @@
 // Stateless templates for pitha-activity-feed's Job Queues table and Recent
 // Kill Switch Events section, split out of the element to keep it small.
 import { html, nothing } from 'lit';
+import { lightDomErrorClass } from '../lib/styles';
 import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 
 export function renderQueueStatus(queues: QueueStatus[]) {
@@ -45,7 +46,7 @@ export function renderKillSwitchEvents(
       <h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Kill Switch Events</h2>
       ${
         error
-          ? html`<p class="pitha-activity-feed-error" role="alert">Failed to load kill switch events: ${error}</p>`
+          ? html`<p class="pitha-activity-feed-error ${lightDomErrorClass}" role="alert">Failed to load kill switch events: ${error}</p>`
           : nothing
       }
       ${
