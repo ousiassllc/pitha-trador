@@ -132,8 +132,8 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
 
 ### 4.8 Entry / Exit
 
-- FR-ENTRY-1: 成行想定Paper Entry・指値Paper Entryの両方を選択可能とする
-- FR-ENTRY-2: 実売買へ移行する場合は原則として指値を優先する
+- FR-ENTRY-1: 成行想定Paper Entry・指値Paper Entryの両方を選択可能とする。現状はExecutionエンジン（`internal/service/execution`）が両方を実装しており（`EntryRequest.OrderType`/`LimitPrice`、`Config.PreferLimit`、PENDING指値の約定処理`TryFillPending`）、本番経路（Policy → `paperexec` → Execution）は`OrderType`/`LimitPrice`を指定しないため常に成行想定で発注する。`Config.PreferLimit`は`config/*.yaml`・環境変数・`runtime_settings`のいずれにも設定キーが無く既定のfalse（成行）固定であり、運用で指値Entryを選ぶ手段は未提供（本番経路への配線は実売買移行時にFR-ENTRY-2と併せて行う）
+- FR-ENTRY-2: 実売買へ移行する場合は原則として指値を優先する（Paper Tradingの現行運用は上記のとおり成行想定）
 - FR-ENTRY-3（ポジションサイジング）: Paper Entryの発注数量は、次の3つの上限株数の最小値を単元（100株）単位に切り下げた値とする。1単元にも満たない場合は発注せず、拘束した制限（`max_trade_loss_pct` / `max_position_per_symbol_pct` / `max_total_exposure_pct`）を理由に見送る
   - 1トレード最大損失: `initial_capital × max_trade_loss_pct ÷ (価格 × stop_loss_pct)`
   - 銘柄上限: `initial_capital × max_position_per_symbol_pct ÷ 価格`
