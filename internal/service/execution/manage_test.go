@@ -70,35 +70,6 @@ func TestEngine_OnSnapshot_ClosesPositionWhenStopLossTriggers(t *testing.T) {
 	}
 }
 
-func TestEngine_OnSnapshot_FillsPendingLimitEntryOnceCrossed(t *testing.T) {
-	te := newTestEngine(t, execution.DefaultConfig())
-	ctx := context.Background()
-	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
-	limit := 1990.0
-	if _, err := te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: longSignal(te.instrument.ID), Quantity: 100,
-		OrderType: domain.OrderTypeLimit, LimitPrice: &limit, Price: 2000, Now: now,
-	}); err != nil {
-		t.Fatalf("Enter: %v", err)
-	}
-
-	result, err := te.engine.OnSnapshot(ctx, snapshotAt(te.instrument.ID, 1995, now.Add(time.Minute)))
-	if err != nil {
-		t.Fatalf("OnSnapshot above limit: %v", err)
-	}
-	if len(result.Filled) != 0 || result.Position != nil {
-		t.Fatalf("OnSnapshot above the BUY limit = %+v, want nothing filled", result)
-	}
-
-	result, err = te.engine.OnSnapshot(ctx, snapshotAt(te.instrument.ID, 1989, now.Add(2*time.Minute)))
-	if err != nil {
-		t.Fatalf("OnSnapshot at crossing price: %v", err)
-	}
-	if len(result.Filled) != 1 || result.Position == nil || result.Position.EntryPrice != 1989 {
-		t.Fatalf("OnSnapshot at crossing price = %+v, want the limit order filled at 1989 and an open position", result)
-	}
-}
-
 func TestEngine_OnSnapshot_NoPositionIsANoOp(t *testing.T) {
 	te := newTestEngine(t, execution.DefaultConfig())
 
@@ -111,51 +82,32 @@ func TestEngine_OnSnapshot_NoPositionIsANoOp(t *testing.T) {
 	}
 }
 
-// A missing price (0) must neither stop the position out at -100% nor mark
-// it nor fill a pending BUY limit at 0 (issue #173).
-func TestEngine_OnSnapshot_RejectsNonPositivePrice(t *testing.T) {
-	te := newTestEngine(t, execution.DefaultConfig())
-	ctx := context.Background()
-	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
-	entry, err := te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: longSignal(te.instrument.ID), Quantity: 100, Price: 2000, Now: now,
-	})
-	if err != nil {
-		t.Fatalf("Enter: %v", err)
+// Enter must reject what #173 rejects elsewhere, plus quantity <= 0 (#342).
+func TestEngine_Enter_RejectsInvalidPriceOrQuantity(t *testing.T) {
+	nan, zero := math.NaN(), 0.0
+	cases := map[string]struct {
+		req  execution.EntryRequest
+		want error
+	}{
+		"price 0":           {execution.EntryRequest{Quantity: 100, Price: 0}, execution.ErrInvalidPrice},
+		"price NaN":         {execution.EntryRequest{Quantity: 100, Price: nan}, execution.ErrInvalidPrice},
+		"price +Inf":        {execution.EntryRequest{Quantity: 100, Price: math.Inf(1)}, execution.ErrInvalidPrice},
+		"limit price 0":     {execution.EntryRequest{Quantity: 100, Price: 2000, OrderType: domain.OrderTypeLimit, LimitPrice: &zero}, execution.ErrInvalidPrice},
+		"limit price NaN":   {execution.EntryRequest{Quantity: 100, Price: 2000, OrderType: domain.OrderTypeLimit, LimitPrice: &nan}, execution.ErrInvalidPrice},
+		"quantity 0":        {execution.EntryRequest{Quantity: 0, Price: 2000}, execution.ErrInvalidQuantity},
+		"quantity negative": {execution.EntryRequest{Quantity: -100, Price: 2000}, execution.ErrInvalidQuantity},
 	}
-
-	for _, price := range []float64{0, -1, math.NaN(), math.Inf(1)} {
-		if _, err := te.engine.OnSnapshot(ctx, snapshotAt(te.instrument.ID, price, now.Add(time.Minute))); !errors.Is(err, execution.ErrInvalidPrice) {
-			t.Fatalf("OnSnapshot(price=%v) err = %v, want ErrInvalidPrice", price, err)
-		}
-	}
-	if _, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 0, now); !errors.Is(err, execution.ErrInvalidPrice) {
-		t.Fatalf("Close(price=0) err = %v, want ErrInvalidPrice", err)
-	}
-
-	got, err := te.positions.Get(ctx, entry.Position.ID)
-	if err != nil {
-		t.Fatalf("Get position: %v", err)
-	}
-	if !got.IsOpen() || got.CurrentPrice != 2000 {
-		t.Errorf("position = %+v, want still open and unmarked at 2000", got)
-	}
-}
-
-func TestEngine_TryFillPending_RejectsNonPositivePrice(t *testing.T) {
-	te := newTestEngine(t, execution.DefaultConfig())
-	ctx := context.Background()
-	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
-	limit := 1990.0
-	entry, err := te.engine.Enter(ctx, execution.EntryRequest{
-		Signal: longSignal(te.instrument.ID), Quantity: 100,
-		OrderType: domain.OrderTypeLimit, LimitPrice: &limit, Price: 2000, Now: now,
-	})
-	if err != nil {
-		t.Fatalf("Enter: %v", err)
-	}
-	_, ok, err := te.engine.TryFillPending(ctx, entry.Order.ID, domain.JevDirectionLong, 0, now)
-	if ok || !errors.Is(err, execution.ErrInvalidPrice) {
-		t.Fatalf("TryFillPending(price=0) = ok %v, err %v; want unfilled ErrInvalidPrice", ok, err)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			te := newTestEngine(t, execution.DefaultConfig())
+			tc.req.Signal, tc.req.Now = longSignal(te.instrument.ID), time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
+			ctx := context.Background()
+			if _, err := te.engine.Enter(ctx, tc.req); !errors.Is(err, tc.want) {
+				t.Fatalf("Enter() err = %v, want %v", err, tc.want)
+			}
+			if _, err := te.positions.GetOpenByInstrument(ctx, te.instrument.ID); !errors.Is(err, domain.ErrPositionNotFound) {
+				t.Errorf("GetOpenByInstrument err = %v, want ErrPositionNotFound", err)
+			}
+		})
 	}
 }

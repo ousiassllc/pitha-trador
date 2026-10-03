@@ -1,7 +1,9 @@
 package sqlitedb_test
 
 import (
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
@@ -149,5 +151,61 @@ func TestOpen_PositionsTableAllowsOnlyOneOpenPositionPerInstrument(t *testing.T)
 	}
 	if err := insertPosition(secondOrderID, "2026-09-26T03:00:00Z"); err != nil {
 		t.Fatalf("insert new open position after prior close: %v", err)
+	}
+}
+
+func TestOpen_CreatesOwnerOnlyDatabaseFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
+	dir := filepath.Join(t.TempDir(), "nested", "pitha-trador")
+	dbPath := filepath.Join(dir, "pitha.db")
+
+	conn, err := sqlitedb.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	// Force a write so the -wal/-shm side files exist while the DB is open.
+	if _, err := conn.Exec("CREATE TABLE perm_probe (id INTEGER)"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	assertMode(t, dir, 0o700)
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		assertMode(t, dbPath+suffix, 0o600)
+	}
+}
+
+func TestOpen_TightensExistingWorldReadableDatabase(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+	if err := os.WriteFile(dbPath, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dbPath, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := sqlitedb.Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	assertMode(t, dbPath, 0o600)
+}
+
+func assertMode(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %q: %v", path, err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Errorf("%q mode = %o, want %o", path, got, want)
 	}
 }

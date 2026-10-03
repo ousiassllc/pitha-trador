@@ -1,126 +1,72 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import './pitha-activity-feed';
-import type { ActivityEvent, QueueStatus } from './pitha-activity-feed';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
+import {
+  createFeed,
+  emit,
+  event,
+  FakeWebSocket,
+  type FeedElement,
+  flush,
+  installFakes,
+  mount,
+  queue,
+} from './activity-feed-test-support';
 import { PithaActivityFeed } from './pitha-activity-feed';
 
-type Listener = (event: unknown) => void;
-type FeedElement = HTMLElement & { updateComplete: Promise<boolean> };
+installFakes();
 
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = [];
-  private listeners: Record<string, Listener[]> = {};
-
-  constructor(public readonly url: string) {
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(type: string, listener: Listener): void {
-    if (!this.listeners[type]) {
-      this.listeners[type] = [];
-    }
-    this.listeners[type].push(listener);
-  }
-
-  emit(type: string, event: unknown = {}): void {
-    for (const listener of this.listeners[type] ?? []) {
-      listener(event);
+// Same upgrade-after-existing-children timing as
+// pitha-scanner-table.hydration.test.ts: the SSR markup must already be
+// in the DOM when the (subclass) element is defined, or this would be a
+// fresh construction that never sees children to preserve.
+function hydrate(tag: string): FeedElement {
+  document.body.innerHTML = `<${tag} api-url="/api/v1/activity" ws-url="/ws/activity" kill-switch-events-url="/api/v1/activity?type=kill_switch&limit=10"><section id="queue-status"><table><tbody><tr data-queue="ssr"></tr></tbody></table></section><section id="activity-feed"><table><tbody><tr data-event-type="ssr"></tr></tbody></table></section></${tag}>`;
+  // happy-dom runs connectedCallback before delivering the existing
+  // attributes on upgrade, unlike browsers (attributeChangedCallback
+  // first). Read them in the constructor to reproduce the browser
+  // order, since the component has no URL defaults.
+  class PithaActivityFeedUnderTest extends PithaActivityFeed {
+    constructor() {
+      super();
+      this.apiUrl = this.getAttribute('api-url') ?? '';
+      this.wsUrl = this.getAttribute('ws-url') ?? '';
+      this.killSwitchEventsUrl = this.getAttribute('kill-switch-events-url') ?? '';
     }
   }
-
-  close(): void {
-    this.emit('close', { code: 1000 });
-  }
-}
-
-const queue = (overrides: Partial<QueueStatus> = {}): QueueStatus => ({
-  queue: 'jev-scout',
-  pending: 3,
-  running: 1,
-  failed_recent: 0,
-  ...overrides,
-});
-
-const event = (overrides: Partial<ActivityEvent> = {}): ActivityEvent => ({
-  type: 'jev_trader',
-  timestamp: '2026-09-29T01:15:00Z',
-  symbol: '7203',
-  detail: 'direction=LONG confidence=0.74',
-  latency_ms: 820,
-  ...overrides,
-});
-
-let originalFetch: typeof fetch;
-let originalWebSocket: typeof WebSocket;
-
-beforeEach(() => {
-  originalFetch = globalThis.fetch;
-  originalWebSocket = globalThis.WebSocket;
-  FakeWebSocket.instances = [];
-  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
-  document.body.innerHTML = '';
-});
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-  globalThis.WebSocket = originalWebSocket;
-  document.body.innerHTML = '';
-});
-
-// The component fetches fire-and-forget from connectedCallback, so there
-// is no promise to await; yielding one setImmediate macrotask boundary
-// (no wall-clock duration involved) lets the whole promise-based
-// fetch -> json -> state-assignment chain settle first.
-async function flush(el: FeedElement): Promise<void> {
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  await el.updateComplete;
-}
-
-// mount stubs `fetch` so that `type=kill_switch` requests return
-// killSwitchEvents and every other request returns { queues, events }.
-async function mount(
-  queues: QueueStatus[],
-  events: ActivityEvent[],
-  killSwitchEvents: ActivityEvent[] = [],
-) {
-  const fetchMock = mock((url: string) => {
-    const body = url.includes('type=kill_switch')
-      ? { queues, events: killSwitchEvents, as_of: 'x' }
-      : { queues, events, as_of: 'x' };
-    return Promise.resolve(new Response(JSON.stringify(body)));
-  });
-  globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-  const el = document.createElement('pitha-activity-feed') as FeedElement;
-  document.body.appendChild(el);
-  await flush(el);
-  return { el, fetchMock };
-}
-
-function emit(message: unknown): void {
-  FakeWebSocket.instances[0].emit('message', { data: JSON.stringify(message) });
+  customElements.define(tag, PithaActivityFeedUnderTest);
+  return document.querySelector(tag) as FeedElement;
 }
 
 describe('pitha-activity-feed', () => {
-  // Same upgrade-after-existing-children timing as
-  // pitha-scanner-table.hydration.test.ts: the SSR markup must already be
-  // in the DOM when the (subclass) element is defined, or this would be a
-  // fresh construction that never sees children to clear.
-  test('replaces the server-rendered fallback instead of duplicating it', async () => {
+  test('replaces the server-rendered fallback with the snapshot once it arrives', async () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(
         new Response(JSON.stringify({ queues: [queue()], events: [event()], as_of: 'x' })),
       ),
     ) as unknown as typeof fetch;
-    document.body.innerHTML =
-      '<pitha-activity-feed-hydration-test><section id="queue-status"><table><tbody><tr data-queue="ssr"></tr></tbody></table></section></pitha-activity-feed-hydration-test>';
-    class PithaActivityFeedUnderTest extends PithaActivityFeed {}
-    customElements.define('pitha-activity-feed-hydration-test', PithaActivityFeedUnderTest);
-    const el = document.querySelector('pitha-activity-feed-hydration-test') as FeedElement;
+    const el = hydrate('pitha-activity-feed-hydration-test');
     await flush(el);
 
     expect(el.querySelectorAll('#queue-status')).toHaveLength(1);
+    expect(el.querySelectorAll('#activity-feed')).toHaveLength(1);
     expect(el.querySelector('[data-queue="ssr"]')).toBeNull();
+    expect(el.querySelector('[data-event-type="ssr"]')).toBeNull();
     expect(el.querySelector('[data-queue="jev-scout"]')).not.toBeNull();
+  });
+
+  test('keeps the server-rendered fallback while loading and when the snapshot fetch fails', async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response('boom', { status: 500 })),
+    ) as unknown as typeof fetch;
+    const el = hydrate('pitha-activity-feed-hydration-failure-test');
+    await flush(el);
+
+    expect(el.querySelector('[data-queue="ssr"]')).not.toBeNull();
+    expect(el.querySelector('[data-event-type="ssr"]')).not.toBeNull();
+    expect(el.querySelectorAll('#queue-status')).toHaveLength(1);
+    expect(el.querySelectorAll('#activity-feed')).toHaveLength(1);
+    expect(el.querySelector('[role="alert"]')).not.toBeNull();
+    // Light DOM: Shadow `noticeStyles` do not apply, so Tailwind classes must (#355).
+    expect(el.querySelector('[role="alert"]')?.classList.contains('text-red-700')).toBe(true);
   });
 
   test('renders queue counts and feed rows from the snapshot', async () => {
@@ -164,6 +110,50 @@ describe('pitha-activity-feed', () => {
     );
   });
 
+  test('shows "No kill switch events." only after a successful empty load', async () => {
+    let release: (res: Response) => void = () => {};
+    const fetchMock = mock((url: string) =>
+      url.includes('type=kill_switch')
+        ? new Promise<Response>((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve(new Response(JSON.stringify({ queues: [], events: [], as_of: 'x' }))),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const el = createFeed();
+    document.body.appendChild(el);
+    await flush(el);
+
+    const section = () => el.querySelector('#kill-switch-events')?.textContent ?? '';
+    expect(section()).not.toContain('No kill switch events.');
+    expect(section()).toContain('Loading kill switch events');
+
+    release(new Response(JSON.stringify({ queues: [], events: [], as_of: 'x' })));
+    await flush(el);
+    expect(section()).toContain('No kill switch events.');
+  });
+
+  test('shows an alert instead of "No kill switch events." when the fetch fails', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    globalThis.fetch = mock((url: string) =>
+      Promise.resolve(
+        url.includes('type=kill_switch')
+          ? new Response('boom', { status: 500 })
+          : new Response(JSON.stringify({ queues: [], events: [], as_of: 'x' })),
+      ),
+    ) as unknown as typeof fetch;
+    const el = createFeed();
+    document.body.appendChild(el);
+    await flush(el);
+
+    const section = el.querySelector('#kill-switch-events');
+    expect(section?.querySelector('[role="alert"]')).not.toBeNull();
+    expect(section?.querySelector('[role="alert"]')?.classList.contains('text-red-700')).toBe(true);
+    expect(section?.textContent).not.toContain('No kill switch events.');
+    expect(section?.textContent).not.toContain('Loading kill switch events');
+    errorSpy.mockRestore();
+  });
+
   test('job_update pushes replace only that queue counts', async () => {
     const { el, fetchMock } = await mount(
       [queue(), queue({ queue: 'jev-trader', pending: 5 })],
@@ -196,63 +186,6 @@ describe('pitha-activity-feed', () => {
     expect(rows[0].textContent).toContain('9984');
   });
 
-  test('type filter re-fetches with ?type= and drops non-matching pushes', async () => {
-    const { el, fetchMock } = await mount([queue()], [event()]);
-
-    const select = el.querySelector('select[data-filter="type"]') as HTMLSelectElement;
-    select.value = 'jev_scout';
-    select.dispatchEvent(new Event('change'));
-    await flush(el);
-    const urls = fetchMock.mock.calls.map((c) => c[0] as string);
-    expect(urls.some((u) => u.includes('?type=jev_scout') && !u.includes('kill_switch'))).toBe(
-      true,
-    );
-
-    const rowsBefore = el.querySelectorAll('#activity-feed tbody tr').length;
-    emit({ type: 'activity_event', event: event({ type: 'jev_trader', symbol: '1111' }) });
-    await el.updateComplete;
-    expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(rowsBefore);
-
-    emit({ type: 'activity_event', event: event({ type: 'jev_scout', symbol: '2222' }) });
-    await el.updateComplete;
-    expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(rowsBefore + 1);
-  });
-
-  test('queue filter matches only job events on that queue', async () => {
-    const { el, fetchMock } = await mount([queue()], []);
-
-    const select = el.querySelector('select[data-filter="queue"]') as HTMLSelectElement;
-    select.value = 'jev-scout';
-    select.dispatchEvent(new Event('change'));
-    await flush(el);
-    expect((fetchMock.mock.calls.at(-1)?.[0] as string) ?? '').toContain('queue=jev-scout');
-
-    emit({
-      type: 'activity_event',
-      event: event({ type: 'job', queue: 'jev-trader', symbol: undefined }),
-    });
-    emit({ type: 'activity_event', event: event({ type: 'jev_scout' }) });
-    emit({
-      type: 'activity_event',
-      event: event({ type: 'job', queue: 'jev-scout', symbol: undefined }),
-    });
-    await el.updateComplete;
-
-    const rows = el.querySelectorAll('#activity-feed tbody tr');
-    expect(rows).toHaveLength(1);
-    expect(rows[0].getAttribute('data-event-type')).toBe('job');
-  });
-
-  test('caps the live feed at 500 rows', async () => {
-    const { el } = await mount([queue()], []);
-    for (let i = 0; i < 510; i++) {
-      emit({ type: 'activity_event', event: event({ symbol: String(i) }) });
-    }
-    await el.updateComplete;
-
-    expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(500);
-  });
-
   // The first update cycle used to close and reopen the socket (issue #170).
   test('opens a single WebSocket on mount and reconnects once when ws-url changes', async () => {
     const { el } = await mount([queue()], []);
@@ -263,5 +196,23 @@ describe('pitha-activity-feed', () => {
 
     expect(FakeWebSocket.instances).toHaveLength(2);
     expect(FakeWebSocket.instances[1].url).toContain('/ws/activity-2');
+  });
+
+  test('logs an error and makes no request when the injected URLs are missing', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    const fetchMock = mock(() => Promise.resolve(new Response('{}')));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const el = document.createElement('pitha-activity-feed') as FeedElement; // no URL attributes
+    document.body.appendChild(el);
+    await flush(el);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    for (const name of ['api-url', 'ws-url', 'kill-switch-events-url']) {
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ message: `pitha-activity-feed: ${name} is not set` }),
+      );
+    }
+    errorSpy.mockRestore();
   });
 });

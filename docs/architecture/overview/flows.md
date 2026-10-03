@@ -25,10 +25,10 @@ sequenceDiagram
 
 `requirements/functional.md` §2 主要処理フロー（シーケンス図）を参照。アーキテクチャ上の要点は以下。
 
-- Scheduler（自前Worker、`jobs`テーブル）が `market-data` → `feature-calc` → `jev-scout` → `jev-trader` の順にジョブをenqueueし、各Serviceがdomainモデルを介して疎結合に連携する
+- Scheduler（自前Worker、`jobs`テーブル）のフルスキャンが銘柄ごとに `market-data` ジョブをenqueueする。特徴量の算出・永続化は `market-data` ジョブ内で同期実行され、`feature-calc` キューは互換用の空ジョブ（同一payloadで並列にenqueueされ成功するだけ。`market-data` → `feature-calc` の連鎖ではない）である。`jev-scout` は候補更新サイクル（`bootstrap/candidates`）と、`market-data` ジョブ内のイベント再評価（FR-SCAN-1）からenqueueされ、`jev-trader` は `jev-scout` ジョブがenqueueする。各Serviceはdomainモデルを介して疎結合に連携する
 - `jev-scout`/`jev-trader`の直前にRAG Context Builder（§7）が類似局面を検索し文脈を付与する
 - Risk判定・Paper発注は独立したキュー（ジョブ）を持たず、`jev-trader`ジョブ内でPolicy Engine → Risk Engine → Execution（Paper）を同期実行する。Risk Engineは必ずPolicy Engineの直後に評価され、Risk Engineの承認なしにExecutionへは到達しない
-- `outcome-labeling` / `analytics` は約定・Exit後に非同期実行し、UIの応答性に影響を与えない
+- `outcome-labeling` は毎分のcron（`@every 1m`）が、判定水平線（5/10/20分）を経過したJev判断を拾ってenqueueする（約定・Exitを契機にはしない）。`analytics` は平日15:40 JSTのSol/Opus自己改善バッチ（`integrations.md` §8）専用のキューである。いずれも売買パスとは独立に非同期実行し、UIの応答性に影響を与えない
 
 ### 10.3 Kill Switchフロー（発動〜再開）
 
@@ -81,7 +81,7 @@ sequenceDiagram
 
 - 自動再開（解消）は発動時刻より後に記録された本物のハートビートが`heartbeat_timeout_minutes`以内にあることを条件とする。発動判定の寄り付きクランプ（最後のハートビートを当日の寄り付きに切り上げる）は解消判定には使わない（寄り付き前は経過時間が負になり、操作者不在でも毎朝解消されてしまうため）
 - ハートビートは有効なセッションCookieを持つ認証済みリクエスト（ページ/アクション/API呼び出し）を更新対象とする（`internal/router.WithHeartbeatRecorder` でSessionミドルウェアの直後に登録）。Cookieを持たないリクエストは対象外とし、外部からの無認証GETでdead-man's switchを延命できないようにする
-- 操作者の操作ではないリクエストは更新対象外とする: `/static/...`、WebSocketのUpgrade（画面が自動で再接続する）、画面が自動ポーリングするルート（現状 `GET /system/update-status`、`hx-trigger="every 60s"`）
+- 操作者の操作ではないリクエストは更新対象外とする: `/static/...`、WebSocketのUpgrade（画面が自動で再接続する）、画面が自動ポーリングするルート（現状 `GET /system/update-status`（`every 60s`）と `GET /system/marketdata-status`（`every 30s`）。周期ポーリング（`hx-trigger="every Ns"`）を追加するときは必ず `backgroundPollPaths` にも追加する。漏れると認証済みタブ1つでデッドマンスイッチが無効化される）
 - 自動発火の再同期リクエストも更新対象外とする（FR-RISK-6）。`pitha-kill-switch-panel` の再同期（初回・`kill_switch` push受信時・WebSocket再接続後の `GET /api/v1/system/status`）と、`systemStateChanged` を契機とするHeaderの `#header-status`（`GET /system/status`）、`pitha-activity-feed` のWebSocket再接続後のスナップショット再取得（`GET /api/v1/activity`、`?type=kill_switch&limit=10`）は専用ヘッダ `X-Pitha-Background: 1`（`middleware.BackgroundHeader`、Lit側は `lib/api.ts` の `get(path, { background: true })`、htmx側は `hx-headers`）を付け、Heartbeatミドルウェアが除外する。これらは操作者不在でも発火するため、`operator_heartbeat_timeout` のKill Switch発動後のpushが自らハートビートを更新し、`AutoResume` が無人のまま解除してしまうことを防ぐ
 - 書き込みはスロットリングする: ミドルウェアが最終記録時刻をメモリ保持し、10秒以内の更新対象リクエストではSQLiteへ書き込まない（タイムアウトは分単位のため精度に影響しない。書き込み失敗時は次のリクエストで即再試行する）
 - Paper Trading運用中は実資金リスクがないためハートビート監視を適用しない（`requirements/functional.md` §4.7 表の heartbeat_timeout_minutes は Live のみ設定）
@@ -142,7 +142,7 @@ sequenceDiagram
 | 障害 | 対応 |
 |------|------|
 | Jev API失敗 | 1回目リトライ→2回目以降exponential backoff→継続失敗でnew entry停止。既存ポジションはコードベースExit Ruleで継続管理 |
-| Market Data欠損 | stale data判定→該当銘柄の新規取引禁止 |
+| Market Data欠損 | 現状: 銘柄単位のstale判定による新規取引禁止は未実装（`StatusTracker`は記録のみ）。全体の`market_data_down` Kill Switch（`GetBoard`5回連続失敗）で新規取引を停止する。銘柄単位の禁止はPhase 7移行前に実装する（`overview/integrations.md` §5） |
 | kabuステーションAPI異常 | Kill Switch発動条件に該当。新規取引停止、必要に応じ強制決済 |
 | DB書き込み失敗継続 | Kill Switch発動条件に該当 |
 | Wailsプロセスクラッシュ | `--supervise`起動の監視プロセス（`internal/supervisor`）が自動再起動する（`architecture/overview/integrations.md` §9）。プロセス停止中は新規エントリーも行われない（既存ポジションはkabuステーション側の待機注文/手動介入を前提）。再起動後、`jobs`テーブルの中断ジョブを`pending`へ復帰させ処理を再開する |

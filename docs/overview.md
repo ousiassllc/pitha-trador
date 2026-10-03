@@ -16,7 +16,7 @@
 
 - 東証上場銘柄・1 分足を基本時間軸とした市場データ取得（kabu ステーション API 経由）
 - Feature Engine による価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出
-- Fast Screener による段階的候補絞り込み（全銘柄 → 50〜200 → Jev Scout）
+- Fast Screener による段階的候補絞り込み（全銘柄 → 上位N件（既定`top_n=20`） → Jev Scout）
 - Jev Scout（深掘り価値判定）・Jev Trader（方向・レジーム・エントリー品質判定）
 - Policy Engine（Jev 出力 → 取引候補への変換）・Risk Engine（ポジションサイズ／損失上限／Kill Switch）
 - Paper Trading による Entry/Exit・ポジション管理・PnL 集計
@@ -160,3 +160,4 @@ graph TD
 | 1.1 | 2026-09-26 | RAG（sqlite-vec）・自己改善ループ（Sol/Opus）を追加、DBをPostgreSQLからSQLiteへ全面移行、Phase 7完全自動運用（dead-man's switch）に対応 | Phase 5/6/7の方針拡張とWails単一exe配布との整合 |
 | 1.2 | 2026-09-29 | スコープ「含むもの」にLunaの実装（News Ingest経由の外部AI API呼び出し）を明記し、Sol/Opusを実際の外部AI API呼び出しとして実装する方針に更新（Opusはシャドーバックテストの決定的しきい値とAIレビューの併用条件）。Phase 6の説明を更新 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
 | 1.3 | 2026-09-29 | 「含まないもの」のニュースイベント関連戦略の記述を明確化: 除外対象は「ニュースイベント単独を起点とする独立戦略」であり、Luna（ニュース分類）による既存4戦略への補助的文脈提供とは矛盾しないことを明記 | Luna追加とのスコープ整合性レビュー対応 |
+| 1.4 | 2026-10-03 | スコープのFast Screener候補数を「50〜200」から「上位N件（既定`top_n=20`）」へ訂正 | issue #327 |

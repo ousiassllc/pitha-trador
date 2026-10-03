@@ -79,7 +79,7 @@ lefthook install
 make dev
 ```
 
-`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面の「詳細設定（任意）」から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
+`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
 
 ### 環境変数
 
@@ -91,7 +91,7 @@ make dev
 | `PITHA_SERVER_ALLOW_NON_LOOPBACK` | `cmd/server` | `1`のときのみ`PITHA_SERVER_ADDR`にloopback以外を許可する（意図的な公開用） |
 | `PITHA_SERVER_ALLOWED_HOSTS` | `cmd/server` | `PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ有効。Hostヘッダとして受け付ける追加ホスト名（カンマ区切り、DNS rebinding対策のHost検証。loopback名（`localhost`/`127.0.0.1`/`::1`）とワイルドカード以外の`PITHA_SERVER_ADDR`のホストは常に許可） |
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
-| `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`） |
+| `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`）。`secrets`テーブルを含むため、DBファイルは`0600`で作成/絞り込み（`-wal`/`-shm`も同モード）、新規作成する親ディレクトリ・`logs/`・インスタンスロックのディレクトリは`0700`、ログ/ロックファイルは`0600`（非Windows。既存の親ディレクトリのモードは変更しない） |
 | `PITHA_BACKUP_DIR` | `internal/bootstrap` | SQLite DBの日次バックアップ（`requirements/non-functional.md` §3）の退避先ディレクトリ。ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）を指定する。ディレクトリ自体は事前に存在している必要がある（作成しない。未マウントの場合はバックアップが失敗しSlack/ログで通知される）。Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。未設定・空のときはバックアップ無効（起動ログに警告）。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する |
 | `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
 | `PITHA_STATIC_DIR` | `internal/router` | 設定すると`/static/...`を`go:embed`ではなく指定ディレクトリ（存在するディレクトリのみ有効。`make dev`は`static/src`）から配信する。未設定・不正パスは埋め込みにフォールバック |
@@ -174,14 +174,21 @@ language: ja
 `.linterlyignore`の方針（`architecture/overview.md` §3「サブパッケージ単位の責務規約」）:
 
 ```text
-# 実行時ログ（ソースコードではない）
+# logs/（.gitignoreの `logs/` パターンでリポジトリルート・cmd/desktop/両方が
+# 対象）はアプリ実行時に生成されるランタイムログで、ソースコードではない。
+# linterly は .gitignore を参照しないため明示的に除外する（issue-sweep実行中、
+# ローカルでの動作確認で溜まった数十万行のログが pre-commit の golangci-lint /
+# linterly をブロックした事例より）。
 **/logs/**
 
-# 自動生成コード（Templが生成するGoコード）
+# 自動生成コード（Templが生成するGoコード。手書きソースコードの除外は基本追加しない）
 *_templ.go
+
+# ライセンス全文（法的な定型文でありソースコードではない。分割・短縮できない）
+LICENSE
 ```
 
-- 許容する除外は上記の`*_templ.go`と`**/logs/**`のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
+- 許容する除外は上記の`*_templ.go`・`**/logs/**`・ライセンス全文`LICENSE`（手書きソースではない定型文）のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
 - サブパッケージ分割前の暫定除外（`internal/repository/`は#244、`internal/web/handler/`は#245、`internal/bootstrap/`は#246、`internal/service/risk/`は#247）は全て削除済みで、#248で全廃を確認した。手書きソースの除外を新規に追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
@@ -253,3 +260,5 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.24 | 2026-10-02 | 環境変数表`PITHA_SERVER_ADDR`の「`cmd/desktop`はネットワークポートを待ち受けない」を、Windowsのみ`/ws/...`専用のループバックリスナー（`127.0.0.1`と`[::1]`、ランダムポート）を起動する実態に合わせて修正 | issue #300（#266/#285の実装との乖離解消） |
 | 1.25 | 2026-10-03 | CI/CD節に`GOTOOLCHAIN: auto`の設定理由を追記（`actions/setup-go` v7が`GOTOOLCHAIN=local`を設定し、`golangci-lint`の`go install`が失敗していた） | PR #304 CI `lint`ジョブ失敗の修正 |
 | 1.26 | 2026-10-03 | `GOTOOLCHAIN: auto`の設定箇所をワークフロー全体から`Install golangci-lint`/`Install linterly`のステップレベルへ訂正（`actions/setup-go`の`$GITHUB_ENV`エクスポートがワークフローレベル`env`を上書きし、1.25の設定は効かなかった） | PR #304 CI `lint`ジョブ失敗の再修正 |
+| 1.27 | 2026-10-03 | `.linterlyignore`の内容ブロックを実ファイル（コメント文面を含む）に合わせ、`LICENSE`（ライセンス全文・手書きソースではない定型文）を許容する除外に追記 | issue #316（実ファイルとの乖離解消） |
+| 1.28 | 2026-10-03 | 初回セットアップ手順の`JEV_BASE_URL`/`JEV_MODEL`の上書き先を、廃止済みの「詳細設定（任意）」からSettings画面のJev接続先モーダル内の任意項目へ訂正 | issue #315（#302 とのdoc-drift解消） |

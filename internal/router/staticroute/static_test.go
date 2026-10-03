@@ -1,4 +1,4 @@
-package router_test
+package staticroute_test
 
 import (
 	"io/fs"

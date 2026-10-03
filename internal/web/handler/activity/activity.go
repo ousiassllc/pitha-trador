@@ -131,9 +131,7 @@ func (h *ActivityHandler) Page(c *gin.Context) {
 		shared.RespondPageError(c, http.StatusInternalServerError, "アクティビティログの取得に失敗しました。")
 		return
 	}
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = pages.ActivityLogPage(snap).Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, http.StatusOK, pages.ActivityLogPage(snap))
 }
 
 // activityJobUpdateMessage mirrors docs/api/endpoints.md §6's

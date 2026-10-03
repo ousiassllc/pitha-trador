@@ -1,6 +1,10 @@
 package molecules
 
-import "strconv"
+import (
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
 
 // ConnectionState is a connection's overall configured state shown on its
 // SettingsCard.
@@ -93,13 +97,13 @@ templ SettingsCard(props SettingsCardProps) {
 			</span>
 			<p class="text-sm text-slate-600">{ props.Description }</p>
 		</div>
-		<button
-			class="rounded-md border border-blue-600 px-4 py-1 text-sm font-semibold text-blue-700"
-			type="button"
-			aria-haspopup="dialog"
-			data-modal-open={ props.ModalID }
-			data-testid={ "open-" + props.ID }
-		>{ props.ActionLabel }</button>
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonOutline, Attrs: templ.Attributes{
+			"aria-haspopup":   "dialog",
+			"data-modal-open": props.ModalID,
+			"data-testid":     "open-" + props.ID,
+		}}) {
+			{ props.ActionLabel }
+		}
 	</li>
 }
 

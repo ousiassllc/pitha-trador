@@ -23,8 +23,9 @@ type SetupProps struct {
 // and the optional Slack; saving and deleting post to the same `POST`/
 // `DELETE /settings/:key` routes. It renders in layout.SetupShell (no
 // Header) so nothing on the page fetches a guarded fragment. The "続ける"
-// link is a plain `/scanner` navigation: while a required key is unset the
-// guard sends it straight back here.
+// link lives in molecules.SetupStatus and is rendered only once every
+// required key is stored (issue #352), so it is never a link the guard would
+// send straight back here.
 templ SetupPage(props SetupProps) {
 	@layout.SetupShell("Setup") {
 		<h1 class="text-2xl font-bold text-slate-900">初期セットアップ</h1>
@@ -37,16 +38,7 @@ templ SetupPage(props SetupProps) {
 			</p>
 			@organisms.ConnectionList(props.Connections)
 		</div>
-		if props.Complete {
-			<p class="mt-6 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="setup-complete">
-				必須項目はすべて設定済みです。
-			</p>
-		} else {
-			<p class="mt-6 text-sm text-slate-600" data-testid="setup-incomplete">
-				必須項目をすべて保存すると、通常の画面へ進めます。
-			</p>
-		}
-		<a class="mt-4 inline-block rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" href="/scanner" data-testid="setup-continue">続ける</a>
+		@molecules.SetupStatus(props.Complete, false)
 		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}
 }

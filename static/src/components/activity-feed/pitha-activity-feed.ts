@@ -11,75 +11,72 @@ import { html, LitElement, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
+import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
 import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
-
-// Mirrors docs/api/endpoints.md §5 `GET /api/v1/activity` shapes.
-export interface QueueStatus {
-  queue: string;
-  pending: number;
-  running: number;
-  failed_recent: number;
-}
-
-export interface ActivityEvent {
-  type: string;
-  timestamp: string;
-  queue?: string;
-  symbol?: string;
-  detail: string;
-  latency_ms?: number;
-}
-
-interface ActivityAPIResponse {
-  queues: QueueStatus[];
-  events: ActivityEvent[];
-  as_of: string;
-}
-
-// Mirrors docs/api/endpoints.md §6 `/ws/activity` message shapes.
-type ActivityWsMessage =
-  | { type: 'job_update'; queue: string; pending: number; running: number; failed_recent?: number }
-  | { type: 'activity_event'; event: ActivityEvent };
-
-const EVENT_TYPES = ['job', 'jev_scout', 'jev_trader', 'kill_switch'] as const;
-const QUEUES = [
-  'market-data',
-  'feature-calc',
-  'jev-scout',
-  'jev-trader',
-  'outcome-labeling',
-  'analytics',
-] as const;
-
-// Feed size bounds (functional.md FR-ACT-3): the displayed list never
-// grows past the API's maximum, however long the page stays open.
-const MAX_EVENTS = 500;
-const KILL_SWITCH_LIMIT = 10;
+import {
+  type ActivityAPIResponse,
+  type ActivityEvent,
+  type ActivityWsMessage,
+  EVENT_TYPES,
+  KILL_SWITCH_LIMIT,
+  MAX_EVENTS,
+  QUEUES,
+  type QueueStatus,
+} from './activity-feed-types';
+import { renderKillSwitchEvents, renderQueueStatus } from './activity-feed-views';
 
 @customElement('pitha-activity-feed')
 export class PithaActivityFeed extends LitElement {
-  // Light DOM, clearing the SSR children first - the same
-  // upgrade-after-existing-children reasoning as pitha-scanner-table's
-  // createRenderRoot (organisms.QueueStatusPanel /
-  // ActivityFeedFallback are this element's server-rendered children).
+  // Light DOM. organisms.QueueStatusPanel / ActivityFeedFallback are this
+  // element's server-rendered children, and the module script is deferred,
+  // so the element is upgraded with them already attached (the same
+  // reasoning as pitha-scanner-table's createRenderRoot). lit-html leaves
+  // pre-existing children alone, so they are remembered here and removed
+  // by willUpdate once the first snapshot arrives - otherwise Lit's first
+  // render would append a second set of tables. Until then (and if the
+  // initial fetch fails) they stay visible, so hydration never blanks the
+  // page or discards data the server already rendered.
   protected override createRenderRoot(): HTMLElement {
-    this.innerHTML = '';
+    this.ssrNodes = Array.from(this.childNodes);
     return this;
   }
 
-  @property({ type: String, attribute: 'api-url' }) apiUrl = '/api/v1/activity';
-  @property({ type: String, attribute: 'ws-url' }) wsUrl = '/ws/activity';
+  protected override willUpdate(): void {
+    if (this.loaded && this.ssrNodes.length > 0) {
+      for (const node of this.ssrNodes) node.remove();
+      this.ssrNodes = [];
+    }
+  }
+
+  private ssrNodes: ChildNode[] = [];
+
+  // URLs are injected by Templ (pages.ActivityLogPage); the component
+  // owns none (docs/components/lit.md §5.5). `kill-switch-events-url` is
+  // the complete URL of the recent Kill Switch events query, so the
+  // query string is never assembled client-side. Its server-side limit
+  // must equal KILL_SWITCH_LIMIT, which trims pushed events.
+  @property({ type: String, attribute: 'api-url' }) apiUrl = '';
+  @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
+  @property({ type: String, attribute: 'kill-switch-events-url' }) killSwitchEventsUrl = '';
 
   @state() private queues: QueueStatus[] = [];
   @state() private events: ActivityEvent[] = [];
   @state() private killSwitchEvents: ActivityEvent[] = [];
+  // Distinguishes "not loaded yet" / "failed" / "zero events" so a missing
+  // Kill Switch history is never shown as "no events" (safety information).
+  @state() private killSwitchLoaded = false;
+  @state() private killSwitchError: string | null = null;
+  // True once a snapshot has arrived. Until then the SSR tables stay in
+  // place and the empty queues/events are never rendered over them.
+  @state() private loaded = false;
   @state() private typeFilter = '';
   @state() private queueFilter = '';
   @state() private error: string | null = null;
   @state() private wsStatus: WsStatus = 'connecting';
 
   private wsClient: WsClient<ActivityWsMessage> | null = null;
+  private snapshotGeneration = 0;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -105,30 +102,48 @@ export class PithaActivityFeed extends LitElement {
   // `background` marks a resync the page fires by itself (WS reconnect), so
   // it is not counted as operator activity (FR-RISK-6, flows.md §10.4).
   private async loadSnapshot(background = false): Promise<void> {
+    if (!this.apiUrl) {
+      logger.error('pitha-activity-feed: api-url is not set');
+      return;
+    }
+    // Only the latest request may touch state: a slower, older response
+    // (previous filter, or a pre-reconnect fetch) must not overwrite it.
+    const generation = ++this.snapshotGeneration;
     try {
       const response = await get<ActivityAPIResponse>(this.feedUrl(), { background });
+      if (generation !== this.snapshotGeneration) return;
       this.queues = response.queues;
       this.events = response.events;
+      this.loaded = true;
       this.error = null;
     } catch (err) {
+      if (generation !== this.snapshotGeneration) return;
       this.error = err instanceof Error ? err.message : String(err);
       logger.error('pitha-activity-feed: failed to load activity snapshot', { error: err });
     }
   }
 
   private async loadKillSwitchEvents(background = false): Promise<void> {
+    if (!this.killSwitchEventsUrl) {
+      logger.error('pitha-activity-feed: kill-switch-events-url is not set');
+      return;
+    }
     try {
-      const response = await get<ActivityAPIResponse>(
-        `${this.apiUrl}?type=kill_switch&limit=${KILL_SWITCH_LIMIT}`,
-        { background },
-      );
+      const response = await get<ActivityAPIResponse>(this.killSwitchEventsUrl, { background });
       this.killSwitchEvents = response.events;
+      this.killSwitchLoaded = true;
+      this.killSwitchError = null;
     } catch (err) {
+      this.killSwitchError = err instanceof Error ? err.message : String(err);
       logger.error('pitha-activity-feed: failed to load kill switch events', { error: err });
     }
   }
 
   private subscribeWs(): void {
+    if (!this.wsUrl) {
+      logger.error('pitha-activity-feed: ws-url is not set');
+      return;
+    }
     // The server sends nothing on connect, so events emitted while the
     // socket was down are lost unless the snapshots are re-fetched (#221).
     let wasDisconnected = false;
@@ -189,47 +204,18 @@ export class PithaActivityFeed extends LitElement {
     this.loadSnapshot();
   }
 
+  // Kill Switch history and the WS / error notices are not part of the SSR
+  // fallback, so they render right away. The Job Queues and Recent Activity
+  // tables are SSR'd too: until the first snapshot arrives (see
+  // createRenderRoot) the SSR copies stay and only these are added beside them.
   protected override render() {
+    if (!this.loaded) {
+      return html`${this.renderKillSwitchEvents()}${this.renderNotices()}`;
+    }
     return html`
-      <section id="queue-status" data-testid="queue-status" class="mt-6">
-        <h2 class="mb-2 text-lg font-semibold text-slate-900">Job Queues</h2>
-        <table class="w-full border-collapse text-left text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-              <th class="px-3 py-2">Queue</th>
-              <th class="px-3 py-2">Pending</th>
-              <th class="px-3 py-2">Running</th>
-              <th class="px-3 py-2">Failed (recent)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${this.queues.map(
-              (q) => html`
-                <tr class="border-b border-slate-100" data-queue=${q.queue}>
-                  <td class="px-3 py-2 font-medium text-slate-900">${q.queue}</td>
-                  <td class="px-3 py-2">${q.pending}</td>
-                  <td class="px-3 py-2">${q.running}</td>
-                  <td class="px-3 py-2">${q.failed_recent}</td>
-                </tr>
-              `,
-            )}
-          </tbody>
-        </table>
-      </section>
+      ${renderQueueStatus(this.queues)}
 
-      <section id="kill-switch-events" data-testid="kill-switch-events" class="mt-6">
-        <h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Kill Switch Events</h2>
-        ${
-          this.killSwitchEvents.length === 0
-            ? html`<p class="text-sm text-slate-500">No kill switch events.</p>`
-            : html`<ul class="text-sm">
-                ${this.killSwitchEvents.map(
-                  (e) =>
-                    html`<li class="py-1"><span class="text-slate-500">${e.timestamp}</span> ${e.detail}</li>`,
-                )}
-              </ul>`
-        }
-      </section>
+      ${this.renderKillSwitchEvents()}
 
       <section id="activity-feed" data-testid="activity-feed" class="mt-6">
         <h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Activity</h2>
@@ -274,9 +260,20 @@ export class PithaActivityFeed extends LitElement {
           </tbody>
         </table>
       </section>
-      ${renderWsDisconnected(this.wsStatus)}
-      ${this.error ? html`<p class="pitha-activity-feed-error" role="alert">${this.error}</p>` : nothing}
+      ${this.renderNotices()}
     `;
+  }
+
+  private renderKillSwitchEvents() {
+    return renderKillSwitchEvents(
+      this.killSwitchEvents,
+      this.killSwitchLoaded,
+      this.killSwitchError,
+    );
+  }
+
+  private renderNotices() {
+    return html`${renderWsDisconnected(this.wsStatus, lightDomWsNoticeClass)}${this.error ? html`<p class="pitha-activity-feed-error ${lightDomErrorClass}" role="alert">${this.error}</p>` : nothing}`;
   }
 
   // Skip the first update cycle (old value undefined): connectedCallback

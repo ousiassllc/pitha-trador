@@ -130,6 +130,7 @@ func LoadStrategy(path string) (*StrategyConfig, error) {
 	if err := applyEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
+	withScanIntervalDefaults(&cfg.Scan)
 	withEventTriggerDefaults(&cfg.Scan.EventTrigger)
 	return cfg, nil
 }
@@ -149,6 +150,7 @@ func LoadStrategyBytes(data []byte) (*StrategyConfig, error) {
 	if err := applyEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
+	withScanIntervalDefaults(&cfg.Scan)
 	withEventTriggerDefaults(&cfg.Scan.EventTrigger)
 	return cfg, nil
 }

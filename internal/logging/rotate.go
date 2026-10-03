@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// Log directories/files (and their .gz archives) are owner-only.
+const (
+	logDirMode  os.FileMode = 0o700
+	logFileMode os.FileMode = 0o600
+)
+
 // dailyFileLayout is RotatingWriter's log file naming convention
 // (also Archiver's own parsing format, archive.go).
 const dailyFileLayout = "2006-01-02"
@@ -26,10 +32,16 @@ type RotatingWriter struct {
 }
 
 // NewRotatingWriter returns a RotatingWriter writing into dir, creating
-// dir (and any missing parents) if it does not already exist.
+// dir (and any missing parents) if it does not already exist. The log
+// directory is private to the owner (0700, also applied to a directory
+// left at 0755 by an older version) because logs may contain order and
+// account details (issue #334).
 func NewRotatingWriter(dir string) (*RotatingWriter, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, logDirMode); err != nil {
 		return nil, fmt.Errorf("logging: create log directory %q: %w", dir, err)
+	}
+	if err := os.Chmod(dir, logDirMode); err != nil {
+		return nil, fmt.Errorf("logging: restrict log directory %q: %w", dir, err)
 	}
 	return &RotatingWriter{dir: dir, now: time.Now}, nil
 }
@@ -53,7 +65,7 @@ func (w *RotatingWriter) rotateLocked(day string) error {
 	if w.file != nil {
 		_ = w.file.Close()
 	}
-	f, err := os.OpenFile(filepath.Join(w.dir, day+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(filepath.Join(w.dir, day+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, logFileMode)
 	if err != nil {
 		return fmt.Errorf("logging: open log file for %s: %w", day, err)
 	}

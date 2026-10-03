@@ -30,11 +30,11 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 ```text
 internal/web/
 ├── apierror/           # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
-├── handler/            # 直下: scanner.go, performance.go, calibration.go, policy_proposals.go, swagger.go。責務別サブパッケージ: symbol/（symbol*.go）, system/（system.go, update.go ほか）, settings/, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング。*_ws.goはWebSocket）
+├── handler/            # 直下: scanner.go, scanner_scan.go, performance.go, calibration.go, policy_proposals.go, swagger.go。責務別サブパッケージ: symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
-├── middleware/         # HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState
-├── atoms/              # Badge, StatusDot, Toast
-├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow
+├── middleware/         # HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
+├── atoms/              # Badge, StatusDot, Toast, Button, Input
+├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SetupStatus
 ├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）
 ├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
 └── layout/             # Shell, SetupShell
@@ -48,6 +48,7 @@ static/
     │   ├── activity-feed/         pitha-activity-feed.ts
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
+    │   ├── modal/                 pitha-modal.ts（Litではない。`molecules.Modal`の`<dialog>`開閉・フォーカス復帰・URLハッシュ自動オープン）
     │   └── lib/
     │       ├── api.ts
     │       ├── ws.ts / ws-status.ts    # WebSocket接続と接続状態表示
@@ -71,14 +72,16 @@ static/
 - `EntryQualityBadge`（Entry Quality: poor/fair/good/strong/exceptional の色分け表示。Scanner Dashboardで使用、issue #239）
 - `StatusDot`（システム状態: Running=緑 / Paused=黄 / Killed=赤。organismsの`SystemStatusBadge`が`domain.SystemState`から`atoms.State`へ変換して描画する）
 - `Toast`（HTMXアクション失敗のエラー通知。`role="alert"`＋閉じるボタンを持ち、`#toast-region`へswapされる。§4「エラー表示」、issue #110/#121）
+- `Button` / `ButtonLink`（`ButtonProps{Variant, Size, Type, Attrs}`。Variant: primary / danger / secondary / outline / danger-outline、Size: medium / small。色・フォーカスリング・`disabled:opacity-50`を一元化し、`hx-*`・`data-testid`等は`Attrs`で渡す。ラベルは子要素。`ButtonLink`は`<a>`版。`Toast`の×ボタンを除く全テンプレートのボタンはこれを使う。issue #309）
+- `Input`（`InputProps{ID, Name, Type, Attrs}`。枠線・余白を共通化した`<input>`。`SecretFieldRow`が使用。issue #309）
 
-> **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Button`/`Input`/`Select`/`Spinner`/`Card`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（ボタン・入力はTailwindユーティリティを各テンプレートに直接記述、Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が`Button`/`Input`等の切り出しの目安）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
+> **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Select`/`Spinner`/`Card`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が切り出しの目安。`Button`/`Input`は重複したため issue #309 で追加済み）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
 
 ### molecules
 
 - `SecretFieldRow`（Settings画面の1項目。ラベル・「設定済み」バッジ・値入力（`type=password`）と保存ボタン・削除ボタン（設定済みのときのみ）・直近の保存/削除結果の通知を持ち、保存は`POST /settings/:key`、削除は`DELETE /settings/:key`で行の`outerHTML`のみ差し替える。他項目の値には影響しない。issue #79）
-- `Modal`（ネイティブ`<dialog>`のシェル。`aria-labelledby`でタイトルに紐付け、タイトル行に「閉じる」ボタンを持つ。`pitha-modal`が開閉・フォーカス復帰・URLハッシュからの自動オープンを担う。issue #302）
-- `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）
+- `Modal`（ネイティブ`<dialog>`のシェル。`aria-labelledby`でタイトルに紐付け、タイトル行に「閉じる」ボタンを持つ。`pitha-modal`が開閉・フォーカス復帰・URLハッシュからの自動オープンを担う。失敗トースト用の`[data-toast-region]`も内包する。issue #302/#353）
+- `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）と`SetupStatus`（Setup画面の「必須項目はすべて設定済みです」＋`/scanner`への「続ける」リンク／「必須項目をすべて保存すると…」メッセージ。リンクは完了時のみ描画。`id="setup-status"`で、`/setup`発の保存・削除の応答に必須キー充足状態を再計算して`hx-swap-oob`で同梱する。issue #325）
 - `SignalBadgeGroup`（direction + confidence + entry_quality の組み合わせ表示）
 - `PositionRow`
 
@@ -89,8 +92,10 @@ static/
 - `KillSwitchPanel`（`pitha-kill-switch-panel`を、現在状態に基づく`status`/`can-pause`/`can-resume`/`can-kill`と各URL属性付きで出力する。issue #106）
 - `ScannerTableFallback`（JS無効時/初回SSR描画用の候補件数＋候補銘柄テーブル＋0件時の空状態。日本語列見出し＋ツールチップ、符号付きReturnの色分け、Jev方向/エントリー品質バッジ。ハイドレーション後は同一の見た目で`pitha-scanner-table`が引き継ぐ。列定義・書式・配色・空状態文言はGo側`scannerColumns`とLit側`COLUMNS`/`scanner-view.ts`で二重管理のため、共有ゴールデン`static/src/components/scanner-table/scanner-contract.json`を`scanner_table_contract_test.go`と`scanner-contract.test.ts`の双方が検証して乖離を防ぐ。小数の丸めはJSの`toFixed`に揃え、ちょうど中間の値は0から遠い方へ丸める（Goの`%f`は偶数丸めのため`formatFloat`で補正。例: 12.5→13）。符号は正のみ`+`（0は符号なし）、確信度は四捨五入（half away from zero）、銘柄リンクは非予約文字以外をパーセントエンコード。表の上に列の意味を`<details data-testid="scanner-column-help">`（`<dl>`）で常時表示可能にし、hover専用の`title`を補う。SSRの空状態は初回描画のため`role="status"`を持たない。issue #239）
 - `ScanPanel`（Scanner Dashboardのスキャン状況パネル`#scan-panel`。最新サイクルのファネル件数（`scan-funnel-*`）・時刻/所要時間・「更新」（`scan-refresh`）・「スキャン対象を見る」（`scan-open`）、開くと検索/状態/理由フィルターとページング付きの銘柄一覧（`scan-table`、行は`data-status`/`data-reason`）。サイクル未実行は空状態`scan-empty`。操作はすべて`hx-get="/scanner/scan"`で`#scan-panel`を`outerHTML`差し替えし、`/ws/scanner`・Lit描画は使わない。`requirements/functional.md` §5.1、issue #303）
+- `ConnectionList`（Settings/Setup共通の接続先一覧。接続先ごとの`SettingsCard`と、その接続先の`SecretFieldRow`を収めた`Modal`を描く。`internal/web/organisms/connection_list.templ`、issue #302）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
 - `PerformanceSummaryPanel`
+- `PerformanceActualsPanel`（Performance画面の「実績（Paper）」節`#performance-actuals`。クローズ済みポジションのTotal/Daily PnL・Trades・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal countを`GET /api/v1/performance`と同じ`insight.Performance`から描画する。算出不能（`null`）の指標は「—」。取得失敗時は固定文言のエラーを節内に表示する。`requirements/functional.md` §5.3、issue #360）
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
 - `UpdatePanel`（Settings画面の「アップデート」節。現在バージョン・最終確認結果・安全ゲート保留中はその旨と理由（ポジション保有/Kill Switch/直近発注）・失敗時は原因の種別（ネットワーク/レート制限/検証失敗など。生のエラー文言は出さない）・「今すぐアップデートを確認」ボタン（`POST /system/update-check`、`#update-panel`をinnerHTMLスワップ。確認中は`hx-disabled-elt`で無効化・`hx-sync="this:drop"`で二重送信を破棄し、`#update-check-progress`に進行表示）。`cmd/server`（アップデーター未搭載）ではアップデート機能が無い旨を表示しボタンは出さない。issue #76/#241）
 - `ErrorLogPanel`（Settings画面の「エラーログ」節`#error-log-panel`。対象期間（直近1/7/30/90日、既定7日）とレベル（ERRORのみ/WARN以上）の`<select>`と「ダウンロード」ボタンを持つ`<form method="get" action="/api/v1/logs/errors">`をSSRで描画する。ブラウザ標準のダウンロードに任せるため`hx-disable`を付けHTMXの差し替えと`lib/api.ts`は使わず、応答の`Content-Disposition: attachment`で保存される。秘密情報はマスク済み・最大10MiBである旨を注記する。`requirements/functional/components-platform.md` §4.19、issue #267）
@@ -105,9 +110,8 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む）
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
-- `ConnectionList`（Settings/Setup共通の接続先一覧。接続先ごとの`SettingsCard`と、その接続先の`SecretFieldRow`を収めた`Modal`を描く。issue #302）
 - `SettingsPage`（接続先別の一覧。Jev/kabuステーション/Slack/Luna/ニュースフィード/Sol/Opusの各行（`SettingsCard`）に設定済み／一部設定済み／未設定の`ConnectionStatus`を出し、「設定する」で`Modal`を開く。モーダルにその接続先のキー・URL・モデル名の`SecretFieldRow`をまとめる（`organisms.ConnectionList`）。「システム」節のアップデート（`#update-panel`、`UpdatePanel`）とエラーログ（`ErrorLogPanel`）も同じ`SettingsCard`＋`Modal`で開く。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。issue #57/#79/#267/#302）
-- `SetupPage`（初回セットアップ画面。Settingsと同じ`ConnectionList`で、必須2キーを持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須2キーがすべて設定済みなら完了表示と`/scanner`へのリンクを出す。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80/#302）
+- `SetupPage`（初回セットアップ画面。Settingsと同じ`ConnectionList`で、必須2キーを持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須2キーがすべて設定済みなら完了表示と`/scanner`への「続ける」リンクを出す（未設定の間はリンクごとレンダリングしない。issue #352）。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80/#302）
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
 
@@ -141,14 +145,14 @@ const (
 - ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/settings`, `/setup`）はHX-Requestヘッダで フルページ/フラグメント を分岐する
 - アクションルート（`/positions/:id/close`, `/system/update-check`, `/settings/:key`）は常にフラグメントを返す。Kill Switch操作（pause/resume/kill）はHTMXアクションルートを持たず、Litの`pitha-kill-switch-panel`が`/api/v1/system/*`を呼ぶ
 - **状態バッジの更新**: システム状態変更（pause/resume/kill）後は、`pitha-kill-switch-panel`が`systemStateChanged`イベントを発火し、Headerの`StatusDot`が`GET /system/status`で再取得される。OOBスワップは「副作用の反映」のみに限定する
-- **ローディング**: Kill Switch実行ボタンは`hx-disabled-elt="this"`で二重発動を防止し、`hx-indicator`でスピナーを表示する。スケルトンスクリーンは使わない
-- **エラー表示**: htmx 2は4xx/5xxを既定でswapしないため、`layout`が`<meta name="htmx-config">`の`responseHandling`（htmx 2標準機能。`response-targets`拡張の後継でありvendorしない）で`[45]..`を`#toast-region`へ`beforeend`でswapする。アクションハンドラは失敗時にステータスと`atoms.Toast`フラグメント（`shared.RespondActionError`）を返す。`static/src/components/htmx-errors/pitha-htmx-errors.ts`が①Toastを持たない失敗応答（空ボディ・プロキシのプレーンテキスト等）のswap抑止と`htmx:responseError`での汎用トースト、②`htmx:sendError`/`htmx:timeout`（応答なし）のトースト、③閉じるボタンと8秒での自動消去を担う。トースト表示先は全ページ共通の`#toast-region`（`layout.Shell`/`SetupShell`）で、フォーム再レンダリング（422）は現状どのルートも使わない（フィールド単位保存の400もトースト）（issue #110/#121）
+- **ローディング**: HTMXアクションは`hx-disabled-elt="this"`（必要に応じ`hx-indicator`）で二重送信を防ぐ（例: 「今すぐアップデートを確認」`#update-check-progress`、ポジション手動決済）。Kill Switch操作はLitの`pitha-kill-switch-panel`が`busy`状態でボタンを無効化する。スケルトンスクリーンは使わない
+- **エラー表示**: htmx 2は4xx/5xxを既定でswapしないため、`layout`が`<meta name="htmx-config">`の`responseHandling`（htmx 2標準機能。`response-targets`拡張の後継でありvendorしない）で`[45]..`を`#toast-region`へ`beforeend`でswapする。アクションハンドラは失敗時にステータスと`atoms.Toast`フラグメント（`shared.RespondActionError`）を返す。`static/src/components/htmx-errors/pitha-htmx-errors.ts`が①Toastを持たない失敗応答（空ボディ・プロキシのプレーンテキスト等）のswap抑止と`htmx:responseError`での汎用トースト、②`htmx:sendError`/`htmx:timeout`（応答なし）のトースト、③閉じるボタンと8秒での自動消去を担う。トースト表示先は全ページ共通の`#toast-region`（`layout.Shell`/`SetupShell`）で、フォーム再レンダリング（422）は現状どのルートも使わない（フィールド単位保存の400もトースト）（issue #110/#121）。`#toast-region`は`popover="manual"`で、トーストが入る（スクリプト追加・htmxの`beforeend`swapどちらも）たびに`pitha-htmx-errors.ts`が`hidePopover()`→`showPopover()`でtop layer最前面へ再表示する。`<dialog>.showModal()`のモーダル（Settings/Setupの保存・削除、アップデート確認）はtop layerに描画されz-indexでは勝てず、これが無いとモーダル内の失敗トーストが背面に隠れるため（issue #321）。ただし`#toast-region`は`<dialog>`の外にあるため、モーダル表示中は`showModal()`の背景inertで閉じるボタンの操作・テキスト選択ができない。そこで`molecules.Modal`が各ダイアログ内に`[data-toast-region]`を持ち、開いているモーダルがある間は`pitha-htmx-errors.ts`がスクリプト追加のトーストをそこへ追加し、htmxのエラーフラグメントも`htmx:beforeSwap`で`detail.target`をそのリージョンへ差し替えて表示する（閉じるボタンと8秒の自動消去が効く。issue #353）
 - **アップデート通知**: `Header`内`#update-banner`は`GET /system/update-status`を`load`・60秒周期・`updateStatusChanged`イベントで取得し、`UpdateBanner`または何も描かない。Settings画面の`#update-panel`は「今すぐアップデートを確認」（`POST /system/update-check`）の応答で置き換わり、応答の`HX-Trigger: updateStatusChanged`でHeaderのバナーも即時更新される（issue #76）
 - **バージョン表示**: `Header`内`#header-version`が`internal/version.Version`（リリースビルドはタグ名、ブランチ/PRビルドは`dev`）を全ページで表示し、`/settings#update-panel`へリンクする。手動の「今すぐアップデートを確認」ボタンはHeaderに置かず、Settings画面に一本化する（確認でインストーラーが検証済みになるとアプリが自動再起動するため、全ページ常設の押下導線にしない）。リンク先の`#update-panel`は`SettingsPage`の「アップデート」`Modal`内に置き、`pitha-modal`がURLハッシュからそのモーダルを開く（`:target`のリングでパネルを強調。issue #241/#302）
 - **ロゴ表示**: `Header`内`#header-logo`が`/static/img/logo.svg`（`static/src/img/logo.svg`。`go:embed`でバイナリに同梱、`make dev`では`PITHA_STATIC_DIR`経由でディスクから配信）とアプリ名を`nav`の直前に表示し、`/scanner`へリンクする。`nav`（`aria-label="メインナビゲーション"`）と同じflexグループ内に置き、狭い幅ではグループ内で折り返す（`flex-wrap`/`min-w-0`）。バージョン・StatusDot・Kill Switchパネルの`justify-between`配置は変わらない。ロゴの「P」マークは`cmd/desktop/build/appicon.png`（Wailsデスクトップアイコン）と同じ意匠（白地の角丸＋ネイビーのセリフ体P）で揃える。`<img>`は隣接するアプリ名テキストが代替になるため`alt=""`（issue #238）
-- **モーダル（issue #302）**: `molecules.Modal`はネイティブ`<dialog>`（`aria-labelledby`でタイトルに紐付け）で、`static/src/components/modal/pitha-modal.ts`（Lit不要の小さなスクリプト）が`[data-modal-open]`ボタンから`showModal()`で開く。`showModal()`によりフォーカスはモーダル内に閉じ込められ（Tabは内部を循環、背景は操作不可）、`Esc`で閉じる。「閉じる」ボタン・背景クリックでも閉じ、閉じるとフォーカスは開いたボタンへ戻る。内容は通常のHTMXフォームなのでスワップはそのまま動く。保存・削除の応答は行に加えて接続先の`ConnectionStatus`を`hx-swap-oob`で返し、背後の一覧の状態を更新する
+- **モーダル（issue #302）**: `molecules.Modal`はネイティブ`<dialog>`（`aria-labelledby`でタイトルに紐付け）で、`static/src/components/modal/pitha-modal.ts`（Lit不要の小さなスクリプト）が`[data-modal-open]`ボタンから`showModal()`で開く。`showModal()`によりフォーカスはモーダル内に閉じ込められ（Tabは内部を循環、背景は操作不可）、`Esc`で閉じる。「閉じる」ボタン・背景クリックでも閉じ、閉じるとフォーカスは開いたボタンへ戻る。各ダイアログは失敗トースト用の`[data-toast-region]`を内包する（§4「エラー表示」、issue #353）。内容は通常のHTMXフォームなのでスワップはそのまま動く。保存・削除の応答は行に加えて接続先の`ConnectionStatus`を`hx-swap-oob`で返し、背後の一覧の状態を更新する
 - **フィールド単位保存**: Settings画面は1つの一括フォームではなく、`SecretFieldRow`ごとの独立フォームで保存（`hx-post="/settings/:key"`）・削除（`hx-delete="/settings/:key"`、`hx-confirm`で確認）し、応答の行フラグメントで当該行のみを差し替える。空入力の保存は400で、値の削除は明示的な削除操作でのみ行う（issue #79）
-- **市況データ接続バナー**: `Header`内`#marketdata-banner`は`GET /system/marketdata-status`を`load`・30秒周期で取得し、トークン発行が失敗している間だけ`MarketDataBanner`を描く。起動時にトークンが取れなくてもアプリは継続起動し（開発機でkabuステーション未起動でもScannerやAPIを使えるようにする既存方針）、バックグラウンドで再試行して復旧後は自動でバナーが消える（issue #295）
+- **市況データ接続バナー**: `Header`内`#marketdata-banner`は`GET /system/marketdata-status`を`load`・30秒周期で取得し（周期ポーリングは操作者ハートビートに数えない。`middleware.backgroundPollPaths`に登録済み。周期ポーリングを追加するときは同マップへの追加が必須、issue #310）、トークン発行が失敗している間だけ`MarketDataBanner`を描く。起動時にトークンが取れなくてもアプリは継続起動し（開発機でkabuステーション未起動でもScannerやAPIを使えるようにする既存方針）、バックグラウンドで再試行して復旧後は自動でバナーが消える（issue #295）
 - **未設定バナー**: `Header`内`#config-banner`は`GET /system/secrets-status`を`hx-trigger="load"`で取得し、`SecretsBanner`（任意キー（SLACK_WEBHOOK_URL等）の未設定一覧＋`/settings`リンク）またはnothingを描く。必須2キーはバナーではなくSetup Guardの`/setup`リダイレクトで扱う。`#header-status`と同じSSR空→自己補正パターン（issue #57/#80）
 - **初回セットアップ誘導**: Setup Guard Middlewareが必須2キー未設定の間`/setup`以外（`POST`/`DELETE /settings/:key`・`/static/...`を除く）を`/setup`へ送る（ページ遷移は302、HTMXは`204`＋`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。issue #140）。`SetupPage`は`Header`を持たない`layout.SetupShell`で描画し、ガード対象の`hx-get`フラグメントを発火させない。保存はSettingsと同じ`SecretFieldRow`の`hx-post="/settings/:key"`を使い、2キーが揃った時点で完了表示と`/scanner`への「続ける」リンクを出す（issue #80）
 
@@ -197,3 +201,11 @@ const (
 | 1.29 | 2026-10-02 | `SecretsBanner`・`SetupPage`・§4の未設定バナー／初回セットアップ誘導の必須キー表記を3キーから2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）へ更新し、`SettingsPage`の「詳細設定（任意）」に`JEV_BASE_URL`/`JEV_MODEL`を追加 | issue #271/#291 |
 | 1.30 | 2026-10-03 | molecules に`Modal`・`SettingsCard`（`ConnectionStatus`）、organisms に`ConnectionList`を追加し、`SettingsPage`/`SetupPage`を接続先別の一覧＋モーダル構成へ変更（「詳細設定（任意）」を廃止）。§4にモーダルのパターン、`static/src/components/modal/pitha-modal.ts`を追記 | issue #302 |
 | 1.31 | 2026-10-03 | organismsに`ScanPanel`を追加し、`ScannerPage`にスキャン状況パネル（ファネル件数・銘柄一覧・除外/欠損理由・手動更新）を置く | issue #303 |
+| 1.32 | 2026-10-03 | atomsに`Button`/`ButtonLink`/`Input`を追加し、各テンプレートの直書きボタン・入力を置き換え | issue #309 |
+| 1.33 | 2026-10-03 | §2のディレクトリ構成図に`static/src/components/modal/`（`pitha-modal.ts`）を追記 | issue #319 |
+| 1.34 | 2026-10-03 | molecules に`SetupStatus`を追加し、`/setup`発の`POST`/`DELETE /settings/:key`応答で完了メッセージを`hx-swap-oob`更新 | issue #325 |
+| 1.35 | 2026-10-03 | `ConnectionList`の分類を実装（`internal/web/organisms`）に合わせ、pages節からorganisms節へ移動 | issue #340 |
+| 1.36 | 2026-10-03 | §2のディレクトリ構成図の`molecules/`行に`Modal`・`SettingsCard`（`ConnectionStatus`）・`SetupStatus`を追記し、§3と整合させる | issue #349 |
+| 1.37 | 2026-10-03 | `SetupPage`の「続ける」リンクを`SetupStatus`の完了分岐へ移し、必須2キー未設定の間は描画しない（OOB更新と一体化） | issue #352 |
+| 1.38 | 2026-10-03 | `Modal`が`[data-toast-region]`を内包し、モーダル表示中の失敗トーストをダイアログ内へ表示して閉じるボタンを操作可能にする（§3「Modal」・§4「エラー表示」） | issue #353 |
+| 1.39 | 2026-10-03 | §5.1 `pitha-price-chart`のマーカー記述から`entry_quality`更新を削除し、`jev_update`の`direction`変化のみ描画・Jev判定パネルはSSRのみと明記（`components/lit.md`） | issue #362 |

@@ -129,8 +129,9 @@ type RunConfig struct {
 	// い値）") without touching the live runtime_settings.
 	Thresholds policy.Thresholds
 	// Risk defaults to policy.AlwaysPassRiskChecker when nil (via
-	// policy.NewEngine), matching that Risk Engine, issue #8/#36, does
-	// not exist yet.
+	// policy.NewEngine), as doc.go explains: the live Risk Engine's limits
+	// depend on live account/Kill Switch state a historical replay does
+	// not have (functional.md §4.11 FR-BT-4).
 	Risk policy.RiskChecker
 
 	Exit ExitRule

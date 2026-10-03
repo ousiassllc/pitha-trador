@@ -24,10 +24,10 @@ type Executor struct {
 }
 
 // ExecuteSignal enters signal via a Paper market order (Engine's default
-// order type). An instrument that already holds an open position or is
-// still in its post-loss cooldown is skipped rather than failing the
-// jev-trader job: both are Execution's own per-symbol gates rejecting a
-// repeat entry, not an error in processing this signal. Likewise a signal
+// order type). An instrument that already holds an open position or a
+// PENDING entry order, or is still in its post-loss cooldown, is skipped
+// rather than failing the jev-trader job: these are Execution's own
+// per-symbol gates rejecting a repeat entry, not an error in processing this signal. Likewise a signal
 // that reaches Execution after the session ended (a job queued before the
 // close) is dropped: retrying would be equally invalid.
 func (p Executor) ExecuteSignal(ctx context.Context, signal domain.TradeSignal, snap domain.Snapshot) error {
@@ -42,7 +42,7 @@ func (p Executor) ExecuteSignal(ctx context.Context, signal domain.TradeSignal, 
 		Now:      snap.Timestamp,
 	})
 	switch {
-	case errors.Is(err, execution.ErrPositionAlreadyOpen), errors.Is(err, execution.ErrSymbolInCooldown),
+	case errors.Is(err, execution.ErrPositionAlreadyOpen), errors.Is(err, execution.ErrPendingOrderExists), errors.Is(err, execution.ErrSymbolInCooldown),
 		errors.Is(err, execution.ErrOutsideTradingSession):
 		slog.InfoContext(ctx, "bootstrap: paper entry skipped", "symbol", signal.Symbol, "signal_id", signal.ID, "reason", err.Error())
 		return nil

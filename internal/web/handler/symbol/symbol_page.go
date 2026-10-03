@@ -44,14 +44,12 @@ func (h *SymbolHandler) Page(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusOK)
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	_ = pages.SymbolDetailPage(pages.SymbolDetailProps{
+	shared.RenderHTML(c, http.StatusOK, pages.SymbolDetailPage(pages.SymbolDetailProps{
 		Symbol:             symbol,
 		State:              state,
 		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
 		StopLossPct:        h.riskParams.StopLossPct,
 		TakeProfitPct:      h.riskParams.TakeProfitPct,
 		Decisions:          decisions,
-	}).Render(ctx, c.Writer)
+	}))
 }

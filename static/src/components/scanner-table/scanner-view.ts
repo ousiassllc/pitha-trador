@@ -4,7 +4,7 @@
 // and internal/web/atoms/badge.templ) so the hydrated table looks the same
 // as the server-rendered one (issue #239).
 import { html } from 'lit';
-import type { ScannerItem } from './pitha-scanner-table';
+import type { ScannerItem } from './scanner-types';
 
 export type SortKey = keyof Pick<
   ScannerItem,

@@ -2,7 +2,9 @@ package singleinstance
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -50,5 +52,29 @@ func TestRelease_NilLock(t *testing.T) {
 	var l *Lock
 	if err := l.Release(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAcquire_CreatesOwnerOnlyDirAndFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
+	dir := filepath.Join(t.TempDir(), "nested")
+	path := filepath.Join(dir, "app.lock")
+
+	l, err := Acquire(path)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+	t.Cleanup(func() { _ = l.Release() })
+
+	for p, want := range map[string]os.FileMode{dir: 0o700, path: 0o600} {
+		info, err := os.Stat(p)
+		if err != nil {
+			t.Fatalf("stat %q: %v", p, err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%q mode = %o, want %o", p, got, want)
+		}
 	}
 }

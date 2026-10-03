@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+	"github.com/ousiassllc/pitha-trador/internal/service/insight"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
@@ -20,16 +22,20 @@ type PerformanceForm struct {
 	ForwardDays    int
 }
 
-// PerformanceProps is PerformancePage's input. Result is nil until a
-// backtest has been run; Error carries a validation or run failure.
+// PerformanceProps is PerformancePage's input. Actuals is the realized
+// (Paper) performance of every closed position, or ActualsError when it
+// could not be read. Result is nil until a backtest has been run; Error
+// carries a validation or run failure.
 type PerformanceProps struct {
-	Form   PerformanceForm
-	Result *backtest.Result
-	Error  string
+	Form         PerformanceForm
+	Actuals      insight.Performance
+	ActualsError string
+	Result       *backtest.Result
+	Error        string
 }
 
 // PerformancePage is the Performance full page (functional.md §5.3,
-// UC-12): a Walk Forward backtest (FR-BT-2) request form over the
+// UC-9/UC-12): the realized (Paper) performance of closed positions, a Walk Forward backtest (FR-BT-2) request form over the
 // recorded market_snapshots/jev_decisions history, and - once run - the
 // out-of-sample Combined Forward metrics plus each fold's Forward
 // metrics (FR-BT-1). `GET /performance`
@@ -37,13 +43,16 @@ type PerformanceProps struct {
 templ PerformancePage(props PerformanceProps) {
 	@layout.Shell("Performance") {
 		<h1 class="text-2xl font-bold text-slate-900">Performance</h1>
+		@organisms.PerformanceActualsPanel(props.Actuals, props.ActualsError)
 		<form class="mt-4 flex flex-wrap items-end gap-4" method="get" action="/performance" data-testid="backtest-form">
 			<label class="flex flex-col text-sm text-slate-600">From <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="date" name="from" value={ props.Form.From } required/></label>
 			<label class="flex flex-col text-sm text-slate-600">To <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="date" name="to" value={ props.Form.To } required/></label>
 			<label class="flex flex-col text-sm text-slate-600">Training days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="training_days" min="1" value={ fmt.Sprintf("%d", props.Form.TrainingDays) }/></label>
 			<label class="flex flex-col text-sm text-slate-600">Validation days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="validation_days" min="1" value={ fmt.Sprintf("%d", props.Form.ValidationDays) }/></label>
 			<label class="flex flex-col text-sm text-slate-600">Forward days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="forward_days" min="1" value={ fmt.Sprintf("%d", props.Form.ForwardDays) }/></label>
-			<button class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" type="submit">Run backtest</button>
+			@atoms.Button(atoms.ButtonProps{Type: "submit"}) {
+				Run backtest
+			}
 		</form>
 		if props.Error != "" {
 			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">{ props.Error }</p>

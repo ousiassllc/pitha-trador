@@ -77,6 +77,9 @@ async function mount() {
   const fetchMock = mock(() => Promise.resolve(new Response(snapshot(3, 'initial'))));
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   const el = document.createElement('pitha-activity-feed') as FeedElement;
+  el.setAttribute('api-url', '/api/v1/activity');
+  el.setAttribute('ws-url', '/ws/activity');
+  el.setAttribute('kill-switch-events-url', '/api/v1/activity?type=kill_switch&limit=10');
   document.body.appendChild(el);
   await flush(el);
   return { el, fetchMock };
@@ -132,5 +135,17 @@ describe('pitha-activity-feed reconnect resync', () => {
     await flush(el);
     expect(fetchMock.mock.calls).toHaveLength(1);
     expect(isBackground(fetchMock.mock.calls[0])).toBe(false);
+  });
+
+  // Light DOM: Shadow `noticeStyles` do not apply, so Tailwind classes must (#355).
+  test('styles the disconnected notice with Tailwind classes while the socket is down', async () => {
+    const { el } = await mount();
+    FakeWebSocket.instances[0].emit('open');
+    FakeWebSocket.instances[0].emit('close', { code: 1006 });
+    await el.updateComplete;
+
+    const notice = el.querySelector('.pitha-ws-disconnected');
+    expect(notice?.classList.contains('text-amber-700')).toBe(true);
+    expect(notice?.classList.contains('text-xs')).toBe(true);
   });
 });

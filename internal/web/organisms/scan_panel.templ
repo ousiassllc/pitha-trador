@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 )
 
 // ScanPanelView is ScanPanel's view model (issue #303). Cycle/Summary are
@@ -39,9 +40,13 @@ templ ScanPanel(v ScanPanelView) {
 			<h2 class="text-base font-semibold text-slate-900">スキャン状況</h2>
 			<div class="flex items-center gap-2">
 				if !v.Open {
-					<button type="button" class="rounded-md border border-sky-600 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100" hx-get={ scanPanelURL } hx-target="#scan-panel" hx-swap="outerHTML" data-testid="scan-open">スキャン対象を見る</button>
+					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonOutline, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanPanelURL, "hx-target": "#scan-panel", "hx-swap": "outerHTML", "data-testid": "scan-open"}}) {
+						スキャン対象を見る
+					}
 				}
-				<button type="button" class="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50" hx-get={ scanHref(v.Query, v.Query.Page, v.Open) } hx-target="#scan-panel" hx-swap="outerHTML" data-testid="scan-refresh">更新</button>
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Query.Page, v.Open), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "data-testid": "scan-refresh"}}) {
+					更新
+				}
 			</div>
 		</div>
 		if !v.HasCycle {
@@ -108,7 +113,9 @@ templ scanList(v ScanPanelView) {
 				}
 			</select>
 		</label>
-		<button type="submit" class="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">絞り込む</button>
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Type: "submit"}) {
+			絞り込む
+		}
 	</form>
 	<p class="mt-3 text-sm text-slate-600" data-testid="scan-total">
 		該当 <span class="font-semibold text-slate-900">{ strconv.Itoa(v.Page.Total) }</span> 銘柄
@@ -138,12 +145,16 @@ templ scanList(v ScanPanelView) {
 	}
 	<nav class="mt-3 flex items-center justify-between text-xs" aria-label="ページ送り" data-testid="scan-pager">
 		if v.Page.Page > 1 {
-			<button type="button" class="rounded-md border border-slate-300 bg-white px-3 py-1 text-slate-700 hover:bg-slate-50" hx-get={ scanHref(v.Query, v.Page.Page-1, true) } hx-target="#scan-panel" hx-swap="outerHTML" data-testid="scan-prev">前へ</button>
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page-1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "data-testid": "scan-prev"}}) {
+				前へ
+			}
 		} else {
 			<span></span>
 		}
 		if v.Page.Page < v.Page.Pages {
-			<button type="button" class="rounded-md border border-slate-300 bg-white px-3 py-1 text-slate-700 hover:bg-slate-50" hx-get={ scanHref(v.Query, v.Page.Page+1, true) } hx-target="#scan-panel" hx-swap="outerHTML" data-testid="scan-next">次へ</button>
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page+1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "data-testid": "scan-next"}}) {
+				次へ
+			}
 		}
 	</nav>
 }

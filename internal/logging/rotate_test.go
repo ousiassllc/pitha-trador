@@ -1,8 +1,10 @@
 package logging
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -96,5 +98,59 @@ func TestRotatingWriter_AppendsAcrossWritesSameDay(t *testing.T) {
 	}
 	if string(data) != "a\nb\n" {
 		t.Errorf("log file content = %q, want %q", data, "a\nb\n")
+	}
+}
+
+func TestRotatingWriter_CreatesOwnerOnlyDirAndFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
+	// A directory left at 0755 by an older version must be tightened too.
+	dir := filepath.Join(t.TempDir(), "logs")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	w, err := NewRotatingWriter(dir)
+	if err != nil {
+		t.Fatalf("NewRotatingWriter: %v", err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+	w.now = func() time.Time { return time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC) }
+	if _, err := w.Write([]byte("line\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	assertMode(t, dir, 0o700)
+	assertMode(t, filepath.Join(dir, "2026-09-27.log"), 0o600)
+}
+
+func TestArchiver_CreatesOwnerOnlyArchive(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not enforced on Windows")
+	}
+	dir := t.TempDir()
+	writeLogFile(t, dir, "2026-08-01.log", "old content\n")
+
+	a := NewArchiver(dir, 30)
+	a.now = func() time.Time { return time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC) }
+	if err := a.Archive(context.Background()); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	assertMode(t, filepath.Join(dir, "2026-08-01.log.gz"), 0o600)
+}
+
+func assertMode(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %q: %v", path, err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Errorf("%q mode = %o, want %o", path, got, want)
 	}
 }

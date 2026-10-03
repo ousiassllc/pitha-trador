@@ -1,11 +1,11 @@
 import { describe, expect, mock, test } from 'bun:test';
 import {
+  createScannerTable,
   FakeWebSocket,
   flush,
   installFakes,
   item,
   mount,
-  type ScannerTableElement,
 } from './scanner-test-support';
 import { COLUMNS } from './scanner-view';
 
@@ -89,7 +89,7 @@ describe('pitha-scanner-table interaction', () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response('', { status: 500 })),
     ) as unknown as typeof fetch;
-    const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+    const el = createScannerTable();
     document.body.appendChild(el);
     await flush(el);
     expect(el.querySelector('[role="alert"]')).not.toBeNull();
@@ -109,7 +109,7 @@ describe('pitha-scanner-table interaction', () => {
 
   test('renders nothing but notices before the first data arrives', async () => {
     globalThis.fetch = mock(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
-    const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+    const el = createScannerTable();
     document.body.appendChild(el);
     await el.updateComplete;
 
@@ -124,16 +124,31 @@ describe('pitha-scanner-table interaction', () => {
       Promise.resolve(new Response('', { status: 500 })),
     ) as unknown as typeof fetch;
 
-    const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+    const el = createScannerTable();
     document.body.appendChild(el);
     await flush(el);
 
     const alert = el.querySelector('[role="alert"]');
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain('500');
+    // Light DOM: Shadow `noticeStyles` do not apply, so Tailwind classes must (#355).
+    expect(alert?.classList.contains('text-red-700')).toBe(true);
     // Nothing has loaded: no count, caption or empty-state claim.
     expect(el.querySelector('[data-testid="scanner-count"]')).toBeNull();
     expect(el.querySelector('caption')).toBeNull();
     expect(el.querySelector('[data-testid="scanner-empty"]')).toBeNull();
+  });
+
+  test('styles the disconnected notice with Tailwind classes while the socket is down', async () => {
+    const { el } = await mount([item()]);
+    FakeWebSocket.instances[0].emit('open', {});
+    await el.updateComplete;
+    expect(el.querySelector('.pitha-ws-disconnected')).toBeNull();
+
+    FakeWebSocket.instances[0].emit('close', { code: 1006 });
+    await el.updateComplete;
+    const notice = el.querySelector('.pitha-ws-disconnected');
+    expect(notice?.classList.contains('text-amber-700')).toBe(true);
+    expect(notice?.classList.contains('text-xs')).toBe(true);
   });
 });

@@ -158,6 +158,7 @@ func TestActivityHandler_Page_RendersIslandWithServerRenderedFallback(t *testing
 		"<pitha-activity-feed",
 		`api-url="/api/v1/activity"`,
 		`ws-url="/ws/activity"`,
+		`kill-switch-events-url="/api/v1/activity?type=kill_switch&limit=10"`,
 		"/static/dist/js/activity-feed/pitha-activity-feed.js",
 		`data-queue="jev-scout"`,
 		`data-event-type="jev_trader"`,

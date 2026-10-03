@@ -62,7 +62,7 @@ func TestShells_WireHTMXErrorToasts(t *testing.T) {
 		}
 
 		for _, want := range []string{
-			`id="toast-region"`,
+			`id="toast-region" popover="manual"`,
 			`id="toast-template"`,
 			`/static/dist/js/htmx-errors/pitha-htmx-errors.js`,
 		} {

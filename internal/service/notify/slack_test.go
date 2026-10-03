@@ -64,6 +64,30 @@ func TestSlackNotifier_PostMessage_NonOKStatusIsError(t *testing.T) {
 	}
 }
 
+func TestSlackNotifier_PostMessage_ErrorBodyIsTruncated(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(strings.Repeat("x", 1<<20)))
+	}))
+	defer srv.Close()
+	n := notify.NewSlackNotifier(notify.Config{WebhookURL: srv.URL})
+
+	err := n.PostMessage(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("expected error for non-2xx response, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "status 500") {
+		t.Errorf("error = %.100s..., want it to carry the status code", msg)
+	}
+	if !strings.Contains(msg, "(truncated)") {
+		t.Errorf("error should mark the body as truncated")
+	}
+	if len(msg) > 5<<10 {
+		t.Errorf("error length = %d, want it capped near 4KiB", len(msg))
+	}
+}
+
 func TestSlackNotifier_KillSwitchTriggered_AutoResumable(t *testing.T) {
 	var got []string
 	n, closeSrv := captureWebhook(t, &got)

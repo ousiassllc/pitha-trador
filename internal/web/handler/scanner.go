@@ -148,9 +148,7 @@ func (h *ScannerHandler) Page(c *gin.Context) {
 	}
 
 	if c.GetHeader("HX-Request") == "true" {
-		c.Status(http.StatusOK)
-		c.Header("Content-Type", "text/html; charset=utf-8")
-		_ = organisms.ScannerTableFallback(candidates, asOf).Render(c.Request.Context(), c.Writer)
+		shared.RenderHTML(c, http.StatusOK, organisms.ScannerTableFallback(candidates, asOf))
 		return
 	}
 	// The scan panel (issue #303) starts closed: funnel only. A failure to
@@ -159,9 +157,7 @@ func (h *ScannerHandler) Page(c *gin.Context) {
 	if err != nil {
 		slog.ErrorContext(c.Request.Context(), "handler: scanner page scan summary", "error", err)
 	}
-	c.Status(http.StatusOK)
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	_ = pages.ScannerPage(candidates, asOf, panel).Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, http.StatusOK, pages.ScannerPage(candidates, asOf, panel))
 }
 
 // scannerUpdateMessage mirrors docs/api/endpoints.md §6's

@@ -10,8 +10,15 @@ import { html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
+import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
+import type {
+  ScannerAPIResponse,
+  ScannerItem,
+  ScannerUpdateMessage,
+  SortDirection,
+} from './scanner-types';
 import {
   COLUMNS,
   type Column,
@@ -26,36 +33,6 @@ import {
   returnClass,
   type SortKey,
 } from './scanner-view';
-
-// Mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner` item shape.
-export interface ScannerItem {
-  symbol: string;
-  price: number;
-  return_1m: number | null;
-  return_5m: number | null;
-  volume_ratio_5m: number | null;
-  price_vs_vwap_bps: number;
-  spread_bps: number | null;
-  jev_direction: string | null;
-  jev_confidence: number | null;
-  entry_quality: string | null;
-  current_position: number | null;
-}
-
-interface ScannerAPIResponse {
-  items: ScannerItem[];
-  as_of: string;
-}
-
-// Mirrors docs/api/endpoints.md §6 `/ws/scanner` message shape.
-interface ScannerUpdateMessage {
-  type: string;
-  items: ScannerItem[];
-  // Same RFC 3339 scan-cycle timestamp as ScannerAPIResponse.as_of.
-  as_of: string;
-}
-
-type SortDirection = 'asc' | 'desc';
 
 @customElement('pitha-scanner-table')
 export class PithaScannerTable extends LitElement {
@@ -95,8 +72,10 @@ export class PithaScannerTable extends LitElement {
   private ssrNodes: ChildNode[] = [];
   private helpOpen = false;
 
-  @property({ type: String, attribute: 'api-url' }) apiUrl = '/api/v1/scanner';
-  @property({ type: String, attribute: 'ws-url' }) wsUrl = '/ws/scanner';
+  // Injected by organisms.ScannerTableFallback; the component owns no URL
+  // (docs/components/lit.md §5.2).
+  @property({ type: String, attribute: 'api-url' }) apiUrl = '';
+  @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
 
   @state() private items: ScannerItem[] = [];
   // False until the first data (initial fetch or WS push) arrives, so an
@@ -123,6 +102,10 @@ export class PithaScannerTable extends LitElement {
   }
 
   private async loadInitial(): Promise<void> {
+    if (!this.apiUrl) {
+      logger.error('pitha-scanner-table: api-url is not set');
+      return;
+    }
     try {
       const response = await get<ScannerAPIResponse>(this.apiUrl);
       this.items = response.items;
@@ -136,6 +119,10 @@ export class PithaScannerTable extends LitElement {
   }
 
   private subscribeWs(): void {
+    if (!this.wsUrl) {
+      logger.error('pitha-scanner-table: ws-url is not set');
+      return;
+    }
     this.wsClient = new WsClient<ScannerUpdateMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;
@@ -168,8 +155,8 @@ export class PithaScannerTable extends LitElement {
 
   protected override render() {
     const notices = html`
-      ${renderWsDisconnected(this.wsStatus)}
-      ${this.error ? html`<p class="pitha-scanner-table-error" role="alert">${this.error}</p>` : ''}
+      ${renderWsDisconnected(this.wsStatus, lightDomWsNoticeClass)}
+      ${this.error ? html`<p class="pitha-scanner-table-error ${lightDomErrorClass}" role="alert">${this.error}</p>` : ''}
     `;
     // Until the first data arrives the server-rendered table stays in
     // place (see createRenderRoot); only the notices are added beside it.

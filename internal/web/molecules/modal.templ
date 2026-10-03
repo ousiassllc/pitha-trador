@@ -1,5 +1,7 @@
 package molecules
 
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
 // Modal is a native `<dialog>` shell (issue #302): a title bar with a
 // 「閉じる」 button above the children. It renders closed; the
 // `pitha-modal` script (static/src/components/modal) opens it from a
@@ -10,6 +12,11 @@ package molecules
 // framework state - the children are plain HTMX forms/panels (light DOM).
 // The dialog has no padding of its own so a click that lands on the dialog
 // element itself is always a backdrop click.
+//
+// The dialog carries its own `[data-toast-region]`: `showModal()` makes
+// everything outside the dialog inert, `#toast-region` included, so while
+// the modal is open pitha-htmx-errors sends failure toasts here, where
+// their 「×」 button and text selection still work (issue #353).
 templ Modal(id, title string) {
 	<dialog
 		id={ id }
@@ -20,10 +27,13 @@ templ Modal(id, title string) {
 	>
 		<div class="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-3">
 			<h2 id={ id + "-title" } class="text-lg font-semibold text-slate-900">{ title }</h2>
-			<button class="rounded-md border border-slate-300 px-3 py-1 text-sm font-semibold text-slate-700" type="button" data-modal-close data-testid={ id + "-close" }>閉じる</button>
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{"data-modal-close": true, "data-testid": id + "-close"}}) {
+				閉じる
+			}
 		</div>
 		<div class="flex flex-col gap-4 px-5 py-4">
 			{ children... }
 		</div>
+		<div data-toast-region class="pointer-events-none fixed bottom-auto left-auto right-4 top-4 z-50 flex w-96 max-w-full flex-col gap-2" aria-live="assertive"></div>
 	</dialog>
 }

@@ -18,7 +18,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
   - `layout.Shell`/`SetupShell`が`<meta name="csrf-token">`を出力し、`<body hx-headers>`でHTMX全リクエストに`X-CSRF-Token`を付与する。Litコンポーネントは`lib/api.ts`が同metaから読み取って送信する。`SecretFieldRow`のフォームは上記フォールバック用に隠しフィールド`_csrf`も持つ
 - 実売買（Phase 7）へ移行しても、Kill Switch解除・発注確定操作に人手の追加認証は要求しない（完全自動運用。`requirements/non-functional.md` §4、FR-RISK-4）。実装（`internal/web/handler/system/system.go`）にも追加認証は無く、`pitha-kill-switch-panel`が確認ダイアログ（`window.confirm`）を出すのはKill操作のみで、Resume（Killedからの手動解除を含む）は確認なしで`POST /api/v1/system/resume`を呼ぶ
-- **Setup Guard**: 必須認証情報（JEV_API_KEY/KABU_API_PASSWORD）のいずれかが`secrets`テーブルに未設定の間は、`GET /setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエスト（ページ・アクション・`/api/v1`・WebSocket含む）を`/setup`へ誘導する。誘導方法はリクエスト種別で応答を分ける（ページ遷移: `/setup`へ302、HTMX（`HX-Request: true`）: `204`＋`HX-Redirect: /setup`、`/api/v1`: `503` JSON `{"setup_required":true,"setup_url":"/setup"}`、WebSocketアップグレード: `403`。302をスクリプト系リクエストが追従して`/setup`のHTML全体を受け取らないため、issue #140）。判定はリクエストごとに行うため、3キーが揃った次のリクエストから解除される（issue #80）
+- **Setup Guard**: 必須認証情報（JEV_API_KEY/KABU_API_PASSWORD）のいずれかが`secrets`テーブルに未設定の間は、`GET /setup`・`POST`/`DELETE /settings/:key`・静的アセット（`/static/...`）以外の全リクエスト（ページ・アクション・`/api/v1`・WebSocket含む）を`/setup`へ誘導する。誘導方法はリクエスト種別で応答を分ける（ページ遷移: `/setup`へ302、HTMX（`HX-Request: true`）: `204`＋`HX-Redirect: /setup`、`/api/v1`: `503` JSON `{"setup_required":true,"setup_url":"/setup"}`、WebSocketアップグレード: `403`。302をスクリプト系リクエストが追従して`/setup`のHTML全体を受け取らないため、issue #140）。判定はリクエストごとに行うため、必須2キーが揃った次のリクエストから解除される（issue #80）
 
 ## 2. ルーティング概要
 
@@ -37,7 +37,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却。ページ上部にスキャン状況パネル（ファネル件数・最終サイクル時刻/所要時間・「スキャン対象を見る」「更新」）を含む（フルページのみ） |
 | GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。issue #303 |
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
-| GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
+| GET | `/performance` | Performance画面。常に先頭に「実績（Paper）」節（クローズ済みポジションのTotal/Daily PnL・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal count。§5 `GET /api/v1/performance` と同一集計、算出不能は「—」）を表示し、取得失敗時は節内にエラーを示して500。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
 | GET | `/calibration` | Calibration画面 |
 | GET | `/settings` | Settings画面。接続先別（Jev/kabuステーション/Slack/Luna/ニュースフィード/Sol/Opus）の一覧で、各接続先のモーダルに許可キー（`internal/config`のallow-list）の`SecretFieldRow`をまとめ、各行が独立した保存・削除フォームを持つ。保存済みの値は再表示せず「設定済み」バッジのみ表示する。「システム」節からアップデート（`#update-panel`）とエラーログのダウンロード（`#error-log-panel`、`GET /api/v1/logs/errors`を呼ぶフォーム。FR-ERRLOG-1）のモーダルを開く（issue #57/#79/#267/#302） |
 | GET | `/setup` | 初回セットアップ画面。Settingsと同じ接続先一覧・モーダルで、必須2キー（JEV_API_KEY/KABU_API_PASSWORD）を持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80/#302） |
@@ -82,7 +82,7 @@ stateDiagram-v2
 | パス | 用途 | 送信メッセージ例 |
 |------|------|-----------------|
 | `/ws/scanner` | Scanner Dashboardのライブ更新（`pitha-scanner-table`） | `{"type":"scanner_update","items":[...],"as_of":"2026-09-26T10:15:00+09:00"}`（`as_of`は`GET /api/v1/scanner`と同じスキャン時刻・RFC 3339） |
-| `/ws/symbols/{symbol}` | Symbol Detailのライブ更新（`pitha-price-chart`, Jev判定パネル） | `{"type":"tick","price":2831.5,...}` / `{"type":"jev_update","direction":"LONG",...}`。`tick`は最新価格が存在する（`price > 0`）間のみ送信し、`pitha-price-chart`は1分足に集約して描画する（issue #183） |
+| `/ws/symbols/{symbol}` | Symbol Detailのチャートのライブ更新（`pitha-price-chart`）。Jev判定パネルはSSRのみで`jev_update`では更新されず、ページ再読み込みで更新される | `{"type":"tick","price":2831.5,...}` / `{"type":"jev_update","direction":"LONG","confidence":0.82}`。`jev_update`は`direction`と`confidence`のみを持ち（`entry_quality`は含まない）、`pitha-price-chart`は`direction`が変化したときだけ方向マーカーを描画する。`tick`は最新価格が存在する（`price > 0`）間のみ送信し、`pitha-price-chart`は1分足に集約して描画する（issue #183） |
 | `/ws/system` | Kill Switch発動等のシステムイベント通知（ヘッダーバッジ用、OOBの代替としてLit非経由でも利用可） | `{"type":"kill_switch","reason":"daily_loss_limit"}`。`reason`は未解決の`kill_switch_events.reason`で、`daily_loss_limit`/`consecutive_losses`/`market_data_down`/`jev_api_down`/`broker_api_error`/`unexpected_position`/`fill_discrepancy`/`db_write_failure`/`operator_heartbeat_timeout`/`operator_manual`（手動Killは`operator_manual`）のいずれか。`kill_switch_events`行の記録に失敗しフラグのみ立った場合のフォールバックは`manual` |
 | `/ws/activity` | System Activity Logのライブ更新（`pitha-activity-feed`） | `{"type":"job_update","queue":"jev-scout","pending":2,"running":1,"failed_recent":0}` / `{"type":"activity_event","event":{"type":"jev_scout","timestamp":"...","symbol":"7203"}}`。接続直後の送信はなく、初期状態は`GET /api/v1/activity`から取得する |
 
@@ -129,3 +129,6 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.27 | 2026-10-02 | §1のWailsアプリのバインド記述を、Windowsのみ`/ws/...`専用ループバックリスナー（`127.0.0.1`と`[::1]`）を起動する実態に合わせて修正（「内蔵HTTPサーバーは`127.0.0.1`にのみバインド」を是正） | issue #300（#266/#285の実装との乖離解消） |
 | 1.28 | 2026-10-03 | §3の`/settings`・`/setup`を接続先別の一覧＋モーダル構成に更新。`POST`/`DELETE /settings/:key`のHTMX応答は行に加えて接続先の状態バッジ（`hx-swap-oob`）を返す | issue #302 |
 | 1.29 | 2026-10-03 | §3 に `GET /scanner/scan`（スキャン状況パネル）を追加、`GET /scanner` にスキャン状況パネルを追記 | issue #303 |
+| 1.30 | 2026-10-03 | `POST`/`DELETE /settings/:key`のHTMX応答は、`Referer`が`/setup`のとき必須キー充足状態を再計算した完了メッセージ（`#setup-status`、`hx-swap-oob`）も返す | issue #325 |
+| 1.31 | 2026-10-03 | §3 `/performance` に「実績（Paper）」節（クローズ済みポジションの実績指標、算出不能は「—」、取得失敗は節内エラー＋500）を追記 | issue #360実装 |
+| 1.32 | 2026-10-03 | §6 `/ws/symbols/{symbol}`の用途から「Jev判定パネル」のライブ更新を削除（パネルはSSRのみ）し、`jev_update`が`direction`/`confidence`のみで`pitha-price-chart`は方向変化のマーカーだけ描画すると明記 | issue #362 |

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import contract from './scanner-contract.json';
 import './pitha-scanner-table';
-import type { ScannerItem } from './pitha-scanner-table';
+import { createScannerTable } from './scanner-test-support';
+import type { ScannerItem } from './scanner-types';
 import { COLUMNS } from './scanner-view';
 
 // Contract test shared with internal/web/organisms/scanner_table_contract_test.go:
@@ -37,7 +38,7 @@ async function render(items: ScannerItem[]): Promise<ScannerTableElement> {
   globalThis.fetch = mock(() =>
     Promise.resolve(new Response(JSON.stringify({ items, as_of: '2026-09-26T10:15:00+09:00' }))),
   ) as unknown as typeof fetch;
-  const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+  const el = createScannerTable();
   document.body.appendChild(el);
   const { promise, resolve } = Promise.withResolvers<void>();
   setTimeout(resolve, 0);

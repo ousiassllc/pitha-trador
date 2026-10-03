@@ -101,6 +101,23 @@ func TestSettingsPage_ModalsAreLabelledDialogs(t *testing.T) {
 	}
 }
 
+// A modal <dialog> makes everything outside it inert, `#toast-region`
+// included, so each dialog must carry its own toast region for failure toasts
+// to stay dismissible (issue #353).
+func TestSettingsPage_EachModalHasItsOwnToastRegion(t *testing.T) {
+	body := renderSettings(t, pages.SettingsProps{Connections: testConnections()})
+	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log"} {
+		start := strings.Index(body, `<dialog id="`+id+`"`)
+		if start < 0 {
+			t.Fatalf("no <dialog id=%s>", id)
+		}
+		dialog := body[start : start+strings.Index(body[start:], "</dialog>")]
+		if got := strings.Count(dialog, "data-toast-region"); got != 1 {
+			t.Errorf("modal %s has %d data-toast-region elements, want 1", id, got)
+		}
+	}
+}
+
 // The エラーログ section is a plain GET form to the download API (FR-ERRLOG-1):
 // 7 days and ERROR-only preselected, HTMX kept out via hx-disable.
 func TestSettingsPage_ErrorLogPanelIsPlainDownloadForm(t *testing.T) {
@@ -150,5 +167,28 @@ func TestSetupPage_UsesConnectionListAndModals(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("SetupPage lacks %q", want)
 		}
+	}
+}
+
+// issue #352: "続ける" is only offered once every required key is stored;
+// before that the Setup Guard would just bounce it back to /setup.
+func TestSetupPage_ContinueLinkOnlyWhenComplete(t *testing.T) {
+	render := func(complete bool) string {
+		var buf bytes.Buffer
+		if err := pages.SetupPage(pages.SetupProps{Complete: complete}).Render(context.Background(), &buf); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return buf.String()
+	}
+
+	if body := render(false); strings.Contains(body, `data-testid="setup-continue"`) || strings.Contains(body, `href="/scanner"`) {
+		t.Errorf("incomplete SetupPage must not render the 続ける link; body=%s", body)
+	}
+	body := render(true)
+	if !strings.Contains(body, `data-testid="setup-continue"`) || !strings.Contains(body, `href="/scanner"`) {
+		t.Errorf("complete SetupPage lacks the 続ける link to /scanner; body=%s", body)
+	}
+	if status := strings.Index(body, `id="setup-status"`); status < 0 || strings.Index(body, `data-testid="setup-continue"`) < status {
+		t.Errorf("the 続ける link must sit inside #setup-status so the OOB swap replaces it; body=%s", body)
 	}
 }

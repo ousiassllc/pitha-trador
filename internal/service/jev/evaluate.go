@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/httpbody"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/systemone"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
@@ -150,7 +150,7 @@ func (c *Client) evaluate(ctx context.Context, label string, req systemone.Reque
 
 // retryable reports whether err may succeed on a repeated request.
 func retryable(err error) bool {
-	if errors.Is(err, systemone.ErrInvalidResponse) {
+	if errors.Is(err, systemone.ErrInvalidResponse) || errors.Is(err, httpbody.ErrTooLarge) {
 		return false
 	}
 	var apiErr *APIError
@@ -192,7 +192,7 @@ func (c *Client) post(ctx context.Context, req systemone.Request, body []byte) (
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
-	respBody, err := io.ReadAll(httpResp.Body)
+	respBody, err := httpbody.ReadAll(httpResp.Body, httpbody.DefaultMaxBytes)
 	if err != nil {
 		return systemone.Result{}, fmt.Errorf("jev: read response body: %w", err)
 	}

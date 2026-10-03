@@ -46,8 +46,11 @@ type EntryResult struct {
 // Enter implements Paper Entry (FR-ENTRY-1〜2): submits a market or limit
 // paper_orders row for req.Signal's direction/instrument, filling and
 // opening a positions row immediately when the order type/price allow it.
-// With Config.Calendar set, entries outside 東証立会時間 fail with
-// ErrOutsideTradingSession.
+// Quantity <= 0 or a non-finite/non-positive Price or LimitPrice fails with
+// ErrInvalidQuantity/ErrInvalidPrice before anything is written (issue
+// #342). With Config.Calendar set, entries outside 東証立会時間 fail with
+// ErrOutsideTradingSession; with a PENDING entry order already on the
+// instrument they fail with ErrPendingOrderExists (issue #343).
 func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, error) {
 	direction := req.Signal.Direction
 	if direction != domain.JevDirectionLong && direction != domain.JevDirectionShort {
@@ -55,6 +58,12 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 	}
 	if !req.Signal.RiskPassed {
 		return EntryResult{}, ErrRiskNotPassed
+	}
+	if req.Quantity <= 0 {
+		return EntryResult{}, fmt.Errorf("%w (got %d)", ErrInvalidQuantity, req.Quantity)
+	}
+	if !validPrice(req.Price) || (req.LimitPrice != nil && !validPrice(*req.LimitPrice)) {
+		return EntryResult{}, fmt.Errorf("execution: enter %q: %w (price %v)", req.Signal.Symbol, ErrInvalidPrice, req.Price)
 	}
 
 	now := req.Now
@@ -69,6 +78,16 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 		return EntryResult{}, ErrPositionAlreadyOpen
 	} else if !errors.Is(err, domain.ErrPositionNotFound) {
 		return EntryResult{}, fmt.Errorf("execution: check open position for instrument %d: %w", req.Signal.InstrumentID, err)
+	}
+
+	pending, err := e.orders.ListByInstrument(ctx, req.Signal.InstrumentID, pendingOrderScanLimit)
+	if err != nil {
+		return EntryResult{}, fmt.Errorf("execution: check pending orders for instrument %d: %w", req.Signal.InstrumentID, err)
+	}
+	for _, o := range pending {
+		if o.Status == domain.OrderStatusPending {
+			return EntryResult{}, ErrPendingOrderExists
+		}
 	}
 
 	if until, inCooldown := e.symbolCooldown(req.Signal.Symbol, now); inCooldown {

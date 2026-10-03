@@ -58,9 +58,7 @@ func (h *UpdateHandler) Status(c *gin.Context) {
 			Ready:     status.Ready,
 		}
 	}
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = organisms.UpdateBanner(props).Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, http.StatusOK, organisms.UpdateBanner(props))
 }
 
 // Panel implements `GET /system/update-panel`: Settings' `#update-panel`
@@ -88,13 +86,11 @@ func (h *UpdateHandler) Check(c *gin.Context) {
 }
 
 func (h *UpdateHandler) renderPanel(c *gin.Context, failed bool) {
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
 	if h.controller == nil {
-		_ = organisms.UpdatePanel(organisms.UpdatePanelProps{
+		shared.RenderHTML(c, http.StatusOK, organisms.UpdatePanel(organisms.UpdatePanelProps{
 			CurrentVersion: version.Version,
 			Unavailable:    true,
-		}).Render(c.Request.Context(), c.Writer)
+		}))
 		return
 	}
 	status := h.controller.Status()
@@ -117,7 +113,7 @@ func (h *UpdateHandler) renderPanel(c *gin.Context, failed bool) {
 	if !status.CheckedAt.IsZero() {
 		props.CheckedAt = status.CheckedAt.In(time.Local).Format("2006-01-02 15:04")
 	}
-	_ = organisms.UpdatePanel(props).Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, http.StatusOK, organisms.UpdatePanel(props))
 }
 
 // blockedReason words the safety-gate condition holding a newer release

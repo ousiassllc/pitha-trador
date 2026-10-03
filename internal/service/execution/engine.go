@@ -29,6 +29,10 @@ var (
 	// already has an open position (positions_open_instrument_uq,
 	// functional.md §4.9's per-symbol "position" state allows only one).
 	ErrPositionAlreadyOpen = errors.New("execution: instrument already has an open position")
+	// ErrPendingOrderExists is returned by Enter when the instrument
+	// already has a PENDING entry order: a second one could never fill
+	// once the first opened the position (issue #343).
+	ErrPendingOrderExists = errors.New("execution: instrument already has a pending entry order")
 	// ErrSymbolInCooldown is returned by Enter when the symbol is still
 	// within its post-loss cooldown window (Config.
 	// CooldownAfterLossMinutes, functional.md §4.9 cooldown_until).
@@ -36,11 +40,13 @@ var (
 	// ErrLimitPriceRequired is returned by Enter when the resolved order
 	// type is LIMIT but req.LimitPrice is nil.
 	ErrLimitPriceRequired = errors.New("execution: limit order requires a limit price")
-	// ErrInvalidPrice is returned by OnSnapshot, TryFillPending and Close
-	// when the price to fill/mark/close at is not finite and positive: a
-	// missing board price (0) must never become a fill, a mark or an exit
-	// (issue #173).
+	// ErrInvalidPrice is returned by Enter, OnSnapshot, TryFillPending and
+	// Close when the price to fill/mark/close at (or Enter's limit price)
+	// is not finite and positive: a missing board price (0) must never
+	// become a fill, a mark or an exit (issues #173, #342).
 	ErrInvalidPrice = errors.New("execution: price must be positive")
+	// ErrInvalidQuantity is returned by Enter when req.Quantity <= 0 (#342).
+	ErrInvalidQuantity = errors.New("execution: quantity must be positive")
 )
 
 // validPrice reports whether p can be used to fill, mark or close at.

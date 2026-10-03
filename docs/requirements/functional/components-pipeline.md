@@ -23,8 +23,8 @@
 
 ### 4.2 Fast Screener
 
-- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-1〜4）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する）
-- FR-FS-2: 通過銘柄に対し以下のスコアを算出し、上位N銘柄のみJev Scoutへ送る
+- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-3〜6、除外・欠損理由の表示は FR-SCAN-4/5）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する）
+- FR-FS-2: 通過銘柄に対し以下のスコアを算出し、上位N銘柄のみJev Scoutへ送る。Nは`fast_screener.top_n`で、同梱既定は20（`config/strategy.yaml`。Jev APIコストを抑える側の値）。50〜200へ引き上げる場合は`non-functional.md` §2.1のAPI呼び出し上限（Nに比例）を確認する
 
 ```text
 screen_score =
@@ -48,6 +48,8 @@ screen_score =
 | 全体スキャン | 60秒ごと |
 | 候補銘柄更新 | 15〜30秒ごと |
 | ポジション保有銘柄 | 5〜15秒ごと |
+
+- 周期は`config/strategy.yaml`の`scan.full_scan_interval_seconds`（60）/ `scan.candidate_refresh_interval_seconds_min`・`_max`（15・30）/ `scan.held_position_interval_seconds_min`・`_max`（5・15）で設定する（括弧内は同梱の既定値、単位は秒）。各値は正の整数で、`_max >= _min`であること。設定ローダー（`internal/config/scan_defaults.go`）は、未設定または0以下のキーを同梱既定値で補完し、`_max < _min`の`_max`を`_min`に引き上げる。いずれも警告ログを出す。0のままだと候補更新が待機なしで回り、全体スキャンが`@every 0s`で登録されるため（ホットループ防止）
 
 - FR-SCAN-1: 以下のいずれかを満たした銘柄は通常周期を待たず再評価する: 1分リターン急変、出来高急増、スプレッド急拡大、板インバランス急変、VWAPクロス、高値/安値ブレイク、約定フロー急変（直近2バーの`trade_flow_imbalance`の差の絶対値が`config/strategy.yaml`の`scan.event_trigger.trade_flow_imbalance_change_threshold`以上。どちらかが欠損の場合は無信号）、ニュースフラグ発生
 - FR-SCAN-2（再評価抑制）: `abs(return_1m) < threshold AND abs(volume_ratio_5m) < threshold AND abs(spread_change) < threshold AND no_event` の場合はJev呼び出しをスキップし、APIコストとレイテンシを削減する
@@ -132,17 +134,24 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
 
 ### 4.8 Entry / Exit
 
-- FR-ENTRY-1: 成行想定Paper Entry・指値Paper Entryの両方を選択可能とする
-- FR-ENTRY-2: 実売買へ移行する場合は原則として指値を優先する
+- FR-ENTRY-1: 成行想定Paper Entry・指値Paper Entryの両方を選択可能とする。現状はExecutionエンジン（`internal/service/execution`）が両方を実装しており（`EntryRequest.OrderType`/`LimitPrice`、`Config.PreferLimit`、PENDING指値の約定処理`TryFillPending`）、本番経路（Policy → `paperexec` → Execution）は`OrderType`/`LimitPrice`を指定しないため常に成行想定で発注する。`Config.PreferLimit`は`config/*.yaml`・環境変数・`runtime_settings`のいずれにも設定キーが無く既定のfalse（成行）固定であり、運用で指値Entryを選ぶ手段は未提供（本番経路への配線は実売買移行時にFR-ENTRY-2と併せて行う）
+- FR-ENTRY-2: 実売買へ移行する場合は原則として指値を優先する（Paper Tradingの現行運用は上記のとおり成行想定）
 - FR-ENTRY-3（ポジションサイジング）: Paper Entryの発注数量は、次の3つの上限株数の最小値を単元（100株）単位に切り下げた値とする。1単元にも満たない場合は発注せず、拘束した制限（`max_trade_loss_pct` / `max_position_per_symbol_pct` / `max_total_exposure_pct`）を理由に見送る
   - 1トレード最大損失: `initial_capital × max_trade_loss_pct ÷ (価格 × stop_loss_pct)`
   - 銘柄上限: `initial_capital × max_position_per_symbol_pct ÷ 価格`
   - 総エクスポージャ残枠: `initial_capital × (max_total_exposure_pct − 現在の総エクスポージャ率) ÷ 価格`
   - `GET /api/v1/symbols/{symbol}`の`risk.allowed_position_pct`は、直近価格で同サイジングを行った結果の数量が占める`initial_capital`比（%、発注不可なら0）
 - FR-ENTRY-4（約定の原子性）: Entry注文の約定（`paper_orders`のFILLED化）とポジション作成（`positions`）は単一のDBトランザクションで行う。失敗時は注文をFILLEDにせず、約定済み注文がどのポジションにも紐付かない状態（孤児約定）はRisk Engineの照合が`fill_discrepancy`として検知する（§4.7）
+- FR-ENTRY-5（銘柄単位のEntryゲート）: Executionエンジンの`Enter`は、次のいずれかに該当する銘柄への新規Entryを受け付けない（`ErrOutsideTradingSession` / `ErrPositionAlreadyOpen` / `ErrPendingOrderExists` / `ErrSymbolInCooldown`）。Risk Engineの判定（FR-RISK-1）とは別の、Execution自身の不変条件である
+  - 立会時間外、または引け前強制決済の開始時刻以降（Calendar設定時。直ちに強制決済されるEntryを避ける）
+  - 保有中のポジションがある（`positions`の部分UNIQUEインデックス、`architecture/er/tables-trading.md`。同一銘柄の同時ポジションは1つ）
+  - 未約定（PENDING）のEntry注文がある（先の注文でポジションができると2本目は約定し得ないため、重複させない）
+  - その銘柄で損失クローズ（実現損益<0）した時刻から`cooldown_after_loss_minutes`（FR-RISK-1）の間。Executionのメモリ上の銘柄別ゲートであり、Risk Engineの判定とは別に働く（プロセス再起動で解除される）
+- FR-ENTRY-6（見送りの扱い）: 上記ゲートによる拒否は、Policy → `paperexec`経路ではエラーではなく「見送り」として扱う。再試行しても同じ理由で拒否されるため、jev-traderジョブは失敗にせず、`paper entry skipped`としてログに残して正常終了する。ゲート以外のEntryエラーはジョブ失敗とする
+- FR-ENTRY-7（入力検証）: `Enter`は発注前に、シグナル方向がLONG/SHORTであること、Risk Engine通過済み（`risk_passed`）であること、数量>0、価格が有限かつ>0、指値価格を指定する場合は有限かつ>0、指値注文では指値価格が指定されていることを検証し、違反は注文を作らずに拒否する。板価格の欠損（0）が約定・時価更新・決済価格にならないよう、`TryFillPending`・`OnSnapshot`・`Close`の価格も同様に検証する
 - FR-EXIT-1: 以下のExit条件を併用する: 固定Stop Loss、固定Take Profit、Trailing Stop、Jev方向反転、continuation_probability低下、VWAP逆クロス、最大保有時間到達、引け前強制決済（`force_flat_before_market_close_minutes` 分前から、大引け15:30 JSTを基準に判定する。前場終了11:30は対象外）。VWAP逆クロスは「価格がVWAPの不利側へ抜けた瞬間」（前回評価時は不利側でなく、今回評価で不利側）のみ成立し、不利側に滞在しているだけでは成立しない（不利側でエントリーしたポジションは、有利側へ抜けた後に再び不利側へ抜けるまでこの条件でクローズしない）。前回評価が無い最初の評価は、建値と現在VWAPの関係を前回の関係とみなす
 - FR-EXIT-2: 初期値: `stop_loss_pct=0.6`, `take_profit_pct=1.2`, `trailing_stop_pct=0.5`, `max_holding_minutes=20`
-- FR-EXIT-3: Jev API不応答時も、既存ポジションはコードベースのExit Ruleで管理を継続する（Jev不応答を理由にリスク管理を停止しない）
+- FR-EXIT-3: Jev API不応答時も、既存ポジションはコードベースのExit Ruleで管理を継続する（Jev不応答を理由にリスク管理を停止しない）。同様に、PENDING指値の約定処理（`TryFillPending`）の失敗は、`OnSnapshot`による保有ポジションの時価更新・Exit評価を止めない（失敗はログに残し、当該注文のみ飛ばす。ポジションが既にあるため約定し得ないPENDING注文は`REJECTED`にする）
 
 ### 4.9 状態管理
 

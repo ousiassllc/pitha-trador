@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -127,7 +128,5 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, _ *struct{}) (*
 // GET /api/v1/calibration on its own), so this handler needs no
 // CalibrationSource dependency to render.
 func (h *CalibrationHandler) Page(c *gin.Context) {
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = pages.CalibrationPage().Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, http.StatusOK, pages.CalibrationPage())
 }
