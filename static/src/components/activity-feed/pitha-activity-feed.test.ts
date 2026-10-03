@@ -1,5 +1,6 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
 import {
+  createFeed,
   emit,
   event,
   FakeWebSocket,
@@ -86,6 +87,49 @@ describe('pitha-activity-feed', () => {
     expect(el.querySelector('#kill-switch-events')?.textContent).toContain(
       'reason=daily_loss_limit',
     );
+  });
+
+  test('shows "No kill switch events." only after a successful empty load', async () => {
+    let release: (res: Response) => void = () => {};
+    const fetchMock = mock((url: string) =>
+      url.includes('type=kill_switch')
+        ? new Promise<Response>((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve(new Response(JSON.stringify({ queues: [], events: [], as_of: 'x' }))),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const el = createFeed();
+    document.body.appendChild(el);
+    await flush(el);
+
+    const section = () => el.querySelector('#kill-switch-events')?.textContent ?? '';
+    expect(section()).not.toContain('No kill switch events.');
+    expect(section()).toContain('Loading kill switch events');
+
+    release(new Response(JSON.stringify({ queues: [], events: [], as_of: 'x' })));
+    await flush(el);
+    expect(section()).toContain('No kill switch events.');
+  });
+
+  test('shows an alert instead of "No kill switch events." when the fetch fails', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    globalThis.fetch = mock((url: string) =>
+      Promise.resolve(
+        url.includes('type=kill_switch')
+          ? new Response('boom', { status: 500 })
+          : new Response(JSON.stringify({ queues: [], events: [], as_of: 'x' })),
+      ),
+    ) as unknown as typeof fetch;
+    const el = createFeed();
+    document.body.appendChild(el);
+    await flush(el);
+
+    const section = el.querySelector('#kill-switch-events');
+    expect(section?.querySelector('[role="alert"]')).not.toBeNull();
+    expect(section?.textContent).not.toContain('No kill switch events.');
+    expect(section?.textContent).not.toContain('Loading kill switch events');
+    errorSpy.mockRestore();
   });
 
   test('job_update pushes replace only that queue counts', async () => {
