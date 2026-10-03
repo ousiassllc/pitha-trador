@@ -18,6 +18,10 @@ Paper Trading開始前に最低限以下を検証する。
 - FR-BT-1: 取引回数、勝率、平均利益、平均損失、Profit Factor、Expectancy、Max Drawdown、スリッページ込みPnL、手数料込みPnLを算出する
 - FR-BT-2: Training/Calibration → Validation → Forward periodのWalk Forwardを繰り返す（全期間一括最適化しない）
 - FR-BT-3: 特徴量は判定時点までのデータのみで生成する（look-ahead防止）
+- FR-BT-4（再現範囲と簡略化）: バックテストおよびシャドーバックテスト（FR-SELFIMPROVE-4）は、記録済みの`market_snapshots`と`jev_decisions`（Jev Trader判断）をPolicy Engineで再生し、以下の簡略化の下で取引を再現する。ライブ運用の結果とは一致せず、Expectancy・Max Drawdownはこの前提での比較値である
+  - Exit条件: 固定Stop Loss・固定Take Profit・最大保有時間のみを評価する（値は`execution.Config`のFR-EXIT-2と同一）。Trailing Stop・Jev方向反転・continuation_probability低下・VWAP逆クロス・引け前強制決済（FR-EXIT-1の残り条件）は評価しない。データ末尾まで条件が成立しない場合はデータ終端で決済する
+  - Risk Engine（§4.7）は適用しない（`risk_passed`は常に真）。max_open_positions・日次損失上限・連敗上限・クールダウン・サイジングによる抑制は再現せず、銘柄ごとに同時1ポジション・損益は価格リターン（%）で集計する。ライブでは拒否・縮小される取引も集計に含まれる
+  - コストモデル: スリッページは売買それぞれ片道5bps（不利な方向）、手数料は0bps（kabuステーションAPIを提供する証券会社の国内現物手数料が無料のため）で固定する。Profit Factor・Expectancy・平均利益・平均損失はコスト控除前の価格リターン、スリッページ込みPnLはスリッページのみ、手数料込みPnLは手数料のみを控除した値、Max Drawdownは両方を控除した累積リターンで算出する
 
 ### 4.12 Jevキャリブレーション
 
@@ -53,7 +57,7 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
   - 「引け後」は平日15:40 JST（大引け15:30の10分後）に固定する。cron式はホストのタイムゾーン（`time.Local`）ではなくJST固定ゾーンで解釈するため、ホストTZに依存しない（`internal/service/scheduler/selfimprove.go`）。祝日は考慮せず、祝日実行時は新規Calibrationデータなしで提案なしとなる
 - FR-SELFIMPROVE-2: Solが変更を提案できる対象は`runtime_settings`の`policy.*`キー（Policy Engineのしきい値）に限定する。`risk.*`キー（Risk Engineのリミット値）および Jev の`prompt_version`/質問セット自体は自己改善ループの対象外とし、人手のみが変更できる（`docs/overview.md`「含まないもの」の「AI（Jev/Sol/Opus）による Risk Engine のリミット値そのものの変更」を継続遵守）
 - FR-SELFIMPROVE-3: 1提案あたりの変更幅は confidence系しきい値で±0.05、entry_quality等の段階型しきい値で1段階までを上限とする
-- FR-SELFIMPROVE-4: Opusは提案を受け取ると、直近の`trade_signals`/`jev_decisions`/`calibration_outcomes`（直近20営業日相当）に対し提案後しきい値を適用した場合のExpectancy・Max Drawdownをシャドーバックテスト（バックテストエンジン§4.11を再利用）で算出し、既存policy_versionに対しExpectancyが悪化せずMax Drawdownの悪化が許容範囲内（相対10%以内）の場合のみ承認する
+- FR-SELFIMPROVE-4: Opusは提案を受け取ると、直近の`trade_signals`/`jev_decisions`/`calibration_outcomes`（直近20営業日相当）に対し提案後しきい値を適用した場合のExpectancy・Max Drawdownをシャドーバックテスト（バックテストエンジン§4.11を再利用。再現範囲はFR-BT-4の簡略化に従い、Exit条件の一部・Risk Engine不適用・固定コストモデルでの比較値である）で算出し、既存policy_versionに対しExpectancyが悪化せずMax Drawdownの悪化が許容範囲内（相対10%以内）の場合のみ承認する
 - FR-SELFIMPROVE-5: 承認された提案は新しい`policy_version`として`runtime_settings`に自動適用し、`policy_proposals.status`を`applied`に更新する。却下時は`rejected`として理由を記録する
 - FR-SELFIMPROVE-6: 適用後5営業日相当のExpectancyが適用前より相対20%以上悪化した場合、自動的に直前の`policy_version`へロールバックし、Slack通知する
 - FR-SELFIMPROVE-7: Sol/Opusの提案・レビュー・適用・ロールバックはすべて`policy_proposals`と`runtime_settings`の変更履歴として監査可能な形で保存する
