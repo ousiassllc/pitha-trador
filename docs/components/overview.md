@@ -30,9 +30,9 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 ```text
 internal/web/
 ├── apierror/           # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
-├── handler/            # 直下: scanner.go, performance.go, calibration.go, policy_proposals.go, swagger.go。責務別サブパッケージ: symbol/（symbol*.go）, system/（system.go, update.go ほか）, settings/, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング。*_ws.goはWebSocket）
+├── handler/            # 直下: scanner.go, scanner_scan.go, performance.go, calibration.go, policy_proposals.go, swagger.go。責務別サブパッケージ: symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
-├── middleware/         # HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState
+├── middleware/         # HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
 ├── atoms/              # Badge, StatusDot, Toast, Button, Input
 ├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow
 ├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）
