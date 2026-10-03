@@ -26,17 +26,15 @@ templ PositionRow(p domain.Position) {
 		if p.IsOpen() {
 			<td class="px-3 py-2">—</td>
 			<td class="px-3 py-2">
-				<button
-					class="rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white"
-					type="button"
-					hx-post={ fmt.Sprintf("/positions/%d/close", p.ID) }
-					hx-target={ fmt.Sprintf("#position-row-%d", p.ID) }
-					hx-swap="outerHTML"
-					hx-disabled-elt="this"
-					hx-confirm="このポジションを成行で決済しますか？"
-				>
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
+					"hx-post":         fmt.Sprintf("/positions/%d/close", p.ID),
+					"hx-target":       fmt.Sprintf("#position-row-%d", p.ID),
+					"hx-swap":         "outerHTML",
+					"hx-disabled-elt": "this",
+					"hx-confirm":      "このポジションを成行で決済しますか？",
+				}}) {
 					Close
-				</button>
+				}
 			</td>
 		} else {
 			<td class="px-3 py-2">{ formatClosedAt(p.ClosedAt) }</td>

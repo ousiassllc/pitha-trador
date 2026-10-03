@@ -1,0 +1,84 @@
+package atoms
+
+// ButtonVariant picks a Button's color scheme.
+type ButtonVariant string
+
+const (
+	// ButtonPrimary is the solid blue call-to-action.
+	ButtonPrimary ButtonVariant = "primary"
+	// ButtonDanger is the solid red destructive action (e.g. closing a position).
+	ButtonDanger ButtonVariant = "danger"
+	// ButtonSecondary is the neutral bordered button (refresh, paging, close).
+	ButtonSecondary ButtonVariant = "secondary"
+	// ButtonOutline is the blue-bordered button for opening a dialog/panel.
+	ButtonOutline ButtonVariant = "outline"
+	// ButtonDangerOutline is the red-bordered destructive action (delete).
+	ButtonDangerOutline ButtonVariant = "danger-outline"
+)
+
+// ButtonSize picks a Button's padding and type size.
+type ButtonSize string
+
+const (
+	// ButtonMedium is the default size.
+	ButtonMedium ButtonSize = ""
+	// ButtonSmall is the compact size for table rows and toolbars.
+	ButtonSmall ButtonSize = "sm"
+)
+
+// ButtonProps is Button/ButtonLink's input. The zero value is a medium
+// primary `type="button"`. Type is only used by Button (empty -> "button").
+// Attrs carries everything else (data-testid, hx-*, aria-*, data-*, href
+// for ButtonLink); a `true` value renders a bare boolean attribute.
+type ButtonProps struct {
+	Variant ButtonVariant
+	Size    ButtonSize
+	Type    string
+	Attrs   templ.Attributes
+}
+
+// Button renders a <button> whose children are its label. All button
+// colors, focus ring and the `disabled:opacity-50` state (which
+// `hx-disabled-elt` relies on) live here so a visual change is one edit.
+templ Button(props ButtonProps) {
+	<button class={ buttonClass(props) } type={ buttonType(props.Type) } { props.Attrs... }>
+		{ children... }
+	</button>
+}
+
+// ButtonLink renders an <a> styled as a Button (a navigation, not an
+// action); pass the target via Attrs["href"].
+templ ButtonLink(props ButtonProps) {
+	<a class={ buttonClass(props) } { props.Attrs... }>
+		{ children... }
+	</a>
+}
+
+func buttonType(t string) string {
+	if t == "" {
+		return "button"
+	}
+	return t
+}
+
+func buttonClass(props ButtonProps) string {
+	const base = "inline-block rounded-md font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
+	size := "px-4 py-2 text-sm"
+	if props.Size == ButtonSmall {
+		size = "px-3 py-1 text-xs"
+	}
+	var color string
+	switch props.Variant {
+	case ButtonDanger:
+		color = "bg-red-600 text-white"
+	case ButtonSecondary:
+		color = "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+	case ButtonOutline:
+		color = "border border-blue-600 text-blue-700 hover:bg-blue-50"
+	case ButtonDangerOutline:
+		color = "border border-red-300 text-red-700 hover:bg-red-50"
+	default:
+		color = "bg-blue-600 text-white"
+	}
+	return base + " " + size + " " + color
+}
