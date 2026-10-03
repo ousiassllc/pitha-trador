@@ -41,7 +41,7 @@
 ```text
 pitha-trador/
 ├── cmd/
-│   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, instance_lock.go, wails.json）。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
+│   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, instance_lock.go, ws_listener.go, wails.json）。`ws_listener.go`はWindowsのみの`/ws/...`専用ループバックリスナー。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
 │   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go。CI・WebView2が動かない環境向け）
 ├── internal/
 │   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, lifecycle.go）、定数（constants.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）のみ
@@ -72,7 +72,9 @@ pitha-trador/
 │   │   ├── failurestreak.go
 │   │   ├── activity.go           # System Activity Feedのイベント型
 │   │   ├── calibration.go
-│   │   └── policyproposal.go     # policy_proposals相当
+│   │   ├── policyproposal.go     # policy_proposals相当
+│   │   ├── scan.go               # スキャンサイクルの銘柄別判定・除外/欠損理由（`ScanCycle`/`ScanSymbol`/`ScreenReason`）
+│   │   └── scan_query.go         # スキャン一覧の絞り込み・ページング・集計（`ScanQuery`/`ScanPage`/`ScanSummary`）
 │   ├── repository/               # domainのみに依存（例外: `system`の`SecretsRepository`のみ`internal/config`のAES-256-GCMヘルパー）。直下にはファイルを置かず、リソース群ごとのサブパッケージ（#244）
 │   │   ├── sqlutil/              # 共有ヘルパー: 時刻のSQLite表現変換（`FormatTime`/`ParseTime`）・`Nullable*`/`Null*`スキャナ・`RowScanner`/`Execer`/`Executor`インターフェース。標準ライブラリのみに依存するリーフ
 │   │   ├── sqlitedb/             # SQLite接続（`Open`）・golang-migrateマイグレーション・`BackupTo`・sqlmw計装ドライバ・DB書き込み失敗検知フック（`DBWriteFailures`）。`domain`とマイグレーションSQLの`go:embed`元`db`のみに依存するリーフ
@@ -157,6 +159,8 @@ pitha-trador/
 │       │   └── lib/               # api.ts, ws.ts, ws-status.ts, logger.ts, styles.ts
 │       ├── css/
 │       ├── img/                   # logo.svg（Header表示用、go:embed対象）
+│       ├── vendor/                # htmx.min.js（checked-in、go:embed対象）
+│       ├── embed.go               # `//go:embed dist img vendor`（パッケージ`staticassets`）
 │       └── dist/                  # ビルド成果物
 ├── db/
 │   └── migrations/                # golang-migrate SQLマイグレーション（SQLite方言、vec0仮想テーブル作成含む）
