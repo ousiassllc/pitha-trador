@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
@@ -48,11 +49,7 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	defer e.snapshotMu.Unlock()
 	now := snap.Timestamp
 
-	filled, err := e.fillPendingEntries(ctx, snap)
-	if err != nil {
-		return SnapshotResult{}, err
-	}
-	result := SnapshotResult{Filled: filled}
+	result := SnapshotResult{Filled: e.fillPendingEntries(ctx, snap)}
 
 	position, err := e.positions.GetOpenByInstrument(ctx, snap.InstrumentID)
 	if errors.Is(err, domain.ErrPositionNotFound) {
@@ -106,11 +103,18 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 }
 
 // fillPendingEntries attempts TryFillPending on every PENDING limit entry
-// order of snap's instrument.
-func (e *Engine) fillPendingEntries(ctx context.Context, snap domain.Snapshot) ([]EntryResult, error) {
+// order of snap's instrument. It never fails: a problem with one pending
+// order must not stop OnSnapshot from marking and evaluating exits for the
+// open position (issue #343), so failures are logged and the order is
+// skipped. A fill that fails because the instrument already has an open
+// position (a second PENDING order that lost the race to
+// positions_open_instrument_uq) can never succeed while that position is
+// open, so that order is rejected instead of being retried forever.
+func (e *Engine) fillPendingEntries(ctx context.Context, snap domain.Snapshot) []EntryResult {
 	orders, err := e.orders.ListByInstrument(ctx, snap.InstrumentID, pendingOrderScanLimit)
 	if err != nil {
-		return nil, fmt.Errorf("execution: list orders for %q: %w", snap.Symbol, err)
+		slog.ErrorContext(ctx, "execution: list orders for pending fill", "symbol", snap.Symbol, "error", err)
+		return nil
 	}
 
 	var filled []EntryResult
@@ -124,13 +128,27 @@ func (e *Engine) fillPendingEntries(ctx context.Context, snap domain.Snapshot) (
 		}
 		entry, ok, err := e.TryFillPending(ctx, order.ID, direction, snap.Price, snap.Timestamp)
 		if err != nil {
-			return nil, err
+			slog.ErrorContext(ctx, "execution: fill pending entry order", "symbol", snap.Symbol, "order_id", order.ID, "error", err)
+			e.rejectIfPositionOpen(ctx, order)
+			continue
 		}
 		if ok {
 			filled = append(filled, entry)
 		}
 	}
-	return filled, nil
+	return filled
+}
+
+// rejectIfPositionOpen marks the PENDING entry order REJECTED when its
+// instrument already has an open position, since it cannot fill until that
+// position closes and Enter never queues entries behind an open position.
+func (e *Engine) rejectIfPositionOpen(ctx context.Context, order domain.PaperOrder) {
+	if _, err := e.positions.GetOpenByInstrument(ctx, order.InstrumentID); err != nil {
+		return
+	}
+	if _, err := e.orders.UpdateStatus(ctx, order.ID, domain.OrderStatusRejected); err != nil {
+		slog.ErrorContext(ctx, "execution: reject pending entry order", "symbol", order.Symbol, "order_id", order.ID, "error", err)
+	}
 }
 
 // latestTraderDecision returns instrumentID's most recent Jev Trader
