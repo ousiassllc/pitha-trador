@@ -135,7 +135,7 @@ Windows PC 上の MCP が、同じ PC の kabuステーションAPIが待受し�
 6. 待受しているときだけ、`secrets` の `KABU_API_PASSWORD` を読む（§7）。読めなければ `issue=password_unavailable` とし、`POST /token` はしない
 7. 読めたときだけ `POST {base}/token` に `{"APIPassword": ...}` を送る（アプリの `marketdata` のトークン発行と同じ形）。成功時の `Token` は破棄し、`issue=ok`。`ResultCode` が 0 以外、または本文の `Code` がある失敗は `kabu-status-mcp-errors.md` の分類へ渡す
 
-戻り値のフィールドは次だけ。パスワード、トークン、リクエスト本文は含めない。
+戻り値のフィールドは次だけ。パスワード、トークン、リクエスト本文、スイッチの値は含めない。`mcp_disabled` のときは `issue` と `guidance` だけとし、待受やログインが分かるフィールドは返さない。
 
 | フィールド | 内容 |
 |------------|------|
