@@ -110,7 +110,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 - type/queueセレクトの変更時は`GET /api/v1/activity?type=&queue=`で再取得する（サーバー側フィルタ。`queue`指定は当該キューの`job`イベントのみに一致）。WS受信イベントも同じ条件でクライアント側で絞り込む
 - 直近Kill Switchイベントは`kill-switch-events-url`属性（Templ注入。値は`/api/v1/activity?type=kill_switch&limit=10`）で別途取得し、WSの`kill_switch`イベントで先頭に追加する（コンポーネント側の切り詰め件数はこの`limit`と同じ10件）。クエリ文字列はクライアントで組み立てない
 - WebSocketが切断後に再接続（`open`へ復帰）した時は、切断中に失ったイベントを補うため`GET /api/v1/activity`（現在のフィルタ付き）と`?type=kill_switch&limit=10`を再取得する（#221）。これは操作者不在でも発火するため`background: true`で送り、ハートビートに数えさせない（§6、FR-RISK-6）。初回・フィルタ変更時の取得は操作者操作のため`background`を付けない
-- SSRフォールバック（`QueueStatusPanel` + `ActivityFeedFallback`）を子要素として持ち、ハイドレーション時に置き換える（`pitha-scanner-table`と同じ light DOM 方式）
+- SSRフォールバック（`QueueStatusPanel` + `ActivityFeedFallback`）を子要素として持ち、初回スナップショット（`GET /api/v1/activity`）の取得に成功した時点で置き換える（`pitha-scanner-table`と同じ light DOM 方式）。取得完了前・取得失敗時はSSRのテーブルをそのまま残し、ハイドレーションで画面を空白にしない。この間は直近Kill Switchイベント・WS切断/エラー通知のみ追加描画する
 
 ## 6. API クライアント / WebSocket（`lib/`）
 

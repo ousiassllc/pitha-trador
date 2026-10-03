@@ -14,38 +14,57 @@ import { PithaActivityFeed } from './pitha-activity-feed';
 
 installFakes();
 
+// Same upgrade-after-existing-children timing as
+// pitha-scanner-table.hydration.test.ts: the SSR markup must already be
+// in the DOM when the (subclass) element is defined, or this would be a
+// fresh construction that never sees children to preserve.
+function hydrate(tag: string): FeedElement {
+  document.body.innerHTML = `<${tag} api-url="/api/v1/activity" ws-url="/ws/activity" kill-switch-events-url="/api/v1/activity?type=kill_switch&limit=10"><section id="queue-status"><table><tbody><tr data-queue="ssr"></tr></tbody></table></section><section id="activity-feed"><table><tbody><tr data-event-type="ssr"></tr></tbody></table></section></${tag}>`;
+  // happy-dom runs connectedCallback before delivering the existing
+  // attributes on upgrade, unlike browsers (attributeChangedCallback
+  // first). Read them in the constructor to reproduce the browser
+  // order, since the component has no URL defaults.
+  class PithaActivityFeedUnderTest extends PithaActivityFeed {
+    constructor() {
+      super();
+      this.apiUrl = this.getAttribute('api-url') ?? '';
+      this.wsUrl = this.getAttribute('ws-url') ?? '';
+      this.killSwitchEventsUrl = this.getAttribute('kill-switch-events-url') ?? '';
+    }
+  }
+  customElements.define(tag, PithaActivityFeedUnderTest);
+  return document.querySelector(tag) as FeedElement;
+}
+
 describe('pitha-activity-feed', () => {
-  // Same upgrade-after-existing-children timing as
-  // pitha-scanner-table.hydration.test.ts: the SSR markup must already be
-  // in the DOM when the (subclass) element is defined, or this would be a
-  // fresh construction that never sees children to clear.
-  test('replaces the server-rendered fallback instead of duplicating it', async () => {
+  test('replaces the server-rendered fallback with the snapshot once it arrives', async () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(
         new Response(JSON.stringify({ queues: [queue()], events: [event()], as_of: 'x' })),
       ),
     ) as unknown as typeof fetch;
-    document.body.innerHTML =
-      '<pitha-activity-feed-hydration-test api-url="/api/v1/activity" ws-url="/ws/activity" kill-switch-events-url="/api/v1/activity?type=kill_switch&limit=10"><section id="queue-status"><table><tbody><tr data-queue="ssr"></tr></tbody></table></section></pitha-activity-feed-hydration-test>';
-    // happy-dom runs connectedCallback before delivering the existing
-    // attributes on upgrade, unlike browsers (attributeChangedCallback
-    // first). Read them in the constructor to reproduce the browser
-    // order, since the component has no URL defaults.
-    class PithaActivityFeedUnderTest extends PithaActivityFeed {
-      constructor() {
-        super();
-        this.apiUrl = this.getAttribute('api-url') ?? '';
-        this.wsUrl = this.getAttribute('ws-url') ?? '';
-        this.killSwitchEventsUrl = this.getAttribute('kill-switch-events-url') ?? '';
-      }
-    }
-    customElements.define('pitha-activity-feed-hydration-test', PithaActivityFeedUnderTest);
-    const el = document.querySelector('pitha-activity-feed-hydration-test') as FeedElement;
+    const el = hydrate('pitha-activity-feed-hydration-test');
     await flush(el);
 
     expect(el.querySelectorAll('#queue-status')).toHaveLength(1);
+    expect(el.querySelectorAll('#activity-feed')).toHaveLength(1);
     expect(el.querySelector('[data-queue="ssr"]')).toBeNull();
+    expect(el.querySelector('[data-event-type="ssr"]')).toBeNull();
     expect(el.querySelector('[data-queue="jev-scout"]')).not.toBeNull();
+  });
+
+  test('keeps the server-rendered fallback while loading and when the snapshot fetch fails', async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(new Response('boom', { status: 500 })),
+    ) as unknown as typeof fetch;
+    const el = hydrate('pitha-activity-feed-hydration-failure-test');
+    await flush(el);
+
+    expect(el.querySelector('[data-queue="ssr"]')).not.toBeNull();
+    expect(el.querySelector('[data-event-type="ssr"]')).not.toBeNull();
+    expect(el.querySelectorAll('#queue-status')).toHaveLength(1);
+    expect(el.querySelectorAll('#activity-feed')).toHaveLength(1);
+    expect(el.querySelector('[role="alert"]')).not.toBeNull();
   });
 
   test('renders queue counts and feed rows from the snapshot', async () => {
