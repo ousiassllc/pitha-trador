@@ -8,7 +8,11 @@
 //   - a 403 marked stale by the server (page opened before an app restart)
 //     gets a "reload the page" toast;
 //   - requests that never got a response (`htmx:sendError`, `htmx:timeout`);
-//   - dismissing toasts (close button, auto-dismiss).
+//   - dismissing toasts (close button, auto-dismiss);
+//   - keeping `#toast-region` visible above a modal `<dialog>`: `showModal()`
+//     puts the dialog in the top layer, which no z-index can beat, so the region
+//     is a `popover="manual"` and is re-shown (moved to the top of the top layer)
+//     whenever a toast lands in it (issue #321).
 // The toast markup lives only in templ (`#toast-template`, atoms.Toast).
 
 import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
@@ -89,14 +93,32 @@ export function onClick(event: Event): void {
   target.closest('[data-toast-dismiss]')?.closest('[data-toast]')?.remove();
 }
 
-function scheduleDismissals(records: MutationRecord[]): void {
+/** Re-shows the popover so it sits above any modal dialog opened since it was last shown. No-op without Popover API support. */
+function raiseToastRegion(target: HTMLElement): void {
+  if (typeof target.showPopover !== 'function') return;
+  if (target.matches(':popover-open')) target.hidePopover();
+  target.showPopover();
+}
+
+/** Toast-landed hook (both `showToast` and htmx's `beforeend` swap): raise the region and schedule the auto-dismiss. */
+function onToastsAdded(target: HTMLElement, records: MutationRecord[]): void {
+  let added = false;
   for (const record of records) {
     for (const node of record.addedNodes) {
       if (node instanceof HTMLElement && node.hasAttribute(TOAST_MARKER)) {
+        added = true;
         setTimeout(() => node.remove(), DISMISS_AFTER_MS);
       }
     }
   }
+  if (added) raiseToastRegion(target);
+}
+
+/** Auto-dismisses and raises toasts as they land in `target` (script-added or htmx-swapped alike). */
+export function watchToastRegion(target: HTMLElement): void {
+  new MutationObserver((records) => onToastsAdded(target, records)).observe(target, {
+    childList: true,
+  });
 }
 
 export function init(): void {
@@ -106,7 +128,7 @@ export function init(): void {
   document.addEventListener('htmx:timeout', onNoResponse);
   document.addEventListener('click', onClick);
   const target = region();
-  if (target) new MutationObserver(scheduleDismissals).observe(target, { childList: true });
+  if (target) watchToastRegion(target);
 }
 
 init();
