@@ -79,7 +79,7 @@ erDiagram
 | spread_bps | numeric(8,2) | NULL可 | |
 | volume | integer | NOT NULL | |
 | turnover | numeric(18,2) | NOT NULL | |
-| return_1m / return_5m / return_15m | numeric(8,4) | NULL可（起動直後等は算出不可） | |
+| return_1m / return_5m / return_15m | numeric(8,4) | NULL可（起動直後等は算出不可） | **小数比**（0.004 = +0.4%）。Scanner API/画面は×100して%表示し、Fast Screenerの`min_abs_return_5m_pct`（%）との比較も×100して行う（`domain.RatioToPercent`） |
 | vwap | numeric(12,2) | NOT NULL | |
 | price_vs_vwap_bps | numeric(8,2) | NOT NULL | |
 | volume_ratio_5m | numeric(8,4) | NULL可 | |

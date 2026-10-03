@@ -209,3 +209,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.17 | 2026-10-03 | FR-RAG-5（Decision historyの類似局面件数表示）を「将来拡張・未実装」と明記し、参照先`components/overview.md`に記述がない旨と実装時の前提を追記（`functional/components-platform.md` §4.13。`architecture/overview.md` §4のRAG Context Builder行の参照範囲をFR-RAG-1〜4へ訂正） | issue #307 |
 | 1.18 | 2026-10-03 | §2の処理フロー図で、Fast Screener候補数を「50〜200」固定からFR-FS-2の上位N件（既定 top_n=20、`config/strategy.yaml`）へ訂正し、Scout通過数の固定値「10〜30」を「Nの一部」へ変更。FR-FS-2（`functional/components-pipeline.md`）へ`top_n`既定値を明記 | issue #327（仕様と同梱既定値の乖離解消。Jev APIコストを抑える側の現行既定を維持） |
 | 1.19 | 2026-10-03 | §5.1 にFR-SCAN-7（立会時間外のスキャン停止通知と次回立会開始時刻の表示）を追加 | issue #367 |
+| 1.20 | 2026-10-03 | §5.1の1m/5m Returnをパーセント表示（Feature Engineの小数比を×100）と明記。FR-FS-1（`functional/components-pipeline.md`）の`min_abs_return_5m_pct`の単位をパーセントと明記 | issue #364, #365 |

@@ -210,3 +210,4 @@ const (
 | 1.38 | 2026-10-03 | `Modal`が`[data-toast-region]`を内包し、モーダル表示中の失敗トーストをダイアログ内へ表示して閉じるボタンを操作可能にする（§3「Modal」・§4「エラー表示」） | issue #353 |
 | 1.39 | 2026-10-03 | §5.1 `pitha-price-chart`のマーカー記述から`entry_quality`更新を削除し、`jev_update`の`direction`変化のみ描画・Jev判定パネルはSSRのみと明記（`components/lit.md`） | issue #362 |
 | 1.40 | 2026-10-03 | `ScanPanel`に立会時間外の停止通知（`scan-offhours`・次回立会開始`scan-resume-at`）を追記 | issue #367 |
+| 1.41 | 2026-10-03 | `pitha-kill-switch-panel`が`/ws/system`の`state_changed`でも`status-url`から再同期し`systemStateChanged`を発火すると追記（`components/lit.md` §5.4） | issue #363 |
