@@ -109,7 +109,7 @@ graph TD
 | アーキテクチャ設計 | `docs/architecture/overview.md`（§5〜§13は `docs/architecture/overview/` に分割） | Go レイヤードアーキテクチャ、kabuステーションAPI/RAG/自己改善ループ連携、Wails単一プロセス構成、SQLite上の自前Scheduler/Worker設計 |
 | ER / データモデル | `docs/architecture/er.md`（テーブル定義は `docs/architecture/er/` に分割） | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes/kill_switch_events/kill_switch_resolutions/runtime_settings/secrets/policy_proposals/jobs のSQLiteテーブル定義とsqlite-vecベクトルインデックス |
 | API 仕様 | `docs/api/endpoints.md` | Huma JSON API（/api/v1/...）と HTMX ページ/アクションルートの仕様 |
-| kabuステーションAPI状態（読み取り専用MCP、Grok Bot コネクタ） | `docs/architecture/kabu-status-mcp.md`（公式エラー対応は `docs/architecture/kabu-status-mcp-errors.md`） | リモートの Grok Bot が、プライベートトンネル（Tailscale 等）越しに Windows PC 上の HTTP MCP へ接続し、kabuステーションAPIの待受・ログイン・API利用設定・パスワード不一致を読む仕様。トンネルに加え、PC に設定した別の API キーを Grok Bot のコネクタに保存して MCP の HTTP を認証する。無い・違うキーは kabu の localhost を呼ぶ前に拒否する。MCP の待受はインターネットに公開しない。localhost:18080（検証時のみ 18081）は MCP だけが呼ぶ。Grok Bot は localhost を直接呼ばない。発注・銘柄登録はしない。API キーも `KABU_API_PASSWORD` もログ・ツール結果・kabu リクエストに出さない。実装は含まない |
+| kabuステーションAPI状態（読み取り専用MCP、Grok Bot コネクタ） | `docs/architecture/kabu-status-mcp.md`（公式エラー対応は `docs/architecture/kabu-status-mcp-errors.md`） | リモートの Grok Bot が、プライベートトンネル（Tailscale 等）越しに Windows PC 上の HTTP MCP へ接続し、kabuステーションAPIの待受・ログイン・API利用設定・パスワード不一致を読む仕様。トンネルに加え、PC に設定した別の API キーを Grok Bot のコネクタに保存して MCP の HTTP を認証する。無い・違うキーは kabu の localhost を呼ぶ前に拒否する。MCP 自体のオン/オフは PC 上のローカル設定で既定はオフ。Grok Bot からは切り替えられず、未認証にはオフを返さない。MCP の待受はインターネットに公開しない。localhost:18080（検証時のみ 18081）は MCP だけが呼ぶ。Grok Bot は localhost を直接呼ばない。発注・銘柄登録はしない。API キーも `KABU_API_PASSWORD` もログ・ツール結果・kabu リクエストに出さない。実装は含まない |
 | コンポーネント設計 | `docs/components/overview.md`（§5〜§9は `docs/components/lit.md`・`runtime.md` に分割） | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
 
 ## マイルストーン / リリース計画
@@ -165,3 +165,4 @@ graph TD
 | 1.5 | 2026-10-03 | ドキュメントマップの kabu ステータス MCP を、リモートの Grok Bot が Windows PC 上の MCP コネクタ経由で接続する記述へ改めた | Grok Bot は PC 上に無く、localhost は PC 上の MCP だけが呼ぶ。1.4 の「同一PCのエージェント」は当時の誤記 |
 | 1.6 | 2026-10-03 | ドキュメントマップの到達を、インターネット非公開の HTTP とプライベートトンネル（Tailscale 等）に改めた | 公開 HTTPS URL でも stdio でもない。コネクタ認証は `KABU_API_PASSWORD` とは別 |
 | 1.7 | 2026-10-03 | ドキュメントマップにコネクタ API キー認証を追記。無い・不一致は kabu の localhost を呼ぶ前に拒否する | プライベートトンネルだけでは認証にならないため |
+| 1.8 | 2026-10-03 | ドキュメントマップに MCP 自体のオン/オフ（PC 上・既定オフ）を追記 | Grok Bot からは切り替えられない。未認証にはオフを返さない |

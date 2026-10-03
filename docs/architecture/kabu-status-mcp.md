@@ -40,6 +40,8 @@ MCP サーバは kabuステーションと同じ Windows PC で動き、HTTP で
 - MCP を stdio では話させない。HTTP 待受をインターネットへ公開しない。公開の HTTPS URL をコネクタにしない
 - Grok Bot から `localhost` / `127.0.0.1` / `::1` や kabuステーションのポートへ直接接続しない。コネクタに登録する URL を `http://localhost:18080/kabusapi` にしない
 - ツール引数で kabu のホストや URL を渡させない。MCP が叩く kabu のホストは localhost 固定
+- MCP 自体のオン/オフを、Grok Bot のツール引数やコネクタから切り替えない。リモートがオンに戻せない（§3.4）
+- スイッチの値を Grok Bot に送らない。未認証の相手に、オフであることも返さない
 - kabuステーションの起動、ログイン、設定変更を代行しない
 - 本リポジトリに MCP の実行ファイル、サーバ実装、テストを追加しない
 
@@ -47,7 +49,7 @@ MCP サーバは kabuステーションと同じ Windows PC で動き、HTTP で
 
 ## 3. 接続先
 
-接続は二段で、呼び手は段ごとに違う。トンネルを通ったあとの API キー検査は §3.3。
+接続は二段で、呼び手は段ごとに違う。トンネルを通ったあとの検査順は、§3.3 の API キー、その次に §3.4 のオン/オフである。
 
 ### 3.1 Grok Bot から MCP コネクタ
 
@@ -80,7 +82,18 @@ localhost を呼ぶのは、Windows PC 上の MCP サーバだけである。ホ
 - 比較する値は Windows PC 上の MCP に設定する。`secrets` の `KABU_API_PASSWORD` 行は使わない
 - 同じキーを Grok Bot のコネクタに保存し、MCP の HTTP へ認証ヘッダで提示する。URL、クエリ、パスには置かない
 - ログ、標準出力、標準エラー、ツール引数、ツールの戻り値には出さない
-- キーが無い、または PC 側の設定と一致しないときは、その場で拒否する。`localhost:18080` にも `18081` にも繋がない。`KABU_API_PASSWORD` も読まない。状態確認のツールは実行しない
+- キーが無い、または PC 側の設定と一致しないときは、その場で拒否する。`localhost:18080` にも `18081` にも繋がない。`KABU_API_PASSWORD` も読まない。状態確認のツールは実行しない。この拒否は、§3.4 がオンでもオフでも同じであり、オフであることは返さない
+
+### 3.4 MCP 自体のオン/オフ
+
+kabuステーションの「APIを利用する」とは別である。あれはステーション側の待受の条件で、こちらは MCP 自体を開くか閉じるかである。チェックが入っていても、このスイッチがオフなら kabu へは繋がない。
+
+- スイッチは Windows PC 上のローカル設定だけである。Grok Bot のツール引数にもコネクタにも置かない。リモートからはオンに戻せない
+- 既定はオフである。ユーザーが PC 上で明示的にオンにしたときだけ、kabu への状態確認に進む
+- 保存先は `KABU_API_PASSWORD` でも `secrets` テーブルでもない。コネクタの API キーとも別の値である。その値は Grok Bot に送らない
+- 検査は §3.3 の API キーが先である。無い・不一致の拒否では、オフかどうかを返さない
+- キーが一致し、かつオフのときだけ `issue=mcp_disabled` と §6 の案内を返す。kabu には繋がない。`KABU_API_PASSWORD` も読まない。待受（`listening`）もログイン状態（`code` やログイン案内）も含めない
+- オンのときだけ §5.1 の状態確認に進む。`kabu_api_error_guidance` はネットワークに繋がないが、オフならそれも実行せず、同じ `mcp_disabled` を返す。オフの間は案内表を使わせない
 
 ## 4. 初期設定と状態の切り分け
 
@@ -104,21 +117,23 @@ localhost を呼ぶのは、Windows PC 上の MCP サーバだけである。ホ
 
 ## 5. ツール
 
-Grok Bot と MCP の間は、プライベートトンネル越しの HTTP コネクタである。stdio ではなく、インターネット公開の HTTPS URL でもない。各リクエストは §3.3 の API キーを通過したあとだけツールに入る。ツールは次の二つだけで、どちらも副作用の無い読み取り。
+Grok Bot と MCP の間は、プライベートトンネル越しの HTTP コネクタである。stdio ではなく、インターネット公開の HTTPS URL でもない。各リクエストは §3.3 の API キーを先に検査する。通過したあと、§3.4 がオンのときだけツールの中身に進む。オフならどちらのツールも `mcp_disabled` だけを返す。ツールは次の二つだけで、どちらも副作用の無い読み取り。
 
 ### 5.1 `kabu_station_status`
 
 Windows PC 上の MCP が、同じ PC の kabuステーションAPIが待受しているか、保存済みパスワードでトークンを発行できるかを確認し、結果だけをリモートの Grok Bot に返す。Grok Bot は localhost を呼ばない。発注も銘柄登録もしない。パスワードとトークンは返さない。
 
-引数は `environment` だけ。省略時は `production`。値は `production` または `verification`。それ以外、ホスト、URL、パスワード、トークンは受け取らない（追加フィールドは拒否）。
+引数は `environment` だけ。省略時は `production`。値は `production` または `verification`。それ以外、ホスト、URL、パスワード、トークン、オン/オフは受け取らない（追加フィールドは拒否）。オンに戻す引数は無い。
 
-手順（§3.3 の API キー検査を通過したリクエストだけ）:
+手順:
 
-1. 選んだポートへ `localhost` で TCP 接続する
-2. 接続拒否なら `issue=not_listening`。HTTP は呼ばない
-3. タイムアウトなど、拒否以外で届かないときは `issue=dial_failed`。ログインコードと断定しない
-4. 待受しているときだけ、`secrets` の `KABU_API_PASSWORD` を読む（§7）。読めなければ `issue=password_unavailable` とし、`POST /token` はしない
-5. 読めたときだけ `POST {base}/token` に `{"APIPassword": ...}` を送る（アプリの `marketdata` のトークン発行と同じ形）。成功時の `Token` は破棄し、`issue=ok`。`ResultCode` が 0 以外、または本文の `Code` がある失敗は `kabu-status-mcp-errors.md` の分類へ渡す
+1. §3.3 の API キーを検査する。無い・不一致は拒否する。オフであることは返さない
+2. §3.4 がオフなら `issue=mcp_disabled` と案内だけを返す。localhost には繋がない。`KABU_API_PASSWORD` は読まない。`listening`、`http_status`、`code`、`official_message`、`port`、`base_url` は返さない
+3. オンのときだけ、選んだポートへ `localhost` で TCP 接続する
+4. 接続拒否なら `issue=not_listening`。HTTP は呼ばない
+5. タイムアウトなど、拒否以外で届かないときは `issue=dial_failed`。ログインコードと断定しない
+6. 待受しているときだけ、`secrets` の `KABU_API_PASSWORD` を読む（§7）。読めなければ `issue=password_unavailable` とし、`POST /token` はしない
+7. 読めたときだけ `POST {base}/token` に `{"APIPassword": ...}` を送る（アプリの `marketdata` のトークン発行と同じ形）。成功時の `Token` は破棄し、`issue=ok`。`ResultCode` が 0 以外、または本文の `Code` がある失敗は `kabu-status-mcp-errors.md` の分類へ渡す
 
 戻り値のフィールドは次だけ。パスワード、トークン、リクエスト本文は含めない。
 
@@ -136,7 +151,8 @@ Windows PC 上の MCP が、同じ PC の kabuステーションAPIが待受し�
 
 | `issue` | 条件 |
 |---------|------|
-| `ok` | `POST /token` が成功（`ResultCode` 0）。トークンは破棄済み |
+| `mcp_disabled` | §3.3 を通過し、§3.4 がオフ。kabu には未接続。待受もログインも含めない |
+| `ok` | `POST /token` が成功（`ResultCode` 0）。トークンは破棄済み。オンのときだけ |
 | `not_listening` | 接続拒否。待受なし |
 | `dial_failed` | 拒否以外で TCP 接続できない |
 | `password_unavailable` | 待受はあるが、保存済みパスワードを読めない。トークン発行はしていない |
@@ -147,7 +163,7 @@ Windows PC 上の MCP が、同じ PC の kabuステーションAPIが待受し�
 
 ### 5.2 `kabu_api_error_guidance`
 
-ネットワークに接続しない。引数は次のどちらか一方。
+ネットワークに接続しない。ただし §3.3 と §3.4 は先に行う。キーが無い・不一致なら拒否し、オフであることは返さない。キーが一致してオフなら、案内表は返さず `issue=mcp_disabled` と §6 の案内だけを返す。オンのときだけ、次のどちらか一方を受ける。
 
 - `transport`: `connection_refused` のみ
 - `code`: 公式の整数コード
@@ -161,6 +177,7 @@ Windows PC 上の MCP が、同じ PC の kabuステーションAPIが待受し�
 | `issue` | `guidance` |
 |---------|------------|
 | `ok` | （空文字） |
+| `mcp_disabled` | この PC では kabu ステータス MCP がオフです。kabuステーションへの状態確認はしていません。オンにする操作は Windows PC 上だけで、ここからは戻せません。 |
 | `not_listening` | kabuステーションAPIは待受していません（接続が拒否されました）。kabuステーションが起動しているか、選んだポート（本番 18080、検証 18081）で API が開いているかを確認してください。「APIを利用する」にチェックが入っていても、ログイン済みとは限りません。チェックを変えたあとは kabuステーションの再起動が必要です。 |
 | `dial_failed` | kabuステーションAPIへ届きませんでした。接続拒否ではないため、未起動とは断定できません。kabuステーションがその PC で起動しているかを確認してください。 |
 | `password_unavailable` | APIは待受していますが、保存済みの KABU_API_PASSWORD を読めないためトークン確認はしていません。Settings の kabuステーションに API パスワードが入っているかを確認してください。値は表示しません。 |
@@ -214,3 +231,4 @@ Grok Bot へ届ける道はプライベートトンネル（Tailscale または�
 | 1.1 | 2026-10-03 | 問い合わせ元をリモートの Grok Bot に改めた。Grok Bot は登録済み MCP コネクタ経由で pitha-trador に接続し、localhost は Windows PC 上の MCP だけが呼ぶ | 同一 PC 上のエージェントが localhost を叩く、という接続の記述が誤りだったため |
 | 1.2 | 2026-10-03 | 到達をプライベートトンネル（Tailscale 等）越しの HTTP に定めた。インターネット公開の HTTPS URL と stdio は使わない。コネクタ認証トークンは `KABU_API_PASSWORD` とは別 | 到達経路の決定。MCP は PC 上の HTTP のまま、インターネットには出さない |
 | 1.3 | 2026-10-03 | コネクタ API キー認証を追加。キーは PC 上の MCP に設定し、Grok Bot のコネクタに保存する。`KABU_API_PASSWORD` とは別。無い・不一致は localhost へ繋ぐ前に拒否する | プライベートトンネルだけでは認証にならないため |
+| 1.4 | 2026-10-03 | MCP 自体のオン/オフ（§3.4）を追加。既定はオフ。PC 上のローカル設定だけで、Grok Bot からは切り替えられない。キー一致かつオフのときだけ `mcp_disabled`。未認証にはオフを返さない | リモートが勝手に状態確認を始められないようにするため |
