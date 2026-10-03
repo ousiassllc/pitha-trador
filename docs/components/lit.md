@@ -42,7 +42,7 @@ export class PithaPriceChart extends LitElement {
 ```
 
 - `tick`は1分足に集約する: 現在の分（`floor(now/60)*60`、または最新バー時刻）のバーの`high/low/close`を更新し、分が変わったときのみ新しいバーを追加する。`price <= 0`の`tick`は無視する（サーバー側も`LastPrice <= 0`の間は`tick`を送らない。issue #183）
-- Jevの`direction`変化・`entry_quality`更新はチャート上のマーカー（例: LONG転換で上向き矢印）として描画する
+- `jev_update`（`direction`/`confidence`）は`direction`が変化したときのみ、チャート上のマーカー（例: LONG転換で上向き矢印）として描画する。同一`direction`の繰り返しや`confidence`のみの変化では描画せず、`entry_quality`は`jev_update`に載らないため扱わない。Symbol DetailのJev判定パネルはSSRのみで、`jev_update`では更新されない（ページ再読み込みで更新。issue #362）
 - `symbol`属性が変化した場合（同一ページ内で銘柄を切り替えるUIを将来追加する場合）は`updated()`ライフサイクルで再購読する
 - `candles-url`/`ws-url`は他コンポーネントと同様に未設定なら`logger.error`を出して該当の取得・購読を行わない
 - `/ws/symbols/{symbol}`が切断されている間（`reconnecting`/`failed`）はチャート下に「接続が切れています」を表示する。`tick`は受信時刻で足を作るため切断中の足は欠落する。切断後に`open`へ復帰した時は`candles-url`を`background: true`で再取得して足を補う（操作者不在でも発火するためハートビートに数えさせない。FR-RISK-6、issue #336）
