@@ -152,3 +152,26 @@ func TestSetupPage_UsesConnectionListAndModals(t *testing.T) {
 		}
 	}
 }
+
+// issue #352: "続ける" is only offered once every required key is stored;
+// before that the Setup Guard would just bounce it back to /setup.
+func TestSetupPage_ContinueLinkOnlyWhenComplete(t *testing.T) {
+	render := func(complete bool) string {
+		var buf bytes.Buffer
+		if err := pages.SetupPage(pages.SetupProps{Complete: complete}).Render(context.Background(), &buf); err != nil {
+			t.Fatalf("render: %v", err)
+		}
+		return buf.String()
+	}
+
+	if body := render(false); strings.Contains(body, `data-testid="setup-continue"`) || strings.Contains(body, `href="/scanner"`) {
+		t.Errorf("incomplete SetupPage must not render the 続ける link; body=%s", body)
+	}
+	body := render(true)
+	if !strings.Contains(body, `data-testid="setup-continue"`) || !strings.Contains(body, `href="/scanner"`) {
+		t.Errorf("complete SetupPage lacks the 続ける link to /scanner; body=%s", body)
+	}
+	if status := strings.Index(body, `id="setup-status"`); status < 0 || strings.Index(body, `data-testid="setup-continue"`) < status {
+		t.Errorf("the 続ける link must sit inside #setup-status so the OOB swap replaces it; body=%s", body)
+	}
+}

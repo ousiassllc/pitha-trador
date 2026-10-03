@@ -1,7 +1,6 @@
 package pages
 
 import (
-	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
@@ -24,8 +23,9 @@ type SetupProps struct {
 // and the optional Slack; saving and deleting post to the same `POST`/
 // `DELETE /settings/:key` routes. It renders in layout.SetupShell (no
 // Header) so nothing on the page fetches a guarded fragment. The "続ける"
-// link is a plain `/scanner` navigation: while a required key is unset the
-// guard sends it straight back here.
+// link lives in molecules.SetupStatus and is rendered only once every
+// required key is stored (issue #352), so it is never a link the guard would
+// send straight back here.
 templ SetupPage(props SetupProps) {
 	@layout.SetupShell("Setup") {
 		<h1 class="text-2xl font-bold text-slate-900">初期セットアップ</h1>
@@ -39,11 +39,6 @@ templ SetupPage(props SetupProps) {
 			@organisms.ConnectionList(props.Connections)
 		</div>
 		@molecules.SetupStatus(props.Complete, false)
-		<div class="mt-4">
-			@atoms.ButtonLink(atoms.ButtonProps{Attrs: templ.Attributes{"href": "/scanner", "data-testid": "setup-continue"}}) {
-				続ける
-			}
-		</div>
 		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}
 }
