@@ -109,6 +109,7 @@ graph TD
 | アーキテクチャ設計 | `docs/architecture/overview.md`（§5〜§13は `docs/architecture/overview/` に分割） | Go レイヤードアーキテクチャ、kabuステーションAPI/RAG/自己改善ループ連携、Wails単一プロセス構成、SQLite上の自前Scheduler/Worker設計 |
 | ER / データモデル | `docs/architecture/er.md`（テーブル定義は `docs/architecture/er/` に分割） | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes/kill_switch_events/kill_switch_resolutions/runtime_settings/secrets/policy_proposals/jobs のSQLiteテーブル定義とsqlite-vecベクトルインデックス |
 | API 仕様 | `docs/api/endpoints.md` | Huma JSON API（/api/v1/...）と HTMX ページ/アクションルートの仕様 |
+| kabuステーションAPI状態（読み取り専用ローカルMCP） | `docs/architecture/kabu-status-mcp.md`（公式エラー対応は `docs/architecture/kabu-status-mcp-errors.md`） | 同一Windows PC上のエージェントが localhost の kabuステーションAPIの待受・ログイン・API利用設定・パスワード不一致を読む仕様。発注・銘柄登録・パスワードの返却はしない。実装は含まない |
 | コンポーネント設計 | `docs/components/overview.md`（§5〜§9は `docs/components/lit.md`・`runtime.md` に分割） | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
 
 ## マイルストーン / リリース計画
@@ -160,3 +161,4 @@ graph TD
 | 1.1 | 2026-09-26 | RAG（sqlite-vec）・自己改善ループ（Sol/Opus）を追加、DBをPostgreSQLからSQLiteへ全面移行、Phase 7完全自動運用（dead-man's switch）に対応 | Phase 5/6/7の方針拡張とWails単一exe配布との整合 |
 | 1.2 | 2026-09-29 | スコープ「含むもの」にLunaの実装（News Ingest経由の外部AI API呼び出し）を明記し、Sol/Opusを実際の外部AI API呼び出しとして実装する方針に更新（Opusはシャドーバックテストの決定的しきい値とAIレビューの併用条件）。Phase 6の説明を更新 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
 | 1.3 | 2026-09-29 | 「含まないもの」のニュースイベント関連戦略の記述を明確化: 除外対象は「ニュースイベント単独を起点とする独立戦略」であり、Luna（ニュース分類）による既存4戦略への補助的文脈提供とは矛盾しないことを明記 | Luna追加とのスコープ整合性レビュー対応 |
+| 1.4 | 2026-10-03 | ドキュメントマップに読み取り専用ローカル kabu ステータス MCP の仕様（`architecture/kabu-status-mcp.md`、エラー対応は `architecture/kabu-status-mcp-errors.md`）を追加 | 同一PCのエージェントが localhost の kabuステーションAPI状態を尋ねる仕様を既存構成へ追加。実装は範囲外 |

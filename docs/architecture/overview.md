@@ -287,3 +287,4 @@ handler → service → repository → domain
 | 1.36 | 2026-10-02 | §8（`overview/integrations.md`）: 最新リリース取得の404（リリース未公開／アクセス不可）を`ErrorAccess`のエラーから`Status.NoRelease`（成功扱い・Infoログのみ・再試行なし）へ変更し、Settings画面に「公開されているリリースが見つかりませんでした」を表示。リリース取得の401/403とアセット取得の401/403/404は`ErrorAccess`のまま | issue #296（リリース未公開期間にERRORログとバックオフ再試行が連打されていた） |
 | 1.37 | 2026-10-02 | §6（`integrations.md`）: kabuステーションAPIトークン発行失敗時の継続起動・バックグラウンド再試行・エラーコード別の原因表示（市況データ接続バナー）を追記 | issue #295 |
 | 1.38 | 2026-10-03 | §10 通信フロー（`overview/flows.md`）: `/setup`がSettingsと同じ接続先一覧・モーダル（`ConnectionList`）を使うことを追記 | issue #302 |
+| 1.39 | 2026-10-03 | §5（`integrations.md`）に、読み取り専用ローカル kabu ステータス MCP の仕様（`docs/architecture/kabu-status-mcp.md`）への参照を追加。実装・実行ファイルは含まない | 同一PC上のエージェントが localhost の kabuステーションAPI状態を尋ねる仕様を既存構成へ追加 |
