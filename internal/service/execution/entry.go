@@ -49,7 +49,8 @@ type EntryResult struct {
 // Quantity <= 0 or a non-finite/non-positive Price or LimitPrice fails with
 // ErrInvalidQuantity/ErrInvalidPrice before anything is written (issue
 // #342). With Config.Calendar set, entries outside 東証立会時間 fail with
-// ErrOutsideTradingSession.
+// ErrOutsideTradingSession; with a PENDING entry order already on the
+// instrument they fail with ErrPendingOrderExists (issue #343).
 func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, error) {
 	direction := req.Signal.Direction
 	if direction != domain.JevDirectionLong && direction != domain.JevDirectionShort {
@@ -77,6 +78,16 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 		return EntryResult{}, ErrPositionAlreadyOpen
 	} else if !errors.Is(err, domain.ErrPositionNotFound) {
 		return EntryResult{}, fmt.Errorf("execution: check open position for instrument %d: %w", req.Signal.InstrumentID, err)
+	}
+
+	pending, err := e.orders.ListByInstrument(ctx, req.Signal.InstrumentID, pendingOrderScanLimit)
+	if err != nil {
+		return EntryResult{}, fmt.Errorf("execution: check pending orders for instrument %d: %w", req.Signal.InstrumentID, err)
+	}
+	for _, o := range pending {
+		if o.Status == domain.OrderStatusPending {
+			return EntryResult{}, ErrPendingOrderExists
+		}
 	}
 
 	if until, inCooldown := e.symbolCooldown(req.Signal.Symbol, now); inCooldown {

@@ -189,3 +189,68 @@ func TestEngine_Enter_RejectsInvalidPriceOrQuantity(t *testing.T) {
 		})
 	}
 }
+
+// Enter must not queue a second entry behind a PENDING one (issue #343).
+func TestEngine_Enter_RejectsWhilePendingOrderExists(t *testing.T) {
+	te := newTestEngine(t, execution.DefaultConfig())
+	ctx := context.Background()
+	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
+	limit := 1990.0
+	req := execution.EntryRequest{
+		Signal: longSignal(te.instrument.ID), Quantity: 100,
+		OrderType: domain.OrderTypeLimit, LimitPrice: &limit, Price: 2000, Now: now,
+	}
+	if _, err := te.engine.Enter(ctx, req); err != nil {
+		t.Fatalf("Enter: %v", err)
+	}
+	if _, err := te.engine.Enter(ctx, req); !errors.Is(err, execution.ErrPendingOrderExists) {
+		t.Fatalf("Enter (second, pending) err = %v, want ErrPendingOrderExists", err)
+	}
+}
+
+// Two PENDING limit orders (e.g. legacy rows) crossing together: the second
+// fill loses to positions_open_instrument_uq, but OnSnapshot must still mark
+// and evaluate exits for the new position instead of failing every snapshot
+// (issue #343).
+func TestEngine_OnSnapshot_DuplicatePendingDoesNotBlockExitEvaluation(t *testing.T) {
+	te := newTestEngine(t, execution.DefaultConfig())
+	ctx := context.Background()
+	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
+	limit := 1990.0
+	for i := 0; i < 2; i++ {
+		if _, err := te.orders.Insert(ctx, domain.PaperOrder{
+			InstrumentID: te.instrument.ID, Symbol: "7203", Side: domain.OrderSideBuy,
+			OrderType: domain.OrderTypeLimit, Quantity: 100, LimitPrice: &limit,
+			Status: domain.OrderStatusPending, SubmittedAt: now.Add(time.Duration(i) * time.Second),
+		}); err != nil {
+			t.Fatalf("Insert pending order: %v", err)
+		}
+	}
+
+	result, err := te.engine.OnSnapshot(ctx, snapshotAt(te.instrument.ID, 1989, now.Add(time.Minute)))
+	if err != nil {
+		t.Fatalf("OnSnapshot: %v", err)
+	}
+	if len(result.Filled) != 1 || result.Position == nil {
+		t.Fatalf("OnSnapshot() = %+v, want exactly one fill and an open position", result)
+	}
+
+	// -1% from the 1989 entry: the stop loss must fire despite the stale order.
+	result, err = te.engine.OnSnapshot(ctx, snapshotAt(te.instrument.ID, 1960, now.Add(2*time.Minute)))
+	if err != nil {
+		t.Fatalf("OnSnapshot (exit): %v", err)
+	}
+	if !result.Exited {
+		t.Fatalf("OnSnapshot().Exited = false, want the stop loss evaluated and triggered")
+	}
+
+	orders, err := te.orders.ListByInstrument(ctx, te.instrument.ID, 10)
+	if err != nil {
+		t.Fatalf("ListByInstrument: %v", err)
+	}
+	for _, o := range orders {
+		if o.Status == domain.OrderStatusPending {
+			t.Errorf("order %d still PENDING, want the unfillable duplicate REJECTED", o.ID)
+		}
+	}
+}
