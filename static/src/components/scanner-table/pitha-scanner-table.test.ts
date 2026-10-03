@@ -1,5 +1,12 @@
-import { describe, expect, test } from 'bun:test';
-import { FakeWebSocket, installFakes, item, mount } from './scanner-test-support';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
+import {
+  FakeWebSocket,
+  flush,
+  installFakes,
+  item,
+  mount,
+  type ScannerTableElement,
+} from './scanner-test-support';
 
 installFakes();
 
@@ -120,5 +127,23 @@ describe('pitha-scanner-table', () => {
 
     expect(FakeWebSocket.instances).toHaveLength(2);
     expect(FakeWebSocket.instances[1].url).toContain('/ws/scanner-2');
+  });
+
+  test('logs an error and makes no request when api-url and ws-url are not injected', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    const fetchMock = mock(() => Promise.resolve(new Response('{}')));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const el = document.createElement('pitha-scanner-table') as ScannerTableElement; // no URL attributes
+    document.body.appendChild(el);
+    await flush(el);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    for (const name of ['api-url', 'ws-url']) {
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ message: `pitha-scanner-table: ${name} is not set` }),
+      );
+    }
+    errorSpy.mockRestore();
   });
 });

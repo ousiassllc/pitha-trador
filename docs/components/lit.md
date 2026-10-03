@@ -48,6 +48,7 @@ export class PithaPriceChart extends LitElement {
 ### 5.2 pitha-scanner-table
 
 - 初期データを`GET /api/v1/scanner`で取得しレンダリング、以後`/ws/scanner`のPUSHで行を更新・ソート順を再計算する
+- `api-url`/`ws-url`はTemplから属性で注入し、コンポーネントは既定値を持たない（HATEOAS）。未設定なら`logger.error`を出して該当の取得・購読を行わない
 - 列ヘッダクリックでクライアント内ソート（サーバー往復不要）
 - SSRフォールバック（`organisms.ScannerTableFallback`）と同一の見た目で描画する（issue #239）: ページ上部に候補件数（`data-testid="scanner-count"`）、`<caption>`に最終更新時刻（`as_of`。REST・`/ws/scanner`・SSRとも同じRFC 3339のオフセット付き表記で、秒未満は表示しない）、列見出しは日本語ラベル＋`title`ツールチップ、1m/5m Returnは符号付き（正=`+`緑・負=`-`赤・0/欠損=灰。0は符号なし）、Jev方向・エントリー品質はバッジ（`atoms.Badge`/`atoms.EntryQualityBadge`と同じ配色）、Confidenceは`%`表示、0件時は空状態メッセージ（`data-testid="scanner-empty"`。初回データ取得前は表示しない。`role="status"`はLit側のみ）。ハイドレーションは最初のデータ（REST応答または`/ws/scanner`のPUSH）が届くまでSSR描画を残し、初回取得に失敗してもSSR描画は消さない。列見出しは`<button>`（Tab＋Enter/Spaceで並べ替え、`aria-sort`、▲/▼表示）で、列の説明はマウス向けの`title`に加え、表の上の`<details data-testid="scanner-column-help">`（見出し「列の意味」、ラベル/説明の`<dl>`。SSRと同一）で、キーボード・タッチ・スクリーンリーダーからも読める（`title`と`aria-describedby`の二重読み上げは避ける）。数値は小数丸めをGoと揃える（ちょうど中間は0から遠い方へ）。列定義・書式・配色を変える場合はGo側`scannerColumns`と本コンポーネントの`COLUMNS`を必ず同時に更新し、共有ゴールデン`scanner-contract.json`（`scanner_table_contract_test.go`/`scanner-contract.test.ts`が検証）も更新する
 - 銘柄行は通常の `<a href="/symbols/{symbol}">` として描画する（Litはハイパーメディアリンクの外側に出ず、通常のブラウザナビゲーションとしてページ遷移する。HTMXリクエストは発火しない = HTMX↔Lit境界ルール§「Litは HTMXリクエストをトリガーしない」に準拠）
@@ -103,8 +104,9 @@ templ KillSwitchPanel(state domain.SystemState) {
 ### 5.5 pitha-activity-feed
 
 - 初期データを`GET /api/v1/activity`で取得しレンダリングし、以後`/ws/activity`の`job_update`（該当キューの件数のみ置換）・`activity_event`（フィード先頭に追加、最大500件で切り詰め）を反映する
+- `api-url`/`ws-url`/`kill-switch-events-url`はすべてTemplから属性で注入し、コンポーネントは既定値を持たない（HATEOAS。`pitha-kill-switch-panel`と同じ）。未設定の属性があれば`logger.error`を出して該当の取得・購読を行わない
 - type/queueセレクトの変更時は`GET /api/v1/activity?type=&queue=`で再取得する（サーバー側フィルタ。`queue`指定は当該キューの`job`イベントのみに一致）。WS受信イベントも同じ条件でクライアント側で絞り込む
-- 直近Kill Switchイベントは`?type=kill_switch&limit=10`で別途取得し、WSの`kill_switch`イベントで先頭に追加する
+- 直近Kill Switchイベントは`kill-switch-events-url`属性（Templ注入。値は`/api/v1/activity?type=kill_switch&limit=10`）で別途取得し、WSの`kill_switch`イベントで先頭に追加する（コンポーネント側の切り詰め件数はこの`limit`と同じ10件）。クエリ文字列はクライアントで組み立てない
 - WebSocketが切断後に再接続（`open`へ復帰）した時は、切断中に失ったイベントを補うため`GET /api/v1/activity`（現在のフィルタ付き）と`?type=kill_switch&limit=10`を再取得する（#221）。これは操作者不在でも発火するため`background: true`で送り、ハートビートに数えさせない（§6、FR-RISK-6）。初回・フィルタ変更時の取得は操作者操作のため`background`を付けない
 - SSRフォールバック（`QueueStatusPanel` + `ActivityFeedFallback`）を子要素として持ち、ハイドレーション時に置き換える（`pitha-scanner-table`と同じ light DOM 方式）
 
