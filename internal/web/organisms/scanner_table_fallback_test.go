@@ -47,6 +47,19 @@ func TestScannerTableFallback_ShowsCountAndRFC3339AsOfCaption(t *testing.T) {
 	}
 }
 
+// Candidate returns are Feature Engine decimal ratios (0.004 == +0.4%); the
+// 騰落率(%) columns must show them as percent (issue #365).
+func TestScannerTableFallback_ShowsReturnsAsPercent(t *testing.T) {
+	r1, r5 := 0.004, -0.0042
+	body := renderScannerTable(t, []domain.Candidate{{Symbol: "7203", Price: 1, Return1m: &r1, Return5m: &r5}})
+
+	for _, want := range []string{">+0.40</td>", ">-0.42</td>"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected table to contain %q, got %q", want, body)
+		}
+	}
+}
+
 func TestScannerTableFallback_EmptyStateWhenNoCandidates(t *testing.T) {
 	body := renderScannerTable(t, nil)
 

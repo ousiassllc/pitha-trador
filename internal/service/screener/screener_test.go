@@ -6,6 +6,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
 
@@ -23,7 +24,7 @@ func baseInput() screener.Input {
 			SpreadBps: f(10),
 			Feature: domain.Feature{
 				VolumeRatio5m: f(2.0),
-				Return5m:      f(0.5),
+				Return5m:      f(0.005), // decimal ratio: +0.5%
 				RealizedVol5m: f(0.01),
 			},
 		},
@@ -65,10 +66,10 @@ func TestPassesFilter_RejectsOutOfScopeInstruments(t *testing.T) {
 		"spread missing":         func(in *screener.Input) { in.Snapshot.SpreadBps = nil },
 		"volume ratio below min": func(in *screener.Input) { in.Snapshot.Feature.VolumeRatio5m = f(1.19) },
 		"volume ratio missing":   func(in *screener.Input) { in.Snapshot.Feature.VolumeRatio5m = nil },
-		"abs return below min":   func(in *screener.Input) { in.Snapshot.Feature.Return5m = f(0.2) },
+		"abs return below min":   func(in *screener.Input) { in.Snapshot.Feature.Return5m = f(0.002) },
 		"return missing":         func(in *screener.Input) { in.Snapshot.Feature.Return5m = nil },
 		"negative return still passes abs check but fails vol": func(in *screener.Input) {
-			in.Snapshot.Feature.Return5m = f(-0.2) // abs(-0.2) = 0.2 < 0.3
+			in.Snapshot.Feature.Return5m = f(-0.002) // abs = 0.2% < 0.3%
 		},
 		"realized vol below min": func(in *screener.Input) { in.Snapshot.Feature.RealizedVol5m = f(0.0009) },
 		"realized vol missing":   func(in *screener.Input) { in.Snapshot.Feature.RealizedVol5m = nil },
@@ -87,9 +88,54 @@ func TestPassesFilter_RejectsOutOfScopeInstruments(t *testing.T) {
 
 func TestPassesFilter_NegativeAbsReturnPasses(t *testing.T) {
 	in := baseInput()
-	in.Snapshot.Feature.Return5m = f(-0.5) // abs(-0.5) = 0.5 >= 0.3
+	in.Snapshot.Feature.Return5m = f(-0.005) // abs = 0.5% >= 0.3%
 	if !screener.PassesFilter(testCfg(), in) {
 		t.Fatal("expected abs(return_5m) to be evaluated, not signed return_5m")
+	}
+}
+
+// Return5m is a Feature Engine decimal ratio (0.004 = +0.4%) while
+// MinAbsReturn5mPct is in percent (0.3 = 0.3%): +0.4% must clear a 0.3%
+// floor, and a 0.2% move must not (issue #364).
+func TestPassesFilter_MinAbsReturn5mPctComparesPercentToDecimalRatio(t *testing.T) {
+	tests := []struct {
+		ratio float64
+		want  bool
+	}{
+		{0.004, true},
+		{-0.004, true},
+		{0.003, true}, // == 0.3%: inclusive boundary
+		{0.002, false},
+		{-0.002, false},
+		{0.3, true},
+	}
+	for _, tc := range tests {
+		in := baseInput()
+		in.Snapshot.Feature.Return5m = f(tc.ratio)
+		if got := screener.PassesFilter(testCfg(), in); got != tc.want {
+			t.Errorf("return_5m=%v (ratio) vs min_abs_return_5m_pct=0.3: pass=%v, want %v", tc.ratio, got, tc.want)
+		}
+	}
+}
+
+// End to end with real Feature Engine output (issue #364): a +0.4% five
+// minute move clears the shipped 0.3% default, a +0.2% move does not.
+func TestPassesFilter_FeatureEngineReturn5mAgainstDefaultThreshold(t *testing.T) {
+	now := time.Date(2026, 9, 27, 9, 30, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		price float64
+		want  bool
+	}{{1004, true}, {996, true}, {1002, false}} {
+		feature := featureengine.Compute(featureengine.Input{
+			Timestamp: now,
+			Current:   featureengine.Reading{Price: tc.price, VWAP: tc.price},
+			History:   []domain.Snapshot{{Timestamp: now.Add(-5 * time.Minute), Price: 1000}},
+		})
+		in := baseInput()
+		in.Snapshot.Feature.Return5m = feature.Return5m
+		if got := screener.PassesFilter(testCfg(), in); got != tc.want {
+			t.Errorf("price %v vs ref 1000 (return_5m=%v): pass=%v, want %v", tc.price, *feature.Return5m, got, tc.want)
+		}
 	}
 }
 

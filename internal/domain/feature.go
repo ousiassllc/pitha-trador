@@ -84,3 +84,19 @@ type Feature struct {
 	StockVsSectorRelativeStrength *float64
 	MarketBreadth                 *float64
 }
+
+// RatioToPercent converts a Feature return (a decimal ratio, 0.004 == +0.4%)
+// to percent (0.4). It is the single ratio->percent conversion point: the
+// Fast Screener's min_abs_return_5m_pct filter and the Scanner API/dashboard's
+// return_1m / return_5m (%) columns all go through it, while Feature Engine
+// output, Jev inputs and DB values stay decimal ratios.
+func RatioToPercent(v float64) float64 { return v * 100 }
+
+// RatioToPercentPtr is RatioToPercent for nullable values; nil stays nil.
+func RatioToPercentPtr(v *float64) *float64 {
+	if v == nil {
+		return nil
+	}
+	p := RatioToPercent(*v)
+	return &p
+}

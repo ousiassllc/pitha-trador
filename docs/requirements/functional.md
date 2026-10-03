@@ -120,7 +120,7 @@ stateDiagram-v2
 
 ### 5.1 Scanner Dashboard
 
-表示項目: Symbol, Price, 1m/5m Return, Volume Ratio, VWAP距離, Spread, Jev Direction, Jev Confidence, Entry Quality, Current Position。候補銘柄更新周期（15〜30秒）に応じてライブ更新する。
+表示項目: Symbol, Price, 1m/5m Return（パーセント表示。Feature Engineの小数比を×100）, Volume Ratio, VWAP距離, Spread, Jev Direction, Jev Confidence, Entry Quality, Current Position。候補銘柄更新周期（15〜30秒）に応じてライブ更新する。
 
 候補表の上に**スキャン状況パネル**を置く（issue #303。動作確認・「なぜこの銘柄が候補に出ないか」の調査用）:
 
@@ -128,6 +128,7 @@ stateDiagram-v2
 - FR-SCAN-4: 「スキャン対象を見る」で、ユニバース全銘柄（最大約4,000）のコード・名称・市場・状態（通過/除外/データ欠損）・理由・Scout結果を一覧する。検索（コード/名称）、状態・理由での絞り込み、ページング（既定50件・最大200件）を備え、1回に描画する行数を抑える
 - FR-SCAN-5: 除外は落ちた条件（FR-FS-1の閾値名＋上位N件の外）を、欠損は取得できなかった値（板情報なし・履歴不足（FR-FE-5）・市況データ未取得）を、理由コードと人が読めるラベルで示す。全フィルターを評価し複数の理由を併記する
 - FR-SCAN-6: 結果は**開いた時点のスナップショット**で、「更新」ボタン・絞り込み・ページ送りで再取得する（`/ws/scanner`には流さず、その挙動は変えない）。保持は最新1サイクル分のメモリ上のみで、再起動後・初回サイクル完了前は「まだスキャンサイクルが実行されていません」の空状態を表示する
+- FR-SCAN-7: 東証の立会時間外（土日・祝日・年末年始休場・昼休み・9:00前/15:30後。判定は`marketcalendar`、`non-functional.md` §3）は、スキャン状況パネルの先頭に「現在は東証の立会時間外のため、市場データ取得・フルスキャン・Jev Scoutは停止中です。表示は保存済みデータに基づきます」旨の停止通知（`data-testid="scan-offhours"`）を、サイクル未実行の空状態・サイクルありの双方で表示し、次回の立会開始時刻（JST。前場9:00／後場12:30、土日・祝日・年末年始をスキップ）を併記する。立会時間中は表示しない。「更新」ボタンは立会時間外でも無効化せず、押下すると保存済みデータを再取得して同じ通知を再描画する（新規スキャンは走らない）。通知はスキャン状況パネルに限り、全ページ共通のバナーにはしない
 
 ### 5.2 Symbol Detail
 
@@ -207,3 +208,5 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.16 | 2026-10-03 | §5.1 にスキャン状況パネル（FR-SCAN-3〜6: ファネル件数・ユニバース銘柄一覧・除外/欠損理由・手動更新）を追加 | issue #303 |
 | 1.17 | 2026-10-03 | FR-RAG-5（Decision historyの類似局面件数表示）を「将来拡張・未実装」と明記し、参照先`components/overview.md`に記述がない旨と実装時の前提を追記（`functional/components-platform.md` §4.13。`architecture/overview.md` §4のRAG Context Builder行の参照範囲をFR-RAG-1〜4へ訂正） | issue #307 |
 | 1.18 | 2026-10-03 | §2の処理フロー図で、Fast Screener候補数を「50〜200」固定からFR-FS-2の上位N件（既定 top_n=20、`config/strategy.yaml`）へ訂正し、Scout通過数の固定値「10〜30」を「Nの一部」へ変更。FR-FS-2（`functional/components-pipeline.md`）へ`top_n`既定値を明記 | issue #327（仕様と同梱既定値の乖離解消。Jev APIコストを抑える側の現行既定を維持） |
+| 1.19 | 2026-10-03 | §5.1 にFR-SCAN-7（立会時間外のスキャン停止通知と次回立会開始時刻の表示）を追加 | issue #367 |
+| 1.20 | 2026-10-03 | §5.1の1m/5m Returnをパーセント表示（Feature Engineの小数比を×100）と明記。FR-FS-1（`functional/components-pipeline.md`）の`min_abs_return_5m_pct`の単位をパーセントと明記 | issue #364, #365 |

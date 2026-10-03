@@ -35,7 +35,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 |---------|------|------|
 | GET | `/` | `/scanner` へリダイレクト |
 | GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却。ページ上部にスキャン状況パネル（ファネル件数・最終サイクル時刻/所要時間・「スキャン対象を見る」「更新」）を含む（フルページのみ） |
-| GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。issue #303 |
+| GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。東証の立会時間外は、サイクルの有無によらずパネルに停止通知`data-testid="scan-offhours"`と次回立会開始（JST）を含める（`GET /scanner`のパネルも同様。「更新」の再取得でも同じ通知が出る。立会時間中は出ない）。issue #303, #367 |
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
 | GET | `/performance` | Performance画面。常に先頭に「実績（Paper）」節（クローズ済みポジションのTotal/Daily PnL・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal count。§5 `GET /api/v1/performance` と同一集計、算出不能は「—」）を表示し、取得失敗時は節内にエラーを示して500。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
 | GET | `/calibration` | Calibration画面 |
@@ -83,7 +83,7 @@ stateDiagram-v2
 |------|------|-----------------|
 | `/ws/scanner` | Scanner Dashboardのライブ更新（`pitha-scanner-table`） | `{"type":"scanner_update","items":[...],"as_of":"2026-09-26T10:15:00+09:00"}`（`as_of`は`GET /api/v1/scanner`と同じスキャン時刻・RFC 3339） |
 | `/ws/symbols/{symbol}` | Symbol Detailのチャートのライブ更新（`pitha-price-chart`）。Jev判定パネルはSSRのみで`jev_update`では更新されず、ページ再読み込みで更新される | `{"type":"tick","price":2831.5,...}` / `{"type":"jev_update","direction":"LONG","confidence":0.82}`。`jev_update`は`direction`と`confidence`のみを持ち（`entry_quality`は含まない）、`pitha-price-chart`は`direction`が変化したときだけ方向マーカーを描画する。`tick`は最新価格が存在する（`price > 0`）間のみ送信し、`pitha-price-chart`は1分足に集約して描画する（issue #183） |
-| `/ws/system` | Kill Switch発動等のシステムイベント通知（ヘッダーバッジ用、OOBの代替としてLit非経由でも利用可） | `{"type":"kill_switch","reason":"daily_loss_limit"}`。`reason`は未解決の`kill_switch_events.reason`で、`daily_loss_limit`/`consecutive_losses`/`market_data_down`/`jev_api_down`/`broker_api_error`/`unexpected_position`/`fill_discrepancy`/`db_write_failure`/`operator_heartbeat_timeout`/`operator_manual`（手動Killは`operator_manual`）のいずれか。`kill_switch_events`行の記録に失敗しフラグのみ立った場合のフォールバックは`manual` |
+| `/ws/system` | Kill Switch発動等のシステムイベント通知（ヘッダーバッジ用、OOBの代替としてLit非経由でも利用可） | `{"type":"kill_switch","reason":"daily_loss_limit"}`。`reason`は未解決の`kill_switch_events.reason`で、`daily_loss_limit`/`consecutive_losses`/`market_data_down`/`jev_api_down`/`broker_api_error`/`unexpected_position`/`fill_discrepancy`/`db_write_failure`/`operator_heartbeat_timeout`/`operator_manual`（手動Killは`operator_manual`）のいずれか。`kill_switch_events`行の記録に失敗しフラグのみ立った場合のフォールバックは`manual`。Killed以外への遷移（Scheduler `AutoResume`による自動解除、別ウィンドウのResume/Pause）では`{"type":"state_changed","state":"running"}`（`state`は`running`/`paused`）を1回push（Killedへの遷移は`kill_switch`のみで`state_changed`は送らない）。接続時点の状態は送らず、Killedで接続した場合のみ`kill_switch`を送る。受信側は`state`を信用せず`GET /api/v1/system/status`で再同期する |
 | `/ws/activity` | System Activity Logのライブ更新（`pitha-activity-feed`） | `{"type":"job_update","queue":"jev-scout","pending":2,"running":1,"failed_recent":0}` / `{"type":"activity_event","event":{"type":"jev_scout","timestamp":"...","symbol":"7203"}}`。接続直後の送信はなく、初期状態は`GET /api/v1/activity`から取得する |
 
 WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（自動再接続、指数バックオフ）を必ず経由する。
@@ -132,3 +132,5 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.30 | 2026-10-03 | `POST`/`DELETE /settings/:key`のHTMX応答は、`Referer`が`/setup`のとき必須キー充足状態を再計算した完了メッセージ（`#setup-status`、`hx-swap-oob`）も返す | issue #325 |
 | 1.31 | 2026-10-03 | §3 `/performance` に「実績（Paper）」節（クローズ済みポジションの実績指標、算出不能は「—」、取得失敗は節内エラー＋500）を追記 | issue #360実装 |
 | 1.32 | 2026-10-03 | §6 `/ws/symbols/{symbol}`の用途から「Jev判定パネル」のライブ更新を削除（パネルはSSRのみ）し、`jev_update`が`direction`/`confidence`のみで`pitha-price-chart`は方向変化のマーカーだけ描画すると明記 | issue #362 |
+| 1.33 | 2026-10-03 | §3 `GET /scanner/scan`・`GET /scanner` のスキャン状況パネルに立会時間外の停止通知を追記 | issue #367 |
+| 1.34 | 2026-10-03 | §6 `/ws/system`にKilled以外への遷移を通知する`state_changed`を追記。`GET /api/v1/scanner`と`/ws/scanner`の`return_1m`/`return_5m`をパーセント単位と明記（`endpoints/huma-api.md`） | issue #363, #365 |

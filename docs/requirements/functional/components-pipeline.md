@@ -23,13 +23,13 @@
 
 ### 4.2 Fast Screener
 
-- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-3〜6、除外・欠損理由の表示は FR-SCAN-4/5）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する）
+- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-3〜6、除外・欠損理由の表示は FR-SCAN-4/5）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する。`min_abs_return_5m_pct`の単位は**パーセント**（0.3 = 0.3%）で、Feature Engineの`return_5m`（小数比、0.003 = 0.3%）を×100して比較する）
 - FR-FS-2: 通過銘柄に対し以下のスコアを算出し、上位N銘柄のみJev Scoutへ送る。Nは`fast_screener.top_n`で、同梱既定は20（`config/strategy.yaml`。Jev APIコストを抑える側の値）。50〜200へ引き上げる場合は`non-functional.md` §2.1のAPI呼び出し上限（Nに比例）を確認する
 
 ```text
 screen_score =
   w1 * normalized_volume_ratio
-+ w2 * abs(return_5m)
++ w2 * abs(return_5m)   # return_5mは小数比（%換算しない）
 + w3 * breakout_strength
 + w4 * orderbook_imbalance
 + w5 * volatility_expansion

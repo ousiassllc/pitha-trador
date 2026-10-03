@@ -46,6 +46,8 @@ fast_screener:
   min_turnover_5m_jpy: 10000000
   max_spread_bps: 50
   min_volume_ratio: 1.2
+  # 5分リターン絶対値の下限。単位は**パーセント**（0.3 = 0.3%）。Feature Engineの
+  # return_5mは小数比（0.003 = 0.3%）で、スクリーナーが×100して比較する。
   min_abs_return_5m_pct: 0.3
   min_realized_volatility: 0.001
   # フィルター通過銘柄のうち上位何件をJev Scoutへ送るか（FR-FS-2）。
