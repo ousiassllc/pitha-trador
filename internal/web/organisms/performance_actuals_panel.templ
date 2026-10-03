@@ -1,0 +1,75 @@
+package organisms
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/insight"
+)
+
+// noValue is shown for a metric that is undefined (nil in the API's
+// `null`), e.g. Sharpe with fewer than 2 trades.
+const noValue = "—"
+
+// PerformanceActualsPanel renders the realized (Paper) performance of every
+// closed position - functional.md §5.3's Total/Daily PnL, Win Rate, Profit
+// Factor, Expectancy, Max Drawdown, Average Hold Time, Sharpe/Sortino
+// reference values and Signal count - the same figures `GET
+// /api/v1/performance` returns. Undefined (nil) metrics render as "—".
+// err is non-empty when the figures could not be read; the panel then
+// shows it instead of the metrics.
+templ PerformanceActualsPanel(perf insight.Performance, err string) {
+	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="performance-actuals">
+		<h2 class="text-lg font-semibold text-slate-900">実績（Paper）</h2>
+		if err != "" {
+			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="actuals-error">{ err }</p>
+		} else {
+			<p class="mt-1 text-xs text-slate-500">クローズ済みポジションの実績。Sharpe / Sortino は1取引あたりの参考値（年率換算なし）。</p>
+			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+				@actualsMetric("Total PnL", "total_pnl", yen(perf.TotalPnL))
+				@actualsMetric("Daily PnL", "daily_pnl", yen(perf.DailyPnL))
+				@actualsMetric("Trades", "trade_count", fmt.Sprintf("%d", perf.TradeCount))
+				@actualsMetric("Win Rate", "win_rate", fmt.Sprintf("%.1f%%", perf.WinRate*100))
+				@actualsMetric("Profit Factor", "profit_factor", optionalRatio(perf.ProfitFactor))
+				@actualsMetric("Expectancy", "expectancy", pct(perf.Expectancy))
+				@actualsMetric("Max Drawdown", "max_drawdown_pct", pct(perf.MaxDrawdownPct))
+				@actualsMetric("Average Hold Time", "average_hold_time_minutes", fmt.Sprintf("%.1f 分", perf.AverageHoldTimeMinutes))
+				@actualsMetric("Sharpe (参考)", "sharpe_ref", optionalRatio(perf.SharpeRef))
+				@actualsMetric("Sortino (参考)", "sortino_ref", optionalRatio(perf.SortinoRef))
+				@actualsMetric("Signal count", "signal_count", fmt.Sprintf("%d", perf.SignalCount))
+			</dl>
+		}
+	</section>
+}
+
+templ actualsMetric(label, key, value string) {
+	<div>
+		<dt class="text-sm text-slate-500">{ label }</dt>
+		<dd class="text-sm font-medium text-slate-900" data-metric={ key }>{ value }</dd>
+	</div>
+}
+
+// optionalRatio renders a nil ratio as "—".
+func optionalRatio(v *float64) string {
+	if v == nil {
+		return noValue
+	}
+	return profitFactor(*v)
+}
+
+// yen renders a currency amount as whole yen with thousands separators,
+// e.g. -¥1,234.
+func yen(v float64) string {
+	s := fmt.Sprintf("%.0f", v)
+	sign := ""
+	if strings.HasPrefix(s, "-") {
+		sign, s = "-", s[1:]
+	}
+	if s == "0" {
+		sign = "" // "-0" from a tiny negative amount
+	}
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return sign + "¥" + s
+}

@@ -95,6 +95,7 @@ static/
 - `ConnectionList`（Settings/Setup共通の接続先一覧。接続先ごとの`SettingsCard`と、その接続先の`SecretFieldRow`を収めた`Modal`を描く。`internal/web/organisms/connection_list.templ`、issue #302）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
 - `PerformanceSummaryPanel`
+- `PerformanceActualsPanel`（Performance画面の「実績（Paper）」節`#performance-actuals`。クローズ済みポジションのTotal/Daily PnL・Trades・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal countを`GET /api/v1/performance`と同じ`insight.Performance`から描画する。算出不能（`null`）の指標は「—」。取得失敗時は固定文言のエラーを節内に表示する。`requirements/functional.md` §5.3、issue #360）
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
 - `UpdatePanel`（Settings画面の「アップデート」節。現在バージョン・最終確認結果・安全ゲート保留中はその旨と理由（ポジション保有/Kill Switch/直近発注）・失敗時は原因の種別（ネットワーク/レート制限/検証失敗など。生のエラー文言は出さない）・「今すぐアップデートを確認」ボタン（`POST /system/update-check`、`#update-panel`をinnerHTMLスワップ。確認中は`hx-disabled-elt`で無効化・`hx-sync="this:drop"`で二重送信を破棄し、`#update-check-progress`に進行表示）。`cmd/server`（アップデーター未搭載）ではアップデート機能が無い旨を表示しボタンは出さない。issue #76/#241）
 - `ErrorLogPanel`（Settings画面の「エラーログ」節`#error-log-panel`。対象期間（直近1/7/30/90日、既定7日）とレベル（ERRORのみ/WARN以上）の`<select>`と「ダウンロード」ボタンを持つ`<form method="get" action="/api/v1/logs/errors">`をSSRで描画する。ブラウザ標準のダウンロードに任せるため`hx-disable`を付けHTMXの差し替えと`lib/api.ts`は使わず、応答の`Content-Disposition: attachment`で保存される。秘密情報はマスク済み・最大10MiBである旨を注記する。`requirements/functional/components-platform.md` §4.19、issue #267）

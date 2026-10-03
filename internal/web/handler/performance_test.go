@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 )
 
@@ -28,11 +29,26 @@ func (r *recordingBacktestRunner) RunWalkForward(_ context.Context, wf backtest.
 	return r.result, r.err
 }
 
+// stubPerformanceSource returns perf/err from Performance.
+type stubPerformanceSource struct {
+	perf insight.Performance
+	err  error
+}
+
+func (s stubPerformanceSource) Performance(context.Context, time.Time) (insight.Performance, error) {
+	return s.perf, s.err
+}
+
 func servePerformance(t *testing.T, runner handler.BacktestRunner, target string) *httptest.ResponseRecorder {
+	t.Helper()
+	return servePerformanceWithActuals(t, runner, stubPerformanceSource{}, target)
+}
+
+func servePerformanceWithActuals(t *testing.T, runner handler.BacktestRunner, actuals handler.PerformanceSource, target string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.GET("/performance", handler.NewPerformanceHandler(runner).Page)
+	engine.GET("/performance", handler.NewPerformanceHandler(runner, actuals).Page)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec
@@ -162,5 +178,68 @@ func TestPerformanceHandler_Page_TimeoutReturns503(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), `data-testid="backtest-error"`) {
 		t.Errorf("status = %d, want 503 with the error shown", rec.Code)
+	}
+}
+
+func TestPerformanceHandler_Page_ShowsRealizedPerformanceSection(t *testing.T) {
+	sharpe := 0.42
+	pf := 1.5
+	runner := &recordingBacktestRunner{}
+	rec := servePerformanceWithActuals(t, runner, stubPerformanceSource{perf: insight.Performance{
+		TotalPnL: 12345, DailyPnL: -800, TradeCount: 4, WinRate: 0.75, ProfitFactor: &pf,
+		Expectancy: 0.5, MaxDrawdownPct: 2.25, AverageHoldTimeMinutes: 37.5,
+		SharpeRef: &sharpe, SortinoRef: nil, SignalCount: 17,
+	}}, "/performance")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if len(runner.calls) != 0 {
+		t.Errorf("RunWalkForward calls = %d, want 0 without the form submitted", len(runner.calls))
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`data-metric="total_pnl">¥12,345<`,
+		`data-metric="daily_pnl">-¥800<`,
+		`data-metric="trade_count">4<`,
+		`data-metric="win_rate">75.0%<`,
+		`data-metric="profit_factor">1.50<`,
+		`data-metric="expectancy">0.50%<`,
+		`data-metric="max_drawdown_pct">2.25%<`,
+		`data-metric="average_hold_time_minutes">37.5 分<`,
+		`data-metric="sharpe_ref">0.42<`,
+		`data-metric="sortino_ref">—<`,
+		`data-metric="signal_count">17<`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+func TestPerformanceHandler_Page_ShowsRealizedPerformanceAlongsideBacktestResult(t *testing.T) {
+	runner := &recordingBacktestRunner{result: backtest.Result{Combined: backtest.Metrics{TradeCount: 12}}}
+	rec := servePerformanceWithActuals(t, runner, stubPerformanceSource{perf: insight.Performance{TradeCount: 3}},
+		"/performance?from=2026-09-01&to=2026-09-10")
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-testid="performance-actuals"`) || !strings.Contains(body, `data-testid="performance-summary"`) {
+		t.Errorf("body should show both the realized section and the backtest summary; body=%s", body)
+	}
+}
+
+func TestPerformanceHandler_Page_ShowsFixedMessageWhenRealizedPerformanceFails(t *testing.T) {
+	runner := &recordingBacktestRunner{}
+	rec := servePerformanceWithActuals(t, runner, stubPerformanceSource{err: errors.New("db: connection refused")}, "/performance")
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-testid="actuals-error"`) || !strings.Contains(body, `data-testid="backtest-form"`) {
+		t.Errorf("body should show the actuals error and still the backtest form; body=%s", body)
+	}
+	if strings.Contains(body, "connection refused") || strings.Contains(body, `data-metric="total_pnl"`) {
+		t.Errorf("body leaks the internal error or shows metrics; body=%s", body)
 	}
 }
