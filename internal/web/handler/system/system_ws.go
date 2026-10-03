@@ -18,6 +18,15 @@ type systemKillSwitchMessage struct {
 	Reason string `json:"reason"`
 }
 
+// systemStateChangedMessage is `{"type":"state_changed","state":"running"}`
+// (docs/api/endpoints.md §6): pushed for every transition that does not
+// end in Killed - Killed→Running by AutoResume or another window's Resume,
+// and Running↔Paused from another window - so an open screen can resync.
+type systemStateChangedMessage struct {
+	Type  string             `json:"type"`
+	State domain.SystemState `json:"state"`
+}
+
 // defaultManualKillReason is the fallback pushed when the system is Killed
 // but has no unresolved kill_switch_events row. A manual `POST /system/kill`
 // (FR-RISK-4) normally records an operator_manual row (risk.Engine.Kill), so
@@ -29,24 +38,35 @@ const defaultManualKillReason = "manual"
 // components/overview.md §5.4): pushes a `kill_switch` message the
 // moment SystemEngine.State transitions into domain.SystemStateKilled -
 // whether triggered by `POST /system/kill` or directly by Risk Engine
-// (architecture/overview.md §10.3) - so `pitha-kill-switch-panel` can
-// reflect that state even when the transition did not originate from its
-// own POST call.
+// (architecture/overview.md §10.3) - and a `state_changed` message on every
+// other transition (notably Killed→Running by AutoResume), so
+// `pitha-kill-switch-panel` and Header can follow state changes that did not
+// originate from the panel's own POST call.
 func (h *SystemHandler) WebSocket(c *gin.Context) {
-	wasKilled := false
+	// previous is "" until the first successful read: a connection that
+	// opens while already Killed is told so (kill_switch), but one that
+	// opens while Running/Paused has nothing to report.
+	var previous domain.SystemState
 	shared.PollWebSocket(c, func() time.Duration { return h.pollInterval }, func(ctx context.Context, conn *websocket.Conn) error {
 		state, events, err := h.engine.State(ctx)
 		if err != nil {
 			return shared.Transient(err)
 		}
 
-		if state == domain.SystemStateKilled && !wasKilled {
+		switch {
+		case state == previous:
+		case state == domain.SystemStateKilled:
 			msg := systemKillSwitchMessage{Type: "kill_switch", Reason: activeUnresolvedReason(events)}
 			if err := shared.WriteJSON(ctx, conn, msg); err != nil {
 				return err
 			}
+		case previous != "":
+			msg := systemStateChangedMessage{Type: "state_changed", State: state}
+			if err := shared.WriteJSON(ctx, conn, msg); err != nil {
+				return err
+			}
 		}
-		wasKilled = state == domain.SystemStateKilled
+		previous = state
 		return nil
 	})
 }

@@ -227,6 +227,30 @@ describe('pitha-kill-switch-panel', () => {
     expect(buttonLabels(el)).toEqual(['Resume']);
   });
 
+  // Issue #363: AutoResume / another window's Resume leaves Killed without
+  // any panel action, so the push must pull the panel and Header back.
+  test('resyncs, restores the allowed actions and dispatches systemStateChanged on a state_changed push', async () => {
+    const { el, fetchMock } = await mount('killed');
+    expect(buttonLabels(el)).toEqual(['Resume']);
+    let changedCount = 0;
+    el.addEventListener('systemStateChanged', () => {
+      changedCount += 1;
+    });
+    fetchMock.mockImplementation((() =>
+      Promise.resolve(new Response(JSON.stringify(stateBody('running'))))) as never);
+
+    FakeWebSocket.instances[0].emit('message', {
+      data: JSON.stringify({ type: 'state_changed', state: 'running' }),
+    });
+    await flush(el);
+
+    expect(changedCount).toBe(1);
+    expect(el.shadowRoot?.querySelector('[data-status]')?.getAttribute('data-status')).toBe(
+      'running',
+    );
+    expect(buttonLabels(el)).toEqual(['Pause', 'Kill']);
+  });
+
   test('offers no actions after a kill_switch push when the resync fails', async () => {
     const { el, fetchMock } = await mount('running');
     fetchMock.mockImplementation((() => Promise.reject(new Error('offline'))) as never);

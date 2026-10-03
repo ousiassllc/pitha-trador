@@ -8,9 +8,11 @@
 // `can_pause`/`can_resume`/`can_kill` from the server's response. It
 // listens on `/ws/system` for a `kill_switch` event pushed when Risk
 // Engine triggers a Kill Switch directly (rather than through this
-// panel's own Kill button) - overview.md §10.3 - and resyncs from
-// `status-url` then, and after a WebSocket reconnect (a push may have been
-// missed while disconnected). Every state change dispatches
+// panel's own Kill button) - overview.md §10.3 - and for a `state_changed`
+// event pushed on every other transition (AutoResume, another window's
+// Resume/Pause; issue #363). It resyncs from `status-url` on either, and
+// after a WebSocket reconnect (a push may have been missed while
+// disconnected). Every state change dispatches
 // `systemStateChanged` so Header's HTMX-driven StatusDot
 // (organisms.Header) re-fetches and stays in sync (HTMX↔Lit boundary:
 // Lit notifies via CustomEvent, HTMX reacts via hx-trigger).
@@ -35,11 +37,15 @@ interface SystemStateResponse {
 }
 
 // Mirrors docs/api/endpoints.md §6's `/ws/system`
-// `{"type":"kill_switch","reason":"..."}` message
-// (internal/web/handler/system.systemKillSwitchMessage).
-interface KillSwitchMessage {
+// `{"type":"kill_switch","reason":"..."}` and
+// `{"type":"state_changed","state":"..."}` messages
+// (internal/web/handler/system.systemKillSwitchMessage /
+// systemStateChangedMessage). `state_changed` only triggers a resync: which
+// actions are allowed is the server's call, not derived from `state`.
+interface SystemWsMessage {
   type: string;
-  reason: string;
+  reason?: string;
+  state?: SystemStatus;
 }
 
 // Kill force-closes every open position (Engine.Kill → closer.CloseAll,
@@ -110,7 +116,7 @@ export class PithaKillSwitchPanel extends LitElement {
   @state() private busy = false;
   @state() private wsStatus: WsStatus = 'connecting';
 
-  private wsClient: WsClient<KillSwitchMessage> | null = null;
+  private wsClient: WsClient<SystemWsMessage> | null = null;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -125,7 +131,7 @@ export class PithaKillSwitchPanel extends LitElement {
   }
 
   // resync re-reads the state and allowed actions from status-url. It is
-  // always auto-fired (initial load, Kill Switch push, WS reconnect), never
+  // always auto-fired (initial load, Kill Switch / state_changed push, WS reconnect), never
   // an operator action, so it is sent as a background request that must not
   // refresh the operator heartbeat (FR-RISK-6 dead-man's switch).
   private async resync(): Promise<void> {
@@ -142,7 +148,7 @@ export class PithaKillSwitchPanel extends LitElement {
   private subscribeWs(): void {
     if (!this.wsUrl) return;
     let wasDisconnected = false;
-    this.wsClient = new WsClient<KillSwitchMessage>(resolveWsUrl(this.wsUrl), {
+    this.wsClient = new WsClient<SystemWsMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;
         if (isWsDisconnected(status)) {
@@ -155,6 +161,8 @@ export class PithaKillSwitchPanel extends LitElement {
       onMessage: (message) => {
         if (message.type === 'kill_switch') {
           this.onKillSwitchPush();
+        } else if (message.type === 'state_changed') {
+          void this.resync();
         }
       },
     });

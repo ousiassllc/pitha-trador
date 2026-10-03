@@ -101,7 +101,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 - 操作後は`systemStateChanged`を発火し、`Header`の`#header-status`（`hx-trigger="systemStateChanged from:closest header"`）がStatusDotを再取得する
 - Killの確認ダイアログ（`window.confirm`）は、Killが新規エントリー停止に加えて保有中の全ポジションを強制決済する（`Engine.Kill` → `closer.CloseAll`、FR-RISK-3 / UC-11）ことを文言で伝える（issue #194）
 - 操作（Pause/Resume/Kill）のPOSTが失敗したときはエラーを表示したうえで`status-url`から状態を再同期し、`systemStateChanged`も発火する。Killは`system.killed`を先に立ててから強制決済するため、強制決済失敗（500）でもサーバーはKilledのままで、UIが`running`のまま残らないようにする（issue #195）
-- Kill Switch発動はRisk Engineからも直接トリガーされうる（`architecture/overview/flows.md` §10.3）。この場合はサーバー側が`/ws/system`経由で`kill_switch`イベントを配信し、`pitha-kill-switch-panel`が受信して`status`をローカルに反映（操作可否は`status-url`から再取得）しつつ、同様に`systemStateChanged`を発火してHeaderと同期させる。`/ws/system`が切断されている間は「接続が切れています」を表示し、再接続後に`status-url`から再同期する（§6）
+- Kill Switch発動はRisk Engineからも直接トリガーされうる（`architecture/overview/flows.md` §10.3）。この場合はサーバー側が`/ws/system`経由で`kill_switch`イベントを配信し、`pitha-kill-switch-panel`が受信して`status`をローカルに反映（操作可否は`status-url`から再取得）しつつ、同様に`systemStateChanged`を発火してHeaderと同期させる。Killed以外への遷移（`AutoResume`による自動解除、別ウィンドウのResume/Pause。#363）は`state_changed`として配信され、パネルは`status-url`から（`background: true`で）再取得して`systemStateChanged`を発火し、Headerの`#header-status`とPause/Kill操作可否を追従させる。`/ws/system`が切断されている間は「接続が切れています」を表示し、再接続後に`status-url`から再同期する（§6）
 
 ### 5.5 pitha-activity-feed
 
