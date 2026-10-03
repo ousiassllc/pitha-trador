@@ -47,6 +47,17 @@ type scannerContract struct {
 	} `json:"rows"`
 }
 
+// percentToRatio turns the contract's percent-unit return (the API/Lit
+// shape) into the Feature Engine decimal ratio that domain.Candidate holds
+// and the SSR fallback converts back to percent for display.
+func percentToRatio(v *float64) *float64 {
+	if v == nil {
+		return nil
+	}
+	r := *v / 100
+	return &r
+}
+
 func loadScannerContract(t *testing.T) scannerContract {
 	t.Helper()
 	data, err := os.ReadFile("../../../static/src/components/scanner-table/scanner-contract.json")
@@ -166,7 +177,7 @@ func TestScannerTableFallback_MatchesLitContract_Rows(t *testing.T) {
 			it := row.Item
 			doc := parseHTML(t, renderScannerTable(t, []domain.Candidate{{
 				Symbol: it.Symbol, Price: it.Price,
-				Return1m: it.Return1m, Return5m: it.Return5m,
+				Return1m: percentToRatio(it.Return1m), Return5m: percentToRatio(it.Return5m),
 				VolumeRatio5m: it.VolumeRatio5m, PriceVsVWAPBps: it.PriceVsVWAPBps, SpreadBps: it.SpreadBps,
 				JevDirection: it.JevDirection, JevConfidence: it.JevConfidence,
 				EntryQuality: it.EntryQuality, CurrentPosition: it.CurrentPosition,

@@ -3,6 +3,7 @@
 export interface ScannerItem {
   symbol: string;
   price: number;
+  // Percent (0.42 == +0.42%); the API converts the Feature Engine's decimal ratio.
   return_1m: number | null;
   return_5m: number | null;
   volume_ratio_5m: number | null;

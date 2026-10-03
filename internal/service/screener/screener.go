@@ -81,7 +81,8 @@ func FilterReasons(cfg config.FastScreenerConfig, in Input) domain.ScreenReasons
 	switch {
 	case in.Snapshot.Feature.Return5m == nil:
 		r = r.Add(domain.ScreenReasonMissingReturn5m)
-	case math.Abs(*in.Snapshot.Feature.Return5m) < cfg.MinAbsReturn5mPct:
+	// Return5m is a decimal ratio; MinAbsReturn5mPct is in percent.
+	case math.Abs(domain.RatioToPercent(*in.Snapshot.Feature.Return5m)) < cfg.MinAbsReturn5mPct:
 		r = r.Add(domain.ScreenReasonMinAbsReturn5m)
 	}
 	switch {

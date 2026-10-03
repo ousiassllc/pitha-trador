@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,7 +22,8 @@ func fixtureCandidates() []domain.Candidate {
 	return []domain.Candidate{
 		{
 			Symbol: "7203", Price: 2831.5,
-			Return1m: f(0.12), Return5m: f(0.42), VolumeRatio5m: f(3.4),
+			// Return1m/5m: Feature Engine decimal ratios (+0.12% / +0.42%).
+			Return1m: f(0.0012), Return5m: f(0.0042), VolumeRatio5m: f(3.4),
 			PriceVsVWAPBps: 38, SpreadBps: f(7),
 			JevDirection: s("LONG"), JevConfidence: f(0.74), EntryQuality: s("strong"),
 			ScreenScore: 9.1,
@@ -48,6 +50,14 @@ func TestScannerHandler_APIScanner_MapsCandidatesToItemsAndAsOf(t *testing.T) {
 	first := out.Body.Items[0]
 	if first.Symbol != "7203" || first.Price != 2831.5 || *first.JevDirection != "LONG" || *first.JevConfidence != 0.74 {
 		t.Fatalf("Body.Items[0] = %+v, want symbol=7203 price=2831.5 jev_direction=LONG jev_confidence=0.74", first)
+	}
+	// Items carry percent (docs/api/endpoints/huma-api.md), not the
+	// Feature Engine's decimal ratios (issue #365).
+	if got := *first.Return1m; math.Abs(got-0.12) > 1e-9 {
+		t.Errorf("Body.Items[0].Return1m = %v, want 0.12 (percent)", got)
+	}
+	if got := *first.Return5m; math.Abs(got-0.42) > 1e-9 {
+		t.Errorf("Body.Items[0].Return5m = %v, want 0.42 (percent)", got)
 	}
 	second := out.Body.Items[1]
 	if second.Return1m != nil || second.JevDirection != nil || second.CurrentPosition != nil {
