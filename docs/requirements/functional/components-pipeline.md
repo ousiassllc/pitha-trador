@@ -49,6 +49,8 @@ screen_score =
 | 候補銘柄更新 | 15〜30秒ごと |
 | ポジション保有銘柄 | 5〜15秒ごと |
 
+- 周期は`config/strategy.yaml`の`scan.full_scan_interval_seconds`（60）/ `scan.candidate_refresh_interval_seconds_min`・`_max`（15・30）/ `scan.held_position_interval_seconds_min`・`_max`（5・15）で設定する（括弧内は同梱の既定値、単位は秒）。各値は正の整数で、`_max >= _min`であること。設定ローダー（`internal/config/scan_defaults.go`）は、未設定または0以下のキーを同梱既定値で補完し、`_max < _min`の`_max`を`_min`に引き上げる。いずれも警告ログを出す。0のままだと候補更新が待機なしで回り、全体スキャンが`@every 0s`で登録されるため（ホットループ防止）
+
 - FR-SCAN-1: 以下のいずれかを満たした銘柄は通常周期を待たず再評価する: 1分リターン急変、出来高急増、スプレッド急拡大、板インバランス急変、VWAPクロス、高値/安値ブレイク、約定フロー急変（直近2バーの`trade_flow_imbalance`の差の絶対値が`config/strategy.yaml`の`scan.event_trigger.trade_flow_imbalance_change_threshold`以上。どちらかが欠損の場合は無信号）、ニュースフラグ発生
 - FR-SCAN-2（再評価抑制）: `abs(return_1m) < threshold AND abs(volume_ratio_5m) < threshold AND abs(spread_change) < threshold AND no_event` の場合はJev呼び出しをスキップし、APIコストとレイテンシを削減する
   - 各thresholdは`config/strategy.yaml`の`scan.event_trigger.*`（`return_1m_change_threshold` / `volume_ratio_change_threshold` / `spread_change_bps_threshold` / `orderbook_imbalance_change_threshold` / `trade_flow_imbalance_change_threshold`）で設定する。判定は`abs(値) >= threshold`で、`return_1m_change_threshold`は1分リターン(`return_1m`)の絶対値、`volume_ratio_change_threshold`は5分出来高比率(`volume_ratio_5m`)の絶対値（前バーとの差ではなく現在値の水準判定。`volume_ratio_5m`は通常1.0前後の比率のため既定2.0は「5分出来高が平均の2倍以上」を意味する）、`spread_change_bps_threshold` / `orderbook_imbalance_change_threshold` / `trade_flow_imbalance_change_threshold`は直近2バーの差の絶対値と比較する。したがって、thresholdが0以下だと全バーでFR-SCAN-1が発火しFR-SCAN-2が無効化される。キー欠落（新キー追加前の古い`strategy.yaml`等）や0以下の値は設定ローダー（`LoadStrategy` / `LoadStrategyBytes`）が同梱既定値（`config/strategy.yaml`の値）で補完し、警告ログを出す
