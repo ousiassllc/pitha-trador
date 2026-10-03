@@ -29,7 +29,7 @@
 ```text
 screen_score =
   w1 * normalized_volume_ratio
-+ w2 * abs(return_5m)
++ w2 * abs(return_5m)   # return_5mは小数比（%換算しない）
 + w3 * breakout_strength
 + w4 * orderbook_imbalance
 + w5 * volatility_expansion

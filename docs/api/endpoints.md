@@ -133,3 +133,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.31 | 2026-10-03 | §3 `/performance` に「実績（Paper）」節（クローズ済みポジションの実績指標、算出不能は「—」、取得失敗は節内エラー＋500）を追記 | issue #360実装 |
 | 1.32 | 2026-10-03 | §6 `/ws/symbols/{symbol}`の用途から「Jev判定パネル」のライブ更新を削除（パネルはSSRのみ）し、`jev_update`が`direction`/`confidence`のみで`pitha-price-chart`は方向変化のマーカーだけ描画すると明記 | issue #362 |
 | 1.33 | 2026-10-03 | §3 `GET /scanner/scan`・`GET /scanner` のスキャン状況パネルに立会時間外の停止通知を追記 | issue #367 |
+| 1.34 | 2026-10-03 | §6 `/ws/system`にKilled以外への遷移を通知する`state_changed`を追記。`GET /api/v1/scanner`と`/ws/scanner`の`return_1m`/`return_5m`をパーセント単位と明記（`endpoints/huma-api.md`） | issue #363, #365 |
