@@ -10,14 +10,18 @@
 - 開発ワークフロー（3種のウォッチプロセスを並行起動、`Makefile dev`ターゲット）:
 
 ```makefile
-.PHONY: dev
 dev:
-	@bunx concurrently \
-		"wails dev" \
+	@PITHA_STRATEGY_PATH=$(CURDIR)/config/strategy.yaml \
+	PITHA_RISK_PATH=$(CURDIR)/config/risk.yaml \
+	PITHA_STATIC_DIR=$(CURDIR)/static/src \
+	SWAGGER_ENABLED=true \
+	bunx concurrently \
+		"cd cmd/desktop && wails dev" \
 		"templ generate --watch" \
-		"bun --cwd static run dev"
+		"bun --cwd=static run dev"
 ```
 
+  - 環境変数（設定ファイルパス・静的ファイルディレクトリ・Swagger有効化）の設定理由は `docs/environment/setup.md` の「Makefileターゲット」節を参照
   - `.templ`編集 → `templ generate --watch`が`_templ.go`を再生成 → `wails dev`がGoファイル変更を検知しプロセス再起動（WebViewは自動リロード）
   - `.ts`編集 → esbuildがバンドル → `static/src/dist`更新 → WebViewはHTTPキャッシュなし設定のため次回リクエストで反映（手動リロードまたは`hx-boost`遷移で反映）
   - esbuildのエントリは`static/src/components/*/pitha-*.ts`をglobで自動列挙し（`lib/*.ts`は各コンポーネントからimportされるためエントリにしない）、本番ビルドはsourcemapを出さず（`go:embed`されて`/static`で配信されるため。`--watch`のみ出力、issue #146）、`splitting: true`（ESM）でLit等の共有コードを`dist/js/chunks/`へ切り出す。全ページ共通の`pitha-kill-switch-panel`と各ページのコンポーネントでLitが二重にロードされることはない
