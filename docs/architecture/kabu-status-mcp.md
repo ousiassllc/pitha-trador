@@ -1,14 +1,27 @@
-# 読み取り専用ローカル kabu ステータス MCP
+# 読み取り専用 kabu ステータス MCP（Grok Bot コネクタ）
 
-同一 Windows PC 上のエージェントが、その PC の kabuステーションAPIの状態を尋ねるための仕様。実装・実行ファイル・テスト・MCPサーバーのコードは本仕様の範囲外であり、リポジトリには置かない。
+リモートの Grok Bot が、pitha-trador 用の MCP コネクタ経由で、Windows PC 上の kabuステーションAPIの状態を尋ねる仕様。Grok Bot はその PC では動かない。実装・実行ファイル・テスト・MCPサーバーのコードは本仕様の範囲外であり、リポジトリには置かない。
 
-公式のエラーコード表（文言の一次情報）は `docs/architecture/kabu-status-mcp-errors.md`。本ファイルは目的、ツール、案内文、パスワードの置き場、起動のしかたを定める。
+公式のエラーコード表（文言の一次情報）は `docs/architecture/kabu-status-mcp-errors.md`。本ファイルは目的、誰が誰に接続するか、ツール、案内文、パスワードの置き場、コネクタ登録を定める。
 
 ## 1. 目的
 
-kabuステーションAPIは kabuステーションが動いている Windows PC の localhost だけに待受する（既定 `http://localhost:18080/kabusapi`）。別のマシンからは届かない。状態を尋ねるエージェントも、その PC 上のプロセスとして動く必要がある。
+尋ねるのはリモートの Grok Bot である。Grok Bot は Windows PC の外にあり、kabuステーションの localhost には接続しない。
 
-将来の MCP は、その PC 上で次だけを答える。
+kabuステーションAPIは、その PC の localhost だけに待受する（既定 `http://localhost:18080/kabusapi`）。別のマシンからは届かない。届ける経路は次だけである。
+
+```mermaid
+flowchart LR
+    Grok["Grok Bot（リモート）"]
+    MCP["MCP サーバ（Windows PC）"]
+    Kabu["kabuステーションAPI\nlocalhost:18080"]
+    Grok -->|"登録済みの MCP コネクタ"| MCP
+    MCP -->|"localhost のみ"| Kabu
+```
+
+MCP サーバは kabuステーションと同じ Windows PC で動かし、Grok Bot のコネクタとして登録する。`localhost:18080` を呼ぶのはこの MCP サーバだけである。Grok Bot に localhost の URL を渡して、自分で叩かせない。
+
+将来の MCP が Grok Bot に返すのは、次だけである。
 
 - 指定したポートで何かが待受しているか（接続拒否は待受なし）
 - 待受しているとき、保存済みの API パスワードで `POST /token` できるか
@@ -20,9 +33,10 @@ kabuステーションAPIは kabuステーションが動いている Windows PC
 
 - 発注・訂正・取消をしない。注文系のパスは呼ばない
 - 銘柄登録・登録解除をしない（板登録の PUT を含む）。板・余力・残高・ランキングも取らない
-- APIパスワードをツール引数、戻り値、ログ、標準出力、標準エラーに出さない。発行されたトークンも同様に出さず、メモリから破棄する
-- パスワードをコマンド引数や環境変数で渡さない（エージェントの記録やプロセス一覧に残る）
-- リモートのホスト名や URL を受け付けない。接続先は localhost のみ
+- APIパスワードをツール引数、戻り値、ログ、標準出力、標準エラー、Grok Bot とのコネクタ記録に出さない。発行されたトークンも同様に出さず、メモリから破棄する
+- パスワードをコマンド引数、環境変数、コネクタのヘッダ、Grok Bot への登録メッセージに渡さない
+- Grok Bot から `localhost` / `127.0.0.1` / `::1` や kabuステーションのポートへ直接接続しない。コネクタに登録する URL を `http://localhost:18080/kabusapi` にしない
+- ツール引数で kabu のホストや URL を渡させない。MCP が叩く kabu のホストは localhost 固定
 - kabuステーションの起動、ログイン、設定変更を代行しない
 - 本リポジトリに MCP の実行ファイル、サーバ実装、テストを追加しない
 
@@ -30,7 +44,15 @@ kabuステーションAPIは kabuステーションが動いている Windows PC
 
 ## 3. 接続先
 
-ホストは `localhost` 固定。ポートは次の二つだけ。
+接続は二段で、呼び手は段ごとに違う。
+
+### 3.1 Grok Bot から MCP コネクタ
+
+Grok Bot が接続するのは、登録済みの MCP コネクタだけである。これは pitha-trador の状態確認用コネクタであり、kabuステーションの URL ではない。Grok Bot はクラウド側にいるため、PC のループバック（`localhost`、`127.0.0.1`、`::1`）へは届かない。登録する入口をループバックの kabu ポートにしてはならない。
+
+### 3.2 MCP サーバから kabuステーション
+
+localhost を呼ぶのは、Windows PC 上の MCP サーバだけである。ホストは `localhost` 固定。ポートは次の二つだけ。
 
 | 環境 | ポート | ベース URL | 既定 |
 |------|--------|------------|------|
@@ -41,7 +63,7 @@ kabuステーションAPIは kabuステーションが動いている Windows PC
 
 `localhost` は `::1` と `127.0.0.1` のどちらにも解決されうる（issue #295 のログは `[::1]:18080` への接続拒否）。IPv4 だけに固定しない。接続拒否は、名前解決の先に待受が無いという意味であり、ログイン状態はまだ分からない。
 
-公式 FAQ のとおり、kabuステーションAPIは kabuステーションと同一 IP からのリクエストだけを受け付ける。MCP プロセスは kabuステーションと同じ PC で動かす。
+公式 FAQ のとおり、kabuステーションAPIは kabuステーションと同一 IP からのリクエストだけを受け付ける。だから MCP プロセスは kabuステーションと同じ PC で動かす。リモートの Grok Bot が `localhost:18080` を直接呼ぶ構成にはしない。
 
 ## 4. 初期設定と状態の切り分け
 
@@ -65,11 +87,11 @@ kabuステーションAPIは kabuステーションが動いている Windows PC
 
 ## 5. ツール
 
-トランスポートは MCP の stdio。ツールは次の二つだけで、どちらも副作用の無い読み取り。
+Grok Bot と MCP の間は、登録したコネクタ（HTTPS の streamable HTTP または SSE）である。stdio ではない。ツールは次の二つだけで、どちらも副作用の無い読み取り。
 
 ### 5.1 `kabu_station_status`
 
-同じ PC の kabuステーションAPIが待受しているか、保存済みパスワードでトークンを発行できるかを確認する。発注も銘柄登録もしない。パスワードとトークンは返さない。
+Windows PC 上の MCP が、同じ PC の kabuステーションAPIが待受しているか、保存済みパスワードでトークンを発行できるかを確認し、結果だけをリモートの Grok Bot に返す。Grok Bot は localhost を呼ばない。発注も銘柄登録もしない。パスワードとトークンは返さない。
 
 引数は `environment` だけ。省略時は `production`。値は `production` または `verification`。それ以外、ホスト、URL、パスワード、トークンは受け取らない（追加フィールドは拒否）。
 
@@ -145,28 +167,21 @@ kabuステーションAPIは kabuステーションが動いている Windows PC
 - 値は `internal/repository/system.SecretsRepository` が `internal/config` の AES-256-GCM で暗号化している。将来実装は同じ復号を使い、別の鍵や平文ファイルを新設しない
 - SQLite は読み取り専用で開く。アプリが単一ライターである前提（`docs/architecture/er.md`）を壊さない。`secrets` への書き込み、他のテーブルの更新はしない
 - 行が無い、DB が無い、復号できない、はいずれも `password_unavailable`。理由がパスワード文字列そのものにならない範囲で区別してよい（未設定 / ファイルが読めない / 復号できない）
-- 平文は `POST /token` のボディを作る間だけメモリに置く。ログへ書かない。ツール結果へ書かない。パニック時の回復ログにも載せない
+- 平文は `POST /token` のボディを作る間だけ、Windows PC 上の MCP プロセスのメモリに置く。ログへ書かない。ツール結果へ書かない。Grok Bot に届くコネクタの記録にも書かない。パニック時の回復ログにも載せない
 - 成功・失敗のどちらの応答でも `Token` は返さない。成功時は破棄する
+- Grok Bot にパスワードを貼らせて登録しない。読む場所は PC 上の `secrets` だけである
 
-## 8. 将来のローカル stdio MCP の起動
+## 8. MCP サーバの置き場と Grok Bot への登録
 
-実装時のプロセスは、kabuステーションと同じ Windows ユーザーのセッションで、MCP クライアントの子プロセスとして stdio で起動する。MCP 自身は TCP 待受を持たない。リモートのエージェントがこの PC の `localhost:18080` に直接届く構成にはしない。
+MCP サーバは、kabuステーションと同じ Windows PC、同じユーザーのセッションで動かす。このプロセスだけが `localhost:18080`（検証時は 18081）へ接続する。実行ファイルの例は `pitha-kabu-status-mcp.exe`。このバイナリは今は無く、本仕様では追加しない。
 
-実行ファイル名の例は `pitha-kabu-status-mcp.exe`。この名前のバイナリは今は無く、本仕様の変更では追加しない。
+Grok Bot はリモートなので、PC 上の stdio 子プロセスとしては起動できない。Cursor のローカル `mcp.json` に `command` で exe を書く形は、この接続の登録方法ではない。
 
-Cursor のローカル MCP 設定に書くときの形（説明用。設定ファイルもリポジトリに追加しない）:
+登録は Grok Bot のコネクタとして行う。Grok Bot の会話で MCP サーバの追加を頼み、Grok Bot から到達できる MCP の URL を渡す。Grok Bot がその URL を確認し、コネクタとして保存する。新しいツールは次のメッセージから使える。渡す URL は MCP のエンドポイントであり、`http://localhost:18080/kabusapi` ではない。
 
-```json
-{
-  "mcpServers": {
-    "kabu-status": {
-      "command": "C:\\path\\to\\pitha-kabu-status-mcp.exe"
-    }
-  }
-}
-```
+Grok Bot はクラウドから PC のループバックへ届かない。コネクタの入口は、Grok Bot が到達できる HTTPS の MCP（streamable HTTP または SSE）にする。その入口の実体は Windows PC 上の MCP プロセスで、プロセスが kabu の localhost を呼ぶ。入口をどう公開するかは本仕様では実装しない。公開した入口を kabu のポートそのものにしてはならない。
 
-`args` と `env` に API パスワードを置かない。ポートの既定は 18080。検証ポートはツール引数 `environment=verification` のときだけ使う。
+`args`、`env`、コネクタのヘッダ、登録時のチャットに API パスワードを置かない。ポートの既定は 18080。検証ポートはツール引数 `environment=verification` のときだけ使う。
 
 ## 9. 関連 issue（文脈のみ）
 
@@ -179,4 +194,5 @@ Cursor のローカル MCP 設定に書くときの形（説明用。設定フ�
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
-| 1.0 | 2026-10-03 | 新規作成 | 同一 PC 上の読み取り専用状態問い合わせの仕様。実装は範囲外 |
+| 1.0 | 2026-10-03 | 新規作成 | 読み取り専用の状態問い合わせの仕様。実装は範囲外 |
+| 1.1 | 2026-10-03 | 問い合わせ元をリモートの Grok Bot に改めた。Grok Bot は登録済み MCP コネクタ経由で pitha-trador に接続し、localhost は Windows PC 上の MCP だけが呼ぶ | 同一 PC 上のエージェントが localhost を叩く、という接続の記述が誤りだったため |

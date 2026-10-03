@@ -288,3 +288,4 @@ handler → service → repository → domain
 | 1.37 | 2026-10-02 | §6（`integrations.md`）: kabuステーションAPIトークン発行失敗時の継続起動・バックグラウンド再試行・エラーコード別の原因表示（市況データ接続バナー）を追記 | issue #295 |
 | 1.38 | 2026-10-03 | §10 通信フロー（`overview/flows.md`）: `/setup`がSettingsと同じ接続先一覧・モーダル（`ConnectionList`）を使うことを追記 | issue #302 |
 | 1.39 | 2026-10-03 | §5（`integrations.md`）に、読み取り専用ローカル kabu ステータス MCP の仕様（`docs/architecture/kabu-status-mcp.md`）への参照を追加。実装・実行ファイルは含まない | 同一PC上のエージェントが localhost の kabuステーションAPI状態を尋ねる仕様を既存構成へ追加 |
+| 1.40 | 2026-10-03 | §5 の状態問い合わせを、リモートの Grok Bot が Windows PC 上の MCP コネクタ経由で接続する記述へ改めた | Grok Bot は PC 上に無く、localhost は PC 上の MCP だけが呼ぶ。1.39 の「同一PC上のエージェント」は当時の誤記 |
