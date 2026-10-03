@@ -3,11 +3,14 @@ package marketdata_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/httpbody"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
@@ -133,5 +136,18 @@ func TestClient_Start_KeepsPreviousTokenOnReissueFailure(t *testing.T) {
 	token, ok := client.Token()
 	if !ok || token != "tok-initial" {
 		t.Errorf("Token() = (%q, %v), want (%q, true) after failed reissues", token, ok, "tok-initial")
+	}
+}
+
+func TestClient_IssueToken_RejectsOversizedResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", httpbody.DefaultMaxBytes+1)))
+	}))
+	defer server.Close()
+
+	client := marketdata.NewClient(marketdata.Config{BaseURL: server.URL, APIPassword: "secret"})
+	_, err := client.IssueToken(context.Background())
+	if !errors.Is(err, httpbody.ErrTooLarge) {
+		t.Fatalf("IssueToken err = %v, want httpbody.ErrTooLarge", err)
 	}
 }

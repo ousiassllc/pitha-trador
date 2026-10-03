@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/httpbody"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
 
@@ -261,7 +262,7 @@ func (c *Client) do(ctx context.Context, method, path, token string, body, out a
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	respBody, readErr := io.ReadAll(resp.Body)
+	respBody, readErr := httpbody.ReadAll(resp.Body, httpbody.DefaultMaxBytes)
 	if readErr != nil {
 		err = fmt.Errorf("marketdata: read response body: %w", readErr)
 		return err
