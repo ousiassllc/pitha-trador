@@ -134,3 +134,23 @@ func TestClient_Start_RetriesAfterInitialFailure(t *testing.T) {
 	}
 	t.Fatal("no token obtained by background retry after the initial failure")
 }
+
+// issue #305: 4001007 (ログイン認証エラー) is the "is kabuステーション logged in?"
+// side of the official error table, even when 「APIを利用する」 is on. Its
+// guidance must walk the operator through the login-state check and must not
+// blame the API settings / password, which 4001008 / 4001013 report instead.
+func TestTokenStatus_NotLoggedInGuidanceIsLoginOnly(t *testing.T) {
+	for _, code := range []int{4001007, 4001017} {
+		got := marketdata.TokenStatus{Issue: marketdata.TokenIssueNotLoggedIn, Code: code}.Guidance()
+		for _, want := range []string{"ログイン", "ログアウト", "緑"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("code %d: Guidance = %q, want it to mention %q", code, got, want)
+			}
+		}
+		for _, banned := range []string{"KABU_API_PASSWORD", "APIシステム設定", "起動していること"} {
+			if strings.Contains(got, banned) {
+				t.Errorf("code %d: Guidance = %q, must not mention %q (API-setting/password cause)", code, got, banned)
+			}
+		}
+	}
+}

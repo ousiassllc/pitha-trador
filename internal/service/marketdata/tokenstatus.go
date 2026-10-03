@@ -50,7 +50,7 @@ func (s TokenStatus) Guidance() string {
 	case TokenIssueUnreachable:
 		return "kabuステーションAPIに接続できません。kabuステーションが起動していること、「APIシステム設定」で「APIを利用する」が有効なこと（変更後はkabuステーションの再起動が必要）を確認してください。"
 	case TokenIssueNotLoggedIn:
-		return "kabuステーションにログインしていません（またはセッションが切れています）。kabuステーションにログインしてください。"
+		return "kabuステーションにログインしていません（またはセッションが切れています）。kabuステーション右上のAPIアイコンが緑か確認し、一度ログアウトして再ログインしてください（再ログイン後に再発行します）。「APIを利用する」の設定不備は4001008、APIパスワード不正は4001013で別に通知されます。"
 	case TokenIssueAPIDisabled:
 		return "kabuステーションのAPI利用設定が完了していません。「APIシステム設定」で「APIを利用する」を有効にしてください。"
 	case TokenIssueBadPassword:
