@@ -101,6 +101,23 @@ func TestSettingsPage_ModalsAreLabelledDialogs(t *testing.T) {
 	}
 }
 
+// A modal <dialog> makes everything outside it inert, `#toast-region`
+// included, so each dialog must carry its own toast region for failure toasts
+// to stay dismissible (issue #353).
+func TestSettingsPage_EachModalHasItsOwnToastRegion(t *testing.T) {
+	body := renderSettings(t, pages.SettingsProps{Connections: testConnections()})
+	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log"} {
+		start := strings.Index(body, `<dialog id="`+id+`"`)
+		if start < 0 {
+			t.Fatalf("no <dialog id=%s>", id)
+		}
+		dialog := body[start : start+strings.Index(body[start:], "</dialog>")]
+		if got := strings.Count(dialog, "data-toast-region"); got != 1 {
+			t.Errorf("modal %s has %d data-toast-region elements, want 1", id, got)
+		}
+	}
+}
+
 // The エラーログ section is a plain GET form to the download API (FR-ERRLOG-1):
 // 7 days and ERROR-only preselected, HTMX kept out via hx-disable.
 func TestSettingsPage_ErrorLogPanelIsPlainDownloadForm(t *testing.T) {

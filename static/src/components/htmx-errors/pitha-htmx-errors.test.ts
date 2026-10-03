@@ -162,3 +162,65 @@ describe('toast region above modal dialogs', () => {
     expect(calls).toEqual([]);
   });
 });
+
+// issue #353: an open modal dialog makes everything outside it inert, so
+// `#toast-region` cannot be clicked; toasts must land in the dialog's own region.
+describe('toast region inside an open modal dialog', () => {
+  const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  let dialog: HTMLElement;
+  let inner: HTMLElement;
+
+  beforeEach(() => {
+    document.body.insertAdjacentHTML(
+      'afterbegin',
+      '<dialog id="modal" data-modal><div data-toast-region></div></dialog>',
+    );
+    dialog = document.getElementById('modal') as HTMLElement;
+    inner = dialog.querySelector('[data-toast-region]') as HTMLElement;
+    watchToastRegion(inner);
+  });
+
+  const innerTexts = () =>
+    [...inner.querySelectorAll('[data-toast-message]')].map((el) => el.textContent);
+
+  test('a script toast lands in the dialog region while the modal is open, and its close button works', () => {
+    dialog.setAttribute('open', '');
+    fire('htmx:sendError');
+
+    expect(innerTexts()).toEqual(['サーバーに接続できませんでした。']);
+    expect(toastTexts()).toEqual([]);
+
+    inner.querySelector<HTMLElement>('[data-toast-dismiss]')?.click();
+    expect(innerTexts()).toEqual([]);
+  });
+
+  test('a closed dialog is ignored: the toast goes to #toast-region', () => {
+    fire('htmx:sendError');
+
+    expect(toastTexts()).toEqual(['サーバーに接続できませんでした。']);
+    expect(innerTexts()).toEqual([]);
+  });
+
+  test('an error fragment from htmx is retargeted to the open dialog region', () => {
+    dialog.setAttribute('open', '');
+    const detail = fire('htmx:beforeSwap', { xhr: fakeXhr(409, TOAST_HTML), shouldSwap: true });
+    expect(detail.target).toBe(inner);
+    expect(detail.shouldSwap).toBe(true);
+  });
+
+  test('an error fragment keeps the configured target when no modal is open', () => {
+    const detail = fire('htmx:beforeSwap', { xhr: fakeXhr(409, TOAST_HTML), shouldSwap: true });
+    expect(detail.target).toBeUndefined();
+  });
+
+  test('a toast in the dialog region never touches the page popover logic', async () => {
+    let calls = 0;
+    (inner as HTMLElement & { showPopover(): void }).showPopover = () => {
+      calls += 1;
+    };
+    dialog.setAttribute('open', '');
+    fire('htmx:sendError');
+    await flush();
+    expect(calls).toBe(0);
+  });
+});

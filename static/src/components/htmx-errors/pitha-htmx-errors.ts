@@ -9,10 +9,13 @@
 //     gets a "reload the page" toast;
 //   - requests that never got a response (`htmx:sendError`, `htmx:timeout`);
 //   - dismissing toasts (close button, auto-dismiss);
-//   - keeping `#toast-region` visible above a modal `<dialog>`: `showModal()`
-//     puts the dialog in the top layer, which no z-index can beat, so the region
-//     is a `popover="manual"` and is re-shown (moved to the top of the top layer)
-//     whenever a toast lands in it (issue #321).
+//   - keeping toasts operable above a modal `<dialog>`: `showModal()` puts the
+//     dialog in the top layer, which no z-index can beat, and makes everything
+//     outside it inert. `#toast-region` is a `popover="manual"` re-shown (moved
+//     to the top of the top layer) whenever a toast lands in it (issue #321), but
+//     being outside the dialog it stays inert, so while a modal is open toasts go
+//     to the `[data-toast-region]` inside that dialog instead, where the close
+//     button and text selection work (issue #353).
 // The toast markup lives only in templ (`#toast-template`, atoms.Toast).
 
 import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
@@ -20,14 +23,23 @@ import { logger } from '../lib/logger';
 
 const TOAST_MARKER = 'data-toast';
 const DISMISS_AFTER_MS = 8000;
+const REGIONS = '#toast-region, [data-toast-region]';
 
 interface ResponseDetail {
   xhr?: XMLHttpRequest;
   shouldSwap?: boolean;
+  target?: Element;
 }
 
+/** The toast region inside the topmost open modal `<dialog>`, if any (`molecules.Modal` renders one). */
+function dialogRegion(): HTMLElement | null {
+  const regions = document.querySelectorAll<HTMLElement>('dialog[open] [data-toast-region]');
+  return regions.item(regions.length - 1);
+}
+
+/** Where a toast must land to stay operable: an open modal blocks everything outside it, `#toast-region` included. */
 function region(): HTMLElement | null {
-  return document.getElementById('toast-region');
+  return dialogRegion() ?? document.getElementById('toast-region');
 }
 
 function carriesToast(xhr: XMLHttpRequest | undefined): boolean {
@@ -61,12 +73,17 @@ function statusMessage(status: number): string {
   return `操作を完了できませんでした（HTTP ${status}）。`;
 }
 
-/** `htmx:beforeSwap`: an error response without a toast fragment is never swapped into `#toast-region`. */
+/** `htmx:beforeSwap`: an error response without a toast fragment is never swapped into `#toast-region`; one with a toast lands in the open modal's region instead (issue #353). */
 export function onBeforeSwap(event: Event): void {
   const detail = (event as CustomEvent<ResponseDetail>).detail;
-  if (isErrorStatus(detail.xhr) && !carriesToast(detail.xhr)) {
+  if (!isErrorStatus(detail.xhr)) return;
+  if (!carriesToast(detail.xhr)) {
     detail.shouldSwap = false;
+    return;
   }
+  // htmx's `responseHandling` targets `#toast-region`, which an open modal dialog makes inert.
+  const inDialog = dialogRegion();
+  if (inDialog) detail.target = inDialog;
 }
 
 /** `htmx:responseError`: generic toast when the server sent no toast of its own. */
@@ -93,9 +110,9 @@ export function onClick(event: Event): void {
   target.closest('[data-toast-dismiss]')?.closest('[data-toast]')?.remove();
 }
 
-/** Re-shows the popover so it sits above any modal dialog opened since it was last shown. No-op without Popover API support. */
+/** Re-shows the popover so it sits above any modal dialog opened since it was last shown. No-op without Popover API support, and for a region inside a dialog (already above the page). */
 function raiseToastRegion(target: HTMLElement): void {
-  if (typeof target.showPopover !== 'function') return;
+  if (typeof target.showPopover !== 'function' || target.closest('dialog')) return;
   if (target.matches(':popover-open')) target.hidePopover();
   target.showPopover();
 }
@@ -127,8 +144,7 @@ export function init(): void {
   document.addEventListener('htmx:sendError', onNoResponse);
   document.addEventListener('htmx:timeout', onNoResponse);
   document.addEventListener('click', onClick);
-  const target = region();
-  if (target) watchToastRegion(target);
+  for (const target of document.querySelectorAll<HTMLElement>(REGIONS)) watchToastRegion(target);
 }
 
 init();
