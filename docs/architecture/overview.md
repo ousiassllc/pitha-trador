@@ -120,6 +120,7 @@ pitha-trador/
 │   │   ├── backup/                # 日次SQLiteバックアップ（daily 90日 + weekly gzip、`requirements/non-functional.md` §3）
 │   │   ├── retention/             # jobs / market_snapshotsの期限切れ行パージ（`requirements/non-functional.md` §3）
 │   │   └── scheduler/             # 自前Workerプール定義・周期ジョブ登録
+│   │       ├── updatecheck/       # アップデート確認ジョブ（周期確認の取得失敗・安全ゲート保留を指数バックオフで再試行。`scheduler`の行数上限のため分離、§9）
 │   │       ├── maintenance/       # 日次ハウスキーピング（バックアップ・データ保持パージ・ログアーカイブ）のcatch-up実行。最終成功日をruntime_settingsへ保持し、起動時と10分ごとに未実行分を実行
 │   │       └── maintenanceflow/   # テスト専用: バックアップ・データ保持パージ・ログローテーションの各ジョブ呼び出しの回帰テスト（行数上限のためschedulerから分離、#248）
 │   ├── router/                    # SSR + API ルーティング定義（Huma登録含む）。`web/handler/**`・`web/apierror`・`web/insightapi`・`web/middleware`・`config`・`static/src`（go:embed）を参照する
@@ -128,10 +129,12 @@ pitha-trador/
 │   │   ├── router_middleware.go   # middlewareの適用順
 │   │   ├── router_routes.go       # ルート登録
 │   │   ├── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
+│   │   ├── ws_listener.go         # `WebSocketOnly`（`/ws/...`のUpgradeだけを通すラッパー。desktopがWails AssetServerと別のloopbackリスナーで使う）
 │   │   ├── analysisflow/          # テスト専用: 分析系ルート（ポリシー提案）の回帰テスト（行数上限のためrouterから分離、#248）
 │   │   ├── apiroutes/             # テスト専用: `/api/v1`のOpenAPI設定（servers・スキーマリンク）とInsight APIルート登録の回帰テスト（行数上限のためrouterから分離、#314）
 │   │   ├── staticroute/           # テスト専用: `/static`配信（vendor・esbuild成果物・`PITHA_STATIC_DIR`上書き・Swagger有効化）の回帰テスト（行数上限のためrouterから分離、#314）
-│   │   └── systemheader/          # テスト専用: HeaderのKill Switchパネルと`/api/v1/system/status`の許可アクションの回帰テスト（行数上限のためrouterから分離、#314）
+│   │   ├── systemheader/          # テスト専用: HeaderのKill Switchパネルと`/api/v1/system/status`の許可アクションの回帰テスト（行数上限のためrouterから分離、#314）
+│   │   └── wslistener/            # テスト専用: `WebSocketOnly`の統合テスト（行数上限のためrouterから分離）
 │   └── web/
 │       ├── apierror/              # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
 │       ├── handler/               # Ginハンドラ。直下は scanner.go, performance.go, calibration.go, policy_proposals.go, swagger.go（一覧・分析系）。それ以外は責務別サブパッケージ（#245）
@@ -165,7 +168,7 @@ pitha-trador/
 
 ### サブパッケージ単位の責務規約
 
-レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`router/analysisflow`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
+レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`router/analysisflow`・`router/wslistener`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
 `repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済みで、上のツリーは実装と一致している（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
 
@@ -219,7 +222,7 @@ handler → service → repository → domain
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7） | `internal/service/selfimprove` |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
-| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`maintenanceflow`はテスト専用 | `internal/service/scheduler`（`maintenance`, `maintenanceflow`） |
+| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`updatecheck`はアップデート確認ジョブの再試行、`maintenanceflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`） |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12）。HTTP/WebSocket公開は`web/handler/activity` | `internal/service/activityfeed`・`internal/web/handler/activity` |
 | Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8） | `internal/service/backtest` |
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
@@ -294,3 +297,4 @@ handler → service → repository → domain
 | 1.40 | 2026-10-03 | §3の`.linterlyignore`方針に、ライセンス全文`LICENSE`（手書きソースではない定型文）を許容する除外として追記 | issue #316 |
 | 1.41 | 2026-10-03 | §5・§6（`overview/integrations.md`）: Settings画面の`JEV_BASE_URL`/`JEV_MODEL`の入力先を、廃止済みの折りたたみ「詳細設定（任意）」からJev接続先モーダル内の任意項目へ訂正（1.34の「詳細設定」は当時の記録）。「上書き値があるときだけ詳細設定を開く」記述を削除 | issue #315（#302 とのdoc-drift解消） |
 | 1.42 | 2026-10-03 | §2の「DBアクセス」行を、sqlc前提から実装どおりの`database/sql`＋手書きSQL（`internal/repository/**`）へ訂正 | issue #317（リポジトリにsqlcの設定・生成コード・依存が存在しない） |
+| 1.43 | 2026-10-03 | §3のツリー・テスト専用ディレクトリ一覧・§4のScheduler/Worker行に、実在する`router/ws_listener.go`・`router/wslistener`（テスト専用）・`scheduler/updatecheck`を追記 | issue #319 |

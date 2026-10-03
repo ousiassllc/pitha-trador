@@ -48,6 +48,7 @@ static/
     │   ├── activity-feed/         pitha-activity-feed.ts
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
+    │   ├── modal/                 pitha-modal.ts（Litではない。`molecules.Modal`の`<dialog>`開閉・フォーカス復帰・URLハッシュ自動オープン）
     │   └── lib/
     │       ├── api.ts
     │       ├── ws.ts / ws-status.ts    # WebSocket接続と接続状態表示
@@ -200,3 +201,4 @@ const (
 | 1.30 | 2026-10-03 | molecules に`Modal`・`SettingsCard`（`ConnectionStatus`）、organisms に`ConnectionList`を追加し、`SettingsPage`/`SetupPage`を接続先別の一覧＋モーダル構成へ変更（「詳細設定（任意）」を廃止）。§4にモーダルのパターン、`static/src/components/modal/pitha-modal.ts`を追記 | issue #302 |
 | 1.31 | 2026-10-03 | organismsに`ScanPanel`を追加し、`ScannerPage`にスキャン状況パネル（ファネル件数・銘柄一覧・除外/欠損理由・手動更新）を置く | issue #303 |
 | 1.32 | 2026-10-03 | atomsに`Button`/`ButtonLink`/`Input`を追加し、各テンプレートの直書きボタン・入力を置き換え | issue #309 |
+| 1.33 | 2026-10-03 | §2のディレクトリ構成図に`static/src/components/modal/`（`pitha-modal.ts`）を追記 | issue #319 |
