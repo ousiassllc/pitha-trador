@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import './pitha-htmx-errors';
+import { watchToastRegion } from './pitha-htmx-errors';
 
 const TOAST_HTML =
   '<div data-toast role="alert"><span data-toast-message></span><button type="button" data-toast-dismiss>×</button></div>';
@@ -106,5 +106,59 @@ describe('dismissing', () => {
     document.querySelector<HTMLElement>('[data-toast-dismiss]')?.click();
 
     expect(toastTexts()).toEqual(['サーバーに接続できませんでした。']);
+  });
+});
+
+// issue #321: `dialog.showModal()` puts the dialog in the top layer, above any
+// z-index, so the toast region must be re-shown as a popover when a toast lands.
+describe('toast region above modal dialogs', () => {
+  type PopoverEl = HTMLElement & { showPopover(): void; hidePopover(): void };
+  const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  let calls: string[];
+
+  beforeEach(() => {
+    calls = [];
+    const el = document.getElementById('toast-region') as PopoverEl;
+    let open = false;
+    el.showPopover = () => {
+      open = true;
+      calls.push('show');
+    };
+    el.hidePopover = () => {
+      open = false;
+      calls.push('hide');
+    };
+    el.matches = ((selector: string) => selector === ':popover-open' && open) as typeof el.matches;
+    watchToastRegion(el);
+  });
+
+  test('a toast shown by script opens the region popover', async () => {
+    fire('htmx:sendError');
+    await flush();
+    expect(calls).toEqual(['show']);
+  });
+
+  test('an htmx beforeend swap of a toast fragment re-raises an already open popover', async () => {
+    const region = document.getElementById('toast-region') as PopoverEl;
+    fire('htmx:sendError');
+    await flush();
+    calls.length = 0;
+
+    region.insertAdjacentHTML('beforeend', TOAST_HTML);
+    await flush();
+
+    expect(calls).toEqual(['hide', 'show']);
+  });
+
+  test('removing a toast does not touch the popover', async () => {
+    const region = document.getElementById('toast-region') as PopoverEl;
+    fire('htmx:sendError');
+    await flush();
+    calls.length = 0;
+
+    region.querySelector('[data-toast]')?.remove();
+    await flush();
+
+    expect(calls).toEqual([]);
   });
 });
