@@ -18,7 +18,8 @@ import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
-import { resolveWsUrl, WsClient } from '../lib/ws';
+import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { renderWsDisconnected } from '../lib/ws-status';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/symbols/{symbol}/candles`
 // item shape (internal/web/handler/symbol.candleOutput).
@@ -90,6 +91,7 @@ export class PithaPriceChart extends LitElement {
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
 
   @state() private error: string | null = null;
+  @state() private wsStatus: WsStatus = 'connecting';
 
   private readonly containerRef = createRef<HTMLDivElement>();
   private chart: IChartApi | null = null;
@@ -133,9 +135,15 @@ export class PithaPriceChart extends LitElement {
     this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', color: '#9ca3af' });
   }
 
-  private async loadInitial(): Promise<void> {
+  // `background` marks a resync the page fires by itself (WS reconnect), so
+  // it is not counted as operator activity (FR-RISK-6, flows.md §10.4).
+  private async loadInitial(background = false): Promise<void> {
+    if (!this.candlesUrl) {
+      logger.error('pitha-price-chart: candles-url is not set');
+      return;
+    }
     try {
-      const response = await get<CandlesAPIResponse>(this.candlesUrl);
+      const response = await get<CandlesAPIResponse>(this.candlesUrl, { background });
       this.applyCandles(response.candles);
       this.error = null;
     } catch (err) {
@@ -162,7 +170,23 @@ export class PithaPriceChart extends LitElement {
   }
 
   private subscribeWs(): void {
+    if (!this.wsUrl) {
+      logger.error('pitha-price-chart: ws-url is not set');
+      return;
+    }
+    // Ticks build bars from the client clock, so bars of the minutes the
+    // socket was down are missing until the candles are re-fetched (#336).
+    let wasDisconnected = false;
     this.wsClient = new WsClient<SymbolMessage>(resolveWsUrl(this.wsUrl), {
+      onStatusChange: (status) => {
+        this.wsStatus = status;
+        if (isWsDisconnected(status)) {
+          wasDisconnected = true;
+        } else if (status === 'open' && wasDisconnected) {
+          wasDisconnected = false;
+          void this.loadInitial(true);
+        }
+      },
       onMessage: (message) => {
         if (message.type === 'tick') {
           this.applyTick(message);
@@ -221,6 +245,7 @@ export class PithaPriceChart extends LitElement {
   protected override render() {
     return html`
       <div ${ref(this.containerRef)} class="pitha-price-chart-container"></div>
+      ${renderWsDisconnected(this.wsStatus)}
       ${this.error ? html`<p class="pitha-price-chart-error" role="alert">${this.error}</p>` : ''}
     `;
   }
