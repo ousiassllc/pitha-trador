@@ -53,6 +53,7 @@ pitha-trador/
 │   │   └── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
 │   ├── config/                   # config/*.yamlの型付きローダー、AES-256-GCM秘密情報ヘルパー（他の内部パッケージに依存しない）
 │   ├── safego/                   # FR-SCHED-6 常駐goroutineのpanic回復（`Recover`/`Run`/`Try`/`Loop`。panicをスタック付きでslogに記録し、ループは次サイクルへ継続。他の内部パッケージに依存しない）
+│   ├── httpbody/                 # 外部API応答ボディの上限付き読み取り（`ReadAll`・`DefaultMaxBytes`=4 MiB・`ErrTooLarge`。標準ライブラリのみに依存。`service/marketdata`・`service/jev`が使う）
 │   ├── logging/                  # slog JSON出力の日次ローテーション（rotate.go）・30日超のgzipアーカイブ（archive.go）・エラーログの抽出とマスク（export.go・export_mask.go、読み取り専用。`requirements/non-functional.md` §5・§5.3）
 │   ├── supervisor/               # --supervise起動時の子プロセス監視・指数バックオフ再起動（cmd/desktopのみが利用。非機能§3）
 │   ├── singleinstance/           # ファイルロックによる多重起動ガード（cmd/desktopのみが利用。OSがプロセス終了時にロックを解放）
@@ -201,6 +202,7 @@ handler → service → repository → domain
 - `domain/`: 他レイヤーに依存しない。純粋なビジネスロジック（例: Risk Engineのしきい値判定ロジック自体はdomainに置き、DB/HTTPアクセスはrepository/serviceに分離）
 - `repository/**`: `domain/` のみに依存（`sqlutil`は標準ライブラリのみ、`sqlitedb`は標準ライブラリ・外部ライブラリ・`domain`・マイグレーションSQLを`go:embed`する最上位`db`パッケージのみ）。例外として`SecretsRepository`（issue #57、`repository/system`）のみ`internal/config`のAES-256-GCMヘルパー（依存を持たない、`domain`と同格の基盤パッケージ）にも依存する。この例外は`system`パッケージ内に閉じ、`sqlutil`等の共有サブパッケージや他のサブパッケージへ広げない。サブパッケージ間の依存方向は前節の規約に従う
 - `internal/safego`: 標準ライブラリのみに依存し、`internal/config`・`domain`と同格の基盤パッケージ。`service/`・`bootstrap`・`cmd/server`のいずれからも参照できる（常駐goroutineのpanic回復、FR-SCHED-6）
+- `internal/httpbody`: 標準ライブラリのみに依存し、`internal/safego`と同格の基盤パッケージ。`service/`から参照できる（kabuステーション・Jevの応答ボディを4 MiBで打ち切る。超過は`ErrTooLarge`。連携側の扱いは`overview/integrations.md` §5・§6）。Slack Webhookのエラー応答は`httpbody`を使わず`service/notify`内で先頭4 KiBに切り詰めて（`...(truncated)`付き）エラー文に埋め込む
 - `service/**`: `domain/`, `repository/**` に依存。`marketdata`/`jev`/`assist`など外部I/OはこのレイヤーでHTTPクライアントとして実装する
 - `web/**`（`web/handler/**`を含む）: `service/`, `domain/` に依存（基盤パッケージ`internal/config`・`internal/version`も、`web/handler/{symbol,settings,system}`と`organisms`が参照する）。`repository/**` を直接使わない（`.golangci.yml` の depguard `web-no-repository` が `internal/web/**` から `internal/repository` **および全サブパッケージ**（`pkg`はプレフィックス一致）への import を lint で拒否する。サブパッケージ追加でルールの書き換えは不要）。**depguardが強制するのはこの`web` → `repository/**`の1方向のみ**で、`repository`・`web/handler`・`bootstrap`のサブパッケージ間（兄弟同士）のimport禁止、`repository`の依存先の制限、`router`・`bootstrap`の参照範囲などは規約でありlintでは強制されない（レビューで担保する）。repositoryが返すセンチネルエラーのうちhandlerが分類する必要があるもの（例: `domain.ErrPositionNotFound`）は`domain/`に定義し、repositoryはそれを返す
 - `bootstrap/**`・`cmd/*`: 組み立て役として全レイヤー（`repository/**`含む）を参照してよい。`bootstrap`の子パッケージは親を参照しない（`internal/config`・`internal/safego`等の基盤パッケージは参照してよい）
@@ -298,3 +300,4 @@ handler → service → repository → domain
 | 1.41 | 2026-10-03 | §5・§6（`overview/integrations.md`）: Settings画面の`JEV_BASE_URL`/`JEV_MODEL`の入力先を、廃止済みの折りたたみ「詳細設定（任意）」からJev接続先モーダル内の任意項目へ訂正（1.34の「詳細設定」は当時の記録）。「上書き値があるときだけ詳細設定を開く」記述を削除 | issue #315（#302 とのdoc-drift解消） |
 | 1.42 | 2026-10-03 | §2の「DBアクセス」行を、sqlc前提から実装どおりの`database/sql`＋手書きSQL（`internal/repository/**`）へ訂正 | issue #317（リポジトリにsqlcの設定・生成コード・依存が存在しない） |
 | 1.43 | 2026-10-03 | §3のツリー・テスト専用ディレクトリ一覧・§4のScheduler/Worker行に、実在する`router/ws_listener.go`・`router/wslistener`（テスト専用）・`scheduler/updatecheck`を追記 | issue #319 |
+| 1.44 | 2026-10-03 | §3のツリー・レイヤー依存ルールに基盤パッケージ`internal/httpbody`（外部API応答ボディの4 MiB上限付き読み取り）を追記。`overview/integrations.md` §5・§6にkabuステーション・Jevの応答ボディ上限と超過時（`httpbody.ErrTooLarge`）の扱いを追記し、Slack Webhookのエラー応答は`httpbody`ではなく`service/notify`内で先頭4 KiBに切り詰めることを明記 | issue #333（#313・#324） |
