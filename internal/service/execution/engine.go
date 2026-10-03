@@ -36,11 +36,13 @@ var (
 	// ErrLimitPriceRequired is returned by Enter when the resolved order
 	// type is LIMIT but req.LimitPrice is nil.
 	ErrLimitPriceRequired = errors.New("execution: limit order requires a limit price")
-	// ErrInvalidPrice is returned by OnSnapshot, TryFillPending and Close
-	// when the price to fill/mark/close at is not finite and positive: a
-	// missing board price (0) must never become a fill, a mark or an exit
-	// (issue #173).
+	// ErrInvalidPrice is returned by Enter, OnSnapshot, TryFillPending and
+	// Close when the price to fill/mark/close at (or Enter's limit price)
+	// is not finite and positive: a missing board price (0) must never
+	// become a fill, a mark or an exit (issues #173, #342).
 	ErrInvalidPrice = errors.New("execution: price must be positive")
+	// ErrInvalidQuantity is returned by Enter when req.Quantity <= 0 (#342).
+	ErrInvalidQuantity = errors.New("execution: quantity must be positive")
 )
 
 // validPrice reports whether p can be used to fill, mark or close at.

@@ -159,3 +159,33 @@ func TestEngine_TryFillPending_RejectsNonPositivePrice(t *testing.T) {
 		t.Fatalf("TryFillPending(price=0) = ok %v, err %v; want unfilled ErrInvalidPrice", ok, err)
 	}
 }
+
+// Enter must reject what #173 rejects elsewhere, plus quantity <= 0 (#342).
+func TestEngine_Enter_RejectsInvalidPriceOrQuantity(t *testing.T) {
+	nan, zero := math.NaN(), 0.0
+	cases := map[string]struct {
+		req  execution.EntryRequest
+		want error
+	}{
+		"price 0":           {execution.EntryRequest{Quantity: 100, Price: 0}, execution.ErrInvalidPrice},
+		"price NaN":         {execution.EntryRequest{Quantity: 100, Price: nan}, execution.ErrInvalidPrice},
+		"price +Inf":        {execution.EntryRequest{Quantity: 100, Price: math.Inf(1)}, execution.ErrInvalidPrice},
+		"limit price 0":     {execution.EntryRequest{Quantity: 100, Price: 2000, OrderType: domain.OrderTypeLimit, LimitPrice: &zero}, execution.ErrInvalidPrice},
+		"limit price NaN":   {execution.EntryRequest{Quantity: 100, Price: 2000, OrderType: domain.OrderTypeLimit, LimitPrice: &nan}, execution.ErrInvalidPrice},
+		"quantity 0":        {execution.EntryRequest{Quantity: 0, Price: 2000}, execution.ErrInvalidQuantity},
+		"quantity negative": {execution.EntryRequest{Quantity: -100, Price: 2000}, execution.ErrInvalidQuantity},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			te := newTestEngine(t, execution.DefaultConfig())
+			tc.req.Signal, tc.req.Now = longSignal(te.instrument.ID), time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
+			ctx := context.Background()
+			if _, err := te.engine.Enter(ctx, tc.req); !errors.Is(err, tc.want) {
+				t.Fatalf("Enter() err = %v, want %v", err, tc.want)
+			}
+			if _, err := te.positions.GetOpenByInstrument(ctx, te.instrument.ID); !errors.Is(err, domain.ErrPositionNotFound) {
+				t.Errorf("GetOpenByInstrument err = %v, want ErrPositionNotFound", err)
+			}
+		})
+	}
+}
