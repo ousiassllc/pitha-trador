@@ -14,6 +14,11 @@ import (
 
 const defaultHTTPTimeout = 10 * time.Second
 
+// maxErrorBodyBytes caps how much of a non-2xx webhook response is read
+// into the returned error, so a misconfigured or hostile endpoint cannot
+// make the notifier buffer or log an unbounded body.
+const maxErrorBodyBytes = 4 << 10
+
 // reasonLabels renders every domain.KillReason* value as the Japanese
 // phrase non-functional.md §5.2's alert list uses, so a Slack message
 // reads naturally instead of showing the raw snake_case reason string.
@@ -91,10 +96,20 @@ func (n *SlackNotifier) PostMessage(ctx context.Context, text string) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("notify: slack webhook returned status %d: %s", resp.StatusCode, respBody)
+		return fmt.Errorf("notify: slack webhook returned status %d: %s", resp.StatusCode, readErrorBody(resp.Body))
 	}
 	return nil
+}
+
+// readErrorBody returns at most maxErrorBodyBytes of body for embedding in
+// an error, marking truncation. A read failure keeps whatever was read so
+// the caller still reports the HTTP status.
+func readErrorBody(body io.Reader) string {
+	data, _ := io.ReadAll(io.LimitReader(body, maxErrorBodyBytes+1))
+	if len(data) > maxErrorBodyBytes {
+		return string(data[:maxErrorBodyBytes]) + "...(truncated)"
+	}
+	return string(data)
 }
 
 // KillSwitchTriggered implements internal/service/risk.Notifier: it
