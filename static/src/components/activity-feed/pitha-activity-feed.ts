@@ -13,49 +13,16 @@ import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
-
-// Mirrors docs/api/endpoints.md §5 `GET /api/v1/activity` shapes.
-export interface QueueStatus {
-  queue: string;
-  pending: number;
-  running: number;
-  failed_recent: number;
-}
-
-export interface ActivityEvent {
-  type: string;
-  timestamp: string;
-  queue?: string;
-  symbol?: string;
-  detail: string;
-  latency_ms?: number;
-}
-
-interface ActivityAPIResponse {
-  queues: QueueStatus[];
-  events: ActivityEvent[];
-  as_of: string;
-}
-
-// Mirrors docs/api/endpoints.md §6 `/ws/activity` message shapes.
-type ActivityWsMessage =
-  | { type: 'job_update'; queue: string; pending: number; running: number; failed_recent?: number }
-  | { type: 'activity_event'; event: ActivityEvent };
-
-const EVENT_TYPES = ['job', 'jev_scout', 'jev_trader', 'kill_switch'] as const;
-const QUEUES = [
-  'market-data',
-  'feature-calc',
-  'jev-scout',
-  'jev-trader',
-  'outcome-labeling',
-  'analytics',
-] as const;
-
-// Feed size bounds (functional.md FR-ACT-3): the displayed list never
-// grows past the API's maximum, however long the page stays open.
-const MAX_EVENTS = 500;
-const KILL_SWITCH_LIMIT = 10;
+import {
+  type ActivityAPIResponse,
+  type ActivityEvent,
+  type ActivityWsMessage,
+  EVENT_TYPES,
+  KILL_SWITCH_LIMIT,
+  MAX_EVENTS,
+  QUEUES,
+  type QueueStatus,
+} from './activity-feed-types';
 
 @customElement('pitha-activity-feed')
 export class PithaActivityFeed extends LitElement {

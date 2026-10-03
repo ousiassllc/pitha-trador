@@ -12,6 +12,12 @@ import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
+import type {
+  ScannerAPIResponse,
+  ScannerItem,
+  ScannerUpdateMessage,
+  SortDirection,
+} from './scanner-types';
 import {
   COLUMNS,
   type Column,
@@ -26,36 +32,6 @@ import {
   returnClass,
   type SortKey,
 } from './scanner-view';
-
-// Mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner` item shape.
-export interface ScannerItem {
-  symbol: string;
-  price: number;
-  return_1m: number | null;
-  return_5m: number | null;
-  volume_ratio_5m: number | null;
-  price_vs_vwap_bps: number;
-  spread_bps: number | null;
-  jev_direction: string | null;
-  jev_confidence: number | null;
-  entry_quality: string | null;
-  current_position: number | null;
-}
-
-interface ScannerAPIResponse {
-  items: ScannerItem[];
-  as_of: string;
-}
-
-// Mirrors docs/api/endpoints.md §6 `/ws/scanner` message shape.
-interface ScannerUpdateMessage {
-  type: string;
-  items: ScannerItem[];
-  // Same RFC 3339 scan-cycle timestamp as ScannerAPIResponse.as_of.
-  as_of: string;
-}
-
-type SortDirection = 'asc' | 'desc';
 
 @customElement('pitha-scanner-table')
 export class PithaScannerTable extends LitElement {

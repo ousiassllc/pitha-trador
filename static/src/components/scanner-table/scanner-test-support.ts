@@ -1,7 +1,7 @@
 // Shared fakes for the pitha-scanner-table test files.
 import { afterEach, beforeEach, mock } from 'bun:test';
 import './pitha-scanner-table';
-import type { ScannerItem } from './pitha-scanner-table';
+import type { ScannerItem } from './scanner-types';
 
 type Listener = (event: unknown) => void;
 export type ScannerTableElement = HTMLElement & { updateComplete: Promise<boolean> };

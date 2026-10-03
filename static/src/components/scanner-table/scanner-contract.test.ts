@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import contract from './scanner-contract.json';
 import './pitha-scanner-table';
-import type { ScannerItem } from './pitha-scanner-table';
 import { createScannerTable } from './scanner-test-support';
+import type { ScannerItem } from './scanner-types';
 import { COLUMNS } from './scanner-view';
 
 // Contract test shared with internal/web/organisms/scanner_table_contract_test.go:

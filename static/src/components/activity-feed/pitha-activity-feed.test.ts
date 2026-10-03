@@ -1,114 +1,17 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import './pitha-activity-feed';
-import type { ActivityEvent, QueueStatus } from './pitha-activity-feed';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
+import {
+  emit,
+  event,
+  FakeWebSocket,
+  type FeedElement,
+  flush,
+  installFakes,
+  mount,
+  queue,
+} from './activity-feed-test-support';
 import { PithaActivityFeed } from './pitha-activity-feed';
 
-type Listener = (event: unknown) => void;
-type FeedElement = HTMLElement & { updateComplete: Promise<boolean> };
-
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = [];
-  private listeners: Record<string, Listener[]> = {};
-
-  constructor(public readonly url: string) {
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(type: string, listener: Listener): void {
-    if (!this.listeners[type]) {
-      this.listeners[type] = [];
-    }
-    this.listeners[type].push(listener);
-  }
-
-  emit(type: string, event: unknown = {}): void {
-    for (const listener of this.listeners[type] ?? []) {
-      listener(event);
-    }
-  }
-
-  close(): void {
-    this.emit('close', { code: 1000 });
-  }
-}
-
-const queue = (overrides: Partial<QueueStatus> = {}): QueueStatus => ({
-  queue: 'jev-scout',
-  pending: 3,
-  running: 1,
-  failed_recent: 0,
-  ...overrides,
-});
-
-const event = (overrides: Partial<ActivityEvent> = {}): ActivityEvent => ({
-  type: 'jev_trader',
-  timestamp: '2026-09-29T01:15:00Z',
-  symbol: '7203',
-  detail: 'direction=LONG confidence=0.74',
-  latency_ms: 820,
-  ...overrides,
-});
-
-let originalFetch: typeof fetch;
-let originalWebSocket: typeof WebSocket;
-
-beforeEach(() => {
-  originalFetch = globalThis.fetch;
-  originalWebSocket = globalThis.WebSocket;
-  FakeWebSocket.instances = [];
-  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
-  document.body.innerHTML = '';
-});
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-  globalThis.WebSocket = originalWebSocket;
-  document.body.innerHTML = '';
-});
-
-// The component fetches fire-and-forget from connectedCallback, so there
-// is no promise to await; yielding one setImmediate macrotask boundary
-// (no wall-clock duration involved) lets the whole promise-based
-// fetch -> json -> state-assignment chain settle first.
-async function flush(el: FeedElement): Promise<void> {
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  await el.updateComplete;
-}
-
-// Builds an element with the URLs Templ injects (pages.ActivityLogPage);
-// the component has no defaults.
-function createFeed(): FeedElement {
-  const el = document.createElement('pitha-activity-feed') as FeedElement;
-  el.setAttribute('api-url', '/api/v1/activity');
-  el.setAttribute('ws-url', '/ws/activity');
-  el.setAttribute('kill-switch-events-url', '/api/v1/activity?type=kill_switch&limit=10');
-  return el;
-}
-
-// mount stubs `fetch` so that `type=kill_switch` requests return
-// killSwitchEvents and every other request returns { queues, events }.
-async function mount(
-  queues: QueueStatus[],
-  events: ActivityEvent[],
-  killSwitchEvents: ActivityEvent[] = [],
-) {
-  const fetchMock = mock((url: string) => {
-    const body = url.includes('type=kill_switch')
-      ? { queues, events: killSwitchEvents, as_of: 'x' }
-      : { queues, events, as_of: 'x' };
-    return Promise.resolve(new Response(JSON.stringify(body)));
-  });
-  globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-  const el = createFeed();
-  document.body.appendChild(el);
-  await flush(el);
-  return { el, fetchMock };
-}
-
-function emit(message: unknown): void {
-  FakeWebSocket.instances[0].emit('message', { data: JSON.stringify(message) });
-}
+installFakes();
 
 describe('pitha-activity-feed', () => {
   // Same upgrade-after-existing-children timing as
@@ -215,63 +118,6 @@ describe('pitha-activity-feed', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0].getAttribute('data-event-type')).toBe('jev_scout');
     expect(rows[0].textContent).toContain('9984');
-  });
-
-  test('type filter re-fetches with ?type= and drops non-matching pushes', async () => {
-    const { el, fetchMock } = await mount([queue()], [event()]);
-
-    const select = el.querySelector('select[data-filter="type"]') as HTMLSelectElement;
-    select.value = 'jev_scout';
-    select.dispatchEvent(new Event('change'));
-    await flush(el);
-    const urls = fetchMock.mock.calls.map((c) => c[0] as string);
-    expect(urls.some((u) => u.includes('?type=jev_scout') && !u.includes('kill_switch'))).toBe(
-      true,
-    );
-
-    const rowsBefore = el.querySelectorAll('#activity-feed tbody tr').length;
-    emit({ type: 'activity_event', event: event({ type: 'jev_trader', symbol: '1111' }) });
-    await el.updateComplete;
-    expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(rowsBefore);
-
-    emit({ type: 'activity_event', event: event({ type: 'jev_scout', symbol: '2222' }) });
-    await el.updateComplete;
-    expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(rowsBefore + 1);
-  });
-
-  test('queue filter matches only job events on that queue', async () => {
-    const { el, fetchMock } = await mount([queue()], []);
-
-    const select = el.querySelector('select[data-filter="queue"]') as HTMLSelectElement;
-    select.value = 'jev-scout';
-    select.dispatchEvent(new Event('change'));
-    await flush(el);
-    expect((fetchMock.mock.calls.at(-1)?.[0] as string) ?? '').toContain('queue=jev-scout');
-
-    emit({
-      type: 'activity_event',
-      event: event({ type: 'job', queue: 'jev-trader', symbol: undefined }),
-    });
-    emit({ type: 'activity_event', event: event({ type: 'jev_scout' }) });
-    emit({
-      type: 'activity_event',
-      event: event({ type: 'job', queue: 'jev-scout', symbol: undefined }),
-    });
-    await el.updateComplete;
-
-    const rows = el.querySelectorAll('#activity-feed tbody tr');
-    expect(rows).toHaveLength(1);
-    expect(rows[0].getAttribute('data-event-type')).toBe('job');
-  });
-
-  test('caps the live feed at 500 rows', async () => {
-    const { el } = await mount([queue()], []);
-    for (let i = 0; i < 510; i++) {
-      emit({ type: 'activity_event', event: event({ symbol: String(i) }) });
-    }
-    await el.updateComplete;
-
-    expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(500);
   });
 
   // The first update cycle used to close and reopen the socket (issue #170).
