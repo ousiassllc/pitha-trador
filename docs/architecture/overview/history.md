@@ -50,3 +50,4 @@
 | 1.43 | 2026-10-03 | §3のツリー・テスト専用ディレクトリ一覧・§4のScheduler/Worker行に、実在する`router/ws_listener.go`・`router/wslistener`（テスト専用）・`scheduler/updatecheck`を追記 | issue #319 |
 | 1.44 | 2026-10-03 | §3のツリー・レイヤー依存ルールに基盤パッケージ`internal/httpbody`（外部API応答ボディの4 MiB上限付き読み取り）を追記。`overview/integrations.md` §5・§6にkabuステーション・Jevの応答ボディ上限と超過時（`httpbody.ErrTooLarge`）の扱いを追記し、Slack Webhookのエラー応答は`httpbody`ではなく`service/notify`内で先頭4 KiBに切り詰めることを明記 | issue #333（#313・#324） |
 | 1.45 | 2026-10-03 | 改訂履歴を`overview/history.md`へ分割し、`overview.md`には分割章表と参照のみを残した（版番号・内容は分割前と同一）。`overview.md`が300行/ファイル上限を超過したため | issue #335 |
+| 1.46 | 2026-10-03 | `overview/integrations.md` §5「異常時」・`overview/flows.md` §11 Market Data欠損行を実装の現状へ訂正（`StatusTracker`は記録のみで`IsStale`の呼び出し元なし。銘柄単位の新規取引禁止は未実装で、有効なのは全体の`market_data_down` Kill Switchのみ） | issue #337（仕様は実装を要求していたが、鮮度閾値が仕様に無く取引経路のリスクゲート変更になるため仕様側を現状に合わせた） |

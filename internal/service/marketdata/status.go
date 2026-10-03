@@ -6,8 +6,8 @@ import (
 )
 
 // SymbolStatus is the last known freshness state for one symbol
-// (docs/architecture/overview.md §5 "異常時": kabuステーションAPI無応答・
-// エラー時は該当銘柄をstale data判定し新規取引を禁止する).
+// (docs/architecture/overview/integrations.md §5 "異常時": recorded only;
+// per-symbol trade blocking on stale data is not implemented yet).
 type SymbolStatus struct {
 	// LastUpdated is when this symbol last received a successful REST
 	// response or PUSH message. Zero if never updated.
@@ -23,10 +23,10 @@ type SymbolStatus struct {
 
 // StatusTracker records, per symbol, whether the most recently observed
 // kabuステーションAPI data (REST poll or PUSH message) is fresh or stale.
-// Feature Engine and other downstream services query it before consuming a
-// symbol's market data so unresponsive/erroring symbols can be excluded
-// (overview.md §5, functional.md 障害対応方針). It is safe for concurrent
-// use.
+// It is record-only today: no trading path consults IsStale, so per-symbol
+// stale data does not yet block new entries (only the global market_data_down
+// Kill Switch does; docs/architecture/overview/integrations.md §5 "異常時").
+// It is safe for concurrent use.
 type StatusTracker struct {
 	mu    sync.RWMutex
 	state map[string]SymbolStatus
