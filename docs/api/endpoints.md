@@ -35,7 +35,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 |---------|------|------|
 | GET | `/` | `/scanner` へリダイレクト |
 | GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却。ページ上部にスキャン状況パネル（ファネル件数・最終サイクル時刻/所要時間・「スキャン対象を見る」「更新」）を含む（フルページのみ） |
-| GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。issue #303 |
+| GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。東証の立会時間外は、サイクルの有無によらずパネルに停止通知`data-testid="scan-offhours"`と次回立会開始（JST）を含める（`GET /scanner`のパネルも同様。「更新」の再取得でも同じ通知が出る。立会時間中は出ない）。issue #303, #367 |
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
 | GET | `/performance` | Performance画面。常に先頭に「実績（Paper）」節（クローズ済みポジションのTotal/Daily PnL・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal count。§5 `GET /api/v1/performance` と同一集計、算出不能は「—」）を表示し、取得失敗時は節内にエラーを示して500。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
 | GET | `/calibration` | Calibration画面 |
@@ -132,3 +132,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.30 | 2026-10-03 | `POST`/`DELETE /settings/:key`のHTMX応答は、`Referer`が`/setup`のとき必須キー充足状態を再計算した完了メッセージ（`#setup-status`、`hx-swap-oob`）も返す | issue #325 |
 | 1.31 | 2026-10-03 | §3 `/performance` に「実績（Paper）」節（クローズ済みポジションの実績指標、算出不能は「—」、取得失敗は節内エラー＋500）を追記 | issue #360実装 |
 | 1.32 | 2026-10-03 | §6 `/ws/symbols/{symbol}`の用途から「Jev判定パネル」のライブ更新を削除（パネルはSSRのみ）し、`jev_update`が`direction`/`confidence`のみで`pitha-price-chart`は方向変化のマーカーだけ描画すると明記 | issue #362 |
+| 1.33 | 2026-10-03 | §3 `GET /scanner/scan`・`GET /scanner` のスキャン状況パネルに立会時間外の停止通知を追記 | issue #367 |

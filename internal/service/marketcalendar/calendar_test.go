@@ -107,3 +107,49 @@ func TestOpenAtAndCloseAt(t *testing.T) {
 		t.Fatal("OpenAt on a national holiday must report no session")
 	}
 }
+
+func TestNextOpen(t *testing.T) {
+	tests := []struct {
+		name string
+		at   time.Time
+		want time.Time
+	}{
+		{"before morning open", jst(2026, 9, 29, 8, 0), jst(2026, 9, 29, 9, 0)},
+		{"exactly at morning open is not strictly after", jst(2026, 9, 29, 9, 0), jst(2026, 9, 29, 12, 30)},
+		{"during morning session", jst(2026, 9, 29, 10, 0), jst(2026, 9, 29, 12, 30)},
+		{"lunch break", jst(2026, 9, 29, 12, 0), jst(2026, 9, 29, 12, 30)},
+		{"during afternoon session", jst(2026, 9, 29, 14, 0), jst(2026, 9, 30, 9, 0)},
+		{"after close", jst(2026, 9, 29, 15, 30), jst(2026, 9, 30, 9, 0)},
+		{"friday after close skips weekend", jst(2026, 10, 2, 15, 30), jst(2026, 10, 5, 9, 0)},
+		{"saturday night", jst(2026, 10, 3, 21, 0), jst(2026, 10, 5, 9, 0)},
+		{"sunday", jst(2026, 10, 4, 10, 0), jst(2026, 10, 5, 9, 0)},
+		{"friday before a holiday Monday", jst(2026, 10, 9, 16, 0), jst(2026, 10, 13, 9, 0)},
+		{"year-end closure", jst(2026, 12, 30, 16, 0), jst(2027, 1, 4, 9, 0)},
+		{"new year day", jst(2027, 1, 1, 10, 0), jst(2027, 1, 4, 9, 0)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := marketcalendar.TSE.NextOpen(tc.at)
+			if !got.Equal(tc.want) || got.Location() != marketcalendar.JST {
+				t.Errorf("NextOpen(%v) = %v, want %v (JST)", tc.at, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNextOpenNormalisesZone(t *testing.T) {
+	// Saturday 12:00 UTC is 21:00 JST; the JST date, not the UTC one, decides.
+	got := marketcalendar.TSE.NextOpen(time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC))
+	if want := jst(2026, 10, 5, 9, 0); !got.Equal(want) {
+		t.Errorf("NextOpen = %v, want %v", got, want)
+	}
+}
+
+func TestNextOpenIsAlwaysAnOpenSession(t *testing.T) {
+	for at := jst(2026, 12, 20, 0, 0); at.Before(jst(2027, 1, 10, 0, 0)); at = at.Add(97 * time.Minute) {
+		next := marketcalendar.TSE.NextOpen(at)
+		if !next.After(at) || !marketcalendar.TSE.IsOpen(next) || marketcalendar.TSE.IsOpen(next.Add(-time.Minute)) {
+			t.Fatalf("NextOpen(%v) = %v is not a session start after t", at, next)
+		}
+	}
+}

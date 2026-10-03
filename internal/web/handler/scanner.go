@@ -70,13 +70,20 @@ func (r CandidateRefreshInterval) Next() time.Duration {
 type ScannerHandler struct {
 	source   CandidateSource
 	interval CandidateRefreshInterval
+	now      func() time.Time
 }
 
 // NewScannerHandler returns a ScannerHandler that reads candidates from
 // source and pushes WebSocket updates spaced within interval.
 func NewScannerHandler(source CandidateSource, interval CandidateRefreshInterval) *ScannerHandler {
-	return &ScannerHandler{source: source, interval: interval}
+	return &ScannerHandler{source: source, interval: interval, now: time.Now}
 }
+
+// SetClock overrides the clock the scan panel uses to decide whether the
+// TSE is in session (default time.Now). Exposed for tests that need a
+// fixed instant rather than production callers, like
+// SymbolHandler.SetTickInterval.
+func (h *ScannerHandler) SetClock(now func() time.Time) { h.now = now }
 
 // scannerItem mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner`'s
 // item shape. Return1m/Return5m are percent (0.4 == +0.4%), converted from

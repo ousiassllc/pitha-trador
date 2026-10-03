@@ -122,9 +122,16 @@ func TestScannerHandler_APIScannerScan_PagesLargeUniverse(t *testing.T) {
 
 func getScan(t *testing.T, src handler.CandidateSource, target string, hx bool) (int, string) {
 	t.Helper()
+	return getScanAt(t, src, time.Now, target, hx)
+}
+
+// getScanAt is getScan with the panel's clock pinned to now.
+func getScanAt(t *testing.T, src handler.CandidateSource, now func() time.Time, target string, hx bool) (int, string) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	h := scanHandler(src)
+	h.SetClock(now)
 	engine.GET("/scanner", h.Page)
 	engine.GET("/scanner/scan", h.ScanView)
 	req := httptest.NewRequest(http.MethodGet, target, nil)
