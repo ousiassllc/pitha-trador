@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -100,5 +101,53 @@ func TestStaticSecretsStore_EverythingUnsetAndWritesAreNoOps(t *testing.T) {
 	}
 	if err := store.Delete(context.Background(), config.KeyJevAPIKey); err != nil {
 		t.Fatalf("Delete: %v", err)
+	}
+}
+
+// issue #325: Save/Delete from /setup carry the recomputed completion
+// message OOB so it follows the required badges; /settings requests don't.
+func TestSettingsHandler_SaveAndDelete_FromSetupUpdateCompletionMessage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	engine := settingsRouter(settings.NewSettingsHandler(store))
+
+	do := func(method, key, value, referer string) string {
+		var body *strings.Reader
+		if method == http.MethodPost {
+			body = strings.NewReader(url.Values{"value": {value}}.Encode())
+		} else {
+			body = strings.NewReader("")
+		}
+		req := httptest.NewRequest(method, "/settings/"+key, body)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("HX-Request", "true")
+		req.Header.Set("Referer", referer)
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s %s = %d, want 200 (body=%s)", method, key, rec.Code, rec.Body.String())
+		}
+		return rec.Body.String()
+	}
+	const oobIncomplete = `id="setup-status"`
+
+	first := do(http.MethodPost, config.KeyJevAPIKey, "jev", "http://localhost/setup")
+	if !strings.Contains(first, oobIncomplete) || !strings.Contains(first, `hx-swap-oob="true"`) || !strings.Contains(first, `data-testid="setup-incomplete"`) || strings.Contains(first, `data-testid="setup-complete"`) {
+		t.Errorf("first required save from /setup must carry the incomplete message; body=%s", first)
+	}
+
+	second := do(http.MethodPost, config.KeyKabuAPIPassword, "kabu", "http://localhost/setup")
+	if !strings.Contains(second, oobIncomplete) || !strings.Contains(second, `data-testid="setup-complete"`) || strings.Contains(second, `data-testid="setup-incomplete"`) {
+		t.Errorf("second required save from /setup must carry the complete message; body=%s", second)
+	}
+
+	deleted := do(http.MethodDelete, config.KeyKabuAPIPassword, "", "http://localhost/setup")
+	if !strings.Contains(deleted, `data-testid="setup-incomplete"`) || strings.Contains(deleted, `data-testid="setup-complete"`) {
+		t.Errorf("deleting a required key from /setup must revert to the incomplete message; body=%s", deleted)
+	}
+
+	fromSettings := do(http.MethodPost, config.KeyKabuAPIPassword, "kabu", "http://localhost/settings")
+	if strings.Contains(fromSettings, oobIncomplete) {
+		t.Errorf("a /settings save must not carry the Setup completion message; body=%s", fromSettings)
 	}
 }

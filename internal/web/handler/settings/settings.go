@@ -169,19 +169,26 @@ func (h *SettingsHandler) Status(c *gin.Context) {
 // renderRow answers a successful Save/Delete. An HTMX request gets the
 // refreshed SecretFieldRow fragment plus an out-of-band copy of the owning
 // connection's status badge, so the list behind the open modal shows the
-// new 設定済み/未設定 state (issue #302). The row form's plain
+// new 設定済み/未設定 state (issue #302). When the request came from the
+// Setup screen it also carries the recomputed completion message, so it
+// follows the required badges (issue #325). The row form's plain
 // `method="post"` fallback (JS disabled) would otherwise render a bare
 // fragment as the whole page, so it is redirected back to the screen it
 // came from instead (the notice is only shown on the HTMX path).
 func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
+	returnPath := settingsReturnPath(c)
 	if c.GetHeader("HX-Request") != "true" {
-		c.Redirect(http.StatusSeeOther, settingsReturnPath(c))
+		c.Redirect(http.StatusSeeOther, returnPath)
 		return
 	}
 	ctx := c.Request.Context()
 	comps := []templ.Component{molecules.SecretFieldRow(h.row(ctx, key, settingsLabel(key), notice))}
 	if conn, ok := connectionByKey(key); ok {
 		comps = append(comps, molecules.ConnectionStatus(h.connectionProps(ctx, conn), true))
+	}
+	if returnPath == "/setup" {
+		complete := len(h.unsetKeys(ctx, config.RequiredSecretKeys())) == 0
+		comps = append(comps, molecules.SetupStatus(complete, true))
 	}
 	shared.RenderHTML(c, http.StatusOK, templ.Join(comps...))
 }

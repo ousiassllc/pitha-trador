@@ -1,0 +1,19 @@
+package molecules
+
+// SetupStatus is the Setup screen's completion message under the connection
+// list: whether every required key is stored (issue #80, FR-SETUP-2). oob
+// renders it as an `hx-swap-oob="true"` fragment (replacing the element with
+// id `setup-status`), which Save/Delete append to their row response when
+// the request came from `/setup` so the message follows the required
+// badges instead of staying at its SSR snapshot (issue #325).
+templ SetupStatus(complete bool, oob bool) {
+	if complete {
+		<p id="setup-status" class="mt-6 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="setup-complete" { oobAttrs(oob)... }>
+			必須項目はすべて設定済みです。
+		</p>
+	} else {
+		<p id="setup-status" class="mt-6 text-sm text-slate-600" data-testid="setup-incomplete" { oobAttrs(oob)... }>
+			必須項目をすべて保存すると、通常の画面へ進めます。
+		</p>
+	}
+}

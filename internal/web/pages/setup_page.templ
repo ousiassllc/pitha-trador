@@ -38,15 +38,7 @@ templ SetupPage(props SetupProps) {
 			</p>
 			@organisms.ConnectionList(props.Connections)
 		</div>
-		if props.Complete {
-			<p class="mt-6 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="setup-complete">
-				必須項目はすべて設定済みです。
-			</p>
-		} else {
-			<p class="mt-6 text-sm text-slate-600" data-testid="setup-incomplete">
-				必須項目をすべて保存すると、通常の画面へ進めます。
-			</p>
-		}
+		@molecules.SetupStatus(props.Complete, false)
 		<div class="mt-4">
 			@atoms.ButtonLink(atoms.ButtonProps{Attrs: templ.Attributes{"href": "/scanner", "data-testid": "setup-continue"}}) {
 				続ける
