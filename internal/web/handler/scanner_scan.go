@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
@@ -193,11 +194,16 @@ func (h *ScannerHandler) ScanView(c *gin.Context) {
 // symbol list window for query. On error the returned view is the
 // empty-state one.
 func (h *ScannerHandler) scanPanel(ctx context.Context, query domain.ScanQuery, open bool) (organisms.ScanPanelView, error) {
+	base := organisms.ScanPanelView{Open: open, Query: query}
+	if now := h.now(); !marketcalendar.TSE.IsOpen(now) {
+		base.OffSession, base.NextOpen = true, marketcalendar.TSE.NextOpen(now)
+	}
 	cycle, ok, err := h.scan(ctx)
 	if err != nil || !ok {
-		return organisms.ScanPanelView{Open: open, Query: query}, err
+		return base, err
 	}
-	view := organisms.ScanPanelView{HasCycle: true, Cycle: cycle, Summary: cycle.Summary(), Open: open, Query: query}
+	view := base
+	view.HasCycle, view.Cycle, view.Summary = true, cycle, cycle.Summary()
 	if open {
 		view.Page = cycle.Query(query)
 		view.Query.Page, view.Query.PageSize = view.Page.Page, view.Page.PageSize

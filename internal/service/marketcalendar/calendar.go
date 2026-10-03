@@ -70,3 +70,30 @@ func (c Calendar) atMinute(t time.Time, minutes int) (time.Time, bool) {
 func isExchangeClosure(month time.Month, day int) bool {
 	return (month == time.December && day == 31) || (month == time.January && day <= 3)
 }
+
+// nextOpenSearchDays bounds NextOpen's day scan. The longest closure is
+// the year-end/new-year break plus adjacent weekends/holidays (well under
+// two weeks), so the bound is never reached for real calendars.
+const nextOpenSearchDays = 31
+
+// NextOpen returns the start of the first session strictly after t:
+// 9:00 (前場) or 12:30 (後場) JST on a trading day. During a session it is
+// the start of the following one (so 10:00 -> 12:30); on the lunch break
+// it is 12:30; after the close, on weekends, holidays and the year-end/
+// new-year closure it is 9:00 of the next trading day. The result is in
+// JST.
+func (c Calendar) NextOpen(t time.Time) time.Time {
+	t = t.In(JST)
+	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, JST)
+	for range nextOpenSearchDays {
+		if c.IsTradingDay(day) {
+			for _, m := range [...]int{morningOpen, afternoonOpen} {
+				if open := day.Add(time.Duration(m) * time.Minute); open.After(t) {
+					return open
+				}
+			}
+		}
+		day = day.AddDate(0, 0, 1)
+	}
+	return time.Time{}
+}
