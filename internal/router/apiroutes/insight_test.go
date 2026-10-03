@@ -1,4 +1,4 @@
-package router_test
+package apiroutes_test
 
 import (
 	"net/http"
