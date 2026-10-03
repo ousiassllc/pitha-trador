@@ -132,6 +132,9 @@ func TestSettingsHandler_SaveAndDelete_FromSetupUpdateCompletionMessage(t *testi
 	const oobIncomplete = `id="setup-status"`
 
 	first := do(http.MethodPost, config.KeyJevAPIKey, "jev", "http://localhost/setup")
+	if strings.Contains(first, `data-testid="setup-continue"`) {
+		t.Errorf("incomplete OOB must not carry the 続ける link; body=%s", first)
+	}
 	if !strings.Contains(first, oobIncomplete) || !strings.Contains(first, `hx-swap-oob="true"`) || !strings.Contains(first, `data-testid="setup-incomplete"`) || strings.Contains(first, `data-testid="setup-complete"`) {
 		t.Errorf("first required save from /setup must carry the incomplete message; body=%s", first)
 	}
@@ -141,9 +144,16 @@ func TestSettingsHandler_SaveAndDelete_FromSetupUpdateCompletionMessage(t *testi
 		t.Errorf("second required save from /setup must carry the complete message; body=%s", second)
 	}
 
+	if !strings.Contains(second, `data-testid="setup-continue"`) || !strings.Contains(second, `href="/scanner"`) {
+		t.Errorf("complete OOB must carry the 続ける link; body=%s", second)
+	}
+
 	deleted := do(http.MethodDelete, config.KeyKabuAPIPassword, "", "http://localhost/setup")
 	if !strings.Contains(deleted, `data-testid="setup-incomplete"`) || strings.Contains(deleted, `data-testid="setup-complete"`) {
 		t.Errorf("deleting a required key from /setup must revert to the incomplete message; body=%s", deleted)
+	}
+	if strings.Contains(deleted, `data-testid="setup-continue"`) {
+		t.Errorf("deleting a required key from /setup must drop the 続ける link; body=%s", deleted)
 	}
 
 	fromSettings := do(http.MethodPost, config.KeyKabuAPIPassword, "kabu", "http://localhost/settings")

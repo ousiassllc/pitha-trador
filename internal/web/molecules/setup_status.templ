@@ -1,19 +1,33 @@
 package molecules
 
-// SetupStatus is the Setup screen's completion message under the connection
-// list: whether every required key is stored (issue #80, FR-SETUP-2). oob
-// renders it as an `hx-swap-oob="true"` fragment (replacing the element with
-// id `setup-status`), which Save/Delete append to their row response when
-// the request came from `/setup` so the message follows the required
-// badges instead of staying at its SSR snapshot (issue #325).
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// SetupStatus is the Setup screen's completion block under the connection
+// list: whether every required key is stored (issue #80, FR-SETUP-2). Once
+// they are, it holds the completion message and the "続ける" link to
+// `/scanner`; until then neither the link nor a disabled stand-in is
+// rendered, since the Setup Guard would only bounce it back (issue #352).
+// oob renders it as an `hx-swap-oob="true"` fragment (replacing the element
+// with id `setup-status`), which Save/Delete append to their row response
+// when the request came from `/setup` so the message and the link follow the
+// required badges instead of staying at their SSR snapshot (issue #325).
 templ SetupStatus(complete bool, oob bool) {
 	if complete {
-		<p id="setup-status" class="mt-6 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="setup-complete" { oobAttrs(oob)... }>
-			必須項目はすべて設定済みです。
-		</p>
+		<div id="setup-status" class="mt-6" { oobAttrs(oob)... }>
+			<p class="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="setup-complete">
+				必須項目はすべて設定済みです。
+			</p>
+			<div class="mt-4">
+				@atoms.ButtonLink(atoms.ButtonProps{Attrs: templ.Attributes{"href": "/scanner", "data-testid": "setup-continue"}}) {
+					続ける
+				}
+			</div>
+		</div>
 	} else {
-		<p id="setup-status" class="mt-6 text-sm text-slate-600" data-testid="setup-incomplete" { oobAttrs(oob)... }>
-			必須項目をすべて保存すると、通常の画面へ進めます。
-		</p>
+		<div id="setup-status" class="mt-6" { oobAttrs(oob)... }>
+			<p class="text-sm text-slate-600" data-testid="setup-incomplete">
+				必須項目をすべて保存すると、通常の画面へ進めます。
+			</p>
+		</div>
 	}
 }

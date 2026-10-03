@@ -81,7 +81,7 @@ static/
 
 - `SecretFieldRow`（Settings画面の1項目。ラベル・「設定済み」バッジ・値入力（`type=password`）と保存ボタン・削除ボタン（設定済みのときのみ）・直近の保存/削除結果の通知を持ち、保存は`POST /settings/:key`、削除は`DELETE /settings/:key`で行の`outerHTML`のみ差し替える。他項目の値には影響しない。issue #79）
 - `Modal`（ネイティブ`<dialog>`のシェル。`aria-labelledby`でタイトルに紐付け、タイトル行に「閉じる」ボタンを持つ。`pitha-modal`が開閉・フォーカス復帰・URLハッシュからの自動オープンを担う。issue #302）
-- `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）と`SetupStatus`（Setup画面の「必須項目はすべて設定済みです」／「必須項目をすべて保存すると…」メッセージ。`id="setup-status"`で、`/setup`発の保存・削除の応答に必須キー充足状態を再計算して`hx-swap-oob`で同梱する。issue #325）
+- `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）と`SetupStatus`（Setup画面の「必須項目はすべて設定済みです」＋`/scanner`への「続ける」リンク／「必須項目をすべて保存すると…」メッセージ。リンクは完了時のみ描画。`id="setup-status"`で、`/setup`発の保存・削除の応答に必須キー充足状態を再計算して`hx-swap-oob`で同梱する。issue #325）
 - `SignalBadgeGroup`（direction + confidence + entry_quality の組み合わせ表示）
 - `PositionRow`
 
@@ -110,7 +110,7 @@ static/
 - `PerformancePage`
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
 - `SettingsPage`（接続先別の一覧。Jev/kabuステーション/Slack/Luna/ニュースフィード/Sol/Opusの各行（`SettingsCard`）に設定済み／一部設定済み／未設定の`ConnectionStatus`を出し、「設定する」で`Modal`を開く。モーダルにその接続先のキー・URL・モデル名の`SecretFieldRow`をまとめる（`organisms.ConnectionList`）。「システム」節のアップデート（`#update-panel`、`UpdatePanel`）とエラーログ（`ErrorLogPanel`）も同じ`SettingsCard`＋`Modal`で開く。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。issue #57/#79/#267/#302）
-- `SetupPage`（初回セットアップ画面。Settingsと同じ`ConnectionList`で、必須2キーを持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須2キーがすべて設定済みなら完了表示と`/scanner`へのリンクを出す。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80/#302）
+- `SetupPage`（初回セットアップ画面。Settingsと同じ`ConnectionList`で、必須2キーを持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須2キーがすべて設定済みなら完了表示と`/scanner`への「続ける」リンクを出す（未設定の間はリンクごとレンダリングしない。issue #352）。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80/#302）
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
 
@@ -205,3 +205,4 @@ const (
 | 1.34 | 2026-10-03 | molecules に`SetupStatus`を追加し、`/setup`発の`POST`/`DELETE /settings/:key`応答で完了メッセージを`hx-swap-oob`更新 | issue #325 |
 | 1.35 | 2026-10-03 | `ConnectionList`の分類を実装（`internal/web/organisms`）に合わせ、pages節からorganisms節へ移動 | issue #340 |
 | 1.36 | 2026-10-03 | §2のディレクトリ構成図の`molecules/`行に`Modal`・`SettingsCard`（`ConnectionStatus`）・`SetupStatus`を追記し、§3と整合させる | issue #349 |
+| 1.37 | 2026-10-03 | `SetupPage`の「続ける」リンクを`SetupStatus`の完了分岐へ移し、必須2キー未設定の間は描画しない（OOB更新と一体化） | issue #352 |
