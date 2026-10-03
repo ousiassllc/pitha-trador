@@ -128,7 +128,10 @@ pitha-trador/
 │   │   ├── router_middleware.go   # middlewareの適用順
 │   │   ├── router_routes.go       # ルート登録
 │   │   ├── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
-│   │   └── analysisflow/          # テスト専用: 分析系ルート（ポリシー提案）の回帰テスト（行数上限のためrouterから分離、#248）
+│   │   ├── analysisflow/          # テスト専用: 分析系ルート（ポリシー提案）の回帰テスト（行数上限のためrouterから分離、#248）
+│   │   ├── apiroutes/             # テスト専用: `/api/v1`のOpenAPI設定（servers・スキーマリンク）とInsight APIルート登録の回帰テスト（行数上限のためrouterから分離、#314）
+│   │   ├── staticroute/           # テスト専用: `/static`配信（vendor・esbuild成果物・`PITHA_STATIC_DIR`上書き・Swagger有効化）の回帰テスト（行数上限のためrouterから分離、#314）
+│   │   └── systemheader/          # テスト専用: HeaderのKill Switchパネルと`/api/v1/system/status`の許可アクションの回帰テスト（行数上限のためrouterから分離、#314）
 │   └── web/
 │       ├── apierror/              # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
 │       ├── handler/               # Ginハンドラ。直下は scanner.go, performance.go, calibration.go, policy_proposals.go, swagger.go（一覧・分析系）。それ以外は責務別サブパッケージ（#245）
@@ -287,3 +290,4 @@ handler → service → repository → domain
 | 1.36 | 2026-10-02 | §8（`overview/integrations.md`）: 最新リリース取得の404（リリース未公開／アクセス不可）を`ErrorAccess`のエラーから`Status.NoRelease`（成功扱い・Infoログのみ・再試行なし）へ変更し、Settings画面に「公開されているリリースが見つかりませんでした」を表示。リリース取得の401/403とアセット取得の401/403/404は`ErrorAccess`のまま | issue #296（リリース未公開期間にERRORログとバックオフ再試行が連打されていた） |
 | 1.37 | 2026-10-02 | §6（`integrations.md`）: kabuステーションAPIトークン発行失敗時の継続起動・バックグラウンド再試行・エラーコード別の原因表示（市況データ接続バナー）を追記 | issue #295 |
 | 1.38 | 2026-10-03 | §10 通信フロー（`overview/flows.md`）: `/setup`がSettingsと同じ接続先一覧・モーダル（`ConnectionList`）を使うことを追記 | issue #302 |
+| 1.39 | 2026-10-03 | §3のツリーに、`internal/router`直下が行数上限（2000行/ディレクトリ）を超過したため外部テストを移したテスト専用サブパッケージ`router/{apiroutes,staticroute,systemheader}`を追記 | issue #314 |
