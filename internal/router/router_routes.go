@@ -60,7 +60,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 
 	engine.GET("/calibration", h.calibration.Page)
 
-	performanceHandler := handler.NewPerformanceHandler(o.backtestRunner)
+	performanceHandler := handler.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
 	engine.GET("/performance", performanceHandler.Page)
 
 	engine.GET("/activity", h.activity.Page)

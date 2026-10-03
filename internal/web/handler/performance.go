@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
@@ -21,6 +22,13 @@ import (
 // Source implements it.
 type BacktestRunner interface {
 	RunWalkForward(ctx context.Context, wf backtest.WalkForwardConfig) (backtest.Result, error)
+}
+
+// PerformanceSource reads the realized (Paper) performance of every closed
+// position as of now (UC-9, functional.md §5.3). internal/service/insight.Reader
+// implements it, as does insightapi.Provider.
+type PerformanceSource interface {
+	Performance(ctx context.Context, now time.Time) (insight.Performance, error)
 }
 
 // StaticBacktestRunner is internal/router.New()'s default BacktestRunner
@@ -60,16 +68,20 @@ const dateLayout = "2006-01-02"
 // PerformanceHandler implements `GET /performance` (docs/api/endpoints.md
 // §3), the Performance page and its backtest execution path (UC-12).
 type PerformanceHandler struct {
-	runner BacktestRunner
-	now    func() time.Time
+	runner  BacktestRunner
+	actuals PerformanceSource
+	now     func() time.Time
 }
 
-// NewPerformanceHandler returns a PerformanceHandler backed by runner.
-func NewPerformanceHandler(runner BacktestRunner) *PerformanceHandler {
-	return &PerformanceHandler{runner: runner, now: time.Now}
+// NewPerformanceHandler returns a PerformanceHandler running backtests with
+// runner and reading the realized performance from actuals.
+func NewPerformanceHandler(runner BacktestRunner, actuals PerformanceSource) *PerformanceHandler {
+	return &PerformanceHandler{runner: runner, actuals: actuals, now: time.Now}
 }
 
-// Page implements `GET /performance`: without a `from` query parameter it
+// Page implements `GET /performance`: it always shows the realized (Paper)
+// performance section (500 with the error shown in it if it cannot be
+// read); then, without a `from` query parameter it
 // renders the backtest form prefilled with defaults; with one it parses
 // from/to/training_days/validation_days/forward_days, runs the Walk
 // Forward backtest, and renders its metrics (400 on invalid input, 500 on
@@ -77,6 +89,13 @@ func NewPerformanceHandler(runner BacktestRunner) *PerformanceHandler {
 func (h *PerformanceHandler) Page(c *gin.Context) {
 	props := pages.PerformanceProps{Form: h.defaultForm()}
 	status := http.StatusOK
+
+	actuals, err := h.actuals.Performance(c.Request.Context(), h.now())
+	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "handler: performance actuals", "error", err)
+		status, props.ActualsError = http.StatusInternalServerError, "実績の取得に失敗しました。"
+	}
+	props.Actuals = actuals
 
 	if c.Query("from") != "" {
 		form, wf, err := parseBacktestForm(c)

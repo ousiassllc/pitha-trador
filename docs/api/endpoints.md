@@ -37,7 +37,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却。ページ上部にスキャン状況パネル（ファネル件数・最終サイクル時刻/所要時間・「スキャン対象を見る」「更新」）を含む（フルページのみ） |
 | GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。issue #303 |
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
-| GET | `/performance` | Performance画面。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
+| GET | `/performance` | Performance画面。常に先頭に「実績（Paper）」節（クローズ済みポジションのTotal/Daily PnL・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal count。§5 `GET /api/v1/performance` と同一集計、算出不能は「—」）を表示し、取得失敗時は節内にエラーを示して500。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
 | GET | `/calibration` | Calibration画面 |
 | GET | `/settings` | Settings画面。接続先別（Jev/kabuステーション/Slack/Luna/ニュースフィード/Sol/Opus）の一覧で、各接続先のモーダルに許可キー（`internal/config`のallow-list）の`SecretFieldRow`をまとめ、各行が独立した保存・削除フォームを持つ。保存済みの値は再表示せず「設定済み」バッジのみ表示する。「システム」節からアップデート（`#update-panel`）とエラーログのダウンロード（`#error-log-panel`、`GET /api/v1/logs/errors`を呼ぶフォーム。FR-ERRLOG-1）のモーダルを開く（issue #57/#79/#267/#302） |
 | GET | `/setup` | 初回セットアップ画面。Settingsと同じ接続先一覧・モーダルで、必須2キー（JEV_API_KEY/KABU_API_PASSWORD）を持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80/#302） |
@@ -130,3 +130,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.28 | 2026-10-03 | §3の`/settings`・`/setup`を接続先別の一覧＋モーダル構成に更新。`POST`/`DELETE /settings/:key`のHTMX応答は行に加えて接続先の状態バッジ（`hx-swap-oob`）を返す | issue #302 |
 | 1.29 | 2026-10-03 | §3 に `GET /scanner/scan`（スキャン状況パネル）を追加、`GET /scanner` にスキャン状況パネルを追記 | issue #303 |
 | 1.30 | 2026-10-03 | `POST`/`DELETE /settings/:key`のHTMX応答は、`Referer`が`/setup`のとき必須キー充足状態を再計算した完了メッセージ（`#setup-status`、`hx-swap-oob`）も返す | issue #325 |
+| 1.31 | 2026-10-03 | §3 `/performance` に「実績（Paper）」節（クローズ済みポジションの実績指標、算出不能は「—」、取得失敗は節内エラー＋500）を追記 | issue #360実装 |
