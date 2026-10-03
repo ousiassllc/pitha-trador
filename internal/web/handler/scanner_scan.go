@@ -177,9 +177,7 @@ func (h *ScannerHandler) ScanView(c *gin.Context) {
 		return
 	}
 	if c.GetHeader("HX-Request") == "true" {
-		c.Status(http.StatusOK)
-		c.Header("Content-Type", "text/html; charset=utf-8")
-		_ = organisms.ScanPanel(panel).Render(ctx, c.Writer)
+		shared.RenderHTML(c, http.StatusOK, organisms.ScanPanel(panel))
 		return
 	}
 	candidates, asOf, err := h.source.Candidates(ctx)
@@ -188,9 +186,7 @@ func (h *ScannerHandler) ScanView(c *gin.Context) {
 		shared.RespondPageError(c, http.StatusInternalServerError, "候補一覧の取得に失敗しました。")
 		return
 	}
-	c.Status(http.StatusOK)
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	_ = pages.ScannerPage(candidates, asOf, panel).Render(ctx, c.Writer)
+	shared.RenderHTML(c, http.StatusOK, pages.ScannerPage(candidates, asOf, panel))
 }
 
 // scanPanel builds the scan panel's view model; open also loads the

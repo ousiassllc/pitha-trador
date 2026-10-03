@@ -56,7 +56,5 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 		return
 	}
 
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = molecules.PositionRow(closed).Render(ctx, c.Writer)
+	shared.RenderHTML(c, http.StatusOK, molecules.PositionRow(closed))
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -99,9 +100,7 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 		}
 	}
 
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(status)
-	_ = pages.PerformancePage(props).Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, status, pages.PerformancePage(props))
 }
 
 func (h *PerformanceHandler) defaultForm() pages.PerformanceForm {

@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -36,7 +37,5 @@ func (h *MarketDataHandler) Status(c *gin.Context) {
 		status := h.source.TokenStatus()
 		issue, guidance = string(status.Issue), status.Guidance()
 	}
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = organisms.MarketDataBanner(issue, guidance).Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, http.StatusOK, organisms.MarketDataBanner(issue, guidance))
 }
