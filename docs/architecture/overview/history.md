@@ -52,3 +52,4 @@
 | 1.45 | 2026-10-03 | 改訂履歴を`overview/history.md`へ分割し、`overview.md`には分割章表と参照のみを残した（版番号・内容は分割前と同一）。`overview.md`が300行/ファイル上限を超過したため | issue #335 |
 | 1.46 | 2026-10-03 | `overview/integrations.md` §5「異常時」・`overview/flows.md` §11 Market Data欠損行を実装の現状へ訂正（`StatusTracker`は記録のみで`IsStale`の呼び出し元なし。銘柄単位の新規取引禁止は未実装で、有効なのは全体の`market_data_down` Kill Switchのみ） | issue #337（仕様は実装を要求していたが、鮮度閾値が仕様に無く取引経路のリスクゲート変更になるため仕様側を現状に合わせた） |
 | 1.47 | 2026-10-03 | §4 Backtest Engine行と`overview/integrations.md` §8に、バックテスト/シャドーバックテストの再現範囲（Exitは固定SL/TP/最大保有時間のみ・Risk Engine不適用・スリッページ5bps/手数料0bps固定）を追記（`requirements/functional/components-platform.md` FR-BT-4新設、FR-SELFIMPROVE-4から参照）。`internal/service/backtest/runner.go`の古いRisk Engineコメントも訂正 | issue #344 |
+| 1.48 | 2026-10-03 | §3のツリー・§4のExecution行にテスト専用サブパッケージ`execution/pendingfill`（PENDING指値Entry関連の外部テスト）を追記。`internal/service/execution`が2000行/ディレクトリ上限を超過したため | issue #348 |
