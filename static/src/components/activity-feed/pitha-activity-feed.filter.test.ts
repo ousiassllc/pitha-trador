@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 import { emit, event, flush, installFakes, mount, queue } from './activity-feed-test-support';
 
 installFakes();
@@ -49,6 +49,39 @@ describe('pitha-activity-feed filters', () => {
     const rows = el.querySelectorAll('#activity-feed tbody tr');
     expect(rows).toHaveLength(1);
     expect(rows[0].getAttribute('data-event-type')).toBe('job');
+  });
+
+  test('ignores a stale response that arrives after a newer filter request', async () => {
+    const { el } = await mount([queue()], [event()]);
+    const respond = (events: unknown[]) =>
+      new Response(JSON.stringify({ queues: [queue()], events, as_of: 'x' }));
+    let resolveFirst!: (r: Response) => void;
+    const fetchMock = mock((url: string) =>
+      url.endsWith('?type=jev_scout')
+        ? new Promise<Response>((resolve) => {
+            resolveFirst = resolve;
+          })
+        : Promise.resolve(respond([event({ type: 'job', queue: 'jev-scout', symbol: 'NEW' })])),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const typeSelect = el.querySelector('select[data-filter="type"]') as HTMLSelectElement;
+    typeSelect.value = 'jev_scout';
+    typeSelect.dispatchEvent(new Event('change'));
+    const queueSelect = el.querySelector('select[data-filter="queue"]') as HTMLSelectElement;
+    queueSelect.value = 'jev-scout';
+    queueSelect.dispatchEvent(new Event('change'));
+    await flush(el);
+    expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(1);
+    expect(el.querySelector('#activity-feed tbody')?.textContent).toContain('NEW');
+
+    resolveFirst(respond([event({ symbol: 'OLD1' }), event({ symbol: 'OLD2' })]));
+    await flush(el);
+
+    const body = el.querySelector('#activity-feed tbody')?.textContent ?? '';
+    expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(1);
+    expect(body).toContain('NEW');
+    expect(body).not.toContain('OLD');
   });
 
   test('caps the live feed at 500 rows', async () => {
