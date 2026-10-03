@@ -47,6 +47,10 @@ export class PithaActivityFeed extends LitElement {
   @state() private queues: QueueStatus[] = [];
   @state() private events: ActivityEvent[] = [];
   @state() private killSwitchEvents: ActivityEvent[] = [];
+  // Distinguishes "not loaded yet" / "failed" / "zero events" so a missing
+  // Kill Switch history is never shown as "no events" (safety information).
+  @state() private killSwitchLoaded = false;
+  @state() private killSwitchError: string | null = null;
   @state() private typeFilter = '';
   @state() private queueFilter = '';
   @state() private error: string | null = null;
@@ -107,7 +111,10 @@ export class PithaActivityFeed extends LitElement {
     try {
       const response = await get<ActivityAPIResponse>(this.killSwitchEventsUrl, { background });
       this.killSwitchEvents = response.events;
+      this.killSwitchLoaded = true;
+      this.killSwitchError = null;
     } catch (err) {
+      this.killSwitchError = err instanceof Error ? err.message : String(err);
       logger.error('pitha-activity-feed: failed to load kill switch events', { error: err });
     }
   }
@@ -208,14 +215,21 @@ export class PithaActivityFeed extends LitElement {
       <section id="kill-switch-events" data-testid="kill-switch-events" class="mt-6">
         <h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Kill Switch Events</h2>
         ${
-          this.killSwitchEvents.length === 0
-            ? html`<p class="text-sm text-slate-500">No kill switch events.</p>`
-            : html`<ul class="text-sm">
+          this.killSwitchError
+            ? html`<p class="pitha-activity-feed-error" role="alert">Failed to load kill switch events: ${this.killSwitchError}</p>`
+            : nothing
+        }
+        ${
+          this.killSwitchEvents.length > 0
+            ? html`<ul class="text-sm">
                 ${this.killSwitchEvents.map(
                   (e) =>
                     html`<li class="py-1"><span class="text-slate-500">${e.timestamp}</span> ${e.detail}</li>`,
                 )}
               </ul>`
+            : this.killSwitchError
+              ? nothing
+              : html`<p class="text-sm text-slate-500">${this.killSwitchLoaded ? 'No kill switch events.' : 'Loading kill switch events…'}</p>`
         }
       </section>
 
