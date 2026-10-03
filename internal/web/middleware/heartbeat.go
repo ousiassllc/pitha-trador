@@ -19,10 +19,13 @@ type HeartbeatRecorder interface {
 }
 
 // backgroundPollPaths are routes the page fetches by itself on a timer
-// (`hx-trigger="every 60s"`, organisms/header.templ). They run whether or
+// (`hx-trigger="... every Ns"`, organisms/header.templ). They run whether or
 // not anyone is at the screen, so they must not count as operator activity.
+// Any new `every Ns` polling route MUST be added here, otherwise one open
+// tab keeps the dead-man's switch (FR-RISK-6) alive forever.
 var backgroundPollPaths = map[string]bool{
-	"/system/update-status": true,
+	"/system/update-status":     true, // #update-banner, every 60s
+	"/system/marketdata-status": true, // #marketdata-banner, every 30s
 }
 
 // BackgroundHeader (value "1") marks a request the page fires by itself, not as a

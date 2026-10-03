@@ -44,6 +44,7 @@ func heartbeatEngineWith(t *testing.T, heartbeat gin.HandlerFunc) *gin.Engine {
 	engine.GET("/ws", ok)
 	engine.GET("/static/app.js", ok)
 	engine.GET("/system/update-status", ok)
+	engine.GET("/system/marketdata-status", ok)
 	engine.POST("/act", ok)
 	return engine
 }
@@ -88,6 +89,7 @@ func TestHeartbeat_IgnoresRequestsThatAreNotOperatorActivity(t *testing.T) {
 		"static asset":           request(http.MethodGet, "/static/app.js", cookie, ""),
 		"websocket upgrade":      wsUpgrade,
 		"background poll":        request(http.MethodGet, "/system/update-status", cookie, ""),
+		"marketdata poll":        request(http.MethodGet, "/system/marketdata-status", cookie, ""),
 		"background header":      resync,
 	} {
 		rec := do(engine, req)
