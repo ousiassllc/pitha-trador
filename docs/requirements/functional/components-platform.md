@@ -34,7 +34,7 @@ Jev Scout/Traderが「今の状態」だけでなく「過去の類似局面で�
 - FR-RAG-2: Jev Scout/Trader呼び出し直前に、現在の状態ベクトルに対しsqlite-vecで類似度上位k件（初期値k=5）を`jev_decisions`（`calibration_outcomes`紐付き済みのもの優先）および`market_snapshots`から検索する
 - FR-RAG-3: 検索結果（類似局面の方向・regime・実際のfuture_return・was_direction_correct等の要約）をJevへのプロンプトにfew-shot文脈として注入する。埋め込みはLLM API呼び出しを伴わない数値特徴量ベクトルのみを用い、追加のAPIコスト・レイテンシを発生させない
 - FR-RAG-4: 蓄積データが不十分な期間（コールドスタート）はRAG文脈を空のまま呼び出す（Jevの通常判断のみで動作する）
-- FR-RAG-5: Symbol DetailのDecision historyに、参照した類似局面の件数を付加情報として表示できる（`components/overview.md`参照。UI必須要件ではない）
+- FR-RAG-5（将来拡張・未実装）: Symbol DetailのDecision historyに、参照した類似局面の件数を付加情報として表示する。任意要件でありUI必須要件ではない。現状は`jev_decisions`にも`GET /api/v1/symbols/{symbol}/decisions`の応答にも参照件数を保持・出力しておらず、`components/overview.md`にも対応する記述はない。実装する場合は、RAG Context Builderが検索した件数の保持先とAPI/UI表示を本書および`components/overview.md`に追記してから着手する
 
 ### 4.14 自己改善ループ（Luna / Sol / Opus 連携）
 
