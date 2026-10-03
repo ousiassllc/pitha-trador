@@ -48,7 +48,9 @@ fast_screener:
   min_volume_ratio: 1.2
   min_abs_return_5m_pct: 0.3
   min_realized_volatility: 0.001
-  # フィルター通過銘柄のうち上位何件をJev Scoutへ送るか。
+  # フィルター通過銘柄のうち上位何件をJev Scoutへ送るか（FR-FS-2）。
+  # 既定20はJev APIコストを抑える側の値。50〜200へ引き上げる場合は
+  # 呼び出しコスト（non-functional.md §2.1）を確認すること。
   top_n: 20
   # FR-FS-2: screen_score算出に使う各要素の重み。
   weights:

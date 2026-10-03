@@ -49,7 +49,7 @@ func (r *Refresher) inSession(t time.Time) bool {
 // turnover, publishes the result to r.Screener (issue #45) for the
 // Scanner Dashboard (internal/router.WithCandidateSource) to read, and -
 // issue #46 - enqueues one jev-scout job per resulting candidate
-// (functional.md §2's main flow: "FS->>JS: 候補銘柄（50〜200）", every
+// (functional.md §2's main flow: "FS->>JS: 候補銘柄（上位N件。既定 top_n=20…）", every
 // scan cycle, not merely on first sight of a symbol - Jev Scout's own
 // FR-SCOUT-1〜3 re-evaluates every still-passing candidate each cycle).
 //
