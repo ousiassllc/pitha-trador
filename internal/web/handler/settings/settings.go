@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 
+	"github.com/a-h/templ"
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -72,9 +73,7 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 func (h *SettingsHandler) Page(c *gin.Context) {
 	ctx := c.Request.Context()
 	props := pages.SettingsProps{Connections: h.connections(ctx, settingsConnections)}
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = pages.SettingsPage(props).Render(ctx, c.Writer)
+	shared.RenderHTML(c, http.StatusOK, pages.SettingsPage(props))
 }
 
 // SetupPage implements `GET /setup` (issue #80, FR-SETUP-2): the
@@ -92,9 +91,7 @@ func (h *SettingsHandler) SetupPage(c *gin.Context) {
 		}
 	}
 	complete := len(h.unsetKeys(ctx, config.RequiredSecretKeys())) == 0
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = pages.SetupPage(pages.SetupProps{Connections: h.connections(ctx, offered), Complete: complete}).Render(ctx, c.Writer)
+	shared.RenderHTML(c, http.StatusOK, pages.SetupPage(pages.SetupProps{Connections: h.connections(ctx, offered), Complete: complete}))
 }
 
 // Save implements `POST /settings/:key`: it stores the form's `value`
@@ -166,9 +163,7 @@ func (h *SettingsHandler) Status(c *gin.Context) {
 		}
 	}
 	missing := h.unsetKeys(c.Request.Context(), keys)
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = organisms.SecretsBanner(missing).Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, http.StatusOK, organisms.SecretsBanner(missing))
 }
 
 // renderRow answers a successful Save/Delete. An HTMX request gets the
@@ -184,12 +179,11 @@ func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
 		return
 	}
 	ctx := c.Request.Context()
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = molecules.SecretFieldRow(h.row(ctx, key, settingsLabel(key), notice)).Render(ctx, c.Writer)
+	comps := []templ.Component{molecules.SecretFieldRow(h.row(ctx, key, settingsLabel(key), notice))}
 	if conn, ok := connectionByKey(key); ok {
-		_ = molecules.ConnectionStatus(h.connectionProps(ctx, conn), true).Render(ctx, c.Writer)
+		comps = append(comps, molecules.ConnectionStatus(h.connectionProps(ctx, conn), true))
 	}
+	shared.RenderHTML(c, http.StatusOK, templ.Join(comps...))
 }
 
 // connections builds the props of every connection in conns, in order.

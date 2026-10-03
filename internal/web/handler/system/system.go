@@ -87,9 +87,7 @@ func (h *SystemHandler) renderBadge(c *gin.Context) {
 		shared.RespondActionError(c, http.StatusInternalServerError, "システム状態の取得に失敗しました。")
 		return
 	}
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(http.StatusOK)
-	_ = organisms.SystemStatusBadge(state).Render(c.Request.Context(), c.Writer)
+	shared.RenderHTML(c, http.StatusOK, organisms.SystemStatusBadge(state))
 }
 
 // SystemStateOutput is the Huma response body for

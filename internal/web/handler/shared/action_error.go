@@ -14,9 +14,7 @@ import (
 // user sees why the action failed instead of a button that silently did
 // nothing.
 func RespondActionError(c *gin.Context, status int, message string) {
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(status)
-	_ = atoms.Toast(message).Render(c.Request.Context(), c.Writer)
+	renderErrorBody(c, status, atoms.Toast(message), message)
 }
 
 // RespondPageError answers a failed SSR page route (issue #143): an
@@ -37,7 +35,5 @@ func RespondPageError(c *gin.Context, status int, message string) {
 // Session (issue #171), which sit outside the handler chain and cannot
 // import pages themselves.
 func RenderErrorPage(c *gin.Context, status int, message string) {
-	c.Header("Content-Type", "text/html; charset=utf-8")
-	c.Status(status)
-	_ = pages.ErrorPage(status, message).Render(c.Request.Context(), c.Writer)
+	renderErrorBody(c, status, pages.ErrorPage(status, message), message)
 }
