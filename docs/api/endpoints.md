@@ -129,3 +129,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.27 | 2026-10-02 | §1のWailsアプリのバインド記述を、Windowsのみ`/ws/...`専用ループバックリスナー（`127.0.0.1`と`[::1]`）を起動する実態に合わせて修正（「内蔵HTTPサーバーは`127.0.0.1`にのみバインド」を是正） | issue #300（#266/#285の実装との乖離解消） |
 | 1.28 | 2026-10-03 | §3の`/settings`・`/setup`を接続先別の一覧＋モーダル構成に更新。`POST`/`DELETE /settings/:key`のHTMX応答は行に加えて接続先の状態バッジ（`hx-swap-oob`）を返す | issue #302 |
 | 1.29 | 2026-10-03 | §3 に `GET /scanner/scan`（スキャン状況パネル）を追加、`GET /scanner` にスキャン状況パネルを追記 | issue #303 |
+| 1.30 | 2026-10-03 | `POST`/`DELETE /settings/:key`のHTMX応答は、`Referer`が`/setup`のとき必須キー充足状態を再計算した完了メッセージ（`#setup-status`、`hx-swap-oob`）も返す | issue #325 |
