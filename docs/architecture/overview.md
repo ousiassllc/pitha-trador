@@ -24,7 +24,7 @@
 | スタイリング | Tailwind CSS | ユーティリティファーストCSS |
 | ビルド | esbuild | Lit/TypeScriptバンドル |
 | DB | **SQLite**（`modernc.org/sqlite`、アプリ内蔵） | 全永続データ（`architecture/er.md`参照）。exeに同梱、外部サービスのインストール不要 |
-| DBアクセス | database/sql + sqlc（sqlite3方言） | 型安全なSQLクエリ生成。ORMは使わずSQLを直接管理 |
+| DBアクセス | database/sql（手書きSQL、`internal/repository/**`） | ORM・SQL生成ツール（sqlc等）は使わず、SQLを直接管理 |
 | マイグレーション | golang-migrate（sqlite3ドライバ） | `db/migrations` のSQLマイグレーション管理 |
 | ベクトル検索 | `modernc.org/sqlite/vec`（sqlite-vecのpure Go移植、`vec0`仮想テーブル） | RAG類似検索（§7）。pgvector相当の機能をSQLite上で実現。CGO不要でクロスコンパイル可能（`environment/setup.md` §CI/CD参照） |
 | Job Queue / Scheduler | 自前Workerプール（`jobs`テーブル + goroutine） | market-data, feature-calc, jev-scout, jev-trader, outcome-labeling, analytics の6キュー（Risk判定・Paper発注は`jev-trader`内で同期実行しキューを持たない）。単一プロセス前提のためRedis/River等の外部キューは不要。`architecture/er.md` の`jobs`テーブルで永続化・再起動時リカバリ |
@@ -293,3 +293,4 @@ handler → service → repository → domain
 | 1.39 | 2026-10-03 | §3のツリーに、`internal/router`直下が行数上限（2000行/ディレクトリ）を超過したため外部テストを移したテスト専用サブパッケージ`router/{apiroutes,staticroute,systemheader}`を追記 | issue #314 |
 | 1.40 | 2026-10-03 | §3の`.linterlyignore`方針に、ライセンス全文`LICENSE`（手書きソースではない定型文）を許容する除外として追記 | issue #316 |
 | 1.41 | 2026-10-03 | §5・§6（`overview/integrations.md`）: Settings画面の`JEV_BASE_URL`/`JEV_MODEL`の入力先を、廃止済みの折りたたみ「詳細設定（任意）」からJev接続先モーダル内の任意項目へ訂正（1.34の「詳細設定」は当時の記録）。「上書き値があるときだけ詳細設定を開く」記述を削除 | issue #315（#302 とのdoc-drift解消） |
+| 1.42 | 2026-10-03 | §2の「DBアクセス」行を、sqlc前提から実装どおりの`database/sql`＋手書きSQL（`internal/repository/**`）へ訂正 | issue #317（リポジトリにsqlcの設定・生成コード・依存が存在しない） |
