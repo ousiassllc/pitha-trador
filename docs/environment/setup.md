@@ -174,14 +174,21 @@ language: ja
 `.linterlyignore`の方針（`architecture/overview.md` §3「サブパッケージ単位の責務規約」）:
 
 ```text
-# 実行時ログ（ソースコードではない）
+# logs/（.gitignoreの `logs/` パターンでリポジトリルート・cmd/desktop/両方が
+# 対象）はアプリ実行時に生成されるランタイムログで、ソースコードではない。
+# linterly は .gitignore を参照しないため明示的に除外する（issue-sweep実行中、
+# ローカルでの動作確認で溜まった数十万行のログが pre-commit の golangci-lint /
+# linterly をブロックした事例より）。
 **/logs/**
 
-# 自動生成コード（Templが生成するGoコード）
+# 自動生成コード（Templが生成するGoコード。手書きソースコードの除外は基本追加しない）
 *_templ.go
+
+# ライセンス全文（法的な定型文でありソースコードではない。分割・短縮できない）
+LICENSE
 ```
 
-- 許容する除外は上記の`*_templ.go`と`**/logs/**`のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
+- 許容する除外は上記の`*_templ.go`・`**/logs/**`・ライセンス全文`LICENSE`（手書きソースではない定型文）のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
 - サブパッケージ分割前の暫定除外（`internal/repository/`は#244、`internal/web/handler/`は#245、`internal/bootstrap/`は#246、`internal/service/risk/`は#247）は全て削除済みで、#248で全廃を確認した。手書きソースの除外を新規に追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
@@ -253,3 +260,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.24 | 2026-10-02 | 環境変数表`PITHA_SERVER_ADDR`の「`cmd/desktop`はネットワークポートを待ち受けない」を、Windowsのみ`/ws/...`専用のループバックリスナー（`127.0.0.1`と`[::1]`、ランダムポート）を起動する実態に合わせて修正 | issue #300（#266/#285の実装との乖離解消） |
 | 1.25 | 2026-10-03 | CI/CD節に`GOTOOLCHAIN: auto`の設定理由を追記（`actions/setup-go` v7が`GOTOOLCHAIN=local`を設定し、`golangci-lint`の`go install`が失敗していた） | PR #304 CI `lint`ジョブ失敗の修正 |
 | 1.26 | 2026-10-03 | `GOTOOLCHAIN: auto`の設定箇所をワークフロー全体から`Install golangci-lint`/`Install linterly`のステップレベルへ訂正（`actions/setup-go`の`$GITHUB_ENV`エクスポートがワークフローレベル`env`を上書きし、1.25の設定は効かなかった） | PR #304 CI `lint`ジョブ失敗の再修正 |
+| 1.27 | 2026-10-03 | `.linterlyignore`の内容ブロックを実ファイル（コメント文面を含む）に合わせ、`LICENSE`（ライセンス全文・手書きソースではない定型文）を許容する除外に追記 | issue #316（実ファイルとの乖離解消） |
