@@ -1,0 +1,29 @@
+package atoms
+
+// InputProps is Input's input. Type is empty for "text". Attrs carries
+// everything else (placeholder, required, autocomplete, data-testid, ...);
+// a `true` value renders a bare boolean attribute.
+type InputProps struct {
+	ID    string
+	Name  string
+	Type  string
+	Attrs templ.Attributes
+}
+
+// Input renders a text-like <input> with the shared border/padding style.
+templ Input(props InputProps) {
+	<input
+		id={ props.ID }
+		class="flex-1 rounded-md border border-slate-300 px-3 py-1"
+		type={ inputType(props.Type) }
+		name={ props.Name }
+		{ props.Attrs... }
+	/>
+}
+
+func inputType(t string) string {
+	if t == "" {
+		return "text"
+	}
+	return t
+}

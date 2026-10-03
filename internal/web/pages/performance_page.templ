@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
@@ -43,7 +44,9 @@ templ PerformancePage(props PerformanceProps) {
 			<label class="flex flex-col text-sm text-slate-600">Training days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="training_days" min="1" value={ fmt.Sprintf("%d", props.Form.TrainingDays) }/></label>
 			<label class="flex flex-col text-sm text-slate-600">Validation days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="validation_days" min="1" value={ fmt.Sprintf("%d", props.Form.ValidationDays) }/></label>
 			<label class="flex flex-col text-sm text-slate-600">Forward days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="forward_days" min="1" value={ fmt.Sprintf("%d", props.Form.ForwardDays) }/></label>
-			<button class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white" type="submit">Run backtest</button>
+			@atoms.Button(atoms.ButtonProps{Type: "submit"}) {
+				Run backtest
+			}
 		</form>
 		if props.Error != "" {
 			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">{ props.Error }</p>
