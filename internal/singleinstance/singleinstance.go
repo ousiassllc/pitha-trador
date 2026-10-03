@@ -30,7 +30,7 @@ type Lock struct {
 // its parent directory if needed). It never blocks: it returns
 // ErrAlreadyRunning when another process holds the lock.
 func Acquire(path string) (*Lock, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("singleinstance: create lock dir: %w", err)
 	}
 	f, err := lockFile(path)
