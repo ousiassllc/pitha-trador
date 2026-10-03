@@ -13,13 +13,15 @@ kabuステーションAPIは、その PC の localhost だけに待受する（�
 ```mermaid
 flowchart LR
     Grok["Grok Bot（リモート）"]
-    MCP["MCP サーバ（Windows PC）"]
+    Tunnel["プライベートトンネル\n（Tailscale 等）"]
+    MCP["MCP サーバ（Windows PC）\nHTTP。インターネット非公開"]
     Kabu["kabuステーションAPI\nlocalhost:18080"]
-    Grok -->|"登録済みの MCP コネクタ"| MCP
+    Grok -->|"コネクタとして登録"| Tunnel
+    Tunnel -->|"Grok Bot 側だけ到達"| MCP
     MCP -->|"localhost のみ"| Kabu
 ```
 
-MCP サーバは kabuステーションと同じ Windows PC で動かし、Grok Bot のコネクタとして登録する。`localhost:18080` を呼ぶのはこの MCP サーバだけである。Grok Bot に localhost の URL を渡して、自分で叩かせない。
+MCP サーバは kabuステーションと同じ Windows PC で動き、HTTP で話す（stdio ではない）。待受はインターネットへ公開しない。Grok Bot から届く道は、プライベートトンネル（Tailscale または同等のもの）だけである。`localhost:18080` を呼ぶのはこの MCP サーバだけである。検証ポート `18081` は、呼び出しが検証を指定したときだけ使う。Grok Bot は localhost を呼ばない。
 
 将来の MCP が Grok Bot に返すのは、次だけである。
 
@@ -34,7 +36,8 @@ MCP サーバは kabuステーションと同じ Windows PC で動かし、Grok 
 - 発注・訂正・取消をしない。注文系のパスは呼ばない
 - 銘柄登録・登録解除をしない（板登録の PUT を含む）。板・余力・残高・ランキングも取らない
 - APIパスワードをツール引数、戻り値、ログ、標準出力、標準エラー、Grok Bot とのコネクタ記録に出さない。発行されたトークンも同様に出さず、メモリから破棄する
-- パスワードをコマンド引数、環境変数、コネクタのヘッダ、Grok Bot への登録メッセージに渡さない
+- `KABU_API_PASSWORD` を Grok Bot に送らない。コネクタ URL、コマンド引数、環境変数、コネクタのヘッダ、登録メッセージに入れない。コネクタ認証は、これとは別のトークンである
+- MCP を stdio では話させない。HTTP 待受をインターネットへ公開しない。公開の HTTPS URL をコネクタにしない
 - Grok Bot から `localhost` / `127.0.0.1` / `::1` や kabuステーションのポートへ直接接続しない。コネクタに登録する URL を `http://localhost:18080/kabusapi` にしない
 - ツール引数で kabu のホストや URL を渡させない。MCP が叩く kabu のホストは localhost 固定
 - kabuステーションの起動、ログイン、設定変更を代行しない
@@ -48,7 +51,11 @@ MCP サーバは kabuステーションと同じ Windows PC で動かし、Grok 
 
 ### 3.1 Grok Bot から MCP コネクタ
 
-Grok Bot が接続するのは、登録済みの MCP コネクタだけである。これは pitha-trador の状態確認用コネクタであり、kabuステーションの URL ではない。Grok Bot はクラウド側にいるため、PC のループバック（`localhost`、`127.0.0.1`、`::1`）へは届かない。登録する入口をループバックの kabu ポートにしてはならない。
+Grok Bot が接続するのは、登録済みの MCP コネクタだけである。これは pitha-trador の状態確認用コネクタであり、kabuステーションの URL ではない。
+
+MCP サーバは Windows PC 上で HTTP を話す。stdio ではない。この HTTP 待受はインターネットに出さない。公開の HTTPS URL も置かない。Grok Bot はクラウド側にいるため、PC のループバック（`localhost`、`127.0.0.1`、`::1`）へは届かない。登録する入口をループバックの kabu ポートにしてはならない。
+
+届けるのはプライベートトンネル（Tailscale または同等のもの）だけである。トンネルは Grok Bot の側からその HTTP へ届く道を作り、インターネット全体には開かない。Grok Bot に登録するアドレスは、このトンネル越しの MCP 入口である。コネクタの認証トークンは `KABU_API_PASSWORD` とは別で、URL にはどちらの秘密も載せない。
 
 ### 3.2 MCP サーバから kabuステーション
 
@@ -87,7 +94,7 @@ localhost を呼ぶのは、Windows PC 上の MCP サーバだけである。ホ
 
 ## 5. ツール
 
-Grok Bot と MCP の間は、登録したコネクタ（HTTPS の streamable HTTP または SSE）である。stdio ではない。ツールは次の二つだけで、どちらも副作用の無い読み取り。
+Grok Bot と MCP の間は、プライベートトンネル越しの HTTP コネクタである。stdio ではなく、インターネット公開の HTTPS URL でもない。ツールは次の二つだけで、どちらも副作用の無い読み取り。
 
 ### 5.1 `kabu_station_status`
 
@@ -169,19 +176,18 @@ Windows PC 上の MCP が、同じ PC の kabuステーションAPIが待受し�
 - 行が無い、DB が無い、復号できない、はいずれも `password_unavailable`。理由がパスワード文字列そのものにならない範囲で区別してよい（未設定 / ファイルが読めない / 復号できない）
 - 平文は `POST /token` のボディを作る間だけ、Windows PC 上の MCP プロセスのメモリに置く。ログへ書かない。ツール結果へ書かない。Grok Bot に届くコネクタの記録にも書かない。パニック時の回復ログにも載せない
 - 成功・失敗のどちらの応答でも `Token` は返さない。成功時は破棄する
-- Grok Bot にパスワードを貼らせて登録しない。読む場所は PC 上の `secrets` だけである
+- Grok Bot にパスワードを送らない。コネクタ URL に入れない。読む場所は PC 上の `secrets` だけである
+- コネクタ認証のトークンは `KABU_API_PASSWORD` とは別である。API パスワードをコネクタ認証に使わない。コネクタ用トークンを kabu の `POST /token` に使わない。どちらもログに出さない
 
 ## 8. MCP サーバの置き場と Grok Bot への登録
 
-MCP サーバは、kabuステーションと同じ Windows PC、同じユーザーのセッションで動かす。このプロセスだけが `localhost:18080`（検証時は 18081）へ接続する。実行ファイルの例は `pitha-kabu-status-mcp.exe`。このバイナリは今は無く、本仕様では追加しない。
+MCP サーバは、kabuステーションと同じ Windows PC、同じユーザーのセッションで動かす。話しかたは HTTP である。stdio ではない。このプロセスだけが kabu へ接続する。既定は `localhost:18080`。`18081` はツール引数で検証を指定したときだけ使う。実行ファイルの例は `pitha-kabu-status-mcp.exe`。このバイナリは今は無く、本仕様では追加しない。
 
-Grok Bot はリモートなので、PC 上の stdio 子プロセスとしては起動できない。Cursor のローカル `mcp.json` に `command` で exe を書く形は、この接続の登録方法ではない。
+HTTP の待受はインターネットへ公開しない。公開の HTTPS URL は作らない。Grok Bot はリモートなので、PC の localhost も、stdio の子プロセスも、コネクタの入口にはならない。Cursor のローカル `mcp.json` に `command` で exe を書く形は、この接続の登録方法ではない。
 
-登録は Grok Bot のコネクタとして行う。Grok Bot の会話で MCP サーバの追加を頼み、Grok Bot から到達できる MCP の URL を渡す。Grok Bot がその URL を確認し、コネクタとして保存する。新しいツールは次のメッセージから使える。渡す URL は MCP のエンドポイントであり、`http://localhost:18080/kabusapi` ではない。
+Grok Bot へ届ける道はプライベートトンネル（Tailscale または同等のもの）だけである。トンネルは Grok Bot の側から、PC 上の HTTP 待受へ届くようにし、インターネット全体には開かない。登録は Grok Bot のコネクタとして行う。渡すアドレスはトンネル越しの MCP 入口であり、`http://localhost:18080/kabusapi` でも、インターネット公開の URL でもない。
 
-Grok Bot はクラウドから PC のループバックへ届かない。コネクタの入口は、Grok Bot が到達できる HTTPS の MCP（streamable HTTP または SSE）にする。その入口の実体は Windows PC 上の MCP プロセスで、プロセスが kabu の localhost を呼ぶ。入口をどう公開するかは本仕様では実装しない。公開した入口を kabu のポートそのものにしてはならない。
-
-`args`、`env`、コネクタのヘッダ、登録時のチャットに API パスワードを置かない。ポートの既定は 18080。検証ポートはツール引数 `environment=verification` のときだけ使う。
+コネクタ認証のトークンは、PC に保存済みの `KABU_API_PASSWORD` とは別である。API パスワードは Grok Bot に送らない。コネクタ URL に入れない。ログに出さない。コネクタ用トークンもログと URL には出さない。kabu のポートの既定は 18080 のままである。
 
 ## 9. 関連 issue（文脈のみ）
 
@@ -196,3 +202,4 @@ Grok Bot はクラウドから PC のループバックへ届かない。コネ�
 |----|------|---------|---------|
 | 1.0 | 2026-10-03 | 新規作成 | 読み取り専用の状態問い合わせの仕様。実装は範囲外 |
 | 1.1 | 2026-10-03 | 問い合わせ元をリモートの Grok Bot に改めた。Grok Bot は登録済み MCP コネクタ経由で pitha-trador に接続し、localhost は Windows PC 上の MCP だけが呼ぶ | 同一 PC 上のエージェントが localhost を叩く、という接続の記述が誤りだったため |
+| 1.2 | 2026-10-03 | 到達をプライベートトンネル（Tailscale 等）越しの HTTP に定めた。インターネット公開の HTTPS URL と stdio は使わない。コネクタ認証トークンは `KABU_API_PASSWORD` とは別 | 到達経路の決定。MCP は PC 上の HTTP のまま、インターネットには出さない |
