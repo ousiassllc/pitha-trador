@@ -28,7 +28,7 @@ sequenceDiagram
 - Scheduler（自前Worker、`jobs`テーブル）のフルスキャンが銘柄ごとに `market-data` ジョブをenqueueする。特徴量の算出・永続化は `market-data` ジョブ内で同期実行され、`feature-calc` キューは互換用の空ジョブ（同一payloadで並列にenqueueされ成功するだけ。`market-data` → `feature-calc` の連鎖ではない）である。`jev-scout` は候補更新サイクル（`bootstrap/candidates`）と、`market-data` ジョブ内のイベント再評価（FR-SCAN-1）からenqueueされ、`jev-trader` は `jev-scout` ジョブがenqueueする。各Serviceはdomainモデルを介して疎結合に連携する
 - `jev-scout`/`jev-trader`の直前にRAG Context Builder（§7）が類似局面を検索し文脈を付与する
 - Risk判定・Paper発注は独立したキュー（ジョブ）を持たず、`jev-trader`ジョブ内でPolicy Engine → Risk Engine → Execution（Paper）を同期実行する。Risk Engineは必ずPolicy Engineの直後に評価され、Risk Engineの承認なしにExecutionへは到達しない
-- `outcome-labeling` / `analytics` は約定・Exit後に非同期実行し、UIの応答性に影響を与えない
+- `outcome-labeling` は毎分のcron（`@every 1m`）が、判定水平線（5/10/20分）を経過したJev判断を拾ってenqueueする（約定・Exitを契機にはしない）。`analytics` は平日15:40 JSTのSol/Opus自己改善バッチ（`integrations.md` §8）専用のキューである。いずれも売買パスとは独立に非同期実行し、UIの応答性に影響を与えない
 
 ### 10.3 Kill Switchフロー（発動〜再開）
 
