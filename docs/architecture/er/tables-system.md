@@ -85,7 +85,7 @@ erDiagram
 
 ## jobs（自前ワーカーキュー、River代替）
 
-SQLiteはRiver（Postgres専用ジョブキュー）を利用できないため、`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6キューをこのテーブルと`internal/service/scheduler`のGoワーカープールで実現する（`architecture/overview.md` §2, §8参照）。Risk判定・Paper発注は`jev-trader`ジョブ内で同期実行され、専用キューは持たない（FR-SCHED-1）。
+SQLiteはRiver（Postgres専用ジョブキュー）を利用できないため、`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6キューをこのテーブルと`internal/service/scheduler`のGoワーカープールで実現する（`architecture/overview.md` §2, §8参照）。`feature-calc`は互換用の空ジョブ（特徴量算出は`market-data`ジョブ内）。Risk判定・Paper発注は`jev-trader`ジョブ内で同期実行され、専用キューは持たない（FR-SCHED-1）。
 
 ```mermaid
 erDiagram
