@@ -4,7 +4,7 @@
 
 ## runtime_settings
 
-Fast Screener/Policy/Risk のしきい値をコード再デプロイなしで変更するためのKey-Valueストア（`config/*.yaml` の初期値をDBへロードし、以降はDBを正とする）。操作者ハートビート（dead-man's switch、`architecture/overview.md` §10.4）の`system.last_ui_heartbeat_at`のような高頻度更新の単一値もこのテーブルで保持する。
+Fast Screener（`screener.*`）とPolicy Engine（`policy.*`）のしきい値をコード再デプロイなしで上書きするKey-Valueストア。値は `config/strategy.yaml` < 環境変数 < `runtime_settings` の順で読み取り時に重ね合わせる（`config/*.yaml` の値をDBへロード/シードする処理はなく、行が無ければyaml/環境変数の値がそのまま使われる）。Riskの閾値は対象外（`config/risk.yaml` のみで管理し、`risk.*` キーはもたない）。操作者ハートビート（dead-man's switch、`architecture/overview.md` §10.4）の`system.last_ui_heartbeat_at`のような高頻度更新の単一値もこのテーブルで保持する。
 
 ```mermaid
 erDiagram
