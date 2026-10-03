@@ -11,6 +11,7 @@ import { html, LitElement, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
+import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
 import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import {
@@ -272,7 +273,7 @@ export class PithaActivityFeed extends LitElement {
   }
 
   private renderNotices() {
-    return html`${renderWsDisconnected(this.wsStatus)}${this.error ? html`<p class="pitha-activity-feed-error" role="alert">${this.error}</p>` : nothing}`;
+    return html`${renderWsDisconnected(this.wsStatus, lightDomWsNoticeClass)}${this.error ? html`<p class="pitha-activity-feed-error ${lightDomErrorClass}" role="alert">${this.error}</p>` : nothing}`;
   }
 
   // Skip the first update cycle (old value undefined): connectedCallback

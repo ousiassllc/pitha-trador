@@ -136,4 +136,16 @@ describe('pitha-activity-feed reconnect resync', () => {
     expect(fetchMock.mock.calls).toHaveLength(1);
     expect(isBackground(fetchMock.mock.calls[0])).toBe(false);
   });
+
+  // Light DOM: Shadow `noticeStyles` do not apply, so Tailwind classes must (#355).
+  test('styles the disconnected notice with Tailwind classes while the socket is down', async () => {
+    const { el } = await mount();
+    FakeWebSocket.instances[0].emit('open');
+    FakeWebSocket.instances[0].emit('close', { code: 1006 });
+    await el.updateComplete;
+
+    const notice = el.querySelector('.pitha-ws-disconnected');
+    expect(notice?.classList.contains('text-amber-700')).toBe(true);
+    expect(notice?.classList.contains('text-xs')).toBe(true);
+  });
 });

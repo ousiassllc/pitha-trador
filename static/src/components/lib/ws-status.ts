@@ -4,9 +4,11 @@
 import { html, nothing } from 'lit';
 import { isWsDisconnected, type WsStatus } from './ws';
 
-export function renderWsDisconnected(status: WsStatus) {
+// `extraClass` lets light-DOM callers add Tailwind classes, since the Shadow
+// DOM `noticeStyles` do not reach them.
+export function renderWsDisconnected(status: WsStatus, extraClass = '') {
   if (!isWsDisconnected(status)) return nothing;
-  return html`<p class="pitha-ws-disconnected" role="status" data-ws-status=${status}>
+  return html`<p class=${`pitha-ws-disconnected ${extraClass}`.trim()} role="status" data-ws-status=${status}>
     接続が切れています。再接続を試行しています（更新が反映されない場合はページを再読み込みしてください）。
   </p>`;
 }

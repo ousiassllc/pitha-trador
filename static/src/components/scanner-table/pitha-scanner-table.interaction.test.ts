@@ -131,9 +131,24 @@ describe('pitha-scanner-table interaction', () => {
     const alert = el.querySelector('[role="alert"]');
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain('500');
+    // Light DOM: Shadow `noticeStyles` do not apply, so Tailwind classes must (#355).
+    expect(alert?.classList.contains('text-red-700')).toBe(true);
     // Nothing has loaded: no count, caption or empty-state claim.
     expect(el.querySelector('[data-testid="scanner-count"]')).toBeNull();
     expect(el.querySelector('caption')).toBeNull();
     expect(el.querySelector('[data-testid="scanner-empty"]')).toBeNull();
+  });
+
+  test('styles the disconnected notice with Tailwind classes while the socket is down', async () => {
+    const { el } = await mount([item()]);
+    FakeWebSocket.instances[0].emit('open', {});
+    await el.updateComplete;
+    expect(el.querySelector('.pitha-ws-disconnected')).toBeNull();
+
+    FakeWebSocket.instances[0].emit('close', { code: 1006 });
+    await el.updateComplete;
+    const notice = el.querySelector('.pitha-ws-disconnected');
+    expect(notice?.classList.contains('text-amber-700')).toBe(true);
+    expect(notice?.classList.contains('text-xs')).toBe(true);
   });
 });

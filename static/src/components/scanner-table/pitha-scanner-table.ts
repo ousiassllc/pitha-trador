@@ -10,6 +10,7 @@ import { html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
+import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import type {
@@ -154,8 +155,8 @@ export class PithaScannerTable extends LitElement {
 
   protected override render() {
     const notices = html`
-      ${renderWsDisconnected(this.wsStatus)}
-      ${this.error ? html`<p class="pitha-scanner-table-error" role="alert">${this.error}</p>` : ''}
+      ${renderWsDisconnected(this.wsStatus, lightDomWsNoticeClass)}
+      ${this.error ? html`<p class="pitha-scanner-table-error ${lightDomErrorClass}" role="alert">${this.error}</p>` : ''}
     `;
     // Until the first data arrives the server-rendered table stays in
     // place (see createRenderRoot); only the notices are added beside it.

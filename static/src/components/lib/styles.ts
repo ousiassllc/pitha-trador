@@ -2,7 +2,8 @@
 // default shadow root (issue #145). Tailwind (static/src/css/app.css) is
 // document CSS and does not cross a shadow boundary, so these components
 // carry their own `static styles`; scanner-table / activity-feed render into
-// the light DOM instead and do not use this.
+// the light DOM instead and do not use the `css` blocks below; they use the
+// Tailwind class constants at the end of this file for the same look.
 import { css } from 'lit';
 
 export const buttonStyles = css`
@@ -39,3 +40,8 @@ export const noticeStyles = css`
     font-size: 0.75rem;
   }
 `;
+
+// Tailwind counterparts of `noticeStyles` for the light-DOM components
+// (issue #355). Kept as whole literals so Tailwind's source scan emits them.
+export const lightDomErrorClass = 'text-sm text-red-700';
+export const lightDomWsNoticeClass = 'text-xs text-amber-700';
