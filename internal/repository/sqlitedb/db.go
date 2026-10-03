@@ -64,6 +64,29 @@ func dsn(path string) string {
 	return fmt.Sprintf("file:%s?_foreign_keys=1&_journal_mode=WAL&_busy_timeout=60000&_txlock=immediate", path)
 }
 
+const (
+	dirMode  os.FileMode = 0o700
+	fileMode os.FileMode = 0o600
+)
+
+// ensurePrivateFile creates the database file with 0600 if it does not
+// exist yet and narrows an existing one to 0600 (e.g. a 0644 file left by
+// an older version). SQLite then derives the permissions of its -wal/-shm
+// files from this file.
+func ensurePrivateFile(path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, fileMode)
+	if err != nil {
+		return fmt.Errorf("repository: create database file %q: %w", path, err)
+	}
+	if err := f.Chmod(fileMode); err != nil {
+		return errors.Join(fmt.Errorf("repository: restrict database file %q: %w", path, err), f.Close())
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("repository: close database file %q: %w", path, err)
+	}
+	return nil
+}
+
 // Open opens (creating it and its parent directory if necessary) the
 // SQLite database file at path, applies every pending golang-migrate
 // migration embedded in db/migrations, and returns a *sql.DB ready for use
@@ -76,11 +99,21 @@ func dsn(path string) string {
 // duration, error) via dbmw.go's sqlmw-wrapped driver
 // (requirements/non-functional.md §5.1 "DB latency / エラー"). Callers are
 // responsible for closing the returned *sql.DB.
+//
+// The database holds the secrets table (broker API password etc.,
+// encrypted only with an in-binary key), so a newly created parent
+// directory is 0700 and the database file is pre-created/forced to 0600
+// before SQLite opens it; SQLite gives the -wal/-shm/-journal side files
+// the main file's mode. A pre-existing parent directory is left untouched
+// because PITHA_DB_PATH may point into a shared directory (issue #334).
 func Open(path string) (*sql.DB, error) {
 	if dir := filepath.Dir(path); dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, dirMode); err != nil {
 			return nil, fmt.Errorf("repository: create database directory %q: %w", dir, err)
 		}
+	}
+	if err := ensurePrivateFile(path); err != nil {
+		return nil, err
 	}
 
 	registerInstrumentedDriver()

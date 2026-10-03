@@ -88,7 +88,7 @@ func (a *Archiver) compress(name string) (err error) {
 	}
 	defer func() { _ = src.Close() }()
 
-	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logFileMode)
 	if err != nil {
 		return fmt.Errorf("logging: create archive %q: %w", dstPath, err)
 	}
