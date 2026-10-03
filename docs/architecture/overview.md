@@ -27,7 +27,7 @@
 | DBアクセス | database/sql（手書きSQL、`internal/repository/**`） | ORM・SQL生成ツール（sqlc等）は使わず、SQLを直接管理 |
 | マイグレーション | golang-migrate（sqlite3ドライバ） | `db/migrations` のSQLマイグレーション管理 |
 | ベクトル検索 | `modernc.org/sqlite/vec`（sqlite-vecのpure Go移植、`vec0`仮想テーブル） | RAG類似検索（§7）。pgvector相当の機能をSQLite上で実現。CGO不要でクロスコンパイル可能（`environment/setup.md` §CI/CD参照） |
-| Job Queue / Scheduler | 自前Workerプール（`jobs`テーブル + goroutine） | market-data, feature-calc, jev-scout, jev-trader, outcome-labeling, analytics の6キュー（Risk判定・Paper発注は`jev-trader`内で同期実行しキューを持たない）。単一プロセス前提のためRedis/River等の外部キューは不要。`architecture/er.md` の`jobs`テーブルで永続化・再起動時リカバリ |
+| Job Queue / Scheduler | 自前Workerプール（`jobs`テーブル + goroutine） | market-data, feature-calc, jev-scout, jev-trader, outcome-labeling, analytics の6キュー（`feature-calc`は互換用の空ジョブで、特徴量算出は`market-data`ジョブ内で完結する。Risk判定・Paper発注は`jev-trader`内で同期実行しキューを持たない）。単一プロセス前提のためRedis/River等の外部キューは不要。`architecture/er.md` の`jobs`テーブルで永続化・再起動時リカバリ |
 | 周期実行 | robfig/cron | 60秒/15-30秒/5-15秒サイクルのトリガー |
 | リアルタイムPush | `github.com/coder/websocket` | Scanner Dashboard/Symbol DetailへのUI即時反映（`nhooyr.io/websocket`はメンテナがcoder/websocketへ移管し非推奨化されたため、フォーク後継のcoder/websocketを採用） |
 | 市場データ・発注 | kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券） | 1分足・板・発注（REST + PUSH WebSocket） |
@@ -46,7 +46,7 @@ pitha-trador/
 ├── internal/
 │   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, lifecycle.go）、定数（constants.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）のみ
 │   │   ├── candidates/           # 候補銘柄の定期更新（Fast Screener実行・jev-scoutのenqueue・更新間隔ティッカー。#246）
-│   │   ├── marketdatajob/        # market-data / feature-calc ジョブハンドラ（板→Reading変換・イベント再評価enqueue。#246）
+│   │   ├── marketdatajob/        # market-data / feature-calc（空ジョブ）ジョブハンドラ（板→Reading変換・特徴量算出・イベント再評価enqueue。#246）
 │   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`backtestsource.Source`。#246）
 │   │   ├── heldposition/         # FR-SCHED-4 保有ポジション監視・Exit評価ループ（5〜15秒周期、最新板で再評価）
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
@@ -231,7 +231,7 @@ handler → service → repository → domain
 | Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
 | Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/candidates`・`bootstrap/heldposition`・`service/marketdata`・`service/pushfeed`・`service/scheduler`（`updatecheck`含む）から使う | `internal/safego` |
-| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-data/feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `paperexec`, `alerts`） |
+| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-dataジョブ、互換用の空feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `paperexec`, `alerts`） |
 | Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ・エラーログのエクスポート（`requirements/non-functional.md` §5・§5.3、フローは`overview/flows.md` §10.6） | `internal/logging` |
 | Supervisor | 子プロセスの異常終了時の指数バックオフ再起動（1秒〜5分、1分安定でリセット）。終了コード0で監視終了。`cmd/desktop`の`--supervise`起動でのみ使う（`requirements/non-functional.md` §3） | `internal/supervisor` |
 | Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。2つ目の起動は`bootstrap.Run`に到達する前に終了コード0で終了し、Scheduler・Kill Switch・発注の二重稼働を防ぐ | `internal/singleinstance` |
