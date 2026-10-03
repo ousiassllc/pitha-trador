@@ -68,8 +68,14 @@ export class PithaActivityFeed extends LitElement {
     return this;
   }
 
-  @property({ type: String, attribute: 'api-url' }) apiUrl = '/api/v1/activity';
-  @property({ type: String, attribute: 'ws-url' }) wsUrl = '/ws/activity';
+  // URLs are injected by Templ (pages.ActivityLogPage); the component
+  // owns none (docs/components/lit.md §5.5). `kill-switch-events-url` is
+  // the complete URL of the recent Kill Switch events query, so the
+  // query string is never assembled client-side. Its server-side limit
+  // must equal KILL_SWITCH_LIMIT, which trims pushed events.
+  @property({ type: String, attribute: 'api-url' }) apiUrl = '';
+  @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
+  @property({ type: String, attribute: 'kill-switch-events-url' }) killSwitchEventsUrl = '';
 
   @state() private queues: QueueStatus[] = [];
   @state() private events: ActivityEvent[] = [];
@@ -105,6 +111,10 @@ export class PithaActivityFeed extends LitElement {
   // `background` marks a resync the page fires by itself (WS reconnect), so
   // it is not counted as operator activity (FR-RISK-6, flows.md §10.4).
   private async loadSnapshot(background = false): Promise<void> {
+    if (!this.apiUrl) {
+      logger.error('pitha-activity-feed: api-url is not set');
+      return;
+    }
     try {
       const response = await get<ActivityAPIResponse>(this.feedUrl(), { background });
       this.queues = response.queues;
@@ -117,11 +127,12 @@ export class PithaActivityFeed extends LitElement {
   }
 
   private async loadKillSwitchEvents(background = false): Promise<void> {
+    if (!this.killSwitchEventsUrl) {
+      logger.error('pitha-activity-feed: kill-switch-events-url is not set');
+      return;
+    }
     try {
-      const response = await get<ActivityAPIResponse>(
-        `${this.apiUrl}?type=kill_switch&limit=${KILL_SWITCH_LIMIT}`,
-        { background },
-      );
+      const response = await get<ActivityAPIResponse>(this.killSwitchEventsUrl, { background });
       this.killSwitchEvents = response.events;
     } catch (err) {
       logger.error('pitha-activity-feed: failed to load kill switch events', { error: err });
@@ -129,6 +140,10 @@ export class PithaActivityFeed extends LitElement {
   }
 
   private subscribeWs(): void {
+    if (!this.wsUrl) {
+      logger.error('pitha-activity-feed: ws-url is not set');
+      return;
+    }
     // The server sends nothing on connect, so events emitted while the
     // socket was down are lost unless the snapshots are re-fetched (#221).
     let wasDisconnected = false;

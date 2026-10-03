@@ -1,11 +1,11 @@
 import { describe, expect, mock, test } from 'bun:test';
 import {
+  createScannerTable,
   FakeWebSocket,
   flush,
   installFakes,
   item,
   mount,
-  type ScannerTableElement,
 } from './scanner-test-support';
 import { COLUMNS } from './scanner-view';
 
@@ -89,7 +89,7 @@ describe('pitha-scanner-table interaction', () => {
     globalThis.fetch = mock(() =>
       Promise.resolve(new Response('', { status: 500 })),
     ) as unknown as typeof fetch;
-    const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+    const el = createScannerTable();
     document.body.appendChild(el);
     await flush(el);
     expect(el.querySelector('[role="alert"]')).not.toBeNull();
@@ -109,7 +109,7 @@ describe('pitha-scanner-table interaction', () => {
 
   test('renders nothing but notices before the first data arrives', async () => {
     globalThis.fetch = mock(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
-    const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+    const el = createScannerTable();
     document.body.appendChild(el);
     await el.updateComplete;
 
@@ -124,7 +124,7 @@ describe('pitha-scanner-table interaction', () => {
       Promise.resolve(new Response('', { status: 500 })),
     ) as unknown as typeof fetch;
 
-    const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+    const el = createScannerTable();
     document.body.appendChild(el);
     await flush(el);
 

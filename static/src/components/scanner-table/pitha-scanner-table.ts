@@ -95,8 +95,10 @@ export class PithaScannerTable extends LitElement {
   private ssrNodes: ChildNode[] = [];
   private helpOpen = false;
 
-  @property({ type: String, attribute: 'api-url' }) apiUrl = '/api/v1/scanner';
-  @property({ type: String, attribute: 'ws-url' }) wsUrl = '/ws/scanner';
+  // Injected by organisms.ScannerTableFallback; the component owns no URL
+  // (docs/components/lit.md §5.2).
+  @property({ type: String, attribute: 'api-url' }) apiUrl = '';
+  @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
 
   @state() private items: ScannerItem[] = [];
   // False until the first data (initial fetch or WS push) arrives, so an
@@ -123,6 +125,10 @@ export class PithaScannerTable extends LitElement {
   }
 
   private async loadInitial(): Promise<void> {
+    if (!this.apiUrl) {
+      logger.error('pitha-scanner-table: api-url is not set');
+      return;
+    }
     try {
       const response = await get<ScannerAPIResponse>(this.apiUrl);
       this.items = response.items;
@@ -136,6 +142,10 @@ export class PithaScannerTable extends LitElement {
   }
 
   private subscribeWs(): void {
+    if (!this.wsUrl) {
+      logger.error('pitha-scanner-table: ws-url is not set');
+      return;
+    }
     this.wsClient = new WsClient<ScannerUpdateMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;

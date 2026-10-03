@@ -101,7 +101,20 @@ function mountSsr(): ScannerTableElement {
   // synchronously triggers the custom-element *upgrade* reaction on
   // that already-connected, already-childed node (spec: "upgrade an
   // element"), matching a deferred module script's real timing.
-  customElements.define(tag, class extends PithaScannerTable {});
+  // happy-dom runs connectedCallback before delivering the existing
+  // attributes on upgrade, unlike browsers (spec: attributeChangedCallback
+  // first). Read them in the constructor to reproduce the browser order,
+  // since the component has no URL defaults to fall back on.
+  customElements.define(
+    tag,
+    class extends PithaScannerTable {
+      constructor() {
+        super();
+        this.apiUrl = this.getAttribute('api-url') ?? '';
+        this.wsUrl = this.getAttribute('ws-url') ?? '';
+      }
+    },
+  );
   return document.querySelector(tag) as ScannerTableElement;
 }
 

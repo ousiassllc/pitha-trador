@@ -89,6 +89,15 @@ export async function flush(el: ScannerTableElement): Promise<void> {
   await el.updateComplete;
 }
 
+// createScannerTable builds an element with the URLs Templ injects in
+// production (organisms.ScannerTableFallback); the component has no defaults.
+export function createScannerTable(): ScannerTableElement {
+  const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+  el.setAttribute('api-url', '/api/v1/scanner');
+  el.setAttribute('ws-url', '/ws/scanner');
+  return el;
+}
+
 // mount stubs `fetch` to resolve with { items, as_of }, appends a fresh
 // <pitha-scanner-table>, and waits for its initial render to complete.
 export async function mount(items: ScannerItem[]) {
@@ -97,7 +106,7 @@ export async function mount(items: ScannerItem[]) {
   );
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-  const el = document.createElement('pitha-scanner-table') as ScannerTableElement;
+  const el = createScannerTable();
   document.body.appendChild(el);
   await flush(el);
   return { el, fetchMock };

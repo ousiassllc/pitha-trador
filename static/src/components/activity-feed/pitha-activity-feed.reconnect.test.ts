@@ -77,6 +77,9 @@ async function mount() {
   const fetchMock = mock(() => Promise.resolve(new Response(snapshot(3, 'initial'))));
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   const el = document.createElement('pitha-activity-feed') as FeedElement;
+  el.setAttribute('api-url', '/api/v1/activity');
+  el.setAttribute('ws-url', '/ws/activity');
+  el.setAttribute('kill-switch-events-url', '/api/v1/activity?type=kill_switch&limit=10');
   document.body.appendChild(el);
   await flush(el);
   return { el, fetchMock };

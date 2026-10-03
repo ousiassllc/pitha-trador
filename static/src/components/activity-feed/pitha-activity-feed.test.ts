@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import './pitha-activity-feed';
 import type { ActivityEvent, QueueStatus } from './pitha-activity-feed';
 import { PithaActivityFeed } from './pitha-activity-feed';
@@ -75,6 +75,16 @@ async function flush(el: FeedElement): Promise<void> {
   await el.updateComplete;
 }
 
+// Builds an element with the URLs Templ injects (pages.ActivityLogPage);
+// the component has no defaults.
+function createFeed(): FeedElement {
+  const el = document.createElement('pitha-activity-feed') as FeedElement;
+  el.setAttribute('api-url', '/api/v1/activity');
+  el.setAttribute('ws-url', '/ws/activity');
+  el.setAttribute('kill-switch-events-url', '/api/v1/activity?type=kill_switch&limit=10');
+  return el;
+}
+
 // mount stubs `fetch` so that `type=kill_switch` requests return
 // killSwitchEvents and every other request returns { queues, events }.
 async function mount(
@@ -90,7 +100,7 @@ async function mount(
   });
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-  const el = document.createElement('pitha-activity-feed') as FeedElement;
+  const el = createFeed();
   document.body.appendChild(el);
   await flush(el);
   return { el, fetchMock };
@@ -112,8 +122,19 @@ describe('pitha-activity-feed', () => {
       ),
     ) as unknown as typeof fetch;
     document.body.innerHTML =
-      '<pitha-activity-feed-hydration-test><section id="queue-status"><table><tbody><tr data-queue="ssr"></tr></tbody></table></section></pitha-activity-feed-hydration-test>';
-    class PithaActivityFeedUnderTest extends PithaActivityFeed {}
+      '<pitha-activity-feed-hydration-test api-url="/api/v1/activity" ws-url="/ws/activity" kill-switch-events-url="/api/v1/activity?type=kill_switch&limit=10"><section id="queue-status"><table><tbody><tr data-queue="ssr"></tr></tbody></table></section></pitha-activity-feed-hydration-test>';
+    // happy-dom runs connectedCallback before delivering the existing
+    // attributes on upgrade, unlike browsers (attributeChangedCallback
+    // first). Read them in the constructor to reproduce the browser
+    // order, since the component has no URL defaults.
+    class PithaActivityFeedUnderTest extends PithaActivityFeed {
+      constructor() {
+        super();
+        this.apiUrl = this.getAttribute('api-url') ?? '';
+        this.wsUrl = this.getAttribute('ws-url') ?? '';
+        this.killSwitchEventsUrl = this.getAttribute('kill-switch-events-url') ?? '';
+      }
+    }
     customElements.define('pitha-activity-feed-hydration-test', PithaActivityFeedUnderTest);
     const el = document.querySelector('pitha-activity-feed-hydration-test') as FeedElement;
     await flush(el);
@@ -263,5 +284,23 @@ describe('pitha-activity-feed', () => {
 
     expect(FakeWebSocket.instances).toHaveLength(2);
     expect(FakeWebSocket.instances[1].url).toContain('/ws/activity-2');
+  });
+
+  test('logs an error and makes no request when the injected URLs are missing', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    const fetchMock = mock(() => Promise.resolve(new Response('{}')));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const el = document.createElement('pitha-activity-feed') as FeedElement; // no URL attributes
+    document.body.appendChild(el);
+    await flush(el);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+    for (const name of ['api-url', 'ws-url', 'kill-switch-events-url']) {
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ message: `pitha-activity-feed: ${name} is not set` }),
+      );
+    }
+    errorSpy.mockRestore();
   });
 });
