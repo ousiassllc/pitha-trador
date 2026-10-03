@@ -1,7 +1,10 @@
 package symbol_test
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -132,5 +135,38 @@ func TestSymbolHandler_Page_NoOpenPositionShowsPlaceholder(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "No open position.") {
 		t.Fatalf("body = %s, want the no-open-position placeholder", rec.Body.String())
+	}
+}
+
+// Issue #322: the page used to stream into c.Writer and drop the Render
+// error, so a failing template left a truncated 200 and no log. A render
+// failure (here: a request context that is already cancelled, which templ
+// components report as an error) must be logged and answered with a 500.
+func TestSymbolHandler_Page_RenderFailureIs500AndLogged(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	provider := &fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastSignal: domain.JevDirectionNone}}
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
+	router := gin.New()
+	router.GET("/symbols/:symbol", h.Page)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodGet, "/symbols/7203", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 (body=%s)", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), `id="jev-panel"`) {
+		t.Errorf("partial page leaked into the response: %q", rec.Body.String())
+	}
+	if !strings.Contains(logs.String(), "handler: render") || !strings.Contains(logs.String(), "context canceled") {
+		t.Errorf("render error not logged: %q", logs.String())
 	}
 }
