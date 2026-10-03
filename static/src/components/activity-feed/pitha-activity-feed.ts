@@ -53,6 +53,7 @@ export class PithaActivityFeed extends LitElement {
   @state() private wsStatus: WsStatus = 'connecting';
 
   private wsClient: WsClient<ActivityWsMessage> | null = null;
+  private snapshotGeneration = 0;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -82,12 +83,17 @@ export class PithaActivityFeed extends LitElement {
       logger.error('pitha-activity-feed: api-url is not set');
       return;
     }
+    // Only the latest request may touch state: a slower, older response
+    // (previous filter, or a pre-reconnect fetch) must not overwrite it.
+    const generation = ++this.snapshotGeneration;
     try {
       const response = await get<ActivityAPIResponse>(this.feedUrl(), { background });
+      if (generation !== this.snapshotGeneration) return;
       this.queues = response.queues;
       this.events = response.events;
       this.error = null;
     } catch (err) {
+      if (generation !== this.snapshotGeneration) return;
       this.error = err instanceof Error ? err.message : String(err);
       logger.error('pitha-activity-feed: failed to load activity snapshot', { error: err });
     }
