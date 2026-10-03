@@ -79,7 +79,8 @@ func NewScannerHandler(source CandidateSource, interval CandidateRefreshInterval
 }
 
 // scannerItem mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner`'s
-// item shape.
+// item shape. Return1m/Return5m are percent (0.4 == +0.4%), converted from
+// the Feature Engine's decimal ratios by toScannerItems.
 type scannerItem struct {
 	Symbol          string   `json:"symbol"`
 	Price           float64  `json:"price"`
@@ -100,8 +101,8 @@ func toScannerItems(candidates []domain.Candidate) []scannerItem {
 		items[i] = scannerItem{
 			Symbol:          c.Symbol,
 			Price:           c.Price,
-			Return1m:        c.Return1m,
-			Return5m:        c.Return5m,
+			Return1m:        domain.RatioToPercentPtr(c.Return1m),
+			Return5m:        domain.RatioToPercentPtr(c.Return5m),
 			VolumeRatio5m:   c.VolumeRatio5m,
 			PriceVsVWAPBps:  c.PriceVsVWAPBps,
 			SpreadBps:       c.SpreadBps,

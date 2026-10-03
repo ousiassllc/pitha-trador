@@ -13,7 +13,7 @@ func TestFilterReasons_ReportsEveryFailedFilter(t *testing.T) {
 	in.Turnover5mJPY = 1                       // < min_turnover_5m_jpy
 	in.Snapshot.SpreadBps = f(99)              // > max_spread_bps
 	in.Snapshot.Feature.VolumeRatio5m = f(0.1) // < min_volume_ratio
-	in.Snapshot.Feature.Return5m = f(-0.01)    // |.| < min_abs_return_5m_pct
+	in.Snapshot.Feature.Return5m = f(-0.0001)  // |.| (0.01%) < min_abs_return_5m_pct (0.3%)
 	in.Snapshot.Feature.RealizedVol5m = f(0)   // < min_realized_volatility
 	got := screener.FilterReasons(testCfg(), in)
 	want := []domain.ScreenReason{

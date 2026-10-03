@@ -59,11 +59,13 @@ type EventTriggerConfig struct {
 // FastScreenerConfig holds the Fast Screener numeric filters and
 // screen_score weights (functional.md §4.2, FR-FS-1/FR-FS-2).
 type FastScreenerConfig struct {
-	MinPrice              float64             `yaml:"min_price"`
-	MaxPrice              float64             `yaml:"max_price"`
-	MinTurnover5mJPY      float64             `yaml:"min_turnover_5m_jpy"`
-	MaxSpreadBps          float64             `yaml:"max_spread_bps"`
-	MinVolumeRatio        float64             `yaml:"min_volume_ratio"`
+	MinPrice         float64 `yaml:"min_price"`
+	MaxPrice         float64 `yaml:"max_price"`
+	MinTurnover5mJPY float64 `yaml:"min_turnover_5m_jpy"`
+	MaxSpreadBps     float64 `yaml:"max_spread_bps"`
+	MinVolumeRatio   float64 `yaml:"min_volume_ratio"`
+	// MinAbsReturn5mPct is in percent (0.3 == 0.3%), unlike Feature.Return5m
+	// which is a decimal ratio; screener converts via domain.RatioToPercent.
 	MinAbsReturn5mPct     float64             `yaml:"min_abs_return_5m_pct"`
 	MinRealizedVolatility float64             `yaml:"min_realized_volatility"`
 	TopN                  int                 `yaml:"top_n"`

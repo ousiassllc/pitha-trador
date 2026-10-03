@@ -104,8 +104,8 @@ templ scannerRow(c domain.Candidate) {
 			<a class="text-sky-700 underline-offset-2 hover:underline" href={ symbolHref(c.Symbol) }>{ c.Symbol }</a>
 		</td>
 		<td class="px-3 py-2 text-right tabular-nums">{ formatFloat(c.Price, 1) }</td>
-		<td class={ returnClass(c.Return1m) }>{ formatSignedNilFloat(c.Return1m, 2) }</td>
-		<td class={ returnClass(c.Return5m) }>{ formatSignedNilFloat(c.Return5m, 2) }</td>
+		<td class={ returnClass(c.Return1m) }>{ formatSignedNilFloat(domain.RatioToPercentPtr(c.Return1m), 2) }</td>
+		<td class={ returnClass(c.Return5m) }>{ formatSignedNilFloat(domain.RatioToPercentPtr(c.Return5m), 2) }</td>
 		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
 		<td class="px-3 py-2 text-right tabular-nums">{ formatSignedFloat(c.PriceVsVWAPBps, 0) }</td>
 		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.SpreadBps, 0) }</td>
