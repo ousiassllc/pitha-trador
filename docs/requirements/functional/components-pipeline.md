@@ -142,9 +142,16 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
   - 総エクスポージャ残枠: `initial_capital × (max_total_exposure_pct − 現在の総エクスポージャ率) ÷ 価格`
   - `GET /api/v1/symbols/{symbol}`の`risk.allowed_position_pct`は、直近価格で同サイジングを行った結果の数量が占める`initial_capital`比（%、発注不可なら0）
 - FR-ENTRY-4（約定の原子性）: Entry注文の約定（`paper_orders`のFILLED化）とポジション作成（`positions`）は単一のDBトランザクションで行う。失敗時は注文をFILLEDにせず、約定済み注文がどのポジションにも紐付かない状態（孤児約定）はRisk Engineの照合が`fill_discrepancy`として検知する（§4.7）
+- FR-ENTRY-5（銘柄単位のEntryゲート）: Executionエンジンの`Enter`は、次のいずれかに該当する銘柄への新規Entryを受け付けない（`ErrOutsideTradingSession` / `ErrPositionAlreadyOpen` / `ErrPendingOrderExists` / `ErrSymbolInCooldown`）。Risk Engineの判定（FR-RISK-1）とは別の、Execution自身の不変条件である
+  - 立会時間外、または引け前強制決済の開始時刻以降（Calendar設定時。直ちに強制決済されるEntryを避ける）
+  - 保有中のポジションがある（`positions`の部分UNIQUEインデックス、`architecture/er/tables-trading.md`。同一銘柄の同時ポジションは1つ）
+  - 未約定（PENDING）のEntry注文がある（先の注文でポジションができると2本目は約定し得ないため、重複させない）
+  - その銘柄で損失クローズ（実現損益<0）した時刻から`cooldown_after_loss_minutes`（FR-RISK-1）の間。Executionのメモリ上の銘柄別ゲートであり、Risk Engineの判定とは別に働く（プロセス再起動で解除される）
+- FR-ENTRY-6（見送りの扱い）: 上記ゲートによる拒否は、Policy → `paperexec`経路ではエラーではなく「見送り」として扱う。再試行しても同じ理由で拒否されるため、jev-traderジョブは失敗にせず、`paper entry skipped`としてログに残して正常終了する。ゲート以外のEntryエラーはジョブ失敗とする
+- FR-ENTRY-7（入力検証）: `Enter`は発注前に、シグナル方向がLONG/SHORTであること、Risk Engine通過済み（`risk_passed`）であること、数量>0、価格が有限かつ>0、指値価格を指定する場合は有限かつ>0、指値注文では指値価格が指定されていることを検証し、違反は注文を作らずに拒否する。板価格の欠損（0）が約定・時価更新・決済価格にならないよう、`TryFillPending`・`OnSnapshot`・`Close`の価格も同様に検証する
 - FR-EXIT-1: 以下のExit条件を併用する: 固定Stop Loss、固定Take Profit、Trailing Stop、Jev方向反転、continuation_probability低下、VWAP逆クロス、最大保有時間到達、引け前強制決済（`force_flat_before_market_close_minutes` 分前から、大引け15:30 JSTを基準に判定する。前場終了11:30は対象外）。VWAP逆クロスは「価格がVWAPの不利側へ抜けた瞬間」（前回評価時は不利側でなく、今回評価で不利側）のみ成立し、不利側に滞在しているだけでは成立しない（不利側でエントリーしたポジションは、有利側へ抜けた後に再び不利側へ抜けるまでこの条件でクローズしない）。前回評価が無い最初の評価は、建値と現在VWAPの関係を前回の関係とみなす
 - FR-EXIT-2: 初期値: `stop_loss_pct=0.6`, `take_profit_pct=1.2`, `trailing_stop_pct=0.5`, `max_holding_minutes=20`
-- FR-EXIT-3: Jev API不応答時も、既存ポジションはコードベースのExit Ruleで管理を継続する（Jev不応答を理由にリスク管理を停止しない）
+- FR-EXIT-3: Jev API不応答時も、既存ポジションはコードベースのExit Ruleで管理を継続する（Jev不応答を理由にリスク管理を停止しない）。同様に、PENDING指値の約定処理（`TryFillPending`）の失敗は、`OnSnapshot`による保有ポジションの時価更新・Exit評価を止めない（失敗はログに残し、当該注文のみ飛ばす。ポジションが既にあるため約定し得ないPENDING注文は`REJECTED`にする）
 
 ### 4.9 状態管理
 
