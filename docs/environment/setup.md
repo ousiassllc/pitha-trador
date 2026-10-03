@@ -79,7 +79,7 @@ lefthook install
 make dev
 ```
 
-`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面の「詳細設定（任意）」から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
+`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
 
 ### 環境変数
 
@@ -261,3 +261,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.25 | 2026-10-03 | CI/CD節に`GOTOOLCHAIN: auto`の設定理由を追記（`actions/setup-go` v7が`GOTOOLCHAIN=local`を設定し、`golangci-lint`の`go install`が失敗していた） | PR #304 CI `lint`ジョブ失敗の修正 |
 | 1.26 | 2026-10-03 | `GOTOOLCHAIN: auto`の設定箇所をワークフロー全体から`Install golangci-lint`/`Install linterly`のステップレベルへ訂正（`actions/setup-go`の`$GITHUB_ENV`エクスポートがワークフローレベル`env`を上書きし、1.25の設定は効かなかった） | PR #304 CI `lint`ジョブ失敗の再修正 |
 | 1.27 | 2026-10-03 | `.linterlyignore`の内容ブロックを実ファイル（コメント文面を含む）に合わせ、`LICENSE`（ライセンス全文・手書きソースではない定型文）を許容する除外に追記 | issue #316（実ファイルとの乖離解消） |
+| 1.28 | 2026-10-03 | 初回セットアップ手順の`JEV_BASE_URL`/`JEV_MODEL`の上書き先を、廃止済みの「詳細設定（任意）」からSettings画面のJev接続先モーダル内の任意項目へ訂正 | issue #315（#302 とのdoc-drift解消） |

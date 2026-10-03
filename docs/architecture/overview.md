@@ -292,3 +292,4 @@ handler → service → repository → domain
 | 1.38 | 2026-10-03 | §10 通信フロー（`overview/flows.md`）: `/setup`がSettingsと同じ接続先一覧・モーダル（`ConnectionList`）を使うことを追記 | issue #302 |
 | 1.39 | 2026-10-03 | §3のツリーに、`internal/router`直下が行数上限（2000行/ディレクトリ）を超過したため外部テストを移したテスト専用サブパッケージ`router/{apiroutes,staticroute,systemheader}`を追記 | issue #314 |
 | 1.40 | 2026-10-03 | §3の`.linterlyignore`方針に、ライセンス全文`LICENSE`（手書きソースではない定型文）を許容する除外として追記 | issue #316 |
+| 1.41 | 2026-10-03 | §5・§6（`overview/integrations.md`）: Settings画面の`JEV_BASE_URL`/`JEV_MODEL`の入力先を、廃止済みの折りたたみ「詳細設定（任意）」からJev接続先モーダル内の任意項目へ訂正（1.34の「詳細設定」は当時の記録）。「上書き値があるときだけ詳細設定を開く」記述を削除 | issue #315（#302 とのdoc-drift解消） |
