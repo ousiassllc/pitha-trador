@@ -53,6 +53,7 @@ pitha-trador/
 │   │   ├── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
 │   │   └── universe/             # 銘柄マスタCSVのパース・検証と`instruments`へのupsert（`Parse`/`SyncFile`。`domain`のみに依存。#389）
 │   ├── config/                   # config/*.yamlの型付きローダー、AES-256-GCM秘密情報ヘルパー（他の内部パッケージに依存しない）
+│   │   └── strategyflow/         # テスト専用: strategy.yamlの起動時検証（`Validate`）・`scan.*`/`event_trigger`の既定値補完の回帰テスト。linterlyの2000行/ディレクトリ制限のため`config`直下から分離（#459）
 │   ├── safego/                   # FR-SCHED-6 常駐goroutineのpanic回復（`Recover`/`Run`/`Try`/`Loop`。panicをスタック付きでslogに記録し、ループは次サイクルへ継続。他の内部パッケージに依存しない）
 │   ├── httpbody/                 # 外部API応答ボディの上限付き読み取り（`ReadAll`・`DefaultMaxBytes`=4 MiB・`ErrTooLarge`。標準ライブラリのみに依存。`service/marketdata`・`service/jev`が使う）
 │   ├── logging/                  # slog JSON出力の日次ローテーション（rotate.go）・30日超のgzipアーカイブ（archive.go）・エラーログの抽出とマスク（export.go・export_mask.go、読み取り専用。`requirements/non-functional.md` §5・§5.3）
@@ -179,7 +180,7 @@ pitha-trador/
 
 ### サブパッケージ単位の責務規約
 
-レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`execution/pendingfill`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`selfimprove/governorflow`・`jev/clientflow`・`updater/checkflow`・`router/analysisflow`・`router/apiroutes`・`router/staticroute`・`router/systemheader`・`router/wslistener`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
+レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`execution/pendingfill`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`selfimprove/governorflow`・`jev/clientflow`・`updater/checkflow`・`router/analysisflow`・`router/apiroutes`・`router/staticroute`・`router/systemheader`・`router/wslistener`・`config/strategyflow`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
 `repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済みで、上のツリーは実装と一致している（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
 
