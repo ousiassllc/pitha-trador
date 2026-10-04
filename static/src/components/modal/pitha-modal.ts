@@ -54,14 +54,15 @@ export function onClick(event: Event): void {
   if (target instanceof HTMLDialogElement && target.hasAttribute('data-modal')) target.close();
 }
 
-/** `close` does not bubble, so it is captured at the document: restore focus, drop a hash that pointed inside. */
+/** `close` does not bubble, so it is captured at the document: restore focus, drop a hash that pointed at or inside the dialog. */
 export function onClose(event: Event): void {
   const dialog = event.target;
   if (!(dialog instanceof HTMLDialogElement) || !dialog.hasAttribute('data-modal')) return;
   opened.get(dialog)?.focus();
   opened.delete(dialog);
   const hash = currentHash();
-  if (hash && dialog.querySelector(`[id="${CSS.escape(hash)}"]`)) {
+  const target = hash ? document.getElementById(hash) : null;
+  if (target && dialog.contains(target)) {
     history.replaceState(null, '', location.pathname + location.search);
   }
 }

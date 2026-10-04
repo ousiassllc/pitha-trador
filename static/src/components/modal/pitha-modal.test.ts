@@ -75,6 +75,22 @@ describe('URL hash', () => {
     expect(location.hash).toBe('');
   });
 
+  test("a hash naming the dialog's own id opens it, closing drops the hash", () => {
+    const { dialog } = render();
+    location.hash = '#modal-a';
+    openFromHash();
+    expect(dialog.open).toBe(true);
+    dialog.close();
+    expect(location.hash).toBe('');
+  });
+
+  test("closing a dialog leaves a hash that names another dialog's id alone", () => {
+    const { dialog } = render();
+    location.hash = '#modal-b';
+    dialog.close();
+    expect(location.hash).toBe('#modal-b');
+  });
+
   test('a hash that names no dialog content is left alone', () => {
     const { dialog } = render();
     location.hash = '#elsewhere';
