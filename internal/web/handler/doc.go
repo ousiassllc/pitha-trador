@@ -1,14 +1,17 @@
-// Package handler contains the small list/analysis Gin handlers
-// (scanner.go, performance.go, calibration.go, policy_proposals.go,
-// swagger.go) that back routes registered by internal/router.
-//
-// Everything else lives in responsibility-scoped subpackages:
+// Package handler is the root of the Gin handler tree that backs routes
+// registered by internal/router. It holds no code of its own: every handler
+// lives in a responsibility-scoped subpackage:
 //   - shared:   Toast/ErrorPage responders, PollWebSocket and WriteJSON
 //     (a leaf every other handler package may import)
 //   - symbol:   Symbol List/Detail/Page/Close and /ws/symbols/:symbol
 //   - system:   System state, Kill Switch controls, /ws/system, update UI
 //   - settings: /settings, /setup and credential save/delete
 //   - activity: System Activity Log (GET /api/v1/activity, /ws/activity)
+//   - scanner:  Scanner page, candidates API, scan funnel and /ws/scanner
+//   - performance: Performance page (walk-forward backtest and actuals)
+//   - calibration: Calibration page and GET /api/v1/calibration
+//   - proposals:   GET /api/v1/policy-proposals
+//   - swagger:  Swagger UI page
 //
 // Sibling subpackages MUST NOT import each other and subpackages MUST NOT
 // import this package.

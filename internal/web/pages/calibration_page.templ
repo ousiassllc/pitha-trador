@@ -12,7 +12,7 @@ import "github.com/ousiassllc/pitha-trador/internal/web/layout"
 // attributes beyond `calibration-url`, injected here (the component has no
 // built-in default URL) as `GET /api/v1/calibration` and fetched directly (no WebSocket,
 // components/overview.md §5.3 "リアルタイム性は不要"). `GET /calibration`
-// (internal/web/handler.CalibrationHandler.Page) renders this for every
+// (internal/web/handler/calibration.CalibrationHandler.Page) renders this for every
 // request.
 templ CalibrationPage() {
 	@layout.Shell("Calibration") {

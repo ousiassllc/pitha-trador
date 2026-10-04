@@ -1,4 +1,4 @@
-package handler_test
+package scanner_test
 
 import (
 	"context"
@@ -14,12 +14,12 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 )
 
 // scanSource is a CandidateSource that also serves a scan cycle.
 type scanSource struct {
-	handler.StaticCandidateSource
+	scanner.StaticCandidateSource
 	cycle domain.ScanCycle
 	ok    bool
 	err   error
@@ -49,13 +49,13 @@ func scanFixture() domain.ScanCycle {
 	}
 }
 
-func scanHandler(src handler.CandidateSource) *handler.ScannerHandler {
-	return handler.NewScannerHandler(src, handler.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
+func scanHandler(src scanner.CandidateSource) *scanner.ScannerHandler {
+	return scanner.NewScannerHandler(src, scanner.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
 }
 
 func TestScannerHandler_APIScannerScan_FunnelFilterAndReasons(t *testing.T) {
 	h := scanHandler(scanSource{cycle: scanFixture(), ok: true})
-	out, err := h.APIScannerScan(context.Background(), &handler.ScannerScanInput{Status: "excluded", Page: 1, PageSize: 50})
+	out, err := h.APIScannerScan(context.Background(), &scanner.ScannerScanInput{Status: "excluded", Page: 1, PageSize: 50})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,18 +82,18 @@ func TestScannerHandler_APIScannerScan_FunnelFilterAndReasons(t *testing.T) {
 }
 
 func TestScannerHandler_APIScannerScan_ScoutOutcomeOnCandidate(t *testing.T) {
-	out, _ := scanHandler(scanSource{cycle: scanFixture(), ok: true}).APIScannerScan(context.Background(), &handler.ScannerScanInput{Q: "alpha", PageSize: 50})
+	out, _ := scanHandler(scanSource{cycle: scanFixture(), ok: true}).APIScannerScan(context.Background(), &scanner.ScannerScanInput{Q: "alpha", PageSize: 50})
 	if len(out.Body.Items) != 1 || out.Body.Items[0].Scout == nil || *out.Body.Items[0].Scout != "passed" || out.Body.Items[0].Status != "passed" {
 		t.Fatalf("items = %+v", out.Body.Items)
 	}
 }
 
 func TestScannerHandler_APIScannerScan_NoCycleOrNoScanSource(t *testing.T) {
-	for name, src := range map[string]handler.CandidateSource{
+	for name, src := range map[string]scanner.CandidateSource{
 		"before first cycle":  scanSource{},
-		"source without Scan": handler.StaticCandidateSource{},
+		"source without Scan": scanner.StaticCandidateSource{},
 	} {
-		out, err := scanHandler(src).APIScannerScan(context.Background(), &handler.ScannerScanInput{})
+		out, err := scanHandler(src).APIScannerScan(context.Background(), &scanner.ScannerScanInput{})
 		if err != nil || out.Body.HasCycle || out.Body.Items == nil || len(out.Body.Items) != 0 || out.Body.Pages != 1 {
 			t.Errorf("%s: out=%+v err=%v, want empty has_cycle=false response", name, out.Body, err)
 		}
@@ -101,7 +101,7 @@ func TestScannerHandler_APIScannerScan_NoCycleOrNoScanSource(t *testing.T) {
 }
 
 func TestScannerHandler_APIScannerScan_RejectsUnknownReason(t *testing.T) {
-	_, err := scanHandler(scanSource{cycle: scanFixture(), ok: true}).APIScannerScan(context.Background(), &handler.ScannerScanInput{Reason: "bogus"})
+	_, err := scanHandler(scanSource{cycle: scanFixture(), ok: true}).APIScannerScan(context.Background(), &scanner.ScannerScanInput{Reason: "bogus"})
 	if err == nil || !strings.Contains(err.Error(), "bogus") {
 		t.Fatalf("err = %v, want 400 naming the unknown reason", err)
 	}
@@ -113,20 +113,20 @@ func TestScannerHandler_APIScannerScan_PagesLargeUniverse(t *testing.T) {
 	for i := range 4000 {
 		cycle.Symbols = append(cycle.Symbols, domain.ScanSymbol{Symbol: fmt.Sprintf("%04d", i), Name: "n"})
 	}
-	out, _ := scanHandler(scanSource{cycle: cycle, ok: true}).APIScannerScan(context.Background(), &handler.ScannerScanInput{Page: 3, PageSize: 100})
+	out, _ := scanHandler(scanSource{cycle: cycle, ok: true}).APIScannerScan(context.Background(), &scanner.ScannerScanInput{Page: 3, PageSize: 100})
 	b := out.Body
 	if b.Total != 4000 || b.Pages != 40 || b.Page != 3 || len(b.Items) != 100 || b.Items[0].Symbol != "0200" {
 		t.Fatalf("page = total %d pages %d page %d len %d first %q", b.Total, b.Pages, b.Page, len(b.Items), b.Items[0].Symbol)
 	}
 }
 
-func getScan(t *testing.T, src handler.CandidateSource, target string, hx bool) (int, string) {
+func getScan(t *testing.T, src scanner.CandidateSource, target string, hx bool) (int, string) {
 	t.Helper()
 	return getScanAt(t, src, time.Now, target, hx)
 }
 
 // getScanAt is getScan with the panel's clock pinned to now.
-func getScanAt(t *testing.T, src handler.CandidateSource, now func() time.Time, target string, hx bool) (int, string) {
+func getScanAt(t *testing.T, src scanner.CandidateSource, now func() time.Time, target string, hx bool) (int, string) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -156,7 +156,7 @@ func TestScannerHandler_Page_ShowsFunnelSummaryButNotSymbolList(t *testing.T) {
 }
 
 func TestScannerHandler_Page_EmptyStateBeforeFirstCycle(t *testing.T) {
-	for _, src := range []handler.CandidateSource{scanSource{}, handler.StaticCandidateSource{}} {
+	for _, src := range []scanner.CandidateSource{scanSource{}, scanner.StaticCandidateSource{}} {
 		code, body := getScan(t, src, "/scanner", false)
 		if code != http.StatusOK || !strings.Contains(body, `data-testid="scan-empty"`) || strings.Contains(body, `data-testid="scan-funnel"`) {
 			t.Errorf("code=%d, want empty-state panel without funnel", code)
@@ -165,7 +165,7 @@ func TestScannerHandler_Page_EmptyStateBeforeFirstCycle(t *testing.T) {
 }
 
 func TestScannerHandler_Page_ScanFailureDoesNotBreakCandidates(t *testing.T) {
-	code, body := getScan(t, scanSource{StaticCandidateSource: handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}, err: errors.New("boom")}, "/scanner", false)
+	code, body := getScan(t, scanSource{StaticCandidateSource: scanner.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}, err: errors.New("boom")}, "/scanner", false)
 	if code != http.StatusOK || !strings.Contains(body, "7203") {
 		t.Fatalf("code=%d, candidates must still render", code)
 	}
@@ -259,7 +259,7 @@ func TestScannerHandler_ScanView_ScanErrorIs500(t *testing.T) {
 // The production wiring (cmd/server) hands *screener.LiveSource to the
 // router as the CandidateSource; it must satisfy ScanSource or the scan
 // panel silently stays on its empty state (issue #303).
-var _ handler.ScanSource = (*screener.LiveSource)(nil)
+var _ scanner.ScanSource = (*screener.LiveSource)(nil)
 
 func TestScannerHandler_ScanView_ServesLiveSourceCycle(t *testing.T) {
 	live := screener.NewLiveSource()

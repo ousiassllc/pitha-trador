@@ -1,4 +1,4 @@
-package handler
+package swagger
 
 import (
 	"net/http"

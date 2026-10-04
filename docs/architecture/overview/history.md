@@ -55,3 +55,4 @@
 | 1.48 | 2026-10-03 | §3のツリー・§4のExecution行にテスト専用サブパッケージ`execution/pendingfill`（PENDING指値Entry関連の外部テスト）を追記。`internal/service/execution`が2000行/ディレクトリ上限を超過したため | issue #348 |
 | 1.49 | 2026-10-03 | `overview/integrations.md` §5のトークン失敗`4001007`/`4001017`（未ログイン）の案内をログイン状態の確認と再ログインに限定（`requirements/functional/components-platform.md` FR-SETTINGS-5も同様）。`overview/flows.md` §10.4のハートビート更新対象外に、`kill_switch`/`state_changed` push受信時の`pitha-kill-switch-panel`の再同期を追記 | issue #305, #363 |
 | 1.50 | 2026-10-04 | `overview/integrations.md` §5に銘柄マスタ（`instruments`）の起動時CSV投入（`internal/bootstrap/universe`）を追記し、`overview/flows.md` §10.1の起動時フローに反映 | issue #389 |
+| 1.51 | 2026-10-04 | §3のツリー・`web/handler`行を更新し、直下に残っていた`scanner`/`performance`/`calibration`/`proposals`/`swagger`を責務別サブパッケージへ移動（直下は`doc.go`のみ）。`internal/web/handler`が2000行/ディレクトリ上限を超過したため | issue #370 |

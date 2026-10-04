@@ -11,7 +11,7 @@ import (
 // LiveSource holds the most recent Run output, refreshed periodically by
 // the composition root (internal/bootstrap, issue #45) from real Feature
 // Engine output. It structurally implements
-// internal/web/handler.CandidateSource's Candidates(ctx)
+// internal/web/handler/scanner.CandidateSource's Candidates(ctx)
 // ([]domain.Candidate, time.Time, error) method without importing that
 // package (package doc.go's layer rule: service depends on domain/
 // repository only), the same way internal/service/scheduler's own

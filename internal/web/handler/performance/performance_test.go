@@ -1,4 +1,4 @@
-package handler_test
+package performance_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 )
 
 // recordingBacktestRunner records the WalkForwardConfig it was asked to
@@ -40,16 +40,16 @@ func (s stubPerformanceSource) Performance(context.Context, time.Time) (insight.
 	return s.perf, s.err
 }
 
-func servePerformance(t *testing.T, runner handler.BacktestRunner, target string) *httptest.ResponseRecorder {
+func servePerformance(t *testing.T, runner performance.BacktestRunner, target string) *httptest.ResponseRecorder {
 	t.Helper()
 	return servePerformanceWithActuals(t, runner, stubPerformanceSource{}, target)
 }
 
-func servePerformanceWithActuals(t *testing.T, runner handler.BacktestRunner, actuals handler.PerformanceSource, target string) *httptest.ResponseRecorder {
+func servePerformanceWithActuals(t *testing.T, runner performance.BacktestRunner, actuals performance.PerformanceSource, target string) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.GET("/performance", handler.NewPerformanceHandler(runner, actuals).Page)
+	engine.GET("/performance", performance.NewPerformanceHandler(runner, actuals).Page)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
 	return rec

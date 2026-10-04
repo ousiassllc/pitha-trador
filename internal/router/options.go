@@ -3,8 +3,11 @@ package router
 import (
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
@@ -15,21 +18,21 @@ import (
 // defaultCandidateRefreshInterval mirrors config/strategy.yaml's
 // scan.candidate_refresh_interval_seconds_min/max defaults
 // (functional.md §4.3, §5.1 "候補銘柄更新周期（15〜30秒）").
-var defaultCandidateRefreshInterval = handler.CandidateRefreshInterval{
+var defaultCandidateRefreshInterval = scanner.CandidateRefreshInterval{
 	Min: 15 * time.Second,
 	Max: 30 * time.Second,
 }
 
 type options struct {
-	candidateSource   handler.CandidateSource
-	candidateRefresh  handler.CandidateRefreshInterval
+	candidateSource   scanner.CandidateSource
+	candidateRefresh  scanner.CandidateRefreshInterval
 	systemEngine      system.SystemEngine
 	symbolProvider    symbol.SymbolProvider
 	symbolRiskParams  symbol.SymbolRiskParams
 	insightProvider   insightapi.Provider
-	calibrationSource handler.CalibrationSource
-	proposalSource    handler.PolicyProposalSource
-	backtestRunner    handler.BacktestRunner
+	calibrationSource calibration.CalibrationSource
+	proposalSource    proposals.PolicyProposalSource
+	backtestRunner    performance.BacktestRunner
 	activitySource    activity.ActivitySource
 	secretsStore      settings.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
 	updateController  system.UpdateController
@@ -44,16 +47,16 @@ type options struct {
 type Option func(*options)
 
 // WithCandidateSource overrides the Scanner Dashboard/API/WebSocket data
-// source (internal/web/handler.CandidateSource). Defaults to an empty
-// handler.StaticCandidateSource until a later sub-scope wires the
+// source (internal/web/handler/scanner.CandidateSource). Defaults to an empty
+// scanner.StaticCandidateSource until a later sub-scope wires the
 // Scheduler's live Fast Screener output in.
-func WithCandidateSource(source handler.CandidateSource) Option {
+func WithCandidateSource(source scanner.CandidateSource) Option {
 	return func(o *options) { o.candidateSource = source }
 }
 
 // WithCandidateRefreshInterval overrides the `/ws/scanner` push spacing.
 // Defaults to defaultCandidateRefreshInterval (15-30s).
-func WithCandidateRefreshInterval(interval handler.CandidateRefreshInterval) Option {
+func WithCandidateRefreshInterval(interval scanner.CandidateRefreshInterval) Option {
 	return func(o *options) { o.candidateRefresh = interval }
 }
 
@@ -92,20 +95,20 @@ func WithInsightProvider(provider insightapi.Provider) Option {
 }
 
 // WithCalibrationSource overrides `GET /api/v1/calibration`'s backing
-// internal/web/handler.CalibrationSource. cmd/desktop and cmd/server pass
+// internal/web/handler/calibration.CalibrationSource. cmd/desktop and cmd/server pass
 // internal/bootstrap's real internal/service/calibration.Service; the
-// empty handler.StaticCalibrationSource default only serves router-level
+// empty calibration.StaticCalibrationSource default only serves router-level
 // tests.
-func WithCalibrationSource(source handler.CalibrationSource) Option {
+func WithCalibrationSource(source calibration.CalibrationSource) Option {
 	return func(o *options) { o.calibrationSource = source }
 }
 
 // WithPolicyProposalSource overrides `GET /api/v1/policy-proposals`'s
-// backing internal/web/handler.PolicyProposalSource. cmd/desktop and
+// backing internal/web/handler/proposals.PolicyProposalSource. cmd/desktop and
 // cmd/server pass internal/bootstrap's *judgement.ProposalRepository; the
-// empty handler.StaticPolicyProposalSource default only serves
+// empty proposals.StaticPolicyProposalSource default only serves
 // router-level tests.
-func WithPolicyProposalSource(source handler.PolicyProposalSource) Option {
+func WithPolicyProposalSource(source proposals.PolicyProposalSource) Option {
 	return func(o *options) { o.proposalSource = source }
 }
 
@@ -119,10 +122,10 @@ func WithActivitySource(source activity.ActivitySource) Option {
 }
 
 // WithBacktestRunner overrides `GET /performance`'s backing
-// internal/web/handler.BacktestRunner. cmd/desktop and cmd/server pass
+// internal/web/handler/performance.BacktestRunner. cmd/desktop and cmd/server pass
 // internal/bootstrap/backtestsource's Source; the empty
-// handler.StaticBacktestRunner default only serves router-level tests.
-func WithBacktestRunner(runner handler.BacktestRunner) Option {
+// performance.StaticBacktestRunner default only serves router-level tests.
+func WithBacktestRunner(runner performance.BacktestRunner) Option {
 	return func(o *options) { o.backtestRunner = runner }
 }
 

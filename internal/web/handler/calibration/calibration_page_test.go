@@ -1,4 +1,4 @@
-package handler_test
+package calibration_test
 
 import (
 	"net/http"
@@ -8,12 +8,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 )
 
 func TestCalibrationHandler_Page_RendersHeatmapIsland(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := handler.NewCalibrationHandler(handler.StaticCalibrationSource{})
+	h := calibration.NewCalibrationHandler(calibration.StaticCalibrationSource{})
 	engine := gin.New()
 	engine.GET("/calibration", h.Page)
 

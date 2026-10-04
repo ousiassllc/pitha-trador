@@ -1,4 +1,4 @@
-package handler_test
+package scanner_test
 
 import (
 	"context"
@@ -14,14 +14,14 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 )
 
 func TestScannerHandler_WebSocket_PushesScannerUpdateMessages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	asOf := time.Date(2026, 9, 26, 10, 15, 0, 0, time.FixedZone("JST", 9*60*60))
-	source := handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: asOf}
-	h := handler.NewScannerHandler(source, handler.CandidateRefreshInterval{
+	source := scanner.StaticCandidateSource{Items: fixtureCandidates(), AsOf: asOf}
+	h := scanner.NewScannerHandler(source, scanner.CandidateRefreshInterval{
 		Min: 20 * time.Millisecond, Max: 30 * time.Millisecond,
 	})
 
@@ -86,9 +86,9 @@ func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	const longInterval = time.Hour
 
-	h := handler.NewScannerHandler(
-		handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()},
-		handler.CandidateRefreshInterval{Min: longInterval, Max: longInterval},
+	h := scanner.NewScannerHandler(
+		scanner.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()},
+		scanner.CandidateRefreshInterval{Min: longInterval, Max: longInterval},
 	)
 
 	returned := make(chan struct{})
@@ -143,10 +143,10 @@ func (f *flakyCandidateSource) Candidates(context.Context) ([]domain.Candidate, 
 	return fixtureCandidates(), time.Now(), nil
 }
 
-func dialScannerWS(t *testing.T, source handler.CandidateSource) (context.Context, *websocket.Conn) {
+func dialScannerWS(t *testing.T, source scanner.CandidateSource) (context.Context, *websocket.Conn) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	h := handler.NewScannerHandler(source, handler.CandidateRefreshInterval{Min: 10 * time.Millisecond, Max: 10 * time.Millisecond})
+	h := scanner.NewScannerHandler(source, scanner.CandidateRefreshInterval{Min: 10 * time.Millisecond, Max: 10 * time.Millisecond})
 	engine := gin.New()
 	engine.GET("/ws/scanner", h.WebSocket)
 	server := httptest.NewServer(engine)
