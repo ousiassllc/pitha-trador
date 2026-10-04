@@ -1,4 +1,4 @@
-package updater_test
+package checkflow_test
 
 import (
 	"context"

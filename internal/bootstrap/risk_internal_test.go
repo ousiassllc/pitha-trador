@@ -34,10 +34,7 @@ func buildServicesWithSecrets(t *testing.T, secrets config.Secrets, notifiers ..
 	}
 	t.Cleanup(func() { _ = state.Close() })
 
-	svc, err := BuildServices(state, secrets, WithNotifiers(notifiers...))
-	if err != nil {
-		t.Fatalf("BuildServices: %v", err)
-	}
+	svc := BuildServices(state, secrets, WithNotifiers(notifiers...))
 	return svc
 }
 

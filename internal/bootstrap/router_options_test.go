@@ -25,10 +25,7 @@ func TestRouterOptions_WireSecretsStoreIntoSetupGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSecrets: %v", err)
 	}
-	services, err := BuildServices(state, secrets)
-	if err != nil {
-		t.Fatalf("BuildServices: %v", err)
-	}
+	services := BuildServices(state, secrets)
 
 	engine := router.New(RouterOptions(services, state, secretsRepo)...)
 	rec := httptest.NewRecorder()

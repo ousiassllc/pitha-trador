@@ -86,10 +86,7 @@ func main() {
 	// #65's unattended self-update, which cmd/server never wires in at
 	// all.
 	app := NewApp()
-	services, err := bootstrap.BuildServices(state, secrets, bootstrap.WithAutoUpdate(app), bootstrap.WithNotifiers(app))
-	if err != nil {
-		log.Fatal(err)
-	}
+	services := bootstrap.BuildServices(state, secrets, bootstrap.WithAutoUpdate(app), bootstrap.WithNotifiers(app))
 	app.services = services
 
 	wsListeners, wsBase := listenWebSocket()
