@@ -216,3 +216,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.24 | 2026-10-05 | FR-SCHED-1（`components-platform.md`）の`feature-calc`をフルスキャンが投入しない互換ハンドラへ訂正、FR-ACT-1の`feature-calc`の注記訂正、FR-ACT-4に`job_update`を約0.5秒間でまとめて配信する旨を追記 | issue #391, #392, #417 |
 | 1.25 | 2026-10-05 | FR-ACT-1に直近`failed`件数の窓（過去1時間・固定）を追記。§4.3（`components-pipeline.md`）に、孤児`running`の`jev-scout`行が固定10分超でSchedulerにより`failed`へ回復され、該当銘柄が再起動まで保留され続けない旨を追記 | issue #424, #425, #427 |
 | 1.26 | 2026-10-05 | FR-SCOUT-3/FR-TRADER-1（`components-pipeline.md`）の質問セット版を`scout-v3`/`trader-v3`へ更新。FR-RAG-2/3（`components-platform.md` §4.13）の`calibration_outcomes`結合・優先採用を実装し、プロンプトが類似事例の実結果を弱い文脈として扱うよう改訂 | issue #437 |
+| 1.27 | 2026-10-05 | FR-RAG-2（`components-platform.md` §4.13）に、`calibration_outcomes`紐付き済み判断を専用の近傍検索で先に取得する旨を追記（Scout判断が最近傍プールを埋めて優先採用が効かなくなる問題の修正）。§4.12（`components-platform.md`）に、Calibration集計が`question_version`で分離せず全版を混在して集計する旨を追記 | issue #440, #441, #442 |

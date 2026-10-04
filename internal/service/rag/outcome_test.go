@@ -162,6 +162,38 @@ func TestService_Context_PrefersOutcomeLabeledThenTraderThenScout(t *testing.T) 
 	}
 }
 
+// Scout decisions are never labelable yet are indexed for every
+// candidate every cycle, so they can fill the whole k*4 nearest pool.
+// Outcome-labeled trader decisions farther away must still be adopted
+// (FR-RAG-2, issues #441/#442), ahead of the closer unlabeled ones.
+func TestService_Context_LabeledDecisionsSurviveScoutSaturatedNearestPool(t *testing.T) {
+	f := newOutcomeFixture(t)
+	const k = 3
+	query := rag.FeatureInput{Return1m: ptr(0.00)}
+	for range k*4 + 5 {
+		f.addDecision(t, domain.JevDecisionTypeScout, "", rag.FeatureInput{Return1m: ptr(0.00)})
+	}
+	f.addDecision(t, domain.JevDecisionTypeTrader, domain.JevDirectionShort, rag.FeatureInput{Return1m: ptr(0.01)})
+	labeledFar := f.addDecision(t, domain.JevDecisionTypeTrader, domain.JevDirectionLong, rag.FeatureInput{Return1m: ptr(0.05)})
+	f.label(t, labeledFar.ID, 5, 0.3, boolPtr(true))
+	labeledNear := f.addDecision(t, domain.JevDecisionTypeTrader, domain.JevDirectionShort, rag.FeatureInput{Return1m: ptr(0.04)})
+	f.label(t, labeledNear.ID, 5, -0.2, boolPtr(false))
+
+	got, err := f.svc.Context(context.Background(), query, k)
+	if err != nil {
+		t.Fatalf("Context: %v", err)
+	}
+	if len(got.Cases) != k {
+		t.Fatalf("Cases = %+v, want %d", got.Cases, k)
+	}
+	for i, wantDirection := range []string{"SHORT", "LONG"} {
+		c := got.Cases[i]
+		if c.FutureReturn == nil || c.Direction == nil || *c.Direction != wantDirection {
+			t.Errorf("Cases[%d] = %+v, want the outcome-labeled %s decision (labeled by ascending distance)", i, c, wantDirection)
+		}
+	}
+}
+
 func TestService_Context_UnlabeledDecisionsFallBackToDirectionConfidenceRegime(t *testing.T) {
 	f := newOutcomeFixture(t)
 	in := rag.FeatureInput{Return1m: ptr(0.01)}

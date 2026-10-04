@@ -142,5 +142,5 @@ CREATE VIRTUAL TABLE jev_decision_vectors USING vec0(
 ```
 
 - `snapshot_id` / `decision_id` は `market_snapshots.id` / `jev_decisions.id` を参照する（仮想テーブルのためFK制約は付与できず、アプリ層で整合性を保証する）
-- 類似検索は `SELECT decision_id, distance FROM jev_decision_vectors WHERE embedding MATCH ? ORDER BY distance LIMIT 5` の形式で行う（k=5、`functional.md` FR-RAG-2）
+- 類似検索は `SELECT decision_id, distance FROM jev_decision_vectors WHERE embedding MATCH ? [AND decision_id IN (SELECT jev_decision_id FROM calibration_outcomes)] ORDER BY distance LIMIT ?` の形式で行う（`functional.md` FR-RAG-2）。`jev_decision_vectors`はまず`calibration_outcomes`紐付き済みに絞った検索で最大k（初期値k=5）件を取得し、k件に満たない場合のみ絞り込みなしで k×4 件（既定20）を追加取得して、アプリ層で「紐付き済み→未付与のTrader判断→Scout判断」（各群は距離順）に再ランクし上位k件を採用する。`market_snapshot_vectors`は不足分（k−採用件数）のみ取得する
 - コールドスタート期間（該当テーブルの行数が少ない間）は検索結果0件として扱い、FR-RAG-4の通りRAG文脈なしでJevを呼び出す
