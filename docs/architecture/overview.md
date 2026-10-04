@@ -118,6 +118,7 @@ pitha-trador/
 │   │   │   └── opus.go
 │   │   ├── newsfeed/              # News Ingest: 外部ニュースフィード定期取得→Luna呼び出し（§13）
 │   │   ├── selfimprove/           # Sol提案生成〜Opusレビュー〜適用/ロールバック（§8）
+│   │   │   └── governorflow/      # テスト専用: Governor（`RunDaily`/`EvaluateProposal`/`ApplyApproved`/`TrackAndRollback`）の回帰テスト。linterlyの2000行/ディレクトリ制限のため`selfimprove`直下から分離（#450〜#452, #455）
 │   │   ├── notify/                # Slack Incoming Webhookによる即時アラート送信
 │   │   ├── updater/               # GitHub Releases自動アップデート（検知・安全ゲート・検証、desktopのみ配線、§9）
 │   │   │   └── checkflow/         # テスト専用: ダウンロード堅牢化・Status分類のテスト。`updater`の行数上限のため分離（#398）
@@ -178,7 +179,7 @@ pitha-trador/
 
 ### サブパッケージ単位の責務規約
 
-レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`router/analysisflow`・`router/wslistener`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
+レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`execution/pendingfill`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`selfimprove/governorflow`・`jev/clientflow`・`updater/checkflow`・`router/analysisflow`・`router/apiroutes`・`router/staticroute`・`router/systemheader`・`router/wslistener`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
 `repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済みで、上のツリーは実装と一致している（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
 
@@ -225,20 +226,20 @@ handler → service → repository → domain
 | Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理 | `internal/service/marketdata` |
 | Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1）。`marketcontextflow`はテスト専用 | `internal/service/featureengine`（`eventtrigger`, `marketcontextflow`） |
 | Fast Screener | 数値フィルター・screen_score算出・上位N銘柄選定（§4.2） | `internal/service/screener` |
-| Jev Adapter (Scout/Trader) | 構造化状態と型付き質問（`noul`/`choice`）をTypeSafe AI公式API（`POST /v1/systemone`）へ送信し、回答をScoutResponse/TraderResponseへ変換する（§4.4, §4.5, §6） | `internal/service/jev` |
+| Jev Adapter (Scout/Trader) | 構造化状態と型付き質問（`noul`/`choice`）をTypeSafe AI公式API（`POST /v1/systemone`）へ送信し、回答をScoutResponse/TraderResponseへ変換する（§4.4, §4.5, §6）。ワイヤ層は`systemone`、テスト用フェイクは`jevtest`、`clientflow`はテスト専用 | `internal/service/jev`（`systemone`, `jevtest`, `clientflow`） |
 | RAG Context Builder | 現在の状態ベクトルからsqlite-vecで類似過去局面を検索し、Jevへのfew-shot文脈を構築する（§7、FR-RAG-1〜4。FR-RAG-5は将来拡張で未実装）。類似判断の`regime`復元に`execution/enrich`を利用する | `internal/service/rag` |
 | Policy Engine | Jev出力をトレードシグナルへ変換（§4.6） | `internal/service/policy` |
 | Market Calendar | 東証の立会時間（前場/後場）・祝日判定。立会時間外の市場データ取得・Jev呼び出し・新規発注停止（Scheduler SessionGate）、FR-RISK-6のハートビート判定、FR-EXIT-1の引け前強制決済が参照する（`requirements/non-functional.md` §3） | `internal/service/marketcalendar` |
 | Risk Engine | ポジションサイズ・損失上限・Kill Switch（§4.7）。全レイヤーの中で最終拒否権を持つ。サイズ算出（FR-ENTRY-3）・ポートフォリオ状態の導出・複数チャネル通知はサブパッケージ。`killswitchflow`・`checkflow`・`monitorflow`はテスト専用 | `internal/service/risk`（`sizing`, `repoportfolio`, `multinotify`, `killswitchflow`, `checkflow`, `monitorflow`） |
 | Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時）。Jev Trader応答項目の復元は`enrich`（`execution`のExit条件・Symbol Detail、`bootstrap/backtestsource`のバックテスト入力、`rag`の類似判断が共用）、FR-EXIT-1 VWAP逆クロス判定は`vwapcross`。`closerace`・`closeflow`・`pendingfill`はテスト専用 | `internal/service/execution`（`enrich`, `vwapcross`, `closerace`, `closeflow`, `pendingfill`） |
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
-| Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7） | `internal/service/selfimprove` |
+| Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7）。`governorflow`はテスト専用 | `internal/service/selfimprove`（`governorflow`） |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
 | Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `orphans`） |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12）。HTTP/WebSocket公開は`web/handler/activity` | `internal/service/activityfeed`・`internal/web/handler/activity` |
 | Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8）。再現範囲は簡略化されており、Exitは固定SL/TP/最大保有時間のみ・Risk Engine不適用・コストはスリッページ5bps/手数料0bps固定（`requirements/functional/components-platform.md` FR-BT-4） | `internal/service/backtest` |
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
-| Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9） | `internal/service/updater` |
+| Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9）。`checkflow`はテスト専用 | `internal/service/updater`（`checkflow`） |
 | Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |
 | Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |

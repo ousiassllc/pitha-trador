@@ -3,11 +3,16 @@ package execution_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 )
 
@@ -67,6 +72,32 @@ func TestEngine_OnSnapshot_ClosesPositionWhenStopLossTriggers(t *testing.T) {
 	}
 	if closed.RealizedPnL == nil || *closed.RealizedPnL != -2000 {
 		t.Errorf("RealizedPnL = %v, want -2000", closed.RealizedPnL)
+	}
+}
+
+// Regression test for issue #460: a failing Mark must report the real
+// position ID, not the zero value Mark returns alongside its error.
+func TestEngine_OnSnapshot_MarkFailureReportsPositionID(t *testing.T) {
+	db := newTestDB(t)
+	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true})
+	if err != nil {
+		t.Fatalf("create instrument: %v", err)
+	}
+	engine := execution.NewEngine(execution.Deps{Orders: trading.NewOrderRepository(db), Positions: trading.NewPositionRepository(db), Decisions: judgement.NewDecisionRepository(db)}, execution.Config{})
+	opened := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
+	entry, err := engine.Enter(context.Background(), execution.EntryRequest{Signal: longSignal(inst.ID), Quantity: 100, Price: 2000, Now: opened})
+	if err != nil {
+		t.Fatalf("Enter: %v", err)
+	}
+	// RAISE(IGNORE) makes Mark's UPDATE touch no row, as if the position was closed concurrently.
+	if _, err := db.Exec(`CREATE TRIGGER positions_skip BEFORE UPDATE ON positions BEGIN SELECT RAISE(IGNORE); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	_, err = engine.OnSnapshot(context.Background(), snapshotAt(inst.ID, 2005, opened.Add(time.Minute)))
+	want := fmt.Sprintf("mark position %d to market", entry.Position.ID)
+	if !errors.Is(err, domain.ErrPositionNotFound) || !strings.Contains(err.Error(), want) {
+		t.Fatalf("OnSnapshot error = %v, want ErrPositionNotFound containing %q", err, want)
 	}
 }
 
