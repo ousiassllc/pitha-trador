@@ -37,6 +37,8 @@ func SecurityHeaders(wsBase string) gin.HandlerFunc {
 // TradingView attribution logo, which the library's licence asks pages to
 // show. It is the SHA-256 of that element's text; re-compute it (the CSP
 // violation console message prints it) when upgrading lightweight-charts.
+// static/src/csp/lightweight-charts-style-hash.test.ts (`bun test`) reads
+// this constant and fails when the installed library's style text differs.
 const lightweightChartsAttributionStyleHash = "'sha256-3pRED1tOXas1FXFoPb9TGCjmYe9XQsmO9OV23khV2nY='"
 
 // contentSecurityPolicy is the policy every page and API response gets. All
