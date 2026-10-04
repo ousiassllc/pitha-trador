@@ -212,3 +212,4 @@ const (
 | 1.40 | 2026-10-03 | `ScanPanel`に立会時間外の停止通知（`scan-offhours`・次回立会開始`scan-resume-at`）を追記 | issue #367 |
 | 1.41 | 2026-10-03 | `pitha-kill-switch-panel`が`/ws/system`の`state_changed`でも`status-url`から再同期し`systemStateChanged`を発火すると追記（`components/lit.md` §5.4） | issue #363 |
 | 1.42 | 2026-10-04 | `pitha-scanner-table`の銘柄リンクをサーバー生成の`detail_url`に変更（Lit側でURLを組み立てない。`components/lit.md` §5.2） | issue #383 |
+| 1.43 | 2026-10-04 | §7（`runtime.md`）の静的配信の記述を`StaticFS`（`go:embed`、`PITHA_STATIC_DIR`でディスク上書き）へ訂正し、実在しない開発時のキャッシュ無効化設定と自動遷移による反映の記述を削除して手動リロードでの再取得に置き換え | issue #385 |
