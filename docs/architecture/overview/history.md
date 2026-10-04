@@ -68,3 +68,5 @@
 | 1.61 | 2026-10-05 | §8（`integrations.md`）に自己改善のロールバック判定の境界を追記: 適用前が負/ゼロでも適用前の絶対値を基準にした相対20%悪化で判定し、改善・同値では非ロールバック。いずれかの窓にクローズ済みポジションが無ければ判定不能として非ロールバック（`status=applied`のまま日次で再評価） | issue #449 |
 | 1.62 | 2026-10-05 | §8（`integrations.md`）に自己改善の`approved`取り残し提案の適用再実行、Slack通知のbest-effort化、ロールバック時の後続提案値の保護、`trade_signals.policy_version`への適用版付加を追記 | issue #450, #451, #452, #455 |
 | 1.63 | 2026-10-05 | §3/§4（`overview.md`）の構成図・テスト専用ディレクトリ一覧・責務表に`service/selfimprove/governorflow`を追記し、一覧に漏れていた`execution/pendingfill`・`jev/clientflow`・`updater/checkflow`・`router/apiroutes`・`router/staticroute`・`router/systemheader`を補完。責務表のJev Adapter・Updater行にサブパッケージを併記 | issue #461 |
+| 1.64 | 2026-10-05 | §3（`overview.md`）の構成図・テスト専用ディレクトリ一覧に`config/strategyflow`を追記（#459で追加されたテスト専用ディレクトリの記載漏れ。`find internal -type d`と構成図を再照合し、他の漏れが無いことを確認） | issue #462 |
+| 1.65 | 2026-10-05 | §5（`integrations.md`）に「板の売/買命名」を追記: kabuステーションAPIの`BidPrice`/`BidQty`は最良売気配・`AskPrice`/`AskQty`は最良買気配（一般的なbid/askと逆）であり、`marketdatajob.readingFromBoard`でbid/ask・数量・板深度を入れ替えてReadingへ渡す。これにより`spread_bps`が常に負だった不具合が解消（保存済み`market_snapshots`は修正前保存分が逆転。詳細は`er/tables-market.md`） | issue #458, #463 |
