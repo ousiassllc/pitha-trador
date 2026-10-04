@@ -14,6 +14,15 @@
 # の基準でもある（functional.md §4.7 / §4.8）。0以下は未設定扱い:
 # Paperは起動時に警告してデフォルト（3,000万円）を使い、Liveは実資金額の設定が必須
 # （未設定のままではRisk Engineが全新規取引をfail-closedで拒否する）。
+#
+# 上記以外の上限は起動時に検証し、範囲外（キーの欠落・タイプミスによる0を含む）は
+# 項目名付きエラーで起動を失敗させる（functional.md §4.7 FR-RISK-1）:
+#   max_position_per_symbol_pct / max_total_exposure_pct / max_daily_loss_pct /
+#   max_trade_loss_pct / max_spread_bps            … 正（>0）
+#   max_open_positions / max_consecutive_losses    … 1以上
+#   cooldown_after_loss_minutes / force_flat_before_market_close_minutes /
+#   heartbeat_timeout_minutes                      … 0以上
+# paperは常に検証し、liveはliveセクションに値を1つでも書いた場合のみ検証する。
 
 paper:
   initial_capital: 30000000
