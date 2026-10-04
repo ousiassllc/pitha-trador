@@ -124,7 +124,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
     {
       "id": 3, "symbol": "7203", "timestamp": "2026-09-27T09:31:00Z",
       "direction": "LONG", "score": 0.74, "entry_price_reference": 2831.5,
-      "policy_version": "v1", "risk_passed": false, "reject_reason": "spread_too_wide",
+      "policy_version": "policy-v1", "risk_passed": false, "reject_reason": "spread_too_wide",
       "jev_decision_id": 2
     }
   ]
