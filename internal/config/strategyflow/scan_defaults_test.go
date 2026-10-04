@@ -1,4 +1,4 @@
-package config_test
+package strategyflow_test
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 		yaml string
 		want config.ScanConfig
 	}{
-		{"no scan section", "fast_screener:\n  top_n: 20\n", defaults},
+		{"no scan section", "", defaults},
 		{
 			"explicit zeros and negatives",
 			"scan:\n  full_scan_interval_seconds: 0\n  candidate_refresh_interval_seconds_min: -1\n" +
@@ -62,7 +62,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := config.LoadStrategyBytes([]byte(tc.yaml))
+			cfg, err := config.LoadStrategyBytes([]byte(tc.yaml + validStrategySections))
 			if err != nil {
 				t.Fatalf("LoadStrategyBytes returned error: %v", err)
 			}

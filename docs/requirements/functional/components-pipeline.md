@@ -40,6 +40,7 @@ screen_score =
   - 履歴不足で算出できない項は0ではなく欠損として合計から除外する（FR-FE-2と同じ扱い）
 
 - FR-FS-3: フィルター設定値・スコア重みはすべて環境変数またはDBで変更可能とする。優先順位は`config/strategy.yaml` < 環境変数`PITHA_FAST_SCREENER_*`（起動時に読込み。例: `PITHA_FAST_SCREENER_MIN_PRICE`, `PITHA_FAST_SCREENER_TOP_N`, `PITHA_FAST_SCREENER_WEIGHT_BREAKOUT_STRENGTH`）< DB `runtime_settings`の`screener.*`キー（候補更新周期ごとに読み込むため再起動不要。キー一覧は`architecture/er.md` §runtime_settings）
+- FR-FS-4（起動時検証）: `config/strategy.yaml`の`fast_screener.*`は、`scan.*`（既定値補完。FR-SCAN-1/FR-SCAN-2）と異なり**補完せず検証する**。`min_price`・`max_price`・`min_turnover_5m_jpy`・`max_spread_bps`・`min_volume_ratio`・`min_abs_return_5m_pct`・`min_realized_volatility`は0より大、`max_price >= min_price`、`top_n >= 1`（0は全銘柄が`top_n_cutoff`で除外されJev Scoutが一度も走らない、負数は上位N件の切り出しで範囲外参照になるため不可）、`weights.*`は0以上かつ少なくとも1つは0より大。キー欠落・タイプミスは0として読み込まれるため、未設定も違反として検出される。違反は項目名（例: `fast_screener.top_n`）付きで全件まとめて報告し、起動に失敗する。検証は`PITHA_FAST_SCREENER_*`環境変数の適用後に行うため、環境変数経由の不正値（例: `PITHA_FAST_SCREENER_TOP_N=0`）も拒否する。`screener.Screen`は防御として`top_n <= 0`でも候補0件を返し、パニックしない（DB `runtime_settings`の`screener.top_n`のような実行時上書き経路向け）
 
 ### 4.3 スキャン頻度・イベント駆動
 
@@ -60,6 +61,7 @@ screen_score =
 
 - FR-SCOUT-1: 1回のJev呼び出し（`POST /v1/systemone`、`architecture/overview.md` §6）で以下の質問群を評価する: `interesting_now`（`noul`型: yesの確率0〜1）, `momentum_quality`（`choice`型: weak/moderate/strong/exceptional）, `liquidity_ok`（`noul`型）, `abnormal_activity`（`noul`型）。入力は`market`（現在の市場状態）と`similar_past_cases`（RAGの類似過去事例）。応答が必須answerの欠落・型不一致・定義外のchoice・範囲外のnoulを含む場合は不正応答として失敗扱いにする
 - FR-SCOUT-2: 通過条件は `interesting_now >= 0.65 AND liquidity_ok >= 0.70 AND abnormal_activity >= 0.55`（初期値。バックテスト後に調整）
+- FR-SCOUT-2a（起動時検証）: `jev_scout.min_interesting_now`・`min_liquidity_ok`・`min_abnormal_activity`は`(0, 1]`であること。キー欠落・タイプミスは0として読み込まれ、`>=`比較が全銘柄で真になりFast Screener通過銘柄がすべてJev Traderへ流れる（コスト上限N×2/分の前提が崩れる）ため、補完せず項目名（例: `jev_scout.min_liquidity_ok`）付きの起動エラーとする（FR-FS-4と同じ流儀）
 - FR-SCOUT-3: 入力・出力・状態ハッシュ・レイテンシ・モデルID（応答の`model`）を`jev_decisions`（decision_type=scout）に保存する。Jev APIは課金額を返さないため`request_cost`はNULLのままとする。質問セットのバージョン（現行`scout-v3`）を`question_version`に記録する
 
 ### 4.5 Jev Trader
@@ -72,6 +74,7 @@ screen_score =
 
 - FR-POLICY-1: LONG条件: `direction == LONG AND P(LONG) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
 - FR-POLICY-2: SHORT条件: `direction == SHORT AND P(SHORT) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
+- FR-POLICY-2a（起動時検証）: `policy.long`/`policy.short`の`min_probability`・`min_continuation_probability`・`max_toxic_flow`・`max_liquidity_stressed`は`(0, 1]`、`min_entry_quality`は`poor`/`fair`/`good`/`strong`/`exceptional`のいずれか、`policy.min_calibration_samples`は0以上（0で無効）であること。キー欠落・タイプミスは0/空として読み込まれ、`min_entry_quality`が未知値だと`poor`相当になりentry_qualityゲートが無効化されるため、補完せず項目名（例: `policy.long.min_entry_quality`）付きで全件まとめて報告し起動に失敗する。検証は`PITHA_POLICY_*`環境変数（FR-POLICY-4）の適用後に行い、環境変数経由の不正値（範囲外・未知のentry_quality）も同様に拒否する。`config/strategy.yaml`・埋め込み既定値は検証を通過する
 - FR-POLICY-3: 以下のいずれかに該当する場合はNONE（取引しない）: JevがNONE、確信度不足、スプレッド過大、板が薄い（スナップショットの`turnover_5m`が`min_turnover_5m_jpy`未満。履歴不足で算出不能な場合は判定しない）、Risk Engine拒否、データ欠損、API異常、キャリブレーション対象外（Jev decisionのconfidenceが属する信頼度バケットのラベル付きCalibrationサンプル数が`policy.min_calibration_samples`未満。0で無効）
 - FR-POLICY-4: しきい値はCalibration結果に基づき調整する。プロンプト変更より先にポリシー側のしきい値調整を優先する
 - FR-POLICY-5: 生成したトレードシグナルを`trade_signals`に保存する（policy_version、risk_passed、reject_reasonを含む）。`policy_version`はPolicy Engineのロジック版`policy-v1`で、自己改善の適用提案（FR-SELFIMPROVE-5）のしきい値が有効な間は`policy-v1+sol-12`のように適用版を付加し（`varchar(20)`に収まる）、ロールバックで適用提案が無くなれば`policy-v1`に戻る。バックテスト再生（Decide）は常に`policy-v1`
