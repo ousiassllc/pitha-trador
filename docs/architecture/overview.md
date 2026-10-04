@@ -162,6 +162,7 @@ pitha-trador/
 │       ├── components/            # Lit Web Components（pitha-* 、詳細は components/overview.md）
 │       │   └── lib/               # api.ts, ws.ts, ws-status.ts, logger.ts, styles.ts
 │       ├── css/
+│       ├── csp/                   # lightweight-charts-style-hash.test.ts（CSPのstyle hashとインストール版の一致検証）
 │       ├── img/                   # logo.svg（Header表示用、go:embed対象）
 │       ├── vendor/                # htmx.min.js（checked-in、go:embed対象）
 │       ├── embed.go               # `//go:embed dist img vendor`（パッケージ`staticassets`）

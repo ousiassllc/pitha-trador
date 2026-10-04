@@ -155,7 +155,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。ジョブ構成（`lint` → `t
 
 - `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`・`gosec`・`bodyclose`・`noctx`・`rowserrcheck`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
 - `gosec`・`noctx`・`bodyclose`は`*_test.go`を対象外とする（`t.TempDir()`配下のパーミッション、テスト用`httptest.NewRequest`・WebSocketハンドシェイクは攻撃面ではないため）。`gosec`の`G304`（変数パスのファイルオープン）は、パスがすべてアプリ自身の設定/データディレクトリやサーバー生成名から作られリクエスト由来ではないため設定で除外する（パーミッション系`G301/G302/G306`は有効のまま）。`internal/config/secret*.go`の`G101`（シークレット行キー名への誤検知）は`exclusions`で除外する。上記以外の指摘は修正するか、理由付きの`//nolint:<linter> // <理由>`で個別に抑止する
-- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否する（レイヤー規約`architecture/overview.md` §3のうちlintで強制するのは`web` → `repository/**`のみで、サブパッケージ間のimport規約はレビューで担保する）。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
+- `depguard`は2ルールでレイヤー規約（`architecture/overview.md` §3）を強制する。`web-no-repository`は`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否し、`templ-no-service`は`internal/web/{atoms,molecules,organisms,pages,layout}/**`（Templ層）から`internal/service/**`へのimportを拒否する（#380、`components/overview.md` §3）。上記以外のimport規約（`service` → `web`の禁止、`bootstrap`の子 → 親の禁止、サブパッケージ間など）はレビューで担保する。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
 - Biomeはlintとformatを1ツールで兼ねるため、`static/`配下は追加のESLint/Prettier設定を持たない
 
 ## Format
@@ -286,3 +286,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.34 | 2026-10-05 | 「銘柄マスタの投入」節にUTF-8以外（Shift_JIS/CP932）のCSVは全体拒否される旨を追記、`make test`の`bun test`がCSPの`lightweight-charts`style hashとインストール版の一致を検証する旨を追記 | issue #393, #407 |
 | 1.35 | 2026-10-05 | CIの`lint`/`test`/`build`で重複していたGo・bunセットアップ・フロントエンドビルド・templ生成を複合Action`.github/actions/setup`へ集約（`ci.yml`の300行上限超過を解消）。ジョブ名・ステップ内容は不変。Dependabotの`github-actions`に`/.github/actions/setup`を追加 | issue #402 |
 | 1.36 | 2026-10-05 | 「銘柄マスタの投入」節に`symbol`の文字種（英数字のみ。違反行は全体拒否）を追記し、`market_index`/`sector_index`も`market-data`ジョブで板取得される旨（PUSH購読・候補更新は`stock`のみ）に訂正。CI/CD節の詳細を`environment/ci.md`へ分割（`setup.md`の行数上限超過を解消。内容は不変） | issue #418, #422, #423 |
+| 1.37 | 2026-10-05 | Lint節のdepguard記述を`.golangci.yml`の2ルール（`web-no-repository`・`templ-no-service`）に訂正（「lintで強制するのは`web` → `repository/**`のみ」を削除） | issue #431 |
