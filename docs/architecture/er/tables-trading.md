@@ -130,7 +130,7 @@ erDiagram
 
 インデックス: `UNIQUE (jev_decision_id, horizon_minutes)`
 
-### calibration_label_skips
+## calibration_label_skips
 
 水平線まで足が揃わないことが確定した`(jev_decision_id, horizon_minutes)`の終端マーカー（マイグレーション000024、issue #481）。`calibration_outcomes`は作らず（短縮horizonを記録しない）、`PendingLabels`が当該ペアを再投入対象から外すためだけに使う。`internal/service/calibration.Labeler`が、判断時刻+horizon+5分の猶予後も窓が揃わない場合に書き込む（`INSERT OR IGNORE`で冪等）。
 

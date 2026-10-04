@@ -74,3 +74,4 @@ erDiagram
 | 1.23 | 2026-10-05 | `er/tables-system.md`の類似検索に、問い合わせ対象の状態自身（同一銘柄の現在以降の判断・直近15分のスナップショット）を許可id集合で除外する旨を追記。スキーマ変更なし | issue #476 |
 | 1.24 | 2026-10-05 | `er/tables-trading.md`に`calibration_label_skips`（ラベル付け恒久不能ペアの終端マーカー、マイグレーション000024）を追記 | issue #481 |
 | 1.25 | 2026-10-05 | 全体ER図と`er/tables-trading.md`の`calibration_label_skips`節に、`jev_decisions`との関係線・`erDiagram`ブロックを追記（#481で追加したFKの図への反映漏れ） | issue #485 |
+| 1.26 | 2026-10-05 | `er/tables-market.md`の`jev_decisions`索引説明に、`(decision_type, timestamp)`が`ListRecent`専用ではなく`CalibrationRepository.PendingLabels`の範囲走査（#484）にも必須で、`EXPLAIN QUERY PLAN`テストで固定している旨を追記。`er/tables-trading.md`の`calibration_label_skips`見出しを`###`→`##`へ是正（他テーブルと階層を統一）。スキーマ変更なし | issue #486, #487, #488 |
