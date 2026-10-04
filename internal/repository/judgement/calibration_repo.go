@@ -164,8 +164,9 @@ type OutcomeLabelJobPayload struct {
 
 // PendingLabels returns every (jev_decision_id, horizon_minutes) pair
 // among horizons whose Jev trader decision's timestamp+horizon has
-// elapsed as of asOf but has no calibration_outcomes row yet, oldest
-// decision first within each horizon.
+// elapsed as of asOf but has no calibration_outcomes row yet and was not
+// marked permanently unlabelable (MarkUnlabelable), oldest decision first
+// within each horizon.
 func (r *CalibrationRepository) PendingLabels(ctx context.Context, horizons []int, asOf time.Time) ([]PendingLabel, error) {
 	var out []PendingLabel
 	for _, horizon := range horizons {
@@ -189,8 +190,12 @@ WHERE d.decision_type = 'trader'
     SELECT 1 FROM calibration_outcomes o
     WHERE o.jev_decision_id = d.id AND o.horizon_minutes = ?
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM calibration_label_skips k
+    WHERE k.jev_decision_id = d.id AND k.horizon_minutes = ?
+  )
 ORDER BY d.timestamp ASC`,
-		sqlutil.FormatTime(cutoff), horizon,
+		sqlutil.FormatTime(cutoff), horizon, horizon,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list pending outcome labels for horizon %dm: %w", horizon, err)

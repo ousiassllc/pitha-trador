@@ -131,7 +131,8 @@ pitha-trador/
 │   │       ├── updatecheck/       # アップデート確認ジョブ（周期確認の取得失敗・安全ゲート保留を指数バックオフで再試行。`scheduler`の行数上限のため分離、§9。Scheduler の更新確認配線の回帰テストも同居、#400）
 │   │       ├── orphans/           # 全キュー共通の孤児`running`ジョブの`failed`回復（`Fail`/`FailAll`。しきい値は固定10分、Schedulerが1分ごとに実行。`requirements/non-functional.md` §2.1、#424/#425）
 │   │       ├── maintenance/       # 日次ハウスキーピング（バックアップ・データ保持パージ・ログアーカイブ）のcatch-up実行。最終成功日をruntime_settingsへ保持し、起動時と10分ごとに未実行分を実行
-│   │       └── maintenanceflow/   # テスト専用: バックアップ・データ保持パージ・ログローテーションの各ジョブ呼び出しの回帰テスト（行数上限のためschedulerから分離、#248）
+│   │       ├── maintenanceflow/   # テスト専用: バックアップ・データ保持パージ・ログローテーションの各ジョブ呼び出しの回帰テスト（行数上限のためschedulerから分離、#248）
+│   │       └── outcomeflow/       # テスト専用: `EnqueueOutcomeLabeling`（ペア走査・pending/running重複排除・ラベル不能ペアの除外）の回帰テスト（行数上限のためschedulerから分離、#481）
 │   ├── router/                    # SSR + API ルーティング定義（Huma登録含む）。`web/handler/**`・`web/apierror`・`web/insightapi`・`web/middleware`・`config`・`static/src`（go:embed）を参照する
 │   │   ├── options.go             # Option群（依存注入）
 │   │   ├── router.go              # New（Gin Engine組み立て）
@@ -236,7 +237,7 @@ handler → service → repository → domain
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7）。`governorflow`はテスト専用 | `internal/service/selfimprove`（`governorflow`） |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
-| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `orphans`） |
+| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`・`outcomeflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `outcomeflow`, `orphans`） |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12）。HTTP/WebSocket公開は`web/handler/activity` | `internal/service/activityfeed`・`internal/web/handler/activity` |
 | Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8）。再現範囲は簡略化されており、Exitは固定SL/TP/最大保有時間のみ・Risk Engine不適用・コストはスリッページ5bps/手数料0bps固定（`requirements/functional/components-platform.md` FR-BT-4） | `internal/service/backtest` |
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |

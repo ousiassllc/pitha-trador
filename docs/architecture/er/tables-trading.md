@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Paper執行・Kill Switch）
 
-`docs/architecture/er.md` から分割した章。対象: `paper_orders` / `positions` / `calibration_outcomes` / `kill_switch_events` / `kill_switch_resolutions`。型・規約と全体ER図は `docs/architecture/er.md` を参照。
+`docs/architecture/er.md` から分割した章。対象: `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions`。型・規約と全体ER図は `docs/architecture/er.md` を参照。
 
 ## paper_orders
 
@@ -129,6 +129,19 @@ erDiagram
 | created_at | text | NOT NULL | |
 
 インデックス: `UNIQUE (jev_decision_id, horizon_minutes)`
+
+### calibration_label_skips
+
+水平線まで足が揃わないことが確定した`(jev_decision_id, horizon_minutes)`の終端マーカー（マイグレーション000024、issue #481）。`calibration_outcomes`は作らず（短縮horizonを記録しない）、`PendingLabels`が当該ペアを再投入対象から外すためだけに使う。`internal/service/calibration.Labeler`が、判断時刻+horizon+5分の猶予後も窓が揃わない場合に書き込む（`INSERT OR IGNORE`で冪等）。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| jev_decision_id | integer | FK → jev_decisions.id, NOT NULL | |
+| horizon_minutes | integer | NOT NULL | |
+| reason | text | NOT NULL | 足が揃わなかった理由 |
+| created_at | text | NOT NULL | |
+
+インデックス: `PRIMARY KEY (jev_decision_id, horizon_minutes)`
 
 ## kill_switch_events
 

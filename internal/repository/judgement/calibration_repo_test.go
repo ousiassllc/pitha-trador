@@ -229,3 +229,35 @@ func TestCalibrationRepository_ListByDecisionIDs(t *testing.T) {
 		t.Fatalf("ListByDecisionIDs(nil) = %v, %v, want no rows and no error", empty, err)
 	}
 }
+
+// A pair marked unlabelable drops out of PendingLabels for that horizon
+// only - not for the decision's other horizons - and marking is idempotent
+// and writes no calibration_outcomes row (issue #481, FR-CAL-4).
+func TestCalibrationRepository_MarkUnlabelableExcludesPairFromPendingLabels(t *testing.T) {
+	outcomes, decisions, instID := newCalibrationFixtures(t)
+	ctx := context.Background()
+	base := time.Date(2026, 9, 27, 15, 25, 0, 0, time.UTC)
+	now := base.Add(21 * time.Minute)
+	decision := insertTraderDecision(t, decisions, instID, base, domain.JevDirectionLong)
+
+	for range 2 {
+		if err := outcomes.MarkUnlabelable(ctx, decision.ID, 20, "close"); err != nil {
+			t.Fatalf("MarkUnlabelable: %v", err)
+		}
+	}
+
+	pending, err := outcomes.PendingLabels(ctx, []int{5, 20}, now)
+	if err != nil {
+		t.Fatalf("PendingLabels: %v", err)
+	}
+	if len(pending) != 1 || pending[0].HorizonMinutes != 5 || pending[0].JevDecisionID != decision.ID {
+		t.Fatalf("PendingLabels = %+v, want only the 5m pair (20m is unlabelable)", pending)
+	}
+	samples, err := outcomes.ListLabeledSamples(ctx)
+	if err != nil {
+		t.Fatalf("ListLabeledSamples: %v", err)
+	}
+	if len(samples) != 0 {
+		t.Fatalf("ListLabeledSamples = %+v, want none (a skip is not a label)", samples)
+	}
+}

@@ -30,7 +30,7 @@ Paper Trading開始前に最低限以下を検証する。
 - FR-CAL-1: すべてのJev判定について `state` / `decision` / `outcome` の3要素を保存する
 - FR-CAL-2: 評価指標としてBrier Score、Log Loss、Expected Calibration Error、Reliability Curve、方向別平均リターン、confidence bucket別PnLを算出する
 - FR-CAL-3: confidence帯（0.50-0.60, 0.60-0.70, 0.70-0.80, 0.80-0.90, 0.90-1.00）ごとに方向一致率と平均future returnを算出する
-- FR-CAL-4: 判定水平線（horizon）ごとに`future_return`, `max_adverse_excursion`, `max_favorable_excursion`, `was_direction_correct`を`calibration_outcomes`に保存する。ラベル付与は水平線まで足が揃った判断に限る: 窓（判断時刻〜horizon後）の最終足が`判断時刻+horizon`の2分前（1分足2本分）より手前で終わる場合（昼休み11:30-12:30・大引け15:30・データ欠測をまたぐ判断）は、短縮horizonの`future_return`/MAE/MFEを固定せず`calibration_outcomes`を作らない（ジョブは失敗し、24時間の再試行窓内は再試行されるが、足が揃わない限りラベルされない）。`UNIQUE (jev_decision_id, horizon_minutes)`のため一度書いた短縮値は後から修正できない
+- FR-CAL-4: 判定水平線（horizon）ごとに`future_return`, `max_adverse_excursion`, `max_favorable_excursion`, `was_direction_correct`を`calibration_outcomes`に保存する。ラベル付与は水平線まで足が揃った判断に限る: 窓（判断時刻〜horizon後）の最終足が`判断時刻+horizon`の2分前（1分足2本分）より手前で終わる場合（昼休み11:30-12:30・大引け15:30・データ欠測をまたぐ判断）は、短縮horizonの`future_return`/MAE/MFEを固定せず`calibration_outcomes`を作らない（判断時刻+horizon+5分の猶予内はジョブを失敗させ、スケジューラーの次回走査で再試行する。猶予後も足が揃わなければ欠測は恒久と確定し、`calibration_label_skips`に終端マーカーを記録してジョブは成功終了する。`PendingLabels`は当該ペアを返さず再投入しない）。再投入時は、同一`(jev_decision_id, horizon_minutes)`のpending/runningジョブが既にあれば重複してenqueueしない（毎分走査でも1ペアにつき同時に高々1ジョブ。issue #481）。`UNIQUE (jev_decision_id, horizon_minutes)`のため一度書いた短縮値は後から修正できない
 
 Calibration集計（FR-CAL-2/3、`ListLabeledSamples*`・自己改善の日次分析）は`jev_decisions.question_version`で分離せず、全版の判断を混在して集計する。`question_version`は記録・表示（Decision history/Activity）用で、版を跨ぐ指標はプロンプト改訂直後に混在する点に注意
 

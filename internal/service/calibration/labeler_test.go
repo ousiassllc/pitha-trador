@@ -38,6 +38,9 @@ type labelerFixtures struct {
 	snapshots  *market.SnapshotRepository
 	outcomes   *judgement.CalibrationRepository
 	instrument domain.Instrument
+	// now is the Labeler's clock; the zero value is before every
+	// decision's data grace period, i.e. "data may still be landing".
+	now *time.Time
 }
 
 func newLabelerFixtures(t *testing.T) labelerFixtures {
@@ -54,9 +57,11 @@ func newLabelerFixtures(t *testing.T) labelerFixtures {
 	decisions := judgement.NewDecisionRepository(db)
 	snapshots := market.NewSnapshotRepository(db)
 	outcomes := judgement.NewCalibrationRepository(db)
+	now := new(time.Time)
 	return labelerFixtures{
 		db:         db,
-		labeler:    calibration.NewLabeler(decisions, snapshots, outcomes),
+		now:        now,
+		labeler:    calibration.NewLabeler(decisions, snapshots, outcomes, calibration.WithClock(func() time.Time { return *now })),
 		decisions:  decisions,
 		snapshots:  snapshots,
 		outcomes:   outcomes,
