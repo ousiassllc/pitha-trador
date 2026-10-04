@@ -2,7 +2,7 @@
 // (split out of the component to keep it within the linterly per-file limit).
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `buckets[]` item
-// shape (internal/web/handler.calibrationBucketOutput).
+// shape (internal/web/handler/calibration.calibrationBucketOutput).
 export interface CalibrationBucket {
   range: string;
   avg_confidence: number;
@@ -15,7 +15,7 @@ export interface CalibrationBucket {
 }
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `by_direction[]`
-// item shape (internal/web/handler.calibrationDirectionOutput).
+// item shape (internal/web/handler/calibration.calibrationDirectionOutput).
 export interface CalibrationDirection {
   direction: 'LONG' | 'SHORT';
   sample_count: number;
@@ -24,7 +24,7 @@ export interface CalibrationDirection {
 }
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's response body
-// (internal/web/handler.CalibrationAPIOutput).
+// (internal/web/handler/calibration.CalibrationAPIOutput).
 export interface CalibrationAPIResponse {
   buckets: CalibrationBucket[];
   by_direction: CalibrationDirection[];

@@ -86,7 +86,6 @@ export class PithaPriceChart extends LitElement {
     `,
   ];
 
-  @property({ type: String, attribute: 'symbol' }) symbol = '';
   @property({ type: String, attribute: 'candles-url' }) candlesUrl = '';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
 

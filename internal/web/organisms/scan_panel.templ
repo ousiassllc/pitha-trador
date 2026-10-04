@@ -108,14 +108,14 @@ templ funnelStep(label, hint, count, testID string) {
 }
 
 templ scanList(v ScanPanelView) {
-	<form class="mt-4 flex flex-wrap items-end gap-3 text-sm" method="get" action={ scanPanelURL } hx-get={ scanPanelURL } hx-target="#scan-panel" hx-swap="outerHTML" hx-trigger="change, submit" data-testid="scan-filter">
+	<form class="mt-4 flex flex-wrap items-end gap-3 text-sm" method="get" action={ scanPanelURL } hx-get={ scanPanelURL } hx-target="#scan-panel" hx-swap="outerHTML" hx-trigger="submit, change from:#scan-status, change from:#scan-reason" data-testid="scan-filter">
 		<label class="flex flex-col text-xs text-slate-600">
 			銘柄コード・名称
 			<input id="scan-q" type="search" name="q" value={ v.Query.Q } maxlength="64" class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm"/>
 		</label>
 		<label class="flex flex-col text-xs text-slate-600">
 			状態
-			<select name="status" class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm">
+			<select id="scan-status" name="status" class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm">
 				@scanOption("", "すべて", string(v.Query.Status) == "")
 				@scanOption(string(domain.ScanStatusPassed), "通過", v.Query.Status == domain.ScanStatusPassed)
 				@scanOption(string(domain.ScanStatusExcluded), "除外", v.Query.Status == domain.ScanStatusExcluded)
@@ -124,11 +124,11 @@ templ scanList(v ScanPanelView) {
 		</label>
 		<label class="flex flex-col text-xs text-slate-600">
 			理由
-			<select name="reason" class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm">
+			<select id="scan-reason" name="reason" class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm">
 				@scanOption("", "すべて", v.Query.Reason == nil)
 				for _, r := range domain.AllScreenReasons() {
-					if n := v.Summary.ByReason[r]; n > 0 {
-						@scanOption(r.Code(), r.Label()+"（"+strconv.Itoa(n)+"）", v.Query.Reason != nil && *v.Query.Reason == r)
+					if n, applied := v.Summary.ByReason[r], v.Query.Reason != nil && *v.Query.Reason == r; n > 0 || applied {
+						@scanOption(r.Code(), r.Label()+"（"+strconv.Itoa(n)+"）", applied)
 					}
 				}
 			</select>
