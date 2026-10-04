@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 )
 
 var fixedNow = time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
@@ -29,7 +30,7 @@ func newService(t *testing.T, policy Policy) (*Service, *sql.DB) {
 }
 
 func daysAgo(d int) string {
-	return fixedNow.AddDate(0, 0, -d).Format(time.RFC3339Nano)
+	return sqlutil.FormatTime(fixedNow.AddDate(0, 0, -d))
 }
 
 // insertJob inserts a job; finishedDaysAgo < 0 leaves finished_at NULL (a

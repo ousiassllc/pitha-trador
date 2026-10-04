@@ -8,10 +8,16 @@ import (
 
 // timeLayout serializes time.Time into the RFC3339 TEXT columns declared
 // throughout db/migrations (docs/architecture/er.md §型・規約「日時」:
-// "UTCのRFC3339文字列として保存する"). Parsing uses the coarser
-// time.RFC3339 layout, which Go accepts regardless of how many fractional
-// second digits (if any) timeLayout produced.
-const timeLayout = time.RFC3339Nano
+// "UTCのRFC3339文字列として保存する"). The fractional second is a fixed
+// nine digits (unlike time.RFC3339Nano, which trims trailing zeros): SQLite
+// compares TEXT lexicographically, and with a variable-width fraction
+// "…:05Z" sorts after "…:05.5Z" ('Z' > '.'), breaking range filters and
+// ORDER BY within one second (issue #430). Fixed width makes lexicographic
+// order equal chronological order. Parsing uses the coarser time.RFC3339
+// layout, which Go accepts regardless of how many fractional second digits
+// (if any) a stored value carries, so rows written before the fixed-width
+// layout (normalized by migration 000021) stay readable.
+const timeLayout = "2006-01-02T15:04:05.000000000Z"
 
 // FormatTime renders t as a UTC RFC3339 string for storage.
 func FormatTime(t time.Time) string {
