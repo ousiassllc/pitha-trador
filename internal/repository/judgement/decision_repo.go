@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -82,6 +83,44 @@ func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (
 func (r *DecisionRepository) Get(ctx context.Context, id int64) (domain.JevDecision, error) {
 	row := r.db.QueryRowContext(ctx, decisionSelectColumns+` FROM jev_decisions WHERE id = ?`, id)
 	return scanDecision(row)
+}
+
+// ListByIDs returns the jev_decisions rows whose id is in ids, in a
+// single query, for internal/service/rag.Service.Context to hydrate a
+// whole similarity-search candidate pool at once. Order is unspecified;
+// ids with no row are simply absent; an empty ids returns nil without
+// querying.
+func (r *DecisionRepository) ListByIDs(ctx context.Context, ids []int64) ([]domain.JevDecision, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+
+	rows, err := r.db.QueryContext(ctx,
+		decisionSelectColumns+` FROM jev_decisions WHERE id IN (`+placeholders+`)`, //nolint:gosec // G202: placeholders is only "?" markers; ids are bound parameters
+		args...)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list jev decisions by ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.JevDecision
+	for rows.Next() {
+		d, err := scanDecision(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: iterate jev decisions by ids: %w", err)
+	}
+	return out, nil
 }
 
 // ListByInstrument returns up to limit jev_decisions rows for
