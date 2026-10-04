@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
 func renderSymbolDetail(t *testing.T, position *domain.Position) string {
 	t.Helper()
 	var buf bytes.Buffer
-	props := pages.SymbolDetailProps{Symbol: "7203", State: execution.SymbolState{Symbol: "7203", Position: position}}
+	props := pages.SymbolDetailProps{Symbol: "7203", Position: position}
 	if err := pages.SymbolDetailPage(props).Render(context.Background(), &buf); err != nil {
 		t.Fatalf("render: %v", err)
 	}

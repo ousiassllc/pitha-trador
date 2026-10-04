@@ -25,6 +25,18 @@ linters:
           deny:
             - pkg: github.com/ousiassllc/pitha-trador/internal/repository
               desc: web layer must not import repository; use service/domain (architecture/overview.md §3)
+        # docs/components/overview.md §3: Templ layers take plain props
+        # (domain types allowed); handler maps service results onto them.
+        templ-no-service:
+          files:
+            - "**/internal/web/atoms/**"
+            - "**/internal/web/molecules/**"
+            - "**/internal/web/organisms/**"
+            - "**/internal/web/pages/**"
+            - "**/internal/web/layout/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/service
+              desc: Templ layers must not import service; take plain props and map them in web/handler (components/overview.md §3)
     gosec:
       excludes:
         # G304 (file path from a variable): every os.Open/ReadFile/Create

@@ -66,6 +66,8 @@ static/
 
 ## 3. Templ テンプレート（Atomic Design）
 
+**依存方針（issue #380）**: Templ層（`atoms`/`molecules`/`organisms`/`pages`/`layout`）は`internal/service`をimportしない（`.golangci.yml`のdepguard `templ-no-service`で強制）。`internal/domain`の型と基盤パッケージ（`internal/config`・`internal/version`）には依存してよい。serviceの戻り値型（`backtest.Metrics`・`insight.Performance`・`execution.SymbolState`・`updater.Status`等）は、`organisms`/`pages`が定義する表示用のplain props（`PerformanceSummary`・`PerformanceActuals`・`PerformanceResult`・`UpdateBannerProps`など）へ`web/handler`が写像して渡す。service側の型変更はhandlerのコンパイルエラーで止まり、テンプレートへ波及しない。
+
 ### atoms
 
 - `Badge`（Direction: LONG/SHORT/NONE、Regime: TREND/RANGE/BREAKOUT/CHAOTIC の色分け表示）
@@ -94,8 +96,8 @@ static/
 - `ScanPanel`（Scanner Dashboardのスキャン状況パネル`#scan-panel`。最新サイクルのファネル件数（`scan-funnel-*`）・時刻/所要時間・「更新」（`scan-refresh`）・「スキャン対象を見る」（`scan-open`）、開くと検索/状態/理由フィルターとページング付きの銘柄一覧（`scan-table`、行は`data-status`/`data-reason`）。サイクル未実行は空状態`scan-empty`。東証の立会時間外は双方の状態で停止通知`scan-offhours`（次回立会開始`scan-resume-at`、JST）を表示し、「更新」は無効化しない（`ScanPanelView.OffSession`/`NextOpen`）。操作はすべて`hx-get="/scanner/scan"`で`#scan-panel`を`outerHTML`差し替えし、`/ws/scanner`・Lit描画は使わない。`requirements/functional.md` §5.1、issue #303）
 - `ConnectionList`（Settings/Setup共通の接続先一覧。接続先ごとの`SettingsCard`と、その接続先の`SecretFieldRow`を収めた`Modal`を描く。`internal/web/organisms/connection_list.templ`、issue #302）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
-- `PerformanceSummaryPanel`
-- `PerformanceActualsPanel`（Performance画面の「実績（Paper）」節`#performance-actuals`。クローズ済みポジションのTotal/Daily PnL・Trades・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal countを`GET /api/v1/performance`と同じ`insight.Performance`から描画する。算出不能（`null`）の指標は「—」。取得失敗時は固定文言のエラーを節内に表示する。`requirements/functional.md` §5.3、issue #360）
+- `PerformanceSummaryPanel`（`backtest.Metrics`を`web/handler`が写像した`organisms.PerformanceSummary`を描画する）
+- `PerformanceActualsPanel`（Performance画面の「実績（Paper）」節`#performance-actuals`。クローズ済みポジションのTotal/Daily PnL・Trades・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal countを`GET /api/v1/performance`と同じ`insight.Performance`を`web/handler`が写像した`organisms.PerformanceActuals`から描画する。算出不能（`null`）の指標は「—」。取得失敗時は固定文言のエラーを節内に表示する。`requirements/functional.md` §5.3、issue #360）
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
 - `UpdatePanel`（Settings画面の「アップデート」節。現在バージョン・最終確認結果・安全ゲート保留中はその旨と理由（ポジション保有/Kill Switch/直近発注）・失敗時は原因の種別（ネットワーク/レート制限/検証失敗など。生のエラー文言は出さない）・「今すぐアップデートを確認」ボタン（`POST /system/update-check`、`#update-panel`をinnerHTMLスワップ。確認中は`hx-disabled-elt`で無効化・`hx-sync="this:drop"`で二重送信を破棄し、`#update-check-progress`に進行表示）。`cmd/server`（アップデーター未搭載）ではアップデート機能が無い旨を表示しボタンは出さない。issue #76/#241）
 - `ErrorLogPanel`（Settings画面の「エラーログ」節`#error-log-panel`。対象期間（直近1/7/30/90日、既定7日）とレベル（ERRORのみ/WARN以上）の`<select>`と「ダウンロード」ボタンを持つ`<form method="get" action="/api/v1/logs/errors">`をSSRで描画する。ブラウザ標準のダウンロードに任せるため`hx-disable`を付けHTMXの差し替えと`lib/api.ts`は使わず、応答の`Content-Disposition: attachment`で保存される。秘密情報はマスク済み・最大10MiBである旨を注記する。`requirements/functional/components-platform.md` §4.19、issue #267）
@@ -215,3 +217,4 @@ const (
 | 1.42 | 2026-10-04 | `pitha-scanner-table`の銘柄リンクをサーバー生成の`detail_url`に変更（Lit側でURLを組み立てない。`components/lit.md` §5.2） | issue #383 |
 | 1.43 | 2026-10-04 | §7（`runtime.md`）の静的配信の記述を`StaticFS`（`go:embed`、`PITHA_STATIC_DIR`でディスク上書き）へ訂正し、実在しない開発時のキャッシュ無効化設定と自動遷移による反映の記述を削除して手動リロードでの再取得に置き換え | issue #385 |
 | 1.44 | 2026-10-04 | §4に「htmxの動的実行無効化」を追記（`htmx-config`に`allowEval:false`/`allowScriptTags:false`） | issue #379 |
+| 1.45 | 2026-10-04 | §3に「依存方針」を追記し、Templ層（atoms〜layout）は`internal/service`をimportせずplain propsを受け取る方針に統一（`PerformanceSummaryPanel`/`PerformanceActualsPanel`/`PerformancePage`/`SymbolDetailPage`の入力型を表示用propsへ変更。`web/handler`が写像する） | issue #380 |

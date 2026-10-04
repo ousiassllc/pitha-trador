@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
@@ -16,7 +15,10 @@ import (
 // stays readable with).
 type SymbolDetailProps struct {
 	Symbol string
-	State  execution.SymbolState
+	// Position is the symbol's currently open position, or nil
+	// (internal/web/handler/symbol maps execution.SymbolState.Position
+	// onto it, so pages stay decoupled from internal/service).
+	Position *domain.Position
 	// AllowedPositionPct/StopLossPct/TakeProfitPct mirror
 	// internal/web/handler/symbol.SymbolRiskParams (duplicated here rather than
 	// imported, to avoid pages importing handler - internal/web/handler
@@ -51,7 +53,7 @@ templ SymbolDetailPage(props SymbolDetailProps) {
 
 		@jevPanel(latestTraderDecision(props.Decisions))
 		@riskPanel(props)
-		@positionPanel(props.State.Position)
+		@positionPanel(props.Position)
 		@organisms.DecisionHistoryList(props.Decisions)
 	}
 }
