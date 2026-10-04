@@ -14,7 +14,10 @@ import (
 // Settings/Setup handlers should use (the empty settings.StaticSecretsStore
 // when o.secretsStore is unset).
 func useMiddleware(engine *gin.Engine, o options) settings.SecretsStore {
-	// First, so Recovery's logged 500 is what RequestLog records and even
+	// First of all, so even Recovery's 500, HostGuard's/Session's rejections
+	// and `/static` carry the security headers (issue #378).
+	engine.Use(middleware.SecurityHeaders(o.wsBase))
+	// Then, so Recovery's logged 500 is what RequestLog records and even
 	// Session's rejections are logged (issues #109/#122).
 	engine.Use(middleware.RequestLog(), middleware.Recovery(shared.RenderErrorPage))
 	if o.wsBase != "" {

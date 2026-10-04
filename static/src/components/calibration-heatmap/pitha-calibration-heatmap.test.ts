@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import './pitha-calibration-heatmap';
-import type { CalibrationAPIResponse, CalibrationBucket } from './calibration-view';
+import {
+  type CalibrationAPIResponse,
+  type CalibrationBucket,
+  heatmapColor,
+} from './calibration-view';
 
 type HeatmapElement = HTMLElement & { updateComplete: Promise<boolean> };
 
@@ -92,6 +96,28 @@ describe('pitha-calibration-heatmap', () => {
     expect(el.shadowRoot?.textContent).toContain('51.0%');
     expect(el.shadowRoot?.textContent).toContain('0.190'); // brier_score
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/calibration');
+  });
+
+  test('colors each cell by its direction_accuracy without a style attribute binding', async () => {
+    const { el } = await mount(
+      response({
+        buckets: [
+          bucket({ range: '0.50-0.60', direction_accuracy: 0.1 }),
+          bucket({ range: '0.90-1.00', direction_accuracy: 0.9 }),
+        ],
+      }),
+    );
+
+    const cells = [
+      ...(el.shadowRoot?.querySelectorAll<HTMLElement>(
+        '[data-testid="calibration-heatmap-cell"]',
+      ) ?? []),
+    ];
+    expect(cells.map((c) => c.style.backgroundColor)).toEqual([
+      heatmapColor(0.1),
+      heatmapColor(0.9),
+    ]);
+    expect(heatmapColor(0.1)).not.toBe(heatmapColor(0.9));
   });
 
   test('renders per-bucket PnL and the per-direction average return', async () => {
