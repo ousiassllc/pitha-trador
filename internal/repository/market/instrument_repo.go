@@ -180,16 +180,24 @@ func (r *InstrumentRepository) ListActiveByKind(ctx context.Context, kind string
 // only the tradable universe counts, and one bar per instrument so a
 // symbol scanned more often is not over-weighted. until keeps a caller
 // computing a bar at time T from reading bars written after T (FR-FE-1).
+//
+// The outer s repeats the [since, until] bound so each instrument's lookup
+// is an index range search over just that window; without it the planner
+// walks every retained bar of every active instrument (90 days of
+// market_snapshots) on each market-data job, which made a 4,000-symbol
+// cycle quadratic (non-functional.md §2.3, issue #391).
 func (r *InstrumentRepository) LatestStockReturns5m(ctx context.Context, since, until time.Time) ([]float64, error) {
+	from, to := sqlutil.FormatTime(since), sqlutil.FormatTime(until)
 	rows, err := r.db.QueryContext(ctx, `
 SELECT s.return_5m
 FROM market_snapshots s
 JOIN instruments i ON i.id = s.instrument_id
 WHERE i.is_active = 1 AND i.kind = ? AND s.return_5m IS NOT NULL
+  AND s.timestamp >= ? AND s.timestamp <= ?
   AND s.timestamp = (
 	SELECT MAX(m.timestamp) FROM market_snapshots m
 	WHERE m.instrument_id = s.instrument_id AND m.timestamp >= ? AND m.timestamp <= ?)`,
-		domain.InstrumentKindStock, sqlutil.FormatTime(since), sqlutil.FormatTime(until))
+		domain.InstrumentKindStock, from, to, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list latest stock returns: %w", err)
 	}
