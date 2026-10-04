@@ -77,3 +77,4 @@
 | 1.70 | 2026-10-05 | §10.1（`flows.md`）の`outcome-labeling`再投入条件に、恒久的にラベル不能と確定済みのペアとpending/running中のペアを除くことを追記。§3/§4（`overview.md`）の構成図・責務表にテスト専用ディレクトリ`scheduler/outcomeflow`を追記 | issue #481 |
 | 1.71 | 2026-10-05 | §10.1（`flows.md`）の`outcome-labeling`再投入条件に、判断から24時間以内に限り`PendingLabels`の下限（`now-24h`）で索引範囲走査する旨を追記（24時間超の未ラベルペアは対象外） | issue #484 |
 | 1.72 | 2026-10-05 | §3（`overview.md`）のツリーの`candidates/`に、最新Jev Trader判断と保有ポジションの付与を追記 | issue #492 |
+| 1.73 | 2026-10-05 | §3/§4（`overview.md`）の構成図・責務表に、最新Jev Trader判断の件数窓・経過時間上限なしの単一定義（`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`/`LatestScout`、`execution.Engine.State`の`LatestTraderDecision`、Exit評価の窓撤廃）の回帰テスト専用ディレクトリ`execution/latestdecision`を追記 | issue #496, #497, #498, #499, #500 |
