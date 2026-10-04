@@ -126,7 +126,7 @@ pitha-trador/
 │   │   ├── backup/                # 日次SQLiteバックアップ（daily 90日 + weekly gzip、`requirements/non-functional.md` §3）
 │   │   ├── retention/             # jobs / market_snapshotsの期限切れ行パージ（`requirements/non-functional.md` §3）
 │   │   └── scheduler/             # 自前Workerプール定義・周期ジョブ登録
-│   │       ├── updatecheck/       # アップデート確認ジョブ（周期確認の取得失敗・安全ゲート保留を指数バックオフで再試行。`scheduler`の行数上限のため分離、§9）
+│   │       ├── updatecheck/       # アップデート確認ジョブ（周期確認の取得失敗・安全ゲート保留を指数バックオフで再試行。`scheduler`の行数上限のため分離、§9。Scheduler の更新確認配線の回帰テストも同居、#400）
 │   │       ├── maintenance/       # 日次ハウスキーピング（バックアップ・データ保持パージ・ログアーカイブ）のcatch-up実行。最終成功日をruntime_settingsへ保持し、起動時と10分ごとに未実行分を実行
 │   │       └── maintenanceflow/   # テスト専用: バックアップ・データ保持パージ・ログローテーションの各ジョブ呼び出しの回帰テスト（行数上限のためschedulerから分離、#248）
 │   ├── router/                    # SSR + API ルーティング定義（Huma登録含む）。`web/handler/**`・`web/apierror`・`web/insightapi`・`web/middleware`・`config`・`static/src`（go:embed）を参照する
