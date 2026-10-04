@@ -46,6 +46,7 @@ export class PithaPriceChart extends LitElement {
 - 出来高ヒストグラムは`candles`の`volume`（1分足あたりの出来高。サーバーが累積セッション値の差分に変換済みで、クライアントでは再計算しない。issue #474）をそのまま描画する
 - `candles-url`/`ws-url`は他コンポーネントと同様に未設定なら`logger.error`を出して該当の取得・購読を行わない
 - `/ws/symbols/{symbol}`が切断されている間（`reconnecting`/`failed`）はチャート下に「接続が切れています」を表示する。`tick`は受信時刻で足を作るため切断中の足は欠落する。切断後に`open`へ復帰した時は`candles-url`を`background: true`で再取得して足を補う（操作者不在でも発火するためハートビートに数えさせない。FR-RISK-6、issue #336）
+- 時間軸・クロスヘアは**JST（Asia/Tokyo）表示**とする。lightweight-charts v4は`UTCTimestamp`を既定でUTC表記するため、そのままでは東証の立会時間09:00〜15:30が00:00〜06:30に見える。`createChart`に`localization.timeFormatter`（クロスヘア、`YYYY-MM-DD HH:mm`）と`timeScale.tickMarkFormatter`（目盛、`HH:mm`/日/月/年）として`price-chart/jst-time.ts`の`formatCrosshairTime`/`formatTickMark`を渡し、`timeScale.timeVisible: true`・`secondsVisible: false`（足が1分単位のため）にする。ゾーンは`Intl.DateTimeFormat`に`timeZone: 'Asia/Tokyo'`を固定し、ホスト/Wailsのタイムゾーンに依存しない。系列・マーカー・ティック足に渡す時刻はこれまで通りepoch秒（UTC）のままで、表示時にのみJSTへ変換する（issue #478）
 
 ### 5.2 pitha-scanner-table
 
