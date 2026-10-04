@@ -12,7 +12,7 @@
 
 | 対象 | 周期目標 | 上限 |
 |------|---------|------|
-| 全体スキャン（全ユニバース特徴量算出＋Fast Screener） | 60秒ごと | 次サイクル開始までに完了しない場合はスキップしログ記録。「完了しない」とは、サイクル開始時点で`market-data`キューに`pending`/`running`のジョブが1件でも残っている状態を指し、その場合は当該サイクルのジョブ投入を行わず`slog.Warn`（`scheduler: full scan skipped: previous cycle still running`、`pending`＝未完了件数）を記録する。未完了ジョブが0件になった次のサイクルから通常どおり投入を再開する（`jobs`への未処理ジョブの無制限な積み増しを防ぐ） |
+| 全体スキャン（全ユニバース特徴量算出＋Fast Screener） | 60秒ごと | 次サイクル開始までに完了しない場合はスキップしログ記録。「完了しない」とは、サイクル開始時点で`market-data`キューに`pending`/`running`のジョブが1件でも残っている状態を指し、その場合は当該サイクルのジョブ投入を行わず`slog.Warn`（`scheduler: full scan skipped: previous cycle still running`、`pending`＝未完了件数）を記録する。未完了ジョブが0件になった次のサイクルから通常どおり投入を再開する（`jobs`への未処理ジョブの無制限な積み増しを防ぐ）。ワーカーが完了書き込みに失敗して`running`のまま残った孤児行で永久にスキップしないよう、判定の直前に`started_at`が10分（全体スキャン周期の10倍）より古い`market-data`の`running`行を`failed`（`last_error`＝`orphaned: still running after 10m0s`）へ回復して判定から除外し、件数を`slog.Warn`（`scheduler: failed orphaned running market-data jobs`）に記録する。しきい値内の`running`行は従来どおり未完了として数える |
 | 候補銘柄（Jev Scout/Trader）再評価 | 15〜30秒ごと | Jev API合計呼び出しは1分あたり上位N銘柄（`top_n`。既定20、`config/strategy.yaml`）× 2（Scout+Trader）を上限とする。この上限は、候補更新サイクルからの`jev-scout`ジョブ投入を銘柄ごとに「`pending`/`running`ジョブがある間、および前回完了から`scan.jev_scout_min_interval_seconds`（既定60秒）未満の間はスキップ」することで担保する（Scoutは同一銘柄で1分あたり最大1回。FR-SCAN-1のイベント発火による即時再評価のみ例外。詳細は`functional/components-pipeline.md` §4.3）。Nを引き上げるほど呼び出しコストが比例して増える |
 | 保有ポジション監視・Exit評価 | 5〜15秒ごと | Risk EngineのExit判定はJev応答を待たずコード側で即時評価する |
 
@@ -129,3 +129,4 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.14 | 2026-10-04 | §2.3 の対象ユニバースの供給元（銘柄マスタCSV）を明記 | issue #389 |
 | 1.15 | 2026-10-04 | §2.1 のJev呼び出し上限（N×2/分）を担保する機構（銘柄別`scan.jev_scout_min_interval_seconds`と未完了ジョブの重複排除）を明記 | issue #388 |
 | 1.16 | 2026-10-05 | §2.3 の対象ユニバースにフルスキャン対象の指数行（`market_index`/`sector_index`）が含まれる旨を追記 | issue #422 |
+| 1.17 | 2026-10-05 | §2.1 の全体スキャン未完了判定に、10分超`running`の孤児ジョブを`failed`へ回復して判定から除外する規則を追記 | issue #416（#390修正の回帰） |
