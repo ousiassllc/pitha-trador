@@ -150,6 +150,56 @@ func TestClient_Trader_SendsOfficialSystemOneRequest(t *testing.T) {
 	})
 }
 
+// FR-RAG-3: the wire body carries each similar case's realized outcome,
+// and every question's guide describes it instead of claiming similar
+// cases are never realized outcomes.
+func TestClient_SendsCaseOutcomesAndMatchingGuide(t *testing.T) {
+	correct, regime := true, "TREND"
+	horizon, futureReturn := 5, 0.4
+	ragContext := rag.Context{Cases: []rag.SimilarCase{{
+		Source: "jev_decision", Regime: &regime,
+		HorizonMinutes: &horizon, FutureReturn: &futureReturn, WasDirectionCorrect: &correct,
+	}}}
+
+	for name, call := range map[string]struct {
+		response string
+		send     func(*jev.Client) error
+	}{
+		"scout": {scoutWireResponse, func(c *jev.Client) error {
+			_, _, err := c.Scout(context.Background(), jev.ScoutRequest{RAGContext: ragContext})
+			return err
+		}},
+		"trader": {traderWireResponse, func(c *jev.Client) error {
+			_, _, err := c.Trader(context.Background(), jev.TraderRequest{RAGContext: ragContext})
+			return err
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			server, got := captureServer(t, call.response)
+			if err := call.send(jev.NewClient(jev.Config{BaseURL: server.URL})); err != nil {
+				t.Fatalf("send: %v", err)
+			}
+
+			cases := string(got.Body.State["similar_past_cases"])
+			for _, want := range []string{`"regime":"TREND"`, `"horizon_minutes":5`, `"future_return":0.4`, `"was_direction_correct":true`} {
+				if !strings.Contains(cases, want) {
+					t.Errorf("similar_past_cases = %s, want it to contain %s", cases, want)
+				}
+			}
+			for id, q := range got.Body.Questions {
+				for _, want := range []string{"`future_return`", "`was_direction_correct`", "`horizon_minutes`", "`regime`", "weak, small-sample context"} {
+					if !strings.Contains(q.Instructions, want) {
+						t.Errorf("question %q instructions lack %s", id, want)
+					}
+				}
+				if strings.Contains(q.Instructions, "not realized outcomes, so use them only as weak context") {
+					t.Errorf("question %q still says similar cases are never realized outcomes", id)
+				}
+			}
+		})
+	}
+}
+
 // assertQuestions checks the question set against the official schema:
 // exact ids/types, non-empty instructions, noul criteria {true,false},
 // choice criteria option -> non-empty rubric.

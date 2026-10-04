@@ -60,11 +60,11 @@ screen_score =
 
 - FR-SCOUT-1: 1回のJev呼び出し（`POST /v1/systemone`、`architecture/overview.md` §6）で以下の質問群を評価する: `interesting_now`（`noul`型: yesの確率0〜1）, `momentum_quality`（`choice`型: weak/moderate/strong/exceptional）, `liquidity_ok`（`noul`型）, `abnormal_activity`（`noul`型）。入力は`market`（現在の市場状態）と`similar_past_cases`（RAGの類似過去事例）。応答が必須answerの欠落・型不一致・定義外のchoice・範囲外のnoulを含む場合は不正応答として失敗扱いにする
 - FR-SCOUT-2: 通過条件は `interesting_now >= 0.65 AND liquidity_ok >= 0.70 AND abnormal_activity >= 0.55`（初期値。バックテスト後に調整）
-- FR-SCOUT-3: 入力・出力・状態ハッシュ・レイテンシ・モデルID（応答の`model`）を`jev_decisions`（decision_type=scout）に保存する。Jev APIは課金額を返さないため`request_cost`はNULLのままとする。質問セットのバージョン（現行`scout-v2`）を`question_version`に記録する
+- FR-SCOUT-3: 入力・出力・状態ハッシュ・レイテンシ・モデルID（応答の`model`）を`jev_decisions`（decision_type=scout）に保存する。Jev APIは課金額を返さないため`request_cost`はNULLのままとする。質問セットのバージョン（現行`scout-v3`）を`question_version`に記録する
 
 ### 4.5 Jev Trader
 
-- FR-TRADER-1: Scout通過銘柄に対し以下を評価する（FR-SCOUT-1と同じく`POST /v1/systemone`、入力は`market`と`similar_past_cases`）: `direction`（`choice`型: LONG/SHORT/NONE）, `regime`（`choice`型: TREND/RANGE/BREAKOUT/CHAOTIC）, `entry_quality`（`choice`型: poor/fair/good/strong/exceptional）, `toxic_flow`（`noul`型）, `liquidity_stressed`（`noul`型）, `continuation_probability`（`noul`型）。`confidence`は`direction`回答の`confidence`を用いる。質問セットのバージョンは現行`trader-v2`
+- FR-TRADER-1: Scout通過銘柄に対し以下を評価する（FR-SCOUT-1と同じく`POST /v1/systemone`、入力は`market`と`similar_past_cases`）: `direction`（`choice`型: LONG/SHORT/NONE）, `regime`（`choice`型: TREND/RANGE/BREAKOUT/CHAOTIC）, `entry_quality`（`choice`型: poor/fair/good/strong/exceptional）, `toxic_flow`（`noul`型）, `liquidity_stressed`（`noul`型）, `continuation_probability`（`noul`型）。`confidence`は`direction`回答の`confidence`を用いる。質問セットのバージョンは現行`trader-v3`
 - FR-TRADER-2: Jevのconfidence/probability（`noul`の値、`choice`の`confidence`）を実際の株価上昇確率とみなさない。実結果との対応はCalibrationで独自に検証する
 - FR-TRADER-3: 入出力を`jev_decisions`（decision_type=trader）に保存する
 
