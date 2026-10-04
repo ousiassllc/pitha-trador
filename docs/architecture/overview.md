@@ -58,7 +58,7 @@ pitha-trador/
 │   ├── httpbody/                 # 外部API応答ボディの上限付き読み取り（`ReadAll`・`DefaultMaxBytes`=4 MiB・`ErrTooLarge`。標準ライブラリのみに依存。`service/marketdata`・`service/jev`が使う）
 │   ├── logging/                  # slog JSON出力の日次ローテーション（rotate.go）・30日超のgzipアーカイブ（archive.go）・エラーログの抽出とマスク（export.go・export_mask.go、読み取り専用。`requirements/non-functional.md` §5・§5.3）
 │   ├── supervisor/               # --supervise起動時の子プロセス監視・指数バックオフ再起動（cmd/desktopのみが利用。非機能§3）
-│   ├── singleinstance/           # ファイルロックによる多重起動ガード（cmd/desktopのみが利用。OSがプロセス終了時にロックを解放）
+│   ├── singleinstance/           # ファイルロックによる多重起動ガード（cmd/desktopとcmd/serverが利用。OSがプロセス終了時にロックを解放）
 │   ├── version/                  # ビルド時に埋め込むバージョン文字列（`ldflags -X`。自動アップデート判定で使用）
 │   ├── domain/                   # ドメインモデル（他レイヤーに非依存）
 │   │   ├── instrument.go
@@ -248,7 +248,7 @@ handler → service → repository → domain
 | Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、secrets読込・routerオプション共通化、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-dataジョブ、互換用の空feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）、`universe`（銘柄マスタCSVのパースと`instruments`へのupsert）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `paperexec`, `alerts`, `universe`） |
 | Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ・エラーログのエクスポート（`requirements/non-functional.md` §5・§5.3、フローは`overview/flows.md` §10.6） | `internal/logging` |
 | Supervisor | 子プロセスの異常終了時の指数バックオフ再起動（1秒〜5分、1分安定でリセット）。終了コード0で監視終了。`cmd/desktop`の`--supervise`起動でのみ使う（`requirements/non-functional.md` §3） | `internal/supervisor` |
-| Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。2つ目の起動は`bootstrap.Run`に到達する前に終了コード0で終了し、Scheduler・Kill Switch・発注の二重稼働を防ぐ | `internal/singleinstance` |
+| Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。`app.lock`は`cmd/desktop`と`cmd/server`で共有し（取得は`bootstrap.AcquireInstanceLock`）、2つ目の起動は`bootstrap.Run`に到達する前に終了する（desktopは終了コード0、serverは非0）。Scheduler・Kill Switch・発注の二重稼働と、先行インスタンスのrunningジョブの回収を防ぐ | `internal/singleinstance`, `internal/bootstrap` |
 | Headless Server | Wailsに依存しない`net/http`エントリーポイント（Updater非配線。§9） | `cmd/server` |
 | Setup Guard Middleware | 必須認証情報（JEV_API_KEY/KABU_API_PASSWORD）が未設定の間、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`以外の全リクエストを`/setup`へ誘導する（ページ遷移は302、HTMXは`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。§10.5、FR-SETUP-1） | `internal/web/middleware` |
 | API Error Formatter | `/api/v1` のエラーボディ整形。`registerAPI`から`apierror.Install()`で`huma.NewError`を上書きし、4xxはバリデーション詳細を`errors[]`に残し、5xxは固定メッセージのみ返して原因を`slog`へ記録する（`api/endpoints.md` §7、issue #215） | `internal/web/apierror` |

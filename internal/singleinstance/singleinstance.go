@@ -2,7 +2,8 @@
 // lock backed by a file the OS releases automatically when the holding
 // process exits or crashes (no stale lock cleanup needed).
 //
-// cmd/desktop takes it before bootstrap.Run so a second launch (e.g. the
+// cmd/desktop and cmd/server take it (via bootstrap.AcquireInstanceLock)
+// before bootstrap.Run so a second launch (e.g. the
 // desktop icon clicked while the --supervise autostart instance is
 // already running) exits before it can recover the first instance's
 // running jobs, start a second Scheduler/Kill Switch or place duplicate

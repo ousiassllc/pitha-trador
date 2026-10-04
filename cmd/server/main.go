@@ -9,6 +9,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -21,6 +23,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
+	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 )
 
 // defaultAddr uses 48080 instead of the far more commonly-claimed 8080
@@ -36,27 +39,50 @@ const defaultAddr = "127.0.0.1:48080"
 const shutdownTimeout = 10 * time.Second
 
 func main() {
+	// run returns instead of calling log.Fatal so its defers (DB and log
+	// writer Close, lock Release) always run; only then is the process
+	// exited non-zero.
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer func() { _ = logWriter.Close() }()
 	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
 
+	// Single-instance guard (the same app.lock cmd/desktop takes), acquired
+	// before bootstrap.Run/BuildServices/Services.Start so a second process
+	// never recovers the first one's running jobs or starts a second
+	// Scheduler/PUSH subscription/Kill Switch against the shared DB.
+	lock, err := bootstrap.AcquireInstanceLock(bootstrap.AppLockName)
+	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
+		slog.Error("server: another instance is already running; exiting", "error", err)
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Release() }()
+
 	// bootstrap.Run opens (creating/migrating) the SQLite DB and loads
 	// config/strategy.yaml + config/risk.yaml (issue #42,
 	// docs/architecture/overview.md §10.1). This entrypoint has no
-	// window at all, so log.Fatal on failure (same as the RotatingWriter
-	// failure above) is the only sensible option.
+	// window at all, so failing the process (main's log.Fatal) is the only
+	// sensible option.
 	state, err := bootstrap.Run(bootstrap.Config{})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer func() { _ = state.Close() }()
 
 	secretsRepo, secrets, err := bootstrap.LoadSecrets(context.Background(), state)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	// No WithAutoUpdate: cmd/server is headless and has no installer to run, so
@@ -66,7 +92,7 @@ func main() {
 	allowNonLoopback := os.Getenv(EnvAllowNonLoopback) == "1"
 	addr, err := resolveListenAddr(os.Getenv("PITHA_SERVER_ADDR"), allowNonLoopback)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	engine := router.New(append(
@@ -79,7 +105,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := services.Start(ctx); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	srv := &http.Server{
@@ -98,7 +124,7 @@ func main() {
 	case err := <-serveErr:
 		stop()
 		services.Stop()
-		log.Fatalf("server error: %v", err)
+		return fmt.Errorf("server error: %w", err)
 	case <-ctx.Done():
 	}
 
@@ -111,4 +137,5 @@ func main() {
 	// Blocks until every Scheduler worker (and its in-flight job) has
 	// exited, before the deferred state.Close closes the DB under them.
 	services.Stop()
+	return nil
 }
