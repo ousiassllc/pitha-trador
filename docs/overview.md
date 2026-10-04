@@ -21,7 +21,7 @@
 - Policy Engine（Jev 出力 → 取引候補への変換）・Risk Engine（ポジションサイズ／損失上限／Kill Switch）
 - Paper Trading による Entry/Exit・ポジション管理・PnL 集計
 - Jev 判断と将来値動きの紐付け・Calibration（Brier Score 等）
-- Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Performance・Calibration 画面）
+- Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Performance・Calibration・System Activity Log・Settings・初回 Setup 画面）
 - Jev RAG（過去の類似局面を sqlite-vec で検索し Jev への文脈として注入）による判断品質の継続的な底上げ
 - Luna（ニュース分類・イベント抽出。News Ingestが取得した見出し・本文を実際の外部AI APIへ送信し、bullish/bearish/neutralとイベント種別を判定）による市場コンテキストの補助的拡張
 - Sol（振り返り分析）・Opus（改善提案レビュー）を実際の外部AI API呼び出しとして実装し、Policy Engineしきい値を自己改善するループ（Risk Engineのリミット値は対象外。Opusの承認は既存の決定的バックテストしきい値との併用条件とし、AIは追加の拒否権としてのみ働く）
@@ -67,7 +67,7 @@ graph TD
             SOL_GOV["Self-Improvement Governor\n(Sol/Opus連携)"]
             DB[("SQLite\n（アプリ内蔵）")]
         end
-        KABU["kabuステーションAPI\n(auカブコム証券 常駐アプリ)"]
+        KABU["kabuステーションAPI\n(三菱UFJ eスマート証券（旧auカブコム証券）常駐アプリ)"]
     end
     JEVAPI["Jev API (外部)"]
     SOLAPI["Sol / Opus / Luna API (外部)"]
@@ -161,3 +161,4 @@ graph TD
 | 1.2 | 2026-09-29 | スコープ「含むもの」にLunaの実装（News Ingest経由の外部AI API呼び出し）を明記し、Sol/Opusを実際の外部AI API呼び出しとして実装する方針に更新（Opusはシャドーバックテストの決定的しきい値とAIレビューの併用条件）。Phase 6の説明を更新 | 現状Jevのみが実AI呼び出しであった状態の是正（AI機能実装フェーズ） |
 | 1.3 | 2026-09-29 | 「含まないもの」のニュースイベント関連戦略の記述を明確化: 除外対象は「ニュースイベント単独を起点とする独立戦略」であり、Luna（ニュース分類）による既存4戦略への補助的文脈提供とは矛盾しないことを明記 | Luna追加とのスコープ整合性レビュー対応 |
 | 1.4 | 2026-10-03 | スコープのFast Screener候補数を「50〜200」から「上位N件（既定`top_n=20`）」へ訂正 | issue #327 |
+| 1.5 | 2026-10-04 | スコープの画面一覧に System Activity Log・Settings・初回 Setup 画面を追記（`api/endpoints.md` §3 と整合）し、構成図の kabuステーション提供元表記を「三菱UFJ eスマート証券（旧auカブコム証券）」に統一 | issue #387 |
