@@ -18,6 +18,14 @@ import (
 // 等").
 var DefaultHorizonsMinutes = []int{5, 10, 20}
 
+// horizonBarTolerance is how far before decision.Timestamp+horizon the
+// last market_snapshots bar of a labeling window may fall (two 1-minute
+// bars: one missed cycle plus timestamp jitter). A window that ends
+// earlier - because the horizon crosses the lunch break (11:30-12:30),
+// the close (15:30), or a data gap - is not labeled (FR-CAL-4), so a
+// shortened horizon is never recorded as the full 5/10/20-minute outcome.
+const horizonBarTolerance = 2 * time.Minute
+
 // Labeler turns one Jev trader decision (jev_decisions,
 // decision_type=trader) into a calibration_outcomes row for one judgment
 // horizon (functional.md FR-CAL-4): future_return, max_adverse_excursion,
@@ -44,9 +52,12 @@ func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.Snaps
 // scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling,
 // labeler.HandleJob).
 //
-// If fewer than horizon_minutes' worth of market_snapshots bars have been
-// recorded yet for this decision, HandleJob returns an error and persists
-// nothing: internal/service/scheduler.EnqueueOutcomeLabeling only
+// If the market_snapshots bars do not yet reach the horizon - the last bar
+// is more than horizonBarTolerance before decision timestamp +
+// horizon_minutes, whether the data hasn't landed yet or the horizon
+// crosses the lunch break, the close, or a data gap that will never fill
+// in - HandleJob returns an error and persists nothing (a shortened
+// horizon is never recorded as the full-horizon outcome): internal/service/scheduler.EnqueueOutcomeLabeling only
 // enqueues a job once a decision's horizon has elapsed, and won't have
 // recorded a calibration_outcomes row for it yet either, so its next
 // periodic scan re-enqueues this same (jev_decision_id, horizon_minutes)
@@ -72,6 +83,10 @@ func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 	if len(window) < 2 || !window[0].Timestamp.Equal(decision.Timestamp) {
 		return fmt.Errorf("calibration: insufficient market data to label decision %d at horizon %dm yet", payload.JevDecisionID, payload.HorizonMinutes)
+	}
+	if last := window[len(window)-1].Timestamp; last.Before(decision.Timestamp.Add(horizon - horizonBarTolerance)) {
+		return fmt.Errorf("calibration: market data for decision %d ends at %s, short of the %dm horizon (lunch break, close, or data gap): not labeling a shortened horizon",
+			payload.JevDecisionID, last.Format(time.RFC3339), payload.HorizonMinutes)
 	}
 
 	direction := domain.JevDirectionNone
