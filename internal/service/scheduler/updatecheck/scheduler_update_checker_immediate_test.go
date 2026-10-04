@@ -1,4 +1,4 @@
-package scheduler_test
+package updatecheck_test
 
 import (
 	"context"
