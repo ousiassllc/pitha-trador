@@ -135,7 +135,10 @@ export class PithaKillSwitchPanel extends LitElement {
   // an operator action, so it is sent as a background request that must not
   // refresh the operator heartbeat (FR-RISK-6 dead-man's switch).
   private async resync(): Promise<void> {
-    if (!this.statusUrl) return;
+    if (!this.statusUrl) {
+      logger.error('pitha-kill-switch-panel: status-url is not set');
+      return;
+    }
     try {
       this.applyState(await get<SystemStateResponse>(this.statusUrl, { background: true }));
       this.error = null;
@@ -146,7 +149,10 @@ export class PithaKillSwitchPanel extends LitElement {
   }
 
   private subscribeWs(): void {
-    if (!this.wsUrl) return;
+    if (!this.wsUrl) {
+      logger.error('pitha-kill-switch-panel: ws-url is not set');
+      return;
+    }
     let wasDisconnected = false;
     this.wsClient = new WsClient<SystemWsMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
@@ -190,8 +196,12 @@ export class PithaKillSwitchPanel extends LitElement {
     this.dispatchEvent(new CustomEvent('systemStateChanged', { bubbles: true, composed: true }));
   }
 
-  private async performAction(url: string): Promise<void> {
-    if (this.busy || !url) return;
+  private async performAction(url: string, attribute: string): Promise<void> {
+    if (this.busy) return;
+    if (!url) {
+      logger.error(`pitha-kill-switch-panel: ${attribute} is not set`);
+      return;
+    }
     this.busy = true;
     try {
       this.applyState(await post<SystemStateResponse>(url));
@@ -210,16 +220,16 @@ export class PithaKillSwitchPanel extends LitElement {
   }
 
   private onPause(): void {
-    void this.performAction(this.pauseUrl);
+    void this.performAction(this.pauseUrl, 'pause-url');
   }
 
   private onResume(): void {
-    void this.performAction(this.resumeUrl);
+    void this.performAction(this.resumeUrl, 'resume-url');
   }
 
   private onKill(): void {
     if (!window.confirm(KILL_CONFIRM_MESSAGE)) return;
-    void this.performAction(this.killUrl);
+    void this.performAction(this.killUrl, 'kill-url');
   }
 
   protected override render() {

@@ -144,6 +144,10 @@ export class PithaCalibrationHeatmap extends LitElement {
   }
 
   private async load(): Promise<void> {
+    if (!this.calibrationUrl) {
+      logger.error('pitha-calibration-heatmap: calibration-url is not set');
+      return;
+    }
     this.loading = true;
     try {
       const response = await get<CalibrationAPIResponse>(this.calibrationUrl);

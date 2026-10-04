@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import './pitha-calibration-heatmap';
 import {
   type CalibrationAPIResponse,
@@ -241,5 +241,29 @@ describe('pitha-calibration-heatmap', () => {
     await flush(el);
 
     expect(el.shadowRoot?.querySelector('[role="alert"]')).not.toBeNull();
+  });
+
+  // fetch('') would GET the current page and fail with a JSON parse error.
+  test('logs an error and makes no request when calibration-url is not injected', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const fetchMock = mock(() => Promise.resolve(new Response('{}')));
+      globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+      const el = document.createElement('pitha-calibration-heatmap') as HeatmapElement; // no URL attribute
+      document.body.appendChild(el);
+      await flush(el);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      const unsetLogs = errorSpy.mock.calls.filter(
+        ([entry]) =>
+          (entry as { message?: string }).message ===
+          'pitha-calibration-heatmap: calibration-url is not set',
+      );
+      expect(unsetLogs).toHaveLength(1);
+      expect(el.shadowRoot?.querySelector('[role="alert"]')).toBeNull();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

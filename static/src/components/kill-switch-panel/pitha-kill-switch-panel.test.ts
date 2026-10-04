@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
 import {
   buttonLabels,
   FakeWebSocket,
@@ -204,5 +204,45 @@ describe('pitha-kill-switch-panel', () => {
     await flush(el);
     expect(fetchMock.mock.calls.length).toBe(1);
     expect(isBackground(fetchMock.mock.calls[0])).toBe(true);
+  });
+
+  // HATEOAS: URL attributes are injected by Templ only. A missing one is a
+  // wiring mistake, so it must be logged rather than silently ignored.
+  test('logs an error and does no request or subscription when status-url and ws-url are not injected', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { fetchMock } = await mount('running', { 'status-url': '', 'ws-url': '' });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(FakeWebSocket.instances).toHaveLength(0);
+      for (const name of ['status-url', 'ws-url']) {
+        expect(errorSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ message: `pitha-kill-switch-panel: ${name} is not set` }),
+        );
+      }
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  test('logs an error and sends no POST when the clicked action URL is not injected', async () => {
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { el, fetchMock } = await mount('running', { 'pause-url': '' });
+      fetchMock.mockClear();
+
+      const pause = Array.from(el.shadowRoot?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === 'Pause',
+      );
+      pause?.click();
+      await flush(el);
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'pitha-kill-switch-panel: pause-url is not set' }),
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });
