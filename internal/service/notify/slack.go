@@ -145,10 +145,12 @@ func (n *SlackNotifier) KillSwitchAutoResumed(ctx context.Context, ev domain.Kil
 
 // DailyLossWarning implements internal/service/risk.Notifier's
 // remaining §5.2 alert category: "日次損失上限接近（例: 上限の80%到達）".
+// currentPct / limitPct are percent values (0.8 = 0.8%), the unit
+// risk.Notifier.DailyLossWarning is called with; they are not ratios.
 func (n *SlackNotifier) DailyLossWarning(ctx context.Context, currentPct, limitPct float64) error {
 	text := fmt.Sprintf(
 		":warning: 日次損失上限接近: 現在の日次損失率 %.2f%%（上限 %.2f%% の %.0f%%到達）",
-		currentPct*100, limitPct*100, currentPct/limitPct*100,
+		currentPct, limitPct, currentPct/limitPct*100,
 	)
 	return n.PostMessage(ctx, text)
 }
