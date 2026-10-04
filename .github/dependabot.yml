@@ -1,9 +1,13 @@
 version: 2
 updates:
-  # Third-party actions in ci.yml are pinned to commit SHAs (issue #375);
+  # Third-party actions in ci.yml and the local composite action
+  # (.github/actions/setup) are pinned to commit SHAs (issue #375);
   # Dependabot rewrites the SHA and the trailing `# vN` comment on update.
+  # Local composite actions are not scanned from `/`, so list them explicitly.
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/setup
     schedule:
       interval: weekly
 

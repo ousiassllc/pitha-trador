@@ -22,6 +22,8 @@
 pitha-trador/
 ├── .github/
 │   ├── dependabot.yml        # Dependabot（gomod / github-actions / bun）
+│   ├── actions/setup/
+│   │   └── action.yml        # 複合Action: setup-go / setup-bun / フロントエンドビルド / templ生成（lint・test・buildで共用）
 │   └── workflows/
 │       └── ci.yml            # push/PR/タグ: lint（govulncheck含む）→ test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
 ├── .env.example               # 環境変数の一覧と説明の雛形（`.env`は自動読込されない。値はプロセス環境変数として設定する）
@@ -41,7 +43,7 @@ pitha-trador/
 ```
 
 - Goモジュールのルートは`pitha-trador/`直下（`go.mod`）
-- `.github/workflows/`には現状`ci.yml`のみが存在する。`e2e.yml`（実機E2E用）は未作成であり、必要になった時点で追加する（後述「CI/CD」節の注意を参照）。依存の自動更新設定は`.github/dependabot.yml`
+- `.github/workflows/`には現状`ci.yml`のみが存在する。共通セットアップは`.github/actions/setup/action.yml`（複合Action）。`e2e.yml`（実機E2E用）は未作成であり、必要になった時点で追加する（後述「CI/CD」節の注意を参照）。依存の自動更新設定は`.github/dependabot.yml`
 - フロントエンド（Lit/TypeScript）の依存管理は`static/`配下に閉じ、bunで管理する（Goモジュールとは独立）
 
 ## 開発環境セットアップ
@@ -155,6 +157,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 - **同時実行制御**: ワークフロー全体に`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: false }`を設定する。版番号の採番（`build`）とタグ作成（`release`）が別ジョブのため、`main`への連続pushで並行実行されると同じ版番号を算出してタグが衝突しうる。同一refの実行を直列化して防ぐ
 - **最小権限**: ワークフロー先頭に`permissions: contents: read`を置き、`release`ジョブのみ`permissions: contents: write`に昇格する。`GITHUB_TOKEN`の既定権限（リポジトリ設定次第でwrite）に依存させない
 - **外部ActionのSHA固定**: `actions/*`・`oven-sh/setup-bun`・`softprops/action-gh-release`は可変タグではなくコミットSHAで参照し、行末コメント`# vN`に解決元タグを残す（タグ付け替えによりrelease権限で任意コードが動くのを防ぐ）。更新は`.github/dependabot.yml`のDependabotがSHAとコメントを書き換えるPRで行う
+- **共通セットアップ（複合Action）**: `lint`/`test`/`build`で共通の`actions/setup-go`・`oven-sh/setup-bun`・`bun install --cwd static --frozen-lockfile`・`bun run --cwd static build`・`templ`のインストールと`templ generate`は、複合Action`.github/actions/setup/action.yml`にまとめて各ジョブから`uses: ./.github/actions/setup`で呼び出す（`ci.yml`を行数上限300行未満に保つため。`actions/checkout`は各ジョブに残す）。複合Action内の外部ActionもSHA固定とし、ローカルの複合Actionは`/`のスキャン対象外のため`.github/dependabot.yml`の`github-actions`の`directories`に`/.github/actions/setup`を明示する。`TEMPL_VERSION`はワークフロー先頭の`env`から継承する
 - **脆弱性スキャン**: `lint`ジョブで`govulncheck ./...`（`GOVULNCHECK_VERSION`で固定）を実行する。Goの標準ライブラリの脆弱性は`go.mod`の`go`ディレクトリのパッチ版で決まるため、`govulncheck`が標準ライブラリの修正済み版を要求した場合は`go.mod`のGoパッチ版を上げる。依存の更新は`.github/dependabot.yml`（`gomod`・`github-actions`・`bun`（`/static`））が週次でPRを作る
 - **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
 - **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/runtime.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`（**現状は未作成**）をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途追加して実行する（通常のlint/test/buildフローには含めない）
@@ -298,3 +301,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.32 | 2026-10-04 | 自動更新の署名検証を追加: CI `build`ジョブが`RELEASE_SIGNING_PUBLIC_KEY`/`RELEASE_SIGNING_KEY`設定時に`checksums.txt.sig`（ed25519分離署名）を生成・公開し、公開鍵を`-ldflags`で埋め込む。鍵の発行手順を追記 | issue #376 |
 | 1.33 | 2026-10-05 | CIの署名発行・欠落時失敗の条件を`ci.yml`の`Sign checksums`の`if`（`main`へのpushとタグpushのみ。PR・`feat/**`は公開鍵の埋め込みのみ）に合わせて訂正 | issue #414 |
 | 1.34 | 2026-10-05 | 「銘柄マスタの投入」節にUTF-8以外（Shift_JIS/CP932）のCSVは全体拒否される旨を追記、`make test`の`bun test`がCSPの`lightweight-charts`style hashとインストール版の一致を検証する旨を追記 | issue #393, #407 |
+| 1.35 | 2026-10-05 | CIの`lint`/`test`/`build`で重複していたGo・bunセットアップ・フロントエンドビルド・templ生成を複合Action`.github/actions/setup`へ集約（`ci.yml`の300行上限超過を解消）。ジョブ名・ステップ内容は不変。Dependabotの`github-actions`に`/.github/actions/setup`を追加 | issue #402 |
