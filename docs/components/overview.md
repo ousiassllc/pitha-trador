@@ -246,3 +246,4 @@ const (
 | 1.54 | 2026-10-05 | §5.1（`lit.md`）`pitha-price-chart`の時間軸・クロスヘアをJST（Asia/Tokyo）表示と明記し、§2ツリーに`jst-time.ts`を追記 | issue #478 |
 | 1.55 | 2026-10-05 | §5.3（`lit.md`）`pitha-calibration-heatmap`の空帯（`sample_count==0`）をグレー「データなし」・curve対象外、各帯`n=`表示、サンプルなし時のBrier/LogLoss/ECE非表示を追記 | issue #480 |
 | 1.56 | 2026-10-05 | §5.1（`lit.md`）`pitha-price-chart`の出来高ヒストグラムが`candles`の1分足あたり`volume`をそのまま描画する旨を追記 | issue #474 |
+| 1.57 | 2026-10-05 | §5.2/§5.3/§5.4（`lit.md`）エントリー品質列を品質順（poor<…<exceptional）でソートする旨（#493）と、`calibration-url`・`status-url`等のURL属性未設定時に`logger.error`を出し取得・購読・操作を行わない旨（#494）を追記 | issue #493, #494 |

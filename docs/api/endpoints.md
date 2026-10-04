@@ -151,3 +151,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.45 | 2026-10-05 | `GET /api/v1/policy-proposals`（`api/endpoints/huma-api-insights.md`）の各itemに`applied_at`/`rolled_back_at`/`rolled_back_reason`（未発生は`null`）を追加 | issue #457 |
 | 1.46 | 2026-10-05 | `GET /api/v1/symbols/{symbol}/candles`（`api/endpoints/huma-api.md`）の`volume`を1分足あたり出来高（累積の差分）と明記 | issue #474 |
 | 1.47 | 2026-10-05 | `GET /api/v1/symbols/{symbol}`の`vwap`（最新スナップショット）と`jev`6項目（最新Jev Trader判断、無ければ`null`）の出所を明記し、`/ws/symbols/{symbol}`の`jev_update`も同じTrader判断由来と明記 | issue #491 |
+| 1.48 | 2026-10-05 | `GET /api/v1/scanner`（`api/endpoints/huma-api.md`）の`jev_direction`/`jev_confidence`/`entry_quality`（最新Trader判断、無ければ`null`）と`current_position`（符号付き保有数量、無保有は`null`）の出所を明記 | issue #492 |
