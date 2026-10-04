@@ -54,3 +54,4 @@
 | 1.47 | 2026-10-03 | §4 Backtest Engine行と`overview/integrations.md` §8に、バックテスト/シャドーバックテストの再現範囲（Exitは固定SL/TP/最大保有時間のみ・Risk Engine不適用・スリッページ5bps/手数料0bps固定）を追記（`requirements/functional/components-platform.md` FR-BT-4新設、FR-SELFIMPROVE-4から参照）。`internal/service/backtest/runner.go`の古いRisk Engineコメントも訂正 | issue #344 |
 | 1.48 | 2026-10-03 | §3のツリー・§4のExecution行にテスト専用サブパッケージ`execution/pendingfill`（PENDING指値Entry関連の外部テスト）を追記。`internal/service/execution`が2000行/ディレクトリ上限を超過したため | issue #348 |
 | 1.49 | 2026-10-03 | `overview/integrations.md` §5のトークン失敗`4001007`/`4001017`（未ログイン）の案内をログイン状態の確認と再ログインに限定（`requirements/functional/components-platform.md` FR-SETTINGS-5も同様）。`overview/flows.md` §10.4のハートビート更新対象外に、`kill_switch`/`state_changed` push受信時の`pitha-kill-switch-panel`の再同期を追記 | issue #305, #363 |
+| 1.50 | 2026-10-04 | `overview/integrations.md` §5に銘柄マスタ（`instruments`）の起動時CSV投入（`internal/bootstrap/universe`）を追記し、`overview/flows.md` §10.1の起動時フローに反映 | issue #389 |

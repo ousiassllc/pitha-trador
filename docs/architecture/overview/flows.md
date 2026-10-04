@@ -16,6 +16,7 @@ sequenceDiagram
     App->>DB: マイグレーション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON, WAL）
     App->>KABU: /kabusapi/token でトークン発行
     KABU-->>App: token
+    App->>App: 銘柄マスタCSVから`instruments`をupsert
     App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始
     App->>SCHED: 周期ジョブ登録（60s/15-30s/5-15s）。前回クラッシュ時の`running`状態ジョブを`pending`へ復帰
     App->>App: WebView起動・Scanner Dashboard表示
