@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import './pitha-kill-switch-panel';
-
-type PanelElement = HTMLElement & { updateComplete: Promise<boolean> };
+import { buttonLabels, flush, type PanelElement } from './kill-switch-test-support';
 
 let originalFetch: typeof fetch;
 let originalConfirm: typeof window.confirm;
@@ -18,15 +16,6 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-// One real macrotask lets the fire-and-forget fetch chains settle
-// (same approach as pitha-kill-switch-panel.test.ts's flush).
-async function flush(el: PanelElement): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, 0);
-  await promise;
-  await el.updateComplete;
-}
-
 function state(name: string, canPause: boolean, canResume: boolean, canKill: boolean): Response {
   return new Response(
     JSON.stringify({
@@ -35,12 +24,6 @@ function state(name: string, canPause: boolean, canResume: boolean, canKill: boo
       can_resume: canResume,
       can_kill: canKill,
     }),
-  );
-}
-
-function buttonLabels(el: PanelElement): (string | undefined)[] {
-  return Array.from(el.shadowRoot?.querySelectorAll('button') ?? []).map((b) =>
-    b.textContent?.trim(),
   );
 }
 
