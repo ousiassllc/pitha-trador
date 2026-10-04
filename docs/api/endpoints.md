@@ -146,3 +146,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.40 | 2026-10-05 | §5の`performance`/`calibration`/`policy-proposals`/`activity`の各節を`api/endpoints/huma-api-insights.md`へ分割（`huma-api.md`が300行/ファイル制限を超過したため）。節番号・内容は変更なし | issue #403 |
 | 1.41 | 2026-10-05 | §`/ws/activity`の`job_update`が約0.5秒間の状態遷移をまとめ、変化のあったキューについて1回だけ送ることを追記 | issue #392 |
 | 1.42 | 2026-10-05 | `GET /api/v1/activity`（`api/endpoints/huma-api-insights.md`）に`failed_recent`の集計窓（`as_of`から過去1時間・固定）を追記 | issue #427 |
+| 1.43 | 2026-10-05 | `GET /api/v1/calibration`（`api/endpoints/huma-api-insights.md`）が`question_version`で分離せず全版のTrader判断を混在して集計することを明記 | issue #440, #443, #448 |
