@@ -12,21 +12,16 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
-	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
-	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 	"github.com/ousiassllc/pitha-trador/internal/supervisor"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
@@ -79,25 +74,9 @@ func main() {
 	}
 	defer func() { _ = state.Close() }()
 
-	// config.LoadSecretsFromDB reads the required JEV_API_KEY/
-	// KABU_API_PASSWORD (plus the optional JEV_BASE_URL/JEV_MODEL/
-	// SLACK_WEBHOOK_URL and LUNA_*/NEWS_FEED_*/SOL_*/OPUS_*
-	// AI/News API credentials) from the secrets table (issue
-	// #57 - `.env`/environment variables are no longer a supported input
-	// for these at all). Unlike the old env-var-based LoadSecrets, a
-	// missing value is never fatal: the app starts regardless, missing
-	// only drives a startup warning log and the Settings screen's
-	// (`/settings`) header banner - BuildServices' Jev/kabuステーション
-	// API client wiring simply receives empty strings for anything
-	// unset (both marketdata.NewClient/jev.NewClient tolerate that) until
-	// an operator fills them in and restarts (no hot-reload).
-	secretsRepo := system.NewSecretsRepository(state.DB)
-	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), secretsRepo)
+	secretsRepo, secrets, err := bootstrap.LoadSecrets(context.Background(), state)
 	if err != nil {
 		log.Fatal(err)
-	}
-	if len(missing) > 0 {
-		slog.Warn("bootstrap: secrets not yet configured; configure them at /settings and restart", "missing", missing)
 	}
 
 	// app is also the Risk Engine's native OS toast Notifier (notify.go),
@@ -115,28 +94,12 @@ func main() {
 
 	wsListeners, wsBase := listenWebSocket()
 
-	engine := router.New(
+	engine := router.New(append(
+		bootstrap.RouterOptions(services, state, secretsRepo),
 		router.WithWebSocketBase(wsBase),
 		router.WithAllowedHosts(middleware.WailsHosts()...),
-		router.WithCandidateSource(services.Screener),
-		router.WithSystemEngine(services.Risk),
-		router.WithHeartbeatRecorder(services.Risk),
-		router.WithSymbolProvider(services.Execution),
-		router.WithSymbolRiskParams(symbol.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config(), services.Risk.AllowedPositionPct)),
-		router.WithInsightProvider(services.Insight),
-		router.WithCalibrationSource(services.Calibration),
-		router.WithPolicyProposalSource(services.Proposals),
-		router.WithBacktestRunner(services.Backtest),
-		router.WithActivitySource(services.Activity),
-		router.WithSecretsStore(secretsRepo),
-		router.WithMarketDataStatus(services.MarketData),
 		router.WithUpdateController(services.Updater),
-		router.WithErrorLogExporter(services.ErrorLogs),
-		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
-			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,
-			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,
-		}),
-	)
+	)...)
 
 	if len(wsListeners) > 0 {
 		defer serveWebSocket(wsListeners, engine)()
