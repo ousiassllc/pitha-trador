@@ -117,8 +117,11 @@ jobs:
       - name: Generate templ
         run: templ generate
 
+      # -race catches data races (Scheduler / Risk Engine / Execution /
+      # WebSocket are concurrent; issue #374). The race detector needs cgo,
+      # which is enabled by default on ubuntu-latest (gcc preinstalled).
       - name: go test
-        run: go test ./...
+        run: go test -race ./...
 
       - name: bun test
         run: bun --cwd static test
