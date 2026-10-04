@@ -2,6 +2,7 @@ package marketdatajob
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -40,6 +41,7 @@ func (f *fakeBoards) Latest(context.Context, string) (marketdata.Board, error) {
 // assert through.
 type testEnv struct {
 	*Handler
+	DB        *sql.DB
 	Fake      *fakeBoards
 	Jobs      *jobqueue.JobRepository
 	Positions *trading.PositionRepository
@@ -47,12 +49,12 @@ type testEnv struct {
 
 // newTestEnv is newTestEnvWithNews with News Ingest unconfigured (its
 // cache is always empty, so no news flag is ever raised).
-func newTestEnv(t *testing.T) testEnv {
+func newTestEnv(t testing.TB) testEnv {
 	t.Helper()
 	return newTestEnvWithNews(t, newsfeed.FeedConfig{}, assist.Config{Label: "luna"})
 }
 
-func newTestEnvWithNews(t *testing.T, feedCfg newsfeed.FeedConfig, lunaCfg assist.Config) testEnv {
+func newTestEnvWithNews(t testing.TB, feedCfg newsfeed.FeedConfig, lunaCfg assist.Config) testEnv {
 	t.Helper()
 	conn, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
@@ -91,7 +93,7 @@ func newTestEnvWithNews(t *testing.T, feedCfg newsfeed.FeedConfig, lunaCfg assis
 			Scheduler:    scheduler.New(jobs, instruments),
 			EventTrigger: strategy.Scan.EventTrigger,
 		},
-		Fake: boards, Jobs: jobs, Positions: positions,
+		DB: conn, Fake: boards, Jobs: jobs, Positions: positions,
 	}
 }
 

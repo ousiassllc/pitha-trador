@@ -6,7 +6,7 @@
 // Handler registered for that queue (this scope only registers
 // market-data/feature-calc; jev-scout and later queues are added by their
 // own scopes), drives the 60-second full-scan cycle that enqueues
-// market-data/feature-calc work for every active instrument
+// market-data work for every active instrument in one transaction
 // (FR-SCHED-2 前半), optionally drives Outcome Labeling's periodic
 // enqueue trigger (EnqueueOutcomeLabeling, WithOutcomeLabelSource,
 // functional.md FR-CAL-4), enqueues an immediate jev-scout job bypassing

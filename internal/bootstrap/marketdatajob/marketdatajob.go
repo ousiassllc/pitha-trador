@@ -166,8 +166,9 @@ func (h *Handler) isCandidate(ctx context.Context, instrumentID int64) bool {
 
 // HandleFeatureCalc is the feature-calc queue Handler (issue #44), an
 // intentional no-op: Handler.HandleMarketData already computes and persists
-// Feature atomically; a succeeding handler keeps the feature-calc jobs
-// EnqueueFullScan adds from piling up as "pending" rows.
+// Feature atomically. EnqueueFullScan no longer feeds this queue; the
+// handler remains so feature-calc jobs left by an earlier version drain
+// instead of staying "pending" forever.
 func HandleFeatureCalc(context.Context, jobqueue.Job) error {
 	return nil
 }

@@ -24,8 +24,8 @@ const defaultPollInterval = 200 * time.Millisecond
 // failed (jobqueue.JobRepository.MarkFailed); nil marks it succeeded.
 type Handler func(ctx context.Context, job jobqueue.Job) error
 
-// fullScanPayload is the JSON body enqueued onto the market-data and
-// feature-calc queues once per active instrument, each full-scan cycle
+// fullScanPayload is the JSON body enqueued onto the market-data queue (and
+// jev-scout, by EnqueueEventReevaluation) per instrument
 // (functional.md §4.10 FR-SCHED-2 前半).
 type fullScanPayload struct {
 	InstrumentID int64  `json:"instrument_id"`
@@ -140,10 +140,12 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 	return n, nil
 }
 
-// EnqueueFullScan enqueues one market-data job and one feature-calc job
-// per active instrument, due at now (functional.md FR-SCHED-2 前半). It
-// returns the number of instruments enqueued for, and logs that count as
-// a structured JSON line (non-functional.md §5.1 "スキャン対象銘柄数").
+// EnqueueFullScan enqueues one market-data job per active instrument, due
+// at now, in a single transaction (functional.md FR-SCHED-2 前半). The
+// feature-calc queue is no longer fed: its handler is a no-op, so the
+// thousands of empty jobs per cycle only cost INSERTs and retained rows
+// (non-functional.md §2.3). It returns the number of instruments enqueued
+// for, and logs that count as a structured JSON line (non-functional.md §5.1 "スキャン対象銘柄数").
 //
 // When the previous cycle's market-data jobs are still pending or
 // running it enqueues nothing, logs a warning and returns (0, nil), so a
@@ -156,7 +158,7 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 	if !s.inSession(now) {
 		return 0, nil
 	}
-	unfinished, err := s.unfinishedMarketDataJobs(ctx, now)
+	unfinished, err := s.unfinishedMarketDataJobs(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -169,35 +171,31 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 		return 0, fmt.Errorf("scheduler: list active instruments for full scan: %w", err)
 	}
 
+	payloads := make([]string, 0, len(instruments))
 	for _, inst := range instruments {
 		payload, err := json.Marshal(fullScanPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
 		if err != nil {
 			return 0, fmt.Errorf("scheduler: marshal full scan payload for %q: %w", inst.Symbol, err)
 		}
-		if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueMarketData, string(payload), now); err != nil {
-			return 0, fmt.Errorf("scheduler: enqueue market-data job for %q: %w", inst.Symbol, err)
-		}
-		if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueFeatureCalc, string(payload), now); err != nil {
-			return 0, fmt.Errorf("scheduler: enqueue feature-calc job for %q: %w", inst.Symbol, err)
-		}
+		payloads = append(payloads, string(payload))
+	}
+	if _, err := s.jobs.EnqueueBatch(ctx, jobqueue.JobQueueMarketData, payloads, now); err != nil {
+		return 0, fmt.Errorf("scheduler: enqueue market-data jobs for full scan: %w", err)
 	}
 	slog.Info("scheduler: full scan enqueued", "instrument_count", len(instruments))
 	return len(instruments), nil
 }
 
 // unfinishedMarketDataJobs returns how many market-data jobs are still
-// pending or running, i.e. left over from earlier full-scan cycles.
-func (s *Scheduler) unfinishedMarketDataJobs(ctx context.Context, now time.Time) (int, error) {
-	counts, err := s.jobs.QueueCounts(ctx, now)
+// pending or running, i.e. left over from earlier full-scan cycles. It
+// counts only those open rows (jobqueue.JobRepository.CountOpen), never the
+// retained finished ones, because it runs every cycle.
+func (s *Scheduler) unfinishedMarketDataJobs(ctx context.Context) (int, error) {
+	n, err := s.jobs.CountOpen(ctx, jobqueue.JobQueueMarketData)
 	if err != nil {
 		return 0, fmt.Errorf("scheduler: count unfinished market-data jobs: %w", err)
 	}
-	for _, c := range counts {
-		if c.Queue == jobqueue.JobQueueMarketData {
-			return c.Pending + c.Running, nil
-		}
-	}
-	return 0, nil
+	return n, nil
 }
 
 // EnqueueEventReevaluation enqueues one jev-scout job for instrumentID,

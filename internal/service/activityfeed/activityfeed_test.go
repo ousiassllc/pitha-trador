@@ -2,6 +2,7 @@ package activityfeed_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,14 +12,16 @@ import (
 )
 
 type fakeJobs struct {
-	counts    []jobqueue.JobQueueCount
-	jobs      []jobqueue.Job
-	gotQueue  string
-	gotLimit  int
-	listCalls int
+	counts     []jobqueue.JobQueueCount
+	jobs       []jobqueue.Job
+	gotQueue   string
+	gotLimit   int
+	listCalls  int
+	countCalls atomic.Int32
 }
 
 func (f *fakeJobs) QueueCounts(context.Context, time.Time) ([]jobqueue.JobQueueCount, error) {
+	f.countCalls.Add(1)
 	return f.counts, nil
 }
 
@@ -194,6 +197,7 @@ func TestService_Snapshot_TruncatesMergedListToLimit(t *testing.T) {
 func TestService_Observers_PublishToSubscribersOnly(t *testing.T) {
 	jobs, decisions, kill := fixtures()
 	svc := activityfeed.New(jobs, decisions, kill)
+	svc.SetQueueUpdateInterval(time.Millisecond)
 
 	// No subscriber: observers are no-ops (must not panic or block).
 	svc.ObserveKillSwitch(context.Background(), domain.KillSwitchEvent{Reason: domain.KillReasonDailyLossLimit})
@@ -210,7 +214,7 @@ func TestService_Observers_PublishToSubscribersOnly(t *testing.T) {
 		select {
 		case m := <-messages:
 			return m
-		default:
+		case <-time.After(5 * time.Second):
 			t.Fatalf("expected a queued message, channel empty")
 			return activityfeed.Message{}
 		}
@@ -262,4 +266,49 @@ func TestService_Subscribe_CancelClosesChannelAndStopsDelivery(t *testing.T) {
 	}
 	// Publishing after cancel must not panic (send on closed channel).
 	svc.ObserveKillSwitch(context.Background(), domain.KillSwitchEvent{Reason: domain.KillReasonDailyLossLimit})
+}
+
+// A burst of transitions (a full scan's enqueue loop) costs one QueueCounts
+// call, not one per transition, and each touched queue gets one update with
+// the current depth.
+func TestService_ObserveJob_CoalescesQueueUpdates(t *testing.T) {
+	jobs, decisions, kill := fixtures()
+	jobs.counts = []jobqueue.JobQueueCount{
+		{Queue: jobqueue.JobQueueMarketData, Pending: 40, Running: 1},
+		{Queue: jobqueue.JobQueueJevScout, Pending: 3, Running: 1, FailedSince: 2},
+	}
+	svc := activityfeed.New(jobs, decisions, kill)
+	svc.SetQueueUpdateInterval(50 * time.Millisecond)
+	messages, cancel := svc.Subscribe()
+	defer cancel()
+
+	for i := range 500 {
+		queue := jobqueue.JobQueueMarketData
+		if i%2 == 1 {
+			queue = jobqueue.JobQueueJevScout
+		}
+		svc.ObserveJob(context.Background(), jobqueue.Job{ID: int64(i), Queue: queue, Status: jobqueue.JobStatusPending, CreatedAt: t0})
+	}
+
+	updates := map[string]activityfeed.QueueUpdate{}
+	timeout := time.After(5 * time.Second)
+	for len(updates) < 2 {
+		select {
+		case m := <-messages:
+			if m.QueueUpdate != nil {
+				updates[m.QueueUpdate.Queue] = *m.QueueUpdate
+			}
+		case <-timeout:
+			t.Fatalf("queue updates = %+v, want one per touched queue", updates)
+		}
+	}
+	if got := updates[jobqueue.JobQueueMarketData]; got.Pending != 40 || got.Running != 1 || got.FailedRecent != 0 {
+		t.Fatalf("market-data update = %+v, want pending=40 running=1 failedRecent=0", got)
+	}
+	if got := updates[jobqueue.JobQueueJevScout]; got.Pending != 3 || got.Running != 1 || got.FailedRecent != 2 {
+		t.Fatalf("jev-scout update = %+v, want pending=3 running=1 failedRecent=2", got)
+	}
+	if n := jobs.countCalls.Load(); n != 1 {
+		t.Fatalf("QueueCounts calls = %d for 500 transitions, want 1", n)
+	}
 }
