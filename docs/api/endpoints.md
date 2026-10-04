@@ -8,7 +8,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
   - `cmd/server`の既定待受は`127.0.0.1:48080`。`PITHA_SERVER_ADDR`でloopback以外（`:48080`・`0.0.0.0`・LAN IP等）を指定すると起動を拒否する。意図的に公開する場合のみ`PITHA_SERVER_ALLOW_NON_LOOPBACK=1`を併用する（issue #91/#99）
 - 単一ユーザー・単一デスクトップアプリのため、外部IdP連携やユーザーログイン画面は持たない
 - 起動時にWailsプロセスがランダムなローカルセッショントークンを生成し、Cookie（`HttpOnly`, `SameSite=Strict`）としてWebViewに設定する。全ての状態変更リクエスト（アクションルート・Huma APIのPOST/PUT/PATCH/DELETE）はこのセッションCookie必須とする
-  - 実装（`internal/web/middleware/session.go`）: `RequestLog`・`Recovery`・（後述の）Host検証の**後**、Setup Guardより**前**にGinエンジン全体（`/static`を除く）へ適用する。適用順は`internal/router/router_middleware.go`のとおり `RequestLog → Recovery → HostGuard（許可リスト設定時） → Session → Heartbeat（recorderがあれば） → Setup Guard（secrets storeがあれば） → SystemState`（RequestLog/RecoveryをSessionより前に置くのは、Sessionの403拒否もアクセスログに残し、panicを500として回復するため。issue #109/#122）。プロセス起動ごとにセッショントークンとCSRFトークンを別々に乱数生成し、Cookie（名前`pitha_session`）は有効なCookieを持たない安全なリクエスト（GET/HEAD/OPTIONS、WebSocketアップグレードを除く）の応答で発行する
+  - 実装（`internal/web/middleware/session.go`）: `SecurityHeaders`・`RequestLog`・`Recovery`・（ws-base設定時の）`WebSocketBase`・（後述の）Host検証の**後**、Setup Guardより**前**にGinエンジン全体（`/static`を除く）へ適用する。適用順は`internal/router/router_middleware.go`のとおり `SecurityHeaders（最外周） → RequestLog → Recovery → WebSocketBase（ws-base設定時） → HostGuard（許可リスト設定時） → Session → Heartbeat（recorderがあれば） → Setup Guard（secrets storeがあれば） → SystemState`（RequestLog/RecoveryをSessionより前に置くのは、Sessionの403拒否もアクセスログに残し、panicを500として回復するため。issue #109/#122。SecurityHeadersを最初に置くのは、Recovery・HostGuard・Sessionの拒否応答にもヘッダを付けるため。issue #378）。プロセス起動ごとにセッショントークンとCSRFトークンを別々に乱数生成し、Cookie（名前`pitha_session`）は有効なCookieを持たない安全なリクエスト（GET/HEAD/OPTIONS、WebSocketアップグレードを除く）の応答で発行する
   - POST/PUT/PATCH/DELETE等の状態変更メソッドは、有効なセッションCookieと、CSRFトークンに一致する`X-CSRF-Token`ヘッダの両方が無ければ403を返す。WebSocketアップグレード（`/ws/...`）は有効なセッションCookieが無ければ403を返す
   - **CSRF拒否の識別（issue #138）**: トークンは起動ごとに再生成されるため、アプリ再起動前に開いたままのページは旧Cookie/旧CSRFトークンを持ち続ける。Cookie無効・CSRFトークン不一致による403には`X-CSRF-Reject: stale`ヘッダを付け、`lib/api.ts`は`StaleSessionError`（Kill Switchパネル等に表示）、`pitha-htmx-errors`は同内容のトーストで「ページを再読み込みしてください」と案内する。再読み込みで新しいCookieとトークンが配布される。ページ遷移（`Accept: text/html`かつ非HTMX・非WebSocket・非`/api/v1`）でのCSRF拒否とpanicによる500は、`router.useMiddleware`が注入する`shared.RenderErrorPage`（`internal/web/handler/shared`）（`pages.ErrorPage`）でHTML本文を返し（`X-CSRF-Reject`ヘッダは維持）、HTMX・fetch・API・WebSocketは従来どおりステータスのみ／プレーンテキストとする（issue #171）
   - **`_csrf`フォームフィールド（issue #142）**: ヘッダを付けられない素のHTMLフォーム送信（JS無効・htmx読込失敗時の`SecretFieldRow`フォールバック）のため、`Content-Type: application/x-www-form-urlencoded`のボディの隠しフィールド`_csrf`も`X-CSRF-Token`ヘッダの代わりに受け付ける（ヘッダがあればヘッダを優先）。セッションCookieは引き続き必須
@@ -75,7 +75,7 @@ stateDiagram-v2
 
 ## 5. API ルート（Huma, `/api/v1`）
 
-全文は `docs/api/endpoints/huma-api.md`（§5、節番号・内容は分割前と同一）に分割した。
+全文は `docs/api/endpoints/huma-api.md`（§5、節番号・内容は分割前と同一。スキャナ・銘柄・シグナル・ポジション・注文・システム状態・エラーログとエンドポイント一覧表）と、そこから分割した `docs/api/endpoints/huma-api-insights.md`（`performance`・`calibration`・`policy-proposals`・`activity`）に分割した。
 
 ## 6. WebSocket
 
@@ -142,3 +142,5 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.36 | 2026-10-04 | §3 `GET /scanner`から呼び出し元のない`HX-Request`時の候補テーブルフラグメント返却を削除し、常にフルページを返すと明記 | issue #381 |
 | 1.37 | 2026-10-04 | §3 `GET /symbols/:symbol`が銘柄形式をJSON APIと同じ規則で先に検証し不正値は404とすること、`pitha-price-chart`へ渡すURLを`SymbolHref`と同じ規則でエスケープすることを明記 | issue #382 |
 | 1.38 | 2026-10-04 | §1にセキュリティヘッダ（CSP/nosniff/X-Frame-Options/Referrer-Policy、`/swagger`の緩和CSP）を追記 | issue #378 |
+| 1.39 | 2026-10-05 | §1のミドルウェア適用順に最外周の`SecurityHeaders`と`WebSocketBase`（ws-base設定時）を追記し、`router_middleware.go`の`engine.Use`順と一致させた | issue #413 |
+| 1.40 | 2026-10-05 | §5の`performance`/`calibration`/`policy-proposals`/`activity`の各節を`api/endpoints/huma-api-insights.md`へ分割（`huma-api.md`が300行/ファイル制限を超過したため）。節番号・内容は変更なし | issue #403 |
