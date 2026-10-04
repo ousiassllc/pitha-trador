@@ -7,6 +7,13 @@
 # 初期値に対応する。
 # しきい値は後続スコープ（Calibration結果に基づく調整、Sol自己改善ループ等）
 # で書き換えられる想定のため、コード側にハードコードしない。
+#
+# fast_screener / jev_scout / policy は起動時に検証される（scan.* のような
+# 既定値補完はしない）。キー欠落・範囲外（top_n < 1、jev_scout.min_* や
+# policy の確率系しきい値が (0, 1] 外、min_entry_quality が
+# poor/fair/good/strong/exceptional 以外、など）は項目名付きのエラーで
+# 起動に失敗する。PITHA_POLICY_* / PITHA_FAST_SCREENER_* で上書きした後の値も
+# 同じ検証を通る（FR-FS-4 / FR-SCOUT-2a / FR-POLICY-2a）。
 
 scan:
   # *_seconds は正の整数で、max >= min であること。未設定/0以下は設定ローダーが

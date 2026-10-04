@@ -1,4 +1,4 @@
-package config_test
+package strategyflow_test
 
 import (
 	"os"
@@ -18,7 +18,7 @@ func TestLoadStrategyBytes_FillsUnsetEventTriggerThresholds(t *testing.T) {
 		name string
 		yaml string
 	}{
-		{"no scan section", "fast_screener:\n  top_n: 20\n"},
+		{"no scan section", ""},
 		{"no event_trigger block", "scan:\n  full_scan_interval_seconds: 60\n"},
 		{"empty event_trigger block", "scan:\n  event_trigger: {}\n"},
 		{
@@ -36,7 +36,7 @@ func TestLoadStrategyBytes_FillsUnsetEventTriggerThresholds(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := config.LoadStrategyBytes([]byte(tc.yaml))
+			cfg, err := config.LoadStrategyBytes([]byte(tc.yaml + validStrategySections))
 			if err != nil {
 				t.Fatalf("LoadStrategyBytes returned error: %v", err)
 			}
@@ -63,7 +63,7 @@ func TestLoadStrategyBytes_FillsUnsetEventTriggerThresholds(t *testing.T) {
 func TestLoadStrategyBytes_KeepsConfiguredEventTriggerThresholds(t *testing.T) {
 	cfg, err := config.LoadStrategyBytes([]byte("scan:\n  event_trigger:\n" +
 		"    return_1m_change_threshold: 0.02\n" +
-		"    trade_flow_imbalance_change_threshold: 0.9\n"))
+		"    trade_flow_imbalance_change_threshold: 0.9\n" + validStrategySections))
 	if err != nil {
 		t.Fatalf("LoadStrategyBytes returned error: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestLoadStrategyBytes_KeepsConfiguredEventTriggerThresholds(t *testing.T) {
 
 func TestLoadStrategy_FillsUnsetEventTriggerThresholdsFromFile(t *testing.T) {
 	path := t.TempDir() + "/strategy.yaml"
-	if err := os.WriteFile(path, []byte("scan:\n  full_scan_interval_seconds: 60\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("scan:\n  full_scan_interval_seconds: 60\n"+validStrategySections), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 	cfg, err := config.LoadStrategy(path)

@@ -179,11 +179,15 @@ func Screen(cfg config.FastScreenerConfig, inputs []Input) Result {
 		return passed[i].candidate.ScreenScore > passed[j].candidate.ScreenScore
 	})
 
-	if len(passed) > cfg.TopN {
-		for _, p := range passed[cfg.TopN:] {
+	// config.StrategyConfig.Validate rejects top_n < 1 at startup; clamp
+	// anyway so a negative value (e.g. a runtime_settings override) cannot
+	// panic the slice below.
+	topN := max(cfg.TopN, 0)
+	if len(passed) > topN {
+		for _, p := range passed[topN:] {
 			reasons[p.idx] = reasons[p.idx].Add(domain.ScreenReasonRankedOut)
 		}
-		passed = passed[:cfg.TopN]
+		passed = passed[:topN]
 	}
 	candidates := make([]domain.Candidate, len(passed))
 	for i, p := range passed {
