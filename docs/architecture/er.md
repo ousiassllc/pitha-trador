@@ -70,3 +70,4 @@ erDiagram
 | 1.20 | 2026-10-05 | `er/tables-market.md`の`market_snapshots.spread_bps`に、逆転板（bid > ask）は欠損（NULL）として扱う旨を追記（`microprice`も同様、`orderbook_imbalance`は数量のみのため対象外） | issue #465 |
 | 1.21 | 2026-10-05 | `er/tables-system.md`の`jev_decision_vectors`に、bid/ask入れ替え修正（#458）前の符号反転ベクトルをマイグレーション`000022`で全件削除しRAG検索から除外する旨を追記（`jev_decisions`は不変） | issue #464 |
 | 1.22 | 2026-10-05 | `er/tables-system.md`・`er/tables-market.md`に、bid/ask入れ替え修正（#458）前の`market_snapshot_vectors`もマイグレーション`000023`で全件削除しRAG検索から除外する旨を追記（`market_snapshots`は不変） | issue #469, #470 |
+| 1.23 | 2026-10-05 | `er/tables-system.md`の類似検索に、問い合わせ対象の状態自身（同一銘柄の現在以降の判断・直近15分のスナップショット）を許可id集合で除外する旨を追記。スキーマ変更なし | issue #476 |

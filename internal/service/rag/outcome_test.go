@@ -80,7 +80,7 @@ func TestService_Context_JoinsCalibrationOutcomeUsingShortestHorizon(t *testing.
 	f.label(t, d.ID, 10, -0.5, boolPtr(false))
 	f.label(t, d.ID, 5, 0.4, boolPtr(true))
 
-	got, err := f.svc.Context(context.Background(), in, 3)
+	got, err := f.svc.Context(context.Background(), in, rag.Subject{}, 3)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestService_Context_NoneDecisionOutcomeHasFutureReturnButNilCorrectness(t *
 	d := f.addDecision(t, domain.JevDecisionTypeTrader, domain.JevDirectionNone, in)
 	f.label(t, d.ID, 5, 0.2, nil)
 
-	got, err := f.svc.Context(context.Background(), in, 1)
+	got, err := f.svc.Context(context.Background(), in, rag.Subject{}, 1)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestService_Context_PrefersOutcomeLabeledThenTraderThenScout(t *testing.T) 
 	labeled := f.addDecision(t, domain.JevDecisionTypeTrader, domain.JevDirectionLong, rag.FeatureInput{Return1m: ptr(0.05)})
 	f.label(t, labeled.ID, 5, 0.3, boolPtr(true))
 
-	got, err := f.svc.Context(context.Background(), query, 3)
+	got, err := f.svc.Context(context.Background(), query, rag.Subject{}, 3)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestService_Context_PrefersOutcomeLabeledThenTraderThenScout(t *testing.T) 
 	}
 
 	// k=1 keeps only the labeled decision even though two are closer.
-	top, err := f.svc.Context(context.Background(), query, 1)
+	top, err := f.svc.Context(context.Background(), query, rag.Subject{}, 1)
 	if err != nil {
 		t.Fatalf("Context(k=1): %v", err)
 	}
@@ -179,7 +179,7 @@ func TestService_Context_LabeledDecisionsSurviveScoutSaturatedNearestPool(t *tes
 	labeledNear := f.addDecision(t, domain.JevDecisionTypeTrader, domain.JevDirectionShort, rag.FeatureInput{Return1m: ptr(0.04)})
 	f.label(t, labeledNear.ID, 5, -0.2, boolPtr(false))
 
-	got, err := f.svc.Context(context.Background(), query, k)
+	got, err := f.svc.Context(context.Background(), query, rag.Subject{}, k)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestService_Context_UnlabeledDecisionsFallBackToDirectionConfidenceRegime(t
 	in := rag.FeatureInput{Return1m: ptr(0.01)}
 	f.addDecision(t, domain.JevDecisionTypeTrader, domain.JevDirectionLong, in)
 
-	got, err := f.svc.Context(context.Background(), in, 5)
+	got, err := f.svc.Context(context.Background(), in, rag.Subject{}, 5)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
