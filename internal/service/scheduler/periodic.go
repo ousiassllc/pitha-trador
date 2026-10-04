@@ -136,7 +136,9 @@ const updateCheckCronSpec = "@every 6h"
 // market data yet; once the gap is confirmed permanent it marks the pair
 // unlabelable and PendingLabels drops it. This bound is the backstop for
 // anything older (kabuステーションAPI outage, process downtime) so a pair is
-// never re-enqueued forever.
+// never re-enqueued forever. It is passed to PendingLabels as the lower
+// bound (asOf - window) so the SQL scan is a range scan over recent
+// decisions only (issue #484); no other layer re-applies it.
 const outcomeLabelRetryWindow = 24 * time.Hour
 
 // DefaultOutcomeLabelHorizonsMinutes are the judgment horizons Outcome
@@ -149,18 +151,18 @@ var DefaultOutcomeLabelHorizonsMinutes = []int{5, 10, 20}
 // (jobqueue.JobQueueOutcomeLabeling) for every Jev trader decision
 // whose horizon has elapsed as of now but has no calibration_outcomes
 // row yet for that (jev_decision_id, horizon_minutes) pair (functional.md
-// FR-CAL-4), skipping decisions older than outcomeLabelRetryWindow, pairs
-// marked unlabelable (PendingLabels), and pairs that already have a
-// pending or running job (issue #481: the per-minute scan must not stack
-// duplicate jobs while one is queued or in flight). It returns the number
-// of jobs enqueued, or (0, nil) if no OutcomeLabelSource is configured
+// FR-CAL-4), skipping decisions older than outcomeLabelRetryWindow (the
+// lower bound handed to PendingLabels), pairs marked unlabelable
+// (PendingLabels), and pairs that already have a pending or running job
+// (issue #481: the per-minute scan must not stack duplicate jobs while
+// one is queued or in flight). It returns the number of jobs enqueued, or (0, nil) if no OutcomeLabelSource is configured
 // (WithOutcomeLabelSource).
 func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (int, error) {
 	if s.outcomeLabels == nil {
 		return 0, nil
 	}
 
-	pending, err := s.outcomeLabels.PendingLabels(ctx, DefaultOutcomeLabelHorizonsMinutes, now)
+	pending, err := s.outcomeLabels.PendingLabels(ctx, DefaultOutcomeLabelHorizonsMinutes, now.Add(-outcomeLabelRetryWindow), now)
 	if err != nil {
 		return 0, fmt.Errorf("scheduler: list pending outcome labels: %w", err)
 	}
@@ -176,9 +178,6 @@ func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (
 
 	enqueued := 0
 	for _, p := range pending {
-		if p.DecisionTimestamp.Before(now.Add(-outcomeLabelRetryWindow)) {
-			continue
-		}
 		payload, err := json.Marshal(judgement.OutcomeLabelJobPayload{JevDecisionID: p.JevDecisionID, HorizonMinutes: p.HorizonMinutes})
 		if err != nil {
 			return 0, fmt.Errorf("scheduler: marshal outcome-labeling payload for decision %d: %w", p.JevDecisionID, err)
