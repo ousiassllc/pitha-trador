@@ -23,7 +23,7 @@ pitha-trador/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml            # push/PR/タグ: lint → test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
-├── .env.example               # 環境変数の一覧と説明（`cp .env.example .env`）
+├── .env.example               # 環境変数の一覧と説明の雛形（`.env`は自動読込されない。値はプロセス環境変数として設定する）
 ├── .bun-version               # CIで使うbunバージョン固定（setup-bunの`bun-version-file`）
 ├── .golangci.yml              # Go lint設定
 ├── .linterly.yml              # 行数リンター設定
@@ -67,8 +67,8 @@ go mod download
 # フロントエンド依存関係（bun固定）
 bun --cwd static install
 
-# 環境変数
-cp .env.example .env
+# 環境変数は`.env`を経由せず、必要に応じてシェル/OSのプロセス環境変数として設定する
+# （既定値のままなら設定不要。変数一覧は下記「環境変数」節と`.env.example`）
 
 # Git Hooks
 lefthook install
@@ -262,3 +262,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.26 | 2026-10-03 | `GOTOOLCHAIN: auto`の設定箇所をワークフロー全体から`Install golangci-lint`/`Install linterly`のステップレベルへ訂正（`actions/setup-go`の`$GITHUB_ENV`エクスポートがワークフローレベル`env`を上書きし、1.25の設定は効かなかった） | PR #304 CI `lint`ジョブ失敗の再修正 |
 | 1.27 | 2026-10-03 | `.linterlyignore`の内容ブロックを実ファイル（コメント文面を含む）に合わせ、`LICENSE`（ライセンス全文・手書きソースではない定型文）を許容する除外に追記 | issue #316（実ファイルとの乖離解消） |
 | 1.28 | 2026-10-03 | 初回セットアップ手順の`JEV_BASE_URL`/`JEV_MODEL`の上書き先を、廃止済みの「詳細設定（任意）」からSettings画面のJev接続先モーダル内の任意項目へ訂正 | issue #315（#302 とのdoc-drift解消） |
+| 1.29 | 2026-10-04 | 初回セットアップ手順から`cp .env.example .env`を削除し、`.env`は自動読込されずプロセス環境変数として設定する旨に統一（ファイル構成図の`.env.example`の説明も同趣旨に修正）。`.env.example`冒頭コメントも是正 | issue #386（環境変数節との矛盾解消） |
