@@ -22,24 +22,6 @@ type symbolJevOutput struct {
 	LiquidityStressed *float64 `json:"liquidity_stressed"`
 }
 
-// latestTraderDecision returns symbol's most recent Jev Trader decision
-// (decisions are ordered newest first; Scout rows are skipped), or nil when
-// Jev Trader has not evaluated it yet. It reads the same
-// RecentDecisions window as the SSR page (defaultDecisionHistoryLimit), so
-// the page and the JSON routes show the same decision.
-func (h *SymbolHandler) latestTraderDecision(ctx context.Context, symbol string) (*domain.JevDecision, error) {
-	decisions, err := h.provider.RecentDecisions(ctx, symbol, defaultDecisionHistoryLimit)
-	if err != nil {
-		return nil, err
-	}
-	for i := range decisions {
-		if decisions[i].DecisionType == domain.JevDecisionTypeTrader {
-			return &decisions[i], nil
-		}
-	}
-	return nil, nil
-}
-
 // symbolRiskOutput mirrors the same endpoint's "risk" section.
 type symbolRiskOutput struct {
 	AllowedPositionPct float64 `json:"allowed_position_pct"`
@@ -67,9 +49,10 @@ type SymbolPathInput struct {
 
 // APISymbol implements `GET /api/v1/symbols/{symbol}` (docs/api/endpoints.md
 // §5): the latest price/VWAP (latest market_snapshots row), the latest Jev
-// Trader decision (the same decision_type=trader row the Symbol Detail SSR
-// page's Jev panel shows, read via SymbolProvider.RecentDecisions, which
-// passes each row through enrich.Decision), the shared Risk Engine
+// Trader decision (SymbolState.LatestTraderDecision: the newest
+// decision_type=trader row with no row-count window or age limit - the same
+// definition the Scanner and the Symbol Detail SSR page use, already passed
+// through enrich.Decision by execution.Engine.State), the shared Risk Engine
 // parameters, and the currently open position size (signed: positive for
 // LONG, negative for SHORT), or nil when flat. vwap and every jev field are
 // null while the snapshot / Trader decision does not exist yet. jev.confidence
@@ -82,13 +65,6 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 			return nil, huma.Error404NotFound("unknown symbol")
 		}
 		return nil, huma.Error500InternalServerError("read symbol state failed", err)
-	}
-	decision, err := h.latestTraderDecision(ctx, in.Symbol)
-	if err != nil {
-		if errors.Is(err, execution.ErrInstrumentUnknown) {
-			return nil, huma.Error404NotFound("unknown symbol")
-		}
-		return nil, huma.Error500InternalServerError("read jev decision failed", err)
 	}
 
 	out := &SymbolAPIOutput{}
@@ -109,7 +85,7 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 		out.Body.CurrentPosition = &size
 	}
 
-	if decision != nil {
+	if decision := state.LatestTraderDecision; decision != nil {
 		out.Body.Jev = symbolJevOutput{
 			Direction:         decision.Direction,
 			Confidence:        decision.Confidence,
