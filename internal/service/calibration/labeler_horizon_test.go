@@ -104,7 +104,7 @@ func countSkips(t *testing.T, f labelerFixtures, decisionID int64, horizonMinute
 
 func pendingPairs(t *testing.T, f labelerFixtures, asOf time.Time) map[[2]int64]bool {
 	t.Helper()
-	pending, err := f.outcomes.PendingLabels(context.Background(), []int{5, 20}, asOf)
+	pending, err := f.outcomes.PendingLabels(context.Background(), []int{5, 20}, asOf.Add(-24*time.Hour), asOf)
 	if err != nil {
 		t.Fatalf("PendingLabels: %v", err)
 	}

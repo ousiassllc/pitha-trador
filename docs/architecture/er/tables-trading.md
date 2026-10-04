@@ -134,6 +134,17 @@ erDiagram
 
 水平線まで足が揃わないことが確定した`(jev_decision_id, horizon_minutes)`の終端マーカー（マイグレーション000024、issue #481）。`calibration_outcomes`は作らず（短縮horizonを記録しない）、`PendingLabels`が当該ペアを再投入対象から外すためだけに使う。`internal/service/calibration.Labeler`が、判断時刻+horizon+5分の猶予後も窓が揃わない場合に書き込む（`INSERT OR IGNORE`で冪等）。
 
+```mermaid
+erDiagram
+    jev_decisions ||--o{ calibration_label_skips : "ラベル付け不能と確定した水平線を持つ"
+    calibration_label_skips {
+        integer jev_decision_id FK
+        integer horizon_minutes
+        text reason
+        text created_at
+    }
+```
+
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
 | jev_decision_id | integer | FK → jev_decisions.id, NOT NULL | |

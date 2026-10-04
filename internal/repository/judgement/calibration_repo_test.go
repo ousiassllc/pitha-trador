@@ -114,7 +114,7 @@ func TestCalibrationRepository_PendingLabels(t *testing.T) {
 		t.Fatalf("insert scout decision: %v", err)
 	}
 
-	pending, err := outcomes.PendingLabels(ctx, []int{5}, now)
+	pending, err := outcomes.PendingLabels(ctx, []int{5}, now.Add(-24*time.Hour), now)
 	if err != nil {
 		t.Fatalf("PendingLabels: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestCalibrationRepository_MarkUnlabelableExcludesPairFromPendingLabels(t *t
 		}
 	}
 
-	pending, err := outcomes.PendingLabels(ctx, []int{5, 20}, now)
+	pending, err := outcomes.PendingLabels(ctx, []int{5, 20}, now.Add(-24*time.Hour), now)
 	if err != nil {
 		t.Fatalf("PendingLabels: %v", err)
 	}

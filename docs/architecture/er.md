@@ -27,6 +27,7 @@ erDiagram
     instruments ||--o{ positions : "保有される"
     jev_decisions ||--o{ trade_signals : "シグナルの根拠になる"
     jev_decisions ||--o{ calibration_outcomes : "結果が紐付く"
+    jev_decisions ||--o{ calibration_label_skips : "ラベル付け不能と確定した水平線を持つ"
     trade_signals ||--o{ paper_orders : "発注の根拠になる"
     paper_orders ||--o| positions : "エントリー約定になる"
     paper_orders ||--o| positions : "Exit約定になる"
@@ -72,3 +73,4 @@ erDiagram
 | 1.22 | 2026-10-05 | `er/tables-system.md`・`er/tables-market.md`に、bid/ask入れ替え修正（#458）前の`market_snapshot_vectors`もマイグレーション`000023`で全件削除しRAG検索から除外する旨を追記（`market_snapshots`は不変） | issue #469, #470 |
 | 1.23 | 2026-10-05 | `er/tables-system.md`の類似検索に、問い合わせ対象の状態自身（同一銘柄の現在以降の判断・直近15分のスナップショット）を許可id集合で除外する旨を追記。スキーマ変更なし | issue #476 |
 | 1.24 | 2026-10-05 | `er/tables-trading.md`に`calibration_label_skips`（ラベル付け恒久不能ペアの終端マーカー、マイグレーション000024）を追記 | issue #481 |
+| 1.25 | 2026-10-05 | 全体ER図と`er/tables-trading.md`の`calibration_label_skips`節に、`jev_decisions`との関係線・`erDiagram`ブロックを追記（#481で追加したFKの図への反映漏れ） | issue #485 |

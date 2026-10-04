@@ -227,3 +227,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.35 | 2026-10-05 | §4.12 FR-CAL-4（`components-platform.md`）に、水平線まで足が揃わない判断（昼休み・大引け・欠測をまたぐ）は短縮horizonでラベル付けしない（`calibration_outcomes`を作らない）ことを追記 | issue #477 |
 | 1.36 | 2026-10-05 | §4.11 FR-BT-4（`components-platform.md`）にJev判断の消費（1判断＝最大1エントリー、Exit後の再利用なし）と、保有足の無いエントリーを取引に計上しない旨を追記 | issue #475, #479 |
 | 1.37 | 2026-10-05 | §4.12 FR-CAL-4（`components-platform.md`）に、水平線まで足が揃わない判断は猶予後に恒久不能として終端マーカーを記録し再投入しないこと、pending/runningの同一ペアは重複enqueueしないことを追記 | issue #481 |
+| 1.38 | 2026-10-05 | §4.12 FR-CAL-4（`components-platform.md`）に、再試行は判断から24時間以内に限り`PendingLabels`の下限（`now-24h`）で索引範囲走査する旨を追記 | issue #484 |
