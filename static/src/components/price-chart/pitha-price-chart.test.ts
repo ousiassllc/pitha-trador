@@ -72,6 +72,27 @@ describe('pitha-price-chart', () => {
     expect(createChartOptions[0]).toMatchObject({ autoSize: true });
   });
 
+  // The library prints UTC (09:00 JST as 00:00) unless given formatters (issue #478).
+  test('renders the time axis and crosshair in JST', async () => {
+    const el = document.createElement('pitha-price-chart') as InstanceType<typeof PithaPriceChart>;
+    el.setAttribute('candles-url', '/api/v1/symbols/7203/candles');
+    el.setAttribute('ws-url', '/ws/symbols/7203');
+    document.body.appendChild(el);
+    await el.updateComplete;
+
+    const options = createChartOptions[0] as {
+      localization: { timeFormatter: (t: number) => string };
+      timeScale: {
+        timeVisible: boolean;
+        tickMarkFormatter: (t: number, type: number, locale: string) => string | null;
+      };
+    };
+    const tseOpen = Date.parse('2026-10-05T00:00:00Z') / 1000;
+    expect(options.timeScale.timeVisible).toBe(true);
+    expect(options.localization.timeFormatter(tseOpen)).toBe('2026-10-05 09:00');
+    expect(options.timeScale.tickMarkFormatter(tseOpen, 3, 'ja-JP')).toBe('09:00');
+  });
+
   // The first update cycle used to reload candles and reopen the socket (issue #170).
   test('loads candles and opens the WebSocket once on mount, again only on URL change', async () => {
     const el = document.createElement('pitha-price-chart') as InstanceType<typeof PithaPriceChart>;

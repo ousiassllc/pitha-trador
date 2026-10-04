@@ -20,6 +20,7 @@ import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
 import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
+import { formatCrosshairTime, formatTickMark } from './jst-time';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/symbols/{symbol}/candles`
 // item shape (internal/web/handler/symbol.candleOutput).
@@ -128,7 +129,14 @@ export class PithaPriceChart extends LitElement {
     // autoSize makes the chart follow its container (the CSS below fixes the
     // container's height, and width is 100% of the host); it ignores
     // explicit width/height options.
-    this.chart = createChart(container, { autoSize: true });
+    // timeVisible/secondsVisible: bars are 1 minute, so ticks show HH:mm
+    // (lightweight-charts shows dates only by default). The formatters render
+    // every time in Asia/Tokyo; the library would otherwise print UTC.
+    this.chart = createChart(container, {
+      autoSize: true,
+      localization: { timeFormatter: formatCrosshairTime },
+      timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: formatTickMark },
+    });
     this.candleSeries = this.chart.addCandlestickSeries();
     this.vwapSeries = this.chart.addLineSeries({ color: '#2962ff', lineWidth: 1 });
     this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', color: '#9ca3af' });
