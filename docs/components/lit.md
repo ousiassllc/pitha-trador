@@ -22,20 +22,29 @@ export class PithaPriceChart extends LitElement {
   @property({ type: String, attribute: 'candles-url' }) candlesUrl = '';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
 
-  @state() private chart: IChartApi | null = null;
+  // リアクティブ（再描画のトリガー）なのは error と wsStatus のみ。
+  // チャート/系列/WsClient は非リアクティブな通常の private フィールド（DOM は createRef の containerRef 経由で掴む）
   @state() private error: string | null = null;
+  @state() private wsStatus: WsStatus = 'connecting';
+
+  private readonly containerRef = createRef<HTMLDivElement>();
+  private chart: IChartApi | null = null;
+  private wsClient: WsClient<SymbolMessage> | null = null;
+  // ほか candleSeries / vwapSeries / volumeSeries / markers / lastDirection / lastBar も同様に非リアクティブ
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this.chart?.remove();
+    this.chart = null;
+    this.wsClient?.close();
+    this.wsClient = null;
+  }
 
   // connectedCallback ではなく firstUpdated: createChart には描画済みの DOM 要素が必要（issue #170）
-  firstUpdated() {
+  protected override firstUpdated(): void {
     this.initChart();   // lightweight-charts でローソク足/VWAPライン/出来高ヒストグラムペインを初期化
     this.loadInitial();  // candlesUrl から初期系列を取得（lib/api.ts経由）
     this.subscribeWs();  // wsUrl から tick / jev_update を受信し系列・マーカーを更新
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.chart?.remove();
-    this.wsClient?.close();
   }
 }
 ```
@@ -91,15 +100,18 @@ export class PithaKillSwitchPanel extends LitElement {
 ```go
 // Templ側（organisms.Header → organisms.KillSwitchPanel）。
 // state は middleware.SystemStateFrom(ctx)（domain.SystemState、読み出せない場合は ""）
+// killSwitch*URL は "/api/v1/system/pause|resume|kill|status" と "/ws/system" を持つ organisms 内の const
 templ KillSwitchPanel(state domain.SystemState) {
     <pitha-kill-switch-panel
         status={ string(state) }
         can-pause?={ state.CanPause() }
         can-resume?={ state.CanResume() }
         can-kill?={ state.CanKill() }
-        pause-url="/api/v1/system/pause" resume-url="/api/v1/system/resume"
-        kill-url="/api/v1/system/kill" status-url="/api/v1/system/status"
-        ws-url="/ws/system">
+        pause-url={ killSwitchPauseURL }
+        resume-url={ killSwitchResumeURL }
+        kill-url={ killSwitchKillURL }
+        status-url={ killSwitchStatusURL }
+        ws-url={ killSwitchWSURL }>
     </pitha-kill-switch-panel>
 }
 ```
