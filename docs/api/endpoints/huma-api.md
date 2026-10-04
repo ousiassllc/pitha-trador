@@ -8,7 +8,7 @@ Huma が OpenAPI 3.1 スペックを `/api/v1/openapi.json` に自動生成す�
 
 ### GET /api/v1/scanner
 
-Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`return_1m`/`return_5m`は**パーセント単位**（0.42 = +0.42%）。Feature Engine・DB・Jev入力の小数比（0.0042）をAPI層（`/ws/scanner`のpushを含む）と SSRフォールバックで×100して返す／表示する。Scanner Dashboardの初期ロード・`pitha-scanner-table`のフォールバック取得に使用（ライブ更新は`/ws/scanner`）。
+Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`return_1m`/`return_5m`は**パーセント単位**（0.42 = +0.42%）。Feature Engine・DB・Jev入力の小数比（0.0042）をAPI層（`/ws/scanner`のpushを含む）と SSRフォールバックで×100して返す／表示する。`jev_direction`/`jev_confidence`/`entry_quality`は当該銘柄の最新Jev Trader判断（`jev_decisions`のdecision_type=trader。`entry_quality`は`response_json`から`internal/service/execution/enrich`で取得）、`current_position`は保有中ポジションの符号付き数量（LONG正/SHORT負。`GET /api/v1/symbols/{symbol}`の`current_position`と同定義、保有なしはnull）。Trader判断が未生成の銘柄の3項目はnull。`internal/bootstrap/candidates`が候補更新サイクルごとに最新判断（1クエリのバッチ取得）と保有中ポジション（1クエリ）を候補へ付与し、`/ws/scanner`・SSRフォールバックにも同じ値が出る（issue #492）。Scanner Dashboardの初期ロード・`pitha-scanner-table`のフォールバック取得に使用（ライブ更新は`/ws/scanner`）。
 
 各itemの`detail_url`は銘柄詳細ページへのサーバー生成リンク（`/symbols/{symbol}`。銘柄コードはRFC 3986のunreserved文字以外をパーセントエンコード。Go側`organisms.SymbolHref`が唯一の定義で、SSR行（`ScannerTableFallback`・`ScanPanel`）と`/ws/scanner`のitemにも同じ値が入る）。`pitha-scanner-table`はこの値をそのまま`href`に使い、URLを組み立てない（HATEOAS、issue #383）。
 

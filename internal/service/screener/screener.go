@@ -139,10 +139,10 @@ type Result struct {
 // survivors with ScreenScore, and returns the top cfg.TopN by descending
 // score as domain.Candidate values ready for Jev Scout / the Scanner
 // Dashboard (FR-FS-1, FR-FS-2). Ties keep inputs' relative order
-// (stable sort). Candidate.Jev*/CurrentPosition fields are left nil: Jev
-// Scout/Trader (functional.md §4.4/§4.5) and Execution/positions are
-// later sub-scopes that populate them once a candidate reaches those
-// stages.
+// (stable sort). Candidate.Jev*/CurrentPosition fields are left nil here:
+// screening has no Jev or position input. The candidate-refresh cycle
+// (internal/bootstrap/candidates.Refresher) fills them from the latest Jev
+// Trader decision and the open position before publishing the candidates.
 func Run(cfg config.FastScreenerConfig, inputs []Input) []domain.Candidate {
 	return Screen(cfg, inputs).Candidates
 }

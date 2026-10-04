@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 )
 
 func TestDecisionRepository_ListRecent_AcrossInstrumentsFiltersByType(t *testing.T) {
@@ -55,5 +56,47 @@ func TestDecisionRepository_Observer_SeesInsertedRow(t *testing.T) {
 	}
 	if len(seen) != 1 || seen[0].ID != created.ID || seen[0].Symbol != "7203" {
 		t.Fatalf("observed = %+v, want the inserted row (ID %d)", seen, created.ID)
+	}
+}
+
+func TestDecisionRepository_LatestTraderByInstruments_PicksNewestTraderPerInstrument(t *testing.T) {
+	db := newTestDB(t)
+	repo := judgement.NewDecisionRepository(db)
+	a := insertInstrument(t, db, "1001", "A")
+	b := insertInstrument(t, db, "1002", "B")
+	c := insertInstrument(t, db, "1003", "C")
+	d := insertInstrument(t, db, "1004", "D")
+	ctx := context.Background()
+	base := time.Date(2026, 9, 29, 9, 0, 0, 0, time.UTC)
+
+	insert := func(instrumentID int64, decisionType string, at time.Time) domain.JevDecision {
+		t.Helper()
+		row, err := repo.Insert(ctx, domain.JevDecision{
+			InstrumentID: instrumentID, Symbol: "S", Timestamp: at, DecisionType: decisionType,
+			StateHash: "h", StateJSON: "{}", QuestionVersion: "v1", ResponseJSON: "{}", ModelID: "m",
+		})
+		if err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+		return row
+	}
+	insert(a, domain.JevDecisionTypeTrader, base)
+	newestA := insert(a, domain.JevDecisionTypeTrader, base.Add(time.Minute))
+	insert(a, domain.JevDecisionTypeScout, base.Add(2*time.Minute)) // newer Scout must not win
+	onlyB := insert(b, domain.JevDecisionTypeTrader, base)
+	insert(c, domain.JevDecisionTypeScout, base)  // Scout only: absent
+	insert(d, domain.JevDecisionTypeTrader, base) // not requested: absent
+
+	got, err := repo.LatestTraderByInstruments(ctx, []int64{a, b, c})
+	if err != nil {
+		t.Fatalf("LatestTraderByInstruments: %v", err)
+	}
+	if len(got) != 2 || got[a].ID != newestA.ID || got[b].ID != onlyB.ID {
+		t.Fatalf("LatestTraderByInstruments = %+v, want {a: newest trader, b: its trader} only", got)
+	}
+
+	empty, err := repo.LatestTraderByInstruments(ctx, nil)
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("LatestTraderByInstruments(nil) = %v, %v, want empty map and nil error", empty, err)
 	}
 }

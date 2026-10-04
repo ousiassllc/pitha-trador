@@ -18,8 +18,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
@@ -34,7 +36,13 @@ type Refresher struct {
 	Settings    *system.RuntimeSettingsRepository
 	Jobs        *jobqueue.JobRepository
 	Screener    *screener.LiveSource
-	Strategy    *config.StrategyConfig
+	// Decisions and Positions supply each candidate's latest Jev Trader
+	// decision and open position for the Scanner Dashboard's Jev
+	// Direction/Confidence/Entry Quality/Current Position columns
+	// (see attachJevState).
+	Decisions *judgement.DecisionRepository
+	Positions *trading.PositionRepository
+	Strategy  *config.StrategyConfig
 	// InSession reports whether t is inside a trading session; a nil
 	// InSession is always in session.
 	InSession func(time.Time) bool
@@ -162,6 +170,13 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 	}
 	funnel.FastScreenerPassed = len(candidates)
 	now := r.now()
+	// Best-effort like the enqueue loop below: a failed read of the
+	// decision/position tables must not withhold the refreshed candidate
+	// list (or Jev Scout) - the Jev columns just fall back to nil
+	// ("pending"/"flat") until the next cycle.
+	if err := r.attachJevState(ctx, candidates); err != nil {
+		slog.Error("candidates: attach jev state to candidates", "error", err)
+	}
 	r.Screener.Set(candidates, now)
 	r.Screener.SetScan(domain.ScanCycle{StartedAt: startedAt, FinishedAt: now, Funnel: funnel, Symbols: symbols})
 
