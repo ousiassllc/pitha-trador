@@ -46,7 +46,7 @@ func main() {
 	// runs) never recovers the first instance's running jobs or starts a
 	// second Scheduler/Kill Switch/order flow against the shared DB. Exit
 	// code 0 also ends a supervisor that spawned this process.
-	lock, err := acquireInstanceLock(appLockName)
+	lock, err := bootstrap.AcquireInstanceLock(bootstrap.AppLockName)
 	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
 		slog.Info("desktop: another instance is already running; exiting")
 		return
@@ -133,7 +133,7 @@ func superviseSelf(childArgs []string) {
 	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
 
 	// A second watcher would spawn a second app instance on every crash.
-	lock, err := acquireInstanceLock(supervisorLockName)
+	lock, err := bootstrap.AcquireInstanceLock(bootstrap.SupervisorLockName)
 	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
 		slog.Info("supervisor: another supervisor is already running; exiting")
 		return
