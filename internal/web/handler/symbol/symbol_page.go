@@ -13,7 +13,9 @@ import (
 )
 
 // defaultDecisionHistoryLimit is how many recent jev_decisions rows
-// Page's Decision history section shows.
+// Page's Decision history section shows. It bounds that history list only:
+// the Jev panel, the API's jev and the WebSocket's jev_update all read
+// execution.SymbolState.LatestTraderDecision, which has no such window.
 const defaultDecisionHistoryLimit = 50
 
 // validSymbol reports whether symbol matches SymbolPathInput's format
@@ -69,6 +71,7 @@ func (h *SymbolHandler) Page(c *gin.Context) {
 		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
 		StopLossPct:        h.riskParams.StopLossPct,
 		TakeProfitPct:      h.riskParams.TakeProfitPct,
+		LatestTrader:       state.LatestTraderDecision,
 		Decisions:          decisions,
 	}))
 }

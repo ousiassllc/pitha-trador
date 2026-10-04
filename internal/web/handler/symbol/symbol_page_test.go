@@ -23,12 +23,14 @@ func TestSymbolHandler_Page_RendersDetailPanelsAndPriceChartIsland(t *testing.T)
 	confidence := 0.74
 	regime := domain.JevRegimeBreakout
 	entryQuality := domain.JevEntryQualityStrong
+	// The latest Trader decision (Jev panel) is independent of the bounded
+	// history list, which here holds only Scout rows (issues #496/#497/#499).
 	provider := &fakeSymbolProvider{
-		state: execution.SymbolState{Symbol: "7203", LastPrice: 2831.5, LastSignal: domain.JevDirectionLong},
-		decisions: []domain.JevDecision{{
+		state: stateWithTrader(execution.SymbolState{Symbol: "7203", LastPrice: 2831.5, LastSignal: domain.JevDirectionLong}, domain.JevDecision{
 			ID: 1, DecisionType: domain.JevDecisionTypeTrader,
 			Direction: &direction, Confidence: &confidence, Regime: &regime, EntryQuality: &entryQuality,
-		}},
+		}),
+		decisions: []domain.JevDecision{{ID: 2, DecisionType: domain.JevDecisionTypeScout}},
 	}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{AllowedPositionPct: 2.0, StopLossPct: 0.6, TakeProfitPct: 1.2})
 	router := gin.New()

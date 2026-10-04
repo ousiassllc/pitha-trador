@@ -47,14 +47,6 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 			return shared.Transient(err)
 		}
 
-		decision, err := h.latestTraderDecision(ctx, symbol)
-		if errors.Is(err, execution.ErrInstrumentUnknown) {
-			return err
-		}
-		if err != nil {
-			return shared.Transient(err)
-		}
-
 		// No snapshot yet (LastPrice == 0): a price-0 tick would drag the
 		// chart's autoscale to 0, so send nothing until a price exists.
 		if state.LastPrice > 0 {
@@ -67,7 +59,7 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 		// to push (a null direction is never a jev_update).
 		var direction *string
 		var confidence *float64
-		if decision != nil {
+		if decision := state.LatestTraderDecision; decision != nil {
 			direction, confidence = jevDirectionOrNil(decision.Direction), decision.Confidence
 		}
 		changed := directionChanged(lastDirection, direction) || !floatPtrEqual(lastConfidence, confidence)

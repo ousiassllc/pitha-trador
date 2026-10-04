@@ -1,6 +1,7 @@
 package judgement
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,5 +50,40 @@ func TestDecisionListRecentQueries_UseTimestampIndexesWithoutSort(t *testing.T) 
 				t.Fatalf("want an ordered scan of %s without a sort; plan:\n%s", tc.index, joined)
 			}
 		})
+	}
+}
+
+// The latest-decision query must be instrument-driven: every instrument
+// seeks (instrument_id, decision_type, timestamp DESC, id DESC) for its
+// newest row, with no walk over all Trader rows (issue #498).
+func TestLatestByInstrumentsQuery_SeeksPerInstrumentIndexWithoutSort(t *testing.T) {
+	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "plan.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	rows, err := db.Query("EXPLAIN QUERY PLAN "+fmt.Sprintf(latestByInstrumentsQuery, "(?),(?),(?)"), 1, 2, 3, "trader")
+	if err != nil {
+		t.Fatalf("EXPLAIN QUERY PLAN: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var plan []string
+	for rows.Next() {
+		var id, parent, notUsed int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+			t.Fatalf("scan plan: %v", err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("plan rows: %v", err)
+	}
+	joined := strings.Join(plan, "\n")
+	const seek = "jev_decisions_instrument_type_timestamp_idx (instrument_id=? AND decision_type=?)"
+	if !strings.Contains(joined, seek) || strings.Contains(joined, "SCAN jev_decisions") ||
+		strings.Contains(joined, "SCAN latest") || strings.Contains(joined, "TEMP B-TREE") {
+		t.Fatalf("want a per-instrument seek of %s and no table scan or sort; plan:\n%s", seek, joined)
 	}
 }

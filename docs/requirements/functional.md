@@ -120,7 +120,7 @@ stateDiagram-v2
 
 ### 5.1 Scanner Dashboard
 
-表示項目: Symbol, Price, 1m/5m Return（パーセント表示。Feature Engineの小数比を×100）, Volume Ratio, VWAP距離, Spread, Jev Direction, Jev Confidence, Entry Quality, Current Position。Jev Direction/Confidence/Entry Qualityは当該銘柄の最新Jev Trader判断、Current Positionは保有中ポジションの符号付き数量（LONG正/SHORT負。保有なしは空）で、候補更新サイクルごとに`internal/bootstrap/candidates`が設定する（Trader判断が未生成の銘柄は空＝判定待ち）。候補銘柄更新周期（15〜30秒）に応じてライブ更新する。
+表示項目: Symbol, Price, 1m/5m Return（パーセント表示。Feature Engineの小数比を×100）, Volume Ratio, VWAP距離, Spread, Jev Direction, Jev Confidence, Entry Quality, Current Position。Jev Direction/Confidence/Entry Qualityは当該銘柄の最新Jev Trader判断（`decision_type=trader`の`timestamp`・`id`最大の1行。件数窓・経過時間の上限は設けず、Scout行が続いても古くても採用し、Symbol Detailの Jev判定パネル・`GET /api/v1/symbols/{symbol}`・`/ws/symbols/{symbol}`・Exit評価と同一定義。古い判断の扱いに上限期間は定めていない）、Current Positionは保有中ポジションの符号付き数量（LONG正/SHORT負。保有なしは空）で、候補更新サイクルごとに`internal/bootstrap/candidates`が設定する（Trader判断が未生成の銘柄は空＝判定待ち）。候補銘柄更新周期（15〜30秒）に応じてライブ更新する。
 
 候補表の上に**スキャン状況パネル**を置く（issue #303。動作確認・「なぜこの銘柄が候補に出ないか」の調査用）:
 
@@ -229,3 +229,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.37 | 2026-10-05 | §4.12 FR-CAL-4（`components-platform.md`）に、水平線まで足が揃わない判断は猶予後に恒久不能として終端マーカーを記録し再投入しないこと、pending/runningの同一ペアは重複enqueueしないことを追記 | issue #481 |
 | 1.38 | 2026-10-05 | §4.12 FR-CAL-4（`components-platform.md`）に、再試行は判断から24時間以内に限り`PendingLabels`の下限（`now-24h`）で索引範囲走査する旨を追記 | issue #484 |
 | 1.39 | 2026-10-05 | §5.1のJev Direction/Confidence/Entry QualityとCurrent Positionを、候補更新サイクルが最新Trader判断・保有ポジションから設定する旨を追記 | issue #492 |
+| 1.40 | 2026-10-05 | §5.1 Scanner表示項目の「最新Jev Trader判断」を、件数窓・経過時間の上限なしの最新1行でSymbol Detail・Exit評価と同一定義と明記 | issue #496, #497, #499 |

@@ -8,7 +8,7 @@ Huma が OpenAPI 3.1 スペックを `/api/v1/openapi.json` に自動生成す�
 
 ### GET /api/v1/scanner
 
-Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`return_1m`/`return_5m`は**パーセント単位**（0.42 = +0.42%）。Feature Engine・DB・Jev入力の小数比（0.0042）をAPI層（`/ws/scanner`のpushを含む）と SSRフォールバックで×100して返す／表示する。`jev_direction`/`jev_confidence`/`entry_quality`は当該銘柄の最新Jev Trader判断（`jev_decisions`のdecision_type=trader。`entry_quality`は`response_json`から`internal/service/execution/enrich`で取得）、`current_position`は保有中ポジションの符号付き数量（LONG正/SHORT負。`GET /api/v1/symbols/{symbol}`の`current_position`と同定義、保有なしはnull）。Trader判断が未生成の銘柄の3項目はnull。`internal/bootstrap/candidates`が候補更新サイクルごとに最新判断（1クエリのバッチ取得）と保有中ポジション（1クエリ）を候補へ付与し、`/ws/scanner`・SSRフォールバックにも同じ値が出る（issue #492）。Scanner Dashboardの初期ロード・`pitha-scanner-table`のフォールバック取得に使用（ライブ更新は`/ws/scanner`）。
+Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`return_1m`/`return_5m`は**パーセント単位**（0.42 = +0.42%）。Feature Engine・DB・Jev入力の小数比（0.0042）をAPI層（`/ws/scanner`のpushを含む）と SSRフォールバックで×100して返す／表示する。`jev_direction`/`jev_confidence`/`entry_quality`は当該銘柄の最新Jev Trader判断（`jev_decisions`のdecision_type=trader。件数窓・経過時間の上限なしで、`GET /api/v1/symbols/{symbol}`の`jev`と同一の判断。`entry_quality`は`response_json`から`internal/service/execution/enrich`で取得）、`current_position`は保有中ポジションの符号付き数量（LONG正/SHORT負。`GET /api/v1/symbols/{symbol}`の`current_position`と同定義、保有なしはnull）。Trader判断が未生成の銘柄の3項目はnull。`internal/bootstrap/candidates`が候補更新サイクルごとに最新判断（1クエリのバッチ取得）と保有中ポジション（1クエリ）を候補へ付与し、`/ws/scanner`・SSRフォールバックにも同じ値が出る（issue #492）。Scanner Dashboardの初期ロード・`pitha-scanner-table`のフォールバック取得に使用（ライブ更新は`/ws/scanner`）。
 
 各itemの`detail_url`は銘柄詳細ページへのサーバー生成リンク（`/symbols/{symbol}`。銘柄コードはRFC 3986のunreserved文字以外をパーセントエンコード。Go側`organisms.SymbolHref`が唯一の定義で、SSR行（`ScannerTableFallback`・`ScanPanel`）と`/ws/scanner`のitemにも同じ値が入る）。`pitha-scanner-table`はこの値をそのまま`href`に使い、URLを組み立てない（HATEOAS、issue #383）。
 
@@ -62,7 +62,7 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 
 Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
-`vwap`は最新の`market_snapshots`のVWAP（`Feature.VWAP`）で、スナップショットが無ければ`null`。`jev`の6項目（`direction`/`confidence`/`regime`/`entry_quality`/`toxic_flow`/`liquidity_stressed`）は、Symbol Detail画面（SSR）のJev判定パネルと同じ**最新のJev Trader判断**（`jev_decisions`の`decision_type=trader`、`enrich.Decision`で補完）の値で、Trader判断がまだ無ければ全項目`null`。`confidence`はJevの自己申告値（FR-TRADER-2）で、Policy Engineの`trade_signals.score`ではなく、最新シグナルが`NONE`でもTrader判断があれば値が入る。
+`vwap`は最新の`market_snapshots`のVWAP（`Feature.VWAP`）で、スナップショットが無ければ`null`。`jev`の6項目（`direction`/`confidence`/`regime`/`entry_quality`/`toxic_flow`/`liquidity_stressed`）は、Symbol Detail画面（SSR）のJev判定パネル・Scannerと同じ**最新のJev Trader判断**（`jev_decisions`の`decision_type=trader`のうち`timestamp`・`id`が最大の1行。直近N件といった件数窓や経過時間の上限は設けず、Scout行が何件続いても、判断が古くても採用する。Scanner/Symbol Detail/Symbol API/WebSocket/`execution.Engine.State`・Exit評価は`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`の同一定義を共有）（`enrich.Decision`で補完）の値で、Trader判断がまだ無ければ全項目`null`。`confidence`はJevの自己申告値（FR-TRADER-2）で、Policy Engineの`trade_signals.score`ではなく、最新シグナルが`NONE`でもTrader判断があれば値が入る。
 
 ```json
 // Output（抜粋）

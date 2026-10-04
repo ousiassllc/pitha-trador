@@ -27,10 +27,15 @@ type SymbolDetailProps struct {
 	AllowedPositionPct float64
 	StopLossPct        float64
 	TakeProfitPct      float64
+	// LatestTrader is the symbol's latest Jev Trader decision for the
+	// "Jev判定" panel (execution.SymbolState.LatestTraderDecision: no
+	// row-count window or age limit, the same definition as the Scanner),
+	// or nil when Jev Trader has not evaluated it yet. It is independent of
+	// Decisions, which is only the bounded history list.
+	LatestTrader *domain.JevDecision
 	// Decisions is the symbol's recent Jev Scout/Trader decision history,
-	// most recent first (execution.Engine.RecentDecisions) - both this
-	// page's "Decision history" section and its "Jev判定" panel (the
-	// latest Trader decision within it) are derived from it.
+	// most recent first (execution.Engine.RecentDecisions), shown in the
+	// page's "Decision history" section only.
 	Decisions []domain.JevDecision
 }
 
@@ -50,7 +55,7 @@ templ SymbolDetailPage(props SymbolDetailProps) {
 		></pitha-price-chart>
 		<script type="module" src="/static/dist/js/price-chart/pitha-price-chart.js"></script>
 
-		@jevPanel(latestTraderDecision(props.Decisions))
+		@jevPanel(props.LatestTrader)
 		@riskPanel(props)
 		@positionPanel(props.Position)
 		@organisms.DecisionHistoryList(props.Decisions)
@@ -67,18 +72,6 @@ func symbolCandlesURL(symbol string) string {
 // symbolWSURL is the `/ws/symbols/{symbol}` URL handed to pitha-price-chart.
 func symbolWSURL(symbol string) string {
 	return "/ws/symbols/" + organisms.EscapeSymbolSegment(symbol)
-}
-
-// latestTraderDecision returns the first (most recent, decisions is
-// ordered DESC) domain.JevDecisionTypeTrader entry in decisions, or nil
-// if none exists yet (Jev Trader has not evaluated this symbol).
-func latestTraderDecision(decisions []domain.JevDecision) *domain.JevDecision {
-	for i := range decisions {
-		if decisions[i].DecisionType == domain.JevDecisionTypeTrader {
-			return &decisions[i]
-		}
-	}
-	return nil
 }
 
 templ jevPanel(d *domain.JevDecision) {

@@ -24,6 +24,12 @@ func traderDecision(direction string, confidence float64) domain.JevDecision {
 	}
 }
 
+// stateWithTrader is a SymbolState whose latest Trader decision is d.
+func stateWithTrader(state execution.SymbolState, d domain.JevDecision) execution.SymbolState {
+	state.LatestTraderDecision = &d
+	return state
+}
+
 type symbolJevBody struct {
 	VWAP *float64 `json:"vwap"`
 	Jev  struct {
@@ -60,13 +66,18 @@ func getSymbolJevBody(t *testing.T, provider *fakeSymbolProvider) symbolJevBody 
 func TestSymbolHandler_APISymbol_ReportsLatestTraderDecisionAndVWAP(t *testing.T) {
 	vwap := 2823.0
 	scout := domain.JevDecision{DecisionType: domain.JevDecisionTypeScout}
+	// The decision history window is all Scout rows (60 > the 50-row
+	// history limit, issues #496/#497/#499): jev must not depend on it.
+	history := make([]domain.JevDecision, 60)
+	for i := range history {
+		history[i] = scout
+	}
 	provider := &fakeSymbolProvider{
-		state: execution.SymbolState{
+		state: stateWithTrader(execution.SymbolState{
 			Symbol: "7203", LastPrice: 2831.5, LastVWAP: &vwap,
 			LastSignal: domain.JevDirectionNone, LastSignalConfidence: 0.99,
-		},
-		// Newest first: a Scout row sits in front of the latest Trader row.
-		decisions: []domain.JevDecision{scout, traderDecision(domain.JevDirectionLong, 0.74), traderDecision(domain.JevDirectionShort, 0.5)},
+		}, traderDecision(domain.JevDirectionLong, 0.74)),
+		decisions: history,
 	}
 
 	body := getSymbolJevBody(t, provider)

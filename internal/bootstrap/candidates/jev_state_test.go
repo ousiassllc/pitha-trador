@@ -7,6 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 )
 
 func mustInsertPassingSnapshot(t *testing.T, r *Refresher, inst domain.Instrument) {
@@ -141,6 +142,45 @@ func TestRefresh_AttachesLatestTraderDecisionAndSignedPositionToCandidates(t *te
 			t.Errorf("%s = direction %v confidence %v quality %v position %v, want all nil (no Trader decision, flat)",
 				symbol, got.JevDirection, got.JevConfidence, got.EntryQuality, got.CurrentPosition)
 		}
+	}
+}
+
+// issues #496/#497/#499: "latest Trader decision" has no row-count window
+// and no age limit. A Trader decision followed by far more than 50 Scout
+// rows is still what the Scanner shows - and it is exactly the decision
+// the Symbol Detail path reads (DecisionRepository.LatestTrader, which
+// execution.Engine.State uses), enrich-ed identically.
+func TestRefresh_LatestTraderDecisionSurvivesLongScoutRunAndMatchesSymbolPath(t *testing.T) {
+	r, _ := newTestRefresherWithOrders(t)
+	r.Strategy.FastScreener = lenientFastScreener()
+	inst := mustCreateInstrument(t, r, "1001")
+	mustInsertPassingSnapshot(t, r, inst)
+	base := time.Now().UTC().Add(-48 * time.Hour) // stale on purpose: no upper age limit
+
+	mustInsertDecision(t, r, inst, domain.JevDecisionTypeTrader, base, domain.JevDirectionLong, 0.74, "strong")
+	for i := 1; i <= 60; i++ {
+		mustInsertDecision(t, r, inst, domain.JevDecisionTypeScout, base.Add(time.Duration(i)*time.Minute), "", 0, "exceptional")
+	}
+
+	if err := r.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	got := candidateBySymbol(t, r, "1001")
+	if got.JevDirection == nil || *got.JevDirection != domain.JevDirectionLong ||
+		got.JevConfidence == nil || *got.JevConfidence != 0.74 ||
+		got.EntryQuality == nil || *got.EntryQuality != "strong" {
+		t.Fatalf("Scanner jev = %v/%v/%v, want LONG/0.74/strong from the Trader decision older than 60 Scout rows",
+			got.JevDirection, got.JevConfidence, got.EntryQuality)
+	}
+
+	symbolSide, err := r.Decisions.LatestTrader(context.Background(), inst.ID)
+	if err != nil {
+		t.Fatalf("LatestTrader: %v", err)
+	}
+	symbolSide = enrich.Decision(symbolSide)
+	if *symbolSide.Direction != *got.JevDirection || *symbolSide.Confidence != *got.JevConfidence || *symbolSide.EntryQuality != *got.EntryQuality {
+		t.Fatalf("Symbol path decision %v/%v/%v differs from Scanner %v/%v/%v",
+			*symbolSide.Direction, *symbolSide.Confidence, *symbolSide.EntryQuality, *got.JevDirection, *got.JevConfidence, *got.EntryQuality)
 	}
 }
 

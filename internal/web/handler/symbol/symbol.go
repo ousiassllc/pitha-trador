@@ -16,8 +16,9 @@ type SymbolStateProvider interface {
 	State(ctx context.Context, symbol string) (execution.SymbolState, error)
 	Candles(ctx context.Context, symbol string, from, to time.Time) ([]domain.Snapshot, error)
 	// RecentDecisions is the Symbol Detail SSR page's "Decision history"
-	// source (functional.md §5.2) and, via the latest Trader row, the
-	// jev section of `GET /api/v1/symbols/{symbol}` and `/ws/symbols/{symbol}`.
+	// source (functional.md §5.2) only. The latest Trader decision (Jev
+	// panel, the API's jev, the WebSocket's jev_update) comes from
+	// State's SymbolState.LatestTraderDecision, never from this window.
 	RecentDecisions(ctx context.Context, symbol string, limit int) ([]domain.JevDecision, error)
 }
 
