@@ -22,6 +22,24 @@ type symbolJevOutput struct {
 	LiquidityStressed *float64 `json:"liquidity_stressed"`
 }
 
+// latestTraderDecision returns symbol's most recent Jev Trader decision
+// (decisions are ordered newest first; Scout rows are skipped), or nil when
+// Jev Trader has not evaluated it yet. It reads the same
+// RecentDecisions window as the SSR page (defaultDecisionHistoryLimit), so
+// the page and the JSON routes show the same decision.
+func (h *SymbolHandler) latestTraderDecision(ctx context.Context, symbol string) (*domain.JevDecision, error) {
+	decisions, err := h.provider.RecentDecisions(ctx, symbol, defaultDecisionHistoryLimit)
+	if err != nil {
+		return nil, err
+	}
+	for i := range decisions {
+		if decisions[i].DecisionType == domain.JevDecisionTypeTrader {
+			return &decisions[i], nil
+		}
+	}
+	return nil, nil
+}
+
 // symbolRiskOutput mirrors the same endpoint's "risk" section.
 type symbolRiskOutput struct {
 	AllowedPositionPct float64 `json:"allowed_position_pct"`
@@ -48,11 +66,15 @@ type SymbolPathInput struct {
 }
 
 // APISymbol implements `GET /api/v1/symbols/{symbol}` (docs/api/endpoints.md
-// §5): the latest price/VWAP, latest Jev Trader decision (parsed via
-// enrich.Decision when read back from judgement.DecisionRepository
-// - see internal/service/execution/state.go), the shared Risk Engine
+// §5): the latest price/VWAP (latest market_snapshots row), the latest Jev
+// Trader decision (the same decision_type=trader row the Symbol Detail SSR
+// page's Jev panel shows, read via SymbolProvider.RecentDecisions, which
+// passes each row through enrich.Decision), the shared Risk Engine
 // parameters, and the currently open position size (signed: positive for
-// LONG, negative for SHORT), or nil when flat.
+// LONG, negative for SHORT), or nil when flat. vwap and every jev field are
+// null while the snapshot / Trader decision does not exist yet. jev.confidence
+// is Jev's own self-reported confidence (FR-TRADER-2), never the Policy
+// Engine's trade_signals.score.
 func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*SymbolAPIOutput, error) {
 	state, err := h.provider.State(ctx, in.Symbol)
 	if err != nil {
@@ -61,10 +83,18 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 		}
 		return nil, huma.Error500InternalServerError("read symbol state failed", err)
 	}
+	decision, err := h.latestTraderDecision(ctx, in.Symbol)
+	if err != nil {
+		if errors.Is(err, execution.ErrInstrumentUnknown) {
+			return nil, huma.Error404NotFound("unknown symbol")
+		}
+		return nil, huma.Error500InternalServerError("read jev decision failed", err)
+	}
 
 	out := &SymbolAPIOutput{}
 	out.Body.Symbol = state.Symbol
 	out.Body.Price = state.LastPrice
+	out.Body.VWAP = state.LastVWAP
 	out.Body.Risk = symbolRiskOutput{
 		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
 		StopLossPct:        h.riskParams.StopLossPct,
@@ -79,10 +109,15 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 		out.Body.CurrentPosition = &size
 	}
 
-	if state.LastSignal != domain.JevDirectionNone {
-		direction := state.LastSignal
-		confidence := state.LastSignalConfidence
-		out.Body.Jev = symbolJevOutput{Direction: &direction, Confidence: &confidence}
+	if decision != nil {
+		out.Body.Jev = symbolJevOutput{
+			Direction:         decision.Direction,
+			Confidence:        decision.Confidence,
+			Regime:            decision.Regime,
+			EntryQuality:      decision.EntryQuality,
+			ToxicFlow:         decision.ToxicFlow,
+			LiquidityStressed: decision.LiquidityStressed,
+		}
 	}
 
 	return out, nil

@@ -19,8 +19,11 @@ import (
 //	  "position": null, "cooldown_until": null
 //	}
 type SymbolState struct {
-	Symbol               string
-	LastPrice            float64
+	Symbol    string
+	LastPrice float64
+	// LastVWAP is the latest market_snapshots row's session VWAP
+	// (Feature.VWAP), or nil when the symbol has no snapshot yet.
+	LastVWAP             *float64
 	LastScanAt           *time.Time
 	LastJevScoutAt       *time.Time
 	LastJevTraderAt      *time.Time
@@ -72,6 +75,8 @@ func (e *Engine) State(ctx context.Context, symbol string) (SymbolState, error) 
 	}
 	if len(snapshots) > 0 {
 		state.LastPrice = snapshots[0].Price
+		vwap := snapshots[0].Feature.VWAP
+		state.LastVWAP = &vwap
 		ts := snapshots[0].Timestamp
 		state.LastScanAt = &ts
 	}

@@ -16,8 +16,8 @@ type SymbolStateProvider interface {
 	State(ctx context.Context, symbol string) (execution.SymbolState, error)
 	Candles(ctx context.Context, symbol string, from, to time.Time) ([]domain.Snapshot, error)
 	// RecentDecisions is the Symbol Detail SSR page's "Decision history"
-	// source (functional.md §5.2) - a page-rendering read, not a JSON
-	// API route (symbol.go's SymbolHandler doc comment).
+	// source (functional.md §5.2) and, via the latest Trader row, the
+	// jev section of `GET /api/v1/symbols/{symbol}` and `/ws/symbols/{symbol}`.
 	RecentDecisions(ctx context.Context, symbol string, limit int) ([]domain.JevDecision, error)
 }
 
