@@ -194,6 +194,7 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig) *mar
 	s.ErrorLogs = logging.NewExporter(LogDir)
 	s.candidates = &candidates.Refresher{
 		Instruments: s.Instruments, Snapshots: s.Snapshots, Settings: s.Settings, Jobs: s.Jobs,
+		Decisions: s.Decisions, Positions: s.Positions,
 		Screener: s.Screener, Strategy: strategy, InSession: marketcalendarOpen,
 	}
 	return &marketdatajob.Handler{
