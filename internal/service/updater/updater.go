@@ -2,6 +2,7 @@ package updater
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -99,6 +100,11 @@ type Config struct {
 	MetadataTimeout time.Duration
 	// DownloadTimeout bounds the whole asset download phase (default 10m).
 	DownloadTimeout time.Duration
+	// PublicKey is the raw ed25519 key checksums.txt.sig must verify under
+	// (issue #376). It defaults to internal/version.ReleasePublicKey, the
+	// key embedded at build time; when neither is set, signature
+	// verification is skipped.
+	PublicKey ed25519.PublicKey
 }
 
 // Checker implements issue #65's periodic GitHub Releases update check
@@ -112,6 +118,12 @@ type Checker struct {
 	downloadURLPrefix string
 	metadataTimeout   time.Duration
 	downloadTimeout   time.Duration
+
+	// publicKey verifies checksums.txt.sig (issue #376); nil disables the
+	// check. publicKeyErr records a configured but malformed key, which must
+	// fail every download closed rather than silently disable the check.
+	publicKey    ed25519.PublicKey
+	publicKeyErr error
 
 	// checkMu serializes CheckForUpdate: the scheduler's periodic tick
 	// and the Settings screen's manual "今すぐ確認" (issue #76) may
@@ -145,6 +157,14 @@ func NewChecker(cfg Config) *Checker {
 	if downloadTimeout <= 0 {
 		downloadTimeout = defaultDownloadTimeout
 	}
+	var publicKey ed25519.PublicKey
+	var publicKeyErr error
+	switch {
+	case len(cfg.PublicKey) > 0:
+		publicKey, publicKeyErr = checkPublicKey(cfg.PublicKey)
+	case version.ReleasePublicKey != "":
+		publicKey, publicKeyErr = parsePublicKey(version.ReleasePublicKey)
+	}
 	return &Checker{
 		owner:             cfg.Owner,
 		repo:              cfg.Repo,
@@ -154,6 +174,8 @@ func NewChecker(cfg Config) *Checker {
 		downloadURLPrefix: downloadURLPrefix,
 		metadataTimeout:   metadataTimeout,
 		downloadTimeout:   downloadTimeout,
+		publicKey:         publicKey,
+		publicKeyErr:      publicKeyErr,
 	}
 }
 
@@ -213,12 +235,12 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 	}
 	c.setStatus(status)
 
-	installerAsset, checksumAsset, err := selectAssets(release.Assets)
+	assets, err := selectAssets(release.Assets)
 	if err != nil {
 		return Result{}, withKind(ErrorRelease, fmt.Errorf("updater: %s: %w", release.TagName, err))
 	}
 
-	installerPath, err := c.downloadAndVerify(ctx, installerAsset, checksumAsset)
+	installerPath, err := c.downloadAndVerify(ctx, assets)
 	if err != nil {
 		return Result{}, fmt.Errorf("updater: download/verify %s: %w", release.TagName, err)
 	}

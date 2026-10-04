@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,14 +16,26 @@ import (
 	"strings"
 )
 
-// downloadAndVerify downloads installerAsset and checksumAsset to a fresh
-// temp directory, verifies installerAsset's SHA256 against the matching
-// line in checksumAsset's `sha256sum` output, and returns the installer's
-// local path once verified. It removes the downloaded files (and the
-// temp directory) on any error - including a checksum mismatch - so a
-// failed/tampered download never lingers on disk (issue #65: "不一致な
+// downloadAndVerify downloads assets.installer and assets.checksums to a
+// fresh temp directory, verifies assets.checksums' ed25519 signature
+// (assets.signature) when a release public key is configured (issue #376),
+// verifies the installer's SHA256 against the matching line in
+// checksums.txt's `sha256sum` output, and returns the installer's local
+// path once verified. It removes the downloaded files (and the temp
+// directory) on any error - including a signature or checksum mismatch -
+// so a failed/tampered download never lingers on disk (issue #65: "不一致な
 // ら更新を中止しエラーログのみ").
-func (c *Checker) downloadAndVerify(ctx context.Context, installerAsset, checksumAsset Asset) (installerPath string, err error) {
+func (c *Checker) downloadAndVerify(ctx context.Context, assets releaseAssets) (installerPath string, err error) {
+	installerAsset := assets.installer
+	switch {
+	case c.publicKeyErr != nil:
+		return "", withKind(ErrorVerification, c.publicKeyErr)
+	case c.publicKey == nil:
+		slog.Warn("updater: no release public key configured; installer authenticity is checked against checksums.txt only")
+	case assets.signature.Name == "":
+		return "", kindErrorf(ErrorVerification, "release has no %s, refusing unsigned installer", signatureAssetName)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, c.downloadTimeout)
 	defer cancel()
 
@@ -37,8 +50,18 @@ func (c *Checker) downloadAndVerify(ctx context.Context, installerAsset, checksu
 	}()
 
 	checksumsPath := filepath.Join(dir, checksumsAssetName)
-	if err = c.downloadTo(ctx, checksumAsset, checksumsPath, maxChecksumsBytes); err != nil {
-		return "", fmt.Errorf("download %s: %w", checksumAsset.Name, err)
+	if err = c.downloadTo(ctx, assets.checksums, checksumsPath, maxChecksumsBytes); err != nil {
+		return "", fmt.Errorf("download %s: %w", assets.checksums.Name, err)
+	}
+
+	if c.publicKey != nil {
+		sigPath := filepath.Join(dir, signatureAssetName)
+		if err = c.downloadTo(ctx, assets.signature, sigPath, maxSignatureBytes); err != nil {
+			return "", fmt.Errorf("download %s: %w", assets.signature.Name, err)
+		}
+		if err = verifySignature(c.publicKey, checksumsPath, sigPath); err != nil {
+			return "", err
+		}
 	}
 
 	installerPath = filepath.Join(dir, filepath.Base(installerAsset.Name))

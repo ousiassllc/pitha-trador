@@ -14,3 +14,11 @@ package version
 
 // Version is this build's semver tag, or "dev" for a branch/PR build.
 var Version = "dev"
+
+// ReleasePublicKey is the base64 (standard encoding) raw ed25519 public key
+// that internal/service/updater verifies checksums.txt.sig against before
+// trusting a release's installer (issue #376). ci.yml embeds it with
+// `-ldflags "-X .../internal/version.ReleasePublicKey=<repository variable
+// RELEASE_SIGNING_PUBLIC_KEY>"`; it stays empty - signature verification
+// off - for builds made without a signing key (see docs/environment/setup.md).
+var ReleasePublicKey = ""

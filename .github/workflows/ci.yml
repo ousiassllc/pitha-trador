@@ -239,7 +239,9 @@ jobs:
         # previous step's Determine version resolves it to "dev" on every
         # branch/PR build, so this is a no-op change from the pre-#65
         # unversioned build there.
-        run: wails build -platform windows/amd64 -nsis -installscope user -ldflags "-X github.com/ousiassllc/pitha-trador/internal/version.Version=${{ steps.version.outputs.value }}"
+        env:
+          RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
+        run: wails build -platform windows/amd64 -nsis -installscope user -ldflags "-X github.com/ousiassllc/pitha-trador/internal/version.Version=${{ steps.version.outputs.value }} -X github.com/ousiassllc/pitha-trador/internal/version.ReleasePublicKey=${RELEASE_SIGNING_PUBLIC_KEY}"
 
       - name: List build output
         working-directory: cmd/desktop
@@ -249,12 +251,37 @@ jobs:
         working-directory: cmd/desktop
         run: sha256sum build/bin/*-installer.exe > build/bin/checksums.txt
 
+      # Issue #376: detached ed25519 signature of checksums.txt. The auto
+      # updater embeds RELEASE_SIGNING_PUBLIC_KEY (the "wails build" step's
+      # -ldflags) and refuses a release whose checksums.txt.sig does not
+      # verify, so a release re-uploaded by someone holding only the
+      # repository/GITHUB_TOKEN cannot re-sign its own checksums.txt. The
+      # secret is only exposed on the release triggers (no fork-PR/branch
+      # builds) and the step fails - rather than silently publishing an
+      # unsigned release the embedded key would reject - when it is missing.
+      # The signature is base64 of the raw 64-byte ed25519 signature.
+      - name: Sign checksums
+        if: vars.RELEASE_SIGNING_PUBLIC_KEY != '' && (startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && github.event_name == 'push'))
+        working-directory: cmd/desktop
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [[ -z "$RELEASE_SIGNING_KEY" ]]; then
+            echo "::error::RELEASE_SIGNING_KEY secret is not set but RELEASE_SIGNING_PUBLIC_KEY is"
+            exit 1
+          fi
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
+          openssl pkeyutl -sign -rawin -inkey "$key" -in build/bin/checksums.txt | base64 -w0 > build/bin/checksums.txt.sig
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pitha-trador-windows-amd64
           path: |
             cmd/desktop/build/bin/*-installer.exe
             cmd/desktop/build/bin/checksums.txt
+            cmd/desktop/build/bin/checksums.txt.sig
 
   # Publishes a GitHub Release either for a manual `git push` of a
   # `vX.Y.Z` tag, or automatically for every plain push to main (i.e.
@@ -284,5 +311,6 @@ jobs:
           files: |
             dist/*-installer.exe
             dist/checksums.txt
+            dist/checksums.txt.sig
           generate_release_notes: true
           draft: false

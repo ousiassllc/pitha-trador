@@ -23,11 +23,22 @@
 // Checker's checkMu forever. Asset downloads are size-capped
 // (maxInstallerBytes/maxChecksumsBytes, tightened to Asset.Size when GitHub
 // reports one) and Asset.BrowserDownloadURL must live under
-// https://github.com/<owner>/<repo>/releases/download/. Known limitation:
-// checksums.txt comes from the same release as the installer, so SHA256
-// only detects corruption, not a replaced release; installer code signing
-// or a detached release signature verified against an embedded public key
-// is not implemented yet.
+// https://github.com/<owner>/<repo>/releases/download/.
+//
+// Release authenticity (issue #376): checksums.txt comes from the same
+// release as the installer, so SHA256 alone only detects corruption, not a
+// replaced release (compromised token or release job). ci.yml therefore
+// also publishes checksums.txt.sig, a base64 detached ed25519 signature of
+// checksums.txt made with a GitHub Actions secret, and the matching public
+// key is embedded in the binary (internal/version.ReleasePublicKey,
+// overridable by Config.PublicKey). When a key is configured,
+// downloadAndVerify verifies the signature right after fetching
+// checksums.txt - before the installer is downloaded or run - and a
+// missing, malformed or mismatching signature (or a malformed key) is a
+// Permanent ErrorVerification that removes every downloaded file. Known
+// limitation: a build without a public key (no signing key provisioned)
+// skips the signature check, logs a warning and relies on SHA256 alone;
+// Authenticode code signing is not implemented.
 //
 // A 404 on the latest-release lookup (no release published, or repository
 // not accessible) is not a failure: the check succeeds with Status.NoRelease
