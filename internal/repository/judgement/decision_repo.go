@@ -111,14 +111,25 @@ func (r *DecisionRepository) ListByInstrument(ctx context.Context, instrumentID 
 	return out, nil
 }
 
+// listRecentAllQuery / listRecentByTypeQuery read the newest jev_decisions
+// rows straight off jev_decisions_timestamp_idx / jev_decisions_type_timestamp_idx
+// (backward scans stop after LIMIT rows). They are two statements rather than
+// one optional-type filter (an OR on the bound parameter) because that cannot
+// use an index and forces a full scan plus sort of the table (issue #419).
+const (
+	listRecentAllQuery    = decisionSelectColumns + ` FROM jev_decisions ORDER BY timestamp DESC, id DESC LIMIT ?`
+	listRecentByTypeQuery = decisionSelectColumns + ` FROM jev_decisions WHERE decision_type = ? ORDER BY timestamp DESC, id DESC LIMIT ?`
+)
+
 // ListRecent returns up to limit jev_decisions rows across every
 // instrument, most recent first, optionally restricted to decisionType
 // ("" = both Scout and Trader) - System Activity Log's Jev call feed.
 func (r *DecisionRepository) ListRecent(ctx context.Context, decisionType string, limit int) ([]domain.JevDecision, error) {
-	rows, err := r.db.QueryContext(ctx,
-		decisionSelectColumns+` FROM jev_decisions WHERE (? = '' OR decision_type = ?) ORDER BY timestamp DESC, id DESC LIMIT ?`,
-		decisionType, decisionType, limit,
-	)
+	query, args := listRecentAllQuery, []any{limit}
+	if decisionType != "" {
+		query, args = listRecentByTypeQuery, []any{decisionType, limit}
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list recent jev decisions (type=%q): %w", decisionType, err)
 	}
