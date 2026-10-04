@@ -10,6 +10,8 @@ Huma が OpenAPI 3.1 スペックを `/api/v1/openapi.json` に自動生成す�
 
 Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`return_1m`/`return_5m`は**パーセント単位**（0.42 = +0.42%）。Feature Engine・DB・Jev入力の小数比（0.0042）をAPI層（`/ws/scanner`のpushを含む）と SSRフォールバックで×100して返す／表示する。Scanner Dashboardの初期ロード・`pitha-scanner-table`のフォールバック取得に使用（ライブ更新は`/ws/scanner`）。
 
+各itemの`detail_url`は銘柄詳細ページへのサーバー生成リンク（`/symbols/{symbol}`。銘柄コードはRFC 3986のunreserved文字以外をパーセントエンコード。Go側`organisms.SymbolHref`が唯一の定義で、SSR行（`ScannerTableFallback`・`ScanPanel`）と`/ws/scanner`のitemにも同じ値が入る）。`pitha-scanner-table`はこの値をそのまま`href`に使い、URLを組み立てない（HATEOAS、issue #383）。
+
 ```json
 // Output（抜粋）
 {
@@ -17,6 +19,7 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
     {
       "symbol": "7203",
       "price": 2831.5,
+      "detail_url": "/symbols/7203",
       "return_1m": 0.12,
       "return_5m": 0.42,
       "volume_ratio_5m": 3.4,

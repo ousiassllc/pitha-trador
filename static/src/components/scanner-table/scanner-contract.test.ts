@@ -85,7 +85,7 @@ describe('SSR/Lit scanner contract', () => {
 
       const tds = [...el.querySelectorAll('tbody tr td')];
       expect(tds.map((td) => td.textContent?.trim())).toEqual(row.cells);
-      expect(tds[0].querySelector('a')?.getAttribute('href')).toBe(row.href);
+      expect(tds[0].querySelector('a')?.getAttribute('href')).toBe(row.item.detail_url);
       expect(classSet(tds[2])).toEqual(sorted(row.returnClasses[0]));
       expect(classSet(tds[3])).toEqual(sorted(row.returnClasses[1]));
       expect(classSet(tds[7].querySelector('span'))).toEqual(sorted(row.directionClass));

@@ -150,16 +150,6 @@ export function formatConfidence(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
 }
 
-// Symbol detail path segment: everything except RFC 3986 unreserved
-// characters is percent-escaped, the same set as symbolHref in
-// internal/web/organisms/scanner_table_fallback.templ.
-export function encodeSymbol(symbol: string): string {
-  return encodeURIComponent(symbol).replace(
-    /[!'()*]/g,
-    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-}
-
 // The server's RFC 3339 timestamp without fractional seconds, matching the
 // SSR caption (Go's time.RFC3339); `as_of` values from the API/WebSocket
 // carry nanoseconds (RFC3339Nano) but the same offset.

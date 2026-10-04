@@ -32,8 +32,11 @@ export class FakeWebSocket {
   }
 }
 
+// detail_url is an opaque marker (not the real route) so tests prove the
+// component renders whatever URL the server sent, verbatim.
 export const item = (overrides: Partial<ScannerItem> = {}): ScannerItem => ({
   symbol: '7203',
+  detail_url: `/server-detail/${overrides.symbol ?? '7203'}`,
   price: 2831.5,
   return_1m: 0.12,
   return_5m: 0.42,
