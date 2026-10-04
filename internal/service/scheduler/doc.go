@@ -15,9 +15,11 @@
 // eventtrigger.Signal fired (EnqueueEventReevaluation,
 // functional.md FR-SCAN-1/FR-SCAN-2), optionally drives the operator
 // heartbeat dead-man's-switch periodic check (CheckOperatorHeartbeat,
-// WithHeartbeatChecker, functional.md FR-RISK-6), and recovers jobs left
-// status='running' by a previous crash back to pending at startup
-// (er.md §jobs).
+// WithHeartbeatChecker, functional.md FR-RISK-6), fails jobs left
+// status='running' on any queue for over 10 minutes (orphans.FailAll,
+// registered as a 1-minute periodic trigger, non-functional.md §2.1),
+// and recovers jobs left status='running' by a previous crash back to
+// pending at startup (er.md §jobs).
 //
 // This package MUST depend only on internal/domain and internal/repository
 // (internal/service/doc.go); it does not import internal/service/marketdata
