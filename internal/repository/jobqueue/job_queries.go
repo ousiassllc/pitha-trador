@@ -78,3 +78,34 @@ func (r *JobRepository) ListRecent(ctx context.Context, queue string, limit int)
 	}
 	return out, nil
 }
+
+// ListOpenOrFinishedSince returns the jobs on queue that are still pending
+// or running, plus those that finished (succeeded or failed) at or after
+// finishedSince - the working set a producer needs to avoid enqueueing a
+// duplicate of an unprocessed job or re-enqueueing too soon after a
+// completed one (issue #388).
+func (r *JobRepository) ListOpenOrFinishedSince(ctx context.Context, queue string, finishedSince time.Time) ([]Job, error) {
+	rows, err := r.db.QueryContext(ctx,
+		jobSelectColumns+` FROM jobs WHERE queue = ?
+		 AND (status IN (?, ?) OR finished_at >= ?)
+		 ORDER BY id ASC`,
+		queue, JobStatusPending, JobStatusRunning, sqlutil.FormatTime(finishedSince),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list open or recently finished jobs (queue=%q): %w", queue, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []Job
+	for rows.Next() {
+		job, err := scanJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list open or recently finished jobs (queue=%q): %w", queue, err)
+	}
+	return out, nil
+}
