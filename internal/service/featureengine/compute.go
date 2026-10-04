@@ -26,19 +26,22 @@ type Reading struct {
 	SessionHigh *float64
 	SessionLow  *float64
 
-	// Bid, Ask, BidQty and AskQty are nil whenever kabuステーションAPI
-	// does not report board data for this instrument/time, in which case
-	// every feature derived from them (OrderbookImbalance, Microprice and
-	// the snapshot-level SpreadBps built in engine.go) is nil rather than
-	// a placeholder number (FR-FE-2).
+	// Bid, Ask, BidQty and AskQty use the conventional meaning: Bid/BidQty
+	// is the best BUY quote and Ask/AskQty the best SELL quote. This is the
+	// reverse of kabuステーションAPI's BidPrice/AskPrice naming, which
+	// callers swap when translating a marketdata.Board. They are nil
+	// whenever kabuステーションAPI does not report board data for this
+	// instrument/time, in which case every feature derived from them
+	// (OrderbookImbalance, Microprice and the snapshot-level SpreadBps
+	// built in engine.go) is nil rather than a placeholder number (FR-FE-2).
 	Bid    *float64
 	Ask    *float64
 	BidQty *float64
 	AskQty *float64
 
 	// BidDepth and AskDepth are the total quantity across every book
-	// level the API reported on the Bid / Ask side; nil when no level was
-	// reported.
+	// level the API reported on the Bid (buy) / Ask (sell) side; nil when
+	// no level was reported.
 	BidDepth *float64
 	AskDepth *float64
 }
