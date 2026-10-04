@@ -55,11 +55,18 @@ static/
     │       └── logger.ts / styles.ts
     ├── css/
     │   └── app.css
+    ├── csp/
+    │   └── lightweight-charts-style-hash.test.ts   # CSPの`style-src`hashとインストール版`lightweight-charts`の一致検証（`bun test`）
     ├── img/
     │   └── logo.svg               # アプリロゴ（Header表示用、go:embed対象）
-    └── dist/
+    ├── vendor/
+    │   └── htmx.min.js            # checked-in、go:embed対象（`layout/shell.templ`が`/static/vendor/htmx.min.js`で参照）
+    ├── embed.go                   # `//go:embed dist img vendor`
+    └── dist/                      # ビルド成果物
         ├── js/
-        └── css/
+        ├── css/
+        └── vendor/
+            └── stoplight-elements/   # `/swagger`用（esbuild.config.mjsが`@stoplight/elements`から出力）
 ```
 
 依存ルールは `architecture/overview.md` §3 の通り（`handler → service → repository → domain`、Templ側は `atoms/molecules/organisms/pages`）。
@@ -230,3 +237,4 @@ const (
 | 1.48 | 2026-10-04 | §3の`handler/`構成を実装に合わせ、直下の`scanner.go`ほかを`scanner/`・`performance/`・`calibration/`・`proposals/`・`swagger/`サブパッケージへ更新 | issue #370 |
 | 1.49 | 2026-10-05 | `ScanPanel`の絞り込みフォームのトリガーを`submit`＋セレクトの`change`に限定しセレクトへ`id`付与（#410）、適用中の理由を件数0でも選択肢に残す（#408）。`pitha-price-chart`から未使用の`symbol`属性を削除し§5.1を訂正（#409）。旧`handler`パスを参照するコメントを更新（#401/#404） | issue #408, #409, #410, #401, #404 |
 | 1.50 | 2026-10-05 | §2の`middleware/`列挙に`SecurityHeaders`（`security_headers.go`、`SwaggerCSP`）を追記 | issue #413 |
+| 1.51 | 2026-10-05 | §2の`static/src`ツリーに`csp/`（`lightweight-charts-style-hash.test.ts`）・`vendor/`（`htmx.min.js`）・`embed.go`・`dist/vendor/`（`stoplight-elements`）を追記 | issue #432 |
