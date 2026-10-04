@@ -60,10 +60,11 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	}
 
 	unrealized := positionSign(position.Side) * float64(position.Quantity) * (snap.Price - position.EntryPrice)
-	position, err = e.positions.Mark(ctx, position.ID, snap.Price, unrealized, now)
+	marked, err := e.positions.Mark(ctx, position.ID, snap.Price, unrealized, now)
 	if err != nil {
 		return SnapshotResult{}, fmt.Errorf("execution: mark position %d to market: %w", position.ID, err)
 	}
+	position = marked
 
 	decision, err := e.latestTraderDecision(ctx, snap.InstrumentID)
 	if err != nil {
