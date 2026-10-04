@@ -4,6 +4,7 @@ import {
   type CalibrationAPIResponse,
   type CalibrationBucket,
   heatmapColor,
+  NO_DATA_COLOR,
 } from './calibration-view';
 
 type HeatmapElement = HTMLElement & { updateComplete: Promise<boolean> };
@@ -151,6 +152,65 @@ describe('pitha-calibration-heatmap', () => {
     expect(rows?.length).toBe(2);
     expect(rows?.[1]?.textContent).toContain('SHORT');
     expect(rows?.[1]?.textContent).toContain('-0.30%');
+  });
+
+  test('renders a band without samples as neutral "データなし" instead of a 0% red cell', async () => {
+    const empty = bucket({
+      range: '0.50-0.60',
+      sample_count: 0,
+      direction_accuracy: 0,
+      avg_future_return_pct: 0,
+      avg_confidence: 0,
+    });
+    const { el } = await mount(
+      response({ buckets: [empty, bucket({ range: '0.90-1.00', sample_count: 7 })] }),
+    );
+
+    const cells = [
+      ...(el.shadowRoot?.querySelectorAll<HTMLElement>(
+        '[data-testid="calibration-heatmap-cell"]',
+      ) ?? []),
+    ];
+    const [emptyCell, filledCell] = cells;
+    expect(emptyCell?.style.backgroundColor).toBe(NO_DATA_COLOR);
+    expect(emptyCell?.style.backgroundColor).not.toBe(heatmapColor(0));
+    expect(emptyCell?.textContent).toContain('データなし');
+    expect(emptyCell?.textContent).toContain('n=0');
+    expect(emptyCell?.textContent).not.toContain('0.0%');
+    expect(emptyCell?.textContent).not.toContain('conf');
+    expect(filledCell?.textContent).toContain('n=7');
+    expect(filledCell?.textContent).toContain('63.0%');
+    expect(filledCell?.textContent).not.toContain('データなし');
+  });
+
+  test('hides Brier/LogLoss/ECE and says "サンプルなし" when there are no labeled samples', async () => {
+    const { el } = await mount(
+      response({
+        buckets: [bucket({ sample_count: 0, direction_accuracy: 0 })],
+        by_direction: [
+          { direction: 'LONG', sample_count: 0, direction_accuracy: 0, avg_future_return_pct: 0 },
+          { direction: 'SHORT', sample_count: 0, direction_accuracy: 0, avg_future_return_pct: 0 },
+        ],
+        brier_score: 0,
+        log_loss: 0,
+        expected_calibration_error: 0,
+      }),
+    );
+
+    const text = el.shadowRoot?.textContent ?? '';
+    expect(el.shadowRoot?.querySelector('[data-testid="calibration-no-samples"]')).not.toBeNull();
+    expect(text).not.toContain('Brier Score');
+    expect(text).not.toContain('0.000');
+    const rows = el.shadowRoot?.querySelectorAll('[data-testid="calibration-direction-row"]');
+    expect(rows?.[0]?.textContent).toContain('0');
+    expect(rows?.[0]?.textContent).not.toContain('0.0%');
+    expect(rows?.[0]?.textContent).not.toContain('0.00%');
+  });
+
+  test('shows the summary scores and no "サンプルなし" notice when samples exist', async () => {
+    const { el } = await mount(response());
+    expect(el.shadowRoot?.querySelector('[data-testid="calibration-no-samples"]')).toBeNull();
+    expect(el.shadowRoot?.textContent).toContain('Brier Score');
   });
 
   test('the refresh button re-fetches calibration-url without opening a WebSocket', async () => {
