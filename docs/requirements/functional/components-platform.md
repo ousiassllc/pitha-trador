@@ -61,7 +61,7 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 - FR-SELFIMPROVE-3: 1提案あたりの変更幅は confidence系しきい値で±0.05、entry_quality等の段階型しきい値で1段階までを上限とする
 - FR-SELFIMPROVE-4: Opusは提案を受け取ると、直近の`trade_signals`/`jev_decisions`/`calibration_outcomes`（直近20営業日相当）に対し提案後しきい値を適用した場合のExpectancy・Max Drawdownをシャドーバックテスト（バックテストエンジン§4.11を再利用。再現範囲はFR-BT-4の簡略化に従い、Exit条件の一部・Risk Engine不適用・固定コストモデルでの比較値である）で算出し、既存policy_versionに対しExpectancyが悪化せずMax Drawdownの悪化が許容範囲内（相対10%以内）の場合のみ承認する
 - FR-SELFIMPROVE-5: 承認された提案は新しい`policy_version`として`runtime_settings`に自動適用し、`policy_proposals.status`を`applied`に更新する。却下時は`rejected`として理由を記録する
-- FR-SELFIMPROVE-6: 適用後5営業日相当のExpectancyが適用前より相対20%以上悪化した場合、自動的に直前の`policy_version`へロールバックし、Slack通知する
+- FR-SELFIMPROVE-6: 適用後5営業日相当のExpectancy（窓内にクローズ済みのポジションの`realized_pnl`平均）が適用前の同じ長さの窓より相対20%以上悪化した場合、自動的に直前の`policy_version`へロールバックし、Slack通知する。「相対20%以上悪化」は`post < pre`かつ`pre - post >= |pre| × 0.20`（適用前が負でも`|pre|`を基準にし、`pre == 0`では`post < 0`のみ）で判定し、`post >= pre`（改善・同値）では決してロールバックしない。適用前または適用後のどちらかの窓にクローズ済みポジションが0件のときは「判定不能」としてロールバックしない（しきい値の厳格化で約定が0件になっても誤ロールバックしない）。判定不能の提案は`status=applied`のまま残り、追跡窓が閉じた後も打ち切らず、以降の日次実行のたびに再評価する（窓は適用時刻を基準に固定のため、窓内のデータが揃うまで判定されない）
 - FR-SELFIMPROVE-7: Sol/Opusの提案・レビュー・適用・ロールバックはすべて`policy_proposals`と`runtime_settings`の変更履歴として監査可能な形で保存する
 - FR-SELFIMPROVE-8: Solが生成した`proposed_changes_json`は、`selfimprove`サービスがFR-SELFIMPROVE-2（対象キーは`policy.*`のみ）・FR-SELFIMPROVE-3（変更幅上限）を機械的に検証する。逸脱する提案は`policy_proposals.status=rejected`（`review_json.reason=llm_output_out_of_bounds`）として却下し、LLM出力の内容を無条件に信用しない
 - FR-SELFIMPROVE-9: Opusの承認判定は、既存の決定的シャドーバックテストしきい値（FR-SELFIMPROVE-4）とOpus APIによる定性レビューの両方を満たした場合にのみ`approved`とする。Opus APIは決定的しきい値を満たす提案を追加で却下できる（安全側の拒否権）が、決定的しきい値を満たさない提案を承認へ覆すことはできない
