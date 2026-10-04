@@ -34,6 +34,29 @@ describe('pitha-scanner-table interaction', () => {
     expect(symbolHeader.textContent).toContain('銘柄 ▼');
   });
 
+  // Lexicographic order would put "exceptional" first and "poor" after
+  // "good" (issue #493); the column hint promises poor < ... < exceptional.
+  test('sorts the entry-quality column by quality rank, nulls first, and reverses on a second click', async () => {
+    const qualities = ['strong', 'poor', null, 'exceptional', 'good', 'fair'];
+    const { el } = await mount(
+      qualities.map((entry_quality, i) => item({ symbol: `S${i}`, entry_quality })),
+    );
+    const header =
+      el.querySelectorAll('thead th')[COLUMNS.findIndex((c) => c.key === 'entry_quality')];
+    const order = () =>
+      [...el.querySelectorAll('tbody tr')].map(
+        (row) => qualities[Number(row.getAttribute('data-symbol')?.slice(1))],
+      );
+
+    (header.querySelector('button') as HTMLElement).click();
+    await el.updateComplete;
+    expect(order()).toEqual([null, 'poor', 'fair', 'good', 'strong', 'exceptional']);
+
+    (header.querySelector('button') as HTMLElement).click();
+    await el.updateComplete;
+    expect(order()).toEqual(['exceptional', 'strong', 'good', 'fair', 'poor', null]);
+  });
+
   // The header <button> is what makes sorting reachable with Tab and
   // Enter/Space (native button behavior). The mouse-only `title` tooltip
   // is complemented by a visible <details> listing every column's hint,
