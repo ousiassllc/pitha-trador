@@ -3,7 +3,9 @@ package selfimprove
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -64,25 +66,30 @@ func (g *Governor) TrackAndRollback(ctx context.Context, proposalID int64) (bool
 		// a validated policy.* threshold, even while reverting.
 		return false, fmt.Errorf("selfimprove: proposal %d failed validation, refusing to roll back: %w", proposalID, err)
 	}
-	for _, c := range changes {
-		if err := g.settings.Set(ctx, c.Key, c.OldValue, now); err != nil {
-			return false, fmt.Errorf("selfimprove: rollback proposal %d: restore %s: %w", proposalID, c.Key, err)
-		}
+	skipped, err := g.revertChanges(ctx, proposal, changes, now)
+	if err != nil {
+		return false, err
 	}
 
 	reason := fmt.Sprintf(
 		"realized expectancy degraded from %.4f to %.4f (>=%.0f%% relative) over the %d-business-day post-apply tracking window (FR-SELFIMPROVE-6)",
 		preExpectancy, postExpectancy, expectancyDegradationTolerance*100, postApplyTrackingDays,
 	)
+	if len(skipped) > 0 {
+		reason += fmt.Sprintf("; left unchanged because runtime_settings no longer held this proposal's applied value (a later proposal or manual edit replaced it): %s", strings.Join(skipped, ", "))
+	}
 	if err := g.proposals.MarkRolledBack(ctx, proposalID, now, reason); err != nil {
 		return false, fmt.Errorf("selfimprove: mark proposal %d rolled back: %w", proposalID, err)
 	}
+	// The rollback is committed: reloading and notifying are best-effort
+	// and never report it as failed (see Notifier).
 	rolledBack, err := g.proposals.Get(ctx, proposalID)
 	if err != nil {
-		return false, fmt.Errorf("selfimprove: reload rolled-back proposal %d: %w", proposalID, err)
+		slog.ErrorContext(ctx, "selfimprove: reload rolled-back proposal for notification failed", "proposal_id", proposalID, "error", err)
+		return true, nil
 	}
 	if err := g.notifier.ProposalRolledBack(ctx, rolledBack, reason); err != nil {
-		return false, fmt.Errorf("selfimprove: notify proposal %d rolled back: %w", proposalID, err)
+		slog.ErrorContext(ctx, "selfimprove: notify proposal rolled back failed", "proposal_id", proposalID, "error", err)
 	}
 	return true, nil
 }

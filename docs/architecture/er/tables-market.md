@@ -195,7 +195,7 @@ erDiagram
 | direction | varchar(10) | NOT NULL, CHECK IN ('LONG','SHORT','NONE') | |
 | score | numeric(6,4) | NULL可 | Policy Engine内部スコア |
 | entry_price_reference | numeric(12,2) | NULL可 | |
-| policy_version | varchar(20) | NOT NULL | しきい値バージョン（`functional.md` FR-POLICY-4） |
+| policy_version | varchar(20) | NOT NULL | Policy Engineのロジック版`policy-v1`。自己改善の適用提案のしきい値が有効な間は`policy-v1+sol-12`のように`policy_proposals.applied_policy_version`を付加（`functional.md` FR-POLICY-4/5, FR-SELFIMPROVE-5） |
 | risk_passed | boolean | NOT NULL | Risk Engine通過可否 |
 | reject_reason | varchar(255) | NULL可 | risk_passed=false時の理由 |
 | created_at | text | NOT NULL | |

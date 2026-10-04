@@ -219,3 +219,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.27 | 2026-10-05 | FR-RAG-2（`components-platform.md` §4.13）に、`calibration_outcomes`紐付き済み判断を専用の近傍検索で先に取得する旨を追記（Scout判断が最近傍プールを埋めて優先採用が効かなくなる問題の修正）。§4.12（`components-platform.md`）に、Calibration集計が`question_version`で分離せず全版を混在して集計する旨を追記 | issue #440, #441, #442 |
 | 1.28 | 2026-10-05 | FR-SELFIMPROVE-6（`components-platform.md` §4.14）に、適用前が負/ゼロの場合の判定（適用前の絶対値基準、改善・同値は非ロールバック）と、適用前後いずれかの窓にクローズ済みポジションが無い場合の判定不能（非ロールバック・日次で再評価）を追記 | issue #449 |
 | 1.29 | 2026-10-05 | §4.7 FR-RISK-1（`components-pipeline.md`）に`config/risk.yaml`の各上限の起動時検証（範囲外・欠落は項目名付きエラーで起動失敗。Liveは`live`セクション定義時のみ検証）を追記 | issue #454 |
+| 1.30 | 2026-10-05 | FR-SELFIMPROVE-5/6（`components-platform.md`）に`approved`取り残し提案の収束・通知のbest-effort化・ロールバックが後続提案の適用値を上書きしないこと、FR-POLICY-5（`components-pipeline.md`）に`trade_signals.policy_version`への適用版付加を追記 | issue #450, #451, #452, #455 |

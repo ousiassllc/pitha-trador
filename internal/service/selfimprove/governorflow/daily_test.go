@@ -1,4 +1,4 @@
-package selfimprove_test
+package governorflow_test
 
 import (
 	"context"
@@ -68,7 +68,7 @@ func TestGovernor_RunDaily_ProposesEvaluatesAndAppliesToRuntimePolicy(t *testing
 		t.Fatalf("stored status = pending, want the proposal evaluated in the same batch")
 	}
 
-	current, err := selfimprove.NewRuntimePolicy(f.settings, baseline).CurrentThresholds(ctx)
+	current, err := selfimprove.NewRuntimePolicy(f.settings, f.proposals, baseline).CurrentThresholds(ctx)
 	if err != nil {
 		t.Fatalf("CurrentThresholds: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestRuntimePolicy_CurrentThresholds_OverridesBaselineWithRuntimeSettings(t 
 		t.Fatalf("settings.Set: %v", err)
 	}
 
-	current, err := selfimprove.NewRuntimePolicy(f.settings, baseline).CurrentThresholds(ctx)
+	current, err := selfimprove.NewRuntimePolicy(f.settings, f.proposals, baseline).CurrentThresholds(ctx)
 	if err != nil {
 		t.Fatalf("CurrentThresholds: %v", err)
 	}

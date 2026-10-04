@@ -15,8 +15,13 @@ import (
 // logic, persisted to trade_signals.policy_version
 // (docs/architecture/er.md §trade_signals, functional.md FR-POLICY-4/5).
 // Bump it whenever the LONG/SHORT/NONE decision logic itself changes
-// materially (config/strategy.yaml's policy.* values are versioned
-// independently by ordinary config/deploy history).
+// materially. Evaluate (the live path) records it alone while the
+// config/strategy.yaml baseline thresholds are in effect, and suffixed
+// with the applied Self-Improvement proposal's policy_version
+// ("policy-v1+sol-12") while a runtime_settings override applied by
+// FR-SELFIMPROVE-5 is, returning to plain Version after a rollback
+// (see PolicySource.AppliedPolicyVersion). Decide, the backtest replay
+// path, always records plain Version.
 const Version = "policy-v1"
 
 // FR-POLICY-3 reject_reason prefixes: every NONE trade_signals row's
@@ -234,11 +239,12 @@ func (e *Engine) decide(ctx context.Context, in Input, th Thresholds) domain.Tra
 // (currentThresholds) and persists the result via the Engine's
 // SignalRepository (FR-POLICY-5).
 func (e *Engine) Evaluate(ctx context.Context, in Input) (domain.TradeSignal, error) {
-	th, err := e.currentThresholds(ctx)
+	th, policyVersion, err := e.currentThresholds(ctx)
 	if err != nil {
 		return domain.TradeSignal{}, err
 	}
 	sig := e.decide(ctx, in, th)
+	sig.PolicyVersion = policyVersion
 	saved, err := e.signals.Insert(ctx, sig)
 	if err != nil {
 		return domain.TradeSignal{}, fmt.Errorf("policy: persist trade signal for %q: %w", in.Symbol, err)

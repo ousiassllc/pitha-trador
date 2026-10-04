@@ -17,11 +17,16 @@ import (
 // standing in for runtime_settings changing between two evaluations.
 type mutablePolicySource struct {
 	current config.PolicyConfig
+	applied string
 	err     error
 }
 
 func (s *mutablePolicySource) CurrentThresholds(context.Context) (config.PolicyConfig, error) {
 	return s.current, s.err
+}
+
+func (s *mutablePolicySource) AppliedPolicyVersion(context.Context) (string, error) {
+	return s.applied, s.err
 }
 
 func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
@@ -62,6 +67,48 @@ func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
 	}
 	if second.Direction != domain.JevDirectionNone {
 		t.Errorf("second Direction = %q, want NONE once the source's min_probability is 0.70", second.Direction)
+	}
+}
+
+func TestEngine_Evaluate_RecordsAppliedPolicyVersionAndRevertsAfterRollback(t *testing.T) {
+	db := newHandlerTestDB(t)
+	instrument, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
+	})
+	if err != nil {
+		t.Fatalf("Create instrument: %v", err)
+	}
+	in := passingInput(domain.JevDirectionLong)
+	in.InstrumentID = instrument.ID
+	saved, err := judgement.NewDecisionRepository(db).Insert(context.Background(), domain.JevDecision{
+		InstrumentID: instrument.ID, Symbol: "7203", Timestamp: in.Timestamp, DecisionType: domain.JevDecisionTypeTrader,
+		StateHash: "hash", StateJSON: "{}", QuestionVersion: "v1", ResponseJSON: "{}", ModelID: "test-model",
+	})
+	if err != nil {
+		t.Fatalf("Insert decision: %v", err)
+	}
+	in.Decision.ID = saved.ID
+
+	source := &mutablePolicySource{current: testThresholds().Policy}
+	engine := policy.NewEngine(testThresholds(), nil, trading.NewSignalRepository(db), policy.WithPolicySource(source))
+
+	for _, step := range []struct{ applied, want string }{
+		{"", policy.Version},
+		{"sol-12", "policy-v1+sol-12"},
+		{"sol-999999", "policy-v1+sol-999999"}, // must still fit VARCHAR(20)
+		{"", policy.Version},                   // after a rollback
+	} {
+		source.applied = step.applied
+		sig, err := engine.Evaluate(context.Background(), in)
+		if err != nil {
+			t.Fatalf("Evaluate (applied %q): %v", step.applied, err)
+		}
+		if sig.PolicyVersion != step.want {
+			t.Errorf("applied %q: PolicyVersion = %q, want %q", step.applied, sig.PolicyVersion, step.want)
+		}
+		if len(sig.PolicyVersion) > 20 {
+			t.Errorf("PolicyVersion %q exceeds the VARCHAR(20) column", sig.PolicyVersion)
+		}
 	}
 }
 
