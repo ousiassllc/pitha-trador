@@ -106,6 +106,62 @@ describe('WsClient', () => {
     expect(statuses.at(-1)).toBe('open');
   });
 
+  // Issue #466: a server that accepts and then immediately closes must not
+  // reset the backoff, or `failed` is never reached.
+  test('grows the backoff and reaches failed when connections close right after open', () => {
+    const statuses: WsStatus[] = [];
+    new WsClient('/ws/scanner', { onStatusChange: (status) => statuses.push(status) });
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const expectedBackoff = Math.min(500 * 2 ** attempt, 30_000);
+      const count = FakeWebSocket.instances.length;
+      FakeWebSocket.instances.at(-1)?.emit('open');
+      FakeWebSocket.instances.at(-1)?.emit('close', { code: 1011 });
+      expect(statuses.at(-1)).toBe('reconnecting');
+      vi.advanceTimersByTime(expectedBackoff - 1);
+      expect(FakeWebSocket.instances).toHaveLength(count);
+      vi.advanceTimersByTime(1);
+      expect(FakeWebSocket.instances).toHaveLength(count + 1);
+    }
+    FakeWebSocket.instances.at(-1)?.emit('open');
+    FakeWebSocket.instances.at(-1)?.emit('close', { code: 1011 });
+    expect(statuses.at(-1)).toBe('failed');
+  });
+
+  test('restarts from the initial backoff after a connection that received a message', () => {
+    new WsClient('/ws/scanner', {});
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      FakeWebSocket.instances.at(-1)?.emit('open');
+      FakeWebSocket.instances.at(-1)?.emit('close', { code: 1011 });
+      vi.advanceTimersByTime(500 * 2 ** attempt);
+    }
+    const healthy = FakeWebSocket.instances.at(-1);
+    healthy?.emit('open');
+    healthy?.emit('message', { data: '{}' });
+    healthy?.emit('close', { code: 1006 });
+
+    const before = FakeWebSocket.instances.length;
+    vi.advanceTimersByTime(500);
+    expect(FakeWebSocket.instances).toHaveLength(before + 1);
+  });
+
+  test('restarts from the initial backoff after a connection that stayed up for 10s', () => {
+    new WsClient('/ws/scanner', {});
+
+    FakeWebSocket.instances.at(-1)?.emit('open');
+    FakeWebSocket.instances.at(-1)?.emit('close', { code: 1011 });
+    vi.advanceTimersByTime(500);
+    const quiet = FakeWebSocket.instances.at(-1);
+    quiet?.emit('open');
+    vi.advanceTimersByTime(10_000);
+    quiet?.emit('close', { code: 1006 });
+
+    const before = FakeWebSocket.instances.length;
+    vi.advanceTimersByTime(500);
+    expect(FakeWebSocket.instances).toHaveLength(before + 1);
+  });
+
   test('does not report a status change or reconnect after close() by the caller', () => {
     const statuses: WsStatus[] = [];
     const client = new WsClient('/ws/scanner', { onStatusChange: (s) => statuses.push(s) });
