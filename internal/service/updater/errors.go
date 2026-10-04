@@ -25,7 +25,8 @@ const (
 	// invalid release content.
 	ErrorAccess ErrorKind = "access"
 	// ErrorVerification: a downloaded asset was rejected - checksum
-	// mismatch or missing entry, size limit, or a URL outside the
+	// mismatch or missing entry, a missing/invalid checksums.txt.sig
+	// signature (issue #376), size limit, or a URL outside the
 	// repository's release-download path.
 	ErrorVerification ErrorKind = "verification"
 	// ErrorRelease: the release was fetched but its content is unusable -
