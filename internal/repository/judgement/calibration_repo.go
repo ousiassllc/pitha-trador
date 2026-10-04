@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -74,6 +75,45 @@ SELECT id, jev_decision_id, horizon_minutes, future_return, max_adverse_excursio
 func (r *CalibrationRepository) Get(ctx context.Context, id int64) (domain.CalibrationOutcome, error) {
 	row := r.db.QueryRowContext(ctx, calibrationOutcomeSelectColumns+` FROM calibration_outcomes WHERE id = ?`, id)
 	return scanCalibrationOutcome(row)
+}
+
+// ListByDecisionIDs returns every calibration_outcomes row whose
+// jev_decision_id is in decisionIDs, ordered by (jev_decision_id,
+// horizon_minutes) ascending, for internal/service/rag.Service.Context to
+// join realized outcomes onto similar past decisions (functional.md
+// FR-RAG-2/3). Decisions with no outcome yet simply contribute no rows;
+// an empty decisionIDs returns nil without querying.
+func (r *CalibrationRepository) ListByDecisionIDs(ctx context.Context, decisionIDs []int64) ([]domain.CalibrationOutcome, error) {
+	if len(decisionIDs) == 0 {
+		return nil, nil
+	}
+
+	args := make([]any, len(decisionIDs))
+	for i, id := range decisionIDs {
+		args[i] = id
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(decisionIDs)), ",")
+
+	rows, err := r.db.QueryContext(ctx,
+		calibrationOutcomeSelectColumns+` FROM calibration_outcomes WHERE jev_decision_id IN (`+placeholders+`) ORDER BY jev_decision_id, horizon_minutes`, //nolint:gosec // G202: placeholders is only "?" markers; ids are bound parameters
+		args...)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list calibration outcomes by decision ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.CalibrationOutcome
+	for rows.Next() {
+		o, err := scanCalibrationOutcome(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: iterate calibration outcomes by decision ids: %w", err)
+	}
+	return out, nil
 }
 
 func scanCalibrationOutcome(row sqlutil.RowScanner) (domain.CalibrationOutcome, error) {

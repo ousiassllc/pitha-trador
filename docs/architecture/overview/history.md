@@ -62,3 +62,4 @@
 | 1.55 | 2026-10-05 | §3の`static/src`ツリーに`csp/`（`lightweight-charts-style-hash.test.ts`）を追記し、実体（`components`/`css`/`csp`/`img`/`vendor`/`embed.go`/`dist`）と一致させた | issue #432 |
 | 1.56 | 2026-10-05 | `architecture/er.md` §型・規約「日時」の小数秒固定幅化（マイグレーション000021）に伴う記述変更。本ファイルが参照する`overview.md`・`overview/`配下の本文は変更なし | issue #430 |
 | 1.57 | 2026-10-05 | `components/overview.md` §2の`static/src/components`ツリーに`scanner-table/`・`activity-feed/`の補助ファイル・`scanner-contract.json`・`dist/js/chunks/`を追記（`components/overview.md`の改訂履歴1.52）。本ファイルが参照する`overview.md`・`overview/`配下の本文は変更なし | issue #436 |
+| 1.58 | 2026-10-05 | §7（`integrations.md`）に実装済みのRAG文脈を追記: `calibration_outcomes`の結合（最短horizonの`future_return`・`was_direction_correct`・`regime`）、outcome紐付き済み判断を優先する再ランク（k×4候補）、`stateGuide`改訂に伴う`question_version`の`scout-v3`/`trader-v3` | issue #437 |

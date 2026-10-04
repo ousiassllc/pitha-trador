@@ -57,6 +57,9 @@ sequenceDiagram
 
 - 埋め込みはLLM API呼び出しを伴わない標準化済み数値特徴量ベクトル（14次元、`architecture/er.md` ベクトルインデックス節参照）。追加のAPIコスト・レイテンシは発生しない（FR-RAG-3）
 - `market_snapshots`保存時・`jev_decisions`保存時にそれぞれ`market_snapshot_vectors`/`jev_decision_vectors`（sqlite-vec仮想テーブル）へ同期書き込みする
+- 検索は`jev_decision_vectors`をk×4件の候補で取得し、`calibration_outcomes`が紐付いた判断を先頭に、次いで未付与のTrader判断、Scout判断の順（各群は距離順）に並べ替えて上位k件を採用し、不足分を`market_snapshot_vectors`の類似局面で補う（FR-RAG-2）
+- 各事例は方向・confidence・regime（`response_json`由来）に加え、紐付き済みなら最短horizonの`horizon_minutes`・`future_return`（%単位、1.0=+1%）・`was_direction_correct`（NONE判断はnull）をJSONへ載せる。未付与の判断は方向・confidence・regimeのみ（FR-RAG-3）
+- 質問文末尾の共通ガイド（`stateGuide`）は、実結果付きの事例を小標本の弱い文脈として扱い、`market`の現在の根拠を上回らせないようJevに指示する（`question_version`は`scout-v3`/`trader-v3`）
 - コールドスタート期間（該当データが少ない）は空の検索結果として扱い、Jevは通常通り判断する（FR-RAG-4）
 
 ## 8. 自己改善ループ（Sol / Opus 連携）
