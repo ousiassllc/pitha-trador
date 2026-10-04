@@ -75,7 +75,8 @@ func TestShells_WireHTMXErrorToasts(t *testing.T) {
 
 // htmx's dynamic code execution (`hx-on*`, trigger filters, `js:` values and
 // `<script>` in swapped HTML) is unused and must stay disabled in both
-// shells; `selfRequestsOnly` must not be turned off, and the
+// shells, and its inline indicator `<style>` (blocked by the CSP) must not be
+// injected; `selfRequestsOnly` must not be turned off, and the
 // responseHandling wiring must survive.
 func TestShells_DisableHTMXDynamicExecution(t *testing.T) {
 	for name, page := range map[string]templ.Component{
@@ -90,7 +91,7 @@ func TestShells_DisableHTMXDynamicExecution(t *testing.T) {
 		if err := json.Unmarshal([]byte(html.UnescapeString(m[1])), &cfg); err != nil {
 			t.Fatalf("%s: htmx-config is not valid JSON: %v", name, err)
 		}
-		for _, key := range []string{"allowEval", "allowScriptTags"} {
+		for _, key := range []string{"allowEval", "allowScriptTags", "includeIndicatorStyles"} {
 			if v, ok := cfg[key]; !ok || v != false {
 				t.Errorf("%s: htmx-config %s = %v (present=%v), want false", name, key, v, ok)
 			}

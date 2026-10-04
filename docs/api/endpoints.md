@@ -15,6 +15,10 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 - **Host/Origin検証（DNS rebinding対策、issue #136）**: `internal/web/middleware/host_guard.go`の`HostGuard`をSessionの前段に置き、Hostヘッダ（ポート・大文字小文字・末尾ドット・IPv6括弧は無視）が許可リストに無いリクエストは`/static`を含め全て403（Cookie・CSRFトークンも発行しない）。状態変更リクエストとWebSocketアップグレードは、`Origin`ヘッダがあれば同じ許可リストに含まれるホストであることも必須（`null`や外部ホストは403、Originなしの非ブラウザクライアントは通す）。許可リストは`router.WithAllowedHosts`で与える
   - `cmd/server`: `localhost`/`127.0.0.1`/`::1`。`PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ、`PITHA_SERVER_ADDR`のバインドホスト（ワイルドカード以外）と`PITHA_SERVER_ALLOWED_HOSTS`（カンマ区切り）を追加する
   - `cmd/desktop`: Wails AssetServerのHost（`wails.localhost`（Windows）・`wails`（macOS/Linuxの`wails://wails/`））
+- **セキュリティヘッダ（issue #378）**: `middleware.SecurityHeaders`が最外周ミドルウェアとして全レスポンス（SSR/HTMX/`/api/v1`/`/static`/NoRoute、Recovery・HostGuard・Sessionによる拒否レスポンスを含む）に付与する。
+  - `Content-Security-Policy`: `default-src 'self'`、`script-src 'self'`、`style-src 'self'`＋lightweight-chartsのTradingViewアトリビューション用`<style>`のsha256ハッシュ、`img-src 'self' data:`、`font-src 'self'`、`connect-src 'self'`＋別リスナのWebSocketベース（`ws://wails.localhost:<port>`、`WithWebSocketBase`で渡された場合のみ）、`object-src 'none'`、`base-uri 'self'`、`form-action 'self'`、`frame-ancestors 'none'`。`'unsafe-inline'`/`'unsafe-eval'`は使わない。そのため`htmx-config`で`includeIndicatorStyles:false`（`allowEval`/`allowScriptTags`も`false`）、Litコンポーネントはインライン`style`属性ではなくCSSOM（`el.style`）で動的スタイルを設定する
+  - `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`（`frame-ancestors`の旧WebView向け補完）、`Referrer-Policy: same-origin`（設定画面の戻り先がSame-origin RefererのPathに依存するため`no-referrer`にはしない）
+  - `/swagger`のみ、Stoplight Elementsが実行時にインラインスタイルを注入するため`middleware.SwaggerCSP`（`style-src 'unsafe-inline'`を追加。スクリプトは`'self'`のまま、`frame-ancestors 'none'`維持）でCSPを置き換える
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
   - `layout.Shell`/`SetupShell`が`<meta name="csrf-token">`を出力し、`<body hx-headers>`でHTMX全リクエストに`X-CSRF-Token`を付与する。Litコンポーネントは`lib/api.ts`が同metaから読み取って送信する。`SecretFieldRow`のフォームは上記フォールバック用に隠しフィールド`_csrf`も持つ
 - 実売買（Phase 7）へ移行しても、Kill Switch解除・発注確定操作に人手の追加認証は要求しない（完全自動運用。`requirements/non-functional.md` §4、FR-RISK-4）。実装（`internal/web/handler/system/system.go`）にも追加認証は無く、`pitha-kill-switch-panel`が確認ダイアログ（`window.confirm`）を出すのはKill操作のみで、Resume（Killedからの手動解除を含む）は確認なしで`POST /api/v1/system/resume`を呼ぶ
@@ -137,3 +141,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.35 | 2026-10-04 | `GET /api/v1/scanner`と`/ws/scanner`の各itemに銘柄詳細リンク`detail_url`を追加（`endpoints/huma-api.md`） | issue #383 |
 | 1.36 | 2026-10-04 | §3 `GET /scanner`から呼び出し元のない`HX-Request`時の候補テーブルフラグメント返却を削除し、常にフルページを返すと明記 | issue #381 |
 | 1.37 | 2026-10-04 | §3 `GET /symbols/:symbol`が銘柄形式をJSON APIと同じ規則で先に検証し不正値は404とすること、`pitha-price-chart`へ渡すURLを`SymbolHref`と同じ規則でエスケープすることを明記 | issue #382 |
+| 1.38 | 2026-10-04 | §1にセキュリティヘッダ（CSP/nosniff/X-Frame-Options/Referrer-Policy、`/swagger`の緩和CSP）を追記 | issue #378 |

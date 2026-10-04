@@ -196,8 +196,14 @@ export class PithaCalibrationHeatmap extends LitElement {
           ${this.buckets.map(
             (b) => html`
               <li
+                ${ref((el) => {
+                  // CSSOM, not a `style` attribute binding: the CSP (no
+                  // `style-src 'unsafe-inline'`) blocks inline style attributes,
+                  // and Lit's styleMap renders one on its first pass.
+                  if (el)
+                    (el as HTMLElement).style.backgroundColor = heatmapColor(b.direction_accuracy);
+                })}
                 class="pitha-calibration-heatmap-cell"
-                style="background-color: ${heatmapColor(b.direction_accuracy)}"
                 data-testid="calibration-heatmap-cell"
               >
                 <span class="range">${b.range}</span>

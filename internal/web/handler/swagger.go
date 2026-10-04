@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
 // swaggerHTML embeds Stoplight Elements (docs/environment/setup.md
@@ -36,7 +38,10 @@ const swaggerHTML = `<!DOCTYPE html>
 // SwaggerUI serves the Stoplight Elements static HTML page for the
 // `/swagger` route. It is intentionally a single static page (no dynamic
 // data, no dependency on service/domain): Elements itself fetches
-// apiDescriptionUrl client-side.
+// apiDescriptionUrl client-side. Elements injects inline styles at runtime,
+// so the page replaces the global CSP (middleware.SecurityHeaders) with
+// the style-relaxed middleware.SwaggerCSP.
 func SwaggerUI(c *gin.Context) {
+	c.Header("Content-Security-Policy", middleware.SwaggerCSP)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(swaggerHTML))
 }

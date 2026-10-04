@@ -19,7 +19,12 @@ import (
 // blast radius of an unescaped value (e.g. `templ.Raw`) from markup injection
 // to arbitrary code execution. `selfRequestsOnly` stays at htmx 2's default
 // (true).
-const htmxConfig = `{"allowEval":false,"allowScriptTags":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true,"target":"#toast-region","swapOverride":"beforeend"}]}`
+//
+// `includeIndicatorStyles` is turned off so htmx does not inject an inline
+// `<style>` at load, which the CSP (middleware.SecurityHeaders, no
+// `style-src 'unsafe-inline'`) would block; the only indicator
+// (organisms.UpdatePanel) styles `.htmx-request` with Tailwind.
+const htmxConfig = `{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true,"target":"#toast-region","swapOverride":"beforeend"}]}`
 
 // Shell is the shared full-page HTML document skeleton every
 // internal/web/pages component renders into (docs/components/overview.md
