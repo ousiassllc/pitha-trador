@@ -23,8 +23,8 @@ func TestEngine_State_DefaultsWhenNoDataYet(t *testing.T) {
 	if state.LastSignal != domain.JevDirectionNone {
 		t.Fatalf("State().LastSignal = %q, want %q (no signal yet)", state.LastSignal, domain.JevDirectionNone)
 	}
-	if state.LastPrice != 0 || state.LastScanAt != nil {
-		t.Fatalf("State() = %+v, want zero LastPrice/nil LastScanAt (no snapshot yet)", state)
+	if state.LastPrice != 0 || state.LastScanAt != nil || state.LastVWAP != nil {
+		t.Fatalf("State() = %+v, want zero LastPrice/nil LastScanAt/nil LastVWAP (no snapshot yet)", state)
 	}
 	if state.Position != nil {
 		t.Fatalf("State().Position = %+v, want nil (no open position)", state.Position)
@@ -94,6 +94,9 @@ func TestEngine_State_ReflectsLatestSnapshotDecisionsSignalAndPosition(t *testin
 	}
 	if state.LastPrice != 2105.0 || state.LastScanAt == nil || !state.LastScanAt.Equal(now) {
 		t.Fatalf("State() snapshot fields = LastPrice=%v LastScanAt=%v, want 2105.0/%v", state.LastPrice, state.LastScanAt, now)
+	}
+	if state.LastVWAP == nil || *state.LastVWAP != 2100.0 {
+		t.Fatalf("State().LastVWAP = %v, want 2100.0 (latest snapshot's Feature.VWAP)", state.LastVWAP)
 	}
 	if state.LastJevScoutAt == nil || !state.LastJevScoutAt.Equal(scoutAt) {
 		t.Fatalf("State().LastJevScoutAt = %v, want %v", state.LastJevScoutAt, scoutAt)

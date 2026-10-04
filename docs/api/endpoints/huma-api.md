@@ -62,6 +62,8 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 
 Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
+`vwap`は最新の`market_snapshots`のVWAP（`Feature.VWAP`）で、スナップショットが無ければ`null`。`jev`の6項目（`direction`/`confidence`/`regime`/`entry_quality`/`toxic_flow`/`liquidity_stressed`）は、Symbol Detail画面（SSR）のJev判定パネルと同じ**最新のJev Trader判断**（`jev_decisions`の`decision_type=trader`、`enrich.Decision`で補完）の値で、Trader判断がまだ無ければ全項目`null`。`confidence`はJevの自己申告値（FR-TRADER-2）で、Policy Engineの`trade_signals.score`ではなく、最新シグナルが`NONE`でもTrader判断があれば値が入る。
+
 ```json
 // Output（抜粋）
 {

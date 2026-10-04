@@ -16,9 +16,8 @@ import (
 )
 
 func TestSymbolHandler_APISymbol_ReturnsStateAndRiskParams(t *testing.T) {
-	confidence := 0.74
 	provider := &fakeSymbolProvider{state: execution.SymbolState{
-		Symbol: "7203", LastPrice: 2831.5, LastSignal: domain.JevDirectionLong, LastSignalConfidence: confidence,
+		Symbol: "7203", LastPrice: 2831.5,
 		Position: &domain.Position{Side: domain.PositionSideLong, Quantity: 100},
 	}}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{AllowedPositionPct: 2.0, StopLossPct: 0.6, TakeProfitPct: 1.2})
@@ -39,10 +38,6 @@ func TestSymbolHandler_APISymbol_ReturnsStateAndRiskParams(t *testing.T) {
 			StopLossPct        float64 `json:"stop_loss_pct"`
 			TakeProfitPct      float64 `json:"take_profit_pct"`
 		} `json:"risk"`
-		Jev struct {
-			Direction  string  `json:"direction"`
-			Confidence float64 `json:"confidence"`
-		} `json:"jev"`
 	}
 	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
 		t.Fatalf("Unmarshal: %v (body=%s)", err, resp.Body.String())
@@ -55,9 +50,6 @@ func TestSymbolHandler_APISymbol_ReturnsStateAndRiskParams(t *testing.T) {
 	}
 	if body.Risk.AllowedPositionPct != 2.0 || body.Risk.StopLossPct != 0.6 || body.Risk.TakeProfitPct != 1.2 {
 		t.Fatalf("risk = %+v, want the configured SymbolRiskParams", body.Risk)
-	}
-	if body.Jev.Direction != domain.JevDirectionLong || body.Jev.Confidence != confidence {
-		t.Fatalf("jev = %+v, want Direction=LONG Confidence=%v", body.Jev, confidence)
 	}
 }
 
