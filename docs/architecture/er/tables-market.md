@@ -78,7 +78,7 @@ erDiagram
 | timestamp | text | NOT NULL | スナップショット時刻（RFC3339、1分足） |
 | price | numeric(12,2) | NOT NULL | |
 | bid / ask | numeric(12,2) | NULL可 | 一般的な意味（bid=最良買気配、ask=最良売気配、bid < ask）。kabuステーションAPIの`AskPrice`（最良買気配）→bid、`BidPrice`（最良売気配）→askに入れ替えて保存する。板情報取得不可時はNULL |
-| spread_bps | numeric(8,2) | NULL可 | (ask − bid)/mid×10000（正常な板では0以上） |
+| spread_bps | numeric(8,2) | NULL可 | (ask − bid)/mid×10000（0以上）。bid/ask欠損・mid=0・**逆転板（bid > ask、特別気配・寄り前後・片側が古い値）は欠損（NULL）**として扱う。上限比較のみのスプレッドガード（Fast Screener/Policy/Risk）が負値を素通りさせないため、NULLは`missing_spread`/`data_missing`で保守的に除外される（issue #465）。同じ理由で`microprice`も逆転板ではNULL。`orderbook_imbalance`は数量のみから算出するため逆転板でも算出する |
 | volume | integer | NOT NULL | |
 | turnover | numeric(18,2) | NOT NULL | |
 | return_1m / return_5m / return_15m | numeric(8,4) | NULL可（起動直後等は算出不可） | **小数比**（0.004 = +0.4%）。Scanner API/画面は×100して%表示し、Fast Screenerの`min_abs_return_5m_pct`（%）との比較も×100して行う（`domain.RatioToPercent`） |

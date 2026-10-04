@@ -34,6 +34,8 @@ type Reading struct {
 	// instrument/time, in which case every feature derived from them
 	// (OrderbookImbalance, Microprice and the snapshot-level SpreadBps
 	// built in engine.go) is nil rather than a placeholder number (FR-FE-2).
+	// A crossed book (Bid > Ask) is treated as invalid too: SpreadBps and
+	// Microprice are nil (OrderbookImbalance uses quantities only).
 	Bid    *float64
 	Ask    *float64
 	BidQty *float64
@@ -184,10 +186,11 @@ func orderbookImbalance(r Reading) *float64 {
 
 // microprice is the quantity-weighted mid (bid*askQty + ask*bidQty) /
 // (bidQty+askQty): it leans toward the side with less resting quantity.
-// nil whenever a quote or quantity is missing (FR-FE-2) or both
+// nil whenever a quote or quantity is missing (FR-FE-2), the book is
+// crossed (Bid > Ask, same invalid-book rule as spreadBps) or both
 // quantities are zero.
 func microprice(r Reading) *float64 {
-	if r.Bid == nil || r.Ask == nil || r.BidQty == nil || r.AskQty == nil {
+	if r.Bid == nil || r.Ask == nil || r.BidQty == nil || r.AskQty == nil || *r.Bid > *r.Ask {
 		return nil
 	}
 	total := *r.BidQty + *r.AskQty
