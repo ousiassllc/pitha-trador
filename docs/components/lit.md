@@ -60,6 +60,10 @@ export class PithaPriceChart extends LitElement {
 
 - `GET /api/v1/calibration`のバケット別データからreliability curve（lightweight-chartsのラインシリーズ）とconfidence帯別カラーヒートマップを描画する
 - リアルタイム性は不要なため WebSocket は使用しない。ページ再訪問時・手動更新ボタン押下時に再フェッチする
+- 空帯・サンプルなしの扱い: APIはサンプル0件の帯・全体でも`direction_accuracy`/`avg_future_return_pct`/`avg_confidence`/`brier_score`等を`0`で返す（「データなし」と「実測0」を値では区別できない）。そのためコンポーネントは`sample_count`で判定する
+  - `sample_count == 0`の帯はreliability curveの実測系列に含めず（Perfect calibration線は全帯）、ヒートマップセルは中立色（グレー）で「データなし」と表示する（的中率・平均リターン・`conf`は出さない）。各帯セルは`n=<sample_count>`を表示する
+  - 方向別テーブルは`sample_count == 0`の行の的中率・平均リターンを`—`で表示する
+  - 全帯・全方向の`sample_count`合計が0のときはBrier Score/Log Loss/Expected Calibration Errorを表示せず「サンプルなし」を表示する（0.000＝最良スコアと誤読させない）。API仕様（`api/endpoints/huma-api-insights.md`）は変更しない
 
 > **Shadow DOMのスタイル（issue #145）**: Tailwindはdocument CSSでShadow Rootを越えない。`pitha-kill-switch-panel`/`pitha-price-chart`/`pitha-calibration-heatmap`は既定のShadow DOMを使うため、各自`static styles`（共通部品は`lib/styles.ts`）を持つ。`pitha-scanner-table`/`pitha-activity-feed`はLight DOMで描画しTailwindをそのまま使う。`pitha-price-chart`は`autoSize`でコンテナ幅に追従する。
 
