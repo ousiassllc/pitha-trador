@@ -2,9 +2,11 @@ package handler_test
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +64,48 @@ func TestScannerHandler_APIScanner_MapsCandidatesToItemsAndAsOf(t *testing.T) {
 	second := out.Body.Items[1]
 	if second.Return1m != nil || second.JevDirection != nil || second.CurrentPosition != nil {
 		t.Fatalf("Body.Items[1] = %+v, want every optional field nil (not yet Jev-evaluated)", second)
+	}
+}
+
+// TestScannerHandler_APIScanner_DetailURLMatchesSSRGolden pins the API
+// item's server-generated detail_url to scanner-contract.json, the same
+// golden the SSR fallback (organisms contract test) and the hydrated Lit
+// table (scanner-contract.test.ts) are checked against, so the href is
+// identical before and after hydration, special characters included.
+func TestScannerHandler_APIScanner_DetailURLMatchesSSRGolden(t *testing.T) {
+	data, err := os.ReadFile("../../../static/src/components/scanner-table/scanner-contract.json")
+	if err != nil {
+		t.Fatalf("read contract: %v", err)
+	}
+	var contract struct {
+		Rows []struct {
+			Item struct {
+				Symbol    string `json:"symbol"`
+				DetailURL string `json:"detail_url"`
+			} `json:"item"`
+		} `json:"rows"`
+	}
+	if err := json.Unmarshal(data, &contract); err != nil {
+		t.Fatalf("parse contract: %v", err)
+	}
+	if len(contract.Rows) == 0 {
+		t.Fatal("contract has no rows")
+	}
+	candidates := make([]domain.Candidate, len(contract.Rows))
+	for i, row := range contract.Rows {
+		candidates[i] = domain.Candidate{Symbol: row.Item.Symbol, Price: 1}
+	}
+	h := handler.NewScannerHandler(handler.StaticCandidateSource{Items: candidates, AsOf: time.Now()},
+		handler.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
+
+	out, err := h.APIScanner(context.Background(), &struct{}{})
+	if err != nil {
+		t.Fatalf("APIScanner() error = %v", err)
+	}
+	for i, row := range contract.Rows {
+		if got := out.Body.Items[i].DetailURL; got != row.Item.DetailURL {
+			t.Errorf("symbol %q: detail_url = %q, want %q", row.Item.Symbol, got, row.Item.DetailURL)
+		}
 	}
 }
 

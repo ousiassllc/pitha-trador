@@ -53,7 +53,7 @@ export class PithaPriceChart extends LitElement {
 - `api-url`/`ws-url`はTemplから属性で注入し、コンポーネントは既定値を持たない（HATEOAS）。未設定なら`logger.error`を出して該当の取得・購読を行わない
 - 列ヘッダクリックでクライアント内ソート（サーバー往復不要）
 - SSRフォールバック（`organisms.ScannerTableFallback`）と同一の見た目で描画する（issue #239）: ページ上部に候補件数（`data-testid="scanner-count"`）、`<caption>`に最終更新時刻（`as_of`。REST・`/ws/scanner`・SSRとも同じRFC 3339のオフセット付き表記で、秒未満は表示しない）、列見出しは日本語ラベル＋`title`ツールチップ、1m/5m Returnは符号付き（正=`+`緑・負=`-`赤・0/欠損=灰。0は符号なし）、Jev方向・エントリー品質はバッジ（`atoms.Badge`/`atoms.EntryQualityBadge`と同じ配色）、Confidenceは`%`表示、0件時は空状態メッセージ（`data-testid="scanner-empty"`。初回データ取得前は表示しない。`role="status"`はLit側のみ）。ハイドレーションは最初のデータ（REST応答または`/ws/scanner`のPUSH）が届くまでSSR描画を残し、初回取得に失敗してもSSR描画は消さない。列見出しは`<button>`（Tab＋Enter/Spaceで並べ替え、`aria-sort`、▲/▼表示）で、列の説明はマウス向けの`title`に加え、表の上の`<details data-testid="scanner-column-help">`（見出し「列の意味」、ラベル/説明の`<dl>`。SSRと同一）で、キーボード・タッチ・スクリーンリーダーからも読める（`title`と`aria-describedby`の二重読み上げは避ける）。数値は小数丸めをGoと揃える（ちょうど中間は0から遠い方へ）。列定義・書式・配色を変える場合はGo側`scannerColumns`と本コンポーネントの`COLUMNS`を必ず同時に更新し、共有ゴールデン`scanner-contract.json`（`scanner_table_contract_test.go`/`scanner-contract.test.ts`が検証）も更新する
-- 銘柄行は通常の `<a href="/symbols/{symbol}">` として描画する（Litはハイパーメディアリンクの外側に出ず、通常のブラウザナビゲーションとしてページ遷移する。HTMXリクエストは発火しない = HTMX↔Lit境界ルール§「Litは HTMXリクエストをトリガーしない」に準拠）
+- 銘柄行は通常の `<a href="{detail_url}">` として描画する。`detail_url`は`GET /api/v1/scanner`・`/ws/scanner`の各itemにサーバーが入れる銘柄詳細リンク（`organisms.SymbolHref`。SSR行と同一規則）で、Litは`/symbols/`を知らずエンコードもせずそのまま`href`に使う（HATEOAS、issue #383。共有ゴールデン`scanner-contract.json`の`item.detail_url`をSSR・API・Litの3者が検証し、特殊文字を含む銘柄でもハイドレート前後で`href`が一致する）。Litはハイパーメディアリンクの外側に出ず、通常のブラウザナビゲーションとしてページ遷移する。HTMXリクエストは発火しない = HTMX↔Lit境界ルール§「Litは HTMXリクエストをトリガーしない」に準拠
 
 ### 5.3 pitha-calibration-heatmap
 

@@ -101,7 +101,7 @@ var scannerColumns = []scannerColumn{
 templ scannerRow(c domain.Candidate) {
 	<tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" data-symbol={ c.Symbol }>
 		<td class="px-3 py-2 font-medium">
-			<a class="text-sky-700 underline-offset-2 hover:underline" href={ symbolHref(c.Symbol) }>{ c.Symbol }</a>
+			<a class="text-sky-700 underline-offset-2 hover:underline" href={ SymbolHref(c.Symbol) }>{ c.Symbol }</a>
 		</td>
 		<td class="px-3 py-2 text-right tabular-nums">{ formatFloat(c.Price, 1) }</td>
 		<td class={ returnClass(c.Return1m) }>{ formatSignedNilFloat(domain.RatioToPercentPtr(c.Return1m), 2) }</td>
@@ -194,10 +194,12 @@ func formatConfidence(v *float64) string {
 	return formatFloat(math.Round(*v*100), 0) + "%" // formatFloat drops the sign of -0, like `${-0}` in JS
 }
 
-// symbolHref is the symbol detail link. Everything except RFC 3986
-// unreserved characters is percent-escaped, the same set as
-// encodeSymbol in scanner-view.ts (url.PathEscape alone would leave
-// `&+:@=$` and encodeURIComponent alone would leave `!'()*`).
-func symbolHref(symbol string) templ.SafeURL {
+// SymbolHref is the symbol detail link. It is the single source of the
+// detail URL rule: the SSR rows use it directly and the scanner API /
+// WebSocket items carry it as `detail_url` (handler.toScannerItems), so
+// pitha-scanner-table never builds the URL itself (HATEOAS). Everything
+// except RFC 3986 unreserved characters is percent-escaped
+// (url.PathEscape alone would leave `&+:@=$`).
+func SymbolHref(symbol string) templ.SafeURL {
 	return templ.SafeURL("/symbols/" + strings.ReplaceAll(url.QueryEscape(symbol), "+", "%20"))
 }
