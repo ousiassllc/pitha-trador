@@ -85,7 +85,7 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 }
 ```
 
-`risk`は固定値ではなく稼働中エンジンの実設定から取得する。`allowed_position_pct`は`config/risk.yaml`の`max_position_per_symbol_pct`（Risk Engineが使用中の区分）、`stop_loss_pct`/`take_profit_pct`は`execution.Config`（Exit条件）の値。
+`risk`は固定値ではなく稼働中エンジンの実設定から取得する。`allowed_position_pct`は、直近価格でRisk Engineのポジションサイジング（`PositionSize`、`requirements/functional/components-pipeline.md` §4.8 FR-ENTRY-3）を行った結果の数量が`initial_capital`に占める%（`数量×価格÷initial_capital×100`）で、1単元（100株）も発注できなければ`0`（`max_position_per_symbol_pct`の値そのものではない）。`config/risk.yaml`の`max_position_per_symbol_pct`は、サイジング関数が未配線の場合（`AllowedPositionPctFor`未設定）にのみ返す静的フォールバック。`stop_loss_pct`/`take_profit_pct`は`execution.Config`（Exit条件）の値。
 
 ### GET /api/v1/symbols/{symbol}/candles
 
