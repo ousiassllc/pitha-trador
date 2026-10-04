@@ -15,7 +15,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
@@ -50,7 +50,7 @@ func TestNew_ReturnsAWailsIndependentEngine(t *testing.T) {
 func TestNew_APIScannerReturnsCandidatesFromWithCandidateSource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	price := 2831.5
-	source := handler.StaticCandidateSource{
+	source := scanner.StaticCandidateSource{
 		Items: []domain.Candidate{{Symbol: "7203", Price: price}},
 		AsOf:  time.Date(2026, 9, 26, 10, 15, 0, 0, time.UTC),
 	}
@@ -71,7 +71,7 @@ func TestNew_APIScannerReturnsCandidatesFromWithCandidateSource(t *testing.T) {
 
 func TestNew_ScannerPageAlwaysServesFullPage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	source := handler.StaticCandidateSource{
+	source := scanner.StaticCandidateSource{
 		Items: []domain.Candidate{{Symbol: "7203", Price: 2831.5}},
 		AsOf:  time.Now(),
 	}

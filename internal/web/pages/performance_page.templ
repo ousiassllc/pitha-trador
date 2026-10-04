@@ -53,7 +53,7 @@ type PerformanceProps struct {
 // recorded market_snapshots/jev_decisions history, and - once run - the
 // out-of-sample Combined Forward metrics plus each fold's Forward
 // metrics (FR-BT-1). `GET /performance`
-// (internal/web/handler.PerformanceHandler.Page) renders it.
+// (internal/web/handler/performance.PerformanceHandler.Page) renders it.
 templ PerformancePage(props PerformanceProps) {
 	@layout.Shell("Performance") {
 		<h1 class="text-2xl font-bold text-slate-900">Performance</h1>

@@ -1,4 +1,4 @@
-package handler_test
+package scanner_test
 
 import (
 	"regexp"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 )
 
 var (
@@ -20,7 +20,7 @@ func fixedClock(y int, m time.Month, d, hh, mm int) func() time.Time {
 
 func TestScannerHandler_ScanPanel_OffSessionNotice(t *testing.T) {
 	saturdayNight := fixedClock(2026, 10, 3, 21, 0)
-	sources := map[string]handler.CandidateSource{
+	sources := map[string]scanner.CandidateSource{
 		"with cycle":   scanSource{cycle: scanFixture(), ok: true},
 		"before cycle": scanSource{},
 	}
@@ -47,7 +47,7 @@ func TestScannerHandler_ScanPanel_OffSessionNotice(t *testing.T) {
 }
 
 func TestScannerHandler_ScanPanel_NoNoticeDuringSession(t *testing.T) {
-	for _, src := range []handler.CandidateSource{scanSource{cycle: scanFixture(), ok: true}, scanSource{}} {
+	for _, src := range []scanner.CandidateSource{scanSource{cycle: scanFixture(), ok: true}, scanSource{}} {
 		for _, hx := range []bool{false, true} {
 			target := "/scanner"
 			if hx {

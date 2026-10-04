@@ -13,7 +13,7 @@ import (
 // organisms.ScannerTableFallback, plus the
 // `pitha-scanner-table` Lit component bundle (components/overview.md
 // §5.2) that hydrates over ScannerTableFallback's SSR markup. `GET
-// /scanner` (internal/web/handler.ScannerHandler.Page) always renders
+// /scanner` (internal/web/handler/scanner.ScannerHandler.Page) always renders
 // this full page; it has no HX-Request fragment variant (the only HTMX
 // fragment route on this screen is `GET /scanner/scan`).
 templ ScannerPage(candidates []domain.Candidate, asOf time.Time, scan organisms.ScanPanelView) {

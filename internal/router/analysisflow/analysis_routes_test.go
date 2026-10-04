@@ -15,7 +15,8 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 )
 
 func strPtr(s string) *string { return &s }
@@ -58,7 +59,7 @@ func getProposals(t *testing.T, engine *gin.Engine, query string) (int, map[stri
 
 func TestNew_APIPolicyProposalsReturnsAuditHistoryInSpecFormat(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithPolicyProposalSource(handler.StaticPolicyProposalSource{Proposals: proposalFixtures(t)}))
+	engine := router.New(router.WithPolicyProposalSource(proposals.StaticPolicyProposalSource{Proposals: proposalFixtures(t)}))
 
 	code, body := getProposals(t, engine, "")
 	if code != http.StatusOK {
@@ -96,7 +97,7 @@ func TestNew_APIPolicyProposalsReturnsAuditHistoryInSpecFormat(t *testing.T) {
 
 func TestNew_APIPolicyProposalsFiltersByStatusAndLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithPolicyProposalSource(handler.StaticPolicyProposalSource{Proposals: proposalFixtures(t)}))
+	engine := router.New(router.WithPolicyProposalSource(proposals.StaticPolicyProposalSource{Proposals: proposalFixtures(t)}))
 
 	_, body := getProposals(t, engine, "?status=rejected")
 	items := body["items"].([]any)
@@ -154,7 +155,7 @@ func TestNew_OpenAPIDescribesPolicyProposalsEndpoint(t *testing.T) {
 
 func TestNew_APICalibrationReturnsMetricsFromWithCalibrationSourceOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	source := handler.StaticCalibrationSource{
+	source := calibration.StaticCalibrationSource{
 		Metrics_: domain.CalibrationMetrics{
 			Buckets: []domain.ConfidenceBucket{
 				{Range: "0.50-0.60", AvgConfidence: 0.55, DirectionAccuracy: 0.51, AvgFutureReturnPct: -0.05, TradeCount: 3, TotalPnL: -1200, AvgPnLPct: -0.4},

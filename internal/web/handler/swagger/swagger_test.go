@@ -1,4 +1,4 @@
-package handler_test
+package swagger_test
 
 import (
 	"net/http"
@@ -8,13 +8,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/swagger"
 )
 
 func TestSwaggerUI_ServesStoplightElementsHTML(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.GET("/swagger", handler.SwaggerUI)
+	engine.GET("/swagger", swagger.SwaggerUI)
 
 	req := httptest.NewRequest(http.MethodGet, "/swagger", nil)
 	rec := httptest.NewRecorder()

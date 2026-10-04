@@ -9,8 +9,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
@@ -24,14 +27,14 @@ import (
 // internal/web/handler) on top of this engine.
 func New(opts ...Option) *gin.Engine {
 	o := options{
-		candidateSource:   handler.StaticCandidateSource{},
+		candidateSource:   scanner.StaticCandidateSource{},
 		candidateRefresh:  defaultCandidateRefreshInterval,
 		systemEngine:      system.StaticSystemEngine{},
 		symbolProvider:    symbol.StaticSymbolProvider{},
 		insightProvider:   insightapi.StaticProvider{},
-		calibrationSource: handler.StaticCalibrationSource{},
-		proposalSource:    handler.StaticPolicyProposalSource{},
-		backtestRunner:    handler.StaticBacktestRunner{},
+		calibrationSource: calibration.StaticCalibrationSource{},
+		proposalSource:    proposals.StaticPolicyProposalSource{},
+		backtestRunner:    performance.StaticBacktestRunner{},
 		activitySource:    activity.StaticActivitySource{},
 		errorLogExporter:  system.UnconfiguredErrorLogExporter{},
 	}

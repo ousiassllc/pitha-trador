@@ -1,4 +1,4 @@
-package handler
+package performance
 
 import (
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"

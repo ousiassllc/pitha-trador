@@ -1,4 +1,4 @@
-package handler_test
+package scanner_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 )
 
 func f(v float64) *float64 { return &v }
@@ -36,8 +36,8 @@ func fixtureCandidates() []domain.Candidate {
 
 func TestScannerHandler_APIScanner_MapsCandidatesToItemsAndAsOf(t *testing.T) {
 	asOf := time.Date(2026, 9, 26, 10, 15, 0, 0, time.UTC)
-	source := handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: asOf}
-	h := handler.NewScannerHandler(source, handler.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
+	source := scanner.StaticCandidateSource{Items: fixtureCandidates(), AsOf: asOf}
+	h := scanner.NewScannerHandler(source, scanner.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
 
 	out, err := h.APIScanner(context.Background(), &struct{}{})
 	if err != nil {
@@ -73,7 +73,7 @@ func TestScannerHandler_APIScanner_MapsCandidatesToItemsAndAsOf(t *testing.T) {
 // table (scanner-contract.test.ts) are checked against, so the href is
 // identical before and after hydration, special characters included.
 func TestScannerHandler_APIScanner_DetailURLMatchesSSRGolden(t *testing.T) {
-	data, err := os.ReadFile("../../../static/src/components/scanner-table/scanner-contract.json")
+	data, err := os.ReadFile("../../../../static/src/components/scanner-table/scanner-contract.json")
 	if err != nil {
 		t.Fatalf("read contract: %v", err)
 	}
@@ -95,8 +95,8 @@ func TestScannerHandler_APIScanner_DetailURLMatchesSSRGolden(t *testing.T) {
 	for i, row := range contract.Rows {
 		candidates[i] = domain.Candidate{Symbol: row.Item.Symbol, Price: 1}
 	}
-	h := handler.NewScannerHandler(handler.StaticCandidateSource{Items: candidates, AsOf: time.Now()},
-		handler.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
+	h := scanner.NewScannerHandler(scanner.StaticCandidateSource{Items: candidates, AsOf: time.Now()},
+		scanner.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
 
 	out, err := h.APIScanner(context.Background(), &struct{}{})
 	if err != nil {
@@ -111,8 +111,8 @@ func TestScannerHandler_APIScanner_DetailURLMatchesSSRGolden(t *testing.T) {
 
 func TestScannerHandler_Page_FullPageWithoutHXRequestHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	source := handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}
-	h := handler.NewScannerHandler(source, handler.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
+	source := scanner.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}
+	h := scanner.NewScannerHandler(source, scanner.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
 
 	engine := gin.New()
 	engine.GET("/scanner", h.Page)
@@ -135,8 +135,8 @@ func TestScannerHandler_Page_FullPageWithoutHXRequestHeader(t *testing.T) {
 // gets the full page (the only HTMX fragment route here is /scanner/scan).
 func TestScannerHandler_Page_FullPageEvenWithHXRequestHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	source := handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}
-	h := handler.NewScannerHandler(source, handler.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
+	source := scanner.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}
+	h := scanner.NewScannerHandler(source, scanner.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
 
 	engine := gin.New()
 	engine.GET("/scanner", h.Page)
@@ -177,7 +177,7 @@ func assertAllScannerColumns(t *testing.T, body string) {
 }
 
 func TestStaticCandidateSource_ZeroAsOfFallsBackToNow(t *testing.T) {
-	source := handler.StaticCandidateSource{}
+	source := scanner.StaticCandidateSource{}
 	before := time.Now()
 	_, asOf, err := source.Candidates(context.Background())
 	after := time.Now()
@@ -190,7 +190,7 @@ func TestStaticCandidateSource_ZeroAsOfFallsBackToNow(t *testing.T) {
 }
 
 func TestCandidateRefreshInterval_NextStaysWithinBounds(t *testing.T) {
-	interval := handler.CandidateRefreshInterval{Min: 15 * time.Second, Max: 30 * time.Second}
+	interval := scanner.CandidateRefreshInterval{Min: 15 * time.Second, Max: 30 * time.Second}
 	for i := 0; i < 50; i++ {
 		got := interval.Next()
 		if got < interval.Min || got > interval.Max {
@@ -200,7 +200,7 @@ func TestCandidateRefreshInterval_NextStaysWithinBounds(t *testing.T) {
 }
 
 func TestCandidateRefreshInterval_MaxNotAfterMinReturnsMin(t *testing.T) {
-	interval := handler.CandidateRefreshInterval{Min: 20 * time.Second, Max: 20 * time.Second}
+	interval := scanner.CandidateRefreshInterval{Min: 20 * time.Second, Max: 20 * time.Second}
 	if got := interval.Next(); got != interval.Min {
 		t.Fatalf("Next() = %v, want Min (%v) when Max <= Min", got, interval.Min)
 	}

@@ -14,7 +14,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 )
 
 type failingProposalSource struct{}
@@ -103,7 +103,7 @@ func TestNew_APIPolicyProposalsCorruptRowDoesNotHideOtherRows(t *testing.T) {
 			logs := captureLogs(t)
 			bad := healthyProposal(41)
 			tc.corrupt(&bad)
-			src := handler.StaticPolicyProposalSource{Proposals: []domain.PolicyProposal{healthyProposal(42), bad, healthyProposal(40)}}
+			src := proposals.StaticPolicyProposalSource{Proposals: []domain.PolicyProposal{healthyProposal(42), bad, healthyProposal(40)}}
 			engine := router.New(router.WithPolicyProposalSource(src))
 
 			code, body := getProposals(t, engine, "")

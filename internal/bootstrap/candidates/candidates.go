@@ -250,11 +250,11 @@ func (r *Refresher) Run(ctx context.Context) {
 	safego.Loop(ctx, "candidate refresh", interval.next, r.Refresh)
 }
 
-// candidateRefreshInterval mirrors internal/web/handler.
+// candidateRefreshInterval mirrors internal/web/handler/scanner.
 // CandidateRefreshInterval's Min/Max-random-jitter behavior without
-// importing internal/web/handler from this file (that import only
+// importing internal/web/handler/scanner from this file (that import only
 // becomes necessary at the cmd/ call site that also needs
-// handler.CandidateRefreshInterval itself, to pass to
+// scanner.CandidateRefreshInterval itself, to pass to
 // router.WithCandidateRefreshInterval).
 type candidateRefreshInterval struct {
 	min, max time.Duration

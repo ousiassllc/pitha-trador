@@ -8,7 +8,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
@@ -60,7 +60,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithSecretsStore(secretsRepo),
 		router.WithMarketDataStatus(services.MarketData),
 		router.WithErrorLogExporter(services.ErrorLogs),
-		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
+		router.WithCandidateRefreshInterval(scanner.CandidateRefreshInterval{
 			Min: time.Duration(scan.CandidateRefreshIntervalSecondsMin) * time.Second,
 			Max: time.Duration(scan.CandidateRefreshIntervalSecondsMax) * time.Second,
 		}),

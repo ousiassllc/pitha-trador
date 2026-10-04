@@ -8,9 +8,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/web/apierror"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/swagger"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
@@ -19,10 +23,10 @@ import (
 // handlers holds the handlers shared between the SSR routes
 // (registerPages) and the `/api/v1` JSON API (registerAPI).
 type handlers struct {
-	scanner     *handler.ScannerHandler
+	scanner     *scanner.ScannerHandler
 	system      *system.SystemHandler
 	symbol      *symbol.SymbolHandler
-	calibration *handler.CalibrationHandler
+	calibration *calibration.CalibrationHandler
 	activity    *activity.ActivityHandler
 }
 
@@ -38,13 +42,13 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	// show instead of any real screen.
 	engine.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/scanner") })
 	if swaggerEnabled() {
-		engine.GET("/swagger", handler.SwaggerUI)
+		engine.GET("/swagger", swagger.SwaggerUI)
 	}
 	h := handlers{
-		scanner:     handler.NewScannerHandler(o.candidateSource, o.candidateRefresh),
+		scanner:     scanner.NewScannerHandler(o.candidateSource, o.candidateRefresh),
 		system:      system.NewSystemHandler(o.systemEngine),
 		symbol:      symbol.NewSymbolHandler(o.symbolProvider, o.symbolRiskParams),
-		calibration: handler.NewCalibrationHandler(o.calibrationSource),
+		calibration: calibration.NewCalibrationHandler(o.calibrationSource),
 		activity:    activity.NewActivityHandler(o.activitySource),
 	}
 	engine.GET("/scanner", h.scanner.Page)
@@ -60,7 +64,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 
 	engine.GET("/calibration", h.calibration.Page)
 
-	performanceHandler := handler.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
+	performanceHandler := performance.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
 	engine.GET("/performance", performanceHandler.Page)
 
 	engine.GET("/activity", h.activity.Page)
@@ -92,7 +96,7 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	apierror.Install()
 	apiConfig := huma.DefaultConfig("pitha-trador API", "0.1.0")
 	// The Stoplight Elements UI is already served at `/swagger` pointed at
-	// this same openapi.json (handler.SwaggerUI); disable Huma's built-in
+	// this same openapi.json (swagger.SwaggerUI); disable Huma's built-in
 	// docs route so there isn't a second, unlinked copy.
 	apiConfig.DocsPath = ""
 	// The group mounts the API under /api/v1; Servers tells Huma (and OpenAPI
@@ -113,6 +117,6 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	huma.Get(api, "/logs/errors", system.NewErrorLogHandler(o.errorLogExporter).APIErrorLogs)
 	insightapi.New(o.insightProvider).Register(api)
 	huma.Get(api, "/calibration", h.calibration.APICalibration)
-	huma.Get(api, "/policy-proposals", handler.NewPolicyProposalHandler(o.proposalSource).APIPolicyProposals)
+	huma.Get(api, "/policy-proposals", proposals.NewPolicyProposalHandler(o.proposalSource).APIPolicyProposals)
 	huma.Get(api, "/activity", h.activity.APIActivity)
 }
