@@ -73,6 +73,65 @@ func TestScheduler_EnqueueFullScan_OnlyActiveInstruments(t *testing.T) {
 	}
 }
 
+func TestScheduler_EnqueueFullScan_SkipsWhilePreviousCycleUnfinished(t *testing.T) {
+	db := newTestDB(t)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
+	ctx := context.Background()
+
+	mustCreateInstrument(t, instruments, "7203", true)
+	mustCreateInstrument(t, instruments, "9433", true)
+
+	s := scheduler.New(jobs, instruments)
+	now := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+
+	if count, err := s.EnqueueFullScan(ctx, now); err != nil || count != 2 {
+		t.Fatalf("first EnqueueFullScan = (%d, %v), want (2, nil)", count, err)
+	}
+
+	// Previous cycle fully pending: the next cycle must enqueue nothing.
+	next := now.Add(time.Minute)
+	if count, err := s.EnqueueFullScan(ctx, next); err != nil || count != 0 {
+		t.Fatalf("EnqueueFullScan with pending jobs = (%d, %v), want (0, nil)", count, err)
+	}
+
+	// One job still running (the rest done) also counts as unfinished.
+	claimed, err := jobs.ClaimNext(ctx, jobqueue.JobQueueMarketData, next)
+	if err != nil {
+		t.Fatalf("ClaimNext: %v", err)
+	}
+	other, err := jobs.ClaimNext(ctx, jobqueue.JobQueueMarketData, next)
+	if err != nil {
+		t.Fatalf("ClaimNext second: %v", err)
+	}
+	if err := jobs.MarkSucceeded(ctx, other.ID, next); err != nil {
+		t.Fatalf("MarkSucceeded: %v", err)
+	}
+	if count, err := s.EnqueueFullScan(ctx, next); err != nil || count != 0 {
+		t.Fatalf("EnqueueFullScan with running job = (%d, %v), want (0, nil)", count, err)
+	}
+	if got := countJobs(t, jobs, jobqueue.JobQueueMarketData, next); got != 2 {
+		t.Fatalf("market-data unfinished/total jobs = %d, want 2 (no new jobs enqueued)", got)
+	}
+
+	// Once the previous cycle has completed, the scan resumes.
+	if err := jobs.MarkSucceeded(ctx, claimed.ID, next); err != nil {
+		t.Fatalf("MarkSucceeded: %v", err)
+	}
+	if count, err := s.EnqueueFullScan(ctx, next); err != nil || count != 2 {
+		t.Fatalf("EnqueueFullScan after completion = (%d, %v), want (2, nil)", count, err)
+	}
+}
+
+func countJobs(t *testing.T, jobs *jobqueue.JobRepository, queue string, since time.Time) int {
+	t.Helper()
+	list, err := jobs.ListOpenOrFinishedSince(context.Background(), queue, since.Add(-time.Hour))
+	if err != nil {
+		t.Fatalf("ListOpenOrFinishedSince: %v", err)
+	}
+	return len(list)
+}
+
 func TestScheduler_Recover_ResetsStuckRunningJobs(t *testing.T) {
 	db := newTestDB(t)
 	instruments := market.NewInstrumentRepository(db)
