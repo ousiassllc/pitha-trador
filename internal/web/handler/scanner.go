@@ -87,9 +87,12 @@ func (h *ScannerHandler) SetClock(now func() time.Time) { h.now = now }
 
 // scannerItem mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner`'s
 // item shape. Return1m/Return5m are percent (0.4 == +0.4%), converted from
-// the Feature Engine's decimal ratios by toScannerItems.
+// the Feature Engine's decimal ratios by toScannerItems. DetailURL is the
+// server-generated symbol detail link (organisms.SymbolHref, the same rule
+// as the SSR rows) so pitha-scanner-table never builds URLs itself.
 type scannerItem struct {
 	Symbol          string   `json:"symbol"`
+	DetailURL       string   `json:"detail_url" doc:"Symbol detail page path (percent-escaped), generated server-side"`
 	Price           float64  `json:"price"`
 	Return1m        *float64 `json:"return_1m"`
 	Return5m        *float64 `json:"return_5m"`
@@ -107,6 +110,7 @@ func toScannerItems(candidates []domain.Candidate) []scannerItem {
 	for i, c := range candidates {
 		items[i] = scannerItem{
 			Symbol:          c.Symbol,
+			DetailURL:       string(organisms.SymbolHref(c.Symbol)),
 			Price:           c.Price,
 			Return1m:        domain.RatioToPercentPtr(c.Return1m),
 			Return5m:        domain.RatioToPercentPtr(c.Return5m),

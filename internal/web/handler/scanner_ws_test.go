@@ -44,7 +44,8 @@ func TestScannerHandler_WebSocket_PushesScannerUpdateMessages(t *testing.T) {
 		Type  string `json:"type"`
 		AsOf  string `json:"as_of"`
 		Items []struct {
-			Symbol string `json:"symbol"`
+			Symbol    string `json:"symbol"`
+			DetailURL string `json:"detail_url"`
 		} `json:"items"`
 	}
 
@@ -64,6 +65,9 @@ func TestScannerHandler_WebSocket_PushesScannerUpdateMessages(t *testing.T) {
 		}
 		if len(got.Items) != 2 || got.Items[0].Symbol != "7203" {
 			t.Fatalf("message[%d].Items = %+v, want fixtureCandidates()", i, got.Items)
+		}
+		if got.Items[0].DetailURL != "/symbols/7203" {
+			t.Fatalf("message[%d].Items[0].detail_url = %q, want %q", i, got.Items[0].DetailURL, "/symbols/7203")
 		}
 		// Same RFC 3339 string (offset preserved) that GET /api/v1/scanner
 		// and the SSR caption show, not a UTC "Z" conversion.
