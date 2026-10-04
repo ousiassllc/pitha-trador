@@ -149,3 +149,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.43 | 2026-10-05 | `GET /api/v1/calibration`（`api/endpoints/huma-api-insights.md`）が`question_version`で分離せず全版のTrader判断を混在して集計することを明記 | issue #440, #443, #448 |
 | 1.44 | 2026-10-05 | `GET /api/v1/symbols/{symbol}`（`api/endpoints/huma-api.md`）の`risk.allowed_position_pct`の説明を、`max_position_per_symbol_pct`ではなくサイジング結果（`initial_capital`比。発注不可なら0。`max_position_per_symbol_pct`は未配線時の静的フォールバック）へ訂正（FR-ENTRY-3・実装と一致） | issue #456 |
 | 1.45 | 2026-10-05 | `GET /api/v1/policy-proposals`（`api/endpoints/huma-api-insights.md`）の各itemに`applied_at`/`rolled_back_at`/`rolled_back_reason`（未発生は`null`）を追加 | issue #457 |
+| 1.46 | 2026-10-05 | `GET /api/v1/symbols/{symbol}/candles`（`api/endpoints/huma-api.md`）の`volume`を1分足あたり出来高（累積の差分）と明記 | issue #474 |

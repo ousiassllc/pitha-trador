@@ -93,7 +93,9 @@ func (h *SymbolHandler) APISymbol(ctx context.Context, in *SymbolPathInput) (*Sy
 // 1-minute bar, not intraday tick-level OHLC - functional.md §3's basic
 // 1-minute timeframe), so Open/High/Low/Close all equal that same Price
 // rather than fabricating intra-bar movement lightweight-charts' input
-// shape implies but this schema does not capture.
+// shape implies but this schema does not capture. Volume is the traded
+// volume of that 1-minute bar (the difference of the stored cumulative
+// session volume, see barVolume), not the session-cumulative value.
 type candleOutput struct {
 	Time   time.Time `json:"time"`
 	Open   float64   `json:"open"`
@@ -157,8 +159,29 @@ func (h *SymbolHandler) APICandles(ctx context.Context, in *CandlesInput) (*Cand
 	for i, s := range snapshots {
 		out.Body.Candles[i] = candleOutput{
 			Time: s.Timestamp, Open: s.Price, High: s.Price, Low: s.Price, Close: s.Price,
-			Volume: s.Volume, VWAP: s.Feature.VWAP,
+			Volume: barVolume(snapshots, i), VWAP: s.Feature.VWAP,
 		}
 	}
 	return out, nil
+}
+
+// barVolume returns snapshots[i]'s per-bar traded volume. market_snapshots
+// stores kabuステーションAPI's cumulative session TradingVolume, so the bar
+// volume is the difference from the previous snapshot. When the cumulative
+// value went backwards (a new session started) the cumulative value itself
+// is the new session's volume so far and is used as-is, so the result is
+// never negative. The first snapshot has no predecessor in the response, so
+// it falls back to Feature.Volume1m (itself a cumulative difference) or 0.
+func barVolume(snapshots []domain.Snapshot, i int) int64 {
+	cur := snapshots[i]
+	if i == 0 {
+		if cur.Feature.Volume1m != nil && *cur.Feature.Volume1m > 0 {
+			return *cur.Feature.Volume1m
+		}
+		return 0
+	}
+	if prev := snapshots[i-1].Volume; cur.Volume >= prev {
+		return cur.Volume - prev
+	}
+	return cur.Volume
 }

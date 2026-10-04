@@ -43,6 +43,7 @@ export class PithaPriceChart extends LitElement {
 - `tick`は1分足に集約する: 現在の分（`floor(now/60)*60`、または最新バー時刻）のバーの`high/low/close`を更新し、分が変わったときのみ新しいバーを追加する。`price <= 0`の`tick`は無視する（サーバー側も`LastPrice <= 0`の間は`tick`を送らない。issue #183）
 - `jev_update`（`direction`/`confidence`）は`direction`が変化したときのみ、チャート上のマーカー（例: LONG転換で上向き矢印）として描画する。同一`direction`の繰り返しや`confidence`のみの変化では描画せず、`entry_quality`は`jev_update`に載らないため扱わない。Symbol DetailのJev判定パネルはSSRのみで、`jev_update`では更新されない（ページ再読み込みで更新。issue #362）
 - `candles-url`/`ws-url`属性が変化した場合は`updated()`ライフサイクルで再取得・再購読する。銘柄はURLに含めてサーバーが注入するため、`symbol`属性は持たない（HATEOAS。issue #409）
+- 出来高ヒストグラムは`candles`の`volume`（1分足あたりの出来高。サーバーが累積セッション値の差分に変換済みで、クライアントでは再計算しない。issue #474）をそのまま描画する
 - `candles-url`/`ws-url`は他コンポーネントと同様に未設定なら`logger.error`を出して該当の取得・購読を行わない
 - `/ws/symbols/{symbol}`が切断されている間（`reconnecting`/`failed`）はチャート下に「接続が切れています」を表示する。`tick`は受信時刻で足を作るため切断中の足は欠落する。切断後に`open`へ復帰した時は`candles-url`を`background: true`で再取得して足を補う（操作者不在でも発火するためハートビートに数えさせない。FR-RISK-6、issue #336）
 
