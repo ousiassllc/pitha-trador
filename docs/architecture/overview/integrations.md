@@ -49,8 +49,8 @@ sequenceDiagram
     participant JEV as Jev Adapter
 
     FE->>RAG: 現在の特徴量ベクトル（14次元、標準化済み）
-    RAG->>VEC: embedding MATCH ? AND decision_id IN (calibration_outcomes紐付き済み) ORDER BY distance LIMIT k
-    RAG->>VEC: 不足時のみ embedding MATCH ? ORDER BY distance LIMIT k×4
+    RAG->>VEC: embedding MATCH ? AND decision_id IN (calibration_outcomes紐付き済み ∩ 自己以外) ORDER BY distance LIMIT k
+    RAG->>VEC: 不足時のみ embedding MATCH ? AND decision_id IN (自己以外) ORDER BY distance LIMIT k×4
     VEC-->>RAG: 類似jev_decision_id + distance
     RAG->>RAG: calibration_outcomesと結合し「方向・regime・future_return・was_direction_correct」を要約
     RAG->>JEV: few-shot文脈（類似局面の要約）+ 現在の状態
@@ -60,9 +60,10 @@ sequenceDiagram
 - 埋め込みはLLM API呼び出しを伴わない標準化済み数値特徴量ベクトル（14次元、`architecture/er.md` ベクトルインデックス節参照）。追加のAPIコスト・レイテンシは発生しない（FR-RAG-3）
 - `market_snapshots`保存時・`jev_decisions`保存時にそれぞれ`market_snapshot_vectors`/`jev_decision_vectors`（sqlite-vec仮想テーブル）へ同期書き込みする
 - 検索は`jev_decision_vectors`に対し、まず`calibration_outcomes`が紐付いた判断だけを対象にした近傍検索（`decision_id IN (SELECT jev_decision_id FROM calibration_outcomes)`、最大k件）を行う。Scout判断はラベル付与不能で全候補×毎サイクル索引されるため、距離順の候補プールだけでは最近傍がScout判断で埋まり、紐付き済み判断が候補に入らない。紐付き済みがk件に満たない場合のみ、制限なしの距離順k×4件を追加で取得して補い（紐付き済みとの重複は除く）、`calibration_outcomes`が紐付いた判断を先頭に、次いで未付与のTrader判断、Scout判断の順（各群は距離順）に並べ替えて上位k件を採用し、不足分を`market_snapshot_vectors`の類似局面で補う（FR-RAG-2）。候補判断の本体は`jev_decisions`から`WHERE id IN (...)`の1クエリ、`calibration_outcomes`も1クエリで一括取得する（候補数に依らず固定クエリ数）
+- 問い合わせ対象の状態自身は類似事例から除外する（`rag.Subject{Symbol, Timestamp}`、FR-RAG-2/4）。判断は同一銘柄で`timestamp`が現在時刻以降のもの（Trader呼び出し直前に保存された同一状態のScout判断を含む）、補充枠の`market_snapshot_vectors`は同一銘柄で現在時刻−15分（`SnapshotRecencyGuard`、特徴量ベクトルの最長ルックバック）より新しいスナップショットを除く。判断側に15分ガードは掛けない。sqlite-vecはKNN走査中のidに等価・`IN`制約しか使えないため、除外は`NOT IN`や範囲条件ではなく、許可id集合に対する`decision_id IN (SELECT id FROM jev_decisions WHERE symbol <> ? OR timestamp < ?)`（スナップショットは`snapshot_id IN (SELECT id FROM market_snapshots WHERE symbol <> ? OR timestamp <= ?)`）として表す。`Symbol`が空のSubjectは何も除外しない
 - 各事例は方向・confidence・regime（`response_json`由来）に加え、紐付き済みなら最短horizonの`horizon_minutes`・`future_return`（%単位、1.0=+1%）・`was_direction_correct`（NONE判断はnull）をJSONへ載せる。未付与の判断は方向・confidence・regimeのみ（FR-RAG-3）
 - 質問文末尾の共通ガイド（`stateGuide`）は、実結果付きの事例を小標本の弱い文脈として扱い、`market`の現在の根拠を上回らせないようJevに指示する（`question_version`は`scout-v3`/`trader-v3`）
-- コールドスタート期間（該当データが少ない）は空の検索結果として扱い、Jevは通常通り判断する（FR-RAG-4）
+- コールドスタート期間（該当データが少ない）は空の検索結果として扱い、Jevは通常通り判断する（FR-RAG-4）。現在のスナップショット自身・直近の足・同一状態のScout判断は上記の自己除外で類似事例に返らないため、過去の蓄積が無い間は文脈が空になる
 
 ## 8. 自己改善ループ（Sol / Opus 連携）
 
