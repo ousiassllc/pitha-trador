@@ -105,3 +105,5 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
   "as_of": "2026-09-29T01:15:03Z"
 }
 ```
+
+`queues[].failed_recent`は`finished_at`が`as_of`から過去1時間（固定。設定では変更できない）以内の`failed`ジョブの件数で、`/ws/activity`の`job_update.failed_recent`も同じ窓で集計する。1時間より前に失敗したジョブは含まれない（`requirements/functional/components-platform.md` FR-ACT-1）。

@@ -68,7 +68,7 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 
 Scheduler/Jev/Risk Engineが「現在何を実行しているか」をUIから確認できるよう、既存テーブル（`jobs`, `jev_decisions`, `kill_switch_events`）を集約したリアルタイムフィードを提供する。Calibration/監査で使う既存データの保持方針（`non-functional.md` §5.1のログローテーション、各テーブル自体の保持期間）は変更しない。新規の永続テーブルは追加しない。
 
-- FR-ACT-1: `jobs`テーブルをキュー別（`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6キュー。`feature-calc`はフルスキャンがenqueueしないため通常0件）に集計し、`pending`/`running`/直近`failed`件数を提供する
+- FR-ACT-1: `jobs`テーブルをキュー別（`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6キュー。`feature-calc`はフルスキャンがenqueueしないため通常0件）に集計し、`pending`/`running`/直近`failed`件数を提供する。直近`failed`件数は`finished_at`が集計時刻（`as_of`）から過去1時間（固定。設定では変更できない。`activityfeed.FailedWindow`）以内の`failed`ジョブの件数で、1時間より前に失敗したジョブは数えない。`GET /api/v1/activity`の`failed_recent`と`/ws/activity`の`job_update.failed_recent`で同じ窓を使う
 - FR-ACT-2: `jobs`の状態遷移、`jev_decisions`の新規登録（Scout/Trader呼び出し）、`kill_switch_events`の発生を時刻順にマージした単一のアクティビティフィードを提供する
 - FR-ACT-3: フィードの1回の取得・配信件数はデフォルト200件、`limit`クエリで最大500件まで指定可能とする。この上限はSystem Activity Log画面向けの表示制限であり、参照元テーブル（`jobs`/`jev_decisions`/`kill_switch_events`）自体の保持期間・行数には影響しない（既存のCalibration・監査用途を継続利用できるようにするため）
 - FR-ACT-4: 新規イベント発生時にWebSocket（`api/endpoints.md` `/ws/activity`）でリアルタイムに配信する。ジョブ状態遷移ごとのキュー件数（`job_update`）は遷移のたびに集計せず、約0.5秒間の遷移をまとめて1回の集計で、変化のあったキューについてのみ配信する（4,000銘柄規模のフルスキャンで1分あたり数千件の遷移が起きても、ワーカー/enqueue経路を集計で塞がないため。UIへのライブ反映1秒以内の目標内）。初期表示は`GET /api/v1/activity`のスナップショットを用いる

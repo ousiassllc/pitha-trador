@@ -213,3 +213,5 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.21 | 2026-10-04 | §2処理フローと§7 MVP完了条件の「対象銘柄を自動取得（kabuステーションAPI経由）」を、銘柄マスタは起動時の銘柄マスタCSV投入・価格/板はkabuステーションAPI取得と実装に合わせて改訂 | issue #389 |
 | 1.22 | 2026-10-04 | §4.3 に候補更新サイクルからの`jev-scout`投入の銘柄別間引き（`scan.jev_scout_min_interval_seconds`・未完了ジョブの重複排除）を追記 | issue #388 |
 | 1.23 | 2026-10-05 | FR-SCHED-2（`components-platform.md`）のフルスキャン対象を「有効な`stock`銘柄」から実装どおり「有効な全銘柄（`stock`＋市場コンテキスト算出用の`market_index`/`sector_index`）」へ訂正し、PUSH購読・候補更新が`stock`のみである点を明記 | issue #422 |
+| 1.24 | 2026-10-05 | FR-SCHED-1（`components-platform.md`）の`feature-calc`をフルスキャンが投入しない互換ハンドラへ訂正、FR-ACT-1の`feature-calc`の注記訂正、FR-ACT-4に`job_update`を約0.5秒間でまとめて配信する旨を追記 | issue #391, #392, #417 |
+| 1.25 | 2026-10-05 | FR-ACT-1に直近`failed`件数の窓（過去1時間・固定）を追記。§4.3（`components-pipeline.md`）に、孤児`running`の`jev-scout`行が固定10分超でSchedulerにより`failed`へ回復され、該当銘柄が再起動まで保留され続けない旨を追記 | issue #424, #425, #427 |
