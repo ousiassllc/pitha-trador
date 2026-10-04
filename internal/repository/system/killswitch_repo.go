@@ -152,10 +152,10 @@ func (r *KillSwitchRepository) ListUnresolved(ctx context.Context) ([]domain.Kil
 // id does not exist or was already resolved.
 func (r *KillSwitchRepository) Resolve(ctx context.Context, id int64, resolvedAt time.Time, resolvedBy string) error {
 	res, err := r.db.ExecContext(ctx, `
-INSERT INTO kill_switch_resolutions (kill_switch_event_id, resolved_at, resolved_by)
-SELECT id, ?, ? FROM kill_switch_events WHERE id = ?
+INSERT INTO kill_switch_resolutions (kill_switch_event_id, resolved_at, resolved_by, created_at)
+SELECT id, ?, ?, ? FROM kill_switch_events WHERE id = ?
 ON CONFLICT (kill_switch_event_id) DO NOTHING`,
-		sqlutil.FormatTime(resolvedAt), resolvedBy, id)
+		sqlutil.FormatTime(resolvedAt), resolvedBy, sqlutil.FormatTime(time.Now().UTC()), id)
 	if err != nil {
 		return fmt.Errorf("repository: resolve kill switch event %d: %w", id, err)
 	}

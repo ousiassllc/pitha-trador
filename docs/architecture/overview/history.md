@@ -61,3 +61,4 @@
 | 1.54 | 2026-10-05 | §3のツリー・§4のScheduler/Worker行に`scheduler/orphans`サブパッケージ（全キュー共通の孤児`running`ジョブの`failed`回復。固定10分、Schedulerが1分ごとに実行）を追記。`internal/service/scheduler/doc.go`の周期トリガー列挙に毎分の`orphans.FailAll`を追記 | issue #424, #425, #429 |
 | 1.55 | 2026-10-05 | §3の`static/src`ツリーに`csp/`（`lightweight-charts-style-hash.test.ts`）を追記し、実体（`components`/`css`/`csp`/`img`/`vendor`/`embed.go`/`dist`）と一致させた | issue #432 |
 | 1.56 | 2026-10-05 | `architecture/er.md` §型・規約「日時」の小数秒固定幅化（マイグレーション000021）に伴う記述変更。本ファイルが参照する`overview.md`・`overview/`配下の本文は変更なし | issue #430 |
+| 1.57 | 2026-10-05 | `components/overview.md` §2の`static/src/components`ツリーに`scanner-table/`・`activity-feed/`の補助ファイル・`scanner-contract.json`・`dist/js/chunks/`を追記（`components/overview.md`の改訂履歴1.52）。本ファイルが参照する`overview.md`・`overview/`配下の本文は変更なし | issue #436 |

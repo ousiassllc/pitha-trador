@@ -43,9 +43,9 @@ static/
 └── src/
     ├── components/
     │   ├── price-chart/           pitha-price-chart.ts
-    │   ├── scanner-table/         pitha-scanner-table.ts
+    │   ├── scanner-table/         pitha-scanner-table.ts / scanner-types.ts（`GET /api/v1/scanner`の応答型）/ scanner-view.ts（列定義・書式・配色・バッジの表示ヘルパー）/ scanner-contract.json（SSRフォールバックとLitの表示契約。Go側`scanner_table_contract_test.go`・`handler/scanner/scanner_test.go`とTS側`scanner-contract.test.ts`が共有する唯一の契約ファイル）
     │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）
-    │   ├── activity-feed/         pitha-activity-feed.ts
+    │   ├── activity-feed/         pitha-activity-feed.ts / activity-feed-types.ts（応答型と定数）/ activity-feed-views.ts（Job Queues表・直近Kill Switchイベントの無状態テンプレート）
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
     │   ├── modal/                 pitha-modal.ts（Litではない。`molecules.Modal`の`<dialog>`開閉・フォーカス復帰・URLハッシュ自動オープン）
@@ -64,10 +64,13 @@ static/
     ├── embed.go                   # `//go:embed dist img vendor`
     └── dist/                      # ビルド成果物
         ├── js/
+        │   └── chunks/            # esbuildの共有チャンク（`splitting: true`・`chunkNames: 'chunks/[name]-[hash]'`。`runtime.md`参照）
         ├── css/
         └── vendor/
             └── stoplight-elements/   # `/swagger`用（esbuild.config.mjsが`@stoplight/elements`から出力）
 ```
+
+`*-test-support.ts`（`scanner-table/`・`activity-feed/`・`kill-switch-panel/`）と`*.test.ts`はテスト専用のフェイク・フィクスチャ・テストで、本番バンドルに含まれないため上のツリーでは省略している。
 
 依存ルールは `architecture/overview.md` §3 の通り（`handler → service → repository → domain`、Templ側は `atoms/molecules/organisms/pages`）。
 
@@ -238,3 +241,4 @@ const (
 | 1.49 | 2026-10-05 | `ScanPanel`の絞り込みフォームのトリガーを`submit`＋セレクトの`change`に限定しセレクトへ`id`付与（#410）、適用中の理由を件数0でも選択肢に残す（#408）。`pitha-price-chart`から未使用の`symbol`属性を削除し§5.1を訂正（#409）。旧`handler`パスを参照するコメントを更新（#401/#404） | issue #408, #409, #410, #401, #404 |
 | 1.50 | 2026-10-05 | §2の`middleware/`列挙に`SecurityHeaders`（`security_headers.go`、`SwaggerCSP`）を追記 | issue #413 |
 | 1.51 | 2026-10-05 | §2の`static/src`ツリーに`csp/`（`lightweight-charts-style-hash.test.ts`）・`vendor/`（`htmx.min.js`）・`embed.go`・`dist/vendor/`（`stoplight-elements`）を追記 | issue #432 |
+| 1.52 | 2026-10-05 | §2の`static/src/components`ツリーに`scanner-table/`の`scanner-types.ts`・`scanner-view.ts`・`scanner-contract.json`（Go/TS共有の表示契約）、`activity-feed/`の`activity-feed-types.ts`・`activity-feed-views.ts`、`dist/js/chunks/`（esbuildの共有チャンク）を追記し、`*-test-support.ts`はテスト専用のため省略と明記 | issue #436 |
