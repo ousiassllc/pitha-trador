@@ -179,4 +179,4 @@ erDiagram
 | kill_switch_event_id | integer | FK → kill_switch_events.id, UNIQUE, NOT NULL | 1イベントにつき解除は1回のみ |
 | resolved_at | text | NOT NULL | |
 | resolved_by | varchar(50) | NOT NULL, CHECK IN ('auto','manual') | |
-| created_at | text | NOT NULL | |
+| created_at | text | NOT NULL, DEFAULT (strftime ミリ秒3桁) | DEFAULTは固定9桁ではないため使わず、`KillSwitchRepository.Resolve`が`sqlutil.FormatTime`で常に明示する（`er.md`「日時列のDEFAULT」）。`kill_switch_events.created_at`も同様 |

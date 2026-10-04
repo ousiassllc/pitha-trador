@@ -30,8 +30,8 @@ erDiagram
 | sector | varchar(100) | NULL可 | 業種。株式の業種と`kind=sector_index`銘柄の`sector`が一致すると、その指数がsector_return_5m算出に使われる |
 | kind | varchar(20) | NOT NULL, DEFAULT 'stock', CHECK IN ('stock','market_index','sector_index') | `stock`のみスクリーニング/売買対象。`market_index`（TOPIX/Nikkei225等）と`sector_index`（業種指数）は市場コンテキスト特徴量（market_return_1m/5m, sector_return_5m）の入力としてだけ追跡し、Fast Screener・バックテスト対象外 |
 | is_active | boolean | NOT NULL, DEFAULT 1 | 0の場合Fast Screener対象外 |
-| created_at | text | NOT NULL, DEFAULT (RFC3339 now) | |
-| updated_at | text | NOT NULL, DEFAULT (RFC3339 now) | |
+| created_at | text | NOT NULL, DEFAULT (strftime ミリ秒3桁) | DEFAULTは本番経路では使わず、`InstrumentRepository`が`sqlutil.FormatTime`（固定9桁）で常に明示する（`er.md`「日時列のDEFAULT」） |
+| updated_at | text | NOT NULL, DEFAULT (strftime ミリ秒3桁) | 同上 |
 
 インデックス: `UNIQUE (symbol)`, `INDEX (is_active)`
 
