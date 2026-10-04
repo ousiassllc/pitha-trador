@@ -195,12 +195,19 @@ func formatConfidence(v *float64) string {
 	return formatFloat(math.Round(*v*100), 0) + "%" // formatFloat drops the sign of -0, like `${-0}` in JS
 }
 
+// EscapeSymbolSegment percent-escapes symbol as one URL path segment.
+// Everything except RFC 3986 unreserved characters is escaped
+// (url.PathEscape alone would leave `&+:@=$`). It is the single escape
+// rule for every symbol-bearing URL (SymbolHref here and the Symbol
+// Detail page's candles/WebSocket URLs).
+func EscapeSymbolSegment(symbol string) string {
+	return strings.ReplaceAll(url.QueryEscape(symbol), "+", "%20")
+}
+
 // SymbolHref is the symbol detail link. It is the single source of the
 // detail URL rule: the SSR rows use it directly and the scanner API /
 // WebSocket items carry it as `detail_url` (handler.toScannerItems), so
-// pitha-scanner-table never builds the URL itself (HATEOAS). Everything
-// except RFC 3986 unreserved characters is percent-escaped
-// (url.PathEscape alone would leave `&+:@=$`).
+// pitha-scanner-table never builds the URL itself (HATEOAS).
 func SymbolHref(symbol string) templ.SafeURL {
-	return templ.SafeURL("/symbols/" + strings.ReplaceAll(url.QueryEscape(symbol), "+", "%20"))
+	return templ.SafeURL("/symbols/" + EscapeSymbolSegment(symbol))
 }
