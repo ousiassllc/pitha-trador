@@ -59,7 +59,7 @@ sequenceDiagram
     participant EX as Execution
     participant DB as SQLite
 
-    SCH->>MD: universe snapshot取得（kabuステーションAPI）
+    SCH->>MD: universe snapshot取得（`instruments`の対象銘柄の板をkabuステーションAPIから取得）
     MD->>FE: 生データ
     FE->>FS: 特徴量
     FS->>FS: screen_score算出・上位N銘柄選定
@@ -161,7 +161,7 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 
 ## 7. MVP完了条件
 
-- 対象銘柄を自動取得できる（kabuステーションAPI経由）
+- 対象銘柄マスタ（`instruments`: `stock`と`market_index`/`sector_index`）を銘柄マスタCSVから起動時に自動投入でき（kabuステーションAPIには上場銘柄一覧の取得手段が無いため。手順は`environment/setup.md`「銘柄マスタの投入」）、投入された銘柄の価格・板をkabuステーションAPI経由で自動取得できる
 - 60秒周期でスキャンできる
 - Fast Screenerで候補を絞れる
 - Jev Scout / Traderを自動実行できる
@@ -210,3 +210,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.18 | 2026-10-03 | §2の処理フロー図で、Fast Screener候補数を「50〜200」固定からFR-FS-2の上位N件（既定 top_n=20、`config/strategy.yaml`）へ訂正し、Scout通過数の固定値「10〜30」を「Nの一部」へ変更。FR-FS-2（`functional/components-pipeline.md`）へ`top_n`既定値を明記 | issue #327（仕様と同梱既定値の乖離解消。Jev APIコストを抑える側の現行既定を維持） |
 | 1.19 | 2026-10-03 | §5.1 にFR-SCAN-7（立会時間外のスキャン停止通知と次回立会開始時刻の表示）を追加 | issue #367 |
 | 1.20 | 2026-10-03 | §5.1の1m/5m Returnをパーセント表示（Feature Engineの小数比を×100）と明記。FR-FS-1（`functional/components-pipeline.md`）の`min_abs_return_5m_pct`の単位をパーセントと明記 | issue #364, #365 |
+| 1.21 | 2026-10-04 | §2処理フローと§7 MVP完了条件の「対象銘柄を自動取得（kabuステーションAPI経由）」を、銘柄マスタは起動時の銘柄マスタCSV投入・価格/板はkabuステーションAPI取得と実装に合わせて改訂 | issue #389 |

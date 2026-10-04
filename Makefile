@@ -9,6 +9,7 @@ help: ## コマンド一覧を表示
 dev: ## 開発起動（wails dev + templ watch + bun watch）
 	@PITHA_STRATEGY_PATH=$(CURDIR)/config/strategy.yaml \
 	PITHA_RISK_PATH=$(CURDIR)/config/risk.yaml \
+	PITHA_UNIVERSE_PATH=$(CURDIR)/config/universe.sample.csv \
 	PITHA_STATIC_DIR=$(CURDIR)/static/src \
 	SWAGGER_ENABLED=true \
 	bunx concurrently \

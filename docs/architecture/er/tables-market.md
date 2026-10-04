@@ -35,6 +35,8 @@ erDiagram
 
 インデックス: `UNIQUE (symbol)`, `INDEX (is_active)`
 
+投入: アプリ起動時に`internal/bootstrap/universe`が銘柄マスタCSVから`symbol`キーでupsertする（`environment/setup.md`「銘柄マスタの投入」）。新規行は`is_active=1`、既存行は`name`/`market`/`sector`/`kind`のみ更新し`is_active`は変更しない。内容が同一の行は更新せず`updated_at`も変わらない（冪等）。
+
 ## market_snapshots
 
 Feature Engineが算出した1分足スナップショット。

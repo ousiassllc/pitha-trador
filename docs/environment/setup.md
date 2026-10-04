@@ -93,10 +93,30 @@ make dev
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
 | `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`）。`secrets`テーブルを含むため、DBファイルは`0600`で作成/絞り込み（`-wal`/`-shm`も同モード）、新規作成する親ディレクトリ・`logs/`・インスタンスロックのディレクトリは`0700`、ログ/ロックファイルは`0600`（非Windows。既存の親ディレクトリのモードは変更しない） |
 | `PITHA_BACKUP_DIR` | `internal/bootstrap` | SQLite DBの日次バックアップ（`requirements/non-functional.md` §3）の退避先ディレクトリ。ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）を指定する。ディレクトリ自体は事前に存在している必要がある（作成しない。未マウントの場合はバックアップが失敗しSlack/ログで通知される）。Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。未設定・空のときはバックアップ無効（起動ログに警告）。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する |
+| `PITHA_UNIVERSE_PATH` | `internal/bootstrap` | 銘柄マスタCSVの場所（「銘柄マスタの投入」節）。優先順位は本環境変数 > 実行ファイルと同じディレクトリの`config/universe.csv`。どちらも無ければCSV同期をスキップする |
 | `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
 | `PITHA_STATIC_DIR` | `internal/router` | 設定すると`/static/...`を`go:embed`ではなく指定ディレクトリ（存在するディレクトリのみ有効。`make dev`は`static/src`）から配信する。未設定・不正パスは埋め込みにフォールバック |
 | `PITHA_POLICY_LONG_*` / `PITHA_POLICY_SHORT_*` | `internal/config` | `config/strategy.yaml`の`policy.long`/`policy.short`のしきい値を起動時に上書きする（FR-POLICY-4）。サフィックスは`MIN_PROBABILITY`・`MIN_ENTRY_QUALITY`・`MIN_CONTINUATION_PROBABILITY`・`MAX_TOXIC_FLOW`・`MAX_LIQUIDITY_STRESSED`。数値は不正値だと起動エラー |
 | `PITHA_FAST_SCREENER_*` | `internal/config` | `fast_screener`のフィルター・重みを起動時に上書きする（FR-FS-1/FR-FS-3、名前は`.env.example`と`requirements/functional.md`参照）。DB `runtime_settings`の`screener.*`が最優先 |
+
+### 銘柄マスタの投入
+
+スキャン対象ユニバース（`instruments`テーブル）は、DBが空のままだと全体スキャン・PUSH購読・候補更新・Jev Scout/Trader・Paper発注のすべてが何もしない。kabuステーションAPIには上場銘柄一覧を取得するエンドポイントが無いため、運用者が銘柄マスタCSV（東証上場銘柄一覧＝JPX公開のExcelをCSV化したもの等）を用意し、アプリ起動時に`internal/bootstrap`が取り込む。
+
+1. 下記形式のCSV（UTF-8、BOM可）を作成し、`PITHA_UNIVERSE_PATH`で指すか、実行ファイルと同じディレクトリの`config/universe.csv`に置く。開発時のサンプルは`config/universe.sample.csv`（`make dev`は`PITHA_UNIVERSE_PATH`でこれを指す）。
+2. アプリを（再）起動する。起動ログに`bootstrap: universe synced`（`instruments`/`changed`件数）が出れば投入済み。
+
+```csv
+symbol,name,market,sector,kind
+7203,トヨタ自動車,TSE Prime,輸送用機器,stock
+101,TOPIX,INDEX,,market_index
+1050,輸送用機器,INDEX,輸送用機器,sector_index
+```
+
+- 列は見出し行で識別する（順序自由・大文字小文字無視）。必須は`symbol`（≤10文字・ファイル内で一意）/`name`/`market`。`sector`は任意（`kind=sector_index`では必須。株式の`sector`と一致するとsector_return_5m算出に使われる）。`kind`は`stock`（既定）/`market_index`/`sector_index`。
+- 同期は冪等。新規`symbol`は`is_active=1`で追加し、既存`symbol`は`name`/`market`/`sector`/`kind`のみ更新して`is_active`は変更しない（運用者が除外した銘柄は再起動しても復活しない）。CSVから消した銘柄は削除も無効化もされない。
+- 不正な行が1つでもあればファイル全体を適用せず、行番号つきのエラーをログに出してDBは変更しない。CSVが無くDBも空の場合はスキャン対象が0件になる旨をエラーログに出す。
+- `market_index`/`sector_index`は市場コンテキスト特徴量（FR-FE-4）の入力としてだけ追跡される。
 
 ### Makefileターゲット
 
@@ -112,7 +132,7 @@ make dev
 | `make build` | `generate`後に`wails build -platform windows/amd64` |
 | `make openapi-export` | 起動中サーバー（`127.0.0.1:48080`）から`docs/api/openapi.json`を書き出す（任意タスク。ファイルは未コミット） |
 
-- **`make dev`の環境変数**: `wails dev`は`cmd/desktop`をカレントとして動くため、`Makefile`は`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`を`$(CURDIR)/config/*.yaml`（絶対パス）に設定する。`internal/bootstrap.Run`は環境変数を埋め込み既定値より優先するため、`config/risk.yaml`等を編集して`make dev`を再起動すれば再ビルドなしで反映される（埋め込み既定値はビルド時のスナップショット）。`PITHA_STATIC_DIR`は`static/src`に設定し、`/static/...`をディスクから配信する。`wails dev`のファイル監視は既定で`.go`変更時のみGoバイナリを再ビルドするため、この上書きが無いと`bun run dev`（esbuild/Tailwind watch）の出力がgo:embedのスナップショットに阻まれ`make dev`再起動まで反映されない
+- **`make dev`の環境変数**: `wails dev`は`cmd/desktop`をカレントとして動くため、`Makefile`は`PITHA_UNIVERSE_PATH`も`config/universe.sample.csv`に設定し（銘柄マスタの投入、上記）、`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`を`$(CURDIR)/config/*.yaml`（絶対パス）に設定する。`internal/bootstrap.Run`は環境変数を埋め込み既定値より優先するため、`config/risk.yaml`等を編集して`make dev`を再起動すれば再ビルドなしで反映される（埋め込み既定値はビルド時のスナップショット）。`PITHA_STATIC_DIR`は`static/src`に設定し、`/static/...`をディスクから配信する。`wails dev`のファイル監視は既定で`.go`変更時のみGoバイナリを再ビルドするため、この上書きが無いと`bun run dev`（esbuild/Tailwind watch）の出力がgo:embedのスナップショットに阻まれ`make dev`再起動まで反映されない
 - **`generate`が前提となる理由**: `templ generate`が`*_templ.go`を、`bun run --cwd static build`が`static/src/dist/{css,js}`を生成する。どちらも`.gitignore`対象であり、`static/src/embed.go`の`//go:embed dist img vendor`は`dist/`が空だとコンパイル自体が失敗する。そのためクリーンなチェックアウトでは、生成前に`go vet`/golangci-lint/`go test`/`wails build`のいずれも実行できない（古い生成物が残っていると陳腐化した出力に対して実行してしまう）。CIの`lint`/`test`/`build`各ジョブも同じ2ステップを先に実行し、`lefthook`のpre-commit/pre-pushも`make generate`を呼ぶ
 - **`-race`の適用範囲**: データ競合の検出はCIの`test`ジョブ（`go test -race ./...`）と`make test-race`で行う。race detectorはcgo（gcc）を必要とし、Windows開発機などgccが無い環境ではビルドできないため、`make test`とlefthookのpre-pushは`-race`なしの`go test ./...`のままにしている（pre-pushを高速に保つ目的も兼ねる）
 
@@ -265,3 +285,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.27 | 2026-10-03 | `.linterlyignore`の内容ブロックを実ファイル（コメント文面を含む）に合わせ、`LICENSE`（ライセンス全文・手書きソースではない定型文）を許容する除外に追記 | issue #316（実ファイルとの乖離解消） |
 | 1.28 | 2026-10-03 | 初回セットアップ手順の`JEV_BASE_URL`/`JEV_MODEL`の上書き先を、廃止済みの「詳細設定（任意）」からSettings画面のJev接続先モーダル内の任意項目へ訂正 | issue #315（#302 とのdoc-drift解消） |
 | 1.29 | 2026-10-04 | 初回セットアップ手順から`cp .env.example .env`を削除し、`.env`は自動読込されずプロセス環境変数として設定する旨に統一（ファイル構成図の`.env.example`の説明も同趣旨に修正）。`.env.example`冒頭コメントも是正 | issue #386（環境変数節との矛盾解消） |
+| 1.30 | 2026-10-04 | 「銘柄マスタの投入」節と`PITHA_UNIVERSE_PATH`を追加（`instruments`の起動時CSV投入手順） | issue #389 |

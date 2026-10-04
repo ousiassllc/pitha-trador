@@ -24,6 +24,8 @@ func (s *Services) Start(ctx context.Context) error {
 		return fmt.Errorf("bootstrap: recover jobs: %w", err)
 	}
 
+	s.syncUniverse(ctx)
+
 	if err := s.MarketData.Start(ctx, defaultTokenRefreshInterval); err != nil {
 		// kabuステーションAPI not reachable at startup (dev machine
 		// without the kabuステーションアプリ running, issue #44's own
