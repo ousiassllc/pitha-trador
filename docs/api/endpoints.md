@@ -144,3 +144,5 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.38 | 2026-10-04 | §1にセキュリティヘッダ（CSP/nosniff/X-Frame-Options/Referrer-Policy、`/swagger`の緩和CSP）を追記 | issue #378 |
 | 1.39 | 2026-10-05 | §1のミドルウェア適用順に最外周の`SecurityHeaders`と`WebSocketBase`（ws-base設定時）を追記し、`router_middleware.go`の`engine.Use`順と一致させた | issue #413 |
 | 1.40 | 2026-10-05 | §5の`performance`/`calibration`/`policy-proposals`/`activity`の各節を`api/endpoints/huma-api-insights.md`へ分割（`huma-api.md`が300行/ファイル制限を超過したため）。節番号・内容は変更なし | issue #403 |
+| 1.41 | 2026-10-05 | §`/ws/activity`の`job_update`が約0.5秒間の状態遷移をまとめ、変化のあったキューについて1回だけ送ることを追記 | issue #392 |
+| 1.42 | 2026-10-05 | `GET /api/v1/activity`（`api/endpoints/huma-api-insights.md`）に`failed_recent`の集計窓（`as_of`から過去1時間・固定）を追記 | issue #427 |

@@ -15,6 +15,9 @@ var allQueues = []string{
 	JobQueueJevTrader, JobQueueOutcomeLabeling, JobQueueAnalytics,
 }
 
+// AllQueues returns every queue name (the JobQueue* constants).
+func AllQueues() []string { return slices.Clone(allQueues) }
+
 // listRecentSQL builds ListRecent's query for queues: per queue, one arm for
 // the open rows (jobs_queue_status_scheduled_idx; pending/running rows are
 // few) and one limit-bounded arm per finished status, read newest-first

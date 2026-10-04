@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/orphans"
 )
 
 // newScoutCooldownRefresher builds a Refresher with one always-passing
@@ -127,5 +128,66 @@ func TestRefresh_SkipsSymbolWithEventDrivenJevScoutJob(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Fatalf("jev-scout jobs = %d, want 1 (the event-driven one only)", len(jobs))
+	}
+}
+
+// Issues #424/#425: a jev-scout row left running by a failed completion
+// write holds its symbol back for good (scoutHeld counts running rows).
+// Once the periodic orphan recovery has failed it, Refresh re-enqueues the
+// symbol after the cooldown; a running row inside the threshold is kept.
+func TestRefresh_ReScoutsSymbolAfterOrphanedJevScoutRecovered(t *testing.T) {
+	refresher, _, clock := newScoutCooldownRefresher(t)
+	ctx := context.Background()
+	if err := refresher.Refresh(ctx); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	orphan, err := refresher.Jobs.ClaimNext(ctx, jobqueue.JobQueueJevScout, *clock)
+	if err != nil {
+		t.Fatalf("ClaimNext: %v", err)
+	}
+	// The worker's MarkSucceeded failed: the row stays running.
+
+	openScoutJobs := func() int {
+		t.Helper()
+		jobs, err := refresher.Jobs.ListOpenOrFinishedSince(ctx, jobqueue.JobQueueJevScout, clock.Add(-time.Hour))
+		if err != nil {
+			t.Fatalf("ListOpenOrFinishedSince: %v", err)
+		}
+		return len(jobs)
+	}
+
+	// Inside the threshold the row is kept and still holds the symbol.
+	*clock = clock.Add(orphans.After - time.Minute)
+	if err := orphans.FailAll(ctx, refresher.Jobs, *clock); err != nil {
+		t.Fatalf("FailAll: %v", err)
+	}
+	if err := refresher.Refresh(ctx); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if got := openScoutJobs(); got != 1 {
+		t.Fatalf("jev-scout jobs inside the threshold = %d, want 1 (no duplicate)", got)
+	}
+
+	// Past it the row is failed; once the cooldown has elapsed the symbol is scouted again.
+	*clock = clock.Add(2 * time.Minute)
+	if err := orphans.FailAll(ctx, refresher.Jobs, *clock); err != nil {
+		t.Fatalf("FailAll: %v", err)
+	}
+	got, err := refresher.Jobs.Get(ctx, orphan.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Status != jobqueue.JobStatusFailed {
+		t.Fatalf("orphan status = %q, want failed", got.Status)
+	}
+	*clock = clock.Add(time.Duration(refresher.Strategy.Scan.JevScoutMinIntervalSeconds+1) * time.Second)
+	if err := refresher.Refresh(ctx); err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if got := openScoutJobs(); got != 2 {
+		t.Fatalf("jev-scout jobs after recovery = %d, want 2 (orphan failed + a new pending one)", got)
+	}
+	if _, err := refresher.Jobs.ClaimNext(ctx, jobqueue.JobQueueJevScout, *clock); err != nil {
+		t.Fatalf("new jev-scout job not claimable: %v", err)
 	}
 }
