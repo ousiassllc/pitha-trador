@@ -74,11 +74,16 @@ Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読
       "backtest_result": { "expectancy_delta_pct": 2.1, "max_drawdown_delta_pct": -3.4 },
       "reviewed_by": "opus",
       "review": { "verdict": "approve", "reason": "..." },
-      "applied_policy_version": "v12"
+      "applied_policy_version": "sol-42",
+      "applied_at": "2026-09-28T16:00:00Z",
+      "rolled_back_at": null,
+      "rolled_back_reason": null
     }
   ]
 }
 ```
+
+`applied_at`（適用日時、RFC 3339）・`rolled_back_at`（FR-SELFIMPROVE-6の自動ロールバック日時、RFC 3339）・`rolled_back_reason`（ロールバック理由。劣化前後の実現Expectancy値を含む文字列）は`policy_proposals`の同名カラムの保存値で、未発生（未適用／ロールバックされていない）の場合は`null`（キーは常に出力する）。`status=rolled_back`の行で「いつ・なぜ」ロールバックされたかを本APIで確認できる（FR-SELFIMPROVE-7）。
 
 `policy_proposals`の保存値のうちJSONとして解釈できないものがあっても、その1行のせいで一覧全体を失敗させない（古い／壊れた行が監査履歴を隠さないため）。該当行は一覧から除外せず返し、解釈できなかったフィールドだけを空にする（`proposed_changes`は`{}`、`backtest_result`/`review`は`null`。`proposed_changes`は`new_value`が1つでもJSONでなければ`{}`）。各失敗は`proposal_id`付きでERRORログに記録する。`500`になるのは`policy_proposals`の読み込み自体が失敗した場合（ストア障害）のみ。
 

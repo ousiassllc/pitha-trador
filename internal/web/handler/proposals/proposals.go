@@ -92,6 +92,9 @@ type policyProposalOutput struct {
 	ReviewedBy           *string                    `json:"reviewed_by"`
 	Review               json.RawMessage            `json:"review" doc:"Review verdict/reason as recorded (e.g. reason=llm_output_out_of_bounds); null until reviewed."`
 	AppliedPolicyVersion *string                    `json:"applied_policy_version"`
+	AppliedAt            *time.Time                 `json:"applied_at" doc:"When the proposal was applied to runtime_settings; null until applied."`
+	RolledBackAt         *time.Time                 `json:"rolled_back_at" doc:"When FR-SELFIMPROVE-6 rolled the proposal back; null if it was never rolled back."`
+	RolledBackReason     *string                    `json:"rolled_back_reason" doc:"Why it was rolled back (the measured Expectancy degradation); null if it was never rolled back."`
 }
 
 // PolicyProposalsAPIOutput is the Huma response body for `GET
@@ -139,6 +142,9 @@ func toPolicyProposalOutput(ctx context.Context, p domain.PolicyProposal) policy
 		ReviewedBy:           p.ReviewedBy,
 		Review:               json.RawMessage("null"),
 		AppliedPolicyVersion: p.AppliedPolicyVersion,
+		AppliedAt:            p.AppliedAt,
+		RolledBackAt:         p.RolledBackAt,
+		RolledBackReason:     p.RolledBackReason,
 	}
 	if p.ReviewJSON != nil {
 		if json.Valid([]byte(*p.ReviewJSON)) {

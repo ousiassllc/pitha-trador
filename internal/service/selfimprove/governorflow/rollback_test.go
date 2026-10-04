@@ -1,4 +1,4 @@
-package selfimprove_test
+package governorflow_test
 
 import (
 	"context"

@@ -138,7 +138,7 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 // Self-Improvement proposal; signals and backtests both read it, so an
 // approved (or rolled-back) change applies on the next evaluation (#52).
 func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config) *policy.Handler {
-	runtimePolicy := selfimprove.NewRuntimePolicy(s.Settings, state.Strategy.Policy)
+	runtimePolicy := selfimprove.NewRuntimePolicy(s.Settings, s.Proposals, state.Strategy.Policy)
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))

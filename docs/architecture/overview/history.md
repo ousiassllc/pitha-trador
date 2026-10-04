@@ -66,3 +66,4 @@
 | 1.59 | 2026-10-05 | §6（`integrations.md`）の現行`question_version`を`scout-v3`/`trader-v3`に更新し（v2はRAG文脈に実結果が無いと案内していた旧プロンプト）、同節の「Calibrationのコホートを分離するため」を実態に訂正（版は記録・表示用で、Calibration集計は版で分離せず全版を混在して集計する） | issue #439, #440, #443, #444, #447, #448 |
 | 1.60 | 2026-10-05 | §7（`integrations.md`）のRAG候補取得を、`calibration_outcomes`紐付き済みのみを対象にした近傍検索（最大k件）＋不足時のk×4件の距離順プールへ変更し、判断本体・outcomeの取得を固定クエリ数の一括取得へ変更。§3/§4（`overview.md`）の`enrich`の利用者に`rag`（類似判断の`regime`復元）・`bootstrap/backtestsource`（バックテスト入力）を追記 | issue #441, #442, #445, #446 |
 | 1.61 | 2026-10-05 | §8（`integrations.md`）に自己改善のロールバック判定の境界を追記: 適用前が負/ゼロでも適用前の絶対値を基準にした相対20%悪化で判定し、改善・同値では非ロールバック。いずれかの窓にクローズ済みポジションが無ければ判定不能として非ロールバック（`status=applied`のまま日次で再評価） | issue #449 |
+| 1.62 | 2026-10-05 | §8（`integrations.md`）に自己改善の`approved`取り残し提案の適用再実行、Slack通知のbest-effort化、ロールバック時の後続提案値の保護、`trade_signals.policy_version`への適用版付加を追記 | issue #450, #451, #452, #455 |

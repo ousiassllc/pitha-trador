@@ -1,4 +1,8 @@
-package selfimprove_test
+// Package governorflow_test holds the Governor/RuntimePolicy tests of
+// selfimprove. They only use selfimprove's exported API and live in their
+// own directory to keep internal/service/selfimprove under the linterly
+// directory line budget.
+package governorflow_test
 
 import (
 	"context"

@@ -13,6 +13,13 @@ import (
 // implements it; internal/bootstrap injects it via WithNotifier.
 // NoopNotifier, the default, lets Governor be constructed and tested
 // without one.
+//
+// Notifications are best-effort, like the Risk Engine's: Governor calls
+// ProposalApplied/ProposalRolledBack only after the apply/rollback is
+// already committed to runtime_settings and policy_proposals, so a
+// returned error is logged and otherwise ignored - it never turns the
+// completed apply/rollback into a failure (DailyResult.Applied/
+// RetriedApplied/RolledBack still report it) and is not retried.
 type Notifier interface {
 	ProposalApplied(ctx context.Context, proposal domain.PolicyProposal) error
 	ProposalRolledBack(ctx context.Context, proposal domain.PolicyProposal, reason string) error
