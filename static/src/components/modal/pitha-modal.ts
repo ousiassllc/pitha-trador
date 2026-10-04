@@ -20,6 +20,15 @@ function dialogById(id: string | null | undefined): HTMLDialogElement | null {
   return el instanceof HTMLDialogElement ? el : null;
 }
 
+/** The decoded URL hash without `#`; `''` when it is empty or not valid percent-encoding (a `URIError` must not escape a listener). */
+function currentHash(): string {
+  try {
+    return decodeURIComponent(location.hash.slice(1));
+  } catch {
+    return '';
+  }
+}
+
 /** Opens `dialog` modally, remembering `invoker` so focus can return to it. */
 export function openModal(dialog: HTMLDialogElement, invoker: HTMLElement | null = null): void {
   if (dialog.open) return;
@@ -51,7 +60,7 @@ export function onClose(event: Event): void {
   if (!(dialog instanceof HTMLDialogElement) || !dialog.hasAttribute('data-modal')) return;
   opened.get(dialog)?.focus();
   opened.delete(dialog);
-  const hash = decodeURIComponent(location.hash.slice(1));
+  const hash = currentHash();
   if (hash && dialog.querySelector(`[id="${CSS.escape(hash)}"]`)) {
     history.replaceState(null, '', location.pathname + location.search);
   }
@@ -59,7 +68,7 @@ export function onClose(event: Event): void {
 
 /** Opens the dialog containing the element the URL hash names. */
 export function openFromHash(): void {
-  const hash = decodeURIComponent(location.hash.slice(1));
+  const hash = currentHash();
   if (!hash) return;
   const target = document.getElementById(hash);
   const dialog = target?.closest<HTMLDialogElement>('dialog[data-modal]');
