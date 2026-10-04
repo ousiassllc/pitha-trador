@@ -14,11 +14,12 @@ sequenceDiagram
     participant SCHED as Scheduler（自前Worker）
 
     App->>DB: マイグレーション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON, WAL）
+    App->>SCHED: 前回クラッシュ時の`running`状態ジョブを`pending`へ復帰（`Scheduler.Recover`）
+    App->>App: 銘柄マスタCSVから`instruments`をupsert（`syncUniverse`。失敗・CSV不在はログのみで継続。kabuステーション不達の影響を受けない）
     App->>KABU: /kabusapi/token でトークン発行
-    KABU-->>App: token
-    App->>App: 銘柄マスタCSVから`instruments`をupsert
+    KABU-->>App: token（失敗しても起動を継続し、バックグラウンドで再試行）
+    App->>SCHED: 周期ジョブ登録（60s/15-30s/5-15s）
     App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始
-    App->>SCHED: 周期ジョブ登録（60s/15-30s/5-15s）。前回クラッシュ時の`running`状態ジョブを`pending`へ復帰
     App->>App: WebView起動・Scanner Dashboard表示
 ```
 
