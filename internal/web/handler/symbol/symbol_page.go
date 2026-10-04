@@ -18,11 +18,10 @@ const defaultDecisionHistoryLimit = 50
 
 // Page implements `GET /symbols/:symbol` (docs/api/endpoints.md §3): the
 // full Symbol Detail page, embedding the `pitha-price-chart` island
-// (functional.md §5.2). Unlike ScannerHandler.Page, no HX-Request
-// fragment variant exists yet - Symbol Detail has no server-rendered
-// fallback content analogous to ScannerTableFallback for `pitha-price-
-// chart` (a canvas-drawn chart has nothing meaningful to show before
-// JS/Lit loads), so every request renders the full page.
+// (functional.md §5.2). There is no HX-Request fragment variant -
+// Symbol Detail has no server-rendered fallback content for
+// `pitha-price-chart` (a canvas-drawn chart has nothing meaningful to
+// show before JS/Lit loads), so every request renders the full page.
 func (h *SymbolHandler) Page(c *gin.Context) {
 	symbol := c.Param("symbol")
 	ctx := c.Request.Context()

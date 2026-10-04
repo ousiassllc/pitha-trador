@@ -148,9 +148,9 @@ func (h *ScannerHandler) APIScanner(ctx context.Context, _ *struct{}) (*ScannerA
 	return out, nil
 }
 
-// Page implements `GET /scanner` (docs/api/endpoints.md §3): the full
-// Scanner Dashboard page, or - when the request carries an `HX-Request`
-// header - the candidate table fragment alone.
+// Page implements `GET /scanner` (docs/api/endpoints.md §3): always the
+// full Scanner Dashboard page. There is no HX-Request fragment variant:
+// the only HTMX fragment route on this screen is `GET /scanner/scan`.
 func (h *ScannerHandler) Page(c *gin.Context) {
 	candidates, asOf, err := h.source.Candidates(c.Request.Context())
 	if err != nil {
@@ -159,10 +159,6 @@ func (h *ScannerHandler) Page(c *gin.Context) {
 		return
 	}
 
-	if c.GetHeader("HX-Request") == "true" {
-		shared.RenderHTML(c, http.StatusOK, organisms.ScannerTableFallback(candidates, asOf))
-		return
-	}
 	// The scan panel (issue #303) starts closed: funnel only. A failure to
 	// read it must not take the candidate list down with it.
 	panel, err := h.scanPanel(c.Request.Context(), domain.ScanQuery{}, false)
