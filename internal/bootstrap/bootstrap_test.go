@@ -167,7 +167,7 @@ func TestBuildServices_EmptySecretsDoesNotPanic(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = state.Close() })
 
-	svc, err := bootstrap.BuildServices(state, config.Secrets{}, nil)
+	svc, err := bootstrap.BuildServices(state, config.Secrets{})
 	if err != nil {
 		t.Fatalf("BuildServices: %v", err)
 	}
