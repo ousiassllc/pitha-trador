@@ -22,3 +22,10 @@ var Version = "dev"
 // RELEASE_SIGNING_PUBLIC_KEY>"`; it stays empty - signature verification
 // off - for builds made without a signing key (see docs/environment/setup.md).
 var ReleasePublicKey = ""
+
+// GitHubOwner and GitHubRepo identify the GitHub repository whose releases
+// internal/service/updater checks for a newer build.
+const (
+	GitHubOwner = "ousiassllc"
+	GitHubRepo  = "pitha-trador"
+)

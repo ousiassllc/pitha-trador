@@ -59,9 +59,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// nil: cmd/server is headless and has no installer to run, so
+	// No WithAutoUpdate: cmd/server is headless and has no installer to run, so
 	// issue #65's unattended self-update never wires in here.
-	services, err := bootstrap.BuildServices(state, secrets, nil)
+	services, err := bootstrap.BuildServices(state, secrets)
 	if err != nil {
 		log.Fatal(err)
 	}

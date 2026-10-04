@@ -2,7 +2,7 @@
 // check and safe, unattended self-update pipeline for cmd/desktop's Wails
 // build only - cmd/server is headless and has no installer concept, so it
 // never wires this package in at all (internal/bootstrap/services.go's
-// BuildServices only does so when its autoUpdate parameter is non-nil).
+// BuildServices only does so when WithAutoUpdate option is given).
 //
 // Checker.CheckForUpdate runs the full read-only-until-verified pipeline
 // once at startup and on every internal/service/scheduler @every-6h tick

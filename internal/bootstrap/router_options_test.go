@@ -25,7 +25,7 @@ func TestRouterOptions_WireSecretsStoreIntoSetupGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSecrets: %v", err)
 	}
-	services, err := BuildServices(state, secrets, nil)
+	services, err := BuildServices(state, secrets)
 	if err != nil {
 		t.Fatalf("BuildServices: %v", err)
 	}

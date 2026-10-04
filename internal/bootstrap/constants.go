@@ -18,9 +18,6 @@ const LogDir = "logs"
 // cloud folder). Unset or empty disables the backup job.
 const EnvBackupDir = "PITHA_BACKUP_DIR"
 
-// jevMaxAttemptsForTest lets in-package tests cap the Jev client's attempts (no real backoff); 0 = production default.
-var jevMaxAttemptsForTest int
-
 // defaultTokenRefreshInterval is how often Services.Start reissues the
 // kabuステーションAPI token (marketdata.Client.Start). The API does not
 // publish an exact token TTL (docs/architecture/overview.md §5), so 20

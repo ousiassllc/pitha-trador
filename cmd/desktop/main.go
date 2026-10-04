@@ -86,7 +86,7 @@ func main() {
 	// #65's unattended self-update, which cmd/server never wires in at
 	// all.
 	app := NewApp()
-	services, err := bootstrap.BuildServices(state, secrets, app, app)
+	services, err := bootstrap.BuildServices(state, secrets, bootstrap.WithAutoUpdate(app), bootstrap.WithNotifiers(app))
 	if err != nil {
 		log.Fatal(err)
 	}
