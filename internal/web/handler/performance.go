@@ -95,7 +95,7 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 		slog.ErrorContext(c.Request.Context(), "handler: performance actuals", "error", err)
 		status, props.ActualsError = http.StatusInternalServerError, "実績の取得に失敗しました。"
 	}
-	props.Actuals = actuals
+	props.Actuals = performanceActuals(actuals)
 
 	if c.Query("from") != "" {
 		form, wf, err := parseBacktestForm(c)
@@ -114,7 +114,7 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 				slog.ErrorContext(ctx, "handler: performance backtest", "error", err)
 				status, props.Error = http.StatusInternalServerError, "バックテストの実行に失敗しました。"
 			default:
-				props.Result = &result
+				props.Result = performanceResult(result)
 			}
 		}
 	}

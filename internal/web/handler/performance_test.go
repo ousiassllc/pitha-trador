@@ -3,6 +3,7 @@ package handler_test
 import (
 	"context"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -91,6 +92,33 @@ func TestPerformanceHandler_Page_RunsWalkForwardOverJSTDayRangeAndRendersMetrics
 	}
 	body := rec.Body.String()
 	for _, want := range []string{`data-metric="trade_count">12<`, `data-metric="expectancy">0.34%<`, `data-metric="max_drawdown_pct">4.10%<`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
+	}
+}
+
+// The handler maps each fold's Forward period (exclusive end) and metrics
+// onto the page's Folds table, and renders +Inf Profit Factor as "∞".
+func TestPerformanceHandler_Page_RendersFoldsAndInfiniteProfitFactor(t *testing.T) {
+	jst := time.FixedZone("JST", 9*60*60)
+	start := time.Date(2026, 9, 8, 0, 0, 0, 0, jst)
+	runner := &recordingBacktestRunner{result: backtest.Result{
+		Splits: []backtest.SplitResult{{
+			Split:   backtest.Split{Forward: backtest.Period{Start: start, End: start.AddDate(0, 0, 2)}},
+			Forward: backtest.Metrics{TradeCount: 3, WinRate: 2.0 / 3, Expectancy: 1.5, MaxDrawdownPct: 0.5, NetPnLPct: 4.25},
+		}},
+		Combined: backtest.Metrics{TradeCount: 3, ProfitFactor: math.Inf(1)},
+	}}
+	rec := servePerformance(t, runner, "/performance?from=2026-09-01&to=2026-09-10&training_days=3&validation_days=2&forward_days=1")
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`data-metric="profit_factor">∞<`,
+		`2026-09-08 – 2026-09-09</td>`,
+		`<td class="px-3 py-2">66.7%</td>`,
+		`<td class="px-3 py-2">4.25%</td>`,
+	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)
 		}

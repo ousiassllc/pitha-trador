@@ -46,7 +46,7 @@ func (h *SymbolHandler) Page(c *gin.Context) {
 
 	shared.RenderHTML(c, http.StatusOK, pages.SymbolDetailPage(pages.SymbolDetailProps{
 		Symbol:             symbol,
-		State:              state,
+		Position:           state.Position,
 		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
 		StopLossPct:        h.riskParams.StopLossPct,
 		TakeProfitPct:      h.riskParams.TakeProfitPct,

@@ -3,16 +3,32 @@ package organisms
 import (
 	"fmt"
 	"math"
-
-	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 )
 
-// PerformanceSummaryPanel renders one backtest.Metrics set - FR-BT-1's
+// PerformanceSummary is PerformanceSummaryPanel's plain-props view of one
+// backtest metric set (internal/web/handler maps backtest.Metrics onto
+// it), so organisms stay decoupled from internal/service. Return figures
+// are percentage returns summed over trades. ProfitFactor is +Inf when
+// there are wins and no losses.
+type PerformanceSummary struct {
+	TradeCount     int
+	WinRate        float64
+	AvgProfit      float64
+	AvgLoss        float64
+	ProfitFactor   float64
+	Expectancy     float64
+	MaxDrawdownPct float64
+	GrossPnLPct    float64
+	SlippagePnLPct float64
+	FeePnLPct      float64
+	NetPnLPct      float64
+}
+
+// PerformanceSummaryPanel renders one PerformanceSummary - FR-BT-1's
 // trade count, win rate, average profit/loss, Profit Factor, Expectancy,
 // Max Drawdown and gross/slippage/fee/net PnL (docs/components/
-// overview.md §3 "PerformanceSummaryPanel"). Return figures are
-// percentage returns summed over trades, the unit backtest.Trade uses.
-templ PerformanceSummaryPanel(title string, m backtest.Metrics) {
+// overview.md §3 "PerformanceSummaryPanel").
+templ PerformanceSummaryPanel(title string, m PerformanceSummary) {
 	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="performance-summary">
 		<h2 class="text-lg font-semibold text-slate-900">{ title }</h2>
 		<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
