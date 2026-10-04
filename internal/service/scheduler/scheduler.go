@@ -150,7 +150,10 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 // When the previous cycle's market-data jobs are still pending or
 // running it enqueues nothing, logs a warning and returns (0, nil), so a
 // worker slower than the cycle cannot pile up unbounded stale jobs
-// (non-functional.md §2.1 "次サイクルまでに完了しない場合はスキップ").
+// (non-functional.md §2.1 "次サイクルまでに完了しない場合はスキップ"). A
+// running row older than orphanedRunningAfter is an orphan (its worker
+// failed to record completion) and is failed first instead of counted
+// (fullscan_unfinished.go, issue #416).
 //
 // Outside a trading session (WithSessionGate) it enqueues nothing and
 // returns (0, nil): no market data is fetched off-hours.
@@ -158,7 +161,7 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 	if !s.inSession(now) {
 		return 0, nil
 	}
-	unfinished, err := s.unfinishedMarketDataJobs(ctx)
+	unfinished, err := s.unfinishedMarketDataJobs(ctx, now)
 	if err != nil {
 		return 0, err
 	}
@@ -184,18 +187,6 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 	}
 	slog.Info("scheduler: full scan enqueued", "instrument_count", len(instruments))
 	return len(instruments), nil
-}
-
-// unfinishedMarketDataJobs returns how many market-data jobs are still
-// pending or running, i.e. left over from earlier full-scan cycles. It
-// counts only those open rows (jobqueue.JobRepository.CountOpen), never the
-// retained finished ones, because it runs every cycle.
-func (s *Scheduler) unfinishedMarketDataJobs(ctx context.Context) (int, error) {
-	n, err := s.jobs.CountOpen(ctx, jobqueue.JobQueueMarketData)
-	if err != nil {
-		return 0, fmt.Errorf("scheduler: count unfinished market-data jobs: %w", err)
-	}
-	return n, nil
 }
 
 // EnqueueEventReevaluation enqueues one jev-scout job for instrumentID,

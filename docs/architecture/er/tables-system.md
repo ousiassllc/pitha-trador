@@ -116,9 +116,9 @@ erDiagram
 | last_error | text | NULL可 | |
 | created_at | text | NOT NULL | |
 
-インデックス: `INDEX (queue, status, scheduled_at)`（`ClaimNext`・未完了件数`CountOpen`）, `INDEX (queue, status, finished_at)`（直近`failed`件数`QueueCounts`・Jev Scout間引き`ListOpenOrFinishedSince`。マイグレーション000019）。保持期間内の完了行は最大で数千万行に達するため、毎サイクル・毎ジョブ遷移で呼ばれるクエリは完了行を全走査せず、この2本の索引の範囲検索だけで引く（`EXPLAIN QUERY PLAN`が`SCAN jobs`にならないことをテストで固定している）
+インデックス: `INDEX (queue, status, scheduled_at)`（`ClaimNext`・未完了件数`CountOpen`）, `INDEX (queue, status, finished_at)`（直近`failed`件数`QueueCounts`・Jev Scout間引き`ListOpenOrFinishedSince`・Activity Logの直近ジョブ`ListRecent`。マイグレーション000019）。保持期間内の完了行は最大で数千万行に達するため、毎サイクル・毎ジョブ遷移で呼ばれるクエリは完了行を全走査せず、この2本の索引の範囲検索だけで引く（`EXPLAIN QUERY PLAN`が`SCAN jobs`にならないことをテストで固定している）
 
-再起動時の回復: プロセス起動時に`status='running'`のまま残っている行（クラッシュで中断されたジョブ）を`pending`へ戻し再実行する。
+再起動時の回復: プロセス起動時に`status='running'`のまま残っている行（クラッシュで中断されたジョブ）を`pending`へ戻し再実行する。起動後に完了書き込みへ失敗して`running`のまま残った`market-data`の行は、全体スキャンの未完了判定（`Scheduler.EnqueueFullScan`）が`started_at`から10分超のものを`failed`へ回復する（`non-functional.md` §2.1）。
 
 保持期間: 完了行のみを対象に、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`succeeded`は`finished_at`から7日、`failed`は30日経過後にバッチ削除する。`pending`/`running`は削除しない。`ClaimNext`や`QueueCounts`の集計コストとDBファイルの肥大を抑えるための措置で、Activity Logが参照する直近の行は保持期間内に残る（`non-functional.md` §3）。
 

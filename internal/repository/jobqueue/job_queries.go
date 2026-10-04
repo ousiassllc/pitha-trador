@@ -73,35 +73,6 @@ func (r *JobRepository) CountOpen(ctx context.Context, queue string) (int, error
 	return n, nil
 }
 
-// ListRecent returns up to limit jobs, most recently active first (by the
-// latest of finished_at, started_at, created_at that is set), optionally
-// restricted to queue ("" = every queue).
-func (r *JobRepository) ListRecent(ctx context.Context, queue string, limit int) ([]Job, error) {
-	rows, err := r.db.QueryContext(ctx,
-		jobSelectColumns+` FROM jobs WHERE (? = '' OR queue = ?)
-		 ORDER BY COALESCE(finished_at, started_at, created_at) DESC, id DESC
-		 LIMIT ?`,
-		queue, queue, limit,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("repository: list recent jobs (queue=%q): %w", queue, err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var out []Job
-	for rows.Next() {
-		job, err := scanJob(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, job)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("repository: list recent jobs (queue=%q): %w", queue, err)
-	}
-	return out, nil
-}
-
 // listOpenOrFinishedSinceQuery is two index range searches (open rows via
 // jobs_queue_status_scheduled_idx, recently finished ones via
 // jobs_queue_status_finished_idx) rather than one "status IN (...) OR

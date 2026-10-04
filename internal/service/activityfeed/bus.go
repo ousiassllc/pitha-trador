@@ -2,6 +2,7 @@ package activityfeed
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -70,7 +71,9 @@ func (s *Service) markQueueDirty(queue string) {
 }
 
 // flushQueueUpdates publishes the current depth of every queue marked dirty
-// since the last flush, with one QueueCounts call.
+// since the last flush, with one QueueCounts call. When that call fails the
+// queues stay dirty and are retried after queueUpdateInterval, for as long
+// as there are subscribers.
 func (s *Service) flushQueueUpdates() {
 	s.mu.Lock()
 	dirty := s.dirtyQueues
@@ -84,6 +87,13 @@ func (s *Service) flushQueueUpdates() {
 	defer cancel()
 	counts, err := s.jobs.QueueCounts(ctx, s.now().Add(-FailedWindow))
 	if err != nil {
+		// Keep the queues dirty and retry on the next interval: dropping
+		// them would leave the queue-depth panel stale until the queue's
+		// next transition (issue #420).
+		slog.Error("activityfeed: queue counts failed; retrying", "error", err, "queues", len(dirty))
+		for queue := range dirty {
+			s.markQueueDirty(queue)
+		}
 		return
 	}
 	byQueue := make(map[string]jobqueue.JobQueueCount, len(counts))

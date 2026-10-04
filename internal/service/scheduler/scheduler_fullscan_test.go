@@ -100,6 +100,55 @@ func TestScheduler_EnqueueFullScan_SkipsWhilePreviousCycleUnfinished(t *testing.
 	}
 }
 
+// A worker whose completion write failed leaves its market-data row
+// running; once it is older than the orphan threshold it must not block
+// the full scan forever (issue #416).
+func TestScheduler_EnqueueFullScan_RecoversOrphanedRunningJob(t *testing.T) {
+	db := newTestDB(t)
+	instruments := market.NewInstrumentRepository(db)
+	jobs := jobqueue.NewJobRepository(db)
+	ctx := context.Background()
+
+	mustCreateInstrument(t, instruments, "7203", true)
+	mustCreateInstrument(t, instruments, "9433", true)
+
+	s := scheduler.New(jobs, instruments)
+	now := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+
+	if count, err := s.EnqueueFullScan(ctx, now); err != nil || count != 2 {
+		t.Fatalf("first EnqueueFullScan = (%d, %v), want (2, nil)", count, err)
+	}
+	orphan, err := jobs.ClaimNext(ctx, jobqueue.JobQueueMarketData, now)
+	if err != nil {
+		t.Fatalf("ClaimNext: %v", err)
+	}
+	other, err := jobs.ClaimNext(ctx, jobqueue.JobQueueMarketData, now)
+	if err != nil {
+		t.Fatalf("ClaimNext second: %v", err)
+	}
+	if err := jobs.MarkSucceeded(ctx, other.ID, now); err != nil {
+		t.Fatalf("MarkSucceeded: %v", err)
+	}
+
+	// Within the threshold the running row still counts as unfinished.
+	if count, err := s.EnqueueFullScan(ctx, now.Add(5*time.Minute)); err != nil || count != 0 {
+		t.Fatalf("EnqueueFullScan with fresh running job = (%d, %v), want (0, nil)", count, err)
+	}
+
+	// Past the threshold it is an orphan: the scan resumes and the row is closed.
+	later := now.Add(11 * time.Minute)
+	if count, err := s.EnqueueFullScan(ctx, later); err != nil || count != 2 {
+		t.Fatalf("EnqueueFullScan with orphaned running job = (%d, %v), want (2, nil)", count, err)
+	}
+	got, err := jobs.Get(ctx, orphan.ID)
+	if err != nil {
+		t.Fatalf("Get orphan: %v", err)
+	}
+	if got.Status != jobqueue.JobStatusFailed || got.FinishedAt == nil || got.LastError == nil {
+		t.Fatalf("orphan job = %+v, want failed with finished_at and last_error", got)
+	}
+}
+
 func countJobs(t *testing.T, jobs *jobqueue.JobRepository, queue string, since time.Time) int {
 	t.Helper()
 	list, err := jobs.ListOpenOrFinishedSince(context.Background(), queue, since.Add(-time.Hour))
