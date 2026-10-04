@@ -37,9 +37,9 @@ Calibration集計（FR-CAL-2/3、`ListLabeledSamples*`・自己改善の日次�
 Jev Scout/Traderが「今の状態」だけでなく「過去の類似局面で何が起きたか」を踏まえて判断できるよう、過去データを検索し文脈として注入する。
 
 - FR-RAG-1: `market_snapshots`（全スナップショット）および`jev_decisions`（判断が発生した局面。`calibration_outcomes`と紐付く）の各行に、標準化済み特徴量ベクトル（return_1m/5m/15m, price_vs_vwap_bps, volume_ratio_1m/5m, spread_bps, orderbook_imbalance, realized_vol_5m/15m, volatility_expansion_ratio, market_return_5m, sector_return_5m 等）を`market_snapshot_vectors`/`jev_decision_vectors`（sqlite-vec `vec0`仮想テーブル）に保存する
-- FR-RAG-2: Jev Scout/Trader呼び出し直前に、現在の状態ベクトルに対しsqlite-vecで類似度上位k件（初期値k=5）を`jev_decisions`（`calibration_outcomes`紐付き済みのもの優先）および`market_snapshots`から検索する。紐付き済みの判断は、Scout判断（ラベル付与不能で全候補×毎サイクル索引される）が最近傍を占めていても候補から漏れないよう、紐付き済みのみを対象にした検索で先に最大k件取得する
+- FR-RAG-2: Jev Scout/Trader呼び出し直前に、現在の状態ベクトルに対しsqlite-vecで類似度上位k件（初期値k=5）を`jev_decisions`（`calibration_outcomes`紐付き済みのもの優先）および`market_snapshots`から検索する。紐付き済みの判断は、Scout判断（ラベル付与不能で全候補×毎サイクル索引される）が最近傍を占めていても候補から漏れないよう、紐付き済みのみを対象にした検索で先に最大k件取得する。問い合わせ対象の状態自身は類似事例に含めない（FR-RAG-4）
 - FR-RAG-3: 検索結果（類似局面の方向・regime・実際のfuture_return・was_direction_correct等の要約）をJevへのプロンプトにfew-shot文脈として注入する。埋め込みはLLM API呼び出しを伴わない数値特徴量ベクトルのみを用い、追加のAPIコスト・レイテンシを発生させない
-- FR-RAG-4: 蓄積データが不十分な期間（コールドスタート）はRAG文脈を空のまま呼び出す（Jevの通常判断のみで動作する）
+- FR-RAG-4: 蓄積データが不十分な期間（コールドスタート）はRAG文脈を空のまま呼び出す（Jevの通常判断のみで動作する）。サイクルごとに現在のスナップショット・Scout判断が検索前に索引済みのため、問い合わせ対象の銘柄・時刻（`Timestamp`）について、(a) 同一銘柄のScout/Trader判断のうち`Timestamp`が現在時刻以降のもの（Trader呼び出し直前に保存された同一状態のScout判断を含む）、(b) 補充枠の`market_snapshots`のうち同一銘柄で`Timestamp`が現在時刻−15分（特徴量ベクトルの最長ルックバック）より新しいもの（現在のスナップショット自身・直近の足）を検索結果から除外する。除外はsqlite-vecのKNN走査時の許可id集合（`IN (SELECT …)`）として行うため、除外対象でk件が埋まることはない。他銘柄の同時刻スナップショット・判断は除外しない。除外の結果、類似事例が0件ならRAG文脈は空となる
 - FR-RAG-5（将来拡張・未実装）: Symbol DetailのDecision historyに、参照した類似局面の件数を付加情報として表示する。任意要件でありUI必須要件ではない。現状は`jev_decisions`にも`GET /api/v1/symbols/{symbol}/decisions`の応答にも参照件数を保持・出力しておらず、`components/overview.md`にも対応する記述はない。実装する場合は、RAG Context Builderが検索した件数の保持先とAPI/UI表示を本書および`components/overview.md`に追記してから着手する
 
 ### 4.14 自己改善ループ（Luna / Sol / Opus 連携）

@@ -56,7 +56,7 @@ func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutSt
 	state = withNewsContext(state, t.news)
 	featureInput := ragFeatureInput(state)
 
-	ragContext, err := t.rag.Context(ctx, featureInput, rag.DefaultK)
+	ragContext, err := t.rag.Context(ctx, featureInput, rag.Subject{Symbol: state.Symbol, Timestamp: state.Timestamp}, rag.DefaultK)
 	if err != nil {
 		slog.Error("jev: build rag context failed, calling Trader without similar-case context", "symbol", state.Symbol, "error", err)
 	}

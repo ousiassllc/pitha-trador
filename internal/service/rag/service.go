@@ -71,9 +71,9 @@ type match struct {
 
 // search runs a sqlite-vec KNN query on table for the k nearest rows to v.
 // filter is an optional extra vec0 constraint on the id column (e.g.
-// "decision_id IN (...)"), applied during the KNN scan so a restricted
-// subset still yields up to k hits; "" searches every row.
-func (s *Service) search(ctx context.Context, table, idColumn, filter string, v Vector, k int) ([]match, error) {
+// "decision_id IN (...)") with its bound args, applied during the KNN scan
+// so a restricted subset still yields up to k hits; "" searches every row.
+func (s *Service) search(ctx context.Context, table, idColumn, filter string, filterArgs []any, v Vector, k int) ([]match, error) {
 	if k <= 0 {
 		return nil, nil
 	}
@@ -85,9 +85,10 @@ func (s *Service) search(ctx context.Context, table, idColumn, filter string, v 
 		filter = " AND " + filter
 	}
 
+	args := append([]any{embedding}, filterArgs...)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+idColumn+`, distance FROM `+table+` WHERE embedding MATCH ?`+filter+` ORDER BY distance LIMIT ?`, //nolint:gosec // G202: table/idColumn/filter are package-internal constants (never user input); values are bound parameters
-		embedding, k)
+		append(args, k)...)
 	if err != nil {
 		return nil, fmt.Errorf("rag: search %s: %w", table, err)
 	}
@@ -154,16 +155,23 @@ type Context struct {
 // matches backfill up to k total. See decisionMatches for how the
 // candidate pool keeps labeled decisions from being crowded out.
 //
+// sub identifies the queried state: it is never returned as its own
+// "similar past case" (FR-RAG-4). Its same-symbol decisions at/after its
+// timestamp (e.g. the Scout decision a Trader call follows) and its
+// same-symbol snapshots within SnapshotRecencyGuard are excluded, so a
+// cold start - nothing but the current state indexed - yields an empty
+// Context.
+//
 // A search or hydration error is only ever returned for a true
 // technical failure (e.g. a closed/broken database connection); a
 // cold-start empty result is not an error (FR-RAG-4).
-func (s *Service) Context(ctx context.Context, in FeatureInput, k int) (Context, error) {
+func (s *Service) Context(ctx context.Context, in FeatureInput, sub Subject, k int) (Context, error) {
 	if k <= 0 {
 		k = DefaultK
 	}
 	v := Build(in)
 
-	decisionMatches, err := s.decisionMatches(ctx, v, k)
+	decisionMatches, err := s.decisionMatches(ctx, v, k, sub)
 	if err != nil {
 		return Context{}, err
 	}
@@ -202,7 +210,8 @@ func (s *Service) Context(ctx context.Context, in FeatureInput, k int) (Context,
 	}
 
 	if len(cases) < k {
-		snapshotMatches, err := s.search(ctx, "market_snapshot_vectors", "snapshot_id", "", v, k-len(cases))
+		snapshotFilter, snapshotArgs := sub.snapshotFilter()
+		snapshotMatches, err := s.search(ctx, "market_snapshot_vectors", "snapshot_id", snapshotFilter, snapshotArgs, v, k-len(cases))
 		if err != nil {
 			return Context{}, fmt.Errorf("rag: search similar snapshots: %w", err)
 		}
