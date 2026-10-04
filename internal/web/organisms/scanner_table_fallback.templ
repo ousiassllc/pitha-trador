@@ -206,7 +206,7 @@ func EscapeSymbolSegment(symbol string) string {
 
 // SymbolHref is the symbol detail link. It is the single source of the
 // detail URL rule: the SSR rows use it directly and the scanner API /
-// WebSocket items carry it as `detail_url` (handler.toScannerItems), so
+// WebSocket items carry it as `detail_url` (internal/web/handler/scanner.toScannerItems), so
 // pitha-scanner-table never builds the URL itself (HATEOAS).
 func SymbolHref(symbol string) templ.SafeURL {
 	return templ.SafeURL("/symbols/" + EscapeSymbolSegment(symbol))

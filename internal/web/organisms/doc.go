@@ -5,7 +5,7 @@
 // Dependency policy: organisms (like internal/web/pages) may import
 // internal/domain but never internal/service. They take plain props
 // (PerformanceSummary, PerformanceActuals, UpdateBannerProps, ...) that
-// internal/web/handler fills from the service result types, so a service
+// the internal/web/handler/* subpackages fill from the service result types, so a service
 // type change cannot break the templates. The golangci-lint depguard rule
 // `templ-no-service` enforces it.
 //
