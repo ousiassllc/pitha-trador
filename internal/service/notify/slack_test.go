@@ -161,11 +161,17 @@ func TestSlackNotifier_DailyLossWarning(t *testing.T) {
 	n, closeSrv := captureWebhook(t, &got)
 	defer closeSrv()
 
-	if err := n.DailyLossWarning(context.Background(), 0.024, 0.03); err != nil {
+	if err := n.DailyLossWarning(context.Background(), 0.8, 1.0); err != nil {
 		t.Fatalf("DailyLossWarning: %v", err)
 	}
-	if !strings.Contains(got[0], "日次損失上限接近") {
-		t.Errorf("message %q missing expected content", got[0])
+	// Arguments are percent values (0.8 = 0.8%): the message must not
+	// scale them by 100 again (0.8% shown as 80.00% was #453).
+	const want = "日次損失上限接近: 現在の日次損失率 0.80%（上限 1.00% の 80%到達）"
+	if !strings.Contains(got[0], want) {
+		t.Errorf("message %q does not contain %q", got[0], want)
+	}
+	if strings.Contains(got[0], "80.00%") || strings.Contains(got[0], "100.00%") {
+		t.Errorf("message %q scales percent values by 100", got[0])
 	}
 }
 
