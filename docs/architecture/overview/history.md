@@ -63,3 +63,4 @@
 | 1.56 | 2026-10-05 | `architecture/er.md` §型・規約「日時」の小数秒固定幅化（マイグレーション000021）に伴う記述変更。本ファイルが参照する`overview.md`・`overview/`配下の本文は変更なし | issue #430 |
 | 1.57 | 2026-10-05 | `components/overview.md` §2の`static/src/components`ツリーに`scanner-table/`・`activity-feed/`の補助ファイル・`scanner-contract.json`・`dist/js/chunks/`を追記（`components/overview.md`の改訂履歴1.52）。本ファイルが参照する`overview.md`・`overview/`配下の本文は変更なし | issue #436 |
 | 1.58 | 2026-10-05 | §7（`integrations.md`）に実装済みのRAG文脈を追記: `calibration_outcomes`の結合（最短horizonの`future_return`・`was_direction_correct`・`regime`）、outcome紐付き済み判断を優先する再ランク（k×4候補）、`stateGuide`改訂に伴う`question_version`の`scout-v3`/`trader-v3` | issue #437 |
+| 1.59 | 2026-10-05 | §6（`integrations.md`）の現行`question_version`を`scout-v3`/`trader-v3`に更新し（v2はRAG文脈に実結果が無いと案内していた旧プロンプト）、同節の「Calibrationのコホートを分離するため」を実態に訂正（版は記録・表示用で、Calibration集計は版で分離せず全版を混在して集計する） | issue #439, #440, #443, #444, #447, #448 |
