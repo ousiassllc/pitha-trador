@@ -9,6 +9,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/orphans"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/updatecheck"
 )
 
@@ -180,6 +181,13 @@ func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (
 // addPeriodicTriggers registers Start's optional cron triggers - each
 // only when its Option configured the dependency it drives.
 func (s *Scheduler) addPeriodicTriggers(ctx context.Context) error {
+	if _, err := s.cron.AddFunc(orphanRecoveryCronSpec, func() {
+		if err := orphans.FailAll(ctx, s.jobs, time.Now().UTC()); err != nil {
+			slog.Error("scheduler: orphaned running job recovery failed", "error", err)
+		}
+	}); err != nil {
+		return fmt.Errorf("scheduler: register orphaned running job recovery trigger: %w", err)
+	}
 	if s.outcomeLabels != nil {
 		if _, err := s.cron.AddFunc(outcomeLabelingCronSpec, func() {
 			if _, err := s.EnqueueOutcomeLabeling(ctx, time.Now().UTC()); err != nil {

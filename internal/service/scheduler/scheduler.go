@@ -151,9 +151,9 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 // running it enqueues nothing, logs a warning and returns (0, nil), so a
 // worker slower than the cycle cannot pile up unbounded stale jobs
 // (non-functional.md §2.1 "次サイクルまでに完了しない場合はスキップ"). A
-// running row older than orphanedRunningAfter is an orphan (its worker
+// running row older than orphans.After is an orphan (its worker
 // failed to record completion) and is failed first instead of counted
-// (fullscan_unfinished.go, issue #416).
+// (orphans package, issues #416/#424/#425).
 //
 // Outside a trading session (WithSessionGate) it enqueues nothing and
 // returns (0, nil): no market data is fetched off-hours.
@@ -223,6 +223,8 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 // retention purge, log archival) run on start and on every 10-minute
 // catch-up tick until each has succeeded today (maintenance.go;
 // non-functional.md §3, §5), running until ctx is done or Stop is called.
+// Every minute it also fails the orphaned running jobs of every queue
+// (orphans.FailAll, issues #424/#425).
 //
 // The 15-30s candidate-refresh cycle (functional.md §4.3) is not a
 // Scheduler trigger: internal/bootstrap/candidates' Refresher.Run drives
