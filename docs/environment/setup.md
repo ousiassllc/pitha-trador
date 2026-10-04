@@ -117,6 +117,7 @@ symbol,name,market,sector,kind
 - 列は見出し行で識別する（順序自由・大文字小文字無視）。必須は`symbol`（≤10文字・ファイル内で一意）/`name`/`market`。`sector`は任意（`kind=sector_index`では必須。株式の`sector`と一致するとsector_return_5m算出に使われる）。`kind`は`stock`（既定）/`market_index`/`sector_index`。
 - 同期は冪等。新規`symbol`は`is_active=1`で追加し、既存`symbol`は`name`/`market`/`sector`/`kind`のみ更新して`is_active`は変更しない（運用者が除外した銘柄は再起動しても復活しない）。CSVから消した銘柄は削除も無効化もされない。
 - 不正な行が1つでもあればファイル全体を適用せず、行番号つきのエラーをログに出してDBは変更しない。CSVが無くDBも空の場合はスキャン対象が0件になる旨をエラーログに出す。
+- CSVはUTF-8（BOM可）のみ対応。UTF-8として不正なバイト列を含むファイル（Excelの既定「CSV」保存形式であるShift_JIS/CP932等）は、`line N, byte M: file is not valid UTF-8`のエラーでファイル全体を拒否する（文字化けした`name`/`sector`を保存しない）。Shift_JISのCSVはUTF-8で保存し直す（Excelでは「CSV UTF-8（コンマ区切り）」を選ぶ）。
 - `market_index`/`sector_index`は市場コンテキスト特徴量（FR-FE-4）の入力としてだけ追跡される。
 
 ### Makefileターゲット
@@ -135,6 +136,7 @@ symbol,name,market,sector,kind
 
 - **`make dev`の環境変数**: `wails dev`は`cmd/desktop`をカレントとして動くため、`Makefile`は`PITHA_UNIVERSE_PATH`も`config/universe.sample.csv`に設定し（銘柄マスタの投入、上記）、`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`を`$(CURDIR)/config/*.yaml`（絶対パス）に設定する。`internal/bootstrap.Run`は環境変数を埋め込み既定値より優先するため、`config/risk.yaml`等を編集して`make dev`を再起動すれば再ビルドなしで反映される（埋め込み既定値はビルド時のスナップショット）。`PITHA_STATIC_DIR`は`static/src`に設定し、`/static/...`をディスクから配信する。`wails dev`のファイル監視は既定で`.go`変更時のみGoバイナリを再ビルドするため、この上書きが無いと`bun run dev`（esbuild/Tailwind watch）の出力がgo:embedのスナップショットに阻まれ`make dev`再起動まで反映されない
 - **`generate`が前提となる理由**: `templ generate`が`*_templ.go`を、`bun run --cwd static build`が`static/src/dist/{css,js}`を生成する。どちらも`.gitignore`対象であり、`static/src/embed.go`の`//go:embed dist img vendor`は`dist/`が空だとコンパイル自体が失敗する。そのためクリーンなチェックアウトでは、生成前に`go vet`/golangci-lint/`go test`/`wails build`のいずれも実行できない（古い生成物が残っていると陳腐化した出力に対して実行してしまう）。CIの`lint`/`test`/`build`各ジョブも同じ2ステップを先に実行し、`lefthook`のpre-commit/pre-pushも`make generate`を呼ぶ
+- **CSPの`lightweight-charts` style hash**: `lightweight-charts`は帰属ロゴ用のインライン`<style>`を挿入し、CSPは`internal/web/middleware/security_headers.go`の`lightweightChartsAttributionStyleHash`（SHA-256）でこれだけを許可している。`bun test`の`static/src/csp/lightweight-charts-style-hash.test.ts`がインストール済みライブラリの実際のstyleテキストのハッシュをこの定数と照合するため、`lightweight-charts`の更新でstyleが変わるとテストが失敗する。失敗したら期待値として表示されたハッシュで定数を更新する。
 - **`-race`の適用範囲**: データ競合の検出はCIの`test`ジョブ（`go test -race ./...`）と`make test-race`で行う。race detectorはcgo（gcc）を必要とし、Windows開発機などgccが無い環境ではビルドできないため、`make test`とlefthookのpre-pushは`-race`なしの`go test ./...`のままにしている（pre-pushを高速に保つ目的も兼ねる）
 
 ## CI/CD
@@ -295,3 +297,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.31 | 2026-10-04 | CI/CD節に最小権限（トップレベル`permissions: contents: read`、`release`のみ`contents: write`）・外部ActionのコミットSHA固定・`govulncheck`・Dependabot（gomod/github-actions/bun）を追記。Lint節に`gosec`/`bodyclose`/`noctx`/`rowserrcheck`と除外方針を追記。`go.mod`のGoを1.25.14へ更新（1.25.11は標準ライブラリの既知脆弱性6件に該当し`govulncheck`が失敗するため） | issue #375 |
 | 1.32 | 2026-10-04 | 自動更新の署名検証を追加: CI `build`ジョブが`RELEASE_SIGNING_PUBLIC_KEY`/`RELEASE_SIGNING_KEY`設定時に`checksums.txt.sig`（ed25519分離署名）を生成・公開し、公開鍵を`-ldflags`で埋め込む。鍵の発行手順を追記 | issue #376 |
 | 1.33 | 2026-10-05 | CIの署名発行・欠落時失敗の条件を`ci.yml`の`Sign checksums`の`if`（`main`へのpushとタグpushのみ。PR・`feat/**`は公開鍵の埋め込みのみ）に合わせて訂正 | issue #414 |
+| 1.34 | 2026-10-05 | 「銘柄マスタの投入」節にUTF-8以外（Shift_JIS/CP932）のCSVは全体拒否される旨を追記、`make test`の`bun test`がCSPの`lightweight-charts`style hashとインストール版の一致を検証する旨を追記 | issue #393, #407 |

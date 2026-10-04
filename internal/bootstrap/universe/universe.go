@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
@@ -69,7 +70,11 @@ func Parse(r io.Reader) ([]domain.Instrument, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read: %w", err)
 	}
-	cr := csv.NewReader(bytes.NewReader(bytes.TrimPrefix(data, utf8BOM)))
+	data = bytes.TrimPrefix(data, utf8BOM)
+	if err := checkUTF8(data); err != nil {
+		return nil, err
+	}
+	cr := csv.NewReader(bytes.NewReader(data))
 	cr.TrimLeadingSpace = true
 	cr.FieldsPerRecord = -1
 
@@ -115,6 +120,27 @@ func Parse(r io.Reader) ([]domain.Instrument, error) {
 		return nil, errors.New("no instrument rows")
 	}
 	return out, nil
+}
+
+// checkUTF8 rejects input that is not valid UTF-8 (typically a Shift_JIS/CP932
+// file saved by Excel's default "CSV" format), naming the 1-based line and
+// column of the first bad byte. Without it the mojibake would pass the
+// ASCII-only checks (symbol/kind) and be stored in name/sector.
+func checkUTF8(data []byte) error {
+	if utf8.Valid(data) {
+		return nil
+	}
+	off := 0
+	for off < len(data) {
+		r, size := utf8.DecodeRune(data[off:])
+		if r == utf8.RuneError && size <= 1 {
+			break
+		}
+		off += size
+	}
+	line := 1 + bytes.Count(data[:off], []byte{'\n'})
+	col := off - (bytes.LastIndexByte(data[:off], '\n') + 1) + 1
+	return fmt.Errorf("line %d, byte %d: file is not valid UTF-8 (Shift_JIS/CP932 is not supported: re-save the CSV as UTF-8)", line, col)
 }
 
 func parseRow(rec []string, cols map[string]int) (domain.Instrument, error) {

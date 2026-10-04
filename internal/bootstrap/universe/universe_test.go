@@ -62,6 +62,40 @@ func TestParse_RejectsInvalidFilesWithTheOffendingLine(t *testing.T) {
 	}
 }
 
+// A Shift_JIS/CP932 file keeps ASCII headers/symbols/kinds valid, so only an
+// explicit UTF-8 check stops the mojibake name/sector from being stored.
+func TestParse_RejectsNonUTF8WithLineAndByte(t *testing.T) {
+	// "トヨタ自動車" / "輸送用機器" in Shift_JIS.
+	const toyotaSJIS = "\x83\x67\x83\x88\x83\x5e\x8e\xa9\x93\xae\x8e\xd4"
+	const sectorSJIS = "\x97\xa6\x91\x97\x97\x70\x8b\x40\x8a\xed"
+	csv := "symbol,name,market,sector,kind\n" +
+		"101,TOPIX,INDEX,,market_index\n" +
+		"7203," + toyotaSJIS + ",TSE Prime," + sectorSJIS + ",stock\n"
+
+	got, err := universe.Parse(strings.NewReader(csv))
+	if err == nil || !strings.Contains(err.Error(), "line 3, byte 6: file is not valid UTF-8") {
+		t.Fatalf("Parse = %+v, %v; want a line 3, byte 6 UTF-8 error", got, err)
+	}
+	if got != nil {
+		t.Fatalf("Parse returned rows %+v alongside the error; the whole file must be rejected", got)
+	}
+	if _, err := universe.Parse(strings.NewReader("\xEF\xBB\xBF" + csv)); err == nil {
+		t.Fatal("Parse accepted a BOM-prefixed Shift_JIS file")
+	}
+}
+
+func TestParse_AcceptsUTF8WithAndWithoutBOM(t *testing.T) {
+	const body = "symbol,name,market\n7203,トヨタ自動車,TSE Prime\n"
+	for name, in := range map[string]string{"no BOM": body, "BOM": "\xEF\xBB\xBF" + body} {
+		t.Run(name, func(t *testing.T) {
+			got, err := universe.Parse(strings.NewReader(in))
+			if err != nil || len(got) != 1 || got[0].Name != "トヨタ自動車" {
+				t.Fatalf("Parse = %+v, %v", got, err)
+			}
+		})
+	}
+}
+
 func TestSyncFile_PopulatesCleanDBIdempotentlyAndKeepsIsActive(t *testing.T) {
 	ctx := context.Background()
 	conn, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
