@@ -80,17 +80,15 @@ describe('pitha-price-chart', () => {
     document.body.appendChild(el);
     await el.updateComplete;
 
+    type Fmt = (t: number, type?: number) => string | null;
     const options = createChartOptions[0] as {
-      localization: { timeFormatter: (t: number) => string };
-      timeScale: {
-        timeVisible: boolean;
-        tickMarkFormatter: (t: number, type: number, locale: string) => string | null;
-      };
+      localization: { timeFormatter: Fmt };
+      timeScale: { timeVisible: boolean; tickMarkFormatter: Fmt };
     };
     const tseOpen = Date.parse('2026-10-05T00:00:00Z') / 1000;
     expect(options.timeScale.timeVisible).toBe(true);
     expect(options.localization.timeFormatter(tseOpen)).toBe('2026-10-05 09:00');
-    expect(options.timeScale.tickMarkFormatter(tseOpen, 3, 'ja-JP')).toBe('09:00');
+    expect(options.timeScale.tickMarkFormatter(tseOpen, 3)).toBe('09:00');
   });
 
   // The first update cycle used to reload candles and reopen the socket (issue #170).
