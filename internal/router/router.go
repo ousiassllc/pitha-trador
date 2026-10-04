@@ -19,12 +19,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 )
 
-// New builds and returns the shared Gin engine: the placeholder root
-// page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
-// the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
-// Route registration otherwise stays minimal at this stage; later
-// sub-scopes register the remaining SSR routes (Templ/HTMX, via
-// internal/web/handler) on top of this engine.
+// New builds and returns the shared Gin engine in three stages:
+// useMiddleware installs the cross-cutting middleware chain (in
+// router_middleware.go), registerPages registers every SSR page, action
+// and WebSocket route (`GET /` redirects to `/scanner`) plus the opt-in
+// `/swagger` API docs UI, and registerAPI registers the Huma-based
+// `/api/v1` JSON API. docs/api/endpoints.md is the source of truth for
+// the route list.
 func New(opts ...Option) *gin.Engine {
 	o := options{
 		candidateSource:   scanner.StaticCandidateSource{},

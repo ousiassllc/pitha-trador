@@ -25,6 +25,18 @@ import (
 // maxSymbolLen is the instruments.symbol column width (varchar(10)).
 const maxSymbolLen = 10
 
+// isAlphanumericASCII reports whether s consists only of [0-9A-Za-z]: the
+// exact format the Symbol Detail page and API (`^[0-9A-Za-z]+$`) accept, so
+// every instrument loaded from the CSV has a reachable detail route.
+func isAlphanumericASCII(s string) bool {
+	for _, c := range []byte(s) {
+		if (c < '0' || c > '9') && (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') {
+			return false
+		}
+	}
+	return true
+}
+
 // utf8BOM is stripped from the file start: Excel's "CSV UTF-8" export adds it.
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 
@@ -57,7 +69,7 @@ func SyncFile(ctx context.Context, repo Upserter, path string) (instruments, cha
 // Parse reads the universe CSV: a header row naming the columns, then one
 // row per instrument. Columns (order free, names case-insensitive):
 //
-//	symbol  required  証券コード/指数コード (≤10文字, ファイル内で一意)
+//	symbol  required  証券コード/指数コード (英数字[0-9A-Za-z]のみ, ≤10文字, ファイル内で一意)
 //	name    required  銘柄名
 //	market  required  市場区分 (例: TSE Prime)
 //	sector  optional  業種 (kind=sector_index では必須)
@@ -160,6 +172,8 @@ func parseRow(rec []string, cols map[string]int) (domain.Instrument, error) {
 	switch {
 	case in.Symbol == "":
 		return in, errors.New("symbol is empty")
+	case !isAlphanumericASCII(in.Symbol):
+		return in, fmt.Errorf("symbol %q must be alphanumeric ([0-9A-Za-z] only): the Symbol Detail route rejects any other symbol", in.Symbol)
 	case len(in.Symbol) > maxSymbolLen:
 		return in, fmt.Errorf("symbol %q exceeds %d characters", in.Symbol, maxSymbolLen)
 	case in.Name == "":

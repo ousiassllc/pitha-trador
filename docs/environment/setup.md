@@ -10,7 +10,7 @@
 - DB: SQLite（`modernc.org/sqlite`、アプリ内蔵）+ golang-migrate + sqlite-vec（ベクトル検索）
 - 外部API: kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券）、Jev / Sol / Opus / Luna API
 
-技術スタックの詳細は `docs/architecture/overview.md` §2 技術スタック、レイヤー構造は同§3 を参照。本ドキュメントは開発環境・CI/CD・Lint/Format/Linterly/Git Hooks/Swagger の構築方針のみを扱う。
+技術スタックの詳細は `docs/architecture/overview.md` §2 技術スタック、レイヤー構造は同§3 を参照。本ドキュメントは開発環境・Lint/Format/Linterly/Git Hooks/Swagger の構築方針を扱う。CI/CD（GitHub Actions）の詳細は `environment/ci.md` に分割している。
 
 アプリケーション本体・CI（`.github/workflows/ci.yml`）・`Makefile`・`lefthook.yml`・`.golangci.yml`・`.linterly.yml`・`static/package.json`等の環境構築用ファイルはいずれも実装済みである。本ドキュメントはその現状の構成と方針を記述する。
 
@@ -39,7 +39,8 @@ pitha-trador/
 │   └── biome.json               # フロントエンドLint+Format設定
 └── docs/
     └── environment/
-        └── setup.md             # 本ドキュメント
+        ├── setup.md             # 本ドキュメント
+        └── ci.md                # CI/CD（GitHub Actions）の詳細
 ```
 
 - Goモジュールのルートは`pitha-trador/`直下（`go.mod`）
@@ -116,11 +117,11 @@ symbol,name,market,sector,kind
 1050,輸送用機器,INDEX,輸送用機器,sector_index
 ```
 
-- 列は見出し行で識別する（順序自由・大文字小文字無視）。必須は`symbol`（≤10文字・ファイル内で一意）/`name`/`market`。`sector`は任意（`kind=sector_index`では必須。株式の`sector`と一致するとsector_return_5m算出に使われる）。`kind`は`stock`（既定）/`market_index`/`sector_index`。
+- 列は見出し行で識別する（順序自由・大文字小文字無視）。必須は`symbol`（英数字`[0-9A-Za-z]`のみ・≤10文字・ファイル内で一意。`7203.T`・`^N225`・全角文字などは行番号つきのエラーでファイル全体を拒否する。銘柄詳細画面/APIが`^[0-9A-Za-z]+$`のsymbolしか受け付けないため。`130A`のような英数字混在コードと`101`（TOPIX）は可）/`name`/`market`。`sector`は任意（`kind=sector_index`では必須。株式の`sector`と一致するとsector_return_5m算出に使われる）。`kind`は`stock`（既定）/`market_index`/`sector_index`。
 - 同期は冪等。新規`symbol`は`is_active=1`で追加し、既存`symbol`は`name`/`market`/`sector`/`kind`のみ更新して`is_active`は変更しない（運用者が除外した銘柄は再起動しても復活しない）。CSVから消した銘柄は削除も無効化もされない。
 - 不正な行が1つでもあればファイル全体を適用せず、行番号つきのエラーをログに出してDBは変更しない。CSVが無くDBも空の場合はスキャン対象が0件になる旨をエラーログに出す。
 - CSVはUTF-8（BOM可）のみ対応。UTF-8として不正なバイト列を含むファイル（Excelの既定「CSV」保存形式であるShift_JIS/CP932等）は、`line N, byte M: file is not valid UTF-8`のエラーでファイル全体を拒否する（文字化けした`name`/`sector`を保存しない）。Shift_JISのCSVはUTF-8で保存し直す（Excelでは「CSV UTF-8（コンマ区切り）」を選ぶ）。
-- `market_index`/`sector_index`は市場コンテキスト特徴量（FR-FE-4）の入力としてだけ追跡される。
+- `market_index`/`sector_index`も`stock`と同じ`market-data`ジョブで60秒周期に板（REST）を取得・スナップショット保存され（FR-SCHED-2）、市場コンテキスト特徴量（FR-FE-4）の入力になる。PUSH購読と候補更新（Fast Screener→Jev Scout）の対象は`stock`のみ。
 
 ### Makefileターゲット
 
@@ -143,25 +144,7 @@ symbol,name,market,sector,kind
 
 ## CI/CD
 
-GitHub Actions（`.github/workflows/ci.yml`）。
-
-- **トリガー**: `push`（main, feat/**）、タグ`v*`のpush、`pull_request`
-- **ジョブ構成**: `lint` → `test` → `build` → `release` の順に実行（前段が失敗したら後段はスキップ。`release`は下記の条件を満たす場合のみ実行）
-  - `lint`: フロントエンドビルド（`bun install --cwd static --frozen-lockfile` + `bun run --cwd static build`）→ `golangci-lint run` ＋ `govulncheck ./...` ＋ `linterly check`（行数制限。lefthookの`--no-verify`回避対策）＋ `bunx biome check .`（`working-directory: static`） ＋ `bunx tsc --noEmit`（`working-directory: static`）
-  - `test`: フロントエンドビルド → `go test -race ./...`（データ競合検出。ローカルでは`make test-race`で再現できる） ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
-  - `build`: フロントエンドビルド → `wails build -platform windows/amd64 -nsis -installscope user` でNSISインストーラー（`.exe`、ユーザースコープインストール）をビルドしCI Artifactとしてアップロードする。SHA256チェックサムも同時に生成する。リポジトリ変数`RELEASE_SIGNING_PUBLIC_KEY`が設定されている場合、公開鍵は全ビルド（PR・`feat/**`含む）で`-ldflags`によりバイナリへ埋め込まれる（issue #376。自動更新が署名を検証する）。`checksums.txt`をシークレット`RELEASE_SIGNING_KEY`（ed25519秘密鍵PEM）で署名して`checksums.txt.sig`を生成するのは、`main`へのpushとタグ`v*`のpushのビルドのみ（`ci.yml`の`Sign checksums`の`if`条件。PR・`feat/**`ビルドは署名せず、シークレット未設定でも失敗しない）。バージョンは`main`へのpushでは既存の最新`vX.Y.Z`タグのパッチ+1、タグpushではタグ名、それ以外（PR・`feat/**`）は`dev`を`-ldflags`で埋め込む（`dev`ビルドは自動更新の対象外）
-  - `release`: `build`の成果物（インストーラー・`checksums.txt`・署名有効時は`checksums.txt.sig`）を`softprops/action-gh-release@v3`でGitHub Releaseとして公開する。`main`へのpush（＝PRマージ、次パッチ版を自動採番）またはタグ`v*`のpush（手動リリース）でのみ実行され、`tag_name`は`build`ジョブが算出した版番号を使う
-  - `config/strategy.yaml`・`config/risk.yaml`・静的アセット（`static/src/dist`・`static/src/img`・`static/src/vendor`）は`go:embed`でバイナリに埋め込む（`architecture/overview.md` §9）。`static/src/embed.go`は空/未ビルドの`dist`を埋め込もうとすると`go build`自体がコンパイルエラーになるため、`lint`/`test`/`build`いずれのジョブも上記フロントエンドビルドを最初のGoコンパイル系ステップより前に実行する必要がある
-- **バージョン固定**: bunは`.bun-version`（`oven-sh/setup-bun`の`bun-version-file`）、templ・wails・golangci-lint・linterlyはワークフロー内でバージョンを固定する。`latest`は使わない
-- **Goツールチェーンの自動切替**: `go.mod`のGo（1.25.x）より新しいGoを要求するツールの`go install`ステップ（`Install golangci-lint`・`Install linterly`。どちらも`go >= 1.26`が必要）に、**ステップレベル**の`env: GOTOOLCHAIN: auto`を設定する。`actions/setup-go`はv6以降、無条件に`GOTOOLCHAIN=local`を`$GITHUB_ENV`経由でエクスポートし、これはワークフロー/ジョブレベルの`env`を上書きする（ステップレベルの`env`のみがそれより優先される）。そのままでは`requires go >= 1.26.0 (running go 1.25.11; GOTOOLCHAIN=local)`と失敗する。`golangci-lint run`・`linterly check`等の実行ステップは`go.mod`のGoで動くため上書き不要
-- **同時実行制御**: ワークフロー全体に`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: false }`を設定する。版番号の採番（`build`）とタグ作成（`release`）が別ジョブのため、`main`への連続pushで並行実行されると同じ版番号を算出してタグが衝突しうる。同一refの実行を直列化して防ぐ
-- **最小権限**: ワークフロー先頭に`permissions: contents: read`を置き、`release`ジョブのみ`permissions: contents: write`に昇格する。`GITHUB_TOKEN`の既定権限（リポジトリ設定次第でwrite）に依存させない
-- **外部ActionのSHA固定**: `actions/*`・`oven-sh/setup-bun`・`softprops/action-gh-release`は可変タグではなくコミットSHAで参照し、行末コメント`# vN`に解決元タグを残す（タグ付け替えによりrelease権限で任意コードが動くのを防ぐ）。更新は`.github/dependabot.yml`のDependabotがSHAとコメントを書き換えるPRで行う
-- **共通セットアップ（複合Action）**: `lint`/`test`/`build`で共通の`actions/setup-go`・`oven-sh/setup-bun`・`bun install --cwd static --frozen-lockfile`・`bun run --cwd static build`・`templ`のインストールと`templ generate`は、複合Action`.github/actions/setup/action.yml`にまとめて各ジョブから`uses: ./.github/actions/setup`で呼び出す（`ci.yml`を行数上限300行未満に保つため。`actions/checkout`は各ジョブに残す）。複合Action内の外部ActionもSHA固定とし、ローカルの複合Actionは`/`のスキャン対象外のため`.github/dependabot.yml`の`github-actions`の`directories`に`/.github/actions/setup`を明示する。`TEMPL_VERSION`はワークフロー先頭の`env`から継承する
-- **脆弱性スキャン**: `lint`ジョブで`govulncheck ./...`（`GOVULNCHECK_VERSION`で固定）を実行する。Goの標準ライブラリの脆弱性は`go.mod`の`go`ディレクトリのパッチ版で決まるため、`govulncheck`が標準ライブラリの修正済み版を要求した場合は`go.mod`のGoパッチ版を上げる。依存の更新は`.github/dependabot.yml`（`gomod`・`github-actions`・`bun`（`/static`））が週次でPRを作る
-- **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
-- **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/runtime.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`（**現状は未作成**）をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途追加して実行する（通常のlint/test/buildフローには含めない）
-- **リリース署名（自動更新の真正性検証、issue #376）**: 同一リリースの`checksums.txt`だけでは差し替えを検知できないため、`checksums.txt`のed25519分離署名`checksums.txt.sig`をCIで発行する。鍵は一度だけ手元で発行する: `openssl genpkey -algorithm ed25519 -out release-key.pem`（秘密鍵PEM全文をシークレット`RELEASE_SIGNING_KEY`へ登録し、ファイルは破棄する）、`openssl pkey -in release-key.pem -pubout -outform DER | tail -c 32 | base64 -w0`（出力をリポジトリ変数`RELEASE_SIGNING_PUBLIC_KEY`へ登録）。変数が設定されたビルドでは公開鍵が`-ldflags`でバイナリに埋め込まれる（全ビルド共通）。署名の発行は`main`へのpushとタグ`v*`のpushのビルドのみで行い、その場合にシークレット未設定なら`build`ジョブは失敗する（PR・`feat/**`ビルドは公開鍵の埋め込みのみで、署名の発行も欠落時の失敗検出もしない。これらは`dev`版で自動更新の対象外）。自動更新は`checksums.txt.sig`が無い／不正なリリースを`ErrorVerification`で拒否する。変数が未設定のビルドは署名を発行・検証せずSHA256照合のみとなる（Warnログを出力）。鍵を更新する場合は新しい鍵のビルドを配布してから旧鍵を廃止する（旧ビルドは旧鍵で署名されたリリースしか受け入れない）
+GitHub Actions（`.github/workflows/ci.yml`）。ジョブ構成（`lint` → `test` → `build` → `release`）・トリガー・バージョン固定・最小権限・外部ActionのSHA固定・複合Action・脆弱性スキャン・リリース署名（issue #376）などの詳細は`environment/ci.md`を参照する。
 
 ## Lint
 
@@ -302,3 +285,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.33 | 2026-10-05 | CIの署名発行・欠落時失敗の条件を`ci.yml`の`Sign checksums`の`if`（`main`へのpushとタグpushのみ。PR・`feat/**`は公開鍵の埋め込みのみ）に合わせて訂正 | issue #414 |
 | 1.34 | 2026-10-05 | 「銘柄マスタの投入」節にUTF-8以外（Shift_JIS/CP932）のCSVは全体拒否される旨を追記、`make test`の`bun test`がCSPの`lightweight-charts`style hashとインストール版の一致を検証する旨を追記 | issue #393, #407 |
 | 1.35 | 2026-10-05 | CIの`lint`/`test`/`build`で重複していたGo・bunセットアップ・フロントエンドビルド・templ生成を複合Action`.github/actions/setup`へ集約（`ci.yml`の300行上限超過を解消）。ジョブ名・ステップ内容は不変。Dependabotの`github-actions`に`/.github/actions/setup`を追加 | issue #402 |
+| 1.36 | 2026-10-05 | 「銘柄マスタの投入」節に`symbol`の文字種（英数字のみ。違反行は全体拒否）を追記し、`market_index`/`sector_index`も`market-data`ジョブで板取得される旨（PUSH購読・候補更新は`stock`のみ）に訂正。CI/CD節の詳細を`environment/ci.md`へ分割（`setup.md`の行数上限超過を解消。内容は不変） | issue #418, #422, #423 |

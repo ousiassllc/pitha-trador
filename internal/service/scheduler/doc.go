@@ -3,9 +3,10 @@
 // Scheduler", §4.10 Scheduler/Worker, functional.md §4.10 FR-SCHED-1〜6).
 //
 // Scheduler claims jobs.Job rows off each registered queue and invokes the
-// Handler registered for that queue (this scope only registers
-// market-data/feature-calc; jev-scout and later queues are added by their
-// own scopes), drives the 60-second full-scan cycle that enqueues
+// Handler registered for that queue (the market-data and the feature-calc
+// no-op compat queue are registered by internal/bootstrap/marketdatajob;
+// the full scan never feeds feature-calc, FR-SCHED-1), drives the
+// 60-second full-scan cycle that enqueues
 // market-data work for every active instrument in one transaction
 // (FR-SCHED-2 前半), optionally drives Outcome Labeling's periodic
 // enqueue trigger (EnqueueOutcomeLabeling, WithOutcomeLabelSource,
