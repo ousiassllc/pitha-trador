@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/ousiassllc/pitha-trador/internal/version"
 )
 
 // signatureAssetName is checksums.txt's detached ed25519 signature: the
@@ -19,6 +21,20 @@ const signatureAssetName = checksumsAssetName + ".sig"
 // maxSignatureBytes caps the signature asset: a base64 ed25519 signature is
 // 88 bytes, so anything near this limit is not a signature.
 const maxSignatureBytes = 4 << 10
+
+// resolvePublicKey picks the key checksums.txt.sig must verify under: the
+// configured one, else internal/version.ReleasePublicKey. Both unset returns
+// (nil, nil), which skips verification; a malformed key returns an error so
+// downloads fail closed.
+func resolvePublicKey(configured ed25519.PublicKey) (ed25519.PublicKey, error) {
+	switch {
+	case len(configured) > 0:
+		return checkPublicKey(configured)
+	case version.ReleasePublicKey != "":
+		return parsePublicKey(version.ReleasePublicKey)
+	}
+	return nil, nil
+}
 
 // parsePublicKey decodes the base64 raw ed25519 public key that
 // internal/version.ReleasePublicKey carries.
