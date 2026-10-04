@@ -224,6 +224,8 @@ Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読
 }
 ```
 
+`policy_proposals`の保存値のうちJSONとして解釈できないものがあっても、その1行のせいで一覧全体を失敗させない（古い／壊れた行が監査履歴を隠さないため）。該当行は一覧から除外せず返し、解釈できなかったフィールドだけを空にする（`proposed_changes`は`{}`、`backtest_result`/`review`は`null`。`proposed_changes`は`new_value`が1つでもJSONでなければ`{}`）。各失敗は`proposal_id`付きでERRORログに記録する。`500`になるのは`policy_proposals`の読み込み自体が失敗した場合（ストア障害）のみ。
+
 ### GET /api/v1/activity
 
 System Activity Log向けの直近アクティビティ・キュー状況スナップショット（`requirements/functional.md` §4.15/§5.5）。`jobs`/`jev_decisions`/`kill_switch_events`を集約する読み取り専用API。新規永続テーブルは持たない。

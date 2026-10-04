@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -117,53 +118,72 @@ func (h *PolicyProposalHandler) APIPolicyProposals(ctx context.Context, in *Poli
 	out := &PolicyProposalsAPIOutput{}
 	out.Body.Items = make([]policyProposalOutput, 0, len(proposals))
 	for _, p := range proposals {
-		item, err := toPolicyProposalOutput(p)
-		if err != nil {
-			return nil, huma.Error500InternalServerError("decode policy proposal failed", err)
-		}
-		out.Body.Items = append(out.Body.Items, item)
+		out.Body.Items = append(out.Body.Items, toPolicyProposalOutput(ctx, p))
 	}
 	return out, nil
 }
 
-func toPolicyProposalOutput(p domain.PolicyProposal) (policyProposalOutput, error) {
-	changes, err := domain.ParsePolicyChanges(p.ProposedChangesJSON)
-	if err != nil {
-		return policyProposalOutput{}, err
-	}
-	proposed := make(map[string]json.RawMessage, len(changes))
-	for _, c := range changes {
-		proposed[c.Key] = json.RawMessage(c.NewValue)
-	}
-
+// toPolicyProposalOutput converts one stored row. A row whose stored JSON
+// cannot be decoded is still returned (so one corrupt, old row cannot hide
+// the rest of the audit history) with only the undecodable field emptied:
+// proposed_changes -> {}, backtest_result / review -> null. Each such
+// failure is logged with the proposal_id; only a store failure in List is a
+// 500.
+func toPolicyProposalOutput(ctx context.Context, p domain.PolicyProposal) policyProposalOutput {
 	item := policyProposalOutput{
 		ID:                   p.ID,
 		ProposedAt:           p.ProposedAt,
 		ProposedBy:           p.ProposedBy,
 		Status:               p.Status,
-		ProposedChanges:      proposed,
+		ProposedChanges:      decodeProposedChanges(ctx, p),
 		ReviewedBy:           p.ReviewedBy,
 		Review:               json.RawMessage("null"),
 		AppliedPolicyVersion: p.AppliedPolicyVersion,
 	}
 	if p.ReviewJSON != nil {
-		item.Review = json.RawMessage(*p.ReviewJSON)
+		if json.Valid([]byte(*p.ReviewJSON)) {
+			item.Review = json.RawMessage(*p.ReviewJSON)
+		} else {
+			slog.ErrorContext(ctx, "handler: policy proposal review is not valid JSON", "proposal_id", p.ID)
+		}
 	}
 	if p.BacktestResultJSON != nil {
 		var cmp assist.BacktestComparison
 		if err := json.Unmarshal([]byte(*p.BacktestResultJSON), &cmp); err != nil {
-			return policyProposalOutput{}, err
-		}
-		item.BacktestResult = &backtestResultOutput{
-			BaselineExpectancy:      cmp.BaselineExpectancy,
-			CandidateExpectancy:     cmp.CandidateExpectancy,
-			BaselineMaxDrawdownPct:  cmp.BaselineMaxDrawdownPct,
-			CandidateMaxDrawdownPct: cmp.CandidateMaxDrawdownPct,
-			ExpectancyDeltaPct:      relativeDeltaPct(cmp.BaselineExpectancy, cmp.CandidateExpectancy, true),
-			MaxDrawdownDeltaPct:     relativeDeltaPct(cmp.BaselineMaxDrawdownPct, cmp.CandidateMaxDrawdownPct, false),
+			slog.ErrorContext(ctx, "handler: decode policy proposal backtest result", "proposal_id", p.ID, "error", err)
+		} else {
+			item.BacktestResult = &backtestResultOutput{
+				BaselineExpectancy:      cmp.BaselineExpectancy,
+				CandidateExpectancy:     cmp.CandidateExpectancy,
+				BaselineMaxDrawdownPct:  cmp.BaselineMaxDrawdownPct,
+				CandidateMaxDrawdownPct: cmp.CandidateMaxDrawdownPct,
+				ExpectancyDeltaPct:      relativeDeltaPct(cmp.BaselineExpectancy, cmp.CandidateExpectancy, true),
+				MaxDrawdownDeltaPct:     relativeDeltaPct(cmp.BaselineMaxDrawdownPct, cmp.CandidateMaxDrawdownPct, false),
+			}
 		}
 	}
-	return item, nil
+	return item
+}
+
+// decodeProposedChanges returns p's key -> new value map, or an empty map
+// (logged) when ProposedChangesJSON is not parseable or a NewValue is not
+// valid JSON (json.RawMessage would otherwise fail the whole response at
+// serialization time).
+func decodeProposedChanges(ctx context.Context, p domain.PolicyProposal) map[string]json.RawMessage {
+	changes, err := domain.ParsePolicyChanges(p.ProposedChangesJSON)
+	if err != nil {
+		slog.ErrorContext(ctx, "handler: decode policy proposal changes", "proposal_id", p.ID, "error", err)
+		return map[string]json.RawMessage{}
+	}
+	proposed := make(map[string]json.RawMessage, len(changes))
+	for _, c := range changes {
+		if !json.Valid([]byte(c.NewValue)) {
+			slog.ErrorContext(ctx, "handler: policy proposal change value is not valid JSON", "proposal_id", p.ID, "key", c.Key)
+			return map[string]json.RawMessage{}
+		}
+		proposed[c.Key] = json.RawMessage(c.NewValue)
+	}
+	return proposed
 }
 
 // relativeDeltaPct returns (candidate - baseline) / baseline * 100, or nil
