@@ -90,7 +90,7 @@ sequenceDiagram
         GOV->>DB: runtime_settings（policy.*）更新、policy_proposals.status=applied
         GOV->>SLACK: 適用を通知
         GOV->>GOV: 適用後5営業日相当のExpectancyを追跡
-        opt 相対20%以上悪化
+        opt 相対20%以上悪化（両窓にクローズ済みポジションがある場合のみ判定）
             GOV->>DB: 直前policy_versionへロールバック、policy_proposals.status=rolled_back
             GOV->>SLACK: ロールバックを通知
         end
@@ -103,6 +103,7 @@ sequenceDiagram
 - Luna（Sense）は本ループとは独立し、高頻度側（Feature Engine/Jev呼び出しの前段）でニュース分類等を提供する補助コンポーネントとして`internal/service/assist/luna.go`に実装する
 - **外部AI API契約（`internal/service/assist`）**: いずれも`POST {BASE_URL}<path>`（`Authorization: Bearer {API_KEY}`、JSON、200以外はエラー扱い）。Sol `/v1/analyze`（リクエスト: 方向別`thresholds`/`calibration`と`constraints`、レスポンス: `{"rationale":{...},"proposed_changes":[{"key","new_value"}]}`。変更なしは空配列）、Opus `/v1/review`（リクエスト: `proposal`/`backtest`/`deterministic`、レスポンス: `{"verdict":"approve|reject","reason":"..."}`）。決定的しきい値を満たさない提案ではOpus APIを呼ばずに却下する。`policy_proposals.review_json`は`verdict`/`approved`/`deterministic_passed`/`llm_reviewed`/`reason`等を含む。
 - 未処理（`pending`）の提案がある日は、Opusレビューの再試行のみ行い新規のSol分析は行わない（同一しきい値への提案の競合防止）
+- **ロールバック判定の境界（FR-SELFIMPROVE-6）**: 適用前/適用後の5営業日窓それぞれでクローズ済みポジションの`realized_pnl`平均（Expectancy）を求め、`post < pre`かつ`pre - post >= |pre| × 0.20`のときだけロールバックする（適用前が負でも`|pre|`基準。`pre == 0`では`post < 0`のみ。`post >= pre`では常に非ロールバック）。どちらかの窓にクローズ済みポジションが0件なら判定不能としてロールバックせず、`status=applied`のまま追跡窓の終了後も打ち切らず日次実行ごとに再評価する（`internal/service/selfimprove/rollback.go`）
 - Sol/Opusはいずれも`internal/service/assist`のHTTPクライアントを介し、Jevアダプタ（§6）と同様の認証情報の入力経路（Settings画面→`secrets`テーブル、`SOL_API_KEY`/`SOL_BASE_URL`、`OPUS_API_KEY`/`OPUS_BASE_URL`）とリトライ/exponential backoff方針に従う実際の外部AI API呼び出しとして実装する。API失敗時は当該日のSol提案生成/Opusレビューをスキップし、Slack通知のうえ翌営業日に再試行する（銘柄単位の売買判断ではないためnew entry停止のような取引影響は発生しない）
 - **シャドーバックテストの再現範囲**: `BT`（バックテストエンジン）は`market_snapshots`と`jev_decisions`をPolicy Engineで再生するが、Exitは固定Stop Loss/Take Profit/最大保有時間のみ（Trailing Stop・Jev方向反転・continuation_probability低下・VWAP逆クロス・引け前強制決済は未評価）、Risk Engineは適用せず（max_open_positions・日次損失上限・連敗上限・クールダウン・サイジングによる抑制は再現しない）、コストはスリッページ片道5bps・手数料0bpsで固定する（`requirements/functional/components-platform.md` FR-BT-4）。決定的しきい値判定（FR-SELFIMPROVE-4）のExpectancy/Max Drawdownはこの前提での既存/提案後しきい値の相対比較であり、ライブ運用の絶対値ではない
 

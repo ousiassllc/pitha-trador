@@ -3,6 +3,7 @@ package selfimprove
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -16,6 +17,10 @@ import (
 // mean realized_pnl of positions closed in the postApplyTrackingDays
 // window before/after AppliedAt; a >=20% relative degradation reverts
 // every change to its OldValue and marks the proposal rolled_back.
+// If either window has no closed position the comparison is
+// indeterminate and nothing is rolled back; the proposal stays
+// status=applied and is re-evaluated on every later run (the windows are
+// anchored on AppliedAt, so there is no timeout/cut-off).
 func (g *Governor) TrackAndRollback(ctx context.Context, proposalID int64) (bool, error) {
 	proposal, err := g.proposals.Get(ctx, proposalID)
 	if err != nil {
@@ -33,13 +38,16 @@ func (g *Governor) TrackAndRollback(ctx context.Context, proposalID int64) (bool
 	}
 
 	preStart := businessDaysBefore(appliedAt, postApplyTrackingDays)
-	preExpectancy, err := g.realizedExpectancy(ctx, preStart, appliedAt)
+	preExpectancy, preOK, err := g.realizedExpectancy(ctx, preStart, appliedAt)
 	if err != nil {
 		return false, fmt.Errorf("selfimprove: pre-apply realized expectancy for proposal %d: %w", proposalID, err)
 	}
-	postExpectancy, err := g.realizedExpectancy(ctx, appliedAt, trackingEnd)
+	postExpectancy, postOK, err := g.realizedExpectancy(ctx, appliedAt, trackingEnd)
 	if err != nil {
 		return false, fmt.Errorf("selfimprove: post-apply realized expectancy for proposal %d: %w", proposalID, err)
+	}
+	if !preOK || !postOK {
+		return false, nil
 	}
 
 	if !expectancyDegraded(preExpectancy, postExpectancy) {
@@ -79,29 +87,29 @@ func (g *Governor) TrackAndRollback(ctx context.Context, proposalID int64) (bool
 	return true, nil
 }
 
-// expectancyDegraded reports whether post is at least
-// expectancyDegradationTolerance worse than pre (FR-SELFIMPROVE-6's
-// "相対20%以上悪化"). A zero/negative pre baseline has no meaningful
-// positive percentage to degrade further from, so any negative post
-// counts as full degradation (conservative: never leaves a newly
-// negative-Expectancy policy in place solely because the relative-%
-// math is undefined at zero).
+// expectancyDegraded reports whether post is a worsening of pre of at
+// least expectancyDegradationTolerance relative to |pre|
+// (FR-SELFIMPROVE-6's "相対20%以上悪化"). The magnitude |pre| is used so
+// the test is meaningful for a negative baseline too, and post >= pre
+// (unchanged or improved) never counts as degraded. pre == 0 has no
+// relative scale, so any post < 0 counts.
 func expectancyDegraded(pre, post float64) bool {
-	if pre <= 0 {
-		return post < 0
+	if post >= pre {
+		return false
 	}
-	return pre-post >= pre*expectancyDegradationTolerance
+	return pre-post >= math.Abs(pre)*expectancyDegradationTolerance
 }
 
 // realizedExpectancy is the mean domain.Position.RealizedPnL of
-// positions closed in [start, end), or 0 if none closed in that window.
-func (g *Governor) realizedExpectancy(ctx context.Context, start, end time.Time) (float64, error) {
+// positions closed in [start, end). ok is false when no position closed
+// in the window: "no data" is distinct from an Expectancy of 0.
+func (g *Governor) realizedExpectancy(ctx context.Context, start, end time.Time) (expectancy float64, ok bool, err error) {
 	closed, err := g.positions.ListClosedBetween(ctx, start, end)
 	if err != nil {
-		return 0, fmt.Errorf("selfimprove: list closed positions [%s, %s): %w", start, end, err)
+		return 0, false, fmt.Errorf("selfimprove: list closed positions [%s, %s): %w", start, end, err)
 	}
 	if len(closed) == 0 {
-		return 0, nil
+		return 0, false, nil
 	}
 	var sum float64
 	for _, p := range closed {
@@ -109,5 +117,5 @@ func (g *Governor) realizedExpectancy(ctx context.Context, start, end time.Time)
 			sum += *p.RealizedPnL
 		}
 	}
-	return sum / float64(len(closed)), nil
+	return sum / float64(len(closed)), true, nil
 }
