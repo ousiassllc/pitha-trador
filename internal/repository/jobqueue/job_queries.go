@@ -110,3 +110,31 @@ func (r *JobRepository) ListOpenOrFinishedSince(ctx context.Context, queue strin
 	}
 	return out, nil
 }
+
+// ListOpenPayloads returns the payload_json of every pending or running job
+// on queue, so a producer can skip enqueueing a payload that is already
+// queued or in flight (issue #481). Like CountOpen it never touches the
+// retained finished rows.
+func (r *JobRepository) ListOpenPayloads(ctx context.Context, queue string) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT payload_json FROM jobs WHERE queue = ? AND status IN (?, ?)`,
+		queue, JobStatusPending, JobStatusRunning,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list open job payloads (queue=%q): %w", queue, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []string
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			return nil, fmt.Errorf("repository: scan open job payload (queue=%q): %w", queue, err)
+		}
+		out = append(out, payload)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: list open job payloads (queue=%q): %w", queue, err)
+	}
+	return out, nil
+}

@@ -74,3 +74,4 @@
 | 1.67 | 2026-10-05 | §3（`overview.md`）の構成図を#468の`instance_lock.go`移設に追従（`cmd/desktop`から削除、`internal/bootstrap`直下に追記、`cmd/server`の`app.lock`取得を追記）、§10.1「起動時フロー」（`flows.md`）の先頭に`app.lock`取得ステップを追加。`cmd/desktop`・`cmd/server`・`internal/bootstrap`の実ファイルと再照合 | issue #471, #473 |
 | 1.68 | 2026-10-05 | `functional/components-platform.md` FR-BT-4に「Jev判断は1件につき高々1回のエントリー（Exit後・保有中判断の再利用なし）」「保有足の無いエントリーは取引に計上しない」を追記し、`overview/integrations.md` §8の再現範囲記述を更新 | issue #475, #479 |
 | 1.69 | 2026-10-05 | §7（`integrations.md`）のRAG検索に、問い合わせ対象の状態自身の除外（`rag.Subject`、判断は同一銘柄の現在時刻以降・補充スナップショットは現在−15分より新しいもの、許可id集合の`IN (SELECT ...)`で表現）とコールドスタートで文脈が空になる旨を追記 | issue #476, #483 |
+| 1.70 | 2026-10-05 | §10.1（`flows.md`）の`outcome-labeling`再投入条件に、恒久的にラベル不能と確定済みのペアとpending/running中のペアを除くことを追記。§3/§4（`overview.md`）の構成図・責務表にテスト専用ディレクトリ`scheduler/outcomeflow`を追記 | issue #481 |

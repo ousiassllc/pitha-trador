@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -26,6 +27,14 @@ var DefaultHorizonsMinutes = []int{5, 10, 20}
 // shortened horizon is never recorded as the full 5/10/20-minute outcome.
 const horizonBarTolerance = 2 * time.Minute
 
+// horizonDataGrace is how long after decision timestamp + horizon the
+// labeling window may still be filling in (market-data cycle lag, a slow
+// job queue) before a window that falls short of the horizon is treated as
+// permanently unlabelable: bars that have not arrived by then (lunch break,
+// close, outage) never will, so the pair is recorded as skipped instead of
+// being retried (issue #481).
+const horizonDataGrace = 5 * time.Minute
+
 // Labeler turns one Jev trader decision (jev_decisions,
 // decision_type=trader) into a calibration_outcomes row for one judgment
 // horizon (functional.md FR-CAL-4): future_return, max_adverse_excursion,
@@ -35,12 +44,26 @@ type Labeler struct {
 	decisions *judgement.DecisionRepository
 	snapshots *market.SnapshotRepository
 	outcomes  *judgement.CalibrationRepository
+	now       func() time.Time
+}
+
+// Option configures a Labeler.
+type Option func(*Labeler)
+
+// WithClock overrides the clock HandleJob uses to tell "data not landed
+// yet" from "data will never land" (default time.Now), for tests.
+func WithClock(now func() time.Time) Option {
+	return func(l *Labeler) { l.now = now }
 }
 
 // NewLabeler returns a Labeler that loads decisions via decisions, market
 // data via snapshots, and persists calibration_outcomes rows via outcomes.
-func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, outcomes *judgement.CalibrationRepository) *Labeler {
-	return &Labeler{decisions: decisions, snapshots: snapshots, outcomes: outcomes}
+func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, outcomes *judgement.CalibrationRepository, opts ...Option) *Labeler {
+	l := &Labeler{decisions: decisions, snapshots: snapshots, outcomes: outcomes, now: time.Now}
+	for _, opt := range opts {
+		opt(l)
+	}
+	return l
 }
 
 // HandleJob processes one outcome-labeling queue job
@@ -52,16 +75,17 @@ func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.Snaps
 // scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling,
 // labeler.HandleJob).
 //
-// If the market_snapshots bars do not yet reach the horizon - the last bar
-// is more than horizonBarTolerance before decision timestamp +
-// horizon_minutes, whether the data hasn't landed yet or the horizon
-// crosses the lunch break, the close, or a data gap that will never fill
-// in - HandleJob returns an error and persists nothing (a shortened
-// horizon is never recorded as the full-horizon outcome): internal/service/scheduler.EnqueueOutcomeLabeling only
-// enqueues a job once a decision's horizon has elapsed, and won't have
-// recorded a calibration_outcomes row for it yet either, so its next
-// periodic scan re-enqueues this same (jev_decision_id, horizon_minutes)
-// pair - no separate retry queue is needed.
+// If the market_snapshots bars do not (yet) reach the horizon - the last
+// bar is more than horizonBarTolerance before decision timestamp +
+// horizon_minutes, or the entry bar is missing - HandleJob never records a
+// shortened horizon as the full-horizon outcome. Within horizonDataGrace of
+// the horizon it returns an error and persists nothing (the data may still
+// be landing), so internal/service/scheduler.EnqueueOutcomeLabeling's next
+// periodic scan re-enqueues the pair - no separate retry queue is needed.
+// Past the grace period the gap is permanent (lunch break, close, outage):
+// HandleJob records the pair as unlabelable
+// (CalibrationRepository.MarkUnlabelable; still no calibration_outcomes
+// row) and succeeds, so PendingLabels stops returning it (issue #481).
 func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	var payload judgement.OutcomeLabelJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
@@ -82,11 +106,11 @@ func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		return fmt.Errorf("calibration: load market snapshots for decision %d: %w", payload.JevDecisionID, err)
 	}
 	if len(window) < 2 || !window[0].Timestamp.Equal(decision.Timestamp) {
-		return fmt.Errorf("calibration: insufficient market data to label decision %d at horizon %dm yet", payload.JevDecisionID, payload.HorizonMinutes)
+		return l.shortWindow(ctx, decision, payload.HorizonMinutes, "no entry bar or no later bars in the horizon window")
 	}
 	if last := window[len(window)-1].Timestamp; last.Before(decision.Timestamp.Add(horizon - horizonBarTolerance)) {
-		return fmt.Errorf("calibration: market data for decision %d ends at %s, short of the %dm horizon (lunch break, close, or data gap): not labeling a shortened horizon",
-			payload.JevDecisionID, last.Format(time.RFC3339), payload.HorizonMinutes)
+		return l.shortWindow(ctx, decision, payload.HorizonMinutes,
+			fmt.Sprintf("market data ends at %s, short of the horizon (lunch break, close, or data gap)", last.Format(time.RFC3339)))
 	}
 
 	direction := domain.JevDirectionNone
@@ -128,6 +152,24 @@ func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}); err != nil {
 		return fmt.Errorf("calibration: persist outcome for decision %d (horizon %dm): %w", payload.JevDecisionID, payload.HorizonMinutes, err)
 	}
+	return nil
+}
+
+// shortWindow handles a window that does not reach the horizon: an error
+// (retried by the next scan) while the data may still land, or - once
+// horizonDataGrace has passed since decision timestamp + horizon - a
+// permanent skip marker and nil. Either way no calibration_outcomes row is
+// written, so a shortened horizon is never recorded (FR-CAL-4).
+func (l *Labeler) shortWindow(ctx context.Context, decision domain.JevDecision, horizonMinutes int, reason string) error {
+	horizon := time.Duration(horizonMinutes) * time.Minute
+	if l.now().Before(decision.Timestamp.Add(horizon + horizonDataGrace)) {
+		return fmt.Errorf("calibration: decision %d horizon %dm not labelable yet: %s", decision.ID, horizonMinutes, reason)
+	}
+	if err := l.outcomes.MarkUnlabelable(ctx, decision.ID, horizonMinutes, reason); err != nil {
+		return fmt.Errorf("calibration: %w", err)
+	}
+	slog.Info("calibration: decision horizon permanently unlabelable, skipping (no shortened-horizon outcome recorded)",
+		"jev_decision_id", decision.ID, "horizon_minutes", horizonMinutes, "reason", reason)
 	return nil
 }
 
