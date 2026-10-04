@@ -145,10 +145,23 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 // returns the number of instruments enqueued for, and logs that count as
 // a structured JSON line (non-functional.md §5.1 "スキャン対象銘柄数").
 //
+// When the previous cycle's market-data jobs are still pending or
+// running it enqueues nothing, logs a warning and returns (0, nil), so a
+// worker slower than the cycle cannot pile up unbounded stale jobs
+// (non-functional.md §2.1 "次サイクルまでに完了しない場合はスキップ").
+//
 // Outside a trading session (WithSessionGate) it enqueues nothing and
 // returns (0, nil): no market data is fetched off-hours.
 func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, error) {
 	if !s.inSession(now) {
+		return 0, nil
+	}
+	unfinished, err := s.unfinishedMarketDataJobs(ctx, now)
+	if err != nil {
+		return 0, err
+	}
+	if unfinished > 0 {
+		slog.Warn("scheduler: full scan skipped: previous cycle still running", "pending", unfinished)
 		return 0, nil
 	}
 	instruments, err := s.instruments.ListActive(ctx)
@@ -170,6 +183,21 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 	}
 	slog.Info("scheduler: full scan enqueued", "instrument_count", len(instruments))
 	return len(instruments), nil
+}
+
+// unfinishedMarketDataJobs returns how many market-data jobs are still
+// pending or running, i.e. left over from earlier full-scan cycles.
+func (s *Scheduler) unfinishedMarketDataJobs(ctx context.Context, now time.Time) (int, error) {
+	counts, err := s.jobs.QueueCounts(ctx, now)
+	if err != nil {
+		return 0, fmt.Errorf("scheduler: count unfinished market-data jobs: %w", err)
+	}
+	for _, c := range counts {
+		if c.Queue == jobqueue.JobQueueMarketData {
+			return c.Pending + c.Running, nil
+		}
+	}
+	return 0, nil
 }
 
 // EnqueueEventReevaluation enqueues one jev-scout job for instrumentID,

@@ -12,7 +12,7 @@
 
 | 対象 | 周期目標 | 上限 |
 |------|---------|------|
-| 全体スキャン（全ユニバース特徴量算出＋Fast Screener） | 60秒ごと | 次サイクル開始までに完了しない場合はスキップしログ記録 |
+| 全体スキャン（全ユニバース特徴量算出＋Fast Screener） | 60秒ごと | 次サイクル開始までに完了しない場合はスキップしログ記録。「完了しない」とは、サイクル開始時点で`market-data`キューに`pending`/`running`のジョブが1件でも残っている状態を指し、その場合は当該サイクルのジョブ投入を行わず`slog.Warn`（`scheduler: full scan skipped: previous cycle still running`、`pending`＝未完了件数）を記録する。未完了ジョブが0件になった次のサイクルから通常どおり投入を再開する（`jobs`への未処理ジョブの無制限な積み増しを防ぐ） |
 | 候補銘柄（Jev Scout/Trader）再評価 | 15〜30秒ごと | Jev API合計呼び出しは1分あたり上位N銘柄（`top_n`。既定20、`config/strategy.yaml`）× 2（Scout+Trader）を上限とする。この上限は、候補更新サイクルからの`jev-scout`ジョブ投入を銘柄ごとに「`pending`/`running`ジョブがある間、および前回完了から`scan.jev_scout_min_interval_seconds`（既定60秒）未満の間はスキップ」することで担保する（Scoutは同一銘柄で1分あたり最大1回。FR-SCAN-1のイベント発火による即時再評価のみ例外。詳細は`functional/components-pipeline.md` §4.3）。Nを引き上げるほど呼び出しコストが比例して増える |
 | 保有ポジション監視・Exit評価 | 5〜15秒ごと | Risk EngineのExit判定はJev応答を待たずコード側で即時評価する |
 
