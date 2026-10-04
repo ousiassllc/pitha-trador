@@ -73,7 +73,7 @@ func TestMigration000022_PurgesPreFixDecisionVectorsKeepsDecisions(t *testing.T)
 		t.Errorf("jev_decisions rows = %d, want the audit row untouched", n)
 	}
 	if n := count(`SELECT COUNT(*) FROM market_snapshot_vectors`); n != 1 {
-		t.Errorf("market_snapshot_vectors rows = %d, want untouched (retention purges them)", n)
+		t.Errorf("market_snapshot_vectors rows = %d, want untouched by 000022 (purged by 000023, issues #469/#470)", n)
 	}
 
 	// New decisions are indexed and searchable after the migration.
