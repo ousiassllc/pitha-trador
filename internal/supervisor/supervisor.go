@@ -90,7 +90,7 @@ func Run(ctx context.Context, cfg Config, run func(ctx context.Context) error) e
 // code or a signal kill is returned as an error; exit code 0 as nil.
 func ExecRun(path string, args ...string) func(ctx context.Context) error {
 	return func(ctx context.Context) error {
-		cmd := exec.CommandContext(ctx, path, args...)
+		cmd := exec.CommandContext(ctx, path, args...) //nolint:gosec // G204: path is this application's own executable, supplied by the caller (not user input)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 		err := cmd.Run()
 		if err == nil {

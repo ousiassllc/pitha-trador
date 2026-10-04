@@ -52,7 +52,7 @@ func (s *Service) insertVector(ctx context.Context, table, idColumn string, id i
 		return err
 	}
 	if _, err := s.db.ExecContext(ctx,
-		`INSERT INTO `+table+` (`+idColumn+`, embedding) VALUES (?, ?)`, id, embedding); err != nil {
+		`INSERT INTO `+table+` (`+idColumn+`, embedding) VALUES (?, ?)`, id, embedding); err != nil { //nolint:gosec // G202: table/idColumn are package-internal constants (never user input); values are bound parameters
 		return fmt.Errorf("rag: insert %s row %d: %w", table, id, err)
 	}
 	return nil
@@ -76,7 +76,7 @@ func (s *Service) search(ctx context.Context, table, idColumn string, v Vector, 
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+idColumn+`, distance FROM `+table+` WHERE embedding MATCH ? ORDER BY distance LIMIT ?`,
+		`SELECT `+idColumn+`, distance FROM `+table+` WHERE embedding MATCH ? ORDER BY distance LIMIT ?`, //nolint:gosec // G202: table/idColumn are package-internal constants (never user input); values are bound parameters
 		embedding, k)
 	if err != nil {
 		return nil, fmt.Errorf("rag: search %s: %w", table, err)

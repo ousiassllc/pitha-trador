@@ -122,7 +122,7 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("repository: open sqlite database %q: %w", path, err)
 	}
 
-	if err := conn.Ping(); err != nil {
+	if err := conn.PingContext(context.Background()); err != nil {
 		return nil, errors.Join(
 			fmt.Errorf("repository: connect to sqlite database %q: %w", path, err),
 			conn.Close(),
