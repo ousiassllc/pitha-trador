@@ -16,6 +16,21 @@ import (
 // Page's Decision history section shows.
 const defaultDecisionHistoryLimit = 50
 
+// validSymbol reports whether symbol matches SymbolPathInput's format
+// (`^[0-9A-Za-z]+$`, 1-16 characters), so the HTML page rejects exactly
+// what the JSON API rejects before consulting the instrument master.
+func validSymbol(symbol string) bool {
+	if len(symbol) < 1 || len(symbol) > 16 {
+		return false
+	}
+	for _, ch := range symbol {
+		if (ch < '0' || ch > '9') && (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') {
+			return false
+		}
+	}
+	return true
+}
+
 // Page implements `GET /symbols/:symbol` (docs/api/endpoints.md §3): the
 // full Symbol Detail page, embedding the `pitha-price-chart` island
 // (functional.md §5.2). There is no HX-Request fragment variant -
@@ -25,6 +40,11 @@ const defaultDecisionHistoryLimit = 50
 func (h *SymbolHandler) Page(c *gin.Context) {
 	symbol := c.Param("symbol")
 	ctx := c.Request.Context()
+
+	if !validSymbol(symbol) {
+		shared.RespondPageError(c, http.StatusNotFound, "指定された銘柄は見つかりません。")
+		return
+	}
 
 	state, err := h.provider.State(ctx, symbol)
 	if errors.Is(err, execution.ErrInstrumentUnknown) {

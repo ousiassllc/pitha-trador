@@ -93,7 +93,7 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 - Huma APIのバリデーションエラーはRFC 7807 Problem Details形式で自動生成される（`components/overview.md` Huma APIパターン参照）
 - 5xx応答は固定メッセージのみを返し、原因エラーは`errors[]`に含めずslogへ記録する（`internal/web/apierror`の`huma.NewError`上書き、issue #215）。4xxのバリデーションメッセージは`errors[]`にそのまま出力し、`ErrInstrumentUnknown`の404は`unknown symbol`固定
 - ビジネスエラー（例: Risk Engine拒否によりKill Switch解除不可）はカスタムエラーも同じProblem Details形式に統一する
-- アクションルート（HTMX）の失敗（4xx/5xx）は該当ステータスと`atoms.Toast`フラグメントを返し、クライアントが`#toast-region`へ表示する（`components/overview.md` §4「エラー表示」）。SSRページルート（`/scanner`・`/symbols/:symbol`・`/activity`）の失敗は、フルページ遷移には`pages.ErrorPage`（ステータス＋固定メッセージ。`err.Error()`は画面に出さずslogへ）、HTMXには同じトーストフラグメントを返す。`/symbols/:symbol`は`ErrInstrumentUnknown`のみ404、他は500（issue #143）。`POST`/`DELETE /settings/:key`の成功応答は、HTMXリクエスト（`HX-Request: true`）には行フラグメント、それ以外（JS無効のフォーム送信）には送信元画面（`/setup`または`/settings`）への303リダイレクトを返す。失敗応答（400/500）はHTMXリクエストにはトースト、それ以外には`pages.ErrorPage`（完全なHTML）を返す（issue #184）
+- アクションルート（HTMX）の失敗（4xx/5xx）は該当ステータスと`atoms.Toast`フラグメントを返し、クライアントが`#toast-region`へ表示する（`components/overview.md` §4「エラー表示」）。SSRページルート（`/scanner`・`/symbols/:symbol`・`/activity`）の失敗は、フルページ遷移には`pages.ErrorPage`（ステータス＋固定メッセージ。`err.Error()`は画面に出さずslogへ）、HTMXには同じトーストフラグメントを返す。`/symbols/:symbol`は銘柄形式（`^[0-9A-Za-z]+$`・1〜16文字、JSON APIの`SymbolPathInput`と同じ）に反する値と`ErrInstrumentUnknown`のみ404、他は500（issue #143/#382）。`pitha-price-chart`へ渡す`candles-url`/`ws-url`は`organisms.EscapeSymbolSegment`（`SymbolHref`と同じ規則）で銘柄をパスエスケープして組み立てる。`POST`/`DELETE /settings/:key`の成功応答は、HTMXリクエスト（`HX-Request: true`）には行フラグメント、それ以外（JS無効のフォーム送信）には送信元画面（`/setup`または`/settings`）への303リダイレクトを返す。失敗応答（400/500）はHTMXリクエストにはトースト、それ以外には`pages.ErrorPage`（完全なHTML）を返す（issue #184）
 
 ## 改訂履歴
 
@@ -136,3 +136,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.34 | 2026-10-03 | §6 `/ws/system`にKilled以外への遷移を通知する`state_changed`を追記。`GET /api/v1/scanner`と`/ws/scanner`の`return_1m`/`return_5m`をパーセント単位と明記（`endpoints/huma-api.md`） | issue #363, #365 |
 | 1.35 | 2026-10-04 | `GET /api/v1/scanner`と`/ws/scanner`の各itemに銘柄詳細リンク`detail_url`を追加（`endpoints/huma-api.md`） | issue #383 |
 | 1.36 | 2026-10-04 | §3 `GET /scanner`から呼び出し元のない`HX-Request`時の候補テーブルフラグメント返却を削除し、常にフルページを返すと明記 | issue #381 |
+| 1.37 | 2026-10-04 | §3 `GET /symbols/:symbol`が銘柄形式をJSON APIと同じ規則で先に検証し不正値は404とすること、`pitha-price-chart`へ渡すURLを`SymbolHref`と同じ規則でエスケープすることを明記 | issue #382 |

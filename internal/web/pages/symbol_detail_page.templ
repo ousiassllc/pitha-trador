@@ -46,8 +46,8 @@ templ SymbolDetailPage(props SymbolDetailProps) {
 		<h1 class="text-2xl font-bold text-slate-900">{ props.Symbol }</h1>
 		<pitha-price-chart
 			symbol={ props.Symbol }
-			candles-url={ fmt.Sprintf("/api/v1/symbols/%s/candles", props.Symbol) }
-			ws-url={ fmt.Sprintf("/ws/symbols/%s", props.Symbol) }
+			candles-url={ symbolCandlesURL(props.Symbol) }
+			ws-url={ symbolWSURL(props.Symbol) }
 		></pitha-price-chart>
 		<script type="module" src="/static/dist/js/price-chart/pitha-price-chart.js"></script>
 
@@ -56,6 +56,18 @@ templ SymbolDetailPage(props SymbolDetailProps) {
 		@positionPanel(props.Position)
 		@organisms.DecisionHistoryList(props.Decisions)
 	}
+}
+
+// symbolCandlesURL is the `GET /api/v1/symbols/{symbol}/candles` URL
+// handed to pitha-price-chart; the symbol is escaped by the same rule as
+// organisms.SymbolHref.
+func symbolCandlesURL(symbol string) string {
+	return "/api/v1/symbols/" + organisms.EscapeSymbolSegment(symbol) + "/candles"
+}
+
+// symbolWSURL is the `/ws/symbols/{symbol}` URL handed to pitha-price-chart.
+func symbolWSURL(symbol string) string {
+	return "/ws/symbols/" + organisms.EscapeSymbolSegment(symbol)
 }
 
 // latestTraderDecision returns the first (most recent, decisions is
