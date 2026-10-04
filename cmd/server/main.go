@@ -129,7 +129,7 @@ func main() {
 	}
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Printf("pitha-trador server listening on %s", addr)
+		log.Printf("pitha-trador server listening on %s", addr) //nolint:gosec // G706: addr is the server's own fixed listen address, not user input
 		err := safego.Try("http server", srv.ListenAndServe)
 		serveErr <- err
 	}()

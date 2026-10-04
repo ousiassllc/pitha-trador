@@ -61,7 +61,7 @@ func (r CandidateRefreshInterval) Next() time.Duration {
 		return r.Min
 	}
 	span := r.Max - r.Min
-	return r.Min + time.Duration(rand.Int64N(int64(span)))
+	return r.Min + time.Duration(rand.Int64N(int64(span))) //nolint:gosec // G404: refresh-interval jitter, not security-sensitive
 }
 
 // ScannerHandler implements the Scanner Dashboard/API/WebSocket routes

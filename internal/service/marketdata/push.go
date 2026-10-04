@@ -45,7 +45,8 @@ type Handler func(Board)
 // them, which downstream StatusTracker consumers already account for via
 // the REST poll path's own MarkStale on failure.
 func (p *PushClient) Run(ctx context.Context, handler Handler) error {
-	conn, _, err := websocket.Dial(ctx, p.url, nil)
+	// coder/websocket: the handshake response body never needs closing.
+	conn, _, err := websocket.Dial(ctx, p.url, nil) //nolint:bodyclose
 	if err != nil {
 		return fmt.Errorf("marketdata: dial push websocket: %w", err)
 	}

@@ -264,5 +264,5 @@ func (r candidateRefreshInterval) next() time.Duration {
 	if r.max <= r.min {
 		return r.min
 	}
-	return r.min + time.Duration(rand.Int64N(int64(r.max-r.min)))
+	return r.min + time.Duration(rand.Int64N(int64(r.max-r.min))) //nolint:gosec // G404: refresh-interval jitter, not security-sensitive
 }

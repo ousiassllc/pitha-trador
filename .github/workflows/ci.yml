@@ -9,6 +9,15 @@ on:
       - "v*"
   pull_request:
 
+# Least privilege: every job gets a read-only GITHUB_TOKEN. Only the
+# `release` job escalates (contents: write) to publish the GitHub Release.
+# Third-party actions are pinned to commit SHAs (the `# vN` comment is the
+# tag the SHA was resolved from); Dependabot's github-actions ecosystem
+# (.github/dependabot.yml) bumps them. Mutable tags could otherwise run
+# arbitrary code with the release job's write token.
+permissions:
+  contents: read
+
 # Serialise runs per ref. The build job computes the next release version
 # from the existing tags and only the release job creates that tag, so two
 # overlapping main-push runs would compute the same version and collide on
@@ -21,6 +30,7 @@ concurrency:
 
 env:
   GOLANGCI_LINT_VERSION: v2.14.0
+  GOVULNCHECK_VERSION: v1.7.0
   LINTERLY_VERSION: v0.3.3
   TEMPL_VERSION: v0.3.1020
 
@@ -28,13 +38,13 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version
 
@@ -69,6 +79,15 @@ jobs:
       - name: golangci-lint run
         run: golangci-lint run
 
+      # Reports known vulnerabilities in the Go standard library (as of the
+      # toolchain go.mod pins) and in dependencies that the code actually
+      # calls. Needs the generated templ/embed files above to type-check.
+      - name: Install govulncheck
+        run: go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+
+      - name: govulncheck
+        run: govulncheck ./...
+
       # Enforces the line-count limits in CI as well; lefthook's
       # pre-commit alone is bypassable via --no-verify / web commits.
       # linterly v0.3.3 also requires go >= 1.26, so it needs the same
@@ -93,13 +112,13 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version
 
@@ -135,15 +154,15 @@ jobs:
       # fetch-depth: 0 (full history incl. tags) so the "Determine
       # version" step below can see every existing vX.Y.Z tag when
       # computing the next release version on a plain main push.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: go.mod
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version
 
@@ -230,7 +249,7 @@ jobs:
         working-directory: cmd/desktop
         run: sha256sum build/bin/*-installer.exe > build/bin/checksums.txt
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pitha-trador-windows-amd64
           path: |
@@ -254,12 +273,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pitha-trador-windows-amd64
           path: dist
 
-      - uses: softprops/action-gh-release@v3
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ needs.build.outputs.version }}
           files: |

@@ -8,6 +8,13 @@ linters:
     - errcheck
     - ineffassign
     - depguard
+    # Security / resource-leak checks (issue #375): TLS, file permissions,
+    # command execution, unclosed HTTP bodies, missing contexts and
+    # unchecked *sql.Rows.Err().
+    - gosec
+    - bodyclose
+    - noctx
+    - rowserrcheck
   settings:
     depguard:
       rules:
@@ -18,8 +25,33 @@ linters:
           deny:
             - pkg: github.com/ousiassllc/pitha-trador/internal/repository
               desc: web layer must not import repository; use service/domain (architecture/overview.md §3)
+    gosec:
+      excludes:
+        # G304 (file path from a variable): every os.Open/ReadFile/Create
+        # path here is built from the app's own config/data directories or
+        # server-generated names (log day, backup name, updater download
+        # dest) - none is taken from a request. File *permission* checks
+        # (G301/G302/G306) stay enabled.
+        - G304
   exclusions:
     generated: lax
+    rules:
+      # Test code: fixed permissions on t.TempDir() files, throwaway
+      # http.NewRequest/net.Dial without contexts and websocket handshakes
+      # in tests are not attack surface; production code is still checked.
+      - path: _test\.go
+        linters:
+          - gosec
+          - noctx
+          - bodyclose
+      # internal/config/secret*.go: G101 matches the *names* of the
+      # secrets-table row keys (JEV_API_KEY, ...) and the encryption seed;
+      # the values are key names / a documented non-secret seed, never
+      # credentials (see secretcrypto.go).
+      - path: internal/config/secret.*\.go
+        text: "G101"
+        linters:
+          - gosec
 
 formatters:
   enable:

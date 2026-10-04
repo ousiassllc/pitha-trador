@@ -2,7 +2,7 @@
 
 ## 概要
 
-- 言語: Go 1.25+（`go.mod`の`go 1.25.11`に準拠。バックエンド・Scheduler・アダプタ全般）
+- 言語: Go 1.25+（`go.mod`の`go 1.25.14`に準拠。バックエンド・Scheduler・アダプタ全般）
 - デスクトップシェル: Wails v2（WebView2、ネイティブウィンドウ/通知。OSトレイは未対応）
 - サーバー: Gin + Huma（`/api/v1/...`）、Templ + HTMX（SSR）
 - フロントエンド（リッチアイランドのみ）: Lit + TypeScript、ビルドは esbuild、パッケージマネージャは **bun** に固定
@@ -21,8 +21,9 @@
 ```text
 pitha-trador/
 ├── .github/
+│   ├── dependabot.yml        # Dependabot（gomod / github-actions / bun）
 │   └── workflows/
-│       └── ci.yml            # push/PR/タグ: lint → test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
+│       └── ci.yml            # push/PR/タグ: lint（govulncheck含む）→ test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
 ├── .env.example               # 環境変数の一覧と説明の雛形（`.env`は自動読込されない。値はプロセス環境変数として設定する）
 ├── .bun-version               # CIで使うbunバージョン固定（setup-bunの`bun-version-file`）
 ├── .golangci.yml              # Go lint設定
@@ -40,7 +41,7 @@ pitha-trador/
 ```
 
 - Goモジュールのルートは`pitha-trador/`直下（`go.mod`）
-- `.github/workflows/`には現状`ci.yml`のみが存在する。`e2e.yml`（実機E2E用）は未作成であり、必要になった時点で追加する（後述「CI/CD」節の注意を参照）
+- `.github/workflows/`には現状`ci.yml`のみが存在する。`e2e.yml`（実機E2E用）は未作成であり、必要になった時点で追加する（後述「CI/CD」節の注意を参照）。依存の自動更新設定は`.github/dependabot.yml`
 - フロントエンド（Lit/TypeScript）の依存管理は`static/`配下に閉じ、bunで管理する（Goモジュールとは独立）
 
 ## 開発環境セットアップ
@@ -142,7 +143,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 
 - **トリガー**: `push`（main, feat/**）、タグ`v*`のpush、`pull_request`
 - **ジョブ構成**: `lint` → `test` → `build` → `release` の順に実行（前段が失敗したら後段はスキップ。`release`は下記の条件を満たす場合のみ実行）
-  - `lint`: フロントエンドビルド（`bun install --cwd static --frozen-lockfile` + `bun run --cwd static build`）→ `golangci-lint run` ＋ `linterly check`（行数制限。lefthookの`--no-verify`回避対策）＋ `bunx biome check .`（`working-directory: static`） ＋ `bunx tsc --noEmit`（`working-directory: static`）
+  - `lint`: フロントエンドビルド（`bun install --cwd static --frozen-lockfile` + `bun run --cwd static build`）→ `golangci-lint run` ＋ `govulncheck ./...` ＋ `linterly check`（行数制限。lefthookの`--no-verify`回避対策）＋ `bunx biome check .`（`working-directory: static`） ＋ `bunx tsc --noEmit`（`working-directory: static`）
   - `test`: フロントエンドビルド → `go test -race ./...`（データ競合検出。ローカルでは`make test-race`で再現できる） ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
   - `build`: フロントエンドビルド → `wails build -platform windows/amd64 -nsis -installscope user` でNSISインストーラー（`.exe`、ユーザースコープインストール）をビルドしCI Artifactとしてアップロードする。SHA256チェックサムも同時に生成する。バージョンは`main`へのpushでは既存の最新`vX.Y.Z`タグのパッチ+1、タグpushではタグ名、それ以外（PR・`feat/**`）は`dev`を`-ldflags`で埋め込む
   - `release`: `build`の成果物（インストーラー・`checksums.txt`）を`softprops/action-gh-release@v3`でGitHub Releaseとして公開する。`main`へのpush（＝PRマージ、次パッチ版を自動採番）またはタグ`v*`のpush（手動リリース）でのみ実行され、`tag_name`は`build`ジョブが算出した版番号を使う
@@ -150,6 +151,9 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 - **バージョン固定**: bunは`.bun-version`（`oven-sh/setup-bun`の`bun-version-file`）、templ・wails・golangci-lint・linterlyはワークフロー内でバージョンを固定する。`latest`は使わない
 - **Goツールチェーンの自動切替**: `go.mod`のGo（1.25.x）より新しいGoを要求するツールの`go install`ステップ（`Install golangci-lint`・`Install linterly`。どちらも`go >= 1.26`が必要）に、**ステップレベル**の`env: GOTOOLCHAIN: auto`を設定する。`actions/setup-go`はv6以降、無条件に`GOTOOLCHAIN=local`を`$GITHUB_ENV`経由でエクスポートし、これはワークフロー/ジョブレベルの`env`を上書きする（ステップレベルの`env`のみがそれより優先される）。そのままでは`requires go >= 1.26.0 (running go 1.25.11; GOTOOLCHAIN=local)`と失敗する。`golangci-lint run`・`linterly check`等の実行ステップは`go.mod`のGoで動くため上書き不要
 - **同時実行制御**: ワークフロー全体に`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: false }`を設定する。版番号の採番（`build`）とタグ作成（`release`）が別ジョブのため、`main`への連続pushで並行実行されると同じ版番号を算出してタグが衝突しうる。同一refの実行を直列化して防ぐ
+- **最小権限**: ワークフロー先頭に`permissions: contents: read`を置き、`release`ジョブのみ`permissions: contents: write`に昇格する。`GITHUB_TOKEN`の既定権限（リポジトリ設定次第でwrite）に依存させない
+- **外部ActionのSHA固定**: `actions/*`・`oven-sh/setup-bun`・`softprops/action-gh-release`は可変タグではなくコミットSHAで参照し、行末コメント`# vN`に解決元タグを残す（タグ付け替えによりrelease権限で任意コードが動くのを防ぐ）。更新は`.github/dependabot.yml`のDependabotがSHAとコメントを書き換えるPRで行う
+- **脆弱性スキャン**: `lint`ジョブで`govulncheck ./...`（`GOVULNCHECK_VERSION`で固定）を実行する。Goの標準ライブラリの脆弱性は`go.mod`の`go`ディレクトリのパッチ版で決まるため、`govulncheck`が標準ライブラリの修正済み版を要求した場合は`go.mod`のGoパッチ版を上げる。依存の更新は`.github/dependabot.yml`（`gomod`・`github-actions`・`bun`（`/static`））が週次でPRを作る
 - **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
 - **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/runtime.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`（**現状は未作成**）をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途追加して実行する（通常のlint/test/buildフローには含めない）
 
@@ -160,7 +164,8 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 | Go | golangci-lint | `.golangci.yml` |
 | フロントエンド（Lit/TypeScript） | Biome | `static/biome.json` |
 
-- `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
+- `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`・`gosec`・`bodyclose`・`noctx`・`rowserrcheck`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
+- `gosec`・`noctx`・`bodyclose`は`*_test.go`を対象外とする（`t.TempDir()`配下のパーミッション、テスト用`httptest.NewRequest`・WebSocketハンドシェイクは攻撃面ではないため）。`gosec`の`G304`（変数パスのファイルオープン）は、パスがすべてアプリ自身の設定/データディレクトリやサーバー生成名から作られリクエスト由来ではないため設定で除外する（パーミッション系`G301/G302/G306`は有効のまま）。`internal/config/secret*.go`の`G101`（シークレット行キー名への誤検知）は`exclusions`で除外する。上記以外の指摘は修正するか、理由付きの`//nolint:<linter> // <理由>`で個別に抑止する
 - `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否する（レイヤー規約`architecture/overview.md` §3のうちlintで強制するのは`web` → `repository/**`のみで、サブパッケージ間のimport規約はレビューで担保する）。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
 - Biomeはlintとformatを1ツールで兼ねるため、`static/`配下は追加のESLint/Prettier設定を持たない
 
@@ -286,3 +291,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.28 | 2026-10-03 | 初回セットアップ手順の`JEV_BASE_URL`/`JEV_MODEL`の上書き先を、廃止済みの「詳細設定（任意）」からSettings画面のJev接続先モーダル内の任意項目へ訂正 | issue #315（#302 とのdoc-drift解消） |
 | 1.29 | 2026-10-04 | 初回セットアップ手順から`cp .env.example .env`を削除し、`.env`は自動読込されずプロセス環境変数として設定する旨に統一（ファイル構成図の`.env.example`の説明も同趣旨に修正）。`.env.example`冒頭コメントも是正 | issue #386（環境変数節との矛盾解消） |
 | 1.30 | 2026-10-04 | 「銘柄マスタの投入」節と`PITHA_UNIVERSE_PATH`を追加（`instruments`の起動時CSV投入手順） | issue #389 |
+| 1.31 | 2026-10-04 | CI/CD節に最小権限（トップレベル`permissions: contents: read`、`release`のみ`contents: write`）・外部ActionのコミットSHA固定・`govulncheck`・Dependabot（gomod/github-actions/bun）を追記。Lint節に`gosec`/`bodyclose`/`noctx`/`rowserrcheck`と除外方針を追記。`go.mod`のGoを1.25.14へ更新（1.25.11は標準ライブラリの既知脆弱性6件に該当し`govulncheck`が失敗するため） | issue #375 |
