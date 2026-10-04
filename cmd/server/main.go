@@ -61,10 +61,7 @@ func main() {
 
 	// No WithAutoUpdate: cmd/server is headless and has no installer to run, so
 	// issue #65's unattended self-update never wires in here.
-	services, err := bootstrap.BuildServices(state, secrets)
-	if err != nil {
-		log.Fatal(err)
-	}
+	services := bootstrap.BuildServices(state, secrets)
 
 	allowNonLoopback := os.Getenv(EnvAllowNonLoopback) == "1"
 	addr, err := resolveListenAddr(os.Getenv("PITHA_SERVER_ADDR"), allowNonLoopback)

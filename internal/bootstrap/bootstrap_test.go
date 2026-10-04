@@ -167,10 +167,7 @@ func TestBuildServices_EmptySecretsDoesNotPanic(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = state.Close() })
 
-	svc, err := bootstrap.BuildServices(state, config.Secrets{})
-	if err != nil {
-		t.Fatalf("BuildServices: %v", err)
-	}
+	svc := bootstrap.BuildServices(state, config.Secrets{})
 	if svc.MarketData == nil {
 		t.Error("BuildServices: Services.MarketData is nil")
 	}
