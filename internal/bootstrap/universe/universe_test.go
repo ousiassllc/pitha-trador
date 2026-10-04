@@ -51,6 +51,9 @@ func TestParse_RejectsInvalidFilesWithTheOffendingLine(t *testing.T) {
 		"unknown kind":           {"symbol,name,market,kind\n7203,トヨタ,TSE Prime,etf\n", `unknown kind "etf"`},
 		"sector_index no sector": {"symbol,name,market,kind\n1020,指数,INDEX,sector_index\n", "sector is required"},
 		"duplicate symbol":       {"symbol,name,market\n7203,a,TSE Prime\n6758,b,TSE Prime\n7203,c,TSE Prime\n", "line 4: duplicate symbol"},
+		"dotted symbol":          {"symbol,name,market\n7203,a,TSE Prime\n7203.T,b,TSE Prime\n", `line 3: symbol "7203.T" must be alphanumeric`},
+		"caret index symbol":     {"symbol,name,market,kind\n^N225,日経平均,INDEX,market_index\n", `line 2: symbol "^N225" must be alphanumeric`},
+		"full-width digits":      {"symbol,name,market\n７２０３,トヨタ,TSE Prime\n", "line 2: symbol \"７２０３\" must be alphanumeric"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -59,6 +62,20 @@ func TestParse_RejectsInvalidFilesWithTheOffendingLine(t *testing.T) {
 				t.Fatalf("Parse error = %v, want it to contain %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// Alphanumeric mixed codes (new TSE codes such as 130A) and numeric index
+// codes (101 = TOPIX) must stay valid: the Symbol Detail route accepts
+// exactly ^[0-9A-Za-z]+$.
+func TestParse_AcceptsAlphanumericSymbols(t *testing.T) {
+	csv := "symbol,name,market,kind\n130A,新規上場,TSE Growth,\n101,TOPIX,INDEX,market_index\n"
+	got, err := universe.Parse(strings.NewReader(csv))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(got) != 2 || got[0].Symbol != "130A" || got[1].Symbol != "101" {
+		t.Fatalf("Parse = %+v, want symbols 130A and 101", got)
 	}
 }
 
