@@ -178,6 +178,7 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 	start := sort.Search(len(bars), func(k int) bool { return !bars[k].Timestamp.Before(window.Start) })
 
 	var trades []Trade
+	var consumedUpTo time.Time
 	for i := start; i < len(bars); {
 		bar := bars[i]
 		if !bar.Timestamp.Before(window.End) {
@@ -187,6 +188,13 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 		decision, ok, err := cfg.Decisions.Decision(ctx, cfg.InstrumentID, bar.Timestamp)
 		if err != nil {
 			return nil, fmt.Errorf("backtest: decision lookup for %q at %s: %w", cfg.Symbol, bar.Timestamp, err)
+		}
+		// Each Jev Trader decision is evaluated at most once (FR-BT-4):
+		// live, one decision yields at most one Policy evaluation/signal,
+		// so a decision already evaluated (or skipped while a position was
+		// open) is treated as absent rather than re-entered after an exit.
+		if ok && !decision.Timestamp.After(consumedUpTo) {
+			ok = false
 		}
 
 		in := policy.Input{
@@ -200,6 +208,7 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 		}
 		if ok {
 			in.Decision = &decision
+			consumedUpTo = decision.Timestamp
 		}
 
 		sig := engine.Decide(ctx, in)
@@ -209,7 +218,16 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 		}
 
 		trade, exitIdx := closeTrade(bars, i, sig.Direction, bar.Price, cfg.Exit, cfg.Cost, cfg.InstrumentID, cfg.Symbol)
+		if exitIdx == i {
+			// No bar to hold through (last bar, or the next bar is already
+			// past MaxHolding - session/overnight gap): the entry could not
+			// have been filled and held, so it is not a trade (zero-return
+			// entry==exit rows would dilute TradeCount/Expectancy/WinRate).
+			i++
+			continue
+		}
 		trades = append(trades, trade)
+		consumedUpTo = bars[exitIdx].Timestamp
 		i = exitIdx + 1
 	}
 	return trades, nil
