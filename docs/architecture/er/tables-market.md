@@ -77,15 +77,15 @@ erDiagram
 | symbol | varchar(10) | NOT NULL | 非正規化（クエリ簡略化用） |
 | timestamp | text | NOT NULL | スナップショット時刻（RFC3339、1分足） |
 | price | numeric(12,2) | NOT NULL | |
-| bid / ask | numeric(12,2) | NULL可 | 板情報取得不可時はNULL |
-| spread_bps | numeric(8,2) | NULL可 | |
+| bid / ask | numeric(12,2) | NULL可 | 一般的な意味（bid=最良買気配、ask=最良売気配、bid < ask）。kabuステーションAPIの`AskPrice`（最良買気配）→bid、`BidPrice`（最良売気配）→askに入れ替えて保存する。板情報取得不可時はNULL |
+| spread_bps | numeric(8,2) | NULL可 | (ask − bid)/mid×10000（正常な板では0以上） |
 | volume | integer | NOT NULL | |
 | turnover | numeric(18,2) | NOT NULL | |
 | return_1m / return_5m / return_15m | numeric(8,4) | NULL可（起動直後等は算出不可） | **小数比**（0.004 = +0.4%）。Scanner API/画面は×100して%表示し、Fast Screenerの`min_abs_return_5m_pct`（%）との比較も×100して行う（`domain.RatioToPercent`） |
 | vwap | numeric(12,2) | NOT NULL | |
 | price_vs_vwap_bps | numeric(8,2) | NOT NULL | |
 | volume_ratio_5m | numeric(8,4) | NULL可 | |
-| orderbook_imbalance | numeric(6,4) | NULL可 | |
+| orderbook_imbalance | numeric(6,4) | NULL可 | (bidQty − askQty)/(bidQty + askQty)。買い数量優勢で正 |
 | realized_vol_5m | numeric(8,4) | NULL可 | |
 | market_return_1m / market_return_5m | numeric | NULL可 | `kind=market_index`銘柄（TOPIX/Nikkei225）のreturnの平均 |
 | sector_return_5m | numeric | NULL可 | 銘柄の`sector`と一致する`kind=sector_index`銘柄のreturn。該当指数なしはNULL |
@@ -101,13 +101,15 @@ erDiagram
 | turnover_1m / turnover_5m | numeric | NULL可 | 累積`turnover`の差分（窓内売買代金・円）。**`turnover`は当日累積値のため合算してはならない**。Fast Screenerの`min_turnover_5m_jpy`とPolicy Engineの「板が薄い」判定は同じturnover_5mを使う（`featureengine.TurnoverOverWindow`） |
 | atr_1m / atr_5m | numeric | NULL可 | 真の値幅の平均（円）。サンプリング価格から作った足（1分×5本/5分×3本）に基づく |
 | realized_vol_15m / volatility_expansion_ratio | numeric | NULL可 | 後者は realized_vol_5m / realized_vol_15m |
-| bid_depth / ask_depth | numeric | NULL可 | 板の`Sell1..10`（bid側）/`Buy1..10`（ask側）の合計数量 |
+| bid_depth / ask_depth | numeric | NULL可 | 板の`Buy1..10`（bid側）/`Sell1..10`（ask側）の合計数量 |
 | buy_trade_ratio / sell_trade_ratio / trade_flow_imbalance | numeric | NULL可 | 直近5分の出来高増分をティックルール（価格上昇=買い、下落=売り、同値=直前方向）で分類した比率と(買−売)/(買+売) |
 | microprice | numeric | NULL可 | (bid×askQty + ask×bidQty)/(bidQty+askQty) |
 | raw_data_json | text | NOT NULL | kabuステーションAPI生レスポンス（JSON文字列、再計算・監査用） |
 | created_at | text | NOT NULL | |
 
 インデックス: `UNIQUE (instrument_id, timestamp)`, `INDEX (symbol, timestamp DESC)`
+
+bid/ask系カラムの注意（issue #458）: 修正前に保存された`bid`/`ask`/`bid_depth`/`ask_depth`/`spread_bps`/`orderbook_imbalance`/`microprice`は、kabuステーションAPIの売/買命名を入れ替えずに保存していたため、bid/ask・数量が逆で`spread_bps`が常に負だった。保持期間（90日）で自然に消えるため再計算は行わず、過去分をスクリーニング・分析に使う場合はこの点に留意する（`raw_data_json`に生のBidPrice/AskPriceが残る）。
 
 ベクトルインデックス: `market_snapshot_vectors`（後述「ベクトルインデックス」参照、`rowid = market_snapshots.id`）
 
