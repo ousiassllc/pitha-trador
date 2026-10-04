@@ -242,3 +242,4 @@ const (
 | 1.50 | 2026-10-05 | §2の`middleware/`列挙に`SecurityHeaders`（`security_headers.go`、`SwaggerCSP`）を追記 | issue #413 |
 | 1.51 | 2026-10-05 | §2の`static/src`ツリーに`csp/`（`lightweight-charts-style-hash.test.ts`）・`vendor/`（`htmx.min.js`）・`embed.go`・`dist/vendor/`（`stoplight-elements`）を追記 | issue #432 |
 | 1.52 | 2026-10-05 | §2の`static/src/components`ツリーに`scanner-table/`の`scanner-types.ts`・`scanner-view.ts`・`scanner-contract.json`（Go/TS共有の表示契約）、`activity-feed/`の`activity-feed-types.ts`・`activity-feed-views.ts`、`dist/js/chunks/`（esbuildの共有チャンク）を追記し、`*-test-support.ts`はテスト専用のため省略と明記 | issue #436 |
+| 1.53 | 2026-10-05 | §6（`lit.md`）`lib/ws.ts`の再接続バックオフ復帰条件（`open`時点ではリセットせず、最初のメッセージ受信または`open`から10秒の接続維持で初期値へ戻す）を追記 | issue #466 |

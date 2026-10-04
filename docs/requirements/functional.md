@@ -222,3 +222,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.30 | 2026-10-05 | FR-SELFIMPROVE-5/6（`components-platform.md`）に`approved`取り残し提案の収束・通知のbest-effort化・ロールバックが後続提案の適用値を上書きしないこと、FR-POLICY-5（`components-pipeline.md`）に`trade_signals.policy_version`への適用版付加を追記 | issue #450, #451, #452, #455 |
 | 1.31 | 2026-10-05 | §4.2 FR-FS-4・§4.4 FR-SCOUT-2a・§4.6 FR-POLICY-2a（`components-pipeline.md`）に`config/strategy.yaml`の`fast_screener.*`/`jev_scout.*`/`policy.*`の起動時検証（補完せず項目名付きで全件報告し起動失敗。`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`適用後も検証）と`screener.Screen`の`top_n <= 0`防御を追記 | issue #459 |
 | 1.32 | 2026-10-05 | §4.1 FR-FE-2（`components-pipeline.md`）に、逆転板（bid > ask）は`spread_bps`/`microprice`を欠損として扱いスプレッド上限ガードを素通りさせないことを追記 | issue #465 |
+| 1.33 | 2026-10-05 | §4.7 FR-RISK-2（`components-pipeline.md`）`jev_api_down`に、復旧後の最初の呼び出しは古い失敗窓を破棄して新しい窓で評価し、窓が最小5件に達しエラー率がしきい値以上になるまで再発動しないことを追記 | issue #467, #472 |

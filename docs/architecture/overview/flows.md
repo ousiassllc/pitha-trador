@@ -13,6 +13,7 @@ sequenceDiagram
     participant DB as SQLite
     participant SCHED as Scheduler（自前Worker）
 
+    App->>App: 多重起動ロック`app.lock`を取得（`bootstrap.AcquireInstanceLock`。DBを開く前。取得失敗時は`bootstrap.Run`・`Recover`に到達せず終了。desktopは終了コード0、serverは非0）
     App->>DB: マイグレーション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON, WAL）
     App->>SCHED: 前回クラッシュ時の`running`状態ジョブを`pending`へ復帰（`Scheduler.Recover`）
     App->>App: 銘柄マスタCSVから`instruments`をupsert（`syncUniverse`。失敗・CSV不在はログのみで継続。kabuステーション不達の影響を受けない）

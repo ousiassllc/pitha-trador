@@ -41,10 +41,10 @@
 ```text
 pitha-trador/
 ├── cmd/
-│   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, instance_lock.go, ws_listener.go, wails.json）。`ws_listener.go`はWindowsのみの`/ws/...`専用ループバックリスナー。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
-│   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go。CI・WebView2が動かない環境向け）
+│   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, ws_listener.go, wails.json）。`ws_listener.go`はWindowsのみの`/ws/...`専用ループバックリスナー。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
+│   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go。CI・WebView2が動かない環境向け）。起動時に`bootstrap.AcquireInstanceLock(bootstrap.AppLockName)`で`app.lock`を取得してから`bootstrap.Run`へ進む（取得失敗時は非0終了。#468）
 ├── internal/
-│   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, services_build.go, lifecycle.go）、定数（constants.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）、secrets読込とrouterオプション列の共通化（router_options.go: `LoadSecrets`/`RouterOptions`。#372）、起動時の銘柄マスタCSV同期（universe.go: `syncUniverse`・`PITHA_UNIVERSE_PATH`。#389）のみ
+│   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, services_build.go, lifecycle.go）、定数（constants.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）、secrets読込とrouterオプション列の共通化（router_options.go: `LoadSecrets`/`RouterOptions`。#372）、起動時の銘柄マスタCSV同期（universe.go: `syncUniverse`・`PITHA_UNIVERSE_PATH`。#389）、多重起動ロックの取得（instance_lock.go: `AcquireInstanceLock`・`AppLockName`/`SupervisorLockName`。desktop/server共通の`app.lock`・`supervisor.lock`。#468）のみ
 │   │   ├── candidates/           # 候補銘柄の定期更新（Fast Screener実行・jev-scoutのenqueue・更新間隔ティッカー。#246）
 │   │   ├── marketdatajob/        # market-data / feature-calc（空ジョブ）ジョブハンドラ（板→Reading変換・特徴量算出・イベント再評価enqueue。#246）
 │   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`backtestsource.Source`。#246）
