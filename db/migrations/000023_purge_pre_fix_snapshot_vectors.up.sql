@@ -1,0 +1,16 @@
+-- bid/ask 入れ替え修正（issue #458）前に保存された market_snapshot_vectors を
+-- RAG の検索対象から外す（issue #469, #470。000022 の取りこぼし）。
+-- 修正前のスナップショットは spread_bps が常に負・orderbook_imbalance が符号反転した
+-- 特徴量でベクトル化されており、000022 が jev_decision_vectors を空にした後は
+-- rag.Service.Context の不足分補充枠（Source: "market_snapshot"）をこれらが占め、
+-- 修正後の問い合わせベクトルとの L2 距離が系統的に歪む。
+-- market_snapshot_vectors は market_snapshots から派生した検索インデックスにすぎないため、
+-- 000022 と同じ全件削除方式（適用時点で存在するベクトルをすべて削除）に揃える。
+-- market_snapshots 本体（raw_data_json を含む監査・履歴）は書き換え・削除しない。
+-- 以降のスナップショットは featureengine.Engine が rag.Service.IndexSnapshot で
+-- 正しい符号のまま索引する。新規 DB（ベクトルなし）では何も起きない。
+-- sqlite-vec(vec0) は KNN 検索中の主キー範囲条件（snapshot_id >= N）を扱えないため、
+-- 検索時の除外ではなく削除で対応する（000022 と同じ理由）。
+-- 他の派生テーブルで spread/imbalance 特徴量を保持するものは無い
+-- （market_snapshots 自体が生値の保管先で、ベクトルは jev_decision_vectors と本テーブルのみ）。
+DELETE FROM market_snapshot_vectors;
