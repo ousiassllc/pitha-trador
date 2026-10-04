@@ -16,6 +16,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 		CandidateRefreshIntervalSecondsMax: config.DefaultCandidateRefreshIntervalSecondsMax,
 		HeldPositionIntervalSecondsMin:     config.DefaultHeldPositionIntervalSecondsMin,
 		HeldPositionIntervalSecondsMax:     config.DefaultHeldPositionIntervalSecondsMax,
+		JevScoutMinIntervalSeconds:         config.DefaultJevScoutMinIntervalSeconds,
 	}
 	tests := []struct {
 		name string
@@ -33,13 +34,15 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 			"valid values are kept",
 			"scan:\n  full_scan_interval_seconds: 120\n" +
 				"  candidate_refresh_interval_seconds_min: 20\n  candidate_refresh_interval_seconds_max: 40\n" +
-				"  held_position_interval_seconds_min: 2\n  held_position_interval_seconds_max: 3\n",
+				"  held_position_interval_seconds_min: 2\n  held_position_interval_seconds_max: 3\n" +
+				"  jev_scout_min_interval_seconds: 90\n",
 			config.ScanConfig{
 				FullScanIntervalSeconds:            120,
 				CandidateRefreshIntervalSecondsMin: 20,
 				CandidateRefreshIntervalSecondsMax: 40,
 				HeldPositionIntervalSecondsMin:     2,
 				HeldPositionIntervalSecondsMax:     3,
+				JevScoutMinIntervalSeconds:         90,
 			},
 		},
 		{
@@ -53,6 +56,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 				CandidateRefreshIntervalSecondsMax: 50,
 				HeldPositionIntervalSecondsMin:     30,
 				HeldPositionIntervalSecondsMax:     30,
+				JevScoutMinIntervalSeconds:         config.DefaultJevScoutMinIntervalSeconds,
 			},
 		},
 	}

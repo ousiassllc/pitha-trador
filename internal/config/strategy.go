@@ -24,6 +24,7 @@ type ScanConfig struct {
 	CandidateRefreshIntervalSecondsMax int                `yaml:"candidate_refresh_interval_seconds_max"`
 	HeldPositionIntervalSecondsMin     int                `yaml:"held_position_interval_seconds_min"`
 	HeldPositionIntervalSecondsMax     int                `yaml:"held_position_interval_seconds_max"`
+	JevScoutMinIntervalSeconds         int                `yaml:"jev_scout_min_interval_seconds"`
 	EventTrigger                       EventTriggerConfig `yaml:"event_trigger"`
 }
 

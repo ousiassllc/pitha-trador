@@ -211,3 +211,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.19 | 2026-10-03 | §5.1 にFR-SCAN-7（立会時間外のスキャン停止通知と次回立会開始時刻の表示）を追加 | issue #367 |
 | 1.20 | 2026-10-03 | §5.1の1m/5m Returnをパーセント表示（Feature Engineの小数比を×100）と明記。FR-FS-1（`functional/components-pipeline.md`）の`min_abs_return_5m_pct`の単位をパーセントと明記 | issue #364, #365 |
 | 1.21 | 2026-10-04 | §2処理フローと§7 MVP完了条件の「対象銘柄を自動取得（kabuステーションAPI経由）」を、銘柄マスタは起動時の銘柄マスタCSV投入・価格/板はkabuステーションAPI取得と実装に合わせて改訂 | issue #389 |
+| 1.22 | 2026-10-04 | §4.3 に候補更新サイクルからの`jev-scout`投入の銘柄別間引き（`scan.jev_scout_min_interval_seconds`・未完了ジョブの重複排除）を追記 | issue #388 |

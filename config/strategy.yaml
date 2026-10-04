@@ -20,6 +20,12 @@ scan:
   # 保有ポジション銘柄を再評価する周期（秒）の範囲。
   held_position_interval_seconds_min: 5
   held_position_interval_seconds_max: 15
+  # 同一銘柄へのjev-scoutジョブを候補更新サイクルから再投入しない最小間隔（秒）。
+  # 前回Scout完了からこの秒数が経つまで（および同一銘柄のpending/running
+  # ジョブがある間）は投入をスキップし、候補更新周期（15〜30秒）に関わらず
+  # 同一銘柄のScoutを1分あたり1回に抑える（非機能§2.1の上限N×2/分）。
+  # イベント発火による即時再評価（FR-SCAN-1）はこの間隔の対象外。
+  jev_scout_min_interval_seconds: 60
   # FR-SCAN-1/FR-SCAN-2: 通常周期を待たず再評価する（しきい値以上）/
   # Jev呼び出しをスキップする（すべてしきい値未満かつイベントなし）判定の
   # しきい値。functional.md §4.3は数値の初期値を定めていないため、他の
