@@ -1,6 +1,5 @@
-// Package layout holds the shared page shell (HTML document skeleton,
+// Package layout holds the shared page shells (HTML document skeleton,
 // <head> metadata, common wrapper markup) that internal/web/pages render
-// into. See docs/components/overview.md §3.
-//
-// Shell (shell.templ) is implemented.
+// into. The list of shells is kept only in docs/components/overview.md §3
+// (not duplicated here).
 package layout

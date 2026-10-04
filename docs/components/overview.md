@@ -117,6 +117,13 @@ static/
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
 
+### layout
+
+- `Shell`（HTMLドキュメントの骨格＋`organisms.Header`＋`<main>`。通常ページ用）
+- `SetupShell`（`Header`を含まない`Shell`。初回セットアップ画面`SetupPage`用。Setup Guardが`/setup`以外をリダイレクトするため`Header`のHTMXフラグメントを持たない。issue #80）
+
+> 本§3のatoms/molecules/organisms/pages/layoutの一覧が、公開コンポーネントの唯一の一覧である。`internal/web/{atoms,molecules,organisms,pages,layout}/doc.go`は一覧を持たず本節を参照するだけにする（二重管理しない。issue #384）。
+
 ### コンポーネントインターフェース規約
 
 `skill://halt/references/architecture.md` の規約（単純コンポーネントは直接パラメータ、複雑なコンポーネントは`Props`構造体＋`templ.Attributes`、バリエーションはGoのconst+カスタム型）にそのまま従う。プロジェクト固有の型例:
@@ -219,3 +226,4 @@ const (
 | 1.44 | 2026-10-04 | §4に「htmxの動的実行無効化」を追記（`htmx-config`に`allowEval:false`/`allowScriptTags:false`） | issue #379 |
 | 1.45 | 2026-10-04 | §3に「依存方針」を追記し、Templ層（atoms〜layout）は`internal/service`をimportせずplain propsを受け取る方針に統一（`PerformanceSummaryPanel`/`PerformanceActualsPanel`/`PerformancePage`/`SymbolDetailPage`の入力型を表示用propsへ変更。`web/handler`が写像する） | issue #380 |
 | 1.46 | 2026-10-04 | §4のページルート記述を実装に合わせ、`GET /scanner`の`HX-Request`フラグメント分岐を廃止（フルページのみ）と明記 | issue #381 |
+| 1.47 | 2026-10-04 | §3に`layout`節（`Shell`/`SetupShell`）を追加し、§3を公開コンポーネントの唯一の一覧とする。`internal/web/{atoms,molecules,organisms,pages,layout}/doc.go`の実装済み一覧・例示を削除し本節への参照に置換 | issue #384 |

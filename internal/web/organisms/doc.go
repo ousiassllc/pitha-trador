@@ -1,7 +1,6 @@
-// Package organisms holds Atomic Design organisms (Header, KillSwitchPanel,
-// ScannerTableFallback, DecisionHistoryList, PerformanceSummaryPanel, ...)
-// composed from internal/web/molecules and internal/web/atoms. See
-// docs/components/overview.md §3.
+// Package organisms holds Atomic Design organisms composed from
+// internal/web/molecules and internal/web/atoms. The list of organisms is
+// kept only in docs/components/overview.md §3 (not duplicated here).
 //
 // Dependency policy: organisms (like internal/web/pages) may import
 // internal/domain but never internal/service. They take plain props
@@ -10,7 +9,6 @@
 // type change cannot break the templates. The golangci-lint depguard rule
 // `templ-no-service` enforces it.
 //
-// Sidebar/CalibrationBucketTable are deliberately absent: navigation is
-// Header's and the Calibration view is pitha-calibration-heatmap's (issue
-// #120), so each is added here only when a page needs it.
+// Components with no consumer are deliberately absent (issue #120); each is
+// added here only when a page needs it (see overview.md §3).
 package organisms
