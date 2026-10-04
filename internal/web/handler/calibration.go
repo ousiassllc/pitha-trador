@@ -121,8 +121,8 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, _ *struct{}) (*
 
 // Page implements `GET /calibration` (docs/api/endpoints.md §3): the
 // Calibration page, embedding the `pitha-calibration-heatmap` island
-// (functional.md §5.4, components/overview.md §5.3). Unlike
-// ScannerHandler.Page there is no HX-Request fragment variant - the
+// (functional.md §5.4, components/overview.md §5.3). There is no
+// HX-Request fragment variant - the
 // reliability curve/heatmap is drawn entirely client-side by
 // pitha-calibration-heatmap itself (which fetches
 // GET /api/v1/calibration on its own), so this handler needs no

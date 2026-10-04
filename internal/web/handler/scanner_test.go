@@ -131,7 +131,9 @@ func TestScannerHandler_Page_FullPageWithoutHXRequestHeader(t *testing.T) {
 	assertAllScannerColumns(t, body)
 }
 
-func TestScannerHandler_Page_FragmentWithHXRequestHeader(t *testing.T) {
+// `GET /scanner` has no HX-Request fragment variant: an HX-Request still
+// gets the full page (the only HTMX fragment route here is /scanner/scan).
+func TestScannerHandler_Page_FullPageEvenWithHXRequestHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	source := handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}
 	h := handler.NewScannerHandler(source, handler.CandidateRefreshInterval{Min: time.Second, Max: 2 * time.Second})
@@ -148,8 +150,8 @@ func TestScannerHandler_Page_FragmentWithHXRequestHeader(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if strings.Contains(body, "<!doctype") || strings.Contains(body, "<!DOCTYPE") || strings.Contains(body, "<html") {
-		t.Fatalf("expected fragment only (no document shell) for HX-Request, got %q", body)
+	if !strings.Contains(body, "<!doctype html>") && !strings.Contains(body, "<!DOCTYPE html>") {
+		t.Fatalf("expected full page (doctype) for HX-Request, got %q", body)
 	}
 	assertAllScannerColumns(t, body)
 }

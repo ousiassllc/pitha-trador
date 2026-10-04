@@ -16,8 +16,9 @@ import (
 // a table of Symbol, Price, 1m/5m Return, Volume Ratio, VWAP distance,
 // Spread, Jev Direction / Confidence / Entry Quality, and Current
 // Position, or an empty-state notice when there are no candidates. It is
-// used both for the initial SSR page load and for the `GET /scanner`
-// HX-Request fragment response (internal/web/handler.ScannerHandler.Page).
+// rendered inside the `GET /scanner` full page
+// (internal/web/pages.ScannerPage) as the SSR content `pitha-scanner-table`
+// hydrates over.
 //
 // The markup is nested inside a `<pitha-scanner-table>` custom element
 // (static/src/components/scanner-table): before JS loads (or for the

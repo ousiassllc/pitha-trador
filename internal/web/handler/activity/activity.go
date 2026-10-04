@@ -122,7 +122,7 @@ func (h *ActivityHandler) APIActivity(ctx context.Context, in *ActivityAPIInput)
 
 // Page implements `GET /activity` (docs/api/endpoints.md §3): the System
 // Activity Log page, SSR-rendered from the current snapshot and hydrated
-// by `pitha-activity-feed`. Like CalibrationHandler.Page there is no
+// by `pitha-activity-feed`. Like the other full-page routes there is no
 // HX-Request fragment variant; live updates come over `/ws/activity`.
 func (h *ActivityHandler) Page(c *gin.Context) {
 	snap, err := h.source.Snapshot(c.Request.Context(), activityfeed.Query{})

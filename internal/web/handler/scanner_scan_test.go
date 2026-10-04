@@ -164,13 +164,6 @@ func TestScannerHandler_Page_EmptyStateBeforeFirstCycle(t *testing.T) {
 	}
 }
 
-func TestScannerHandler_Page_HXRequestStaysTableFragment(t *testing.T) {
-	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner", true)
-	if strings.Contains(body, "scan-panel") {
-		t.Error("`/scanner` HX-Request fragment must stay the candidate table only")
-	}
-}
-
 func TestScannerHandler_Page_ScanFailureDoesNotBreakCandidates(t *testing.T) {
 	code, body := getScan(t, scanSource{StaticCandidateSource: handler.StaticCandidateSource{Items: fixtureCandidates(), AsOf: time.Now()}, err: errors.New("boom")}, "/scanner", false)
 	if code != http.StatusOK || !strings.Contains(body, "7203") {
