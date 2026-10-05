@@ -1,83 +1,18 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
-import './pitha-calibration-heatmap';
+import { describe, expect, mock, spyOn, test } from 'bun:test';
+import { heatmapColor, NO_DATA_COLOR } from './calibration-view';
 import {
-  type CalibrationAPIResponse,
-  type CalibrationBucket,
-  heatmapColor,
-  NO_DATA_COLOR,
-} from './calibration-view';
+  bucket,
+  flush,
+  type HeatmapElement,
+  installHeatmapHarness,
+  mount,
+  response,
+} from './heatmap-test-support';
 
-type HeatmapElement = HTMLElement & { updateComplete: Promise<boolean> };
+// Dynamic: a static import would load the component before the mock exists.
+await import('./pitha-calibration-heatmap');
 
-const bucket = (overrides: Partial<CalibrationBucket> = {}): CalibrationBucket => ({
-  range: '0.70-0.80',
-  avg_confidence: 0.75,
-  direction_accuracy: 0.63,
-  avg_future_return_pct: 0.11,
-  sample_count: 20,
-  trade_count: 0,
-  total_pnl: 0,
-  avg_pnl_pct: 0,
-  ...overrides,
-});
-
-const response = (overrides: Partial<CalibrationAPIResponse> = {}): CalibrationAPIResponse => ({
-  buckets: [bucket()],
-  by_direction: [],
-  brier_score: 0.19,
-  log_loss: 0.52,
-  expected_calibration_error: 0.06,
-  ...overrides,
-});
-
-let originalFetch: typeof fetch;
-
-beforeEach(() => {
-  originalFetch = globalThis.fetch;
-  document.body.innerHTML = '';
-});
-
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-  document.body.innerHTML = '';
-});
-
-// pitha-calibration-heatmap fetches fire-and-forget from firstUpdated (not
-// awaited or exposed as a property, matching pitha-scanner-table's own
-// test - see its nextMacrotask), so there is no promise this test can
-// await directly for "the fetch mock's response has been parsed and
-// rendered". A single real macrotask tick (zero-delay, not a guessed
-// race-condition duration) is the deterministic way to let that
-// fire-and-forget microtask chain (fetch -> json() -> state assignment ->
-// Lit's own update scheduling, all promise-based) fully settle before
-// asserting - it relies on the microtasks-before-macrotasks ordering the
-// spec guarantees, not on wall-clock timing (bun:test has no fake-timer
-// integration with Lit's internal scheduler, so this mirrors the existing
-// pitha-scanner-table.test.ts helper rather than introducing a second way
-// to await this same fire-and-forget pattern).
-async function nextMacrotask(): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, 0);
-  await promise;
-}
-
-async function flush(el: HeatmapElement): Promise<void> {
-  await nextMacrotask();
-  await el.updateComplete;
-}
-
-async function mount(body: CalibrationAPIResponse) {
-  const fetchMock = mock((_input: RequestInfo | URL) =>
-    Promise.resolve(new Response(JSON.stringify(body))),
-  );
-  globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-  const el = document.createElement('pitha-calibration-heatmap') as HeatmapElement;
-  el.setAttribute('calibration-url', '/api/v1/calibration');
-  document.body.appendChild(el);
-  await flush(el);
-  return { el, fetchMock };
-}
+installHeatmapHarness();
 
 describe('pitha-calibration-heatmap', () => {
   test('loads calibration metrics from calibration-url and renders a heatmap cell per bucket', async () => {
