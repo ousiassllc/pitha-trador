@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
@@ -60,6 +61,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithSecretsStore(secretsRepo),
 		router.WithMarketDataStatus(services.MarketData),
 		router.WithErrorLogExporter(services.ErrorLogs),
+		router.WithUniverseImporter(universe.NewImporter(services.Instruments, nil)),
 		router.WithCandidateRefreshInterval(scanner.CandidateRefreshInterval{
 			Min: time.Duration(scan.CandidateRefreshIntervalSecondsMin) * time.Second,
 			Max: time.Duration(scan.CandidateRefreshIntervalSecondsMax) * time.Second,

@@ -26,6 +26,7 @@ var defaultCandidateRefreshInterval = scanner.CandidateRefreshInterval{
 type options struct {
 	candidateSource   scanner.CandidateSource
 	candidateRefresh  scanner.CandidateRefreshInterval
+	universeImporter  scanner.UniverseImporter
 	systemEngine      system.SystemEngine
 	symbolProvider    symbol.SymbolProvider
 	symbolRiskParams  symbol.SymbolRiskParams
@@ -58,6 +59,14 @@ func WithCandidateSource(source scanner.CandidateSource) Option {
 // Defaults to defaultCandidateRefreshInterval (15-30s).
 func WithCandidateRefreshInterval(interval scanner.CandidateRefreshInterval) Option {
 	return func(o *options) { o.candidateRefresh = interval }
+}
+
+// WithUniverseImporter enables the Scanner Dashboard's 銘柄マスタ未投入
+// guidance and operator-confirmed JPX import (issue #508,
+// internal/web/handler/scanner.UniverseImporter). Without it the panel keeps
+// its plain empty state and `POST /scanner/universe/import` 404s.
+func WithUniverseImporter(imp scanner.UniverseImporter) Option {
+	return func(o *options) { o.universeImporter = imp }
 }
 
 // WithSystemEngine overrides the Kill Switch action/API routes' backing

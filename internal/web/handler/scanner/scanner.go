@@ -71,6 +71,7 @@ type ScannerHandler struct {
 	source   CandidateSource
 	interval CandidateRefreshInterval
 	now      func() time.Time
+	universe UniverseImporter
 }
 
 // NewScannerHandler returns a ScannerHandler that reads candidates from

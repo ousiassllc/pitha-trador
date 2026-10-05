@@ -169,17 +169,8 @@ func parseRow(rec []string, cols map[string]int) (domain.Instrument, error) {
 	if sector := field("sector"); sector != "" {
 		in.Sector = &sector
 	}
-	switch {
-	case in.Symbol == "":
-		return in, errors.New("symbol is empty")
-	case !isAlphanumericASCII(in.Symbol):
-		return in, fmt.Errorf("symbol %q must be alphanumeric ([0-9A-Za-z] only): the Symbol Detail route rejects any other symbol", in.Symbol)
-	case len(in.Symbol) > maxSymbolLen:
-		return in, fmt.Errorf("symbol %q exceeds %d characters", in.Symbol, maxSymbolLen)
-	case in.Name == "":
-		return in, fmt.Errorf("symbol %q: name is empty", in.Symbol)
-	case in.Market == "":
-		return in, fmt.Errorf("symbol %q: market is empty", in.Symbol)
+	if err := checkIdentity(in); err != nil {
+		return in, err
 	}
 	switch in.Kind {
 	case "":
@@ -193,4 +184,22 @@ func parseRow(rec []string, cols map[string]int) (domain.Instrument, error) {
 		return in, fmt.Errorf("symbol %q: unknown kind %q (want stock, market_index or sector_index)", in.Symbol, in.Kind)
 	}
 	return in, nil
+}
+
+// checkIdentity validates the fields every universe row needs whatever its
+// source (CSV or the JPX list): symbol format/length, name and market.
+func checkIdentity(in domain.Instrument) error {
+	switch {
+	case in.Symbol == "":
+		return errors.New("symbol is empty")
+	case !isAlphanumericASCII(in.Symbol):
+		return fmt.Errorf("symbol %q must be alphanumeric ([0-9A-Za-z] only): the Symbol Detail route rejects any other symbol", in.Symbol)
+	case len(in.Symbol) > maxSymbolLen:
+		return fmt.Errorf("symbol %q exceeds %d characters", in.Symbol, maxSymbolLen)
+	case in.Name == "":
+		return fmt.Errorf("symbol %q: name is empty", in.Symbol)
+	case in.Market == "":
+		return fmt.Errorf("symbol %q: market is empty", in.Symbol)
+	}
+	return nil
 }
