@@ -8,7 +8,7 @@
 //   - a 403 marked stale by the server (page opened before an app restart)
 //     gets a "reload the page" toast;
 //   - requests that never got a response (`htmx:sendError`, `htmx:timeout`);
-//   - dismissing toasts (close button, auto-dismiss);
+//   - dismissing toasts (close button, auto-dismiss that pauses while hovered/focused);
 //   - keeping toasts operable above a modal `<dialog>`: `showModal()` puts the
 //     dialog in the top layer, which no z-index can beat, and makes everything
 //     outside it inert. `#toast-region` is a `popover="manual"` re-shown (moved
@@ -117,6 +117,34 @@ function raiseToastRegion(target: HTMLElement): void {
   target.showPopover();
 }
 
+/** Auto-dismisses `toast` after DISMISS_AFTER_MS, but never while the pointer is over it or focus is inside it (WCAG 2.2.1): the countdown restarts once both are gone. */
+function scheduleDismiss(toast: HTMLElement): void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let hovered = false;
+  let focused = false;
+  const arm = () => {
+    clearTimeout(timer);
+    if (!hovered && !focused) timer = setTimeout(() => toast.remove(), DISMISS_AFTER_MS);
+  };
+  toast.addEventListener('mouseenter', () => {
+    hovered = true;
+    arm();
+  });
+  toast.addEventListener('mouseleave', () => {
+    hovered = false;
+    arm();
+  });
+  toast.addEventListener('focusin', () => {
+    focused = true;
+    arm();
+  });
+  toast.addEventListener('focusout', () => {
+    focused = false;
+    arm();
+  });
+  arm();
+}
+
 /** Toast-landed hook (both `showToast` and htmx's `beforeend` swap): raise the region and schedule the auto-dismiss. */
 function onToastsAdded(target: HTMLElement, records: MutationRecord[]): void {
   let added = false;
@@ -124,7 +152,7 @@ function onToastsAdded(target: HTMLElement, records: MutationRecord[]): void {
     for (const node of record.addedNodes) {
       if (node instanceof HTMLElement && node.hasAttribute(TOAST_MARKER)) {
         added = true;
-        setTimeout(() => node.remove(), DISMISS_AFTER_MS);
+        scheduleDismiss(node);
       }
     }
   }
