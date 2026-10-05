@@ -9,6 +9,7 @@ package marketdatajob
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -93,6 +94,11 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 
 	board, err := h.Boards.Latest(ctx, payload.Symbol)
 	if err != nil {
+		if errors.Is(err, marketdata.ErrRateLimited) {
+			slog.Warn("marketdatajob: defer board fetch to next cycle (kabu info api rate limited)",
+				"symbol", payload.Symbol)
+			return nil
+		}
 		return fmt.Errorf("marketdatajob: fetch board for %q: %w", payload.Symbol, err)
 	}
 

@@ -12,6 +12,10 @@ const (
 	DefaultHeldPositionIntervalSecondsMin     = 5
 	DefaultHeldPositionIntervalSecondsMax     = 15
 	DefaultJevScoutMinIntervalSeconds         = 60
+	// DefaultKabuInfoAPIMaxPerSecond matches marketdata/infolimit.DefaultMaxPerSecond.
+	DefaultKabuInfoAPIMaxPerSecond = 8
+	// OfficialKabuInfoAPIMaxPerSecond is the kabuステーションAPI FAQ cap.
+	OfficialKabuInfoAPIMaxPerSecond = 10
 )
 
 // withScanIntervalDefaults makes every scan.*_seconds interval usable: an
@@ -45,4 +49,14 @@ func withScanIntervalDefaults(cfg *ScanConfig) {
 	fill("held_position_interval_seconds_max", &cfg.HeldPositionIntervalSecondsMax, DefaultHeldPositionIntervalSecondsMax)
 	clampMax("held_position_interval_seconds_max", cfg.HeldPositionIntervalSecondsMin, &cfg.HeldPositionIntervalSecondsMax)
 	fill("jev_scout_min_interval_seconds", &cfg.JevScoutMinIntervalSeconds, DefaultJevScoutMinIntervalSeconds)
+	if cfg.KabuInfoAPIMaxPerSecond <= 0 {
+		slog.Warn("config: scan.kabu_info_api_max_per_second is not set (or not positive) in strategy.yaml; using default",
+			"default", DefaultKabuInfoAPIMaxPerSecond)
+		cfg.KabuInfoAPIMaxPerSecond = DefaultKabuInfoAPIMaxPerSecond
+	}
+	if cfg.KabuInfoAPIMaxPerSecond > OfficialKabuInfoAPIMaxPerSecond {
+		slog.Warn("config: scan.kabu_info_api_max_per_second exceeds the official kabu info-API cap; clamping",
+			"requested", cfg.KabuInfoAPIMaxPerSecond, "official_cap", OfficialKabuInfoAPIMaxPerSecond)
+		cfg.KabuInfoAPIMaxPerSecond = OfficialKabuInfoAPIMaxPerSecond
+	}
 }

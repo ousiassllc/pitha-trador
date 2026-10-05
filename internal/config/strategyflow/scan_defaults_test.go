@@ -17,6 +17,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 		HeldPositionIntervalSecondsMin:     config.DefaultHeldPositionIntervalSecondsMin,
 		HeldPositionIntervalSecondsMax:     config.DefaultHeldPositionIntervalSecondsMax,
 		JevScoutMinIntervalSeconds:         config.DefaultJevScoutMinIntervalSeconds,
+		KabuInfoAPIMaxPerSecond:            config.DefaultKabuInfoAPIMaxPerSecond,
 	}
 	tests := []struct {
 		name string
@@ -43,6 +44,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 				HeldPositionIntervalSecondsMin:     2,
 				HeldPositionIntervalSecondsMax:     3,
 				JevScoutMinIntervalSeconds:         90,
+				KabuInfoAPIMaxPerSecond:            config.DefaultKabuInfoAPIMaxPerSecond,
 			},
 		},
 		{
@@ -57,6 +59,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 				HeldPositionIntervalSecondsMin:     30,
 				HeldPositionIntervalSecondsMax:     30,
 				JevScoutMinIntervalSeconds:         config.DefaultJevScoutMinIntervalSeconds,
+				KabuInfoAPIMaxPerSecond:            config.DefaultKabuInfoAPIMaxPerSecond,
 			},
 		},
 	}
@@ -70,6 +73,29 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 			got.EventTrigger = config.EventTriggerConfig{}
 			if got != tc.want {
 				t.Errorf("Scan intervals = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadStrategyBytes_KabuInfoAPIMaxPerSecond(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+		want int
+	}{
+		{"explicit 5 is kept", "scan:\n  kabu_info_api_max_per_second: 5\n", 5},
+		{"above official cap is clamped to 10", "scan:\n  kabu_info_api_max_per_second: 50\n", 10},
+		{"zero is filled with default 8", "scan:\n  kabu_info_api_max_per_second: 0\n", 8},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := config.LoadStrategyBytes([]byte(tc.yaml + validStrategySections))
+			if err != nil {
+				t.Fatalf("LoadStrategyBytes: %v", err)
+			}
+			if got := cfg.Scan.KabuInfoAPIMaxPerSecond; got != tc.want {
+				t.Errorf("KabuInfoAPIMaxPerSecond = %d, want %d", got, tc.want)
 			}
 		})
 	}

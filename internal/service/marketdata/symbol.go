@@ -44,7 +44,7 @@ func (c *Client) GetSymbol(ctx context.Context, symbol string, exchange int) (Sy
 		return SymbolInfo{}, ErrNoToken
 	}
 	var info SymbolInfo
-	if err := c.do(ctx, http.MethodGet, fmt.Sprintf("/symbol/%s@%d", symbol, exchange), token, nil, &info); err != nil {
+	if err := c.doInfo(ctx, http.MethodGet, fmt.Sprintf("/symbol/%s@%d", symbol, exchange), token, nil, &info); err != nil {
 		return SymbolInfo{}, err
 	}
 	return info, nil
