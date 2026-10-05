@@ -32,9 +32,15 @@ export class PithaPriceChart extends LitElement {
   private wsClient: WsClient<SymbolMessage> | null = null;
   // ほか candleSeries / vwapSeries / volumeSeries / markers / lastDirection / lastBar も同様に非リアクティブ
 
+  // DOMから外して再挿入された場合（firstUpdatedは再実行されない）は、disconnectedCallbackで破棄したものを作り直す（issue #523）
+  override connectedCallback(): void {
+    super.connectedCallback();
+    if (this.hasUpdated) this.start();
+  }
+
   override disconnectedCallback(): void {
     super.disconnectedCallback();
-    this.chart?.remove();
+    this.chart?.remove();   // 系列・lastBar・markers・lastDirectionもnullに戻す
     this.chart = null;
     this.wsClient?.close();
     this.wsClient = null;
@@ -42,6 +48,10 @@ export class PithaPriceChart extends LitElement {
 
   // connectedCallback ではなく firstUpdated: createChart には描画済みの DOM 要素が必要（issue #170）
   protected override firstUpdated(): void {
+    this.start();
+  }
+
+  private start(): void {
     this.initChart();   // lightweight-charts でローソク足/VWAPライン/出来高ヒストグラムペインを初期化
     this.loadInitial();  // candlesUrl から初期系列を取得（lib/api.ts経由）
     this.subscribeWs();  // wsUrl から tick / jev_update を受信し系列・マーカーを更新
@@ -49,12 +59,12 @@ export class PithaPriceChart extends LitElement {
 }
 ```
 
-- `tick`は1分足に集約する: 現在の分（`floor(now/60)*60`、または最新バー時刻）のバーの`high/low/close`を更新し、分が変わったときのみ新しいバーを追加する。`price <= 0`の`tick`は無視する（サーバー側も`LastPrice <= 0`の間は`tick`を送らない。issue #183）
+- `tick`は1分足に集約する: メッセージの`time`（スナップショット時刻。クライアント時計は使わない）の分（`floor(time/60)*60`）のバーの`high/low/close`を更新し、分が変わったときのみ新しいバーを追加する（集約は`price-chart/bars.ts`の`foldTick`）。`price <= 0`・時刻不正・最新バーより古いスナップショットの`tick`は無視する。サーバーは`LastPrice > 0`かつ新しいスナップショットが現れたときだけ`tick`を送るため、場外・スキャン停止中に偽の足は増えない（issue #183, #557）
 - `jev_update`（`direction`/`confidence`）は`direction`が変化したときのみ、チャート上のマーカー（例: LONG転換で上向き矢印）として描画する。同一`direction`の繰り返しや`confidence`のみの変化では描画せず、`entry_quality`は`jev_update`に載らないため扱わない。Symbol DetailのJev判定パネルはSSRのみで、`jev_update`では更新されない（ページ再読み込みで更新。issue #362）
-- `candles-url`/`ws-url`属性が変化した場合は`updated()`ライフサイクルで再取得・再購読する。銘柄はURLに含めてサーバーが注入するため、`symbol`属性は持たない（HATEOAS。issue #409）
+- `candles-url`/`ws-url`属性が変化した場合は`updated()`ライフサイクルで再取得・再購読し、前銘柄の方向マーカー（`markers`・`lastDirection`・`setMarkers([])`）も消す（issue #562）。銘柄はURLに含めてサーバーが注入するため、`symbol`属性は持たない（HATEOAS。issue #409）
 - 出来高ヒストグラムは`candles`の`volume`（1分足あたりの出来高。サーバーが累積セッション値の差分に変換済みで、クライアントでは再計算しない。issue #474）をそのまま描画する
 - `candles-url`/`ws-url`は他コンポーネントと同様に未設定なら`logger.error`を出して該当の取得・購読を行わない
-- `/ws/symbols/{symbol}`が切断されている間（`reconnecting`/`failed`）はチャート下に「接続が切れています」を表示する。`tick`は受信時刻で足を作るため切断中の足は欠落する。切断後に`open`へ復帰した時は`candles-url`を`background: true`で再取得して足を補う（操作者不在でも発火するためハートビートに数えさせない。FR-RISK-6、issue #336）
+- `/ws/symbols/{symbol}`が切断されている間（`reconnecting`/`failed`）はチャート下に「接続が切れています」を表示する。`tick`はスナップショット時刻で足を作るため切断中の足は欠落する。切断後に`open`へ復帰した時は`candles-url`を`background: true`で再取得して足を補う（操作者不在でも発火するためハートビートに数えさせない。FR-RISK-6、issue #336）
 - 時間軸・クロスヘアは**JST（Asia/Tokyo）表示**とする。lightweight-charts v4は`UTCTimestamp`を既定でUTC表記するため、そのままでは東証の立会時間09:00〜15:30が00:00〜06:30に見える。`createChart`に`localization.timeFormatter`（クロスヘア、`YYYY-MM-DD HH:mm`）と`timeScale.tickMarkFormatter`（目盛、`HH:mm`/日/月/年）として`price-chart/jst-time.ts`の`formatCrosshairTime`/`formatTickMark`を渡し、`timeScale.timeVisible: true`・`secondsVisible: false`（足が1分単位のため）にする。ゾーンは`Intl.DateTimeFormat`に`timeZone: 'Asia/Tokyo'`を固定し、ホスト/Wailsのタイムゾーンに依存しない。系列・マーカー・ティック足に渡す時刻はこれまで通りepoch秒（UTC）のままで、表示時にのみJSTへ変換する（issue #478）
 
 ### 5.2 pitha-scanner-table
@@ -70,6 +80,7 @@ export class PithaPriceChart extends LitElement {
 
 - `GET /api/v1/calibration`のバケット別データからreliability curve（lightweight-chartsのラインシリーズ）とconfidence帯別カラーヒートマップを描画する
 - リアルタイム性は不要なため WebSocket は使用しない。ページ再訪問時・手動更新ボタン押下時に再フェッチする
+- DOMから外して再挿入された場合は、`disconnectedCallback`で破棄したチャートを`connectedCallback`で作り直し、保持済みのバケットから曲線を再描画する（`pitha-price-chart`と対称。issue #523）
 - `calibration-url`はTemplから属性で注入し、コンポーネントは既定値を持たない（HATEOAS）。未設定なら`logger.error`を出して取得を行わない（`fetch('')`で現在ページを取得しない。初回・更新ボタンとも同様。issue #494）
 - 空帯・サンプルなしの扱い: APIはサンプル0件の帯・全体でも`direction_accuracy`/`avg_future_return_pct`/`avg_confidence`/`brier_score`等を`0`で返す（「データなし」と「実測0」を値では区別できない）。そのためコンポーネントは`sample_count`で判定する
   - `sample_count == 0`の帯はreliability curveの実測系列に含めず（Perfect calibration線は全帯）、ヒートマップセルは中立色（グレー）で「データなし」と表示する（的中率・平均リターン・`conf`は出さない）。各帯セルは`n=<sample_count>`を表示する
@@ -141,10 +152,9 @@ templ KillSwitchPanel(state domain.SystemState) {
 ```typescript
 get<T>(path: string, options?: { background?: boolean }): Promise<T>
 post<T>(path: string, body?): Promise<T>
-put<T>(path: string, body?): Promise<T>
-patch<T>(path: string, body?): Promise<T>
-del<T>(path: string): Promise<T>
 ```
+
+`put`/`patch`/`del`は本番コードから使われないため持たない（必要になった時点で追加する。issue #563）。非2xx応答は`ApiError`（`method`/`path`/`status`/`detail`）を投げる。`detail`は応答本文がJSONならRFC 7807の`detail`（文字列でなければ空）。`message`は`リクエストに失敗しました（HTTP <status>）: <detail>`（`detail`が空なら末尾なし）で、内部のAPIパスは含めない（パスは`ApiError.path`としてロガー用に保持し、UIには出さない。issue #559）。`StaleSessionError`（CSRF不一致の403）は従来通り再読み込みを案内する。
 
 `get` の `background: true` は自動発火のリクエスト（`pitha-kill-switch-panel` の再同期、`pitha-activity-feed` / `pitha-price-chart` のWebSocket再接続後のスナップショット・足の再取得）に `X-Pitha-Background: 1` を付け、操作者ハートビートとして数えさせない（`architecture/overview/flows.md` §10.4、FR-RISK-6）。
 
