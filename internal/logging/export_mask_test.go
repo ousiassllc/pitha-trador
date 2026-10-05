@@ -24,6 +24,7 @@ func TestMaskString_PatternsCaseInsensitive(t *testing.T) {
 		{"passwd query", "https://x/y?passwd=pw", "https://x/y?passwd=[REDACTED]"},
 		{"http slack url", "post http://hooks.slack.com/services/T0/B0/xyz failed", "post [REDACTED] failed"},
 		{"https slack url", "post https://hooks.slack.com/services/T0/B0/xyz failed", "post [REDACTED] failed"},
+		{"upper-case slack url", "post HTTPS://HOOKS.SLACK.COM/services/T0/B0/xyz failed", "post [REDACTED] failed"},
 		{"plain text untouched", "Basic auth is not configured; secret store is empty", "Basic auth is not configured; secret store is empty"},
 	}
 	for _, tt := range tests {
