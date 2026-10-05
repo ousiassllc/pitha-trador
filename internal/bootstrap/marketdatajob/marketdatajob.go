@@ -103,7 +103,7 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 		return fmt.Errorf("marketdatajob: fetch board for %q: %w", payload.Symbol, err)
 	}
 
-	history, err := h.Snapshots.ListByInstrument(ctx, payload.InstrumentID, featureengine.HistoryLookbackBars)
+	history, err := h.Snapshots.ListHistoryByInstrument(ctx, payload.InstrumentID, featureengine.HistoryLookbackBars)
 	if err != nil {
 		return fmt.Errorf("marketdatajob: list snapshot history for %q: %w", payload.Symbol, err)
 	}

@@ -12,9 +12,13 @@
 // the audit trail (FR-ACT).
 //
 // Rows are deleted in bounded batches so one pass never holds the SQLite
-// write lock for long while the workers are inserting. Deleted pages are
-// reused by later inserts, so the database file stops growing but does not
-// shrink; the daily backup (VACUUM INTO) is compact.
+// write lock for long while the workers are inserting. The expired-row
+// SELECTs are index range scans (migration 000027: market_snapshots(timestamp),
+// jobs(status, finished_at)), so even the final partial batch of a pass
+// reads only the expired rows instead of scanning the whole retained
+// table under the write lock (issue #533). Deleted pages are reused by
+// later inserts, so the database file stops growing but does not shrink;
+// the daily backup (VACUUM INTO) is compact.
 //
 // internal/service/scheduler.Scheduler runs Purge once a day through
 // scheduler.WithDataPurger.
@@ -105,16 +109,25 @@ func (s *Service) Purge(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// deleteExpiredJobsSQL removes one batch of finished jobs. The inner SELECT
+// is served by jobs_status_finished_idx (status, finished_at).
+const deleteExpiredJobsSQL = `DELETE FROM jobs WHERE id IN (
+	SELECT id FROM jobs WHERE status = ? AND finished_at < ? LIMIT ?)`
+
+// selectExpiredSnapshotIDsSQL picks one batch of expired snapshot ids. It is
+// served by market_snapshots_timestamp_idx, whose order (timestamp, rowid)
+// matches ORDER BY, so no full scan or sort happens inside the write
+// transaction.
+const selectExpiredSnapshotIDsSQL = `SELECT id FROM market_snapshots
+	WHERE timestamp < ? ORDER BY timestamp, id LIMIT ?`
+
 // purgeJobs deletes jobs with the given terminal status finished before
 // cutoff (an RFC3339 UTC string, as stored), returning how many were
 // deleted.
 func (s *Service) purgeJobs(ctx context.Context, status, cutoff string) (int64, error) {
 	var total int64
 	for {
-		res, err := s.db.ExecContext(ctx,
-			`DELETE FROM jobs WHERE id IN (
-				SELECT id FROM jobs WHERE status = ? AND finished_at < ? LIMIT ?)`,
-			status, cutoff, s.batchSize)
+		res, err := s.db.ExecContext(ctx, deleteExpiredJobsSQL, status, cutoff, s.batchSize)
 		if err != nil {
 			return total, err
 		}
@@ -151,8 +164,7 @@ func (s *Service) purgeSnapshotBatch(ctx context.Context, cutoff string) (int64,
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	rows, err := tx.QueryContext(ctx,
-		`SELECT id FROM market_snapshots WHERE timestamp < ? ORDER BY id LIMIT ?`, cutoff, s.batchSize)
+	rows, err := tx.QueryContext(ctx, selectExpiredSnapshotIDsSQL, cutoff, s.batchSize)
 	if err != nil {
 		return 0, err
 	}

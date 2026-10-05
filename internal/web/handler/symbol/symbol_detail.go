@@ -131,6 +131,12 @@ type CandlesAPIOutput struct {
 // optional query params with no stated default).
 const defaultCandlesLookback = 6 * time.Hour
 
+// maxCandlesSpan caps `to - from`. 1-minute bars run ~330/day per symbol, so
+// 7 days is ~2,300 rows; without a cap `from=1970-01-01` would load the
+// whole 90-day retention window (~30k rows) into memory in one request
+// (issue #543, same class as performance/decisions ranges).
+const maxCandlesSpan = 7 * 24 * time.Hour
+
 // CandlesInput is `GET /api/v1/symbols/{symbol}/candles`'s path+query
 // parameters (docs/api/endpoints.md §5). `1m` is this MVP's only
 // supported/native granularity (market_snapshots' own bar size), so
@@ -138,7 +144,7 @@ const defaultCandlesLookback = 6 * time.Hour
 // date-time`) validated by Huma; the zero time means "not provided".
 type CandlesInput struct {
 	Symbol   string    `path:"symbol" minLength:"1" maxLength:"16" pattern:"^[0-9A-Za-z]+$" doc:"Instrument symbol (alphanumeric, e.g. 7203)."`
-	From     time.Time `query:"from" doc:"RFC3339 start time; defaults to 6 hours before to."`
+	From     time.Time `query:"from" doc:"RFC3339 start time; defaults to 6 hours before to. to - from must be within 7 days and from must not be after to."`
 	To       time.Time `query:"to" doc:"RFC3339 end time; defaults to now."`
 	Interval string    `query:"interval" enum:"1m" default:"1m" doc:"Fixed at 1m for this MVP."`
 }
@@ -154,6 +160,12 @@ func (h *SymbolHandler) APICandles(ctx context.Context, in *CandlesInput) (*Cand
 	from := to.Add(-defaultCandlesLookback)
 	if !in.From.IsZero() {
 		from = in.From
+	}
+	if from.After(to) {
+		return nil, huma.Error400BadRequest("from must not be after to")
+	}
+	if to.Sub(from) > maxCandlesSpan {
+		return nil, huma.Error400BadRequest("from..to spans more than 7 days")
 	}
 
 	snapshots, err := h.provider.Candles(ctx, in.Symbol, from, to)

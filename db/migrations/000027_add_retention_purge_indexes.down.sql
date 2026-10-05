@@ -1,0 +1,2 @@
+DROP INDEX jobs_status_finished_idx;
+DROP INDEX market_snapshots_timestamp_idx;

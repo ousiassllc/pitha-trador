@@ -122,15 +122,22 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 	inputSlot := make([]int, 0, len(actives))
 	funnel := domain.ScanFunnel{Universe: len(actives)}
 	inputs := make([]screener.Input, 0, len(actives))
+	// The latest bar plus featureengine.HistoryLookbackBars prior bars per
+	// instrument: enough for both the trailing turnover and
+	// ComputeScreenSignals' 15-minute volatility window. Fetched in one
+	// query without raw_data_json (issue #546) instead of a full-board
+	// ListByInstrument per active stock every cycle.
+	ids := make([]int64, len(actives))
+	for i, inst := range actives {
+		ids[i] = inst.ID
+	}
+	history, err := r.Snapshots.ListHistoryByInstruments(ctx, ids, featureengine.HistoryLookbackBars+1)
+	if err != nil {
+		return fmt.Errorf("candidates: list snapshot history: %w", err)
+	}
 	for slot, inst := range actives {
 		symbols[slot] = domain.ScanSymbol{InstrumentID: inst.ID, Symbol: inst.Symbol, Name: inst.Name, Market: inst.Market}
-		// The latest bar plus featureengine.HistoryLookbackBars prior
-		// bars: enough for both the trailing turnover and
-		// ComputeScreenSignals' 15-minute volatility window.
-		bars, err := r.Snapshots.ListByInstrument(ctx, inst.ID, featureengine.HistoryLookbackBars+1)
-		if err != nil {
-			return fmt.Errorf("candidates: list snapshots for %q: %w", inst.Symbol, err)
-		}
+		bars := history[inst.ID]
 		if len(bars) == 0 {
 			symbols[slot].Reasons = symbols[slot].Reasons.Add(domain.ScreenReasonNoSnapshot)
 			continue

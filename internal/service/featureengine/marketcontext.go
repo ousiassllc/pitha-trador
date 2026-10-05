@@ -86,7 +86,7 @@ func (l *MarketContextLoader) Load(ctx context.Context, inst domain.Instrument, 
 
 // indexBars returns idx's recent bars, or nil (logged) on a read error.
 func (l *MarketContextLoader) indexBars(ctx context.Context, idx domain.Instrument) []domain.Snapshot {
-	bars, err := l.snapshots.ListByInstrument(ctx, idx.ID, HistoryLookbackBars)
+	bars, err := l.snapshots.ListHistoryByInstrument(ctx, idx.ID, HistoryLookbackBars)
 	if err != nil {
 		slog.Warn("bootstrap: list index snapshots", "symbol", idx.Symbol, "error", err)
 		return nil
