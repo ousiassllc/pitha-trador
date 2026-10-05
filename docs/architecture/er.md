@@ -1,6 +1,6 @@
 # ER / データモデル
 
-DB: **SQLite**（アプリ内蔵、`modernc.org/sqlite` によるpure Go実装。cgo不要でWailsの単一実行ファイルに同梱する）。マイグレーションは `db/migrations`（golang-migrate、`sqlite3`ドライバ）で管理する。DBファイルはWindowsのアプリデータフォルダ（例: `%APPDATA%\pitha-trador\pitha.db`）に配置する。
+DB: **SQLite**（アプリ内蔵、`modernc.org/sqlite` によるpure Go実装。cgo不要でWailsの単一実行ファイルに同梱する）。マイグレーションは `db/migrations`（golang-migrate、`database/sqlite`ドライバ。`modernc.org/sqlite`上で動作しcgo不要）で管理する。DBファイルはWindowsのアプリデータフォルダ（例: `%APPDATA%\pitha-trador\pitha.db`）に配置する。
 
 ## 型・規約（SQLite特有の注意点）
 
@@ -12,7 +12,7 @@ DB: **SQLite**（アプリ内蔵、`modernc.org/sqlite` によるpure Go実装�
 | 日時列のDEFAULT | 一部の`created_at`/`updated_at`列にはスキーマ上`DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`が残るが、`%f`は**ミリ秒3桁**（長さ24）で上記の固定9桁（長さ30）規約と幅が異なる。DEFAULTは本番経路では使わず、全INSERTで`created_at`/`updated_at`を`sqlutil.FormatTime`で明示する（`kill_switch_resolutions.created_at`を含む）。DEFAULTに依存して新規行を書くと同一テーブル内で幅が混在し、辞書順＝時刻順が崩れる |
 | JSON | `jsonb`型は存在しないため `text` で宣言し、JSON文字列として保存する。クエリ時はSQLiteのJSON1関数（`json_extract`等）を用いる |
 | 真偽値 | `boolean`はSQLite上は`integer`（0/1）として格納される。宣言上は`boolean`のまま表記する |
-| 数値精度 | `numeric(x,y)`は桁数がDB側で強制されない（SQLiteの動的型付け）。丸め処理はGoアプリケーション層（リポジトリ層`internal/repository/**`）で行う |
+| 数値精度 | `numeric(x,y)`は桁数がDB側で強制されない（SQLiteの動的型付け）。宣言桁への丸め処理はアプリケーション層・リポジトリ層（`internal/repository/**`）のどちらにも存在せず、`float64`を無加工で保存・読み出しする（約定価格の呼値丸め`internal/service/fillmodel`は取引ルール上の丸めでDB桁への丸めではない）。宣言の`numeric(x,y)`は想定する値域・精度の目安であり、桁あふれ・桁丸めの強制は行わない |
 | ベクトル検索 | pgvectorに相当する型は無いため、**sqlite-vec**拡張（`vec0`仮想テーブル）を別テーブルとして持つ（`docs/architecture/er/tables-system.md` の「ベクトルインデックス」参照） |
 | 同時実行 | WALモード（`PRAGMA journal_mode=WAL`）を有効化する。書き込みはGo単一プロセスからのみ行うため、複数ライターの競合は発生しない |
 
@@ -78,3 +78,4 @@ erDiagram
 | 1.27 | 2026-10-05 | `er/tables-market.md`の`jev_decisions`に`(instrument_id, decision_type, timestamp DESC, id DESC)`索引（最新Trader/Scout判断の銘柄駆動seek用）を追記 | issue #498 |
 | 1.28 | 2026-10-05 | `er/tables-trading.md`の`paper_orders.fees`/`slippage_bps`に、約定モデル（FR-ENTRY-8）が約定時に記録する値（手数料円・直近価格に対する不利方向bps）と、`positions.realized_pnl`が両約定の手数料控除後であることを追記。スキーマ変更なし | issue #509 |
 | 1.29 | 2026-10-05 | `er/tables-market.md`の`market_snapshots`に取引可否カラム`special_quote`/`price_limit`/`lendable`を追加（マイグレーション000026。特別気配・ストップ高安・貸借なしショートをエントリー前に外す） | issue #511 |
+| 1.30 | 2026-10-05 | 実装との乖離を是正: 「数値精度」の丸め処理は存在せずfloat64を無加工保存と訂正、マイグレーションドライバを`database/sqlite`（modernc）へ訂正、`secrets`許可キー13個の明記、`market_snapshots`のER図に全列を反映、`calibration_outcomes`の`future_return`/`max_*_excursion`の単位（%）を明記 | issue #565, #569, #574, #575, #576 |

@@ -36,7 +36,7 @@ erDiagram
 
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
-| key | varchar(100) | PK | 例: `JEV_API_KEY`, `JEV_BASE_URL`, `KABU_API_PASSWORD`, `SLACK_WEBHOOK_URL`（キー定数は`internal/config/secrets.go`） |
+| key | varchar(100) | PK | 許可キーは`internal/config/secrets.go`の`AllowedSecretKeys`の13個のみ。必須: `JEV_API_KEY`, `KABU_API_PASSWORD`。任意: `JEV_BASE_URL`, `JEV_MODEL`, `SLACK_WEBHOOK_URL`, `LUNA_API_KEY`, `LUNA_BASE_URL`, `NEWS_FEED_URL`, `NEWS_FEED_API_KEY`, `SOL_API_KEY`, `SOL_BASE_URL`, `OPUS_API_KEY`, `OPUS_BASE_URL`（キー一覧の正は`AllowedSecretKeys`） |
 | encrypted_value | text | NOT NULL | AES-256-GCMで暗号化した値。先頭にランダムnonceを連結しbase64（StdEncoding）でエンコードした文字列 |
 | updated_at | text | NOT NULL | |
 

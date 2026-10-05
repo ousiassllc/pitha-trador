@@ -122,9 +122,9 @@ erDiagram
 | id | integer | PK（AUTOINCREMENT） | |
 | jev_decision_id | integer | FK → jev_decisions.id, NOT NULL | decision_type=trader対象 |
 | horizon_minutes | integer | NOT NULL | 5 / 10 / 20 等 |
-| future_return | numeric(8,4) | NOT NULL | |
-| max_adverse_excursion | numeric(8,4) | NOT NULL | |
-| max_favorable_excursion | numeric(8,4) | NOT NULL | |
+| future_return | numeric(8,4) | NOT NULL | **百分率（%）**（1.0 = +1%）。`entry`（判断時刻の足の価格）から水平線末尾の足の価格への `(price − entry)/entry × 100`。方向調整は**しない**（shortでも価格上昇なら正）。`market_snapshots.return_*`の小数比（0.004 = +0.4%）とは単位が異なり、×100の換算を要する |
+| max_adverse_excursion | numeric(8,4) | NOT NULL | **百分率（%）**。窓内の方向調整済みリターン（short は符号反転）の最小値（0以下。含み損の最大幅）。`direction=NONE`はlong扱い（調整係数+1） |
+| max_favorable_excursion | numeric(8,4) | NOT NULL | **百分率（%）**。窓内の方向調整済みリターンの最大値（0以上。含み益の最大幅） |
 | was_direction_correct | boolean | NULL可 | direction=NONEの場合NULL |
 | created_at | text | NOT NULL | |
 
