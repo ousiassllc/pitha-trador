@@ -59,6 +59,9 @@ func (e *Engine) RunCycle(ctx context.Context, inputs []CycleInput) ([]domain.Sn
 			Volume:       in.Input.Current.Volume,
 			Turnover:     in.Input.Current.Turnover,
 			Feature:      Compute(in.Input),
+			SpecialQuote: in.Input.Current.SpecialQuote,
+			PriceLimit:   in.Input.Current.PriceLimit,
+			Lendable:     in.Input.Current.Lendable,
 			RawDataJSON:  in.RawDataJSON,
 		})
 	}

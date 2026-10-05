@@ -23,7 +23,7 @@
 
 ### 4.2 Fast Screener
 
-- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-3〜6、除外・欠損理由の表示は FR-SCAN-4/5）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する。`min_abs_return_5m_pct`の単位は**パーセント**（0.3 = 0.3%）で、Feature Engineの`return_5m`（小数比、0.003 = 0.3%）を×100して比較する）
+- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-3〜6、除外・欠損理由の表示は FR-SCAN-4/5）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する。約定不能な足も同じくJev呼び出し前に除外する（issue #511）: **特別気配**（板の`BidSign`/`AskSign`が`0102`特別気配・`0108`停止前特別気配。理由`special_quote`）と**ストップ高/ストップ安**（現値が銘柄情報`UpperLimit`/`LowerLimit`に到達。理由`limit_up`/`limit_down`）は、スナップショットの`special_quote`/`price_limit`から判定され、除外理由としてScanner Dashboardに表示される（欠損ではなく`excluded`）。ショート方向が確定するのはJev Trader後のためFast Screenerでは貸借を見ず、貸借なしのショートはFR-POLICY-3で外す。`min_abs_return_5m_pct`の単位は**パーセント**（0.3 = 0.3%）で、Feature Engineの`return_5m`（小数比、0.003 = 0.3%）を×100して比較する）
 - FR-FS-2: 通過銘柄に対し以下のスコアを算出し、上位N銘柄のみJev Scoutへ送る。Nは`fast_screener.top_n`で、同梱既定は20（`config/strategy.yaml`。Jev APIコストを抑える側の値）。50〜200へ引き上げる場合は`non-functional.md` §2.1のAPI呼び出し上限（Nに比例）を確認する
 
 ```text
@@ -75,7 +75,7 @@ screen_score =
 - FR-POLICY-1: LONG条件: `direction == LONG AND P(LONG) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
 - FR-POLICY-2: SHORT条件: `direction == SHORT AND P(SHORT) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
 - FR-POLICY-2a（起動時検証）: `policy.long`/`policy.short`の`min_probability`・`min_continuation_probability`・`max_toxic_flow`・`max_liquidity_stressed`は`(0, 1]`、`min_entry_quality`は`poor`/`fair`/`good`/`strong`/`exceptional`のいずれか、`policy.min_calibration_samples`は0以上（0で無効）であること。キー欠落・タイプミスは0/空として読み込まれ、`min_entry_quality`が未知値だと`poor`相当になりentry_qualityゲートが無効化されるため、補完せず項目名（例: `policy.long.min_entry_quality`）付きで全件まとめて報告し起動に失敗する。検証は`PITHA_POLICY_*`環境変数（FR-POLICY-4）の適用後に行い、環境変数経由の不正値（範囲外・未知のentry_quality）も同様に拒否する。`config/strategy.yaml`・埋め込み既定値は検証を通過する
-- FR-POLICY-3: 以下のいずれかに該当する場合はNONE（取引しない）: JevがNONE、確信度不足、スプレッド過大、板が薄い（スナップショットの`turnover_5m`が`min_turnover_5m_jpy`未満。履歴不足で算出不能な場合は判定しない）、Risk Engine拒否、データ欠損、API異常、キャリブレーション対象外（Jev decisionのconfidenceが属する信頼度バケットのラベル付きCalibrationサンプル数が`policy.min_calibration_samples`未満。0で無効）
+- FR-POLICY-3: 以下のいずれかに該当する場合はNONE（取引しない）: JevがNONE、確信度不足、スプレッド過大、板が薄い（スナップショットの`turnover_5m`が`min_turnover_5m_jpy`未満。履歴不足で算出不能な場合は判定しない）、約定不能（スナップショットが特別気配（`special_quote`）またはストップ高/安（`price_limit`）。Fast Screener通過後に状態が変わった場合の再確認。LONG/SHORT双方）、貸借なしのショート（スナップショットの`lendable`が明示的にfalse、つまり銘柄情報`MarginSell`がfalseの銘柄のSHORT。`lendable`が不明（NULL）の場合は判定しない。`reject_reason`は`special_quote`/`price_limit: stop_up|stop_down`/`not_lendable`）、Risk Engine拒否、データ欠損、API異常、キャリブレーション対象外（Jev decisionのconfidenceが属する信頼度バケットのラベル付きCalibrationサンプル数が`policy.min_calibration_samples`未満。0で無効）
 - FR-POLICY-4: しきい値はCalibration結果に基づき調整する。プロンプト変更より先にポリシー側のしきい値調整を優先する
 - FR-POLICY-5: 生成したトレードシグナルを`trade_signals`に保存する（policy_version、risk_passed、reject_reasonを含む）。`policy_version`はPolicy Engineのロジック版`policy-v1`で、自己改善の適用提案（FR-SELFIMPROVE-5）のしきい値が有効な間は`policy-v1+sol-12`のように適用版を付加し（`varchar(20)`に収まる）、ロールバックで適用提案が無くなれば`policy-v1`に戻る。バックテスト再生（Decide）は常に`policy-v1`
 

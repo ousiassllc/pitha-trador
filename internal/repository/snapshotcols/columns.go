@@ -36,6 +36,14 @@ func i64Col(name string, field func(*domain.Snapshot) **int64) Column {
 	}
 }
 
+func boolPtrCol(name string, field func(*domain.Snapshot) **bool) Column {
+	return Column{
+		Name: name,
+		Arg:  func(s *domain.Snapshot) any { return nullable(*field(s)) },
+		Dest: func(s *domain.Snapshot) any { return nullBool(field(s)) },
+	}
+}
+
 func reqCol[T any](name string, field func(*domain.Snapshot) *T) Column {
 	return Column{
 		Name: name,
@@ -46,7 +54,8 @@ func reqCol[T any](name string, field func(*domain.Snapshot) *T) Column {
 
 // Columns is every market_snapshots column between
 // turnover and raw_data_json, in table order for the original columns
-// followed by those added in migration 000016.
+// followed by those added in migration 000016 and, after the Feature
+// columns, the tradability columns of migration 000026.
 var Columns = []Column{
 	f64Col("return_1m", func(s *domain.Snapshot) **float64 { return &s.Feature.Return1m }),
 	f64Col("return_5m", func(s *domain.Snapshot) **float64 { return &s.Feature.Return5m }),
@@ -85,6 +94,10 @@ var Columns = []Column{
 	f64Col("market_return_1m", func(s *domain.Snapshot) **float64 { return &s.Feature.MarketReturn1m }),
 	f64Col("stock_vs_sector_relative_strength", func(s *domain.Snapshot) **float64 { return &s.Feature.StockVsSectorRelativeStrength }),
 	f64Col("market_breadth", func(s *domain.Snapshot) **float64 { return &s.Feature.MarketBreadth }),
+
+	reqCol("special_quote", func(s *domain.Snapshot) *bool { return &s.SpecialQuote }),
+	reqCol("price_limit", func(s *domain.Snapshot) *domain.PriceLimit { return &s.PriceLimit }),
+	boolPtrCol("lendable", func(s *domain.Snapshot) **bool { return &s.Lendable }),
 }
 
 // Names is the comma-joined column list of Columns.

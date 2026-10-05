@@ -102,3 +102,33 @@ func TestScreen_ReasonsParallelToInputsAndTopNCut(t *testing.T) {
 		t.Errorf("Run diverged from Screen: %+v", got)
 	}
 }
+
+// Special-quote and stop-high/stop-low bars are excluded (not "missing")
+// with their own reason, and are never candidates (issue #511).
+func TestFilterReasons_UntradableBars(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(*screener.Input)
+		want domain.ScreenReason
+	}{
+		{"special quote", func(in *screener.Input) { in.Snapshot.SpecialQuote = true }, domain.ScreenReasonSpecialQuote},
+		{"stop high", func(in *screener.Input) { in.Snapshot.PriceLimit = domain.PriceLimitUp }, domain.ScreenReasonLimitUp},
+		{"stop low", func(in *screener.Input) { in.Snapshot.PriceLimit = domain.PriceLimitDown }, domain.ScreenReasonLimitDown},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			in := baseInput()
+			if got := screener.FilterReasons(testCfg(), in); got != 0 {
+				t.Fatalf("baseInput must pass, got %v", got.List())
+			}
+			c.mut(&in)
+			got := screener.FilterReasons(testCfg(), in)
+			if !got.Has(c.want) || len(got.List()) != 1 || got.Status() != domain.ScanStatusExcluded {
+				t.Fatalf("reasons = %v (status %s), want only %s excluded", got.List(), got.Status(), c.want.Code())
+			}
+			if res := screener.Screen(testCfg(), []screener.Input{in}); len(res.Candidates) != 0 {
+				t.Errorf("candidates = %d, want 0", len(res.Candidates))
+			}
+		})
+	}
+}

@@ -79,3 +79,4 @@
 | 1.72 | 2026-10-05 | §3（`overview.md`）のツリーの`candidates/`に、最新Jev Trader判断と保有ポジションの付与を追記 | issue #492 |
 | 1.73 | 2026-10-05 | §3/§4（`overview.md`）の構成図・責務表に、最新Jev Trader判断の件数窓・経過時間上限なしの単一定義（`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`/`LatestScout`、`execution.Engine.State`の`LatestTraderDecision`、Exit評価の窓撤廃）の回帰テスト専用ディレクトリ`execution/latestdecision`を追記 | issue #496, #497, #498, #499, #500 |
 | 1.74 | 2026-10-05 | §4の責務表に約定モデル`internal/service/fillmodel`（呼値・スプレッド・滑り・手数料・昼休み・寄り引け）、Market Calendarの`PhaseAt`、Executionのテスト専用`fillflow`/`exitflow`を追記し、Backtest Engine行・`overview/integrations.md` §8のコストモデルを固定5bps/0bpsからPaper Tradingと共用の約定モデルへ更新 | issue #509 |
+| 1.75 | 2026-10-05 | §5（`overview/integrations.md`）に約定可否の入力（板の`BidSign`/`AskSign`と銘柄情報`/symbol`の`UpperLimit`/`LowerLimit`/`MarginSell`、`symbolcache.Cache`）を追記 | issue #511 |

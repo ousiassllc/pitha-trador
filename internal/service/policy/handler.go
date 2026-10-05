@@ -104,6 +104,9 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		EntryPriceReference: &snap.Price,
 		SpreadBps:           snap.SpreadBps,
 		Turnover5mJPY:       snap.Feature.Turnover5m,
+		SpecialQuote:        snap.SpecialQuote,
+		PriceLimit:          snap.PriceLimit,
+		Lendable:            snap.Lendable,
 		Calibrated:          calibrated,
 	})
 	if err != nil {
