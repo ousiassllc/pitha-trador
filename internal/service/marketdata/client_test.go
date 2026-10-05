@@ -84,6 +84,20 @@ func TestNewClient_EmptyConfigDoesNotPanic(t *testing.T) {
 	}
 }
 
+// waitForCount blocks until count reaches want, failing the test after a
+// generous deadline (a bound for a broken implementation, not a pacing
+// assumption: a healthy run returns as soon as the condition holds).
+func waitForCount(t *testing.T, count *atomic.Int32, want int32) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for count.Load() < want {
+		if time.Now().After(deadline) {
+			t.Fatalf("server saw %d requests, want at least %d", count.Load(), want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestClient_Start_ReissuesTokenPeriodically(t *testing.T) {
 	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -97,16 +111,12 @@ func TestClient_Start_ReissuesTokenPeriodically(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := client.Start(ctx, 15*time.Millisecond); err != nil {
+	if err := client.Start(ctx, 5*time.Millisecond); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
-	time.Sleep(80 * time.Millisecond)
-	cancel()
-
-	if got := count.Load(); got < 3 {
-		t.Errorf("token issuance count = %d, want at least 3 within 80ms at a 15ms interval", got)
-	}
+	// The initial issuance plus at least two periodic reissues.
+	waitForCount(t, &count, 3)
 }
 
 func TestClient_Start_KeepsPreviousTokenOnReissueFailure(t *testing.T) {
@@ -126,11 +136,13 @@ func TestClient_Start_KeepsPreviousTokenOnReissueFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := client.Start(ctx, 10*time.Millisecond); err != nil {
+	if err := client.Start(ctx, 5*time.Millisecond); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	// The reissue loop is sequential, so the third request can only start
+	// after the second (the first failing one) has been fully handled.
+	waitForCount(t, &count, 3)
 	cancel()
 
 	token, ok := client.Token()

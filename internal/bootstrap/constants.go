@@ -32,5 +32,6 @@ const defaultTokenRefreshInterval = 20 * time.Minute
 const defaultKabuExchange = marketdata.ExchangeTSE
 
 // newsPollInterval is how often News Ingest polls the external news feed
-// for every active instrument (FR-LUNA-1).
+// for the Fast Screener candidates and held symbols, during the TSE session
+// only (FR-LUNA-1, issue #531).
 const newsPollInterval = time.Minute

@@ -210,8 +210,7 @@ func (s *Service) Context(ctx context.Context, in FeatureInput, sub Subject, k i
 	}
 
 	if len(cases) < k {
-		snapshotFilter, snapshotArgs := sub.snapshotFilter()
-		snapshotMatches, err := s.search(ctx, "market_snapshot_vectors", "snapshot_id", snapshotFilter, snapshotArgs, v, k-len(cases))
+		snapshotMatches, err := s.searchExcluding(ctx, "market_snapshot_vectors", "snapshot_id", "", nil, v, k-len(cases), sub.snapshotSelf())
 		if err != nil {
 			return Context{}, fmt.Errorf("rag: search similar snapshots: %w", err)
 		}

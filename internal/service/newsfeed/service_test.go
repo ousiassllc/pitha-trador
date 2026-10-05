@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,29 +29,31 @@ func (f *fakeFeed) Fetch(_ context.Context, symbol string) ([]assist.NewsItem, e
 }
 
 type fakeLuna struct {
+	mu    sync.Mutex
 	calls int
 	err   error
 }
 
 func (f *fakeLuna) Classify(_ context.Context, item assist.NewsItem) (assist.Classification, error) {
+	f.mu.Lock()
 	f.calls++
+	f.mu.Unlock()
 	if f.err != nil {
 		return assist.Classification{}, f.err
 	}
 	return assist.Classification{Sentiment: domain.NewsSentimentBullish, EventType: domain.NewsEventEarnings, Summary: "S:" + item.Headline}, nil
 }
 
-type fakeInstruments []domain.Instrument
+type fakeSymbols []string
 
-func (f fakeInstruments) ListActive(context.Context) ([]domain.Instrument, error) { return f, nil }
+func (f fakeSymbols) NewsSymbols(context.Context) ([]string, error) { return f, nil }
 
 func article(id, headline string, age time.Duration) assist.NewsItem {
 	return assist.NewsItem{ID: id, Symbol: "7203", Headline: headline, PublishedAt: t0.Add(-age)}
 }
 
 func newService(feed *fakeFeed, luna *fakeLuna, opts ...newsfeed.Option) *newsfeed.Service {
-	insts := fakeInstruments{{Symbol: "7203", IsActive: true}}
-	return newsfeed.NewService(feed, luna, insts, append([]newsfeed.Option{newsfeed.WithNow(func() time.Time { return t0 })}, opts...)...)
+	return newsfeed.NewService(feed, luna, fakeSymbols{"7203"}, append([]newsfeed.Option{newsfeed.WithNow(func() time.Time { return t0 })}, opts...)...)
 }
 
 func TestPoll_ClassifiesNewsIntoCacheNewestFirstAndRaisesFlag(t *testing.T) {
@@ -127,7 +132,7 @@ func TestPoll_ExpiredArticlesAreIgnoredAndCacheEntriesExpire(t *testing.T) {
 	now := t0
 	feed := &fakeFeed{items: map[string][]assist.NewsItem{"7203": {article("stale", "stale", 3*time.Hour), article("fresh", "fresh", time.Minute)}}}
 	luna := &fakeLuna{}
-	svc := newsfeed.NewService(feed, luna, fakeInstruments{{Symbol: "7203"}},
+	svc := newsfeed.NewService(feed, luna, fakeSymbols{"7203"},
 		newsfeed.WithNow(func() time.Time { return now }), newsfeed.WithTTL(time.Hour))
 
 	_ = svc.Poll(context.Background())
@@ -205,5 +210,109 @@ func TestPoll_ArticleWithoutPublishedAtIsClassifiedOnceAndDedupedByHeadline(t *t
 	}
 	if ctx, ok := svc.NewsContext("7203"); !ok || len(ctx.Items) != 1 {
 		t.Errorf("NewsContext = %+v, %v, want the undated article cached", ctx, ok)
+	}
+}
+
+// countingFeed records which symbols were fetched and the peak number of
+// Fetch calls in flight.
+type countingFeed struct {
+	mu      sync.Mutex
+	fetched []string
+	active  int
+	peak    int
+	release chan struct{}
+}
+
+func (f *countingFeed) Fetch(ctx context.Context, symbol string) ([]assist.NewsItem, error) {
+	f.mu.Lock()
+	f.fetched = append(f.fetched, symbol)
+	f.active++
+	f.peak = max(f.peak, f.active)
+	f.mu.Unlock()
+	defer func() {
+		f.mu.Lock()
+		f.active--
+		f.mu.Unlock()
+	}()
+	if f.release != nil {
+		select {
+		case <-f.release:
+		case <-ctx.Done():
+		}
+	}
+	return nil, nil
+}
+
+func TestPoll_FetchesOnlyTheSourceSymbols(t *testing.T) {
+	feed := &countingFeed{}
+	svc := newsfeed.NewService(feed, &fakeLuna{}, fakeSymbols{"7203", "9984"}, newsfeed.WithNow(func() time.Time { return t0 }))
+	if err := svc.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	slices.Sort(feed.fetched)
+	if want := []string{"7203", "9984"}; !slices.Equal(feed.fetched, want) {
+		t.Errorf("fetched = %v, want exactly %v", feed.fetched, want)
+	}
+}
+
+func TestPoll_SkipsOutsideSession(t *testing.T) {
+	feed := &countingFeed{}
+	open := false
+	svc := newsfeed.NewService(feed, &fakeLuna{}, fakeSymbols{"7203"},
+		newsfeed.WithNow(func() time.Time { return t0 }),
+		newsfeed.WithSessionGate(func(time.Time) bool { return open }))
+
+	if err := svc.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll (closed): %v", err)
+	}
+	if len(feed.fetched) != 0 {
+		t.Fatalf("fetched %v outside the session, want no feed requests", feed.fetched)
+	}
+
+	open = true
+	if err := svc.Poll(context.Background()); err != nil {
+		t.Fatalf("Poll (open): %v", err)
+	}
+	if len(feed.fetched) != 1 {
+		t.Errorf("fetched %v inside the session, want one request", feed.fetched)
+	}
+}
+
+// The fetches overlap (a slow feed does not serialize the cycle) but never
+// exceed the configured concurrency.
+func TestPoll_BoundedConcurrency(t *testing.T) {
+	const limit = 3
+	symbols := make(fakeSymbols, 12)
+	for i := range symbols {
+		symbols[i] = fmt.Sprintf("%04d", 1000+i)
+	}
+	feed := &countingFeed{release: make(chan struct{})}
+	svc := newsfeed.NewService(feed, &fakeLuna{}, symbols, newsfeed.WithConcurrency(limit))
+
+	done := make(chan error, 1)
+	go func() { done <- svc.Poll(context.Background()) }()
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		feed.mu.Lock()
+		active := feed.active
+		feed.mu.Unlock()
+		if active == limit {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d fetches in flight, want %d overlapping", active, limit)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(feed.release)
+	if err := <-done; err != nil {
+		t.Fatalf("Poll: %v", err)
+	}
+	if feed.peak != limit {
+		t.Errorf("peak concurrent fetches = %d, want %d", feed.peak, limit)
+	}
+	if len(feed.fetched) != len(symbols) {
+		t.Errorf("fetched %d symbols, want %d", len(feed.fetched), len(symbols))
 	}
 }
