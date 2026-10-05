@@ -137,6 +137,28 @@ describe('pitha-activity-feed reconnect resync', () => {
     expect(isBackground(fetchMock.mock.calls[0])).toBe(false);
   });
 
+  // The server tells a client it was too slow to keep up (dropped job
+  // events / queue updates) with {"type":"resync"} (#536).
+  test('re-fetches the snapshot and kill switch events on a server resync message', async () => {
+    const { el, fetchMock } = await mount();
+    FakeWebSocket.instances[0].emit('open');
+
+    fetchMock.mockClear();
+    fetchMock.mockImplementation((() =>
+      Promise.resolve(new Response(snapshot(7, 'dropped by the server')))) as never);
+    FakeWebSocket.instances[0].emit('message', { data: JSON.stringify({ type: 'resync' }) });
+    await flush(el);
+
+    const urls = fetchMock.mock.calls.map((c) => (c as unknown as [string])[0]);
+    expect(urls).toHaveLength(2);
+    expect(urls.some((u) => u.includes('type=kill_switch'))).toBe(true);
+    expect(fetchMock.mock.calls.every(isBackground)).toBe(true);
+    expect(el.querySelector('#queue-status tbody tr td:nth-child(2)')?.textContent).toBe('7');
+    expect(el.querySelector('#activity-feed tbody tr td:nth-child(4)')?.textContent).toBe(
+      'dropped by the server',
+    );
+  });
+
   // Light DOM: Shadow `noticeStyles` do not apply, so Tailwind classes must (#355).
   test('styles the disconnected notice with Tailwind classes while the socket is down', async () => {
     const { el } = await mount();

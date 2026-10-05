@@ -215,6 +215,7 @@ func TestActivityHandler_WebSocket_ForwardsBusMessagesAndUnsubscribesOnDisconnec
 	source.messages <- activityfeed.Message{Event: &domain.ActivityEvent{
 		Type: domain.ActivityTypeJevScout, Timestamp: time.Date(2026, 9, 29, 1, 15, 0, 0, time.UTC), Symbol: "7203",
 	}}
+	source.messages <- activityfeed.Message{Resync: true}
 
 	read := func() map[string]any {
 		t.Helper()
@@ -237,6 +238,9 @@ func TestActivityHandler_WebSocket_ForwardsBusMessagesAndUnsubscribesOnDisconnec
 	inner, _ := ev["event"].(map[string]any)
 	if ev["type"] != "activity_event" || inner["type"] != "jev_scout" || inner["symbol"] != "7203" || inner["timestamp"] != "2026-09-29T01:15:00Z" {
 		t.Fatalf("activity_event = %+v", ev)
+	}
+	if resync := read(); resync["type"] != "resync" || len(resync) != 1 {
+		t.Fatalf("resync = %+v, want {\"type\":\"resync\"}", resync)
 	}
 
 	_ = conn.Close(websocket.StatusNormalClosure, "")

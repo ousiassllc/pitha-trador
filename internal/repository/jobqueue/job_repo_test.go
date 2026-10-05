@@ -193,14 +193,13 @@ func TestJobRepository_ResetStuckRunning(t *testing.T) {
 
 // TestJobRepository_ClaimNext_ConcurrentClaimsDoNotHitSQLiteBusy pits many
 // goroutines against a single JobRepository (and its shared *sql.DB pool)
-// all racing to ClaimNext the same queue at once. ClaimNext runs a SELECT
-// followed by an UPDATE inside one transaction; a deferred BEGIN only
-// acquires SQLite's write lock at that later UPDATE, so two concurrent
-// transactions that both finish their SELECT can race for the write-lock
-// upgrade and fail with SQLITE_BUSY even when PRAGMA busy_timeout is set,
-// unless BEGIN IMMEDIATE (DSN `_txlock=immediate`) forces the write lock
-// to be acquired up front (issue #39). This test asserts every enqueued
-// job is claimed exactly once, with no unexpected errors.
+// all racing to ClaimNext the same queue at once. ClaimNext finds the
+// oldest due job with a plain read and claims it with an UPDATE guarded
+// by status = 'pending' (issue #541), so two workers that pick the same
+// candidate must not both win, and contention must be absorbed by
+// busy_timeout rather than surface as SQLITE_BUSY (issue #39). This test
+// asserts every enqueued job is claimed exactly once, with no unexpected
+// errors.
 func TestJobRepository_ClaimNext_ConcurrentClaimsDoNotHitSQLiteBusy(t *testing.T) {
 	repo := jobqueue.NewJobRepository(newTestDB(t))
 	ctx := context.Background()

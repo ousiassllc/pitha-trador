@@ -175,6 +175,10 @@ export class PithaActivityFeed extends LitElement {
             }
           : q,
       );
+    } else if (message.type === 'resync') {
+      // The server dropped messages for this slow client (#536).
+      void this.loadSnapshot(true);
+      void this.loadKillSwitchEvents(true);
     } else if (message.type === 'activity_event') {
       const { event } = message;
       if (this.matchesFilter(event)) {
