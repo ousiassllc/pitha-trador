@@ -17,15 +17,15 @@ import (
 templ ActivityFeedFallback(events []domain.ActivityEvent, asOf time.Time) {
 	<section class="mt-6" id="activity-feed" data-testid="activity-feed">
 		<h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Activity</h2>
-		<table class="w-full border-collapse text-left text-sm">
+		<table class="w-full border-collapse text-left text-sm" aria-label="アクティビティフィード">
 			<caption class="mb-2 text-left text-sm text-slate-500">{ "as of " + atoms.FormatJST(asOf) }</caption>
 			<thead>
 				<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-					<th class="px-3 py-2">Time</th>
-					<th class="px-3 py-2">Type</th>
-					<th class="px-3 py-2">Symbol</th>
-					<th class="px-3 py-2">Detail</th>
-					<th class="px-3 py-2">Latency (ms)</th>
+					<th scope="col" class="px-3 py-2">Time</th>
+					<th scope="col" class="px-3 py-2">Type</th>
+					<th scope="col" class="px-3 py-2">Symbol</th>
+					<th scope="col" class="px-3 py-2">Detail</th>
+					<th scope="col" class="px-3 py-2">Latency (ms)</th>
 				</tr>
 			</thead>
 			<tbody>

@@ -125,7 +125,7 @@ templ positionPanel(position *domain.Position) {
 		if position == nil {
 			<p class="mt-4 text-sm text-slate-500">No open position.</p>
 		} else {
-			<table class="mt-4 w-full border-collapse text-left text-sm">
+			<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="ポジション">
 				<thead>
 					<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
 						<th scope="col" class="px-3 py-2">Symbol</th>

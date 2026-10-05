@@ -60,15 +60,15 @@ templ PerformancePage(props PerformanceProps) {
 templ foldTable(folds []PerformanceFold) {
 	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="backtest-folds">
 		<h2 class="text-lg font-semibold text-slate-900">Folds</h2>
-		<table class="mt-4 w-full border-collapse text-left text-sm">
+		<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="Walk Forward 結果（フォールド別）">
 			<thead>
 				<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-					<th class="px-3 py-2">Forward period</th>
-					<th class="px-3 py-2">Trades</th>
-					<th class="px-3 py-2">Win Rate</th>
-					<th class="px-3 py-2">Expectancy</th>
-					<th class="px-3 py-2">Max Drawdown</th>
-					<th class="px-3 py-2">Net PnL</th>
+					<th scope="col" class="px-3 py-2">Forward period</th>
+					<th scope="col" class="px-3 py-2">Trades</th>
+					<th scope="col" class="px-3 py-2">Win Rate</th>
+					<th scope="col" class="px-3 py-2">Expectancy</th>
+					<th scope="col" class="px-3 py-2">Max Drawdown</th>
+					<th scope="col" class="px-3 py-2">Net PnL</th>
 				</tr>
 			</thead>
 			<tbody>

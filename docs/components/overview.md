@@ -154,6 +154,9 @@ const (
 
 Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`（`internal/domain/jevdecision.go`）の文字列定数をそのままテキスト表示する（色分けはしない）。
 
+**表のアクセシビリティ（issue #544）**: `internal/web`のtemplに書く`<table>`は、すべての`<th>`に`scope`（列見出しは`scope="col"`）を付け、表ごとに`aria-label`（または`<caption>`）で目的を与える。`internal/web/table_a11y_test.go`が全`.templ`を静的に検査する。
+
+
 ## 4. HTMX パターン
 
 `api/endpoints.md` §2〜4 のルーティング定義に対応する。要点のみ再掲する。
@@ -250,3 +253,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.61 | 2026-10-05 | atomsに`Select`を追加し`Input`に`Class`を追加、organismsに`BacktestForm`を追加して`PerformancePage`/`ScanPanel`/`ErrorLogPanel`の直書きinput/selectをatoms経由に統一 | issue #520 |
 | 1.62 | 2026-10-05 | SSRの時刻表示（判断履歴・Activity Feed・Scanner caption・最終サイクル・ポジション）を`atoms.FormatJST`（`2006-01-02 15:04:05 JST`）に統一し、Litの同表示も`formatJstDateTime`で同形式にした。API（JSON）はRFC 3339のまま | issue #542 |
 | 1.63 | 2026-10-05 | 周期ポーリングの操作者ハートビート除外を`X-Pitha-Background`ヘッダのみに統一し、`middleware.backgroundPollPaths`を廃止 | issue #522 |
+| 1.64 | 2026-10-05 | §3に表のアクセシビリティ規約（`<th scope>`・`<table>`の`aria-label`/`<caption>`）を追記し、全表へ適用して静的テストを追加 | issue #544 |
