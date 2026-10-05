@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -37,6 +38,7 @@ func reviewInput(baseExp, candExp, baseDD, candDD float64) assist.OpusReviewInpu
 		Comparison: assist.BacktestComparison{
 			BaselineExpectancy: baseExp, CandidateExpectancy: candExp,
 			BaselineMaxDrawdownPct: baseDD, CandidateMaxDrawdownPct: candDD,
+			BaselineTradeCount: 30, CandidateTradeCount: 30,
 		},
 	}
 }
@@ -137,5 +139,50 @@ func TestOpus_Review_APIFailureOrBadVerdictIsAnErrorNotADecision(t *testing.T) {
 	unconfigured := assist.NewOpus(assist.NewClient(assist.Config{Label: "opus"}))
 	if _, _, err := unconfigured.Review(context.Background(), reviewInput(0.20, 0.25, 5, 5)); !errors.Is(err, assist.ErrNotConfigured) {
 		t.Errorf("unconfigured Review error = %v, want ErrNotConfigured", err)
+	}
+}
+
+func TestOpus_Review_InsufficientBacktestTradesRejectsWithoutCallingAPI(t *testing.T) {
+	tests := map[string]struct{ baseline, candidate int }{
+		"no trades on either side": {0, 0},
+		"baseline too thin":        {assist.MinBacktestTrades - 1, 50},
+		"candidate too thin":       {50, assist.MinBacktestTrades - 1},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			opus, calls, _ := opusFixture(t, `{"verdict":"approve","reason":"fine"}`)
+			// Expectancy/drawdown "pass" (candidate better): only the sample size can reject.
+			in := reviewInput(0.20, 0.25, 5, 5)
+			in.Comparison.BaselineTradeCount, in.Comparison.CandidateTradeCount = tc.baseline, tc.candidate
+
+			approved, reviewJSON, err := opus.Review(context.Background(), in)
+			if err != nil || approved {
+				t.Fatalf("Review = (%v, %v), want a rejection", approved, err)
+			}
+			review := decodeReview(t, reviewJSON)
+			if review.Verdict != "reject" || review.DeterministicPassed || review.SufficientSamples || review.LLMReviewed {
+				t.Errorf("review = %+v, want reject for insufficient samples without consulting the API", review)
+			}
+			if !strings.HasPrefix(review.Reason, assist.ReasonInsufficientSamples) {
+				t.Errorf("reason = %q, want prefix %q", review.Reason, assist.ReasonInsufficientSamples)
+			}
+			if calls.Load() != 0 {
+				t.Errorf("Opus API called %d time(s), want 0", calls.Load())
+			}
+		})
+	}
+}
+
+func TestOpus_Review_ProceedsToAPIAtExactlyMinBacktestTrades(t *testing.T) {
+	opus, calls, _ := opusFixture(t, `{"verdict":"approve","reason":"fine"}`)
+	in := reviewInput(0.20, 0.25, 5, 5)
+	in.Comparison.BaselineTradeCount, in.Comparison.CandidateTradeCount = assist.MinBacktestTrades, assist.MinBacktestTrades
+
+	approved, reviewJSON, err := opus.Review(context.Background(), in)
+	if err != nil || !approved {
+		t.Fatalf("Review = (%v, %s, %v), want approved at the minimum trade count", approved, reviewJSON, err)
+	}
+	if review := decodeReview(t, reviewJSON); !review.SufficientSamples || calls.Load() != 1 {
+		t.Errorf("review = %+v, API calls = %d, want sufficient samples and 1 call", review, calls.Load())
 	}
 }

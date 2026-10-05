@@ -7,10 +7,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
-// CalibrationSource supplies Calibration's aggregated outcomes
+// CalibrationSource supplies Calibration's per-bucket sample counts
 // (internal/service/calibration.Service satisfies it).
 type CalibrationSource interface {
-	Metrics(ctx context.Context) (domain.CalibrationMetrics, error)
+	// BucketSampleCount returns how many labeled samples fall in the
+	// confidence bucket containing confidence, or 0 when it is in none.
+	// It must be cheap: it runs on every directional Jev trader job.
+	BucketSampleCount(ctx context.Context, confidence float64) (int, error)
 }
 
 // HandlerOption configures optional Handler behavior.
@@ -38,16 +41,9 @@ func (h *Handler) calibrated(ctx context.Context, d domain.JevDecision) (bool, e
 		return false, nil
 	}
 
-	metrics, err := h.calib.Metrics(ctx)
+	count, err := h.calib.BucketSampleCount(ctx, *d.Confidence)
 	if err != nil {
-		return false, fmt.Errorf("load calibration metrics: %w", err)
+		return false, fmt.Errorf("count calibration samples: %w", err)
 	}
-	for i, r := range domain.DefaultConfidenceBucketRanges {
-		last := i == len(domain.DefaultConfidenceBucketRanges)-1
-		c := *d.Confidence
-		if c >= r.Low && (c < r.High || (last && c == r.High)) {
-			return i < len(metrics.Buckets) && metrics.Buckets[i].SampleCount >= minSamples, nil
-		}
-	}
-	return false, nil
+	return count >= minSamples, nil
 }

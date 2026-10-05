@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/textutil"
 )
 
 // Endpoint is the TypeSafe AI evaluation endpoint (appended to
@@ -82,13 +84,17 @@ type Config struct {
 }
 
 // APIError is returned when the Jev API responds with a non-200 status.
+// Body holds the full (size-capped) response, but Error() embeds only a
+// short single-line excerpt: error strings end up in trade_signals.
+// reject_reason, jobs.last_error and logs, which a multi-MiB proxy error
+// page must not be able to bloat.
 type APIError struct {
 	StatusCode int
 	Body       string
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("jev: api error (status %d): %s", e.StatusCode, e.Body)
+	return fmt.Sprintf("jev: api error (status %d): %s", e.StatusCode, textutil.Excerpt(e.Body, textutil.ErrorBodyExcerptBytes))
 }
 
 // Client is the Jev API HTTP client (architecture/overview.md §6).
