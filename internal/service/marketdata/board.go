@@ -64,6 +64,12 @@ type Board struct {
 	AskPrice      *float64 `json:"AskPrice"`
 	AskQty        *float64 `json:"AskQty"`
 
+	// BidSign/AskSign are the 気配フラグ of the BidPrice/AskPrice quotes
+	// (BoardSuccess.BidSign/AskSign, e.g. "0101" 一般気配, "0102" 特別気配);
+	// empty when the API reports none. See IsSpecialQuote.
+	BidSign string `json:"BidSign"`
+	AskSign string `json:"AskSign"`
+
 	// HighPrice/LowPrice are the session (当日) high/low; nil when the API
 	// has not resolved them yet.
 	HighPrice *float64 `json:"HighPrice"`
@@ -108,6 +114,26 @@ type BoardLevel struct {
 // price of 0 (issue #173).
 func (b Board) HasPrice() bool {
 	return b.CurrentPrice > 0 && !math.IsInf(b.CurrentPrice, 0)
+}
+
+// 気配フラグ (BidSign/AskSign) values that mean the quote is a special quote
+// (kabu_STATION_API.yaml BoardSuccess.BidSign).
+const (
+	quoteSignSpecial        = "0102" // 特別気配
+	quoteSignSpecialPreHalt = "0108" // 停止前特別気配
+)
+
+// IsSpecialQuote reports whether either side of the book is a 特別気配
+// (including 停止前特別気配): a price-discovery quote that does not trade
+// at the displayed price, so the instrument cannot be entered reliably
+// (issue #511).
+func (b Board) IsSpecialQuote() bool {
+	for _, sign := range [...]string{b.BidSign, b.AskSign} {
+		if sign == quoteSignSpecial || sign == quoteSignSpecialPreHalt {
+			return true
+		}
+	}
+	return false
 }
 
 // SellDepth is the total quantity across the reported Sell levels, and

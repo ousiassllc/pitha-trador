@@ -78,6 +78,21 @@ func (p *Provider) OpenPositionCount(ctx context.Context) (int, error) {
 	return len(open), nil
 }
 
+// OpenPositionCountBySide counts the open positions on side (LONG/SHORT).
+func (p *Provider) OpenPositionCountBySide(ctx context.Context, side string) (int, error) {
+	open, err := p.positions.ListOpen(ctx)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, pos := range open {
+		if pos.Side == side {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // positionNotional is a position's current market value: quantity at the
 // latest mark, or at entry until the first mark arrives.
 func positionNotional(pos domain.Position) float64 {

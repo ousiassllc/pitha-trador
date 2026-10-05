@@ -2,6 +2,7 @@ package backtestsource
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -14,9 +15,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 )
@@ -25,6 +29,8 @@ import (
 // strategy.yaml/risk.yaml defaults, plus the repositories tests record
 // live history through.
 type testEnv struct {
+	Conn        *sql.DB
+	Config      execution.Config
 	Source      *Source
 	Instruments *market.InstrumentRepository
 	Snapshots   *market.SnapshotRepository
@@ -32,6 +38,14 @@ type testEnv struct {
 }
 
 func newTestEnv(t *testing.T) testEnv {
+	t.Helper()
+	return newTestEnvWith(t, func(*execution.Config) {})
+}
+
+// newTestEnvWith is newTestEnv with Paper Trading's execution.Config
+// (which a backtest shares: exit rule, fill model, calendar) adjusted by
+// tune.
+func newTestEnvWith(t *testing.T, tune func(*execution.Config)) testEnv {
 	t.Helper()
 	conn, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
@@ -46,14 +60,17 @@ func newTestEnv(t *testing.T) testEnv {
 	if err != nil {
 		t.Fatalf("LoadRiskBytes: %v", err)
 	}
+	execCfg := execution.ConfigFromRiskLimits(riskCfg.Paper)
+	tune(&execCfg)
 	env := testEnv{
+		Conn:        conn,
+		Config:      execCfg,
 		Instruments: market.NewInstrumentRepository(conn),
 		Snapshots:   market.NewSnapshotRepository(conn),
 		Decisions:   judgement.NewDecisionRepository(conn),
 	}
 	runtimePolicy := selfimprove.NewRuntimePolicy(system.NewRuntimeSettingsRepository(conn), judgement.NewProposalRepository(conn), strategy.Policy)
-	env.Source = New(env.Instruments, env.Snapshots, env.Decisions, policy.ThresholdsFromStrategy(*strategy), runtimePolicy,
-		execution.ConfigFromRiskLimits(riskCfg.Paper))
+	env.Source = New(env.Instruments, env.Snapshots, env.Decisions, policy.ThresholdsFromStrategy(*strategy), runtimePolicy, execCfg)
 	return env
 }
 
@@ -139,4 +156,67 @@ func TestSource_RunWalkForwardReplaysRecordedHistory(t *testing.T) {
 			t.Errorf("Splits[%d].Training.TradeCount = %d, want 0", i, sp.Training.TradeCount)
 		}
 	}
+}
+
+// TestSource_BacktestFillsMatchPaperExecution is #509's shared-assumption
+// check: a backtest trade's entry/exit prices equal what Paper Trading's
+// Execution Engine fills for the same bars - including the 9:00 寄り
+// being an auction fill, not a ザラ場 fill.
+func TestSource_BacktestFillsMatchPaperExecution(t *testing.T) {
+	env := newTestEnvWith(t, func(cfg *execution.Config) { cfg.Calendar = marketcalendar.TSE })
+	ctx := context.Background()
+	inst := mustCreateInstrument(t, env, "7203")
+	base := time.Date(2026, 9, 1, 9, 0, 0, 0, marketcalendar.JST) // 火曜 9:00 JST
+	recordLiveBars(t, env, inst, base, 30)
+
+	period := backtest.Period{Start: base, End: base.Add(30 * time.Minute)}
+	configs, err := env.Source.RunConfigs(ctx, period)
+	if err != nil || len(configs) != 1 {
+		t.Fatalf("RunConfigs = %d configs, err %v; want 1", len(configs), err)
+	}
+	trades, err := backtest.ShadowBacktestTrades(ctx, configs[0], period)
+	if err != nil || len(trades) == 0 {
+		t.Fatalf("ShadowBacktestTrades = %d trades, err %v; want at least 1", len(trades), err)
+	}
+	trade := trades[0]
+
+	engine := execution.NewEngine(execution.Deps{
+		Orders: trading.NewOrderRepository(env.Conn), Positions: trading.NewPositionRepository(env.Conn),
+	}, env.Config)
+	entrySnap := snapshotAt(t, env, inst, trade.EntryTimestamp)
+	entry, err := engine.Enter(ctx, execution.EntryRequest{
+		Signal:   domain.TradeSignal{InstrumentID: inst.ID, Symbol: inst.Symbol, Direction: trade.Direction, RiskPassed: true},
+		Quantity: 100, Price: entrySnap.Price, Book: fillmodel.BookOf(entrySnap), Now: entrySnap.Timestamp,
+	})
+	if err != nil {
+		t.Fatalf("Enter: %v", err)
+	}
+	if entry.Position.EntryPrice != trade.EntryPrice {
+		t.Errorf("paper entry %v != backtest entry %v", entry.Position.EntryPrice, trade.EntryPrice)
+	}
+	if trade.EntryPrice == entrySnap.Price {
+		t.Errorf("entry filled at the signal price %v: no execution cost applied", entrySnap.Price)
+	}
+
+	exitSnap := snapshotAt(t, env, inst, trade.ExitTimestamp)
+	closed, err := engine.Close(ctx, entry.Position.ID, domain.ExitReasonManual, exitSnap.Price, fillmodel.BookOf(exitSnap), exitSnap.Timestamp)
+	if err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	exitOrder, err := trading.NewOrderRepository(env.Conn).Get(ctx, *closed.ExitOrderID)
+	if err != nil {
+		t.Fatalf("Get exit order: %v", err)
+	}
+	if *exitOrder.FilledPrice != trade.ExitPrice {
+		t.Errorf("paper exit %v != backtest exit %v", *exitOrder.FilledPrice, trade.ExitPrice)
+	}
+}
+
+func snapshotAt(t *testing.T, env testEnv, inst domain.Instrument, ts time.Time) domain.Snapshot {
+	t.Helper()
+	snaps, err := env.Snapshots.ListByInstrumentRange(context.Background(), inst.ID, ts, ts.Add(time.Minute))
+	if err != nil || len(snaps) != 1 {
+		t.Fatalf("snapshot at %v = %d rows, err %v; want 1", ts, len(snaps), err)
+	}
+	return snaps[0]
 }

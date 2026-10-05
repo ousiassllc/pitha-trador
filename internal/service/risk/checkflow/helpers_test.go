@@ -29,6 +29,8 @@ func testLimits() config.RiskLimits {
 		MaxDailyLossPct:                   1.0,
 		MaxTradeLossPct:                   0.25,
 		MaxOpenPositions:                  5,
+		MaxSameDirectionPositions:         3,
+		MarketAdverseReturn5mPct:          0.2,
 		MaxSpreadBps:                      30,
 		MaxConsecutiveLosses:              4,
 		CooldownAfterLossMinutes:          5,
@@ -42,6 +44,8 @@ func testLimits() config.RiskLimits {
 // behavior) unless a test overrides it.
 type fakePortfolio struct {
 	openPositionCount int
+	longPositions     int
+	shortPositions    int
 	totalExposurePct  float64
 	symbolExposurePct float64
 	dailyLossPct      float64
@@ -51,6 +55,12 @@ type fakePortfolio struct {
 
 func (f fakePortfolio) OpenPositionCount(context.Context) (int, error) {
 	return f.openPositionCount, nil
+}
+func (f fakePortfolio) OpenPositionCountBySide(_ context.Context, side string) (int, error) {
+	if side == domain.PositionSideShort {
+		return f.shortPositions, nil
+	}
+	return f.longPositions, nil
 }
 func (f fakePortfolio) TotalExposurePct(context.Context) (float64, error) {
 	return f.totalExposurePct, nil

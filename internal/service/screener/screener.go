@@ -91,6 +91,19 @@ func FilterReasons(cfg config.FastScreenerConfig, in Input) domain.ScreenReasons
 	case *in.Snapshot.Feature.RealizedVol5m < cfg.MinRealizedVolatility:
 		r = r.Add(domain.ScreenReasonMinRealizedVol)
 	}
+	// Untradable-now (issue #511): a bar in a special quote or stuck at the
+	// stop-high / stop-low limit cannot be entered, so it never becomes a
+	// candidate. Rows persisted before migration 000026 carry the zero
+	// values and are unaffected.
+	if in.Snapshot.SpecialQuote {
+		r = r.Add(domain.ScreenReasonSpecialQuote)
+	}
+	switch in.Snapshot.PriceLimit {
+	case domain.PriceLimitUp:
+		r = r.Add(domain.ScreenReasonLimitUp)
+	case domain.PriceLimitDown:
+		r = r.Add(domain.ScreenReasonLimitDown)
+	}
 	return r
 }
 

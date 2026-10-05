@@ -94,6 +94,7 @@ pitha-trador/
 │   │   │   ├── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
 │   │   │   └── marketcontextflow/ # テスト専用: `MarketContextLoader`の回帰テスト（行数上限のためfeatureengineから分離、#248）
 │   │   ├── pushfeed/             # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き）
+│   │   ├── symbolcache/          # kabuステーションAPI銘柄情報（貸借・値幅上下限）の1営業日キャッシュ（issue #511）
 │   │   ├── screener/             # Fast Screener・screen_score算出
 │   │   ├── jev/                  # Jevアダプタ（client.go, evaluate.go, scout.go, trader.go, schemas.go, questions*.go, prompt_version.go, systemone/=ワイヤ層, jevtest/=テスト用フェイク, clientflow/=Clientテスト）
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）
@@ -232,15 +233,15 @@ handler → service → repository → domain
 | Jev Adapter (Scout/Trader) | 構造化状態と型付き質問（`noul`/`choice`）をTypeSafe AI公式API（`POST /v1/systemone`）へ送信し、回答をScoutResponse/TraderResponseへ変換する（§4.4, §4.5, §6）。ワイヤ層は`systemone`、テスト用フェイクは`jevtest`、`clientflow`はテスト専用 | `internal/service/jev`（`systemone`, `jevtest`, `clientflow`） |
 | RAG Context Builder | 現在の状態ベクトルからsqlite-vecで類似過去局面を検索し、Jevへのfew-shot文脈を構築する（§7、FR-RAG-1〜4。FR-RAG-5は将来拡張で未実装）。類似判断の`regime`復元に`execution/enrich`を利用する | `internal/service/rag` |
 | Policy Engine | Jev出力をトレードシグナルへ変換（§4.6） | `internal/service/policy` |
-| Market Calendar | 東証の立会時間（前場/後場）・祝日判定。立会時間外の市場データ取得・Jev呼び出し・新規発注停止（Scheduler SessionGate）、FR-RISK-6のハートビート判定、FR-EXIT-1の引け前強制決済が参照する（`requirements/non-functional.md` §3） | `internal/service/marketcalendar` |
+| Market Calendar | 東証の立会時間（前場/後場）・祝日判定。立会時間外の市場データ取得・Jev呼び出し・新規発注停止（Scheduler SessionGate）、FR-RISK-6のハートビート判定、FR-EXIT-1の引け前強制決済が参照する。`PhaseAt`は時刻を昼休み・立会時間外/寄り（9:00・12:30の最初の1分足）/ザラ場/引けのクロージング・オークション（15:25〜）に分類し、約定モデルが参照する（`requirements/non-functional.md` §3、FR-ENTRY-8） | `internal/service/marketcalendar` |
 | Risk Engine | ポジションサイズ・損失上限・Kill Switch（§4.7）。全レイヤーの中で最終拒否権を持つ。サイズ算出（FR-ENTRY-3）・ポートフォリオ状態の導出・複数チャネル通知はサブパッケージ。`killswitchflow`・`checkflow`・`monitorflow`はテスト専用 | `internal/service/risk`（`sizing`, `repoportfolio`, `multinotify`, `killswitchflow`, `checkflow`, `monitorflow`） |
-| Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時）。Jev Trader応答項目の復元は`enrich`（`execution`のExit条件・Symbol Detail、`bootstrap/backtestsource`のバックテスト入力、`rag`の類似判断が共用）、FR-EXIT-1 VWAP逆クロス判定は`vwapcross`。`closerace`・`closeflow`・`pendingfill`・`latestdecision`はテスト専用（`latestdecision`は最新Trader判断の単一定義の回帰テスト） | `internal/service/execution`（`enrich`, `vwapcross`, `closerace`, `closeflow`, `pendingfill`, `latestdecision`） |
+| Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時）。約定価格・手数料は`fillmodel`の約定モデル（呼値・スプレッド・滑り・手数料・昼休み・寄り引け。FR-ENTRY-8）で決め、バックテスト（`backtest`）と同じモデルを共用する。Jev Trader応答項目の復元は`enrich`（`execution`のExit条件・Symbol Detail、`bootstrap/backtestsource`のバックテスト入力、`rag`の類似判断が共用）、FR-EXIT-1 VWAP逆クロス判定は`vwapcross`。`closerace`・`closeflow`・`pendingfill`・`latestdecision`・`fillflow`・`exitflow`はテスト専用（`latestdecision`は最新Trader判断の単一定義の回帰テスト、`fillflow`は約定モデル・立会時間のテスト） | `internal/service/execution`（`enrich`, `vwapcross`, `closerace`, `closeflow`, `pendingfill`, `latestdecision`, `fillflow`, `exitflow`）・`internal/service/fillmodel` |
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7）。`governorflow`はテスト専用 | `internal/service/selfimprove`（`governorflow`） |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
 | Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`・`outcomeflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `outcomeflow`, `orphans`） |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12）。HTTP/WebSocket公開は`web/handler/activity` | `internal/service/activityfeed`・`internal/web/handler/activity` |
-| Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8）。再現範囲は簡略化されており、Exitは固定SL/TP/最大保有時間のみ・Risk Engine不適用・コストはスリッページ5bps/手数料0bps固定（`requirements/functional/components-platform.md` FR-BT-4） | `internal/service/backtest` |
+| Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8）。再現範囲は簡略化されており、Exitは固定SL/TP/最大保有時間のみ・Risk Engine不適用。約定はPaper Tradingと同じ約定モデル（呼値・スプレッド・滑り2bps/板寄せ5bps・手数料0bps・昼休み・寄り引け、`fillmodel.Default`）で行う（`requirements/functional/components-platform.md` FR-BT-4） | `internal/service/backtest` |
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
 | Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9）。`checkflow`はテスト専用 | `internal/service/updater`（`checkflow`） |
 | Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |

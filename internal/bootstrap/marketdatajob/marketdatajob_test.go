@@ -89,7 +89,6 @@ func TestHandleMarketData_ClosesPaperPositionWhenNewBarHitsStopLoss(t *testing.T
 		Symbol: "7203", CurrentPrice: 2400, VWAP: 2450, TradingVolume: 1000000, TradingValue: 2.4e9,
 	}
 	inst := mustCreateInstrument(t, env, "7203")
-	tradingHours := time.Date(2026, 9, 29, 10, 0, 0, 0, marketcalendar.JST)
 	if _, err := env.Execution.Enter(context.Background(), execution.EntryRequest{
 		Signal: domain.TradeSignal{
 			InstrumentID: inst.ID, Symbol: inst.Symbol, Direction: domain.JevDirectionLong,
@@ -115,5 +114,42 @@ func TestHandleMarketData_ClosesPaperPositionWhenNewBarHitsStopLoss(t *testing.T
 	// 2500 -> 2400 is -4%, past config/risk.yaml-derived stop_loss_pct=0.6.
 	if closed.IsOpen() || closed.ExitReason == nil || *closed.ExitReason != domain.ExitReasonStopLoss {
 		t.Errorf("position after -4%% bar = %+v, want closed with %q", closed, domain.ExitReasonStopLoss)
+	}
+}
+
+// FR-ENTRY-8 / issue #512: the stop-loss exit is judged at the Handler's
+// clock, not the wall clock - a bar stamped in the 昼休み (11:30-12:30 JST)
+// cannot fill, so the position stays open until the next in-session bar.
+func TestHandleMarketData_KeepsPaperPositionOpenWhenStopLossBarArrivesAtLunchBreak(t *testing.T) {
+	env := newTestEnv(t)
+	env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, marketcalendar.JST) }
+	env.Fake.board = marketdata.Board{
+		Symbol: "7203", CurrentPrice: 2400, VWAP: 2450, TradingVolume: 1000000, TradingValue: 2.4e9,
+	}
+	inst := mustCreateInstrument(t, env, "7203")
+	if _, err := env.Execution.Enter(context.Background(), execution.EntryRequest{
+		Signal: domain.TradeSignal{
+			InstrumentID: inst.ID, Symbol: inst.Symbol, Direction: domain.JevDirectionLong,
+			RiskPassed: true, PolicyVersion: "v1",
+		},
+		Quantity: 100, Price: 2500, Now: tradingHours,
+	}); err != nil {
+		t.Fatalf("Enter: %v", err)
+	}
+	position, err := env.Positions.GetOpenByInstrument(context.Background(), inst.ID)
+	if err != nil {
+		t.Fatalf("GetOpenByInstrument: %v", err)
+	}
+
+	if err := env.HandleMarketData(context.Background(), marketDataJob(t, inst)); err != nil {
+		t.Fatalf("HandleMarketData: %v", err)
+	}
+
+	after, err := env.Positions.Get(context.Background(), position.ID)
+	if err != nil {
+		t.Fatalf("Get position: %v", err)
+	}
+	if !after.IsOpen() {
+		t.Errorf("position after a lunch-break stop-loss bar = %+v, want still open", after)
 	}
 }

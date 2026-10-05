@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
@@ -40,12 +42,18 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	}
 
 	exitPrice := position.CurrentPrice
+	var book fillmodel.Book
 	if state, err := h.provider.State(ctx, position.Symbol); err == nil && state.LastPrice > 0 {
-		exitPrice = state.LastPrice
+		exitPrice, book = state.LastPrice, state.LastBook
 	}
 
-	closed, err := h.provider.Close(ctx, id, domain.ExitReasonManual, exitPrice, h.now())
+	closed, err := h.provider.Close(ctx, id, domain.ExitReasonManual, exitPrice, book, h.now())
 	if err != nil {
+		// 昼休み・立会時間外は約定しない（次の立会で再度決済できる）。
+		if errors.Is(err, execution.ErrOutsideTradingSession) {
+			shared.RespondActionError(c, http.StatusConflict, "立会時間外（昼休み・大引け後）のため決済できません。次の立会で再度お試しください。")
+			return
+		}
 		// A concurrent exit (Exit monitor / CloseAll / another click) won the race.
 		if errors.Is(err, domain.ErrPositionAlreadyClosed) {
 			shared.RespondActionError(c, http.StatusConflict, "このポジションは既に決済済みです。")

@@ -28,6 +28,13 @@ const (
 	ScreenReasonMinAbsReturn5m
 	ScreenReasonMinRealizedVol
 
+	// Untradable-now reasons (issue #511): the instrument cannot be filled
+	// or is unfavourable to enter whatever its numbers say. Reported as
+	// excluded (not missing) with kind=threshold in the Scanner API.
+	ScreenReasonSpecialQuote // 特別気配
+	ScreenReasonLimitUp      // ストップ高
+	ScreenReasonLimitDown    // ストップ安
+
 	// ScreenReasonRankedOut: passed every filter but ranked below
 	// FastScreenerConfig.TopN by screen_score.
 	ScreenReasonRankedOut
@@ -54,6 +61,9 @@ var screenReasonInfos = [screenReasonCount]screenReasonInfo{
 	ScreenReasonMinVolumeRatio:     {"min_volume_ratio", "出来高倍率が下限未満（min_volume_ratio）", false},
 	ScreenReasonMinAbsReturn5m:     {"min_abs_return_5m_pct", "5分騰落率の絶対値が下限未満（min_abs_return_5m_pct）", false},
 	ScreenReasonMinRealizedVol:     {"min_realized_volatility", "実現ボラティリティが下限未満（min_realized_volatility）", false},
+	ScreenReasonSpecialQuote:       {"special_quote", "特別気配（約定不能）", false},
+	ScreenReasonLimitUp:            {"limit_up", "ストップ高（約定不能）", false},
+	ScreenReasonLimitDown:          {"limit_down", "ストップ安（約定不能）", false},
 	ScreenReasonRankedOut:          {"top_n_cutoff", "条件は満たしたが上位N件に入らなかった（top_n）", false},
 }
 
@@ -87,9 +97,9 @@ func AllScreenReasons() []ScreenReason {
 }
 
 // ScreenReasons is a compact set of ScreenReason (a bitmask, so retaining
-// ~4,000 per-symbol verdicts costs two bytes each). The zero value is the
+// ~4,000 per-symbol verdicts costs four bytes each). The zero value is the
 // empty set: no reason to exclude, i.e. the instrument passed.
-type ScreenReasons uint16
+type ScreenReasons uint32
 
 // Add returns s with r added.
 func (s ScreenReasons) Add(r ScreenReason) ScreenReasons { return s | 1<<r }

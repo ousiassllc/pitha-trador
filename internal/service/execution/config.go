@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
@@ -52,6 +53,12 @@ type Config struct {
 	// for 引け前強制決済 (calendar.go); nil disables both.
 	Calendar MarketCalendar
 
+	// Fill is the cost assumption market orders fill under (slippage,
+	// fees; fillmodel.Default via DefaultConfig). The zero value charges
+	// neither, but a fill still honours the tick grid, the spread and the
+	// session phase (昼休みは約定しない、寄り・引けは別約定: fillmodel).
+	Fill fillmodel.Model
+
 	// Now defaults to time.Now. Tests override it for deterministic
 	// max-holding/force-flat/cooldown checks.
 	Now func() time.Time
@@ -59,9 +66,9 @@ type Config struct {
 
 // DefaultConfig returns FR-EXIT-2's initial values
 // (stop_loss_pct=0.6, take_profit_pct=1.2, trailing_stop_pct=0.5,
-// max_holding_minutes=20) plus config/risk.yaml's Paper
+// max_holding_minutes=20), config/risk.yaml's Paper
 // cooldown_after_loss_minutes/force_flat_before_market_close_minutes
-// (5/10).
+// (5/10) and fillmodel.Default's fill costs.
 func DefaultConfig() Config {
 	return Config{
 		StopLossPct:                       sizing.DefaultStopLossPct, // Risk Engine sizes positions against this same stop
@@ -71,6 +78,7 @@ func DefaultConfig() Config {
 		MinContinuationProbability:        0.60,
 		CooldownAfterLossMinutes:          5,
 		ForceFlatBeforeMarketCloseMinutes: 10,
+		Fill:                              fillmodel.Default(),
 	}
 }
 

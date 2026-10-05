@@ -7,6 +7,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 // SymbolStateProvider is the subset of internal/service/execution.Engine
@@ -28,7 +29,7 @@ type SymbolStateProvider interface {
 type PositionExecutor interface {
 	GetPosition(ctx context.Context, id int64) (domain.Position, error)
 	ListPositions(ctx context.Context, limit int) ([]domain.Position, error)
-	Close(ctx context.Context, positionID int64, reason string, exitPrice float64, now time.Time) (domain.Position, error)
+	Close(ctx context.Context, positionID int64, reason string, exitPrice float64, book fillmodel.Book, now time.Time) (domain.Position, error)
 }
 
 // OrderLister is the subset of internal/service/execution.Engine `GET
@@ -75,7 +76,7 @@ func (StaticSymbolProvider) ListPositions(context.Context, int) ([]domain.Positi
 	return nil, nil
 }
 
-func (StaticSymbolProvider) Close(context.Context, int64, string, float64, time.Time) (domain.Position, error) {
+func (StaticSymbolProvider) Close(context.Context, int64, string, float64, fillmodel.Book, time.Time) (domain.Position, error) {
 	return domain.Position{}, domain.ErrPositionNotFound
 }
 

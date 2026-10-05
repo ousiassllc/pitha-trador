@@ -9,8 +9,9 @@ import (
 
 // decideDirection implements FR-POLICY-1〜3's decision tree, in order:
 // API失敗 -> データ欠損/未評価 -> キャリブレーション対象外 -> スプレッド/
-// 流動性 -> Jevのdirection別しきい値評価. It does not consult
-// RiskChecker; Decide applies that as the final gate.
+// 流動性 -> 特別気配/ストップ高安 -> Jevのdirection別（ショートは貸借銘柄
+// のみ）しきい値評価. It does not consult RiskChecker; Decide applies that
+// as the final gate.
 func (e *Engine) decideDirection(in Input, th Thresholds) (direction string, score *float64, reason *string) {
 	if in.APIErr != nil {
 		return domain.JevDirectionNone, nil, reasonf("%s: %v", ReasonAPIError, in.APIErr)
@@ -31,6 +32,13 @@ func (e *Engine) decideDirection(in Input, th Thresholds) (direction string, sco
 		return domain.JevDirectionNone, nil, reasonf("%s: turnover_5m_jpy=%.0f < min=%.0f", ReasonThinLiquidity, *in.Turnover5mJPY, th.MinTurnover5mJPY)
 	}
 
+	if in.SpecialQuote {
+		return domain.JevDirectionNone, nil, reasonf(ReasonSpecialQuote)
+	}
+	if in.PriceLimit != domain.PriceLimitNone {
+		return domain.JevDirectionNone, nil, reasonf("%s: stop_%s", ReasonPriceLimit, in.PriceLimit)
+	}
+
 	d := in.Decision
 	if d.Direction == nil || d.EntryQuality == nil || d.Confidence == nil ||
 		d.ContinuationProbability == nil || d.ToxicFlow == nil || d.LiquidityStressed == nil {
@@ -41,6 +49,9 @@ func (e *Engine) decideDirection(in Input, th Thresholds) (direction string, sco
 	case domain.JevDirectionLong:
 		return e.evaluateThreshold(domain.JevDirectionLong, th.Policy.Long, d)
 	case domain.JevDirectionShort:
+		if in.Lendable != nil && !*in.Lendable {
+			return domain.JevDirectionNone, nil, reasonf(ReasonNotLendable)
+		}
 		return e.evaluateThreshold(domain.JevDirectionShort, th.Policy.Short, d)
 	default:
 		return domain.JevDirectionNone, nil, reasonf(ReasonJevNone)

@@ -1,0 +1,74 @@
+package organisms
+
+import (
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// universeImportURL is the route that runs the operator-confirmed JPX import
+// (internal/web/handler/scanner.ScannerHandler.UniverseImport).
+const universeImportURL = "/scanner/universe/import"
+
+// scanUniverseEmpty replaces the "no cycle yet" empty state while the
+// 銘柄マスタ (instruments) holds no active stock (issue #508): nothing can be
+// scanned until a master is supplied, which the old wording hid. It names the
+// CSV locations (environment/setup.md「銘柄マスタの投入」) and asks, with a
+// button, whether to fetch JPX's 東証上場銘柄一覧 - nothing is downloaded
+// before that press. importError, when set, is the failed attempt's cause
+// (the master stays empty and the CSV route remains).
+templ scanUniverseEmpty(importError string) {
+	<div class="mt-3 rounded-md border border-dashed border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-900" data-testid="scan-universe-empty">
+		<p class="font-semibold">銘柄マスタが未投入です</p>
+		<p class="mt-1 text-xs">
+			スキャン対象の銘柄が1件も登録されていないため、スキャンサイクルは何も処理しません（kabuステーションAPIには上場銘柄一覧の取得手段がありません）。次のいずれかで銘柄マスタを投入してください。
+		</p>
+		<ul class="mt-2 list-disc pl-5 text-xs" data-testid="scan-universe-csv-guide">
+			<li>銘柄マスタCSVを置いてアプリを再起動する。置き場所は環境変数 <code>PITHA_UNIVERSE_PATH</code> で指定したパス、未設定なら実行ファイルと同じディレクトリの <code>config/universe.csv</code> です（形式は <code>docs/environment/setup.md</code>「銘柄マスタの投入」）。</li>
+			<li>下の操作で、JPX（日本取引所グループ）が公開している東証上場銘柄一覧を取得して投入する（再起動は不要）。</li>
+		</ul>
+		if importError != "" {
+			<p class="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert" data-testid="scan-universe-import-error">
+				JPXからの取得に失敗しました。銘柄マスタは変更していません。原因: { importError }
+				<br/>
+				ネットワークやJPX側の公開URL・形式の変更が考えられます。上記のCSVによる投入をお試しください。
+			</p>
+		}
+		<div class="mt-3 flex flex-wrap items-center gap-3">
+			<p class="text-xs">
+				JPXの東証上場銘柄一覧（<code>data_j.xlsx</code>）を取得して投入しますか？ 取得するボタンを押すまで、JPXへは接続しません（取得は押下ごとの1回のみで、自動での定期取得はしません）。株式（内国・外国）のみを投入し、ETF・ETN、REIT等、PRO Market、出資証券は対象外です。
+				データの権利はJPXに帰属します。取得・利用は
+				<a class="text-sky-700 underline-offset-2 hover:underline" href="https://www.jpx.co.jp/term-of-use/" target="_blank" rel="noopener noreferrer" data-testid="scan-universe-jpx-terms">JPXの利用上の注意</a>
+				に従い、ご自身の責任で行ってください。
+			</p>
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
+				"hx-post":         universeImportURL,
+				"hx-target":       "#scan-panel",
+				"hx-swap":         "outerHTML",
+				"hx-disabled-elt": "this",
+				"hx-indicator":    "#scan-universe-import-progress",
+				"hx-sync":         "this:drop",
+				"data-testid":     "scan-universe-import",
+			}}) {
+				JPXから取得して投入する
+			}
+			<span
+				id="scan-universe-import-progress"
+				class="hidden text-xs text-slate-500 [&.htmx-request]:inline"
+				role="status"
+				aria-live="polite"
+			>取得中です…</span>
+		</div>
+	</div>
+}
+
+// scanUniverseImported reports a successful JPX import (issue #508): count
+// stocks now in the master, picked up by the next scan cycle. Nothing is
+// rendered for count 0 (no import ran, or it failed).
+templ scanUniverseImported(count int) {
+	if count > 0 {
+		<p class="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" role="status" data-testid="scan-universe-imported">
+			JPXの東証上場銘柄一覧から { strconv.Itoa(count) } 銘柄を銘柄マスタに投入しました。次のスキャンサイクルから対象になります（再起動は不要です。サイクルは立会時間中に60秒ごとに実行されます）。
+		</p>
+	}
+}

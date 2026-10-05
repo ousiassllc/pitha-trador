@@ -19,6 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 var now = time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC)
@@ -82,7 +83,7 @@ func TestEngine_Close_ConcurrentCallsCloseOnceWithoutOrphanFilledOrder(t *testin
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, errs[i] = f.engine.Close(context.Background(), f.position.ID, domain.ExitReasonManual, 2110, now.Add(time.Minute))
+			_, errs[i] = f.engine.Close(context.Background(), f.position.ID, domain.ExitReasonManual, 2110, fillmodel.Book{}, now.Add(time.Minute))
 		}()
 	}
 	wg.Wait()
@@ -124,7 +125,7 @@ func TestPositionRepository_CloseWithExitOrder_LosingCloseRollsBackOrder(t *test
 
 func TestOrderRepository_Fill_RejectsAlreadyFilledOrder(t *testing.T) {
 	f := newFixture(t)
-	if _, err := f.orders.Fill(context.Background(), f.position.EntryOrderID, 9999, nil, now); !errors.Is(err, trading.ErrOrderNotPending) {
+	if _, err := f.orders.Fill(context.Background(), f.position.EntryOrderID, 9999, 0, nil, now); !errors.Is(err, trading.ErrOrderNotPending) {
 		t.Fatalf("Fill on FILLED entry order err = %v, want ErrOrderNotPending", err)
 	}
 }

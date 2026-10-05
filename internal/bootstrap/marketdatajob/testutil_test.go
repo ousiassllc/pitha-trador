@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	configdefaults "github.com/ousiassllc/pitha-trador/config"
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -24,6 +25,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
+
+// tradingHours is a fixed instant inside the 前場 (2026-09-29 10:00 JST): the
+// session-gated Execution must not depend on the wall clock (issue #512).
+var tradingHours = time.Date(2026, 9, 29, 10, 0, 0, 0, marketcalendar.JST)
+
+// barClock is the clock tests give Handler and Execution: one minute after
+// tradingHours, still inside the session.
+func barClock() time.Time { return tradingHours.Add(time.Minute) }
 
 // fakeBoards is the BoardSource stand-in: it returns board (or err) for
 // every symbol.
@@ -77,6 +86,7 @@ func newTestEnvWithNews(t testing.TB, feedCfg newsfeed.FeedConfig, lunaCfg assis
 	positions := trading.NewPositionRepository(conn)
 	executionConfig := execution.ConfigFromRiskLimits(riskCfg.Paper)
 	executionConfig.Calendar = marketcalendar.TSE
+	executionConfig.Now = barClock
 	boards := &fakeBoards{}
 	return testEnv{
 		Handler: &Handler{
@@ -92,6 +102,7 @@ func newTestEnvWithNews(t testing.TB, feedCfg newsfeed.FeedConfig, lunaCfg assis
 			News:         newsfeed.NewService(newsfeed.NewFeedClient(feedCfg), assist.NewLuna(assist.NewClient(lunaCfg)), instruments),
 			Scheduler:    scheduler.New(jobs, instruments),
 			EventTrigger: strategy.Scan.EventTrigger,
+			Now:          barClock,
 		},
 		DB: conn, Fake: boards, Jobs: jobs, Positions: positions,
 	}

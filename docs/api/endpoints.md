@@ -55,11 +55,12 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/system/update-status` | 新バージョン検知バナーのフラグメント再取得（Headerの`#update-banner`が`load`・60秒周期・`updateStatusChanged`イベントで呼び出す）。新バージョンが無い/アップデーター未搭載（`cmd/server`）なら空 | `UpdateBanner`（安全ゲート待ち/再起動直前の状態を明示） |
 | GET | `/system/update-panel` | Settings画面`#update-panel`のフラグメント取得（現在バージョン・最終確認結果・安全ゲート保留の理由・失敗の種別・確認ボタン）。アップデーター未搭載（`cmd/server`）ではその旨の説明のみ返す（確認ボタンなし） | `UpdatePanel` |
 | POST | `/system/update-check` | 「今すぐアップデートを確認」。スケジューラーと同じ`CheckForUpdate`を即時実行し、`HX-Trigger: updateStatusChanged`付きで`UpdatePanel`を返す。確認失敗もパネル内表示（HTTP 200）。アップデーター未搭載なら404 | `UpdatePanel` |
+| POST | `/scanner/universe/import` | 「JPXから取得して投入する」（Scanner Dashboardのスキャン状況パネルの銘柄マスタ未投入案内のボタン。CSRFトークン必須）。有効な`stock`が無いときだけ、JPXの東証上場銘柄一覧（`data_j.xlsx`）を1回取得して株式を`instruments`へ投入し（検証・対象区分は`environment/setup.md`「銘柄マスタの投入」）、`#scan-panel`のフラグメントを返す（成功は`scan-universe-imported`の件数通知、失敗はマスタ無変更で`scan-universe-import-error`に原因とCSV投入の案内。どちらもHTTP 200）。有効な`stock`が既にあれば409（取得しない）、状態確認の失敗は500、インポーター未搭載（ルーターに`WithUniverseImporter`なし）は404（issue #508） | `ScanPanel` |
 | POST | `/settings/:key` | 単一キーの保存（フォーム項目`value`）。他キーには一切影響しない。`:key`が許可キー一覧（`internal/config`のallow-list: JEV_*/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_*/NEWS_FEED_*/SOL_*/OPUS_*）に無い場合、または`value`が前後空白トリム後に空の場合は400（空入力で保存済みの値が消えることはない）。`value`は保存前に前後空白をトリムし、キー別に検証する（URL系6キー: `http`/`https`かつホスト非空、その他: 制御文字・改行を含まない）。違反は400で保存せず、Setup Guardも解除されない。反映はアプリ再起動後（issue #79/#235） | 更新後の`SecretFieldRow`フラグメント |
 | DELETE | `/settings/:key` | 単一キーの削除。他キーには一切影響しない。`:key`が許可キー一覧に無い場合は400（issue #79） | 更新後の`SecretFieldRow`フラグメント |
 | GET | `/system/secrets-status` | 任意キー（SLACK_WEBHOOK_URL等）の未設定を知らせる全ページ共通バナー（`Header`の`#config-banner`が`load`で取得）のフラグメント。必須2キー（JEV_API_KEY/KABU_API_PASSWORD）はSetup Guardが`/setup`へ誘導するため対象外。全て設定済みなら空 | `SecretsBanner` |
 | GET | `/system/marketdata-status` | 市況データ接続エラーを知らせる全ページ共通バナー（`Header`の`#marketdata-banner`が`load`・30秒周期で取得）のフラグメント。kabuステーションAPIのトークン発行が失敗している間だけ、原因（未起動・API未有効 / 未ログイン `4001007`・`4001017` / API利用不可 `4001008` / APIパスワード不正 `4001013`）と対処を表示。トークン取得済みなら空 | `MarketDataBanner` |
-| POST | `/positions/:id/close` | 手動決済（成行Paper Exit） | ポジション行フラグメント |
+| POST | `/positions/:id/close` | 手動決済（成行Paper Exit）。約定価格・手数料は約定モデル（`requirements/functional/components-pipeline.md` FR-ENTRY-8: 呼値・スプレッド・滑り・寄り引け）で決まり、昼休み（11:30〜12:30）・立会時間外は約定しないため409を返してポジションを保持する | ポジション行フラグメント |
 
 ### システム状態遷移（`POST /api/v1/system/*`）
 
@@ -153,3 +154,5 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.47 | 2026-10-05 | `GET /api/v1/symbols/{symbol}`の`vwap`（最新スナップショット）と`jev`6項目（最新Jev Trader判断、無ければ`null`）の出所を明記し、`/ws/symbols/{symbol}`の`jev_update`も同じTrader判断由来と明記 | issue #491 |
 | 1.48 | 2026-10-05 | `GET /api/v1/scanner`（`api/endpoints/huma-api.md`）の`jev_direction`/`jev_confidence`/`entry_quality`（最新Trader判断、無ければ`null`）と`current_position`（符号付き保有数量、無保有は`null`）の出所を明記 | issue #492 |
 | 1.49 | 2026-10-05 | 最新Jev Trader判断を「件数窓・経過時間の上限なしの最新1行」としてScanner（`GET /api/v1/scanner`）・`GET /api/v1/symbols/{symbol}`の`jev`・`/ws/symbols/{symbol}`の`jev_update`で統一（直近50件窓によるnull化を解消） | issue #496, #497, #499 |
+| 1.50 | 2026-10-05 | §4に`POST /scanner/universe/import`（銘柄マスタ未投入時のJPX東証上場銘柄一覧の確認付き取得）を追加 | issue #508 |
+| 1.51 | 2026-10-05 | `POST /positions/:id/close`が、昼休み（11:30〜12:30）・立会時間外は約定しないため409（ポジション保持）を返し、約定価格・手数料は約定モデル（FR-ENTRY-8）で決まる旨を追記 | issue #509 |

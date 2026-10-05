@@ -43,8 +43,8 @@ erDiagram
 | submitted_at | text | NOT NULL | |
 | filled_at | text | NULL可 | |
 | filled_price | numeric(12,2) | NULL可 | |
-| fees | numeric(10,2) | NOT NULL, DEFAULT 0 | |
-| slippage_bps | numeric(8,2) | NULL可 | |
+| fees | numeric(10,2) | NOT NULL, DEFAULT 0 | 約定手数料（円）。約定時に`fillmodel`の`FeeBps`×約定代金を記録する（既定0bps。FR-ENTRY-8）。`positions.realized_pnl`はエントリー・Exit両注文の`fees`を差し引いた値 |
+| slippage_bps | numeric(8,2) | NULL可 | 約定時の直近価格（シグナル価格）に対する不利方向のbps（呼値丸め・スプレッド・滑り込み。負は有利。FR-ENTRY-8） |
 | created_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id, submitted_at DESC)`, `INDEX (status)`

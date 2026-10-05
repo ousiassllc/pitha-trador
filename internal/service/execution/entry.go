@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 // EntryRequest is Enter's input: a Risk-Engine-approved trade signal
@@ -25,12 +26,16 @@ type EntryRequest struct {
 	// LimitPrice is required when OrderType resolves to
 	// domain.OrderTypeLimit.
 	LimitPrice *float64
-	// Price is the current reference price: a market order fills at
-	// Price immediately; a limit order fills immediately only if Price
-	// already satisfies LimitPrice (buy at-or-below / sell at-or-above),
-	// otherwise the order stays domain.OrderStatusPending until a later
-	// TryFillPending call observes a crossing price.
+	// Price is the current reference (last) price: a market order fills
+	// at the quote Book gives around it (Config.Fill: spread, slippage,
+	// tick grid, 寄り/引け); a limit order fills immediately only if that
+	// touch already satisfies LimitPrice (buy at-or-below / sell at-or-
+	// above), otherwise the order stays domain.OrderStatusPending until a
+	// later TryFillPending call observes a crossing price.
 	Price float64
+	// Book is Price's bid/ask quote; the zero value (unknown) fills at
+	// Price without crossing a spread.
+	Book fillmodel.Book
 	// Now defaults to Engine's Config.Now() when zero.
 	Now time.Time
 }
@@ -111,6 +116,11 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 		side = domain.OrderSideSell
 	}
 
+	f, fills, err := e.fillFor(orderType, side, req.Quantity, req.LimitPrice, req.Price, req.Book, now)
+	if err != nil {
+		return EntryResult{}, err
+	}
+
 	order, err := e.orders.Insert(ctx, domain.PaperOrder{
 		InstrumentID:  req.Signal.InstrumentID,
 		TradeSignalID: signalIDPtr(req.Signal),
@@ -126,8 +136,8 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 		return EntryResult{}, fmt.Errorf("execution: submit entry order for %q: %w", req.Signal.Symbol, err)
 	}
 
-	if orderType == domain.OrderTypeMarket || limitCrosses(side, *req.LimitPrice, req.Price) {
-		result, err := e.fillEntry(ctx, order, direction, req.Price, now)
+	if fills {
+		result, err := e.fillEntry(ctx, order, direction, f, now)
 		if err != nil {
 			// fillEntry rolled back, so the order is still PENDING and
 			// nothing retries a market order: reject it instead of
@@ -144,11 +154,12 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 }
 
 // TryFillPending attempts to fill a still-PENDING limit entry order at
-// currentPrice, opening its position if the price now crosses the
-// order's limit (FR-ENTRY-1's limit-order path continuing past Enter's
-// initial check). It returns ok=false without error if orderID is not a
-// PENDING limit order or currentPrice has not crossed yet.
-func (e *Engine) TryFillPending(ctx context.Context, orderID int64, direction string, currentPrice float64, now time.Time) (EntryResult, bool, error) {
+// currentPrice (with its quote book), opening its position if the touch now
+// crosses the order's limit (FR-ENTRY-1's limit-order path continuing past
+// Enter's initial check). It returns ok=false without error if orderID is
+// not a PENDING limit order, the limit has not been crossed yet, or the
+// market is closed (昼休み・立会時間外: the order stays PENDING).
+func (e *Engine) TryFillPending(ctx context.Context, orderID int64, direction string, currentPrice float64, book fillmodel.Book, now time.Time) (EntryResult, bool, error) {
 	if !validPrice(currentPrice) {
 		return EntryResult{}, false, fmt.Errorf("execution: fill pending order %d: %w (got %v)", orderID, ErrInvalidPrice, currentPrice)
 	}
@@ -159,50 +170,44 @@ func (e *Engine) TryFillPending(ctx context.Context, orderID int64, direction st
 	if order.Status != domain.OrderStatusPending || order.OrderType != domain.OrderTypeLimit || order.LimitPrice == nil {
 		return EntryResult{}, false, nil
 	}
-	if !limitCrosses(order.Side, *order.LimitPrice, currentPrice) {
+	f, fills, err := e.fillFor(order.OrderType, order.Side, order.Quantity, order.LimitPrice, currentPrice, book, now)
+	if errors.Is(err, ErrOutsideTradingSession) || (err == nil && !fills) {
 		return EntryResult{}, false, nil
 	}
+	if err != nil {
+		return EntryResult{}, false, err
+	}
 
-	result, err := e.fillEntry(ctx, order, direction, currentPrice, now)
+	result, err := e.fillEntry(ctx, order, direction, f, now)
 	if err != nil {
 		return EntryResult{}, false, err
 	}
 	return result, true, nil
 }
 
-// fillEntry fills order at price/now and opens the resulting position in a
+// fillEntry fills order at f/now and opens the resulting position in a
 // single transaction (OrderRepository.FillEntry): a failure opening the
 // position leaves the order un-filled rather than FILLED with no position
 // (issue #158).
-func (e *Engine) fillEntry(ctx context.Context, order domain.PaperOrder, direction string, price float64, now time.Time) (EntryResult, error) {
+func (e *Engine) fillEntry(ctx context.Context, order domain.PaperOrder, direction string, f fill, now time.Time) (EntryResult, error) {
 	positionSide := domain.PositionSideLong
 	if direction == domain.JevDirectionShort {
 		positionSide = domain.PositionSideShort
 	}
 
-	filled, position, err := e.orders.FillEntry(ctx, order.ID, price, nil, now, domain.Position{
+	filled, position, err := e.orders.FillEntry(ctx, order.ID, f.price, f.fee, &f.slippageBps, now, domain.Position{
 		InstrumentID: order.InstrumentID,
 		Symbol:       order.Symbol,
 		Side:         positionSide,
 		Quantity:     order.Quantity,
-		EntryPrice:   price,
-		CurrentPrice: price,
+		EntryPrice:   f.price,
+		CurrentPrice: f.price,
 		OpenedAt:     now,
 	})
 	if err != nil {
 		return EntryResult{}, fmt.Errorf("execution: fill entry order %d and open position for %q: %w", order.ID, order.Symbol, err)
 	}
 	return EntryResult{Order: filled, Position: &position}, nil
-}
-
-// limitCrosses reports whether price already satisfies a limit order on
-// side: a BUY limit fills at or below its limit price; a SELL limit fills
-// at or above it.
-func limitCrosses(side string, limitPrice, price float64) bool {
-	if side == domain.OrderSideBuy {
-		return price <= limitPrice
-	}
-	return price >= limitPrice
 }
 
 func signalIDPtr(s domain.TradeSignal) *int64 {

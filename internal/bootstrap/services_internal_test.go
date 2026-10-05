@@ -31,7 +31,7 @@ func newTestServices(t *testing.T) *Services {
 
 	// JevBaseURL points at a closed local port: an empty one would fall back
 	// to the production host (issue #271) and make these tests dial it.
-	svc := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"}, WithJevMaxAttempts(1))
+	svc := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"}, WithJevMaxAttempts(1), WithExecutionClock(func() time.Time { return tradingHours.Add(time.Minute) }))
 	return svc
 }
 

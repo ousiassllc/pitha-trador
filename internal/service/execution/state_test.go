@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 func TestEngine_State_DefaultsWhenNoDataYet(t *testing.T) {
@@ -132,7 +133,7 @@ func TestEngine_State_ReportsCooldownAfterLosingClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enter: %v", err)
 	}
-	if _, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 2088.0, closedAt); err != nil {
+	if _, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 2088.0, fillmodel.Book{}, closedAt); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 

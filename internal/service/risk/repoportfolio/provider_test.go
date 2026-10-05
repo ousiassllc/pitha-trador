@@ -101,6 +101,22 @@ func TestRepositoryPortfolioProvider_OpenPositionCount_CountsOnlyOpenPositions(t
 	}
 }
 
+func TestRepositoryPortfolioProvider_OpenPositionCountBySide_CountsOnlyOpenPositionsOnThatSide(t *testing.T) {
+	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	closed := mustOpenPosition(t, positions, orders, instrumentID, now)
+	mustClosePosition(t, positions, orders, closed, 500, now.Add(time.Minute))
+	mustOpenPosition(t, positions, orders, instrumentID, now.Add(2*time.Minute))
+
+	for side, want := range map[string]int{domain.PositionSideLong: 1, domain.PositionSideShort: 0} {
+		if got, err := provider.OpenPositionCountBySide(ctx, side); err != nil || got != want {
+			t.Errorf("OpenPositionCountBySide(%s) = (%d, %v), want (%d, nil)", side, got, err, want)
+		}
+	}
+}
+
 func TestRepositoryPortfolioProvider_ConsecutiveLosses_CountsFromMostRecentClose(t *testing.T) {
 	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
 	now := time.Now().UTC()

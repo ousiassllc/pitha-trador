@@ -21,6 +21,12 @@ func TestLoadRisk_ParsesRepositoryTemplateFile(t *testing.T) {
 	if got, want := cfg.Live.MaxOpenPositions, 3; got != want {
 		t.Errorf("Live.MaxOpenPositions = %d, want %d", got, want)
 	}
+	if got, want := cfg.Paper.MaxSameDirectionPositions, 3; got != want {
+		t.Errorf("Paper.MaxSameDirectionPositions = %d, want %d", got, want)
+	}
+	if got, want := cfg.Live.MarketAdverseReturn5mPct, 0.15; got != want {
+		t.Errorf("Live.MarketAdverseReturn5mPct = %v, want %v", got, want)
+	}
 	if got, want := cfg.Live.HeartbeatTimeoutMinutes, 120; got != want {
 		t.Errorf("Live.HeartbeatTimeoutMinutes = %d, want %d", got, want)
 	}
@@ -68,6 +74,8 @@ const validRiskSection = `  max_position_per_symbol_pct: 2.0
   max_daily_loss_pct: 1.0
   max_trade_loss_pct: 0.25
   max_open_positions: 5
+  max_same_direction_positions: 3
+  market_adverse_return_5m_pct: 0.2
   max_spread_bps: 30
   max_consecutive_losses: 4
   cooldown_after_loss_minutes: 5
@@ -95,6 +103,8 @@ func TestLoadRiskBytes_RejectsInvalidLimitsNamingTheKey(t *testing.T) {
 		{"paper max_trade_loss_pct negative", strings.Replace(validRiskSection, "max_trade_loss_pct: 0.25", "max_trade_loss_pct: -1", 1), "paper.max_trade_loss_pct"},
 		{"paper max_consecutive_losses omitted", strings.Replace(validRiskSection, "  max_consecutive_losses: 4\n", "", 1), "paper.max_consecutive_losses"},
 		{"paper max_open_positions 0", strings.Replace(validRiskSection, "max_open_positions: 5", "max_open_positions: 0", 1), "paper.max_open_positions"},
+		{"paper max_same_direction_positions omitted", strings.Replace(validRiskSection, "  max_same_direction_positions: 3\n", "", 1), "paper.max_same_direction_positions"},
+		{"paper market_adverse_return_5m_pct 0", strings.Replace(validRiskSection, "market_adverse_return_5m_pct: 0.2", "market_adverse_return_5m_pct: 0", 1), "paper.market_adverse_return_5m_pct"},
 		{"paper max_spread_bps omitted", strings.Replace(validRiskSection, "  max_spread_bps: 30\n", "", 1), "paper.max_spread_bps"},
 		{"paper max_position_per_symbol_pct nan", strings.Replace(validRiskSection, "max_position_per_symbol_pct: 2.0", "max_position_per_symbol_pct: .nan", 1), "paper.max_position_per_symbol_pct"},
 		{"paper cooldown negative", strings.Replace(validRiskSection, "cooldown_after_loss_minutes: 5", "cooldown_after_loss_minutes: -1", 1), "paper.cooldown_after_loss_minutes"},

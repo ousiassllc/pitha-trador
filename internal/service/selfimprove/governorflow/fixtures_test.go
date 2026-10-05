@@ -157,7 +157,7 @@ func (f governorFixtures) closePosition(t *testing.T, closedAt time.Time, realiz
 	if err != nil {
 		t.Fatalf("insert entry order: %v", err)
 	}
-	entry, err = f.orders.Fill(ctx, entry.ID, 2100.0, nil, closedAt)
+	entry, err = f.orders.Fill(ctx, entry.ID, 2100.0, 0, nil, closedAt)
 	if err != nil {
 		t.Fatalf("fill entry order: %v", err)
 	}

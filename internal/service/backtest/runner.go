@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
 
@@ -84,21 +85,6 @@ type ExitRule struct {
 	MaxHolding    time.Duration
 }
 
-// CostModel is the slippage/fee assumption FR-BT-1's "スリッページ込み
-// PnL"/"手数料込みPnL" figures apply. docs/architecture/er.md
-// §paper_orders has fees/slippage_bps columns for real order fills, but
-// this backtest scope has no order execution to derive them from, so a
-// caller supplies its own assumption.
-type CostModel struct {
-	// SlippageBps worsens both entry and exit fill price by this many
-	// basis points (e.g. a LONG buys higher and sells lower).
-	SlippageBps float64
-	// FeeBps is charged on both entry and exit notional (round trip),
-	// expressed directly as percentage points of return since Trade's
-	// values are percentage returns, not currency amounts.
-	FeeBps float64
-}
-
 // RunConfig is everything one backtest replay needs for a single
 // instrument (FR-BT-1〜3).
 type RunConfig struct {
@@ -135,7 +121,13 @@ type RunConfig struct {
 	Risk policy.RiskChecker
 
 	Exit ExitRule
-	Cost CostModel
+	// Cost is the fill assumption (fillmodel.Default in production, the
+	// same one Paper Trading uses): FR-BT-1's スリッページ込み/手数料込みPnL
+	// figures come from the fills it produces.
+	Cost fillmodel.Model
+	// Sessions says which bars are 昼休み/寄り/ザラ場/引け (see Sessions);
+	// nil means every bar is ザラ場.
+	Sessions Sessions
 }
 
 // SplitResult is one Walk Forward fold's Split boundaries plus the
@@ -217,7 +209,16 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 			continue
 		}
 
-		trade, exitIdx := closeTrade(bars, i, sig.Direction, bar.Price, cfg.Exit, cfg.Cost, cfg.InstrumentID, cfg.Symbol)
+		x := executor{cost: cfg.Cost, sessions: cfg.Sessions}
+		entryFill, ok := x.fill(bar, entrySide(sig.Direction))
+		if !ok {
+			// 昼休み・立会時間外: the entry cannot fill (live Enter fails
+			// with ErrOutsideTradingSession), and the decision is spent.
+			i++
+			continue
+		}
+
+		trade, exitIdx := closeTrade(bars, i, sig.Direction, entryFill, cfg.Exit, x, cfg.InstrumentID, cfg.Symbol)
 		if exitIdx == i {
 			// No bar to hold through (last bar, or the next bar is already
 			// past MaxHolding - session/overnight gap): the entry could not
@@ -231,63 +232,4 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 		i = exitIdx + 1
 	}
 	return trades, nil
-}
-
-// closeTrade walks forward from bars[entryIdx+1:] applying exit's Stop
-// Loss/Take Profit/max holding conditions (in that priority order at
-// each bar) and returns the resulting Trade plus the index of the bar it
-// exited on, so replay's caller resumes scanning for the next entry
-// immediately after it.
-func closeTrade(bars []domain.Snapshot, entryIdx int, direction string, entryPrice float64, exit ExitRule, cost CostModel, instrumentID int64, symbol string) (Trade, int) {
-	entry := bars[entryIdx]
-	sign := 1.0
-	if direction == domain.JevDirectionShort {
-		sign = -1.0
-	}
-
-	exitIdx := entryIdx
-	reason := ExitReasonDataEnded
-	for j := entryIdx + 1; j < len(bars); j++ {
-		if exit.MaxHolding > 0 && bars[j].Timestamp.Sub(entry.Timestamp) > exit.MaxHolding {
-			reason = ExitReasonMaxHolding
-			break
-		}
-		exitIdx = j
-
-		retPct := sign * (bars[j].Price/entryPrice - 1) * 100
-		if exit.StopLossPct > 0 && retPct <= -exit.StopLossPct {
-			reason = ExitReasonStopLoss
-			break
-		}
-		if exit.TakeProfitPct > 0 && retPct >= exit.TakeProfitPct {
-			reason = ExitReasonTakeProfit
-			break
-		}
-	}
-
-	exitBar := bars[exitIdx]
-	grossReturnPct := sign * (exitBar.Price/entryPrice - 1) * 100
-
-	slippedEntry := entryPrice * (1 + sign*cost.SlippageBps/10000)
-	slippedExit := exitBar.Price * (1 - sign*cost.SlippageBps/10000)
-	slippageReturnPct := sign * (slippedExit/slippedEntry - 1) * 100
-
-	feeDeductionPct := cost.FeeBps / 100 * 2
-	feeReturnPct := grossReturnPct - feeDeductionPct
-	netReturnPct := slippageReturnPct - feeDeductionPct
-
-	return Trade{
-		InstrumentID:      instrumentID,
-		Symbol:            symbol,
-		Direction:         direction,
-		EntryTimestamp:    entry.Timestamp,
-		EntryPrice:        entryPrice,
-		ExitTimestamp:     exitBar.Timestamp,
-		ExitPrice:         exitBar.Price,
-		ExitReason:        reason,
-		GrossReturnPct:    grossReturnPct,
-		SlippageReturnPct: slippageReturnPct,
-		FeeReturnPct:      feeReturnPct,
-		NetReturnPct:      netReturnPct,
-	}, exitIdx
 }

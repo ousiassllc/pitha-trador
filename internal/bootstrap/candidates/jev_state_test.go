@@ -50,7 +50,7 @@ func mustInsertFilledOrder(t *testing.T, orders *trading.OrderRepository, inst d
 	if err != nil {
 		t.Fatalf("Insert order %s: %v", inst.Symbol, err)
 	}
-	filled, err := orders.Fill(context.Background(), created.ID, 2500, nil, now)
+	filled, err := orders.Fill(context.Background(), created.ID, 2500, 0, nil, now)
 	if err != nil {
 		t.Fatalf("Fill order %s: %v", inst.Symbol, err)
 	}

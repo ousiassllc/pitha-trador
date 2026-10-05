@@ -27,6 +27,11 @@ type RiskConfig struct {
 // measured against and Execution's position sizing is derived from
 // (functional.md §4.7/§4.8). Paper: the simulated capital; Live: the
 // capital allocated to this system. A value <= 0 means "unset".
+//
+// MaxSameDirectionPositions caps the open positions pointing the same way
+// (LONG or SHORT); MarketAdverseReturn5mPct is the 5-minute market-index
+// return (percent) against a held direction at which adding to it is
+// rejected (functional.md §4.7 FR-RISK-1 correlation / market-adverse gate).
 type RiskLimits struct {
 	InitialCapital                    float64 `yaml:"initial_capital"`
 	MaxPositionPerSymbolPct           float64 `yaml:"max_position_per_symbol_pct"`
@@ -34,6 +39,8 @@ type RiskLimits struct {
 	MaxDailyLossPct                   float64 `yaml:"max_daily_loss_pct"`
 	MaxTradeLossPct                   float64 `yaml:"max_trade_loss_pct"`
 	MaxOpenPositions                  int     `yaml:"max_open_positions"`
+	MaxSameDirectionPositions         int     `yaml:"max_same_direction_positions"`
+	MarketAdverseReturn5mPct          float64 `yaml:"market_adverse_return_5m_pct"`
 	MaxSpreadBps                      float64 `yaml:"max_spread_bps"`
 	MaxConsecutiveLosses              int     `yaml:"max_consecutive_losses"`
 	CooldownAfterLossMinutes          int     `yaml:"cooldown_after_loss_minutes"`
@@ -129,6 +136,8 @@ func (l RiskLimits) validate(mode string) []error {
 	positive("max_trade_loss_pct", l.MaxTradeLossPct)
 	positive("max_spread_bps", l.MaxSpreadBps)
 	atLeastOne("max_open_positions", l.MaxOpenPositions)
+	atLeastOne("max_same_direction_positions", l.MaxSameDirectionPositions)
+	positive("market_adverse_return_5m_pct", l.MarketAdverseReturn5mPct)
 	atLeastOne("max_consecutive_losses", l.MaxConsecutiveLosses)
 	nonNegative("cooldown_after_loss_minutes", l.CooldownAfterLossMinutes)
 	nonNegative("force_flat_before_market_close_minutes", l.ForceFlatBeforeMarketCloseMinutes)

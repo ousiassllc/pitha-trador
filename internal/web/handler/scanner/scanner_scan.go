@@ -194,7 +194,7 @@ func (h *ScannerHandler) ScanView(c *gin.Context) {
 // symbol list window for query. On error the returned view is the
 // empty-state one.
 func (h *ScannerHandler) scanPanel(ctx context.Context, query domain.ScanQuery, open bool) (organisms.ScanPanelView, error) {
-	base := organisms.ScanPanelView{Open: open, Query: query}
+	base := organisms.ScanPanelView{Open: open, Query: query, UniverseEmpty: h.universeEmpty(ctx)}
 	if now := h.now(); !marketcalendar.TSE.IsOpen(now) {
 		base.OffSession, base.NextOpen = true, marketcalendar.TSE.NextOpen(now)
 	}

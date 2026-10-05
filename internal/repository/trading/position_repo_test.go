@@ -27,7 +27,7 @@ func insertFilledEntryOrder(t *testing.T, orders *trading.OrderRepository, instr
 	if err != nil {
 		t.Fatalf("insert entry order fixture: %v", err)
 	}
-	filled, err := orders.Fill(ctx, created.ID, 2100.0, nil, now)
+	filled, err := orders.Fill(ctx, created.ID, 2100.0, 0, nil, now)
 	if err != nil {
 		t.Fatalf("fill entry order fixture: %v", err)
 	}

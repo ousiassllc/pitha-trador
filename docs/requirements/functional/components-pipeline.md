@@ -23,7 +23,7 @@
 
 ### 4.2 Fast Screener
 
-- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-3〜6、除外・欠損理由の表示は FR-SCAN-4/5）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する。`min_abs_return_5m_pct`の単位は**パーセント**（0.3 = 0.3%）で、Feature Engineの`return_5m`（小数比、0.003 = 0.3%）を×100して比較する）
+- FR-FS-1: Jev API呼び出し前に、環境変数/DB設定値（`min_price`, `max_price`, `min_turnover_5m_jpy`, `max_spread_bps`, `min_volume_ratio`, `min_abs_return_5m_pct`, `min_realized_volatility`）で明らかに対象外の銘柄を除外する（全フィルターを評価して除外理由を保持し、Scanner Dashboardのスキャン状況パネル（FR-SCAN-3〜6、除外・欠損理由の表示は FR-SCAN-4/5）で銘柄別に参照できる。値が欠損の銘柄は閾値未達ではなく欠損理由として区別する。約定不能な足も同じくJev呼び出し前に除外する（issue #511）: **特別気配**（板の`BidSign`/`AskSign`が`0102`特別気配・`0108`停止前特別気配。理由`special_quote`）と**ストップ高/ストップ安**（現値が銘柄情報`UpperLimit`/`LowerLimit`に到達。理由`limit_up`/`limit_down`）は、スナップショットの`special_quote`/`price_limit`から判定され、除外理由としてScanner Dashboardに表示される（欠損ではなく`excluded`）。ショート方向が確定するのはJev Trader後のためFast Screenerでは貸借を見ず、貸借なしのショートはFR-POLICY-3で外す。`min_abs_return_5m_pct`の単位は**パーセント**（0.3 = 0.3%）で、Feature Engineの`return_5m`（小数比、0.003 = 0.3%）を×100して比較する）
 - FR-FS-2: 通過銘柄に対し以下のスコアを算出し、上位N銘柄のみJev Scoutへ送る。Nは`fast_screener.top_n`で、同梱既定は20（`config/strategy.yaml`。Jev APIコストを抑える側の値）。50〜200へ引き上げる場合は`non-functional.md` §2.1のAPI呼び出し上限（Nに比例）を確認する
 
 ```text
@@ -75,7 +75,7 @@ screen_score =
 - FR-POLICY-1: LONG条件: `direction == LONG AND P(LONG) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
 - FR-POLICY-2: SHORT条件: `direction == SHORT AND P(SHORT) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
 - FR-POLICY-2a（起動時検証）: `policy.long`/`policy.short`の`min_probability`・`min_continuation_probability`・`max_toxic_flow`・`max_liquidity_stressed`は`(0, 1]`、`min_entry_quality`は`poor`/`fair`/`good`/`strong`/`exceptional`のいずれか、`policy.min_calibration_samples`は0以上（0で無効）であること。キー欠落・タイプミスは0/空として読み込まれ、`min_entry_quality`が未知値だと`poor`相当になりentry_qualityゲートが無効化されるため、補完せず項目名（例: `policy.long.min_entry_quality`）付きで全件まとめて報告し起動に失敗する。検証は`PITHA_POLICY_*`環境変数（FR-POLICY-4）の適用後に行い、環境変数経由の不正値（範囲外・未知のentry_quality）も同様に拒否する。`config/strategy.yaml`・埋め込み既定値は検証を通過する
-- FR-POLICY-3: 以下のいずれかに該当する場合はNONE（取引しない）: JevがNONE、確信度不足、スプレッド過大、板が薄い（スナップショットの`turnover_5m`が`min_turnover_5m_jpy`未満。履歴不足で算出不能な場合は判定しない）、Risk Engine拒否、データ欠損、API異常、キャリブレーション対象外（Jev decisionのconfidenceが属する信頼度バケットのラベル付きCalibrationサンプル数が`policy.min_calibration_samples`未満。0で無効）
+- FR-POLICY-3: 以下のいずれかに該当する場合はNONE（取引しない）: JevがNONE、確信度不足、スプレッド過大、板が薄い（スナップショットの`turnover_5m`が`min_turnover_5m_jpy`未満。履歴不足で算出不能な場合は判定しない）、約定不能（スナップショットが特別気配（`special_quote`）またはストップ高/安（`price_limit`）。Fast Screener通過後に状態が変わった場合の再確認。LONG/SHORT双方）、貸借なしのショート（スナップショットの`lendable`が明示的にfalse、つまり銘柄情報`MarginSell`がfalseの銘柄のSHORT。`lendable`が不明（NULL）の場合は判定しない。`reject_reason`は`special_quote`/`price_limit: stop_up|stop_down`/`not_lendable`）、Risk Engine拒否、データ欠損、API異常、キャリブレーション対象外（Jev decisionのconfidenceが属する信頼度バケットのラベル付きCalibrationサンプル数が`policy.min_calibration_samples`未満。0で無効）
 - FR-POLICY-4: しきい値はCalibration結果に基づき調整する。プロンプト変更より先にポリシー側のしきい値調整を優先する
 - FR-POLICY-5: 生成したトレードシグナルを`trade_signals`に保存する（policy_version、risk_passed、reject_reasonを含む）。`policy_version`はPolicy Engineのロジック版`policy-v1`で、自己改善の適用提案（FR-SELFIMPROVE-5）のしきい値が有効な間は`policy-v1+sol-12`のように適用版を付加し（`varchar(20)`に収まる）、ロールバックで適用提案が無くなれば`policy-v1`に戻る。バックテスト再生（Decide）は常に`policy-v1`
 
@@ -90,6 +90,8 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 | max_daily_loss_pct | 1.0 | 0.5 |
 | max_trade_loss_pct | 0.25 | 0.15 |
 | max_open_positions | 5 | 3 |
+| max_same_direction_positions | 3 | 2 |
+| market_adverse_return_5m_pct | 0.2 | 0.15 |
 | max_spread_bps | 30 | 20 |
 | max_consecutive_losses | 4 | 3 |
 | cooldown_after_loss_minutes | 5 | 10 |
@@ -99,8 +101,9 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 - FR-RISK-1: 上記制限のいずれかに抵触する場合、新規取引を拒否する
   - 「口座資産に対する%」の各上限（max_position_per_symbol_pct / max_total_exposure_pct / max_daily_loss_pct / max_trade_loss_pct）の分母は`config/risk.yaml`の`initial_capital`（想定資金・円。Paper初期値3,000万円、Liveは実運用資金を設定必須）とする。総エクスポージャ・銘柄エクスポージャは保有中ポジションの評価額（数量×現在値）、日次損失率は当日（JST）にクローズしたポジションの実現損益と保有中ポジションの含み損益の合計損失を分母で割った値
   - `initial_capital`が未設定（0以下）、またはRisk Engineが判定に必要な状態（ポジション・注文・最新スナップショット・スプレッド）を読み取れない場合は、判定をスキップせず`risk_engine_error`で拒否する（fail-closed。スプレッド欠損は「データ欠損」、FR-POLICY-3）
+  - 同じ方向に重ねない制約（相関・市場逆行）: モメンタム・出来高急増・ブレイクアウトは同じ地合いで同じ方向の銘柄に寄るため、銘柄ごとの上限だけでは相場要因でまとめて負けるのを防げない。Risk Engineは新規エントリーの方向（LONG/SHORT）と同じ向きの保有ポジション数を読み、(1)`max_same_direction_positions`以上なら`max_same_direction_positions`理由で拒否する（反対方向の保有は数えない）、(2)同方向を1件以上保有中に、市場全体が保有方向と逆行している（`market_adverse_return_5m_pct`（%）以上、LONGなら下落・SHORTなら上昇）なら`market_adverse_to_direction`理由で拒否する。市場全体の動きは既存の`market_return_5m`（`kind=market_index`の追跡銘柄、TOPIX等。§4.1 FR-FE-4）を使い、先物専用の新規データ取得は要しない。`market_return_5m`が算出不能（指標未追跡・足の欠損）の場合、または同方向の保有が無い場合は市場逆行では拒否しない（相関はポジション間の重なりを抑える制約のため）。判定は最新スナップショット（`market_snapshots`）の値で行い、拒否理由はスプレッド等と同じく`trade_signals.reject_reason`（`risk_rejected`）に記録される
   - `max_trade_loss_pct`はポジションサイジングで強制する（§4.8 FR-ENTRY-3）。1単元（100株）でもStop Lossに掛かった時の損失が上限を超える場合は`max_trade_loss_pct`理由で拒否する
-  - `config/risk.yaml`の各上限は起動時（`LoadRisk`/`LoadRiskBytes`）に検証し、範囲外の項目があれば項目名（例: `paper.max_daily_loss_pct`）を含むエラーで起動を失敗させる（違反は全件まとめて報告する）。キーの欠落・タイプミスは0として読み込まれ、`max_daily_loss_pct`=0・`max_consecutive_losses`=0は損失も連敗も無い状態でKill Switchを発動し続けるため（手動再開しても1分周期の判定で即再発動する）、「上限なし」の意味では扱わない。`max_position_per_symbol_pct`/`max_total_exposure_pct`/`max_daily_loss_pct`/`max_trade_loss_pct`/`max_spread_bps`は正（>0）、`max_open_positions`/`max_consecutive_losses`は1以上、`cooldown_after_loss_minutes`/`force_flat_before_market_close_minutes`/`heartbeat_timeout_minutes`は0以上。`initial_capital`はこの検証の対象外（上記の未設定扱い）。Paperは常に検証し、Liveは`live`セクションに1つでも値が定義されている場合のみ検証する（`live`セクションが無い場合はLive未運用として未検証）
+  - `config/risk.yaml`の各上限は起動時（`LoadRisk`/`LoadRiskBytes`）に検証し、範囲外の項目があれば項目名（例: `paper.max_daily_loss_pct`）を含むエラーで起動を失敗させる（違反は全件まとめて報告する）。キーの欠落・タイプミスは0として読み込まれ、`max_daily_loss_pct`=0・`max_consecutive_losses`=0は損失も連敗も無い状態でKill Switchを発動し続けるため（手動再開しても1分周期の判定で即再発動する）、「上限なし」の意味では扱わない。`max_position_per_symbol_pct`/`max_total_exposure_pct`/`max_daily_loss_pct`/`max_trade_loss_pct`/`max_spread_bps`/`market_adverse_return_5m_pct`は正（>0）、`max_open_positions`/`max_same_direction_positions`/`max_consecutive_losses`は1以上、`cooldown_after_loss_minutes`/`force_flat_before_market_close_minutes`/`heartbeat_timeout_minutes`は0以上。`initial_capital`はこの検証の対象外（上記の未設定扱い）。Paperは常に検証し、Liveは`live`セクションに1つでも値が定義されている場合のみ検証する（`live`セクションが無い場合はLive未運用として未検証）
 - FR-RISK-2: 以下のいずれかでKill Switch（新規取引停止）を発動する: 日次損失上限到達、連敗上限到達、市場データ停止、Jev API連続失敗、Broker API異常、想定外ポジション発生、約定差異検知、DB書き込み失敗が一定回数継続、operator_heartbeat_timeout（Live専用、FR-RISK-6参照）、オペレーターによる手動Kill（`POST /api/v1/system/kill`。reason=`operator_manual`）
 - FR-RISK-3: Kill Switch発動時、必要に応じて保有ポジションをクローズする（強制決済の対象reasonは`architecture/overview/flows.md` §10.3。オペレーターの手動Killも UC-11 の「強制決済」として全ポジションをクローズする）
 - FR-RISK-4: Kill SwitchはUI（Wailsアプリ）とサーバー内部処理の両方から操作可能とする。Phase 7の発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）
@@ -154,6 +157,14 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
   - その銘柄で損失クローズ（実現損益<0）した時刻から`cooldown_after_loss_minutes`（FR-RISK-1）の間。Executionのメモリ上の銘柄別ゲートであり、Risk Engineの判定とは別に働く（プロセス再起動で解除される）
 - FR-ENTRY-6（見送りの扱い）: 上記ゲートによる拒否は、Policy → `paperexec`経路ではエラーではなく「見送り」として扱う。再試行しても同じ理由で拒否されるため、jev-traderジョブは失敗にせず、`paper entry skipped`としてログに残して正常終了する。ゲート以外のEntryエラーはジョブ失敗とする
 - FR-ENTRY-7（入力検証）: `Enter`は発注前に、シグナル方向がLONG/SHORTであること、Risk Engine通過済み（`risk_passed`）であること、数量>0、価格が有限かつ>0、指値価格を指定する場合は有限かつ>0、指値注文では指値価格が指定されていることを検証し、違反は注文を作らずに拒否する。板価格の欠損（0）が約定・時価更新・決済価格にならないよう、`TryFillPending`・`OnSnapshot`・`Close`の価格も同様に検証する
+- FR-ENTRY-8（約定モデル: 呼値・スプレッド・手数料・滑り・立会）: Paper Entry/Exitはシグナル価格（直近価格）での全量約定にせず、`internal/service/fillmodel`の約定モデルで価格・手数料を決める。Paper Trading（`execution`）とバックテスト（FR-BT-4）は同じモデル（`fillmodel.Default`）を使う
+  - 呼値単位: 約定価格は東証の呼値の単位（標準テーブル。3,000円以下1円、5,000円以下5円、30,000円以下10円、50,000円以下50円、300,000円以下100円…。TOPIX100構成銘柄・ETF等の特例テーブルは扱わない）に載せ、注文に不利な側へ丸める（買いは切り上げ、売りは切り下げ）
+  - スプレッド: ザラ場の成行は板を跨ぐ（買い＝最良売気配`ask`、売り＝最良買気配`bid`）。板が無い（`bid`/`ask`がNULLまたは逆転）場合は`spread_bps`の半分を直近価格の不利側へ乗せ、`spread_bps`も無ければ直近価格とする
+  - 滑り: 板の気配に加えて不利側へ`SlippageBps`（初期値2bps）を乗せる。約定価格との差を`paper_orders.slippage_bps`（直近価格に対する不利方向のbps。呼値丸め・スプレッド込み）に記録する
+  - 手数料: 約定代金の`FeeBps`（初期値0bps。kabuステーションAPIを提供する証券会社の国内現物手数料が無料のため）を`paper_orders.fees`（円）に記録し、`realized_pnl`はエントリー・Exit両約定の手数料を差し引いた値とする
+  - 昼休み・立会時間外: 前場11:30〜後場12:30の昼休み、大引け後、非営業日は約定しない（`marketcalendar.PhaseClosed`）。Entryは`ErrOutsideTradingSession`、手動`Close`（`POST /positions/:id/close`は409）・Kill Switchの`CloseAll`も同様に約定せずポジションを保持する（`CloseAll`は`ErrOutsideTradingSession`を含むエラーを返し、次の立会で再度決済する）。`OnSnapshot`はExit条件が成立しても昼休み中はクローズせず、次の立会の足で再評価する。PENDING指値も昼休み中は約定せず次の立会まで待つ
+  - 寄り・引けの気配: 前場・後場の寄り（9:00・12:30の最初の1分足）と大引けのクロージング・オークション（15:25〜15:30）は板寄せの単一価格約定として、ザラ場の1分足とは別に扱う。スプレッドは跨がず、直近価格（気配値）に`AuctionSlippageBps`（初期値5bps）の不利な滑りと呼値丸めを適用する（`marketcalendar.Calendar.PhaseAt`）
+  - 指値: 板の気配が指値を満たす（買い＝`ask`≦指値、売り＝`bid`≧指値）ときに約定する。約定価格は気配＋滑り（呼値丸め後）だが、指値より不利にはならない
 - FR-EXIT-1: 以下のExit条件を併用する: 固定Stop Loss、固定Take Profit、Trailing Stop、Jev方向反転、continuation_probability低下、VWAP逆クロス、最大保有時間到達、引け前強制決済（`force_flat_before_market_close_minutes` 分前から、大引け15:30 JSTを基準に判定する。前場終了11:30は対象外）。VWAP逆クロスは「価格がVWAPの不利側へ抜けた瞬間」（前回評価時は不利側でなく、今回評価で不利側）のみ成立し、不利側に滞在しているだけでは成立しない（不利側でエントリーしたポジションは、有利側へ抜けた後に再び不利側へ抜けるまでこの条件でクローズしない）。前回評価が無い最初の評価は、建値と現在VWAPの関係を前回の関係とみなす
 - FR-EXIT-2: 初期値: `stop_loss_pct=0.6`, `take_profit_pct=1.2`, `trailing_stop_pct=0.5`, `max_holding_minutes=20`
 - FR-EXIT-3: Jev API不応答時も、既存ポジションはコードベースのExit Ruleで管理を継続する（Jev不応答を理由にリスク管理を停止しない）。同様に、PENDING指値の約定処理（`TryFillPending`）の失敗は、`OnSnapshot`による保有ポジションの時価更新・Exit評価を止めない（失敗はログに残し、当該注文のみ飛ばす。ポジションが既にあるため約定し得ないPENDING注文は`REJECTED`にする）
