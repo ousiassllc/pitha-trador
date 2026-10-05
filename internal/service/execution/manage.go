@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 // pendingOrderScanLimit bounds how many of an instrument's most recent
@@ -32,8 +33,11 @@ type SnapshotResult struct {
 // instrument (functional.md §4.8, §4.10 FR-SCHED-4): it fills any PENDING
 // limit entry order snap.Price now crosses, marks the open position to
 // market, then evaluates FR-EXIT-1's exit conditions against snap and the
-// latest Jev Trader decision, closing the position at snap.Price when one
-// triggers. It requires Deps.Decisions to have been set on NewEngine.
+// latest Jev Trader decision, closing the position (filled per Config.Fill
+// around snap.Price, not at it) when one triggers. A PENDING entry or an
+// exit that triggers while the market is closed (昼休み) stays pending/open
+// until the next in-session bar. It requires Deps.Decisions to have been
+// set on NewEngine.
 func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (SnapshotResult, error) {
 	if e.decisions == nil {
 		return SnapshotResult{}, fmt.Errorf("execution: OnSnapshot requires Deps.Decisions to be configured")
@@ -87,9 +91,15 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 		return result, nil
 	}
 
-	closed, err := e.Close(ctx, position.ID, reason, snap.Price, now)
+	closed, err := e.Close(ctx, position.ID, reason, snap.Price, fillmodel.BookOf(snap), now)
 	if errors.Is(err, domain.ErrPositionAlreadyClosed) {
 		return result, nil // a concurrent manual close / CloseAll won
+	}
+	if errors.Is(err, ErrOutsideTradingSession) {
+		// 昼休み: the exit cannot fill now; the condition is evaluated again
+		// on the next in-session bar.
+		result.Position = &position
+		return result, nil
 	}
 	if err != nil {
 		return SnapshotResult{}, err
@@ -123,7 +133,7 @@ func (e *Engine) fillPendingEntries(ctx context.Context, snap domain.Snapshot) [
 		if order.Side == domain.OrderSideSell {
 			direction = domain.JevDirectionShort
 		}
-		entry, ok, err := e.TryFillPending(ctx, order.ID, direction, snap.Price, snap.Timestamp)
+		entry, ok, err := e.TryFillPending(ctx, order.ID, direction, snap.Price, fillmodel.BookOf(snap), snap.Timestamp)
 		if err != nil {
 			slog.ErrorContext(ctx, "execution: fill pending entry order", "symbol", snap.Symbol, "order_id", order.ID, "error", err)
 			e.rejectIfPositionOpen(ctx, order)

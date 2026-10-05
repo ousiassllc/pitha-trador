@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 // testEngine bundles a real (in-memory-SQLite-backed) Engine plus its
@@ -56,9 +57,8 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	}, cfg)
 
 	return testEngine{
-		engine: engine, orders: orders, positions: positions,
-		instruments: instruments, snapshots: snapshots, decisions: decisions, signals: signals,
-		instrument: inst,
+		engine: engine, orders: orders, positions: positions, snapshots: snapshots,
+		instruments: instruments, decisions: decisions, signals: signals, instrument: inst,
 	}
 }
 
@@ -139,7 +139,7 @@ func TestEngine_Enter_LimitOrderStaysPendingUntilPriceCrosses(t *testing.T) {
 		t.Fatalf("Enter().Position = %+v, want nil while the limit order is still pending", result.Position)
 	}
 
-	filled, ok, err := te.engine.TryFillPending(ctx, result.Order.ID, domain.JevDirectionLong, 2089.0, time.Now().UTC())
+	filled, ok, err := te.engine.TryFillPending(ctx, result.Order.ID, domain.JevDirectionLong, 2089.0, fillmodel.Book{}, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("TryFillPending: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestEngine_TryFillPending_PositionOpenFailureKeepsOrderPending(t *testing.T
 		t.Fatalf("open competing position: %v", err)
 	}
 
-	if _, ok, err := te.engine.TryFillPending(ctx, result.Order.ID, domain.JevDirectionLong, 1990, now); err == nil || ok {
+	if _, ok, err := te.engine.TryFillPending(ctx, result.Order.ID, domain.JevDirectionLong, 1990, fillmodel.Book{}, now); err == nil || ok {
 		t.Fatalf("TryFillPending = (ok=%v, err=%v), want error", ok, err)
 	}
 

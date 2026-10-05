@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
@@ -24,7 +25,8 @@ type Executor struct {
 }
 
 // ExecuteSignal enters signal via a Paper market order (Engine's default
-// order type). An instrument that already holds an open position or a
+// order type), filled at snap's quote under Execution's fill model (spread,
+// slippage, tick grid, 寄り/引け: fillmodel), not at snap.Price. An instrument that already holds an open position or a
 // PENDING entry order, or is still in its post-loss cooldown, is skipped
 // rather than failing the jev-trader job: these are Execution's own
 // per-symbol gates rejecting a repeat entry, not an error in processing this signal. Likewise a signal
@@ -39,6 +41,7 @@ func (p Executor) ExecuteSignal(ctx context.Context, signal domain.TradeSignal, 
 		Signal:   signal,
 		Quantity: quantity,
 		Price:    snap.Price,
+		Book:     fillmodel.BookOf(snap),
 		Now:      snap.Timestamp,
 	})
 	switch {

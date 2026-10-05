@@ -60,7 +60,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | DELETE | `/settings/:key` | 単一キーの削除。他キーには一切影響しない。`:key`が許可キー一覧に無い場合は400（issue #79） | 更新後の`SecretFieldRow`フラグメント |
 | GET | `/system/secrets-status` | 任意キー（SLACK_WEBHOOK_URL等）の未設定を知らせる全ページ共通バナー（`Header`の`#config-banner`が`load`で取得）のフラグメント。必須2キー（JEV_API_KEY/KABU_API_PASSWORD）はSetup Guardが`/setup`へ誘導するため対象外。全て設定済みなら空 | `SecretsBanner` |
 | GET | `/system/marketdata-status` | 市況データ接続エラーを知らせる全ページ共通バナー（`Header`の`#marketdata-banner`が`load`・30秒周期で取得）のフラグメント。kabuステーションAPIのトークン発行が失敗している間だけ、原因（未起動・API未有効 / 未ログイン `4001007`・`4001017` / API利用不可 `4001008` / APIパスワード不正 `4001013`）と対処を表示。トークン取得済みなら空 | `MarketDataBanner` |
-| POST | `/positions/:id/close` | 手動決済（成行Paper Exit） | ポジション行フラグメント |
+| POST | `/positions/:id/close` | 手動決済（成行Paper Exit）。約定価格・手数料は約定モデル（`requirements/functional/components-pipeline.md` FR-ENTRY-8: 呼値・スプレッド・滑り・寄り引け）で決まり、昼休み（11:30〜12:30）・立会時間外は約定しないため409を返してポジションを保持する | ポジション行フラグメント |
 
 ### システム状態遷移（`POST /api/v1/system/*`）
 
@@ -155,3 +155,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.48 | 2026-10-05 | `GET /api/v1/scanner`（`api/endpoints/huma-api.md`）の`jev_direction`/`jev_confidence`/`entry_quality`（最新Trader判断、無ければ`null`）と`current_position`（符号付き保有数量、無保有は`null`）の出所を明記 | issue #492 |
 | 1.49 | 2026-10-05 | 最新Jev Trader判断を「件数窓・経過時間の上限なしの最新1行」としてScanner（`GET /api/v1/scanner`）・`GET /api/v1/symbols/{symbol}`の`jev`・`/ws/symbols/{symbol}`の`jev_update`で統一（直近50件窓によるnull化を解消） | issue #496, #497, #499 |
 | 1.50 | 2026-10-05 | §4に`POST /scanner/universe/import`（銘柄マスタ未投入時のJPX東証上場銘柄一覧の確認付き取得）を追加 | issue #508 |
+| 1.51 | 2026-10-05 | `POST /positions/:id/close`が、昼休み（11:30〜12:30）・立会時間外は約定しないため409（ポジション保持）を返し、約定価格・手数料は約定モデル（FR-ENTRY-8）で決まる旨を追記 | issue #509 |

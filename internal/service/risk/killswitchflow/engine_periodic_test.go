@@ -231,7 +231,7 @@ func TestEngine_Resume_FillDiscrepancy_OrphanDoesNotRefire(t *testing.T) {
 		if err != nil {
 			t.Fatalf("insert order: %v", err)
 		}
-		if _, err := orders.Fill(ctx, o.ID, 2100, nil, filledAt); err != nil {
+		if _, err := orders.Fill(ctx, o.ID, 2100, 0, nil, filledAt); err != nil {
 			t.Fatalf("fill order: %v", err)
 		}
 	}

@@ -265,7 +265,7 @@ func (f *monitorFixture) insertOrphanFill(t *testing.T, filledAt time.Time) {
 	if err != nil {
 		t.Fatalf("insert order: %v", err)
 	}
-	if _, err := f.orders.Fill(ctx, order.ID, 2100, nil, filledAt); err != nil {
+	if _, err := f.orders.Fill(ctx, order.ID, 2100, 0, nil, filledAt); err != nil {
 		t.Fatalf("fill order: %v", err)
 	}
 }

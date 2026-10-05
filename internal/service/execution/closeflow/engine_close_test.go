@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 func TestEngine_Close_LosingTradeStartsSymbolCooldown(t *testing.T) {
@@ -24,7 +25,7 @@ func TestEngine_Close_LosingTradeStartsSymbolCooldown(t *testing.T) {
 	}
 
 	closedAt := now.Add(2 * time.Minute)
-	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 2088.0, closedAt)
+	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 2088.0, fillmodel.Book{}, closedAt)
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -66,7 +67,7 @@ func TestEngine_Close_WinningTradeDoesNotStartCooldown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enter: %v", err)
 	}
-	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonTakeProfit, 2130.0, now.Add(time.Minute))
+	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonTakeProfit, 2130.0, fillmodel.Book{}, now.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestEngine_Close_ShortPositionRealizedPnLSignIsInverted(t *testing.T) {
 		t.Fatalf("Enter: %v", err)
 	}
 
-	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonManual, 2080.0, now.Add(time.Minute))
+	closed, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonManual, 2080.0, fillmodel.Book{}, now.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("Close: %v", err)
 	}

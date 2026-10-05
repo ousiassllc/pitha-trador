@@ -19,16 +19,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
-
-// backtestCost is the slippage/fee assumption every backtest this build
-// runs applies (FR-BT-1's スリッページ込み/手数料込みPnL). kabuステーションAPI
-// を提供する三菱UFJ eスマート証券（旧auカブコム証券）の国内株式現物取引手数料は
-// 2026-05-18の改定以降無料のため、FeeBps is 0; 5bps of slippage per side is a
-// conservative allowance for crossing half of a typical liquid-TSE-stock
-// spread with a market order.
-var backtestCost = backtest.CostModel{SlippageBps: 5, FeeBps: 0}
 
 // Source assembles backtest.RunConfig values from the persisted
 // market_snapshots/jev_decisions history of every active instrument, so
@@ -42,6 +35,12 @@ type Source struct {
 	thresholds  policy.Thresholds
 	policy      policy.PolicySource
 	exit        backtest.ExitRule
+	// cost/sessions are Paper Trading's own fill assumption
+	// (execution.Config.Fill/Calendar), so a backtest fills orders exactly
+	// as Execution does (#509): spread, slippage, fees, tick grid, 昼休み,
+	// 寄り/引け.
+	cost     fillmodel.Model
+	sessions backtest.Sessions
 }
 
 // New builds a Source replaying with thresholds' spread/turnover limits and
@@ -58,6 +57,8 @@ func New(instruments *market.InstrumentRepository, snapshots *market.SnapshotRep
 			TakeProfitPct: exit.TakeProfitPct,
 			MaxHolding:    time.Duration(exit.MaxHoldingMinutes) * time.Minute,
 		},
+		cost:     exit.Fill,
+		sessions: exit.Calendar,
 	}
 }
 
@@ -110,7 +111,8 @@ func (b *Source) RunConfigs(ctx context.Context, period backtest.Period) ([]back
 			Decisions:    backtest.NewSliceDecisionSource(decisions),
 			Thresholds:   thresholds,
 			Exit:         b.exit,
-			Cost:         backtestCost,
+			Cost:         b.cost,
+			Sessions:     b.sessions,
 		})
 	}
 	return configs, nil

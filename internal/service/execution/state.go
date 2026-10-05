@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 // SymbolState mirrors functional.md §4.9's per-symbol JSON shape:
@@ -22,6 +23,9 @@ import (
 type SymbolState struct {
 	Symbol    string
 	LastPrice float64
+	// LastBook is the latest market_snapshots row's bid/ask quote (the zero
+	// Book when it has none); a manual close fills against it.
+	LastBook fillmodel.Book
 	// LastVWAP is the latest market_snapshots row's session VWAP
 	// (Feature.VWAP), or nil when the symbol has no snapshot yet.
 	LastVWAP             *float64
@@ -84,6 +88,7 @@ func (e *Engine) State(ctx context.Context, symbol string) (SymbolState, error) 
 	}
 	if len(snapshots) > 0 {
 		state.LastPrice = snapshots[0].Price
+		state.LastBook = fillmodel.BookOf(snapshots[0])
 		vwap := snapshots[0].Feature.VWAP
 		state.LastVWAP = &vwap
 		ts := snapshots[0].Timestamp

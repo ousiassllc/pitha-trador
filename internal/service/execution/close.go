@@ -7,12 +7,18 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
 // Close implements Paper Exit (FR-EXIT-1〜2): submits a market exit order
-// opposite position's side, fills it immediately at exitPrice, and closes
-// position with the resulting realized P&L and reason. reason is one of
+// opposite position's side, fills it immediately and closes position with
+// the resulting realized P&L and reason. The fill is priced by Config.Fill
+// against exitPrice (the last price) and its quote book - spread,
+// slippage, tick grid, 寄り/引けの板寄せ - not at exitPrice itself, and
+// realized P&L is net of both fills' fees. During the 昼休み or outside
+// the session nothing fills: Close fails with ErrOutsideTradingSession and
+// leaves the position open. reason is one of
 // the domain.ExitReason* constants (domain.ExitReasonManual for
 // operator-initiated `POST /positions/:id/close`).
 //
@@ -21,7 +27,7 @@ import (
 // cooldown_until) - an in-memory, per-symbol gate Enter checks, distinct
 // from internal/service/risk.Engine's own portfolio-wide
 // cooldown_after_loss_minutes check (config.go's doc comment).
-func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exitPrice float64, now time.Time) (domain.Position, error) {
+func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exitPrice float64, book fillmodel.Book, now time.Time) (domain.Position, error) {
 	if !validPrice(exitPrice) {
 		return domain.Position{}, fmt.Errorf("execution: close position %d: %w (got %v)", positionID, ErrInvalidPrice, exitPrice)
 	}
@@ -39,7 +45,15 @@ func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exi
 	if position.Side == domain.PositionSideShort {
 		exitSide = domain.OrderSideBuy
 	}
-	realizedPnL := positionSign(position.Side) * float64(position.Quantity) * (exitPrice - position.EntryPrice)
+	exit, _, err := e.fillFor(domain.OrderTypeMarket, exitSide, position.Quantity, nil, exitPrice, book, now)
+	if err != nil {
+		return domain.Position{}, fmt.Errorf("execution: close position %d: %w", positionID, err)
+	}
+	entryOrder, err := e.orders.Get(ctx, position.EntryOrderID)
+	if err != nil {
+		return domain.Position{}, fmt.Errorf("execution: get entry order %d of position %d: %w", position.EntryOrderID, positionID, err)
+	}
+	realizedPnL := positionSign(position.Side)*float64(position.Quantity)*(exit.price-position.EntryPrice) - entryOrder.Fees - exit.fee
 
 	// Submit, fill and close in one transaction: no orphan FILLED exit order.
 	closed, err := e.positions.CloseWithExitOrder(ctx, domain.PaperOrder{
@@ -50,7 +64,9 @@ func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exi
 		Quantity:     position.Quantity,
 		Status:       domain.OrderStatusPending,
 		SubmittedAt:  now,
-	}, exitPrice, positionID, realizedPnL, reason, now)
+		Fees:         exit.fee,
+		SlippageBps:  &exit.slippageBps,
+	}, exit.price, positionID, realizedPnL, reason, now)
 	if errors.Is(err, domain.ErrPositionNotFound) {
 		return domain.Position{}, fmt.Errorf("%w: position %d", domain.ErrPositionAlreadyClosed, positionID)
 	}
@@ -92,11 +108,25 @@ func (e *Engine) CloseAll(ctx context.Context, reason string) error {
 	now := e.cfg.Now()
 	var errs []error
 	for _, position := range open {
-		if _, err := e.Close(ctx, position.ID, domain.ExitReasonForceClose, position.CurrentPrice, now); err != nil && !errors.Is(err, domain.ErrPositionAlreadyClosed) {
+		if _, err := e.Close(ctx, position.ID, domain.ExitReasonForceClose, position.CurrentPrice, e.latestBook(ctx, position), now); err != nil && !errors.Is(err, domain.ErrPositionAlreadyClosed) {
 			errs = append(errs, fmt.Errorf("execution: force-close position %d for kill switch %q: %w", position.ID, reason, err))
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// latestBook is the quote of position's instrument's latest market_snapshots
+// row when it is still the bar CurrentPrice was marked at; the zero Book
+// (unknown quote) otherwise or when Deps.Snapshots is nil.
+func (e *Engine) latestBook(ctx context.Context, position domain.Position) fillmodel.Book {
+	if e.snapshots == nil {
+		return fillmodel.Book{}
+	}
+	latest, err := e.snapshots.ListByInstrument(ctx, position.InstrumentID, 1)
+	if err != nil || len(latest) == 0 || latest[0].Price != position.CurrentPrice {
+		return fillmodel.Book{}
+	}
+	return fillmodel.BookOf(latest[0])
 }
 
 // var _ risk.PositionCloser assertion below keeps CloseAll's signature

@@ -14,14 +14,23 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 func snapshotAt(instrumentID int64, price float64, at time.Time) domain.Snapshot {
 	return domain.Snapshot{InstrumentID: instrumentID, Symbol: "7203", Timestamp: at, Price: price}
 }
 
+// costlessConfig is DefaultConfig without fill costs: tests of exit/limit
+// logic that pin exact prices, as opposed to fill_test.go's cost model.
+func costlessConfig() execution.Config {
+	cfg := execution.DefaultConfig()
+	cfg.Fill = fillmodel.Model{}
+	return cfg
+}
+
 func TestEngine_OnSnapshot_MarksOpenPositionWithoutExitingInsideThresholds(t *testing.T) {
-	te := newTestEngine(t, execution.DefaultConfig())
+	te := newTestEngine(t, costlessConfig())
 	ctx := context.Background()
 	opened := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
 	if _, err := te.engine.Enter(ctx, execution.EntryRequest{
@@ -44,7 +53,7 @@ func TestEngine_OnSnapshot_MarksOpenPositionWithoutExitingInsideThresholds(t *te
 }
 
 func TestEngine_OnSnapshot_ClosesPositionWhenStopLossTriggers(t *testing.T) {
-	te := newTestEngine(t, execution.DefaultConfig())
+	te := newTestEngine(t, costlessConfig())
 	ctx := context.Background()
 	opened := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
 	entry, err := te.engine.Enter(ctx, execution.EntryRequest{

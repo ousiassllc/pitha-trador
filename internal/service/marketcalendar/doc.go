@@ -11,7 +11,9 @@
 // 休日) nor one of the exchange's own closures (年末年始休場: 12/31, 1/1,
 // 1/2, 1/3). The holiday rules are those in force since 2020 (令和); dates
 // before 2020 are not guaranteed. Ad-hoc closures (e.g. system failures)
-// are not modelled.
+// are not modelled. PhaseAt (phase.go) further classifies an in-session time
+// as 寄り (the first minute of each session), ザラ場 or 引け (15:25-15:30),
+// for the fill model (internal/service/fillmodel).
 //
 // This package MUST NOT import any other internal package: the packages
 // that consume it (scheduler, risk, execution) receive it through small

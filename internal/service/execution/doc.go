@@ -16,6 +16,11 @@
 // step internal/bootstrap's market-data job runs after persisting each
 // new snapshot: limit-entry fills, mark-to-market and FR-EXIT-1 exits.
 //
+// Fills are priced by Config.Fill (internal/service/fillmodel, shared with
+// the Backtest Engine, FR-ENTRY-8): tick grid, spread, slippage, fees, no
+// fill during the 昼休み, 寄り/引け as a separate auction fill - never at
+// the signal price itself.
+//
 // Engine only opens positions for signals Policy Engine already passed
 // through Risk Engine (domain.TradeSignal.RiskPassed == true,
 // internal/service/policy.Engine.Decide) - Execution does not

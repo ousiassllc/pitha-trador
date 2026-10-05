@@ -40,8 +40,10 @@ func TestPaperExecutor_SizesEntryFromRiskLimitsAndSkipsRepeatEntry(t *testing.T)
 	inst := mustCreateInstrument(t, svc, "7203")
 
 	position := mustOpenPaperPosition(t, svc, inst, 2500)
-	if position.Quantity != 200 || position.EntryPrice != 2500 || position.Side != domain.PositionSideLong {
-		t.Fatalf("opened position = %+v, want LONG %d shares at 2500", position, 200)
+	// Filled by the fill model, not at the signal price 2500: 2500 + 2bps
+	// slippage = 2500.5, rounded up to the 1 yen tick (#509).
+	if position.Quantity != 200 || position.EntryPrice != 2501 || position.Side != domain.PositionSideLong {
+		t.Fatalf("opened position = %+v, want LONG %d shares at 2501", position, 200)
 	}
 
 	// A second approved signal while the position is still open is not an

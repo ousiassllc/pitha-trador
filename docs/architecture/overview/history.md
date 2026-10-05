@@ -78,3 +78,4 @@
 | 1.71 | 2026-10-05 | §10.1（`flows.md`）の`outcome-labeling`再投入条件に、判断から24時間以内に限り`PendingLabels`の下限（`now-24h`）で索引範囲走査する旨を追記（24時間超の未ラベルペアは対象外） | issue #484 |
 | 1.72 | 2026-10-05 | §3（`overview.md`）のツリーの`candidates/`に、最新Jev Trader判断と保有ポジションの付与を追記 | issue #492 |
 | 1.73 | 2026-10-05 | §3/§4（`overview.md`）の構成図・責務表に、最新Jev Trader判断の件数窓・経過時間上限なしの単一定義（`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`/`LatestScout`、`execution.Engine.State`の`LatestTraderDecision`、Exit評価の窓撤廃）の回帰テスト専用ディレクトリ`execution/latestdecision`を追記 | issue #496, #497, #498, #499, #500 |
+| 1.74 | 2026-10-05 | §4の責務表に約定モデル`internal/service/fillmodel`（呼値・スプレッド・滑り・手数料・昼休み・寄り引け）、Market Calendarの`PhaseAt`、Executionのテスト専用`fillflow`/`exitflow`を追記し、Backtest Engine行・`overview/integrations.md` §8のコストモデルを固定5bps/0bpsからPaper Tradingと共用の約定モデルへ更新 | issue #509 |
