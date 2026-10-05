@@ -21,9 +21,12 @@ generate: ## templ生成とフロントエンドビルド（lint/test/buildの�
 	templ generate
 	bun run --cwd static build
 
-lint: generate ## golangci-lint と biome check
+lint: generate ## CIのlintジョブと同じ検査（golangci-lint・GOOS=windows go vet・linterly・biome・tsc）
 	golangci-lint run
+	GOOS=windows go vet ./...
+	linterly check --no-update-check
 	bun run --cwd static lint
+	bun run --cwd static typecheck
 
 test: generate ## go test と bun test
 	go test ./...

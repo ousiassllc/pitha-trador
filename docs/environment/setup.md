@@ -132,7 +132,7 @@ symbol,name,market,sector,kind
 |---|---|
 | `make dev` | `wails dev`・`templ generate --watch`・`bun --cwd=static run dev`を並行起動 |
 | `make generate` | `templ generate`と`bun run --cwd static build`。`lint`/`test`/`build`の前提 |
-| `make lint` | `generate`後に`golangci-lint run`と`bun run --cwd static lint`（`static/`で`biome check .`を実行。ルートで`bunx biome`を実行すると`@biomejs/biome`ではなく無関係なnpmパッケージ`biome`を解決して何も検査しないため、`static/`から実行する）。CIの`lint`ジョブが実行する`linterly check`と`bunx tsc --noEmit`は含まない（`linterly check`はlefthookのpre-commitで、`tsc --noEmit`はCIのみで実行される） |
+| `make lint` | `generate`後に`golangci-lint run`と`bun run --cwd static lint`（`static/`で`biome check .`を実行。ルートで`bunx biome`を実行すると`@biomejs/biome`ではなく無関係なnpmパッケージ`biome`を解決して何も検査しないため、`static/`から実行する）。続けて`GOOS=windows go vet ./...`（Windows専用ファイルの検査）・`linterly check --no-update-check`・`bun run --cwd static typecheck`（`tsc --noEmit`）を実行し、CIの`lint`ジョブ（`govulncheck`を除く）と同じ検査をローカルで再現する |
 | `make test` | `generate`後に`go test ./...`と`bun --cwd=static test` |
 | `make test-race` | `generate`後に`go test -race ./...`（CIの`test`ジョブと同じ検証。race detectorはcgoを必要とするためgccが必要で、`CGO_ENABLED=0`の環境では使えない） |
 | `make build` | `generate`後に`wails build -platform windows/amd64` |
@@ -201,11 +201,14 @@ language: ja
 # 自動生成コード（Templが生成するGoコード。手書きソースコードの除外は基本追加しない）
 *_templ.go
 
+# wails dev/build 生成の JS バインディング・runtime 型定義（.gitignore 済みの生成物）
+static/wailsjs/**
+
 # ライセンス全文（法的な定型文でありソースコードではない。分割・短縮できない）
 LICENSE
 ```
 
-- 許容する除外は上記の`*_templ.go`・`**/logs/**`・ライセンス全文`LICENSE`（手書きソースではない定型文）のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
+- 許容する除外は上記の`*_templ.go`・`**/logs/**`・`static/wailsjs/**`（`wails dev`が生成する`.gitignore`済みのバインディング・`runtime.d.ts`）・ライセンス全文`LICENSE`（手書きソースではない定型文）のみ。**手書きソース（テスト含む）の除外は置かない**。ディレクトリ2000行・ファイル300行の上限は、責務別サブパッケージへの分割（`architecture/overview.md` §3）で満たす
 - サブパッケージ分割前の暫定除外（`internal/repository/`は#244、`internal/web/handler/`は#245、`internal/bootstrap/`は#246、`internal/service/risk/`は#247）は全て削除済みで、#248で全廃を確認した。手書きソースの除外を新規に追加してはならない（必要になった時点でサブパッケージ分割を先に行う）
 
 `static/src/dist/`（esbuildビルド成果物。`static/esbuild.config.mjs`の`outdir: src/dist/js`、Tailwind出力は`static/src/dist/css`。`.gitignore`対象）は`default_excludes: true`により自動除外される想定。手書きソースコードの除外パターンは基本追加しない。
@@ -222,8 +225,12 @@ pre-commit:
       run: make generate && golangci-lint run
     biome:
       root: static/
-      glob: "**/*.{ts,css}"
+      glob: "**/*.{ts,css,json,mjs}"
       run: bunx biome check {staged_files}
+    typecheck:
+      root: static/
+      glob: "**/*.ts"
+      run: bun run typecheck
     linterly:
       run: linterly check
 
@@ -235,7 +242,7 @@ pre-push:
 
 `biome`は`root: static/`で`static/`をカレントにして実行する（`@biomejs/biome`は`static/package.json`のdevDependencyであり、リポジトリルートの`bunx biome`は無関係なnpmパッケージ`biome`を解決してしまうため）。`root`指定時、`{staged_files}`は`static/`配下のステージ済みファイルのみが`static/`相対パスで渡され、`glob`もその相対パスに対して評価される。
 
-`golangci-lint`と`go-test`の前に`make generate`を実行するのは、`*_templ.go`と`static/src/dist/`が未生成だと`go:embed`でコンパイルできない（または古い生成物に対して実行してしまう）ため。`linterly check`は`{staged_files}`を渡さずリポジトリ全体を検査する（ディレクトリ単位の行数上限のため）。
+`typecheck`はCIの`lint`ジョブの`tsc --noEmit`と同じ検査で、`biome`では検出できない型エラー（#197/#198でCIのみ失敗した経緯）をコミット時に検出する。`tsc`はプロジェクト全体を検査するため`{staged_files}`は渡さない（`static/node_modules`が必要で、`bun install --cwd static`で導入する）。`golangci-lint`と`go-test`の前に`make generate`を実行するのは、`*_templ.go`と`static/src/dist/`が未生成だと`go:embed`でコンパイルできない（または古い生成物に対して実行してしまう）ため。`linterly check`は`{staged_files}`を渡さずリポジトリ全体を検査する（ディレクトリ単位の行数上限のため）。
 
 ## Swagger / OpenAPI
 
@@ -290,3 +297,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.37 | 2026-10-05 | Lint節のdepguard記述を`.golangci.yml`の2ルール（`web-no-repository`・`templ-no-service`）に訂正（「lintで強制するのは`web` → `repository/**`のみ」を削除） | issue #431 |
 | 1.38 | 2026-10-05 | 環境変数表の`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`に、上書き後の値も起動時検証される旨を追記 | issue #459 |
 | 1.39 | 2026-10-05 | 「銘柄マスタの投入」節にCSV未投入時の画面案内とJPX東証上場銘柄一覧の確認付き自動取得（`POST /scanner/universe/import`）を追記 | issue #508 |
+| 1.40 | 2026-10-05 | `make lint`をCIの`lint`ジョブ相当（`GOOS=windows go vet`・`linterly check`・`tsc --noEmit`を追加）に、lefthookのpre-commitに`typecheck`を追加し`biome`のglobへ`json`/`mjs`を追加。`.linterlyignore`に生成物`static/wailsjs/**`を追加 | issue #553/#555 |

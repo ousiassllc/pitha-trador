@@ -68,6 +68,15 @@ jobs:
       - name: govulncheck
         run: govulncheck ./...
 
+      # GOOS=windows go vet type-checks and vets the Windows-only files
+      # (internal/singleinstance/lock_windows.go, cmd/desktop's Windows
+      # branches) that the linux golangci-lint run above never sees. Pure Go
+      # (no CGO), so the cross-compile works on ubuntu-latest.
+      - name: go vet (windows)
+        env:
+          GOOS: windows
+        run: go vet ./...
+
       # Enforces the line-count limits in CI as well; lefthook's
       # pre-commit alone is bypassable via --no-verify / web commits.
       # linterly v0.3.3 also requires go >= 1.26, so it needs the same
@@ -107,8 +116,21 @@ jobs:
       - name: bun test
         run: bun --cwd static test
 
+  # The production target is Windows, but lint/test above run on Linux:
+  # run the Windows-only single-instance lock (lock_windows.go,
+  # CreateFile dwShareMode=0) test natively. The frontend/templ setup is
+  # needed because static/src/embed.go must compile for any `go test`.
+  test-windows:
+    needs: lint
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup
+      - name: go test (singleinstance, windows)
+        run: go test ./internal/singleinstance/...
+
   build:
-    needs: test
+    needs: [test, test-windows]
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.value }}
@@ -252,6 +274,10 @@ jobs:
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ needs.build.outputs.version }}
+          # Pin the tag to the commit this run built. Without it GitHub
+          # tags the default branch's *current* head, which can already be
+          # a newer main commit than the one build embedded the version for.
+          target_commitish: ${{ github.sha }}
           files: |
             dist/*-installer.exe
             dist/checksums.txt
