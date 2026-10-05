@@ -10,6 +10,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 - 起動時にWailsプロセスがランダムなローカルセッショントークンを生成し、Cookie（`HttpOnly`, `SameSite=Strict`）としてWebViewに設定する。全ての状態変更リクエスト（アクションルート・Huma APIのPOST/PUT/PATCH/DELETE）はこのセッションCookie必須とする
   - 実装（`internal/web/middleware/session.go`）: `SecurityHeaders`・`RequestLog`・`Recovery`・（ws-base設定時の）`WebSocketBase`・（後述の）Host検証の**後**、Setup Guardより**前**にGinエンジン全体（`/static`を除く）へ適用する。適用順は`internal/router/router_middleware.go`のとおり `SecurityHeaders（最外周） → RequestLog → Recovery → WebSocketBase（ws-base設定時） → HostGuard（許可リスト設定時） → Session → Heartbeat（recorderがあれば） → Setup Guard（secrets storeがあれば） → SystemState`（RequestLog/RecoveryをSessionより前に置くのは、Sessionの403拒否もアクセスログに残し、panicを500として回復するため。issue #109/#122。SecurityHeadersを最初に置くのは、Recovery・HostGuard・Sessionの拒否応答にもヘッダを付けるため。issue #378）。プロセス起動ごとにセッショントークンとCSRFトークンを別々に乱数生成し、Cookie（名前`pitha_session`）は有効なCookieを持たない安全なリクエスト（GET/HEAD/OPTIONS、WebSocketアップグレードを除く）の応答で発行する
   - POST/PUT/PATCH/DELETE等の状態変更メソッドは、有効なセッションCookieと、CSRFトークンに一致する`X-CSRF-Token`ヘッダの両方が無ければ403を返す。WebSocketアップグレード（`/ws/...`）は有効なセッションCookieが無ければ403を返す
+  - 例外として、`GET /api/v1/logs/errors`は安全メソッドのGETだがエラーログを取得するため、有効なセッションCookieを必須とし、無ければ403（`missing or invalid session cookie`）を返す（FR-ERRLOG-6、`endpoints/huma-api.md`）。他の`/api/v1`のGETはCookie不要
   - **CSRF拒否の識別（issue #138）**: トークンは起動ごとに再生成されるため、アプリ再起動前に開いたままのページは旧Cookie/旧CSRFトークンを持ち続ける。Cookie無効・CSRFトークン不一致による403には`X-CSRF-Reject: stale`ヘッダを付け、`lib/api.ts`は`StaleSessionError`（Kill Switchパネル等に表示）、`pitha-htmx-errors`は同内容のトーストで「ページを再読み込みしてください」と案内する。再読み込みで新しいCookieとトークンが配布される。ページ遷移（`Accept: text/html`かつ非HTMX・非WebSocket・非`/api/v1`）でのCSRF拒否とpanicによる500は、`router.useMiddleware`が注入する`shared.RenderErrorPage`（`internal/web/handler/shared`）（`pages.ErrorPage`）でHTML本文を返し（`X-CSRF-Reject`ヘッダは維持）、HTMX・fetch・API・WebSocketは従来どおりステータスのみ／プレーンテキストとする（issue #171）
   - **`_csrf`フォームフィールド（issue #142）**: ヘッダを付けられない素のHTMLフォーム送信（JS無効・htmx読込失敗時の`SecretFieldRow`フォールバック）のため、`Content-Type: application/x-www-form-urlencoded`のボディの隠しフィールド`_csrf`も`X-CSRF-Token`ヘッダの代わりに受け付ける（ヘッダがあればヘッダを優先）。セッションCookieは引き続き必須
 - **Host/Origin検証（DNS rebinding対策、issue #136）**: `internal/web/middleware/host_guard.go`の`HostGuard`をSessionの前段に置き、Hostヘッダ（ポート・大文字小文字・末尾ドット・IPv6括弧は無視）が許可リストに無いリクエストは`/static`を含め全て403（Cookie・CSRFトークンも発行しない）。状態変更リクエストとWebSocketアップグレードは、`Origin`ヘッダがあれば同じ許可リストに含まれるホストであることも必須（`null`や外部ホストは403、Originなしの非ブラウザクライアントは通す）。許可リストは`router.WithAllowedHosts`で与える
@@ -19,6 +20,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
   - `Content-Security-Policy`: `default-src 'self'`、`script-src 'self'`、`style-src 'self'`＋lightweight-chartsのTradingViewアトリビューション用`<style>`のsha256ハッシュ、`img-src 'self' data:`、`font-src 'self'`、`connect-src 'self'`＋別リスナのWebSocketベース（`ws://wails.localhost:<port>`、`WithWebSocketBase`で渡された場合のみ）、`object-src 'none'`、`base-uri 'self'`、`form-action 'self'`、`frame-ancestors 'none'`。`'unsafe-inline'`/`'unsafe-eval'`は使わない。そのため`htmx-config`で`includeIndicatorStyles:false`（`allowEval`/`allowScriptTags`も`false`）、Litコンポーネントはインライン`style`属性ではなくCSSOM（`el.style`）で動的スタイルを設定する
   - `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`（`frame-ancestors`の旧WebView向け補完）、`Referrer-Policy: same-origin`（設定画面の戻り先がSame-origin RefererのPathに依存するため`no-referrer`にはしない）
   - `/swagger`のみ、Stoplight Elementsが実行時にインラインスタイルを注入するため`middleware.SwaggerCSP`（`style-src 'unsafe-inline'`を追加。スクリプトは`'self'`のまま、`frame-ancestors 'none'`維持）でCSPを置き換える
+- **`GET /swagger`（オプトイン）**: Stoplight ElementsのAPIドキュメントUI。環境変数`SWAGGER_ENABLED=true`のときのみ`internal/router/router_routes.go`が登録し、未設定・それ以外は404（既定は無効）。`/api/v1/openapi.json`は本変数に関わらず常に公開される（`environment/setup.md`「Swagger / OpenAPI」）
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
   - `layout.Shell`/`SetupShell`が`<meta name="csrf-token">`を出力し、`<body hx-headers>`でHTMX全リクエストに`X-CSRF-Token`を付与する。Litコンポーネントは`lib/api.ts`が同metaから読み取って送信する。`SecretFieldRow`のフォームは上記フォールバック用に隠しフィールド`_csrf`も持つ
 - 実売買（Phase 7）へ移行しても、Kill Switch解除・発注確定操作に人手の追加認証は要求しない（完全自動運用。`requirements/non-functional.md` §4、FR-RISK-4）。実装（`internal/web/handler/system/system.go`）にも追加認証は無く、`pitha-kill-switch-panel`が確認ダイアログ（`window.confirm`）を出すのはKill操作のみで、Resume（Killedからの手動解除を含む）は確認なしで`POST /api/v1/system/resume`を呼ぶ
@@ -46,6 +48,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/settings` | Settings画面。接続先別（Jev/kabuステーション/Slack/Luna/ニュースフィード/Sol/Opus）の一覧で、各接続先のモーダルに許可キー（`internal/config`のallow-list）の`SecretFieldRow`をまとめ、各行が独立した保存・削除フォームを持つ。保存済みの値は再表示せず「設定済み」バッジのみ表示する。「システム」節からアップデート（`#update-panel`）とエラーログのダウンロード（`#error-log-panel`、`GET /api/v1/logs/errors`を呼ぶフォーム。FR-ERRLOG-1）のモーダルを開く（issue #57/#79/#267/#302） |
 | GET | `/setup` | 初回セットアップ画面。Settingsと同じ接続先一覧・モーダルで、必須2キー（JEV_API_KEY/KABU_API_PASSWORD）を持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80/#302） |
 | GET | `/activity` | System Activity Log画面。`<pitha-activity-feed>`アイランド（SSRフォールバック: キュー状況＋アクティビティ一覧）を埋め込んだフルページ |
+| GET | `/swagger` | Swagger UI（Stoplight Elements）。`SWAGGER_ENABLED=true`のときのみ登録、既定は404。詳細は§1・`environment/setup.md`「Swagger / OpenAPI」 |
 
 ## 4. アクションルート
 
@@ -97,7 +100,7 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 
 - Huma APIのバリデーションエラーはRFC 7807 Problem Details形式で自動生成される（`components/overview.md` Huma APIパターン参照）
 - 5xx応答は固定メッセージのみを返し、原因エラーは`errors[]`に含めずslogへ記録する（`internal/web/apierror`の`huma.NewError`上書き、issue #215）。4xxのバリデーションメッセージは`errors[]`にそのまま出力し、`ErrInstrumentUnknown`の404は`unknown symbol`固定
-- ビジネスエラー（例: Risk Engine拒否によりKill Switch解除不可）はカスタムエラーも同じProblem Details形式に統一する
+- ビジネスエラー（例: 未登録銘柄の404 `unknown symbol`）はカスタムエラーも同じProblem Details形式に統一する。なお`POST /api/v1/system/resume`にRisk Engineによる拒否経路はなく、人手のResumeは常にRunningへ戻る（失敗は500固定メッセージ。FR-RISK-4）
 - アクションルート（HTMX）の失敗（4xx/5xx）は該当ステータスと`atoms.Toast`フラグメントを返し、クライアントが`#toast-region`へ表示する（`components/overview.md` §4「エラー表示」）。SSRページルート（`/scanner`・`/symbols/:symbol`・`/activity`）の失敗は、フルページ遷移には`pages.ErrorPage`（ステータス＋固定メッセージ。`err.Error()`は画面に出さずslogへ）、HTMXには同じトーストフラグメントを返す。`/symbols/:symbol`は銘柄形式（`^[0-9A-Za-z]+$`・1〜16文字、JSON APIの`SymbolPathInput`と同じ）に反する値と`ErrInstrumentUnknown`のみ404、他は500（issue #143/#382）。`pitha-price-chart`へ渡す`candles-url`/`ws-url`は`organisms.EscapeSymbolSegment`（`SymbolHref`と同じ規則）で銘柄をパスエスケープして組み立てる。`POST`/`DELETE /settings/:key`の成功応答は、HTMXリクエスト（`HX-Request: true`）には行フラグメント、それ以外（JS無効のフォーム送信）には送信元画面（`/setup`または`/settings`）への303リダイレクトを返す。失敗応答（400/500）はHTMXリクエストにはトースト、それ以外には`pages.ErrorPage`（完全なHTML）を返す（issue #184）
 
 ## 改訂履歴
@@ -157,3 +160,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.50 | 2026-10-05 | §4に`POST /scanner/universe/import`（銘柄マスタ未投入時のJPX東証上場銘柄一覧の確認付き取得）を追加 | issue #508 |
 | 1.51 | 2026-10-05 | `POST /positions/:id/close`が、昼休み（11:30〜12:30）・立会時間外は約定しないため409（ポジション保持）を返し、約定価格・手数料は約定モデル（FR-ENTRY-8）で決まる旨を追記 | issue #509 |
 | 1.52 | 2026-10-05 | §6 `/ws/activity`に`{"type":"resync"}`（購読バッファ溢れの通知）と、Kill Switch／Jev判断イベントの予約バッファ・溢れ時切断を追記 | issue #536 |
+| 1.53 | 2026-10-05 | `GET /api/v1/scanner/scan`の`q`/`reason`最大長と422、`GET /api/v1/logs/errors`のCookie必須（未認証403）、`GET /api/v1/activity`の`queue`/`type`許容値（範囲外422）と`events[].queue`、`policy-proposals`の`backtest_result`全6フィールドとデルタの`null`条件、オプトインの`GET /swagger`を追記。§7のビジネスエラー例を実在する`unknown symbol`の404へ差し替え | issue #518, #582, #583, #584, #585, #586 |

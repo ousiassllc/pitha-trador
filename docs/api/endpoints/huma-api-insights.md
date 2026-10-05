@@ -71,7 +71,7 @@ Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読
       "proposed_by": "sol",
       "status": "applied",
       "proposed_changes": { "policy.long.min_probability": 0.68 },
-      "backtest_result": { "expectancy_delta_pct": 2.1, "max_drawdown_delta_pct": -3.4 },
+      "backtest_result": { "baseline_expectancy": 0.31, "candidate_expectancy": 0.3165, "baseline_max_drawdown_pct": 5.0, "candidate_max_drawdown_pct": 4.83, "expectancy_delta_pct": 2.1, "max_drawdown_delta_pct": -3.4 },
       "reviewed_by": "opus",
       "review": { "verdict": "approve", "reason": "..." },
       "applied_policy_version": "sol-42",
@@ -82,6 +82,8 @@ Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読
   ]
 }
 ```
+
+`backtest_result`はシャドウバックテスト（FR-SELFIMPROVE-4）の比較結果で、実行前は`null`。基準値・候補値の`baseline_expectancy`/`candidate_expectancy`/`baseline_max_drawdown_pct`/`candidate_max_drawdown_pct`と、相対変化率`expectancy_delta_pct`（`(candidate - baseline) / |baseline| * 100`。基準Expectancyが負でも改善なら正になる）・`max_drawdown_delta_pct`（`(candidate - baseline) / baseline * 100`）の計6フィールドを常に出力する。基準値（`baseline_expectancy`/`baseline_max_drawdown_pct`）が0のときは変化率を定義できないため、該当するデルタのみ`null`になる（`internal/web/handler/proposals`の`relativeDeltaPct`）。
 
 `applied_at`（適用日時、RFC 3339）・`rolled_back_at`（FR-SELFIMPROVE-6の自動ロールバック日時、RFC 3339）・`rolled_back_reason`（ロールバック理由。劣化前後の実現Expectancy値を含む文字列）は`policy_proposals`の同名カラムの保存値で、未発生（未適用／ロールバックされていない）の場合は`null`（キーは常に出力する）。`status=rolled_back`の行で「いつ・なぜ」ロールバックされたかを本APIで確認できる（FR-SELFIMPROVE-7）。
 
@@ -94,8 +96,8 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 | クエリ | 型 | 説明 |
 |-------|-----|------|
 | `limit` | integer | フィード件数（既定200、1〜500。範囲外は422） |
-| `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー）。`job`イベントのみが対象で、指定時は`jev_scout`/`jev_trader`/`kill_switch`イベントは含まれない |
-| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch`（省略時は全種別） |
+| `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー）。許容値は`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6種で、範囲外は422。`job`イベントのみが対象で、指定時は`jev_scout`/`jev_trader`/`kill_switch`イベントは含まれない |
+| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch`（省略時は全種別。範囲外は422） |
 
 ```json
 // Output（抜粋）
@@ -104,11 +106,14 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
     { "queue": "jev-scout", "pending": 3, "running": 1, "failed_recent": 0 }
   ],
   "events": [
+    { "type": "job", "timestamp": "2026-09-29T01:16:00Z", "queue": "jev-scout", "detail": "queue=jev-scout status=succeeded attempts=1", "latency_ms": 1500 },
     { "type": "jev_trader", "timestamp": "2026-09-29T01:15:00Z", "symbol": "7203", "detail": "direction=LONG confidence=0.74", "latency_ms": 820 },
     { "type": "kill_switch", "timestamp": "2026-09-29T01:10:00Z", "detail": "reason=daily_loss_limit" }
   ],
   "as_of": "2026-09-29T01:15:03Z"
 }
 ```
+
+`events[].queue`は`type=job`のイベントにのみ付く（`jobs.queue`の値。それ以外のイベントではキーごと省略）。`/ws/activity`の`activity_event.event`も同じ構造。
 
 `queues[].failed_recent`は`finished_at`が`as_of`から過去1時間（固定。設定では変更できない）以内の`failed`ジョブの件数で、`/ws/activity`の`job_update.failed_recent`も同じ窓で集計する。1時間より前に失敗したジョブは含まれない（`requirements/functional/components-platform.md` FR-ACT-1）。
