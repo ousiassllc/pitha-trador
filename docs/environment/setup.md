@@ -54,11 +54,14 @@ pitha-trador/
 | ツール | バージョン目安 | 用途 |
 |---|---|---|
 | Go | 1.25+（`go.mod`準拠） | バックエンド全般 |
-| Wails CLI | v2 (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`) | デスクトップアプリのビルド・`wails dev` |
+| Wails CLI | v2.16.0（`go.mod`の`wails/v2`・`ci.yml`と同版。`go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0`） | デスクトップアプリのビルド・`wails dev` |
 | WebView2 Runtime | 最新（Windows 10/11は通常プリインストール済み） | Wailsのネイティブウィンドウ描画（Windows実機/`wails dev`時に必要） |
 | bun | `.bun-version`記載のバージョン（CIと同一） | フロントエンド（Lit/TypeScript）の依存管理・ビルド |
 | golang-migrate CLI | v4（`go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest`） | マイグレーションファイルの手動生成・確認用（アプリ起動時は自動適用） |
-| golangci-lint | 最新 | Go lint |
+| templ CLI | `go.mod`の`a-h/templ`と同版（現在v0.3.1020。CIは`ci.yml`の`TEMPL_VERSION`。`go install github.com/a-h/templ/cmd/templ@v0.3.1020`） | `templ generate`。`make generate`・`make dev`が実行するため、`make lint`/`make test`/`make build`・lefthookのpre-commit/pre-pushに必須 |
+| golangci-lint | v2.14.0（`ci.yml`の`GOLANGCI_LINT_VERSION`と同版。`GOTOOLCHAIN=auto go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`。`go >= 1.26`を要求するため`GOTOOLCHAIN=auto`が要る） | Go lint（`make lint`・pre-commit） |
+| linterly | v0.3.3（`ci.yml`の`LINTERLY_VERSION`と同版。`GOTOOLCHAIN=auto go install github.com/ousiassllc/linterly/cmd/linterly@v0.3.3`） | 行数制限の検査（`make lint`・pre-commit。下記「Linterly」節） |
+| govulncheck | v1.7.0（`ci.yml`の`GOVULNCHECK_VERSION`。`go install golang.org/x/vuln/cmd/govulncheck@v1.7.0`） | 既知脆弱性の検査。CIの`lint`ジョブ専用（`make lint`には含まれない。ローカル実行は任意） |
 | Lefthook | 最新（`go install github.com/evilmartians/lefthook@latest` または `bun add -D lefthook`） | Git Hooks |
 | kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）提供 | Windows実機での市場データ・発注検証（開発時はモックサーバーで代替可） |
 
@@ -272,11 +275,7 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.12 | 2026-09-29 | 環境変数表に`PITHA_SERVER_ALLOWED_HOSTS`（Host検証の追加許可ホスト）を追加 | issue #136 |
 | 1.13 | 2026-09-29 | `PITHA_BACKUP_DIR`の説明を更新（`secrets`除外・パーミッション・週次52週保持・退避先必須・catch-up実行） | issue #137/#152/#159 |
 | 1.14 | 2026-09-29 | Lint/Format/Linterly/Git Hooks節を実ファイル（`.golangci.yml`の有効linterとdepguard、`lefthook.yml`、`.linterlyignore`）に合わせて是正。`make lint`とCI `lint`ジョブの差分を明記。`.env.example`に`PITHA_SERVER_ALLOW_NON_LOOPBACK`/`PITHA_SERVER_ALLOWED_HOSTS`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`の雛形を追加 | issue #154 |
-| 1.15 | 2026-09-30 | `depguard`がサブパッケージも拒否対象であることを明記。`.linterlyignore`の方針を「手書きソースの除外全廃（許容は`*_templ.go`と`**/logs/**`のみ）」へ改め、現行の暫定除外は#134の子Issueで解消する旨を記載 | issue #243 |
-| 1.16 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/web/handler/`を削除（`web/handler`のサブパッケージ分割完了）。残りは`internal/bootstrap/`・`internal/service/risk/` | issue #245 |
-| 1.17 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/bootstrap/`を削除（`bootstrap`のサブパッケージ分割完了）。残りは`internal/service/risk/` | issue #246 |
-| 1.18 | 2026-09-30 | `.linterlyignore`の暫定除外から`internal/service/risk/`を削除（`service/risk`のテスト専用サブパッケージへの分割完了）。手書きソースの暫定除外は残っていない | issue #247 |
-| 1.19 | 2026-09-30 | `.linterlyignore`の最終確認（除外は`*_templ.go`と`**/logs/**`のみで、既知債務コメント・手書きソース除外なし）を反映し、「#248で全廃を確認する」の予定表現を確認済みの記述へ改めた | issue #248 |
+| 1.15–1.19 | 2026-09-30 | `depguard`がサブパッケージも拒否対象であることを明記。`.linterlyignore`の方針を「手書きソースの除外全廃（許容は`*_templ.go`と`**/logs/**`のみ）」へ改め、暫定除外（`internal/web/handler/`・`internal/bootstrap/`・`internal/service/risk/`）をサブパッケージ分割の完了に伴い順次削除し、手書きソースの暫定除外が残っていないことを確認済みの記述へ更新 | issue #243, #245, #246, #247, #248 |
 | 1.20 | 2026-09-30 | depguardの強制範囲（`web` → `repository/**`のみ）を明記。lefthook/CIコメントの`go:embed`対象を`dist img vendor`へ更新 | 分割後レビュー指摘 |
 | 1.21 | 2026-10-01 | Settings画面経由の入力対象に`UPDATE_GITHUB_TOKEN`（非公開リポジトリのリリース取得用、任意）を追加 | issue #265 |
 | 1.22 | 2026-10-02 | Settings画面経由の入力対象から`UPDATE_GITHUB_TOKEN`を削除（リポジトリのpublic化に伴い更新確認用トークン機能を廃止） | 更新確認用トークン機能の廃止 |
@@ -298,3 +297,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.38 | 2026-10-05 | 環境変数表の`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`に、上書き後の値も起動時検証される旨を追記 | issue #459 |
 | 1.39 | 2026-10-05 | 「銘柄マスタの投入」節にCSV未投入時の画面案内とJPX東証上場銘柄一覧の確認付き自動取得（`POST /scanner/universe/import`）を追記 | issue #508 |
 | 1.40 | 2026-10-05 | `make lint`をCIの`lint`ジョブ相当（`GOOS=windows go vet`・`linterly check`・`tsc --noEmit`を追加）に、lefthookのpre-commitに`typecheck`を追加し`biome`のglobへ`json`/`mjs`を追加。`.linterlyignore`に生成物`static/wailsjs/**`を追加 | issue #553/#555 |
+| 1.41 | 2026-10-05 | 必要ツール表に`templ`CLI・`linterly`・`govulncheck`を追加し、Wails CLI・`golangci-lint`をCI固定版（`ci.yml`・`go.mod`）に合わせた。`environment/ci.md`の`linterly check --no-update-check`・`bun test`常時実行・初回タグ`v0.1.0`を`ci.yml`に合わせた | issue #519, #567, #578 |
