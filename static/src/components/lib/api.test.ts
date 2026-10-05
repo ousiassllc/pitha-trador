@@ -69,13 +69,45 @@ describe('post', () => {
 });
 
 describe('error handling', () => {
-  test('throws with the method, path, and status when the response is not ok', async () => {
-    const fetchMock = mock(() => Promise.resolve(new Response('', { status: 500 })));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+  async function failure(response: Response): Promise<api.ApiError> {
+    globalThis.fetch = mock(() => Promise.resolve(response)) as unknown as typeof fetch;
+    const err = await api.post('/api/v1/system/kill').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(api.ApiError);
+    return err as api.ApiError;
+  }
 
-    await expect(api.del('/api/v1/positions/1')).rejects.toThrow(
-      'DELETE /api/v1/positions/1 failed with status 500',
+  // The server's problem+json detail explains why (e.g. liquidation failed);
+  // the internal path must not reach the operator-facing message (#559).
+  test('carries the problem+json detail and status, keeping the path out of the message', async () => {
+    const err = await failure(
+      new Response(
+        JSON.stringify({ title: 'Internal Server Error', status: 500, detail: 'kill failed' }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/problem+json' },
+        },
+      ),
     );
+
+    expect(err.status).toBe(500);
+    expect(err.detail).toBe('kill failed');
+    expect(err.message).toBe('リクエストに失敗しました（HTTP 500）: kill failed');
+    expect(err.message).not.toContain('/api/v1/system/kill');
+    expect(err.method).toBe('POST');
+    expect(err.path).toBe('/api/v1/system/kill');
+  });
+
+  test.each([
+    ['an empty body', ''],
+    ['a non-JSON body', '<html>Bad Gateway</html>'],
+    ['a JSON body without detail', '{"status":502}'],
+    ['a non-string detail', '{"detail":{"x":1}}'],
+  ])('falls back to the status alone for %s', async (_name, body) => {
+    const err = await failure(new Response(body, { status: 502 }));
+
+    expect(err.status).toBe(502);
+    expect(err.detail).toBe('');
+    expect(err.message).toBe('リクエストに失敗しました（HTTP 502）');
   });
 });
 
@@ -99,8 +131,9 @@ describe('stale session', () => {
       Promise.resolve(new Response('', { status: 403 })),
     ) as unknown as typeof fetch;
 
-    await expect(api.post('/api/v1/system/kill')).rejects.toThrow(
-      'POST /api/v1/system/kill failed with status 403',
-    );
+    const error = await api.post('/api/v1/system/kill').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(api.ApiError);
+    expect((error as api.ApiError).status).toBe(403);
   });
 });

@@ -28,6 +28,37 @@ export class StaleSessionError extends Error {
   }
 }
 
+/**
+ * A non-2xx API response. `message` is operator-facing (Japanese) and carries
+ * only the HTTP status and the server's problem+json `detail`; the request
+ * method/path are kept as fields for logs, not shown in the UI.
+ */
+export class ApiError extends Error {
+  constructor(
+    readonly method: string,
+    readonly path: string,
+    readonly status: number,
+    readonly detail: string,
+  ) {
+    super(`リクエストに失敗しました（HTTP ${status}）${detail ? `: ${detail}` : ''}`);
+    this.name = 'ApiError';
+  }
+}
+
+// readProblemDetail returns the RFC 7807 `detail` of an error response, or ''
+// when the body is empty, not JSON, or carries no string `detail`.
+async function readProblemDetail(response: Response): Promise<string> {
+  try {
+    const problem: unknown = await response.json();
+    if (typeof problem === 'object' && problem !== null && 'detail' in problem) {
+      return typeof problem.detail === 'string' ? problem.detail : '';
+    }
+  } catch {
+    // Empty or non-JSON body: fall back to the status alone.
+  }
+  return '';
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -59,7 +90,7 @@ async function request<T>(
     throw new StaleSessionError();
   }
   if (!response.ok) {
-    throw new Error(`${method} ${path} failed with status ${response.status}`);
+    throw new ApiError(method, path, response.status, await readProblemDetail(response));
   }
 
   return (await response.json()) as T;
@@ -71,16 +102,4 @@ export function get<T>(path: string, options?: GetOptions): Promise<T> {
 
 export function post<T>(path: string, body?: unknown): Promise<T> {
   return request<T>('POST', path, body);
-}
-
-export function put<T>(path: string, body?: unknown): Promise<T> {
-  return request<T>('PUT', path, body);
-}
-
-export function patch<T>(path: string, body?: unknown): Promise<T> {
-  return request<T>('PATCH', path, body);
-}
-
-export function del<T>(path: string): Promise<T> {
-  return request<T>('DELETE', path);
 }
