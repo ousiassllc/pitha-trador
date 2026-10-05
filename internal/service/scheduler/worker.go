@@ -9,7 +9,13 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/textutil"
 )
+
+// maxLastErrorBytes bounds jobs.last_error: a handler error can embed an
+// external API's response body, and the column is read back by the
+// Activity/audit screens.
+const maxLastErrorBytes = 1024
 
 func (s *Scheduler) runWorker(ctx context.Context, queue string) {
 	defer s.wg.Done()
@@ -52,7 +58,7 @@ func (s *Scheduler) processNext(ctx context.Context, queue string, handler Handl
 	}
 
 	if err := safeHandle(ctx, handler, job); err != nil {
-		if markErr := s.jobs.MarkFailed(ctx, job.ID, time.Now().UTC(), err.Error()); markErr != nil {
+		if markErr := s.jobs.MarkFailed(ctx, job.ID, time.Now().UTC(), textutil.Truncate(err.Error(), maxLastErrorBytes)); markErr != nil {
 			slog.Error("scheduler: mark job failed", "job_id", job.ID, "error", markErr)
 		}
 		return true

@@ -5,7 +5,12 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/textutil"
 )
+
+// maxRejectReasonBytes is trade_signals.reject_reason's declared width
+// (VARCHAR(255)); SQLite does not enforce it, so reasonf does.
+const maxRejectReasonBytes = 255
 
 // decideDirection implements FR-POLICY-1〜3's decision tree, in order:
 // API失敗 -> データ欠損/未評価 -> キャリブレーション対象外 -> スプレッド/
@@ -89,6 +94,6 @@ func (e *Engine) evaluateThreshold(direction string, t config.PolicyDirectionThr
 // (domain.TradeSignal.RejectReason's type). format may be a plain
 // constant (no verbs).
 func reasonf(format string, args ...any) *string {
-	s := fmt.Sprintf(format, args...)
+	s := textutil.Truncate(fmt.Sprintf(format, args...), maxRejectReasonBytes)
 	return &s
 }

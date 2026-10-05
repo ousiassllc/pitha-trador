@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/textutil"
 )
 
 const (
@@ -34,14 +36,15 @@ const (
 var ErrNotConfigured = errors.New("assist: external AI API is not configured")
 
 // APIError is returned when an external AI API responds with a non-200
-// status.
+// status. Body holds the full (size-capped) response, but Error() embeds
+// only a short single-line excerpt (see jev.APIError).
 type APIError struct {
 	StatusCode int
 	Body       string
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("assist: api error (status %d): %s", e.StatusCode, e.Body)
+	return fmt.Sprintf("assist: api error (status %d): %s", e.StatusCode, textutil.Excerpt(e.Body, textutil.ErrorBodyExcerptBytes))
 }
 
 // Config configures a Client.
