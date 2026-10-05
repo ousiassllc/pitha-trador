@@ -87,6 +87,39 @@ describe('WsClient', () => {
     expect(statuses).toEqual(['connecting', 'open', 'reconnecting', 'open']);
   });
 
+  test('calls onReconnect only on the first open after a disconnect, never on the initial open', () => {
+    const onReconnect = vi.fn();
+    new WsClient('/ws/scanner', { onReconnect });
+
+    FakeWebSocket.instances[0].emit('open');
+    expect(onReconnect).not.toHaveBeenCalled();
+
+    FakeWebSocket.instances[0].emit('close', { code: 1006 });
+    expect(onReconnect).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(500);
+    FakeWebSocket.instances[1].emit('open');
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+
+    // A later drop re-arms it; a repeated open without a drop does not fire it.
+    FakeWebSocket.instances[1].emit('open');
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+    FakeWebSocket.instances[1].emit('close', { code: 1006 });
+    vi.advanceTimersByTime(1000);
+    FakeWebSocket.instances[2].emit('open');
+    expect(onReconnect).toHaveBeenCalledTimes(2);
+  });
+
+  test('does not call onReconnect after close() by the caller', () => {
+    const onReconnect = vi.fn();
+    const client = new WsClient('/ws/scanner', { onReconnect });
+    FakeWebSocket.instances[0].emit('open');
+    client.close();
+    vi.advanceTimersByTime(500);
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(onReconnect).not.toHaveBeenCalled();
+  });
+
   test('reports failed after the retry limit but keeps retrying every 30s', () => {
     const statuses: WsStatus[] = [];
     new WsClient('/ws/scanner', { onStatusChange: (status) => statuses.push(status) });

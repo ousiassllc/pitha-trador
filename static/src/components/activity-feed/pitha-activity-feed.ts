@@ -13,7 +13,7 @@ import { get } from '../lib/api';
 import { formatJstDateTime } from '../lib/jst-datetime';
 import { logger } from '../lib/logger';
 import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
-import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import {
   type ActivityAPIResponse,
@@ -147,17 +147,13 @@ export class PithaActivityFeed extends LitElement {
     }
     // The server sends nothing on connect, so events emitted while the
     // socket was down are lost unless the snapshots are re-fetched (#221).
-    let wasDisconnected = false;
     this.wsClient = new WsClient<ActivityWsMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;
-        if (isWsDisconnected(status)) {
-          wasDisconnected = true;
-        } else if (status === 'open' && wasDisconnected) {
-          wasDisconnected = false;
-          void this.loadSnapshot(true);
-          void this.loadKillSwitchEvents(true);
-        }
+      },
+      onReconnect: () => {
+        void this.loadSnapshot(true);
+        void this.loadKillSwitchEvents(true);
       },
       onMessage: (message) => this.onWsMessage(message),
     });

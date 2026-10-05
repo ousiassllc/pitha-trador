@@ -18,7 +18,7 @@ import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
-import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import { formatCrosshairTime, formatTickMark } from './jst-time';
 
@@ -183,17 +183,11 @@ export class PithaPriceChart extends LitElement {
     }
     // Ticks build bars from the client clock, so bars of the minutes the
     // socket was down are missing until the candles are re-fetched (#336).
-    let wasDisconnected = false;
     this.wsClient = new WsClient<SymbolMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;
-        if (isWsDisconnected(status)) {
-          wasDisconnected = true;
-        } else if (status === 'open' && wasDisconnected) {
-          wasDisconnected = false;
-          void this.loadInitial(true);
-        }
       },
+      onReconnect: () => void this.loadInitial(true),
       onMessage: (message) => {
         if (message.type === 'tick') {
           this.applyTick(message);
