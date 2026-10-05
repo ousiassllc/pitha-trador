@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +16,11 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/infolimit"
 )
+
+func TestMain(m *testing.M) {
+	slog.SetDefault(slog.New(slog.DiscardHandler))
+	os.Exit(m.Run())
+}
 
 func tokenAndBoardServer(t *testing.T, onBoard func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	t.Helper()
@@ -139,8 +146,8 @@ func TestClient_GetBoard_Exhausted4001006IsErrRateLimited(t *testing.T) {
 	if got := calls.Load(); got != 4 {
 		t.Fatalf("board calls = %d, want 4 (initial + 3 retries)", got)
 	}
-	if client.Status().IsStale("9997") {
-		t.Fatal("ErrRateLimited must not mark the symbol stale")
+	if status, ok := client.Status().Status("9997"); ok {
+		t.Fatalf("ErrRateLimited recorded status %+v, want no stale mark", status)
 	}
 	ok, herr := client.Healthy(context.Background())
 	if herr != nil || !ok {
