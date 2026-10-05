@@ -53,6 +53,17 @@ type Handler struct {
 	// Symbols supplies each stock's 貸借区分 and 値幅上限/下限 (issue #511).
 	// nil leaves the flags unknown, which restricts nothing.
 	Symbols SymbolSource
+	// Now is the clock stamping each bar (default time.Now). Tests pin it so
+	// Execution's session gate does not depend on the wall clock (issue #512).
+	Now func() time.Time
+}
+
+// now is the current UTC time from Handler.Now (time.Now when unset).
+func (h *Handler) now() time.Time {
+	if h.Now == nil {
+		return time.Now().UTC()
+	}
+	return h.Now().UTC()
 }
 
 // marketDataJobPayload mirrors scheduler's unexported fullScanPayload
@@ -100,7 +111,7 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 		return fmt.Errorf("marketdatajob: load instrument %q: %w", payload.Symbol, err)
 	}
 
-	now := time.Now().UTC()
+	now := h.now()
 	mc := featureengine.NewMarketContextLoader(h.Instruments, h.Snapshots).Load(ctx, inst, now)
 	current := readingFromBoard(board)
 	h.applySymbolInfo(ctx, &current, inst, payload.Symbol)

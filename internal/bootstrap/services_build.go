@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
@@ -106,8 +107,9 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 
 // buildRiskAndExecution builds the paper Execution Engine and the Risk Engine
 // guarding it, and returns the execution config the backtest source reuses.
-func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels alerts.Channels, notifiers []risk.Notifier) execution.Config {
+func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels alerts.Channels, notifiers []risk.Notifier, now func() time.Time) execution.Config {
 	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(limits))
+	executionConfig.Now = now // nil keeps time.Now
 	s.Execution = execution.NewEngine(execution.Deps{
 		Orders:      s.Orders,
 		Positions:   s.Positions,
