@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -84,9 +85,9 @@ func TestNewClient_EmptyConfigDoesNotPanic(t *testing.T) {
 }
 
 func TestClient_Start_ReissuesTokenPeriodically(t *testing.T) {
-	var count int
+	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
+		count.Add(1)
 		_ = json.NewEncoder(w).Encode(map[string]any{"ResultCode": 0, "Token": "tok"})
 	}))
 	defer server.Close()
@@ -103,16 +104,15 @@ func TestClient_Start_ReissuesTokenPeriodically(t *testing.T) {
 	time.Sleep(80 * time.Millisecond)
 	cancel()
 
-	if count < 3 {
-		t.Errorf("token issuance count = %d, want at least 3 within 80ms at a 15ms interval", count)
+	if got := count.Load(); got < 3 {
+		t.Errorf("token issuance count = %d, want at least 3 within 80ms at a 15ms interval", got)
 	}
 }
 
 func TestClient_Start_KeepsPreviousTokenOnReissueFailure(t *testing.T) {
-	var count int
+	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		count++
-		if count == 1 {
+		if count.Add(1) == 1 {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ResultCode": 0, "Token": "tok-initial"})
 			return
 		}
