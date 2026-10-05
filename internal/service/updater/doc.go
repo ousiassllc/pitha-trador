@@ -15,7 +15,12 @@
 // safety gate (no open positions, Kill Switch inactive, no order
 // submitted within the last MinIdleAfterOrder) passes - download the
 // installer asset, verify it against the published checksums.txt (issue
-// #64), and report the verified local path back in its Result.
+// #64), and report the verified local path back in its Result. The gate is
+// evaluated a second time right after the download (issue #535): the
+// download may take minutes, and the caller quits and installs as soon as
+// the Result is Ready, so a position opened, Kill Switch fired or order
+// submitted meanwhile turns the check into Status.Blocked instead (the
+// installer is discarded and the next check retries).
 //
 // Fetch hardening (issue #126): every request carries a context deadline
 // (Config.MetadataTimeout for the release lookup, Config.DownloadTimeout
