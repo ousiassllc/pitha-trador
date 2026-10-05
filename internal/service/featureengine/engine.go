@@ -55,7 +55,7 @@ func (e *Engine) RunCycle(ctx context.Context, inputs []CycleInput) ([]domain.Sn
 			Price:        in.Input.Current.Price,
 			Bid:          in.Input.Current.Bid,
 			Ask:          in.Input.Current.Ask,
-			SpreadBps:    spreadBps(in.Input.Current.Bid, in.Input.Current.Ask),
+			SpreadBps:    SpreadBps(in.Input.Current.Bid, in.Input.Current.Ask),
 			Volume:       in.Input.Current.Volume,
 			Turnover:     in.Input.Current.Turnover,
 			Feature:      Compute(in.Input),
@@ -84,13 +84,13 @@ func (e *Engine) RunCycle(ctx context.Context, inputs []CycleInput) ([]domain.Sn
 	return saved, nil
 }
 
-// spreadBps computes (ask-bid)/midprice*10000, or nil if either quote is
+// SpreadBps computes (ask-bid)/midprice*10000, or nil if either quote is
 // missing (FR-FE-2), the midprice is zero, or the book is crossed
 // (bid > ask: special quote, around the open/close or one stale side).
 // A crossed book would yield a negative spread that slips past the
 // upper-bound-only spread guards (screener/policy/risk), so it is treated
 // as unavailable and those guards fail closed (missing_spread).
-func spreadBps(bid, ask *float64) *float64 {
+func SpreadBps(bid, ask *float64) *float64 {
 	if bid == nil || ask == nil || *bid > *ask {
 		return nil
 	}

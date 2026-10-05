@@ -82,8 +82,11 @@ const validRiskSection = `  max_position_per_symbol_pct: 2.0
   force_flat_before_market_close_minutes: 10
 `
 
+// liveHeartbeat is the one key Live additionally requires (FR-RISK-6).
+const liveHeartbeat = "  heartbeat_timeout_minutes: 120\n"
+
 func TestLoadRiskBytes_MissingPaperInitialCapitalGetsDefaultButLiveDoesNot(t *testing.T) {
-	cfg, err := config.LoadRiskBytes([]byte("paper:\n" + validRiskSection + "live:\n" + validRiskSection))
+	cfg, err := config.LoadRiskBytes([]byte("paper:\n" + validRiskSection + "live:\n" + validRiskSection + liveHeartbeat))
 	if err != nil {
 		t.Fatalf("LoadRiskBytes: %v", err)
 	}
@@ -151,5 +154,43 @@ func TestLoadRiskBytes_ReportsEveryViolationAtOnce(t *testing.T) {
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error %q does not name %q", err, key)
 		}
+	}
+}
+
+// Regression test for issue #540: Live's dead-man's switch must not be
+// silently disabled by an omitted or typo'd heartbeat_timeout_minutes.
+func TestLoadRiskBytes_LiveRequiresHeartbeatTimeout(t *testing.T) {
+	paper := "paper:\n" + validRiskSection
+	tests := map[string]string{
+		"omitted": paper + "live:\n" + validRiskSection,
+		"zero":    paper + "live:\n" + validRiskSection + "  heartbeat_timeout_minutes: 0\n",
+		"typo":    paper + "live:\n" + validRiskSection + "  heartbeat_timout_minutes: 120\n",
+	}
+	for name, yamlText := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := config.LoadRiskBytes([]byte(yamlText))
+			if err == nil {
+				t.Fatal("LoadRiskBytes returned nil error, want one rejecting live.heartbeat_timeout_minutes")
+			}
+			want := "live.heartbeat_timeout_minutes"
+			if name == "typo" {
+				want = "heartbeat_timout_minutes" // strict decoding names the unknown key
+			}
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not name %q", err, want)
+			}
+		})
+	}
+
+	if _, err := config.LoadRiskBytes([]byte(paper + "live:\n" + validRiskSection + liveHeartbeat)); err != nil {
+		t.Errorf("live with heartbeat_timeout_minutes: 120: error %v, want nil", err)
+	}
+}
+
+// Regression test for issue #540: unknown keys are errors, not silent zeros.
+func TestLoadRiskBytes_RejectsUnknownKeyNamingIt(t *testing.T) {
+	_, err := config.LoadRiskBytes([]byte("paper:\n" + validRiskSection + "  max_daily_loss_pcnt: 1.0\n"))
+	if err == nil || !strings.Contains(err.Error(), "max_daily_loss_pcnt") {
+		t.Fatalf("LoadRiskBytes error = %v, want one naming max_daily_loss_pcnt", err)
 	}
 }

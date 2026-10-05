@@ -17,10 +17,13 @@ const (
 
 // loadYAMLBytes decodes data as YAML into a new value of type T. desc
 // identifies the source (a file path, or a sentinel like "(embedded
-// default)") for the wrapped error message only.
+// default)") for the wrapped error message only. Decoding is strict: a key
+// the config struct does not know (typically a typo such as
+// heartbeat_timout_minutes, which would otherwise silently leave the real
+// setting at 0) is an error naming that key.
 func loadYAMLBytes[T any](data []byte, desc string) (*T, error) {
 	var v T
-	if err := yaml.Unmarshal(data, &v); err != nil {
+	if err := yaml.UnmarshalWithOptions(data, &v, yaml.Strict()); err != nil {
 		return nil, fmt.Errorf("config: parse %q: %w", desc, err)
 	}
 	return &v, nil
