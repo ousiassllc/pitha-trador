@@ -124,8 +124,12 @@ func (f fakeShadowBacktestSource) RunConfigs(context.Context, backtest.Period) (
 	return f.configs, nil
 }
 
-// newUptrendSource builds a fakeShadowBacktestSource whose single
-// RunConfig's Thresholds.Policy is baseline: a 10-bar steady uptrend with
+// uptrendInstrumentCopies is how many identical RunConfigs newUptrendSource
+// returns.
+const uptrendInstrumentCopies = 5
+
+// newUptrendSource builds a fakeShadowBacktestSource whose
+// RunConfigs' Thresholds.Policy are baseline: a 10-bar steady uptrend with
 // a LONG decision every bar (0.80 confidence), profitable under any
 // MinProbability <= 0.80.
 func newUptrendSource(instrumentID int64, base time.Time, baseline config.PolicyConfig) fakeShadowBacktestSource {
@@ -134,14 +138,22 @@ func newUptrendSource(instrumentID int64, base time.Time, baseline config.Policy
 	for _, b := range bars {
 		decisions = append(decisions, longDecision(instrumentID, b.Timestamp))
 	}
-	return fakeShadowBacktestSource{configs: []backtest.RunConfig{{
+	cfg := backtest.RunConfig{
 		InstrumentID: instrumentID,
 		Symbol:       "7203",
 		Snapshots:    bars,
 		Decisions:    backtest.NewSliceDecisionSource(decisions),
 		Thresholds:   policy.Thresholds{Policy: baseline, MaxSpreadBps: 50},
 		Exit:         backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute},
-	}}}
+	}
+	// Replicate the instrument so each pass yields at least
+	// assist.MinBacktestTrades trades (one copy trades only a few times
+	// inside the 10-minute fixture window).
+	configs := make([]backtest.RunConfig, uptrendInstrumentCopies)
+	for i := range configs {
+		configs[i] = cfg
+	}
+	return fakeShadowBacktestSource{configs: configs}
 }
 
 // closePosition opens then immediately closes one position at closedAt

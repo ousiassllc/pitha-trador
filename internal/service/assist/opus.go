@@ -26,6 +26,19 @@ const (
 // meaningful "10% of zero" to be lenient about.
 const MaxDrawdownDegradationTolerance = 0.10
 
+// MinBacktestTrades is the fewest shadow-backtest trades each side (the
+// baseline and the candidate pass) must have for the deterministic
+// Expectancy/Max Drawdown comparison to count as evidence. Below it the
+// comparison is noise - with zero trades both sides are Expectancy 0 /
+// Max Drawdown 0, which would trivially satisfy "not worse" - so the
+// proposal is rejected as ReasonInsufficientSamples without consulting
+// the Opus API.
+const MinBacktestTrades = 10
+
+// ReasonInsufficientSamples is the review_json.reason prefix recorded when
+// a side of the shadow backtest has fewer than MinBacktestTrades trades.
+const ReasonInsufficientSamples = "insufficient_samples"
+
 // backtestMagnitudeEpsilon absorbs float64 arithmetic noise in the
 // Max Drawdown comparison so an exact-tolerance candidate is never
 // spuriously rejected.
@@ -45,6 +58,10 @@ type BacktestComparison struct {
 	CandidateExpectancy     float64 `json:"candidate_expectancy"`
 	BaselineMaxDrawdownPct  float64 `json:"baseline_max_drawdown_pct"`
 	CandidateMaxDrawdownPct float64 `json:"candidate_max_drawdown_pct"`
+	// BaselineTradeCount/CandidateTradeCount are the trades behind each
+	// side's metrics (0 in rows stored before they were recorded).
+	BaselineTradeCount  int `json:"baseline_trade_count"`
+	CandidateTradeCount int `json:"candidate_trade_count"`
 }
 
 // OpusReviewInput is everything Opus reviews for one proposal: Sol's
@@ -72,6 +89,9 @@ type OpusReview struct {
 	CandidateExpectancy     float64 `json:"candidate_expectancy"`
 	BaselineMaxDrawdownPct  float64 `json:"baseline_max_drawdown_pct"`
 	CandidateMaxDrawdownPct float64 `json:"candidate_max_drawdown_pct"`
+	BaselineTradeCount      int     `json:"baseline_trade_count"`
+	CandidateTradeCount     int     `json:"candidate_trade_count"`
+	SufficientSamples       bool    `json:"sufficient_samples"`
 	Reason                  string  `json:"reason"`
 }
 
@@ -112,6 +132,8 @@ type opusBacktest struct {
 	CandidateExpectancy     float64 `json:"candidate_expectancy"`
 	BaselineMaxDrawdownPct  float64 `json:"baseline_max_drawdown_pct"`
 	CandidateMaxDrawdownPct float64 `json:"candidate_max_drawdown_pct"`
+	BaselineTradeCount      int     `json:"baseline_trade_count"`
+	CandidateTradeCount     int     `json:"candidate_trade_count"`
 }
 
 type opusDeterministic struct {
@@ -131,7 +153,9 @@ type OpusResponse struct {
 // internal/service/selfimprove.Governor stores as
 // policy_proposals.review_json.
 //
-// The deterministic rule is evaluated first: a proposal whose shadow-
+// The deterministic rule is evaluated first: a proposal with fewer than
+// MinBacktestTrades shadow-backtest trades on either side has no evidence
+// to judge and is rejected as ReasonInsufficientSamples; one whose shadow-
 // backtest Expectancy is worse than baseline or whose Max Drawdown
 // degradation exceeds MaxDrawdownDegradationTolerance (relative) is
 // rejected without calling the Opus API. Otherwise the Opus API is asked
@@ -145,7 +169,8 @@ func (o *Opus) Review(ctx context.Context, in OpusReviewInput) (bool, string, er
 	expectancyNotWorse := cmp.CandidateExpectancy >= cmp.BaselineExpectancy
 	maxDrawdownBudget := cmp.BaselineMaxDrawdownPct * (1 + MaxDrawdownDegradationTolerance)
 	maxDrawdownWithinBudget := cmp.CandidateMaxDrawdownPct <= maxDrawdownBudget+backtestMagnitudeEpsilon
-	deterministicPassed := expectancyNotWorse && maxDrawdownWithinBudget
+	sufficientSamples := cmp.BaselineTradeCount >= MinBacktestTrades && cmp.CandidateTradeCount >= MinBacktestTrades
+	deterministicPassed := sufficientSamples && expectancyNotWorse && maxDrawdownWithinBudget
 
 	review := OpusReview{
 		DeterministicPassed:     deterministicPassed,
@@ -155,11 +180,14 @@ func (o *Opus) Review(ctx context.Context, in OpusReviewInput) (bool, string, er
 		CandidateExpectancy:     cmp.CandidateExpectancy,
 		BaselineMaxDrawdownPct:  cmp.BaselineMaxDrawdownPct,
 		CandidateMaxDrawdownPct: cmp.CandidateMaxDrawdownPct,
+		BaselineTradeCount:      cmp.BaselineTradeCount,
+		CandidateTradeCount:     cmp.CandidateTradeCount,
+		SufficientSamples:       sufficientSamples,
 	}
 
 	if !deterministicPassed {
 		review.Verdict = OpusVerdictReject
-		review.Reason = deterministicRejectReason(expectancyNotWorse, maxDrawdownWithinBudget)
+		review.Reason = deterministicRejectReason(sufficientSamples, cmp, expectancyNotWorse, maxDrawdownWithinBudget)
 		return encodeReview(review)
 	}
 
@@ -200,6 +228,8 @@ func (o *Opus) callAPI(ctx context.Context, in OpusReviewInput, expectancyNotWor
 			CandidateExpectancy:     in.Comparison.CandidateExpectancy,
 			BaselineMaxDrawdownPct:  in.Comparison.BaselineMaxDrawdownPct,
 			CandidateMaxDrawdownPct: in.Comparison.CandidateMaxDrawdownPct,
+			BaselineTradeCount:      in.Comparison.BaselineTradeCount,
+			CandidateTradeCount:     in.Comparison.CandidateTradeCount,
 		},
 		Deterministic: opusDeterministic{
 			ExpectancyNotWorse:      expectancyNotWorse,
@@ -226,8 +256,11 @@ func encodeReview(review OpusReview) (bool, string, error) {
 	return review.Approved, string(data), nil
 }
 
-func deterministicRejectReason(expectancyNotWorse, maxDrawdownWithinBudget bool) string {
+func deterministicRejectReason(sufficientSamples bool, cmp BacktestComparison, expectancyNotWorse, maxDrawdownWithinBudget bool) string {
 	switch {
+	case !sufficientSamples:
+		return fmt.Sprintf("%s: shadow backtest needs at least %d trades per side, got baseline=%d candidate=%d (FR-SELFIMPROVE-4)",
+			ReasonInsufficientSamples, MinBacktestTrades, cmp.BaselineTradeCount, cmp.CandidateTradeCount)
 	case !expectancyNotWorse && !maxDrawdownWithinBudget:
 		return "shadow backtest Expectancy worsened and Max Drawdown exceeded the 10% relative budget (FR-SELFIMPROVE-4)"
 	case !expectancyNotWorse:

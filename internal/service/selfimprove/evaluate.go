@@ -61,6 +61,8 @@ func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool
 		CandidateExpectancy:     candidateMetrics.Expectancy,
 		BaselineMaxDrawdownPct:  baselineMetrics.MaxDrawdownPct,
 		CandidateMaxDrawdownPct: candidateMetrics.MaxDrawdownPct,
+		BaselineTradeCount:      baselineMetrics.TradeCount,
+		CandidateTradeCount:     candidateMetrics.TradeCount,
 	}
 	backtestResultJSON, err := json.Marshal(cmp)
 	if err != nil {
