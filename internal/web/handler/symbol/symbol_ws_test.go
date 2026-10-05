@@ -19,8 +19,9 @@ import (
 func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	confidence := 0.74
+	scanAt := time.Date(2026, 10, 5, 9, 30, 15, 0, time.UTC)
 	provider := &fakeSymbolProvider{
-		state: stateWithTrader(execution.SymbolState{Symbol: "7203", LastPrice: 2105.5, LastSignal: domain.JevDirectionShort, LastSignalConfidence: 0.1},
+		state: stateWithTrader(execution.SymbolState{Symbol: "7203", LastPrice: 2105.5, LastScanAt: &scanAt, LastSignal: domain.JevDirectionShort, LastSignalConfidence: 0.1},
 			traderDecision(domain.JevDirectionLong, confidence)),
 	}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
@@ -42,11 +43,11 @@ func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 	defer func() { _ = conn.CloseNow() }()
 
 	// The first tick and its jev_update (direction just became known)
-	// both arrive immediately on connect, before the first interval
-	// tick.
+	// both arrive immediately on connect, before the first interval tick.
 	var tick struct {
-		Type  string  `json:"type"`
-		Price float64 `json:"price"`
+		Type  string    `json:"type"`
+		Price float64   `json:"price"`
+		Time  time.Time `json:"time"`
 	}
 	_, data, err := conn.Read(ctx)
 	if err != nil {
@@ -57,6 +58,9 @@ func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 	}
 	if tick.Type != "tick" || tick.Price != 2105.5 {
 		t.Fatalf("tick = %+v, want Type=tick Price=2105.5", tick)
+	}
+	if !tick.Time.Equal(scanAt) {
+		t.Fatalf("tick.Time = %v, want the snapshot time %v", tick.Time, scanAt)
 	}
 
 	var jevUpdate struct {
@@ -78,18 +82,12 @@ func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 		t.Fatalf("jev_update.Confidence = %v, want %v", jevUpdate.Confidence, confidence)
 	}
 
-	// A second tick follows within the 20ms interval, proving the
-	// handler loops rather than pushing once and stopping. No second
-	// jev_update is expected: direction/confidence have not changed.
-	_, data, err = conn.Read(ctx)
-	if err != nil {
-		t.Fatalf("conn.Read() [second tick] error = %v", err)
-	}
-	if err := json.Unmarshal(data, &tick); err != nil {
-		t.Fatalf("json.Unmarshal() [second tick] error = %v, data = %s", err, data)
-	}
-	if tick.Type != "tick" {
-		t.Fatalf("second message.Type = %q, want %q (no jev_update since nothing changed)", tick.Type, "tick")
+	// The snapshot has not advanced, so no further tick (and no
+	// jev_update: direction/confidence have not changed) follows.
+	quietCtx, quietCancel := context.WithTimeout(ctx, 150*time.Millisecond)
+	defer quietCancel()
+	if _, data, err = conn.Read(quietCtx); err == nil {
+		t.Fatalf("unexpected message %s: the snapshot did not change", data)
 	}
 
 	_ = conn.Close(websocket.StatusNormalClosure, "")
@@ -99,7 +97,7 @@ func TestSymbolHandler_WebSocket_NoJevUpdateWhenNoTraderDecisionYet(t *testing.T
 	gin.SetMode(gin.TestMode)
 	// A Policy signal alone must not produce a jev_update.
 	provider := &fakeSymbolProvider{state: execution.SymbolState{
-		Symbol: "7203", LastPrice: 2100.0, LastSignal: domain.JevDirectionLong, LastSignalConfidence: 0.8,
+		Symbol: "7203", LastPrice: 2100.0, LastScanAt: timePtr(time.Date(2026, 10, 5, 9, 30, 0, 0, time.UTC)), LastSignal: domain.JevDirectionLong, LastSignalConfidence: 0.8,
 	}}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	h.SetTickInterval(200 * time.Millisecond)

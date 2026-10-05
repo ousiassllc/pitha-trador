@@ -14,10 +14,13 @@ import (
 )
 
 // symbolTickMessage mirrors docs/api/endpoints.md §6's
-// `{"type":"tick","price":2831.5,...}` message.
+// `{"type":"tick","price":2831.5,"time":"2026-...Z"}` message. Time is the
+// snapshot's timestamp (State.LastScanAt), not the send time, so a client
+// places the price on the bar the snapshot belongs to.
 type symbolTickMessage struct {
-	Type  string  `json:"type"`
-	Price float64 `json:"price"`
+	Type  string    `json:"type"`
+	Price float64   `json:"price"`
+	Time  time.Time `json:"time"`
 }
 
 // symbolJevUpdateMessage mirrors the same section's
@@ -29,14 +32,17 @@ type symbolJevUpdateMessage struct {
 }
 
 // WebSocket implements `/ws/symbols/{symbol}` (docs/api/endpoints.md §6):
-// pushes a `tick` message every h.tickInterval, plus a `jev_update`
-// message whenever the latest Jev Trader direction/confidence changes
-// from what was last pushed - `pitha-price-chart`'s live update/marker
-// source.
+// pushes a `tick` message whenever a new price snapshot appears (checked
+// every h.tickInterval), plus a `jev_update` message whenever the latest
+// Jev Trader direction/confidence changes from what was last pushed -
+// `pitha-price-chart`'s live update/marker source. A snapshot already
+// pushed is not repeated: off-hours or with the scanner down the last
+// price would otherwise keep drawing fake bars.
 func (h *SymbolHandler) WebSocket(c *gin.Context) {
 	symbol := c.Param("symbol")
 	var lastDirection *string
 	var lastConfidence *float64
+	var lastTickAt time.Time
 
 	shared.PollWebSocket(c, func() time.Duration { return h.tickInterval }, func(ctx context.Context, conn *websocket.Conn) error {
 		state, err := h.provider.State(ctx, symbol)
@@ -47,12 +53,15 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 			return shared.Transient(err)
 		}
 
-		// No snapshot yet (LastPrice == 0): a price-0 tick would drag the
-		// chart's autoscale to 0, so send nothing until a price exists.
-		if state.LastPrice > 0 {
-			if err := shared.WriteJSON(ctx, conn, symbolTickMessage{Type: "tick", Price: state.LastPrice}); err != nil {
+		// No snapshot yet (LastPrice == 0 / no LastScanAt): a price-0 tick
+		// would drag the chart's autoscale to 0, so send nothing until one
+		// exists. A snapshot identical to the last pushed one is skipped.
+		if state.LastPrice > 0 && state.LastScanAt != nil && !state.LastScanAt.Equal(lastTickAt) {
+			msg := symbolTickMessage{Type: "tick", Price: state.LastPrice, Time: *state.LastScanAt}
+			if err := shared.WriteJSON(ctx, conn, msg); err != nil {
 				return err
 			}
+			lastTickAt = *state.LastScanAt
 		}
 
 		// No Trader decision yet, or one without a usable direction: nothing
