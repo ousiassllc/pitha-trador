@@ -28,13 +28,14 @@
 
 ```text
 screen_score =
-  w1 * normalized_volume_ratio
+  w1 * normalized_volume_ratio   # = volume_ratio_5m（下記）
 + w2 * abs(return_5m)   # return_5mは小数比（%換算しない）
 + w3 * breakout_strength
 + w4 * orderbook_imbalance
 + w5 * volatility_expansion
 ```
 
+  - `normalized_volume_ratio`: Feature Engineが算出する`volume_ratio_5m`（5分出来高の現在値/平均の比率。通常1.0前後）をそのまま用いる。追加の正規化・キャップ・スケーリングは行わない（実装は`screener.ScreenScore`が`weights.volume_ratio * volume_ratio_5m`を加算する）。「正規化済みの比率」という意味でのみ`normalized`と呼ぶ。履歴不足で算出できない場合は下記のとおり項ごと欠損として除外する
   - `breakout_strength`: 直前5分間（判定時点の足を除く）の高値/安値に対する現在価格のブレイク幅（高値上抜け時は`price/high - 1`、安値下抜け時は`1 - price/low`、レンジ内は`0`）。Feature Engine（`featureengine.ComputeScreenSignals`）が算出する
   - `volatility_expansion`: `volatility_expansion_ratio`（`realized_vol_5m / realized_vol_15m`）。同上
   - 履歴不足で算出できない項は0ではなく欠損として合計から除外する（FR-FE-2と同じ扱い）
