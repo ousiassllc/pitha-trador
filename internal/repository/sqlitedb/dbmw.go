@@ -62,6 +62,41 @@ func (loggingInterceptor) ConnQueryContext(ctx context.Context, conn driver.Quer
 	return ctx, rows, err
 }
 
+type readOnlyTxKey struct{}
+
+// ConnBeginTx feeds a failed BEGIN (with _txlock=immediate: failing to take
+// the write lock, e.g. SQLITE_BUSY after busy_timeout) into
+// DBWriteFailures. A successful BEGIN proves nothing about writability, so
+// it leaves the streak untouched (issue #539).
+func (loggingInterceptor) ConnBeginTx(ctx context.Context, conn driver.ConnBeginTx, opts driver.TxOptions) (context.Context, driver.Tx, error) {
+	tx, err := conn.BeginTx(ctx, opts)
+	if err != nil {
+		recordDBWrite(err)
+		return ctx, nil, err
+	}
+	if opts.ReadOnly {
+		// TxCommit receives this ctx: a read-only COMMIT writes nothing,
+		// so its success must not reset the failure streak.
+		ctx = context.WithValue(ctx, readOnlyTxKey{}, true)
+	}
+	return ctx, tx, nil
+}
+
+// TxCommit feeds the COMMIT outcome of a read-write transaction into
+// DBWriteFailures: a transaction's writes are only durable once COMMIT
+// succeeds, so SQLITE_FULL/IOERR/BUSY there is a storage failure, and a
+// successful COMMIT resets the streak. Writes that use RETURNING go
+// through QueryContext and are not observed individually; every such
+// write in this codebase runs inside a transaction, so BEGIN/COMMIT here
+// covers it (issue #539).
+func (loggingInterceptor) TxCommit(ctx context.Context, tx driver.Tx) error {
+	err := tx.Commit()
+	if readOnly, _ := ctx.Value(readOnlyTxKey{}).(bool); !readOnly || err != nil {
+		recordDBWrite(err)
+	}
+	return err
+}
+
 func (loggingInterceptor) StmtExecContext(ctx context.Context, stmt driver.StmtExecContext, query string, args []driver.NamedValue) (driver.Result, error) {
 	start := time.Now()
 	res, err := stmt.ExecContext(ctx, args)
