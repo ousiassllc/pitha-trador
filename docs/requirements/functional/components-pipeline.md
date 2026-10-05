@@ -19,7 +19,7 @@
 - FR-FE-2: 板・約定特徴量はkabuステーションAPIから取得できない銘柄・時間帯では欠損値として扱い、依存するJev入力/スコアから除外する。bid/askが逆転した板（bid > ask）も無効として`spread_bps`/`microprice`を欠損とし、スプレッド上限ガードが負値を素通りしないようにする
 - FR-FE-3: `volume`/`turnover`はkabuステーションAPIの当日累積値である。`volume_1m/5m`・`turnover_1m/5m`は「現在の累積値 − 窓の開始時点の累積値」で算出し、足の合算はしない。Fast Screenerの`min_turnover_5m_jpy`とPolicy Engineの「板が薄い」判定は同じ`turnover_5m`（`featureengine.TurnoverOverWindow`）を用いる
 - FR-FE-4: 市場コンテキストは`instruments.kind`で区別した追跡銘柄から算出する。`market_index`（TOPIX/Nikkei225等）のreturn平均を`market_return_1m/5m`、銘柄の`sector`と一致する`sector_index`のreturnを`sector_return_5m`とし、`stock_vs_sector_relative_strength = return_5m − sector_return_5m`、`market_breadth`は直近3分以内の全アクティブ株式の最新return_5mの（上昇数−下落数）/銘柄数とする。追跡銘柄が未登録・更新が3分以上停止・履歴不足の場合は欠損値とする（FR-FE-2と同じ扱い）
-- FR-FE-5: 窓（`return_*`・`vwap_slope`・`realized_vol_*`・`volume_*`・`turnover_*`・`vwap_cross_direction`等）の基準バーは、窓開始時刻（判定時刻−窓幅）から「窓幅の50%（最小90秒）」以内に存在しなければならない。それより古い基準バー（前営業日の引け・昼休み前の前場最終バー・再起動/欠測をまたぐバー）しか無い場合は履歴不足として欠損値（nil）とし、ギャップを「N分リターン」として扱わない（`featureengine.windowRef`）
+- FR-FE-5: 窓（`return_*`・`vwap_slope`・`volume_*`・`turnover_*`・`vwap_cross_direction`等）の基準バーは、窓開始時刻（判定時刻−窓幅）から「窓幅の50%（最小90秒）」以内に存在しなければならない。それより古い基準バー（前営業日の引け・昼休み前の前場最終バー・再起動/欠測をまたぐバー）しか無い場合は履歴不足として欠損値（nil）とし、ギャップを「N分リターン」として扱わない（`featureengine.windowRef`）。**`realized_vol_*`はこの列挙の対象外**で、窓開始の基準バーを要求せず、窓内の1分刻みの各マークごとに直近バーを90秒（`minRefTolerance`）以内の許容で探して1分リターンを作り（それより古いバーしか無いマークのリターンは除く）、2本以上のリターンが得られれば算出する（得られなければnil。`featureengine.realizedVol`）。このため`realized_vol_15m`は履歴が3分程度でも非nilになりうる（部分窓の値）。この値は`volatility_expansion_ratio`・Fast Screenerの`min_realized_volatility`にそのまま流れる
 
 ### 4.2 Fast Screener
 
