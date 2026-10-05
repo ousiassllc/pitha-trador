@@ -177,7 +177,7 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(s.Risk),
 		scheduler.WithRiskMonitor(s.Risk),
 		scheduler.WithAutoResumer(s.Risk),
-		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
+		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0)),
 		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
@@ -198,9 +198,9 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 // buildMarketDataPipeline builds the PUSH feed, the Scanner Dashboard
 // candidate refresher and the log exporter, and returns the market-data
 // queue Handler wired onto them.
-func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig) *marketdatajob.Handler {
+func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logDir string) *marketdatajob.Handler {
 	s.PushFeed = pushfeed.New(s.Instruments, s.MarketData, marketdata.DefaultPushURL, defaultKabuExchange)
-	s.ErrorLogs = logging.NewExporter(LogDir)
+	s.ErrorLogs = logging.NewExporter(logDir)
 	s.candidates = &candidates.Refresher{
 		Instruments: s.Instruments, Snapshots: s.Snapshots, Settings: s.Settings, Jobs: s.Jobs,
 		Decisions: s.Decisions, Positions: s.Positions,

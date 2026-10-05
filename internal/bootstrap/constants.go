@@ -6,12 +6,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
-// LogDir is the directory every entrypoint's logging.RotatingWriter
-// writes the daily structured JSON log file to, and the Scheduler's
-// maintenance task (logging.Archiver) compresses files past their 30-day
-// retention in (requirements/non-functional.md §5).
-const LogDir = "logs"
-
 // EnvBackupDir names the environment variable holding the destination
 // directory of the daily SQLite backup (requirements/non-functional.md §3):
 // a location outside the local application disk (external drive / synced

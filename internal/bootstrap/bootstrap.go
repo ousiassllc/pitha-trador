@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	configdefaults "github.com/ousiassllc/pitha-trador/config"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
@@ -82,6 +83,7 @@ type ResolvedPaths struct {
 	DBPath       string
 	StrategyPath string
 	RiskPath     string
+	LogDir       string
 }
 
 // State is the "DB接続・設定値が使える状態" issue #42 sets up, shared by
@@ -148,6 +150,7 @@ func Run(cfg Config) (*State, error) {
 			DBPath:       dbPath,
 			StrategyPath: strategyPath,
 			RiskPath:     riskPath,
+			LogDir:       startup.LogDir(dbPath),
 		},
 	}, nil
 }
@@ -227,4 +230,14 @@ func resolveConfigPath(explicit, envVar, defaultRelPath string) (path string, ok
 		return "", false
 	}
 	return candidate, true
+}
+
+// ResolveLogDir returns the absolute log directory (startup.LogDir) for the
+// DB path resolved like Run does, independent of the working directory.
+func ResolveLogDir() (string, error) {
+	dbPath, err := resolveDBPath("")
+	if err != nil {
+		return "", err
+	}
+	return startup.LogDir(dbPath), nil
 }
