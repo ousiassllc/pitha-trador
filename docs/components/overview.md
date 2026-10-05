@@ -9,7 +9,7 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 - リッチなインタラクション（チャート・ライブテーブル・Kill Switch操作）が必要な箇所だけ Lit Web Components（`pitha-*`）で拡張する
 - テンプレートは Atomic Design（atoms/molecules/organisms/pages）で構造化する
 - **HATEOAS**: サーバーが現在の状態（Running/Paused/Killed・保有ポジション有無・権限）に基づき、利用可能なアクションのみをHTML/属性として出力する。ボタンは「見えるなら押せる」。`hidden`/`disabled`で隠すのではなくレンダリングしない
-- WailsのWebView2は、Gin Engine を `AssetServer.Handler` として注入されたローカルプロセス内アセットサーバーにのみアクセスする（`architecture/overview.md` §9）
+- WailsのWebView2は、Gin Engine を `AssetServer.Handler` として注入されたローカルプロセス内アセットサーバーへアクセスする（`architecture/overview.md` §9）。WebSocketだけは、Wails AssetServerが扱えないためWindowsデスクトップ版が別に起動するループバック専用リスナー（`router.WebSocketOnly`。`/ws/...`のUpgradeのみ受け、`<meta name="ws-base">`でLitへアドレスを伝える）へ直接接続する（`api/endpoints.md` §6、`runtime.md` §7）
 
 ### 技術スタック
 
@@ -30,10 +30,10 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 ```text
 internal/web/
 ├── apierror/           # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
-├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
+├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go, scanner_universe.go）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（render.goのバッファ描画`RenderHTML`・action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
 ├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
-├── atoms/              # Badge, StatusDot, Toast, Button, Input, Select
+├── atoms/              # Badge（+ EntryQualityBadge）, StatusDot, Toast, Button（+ ButtonLink）, Input, Select
 ├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SetupStatus
 ├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）
 ├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
@@ -76,7 +76,7 @@ static/
 
 ## 3. Templ テンプレート（Atomic Design）
 
-**依存方針（issue #380）**: Templ層（`atoms`/`molecules`/`organisms`/`pages`/`layout`）は`internal/service`をimportしない（`.golangci.yml`のdepguard `templ-no-service`で強制）。`internal/domain`の型と基盤パッケージ（`internal/config`・`internal/version`）には依存してよい。serviceの戻り値型（`backtest.Metrics`・`insight.Performance`・`execution.SymbolState`・`updater.Status`等）は、`organisms`/`pages`が定義する表示用のplain props（`PerformanceSummary`・`PerformanceActuals`・`PerformanceResult`・`UpdateBannerProps`など）へ`web/handler`が写像して渡す。service側の型変更はhandlerのコンパイルエラーで止まり、テンプレートへ波及しない。
+**依存方針（issue #380/#521）**: Templ層（`atoms`/`molecules`/`organisms`/`pages`/`layout`）は`internal/service`をimportしない（`.golangci.yml`のdepguard `templ-no-service`で強制）。`internal/domain`の型と基盤パッケージ（`internal/config`・`internal/version`）には依存してよい。Templ層内の依存は一方向（`atoms` → `molecules` → `organisms` → `layout` → `pages`。`pages`が`layout.Shell`/`SetupShell`へ描画し、`layout`が`organisms.Header`を組み立てる）で、逆向きのimportはdepguardの`atoms-direction`/`molecules-direction`/`organisms-direction`/`layout-direction`が拒否する。`internal/web/middleware`をimportしてよいTempl層は組み立て層の`layout`のみ（`CSRFToken`・`WebSocketBaseURL`・`SystemStateFrom`を`<meta>`・`hx-headers`・`Header`へ流す）で、`atoms`/`molecules`/`organisms`/`pages`は`templ-parts-no-middleware`で禁止する。これらがCSRFトークン等を要するときは`web/handler`が解決してpropsで渡す（例: `molecules.SecretFieldRowProps`の`CSRFField`/`CSRFToken`。`settings.row`が`middleware.CSRFFormField`/`CSRFToken(ctx)`を詰める）。serviceの戻り値型（`backtest.Metrics`・`insight.Performance`・`execution.SymbolState`・`updater.Status`等）は、`organisms`/`pages`が定義する表示用のplain props（`PerformanceSummary`・`PerformanceActuals`・`PerformanceResult`・`UpdateBannerProps`など）へ`web/handler`が写像して渡す。service側の型変更はhandlerのコンパイルエラーで止まり、テンプレートへ波及しない。
 
 ### atoms
 
@@ -100,7 +100,7 @@ static/
 
 ### organisms
 
-- `Header`（ナビゲーション＋`SystemStatusBadge`（`StatusDot`）。Kill Switch状態のOOB更新対象。`middleware.SystemStateFrom`の現在状態から`KillSwitchPanel`を描画する）
+- `Header`（ナビゲーション＋`SystemStatusBadge`（`StatusDot`）。Kill Switch状態のOOB更新対象。`layout.Shell`が`middleware.SystemStateFrom`で解決して渡す現在状態から`KillSwitchPanel`を描画する。organisms自身は`web/middleware`をimportしない）
 - `SystemStatusBadge`（システム状態の`StatusDot`フラグメント。`Header`内`#header-status`と`GET /system/status`が返す。`domain.SystemState`→`atoms.State`の変換を担い、atomsを`internal/domain`から切り離す）
 - `KillSwitchPanel`（`pitha-kill-switch-panel`を、現在状態に基づく`status`/`can-pause`/`can-resume`/`can-kill`と各URL属性付きで出力する。issue #106）
 - `ScannerTableFallback`（JS無効時/初回SSR描画用の候補件数＋候補銘柄テーブル＋0件時の空状態。日本語列見出し＋ツールチップ、符号付きReturnの色分け、Jev方向/エントリー品質バッジ。ハイドレーション後は同一の見た目で`pitha-scanner-table`が引き継ぐ。列定義・書式・配色・空状態文言はGo側`scannerColumns`とLit側`COLUMNS`/`scanner-view.ts`で二重管理のため、共有ゴールデン`static/src/components/scanner-table/scanner-contract.json`を`scanner_table_contract_test.go`と`scanner-contract.test.ts`の双方が検証して乖離を防ぐ。小数の丸めはJSの`toFixed`に揃え、ちょうど中間の値は0から遠い方へ丸める（Goの`%f`は偶数丸めのため`formatFloat`で補正。例: 12.5→13）。符号は正のみ`+`（0は符号なし）、確信度は四捨五入（half away from zero）、銘柄リンクは非予約文字以外をパーセントエンコード。表の上に列の意味を`<details data-testid="scanner-column-help">`（`<dl>`）で常時表示可能にし、hover専用の`title`を補う。SSRの空状態は初回描画のため`role="status"`を持たない。issue #239）
@@ -161,8 +161,8 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 
 `api/endpoints.md` §2〜4 のルーティング定義に対応する。要点のみ再掲する。
 
-- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/settings`, `/setup`）は常にフルページを返し、`HX-Request`では分岐しない（失敗時のみ`HX-Request`にはトーストを返す）。HTMXフラグメントの取得は`GET /scanner/scan`（スキャン状況パネル）と§4のアクションルートが担う
-- アクションルート（`/positions/:id/close`, `/system/update-check`, `/settings/:key`）は常にフラグメントを返す。Kill Switch操作（pause/resume/kill）はHTMXアクションルートを持たず、Litの`pitha-kill-switch-panel`が`/api/v1/system/*`を呼ぶ
+- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/activity`, `/settings`, `/setup`）は常にフルページを返し、`HX-Request`では分岐しない（失敗時のみ`HX-Request`にはトーストを返す）。HTMXフラグメントの取得は`GET /scanner/scan`（スキャン状況パネル）と、`Header`等が取得するフラグメントのGETルート（`GET /system/status`・`/system/update-status`・`/system/update-panel`・`/system/secrets-status`・`/system/marketdata-status`）が担う
+- アクションルート（`POST /positions/:id/close`, `POST /system/update-check`, `POST /scanner/universe/import`, `POST`/`DELETE /settings/:key`）は常にフラグメントを返す。Kill Switch操作（pause/resume/kill）はHTMXアクションルートを持たず、Litの`pitha-kill-switch-panel`が`/api/v1/system/*`を呼ぶ
 - **状態バッジの更新**: システム状態変更（pause/resume/kill）後は、`pitha-kill-switch-panel`が`systemStateChanged`イベントを発火し、Headerの`StatusDot`が`GET /system/status`で再取得される。OOBスワップは「副作用の反映」のみに限定する
 - **ローディング**: HTMXアクションは`hx-disabled-elt="this"`（必要に応じ`hx-indicator`）で二重送信を防ぐ（例: 「今すぐアップデートを確認」`#update-check-progress`、ポジション手動決済）。Kill Switch操作はLitの`pitha-kill-switch-panel`が`busy`状態でボタンを無効化する。スケルトンスクリーンは使わない
 - **エラー表示**: htmx 2は4xx/5xxを既定でswapしないため、`layout`が`<meta name="htmx-config">`の`responseHandling`（htmx 2標準機能。`response-targets`拡張の後継でありvendorしない）で`[45]..`を`#toast-region`へ`beforeend`でswapする。アクションハンドラは失敗時にステータスと`atoms.Toast`フラグメント（`shared.RespondActionError`）を返す。`static/src/components/htmx-errors/pitha-htmx-errors.ts`が①Toastを持たない失敗応答（空ボディ・プロキシのプレーンテキスト等）のswap抑止と`htmx:responseError`での汎用トースト、②`htmx:sendError`/`htmx:timeout`（応答なし）のトースト、③閉じるボタンと8秒での自動消去（ポインタが載っている間・フォーカスが内側にある間は停止し、外れてから8秒数え直す。WCAG 2.2.1、issue #561）を担う。トースト表示先は全ページ共通の`#toast-region`（`layout.Shell`/`SetupShell`）で、フォーム再レンダリング（422）は現状どのルートも使わない（フィールド単位保存の400もトースト）（issue #110/#121）。`#toast-region`は`popover="manual"`で、トーストが入る（スクリプト追加・htmxの`beforeend`swapどちらも）たびに`pitha-htmx-errors.ts`が`hidePopover()`→`showPopover()`でtop layer最前面へ再表示する。`<dialog>.showModal()`のモーダル（Settings/Setupの保存・削除、アップデート確認）はtop layerに描画されz-indexでは勝てず、これが無いとモーダル内の失敗トーストが背面に隠れるため（issue #321）。ただし`#toast-region`は`<dialog>`の外にあるため、モーダル表示中は`showModal()`の背景inertで閉じるボタンの操作・テキスト選択ができない。そこで`molecules.Modal`が各ダイアログ内に`[data-toast-region]`を持ち、開いているモーダルがある間は`pitha-htmx-errors.ts`がスクリプト追加のトーストをそこへ追加し、htmxのエラーフラグメントも`htmx:beforeSwap`で`detail.target`をそのリージョンへ差し替えて表示する（閉じるボタンと8秒の自動消去が効く。issue #353）
@@ -254,3 +254,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.62 | 2026-10-05 | SSRの時刻表示（判断履歴・Activity Feed・Scanner caption・最終サイクル・ポジション）を`atoms.FormatJST`（`2006-01-02 15:04:05 JST`）に統一し、Litの同表示も`formatJstDateTime`で同形式にした。API（JSON）はRFC 3339のまま | issue #542 |
 | 1.63 | 2026-10-05 | 周期ポーリングの操作者ハートビート除外を`X-Pitha-Background`ヘッダのみに統一し、`middleware.backgroundPollPaths`を廃止 | issue #522 |
 | 1.64 | 2026-10-05 | §3に表のアクセシビリティ規約（`<th scope>`・`<table>`の`aria-label`/`<caption>`）を追記し、全表へ適用して静的テストを追加 | issue #544 |
+| 1.65 | 2026-10-05 | §1のWebView接続先を`api/endpoints.md` §6に整合（Windowsのloopback専用WebSocketリスナー`ws-base`を追記、`runtime.md` §7・`lit.md` §6にも反映）。§2のツリー（`scanner_universe.go`・`shared/render.go`・`Badge`/`EntryQualityBadge`・`Button`/`ButtonLink`）と§4のルート列挙（`/activity`・`POST /scanner/universe/import`・フラグメントGET群）を実態に合わせた。§3にTempl層のAtomic Design一方向依存と`web/middleware`のimportを`layout`のみに限る方針を追記し、depguard（`atoms-direction`等・`templ-parts-no-middleware`）で強制、`SecretFieldRowProps`にCSRFField/CSRFTokenを追加して`molecules`の`middleware`依存を除去（#521, #568, #587, #588） |

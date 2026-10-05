@@ -147,7 +147,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 
 ## 6. API クライアント / WebSocket（`lib/`）
 
-`lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース）:
+`lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース。`403`かつ応答ヘッダ`X-CSRF-Reject: stale`（`middleware.CSRFRejectHeader`）はアプリ再起動でページのセッションCookie/CSRFトークンが失効した状態として`StaleSessionError`（メッセージは`STALE_SESSION_MESSAGE`＝ページ再読み込みを促す固定文言。`CSRF_REJECT_HEADER`/`CSRF_REJECT_STALE`も公開）を投げ、それ以外の非2xxは`Error`を投げる。`StaleSessionError`は`htmx-errors/pitha-htmx-errors.ts`も同じ文言のトースト表示に使う）:
 
 ```typescript
 get<T>(path: string, options?: { background?: boolean }): Promise<T>
@@ -158,6 +158,6 @@ post<T>(path: string, body?): Promise<T>
 
 `get` の `background: true` は自動発火のリクエスト（`pitha-kill-switch-panel` の再同期、`pitha-activity-feed` / `pitha-price-chart` のWebSocket再接続後のスナップショット・足の再取得）に `X-Pitha-Background: 1` を付け、操作者ハートビートとして数えさせない（`architecture/overview/flows.md` §10.4、FR-RISK-6）。
 
-`lib/ws.ts`（自動再接続、指数バックオフ（〜30秒）、JSONメッセージパース（不正なJSONは`logger.warn`して破棄）、`onOpen`/`onReconnect`/`onMessage`/`onClose`/`onStatusChange`コールバック）。`onReconnect`は切断後の最初の`open`でのみ1回呼ばれ（初回`open`では呼ばれない）、`WsClient`自身が切断済みかを保持する。切断中に取りこぼしたpushの再取得は各コンポーネントがこのコールバックで行い、`onStatusChange`は接続状態の表示更新専用とする（issue #558）。`onStatusChange`は`connecting`/`open`/`reconnecting`/`failed`を通知する。`failed`は連続10回の再接続失敗後で、以降も30秒間隔で無期限に再試行する。バックオフは`open`時点ではリセットせず、最初のメッセージ受信または`open`から10秒の接続維持を確認した時点で初期値（500ms）へ戻す。受理直後に切断される接続を繰り返しても、バックオフが伸びて`failed`に到達する（issue #466）。`WsClient`を持つ`pitha-price-chart`/`pitha-kill-switch-panel`/`pitha-scanner-table`/`pitha-activity-feed`は`reconnecting`/`failed`の間、`lib/ws-status.ts`の「接続が切れています」通知（`role="status"`）を表示する（issue #133、`pitha-price-chart`は#336）。5種のLitコンポーネントは共通してこの2ファイルのみを経由し、`fetch()`/`new WebSocket()`を直接呼ばない。
+`lib/ws.ts`（`WsClient`。`resolveWsUrl(url)`は相対パス（`/ws/scanner`等）を絶対`ws://`/`wss://` URLにして`WsClient`へ渡す共有ヘルパーで、`<meta name="ws-base">`（デスクトップ版がWebSocket専用ループバックリスナーのアドレスを出力する。`api/endpoints.md` §6）があればそれを、無ければ現在ページのプロトコル/ホストを基準にする（`pitha-price-chart`・`pitha-kill-switch-panel`・`pitha-scanner-table`・`pitha-activity-feed`が`new WsClient(resolveWsUrl(this.wsUrl), ...)`で使う）。`isWsDisconnected(status)`は`reconnecting`/`failed`で`true`を返し、接続断の表示可否判定に使う。自動再接続、指数バックオフ（〜30秒）、JSONメッセージパース（不正なJSONは`logger.warn`して破棄）、`onOpen`/`onReconnect`/`onMessage`/`onClose`/`onStatusChange`コールバック）。`onReconnect`は切断後の最初の`open`でのみ1回呼ばれ（初回`open`では呼ばれない）、`WsClient`自身が切断済みかを保持する。切断中に取りこぼしたpushの再取得は各コンポーネントがこのコールバックで行い、`onStatusChange`は接続状態の表示更新専用とする（issue #558）。`onStatusChange`は`connecting`/`open`/`reconnecting`/`failed`を通知する。`failed`は連続10回の再接続失敗後で、以降も30秒間隔で無期限に再試行する。バックオフは`open`時点ではリセットせず、最初のメッセージ受信または`open`から10秒の接続維持を確認した時点で初期値（500ms）へ戻す。受理直後に切断される接続を繰り返しても、バックオフが伸びて`failed`に到達する（issue #466）。`WsClient`を持つ`pitha-price-chart`/`pitha-kill-switch-panel`/`pitha-scanner-table`/`pitha-activity-feed`は`reconnecting`/`failed`の間、`lib/ws-status.ts`の「接続が切れています」通知（`role="status"`）を表示する（issue #133、`pitha-price-chart`は#336）。5種のLitコンポーネントは共通してこの2ファイルのみを経由し、`fetch()`/`new WebSocket()`を直接呼ばない。
 
-`lib/logger.ts`: 構造化ログをブラウザ（WebView）コンソールへ出力し、致命的エラーは将来的にGoバックエンドへ送信できるようフックポイントを用意する（MVPではコンソール出力のみ）。
+`lib/logger.ts`: 構造化ログをブラウザ（WebView）コンソールへ出力する。公開APIは`logger.debug`/`info`/`warn`/`error`/`fatal`（`(message, fields?)`）。`fatal`は将来Goバックエンドへ転送すべき致命的エラー用に予約され、現状は`error`と同じ出力に`fatal: true`フィールドを足すだけでコンソール出力のみ。
