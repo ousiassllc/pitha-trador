@@ -104,7 +104,7 @@ func TestOrderRepository_Fill_SetsFilledFieldsAndStatus(t *testing.T) {
 	}
 
 	slippage := 1.5
-	filled, err := repo.Fill(ctx, created.ID, 2105.0, &slippage, filledAt)
+	filled, err := repo.Fill(ctx, created.ID, 2105.0, 0, &slippage, filledAt)
 	if err != nil {
 		t.Fatalf("Fill: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestOrderRepository_Fill_SetsFilledFieldsAndStatus(t *testing.T) {
 func TestOrderRepository_Fill_NotFound(t *testing.T) {
 	repo, _ := openTestOrderRepo(t)
 
-	_, err := repo.Fill(context.Background(), 999999, 100, nil, time.Now())
+	_, err := repo.Fill(context.Background(), 999999, 100, 0, nil, time.Now())
 	if !errors.Is(err, trading.ErrOrderNotFound) {
 		t.Fatalf("Fill(unknown) error = %v, want ErrOrderNotFound", err)
 	}
@@ -254,13 +254,13 @@ func TestOrderRepository_FillEntry_AtomicOrderFillAndPositionOpen(t *testing.T) 
 	positions, orders, instrumentID := openTestPositionRepo(t)
 	ctx, now := context.Background(), time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC)
 	first := pendingOrder(t, orders, instrumentID, now)
-	filled, position, err := orders.FillEntry(ctx, first.ID, 2100, nil, now, fillEntryPosition(instrumentID, now))
+	filled, position, err := orders.FillEntry(ctx, first.ID, 2100, 0, nil, now, fillEntryPosition(instrumentID, now))
 	if err != nil || filled.Status != domain.OrderStatusFilled || position.EntryOrderID != first.ID {
 		t.Fatalf("FillEntry = (%+v, %+v, %v), want FILLED order + linked position", filled, position, err)
 	}
 
 	second := pendingOrder(t, orders, instrumentID, now)
-	if _, _, err := orders.FillEntry(ctx, second.ID, 2110, nil, now, fillEntryPosition(instrumentID, now)); err == nil {
+	if _, _, err := orders.FillEntry(ctx, second.ID, 2110, 0, nil, now, fillEntryPosition(instrumentID, now)); err == nil {
 		t.Fatal("FillEntry with an open position = nil error, want the unique-constraint failure")
 	}
 	if got, err := orders.Get(ctx, second.ID); err != nil || got.Status != domain.OrderStatusPending || got.FilledAt != nil {
@@ -275,7 +275,7 @@ func TestOrderRepository_ListFilledWithoutPosition_FindsOnlyUnlinkedFillsBeforeC
 	_, orders, instrumentID := openTestPositionRepo(t)
 	ctx, now := context.Background(), time.Date(2026, 9, 29, 9, 31, 0, 0, time.UTC)
 	linked := pendingOrder(t, orders, instrumentID, now)
-	if _, _, err := orders.FillEntry(ctx, linked.ID, 2100, nil, now, fillEntryPosition(instrumentID, now)); err != nil {
+	if _, _, err := orders.FillEntry(ctx, linked.ID, 2100, 0, nil, now, fillEntryPosition(instrumentID, now)); err != nil {
 		t.Fatal(err)
 	}
 	orphan := insertFilledEntryOrder(t, orders, instrumentID, now) // bare Fill: the pre-#158 failure state

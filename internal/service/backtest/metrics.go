@@ -32,20 +32,25 @@ type Trade struct {
 	Direction string
 
 	EntryTimestamp time.Time
-	EntryPrice     float64
-	ExitTimestamp  time.Time
-	ExitPrice      float64
-	ExitReason     string
+	// EntryPrice/ExitPrice are the fill prices the fill model produced
+	// (spread, slippage, tick grid, 寄り/引け applied), i.e. what a paper
+	// position's EntryPrice and exit order's filled_price would be - not
+	// the bars' last prices GrossReturnPct is computed from.
+	EntryPrice    float64
+	ExitTimestamp time.Time
+	ExitPrice     float64
+	ExitReason    string
 
-	// GrossReturnPct is the raw price return, before any slippage/fee
-	// adjustment.
+	// GrossReturnPct is the raw price return between the entry and exit
+	// bars' last prices, before any execution cost or fee.
 	GrossReturnPct float64
-	// SlippageReturnPct applies CostModel.SlippageBps unfavorably to both
-	// EntryPrice and ExitPrice before computing the return (FR-BT-1
+	// SlippageReturnPct is the return between EntryPrice and ExitPrice:
+	// GrossReturnPct after the execution costs (spread, slippage, tick
+	// grid, 寄り/引けの板寄せ) fillmodel charges on both fills (FR-BT-1
 	// "スリッページ込みPnL").
 	SlippageReturnPct float64
-	// FeeReturnPct subtracts CostModel.FeeBps (charged on both entry and
-	// exit notional) from GrossReturnPct (FR-BT-1 "手数料込みPnL").
+	// FeeReturnPct subtracts fillmodel.Model.FeeBps (charged on both entry
+	// and exit notional) from GrossReturnPct (FR-BT-1 "手数料込みPnL").
 	FeeReturnPct float64
 	// NetReturnPct combines SlippageReturnPct's price adjustment and
 	// FeeReturnPct's fee deduction: the realistic "what this trade would

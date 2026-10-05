@@ -154,6 +154,14 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
   - その銘柄で損失クローズ（実現損益<0）した時刻から`cooldown_after_loss_minutes`（FR-RISK-1）の間。Executionのメモリ上の銘柄別ゲートであり、Risk Engineの判定とは別に働く（プロセス再起動で解除される）
 - FR-ENTRY-6（見送りの扱い）: 上記ゲートによる拒否は、Policy → `paperexec`経路ではエラーではなく「見送り」として扱う。再試行しても同じ理由で拒否されるため、jev-traderジョブは失敗にせず、`paper entry skipped`としてログに残して正常終了する。ゲート以外のEntryエラーはジョブ失敗とする
 - FR-ENTRY-7（入力検証）: `Enter`は発注前に、シグナル方向がLONG/SHORTであること、Risk Engine通過済み（`risk_passed`）であること、数量>0、価格が有限かつ>0、指値価格を指定する場合は有限かつ>0、指値注文では指値価格が指定されていることを検証し、違反は注文を作らずに拒否する。板価格の欠損（0）が約定・時価更新・決済価格にならないよう、`TryFillPending`・`OnSnapshot`・`Close`の価格も同様に検証する
+- FR-ENTRY-8（約定モデル: 呼値・スプレッド・手数料・滑り・立会）: Paper Entry/Exitはシグナル価格（直近価格）での全量約定にせず、`internal/service/fillmodel`の約定モデルで価格・手数料を決める。Paper Trading（`execution`）とバックテスト（FR-BT-4）は同じモデル（`fillmodel.Default`）を使う
+  - 呼値単位: 約定価格は東証の呼値の単位（標準テーブル。3,000円以下1円、5,000円以下5円、30,000円以下10円、50,000円以下50円、300,000円以下100円…。TOPIX100構成銘柄・ETF等の特例テーブルは扱わない）に載せ、注文に不利な側へ丸める（買いは切り上げ、売りは切り下げ）
+  - スプレッド: ザラ場の成行は板を跨ぐ（買い＝最良売気配`ask`、売り＝最良買気配`bid`）。板が無い（`bid`/`ask`がNULLまたは逆転）場合は`spread_bps`の半分を直近価格の不利側へ乗せ、`spread_bps`も無ければ直近価格とする
+  - 滑り: 板の気配に加えて不利側へ`SlippageBps`（初期値2bps）を乗せる。約定価格との差を`paper_orders.slippage_bps`（直近価格に対する不利方向のbps。呼値丸め・スプレッド込み）に記録する
+  - 手数料: 約定代金の`FeeBps`（初期値0bps。kabuステーションAPIを提供する証券会社の国内現物手数料が無料のため）を`paper_orders.fees`（円）に記録し、`realized_pnl`はエントリー・Exit両約定の手数料を差し引いた値とする
+  - 昼休み・立会時間外: 前場11:30〜後場12:30の昼休み、大引け後、非営業日は約定しない（`marketcalendar.PhaseClosed`）。Entryは`ErrOutsideTradingSession`、手動`Close`（`POST /positions/:id/close`は409）・Kill Switchの`CloseAll`も同様に約定せずポジションを保持する（`CloseAll`は`ErrOutsideTradingSession`を含むエラーを返し、次の立会で再度決済する）。`OnSnapshot`はExit条件が成立しても昼休み中はクローズせず、次の立会の足で再評価する。PENDING指値も昼休み中は約定せず次の立会まで待つ
+  - 寄り・引けの気配: 前場・後場の寄り（9:00・12:30の最初の1分足）と大引けのクロージング・オークション（15:25〜15:30）は板寄せの単一価格約定として、ザラ場の1分足とは別に扱う。スプレッドは跨がず、直近価格（気配値）に`AuctionSlippageBps`（初期値5bps）の不利な滑りと呼値丸めを適用する（`marketcalendar.Calendar.PhaseAt`）
+  - 指値: 板の気配が指値を満たす（買い＝`ask`≦指値、売り＝`bid`≧指値）ときに約定する。約定価格は気配＋滑り（呼値丸め後）だが、指値より不利にはならない
 - FR-EXIT-1: 以下のExit条件を併用する: 固定Stop Loss、固定Take Profit、Trailing Stop、Jev方向反転、continuation_probability低下、VWAP逆クロス、最大保有時間到達、引け前強制決済（`force_flat_before_market_close_minutes` 分前から、大引け15:30 JSTを基準に判定する。前場終了11:30は対象外）。VWAP逆クロスは「価格がVWAPの不利側へ抜けた瞬間」（前回評価時は不利側でなく、今回評価で不利側）のみ成立し、不利側に滞在しているだけでは成立しない（不利側でエントリーしたポジションは、有利側へ抜けた後に再び不利側へ抜けるまでこの条件でクローズしない）。前回評価が無い最初の評価は、建値と現在VWAPの関係を前回の関係とみなす
 - FR-EXIT-2: 初期値: `stop_loss_pct=0.6`, `take_profit_pct=1.2`, `trailing_stop_pct=0.5`, `max_holding_minutes=20`
 - FR-EXIT-3: Jev API不応答時も、既存ポジションはコードベースのExit Ruleで管理を継続する（Jev不応答を理由にリスク管理を停止しない）。同様に、PENDING指値の約定処理（`TryFillPending`）の失敗は、`OnSnapshot`による保有ポジションの時価更新・Exit評価を止めない（失敗はログに残し、当該注文のみ飛ばす。ポジションが既にあるため約定し得ないPENDING注文は`REJECTED`にする）

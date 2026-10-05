@@ -3,6 +3,7 @@ package symbol_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -151,5 +152,17 @@ func TestSymbolHandler_ClosePosition_500LogsCause(t *testing.T) {
 		if strings.Contains(rec.Body.String(), "secret") || !strings.Contains(logs.String(), "secret "+name+" cause") {
 			t.Errorf("%s: body = %q, log = %q; want cause logged only", name, rec.Body.String(), logs.String())
 		}
+	}
+}
+
+func TestSymbolHandler_ClosePosition_OutsideTradingSessionReturns409(t *testing.T) { // 昼休み・立会時間外は約定しない（#509）
+	gin.SetMode(gin.TestMode)
+	provider := &fakeSymbolProvider{position: domain.Position{ID: 42, Symbol: "7203"}, closeErr: fmt.Errorf("close: %w", execution.ErrOutsideTradingSession)}
+	router := gin.New()
+	router.POST("/positions/:id/close", symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{}).ClosePosition)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/positions/42/close", nil))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "立会時間外") {
+		t.Fatalf("status/body = %d/%q, want 409 with the 立会時間外 toast", rec.Code, rec.Body.String())
 	}
 }

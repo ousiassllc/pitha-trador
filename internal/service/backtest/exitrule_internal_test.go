@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 func barsAt(prices []float64, base time.Time) []domain.Snapshot {
@@ -20,7 +21,7 @@ func TestCloseTrade_TakeProfitLong(t *testing.T) {
 	bars := barsAt([]float64{100, 100.5, 101.2, 99}, base)
 	exit := ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: time.Hour}
 
-	trade, exitIdx := closeTrade(bars, 0, domain.JevDirectionLong, 100, exit, CostModel{}, 1, "TEST")
+	trade, exitIdx := closeTrade(bars, 0, domain.JevDirectionLong, 100, exit, executor{}, 1, "TEST")
 	if trade.ExitReason != ExitReasonTakeProfit {
 		t.Errorf("ExitReason = %q, want %q", trade.ExitReason, ExitReasonTakeProfit)
 	}
@@ -40,7 +41,7 @@ func TestCloseTrade_StopLossShort(t *testing.T) {
 	bars := barsAt([]float64{100, 100.2, 103, 99}, base)
 	exit := ExitRule{StopLossPct: 2.0, TakeProfitPct: 50, MaxHolding: time.Hour}
 
-	trade, exitIdx := closeTrade(bars, 0, domain.JevDirectionShort, 100, exit, CostModel{}, 1, "TEST")
+	trade, exitIdx := closeTrade(bars, 0, domain.JevDirectionShort, 100, exit, executor{}, 1, "TEST")
 	if trade.ExitReason != ExitReasonStopLoss {
 		t.Errorf("ExitReason = %q, want %q", trade.ExitReason, ExitReasonStopLoss)
 	}
@@ -57,7 +58,7 @@ func TestCloseTrade_MaxHolding(t *testing.T) {
 	bars := barsAt([]float64{100, 100.1, 100.2, 100.3, 100.4}, base)
 	exit := ExitRule{StopLossPct: 50, TakeProfitPct: 50, MaxHolding: 2 * time.Minute}
 
-	trade, exitIdx := closeTrade(bars, 0, domain.JevDirectionLong, 100, exit, CostModel{}, 1, "TEST")
+	trade, exitIdx := closeTrade(bars, 0, domain.JevDirectionLong, 100, exit, executor{}, 1, "TEST")
 	if trade.ExitReason != ExitReasonMaxHolding {
 		t.Errorf("ExitReason = %q, want %q", trade.ExitReason, ExitReasonMaxHolding)
 	}
@@ -71,7 +72,7 @@ func TestCloseTrade_DataEnded(t *testing.T) {
 	bars := barsAt([]float64{100, 100.1, 100.2}, base)
 	exit := ExitRule{StopLossPct: 50, TakeProfitPct: 50, MaxHolding: time.Hour}
 
-	trade, exitIdx := closeTrade(bars, 0, domain.JevDirectionLong, 100, exit, CostModel{}, 1, "TEST")
+	trade, exitIdx := closeTrade(bars, 0, domain.JevDirectionLong, 100, exit, executor{}, 1, "TEST")
 	if trade.ExitReason != ExitReasonDataEnded {
 		t.Errorf("ExitReason = %q, want %q", trade.ExitReason, ExitReasonDataEnded)
 	}
@@ -80,7 +81,7 @@ func TestCloseTrade_DataEnded(t *testing.T) {
 	}
 }
 
-// TestCloseTrade_CostModelReducesReturn confirms CostModel's slippage
+// TestCloseTrade_CostModelReducesReturn confirms the fill model's slippage
 // (unfavorable entry/exit price adjustment) and fee (flat percentage-
 // point deduction) both make the reported return worse than the gross,
 // look-ahead-free price return (FR-BT-1 "スリッページ込みPnL"/"手数料込
@@ -89,9 +90,9 @@ func TestCloseTrade_CostModelReducesReturn(t *testing.T) {
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
 	bars := barsAt([]float64{100, 105}, base)
 	exit := ExitRule{MaxHolding: time.Hour}
-	cost := CostModel{SlippageBps: 50, FeeBps: 10}
+	x := executor{cost: fillmodel.Model{SlippageBps: 50, FeeBps: 10}}
 
-	trade, _ := closeTrade(bars, 0, domain.JevDirectionLong, 100, exit, cost, 1, "TEST")
+	trade, _ := closeTrade(bars, 0, domain.JevDirectionLong, 100, exit, x, 1, "TEST")
 	if trade.SlippageReturnPct >= trade.GrossReturnPct {
 		t.Errorf("SlippageReturnPct = %v, want < GrossReturnPct = %v", trade.SlippageReturnPct, trade.GrossReturnPct)
 	}

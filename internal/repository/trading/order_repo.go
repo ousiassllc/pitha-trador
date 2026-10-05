@@ -80,19 +80,20 @@ func (r *OrderRepository) Get(ctx context.Context, id int64) (domain.PaperOrder,
 }
 
 // Fill marks a PENDING order FILLED at price/now (Paper Entry/Exit
-// execution, functional.md FR-ENTRY-1), recording slippageBps versus the
-// order's reference price. It returns ErrOrderNotFound if id does not
-// exist and ErrOrderNotPending if the order was already filled/cancelled.
-func (r *OrderRepository) Fill(ctx context.Context, id int64, price float64, slippageBps *float64, now time.Time) (domain.PaperOrder, error) {
-	return fillOrder(ctx, r.db, id, price, slippageBps, now)
+// execution, functional.md FR-ENTRY-1), recording the commission fees (JPY)
+// and slippageBps versus the order's reference price. It returns
+// ErrOrderNotFound if id does not exist and ErrOrderNotPending if the order
+// was already filled/cancelled.
+func (r *OrderRepository) Fill(ctx context.Context, id int64, price, fees float64, slippageBps *float64, now time.Time) (domain.PaperOrder, error) {
+	return fillOrder(ctx, r.db, id, price, fees, slippageBps, now)
 }
 
 // fillOrder is Fill's body over any sqlutil.Executor, so FillEntry can run it
 // inside its own transaction.
-func fillOrder(ctx context.Context, x sqlutil.Executor, id int64, price float64, slippageBps *float64, now time.Time) (domain.PaperOrder, error) {
+func fillOrder(ctx context.Context, x sqlutil.Executor, id int64, price, fees float64, slippageBps *float64, now time.Time) (domain.PaperOrder, error) {
 	res, err := x.ExecContext(ctx,
-		`UPDATE paper_orders SET status = ?, filled_at = ?, filled_price = ?, slippage_bps = ? WHERE id = ? AND status = ?`,
-		domain.OrderStatusFilled, sqlutil.FormatTime(now), price, sqlutil.NullableFloat64(slippageBps), id, domain.OrderStatusPending,
+		`UPDATE paper_orders SET status = ?, filled_at = ?, filled_price = ?, fees = ?, slippage_bps = ? WHERE id = ? AND status = ?`,
+		domain.OrderStatusFilled, sqlutil.FormatTime(now), price, fees, sqlutil.NullableFloat64(slippageBps), id, domain.OrderStatusPending,
 	)
 	if err != nil {
 		return domain.PaperOrder{}, fmt.Errorf("repository: fill paper order %d: %w", id, err)
@@ -214,21 +215,22 @@ func scanOrder(row sqlutil.RowScanner) (domain.PaperOrder, error) {
 	return o, nil
 }
 
-// FillEntry marks the PENDING entry order orderID FILLED at price/now and
+// FillEntry marks the PENDING entry order orderID FILLED at price/now (with
+// its commission fees and slippageBps, as Fill) and
 // opens position (whose EntryOrderID is set to orderID) in ONE database
 // transaction: either both the FILLED order and its positions row exist
 // afterwards, or neither is written and the order stays as it was. Without
 // this, a failure between the two writes (positions_open_instrument_uq
 // violation, SQLITE_BUSY, process exit) left a FILLED order with no
 // position, which nothing retries (issue #158).
-func (r *OrderRepository) FillEntry(ctx context.Context, orderID int64, price float64, slippageBps *float64, now time.Time, position domain.Position) (domain.PaperOrder, domain.Position, error) {
+func (r *OrderRepository) FillEntry(ctx context.Context, orderID int64, price, fees float64, slippageBps *float64, now time.Time, position domain.Position) (domain.PaperOrder, domain.Position, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return domain.PaperOrder{}, domain.Position{}, fmt.Errorf("repository: begin fill-entry transaction for order %d: %w", orderID, err)
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after Commit
 
-	filled, err := fillOrder(ctx, tx, orderID, price, slippageBps, now)
+	filled, err := fillOrder(ctx, tx, orderID, price, fees, slippageBps, now)
 	if err != nil {
 		return domain.PaperOrder{}, domain.Position{}, err
 	}

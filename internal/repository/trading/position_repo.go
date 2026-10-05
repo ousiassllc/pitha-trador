@@ -128,7 +128,8 @@ func closePosition(ctx context.Context, x sqlutil.Executor, id, exitOrderID int6
 
 // CloseWithExitOrder submits exitOrder (PENDING), fills it at price/now and
 // closes positionID with it in ONE transaction: afterwards either the FILLED
-// exit order and the closed position both exist, or neither. A concurrent
+// exit order and the closed position both exist, or neither. exitOrder's
+// Fees/SlippageBps are the fill's commission and slippage. A concurrent
 // close of the same position matches no open row (domain.ErrPositionNotFound)
 // and rolls its order insert back, so no orphan FILLED exit order is left for
 // risk.Engine's reconciliation to report as a fill discrepancy (issue #174).
@@ -143,7 +144,7 @@ func (r *PositionRepository) CloseWithExitOrder(ctx context.Context, exitOrder d
 	if err != nil {
 		return domain.Position{}, err
 	}
-	filled, err := fillOrder(ctx, tx, inserted.ID, price, nil, now)
+	filled, err := fillOrder(ctx, tx, inserted.ID, price, exitOrder.Fees, exitOrder.SlippageBps, now)
 	if err != nil {
 		return domain.Position{}, err
 	}

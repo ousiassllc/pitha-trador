@@ -20,6 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 // testEngine bundles a real (SQLite-backed) Engine plus the repositories and
@@ -76,8 +77,16 @@ func snapshotAt(instrumentID int64, price float64, at time.Time) domain.Snapshot
 	return domain.Snapshot{InstrumentID: instrumentID, Symbol: "7203", Timestamp: at, Price: price}
 }
 
+// costlessConfig is DefaultConfig without fill costs, for tests that pin
+// exact fill prices (the cost model is covered by ../fill_test.go).
+func costlessConfig() execution.Config {
+	cfg := execution.DefaultConfig()
+	cfg.Fill = fillmodel.Model{}
+	return cfg
+}
+
 func TestEngine_OnSnapshot_FillsPendingLimitEntryOnceCrossed(t *testing.T) {
-	te := newTestEngine(t, execution.DefaultConfig())
+	te := newTestEngine(t, costlessConfig())
 	ctx := context.Background()
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
 	limit := 1990.0
@@ -108,7 +117,7 @@ func TestEngine_OnSnapshot_FillsPendingLimitEntryOnceCrossed(t *testing.T) {
 // A missing price (0) must neither stop the position out at -100% nor mark
 // it nor fill a pending BUY limit at 0 (issue #173).
 func TestEngine_OnSnapshot_RejectsNonPositivePrice(t *testing.T) {
-	te := newTestEngine(t, execution.DefaultConfig())
+	te := newTestEngine(t, costlessConfig())
 	ctx := context.Background()
 	now := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
 	entry, err := te.engine.Enter(ctx, execution.EntryRequest{
@@ -123,7 +132,7 @@ func TestEngine_OnSnapshot_RejectsNonPositivePrice(t *testing.T) {
 			t.Fatalf("OnSnapshot(price=%v) err = %v, want ErrInvalidPrice", price, err)
 		}
 	}
-	if _, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 0, now); !errors.Is(err, execution.ErrInvalidPrice) {
+	if _, err := te.engine.Close(ctx, entry.Position.ID, domain.ExitReasonStopLoss, 0, fillmodel.Book{}, now); !errors.Is(err, execution.ErrInvalidPrice) {
 		t.Fatalf("Close(price=0) err = %v, want ErrInvalidPrice", err)
 	}
 
@@ -148,7 +157,7 @@ func TestEngine_TryFillPending_RejectsNonPositivePrice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Enter: %v", err)
 	}
-	_, ok, err := te.engine.TryFillPending(ctx, entry.Order.ID, domain.JevDirectionLong, 0, now)
+	_, ok, err := te.engine.TryFillPending(ctx, entry.Order.ID, domain.JevDirectionLong, 0, fillmodel.Book{}, now)
 	if ok || !errors.Is(err, execution.ErrInvalidPrice) {
 		t.Fatalf("TryFillPending(price=0) = ok %v, err %v; want unfilled ErrInvalidPrice", ok, err)
 	}

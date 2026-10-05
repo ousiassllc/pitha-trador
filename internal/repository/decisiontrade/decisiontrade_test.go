@@ -42,7 +42,7 @@ func openDecisionTrade(t *testing.T, db *repositoryDB, decision domain.JevDecisi
 	if err != nil {
 		t.Fatalf("insert entry order: %v", err)
 	}
-	if _, err := db.orders.Fill(ctx, entry.ID, 1000, nil, now); err != nil {
+	if _, err := db.orders.Fill(ctx, entry.ID, 1000, 0, nil, now); err != nil {
 		t.Fatalf("fill entry order: %v", err)
 	}
 	pos, err := db.positions.Open(ctx, domain.Position{
