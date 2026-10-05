@@ -8,7 +8,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -18,7 +17,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
-	"github.com/ousiassllc/pitha-trador/internal/logging"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 	"github.com/ousiassllc/pitha-trador/internal/supervisor"
@@ -26,20 +25,20 @@ import (
 )
 
 func main() {
+	// run returns instead of exiting so its defers (DB Close, lock Release)
+	// always run; RunMain then logs a returned error at ERROR level (so the
+	// error-log export contains the reason the app did not start) and the
+	// process exits non-zero.
+	os.Exit(startup.RunMain("desktop", bootstrap.ResolveLogDir, run))
+}
+
+func run() error {
 	// The installer's Startup shortcut launches `pitha-trador.exe
 	// --supervise` (docs/requirements/non-functional.md §3): that process
 	// only supervises, restarting the real app after a crash.
 	if childArgs, ok := supervisor.ChildArgs(os.Args[1:]); ok {
-		superviseSelf(childArgs)
-		return
+		return superviseSelf(childArgs)
 	}
-
-	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = logWriter.Close() }()
-	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
 
 	// Single-instance guard, taken before bootstrap.Run/BuildServices so a
 	// second launch (desktop icon while the --supervise autostart instance
@@ -49,10 +48,10 @@ func main() {
 	lock, err := bootstrap.AcquireInstanceLock(bootstrap.AppLockName)
 	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
 		slog.Info("desktop: another instance is already running; exiting")
-		return
+		return nil
 	}
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer func() { _ = lock.Release() }()
 
@@ -64,19 +63,19 @@ func main() {
 	// exists would need standalone platform-native dialog handling
 	// (Wails' own runtime.MessageDialog requires the ctx OnStartup
 	// provides, which does not exist yet at this point) - added
-	// complexity for a rare failure path when log.Fatal (the same
-	// decision cmd/server/main.go makes, and what the RotatingWriter
-	// failure above already does) already surfaces the error in the
-	// structured JSON log file operators check first.
+	// complexity for a rare failure path when failing the process (the
+	// same decision cmd/server/main.go makes) already surfaces the error
+	// as an ERROR record in the structured JSON log file operators check
+	// first (bootstrap.RunMain).
 	state, err := bootstrap.Run(bootstrap.Config{})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer func() { _ = state.Close() }()
 
 	secretsRepo, secrets, err := bootstrap.LoadSecrets(context.Background(), state)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	// app is also the Risk Engine's native OS toast Notifier (notify.go),
@@ -102,7 +101,7 @@ func main() {
 		defer serveWebSocket(wsListeners, engine)()
 	}
 
-	if err := wails.Run(&options.App{
+	return wails.Run(&options.App{
 		Title:  "pitha-trador",
 		Width:  1280,
 		Height: 800,
@@ -114,40 +113,32 @@ func main() {
 		Bind: []interface{}{
 			app,
 		},
-	}); err != nil {
-		log.Fatal(err)
-	}
+	})
 }
 
 // superviseSelf re-executes this binary (without --supervise) and restarts
 // it after every abnormal exit. It returns once the child exits cleanly
 // (operator quit / self-update) or the supervisor itself is interrupted.
-func superviseSelf(childArgs []string) {
-	// The child appends to the same daily JSON log file (O_APPEND), so
-	// crash/restart records land next to the child's own output.
-	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = logWriter.Close() }()
-	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
-
+// The child appends to the same daily JSON log file (O_APPEND), so
+// crash/restart records land next to the child's own output.
+func superviseSelf(childArgs []string) error {
 	// A second watcher would spawn a second app instance on every crash.
 	lock, err := bootstrap.AcquireInstanceLock(bootstrap.SupervisorLockName)
 	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
 		slog.Info("supervisor: another supervisor is already running; exiting")
-		return
+		return nil
 	}
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer func() { _ = lock.Release() }()
 
 	exe, err := os.Executable()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	_ = supervisor.Run(ctx, supervisor.Config{}, supervisor.ExecRun(exe, childArgs...))
+	return nil
 }
