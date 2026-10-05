@@ -1,7 +1,8 @@
 // Package newsfeed implements News Ingest (docs/architecture/overview.md
 // §13, functional.md §4.16 FR-LUNA-1〜5): it periodically fetches news
-// for every active instrument from the external news feed, classifies each
-// new item with Luna, and keeps the results in an in-memory, TTL-bounded
+// for the symbols that can actually use it (the current Fast Screener
+// candidates and held positions, see SymbolSource; only during the TSE
+// session) from the external news feed, classifies each new item with Luna, and keeps the results in an in-memory, TTL-bounded
 // per-symbol cache. Nothing is persisted: the cache is read by Jev
 // Scout/Trader to inject `news_context` into jev_decisions.state_json
 // (FR-LUNA-3) and by the event-driven re-evaluation trigger as FR-SCAN-1's
@@ -24,6 +25,11 @@ import (
 )
 
 const (
+	// DefaultConcurrency bounds the simultaneous feed/Luna requests of one
+	// Poll cycle, so a cycle's duration grows with symbols/DefaultConcurrency
+	// rather than linearly with the symbol count.
+	DefaultConcurrency = 4
+
 	// DefaultMaxItems is FR-LUNA-3's "直近N件": how many classified items
 	// the cache keeps per symbol.
 	DefaultMaxItems = 5
@@ -42,10 +48,12 @@ type Classifier interface {
 	Classify(ctx context.Context, item assist.NewsItem) (assist.Classification, error)
 }
 
-// InstrumentSource lists the instruments News Ingest polls
-// (market.InstrumentRepository).
-type InstrumentSource interface {
-	ListActive(ctx context.Context) ([]domain.Instrument, error)
+// SymbolSource lists the symbols News Ingest polls this cycle: the symbols
+// whose news is read at all (Jev Scout/Trader news_context and the
+// event-driven re-evaluation news flag only ever look at Fast Screener
+// candidates and held positions), not the whole ~4,000-symbol universe.
+type SymbolSource interface {
+	NewsSymbols(ctx context.Context) ([]string, error)
 }
 
 // Option configures a Service.
@@ -69,6 +77,23 @@ func WithTTL(ttl time.Duration) Option {
 	}
 }
 
+// WithConcurrency overrides DefaultConcurrency: how many symbols' feed
+// fetches (and Luna classifications) run at once.
+func WithConcurrency(n int) Option {
+	return func(s *Service) {
+		if n > 0 {
+			s.concurrency = n
+		}
+	}
+}
+
+// WithSessionGate makes Poll a no-op whenever open(now) is false (outside
+// the 東証立会時間), so nights and weekends send no feed requests. The
+// default polls at any time.
+func WithSessionGate(open func(time.Time) bool) Option {
+	return func(s *Service) { s.inSession = open }
+}
+
 // WithNow overrides time.Now (tests).
 func WithNow(now func() time.Time) Option {
 	return func(s *Service) { s.now = now }
@@ -78,9 +103,11 @@ func WithNow(now func() time.Time) Option {
 type Service struct {
 	feed        Feed
 	classifier  Classifier
-	instruments InstrumentSource
+	symbols     SymbolSource
 	maxItems    int
 	ttl         time.Duration
+	concurrency int
+	inSession   func(time.Time) bool
 	now         func() time.Time
 
 	mu    sync.Mutex
@@ -96,15 +123,17 @@ type symbolNews struct {
 	flagged bool
 }
 
-// NewService returns a Service that polls feed for instruments' active
-// symbols and classifies with classifier.
-func NewService(feed Feed, classifier Classifier, instruments InstrumentSource, opts ...Option) *Service {
+// NewService returns a Service that polls feed for the symbols the
+// SymbolSource lists and classifies with classifier.
+func NewService(feed Feed, classifier Classifier, symbols SymbolSource, opts ...Option) *Service {
 	s := &Service{
 		feed:        feed,
 		classifier:  classifier,
-		instruments: instruments,
+		symbols:     symbols,
 		maxItems:    DefaultMaxItems,
 		ttl:         DefaultTTL,
+		concurrency: DefaultConcurrency,
+		inSession:   func(time.Time) bool { return true },
 		now:         func() time.Time { return time.Now().UTC() },
 		cache:       make(map[string]*symbolNews),
 	}
@@ -114,22 +143,34 @@ func NewService(feed Feed, classifier Classifier, instruments InstrumentSource, 
 	return s
 }
 
-// Poll runs one News Ingest cycle (FR-LUNA-1/FR-LUNA-2). It returns an
-// error only when the active instrument list cannot be read; per-symbol
-// feed failures and per-item Luna failures are logged and skipped
-// (FR-LUNA-4).
+// Poll runs one News Ingest cycle (FR-LUNA-1/FR-LUNA-2) over the symbols of
+// the SymbolSource, at most concurrency at a time, and does nothing outside
+// the session gate. It returns an error only when the symbol list cannot be
+// read; per-symbol feed failures and per-item Luna failures are logged and
+// skipped (FR-LUNA-4).
 func (s *Service) Poll(ctx context.Context) error {
-	instruments, err := s.instruments.ListActive(ctx)
+	if !s.inSession(s.now()) {
+		return nil
+	}
+	symbols, err := s.symbols.NewsSymbols(ctx)
 	if err != nil {
 		return err
 	}
-	for _, in := range instruments {
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, s.concurrency)
+	for _, symbol := range symbols {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			break
 		}
-		s.pollSymbol(ctx, in.Symbol)
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer func() { <-sem; wg.Done() }()
+			s.pollSymbol(ctx, symbol)
+		}()
 	}
-	return nil
+	wg.Wait()
+	return ctx.Err()
 }
 
 func (s *Service) pollSymbol(ctx context.Context, symbol string) {

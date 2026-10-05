@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
@@ -98,14 +99,14 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	lunaClient := assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey})
 	newsFeed := newsfeed.NewFeedClient(newsfeed.FeedConfig{URL: secrets.NewsFeedURL, APIKey: secrets.NewsFeedAPIKey})
 	s.newsEnabled = lunaClient.Configured() && newsFeed.Configured()
-	s.News = newsfeed.NewService(newsFeed, assist.NewLuna(lunaClient), s.Instruments)
+	s.Screener = screener.NewLiveSource() // News Ingest polls its candidates; shared with buildJevPipeline
+	s.News = newsfeed.NewService(newsFeed, assist.NewLuna(lunaClient), newstargets.New(s.Screener, s.Positions), newsfeed.WithSessionGate(marketcalendarOpen))
 }
 
 // buildJevPipeline builds RAG, Feature Engine, Screener and the Jev Scout/Trader.
 func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig) {
 	s.RAG = rag.NewService(db, s.Decisions, s.Snapshots)
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
-	s.Screener = screener.NewLiveSource()
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout, jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener))
 	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, jev.WithNewsSource(s.News))
 }

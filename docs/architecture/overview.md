@@ -49,6 +49,7 @@ pitha-trador/
 │   │   ├── marketdatajob/        # market-data / feature-calc（空ジョブ）ジョブハンドラ（板→Reading変換・特徴量算出・イベント再評価enqueue。#246）
 │   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`backtestsource.Source`。#246）
 │   │   ├── heldposition/         # FR-SCHED-4 保有ポジション監視・Exit評価ループ（5〜15秒周期、最新板で再評価）
+│   │   ├── newstargets/          # News Ingestの対象銘柄（Fast Screener候補＋保有ポジション銘柄。全銘柄は取得しない。#531）
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
 │   │   ├── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
 │   │   └── universe/             # 銘柄マスタCSVのパース・検証と`instruments`へのupsert（`Parse`/`SyncFile`。`domain`のみに依存。#389）

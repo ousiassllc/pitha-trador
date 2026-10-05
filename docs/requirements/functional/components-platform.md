@@ -81,7 +81,7 @@ Scheduler/Jev/Risk Engineが「現在何を実行しているか」をUIから�
 
 News Ingest（`internal/service/newsfeed`）が対象銘柄に関連するニュース見出し・本文を外部ニュースフィードから取得し、Luna（外部AI API）へ送信して市場コンテキストを補強する。永続化は既存カラムの範囲内で行い、新規テーブルは追加しない。
 
-- FR-LUNA-1: News Ingestは`instruments`テーブルの`is_active`銘柄を対象に、設定可能な外部ニュースフィード（`environment/setup.md`の`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`）から見出し・本文を定期取得する
+- FR-LUNA-1: News Ingestは、ニュースが実際に参照される銘柄（直近のFast Screener候補と保有中ポジションの銘柄）のみを対象に、東証立会時間中だけ、少数（既定4）の並列で、設定可能な外部ニュースフィード（`environment/setup.md`の`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`）から見出し・本文を定期取得する
 - FR-LUNA-2: 取得したニュース1件ごとにLuna API（`LUNA_API_KEY`/`LUNA_BASE_URL`）へ送信し、`sentiment`（bullish/bearish/neutral）・`event_type`（決算/業績修正/M&A/規制/その他）・`summary`を受け取る
 - FR-LUNA-3: Luna応答は当該銘柄の直近ニュース文脈としてインメモリキャッシュ（直近N件、TTL付き、DB非永続）に保持し、Jev Scout/Trader呼び出し時に`jev_decisions.state_json`（既存カラム）内の`news_context`フィールドとして注入する。これによりFR-SCAN-1の「ニュースフラグ発生」トリガーを実装する
 - FR-LUNA-4: Luna API失敗時はニュースフラグを立てず、通常のFast Screener/Jevフローに影響を与えない（Jev同様、失敗時は機能低下のみでシステム全体を止めないフェイルセーフ）

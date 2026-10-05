@@ -166,7 +166,7 @@ sequenceDiagram
     participant SCOUT as Jev Scout
 
     loop 定期ポーリング
-        NF->>FEED: 対象銘柄（instruments.is_active）関連ニュース取得
+        NF->>FEED: 対象銘柄（Fast Screener候補＋保有銘柄、立会時間中のみ、並列度上限4）関連ニュース取得
         FEED-->>NF: 見出し・本文
         NF->>LUNA: ニュース本文（Luna API、実際の外部AI呼び出し）
         LUNA-->>NF: sentiment / event_type / summary
