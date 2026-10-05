@@ -16,6 +16,11 @@ type PortfolioProvider interface {
 	// for FR-RISK-1's max_open_positions.
 	OpenPositionCount(ctx context.Context) (int, error)
 
+	// OpenPositionCountBySide returns how many open positions are on side
+	// (domain.PositionSideLong or PositionSideShort), for FR-RISK-1's
+	// max_same_direction_positions and market-adverse gate.
+	OpenPositionCountBySide(ctx context.Context, side string) (int, error)
+
 	// TotalExposurePct returns every open position's combined notional as
 	// a percentage of account equity, for FR-RISK-1's
 	// max_total_exposure_pct.
@@ -59,6 +64,10 @@ type PortfolioProvider interface {
 type ZeroPortfolioProvider struct{}
 
 func (ZeroPortfolioProvider) OpenPositionCount(context.Context) (int, error) { return 0, nil }
+
+func (ZeroPortfolioProvider) OpenPositionCountBySide(context.Context, string) (int, error) {
+	return 0, nil
+}
 
 func (ZeroPortfolioProvider) TotalExposurePct(context.Context) (float64, error) { return 0, nil }
 

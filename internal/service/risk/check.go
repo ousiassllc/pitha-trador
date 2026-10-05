@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/correlation"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
@@ -20,7 +21,10 @@ import (
 // recent loss - a lightweight, time-based gate that is not itself logged
 // to kill_switch_events, unlike consecutive_losses reaching
 // max_consecutive_losses below), then each FR-RISK-1 limit in the table's
-// order. max_trade_loss_pct is enforced through position sizing
+// order, including the "同じ方向に重ねない" pair: max_same_direction_positions
+// and market_adverse_to_direction (a same-direction add while the market
+// index moves against the held direction, internal/service/risk/correlation).
+// max_trade_loss_pct is enforced through position sizing
 // (sizing.Quantity): the candidate is rejected when not even one lot
 // keeps a stop-out loss within it.
 //
@@ -71,6 +75,13 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if count >= e.limits.MaxOpenPositions {
 		return false, fmt.Sprintf("%s: count=%d max=%d", ReasonMaxOpenPositions, count, e.limits.MaxOpenPositions)
 	}
+	sameDirection, err := e.portfolio.OpenPositionCountBySide(ctx, direction)
+	if err != nil {
+		return e.failClosed("read same-direction position count", err)
+	}
+	if correlation.SameDirectionExceeded(e.limits, sameDirection) {
+		return false, fmt.Sprintf("%s: direction=%s count=%d max=%d", ReasonMaxSameDirection, direction, sameDirection, e.limits.MaxSameDirectionPositions)
+	}
 	totalPct, err := e.portfolio.TotalExposurePct(ctx)
 	if err != nil {
 		return e.failClosed("read total exposure", err)
@@ -119,6 +130,9 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	}
 	if *snapshot.SpreadBps > e.limits.MaxSpreadBps {
 		return false, fmt.Sprintf("%s: spread_bps=%.2f max=%.2f", ReasonMaxSpreadBps, *snapshot.SpreadBps, e.limits.MaxSpreadBps)
+	}
+	if pct, adverse := correlation.MarketAdverse(e.limits, direction, sameDirection, snapshot.Feature.MarketReturn5m); adverse {
+		return false, fmt.Sprintf("%s: direction=%s same_direction_positions=%d market_return_5m_pct=%.4f threshold_pct=%.4f", ReasonMarketAdverse, direction, sameDirection, pct, e.limits.MarketAdverseReturn5mPct)
 	}
 	if qty, reason := sizing.Quantity(e.limits, e.stopLossPct, snapshot.Price, totalPct); qty == 0 {
 		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", reason, snapshot.Price, e.stopLossPct, e.limits.MaxTradeLossPct)

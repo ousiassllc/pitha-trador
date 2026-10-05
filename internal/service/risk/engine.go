@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/correlation"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
@@ -24,6 +25,8 @@ const (
 	ReasonKillSwitchActive        = "kill_switch_active"
 	ReasonCooldownAfterLoss       = "cooldown_after_loss"
 	ReasonMaxOpenPositions        = "max_open_positions"
+	ReasonMaxSameDirection        = correlation.ReasonMaxSameDirectionPositions
+	ReasonMarketAdverse           = correlation.ReasonMarketAdverse
 	ReasonMaxTotalExposurePct     = sizing.ReasonMaxTotalExposurePct
 	ReasonMaxPositionPerSymbolPct = sizing.ReasonMaxPositionPerSymbolPct
 	ReasonMaxDailyLossPct         = "max_daily_loss_pct"
