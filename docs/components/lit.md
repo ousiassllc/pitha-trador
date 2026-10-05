@@ -125,7 +125,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 
 ### 5.5 pitha-activity-feed
 
-- 初期データを`GET /api/v1/activity`で取得しレンダリングし、以後`/ws/activity`の`job_update`（該当キューの件数のみ置換）・`activity_event`（フィード先頭に追加、最大500件で切り詰め）を反映する
+- 初期データを`GET /api/v1/activity`で取得しレンダリングし、以後`/ws/activity`の`job_update`（該当キューの件数のみ置換）・`activity_event`（フィード先頭に追加、最大500件で切り詰め）を反映する。`{"type":"resync"}`（サーバが取りこぼしを通知）を受けたらスナップショットとKill Switchイベントを再取得する
 - `api-url`/`ws-url`/`kill-switch-events-url`はすべてTemplから属性で注入し、コンポーネントは既定値を持たない（HATEOAS。`pitha-kill-switch-panel`と同じ）。未設定の属性があれば`logger.error`を出して該当の取得・購読を行わない
 - type/queueセレクトの変更時は`GET /api/v1/activity?type=&queue=`で再取得する（サーバー側フィルタ。`queue`指定は当該キューの`job`イベントのみに一致）。WS受信イベントも同じ条件でクライアント側で絞り込む
 - 直近Kill Switchイベントは`kill-switch-events-url`属性（Templ注入。値は`/api/v1/activity?type=kill_switch&limit=10`）で別途取得し、WSの`kill_switch`イベントで先頭に追加する（コンポーネント側の切り詰め件数はこの`limit`と同じ10件）。クエリ文字列はクライアントで組み立てない

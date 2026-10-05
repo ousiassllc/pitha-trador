@@ -116,7 +116,7 @@ erDiagram
 | last_error | text | NULL可 | |
 | created_at | text | NOT NULL | |
 
-インデックス: `INDEX (queue, status, scheduled_at)`（`ClaimNext`・未完了件数`CountOpen`）, `INDEX (queue, status, finished_at)`（直近`failed`件数`QueueCounts`・Jev Scout間引き`ListOpenOrFinishedSince`・Activity Logの直近ジョブ`ListRecent`。マイグレーション000019）。保持期間内の完了行は最大で数千万行に達するため、毎サイクル・毎ジョブ遷移で呼ばれるクエリは完了行を全走査せず、この2本の索引の範囲検索だけで引く（`EXPLAIN QUERY PLAN`が`SCAN jobs`にならないことをテストで固定している）
+インデックス: `INDEX (queue, status, scheduled_at)`（`ClaimNext`・未完了件数`CountOpen`。`ClaimNext`は書き込みロックを取らない読み取りで最古の実行可能ジョブを探し、`status='pending'`条件付き`UPDATE`で確保する。空キューのポーリングが毎回`BEGIN IMMEDIATE`で書き込みロックを奪わないため）, `INDEX (queue, status, finished_at)`（直近`failed`件数`QueueCounts`・Jev Scout間引き`ListOpenOrFinishedSince`・Activity Logの直近ジョブ`ListRecent`。マイグレーション000019）。保持期間内の完了行は最大で数千万行に達するため、毎サイクル・毎ジョブ遷移で呼ばれるクエリは完了行を全走査せず、この2本の索引の範囲検索だけで引く（`EXPLAIN QUERY PLAN`が`SCAN jobs`にならないことをテストで固定している）
 
 再起動時の回復: プロセス起動時に`status='running'`のまま残っている行（クラッシュで中断されたジョブ）を`pending`へ戻し再実行する。起動後に完了書き込みへ失敗して`running`のまま残った行は、全キュー共通でSchedulerが1分ごとに`started_at`から固定10分超のものを`failed`へ回復する（`last_error`＝`orphaned: …`。しきい値は`scan.full_scan_interval_seconds`に連動しない。`market-data`は全体スキャンの未完了判定（`Scheduler.EnqueueFullScan`）の直前にも回復する。`non-functional.md` §2.1）。
 

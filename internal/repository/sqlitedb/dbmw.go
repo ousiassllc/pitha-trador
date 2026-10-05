@@ -85,10 +85,12 @@ func (loggingInterceptor) ConnBeginTx(ctx context.Context, conn driver.ConnBegin
 // TxCommit feeds the COMMIT outcome of a read-write transaction into
 // DBWriteFailures: a transaction's writes are only durable once COMMIT
 // succeeds, so SQLITE_FULL/IOERR/BUSY there is a storage failure, and a
-// successful COMMIT resets the streak. Writes that use RETURNING go
-// through QueryContext and are not observed individually; every such
-// write in this codebase runs inside a transaction, so BEGIN/COMMIT here
-// covers it (issue #539).
+// successful COMMIT resets the streak. Policy for writes that use
+// RETURNING: they go through QueryContext and are not observed (a read
+// and a write cannot be told apart there). The only such statement is the
+// rare orphan cleanup FailOrphanedRunning; the hot-path writes (fills,
+// closes, enqueues, claims) use Exec or run in a transaction and are
+// covered here and in ConnExecContext (issue #539).
 func (loggingInterceptor) TxCommit(ctx context.Context, tx driver.Tx) error {
 	err := tx.Commit()
 	if readOnly, _ := ctx.Value(readOnlyTxKey{}).(bool); !readOnly || err != nil {
