@@ -22,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/quote"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
@@ -239,8 +240,8 @@ func readingFromBoard(board marketdata.Board) featureengine.Reading {
 		Turnover:     board.TradingValue,
 		SessionHigh:  board.HighPrice,
 		SessionLow:   board.LowPrice,
-		Bid:          board.AskPrice,
-		Ask:          board.BidPrice,
+		Bid:          quote.Bid(board),
+		Ask:          quote.Ask(board),
 		BidQty:       board.AskQty,
 		AskQty:       board.BidQty,
 		SpecialQuote: board.IsSpecialQuote(),

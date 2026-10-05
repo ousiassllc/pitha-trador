@@ -10,9 +10,6 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
-	"github.com/ousiassllc/pitha-trador/internal/repository/market"
-	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
@@ -84,29 +81,53 @@ func TestEngine_OnSnapshot_ClosesPositionWhenStopLossTriggers(t *testing.T) {
 	}
 }
 
-// Regression test for issue #460: a failing Mark must report the real
-// position ID, not the zero value Mark returns alongside its error.
-func TestEngine_OnSnapshot_MarkFailureReportsPositionID(t *testing.T) {
-	db := newTestDB(t)
-	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true})
-	if err != nil {
-		t.Fatalf("create instrument: %v", err)
-	}
-	engine := execution.NewEngine(execution.Deps{Orders: trading.NewOrderRepository(db), Positions: trading.NewPositionRepository(db), Decisions: judgement.NewDecisionRepository(db)}, execution.Config{})
+// enterOpenPosition opens a 100-share LONG at 2000 and returns its
+// position ID and entry time.
+func enterOpenPosition(t *testing.T, te testEngine) (int64, time.Time) {
+	t.Helper()
 	opened := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
-	entry, err := engine.Enter(context.Background(), execution.EntryRequest{Signal: longSignal(inst.ID), Quantity: 100, Price: 2000, Now: opened})
+	entry, err := te.engine.Enter(context.Background(), execution.EntryRequest{
+		Signal: longSignal(te.instrument.ID), Quantity: 100, Price: 2000, Now: opened,
+	})
 	if err != nil {
 		t.Fatalf("Enter: %v", err)
 	}
-	// RAISE(IGNORE) makes Mark's UPDATE touch no row, as if the position was closed concurrently.
-	if _, err := db.Exec(`CREATE TRIGGER positions_skip BEFORE UPDATE ON positions BEGIN SELECT RAISE(IGNORE); END`); err != nil {
+	return entry.Position.ID, opened
+}
+
+// Regression test for issue #460: a failing Mark must report the real
+// position ID, not the zero value Mark returns alongside its error.
+func TestEngine_OnSnapshot_MarkFailureReportsPositionID(t *testing.T) {
+	te := newTestEngine(t, execution.Config{})
+	positionID, opened := enterOpenPosition(t, te)
+	if _, err := te.db.Exec(`CREATE TRIGGER positions_busy BEFORE UPDATE ON positions BEGIN SELECT RAISE(ABORT, 'database is locked'); END`); err != nil {
 		t.Fatalf("create trigger: %v", err)
 	}
 
-	_, err = engine.OnSnapshot(context.Background(), snapshotAt(inst.ID, 2005, opened.Add(time.Minute)))
-	want := fmt.Sprintf("mark position %d to market", entry.Position.ID)
-	if !errors.Is(err, domain.ErrPositionNotFound) || !strings.Contains(err.Error(), want) {
-		t.Fatalf("OnSnapshot error = %v, want ErrPositionNotFound containing %q", err, want)
+	_, err := te.engine.OnSnapshot(context.Background(), snapshotAt(te.instrument.ID, 2005, opened.Add(time.Minute)))
+	want := fmt.Sprintf("mark position %d to market", positionID)
+	if err == nil || errors.Is(err, domain.ErrPositionNotFound) || !strings.Contains(err.Error(), want) {
+		t.Fatalf("OnSnapshot error = %v, want a non-NotFound error containing %q", err, want)
+	}
+}
+
+// Regression test for issue #526: a manual close / CloseAll that wins the
+// race between GetOpenByInstrument and Mark is a normal outcome, not an
+// error that fails the whole market-data job.
+func TestEngine_OnSnapshot_PositionClosedBeforeMarkIsNotAnError(t *testing.T) {
+	te := newTestEngine(t, execution.Config{})
+	_, opened := enterOpenPosition(t, te)
+	// RAISE(IGNORE) makes Mark's UPDATE touch no row, as if the position was closed concurrently.
+	if _, err := te.db.Exec(`CREATE TRIGGER positions_skip BEFORE UPDATE ON positions BEGIN SELECT RAISE(IGNORE); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	result, err := te.engine.OnSnapshot(context.Background(), snapshotAt(te.instrument.ID, 2005, opened.Add(time.Minute)))
+	if err != nil {
+		t.Fatalf("OnSnapshot: %v, want no error for a concurrently closed position", err)
+	}
+	if result.Position != nil || result.Exited {
+		t.Errorf("OnSnapshot() = %+v, want Position=nil, Exited=false", result)
 	}
 }
 

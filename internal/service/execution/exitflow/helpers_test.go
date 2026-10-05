@@ -7,6 +7,7 @@ package exitflow_test
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 // testEngine bundles a real (SQLite-backed) Engine plus the repositories and
 // instrument fixture these tests need.
 type testEngine struct {
+	db         *sql.DB
 	engine     *execution.Engine
 	orders     *trading.OrderRepository
 	positions  *trading.PositionRepository
@@ -61,7 +63,7 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 		Instruments: instruments,
 	}, cfg)
 
-	return testEngine{engine: engine, orders: orders, positions: positions, snapshots: snapshots, instrument: inst}
+	return testEngine{db: db, engine: engine, orders: orders, positions: positions, snapshots: snapshots, instrument: inst}
 }
 
 func longSignal(instrumentID int64) domain.TradeSignal {
