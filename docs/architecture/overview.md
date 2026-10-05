@@ -28,7 +28,7 @@
 | マイグレーション | golang-migrate（`database/sqlite`ドライバ、`modernc.org/sqlite`上） | `db/migrations` のSQLマイグレーション管理 |
 | ベクトル検索 | `modernc.org/sqlite/vec`（sqlite-vecのpure Go移植、`vec0`仮想テーブル） | RAG類似検索（§7）。pgvector相当の機能をSQLite上で実現。CGO不要でクロスコンパイル可能（`environment/setup.md` §CI/CD参照） |
 | Job Queue / Scheduler | 自前Workerプール（`jobs`テーブル + goroutine） | market-data, feature-calc, jev-scout, jev-trader, outcome-labeling, analytics の6キュー（`feature-calc`は互換用の空ジョブで、特徴量算出は`market-data`ジョブ内で完結する。Risk判定・Paper発注は`jev-trader`内で同期実行しキューを持たない）。単一プロセス前提のためRedis/River等の外部キューは不要。`architecture/er.md` の`jobs`テーブルで永続化・再起動時リカバリ |
-| 周期実行 | robfig/cron | 60秒/15-30秒/5-15秒サイクルのトリガー |
+| 周期実行 | robfig/cron ＋自前ループ | robfig/cron（`Scheduler`）は60秒フルスキャンと分単位以上の保守ジョブ（孤児回復・Outcome Labeling・ハートビート/リスク監視・自動再開・アップデート確認・日次の自己改善/バックアップ等）のトリガー。15-30秒の候補更新は`internal/bootstrap/candidates`の自前ループ（`min`+ジッター）、5-15秒の保有ポジション再評価は`internal/bootstrap/lifecycle.go`が起動する別goroutine（`heldposition.Monitor.Run`）で、いずれもcronのジョブ登録ではない |
 | リアルタイムPush | `github.com/coder/websocket` | Scanner Dashboard/Symbol DetailへのUI即時反映（`nhooyr.io/websocket`はメンテナがcoder/websocketへ移管し非推奨化されたため、フォーク後継のcoder/websocketを採用） |
 | 市場データ・発注 | kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券） | 1分足・板・発注（REST + PUSH WebSocket） |
 | Jevアダプタ | 独自HTTPクライアント | Jev API（外部LLM判断レイヤー）呼び出し |
