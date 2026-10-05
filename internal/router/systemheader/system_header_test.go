@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -124,5 +125,25 @@ func TestNew_HeaderStatusRefreshIsMarkedBackground(t *testing.T) {
 	alt := `hx-headers='{"` + middleware.BackgroundHeader + `":"1"}'`
 	if body := rec.Body.String(); !strings.Contains(body, want) && !strings.Contains(body, alt) {
 		t.Errorf("#header-status must send %s, got %q", middleware.BackgroundHeader, body)
+	}
+}
+
+// Every timer-driven (`every Ns`) element in the page must send the
+// background marker: the server keeps no path list, so a poll missing the
+// header would keep the dead-man's switch alive from an idle tab (FR-RISK-6).
+func TestNew_EveryNsPollingElementsAreMarkedBackground(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(failingStateEngine{}))
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/calibration", nil))
+
+	polling := regexp.MustCompile(`<[^>]*hx-trigger="[^"]*every \d+s[^"]*"[^>]*>`).FindAllString(rec.Body.String(), -1)
+	if len(polling) < 2 {
+		t.Fatalf("found %d `every Ns` elements, want at least the update and marketdata banners: %q", len(polling), polling)
+	}
+	for _, tag := range polling {
+		if !strings.Contains(tag, middleware.BackgroundHeader) {
+			t.Errorf("polling element must send %s via hx-headers: %s", middleware.BackgroundHeader, tag)
+		}
 	}
 }
