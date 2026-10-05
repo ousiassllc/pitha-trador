@@ -17,6 +17,9 @@ func TestLoadStrategy_ParsesRepositoryTemplateFile(t *testing.T) {
 	if got, want := cfg.Scan.FullScanIntervalSeconds, 60; got != want {
 		t.Errorf("Scan.FullScanIntervalSeconds = %d, want %d", got, want)
 	}
+	if got, want := cfg.Scan.KabuInfoAPIMaxPerSecond, 8; got != want {
+		t.Errorf("Scan.KabuInfoAPIMaxPerSecond = %d, want %d", got, want)
+	}
 	if got, want := cfg.FastScreener.TopN, 20; got != want {
 		t.Errorf("FastScreener.TopN = %d, want %d", got, want)
 	}

@@ -2,10 +2,14 @@ package marketdata
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/infolimit"
 )
 
 // RegisterSymbol identifies one instrument for PUSH registration
@@ -36,7 +40,7 @@ func (c *Client) RegisterSymbols(ctx context.Context, symbols []RegisterSymbol) 
 	}
 
 	var resp RegisterSuccess
-	if err := c.do(ctx, http.MethodPut, "/register", token, registerRequest{Symbols: symbols}, &resp); err != nil {
+	if err := c.doInfo(ctx, http.MethodPut, "/register", token, registerRequest{Symbols: symbols}, &resp); err != nil {
 		return RegisterSuccess{}, err
 	}
 	return resp, nil
@@ -173,12 +177,48 @@ func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Boa
 
 	var board Board
 	path := fmt.Sprintf("/board/%s@%d", symbol, exchange)
-	if err := c.do(ctx, http.MethodGet, path, token, nil, &board); err != nil {
-		c.status.MarkStale(symbol, err)
-		c.boardFailures.Fail()
+	if err := c.doInfo(ctx, http.MethodGet, path, token, nil, &board); err != nil {
+		if !errors.Is(err, ErrRateLimited) {
+			c.status.MarkStale(symbol, err)
+			c.boardFailures.Fail()
+		}
 		return Board{}, err
 	}
 	c.status.MarkFresh(symbol, time.Now().UTC())
 	c.boardFailures.Succeed()
 	return board, nil
 }
+
+const (
+	infoAPIRateLimitAttempts = 4 // initial + 3 retries
+	infoAPIRateLimitBackoff  = time.Second
+)
+
+// doInfo is do plus the process-wide information/register API limiter
+// and 429 / 4001006 retry (issue #514). Token issuance stays on do.
+func (c *Client) doInfo(ctx context.Context, method, path, token string, body, out any) error {
+	var last error
+	for attempt := 1; attempt <= infoAPIRateLimitAttempts; attempt++ {
+		if err := c.limiter.Wait(ctx); err != nil {
+			return err
+		}
+		err := c.do(ctx, method, path, token, body, out)
+		if !IsRateLimit(err) {
+			return err
+		}
+		last = err
+		c.limiter.NoteOverflow()
+		slog.Warn("marketdata: kabu info api rate limited, backing off",
+			"path", path, "attempt", attempt)
+		if attempt == infoAPIRateLimitAttempts {
+			break
+		}
+		if err := infolimit.Sleep(ctx, c.limiter.Clock(), infoAPIRateLimitBackoff); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("%w: %w", ErrRateLimited, last)
+}
+
+// RateLimitStats reports the process-wide information-API limiter.
+func (c *Client) RateLimitStats() infolimit.Stats { return c.limiter.Stats() }

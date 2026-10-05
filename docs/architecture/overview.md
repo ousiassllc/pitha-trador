@@ -89,6 +89,8 @@ pitha-trador/
 │   │   └── snapshotcols/         # market_snapshotsのFeature列とdomain.Featureの対応表（INSERT/SELECT用。`market`が本番コードで使う`domain`のみに依存するリーフ）
 │   ├── service/                  # domain, repositoryに依存
 │   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS）
+│   │   │   ├── infolimit/        # 情報API・銘柄登録のプロセス全体レート制限（公式10件/秒、既定8。issue #514）
+│   │   │   └── rateflow/         # テスト専用: 情報APIレート上限と4001006の回帰テスト（#514）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
 │   │   ├── featureengine/        # 特徴量算出
 │   │   │   ├── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
@@ -183,7 +185,7 @@ pitha-trador/
 
 ### サブパッケージ単位の責務規約
 
-レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`execution/pendingfill`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`selfimprove/governorflow`・`jev/clientflow`・`updater/checkflow`・`router/analysisflow`・`router/apiroutes`・`router/staticroute`・`router/systemheader`・`router/wslistener`・`config/strategyflow`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
+レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`execution/pendingfill`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`selfimprove/governorflow`・`jev/clientflow`・`updater/checkflow`・`router/analysisflow`・`router/apiroutes`・`router/staticroute`・`router/systemheader`・`router/wslistener`・`config/strategyflow`・`marketdata/rateflow`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
 `repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済みで、上のツリーは実装と一致している（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
 
@@ -227,7 +229,7 @@ handler → service → repository → domain
 
 | コンポーネント | 責務 | 実装場所 |
 |---------------|------|---------|
-| Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理 | `internal/service/marketdata` |
+| Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理。情報API・銘柄登録は`infolimit`でプロセス全体の秒間上限を守る。`rateflow`はテスト専用 | `internal/service/marketdata`（`infolimit`, `rateflow`） |
 | Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1）。`marketcontextflow`はテスト専用 | `internal/service/featureengine`（`eventtrigger`, `marketcontextflow`） |
 | Fast Screener | 数値フィルター・screen_score算出・上位N銘柄選定（§4.2） | `internal/service/screener` |
 | Jev Adapter (Scout/Trader) | 構造化状態と型付き質問（`noul`/`choice`）をTypeSafe AI公式API（`POST /v1/systemone`）へ送信し、回答をScoutResponse/TraderResponseへ変換する（§4.4, §4.5, §6）。ワイヤ層は`systemone`、テスト用フェイクは`jevtest`、`clientflow`はテスト専用 | `internal/service/jev`（`systemone`, `jevtest`, `clientflow`） |

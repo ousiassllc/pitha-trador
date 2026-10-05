@@ -19,13 +19,17 @@ type StrategyConfig struct {
 // ScanConfig holds the Scheduler scan-frequency settings
 // (functional.md §4.3 スキャン頻度・イベント駆動).
 type ScanConfig struct {
-	FullScanIntervalSeconds            int                `yaml:"full_scan_interval_seconds"`
-	CandidateRefreshIntervalSecondsMin int                `yaml:"candidate_refresh_interval_seconds_min"`
-	CandidateRefreshIntervalSecondsMax int                `yaml:"candidate_refresh_interval_seconds_max"`
-	HeldPositionIntervalSecondsMin     int                `yaml:"held_position_interval_seconds_min"`
-	HeldPositionIntervalSecondsMax     int                `yaml:"held_position_interval_seconds_max"`
-	JevScoutMinIntervalSeconds         int                `yaml:"jev_scout_min_interval_seconds"`
-	EventTrigger                       EventTriggerConfig `yaml:"event_trigger"`
+	FullScanIntervalSeconds            int `yaml:"full_scan_interval_seconds"`
+	CandidateRefreshIntervalSecondsMin int `yaml:"candidate_refresh_interval_seconds_min"`
+	CandidateRefreshIntervalSecondsMax int `yaml:"candidate_refresh_interval_seconds_max"`
+	HeldPositionIntervalSecondsMin     int `yaml:"held_position_interval_seconds_min"`
+	HeldPositionIntervalSecondsMax     int `yaml:"held_position_interval_seconds_max"`
+	JevScoutMinIntervalSeconds         int `yaml:"jev_scout_min_interval_seconds"`
+	// KabuInfoAPIMaxPerSecond is the process-wide cap on kabuステーション
+	// 情報API / 銘柄登録API calls (GetBoard, GetSymbol, RegisterSymbols).
+	// Official cap is 10/s; default 8. Values above 10 are clamped.
+	KabuInfoAPIMaxPerSecond int                `yaml:"kabu_info_api_max_per_second"`
+	EventTrigger            EventTriggerConfig `yaml:"event_trigger"`
 }
 
 // EventTriggerConfig holds FR-SCAN-1/FR-SCAN-2's event-driven

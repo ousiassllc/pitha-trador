@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/httpbody"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/infolimit"
 )
 
 // DefaultBaseURL is kabuステーションAPIの既定ローカルエンドポイント
@@ -52,6 +53,10 @@ type Config struct {
 	// GetBoard. Defaults to a fresh NewStatusTracker(); pass a shared
 	// tracker to combine REST and PUSH freshness (see PushClient).
 	Status *StatusTracker
+	// InfoAPIMaxPerSecond caps GetBoard/GetSymbol/RegisterSymbols (default 8, max 10).
+	InfoAPIMaxPerSecond int
+	// Clock drives the info-API limiter; tests inject infolimit.ManualClock.
+	Clock infolimit.Clock
 }
 
 // Client is a kabuステーションAPI REST client: token issuance/holding,
@@ -65,6 +70,7 @@ type Client struct {
 
 	boardFailures  domain.FailureStreak
 	brokerFailures domain.FailureStreak
+	limiter        *infolimit.Limiter
 
 	mu          sync.RWMutex
 	token       string
@@ -91,6 +97,7 @@ func NewClient(cfg Config) *Client {
 		apiPassword: cfg.APIPassword,
 		httpClient:  httpClient,
 		status:      status,
+		limiter:     infolimit.New(cfg.InfoAPIMaxPerSecond, cfg.Clock),
 	}
 }
 

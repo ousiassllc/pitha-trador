@@ -49,6 +49,23 @@ func TestHandleMarketData_FetchesComputesAndPersistsSnapshot(t *testing.T) {
 	}
 }
 
+func TestHandleMarketData_DefersRateLimitedFetchWithoutFailing(t *testing.T) {
+	env := newTestEnv(t)
+	env.Fake.err = marketdata.ErrRateLimited
+	inst := mustCreateInstrument(t, env, "9997")
+
+	if err := env.HandleMarketData(context.Background(), marketDataJob(t, inst)); err != nil {
+		t.Fatalf("HandleMarketData: %v, want nil (4001006 is deferred, not failed)", err)
+	}
+	snaps, err := env.Snapshots.ListByInstrument(context.Background(), inst.ID, 10)
+	if err != nil {
+		t.Fatalf("ListByInstrument: %v", err)
+	}
+	if len(snaps) != 0 {
+		t.Errorf("len(snaps) = %d, want 0 (no snapshot on deferred rate limit)", len(snaps))
+	}
+}
+
 func TestHandleMarketData_ReturnsErrorWithoutSwallowingOnFetchFailure(t *testing.T) {
 	env := newTestEnv(t)
 	env.Fake.err = marketdata.ErrNoToken

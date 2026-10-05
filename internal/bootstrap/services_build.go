@@ -78,8 +78,13 @@ func (s *Services) wireActivity() {
 // (its cache is simply always empty, so no news_context is injected and no
 // news flag is raised) but its polling loop is not started.
 func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels alerts.Channels, jevMaxAttempts int) {
+	infoAPIMax := 0
+	if s.strategy != nil {
+		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
+	}
 	s.MarketData = marketdata.NewClient(marketdata.Config{
-		APIPassword: secrets.KabuAPIPassword,
+		APIPassword:         secrets.KabuAPIPassword,
+		InfoAPIMaxPerSecond: infoAPIMax,
 	})
 	s.Jev = jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,

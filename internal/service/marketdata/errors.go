@@ -3,12 +3,30 @@ package marketdata
 import (
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 // ErrPriceUnavailable is returned by callers that need a usable last price
 // when a Board reports none (CurrentPrice 0/NaN: before the opening auction,
 // no trade yet, or null in the response). See Board.HasPrice.
 var ErrPriceUnavailable = errors.New("marketdata: current price unavailable")
+
+// CodeAPIRateLimit is kabuステーションAPI 4001006「API実行回数エラー」
+// (https://kabucom.github.io/kabusapi/ptal/error.html). HTTP 429 carries it.
+const CodeAPIRateLimit = 4001006
+
+// ErrRateLimited is returned after 429 / 4001006 retries are exhausted.
+// Callers must not treat it as a symbol failure (issue #514).
+var ErrRateLimited = errors.New("marketdata: kabu info api rate limited")
+
+// IsRateLimit reports whether err is a 429 or 4001006 overflow.
+func IsRateLimit(err error) bool {
+	var api *APIError
+	if !errors.As(err, &api) {
+		return false
+	}
+	return api.Code == CodeAPIRateLimit || api.StatusCode == http.StatusTooManyRequests
+}
 
 // APIError represents a kabuステーションAPI error response
 // (kabu_STATION_API.yaml components.schemas.ErrorResponse: {"Code": int,
