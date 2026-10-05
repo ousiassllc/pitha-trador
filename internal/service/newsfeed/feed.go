@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/httpbody"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 )
 
@@ -87,7 +87,7 @@ func (f *FeedClient) Fetch(ctx context.Context, symbol string) ([]assist.NewsIte
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFeedBytes))
+	body, err := httpbody.ReadAll(resp.Body, maxFeedBytes)
 	if err != nil {
 		return nil, fmt.Errorf("newsfeed: read feed response for %q: %w", symbol, err)
 	}
