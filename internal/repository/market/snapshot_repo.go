@@ -196,12 +196,31 @@ func (r *SnapshotRepository) ListByInstrumentBefore(ctx context.Context, instrum
 	return out, nil
 }
 
-var snapshotSelectColumns = `
-SELECT id, instrument_id, symbol, timestamp, price, bid, ask, spread_bps, volume, turnover,
+// snapshotColumns lists the market_snapshots columns scanSnapshot reads.
+// withRaw adds raw_data_json (the whole board, ~1-2KB/row), which only the
+// by-id/replay readers need; history readers (snapshotHistoryColumns) skip it.
+func snapshotColumns(withRaw bool) string {
+	raw := ""
+	if withRaw {
+		raw = "raw_data_json, "
+	}
+	return `SELECT id, instrument_id, symbol, timestamp, price, bid, ask, spread_bps, volume, turnover,
 	` + snapshotcols.Names() + `,
-	raw_data_json, created_at`
+	` + raw + `created_at`
+}
+
+var (
+	snapshotSelectColumns  = snapshotColumns(true)
+	snapshotHistoryColumns = snapshotColumns(false)
+)
 
 func scanSnapshot(row sqlutil.RowScanner) (domain.Snapshot, error) {
+	return scanSnapshotColumns(row, true)
+}
+
+// scanSnapshotColumns scans a row selected with snapshotColumns(withRaw);
+// without raw_data_json, Snapshot.RawDataJSON stays empty.
+func scanSnapshotColumns(row sqlutil.RowScanner, withRaw bool) (domain.Snapshot, error) {
 	var (
 		s         domain.Snapshot
 		timestamp string
@@ -214,7 +233,10 @@ func scanSnapshot(row sqlutil.RowScanner) (domain.Snapshot, error) {
 		&s.Volume, &s.Turnover,
 	}
 	dest = append(dest, snapshotcols.Dests(&s)...)
-	dest = append(dest, &s.RawDataJSON, &createdAt)
+	if withRaw {
+		dest = append(dest, &s.RawDataJSON)
+	}
+	dest = append(dest, &createdAt)
 
 	err := row.Scan(dest...)
 	if errors.Is(err, sql.ErrNoRows) {
