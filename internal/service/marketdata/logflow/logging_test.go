@@ -1,4 +1,4 @@
-package marketdata_test
+package logflow_test
 
 import (
 	"bytes"

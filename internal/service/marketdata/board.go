@@ -168,6 +168,8 @@ func levelDepth(levels ...*BoardLevel) (float64, bool) {
 // cumulative volume/turnover, and best bid/ask) for symbol@exchange over
 // REST (overview.md §4 Market Data Client, §5). It records the result
 // with the Client's StatusTracker: fresh on success, stale on any error.
+// Only feed-level errors extend the market_data_down streak; per-symbol
+// 4xx such as 4002001 do not (countsAsFeedFailure).
 func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Board, error) {
 	token, ok := c.Token()
 	if !ok {
@@ -180,7 +182,9 @@ func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Boa
 	if err := c.doInfo(ctx, http.MethodGet, path, token, nil, &board); err != nil {
 		if !errors.Is(err, ErrRateLimited) {
 			c.status.MarkStale(symbol, err)
-			c.boardFailures.Fail()
+			if countsAsFeedFailure(err) {
+				c.boardFailures.Fail()
+			}
 		}
 		return Board{}, err
 	}

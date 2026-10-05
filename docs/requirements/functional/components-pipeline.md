@@ -130,7 +130,7 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 
 FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行する（`internal/service/scheduler`の`WithRiskMonitor`/`WithAutoResumer`）。判定基準は以下。
 
-- market_data_down: kabuステーションAPIの板取得（`GetBoard`）が5回連続で失敗（成功1回で復旧、自動再開）
+- market_data_down: kabuステーションAPIの板取得（`GetBoard`）が5回連続で失敗（成功1回で復旧、自動再開）。数えるのはフィード側の失敗（トークン未保持・通信エラー・HTTP 5xx・認証/トークン系の4xx＝401/403と`4001007`/`4001008`/`4001009`/`4001013`/`4001017`）のみ。銘柄単位の4xx（`4002001`銘柄が見つからない、廃止・停止銘柄など）と429/`4001006`は数えず、当該銘柄をstaleにするだけ（無効銘柄が並んでも全体停止にしない。issue #532）
 - jev_api_down: Jev APIの直近呼び出しエラー率がしきい値（既定50%、直近20件、最小5件）以上（しきい値未満に戻るか、5分間呼び出しが無ければ復旧、自動再開。復旧後の最初の呼び出しは古い失敗窓を破棄して新しい窓で評価し、窓が最小5件に達しエラー率がしきい値以上になるまで再発動しない）。Slack通知（§5.2）と同じ信号を使う
 - broker_api_error: kabuステーションAPIがHTTP 5xxを5回連続で返す（手動再開のみ）。4xx・通信エラーは対象外（通信エラーは市場データ停止側で扱う）
 - db_write_failure: SQLiteの書き込みがストレージ起因（BUSY/LOCKED/READONLY/IOERR/FULL/CANTOPEN/CORRUPT/NOTADB。NOTADBはDBファイルがSQLite形式でない状態で、破損の一種として扱う）で5回連続失敗（手動再開のみ）。制約違反は対象外。書き込みはExec系に加え、トランザクションの`BEGIN`（`_txlock=immediate`の書き込みロック取得失敗）と、読み取り専用でないトランザクションの`COMMIT`の成否も計上する。`RETURNING`付きクエリ（孤児ジョブ回復`FailOrphanedRunning`のみ）は計上対象外
