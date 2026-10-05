@@ -27,7 +27,7 @@ func isSensitiveKey(key string) bool {
 // String-value patterns (FR-ERRLOG-3 (b)); url.Error puts the whole request
 // URL into the logged error string.
 var (
-	slackWebhookRe = regexp.MustCompile(`https?://hooks\.slack\.com/services/[A-Za-z0-9/_\-]+`)
+	slackWebhookRe = regexp.MustCompile(`(?i)https?://hooks\.slack\.com/services/[A-Za-z0-9/_\-]+`)
 	bearerRe       = regexp.MustCompile(`(?i)(\bBearer\s+)[A-Za-z0-9\-._~+/]+=*`)
 	// basicAuthRe covers "Authorization: Basic <base64>" (and the other
 	// non-Bearer schemes); the scheme stays, like Bearer's.

@@ -81,3 +81,4 @@
 | 1.74 | 2026-10-05 | §4の責務表に約定モデル`internal/service/fillmodel`（呼値・スプレッド・滑り・手数料・昼休み・寄り引け）、Market Calendarの`PhaseAt`、Executionのテスト専用`fillflow`/`exitflow`を追記し、Backtest Engine行・`overview/integrations.md` §8のコストモデルを固定5bps/0bpsからPaper Tradingと共用の約定モデルへ更新 | issue #509 |
 | 1.75 | 2026-10-05 | §5（`overview/integrations.md`）に約定可否の入力（板の`BidSign`/`AskSign`と銘柄情報`/symbol`の`UpperLimit`/`LowerLimit`/`MarginSell`、`symbolcache.Cache`）を追記 | issue #511 |
 | 1.76 | 2026-10-05 | §5（`integrations.md`）の「RESTに別途のレート制御は設けない」を撤回し、情報API・銘柄登録のプロセス全体レート制限（既定8件/秒）と429/`4001006`の扱いを追記。§3/§4（`overview.md`）に`marketdata/infolimit`とテスト専用`marketdata/rateflow`を追記 | issue #514 |
+| 1.77 | 2026-10-05 | §2（`overview.md`）の「周期実行」行と§10.1（`flows.md`）の起動時フローを、robfig/cron（60秒フルスキャン・保守ジョブ）・候補更新の自前ループ（15-30秒）・保有ポジション再評価の別goroutine（5-15秒）の実態に合わせて修正 | 実装との乖離解消（#570） |
