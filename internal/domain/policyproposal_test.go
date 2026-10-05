@@ -118,3 +118,26 @@ func TestValidatePolicyChanges_RejectsOutOfRangeConfidenceAndDuplicateKeys(t *te
 		})
 	}
 }
+
+func TestValidatePolicyChanges_ConfidenceRangeMatchesConfigThresholds(t *testing.T) {
+	tests := []struct {
+		name     string
+		old, new string
+		wantErr  bool
+	}{
+		{"zero rejected", `0.05`, `0`, true},
+		{"negative rejected", `0.02`, `-0.01`, true},
+		{"above one rejected", `0.98`, `1.03`, true},
+		{"one allowed", `0.96`, `1`, false},
+		{"small positive allowed", `0.05`, `0.01`, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			changes := []domain.PolicyChange{{Key: domain.PolicyKeyLongMaxToxicFlow, OldValue: tc.old, NewValue: tc.new}}
+			err := domain.ValidatePolicyChanges(changes)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ValidatePolicyChanges(%s -> %s) error = %v, wantErr %v", tc.old, tc.new, err, tc.wantErr)
+			}
+		})
+	}
+}

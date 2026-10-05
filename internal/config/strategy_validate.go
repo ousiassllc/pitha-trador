@@ -117,9 +117,17 @@ func (t PolicyDirectionThresholds) validate(key string) []error {
 	return errs
 }
 
+// IsProbabilityThreshold reports whether v is a valid policy/screener
+// probability threshold: inside (0, 1] (NaN is rejected). domain's
+// self-improvement validation reuses it so the startup and runtime ranges
+// cannot drift apart.
+func IsProbabilityThreshold(v float64) bool {
+	return v > 0 && v <= 1
+}
+
 // appendProbabilityErr appends an error naming key when v is outside (0, 1].
 func appendProbabilityErr(errs []error, key string, v float64) []error {
-	if !(v > 0 && v <= 1) { // also rejects NaN
+	if !IsProbabilityThreshold(v) {
 		return append(errs, fmt.Errorf("%s must be in (0, 1] (got %v)", key, v))
 	}
 	return errs
