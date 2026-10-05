@@ -92,6 +92,8 @@ describe('pitha-activity-feed', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('direction=LONG');
     expect(rows[0].textContent).toContain('820');
+    // 01:15Z is rendered in JST like the SSR fallback (internal/web/atoms.FormatJST).
+    expect(rows[0].querySelectorAll('td')[0].textContent).toBe('2026-09-29 10:15:00 JST');
     expect(rows[1].querySelectorAll('td')[2].textContent).toBe('—'); // no symbol
     expect(rows[1].querySelectorAll('td')[4].textContent).toBe('—'); // no latency
   });
@@ -107,6 +109,9 @@ describe('pitha-activity-feed', () => {
 
     expect(el.querySelector('#kill-switch-events')?.textContent).toContain(
       'reason=daily_loss_limit',
+    );
+    expect(el.querySelector('#kill-switch-events')?.textContent).toContain(
+      '2026-09-29 10:15:00 JST',
     );
   });
 

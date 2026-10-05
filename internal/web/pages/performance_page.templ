@@ -4,21 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
-
-// PerformanceForm is the Performance page's Walk Forward backtest
-// request, echoed back into the form so a rerun starts from the last
-// submitted values. From/To are YYYY-MM-DD dates (To inclusive).
-type PerformanceForm struct {
-	From           string
-	To             string
-	TrainingDays   int
-	ValidationDays int
-	ForwardDays    int
-}
 
 // PerformanceFold is one Walk Forward fold's Forward period and metrics.
 // ForwardEnd is the exclusive end of the day-granular period.
@@ -41,7 +29,7 @@ type PerformanceResult struct {
 // carries a validation or run failure. internal/web/handler maps the
 // internal/service types onto these plain props.
 type PerformanceProps struct {
-	Form         PerformanceForm
+	Form         organisms.BacktestFormValues
 	Actuals      organisms.PerformanceActuals
 	ActualsError string
 	Result       *PerformanceResult
@@ -58,16 +46,7 @@ templ PerformancePage(props PerformanceProps) {
 	@layout.Shell("Performance") {
 		<h1 class="text-2xl font-bold text-slate-900">Performance</h1>
 		@organisms.PerformanceActualsPanel(props.Actuals, props.ActualsError)
-		<form class="mt-4 flex flex-wrap items-end gap-4" method="get" action="/performance" data-testid="backtest-form">
-			<label class="flex flex-col text-sm text-slate-600">From <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="date" name="from" value={ props.Form.From } required/></label>
-			<label class="flex flex-col text-sm text-slate-600">To <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="date" name="to" value={ props.Form.To } required/></label>
-			<label class="flex flex-col text-sm text-slate-600">Training days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="training_days" min="1" value={ fmt.Sprintf("%d", props.Form.TrainingDays) }/></label>
-			<label class="flex flex-col text-sm text-slate-600">Validation days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="validation_days" min="1" value={ fmt.Sprintf("%d", props.Form.ValidationDays) }/></label>
-			<label class="flex flex-col text-sm text-slate-600">Forward days <input class="mt-1 rounded-md border border-slate-300 px-3 py-1" type="number" name="forward_days" min="1" value={ fmt.Sprintf("%d", props.Form.ForwardDays) }/></label>
-			@atoms.Button(atoms.ButtonProps{Type: "submit"}) {
-				Run backtest
-			}
-		</form>
+		@organisms.BacktestForm(props.Form)
 		if props.Error != "" {
 			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">{ props.Error }</p>
 		}

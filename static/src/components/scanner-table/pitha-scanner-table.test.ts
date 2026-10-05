@@ -61,7 +61,7 @@ describe('pitha-scanner-table', () => {
 
     expect(el.querySelector('[data-testid="scanner-count"]')?.textContent).toContain('2');
     expect(el.querySelector('caption')?.textContent?.trim()).toBe(
-      'Scanner Dashboard — as of 2026-09-26T10:15:00+09:00',
+      'Scanner Dashboard — as of 2026-09-26 10:15:00 JST',
     );
 
     const cells = (symbol: string) => el.querySelectorAll(`tr[data-symbol="${symbol}"] td`);

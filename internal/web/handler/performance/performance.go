@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -122,9 +123,9 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 	shared.RenderHTML(c, status, pages.PerformancePage(props))
 }
 
-func (h *PerformanceHandler) defaultForm() pages.PerformanceForm {
+func (h *PerformanceHandler) defaultForm() organisms.BacktestFormValues {
 	today := h.now().In(jst)
-	return pages.PerformanceForm{
+	return organisms.BacktestFormValues{
 		From:           today.AddDate(0, 0, -defaultRangeDays).Format(dateLayout),
 		To:             today.Format(dateLayout),
 		TrainingDays:   defaultTrainingDays,
@@ -137,8 +138,8 @@ func (h *PerformanceHandler) defaultForm() pages.PerformanceForm {
 // WalkForwardConfig over [from 00:00 JST, to+1 00:00 JST), stepping one
 // Forward period per fold. The returned form echoes the raw input even on
 // error.
-func parseBacktestForm(c *gin.Context) (pages.PerformanceForm, backtest.WalkForwardConfig, error) {
-	form := pages.PerformanceForm{From: c.Query("from"), To: c.Query("to")}
+func parseBacktestForm(c *gin.Context) (organisms.BacktestFormValues, backtest.WalkForwardConfig, error) {
+	form := organisms.BacktestFormValues{From: c.Query("from"), To: c.Query("to")}
 	var errs []error
 	days := func(key string, fallback int) int {
 		raw := c.Query(key)

@@ -33,7 +33,7 @@ internal/web/
 ├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
 ├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
-├── atoms/              # Badge, StatusDot, Toast, Button, Input
+├── atoms/              # Badge, StatusDot, Toast, Button, Input, Select
 ├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SetupStatus
 ├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）
 ├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
@@ -85,9 +85,10 @@ static/
 - `StatusDot`（システム状態: Running=緑 / Paused=黄 / Killed=赤。organismsの`SystemStatusBadge`が`domain.SystemState`から`atoms.State`へ変換して描画する）
 - `Toast`（HTMXアクション失敗のエラー通知。`role="alert"`＋閉じるボタンを持ち、`#toast-region`へswapされる。§4「エラー表示」、issue #110/#121）
 - `Button` / `ButtonLink`（`ButtonProps{Variant, Size, Type, Attrs}`。Variant: primary / danger / secondary / outline / danger-outline、Size: medium / small。色・フォーカスリング・`disabled:opacity-50`を一元化し、`hx-*`・`data-testid`等は`Attrs`で渡す。ラベルは子要素。`ButtonLink`は`<a>`版。`Toast`の×ボタンを除く全テンプレートのボタンはこれを使う。issue #309）
-- `Input`（`InputProps{ID, Name, Type, Attrs}`。枠線・余白を共通化した`<input>`。`SecretFieldRow`が使用。issue #309）
+- `Input`（`InputProps{ID, Name, Type, Class, Attrs}`。共通の枠線（`rounded-md border border-slate-300`）に`Class`のレイアウト系クラスを足した`<input>`。`Class`未指定は行内で広がる`flex-1 px-3 py-1`、縦積みラベル内では`Class`を渡して`flex-1`を外す。`SecretFieldRow`・`ScanPanel`・`BacktestForm`が使用。issue #309/#520）
+- `Select`（`SelectProps{ID, Name, Class, Attrs}`。`Input`と同じ枠線の`<select>`。`<option>`は子要素。`Class`未指定は`px-3 py-1`。`ScanPanel`・`ErrorLogPanel`が使用。issue #520）
 
-> **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Select`/`Spinner`/`Card`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が切り出しの目安。`Button`/`Input`は重複したため issue #309 で追加済み）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
+> **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Spinner`/`Card`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が切り出しの目安。`Button`/`Input`は重複したため issue #309 で追加済み）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
 
 ### molecules
 
@@ -107,6 +108,7 @@ static/
 - `ScanPanel`の銘柄マスタ未投入状態（`ScanPanelView.UniverseEmpty`。有効な`stock`が無いとき、`scan-empty`の代わりに`scanUniverseEmpty`を表示する。issue #508）: 「銘柄マスタが未投入です」の案内`scan-universe-empty`（CSVの置き場所`scan-universe-csv-guide`）と、JPXの利用上の注意へのリンク`scan-universe-jpx-terms`を添えた確認付きの取得ボタン`scan-universe-import`（`hx-post="/scanner/universe/import"`、`hx-target="#scan-panel"`、`hx-swap="outerHTML"`、押下中は無効化して`取得中です…`を表示）。押すまでJPXへは接続しない。取得後は`#scan-panel`が差し替わり、成功は`UniverseImported`件数の通知`scan-universe-imported`、失敗は`UniverseImportError`の`scan-universe-import-error`（案内とボタンは残る）を表示する
 - `ConnectionList`（Settings/Setup共通の接続先一覧。接続先ごとの`SettingsCard`と、その接続先の`SecretFieldRow`を収めた`Modal`を描く。`internal/web/organisms/connection_list.templ`、issue #302）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
+- `BacktestForm`（Performance画面のWalk Forwardバックテスト要求フォーム。`BacktestFormValues{From, To, TrainingDays, ValidationDays, ForwardDays}`を再入力用に描画し、入力は`atoms.Input`経由。`PerformancePage`が組み立てる。issue #520）
 - `PerformanceSummaryPanel`（`backtest.Metrics`を`web/handler`が写像した`organisms.PerformanceSummary`を描画する）
 - `PerformanceActualsPanel`（Performance画面の「実績（Paper）」節`#performance-actuals`。クローズ済みポジションのTotal/Daily PnL・Trades・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal countを`GET /api/v1/performance`と同じ`insight.Performance`を`web/handler`が写像した`organisms.PerformanceActuals`から描画する。算出不能（`null`）の指標は「—」。取得失敗時は固定文言のエラーを節内に表示する。`requirements/functional.md` §5.3、issue #360）
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で`X-Pitha-Background: 1`付きで取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
@@ -245,3 +247,6 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.58 | 2026-10-05 | §7（`runtime.md`）`make dev`スニペットを`Makefile`の`dev`ターゲットと完全一致させ（見出し行のコメントと`PITHA_UNIVERSE_PATH=$(CURDIR)/config/universe.sample.csv`を追記。#389で追加後の#320回帰）、環境変数の括弧書きに銘柄マスタCSVを追記 | issue #501, #320, #389 |
 | 1.59 | 2026-10-05 | §5.1（`lit.md`）`pitha-price-chart`のスニペットを実装に合わせ、`chart`の`@state()`を外して非リアクティブ（リアクティブは`error`/`wsStatus`のみ）と明記、`wsStatus`・`disconnectedCallback`の`chart`/`wsClient`の`null`化・`override`修飾子を反映。§5.4のTempl例を`killSwitch*URL`定数に、§3の`Badge`/`Direction`/`Regime`記述を`atoms.Direction`の実体（`Regime`型・色分けは存在しない）に訂正 | issue #502 |
 | 1.60 | 2026-10-05 | `ScanPanel`に銘柄マスタ未投入の案内とJPXからの確認付き取得（`scan-universe-empty`/`scan-universe-import`/`scan-universe-imported`/`scan-universe-import-error`）を追記 | issue #508 |
+| 1.61 | 2026-10-05 | atomsに`Select`を追加し`Input`に`Class`を追加、organismsに`BacktestForm`を追加して`PerformancePage`/`ScanPanel`/`ErrorLogPanel`の直書きinput/selectをatoms経由に統一 | issue #520 |
+| 1.62 | 2026-10-05 | SSRの時刻表示（判断履歴・Activity Feed・Scanner caption・最終サイクル・ポジション）を`atoms.FormatJST`（`2006-01-02 15:04:05 JST`）に統一し、Litの同表示も`formatJstDateTime`で同形式にした。API（JSON）はRFC 3339のまま | issue #542 |
+| 1.63 | 2026-10-05 | 周期ポーリングの操作者ハートビート除外を`X-Pitha-Background`ヘッダのみに統一し、`middleware.backgroundPollPaths`を廃止 | issue #522 |

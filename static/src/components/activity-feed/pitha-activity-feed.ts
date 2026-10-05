@@ -10,6 +10,7 @@
 import { html, LitElement, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
+import { formatJstDateTime } from '../lib/jst-datetime';
 import { logger } from '../lib/logger';
 import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
 import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
@@ -249,7 +250,7 @@ export class PithaActivityFeed extends LitElement {
             ${this.events.map(
               (e) => html`
                 <tr class="border-b border-slate-100" data-event-type=${e.type}>
-                  <td class="px-3 py-2">${e.timestamp}</td>
+                  <td class="px-3 py-2">${formatJstDateTime(e.timestamp)}</td>
                   <td class="px-3 py-2 font-medium text-slate-900">${e.type}</td>
                   <td class="px-3 py-2">${e.symbol ?? '—'}</td>
                   <td class="px-3 py-2">${e.detail}</td>

@@ -2,9 +2,9 @@ package organisms
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 )
 
 // DecisionHistoryList renders a symbol's Jev Scout/Trader decision
@@ -40,7 +40,7 @@ templ DecisionHistoryList(decisions []domain.JevDecision) {
 
 templ decisionRow(d domain.JevDecision) {
 	<tr class="border-b border-slate-100" data-decision-id={ fmt.Sprintf("%d", d.ID) }>
-		<td class="px-3 py-2">{ d.Timestamp.Format(time.RFC3339) }</td>
+		<td class="px-3 py-2">{ atoms.FormatJST(d.Timestamp) }</td>
 		<td class="px-3 py-2">{ d.DecisionType }</td>
 		<td class="px-3 py-2">{ nilableString(d.Direction) }</td>
 		<td class="px-3 py-2">{ nilableFloatStr(d.Confidence) }</td>
