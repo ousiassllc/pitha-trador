@@ -108,6 +108,7 @@ templ Header(state domain.SystemState) {
 			id="update-banner"
 			class="order-last w-full empty:hidden"
 			hx-get="/system/update-status"
+			hx-headers='{"X-Pitha-Background":"1"}'
 			hx-trigger="load, every 60s, updateStatusChanged from:body"
 			hx-target="this"
 			hx-swap="innerHTML"
@@ -116,6 +117,7 @@ templ Header(state domain.SystemState) {
 			id="marketdata-banner"
 			class="order-last w-full empty:hidden"
 			hx-get="/system/marketdata-status"
+			hx-headers='{"X-Pitha-Background":"1"}'
 			hx-trigger="load, every 30s"
 			hx-target="this"
 			hx-swap="innerHTML"

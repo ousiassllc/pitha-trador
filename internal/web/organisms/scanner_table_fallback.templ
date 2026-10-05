@@ -49,8 +49,8 @@ templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 				</dl>
 			</details>
 			<div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
-				<table class="w-full border-collapse text-left text-sm">
-					<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">{ "Scanner Dashboard — as of " + asOf.Format(time.RFC3339) }</caption>
+				<table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
+					<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">{ "Scanner Dashboard — as of " + atoms.FormatJST(asOf) }</caption>
 					<thead>
 						<tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
 							for _, col := range scannerColumns {

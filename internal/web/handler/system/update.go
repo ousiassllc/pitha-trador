@@ -4,12 +4,12 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 	"github.com/ousiassllc/pitha-trador/internal/version"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
@@ -111,7 +111,7 @@ func (h *UpdateHandler) renderPanel(c *gin.Context, failed bool) {
 		props.BlockedReason = blockedReason(status.BlockedKind)
 	}
 	if !status.CheckedAt.IsZero() {
-		props.CheckedAt = status.CheckedAt.In(time.Local).Format("2006-01-02 15:04")
+		props.CheckedAt = atoms.FormatJST(status.CheckedAt)
 	}
 	shared.RenderHTML(c, http.StatusOK, organisms.UpdatePanel(props))
 }

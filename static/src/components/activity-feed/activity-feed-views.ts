@@ -1,6 +1,7 @@
 // Stateless templates for pitha-activity-feed's Job Queues table and Recent
 // Kill Switch Events section, split out of the element to keep it small.
 import { html, nothing } from 'lit';
+import { formatJstDateTime } from '../lib/jst-datetime';
 import { lightDomErrorClass } from '../lib/styles';
 import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 
@@ -54,7 +55,7 @@ export function renderKillSwitchEvents(
           ? html`<ul class="text-sm">
               ${events.map(
                 (e) =>
-                  html`<li class="py-1"><span class="text-slate-500">${e.timestamp}</span> ${e.detail}</li>`,
+                  html`<li class="py-1"><span class="text-slate-500">${formatJstDateTime(e.timestamp)}</span> ${e.detail}</li>`,
               )}
             </ul>`
           : error

@@ -33,7 +33,7 @@ internal/web/
 ├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
 ├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
-├── atoms/              # Badge, StatusDot, Toast, Button, Input
+├── atoms/              # Badge, StatusDot, Toast, Button, Input, Select
 ├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SetupStatus
 ├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）
 ├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
@@ -85,9 +85,10 @@ static/
 - `StatusDot`（システム状態: Running=緑 / Paused=黄 / Killed=赤。organismsの`SystemStatusBadge`が`domain.SystemState`から`atoms.State`へ変換して描画する）
 - `Toast`（HTMXアクション失敗のエラー通知。`role="alert"`＋閉じるボタンを持ち、`#toast-region`へswapされる。§4「エラー表示」、issue #110/#121）
 - `Button` / `ButtonLink`（`ButtonProps{Variant, Size, Type, Attrs}`。Variant: primary / danger / secondary / outline / danger-outline、Size: medium / small。色・フォーカスリング・`disabled:opacity-50`を一元化し、`hx-*`・`data-testid`等は`Attrs`で渡す。ラベルは子要素。`ButtonLink`は`<a>`版。`Toast`の×ボタンを除く全テンプレートのボタンはこれを使う。issue #309）
-- `Input`（`InputProps{ID, Name, Type, Attrs}`。枠線・余白を共通化した`<input>`。`SecretFieldRow`が使用。issue #309）
+- `Input`（`InputProps{ID, Name, Type, Class, Attrs}`。共通の枠線（`rounded-md border border-slate-300`）に`Class`のレイアウト系クラスを足した`<input>`。`Class`未指定は行内で広がる`flex-1 px-3 py-1`、縦積みラベル内では`Class`を渡して`flex-1`を外す。`SecretFieldRow`・`ScanPanel`・`BacktestForm`が使用。issue #309/#520）
+- `Select`（`SelectProps{ID, Name, Class, Attrs}`。`Input`と同じ枠線の`<select>`。`<option>`は子要素。`Class`未指定は`px-3 py-1`。`ScanPanel`・`ErrorLogPanel`が使用。issue #520）
 
-> **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Select`/`Spinner`/`Card`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が切り出しの目安。`Button`/`Input`は重複したため issue #309 で追加済み）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
+> **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Spinner`/`Card`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が切り出しの目安。`Button`/`Input`は重複したため issue #309 で追加済み）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
 
 ### molecules
 
@@ -107,9 +108,10 @@ static/
 - `ScanPanel`の銘柄マスタ未投入状態（`ScanPanelView.UniverseEmpty`。有効な`stock`が無いとき、`scan-empty`の代わりに`scanUniverseEmpty`を表示する。issue #508）: 「銘柄マスタが未投入です」の案内`scan-universe-empty`（CSVの置き場所`scan-universe-csv-guide`）と、JPXの利用上の注意へのリンク`scan-universe-jpx-terms`を添えた確認付きの取得ボタン`scan-universe-import`（`hx-post="/scanner/universe/import"`、`hx-target="#scan-panel"`、`hx-swap="outerHTML"`、押下中は無効化して`取得中です…`を表示）。押すまでJPXへは接続しない。取得後は`#scan-panel`が差し替わり、成功は`UniverseImported`件数の通知`scan-universe-imported`、失敗は`UniverseImportError`の`scan-universe-import-error`（案内とボタンは残る）を表示する
 - `ConnectionList`（Settings/Setup共通の接続先一覧。接続先ごとの`SettingsCard`と、その接続先の`SecretFieldRow`を収めた`Modal`を描く。`internal/web/organisms/connection_list.templ`、issue #302）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
+- `BacktestForm`（Performance画面のWalk Forwardバックテスト要求フォーム。`BacktestFormValues{From, To, TrainingDays, ValidationDays, ForwardDays}`を再入力用に描画し、入力は`atoms.Input`経由。`PerformancePage`が組み立てる。issue #520）
 - `PerformanceSummaryPanel`（`backtest.Metrics`を`web/handler`が写像した`organisms.PerformanceSummary`を描画する）
 - `PerformanceActualsPanel`（Performance画面の「実績（Paper）」節`#performance-actuals`。クローズ済みポジションのTotal/Daily PnL・Trades・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal countを`GET /api/v1/performance`と同じ`insight.Performance`を`web/handler`が写像した`organisms.PerformanceActuals`から描画する。算出不能（`null`）の指標は「—」。取得失敗時は固定文言のエラーを節内に表示する。`requirements/functional.md` §5.3、issue #360）
-- `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
+- `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で`X-Pitha-Background: 1`付きで取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
 - `UpdatePanel`（Settings画面の「アップデート」節。現在バージョン・最終確認結果・安全ゲート保留中はその旨と理由（ポジション保有/Kill Switch/直近発注）・失敗時は原因の種別（ネットワーク/レート制限/検証失敗など。生のエラー文言は出さない）・「今すぐアップデートを確認」ボタン（`POST /system/update-check`、`#update-panel`をinnerHTMLスワップ。確認中は`hx-disabled-elt`で無効化・`hx-sync="this:drop"`で二重送信を破棄し、`#update-check-progress`に進行表示）。`cmd/server`（アップデーター未搭載）ではアップデート機能が無い旨を表示しボタンは出さない。issue #76/#241）
 - `ErrorLogPanel`（Settings画面の「エラーログ」節`#error-log-panel`。対象期間（直近1/7/30/90日、既定7日）とレベル（ERRORのみ/WARN以上）の`<select>`と「ダウンロード」ボタンを持つ`<form method="get" action="/api/v1/logs/errors">`をSSRで描画する。ブラウザ標準のダウンロードに任せるため`hx-disable`を付けHTMXの差し替えと`lib/api.ts`は使わず、応答の`Content-Disposition: attachment`で保存される。秘密情報はマスク済み・最大10MiBである旨を注記する。`requirements/functional/components-platform.md` §4.19、issue #267）
 - `MarketDataBanner`（kabuステーションAPIのトークン発行失敗時の全ページ共通エラーバナー。失敗原因（未起動・API未有効 / 未ログイン / APIパスワード不正 / API利用不可）と対処を示し、自動再試行中である旨と`/settings`リンクを表示する。`Header`内`#marketdata-banner`が`GET /system/marketdata-status`を`load`・30秒周期で取得する、issue #295）
@@ -152,6 +154,9 @@ const (
 
 Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`（`internal/domain/jevdecision.go`）の文字列定数をそのままテキスト表示する（色分けはしない）。
 
+**表のアクセシビリティ（issue #544）**: `internal/web`のtemplに書く`<table>`は、すべての`<th>`に`scope`（列見出しは`scope="col"`）を付け、表ごとに`aria-label`（または`<caption>`）で目的を与える。`internal/web/table_a11y_test.go`が全`.templ`を静的に検査する。
+
+
 ## 4. HTMX パターン
 
 `api/endpoints.md` §2〜4 のルーティング定義に対応する。要点のみ再掲する。
@@ -167,7 +172,7 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 - **ロゴ表示**: `Header`内`#header-logo`が`/static/img/logo.svg`（`static/src/img/logo.svg`。`go:embed`でバイナリに同梱、`make dev`では`PITHA_STATIC_DIR`経由でディスクから配信）とアプリ名を`nav`の直前に表示し、`/scanner`へリンクする。`nav`（`aria-label="メインナビゲーション"`）と同じflexグループ内に置き、狭い幅ではグループ内で折り返す（`flex-wrap`/`min-w-0`）。バージョン・StatusDot・Kill Switchパネルの`justify-between`配置は変わらない。ロゴの「P」マークは`cmd/desktop/build/appicon.png`（Wailsデスクトップアイコン）と同じ意匠（白地の角丸＋ネイビーのセリフ体P）で揃える。`<img>`は隣接するアプリ名テキストが代替になるため`alt=""`（issue #238）
 - **モーダル（issue #302）**: `molecules.Modal`はネイティブ`<dialog>`（`aria-labelledby`でタイトルに紐付け）で、`static/src/components/modal/pitha-modal.ts`（Lit不要の小さなスクリプト）が`[data-modal-open]`ボタンから`showModal()`で開く。`showModal()`によりフォーカスはモーダル内に閉じ込められ（Tabは内部を循環、背景は操作不可）、`Esc`で閉じる。「閉じる」ボタン・背景クリックでも閉じ、閉じるとフォーカスは開いたボタンへ戻る。各ダイアログは失敗トースト用の`[data-toast-region]`を内包する（§4「エラー表示」、issue #353）。内容は通常のHTMXフォームなのでスワップはそのまま動く。保存・削除の応答は行に加えて接続先の`ConnectionStatus`を`hx-swap-oob`で返し、背後の一覧の状態を更新する
 - **フィールド単位保存**: Settings画面は1つの一括フォームではなく、`SecretFieldRow`ごとの独立フォームで保存（`hx-post="/settings/:key"`）・削除（`hx-delete="/settings/:key"`、`hx-confirm`で確認）し、応答の行フラグメントで当該行のみを差し替える。空入力の保存は400で、値の削除は明示的な削除操作でのみ行う（issue #79）
-- **市況データ接続バナー**: `Header`内`#marketdata-banner`は`GET /system/marketdata-status`を`load`・30秒周期で取得し（周期ポーリングは操作者ハートビートに数えない。`middleware.backgroundPollPaths`に登録済み。周期ポーリングを追加するときは同マップへの追加が必須、issue #310）、トークン発行が失敗している間だけ`MarketDataBanner`を描く。起動時にトークンが取れなくてもアプリは継続起動し（開発機でkabuステーション未起動でもScannerやAPIを使えるようにする既存方針）、バックグラウンドで再試行して復旧後は自動でバナーが消える（issue #295）
+- **市況データ接続バナー**: `Header`内`#marketdata-banner`は`GET /system/marketdata-status`を`load`・30秒周期で取得し（周期ポーリングは操作者ハートビートに数えない。要素の`hx-headers`で`X-Pitha-Background: 1`を送る。周期ポーリングを追加するときは同ヘッダの付与が必須、issue #310）、トークン発行が失敗している間だけ`MarketDataBanner`を描く。起動時にトークンが取れなくてもアプリは継続起動し（開発機でkabuステーション未起動でもScannerやAPIを使えるようにする既存方針）、バックグラウンドで再試行して復旧後は自動でバナーが消える（issue #295）
 - **未設定バナー**: `Header`内`#config-banner`は`GET /system/secrets-status`を`hx-trigger="load"`で取得し、`SecretsBanner`（任意キー（SLACK_WEBHOOK_URL等）の未設定一覧＋`/settings`リンク）またはnothingを描く。必須2キーはバナーではなくSetup Guardの`/setup`リダイレクトで扱う。`#header-status`と同じSSR空→自己補正パターン（issue #57/#80）
 - **初回セットアップ誘導**: Setup Guard Middlewareが必須2キー未設定の間`/setup`以外（`POST`/`DELETE /settings/:key`・`/static/...`を除く）を`/setup`へ送る（ページ遷移は302、HTMXは`204`＋`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。issue #140）。`SetupPage`は`Header`を持たない`layout.SetupShell`で描画し、ガード対象の`hx-get`フラグメントを発火させない。保存はSettingsと同じ`SecretFieldRow`の`hx-post="/settings/:key"`を使い、2キーが揃った時点で完了表示と`/scanner`への「続ける」リンクを出す（issue #80）
 
@@ -245,3 +250,7 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.58 | 2026-10-05 | §7（`runtime.md`）`make dev`スニペットを`Makefile`の`dev`ターゲットと完全一致させ（見出し行のコメントと`PITHA_UNIVERSE_PATH=$(CURDIR)/config/universe.sample.csv`を追記。#389で追加後の#320回帰）、環境変数の括弧書きに銘柄マスタCSVを追記 | issue #501, #320, #389 |
 | 1.59 | 2026-10-05 | §5.1（`lit.md`）`pitha-price-chart`のスニペットを実装に合わせ、`chart`の`@state()`を外して非リアクティブ（リアクティブは`error`/`wsStatus`のみ）と明記、`wsStatus`・`disconnectedCallback`の`chart`/`wsClient`の`null`化・`override`修飾子を反映。§5.4のTempl例を`killSwitch*URL`定数に、§3の`Badge`/`Direction`/`Regime`記述を`atoms.Direction`の実体（`Regime`型・色分けは存在しない）に訂正 | issue #502 |
 | 1.60 | 2026-10-05 | `ScanPanel`に銘柄マスタ未投入の案内とJPXからの確認付き取得（`scan-universe-empty`/`scan-universe-import`/`scan-universe-imported`/`scan-universe-import-error`）を追記 | issue #508 |
+| 1.61 | 2026-10-05 | atomsに`Select`を追加し`Input`に`Class`を追加、organismsに`BacktestForm`を追加して`PerformancePage`/`ScanPanel`/`ErrorLogPanel`の直書きinput/selectをatoms経由に統一 | issue #520 |
+| 1.62 | 2026-10-05 | SSRの時刻表示（判断履歴・Activity Feed・Scanner caption・最終サイクル・ポジション）を`atoms.FormatJST`（`2006-01-02 15:04:05 JST`）に統一し、Litの同表示も`formatJstDateTime`で同形式にした。API（JSON）はRFC 3339のまま | issue #542 |
+| 1.63 | 2026-10-05 | 周期ポーリングの操作者ハートビート除外を`X-Pitha-Background`ヘッダのみに統一し、`middleware.backgroundPollPaths`を廃止 | issue #522 |
+| 1.64 | 2026-10-05 | §3に表のアクセシビリティ規約（`<th scope>`・`<table>`の`aria-label`/`<caption>`）を追記し、全表へ適用して静的テストを追加 | issue #544 |

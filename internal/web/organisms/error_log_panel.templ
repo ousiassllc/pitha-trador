@@ -19,19 +19,19 @@ templ ErrorLogPanel() {
 		<form method="get" action="/api/v1/logs/errors" hx-disable class="flex flex-wrap items-end gap-3" data-testid="error-log-form">
 			<label class="flex flex-col gap-1">
 				<span class="font-medium text-slate-700">期間</span>
-				<select name="days" class="rounded-md border border-slate-300 bg-white px-3 py-2" data-testid="error-log-days">
+				@atoms.Select(atoms.SelectProps{Name: "days", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "error-log-days"}}) {
 					<option value="1">直近 1 日</option>
 					<option value="7" selected>直近 7 日</option>
 					<option value="30">直近 30 日</option>
 					<option value="90">直近 90 日</option>
-				</select>
+				}
 			</label>
 			<label class="flex flex-col gap-1">
 				<span class="font-medium text-slate-700">レベル</span>
-				<select name="level" class="rounded-md border border-slate-300 bg-white px-3 py-2" data-testid="error-log-level">
+				@atoms.Select(atoms.SelectProps{Name: "level", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "error-log-level"}}) {
 					<option value="error" selected>ERROR のみ</option>
 					<option value="warn">WARN 以上</option>
-				</select>
+				}
 			</label>
 			@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "error-log-download"}}) {
 				ダウンロード

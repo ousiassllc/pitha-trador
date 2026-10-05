@@ -83,13 +83,20 @@ func TestHeartbeat_IgnoresRequestsThatAreNotOperatorActivity(t *testing.T) {
 	resync := request(http.MethodGet, "/page", cookie, "")
 	resync.Header.Set(middleware.BackgroundHeader, "1")
 
+	// Header's `every Ns` banner polls send the marker via hx-headers.
+	poll := func(path string) *http.Request {
+		r := request(http.MethodGet, path, cookie, "")
+		r.Header.Set(middleware.BackgroundHeader, "1")
+		return r
+	}
+
 	for name, req := range map[string]*http.Request{
 		"no session cookie":      request(http.MethodGet, "/page", nil, ""),
 		"invalid session cookie": request(http.MethodGet, "/page", staleCookie, ""),
 		"static asset":           request(http.MethodGet, "/static/app.js", cookie, ""),
 		"websocket upgrade":      wsUpgrade,
-		"background poll":        request(http.MethodGet, "/system/update-status", cookie, ""),
-		"marketdata poll":        request(http.MethodGet, "/system/marketdata-status", cookie, ""),
+		"update banner poll":     poll("/system/update-status"),
+		"marketdata banner poll": poll("/system/marketdata-status"),
 		"background header":      resync,
 	} {
 		rec := do(engine, req)
@@ -99,6 +106,20 @@ func TestHeartbeat_IgnoresRequestsThatAreNotOperatorActivity(t *testing.T) {
 		if recorder.calls != 0 {
 			t.Fatalf("%s recorded %d heartbeats, want 0", name, recorder.calls)
 		}
+	}
+}
+
+// No URL path is exempt by itself: only the marker header excludes a
+// request, so a polling route whose author forgets the header is counted
+// (visible) rather than silently hidden behind a server-side path list.
+func TestHeartbeat_ExcludesByHeaderNotByPath(t *testing.T) {
+	recorder := &fakeRecorder{}
+	engine := heartbeatEngine(t, recorder)
+	cookie, _ := login(t, engine)
+
+	rec := do(engine, request(http.MethodGet, "/system/update-status", cookie, ""))
+	if rec.Code != http.StatusOK || recorder.calls != 1 {
+		t.Fatalf("GET /system/update-status without marker = %d with %d heartbeats, want 200 and 1", rec.Code, recorder.calls)
 	}
 }
 

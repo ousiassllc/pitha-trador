@@ -74,7 +74,7 @@ templ ScanPanel(v ScanPanelView) {
 			</p>
 		} else {
 			<p class="mt-1 text-xs text-slate-500" data-testid="scan-cycle-meta">
-				最終サイクル { v.Cycle.FinishedAt.Format(time.RFC3339) }（所要 { formatCycleDuration(v.Cycle.Duration()) }）。ページを開いた時点または「更新」押下時のスナップショットです。
+				最終サイクル { atoms.FormatJST(v.Cycle.FinishedAt) }（所要 { formatCycleDuration(v.Cycle.Duration()) }）。ページを開いた時点または「更新」押下時のスナップショットです。
 			</p>
 			@scanFunnel(v)
 			<p class="mt-2 text-xs text-slate-500">
@@ -115,31 +115,35 @@ templ funnelStep(label, hint, count, testID string) {
 	</li>
 }
 
+// scanFieldClass is the filter form's layout for atoms.Input/atoms.Select
+// (stacked under a label, so no flex-1).
+const scanFieldClass = "mt-1 px-2 py-1 text-sm"
+
 templ scanList(v ScanPanelView) {
 	<form class="mt-4 flex flex-wrap items-end gap-3 text-sm" method="get" action={ scanPanelURL } hx-get={ scanPanelURL } hx-target="#scan-panel" hx-swap="outerHTML" hx-trigger="submit, change from:#scan-status, change from:#scan-reason" data-testid="scan-filter">
 		<label class="flex flex-col text-xs text-slate-600">
 			銘柄コード・名称
-			<input id="scan-q" type="search" name="q" value={ v.Query.Q } maxlength="64" class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm"/>
+			@atoms.Input(atoms.InputProps{ID: "scan-q", Name: "q", Type: "search", Class: scanFieldClass, Attrs: templ.Attributes{"value": v.Query.Q, "maxlength": "64"}})
 		</label>
 		<label class="flex flex-col text-xs text-slate-600">
 			状態
-			<select id="scan-status" name="status" class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm">
+			@atoms.Select(atoms.SelectProps{ID: "scan-status", Name: "status", Class: scanFieldClass}) {
 				@scanOption("", "すべて", string(v.Query.Status) == "")
 				@scanOption(string(domain.ScanStatusPassed), "通過", v.Query.Status == domain.ScanStatusPassed)
 				@scanOption(string(domain.ScanStatusExcluded), "除外", v.Query.Status == domain.ScanStatusExcluded)
 				@scanOption(string(domain.ScanStatusMissing), "データ欠損", v.Query.Status == domain.ScanStatusMissing)
-			</select>
+			}
 		</label>
 		<label class="flex flex-col text-xs text-slate-600">
 			理由
-			<select id="scan-reason" name="reason" class="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm">
+			@atoms.Select(atoms.SelectProps{ID: "scan-reason", Name: "reason", Class: scanFieldClass}) {
 				@scanOption("", "すべて", v.Query.Reason == nil)
 				for _, r := range domain.AllScreenReasons() {
 					if n, applied := v.Summary.ByReason[r], v.Query.Reason != nil && *v.Query.Reason == r; n > 0 || applied {
 						@scanOption(r.Code(), r.Label()+"（"+strconv.Itoa(n)+"）", applied)
 					}
 				}
-			</select>
+			}
 		</label>
 		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Type: "submit"}) {
 			絞り込む
@@ -150,7 +154,7 @@ templ scanList(v ScanPanelView) {
 		（{ strconv.Itoa(v.Page.Page) } / { strconv.Itoa(v.Page.Pages) } ページ）
 	</p>
 	<div class="mt-2 overflow-x-auto rounded-md border border-slate-200">
-		<table class="w-full border-collapse text-left text-sm" data-testid="scan-table">
+		<table class="w-full border-collapse text-left text-sm" aria-label="スキャン対象銘柄" data-testid="scan-table">
 			<thead>
 				<tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
 					<th scope="col" class="whitespace-nowrap px-3 py-2">銘柄コード</th>
@@ -281,20 +285,4 @@ func scanHref(q domain.ScanQuery, page int, open bool) string {
 		return scanPanelURL
 	}
 	return scanPanelURL + "?" + v.Encode()
-}
-
-var weekdayJA = [...]string{"日", "月", "火", "水", "木", "金", "土"}
-
-// formatNextOpen renders t as JST, e.g. `2026-10-05(月) 09:00 JST`. The
-// zone is fixed so the output does not depend on the host's local zone.
-func formatNextOpen(t time.Time) string {
-	t = t.In(time.FixedZone("JST", 9*60*60))
-	return t.Format("2006-01-02") + "(" + weekdayJA[t.Weekday()] + ") " + t.Format("15:04") + " JST"
-}
-
-func formatCycleDuration(d time.Duration) string {
-	if d < time.Second {
-		return strconv.FormatInt(d.Milliseconds(), 10) + "ms"
-	}
-	return strconv.FormatFloat(d.Seconds(), 'f', 1, 64) + "s"
 }

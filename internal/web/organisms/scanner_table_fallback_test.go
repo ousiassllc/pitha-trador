@@ -29,14 +29,14 @@ func renderScannerTable(t *testing.T, candidates []domain.Candidate) string {
 // Per-cell formatting, colors, badges, links and column definitions are
 // pinned against the Lit component by scanner_table_contract_test.go.
 
-func TestScannerTableFallback_ShowsCountAndRFC3339AsOfCaption(t *testing.T) {
+func TestScannerTableFallback_ShowsCountAndJSTAsOfCaption(t *testing.T) {
 	asOf := time.Date(2026, 9, 26, 10, 15, 0, 0, time.FixedZone("JST", 9*60*60))
 	body := renderScannerTableAt(t, []domain.Candidate{{Symbol: "7203", Price: 1}, {Symbol: "9984", Price: 2}}, asOf)
 
 	for _, want := range []string{
 		`data-testid="scanner-count"`,
 		">2</span>",
-		"Scanner Dashboard — as of 2026-09-26T10:15:00+09:00</caption>",
+		"Scanner Dashboard — as of 2026-09-26 10:15:00 JST</caption>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("expected table to contain %q, got %q", want, body)
