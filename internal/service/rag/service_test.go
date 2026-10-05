@@ -39,7 +39,7 @@ func TestService_Context_ColdStartReturnsEmptyNotError(t *testing.T) {
 	db := newTestDB(t)
 	svc := rag.NewService(db, judgement.NewDecisionRepository(db), market.NewSnapshotRepository(db))
 
-	got, err := svc.Context(context.Background(), rag.FeatureInput{Return1m: ptr(0.01)}, rag.DefaultK)
+	got, err := svc.Context(context.Background(), rag.FeatureInput{Return1m: ptr(0.01)}, rag.Subject{}, rag.DefaultK)
 	if err != nil {
 		t.Fatalf("Context: %v (a cold-start empty index must not be an error, functional.md FR-RAG-4)", err)
 	}
@@ -71,7 +71,7 @@ func TestService_IndexSnapshot_ThenContextFindsItAsMarketSnapshotCase(t *testing
 		t.Fatalf("IndexSnapshot: %v", err)
 	}
 
-	got, err := svc.Context(context.Background(), in, rag.DefaultK)
+	got, err := svc.Context(context.Background(), in, rag.Subject{}, rag.DefaultK)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestService_Context_PrioritizesDecisionsOverSnapshotsAndBackfillsToK(t *tes
 		t.Fatalf("IndexDecision: %v", err)
 	}
 
-	got, err := svc.Context(context.Background(), in, 1)
+	got, err := svc.Context(context.Background(), in, rag.Subject{}, 1)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestService_Context_PrioritizesDecisionsOverSnapshotsAndBackfillsToK(t *tes
 		t.Errorf("Context(k=1).Cases[0].Direction = %v, want \"LONG\"", got.Cases[0].Direction)
 	}
 
-	got, err = svc.Context(context.Background(), in, 2)
+	got, err = svc.Context(context.Background(), in, rag.Subject{}, 2)
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}

@@ -9,14 +9,13 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
 func renderSymbolDetail(t *testing.T, position *domain.Position) string {
 	t.Helper()
 	var buf bytes.Buffer
-	props := pages.SymbolDetailProps{Symbol: "7203", State: execution.SymbolState{Symbol: "7203", Position: position}}
+	props := pages.SymbolDetailProps{Symbol: "7203", Position: position}
 	if err := pages.SymbolDetailPage(props).Render(context.Background(), &buf); err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -56,5 +55,26 @@ func TestSymbolDetailPage_PositionTableHeaderMatchesRowColumns(t *testing.T) {
 				t.Errorf("<th> count = %d, PositionRow <td> count = %d", ths, tds)
 			}
 		})
+	}
+}
+
+// issue #382: the URLs injected into pitha-price-chart must escape the symbol
+// with the same rule as the Scanner's symbol link (organisms.SymbolHref), so a
+// symbol with URL-significant characters can never alter the path or add a
+// query/fragment.
+func TestSymbolDetailPage_PriceChartURLsEscapeSymbol(t *testing.T) {
+	var buf bytes.Buffer
+	props := pages.SymbolDetailProps{Symbol: "a/b?c#d%e.f"}
+	if err := pages.SymbolDetailPage(props).Render(context.Background(), &buf); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	body := buf.String()
+	for _, want := range []string{
+		`candles-url="/api/v1/symbols/a%2Fb%3Fc%23d%25e.f/candles"`,
+		`ws-url="/ws/symbols/a%2Fb%3Fc%23d%25e.f"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body does not contain %q", want)
+		}
 	}
 }

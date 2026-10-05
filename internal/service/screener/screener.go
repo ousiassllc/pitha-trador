@@ -139,10 +139,10 @@ type Result struct {
 // survivors with ScreenScore, and returns the top cfg.TopN by descending
 // score as domain.Candidate values ready for Jev Scout / the Scanner
 // Dashboard (FR-FS-1, FR-FS-2). Ties keep inputs' relative order
-// (stable sort). Candidate.Jev*/CurrentPosition fields are left nil: Jev
-// Scout/Trader (functional.md §4.4/§4.5) and Execution/positions are
-// later sub-scopes that populate them once a candidate reaches those
-// stages.
+// (stable sort). Candidate.Jev*/CurrentPosition fields are left nil here:
+// screening has no Jev or position input. The candidate-refresh cycle
+// (internal/bootstrap/candidates.Refresher) fills them from the latest Jev
+// Trader decision and the open position before publishing the candidates.
 func Run(cfg config.FastScreenerConfig, inputs []Input) []domain.Candidate {
 	return Screen(cfg, inputs).Candidates
 }
@@ -179,11 +179,15 @@ func Screen(cfg config.FastScreenerConfig, inputs []Input) Result {
 		return passed[i].candidate.ScreenScore > passed[j].candidate.ScreenScore
 	})
 
-	if len(passed) > cfg.TopN {
-		for _, p := range passed[cfg.TopN:] {
+	// config.StrategyConfig.Validate rejects top_n < 1 at startup; clamp
+	// anyway so a negative value (e.g. a runtime_settings override) cannot
+	// panic the slice below.
+	topN := max(cfg.TopN, 0)
+	if len(passed) > topN {
+		for _, p := range passed[topN:] {
 			reasons[p.idx] = reasons[p.idx].Add(domain.ScreenReasonRankedOut)
 		}
-		passed = passed[:cfg.TopN]
+		passed = passed[:topN]
 	}
 	candidates := make([]domain.Candidate, len(passed))
 	for i, p := range passed {

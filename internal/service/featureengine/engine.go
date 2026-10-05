@@ -82,9 +82,13 @@ func (e *Engine) RunCycle(ctx context.Context, inputs []CycleInput) ([]domain.Sn
 }
 
 // spreadBps computes (ask-bid)/midprice*10000, or nil if either quote is
-// missing (FR-FE-2) or the midprice is zero.
+// missing (FR-FE-2), the midprice is zero, or the book is crossed
+// (bid > ask: special quote, around the open/close or one stale side).
+// A crossed book would yield a negative spread that slips past the
+// upper-bound-only spread guards (screener/policy/risk), so it is treated
+// as unavailable and those guards fail closed (missing_spread).
 func spreadBps(bid, ask *float64) *float64 {
-	if bid == nil || ask == nil {
+	if bid == nil || ask == nil || *bid > *ask {
 		return nil
 	}
 	mid := (*bid + *ask) / 2

@@ -37,7 +37,7 @@ func NewService(outcomes *judgement.CalibrationRepository, trades TradeSource) *
 // aggregates them via the package-level Metrics function, then adds each
 // confidence bucket's realized PnL from the closed positions those
 // decisions opened (WithTradePnL, FR-CAL-2/3). It
-// matches internal/web/handler.CalibrationSource's signature, so a
+// matches internal/web/handler/calibration.CalibrationSource's signature, so a
 // *Service can be passed directly to
 // internal/router.WithCalibrationSource.
 func (s *Service) Metrics(ctx context.Context) (domain.CalibrationMetrics, error) {

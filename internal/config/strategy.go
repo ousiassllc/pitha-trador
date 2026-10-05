@@ -24,6 +24,7 @@ type ScanConfig struct {
 	CandidateRefreshIntervalSecondsMax int                `yaml:"candidate_refresh_interval_seconds_max"`
 	HeldPositionIntervalSecondsMin     int                `yaml:"held_position_interval_seconds_min"`
 	HeldPositionIntervalSecondsMax     int                `yaml:"held_position_interval_seconds_max"`
+	JevScoutMinIntervalSeconds         int                `yaml:"jev_scout_min_interval_seconds"`
 	EventTrigger                       EventTriggerConfig `yaml:"event_trigger"`
 }
 
@@ -120,32 +121,35 @@ type PolicyDirectionThresholds struct {
 // path (conventionally DefaultStrategyPath) into a StrategyConfig, then
 // applies any PITHA_POLICY_LONG_*/PITHA_POLICY_SHORT_* (FR-POLICY-4) and
 // PITHA_FAST_SCREENER_* (FR-FS-1/FR-FS-3) environment variable overrides
-// on top of it. runtime_settings-backed overrides are layered on top of
-// this result at read time: policy.* by internal/service/selfimprove.
+// on top of it, fills unset scan.* values with their defaults, and finally
+// fails with an error naming every offending key when fast_screener.*,
+// jev_scout.* or policy.* is missing/out of range (see
+// StrategyConfig.Validate). runtime_settings-backed overrides are layered
+// on top of this result at read time: policy.* by internal/service/selfimprove.
 // RuntimePolicy, screener.* by ApplyFastScreenerSetting
 // (docs/architecture/er.md §runtime_settings).
 func LoadStrategy(path string) (*StrategyConfig, error) {
 	cfg, err := loadYAMLFile[StrategyConfig](path)
-	if err != nil {
-		return nil, err
-	}
-	if err := applyEnvOverrides(cfg); err != nil {
-		return nil, err
-	}
-	withScanIntervalDefaults(&cfg.Scan)
-	withEventTriggerDefaults(&cfg.Scan.EventTrigger)
-	return cfg, nil
+	return finishStrategy(cfg, err)
 }
 
 // LoadStrategyBytes parses data (conventionally an embedded copy of
 // config/strategy.yaml, github.com/ousiassllc/pitha-trador/config's
 // configdefaults.DefaultStrategyYAML) as a StrategyConfig, applying the
-// same environment overrides as LoadStrategy. internal/bootstrap falls back to this when no
+// same environment overrides, defaults and validation as LoadStrategy.
+// internal/bootstrap falls back to this when no
 // strategy.yaml is found on disk (explicit path, PITHA_STRATEGY_PATH, nor
 // next to the running executable) so a distributed .exe with no
 // accompanying config/ directory still starts.
 func LoadStrategyBytes(data []byte) (*StrategyConfig, error) {
 	cfg, err := loadYAMLBytes[StrategyConfig](data, "(embedded default)")
+	return finishStrategy(cfg, err)
+}
+
+// finishStrategy applies LoadStrategy/LoadStrategyBytes' shared post-parse
+// steps: environment overrides, scan.* defaults, then validation (which
+// must run last so it sees the overridden values).
+func finishStrategy(cfg *StrategyConfig, err error) (*StrategyConfig, error) {
 	if err != nil {
 		return nil, err
 	}
@@ -154,6 +158,9 @@ func LoadStrategyBytes(data []byte) (*StrategyConfig, error) {
 	}
 	withScanIntervalDefaults(&cfg.Scan)
 	withEventTriggerDefaults(&cfg.Scan.EventTrigger)
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
 }
 

@@ -2,6 +2,8 @@
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/scanner` item shape.
 export interface ScannerItem {
   symbol: string;
+  // Server-generated symbol detail link (Go organisms.SymbolHref); used as-is for the row's href.
+  detail_url: string;
   price: number;
   // Percent (0.42 == +0.42%); the API converts the Feature Engine's decimal ratio.
   return_1m: number | null;

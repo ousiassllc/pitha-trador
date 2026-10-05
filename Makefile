@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help dev generate lint test build openapi-export
+.PHONY: help dev generate lint test test-race build openapi-export
 
 help: ## コマンド一覧を表示
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
@@ -9,6 +9,7 @@ help: ## コマンド一覧を表示
 dev: ## 開発起動（wails dev + templ watch + bun watch）
 	@PITHA_STRATEGY_PATH=$(CURDIR)/config/strategy.yaml \
 	PITHA_RISK_PATH=$(CURDIR)/config/risk.yaml \
+	PITHA_UNIVERSE_PATH=$(CURDIR)/config/universe.sample.csv \
 	PITHA_STATIC_DIR=$(CURDIR)/static/src \
 	SWAGGER_ENABLED=true \
 	bunx concurrently \
@@ -27,6 +28,9 @@ lint: generate ## golangci-lint と biome check
 test: generate ## go test と bun test
 	go test ./...
 	bun --cwd=static test
+
+test-race: generate ## go test -race（CIのtestジョブと同じ。cgo/gccが必要）
+	go test -race ./...
 
 build: generate ## Windows向けにwails build
 	cd cmd/desktop && wails build -platform windows/amd64

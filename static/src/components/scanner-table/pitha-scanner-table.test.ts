@@ -25,11 +25,11 @@ describe('pitha-scanner-table', () => {
     expect(rows[1].textContent).toContain('—'); // no Jev evaluation yet
   });
 
-  test('renders symbol cells as plain <a href> links (real navigation, not HTMX)', async () => {
-    const { el } = await mount([item()]);
+  test('renders symbol cells as plain <a href> links to the server-provided detail_url (real navigation, not HTMX)', async () => {
+    const { el } = await mount([item({ detail_url: '/from-server?q=%26' })]);
 
     const link = el.querySelector('td a') as HTMLAnchorElement;
-    expect(link.getAttribute('href')).toBe('/symbols/7203');
+    expect(link.getAttribute('href')).toBe('/from-server?q=%26');
     expect(link.getAttribute('hx-get')).toBeNull();
     expect(link.hasAttribute('hx-boost')).toBe(false);
   });

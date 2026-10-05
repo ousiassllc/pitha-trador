@@ -24,8 +24,8 @@ const defaultPollInterval = 200 * time.Millisecond
 // failed (jobqueue.JobRepository.MarkFailed); nil marks it succeeded.
 type Handler func(ctx context.Context, job jobqueue.Job) error
 
-// fullScanPayload is the JSON body enqueued onto the market-data and
-// feature-calc queues once per active instrument, each full-scan cycle
+// fullScanPayload is the JSON body enqueued onto the market-data queue (and
+// jev-scout, by EnqueueEventReevaluation) per instrument
 // (functional.md §4.10 FR-SCHED-2 前半).
 type fullScanPayload struct {
 	InstrumentID int64  `json:"instrument_id"`
@@ -140,10 +140,20 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 	return n, nil
 }
 
-// EnqueueFullScan enqueues one market-data job and one feature-calc job
-// per active instrument, due at now (functional.md FR-SCHED-2 前半). It
-// returns the number of instruments enqueued for, and logs that count as
-// a structured JSON line (non-functional.md §5.1 "スキャン対象銘柄数").
+// EnqueueFullScan enqueues one market-data job per active instrument, due
+// at now, in a single transaction (functional.md FR-SCHED-2 前半). The
+// feature-calc queue is no longer fed: its handler is a no-op, so the
+// thousands of empty jobs per cycle only cost INSERTs and retained rows
+// (non-functional.md §2.3). It returns the number of instruments enqueued
+// for, and logs that count as a structured JSON line (non-functional.md §5.1 "スキャン対象銘柄数").
+//
+// When the previous cycle's market-data jobs are still pending or
+// running it enqueues nothing, logs a warning and returns (0, nil), so a
+// worker slower than the cycle cannot pile up unbounded stale jobs
+// (non-functional.md §2.1 "次サイクルまでに完了しない場合はスキップ"). A
+// running row older than orphans.After is an orphan (its worker
+// failed to record completion) and is failed first instead of counted
+// (orphans package, issues #416/#424/#425).
 //
 // Outside a trading session (WithSessionGate) it enqueues nothing and
 // returns (0, nil): no market data is fetched off-hours.
@@ -151,22 +161,29 @@ func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, er
 	if !s.inSession(now) {
 		return 0, nil
 	}
+	unfinished, err := s.unfinishedMarketDataJobs(ctx, now)
+	if err != nil {
+		return 0, err
+	}
+	if unfinished > 0 {
+		slog.Warn("scheduler: full scan skipped: previous cycle still running", "pending", unfinished)
+		return 0, nil
+	}
 	instruments, err := s.instruments.ListActive(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("scheduler: list active instruments for full scan: %w", err)
 	}
 
+	payloads := make([]string, 0, len(instruments))
 	for _, inst := range instruments {
 		payload, err := json.Marshal(fullScanPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
 		if err != nil {
 			return 0, fmt.Errorf("scheduler: marshal full scan payload for %q: %w", inst.Symbol, err)
 		}
-		if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueMarketData, string(payload), now); err != nil {
-			return 0, fmt.Errorf("scheduler: enqueue market-data job for %q: %w", inst.Symbol, err)
-		}
-		if _, err := s.jobs.Enqueue(ctx, jobqueue.JobQueueFeatureCalc, string(payload), now); err != nil {
-			return 0, fmt.Errorf("scheduler: enqueue feature-calc job for %q: %w", inst.Symbol, err)
-		}
+		payloads = append(payloads, string(payload))
+	}
+	if _, err := s.jobs.EnqueueBatch(ctx, jobqueue.JobQueueMarketData, payloads, now); err != nil {
+		return 0, fmt.Errorf("scheduler: enqueue market-data jobs for full scan: %w", err)
 	}
 	slog.Info("scheduler: full scan enqueued", "instrument_count", len(instruments))
 	return len(instruments), nil
@@ -206,6 +223,8 @@ func (s *Scheduler) EnqueueEventReevaluation(ctx context.Context, instrumentID i
 // retention purge, log archival) run on start and on every 10-minute
 // catch-up tick until each has succeeded today (maintenance.go;
 // non-functional.md §3, §5), running until ctx is done or Stop is called.
+// Every minute it also fails the orphaned running jobs of every queue
+// (orphans.FailAll, issues #424/#425).
 //
 // The 15-30s candidate-refresh cycle (functional.md §4.3) is not a
 // Scheduler trigger: internal/bootstrap/candidates' Refresher.Run drives

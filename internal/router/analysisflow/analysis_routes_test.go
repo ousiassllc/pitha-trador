@@ -15,7 +15,8 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 )
 
 func strPtr(s string) *string { return &s }
@@ -58,7 +59,7 @@ func getProposals(t *testing.T, engine *gin.Engine, query string) (int, map[stri
 
 func TestNew_APIPolicyProposalsReturnsAuditHistoryInSpecFormat(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithPolicyProposalSource(handler.StaticPolicyProposalSource{Proposals: proposalFixtures(t)}))
+	engine := router.New(router.WithPolicyProposalSource(proposals.StaticPolicyProposalSource{Proposals: proposalFixtures(t)}))
 
 	code, body := getProposals(t, engine, "")
 	if code != http.StatusOK {
@@ -94,9 +95,44 @@ func TestNew_APIPolicyProposalsReturnsAuditHistoryInSpecFormat(t *testing.T) {
 	}
 }
 
+func TestNew_APIPolicyProposalsReturnsAppliedAndRollbackAudit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	appliedAt := time.Date(2026, 9, 28, 16, 0, 0, 0, time.UTC)
+	rolledBackAt := time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC)
+	reason := "realized expectancy degraded from 1000.0000 to 700.0000 (>=20% relative)"
+	rolledBack := domain.PolicyProposal{
+		ID: 43, ProposedAt: time.Date(2026, 9, 28, 15, 0, 0, 0, time.UTC), ProposedBy: "sol", Status: domain.PolicyProposalStatusRolledBack,
+		ProposedChangesJSON:  `[{"key":"policy.long.min_probability","old_value":"0.6","new_value":"0.68"}]`,
+		AppliedPolicyVersion: strPtr("sol-43"), AppliedAt: &appliedAt, RolledBackAt: &rolledBackAt, RolledBackReason: &reason,
+	}
+	pending := domain.PolicyProposal{
+		ID: 44, ProposedAt: time.Date(2026, 9, 29, 15, 0, 0, 0, time.UTC), ProposedBy: "sol", Status: domain.PolicyProposalStatusPending,
+		ProposedChangesJSON: `[{"key":"policy.long.min_probability","old_value":"0.6","new_value":"0.62"}]`,
+	}
+	engine := router.New(router.WithPolicyProposalSource(proposals.StaticPolicyProposalSource{Proposals: []domain.PolicyProposal{rolledBack, pending}}))
+
+	code, body := getProposals(t, engine, "")
+	if code != http.StatusOK {
+		t.Fatalf("status = %d, body %v", code, body)
+	}
+	items := body["items"].([]any)
+	got := items[0].(map[string]any)
+	if got["applied_at"] != "2026-09-28T16:00:00Z" || got["rolled_back_at"] != "2026-10-06T16:00:00Z" || got["rolled_back_reason"] != reason {
+		t.Errorf("rolled_back item = %v, want the stored applied_at/rolled_back_at/rolled_back_reason", got)
+	}
+
+	never := items[1].(map[string]any)
+	for _, key := range []string{"applied_at", "rolled_back_at", "rolled_back_reason"} {
+		v, present := never[key]
+		if !present || v != nil {
+			t.Errorf("pending item %s = (%v, present=%v), want an explicit null", key, v, present)
+		}
+	}
+}
+
 func TestNew_APIPolicyProposalsFiltersByStatusAndLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithPolicyProposalSource(handler.StaticPolicyProposalSource{Proposals: proposalFixtures(t)}))
+	engine := router.New(router.WithPolicyProposalSource(proposals.StaticPolicyProposalSource{Proposals: proposalFixtures(t)}))
 
 	_, body := getProposals(t, engine, "?status=rejected")
 	items := body["items"].([]any)
@@ -154,7 +190,7 @@ func TestNew_OpenAPIDescribesPolicyProposalsEndpoint(t *testing.T) {
 
 func TestNew_APICalibrationReturnsMetricsFromWithCalibrationSourceOption(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	source := handler.StaticCalibrationSource{
+	source := calibration.StaticCalibrationSource{
 		Metrics_: domain.CalibrationMetrics{
 			Buckets: []domain.ConfidenceBucket{
 				{Range: "0.50-0.60", AvgConfidence: 0.55, DirectionAccuracy: 0.51, AvgFutureReturnPct: -0.05, TradeCount: 3, TotalPnL: -1200, AvgPnLPct: -0.4},

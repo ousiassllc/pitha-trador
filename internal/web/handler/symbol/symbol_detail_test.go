@@ -16,9 +16,8 @@ import (
 )
 
 func TestSymbolHandler_APISymbol_ReturnsStateAndRiskParams(t *testing.T) {
-	confidence := 0.74
 	provider := &fakeSymbolProvider{state: execution.SymbolState{
-		Symbol: "7203", LastPrice: 2831.5, LastSignal: domain.JevDirectionLong, LastSignalConfidence: confidence,
+		Symbol: "7203", LastPrice: 2831.5,
 		Position: &domain.Position{Side: domain.PositionSideLong, Quantity: 100},
 	}}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{AllowedPositionPct: 2.0, StopLossPct: 0.6, TakeProfitPct: 1.2})
@@ -39,10 +38,6 @@ func TestSymbolHandler_APISymbol_ReturnsStateAndRiskParams(t *testing.T) {
 			StopLossPct        float64 `json:"stop_loss_pct"`
 			TakeProfitPct      float64 `json:"take_profit_pct"`
 		} `json:"risk"`
-		Jev struct {
-			Direction  string  `json:"direction"`
-			Confidence float64 `json:"confidence"`
-		} `json:"jev"`
 	}
 	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
 		t.Fatalf("Unmarshal: %v (body=%s)", err, resp.Body.String())
@@ -55,9 +50,6 @@ func TestSymbolHandler_APISymbol_ReturnsStateAndRiskParams(t *testing.T) {
 	}
 	if body.Risk.AllowedPositionPct != 2.0 || body.Risk.StopLossPct != 0.6 || body.Risk.TakeProfitPct != 1.2 {
 		t.Fatalf("risk = %+v, want the configured SymbolRiskParams", body.Risk)
-	}
-	if body.Jev.Direction != domain.JevDirectionLong || body.Jev.Confidence != confidence {
-		t.Fatalf("jev = %+v, want Direction=LONG Confidence=%v", body.Jev, confidence)
 	}
 }
 
@@ -131,8 +123,47 @@ func TestSymbolHandler_APICandles_DefaultsToSixHourLookback(t *testing.T) {
 		t.Fatalf("candles = %+v, want exactly 1", body.Candles)
 	}
 	c := body.Candles[0]
-	if c.Open != 2105.0 || c.High != 2105.0 || c.Low != 2105.0 || c.Close != 2105.0 || c.VWAP != 2100.0 || c.Volume != 1000 {
-		t.Fatalf("candle = %+v, want Open=High=Low=Close=2105.0 VWAP=2100.0 Volume=1000", c)
+	if c.Open != 2105.0 || c.High != 2105.0 || c.Low != 2105.0 || c.Close != 2105.0 || c.VWAP != 2100.0 || c.Volume != 0 {
+		t.Fatalf("candle = %+v, want Open=High=Low=Close=2105.0 VWAP=2100.0 Volume=0 (first bar without Volume1m)", c)
+	}
+}
+
+func TestSymbolHandler_APICandles_ReturnsPerBarVolume(t *testing.T) {
+	at := func(min int) time.Time { return time.Date(2026, 9, 27, 9, min, 0, 0, time.UTC) }
+	vol1m := int64(400)
+	provider := &fakeSymbolProvider{candles: []domain.Snapshot{
+		{Timestamp: at(0), Price: 100, Volume: 1000, Feature: domain.Feature{Volume1m: &vol1m}},
+		{Timestamp: at(1), Price: 101, Volume: 1500},
+		{Timestamp: at(2), Price: 102, Volume: 1800},
+		{Timestamp: at(3), Price: 103, Volume: 1800},
+		{Timestamp: at(4), Price: 104, Volume: 250}, // cumulative went backwards: new session
+		{Timestamp: at(5), Price: 105, Volume: 700},
+	}}
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
+	_, api := humatest.New(t)
+	huma.Get(api, "/symbols/{symbol}/candles", h.APICandles)
+
+	resp := api.Get("/symbols/7203/candles")
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%s)", resp.Code, http.StatusOK, resp.Body.String())
+	}
+	var body struct {
+		Candles []struct {
+			Volume int64 `json:"volume"`
+		} `json:"candles"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("Unmarshal: %v (body=%s)", err, resp.Body.String())
+	}
+	want := []int64{400, 500, 300, 0, 250, 450}
+	if len(body.Candles) != len(want) {
+		t.Fatalf("candles = %+v, want %d", body.Candles, len(want))
+	}
+	for i, w := range want {
+		if body.Candles[i].Volume != w {
+			t.Errorf("candles[%d].volume = %d, want %d", i, body.Candles[i].Volume, w)
+		}
 	}
 }
 

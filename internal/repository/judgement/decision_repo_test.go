@@ -150,4 +150,39 @@ func TestDecisionRepository_ListByInstrument_MostRecentFirstAndRespectsLimit(t *
 	}
 }
 
+func TestDecisionRepository_ListByIDs_ReturnsOnlyExistingRequestedRows(t *testing.T) {
+	repo, instrumentID := openTestDecisionRepo(t)
+	ctx := context.Background()
+
+	var ids []int64
+	for range 3 {
+		d, err := repo.Insert(ctx, domain.JevDecision{
+			InstrumentID: instrumentID, Symbol: "7203", Timestamp: time.Date(2026, 9, 27, 9, 30, 0, 0, time.UTC),
+			DecisionType: domain.JevDecisionTypeScout, StateHash: "hash", StateJSON: "{}",
+			QuestionVersion: "scout-v1", ResponseJSON: "{}", ModelID: "jev-scout-model",
+		})
+		if err != nil {
+			t.Fatalf("Insert decision: %v", err)
+		}
+		ids = append(ids, d.ID)
+	}
+
+	got, err := repo.ListByIDs(ctx, []int64{ids[2], ids[0], 999999})
+	if err != nil {
+		t.Fatalf("ListByIDs: %v", err)
+	}
+	gotIDs := map[int64]bool{}
+	for _, d := range got {
+		gotIDs[d.ID] = true
+	}
+	if len(got) != 2 || !gotIDs[ids[0]] || !gotIDs[ids[2]] {
+		t.Fatalf("ListByIDs ids = %v, want exactly %d and %d (unknown id omitted, unrequested row excluded)", gotIDs, ids[0], ids[2])
+	}
+
+	empty, err := repo.ListByIDs(ctx, nil)
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("ListByIDs(nil) = %v, %v, want no rows and no error", empty, err)
+	}
+}
+
 func ptr[T any](v T) *T { return &v }

@@ -166,8 +166,9 @@ func (h *Handler) isCandidate(ctx context.Context, instrumentID int64) bool {
 
 // HandleFeatureCalc is the feature-calc queue Handler (issue #44), an
 // intentional no-op: Handler.HandleMarketData already computes and persists
-// Feature atomically; a succeeding handler keeps the feature-calc jobs
-// EnqueueFullScan adds from piling up as "pending" rows.
+// Feature atomically. EnqueueFullScan no longer feeds this queue; the
+// handler remains so feature-calc jobs left by an earlier version drain
+// instead of staying "pending" forever.
 func HandleFeatureCalc(context.Context, jobqueue.Job) error {
 	return nil
 }
@@ -175,6 +176,13 @@ func HandleFeatureCalc(context.Context, jobqueue.Job) error {
 // readingFromBoard translates a marketdata.Board into the
 // featureengine.Reading Compute expects (doc.go: "Callers translate
 // marketdata.Board into the featureengine.Reading this package expects").
+//
+// kabuステーションAPI names the best quotes from the trader's side: BidPrice/
+// BidQty is the best SELL (offer) quote and AskPrice/AskQty the best BUY
+// (bid) quote (kabu_STATION_API.yaml BoardSuccess), the reverse of the
+// conventional meaning featureengine.Reading uses (Bid = best buy quote,
+// Ask = best sell quote). The mapping is therefore swapped here, and
+// likewise the depth: Buy1..10 is Reading.BidDepth, Sell1..10 AskDepth.
 func readingFromBoard(board marketdata.Board) featureengine.Reading {
 	r := featureengine.Reading{
 		Price:       board.CurrentPrice,
@@ -183,16 +191,15 @@ func readingFromBoard(board marketdata.Board) featureengine.Reading {
 		Turnover:    board.TradingValue,
 		SessionHigh: board.HighPrice,
 		SessionLow:  board.LowPrice,
-		Bid:         board.BidPrice,
-		Ask:         board.AskPrice,
-		BidQty:      board.BidQty,
-		AskQty:      board.AskQty,
-	}
-	// Sell levels sit with BidPrice/BidQty, Buy levels with AskPrice/AskQty.
-	if d, ok := board.SellDepth(); ok {
-		r.BidDepth = &d
+		Bid:         board.AskPrice,
+		Ask:         board.BidPrice,
+		BidQty:      board.AskQty,
+		AskQty:      board.BidQty,
 	}
 	if d, ok := board.BuyDepth(); ok {
+		r.BidDepth = &d
+	}
+	if d, ok := board.SellDepth(); ok {
 		r.AskDepth = &d
 	}
 	return r

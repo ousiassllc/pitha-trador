@@ -7,10 +7,12 @@ import "time"
 // (requirements/functional.md §4.2), ready to hand off to Jev Scout and to
 // display on the Scanner Dashboard (functional.md §5.1).
 //
-// The Jev* fields and CurrentPosition are populated by later sub-scopes
-// (Jev Scout/Trader - functional.md §4.4/§4.5 - and Execution/positions
-// respectively); until then they are nil rather than a fabricated
-// placeholder value, which callers must render as "pending"/"flat".
+// The Jev* fields and CurrentPosition are not set by the Fast Screener;
+// internal/bootstrap/candidates.Refresher fills them each refresh cycle from
+// the latest Jev Trader decision (functional.md §4.5) and the open position.
+// While there is no Trader decision / no open position they stay nil rather
+// than a fabricated placeholder value, which callers must render as
+// "pending"/"flat".
 type Candidate struct {
 	InstrumentID int64
 	Symbol       string
@@ -35,8 +37,8 @@ type Candidate struct {
 	// or nil if Jev Trader has not yet evaluated this candidate.
 	EntryQuality *string
 
-	// CurrentPosition is this instrument's open Paper/Live position size,
-	// or nil if flat (internal/service/execution, a later sub-scope).
+	// CurrentPosition is this instrument's open Paper/Live position size
+	// (positive for LONG, negative for SHORT), or nil if flat.
 	CurrentPosition *float64
 
 	// AsOf is the scan cycle timestamp this candidate's data was computed

@@ -70,8 +70,9 @@ type Board struct {
 	LowPrice  *float64 `json:"LowPrice"`
 
 	// Sell1..Sell10 / Buy1..Buy10 are the ten displayed book levels.
-	// Sell levels sit on the same side as BidPrice/BidQty and Buy levels
-	// on the AskPrice/AskQty side (see the swapped-naming note above).
+	// Sell levels sit on the same side as BidPrice/BidQty (the best sell
+	// quote) and Buy levels on the AskPrice/AskQty (best buy quote) side
+	// (see the swapped-naming note above).
 	Sell1  *BoardLevel `json:"Sell1"`
 	Sell2  *BoardLevel `json:"Sell2"`
 	Sell3  *BoardLevel `json:"Sell3"`

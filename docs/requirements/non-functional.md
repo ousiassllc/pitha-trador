@@ -12,8 +12,8 @@
 
 | 対象 | 周期目標 | 上限 |
 |------|---------|------|
-| 全体スキャン（全ユニバース特徴量算出＋Fast Screener） | 60秒ごと | 次サイクル開始までに完了しない場合はスキップしログ記録 |
-| 候補銘柄（Jev Scout/Trader）再評価 | 15〜30秒ごと | Jev API合計呼び出しは1分あたり上位N銘柄（`top_n`。既定20、`config/strategy.yaml`）× 2（Scout+Trader）を上限とする。Nを引き上げるほど呼び出しコストが比例して増える |
+| 全体スキャン（全ユニバース特徴量算出＋Fast Screener） | 60秒ごと | 次サイクル開始までに完了しない場合はスキップしログ記録。「完了しない」とは、サイクル開始時点で`market-data`キューに`pending`/`running`のジョブが1件でも残っている状態を指し、その場合は当該サイクルのジョブ投入を行わず`slog.Warn`（`scheduler: full scan skipped: previous cycle still running`、`pending`＝未完了件数）を記録する。未完了ジョブが0件になった次のサイクルから通常どおり投入を再開する（`jobs`への未処理ジョブの無制限な積み増しを防ぐ）。ワーカーが完了書き込みに失敗して`running`のまま残った孤児行で永久にスキップしないよう、判定の直前に`started_at`が10分より古い`market-data`の`running`行を`failed`（`last_error`＝`orphaned: still running after 10m0s`）へ回復して判定から除外する。しきい値内の`running`行は従来どおり未完了として数える。この孤児回復は全キュー（`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`）に共通で、Schedulerが1分ごとに全キューへ実行する（`internal/service/scheduler/orphans`）ため、`jev-scout`の孤児行が候補更新の間引き（`scoutHeld`）で該当銘柄を再起動まで保留し続けること（`functional/components-pipeline.md` §4.3）や、Activity Logの`running`件数が実態と乖離し続けることも防ぐ。回復した件数はキュー名付きで`slog.Warn`（`orphans: failed orphaned running jobs`、`queue`・`count`・`threshold`）に記録する。しきい値は固定の10分で、既定の全体スキャン周期60秒の10倍に相当するが`scan.full_scan_interval_seconds`には連動しない（周期を変更しても10分のまま）。根拠: Jev呼び出しの最悪所要は約43秒（§2.2）、`market-data`は1銘柄の取得であり、いずれもこれを大きく上回る。想定より長く動いているだけのジョブを早期に`failed`としても、そのワーカーの完了書き込みが後から状態を上書きするため害はない |
+| 候補銘柄（Jev Scout/Trader）再評価 | 15〜30秒ごと | Jev API合計呼び出しは1分あたり上位N銘柄（`top_n`。既定20、`config/strategy.yaml`）× 2（Scout+Trader）を上限とする。この上限は、候補更新サイクルからの`jev-scout`ジョブ投入を銘柄ごとに「`pending`/`running`ジョブがある間、および前回完了から`scan.jev_scout_min_interval_seconds`（既定60秒）未満の間はスキップ」することで担保する（Scoutは同一銘柄で1分あたり最大1回。FR-SCAN-1のイベント発火による即時再評価のみ例外。詳細は`functional/components-pipeline.md` §4.3）。Nを引き上げるほど呼び出しコストが比例して増える |
 | 保有ポジション監視・Exit評価 | 5〜15秒ごと | Risk EngineのExit判定はJev応答を待たずコード側で即時評価する |
 
 ### 2.2 レイテンシ目標
@@ -32,7 +32,11 @@
 
 ### 2.3 スループット・スケーラビリティ
 
-- 対象ユニバースは東証上場銘柄（最大 約4,000銘柄）を想定し、Fast Screener段階まで全銘柄を60秒サイクルで処理できること
+- 対象ユニバースは東証上場銘柄（最大 約4,000銘柄。運用者が銘柄マスタCSVで供給する。`environment/setup.md`「銘柄マスタの投入」）を想定し、Fast Screener段階まで全銘柄を60秒サイクルで処理できること（現行実装が保証する範囲は下記）。フルスキャンの対象は有効な全銘柄で、市場コンテキスト算出用の`market_index`/`sector_index`行も同じ`market-data`ジョブで処理するため、以下の銘柄数・銘柄あたりコストの試算にはこれらの指数行も含まれる（`functional/components-platform.md` FR-SCHED-2）
+  - **保証できる範囲（issue #391）**: `market-data`キューのワーカーは1本で、ジョブを1銘柄ずつ直列処理する（`ClaimNext`→板取得→特徴量算出・スナップショット保存→`MarkSucceeded`。SQLiteは単一ライターで、各コミットがfsyncを伴う）。このため1サイクルの所要時間は「銘柄数 × (銘柄あたりDBコスト＋板取得レイテンシ)」で決まり、60秒に収まる銘柄数の上限は `60秒 ÷ (銘柄あたりDBコスト＋板取得レイテンシ)` になる。銘柄あたりDBコストは`BenchmarkFullScanCycle`（`internal/bootstrap/marketdatajob`。板取得が即時のフェイク、SQLite実DB、Ryzen 9 5950X・Linux、他プロセスと共有のSSD。`go test ./internal/bootstrap/marketdatajob -run '^$' -bench FullScanCycle -benchtime 1x`）で計測した: 500銘柄≒19.5ms/銘柄（約9.7秒）、1,000銘柄≒18.8ms/銘柄（約18.8秒）、4,000銘柄≒27.8ms/銘柄（約111秒。同一ホストの負荷により100〜240秒の範囲でばらつく）。**すなわち4,000銘柄の全体スキャンを60秒以内に完了することは、板取得が即時でも現行の単一ワーカー設計では保証できない**。保証する上限は、板取得レイテンシを含めた銘柄あたり所要時間が上記式を満たす範囲（板取得が即時の場合の目安で約2,000銘柄、REST板取得のレイテンシ分だけさらに減る）とし、これを超えるユニバースでは次の挙動になる
+  - サイクルが60秒に収まらない場合は§2.1のとおり次サイクルの投入をスキップして`slog.Warn`（`scheduler: full scan skipped: previous cycle still running`）を出す。周期は処理時間まで間延びするが、未完了ジョブは積み増されない。運用者はこのWarnが連続して出ていないかで上限超過に気付く
+  - フルスキャンが投入するのは`market-data`ジョブのみで（空ハンドラの`feature-calc`ジョブは投入しない）、全銘柄分を1トランザクションで投入する（1サイクルあたり銘柄数×1回のINSERTコミットを1回に削減）
+  - kabuステーションREST（`GetBoard`）には並列度・レート制御を設けない。呼び出しは`market-data`ワーカー1本の直列実行（並列度1）で、PUSH（最大50銘柄、`architecture/overview/integrations.md` §5）の対象外銘柄が1銘柄ずつ順に呼ばれるため、リクエストレートは板取得レイテンシの逆数で自然に頭打ちになる。ワーカーの並列化は、銘柄あたりDBコストがSQLite単一ライターのコミット（fsync）に律速されており効果を実測で示せていないため実施しない（4,000銘柄を60秒で処理する必要が生じた場合の課題）
 - Scanner Dashboardのスキャン状況パネル用に保持する銘柄別の判定結果（FR-SCAN-3〜6）は最新1サイクル分のメモリ上のみ（約4,000銘柄×数十バイト）で、サイクル周期・Fast Screener 2秒以内の目標に影響させない。4,000銘柄での計測（issue #303、`go test -bench`・Ryzen 9 5950X・SQLite実DB）: Fast Screener段階（`screener.Run`→`Screen`）は約0.28ms→約0.33ms/サイクル（追加確保は約8KB=銘柄あたり2バイトの理由ビットマスクのみ）、候補更新サイクル全体（DB読込・特徴量入力組立・保持込み）は確保量が約45.0MB→約45.4MB（+約1%、確保回数は+10回）で所要時間は計測ばらつきの範囲内（約1.1〜1.5秒、大半は既存のSQLite読込）。どちらも60秒周期・Fast Screener 2秒以内の目標に影響しない
 - Jev API呼び出しは全銘柄ではなくFast Screener通過銘柄の上位N（`top_n`。既定20。50〜200は引き上げ時の目安）→ Scout通過銘柄（Nの一部）に限定し、API呼び出しコストを抑制する（§4.3 再評価抑制も適用）
 - 単一Windowsホスト・単一プロセス（Wails）構成のため、将来的にスキャン対象拡大や複数戦略同時運用が必要になった場合は、Scheduler/Worker層をプロセス分離・別ホスト化できるよう、内部レイヤー（domain/repository/service）をWailsプロセスに直接依存させない設計とする（詳細は`architecture/overview.md`）
@@ -122,3 +126,10 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.11 | 2026-10-03 | §4のkabuステーションAPI認証情報の保存方式を実装に合わせて修正（APIパスワードは`secrets`テーブルにAES-256-GCM暗号化、発行トークンはメモリのみ保持で非永続、OS資格情報ストア不使用） | issue #306 |
 | 1.12 | 2026-10-03 | §2.1/§2.3 の候補数表現を「上位N銘柄（`top_n`、既定20）」へ統一し、「50〜200」「10〜30」の固定値を削除 | issue #327 |
 | 1.13 | 2026-10-03 | §3 に立会時間外のスキャン停止通知（FR-SCAN-7）と`NextOpen`を追記 | issue #367 |
+| 1.14 | 2026-10-04 | §2.3 の対象ユニバースの供給元（銘柄マスタCSV）を明記 | issue #389 |
+| 1.15 | 2026-10-04 | §2.1 のJev呼び出し上限（N×2/分）を担保する機構（銘柄別`scan.jev_scout_min_interval_seconds`と未完了ジョブの重複排除）を明記 | issue #388 |
+| 1.16 | 2026-10-05 | §2.3 の対象ユニバースにフルスキャン対象の指数行（`market_index`/`sector_index`）が含まれる旨を追記 | issue #422 |
+| 1.17 | 2026-10-05 | §2.1 の全体スキャン未完了判定に、10分超`running`の孤児ジョブを`failed`へ回復して判定から除外する規則を追記 | issue #416（#390修正の回帰） |
+| 1.18 | 2026-10-05 | §2.1 の全体スキャンの前サイクル未完了時のスキップと`slog.Warn`を追記 | issue #390 |
+| 1.19 | 2026-10-05 | §2.3 にフルスキャンの保証範囲（約2,000銘柄目安）とREST並列度1の根拠を追記 | issue #391 |
+| 1.20 | 2026-10-05 | §2.1 の孤児`running`回復を全キュー共通（Schedulerが1分ごとに実行、`jev-scout`の`scoutHeld`保留も解消）へ拡張し、しきい値が固定10分で`scan.full_scan_interval_seconds`に連動しないこと・根拠・キュー名付きWarnログを明記 | issue #424/#425/#428 |

@@ -1,11 +1,13 @@
 package bootstrap_test
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	configdefaults "github.com/ousiassllc/pitha-trador/config"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 )
@@ -118,7 +120,10 @@ func TestRun_ExecutableDirectoryConfigTakesPrecedenceOverEmbeddedDefault(t *test
 	})
 
 	const wantTopN = 4242
-	if err := os.WriteFile(strategyPath, fmt.Appendf(nil, "fast_screener:\n  top_n: %d\n", wantTopN), 0o644); err != nil {
+	// strategy.yaml is validated at startup, so the fixture is the full
+	// embedded default with only top_n changed.
+	strategyYAML := bytes.Replace(configdefaults.DefaultStrategyYAML, []byte("top_n: 20"), fmt.Appendf(nil, "top_n: %d", wantTopN), 1)
+	if err := os.WriteFile(strategyPath, strategyYAML, 0o644); err != nil {
 		t.Fatalf("WriteFile(%q): %v", strategyPath, err)
 	}
 
@@ -167,10 +172,7 @@ func TestBuildServices_EmptySecretsDoesNotPanic(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = state.Close() })
 
-	svc, err := bootstrap.BuildServices(state, config.Secrets{}, nil)
-	if err != nil {
-		t.Fatalf("BuildServices: %v", err)
-	}
+	svc := bootstrap.BuildServices(state, config.Secrets{})
 	if svc.MarketData == nil {
 		t.Error("BuildServices: Services.MarketData is nil")
 	}

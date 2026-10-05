@@ -28,6 +28,7 @@ type scannerContract struct {
 		Name string `json:"name"`
 		Item struct {
 			Symbol          string   `json:"symbol"`
+			DetailURL       string   `json:"detail_url"`
 			Price           float64  `json:"price"`
 			Return1m        *float64 `json:"return_1m"`
 			Return5m        *float64 `json:"return_5m"`
@@ -39,7 +40,6 @@ type scannerContract struct {
 			EntryQuality    *string  `json:"entry_quality"`
 			CurrentPosition *float64 `json:"current_position"`
 		} `json:"item"`
-		Href           string   `json:"href"`
 		Cells          []string `json:"cells"`
 		ReturnClasses  []string `json:"returnClasses"`
 		DirectionClass string   `json:"directionClass"`
@@ -197,8 +197,8 @@ func TestScannerTableFallback_MatchesLitContract_Rows(t *testing.T) {
 				}
 			}
 
-			if got := attr(findAll(tds[0], tag("a"))[0], "href"); got != row.Href {
-				t.Errorf("href = %q, want %q", got, row.Href)
+			if got := attr(findAll(tds[0], tag("a"))[0], "href"); got != it.DetailURL {
+				t.Errorf("href = %q, want %q", got, it.DetailURL)
 			}
 			for i, cell := range []int{2, 3} {
 				if got, want := classSet(attr(tds[cell], "class")), classSet(row.ReturnClasses[i]); !slices.Equal(got, want) {

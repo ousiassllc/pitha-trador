@@ -96,6 +96,28 @@ export const COLUMNS: Column[] = [
   },
 ];
 
+// Quality order for sorting the entry_quality column, worst to best. Keep in
+// step with the `entry_quality` hint above and the domain's source of truth,
+// `JevEntryQuality*` in internal/domain/jevdecision.go ("Ordered from worst
+// to best"; the Policy Engine's `entry_quality >= strong` depends on it). It
+// only orders values for display; nothing here decides behavior (HATEOAS).
+const ENTRY_QUALITY_RANK: Readonly<Record<string, number>> = {
+  poor: 0,
+  fair: 1,
+  good: 2,
+  strong: 3,
+  exceptional: 4,
+};
+
+// sortValue is what a column's header sorts by: the entry_quality rank (an
+// unknown value sorts like null, i.e. first) or the raw cell value.
+export function sortValue(item: ScannerItem, key: SortKey): string | number | null {
+  if (key === 'entry_quality') {
+    return item.entry_quality === null ? null : (ENTRY_QUALITY_RANK[item.entry_quality] ?? null);
+  }
+  return item[key];
+}
+
 const BADGE_BASE = 'inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold';
 
 // Mirrors atoms.Badge / atoms.EntryQualityBadge (internal/web/atoms/badge.templ).
@@ -148,16 +170,6 @@ export function formatSigned(value: number, decimals: number): string {
 // round halves up for non-negative values (Go's %.0f would round to even).
 export function formatConfidence(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
-}
-
-// Symbol detail path segment: everything except RFC 3986 unreserved
-// characters is percent-escaped, the same set as symbolHref in
-// internal/web/organisms/scanner_table_fallback.templ.
-export function encodeSymbol(symbol: string): string {
-  return encodeURIComponent(symbol).replace(
-    /[!'()*]/g,
-    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
 }
 
 // The server's RFC 3339 timestamp without fractional seconds, matching the

@@ -2,6 +2,8 @@ package activityfeed
 
 import (
 	"context"
+	"log/slog"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
@@ -43,25 +45,70 @@ func (s *Service) publish(msg Message) {
 }
 
 // ObserveJob is a jobqueue.JobObserver: it publishes the transition as
-// an activity event plus the queue's new depth.
-func (s *Service) ObserveJob(ctx context.Context, job jobqueue.Job) {
+// an activity event and schedules a queue-depth update for the job's
+// queue. The depth is not recomputed per transition: it runs on the
+// writer's goroutine (enqueue loop, worker), and counting jobs for every
+// one of thousands of transitions per minute is needless load. Transitions
+// within queueUpdateInterval share one QueueCounts call, run off the
+// writer's goroutine (flushQueueUpdates).
+func (s *Service) ObserveJob(_ context.Context, job jobqueue.Job) {
 	if !s.hasSubscribers() {
 		return
 	}
 	ev := jobEvent(job)
 	s.publish(Message{Event: &ev})
+	s.markQueueDirty(job.Queue)
+}
 
-	counts, err := s.jobs.QueueCounts(ctx, s.now().Add(-FailedWindow))
-	if err != nil {
+func (s *Service) markQueueDirty(queue string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.dirtyQueues == nil {
+		s.dirtyQueues = make(map[string]struct{})
+		time.AfterFunc(s.queueUpdateInterval, s.flushQueueUpdates)
+	}
+	s.dirtyQueues[queue] = struct{}{}
+}
+
+// flushQueueUpdates publishes the current depth of every queue marked dirty
+// since the last flush, with one QueueCounts call. When that call fails the
+// queues stay dirty and are retried after queueUpdateInterval, for as long
+// as there are subscribers.
+func (s *Service) flushQueueUpdates() {
+	s.mu.Lock()
+	dirty := s.dirtyQueues
+	s.dirtyQueues = nil
+	s.mu.Unlock()
+	if len(dirty) == 0 || !s.hasSubscribers() {
 		return
 	}
-	update := QueueUpdate{Queue: job.Queue}
-	for _, c := range counts {
-		if c.Queue == job.Queue {
-			update.Pending, update.Running, update.FailedRecent = c.Pending, c.Running, c.FailedSince
+
+	ctx, cancel := context.WithTimeout(context.Background(), queueUpdateTimeout)
+	defer cancel()
+	counts, err := s.jobs.QueueCounts(ctx, s.now().Add(-FailedWindow))
+	if err != nil {
+		// Keep the queues dirty and retry on the next interval: dropping
+		// them would leave the queue-depth panel stale until the queue's
+		// next transition (issue #420).
+		slog.Error("activityfeed: queue counts failed; retrying", "error", err, "queues", len(dirty))
+		for queue := range dirty {
+			s.markQueueDirty(queue)
 		}
+		return
 	}
-	s.publish(Message{QueueUpdate: &update})
+	byQueue := make(map[string]jobqueue.JobQueueCount, len(counts))
+	for _, c := range counts {
+		byQueue[c.Queue] = c
+	}
+	for _, queue := range Queues() {
+		if _, ok := dirty[queue]; !ok {
+			continue
+		}
+		c := byQueue[queue]
+		s.publish(Message{QueueUpdate: &QueueUpdate{
+			Queue: queue, Pending: c.Pending, Running: c.Running, FailedRecent: c.FailedSince,
+		}})
+	}
 }
 
 // ObserveDecision is a judgement.DecisionObserver.

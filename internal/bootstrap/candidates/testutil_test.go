@@ -9,9 +9,11 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
 
@@ -34,15 +36,26 @@ func newTestDB(t *testing.T) *sql.DB {
 // and no session gate (always in session).
 func newTestRefresher(t *testing.T) *Refresher {
 	t.Helper()
+	r, _ := newTestRefresherWithOrders(t)
+	return r
+}
+
+// newTestRefresherWithOrders is newTestRefresher that also returns the
+// paper-order repository over the same DB, for tests that need a position
+// (positions reference an entry order).
+func newTestRefresherWithOrders(t *testing.T) (*Refresher, *trading.OrderRepository) {
+	t.Helper()
 	conn := newTestDB(t)
 	return &Refresher{
 		Instruments: market.NewInstrumentRepository(conn),
 		Snapshots:   market.NewSnapshotRepository(conn),
 		Settings:    system.NewRuntimeSettingsRepository(conn),
 		Jobs:        jobqueue.NewJobRepository(conn),
+		Decisions:   judgement.NewDecisionRepository(conn),
+		Positions:   trading.NewPositionRepository(conn),
 		Screener:    screener.NewLiveSource(),
 		Strategy:    &config.StrategyConfig{},
-	}
+	}, trading.NewOrderRepository(conn)
 }
 
 func mustCreateInstrument(t *testing.T, r *Refresher, symbol string) domain.Instrument {

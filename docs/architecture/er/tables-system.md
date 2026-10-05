@@ -116,9 +116,9 @@ erDiagram
 | last_error | text | NULL可 | |
 | created_at | text | NOT NULL | |
 
-インデックス: `INDEX (queue, status, scheduled_at)`
+インデックス: `INDEX (queue, status, scheduled_at)`（`ClaimNext`・未完了件数`CountOpen`）, `INDEX (queue, status, finished_at)`（直近`failed`件数`QueueCounts`・Jev Scout間引き`ListOpenOrFinishedSince`・Activity Logの直近ジョブ`ListRecent`。マイグレーション000019）。保持期間内の完了行は最大で数千万行に達するため、毎サイクル・毎ジョブ遷移で呼ばれるクエリは完了行を全走査せず、この2本の索引の範囲検索だけで引く（`EXPLAIN QUERY PLAN`が`SCAN jobs`にならないことをテストで固定している）
 
-再起動時の回復: プロセス起動時に`status='running'`のまま残っている行（クラッシュで中断されたジョブ）を`pending`へ戻し再実行する。
+再起動時の回復: プロセス起動時に`status='running'`のまま残っている行（クラッシュで中断されたジョブ）を`pending`へ戻し再実行する。起動後に完了書き込みへ失敗して`running`のまま残った行は、全キュー共通でSchedulerが1分ごとに`started_at`から固定10分超のものを`failed`へ回復する（`last_error`＝`orphaned: …`。しきい値は`scan.full_scan_interval_seconds`に連動しない。`market-data`は全体スキャンの未完了判定（`Scheduler.EnqueueFullScan`）の直前にも回復する。`non-functional.md` §2.1）。
 
 保持期間: 完了行のみを対象に、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`succeeded`は`finished_at`から7日、`failed`は30日経過後にバッチ削除する。`pending`/`running`は削除しない。`ClaimNext`や`QueueCounts`の集計コストとDBファイルの肥大を抑えるための措置で、Activity Logが参照する直近の行は保持期間内に残る（`non-functional.md` §3）。
 
@@ -142,5 +142,7 @@ CREATE VIRTUAL TABLE jev_decision_vectors USING vec0(
 ```
 
 - `snapshot_id` / `decision_id` は `market_snapshots.id` / `jev_decisions.id` を参照する（仮想テーブルのためFK制約は付与できず、アプリ層で整合性を保証する）
-- 類似検索は `SELECT decision_id, distance FROM jev_decision_vectors WHERE embedding MATCH ? ORDER BY distance LIMIT 5` の形式で行う（k=5、`functional.md` FR-RAG-2）
+- 類似検索は `SELECT decision_id, distance FROM jev_decision_vectors WHERE embedding MATCH ? [AND decision_id IN (SELECT jev_decision_id FROM calibration_outcomes)] ORDER BY distance LIMIT ?` の形式で行う（`functional.md` FR-RAG-2）。`jev_decision_vectors`はまず`calibration_outcomes`紐付き済みに絞った検索で最大k（初期値k=5）件を取得し、k件に満たない場合のみ絞り込みなしで k×4 件（既定20）を追加取得して、アプリ層で「紐付き済み→未付与のTrader判断→Scout判断」（各群は距離順）に再ランクし上位k件を採用する。`market_snapshot_vectors`は不足分（k−採用件数）のみ取得する。いずれも問い合わせ対象の状態自身は`rowid`の許可id集合（`id IN (SELECT id FROM … WHERE symbol <> ? OR timestamp …)`）で除外する（判断は同一銘柄の現在時刻以降、スナップショットは同一銘柄の現在−15分より新しいもの。`functional.md` FR-RAG-4）
+- bid/ask入れ替え修正（issue #458）前に索引した`jev_decision_vectors`は、`spread_bps`が常に負・`orderbook_imbalance`が符号反転した特徴量由来で、修正後の問い合わせベクトルとの距離を歪めるため、マイグレーション`000022`で全件削除する。`jev_decisions`（`state_json`・`response_json`・`calibration_outcomes`）は追記専用の監査ログとして書き換えない。履歴の書き換え・再ベクトル化は行わない（旧`state_json`自体が旧符号のため正しいベクトルを再構成できない）。vec0はKNN中の`decision_id >= N`のような範囲条件を扱えないため、検索時の除外ではなく削除で対応する。以降の判断は正しい符号で索引される（issue #464）
+- 同じ理由で、修正前に索引した`market_snapshot_vectors`（`spread_bps`/`orderbook_imbalance`が符号反転）も、`jev_decision_vectors`の全件削除後は`rag.Service.Context`の不足分補充枠を占め距離を歪めるため、マイグレーション`000023`で全件削除する（`000022`は書き換えず新番号で追加）。`market_snapshots`本体（`raw_data_json`を含む）は書き換えない。以降のスナップショットは`featureengine`が正しい符号で索引する。これら2つのベクトルテーブルが`spread_bps`/`orderbook_imbalance`由来の派生データを持つ唯一のテーブルで、他に再計算・削除が必要な派生テーブルは無い（issue #469, #470）
 - コールドスタート期間（該当テーブルの行数が少ない間）は検索結果0件として扱い、FR-RAG-4の通りRAG文脈なしでJevを呼び出す

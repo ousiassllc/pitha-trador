@@ -16,7 +16,7 @@
 | 市場コンテキスト | TOPIX/Nikkei225 return_1m/5m, sector_return_5m, stock_vs_sector_relative_strength, market_breadth |
 
 - FR-FE-1: すべての特徴量は判定時点までのデータのみで算出する（look-ahead防止、§4.11 バックテスト（FR-BT-3）参照）
-- FR-FE-2: 板・約定特徴量はkabuステーションAPIから取得できない銘柄・時間帯では欠損値として扱い、依存するJev入力/スコアから除外する
+- FR-FE-2: 板・約定特徴量はkabuステーションAPIから取得できない銘柄・時間帯では欠損値として扱い、依存するJev入力/スコアから除外する。bid/askが逆転した板（bid > ask）も無効として`spread_bps`/`microprice`を欠損とし、スプレッド上限ガードが負値を素通りしないようにする
 - FR-FE-3: `volume`/`turnover`はkabuステーションAPIの当日累積値である。`volume_1m/5m`・`turnover_1m/5m`は「現在の累積値 − 窓の開始時点の累積値」で算出し、足の合算はしない。Fast Screenerの`min_turnover_5m_jpy`とPolicy Engineの「板が薄い」判定は同じ`turnover_5m`（`featureengine.TurnoverOverWindow`）を用いる
 - FR-FE-4: 市場コンテキストは`instruments.kind`で区別した追跡銘柄から算出する。`market_index`（TOPIX/Nikkei225等）のreturn平均を`market_return_1m/5m`、銘柄の`sector`と一致する`sector_index`のreturnを`sector_return_5m`とし、`stock_vs_sector_relative_strength = return_5m − sector_return_5m`、`market_breadth`は直近3分以内の全アクティブ株式の最新return_5mの（上昇数−下落数）/銘柄数とする。追跡銘柄が未登録・更新が3分以上停止・履歴不足の場合は欠損値とする（FR-FE-2と同じ扱い）
 - FR-FE-5: 窓（`return_*`・`vwap_slope`・`realized_vol_*`・`volume_*`・`turnover_*`・`vwap_cross_direction`等）の基準バーは、窓開始時刻（判定時刻−窓幅）から「窓幅の50%（最小90秒）」以内に存在しなければならない。それより古い基準バー（前営業日の引け・昼休み前の前場最終バー・再起動/欠測をまたぐバー）しか無い場合は履歴不足として欠損値（nil）とし、ギャップを「N分リターン」として扱わない（`featureengine.windowRef`）
@@ -40,6 +40,7 @@ screen_score =
   - 履歴不足で算出できない項は0ではなく欠損として合計から除外する（FR-FE-2と同じ扱い）
 
 - FR-FS-3: フィルター設定値・スコア重みはすべて環境変数またはDBで変更可能とする。優先順位は`config/strategy.yaml` < 環境変数`PITHA_FAST_SCREENER_*`（起動時に読込み。例: `PITHA_FAST_SCREENER_MIN_PRICE`, `PITHA_FAST_SCREENER_TOP_N`, `PITHA_FAST_SCREENER_WEIGHT_BREAKOUT_STRENGTH`）< DB `runtime_settings`の`screener.*`キー（候補更新周期ごとに読み込むため再起動不要。キー一覧は`architecture/er.md` §runtime_settings）
+- FR-FS-4（起動時検証）: `config/strategy.yaml`の`fast_screener.*`は、`scan.*`（既定値補完。FR-SCAN-1/FR-SCAN-2）と異なり**補完せず検証する**。`min_price`・`max_price`・`min_turnover_5m_jpy`・`max_spread_bps`・`min_volume_ratio`・`min_abs_return_5m_pct`・`min_realized_volatility`は0より大、`max_price >= min_price`、`top_n >= 1`（0は全銘柄が`top_n_cutoff`で除外されJev Scoutが一度も走らない、負数は上位N件の切り出しで範囲外参照になるため不可）、`weights.*`は0以上かつ少なくとも1つは0より大。キー欠落・タイプミスは0として読み込まれるため、未設定も違反として検出される。違反は項目名（例: `fast_screener.top_n`）付きで全件まとめて報告し、起動に失敗する。検証は`PITHA_FAST_SCREENER_*`環境変数の適用後に行うため、環境変数経由の不正値（例: `PITHA_FAST_SCREENER_TOP_N=0`）も拒否する。`screener.Screen`は防御として`top_n <= 0`でも候補0件を返し、パニックしない（DB `runtime_settings`の`screener.top_n`のような実行時上書き経路向け）
 
 ### 4.3 スキャン頻度・イベント駆動
 
@@ -49,21 +50,23 @@ screen_score =
 | 候補銘柄更新 | 15〜30秒ごと |
 | ポジション保有銘柄 | 5〜15秒ごと |
 
-- 周期は`config/strategy.yaml`の`scan.full_scan_interval_seconds`（60）/ `scan.candidate_refresh_interval_seconds_min`・`_max`（15・30）/ `scan.held_position_interval_seconds_min`・`_max`（5・15）で設定する（括弧内は同梱の既定値、単位は秒）。各値は正の整数で、`_max >= _min`であること。設定ローダー（`internal/config/scan_defaults.go`）は、未設定または0以下のキーを同梱既定値で補完し、`_max < _min`の`_max`を`_min`に引き上げる。いずれも警告ログを出す。0のままだと候補更新が待機なしで回り、全体スキャンが`@every 0s`で登録されるため（ホットループ防止）
+- 周期は`config/strategy.yaml`の`scan.full_scan_interval_seconds`（60）/ `scan.candidate_refresh_interval_seconds_min`・`_max`（15・30）/ `scan.held_position_interval_seconds_min`・`_max`（5・15）/ `scan.jev_scout_min_interval_seconds`（60）で設定する（括弧内は同梱の既定値、単位は秒）。各値は正の整数で、`_max >= _min`であること。設定ローダー（`internal/config/scan_defaults.go`）は、未設定または0以下のキーを同梱既定値で補完し、`_max < _min`の`_max`を`_min`に引き上げる。いずれも警告ログを出す。0のままだと候補更新が待機なしで回り、全体スキャンが`@every 0s`で登録されるため（ホットループ防止）
 
 - FR-SCAN-1: 以下のいずれかを満たした銘柄は通常周期を待たず再評価する: 1分リターン急変、出来高急増、スプレッド急拡大、板インバランス急変、VWAPクロス、高値/安値ブレイク、約定フロー急変（直近2バーの`trade_flow_imbalance`の差の絶対値が`config/strategy.yaml`の`scan.event_trigger.trade_flow_imbalance_change_threshold`以上。どちらかが欠損の場合は無信号）、ニュースフラグ発生
 - FR-SCAN-2（再評価抑制）: `abs(return_1m) < threshold AND abs(volume_ratio_5m) < threshold AND abs(spread_change) < threshold AND no_event` の場合はJev呼び出しをスキップし、APIコストとレイテンシを削減する
+- 候補更新サイクル（15〜30秒周期）からの`jev-scout`ジョブ投入は銘柄ごとに間引く（非機能§2.1の上限「1分あたりN銘柄×2（Scout+Trader）」を担保する機構）: 同一銘柄に`pending`/`running`の`jev-scout`ジョブがある間、および同一銘柄の直近の`jev-scout`ジョブ完了（成功・失敗とも）から`scan.jev_scout_min_interval_seconds`（既定60秒）経過するまでは投入しない（`internal/bootstrap/candidates`の`scoutHeld`）。これにより同一銘柄のScoutは通常1分あたり1回まで（通過銘柄のTraderを含めてもN×2/分以内）。FR-SCAN-1のイベント発火による即時再評価（`Scheduler.EnqueueEventReevaluation`）はこの間隔の対象外で、通常周期を待たず投入される（ただしその`jev-scout`ジョブも上記の`pending`/`running`・直近完了の判定対象になるため、直後の候補更新サイクルでの重複投入は起きない）。ワーカーの完了書き込み失敗で`running`のまま残った孤児行は、`started_at`から固定10分超でSchedulerが`failed`へ回復する（1分ごと。`non-functional.md` §2.1）ため、その銘柄は回復後（失敗扱いの完了時刻から`scan.jev_scout_min_interval_seconds`経過後）に再び投入され、再起動まで保留され続けることはない
   - 各thresholdは`config/strategy.yaml`の`scan.event_trigger.*`（`return_1m_change_threshold` / `volume_ratio_change_threshold` / `spread_change_bps_threshold` / `orderbook_imbalance_change_threshold` / `trade_flow_imbalance_change_threshold`）で設定する。判定は`abs(値) >= threshold`で、`return_1m_change_threshold`は1分リターン(`return_1m`)の絶対値、`volume_ratio_change_threshold`は5分出来高比率(`volume_ratio_5m`)の絶対値（前バーとの差ではなく現在値の水準判定。`volume_ratio_5m`は通常1.0前後の比率のため既定2.0は「5分出来高が平均の2倍以上」を意味する）、`spread_change_bps_threshold` / `orderbook_imbalance_change_threshold` / `trade_flow_imbalance_change_threshold`は直近2バーの差の絶対値と比較する。したがって、thresholdが0以下だと全バーでFR-SCAN-1が発火しFR-SCAN-2が無効化される。キー欠落（新キー追加前の古い`strategy.yaml`等）や0以下の値は設定ローダー（`LoadStrategy` / `LoadStrategyBytes`）が同梱既定値（`config/strategy.yaml`の値）で補完し、警告ログを出す
 
 ### 4.4 Jev Scout
 
 - FR-SCOUT-1: 1回のJev呼び出し（`POST /v1/systemone`、`architecture/overview.md` §6）で以下の質問群を評価する: `interesting_now`（`noul`型: yesの確率0〜1）, `momentum_quality`（`choice`型: weak/moderate/strong/exceptional）, `liquidity_ok`（`noul`型）, `abnormal_activity`（`noul`型）。入力は`market`（現在の市場状態）と`similar_past_cases`（RAGの類似過去事例）。応答が必須answerの欠落・型不一致・定義外のchoice・範囲外のnoulを含む場合は不正応答として失敗扱いにする
 - FR-SCOUT-2: 通過条件は `interesting_now >= 0.65 AND liquidity_ok >= 0.70 AND abnormal_activity >= 0.55`（初期値。バックテスト後に調整）
-- FR-SCOUT-3: 入力・出力・状態ハッシュ・レイテンシ・モデルID（応答の`model`）を`jev_decisions`（decision_type=scout）に保存する。Jev APIは課金額を返さないため`request_cost`はNULLのままとする。質問セットのバージョン（現行`scout-v2`）を`question_version`に記録する
+- FR-SCOUT-2a（起動時検証）: `jev_scout.min_interesting_now`・`min_liquidity_ok`・`min_abnormal_activity`は`(0, 1]`であること。キー欠落・タイプミスは0として読み込まれ、`>=`比較が全銘柄で真になりFast Screener通過銘柄がすべてJev Traderへ流れる（コスト上限N×2/分の前提が崩れる）ため、補完せず項目名（例: `jev_scout.min_liquidity_ok`）付きの起動エラーとする（FR-FS-4と同じ流儀）
+- FR-SCOUT-3: 入力・出力・状態ハッシュ・レイテンシ・モデルID（応答の`model`）を`jev_decisions`（decision_type=scout）に保存する。Jev APIは課金額を返さないため`request_cost`はNULLのままとする。質問セットのバージョン（現行`scout-v3`）を`question_version`に記録する
 
 ### 4.5 Jev Trader
 
-- FR-TRADER-1: Scout通過銘柄に対し以下を評価する（FR-SCOUT-1と同じく`POST /v1/systemone`、入力は`market`と`similar_past_cases`）: `direction`（`choice`型: LONG/SHORT/NONE）, `regime`（`choice`型: TREND/RANGE/BREAKOUT/CHAOTIC）, `entry_quality`（`choice`型: poor/fair/good/strong/exceptional）, `toxic_flow`（`noul`型）, `liquidity_stressed`（`noul`型）, `continuation_probability`（`noul`型）。`confidence`は`direction`回答の`confidence`を用いる。質問セットのバージョンは現行`trader-v2`
+- FR-TRADER-1: Scout通過銘柄に対し以下を評価する（FR-SCOUT-1と同じく`POST /v1/systemone`、入力は`market`と`similar_past_cases`）: `direction`（`choice`型: LONG/SHORT/NONE）, `regime`（`choice`型: TREND/RANGE/BREAKOUT/CHAOTIC）, `entry_quality`（`choice`型: poor/fair/good/strong/exceptional）, `toxic_flow`（`noul`型）, `liquidity_stressed`（`noul`型）, `continuation_probability`（`noul`型）。`confidence`は`direction`回答の`confidence`を用いる。質問セットのバージョンは現行`trader-v3`
 - FR-TRADER-2: Jevのconfidence/probability（`noul`の値、`choice`の`confidence`）を実際の株価上昇確率とみなさない。実結果との対応はCalibrationで独自に検証する
 - FR-TRADER-3: 入出力を`jev_decisions`（decision_type=trader）に保存する
 
@@ -71,9 +74,10 @@ screen_score =
 
 - FR-POLICY-1: LONG条件: `direction == LONG AND P(LONG) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
 - FR-POLICY-2: SHORT条件: `direction == SHORT AND P(SHORT) >= 0.68 AND entry_quality >= strong AND continuation_probability >= 0.60 AND toxic_flow <= 0.35 AND liquidity_stressed <= 0.25`
+- FR-POLICY-2a（起動時検証）: `policy.long`/`policy.short`の`min_probability`・`min_continuation_probability`・`max_toxic_flow`・`max_liquidity_stressed`は`(0, 1]`、`min_entry_quality`は`poor`/`fair`/`good`/`strong`/`exceptional`のいずれか、`policy.min_calibration_samples`は0以上（0で無効）であること。キー欠落・タイプミスは0/空として読み込まれ、`min_entry_quality`が未知値だと`poor`相当になりentry_qualityゲートが無効化されるため、補完せず項目名（例: `policy.long.min_entry_quality`）付きで全件まとめて報告し起動に失敗する。検証は`PITHA_POLICY_*`環境変数（FR-POLICY-4）の適用後に行い、環境変数経由の不正値（範囲外・未知のentry_quality）も同様に拒否する。`config/strategy.yaml`・埋め込み既定値は検証を通過する
 - FR-POLICY-3: 以下のいずれかに該当する場合はNONE（取引しない）: JevがNONE、確信度不足、スプレッド過大、板が薄い（スナップショットの`turnover_5m`が`min_turnover_5m_jpy`未満。履歴不足で算出不能な場合は判定しない）、Risk Engine拒否、データ欠損、API異常、キャリブレーション対象外（Jev decisionのconfidenceが属する信頼度バケットのラベル付きCalibrationサンプル数が`policy.min_calibration_samples`未満。0で無効）
 - FR-POLICY-4: しきい値はCalibration結果に基づき調整する。プロンプト変更より先にポリシー側のしきい値調整を優先する
-- FR-POLICY-5: 生成したトレードシグナルを`trade_signals`に保存する（policy_version、risk_passed、reject_reasonを含む）
+- FR-POLICY-5: 生成したトレードシグナルを`trade_signals`に保存する（policy_version、risk_passed、reject_reasonを含む）。`policy_version`はPolicy Engineのロジック版`policy-v1`で、自己改善の適用提案（FR-SELFIMPROVE-5）のしきい値が有効な間は`policy-v1+sol-12`のように適用版を付加し（`varchar(20)`に収まる）、ロールバックで適用提案が無くなれば`policy-v1`に戻る。バックテスト再生（Decide）は常に`policy-v1`
 
 ### 4.7 Risk Engine
 
@@ -96,6 +100,7 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
   - 「口座資産に対する%」の各上限（max_position_per_symbol_pct / max_total_exposure_pct / max_daily_loss_pct / max_trade_loss_pct）の分母は`config/risk.yaml`の`initial_capital`（想定資金・円。Paper初期値3,000万円、Liveは実運用資金を設定必須）とする。総エクスポージャ・銘柄エクスポージャは保有中ポジションの評価額（数量×現在値）、日次損失率は当日（JST）にクローズしたポジションの実現損益と保有中ポジションの含み損益の合計損失を分母で割った値
   - `initial_capital`が未設定（0以下）、またはRisk Engineが判定に必要な状態（ポジション・注文・最新スナップショット・スプレッド）を読み取れない場合は、判定をスキップせず`risk_engine_error`で拒否する（fail-closed。スプレッド欠損は「データ欠損」、FR-POLICY-3）
   - `max_trade_loss_pct`はポジションサイジングで強制する（§4.8 FR-ENTRY-3）。1単元（100株）でもStop Lossに掛かった時の損失が上限を超える場合は`max_trade_loss_pct`理由で拒否する
+  - `config/risk.yaml`の各上限は起動時（`LoadRisk`/`LoadRiskBytes`）に検証し、範囲外の項目があれば項目名（例: `paper.max_daily_loss_pct`）を含むエラーで起動を失敗させる（違反は全件まとめて報告する）。キーの欠落・タイプミスは0として読み込まれ、`max_daily_loss_pct`=0・`max_consecutive_losses`=0は損失も連敗も無い状態でKill Switchを発動し続けるため（手動再開しても1分周期の判定で即再発動する）、「上限なし」の意味では扱わない。`max_position_per_symbol_pct`/`max_total_exposure_pct`/`max_daily_loss_pct`/`max_trade_loss_pct`/`max_spread_bps`は正（>0）、`max_open_positions`/`max_consecutive_losses`は1以上、`cooldown_after_loss_minutes`/`force_flat_before_market_close_minutes`/`heartbeat_timeout_minutes`は0以上。`initial_capital`はこの検証の対象外（上記の未設定扱い）。Paperは常に検証し、Liveは`live`セクションに1つでも値が定義されている場合のみ検証する（`live`セクションが無い場合はLive未運用として未検証）
 - FR-RISK-2: 以下のいずれかでKill Switch（新規取引停止）を発動する: 日次損失上限到達、連敗上限到達、市場データ停止、Jev API連続失敗、Broker API異常、想定外ポジション発生、約定差異検知、DB書き込み失敗が一定回数継続、operator_heartbeat_timeout（Live専用、FR-RISK-6参照）、オペレーターによる手動Kill（`POST /api/v1/system/kill`。reason=`operator_manual`）
 - FR-RISK-3: Kill Switch発動時、必要に応じて保有ポジションをクローズする（強制決済の対象reasonは`architecture/overview/flows.md` §10.3。オペレーターの手動Killも UC-11 の「強制決済」として全ポジションをクローズする）
 - FR-RISK-4: Kill SwitchはUI（Wailsアプリ）とサーバー内部処理の両方から操作可能とする。Phase 7の発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）
@@ -123,7 +128,7 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行する（`internal/service/scheduler`の`WithRiskMonitor`/`WithAutoResumer`）。判定基準は以下。
 
 - market_data_down: kabuステーションAPIの板取得（`GetBoard`）が5回連続で失敗（成功1回で復旧、自動再開）
-- jev_api_down: Jev APIの直近呼び出しエラー率がしきい値（既定50%、直近20件、最小5件）以上（しきい値未満に戻るか、5分間呼び出しが無ければ復旧、自動再開）。Slack通知（§5.2）と同じ信号を使う
+- jev_api_down: Jev APIの直近呼び出しエラー率がしきい値（既定50%、直近20件、最小5件）以上（しきい値未満に戻るか、5分間呼び出しが無ければ復旧、自動再開。復旧後の最初の呼び出しは古い失敗窓を破棄して新しい窓で評価し、窓が最小5件に達しエラー率がしきい値以上になるまで再発動しない）。Slack通知（§5.2）と同じ信号を使う
 - broker_api_error: kabuステーションAPIがHTTP 5xxを5回連続で返す（手動再開のみ）。4xx・通信エラーは対象外（通信エラーは市場データ停止側で扱う）
 - db_write_failure: SQLiteの書き込みがストレージ起因（BUSY/LOCKED/READONLY/IOERR/FULL/CANTOPEN/CORRUPT/NOTADB。NOTADBはDBファイルがSQLite形式でない状態で、破損の一種として扱う）で5回連続失敗（手動再開のみ）。制約違反は対象外
 - unexpected_position / fill_discrepancy: Paper Tradingでは外部Brokerが無いため、保有中ポジションを起点となる`paper_orders`の約定記録と突合する。起点注文が存在しない・未約定・銘柄/売買方向が不一致なら`unexpected_position`、約定数量・約定価格がポジションと不一致、または指値を超えた約定なら`fill_discrepancy`（手動再開のみ）。逆方向の照合として、直近15分内（約定直後の1分は猶予）にFILLEDとなった注文がどのポジションのEntry/Exit注文にもなっていない場合も`fill_discrepancy`とする

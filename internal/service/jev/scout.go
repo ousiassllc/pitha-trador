@@ -162,7 +162,7 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 	state = withNewsContext(state, s.news)
 	featureInput := ragFeatureInput(state)
 
-	ragContext, err := s.rag.Context(ctx, featureInput, rag.DefaultK)
+	ragContext, err := s.rag.Context(ctx, featureInput, rag.Subject{Symbol: state.Symbol, Timestamp: state.Timestamp}, rag.DefaultK)
 	if err != nil {
 		slog.Error("jev: build rag context failed, calling Scout without similar-case context", "symbol", state.Symbol, "error", err)
 	}

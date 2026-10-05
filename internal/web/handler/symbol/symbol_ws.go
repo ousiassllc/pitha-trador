@@ -55,28 +55,34 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 			}
 		}
 
-		direction := jevDirectionOrNil(state.LastSignal)
-		confidence := state.LastSignalConfidence
-		changed := directionChanged(lastDirection, direction) || lastConfidence == nil || *lastConfidence != confidence
+		// No Trader decision yet, or one without a usable direction: nothing
+		// to push (a null direction is never a jev_update).
+		var direction *string
+		var confidence *float64
+		if decision := state.LatestTraderDecision; decision != nil {
+			direction, confidence = jevDirectionOrNil(decision.Direction), decision.Confidence
+		}
+		changed := directionChanged(lastDirection, direction) || !floatPtrEqual(lastConfidence, confidence)
 		if direction != nil && changed {
-			msg := symbolJevUpdateMessage{Type: "jev_update", Direction: direction, Confidence: &confidence}
+			msg := symbolJevUpdateMessage{Type: "jev_update", Direction: direction, Confidence: confidence}
 			if err := shared.WriteJSON(ctx, conn, msg); err != nil {
 				return err
 			}
-			lastDirection, lastConfidence = direction, &confidence
+			lastDirection, lastConfidence = direction, confidence
 		}
 		return nil
 	})
 }
 
-// jevDirectionOrNil returns nil for domain.JevDirectionNone (no signal
-// yet) so symbolJevUpdateMessage.Direction matches the "not evaluated
-// yet" shape other Jev-derived JSON fields use elsewhere in this package.
-func jevDirectionOrNil(direction string) *string {
-	if direction == domain.JevDirectionNone {
+// jevDirectionOrNil returns nil for a missing or domain.JevDirectionNone
+// direction (no Trader call yet / no stance) so
+// symbolJevUpdateMessage.Direction matches the "not evaluated yet" shape
+// other Jev-derived JSON fields use elsewhere in this package.
+func jevDirectionOrNil(direction *string) *string {
+	if direction == nil || *direction == domain.JevDirectionNone {
 		return nil
 	}
-	return &direction
+	return direction
 }
 
 func directionChanged(prev, next *string) bool {
@@ -84,4 +90,11 @@ func directionChanged(prev, next *string) bool {
 		return prev != next
 	}
 	return *prev != *next
+}
+
+func floatPtrEqual(a, b *float64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }

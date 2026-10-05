@@ -1,6 +1,10 @@
 package config
 
-import "log/slog"
+import (
+	"errors"
+	"fmt"
+	"log/slog"
+)
 
 // RiskConfig mirrors config/risk.yaml: Risk Engine制限値（Paper/Live別、
 // docs/requirements/functional.md §4.7 Risk Engine の表）。
@@ -44,10 +48,12 @@ type RiskLimits struct {
 const DefaultPaperInitialCapital = 30_000_000
 
 // LoadRisk reads and parses the risk configuration YAML file at path
-// (conventionally DefaultRiskPath) into a RiskConfig.
+// (conventionally DefaultRiskPath) into a RiskConfig, failing with an
+// error naming the offending key when a limit is out of range (see
+// RiskConfig.Validate).
 func LoadRisk(path string) (*RiskConfig, error) {
 	cfg, err := loadYAMLFile[RiskConfig](path)
-	return withPaperCapitalDefault(cfg, err)
+	return finishRisk(cfg, err)
 }
 
 // LoadRiskBytes parses data (conventionally an embedded copy of
@@ -58,7 +64,76 @@ func LoadRisk(path string) (*RiskConfig, error) {
 // .exe with no accompanying config/ directory still starts.
 func LoadRiskBytes(data []byte) (*RiskConfig, error) {
 	cfg, err := loadYAMLBytes[RiskConfig](data, "(embedded default)")
-	return withPaperCapitalDefault(cfg, err)
+	return finishRisk(cfg, err)
+}
+
+// finishRisk applies LoadRisk/LoadRiskBytes' shared post-parse steps: the
+// Paper initial_capital default, then limit validation.
+func finishRisk(cfg *RiskConfig, err error) (*RiskConfig, error) {
+	cfg, err = withPaperCapitalDefault(cfg, err)
+	if err != nil {
+		return cfg, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// Validate rejects limits that would make Risk Engine misbehave. A key
+// omitted from risk.yaml (or a typo'd one) decodes as 0, and a 0 limit is
+// not "unlimited": max_daily_loss_pct=0 trips daily_loss_limit and
+// max_consecutive_losses=0 trips consecutive_losses with no loss at all,
+// re-firing the Kill Switch after every manual resume
+// (functional/components-pipeline.md §4.7 FR-RISK-1/2).
+//
+// Paper is always validated. Live is validated only when the live section
+// defines at least one value: like initial_capital, a risk.yaml with no
+// live section simply isn't set up for Live (no Live limits to misapply).
+// Every violation is reported at once.
+func (c *RiskConfig) Validate() error {
+	errs := c.Paper.validate("paper")
+	if c.Live != (RiskLimits{}) {
+		errs = append(errs, c.Live.validate("live")...)
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return fmt.Errorf("config: invalid risk.yaml: %w", errors.Join(errs...))
+}
+
+// validate checks one mode's limits (mode is "paper" or "live", used as
+// the error-message key prefix). initial_capital is deliberately not
+// checked here: <= 0 is handled by the Paper default / Live fail-closed
+// rule documented on RiskLimits.
+func (l RiskLimits) validate(mode string) []error {
+	var errs []error
+	positive := func(key string, v float64) {
+		if !(v > 0) { // also rejects NaN
+			errs = append(errs, fmt.Errorf("%s.%s must be > 0 (got %v)", mode, key, v))
+		}
+	}
+	atLeastOne := func(key string, v int) {
+		if v < 1 {
+			errs = append(errs, fmt.Errorf("%s.%s must be >= 1 (got %d)", mode, key, v))
+		}
+	}
+	nonNegative := func(key string, v int) {
+		if v < 0 {
+			errs = append(errs, fmt.Errorf("%s.%s must be >= 0 (got %d)", mode, key, v))
+		}
+	}
+	positive("max_position_per_symbol_pct", l.MaxPositionPerSymbolPct)
+	positive("max_total_exposure_pct", l.MaxTotalExposurePct)
+	positive("max_daily_loss_pct", l.MaxDailyLossPct)
+	positive("max_trade_loss_pct", l.MaxTradeLossPct)
+	positive("max_spread_bps", l.MaxSpreadBps)
+	atLeastOne("max_open_positions", l.MaxOpenPositions)
+	atLeastOne("max_consecutive_losses", l.MaxConsecutiveLosses)
+	nonNegative("cooldown_after_loss_minutes", l.CooldownAfterLossMinutes)
+	nonNegative("force_flat_before_market_close_minutes", l.ForceFlatBeforeMarketCloseMinutes)
+	nonNegative("heartbeat_timeout_minutes", l.HeartbeatTimeoutMinutes)
+	return errs
 }
 
 // withPaperCapitalDefault fills DefaultPaperInitialCapital into a

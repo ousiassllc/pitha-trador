@@ -73,6 +73,38 @@ func TestShells_WireHTMXErrorToasts(t *testing.T) {
 	}
 }
 
+// htmx's dynamic code execution (`hx-on*`, trigger filters, `js:` values and
+// `<script>` in swapped HTML) is unused and must stay disabled in both
+// shells, and its inline indicator `<style>` (blocked by the CSP) must not be
+// injected; `selfRequestsOnly` must not be turned off, and the
+// responseHandling wiring must survive.
+func TestShells_DisableHTMXDynamicExecution(t *testing.T) {
+	for name, page := range map[string]templ.Component{
+		"Shell":      layout.Shell("t"),
+		"SetupShell": layout.SetupShell("t"),
+	} {
+		m := htmxConfigRe.FindStringSubmatch(render(t, page))
+		if m == nil {
+			t.Fatalf("%s: no htmx-config meta", name)
+		}
+		var cfg map[string]any
+		if err := json.Unmarshal([]byte(html.UnescapeString(m[1])), &cfg); err != nil {
+			t.Fatalf("%s: htmx-config is not valid JSON: %v", name, err)
+		}
+		for _, key := range []string{"allowEval", "allowScriptTags", "includeIndicatorStyles"} {
+			if v, ok := cfg[key]; !ok || v != false {
+				t.Errorf("%s: htmx-config %s = %v (present=%v), want false", name, key, v, ok)
+			}
+		}
+		if v, ok := cfg["selfRequestsOnly"]; ok && v != true {
+			t.Errorf("%s: htmx-config selfRequestsOnly = %v, want true (or unset)", name, v)
+		}
+		if rh, ok := cfg["responseHandling"].([]any); !ok || len(rh) == 0 {
+			t.Errorf("%s: htmx-config lost responseHandling: %v", name, cfg["responseHandling"])
+		}
+	}
+}
+
 // Every page shows the running build's version in the header and links it
 // to Settings' アップデート section, but the header never carries the
 // update-check button (a check that finds an installer restarts the app).

@@ -11,6 +11,7 @@ const (
 	DefaultCandidateRefreshIntervalSecondsMax = 30
 	DefaultHeldPositionIntervalSecondsMin     = 5
 	DefaultHeldPositionIntervalSecondsMax     = 15
+	DefaultJevScoutMinIntervalSeconds         = 60
 )
 
 // withScanIntervalDefaults makes every scan.*_seconds interval usable: an
@@ -43,4 +44,5 @@ func withScanIntervalDefaults(cfg *ScanConfig) {
 	fill("held_position_interval_seconds_min", &cfg.HeldPositionIntervalSecondsMin, DefaultHeldPositionIntervalSecondsMin)
 	fill("held_position_interval_seconds_max", &cfg.HeldPositionIntervalSecondsMax, DefaultHeldPositionIntervalSecondsMax)
 	clampMax("held_position_interval_seconds_max", cfg.HeldPositionIntervalSecondsMin, &cfg.HeldPositionIntervalSecondsMax)
+	fill("jev_scout_min_interval_seconds", &cfg.JevScoutMinIntervalSeconds, DefaultJevScoutMinIntervalSeconds)
 }

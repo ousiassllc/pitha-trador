@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 )
 
 // Default retention windows, in days.
@@ -77,7 +78,7 @@ func New(db *sql.DB, policy Policy) *Service {
 func (s *Service) Purge(ctx context.Context) error {
 	now := s.now().UTC()
 	cutoff := func(days int) string {
-		return now.AddDate(0, 0, -days).Format(time.RFC3339Nano)
+		return sqlutil.FormatTime(now.AddDate(0, 0, -days))
 	}
 
 	var errs []error

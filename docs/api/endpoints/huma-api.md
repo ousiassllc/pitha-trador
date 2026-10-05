@@ -1,6 +1,6 @@
 # API仕様: API ルート（§5）
 
-`docs/api/endpoints.md` から分割した章（300行/ファイル制限のため）。節番号・内容は変更なし。認証・ミドルウェア（§1）・ルーティング概要（§2）・WebSocket（§6）・エラーレスポンス（§7）は `docs/api/endpoints.md` を参照。
+`docs/api/endpoints.md` から分割した章（300行/ファイル制限のため）。節番号・内容は変更なし。認証・ミドルウェア（§1）・ルーティング概要（§2）・WebSocket（§6）・エラーレスポンス（§7）は `docs/api/endpoints.md` を参照。`GET /api/v1/performance`・`/calibration`・`/policy-proposals`・`/activity` の各節は `docs/api/endpoints/huma-api-insights.md` に分割した（末尾のエンドポイント一覧表は本ファイルに全エンドポイントを掲載）。
 
 ## 5. API ルート（Huma, `/api/v1`）
 
@@ -8,7 +8,9 @@ Huma が OpenAPI 3.1 スペックを `/api/v1/openapi.json` に自動生成す�
 
 ### GET /api/v1/scanner
 
-Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`return_1m`/`return_5m`は**パーセント単位**（0.42 = +0.42%）。Feature Engine・DB・Jev入力の小数比（0.0042）をAPI層（`/ws/scanner`のpushを含む）と SSRフォールバックで×100して返す／表示する。Scanner Dashboardの初期ロード・`pitha-scanner-table`のフォールバック取得に使用（ライブ更新は`/ws/scanner`）。
+Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`return_1m`/`return_5m`は**パーセント単位**（0.42 = +0.42%）。Feature Engine・DB・Jev入力の小数比（0.0042）をAPI層（`/ws/scanner`のpushを含む）と SSRフォールバックで×100して返す／表示する。`jev_direction`/`jev_confidence`/`entry_quality`は当該銘柄の最新Jev Trader判断（`jev_decisions`のdecision_type=trader。件数窓・経過時間の上限なしで、`GET /api/v1/symbols/{symbol}`の`jev`と同一の判断。`entry_quality`は`response_json`から`internal/service/execution/enrich`で取得）、`current_position`は保有中ポジションの符号付き数量（LONG正/SHORT負。`GET /api/v1/symbols/{symbol}`の`current_position`と同定義、保有なしはnull）。Trader判断が未生成の銘柄の3項目はnull。`internal/bootstrap/candidates`が候補更新サイクルごとに最新判断（1クエリのバッチ取得）と保有中ポジション（1クエリ）を候補へ付与し、`/ws/scanner`・SSRフォールバックにも同じ値が出る（issue #492）。Scanner Dashboardの初期ロード・`pitha-scanner-table`のフォールバック取得に使用（ライブ更新は`/ws/scanner`）。
+
+各itemの`detail_url`は銘柄詳細ページへのサーバー生成リンク（`/symbols/{symbol}`。銘柄コードはRFC 3986のunreserved文字以外をパーセントエンコード。Go側`organisms.SymbolHref`が唯一の定義で、SSR行（`ScannerTableFallback`・`ScanPanel`）と`/ws/scanner`のitemにも同じ値が入る）。`pitha-scanner-table`はこの値をそのまま`href`に使い、URLを組み立てない（HATEOAS、issue #383）。
 
 ```json
 // Output（抜粋）
@@ -17,6 +19,7 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
     {
       "symbol": "7203",
       "price": 2831.5,
+      "detail_url": "/symbols/7203",
       "return_1m": 0.12,
       "return_5m": 0.42,
       "volume_ratio_5m": 3.4,
@@ -59,6 +62,8 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 
 Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
+`vwap`は最新の`market_snapshots`のVWAP（`Feature.VWAP`）で、スナップショットが無ければ`null`。`jev`の6項目（`direction`/`confidence`/`regime`/`entry_quality`/`toxic_flow`/`liquidity_stressed`）は、Symbol Detail画面（SSR）のJev判定パネル・Scannerと同じ**最新のJev Trader判断**（`jev_decisions`の`decision_type=trader`のうち`timestamp`・`id`が最大の1行。直近N件といった件数窓や経過時間の上限は設けず、Scout行が何件続いても、判断が古くても採用する。Scanner/Symbol Detail/Symbol API/WebSocket/`execution.Engine.State`・Exit評価は`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`の同一定義を共有）（`enrich.Decision`で補完）の値で、Trader判断がまだ無ければ全項目`null`。`confidence`はJevの自己申告値（FR-TRADER-2）で、Policy Engineの`trade_signals.score`ではなく、最新シグナルが`NONE`でもTrader判断があれば値が入る。
+
 ```json
 // Output（抜粋）
 {
@@ -82,7 +87,7 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 }
 ```
 
-`risk`は固定値ではなく稼働中エンジンの実設定から取得する。`allowed_position_pct`は`config/risk.yaml`の`max_position_per_symbol_pct`（Risk Engineが使用中の区分）、`stop_loss_pct`/`take_profit_pct`は`execution.Config`（Exit条件）の値。
+`risk`は固定値ではなく稼働中エンジンの実設定から取得する。`allowed_position_pct`は、直近価格でRisk Engineのポジションサイジング（`PositionSize`、`requirements/functional/components-pipeline.md` §4.8 FR-ENTRY-3）を行った結果の数量が`initial_capital`に占める%（`数量×価格÷initial_capital×100`）で、1単元（100株）も発注できなければ`0`（`max_position_per_symbol_pct`の値そのものではない）。`config/risk.yaml`の`max_position_per_symbol_pct`は、サイジング関数が未配線の場合（`AllowedPositionPctFor`未設定）にのみ返す静的フォールバック。`stop_loss_pct`/`take_profit_pct`は`execution.Config`（Exit条件）の値。
 
 ### GET /api/v1/symbols/{symbol}/candles
 
@@ -95,6 +100,8 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 | `interval` | string | `1m` 固定（MVP。`1m`以外は422） |
 
 パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、`/symbols/{symbol}`系ルート共通）。`from`/`to`がRFC3339でない場合、`symbol`/`interval`が範囲外の場合はいずれも422。
+
+各点の`volume`は**1分足あたりの出来高**（バー単位）で、保存済みの累積セッション出来高（`market_snapshots.volume`、kabuステーションAPIの`TradingVolume`）の隣接スナップショット間差分（`cur - prev`）。累積値が後退した場合（新セッション）は当該バーの累積値自体を返し、負値にはしない。応答の先頭バーは前のスナップショットを持たないため、`Feature.Volume1m`（累積差分）があればその値、なければ`0`。`open`/`high`/`low`/`close`は1バー1サンプルの価格で同値。
 
 ### GET /api/v1/symbols/{symbol}/decisions
 
@@ -119,7 +126,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
     {
       "id": 3, "symbol": "7203", "timestamp": "2026-09-27T09:31:00Z",
       "direction": "LONG", "score": 0.74, "entry_price_reference": 2831.5,
-      "policy_version": "v1", "risk_passed": false, "reject_reason": "spread_too_wide",
+      "policy_version": "policy-v1", "risk_passed": false, "reject_reason": "spread_too_wide",
       "jev_decision_id": 2
     }
   ]
@@ -142,108 +149,6 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 |-------|-----|------|
 | `status` | string | `PENDING`/`FILLED`/`CANCELLED`/`REJECTED`でフィルタ（省略時は全件。それ以外は422） |
 | `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
-
-### GET /api/v1/performance
-
-全クローズ済みポジション（`positions.closed_at`あり）の実績集計。`total_pnl`/`daily_pnl`は`realized_pnl`の合計（`daily_pnl`はJST当日0時以降にクローズしたもの）。`win_rate`/`expectancy`/`max_drawdown_pct`はバックテスト（`internal/service/backtest.Aggregate`）と同じ定義で、各ポジションのエントリー約定額に対する損益率（%）から算出する。`profit_factor`は総利益÷総損失（損失なしは`null`）、`sharpe_ref`/`sortino_ref`はトレードごとリターンの平均÷標準偏差／下方偏差（年率換算なし、算出不能時は`null`）、`signal_count`はLONG/SHORTの`trade_signals`件数。
-
-```json
-// Output（抜粋）
-{
-  "total_pnl": 128340,
-  "daily_pnl": 15200,
-  "win_rate": 0.57,
-  "profit_factor": 1.82,
-  "expectancy": 0.34,
-  "max_drawdown_pct": 4.1,
-  "average_hold_time_minutes": 14.2,
-  "sharpe_ref": 1.1,
-  "sortino_ref": 1.6,
-  "trade_count": 12,
-  "signal_count": 342
-}
-```
-
-### GET /api/v1/calibration
-
-```json
-// Output（抜粋）
-{
-  "buckets": [
-    { "range": "0.50-0.60", "avg_confidence": 0.55, "direction_accuracy": 0.51, "avg_future_return_pct": -0.05,
-      "sample_count": 80, "trade_count": 6, "total_pnl": -1800, "avg_pnl_pct": -0.21 },
-    { "range": "0.60-0.70", "avg_confidence": 0.65, "direction_accuracy": 0.55, "avg_future_return_pct": 0.02,
-      "sample_count": 64, "trade_count": 9, "total_pnl": 400, "avg_pnl_pct": 0.03 },
-    { "range": "0.70-0.80", "avg_confidence": 0.75, "direction_accuracy": 0.63, "avg_future_return_pct": 0.11,
-      "sample_count": 41, "trade_count": 12, "total_pnl": 5200, "avg_pnl_pct": 0.18 },
-    { "range": "0.80-0.90", "avg_confidence": 0.85, "direction_accuracy": 0.71, "avg_future_return_pct": 0.24,
-      "sample_count": 22, "trade_count": 7, "total_pnl": 6100, "avg_pnl_pct": 0.31 },
-    { "range": "0.90-1.00", "avg_confidence": 0.94, "direction_accuracy": 0.78, "avg_future_return_pct": 0.39,
-      "sample_count": 9, "trade_count": 3, "total_pnl": 3300, "avg_pnl_pct": 0.42 }
-  ],
-  "by_direction": [
-    { "direction": "LONG", "sample_count": 120, "direction_accuracy": 0.62, "avg_future_return_pct": 0.14 },
-    { "direction": "SHORT", "sample_count": 96, "direction_accuracy": 0.58, "avg_future_return_pct": 0.09 }
-  ],
-  "brier_score": 0.19,
-  "log_loss": 0.52,
-  "expected_calibration_error": 0.06
-}
-```
-
-`by_direction`は予測方向（`LONG`/`SHORT`、常に両方を返す）別の方向別平均リターン（`avg_future_return_pct`は方向調整済み＝SHORTは下落が正）と的中率（FR-CAL-2）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`はconfidence bucket別PnL（FR-CAL-2）で、`positions.entry_order_id` → `paper_orders.trade_signal_id` → `trade_signals.jev_decision_id`で辿れるTrader判断由来のクローズ済みポジションの件数・実現損益合計（JPY）・エントリー金額に対する平均リターン（%）。手動エントリーは含まない。
-
-### GET /api/v1/policy-proposals
-
-Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読み取り専用API。`policy_proposals`の提案・レビュー・適用・ロールバック履歴を返す。UIページは持たず、外部監視・手動確認用に提供する（実際の外部AI API呼び出しの結果を追跡できるようにするため、`requirements/functional.md` FR-SELFIMPROVE-7〜9）。
-
-| クエリ | 型 | 説明 |
-|-------|-----|------|
-| `status` | string | `pending`/`approved`/`rejected`/`applied`/`rolled_back`でフィルタ（省略時は全件） |
-| `limit` | integer | 件数上限（既定50、最大200） |
-
-```json
-// Output（抜粋）
-{
-  "items": [
-    {
-      "id": 42,
-      "proposed_at": "2026-09-28T15:00:00Z",
-      "proposed_by": "sol",
-      "status": "applied",
-      "proposed_changes": { "policy.long.min_probability": 0.68 },
-      "backtest_result": { "expectancy_delta_pct": 2.1, "max_drawdown_delta_pct": -3.4 },
-      "reviewed_by": "opus",
-      "review": { "verdict": "approve", "reason": "..." },
-      "applied_policy_version": "v12"
-    }
-  ]
-}
-```
-
-### GET /api/v1/activity
-
-System Activity Log向けの直近アクティビティ・キュー状況スナップショット（`requirements/functional.md` §4.15/§5.5）。`jobs`/`jev_decisions`/`kill_switch_events`を集約する読み取り専用API。新規永続テーブルは持たない。
-
-| クエリ | 型 | 説明 |
-|-------|-----|------|
-| `limit` | integer | フィード件数（既定200、1〜500。範囲外は422） |
-| `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー）。`job`イベントのみが対象で、指定時は`jev_scout`/`jev_trader`/`kill_switch`イベントは含まれない |
-| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch`（省略時は全種別） |
-
-```json
-// Output（抜粋）
-{
-  "queues": [
-    { "queue": "jev-scout", "pending": 3, "running": 1, "failed_recent": 0 }
-  ],
-  "events": [
-    { "type": "jev_trader", "timestamp": "2026-09-29T01:15:00Z", "symbol": "7203", "detail": "direction=LONG confidence=0.74", "latency_ms": 820 },
-    { "type": "kill_switch", "timestamp": "2026-09-29T01:10:00Z", "detail": "reason=daily_loss_limit" }
-  ],
-  "as_of": "2026-09-29T01:15:03Z"
-}
-```
 
 ### GET /api/v1/system/status / POST /api/v1/system/pause / resume / kill
 

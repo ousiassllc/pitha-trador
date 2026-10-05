@@ -18,8 +18,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
@@ -34,24 +36,67 @@ type Refresher struct {
 	Settings    *system.RuntimeSettingsRepository
 	Jobs        *jobqueue.JobRepository
 	Screener    *screener.LiveSource
-	Strategy    *config.StrategyConfig
+	// Decisions and Positions supply each candidate's latest Jev Trader
+	// decision and open position for the Scanner Dashboard's Jev
+	// Direction/Confidence/Entry Quality/Current Position columns
+	// (see attachJevState).
+	Decisions *judgement.DecisionRepository
+	Positions *trading.PositionRepository
+	Strategy  *config.StrategyConfig
 	// InSession reports whether t is inside a trading session; a nil
 	// InSession is always in session.
 	InSession func(time.Time) bool
+	// Now reports the current time; nil means time.Now. Tests inject a
+	// fake clock to step through the per-symbol Scout cooldown.
+	Now func() time.Time
 }
 
 func (r *Refresher) inSession(t time.Time) bool {
 	return r.InSession == nil || r.InSession(t)
 }
 
+func (r *Refresher) now() time.Time {
+	if r.Now == nil {
+		return time.Now().UTC()
+	}
+	return r.Now().UTC()
+}
+
+// scoutHeld returns the instrument IDs a new jev-scout job must not be
+// enqueued for at now (issue #388; non-functional.md §2.1 caps Jev calls
+// at top_n × 2 per minute): those with a pending or running jev-scout job
+// (whether from this cycle or from an FR-SCAN-1 event re-evaluation), and
+// those whose last jev-scout job finished less than
+// scan.jev_scout_min_interval_seconds ago. The 15-30s refresh cadence
+// would otherwise re-run Scout for every candidate 2-4 times a minute.
+func (r *Refresher) scoutHeld(ctx context.Context, now time.Time) (map[int64]bool, error) {
+	cooldown := time.Duration(r.Strategy.Scan.JevScoutMinIntervalSeconds) * time.Second
+	jobs, err := r.Jobs.ListOpenOrFinishedSince(ctx, jobqueue.JobQueueJevScout, now.Add(-cooldown))
+	if err != nil {
+		return nil, fmt.Errorf("candidates: list open jev-scout jobs: %w", err)
+	}
+	held := make(map[int64]bool, len(jobs))
+	for _, job := range jobs {
+		var payload jev.ScoutJobPayload
+		if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
+			slog.Warn("candidates: undecodable jev-scout job payload", "job_id", job.ID, "error", err)
+			continue
+		}
+		held[payload.InstrumentID] = true
+	}
+	return held, nil
+}
+
 // Refresh recomputes screener.Run over every active
 // instrument's latest snapshot and trailing 5-minute
 // turnover, publishes the result to r.Screener (issue #45) for the
 // Scanner Dashboard (internal/router.WithCandidateSource) to read, and -
-// issue #46 - enqueues one jev-scout job per resulting candidate
-// (functional.md §2's main flow: "FS->>JS: 候補銘柄（上位N件。既定 top_n=20…）", every
-// scan cycle, not merely on first sight of a symbol - Jev Scout's own
-// FR-SCOUT-1〜3 re-evaluates every still-passing candidate each cycle).
+// issue #46 - enqueues a jev-scout job per resulting candidate that has
+// none pending/running and whose last Scout finished at least
+// scan.jev_scout_min_interval_seconds ago (issue #388; see scoutHeld), so
+// Jev Scout re-evaluates each still-passing candidate (FR-SCOUT-1〜3) at
+// most once a minute rather than on every 15-30s cycle (functional.md §2's
+// main flow: "FS->>JS: 候補銘柄（上位N件。既定 top_n=20…）").
 //
 // An instrument with no market_snapshots rows yet (Feature Engine has not
 // completed a cycle for it) is skipped rather than fabricating a
@@ -59,7 +104,7 @@ func (r *Refresher) inSession(t time.Time) bool {
 // fabricated" precedent marketdatajob's own History/MarketReturn5m
 // comment already follows.
 func (r *Refresher) Refresh(ctx context.Context) error {
-	startedAt := time.Now().UTC()
+	startedAt := r.now()
 	actives, err := r.Instruments.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
 		return fmt.Errorf("candidates: list active instruments: %w", err)
@@ -124,7 +169,14 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 		symbols[inputSlot[i]].Reasons = reasons
 	}
 	funnel.FastScreenerPassed = len(candidates)
-	now := time.Now().UTC()
+	now := r.now()
+	// Best-effort like the enqueue loop below: a failed read of the
+	// decision/position tables must not withhold the refreshed candidate
+	// list (or Jev Scout) - the Jev columns just fall back to nil
+	// ("pending"/"flat") until the next cycle.
+	if err := r.attachJevState(ctx, candidates); err != nil {
+		slog.Error("candidates: attach jev state to candidates", "error", err)
+	}
 	r.Screener.Set(candidates, now)
 	r.Screener.SetScan(domain.ScanCycle{StartedAt: startedAt, FinishedAt: now, Funnel: funnel, Symbols: symbols})
 
@@ -134,7 +186,18 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 		// (non-functional.md §3).
 		return nil
 	}
+	held, err := r.scoutHeld(ctx, now)
+	if err != nil {
+		// Without the open/recent-job view a blind enqueue would risk the
+		// duplicate billed calls this gate exists to prevent; skip Jev
+		// Scout for this cycle and try again on the next one.
+		slog.Error("candidates: skip jev-scout enqueue", "error", err)
+		return nil
+	}
 	for _, c := range candidates {
+		if held[c.InstrumentID] {
+			continue
+		}
 		if err := r.enqueueJevScout(ctx, c.InstrumentID, c.Symbol, now); err != nil {
 			// A single candidate's enqueue failure (DB write error) must
 			// not drop the remaining candidates from this cycle's Jev
@@ -202,11 +265,11 @@ func (r *Refresher) Run(ctx context.Context) {
 	safego.Loop(ctx, "candidate refresh", interval.next, r.Refresh)
 }
 
-// candidateRefreshInterval mirrors internal/web/handler.
+// candidateRefreshInterval mirrors internal/web/handler/scanner.
 // CandidateRefreshInterval's Min/Max-random-jitter behavior without
-// importing internal/web/handler from this file (that import only
+// importing internal/web/handler/scanner from this file (that import only
 // becomes necessary at the cmd/ call site that also needs
-// handler.CandidateRefreshInterval itself, to pass to
+// scanner.CandidateRefreshInterval itself, to pass to
 // router.WithCandidateRefreshInterval).
 type candidateRefreshInterval struct {
 	min, max time.Duration
@@ -216,5 +279,5 @@ func (r candidateRefreshInterval) next() time.Duration {
 	if r.max <= r.min {
 		return r.min
 	}
-	return r.min + time.Duration(rand.Int64N(int64(r.max-r.min)))
+	return r.min + time.Duration(rand.Int64N(int64(r.max-r.min))) //nolint:gosec // G404: refresh-interval jitter, not security-sensitive
 }

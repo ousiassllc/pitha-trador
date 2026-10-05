@@ -17,5 +17,7 @@ const silentInstallFlag = "/S"
 // verification down to "呼び出すコマンド構築ロジック自体のユニットテス
 // ト").
 func BuildSilentInstallCommand(installerPath string) *exec.Cmd {
-	return exec.Command(installerPath, silentInstallFlag)
+	// No context: the installer must outlive this process (the app exits so the
+	// installer can replace its own exe), so cancellation must never kill it.
+	return exec.Command(installerPath, silentInstallFlag) //nolint:noctx,gosec // G204: installerPath is the installer the updater itself downloaded, not user input
 }

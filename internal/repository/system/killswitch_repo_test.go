@@ -2,6 +2,7 @@ package system_test
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -128,6 +129,37 @@ func TestKillSwitchRepository_Resolve_AlreadyResolvedReturnsNotFound(t *testing.
 	}
 	if got.ResolvedAt == nil || got.ResolvedBy == nil || *got.ResolvedBy != domain.ResolvedByManual {
 		t.Fatalf("Get after resolve: ResolvedAt/ResolvedBy = %v/%v", got.ResolvedAt, got.ResolvedBy)
+	}
+}
+
+// kill_switch_resolutions.created_at must be written with sqlutil.FormatTime
+// (fixed 9-digit fractional seconds, length 30), not the column DEFAULT
+// (strftime %f, 3 digits, length 24): mixed widths break lexicographic
+// order = time order (issue #430, #433).
+func TestKillSwitchRepository_Resolve_WritesFixedWidthTimestamps(t *testing.T) {
+	db := newTestDB(t)
+	repo := system.NewKillSwitchRepository(db)
+	ctx := context.Background()
+
+	ev, err := repo.Insert(ctx, domain.KillSwitchEvent{Reason: domain.KillReasonBrokerAPIError, DetailJSON: `{}`})
+	if err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	if err := repo.Resolve(ctx, ev.ID, time.Now(), domain.ResolvedByAuto); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	var resolvedAt, createdAt string
+	if err := db.QueryRowContext(ctx,
+		`SELECT resolved_at, created_at FROM kill_switch_resolutions WHERE kill_switch_event_id = ?`, ev.ID,
+	).Scan(&resolvedAt, &createdAt); err != nil {
+		t.Fatalf("select resolution: %v", err)
+	}
+	fixedWidth := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{9}Z$`)
+	for name, v := range map[string]string{"resolved_at": resolvedAt, "created_at": createdAt} {
+		if len(v) != 30 || !fixedWidth.MatchString(v) {
+			t.Errorf("%s = %q (len %d), want fixed 9-digit fractional seconds (len 30)", name, v, len(v))
+		}
 	}
 }
 

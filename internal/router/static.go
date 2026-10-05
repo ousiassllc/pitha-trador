@@ -29,7 +29,7 @@ const EnvStaticDir = "PITHA_STATIC_DIR"
 // embedded snapshot is a fallback from.
 func staticFS() http.FileSystem {
 	if dir := os.Getenv(EnvStaticDir); dir != "" {
-		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() { //nolint:gosec // G703: dir comes from the operator's own dev-mode env var (EnvStaticDir), not from a request
 			return http.Dir(dir)
 		}
 	}

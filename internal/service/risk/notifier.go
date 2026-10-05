@@ -28,6 +28,10 @@ import (
 // internal/service/jev.AlertNotifier's own responsibility - a different
 // package's own call outcomes drive it, not anything Risk Engine
 // observes.
+//
+// DailyLossWarning's currentPct and limitPct are percent values (0.8 means
+// 0.8%, the same unit as risk.yaml's max_daily_loss_pct), not ratios;
+// implementations must not scale them by 100 again.
 type Notifier interface {
 	KillSwitchTriggered(ctx context.Context, ev domain.KillSwitchEvent, autoResumable bool) error
 	KillSwitchAutoResumed(ctx context.Context, ev domain.KillSwitchEvent) error

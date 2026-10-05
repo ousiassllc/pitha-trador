@@ -39,6 +39,8 @@ func allowGate() updater.SafeGate {
 
 const installerBody = "fake-installer-bytes-for-issue-65-tests"
 
+const installerName = "pitha-trador-windows-amd64-installer.exe"
+
 func installerChecksum(t *testing.T) string {
 	t.Helper()
 	sum := sha256.Sum256([]byte(installerBody))

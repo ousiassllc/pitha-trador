@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -84,6 +85,44 @@ func (r *DecisionRepository) Get(ctx context.Context, id int64) (domain.JevDecis
 	return scanDecision(row)
 }
 
+// ListByIDs returns the jev_decisions rows whose id is in ids, in a
+// single query, for internal/service/rag.Service.Context to hydrate a
+// whole similarity-search candidate pool at once. Order is unspecified;
+// ids with no row are simply absent; an empty ids returns nil without
+// querying.
+func (r *DecisionRepository) ListByIDs(ctx context.Context, ids []int64) ([]domain.JevDecision, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+
+	rows, err := r.db.QueryContext(ctx,
+		decisionSelectColumns+` FROM jev_decisions WHERE id IN (`+placeholders+`)`, //nolint:gosec // G202: placeholders is only "?" markers; ids are bound parameters
+		args...)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list jev decisions by ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.JevDecision
+	for rows.Next() {
+		d, err := scanDecision(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: iterate jev decisions by ids: %w", err)
+	}
+	return out, nil
+}
+
 // ListByInstrument returns up to limit jev_decisions rows for
 // instrumentID, most recent first, for the Symbol Detail UI's decision
 // history and Calibration's per-instrument analysis.
@@ -111,14 +150,25 @@ func (r *DecisionRepository) ListByInstrument(ctx context.Context, instrumentID 
 	return out, nil
 }
 
+// listRecentAllQuery / listRecentByTypeQuery read the newest jev_decisions
+// rows straight off jev_decisions_timestamp_idx / jev_decisions_type_timestamp_idx
+// (backward scans stop after LIMIT rows). They are two statements rather than
+// one optional-type filter (an OR on the bound parameter) because that cannot
+// use an index and forces a full scan plus sort of the table (issue #419).
+const (
+	listRecentAllQuery    = decisionSelectColumns + ` FROM jev_decisions ORDER BY timestamp DESC, id DESC LIMIT ?`
+	listRecentByTypeQuery = decisionSelectColumns + ` FROM jev_decisions WHERE decision_type = ? ORDER BY timestamp DESC, id DESC LIMIT ?`
+)
+
 // ListRecent returns up to limit jev_decisions rows across every
 // instrument, most recent first, optionally restricted to decisionType
 // ("" = both Scout and Trader) - System Activity Log's Jev call feed.
 func (r *DecisionRepository) ListRecent(ctx context.Context, decisionType string, limit int) ([]domain.JevDecision, error) {
-	rows, err := r.db.QueryContext(ctx,
-		decisionSelectColumns+` FROM jev_decisions WHERE (? = '' OR decision_type = ?) ORDER BY timestamp DESC, id DESC LIMIT ?`,
-		decisionType, decisionType, limit,
-	)
+	query, args := listRecentAllQuery, []any{limit}
+	if decisionType != "" {
+		query, args = listRecentByTypeQuery, []any{decisionType, limit}
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list recent jev decisions (type=%q): %w", decisionType, err)
 	}

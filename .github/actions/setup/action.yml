@@ -1,0 +1,40 @@
+name: Setup toolchain
+description: >-
+  Install Go and bun, build the frontend assets, and generate the templ
+  code that the lint/test/build jobs of ci.yml all need before compiling Go.
+  Run actions/checkout first. Reads TEMPL_VERSION from the workflow-level
+  `env:` of the calling workflow (ci.yml).
+
+# Third-party actions are pinned to commit SHAs (the `# vN` comment is the
+# tag the SHA was resolved from); Dependabot's github-actions ecosystem
+# (.github/dependabot.yml, `directories`) bumps them here as well.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      with:
+        go-version-file: go.mod
+
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      with:
+        bun-version-file: .bun-version
+
+    - name: Install frontend dependencies
+      shell: bash
+      run: bun install --cwd static --frozen-lockfile
+
+    # go build/go vet/go test and `wails build` require
+    # static/src/embed.go's `//go:embed dist img vendor` target to exist
+    # (issue #59) - dist/ is `.gitignore`'d and only produced by this
+    # build step, so it must run before any Go compilation.
+    - name: Build frontend assets
+      shell: bash
+      run: bun run --cwd static build
+
+    - name: Install templ
+      shell: bash
+      run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
+
+    - name: Generate templ
+      shell: bash
+      run: templ generate

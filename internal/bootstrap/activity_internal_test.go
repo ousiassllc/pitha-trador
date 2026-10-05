@@ -36,7 +36,9 @@ func TestBuildServices_ActivityFeedAggregatesRealRepositoriesAndReceivesLiveWrit
 	}
 
 	// Enqueue → job event + queue update; decision → jev_scout event;
-	// kill switch → kill_switch event.
+	// kill switch → kill_switch event. Events are published synchronously;
+	// the queue update is coalesced and arrives asynchronously after
+	// activityfeed's queue-update interval, so wait for it.
 	var events []string
 	var update *activityfeed.QueueUpdate
 	for range 4 {
@@ -47,7 +49,7 @@ func TestBuildServices_ActivityFeedAggregatesRealRepositoriesAndReceivesLiveWrit
 			} else {
 				events = append(events, m.Event.Type)
 			}
-		default:
+		case <-time.After(10 * time.Second):
 			t.Fatalf("expected 4 bus messages, got events=%v update=%v", events, update)
 		}
 	}

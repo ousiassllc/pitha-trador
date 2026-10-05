@@ -2,7 +2,7 @@
 // (split out of the component to keep it within the linterly per-file limit).
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `buckets[]` item
-// shape (internal/web/handler.calibrationBucketOutput).
+// shape (internal/web/handler/calibration.calibrationBucketOutput).
 export interface CalibrationBucket {
   range: string;
   avg_confidence: number;
@@ -15,7 +15,7 @@ export interface CalibrationBucket {
 }
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `by_direction[]`
-// item shape (internal/web/handler.calibrationDirectionOutput).
+// item shape (internal/web/handler/calibration.calibrationDirectionOutput).
 export interface CalibrationDirection {
   direction: 'LONG' | 'SHORT';
   sample_count: number;
@@ -24,7 +24,7 @@ export interface CalibrationDirection {
 }
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's response body
-// (internal/web/handler.CalibrationAPIOutput).
+// (internal/web/handler/calibration.CalibrationAPIOutput).
 export interface CalibrationAPIResponse {
   buckets: CalibrationBucket[];
   by_direction: CalibrationDirection[];
@@ -50,6 +50,29 @@ export function bucketMidpointPct(range: string): number {
 export function heatmapColor(directionAccuracy: number): string {
   const hue = Math.max(0, Math.min(1, directionAccuracy)) * 120;
   return `hsl(${hue}, 70%, 45%)`;
+}
+
+// NO_DATA_COLOR is the neutral (grey) heatmap background of a band with no
+// labeled samples, visibly distinct from heatmapColor's red(0% accuracy).
+export const NO_DATA_COLOR = 'hsl(0, 0%, 75%)';
+
+// bucketColor is a band's heatmap background: heatmapColor of its observed
+// accuracy, or NO_DATA_COLOR when it has no samples (the API returns 0 for
+// every metric of an empty band, which is "no data", not "0% accurate").
+export function bucketColor(bucket: CalibrationBucket): string {
+  return bucket.sample_count > 0 ? heatmapColor(bucket.direction_accuracy) : NO_DATA_COLOR;
+}
+
+// hasLabeledSamples reports whether the response is based on any labeled
+// sample. brier_score/log_loss/expected_calibration_error are 0 (the "best"
+// score) when there is none, so they must not be shown then. by_direction
+// counts every labeled sample (including any whose confidence falls outside
+// all bands), so it is checked alongside the bands.
+export function hasLabeledSamples(response: CalibrationAPIResponse): boolean {
+  return (
+    response.buckets.some((b) => b.sample_count > 0) ||
+    response.by_direction.some((d) => d.sample_count > 0)
+  );
 }
 
 // formatYen renders a signed JPY amount, e.g. "+1,200 JPY" / "-400 JPY".

@@ -19,12 +19,13 @@ import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
 import {
+  bucketColor,
   bucketMidpointPct,
   type CalibrationAPIResponse,
   type CalibrationBucket,
   type CalibrationDirection,
   formatYen,
-  heatmapColor,
+  hasLabeledSamples,
 } from './calibration-view';
 
 const CHART_HEIGHT = 300;
@@ -94,6 +95,7 @@ export class PithaCalibrationHeatmap extends LitElement {
 
   @state() private buckets: CalibrationBucket[] = [];
   @state() private byDirection: CalibrationDirection[] = [];
+  @state() private hasSamples = false;
   @state() private brierScore: number | null = null;
   @state() private logLoss: number | null = null;
   @state() private expectedCalibrationError: number | null = null;
@@ -142,11 +144,16 @@ export class PithaCalibrationHeatmap extends LitElement {
   }
 
   private async load(): Promise<void> {
+    if (!this.calibrationUrl) {
+      logger.error('pitha-calibration-heatmap: calibration-url is not set');
+      return;
+    }
     this.loading = true;
     try {
       const response = await get<CalibrationAPIResponse>(this.calibrationUrl);
       this.buckets = response.buckets;
       this.byDirection = response.by_direction;
+      this.hasSamples = hasLabeledSamples(response);
       this.brierScore = response.brier_score;
       this.logLoss = response.log_loss;
       this.expectedCalibrationError = response.expected_calibration_error;
@@ -162,11 +169,15 @@ export class PithaCalibrationHeatmap extends LitElement {
 
   private applyBuckets(buckets: CalibrationBucket[]): void {
     if (!this.accuracySeries || !this.perfectSeries) return;
+    // Empty bands carry direction_accuracy 0 ("no data"): leave them off the
+    // curve rather than plotting a drop to 0.
     this.accuracySeries.setData(
-      buckets.map((b) => ({
-        time: bucketMidpointPct(b.range) as UTCTimestamp,
-        value: b.direction_accuracy,
-      })),
+      buckets
+        .filter((b) => b.sample_count > 0)
+        .map((b) => ({
+          time: bucketMidpointPct(b.range) as UTCTimestamp,
+          value: b.direction_accuracy,
+        })),
     );
     this.perfectSeries.setData(
       buckets.map((b) => ({
@@ -196,14 +207,26 @@ export class PithaCalibrationHeatmap extends LitElement {
           ${this.buckets.map(
             (b) => html`
               <li
+                ${ref((el) => {
+                  // CSSOM, not a `style` attribute binding: the CSP (no
+                  // `style-src 'unsafe-inline'`) blocks inline style attributes,
+                  // and Lit's styleMap renders one on its first pass.
+                  if (el) (el as HTMLElement).style.backgroundColor = bucketColor(b);
+                })}
                 class="pitha-calibration-heatmap-cell"
-                style="background-color: ${heatmapColor(b.direction_accuracy)}"
                 data-testid="calibration-heatmap-cell"
               >
                 <span class="range">${b.range}</span>
-                <span class="accuracy">${(b.direction_accuracy * 100).toFixed(1)}%</span>
-                <span class="avg-return">${b.avg_future_return_pct.toFixed(2)}%</span>
-                <span class="avg-confidence">conf ${b.avg_confidence.toFixed(2)}</span>
+                <span class="sample-count">n=${b.sample_count}</span>
+                ${
+                  b.sample_count > 0
+                    ? html`
+                      <span class="accuracy">${(b.direction_accuracy * 100).toFixed(1)}%</span>
+                      <span class="avg-return">${b.avg_future_return_pct.toFixed(2)}%</span>
+                      <span class="avg-confidence">conf ${b.avg_confidence.toFixed(2)}</span>
+                    `
+                    : html`<span class="no-data">データなし</span>`
+                }
                 <span class="bucket-pnl">
                   ${b.trade_count} trades / ${formatYen(b.total_pnl)} (${b.avg_pnl_pct.toFixed(2)}%)
                 </span>
@@ -221,15 +244,20 @@ export class PithaCalibrationHeatmap extends LitElement {
                 <tr data-testid="calibration-direction-row">
                   <td>${d.direction}</td>
                   <td>${d.sample_count}</td>
-                  <td>${(d.direction_accuracy * 100).toFixed(1)}%</td>
-                  <td>${d.avg_future_return_pct.toFixed(2)}%</td>
+                  <td>${d.sample_count > 0 ? `${(d.direction_accuracy * 100).toFixed(1)}%` : '—'}</td>
+                  <td>${d.sample_count > 0 ? `${d.avg_future_return_pct.toFixed(2)}%` : '—'}</td>
                 </tr>
               `,
             )}
           </tbody>
         </table>
         ${
-          this.brierScore !== null
+          this.brierScore !== null && !this.hasSamples
+            ? html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-no-samples">サンプルなし（ラベル付き判断がまだありません）</p>`
+            : ''
+        }
+        ${
+          this.brierScore !== null && this.hasSamples
             ? html`
               <dl class="pitha-calibration-heatmap-summary">
                 <dt>Brier Score</dt>

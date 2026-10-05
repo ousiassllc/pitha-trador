@@ -9,29 +9,33 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 )
 
-// New builds and returns the shared Gin engine: the placeholder root
-// page, the `/swagger` API docs UI, the Huma-based `/api/v1` JSON API, and
-// the Scanner Dashboard SSR/WebSocket routes (docs/api/endpoints.md).
-// Route registration otherwise stays minimal at this stage; later
-// sub-scopes register the remaining SSR routes (Templ/HTMX, via
-// internal/web/handler) on top of this engine.
+// New builds and returns the shared Gin engine in three stages:
+// useMiddleware installs the cross-cutting middleware chain (in
+// router_middleware.go), registerPages registers every SSR page, action
+// and WebSocket route (`GET /` redirects to `/scanner`) plus the opt-in
+// `/swagger` API docs UI, and registerAPI registers the Huma-based
+// `/api/v1` JSON API. docs/api/endpoints.md is the source of truth for
+// the route list.
 func New(opts ...Option) *gin.Engine {
 	o := options{
-		candidateSource:   handler.StaticCandidateSource{},
+		candidateSource:   scanner.StaticCandidateSource{},
 		candidateRefresh:  defaultCandidateRefreshInterval,
 		systemEngine:      system.StaticSystemEngine{},
 		symbolProvider:    symbol.StaticSymbolProvider{},
 		insightProvider:   insightapi.StaticProvider{},
-		calibrationSource: handler.StaticCalibrationSource{},
-		proposalSource:    handler.StaticPolicyProposalSource{},
-		backtestRunner:    handler.StaticBacktestRunner{},
+		calibrationSource: calibration.StaticCalibrationSource{},
+		proposalSource:    proposals.StaticPolicyProposalSource{},
+		backtestRunner:    performance.StaticBacktestRunner{},
 		activitySource:    activity.StaticActivitySource{},
 		errorLogExporter:  system.UnconfiguredErrorLogExporter{},
 	}

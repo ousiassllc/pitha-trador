@@ -31,6 +31,16 @@ const (
 	// subscriberBuffer is each subscriber's channel capacity; a subscriber
 	// slower than this many pending messages misses the overflow.
 	subscriberBuffer = 64
+
+	// queueUpdateInterval is how long ObserveJob coalesces job transitions
+	// before computing one set of queue-depth updates (within
+	// non-functional.md §2.2's 1s live-reflection target). A 4,000-symbol
+	// full scan makes thousands of transitions a minute; counting per
+	// transition would put a jobs aggregation on every enqueue/claim/finish.
+	queueUpdateInterval = 500 * time.Millisecond
+
+	// queueUpdateTimeout bounds one coalesced QueueCounts call.
+	queueUpdateTimeout = 5 * time.Second
 )
 
 // Queues lists the 6 job queues in pipeline order (repository job queue
@@ -99,8 +109,15 @@ type Service struct {
 	killSw    KillSwitchSource
 	now       func() time.Time
 
+	// queueUpdateInterval is queueUpdateInterval; a field so tests can
+	// shorten it.
+	queueUpdateInterval time.Duration
+
 	mu   sync.Mutex
 	subs map[chan Message]struct{}
+	// dirtyQueues are the queues with transitions not yet reported as a
+	// QueueUpdate; non-nil while a flush is scheduled (bus.go).
+	dirtyQueues map[string]struct{}
 }
 
 // New returns a Service reading from the given sources.
@@ -111,6 +128,8 @@ func New(jobs JobSource, decisions DecisionSource, killSwitch KillSwitchSource) 
 		killSw:    killSwitch,
 		now:       func() time.Time { return time.Now().UTC() },
 		subs:      make(map[chan Message]struct{}),
+
+		queueUpdateInterval: queueUpdateInterval,
 	}
 }
 

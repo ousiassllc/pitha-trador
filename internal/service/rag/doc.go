@@ -6,7 +6,11 @@
 // jev_decision_vectors, docs/architecture/er.md §ベクトルインデックス), and
 // searches those tables for past states similar to the one Jev is about
 // to evaluate so a summary of what happened then can be injected into
-// the Jev request as few-shot context (Service.Context).
+// the Jev request as few-shot context (Service.Context). Each similar
+// jev_decisions hit is joined with its calibration_outcomes row
+// (future_return, was_direction_correct) when Outcome Labeling has
+// labeled it, and outcome-labeled decisions are preferred over
+// unlabeled ones (FR-RAG-2/3).
 //
 // The embedding is a deterministic function of already-computed Feature
 // Engine values - no LLM call, no network round trip, no added latency

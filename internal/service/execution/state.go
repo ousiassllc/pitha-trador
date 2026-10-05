@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 )
 
@@ -19,13 +20,23 @@ import (
 //	  "position": null, "cooldown_until": null
 //	}
 type SymbolState struct {
-	Symbol               string
-	LastPrice            float64
+	Symbol    string
+	LastPrice float64
+	// LastVWAP is the latest market_snapshots row's session VWAP
+	// (Feature.VWAP), or nil when the symbol has no snapshot yet.
+	LastVWAP             *float64
 	LastScanAt           *time.Time
 	LastJevScoutAt       *time.Time
 	LastJevTraderAt      *time.Time
 	LastSignal           string
 	LastSignalConfidence float64
+	// LatestTraderDecision is the symbol's latest Jev Trader decision
+	// (enrich.Decision-populated; judgement.DecisionRepository.LatestTrader's
+	// definition: no row-count window, no age limit), or nil when Jev Trader
+	// has not evaluated it yet. LastJevTraderAt is its Timestamp. Symbol
+	// Detail's SSR page, GET /api/v1/symbols/{symbol} and /ws/symbols/{symbol}
+	// all read the Jev panel from it, so they agree with the Scanner.
+	LatestTraderDecision *domain.JevDecision
 	// Position is the currently open position for this symbol, or nil
 	// (functional.md §4.9's "position": null).
 	Position *domain.Position
@@ -39,9 +50,10 @@ type SymbolState struct {
 var ErrInstrumentUnknown = errors.New("execution: unknown symbol")
 
 // State builds symbol's functional.md §4.9 state view from the latest
-// market_snapshots row (last_price/last_scan_at), the latest
-// jev_decisions rows per decision_type (last_jev_scout_at/
-// last_jev_trader_at), the latest trade_signals row (last_signal/
+// market_snapshots row (last_price/last_scan_at), the latest jev_decisions
+// row per decision_type (last_jev_scout_at/last_jev_trader_at and
+// LatestTraderDecision; one indexed single-row read each, independent of how
+// many rows of the other type follow it), the latest trade_signals row (last_signal/
 // last_signal_confidence, defaulting to domain.JevDirectionNone/0 when
 // none exists yet), the currently open position (if any), and this
 // symbol's in-memory cooldown_until (Engine.Close).
@@ -72,32 +84,30 @@ func (e *Engine) State(ctx context.Context, symbol string) (SymbolState, error) 
 	}
 	if len(snapshots) > 0 {
 		state.LastPrice = snapshots[0].Price
+		vwap := snapshots[0].Feature.VWAP
+		state.LastVWAP = &vwap
 		ts := snapshots[0].Timestamp
 		state.LastScanAt = &ts
 	}
 
-	// jev_decisions has no per-decision_type "latest" query, so scan
-	// enough recent rows for both types (Scout/Trader alternate roughly
-	// 1:1 per scan cycle, functional.md §4.3).
-	decisions, err := e.decisions.ListByInstrument(ctx, inst.ID, 50)
-	if err != nil {
-		return SymbolState{}, fmt.Errorf("execution: recent decisions for %q: %w", symbol, err)
+	scout, err := e.decisions.LatestScout(ctx, inst.ID)
+	switch {
+	case err == nil:
+		ts := scout.Timestamp
+		state.LastJevScoutAt = &ts
+	case errors.Is(err, judgement.ErrDecisionNotFound):
+		// no Scout decision yet: LastJevScoutAt stays nil
+	default:
+		return SymbolState{}, fmt.Errorf("execution: latest scout decision for %q: %w", symbol, err)
 	}
-	for _, d := range decisions {
-		ts := d.Timestamp
-		switch d.DecisionType {
-		case domain.JevDecisionTypeScout:
-			if state.LastJevScoutAt == nil {
-				state.LastJevScoutAt = &ts
-			}
-		case domain.JevDecisionTypeTrader:
-			if state.LastJevTraderAt == nil {
-				state.LastJevTraderAt = &ts
-			}
-		}
-		if state.LastJevScoutAt != nil && state.LastJevTraderAt != nil {
-			break
-		}
+	trader, err := e.latestTraderDecision(ctx, inst.ID)
+	if err != nil {
+		return SymbolState{}, err
+	}
+	if trader != nil {
+		ts := trader.Timestamp
+		state.LastJevTraderAt = &ts
+		state.LatestTraderDecision = trader
 	}
 
 	signals, err := e.signals.ListByInstrument(ctx, inst.ID, 1)

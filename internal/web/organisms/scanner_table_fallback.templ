@@ -16,8 +16,9 @@ import (
 // a table of Symbol, Price, 1m/5m Return, Volume Ratio, VWAP distance,
 // Spread, Jev Direction / Confidence / Entry Quality, and Current
 // Position, or an empty-state notice when there are no candidates. It is
-// used both for the initial SSR page load and for the `GET /scanner`
-// HX-Request fragment response (internal/web/handler.ScannerHandler.Page).
+// rendered inside the `GET /scanner` full page
+// (internal/web/pages.ScannerPage) as the SSR content `pitha-scanner-table`
+// hydrates over.
 //
 // The markup is nested inside a `<pitha-scanner-table>` custom element
 // (static/src/components/scanner-table): before JS loads (or for the
@@ -101,7 +102,7 @@ var scannerColumns = []scannerColumn{
 templ scannerRow(c domain.Candidate) {
 	<tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" data-symbol={ c.Symbol }>
 		<td class="px-3 py-2 font-medium">
-			<a class="text-sky-700 underline-offset-2 hover:underline" href={ symbolHref(c.Symbol) }>{ c.Symbol }</a>
+			<a class="text-sky-700 underline-offset-2 hover:underline" href={ SymbolHref(c.Symbol) }>{ c.Symbol }</a>
 		</td>
 		<td class="px-3 py-2 text-right tabular-nums">{ formatFloat(c.Price, 1) }</td>
 		<td class={ returnClass(c.Return1m) }>{ formatSignedNilFloat(domain.RatioToPercentPtr(c.Return1m), 2) }</td>
@@ -194,10 +195,19 @@ func formatConfidence(v *float64) string {
 	return formatFloat(math.Round(*v*100), 0) + "%" // formatFloat drops the sign of -0, like `${-0}` in JS
 }
 
-// symbolHref is the symbol detail link. Everything except RFC 3986
-// unreserved characters is percent-escaped, the same set as
-// encodeSymbol in scanner-view.ts (url.PathEscape alone would leave
-// `&+:@=$` and encodeURIComponent alone would leave `!'()*`).
-func symbolHref(symbol string) templ.SafeURL {
-	return templ.SafeURL("/symbols/" + strings.ReplaceAll(url.QueryEscape(symbol), "+", "%20"))
+// EscapeSymbolSegment percent-escapes symbol as one URL path segment.
+// Everything except RFC 3986 unreserved characters is escaped
+// (url.PathEscape alone would leave `&+:@=$`). It is the single escape
+// rule for every symbol-bearing URL (SymbolHref here and the Symbol
+// Detail page's candles/WebSocket URLs).
+func EscapeSymbolSegment(symbol string) string {
+	return strings.ReplaceAll(url.QueryEscape(symbol), "+", "%20")
+}
+
+// SymbolHref is the symbol detail link. It is the single source of the
+// detail URL rule: the SSR rows use it directly and the scanner API /
+// WebSocket items carry it as `detail_url` (internal/web/handler/scanner.toScannerItems), so
+// pitha-scanner-table never builds the URL itself (HATEOAS).
+func SymbolHref(symbol string) templ.SafeURL {
+	return templ.SafeURL("/symbols/" + EscapeSymbolSegment(symbol))
 }

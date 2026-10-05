@@ -114,5 +114,5 @@ func NewGovernor(
 // CurrentThresholds returns the currently-active PolicyConfig
 // (RuntimePolicy.CurrentThresholds over g.baseline and g.settings).
 func (g *Governor) CurrentThresholds(ctx context.Context) (config.PolicyConfig, error) {
-	return NewRuntimePolicy(g.settings, g.baseline).CurrentThresholds(ctx)
+	return NewRuntimePolicy(g.settings, g.proposals, g.baseline).CurrentThresholds(ctx)
 }

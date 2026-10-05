@@ -246,6 +246,26 @@ func TestRun_TopNLargerThanSurvivorsReturnsAll(t *testing.T) {
 	}
 }
 
+// A non-positive TopN (config validation rejects it at startup, but a
+// runtime override could still carry one) must yield no candidates rather
+// than panic on passed[TopN:].
+func TestScreen_NonPositiveTopNDoesNotPanic(t *testing.T) {
+	for _, topN := range []int{0, -1, -100} {
+		cfg := testCfg()
+		cfg.TopN = topN
+
+		res := screener.Screen(cfg, []screener.Input{baseInput(), baseInput()})
+		if len(res.Candidates) != 0 {
+			t.Errorf("TopN=%d: len(Candidates) = %d, want 0", topN, len(res.Candidates))
+		}
+		for i, r := range res.Reasons {
+			if !r.Has(domain.ScreenReasonRankedOut) {
+				t.Errorf("TopN=%d: Reasons[%d] = %v, want ranked-out", topN, i, r)
+			}
+		}
+	}
+}
+
 func TestRun_CandidateFieldsMirrorSnapshot(t *testing.T) {
 	cfg := testCfg()
 	in := baseInput()

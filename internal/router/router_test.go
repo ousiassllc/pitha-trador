@@ -15,7 +15,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
@@ -50,7 +50,7 @@ func TestNew_ReturnsAWailsIndependentEngine(t *testing.T) {
 func TestNew_APIScannerReturnsCandidatesFromWithCandidateSource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	price := 2831.5
-	source := handler.StaticCandidateSource{
+	source := scanner.StaticCandidateSource{
 		Items: []domain.Candidate{{Symbol: "7203", Price: price}},
 		AsOf:  time.Date(2026, 9, 26, 10, 15, 0, 0, time.UTC),
 	}
@@ -69,36 +69,31 @@ func TestNew_APIScannerReturnsCandidatesFromWithCandidateSource(t *testing.T) {
 	}
 }
 
-func TestNew_ScannerPageServesFullPageOrFragmentByHXRequestHeader(t *testing.T) {
+func TestNew_ScannerPageAlwaysServesFullPage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	source := handler.StaticCandidateSource{
+	source := scanner.StaticCandidateSource{
 		Items: []domain.Candidate{{Symbol: "7203", Price: 2831.5}},
 		AsOf:  time.Now(),
 	}
 	engine := router.New(router.WithCandidateSource(source))
 
-	fullReq := httptest.NewRequest(http.MethodGet, "/scanner", nil)
-	fullRec := httptest.NewRecorder()
-	engine.ServeHTTP(fullRec, fullReq)
-	if fullRec.Code != http.StatusOK {
-		t.Fatalf("full page: expected status %d, got %d", http.StatusOK, fullRec.Code)
-	}
-	if !strings.Contains(strings.ToLower(fullRec.Body.String()), "<!doctype html>") {
-		t.Fatalf("full page: expected document shell, got %q", fullRec.Body.String())
-	}
-
-	fragReq := httptest.NewRequest(http.MethodGet, "/scanner", nil)
-	fragReq.Header.Set("HX-Request", "true")
-	fragRec := httptest.NewRecorder()
-	engine.ServeHTTP(fragRec, fragReq)
-	if fragRec.Code != http.StatusOK {
-		t.Fatalf("fragment: expected status %d, got %d", http.StatusOK, fragRec.Code)
-	}
-	if strings.Contains(strings.ToLower(fragRec.Body.String()), "<!doctype") {
-		t.Fatalf("fragment: expected no document shell for HX-Request, got %q", fragRec.Body.String())
-	}
-	if !strings.Contains(fragRec.Body.String(), "7203") {
-		t.Fatalf("fragment: expected candidate symbol, got %q", fragRec.Body.String())
+	for _, hx := range []bool{false, true} {
+		req := httptest.NewRequest(http.MethodGet, "/scanner", nil)
+		if hx {
+			req.Header.Set("HX-Request", "true")
+		}
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("hx=%v: expected status %d, got %d", hx, http.StatusOK, rec.Code)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(strings.ToLower(body), "<!doctype html>") {
+			t.Fatalf("hx=%v: expected document shell, got %q", hx, body)
+		}
+		if !strings.Contains(body, "7203") {
+			t.Fatalf("hx=%v: expected candidate symbol, got %q", hx, body)
+		}
 	}
 }
 

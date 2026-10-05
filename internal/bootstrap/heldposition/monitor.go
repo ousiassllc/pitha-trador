@@ -133,7 +133,7 @@ func (m Monitor) Run(ctx context.Context, min, max time.Duration) {
 	}
 	wait := func() time.Duration {
 		if max > min {
-			return min + time.Duration(rand.Int64N(int64(max-min)))
+			return min + time.Duration(rand.Int64N(int64(max-min))) //nolint:gosec // G404: poll-interval jitter, not security-sensitive
 		}
 		return min
 	}

@@ -14,6 +14,25 @@ import (
 // implements it.
 type PolicySource interface {
 	CurrentThresholds(ctx context.Context) (config.PolicyConfig, error)
+	// AppliedPolicyVersion returns the policy_version
+	// (policy_proposals.applied_policy_version, e.g. "sol-12") of the
+	// applied proposal currently in effect, or "" when none is - the
+	// thresholds are then config/strategy.yaml's baseline.
+	AppliedPolicyVersion(ctx context.Context) (string, error)
+}
+
+// signalPolicyVersion is the trade_signals.policy_version recorded for a
+// live signal: Version alone on the baseline thresholds, or
+// "<Version>+<applied_policy_version>" (e.g. "policy-v1+sol-12") while a
+// Self-Improvement proposal's thresholds are in effect, so every signal
+// identifies the applied version that produced it (FR-POLICY-5,
+// FR-SELFIMPROVE-5/7). The column is VARCHAR(20): the suffix fits up to
+// a six-digit proposal id.
+func signalPolicyVersion(applied string) string {
+	if applied == "" {
+		return Version
+	}
+	return Version + "+" + applied
 }
 
 // Option configures an Engine beyond NewEngine's required dependencies.
@@ -29,16 +48,21 @@ func WithPolicySource(src PolicySource) Option {
 }
 
 // currentThresholds returns e.thresholds with Policy replaced by the
-// PolicySource's current values when one is configured.
-func (e *Engine) currentThresholds(ctx context.Context) (Thresholds, error) {
+// PolicySource's current values when one is configured, together with the
+// trade_signals.policy_version identifying them.
+func (e *Engine) currentThresholds(ctx context.Context) (Thresholds, string, error) {
 	if e.policy == nil {
-		return e.thresholds, nil
+		return e.thresholds, Version, nil
 	}
 	current, err := e.policy.CurrentThresholds(ctx)
 	if err != nil {
-		return Thresholds{}, fmt.Errorf("policy: read current policy thresholds: %w", err)
+		return Thresholds{}, "", fmt.Errorf("policy: read current policy thresholds: %w", err)
+	}
+	applied, err := e.policy.AppliedPolicyVersion(ctx)
+	if err != nil {
+		return Thresholds{}, "", fmt.Errorf("policy: read applied policy version: %w", err)
 	}
 	th := e.thresholds
 	th.Policy = current
-	return th, nil
+	return th, signalPolicyVersion(applied), nil
 }

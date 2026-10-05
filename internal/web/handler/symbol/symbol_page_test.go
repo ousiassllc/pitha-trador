@@ -23,12 +23,14 @@ func TestSymbolHandler_Page_RendersDetailPanelsAndPriceChartIsland(t *testing.T)
 	confidence := 0.74
 	regime := domain.JevRegimeBreakout
 	entryQuality := domain.JevEntryQualityStrong
+	// The latest Trader decision (Jev panel) is independent of the bounded
+	// history list, which here holds only Scout rows (issues #496/#497/#499).
 	provider := &fakeSymbolProvider{
-		state: execution.SymbolState{Symbol: "7203", LastPrice: 2831.5, LastSignal: domain.JevDirectionLong},
-		decisions: []domain.JevDecision{{
+		state: stateWithTrader(execution.SymbolState{Symbol: "7203", LastPrice: 2831.5, LastSignal: domain.JevDirectionLong}, domain.JevDecision{
 			ID: 1, DecisionType: domain.JevDecisionTypeTrader,
 			Direction: &direction, Confidence: &confidence, Regime: &regime, EntryQuality: &entryQuality,
-		}},
+		}),
+		decisions: []domain.JevDecision{{ID: 2, DecisionType: domain.JevDecisionTypeScout}},
 	}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{AllowedPositionPct: 2.0, StopLossPct: 0.6, TakeProfitPct: 1.2})
 	router := gin.New()
@@ -169,4 +171,43 @@ func TestSymbolHandler_Page_RenderFailureIs500AndLogged(t *testing.T) {
 	if !strings.Contains(logs.String(), "handler: render") || !strings.Contains(logs.String(), "context canceled") {
 		t.Errorf("render error not logged: %q", logs.String())
 	}
+}
+
+// issue #382: Page validates the symbol format (same as the JSON API's
+// SymbolPathInput) before consulting the provider. The fake provider
+// resolves every symbol, so a 404 here can only come from the format check.
+func TestSymbolHandler_Page_InvalidSymbolFormatReturns404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	provider := &fakeSymbolProvider{state: execution.SymbolState{Symbol: "x", LastPrice: 1}}
+	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
+	router := gin.New()
+	router.GET("/symbols/:symbol", h.Page)
+
+	for name, path := range map[string]string{
+		"dot":       "/symbols/a.b",
+		"question":  "/symbols/a%3Fb",
+		"hash":      "/symbols/a%23b",
+		"percent":   "/symbols/a%25b",
+		"too long":  "/symbols/12345678901234567",
+		"non-ascii": "/symbols/%E3%83%88%E3%83%A8%E3%82%BF",
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+			}
+			if !strings.Contains(rec.Body.String(), `data-testid="error-page"`) {
+				t.Fatalf("404 should render the error page, got body %q", rec.Body.String())
+			}
+		})
+	}
+
+	t.Run("16 chars is accepted", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/symbols/1234567890abcdef", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+		}
+	})
 }

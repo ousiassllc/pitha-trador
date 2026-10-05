@@ -13,6 +13,9 @@ import { logger } from './logger';
 const MAX_RETRIES = 10;
 const INITIAL_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 30_000;
+// STABLE_CONNECTION_MS is how long an opened connection must stay up (without
+// receiving any message) before it counts as healthy and resets the backoff.
+const STABLE_CONNECTION_MS = 10_000;
 
 // resolveWsUrl turns a possibly-relative WebSocket path (e.g. `/ws/scanner`)
 // into an absolute `ws://`/`wss://` URL, or returns url unchanged if it is
@@ -72,13 +75,30 @@ export class WsClient<T = unknown> {
   private connect(): void {
     const socket = new WebSocket(this.url);
 
-    socket.addEventListener('open', () => {
+    // The backoff is reset only once the connection proves healthy (first
+    // message or STABLE_CONNECTION_MS of uptime), not on `open`: a server that
+    // accepts and then immediately closes would otherwise pin the backoff at
+    // INITIAL_BACKOFF_MS and never reach `failed` (issue #466).
+    let stableTimer: number | null = null;
+    const clearStableTimer = () => {
+      if (stableTimer !== null) {
+        window.clearTimeout(stableTimer);
+        stableTimer = null;
+      }
+    };
+    const markHealthy = () => {
+      clearStableTimer();
       this.retries = 0;
+    };
+
+    socket.addEventListener('open', () => {
+      stableTimer = window.setTimeout(markHealthy, STABLE_CONNECTION_MS);
       this.options.onStatusChange?.('open');
       this.options.onOpen?.();
     });
 
     socket.addEventListener('message', (event: MessageEvent<string>) => {
+      markHealthy();
       let message: T;
       try {
         message = JSON.parse(event.data) as T;
@@ -92,6 +112,7 @@ export class WsClient<T = unknown> {
     });
 
     socket.addEventListener('close', (event) => {
+      clearStableTimer();
       this.options.onClose?.(event as CloseEvent);
       if (this.closedByUser) return;
       const backoff = Math.min(INITIAL_BACKOFF_MS * 2 ** this.retries, MAX_BACKOFF_MS);

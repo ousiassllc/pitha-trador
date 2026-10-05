@@ -1,0 +1,13 @@
+-- bid/ask 入れ替え修正（issue #458）前に保存された jev_decision_vectors を
+-- RAG の検索対象から外す（issue #464）。
+-- 修正前の判断は spread_bps が常に負・orderbook_imbalance が符号反転した特徴量で
+-- ベクトル化されており、修正後の正しい符号の問い合わせベクトルとの L2 距離が
+-- 系統的に歪む（「似た過去事例」が誤って選ばれる）。jev_decision_vectors は
+-- jev_decisions から派生した検索インデックスにすぎないため、適用時点で存在する
+-- ベクトルをすべて削除する。jev_decisions（state_json・response_json・
+-- calibration_outcomes を含む追記専用の監査ログ）は書き換え・削除しない。
+-- 以降の判断は rag.Service.IndexDecision が正しい符号で索引する。
+-- 新規 DB（ベクトルなし）では何も起きない。
+-- sqlite-vec(vec0) は KNN 検索中の主キー範囲条件（decision_id >= N）を扱えず、
+-- 検索時の除外フィルタは IN 副問い合わせで全判断を毎回走査するため採らない。
+DELETE FROM jev_decision_vectors;

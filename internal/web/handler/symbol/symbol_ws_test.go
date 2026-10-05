@@ -19,9 +19,10 @@ import (
 func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	confidence := 0.74
-	provider := &fakeSymbolProvider{state: execution.SymbolState{
-		Symbol: "7203", LastPrice: 2105.5, LastSignal: domain.JevDirectionLong, LastSignalConfidence: confidence,
-	}}
+	provider := &fakeSymbolProvider{
+		state: stateWithTrader(execution.SymbolState{Symbol: "7203", LastPrice: 2105.5, LastSignal: domain.JevDirectionShort, LastSignalConfidence: 0.1},
+			traderDecision(domain.JevDirectionLong, confidence)),
+	}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	h.SetTickInterval(20 * time.Millisecond)
 
@@ -94,10 +95,11 @@ func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 	_ = conn.Close(websocket.StatusNormalClosure, "")
 }
 
-func TestSymbolHandler_WebSocket_NoJevUpdateWhenNoSignalYet(t *testing.T) {
+func TestSymbolHandler_WebSocket_NoJevUpdateWhenNoTraderDecisionYet(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	// A Policy signal alone must not produce a jev_update.
 	provider := &fakeSymbolProvider{state: execution.SymbolState{
-		Symbol: "7203", LastPrice: 2100.0, LastSignal: domain.JevDirectionNone,
+		Symbol: "7203", LastPrice: 2100.0, LastSignal: domain.JevDirectionLong, LastSignalConfidence: 0.8,
 	}}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	h.SetTickInterval(200 * time.Millisecond)
@@ -128,7 +130,7 @@ func TestSymbolHandler_WebSocket_NoJevUpdateWhenNoSignalYet(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v, data = %s", err, data)
 	}
 	if got.Type != "tick" {
-		t.Fatalf("first message.Type = %q, want %q (no jev_update: LastSignal is NONE)", got.Type, "tick")
+		t.Fatalf("first message.Type = %q, want %q (no jev_update: no Trader decision yet)", got.Type, "tick")
 	}
 
 	_ = conn.Close(websocket.StatusNormalClosure, "")
@@ -138,9 +140,9 @@ func TestSymbolHandler_WebSocket_NoJevUpdateWhenNoSignalYet(t *testing.T) {
 // pitha-price-chart autoscale down to 0 (issue #183).
 func TestSymbolHandler_WebSocket_SkipsTickWhileNoPrice(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	provider := &fakeSymbolProvider{state: execution.SymbolState{
-		Symbol: "7203", LastPrice: 0, LastSignal: domain.JevDirectionLong, LastSignalConfidence: 0.5,
-	}}
+	provider := &fakeSymbolProvider{
+		state: stateWithTrader(execution.SymbolState{Symbol: "7203", LastPrice: 0}, traderDecision(domain.JevDirectionLong, 0.5)),
+	}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	h.SetTickInterval(20 * time.Millisecond)
 

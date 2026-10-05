@@ -1,0 +1,1 @@
+DROP INDEX jev_decisions_instrument_type_timestamp_idx;

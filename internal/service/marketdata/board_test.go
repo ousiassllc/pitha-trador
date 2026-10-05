@@ -70,8 +70,11 @@ func TestClient_GetBoard_MarksFreshOnSuccess(t *testing.T) {
 		case "/token":
 			_ = json.NewEncoder(w).Encode(map[string]any{"ResultCode": 0, "Token": "tok-abc"})
 		case "/board/7203@1":
+			// kabu naming is trader-side: BidPrice is the best SELL quote
+			// and AskPrice the best BUY quote, so BidPrice > AskPrice
+			// (kabu_STATION_API.yaml BoardSuccess sample).
 			bid := 2408.5
-			ask := 2409.0
+			ask := 2407.5
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"Symbol":        "7203",
 				"CurrentPrice":  2409.0,
@@ -101,6 +104,9 @@ func TestClient_GetBoard_MarksFreshOnSuccess(t *testing.T) {
 	}
 	if board.BidPrice == nil || *board.BidPrice != 2408.5 {
 		t.Errorf("board.BidPrice = %v, want 2408.5", board.BidPrice)
+	}
+	if board.AskPrice == nil || *board.AskPrice != 2407.5 {
+		t.Errorf("board.AskPrice = %v, want 2407.5", board.AskPrice)
 	}
 
 	if client.Status().IsStale("7203") {

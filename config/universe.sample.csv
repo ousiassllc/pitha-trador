@@ -1,0 +1,6 @@
+symbol,name,market,sector,kind
+7203,トヨタ自動車,TSE Prime,輸送用機器,stock
+6758,ソニーグループ,TSE Prime,電気機器,stock
+8306,三菱UFJフィナンシャル・グループ,TSE Prime,銀行業,stock
+101,TOPIX,INDEX,,market_index
+1050,輸送用機器,INDEX,輸送用機器,sector_index

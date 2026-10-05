@@ -13,7 +13,8 @@ import (
 // Job queue names (docs/architecture/er.md §jobs, overview.md §2 "Job
 // Queue / Scheduler"). internal/service/scheduler enqueues and drains
 // jobs on these queues in this pipeline order:
-// market-data → feature-calc → jev-scout → jev-trader, with
+// market-data → jev-scout → jev-trader (feature-calc is a compat no-op
+// queue the full scan never feeds; FR-SCHED-1), with
 // outcome-labeling/analytics running asynchronously afterward. Risk
 // check and Paper execution are not queues: they run synchronously
 // inside the jev-trader job (FR-SCHED-1).
@@ -198,21 +199,6 @@ func (r *JobRepository) setFinished(ctx context.Context, id int64, status string
 		}
 	}
 	return nil
-}
-
-// ResetStuckRunning resets every job still marked running back to pending
-// (docs/architecture/er.md §jobs "再起動時の回復": プロセス起動時に
-// status='running'のまま残っている行（クラッシュで中断されたジョブ）を
-// pendingへ戻し再実行する). It returns the number of rows reset.
-func (r *JobRepository) ResetStuckRunning(ctx context.Context) (int64, error) {
-	res, err := r.db.ExecContext(ctx,
-		`UPDATE jobs SET status = ?, started_at = NULL WHERE status = ?`,
-		JobStatusPending, JobStatusRunning,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("repository: reset stuck running jobs: %w", err)
-	}
-	return res.RowsAffected()
 }
 
 const jobSelectColumns = `

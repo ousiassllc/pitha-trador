@@ -3,7 +3,8 @@
 // initial rows from `GET /api/v1/scanner` (via lib/api.ts), then applies
 // `/ws/scanner` PUSH updates (via lib/ws.ts) as they arrive. Column
 // headers sort client-side (no server round trip); symbol rows are plain
-// `<a href="/symbols/{symbol}">` links so clicking one is a normal browser
+// `<a href>` links to the server-provided `detail_url` (HATEOAS: the URL is
+// never built here), so clicking one is a normal browser
 // navigation, not an HTMX request (HTMX↔Lit boundary rule: "Lit does not
 // trigger HTMX requests").
 import { html, LitElement, type PropertyValues } from 'lit';
@@ -23,7 +24,6 @@ import {
   COLUMNS,
   type Column,
   directionBadge,
-  encodeSymbol,
   entryQualityBadge,
   formatAsOf,
   formatConfidence,
@@ -32,6 +32,7 @@ import {
   formatSignedNullable,
   returnClass,
   type SortKey,
+  sortValue,
 } from './scanner-view';
 
 @customElement('pitha-scanner-table')
@@ -150,7 +151,9 @@ export class PithaScannerTable extends LitElement {
   private sortedItems(): ScannerItem[] {
     const { sortKey, sortDirection } = this;
     const factor = sortDirection === 'asc' ? 1 : -1;
-    return [...this.items].sort((a, b) => factor * compareValues(a[sortKey], b[sortKey]));
+    return [...this.items].sort(
+      (a, b) => factor * compareValues(sortValue(a, sortKey), sortValue(b, sortKey)),
+    );
   }
 
   protected override render() {
@@ -239,7 +242,7 @@ export class PithaScannerTable extends LitElement {
     return html`
       <tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" data-symbol=${item.symbol}>
         <td class="px-3 py-2 font-medium">
-          <a class="text-sky-700 underline-offset-2 hover:underline" href=${`/symbols/${encodeSymbol(item.symbol)}`}>${item.symbol}</a>
+          <a class="text-sky-700 underline-offset-2 hover:underline" href=${item.detail_url}>${item.symbol}</a>
         </td>
         <td class=${numeric}>${item.price.toFixed(1)}</td>
         <td class=${returnClass(item.return_1m)}>${formatSignedNullable(item.return_1m, 2)}</td>
@@ -268,7 +271,7 @@ export class PithaScannerTable extends LitElement {
 // compareValues orders nulls first (regardless of column direction, they
 // sort as the smallest value), then strings lexicographically and numbers
 // numerically.
-function compareValues(a: ScannerItem[SortKey], b: ScannerItem[SortKey]): number {
+function compareValues(a: string | number | null, b: string | number | null): number {
   if (a === null || b === null) {
     if (a === b) return 0;
     return a === null ? -1 : 1;

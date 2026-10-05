@@ -2,7 +2,7 @@
 
 ## 概要
 
-- 言語: Go 1.25+（`go.mod`の`go 1.25.11`に準拠。バックエンド・Scheduler・アダプタ全般）
+- 言語: Go 1.25+（`go.mod`の`go 1.25.14`に準拠。バックエンド・Scheduler・アダプタ全般）
 - デスクトップシェル: Wails v2（WebView2、ネイティブウィンドウ/通知。OSトレイは未対応）
 - サーバー: Gin + Huma（`/api/v1/...`）、Templ + HTMX（SSR）
 - フロントエンド（リッチアイランドのみ）: Lit + TypeScript、ビルドは esbuild、パッケージマネージャは **bun** に固定
@@ -10,7 +10,7 @@
 - DB: SQLite（`modernc.org/sqlite`、アプリ内蔵）+ golang-migrate + sqlite-vec（ベクトル検索）
 - 外部API: kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券）、Jev / Sol / Opus / Luna API
 
-技術スタックの詳細は `docs/architecture/overview.md` §2 技術スタック、レイヤー構造は同§3 を参照。本ドキュメントは開発環境・CI/CD・Lint/Format/Linterly/Git Hooks/Swagger の構築方針のみを扱う。
+技術スタックの詳細は `docs/architecture/overview.md` §2 技術スタック、レイヤー構造は同§3 を参照。本ドキュメントは開発環境・Lint/Format/Linterly/Git Hooks/Swagger の構築方針を扱う。CI/CD（GitHub Actions）の詳細は `environment/ci.md` に分割している。
 
 アプリケーション本体・CI（`.github/workflows/ci.yml`）・`Makefile`・`lefthook.yml`・`.golangci.yml`・`.linterly.yml`・`static/package.json`等の環境構築用ファイルはいずれも実装済みである。本ドキュメントはその現状の構成と方針を記述する。
 
@@ -21,9 +21,12 @@
 ```text
 pitha-trador/
 ├── .github/
+│   ├── dependabot.yml        # Dependabot（gomod / github-actions / bun）
+│   ├── actions/setup/
+│   │   └── action.yml        # 複合Action: setup-go / setup-bun / フロントエンドビルド / templ生成（lint・test・buildで共用）
 │   └── workflows/
-│       └── ci.yml            # push/PR/タグ: lint → test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
-├── .env.example               # 環境変数の一覧と説明（`cp .env.example .env`）
+│       └── ci.yml            # push/PR/タグ: lint（govulncheck含む）→ test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
+├── .env.example               # 環境変数の一覧と説明の雛形（`.env`は自動読込されない。値はプロセス環境変数として設定する）
 ├── .bun-version               # CIで使うbunバージョン固定（setup-bunの`bun-version-file`）
 ├── .golangci.yml              # Go lint設定
 ├── .linterly.yml              # 行数リンター設定
@@ -36,11 +39,12 @@ pitha-trador/
 │   └── biome.json               # フロントエンドLint+Format設定
 └── docs/
     └── environment/
-        └── setup.md             # 本ドキュメント
+        ├── setup.md             # 本ドキュメント
+        └── ci.md                # CI/CD（GitHub Actions）の詳細
 ```
 
 - Goモジュールのルートは`pitha-trador/`直下（`go.mod`）
-- `.github/workflows/`には現状`ci.yml`のみが存在する。`e2e.yml`（実機E2E用）は未作成であり、必要になった時点で追加する（後述「CI/CD」節の注意を参照）
+- `.github/workflows/`には現状`ci.yml`のみが存在する。共通セットアップは`.github/actions/setup/action.yml`（複合Action）。`e2e.yml`（実機E2E用）は未作成であり、必要になった時点で追加する（後述「CI/CD」節の注意を参照）。依存の自動更新設定は`.github/dependabot.yml`
 - フロントエンド（Lit/TypeScript）の依存管理は`static/`配下に閉じ、bunで管理する（Goモジュールとは独立）
 
 ## 開発環境セットアップ
@@ -67,8 +71,8 @@ go mod download
 # フロントエンド依存関係（bun固定）
 bun --cwd static install
 
-# 環境変数
-cp .env.example .env
+# 環境変数は`.env`を経由せず、必要に応じてシェル/OSのプロセス環境変数として設定する
+# （既定値のままなら設定不要。変数一覧は下記「環境変数」節と`.env.example`）
 
 # Git Hooks
 lefthook install
@@ -93,10 +97,31 @@ make dev
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
 | `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`）。`secrets`テーブルを含むため、DBファイルは`0600`で作成/絞り込み（`-wal`/`-shm`も同モード）、新規作成する親ディレクトリ・`logs/`・インスタンスロックのディレクトリは`0700`、ログ/ロックファイルは`0600`（非Windows。既存の親ディレクトリのモードは変更しない） |
 | `PITHA_BACKUP_DIR` | `internal/bootstrap` | SQLite DBの日次バックアップ（`requirements/non-functional.md` §3）の退避先ディレクトリ。ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）を指定する。ディレクトリ自体は事前に存在している必要がある（作成しない。未マウントの場合はバックアップが失敗しSlack/ログで通知される）。Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。未設定・空のときはバックアップ無効（起動ログに警告）。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する |
+| `PITHA_UNIVERSE_PATH` | `internal/bootstrap` | 銘柄マスタCSVの場所（「銘柄マスタの投入」節）。優先順位は本環境変数 > 実行ファイルと同じディレクトリの`config/universe.csv`。どちらも無ければCSV同期をスキップする |
 | `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
 | `PITHA_STATIC_DIR` | `internal/router` | 設定すると`/static/...`を`go:embed`ではなく指定ディレクトリ（存在するディレクトリのみ有効。`make dev`は`static/src`）から配信する。未設定・不正パスは埋め込みにフォールバック |
-| `PITHA_POLICY_LONG_*` / `PITHA_POLICY_SHORT_*` | `internal/config` | `config/strategy.yaml`の`policy.long`/`policy.short`のしきい値を起動時に上書きする（FR-POLICY-4）。サフィックスは`MIN_PROBABILITY`・`MIN_ENTRY_QUALITY`・`MIN_CONTINUATION_PROBABILITY`・`MAX_TOXIC_FLOW`・`MAX_LIQUIDITY_STRESSED`。数値は不正値だと起動エラー |
-| `PITHA_FAST_SCREENER_*` | `internal/config` | `fast_screener`のフィルター・重みを起動時に上書きする（FR-FS-1/FR-FS-3、名前は`.env.example`と`requirements/functional.md`参照）。DB `runtime_settings`の`screener.*`が最優先 |
+| `PITHA_POLICY_LONG_*` / `PITHA_POLICY_SHORT_*` | `internal/config` | `config/strategy.yaml`の`policy.long`/`policy.short`のしきい値を起動時に上書きする（FR-POLICY-4）。サフィックスは`MIN_PROBABILITY`・`MIN_ENTRY_QUALITY`・`MIN_CONTINUATION_PROBABILITY`・`MAX_TOXIC_FLOW`・`MAX_LIQUIDITY_STRESSED`。数値は不正値だと起動エラー。上書き後の値も確率系は`(0, 1]`、`MIN_ENTRY_QUALITY`は`poor`/`fair`/`good`/`strong`/`exceptional`のいずれかでなければ項目名付きの起動エラー（FR-POLICY-2a） |
+| `PITHA_FAST_SCREENER_*` | `internal/config` | `fast_screener`のフィルター・重みを起動時に上書きする（FR-FS-1/FR-FS-3、名前は`.env.example`と`requirements/functional.md`参照）。DB `runtime_settings`の`screener.*`が最優先。上書き後の値も`top_n >= 1`・価格/しきい値は正・`max_price >= min_price`などを満たさなければ項目名付きの起動エラー（FR-FS-4） |
+
+### 銘柄マスタの投入
+
+スキャン対象ユニバース（`instruments`テーブル）は、DBが空のままだと全体スキャン・PUSH購読・候補更新・Jev Scout/Trader・Paper発注のすべてが何もしない。kabuステーションAPIには上場銘柄一覧を取得するエンドポイントが無いため、運用者が銘柄マスタCSV（東証上場銘柄一覧＝JPX公開のExcelをCSV化したもの等）を用意し、アプリ起動時に`internal/bootstrap`が取り込む。
+
+1. 下記形式のCSV（UTF-8、BOM可）を作成し、`PITHA_UNIVERSE_PATH`で指すか、実行ファイルと同じディレクトリの`config/universe.csv`に置く。開発時のサンプルは`config/universe.sample.csv`（`make dev`は`PITHA_UNIVERSE_PATH`でこれを指す）。
+2. アプリを（再）起動する。起動ログに`bootstrap: universe synced`（`instruments`/`changed`件数）が出れば投入済み。
+
+```csv
+symbol,name,market,sector,kind
+7203,トヨタ自動車,TSE Prime,輸送用機器,stock
+101,TOPIX,INDEX,,market_index
+1050,輸送用機器,INDEX,輸送用機器,sector_index
+```
+
+- 列は見出し行で識別する（順序自由・大文字小文字無視）。必須は`symbol`（英数字`[0-9A-Za-z]`のみ・≤10文字・ファイル内で一意。`7203.T`・`^N225`・全角文字などは行番号つきのエラーでファイル全体を拒否する。銘柄詳細画面/APIが`^[0-9A-Za-z]+$`のsymbolしか受け付けないため。`130A`のような英数字混在コードと`101`（TOPIX）は可）/`name`/`market`。`sector`は任意（`kind=sector_index`では必須。株式の`sector`と一致するとsector_return_5m算出に使われる）。`kind`は`stock`（既定）/`market_index`/`sector_index`。
+- 同期は冪等。新規`symbol`は`is_active=1`で追加し、既存`symbol`は`name`/`market`/`sector`/`kind`のみ更新して`is_active`は変更しない（運用者が除外した銘柄は再起動しても復活しない）。CSVから消した銘柄は削除も無効化もされない。
+- 不正な行が1つでもあればファイル全体を適用せず、行番号つきのエラーをログに出してDBは変更しない。CSVが無くDBも空の場合はスキャン対象が0件になる旨をエラーログに出す。
+- CSVはUTF-8（BOM可）のみ対応。UTF-8として不正なバイト列を含むファイル（Excelの既定「CSV」保存形式であるShift_JIS/CP932等）は、`line N, byte M: file is not valid UTF-8`のエラーでファイル全体を拒否する（文字化けした`name`/`sector`を保存しない）。Shift_JISのCSVはUTF-8で保存し直す（Excelでは「CSV UTF-8（コンマ区切り）」を選ぶ）。
+- `market_index`/`sector_index`も`stock`と同じ`market-data`ジョブで60秒周期に板（REST）を取得・スナップショット保存され（FR-SCHED-2）、市場コンテキスト特徴量（FR-FE-4）の入力になる。PUSH購読と候補更新（Fast Screener→Jev Scout）の対象は`stock`のみ。
 
 ### Makefileターゲット
 
@@ -108,28 +133,18 @@ make dev
 | `make generate` | `templ generate`と`bun run --cwd static build`。`lint`/`test`/`build`の前提 |
 | `make lint` | `generate`後に`golangci-lint run`と`bun run --cwd static lint`（`static/`で`biome check .`を実行。ルートで`bunx biome`を実行すると`@biomejs/biome`ではなく無関係なnpmパッケージ`biome`を解決して何も検査しないため、`static/`から実行する）。CIの`lint`ジョブが実行する`linterly check`と`bunx tsc --noEmit`は含まない（`linterly check`はlefthookのpre-commitで、`tsc --noEmit`はCIのみで実行される） |
 | `make test` | `generate`後に`go test ./...`と`bun --cwd=static test` |
+| `make test-race` | `generate`後に`go test -race ./...`（CIの`test`ジョブと同じ検証。race detectorはcgoを必要とするためgccが必要で、`CGO_ENABLED=0`の環境では使えない） |
 | `make build` | `generate`後に`wails build -platform windows/amd64` |
 | `make openapi-export` | 起動中サーバー（`127.0.0.1:48080`）から`docs/api/openapi.json`を書き出す（任意タスク。ファイルは未コミット） |
 
-- **`make dev`の環境変数**: `wails dev`は`cmd/desktop`をカレントとして動くため、`Makefile`は`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`を`$(CURDIR)/config/*.yaml`（絶対パス）に設定する。`internal/bootstrap.Run`は環境変数を埋め込み既定値より優先するため、`config/risk.yaml`等を編集して`make dev`を再起動すれば再ビルドなしで反映される（埋め込み既定値はビルド時のスナップショット）。`PITHA_STATIC_DIR`は`static/src`に設定し、`/static/...`をディスクから配信する。`wails dev`のファイル監視は既定で`.go`変更時のみGoバイナリを再ビルドするため、この上書きが無いと`bun run dev`（esbuild/Tailwind watch）の出力がgo:embedのスナップショットに阻まれ`make dev`再起動まで反映されない
+- **`make dev`の環境変数**: `wails dev`は`cmd/desktop`をカレントとして動くため、`Makefile`は`PITHA_UNIVERSE_PATH`も`config/universe.sample.csv`に設定し（銘柄マスタの投入、上記）、`PITHA_STRATEGY_PATH`/`PITHA_RISK_PATH`を`$(CURDIR)/config/*.yaml`（絶対パス）に設定する。`internal/bootstrap.Run`は環境変数を埋め込み既定値より優先するため、`config/risk.yaml`等を編集して`make dev`を再起動すれば再ビルドなしで反映される（埋め込み既定値はビルド時のスナップショット）。`PITHA_STATIC_DIR`は`static/src`に設定し、`/static/...`をディスクから配信する。`wails dev`のファイル監視は既定で`.go`変更時のみGoバイナリを再ビルドするため、この上書きが無いと`bun run dev`（esbuild/Tailwind watch）の出力がgo:embedのスナップショットに阻まれ`make dev`再起動まで反映されない
 - **`generate`が前提となる理由**: `templ generate`が`*_templ.go`を、`bun run --cwd static build`が`static/src/dist/{css,js}`を生成する。どちらも`.gitignore`対象であり、`static/src/embed.go`の`//go:embed dist img vendor`は`dist/`が空だとコンパイル自体が失敗する。そのためクリーンなチェックアウトでは、生成前に`go vet`/golangci-lint/`go test`/`wails build`のいずれも実行できない（古い生成物が残っていると陳腐化した出力に対して実行してしまう）。CIの`lint`/`test`/`build`各ジョブも同じ2ステップを先に実行し、`lefthook`のpre-commit/pre-pushも`make generate`を呼ぶ
+- **CSPの`lightweight-charts` style hash**: `lightweight-charts`は帰属ロゴ用のインライン`<style>`を挿入し、CSPは`internal/web/middleware/security_headers.go`の`lightweightChartsAttributionStyleHash`（SHA-256）でこれだけを許可している。`bun test`の`static/src/csp/lightweight-charts-style-hash.test.ts`がインストール済みライブラリの実際のstyleテキストのハッシュをこの定数と照合するため、`lightweight-charts`の更新でstyleが変わるとテストが失敗する。失敗したら期待値として表示されたハッシュで定数を更新する。
+- **`-race`の適用範囲**: データ競合の検出はCIの`test`ジョブ（`go test -race ./...`）と`make test-race`で行う。race detectorはcgo（gcc）を必要とし、Windows開発機などgccが無い環境ではビルドできないため、`make test`とlefthookのpre-pushは`-race`なしの`go test ./...`のままにしている（pre-pushを高速に保つ目的も兼ねる）
 
 ## CI/CD
 
-GitHub Actions（`.github/workflows/ci.yml`）。
-
-- **トリガー**: `push`（main, feat/**）、タグ`v*`のpush、`pull_request`
-- **ジョブ構成**: `lint` → `test` → `build` → `release` の順に実行（前段が失敗したら後段はスキップ。`release`は下記の条件を満たす場合のみ実行）
-  - `lint`: フロントエンドビルド（`bun install --cwd static --frozen-lockfile` + `bun run --cwd static build`）→ `golangci-lint run` ＋ `linterly check`（行数制限。lefthookの`--no-verify`回避対策）＋ `bunx biome check .`（`working-directory: static`） ＋ `bunx tsc --noEmit`（`working-directory: static`）
-  - `test`: フロントエンドビルド → `go test ./...` ＋（フロントエンドの単体テストがある場合）`bun --cwd static test`
-  - `build`: フロントエンドビルド → `wails build -platform windows/amd64 -nsis -installscope user` でNSISインストーラー（`.exe`、ユーザースコープインストール）をビルドしCI Artifactとしてアップロードする。SHA256チェックサムも同時に生成する。バージョンは`main`へのpushでは既存の最新`vX.Y.Z`タグのパッチ+1、タグpushではタグ名、それ以外（PR・`feat/**`）は`dev`を`-ldflags`で埋め込む
-  - `release`: `build`の成果物（インストーラー・`checksums.txt`）を`softprops/action-gh-release@v3`でGitHub Releaseとして公開する。`main`へのpush（＝PRマージ、次パッチ版を自動採番）またはタグ`v*`のpush（手動リリース）でのみ実行され、`tag_name`は`build`ジョブが算出した版番号を使う
-  - `config/strategy.yaml`・`config/risk.yaml`・静的アセット（`static/src/dist`・`static/src/img`・`static/src/vendor`）は`go:embed`でバイナリに埋め込む（`architecture/overview.md` §9）。`static/src/embed.go`は空/未ビルドの`dist`を埋め込もうとすると`go build`自体がコンパイルエラーになるため、`lint`/`test`/`build`いずれのジョブも上記フロントエンドビルドを最初のGoコンパイル系ステップより前に実行する必要がある
-- **バージョン固定**: bunは`.bun-version`（`oven-sh/setup-bun`の`bun-version-file`）、templ・wails・golangci-lint・linterlyはワークフロー内でバージョンを固定する。`latest`は使わない
-- **Goツールチェーンの自動切替**: `go.mod`のGo（1.25.x）より新しいGoを要求するツールの`go install`ステップ（`Install golangci-lint`・`Install linterly`。どちらも`go >= 1.26`が必要）に、**ステップレベル**の`env: GOTOOLCHAIN: auto`を設定する。`actions/setup-go`はv6以降、無条件に`GOTOOLCHAIN=local`を`$GITHUB_ENV`経由でエクスポートし、これはワークフロー/ジョブレベルの`env`を上書きする（ステップレベルの`env`のみがそれより優先される）。そのままでは`requires go >= 1.26.0 (running go 1.25.11; GOTOOLCHAIN=local)`と失敗する。`golangci-lint run`・`linterly check`等の実行ステップは`go.mod`のGoで動くため上書き不要
-- **同時実行制御**: ワークフロー全体に`concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: false }`を設定する。版番号の採番（`build`）とタグ作成（`release`）が別ジョブのため、`main`への連続pushで並行実行されると同じ版番号を算出してタグが衝突しうる。同一refの実行を直列化して防ぐ
-- **実行環境**: `ubuntu-latest`のみで完結する。Wails v2のWindowsターゲットはpure Go実装であり、DBドライバも`modernc.org/sqlite`（+`modernc.org/sqlite/vec`）でCGO不要のため、`GOOS=windows`へのクロスコンパイルがLinux上でそのまま成立する（mingw等のクロスコンパイラも不要）。よってWindowsランナーを毎PRで使う必要はない
-- **注意**: WebView2はWindows専用のランタイムのため、`.exe`を実際に起動してUIを操作するE2Eテスト（`components/runtime.md` §9）は`ubuntu-latest`では実行できない。そのようなテストが必要になった場合のみ、`.github/workflows/e2e.yml`（**現状は未作成**）をタグpush等の低頻度トリガーで`windows-latest`ランナーにより別途追加して実行する（通常のlint/test/buildフローには含めない）
+GitHub Actions（`.github/workflows/ci.yml`）。ジョブ構成（`lint` → `test` → `build` → `release`）・トリガー・バージョン固定・最小権限・外部ActionのSHA固定・複合Action・脆弱性スキャン・リリース署名（issue #376）などの詳細は`environment/ci.md`を参照する。
 
 ## Lint
 
@@ -138,8 +153,9 @@ GitHub Actions（`.github/workflows/ci.yml`）。
 | Go | golangci-lint | `.golangci.yml` |
 | フロントエンド（Lit/TypeScript） | Biome | `static/biome.json` |
 
-- `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
-- `depguard`の`web-no-repository`ルールが、`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否する（レイヤー規約`architecture/overview.md` §3のうちlintで強制するのは`web` → `repository/**`のみで、サブパッケージ間のimport規約はレビューで担保する）。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
+- `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`・`gosec`・`bodyclose`・`noctx`・`rowserrcheck`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
+- `gosec`・`noctx`・`bodyclose`は`*_test.go`を対象外とする（`t.TempDir()`配下のパーミッション、テスト用`httptest.NewRequest`・WebSocketハンドシェイクは攻撃面ではないため）。`gosec`の`G304`（変数パスのファイルオープン）は、パスがすべてアプリ自身の設定/データディレクトリやサーバー生成名から作られリクエスト由来ではないため設定で除外する（パーミッション系`G301/G302/G306`は有効のまま）。`internal/config/secret*.go`の`G101`（シークレット行キー名への誤検知）は`exclusions`で除外する。上記以外の指摘は修正するか、理由付きの`//nolint:<linter> // <理由>`で個別に抑止する
+- `depguard`は2ルールでレイヤー規約（`architecture/overview.md` §3）を強制する。`web-no-repository`は`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否し、`templ-no-service`は`internal/web/{atoms,molecules,organisms,pages,layout}/**`（Templ層）から`internal/service/**`へのimportを拒否する（#380、`components/overview.md` §3）。上記以外のimport規約（`service` → `web`の禁止、`bootstrap`の子 → 親の禁止、サブパッケージ間など）はレビューで担保する。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
 - Biomeはlintとformatを1ツールで兼ねるため、`static/`配下は追加のESLint/Prettier設定を持たない
 
 ## Format
@@ -262,3 +278,13 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.26 | 2026-10-03 | `GOTOOLCHAIN: auto`の設定箇所をワークフロー全体から`Install golangci-lint`/`Install linterly`のステップレベルへ訂正（`actions/setup-go`の`$GITHUB_ENV`エクスポートがワークフローレベル`env`を上書きし、1.25の設定は効かなかった） | PR #304 CI `lint`ジョブ失敗の再修正 |
 | 1.27 | 2026-10-03 | `.linterlyignore`の内容ブロックを実ファイル（コメント文面を含む）に合わせ、`LICENSE`（ライセンス全文・手書きソースではない定型文）を許容する除外に追記 | issue #316（実ファイルとの乖離解消） |
 | 1.28 | 2026-10-03 | 初回セットアップ手順の`JEV_BASE_URL`/`JEV_MODEL`の上書き先を、廃止済みの「詳細設定（任意）」からSettings画面のJev接続先モーダル内の任意項目へ訂正 | issue #315（#302 とのdoc-drift解消） |
+| 1.29 | 2026-10-04 | 初回セットアップ手順から`cp .env.example .env`を削除し、`.env`は自動読込されずプロセス環境変数として設定する旨に統一（ファイル構成図の`.env.example`の説明も同趣旨に修正）。`.env.example`冒頭コメントも是正 | issue #386（環境変数節との矛盾解消） |
+| 1.30 | 2026-10-04 | 「銘柄マスタの投入」節と`PITHA_UNIVERSE_PATH`を追加（`instruments`の起動時CSV投入手順） | issue #389 |
+| 1.31 | 2026-10-04 | CI/CD節に最小権限（トップレベル`permissions: contents: read`、`release`のみ`contents: write`）・外部ActionのコミットSHA固定・`govulncheck`・Dependabot（gomod/github-actions/bun）を追記。Lint節に`gosec`/`bodyclose`/`noctx`/`rowserrcheck`と除外方針を追記。`go.mod`のGoを1.25.14へ更新（1.25.11は標準ライブラリの既知脆弱性6件に該当し`govulncheck`が失敗するため） | issue #375 |
+| 1.32 | 2026-10-04 | 自動更新の署名検証を追加: CI `build`ジョブが`RELEASE_SIGNING_PUBLIC_KEY`/`RELEASE_SIGNING_KEY`設定時に`checksums.txt.sig`（ed25519分離署名）を生成・公開し、公開鍵を`-ldflags`で埋め込む。鍵の発行手順を追記 | issue #376 |
+| 1.33 | 2026-10-05 | CIの署名発行・欠落時失敗の条件を`ci.yml`の`Sign checksums`の`if`（`main`へのpushとタグpushのみ。PR・`feat/**`は公開鍵の埋め込みのみ）に合わせて訂正 | issue #414 |
+| 1.34 | 2026-10-05 | 「銘柄マスタの投入」節にUTF-8以外（Shift_JIS/CP932）のCSVは全体拒否される旨を追記、`make test`の`bun test`がCSPの`lightweight-charts`style hashとインストール版の一致を検証する旨を追記 | issue #393, #407 |
+| 1.35 | 2026-10-05 | CIの`lint`/`test`/`build`で重複していたGo・bunセットアップ・フロントエンドビルド・templ生成を複合Action`.github/actions/setup`へ集約（`ci.yml`の300行上限超過を解消）。ジョブ名・ステップ内容は不変。Dependabotの`github-actions`に`/.github/actions/setup`を追加 | issue #402 |
+| 1.36 | 2026-10-05 | 「銘柄マスタの投入」節に`symbol`の文字種（英数字のみ。違反行は全体拒否）を追記し、`market_index`/`sector_index`も`market-data`ジョブで板取得される旨（PUSH購読・候補更新は`stock`のみ）に訂正。CI/CD節の詳細を`environment/ci.md`へ分割（`setup.md`の行数上限超過を解消。内容は不変） | issue #418, #422, #423 |
+| 1.37 | 2026-10-05 | Lint節のdepguard記述を`.golangci.yml`の2ルール（`web-no-repository`・`templ-no-service`）に訂正（「lintで強制するのは`web` → `repository/**`のみ」を削除） | issue #431 |
+| 1.38 | 2026-10-05 | 環境変数表の`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`に、上書き後の値も起動時検証される旨を追記 | issue #459 |

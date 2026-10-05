@@ -9,6 +9,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -18,13 +20,10 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
-	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
-	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
+	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 )
 
 // defaultAddr uses 48080 instead of the far more commonly-claimed 8080
@@ -40,86 +39,73 @@ const defaultAddr = "127.0.0.1:48080"
 const shutdownTimeout = 10 * time.Second
 
 func main() {
+	// run returns instead of calling log.Fatal so its defers (DB and log
+	// writer Close, lock Release) always run; only then is the process
+	// exited non-zero.
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer func() { _ = logWriter.Close() }()
 	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
 
+	// Single-instance guard (the same app.lock cmd/desktop takes), acquired
+	// before bootstrap.Run/BuildServices/Services.Start so a second process
+	// never recovers the first one's running jobs or starts a second
+	// Scheduler/PUSH subscription/Kill Switch against the shared DB.
+	lock, err := bootstrap.AcquireInstanceLock(bootstrap.AppLockName)
+	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
+		slog.Error("server: another instance is already running; exiting", "error", err)
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	defer func() { _ = lock.Release() }()
+
 	// bootstrap.Run opens (creating/migrating) the SQLite DB and loads
 	// config/strategy.yaml + config/risk.yaml (issue #42,
 	// docs/architecture/overview.md §10.1). This entrypoint has no
-	// window at all, so log.Fatal on failure (same as the RotatingWriter
-	// failure above) is the only sensible option.
+	// window at all, so failing the process (main's log.Fatal) is the only
+	// sensible option.
 	state, err := bootstrap.Run(bootstrap.Config{})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer func() { _ = state.Close() }()
 
-	// config.LoadSecretsFromDB reads the required JEV_API_KEY/
-	// KABU_API_PASSWORD (plus the optional JEV_BASE_URL/JEV_MODEL/
-	// SLACK_WEBHOOK_URL and LUNA_*/NEWS_FEED_*/SOL_*/OPUS_*
-	// AI/News API credentials) from the secrets table (issue
-	// #57 - `.env`/environment variables are no longer a supported input
-	// for these at all). Unlike the old env-var-based LoadSecrets, a
-	// missing value is never fatal: the server starts regardless,
-	// missing only drives a startup warning log and the Settings
-	// screen's (`/settings`) header banner - BuildServices' Jev/
-	// kabuステーションAPI client wiring simply receives empty strings for
-	// anything unset (both marketdata.NewClient/jev.NewClient tolerate
-	// that) until an operator fills them in and restarts (no
-	// hot-reload).
-	secretsRepo := system.NewSecretsRepository(state.DB)
-	secrets, missing, err := config.LoadSecretsFromDB(context.Background(), secretsRepo)
+	secretsRepo, secrets, err := bootstrap.LoadSecrets(context.Background(), state)
 	if err != nil {
-		log.Fatal(err)
-	}
-	if len(missing) > 0 {
-		slog.Warn("bootstrap: secrets not yet configured; configure them at /settings and restart", "missing", missing)
+		return err
 	}
 
-	// nil: cmd/server is headless and has no installer to run, so
+	// No WithAutoUpdate: cmd/server is headless and has no installer to run, so
 	// issue #65's unattended self-update never wires in here.
-	services, err := bootstrap.BuildServices(state, secrets, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
+	services := bootstrap.BuildServices(state, secrets)
 
 	allowNonLoopback := os.Getenv(EnvAllowNonLoopback) == "1"
 	addr, err := resolveListenAddr(os.Getenv("PITHA_SERVER_ADDR"), allowNonLoopback)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	engine := router.New(
+	engine := router.New(append(
+		bootstrap.RouterOptions(services, state, secretsRepo),
 		router.WithAllowedHosts(allowedHosts(addr, allowNonLoopback, os.Getenv(EnvAllowedHosts))...),
-		router.WithCandidateSource(services.Screener),
-		router.WithSystemEngine(services.Risk),
-		router.WithHeartbeatRecorder(services.Risk),
-		router.WithSymbolProvider(services.Execution),
-		router.WithSymbolRiskParams(symbol.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config(), services.Risk.AllowedPositionPct)),
-		router.WithInsightProvider(services.Insight),
-		router.WithCalibrationSource(services.Calibration),
-		router.WithPolicyProposalSource(services.Proposals),
-		router.WithBacktestRunner(services.Backtest),
-		router.WithActivitySource(services.Activity),
-		router.WithSecretsStore(secretsRepo),
-		router.WithMarketDataStatus(services.MarketData),
-		router.WithErrorLogExporter(services.ErrorLogs),
-		router.WithCandidateRefreshInterval(handler.CandidateRefreshInterval{
-			Min: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMin) * time.Second,
-			Max: time.Duration(state.Strategy.Scan.CandidateRefreshIntervalSecondsMax) * time.Second,
-		}),
-	)
+	)...)
 
 	// ctx is canceled on SIGINT/SIGTERM: the signal that stops the HTTP
 	// server also stops every background goroutine Services.Start owns.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := services.Start(ctx); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	srv := &http.Server{
@@ -129,7 +115,7 @@ func main() {
 	}
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Printf("pitha-trador server listening on %s", addr)
+		log.Printf("pitha-trador server listening on %s", addr) //nolint:gosec // G706: addr is the server's own fixed listen address, not user input
 		err := safego.Try("http server", srv.ListenAndServe)
 		serveErr <- err
 	}()
@@ -138,7 +124,7 @@ func main() {
 	case err := <-serveErr:
 		stop()
 		services.Stop()
-		log.Fatalf("server error: %v", err)
+		return fmt.Errorf("server error: %w", err)
 	case <-ctx.Done():
 	}
 
@@ -151,4 +137,5 @@ func main() {
 	// Blocks until every Scheduler worker (and its in-flight job) has
 	// exited, before the deferred state.Close closes the DB under them.
 	services.Stop()
+	return nil
 }

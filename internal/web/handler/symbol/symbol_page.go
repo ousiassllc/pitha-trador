@@ -13,19 +13,40 @@ import (
 )
 
 // defaultDecisionHistoryLimit is how many recent jev_decisions rows
-// Page's Decision history section shows.
+// Page's Decision history section shows. It bounds that history list only:
+// the Jev panel, the API's jev and the WebSocket's jev_update all read
+// execution.SymbolState.LatestTraderDecision, which has no such window.
 const defaultDecisionHistoryLimit = 50
+
+// validSymbol reports whether symbol matches SymbolPathInput's format
+// (`^[0-9A-Za-z]+$`, 1-16 characters), so the HTML page rejects exactly
+// what the JSON API rejects before consulting the instrument master.
+func validSymbol(symbol string) bool {
+	if len(symbol) < 1 || len(symbol) > 16 {
+		return false
+	}
+	for _, ch := range symbol {
+		if (ch < '0' || ch > '9') && (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') {
+			return false
+		}
+	}
+	return true
+}
 
 // Page implements `GET /symbols/:symbol` (docs/api/endpoints.md §3): the
 // full Symbol Detail page, embedding the `pitha-price-chart` island
-// (functional.md §5.2). Unlike ScannerHandler.Page, no HX-Request
-// fragment variant exists yet - Symbol Detail has no server-rendered
-// fallback content analogous to ScannerTableFallback for `pitha-price-
-// chart` (a canvas-drawn chart has nothing meaningful to show before
-// JS/Lit loads), so every request renders the full page.
+// (functional.md §5.2). There is no HX-Request fragment variant -
+// Symbol Detail has no server-rendered fallback content for
+// `pitha-price-chart` (a canvas-drawn chart has nothing meaningful to
+// show before JS/Lit loads), so every request renders the full page.
 func (h *SymbolHandler) Page(c *gin.Context) {
 	symbol := c.Param("symbol")
 	ctx := c.Request.Context()
+
+	if !validSymbol(symbol) {
+		shared.RespondPageError(c, http.StatusNotFound, "指定された銘柄は見つかりません。")
+		return
+	}
 
 	state, err := h.provider.State(ctx, symbol)
 	if errors.Is(err, execution.ErrInstrumentUnknown) {
@@ -46,10 +67,11 @@ func (h *SymbolHandler) Page(c *gin.Context) {
 
 	shared.RenderHTML(c, http.StatusOK, pages.SymbolDetailPage(pages.SymbolDetailProps{
 		Symbol:             symbol,
-		State:              state,
+		Position:           state.Position,
 		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
 		StopLossPct:        h.riskParams.StopLossPct,
 		TakeProfitPct:      h.riskParams.TakeProfitPct,
+		LatestTrader:       state.LatestTraderDecision,
 		Decisions:          decisions,
 	}))
 }

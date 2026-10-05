@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
@@ -16,11 +17,6 @@ import (
 // allows at most one open position per instrument, so only a handful of
 // recent orders can ever still be pending.
 const pendingOrderScanLimit = 20
-
-// latestTraderDecisionScanLimit is how many recent jev_decisions rows
-// OnSnapshot scans for the latest Jev Trader decision (Scout/Trader rows
-// interleave per scan cycle; mirrors State's own reasoning).
-const latestTraderDecisionScanLimit = 50
 
 // SnapshotResult is OnSnapshot's output: every entry filled and the
 // instrument's open position after this market update (nil when none), and
@@ -60,10 +56,11 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	}
 
 	unrealized := positionSign(position.Side) * float64(position.Quantity) * (snap.Price - position.EntryPrice)
-	position, err = e.positions.Mark(ctx, position.ID, snap.Price, unrealized, now)
+	marked, err := e.positions.Mark(ctx, position.ID, snap.Price, unrealized, now)
 	if err != nil {
 		return SnapshotResult{}, fmt.Errorf("execution: mark position %d to market: %w", position.ID, err)
 	}
+	position = marked
 
 	decision, err := e.latestTraderDecision(ctx, snap.InstrumentID)
 	if err != nil {
@@ -154,17 +151,17 @@ func (e *Engine) rejectIfPositionOpen(ctx context.Context, order domain.PaperOrd
 // latestTraderDecision returns instrumentID's most recent Jev Trader
 // decision (enrich.Decision-populated, as EvaluateExit requires), or nil
 // when none exists - which disables only the two Jev-derived exit
-// conditions (FR-EXIT-3).
+// conditions (FR-EXIT-3). "Most recent" is
+// judgement.DecisionRepository.LatestTrader's definition (no row-count
+// window, no age limit), the same one State/Symbol Detail/Scanner use.
 func (e *Engine) latestTraderDecision(ctx context.Context, instrumentID int64) (*domain.JevDecision, error) {
-	decisions, err := e.decisions.ListByInstrument(ctx, instrumentID, latestTraderDecisionScanLimit)
+	d, err := e.decisions.LatestTrader(ctx, instrumentID)
+	if errors.Is(err, judgement.ErrDecisionNotFound) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("execution: recent decisions for instrument %d: %w", instrumentID, err)
+		return nil, fmt.Errorf("execution: latest trader decision for instrument %d: %w", instrumentID, err)
 	}
-	for _, d := range decisions {
-		if d.DecisionType == domain.JevDecisionTypeTrader {
-			enriched := enrich.Decision(d)
-			return &enriched, nil
-		}
-	}
-	return nil, nil
+	enriched := enrich.Decision(d)
+	return &enriched, nil
 }

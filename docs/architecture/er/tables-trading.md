@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Paper執行・Kill Switch）
 
-`docs/architecture/er.md` から分割した章。対象: `paper_orders` / `positions` / `calibration_outcomes` / `kill_switch_events` / `kill_switch_resolutions`。型・規約と全体ER図は `docs/architecture/er.md` を参照。
+`docs/architecture/er.md` から分割した章。対象: `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions`。型・規約と全体ER図は `docs/architecture/er.md` を参照。
 
 ## paper_orders
 
@@ -130,6 +130,30 @@ erDiagram
 
 インデックス: `UNIQUE (jev_decision_id, horizon_minutes)`
 
+## calibration_label_skips
+
+水平線まで足が揃わないことが確定した`(jev_decision_id, horizon_minutes)`の終端マーカー（マイグレーション000024、issue #481）。`calibration_outcomes`は作らず（短縮horizonを記録しない）、`PendingLabels`が当該ペアを再投入対象から外すためだけに使う。`internal/service/calibration.Labeler`が、判断時刻+horizon+5分の猶予後も窓が揃わない場合に書き込む（`INSERT OR IGNORE`で冪等）。
+
+```mermaid
+erDiagram
+    jev_decisions ||--o{ calibration_label_skips : "ラベル付け不能と確定した水平線を持つ"
+    calibration_label_skips {
+        integer jev_decision_id FK
+        integer horizon_minutes
+        text reason
+        text created_at
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| jev_decision_id | integer | FK → jev_decisions.id, NOT NULL | |
+| horizon_minutes | integer | NOT NULL | |
+| reason | text | NOT NULL | 足が揃わなかった理由 |
+| created_at | text | NOT NULL | |
+
+インデックス: `PRIMARY KEY (jev_decision_id, horizon_minutes)`
+
 ## kill_switch_events
 
 Risk EngineのKill Switch発動履歴（監査ログ）。**追記専用**であり、`UPDATE`/`DELETE`はDBトリガー（`kill_switch_events_no_update` / `kill_switch_events_no_delete`、マイグレーション000014）が`ABORT`で拒否する（`operator_manual`を許すCHECK拡張のためテーブルを作り直したマイグレーション000017でも同トリガーを再作成している）。解除は本テーブルを更新せず、`kill_switch_resolutions`へ行を追記して記録する。
@@ -179,4 +203,4 @@ erDiagram
 | kill_switch_event_id | integer | FK → kill_switch_events.id, UNIQUE, NOT NULL | 1イベントにつき解除は1回のみ |
 | resolved_at | text | NOT NULL | |
 | resolved_by | varchar(50) | NOT NULL, CHECK IN ('auto','manual') | |
-| created_at | text | NOT NULL | |
+| created_at | text | NOT NULL, DEFAULT (strftime ミリ秒3桁) | DEFAULTは固定9桁ではないため使わず、`KillSwitchRepository.Resolve`が`sqlutil.FormatTime`で常に明示する（`er.md`「日時列のDEFAULT」）。`kill_switch_events.created_at`も同様 |

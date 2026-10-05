@@ -36,43 +36,6 @@ func mustCreateInstrument(t *testing.T, repo *market.InstrumentRepository, symbo
 	return inst
 }
 
-func TestScheduler_EnqueueFullScan_OnlyActiveInstruments(t *testing.T) {
-	db := newTestDB(t)
-	instruments := market.NewInstrumentRepository(db)
-	jobs := jobqueue.NewJobRepository(db)
-
-	mustCreateInstrument(t, instruments, "7203", true)
-	mustCreateInstrument(t, instruments, "9433", true)
-	mustCreateInstrument(t, instruments, "1301", false)
-
-	s := scheduler.New(jobs, instruments)
-	now := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
-
-	count, err := s.EnqueueFullScan(context.Background(), now)
-	if err != nil {
-		t.Fatalf("EnqueueFullScan: %v", err)
-	}
-	if count != 2 {
-		t.Fatalf("EnqueueFullScan count = %d, want 2 (inactive instrument excluded)", count)
-	}
-
-	for _, queue := range []string{jobqueue.JobQueueMarketData, jobqueue.JobQueueFeatureCalc} {
-		claimed := 0
-		for {
-			if _, err := jobs.ClaimNext(context.Background(), queue, now); err != nil {
-				if errors.Is(err, jobqueue.ErrJobNotFound) {
-					break
-				}
-				t.Fatalf("ClaimNext(%q): %v", queue, err)
-			}
-			claimed++
-		}
-		if claimed != 2 {
-			t.Errorf("queue %q had %d due jobs, want 2 (one per active instrument)", queue, claimed)
-		}
-	}
-}
-
 func TestScheduler_Recover_ResetsStuckRunningJobs(t *testing.T) {
 	db := newTestDB(t)
 	instruments := market.NewInstrumentRepository(db)

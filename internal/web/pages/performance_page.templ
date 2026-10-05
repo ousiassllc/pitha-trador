@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
-	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
@@ -22,15 +20,31 @@ type PerformanceForm struct {
 	ForwardDays    int
 }
 
+// PerformanceFold is one Walk Forward fold's Forward period and metrics.
+// ForwardEnd is the exclusive end of the day-granular period.
+type PerformanceFold struct {
+	ForwardStart time.Time
+	ForwardEnd   time.Time
+	Forward      organisms.PerformanceSummary
+}
+
+// PerformanceResult is a Walk Forward backtest's output: the out-of-sample
+// metrics Combined across every fold's Forward period, and each Fold.
+type PerformanceResult struct {
+	Combined organisms.PerformanceSummary
+	Folds    []PerformanceFold
+}
+
 // PerformanceProps is PerformancePage's input. Actuals is the realized
 // (Paper) performance of every closed position, or ActualsError when it
 // could not be read. Result is nil until a backtest has been run; Error
-// carries a validation or run failure.
+// carries a validation or run failure. internal/web/handler maps the
+// internal/service types onto these plain props.
 type PerformanceProps struct {
 	Form         PerformanceForm
-	Actuals      insight.Performance
+	Actuals      organisms.PerformanceActuals
 	ActualsError string
-	Result       *backtest.Result
+	Result       *PerformanceResult
 	Error        string
 }
 
@@ -39,7 +53,7 @@ type PerformanceProps struct {
 // recorded market_snapshots/jev_decisions history, and - once run - the
 // out-of-sample Combined Forward metrics plus each fold's Forward
 // metrics (FR-BT-1). `GET /performance`
-// (internal/web/handler.PerformanceHandler.Page) renders it.
+// (internal/web/handler/performance.PerformanceHandler.Page) renders it.
 templ PerformancePage(props PerformanceProps) {
 	@layout.Shell("Performance") {
 		<h1 class="text-2xl font-bold text-slate-900">Performance</h1>
@@ -59,12 +73,12 @@ templ PerformancePage(props PerformanceProps) {
 		}
 		if props.Result != nil {
 			@organisms.PerformanceSummaryPanel("Walk Forward (Forward periods combined)", props.Result.Combined)
-			@foldTable(props.Result.Splits)
+			@foldTable(props.Result.Folds)
 		}
 	}
 }
 
-templ foldTable(splits []backtest.SplitResult) {
+templ foldTable(folds []PerformanceFold) {
 	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="backtest-folds">
 		<h2 class="text-lg font-semibold text-slate-900">Folds</h2>
 		<table class="mt-4 w-full border-collapse text-left text-sm">
@@ -79,14 +93,14 @@ templ foldTable(splits []backtest.SplitResult) {
 				</tr>
 			</thead>
 			<tbody>
-				for _, sp := range splits {
+				for _, f := range folds {
 					<tr class="border-b border-slate-100">
-						<td class="px-3 py-2">{ sp.Split.Forward.Start.Format("2006-01-02") } – { lastDay(sp.Split.Forward) }</td>
-						<td class="px-3 py-2">{ fmt.Sprintf("%d", sp.Forward.TradeCount) }</td>
-						<td class="px-3 py-2">{ fmt.Sprintf("%.1f%%", sp.Forward.WinRate*100) }</td>
-						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", sp.Forward.Expectancy) }</td>
-						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", sp.Forward.MaxDrawdownPct) }</td>
-						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", sp.Forward.NetPnLPct) }</td>
+						<td class="px-3 py-2">{ f.ForwardStart.Format("2006-01-02") } – { lastDay(f.ForwardEnd) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%d", f.Forward.TradeCount) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%.1f%%", f.Forward.WinRate*100) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", f.Forward.Expectancy) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", f.Forward.MaxDrawdownPct) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", f.Forward.NetPnLPct) }</td>
 					</tr>
 				}
 			</tbody>
@@ -94,7 +108,8 @@ templ foldTable(splits []backtest.SplitResult) {
 	</section>
 }
 
-// lastDay renders a day-granular half-open Period's final (inclusive) day.
-func lastDay(p backtest.Period) string {
-	return p.End.Add(-time.Nanosecond).Format("2006-01-02")
+// lastDay renders the final (inclusive) day of a day-granular period whose
+// exclusive end is end.
+func lastDay(end time.Time) string {
+	return end.Add(-time.Nanosecond).Format("2006-01-02")
 }

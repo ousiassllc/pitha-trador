@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
@@ -20,18 +21,20 @@ const DefaultK = 5
 // because each one is a plain (rowid, embedding) pair, not a domain
 // entity with its own CRUD surface.
 type Service struct {
-	db        *sql.DB
-	decisions *judgement.DecisionRepository
-	snapshots *market.SnapshotRepository
+	db          *sql.DB
+	decisions   *judgement.DecisionRepository
+	calibration *judgement.CalibrationRepository
+	snapshots   *market.SnapshotRepository
 }
 
 // NewService returns a Service backed by db (which must have
 // modernc.org/sqlite/vec registered - internal/repository/sqlitedb/db.go does
 // this via a blank import before Open applies db/migrations' vec0
 // CREATE VIRTUAL TABLE statements) and used to hydrate similarity-search
-// hits into SimilarCase summaries via decisions/snapshots.
+// hits into SimilarCase summaries via decisions/snapshots, joined with
+// db's calibration_outcomes (FR-RAG-2/3).
 func NewService(db *sql.DB, decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository) *Service {
-	return &Service{db: db, decisions: decisions, snapshots: snapshots}
+	return &Service{db: db, decisions: decisions, calibration: judgement.NewCalibrationRepository(db), snapshots: snapshots}
 }
 
 // IndexSnapshot standardizes in and writes it to market_snapshot_vectors
@@ -52,7 +55,7 @@ func (s *Service) insertVector(ctx context.Context, table, idColumn string, id i
 		return err
 	}
 	if _, err := s.db.ExecContext(ctx,
-		`INSERT INTO `+table+` (`+idColumn+`, embedding) VALUES (?, ?)`, id, embedding); err != nil {
+		`INSERT INTO `+table+` (`+idColumn+`, embedding) VALUES (?, ?)`, id, embedding); err != nil { //nolint:gosec // G202: table/idColumn are package-internal constants (never user input); values are bound parameters
 		return fmt.Errorf("rag: insert %s row %d: %w", table, id, err)
 	}
 	return nil
@@ -66,7 +69,11 @@ type match struct {
 	distance float64
 }
 
-func (s *Service) search(ctx context.Context, table, idColumn string, v Vector, k int) ([]match, error) {
+// search runs a sqlite-vec KNN query on table for the k nearest rows to v.
+// filter is an optional extra vec0 constraint on the id column (e.g.
+// "decision_id IN (...)") with its bound args, applied during the KNN scan
+// so a restricted subset still yields up to k hits; "" searches every row.
+func (s *Service) search(ctx context.Context, table, idColumn, filter string, filterArgs []any, v Vector, k int) ([]match, error) {
 	if k <= 0 {
 		return nil, nil
 	}
@@ -74,10 +81,14 @@ func (s *Service) search(ctx context.Context, table, idColumn string, v Vector, 
 	if err != nil {
 		return nil, err
 	}
+	if filter != "" {
+		filter = " AND " + filter
+	}
 
+	args := append([]any{embedding}, filterArgs...)
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+idColumn+`, distance FROM `+table+` WHERE embedding MATCH ? ORDER BY distance LIMIT ?`,
-		embedding, k)
+		`SELECT `+idColumn+`, distance FROM `+table+` WHERE embedding MATCH ?`+filter+` ORDER BY distance LIMIT ?`, //nolint:gosec // G202: table/idColumn/filter are package-internal constants (never user input); values are bound parameters
+		append(args, k)...)
 	if err != nil {
 		return nil, fmt.Errorf("rag: search %s: %w", table, err)
 	}
@@ -107,15 +118,25 @@ type SimilarCase struct {
 	Timestamp time.Time `json:"timestamp"`
 	Distance  float64   `json:"distance"`
 
-	// Direction/Confidence are only ever set when Source is
+	// Direction/Confidence/Regime are only ever set when Source is
 	// "jev_decision" and the matched decision recorded a Jev Trader
-	// judgement (domain.JevDecision.Direction is nil for
-	// decision_type=scout, functional.md §4.5). future_return /
-	// was_direction_correct (FR-RAG-3) require calibration_outcomes,
-	// which does not exist yet in this codebase (functional.md §4.12 is
-	// a later sub-scope); add them here once that table lands.
+	// judgement (domain.JevDecision.Direction/Confidence/Regime are nil
+	// for decision_type=scout, functional.md §4.5).
 	Direction  *string  `json:"direction,omitempty"`
 	Confidence *float64 `json:"confidence,omitempty"`
+	Regime     *string  `json:"regime,omitempty"`
+
+	// HorizonMinutes/FutureReturn/WasDirectionCorrect are the matched
+	// decision's realized calibration_outcomes row (FR-RAG-3), set only
+	// when Outcome Labeling has labeled it. When several horizons are
+	// labeled, the shortest one is reported (the Trader question asks
+	// for the next few minutes). FutureReturn is the raw percentage
+	// price return as stored (1.0 == +1%, not a fraction);
+	// WasDirectionCorrect stays nil for a NONE decision (er.md:
+	// direction=NONEの場合NULL).
+	HorizonMinutes      *int     `json:"horizon_minutes,omitempty"`
+	FutureReturn        *float64 `json:"future_return,omitempty"`
+	WasDirectionCorrect *bool    `json:"was_direction_correct,omitempty"`
 }
 
 // Context is the few-shot context the RAG Context Builder injects into a
@@ -128,46 +149,69 @@ type Context struct {
 }
 
 // Context returns the FR-RAG-2 top-k (DefaultK if k <= 0) similar past
-// states for in: jev_decisions matches first, backfilled with
-// market_snapshots matches up to k total. jev_decisions matches are
-// prioritized because - once functional.md §4.12's calibration_outcomes
-// lands - they are the ones that can carry a resolved outcome; that is
-// this codebase's current closest match to FR-RAG-2's
-// "calibration_outcomes紐付き済みのもの優先" intent, since the table
-// itself does not exist yet.
+// states for in. jev_decisions matches come first, ranked outcome-labeled
+// (calibration_outcomes joined) before unlabeled trader decisions before
+// scout decisions, each group by ascending distance; market_snapshots
+// matches backfill up to k total. See decisionMatches for how the
+// candidate pool keeps labeled decisions from being crowded out.
+//
+// sub identifies the queried state: it is never returned as its own
+// "similar past case" (FR-RAG-4). Its same-symbol decisions at/after its
+// timestamp (e.g. the Scout decision a Trader call follows) and its
+// same-symbol snapshots within SnapshotRecencyGuard are excluded, so a
+// cold start - nothing but the current state indexed - yields an empty
+// Context.
 //
 // A search or hydration error is only ever returned for a true
 // technical failure (e.g. a closed/broken database connection); a
 // cold-start empty result is not an error (FR-RAG-4).
-func (s *Service) Context(ctx context.Context, in FeatureInput, k int) (Context, error) {
+func (s *Service) Context(ctx context.Context, in FeatureInput, sub Subject, k int) (Context, error) {
 	if k <= 0 {
 		k = DefaultK
 	}
 	v := Build(in)
 
-	decisionMatches, err := s.search(ctx, "jev_decision_vectors", "decision_id", v, k)
+	decisionMatches, err := s.decisionMatches(ctx, v, k, sub)
 	if err != nil {
-		return Context{}, fmt.Errorf("rag: search similar decisions: %w", err)
+		return Context{}, err
 	}
 
-	var cases []SimilarCase
-	for _, m := range decisionMatches {
-		d, err := s.decisions.Get(ctx, m.id)
-		if err != nil {
-			continue
+	candidates, err := s.hydrateDecisions(ctx, decisionMatches)
+	if err != nil {
+		return Context{}, err
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if ri, rj := candidates[i].rank(), candidates[j].rank(); ri != rj {
+			return ri < rj
 		}
-		cases = append(cases, SimilarCase{
+		return candidates[i].distance < candidates[j].distance
+	})
+	if len(candidates) > k {
+		candidates = candidates[:k]
+	}
+
+	cases := make([]SimilarCase, 0, k)
+	for _, c := range candidates {
+		sc := SimilarCase{
 			Source:     "jev_decision",
-			Symbol:     d.Symbol,
-			Timestamp:  d.Timestamp,
-			Distance:   m.distance,
-			Direction:  d.Direction,
-			Confidence: d.Confidence,
-		})
+			Symbol:     c.decision.Symbol,
+			Timestamp:  c.decision.Timestamp,
+			Distance:   c.distance,
+			Direction:  c.decision.Direction,
+			Confidence: c.decision.Confidence,
+			Regime:     c.decision.Regime,
+		}
+		if c.outcome != nil {
+			sc.HorizonMinutes = &c.outcome.HorizonMinutes
+			sc.FutureReturn = &c.outcome.FutureReturn
+			sc.WasDirectionCorrect = c.outcome.WasDirectionCorrect
+		}
+		cases = append(cases, sc)
 	}
 
 	if len(cases) < k {
-		snapshotMatches, err := s.search(ctx, "market_snapshot_vectors", "snapshot_id", v, k-len(cases))
+		snapshotFilter, snapshotArgs := sub.snapshotFilter()
+		snapshotMatches, err := s.search(ctx, "market_snapshot_vectors", "snapshot_id", snapshotFilter, snapshotArgs, v, k-len(cases))
 		if err != nil {
 			return Context{}, fmt.Errorf("rag: search similar snapshots: %w", err)
 		}
@@ -185,5 +229,8 @@ func (s *Service) Context(ctx context.Context, in FeatureInput, k int) (Context,
 		}
 	}
 
+	if len(cases) == 0 {
+		return Context{}, nil
+	}
 	return Context{Cases: cases}, nil
 }

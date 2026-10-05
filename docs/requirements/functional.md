@@ -59,7 +59,7 @@ sequenceDiagram
     participant EX as Execution
     participant DB as SQLite
 
-    SCH->>MD: universe snapshot取得（kabuステーションAPI）
+    SCH->>MD: universe snapshot取得（`instruments`の対象銘柄の板をkabuステーションAPIから取得）
     MD->>FE: 生データ
     FE->>FS: 特徴量
     FS->>FS: screen_score算出・上位N銘柄選定
@@ -120,7 +120,7 @@ stateDiagram-v2
 
 ### 5.1 Scanner Dashboard
 
-表示項目: Symbol, Price, 1m/5m Return（パーセント表示。Feature Engineの小数比を×100）, Volume Ratio, VWAP距離, Spread, Jev Direction, Jev Confidence, Entry Quality, Current Position。候補銘柄更新周期（15〜30秒）に応じてライブ更新する。
+表示項目: Symbol, Price, 1m/5m Return（パーセント表示。Feature Engineの小数比を×100）, Volume Ratio, VWAP距離, Spread, Jev Direction, Jev Confidence, Entry Quality, Current Position。Jev Direction/Confidence/Entry Qualityは当該銘柄の最新Jev Trader判断（`decision_type=trader`の`timestamp`・`id`最大の1行。件数窓・経過時間の上限は設けず、Scout行が続いても古くても採用し、Symbol Detailの Jev判定パネル・`GET /api/v1/symbols/{symbol}`・`/ws/symbols/{symbol}`・Exit評価と同一定義。古い判断の扱いに上限期間は定めていない）、Current Positionは保有中ポジションの符号付き数量（LONG正/SHORT負。保有なしは空）で、候補更新サイクルごとに`internal/bootstrap/candidates`が設定する（Trader判断が未生成の銘柄は空＝判定待ち）。候補銘柄更新周期（15〜30秒）に応じてライブ更新する。
 
 候補表の上に**スキャン状況パネル**を置く（issue #303。動作確認・「なぜこの銘柄が候補に出ないか」の調査用）:
 
@@ -161,7 +161,7 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 
 ## 7. MVP完了条件
 
-- 対象銘柄を自動取得できる（kabuステーションAPI経由）
+- 対象銘柄マスタ（`instruments`: `stock`と`market_index`/`sector_index`）を銘柄マスタCSVから起動時に自動投入でき（kabuステーションAPIには上場銘柄一覧の取得手段が無いため。手順は`environment/setup.md`「銘柄マスタの投入」）、投入された銘柄の価格・板をkabuステーションAPI経由で自動取得できる
 - 60秒周期でスキャンできる
 - Fast Screenerで候補を絞れる
 - Jev Scout / Traderを自動実行できる
@@ -210,3 +210,23 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.18 | 2026-10-03 | §2の処理フロー図で、Fast Screener候補数を「50〜200」固定からFR-FS-2の上位N件（既定 top_n=20、`config/strategy.yaml`）へ訂正し、Scout通過数の固定値「10〜30」を「Nの一部」へ変更。FR-FS-2（`functional/components-pipeline.md`）へ`top_n`既定値を明記 | issue #327（仕様と同梱既定値の乖離解消。Jev APIコストを抑える側の現行既定を維持） |
 | 1.19 | 2026-10-03 | §5.1 にFR-SCAN-7（立会時間外のスキャン停止通知と次回立会開始時刻の表示）を追加 | issue #367 |
 | 1.20 | 2026-10-03 | §5.1の1m/5m Returnをパーセント表示（Feature Engineの小数比を×100）と明記。FR-FS-1（`functional/components-pipeline.md`）の`min_abs_return_5m_pct`の単位をパーセントと明記 | issue #364, #365 |
+| 1.21 | 2026-10-04 | §2処理フローと§7 MVP完了条件の「対象銘柄を自動取得（kabuステーションAPI経由）」を、銘柄マスタは起動時の銘柄マスタCSV投入・価格/板はkabuステーションAPI取得と実装に合わせて改訂 | issue #389 |
+| 1.22 | 2026-10-04 | §4.3 に候補更新サイクルからの`jev-scout`投入の銘柄別間引き（`scan.jev_scout_min_interval_seconds`・未完了ジョブの重複排除）を追記 | issue #388 |
+| 1.23 | 2026-10-05 | FR-SCHED-2（`components-platform.md`）のフルスキャン対象を「有効な`stock`銘柄」から実装どおり「有効な全銘柄（`stock`＋市場コンテキスト算出用の`market_index`/`sector_index`）」へ訂正し、PUSH購読・候補更新が`stock`のみである点を明記 | issue #422 |
+| 1.24 | 2026-10-05 | FR-SCHED-1（`components-platform.md`）の`feature-calc`をフルスキャンが投入しない互換ハンドラへ訂正、FR-ACT-1の`feature-calc`の注記訂正、FR-ACT-4に`job_update`を約0.5秒間でまとめて配信する旨を追記 | issue #391, #392, #417 |
+| 1.25 | 2026-10-05 | FR-ACT-1に直近`failed`件数の窓（過去1時間・固定）を追記。§4.3（`components-pipeline.md`）に、孤児`running`の`jev-scout`行が固定10分超でSchedulerにより`failed`へ回復され、該当銘柄が再起動まで保留され続けない旨を追記 | issue #424, #425, #427 |
+| 1.26 | 2026-10-05 | FR-SCOUT-3/FR-TRADER-1（`components-pipeline.md`）の質問セット版を`scout-v3`/`trader-v3`へ更新。FR-RAG-2/3（`components-platform.md` §4.13）の`calibration_outcomes`結合・優先採用を実装し、プロンプトが類似事例の実結果を弱い文脈として扱うよう改訂 | issue #437 |
+| 1.27 | 2026-10-05 | FR-RAG-2（`components-platform.md` §4.13）に、`calibration_outcomes`紐付き済み判断を専用の近傍検索で先に取得する旨を追記（Scout判断が最近傍プールを埋めて優先採用が効かなくなる問題の修正）。§4.12（`components-platform.md`）に、Calibration集計が`question_version`で分離せず全版を混在して集計する旨を追記 | issue #440, #441, #442 |
+| 1.28 | 2026-10-05 | FR-SELFIMPROVE-6（`components-platform.md` §4.14）に、適用前が負/ゼロの場合の判定（適用前の絶対値基準、改善・同値は非ロールバック）と、適用前後いずれかの窓にクローズ済みポジションが無い場合の判定不能（非ロールバック・日次で再評価）を追記 | issue #449 |
+| 1.29 | 2026-10-05 | §4.7 FR-RISK-1（`components-pipeline.md`）に`config/risk.yaml`の各上限の起動時検証（範囲外・欠落は項目名付きエラーで起動失敗。Liveは`live`セクション定義時のみ検証）を追記 | issue #454 |
+| 1.30 | 2026-10-05 | FR-SELFIMPROVE-5/6（`components-platform.md`）に`approved`取り残し提案の収束・通知のbest-effort化・ロールバックが後続提案の適用値を上書きしないこと、FR-POLICY-5（`components-pipeline.md`）に`trade_signals.policy_version`への適用版付加を追記 | issue #450, #451, #452, #455 |
+| 1.31 | 2026-10-05 | §4.2 FR-FS-4・§4.4 FR-SCOUT-2a・§4.6 FR-POLICY-2a（`components-pipeline.md`）に`config/strategy.yaml`の`fast_screener.*`/`jev_scout.*`/`policy.*`の起動時検証（補完せず項目名付きで全件報告し起動失敗。`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`適用後も検証）と`screener.Screen`の`top_n <= 0`防御を追記 | issue #459 |
+| 1.32 | 2026-10-05 | §4.1 FR-FE-2（`components-pipeline.md`）に、逆転板（bid > ask）は`spread_bps`/`microprice`を欠損として扱いスプレッド上限ガードを素通りさせないことを追記 | issue #465 |
+| 1.33 | 2026-10-05 | §4.7 FR-RISK-2（`components-pipeline.md`）`jev_api_down`に、復旧後の最初の呼び出しは古い失敗窓を破棄して新しい窓で評価し、窓が最小5件に達しエラー率がしきい値以上になるまで再発動しないことを追記 | issue #467, #472 |
+| 1.34 | 2026-10-05 | §4.13 FR-RAG-2/4（`components-platform.md`）に、問い合わせ対象の状態自身（同一銘柄の現在以降の判断・直近15分のスナップショット）を類似事例から除外し、コールドスタートで文脈が空になることを追記 | issue #476 |
+| 1.35 | 2026-10-05 | §4.12 FR-CAL-4（`components-platform.md`）に、水平線まで足が揃わない判断（昼休み・大引け・欠測をまたぐ）は短縮horizonでラベル付けしない（`calibration_outcomes`を作らない）ことを追記 | issue #477 |
+| 1.36 | 2026-10-05 | §4.11 FR-BT-4（`components-platform.md`）にJev判断の消費（1判断＝最大1エントリー、Exit後の再利用なし）と、保有足の無いエントリーを取引に計上しない旨を追記 | issue #475, #479 |
+| 1.37 | 2026-10-05 | §4.12 FR-CAL-4（`components-platform.md`）に、水平線まで足が揃わない判断は猶予後に恒久不能として終端マーカーを記録し再投入しないこと、pending/runningの同一ペアは重複enqueueしないことを追記 | issue #481 |
+| 1.38 | 2026-10-05 | §4.12 FR-CAL-4（`components-platform.md`）に、再試行は判断から24時間以内に限り`PendingLabels`の下限（`now-24h`）で索引範囲走査する旨を追記 | issue #484 |
+| 1.39 | 2026-10-05 | §5.1のJev Direction/Confidence/Entry QualityとCurrent Positionを、候補更新サイクルが最新Trader判断・保有ポジションから設定する旨を追記 | issue #492 |
+| 1.40 | 2026-10-05 | §5.1 Scanner表示項目の「最新Jev Trader判断」を、件数窓・経過時間の上限なしの最新1行でSymbol Detail・Exit評価と同一定義と明記 | issue #496, #497, #499 |

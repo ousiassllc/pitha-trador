@@ -52,7 +52,13 @@ func (t *errorRateTracker) record(failed bool, threshold float64) (rate float64,
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.lastCall = time.Now()
+	now := time.Now()
+	// A breach idle for breachStaleAfter counts as cleared (see isBreached):
+	// evaluate this call on a fresh window, not the stale failures.
+	if t.breached && now.Sub(t.lastCall) >= breachStaleAfter {
+		t.window, t.breached = nil, false
+	}
+	t.lastCall = now
 	t.window = append(t.window, failed)
 	if len(t.window) > t.size {
 		t.window = t.window[1:]
@@ -82,8 +88,8 @@ func (t *errorRateTracker) record(failed bool, threshold float64) (rate float64,
 // breachStaleAfter is how long a breach stays "current" without any new
 // call: once Jev API calls stop (e.g. the Kill Switch the breach raised
 // halts new Scout/Trader work), the window can no longer show recovery, so
-// a breach with no call for this long is treated as cleared and the next
-// failed call re-establishes it.
+// a breach with no call for this long is treated as cleared and record
+// restarts the window.
 const breachStaleAfter = 5 * time.Minute
 
 // isBreached reports whether the rolling error rate is currently at or

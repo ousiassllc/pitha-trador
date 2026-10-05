@@ -30,9 +30,9 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 ```text
 internal/web/
 ├── apierror/           # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
-├── handler/            # 直下: scanner.go, scanner_scan.go, performance.go, calibration.go, policy_proposals.go, swagger.go。責務別サブパッケージ: symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
+├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
-├── middleware/         # HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
+├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
 ├── atoms/              # Badge, StatusDot, Toast, Button, Input
 ├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SetupStatus
 ├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）
@@ -42,10 +42,10 @@ internal/web/
 static/
 └── src/
     ├── components/
-    │   ├── price-chart/           pitha-price-chart.ts
-    │   ├── scanner-table/         pitha-scanner-table.ts
+    │   ├── price-chart/           pitha-price-chart.ts / jst-time.ts（時間軸・クロスヘアのJST整形）
+    │   ├── scanner-table/         pitha-scanner-table.ts / scanner-types.ts（`GET /api/v1/scanner`の応答型）/ scanner-view.ts（列定義・書式・配色・バッジの表示ヘルパー）/ scanner-contract.json（SSRフォールバックとLitの表示契約。Go側`scanner_table_contract_test.go`・`handler/scanner/scanner_test.go`とTS側`scanner-contract.test.ts`が共有する唯一の契約ファイル）
     │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）
-    │   ├── activity-feed/         pitha-activity-feed.ts
+    │   ├── activity-feed/         pitha-activity-feed.ts / activity-feed-types.ts（応答型と定数）/ activity-feed-views.ts（Job Queues表・直近Kill Switchイベントの無状態テンプレート）
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
     │   ├── modal/                 pitha-modal.ts（Litではない。`molecules.Modal`の`<dialog>`開閉・フォーカス復帰・URLハッシュ自動オープン）
@@ -55,20 +55,32 @@ static/
     │       └── logger.ts / styles.ts
     ├── css/
     │   └── app.css
+    ├── csp/
+    │   └── lightweight-charts-style-hash.test.ts   # CSPの`style-src`hashとインストール版`lightweight-charts`の一致検証（`bun test`）
     ├── img/
     │   └── logo.svg               # アプリロゴ（Header表示用、go:embed対象）
-    └── dist/
+    ├── vendor/
+    │   └── htmx.min.js            # checked-in、go:embed対象（`layout/shell.templ`が`/static/vendor/htmx.min.js`で参照）
+    ├── embed.go                   # `//go:embed dist img vendor`
+    └── dist/                      # ビルド成果物
         ├── js/
-        └── css/
+        │   └── chunks/            # esbuildの共有チャンク（`splitting: true`・`chunkNames: 'chunks/[name]-[hash]'`。`runtime.md`参照）
+        ├── css/
+        └── vendor/
+            └── stoplight-elements/   # `/swagger`用（esbuild.config.mjsが`@stoplight/elements`から出力）
 ```
+
+`*-test-support.ts`（`scanner-table/`・`activity-feed/`・`kill-switch-panel/`）と`*.test.ts`はテスト専用のフェイク・フィクスチャ・テストで、本番バンドルに含まれないため上のツリーでは省略している。
 
 依存ルールは `architecture/overview.md` §3 の通り（`handler → service → repository → domain`、Templ側は `atoms/molecules/organisms/pages`）。
 
 ## 3. Templ テンプレート（Atomic Design）
 
+**依存方針（issue #380）**: Templ層（`atoms`/`molecules`/`organisms`/`pages`/`layout`）は`internal/service`をimportしない（`.golangci.yml`のdepguard `templ-no-service`で強制）。`internal/domain`の型と基盤パッケージ（`internal/config`・`internal/version`）には依存してよい。serviceの戻り値型（`backtest.Metrics`・`insight.Performance`・`execution.SymbolState`・`updater.Status`等）は、`organisms`/`pages`が定義する表示用のplain props（`PerformanceSummary`・`PerformanceActuals`・`PerformanceResult`・`UpdateBannerProps`など）へ`web/handler`が写像して渡す。service側の型変更はhandlerのコンパイルエラーで止まり、テンプレートへ波及しない。
+
 ### atoms
 
-- `Badge`（Direction: LONG/SHORT/NONE、Regime: TREND/RANGE/BREAKOUT/CHAOTIC の色分け表示）
+- `Badge`（Direction: LONG/SHORT/NONE の色分け表示。`atoms.Direction`型）
 - `EntryQualityBadge`（Entry Quality: poor/fair/good/strong/exceptional の色分け表示。Scanner Dashboardで使用、issue #239）
 - `StatusDot`（システム状態: Running=緑 / Paused=黄 / Killed=赤。organismsの`SystemStatusBadge`が`domain.SystemState`から`atoms.State`へ変換して描画する）
 - `Toast`（HTMXアクション失敗のエラー通知。`role="alert"`＋閉じるボタンを持ち、`#toast-region`へswapされる。§4「エラー表示」、issue #110/#121）
@@ -91,11 +103,11 @@ static/
 - `SystemStatusBadge`（システム状態の`StatusDot`フラグメント。`Header`内`#header-status`と`GET /system/status`が返す。`domain.SystemState`→`atoms.State`の変換を担い、atomsを`internal/domain`から切り離す）
 - `KillSwitchPanel`（`pitha-kill-switch-panel`を、現在状態に基づく`status`/`can-pause`/`can-resume`/`can-kill`と各URL属性付きで出力する。issue #106）
 - `ScannerTableFallback`（JS無効時/初回SSR描画用の候補件数＋候補銘柄テーブル＋0件時の空状態。日本語列見出し＋ツールチップ、符号付きReturnの色分け、Jev方向/エントリー品質バッジ。ハイドレーション後は同一の見た目で`pitha-scanner-table`が引き継ぐ。列定義・書式・配色・空状態文言はGo側`scannerColumns`とLit側`COLUMNS`/`scanner-view.ts`で二重管理のため、共有ゴールデン`static/src/components/scanner-table/scanner-contract.json`を`scanner_table_contract_test.go`と`scanner-contract.test.ts`の双方が検証して乖離を防ぐ。小数の丸めはJSの`toFixed`に揃え、ちょうど中間の値は0から遠い方へ丸める（Goの`%f`は偶数丸めのため`formatFloat`で補正。例: 12.5→13）。符号は正のみ`+`（0は符号なし）、確信度は四捨五入（half away from zero）、銘柄リンクは非予約文字以外をパーセントエンコード。表の上に列の意味を`<details data-testid="scanner-column-help">`（`<dl>`）で常時表示可能にし、hover専用の`title`を補う。SSRの空状態は初回描画のため`role="status"`を持たない。issue #239）
-- `ScanPanel`（Scanner Dashboardのスキャン状況パネル`#scan-panel`。最新サイクルのファネル件数（`scan-funnel-*`）・時刻/所要時間・「更新」（`scan-refresh`）・「スキャン対象を見る」（`scan-open`）、開くと検索/状態/理由フィルターとページング付きの銘柄一覧（`scan-table`、行は`data-status`/`data-reason`）。サイクル未実行は空状態`scan-empty`。東証の立会時間外は双方の状態で停止通知`scan-offhours`（次回立会開始`scan-resume-at`、JST）を表示し、「更新」は無効化しない（`ScanPanelView.OffSession`/`NextOpen`）。操作はすべて`hx-get="/scanner/scan"`で`#scan-panel`を`outerHTML`差し替えし、`/ws/scanner`・Lit描画は使わない。`requirements/functional.md` §5.1、issue #303）
+- `ScanPanel`（Scanner Dashboardのスキャン状況パネル`#scan-panel`。最新サイクルのファネル件数（`scan-funnel-*`）・時刻/所要時間・「更新」（`scan-refresh`）・「スキャン対象を見る」（`scan-open`）、開くと検索/状態/理由フィルターとページング付きの銘柄一覧（`scan-table`、行は`data-status`/`data-reason`）。サイクル未実行は空状態`scan-empty`。東証の立会時間外は双方の状態で停止通知`scan-offhours`（次回立会開始`scan-resume-at`、JST）を表示し、「更新」は無効化しない（`ScanPanelView.OffSession`/`NextOpen`）。フィルターフォームは1操作1リクエストで、検索語はEnter/「絞り込む」（`submit`）、状態・理由セレクト（`id="scan-status"`/`"scan-reason"`）は`change`で発火する（`hx-trigger="submit, change from:#scan-status, change from:#scan-reason"`。Tab移動のblurでは発火せず、差し替え後もidでフォーカスが戻る。issue #410）。適用中の理由は件数0でもセレクトに選択状態で残す（issue #408）。操作はすべて`hx-get="/scanner/scan"`で`#scan-panel`を`outerHTML`差し替えし、`/ws/scanner`・Lit描画は使わない。`requirements/functional.md` §5.1、issue #303）
 - `ConnectionList`（Settings/Setup共通の接続先一覧。接続先ごとの`SettingsCard`と、その接続先の`SecretFieldRow`を収めた`Modal`を描く。`internal/web/organisms/connection_list.templ`、issue #302）
 - `DecisionHistoryList`（Jev判断履歴の時系列リスト）
-- `PerformanceSummaryPanel`
-- `PerformanceActualsPanel`（Performance画面の「実績（Paper）」節`#performance-actuals`。クローズ済みポジションのTotal/Daily PnL・Trades・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal countを`GET /api/v1/performance`と同じ`insight.Performance`から描画する。算出不能（`null`）の指標は「—」。取得失敗時は固定文言のエラーを節内に表示する。`requirements/functional.md` §5.3、issue #360）
+- `PerformanceSummaryPanel`（`backtest.Metrics`を`web/handler`が写像した`organisms.PerformanceSummary`を描画する）
+- `PerformanceActualsPanel`（Performance画面の「実績（Paper）」節`#performance-actuals`。クローズ済みポジションのTotal/Daily PnL・Trades・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal countを`GET /api/v1/performance`と同じ`insight.Performance`を`web/handler`が写像した`organisms.PerformanceActuals`から描画する。算出不能（`null`）の指標は「—」。取得失敗時は固定文言のエラーを節内に表示する。`requirements/functional.md` §5.3、issue #360）
 - `UpdateBanner`（新バージョン検知時の全ページ共通通知バナー。`Header`内`#update-banner`が`GET /system/update-status`を`hx-trigger="load, every 60s, updateStatusChanged from:body"`で取得。安全ゲート待ち（`Blocked`）・インストーラー準備完了（`Ready`）を文言で区別し、新バージョンが無ければ描画しない、issue #76）
 - `UpdatePanel`（Settings画面の「アップデート」節。現在バージョン・最終確認結果・安全ゲート保留中はその旨と理由（ポジション保有/Kill Switch/直近発注）・失敗時は原因の種別（ネットワーク/レート制限/検証失敗など。生のエラー文言は出さない）・「今すぐアップデートを確認」ボタン（`POST /system/update-check`、`#update-panel`をinnerHTMLスワップ。確認中は`hx-disabled-elt`で無効化・`hx-sync="this:drop"`で二重送信を破棄し、`#update-check-progress`に進行表示）。`cmd/server`（アップデーター未搭載）ではアップデート機能が無い旨を表示しボタンは出さない。issue #76/#241）
 - `ErrorLogPanel`（Settings画面の「エラーログ」節`#error-log-panel`。対象期間（直近1/7/30/90日、既定7日）とレベル（ERRORのみ/WARN以上）の`<select>`と「ダウンロード」ボタンを持つ`<form method="get" action="/api/v1/logs/errors">`をSSRで描画する。ブラウザ標準のダウンロードに任せるため`hx-disable`を付けHTMXの差し替えと`lib/api.ts`は使わず、応答の`Content-Disposition: attachment`で保存される。秘密情報はマスク済み・最大10MiBである旨を注記する。`requirements/functional/components-platform.md` §4.19、issue #267）
@@ -115,11 +127,19 @@ static/
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
 
+### layout
+
+- `Shell`（HTMLドキュメントの骨格＋`organisms.Header`＋`<main>`。通常ページ用）
+- `SetupShell`（`Header`を含まない`Shell`。初回セットアップ画面`SetupPage`用。Setup Guardが`/setup`以外をリダイレクトするため`Header`のHTMXフラグメントを持たない。issue #80）
+
+> 本§3のatoms/molecules/organisms/pages/layoutの一覧が、公開コンポーネントの唯一の一覧である。`internal/web/{atoms,molecules,organisms,pages,layout}/doc.go`は一覧を持たず本節を参照するだけにする（二重管理しない。issue #384）。
+
 ### コンポーネントインターフェース規約
 
 `skill://halt/references/architecture.md` の規約（単純コンポーネントは直接パラメータ、複雑なコンポーネントは`Props`構造体＋`templ.Attributes`、バリエーションはGoのconst+カスタム型）にそのまま従う。プロジェクト固有の型例:
 
 ```go
+// internal/web/atoms/badge.templ
 type Direction string
 
 const (
@@ -127,26 +147,20 @@ const (
     DirectionShort Direction = "SHORT"
     DirectionNone  Direction = "NONE"
 )
-
-type Regime string
-
-const (
-    RegimeTrend    Regime = "TREND"
-    RegimeRange    Regime = "RANGE"
-    RegimeBreakout Regime = "BREAKOUT"
-    RegimeChaotic  Regime = "CHAOTIC"
-)
 ```
+
+Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`（`internal/domain/jevdecision.go`）の文字列定数をそのままテキスト表示する（色分けはしない）。
 
 ## 4. HTMX パターン
 
 `api/endpoints.md` §2〜4 のルーティング定義に対応する。要点のみ再掲する。
 
-- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/settings`, `/setup`）はHX-Requestヘッダで フルページ/フラグメント を分岐する
+- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/settings`, `/setup`）は常にフルページを返し、`HX-Request`では分岐しない（失敗時のみ`HX-Request`にはトーストを返す）。HTMXフラグメントの取得は`GET /scanner/scan`（スキャン状況パネル）と§4のアクションルートが担う
 - アクションルート（`/positions/:id/close`, `/system/update-check`, `/settings/:key`）は常にフラグメントを返す。Kill Switch操作（pause/resume/kill）はHTMXアクションルートを持たず、Litの`pitha-kill-switch-panel`が`/api/v1/system/*`を呼ぶ
 - **状態バッジの更新**: システム状態変更（pause/resume/kill）後は、`pitha-kill-switch-panel`が`systemStateChanged`イベントを発火し、Headerの`StatusDot`が`GET /system/status`で再取得される。OOBスワップは「副作用の反映」のみに限定する
 - **ローディング**: HTMXアクションは`hx-disabled-elt="this"`（必要に応じ`hx-indicator`）で二重送信を防ぐ（例: 「今すぐアップデートを確認」`#update-check-progress`、ポジション手動決済）。Kill Switch操作はLitの`pitha-kill-switch-panel`が`busy`状態でボタンを無効化する。スケルトンスクリーンは使わない
 - **エラー表示**: htmx 2は4xx/5xxを既定でswapしないため、`layout`が`<meta name="htmx-config">`の`responseHandling`（htmx 2標準機能。`response-targets`拡張の後継でありvendorしない）で`[45]..`を`#toast-region`へ`beforeend`でswapする。アクションハンドラは失敗時にステータスと`atoms.Toast`フラグメント（`shared.RespondActionError`）を返す。`static/src/components/htmx-errors/pitha-htmx-errors.ts`が①Toastを持たない失敗応答（空ボディ・プロキシのプレーンテキスト等）のswap抑止と`htmx:responseError`での汎用トースト、②`htmx:sendError`/`htmx:timeout`（応答なし）のトースト、③閉じるボタンと8秒での自動消去を担う。トースト表示先は全ページ共通の`#toast-region`（`layout.Shell`/`SetupShell`）で、フォーム再レンダリング（422）は現状どのルートも使わない（フィールド単位保存の400もトースト）（issue #110/#121）。`#toast-region`は`popover="manual"`で、トーストが入る（スクリプト追加・htmxの`beforeend`swapどちらも）たびに`pitha-htmx-errors.ts`が`hidePopover()`→`showPopover()`でtop layer最前面へ再表示する。`<dialog>.showModal()`のモーダル（Settings/Setupの保存・削除、アップデート確認）はtop layerに描画されz-indexでは勝てず、これが無いとモーダル内の失敗トーストが背面に隠れるため（issue #321）。ただし`#toast-region`は`<dialog>`の外にあるため、モーダル表示中は`showModal()`の背景inertで閉じるボタンの操作・テキスト選択ができない。そこで`molecules.Modal`が各ダイアログ内に`[data-toast-region]`を持ち、開いているモーダルがある間は`pitha-htmx-errors.ts`がスクリプト追加のトーストをそこへ追加し、htmxのエラーフラグメントも`htmx:beforeSwap`で`detail.target`をそのリージョンへ差し替えて表示する（閉じるボタンと8秒の自動消去が効く。issue #353）
+- **htmxの動的実行無効化**: `layout`の`<meta name="htmx-config">`は`allowEval:false`（`hx-on*`・`hx-trigger`のフィルタ式・`js:`値の評価）と`allowScriptTags:false`（swapされたHTML内`<script>`の実行）を設定する。テンプレートはこれらを使わない（`hx-on*`・`[...]`フィルタ・`js:`は禁止。`<script>`を返すHTMXフラグメントも作らない）。`selfRequestsOnly`はhtmx 2既定のtrueのまま（issue #379）
 - **アップデート通知**: `Header`内`#update-banner`は`GET /system/update-status`を`load`・60秒周期・`updateStatusChanged`イベントで取得し、`UpdateBanner`または何も描かない。Settings画面の`#update-panel`は「今すぐアップデートを確認」（`POST /system/update-check`）の応答で置き換わり、応答の`HX-Trigger: updateStatusChanged`でHeaderのバナーも即時更新される（issue #76）
 - **バージョン表示**: `Header`内`#header-version`が`internal/version.Version`（リリースビルドはタグ名、ブランチ/PRビルドは`dev`）を全ページで表示し、`/settings#update-panel`へリンクする。手動の「今すぐアップデートを確認」ボタンはHeaderに置かず、Settings画面に一本化する（確認でインストーラーが検証済みになるとアプリが自動再起動するため、全ページ常設の押下導線にしない）。リンク先の`#update-panel`は`SettingsPage`の「アップデート」`Modal`内に置き、`pitha-modal`がURLハッシュからそのモーダルを開く（`:target`のリングでパネルを強調。issue #241/#302）
 - **ロゴ表示**: `Header`内`#header-logo`が`/static/img/logo.svg`（`static/src/img/logo.svg`。`go:embed`でバイナリに同梱、`make dev`では`PITHA_STATIC_DIR`経由でディスクから配信）とアプリ名を`nav`の直前に表示し、`/scanner`へリンクする。`nav`（`aria-label="メインナビゲーション"`）と同じflexグループ内に置き、狭い幅ではグループ内で折り返す（`flex-wrap`/`min-w-0`）。バージョン・StatusDot・Kill Switchパネルの`justify-between`配置は変わらない。ロゴの「P」マークは`cmd/desktop/build/appicon.png`（Wailsデスクトップアイコン）と同じ意匠（白地の角丸＋ネイビーのセリフ体P）で揃える。`<img>`は隣接するアプリ名テキストが代替になるため`alt=""`（issue #238）
@@ -211,3 +225,21 @@ const (
 | 1.39 | 2026-10-03 | §5.1 `pitha-price-chart`のマーカー記述から`entry_quality`更新を削除し、`jev_update`の`direction`変化のみ描画・Jev判定パネルはSSRのみと明記（`components/lit.md`） | issue #362 |
 | 1.40 | 2026-10-03 | `ScanPanel`に立会時間外の停止通知（`scan-offhours`・次回立会開始`scan-resume-at`）を追記 | issue #367 |
 | 1.41 | 2026-10-03 | `pitha-kill-switch-panel`が`/ws/system`の`state_changed`でも`status-url`から再同期し`systemStateChanged`を発火すると追記（`components/lit.md` §5.4） | issue #363 |
+| 1.42 | 2026-10-04 | `pitha-scanner-table`の銘柄リンクをサーバー生成の`detail_url`に変更（Lit側でURLを組み立てない。`components/lit.md` §5.2） | issue #383 |
+| 1.43 | 2026-10-04 | §7（`runtime.md`）の静的配信の記述を`StaticFS`（`go:embed`、`PITHA_STATIC_DIR`でディスク上書き）へ訂正し、実在しない開発時のキャッシュ無効化設定と自動遷移による反映の記述を削除して手動リロードでの再取得に置き換え | issue #385 |
+| 1.44 | 2026-10-04 | §4に「htmxの動的実行無効化」を追記（`htmx-config`に`allowEval:false`/`allowScriptTags:false`） | issue #379 |
+| 1.45 | 2026-10-04 | §3に「依存方針」を追記し、Templ層（atoms〜layout）は`internal/service`をimportせずplain propsを受け取る方針に統一（`PerformanceSummaryPanel`/`PerformanceActualsPanel`/`PerformancePage`/`SymbolDetailPage`の入力型を表示用propsへ変更。`web/handler`が写像する） | issue #380 |
+| 1.46 | 2026-10-04 | §4のページルート記述を実装に合わせ、`GET /scanner`の`HX-Request`フラグメント分岐を廃止（フルページのみ）と明記 | issue #381 |
+| 1.47 | 2026-10-04 | §3に`layout`節（`Shell`/`SetupShell`）を追加し、§3を公開コンポーネントの唯一の一覧とする。`internal/web/{atoms,molecules,organisms,pages,layout}/doc.go`の実装済み一覧・例示を削除し本節への参照に置換 | issue #384 |
+| 1.48 | 2026-10-04 | §3の`handler/`構成を実装に合わせ、直下の`scanner.go`ほかを`scanner/`・`performance/`・`calibration/`・`proposals/`・`swagger/`サブパッケージへ更新 | issue #370 |
+| 1.49 | 2026-10-05 | `ScanPanel`の絞り込みフォームのトリガーを`submit`＋セレクトの`change`に限定しセレクトへ`id`付与（#410）、適用中の理由を件数0でも選択肢に残す（#408）。`pitha-price-chart`から未使用の`symbol`属性を削除し§5.1を訂正（#409）。旧`handler`パスを参照するコメントを更新（#401/#404） | issue #408, #409, #410, #401, #404 |
+| 1.50 | 2026-10-05 | §2の`middleware/`列挙に`SecurityHeaders`（`security_headers.go`、`SwaggerCSP`）を追記 | issue #413 |
+| 1.51 | 2026-10-05 | §2の`static/src`ツリーに`csp/`（`lightweight-charts-style-hash.test.ts`）・`vendor/`（`htmx.min.js`）・`embed.go`・`dist/vendor/`（`stoplight-elements`）を追記 | issue #432 |
+| 1.52 | 2026-10-05 | §2の`static/src/components`ツリーに`scanner-table/`の`scanner-types.ts`・`scanner-view.ts`・`scanner-contract.json`（Go/TS共有の表示契約）、`activity-feed/`の`activity-feed-types.ts`・`activity-feed-views.ts`、`dist/js/chunks/`（esbuildの共有チャンク）を追記し、`*-test-support.ts`はテスト専用のため省略と明記 | issue #436 |
+| 1.53 | 2026-10-05 | §6（`lit.md`）`lib/ws.ts`の再接続バックオフ復帰条件（`open`時点ではリセットせず、最初のメッセージ受信または`open`から10秒の接続維持で初期値へ戻す）を追記 | issue #466 |
+| 1.54 | 2026-10-05 | §5.1（`lit.md`）`pitha-price-chart`の時間軸・クロスヘアをJST（Asia/Tokyo）表示と明記し、§2ツリーに`jst-time.ts`を追記 | issue #478 |
+| 1.55 | 2026-10-05 | §5.3（`lit.md`）`pitha-calibration-heatmap`の空帯（`sample_count==0`）をグレー「データなし」・curve対象外、各帯`n=`表示、サンプルなし時のBrier/LogLoss/ECE非表示を追記 | issue #480 |
+| 1.56 | 2026-10-05 | §5.1（`lit.md`）`pitha-price-chart`の出来高ヒストグラムが`candles`の1分足あたり`volume`をそのまま描画する旨を追記 | issue #474 |
+| 1.57 | 2026-10-05 | §5.2/§5.3/§5.4（`lit.md`）エントリー品質列を品質順（poor<…<exceptional）でソートする旨（#493）と、`calibration-url`・`status-url`等のURL属性未設定時に`logger.error`を出し取得・購読・操作を行わない旨（#494）を追記 | issue #493, #494 |
+| 1.58 | 2026-10-05 | §7（`runtime.md`）`make dev`スニペットを`Makefile`の`dev`ターゲットと完全一致させ（見出し行のコメントと`PITHA_UNIVERSE_PATH=$(CURDIR)/config/universe.sample.csv`を追記。#389で追加後の#320回帰）、環境変数の括弧書きに銘柄マスタCSVを追記 | issue #501, #320, #389 |
+| 1.59 | 2026-10-05 | §5.1（`lit.md`）`pitha-price-chart`のスニペットを実装に合わせ、`chart`の`@state()`を外して非リアクティブ（リアクティブは`error`/`wsStatus`のみ）と明記、`wsStatus`・`disconnectedCallback`の`chart`/`wsClient`の`null`化・`override`修飾子を反映。§5.4のTempl例を`killSwitch*URL`定数に、§3の`Badge`/`Direction`/`Regime`記述を`atoms.Direction`の実体（`Regime`型・色分けは存在しない）に訂正 | issue #502 |

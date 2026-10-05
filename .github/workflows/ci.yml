@@ -9,6 +9,15 @@ on:
       - "v*"
   pull_request:
 
+# Least privilege: every job gets a read-only GITHUB_TOKEN. Only the
+# `release` job escalates (contents: write) to publish the GitHub Release.
+# Third-party actions are pinned to commit SHAs (the `# vN` comment is the
+# tag the SHA was resolved from); Dependabot's github-actions ecosystem
+# (.github/dependabot.yml) bumps them. Mutable tags could otherwise run
+# arbitrary code with the release job's write token.
+permissions:
+  contents: read
+
 # Serialise runs per ref. The build job computes the next release version
 # from the existing tags and only the release job creates that tag, so two
 # overlapping main-push runs would compute the same version and collide on
@@ -21,6 +30,7 @@ concurrency:
 
 env:
   GOLANGCI_LINT_VERSION: v2.14.0
+  GOVULNCHECK_VERSION: v1.7.0
   LINTERLY_VERSION: v0.3.3
   TEMPL_VERSION: v0.3.1020
 
@@ -28,31 +38,11 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-
-      - name: Install frontend dependencies
-        run: bun install --cwd static --frozen-lockfile
-
-      # go build/go vet (and therefore golangci-lint) now require
-      # static/src/embed.go's `//go:embed dist img vendor` target to exist
-      # (issue #59) - dist/ is `.gitignore`'d and only produced by this
-      # build step, so it must run before golangci-lint.
-      - name: Build frontend assets
-        run: bun run --cwd static build
-
-      - name: Install templ
-        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
-
-      - name: Generate templ
-        run: templ generate
+      # Frontend build + templ generate must precede golangci-lint:
+      # go build/go vet need the generated/embedded files (issue #59).
+      - uses: ./.github/actions/setup
 
       # actions/setup-go (v6+) unconditionally exports GOTOOLCHAIN=local via
       # $GITHUB_ENV, which overrides workflow/job-level `env:` for every later
@@ -68,6 +58,15 @@ jobs:
 
       - name: golangci-lint run
         run: golangci-lint run
+
+      # Reports known vulnerabilities in the Go standard library (as of the
+      # toolchain go.mod pins) and in dependencies that the code actually
+      # calls. Needs the generated templ/embed files above to type-check.
+      - name: Install govulncheck
+        run: go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
+
+      - name: govulncheck
+        run: govulncheck ./...
 
       # Enforces the line-count limits in CI as well; lefthook's
       # pre-commit alone is bypassable via --no-verify / web commits.
@@ -93,32 +92,17 @@ jobs:
     needs: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-
-      - name: Install frontend dependencies
-        run: bun install --cwd static --frozen-lockfile
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # go test needs static/src/embed.go's embedded dist/img/vendor target
-      # to exist (issue #59), same as the lint job.
-      - name: Build frontend assets
-        run: bun run --cwd static build
+      # (issue #59), which the shared setup action produces.
+      - uses: ./.github/actions/setup
 
-      - name: Install templ
-        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
-
-      - name: Generate templ
-        run: templ generate
-
+      # -race catches data races (Scheduler / Risk Engine / Execution /
+      # WebSocket are concurrent; issue #374). The race detector needs cgo,
+      # which is enabled by default on ubuntu-latest (gcc preinstalled).
       - name: go test
-        run: go test ./...
+        run: go test -race ./...
 
       - name: bun test
         run: bun --cwd static test
@@ -132,33 +116,15 @@ jobs:
       # fetch-depth: 0 (full history incl. tags) so the "Determine
       # version" step below can see every existing vX.Y.Z tag when
       # computing the next release version on a plain main push.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-
-      - name: Install frontend dependencies
-        run: bun install --cwd static --frozen-lockfile
-
-      # wails build's AssetServer.Handler (internal/router.New via
-      # cmd/desktop) embeds static/src/embed.go's dist/img/vendor at compile
-      # time (issue #59), so the frontend must be built - and this step
-      # must run - before `wails build` below.
-      - name: Build frontend assets
-        run: bun run --cwd static build
-
-      - name: Install templ
-        run: go install "github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}"
-
-      - name: Generate templ
-        run: templ generate
+      # Shared setup (Go, bun, frontend build, templ). wails build's
+      # AssetServer.Handler (internal/router.New via cmd/desktop) embeds
+      # static/src/embed.go's dist/img/vendor at compile time (issue #59),
+      # so the frontend build in this action must precede `wails build`.
+      - uses: ./.github/actions/setup
 
       - name: Install wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
@@ -217,7 +183,9 @@ jobs:
         # previous step's Determine version resolves it to "dev" on every
         # branch/PR build, so this is a no-op change from the pre-#65
         # unversioned build there.
-        run: wails build -platform windows/amd64 -nsis -installscope user -ldflags "-X github.com/ousiassllc/pitha-trador/internal/version.Version=${{ steps.version.outputs.value }}"
+        env:
+          RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
+        run: wails build -platform windows/amd64 -nsis -installscope user -ldflags "-X github.com/ousiassllc/pitha-trador/internal/version.Version=${{ steps.version.outputs.value }} -X github.com/ousiassllc/pitha-trador/internal/version.ReleasePublicKey=${RELEASE_SIGNING_PUBLIC_KEY}"
 
       - name: List build output
         working-directory: cmd/desktop
@@ -227,12 +195,37 @@ jobs:
         working-directory: cmd/desktop
         run: sha256sum build/bin/*-installer.exe > build/bin/checksums.txt
 
-      - uses: actions/upload-artifact@v7
+      # Issue #376: detached ed25519 signature of checksums.txt. The auto
+      # updater embeds RELEASE_SIGNING_PUBLIC_KEY (the "wails build" step's
+      # -ldflags) and refuses a release whose checksums.txt.sig does not
+      # verify, so a release re-uploaded by someone holding only the
+      # repository/GITHUB_TOKEN cannot re-sign its own checksums.txt. The
+      # secret is only exposed on the release triggers (no fork-PR/branch
+      # builds) and the step fails - rather than silently publishing an
+      # unsigned release the embedded key would reject - when it is missing.
+      # The signature is base64 of the raw 64-byte ed25519 signature.
+      - name: Sign checksums
+        if: vars.RELEASE_SIGNING_PUBLIC_KEY != '' && (startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && github.event_name == 'push'))
+        working-directory: cmd/desktop
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          if [[ -z "$RELEASE_SIGNING_KEY" ]]; then
+            echo "::error::RELEASE_SIGNING_KEY secret is not set but RELEASE_SIGNING_PUBLIC_KEY is"
+            exit 1
+          fi
+          key="$(mktemp)"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
+          openssl pkeyutl -sign -rawin -inkey "$key" -in build/bin/checksums.txt | base64 -w0 > build/bin/checksums.txt.sig
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pitha-trador-windows-amd64
           path: |
             cmd/desktop/build/bin/*-installer.exe
             cmd/desktop/build/bin/checksums.txt
+            cmd/desktop/build/bin/checksums.txt.sig
 
   # Publishes a GitHub Release either for a manual `git push` of a
   # `vX.Y.Z` tag, or automatically for every plain push to main (i.e.
@@ -251,16 +244,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pitha-trador-windows-amd64
           path: dist
 
-      - uses: softprops/action-gh-release@v3
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ needs.build.outputs.version }}
           files: |
             dist/*-installer.exe
             dist/checksums.txt
+            dist/checksums.txt.sig
           generate_release_notes: true
           draft: false

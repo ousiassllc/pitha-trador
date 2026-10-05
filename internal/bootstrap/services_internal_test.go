@@ -26,17 +26,12 @@ func newTestServices(t *testing.T) *Services {
 		t.Fatalf("Run: %v", err)
 	}
 	t.Cleanup(func() { _ = state.Close() })
-	// Jev calls fail after one attempt: tests here only need a Handler to run,
-	// not the real 1.5s retry backoff (issue #236).
-	jevMaxAttemptsForTest = 1
-	t.Cleanup(func() { jevMaxAttemptsForTest = 0 })
+	// Jev calls fail after one attempt (WithJevMaxAttempts below): tests here
+	// only need a Handler to run, not the real 1.5s retry backoff (issue #236).
 
 	// JevBaseURL points at a closed local port: an empty one would fall back
 	// to the production host (issue #271) and make these tests dial it.
-	svc, err := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"}, nil)
-	if err != nil {
-		t.Fatalf("BuildServices: %v", err)
-	}
+	svc := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"}, WithJevMaxAttempts(1))
 	return svc
 }
 

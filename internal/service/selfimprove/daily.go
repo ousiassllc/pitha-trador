@@ -22,8 +22,10 @@ type DirectionCalibrationSource interface {
 type DailyResult struct {
 	// RolledBack lists applied proposals FR-SELFIMPROVE-6 reverted today.
 	RolledBack []int64
-	// RetriedApplied lists earlier pending proposals (whose Opus review
-	// failed on a previous day) that today's retry approved and applied.
+	// RetriedApplied lists earlier proposals today's retry applied:
+	// pending ones (whose Opus review failed on a previous day) that were
+	// approved and applied, and approved ones (whose apply failed
+	// part-way) that were finished.
 	RetriedApplied []int64
 	// Proposal is today's new Sol proposal, nil when Sol proposed nothing
 	// (or its API was skipped). It may be status=rejected
@@ -39,32 +41,50 @@ type DailyResult struct {
 }
 
 // RunDaily is the Continuous Loop's daily post-close batch
-// (functional.md §4.14, overview.md §8): it first runs
-// FR-SELFIMPROVE-6's post-apply check on every applied proposal (reverting
-// degraded ones), retries the Opus review of any proposal an earlier Opus
-// API failure left pending, then has Sol analyze the last
+// (functional.md §4.14, overview.md §8): it first
+// finishes the apply of any proposal an earlier failed apply left
+// approved (FR-SELFIMPROVE-5), runs FR-SELFIMPROVE-6's post-apply check on
+// every applied proposal (reverting degraded ones), retries the Opus
+// review of any proposal an earlier Opus API failure left pending, then
+// has Sol analyze the last
 // shadowBacktestLookbackDays business days of Calibration data per
 // direction (FR-SELFIMPROVE-1) and, when Sol proposes a change that passes
 // FR-SELFIMPROVE-8's machine validation, runs the shadow backtest + Opus
 // review and applies an approved proposal immediately
 // (FR-SELFIMPROVE-4/5/9).
 //
-// Rollback runs first so today's analysis starts from the thresholds that
+// Finishing approved applies and the rollback check run first so today's analysis starts from the thresholds that
 // actually remain in effect. A Sol/Opus API failure skips only that stage
 // for today: it is recorded in DailyResult.SkippedStages, notified via
 // Notifier.AIStageSkipped, and is not an error. While a proposal remains
-// pending at the start of a run, that run only retries them and does not
+// pending (or approved but not yet applied) at the start of a run, that
+// run only finishes/retries them and does not
 // start a new Sol analysis, so two proposals never compete for the same
 // thresholds. A single proposal's failure is joined into the
 // returned error without stopping the rest of the batch.
 func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibrationSource) (DailyResult, error) {
 	var result DailyResult
 
+	// An approved proposal is one whose apply failed part-way
+	// (EvaluateProposal approves, then applies): finish it first so it
+	// is tracked and rolled back like any applied proposal below.
+	var errs []error
+	approved, err := g.proposals.ListByStatus(ctx, domain.PolicyProposalStatusApproved)
+	if err != nil {
+		return result, fmt.Errorf("selfimprove: list approved proposals: %w", err)
+	}
+	for _, p := range approved {
+		if err := g.ApplyApproved(ctx, p.ID); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		result.RetriedApplied = append(result.RetriedApplied, p.ID)
+	}
+
 	applied, err := g.proposals.ListByStatus(ctx, domain.PolicyProposalStatusApplied)
 	if err != nil {
 		return result, fmt.Errorf("selfimprove: list applied proposals: %w", err)
 	}
-	var errs []error
 	for _, p := range applied {
 		rolledBack, err := g.TrackAndRollback(ctx, p.ID)
 		if err != nil {
@@ -81,19 +101,20 @@ func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibratio
 		return result, errors.Join(append(errs, fmt.Errorf("selfimprove: list pending proposals: %w", err))...)
 	}
 	for _, p := range pending {
-		approved, err := g.EvaluateProposal(ctx, p.ID)
+		ok, err := g.EvaluateProposal(ctx, p.ID)
 		if err != nil {
 			errs = g.skipOrCollect(ctx, &result, errs, err)
 			continue
 		}
-		if approved {
+		if ok {
 			result.RetriedApplied = append(result.RetriedApplied, p.ID)
 		}
 	}
-	if len(pending) > 0 {
+	if len(pending) > 0 || len(approved) > 0 {
 		// Today's slot went to clearing the backlog: a fresh Sol
-		// analysis waits until nothing is pending at the start of a
-		// run, so two proposals never compete for the same thresholds.
+		// analysis waits until nothing is pending or half-applied at
+		// the start of a run, so two proposals never compete for the
+		// same thresholds.
 		return result, errors.Join(errs...)
 	}
 
@@ -102,11 +123,11 @@ func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibratio
 	if err != nil {
 		return result, errors.Join(append(errs, fmt.Errorf("selfimprove: load calibration metrics: %w", err))...)
 	}
-	proposal, ok, err := g.ProposeDaily(ctx, long, short)
+	proposal, proposed, err := g.ProposeDaily(ctx, long, short)
 	if err != nil {
 		return result, errors.Join(g.skipOrCollect(ctx, &result, errs, err)...)
 	}
-	if !ok {
+	if !proposed {
 		return result, errors.Join(errs...)
 	}
 	result.Proposal = &proposal
@@ -114,11 +135,11 @@ func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibratio
 		return result, errors.Join(errs...)
 	}
 
-	approved, err := g.EvaluateProposal(ctx, proposal.ID)
+	approvedNow, err := g.EvaluateProposal(ctx, proposal.ID)
 	if err != nil {
 		return result, errors.Join(g.skipOrCollect(ctx, &result, errs, err)...)
 	}
-	result.Applied = approved
+	result.Applied = approvedNow
 	return result, errors.Join(errs...)
 }
 

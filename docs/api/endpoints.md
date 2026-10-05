@@ -8,13 +8,17 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
   - `cmd/server`の既定待受は`127.0.0.1:48080`。`PITHA_SERVER_ADDR`でloopback以外（`:48080`・`0.0.0.0`・LAN IP等）を指定すると起動を拒否する。意図的に公開する場合のみ`PITHA_SERVER_ALLOW_NON_LOOPBACK=1`を併用する（issue #91/#99）
 - 単一ユーザー・単一デスクトップアプリのため、外部IdP連携やユーザーログイン画面は持たない
 - 起動時にWailsプロセスがランダムなローカルセッショントークンを生成し、Cookie（`HttpOnly`, `SameSite=Strict`）としてWebViewに設定する。全ての状態変更リクエスト（アクションルート・Huma APIのPOST/PUT/PATCH/DELETE）はこのセッションCookie必須とする
-  - 実装（`internal/web/middleware/session.go`）: `RequestLog`・`Recovery`・（後述の）Host検証の**後**、Setup Guardより**前**にGinエンジン全体（`/static`を除く）へ適用する。適用順は`internal/router/router_middleware.go`のとおり `RequestLog → Recovery → HostGuard（許可リスト設定時） → Session → Heartbeat（recorderがあれば） → Setup Guard（secrets storeがあれば） → SystemState`（RequestLog/RecoveryをSessionより前に置くのは、Sessionの403拒否もアクセスログに残し、panicを500として回復するため。issue #109/#122）。プロセス起動ごとにセッショントークンとCSRFトークンを別々に乱数生成し、Cookie（名前`pitha_session`）は有効なCookieを持たない安全なリクエスト（GET/HEAD/OPTIONS、WebSocketアップグレードを除く）の応答で発行する
+  - 実装（`internal/web/middleware/session.go`）: `SecurityHeaders`・`RequestLog`・`Recovery`・（ws-base設定時の）`WebSocketBase`・（後述の）Host検証の**後**、Setup Guardより**前**にGinエンジン全体（`/static`を除く）へ適用する。適用順は`internal/router/router_middleware.go`のとおり `SecurityHeaders（最外周） → RequestLog → Recovery → WebSocketBase（ws-base設定時） → HostGuard（許可リスト設定時） → Session → Heartbeat（recorderがあれば） → Setup Guard（secrets storeがあれば） → SystemState`（RequestLog/RecoveryをSessionより前に置くのは、Sessionの403拒否もアクセスログに残し、panicを500として回復するため。issue #109/#122。SecurityHeadersを最初に置くのは、Recovery・HostGuard・Sessionの拒否応答にもヘッダを付けるため。issue #378）。プロセス起動ごとにセッショントークンとCSRFトークンを別々に乱数生成し、Cookie（名前`pitha_session`）は有効なCookieを持たない安全なリクエスト（GET/HEAD/OPTIONS、WebSocketアップグレードを除く）の応答で発行する
   - POST/PUT/PATCH/DELETE等の状態変更メソッドは、有効なセッションCookieと、CSRFトークンに一致する`X-CSRF-Token`ヘッダの両方が無ければ403を返す。WebSocketアップグレード（`/ws/...`）は有効なセッションCookieが無ければ403を返す
   - **CSRF拒否の識別（issue #138）**: トークンは起動ごとに再生成されるため、アプリ再起動前に開いたままのページは旧Cookie/旧CSRFトークンを持ち続ける。Cookie無効・CSRFトークン不一致による403には`X-CSRF-Reject: stale`ヘッダを付け、`lib/api.ts`は`StaleSessionError`（Kill Switchパネル等に表示）、`pitha-htmx-errors`は同内容のトーストで「ページを再読み込みしてください」と案内する。再読み込みで新しいCookieとトークンが配布される。ページ遷移（`Accept: text/html`かつ非HTMX・非WebSocket・非`/api/v1`）でのCSRF拒否とpanicによる500は、`router.useMiddleware`が注入する`shared.RenderErrorPage`（`internal/web/handler/shared`）（`pages.ErrorPage`）でHTML本文を返し（`X-CSRF-Reject`ヘッダは維持）、HTMX・fetch・API・WebSocketは従来どおりステータスのみ／プレーンテキストとする（issue #171）
   - **`_csrf`フォームフィールド（issue #142）**: ヘッダを付けられない素のHTMLフォーム送信（JS無効・htmx読込失敗時の`SecretFieldRow`フォールバック）のため、`Content-Type: application/x-www-form-urlencoded`のボディの隠しフィールド`_csrf`も`X-CSRF-Token`ヘッダの代わりに受け付ける（ヘッダがあればヘッダを優先）。セッションCookieは引き続き必須
 - **Host/Origin検証（DNS rebinding対策、issue #136）**: `internal/web/middleware/host_guard.go`の`HostGuard`をSessionの前段に置き、Hostヘッダ（ポート・大文字小文字・末尾ドット・IPv6括弧は無視）が許可リストに無いリクエストは`/static`を含め全て403（Cookie・CSRFトークンも発行しない）。状態変更リクエストとWebSocketアップグレードは、`Origin`ヘッダがあれば同じ許可リストに含まれるホストであることも必須（`null`や外部ホストは403、Originなしの非ブラウザクライアントは通す）。許可リストは`router.WithAllowedHosts`で与える
   - `cmd/server`: `localhost`/`127.0.0.1`/`::1`。`PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ、`PITHA_SERVER_ADDR`のバインドホスト（ワイルドカード以外）と`PITHA_SERVER_ALLOWED_HOSTS`（カンマ区切り）を追加する
   - `cmd/desktop`: Wails AssetServerのHost（`wails.localhost`（Windows）・`wails`（macOS/Linuxの`wails://wails/`））
+- **セキュリティヘッダ（issue #378）**: `middleware.SecurityHeaders`が最外周ミドルウェアとして全レスポンス（SSR/HTMX/`/api/v1`/`/static`/NoRoute、Recovery・HostGuard・Sessionによる拒否レスポンスを含む）に付与する。
+  - `Content-Security-Policy`: `default-src 'self'`、`script-src 'self'`、`style-src 'self'`＋lightweight-chartsのTradingViewアトリビューション用`<style>`のsha256ハッシュ、`img-src 'self' data:`、`font-src 'self'`、`connect-src 'self'`＋別リスナのWebSocketベース（`ws://wails.localhost:<port>`、`WithWebSocketBase`で渡された場合のみ）、`object-src 'none'`、`base-uri 'self'`、`form-action 'self'`、`frame-ancestors 'none'`。`'unsafe-inline'`/`'unsafe-eval'`は使わない。そのため`htmx-config`で`includeIndicatorStyles:false`（`allowEval`/`allowScriptTags`も`false`）、Litコンポーネントはインライン`style`属性ではなくCSSOM（`el.style`）で動的スタイルを設定する
+  - `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`（`frame-ancestors`の旧WebView向け補完）、`Referrer-Policy: same-origin`（設定画面の戻り先がSame-origin RefererのPathに依存するため`no-referrer`にはしない）
+  - `/swagger`のみ、Stoplight Elementsが実行時にインラインスタイルを注入するため`middleware.SwaggerCSP`（`style-src 'unsafe-inline'`を追加。スクリプトは`'self'`のまま、`frame-ancestors 'none'`維持）でCSPを置き換える
 - HTMXフォームにはCSRFトークンをmetaタグ経由で付与し、`X-CSRF-Token`ヘッダで送信する（`components/overview.md` セキュリティ節）
   - `layout.Shell`/`SetupShell`が`<meta name="csrf-token">`を出力し、`<body hx-headers>`でHTMX全リクエストに`X-CSRF-Token`を付与する。Litコンポーネントは`lib/api.ts`が同metaから読み取って送信する。`SecretFieldRow`のフォームは上記フォールバック用に隠しフィールド`_csrf`も持つ
 - 実売買（Phase 7）へ移行しても、Kill Switch解除・発注確定操作に人手の追加認証は要求しない（完全自動運用。`requirements/non-functional.md` §4、FR-RISK-4）。実装（`internal/web/handler/system/system.go`）にも追加認証は無く、`pitha-kill-switch-panel`が確認ダイアログ（`window.confirm`）を出すのはKill操作のみで、Resume（Killedからの手動解除を含む）は確認なしで`POST /api/v1/system/resume`を呼ぶ
@@ -24,7 +28,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 
 | パターン | 例 | HX-Request分岐 | 返却 | 登録先 |
 |---------|-----|----------------|------|--------|
-| ページルート | `/scanner`, `/symbols/:symbol` | する | フルページ or フラグメント | Gin |
+| ページルート | `/scanner`, `/symbols/:symbol` | する | フルページ（`/scanner/scan`のみ`HX-Request`でフラグメント） | Gin |
 | アクションルート | `/system/update-check` 等 | しない | フラグメントのみ | Gin |
 | APIルート | `/api/v1/...` | しない | JSON | Huma |
 | WebSocket | `/ws/scanner` 等 | 該当なし | JSONメッセージ | Gin (`github.com/coder/websocket`) |
@@ -34,7 +38,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/` | `/scanner` へリダイレクト |
-| GET | `/scanner` | Scanner Dashboard。HX-Requestありなら候補テーブルフラグメントのみ返却。ページ上部にスキャン状況パネル（ファネル件数・最終サイクル時刻/所要時間・「スキャン対象を見る」「更新」）を含む（フルページのみ） |
+| GET | `/scanner` | Scanner Dashboard。常にフルページを返す（`HX-Request`による分岐はない。HTMXフラグメントは`GET /scanner/scan`のみ）。ページ上部にスキャン状況パネル（ファネル件数・最終サイクル時刻/所要時間・「スキャン対象を見る」「更新」）を含む |
 | GET | `/scanner/scan` | スキャン状況パネル（`#scan-panel`）。HX-Requestならパネルのフラグメントのみ、それ以外はパネルを開いた状態のフルページ。クエリ: `q`（銘柄コード/名称の部分一致）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード）, `page`, `page_size`（既定50・最大200）, `open=0`（ファネルのみ）。未知の値は無視する（400にしない）。最新サイクルの結果を都度1回読む（`/ws/scanner`には流さない）。東証の立会時間外は、サイクルの有無によらずパネルに停止通知`data-testid="scan-offhours"`と次回立会開始（JST）を含める（`GET /scanner`のパネルも同様。「更新」の再取得でも同じ通知が出る。立会時間中は出ない）。issue #303, #367 |
 | GET | `/symbols/:symbol` | Symbol Detail。`<pitha-price-chart>` 等のLitアイランドを埋め込んだフルページ |
 | GET | `/performance` | Performance画面。常に先頭に「実績（Paper）」節（クローズ済みポジションのTotal/Daily PnL・Win Rate・Profit Factor・Expectancy・Max Drawdown・Average Hold Time・Sharpe/Sortino参考値・Signal count。§5 `GET /api/v1/performance` と同一集計、算出不能は「—」）を表示し、取得失敗時は節内にエラーを示して500。クエリ `from`/`to`（YYYY-MM-DD、JST、`to`含む）・`training_days`/`validation_days`/`forward_days`（既定5/2/1）指定時は記録済みデータでWalk Forwardバックテスト（FR-BT-1〜3）を実行し結果を表示する。不正入力は400。上限: 各 `*_days` は最大366、`from`〜`to` は最大1830日（366×5）、Fold数は最大1000（超過は400）。実行が60秒を超えた場合は503 |
@@ -71,7 +75,7 @@ stateDiagram-v2
 
 ## 5. API ルート（Huma, `/api/v1`）
 
-全文は `docs/api/endpoints/huma-api.md`（§5、節番号・内容は分割前と同一）に分割した。
+全文は `docs/api/endpoints/huma-api.md`（§5、節番号・内容は分割前と同一。スキャナ・銘柄・シグナル・ポジション・注文・システム状態・エラーログとエンドポイント一覧表）と、そこから分割した `docs/api/endpoints/huma-api-insights.md`（`performance`・`calibration`・`policy-proposals`・`activity`）に分割した。
 
 ## 6. WebSocket
 
@@ -82,9 +86,9 @@ stateDiagram-v2
 | パス | 用途 | 送信メッセージ例 |
 |------|------|-----------------|
 | `/ws/scanner` | Scanner Dashboardのライブ更新（`pitha-scanner-table`） | `{"type":"scanner_update","items":[...],"as_of":"2026-09-26T10:15:00+09:00"}`（`as_of`は`GET /api/v1/scanner`と同じスキャン時刻・RFC 3339） |
-| `/ws/symbols/{symbol}` | Symbol Detailのチャートのライブ更新（`pitha-price-chart`）。Jev判定パネルはSSRのみで`jev_update`では更新されず、ページ再読み込みで更新される | `{"type":"tick","price":2831.5,...}` / `{"type":"jev_update","direction":"LONG","confidence":0.82}`。`jev_update`は`direction`と`confidence`のみを持ち（`entry_quality`は含まない）、`pitha-price-chart`は`direction`が変化したときだけ方向マーカーを描画する。`tick`は最新価格が存在する（`price > 0`）間のみ送信し、`pitha-price-chart`は1分足に集約して描画する（issue #183） |
+| `/ws/symbols/{symbol}` | Symbol Detailのチャートのライブ更新（`pitha-price-chart`）。Jev判定パネルはSSRのみで`jev_update`では更新されず、ページ再読み込みで更新される | `{"type":"tick","price":2831.5,...}` / `{"type":"jev_update","direction":"LONG","confidence":0.82}`。`jev_update`は最新のJev Trader判断（`GET /api/v1/symbols/{symbol}`の`jev`・Scannerと同じ、件数窓・経過時間の上限なし。毎tickの読み出しは`State`が取る最新Trader/Scout各1行のみ）の`direction`と`confidence`のみを持ち（`entry_quality`は含まない）、`pitha-price-chart`は`direction`が変化したときだけ方向マーカーを描画する。`tick`は最新価格が存在する（`price > 0`）間のみ送信し、`pitha-price-chart`は1分足に集約して描画する（issue #183） |
 | `/ws/system` | Kill Switch発動等のシステムイベント通知（ヘッダーバッジ用、OOBの代替としてLit非経由でも利用可） | `{"type":"kill_switch","reason":"daily_loss_limit"}`。`reason`は未解決の`kill_switch_events.reason`で、`daily_loss_limit`/`consecutive_losses`/`market_data_down`/`jev_api_down`/`broker_api_error`/`unexpected_position`/`fill_discrepancy`/`db_write_failure`/`operator_heartbeat_timeout`/`operator_manual`（手動Killは`operator_manual`）のいずれか。`kill_switch_events`行の記録に失敗しフラグのみ立った場合のフォールバックは`manual`。Killed以外への遷移（Scheduler `AutoResume`による自動解除、別ウィンドウのResume/Pause）では`{"type":"state_changed","state":"running"}`（`state`は`running`/`paused`）を1回push（Killedへの遷移は`kill_switch`のみで`state_changed`は送らない）。接続時点の状態は送らず、Killedで接続した場合のみ`kill_switch`を送る。受信側は`state`を信用せず`GET /api/v1/system/status`で再同期する |
-| `/ws/activity` | System Activity Logのライブ更新（`pitha-activity-feed`） | `{"type":"job_update","queue":"jev-scout","pending":2,"running":1,"failed_recent":0}` / `{"type":"activity_event","event":{"type":"jev_scout","timestamp":"...","symbol":"7203"}}`。接続直後の送信はなく、初期状態は`GET /api/v1/activity`から取得する |
+| `/ws/activity` | System Activity Logのライブ更新（`pitha-activity-feed`）。`job_update`は約0.5秒間の状態遷移をまとめ、変化のあったキューについて1回だけ送る | `{"type":"job_update","queue":"jev-scout","pending":2,"running":1,"failed_recent":0}` / `{"type":"activity_event","event":{"type":"jev_scout","timestamp":"...","symbol":"7203"}}`。接続直後の送信はなく、初期状態は`GET /api/v1/activity`から取得する |
 
 WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（自動再接続、指数バックオフ）を必ず経由する。
 
@@ -93,7 +97,7 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 - Huma APIのバリデーションエラーはRFC 7807 Problem Details形式で自動生成される（`components/overview.md` Huma APIパターン参照）
 - 5xx応答は固定メッセージのみを返し、原因エラーは`errors[]`に含めずslogへ記録する（`internal/web/apierror`の`huma.NewError`上書き、issue #215）。4xxのバリデーションメッセージは`errors[]`にそのまま出力し、`ErrInstrumentUnknown`の404は`unknown symbol`固定
 - ビジネスエラー（例: Risk Engine拒否によりKill Switch解除不可）はカスタムエラーも同じProblem Details形式に統一する
-- アクションルート（HTMX）の失敗（4xx/5xx）は該当ステータスと`atoms.Toast`フラグメントを返し、クライアントが`#toast-region`へ表示する（`components/overview.md` §4「エラー表示」）。SSRページルート（`/scanner`・`/symbols/:symbol`・`/activity`）の失敗は、フルページ遷移には`pages.ErrorPage`（ステータス＋固定メッセージ。`err.Error()`は画面に出さずslogへ）、HTMXには同じトーストフラグメントを返す。`/symbols/:symbol`は`ErrInstrumentUnknown`のみ404、他は500（issue #143）。`POST`/`DELETE /settings/:key`の成功応答は、HTMXリクエスト（`HX-Request: true`）には行フラグメント、それ以外（JS無効のフォーム送信）には送信元画面（`/setup`または`/settings`）への303リダイレクトを返す。失敗応答（400/500）はHTMXリクエストにはトースト、それ以外には`pages.ErrorPage`（完全なHTML）を返す（issue #184）
+- アクションルート（HTMX）の失敗（4xx/5xx）は該当ステータスと`atoms.Toast`フラグメントを返し、クライアントが`#toast-region`へ表示する（`components/overview.md` §4「エラー表示」）。SSRページルート（`/scanner`・`/symbols/:symbol`・`/activity`）の失敗は、フルページ遷移には`pages.ErrorPage`（ステータス＋固定メッセージ。`err.Error()`は画面に出さずslogへ）、HTMXには同じトーストフラグメントを返す。`/symbols/:symbol`は銘柄形式（`^[0-9A-Za-z]+$`・1〜16文字、JSON APIの`SymbolPathInput`と同じ）に反する値と`ErrInstrumentUnknown`のみ404、他は500（issue #143/#382）。`pitha-price-chart`へ渡す`candles-url`/`ws-url`は`organisms.EscapeSymbolSegment`（`SymbolHref`と同じ規則）で銘柄をパスエスケープして組み立てる。`POST`/`DELETE /settings/:key`の成功応答は、HTMXリクエスト（`HX-Request: true`）には行フラグメント、それ以外（JS無効のフォーム送信）には送信元画面（`/setup`または`/settings`）への303リダイレクトを返す。失敗応答（400/500）はHTMXリクエストにはトースト、それ以外には`pages.ErrorPage`（完全なHTML）を返す（issue #184）
 
 ## 改訂履歴
 
@@ -134,3 +138,18 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.32 | 2026-10-03 | §6 `/ws/symbols/{symbol}`の用途から「Jev判定パネル」のライブ更新を削除（パネルはSSRのみ）し、`jev_update`が`direction`/`confidence`のみで`pitha-price-chart`は方向変化のマーカーだけ描画すると明記 | issue #362 |
 | 1.33 | 2026-10-03 | §3 `GET /scanner/scan`・`GET /scanner` のスキャン状況パネルに立会時間外の停止通知を追記 | issue #367 |
 | 1.34 | 2026-10-03 | §6 `/ws/system`にKilled以外への遷移を通知する`state_changed`を追記。`GET /api/v1/scanner`と`/ws/scanner`の`return_1m`/`return_5m`をパーセント単位と明記（`endpoints/huma-api.md`） | issue #363, #365 |
+| 1.35 | 2026-10-04 | `GET /api/v1/scanner`と`/ws/scanner`の各itemに銘柄詳細リンク`detail_url`を追加（`endpoints/huma-api.md`） | issue #383 |
+| 1.36 | 2026-10-04 | §3 `GET /scanner`から呼び出し元のない`HX-Request`時の候補テーブルフラグメント返却を削除し、常にフルページを返すと明記 | issue #381 |
+| 1.37 | 2026-10-04 | §3 `GET /symbols/:symbol`が銘柄形式をJSON APIと同じ規則で先に検証し不正値は404とすること、`pitha-price-chart`へ渡すURLを`SymbolHref`と同じ規則でエスケープすることを明記 | issue #382 |
+| 1.38 | 2026-10-04 | §1にセキュリティヘッダ（CSP/nosniff/X-Frame-Options/Referrer-Policy、`/swagger`の緩和CSP）を追記 | issue #378 |
+| 1.39 | 2026-10-05 | §1のミドルウェア適用順に最外周の`SecurityHeaders`と`WebSocketBase`（ws-base設定時）を追記し、`router_middleware.go`の`engine.Use`順と一致させた | issue #413 |
+| 1.40 | 2026-10-05 | §5の`performance`/`calibration`/`policy-proposals`/`activity`の各節を`api/endpoints/huma-api-insights.md`へ分割（`huma-api.md`が300行/ファイル制限を超過したため）。節番号・内容は変更なし | issue #403 |
+| 1.41 | 2026-10-05 | §`/ws/activity`の`job_update`が約0.5秒間の状態遷移をまとめ、変化のあったキューについて1回だけ送ることを追記 | issue #392 |
+| 1.42 | 2026-10-05 | `GET /api/v1/activity`（`api/endpoints/huma-api-insights.md`）に`failed_recent`の集計窓（`as_of`から過去1時間・固定）を追記 | issue #427 |
+| 1.43 | 2026-10-05 | `GET /api/v1/calibration`（`api/endpoints/huma-api-insights.md`）が`question_version`で分離せず全版のTrader判断を混在して集計することを明記 | issue #440, #443, #448 |
+| 1.44 | 2026-10-05 | `GET /api/v1/symbols/{symbol}`（`api/endpoints/huma-api.md`）の`risk.allowed_position_pct`の説明を、`max_position_per_symbol_pct`ではなくサイジング結果（`initial_capital`比。発注不可なら0。`max_position_per_symbol_pct`は未配線時の静的フォールバック）へ訂正（FR-ENTRY-3・実装と一致） | issue #456 |
+| 1.45 | 2026-10-05 | `GET /api/v1/policy-proposals`（`api/endpoints/huma-api-insights.md`）の各itemに`applied_at`/`rolled_back_at`/`rolled_back_reason`（未発生は`null`）を追加 | issue #457 |
+| 1.46 | 2026-10-05 | `GET /api/v1/symbols/{symbol}/candles`（`api/endpoints/huma-api.md`）の`volume`を1分足あたり出来高（累積の差分）と明記 | issue #474 |
+| 1.47 | 2026-10-05 | `GET /api/v1/symbols/{symbol}`の`vwap`（最新スナップショット）と`jev`6項目（最新Jev Trader判断、無ければ`null`）の出所を明記し、`/ws/symbols/{symbol}`の`jev_update`も同じTrader判断由来と明記 | issue #491 |
+| 1.48 | 2026-10-05 | `GET /api/v1/scanner`（`api/endpoints/huma-api.md`）の`jev_direction`/`jev_confidence`/`entry_quality`（最新Trader判断、無ければ`null`）と`current_position`（符号付き保有数量、無保有は`null`）の出所を明記 | issue #492 |
+| 1.49 | 2026-10-05 | 最新Jev Trader判断を「件数窓・経過時間の上限なしの最新1行」としてScanner（`GET /api/v1/scanner`）・`GET /api/v1/symbols/{symbol}`の`jev`・`/ws/symbols/{symbol}`の`jev_update`で統一（直近50件窓によるnull化を解消） | issue #496, #497, #499 |

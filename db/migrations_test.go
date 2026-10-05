@@ -133,6 +133,9 @@ func TestMigration000018_DeletesOnlyTheUpdateGitHubTokenSecret(t *testing.T) {
 		}
 		keys = append(keys, k)
 	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows: %v", err)
+	}
 	if len(keys) != 1 || keys[0] != "JEV_API_KEY" {
 		t.Fatalf("secrets after migration 18 = %v, want only JEV_API_KEY", keys)
 	}

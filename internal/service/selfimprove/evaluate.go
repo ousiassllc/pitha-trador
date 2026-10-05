@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -90,30 +91,54 @@ func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool
 	if err := g.proposals.UpdateReview(ctx, proposalID, domain.PolicyProposalStatusApproved, "opus", reviewJSON); err != nil {
 		return false, fmt.Errorf("selfimprove: record approval for proposal %d: %w", proposalID, err)
 	}
-	if _, err := g.apply(ctx, proposalID, changes, now); err != nil {
+	if err := g.apply(ctx, proposalID, changes, now); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
+// ApplyApproved finishes the apply of a proposal EvaluateProposal approved
+// but could not apply (a runtime_settings write or the status update
+// failed, leaving status=approved, FR-SELFIMPROVE-5) so it converges to
+// applied and enters FR-SELFIMPROVE-6's tracking. Every Set is an upsert,
+// so re-running a partly-done apply is safe. RunDaily calls it for every
+// approved proposal before anything else.
+func (g *Governor) ApplyApproved(ctx context.Context, proposalID int64) error {
+	proposal, err := g.proposals.Get(ctx, proposalID)
+	if err != nil {
+		return fmt.Errorf("selfimprove: get proposal %d: %w", proposalID, err)
+	}
+	if proposal.Status != domain.PolicyProposalStatusApproved {
+		return fmt.Errorf("selfimprove: proposal %d has status %q, want approved", proposalID, proposal.Status)
+	}
+	changes, err := domain.ParsePolicyChanges(proposal.ProposedChangesJSON)
+	if err != nil {
+		return fmt.Errorf("selfimprove: parse proposal %d changes: %w", proposalID, err)
+	}
+	return g.apply(ctx, proposalID, changes, g.now())
+}
+
 // apply writes every change's NewValue to runtime_settings and marks
-// proposal applied (FR-SELFIMPROVE-5).
-func (g *Governor) apply(ctx context.Context, proposalID int64, changes []domain.PolicyChange, now time.Time) (domain.PolicyProposal, error) {
+// proposal applied (FR-SELFIMPROVE-5). The Slack notification is
+// best-effort: once the proposal is applied a notifier failure is logged,
+// never reported as a failed apply (see Notifier).
+func (g *Governor) apply(ctx context.Context, proposalID int64, changes []domain.PolicyChange, now time.Time) error {
 	for _, c := range changes {
 		if err := g.settings.Set(ctx, c.Key, c.NewValue, now); err != nil {
-			return domain.PolicyProposal{}, fmt.Errorf("selfimprove: apply proposal %d: set %s: %w", proposalID, c.Key, err)
+			return fmt.Errorf("selfimprove: apply proposal %d: set %s: %w", proposalID, c.Key, err)
 		}
 	}
 	appliedPolicyVersion := fmt.Sprintf("sol-%d", proposalID)
 	if err := g.proposals.MarkApplied(ctx, proposalID, appliedPolicyVersion, now); err != nil {
-		return domain.PolicyProposal{}, fmt.Errorf("selfimprove: mark proposal %d applied: %w", proposalID, err)
+		return fmt.Errorf("selfimprove: mark proposal %d applied: %w", proposalID, err)
 	}
 	applied, err := g.proposals.Get(ctx, proposalID)
 	if err != nil {
-		return domain.PolicyProposal{}, fmt.Errorf("selfimprove: reload applied proposal %d: %w", proposalID, err)
+		slog.ErrorContext(ctx, "selfimprove: reload applied proposal for notification failed", "proposal_id", proposalID, "error", err)
+		return nil
 	}
 	if err := g.notifier.ProposalApplied(ctx, applied); err != nil {
-		return domain.PolicyProposal{}, fmt.Errorf("selfimprove: notify proposal %d applied: %w", proposalID, err)
+		slog.ErrorContext(ctx, "selfimprove: notify proposal applied failed", "proposal_id", proposalID, "error", err)
 	}
-	return applied, nil
+	return nil
 }

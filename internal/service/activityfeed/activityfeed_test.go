@@ -2,6 +2,7 @@ package activityfeed_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,14 +12,16 @@ import (
 )
 
 type fakeJobs struct {
-	counts    []jobqueue.JobQueueCount
-	jobs      []jobqueue.Job
-	gotQueue  string
-	gotLimit  int
-	listCalls int
+	counts     []jobqueue.JobQueueCount
+	jobs       []jobqueue.Job
+	gotQueue   string
+	gotLimit   int
+	listCalls  int
+	countCalls atomic.Int32
 }
 
 func (f *fakeJobs) QueueCounts(context.Context, time.Time) ([]jobqueue.JobQueueCount, error) {
+	f.countCalls.Add(1)
 	return f.counts, nil
 }
 
@@ -194,6 +197,7 @@ func TestService_Snapshot_TruncatesMergedListToLimit(t *testing.T) {
 func TestService_Observers_PublishToSubscribersOnly(t *testing.T) {
 	jobs, decisions, kill := fixtures()
 	svc := activityfeed.New(jobs, decisions, kill)
+	svc.SetQueueUpdateInterval(time.Millisecond)
 
 	// No subscriber: observers are no-ops (must not panic or block).
 	svc.ObserveKillSwitch(context.Background(), domain.KillSwitchEvent{Reason: domain.KillReasonDailyLossLimit})
@@ -210,7 +214,7 @@ func TestService_Observers_PublishToSubscribersOnly(t *testing.T) {
 		select {
 		case m := <-messages:
 			return m
-		default:
+		case <-time.After(5 * time.Second):
 			t.Fatalf("expected a queued message, channel empty")
 			return activityfeed.Message{}
 		}

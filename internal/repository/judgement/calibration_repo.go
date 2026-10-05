@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -76,6 +77,45 @@ func (r *CalibrationRepository) Get(ctx context.Context, id int64) (domain.Calib
 	return scanCalibrationOutcome(row)
 }
 
+// ListByDecisionIDs returns every calibration_outcomes row whose
+// jev_decision_id is in decisionIDs, ordered by (jev_decision_id,
+// horizon_minutes) ascending, for internal/service/rag.Service.Context to
+// join realized outcomes onto similar past decisions (functional.md
+// FR-RAG-2/3). Decisions with no outcome yet simply contribute no rows;
+// an empty decisionIDs returns nil without querying.
+func (r *CalibrationRepository) ListByDecisionIDs(ctx context.Context, decisionIDs []int64) ([]domain.CalibrationOutcome, error) {
+	if len(decisionIDs) == 0 {
+		return nil, nil
+	}
+
+	args := make([]any, len(decisionIDs))
+	for i, id := range decisionIDs {
+		args[i] = id
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(decisionIDs)), ",")
+
+	rows, err := r.db.QueryContext(ctx,
+		calibrationOutcomeSelectColumns+` FROM calibration_outcomes WHERE jev_decision_id IN (`+placeholders+`) ORDER BY jev_decision_id, horizon_minutes`, //nolint:gosec // G202: placeholders is only "?" markers; ids are bound parameters
+		args...)
+	if err != nil {
+		return nil, fmt.Errorf("repository: list calibration outcomes by decision ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []domain.CalibrationOutcome
+	for rows.Next() {
+		o, err := scanCalibrationOutcome(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: iterate calibration outcomes by decision ids: %w", err)
+	}
+	return out, nil
+}
+
 func scanCalibrationOutcome(row sqlutil.RowScanner) (domain.CalibrationOutcome, error) {
 	var (
 		o         domain.CalibrationOutcome
@@ -124,12 +164,16 @@ type OutcomeLabelJobPayload struct {
 
 // PendingLabels returns every (jev_decision_id, horizon_minutes) pair
 // among horizons whose Jev trader decision's timestamp+horizon has
-// elapsed as of asOf but has no calibration_outcomes row yet, oldest
-// decision first within each horizon.
-func (r *CalibrationRepository) PendingLabels(ctx context.Context, horizons []int, asOf time.Time) ([]PendingLabel, error) {
+// elapsed as of asOf but has no calibration_outcomes row yet and was not
+// marked permanently unlabelable (MarkUnlabelable), oldest decision first
+// within each horizon. Only decisions strictly newer than since are
+// considered: the lower bound turns the scan into a
+// jev_decisions_type_timestamp_idx range scan instead of a walk over the
+// whole (never purged) jev_decisions history every minute (issue #484).
+func (r *CalibrationRepository) PendingLabels(ctx context.Context, horizons []int, since, asOf time.Time) ([]PendingLabel, error) {
 	var out []PendingLabel
 	for _, horizon := range horizons {
-		labels, err := r.pendingLabelsForHorizon(ctx, horizon, asOf)
+		labels, err := r.pendingLabelsForHorizon(ctx, horizon, since, asOf)
 		if err != nil {
 			return nil, err
 		}
@@ -138,19 +182,27 @@ func (r *CalibrationRepository) PendingLabels(ctx context.Context, horizons []in
 	return out, nil
 }
 
-func (r *CalibrationRepository) pendingLabelsForHorizon(ctx context.Context, horizon int, asOf time.Time) ([]PendingLabel, error) {
-	cutoff := asOf.Add(-time.Duration(horizon) * time.Minute)
-	rows, err := r.db.QueryContext(ctx, `
+// pendingLabelsQuery args: since, cutoff, horizon, horizon.
+const pendingLabelsQuery = `
 SELECT d.id, d.instrument_id, d.symbol, d.timestamp
 FROM jev_decisions d
 WHERE d.decision_type = 'trader'
+  AND d.timestamp > ?
   AND d.timestamp <= ?
   AND NOT EXISTS (
     SELECT 1 FROM calibration_outcomes o
     WHERE o.jev_decision_id = d.id AND o.horizon_minutes = ?
   )
-ORDER BY d.timestamp ASC`,
-		sqlutil.FormatTime(cutoff), horizon,
+  AND NOT EXISTS (
+    SELECT 1 FROM calibration_label_skips k
+    WHERE k.jev_decision_id = d.id AND k.horizon_minutes = ?
+  )
+ORDER BY d.timestamp ASC`
+
+func (r *CalibrationRepository) pendingLabelsForHorizon(ctx context.Context, horizon int, since, asOf time.Time) ([]PendingLabel, error) {
+	cutoff := asOf.Add(-time.Duration(horizon) * time.Minute)
+	rows, err := r.db.QueryContext(ctx, pendingLabelsQuery,
+		sqlutil.FormatTime(since), sqlutil.FormatTime(cutoff), horizon, horizon,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list pending outcome labels for horizon %dm: %w", horizon, err)

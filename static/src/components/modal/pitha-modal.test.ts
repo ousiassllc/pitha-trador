@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import './pitha-modal';
-import { openFromHash } from './pitha-modal';
+import { onClose, openFromHash } from './pitha-modal';
 
 // happy-dom has no top layer, but it implements <dialog>'s open state, so
 // showModal()/close() are stubbed only where the DOM lacks them.
@@ -75,6 +75,22 @@ describe('URL hash', () => {
     expect(location.hash).toBe('');
   });
 
+  test("a hash naming the dialog's own id opens it, closing drops the hash", () => {
+    const { dialog } = render();
+    location.hash = '#modal-a';
+    openFromHash();
+    expect(dialog.open).toBe(true);
+    dialog.close();
+    expect(location.hash).toBe('');
+  });
+
+  test("closing a dialog leaves a hash that names another dialog's id alone", () => {
+    const { dialog } = render();
+    location.hash = '#modal-b';
+    dialog.close();
+    expect(location.hash).toBe('#modal-b');
+  });
+
   test('a hash that names no dialog content is left alone', () => {
     const { dialog } = render();
     location.hash = '#elsewhere';
@@ -82,4 +98,30 @@ describe('URL hash', () => {
     openFromHash();
     expect(spy).not.toHaveBeenCalled();
   });
+
+  test('an encoded hash id opens its dialog', () => {
+    document.body.innerHTML = '<dialog id="modal-a" data-modal><div id="a b"></div></dialog>';
+    const dialog = document.getElementById('modal-a') as HTMLDialogElement;
+    stubDialog(dialog);
+    location.hash = '#a%20b';
+    openFromHash();
+    expect(dialog.open).toBe(true);
+  });
+
+  for (const bad of ['#100%', '#%E0%A4%A']) {
+    test(`a malformed percent-encoded hash (${bad}) opens nothing and does not throw`, () => {
+      const { dialog } = render();
+      location.hash = bad;
+      expect(() => openFromHash()).not.toThrow();
+      expect(dialog.open).toBe(false);
+      expect((document.getElementById('modal-b') as HTMLDialogElement).open).toBe(false);
+    });
+
+    test(`closing a dialog under a malformed hash (${bad}) does not throw and keeps the hash`, () => {
+      const { dialog } = render();
+      location.hash = bad;
+      expect(() => onClose({ target: dialog } as unknown as Event)).not.toThrow();
+      expect(location.hash).toBe(bad);
+    });
+  }
 });

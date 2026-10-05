@@ -51,7 +51,7 @@ func newTestEnv(t *testing.T) testEnv {
 		Snapshots:   market.NewSnapshotRepository(conn),
 		Decisions:   judgement.NewDecisionRepository(conn),
 	}
-	runtimePolicy := selfimprove.NewRuntimePolicy(system.NewRuntimeSettingsRepository(conn), strategy.Policy)
+	runtimePolicy := selfimprove.NewRuntimePolicy(system.NewRuntimeSettingsRepository(conn), judgement.NewProposalRepository(conn), strategy.Policy)
 	env.Source = New(env.Instruments, env.Snapshots, env.Decisions, policy.ThresholdsFromStrategy(*strategy), runtimePolicy,
 		execution.ConfigFromRiskLimits(riskCfg.Paper))
 	return env
