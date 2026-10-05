@@ -122,6 +122,7 @@ symbol,name,market,sector,kind
 - 不正な行が1つでもあればファイル全体を適用せず、行番号つきのエラーをログに出してDBは変更しない。CSVが無くDBも空の場合はスキャン対象が0件になる旨をエラーログに出す。
 - CSVはUTF-8（BOM可）のみ対応。UTF-8として不正なバイト列を含むファイル（Excelの既定「CSV」保存形式であるShift_JIS/CP932等）は、`line N, byte M: file is not valid UTF-8`のエラーでファイル全体を拒否する（文字化けした`name`/`sector`を保存しない）。Shift_JISのCSVはUTF-8で保存し直す（Excelでは「CSV UTF-8（コンマ区切り）」を選ぶ）。
 - `market_index`/`sector_index`も`stock`と同じ`market-data`ジョブで60秒周期に板（REST）を取得・スナップショット保存され（FR-SCHED-2）、市場コンテキスト特徴量（FR-FE-4）の入力になる。PUSH購読と候補更新（Fast Screener→Jev Scout）の対象は`stock`のみ。
+- **CSVが無い場合の画面案内とJPXからの自動取得**（issue #508）: 有効な`stock`が1件も無い間、Scanner Dashboardのスキャン状況パネルは「まだスキャンサイクルが実行されていません」の代わりに「銘柄マスタが未投入です」の案内（`data-testid="scan-universe-empty"`。CSVの置き場所`PITHA_UNIVERSE_PATH`／`config/universe.csv`を併記）と、確認付きの取得ボタン「JPXから取得して投入する」（`scan-universe-import`）を表示する。押すまでJPXへは接続せず、起動時・定期の自動取得もしない。押下（`POST /scanner/universe/import`）で東証上場銘柄一覧（`https://www.jpx.co.jp/markets/statistics-equities/misc/tvdivq0000001vg2-att/data_j.xlsx`、16 MiB超は中止、全体で60秒）を1回だけ取得し、株式（`プライム/スタンダード/グロース`の内国・外国。`market`は`TSE Prime`/`TSE Standard`/`TSE Growth`、`sector`は33業種区分、`-`は未設定）だけをCSVと同じ検証・同じupsert（1トランザクション）で投入する。ETF・ETN／REIT等／PRO Market／出資証券は対象外で、指数（`market_index`/`sector_index`）は一覧に無いためCSVで追加する。未知の区分・不正な`symbol`・重複コード・1,000件未満・列の欠落は全体を拒否し、ネットワーク失敗やHTTPエラーと合わせてDBを変更せず原因をパネルに表示してCSV投入へ誘導する。成功すると再起動なしで次のスキャンサイクルから対象になる（PUSH購読の登録は次回の（再）接続時で、それまではREST取得）。有効な`stock`が既にあるときは取得を提供せず、`POST`は409（CSVで投入済みのマスタは上書きしない）。JPXのデータの権利はJPXに帰属し、取得・利用は[JPXの利用上の注意](https://www.jpx.co.jp/term-of-use/)（高頻度・高負荷な自動取得の自粛を含む）に従って運用者が責任を負う（パネルにも同旨とリンクを表示する）。
 
 ### Makefileターゲット
 
@@ -288,3 +289,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.36 | 2026-10-05 | 「銘柄マスタの投入」節に`symbol`の文字種（英数字のみ。違反行は全体拒否）を追記し、`market_index`/`sector_index`も`market-data`ジョブで板取得される旨（PUSH購読・候補更新は`stock`のみ）に訂正。CI/CD節の詳細を`environment/ci.md`へ分割（`setup.md`の行数上限超過を解消。内容は不変） | issue #418, #422, #423 |
 | 1.37 | 2026-10-05 | Lint節のdepguard記述を`.golangci.yml`の2ルール（`web-no-repository`・`templ-no-service`）に訂正（「lintで強制するのは`web` → `repository/**`のみ」を削除） | issue #431 |
 | 1.38 | 2026-10-05 | 環境変数表の`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`に、上書き後の値も起動時検証される旨を追記 | issue #459 |
+| 1.39 | 2026-10-05 | 「銘柄マスタの投入」節にCSV未投入時の画面案内とJPX東証上場銘柄一覧の確認付き自動取得（`POST /scanner/universe/import`）を追記 | issue #508 |

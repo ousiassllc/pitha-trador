@@ -51,8 +51,10 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 		calibration: calibration.NewCalibrationHandler(o.calibrationSource),
 		activity:    activity.NewActivityHandler(o.activitySource),
 	}
+	h.scanner.SetUniverseImporter(o.universeImporter)
 	engine.GET("/scanner", h.scanner.Page)
 	engine.GET("/scanner/scan", h.scanner.ScanView)
+	engine.POST("/scanner/universe/import", h.scanner.UniverseImport)
 	engine.GET("/ws/scanner", h.scanner.WebSocket)
 
 	engine.GET("/system/status", h.system.Status)
