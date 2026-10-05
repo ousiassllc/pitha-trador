@@ -36,6 +36,9 @@ const (
 	ReasonLiquidityStressedAboveThreshold       = "liquidity_stressed_above_threshold"
 	ReasonSpreadTooWide                         = "spread_too_wide"
 	ReasonThinLiquidity                         = "thin_liquidity"
+	ReasonSpecialQuote                          = "special_quote"
+	ReasonPriceLimit                            = "price_limit"
+	ReasonNotLendable                           = "not_lendable"
 	ReasonMissingData                           = "missing_data"
 	ReasonAPIError                              = "api_error"
 	ReasonNotCalibrated                         = "not_calibrated"
@@ -136,6 +139,16 @@ type Input struct {
 	// min_turnover_5m_jpy limit (FR-POLICY-3 "板が薄い"). nil means it
 	// could not be computed (insufficient history) and skips this check.
 	Turnover5mJPY *float64
+
+	// SpecialQuote and PriceLimit are the snapshot's entry-eligibility
+	// flags: a 特別気配 or a stop-high/stop-low bar cannot be filled, so
+	// either way FR-POLICY-3 returns NONE even if Fast Screener passed it
+	// on an earlier bar (issue #511). Lendable is false when the
+	// instrument is not 貸借銘柄, which blocks only a SHORT; nil (unknown)
+	// blocks nothing. The zero values restrict nothing.
+	SpecialQuote bool
+	PriceLimit   domain.PriceLimit
+	Lendable     *bool
 
 	// Calibrated is false when Calibration (functional.md §4.9) does not
 	// yet cover the decision - its confidence bucket has too few labeled

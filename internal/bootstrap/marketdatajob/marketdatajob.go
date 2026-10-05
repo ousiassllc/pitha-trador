@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -30,6 +31,12 @@ type BoardSource interface {
 	Latest(ctx context.Context, symbol string) (marketdata.Board, error)
 }
 
+// SymbolSource returns a symbol's 銘柄情報 (貸借・値幅制限) for the entry
+// eligibility flags (*symbolcache.Cache). Optional on Handler.
+type SymbolSource interface {
+	Get(ctx context.Context, symbol string) (marketdata.SymbolInfo, error)
+}
+
 // Handler is the market-data queue Handler over the dependencies it uses.
 type Handler struct {
 	Boards        BoardSource
@@ -43,6 +50,9 @@ type Handler struct {
 	// EventTrigger holds FR-SCAN-1/FR-SCAN-2's thresholds
 	// (config/strategy.yaml scan.event_trigger).
 	EventTrigger config.EventTriggerConfig
+	// Symbols supplies each stock's 貸借区分 and 値幅上限/下限 (issue #511).
+	// nil leaves the flags unknown, which restricts nothing.
+	Symbols SymbolSource
 }
 
 // marketDataJobPayload mirrors scheduler's unexported fullScanPayload
@@ -92,9 +102,11 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 
 	now := time.Now().UTC()
 	mc := featureengine.NewMarketContextLoader(h.Instruments, h.Snapshots).Load(ctx, inst, now)
+	current := readingFromBoard(board)
+	h.applySymbolInfo(ctx, &current, inst, payload.Symbol)
 	input := featureengine.Input{
 		Timestamp:      now,
-		Current:        readingFromBoard(board),
+		Current:        current,
 		History:        history,
 		MarketReturn1m: mc.MarketReturn1m,
 		MarketReturn5m: mc.MarketReturn5m,
@@ -173,6 +185,25 @@ func HandleFeatureCalc(context.Context, jobqueue.Job) error {
 	return nil
 }
 
+// applySymbolInfo fills r's 貸借区分 and stop-high/stop-low flag from the
+// stock's 銘柄情報. It is best effort: a failed lookup leaves them unknown
+// (Lendable nil, PriceLimitNone), because a missing flag must never stop
+// the bar from being persisted; the failure is logged and retried next
+// cycle (symbolcache.Cache does not cache errors). Index instruments have no
+// 貸借/値幅 and are skipped.
+func (h *Handler) applySymbolInfo(ctx context.Context, r *featureengine.Reading, inst domain.Instrument, symbol string) {
+	if h.Symbols == nil || inst.Kind != domain.InstrumentKindStock {
+		return
+	}
+	info, err := h.Symbols.Get(ctx, symbol)
+	if err != nil {
+		slog.Warn("marketdatajob: fetch symbol info failed; lendable/price-limit unknown", "symbol", symbol, "error", err)
+		return
+	}
+	r.Lendable = info.MarginSell
+	r.PriceLimit = info.PriceLimit(r.Price)
+}
+
 // readingFromBoard translates a marketdata.Board into the
 // featureengine.Reading Compute expects (doc.go: "Callers translate
 // marketdata.Board into the featureengine.Reading this package expects").
@@ -185,16 +216,17 @@ func HandleFeatureCalc(context.Context, jobqueue.Job) error {
 // likewise the depth: Buy1..10 is Reading.BidDepth, Sell1..10 AskDepth.
 func readingFromBoard(board marketdata.Board) featureengine.Reading {
 	r := featureengine.Reading{
-		Price:       board.CurrentPrice,
-		VWAP:        board.VWAP,
-		Volume:      int64(board.TradingVolume),
-		Turnover:    board.TradingValue,
-		SessionHigh: board.HighPrice,
-		SessionLow:  board.LowPrice,
-		Bid:         board.AskPrice,
-		Ask:         board.BidPrice,
-		BidQty:      board.AskQty,
-		AskQty:      board.BidQty,
+		Price:        board.CurrentPrice,
+		VWAP:         board.VWAP,
+		Volume:       int64(board.TradingVolume),
+		Turnover:     board.TradingValue,
+		SessionHigh:  board.HighPrice,
+		SessionLow:   board.LowPrice,
+		Bid:          board.AskPrice,
+		Ask:          board.BidPrice,
+		BidQty:       board.AskQty,
+		AskQty:       board.BidQty,
+		SpecialQuote: board.IsSpecialQuote(),
 	}
 	if d, ok := board.BuyDepth(); ok {
 		r.BidDepth = &d

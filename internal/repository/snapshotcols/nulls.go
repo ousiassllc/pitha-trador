@@ -29,6 +29,10 @@ func (n nullScanner[T]) Scan(src any) error {
 		var ni sql.NullInt64
 		err = ni.Scan(src)
 		*p = ni.Int64
+	case *bool:
+		var nb sql.NullBool
+		err = nb.Scan(src)
+		*p = nb.Bool
 	}
 	if err != nil {
 		return err
@@ -39,3 +43,4 @@ func (n nullScanner[T]) Scan(src any) error {
 
 func nullFloat(dest **float64) sql.Scanner { return nullScanner[float64]{dest} }
 func nullInt64(dest **int64) sql.Scanner   { return nullScanner[int64]{dest} }
+func nullBool(dest **bool) sql.Scanner     { return nullScanner[bool]{dest} }

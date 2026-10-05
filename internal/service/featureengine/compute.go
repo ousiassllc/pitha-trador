@@ -46,6 +46,13 @@ type Reading struct {
 	// no level was reported.
 	BidDepth *float64
 	AskDepth *float64
+
+	// SpecialQuote, PriceLimit and Lendable are the entry-eligibility
+	// flags persisted verbatim to market_snapshots (issue #511); see
+	// domain.Snapshot. Compute does not use them.
+	SpecialQuote bool
+	PriceLimit   domain.PriceLimit
+	Lendable     *bool
 }
 
 // HistoryLookbackBars is how many prior market_snapshots bars the live

@@ -55,7 +55,7 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 ```
 
 - `status`: `passed`=Fast Screener候補、`excluded`=閾値で落ちた／上位N件の外（`top_n_cutoff`）、`missing`=値を算出できず判定不能（欠損理由が1つでもあれば`missing`を優先）
-- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
+- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、約定不能の`special_quote`（特別気配）/`limit_up`（ストップ高）/`limit_down`（ストップ安）（`kind=threshold`、`status=excluded`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
 - `funnel.scout_*`は候補に対するJev Scoutの判定済み件数（サイクル公開後にジョブが完了するたび増える。`scout`が`null`=候補外または判定待ち、`error`=Jev呼び出し失敗）
 
 ### GET /api/v1/symbols/{symbol}

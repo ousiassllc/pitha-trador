@@ -42,6 +42,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
+	"github.com/ousiassllc/pitha-trador/internal/service/symbolcache"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 	"github.com/ousiassllc/pitha-trador/internal/version"
 )
@@ -201,5 +202,6 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig) *mar
 		Boards: s.PushFeed, Instruments: s.Instruments, Snapshots: s.Snapshots, FeatureEngine: s.FeatureEngine,
 		Execution: s.Execution, Screener: s.Screener, News: s.News, Scheduler: s.Scheduler,
 		EventTrigger: strategy.Scan.EventTrigger,
+		Symbols:      symbolcache.New(s.MarketData, defaultKabuExchange),
 	}
 }

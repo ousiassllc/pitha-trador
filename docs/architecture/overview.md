@@ -94,6 +94,7 @@ pitha-trador/
 │   │   │   ├── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
 │   │   │   └── marketcontextflow/ # テスト専用: `MarketContextLoader`の回帰テスト（行数上限のためfeatureengineから分離、#248）
 │   │   ├── pushfeed/             # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き）
+│   │   ├── symbolcache/          # kabuステーションAPI銘柄情報（貸借・値幅上下限）の1営業日キャッシュ（issue #511）
 │   │   ├── screener/             # Fast Screener・screen_score算出
 │   │   ├── jev/                  # Jevアダプタ（client.go, evaluate.go, scout.go, trader.go, schemas.go, questions*.go, prompt_version.go, systemone/=ワイヤ層, jevtest/=テスト用フェイク, clientflow/=Clientテスト）
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）

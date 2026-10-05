@@ -223,3 +223,39 @@ func TestSnapshotRepository_ListByInstrumentRange_AscendingWithinBounds(t *testi
 		}
 	}
 }
+
+// The tradability flags (migration 000026) round-trip, and an unset
+// Lendable stays NULL (unknown) rather than becoming false.
+func TestSnapshotRepository_Insert_RoundTripsTradabilityFlags(t *testing.T) {
+	conn := newTestDB(t)
+	instRepo := market.NewInstrumentRepository(conn)
+	snapRepo := market.NewSnapshotRepository(conn)
+	ctx := context.Background()
+	inst := mustCreateInstrument(t, instRepo, "6758")
+	lendable := false
+
+	for i, tc := range []struct {
+		name string
+		in   domain.Snapshot
+	}{
+		{"flagged", domain.Snapshot{SpecialQuote: true, PriceLimit: domain.PriceLimitDown, Lendable: &lendable}},
+		{"unknown", domain.Snapshot{}},
+	} {
+		tc.in.InstrumentID, tc.in.Symbol, tc.in.Price, tc.in.RawDataJSON = inst.ID, inst.Symbol, 1000, `{}`
+		tc.in.Timestamp = time.Date(2026, 9, 26, 1, 16+i, 0, 0, time.UTC)
+		inserted, err := snapRepo.Insert(ctx, tc.in)
+		if err != nil {
+			t.Fatalf("%s: Insert: %v", tc.name, err)
+		}
+		got, err := snapRepo.Get(ctx, inserted.ID)
+		if err != nil {
+			t.Fatalf("%s: Get: %v", tc.name, err)
+		}
+		if got.SpecialQuote != tc.in.SpecialQuote || got.PriceLimit != tc.in.PriceLimit {
+			t.Errorf("%s: SpecialQuote/PriceLimit = %v/%q, want %v/%q", tc.name, got.SpecialQuote, got.PriceLimit, tc.in.SpecialQuote, tc.in.PriceLimit)
+		}
+		if (got.Lendable == nil) != (tc.in.Lendable == nil) || (got.Lendable != nil && *got.Lendable != *tc.in.Lendable) {
+			t.Errorf("%s: Lendable = %v, want %v", tc.name, got.Lendable, tc.in.Lendable)
+		}
+	}
+}
