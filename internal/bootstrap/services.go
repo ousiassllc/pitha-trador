@@ -12,6 +12,7 @@ package bootstrap
 
 import (
 	"sync"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
@@ -94,6 +95,7 @@ type buildSettings struct {
 	autoUpdate     updater.Quitter
 	notifiers      []risk.Notifier
 	jevMaxAttempts int
+	executionNow   func() time.Time
 }
 
 // BuildOption customises BuildServices' optional inputs.
@@ -118,6 +120,13 @@ func WithJevMaxAttempts(n int) BuildOption {
 	return func(s *buildSettings) { s.jevMaxAttempts = n }
 }
 
+// WithExecutionClock replaces the Execution Engine's clock (default time.Now).
+// Tests pin it inside 東証立会時間 so a run during the 昼休み (11:30-12:30
+// JST) does not hit the session gate (issue #512).
+func WithExecutionClock(now func() time.Time) BuildOption {
+	return func(s *buildSettings) { s.executionNow = now }
+}
+
 // BuildServices constructs the full composition-root service graph on top
 // of state (bootstrap.Run's DB + config) and secrets (config.LoadSecrets),
 // registering every internal/service/scheduler queue Handler this build
@@ -140,7 +149,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc.wireActivity()
 	svc.buildExternalClients(secrets, alertChannels, cfg.jevMaxAttempts)
 	svc.buildJevPipeline(state.DB, state.Strategy)
-	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers)
+	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow)
 	traderHandler := svc.buildPolicyAndBacktest(state, executionConfig)
 	svc.buildGovernor(state.Strategy, secrets, alertChannels)
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
