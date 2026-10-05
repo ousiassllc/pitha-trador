@@ -107,10 +107,23 @@ export class PithaCalibrationHeatmap extends LitElement {
   private accuracySeries: ISeriesApi<'Line'> | null = null;
   private perfectSeries: ISeriesApi<'Line'> | null = null;
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    // Re-attached after a removal: firstUpdated does not run again, but the
+    // rendered container and the loaded buckets survive, so rebuild the chart
+    // disconnectedCallback tore down and redraw the curve from them.
+    if (this.hasUpdated) {
+      this.initChart();
+      this.applyBuckets(this.buckets);
+    }
+  }
+
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.chart?.remove();
     this.chart = null;
+    this.accuracySeries = null;
+    this.perfectSeries = null;
   }
 
   // firstUpdated (not connectedCallback) so this.containerRef.value is

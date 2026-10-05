@@ -20,6 +20,7 @@ import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
+import { type Bar, foldTick, toUTCTimestamp } from './bars';
 import { formatCrosshairTime, formatTickMark } from './jst-time';
 
 // Mirrors docs/api/endpoints.md §5 `GET /api/v1/symbols/{symbol}/candles`
@@ -44,6 +45,8 @@ interface CandlesAPIResponse {
 interface TickMessage {
   type: 'tick';
   price: number;
+  // RFC 3339 time of the snapshot the price comes from.
+  time: string;
 }
 
 interface JevUpdateMessage {
@@ -55,21 +58,8 @@ interface JevUpdateMessage {
 type SymbolMessage = TickMessage | JevUpdateMessage;
 
 const CHART_HEIGHT = 400;
-const BAR_SECONDS = 60;
-
-interface Bar {
-  time: UTCTimestamp;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-}
 const LONG_MARKER_COLOR = '#16a34a';
 const SHORT_MARKER_COLOR = '#dc2626';
-
-function toUTCTimestamp(iso: string): UTCTimestamp {
-  return Math.floor(new Date(iso).getTime() / 1000) as UTCTimestamp;
-}
 
 @customElement('pitha-price-chart')
 export class PithaPriceChart extends LitElement {
@@ -105,21 +95,48 @@ export class PithaPriceChart extends LitElement {
   // into it instead of stacking new bars.
   private lastBar: Bar | null = null;
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    // Re-attached after a removal: firstUpdated does not run again, but the
+    // rendered container survives, so rebuild what disconnectedCallback tore down.
+    if (this.hasUpdated) this.start();
+  }
+
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.chart?.remove();
     this.chart = null;
+    this.candleSeries = null;
+    this.vwapSeries = null;
+    this.volumeSeries = null;
+    this.lastBar = null;
+    this.markers = [];
+    this.lastDirection = null;
+    this.stopWs();
+  }
+
+  // firstUpdated (not connectedCallback) for the first start so
+  // this.containerRef.value is guaranteed populated: createChart needs a
+  // real, already-rendered DOM element to attach its canvas to.
+  protected override firstUpdated(): void {
+    this.start();
+  }
+
+  private start(): void {
+    this.initChart();
+    this.loadInitial();
+    this.subscribeWs();
+  }
+
+  private stopWs(): void {
     this.wsClient?.close();
     this.wsClient = null;
   }
 
-  // firstUpdated (not connectedCallback) so this.containerRef.value is
-  // guaranteed populated: createChart needs a real, already-rendered DOM
-  // element to attach its canvas to.
-  protected override firstUpdated(): void {
-    this.initChart();
-    this.loadInitial();
-    this.subscribeWs();
+  private resetMarkers(): void {
+    this.markers = [];
+    this.lastDirection = null;
+    this.candleSeries?.setMarkers([]);
   }
 
   private initChart(): void {
@@ -177,11 +194,12 @@ export class PithaPriceChart extends LitElement {
   }
 
   private subscribeWs(): void {
+    this.wsStatus = 'connecting';
     if (!this.wsUrl) {
       logger.error('pitha-price-chart: ws-url is not set');
       return;
     }
-    // Ticks build bars from the client clock, so bars of the minutes the
+    // Ticks build bars from snapshot times, so bars of the minutes the
     // socket was down are missing until the candles are re-fetched (#336).
     this.wsClient = new WsClient<SymbolMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
@@ -198,25 +216,12 @@ export class PithaPriceChart extends LitElement {
     });
   }
 
-  // applyTick folds a price tick into the current 1-minute bar (a new bar
-  // only when the minute changes), matching the candles endpoint's
-  // resolution. A non-positive price means the server has no snapshot yet
-  // and would drag the chart's autoscale to 0, so it is ignored.
+  // applyTick draws a price tick folded into the bar of its snapshot time
+  // (see foldTick).
   private applyTick(message: TickMessage): void {
-    if (!this.candleSeries || !(message.price > 0)) return;
-    const price = message.price;
-    // Never go back in time: series.update rejects a bar older than the last.
-    const minute = Math.floor(Date.now() / 1000 / BAR_SECONDS) * BAR_SECONDS;
-    const time = Math.max(minute, this.lastBar?.time ?? 0) as UTCTimestamp;
-    const bar: Bar =
-      this.lastBar && this.lastBar.time === time
-        ? {
-            ...this.lastBar,
-            high: Math.max(this.lastBar.high, price),
-            low: Math.min(this.lastBar.low, price),
-            close: price,
-          }
-        : { time, open: price, high: price, low: price, close: price };
+    if (!this.candleSeries) return;
+    const bar = foldTick(this.lastBar, message.price, message.time);
+    if (!bar) return;
     this.lastBar = bar;
     this.candleSeries.update(bar);
   }
@@ -255,11 +260,14 @@ export class PithaPriceChart extends LitElement {
   // recorded old value is undefined: firstUpdated has already loaded the
   // candles and opened the socket, and redoing both would double them.
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.get('candlesUrl') !== undefined && this.candleSeries) {
-      this.loadInitial();
-    }
-    if (changed.get('wsUrl') !== undefined && this.wsClient) {
-      this.wsClient.close();
+    if (!this.chart) return;
+    const candlesChanged = changed.get('candlesUrl') !== undefined;
+    const wsChanged = changed.get('wsUrl') !== undefined;
+    // Markers and the last direction belong to the previous symbol.
+    if (candlesChanged || wsChanged) this.resetMarkers();
+    if (candlesChanged) this.loadInitial();
+    if (wsChanged) {
+      this.stopWs();
       this.subscribeWs();
     }
   }

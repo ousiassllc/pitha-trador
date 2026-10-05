@@ -71,7 +71,14 @@ describe('pitha-kill-switch-panel actions', () => {
     globalThis.fetch = mock((_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === 'POST') {
         killAttempted = true;
-        return Promise.resolve(new Response('liquidation failed', { status: 500 }));
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ title: 'Internal Server Error', detail: 'liquidation failed' }),
+            {
+              status: 500,
+            },
+          ),
+        );
       }
       return Promise.resolve(
         killAttempted ? state('killed', false, true, false) : state('running', true, false, true),
@@ -96,8 +103,9 @@ describe('pitha-kill-switch-panel actions', () => {
     // Header's StatusDot is told about the resynced state, and the failed
     // action's own error stays visible.
     expect(changed).toBeGreaterThan(0);
-    expect(el.shadowRoot?.querySelector('[role="alert"]')?.textContent).toContain(
-      'POST /api/v1/system/kill failed with status 500',
-    );
+    // The operator sees the server's reason, not the internal API path (#559).
+    const alert = el.shadowRoot?.querySelector('[role="alert"]')?.textContent ?? '';
+    expect(alert).toContain('リクエストに失敗しました（HTTP 500）: liquidation failed');
+    expect(alert).not.toContain('/api/v1/system/kill');
   });
 });
