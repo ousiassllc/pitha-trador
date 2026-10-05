@@ -29,11 +29,33 @@ type App struct {
 	// runs on Wails' separate shutdown goroutine.
 	mu               sync.Mutex
 	pendingInstaller string
+
+	// initNotifications/cleanupNotifications are Wails' native notification
+	// lifecycle calls; they are fields only so tests can observe them
+	// without a Wails runtime.
+	initNotifications    func(context.Context) error
+	cleanupNotifications func(context.Context)
 }
 
 // NewApp creates a new App instance.
 func NewApp() *App {
-	return &App{}
+	return &App{
+		initNotifications:    runtime.InitializeNotifications,
+		cleanupNotifications: runtime.CleanupNotifications,
+	}
+}
+
+// setupNotifications initializes Wails' native notification service, which
+// runtime.SendNotification requires before its first use ("This must be
+// called before sending any notifications"; on Windows it sets the toast
+// AppID, icon and activation callback - issue #549). A failure is logged and
+// otherwise ignored: the app still runs, and KillSwitchTriggered /
+// KillSwitchAutoResumed then return (and the risk fan-out logs) the
+// SendNotification error.
+func (a *App) setupNotifications(ctx context.Context) {
+	if err := a.initNotifications(ctx); err != nil {
+		slog.Error("desktop: initialize native notifications failed", "error", err)
+	}
 }
 
 // startup is Wails' OnStartup hook: it saves the runtime context, then
@@ -44,6 +66,7 @@ func NewApp() *App {
 // quits rather than running with its background processing silently dead.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.setupNotifications(ctx)
 
 	runCtx, cancel := context.WithCancel(ctx)
 	a.cancel = cancel
@@ -83,11 +106,12 @@ func (a *App) QuitForUpdate(installerPath string) {
 // installer itself (build/windows/installer/project.nsi's silent-launch
 // customization) restarts the new pitha-trador.exe once installation
 // completes.
-func (a *App) shutdown(context.Context) {
+func (a *App) shutdown(ctx context.Context) {
 	if a.cancel != nil {
 		a.cancel()
 	}
 	a.services.Stop()
+	a.cleanupNotifications(ctx)
 
 	a.mu.Lock()
 	installerPath := a.pendingInstaller
