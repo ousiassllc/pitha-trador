@@ -65,6 +65,32 @@ erDiagram
         numeric realized_vol_5m
         numeric market_return_5m
         numeric sector_return_5m
+        numeric market_return_1m
+        numeric stock_vs_sector_relative_strength
+        numeric market_breadth
+        numeric return_3m
+        numeric return_30m
+        numeric high_distance_5m
+        numeric low_distance_5m
+        numeric session_high_distance
+        numeric session_low_distance
+        numeric vwap_slope
+        integer vwap_cross_direction
+        integer volume_1m
+        integer volume_5m
+        numeric volume_ratio_1m
+        numeric turnover_1m
+        numeric turnover_5m
+        numeric atr_1m
+        numeric atr_5m
+        numeric realized_vol_15m
+        numeric volatility_expansion_ratio
+        numeric bid_depth
+        numeric ask_depth
+        numeric buy_trade_ratio
+        numeric sell_trade_ratio
+        numeric trade_flow_imbalance
+        numeric microprice
         integer special_quote
         varchar price_limit
         integer lendable

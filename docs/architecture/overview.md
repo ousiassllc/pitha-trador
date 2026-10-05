@@ -25,7 +25,7 @@
 | ビルド | esbuild | Lit/TypeScriptバンドル |
 | DB | **SQLite**（`modernc.org/sqlite`、アプリ内蔵） | 全永続データ（`architecture/er.md`参照）。exeに同梱、外部サービスのインストール不要 |
 | DBアクセス | database/sql（手書きSQL、`internal/repository/**`） | ORM・SQL生成ツール（sqlc等）は使わず、SQLを直接管理 |
-| マイグレーション | golang-migrate（sqlite3ドライバ） | `db/migrations` のSQLマイグレーション管理 |
+| マイグレーション | golang-migrate（`database/sqlite`ドライバ、`modernc.org/sqlite`上） | `db/migrations` のSQLマイグレーション管理 |
 | ベクトル検索 | `modernc.org/sqlite/vec`（sqlite-vecのpure Go移植、`vec0`仮想テーブル） | RAG類似検索（§7）。pgvector相当の機能をSQLite上で実現。CGO不要でクロスコンパイル可能（`environment/setup.md` §CI/CD参照） |
 | Job Queue / Scheduler | 自前Workerプール（`jobs`テーブル + goroutine） | market-data, feature-calc, jev-scout, jev-trader, outcome-labeling, analytics の6キュー（`feature-calc`は互換用の空ジョブで、特徴量算出は`market-data`ジョブ内で完結する。Risk判定・Paper発注は`jev-trader`内で同期実行しキューを持たない）。単一プロセス前提のためRedis/River等の外部キューは不要。`architecture/er.md` の`jobs`テーブルで永続化・再起動時リカバリ |
 | 周期実行 | robfig/cron | 60秒/15-30秒/5-15秒サイクルのトリガー |
