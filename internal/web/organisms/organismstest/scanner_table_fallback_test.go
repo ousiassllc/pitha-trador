@@ -10,8 +10,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
-func ptr[T any](v T) *T { return &v }
-
 func renderScannerTableAt(t *testing.T, candidates []domain.Candidate, asOf time.Time) string {
 	t.Helper()
 	var sb strings.Builder
