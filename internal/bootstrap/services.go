@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
@@ -89,6 +90,10 @@ type Services struct {
 
 	newsEnabled bool
 	candidates  *candidates.Refresher
+	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true
+	// (rankingwatch_start.go).
+	watchlist      *rankingwatch.Watchlist
+	rankingWatcher *rankingwatch.Watcher
 }
 
 // buildSettings collects BuildServices' optional inputs; see BuildOption.

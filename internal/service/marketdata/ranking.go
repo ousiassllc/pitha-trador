@@ -1,11 +1,6 @@
 package marketdata
 
-import (
-	"context"
-	"net/http"
-	"net/url"
-	"strconv"
-)
+import "context"
 
 // RankingMeasurement is what GET /ranking (詳細ランキング) measurement keeps
 // of a response: counts and the 時刻 only. Prices, volumes and symbols of the
@@ -35,13 +30,8 @@ type rankingResponse struct {
 // RankingMeasurement. It goes through the same process-wide information-API
 // limiter as every other info call. It requires a token.
 func (c *Client) MeasureRanking(ctx context.Context, rankType int, exchange string) (RankingMeasurement, error) {
-	token, ok := c.Token()
-	if !ok {
-		return RankingMeasurement{}, ErrNoToken
-	}
-	q := url.Values{"Type": {strconv.Itoa(rankType)}, "ExchangeDivision": {exchange}}
 	var resp rankingResponse
-	if err := c.doInfo(ctx, http.MethodGet, "/ranking?"+q.Encode(), token, nil, &resp); err != nil {
+	if err := c.getRanking(ctx, rankType, exchange, &resp); err != nil {
 		return RankingMeasurement{}, err
 	}
 	m := RankingMeasurement{Count: len(resp.Ranking)}

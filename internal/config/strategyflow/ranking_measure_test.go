@@ -15,8 +15,8 @@ func TestLoadStrategyBytes_FullScanEnabled(t *testing.T) {
 		yaml string
 		want bool
 	}{
-		{"omitted means on", "", true},
-		{"explicit true", "scan:\n  full_scan_enabled: true\n", true},
+		{"omitted means off", "", false},
+		{"explicit true turns the full scan on", "scan:\n  full_scan_enabled: true\n", true},
 		{"explicit false turns the full scan off", "scan:\n  full_scan_enabled: false\n", false},
 	}
 	for _, tc := range cases {
@@ -81,8 +81,8 @@ func TestLoadStrategyBytes_RejectsInvalidRankingMeasure(t *testing.T) {
 	}
 }
 
-// The shipped strategy.yaml keeps the measurement opt-in.
-func TestDefaultStrategyYAML_RankingMeasureOffAndFullScanOn(t *testing.T) {
+// The shipped strategy.yaml keeps the measurement opt-in and the full scan off.
+func TestDefaultStrategyYAML_RankingMeasureAndFullScanOff(t *testing.T) {
 	cfg, err := internalconfig.LoadStrategyBytes(configdefaults.DefaultStrategyYAML)
 	if err != nil {
 		t.Fatalf("LoadStrategyBytes: %v", err)
@@ -90,7 +90,7 @@ func TestDefaultStrategyYAML_RankingMeasureOffAndFullScanOn(t *testing.T) {
 	if cfg.Scan.RankingMeasure.Enabled {
 		t.Error("shipped strategy.yaml enables scan.ranking_measure; it must be opt-in")
 	}
-	if !cfg.Scan.FullScanOn() {
-		t.Error("shipped strategy.yaml turns the full scan off; it must default to on")
+	if cfg.Scan.FullScanOn() {
+		t.Error("shipped strategy.yaml turns the full scan on; the ranking-based watch is the default")
 	}
 }

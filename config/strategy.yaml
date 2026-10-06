@@ -20,10 +20,12 @@ scan:
   # 下記の同梱既定値で補完し、max < min の max は min に引き上げる（0だと
   # 候補更新が待機なしで回り、フルスキャンが毎秒登録されるため）。
   # 全銘柄RESTスキャン（60秒ごとの market-data 全件投入、FR-SCHED-2）の
-  # オン/オフ。falseで全件投入を行わない（issue #652。#651の方針転換に向けた
-  # 計測中はfalse）。市場コンテキスト算出用の指数行も含め投入されなくなる。
-  # 省略時はtrue。
-  full_scan_enabled: true
+  # オン/オフ。既定はfalse（issue #651の方針転換・#652）。省略時もfalse。
+  # falseのとき、全件投入の代わりにkabu GET /ranking（毎分）で決めた
+  # PUSH登録銘柄（最大45。保有・注文中は固定枠、入れ替えは毎分最大5、
+  # 入れた銘柄は最低5分保持。FR-SCHED-9）だけを取り込む。市場コンテキスト
+  # 算出用の指数行も投入されなくなる。明示的にtrueにしたときだけ全件投入する。
+  full_scan_enabled: false
   # 対象ユニバース全体を再スキャンする周期（秒）。functional.md §4.3。
   full_scan_interval_seconds: 60
   # 候補銘柄（Fast Screener通過銘柄）を再評価する周期（秒）の範囲。

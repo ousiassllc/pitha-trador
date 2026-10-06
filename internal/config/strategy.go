@@ -21,8 +21,9 @@ type StrategyConfig struct {
 type ScanConfig struct {
 	// FullScanEnabled turns the 60秒 full REST scan (the market-data job for
 	// every active instrument, FR-SCHED-2) on or off. nil (key omitted) means
-	// on; read it via FullScanOn. Off, no full market-data ingestion is
-	// performed (issue #652).
+	// off: only an explicit true enables it; read it via FullScanOn. Off, the
+	// ranking-based watchlist (internal/bootstrap/rankingwatch, FR-SCHED-9)
+	// decides which symbols are ingested (issues #651/#652).
 	FullScanEnabled                    *bool `yaml:"full_scan_enabled"`
 	FullScanIntervalSeconds            int   `yaml:"full_scan_interval_seconds"`
 	CandidateRefreshIntervalSecondsMin int   `yaml:"candidate_refresh_interval_seconds_min"`
@@ -38,9 +39,9 @@ type ScanConfig struct {
 	RankingMeasure          RankingMeasureConfig `yaml:"ranking_measure"`
 }
 
-// FullScanOn reports whether the 60秒 full REST scan is enabled: true unless
-// scan.full_scan_enabled is explicitly false.
-func (c ScanConfig) FullScanOn() bool { return c.FullScanEnabled == nil || *c.FullScanEnabled }
+// FullScanOn reports whether the 60秒 full REST scan is enabled: false unless
+// scan.full_scan_enabled is explicitly true.
+func (c ScanConfig) FullScanOn() bool { return c.FullScanEnabled != nil && *c.FullScanEnabled }
 
 // EventTriggerConfig holds FR-SCAN-1/FR-SCAN-2's event-driven
 // re-evaluation thresholds (functional.md §4.3): a symbol whose

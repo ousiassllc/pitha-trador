@@ -171,3 +171,25 @@ func TestUnregisterAll_FreesSlotsLeftByPreviousRun(t *testing.T) {
 		t.Fatalf("GetBoard after UnregisterAll: %v", err)
 	}
 }
+
+// UnregisterSymbols frees only the given symbols and tolerates ones kabu no
+// longer holds; the ranking watch list uses it to drop symbols it rotated out.
+func TestUnregisterSymbols_FreesGivenSymbolsOnly(t *testing.T) {
+	server := newSlotServer(t, 50)
+	client := newClient(t, server)
+	ctx := context.Background()
+	watch := []marketdata.RegisterSymbol{{Symbol: "7203", Exchange: 1}, {Symbol: "6758", Exchange: 1}}
+	if _, err := client.RegisterSymbols(ctx, watch); err != nil {
+		t.Fatalf("RegisterSymbols: %v", err)
+	}
+	if err := client.UnregisterSymbols(ctx, nil); err != nil {
+		t.Fatalf("UnregisterSymbols(nil): %v", err)
+	}
+	if err := client.UnregisterSymbols(ctx, watch[:1]); err != nil {
+		t.Fatalf("UnregisterSymbols: %v", err)
+	}
+	registered, _ := server.snapshot()
+	if len(registered) != 1 || registered[0] != "6758" {
+		t.Errorf("registered = %v, want only 6758", registered)
+	}
+}

@@ -50,6 +50,7 @@ pitha-trador/
 │   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`backtestsource.Source`。#246）
 │   │   ├── heldposition/         # FR-SCHED-4 保有ポジション監視・Exit評価ループ（5〜15秒周期、最新板で再評価）
 │   │   ├── rankingmeasure/       # FR-SCHED-8 kabu `/ranking`計測ループ（`scan.ranking_measure`でオプトイン。件数・`duration_ms`・`CurrentPriceTime`・HTTP/kabuコードだけをログに出し、価格は保存・出力しない。#652）
+│   │   ├── rankingwatch/         # FR-SCHED-9 ランキング監視（既定。kabu `GET /ranking`の毎分取得で監視銘柄=PUSH登録最大45件を決め、`market-data`投入・Fast Screener対象に使う。空/失敗は候補0件で継続。`scan.full_scan_enabled: true`のときだけ無効。価格は保存・出力しない）
 │   │   ├── newstargets/          # News Ingestの対象銘柄（Fast Screener候補＋保有ポジション銘柄。全銘柄は取得しない。#531）
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
 │   │   ├── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
@@ -258,7 +259,7 @@ handler → service → repository → domain
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7）。`governorflow`はテスト専用 | `internal/service/selfimprove`（`governorflow`） |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
-| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`scan.full_scan_enabled: false`のとき`WithFullScanDisabled`（`fullscan.go`）で60秒フルスキャンのcronトリガーを登録せず`market-data`全件投入を行わない（FR-SCHED-7、#652）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`・`outcomeflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `outcomeflow`, `orphans`） |
+| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`scan.full_scan_enabled`が`true`でない（既定）とき`WithFullScanDisabled`（`fullscan.go`）で60秒フルスキャンのcronトリガーを登録せず`market-data`全件投入を行わない（FR-SCHED-7、#652）。代わりにランキング監視（`bootstrap/rankingwatch`）が`EnqueueMarketData`で監視銘柄のジョブだけを投入する（FR-SCHED-9）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`・`outcomeflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `outcomeflow`, `orphans`） |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12）。HTTP/WebSocket公開は`web/handler/activity` | `internal/service/activityfeed`・`internal/web/handler/activity` |
 | Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8）。再現範囲は簡略化されており、Exitは固定SL/TP/最大保有時間のみ・Risk Engine不適用。約定はPaper Tradingと同じ約定モデル（呼値・スプレッド・滑り2bps/板寄せ5bps・手数料0bps・昼休み・寄り引け、`fillmodel.Default`）で行う（`requirements/functional/components-platform.md` FR-BT-4） | `internal/service/backtest` |
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |

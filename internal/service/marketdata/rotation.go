@@ -82,14 +82,7 @@ func (c *Client) releaseRestSlots(ctx context.Context) error {
 		return errNoRestSlots
 	}
 
-	token, ok := c.Token()
-	if !ok {
-		return ErrNoToken
-	}
-	err := c.doInfo(ctx, http.MethodPut, "/unregister", token, registerRequest{Symbols: syms}, nil)
-	var api *APIError
-	alreadyGone := errors.As(err, &api) && (api.Code == codeUnregisterFailed || api.Code == codeUnregisterSome)
-	if err != nil && !alreadyGone {
+	if err := c.unregister(ctx, syms); err != nil {
 		return err
 	}
 	c.regMu.Lock()
@@ -98,6 +91,32 @@ func (c *Client) releaseRestSlots(ctx context.Context) error {
 	}
 	c.regMu.Unlock()
 	return nil
+}
+
+// unregister is PUT /unregister for syms; "not registered" answers
+// (4001020/4001021) count as success.
+func (c *Client) unregister(ctx context.Context, syms []RegisterSymbol) error {
+	token, ok := c.Token()
+	if !ok {
+		return ErrNoToken
+	}
+	err := c.doInfo(ctx, http.MethodPut, "/unregister", token, registerRequest{Symbols: syms}, nil)
+	var api *APIError
+	if errors.As(err, &api) && (api.Code == codeUnregisterFailed || api.Code == codeUnregisterSome) {
+		return nil
+	}
+	return err
+}
+
+// UnregisterSymbols releases symbols from the API登録銘柄リスト, so a watch
+// list that rotates every minute (rankingwatch) frees the slots of the symbols
+// it dropped whether or not /register replaces the list. Symbols kabu no
+// longer holds are not an error.
+func (c *Client) UnregisterSymbols(ctx context.Context, symbols []RegisterSymbol) error {
+	if len(symbols) == 0 {
+		return nil
+	}
+	return c.unregister(ctx, symbols)
 }
 
 // UnregisterAll empties the API登録銘柄リスト (PUT /unregister/all). Startup
@@ -117,14 +136,16 @@ func (c *Client) UnregisterAll(ctx context.Context) error {
 	return nil
 }
 
-// notePinned records symbols registered for PUSH: they stay registered and
-// are never released by withRestSlot.
+// notePinned records the symbols registered for PUSH: they stay registered and
+// are never released by withRestSlot. The set replaces the previous one: the
+// watch list changes every minute (rankingwatch) and the symbols it dropped
+// are unregistered (UnregisterSymbols) or replaced by /register itself, so
+// they must not stay pinned. REST-registered symbols are kept as release
+// candidates (releasing one kabu no longer holds is harmless).
 func (c *Client) notePinned(symbols []RegisterSymbol) {
 	c.regMu.Lock()
 	defer c.regMu.Unlock()
-	if c.pinned == nil {
-		c.pinned = make(map[RegisterSymbol]struct{}, len(symbols))
-	}
+	c.pinned = make(map[RegisterSymbol]struct{}, len(symbols))
 	for _, s := range symbols {
 		c.pinned[s] = struct{}{}
 		delete(c.transient, s)
