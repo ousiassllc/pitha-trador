@@ -108,6 +108,8 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return fmt.Errorf("marketdatajob: decode market-data job payload: %w", err)
 	}
+	pt := newPhaseTimer()
+	defer pt.warnIfSlow(payload.Symbol)
 
 	board, err := h.Boards.Latest(ctx, payload.Symbol)
 	if err != nil {
@@ -118,11 +120,13 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 		}
 		return fmt.Errorf("marketdatajob: fetch board for %q: %w", payload.Symbol, err)
 	}
+	pt.mark("latest")
 
 	history, err := h.Snapshots.ListHistoryByInstrument(ctx, payload.InstrumentID, featureengine.HistoryLookbackBars)
 	if err != nil {
 		return fmt.Errorf("marketdatajob: list snapshot history for %q: %w", payload.Symbol, err)
 	}
+	pt.mark("history")
 
 	rawJSON, err := json.Marshal(board)
 	if err != nil {
@@ -136,8 +140,10 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 
 	now := h.now()
 	mc := h.marketContextLoader().Load(ctx, inst, now)
+	pt.mark("context")
 	current := readingFromBoard(board)
 	h.applySymbolInfo(ctx, &current, inst, payload.Symbol)
+	pt.mark("symbol")
 	input := featureengine.Input{
 		Timestamp:      now,
 		Current:        current,
@@ -157,6 +163,7 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 	if err != nil {
 		return fmt.Errorf("marketdatajob: run feature engine cycle for %q: %w", payload.Symbol, err)
 	}
+	pt.mark("cycle")
 
 	// Paper Trading's per-bar step (issue #49): fill crossed limit
 	// entries, mark the open position to market, and close it when an
@@ -169,6 +176,7 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 			return err
 		}
 	}
+	pt.mark("execution")
 	return nil
 }
 
