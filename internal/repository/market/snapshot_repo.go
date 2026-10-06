@@ -145,8 +145,19 @@ func (r *SnapshotRepository) ListByInstrument(ctx context.Context, instrumentID 
 // internal/service/backtest one bar at a time in chronological order
 // (functional.md FR-BT-2/FR-BT-3).
 func (r *SnapshotRepository) ListByInstrumentRange(ctx context.Context, instrumentID int64, from, to time.Time) ([]domain.Snapshot, error) {
+	return r.listRange(ctx, snapshotSelectColumns, true, instrumentID, from, to)
+}
+
+// ListHistoryByInstrumentRange is ListByInstrumentRange without
+// raw_data_json (Snapshot.RawDataJSON is left empty): the backtest replay
+// never reads the stored board, which is ~1-2KB per row.
+func (r *SnapshotRepository) ListHistoryByInstrumentRange(ctx context.Context, instrumentID int64, from, to time.Time) ([]domain.Snapshot, error) {
+	return r.listRange(ctx, snapshotHistoryColumns, false, instrumentID, from, to)
+}
+
+func (r *SnapshotRepository) listRange(ctx context.Context, columns string, withRaw bool, instrumentID int64, from, to time.Time) ([]domain.Snapshot, error) {
 	rows, err := r.db.QueryContext(ctx,
-		snapshotSelectColumns+` FROM market_snapshots WHERE instrument_id = ? AND timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC`,
+		columns+` FROM market_snapshots WHERE instrument_id = ? AND timestamp >= ? AND timestamp < ? ORDER BY timestamp ASC`,
 		instrumentID, sqlutil.FormatTime(from), sqlutil.FormatTime(to),
 	)
 	if err != nil {
@@ -156,7 +167,7 @@ func (r *SnapshotRepository) ListByInstrumentRange(ctx context.Context, instrume
 
 	var out []domain.Snapshot
 	for rows.Next() {
-		s, err := scanSnapshot(rows)
+		s, err := scanSnapshotColumns(rows, withRaw)
 		if err != nil {
 			return nil, err
 		}
@@ -173,8 +184,18 @@ func (r *SnapshotRepository) ListByInstrumentRange(ctx context.Context, instrume
 // history window the live market-data job passed to Feature Engine for a
 // bar at before, which a backtest needs as look-ahead-check warmup.
 func (r *SnapshotRepository) ListByInstrumentBefore(ctx context.Context, instrumentID int64, before time.Time, limit int) ([]domain.Snapshot, error) {
+	return r.listBefore(ctx, snapshotSelectColumns, true, instrumentID, before, limit)
+}
+
+// ListHistoryByInstrumentBefore is ListByInstrumentBefore without
+// raw_data_json (Snapshot.RawDataJSON is left empty).
+func (r *SnapshotRepository) ListHistoryByInstrumentBefore(ctx context.Context, instrumentID int64, before time.Time, limit int) ([]domain.Snapshot, error) {
+	return r.listBefore(ctx, snapshotHistoryColumns, false, instrumentID, before, limit)
+}
+
+func (r *SnapshotRepository) listBefore(ctx context.Context, columns string, withRaw bool, instrumentID int64, before time.Time, limit int) ([]domain.Snapshot, error) {
 	rows, err := r.db.QueryContext(ctx,
-		snapshotSelectColumns+` FROM market_snapshots WHERE instrument_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?`,
+		columns+` FROM market_snapshots WHERE instrument_id = ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?`,
 		instrumentID, sqlutil.FormatTime(before), limit,
 	)
 	if err != nil {
@@ -184,7 +205,7 @@ func (r *SnapshotRepository) ListByInstrumentBefore(ctx context.Context, instrum
 
 	var out []domain.Snapshot
 	for rows.Next() {
-		s, err := scanSnapshot(rows)
+		s, err := scanSnapshotColumns(rows, withRaw)
 		if err != nil {
 			return nil, err
 		}

@@ -113,15 +113,20 @@ func longDecision(instrumentID int64, ts time.Time) domain.JevDecision {
 	}
 }
 
-// fakeShadowBacktestSource returns the same []backtest.RunConfig every
+// fakeShadowBacktestSource yields the same []backtest.RunConfig every
 // time, regardless of the requested period (the fixture's own Snapshots
 // already cover the period tests fix via selfimprove.WithNow).
 type fakeShadowBacktestSource struct {
 	configs []backtest.RunConfig
 }
 
-func (f fakeShadowBacktestSource) RunConfigs(context.Context, backtest.Period) ([]backtest.RunConfig, error) {
-	return f.configs, nil
+func (f fakeShadowBacktestSource) ForEachRunConfig(_ context.Context, _ backtest.Period, fn func(backtest.RunConfig) error) error {
+	for _, cfg := range f.configs {
+		if err := fn(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // uptrendInstrumentCopies is how many identical RunConfigs newUptrendSource

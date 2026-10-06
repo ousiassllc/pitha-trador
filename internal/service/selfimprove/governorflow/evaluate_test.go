@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 )
 
@@ -147,5 +148,49 @@ func TestGovernor_EvaluateProposal_RejectsAndNeverWritesRiskOrPromptVersionKeys(
 		if _, ok, err := f.settings.Get(ctx, key); err != nil || ok {
 			t.Fatalf("runtime_settings[%s] set = %v (err %v), want unset - Governor must never write it", key, ok, err)
 		}
+	}
+}
+
+// countingSource counts ForEachRunConfig calls: each call is one pass over
+// the DB history in production.
+type countingSource struct {
+	fakeShadowBacktestSource
+	calls int
+}
+
+func (c *countingSource) ForEachRunConfig(ctx context.Context, period backtest.Period, fn func(backtest.RunConfig) error) error {
+	c.calls++
+	return c.fakeShadowBacktestSource.ForEachRunConfig(ctx, period, fn)
+}
+
+// Issue #597: baseline and candidate replay the same RunConfigs, so one
+// proposal's evaluation reads the history from the source once, not once
+// per pass.
+func TestGovernor_EvaluateProposal_ReadsShadowBacktestHistoryOncePerProposal(t *testing.T) {
+	f := newGovernorFixtures(t)
+	ctx := context.Background()
+	base := time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC)
+	now := base.Add(10 * time.Minute)
+	baseline := baselinePolicyConfig(0.60)
+	source := &countingSource{fakeShadowBacktestSource: newUptrendSource(f.instrument.ID, base, baseline)}
+	g := selfimprove.NewGovernor(f.proposals, f.settings, f.positions, source, baseline,
+		newFakeAI(t).options(selfimprove.WithNow(func() time.Time { return now }))...)
+	changesJSON, err := domain.EncodePolicyChanges([]domain.PolicyChange{
+		{Key: domain.PolicyKeyLongMinProbability, OldValue: `0.60`, NewValue: `0.65`},
+	})
+	if err != nil {
+		t.Fatalf("EncodePolicyChanges: %v", err)
+	}
+	proposal, err := f.proposals.Insert(ctx, domain.PolicyProposal{RationaleJSON: `{}`, ProposedChangesJSON: changesJSON})
+	if err != nil {
+		t.Fatalf("Insert proposal: %v", err)
+	}
+
+	if _, err := g.EvaluateProposal(ctx, proposal.ID); err != nil {
+		t.Fatalf("EvaluateProposal: %v", err)
+	}
+
+	if source.calls != 1 {
+		t.Errorf("ForEachRunConfig calls = %d, want 1 per proposal", source.calls)
 	}
 }

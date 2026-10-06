@@ -25,13 +25,17 @@ const expectancyDegradationTolerance = 0.20
 // ShadowBacktestSource supplies the backtest.RunConfig(s) a shadow
 // backtest replays over period (FR-SELFIMPROVE-4's "直近の
 // trade_signals/jev_decisions/calibration_outcomes"): one RunConfig per
-// instrument, its Thresholds already set to the *current* (pre-proposal)
-// policy.* values - Governor overrides only RunConfig.Thresholds.Policy
-// for the candidate pass. internal/bootstrap/backtestsource's Source is the
-// production implementation (RunConfigs assembled from the recorded
+// instrument, passed to fn one at a time so the source reads (and the
+// caller holds) a single instrument's history at once. Each RunConfig's
+// Thresholds are already the *current* (pre-proposal) policy.* values -
+// Governor overrides only RunConfig.Thresholds.Policy for the candidate
+// pass, replaying baseline and candidate on the same RunConfig so a
+// proposal's evaluation reads the DB once. An error from fn stops the
+// iteration and is returned. internal/bootstrap/backtestsource's Source is
+// the production implementation (assembled from the recorded
 // market_snapshots/jev_decisions under RuntimePolicy's thresholds).
 type ShadowBacktestSource interface {
-	RunConfigs(ctx context.Context, period backtest.Period) ([]backtest.RunConfig, error)
+	ForEachRunConfig(ctx context.Context, period backtest.Period, fn func(backtest.RunConfig) error) error
 }
 
 // Governor is the Self-Improvement Governor (overview.md §8): it records
