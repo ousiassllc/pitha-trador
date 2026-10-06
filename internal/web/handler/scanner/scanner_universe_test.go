@@ -106,7 +106,7 @@ func TestUniverseImport_SuccessRegistersAndExplainsNextCycle(t *testing.T) {
 	if code != http.StatusOK || imp.imports != 1 {
 		t.Fatalf("status %d, imports %d; want 200 and one import", code, imp.imports)
 	}
-	for _, want := range []string{`data-testid="scan-universe-imported"`, "3707 銘柄", "再起動は不要"} {
+	for _, want := range []string{`data-testid="scan-universe-imported"`, `id="scan-universe-imported"`, "3707 銘柄", "再起動は不要"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("response missing %q", want)
 		}
@@ -122,7 +122,7 @@ func TestUniverseImport_FailureShowsCauseAndKeepsCSVRoute(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 so HTMX swaps the panel", code)
 	}
-	for _, want := range []string{`data-testid="scan-universe-import-error"`, "JPXに接続できませんでした", "変更していません", "PITHA_UNIVERSE_PATH", "scan-universe-import\""} {
+	for _, want := range []string{`data-testid="scan-universe-import-error"`, "JPXに接続できませんでした", "変更していません", "PITHA_UNIVERSE_PATH", "scan-universe-import\"", `id="scan-universe-import"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("response missing %q", want)
 		}
