@@ -11,7 +11,9 @@
 // touched: kill_switch_* are append-only by trigger (#102) and the rest are
 // the audit trail (FR-ACT).
 //
-// Rows are deleted in bounded batches so one pass never holds the SQLite
+// Rows are deleted in bounded batches, with a short pause (defaultBatchPause)
+// after every full batch so a concurrent writer waiting on busy_timeout can
+// take the lock between batches (issue #533), so one pass never holds the SQLite
 // write lock for long while the workers are inserting. The expired-row
 // SELECTs are index range scans (migration 000027: market_snapshots(timestamp),
 // jobs(status, finished_at)), so even the final partial batch of a pass
@@ -47,6 +49,13 @@ const (
 // removes.
 const defaultBatchSize = 1000
 
+// defaultBatchPause is how long Purge waits after a full batch before
+// starting the next, so a writer waiting on busy_timeout can get in. The
+// modernc.org/sqlite busy handler (SQLite's default one, delays table in
+// lib/sqlite.go _delays) polls with sleeps of at most 100ms, so 200ms
+// guarantees at least one retry lands inside the pause.
+const defaultBatchPause = 200 * time.Millisecond
+
 // Policy is the retention window per table, in days. A zero or negative
 // field falls back to its Default* value.
 type Policy struct {
@@ -57,10 +66,12 @@ type Policy struct {
 
 // Service purges expired rows from one database.
 type Service struct {
-	db        *sql.DB
-	policy    Policy
-	batchSize int
-	now       func() time.Time
+	db         *sql.DB
+	policy     Policy
+	batchSize  int
+	batchPause time.Duration // wait after each full batch so other writers can take the lock
+	now        func() time.Time
+	sleep      func(ctx context.Context, d time.Duration) error // sleepContext; injectable for tests
 }
 
 // New returns a Service purging db according to policy.
@@ -74,7 +85,14 @@ func New(db *sql.DB, policy Policy) *Service {
 	if policy.SnapshotDays <= 0 {
 		policy.SnapshotDays = DefaultSnapshotDays
 	}
-	return &Service{db: db, policy: policy, batchSize: defaultBatchSize, now: time.Now}
+	return &Service{
+		db:         db,
+		policy:     policy,
+		batchSize:  defaultBatchSize,
+		batchPause: defaultBatchPause,
+		now:        time.Now,
+		sleep:      sleepContext,
+	}
 }
 
 // Purge runs one pass over every table. A failure on one table does not
@@ -139,6 +157,34 @@ func (s *Service) purgeJobs(ctx context.Context, status, cutoff string) (int64, 
 		if n < int64(s.batchSize) {
 			return total, nil
 		}
+		if err := s.pauseBetweenBatches(ctx); err != nil {
+			return total, err
+		}
+	}
+}
+
+// pauseBetweenBatches yields the write lock after a full batch: the next
+// batch's BEGIN IMMEDIATE would otherwise follow the previous COMMIT within
+// microseconds, while a concurrent writer blocked on busy_timeout only
+// retries on the driver's sleep schedule and so keeps missing that gap,
+// starving until the purge ends.
+func (s *Service) pauseBetweenBatches(ctx context.Context) error {
+	if s.batchPause <= 0 {
+		return ctx.Err()
+	}
+	return s.sleep(ctx, s.batchPause)
+}
+
+// sleepContext waits d or until ctx is done, returning ctx.Err() in the
+// latter case.
+func sleepContext(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
 	}
 }
 
@@ -152,6 +198,9 @@ func (s *Service) purgeSnapshots(ctx context.Context, cutoff string) (int64, err
 		n, err := s.purgeSnapshotBatch(ctx, cutoff)
 		total += n
 		if err != nil || n < int64(s.batchSize) {
+			return total, err
+		}
+		if err := s.pauseBetweenBatches(ctx); err != nil {
 			return total, err
 		}
 	}

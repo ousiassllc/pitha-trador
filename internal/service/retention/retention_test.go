@@ -26,6 +26,10 @@ func newService(t *testing.T, policy Policy) (*Service, *sql.DB) {
 	t.Cleanup(func() { _ = db.Close() })
 	s := New(db, policy)
 	s.now = func() time.Time { return fixedNow }
+	// Skip the inter-batch pause so small-batch tests stay fast; tests of the
+	// pause itself inject their own sleep, and the concurrency test restores
+	// sleepContext.
+	s.sleep = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
 	return s, db
 }
 
