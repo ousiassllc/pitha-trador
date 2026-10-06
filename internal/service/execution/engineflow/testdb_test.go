@@ -26,5 +26,3 @@ func newTestDB(t *testing.T) *sql.DB {
 }
 
 func floatPtr(f float64) *float64 { return &f }
-
-func stringPtr(s string) *string { return &s }
