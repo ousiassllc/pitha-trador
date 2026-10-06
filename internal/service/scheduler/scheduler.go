@@ -10,6 +10,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -53,6 +54,8 @@ type Scheduler struct {
 	// sessionOpen is optional (WithSessionGate): a nil value leaves the
 	// full-scan/event-driven triggers ungated (session.go).
 	sessionOpen func(time.Time) bool
+	// fullScanDisabled is set by WithFullScanDisabled (fullscan.go).
+	fullScanDisabled bool
 	// logRotator is optional (WithLogRotator): a nil value makes Start
 	// skip registering the log-archival maintenance task entirely
 	// (non-functional.md §5 "ログは日次ローテーションし").
@@ -157,36 +160,18 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 //
 // Outside a trading session (WithSessionGate) it enqueues nothing and
 // returns (0, nil): no market data is fetched off-hours.
+// WithFullScanDisabled also makes it a no-op (fullscan.go).
 func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, error) {
-	if !s.inSession(now) {
+	if s.fullScanDisabled {
 		return 0, nil
 	}
-	unfinished, err := s.unfinishedMarketDataJobs(ctx, now)
-	if err != nil {
-		return 0, err
-	}
-	if unfinished > 0 {
-		slog.Warn("scheduler: full scan skipped: previous cycle still running", "pending", unfinished)
-		return 0, nil
-	}
-	instruments, err := s.instruments.ListActive(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("scheduler: list active instruments for full scan: %w", err)
-	}
-
-	payloads := make([]string, 0, len(instruments))
-	for _, inst := range instruments {
-		payload, err := json.Marshal(fullScanPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
+	return s.enqueueMarketData(ctx, now, "full scan", func() ([]domain.Instrument, error) {
+		instruments, err := s.instruments.ListActive(ctx)
 		if err != nil {
-			return 0, fmt.Errorf("scheduler: marshal full scan payload for %q: %w", inst.Symbol, err)
+			return nil, fmt.Errorf("scheduler: list active instruments for full scan: %w", err)
 		}
-		payloads = append(payloads, string(payload))
-	}
-	if _, err := s.jobs.EnqueueBatch(ctx, jobqueue.JobQueueMarketData, payloads, now); err != nil {
-		return 0, fmt.Errorf("scheduler: enqueue market-data jobs for full scan: %w", err)
-	}
-	slog.Info("scheduler: full scan enqueued", "instrument_count", len(instruments))
-	return len(instruments), nil
+		return instruments, nil
+	})
 }
 
 // EnqueueEventReevaluation enqueues one jev-scout job for instrumentID,
@@ -246,14 +231,9 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 	}
 
 	s.cron = cron.New(cron.WithChain(cron.Recover(cronSlogLogger{})))
-	spec := fmt.Sprintf("@every %s", fullScanInterval)
-	if _, err := s.cron.AddFunc(spec, func() {
-		if _, err := s.EnqueueFullScan(runCtx, time.Now().UTC()); err != nil {
-			slog.Error("scheduler: full scan enqueue failed", "error", err)
-		}
-	}); err != nil {
+	if err := s.addFullScanTrigger(runCtx, fullScanInterval); err != nil {
 		cancel()
-		return fmt.Errorf("scheduler: register full scan trigger %q: %w", spec, err)
+		return err
 	}
 
 	selfImprove, err := selfImproveSchedule()

@@ -42,24 +42,37 @@ const (
 	// and a dev machine without a webhook must still be able to start).
 	KeySlackWebhookURL = "SLACK_WEBHOOK_URL"
 	// KeyLunaAPIKey/KeyLunaBaseURL supply internal/service/assist's Luna
-	// adapter (ニュース分類, FR-LUNA-2). KeyNewsFeedURL/KeyNewsFeedAPIKey
-	// supply internal/service/newsfeed's external news feed client
-	// (FR-LUNA-1). All four are optional like KeySlackWebhookURL: with
-	// any unset, News Ingest simply does not run and no news flag is ever
-	// raised (FR-LUNA-4).
+	// adapter (ニュース分類, FR-LUNA-2). They are optional overrides: Luna
+	// defaults to Jev (issue #273) and only calls its own API once
+	// LUNA_BASE_URL is set. KeyNewsFeedURL/KeyNewsFeedAPIKey override
+	// internal/service/newsfeed's default feed (やのしん TDnet WebAPI, no
+	// key needed) with a user-specified generic feed (FR-LUNA-1), and
+	// KeyNewsFeedEnabled switches News Ingest off ("off"; unset = on).
+	// With Luna and the feed both available News Ingest runs; otherwise it
+	// does not and no news flag is ever raised (FR-LUNA-4).
 	KeyLunaAPIKey     = "LUNA_API_KEY"
 	KeyLunaBaseURL    = "LUNA_BASE_URL"
 	KeyNewsFeedURL    = "NEWS_FEED_URL"
 	KeyNewsFeedAPIKey = "NEWS_FEED_API_KEY"
-	// KeySolAPIKey/KeySolBaseURL and KeyOpusAPIKey/KeyOpusBaseURL supply
-	// internal/service/assist's Sol (daily analysis) and Opus (proposal
-	// review) adapters (FR-SELFIMPROVE-8/9). Optional like the Luna keys:
-	// with either pair unset the matching self-improvement stage is
-	// skipped each day and no proposal can be approved without Opus.
+	// KeyNewsFeedEnabled is "on" or "off" (see NormalizeSecretValue); only
+	// "off" has an effect (Secrets.NewsFeedOff).
+	KeyNewsFeedEnabled = "NEWS_FEED_ENABLED"
+	// KeySolAPIKey/KeySolBaseURL and KeyOpusAPIKey/KeyOpusBaseURL are the
+	// optional overrides of internal/service/assist's Sol (daily analysis)
+	// and Opus (proposal review) adapters (FR-SELFIMPROVE-8/9). Both
+	// default to Jev (issue #273); a role with its BASE_URL set calls that
+	// API instead, an unset role falls back to Jev. With Jev unconfigured
+	// as well the matching stage is skipped each day.
 	KeySolAPIKey   = "SOL_API_KEY"
 	KeySolBaseURL  = "SOL_BASE_URL"
 	KeyOpusAPIKey  = "OPUS_API_KEY"
 	KeyOpusBaseURL = "OPUS_BASE_URL"
+)
+
+// Switch values of KeyNewsFeedEnabled.
+const (
+	SwitchOn  = "on"
+	SwitchOff = "off"
 )
 
 // requiredSecretKeys are the Settings fields whose absence
@@ -70,7 +83,7 @@ var requiredSecretKeys = []string{KeyJevAPIKey, KeyKabuAPIPassword}
 
 // optionalSecretKeys are loaded like requiredSecretKeys but never reported
 // as missing.
-var optionalSecretKeys = []string{KeyJevBaseURL, KeyJevModel, KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey,
+var optionalSecretKeys = []string{KeyJevBaseURL, KeyJevModel, KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey, KeyNewsFeedEnabled,
 	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL}
 
 // RequiredSecretKeys returns the keys whose absence keeps the app
@@ -120,12 +133,21 @@ type Secrets struct {
 	LunaBaseURL    string
 	NewsFeedURL    string
 	NewsFeedAPIKey string
+	// NewsFeedEnabled is the stored KeyNewsFeedEnabled value ("" = unset).
+	NewsFeedEnabled string
 	// SolAPIKey/SolBaseURL and OpusAPIKey/OpusBaseURL are optional (see
 	// KeySolAPIKey).
 	SolAPIKey   string
 	SolBaseURL  string
 	OpusAPIKey  string
 	OpusBaseURL string
+}
+
+// NewsFeedOff reports whether the operator switched the news feed off
+// (NEWS_FEED_ENABLED=off): News Ingest is then not started. Unset or "on"
+// keeps the default (やのしん, or NEWS_FEED_URL when set).
+func (s Secrets) NewsFeedOff() bool {
+	return s.NewsFeedEnabled == SwitchOff
 }
 
 // SecretsRepository is the subset of internal/repository/system.SecretsRepository's
@@ -183,6 +205,7 @@ func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []
 		LunaBaseURL:     values[KeyLunaBaseURL],
 		NewsFeedURL:     values[KeyNewsFeedURL],
 		NewsFeedAPIKey:  values[KeyNewsFeedAPIKey],
+		NewsFeedEnabled: values[KeyNewsFeedEnabled],
 		SolAPIKey:       values[KeySolAPIKey],
 		SolBaseURL:      values[KeySolBaseURL],
 		OpusAPIKey:      values[KeyOpusAPIKey],

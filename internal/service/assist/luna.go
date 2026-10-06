@@ -38,26 +38,45 @@ type Classification struct {
 }
 
 // Luna is the Sense adapter: it classifies a news item into
-// sentiment/event_type/summary by calling the external Luna AI API
-// (FR-LUNA-2, overview.md §13). Its output is auxiliary context for Jev
-// only (FR-LUNA-5).
+// sentiment/event_type/summary (FR-LUNA-2, overview.md §13). By default it
+// asks Jev (luna_jev.go); when LUNA_BASE_URL is set it calls that external
+// Luna AI API instead. Its output is auxiliary context for Jev only
+// (FR-LUNA-5).
 type Luna struct {
 	client *Client
+	jev    Asker
 }
 
-// NewLuna returns a Luna adapter that calls client.
-func NewLuna(client *Client) *Luna {
-	return &Luna{client: client}
+// NewLuna returns a Luna adapter that calls client, or Jev (WithJev) when
+// client is not configured.
+func NewLuna(client *Client, opts ...Option) *Luna {
+	return &Luna{client: client, jev: applyOptions(opts).jev}
 }
 
-// Classify sends item to the Luna API and returns its validated
-// classification. A response with an unknown sentiment/event_type or an
-// empty summary is an error, not a best-effort guess: FR-LUNA-4 treats any
-// Luna failure as "no news flag".
+// Configured reports whether Classify can reach a backend; News Ingest is
+// not started otherwise.
+func (l *Luna) Configured() bool {
+	_, err := useJev(l.client, l.jev)
+	return err == nil
+}
+
+// Classify classifies item and returns its validated classification. A
+// response with an unknown sentiment/event_type or an empty summary is an
+// error, not a best-effort guess: FR-LUNA-4 treats any Luna failure as "no
+// news flag".
 func (l *Luna) Classify(ctx context.Context, item NewsItem) (Classification, error) {
+	viaJev, err := useJev(l.client, l.jev)
+	if err != nil {
+		return Classification{}, fmt.Errorf("assist: luna classify %q: %w", item.Symbol, err)
+	}
 	var out Classification
-	req := LunaRequest{Symbol: item.Symbol, Headline: item.Headline, Body: item.Body, PublishedAt: item.PublishedAt}
-	if err := l.client.PostJSON(ctx, LunaClassifyPath, req, &out); err != nil {
+	if viaJev {
+		out, err = l.classifyWithJev(ctx, item)
+	} else {
+		req := LunaRequest{Symbol: item.Symbol, Headline: item.Headline, Body: item.Body, PublishedAt: item.PublishedAt}
+		err = l.client.PostJSON(ctx, LunaClassifyPath, req, &out)
+	}
+	if err != nil {
 		return Classification{}, fmt.Errorf("assist: luna classify %q: %w", item.Symbol, err)
 	}
 	if err := out.validate(); err != nil {

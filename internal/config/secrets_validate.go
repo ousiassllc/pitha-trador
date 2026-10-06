@@ -39,6 +39,9 @@ func NormalizeSecretValue(key, raw string) (string, error) {
 	if value == "" {
 		return "", ErrEmptySecretValue
 	}
+	if key == KeyNewsFeedEnabled {
+		return normalizeSwitch(value)
+	}
 	if IsURLSecretKey(key) {
 		if err := validateSecretURL(value); err != nil {
 			return "", err
@@ -49,6 +52,15 @@ func NormalizeSecretValue(key, raw string) (string, error) {
 		return "", errors.New("改行・制御文字を含む値は保存できません。")
 	}
 	return value, nil
+}
+
+// normalizeSwitch accepts "on"/"off" in any case and returns it lower-cased.
+func normalizeSwitch(value string) (string, error) {
+	switch v := strings.ToLower(value); v {
+	case SwitchOn, SwitchOff:
+		return v, nil
+	}
+	return "", errors.New("on または off を入力してください。")
 }
 
 func validateSecretURL(value string) error {

@@ -49,6 +49,8 @@ pitha-trador/
 │   │   ├── marketdatajob/        # market-data / feature-calc（空ジョブ）ジョブハンドラ（板→Reading変換・特徴量算出・イベント再評価enqueue。#246）
 │   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`backtestsource.Source`。#246）
 │   │   ├── heldposition/         # FR-SCHED-4 保有ポジション監視・Exit評価ループ（5〜15秒周期、最新板で再評価）
+│   │   ├── rankingmeasure/       # FR-SCHED-8 kabu `/ranking`計測ループ（`scan.ranking_measure`でオプトイン。件数・`duration_ms`・`CurrentPriceTime`・HTTP/kabuコードだけをログに出し、価格は保存・出力しない。#652）
+│   │   ├── rankingwatch/         # FR-SCHED-9 ランキング監視（既定。kabu `GET /ranking`の毎分取得で監視銘柄=PUSH登録最大45件を決め、`market-data`投入・Fast Screener対象に使う。空/失敗は候補0件で継続。`scan.full_scan_enabled: true`のときだけ無効。価格は保存・出力しない）
 │   │   ├── newstargets/          # News Ingestの対象銘柄（Fast Screener候補＋保有ポジション銘柄。全銘柄は取得しない。#531）
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
 │   │   ├── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
@@ -98,6 +100,7 @@ pitha-trador/
 │   │   │   ├── infolimit/        # 情報API・銘柄登録のプロセス全体レート制限（公式10件/秒、既定8。issue #514）
 │   │   │   ├── quote/            # kabuステーションAPIの板を一般的なbid/askへ変換（`Bid`/`Ask`/`SpreadBps`。売/買の入れ替えの単一定義。`bootstrap/marketdatajob`と`bootstrap/heldposition`が共用。`marketdata`・`featureengine`に依存する本番コード）
 │   │   │   ├── rateflow/         # テスト専用: 情報APIレート上限と4001006の回帰テスト（#514）
+│   │   │   ├── rankingflow/      # テスト専用: `MeasureRanking`（`/ranking`の件数・同順位・`CurrentPriceTime`への縮約）の回帰テスト（#652）
 │   │   │   └── tokenflow/        # テスト専用: トークン発行・状態・失効時の再発行の回帰テスト（#621）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
 │   │   ├── featureengine/        # 特徴量算出
@@ -244,7 +247,7 @@ handler → service → repository → domain
 
 | コンポーネント | 責務 | 実装場所 |
 |---------------|------|---------|
-| Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理。情報API・銘柄登録は`infolimit`でプロセス全体の秒間上限を守る。`rateflow`はテスト専用 | `internal/service/marketdata`（`infolimit`, `rateflow`） |
+| Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理。情報API・銘柄登録は`infolimit`でプロセス全体の秒間上限を守る。`MeasureRanking`（`ranking.go`）は`GET /ranking`の応答を件数・同順位の重複数・`CurrentPriceTime`だけへ縮約する計測専用の取得で、価格はデコードしない（FR-SCHED-8、#652）。`rateflow`はテスト専用 | `internal/service/marketdata`（`infolimit`, `rateflow`） |
 | Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1）。`marketcontext`は市場コンテキストの算出とキャッシュ | `internal/service/featureengine`（`eventtrigger`, `marketcontext`） |
 | Fast Screener | 数値フィルター・screen_score算出・上位N銘柄選定（§4.2） | `internal/service/screener` |
 | Jev Adapter (Scout/Trader) | 構造化状態と型付き質問（`noul`/`choice`）をTypeSafe AI公式API（`POST /v1/systemone`）へ送信し、回答をScoutResponse/TraderResponseへ変換する（§4.4, §4.5, §6）。ワイヤ層は`systemone`、テスト用フェイクは`jevtest`、`clientflow`はテスト専用 | `internal/service/jev`（`systemone`, `jevtest`, `clientflow`） |
@@ -256,7 +259,7 @@ handler → service → repository → domain
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7）。`governorflow`はテスト専用 | `internal/service/selfimprove`（`governorflow`） |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
-| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`・`outcomeflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `outcomeflow`, `orphans`） |
+| Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`scan.full_scan_enabled`が`true`でない（既定）とき`WithFullScanDisabled`（`fullscan.go`）で60秒フルスキャンのcronトリガーを登録せず`market-data`全件投入を行わない（FR-SCHED-7、#652）。代わりにランキング監視（`bootstrap/rankingwatch`）が`EnqueueMarketData`で監視銘柄のジョブだけを投入する（FR-SCHED-9）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`・`outcomeflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `outcomeflow`, `orphans`） |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12）。HTTP/WebSocket公開は`web/handler/activity` | `internal/service/activityfeed`・`internal/web/handler/activity` |
 | Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8）。再現範囲は簡略化されており、Exitは固定SL/TP/最大保有時間のみ・Risk Engine不適用。約定はPaper Tradingと同じ約定モデル（呼値・スプレッド・滑り2bps/板寄せ5bps・手数料0bps・昼休み・寄り引け、`fillmodel.Default`）で行う（`requirements/functional/components-platform.md` FR-BT-4） | `internal/service/backtest` |
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
@@ -265,7 +268,7 @@ handler → service → repository → domain
 | Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
 | Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/candidates`・`bootstrap/heldposition`・`service/marketdata`・`service/pushfeed`・`service/scheduler`（`updatecheck`含む）から使う | `internal/safego` |
-| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、secrets読込・routerオプション共通化、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-dataジョブ、互換用の空feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）、`startup`（desktop/server共通の`RunMain`・ログディレクトリ解決）、`universe`（銘柄マスタCSVのパースと`instruments`へのupsert）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `paperexec`, `alerts`, `startup`, `universe`） |
+| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、secrets読込・routerオプション共通化、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-dataジョブ、互換用の空feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`rankingmeasure`（FR-SCHED-8 kabu `/ranking`計測ループ。`scan.ranking_measure`でオプトイン、計測値のみログ出力）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）、`startup`（desktop/server共通の`RunMain`・ログディレクトリ解決）、`universe`（銘柄マスタCSVのパースと`instruments`へのupsert）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `rankingmeasure`, `paperexec`, `alerts`, `startup`, `universe`） |
 | Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ・エラーログのエクスポート（`requirements/non-functional.md` §5・§5.3、フローは`overview/flows.md` §10.6） | `internal/logging` |
 | Supervisor | 子プロセスの異常終了時の指数バックオフ再起動（1秒〜5分、1分安定でリセット）。終了コード0で監視終了。`cmd/desktop`の`--supervise`起動でのみ使う（`requirements/non-functional.md` §3） | `internal/supervisor` |
 | Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。`app.lock`は`cmd/desktop`と`cmd/server`で共有し（取得は`bootstrap.AcquireInstanceLock`）、2つ目の起動は`bootstrap.Run`に到達する前に終了する（desktopは終了コード0、serverは非0）。Scheduler・Kill Switch・発注の二重稼働と、先行インスタンスのrunningジョブの回収を防ぐ | `internal/singleinstance`, `internal/bootstrap` |

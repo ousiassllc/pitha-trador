@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
@@ -89,6 +90,10 @@ type Services struct {
 
 	newsEnabled bool
 	candidates  *candidates.Refresher
+	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true
+	// (rankingwatch_start.go).
+	watchlist      *rankingwatch.Watchlist
+	rankingWatcher *rankingwatch.Watcher
 }
 
 // buildSettings collects BuildServices' optional inputs; see BuildOption.
@@ -97,6 +102,8 @@ type buildSettings struct {
 	notifiers      []risk.Notifier
 	jevMaxAttempts int
 	executionNow   func() time.Time
+	yanoshinURL    string
+	newsNow        func() time.Time
 }
 
 // BuildOption customises BuildServices' optional inputs.
@@ -119,6 +126,18 @@ func WithNotifiers(notifiers ...risk.Notifier) BuildOption {
 // avoid the production retry backoff. n <= 0 keeps the production policy.
 func WithJevMaxAttempts(n int) BuildOption {
 	return func(s *buildSettings) { s.jevMaxAttempts = n }
+}
+
+// WithYanoshinBaseURL points the default news feed (やのしん TDnet WebAPI) at
+// baseURL; tests use it so they never dial the real service.
+func WithYanoshinBaseURL(baseURL string) BuildOption {
+	return func(s *buildSettings) { s.yanoshinURL = baseURL }
+}
+
+// WithNewsClock replaces News Ingest's clock (default time.Now), which its
+// 東証立会時間 gate reads; tests pin it inside the session.
+func WithNewsClock(now func() time.Time) BuildOption {
+	return func(s *buildSettings) { s.newsNow = now }
 }
 
 // WithExecutionClock replaces the Execution Engine's clock (default time.Now).
@@ -148,7 +167,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc := &Services{strategy: state.Strategy}
 	svc.buildRepositories(state.DB)
 	svc.wireActivity()
-	svc.buildExternalClients(secrets, alertChannels, cfg.jevMaxAttempts)
+	svc.buildExternalClients(secrets, alertChannels, cfg)
 	svc.buildJevPipeline(state.DB, state.Strategy)
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow)
 	traderHandler := svc.buildPolicyAndBacktest(state, executionConfig)

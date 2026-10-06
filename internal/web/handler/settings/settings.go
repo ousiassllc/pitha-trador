@@ -12,7 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
-	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
@@ -206,7 +205,7 @@ func (h *SettingsHandler) connections(ctx context.Context, conns []connection) [
 // connectionProps builds one connection's props; it is Required when it
 // holds a key of config.RequiredSecretKeys.
 func (h *SettingsHandler) connectionProps(ctx context.Context, conn connection) molecules.ConnectionProps {
-	props := molecules.ConnectionProps{ID: conn.id, Name: conn.name, Description: conn.description}
+	props := molecules.ConnectionProps{ID: conn.id, Name: conn.name, Description: conn.description, DefaultLabel: conn.defaultLabel}
 	for _, field := range conn.fields {
 		props.Fields = append(props.Fields, h.row(ctx, field.key, field.label, ""))
 		if slices.Contains(config.RequiredSecretKeys(), field.key) {
@@ -229,13 +228,6 @@ func (h *SettingsHandler) row(ctx context.Context, key, label, notice string) mo
 		ok = false
 	}
 	return molecules.SecretFieldRowProps{Key: key, Label: label, Hint: settingsHints[key], Configured: ok, Notice: notice, CSRFField: middleware.CSRFFormField, CSRFToken: middleware.CSRFToken(ctx)}
-}
-
-// settingsHints is the per-key input guidance shown under a Settings
-// field. Only keys whose expected format is easy to get wrong have one.
-var settingsHints = map[string]string{
-	config.KeyJevBaseURL: "未設定の場合は既定値 " + jev.DefaultBaseURL + " を使用します。上書きする場合はホスト名のみ入力してください（/v1/systemone などのパスは付けないでください）。",
-	config.KeyJevModel:   "未設定の場合は既定値 " + jev.DefaultModel + " を使用します。",
 }
 
 // settingsLabel returns key's display label; key must be in

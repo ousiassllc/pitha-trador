@@ -42,6 +42,7 @@ type Universe interface {
 type Broker interface {
 	RegisterSymbols(ctx context.Context, symbols []marketdata.RegisterSymbol) (marketdata.RegisterSuccess, error)
 	UnregisterAll(ctx context.Context) error
+	UnregisterSymbols(ctx context.Context, symbols []marketdata.RegisterSymbol) error
 	GetBoard(ctx context.Context, symbol string, exchange int) (marketdata.Board, error)
 	Status() *marketdata.StatusTracker
 }
@@ -56,6 +57,7 @@ type Feed struct {
 	Exchange int
 
 	boards *marketdata.BoardCache
+	watch  watchState // ranking-driven registration (watch.go)
 }
 
 // New returns a Feed subscribing to url.
@@ -107,7 +109,7 @@ func (f *Feed) Run(ctx context.Context) {
 		// A panic (register, PUSH read, board callback) is logged and
 		// handled like any failed attempt: back off, then re-subscribe.
 		err := safego.Try("pushfeed subscription", func() error {
-			if err := f.RegisterUniverse(ctx); err != nil {
+			if err := f.register(ctx); err != nil {
 				return err
 			}
 			connectedAt := time.Now()

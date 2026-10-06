@@ -1,6 +1,7 @@
 package strategyflow_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -71,7 +72,8 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 			}
 			got := cfg.Scan
 			got.EventTrigger = config.EventTriggerConfig{}
-			if got != tc.want {
+			got.RankingMeasure = config.RankingMeasureConfig{}
+			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("Scan intervals = %+v, want %+v", got, tc.want)
 			}
 		})
