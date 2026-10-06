@@ -29,17 +29,21 @@ func LogDir(dbPath string) string {
 }
 
 // setupLogging installs the process-wide JSON slog logger writing to the
-// rotating daily file in the directory logDir returns, and returns the
-// function that closes that file. A log directory that cannot be resolved or
+// rotating daily files in the directory logDir returns - the full log
+// (<date>.log) and the ERROR-only log (<date>-error.log) - and returns the
+// function that closes them. A log directory that cannot be resolved or
 // created (read-only location, ...) must not stop the application from
 // starting: the logger then writes to stderr and says why.
 func setupLogging(logDir func() (string, error)) (closeLog func()) {
 	dir, err := logDir()
 	if err == nil {
-		var rw *logging.RotatingWriter
+		var rw, ew *logging.RotatingWriter
 		if rw, err = logging.NewRotatingWriter(dir); err == nil {
-			slog.SetDefault(logging.New(rw, slog.LevelInfo))
-			return func() { _ = rw.Close() }
+			if ew, err = logging.NewErrorRotatingWriter(dir); err == nil {
+				slog.SetDefault(logging.NewSplit(rw, ew, slog.LevelInfo))
+				return func() { _ = rw.Close(); _ = ew.Close() }
+			}
+			_ = rw.Close()
 		}
 	}
 	slog.SetDefault(logging.New(os.Stderr, slog.LevelInfo))
