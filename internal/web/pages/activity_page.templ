@@ -15,7 +15,7 @@ import (
 // (internal/web/handler/activity.ActivityHandler.Page) renders this for every
 // request.
 templ ActivityLogPage(snapshot domain.ActivitySnapshot) {
-	@layout.Shell("System Activity Log") {
+	@layout.Shell("System Activity Log", organisms.NavActivity) {
 		<h1 class="text-2xl font-bold text-slate-900">System Activity Log</h1>
 		<pitha-activity-feed api-url="/api/v1/activity" ws-url="/ws/activity" kill-switch-events-url="/api/v1/activity?type=kill_switch&limit=10">
 			@organisms.QueueStatusPanel(snapshot.Queues)

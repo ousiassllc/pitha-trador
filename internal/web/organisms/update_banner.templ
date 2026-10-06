@@ -21,10 +21,12 @@ type UpdateBannerProps struct {
 // Header's `#update-banner` fetches it via `GET /system/update-status`
 // (hx-trigger="load", then periodically and on `updateStatusChanged`),
 // the same self-correcting pattern `#config-banner` uses for
-// SecretsBanner. It renders nothing unless a newer release exists.
+// SecretsBanner. It renders nothing unless a newer release exists. The
+// `#update-banner` container is the fixed `role="status"` live region (issue
+// #626), so the body carries no role.
 templ UpdateBanner(props UpdateBannerProps) {
 	if props.Available {
-		<div class="rounded-md border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-800" role="status" data-testid="update-banner">
+		<div class="rounded-md border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-800" data-testid="update-banner">
 			<p>
 				新バージョン { props.Version } が利用可能です。
 				switch {

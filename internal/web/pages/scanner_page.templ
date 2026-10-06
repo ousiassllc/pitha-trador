@@ -17,7 +17,7 @@ import (
 // this full page; it has no HX-Request fragment variant (the only HTMX
 // fragment route on this screen is `GET /scanner/scan`).
 templ ScannerPage(candidates []domain.Candidate, asOf time.Time, scan organisms.ScanPanelView) {
-	@layout.Shell("Scanner Dashboard") {
+	@layout.Shell("Scanner Dashboard", organisms.NavScanner) {
 		<h1 class="text-2xl font-bold text-slate-900">Scanner Dashboard</h1>
 		<p class="mt-1 text-sm text-slate-600" data-testid="scanner-description">
 			Fast Screenerが選んだ売買候補の一覧です。15〜30秒ごとに自動更新されます。各列の意味は表の上の「列の意味」で確認できます。

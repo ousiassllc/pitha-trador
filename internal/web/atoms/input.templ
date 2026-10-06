@@ -20,13 +20,18 @@ type InputProps struct {
 	Attrs templ.Attributes
 }
 
-// Input renders a text-like <input> with the shared border style.
+// Input renders a text-like <input> with the shared border style. An empty
+// ID or Name omits the attribute (an empty `id=""` is invalid HTML).
 templ Input(props InputProps) {
 	<input
-		id={ props.ID }
+		if props.ID != "" {
+			id={ props.ID }
+		}
 		class={ fieldClass(props.Class, "flex-1 px-3 py-1") }
 		type={ inputType(props.Type) }
-		name={ props.Name }
+		if props.Name != "" {
+			name={ props.Name }
+		}
 		{ props.Attrs... }
 	/>
 }
@@ -42,11 +47,15 @@ type SelectProps struct {
 }
 
 // Select renders a <select> with the shared border style around its
-// <option> children.
+// <option> children. An empty ID or Name omits the attribute.
 templ Select(props SelectProps) {
 	<select
-		id={ props.ID }
-		name={ props.Name }
+		if props.ID != "" {
+			id={ props.ID }
+		}
+		if props.Name != "" {
+			name={ props.Name }
+		}
 		class={ fieldClass(props.Class, "px-3 py-1") }
 		{ props.Attrs... }
 	>
