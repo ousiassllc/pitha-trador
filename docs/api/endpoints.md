@@ -165,3 +165,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.55 | 2026-10-06 | §7に未定義パスの404応答（`/api/v1`はproblem+json、ページ遷移は`ErrorPage`、HTMXはトースト、WebSocketは本文なし）を追記 | issue #605 |
 | 1.56 | 2026-10-06 | §6 `/ws/symbols/{symbol}`の`jev_update`に判断時刻`time`を追加し、`pitha-price-chart`は初回の`jev_update`を転換として描画せず、`time`の分足にマーカーを置く | issue #624 |
 | 1.57 | 2026-10-06 | §3 `/performance`に、バックテスト実行トリガー（`from`の指定。`to`のみは実行しない）・400の各条件（`to`省略・`to<from`・0 Fold）・実行失敗の500を追記 | issue #632 |
+| 1.58 | 2026-10-06 | `GET /api/v1/scanner/scan/export`（スキャン結果のCSVダウンロード。`endpoints/huma-api.md`）を追記 | スキャン情報をエクスポートしたい |
