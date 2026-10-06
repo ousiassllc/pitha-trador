@@ -50,11 +50,28 @@ describe('open / close', () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  test('a click on the backdrop (the dialog itself) closes; a click inside does not', () => {
+  test('a click on the backdrop (press and release on the dialog itself) closes; a click inside does not', () => {
     const { opener, dialog } = render();
     opener.click();
-    (document.getElementById('inside') as HTMLElement).click();
+    const inside = document.getElementById('inside') as HTMLElement;
+    inside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    inside.click();
     expect(dialog.open).toBe(true);
+    dialog.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    dialog.click();
+    expect(dialog.open).toBe(false);
+  });
+
+  test('a press inside the dialog released on the backdrop (drag out of an input) does not close', () => {
+    const { opener, dialog } = render();
+    opener.click();
+    const field = document.getElementById('field') as HTMLElement;
+    field.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    // The browser targets the common ancestor (the dialog) with the click.
+    dialog.click();
+    expect(dialog.open).toBe(true);
+    // A later genuine backdrop press-and-release still closes it.
+    dialog.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     dialog.click();
     expect(dialog.open).toBe(false);
   });
