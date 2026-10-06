@@ -86,3 +86,4 @@
 | 1.79 | 2026-10-06 | §5（`integrations.md`）の外部AI API契約にassistクライアントの再試行分類（Jevと同方針）を追記し、§6に自動アップデートのインストーラー一時ディレクトリの起動時掃除を追記 | issue #590, #593 |
 | 1.80 | 2026-10-06 | §3のツリーと§4の責務表に`repository/calibration`（`calibration_outcomes`/`calibration_label_skips`の`CalibrationRepository`）を追加し、`judgement`から分離（linterlyのディレクトリ2000行制限超過の解消） | issue #601 |
 | 1.81 | 2026-10-06 | §3のツリーに`router/router_noroute.go`（未定義パスの404）と`service/updater/tempcleanup`（更新後のインストーラー一時ディレクトリ掃除）を追加 | issue #590, #605 |
+| 1.82 | 2026-10-06 | §3のツリー・§4の責務表に`bootstrap/startup`（`RunMain`・`LogDir`）・`textutil`・`service/marketdata/quote`・`cmd/server/shutdown.go`を追加し、domainの依存記述を`internal/config`（`policyproposal.go`のしきい値検証のみ）を含む形へ、サブパッケージ規約を親が子をimportしない補助サブパッケージ（`quote`・`jevtest`・`multinotify`）の例外付きへ修正。`integrations.md` §5の板の売/買入れ替えを`quote.Bid`/`Ask`/`SpreadBps`経由の記述へ更新。`flows.md` §10.1に`RunMain`のログ設定・致命的エラー記録とNews Ingestティッカー、停止フロー（server/desktop）を追記 | issue #610, #611, #612, #613 |

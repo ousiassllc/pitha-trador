@@ -33,16 +33,16 @@ internal/web/
 ├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go, scanner_universe.go）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go）, activity/, shared/（render.goのバッファ描画`RenderHTML`・action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
 ├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
-├── atoms/              # Badge（+ EntryQualityBadge）, StatusDot, Toast, Button（+ ButtonLink）, Input, Select
+├── atoms/              # Badge（+ EntryQualityBadge）, StatusDot, Toast, Button（+ ButtonLink）, Input, Select, timefmt.go（`atoms.FormatJST`/`JST`/`TimeLayoutJST`: SSR時刻表示の唯一の書式。`2026-10-05 09:30:00 JST`）
 ├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SetupStatus
-├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）
+├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）。scan_format.go（ScanPanelの書式ヘルパー: 次回開場時刻・サイクル所要時間。`atoms.FormatJST`系の書式を使う）
 ├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
 └── layout/             # Shell, SetupShell
 
 static/
 └── src/
     ├── components/
-    │   ├── price-chart/           pitha-price-chart.ts / jst-time.ts（時間軸・クロスヘアのJST整形）
+    │   ├── price-chart/           pitha-price-chart.ts / bars.ts（1分足`Bar`と`foldTick`等の足の集約ヘルパー）/ chart-data.ts（系列データ・ペイン配置・代替テキストの純粋ヘルパー）/ chart-types.ts（応答・WebSocketメッセージの型）/ jst-time.ts（時間軸・クロスヘアのJST整形）
     │   ├── scanner-table/         pitha-scanner-table.ts / scanner-types.ts（`GET /api/v1/scanner`の応答型）/ scanner-view.ts（列定義・書式・配色・バッジの表示ヘルパー）/ scanner-contract.json（SSRフォールバックとLitの表示契約。Go側`scanner_table_contract_test.go`・`handler/scanner/scanner_test.go`とTS側`scanner-contract.test.ts`が共有する唯一の契約ファイル）
     │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）
     │   ├── activity-feed/         pitha-activity-feed.ts / activity-feed-types.ts（応答型と定数）/ activity-feed-views.ts（Job Queues表・直近Kill Switchイベントの無状態テンプレート）
@@ -52,6 +52,7 @@ static/
     │   └── lib/
     │       ├── api.ts
     │       ├── ws.ts / ws-status.ts    # WebSocket接続と接続状態表示
+    │       ├── jst-datetime.ts         # SSRフォールバックの`atoms.FormatJST`と同形式のJST日時ラベル（Lit描画とSSRの表示を一致させる）
     │       └── logger.ts / styles.ts
     ├── css/
     │   └── app.css
@@ -70,7 +71,7 @@ static/
             └── stoplight-elements/   # `/swagger`用（esbuild.config.mjsが`@stoplight/elements`から出力）
 ```
 
-`*-test-support.ts`（`scanner-table/`・`activity-feed/`・`kill-switch-panel/`）と`*.test.ts`はテスト専用のフェイク・フィクスチャ・テストで、本番バンドルに含まれないため上のツリーでは省略している。
+各コンポーネントディレクトリの`*-test-support.ts`（`scanner-table/`・`activity-feed/`・`kill-switch-panel/`・`price-chart/chart-test-support.ts`・`calibration-heatmap/heatmap-test-support.ts`、および共有の`lib/ws-test-support.ts`）と`*.test.ts`はテスト専用のフェイク・フィクスチャ・テストで、本番バンドルに含まれないため上のツリーでは省略している。
 
 依存ルールは `architecture/overview.md` §3 の通り（`handler → service → repository → domain`、Templ側は `atoms/molecules/organisms/pages`）。
 
@@ -166,9 +167,9 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 - ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/activity`, `/settings`, `/setup`）は常にフルページを返し、`HX-Request`では分岐しない（失敗時のみ`HX-Request`にはトーストを返す）。HTMXフラグメントの取得は`GET /scanner/scan`（スキャン状況パネル）と、`Header`等が取得するフラグメントのGETルート（`GET /system/status`・`/system/update-status`・`/system/update-panel`・`/system/secrets-status`・`/system/marketdata-status`）が担う
 - アクションルート（`POST /positions/:id/close`, `POST /system/update-check`, `POST /scanner/universe/import`, `POST`/`DELETE /settings/:key`）は常にフラグメントを返す。Kill Switch操作（pause/resume/kill）はHTMXアクションルートを持たず、Litの`pitha-kill-switch-panel`が`/api/v1/system/*`を呼ぶ
 - **状態バッジの更新**: システム状態変更（pause/resume/kill）後は、`pitha-kill-switch-panel`が`systemStateChanged`イベントを発火し、Headerの`StatusDot`が`GET /system/status`で再取得される。OOBスワップは「副作用の反映」のみに限定する
-- **ローディング**: HTMXアクションは`hx-disabled-elt="this"`（必要に応じ`hx-indicator`）で二重送信を防ぐ（例: 「今すぐアップデートを確認」`#update-check-progress`、ポジション手動決済）。Kill Switch操作はLitの`pitha-kill-switch-panel`が`busy`状態でボタンを無効化する。スケルトンスクリーンは使わない
+- **ローディング**: HTMXアクションは`hx-disabled-elt="this"`（必要に応じ`hx-indicator`）で二重送信を防ぐ（例: 「今すぐアップデートを確認」`#update-check-progress`、ポジション手動決済）。`hx-indicator`の表示はhtmx既定のインライン`<style>`に頼れない（`includeIndicatorStyles:false`。次項）ため、インジケーター要素はTailwindの`.htmx-request`バリアント等で自前でスタイルする。Kill Switch操作はLitの`pitha-kill-switch-panel`が`busy`状態でボタンを無効化する。スケルトンスクリーンは使わない
 - **エラー表示**: htmx 2は4xx/5xxを既定でswapしないため、`layout`が`<meta name="htmx-config">`の`responseHandling`（htmx 2標準機能。`response-targets`拡張の後継でありvendorしない）で`[45]..`を`#toast-region`へ`beforeend`でswapする。アクションハンドラは失敗時にステータスと`atoms.Toast`フラグメント（`shared.RespondActionError`）を返す。`static/src/components/htmx-errors/pitha-htmx-errors.ts`が①Toastを持たない失敗応答（空ボディ・プロキシのプレーンテキスト等）のswap抑止と`htmx:responseError`での汎用トースト、②`htmx:sendError`/`htmx:timeout`（応答なし）のトースト、③閉じるボタンと8秒での自動消去（ポインタが載っている間・フォーカスが内側にある間は停止し、外れてから8秒数え直す。WCAG 2.2.1、issue #561）を担う。トースト表示先は全ページ共通の`#toast-region`（`layout.Shell`/`SetupShell`）で、フォーム再レンダリング（422）は現状どのルートも使わない（フィールド単位保存の400もトースト）（issue #110/#121）。`#toast-region`は`popover="manual"`で、トーストが入る（スクリプト追加・htmxの`beforeend`swapどちらも）たびに`pitha-htmx-errors.ts`が`hidePopover()`→`showPopover()`でtop layer最前面へ再表示する。`<dialog>.showModal()`のモーダル（Settings/Setupの保存・削除、アップデート確認）はtop layerに描画されz-indexでは勝てず、これが無いとモーダル内の失敗トーストが背面に隠れるため（issue #321）。ただし`#toast-region`は`<dialog>`の外にあるため、モーダル表示中は`showModal()`の背景inertで閉じるボタンの操作・テキスト選択ができない。そこで`molecules.Modal`が各ダイアログ内に`[data-toast-region]`を持ち、開いているモーダルがある間は`pitha-htmx-errors.ts`がスクリプト追加のトーストをそこへ追加し、htmxのエラーフラグメントも`htmx:beforeSwap`で`detail.target`をそのリージョンへ差し替えて表示する（閉じるボタンと8秒の自動消去が効く。issue #353）
-- **htmxの動的実行無効化**: `layout`の`<meta name="htmx-config">`は`allowEval:false`（`hx-on*`・`hx-trigger`のフィルタ式・`js:`値の評価）と`allowScriptTags:false`（swapされたHTML内`<script>`の実行）を設定する。テンプレートはこれらを使わない（`hx-on*`・`[...]`フィルタ・`js:`は禁止。`<script>`を返すHTMXフラグメントも作らない）。`selfRequestsOnly`はhtmx 2既定のtrueのまま（issue #379）
+- **htmxの動的実行無効化**: `layout`の`<meta name="htmx-config">`（`shell.templ`の`htmxConfig`）は`allowEval:false`（`hx-on*`・`hx-trigger`のフィルタ式・`js:`値の評価）と`allowScriptTags:false`（swapされたHTML内`<script>`の実行）、`includeIndicatorStyles:false`（htmxが読み込み時に`<style>`をインラインで注入しないようにする。CSPの`style-src`が`'unsafe-inline'`を許さないため。`hx-indicator`の表示は自前でスタイルする規約で、唯一のインジケーター`UpdatePanel`の`#update-check-progress`はTailwindの`.htmx-request`バリアントで装飾する。issue #413）、`responseHandling`（上の「エラー表示」）を設定する。テンプレートはこれらを使わない（`hx-on*`・`[...]`フィルタ・`js:`は禁止。`<script>`を返すHTMXフラグメントも作らない）。`selfRequestsOnly`はhtmx 2既定のtrueのまま（issue #379）
 - **アップデート通知**: `Header`内`#update-banner`は`GET /system/update-status`を`load`・60秒周期・`updateStatusChanged`イベントで取得し、`UpdateBanner`または何も描かない。Settings画面の`#update-panel`は「今すぐアップデートを確認」（`POST /system/update-check`）の応答で置き換わり、応答の`HX-Trigger: updateStatusChanged`でHeaderのバナーも即時更新される（issue #76）
 - **バージョン表示**: `Header`内`#header-version`が`internal/version.Version`（リリースビルドはタグ名、ブランチ/PRビルドは`dev`）を全ページで表示し、`/settings#update-panel`へリンクする。手動の「今すぐアップデートを確認」ボタンはHeaderに置かず、Settings画面に一本化する（確認でインストーラーが検証済みになるとアプリが自動再起動するため、全ページ常設の押下導線にしない）。リンク先の`#update-panel`は`SettingsPage`の「アップデート」`Modal`内に置き、`pitha-modal`がURLハッシュからそのモーダルを開く（`:target`のリングでパネルを強調。issue #241/#302）
 - **ロゴ表示**: `Header`内`#header-logo`が`/static/img/logo.svg`（`static/src/img/logo.svg`。`go:embed`でバイナリに同梱、`make dev`では`PITHA_STATIC_DIR`経由でディスクから配信）とアプリ名を`nav`の直前に表示し、`/scanner`へリンクする。`nav`（`aria-label="メインナビゲーション"`）と同じflexグループ内に置き、狭い幅ではグループ内で折り返す（`flex-wrap`/`min-w-0`）。バージョン・StatusDot・Kill Switchパネルの`justify-between`配置は変わらない。ロゴの「P」マークは`cmd/desktop/build/appicon.png`（Wailsデスクトップアイコン）と同じ意匠（白地の角丸＋ネイビーのセリフ体P）で揃える。`<img>`は隣接するアプリ名テキストが代替になるため`alt=""`（issue #238）
@@ -254,8 +255,11 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.59 | 2026-10-05 | §5.1（`lit.md`）`pitha-price-chart`のスニペットを実装に合わせ、`chart`の`@state()`を外して非リアクティブ（リアクティブは`error`/`wsStatus`のみ）と明記、`wsStatus`・`disconnectedCallback`の`chart`/`wsClient`の`null`化・`override`修飾子を反映。§5.4のTempl例を`killSwitch*URL`定数に、§3の`Badge`/`Direction`/`Regime`記述を`atoms.Direction`の実体（`Regime`型・色分けは存在しない）に訂正 | issue #502 |
 | 1.60 | 2026-10-05 | `ScanPanel`に銘柄マスタ未投入の案内とJPXからの確認付き取得（`scan-universe-empty`/`scan-universe-import`/`scan-universe-imported`/`scan-universe-import-error`）を追記 | issue #508 |
 | 1.61 | 2026-10-05 | atomsに`Select`を追加し`Input`に`Class`を追加、organismsに`BacktestForm`を追加して`PerformancePage`/`ScanPanel`/`ErrorLogPanel`の直書きinput/selectをatoms経由に統一 | issue #520 |
-| 1.62 | 2026-10-05 | SSRの時刻表示（判断履歴・Activity Feed・Scanner caption・最終サイクル・ポジション）を`atoms.FormatJST`（`2006-01-02 15:04:05 JST`）に統一し、Litの同表示も`formatJstDateTime`で同形式にした。API（JSON）はRFC 3339のまま | issue #542 |
+| 1.62 | 2026-10-05 | SSRの時刻表示（判断履歴・Activity Feed・Scanner caption・最終サイクル・ポジション。1.68で`UpdatePanel`の最終確認時刻`CheckedAt`（`handler/system/update.go`）も対象として追記）を`atoms.FormatJST`（`2006-01-02 15:04:05 JST`）に統一し、Litの同表示も`formatJstDateTime`で同形式にした。API（JSON）はRFC 3339のまま | issue #542 |
 | 1.63 | 2026-10-05 | 周期ポーリングの操作者ハートビート除外を`X-Pitha-Background`ヘッダのみに統一し、`middleware.backgroundPollPaths`を廃止 | issue #522 |
 | 1.64 | 2026-10-05 | §3に表のアクセシビリティ規約（`<th scope>`・`<table>`の`aria-label`/`<caption>`）を追記し、全表へ適用して静的テストを追加 | issue #544 |
 | 1.65 | 2026-10-05 | §1のWebView接続先を`api/endpoints.md` §6に整合（Windowsのloopback専用WebSocketリスナー`ws-base`を追記、`runtime.md` §7・`lit.md` §6にも反映）。§2のツリー（`scanner_universe.go`・`shared/render.go`・`Badge`/`EntryQualityBadge`・`Button`/`ButtonLink`）と§4のルート列挙（`/activity`・`POST /scanner/universe/import`・フラグメントGET群）を実態に合わせた。§3にTempl層のAtomic Design一方向依存と`web/middleware`のimportを`layout`のみに限る方針を追記し、depguard（`atoms-direction`等・`templ-parts-no-middleware`）で強制、`SecretFieldRowProps`にCSRFField/CSRFTokenを追加して`molecules`の`middleware`依存を除去（#521, #568, #587, #588） |
 | 1.66 | 2026-10-06 | `Header`のナビに`aria-current="page"`（`NavItem`、#631）、3つのバナー枠の配置統一（#625）とポーリングバナーのライブリージョン化（#626）、`atoms.Input`/`Select`の空`id`/`name`非出力（#629）、Symbol Detail/Performanceのパネルを`JevPanel`/`RiskPanel`/`PositionPanel`/`BacktestFoldTable`としてorganismsへ移動（#630）、Scanner captionの初回スキャン前表示（#614）を反映 | issue #625, #626, #629, #630, #631, #614 |
+| 1.67 | 2026-10-06 | §5.1/§5.3（`lit.md`）`pitha-price-chart`/`pitha-calibration-heatmap`がDOMから外されて再挿入された場合に`connectedCallback`でチャートを作り直す旨（#523）、§5.1の`tick`をスナップショット時刻（クライアント時計は使わない）の分で1分足に集約する旨（`price-chart/bars.ts`の`foldTick`。#557）、`candles-url`/`ws-url`変更時に前銘柄の方向マーカーを初期化する旨（#562）を追記。§2のツリーに`price-chart/bars.ts`・`chart-data.ts`・`chart-types.ts`、`lib/jst-datetime.ts`、`atoms/timefmt.go`、`organisms/scan_format.go`を追加し、`*-test-support.ts`の列挙を`price-chart/`・`calibration-heatmap/`・`lib/ws-test-support.ts`まで広げた | issue #523, #557, #562, #639 |
+| 1.68 | 2026-10-06 | §5.5（`lit.md`）`pitha-activity-feed`の`resync`受信時のスナップショット再取得（#536）、§5.4の`pitha-kill-switch-panel`の操作世代カウンタ・`onReconnect`の分離・live region（#556, #558, #561）、§6`lib/api.ts`の`ApiError`導入と未使用の`put`/`patch`/`del`の削除（#559, #563）を履歴に記録。SSR時刻表示の統一対象（1.62）に`UpdatePanel`の最終確認時刻を追加 | issue #536, #556, #558, #559, #561, #563, #640 |
+| 1.69 | 2026-10-06 | §4「htmxの動的実行無効化」に`includeIndicatorStyles:false`（CSPの`style-src`回避と、インジケーターをTailwindの`.htmx-request`バリアントで自前スタイルする規約）を追記し、`shell.templ`の`htmxConfig`の全キーと一致させた | issue #413, #641 |
