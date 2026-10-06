@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { FakeWebSocket } from '../lib/ws-test-support';
 import {
   buttonLabels,
-  FakeWebSocket,
   flush,
   installFakes,
   mount,

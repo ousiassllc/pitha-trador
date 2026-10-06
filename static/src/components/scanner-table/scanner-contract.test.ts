@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { installFakeWebSocket } from '../lib/ws-test-support';
 import contract from './scanner-contract.json';
 import './pitha-scanner-table';
 import { createScannerTable } from './scanner-test-support';
@@ -12,25 +13,18 @@ import { COLUMNS } from './scanner-view';
 
 type ScannerTableElement = HTMLElement & { updateComplete: Promise<boolean> };
 
-class FakeWebSocket {
-  constructor(public readonly url: string) {}
-  addEventListener(): void {}
-  close(): void {}
-}
-
 let originalFetch: typeof fetch;
-let originalWebSocket: typeof WebSocket;
+let restoreWebSocket: () => void;
 
 beforeEach(() => {
   originalFetch = globalThis.fetch;
-  originalWebSocket = globalThis.WebSocket;
-  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+  restoreWebSocket = installFakeWebSocket();
   document.body.innerHTML = '';
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  globalThis.WebSocket = originalWebSocket;
+  restoreWebSocket();
   document.body.innerHTML = '';
 });
 

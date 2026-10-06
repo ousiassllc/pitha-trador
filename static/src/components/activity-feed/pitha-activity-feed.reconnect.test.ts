@@ -1,49 +1,21 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { FakeWebSocket, installFakeWebSocket } from '../lib/ws-test-support';
 import './pitha-activity-feed';
 
-type Listener = (event: unknown) => void;
 type FeedElement = HTMLElement & { updateComplete: Promise<boolean> };
 
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = [];
-  private listeners: Record<string, Listener[]> = {};
-
-  constructor(public readonly url: string) {
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(type: string, listener: Listener): void {
-    if (!this.listeners[type]) {
-      this.listeners[type] = [];
-    }
-    this.listeners[type].push(listener);
-  }
-
-  emit(type: string, event: unknown = {}): void {
-    for (const listener of this.listeners[type] ?? []) {
-      listener(event);
-    }
-  }
-
-  close(): void {
-    this.emit('close', { code: 1000 });
-  }
-}
-
 let originalFetch: typeof fetch;
-let originalWebSocket: typeof WebSocket;
+let restoreWebSocket: () => void;
 
 beforeEach(() => {
   originalFetch = globalThis.fetch;
-  originalWebSocket = globalThis.WebSocket;
-  FakeWebSocket.instances = [];
-  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+  restoreWebSocket = installFakeWebSocket();
   document.body.innerHTML = '';
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  globalThis.WebSocket = originalWebSocket;
+  restoreWebSocket();
   document.body.innerHTML = '';
 });
 

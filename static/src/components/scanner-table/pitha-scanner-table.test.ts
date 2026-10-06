@@ -1,12 +1,6 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
-import {
-  FakeWebSocket,
-  flush,
-  installFakes,
-  item,
-  mount,
-  type ScannerTableElement,
-} from './scanner-test-support';
+import { FakeWebSocket } from '../lib/ws-test-support';
+import { flush, installFakes, item, mount, type ScannerTableElement } from './scanner-test-support';
 
 installFakes();
 
