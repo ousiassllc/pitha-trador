@@ -18,9 +18,9 @@ import (
 func eventTestBars(inst domain.Instrument, prevVWAPBps, currVWAPBps float64) (domain.Snapshot, []domain.Snapshot) {
 	at := time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC)
 	prev := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at.Add(-time.Minute), Price: 2500,
-		Feature: domain.Feature{PriceVsVWAPBps: prevVWAPBps}}
+		Feature: domain.Feature{VWAP: 2500, PriceVsVWAPBps: prevVWAPBps}}
 	curr := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at, Price: 2500,
-		Feature: domain.Feature{PriceVsVWAPBps: currVWAPBps}}
+		Feature: domain.Feature{VWAP: 2500, PriceVsVWAPBps: currVWAPBps}}
 	return curr, []domain.Snapshot{prev}
 }
 

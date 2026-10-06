@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -97,4 +98,16 @@ func ApplyFastScreenerSetting(cfg *FastScreenerConfig, key, jsonValue string) er
 		return nil
 	}
 	return fmt.Errorf("config: %q is not a fast screener runtime setting key", key)
+}
+
+// ValidateFastScreenerOverrides enforces FR-FS-4's invariants (every
+// threshold > 0, max_price >= min_price, top_n >= 1, weights all >= 0 with a
+// positive sum) on a FastScreenerConfig after runtime_settings screener.*
+// overrides were applied to it. LoadStrategy validates the YAML+env result
+// the same way; this gives the highest-priority DB layer the same check
+// (issue #617; top_n >= 1 is checked here, not by setTopN, so an env value
+// of 0 is reported by LoadStrategy's validation). Violations are named by their runtime_settings key prefix
+// ("screener.min_price must be > 0 ...") and joined.
+func ValidateFastScreenerOverrides(cfg FastScreenerConfig) error {
+	return errors.Join(cfg.validate("screener")...)
 }

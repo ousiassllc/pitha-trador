@@ -94,11 +94,12 @@ pitha-trador/
 │   │   │   ├── feedfail/         # テスト専用: GetBoard失敗のうちmarket_data_downの連続失敗に数えるもの（#532）
 │   │   │   ├── logflow/          # テスト専用: GetBoardの構造化ログ（ディレクトリ行数上限対応で移動）
 │   │   │   ├── infolimit/        # 情報API・銘柄登録のプロセス全体レート制限（公式10件/秒、既定8。issue #514）
-│   │   │   └── rateflow/         # テスト専用: 情報APIレート上限と4001006の回帰テスト（#514）
+│   │   │   ├── rateflow/         # テスト専用: 情報APIレート上限と4001006の回帰テスト（#514）
+│   │   │   └── tokenflow/        # テスト専用: トークン発行・状態・失効時の再発行の回帰テスト（#621）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
 │   │   ├── featureengine/        # 特徴量算出
 │   │   │   ├── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
-│   │   │   └── marketcontextflow/ # テスト専用: `MarketContextLoader`の回帰テスト（行数上限のためfeatureengineから分離、#248）
+│   │   │   └── marketcontext/    # 市場コンテキスト（指数リターン・市場ブレッドス）の`Loader`。全銘柄共通値を30秒キャッシュして共有（#622。旧`marketcontextflow`のテストも同居）
 │   │   ├── pushfeed/             # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き）
 │   │   ├── symbolcache/          # kabuステーションAPI銘柄情報（貸借・値幅上下限）の1営業日キャッシュ（issue #511）
 │   │   ├── screener/             # Fast Screener・screen_score算出
@@ -240,7 +241,7 @@ handler → service → repository → domain
 | コンポーネント | 責務 | 実装場所 |
 |---------------|------|---------|
 | Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理。情報API・銘柄登録は`infolimit`でプロセス全体の秒間上限を守る。`rateflow`はテスト専用 | `internal/service/marketdata`（`infolimit`, `rateflow`） |
-| Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1）。`marketcontextflow`はテスト専用 | `internal/service/featureengine`（`eventtrigger`, `marketcontextflow`） |
+| Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1）。`marketcontext`は市場コンテキストの算出とキャッシュ | `internal/service/featureengine`（`eventtrigger`, `marketcontext`） |
 | Fast Screener | 数値フィルター・screen_score算出・上位N銘柄選定（§4.2） | `internal/service/screener` |
 | Jev Adapter (Scout/Trader) | 構造化状態と型付き質問（`noul`/`choice`）をTypeSafe AI公式API（`POST /v1/systemone`）へ送信し、回答をScoutResponse/TraderResponseへ変換する（§4.4, §4.5, §6）。ワイヤ層は`systemone`、テスト用フェイクは`jevtest`、`clientflow`はテスト専用 | `internal/service/jev`（`systemone`, `jevtest`, `clientflow`） |
 | RAG Context Builder | 現在の状態ベクトルからsqlite-vecで類似過去局面を検索し、Jevへのfew-shot文脈を構築する（§7、FR-RAG-1〜4。FR-RAG-5は将来拡張で未実装）。類似判断の`regime`復元に`execution/enrich`を利用する | `internal/service/rag` |

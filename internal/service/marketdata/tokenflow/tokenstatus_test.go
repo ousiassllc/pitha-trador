@@ -1,4 +1,7 @@
-package marketdata_test
+// Package tokenflow_test holds the external tests of token issuance, status and
+// reissue. It lives in its own directory to keep internal/service/marketdata
+// under the per-directory line limit.
+package tokenflow_test
 
 import (
 	"context"
