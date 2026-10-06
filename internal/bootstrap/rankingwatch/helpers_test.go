@@ -3,6 +3,7 @@ package rankingwatch_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"slices"
 	"sync"
@@ -47,8 +48,27 @@ func (f *fakeHeld) HeldSymbols(context.Context) ([]string, error) { return f.sym
 
 type fakeUniverse []domain.Instrument
 
-func (u fakeUniverse) ListActiveByKind(context.Context, string) ([]domain.Instrument, error) {
-	return u, nil
+func (u fakeUniverse) ListActiveByKind(_ context.Context, kind string) ([]domain.Instrument, error) {
+	var out []domain.Instrument
+	for _, inst := range u {
+		if inst.Kind == kind {
+			out = append(out, inst)
+		}
+	}
+	return out, nil
+}
+
+// failingKind is a Universe whose listing of one kind fails.
+type failingKind struct {
+	fakeUniverse
+	kind string
+}
+
+func (u failingKind) ListActiveByKind(ctx context.Context, kind string) ([]domain.Instrument, error) {
+	if kind == u.kind {
+		return nil, errors.New("db locked")
+	}
+	return u.fakeUniverse.ListActiveByKind(ctx, kind)
 }
 
 type fakeRegistrar struct {

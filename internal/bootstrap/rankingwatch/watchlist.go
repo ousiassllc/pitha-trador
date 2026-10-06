@@ -2,11 +2,14 @@ package rankingwatch
 
 import "sync"
 
-// Watchlist is the current watch list, shared between Watcher (writer) and
-// the candidate refresh (reader, candidates.Refresher.Watch). It is empty
-// until the first cycle and whenever the ranking is empty or failed and
-// nothing is held, so the Scanner Dashboard never shows candidates from a
-// ranking that is no longer there.
+// Watchlist is the symbols the candidate refresh screens, shared between
+// Watcher (writer) and candidates.Refresher.Watch (reader). In the session it
+// is the watch list; outside it, the watch list of the last in-session cycle
+// (plus the held symbols), so the Scanner Dashboard goes on showing the
+// candidates from the stored data (FR-SCAN-7). It is empty until the first
+// cycle and whenever an in-session ranking is empty or failed and nothing is
+// held, so the dashboard never shows candidates from a ranking that is no
+// longer there.
 type Watchlist struct {
 	mu      sync.RWMutex
 	symbols map[string]struct{}

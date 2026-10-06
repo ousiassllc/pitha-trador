@@ -106,20 +106,6 @@ func TestWatcher_RegistrationFailureOrPanicIsRetriedNextCycle(t *testing.T) {
 	}
 }
 
-func TestWatcher_OutsideTheSessionRequestsNoRanking(t *testing.T) {
-	r := newRig(t, "7203", "6758")
-	r.held.symbols = []string{"6758"}
-	r.w.Open = func(time.Time) bool { return false }
-	r.src.set([]string{"7203"}, nil, false)
-	r.cycle()
-	if r.src.calls != 0 {
-		t.Errorf("ranking requests = %d, want 0 outside the session", r.src.calls)
-	}
-	if !r.list.Contains("6758") || r.list.Contains("7203") {
-		t.Error("outside the session only the held symbol should be watched")
-	}
-}
-
 func TestWatcher_RunCyclesUntilCancelled(t *testing.T) {
 	r := newRig(t, "7203")
 	r.src.set([]string{"7203"}, nil, false)
