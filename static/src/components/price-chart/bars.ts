@@ -16,6 +16,13 @@ export function toUTCTimestamp(iso: string): UTCTimestamp {
   return Math.floor(new Date(iso).getTime() / 1000) as UTCTimestamp;
 }
 
+/** The start (UTC seconds) of the 1-minute bar `iso` falls in; `null` when it does not parse. */
+export function toBarTime(iso: string): UTCTimestamp | null {
+  const seconds = toUTCTimestamp(iso);
+  if (!Number.isFinite(seconds)) return null;
+  return (Math.floor(seconds / BAR_SECONDS) * BAR_SECONDS) as UTCTimestamp;
+}
+
 // foldTick returns the bar to draw after a price tick, or null when the tick
 // must be ignored. The tick goes into the 1-minute bar of its snapshot time
 // (`snapshotTime`, RFC 3339 - not the client clock, so a stalled feed adds no
@@ -25,9 +32,8 @@ export function toUTCTimestamp(iso: string): UTCTimestamp {
 // (series.update rejects a bar older than the last).
 export function foldTick(lastBar: Bar | null, price: number, snapshotTime: string): Bar | null {
   if (!(price > 0)) return null;
-  const snapshot = toUTCTimestamp(snapshotTime);
-  if (!Number.isFinite(snapshot)) return null;
-  const time = (Math.floor(snapshot / BAR_SECONDS) * BAR_SECONDS) as UTCTimestamp;
+  const time = toBarTime(snapshotTime);
+  if (time === null) return null;
   if (lastBar && time < lastBar.time) return null;
   if (lastBar && lastBar.time === time) {
     return {

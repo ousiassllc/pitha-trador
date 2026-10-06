@@ -87,7 +87,9 @@ describe('pitha-price-chart', () => {
 
   // Markers and lastDirection of the previous symbol used to survive a URL
   // change, so its arrows stayed on the new chart and the new symbol's first
-  // jev_update in the same direction was swallowed (issue #562).
+  // jev_update in the same direction was swallowed (issue #562). The first
+  // jev_update of a connection only seeds the direction (issue #624), so each
+  // symbol needs a seed plus a flip to draw one marker.
   test('clears the previous symbol markers and last direction when the URLs change', async () => {
     const el = document.createElement('pitha-price-chart') as InstanceType<typeof PithaPriceChart>;
     el.setAttribute('candles-url', '/api/v1/symbols/7203/candles');
@@ -95,9 +97,12 @@ describe('pitha-price-chart', () => {
     document.body.appendChild(el);
     await el.updateComplete;
     const candle = createdSeries[0];
-    const jevLong = { data: JSON.stringify({ type: 'jev_update', direction: 'LONG' }) };
+    const jev = (direction: string) => ({
+      data: JSON.stringify({ type: 'jev_update', direction, time: '2026-09-29T01:00:30Z' }),
+    });
 
-    FakeWebSocket.instances[0].emit('message', jevLong);
+    FakeWebSocket.instances[0].emit('message', jev('SHORT'));
+    FakeWebSocket.instances[0].emit('message', jev('LONG'));
     expect(candle.setMarkers.mock.calls.at(-1)?.[0]).toHaveLength(1);
 
     el.setAttribute('candles-url', '/api/v1/symbols/6758/candles');
@@ -105,7 +110,8 @@ describe('pitha-price-chart', () => {
     await el.updateComplete;
     expect(candle.setMarkers.mock.calls.at(-1)?.[0]).toEqual([]);
 
-    FakeWebSocket.instances[1].emit('message', jevLong);
+    FakeWebSocket.instances[1].emit('message', jev('SHORT'));
+    FakeWebSocket.instances[1].emit('message', jev('LONG'));
     expect(candle.setMarkers.mock.calls.at(-1)?.[0]).toHaveLength(1);
   });
 
