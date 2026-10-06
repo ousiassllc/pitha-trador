@@ -58,6 +58,14 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 - 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、約定不能の`special_quote`（特別気配）/`limit_up`（ストップ高）/`limit_down`（ストップ安）（`kind=threshold`、`status=excluded`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
 - `funnel.scout_*`は候補に対するJev Scoutの判定済み件数（サイクル公開後にジョブが完了するたび増える。`scout`が`null`=候補外または判定待ち、`error`=Jev呼び出し失敗）
 
+### GET /api/v1/scanner/scan/export
+
+最新のスキャンサイクルの銘柄ごとの判定を、ページングなしの全件でCSVのダウンロード（`Content-Disposition: attachment`、`text/csv; charset=utf-8`、先頭にUTF-8 BOM）として返す。Scanner Dashboardの銘柄一覧の「CSVダウンロード」リンクが、現在の絞り込み条件（ページは引き継がない）付きで呼ぶ。
+
+クエリ: `q`・`status`・`reason`は`GET /api/v1/scanner/scan`と同じ（未知の`reason`は400）。最初のサイクル前はヘッダー行のみのCSV。レスポンスヘッダー`X-Pitha-Record-Count`にデータ行数。ファイル名は`pitha-scan-<サイクル終了時刻UTC yyyymmdd-hhmmss>.csv`。
+
+列: `symbol`, `name`, `market`, `status`（`passed`/`excluded`/`missing`）, `reason_codes`（`;`区切り）, `reason_labels`（`;`区切り）, `scout`（Jev Scoutの結果。未実施は空）。`=`・`+`・`-`・`@`・タブ・CRで始まるセルは、表計算ソフトで数式として実行されないよう先頭に`'`を付ける。
+
 ### GET /api/v1/symbols/{symbol}
 
 Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
@@ -189,6 +197,7 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 |---------|------|------|
 | GET | `/api/v1/scanner` | 候補銘柄一覧 |
 | GET | `/api/v1/scanner/scan` | 最新スキャンサイクルのファネル件数・銘柄別の判定（通過/除外/欠損と理由） |
+| GET | `/api/v1/scanner/scan/export` | 最新スキャンサイクルの銘柄ごとの判定をCSVでダウンロード（絞り込みはscanと同じ、ページングなしの全件、UTF-8 BOM付き） | `internal/web/handler/scanner` |
 | GET | `/api/v1/symbols/{symbol}` | 銘柄詳細 |
 | GET | `/api/v1/symbols/{symbol}/candles` | チャート用系列データ |
 | GET | `/api/v1/symbols/{symbol}/decisions` | Jev判断履歴 |

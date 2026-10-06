@@ -108,6 +108,7 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	api := humagin.NewWithGroup(engine, engine.Group(apiBasePath), apiConfig)
 	huma.Get(api, "/scanner", h.scanner.APIScanner)
 	huma.Get(api, "/scanner/scan", h.scanner.APIScannerScan)
+	huma.Get(api, "/scanner/scan/export", h.scanner.APIScannerScanExport)
 	huma.Post(api, "/system/pause", h.system.APIPause)
 	huma.Post(api, "/system/resume", h.system.APIResume)
 	huma.Post(api, "/system/kill", h.system.APIKill)

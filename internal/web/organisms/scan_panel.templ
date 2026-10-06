@@ -35,6 +35,9 @@ type ScanPanelView struct {
 
 const scanPanelURL = "/scanner/scan"
 
+// scanExportURL is the scan CSV download endpoint.
+const scanExportURL = "/api/v1/scanner/scan/export"
+
 // ScanPanel is the Scanner Dashboard's scan-status panel (issue #303,
 // functional.md §5.1): the latest scan cycle's funnel (universe ->
 // features -> Fast Screener -> Scout), its time and duration, a manual
@@ -149,10 +152,13 @@ templ scanList(v ScanPanelView) {
 			絞り込む
 		}
 	</form>
-	<p class="mt-3 text-sm text-slate-600" data-testid="scan-total">
-		該当 <span class="font-semibold text-slate-900">{ strconv.Itoa(v.Page.Total) }</span> 銘柄
-		（{ strconv.Itoa(v.Page.Page) } / { strconv.Itoa(v.Page.Pages) } ページ）
-	</p>
+	<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+		<p data-testid="scan-total">
+			該当 <span class="font-semibold text-slate-900">{ strconv.Itoa(v.Page.Total) }</span> 銘柄
+			（{ strconv.Itoa(v.Page.Page) } / { strconv.Itoa(v.Page.Pages) } ページ）
+		</p>
+		<a class="text-xs text-sky-700 underline-offset-2 hover:underline" href={ templ.SafeURL(scanExportHref(v.Query)) } hx-disable data-testid="scan-export" title="現在の絞り込み条件に該当する全銘柄（ページ分割なし）をCSVでダウンロードします">CSVダウンロード（絞り込み結果すべて）</a>
+	</div>
 	<div class="mt-2 overflow-x-auto rounded-md border border-slate-200">
 		<table class="w-full border-collapse text-left text-sm" aria-label="スキャン対象銘柄" data-testid="scan-table">
 			<thead>
@@ -285,4 +291,23 @@ func scanHref(q domain.ScanQuery, page int, open bool) string {
 		return scanPanelURL
 	}
 	return scanPanelURL + "?" + v.Encode()
+}
+
+// scanExportHref is the CSV download URL (`GET /api/v1/scanner/scan/export`)
+// for q's filters; paging does not apply to the export.
+func scanExportHref(q domain.ScanQuery) string {
+	v := url.Values{}
+	if q.Q != "" {
+		v.Set("q", q.Q)
+	}
+	if q.Status != "" {
+		v.Set("status", string(q.Status))
+	}
+	if q.Reason != nil {
+		v.Set("reason", q.Reason.Code())
+	}
+	if len(v) == 0 {
+		return scanExportURL
+	}
+	return scanExportURL + "?" + v.Encode()
 }

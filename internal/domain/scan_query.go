@@ -31,18 +31,11 @@ type ScanPage struct {
 	Pages    int // number of pages, at least 1
 }
 
-// Query applies q to the cycle's symbols. Symbols keep their (symbol)
-// order. A page past the end is clamped to the last page.
-func (c ScanCycle) Query(q ScanQuery) ScanPage {
-	size := q.PageSize
-	switch {
-	case size <= 0:
-		size = DefaultScanPageSize
-	case size > MaxScanPageSize:
-		size = MaxScanPageSize
-	}
+// Matches returns every symbol of the cycle that satisfies q's filters
+// (Q, Status, Reason; paging is ignored), in the cycle's (symbol) order.
+// The slice is newly allocated.
+func (c ScanCycle) Matches(q ScanQuery) []ScanSymbol {
 	needle := strings.ToLower(strings.TrimSpace(q.Q))
-
 	matches := make([]ScanSymbol, 0, len(c.Symbols))
 	for _, s := range c.Symbols {
 		if q.Reason != nil && !s.Reasons.Has(*q.Reason) {
@@ -56,6 +49,20 @@ func (c ScanCycle) Query(q ScanQuery) ScanPage {
 		}
 		matches = append(matches, s)
 	}
+	return matches
+}
+
+// Query applies q to the cycle's symbols. Symbols keep their (symbol)
+// order. A page past the end is clamped to the last page.
+func (c ScanCycle) Query(q ScanQuery) ScanPage {
+	size := q.PageSize
+	switch {
+	case size <= 0:
+		size = DefaultScanPageSize
+	case size > MaxScanPageSize:
+		size = MaxScanPageSize
+	}
+	matches := c.Matches(q)
 
 	pages := max(1, (len(matches)+size-1)/size)
 	page := min(max(q.Page, 1), pages)
