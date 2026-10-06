@@ -44,7 +44,10 @@ func (c *Client) GetSymbol(ctx context.Context, symbol string, exchange int) (Sy
 		return SymbolInfo{}, ErrNoToken
 	}
 	var info SymbolInfo
-	if err := c.doInfo(ctx, http.MethodGet, fmt.Sprintf("/symbol/%s@%d", symbol, exchange), token, nil, &info); err != nil {
+	path := fmt.Sprintf("/symbol/%s@%d", symbol, exchange)
+	if err := c.withRestSlot(ctx, RegisterSymbol{Symbol: symbol, Exchange: exchange}, func() error {
+		return c.doInfo(ctx, http.MethodGet, path, token, nil, &info)
+	}); err != nil {
 		return SymbolInfo{}, err
 	}
 	return info, nil

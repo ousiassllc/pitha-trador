@@ -28,6 +28,7 @@ const (
 	TokenIssueAPIDisabled TokenIssue = "api_disabled"  // 4001008
 	TokenIssueBadPassword TokenIssue = "bad_password"  // 4001013
 	TokenIssueUnknown     TokenIssue = "unknown"       // 上記以外
+	TokenIssueRejected    TokenIssue = "rejected"      // /token は成功するが情報系APIが新トークンも拒否
 )
 
 // TokenStatus is a snapshot of the last token issuance outcome (Client.
@@ -55,6 +56,8 @@ func (s TokenStatus) Guidance() string {
 		return "kabuステーションのAPI利用設定が完了していません。「APIシステム設定」で「APIを利用する」を有効にしてください。"
 	case TokenIssueBadPassword:
 		return "APIパスワードが正しくありません。設定画面の KABU_API_PASSWORD を、kabuステーション「APIシステム設定」のAPIパスワードと一致させてください（本番用と検証用の取り違えに注意）。"
+	case TokenIssueRejected:
+		return fmt.Sprintf("トークンは発行できましたが、板・銘柄情報APIが認証エラー（エラーコード %d）を返し続けています。取得を一時停止し30秒ごとに再試行しています。kabuステーションにログインした状態でも発生する場合は、別のプロセス（本アプリの二重起動や他のAPIツール）が同じkabuステーションの /token を呼んでトークンを取り合っていないか確認し、kabuステーションを一度ログアウトして再ログインしてください。", s.Code)
 	case TokenIssueUnknown:
 		fallthrough
 	default:

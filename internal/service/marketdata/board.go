@@ -43,6 +43,7 @@ func (c *Client) RegisterSymbols(ctx context.Context, symbols []RegisterSymbol) 
 	if err := c.doInfo(ctx, http.MethodPut, "/register", token, registerRequest{Symbols: symbols}, &resp); err != nil {
 		return RegisterSuccess{}, err
 	}
+	c.notePinned(symbols)
 	return resp, nil
 }
 
@@ -179,7 +180,9 @@ func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Boa
 
 	var board Board
 	path := fmt.Sprintf("/board/%s@%d", symbol, exchange)
-	if err := c.doInfo(ctx, http.MethodGet, path, token, nil, &board); err != nil {
+	if err := c.withRestSlot(ctx, RegisterSymbol{Symbol: symbol, Exchange: exchange}, func() error {
+		return c.doInfo(ctx, http.MethodGet, path, token, nil, &board)
+	}); err != nil {
 		if !errors.Is(err, ErrRateLimited) {
 			c.status.MarkStale(symbol, err)
 			if countsAsFeedFailure(err) {
