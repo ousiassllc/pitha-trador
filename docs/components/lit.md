@@ -14,6 +14,10 @@
 | `pitha-activity-feed` | キュー別pending/running/failed件数・直近アクティビティ一覧・直近Kill Switchイベントのライブ表示（type/queueフィルタ付き） | System Activity Log | `GET /api/v1/activity`（初期・フィルタ変更時）＋ `/ws/activity`（ライブ） |
 | `pitha-kill-switch-panel` | システム状態表示・Kill Switch発動/解除操作 | 全ページ共通（Header内アイランド） | `GET/POST /api/v1/system/*` |
 
+> **Lit描画の表のa11y（issue #623）**: `pitha-activity-feed`・`pitha-scanner-table`・`pitha-calibration-heatmap`はハイドレーション後にSSRの表を置き換えるため、Templ側（`internal/web/table_a11y_test.go`）と同じ水準を保つ。全`<th>`は`scope="col"`、全`<table>`はSSR版と同じ`aria-label`（キュー状況／アクティビティフィード／スキャナー候補／方向別キャリブレーション）を持ち、Recent Activityは`<caption>`の`as of`も引き継ぐ。`lib/table-a11y.test.ts`が`components/`の`.ts`テンプレートを静的に検査する。
+
+> **テスト用`FakeWebSocket`（issue #638）**: コンポーネントテストのフェイクは`lib/ws-test-support.ts`の1実装（`FakeWebSocket`・`installFakeWebSocket`）に集約し、各`*-test-support.ts`/テストはそれをimportする。`lib/ws.ts`の挙動を変えるときはここだけ追従する。
+
 ### 5.1 pitha-price-chart
 
 ```typescript
@@ -60,9 +64,12 @@ export class PithaPriceChart extends LitElement {
 ```
 
 - `tick`は1分足に集約する: メッセージの`time`（スナップショット時刻。クライアント時計は使わない）の分（`floor(time/60)*60`）のバーの`high/low/close`を更新し、分が変わったときのみ新しいバーを追加する（集約は`price-chart/bars.ts`の`foldTick`）。`price <= 0`・時刻不正・最新バーより古いスナップショットの`tick`は無視する。サーバーは`LastPrice > 0`かつ新しいスナップショットが現れたときだけ`tick`を送るため、場外・スキャン停止中に偽の足は増えない（issue #183, #557）
-- `jev_update`（`direction`/`confidence`）は`direction`が変化したときのみ、チャート上のマーカー（例: LONG転換で上向き矢印）として描画する。同一`direction`の繰り返しや`confidence`のみの変化では描画せず、`entry_quality`は`jev_update`に載らないため扱わない。Symbol DetailのJev判定パネルはSSRのみで、`jev_update`では更新されない（ページ再読み込みで更新。issue #362）
+- `jev_update`（`direction`/`confidence`/`time`）は`direction`が変化したときのみ、チャート上のマーカー（例: LONG転換で上向き矢印）として描画する。マーカーはクライアント時計ではなくメッセージの`time`（判断時刻）を含む1分足（`bars.ts`の`toBarTime`）に置く。接続直後（再購読直後を含む）の最初の`jev_update`は現在の方向を伝える初期状態であり転換ではないため描画せず、`lastDirection`の初期化にだけ使う（以降の方向変化のみ描画。issue #624）。同一`direction`の繰り返しや`confidence`のみの変化では描画せず、`entry_quality`は`jev_update`に載らないため扱わない。Symbol DetailのJev判定パネルはSSRのみで、`jev_update`では更新されない（ページ再読み込みで更新。issue #362）
 - `candles-url`/`ws-url`属性が変化した場合は`updated()`ライフサイクルで再取得・再購読し、前銘柄の方向マーカー（`markers`・`lastDirection`・`setMarkers([])`）も消す（issue #562）。銘柄はURLに含めてサーバーが注入するため、`symbol`属性は持たない（HATEOAS。issue #409）
-- 出来高ヒストグラムは`candles`の`volume`（1分足あたりの出来高。サーバーが累積セッション値の差分に変換済みで、クライアントでは再計算しない。issue #474）をそのまま描画する
+- ペインは縦に分割する: 出来高ヒストグラムのオーバーレイ価格スケールに`scaleMargins: { top: 0.8, bottom: 0 }`、メイン価格スケール（`'right'`）に`{ top: 0.1, bottom: 0.25 }`を設定し、出来高を下部20%に半透明（`rgba(156, 163, 175, 0.5)`）で描いてローソク足・VWAPを覆わない（`price-chart/chart-data.ts`。issue #634）
+- VWAPラインは`vwap > 0`の点だけを描画する。`vwap`は`float64`でnullを送れず、未約定などで0が返るが、0を描くと価格軸が0起点に崩れるため、`vwap <= 0`のローソク足は`WhitespaceData`（時間軸の位置は保ち、線は途切れる）にする（`vwapSeriesData`。issue #635）
+- チャートのコンテナは`role="img"`と空でない`aria-label`（銘柄・最新終値・最新VWAP・直近のJev方向。`describeChart`）を持ち、初期ロード・`tick`・`jev_update`の適用時に更新する。`aria-live`は付けず、要約のみを更新する（issue #637）
+- 出来高ヒストグラムは`candles`の`volume'（1分足あたりの出来高。サーバーが累積セッション値の差分に変換済みで、クライアントでは再計算しない。issue #474）をそのまま描画する
 - `candles-url`/`ws-url`は他コンポーネントと同様に未設定なら`logger.error`を出して該当の取得・購読を行わない
 - `/ws/symbols/{symbol}`が切断されている間（`reconnecting`/`failed`）はチャート下に「接続が切れています」を表示する。`tick`はスナップショット時刻で足を作るため切断中の足は欠落する。切断後に`open`へ復帰した時は`candles-url`を`background: true`で再取得して足を補う（操作者不在でも発火するためハートビートに数えさせない。FR-RISK-6、issue #336）
 - 時間軸・クロスヘアは**JST（Asia/Tokyo）表示**とする。lightweight-charts v4は`UTCTimestamp`を既定でUTC表記するため、そのままでは東証の立会時間09:00〜15:30が00:00〜06:30に見える。`createChart`に`localization.timeFormatter`（クロスヘア、`YYYY-MM-DD HH:mm`）と`timeScale.tickMarkFormatter`（目盛、`HH:mm`/日/月/年）として`price-chart/jst-time.ts`の`formatCrosshairTime`/`formatTickMark`を渡し、`timeScale.timeVisible: true`・`secondsVisible: false`（足が1分単位のため）にする。ゾーンは`Intl.DateTimeFormat`に`timeZone: 'Asia/Tokyo'`を固定し、ホスト/Wailsのタイムゾーンに依存しない。系列・マーカー・ティック足に渡す時刻はこれまで通りepoch秒（UTC）のままで、表示時にのみJSTへ変換する（issue #478）
@@ -86,6 +93,7 @@ export class PithaPriceChart extends LitElement {
   - `sample_count == 0`の帯はreliability curveの実測系列に含めず（Perfect calibration線は全帯）、ヒートマップセルは中立色（グレー）で「データなし」と表示する（的中率・平均リターン・`conf`は出さない）。各帯セルは`n=<sample_count>`を表示する
   - 方向別テーブルは`sample_count == 0`の行の的中率・平均リターンを`—`で表示する
   - 全帯・全方向の`sample_count`合計が0のときはBrier Score/Log Loss/Expected Calibration Errorを表示せず「サンプルなし」を表示する（0.000＝最良スコアと誤読させない）。API仕様（`api/endpoints/huma-api-insights.md`）は変更しない
+- ヒートマップセルの文字色は背景に応じて切り替える（`calibration-view.ts`の`heatmapColors`）。背景`hsl(h, 70%, 45%)`に濃色`#0f172a`でコントラスト比4.5:1（WCAG 2.x AA）に届く帯はそのまま、低的中率側（赤〜橙）は白文字に切り替えて背景の明度を4.5:1に届く最小限まで下げる。背景色・文字色とも`ref`コールバックからCSSOM（`style.backgroundColor`/`style.color`）で設定する（CSPがインライン`style`属性を禁じるため。issue #636）
 
 > **Shadow DOMのスタイル（issue #145）**: Tailwindはdocument CSSでShadow Rootを越えない。`pitha-kill-switch-panel`/`pitha-price-chart`/`pitha-calibration-heatmap`は既定のShadow DOMを使うため、各自`static styles`（共通部品は`lib/styles.ts`）を持つ。`pitha-scanner-table`/`pitha-activity-feed`はLight DOMで描画しTailwindをそのまま使う。`pitha-price-chart`は`autoSize`でコンテナ幅に追従する。
 

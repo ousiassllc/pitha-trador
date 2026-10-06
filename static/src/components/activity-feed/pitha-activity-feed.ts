@@ -75,6 +75,8 @@ export class PithaActivityFeed extends LitElement {
   @state() private queueFilter = '';
   @state() private error: string | null = null;
   @state() private wsStatus: WsStatus = 'connecting';
+  // RFC 3339 time of the latest snapshot; the table caption mirrors the SSR "as of".
+  @state() private asOf = '';
 
   private wsClient: WsClient<ActivityWsMessage> | null = null;
   private snapshotGeneration = 0;
@@ -115,6 +117,7 @@ export class PithaActivityFeed extends LitElement {
       if (generation !== this.snapshotGeneration) return;
       this.queues = response.queues;
       this.events = response.events;
+      this.asOf = response.as_of;
       this.loaded = true;
       this.error = null;
     } catch (err) {
@@ -236,14 +239,15 @@ export class PithaActivityFeed extends LitElement {
             </select>
           </label>
         </div>
-        <table class="w-full border-collapse text-left text-sm">
+        <table class="w-full border-collapse text-left text-sm" aria-label="アクティビティフィード">
+          ${this.asOf ? html`<caption class="mb-2 text-left text-sm text-slate-500">as of ${formatJstDateTime(this.asOf)}</caption>` : nothing}
           <thead>
             <tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-              <th class="px-3 py-2">Time</th>
-              <th class="px-3 py-2">Type</th>
-              <th class="px-3 py-2">Symbol</th>
-              <th class="px-3 py-2">Detail</th>
-              <th class="px-3 py-2">Latency (ms)</th>
+              <th scope="col" class="px-3 py-2">Time</th>
+              <th scope="col" class="px-3 py-2">Type</th>
+              <th scope="col" class="px-3 py-2">Symbol</th>
+              <th scope="col" class="px-3 py-2">Detail</th>
+              <th scope="col" class="px-3 py-2">Latency (ms)</th>
             </tr>
           </thead>
           <tbody>

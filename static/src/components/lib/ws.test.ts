@@ -1,46 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from './ws';
+import { FakeWebSocket, installFakeWebSocket } from './ws-test-support';
 
-type Listener = (event: unknown) => void;
-
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = [];
-  private listeners: Record<string, Listener[]> = {};
-
-  constructor(public readonly url: string) {
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(type: string, listener: Listener): void {
-    if (!this.listeners[type]) {
-      this.listeners[type] = [];
-    }
-    this.listeners[type].push(listener);
-  }
-
-  emit(type: string, event: unknown = {}): void {
-    for (const listener of this.listeners[type] ?? []) {
-      listener(event);
-    }
-  }
-
-  close(): void {
-    this.emit('close', { code: 1000 });
-  }
-}
-
-let originalWebSocket: typeof WebSocket;
+let restoreWebSocket: () => void;
 
 beforeEach(() => {
-  originalWebSocket = globalThis.WebSocket;
-  FakeWebSocket.instances = [];
-  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+  restoreWebSocket = installFakeWebSocket();
   vi.useFakeTimers();
 });
 
 afterEach(() => {
   vi.useRealTimers();
-  globalThis.WebSocket = originalWebSocket;
+  restoreWebSocket();
 });
 
 describe('WsClient', () => {

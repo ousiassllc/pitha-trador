@@ -174,7 +174,7 @@ export class PithaScannerTable extends LitElement {
       </p>
       ${this.renderHelp()}
       <div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
-        <table class="w-full border-collapse text-left text-sm">
+        <table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
           ${
             this.asOf
               ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">Scanner Dashboard — as of ${formatJstDateTime(this.asOf)}</caption>`

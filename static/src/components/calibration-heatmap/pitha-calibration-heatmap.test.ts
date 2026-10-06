@@ -1,5 +1,5 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
-import { heatmapColor, NO_DATA_COLOR } from './calibration-view';
+import { heatmapColors, NO_DATA_COLOR } from './calibration-view';
 import {
   bucket,
   flush,
@@ -50,10 +50,14 @@ describe('pitha-calibration-heatmap', () => {
       ) ?? []),
     ];
     expect(cells.map((c) => c.style.backgroundColor)).toEqual([
-      heatmapColor(0.1),
-      heatmapColor(0.9),
+      heatmapColors(0.1).background,
+      heatmapColors(0.9).background,
     ]);
-    expect(heatmapColor(0.1)).not.toBe(heatmapColor(0.9));
+    expect(cells.map((c) => c.style.color)).toEqual([
+      heatmapColors(0.1).color,
+      heatmapColors(0.9).color,
+    ]);
+    expect(heatmapColors(0.1).background).not.toBe(heatmapColors(0.9).background);
   });
 
   test('renders per-bucket PnL and the per-direction average return', async () => {
@@ -108,7 +112,7 @@ describe('pitha-calibration-heatmap', () => {
     ];
     const [emptyCell, filledCell] = cells;
     expect(emptyCell?.style.backgroundColor).toBe(NO_DATA_COLOR);
-    expect(emptyCell?.style.backgroundColor).not.toBe(heatmapColor(0));
+    expect(emptyCell?.style.backgroundColor).not.toBe(heatmapColors(0).background);
     expect(emptyCell?.textContent).toContain('データなし');
     expect(emptyCell?.textContent).toContain('n=0');
     expect(emptyCell?.textContent).not.toContain('0.0%');

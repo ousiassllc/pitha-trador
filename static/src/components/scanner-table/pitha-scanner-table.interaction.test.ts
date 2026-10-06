@@ -1,12 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
-import {
-  createScannerTable,
-  FakeWebSocket,
-  flush,
-  installFakes,
-  item,
-  mount,
-} from './scanner-test-support';
+import { FakeWebSocket } from '../lib/ws-test-support';
+import { createScannerTable, flush, installFakes, item, mount } from './scanner-test-support';
 import { COLUMNS } from './scanner-view';
 
 installFakes();

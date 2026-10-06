@@ -1,9 +1,9 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
+import { FakeWebSocket } from '../lib/ws-test-support';
 import {
   createFeed,
   emit,
   event,
-  FakeWebSocket,
   type FeedElement,
   flush,
   installFakes,

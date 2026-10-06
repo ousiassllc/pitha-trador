@@ -1,37 +1,11 @@
 // Shared fixtures for the pitha-activity-feed tests: a fake WebSocket, fetch
 // stubbing helpers and the per-test global setup/teardown.
 import { afterEach, beforeEach, mock } from 'bun:test';
+import { FakeWebSocket, installFakeWebSocket } from '../lib/ws-test-support';
 import './pitha-activity-feed';
 import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 
-type Listener = (event: unknown) => void;
 export type FeedElement = HTMLElement & { updateComplete: Promise<boolean> };
-
-export class FakeWebSocket {
-  static instances: FakeWebSocket[] = [];
-  private listeners: Record<string, Listener[]> = {};
-
-  constructor(public readonly url: string) {
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(type: string, listener: Listener): void {
-    if (!this.listeners[type]) {
-      this.listeners[type] = [];
-    }
-    this.listeners[type].push(listener);
-  }
-
-  emit(type: string, event: unknown = {}): void {
-    for (const listener of this.listeners[type] ?? []) {
-      listener(event);
-    }
-  }
-
-  close(): void {
-    this.emit('close', { code: 1000 });
-  }
-}
 
 export const queue = (overrides: Partial<QueueStatus> = {}): QueueStatus => ({
   queue: 'jev-scout',
@@ -51,22 +25,20 @@ export const event = (overrides: Partial<ActivityEvent> = {}): ActivityEvent => 
 });
 
 let originalFetch: typeof fetch;
-let originalWebSocket: typeof WebSocket;
+let restoreWebSocket: () => void;
 
 // installFakes registers the beforeEach/afterEach pair that swaps in
 // FakeWebSocket and restores the real globals; call it once per test file.
 export function installFakes(): void {
   beforeEach(() => {
     originalFetch = globalThis.fetch;
-    originalWebSocket = globalThis.WebSocket;
-    FakeWebSocket.instances = [];
-    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+    restoreWebSocket = installFakeWebSocket();
     document.body.innerHTML = '';
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    globalThis.WebSocket = originalWebSocket;
+    restoreWebSocket();
     document.body.innerHTML = '';
   });
 }

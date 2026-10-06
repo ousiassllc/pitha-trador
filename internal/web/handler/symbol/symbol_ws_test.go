@@ -20,9 +20,14 @@ func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	confidence := 0.74
 	scanAt := time.Date(2026, 10, 5, 9, 30, 15, 0, time.UTC)
+	// The decision is older than the snapshot: jev_update must carry the
+	// decision's own time, not the snapshot or send time.
+	decidedAt := time.Date(2026, 10, 5, 6, 12, 0, 0, time.UTC)
+	decision := traderDecision(domain.JevDirectionLong, confidence)
+	decision.Timestamp = decidedAt
 	provider := &fakeSymbolProvider{
 		state: stateWithTrader(execution.SymbolState{Symbol: "7203", LastPrice: 2105.5, LastScanAt: &scanAt, LastSignal: domain.JevDirectionShort, LastSignalConfidence: 0.1},
-			traderDecision(domain.JevDirectionLong, confidence)),
+			decision),
 	}
 	h := symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{})
 	h.SetTickInterval(20 * time.Millisecond)
@@ -64,9 +69,10 @@ func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 	}
 
 	var jevUpdate struct {
-		Type       string   `json:"type"`
-		Direction  *string  `json:"direction"`
-		Confidence *float64 `json:"confidence"`
+		Type       string    `json:"type"`
+		Direction  *string   `json:"direction"`
+		Confidence *float64  `json:"confidence"`
+		Time       time.Time `json:"time"`
 	}
 	_, data, err = conn.Read(ctx)
 	if err != nil {
@@ -80,6 +86,9 @@ func TestSymbolHandler_WebSocket_PushesTickAndJevUpdateMessages(t *testing.T) {
 	}
 	if jevUpdate.Confidence == nil || *jevUpdate.Confidence != confidence {
 		t.Fatalf("jev_update.Confidence = %v, want %v", jevUpdate.Confidence, confidence)
+	}
+	if !jevUpdate.Time.Equal(decidedAt) {
+		t.Fatalf("jev_update.Time = %v, want the decision time %v", jevUpdate.Time, decidedAt)
 	}
 
 	// The snapshot has not advanced, so no further tick (and no

@@ -24,11 +24,16 @@ type symbolTickMessage struct {
 }
 
 // symbolJevUpdateMessage mirrors the same section's
-// `{"type":"jev_update","direction":"LONG",...}` message.
+// `{"type":"jev_update","direction":"LONG",...,"time":"2026-...Z"}` message.
+// Time is the Jev decision's own timestamp (domain.JevDecision.Timestamp), not
+// the send time, so a client places a direction-change marker on the bar the
+// decision belongs to (the first message after connecting reports a decision
+// that may be hours old).
 type symbolJevUpdateMessage struct {
-	Type       string   `json:"type"`
-	Direction  *string  `json:"direction"`
-	Confidence *float64 `json:"confidence"`
+	Type       string    `json:"type"`
+	Direction  *string   `json:"direction"`
+	Confidence *float64  `json:"confidence"`
+	Time       time.Time `json:"time"`
 }
 
 // WebSocket implements `/ws/symbols/{symbol}` (docs/api/endpoints.md §6):
@@ -68,12 +73,13 @@ func (h *SymbolHandler) WebSocket(c *gin.Context) {
 		// to push (a null direction is never a jev_update).
 		var direction *string
 		var confidence *float64
+		var decidedAt time.Time
 		if decision := state.LatestTraderDecision; decision != nil {
-			direction, confidence = jevDirectionOrNil(decision.Direction), decision.Confidence
+			direction, confidence, decidedAt = jevDirectionOrNil(decision.Direction), decision.Confidence, decision.Timestamp
 		}
 		changed := directionChanged(lastDirection, direction) || !floatPtrEqual(lastConfidence, confidence)
 		if direction != nil && changed {
-			msg := symbolJevUpdateMessage{Type: "jev_update", Direction: direction, Confidence: confidence}
+			msg := symbolJevUpdateMessage{Type: "jev_update", Direction: direction, Confidence: confidence, Time: decidedAt}
 			if err := shared.WriteJSON(ctx, conn, msg); err != nil {
 				return err
 			}

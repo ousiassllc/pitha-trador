@@ -5,8 +5,11 @@
 // close; this module only adds the wiring a bare `<dialog>` lacks:
 //   - a `[data-modal-open="<id>"]` button opens that dialog, and focus
 //     returns to it when the dialog closes;
-//   - a `[data-modal-close]` button and a click on the backdrop (a click
-//     whose target is the `<dialog>` itself - the dialog has no padding) close it;
+//   - a `[data-modal-close]` button and a click on the backdrop close it. A
+//     backdrop click is a click whose target is the `<dialog>` itself (the
+//     dialog has no padding) AND whose press (`pointerdown`) also started on
+//     the `<dialog>`: dragging out of an input and releasing outside makes the
+//     browser target the common ancestor, which must not discard the input;
 //   - a URL hash that points at, or inside, a dialog opens it - the header's
 //     version link `/settings#update-panel` lands in the アップデート modal.
 //     Closing such a dialog drops the hash so the same link works again.
@@ -14,6 +17,14 @@
 // UpdatePanel), so HTMX swaps inside an open dialog need no help from here.
 
 const opened = new WeakMap<HTMLDialogElement, HTMLElement | null>();
+
+/** Target of the latest `pointerdown`; a backdrop click only counts when the press began on the dialog too. */
+let pressTarget: EventTarget | null = null;
+
+/** `pointerdown` (capture): remember where the press started. */
+export function onPointerDown(event: Event): void {
+  pressTarget = event.target;
+}
 
 function dialogById(id: string | null | undefined): HTMLDialogElement | null {
   const el = id ? document.getElementById(id) : null;
@@ -51,7 +62,14 @@ export function onClick(event: Event): void {
     target.closest<HTMLDialogElement>('dialog[data-modal]')?.close();
     return;
   }
-  if (target instanceof HTMLDialogElement && target.hasAttribute('data-modal')) target.close();
+  if (
+    target instanceof HTMLDialogElement &&
+    target.hasAttribute('data-modal') &&
+    pressTarget === target
+  ) {
+    target.close();
+  }
+  pressTarget = null;
 }
 
 /** `close` does not bubble, so it is captured at the document: restore focus, drop a hash that pointed at or inside the dialog. */
@@ -79,6 +97,7 @@ export function openFromHash(): void {
 }
 
 export function init(): void {
+  document.addEventListener('pointerdown', onPointerDown, true);
   document.addEventListener('click', onClick);
   document.addEventListener('close', onClose, true);
   window.addEventListener('hashchange', openFromHash);
