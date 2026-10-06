@@ -37,12 +37,12 @@ type Refresher struct {
 	Jobs        *jobqueue.JobRepository
 	Screener    *screener.LiveSource
 	// Decisions and Positions supply each candidate's latest Jev Trader
-	// decision and open position for the Scanner Dashboard's Jev
-	// Direction/Confidence/Entry Quality/Current Position columns
+	// decision and open position for the Scanner Dashboard's Jev columns
 	// (see attachJevState).
 	Decisions *judgement.DecisionRepository
 	Positions *trading.PositionRepository
 	Strategy  *config.StrategyConfig
+	Watch     Watch // ranking watch list restricting screening; nil screens all
 	// InSession reports whether t is inside a trading session; a nil
 	// InSession is always in session.
 	InSession func(time.Time) bool
@@ -105,7 +105,7 @@ func (r *Refresher) scoutHeld(ctx context.Context, now time.Time) (map[int64]boo
 // comment already follows.
 func (r *Refresher) Refresh(ctx context.Context) error {
 	startedAt := r.now()
-	actives, err := r.Instruments.ListActiveByKind(ctx, domain.InstrumentKindStock)
+	actives, err := r.activeStocks(ctx)
 	if err != nil {
 		return fmt.Errorf("candidates: list active instruments: %w", err)
 	}

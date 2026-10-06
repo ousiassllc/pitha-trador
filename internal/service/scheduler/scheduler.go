@@ -10,6 +10,7 @@ import (
 
 	"github.com/robfig/cron/v3"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -161,35 +162,16 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 // returns (0, nil): no market data is fetched off-hours.
 // WithFullScanDisabled also makes it a no-op (fullscan.go).
 func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, error) {
-	if s.fullScanDisabled || !s.inSession(now) {
+	if s.fullScanDisabled {
 		return 0, nil
 	}
-	unfinished, err := s.unfinishedMarketDataJobs(ctx, now)
-	if err != nil {
-		return 0, err
-	}
-	if unfinished > 0 {
-		slog.Warn("scheduler: full scan skipped: previous cycle still running", "pending", unfinished)
-		return 0, nil
-	}
-	instruments, err := s.instruments.ListActive(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("scheduler: list active instruments for full scan: %w", err)
-	}
-
-	payloads := make([]string, 0, len(instruments))
-	for _, inst := range instruments {
-		payload, err := json.Marshal(fullScanPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
+	return s.enqueueMarketData(ctx, now, "full scan", func() ([]domain.Instrument, error) {
+		instruments, err := s.instruments.ListActive(ctx)
 		if err != nil {
-			return 0, fmt.Errorf("scheduler: marshal full scan payload for %q: %w", inst.Symbol, err)
+			return nil, fmt.Errorf("scheduler: list active instruments for full scan: %w", err)
 		}
-		payloads = append(payloads, string(payload))
-	}
-	if _, err := s.jobs.EnqueueBatch(ctx, jobqueue.JobQueueMarketData, payloads, now); err != nil {
-		return 0, fmt.Errorf("scheduler: enqueue market-data jobs for full scan: %w", err)
-	}
-	slog.Info("scheduler: full scan enqueued", "instrument_count", len(instruments))
-	return len(instruments), nil
+		return instruments, nil
+	})
 }
 
 // EnqueueEventReevaluation enqueues one jev-scout job for instrumentID,

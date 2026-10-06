@@ -11,11 +11,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
-// TestSyncUniverse_CleanDBGetsUniverseSoFullScanEnqueuesJobs is issue #389's
+// TestSyncUniverse_CleanDBGetsUniverseSoWatchEnqueuesJobs is issue #389's
 // acceptance path: a clean DB plus the universe CSV yields stocks and index
-// instruments, and the full scan then enqueues one market-data job per
-// scanned instrument.
-func TestSyncUniverse_CleanDBGetsUniverseSoFullScanEnqueuesJobs(t *testing.T) {
+// instruments, and the ranking watch (the default, scan.full_scan_enabled
+// off) then enqueues one market-data job per watched stock. The default
+// Scheduler's full scan enqueues nothing.
+func TestSyncUniverse_CleanDBGetsUniverseSoWatchEnqueuesJobs(t *testing.T) {
 	svc := newTestServices(t)
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "universe.csv")
@@ -37,20 +38,23 @@ func TestSyncUniverse_CleanDBGetsUniverseSoFullScanEnqueuesJobs(t *testing.T) {
 	}
 
 	inSession := time.Date(2026, 9, 29, 10, 0, 0, 0, time.FixedZone("JST", 9*3600))
-	n, err := svc.Scheduler.EnqueueFullScan(ctx, inSession)
-	if err != nil || n != 3 {
-		t.Fatalf("EnqueueFullScan = (%d, %v), want 3 instruments", n, err)
+	if n, err := svc.Scheduler.EnqueueFullScan(ctx, inSession); err != nil || n != 0 {
+		t.Fatalf("EnqueueFullScan = (%d, %v), want 0: the full scan is off by default", n, err)
+	}
+	n, err := svc.Scheduler.EnqueueMarketData(ctx, stocks, inSession)
+	if err != nil || n != 2 {
+		t.Fatalf("EnqueueMarketData = (%d, %v), want 2 stocks", n, err)
 	}
 	counts, err := svc.Jobs.QueueCounts(ctx, inSession)
 	if err != nil {
 		t.Fatalf("QueueCounts: %v", err)
 	}
 	for _, c := range counts {
-		if c.Queue == jobqueue.JobQueueMarketData && c.Pending == 3 {
+		if c.Queue == jobqueue.JobQueueMarketData && c.Pending == 2 {
 			return
 		}
 	}
-	t.Fatalf("queue counts = %+v, want 3 pending market-data jobs", counts)
+	t.Fatalf("queue counts = %+v, want 2 pending market-data jobs", counts)
 }
 
 // A broken universe file must not wipe or alter what the DB already holds.

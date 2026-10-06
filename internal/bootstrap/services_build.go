@@ -210,6 +210,7 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logD
 		Decisions: s.Decisions, Positions: s.Positions,
 		Screener: s.Screener, Strategy: strategy, InSession: marketcalendarOpen,
 	}
+	s.buildRankingWatch()
 	return &marketdatajob.Handler{
 		Boards: s.PushFeed, Instruments: s.Instruments, Snapshots: s.Snapshots, FeatureEngine: s.FeatureEngine,
 		Execution: s.Execution, Screener: s.Screener, News: s.News, Scheduler: s.Scheduler,
