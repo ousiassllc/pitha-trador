@@ -13,7 +13,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
@@ -40,7 +39,7 @@ func (f fakeSymbolProvider) GetPosition(context.Context, int64) (domain.Position
 func (f fakeSymbolProvider) ListPositions(context.Context, int) ([]domain.Position, error) {
 	return f.positions, nil
 }
-func (f fakeSymbolProvider) Close(context.Context, int64, string, float64, fillmodel.Book, time.Time) (domain.Position, error) {
+func (f fakeSymbolProvider) CloseAtMarket(context.Context, int64, string, time.Time) (domain.Position, error) {
 	return domain.Position{}, domain.ErrPositionNotFound
 }
 func (f fakeSymbolProvider) ListOrders(context.Context, string, int) ([]domain.PaperOrder, error) {

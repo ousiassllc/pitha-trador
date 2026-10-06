@@ -10,13 +10,13 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
 // ClosePosition implements `POST /positions/:id/close` (docs/api/endpoints.md
-// §4): a manual, market-price Paper Exit (domain.ExitReasonManual),
+// §4): a manual, market-price Paper Exit (domain.ExitReasonManual) priced
+// by execution.Engine.CloseAtMarket (the handler assembles no fill inputs),
 // returning the updated molecules.PositionRow fragment.
 func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -41,13 +41,7 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 		return
 	}
 
-	exitPrice := position.CurrentPrice
-	var book fillmodel.Book
-	if state, err := h.provider.State(ctx, position.Symbol); err == nil && state.LastPrice > 0 {
-		exitPrice, book = state.LastPrice, state.LastBook
-	}
-
-	closed, err := h.provider.Close(ctx, id, domain.ExitReasonManual, exitPrice, book, h.now())
+	closed, err := h.provider.CloseAtMarket(ctx, id, domain.ExitReasonManual, h.now())
 	if err != nil {
 		// 昼休み・立会時間外は約定しない（次の立会で再度決済できる）。
 		if errors.Is(err, execution.ErrOutsideTradingSession) {

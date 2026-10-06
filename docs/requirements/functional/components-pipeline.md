@@ -155,6 +155,7 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
   - 立会時間外、または引け前強制決済の開始時刻以降（Calendar設定時。直ちに強制決済されるEntryを避ける）
   - 保有中のポジションがある（`positions`の部分UNIQUEインデックス、`architecture/er/tables-trading.md`。同一銘柄の同時ポジションは1つ）
   - 未約定（PENDING）のEntry注文がある（先の注文でポジションができると2本目は約定し得ないため、重複させない）
+    - 成行注文は発注直後に約定するため、1分以上PENDINGのまま残った成行注文（INSERTと約定の間のクラッシュ等による孤児）はゲートせず、`Enter`/`OnSnapshot`がREJECTEDへ遷移させる（指値注文の重複拒否は従来どおり）。約定失敗時のREJECTEDはctxキャンセルと切り離して実行する
   - その銘柄で損失クローズ（実現損益<0）した時刻から`cooldown_after_loss_minutes`（FR-RISK-1）の間。Executionのメモリ上の銘柄別ゲートであり、Risk Engineの判定とは別に働く（プロセス再起動で解除される）
 - FR-ENTRY-6（見送りの扱い）: 上記ゲートによる拒否は、Policy → `paperexec`経路ではエラーではなく「見送り」として扱う。再試行しても同じ理由で拒否されるため、jev-traderジョブは失敗にせず、`paper entry skipped`としてログに残して正常終了する。ゲート以外のEntryエラーはジョブ失敗とする
 - FR-ENTRY-7（入力検証）: `Enter`は発注前に、シグナル方向がLONG/SHORTであること、Risk Engine通過済み（`risk_passed`）であること、数量>0、価格が有限かつ>0、指値価格を指定する場合は有限かつ>0、指値注文では指値価格が指定されていることを検証し、違反は注文を作らずに拒否する。板価格の欠損（0）が約定・時価更新・決済価格にならないよう、`TryFillPending`・`OnSnapshot`・`Close`の価格も同様に検証する

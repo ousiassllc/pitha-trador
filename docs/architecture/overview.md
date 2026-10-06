@@ -119,7 +119,7 @@ pitha-trador/
 │   │   │   ├── fillflow/          # テスト専用: 約定モデル（FR-ENTRY-8）・立会時間の`execution.Engine`テスト（行数上限のためexecutionから分離、#248/#509）
 │   │   │   ├── exitflow/          # テスト専用: FR-EXIT-1 Exit条件（`EvaluateExit`）の回帰テスト（行数上限のためexecutionから分離、#248/#509）
 │   │   │   ├── vwapcross/         # FR-EXIT-1 VWAP逆クロスのクロス判定・前回観測トラッカー（execution.Engineが依存する本番コード）
-│   │   │   ├── pendingfill/       # テスト専用: PENDING指値Entryの約定・重複PENDING・非正価格拒否の回帰テスト（行数上限のためexecutionから分離、#348）
+│   │   │   ├── pendingfill/       # テスト専用: PENDING指値Entryの約定・重複PENDING・孤児PENDING成行の掃除・非正価格拒否の回帰テスト（行数上限のためexecutionから分離、#348）
 │   │   │   ├── closerace/         # テスト専用: 決済競合（手動決済/CloseAll/Exitモニタ）の回帰テスト（行数上限のためexecutionから分離）
 │   │   │   ├── closeflow/         # テスト専用: `Engine.Close`/`CloseAll`の回帰テスト（行数上限のためexecutionから分離、#248）
 │   │   │   └── latestdecision/    # テスト専用: 最新Jev Trader判断の件数窓・経過時間上限なしの単一定義（`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`/`LatestScout`と`execution.Engine.State`の`LatestTraderDecision`）の回帰テスト（行数上限のためexecution/judgementから分離、#496/#497/#499）

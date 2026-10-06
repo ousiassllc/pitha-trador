@@ -89,7 +89,7 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 	if err != nil {
 		return EntryResult{}, fmt.Errorf("execution: check pending orders for instrument %d: %w", req.Signal.InstrumentID, err)
 	}
-	for _, o := range pending {
+	for _, o := range e.rejectStaleMarketOrders(ctx, pending, now) {
 		if o.Status == domain.OrderStatusPending {
 			return EntryResult{}, ErrPendingOrderExists
 		}
@@ -143,7 +143,7 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 			// nothing retries a market order: reject it instead of
 			// leaving it dangling (a concurrent Enter for the same
 			// instrument lands here via positions_open_instrument_uq).
-			if _, rejectErr := e.orders.UpdateStatus(ctx, order.ID, domain.OrderStatusRejected); rejectErr != nil {
+			if rejectErr := e.rejectOrder(ctx, order); rejectErr != nil {
 				err = errors.Join(err, fmt.Errorf("execution: reject unfilled entry order %d: %w", order.ID, rejectErr))
 			}
 			return EntryResult{}, err

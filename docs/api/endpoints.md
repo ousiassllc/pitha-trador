@@ -63,7 +63,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | DELETE | `/settings/:key` | 単一キーの削除。他キーには一切影響しない。`:key`が許可キー一覧に無い場合は400（issue #79） | 更新後の`SecretFieldRow`フラグメント |
 | GET | `/system/secrets-status` | 任意キー（SLACK_WEBHOOK_URL等）の未設定を知らせる全ページ共通バナー（`Header`の`#config-banner`が`load`で取得）のフラグメント。必須2キー（JEV_API_KEY/KABU_API_PASSWORD）はSetup Guardが`/setup`へ誘導するため対象外。全て設定済みなら空 | `SecretsBanner` |
 | GET | `/system/marketdata-status` | 市況データ接続エラーを知らせる全ページ共通バナー（`Header`の`#marketdata-banner`が`load`・30秒周期で取得）のフラグメント。kabuステーションAPIのトークン発行が失敗している間だけ、原因（未起動・API未有効 / 未ログイン `4001007`・`4001017` / API利用不可 `4001008` / APIパスワード不正 `4001013`）と対処を表示。トークン取得済みなら空 | `MarketDataBanner` |
-| POST | `/positions/:id/close` | 手動決済（成行Paper Exit）。約定価格・手数料は約定モデル（`requirements/functional/components-pipeline.md` FR-ENTRY-8: 呼値・スプレッド・滑り・寄り引け）で決まり、昼休み（11:30〜12:30）・立会時間外は約定しないため409を返してポジションを保持する | ポジション行フラグメント |
+| POST | `/positions/:id/close` | 手動決済（成行Paper Exit）。約定価格・手数料は約定モデル（`requirements/functional/components-pipeline.md` FR-ENTRY-8: 呼値・スプレッド・滑り・寄り引け）で決まり、昼休み（11:30〜12:30）・立会時間外は約定しないため409を返してポジションを保持する。約定価格・板は`Engine.CloseAtMarket`が`CloseAll`と同じ選択（`CurrentPrice`＋同じ足の最新スナップショットの板）で決め、スナップショットの読み取りに失敗した場合は板なしで約定させず500（エラーログ）を返す | ポジション行フラグメント |
 
 ### システム状態遷移（`POST /api/v1/system/*`）
 

@@ -1,10 +1,13 @@
 package middleware_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -58,6 +61,30 @@ func TestSystemState_UnreadableStateIsUnknown(t *testing.T) {
 
 	if got != "" {
 		t.Errorf("SystemStateFrom on read error = %q, want unknown (\"\")", got)
+	}
+}
+
+// #606: an unreadable Kill Switch state hides the header buttons, so the
+// cause must reach the log - exactly once per render, at ERROR.
+func TestSystemState_ReadErrorIsLoggedOnceAtError(t *testing.T) {
+	var logs bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	reader := &fakeStateReader{err: errors.New("db down")}
+	got := domain.SystemStateRunning
+	serveSystemState(t, reader, func(ctx context.Context) { got = middleware.SystemStateFrom(ctx) })
+
+	if got != "" {
+		t.Errorf("SystemStateFrom = %q, want \"\"", got)
+	}
+	out := logs.String()
+	if n := strings.Count(out, "level=ERROR"); n != 1 {
+		t.Fatalf("ERROR log lines = %d, want 1; logs:\n%s", n, out)
+	}
+	if !strings.Contains(out, "middleware: read system state for header") || !strings.Contains(out, "db down") {
+		t.Errorf("log missing message/error: %s", out)
 	}
 }
 
