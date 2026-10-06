@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -68,11 +69,19 @@ func TestPurgeQueries_UseIndexRangeScans(t *testing.T) {
 }
 
 // A purge over many expired rows must not starve another connection's
-// INSERT: each batch is a short write transaction, so the writer gets in
-// between batches long before busy_timeout (60s) expires.
+// INSERT: after each full batch Purge pauses (batchPause) so the writer,
+// which only retries on the driver's busy-handler sleeps, gets in between
+// batches instead of waiting until the whole purge ends (issue #533).
+//
+// The primary assertion is ordering, not wall time: the first INSERT must
+// complete while Purge is still running. That holds on a slow (-race,
+// loaded) machine as well, unlike an absolute latency bound. The latency
+// bound is only a loose guard (one batch + driver retry sleep, far below
+// busy_timeout = 60s).
 func TestPurge_DoesNotBlockConcurrentInsert(t *testing.T) {
 	s, db := newService(t, Policy{})
-	const expired, kept = 30000, 30000
+	s.sleep = sleepContext
+	const expired, kept, inserts = 10000, 10000, 50 // 10 full batches => 9+ pauses
 	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
 	})
@@ -82,21 +91,27 @@ func TestPurge_DoesNotBlockConcurrentInsert(t *testing.T) {
 	seedSnapshots(t, db, inst.ID, expired, fixedNow.AddDate(0, 0, -120))
 	seedSnapshots(t, db, inst.ID, kept, fixedNow.AddDate(0, 0, -60))
 
+	var purgeDone atomic.Bool
 	var wg sync.WaitGroup
 	wg.Add(1)
 	var purgeErr error
 	go func() {
 		defer wg.Done()
+		defer purgeDone.Store(true)
 		purgeErr = s.Purge(context.Background())
 	}()
 
 	var worst time.Duration
-	for i := range 50 {
+	firstDuringPurge := false
+	for i := range inserts {
 		start := time.Now()
 		ts := sqlutil.FormatTime(fixedNow.Add(time.Duration(i) * time.Second))
 		_, err := db.Exec(insertBarSQL, inst.ID, ts, ts)
 		if err != nil {
 			t.Fatalf("concurrent insert %d: %v", i, err)
+		}
+		if i == 0 {
+			firstDuringPurge = !purgeDone.Load()
 		}
 		worst = max(worst, time.Since(start))
 	}
@@ -104,11 +119,14 @@ func TestPurge_DoesNotBlockConcurrentInsert(t *testing.T) {
 	if purgeErr != nil {
 		t.Fatalf("Purge: %v", purgeErr)
 	}
-	if worst > 5*time.Second {
+	if !firstDuringPurge {
+		t.Error("first concurrent INSERT only completed after Purge finished: writer was starved between batches")
+	}
+	if worst > 10*time.Second {
 		t.Errorf("slowest concurrent INSERT took %v, want well under busy_timeout", worst)
 	}
-	if got := count(t, db, `SELECT COUNT(*) FROM market_snapshots`); got != kept+50 {
-		t.Errorf("market_snapshots = %d, want %d", got, kept+50)
+	if got := count(t, db, `SELECT COUNT(*) FROM market_snapshots`); got != kept+inserts {
+		t.Errorf("market_snapshots = %d, want %d", got, kept+inserts)
 	}
 }
 
