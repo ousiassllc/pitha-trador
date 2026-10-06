@@ -76,7 +76,7 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 - Market data fetch latency / エラー率
 - Jev API latency / エラー率
 - スキャン対象銘柄数、Scout呼び出し回数、Trader呼び出し回数
-- Signal count（生成シグナル数）
+- Signal count（生成シグナル数。`policy: trade signal decided`ログ。永続化する`Evaluate`のみが出力し、バックテスト再現の`Decide`は出力しない）
 - Risk拒否件数
 - kabuステーションAPI（Broker）latency / エラー
 - DB latency / エラー（エラーはERROR、100ms以上の低速クエリはWARN、それ未満の正常クエリはDEBUG。ワーカーのアイドルポーリングでログが肥大化しないよう、正常クエリはINFOで記録しない）
