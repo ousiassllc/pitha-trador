@@ -224,10 +224,12 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 // for this cycle: r.Strategy.FastScreener (config/strategy.yaml with
 // PITHA_FAST_SCREENER_* env overrides already applied by
 // config.LoadStrategy) overridden by every screener.* runtime_settings
-// key currently in the DB. It is read per cycle so a DB change takes
+// key currently in the DB (the result is re-validated against FR-FS-4
+// when any override applied). It is read per cycle so a DB change takes
 // effect on the next refresh without a restart.
 func (r *Refresher) fastScreenerConfig(ctx context.Context) (config.FastScreenerConfig, error) {
 	cfg := r.Strategy.FastScreener
+	overridden := false
 	for _, key := range config.FastScreenerSettingKeys() {
 		raw, ok, err := r.Settings.Get(ctx, key)
 		if err != nil {
@@ -238,6 +240,15 @@ func (r *Refresher) fastScreenerConfig(ctx context.Context) (config.FastScreener
 		}
 		if err := config.ApplyFastScreenerSetting(&cfg, key, raw); err != nil {
 			return config.FastScreenerConfig{}, fmt.Errorf("candidates: %w", err)
+		}
+		overridden = true
+	}
+	// The YAML+env base was validated by config.LoadStrategy; an override
+	// layer must not break FR-FS-4's invariants either (a bad DB value would
+	// silently disable the filters or empty the candidate list, issue #617).
+	if overridden {
+		if err := config.ValidateFastScreenerOverrides(cfg); err != nil {
+			return config.FastScreenerConfig{}, fmt.Errorf("candidates: invalid screener.* runtime settings: %w", err)
 		}
 	}
 	return cfg, nil
