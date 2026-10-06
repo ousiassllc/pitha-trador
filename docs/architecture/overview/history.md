@@ -83,3 +83,6 @@
 | 1.76 | 2026-10-05 | §5（`integrations.md`）の「RESTに別途のレート制御は設けない」を撤回し、情報API・銘柄登録のプロセス全体レート制限（既定8件/秒）と429/`4001006`の扱いを追記。§3/§4（`overview.md`）に`marketdata/infolimit`とテスト専用`marketdata/rateflow`を追記 | issue #514 |
 | 1.77 | 2026-10-05 | §2（`overview.md`）の「周期実行」行と§10.1（`flows.md`）の起動時フローを、robfig/cron（60秒フルスキャン・保守ジョブ）・候補更新の自前ループ（15-30秒）・保有ポジション再評価の別goroutine（5-15秒）の実態に合わせて修正 | 実装との乖離解消（#570） |
 | 1.78 | 2026-10-05 | §3のツリーと§4のRisk Engine責務表にFR-RISK-1の同方向ゲート`risk/correlation`（本番）、ツリーに約定モデル`service/fillmodel`（本番）とテスト専用`execution/fillflow`・`execution/exitflow`を追記。§9（`integrations.md`）にWindows限定のWebSocket専用ループバックリスナー（`router.WebSocketOnly`・`ws-base`）を追記し、`cmd/server`を実在として記述（#516, #566, #568） |
+| 1.79 | 2026-10-06 | §5（`integrations.md`）の外部AI API契約にassistクライアントの再試行分類（Jevと同方針）を追記し、§6に自動アップデートのインストーラー一時ディレクトリの起動時掃除を追記 | issue #590, #593 |
+| 1.80 | 2026-10-06 | §3のツリーと§4の責務表に`repository/calibration`（`calibration_outcomes`/`calibration_label_skips`の`CalibrationRepository`）を追加し、`judgement`から分離（linterlyのディレクトリ2000行制限超過の解消） | issue #601 |
+| 1.81 | 2026-10-06 | §3のツリーに`router/router_noroute.go`（未定義パスの404）と`service/updater/tempcleanup`（更新後のインストーラー一時ディレクトリ掃除）を追加 | issue #590, #605 |

@@ -4,11 +4,13 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
+	"github.com/ousiassllc/pitha-trador/internal/service/updater/tempcleanup"
 )
 
 // App is the Wails-bound application struct. It holds the Wails runtime
@@ -65,8 +67,10 @@ func (a *App) setupNotifications(ctx context.Context) {
 // trade or scan, so it is reported in a native error dialog and the app
 // quits rather than running with its background processing silently dead.
 func (a *App) startup(ctx context.Context) {
+	startedAt := time.Now()
 	a.ctx = ctx
 	a.setupNotifications(ctx)
+	cleanupStaleUpdateDownloads(startedAt)
 
 	runCtx, cancel := context.WithCancel(ctx)
 	a.cancel = cancel
@@ -79,6 +83,21 @@ func (a *App) startup(ctx context.Context) {
 			Message: err.Error(),
 		})
 		runtime.Quit(ctx)
+	}
+}
+
+// cleanupStaleUpdateDownloads removes the installer directories a previous
+// self-update left in the temp directory (tempcleanup.CleanupStale;
+// the installer cannot delete itself, so the restarted app does). A failure
+// is only logged: it must never keep the app from starting.
+func cleanupStaleUpdateDownloads(startedAt time.Time) {
+	removed, err := tempcleanup.CleanupStale(startedAt)
+	if err != nil {
+		slog.Warn("desktop: clean up stale update downloads failed", "removed", removed, "error", err)
+		return
+	}
+	if removed > 0 {
+		slog.Info("desktop: removed stale update downloads", "removed", removed)
 	}
 }
 

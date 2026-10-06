@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -79,7 +80,7 @@ func TestScheduler_EnqueueOutcomeLabeling_EnqueuesDueDecisions(t *testing.T) {
 	instruments := market.NewInstrumentRepository(db)
 	jobs := jobqueue.NewJobRepository(db)
 	decisions := judgement.NewDecisionRepository(db)
-	outcomes := judgement.NewCalibrationRepository(db)
+	outcomes := calrepo.NewCalibrationRepository(db)
 
 	inst := mustCreateInstrument(t, instruments, "7203", true)
 	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
@@ -108,7 +109,7 @@ func TestScheduler_EnqueueOutcomeLabeling_EnqueuesDueDecisions(t *testing.T) {
 			}
 			t.Fatalf("ClaimNext(%q): %v", jobqueue.JobQueueOutcomeLabeling, err)
 		}
-		var payload judgement.OutcomeLabelJobPayload
+		var payload calrepo.OutcomeLabelJobPayload
 		if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 			t.Fatalf("unmarshal payload: %v", err)
 		}
@@ -129,7 +130,7 @@ func TestScheduler_EnqueueOutcomeLabeling_StopsRetryingDecisionsPastRetryWindow(
 	instruments := market.NewInstrumentRepository(db)
 	jobs := jobqueue.NewJobRepository(db)
 	decisions := judgement.NewDecisionRepository(db)
-	outcomes := judgement.NewCalibrationRepository(db)
+	outcomes := calrepo.NewCalibrationRepository(db)
 
 	inst := mustCreateInstrument(t, instruments, "7203", true)
 	now := time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC)
@@ -170,7 +171,7 @@ func TestScheduler_EnqueueOutcomeLabeling_DedupesPendingAndRunningPairs(t *testi
 	instruments := market.NewInstrumentRepository(db)
 	jobs := jobqueue.NewJobRepository(db)
 	decisions := judgement.NewDecisionRepository(db)
-	outcomes := judgement.NewCalibrationRepository(db)
+	outcomes := calrepo.NewCalibrationRepository(db)
 	ctx := context.Background()
 
 	inst := mustCreateInstrument(t, instruments, "7203", true)
@@ -230,7 +231,7 @@ func TestScheduler_EnqueueOutcomeLabeling_SkipsPermanentlyUnlabelablePairs(t *te
 	instruments := market.NewInstrumentRepository(db)
 	jobs := jobqueue.NewJobRepository(db)
 	decisions := judgement.NewDecisionRepository(db)
-	outcomes := judgement.NewCalibrationRepository(db)
+	outcomes := calrepo.NewCalibrationRepository(db)
 	ctx := context.Background()
 
 	inst := mustCreateInstrument(t, instruments, "7203", true)
@@ -270,7 +271,7 @@ func countLabelingJobsForHorizon(t *testing.T, jobs *jobqueue.JobRepository, hor
 	}
 	n := 0
 	for _, j := range all {
-		var p judgement.OutcomeLabelJobPayload
+		var p calrepo.OutcomeLabelJobPayload
 		if err := json.Unmarshal([]byte(j.PayloadJSON), &p); err != nil {
 			t.Fatalf("unmarshal payload: %v", err)
 		}

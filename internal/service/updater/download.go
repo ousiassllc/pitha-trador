@@ -14,6 +14,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/updater/tempcleanup"
 )
 
 // downloadAndVerify downloads assets.installer and assets.checksums to a
@@ -39,7 +41,7 @@ func (c *Checker) downloadAndVerify(ctx context.Context, assets releaseAssets) (
 	ctx, cancel := context.WithTimeout(ctx, c.downloadTimeout)
 	defer cancel()
 
-	dir, err := os.MkdirTemp("", "pitha-trador-update-*")
+	dir, err := os.MkdirTemp("", tempcleanup.DirPattern)
 	if err != nil {
 		return "", fmt.Errorf("create temp dir: %w", err)
 	}

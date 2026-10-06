@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
@@ -18,7 +19,7 @@ import (
 type outcomeFixture struct {
 	svc       *rag.Service
 	decisions *judgement.DecisionRepository
-	outcomes  *judgement.CalibrationRepository
+	outcomes  *calrepo.CalibrationRepository
 	instID    int64
 	symbol    string
 }
@@ -33,7 +34,7 @@ func newOutcomeFixture(t *testing.T) outcomeFixture {
 	return outcomeFixture{
 		svc:       rag.NewService(db, decisions, market.NewSnapshotRepository(db)),
 		decisions: decisions,
-		outcomes:  judgement.NewCalibrationRepository(db),
+		outcomes:  calrepo.NewCalibrationRepository(db),
 		instID:    inst.ID,
 		symbol:    inst.Symbol,
 	}

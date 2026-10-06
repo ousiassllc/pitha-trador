@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"time"
 
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
-	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/orphans"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/updatecheck"
 )
@@ -178,7 +178,7 @@ func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (
 
 	enqueued := 0
 	for _, p := range pending {
-		payload, err := json.Marshal(judgement.OutcomeLabelJobPayload{JevDecisionID: p.JevDecisionID, HorizonMinutes: p.HorizonMinutes})
+		payload, err := json.Marshal(calrepo.OutcomeLabelJobPayload{JevDecisionID: p.JevDecisionID, HorizonMinutes: p.HorizonMinutes})
 		if err != nil {
 			return 0, fmt.Errorf("scheduler: marshal outcome-labeling payload for decision %d: %w", p.JevDecisionID, err)
 		}

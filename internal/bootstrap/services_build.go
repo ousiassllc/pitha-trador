@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
@@ -58,7 +59,7 @@ func (s *Services) buildRepositories(db *sql.DB) {
 	s.Jobs = jobqueue.NewJobRepository(db)
 	s.Positions = trading.NewPositionRepository(db)
 	s.Orders = trading.NewOrderRepository(db)
-	s.Outcomes = judgement.NewCalibrationRepository(db)
+	s.Outcomes = calrepo.NewCalibrationRepository(db)
 	s.KillSwitch = system.NewKillSwitchRepository(db)
 	s.Settings = system.NewRuntimeSettingsRepository(db)
 	s.Proposals = judgement.NewProposalRepository(db)

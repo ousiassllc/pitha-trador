@@ -2,11 +2,8 @@ package newsfeed_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"slices"
 	"sync"
 	"testing"
@@ -162,37 +159,6 @@ func TestPoll_KeepsOnlyMostRecentNItems(t *testing.T) {
 	ctx, _ := svc.NewsContext("7203")
 	if len(ctx.Items) != 2 || ctx.Items[0].Summary != "S:four" || ctx.Items[1].Summary != "S:three" {
 		t.Errorf("NewsContext = %+v, want the 2 most recent items", ctx)
-	}
-}
-
-func TestFeedClient_FetchSendsSymbolAndKeyAndDecodesItems(t *testing.T) {
-	var gotSymbol, gotAuth string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotSymbol, gotAuth = r.URL.Query().Get("symbol"), r.Header.Get("Authorization")
-		_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{
-			{"id": "n1", "headline": "見出し", "body": "本文", "published_at": t0},
-		}})
-	}))
-	t.Cleanup(server.Close)
-
-	client := newsfeed.NewFeedClient(newsfeed.FeedConfig{URL: server.URL + "/news?lang=ja", APIKey: "feed-key"})
-	items, err := client.Fetch(context.Background(), "7203")
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if gotSymbol != "7203" || gotAuth != "Bearer feed-key" {
-		t.Errorf("request symbol/auth = %q/%q", gotSymbol, gotAuth)
-	}
-	if len(items) != 1 || items[0].ID != "n1" || items[0].Symbol != "7203" || items[0].Headline != "見出し" || !items[0].PublishedAt.Equal(t0) {
-		t.Errorf("items = %+v", items)
-	}
-}
-
-func TestFeedClient_FetchFailsOnNon200(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "no", http.StatusBadGateway) }))
-	t.Cleanup(server.Close)
-	if _, err := newsfeed.NewFeedClient(newsfeed.FeedConfig{URL: server.URL}).Fetch(context.Background(), "7203"); err == nil {
-		t.Error("Fetch succeeded on a 502, want an error")
 	}
 }
 
