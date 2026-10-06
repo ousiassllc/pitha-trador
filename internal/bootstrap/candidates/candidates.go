@@ -224,9 +224,8 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 // for this cycle: r.Strategy.FastScreener (config/strategy.yaml with
 // PITHA_FAST_SCREENER_* env overrides already applied by
 // config.LoadStrategy) overridden by every screener.* runtime_settings
-// key currently in the DB (the result is re-validated against FR-FS-4
-// when any override applied). It is read per cycle so a DB change takes
-// effect on the next refresh without a restart.
+// key in the DB (re-validated against FR-FS-4 when any applied). Read per
+// cycle so a DB change takes effect on the next refresh without a restart.
 func (r *Refresher) fastScreenerConfig(ctx context.Context) (config.FastScreenerConfig, error) {
 	cfg := r.Strategy.FastScreener
 	overridden := false
