@@ -135,7 +135,7 @@ func (e *Engine) fillPendingEntries(ctx context.Context, snap domain.Snapshot) [
 	}
 
 	var filled []EntryResult
-	for _, order := range orders {
+	for _, order := range e.rejectStaleMarketOrders(ctx, orders, snap.Timestamp) {
 		if order.Status != domain.OrderStatusPending || order.OrderType != domain.OrderTypeLimit {
 			continue
 		}
@@ -163,7 +163,7 @@ func (e *Engine) rejectIfPositionOpen(ctx context.Context, order domain.PaperOrd
 	if _, err := e.positions.GetOpenByInstrument(ctx, order.InstrumentID); err != nil {
 		return
 	}
-	if _, err := e.orders.UpdateStatus(ctx, order.ID, domain.OrderStatusRejected); err != nil {
+	if err := e.rejectOrder(ctx, order); err != nil {
 		slog.ErrorContext(ctx, "execution: reject pending entry order", "symbol", order.Symbol, "order_id", order.ID, "error", err)
 	}
 }

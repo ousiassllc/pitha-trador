@@ -30,11 +30,13 @@ type testEngine struct {
 	orders     *trading.OrderRepository
 	positions  *trading.PositionRepository
 	instrument domain.Instrument
+	dbPath     string
 }
 
 func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	t.Helper()
-	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	dbPath := filepath.Join(t.TempDir(), "pitha.db")
+	db, err := sqlitedb.Open(dbPath)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -63,7 +65,7 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 		Instruments: instruments,
 	}, cfg)
 
-	return testEngine{engine: engine, orders: orders, positions: positions, instrument: inst}
+	return testEngine{engine: engine, orders: orders, positions: positions, instrument: inst, dbPath: dbPath}
 }
 
 func longSignal(instrumentID int64) domain.TradeSignal {
