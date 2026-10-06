@@ -1,8 +1,4 @@
-// Package marketcontextflow_test holds the MarketContextLoader tests of
-// featureengine (FR-FE market context). They only use featureengine's
-// exported API and live in their own directory to keep
-// internal/service/featureengine under the linterly line budget (#248).
-package marketcontextflow_test
+package marketcontext_test
 
 import (
 	"context"
@@ -14,13 +10,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
-	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/marketcontext"
 )
 
 type loaderFixture struct {
 	instruments *market.InstrumentRepository
 	snapshots   *market.SnapshotRepository
-	loader      *featureengine.MarketContextLoader
+	loader      *marketcontext.Loader
 }
 
 func newLoaderFixture(t *testing.T) loaderFixture {
@@ -31,7 +27,7 @@ func newLoaderFixture(t *testing.T) loaderFixture {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	instruments, snapshots := market.NewInstrumentRepository(db), market.NewSnapshotRepository(db)
-	return loaderFixture{instruments, snapshots, featureengine.NewMarketContextLoader(instruments, snapshots)}
+	return loaderFixture{instruments, snapshots, marketcontext.NewLoader(instruments, snapshots)}
 }
 
 func (f loaderFixture) instrument(t *testing.T, symbol, kind string, sector *string) domain.Instrument {
@@ -71,7 +67,7 @@ func wantValue(t *testing.T, name string, got *float64, want float64) {
 
 // Regression for #144: market_return_1m/5m, sector_return_5m and
 // market_breadth were never populated.
-func TestMarketContextLoader_DerivesContextFromTrackedIndices(t *testing.T) {
+func TestLoader_DerivesContextFromTrackedIndices(t *testing.T) {
 	f := newLoaderFixture(t)
 	sector := "Transportation Equipment"
 	stock := f.instrument(t, "7203", domain.InstrumentKindStock, &sector)
@@ -104,7 +100,7 @@ func TestMarketContextLoader_DerivesContextFromTrackedIndices(t *testing.T) {
 	}
 }
 
-func TestMarketContextLoader_MissingSourcesAreNil(t *testing.T) {
+func TestLoader_MissingSourcesAreNil(t *testing.T) {
 	f := newLoaderFixture(t)
 	stock := f.instrument(t, "7203", domain.InstrumentKindStock, strPtr("Banks"))
 	mc := f.loader.Load(context.Background(), stock, time.Now().UTC())
@@ -122,7 +118,7 @@ func TestMarketContextLoader_MissingSourcesAreNil(t *testing.T) {
 		t.Errorf("MarketReturn5m = %v, want nil for a stale index", *mc.MarketReturn5m)
 	}
 
-	if mc := f.loader.Load(context.Background(), topix, time.Now().UTC()); mc != (featureengine.MarketContext{}) {
+	if mc := f.loader.Load(context.Background(), topix, time.Now().UTC()); mc != (marketcontext.Context{}) {
 		t.Errorf("index instrument context = %+v, want empty", mc)
 	}
 }

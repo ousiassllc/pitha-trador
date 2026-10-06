@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -21,6 +22,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/marketcontext"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/quote"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
@@ -58,6 +60,20 @@ type Handler struct {
 	// Now is the clock stamping each bar (default time.Now). Tests pin it so
 	// Execution's session gate does not depend on the wall clock (issue #512).
 	Now func() time.Time
+
+	// marketContext shares the market-wide context (index returns, breadth)
+	// across all jobs instead of re-reading it per symbol (issue #622); it
+	// is built on first use from Instruments and Snapshots.
+	marketContextOnce sync.Once
+	marketContext     *marketcontext.Loader
+}
+
+// marketContextLoader returns the Handler's shared market context Loader.
+func (h *Handler) marketContextLoader() *marketcontext.Loader {
+	h.marketContextOnce.Do(func() {
+		h.marketContext = marketcontext.NewLoader(h.Instruments, h.Snapshots)
+	})
+	return h.marketContext
 }
 
 // now is the current UTC time from Handler.Now (time.Now when unset).
@@ -119,7 +135,7 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 	}
 
 	now := h.now()
-	mc := featureengine.NewMarketContextLoader(h.Instruments, h.Snapshots).Load(ctx, inst, now)
+	mc := h.marketContextLoader().Load(ctx, inst, now)
 	current := readingFromBoard(board)
 	h.applySymbolInfo(ctx, &current, inst, payload.Symbol)
 	input := featureengine.Input{
