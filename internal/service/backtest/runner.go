@@ -170,7 +170,15 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 	start := sort.Search(len(bars), func(k int) bool { return !bars[k].Timestamp.Before(window.Start) })
 
 	var trades []Trade
+	// A decision visible at the window's first bar was recorded before
+	// the window: a previous window (or the warm-up history) already
+	// evaluated or skipped it, so it is treated as consumed up to the
+	// last bar before the window (FR-BT-4: one decision, at most one
+	// entry - across Walk Forward windows too).
 	var consumedUpTo time.Time
+	if start > 0 {
+		consumedUpTo = bars[start-1].Timestamp
+	}
 	for i := start; i < len(bars); {
 		bar := bars[i]
 		if !bar.Timestamp.Before(window.End) {
@@ -189,15 +197,11 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 			ok = false
 		}
 
-		in := policy.Input{
-			InstrumentID:        cfg.InstrumentID,
-			Symbol:              cfg.Symbol,
-			Timestamp:           bar.Timestamp,
-			EntryPriceReference: &bar.Price,
-			SpreadBps:           bar.SpreadBps,
-			Turnover5mJPY:       bar.Feature.Turnover5m,
-			Calibrated:          calibrated,
-		}
+		in := policy.InputFromSnapshot(bar)
+		in.InstrumentID = cfg.InstrumentID
+		in.Symbol = cfg.Symbol
+		in.Timestamp = bar.Timestamp
+		in.Calibrated = calibrated
 		if ok {
 			in.Decision = &decision
 			consumedUpTo = decision.Timestamp

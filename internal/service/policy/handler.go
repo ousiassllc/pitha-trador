@@ -96,19 +96,13 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		return fmt.Errorf("policy: calibration check for %q: %w", payload.Symbol, err)
 	}
 
-	signal, err := h.engine.Evaluate(ctx, Input{
-		InstrumentID:        payload.InstrumentID,
-		Symbol:              payload.Symbol,
-		Timestamp:           decision.Timestamp,
-		Decision:            &decision,
-		EntryPriceReference: &snap.Price,
-		SpreadBps:           snap.SpreadBps,
-		Turnover5mJPY:       snap.Feature.Turnover5m,
-		SpecialQuote:        snap.SpecialQuote,
-		PriceLimit:          snap.PriceLimit,
-		Lendable:            snap.Lendable,
-		Calibrated:          calibrated,
-	})
+	in := InputFromSnapshot(snap)
+	in.InstrumentID = payload.InstrumentID
+	in.Symbol = payload.Symbol
+	in.Timestamp = decision.Timestamp
+	in.Decision = &decision
+	in.Calibrated = calibrated
+	signal, err := h.engine.Evaluate(ctx, in)
 	if err != nil {
 		return fmt.Errorf("policy: evaluate trade signal for %q: %w", payload.Symbol, err)
 	}
