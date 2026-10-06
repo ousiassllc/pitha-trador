@@ -13,6 +13,7 @@ sequenceDiagram
     participant DB as SQLite
     participant SCHED as Scheduler（自前Worker）
 
+    App->>App: `startup.RunMain`でプロセスを開始（`cmd/desktop`・`cmd/server`共通。日次JSONログを`PITHA_LOG_DIR`（未設定ならDBと同じ親ディレクトリの絶対パス`logs/`。作業ディレクトリに依存しない）へ設定し、以降の`run`が返した致命的エラーはERRORで記録して終了コード1にする。ログ用ディレクトリ・ファイルを作れない場合は標準エラー出力へフォールバックして起動を継続。#547）
     App->>App: 多重起動ロック`app.lock`を取得（`bootstrap.AcquireInstanceLock`。DBを開く前。取得失敗時は`bootstrap.Run`・`Recover`に到達せず終了。desktopは終了コード0、serverは非0）
     App->>DB: マイグレーション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON, WAL）
     App->>SCHED: 前回クラッシュ時の`running`状態ジョブを`pending`へ復帰（`Scheduler.Recover`）
@@ -20,10 +21,43 @@ sequenceDiagram
     App->>KABU: /kabusapi/token でトークン発行
     KABU-->>App: token（失敗しても起動を継続し、バックグラウンドで再試行）
     App->>SCHED: robfig/cronへ周期ジョブ登録（60秒フルスキャン＋分単位以上の保守ジョブ）
-    App->>App: 候補更新ループ（15-30秒、`candidates.Run`）と保有ポジション再評価ループ（5-15秒、`heldposition.Monitor.Run`）を別goroutineで起動（cronのジョブ登録ではない）
+    App->>App: 候補更新ループ（15-30秒、`candidates.Run`）と保有ポジション再評価ループ（5-15秒、`heldposition.Monitor.Run`）を別goroutineで起動（cronのジョブ登録ではない）。LunaとNEWS_FEEDの両方が設定済みの場合のみ、News Ingestのティッカー（`newsIngestTicker`。起動直後に1回、以降1分周期。§13）も別goroutineで起動する
     App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始
     App->>App: WebView起動・Scanner Dashboard表示
 ```
+
+#### 停止フロー
+
+`bootstrap.Services.Start`が起動したgoroutineは`Start`へ渡したcontextに紐づくため、停止はcontextの取り消し→`Services.Stop()`（Schedulerのcronとワーカーを止め、候補更新・保有監視・PushFeed・News Ingestのgoroutineと実行中ジョブの終了を待つ）の順で行い、DBを閉じるのはその後（`defer`）に限る。
+
+```mermaid
+sequenceDiagram
+    participant OS as OS/Wails
+    participant App as アプリ（cmd/server／cmd/desktop）
+    participant HTTP as HTTPサーバー（serverのみ）
+    participant SVC as bootstrap.Services
+    participant DB as SQLite
+
+    alt cmd/server
+        OS->>App: SIGINT/SIGTERM（`signal.NotifyContext`のcontext取り消し。`Services.Start`のgoroutineにも伝わる）
+        App->>HTTP: `httpServer.shutdown(10s)`: 新規接続の受付停止と処理中リクエストの待機（最大10秒）
+        App->>HTTP: サーバーcontextを取り消してWebSocketハンドラを終了させ、返るまで待機（最大10秒。`http.Server.Shutdown`は乗っ取り済み接続を待たないため`handlerTracker`で待つ）。失敗はERRORログのみで続行
+        App->>SVC: `Services.Stop()`（ワーカー・バックグラウンドgoroutineの終了待ち）
+        App->>DB: deferで`State.Close`（DBクローズ）、`app.lock`解放。`run`が返り`RunMain`が終了コード0で終了
+    else cmd/desktop
+        OS->>App: Wailsの`OnShutdown`（`App.shutdown`）
+        App->>SVC: `OnStartup`で作ったcontextの`cancel`
+        App->>SVC: `Services.Stop()`（ワーカー・バックグラウンドgoroutineの終了待ち）
+        App->>App: ネイティブ通知の後始末（`runtime.CleanupNotifications`）
+        opt 自動アップデートの`QuitForUpdate`でインストーラーが記録済み
+            App->>App: 検証済みインストーラーを`/S`（サイレント）で切り離して起動（失敗はERRORログのみ。`updater.BuildSilentInstallCommand`）
+        end
+        App->>DB: `wails.Run`が返った後、deferで`State.Close`、`app.lock`解放
+    end
+```
+
+- serverでListenAndServeが自発的に失敗した場合も、contextを取り消して`Services.Stop()`を呼んでから`server error`として`run`が返り、`RunMain`がERRORログ＋終了コード1にする
+- desktopの`OnStartup`で`Services.Start`が失敗した場合は、ログに記録してネイティブのエラーダイアログを表示し、`runtime.Quit`で上記の`OnShutdown`に進む
 
 ### 10.2 スキャン〜発注フロー
 

@@ -41,8 +41,8 @@
 ```text
 pitha-trador/
 ├── cmd/
-│   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, ws_listener.go, wails.json）。`ws_listener.go`はWindowsのみの`/ws/...`専用ループバックリスナー。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
-│   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go。CI・WebView2が動かない環境向け）。起動時に`bootstrap.AcquireInstanceLock(bootstrap.AppLockName)`で`app.lock`を取得してから`bootstrap.Run`へ進む（取得失敗時は非0終了。#468）
+│   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, ws_listener.go, wails.json）。`main`は`cmd/server`と同じく`startup.RunMain`で始まる。`ws_listener.go`はWindowsのみの`/ws/...`専用ループバックリスナー。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
+│   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go, shutdown.go。CI・WebView2が動かない環境向け）。`main`は`startup.RunMain`（ログ設定と致命的エラーのERROR記録・終了コード。#547）で始まり、`bootstrap.AcquireInstanceLock(bootstrap.AppLockName)`で`app.lock`を取得してから`bootstrap.Run`へ進む（取得失敗時は非0終了。#468）。`shutdown.go`はSIGINT/SIGTERM時のHTTP停止とWebSocketハンドラの終了待ち（`httpServer.shutdown`。§10.1の停止フロー）
 ├── internal/
 │   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, services_build.go, lifecycle.go）、定数（constants.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）、secrets読込とrouterオプション列の共通化（router_options.go: `LoadSecrets`/`RouterOptions`。#372）、起動時の銘柄マスタCSV同期（universe.go: `syncUniverse`・`PITHA_UNIVERSE_PATH`。#389）、多重起動ロックの取得（instance_lock.go: `AcquireInstanceLock`・`AppLockName`/`SupervisorLockName`。desktop/server共通の`app.lock`・`supervisor.lock`。#468）のみ
 │   │   ├── candidates/           # 候補銘柄の定期更新（Fast Screener実行・最新Jev Trader判断と保有ポジションの候補への付与（#492）・jev-scoutのenqueue・更新間隔ティッカー。#246）
@@ -52,16 +52,18 @@ pitha-trador/
 │   │   ├── newstargets/          # News Ingestの対象銘柄（Fast Screener候補＋保有ポジション銘柄。全銘柄は取得しない。#531）
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
 │   │   ├── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
+│   │   ├── startup/              # desktop/server共通のプロセス起動処理（`RunMain`: ログ設定→`run`実行→致命的エラーのERROR記録と終了コード決定、`LogDir`/`EnvLogDir`=`PITHA_LOG_DIR`: ログディレクトリ解決。`internal/logging`のみに依存。#547・#551・#552）
 │   │   └── universe/             # 銘柄マスタCSVのパース・検証と`instruments`へのupsert（`Parse`/`SyncFile`。`domain`のみに依存。#389）
 │   ├── config/                   # config/*.yamlの型付きローダー、AES-256-GCM秘密情報ヘルパー（他の内部パッケージに依存しない）
 │   │   └── strategyflow/         # テスト専用: strategy.yamlの起動時検証（`Validate`）・`scan.*`/`event_trigger`の既定値補完の回帰テスト。linterlyの2000行/ディレクトリ制限のため`config`直下から分離（#459）
 │   ├── safego/                   # FR-SCHED-6 常駐goroutineのpanic回復（`Recover`/`Run`/`Try`/`Loop`。panicをスタック付きでslogに記録し、ループは次サイクルへ継続。他の内部パッケージに依存しない）
 │   ├── httpbody/                 # 外部API応答ボディの上限付き読み取り（`ReadAll`・`DefaultMaxBytes`=4 MiB・`ErrTooLarge`。標準ライブラリのみに依存。`service/marketdata`・`service/jev`が使う）
+│   ├── textutil/                 # 外部応答ボディ・エラー文字列のバイト数切り詰め（`Truncate`/`Excerpt`・`ErrorBodyExcerptBytes`=256。UTF-8のルーン境界で切り、`…`を付す。標準ライブラリのみに依存するリーフ。`service/jev`・`service/policy`・`service/assist`・`service/scheduler`が使う。#530）
 │   ├── logging/                  # slog JSON出力の日次ローテーション（rotate.go）・30日超のgzipアーカイブ（archive.go）・エラーログの抽出とマスク（export.go・export_mask.go、読み取り専用。`requirements/non-functional.md` §5・§5.3）
 │   ├── supervisor/               # --supervise起動時の子プロセス監視・指数バックオフ再起動（cmd/desktopのみが利用。非機能§3）
 │   ├── singleinstance/           # ファイルロックによる多重起動ガード（cmd/desktopとcmd/serverが利用。OSがプロセス終了時にロックを解放）
 │   ├── version/                  # ビルド時に埋め込むバージョン文字列（`ldflags -X`。自動アップデート判定で使用）
-│   ├── domain/                   # ドメインモデル（他レイヤーに非依存）
+│   ├── domain/                   # ドメインモデル（標準ライブラリと基盤パッケージ`internal/config`のみに依存。`config`への依存は`policyproposal.go`のしきい値検証`config.IsProbabilityThreshold`に限る。#527）
 │   │   ├── instrument.go
 │   │   ├── snapshot.go           # market_snapshots相当
 │   │   ├── feature.go
@@ -94,6 +96,7 @@ pitha-trador/
 │   │   │   ├── feedfail/         # テスト専用: GetBoard失敗のうちmarket_data_downの連続失敗に数えるもの（#532）
 │   │   │   ├── logflow/          # テスト専用: GetBoardの構造化ログ（ディレクトリ行数上限対応で移動）
 │   │   │   ├── infolimit/        # 情報API・銘柄登録のプロセス全体レート制限（公式10件/秒、既定8。issue #514）
+│   │   │   ├── quote/            # kabuステーションAPIの板を一般的なbid/askへ変換（`Bid`/`Ask`/`SpreadBps`。売/買の入れ替えの単一定義。`bootstrap/marketdatajob`と`bootstrap/heldposition`が共用。`marketdata`・`featureengine`に依存する本番コード）
 │   │   │   ├── rateflow/         # テスト専用: 情報APIレート上限と4001006の回帰テスト（#514）
 │   │   │   └── tokenflow/        # テスト専用: トークン発行・状態・失効時の再発行の回帰テスト（#621）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
@@ -202,7 +205,7 @@ pitha-trador/
 
 - 兄弟サブパッケージ同士は本番コードでimportしない。共有コードは`sqlutil`/`sqlitedb`/`handler/shared`のようなリーフ・ヘルパー用サブパッケージへ切り出す。リソース群を跨ぐ読み取りは`decisiontrade`のように専用サブパッケージ（本番コードは`domain`のみに依存し、他テーブルはSQLで直接結合する）へ置く。**本番コードの例外は`market` → `snapshotcols`のみ**（`market_snapshots`のFeature列対応表を共有する`domain`のみに依存するリーフ。逆向きは禁止）
 - **テスト専用のクロスリソース読み取り例外**: `decisiontrade`・`snapshotcols`の外部テスト（`_test.go`）は、データ準備と列対応の整合検証のため兄弟群（`judgement`/`market`/`trading`。`snapshotcols`のテストは`market`）の公開APIと`sqlitedb.Open`をimportしてよい。この例外は`_test.go`に閉じ、本番コードへ広げない。それ以外の群のテストは他リソース群のデータをSQLで直接用意する
-- サブパッケージは親パッケージをimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る
+- サブパッケージは、親パッケージがその子をimportする場合に親をimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る。**例外**: 親が本番コードでimportしない補助サブパッケージは親の公開型を参照してよい。`service/marketdata/quote`（`marketdata.Board`）・`service/jev/jevtest`（`jev.Client`向けのhttptestハンドラ。`jev`の公開型を参照）・`service/risk/multinotify`（`risk.Notifier`）の3つで、いずれも親は子をimportせず（子をimportするのは`bootstrap`配下の組み立て役とテストのみ）、循環は起きない
 - 分割後の呼び出し元はサブパッケージ名で修飾する（例: `jobqueue.Job`、`sqlitedb.Open`）。センチネルエラーは返すパッケージが定義する（他レイヤーが分類する必要がある場合は従来どおり`domain/`に置く）
 - テストは対象コードと同じサブパッケージへ移設する。`service/risk`のようにパッケージ内結合が強くコードを分割できない場合、または本番コードは上限内でも外部テスト（`package X_test`）を足すとディレクトリ2000行を超える場合のみ、外部テストをテスト専用サブパッケージ（`*flow`等）へ分離する。各テスト専用サブパッケージは自前のヘルパーを持ち、兄弟テストパッケージ同士はimportしない
 - `.linterlyignore`に手書きソースの除外を置かない。許容するのは自動生成物`*_templ.go`・実行時ログ`**/logs/**`・ライセンス全文`LICENSE`（手書きソースではない定型文）のみ（詳細は`environment/setup.md`）
@@ -226,10 +229,11 @@ handler → service → repository → domain
  Templ テンプレート（atoms/molecules/organisms/pages）
 ```
 
-- `domain/`: 他レイヤーに依存しない。純粋なビジネスロジック（例: Risk Engineのしきい値判定ロジック自体はdomainに置き、DB/HTTPアクセスはrepository/serviceに分離）
+- `domain/`: 標準ライブラリと基盤パッケージ`internal/config`（`policyproposal.go`のしきい値検証`config.IsProbabilityThreshold`のみ。`config`は他の内部パッケージに依存しないため循環しない。issue #527）にのみ依存し、他のレイヤー（`repository`・`service`・`web`等）には依存しない。純粋なビジネスロジック（例: Risk Engineのしきい値判定ロジック自体はdomainに置き、DB/HTTPアクセスはrepository/serviceに分離）。この例外を他のdomainファイルへ広げない
 - `repository/**`: `domain/` のみに依存（`sqlutil`は標準ライブラリのみ、`sqlitedb`は標準ライブラリ・外部ライブラリ・`domain`・マイグレーションSQLを`go:embed`する最上位`db`パッケージのみ）。例外として`SecretsRepository`（issue #57、`repository/system`）のみ`internal/config`のAES-256-GCMヘルパー（依存を持たない、`domain`と同格の基盤パッケージ）にも依存する。この例外は`system`パッケージ内に閉じ、`sqlutil`等の共有サブパッケージや他のサブパッケージへ広げない。サブパッケージ間の依存方向は前節の規約に従う
 - `internal/safego`: 標準ライブラリのみに依存し、`internal/config`・`domain`と同格の基盤パッケージ。`service/`・`bootstrap`・`cmd/server`のいずれからも参照できる（常駐goroutineのpanic回復、FR-SCHED-6）
 - `internal/httpbody`: 標準ライブラリのみに依存し、`internal/safego`と同格の基盤パッケージ。`service/`から参照できる（kabuステーション・Jevの応答ボディを4 MiBで打ち切る。超過は`ErrTooLarge`。連携側の扱いは`overview/integrations.md` §5・§6）。Slack Webhookのエラー応答は`httpbody`を使わず`service/notify`内で先頭4 KiBに切り詰めて（`...(truncated)`付き）エラー文に埋め込む
+- `internal/textutil`: 標準ライブラリのみに依存し、`internal/safego`・`internal/httpbody`と同格の基盤パッケージ。`service/`から参照できる（外部APIの非200応答ボディやエラー文字列を、DB列・ログへ載せる前にバイト数で切り詰める`Truncate`/`Excerpt`。`ErrorBodyExcerptBytes`=256）
 - `service/**`: `domain/`, `repository/**` に依存。`marketdata`/`jev`/`assist`など外部I/OはこのレイヤーでHTTPクライアントとして実装する
 - `web/**`（`web/handler/**`を含む）: `service/`, `domain/` に依存（基盤パッケージ`internal/config`・`internal/version`も、`web/handler/{symbol,settings,system}`と`organisms`が参照する）。`repository/**` を直接使わない（`.golangci.yml` の depguard `web-no-repository` が `internal/web/**` から `internal/repository` **および全サブパッケージ**（`pkg`はプレフィックス一致）への import を lint で拒否する。サブパッケージ追加でルールの書き換えは不要）。**depguardが強制するのはこの`web` → `repository/**`と、次項のTempl層 → `service/**`の2方向のみ**で、`repository`・`web/handler`・`bootstrap`のサブパッケージ間（兄弟同士）のimport禁止、`repository`の依存先の制限、`router`・`bootstrap`の参照範囲などは規約でありlintでは強制されない（レビューで担保する）。repositoryが返すセンチネルエラーのうちhandlerが分類する必要があるもの（例: `domain.ErrPositionNotFound`）は`domain/`に定義し、repositoryはそれを返す
 - `web/{atoms,molecules,organisms,pages,layout}`（Templ層）: `domain/`・基盤パッケージ・下位のTempl層にのみ依存し、`service/**` をimportしない（depguard `templ-no-service`が lint で拒否する）。`service`の戻り値型（`backtest.Metrics`・`insight.Performance`・`execution.SymbolState`等）は`web/handler`が表示用のplain props（例: `organisms.PerformanceSummary`・`pages.PerformanceResult`）へ写像して渡す。service側の型変更はhandlerのコンパイルエラーで止まり、テンプレートへ波及しない（`components/overview.md` §3、issue #380）
@@ -261,7 +265,7 @@ handler → service → repository → domain
 | Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
 | Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/candidates`・`bootstrap/heldposition`・`service/marketdata`・`service/pushfeed`・`service/scheduler`（`updatecheck`含む）から使う | `internal/safego` |
-| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、secrets読込・routerオプション共通化、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-dataジョブ、互換用の空feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）、`universe`（銘柄マスタCSVのパースと`instruments`へのupsert）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `paperexec`, `alerts`, `universe`） |
+| Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、secrets読込・routerオプション共通化、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-dataジョブ、互換用の空feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）、`startup`（desktop/server共通の`RunMain`・ログディレクトリ解決）、`universe`（銘柄マスタCSVのパースと`instruments`へのupsert）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `paperexec`, `alerts`, `startup`, `universe`） |
 | Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ・エラーログのエクスポート（`requirements/non-functional.md` §5・§5.3、フローは`overview/flows.md` §10.6） | `internal/logging` |
 | Supervisor | 子プロセスの異常終了時の指数バックオフ再起動（1秒〜5分、1分安定でリセット）。終了コード0で監視終了。`cmd/desktop`の`--supervise`起動でのみ使う（`requirements/non-functional.md` §3） | `internal/supervisor` |
 | Single Instance Guard | DBと同じディレクトリのロックファイル（`app.lock`／`supervisor.lock`）による多重起動防止。`app.lock`は`cmd/desktop`と`cmd/server`で共有し（取得は`bootstrap.AcquireInstanceLock`）、2つ目の起動は`bootstrap.Run`に到達する前に終了する（desktopは終了コード0、serverは非0）。Scheduler・Kill Switch・発注の二重稼働と、先行インスタンスのrunningジョブの回収を防ぐ | `internal/singleinstance`, `internal/bootstrap` |
