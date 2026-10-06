@@ -197,7 +197,7 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 |---------|------|------|
 | GET | `/api/v1/scanner` | 候補銘柄一覧 |
 | GET | `/api/v1/scanner/scan` | 最新スキャンサイクルのファネル件数・銘柄別の判定（通過/除外/欠損と理由） |
-| GET | `/api/v1/scanner/scan/export` | 最新スキャンサイクルの銘柄ごとの判定をCSVでダウンロード（絞り込みはscanと同じ、ページングなしの全件、UTF-8 BOM付き） | `internal/web/handler/scanner` |
+| GET | `/api/v1/scanner/scan/export` | 最新スキャンサイクルの銘柄ごとの判定をCSVでダウンロード（絞り込みはscanと同じ、ページングなしの全件、UTF-8 BOM付き） |
 | GET | `/api/v1/symbols/{symbol}` | 銘柄詳細 |
 | GET | `/api/v1/symbols/{symbol}/candles` | チャート用系列データ |
 | GET | `/api/v1/symbols/{symbol}/decisions` | Jev判断履歴 |
