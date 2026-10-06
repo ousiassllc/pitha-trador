@@ -12,14 +12,15 @@ import {
   LineStyle,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { css, html, LitElement } from 'lit';
+import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
+import { heatmapStyles } from './calibration-styles';
 import {
-  bucketColor,
+  bucketColors,
   bucketMidpointPct,
   type CalibrationAPIResponse,
   type CalibrationBucket,
@@ -28,68 +29,13 @@ import {
   hasLabeledSamples,
 } from './calibration-view';
 
-const CHART_HEIGHT = 300;
 const ACCURACY_LINE_COLOR = '#2563eb';
 const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';
 
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
   // Shadow DOM: Tailwind does not reach in here, so style locally.
-  static override styles = [
-    buttonStyles,
-    noticeStyles,
-    css`
-      :host {
-        display: block;
-      }
-      .pitha-calibration-heatmap {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-      .pitha-calibration-heatmap-chart {
-        width: 100%;
-        height: ${CHART_HEIGHT}px;
-      }
-      .pitha-calibration-heatmap button {
-        align-self: flex-start;
-      }
-      .pitha-calibration-heatmap-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
-        gap: 0.5rem;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-      .pitha-calibration-heatmap-cell {
-        display: flex;
-        flex-direction: column;
-        border-radius: 0.375rem;
-        padding: 0.5rem;
-        font-size: 0.75rem;
-        color: #0f172a;
-      }
-      .pitha-calibration-heatmap-cell .accuracy {
-        font-size: 1rem;
-        font-weight: 600;
-      }
-      .pitha-calibration-heatmap-summary {
-        display: grid;
-        grid-template-columns: max-content 1fr;
-        gap: 0.25rem 1rem;
-        margin: 0;
-        font-size: 0.875rem;
-      }
-      .pitha-calibration-heatmap-summary dt {
-        color: #475569;
-      }
-      .pitha-calibration-heatmap-summary dd {
-        margin: 0;
-        font-variant-numeric: tabular-nums;
-      }
-    `,
-  ];
+  static override styles = [buttonStyles, noticeStyles, heatmapStyles];
 
   @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 
@@ -224,7 +170,11 @@ export class PithaCalibrationHeatmap extends LitElement {
                   // CSSOM, not a `style` attribute binding: the CSP (no
                   // `style-src 'unsafe-inline'`) blocks inline style attributes,
                   // and Lit's styleMap renders one on its first pass.
-                  if (el) (el as HTMLElement).style.backgroundColor = bucketColor(b);
+                  if (el) {
+                    const { background, color } = bucketColors(b);
+                    (el as HTMLElement).style.backgroundColor = background;
+                    (el as HTMLElement).style.color = color;
+                  }
                 })}
                 class="pitha-calibration-heatmap-cell"
                 data-testid="calibration-heatmap-cell"
@@ -247,9 +197,18 @@ export class PithaCalibrationHeatmap extends LitElement {
             `,
           )}
         </ul>
-        <table class="pitha-calibration-heatmap-directions" data-testid="calibration-direction-table">
+        <table
+          class="pitha-calibration-heatmap-directions"
+          data-testid="calibration-direction-table"
+          aria-label="方向別キャリブレーション"
+        >
           <thead>
-            <tr><th>Direction</th><th>Samples</th><th>Accuracy</th><th>Avg return</th></tr>
+            <tr>
+              <th scope="col">Direction</th>
+              <th scope="col">Samples</th>
+              <th scope="col">Accuracy</th>
+              <th scope="col">Avg return</th>
+            </tr>
           </thead>
           <tbody>
             ${this.byDirection.map(
