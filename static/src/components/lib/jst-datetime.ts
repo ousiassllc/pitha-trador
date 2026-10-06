@@ -24,3 +24,9 @@ export function formatJstDateTime(rfc3339: string): string {
   for (const part of jstFormat.formatToParts(at)) p[part.type] = part.value;
   return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second} JST`;
 }
+
+// Go's zero time.Time, which GET /api/v1/scanner and /ws/scanner report as
+// `as_of` until the first scan cycle completes (no data yet).
+export function isZeroTime(rfc3339: string): boolean {
+  return rfc3339.startsWith('0001-01-01T');
+}

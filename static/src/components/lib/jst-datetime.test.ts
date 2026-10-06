@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatJstDateTime } from './jst-datetime';
+import { formatJstDateTime, isZeroTime } from './jst-datetime';
 
 describe('formatJstDateTime', () => {
   test('UTC 00:30Z is 09:30 JST', () => {
@@ -19,5 +19,16 @@ describe('formatJstDateTime', () => {
 
   test('unparseable input is shown unchanged', () => {
     expect(formatJstDateTime('not a time')).toBe('not a time');
+  });
+});
+
+describe('isZeroTime', () => {
+  test('detects the Go zero time in any offset form', () => {
+    expect(isZeroTime('0001-01-01T00:00:00Z')).toBe(true);
+    expect(isZeroTime('0001-01-01T09:00:00+09:00')).toBe(true);
+  });
+
+  test('real timestamps are not the zero time', () => {
+    expect(isZeroTime('2026-10-05T00:30:00Z')).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-package organisms_test
+package organismstest
 
 import (
 	"context"
@@ -68,5 +68,18 @@ func TestScannerTableFallback_EmptyStateWhenNoCandidates(t *testing.T) {
 	}
 	if !strings.Contains(body, ">0</span>") {
 		t.Errorf("expected candidate count 0, got %q", body)
+	}
+}
+
+// Before the first scan cycle completes the source reports the zero time,
+// which must not be shown as "as of 0001-01-01 ..." (issue #614).
+func TestScannerTableFallback_ZeroAsOfShowsNoDataCaption(t *testing.T) {
+	body := renderScannerTableAt(t, nil, time.Time{})
+
+	if strings.Contains(body, "0001-01-01") || strings.Contains(body, "as of") {
+		t.Errorf("zero asOf must not render a timestamp: %s", body)
+	}
+	if !strings.Contains(body, "Scanner Dashboard — データ未取得</caption>") {
+		t.Errorf("caption missing no-data notice: %s", body)
 	}
 }

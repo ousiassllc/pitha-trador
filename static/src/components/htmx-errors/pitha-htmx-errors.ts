@@ -16,6 +16,11 @@
 //     being outside the dialog it stays inert, so while a modal is open toasts go
 //     to the `[data-toast-region]` inside that dialog instead, where the close
 //     button and text selection work (issue #353).
+//   - polled live banners (`[data-live-banner]`, Header's `#update-banner` /
+//     `#marketdata-banner`, issue #626): the container is the fixed
+//     `role="status"` live region; a poll answering the markup already shown
+//     is not swapped, so a screen reader announces a banner only when it
+//     appears or changes, not on every poll.
 // The toast markup lives only in templ (`#toast-template`, atoms.Toast).
 
 import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
@@ -25,8 +30,11 @@ const TOAST_MARKER = 'data-toast';
 const DISMISS_AFTER_MS = 8000;
 const REGIONS = '#toast-region, [data-toast-region]';
 
+const LIVE_BANNER_LAST = 'liveBannerLast';
+
 interface ResponseDetail {
   xhr?: XMLHttpRequest;
+  serverResponse?: string;
   shouldSwap?: boolean;
   target?: Element;
 }
@@ -73,9 +81,23 @@ function statusMessage(status: number): string {
   return `操作を完了できませんでした（HTTP ${status}）。`;
 }
 
+/** Cancels a swap whose body equals the previous one for a `[data-live-banner]` target (issue #626). */
+function skipUnchangedLiveBanner(detail: ResponseDetail): void {
+  const target = detail.target;
+  if (!(target instanceof HTMLElement) || !target.hasAttribute('data-live-banner')) return;
+  if (isErrorStatus(detail.xhr) || detail.shouldSwap === false) return;
+  const body = detail.serverResponse ?? '';
+  if (target.dataset[LIVE_BANNER_LAST] === body) {
+    detail.shouldSwap = false;
+    return;
+  }
+  target.dataset[LIVE_BANNER_LAST] = body;
+}
+
 /** `htmx:beforeSwap`: an error response without a toast fragment is never swapped into `#toast-region`; one with a toast lands in the open modal's region instead (issue #353). */
 export function onBeforeSwap(event: Event): void {
   const detail = (event as CustomEvent<ResponseDetail>).detail;
+  skipUnchangedLiveBanner(detail);
   if (!isErrorStatus(detail.xhr)) return;
   if (!carriesToast(detail.xhr)) {
     detail.shouldSwap = false;

@@ -117,6 +117,20 @@ describe('pitha-scanner-table', () => {
     expect(el.querySelector('[data-testid="scanner-count"]')?.textContent).toContain('1');
   });
 
+  // Before the first scan cycle the server reports Go's zero time (issue #614).
+  test('shows a no-data caption instead of a 0001-01-01 timestamp for the zero as_of', async () => {
+    const { el } = await mount([]);
+
+    FakeWebSocket.instances[0].emit('message', {
+      data: JSON.stringify({ type: 'scanner_update', items: [], as_of: '0001-01-01T00:00:00Z' }),
+    });
+    await el.updateComplete;
+
+    expect(el.querySelector('caption')?.textContent?.trim()).toBe(
+      'Scanner Dashboard — データ未取得',
+    );
+  });
+
   // The first update cycle used to close and reopen the socket (issue #170).
   test('opens a single WebSocket on mount and reconnects once when ws-url changes', async () => {
     const { el } = await mount([item()]);

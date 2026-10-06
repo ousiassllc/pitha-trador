@@ -1,4 +1,4 @@
-package organisms_test
+package organismstest
 
 import (
 	"encoding/json"
@@ -60,7 +60,7 @@ func percentToRatio(v *float64) *float64 {
 
 func loadScannerContract(t *testing.T) scannerContract {
 	t.Helper()
-	data, err := os.ReadFile("../../../static/src/components/scanner-table/scanner-contract.json")
+	data, err := os.ReadFile("../../../../static/src/components/scanner-table/scanner-contract.json")
 	if err != nil {
 		t.Fatalf("read contract: %v", err)
 	}

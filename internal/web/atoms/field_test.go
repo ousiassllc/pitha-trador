@@ -55,3 +55,30 @@ func TestSelect_DefaultClass(t *testing.T) {
 		t.Errorf("default class missing: %s", body)
 	}
 }
+
+// An empty ID/Name must omit the attribute rather than render `id=""`
+// (invalid HTML: an id is at least one character).
+func TestInputAndSelect_OmitEmptyIDAndName(t *testing.T) {
+	for name, body := range map[string]string{
+		"Input":  renderWithLabel(t, atoms.Input(atoms.InputProps{}), ""),
+		"Select": renderWithLabel(t, atoms.Select(atoms.SelectProps{}), ""),
+	} {
+		for _, bad := range []string{`id=`, `name=`} {
+			if strings.Contains(body, bad) {
+				t.Errorf("%s with empty ID/Name must not render %q: %s", name, bad, body)
+			}
+		}
+	}
+}
+
+func TestInputAndSelect_RenderIDAndNameWhenGiven(t *testing.T) {
+	in := renderWithLabel(t, atoms.Input(atoms.InputProps{ID: "i", Name: "n"}), "")
+	sel := renderWithLabel(t, atoms.Select(atoms.SelectProps{ID: "i", Name: "n"}), "")
+	for name, body := range map[string]string{"Input": in, "Select": sel} {
+		for _, want := range []string{`id="i"`, `name="n"`} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s body missing %q: %s", name, want, body)
+			}
+		}
+	}
+}
