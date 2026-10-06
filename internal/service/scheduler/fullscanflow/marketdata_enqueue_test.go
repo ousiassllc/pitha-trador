@@ -1,4 +1,4 @@
-package scheduler_test
+package fullscanflow_test
 
 import (
 	"context"

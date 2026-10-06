@@ -1,4 +1,4 @@
-package marketdata_test
+package boardflow_test
 
 import (
 	"context"
