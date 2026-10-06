@@ -128,6 +128,9 @@ type Service struct {
 
 	mu   sync.Mutex
 	subs map[chan Message]*subscriber
+	// newsErrors are the recent news_feed events, oldest first
+	// (news_errors.go).
+	newsErrors []domain.ActivityEvent
 	// dirtyQueues are the queues with transitions not yet reported as a
 	// QueueUpdate; non-nil while a flush is scheduled (bus.go).
 	dirtyQueues map[string]struct{}
@@ -168,7 +171,7 @@ func (s *Service) Snapshot(ctx context.Context, q Query) (domain.ActivitySnapsho
 		return domain.ActivitySnapshot{}, err
 	}
 	// Stable so equal timestamps keep collectEvents' job → scout → trader
-	// → kill switch order.
+	// → kill switch → news feed order.
 	sort.SliceStable(events, func(i, j int) bool { return events[i].Timestamp.After(events[j].Timestamp) })
 	if len(events) > limit {
 		events = events[:limit]
@@ -238,6 +241,9 @@ func (s *Service) collectEvents(ctx context.Context, q Query, limit int) ([]doma
 		for _, ev := range kills {
 			events = append(events, killSwitchEvent(ev))
 		}
+	}
+	if q.Type == "" || q.Type == domain.ActivityTypeNewsFeed {
+		events = append(events, s.newsErrorEvents(ctx)...)
 	}
 	return events, nil
 }

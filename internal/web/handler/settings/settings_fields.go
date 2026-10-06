@@ -19,7 +19,10 @@ type connection struct {
 	id          string
 	name        string
 	description string
-	fields      []settingsField
+	// defaultLabel names what the connection uses while none of its fields
+	// is stored (issue #273); "" for connections that need their own key.
+	defaultLabel string
+	fields       []settingsField
 }
 
 // settingsConnections is the Settings screen's connection list in display
@@ -27,8 +30,9 @@ type connection struct {
 // so the migration away from it stays recognizable. Every key here must be
 // in config.AllowedSecretKeys (the per-key routes' allow-list), and the
 // groups together must cover it exactly once, which settings_groups_test.go
-// asserts. Luna/Sol/Opus/News Feed are shown as optional until issue #273
-// (human decision) settles their default/hidden policy.
+// asserts. Luna/Sol/Opus default to Jev and the news feed to the やのしん TDnet
+// WebAPI (issue #273), so their fields are optional overrides only; the Jev
+// key alone enables them.
 var settingsConnections = []connection{
 	{
 		id:          "jev",
@@ -57,36 +61,41 @@ var settingsConnections = []connection{
 		},
 	},
 	{
-		id:          "luna",
-		name:        "Luna",
-		description: "ニュースの分類・要約を行う AI（Luna）への接続です（任意）。",
+		id:           "luna",
+		name:         "Luna",
+		defaultLabel: "Jev",
+		description:  "ニュースの分類を行う AI（Luna）への接続です。既定では Jev を使うため、追加のキー入力は不要です。別の AI に差し替える場合のみ入力してください（未入力なら Jev）。",
 		fields: []settingsField{
 			{config.KeyLunaAPIKey, "LUNA_API_KEY（任意）"},
 			{config.KeyLunaBaseURL, "LUNA_BASE_URL（任意）"},
 		},
 	},
 	{
-		id:          "news-feed",
-		name:        "ニュースフィード",
-		description: "Luna に渡すニュースを取得する外部ニュースフィードへの接続です（任意）。",
+		id:           "news-feed",
+		name:         "ニュースフィード",
+		defaultLabel: "やのしん",
+		description:  "Luna に渡すニュースの取得元です。既定はやのしん TDnet WebAPI（適時開示、API キー不要）で、監視中の銘柄のみを取得します。別のフィードを使う場合は NEWS_FEED_URL を入力し、止める場合は NEWS_FEED_ENABLED に off を保存してください。",
 		fields: []settingsField{
-			{config.KeyNewsFeedAPIKey, "NEWS_FEED_API_KEY（任意）"},
 			{config.KeyNewsFeedURL, "NEWS_FEED_URL（任意）"},
+			{config.KeyNewsFeedAPIKey, "NEWS_FEED_API_KEY（任意）"},
+			{config.KeyNewsFeedEnabled, "NEWS_FEED_ENABLED（任意）"},
 		},
 	},
 	{
-		id:          "sol",
-		name:        "Sol",
-		description: "負けトレードを分析して改善提案を作る AI（Sol）への接続です（任意）。",
+		id:           "sol",
+		name:         "Sol",
+		defaultLabel: "Jev",
+		description:  "日次の自己改善で、しきい値の変更案を作る AI（Sol）への接続です。既定では Jev を使うため、追加のキー入力は不要です。別の AI に差し替える場合のみ入力してください（未入力なら Jev）。",
 		fields: []settingsField{
 			{config.KeySolAPIKey, "SOL_API_KEY（任意）"},
 			{config.KeySolBaseURL, "SOL_BASE_URL（任意）"},
 		},
 	},
 	{
-		id:          "opus",
-		name:        "Opus",
-		description: "Sol の改善提案を検証して承認・却下する AI（Opus）への接続です（任意）。",
+		id:           "opus",
+		name:         "Opus",
+		defaultLabel: "Jev",
+		description:  "Sol の改善提案を検証して承認・却下する AI（Opus）への接続です。既定では Jev を使うため、追加のキー入力は不要です。別の AI に差し替える場合のみ入力してください（未入力なら Jev）。",
 		fields: []settingsField{
 			{config.KeyOpusAPIKey, "OPUS_API_KEY（任意）"},
 			{config.KeyOpusBaseURL, "OPUS_BASE_URL（任意）"},
@@ -102,4 +111,8 @@ var setupConnectionIDs = []string{"jev", "kabu", "slack"}
 // defaultedKeys are the override-only keys whose unset state is the normal
 // one (a default applies), so the global secrets banner never nags about
 // them.
-var defaultedKeys = []string{config.KeyJevBaseURL, config.KeyJevModel}
+var defaultedKeys = []string{
+	config.KeyJevBaseURL, config.KeyJevModel,
+	config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
+	config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
+}

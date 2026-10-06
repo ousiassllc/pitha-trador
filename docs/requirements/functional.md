@@ -145,7 +145,7 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 
 ### 5.5 System Activity Log
 
-表示項目: キュー別（6キュー）の`pending`/`running`/直近`failed`件数、直近アクティビティ一覧（時刻・種別 [job/jev_scout/jev_trader/kill_switch]・対象銘柄・詳細・latency_ms）、直近Kill Switchイベント。キュー種別・イベント種別でフィルタ可能とする。新規イベント発生に応じて`/ws/activity`経由でライブ更新する（§4.15）。
+表示項目: キュー別（6キュー）の`pending`/`running`/直近`failed`件数、直近アクティビティ一覧（時刻・種別 [job/jev_scout/jev_trader/kill_switch/news_feed]・対象銘柄・詳細・latency_ms）、直近Kill Switchイベント。キュー種別・イベント種別でフィルタ可能とする。新規イベント発生に応じて`/ws/activity`経由でライブ更新する（§4.15）。
 
 ## 6. MVPフェーズ
 
@@ -239,3 +239,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.46 | 2026-10-05 | `functional/components-pipeline.md`のFR-FS-2（`normalized_volume_ratio`=`volume_ratio_5m`の定義）、FR-FE-5（`realized_vol_*`の欠損規則を分離）、FR-SCAN-2（再評価抑制の適用範囲を即時再評価経路に限定）、FR-POLICY-4（`PITHA_POLICY_*`環境変数とDB `runtime_settings`の優先順位）、FR-RISK-5（監査ログ対象をKill Switch発動・再開・解除に限定）を実装に合わせて修正 | 実装との乖離解消（#517/#564/#571/#572/#573） |
 | 1.47 | 2026-10-06 | §4.10に FR-SCHED-7（全銘柄RESTスキャンを`scan.full_scan_enabled`で停止）・FR-SCHED-8（kabu `/ranking`計測ループ`scan.ranking_measure`。件数・`duration_ms`・`CurrentPriceTime`・HTTP/kabuコードのみをログ出力し、価格は保存・出力しない）を追加 | issue #652（#651 段階0） |
 | 1.48 | 2026-10-06 | §4.10のFR-SCHED-7を既定オフ（`scan.full_scan_enabled`省略時・同梱既定を`false`へ変更。`true`明示時のみ全件投入）に改め、FR-SCHED-2をフルスキャン明示オン時の記述と明記、FR-SCHED-9（kabu `GET /ranking`の毎分取得で決めるランキング監視。PUSH最大45銘柄・保有固定枠・入れ替え毎分最大5・最低5分保持・空/失敗時は候補0件で自動復帰）を追加。寄り前監視リスト（J-Quants Light）は未実装 | PR #653 の方針変更（#651の結論に従いランキング方式を既定化。#652） |
+| 1.49 | 2026-10-06 | §4.16のFR-LUNA-1/2/4とSettings（FR-SETTINGS-1）を、Luna/Sol/Opus既定=Jev・ニュースフィード既定=やのしん・`NEWS_FEED_ENABLED`・フィード失敗時のフェイルセーフ（ニュースフラグ非立て・バックオフ・Activity Feedの`news_feed`イベント）へ更新。§4.15のイベント種別に`news_feed`を追加 | issue #273 |

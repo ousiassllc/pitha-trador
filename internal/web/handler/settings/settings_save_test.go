@@ -178,3 +178,24 @@ func TestSettingsHandler_Save_InvalidValuesAre400AndStoreUntouched(t *testing.T)
 		})
 	}
 }
+
+// issue #273: NEWS_FEED_ENABLED switches News Ingest off; only on/off are
+// accepted (stored lower-cased), anything else is a 400 that stores nothing.
+func TestSettingsHandler_Save_NewsFeedEnabledAcceptsOnlyOnOff(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	engine := settingsRouter(settings.NewSettingsHandler(store))
+
+	if rec := postSetting(engine, config.KeyNewsFeedEnabled, url.Values{"value": {" OFF "}}); rec.Code != http.StatusOK {
+		t.Fatalf("POST off status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := store.values[config.KeyNewsFeedEnabled]; got != "off" {
+		t.Fatalf("stored NEWS_FEED_ENABLED = %q, want off", got)
+	}
+	if rec := postSetting(engine, config.KeyNewsFeedEnabled, url.Values{"value": {"maybe"}}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST maybe status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if got := store.values[config.KeyNewsFeedEnabled]; got != "off" {
+		t.Fatalf("invalid value changed the store to %q", got)
+	}
+}

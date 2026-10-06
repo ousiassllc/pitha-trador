@@ -98,15 +98,19 @@ type OpusReview struct {
 // Opus is the Govern adapter. A proposal is approved only when it meets
 // FR-SELFIMPROVE-4's deterministic shadow-backtest thresholds AND the
 // external Opus LLM API's qualitative review approves it
-// (FR-SELFIMPROVE-9). The LLM is an additional veto only.
+// (FR-SELFIMPROVE-9). The LLM is an additional veto only. By default the
+// qualitative review is Jev's noul adoption probability (opus_jev.go); when
+// OPUS_BASE_URL is set the external Opus API reviews instead.
 type Opus struct {
 	client *Client
+	jev    Asker
 }
 
 // NewOpus returns an Opus adapter that calls client
-// (OPUS_API_KEY/OPUS_BASE_URL).
-func NewOpus(client *Client) *Opus {
-	return &Opus{client: client}
+// (OPUS_API_KEY/OPUS_BASE_URL), or Jev (WithJev) when client is not
+// configured.
+func NewOpus(client *Client, opts ...Option) *Opus {
+	return &Opus{client: client, jev: applyOptions(opts).jev}
 }
 
 type opusRequest struct {
@@ -206,6 +210,10 @@ func (o *Opus) Review(ctx context.Context, in OpusReviewInput) (bool, string, er
 }
 
 func (o *Opus) callAPI(ctx context.Context, in OpusReviewInput, expectancyNotWorse, maxDrawdownWithinBudget bool) (OpusResponse, error) {
+	viaJev, err := useJev(o.client, o.jev)
+	if err != nil {
+		return OpusResponse{}, fmt.Errorf("assist: opus review: %w", err)
+	}
 	changes := make([]opusChange, 0, len(in.Changes))
 	for _, c := range in.Changes {
 		changes = append(changes, opusChange{Key: c.Key, OldValue: c.OldValue, NewValue: c.NewValue})
@@ -239,7 +247,12 @@ func (o *Opus) callAPI(ctx context.Context, in OpusReviewInput, expectancyNotWor
 	}
 
 	var resp OpusResponse
-	if err := o.client.PostJSON(ctx, OpusReviewPath, req, &resp); err != nil {
+	if viaJev {
+		resp, err = o.reviewWithJev(ctx, req)
+	} else {
+		err = o.client.PostJSON(ctx, OpusReviewPath, req, &resp)
+	}
+	if err != nil {
 		return OpusResponse{}, fmt.Errorf("assist: opus review: %w", err)
 	}
 	if resp.Verdict != OpusVerdictApprove && resp.Verdict != OpusVerdictReject {
