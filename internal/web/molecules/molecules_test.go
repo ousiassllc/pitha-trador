@@ -4,9 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/a-h/templ"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
@@ -52,5 +54,31 @@ func TestSecretFieldRow_ButtonsHaveStableIDs(t *testing.T) {
 	unconfigured := render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "jquants_api_key", Label: "J-Quants"}))
 	if !strings.Contains(unconfigured, `id="save-jquants_api_key"`) || strings.Contains(unconfigured, "delete-jquants_api_key") {
 		t.Errorf("unconfigured row must keep the save id and have no delete button: %s", unconfigured)
+	}
+}
+
+// Closing a position swaps its row (outerHTML) for a closed row that has no
+// Close button, so the focus would fall to <body> (issue #681): the button
+// has a stable id and hands focus to the replaced row, whose id the
+// response fragment also renders.
+func TestPositionRow_CloseButtonHandsFocusToReplacedRow(t *testing.T) {
+	now := time.Now()
+	pnl, reason := 12.5, domain.ExitReasonManual
+	open := domain.Position{ID: 7, Symbol: "7203", Side: domain.PositionSideLong, Quantity: 100, OpenedAt: now}
+	closed := open
+	closed.RealizedPnL, closed.ClosedAt, closed.ExitReason = &pnl, &now, &reason
+
+	openHTML := render(t, molecules.PositionRow(open))
+	for _, want := range []string{`id="close-position-7"`, `data-focus-after-swap="position-row-7"`, `hx-target="#position-row-7"`} {
+		if !strings.Contains(openHTML, want) {
+			t.Errorf("open row missing %q: %s", want, openHTML)
+		}
+	}
+	closedHTML := render(t, molecules.PositionRow(closed))
+	if !strings.Contains(closedHTML, `id="position-row-7"`) {
+		t.Errorf("closed row must keep the focus target id: %s", closedHTML)
+	}
+	if strings.Contains(closedHTML, "close-position-7") {
+		t.Errorf("closed row must not render the Close button: %s", closedHTML)
 	}
 }

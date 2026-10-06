@@ -153,6 +153,33 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 |-------|-----|------|
 | `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
 
+出力は`{"items": [...]}`で、**開始（`opened_at`）が新しい順**。保有中の行とクローズ済みの行を同じ形式で返す。
+
+```json
+// Output（抜粋）
+{
+  "items": [
+    {
+      "id": 12, "symbol": "7203", "side": "LONG", "quantity": 100,
+      "entry_price": 2831.5, "current_price": 2840.0, "unrealized_pnl": 850.0,
+      "realized_pnl": null, "opened_at": "2026-10-07T00:12:03Z",
+      "closed_at": null, "exit_reason": null
+    },
+    {
+      "id": 11, "symbol": "6758", "side": "SHORT", "quantity": 200,
+      "entry_price": 3410.0, "current_price": 3398.5, "unrealized_pnl": 0.0,
+      "realized_pnl": 2300.0, "opened_at": "2026-10-07T00:05:41Z",
+      "closed_at": "2026-10-07T01:02:17Z", "exit_reason": "take_profit"
+    }
+  ]
+}
+```
+
+- `side`は`LONG`/`SHORT`（`paper_orders.side`の`BUY`/`SELL`とは別）。`quantity`は株数、`entry_price`/`current_price`/`unrealized_pnl`/`realized_pnl`は円
+- `realized_pnl`/`closed_at`/`exit_reason`は**未クローズ（保有中）で`null`**。`realized_pnl`はエントリー・Exit両注文の`fees`を差し引いた値
+- `exit_reason`の値は`stop_loss`/`take_profit`/`trailing_stop`/`jev_direction_reversed`/`continuation_probability_dropped`/`vwap_cross`/`max_holding`/`force_flat_before_close`/`manual`/`force_close`（意味は`architecture/er/tables-trading.md`の`positions.exit_reason`）
+- `opened_at`/`closed_at`はRFC 3339（UTC、末尾`Z`）
+
 ### GET /api/v1/orders
 
 `paper_orders`一覧（ステータスフィルタ `?status=` 対応）。
@@ -161,6 +188,32 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 |-------|-----|------|
 | `status` | string | `PENDING`/`FILLED`/`CANCELLED`/`REJECTED`でフィルタ（省略時は全件。それ以外は422） |
 | `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
+
+出力は`{"items": [...]}`で、**`submitted_at`が新しい順**。
+
+```json
+// Output（抜粋）
+{
+  "items": [
+    {
+      "id": 25, "symbol": "7203", "side": "BUY", "order_type": "MARKET", "quantity": 100,
+      "limit_price": null, "status": "FILLED", "submitted_at": "2026-10-07T00:12:02Z",
+      "filled_at": "2026-10-07T00:12:03Z", "filled_price": 2831.5,
+      "fees": 0.0, "slippage_bps": 1.8
+    },
+    {
+      "id": 26, "symbol": "6758", "side": "SELL", "order_type": "LIMIT", "quantity": 200,
+      "limit_price": 3410.0, "status": "PENDING", "submitted_at": "2026-10-07T00:20:41Z",
+      "filled_at": null, "filled_price": null, "fees": 0.0, "slippage_bps": null
+    }
+  ]
+}
+```
+
+- `side`は`BUY`/`SELL`、`order_type`は`MARKET`/`LIMIT`、`status`は`PENDING`/`FILLED`/`CANCELLED`/`REJECTED`
+- `limit_price`は成行（`MARKET`）で`null`。`filled_at`/`filled_price`/`slippage_bps`は**未約定で`null`**
+- `fees`は約定手数料（円。約定時に`FeeBps`×約定代金を記録、既定0。未約定は`0`）。`slippage_bps`は約定時の直近価格（シグナル価格）に対する不利方向のbps（負は有利。FR-ENTRY-8、`architecture/er/tables-trading.md`の`paper_orders`）
+- `submitted_at`/`filled_at`はRFC 3339（UTC、末尾`Z`）
 
 ### GET /api/v1/system/status / POST /api/v1/system/pause / resume / kill
 
