@@ -7,14 +7,45 @@ installFakes();
 
 // Header sorting/accessibility and /ws/scanner push behavior.
 describe('pitha-scanner-table interaction', () => {
+  // Issue #674: before any header click the rows keep the server order
+  // (ScreenScore descending), identical to the SSR fallback, and no column
+  // claims to be sorted.
+  test('keeps the server row order and aria-sort=none until a header is clicked', async () => {
+    const { el } = await mount([
+      item({ symbol: 'BBBB' }),
+      item({ symbol: 'CCCC' }),
+      item({ symbol: 'AAAA' }),
+    ]);
+
+    const symbols = () =>
+      [...el.querySelectorAll('tbody tr')].map((row) => row.getAttribute('data-symbol'));
+    expect(symbols()).toEqual(['BBBB', 'CCCC', 'AAAA']);
+    for (const th of el.querySelectorAll('thead th')) {
+      expect(th.getAttribute('aria-sort')).toBe('none');
+      expect(th.textContent).not.toMatch(/[▲▼]/);
+    }
+
+    // A /ws/scanner push keeps the server order too.
+    FakeWebSocket.instances[0].emit('message', {
+      data: JSON.stringify({
+        type: 'scanner_update',
+        items: [item({ symbol: 'CCCC' }), item({ symbol: 'AAAA' }), item({ symbol: 'BBBB' })],
+        as_of: '2026-09-26T10:16:00+09:00',
+      }),
+    });
+    await el.updateComplete;
+    expect(symbols()).toEqual(['CCCC', 'AAAA', 'BBBB']);
+  });
+
   test('sorts client-side on header click without an additional fetch', async () => {
     const { el, fetchMock } = await mount([item({ symbol: 'BBBB' }), item({ symbol: 'AAAA' })]);
 
-    // Default sort key is 'symbol' ascending.
+    const symbolHeader = el.querySelector('thead th') as HTMLElement;
+    (symbolHeader.querySelector('button') as HTMLElement).click(); // first click -> ascending
+    await el.updateComplete;
+
     let rows = el.querySelectorAll('tbody tr');
     expect(rows[0].getAttribute('data-symbol')).toBe('AAAA');
-
-    const symbolHeader = el.querySelector('thead th') as HTMLElement;
     expect(symbolHeader.getAttribute('aria-sort')).toBe('ascending');
     expect(symbolHeader.textContent).toContain('銘柄 ▲');
 
