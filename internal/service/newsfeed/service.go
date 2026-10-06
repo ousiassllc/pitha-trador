@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 )
 
@@ -178,7 +179,12 @@ func (s *Service) Poll(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer func() { <-sem; wg.Done() }()
-			s.pollSymbol(ctx, symbol)
+			// A panic in this goroutine is invisible to the caller's
+			// safego.Loop, so each symbol is guarded on its own (FR-SCHED-6):
+			// it degrades to "no news for this symbol" (FR-LUNA-4).
+			if safego.Run("news ingest "+symbol, func() { s.pollSymbol(ctx, symbol) }) {
+				s.reportError(symbol, errors.New("newsfeed: panic while polling symbol"))
+			}
 		}()
 	}
 	wg.Wait()
