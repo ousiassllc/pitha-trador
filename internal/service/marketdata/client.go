@@ -75,6 +75,8 @@ type Client struct {
 	mu          sync.RWMutex
 	token       string
 	tokenStatus TokenStatus
+	reissueMu   sync.Mutex // serializes reactive reissues (tokenrefresh.go); guards lastReissue
+	lastReissue time.Time
 }
 
 // NewClient returns a Client configured by cfg. The returned Client holds

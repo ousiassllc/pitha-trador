@@ -198,9 +198,9 @@ const (
 	infoAPIRateLimitBackoff  = time.Second
 )
 
-// doInfo is do plus the process-wide information/register API limiter
+// doInfoOnce is do plus the process-wide information/register API limiter
 // and 429 / 4001006 retry (issue #514). Token issuance stays on do.
-func (c *Client) doInfo(ctx context.Context, method, path, token string, body, out any) error {
+func (c *Client) doInfoOnce(ctx context.Context, method, path, token string, body, out any) error {
 	var last error
 	for attempt := 1; attempt <= infoAPIRateLimitAttempts; attempt++ {
 		if err := c.limiter.Wait(ctx); err != nil {
