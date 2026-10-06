@@ -23,8 +23,11 @@ scan:
   # オン/オフ。既定はfalse（issue #651の方針転換・#652）。省略時もfalse。
   # falseのとき、全件投入の代わりにkabu GET /ranking（毎分）で決めた
   # PUSH登録銘柄（最大45。保有・注文中は固定枠、入れ替えは毎分最大5、
-  # 入れた銘柄は最低5分保持。FR-SCHED-9）だけを取り込む。市場コンテキスト
-  # 算出用の指数行も投入されなくなる。明示的にtrueにしたときだけ全件投入する。
+  # 入れた銘柄は最低5分保持。FR-SCHED-9）と、市場コンテキスト算出用の指数行
+  # （market_index全件・監視銘柄のsectorに一致するsector_index）だけを取り込む。
+  # このためスキャン状況パネルのユニバースは監視銘柄（最大45）になり、
+  # market_breadthも監視銘柄だけの集計になる。
+  # 明示的にtrueにしたときだけ全件投入する。
   full_scan_enabled: false
   # 対象ユニバース全体を再スキャンする周期（秒）。functional.md §4.3。
   full_scan_interval_seconds: 60
