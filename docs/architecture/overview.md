@@ -210,7 +210,7 @@ pitha-trador/
 
 ### サブパッケージ単位の責務規約
 
-レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。`*_test.go`のみのディレクトリ（`execution/closerace`・`execution/closeflow`・`execution/pendingfill`・`risk/killswitchflow`・`risk/checkflow`・`risk/monitorflow`・`featureengine/marketcontextflow`・`scheduler/maintenanceflow`・`selfimprove/governorflow`・`jev/clientflow`・`updater/checkflow`・`router/analysisflow`・`router/apiroutes`・`router/staticroute`・`router/systemheader`・`router/wslistener`・`config/strategyflow`・`marketdata/rateflow`）は行数上限を満たすためにテストを分離したもので、本番コードではない。
+レイヤー（import方向の境界）は最上位ディレクトリ（`domain`/`repository`/`service`/`web`/`router`/`bootstrap`）で決まり、**1パッケージ（ディレクトリ）は1つの責務**を持つ。旧規約の「レイヤー内の全ファイルを1ディレクトリへ平坦に置く」は廃止し、ディレクトリ行数上限（linterly: 300行/ファイル・2000行/ディレクトリ。除外で回避しない）を超える見込みのレイヤーは責務別サブパッケージへ分割する。ツリーの`service/`配下と同様、サブパッケージはディレクトリ単位（責務）で記載し、新規サブパッケージはファイル名を列挙せずディレクトリ行のみ追加する（ファイル構成はパッケージコメントを一次情報とする）。ツリーで「テスト専用」と注記した`*_test.go`のみのディレクトリ（`organisms/organismstest`を含む）は行数上限を満たすためにテストを分離したもので、本番コードではない。
 
 `repository`（#244）・`web/handler`（#245）・`bootstrap`（#246）・`service/risk`（#247）はいずれも分割済みで、上のツリーは実装と一致している（各Issueは完了時に本ツリーが実装と一致することを受け入れ条件とする）。**サブパッケージ共通の規約**:
 
@@ -294,8 +294,4 @@ handler → service → repository → domain
 |----|----------|
 | §5 kabuステーションAPI連携 / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 | `docs/architecture/overview/integrations.md` |
 | §10 通信フロー（§10.1〜§10.6）/ §11 障害対応方針 | `docs/architecture/overview/flows.md` |
-| 改訂履歴（1.0〜） | `docs/architecture/overview/history.md` |
-
-## 改訂履歴
-
-改訂履歴は `.linterly.yml` の300行/ファイル制限のため `docs/architecture/overview/history.md` に分割している（版番号・内容は分割前と同一。`overview.md` と `overview/` 配下の全体の改訂を追記する）。
+| 改訂履歴（1.0〜。`overview.md`と`overview/`配下の全体の改訂を追記する） | `docs/architecture/overview/history.md` |
