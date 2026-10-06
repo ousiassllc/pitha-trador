@@ -25,7 +25,7 @@ pitha-trador/
 │   ├── actions/setup/
 │   │   └── action.yml        # 複合Action: setup-go / setup-bun / フロントエンドビルド / templ生成（lint・test・buildで共用）
 │   └── workflows/
-│       └── ci.yml            # push/PR/タグ: lint（govulncheck含む）→ test → build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
+│       └── ci.yml            # push/PR/タグ: lint（govulncheck含む）→ test・test-windows（並列）→ build（wails build -platform windows/amd64 -nsis -installscope user 含む）→ release（main push/タグpush時のみ）
 ├── .env.example               # 環境変数の一覧と説明の雛形（`.env`は自動読込されない。値はプロセス環境変数として設定する）
 ├── .bun-version               # CIで使うbunバージョン固定（setup-bunの`bun-version-file`）
 ├── .golangci.yml              # Go lint設定
@@ -98,7 +98,8 @@ make dev
 | `PITHA_SERVER_ALLOW_NON_LOOPBACK` | `cmd/server` | `1`のときのみ`PITHA_SERVER_ADDR`にloopback以外を許可する（意図的な公開用） |
 | `PITHA_SERVER_ALLOWED_HOSTS` | `cmd/server` | `PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ有効。Hostヘッダとして受け付ける追加ホスト名（カンマ区切り、DNS rebinding対策のHost検証。loopback名（`localhost`/`127.0.0.1`/`::1`）とワイルドカード以外の`PITHA_SERVER_ADDR`のホストは常に許可） |
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
-| `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`）。`secrets`テーブルを含むため、DBファイルは`0600`で作成/絞り込み（`-wal`/`-shm`も同モード）、新規作成する親ディレクトリ・`logs/`・インスタンスロックのディレクトリは`0700`、ログ/ロックファイルは`0600`（非Windows。既存の親ディレクトリのモードは変更しない） 日次JSONログ・`.gz`アーカイブ・エラーログのダウンロードが共有するログディレクトリは`PITHA_LOG_DIR`で指定でき（未設定なら同じ親ディレクトリ配下の`logs/`。作業ディレクトリには依存しない）、作成できない場合は標準エラー出力へフォールバックして起動を継続する。起動失敗などの致命エラーはERRORレベルで記録する |
+| `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`）。`secrets`テーブルを含むため、DBファイルは`0600`で作成/絞り込み（`-wal`/`-shm`も同モード）、新規作成する親ディレクトリ・`logs/`・インスタンスロックのディレクトリは`0700`、ログ/ロックファイルは`0600`（非Windows。既存の親ディレクトリのモードは変更しない） |
+| `PITHA_LOG_DIR` | `internal/bootstrap/startup` | 日次JSONログ・`.gz`アーカイブ・エラーログのダウンロードが共有するログディレクトリ。未設定（または空）はDBファイルの親ディレクトリ配下の`logs/`（作業ディレクトリには依存しない）。作成できない場合は標準エラー出力へフォールバックして起動を継続する。起動失敗などの致命エラーはERRORレベルで記録する |
 | `PITHA_BACKUP_DIR` | `internal/bootstrap` | SQLite DBの日次バックアップ（`requirements/non-functional.md` §3）の退避先ディレクトリ。ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）を指定する。ディレクトリ自体は事前に存在している必要がある（作成しない。未マウントの場合はバックアップが失敗しSlack/ログで通知される）。Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。未設定・空のときはバックアップ無効（起動ログに警告）。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する |
 | `PITHA_UNIVERSE_PATH` | `internal/bootstrap` | 銘柄マスタCSVの場所（「銘柄マスタの投入」節）。優先順位は本環境変数 > 実行ファイルと同じディレクトリの`config/universe.csv`。どちらも無ければCSV同期をスキップする |
 | `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
@@ -148,7 +149,7 @@ symbol,name,market,sector,kind
 
 ## CI/CD
 
-GitHub Actions（`.github/workflows/ci.yml`）。ジョブ構成（`lint` → `test` → `build` → `release`）・トリガー・バージョン固定・最小権限・外部ActionのSHA固定・複合Action・脆弱性スキャン・リリース署名（issue #376）などの詳細は`environment/ci.md`を参照する。
+GitHub Actions（`.github/workflows/ci.yml`）。ジョブ構成（`lint` → `test`・`test-windows`（並列）→ `build` → `release`）・トリガー・バージョン固定・最小権限・外部ActionのSHA固定・複合Action・脆弱性スキャン・リリース署名（issue #376）などの詳細は`environment/ci.md`を参照する。
 
 ## Lint
 
@@ -159,7 +160,7 @@ GitHub Actions（`.github/workflows/ci.yml`）。ジョブ構成（`lint` → `t
 
 - `.golangci.yml`は`default: none`とし、`govet`・`staticcheck`・`errcheck`・`ineffassign`・`depguard`・`gosec`・`bodyclose`・`noctx`・`rowserrcheck`のみを有効化する（`gofmt`はlinterではなく`formatters:`で有効化）
 - `gosec`・`noctx`・`bodyclose`は`*_test.go`を対象外とする（`t.TempDir()`配下のパーミッション、テスト用`httptest.NewRequest`・WebSocketハンドシェイクは攻撃面ではないため）。`gosec`の`G304`（変数パスのファイルオープン）は、パスがすべてアプリ自身の設定/データディレクトリやサーバー生成名から作られリクエスト由来ではないため設定で除外する（パーミッション系`G301/G302/G306`は有効のまま）。`internal/config/secret*.go`の`G101`（シークレット行キー名への誤検知）は`exclusions`で除外する。上記以外の指摘は修正するか、理由付きの`//nolint:<linter> // <理由>`で個別に抑止する
-- `depguard`は2ルールでレイヤー規約（`architecture/overview.md` §3）を強制する。`web-no-repository`は`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否し、`templ-no-service`は`internal/web/{atoms,molecules,organisms,pages,layout}/**`（Templ層）から`internal/service/**`へのimportを拒否する（#380、`components/overview.md` §3）。上記以外のimport規約（`service` → `web`の禁止、`bootstrap`の子 → 親の禁止、サブパッケージ間など）はレビューで担保する。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
+- `depguard`は7ルールでレイヤー規約（`architecture/overview.md` §3、`components/overview.md` §3）を強制する。`web-no-repository`は`internal/web/**`から`internal/repository`**およびその全サブパッケージ**（`pkg`はプレフィックス一致）へのimportを拒否し、`templ-no-service`は`internal/web/{atoms,molecules,organisms,pages,layout}/**`（Templ層）から`internal/service/**`へのimportを拒否する（#380）。Atomic Designの依存方向（atoms → molecules → organisms → layout → pages の下向きのみ）は`atoms-direction`・`molecules-direction`・`organisms-direction`・`layout-direction`が上位層のimportを拒否して強制し、`templ-parts-no-middleware`が`atoms`/`molecules`/`organisms`/`pages`から`internal/web/middleware`へのimportを拒否する（`web/layout`と`web/handler`のみ利用可。#521）。上記以外のimport規約（`service` → `web`の禁止、`bootstrap`の子 → 親の禁止、サブパッケージ間など）はレビューで担保する。`repository`のサブパッケージ分割（#244）でルールの書き換えは不要
 - Biomeはlintとformatを1ツールで兼ねるため、`static/`配下は追加のESLint/Prettier設定を持たない
 
 ## Format
@@ -277,12 +278,10 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.14 | 2026-09-29 | Lint/Format/Linterly/Git Hooks節を実ファイル（`.golangci.yml`の有効linterとdepguard、`lefthook.yml`、`.linterlyignore`）に合わせて是正。`make lint`とCI `lint`ジョブの差分を明記。`.env.example`に`PITHA_SERVER_ALLOW_NON_LOOPBACK`/`PITHA_SERVER_ALLOWED_HOSTS`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`の雛形を追加 | issue #154 |
 | 1.15–1.19 | 2026-09-30 | `depguard`がサブパッケージも拒否対象であることを明記。`.linterlyignore`の方針を「手書きソースの除外全廃（許容は`*_templ.go`と`**/logs/**`のみ）」へ改め、暫定除外（`internal/web/handler/`・`internal/bootstrap/`・`internal/service/risk/`）をサブパッケージ分割の完了に伴い順次削除し、手書きソースの暫定除外が残っていないことを確認済みの記述へ更新 | issue #243, #245, #246, #247, #248 |
 | 1.20 | 2026-09-30 | depguardの強制範囲（`web` → `repository/**`のみ）を明記。lefthook/CIコメントの`go:embed`対象を`dist img vendor`へ更新 | 分割後レビュー指摘 |
-| 1.21 | 2026-10-01 | Settings画面経由の入力対象に`UPDATE_GITHUB_TOKEN`（非公開リポジトリのリリース取得用、任意）を追加 | issue #265 |
-| 1.22 | 2026-10-02 | Settings画面経由の入力対象から`UPDATE_GITHUB_TOKEN`を削除（リポジトリのpublic化に伴い更新確認用トークン機能を廃止） | 更新確認用トークン機能の廃止 |
+| 1.21–1.22 | 2026-10-02 | Settings画面経由の入力対象に`UPDATE_GITHUB_TOKEN`（非公開リポジトリのリリース取得用、任意）を追加（1.21）したが、リポジトリのpublic化に伴い更新確認用トークン機能を廃止して削除（1.22） | issue #265、更新確認用トークン機能の廃止 |
 | 1.23 | 2026-10-02 | Settings画面経由の入力対象に`JEV_MODEL`を追加し、必須キーを`JEV_API_KEY`/`KABU_API_PASSWORD`の2つへ更新（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`付きの任意上書き）。履歴1.7の「必須3キー」は当時の記録 | issue #271/#291 |
 | 1.24 | 2026-10-02 | 環境変数表`PITHA_SERVER_ADDR`の「`cmd/desktop`はネットワークポートを待ち受けない」を、Windowsのみ`/ws/...`専用のループバックリスナー（`127.0.0.1`と`[::1]`、ランダムポート）を起動する実態に合わせて修正 | issue #300（#266/#285の実装との乖離解消） |
-| 1.25 | 2026-10-03 | CI/CD節に`GOTOOLCHAIN: auto`の設定理由を追記（`actions/setup-go` v7が`GOTOOLCHAIN=local`を設定し、`golangci-lint`の`go install`が失敗していた） | PR #304 CI `lint`ジョブ失敗の修正 |
-| 1.26 | 2026-10-03 | `GOTOOLCHAIN: auto`の設定箇所をワークフロー全体から`Install golangci-lint`/`Install linterly`のステップレベルへ訂正（`actions/setup-go`の`$GITHUB_ENV`エクスポートがワークフローレベル`env`を上書きし、1.25の設定は効かなかった） | PR #304 CI `lint`ジョブ失敗の再修正 |
+| 1.25–1.26 | 2026-10-03 | CI/CD節に`GOTOOLCHAIN: auto`の設定理由を追記（`actions/setup-go` v7が`GOTOOLCHAIN=local`を設定し、`golangci-lint`の`go install`が失敗していた）。設定箇所はワークフロー全体ではなく`Install golangci-lint`/`Install linterly`のステップレベルが正（`actions/setup-go`の`$GITHUB_ENV`エクスポートがワークフローレベル`env`を上書きするため） | PR #304 CI `lint`ジョブ失敗の修正・再修正 |
 | 1.27 | 2026-10-03 | `.linterlyignore`の内容ブロックを実ファイル（コメント文面を含む）に合わせ、`LICENSE`（ライセンス全文・手書きソースではない定型文）を許容する除外に追記 | issue #316（実ファイルとの乖離解消） |
 | 1.28 | 2026-10-03 | 初回セットアップ手順の`JEV_BASE_URL`/`JEV_MODEL`の上書き先を、廃止済みの「詳細設定（任意）」からSettings画面のJev接続先モーダル内の任意項目へ訂正 | issue #315（#302 とのdoc-drift解消） |
 | 1.29 | 2026-10-04 | 初回セットアップ手順から`cp .env.example .env`を削除し、`.env`は自動読込されずプロセス環境変数として設定する旨に統一（ファイル構成図の`.env.example`の説明も同趣旨に修正）。`.env.example`冒頭コメントも是正 | issue #386（環境変数節との矛盾解消） |
@@ -298,3 +297,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.39 | 2026-10-05 | 「銘柄マスタの投入」節にCSV未投入時の画面案内とJPX東証上場銘柄一覧の確認付き自動取得（`POST /scanner/universe/import`）を追記 | issue #508 |
 | 1.40 | 2026-10-05 | `make lint`をCIの`lint`ジョブ相当（`GOOS=windows go vet`・`linterly check`・`tsc --noEmit`を追加）に、lefthookのpre-commitに`typecheck`を追加し`biome`のglobへ`json`/`mjs`を追加。`.linterlyignore`に生成物`static/wailsjs/**`を追加 | issue #553/#555 |
 | 1.41 | 2026-10-05 | 必要ツール表に`templ`CLI・`linterly`・`govulncheck`を追加し、Wails CLI・`golangci-lint`をCI固定版（`ci.yml`・`go.mod`）に合わせた。`environment/ci.md`の`linterly check --no-update-check`・`bun test`常時実行・初回タグ`v0.1.0`を`ci.yml`に合わせた | issue #519, #567, #578 |
+| 1.42 | 2026-10-06 | depguard記述を`.golangci.yml`の7ルール（`atoms/molecules/organisms/layout-direction`・`templ-parts-no-middleware`を追加、Atomic Design依存方向とweb/middleware制限はlintで強制）に更新。CIジョブ構成（ファイル構成図・CI/CD節）に`test-windows`を追記。環境変数表に`PITHA_LOG_DIR`の独立行を追加（`.env.example`にも雛形を追加） | issue #521（再乖離）, #607, #608, #609 |

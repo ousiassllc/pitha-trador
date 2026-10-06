@@ -10,7 +10,7 @@
 import { html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
-import { formatJstDateTime } from '../lib/jst-datetime';
+import { formatJstDateTime, isZeroTime } from '../lib/jst-datetime';
 import { logger } from '../lib/logger';
 import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
@@ -177,7 +177,7 @@ export class PithaScannerTable extends LitElement {
         <table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
           ${
             this.asOf
-              ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">Scanner Dashboard — as of ${formatJstDateTime(this.asOf)}</caption>`
+              ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">Scanner Dashboard — ${isZeroTime(this.asOf) ? 'データ未取得' : `as of ${formatJstDateTime(this.asOf)}`}</caption>`
               : ''
           }
           <thead>

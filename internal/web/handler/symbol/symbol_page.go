@@ -9,6 +9,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -66,12 +67,14 @@ func (h *SymbolHandler) Page(c *gin.Context) {
 	}
 
 	shared.RenderHTML(c, http.StatusOK, pages.SymbolDetailPage(pages.SymbolDetailProps{
-		Symbol:             symbol,
-		Position:           state.Position,
-		AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
-		StopLossPct:        h.riskParams.StopLossPct,
-		TakeProfitPct:      h.riskParams.TakeProfitPct,
-		LatestTrader:       state.LatestTraderDecision,
-		Decisions:          decisions,
+		Symbol:   symbol,
+		Position: state.Position,
+		Risk: organisms.RiskParams{
+			AllowedPositionPct: h.riskParams.allowedPositionPct(ctx, state.LastPrice),
+			StopLossPct:        h.riskParams.StopLossPct,
+			TakeProfitPct:      h.riskParams.TakeProfitPct,
+		},
+		LatestTrader: state.LatestTraderDecision,
+		Decisions:    decisions,
 	}))
 }

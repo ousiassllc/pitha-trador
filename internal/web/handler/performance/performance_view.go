@@ -44,9 +44,9 @@ func performanceSummary(m backtest.Metrics) organisms.PerformanceSummary {
 }
 
 func performanceResult(r backtest.Result) *pages.PerformanceResult {
-	folds := make([]pages.PerformanceFold, len(r.Splits))
+	folds := make([]organisms.BacktestFold, len(r.Splits))
 	for i, sp := range r.Splits {
-		folds[i] = pages.PerformanceFold{
+		folds[i] = organisms.BacktestFold{
 			ForwardStart: sp.Split.Forward.Start,
 			ForwardEnd:   sp.Split.Forward.End,
 			Forward:      performanceSummary(sp.Forward),

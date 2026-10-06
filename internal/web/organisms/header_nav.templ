@@ -1,0 +1,56 @@
+package organisms
+
+// NavItem identifies a main-navigation entry of Header. Each page passes
+// its own item to layout.Shell so Header can mark the current one
+// (issue #631). NavNone is for pages that belong to no nav entry (the
+// error page).
+type NavItem string
+
+const (
+	NavNone        NavItem = ""
+	NavScanner     NavItem = "scanner"
+	NavPerformance NavItem = "performance"
+	NavCalibration NavItem = "calibration"
+	NavActivity    NavItem = "activity"
+	NavSettings    NavItem = "settings"
+)
+
+// navEntries is the main navigation in display order. Symbol Detail
+// (`/symbols/:symbol`, reached from the Scanner candidate table) passes
+// NavScanner, so it keeps the Scanner entry marked.
+var navEntries = []struct {
+	Item  NavItem
+	Label string
+	Href  templ.SafeURL
+}{
+	{NavScanner, "Scanner", "/scanner"},
+	{NavPerformance, "Performance", "/performance"},
+	{NavCalibration, "Calibration", "/calibration"},
+	{NavActivity, "Activity", "/activity"},
+	{NavSettings, "Settings", "/settings"},
+}
+
+// navLinkClass is a nav link's styling: the current entry is emphasised,
+// the others only get the hover colour.
+func navLinkClass(current bool) string {
+	if current {
+		return "font-semibold text-slate-900"
+	}
+	return "hover:text-slate-900"
+}
+
+// MainNav renders Header's `<nav>`: the entry equal to current (when not
+// NavNone) carries `aria-current="page"` and the emphasised style.
+templ MainNav(current NavItem) {
+	<nav aria-label="メインナビゲーション" class="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
+		for _, e := range navEntries {
+			<a
+				class={ navLinkClass(e.Item == current) }
+				href={ e.Href }
+				if e.Item == current {
+					aria-current="page"
+				}
+			>{ e.Label }</a>
+		}
+	</nav>
+}

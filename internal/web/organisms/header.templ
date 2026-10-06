@@ -61,11 +61,23 @@ import (
 // single, explicit Settings screen.
 //
 // `#header-logo` (issue #238) is the app logo (`/static/img/logo.svg`,
-// go:embed'ed from static/src/img, same "P" mark as the desktop icon
+// embedded from static/src/img, same "P" mark as the desktop icon
 // cmd/desktop/build/appicon.png) plus the app name, leading the nav in
 // one flex group so the `justify-between` spacing of the version /
 // StatusDot / Kill Switch items is unchanged. The `<img>` has an empty
 // alt since the adjacent text already names the app.
+//
+// current is the page's main-navigation entry (layout.Shell passes it
+// through): MainNav marks that link `aria-current="page"` (issue #631).
+//
+// The polled `#update-banner` / `#marketdata-banner` containers are the
+// fixed live regions (`role="status"` `aria-live="polite"`), so the
+// banner bodies carry no role of their own (a `role="alert"` body would be
+// re-inserted and re-announced on every poll, issue #626); `data-live-
+// banner` makes pitha-htmx-errors skip a swap whose markup is identical to
+// what is already shown, so only a new/changed banner is announced. All
+// three banner frames share `order-last w-full empty:hidden` (issue #625):
+// they sit on their own full-width last row and, when empty, take no space.
 //
 // headerStatusTrigger is `#header-status`'s hx-trigger: an unknown state
 // (see Header) additionally fetches the badge on `load`.
@@ -77,7 +89,7 @@ func headerStatusTrigger(state domain.SystemState) string {
 	return onChange
 }
 
-templ Header(state domain.SystemState) {
+templ Header(state domain.SystemState, current NavItem) {
 	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
 		<div class="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
 			<a
@@ -89,16 +101,11 @@ templ Header(state domain.SystemState) {
 				<img class="h-8 w-8" src="/static/img/logo.svg" width="32" height="32" alt=""/>
 				<span>Pitha Trador</span>
 			</a>
-			<nav aria-label="メインナビゲーション" class="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
-				<a class="hover:text-slate-900" href="/scanner">Scanner</a>
-				<a class="hover:text-slate-900" href="/performance">Performance</a>
-				<a class="hover:text-slate-900" href="/calibration">Calibration</a>
-				<a class="hover:text-slate-900" href="/activity">Activity</a>
-				<a class="hover:text-slate-900" href="/settings">Settings</a>
-			</nav>
+			@MainNav(current)
 		</div>
 		<div
 			id="config-banner"
+			class="order-last w-full empty:hidden"
 			hx-get="/system/secrets-status"
 			hx-trigger="load"
 			hx-target="this"
@@ -107,6 +114,9 @@ templ Header(state domain.SystemState) {
 		<div
 			id="update-banner"
 			class="order-last w-full empty:hidden"
+			role="status"
+			aria-live="polite"
+			data-live-banner
 			hx-get="/system/update-status"
 			hx-headers='{"X-Pitha-Background":"1"}'
 			hx-trigger="load, every 60s, updateStatusChanged from:body"
@@ -116,6 +126,9 @@ templ Header(state domain.SystemState) {
 		<div
 			id="marketdata-banner"
 			class="order-last w-full empty:hidden"
+			role="status"
+			aria-live="polite"
+			data-live-banner
 			hx-get="/system/marketdata-status"
 			hx-headers='{"X-Pitha-Background":"1"}'
 			hx-trigger="load, every 30s"

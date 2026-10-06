@@ -1,0 +1,37 @@
+package organisms
+
+import (
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+)
+
+// PositionPanel is Symbol Detail's "Position" panel: the symbol's open
+// position as a one-row table, or a notice when position is nil.
+templ PositionPanel(position *domain.Position) {
+	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" id="position-panel" data-testid="position-panel">
+		<h2 class="text-lg font-semibold text-slate-900">Position</h2>
+		if position == nil {
+			<p class="mt-4 text-sm text-slate-500">No open position.</p>
+		} else {
+			<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="ポジション">
+				<thead>
+					<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
+						<th scope="col" class="px-3 py-2">Symbol</th>
+						<th scope="col" class="px-3 py-2">Side</th>
+						<th scope="col" class="px-3 py-2">Qty</th>
+						<th scope="col" class="px-3 py-2">Entry</th>
+						<th scope="col" class="px-3 py-2">Current</th>
+						<th scope="col" class="px-3 py-2">Unrealized P&amp;L</th>
+						<th scope="col" class="px-3 py-2">Realized P&amp;L</th>
+						<th scope="col" class="px-3 py-2">Opened</th>
+						<th scope="col" class="px-3 py-2">Closed</th>
+						<th scope="col" class="px-3 py-2">Exit reason / Action</th>
+					</tr>
+				</thead>
+				<tbody>
+					@molecules.PositionRow(*position)
+				</tbody>
+			</table>
+		}
+	</section>
+}

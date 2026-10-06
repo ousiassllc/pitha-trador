@@ -1,4 +1,4 @@
-package organisms_test
+package organismstest
 
 import (
 	"strings"
