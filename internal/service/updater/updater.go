@@ -73,8 +73,10 @@ type Result struct {
 	// Version is the newer release's tag_name, set whenever Ready.
 	Version string
 	// InstallerPath is the verified installer's local temp-file path, set
-	// whenever Ready. The caller is responsible for removing it once
-	// installed.
+	// whenever Ready. It lives in a per-download temp directory that is
+	// not removed once the installer has run (a running installer cannot
+	// delete itself on Windows): the next startup removes it via
+	// CleanupStaleDownloads.
 	InstallerPath string
 }
 

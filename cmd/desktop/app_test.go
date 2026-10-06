@@ -5,8 +5,11 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestApp_SetupNotifications_InitializesOnceAndLogsFailure regresses issue
@@ -48,5 +51,29 @@ func TestApp_SetupNotifications_SuccessLogsNothing(t *testing.T) {
 
 	if logs.Len() != 0 {
 		t.Errorf("unexpected log output on success: %q", logs.String())
+	}
+}
+
+// TestCleanupStaleUpdateDownloads_RemovesPreviousInstallerDir regresses
+// issue #590: a successful self-update left its pitha-trador-update-* dir
+// in the temp directory forever; the restarted app now removes it.
+func TestCleanupStaleUpdateDownloads_RemovesPreviousInstallerDir(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	t.Setenv("TMP", tmp)
+	t.Setenv("TEMP", tmp)
+	stale := filepath.Join(tmp, "pitha-trador-update-123")
+	if err := os.Mkdir(stale, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	cleanupStaleUpdateDownloads(time.Now())
+
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale dir still exists (stat err = %v), want removed", err)
 	}
 }

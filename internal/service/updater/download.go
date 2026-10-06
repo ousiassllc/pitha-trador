@@ -16,6 +16,11 @@ import (
 	"strings"
 )
 
+// downloadDirPattern is the os.MkdirTemp pattern of the per-download
+// directory holding the installer, checksums.txt and its signature;
+// CleanupStaleDownloads removes leftovers by the same prefix.
+const downloadDirPattern = "pitha-trador-update-*"
+
 // downloadAndVerify downloads assets.installer and assets.checksums to a
 // fresh temp directory, verifies assets.checksums' ed25519 signature
 // (assets.signature) when a release public key is configured (issue #376),
@@ -39,7 +44,7 @@ func (c *Checker) downloadAndVerify(ctx context.Context, assets releaseAssets) (
 	ctx, cancel := context.WithTimeout(ctx, c.downloadTimeout)
 	defer cancel()
 
-	dir, err := os.MkdirTemp("", "pitha-trador-update-*")
+	dir, err := os.MkdirTemp("", downloadDirPattern)
 	if err != nil {
 		return "", fmt.Errorf("create temp dir: %w", err)
 	}
