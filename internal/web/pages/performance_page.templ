@@ -14,15 +14,15 @@ type PerformanceResult struct {
 
 // PerformanceProps is PerformancePage's input. Actuals is the realized
 // (Paper) performance of every closed position, or ActualsError when it
-// could not be read. Result is nil until a backtest has been run; Error
-// carries a validation or run failure. internal/web/handler maps the
+// could not be read. Result is nil until a backtest has been run; Errors
+// carries the validation or run failure messages, one per line. internal/web/handler maps the
 // internal/service types onto these plain props.
 type PerformanceProps struct {
 	Form         organisms.BacktestFormValues
 	Actuals      organisms.PerformanceActuals
 	ActualsError string
 	Result       *PerformanceResult
-	Error        string
+	Errors       []string
 }
 
 // PerformancePage is the Performance full page (functional.md §5.3,
@@ -36,8 +36,12 @@ templ PerformancePage(props PerformanceProps) {
 		<h1 class="text-2xl font-bold text-slate-900">Performance</h1>
 		@organisms.PerformanceActualsPanel(props.Actuals, props.ActualsError)
 		@organisms.BacktestForm(props.Form)
-		if props.Error != "" {
-			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">{ props.Error }</p>
+		if len(props.Errors) > 0 {
+			<ul class="mt-4 list-inside list-disc rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">
+				for _, msg := range props.Errors {
+					<li data-testid="backtest-error-item">{ msg }</li>
+				}
+			</ul>
 		}
 		if props.Result != nil {
 			@organisms.PerformanceSummaryPanel("Walk Forward (Forward periods combined)", props.Result.Combined)
