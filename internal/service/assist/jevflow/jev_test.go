@@ -1,4 +1,4 @@
-package assist_test
+package jevflow_test
 
 import (
 	"context"

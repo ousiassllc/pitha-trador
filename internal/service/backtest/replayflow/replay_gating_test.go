@@ -1,4 +1,4 @@
-package backtest_test
+package replayflow_test
 
 import (
 	"bytes"

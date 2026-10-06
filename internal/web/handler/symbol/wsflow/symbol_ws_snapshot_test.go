@@ -1,4 +1,4 @@
-package symbol_test
+package wsflow_test
 
 import (
 	"context"

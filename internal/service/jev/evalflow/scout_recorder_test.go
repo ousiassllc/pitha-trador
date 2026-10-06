@@ -1,4 +1,4 @@
-package jev_test
+package evalflow_test
 
 import (
 	"context"

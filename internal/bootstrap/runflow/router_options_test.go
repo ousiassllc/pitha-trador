@@ -1,4 +1,4 @@
-package bootstrap
+package runflow_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 )
 
@@ -15,19 +16,19 @@ import (
 // the engine's Setup Guard (only active once WithSecretsStore is applied)
 // must send operators to /setup.
 func TestRouterOptions_WireSecretsStoreIntoSetupGuard(t *testing.T) {
-	state, err := Run(Config{DBPath: filepath.Join(t.TempDir(), "pitha.db")})
+	state, err := bootstrap.Run(bootstrap.Config{DBPath: filepath.Join(t.TempDir(), "pitha.db")})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	t.Cleanup(func() { _ = state.Close() })
 
-	secretsRepo, secrets, err := LoadSecrets(context.Background(), state)
+	secretsRepo, secrets, err := bootstrap.LoadSecrets(context.Background(), state)
 	if err != nil {
 		t.Fatalf("LoadSecrets: %v", err)
 	}
-	services := BuildServices(state, secrets)
+	services := bootstrap.BuildServices(state, secrets)
 
-	engine := router.New(RouterOptions(services, state, secretsRepo)...)
+	engine := router.New(bootstrap.RouterOptions(services, state, secretsRepo)...)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/scanner", nil))
 
