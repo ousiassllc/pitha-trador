@@ -104,7 +104,7 @@ templ scanOffHours(nextOpen time.Time) {
 
 templ scanFunnel(v ScanPanelView) {
 	<ol class="mt-3 grid gap-2 sm:grid-cols-4" data-testid="scan-funnel">
-		@funnelStep("ユニバース", "スキャン対象の東証上場銘柄数", strconv.Itoa(v.Cycle.Funnel.Universe), "scan-funnel-universe")
+		@funnelStep("ユニバース", "スキャン対象の銘柄数。ランキング監視（既定）では監視銘柄（最大45）、scan.full_scan_enabled: true のときだけ東証上場の全銘柄", strconv.Itoa(v.Cycle.Funnel.Universe), "scan-funnel-universe")
 		@funnelStep("特徴量算出", "市況データ（特徴量）が算出できた銘柄数", strconv.Itoa(v.Cycle.Funnel.FeatureComputed), "scan-funnel-features")
 		@funnelStep("Fast Screener通過", "足切り条件を満たし上位N件に入った銘柄数（Jev Scout候補）", strconv.Itoa(v.Cycle.Funnel.FastScreenerPassed), "scan-funnel-fast")
 		@funnelStep("Scout通過", "Jev Scoutの判定が済んだ候補のうち通過した銘柄数（"+strconv.Itoa(v.Cycle.Funnel.ScoutEvaluated)+"/"+strconv.Itoa(v.Cycle.Funnel.FastScreenerPassed)+"件判定済み）", strconv.Itoa(v.Cycle.Funnel.ScoutPassed), "scan-funnel-scout")

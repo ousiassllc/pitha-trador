@@ -167,3 +167,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.57 | 2026-10-06 | §3 `/performance`に、バックテスト実行トリガー（`from`の指定。`to`のみは実行しない）・400の各条件（`to`省略・`to<from`・0 Fold）・実行失敗の500を追記 | issue #632 |
 | 1.58 | 2026-10-06 | `GET /api/v1/scanner/scan/export`（スキャン結果のCSVダウンロード。`endpoints/huma-api.md`）を追記 | スキャン情報をエクスポートしたい |
 | 1.59 | 2026-10-06 | `GET /settings`・`POST /settings/:key`の許可キーに`NEWS_FEED_ENABLED`を追加、`GET /api/v1/activity`の`type`に`news_feed`を追加（Luna/Sol/Opus既定=Jev・ニュースフィード既定=やのしん） | issue #273 |
+| 1.60 | 2026-10-07 | `GET /api/v1/scanner/scan`（`huma-api.md`）の`funnel.universe`の例が`scan.full_scan_enabled: true`時の値で、既定のランキング監視では監視銘柄（最大45）の範囲になり、立会時間外は直前の監視リストを保存済みデータで評価する旨を注記 | issue #668, #669 |

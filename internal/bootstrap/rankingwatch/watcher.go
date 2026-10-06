@@ -56,7 +56,7 @@ type Ingester interface {
 
 // Watcher runs the ranking-driven watch cycle: fetch the rankings, select the
 // watch list, publish it, register it for PUSH and enqueue its market-data
-// jobs. A cycle never fails: an empty or failed ranking leaves only the held
+// jobs (plus those of the market-context index rows). A cycle never fails: an empty or failed ranking leaves only the held
 // symbols (see Selector.Update) and the next cycle tries again.
 type Watcher struct {
 	Source    Source
@@ -70,8 +70,9 @@ type Watcher struct {
 	Types    []int
 	Exchange string
 	// Open reports whether t is inside a trading session; outside it no
-	// ranking is requested and the watch list holds the held symbols only.
-	// nil means always open.
+	// ranking is requested and PUSH registration and market-data ingestion
+	// cover the held symbols only, while the candidate list (List) keeps
+	// the last watch list. nil means always open.
 	Open func(t time.Time) bool
 	// Now defaults to time.Now.
 	Now func() time.Time
@@ -110,17 +111,26 @@ func (w *Watcher) cycle(ctx context.Context) {
 	}
 
 	held := w.heldSymbols(ctx)
-	var res rankingResult
+	var (
+		res            rankingResult
+		watch, screen  []string
+		added, removed int
+	)
 	if w.Open == nil || w.Open(now) {
 		res = w.fetchRanking(ctx, byCode)
 		if ctx.Err() != nil {
 			return
 		}
+		watch, added, removed = w.selector.Update(now, held, res.symbols)
+		screen = watch
 	} else {
+		// No ranking is requested outside the session: PUSH registration and
+		// market-data ingestion shrink to the held symbols, but the candidate
+		// list keeps the last watch list (screened from the stored data).
 		res.offSession = true
+		watch, screen = w.selector.Retain(held)
 	}
-	watch, added, removed := w.selector.Update(now, held, res.symbols)
-	w.List.Set(watch)
+	w.List.Set(screen)
 	w.register(ctx, now, watch)
 	w.enqueue(ctx, now, watch, byCode)
 	w.health.report(now, res, len(held), len(watch), added, removed, time.Since(start))
@@ -161,17 +171,53 @@ func (w *Watcher) register(ctx context.Context, now time.Time, watch []string) {
 }
 
 // enqueue enqueues market-data jobs for the watched symbols that are in the
-// universe.
+// universe, plus the index rows the market context needs (marketIndexes).
 func (w *Watcher) enqueue(ctx context.Context, now time.Time, watch []string, byCode map[string]domain.Instrument) {
 	instruments := make([]domain.Instrument, 0, len(watch))
+	sectors := make(map[string]struct{})
 	for _, sym := range watch {
 		if inst, ok := byCode[sym]; ok {
 			instruments = append(instruments, inst)
+			if inst.Sector != nil {
+				sectors[*inst.Sector] = struct{}{}
+			}
 		}
 	}
+	instruments = append(instruments, w.marketIndexes(ctx, now, sectors)...)
 	if _, err := w.Ingester.EnqueueMarketData(ctx, instruments, now); err != nil && ctx.Err() == nil {
 		w.health.logEnqueueError(now, err)
 	}
+}
+
+// marketIndexes lists the active market_index rows and the sector_index rows
+// of the given sectors: the instruments the market context (market_return_*,
+// sector_return_5m; FR-FE-4) is derived from, which the full scan ingests
+// along with every stock but the watch list does not contain (issue #670;
+// without them the Risk Engine's market_adverse_to_direction gate would find
+// no market return). A failed listing is logged and skipped.
+func (w *Watcher) marketIndexes(ctx context.Context, now time.Time, sectors map[string]struct{}) []domain.Instrument {
+	var out []domain.Instrument
+	for _, kind := range []string{domain.InstrumentKindMarketIndex, domain.InstrumentKindSectorIndex} {
+		rows, err := w.Universe.ListActiveByKind(ctx, kind)
+		if err != nil {
+			if ctx.Err() == nil {
+				w.health.logIndexError(now, err)
+			}
+			continue
+		}
+		for _, inst := range rows {
+			if kind == domain.InstrumentKindSectorIndex {
+				if inst.Sector == nil {
+					continue
+				}
+				if _, ok := sectors[*inst.Sector]; !ok {
+					continue
+				}
+			}
+			out = append(out, inst)
+		}
+	}
+	return out
 }
 
 // Run calls Cycle immediately and then every interval until ctx is done.
