@@ -63,6 +63,8 @@ func (s *Services) Start(ctx context.Context) error {
 	s.wg.Add(1) // startup symbol registration + PUSH subscription (flows.md §10.1)
 	go func() { defer s.wg.Done(); s.PushFeed.Run(ctx) }()
 
+	s.startRankingMeasure(ctx)
+
 	if s.newsEnabled {
 		s.wg.Add(1)
 		go s.newsIngestTicker(ctx)

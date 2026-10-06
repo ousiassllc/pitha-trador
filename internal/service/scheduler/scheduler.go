@@ -53,6 +53,8 @@ type Scheduler struct {
 	// sessionOpen is optional (WithSessionGate): a nil value leaves the
 	// full-scan/event-driven triggers ungated (session.go).
 	sessionOpen func(time.Time) bool
+	// fullScanDisabled is set by WithFullScanDisabled (fullscan.go).
+	fullScanDisabled bool
 	// logRotator is optional (WithLogRotator): a nil value makes Start
 	// skip registering the log-archival maintenance task entirely
 	// (non-functional.md §5 "ログは日次ローテーションし").
@@ -157,8 +159,9 @@ func (s *Scheduler) Recover(ctx context.Context) (int64, error) {
 //
 // Outside a trading session (WithSessionGate) it enqueues nothing and
 // returns (0, nil): no market data is fetched off-hours.
+// WithFullScanDisabled also makes it a no-op (fullscan.go).
 func (s *Scheduler) EnqueueFullScan(ctx context.Context, now time.Time) (int, error) {
-	if !s.inSession(now) {
+	if s.fullScanDisabled || !s.inSession(now) {
 		return 0, nil
 	}
 	unfinished, err := s.unfinishedMarketDataJobs(ctx, now)
@@ -246,14 +249,9 @@ func (s *Scheduler) Start(ctx context.Context, fullScanInterval time.Duration) e
 	}
 
 	s.cron = cron.New(cron.WithChain(cron.Recover(cronSlogLogger{})))
-	spec := fmt.Sprintf("@every %s", fullScanInterval)
-	if _, err := s.cron.AddFunc(spec, func() {
-		if _, err := s.EnqueueFullScan(runCtx, time.Now().UTC()); err != nil {
-			slog.Error("scheduler: full scan enqueue failed", "error", err)
-		}
-	}); err != nil {
+	if err := s.addFullScanTrigger(runCtx, fullScanInterval); err != nil {
 		cancel()
-		return fmt.Errorf("scheduler: register full scan trigger %q: %w", spec, err)
+		return err
 	}
 
 	selfImprove, err := selfImproveSchedule()

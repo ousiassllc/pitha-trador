@@ -26,12 +26,14 @@ var entryQualityValues = []string{"poor", "fair", "good", "strong", "exceptional
 //
 // LoadStrategy/LoadStrategyBytes call it after the PITHA_POLICY_* and
 // PITHA_FAST_SCREENER_* environment overrides have been applied, so an
-// invalid override is rejected too. scan.* is not checked here: it is
-// default-filled by the loaders beforehand.
+// invalid override is rejected too. scan.* is not checked here (it is
+// default-filled by the loaders beforehand), except scan.ranking_measure's
+// types/exchanges, which kabuステーション would reject with a 400.
 func (c *StrategyConfig) Validate() error {
 	errs := c.FastScreener.validate("fast_screener")
 	errs = append(errs, c.JevScout.validate("jev_scout")...)
 	errs = append(errs, c.Policy.validate("policy")...)
+	errs = append(errs, c.Scan.RankingMeasure.validate("scan.ranking_measure")...)
 	if len(errs) == 0 {
 		return nil
 	}
