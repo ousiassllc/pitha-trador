@@ -99,3 +99,18 @@ describe('focus after a swap that removed the clicked button (issue #676)', () =
     expect(document.activeElement === document.body || document.activeElement === null).toBe(true);
   });
 });
+
+describe('focus after closing a position (issue #681)', () => {
+  test('moves focus to the replaced row, which gets a tabindex', () => {
+    const trigger = clickedButtonGone('position-row-7');
+    const table = document.createElement('table');
+    table.innerHTML = '<tbody><tr id="position-row-7"><td>7203</td><td>—</td></tr></tbody>';
+    document.body.appendChild(table);
+
+    afterSwap(trigger, table);
+
+    const row = document.getElementById('position-row-7');
+    expect(document.activeElement).toBe(row);
+    expect(row?.getAttribute('tabindex')).toBe('-1');
+  });
+});

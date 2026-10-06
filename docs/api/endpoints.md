@@ -169,3 +169,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.59 | 2026-10-06 | `GET /settings`・`POST /settings/:key`の許可キーに`NEWS_FEED_ENABLED`を追加、`GET /api/v1/activity`の`type`に`news_feed`を追加（Luna/Sol/Opus既定=Jev・ニュースフィード既定=やのしん） | issue #273 |
 | 1.60 | 2026-10-07 | `GET /api/v1/scanner/scan`（`huma-api.md`）の`funnel.universe`の例が`scan.full_scan_enabled: true`時の値で、既定のランキング監視では監視銘柄（最大45）の範囲になり、立会時間外は直前の監視リストを保存済みデータで評価する旨を注記 | issue #668, #669 |
 | 1.61 | 2026-10-07 | §4 `POST /settings/:key`の検証規則に、`NEWS_FEED_ENABLED`は`on`/`off`のみ受け付け（大文字小文字無視・小文字へ正規化して保存）、それ以外は400である旨を追記 | issue #675 |
+| 1.62 | 2026-10-07 | `GET /api/v1/positions`・`GET /api/v1/orders`（`endpoints/huma-api.md`）に出力スキーマ（`items`の全フィールド・`null`条件・RFC 3339時刻・新しい順・`side`の値域・`exit_reason`/`fees`/`slippage_bps`の意味）を追記 | issue #680 |

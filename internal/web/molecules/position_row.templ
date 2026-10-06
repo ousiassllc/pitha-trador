@@ -27,11 +27,13 @@ templ PositionRow(p domain.Position) {
 			<td class="px-3 py-2">—</td>
 			<td class="px-3 py-2">
 				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
-					"hx-post":         fmt.Sprintf("/positions/%d/close", p.ID),
-					"hx-target":       fmt.Sprintf("#position-row-%d", p.ID),
-					"hx-swap":         "outerHTML",
-					"hx-disabled-elt": "this",
-					"hx-confirm":      "このポジションを成行で決済しますか？",
+					"id":                    fmt.Sprintf("close-position-%d", p.ID),
+					"data-focus-after-swap": fmt.Sprintf("position-row-%d", p.ID),
+					"hx-post":               fmt.Sprintf("/positions/%d/close", p.ID),
+					"hx-target":             fmt.Sprintf("#position-row-%d", p.ID),
+					"hx-swap":               "outerHTML",
+					"hx-disabled-elt":       "this",
+					"hx-confirm":            "このポジションを成行で決済しますか？",
 				}}) {
 					Close
 				}
