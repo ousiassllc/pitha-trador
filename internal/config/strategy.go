@@ -19,18 +19,28 @@ type StrategyConfig struct {
 // ScanConfig holds the Scheduler scan-frequency settings
 // (functional.md §4.3 スキャン頻度・イベント駆動).
 type ScanConfig struct {
-	FullScanIntervalSeconds            int `yaml:"full_scan_interval_seconds"`
-	CandidateRefreshIntervalSecondsMin int `yaml:"candidate_refresh_interval_seconds_min"`
-	CandidateRefreshIntervalSecondsMax int `yaml:"candidate_refresh_interval_seconds_max"`
-	HeldPositionIntervalSecondsMin     int `yaml:"held_position_interval_seconds_min"`
-	HeldPositionIntervalSecondsMax     int `yaml:"held_position_interval_seconds_max"`
-	JevScoutMinIntervalSeconds         int `yaml:"jev_scout_min_interval_seconds"`
+	// FullScanEnabled turns the 60秒 full REST scan (the market-data job for
+	// every active instrument, FR-SCHED-2) on or off. nil (key omitted) means
+	// on; read it via FullScanOn. Off, no full market-data ingestion is
+	// performed (issue #652).
+	FullScanEnabled                    *bool `yaml:"full_scan_enabled"`
+	FullScanIntervalSeconds            int   `yaml:"full_scan_interval_seconds"`
+	CandidateRefreshIntervalSecondsMin int   `yaml:"candidate_refresh_interval_seconds_min"`
+	CandidateRefreshIntervalSecondsMax int   `yaml:"candidate_refresh_interval_seconds_max"`
+	HeldPositionIntervalSecondsMin     int   `yaml:"held_position_interval_seconds_min"`
+	HeldPositionIntervalSecondsMax     int   `yaml:"held_position_interval_seconds_max"`
+	JevScoutMinIntervalSeconds         int   `yaml:"jev_scout_min_interval_seconds"`
 	// KabuInfoAPIMaxPerSecond is the process-wide cap on kabuステーション
 	// 情報API / 銘柄登録API calls (GetBoard, GetSymbol, RegisterSymbols).
 	// Official cap is 10/s; default 8. Values above 10 are clamped.
-	KabuInfoAPIMaxPerSecond int                `yaml:"kabu_info_api_max_per_second"`
-	EventTrigger            EventTriggerConfig `yaml:"event_trigger"`
+	KabuInfoAPIMaxPerSecond int                  `yaml:"kabu_info_api_max_per_second"`
+	EventTrigger            EventTriggerConfig   `yaml:"event_trigger"`
+	RankingMeasure          RankingMeasureConfig `yaml:"ranking_measure"`
 }
+
+// FullScanOn reports whether the 60秒 full REST scan is enabled: true unless
+// scan.full_scan_enabled is explicitly false.
+func (c ScanConfig) FullScanOn() bool { return c.FullScanEnabled == nil || *c.FullScanEnabled }
 
 // EventTriggerConfig holds FR-SCAN-1/FR-SCAN-2's event-driven
 // re-evaluation thresholds (functional.md §4.3): a symbol whose
@@ -162,6 +172,7 @@ func finishStrategy(cfg *StrategyConfig, err error) (*StrategyConfig, error) {
 	}
 	withScanIntervalDefaults(&cfg.Scan)
 	withEventTriggerDefaults(&cfg.Scan.EventTrigger)
+	withRankingMeasureDefaults(&cfg.Scan.RankingMeasure)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

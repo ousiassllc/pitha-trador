@@ -187,6 +187,9 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 	} else {
 		slog.Warn("bootstrap: daily database backup disabled: " + EnvBackupDir + " is not set (requirements/non-functional.md §3)")
 	}
+	if s.strategy != nil && !s.strategy.Scan.FullScanOn() {
+		schedOpts = append(schedOpts, scheduler.WithFullScanDisabled())
+	}
 	if autoUpdate != nil {
 		gate := updater.SafeGate{Positions: repoportfolio.New(s.Positions, state.Risk.Paper.InitialCapital), State: s.Risk, Orders: s.Execution}
 		checker := updater.NewChecker(updater.Config{Owner: version.GitHubOwner, Repo: version.GitHubRepo, Gate: gate})

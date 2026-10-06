@@ -19,6 +19,11 @@ scan:
   # *_seconds は正の整数で、max >= min であること。未設定/0以下は設定ローダーが
   # 下記の同梱既定値で補完し、max < min の max は min に引き上げる（0だと
   # 候補更新が待機なしで回り、フルスキャンが毎秒登録されるため）。
+  # 全銘柄RESTスキャン（60秒ごとの market-data 全件投入、FR-SCHED-2）の
+  # オン/オフ。falseで全件投入を行わない（issue #652。#651の方針転換に向けた
+  # 計測中はfalse）。市場コンテキスト算出用の指数行も含め投入されなくなる。
+  # 省略時はtrue。
+  full_scan_enabled: true
   # 対象ユニバース全体を再スキャンする周期（秒）。functional.md §4.3。
   full_scan_interval_seconds: 60
   # 候補銘柄（Fast Screener通過銘柄）を再評価する周期（秒）の範囲。
@@ -55,6 +60,20 @@ scan:
     orderbook_imbalance_change_threshold: 0.3
     # 約定フロー急変: 直近2バーのtrade_flow_imbalance(-1〜1)の差の絶対値。
     trade_flow_imbalance_change_threshold: 0.4
+  # 場中 kabuステーション GET /ranking を定期取得し、件数・duration_ms・
+  # CurrentPriceTime・HTTP/kabuコードだけをログに出す計測（issue #652、
+  # functional.md FR-SCHED-8）。取得した価格・時価はDB保存もログ出力もしない
+  # （kabu利用規約）。既定はオフ。types は種別1〜15、exchanges は
+  # ALL/T/TP/TS/TG/M/FK/S。未設定は種別1〜7×T/TP/TS/TG・60秒周期で補完する。
+  # include_outside_session: true で立会時間外（8:55〜9:10のデータ復帰時間
+  # の計測など）も取得する。1サイクルの呼び出し数は types×exchanges 件で、
+  # kabu_info_api_max_per_second の上限を共有する。
+  ranking_measure:
+    enabled: false
+    include_outside_session: false
+    interval_seconds: 60
+    types: [1, 2, 3, 4, 5, 6, 7]
+    exchanges: [T, TP, TS, TG]
 
 fast_screener:
   # FR-FS-1: Jev API呼び出し前の数値フィルター。
