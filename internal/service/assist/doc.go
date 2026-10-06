@@ -2,12 +2,15 @@
 // docs/architecture/overview.md §2 "Luna/Sol/Opusアダプタ | 独自HTTPクライ
 // アント": Luna (Sense, §13: news classification, FR-LUNA-2), Sol (Think,
 // §8: daily threshold-change proposals, FR-SELFIMPROVE-1) and Opus
-// (Govern, §8: qualitative proposal review, FR-SELFIMPROVE-9). Each is a
-// thin wrapper over Client, a JSON-over-HTTP client with Bearer
-// authentication and Jev's retry/exponential-backoff policy, calling an
-// actual external AI API configured from the Settings screen
-// (LUNA_*/SOL_*/OPUS_* secrets). An unconfigured Client fails every call
-// with ErrNotConfigured, which callers treat like any other API failure.
+// (Govern, §8: qualitative proposal review, FR-SELFIMPROVE-9). Each role
+// defaults to Jev (Asker, issue #273): Luna asks choice questions, Sol picks
+// among code-generated candidates with a choice question and Opus asks a
+// noul adoption probability, since Jev returns structured answers only.
+// A role whose LUNA_*/SOL_*/OPUS_* override is configured instead calls
+// that external AI API through Client, a JSON-over-HTTP client with Bearer
+// authentication and Jev's retry/exponential-backoff policy. With neither
+// an override nor Jev configured a role fails every call with
+// ErrNotConfigured, which callers treat like any other API failure.
 //
 // LLM output is untrusted. Sol returns the changes it proposes verbatim
 // (SolChange) and internal/service/selfimprove.Governor machine-validates

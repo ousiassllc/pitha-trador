@@ -44,8 +44,8 @@ func modalSection(t *testing.T, body, id string) string {
 // issue #302: each connection's key, URL and model name live together in
 // that connection's modal. The grouping is pinned exactly so that adding or
 // moving a key is a deliberate test change; together the modals cover the
-// allow-list exactly once. Luna/Sol/Opus/News Feed stay shown (as optional)
-// until the human decision in #273.
+// allow-list exactly once. Luna/Sol/Opus/News Feed are optional overrides of
+// their defaults (Jev / やのしん, issue #273).
 func TestSettingsHandler_Page_GroupsKeysIntoOneModalPerConnection(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore()))
@@ -59,7 +59,7 @@ func TestSettingsHandler_Page_GroupsKeysIntoOneModalPerConnection(t *testing.T) 
 		"kabu":      {config.KeyKabuAPIPassword},
 		"slack":     {config.KeySlackWebhookURL},
 		"luna":      {config.KeyLunaAPIKey, config.KeyLunaBaseURL},
-		"news-feed": {config.KeyNewsFeedAPIKey, config.KeyNewsFeedURL},
+		"news-feed": {config.KeyNewsFeedAPIKey, config.KeyNewsFeedURL, config.KeyNewsFeedEnabled},
 		"sol":       {config.KeySolAPIKey, config.KeySolBaseURL},
 		"opus":      {config.KeyOpusAPIKey, config.KeyOpusBaseURL},
 	}
@@ -84,7 +84,8 @@ func TestSettingsHandler_Page_GroupsKeysIntoOneModalPerConnection(t *testing.T) 
 
 // The list shows each connection's state from its main key: unset by
 // default, configured once the key is stored, partial when only an override
-// is stored.
+// is stored. Luna/Sol/Opus/News Feed work through a default (issue #273), so
+// with nothing stored they show "default", not "unset".
 func TestSettingsHandler_Page_CardStateReflectsStoredKeys(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := newFakeSecretsStore()
@@ -96,7 +97,7 @@ func TestSettingsHandler_Page_CardStateReflectsStoredKeys(t *testing.T) {
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
 	body := rec.Body.String()
 
-	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "slack": "unset"} {
+	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "slack": "unset", "sol": "default", "opus": "default", "news-feed": "default"} {
 		if want := `data-testid="connection-status-` + id + `"`; !strings.Contains(body, want) {
 			t.Fatalf("no status for %s", id)
 		}
@@ -128,12 +129,13 @@ func TestSettingsHandler_SaveAndDelete_RefreshConnectionStatusOutOfBand(t *testi
 	}
 
 	rec = deleteSetting(engine, config.KeyLunaAPIKey)
-	if !strings.Contains(rec.Body.String(), `data-state="unset"`) {
-		t.Fatalf("Delete response lacks the unset OOB status; body=%s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `data-state="default"`) {
+		t.Fatalf("Delete response lacks the default (Jev) OOB status; body=%s", rec.Body.String())
 	}
 }
 
-// issues #271/#274: JEV_BASE_URL and JEV_MODEL default when unset, so the
+// issues #271/#274/#273: JEV_BASE_URL and JEV_MODEL default when unset, and so
+// do the Luna/Sol/Opus overrides (Jev) and the news feed keys (やのしん), so the
 // optional-keys banner must not nag about them.
 func TestSettingsHandler_Status_DoesNotNagAboutDefaultedKeys(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -148,7 +150,11 @@ func TestSettingsHandler_Status_DoesNotNagAboutDefaultedKeys(t *testing.T) {
 	if !strings.Contains(body, config.KeySlackWebhookURL) {
 		t.Fatalf("banner does not list unset SLACK_WEBHOOK_URL; body=%s", body)
 	}
-	for _, key := range []string{config.KeyJevBaseURL, config.KeyJevModel} {
+	for _, key := range []string{
+		config.KeyJevBaseURL, config.KeyJevModel,
+		config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
+		config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
+	} {
 		if strings.Contains(body, key) {
 			t.Errorf("banner lists defaulted key %s; body=%s", key, body)
 		}

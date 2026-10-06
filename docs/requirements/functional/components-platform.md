@@ -60,8 +60,8 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 |------|------|------------|
 | Luna（Sense） | ニュース分類・決算要約・bullish/bearish/neutral分類・イベント抽出 | リアルタイム補助（高頻度ループ内） |
 | Jev（Decide） | 個別銘柄の売買方向・レジーム判断（RAG文脈込み） | 高頻度（§4.4, §4.5） |
-| Sol（Think） | 負けトレード分析・相場環境変化分析・Jev誤判定クラスタ分析を行い、Policy Engineしきい値の改善提案（rationale付き）を生成する | 低頻度（日次、引け後） |
-| Opus（Govern） | Solの改善提案をレビューし、直近の実績データでシャドーバックテスト検証した上で承認/却下する | Sol提案発生時のみ |
+| Sol（Think） | 負けトレード分析・相場環境変化分析・Jev誤判定クラスタ分析を行い、Policy Engineしきい値の改善提案（rationale付き）を生成する（既定はJev: 候補生成はコード、Jevが`choice`で選択。`integrations.md` §8） | 低頻度（日次、引け後） |
+| Opus（Govern） | Solの改善提案をレビューし、直近の実績データでシャドーバックテスト検証した上で承認/却下する（既定はJevの`noul`採用確率。`integrations.md` §8） | Sol提案発生時のみ |
 | Risk Engine（Control） | ポジションサイズ・損失上限等の最終拒否権。Sol/Opusからは変更不可 | 常時 |
 | Execution（Act） | 発注・約定 | 常時 |
 
@@ -87,19 +87,19 @@ Scheduler/Jev/Risk Engineが「現在何を実行しているか」をUIから�
 
 ### 4.16 Luna ニュース分類・News Ingest
 
-News Ingest（`internal/service/newsfeed`）が対象銘柄に関連するニュース見出し・本文を外部ニュースフィードから取得し、Luna（外部AI API）へ送信して市場コンテキストを補強する。永続化は既存カラムの範囲内で行い、新規テーブルは追加しない。
+News Ingest（`internal/service/newsfeed`）が対象銘柄に関連するニュース見出し・本文をニュースフィード（既定: やのしんTDnet WebAPI、キー不要）から取得し、Luna（既定: Jev。`LUNA_*`で別の外部AIへ差し替え可）へ送信して市場コンテキストを補強する。Luna・Sol・Opusは既定でJev（`JEV_API_KEY`のみ）で動き、`LUNA_*`/`SOL_*`/`OPUS_*`は役ごとの任意の差し替えである（未入力の役はJevにフォールバック。`architecture/overview/integrations.md` §8・§13）。永続化は既存カラムの範囲内で行い、新規テーブルは追加しない。
 
-- FR-LUNA-1: News Ingestは、ニュースが実際に参照される銘柄（直近のFast Screener候補と保有中ポジションの銘柄）のみを対象に、東証立会時間中だけ、少数（既定4）の並列で、設定可能な外部ニュースフィード（`environment/setup.md`の`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`）から見出し・本文を定期取得する
-- FR-LUNA-2: 取得したニュース1件ごとにLuna API（`LUNA_API_KEY`/`LUNA_BASE_URL`）へ送信し、`sentiment`（bullish/bearish/neutral）・`event_type`（決算/業績修正/M&A/規制/その他）・`summary`を受け取る
+- FR-LUNA-1: News Ingestは、ニュースが実際に参照される銘柄（直近のFast Screener候補と保有中ポジションの銘柄）のみを対象に、東証立会時間中だけ、少数（既定4）の並列で、ニュースフィードから見出し・本文を定期取得する。既定はやのしんTDnet WebAPI（`https://webapi.yanoshin.jp/webapi/tdnet/list/{銘柄コード}.json`、API キー不要、銘柄単位、1分周期、記事ID（無ければ見出し）で重複排除）で、`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`でユーザー指定の汎用フィード（`{"items":[{id,headline,body,published_at}]}`）へ差し替え、`NEWS_FEED_ENABLED=off`で停止（News Ingestを起動しない）できる。やのしんの応答（`items[].Tdnet`/`TDnet`/フラット）は`newsfeed`のアダプタで同契約へ正規化する（PDF取得・`release.tdnet.info`のスクレイピングはしない）
+- FR-LUNA-2: 取得したニュース1件ごとにLuna（既定Jevの`choice`質問。`LUNA_BASE_URL`設定時はそのLuna API）へ送信し、`sentiment`（bullish/bearish/neutral）・`event_type`（決算/業績修正/M&A/規制/その他）・`summary`を受け取る
 - FR-LUNA-3: Luna応答は当該銘柄の直近ニュース文脈としてインメモリキャッシュ（直近N件、TTL付き、DB非永続）に保持し、Jev Scout/Trader呼び出し時に`jev_decisions.state_json`（既存カラム）内の`news_context`フィールドとして注入する。これによりFR-SCAN-1の「ニュースフラグ発生」トリガーを実装する
-- FR-LUNA-4: Luna API失敗時はニュースフラグを立てず、通常のFast Screener/Jevフローに影響を与えない（Jev同様、失敗時は機能低下のみでシステム全体を止めないフェイルセーフ）
+- FR-LUNA-4: Luna失敗時、およびニュースフィード（やのしん等）の停止・遅延・タイムアウト時は、ニュースフラグを立てずその銘柄をスキップし、通常のFast Screener/Jev/発注フロー・起動に影響を与えない（Jev同様、失敗時は機能低下のみでシステム全体を止めないフェイルセーフ）。フィード取得は短いタイムアウトとし、連続失敗時はバックオフして問い合わせ頻度を落とす。エラーはログとSystem Activity Feed（`news_feed`）に出す。Jev・フィードが使えなくても起動は失敗しない（issue #273）
 - FR-LUNA-5: Lunaの分類結果はJevの判断そのものを上書きしない。あくまでJev Scout/Traderへの補助的な文脈情報としてのみ用いる（`architecture/overview.md` §8「Lunaは高頻度側の補助コンポーネント」の方針を継続）
 
 ### 4.17 環境設定（Settings）
 
 Settings画面（`GET /settings`）で認証情報を管理する。値は`secrets`テーブルにAES-256-GCMで暗号化して保存する。
 
-- FR-SETTINGS-1: 設定項目は`internal/config`の許可キー一覧（JEV_API_KEY/JEV_BASE_URL/JEV_MODEL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_API_KEY/LUNA_BASE_URL/NEWS_FEED_URL/NEWS_FEED_API_KEY/SOL_API_KEY/SOL_BASE_URL/OPUS_API_KEY/OPUS_BASE_URL）に限定する。画面は項目ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ。画面は接続先別の一覧（Jev / kabuステーション / Slack / Luna / ニュースフィード / Sol / Opus）で、各接続先に設定済み／一部設定済み／未設定の状態（必須キーを持つ接続先は未設定の間「必須」も）を表示し、「設定する」で開くモーダル（`<dialog>`）に、その接続先のキー・URL・モデル名を1か所にまとめる（Jev: JEV_API_KEY/JEV_BASE_URL/JEV_MODEL、Luna: LUNA_API_KEY/LUNA_BASE_URL、ニュースフィード: NEWS_FEED_API_KEY/NEWS_FEED_URL、Sol: SOL_API_KEY/SOL_BASE_URL、Opus: OPUS_API_KEY/OPUS_BASE_URL、kabuステーション: KABU_API_PASSWORD、Slack: SLACK_WEBHOOK_URL）。接続先の状態は先頭キー（認証情報）の保存有無で決まり、保存・削除に応じて一覧の状態も更新される。アップデート（`#update-panel`）とエラーログ（`#error-log-panel`）は「システム」節の項目として同じ枠組みのモーダルで開く。Luna/Sol/Opus/ニュースフィードは既定値方針（issue #273）が決まるまで「表示するが任意」として扱う。空欄は既定値を意味し、保存済みの上書き値は項目ごとの削除で既定値へ戻せる（JEV_BASE_URLの既定は`https://api.typesafe.ai`、JEV_MODELの既定は`jev-latest`）
+- FR-SETTINGS-1: 設定項目は`internal/config`の許可キー一覧（JEV_API_KEY/JEV_BASE_URL/JEV_MODEL/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_API_KEY/LUNA_BASE_URL/NEWS_FEED_URL/NEWS_FEED_API_KEY/NEWS_FEED_ENABLED/SOL_API_KEY/SOL_BASE_URL/OPUS_API_KEY/OPUS_BASE_URL）に限定する。Luna/Sol/Opus/ニュースフィードの項目は既定（Jev/やのしん）の任意の差し替えで、全て未入力でも「既定（Jev）を使用」と表示し、グローバルの未設定バナーの対象にしない（issue #273）。画面は項目ごとに`SecretFieldRow`を表示し、各行が独立した保存・削除フォームを持つ。画面は接続先別の一覧（Jev / kabuステーション / Slack / Luna / ニュースフィード / Sol / Opus）で、各接続先に設定済み／一部設定済み／未設定の状態（必須キーを持つ接続先は未設定の間「必須」も）を表示し、「設定する」で開くモーダル（`<dialog>`）に、その接続先のキー・URL・モデル名を1か所にまとめる（Jev: JEV_API_KEY/JEV_BASE_URL/JEV_MODEL、Luna: LUNA_API_KEY/LUNA_BASE_URL、ニュースフィード: NEWS_FEED_API_KEY/NEWS_FEED_URL、Sol: SOL_API_KEY/SOL_BASE_URL、Opus: OPUS_API_KEY/OPUS_BASE_URL、kabuステーション: KABU_API_PASSWORD、Slack: SLACK_WEBHOOK_URL）。接続先の状態は先頭キー（認証情報）の保存有無で決まり、保存・削除に応じて一覧の状態も更新される。アップデート（`#update-panel`）とエラーログ（`#error-log-panel`）は「システム」節の項目として同じ枠組みのモーダルで開く。Luna/Sol/Opus/ニュースフィードは既定値方針（issue #273）が決まるまで「表示するが任意」として扱う。空欄は既定値を意味し、保存済みの上書き値は項目ごとの削除で既定値へ戻せる（JEV_BASE_URLの既定は`https://api.typesafe.ai`、JEV_MODELの既定は`jev-latest`）
 - FR-SETTINGS-2: `POST /settings/:key`は指定キー1件のみを保存し、他キーの値に一切影響しない。値は前後空白をトリムしてから検証する。トリム後に空の値は400とし、保存済みの値を空入力で消すことはできない。URL系キー（JEV_BASE_URL/SLACK_WEBHOOK_URL/LUNA_BASE_URL/NEWS_FEED_URL/SOL_BASE_URL/OPUS_BASE_URL）は`http`/`https`スキームかつホスト非空、その他の認証情報は制御文字（改行・タブ等）を含まないことを要求し、違反は400で保存しない（HTMXはトースト、非JSはエラーページ。Setup Guardは有効な必須値でのみ解除される）
 - FR-SETTINGS-3: `DELETE /settings/:key`は指定キー1件のみを削除し、他キーの値に一切影響しない。許可キー一覧に無いキー名は保存・削除とも400を返す
 - FR-SETTINGS-4: 保存済みの値は画面に再表示せず「設定済み」バッジのみ表示する。モーダルは`Esc`・「閉じる」ボタン・背景クリックで閉じ、開いている間はフォーカスがモーダル内に留まり、閉じるとフォーカスは開いたボタンへ戻る。`/settings#update-panel`（ヘッダーのバージョンリンク）はアップデートのモーダルを開いた状態で表示する。全ページ共通バナー（`GET /system/secrets-status`）は任意キー（SLACK_WEBHOOK_URL等）の未設定のみ案内する（必須キーはSetup Guard、§4.18が`/setup`へ誘導する）。設定変更の反映にはアプリ再起動が必要

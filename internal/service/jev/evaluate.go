@@ -34,7 +34,7 @@ type systemOneState struct {
 // the answers mapped onto ScoutResponse together with the total call
 // latency (including retries). Retry policy: see evaluate.
 func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, time.Duration, error) {
-	result, latency, err := c.evaluate(ctx, "scout", systemone.Request{
+	result, latency, err := c.evaluate(ctx, "scout", true, systemone.Request{
 		State:     systemOneState{Market: req.State, SimilarPastCases: req.RAGContext},
 		Model:     c.model,
 		Questions: scoutQuestions,
@@ -57,7 +57,7 @@ func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, ti
 // direction answer (FR-TRADER-2: Jev's self-reported certainty, not a
 // verified probability). Retry policy: see evaluate.
 func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse, time.Duration, error) {
-	result, latency, err := c.evaluate(ctx, "trader", systemone.Request{
+	result, latency, err := c.evaluate(ctx, "trader", true, systemone.Request{
 		State:     systemOneState{Market: req.State, SimilarPastCases: req.RAGContext},
 		Model:     c.model,
 		Questions: traderQuestions,
@@ -93,10 +93,12 @@ func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse,
 // invalid response body (systemone.ErrInvalidResponse), are never
 // retried: repeating the same request cannot fix them. A call that
 // ultimately fails returns the last error and the caller records no new
-// jev_decisions entry (継続失敗でnew entry停止). It also feeds c.errorRate;
-// the call that first pushes its rolling error rate to c.errorRateThreshold
-// notifies c.alerts (§5.2 "Jev APIエラー率上昇（しきい値超過）", errorrate.go).
-func (c *Client) evaluate(ctx context.Context, label string, req systemone.Request) (result systemone.Result, latency time.Duration, err error) {
+// jev_decisions entry (継続失敗でnew entry停止). With trackHealth it also feeds
+// c.errorRate; the call that first pushes its rolling error rate to
+// c.errorRateThreshold notifies c.alerts (§5.2 "Jev APIエラー率上昇（しきい値超過）",
+// errorrate.go). Ask passes false: Luna/Sol/Opus questions are auxiliary and
+// must not trip the jev_api_down Kill Switch of the trading flow.
+func (c *Client) evaluate(ctx context.Context, label string, trackHealth bool, req systemone.Request) (result systemone.Result, latency time.Duration, err error) {
 	start := time.Now()
 	defer func() {
 		latency = time.Since(start)
@@ -105,6 +107,9 @@ func (c *Client) evaluate(ctx context.Context, label string, req systemone.Reque
 			slog.Error("jev: api call failed", append(attrs, "error", err)...)
 		} else {
 			slog.Info("jev: api call completed", attrs...)
+		}
+		if !trackHealth {
+			return
 		}
 		if rate, newlyBreached := c.errorRate.record(err != nil, c.errorRateThreshold); newlyBreached {
 			if alertErr := c.alerts.JevAPIErrorRateExceeded(ctx, rate, c.errorRateThreshold); alertErr != nil {

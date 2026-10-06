@@ -75,11 +75,13 @@ func (s *Services) wireActivity() {
 }
 
 // buildExternalClients builds the kabuステーション and Jev API clients and the
-// News Ingest service (issue #81, FR-LUNA-1〜5). The news feed and Luna are
-// both optional secrets: unless both are configured the service still exists
-// (its cache is simply always empty, so no news_context is injected and no
-// news flag is raised) but its polling loop is not started.
-func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels alerts.Channels, jevMaxAttempts int) {
+// News Ingest service (issue #81, FR-LUNA-1〜5). Luna defaults to Jev and the
+// news feed to the やのしん TDnet WebAPI (issue #273), so News Ingest runs
+// with nothing but JEV_API_KEY. Unless Luna (Jev or LUNA_*) is available and
+// the feed is not switched off the service still exists (its cache is simply
+// always empty, so no news_context is injected and no news flag is raised)
+// but its polling loop is not started; start-up never depends on either.
+func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels alerts.Channels, cfg buildSettings) {
 	infoAPIMax := 0
 	if s.strategy != nil {
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
@@ -94,14 +96,19 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 		APIKey:  secrets.JevAPIKey,
 		Alerts:  alertChannels.JevAlerts(),
 		// 0 keeps the production retry policy (jev.defaultMaxAttempts).
-		MaxAttempts: jevMaxAttempts,
+		MaxAttempts: cfg.jevMaxAttempts,
 	})
 
-	lunaClient := assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey})
-	newsFeed := newsfeed.NewFeedClient(newsfeed.FeedConfig{URL: secrets.NewsFeedURL, APIKey: secrets.NewsFeedAPIKey})
-	s.newsEnabled = lunaClient.Configured() && newsFeed.Configured()
+	luna := assist.NewLuna(assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}), assist.WithJev(s.Jev))
+	feed, feedOn := newNewsFeed(secrets, cfg.yanoshinURL)
+	s.newsEnabled = feedOn && luna.Configured()
+	logNewsIngest(s.newsEnabled, feedOn)
 	s.Screener = screener.NewLiveSource() // News Ingest polls its candidates; shared with buildJevPipeline
-	s.News = newsfeed.NewService(newsFeed, assist.NewLuna(lunaClient), newstargets.New(s.Screener, s.Positions), newsfeed.WithSessionGate(marketcalendarOpen))
+	newsOpts := []newsfeed.Option{newsfeed.WithSessionGate(marketcalendarOpen), newsfeed.WithErrorObserver(s.Activity.ObserveNewsFeedError)}
+	if cfg.newsNow != nil {
+		newsOpts = append(newsOpts, newsfeed.WithNow(cfg.newsNow))
+	}
+	s.News = newsfeed.NewService(feed, luna, newstargets.New(s.Screener, s.Positions), newsOpts...)
 }
 
 // buildJevPipeline builds RAG, Feature Engine, Screener and the Jev Scout/Trader.
@@ -157,17 +164,18 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 }
 
 // buildGovernor builds the Self-Improvement Governor. Sol/Opus (issue #82,
-// FR-SELFIMPROVE-8/9) are real external LLM API clients built from the
-// optional SOL_*/OPUS_* secrets. Left unset, each stage is skipped every day
-// (assist.ErrNotConfigured) instead of blocking start-up.
+// FR-SELFIMPROVE-8/9) default to Jev (issue #273); the optional SOL_*/OPUS_*
+// secrets replace one role each with an external LLM API. With neither Jev
+// nor an override, the stage is skipped every day (assist.ErrNotConfigured)
+// instead of blocking start-up.
 func (s *Services) buildGovernor(strategy *config.StrategyConfig, secrets config.Secrets, alertChannels alerts.Channels) {
 	solClient := assist.NewClient(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey})
 	opusClient := assist.NewClient(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey})
 	s.Governor = selfimprove.NewGovernor(s.Proposals, s.Settings, s.Positions,
 		s.Backtest, strategy.Policy,
 		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()),
-		selfimprove.WithSol(assist.NewSol(solClient)),
-		selfimprove.WithOpus(assist.NewOpus(opusClient)))
+		selfimprove.WithSol(assist.NewSol(solClient, assist.WithJev(s.Jev))),
+		selfimprove.WithOpus(assist.NewOpus(opusClient, assist.WithJev(s.Jev))))
 }
 
 // buildScheduler builds the Scheduler with its maintenance tasks and, when

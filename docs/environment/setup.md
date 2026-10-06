@@ -86,7 +86,7 @@ lefthook install
 make dev
 ```
 
-`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
+`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`/`NEWS_FEED_ENABLED`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。Luna/Sol/Opusは既定でJev（`JEV_API_KEY`のみ）、ニュースフィードは既定でやのしんTDnet WebAPI（キー不要）で動くため、`LUNA_*`/`SOL_*`/`OPUS_*`/`NEWS_FEED_*`は役ごと・フィードの任意の差し替え（`NEWS_FEED_ENABLED`に`off`でニュース取り込みを停止）であり、未入力でも起動は失敗しない（issue #273）。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
 
 ### 環境変数
 
@@ -272,8 +272,7 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.8 | 2026-09-29 | CI/CD節のジョブ構成・トリガーに`release`ジョブとタグ`v*`トリガーを追記（issue #115）。bunを`.bun-version`で固定、`lint`ジョブに`linterly check`を追加、`concurrency`で版番号採番の競合を防止（issue #132） | code-review・doc-driftレビュー指摘 |
 | 1.9 | 2026-09-29 | グリーンフィールド記述を削除し実装済みの現状に更新、Goを1.25+（`go.mod`準拠）に修正、環境変数一覧（`PITHA_SERVER_ADDR`/`PITHA_DB_PATH`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`等）とMakefileターゲット節（`make`既定は`help`）を追加、ビルド成果物パスを`static/src/dist`に統一、`e2e.yml`は未作成と明記 | issue #113/#114/#116/#118/#131 doc-drift・code-reviewレビュー指摘 |
 | 1.10 | 2026-09-29 | Swagger UIをunpkg CDN読み込みから、bunで導入した`@stoplight/elements`のvendor同梱・同一オリジン配信へ変更し、`SWAGGER_ENABLED`を`true`のみ有効のオプトインに変更（`make dev`が設定）。`.env.example`の説明を`/swagger`のみの切替に是正（issue #112, #117） | セキュリティ指摘（未固定・SRIなしCDNスクリプト）・doc-drift指摘 |
-| 1.11 | 2026-09-29 | 環境変数表に`PITHA_BACKUP_DIR`（SQLite日次バックアップの退避先）を追加 | issue #97（DB日次バックアップ未実装の解消） |
-| 1.12 | 2026-09-29 | 環境変数表に`PITHA_SERVER_ALLOWED_HOSTS`（Host検証の追加許可ホスト）を追加 | issue #136 |
+| 1.11–1.12 | 2026-09-29 | 環境変数表に`PITHA_BACKUP_DIR`（SQLite日次バックアップの退避先）・`PITHA_SERVER_ALLOWED_HOSTS`（Host検証の追加許可ホスト）を追加 | issue #97（DB日次バックアップ未実装の解消）, #136 |
 | 1.13 | 2026-09-29 | `PITHA_BACKUP_DIR`の説明を更新（`secrets`除外・パーミッション・週次52週保持・退避先必須・catch-up実行） | issue #137/#152/#159 |
 | 1.14 | 2026-09-29 | Lint/Format/Linterly/Git Hooks節を実ファイル（`.golangci.yml`の有効linterとdepguard、`lefthook.yml`、`.linterlyignore`）に合わせて是正。`make lint`とCI `lint`ジョブの差分を明記。`.env.example`に`PITHA_SERVER_ALLOW_NON_LOOPBACK`/`PITHA_SERVER_ALLOWED_HOSTS`/`PITHA_STATIC_DIR`/`PITHA_POLICY_*`の雛形を追加 | issue #154 |
 | 1.15–1.19 | 2026-09-30 | `depguard`がサブパッケージも拒否対象であることを明記。`.linterlyignore`の方針を「手書きソースの除外全廃（許容は`*_templ.go`と`**/logs/**`のみ）」へ改め、暫定除外（`internal/web/handler/`・`internal/bootstrap/`・`internal/service/risk/`）をサブパッケージ分割の完了に伴い順次削除し、手書きソースの暫定除外が残っていないことを確認済みの記述へ更新 | issue #243, #245, #246, #247, #248 |
@@ -298,3 +297,4 @@ APIサーバー（Huma）を含むプロジェクトのため対象。`docs/api/
 | 1.40 | 2026-10-05 | `make lint`をCIの`lint`ジョブ相当（`GOOS=windows go vet`・`linterly check`・`tsc --noEmit`を追加）に、lefthookのpre-commitに`typecheck`を追加し`biome`のglobへ`json`/`mjs`を追加。`.linterlyignore`に生成物`static/wailsjs/**`を追加 | issue #553/#555 |
 | 1.41 | 2026-10-05 | 必要ツール表に`templ`CLI・`linterly`・`govulncheck`を追加し、Wails CLI・`golangci-lint`をCI固定版（`ci.yml`・`go.mod`）に合わせた。`environment/ci.md`の`linterly check --no-update-check`・`bun test`常時実行・初回タグ`v0.1.0`を`ci.yml`に合わせた | issue #519, #567, #578 |
 | 1.42 | 2026-10-06 | depguard記述を`.golangci.yml`の7ルール（`atoms/molecules/organisms/layout-direction`・`templ-parts-no-middleware`を追加、Atomic Design依存方向とweb/middleware制限はlintで強制）に更新。CIジョブ構成（ファイル構成図・CI/CD節）に`test-windows`を追記。環境変数表に`PITHA_LOG_DIR`の独立行を追加（`.env.example`にも雛形を追加） | issue #521（再乖離）, #607, #608, #609 |
+| 1.43 | 2026-10-06 | `LUNA_*`/`SOL_*`/`OPUS_*`/`NEWS_FEED_*`を既定（Jev/やのしん）の任意の差し替えとして位置づけ直し、`NEWS_FEED_ENABLED`を追加 | issue #273 |

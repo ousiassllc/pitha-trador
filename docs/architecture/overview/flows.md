@@ -21,7 +21,7 @@ sequenceDiagram
     App->>KABU: /kabusapi/token でトークン発行
     KABU-->>App: token（失敗しても起動を継続し、バックグラウンドで再試行）
     App->>SCHED: robfig/cronへ周期ジョブ登録（60秒フルスキャン＋分単位以上の保守ジョブ）
-    App->>App: 候補更新ループ（15-30秒、`candidates.Run`）と保有ポジション再評価ループ（5-15秒、`heldposition.Monitor.Run`）を別goroutineで起動（cronのジョブ登録ではない）。LunaとNEWS_FEEDの両方が設定済みの場合のみ、News Ingestのティッカー（`newsIngestTicker`。起動直後に1回、以降1分周期。§13）も別goroutineで起動する
+    App->>App: 候補更新ループ（15-30秒、`candidates.Run`）と保有ポジション再評価ループ（5-15秒、`heldposition.Monitor.Run`）を別goroutineで起動（cronのジョブ登録ではない）。Luna（既定Jev。`LUNA_BASE_URL`で差し替え可）が使え、かつニュースフィードが`NEWS_FEED_ENABLED=off`でない場合のみ（既定ではJevキーだけで有効）、News Ingestのティッカー（`newsIngestTicker`。起動直後に1回、以降1分周期。§13）も別goroutineで起動する
     App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始
     App->>App: WebView起動・Scanner Dashboard表示
 ```

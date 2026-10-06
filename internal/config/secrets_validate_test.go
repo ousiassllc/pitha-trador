@@ -82,3 +82,24 @@ func TestNormalizeSecretValue_EveryAllowedKeyIsClassified(t *testing.T) {
 		t.Errorf("unknown key classified as URL key")
 	}
 }
+
+func TestNormalizeSecretValue_NewsFeedEnabledIsOnOrOff(t *testing.T) {
+	for raw, want := range map[string]string{"on": "on", " OFF ": "off", "Off": "off"} {
+		if got, err := config.NormalizeSecretValue(config.KeyNewsFeedEnabled, raw); err != nil || got != want {
+			t.Errorf("NormalizeSecretValue(%q) = %q, %v; want %q", raw, got, err, want)
+		}
+	}
+	for _, bad := range []string{"yes", "false", "0", "https://example.com"} {
+		if got, err := config.NormalizeSecretValue(config.KeyNewsFeedEnabled, bad); err == nil || got != "" {
+			t.Errorf("NormalizeSecretValue(%q) = %q, %v; want a validation error", bad, got, err)
+		}
+	}
+}
+
+func TestSecrets_NewsFeedOffOnlyWhenStoredOff(t *testing.T) {
+	for enabled, want := range map[string]bool{"": false, "on": false, "off": true} {
+		if got := (config.Secrets{NewsFeedEnabled: enabled}).NewsFeedOff(); got != want {
+			t.Errorf("NewsFeedOff() with %q = %v, want %v", enabled, got, want)
+		}
+	}
+}

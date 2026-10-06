@@ -59,16 +59,20 @@ type SolProposal struct {
 	Changes       []SolChange
 }
 
-// Sol is the Think adapter: it sends the recent Calibration metrics to the
-// external Sol LLM API and returns the threshold changes it proposes
-// (FR-SELFIMPROVE-1, FR-SELFIMPROVE-8).
+// Sol is the Think adapter: it turns the recent Calibration metrics into
+// the threshold changes it proposes (FR-SELFIMPROVE-1, FR-SELFIMPROVE-8).
+// By default the code generates the candidate changes and Jev picks one
+// (sol_jev.go); when SOL_BASE_URL is set the external Sol LLM API proposes
+// them instead.
 type Sol struct {
 	client *Client
+	jev    Asker
 }
 
-// NewSol returns a Sol adapter that calls client (SOL_API_KEY/SOL_BASE_URL).
-func NewSol(client *Client) *Sol {
-	return &Sol{client: client}
+// NewSol returns a Sol adapter that calls client (SOL_API_KEY/SOL_BASE_URL),
+// or Jev (WithJev) when client is not configured.
+func NewSol(client *Client, opts ...Option) *Sol {
+	return &Sol{client: client, jev: applyOptions(opts).jev}
 }
 
 type solRequest struct {
@@ -172,6 +176,17 @@ func newSolDirection(dc DirectionCalibration) solDirection {
 // failure (including ErrNotConfigured) is returned as an error: the daily
 // analysis is skipped and retried the next business day (overview.md §8).
 func (s *Sol) Analyze(ctx context.Context, in SolAnalysisInput) (SolProposal, bool, error) {
+	viaJev, err := useJev(s.client, s.jev)
+	if err != nil {
+		return SolProposal{}, false, fmt.Errorf("assist: sol analyze: %w", err)
+	}
+	if viaJev {
+		proposal, ok, err := s.analyzeWithJev(ctx, in)
+		if err != nil {
+			return SolProposal{}, false, fmt.Errorf("assist: sol analyze: %w", err)
+		}
+		return proposal, ok, nil
+	}
 	var resp SolResponse
 	if err := s.client.PostJSON(ctx, SolAnalyzePath, newSolRequest(in), &resp); err != nil {
 		return SolProposal{}, false, fmt.Errorf("assist: sol analyze: %w", err)

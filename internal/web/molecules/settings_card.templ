@@ -19,6 +19,10 @@ const (
 	ConnectionPartial ConnectionState = "partial"
 	// ConnectionUnset: nothing is stored.
 	ConnectionUnset ConnectionState = "unset"
+	// ConnectionDefault: nothing is stored but the connection works through
+	// a default (Luna/Sol/Opus through Jev, the news feed through やのしん,
+	// issue #273); every field is only an optional override.
+	ConnectionDefault ConnectionState = "default"
 )
 
 // ConnectionProps is one external service on the Settings/Setup screens
@@ -26,13 +30,15 @@ const (
 // and Description what the operator sees in the list, Required whether the
 // connection holds a key the app cannot start without, and Fields the keys
 // edited in its modal - the main credential first, then optional URL/model
-// overrides.
+// overrides. DefaultLabel names what the connection uses while nothing is
+// stored ("" when it needs its own configuration).
 type ConnectionProps struct {
-	ID          string
-	Name        string
-	Description string
-	Required    bool
-	Fields      []SecretFieldRowProps
+	ID           string
+	Name         string
+	Description  string
+	DefaultLabel string
+	Required     bool
+	Fields       []SecretFieldRowProps
 }
 
 // ModalID is the id of the connection's Modal; the card's open button
@@ -46,13 +52,17 @@ func (p ConnectionProps) StatusID() string { return "connection-status-" + p.ID 
 
 // State derives the connection's status from its fields: configured when
 // the main key (first field) is stored, partial when only later overrides
-// are, unset otherwise.
+// are, default when nothing is stored but a DefaultLabel applies, unset
+// otherwise.
 func (p ConnectionProps) State() ConnectionState {
 	if len(p.Fields) > 0 && p.Fields[0].Configured {
 		return ConnectionConfigured
 	}
 	if p.ConfiguredCount() > 0 {
 		return ConnectionPartial
+	}
+	if p.DefaultLabel != "" {
+		return ConnectionDefault
 	}
 	return ConnectionUnset
 }
@@ -119,6 +129,8 @@ templ ConnectionStatus(props ConnectionProps, oob bool) {
 				<span class="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">設定済み</span>
 			case ConnectionPartial:
 				<span class="rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800">一部設定済み</span>
+			case ConnectionDefault:
+				<span class="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">既定（{ props.DefaultLabel }）を使用</span>
 			default:
 				<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">未設定</span>
 		}
