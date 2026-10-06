@@ -69,7 +69,16 @@ import (
 // and '%XX' would be mis-decoded. A Windows drive-letter path becomes
 // `/C:/...` so it is not read as a URI authority.
 func dsn(path string) string {
-	return "file:" + uriPath(path) + "?_foreign_keys=1&_journal_mode=WAL&_busy_timeout=60000&_txlock=immediate"
+	return FileURI(path, "_foreign_keys=1&_journal_mode=WAL&_busy_timeout=60000&_txlock=immediate")
+}
+
+// FileURI builds the `file:` URI modernc.org/sqlite opens for the database
+// file at path with the given query (without the leading '?'). It is the
+// single place that escapes path (see dsn), shared with internal/service/
+// backup, which opens copies of the database under operator-chosen
+// directories (issue #591).
+func FileURI(path, query string) string {
+	return "file:" + uriPath(path) + "?" + query
 }
 
 var uriPathEscaper = strings.NewReplacer("%", "%25", "?", "%3F", "#", "%23")
