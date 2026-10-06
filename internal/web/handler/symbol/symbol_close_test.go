@@ -166,3 +166,22 @@ func TestSymbolHandler_ClosePosition_OutsideTradingSessionReturns409(t *testing.
 		t.Fatalf("status/body = %d/%q, want 409 with the 立会時間外 toast", rec.Code, rec.Body.String())
 	}
 }
+
+// #604: the handler assembles no fill-model inputs, so a failing State read
+// (e.g. "database is locked") can no longer degrade the exit to a zero Book;
+// the price/Book choice and its failures live in Engine.CloseAtMarket.
+func TestSymbolHandler_ClosePosition_DoesNotDependOnStateRead(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	provider := &fakeSymbolProvider{
+		position:    domain.Position{ID: 42, Symbol: "7203"},
+		stateErr:    errors.New("database is locked"),
+		closeResult: domain.Position{ID: 42, Symbol: "7203"},
+	}
+	router := gin.New()
+	router.POST("/positions/:id/close", symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{}).ClosePosition)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/positions/42/close", nil))
+	if rec.Code != http.StatusOK || provider.closeCalls != 1 {
+		t.Fatalf("status/closeCalls = %d/%d, want 200/1 (CloseAtMarket owns the price/Book choice)", rec.Code, provider.closeCalls)
+	}
+}

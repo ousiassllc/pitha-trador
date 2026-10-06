@@ -8,6 +8,7 @@ package closeflow_test
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -25,6 +26,8 @@ type testEngine struct {
 	engine      *execution.Engine
 	positions   *trading.PositionRepository
 	instruments *market.InstrumentRepository
+	snapshots   *market.SnapshotRepository
+	db          *sql.DB
 	instrument  domain.Instrument
 }
 
@@ -49,16 +52,17 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	}
 
 	positions := trading.NewPositionRepository(db)
+	snapshots := market.NewSnapshotRepository(db)
 	engine := execution.NewEngine(execution.Deps{
 		Orders:      trading.NewOrderRepository(db),
 		Positions:   positions,
-		Snapshots:   market.NewSnapshotRepository(db),
+		Snapshots:   snapshots,
 		Decisions:   judgement.NewDecisionRepository(db),
 		Signals:     trading.NewSignalRepository(db),
 		Instruments: instruments,
 	}, cfg)
 
-	return testEngine{engine: engine, positions: positions, instruments: instruments, instrument: inst}
+	return testEngine{engine: engine, positions: positions, instruments: instruments, snapshots: snapshots, db: db, instrument: inst}
 }
 
 func longSignal(instrumentID int64) domain.TradeSignal {

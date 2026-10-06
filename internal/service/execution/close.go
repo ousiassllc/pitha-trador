@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -108,25 +109,58 @@ func (e *Engine) CloseAll(ctx context.Context, reason string) error {
 	now := e.cfg.Now()
 	var errs []error
 	for _, position := range open {
-		if _, err := e.Close(ctx, position.ID, domain.ExitReasonForceClose, position.CurrentPrice, e.latestBook(ctx, position), now); err != nil && !errors.Is(err, domain.ErrPositionAlreadyClosed) {
+		book, err := e.latestBook(ctx, position)
+		if err != nil {
+			// A force-close must not be blocked by an unreadable quote: close
+			// against the unknown (zero) Book, loudly.
+			slog.WarnContext(ctx, "execution: force-close without quote book", "position_id", position.ID, "symbol", position.Symbol, "error", err)
+			book = fillmodel.Book{}
+		}
+		if _, err := e.Close(ctx, position.ID, domain.ExitReasonForceClose, position.CurrentPrice, book, now); err != nil && !errors.Is(err, domain.ErrPositionAlreadyClosed) {
 			errs = append(errs, fmt.Errorf("execution: force-close position %d for kill switch %q: %w", position.ID, reason, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
+// CloseAtMarket is the manual Paper Exit behind `POST /positions/:id/close`:
+// it closes positionID at its CurrentPrice against the quote Book of the
+// instrument's latest market_snapshots row (the same price/Book selection
+// as CloseAll, see latestBook), so no caller assembles fill-model inputs.
+// Unlike CloseAll it does not degrade to an unknown Book when the latest
+// snapshot cannot be read - that would silently fill without spread - but
+// fails with the read error and leaves the position open.
+func (e *Engine) CloseAtMarket(ctx context.Context, positionID int64, reason string, now time.Time) (domain.Position, error) {
+	position, err := e.positions.Get(ctx, positionID)
+	if err != nil {
+		return domain.Position{}, fmt.Errorf("execution: get position %d: %w", positionID, err)
+	}
+	if !position.IsOpen() {
+		return domain.Position{}, fmt.Errorf("%w: position %d", domain.ErrPositionAlreadyClosed, positionID)
+	}
+	book, err := e.latestBook(ctx, position)
+	if err != nil {
+		return domain.Position{}, fmt.Errorf("execution: close position %d at market: %w", positionID, err)
+	}
+	return e.Close(ctx, positionID, reason, position.CurrentPrice, book, now)
+}
+
 // latestBook is the quote of position's instrument's latest market_snapshots
 // row when it is still the bar CurrentPrice was marked at; the zero Book
-// (unknown quote) otherwise or when Deps.Snapshots is nil.
-func (e *Engine) latestBook(ctx context.Context, position domain.Position) fillmodel.Book {
+// (unknown quote) when there is no such row, the latest row is a different
+// bar, or Deps.Snapshots is nil. It fails only when the snapshot read fails.
+func (e *Engine) latestBook(ctx context.Context, position domain.Position) (fillmodel.Book, error) {
 	if e.snapshots == nil {
-		return fillmodel.Book{}
+		return fillmodel.Book{}, nil
 	}
 	latest, err := e.snapshots.ListByInstrument(ctx, position.InstrumentID, 1)
-	if err != nil || len(latest) == 0 || latest[0].Price != position.CurrentPrice {
-		return fillmodel.Book{}
+	if err != nil {
+		return fillmodel.Book{}, fmt.Errorf("execution: latest snapshot for instrument %d: %w", position.InstrumentID, err)
 	}
-	return fillmodel.BookOf(latest[0])
+	if len(latest) == 0 || latest[0].Price != position.CurrentPrice {
+		return fillmodel.Book{}, nil
+	}
+	return fillmodel.BookOf(latest[0]), nil
 }
 
 // var _ risk.PositionCloser assertion below keeps CloseAll's signature
