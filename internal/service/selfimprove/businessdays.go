@@ -1,43 +1,31 @@
 package selfimprove
 
-import "time"
+import (
+	"time"
 
-// businessDaysBefore/businessDaysAfter approximate "N営業日" (FR-
-// SELFIMPROVE-4's lookback, FR-SELFIMPROVE-6's tracking window) by
-// skipping Saturday/Sunday only - JP market holidays are not modeled,
-// matching the rest of this codebase's absence of a holiday calendar
-// (internal/service/scheduler's own fullScanInterval cron trigger has
-// the same gap). This is a deliberate MVP simplification, not a
-// FR-SELFIMPROVE-4/6 correctness requirement: a holiday occasionally
-// shifts the lookback/tracking window's exact bar count by one, not its
-// overall order-of-magnitude 20/5-day intent.
+	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
+)
+
+// businessDaysBefore/businessDaysAfter count "N営業日" (FR-SELFIMPROVE-4's
+// lookback, FR-SELFIMPROVE-6's tracking window) as TSE trading days
+// (marketcalendar.TSE.IsTradingDay: weekends, national holidays, 振替休日,
+// 国民の休日 and the 12/31〜1/3 年末年始休場 are skipped), judged on the JST
+// date. The returned time is t shifted by whole JST days, in JST.
 func businessDaysBefore(t time.Time, days int) time.Time {
-	d := t
-	for remaining := days; remaining > 0; {
-		d = d.AddDate(0, 0, -1)
-		if isBusinessDay(d) {
-			remaining--
-		}
-	}
-	return d
+	return shiftBusinessDays(t, days, -1)
 }
 
 func businessDaysAfter(t time.Time, days int) time.Time {
-	d := t
+	return shiftBusinessDays(t, days, 1)
+}
+
+func shiftBusinessDays(t time.Time, days, step int) time.Time {
+	d := t.In(marketcalendar.JST)
 	for remaining := days; remaining > 0; {
-		d = d.AddDate(0, 0, 1)
-		if isBusinessDay(d) {
+		d = d.AddDate(0, 0, step)
+		if marketcalendar.TSE.IsTradingDay(d) {
 			remaining--
 		}
 	}
 	return d
-}
-
-func isBusinessDay(t time.Time) bool {
-	switch t.Weekday() {
-	case time.Saturday, time.Sunday:
-		return false
-	default:
-		return true
-	}
 }

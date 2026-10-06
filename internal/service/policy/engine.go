@@ -190,13 +190,15 @@ func NewEngine(thresholds Thresholds, risk RiskChecker, signals *trading.SignalR
 // with persistence (FR-POLICY-5); Decide itself performs no I/O other
 // than the injected RiskChecker.
 //
-// Every call emits a structured JSON log line for non-functional.md
-// §5.1's "Signal count（生成シグナル数）" (counting "policy: trade signal
-// decided" log lines); a Risk Engine rejection additionally emits its
-// own "policy: risk engine rejected signal" line for §5.1's "Risk拒否
-// 件数" (counting those log lines is a narrower count than every
-// direction=none signal, since some become none for other FR-POLICY-1〜3
-// reasons - missing data, calibration exclusion, spread too wide, ...).
+// Decide emits no "policy: trade signal decided" log line: that line
+// is non-functional.md §5.1's "Signal count（生成シグナル数）", which
+// must count signals actually generated (Evaluate, the persisting path),
+// not the every-bar replays a backtest runs through Decide. A Risk
+// Engine rejection still emits its own "policy: risk engine rejected
+// signal" line for §5.1's "Risk拒否件数" (counting those log lines is a
+// narrower count than every direction=none signal, since some become
+// none for other FR-POLICY-1〜3 reasons - missing data, calibration
+// exclusion, spread too wide, ...).
 func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
 	return e.decide(ctx, in, e.thresholds)
 }
@@ -237,20 +239,14 @@ func (e *Engine) decide(ctx context.Context, in Input, th Thresholds) domain.Tra
 	sig.RiskPassed = direction != domain.JevDirectionNone
 	sig.RejectReason = reason
 
-	rejectReason := ""
-	if reason != nil {
-		rejectReason = *reason
-	}
-	slog.Info("policy: trade signal decided",
-		"instrument_id", in.InstrumentID, "symbol", in.Symbol, "direction", sig.Direction,
-		"risk_passed", sig.RiskPassed, "reject_reason", rejectReason)
-
 	return sig
 }
 
 // Evaluate decides in against the currently-active thresholds
 // (currentThresholds) and persists the result via the Engine's
-// SignalRepository (FR-POLICY-5).
+// SignalRepository (FR-POLICY-5). Every call emits one structured JSON
+// "policy: trade signal decided" log line, the §5.1 "Signal count（生成
+// シグナル数）" source (see Decide).
 func (e *Engine) Evaluate(ctx context.Context, in Input) (domain.TradeSignal, error) {
 	th, policyVersion, err := e.currentThresholds(ctx)
 	if err != nil {
@@ -258,6 +254,13 @@ func (e *Engine) Evaluate(ctx context.Context, in Input) (domain.TradeSignal, er
 	}
 	sig := e.decide(ctx, in, th)
 	sig.PolicyVersion = policyVersion
+	rejectReason := ""
+	if sig.RejectReason != nil {
+		rejectReason = *sig.RejectReason
+	}
+	slog.Info("policy: trade signal decided",
+		"instrument_id", in.InstrumentID, "symbol", in.Symbol, "direction", sig.Direction,
+		"risk_passed", sig.RiskPassed, "reject_reason", rejectReason)
 	saved, err := e.signals.Insert(ctx, sig)
 	if err != nil {
 		return domain.TradeSignal{}, fmt.Errorf("policy: persist trade signal for %q: %w", in.Symbol, err)

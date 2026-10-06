@@ -13,11 +13,12 @@ type noTrades struct{}
 
 func (noTrades) List(context.Context) ([]domain.DecisionTrade, error) { return nil, nil }
 
-// BucketSampleCount must classify every confidence into the same bucket
+// BucketHasSamples must classify every confidence into the same bucket
 // that Metrics counts it into, including the bucket edges and the
-// closed-high last bucket, so the policy's calibrated() verdict is
-// unchanged by reading the count straight from the database.
-func TestService_BucketSampleCount_MatchesMetricsBuckets(t *testing.T) {
+// closed-high last bucket, and flip exactly at the threshold, so the
+// policy's calibrated() verdict is unchanged by the capped database
+// COUNT (count == min-1 / min / min+1).
+func TestService_BucketHasSamples_MatchesMetricsBuckets(t *testing.T) {
 	f := newLabelerFixtures(t)
 	ctx := context.Background()
 	base := time.Date(2026, 9, 28, 9, 0, 0, 0, time.UTC)
@@ -47,18 +48,36 @@ func TestService_BucketSampleCount_MatchesMetricsBuckets(t *testing.T) {
 				want = metrics.Buckets[i].SampleCount
 			}
 		}
-		got, err := svc.BucketSampleCount(ctx, c)
-		if err != nil {
-			t.Fatalf("BucketSampleCount(%v): %v", c, err)
+		if want == 0 {
+			if got, err := svc.BucketHasSamples(ctx, c, 1); err != nil || got {
+				t.Errorf("BucketHasSamples(%v, 1) = %v, %v; want false (no samples)", c, got, err)
+			}
+			continue
 		}
-		if got != want {
-			t.Errorf("BucketSampleCount(%v) = %d, want %d (Metrics bucket count)", c, got, want)
+		for _, tc := range []struct {
+			min  int
+			want bool
+		}{{want - 1, true}, {want, true}, {want + 1, false}} {
+			if tc.min <= 0 {
+				continue
+			}
+			got, err := svc.BucketHasSamples(ctx, c, tc.min)
+			if err != nil {
+				t.Fatalf("BucketHasSamples(%v, %d): %v", c, tc.min, err)
+			}
+			if got != tc.want {
+				t.Errorf("BucketHasSamples(%v, %d) = %v, want %v (Metrics bucket count %d)", c, tc.min, got, tc.want, want)
+			}
 		}
 	}
-	if got, _ := svc.BucketSampleCount(ctx, 0.45); got != 0 {
-		t.Errorf("BucketSampleCount(0.45) = %d, want 0 (below every bucket)", got)
+	if got, _ := svc.BucketHasSamples(ctx, 0.45, 1); got {
+		t.Error("BucketHasSamples(0.45, 1) = true, want false (below every bucket)")
 	}
-	if got, _ := svc.BucketSampleCount(ctx, 1.0); got != 6 {
-		t.Errorf("BucketSampleCount(1.0) = %d, want 6 (0.90, 0.95 and 1.00 x2 horizons: last bucket includes its upper edge)", got)
+	// 0.90, 0.95 and 1.00, each with 2 horizons: the last bucket includes its upper edge.
+	if got, _ := svc.BucketHasSamples(ctx, 1.0, 6); !got {
+		t.Error("BucketHasSamples(1.0, 6) = false, want true")
+	}
+	if got, _ := svc.BucketHasSamples(ctx, 1.0, 7); got {
+		t.Error("BucketHasSamples(1.0, 7) = true, want false")
 	}
 }

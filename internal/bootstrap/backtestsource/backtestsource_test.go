@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -219,4 +220,59 @@ func snapshotAt(t *testing.T, env testEnv, inst domain.Instrument, ts time.Time)
 		t.Fatalf("snapshot at %v = %d rows, err %v; want 1", ts, len(snaps), err)
 	}
 	return snaps[0]
+}
+
+// TestSource_ForEachRunConfigReadsSnapshotsWithoutRawData is issue #597:
+// the replay never reads raw_data_json, so neither the in-range bars nor
+// the warmup bars carry it, and the stored rows really do have it.
+func TestSource_ForEachRunConfigReadsSnapshotsWithoutRawData(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	inst := mustCreateInstrument(t, env, "7203")
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	recordLiveBars(t, env, inst, base, 40)
+	if _, err := env.Conn.ExecContext(ctx, `UPDATE market_snapshots SET raw_data_json = '{"board":"large"}'`); err != nil {
+		t.Fatalf("seed raw_data_json: %v", err)
+	}
+	if got := snapshotAt(t, env, inst, base); got.RawDataJSON == "" {
+		t.Fatal("fixture rows have no raw_data_json; the exclusion would be vacuous")
+	}
+
+	period := backtest.Period{Start: base.Add(20 * time.Minute), End: base.Add(40 * time.Minute)}
+	var seen []backtest.RunConfig
+	err := env.Source.ForEachRunConfig(ctx, period, func(cfg backtest.RunConfig) error {
+		seen = append(seen, cfg)
+		return nil
+	})
+	if err != nil || len(seen) != 1 {
+		t.Fatalf("ForEachRunConfig = %d configs, err %v; want 1", len(seen), err)
+	}
+	cfg := seen[0]
+	if cfg.WarmupBars == 0 || len(cfg.Snapshots) <= cfg.WarmupBars {
+		t.Fatalf("WarmupBars = %d of %d snapshots; want warmup and in-range bars", cfg.WarmupBars, len(cfg.Snapshots))
+	}
+	for i, s := range cfg.Snapshots {
+		if s.RawDataJSON != "" {
+			t.Fatalf("Snapshots[%d].RawDataJSON = %q, want empty", i, s.RawDataJSON)
+		}
+	}
+}
+
+func TestSource_ForEachRunConfigStopsOnCallbackError(t *testing.T) {
+	env := newTestEnv(t)
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	for _, sym := range []string{"7203", "6758"} {
+		recordLiveBars(t, env, mustCreateInstrument(t, env, sym), base, 5)
+	}
+	stop := errors.New("stop")
+
+	calls := 0
+	err := env.Source.ForEachRunConfig(context.Background(), backtest.Period{Start: base, End: base.Add(time.Hour)}, func(backtest.RunConfig) error {
+		calls++
+		return stop
+	})
+
+	if !errors.Is(err, stop) || calls != 1 {
+		t.Errorf("err = %v after %d calls, want the callback error after 1 call", err, calls)
+	}
 }

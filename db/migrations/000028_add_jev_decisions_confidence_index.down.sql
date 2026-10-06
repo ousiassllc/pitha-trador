@@ -1,0 +1,1 @@
+DROP INDEX jev_decisions_type_direction_confidence_idx;

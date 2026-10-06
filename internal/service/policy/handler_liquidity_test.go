@@ -19,13 +19,13 @@ import (
 
 type fakeCalibration struct{ sampleCounts [5]int }
 
-func (f fakeCalibration) BucketSampleCount(_ context.Context, confidence float64) (int, error) {
+func (f fakeCalibration) BucketHasSamples(_ context.Context, confidence float64, min int) (bool, error) {
 	for i, r := range domain.DefaultConfidenceBucketRanges {
 		if confidence >= r.Low && confidence < r.High {
-			return f.sampleCounts[i], nil
+			return f.sampleCounts[i] >= min, nil
 		}
 	}
-	return 0, nil
+	return false, nil
 }
 
 // runHandleJob runs one jev-trader job for a fresh instrument whose latest

@@ -43,15 +43,21 @@ func TestCalibrationRepository_CountLabeledSamplesInConfidenceRange(t *testing.T
 		name        string
 		low, high   float64
 		includeHigh bool
+		limit       int
 		want        int
 	}{
-		{"half-open range", 0.60, 0.70, false, 4},
-		{"closed upper bound", 0.60, 0.70, true, 6},
-		{"empty range", 0.80, 0.90, false, 0},
+		{"half-open range", 0.60, 0.70, false, 100, 4},
+		{"closed upper bound", 0.60, 0.70, true, 100, 6},
+		{"empty range", 0.80, 0.90, false, 100, 0},
+		{"limit = count+1", 0.60, 0.70, false, 5, 4},
+		{"limit = count", 0.60, 0.70, false, 4, 4},
+		{"limit = count-1 caps the count", 0.60, 0.70, false, 3, 3},
+		{"limit 1", 0.60, 0.70, true, 1, 1},
+		{"non-positive limit", 0.60, 0.70, false, 0, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := outcomes.CountLabeledSamplesInConfidenceRange(ctx, tc.low, tc.high, tc.includeHigh)
+			got, err := outcomes.CountLabeledSamplesInConfidenceRange(ctx, tc.low, tc.high, tc.includeHigh, tc.limit)
 			if err != nil {
 				t.Fatalf("CountLabeledSamplesInConfidenceRange: %v", err)
 			}

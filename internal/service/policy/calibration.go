@@ -7,13 +7,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
-// CalibrationSource supplies Calibration's per-bucket sample counts
-// (internal/service/calibration.Service satisfies it).
+// CalibrationSource answers whether a confidence bucket is populated
+// enough (internal/service/calibration.Service satisfies it).
 type CalibrationSource interface {
-	// BucketSampleCount returns how many labeled samples fall in the
-	// confidence bucket containing confidence, or 0 when it is in none.
-	// It must be cheap: it runs on every directional Jev trader job.
-	BucketSampleCount(ctx context.Context, confidence float64) (int, error)
+	// BucketHasSamples reports whether the confidence bucket containing
+	// confidence holds at least min labeled samples (false when it is in
+	// no bucket). It must be cheap and independent of the labeling
+	// history's size: it runs on every directional Jev trader job.
+	BucketHasSamples(ctx context.Context, confidence float64, min int) (bool, error)
 }
 
 // HandlerOption configures optional Handler behavior.
@@ -41,9 +42,9 @@ func (h *Handler) calibrated(ctx context.Context, d domain.JevDecision) (bool, e
 		return false, nil
 	}
 
-	count, err := h.calib.BucketSampleCount(ctx, *d.Confidence)
+	enough, err := h.calib.BucketHasSamples(ctx, *d.Confidence, minSamples)
 	if err != nil {
 		return false, fmt.Errorf("count calibration samples: %w", err)
 	}
-	return count >= minSamples, nil
+	return enough, nil
 }

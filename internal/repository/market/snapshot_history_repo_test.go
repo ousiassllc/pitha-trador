@@ -79,3 +79,49 @@ func TestSnapshotRepository_ListHistoryByInstruments_MatchesListByInstrumentWith
 		t.Errorf("1001 rows = %d, want %d", n, limit)
 	}
 }
+
+// ListHistoryByInstrumentRange/Before must return exactly what the raw
+// variants return minus raw_data_json (issue #597: the backtest replay
+// never reads the ~1-2KB board).
+func TestSnapshotRepository_ListHistoryRangeAndBefore_MatchRawVariantsWithoutRawData(t *testing.T) {
+	conn := newTestDB(t)
+	instRepo := market.NewInstrumentRepository(conn)
+	snapRepo := market.NewSnapshotRepository(conn)
+	ctx := context.Background()
+	inst := mustCreateInstrument(t, instRepo, "1001")
+	seedBars(t, snapRepo, inst, 9)
+	base := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	from, to := base.Add(2*time.Minute), base.Add(7*time.Minute)
+
+	wantRange, err := snapRepo.ListByInstrumentRange(ctx, inst.ID, from, to)
+	if err != nil || len(wantRange) != 5 {
+		t.Fatalf("ListByInstrumentRange = %d rows, err %v; want 5", len(wantRange), err)
+	}
+	gotRange, err := snapRepo.ListHistoryByInstrumentRange(ctx, inst.ID, from, to)
+	if err != nil {
+		t.Fatalf("ListHistoryByInstrumentRange: %v", err)
+	}
+	wantBefore, err := snapRepo.ListByInstrumentBefore(ctx, inst.ID, from, 5)
+	if err != nil || len(wantBefore) != 2 {
+		t.Fatalf("ListByInstrumentBefore = %d rows, err %v; want 2", len(wantBefore), err)
+	}
+	gotBefore, err := snapRepo.ListHistoryByInstrumentBefore(ctx, inst.ID, from, 5)
+	if err != nil {
+		t.Fatalf("ListHistoryByInstrumentBefore: %v", err)
+	}
+
+	for _, rows := range [][]domain.Snapshot{wantRange, wantBefore} {
+		for i := range rows {
+			if rows[i].RawDataJSON == "" {
+				t.Fatal("raw variant returned empty RawDataJSON; the fixture does not exercise the exclusion")
+			}
+			rows[i].RawDataJSON = ""
+		}
+	}
+	if !reflect.DeepEqual(gotRange, wantRange) {
+		t.Errorf("ListHistoryByInstrumentRange = %+v, want %+v", gotRange, wantRange)
+	}
+	if !reflect.DeepEqual(gotBefore, wantBefore) {
+		t.Errorf("ListHistoryByInstrumentBefore = %+v, want %+v", gotBefore, wantBefore)
+	}
+}
