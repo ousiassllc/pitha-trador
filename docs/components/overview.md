@@ -44,7 +44,7 @@ static/
     ├── components/
     │   ├── price-chart/           pitha-price-chart.ts / bars.ts（1分足`Bar`と`foldTick`等の足の集約ヘルパー）/ chart-data.ts（系列データ・ペイン配置・代替テキストの純粋ヘルパー）/ chart-types.ts（応答・WebSocketメッセージの型）/ jst-time.ts（時間軸・クロスヘアのJST整形）
     │   ├── scanner-table/         pitha-scanner-table.ts / scanner-types.ts（`GET /api/v1/scanner`の応答型）/ scanner-view.ts（列定義・書式・配色・バッジの表示ヘルパー）/ scanner-contract.json（SSRフォールバックとLitの表示契約。Go側`scanner_table_contract_test.go`・`handler/scanner/scanner_test.go`とTS側`scanner-contract.test.ts`が共有する唯一の契約ファイル）
-    │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）
+    │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）/ calibration-styles.ts（Shadow DOM用スタイル`heatmapStyles`と`CHART_HEIGHT`。行数上限のため分離）
     │   ├── activity-feed/         pitha-activity-feed.ts / activity-feed-types.ts（応答型と定数）/ activity-feed-views.ts（Job Queues表・直近Kill Switchイベントの無状態テンプレート）
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
@@ -264,3 +264,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.68 | 2026-10-06 | §5.5（`lit.md`）`pitha-activity-feed`の`resync`受信時のスナップショット再取得（#536）、§5.4の`pitha-kill-switch-panel`の操作世代カウンタ・`onReconnect`の分離・live region（#556, #558, #561）、§6`lib/api.ts`の`ApiError`導入と未使用の`put`/`patch`/`del`の削除（#559, #563）を履歴に記録。SSR時刻表示の統一対象（1.62）に`UpdatePanel`の最終確認時刻を追加 | issue #536, #556, #558, #559, #561, #563, #640 |
 | 1.69 | 2026-10-06 | §4「htmxの動的実行無効化」に`includeIndicatorStyles:false`（CSPの`style-src`回避と、インジケーターをTailwindの`.htmx-request`バリアントで自前スタイルする規約）を追記し、`shell.templ`の`htmxConfig`の全キーと一致させた | issue #413, #641 |
 | 1.70 | 2026-10-07 | `ScanPanel`のCSVダウンロードリンク`scan-export`（`GET /api/v1/scanner/scan/export`）と、§2ツリーの`handler/scanner/scanner_export.go`・`handler/settings/settings_hints.go`を追記 | issue #661 |
+| 1.71 | 2026-10-07 | §2のツリーの`calibration-heatmap/`に実在する`calibration-styles.ts`（Shadow DOM用スタイル`heatmapStyles`と`CHART_HEIGHT`。行数上限のためコンポーネントから分離。#636で追加）を追記 | issue #664 |
