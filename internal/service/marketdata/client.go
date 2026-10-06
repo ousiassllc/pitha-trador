@@ -75,8 +75,19 @@ type Client struct {
 	mu          sync.RWMutex
 	token       string
 	tokenStatus TokenStatus
+	// authFailure is the rejection that opened the information-API auth
+	// circuit breaker (tokenrefresh.go), nil while closed; authRetryAt is
+	// when the next probe call may pass. Both are guarded by mu.
+	authFailure error
+	authRetryAt time.Time
 	reissueMu   sync.Mutex // serializes reactive reissues (tokenrefresh.go); guards lastReissue
 	lastReissue time.Time
+
+	// regMu guards pinned (PUSH-registered) and transient (REST-registered)
+	// symbols; see rotation.go.
+	regMu     sync.Mutex
+	pinned    map[RegisterSymbol]struct{}
+	transient map[RegisterSymbol]struct{}
 }
 
 // NewClient returns a Client configured by cfg. The returned Client holds
@@ -156,6 +167,15 @@ func (c *Client) issueToken(ctx context.Context) (string, error) {
 func (c *Client) TokenStatus() TokenStatus {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if c.tokenStatus.Failed() {
+		return c.tokenStatus
+	}
+	// /token succeeds yet the information APIs keep rejecting the fresh token
+	// (auth circuit breaker open, tokenrefresh.go).
+	var api *APIError
+	if errors.As(c.authFailure, &api) {
+		return TokenStatus{Issue: TokenIssueRejected, Code: api.Code}
+	}
 	return c.tokenStatus
 }
 

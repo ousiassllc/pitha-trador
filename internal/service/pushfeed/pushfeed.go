@@ -18,9 +18,12 @@ import (
 )
 
 const (
-	// MaxRegisterSymbols is kabuステーションAPI's cap on simultaneously
-	// registered PUSH symbols (kabu_STATION_API.yaml /register: 50).
-	MaxRegisterSymbols = 50
+	// MaxRegisterSymbols is how many symbols are registered for PUSH. kabu
+	// station caps the API登録銘柄リスト at 50 across PUSH and REST, and every
+	// REST /board or /symbol request registers its symbol too, so
+	// marketdata.RestRotationSlots stay free for the REST poll to rotate
+	// through (marketdata.Client.withRestSlot).
+	MaxRegisterSymbols = marketdata.MaxRegisteredSymbols - marketdata.RestRotationSlots
 	// BoardMaxAge is how old a PUSH board may be to be preferred over a
 	// REST poll.
 	BoardMaxAge = 30 * time.Second
@@ -38,6 +41,7 @@ type Universe interface {
 // (*marketdata.Client).
 type Broker interface {
 	RegisterSymbols(ctx context.Context, symbols []marketdata.RegisterSymbol) (marketdata.RegisterSuccess, error)
+	UnregisterAll(ctx context.Context) error
 	GetBoard(ctx context.Context, symbol string, exchange int) (marketdata.Board, error)
 	Status() *marketdata.StatusTracker
 }
@@ -61,7 +65,10 @@ func New(universe Universe, broker Broker, url string, exchange int) *Feed {
 
 // RegisterUniverse registers the active stocks (capped at
 // MaxRegisterSymbols) so their updates arrive over PUSH. Symbols beyond
-// the cap are served by the REST poll only.
+// the cap are served by the REST poll only, which rotates through the
+// remaining registration slots. The registration list is emptied first:
+// kabu station keeps registrations across app restarts, and stale ones
+// would leave no slot for the REST poll (4002006).
 func (f *Feed) RegisterUniverse(ctx context.Context) error {
 	stocks, err := f.Universe.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
@@ -78,6 +85,9 @@ func (f *Feed) RegisterUniverse(ctx context.Context) error {
 	symbols := make([]marketdata.RegisterSymbol, len(stocks))
 	for i, inst := range stocks {
 		symbols[i] = marketdata.RegisterSymbol{Symbol: inst.Symbol, Exchange: f.Exchange}
+	}
+	if err := f.Broker.UnregisterAll(ctx); err != nil {
+		return fmt.Errorf("pushfeed: unregister all symbols: %w", err)
 	}
 	if _, err := f.Broker.RegisterSymbols(ctx, symbols); err != nil {
 		return fmt.Errorf("pushfeed: register symbols: %w", err)

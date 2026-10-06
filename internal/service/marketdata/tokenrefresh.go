@@ -27,8 +27,20 @@ func isTokenRejected(err error) bool {
 // (issue #621): on 401 / 4001009 it reissues the token (single-flight, see
 // refreshRejectedToken) and retries the request once with the new token.
 // If the reissue fails, or yields nothing new, the original error is returned.
+//
+// While every token keeps being rejected, an auth circuit breaker (see
+// enterInfo) fails calls immediately instead of spending one rate-limited
+// request per symbol: a full scan over thousands of symbols would
+// otherwise crawl for minutes without a single result.
 func (c *Client) doInfo(ctx context.Context, method, path, token string, body, out any) error {
+	if err := c.enterInfo(); err != nil {
+		return err
+	}
 	err := c.doInfoOnce(ctx, method, path, token, body, out)
+	if err == nil {
+		c.clearAuthFailure()
+		return nil
+	}
 	if !isTokenRejected(err) {
 		return err
 	}
@@ -37,9 +49,55 @@ func (c *Client) doInfo(ctx context.Context, method, path, token string, body, o
 		if !errors.Is(refreshErr, errReissueThrottled) {
 			slog.Error("marketdata: token reissue after rejection failed", "path", path, "error", refreshErr)
 		}
+		c.tripAuthFailure(err)
 		return err
 	}
-	return c.doInfoOnce(ctx, method, path, fresh, body, out)
+	err = c.doInfoOnce(ctx, method, path, fresh, body, out)
+	switch {
+	case err == nil:
+		c.clearAuthFailure()
+	case isTokenRejected(err):
+		slog.Error("marketdata: freshly issued token is also rejected; kabu station accepts /token but refuses information APIs",
+			"path", path, "error", err)
+		c.tripAuthFailure(err)
+	}
+	return err
+}
+
+// authBreakerCooldown is how long information-API calls fail fast after a
+// freshly issued token was still rejected, before one call probes again.
+const authBreakerCooldown = 30 * time.Second
+
+// enterInfo gates an information-API call on the auth circuit breaker. It
+// returns the recorded rejection while the breaker is open. Once the
+// cooldown has elapsed it lets exactly one caller through as the probe
+// (re-arming the cooldown for everyone else); a successful call closes the
+// breaker (clearAuthFailure).
+func (c *Client) enterInfo() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.authFailure == nil {
+		return nil
+	}
+	now := c.limiter.Clock().Now()
+	if now.Before(c.authRetryAt) {
+		return c.authFailure
+	}
+	c.authRetryAt = now.Add(authBreakerCooldown)
+	return nil
+}
+
+func (c *Client) tripAuthFailure(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.authFailure = err
+	c.authRetryAt = c.limiter.Clock().Now().Add(authBreakerCooldown)
+}
+
+func (c *Client) clearAuthFailure() {
+	c.mu.Lock()
+	c.authFailure = nil
+	c.mu.Unlock()
 }
 
 // refreshRejectedToken returns a token newer than rejected. Concurrent
