@@ -83,7 +83,9 @@ export class PithaScannerTable extends LitElement {
   // empty list before loading is not mistaken for "no candidates".
   @state() private loaded = false;
   @state() private asOf: string | null = null;
-  @state() private sortKey: SortKey = 'symbol';
+  // null = server order (ScreenScore descending, same as the SSR fallback);
+  // set only once a header is clicked (docs/components/lit.md §5.2, issue #674).
+  @state() private sortKey: SortKey | null = null;
   @state() private sortDirection: SortDirection = 'asc';
   @state() private error: string | null = null;
   @state() private wsStatus: WsStatus = 'connecting';
@@ -150,6 +152,7 @@ export class PithaScannerTable extends LitElement {
 
   private sortedItems(): ScannerItem[] {
     const { sortKey, sortDirection } = this;
+    if (sortKey === null) return this.items;
     const factor = sortDirection === 'asc' ? 1 : -1;
     return [...this.items].sort(
       (a, b) => factor * compareValues(sortValue(a, sortKey), sortValue(b, sortKey)),

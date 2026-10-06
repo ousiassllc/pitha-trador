@@ -265,3 +265,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.69 | 2026-10-06 | §4「htmxの動的実行無効化」に`includeIndicatorStyles:false`（CSPの`style-src`回避と、インジケーターをTailwindの`.htmx-request`バリアントで自前スタイルする規約）を追記し、`shell.templ`の`htmxConfig`の全キーと一致させた | issue #413, #641 |
 | 1.70 | 2026-10-07 | `ScanPanel`のCSVダウンロードリンク`scan-export`（`GET /api/v1/scanner/scan/export`）と、§2ツリーの`handler/scanner/scanner_export.go`・`handler/settings/settings_hints.go`を追記 | issue #661 |
 | 1.71 | 2026-10-07 | §2のツリーの`calibration-heatmap/`に実在する`calibration-styles.ts`（Shadow DOM用スタイル`heatmapStyles`と`CHART_HEIGHT`。行数上限のためコンポーネントから分離。#636で追加）を追記 | issue #664 |
+| 1.72 | 2026-10-07 | §5.2（`lit.md`）`pitha-scanner-table`の行順の既定をSSRと同じサーバー順（ScreenScore降順）に統一し、列ソートはヘッダークリック後のみ（未選択時は`aria-sort="none"`）と明記 | issue #674 |
