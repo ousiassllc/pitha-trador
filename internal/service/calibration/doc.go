@@ -9,7 +9,7 @@
 // This package depends only on internal/domain and internal/repository
 // (internal/service/doc.go), and in turn internal/service/scheduler
 // depends only on internal/domain and internal/repository too (its own
-// doc.go) - so it constructs judgement.OutcomeLabelJobPayload directly
+// doc.go) - so it constructs calrepo.OutcomeLabelJobPayload directly
 // rather than importing this package, and Labeler.HandleJob decodes that
 // same repository-defined payload shape.
 package calibration

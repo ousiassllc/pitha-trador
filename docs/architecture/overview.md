@@ -83,7 +83,8 @@ pitha-trador/
 │   │   ├── sqlitedb/             # SQLite接続（`Open`）・golang-migrateマイグレーション・`BackupTo`・sqlmw計装ドライバ・DB書き込み失敗検知フック（`DBWriteFailures`）。`domain`とマイグレーションSQLの`go:embed`元`db`のみに依存するリーフ
 │   │   ├── market/               # instruments / market_snapshots（`InstrumentRepository`, `SnapshotRepository`）。`snapshotcols`を本番コードで使う
 │   │   ├── jobqueue/             # jobsテーブル・キュー名/状態定数（`Job`, `JobRepository`, `ErrJobNotFound`）
-│   │   ├── judgement/            # jev_decisions / calibration_outcomes / policy_proposals（`DecisionRepository`, `CalibrationRepository`, `ProposalRepository`）
+│   │   ├── judgement/            # jev_decisions / policy_proposals（`DecisionRepository`, `ProposalRepository`）
+│   │   ├── calibration/          # calibration_outcomes / calibration_label_skips（`CalibrationRepository`。`judgement`から分離: linterlyのディレクトリ2000行制限、issue #601）
 │   │   ├── trading/              # trade_signals / paper_orders / positions（`SignalRepository`, `OrderRepository`, `PositionRepository`）
 │   │   ├── system/               # kill_switch_events / runtime_settings / secrets（`KillSwitchRepository`, `RuntimeSettingsRepository`, `SecretsRepository`）
 │   │   ├── decisiontrade/        # クローズ済みポジションと開始時のJev判断の結合読み取り（FR-CAL-2の帯別PnL用。複数リソース群を跨ぐ読み取りの置き場。本番コードは`domain`のみに依存し、他テーブルはSQLで直接結合する）
@@ -133,6 +134,7 @@ pitha-trador/
 │   │   │   └── governorflow/      # テスト専用: Governor（`RunDaily`/`EvaluateProposal`/`ApplyApproved`/`TrackAndRollback`）の回帰テスト。linterlyの2000行/ディレクトリ制限のため`selfimprove`直下から分離（#450〜#452, #455）
 │   │   ├── notify/                # Slack Incoming Webhookによる即時アラート送信
 │   │   ├── updater/               # GitHub Releases自動アップデート（検知・安全ゲート・検証、desktopのみ配線、§9）
+│   │   │   ├── tempcleanup/       # 更新後に残るインストーラー一時ディレクトリの起動時掃除（`CleanupStale`、issue #590）。`updater`と`cmd/desktop`から使うリーフ
 │   │   │   └── checkflow/         # テスト専用: ダウンロード堅牢化・Status分類のテスト。`updater`の行数上限のため分離（#398）
 │   │   ├── activityfeed/          # jobs/jev_decisions/kill_switch_events集約の読み取り専用フィード（System Activity Log向け、§12）
 │   │   ├── insight/               # 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）
@@ -149,6 +151,7 @@ pitha-trador/
 │   │   ├── router.go              # New（Gin Engine組み立て）
 │   │   ├── router_middleware.go   # middlewareの適用順
 │   │   ├── router_routes.go       # ルート登録
+│   │   ├── router_noroute.go      # 未定義パス・メソッドの404（`/api/v1`はproblem+json、ページはErrorPage、HTMXはトースト、issue #605）
 │   │   ├── static.go              # 静的アセット配信（go:embed、`PITHA_STATIC_DIR`によるディスク上書き）
 │   │   ├── ws_listener.go         # `WebSocketOnly`（`/ws/...`のUpgradeだけを通すラッパー。desktopがWails AssetServerと別のloopbackリスナーで使う）
 │   │   ├── analysisflow/          # テスト専用: 分析系ルート（ポリシー提案）の回帰テスト（行数上限のためrouterから分離、#248）
@@ -207,7 +210,7 @@ pitha-trador/
 
 | パッケージ | 分割方針 | 依存方向 |
 |-----------|---------|---------|
-| `repository`（#244） | テーブルの結合度でリソース群に分ける（`market`/`jobqueue`/`judgement`/`trading`/`system`）。各リポジトリ型はそのテーブルを所有する群に置き、群内のリポジトリ実装のファイル名は`*_repo.go`を維持する（`jobqueue`の`job_queries.go`等の補助クエリと、各群の`doc.go`（パッケージコメント）は例外）。`formatTime`/`nullable*`/`rowScanner`/`execer`/`sqlExecutor`は公開名（`FormatTime`/`Nullable*`/`RowScanner`/`Execer`/`Executor`）にして`sqlutil`へ集約し、`db.go`・`dbmw.go`は`sqlitedb`へ。既存の`decisiontrade`/`snapshotcols`は現位置を維持 | 群 → `sqlutil`・`domain`（`market`のみ`snapshotcols`も可）。`sqlitedb` → `domain`・マイグレーションSQLの`go:embed`元`db`。群同士・本番コードでの群→`sqlitedb`は禁止（テストのDB準備のみ`_test.go`から`sqlitedb.Open`可。`decisiontrade`・`snapshotcols`のテストは前節の例外）。`system`のみ`internal/config`も可 |
+| `repository`（#244） | テーブルの結合度でリソース群に分ける（`market`/`jobqueue`/`judgement`/`calibration`/`trading`/`system`）。各リポジトリ型はそのテーブルを所有する群に置き、群内のリポジトリ実装のファイル名は`*_repo.go`を維持する（`jobqueue`の`job_queries.go`等の補助クエリと、各群の`doc.go`（パッケージコメント）は例外）。`formatTime`/`nullable*`/`rowScanner`/`execer`/`sqlExecutor`は公開名（`FormatTime`/`Nullable*`/`RowScanner`/`Execer`/`Executor`）にして`sqlutil`へ集約し、`db.go`・`dbmw.go`は`sqlitedb`へ。既存の`decisiontrade`/`snapshotcols`は現位置を維持 | 群 → `sqlutil`・`domain`（`market`のみ`snapshotcols`も可）。`sqlitedb` → `domain`・マイグレーションSQLの`go:embed`元`db`。群同士・本番コードでの群→`sqlitedb`は禁止（テストのDB準備のみ`_test.go`から`sqlitedb.Open`可。`decisiontrade`・`snapshotcols`のテストは前節の例外）。`system`のみ`internal/config`も可 |
 | `web/handler`（#245・#370） | 画面/APIの責務別に`symbol`/`system`/`settings`/`activity`/`scanner`/`performance`/`calibration`/`proposals`/`swagger`へ分け、直下は`doc.go`のみ（直下に残していた一覧・分析系ハンドラも#370で`web/handler`が2000行上限を超えたため分割）。`settings/`のテストは表示・保存・削除・セットアップの観点でファイルを分割している（共通のフェイクは`testutil_test.go`）。`action_error.go`・`ws_poll.go`（と各WebSocketハンドラが共用していた`writeJSON`）は`shared`へ移し公開名にした（全サブパッケージ・`router`が共用。`RespondActionError`/`RespondPageError`/`PollWebSocket`/`WriteJSON`/`RenderErrorPage`）。クライアント切断で即終了する回帰テスト（#127）は各WebSocketハンドラを所有するパッケージ（`scanner`・`symbol`・`system`）が個別に持ち、テストが兄弟を跨がない | 各サブパッケージ → `service`・`domain`・`shared`・Templ（`web/atoms`・`web/pages`等）。基盤パッケージ`internal/config`（`symbol`・`settings`）・`internal/version`（`system`）も参照する。`shared` → Templ のみ（handler・`service`に依存しない）。`repository/**`は不可。サブパッケージ同士・`handler`直下への逆import禁止。`router` → `shared`・全サブパッケージ |
 | `bootstrap`（#246） | 直下は組み立て役（`Run`/`State`/`Services`/`BuildServices`/`Start`/`Stop`、`LoadSecrets`/`RouterOptions`（desktop/server共通のsecrets読込とrouterオプション列。#372）、起動時の銘柄マスタCSV同期`syncUniverse`（#389））のみ。ジョブ/ループ単位の責務を`candidates`/`marketdatajob`/`backtestsource`へ切り出す（既存の`heldposition`/`paperexec`/`alerts`/`universe`と同格）。切り出し先は`Services`ではなく必要な依存だけをフィールドに持つ構造体（`candidates.Refresher`・`marketdatajob.Handler`・`backtestsource.Source`）に対するメソッドとして実装し、直下の`BuildServices`が引数で組み立てる（`marketdatajob.BoardSource`のような小さなインターフェース経由で依存を受ける）。テストは各サブパッケージ内で最小のフェイク/実DBを組み立て、`Services`全体には依存しない。直下のテストは`BuildServices`の配線検証のみ | 直下 → 全サブパッケージ・`service`・`repository`・`sqlitedb`・`internal/router`・`internal/web/handler/{scanner,symbol}`（`router_options.go`のみ）。サブパッケージ → `service`・`domain`・`repository`群と、基盤パッケージ`internal/config`（`candidates`・`marketdatajob`・`alerts`）・`internal/safego`（`candidates`・`heldposition`）のみ（`universe`は`domain`のみ）。親・兄弟への依存禁止 |
 | `service/risk`（#247） | `Engine`のメソッド群（`check.go`のCheck・`state.go`の状態遷移・`losslimit.go`の損失上限・`monitor.go`の定期監視・`warning.go`の日次損失警告・`autoresume.go`・`baseline.go`・`session.go`・`settings.go`・`sizing.go`）は`Engine`のunexported状態を共有するため**分割せず**`risk`直下に保つ（本番コードのみで約1.6k行＝ディレクトリ上限内。直下に`_test.go`は置かない）。行数上限は、`package risk_test`の外部テスト（旧940行）を`killswitchflow`に倣ってテスト専用サブパッケージへ移して満たした（`checkflow`=`Engine.Check`・`monitorflow`=定期監視・日次損失警告・Notifier）。各テスト専用サブパッケージは`helpers_test.go`に自前のフェイク（`fakePortfolio`/`fakeCloser`/`fakeNotifier`等）とテストDB準備（`sqlitedb.Open`）を持ち、兄弟テストパッケージをimportしない | テスト専用サブパッケージ → `risk`（公開API）・`domain`・`config`・`repository/**`（`Engine`へ渡す依存の組み立てとテストDB準備のみ）。本番の依存方向（`risk` → `domain`・`repository/**`・`config`）は変更しない |
@@ -264,7 +267,7 @@ handler → service → repository → domain
 | Headless Server | Wailsに依存しない`net/http`エントリーポイント（Updater非配線。§9） | `cmd/server` |
 | Setup Guard Middleware | 必須認証情報（JEV_API_KEY/KABU_API_PASSWORD）が未設定の間、`/setup`・`POST`/`DELETE /settings/:key`・`/static/...`以外の全リクエストを`/setup`へ誘導する（ページ遷移は302、HTMXは`HX-Redirect`、`/api/v1`は503 JSON、WebSocketは403。§10.5、FR-SETUP-1） | `internal/web/middleware` |
 | API Error Formatter | `/api/v1` のエラーボディ整形。`registerAPI`から`apierror.Install()`で`huma.NewError`を上書きし、4xxはバリデーション詳細を`errors[]`に残し、5xxは固定メッセージのみ返して原因を`slog`へ記録する（`api/endpoints.md` §7、issue #215） | `internal/web/apierror` |
-| Repository | SQLiteの永続化（テーブルを所有するリソース群`market`/`jobqueue`/`judgement`/`trading`/`system`、共有ヘルパー`sqlutil`・接続`sqlitedb`、複数リソースの読み取り`decisiontrade`・列対応表`snapshotcols`。§3） | `internal/repository`（サブパッケージ群） |
+| Repository | SQLiteの永続化（テーブルを所有するリソース群`market`/`jobqueue`/`judgement`/`calibration`/`trading`/`system`、共有ヘルパー`sqlutil`・接続`sqlitedb`、複数リソースの読み取り`decisiontrade`・列対応表`snapshotcols`。§3） | `internal/repository`（サブパッケージ群） |
 | Web (HTMX/Templ/Lit) | UI提供（`components/overview.md`）。画面/APIハンドラは責務別サブパッケージ: `symbol`（Symbol List/Detail/Close・`/ws/symbols/:symbol`）、`system`（System状態・Kill Switch・`/ws/system`・自動アップデートUI・エラーログのダウンロード`/api/v1/logs/errors`）、`settings`（`/settings`・`/setup`画面。Setup Guard Middlewareの誘導先）、`activity`（Activity Feed画面/API）、`shared`（共通ヘルパー） | `internal/web`（`handler/{shared,symbol,system,settings,activity}`） |
 
 ## 5〜13. 分割章

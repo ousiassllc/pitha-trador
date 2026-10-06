@@ -1,4 +1,4 @@
-package judgement_test
+package calibration_test
 
 import (
 	"context"
@@ -7,16 +7,17 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 )
 
 // newCalibrationFixtures opens a fresh test database with one instrument
 // already created, for calibration_repo_test.go's fixtures.
-func newCalibrationFixtures(t *testing.T) (*judgement.CalibrationRepository, *judgement.DecisionRepository, int64) {
+func newCalibrationFixtures(t *testing.T) (*calibration.CalibrationRepository, *judgement.DecisionRepository, int64) {
 	t.Helper()
 	db := newTestDB(t)
 	instID := insertInstrument(t, db, "7203", "トヨタ自動車")
-	return judgement.NewCalibrationRepository(db), judgement.NewDecisionRepository(db), instID
+	return calibration.NewCalibrationRepository(db), judgement.NewDecisionRepository(db), instID
 }
 
 // insertTraderDecision inserts a decision_type=trader jev_decisions row.

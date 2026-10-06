@@ -10,8 +10,8 @@ import (
 
 	"github.com/robfig/cron/v3"
 
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
-	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
@@ -40,7 +40,7 @@ type Scheduler struct {
 	// outcomeLabels is optional (WithOutcomeLabelSource): a nil value
 	// makes EnqueueOutcomeLabeling a no-op and skips Start's
 	// outcome-labeling trigger.
-	outcomeLabels *judgement.CalibrationRepository
+	outcomeLabels *calrepo.CalibrationRepository
 	// heartbeatChecker is optional (WithHeartbeatChecker): a nil value
 	// makes CheckOperatorHeartbeat a no-op, the same deferral
 	// outcomeLabels above already documents.
@@ -101,8 +101,8 @@ func WithPollInterval(d time.Duration) Option {
 
 // WithOutcomeLabelSource enables EnqueueOutcomeLabeling and Start's
 // 1-minute outcome-labeling enqueue trigger (functional.md FR-CAL-4).
-// Unset by default. *judgement.CalibrationRepository implements this directly.
-func WithOutcomeLabelSource(repo *judgement.CalibrationRepository) Option {
+// Unset by default. *calrepo.CalibrationRepository implements this directly.
+func WithOutcomeLabelSource(repo *calrepo.CalibrationRepository) Option {
 	return func(s *Scheduler) { s.outcomeLabels = repo }
 }
 

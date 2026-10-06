@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 )
@@ -23,7 +24,7 @@ const DefaultK = 5
 type Service struct {
 	db          *sql.DB
 	decisions   *judgement.DecisionRepository
-	calibration *judgement.CalibrationRepository
+	calibration *calrepo.CalibrationRepository
 	snapshots   *market.SnapshotRepository
 }
 
@@ -34,7 +35,7 @@ type Service struct {
 // hits into SimilarCase summaries via decisions/snapshots, joined with
 // db's calibration_outcomes (FR-RAG-2/3).
 func NewService(db *sql.DB, decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository) *Service {
-	return &Service{db: db, decisions: decisions, calibration: judgement.NewCalibrationRepository(db), snapshots: snapshots}
+	return &Service{db: db, decisions: decisions, calibration: calrepo.NewCalibrationRepository(db), snapshots: snapshots}
 }
 
 // IndexSnapshot standardizes in and writes it to market_snapshot_vectors

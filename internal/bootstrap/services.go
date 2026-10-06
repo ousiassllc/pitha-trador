@@ -20,6 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -56,7 +57,7 @@ type Services struct {
 	Jobs        *jobqueue.JobRepository
 	Positions   *trading.PositionRepository
 	Orders      *trading.OrderRepository
-	Outcomes    *judgement.CalibrationRepository
+	Outcomes    *calrepo.CalibrationRepository
 	KillSwitch  *system.KillSwitchRepository
 	Settings    *system.RuntimeSettingsRepository
 	Proposals   *judgement.ProposalRepository

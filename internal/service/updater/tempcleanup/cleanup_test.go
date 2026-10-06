@@ -1,4 +1,4 @@
-package updater_test
+package tempcleanup_test
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/updater"
+	"github.com/ousiassllc/pitha-trador/internal/service/updater/tempcleanup"
 )
 
 func mkDir(t *testing.T, root, name string, modTime time.Time) string {
@@ -29,7 +29,7 @@ func exists(path string) bool {
 	return err == nil
 }
 
-func TestCleanupStaleDownloads_RemovesOnlyOlderUpdateDirs(t *testing.T) {
+func TestCleanupStale_RemovesOnlyOlderUpdateDirs(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp) // os.TempDir on Unix
 	t.Setenv("TMP", tmp)    // ... and on Windows
@@ -50,9 +50,9 @@ func TestCleanupStaleDownloads_RemovesOnlyOlderUpdateDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	removed, err := updater.CleanupStaleDownloads(startedAt)
+	removed, err := tempcleanup.CleanupStale(startedAt)
 	if err != nil {
-		t.Fatalf("CleanupStaleDownloads: %v", err)
+		t.Fatalf("CleanupStale: %v", err)
 	}
 	if removed != 2 {
 		t.Errorf("removed = %d, want 2", removed)
@@ -69,13 +69,13 @@ func TestCleanupStaleDownloads_RemovesOnlyOlderUpdateDirs(t *testing.T) {
 	}
 }
 
-func TestCleanupStaleDownloads_NothingToRemove(t *testing.T) {
+func TestCleanupStale_NothingToRemove(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
 	t.Setenv("TMP", tmp)
 	t.Setenv("TEMP", tmp)
-	removed, err := updater.CleanupStaleDownloads(time.Now())
+	removed, err := tempcleanup.CleanupStale(time.Now())
 	if err != nil || removed != 0 {
-		t.Errorf("CleanupStaleDownloads = %d, %v; want 0, nil", removed, err)
+		t.Errorf("CleanupStale = %d, %v; want 0, nil", removed, err)
 	}
 }

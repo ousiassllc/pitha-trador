@@ -76,7 +76,7 @@ type Result struct {
 	// whenever Ready. It lives in a per-download temp directory that is
 	// not removed once the installer has run (a running installer cannot
 	// delete itself on Windows): the next startup removes it via
-	// CleanupStaleDownloads.
+	// tempcleanup.CleanupStale.
 	InstallerPath string
 }
 

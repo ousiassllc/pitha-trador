@@ -10,6 +10,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
+	"github.com/ousiassllc/pitha-trador/internal/service/updater/tempcleanup"
 )
 
 // App is the Wails-bound application struct. It holds the Wails runtime
@@ -86,11 +87,11 @@ func (a *App) startup(ctx context.Context) {
 }
 
 // cleanupStaleUpdateDownloads removes the installer directories a previous
-// self-update left in the temp directory (updater.CleanupStaleDownloads;
+// self-update left in the temp directory (tempcleanup.CleanupStale;
 // the installer cannot delete itself, so the restarted app does). A failure
 // is only logged: it must never keep the app from starting.
 func cleanupStaleUpdateDownloads(startedAt time.Time) {
-	removed, err := updater.CleanupStaleDownloads(startedAt)
+	removed, err := tempcleanup.CleanupStale(startedAt)
 	if err != nil {
 		slog.Warn("desktop: clean up stale update downloads failed", "removed", removed, "error", err)
 		return
