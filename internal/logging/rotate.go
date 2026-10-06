@@ -18,13 +18,19 @@ const (
 // (also Archiver's own parsing format, archive.go).
 const dailyFileLayout = "2006-01-02"
 
-// RotatingWriter is an io.Writer that writes into dir/<YYYY-MM-DD>.log,
+// errorFileSuffix distinguishes the ERROR-only log file
+// (<YYYY-MM-DD>-error.log) from the full log (<YYYY-MM-DD>.log) in the
+// same directory.
+const errorFileSuffix = "-error"
+
+// RotatingWriter is an io.Writer that writes into dir/<YYYY-MM-DD><suffix>.log,
 // switching to a new file the moment the UTC calendar date changes
 // (non-functional.md §5 "ログは日次ローテーションし"). It is safe for
 // concurrent use.
 type RotatingWriter struct {
-	dir string
-	now func() time.Time
+	dir    string
+	suffix string // "" for the full log, errorFileSuffix for the ERROR-only log
+	now    func() time.Time
 
 	mu   sync.Mutex
 	day  string
@@ -37,13 +43,24 @@ type RotatingWriter struct {
 // left at 0755 by an older version) because logs may contain order and
 // account details (issue #334).
 func NewRotatingWriter(dir string) (*RotatingWriter, error) {
+	return newRotatingWriter(dir, "")
+}
+
+// NewErrorRotatingWriter is NewRotatingWriter for the ERROR-only log file
+// dir/<YYYY-MM-DD>-error.log (see NewSplit). It shares the directory with
+// the full log, so Archiver compresses and ages both alike.
+func NewErrorRotatingWriter(dir string) (*RotatingWriter, error) {
+	return newRotatingWriter(dir, errorFileSuffix)
+}
+
+func newRotatingWriter(dir, suffix string) (*RotatingWriter, error) {
 	if err := os.MkdirAll(dir, logDirMode); err != nil {
 		return nil, fmt.Errorf("logging: create log directory %q: %w", dir, err)
 	}
 	if err := os.Chmod(dir, logDirMode); err != nil {
 		return nil, fmt.Errorf("logging: restrict log directory %q: %w", dir, err)
 	}
-	return &RotatingWriter{dir: dir, now: time.Now}, nil
+	return &RotatingWriter{dir: dir, suffix: suffix, now: time.Now}, nil
 }
 
 // Write implements io.Writer, opening (or rolling over to) today's log
@@ -65,7 +82,7 @@ func (w *RotatingWriter) rotateLocked(day string) error {
 	if w.file != nil {
 		_ = w.file.Close()
 	}
-	f, err := os.OpenFile(filepath.Join(w.dir, day+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, logFileMode)
+	f, err := os.OpenFile(filepath.Join(w.dir, day+w.suffix+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, logFileMode)
 	if err != nil {
 		return fmt.Errorf("logging: open log file for %s: %w", day, err)
 	}

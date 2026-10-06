@@ -154,3 +154,20 @@ func assertMode(t *testing.T, path string, want os.FileMode) {
 		t.Errorf("%q mode = %o, want %o", path, got, want)
 	}
 }
+
+func TestErrorRotatingWriter_WritesDateErrorLogFile(t *testing.T) {
+	dir := t.TempDir()
+	w, err := NewErrorRotatingWriter(dir)
+	if err != nil {
+		t.Fatalf("NewErrorRotatingWriter: %v", err)
+	}
+	defer func() { _ = w.Close() }()
+	w.now = func() time.Time { return time.Date(2026, 10, 6, 1, 0, 0, 0, time.UTC) }
+
+	if _, err := w.Write([]byte("e\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "2026-10-06-error.log")); err != nil {
+		t.Errorf("expected 2026-10-06-error.log: %v", err)
+	}
+}

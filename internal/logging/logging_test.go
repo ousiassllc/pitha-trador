@@ -48,3 +48,28 @@ func TestNew_RespectsLevel(t *testing.T) {
 		t.Fatal("Warn was not logged at the configured Warn level")
 	}
 }
+
+func TestNewSplit_ErrorsGoToBothSinksOthersOnlyToFullLog(t *testing.T) {
+	var all, errs bytes.Buffer
+	logger := logging.NewSplit(&all, &errs, slog.LevelInfo).With("component", "x")
+
+	logger.Debug("below level")
+	logger.Info("an info", "k", 1)
+	logger.Warn("a warning")
+	logger.Error("an error", "error", "boom")
+
+	for _, msg := range []string{"an info", "a warning", "an error"} {
+		if !strings.Contains(all.String(), msg) {
+			t.Errorf("full log lacks %q:\n%s", msg, all.String())
+		}
+	}
+	if strings.Contains(all.String(), "below level") {
+		t.Errorf("full log contains a record below its level:\n%s", all.String())
+	}
+	if !strings.Contains(errs.String(), "an error") || !strings.Contains(errs.String(), `"component":"x"`) {
+		t.Errorf("error log lacks the ERROR record with its With-attrs:\n%s", errs.String())
+	}
+	if strings.Contains(errs.String(), "an info") || strings.Contains(errs.String(), "a warning") {
+		t.Errorf("error log contains non-ERROR records:\n%s", errs.String())
+	}
+}

@@ -16,9 +16,9 @@ import (
 const DefaultRetentionDays = 30
 
 // Archiver gzip-compresses (and removes the plaintext original of) every
-// dir/<YYYY-MM-DD>.log file - RotatingWriter's own naming convention -
-// whose date is older than RetentionDays, leaving a
-// "<YYYY-MM-DD>.log.gz" file in its place.
+// dir/<YYYY-MM-DD>.log and dir/<YYYY-MM-DD>-error.log file - RotatingWriter's
+// own naming convention - whose date is older than RetentionDays, leaving a
+// "<name>.log.gz" file in its place.
 // internal/bootstrap wires an Archiver over the directory a RotatingWriter
 // writes to via scheduler.WithLogRotator; the Scheduler then runs Rotate as
 // the "log_rotation" task of its maintenance.Runner (once per day, on start
@@ -70,7 +70,7 @@ func (a *Archiver) Archive(ctx context.Context) error {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".log") {
 			continue
 		}
-		day, err := time.Parse(dailyFileLayout, strings.TrimSuffix(entry.Name(), ".log"))
+		day, err := time.Parse(dailyFileLayout, strings.TrimSuffix(strings.TrimSuffix(entry.Name(), ".log"), errorFileSuffix))
 		if err != nil {
 			continue
 		}

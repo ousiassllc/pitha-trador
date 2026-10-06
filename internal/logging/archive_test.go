@@ -78,3 +78,25 @@ func TestArchiver_IgnoresNonLogFiles(t *testing.T) {
 		t.Errorf("already-archived file should have been left untouched: %v", err)
 	}
 }
+
+func TestArchiver_CompressesOldErrorLogsToo(t *testing.T) {
+	dir := t.TempDir()
+	writeLogFile(t, dir, "2026-08-01-error.log", "old error\n")
+	writeLogFile(t, dir, "2026-09-20-error.log", "recent error\n")
+
+	a := NewArchiver(dir, 30)
+	a.now = func() time.Time { return time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC) }
+	if err := a.Archive(context.Background()); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "2026-08-01-error.log.gz")); err != nil {
+		t.Errorf("old error log was not archived: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "2026-08-01-error.log")); !os.IsNotExist(err) {
+		t.Errorf("old error log was not removed after archival: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "2026-09-20-error.log")); err != nil {
+		t.Errorf("recent error log should remain: %v", err)
+	}
+}
