@@ -110,6 +110,7 @@ graph TD
 | ER / データモデル | `docs/architecture/er.md`（テーブル定義は `docs/architecture/er/` に分割） | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes/calibration_label_skips/kill_switch_events/kill_switch_resolutions/runtime_settings/secrets/policy_proposals/jobs のSQLiteテーブル定義とsqlite-vecベクトルインデックス |
 | API 仕様 | `docs/api/endpoints.md` | Huma JSON API（/api/v1/...）と HTMX ページ/アクションルートの仕様 |
 | コンポーネント設計 | `docs/components/overview.md`（§5〜§9は `docs/components/lit.md`・`runtime.md` に分割） | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
+| 環境構築 | `docs/environment/setup.md`（CI/CDは `docs/environment/ci.md`、改訂履歴は `docs/environment/setup/history.md` に分割） | 開発環境・必要ツール・環境変数・銘柄マスタ投入・Makefile・Lint/Format/Linterly/Git Hooks・Swagger/OpenAPI・CI/CD |
 
 ## マイルストーン / リリース計画
 
@@ -163,3 +164,4 @@ graph TD
 | 1.4 | 2026-10-03 | スコープのFast Screener候補数を「50〜200」から「上位N件（既定`top_n=20`）」へ訂正 | issue #327 |
 | 1.5 | 2026-10-04 | スコープの画面一覧に System Activity Log・Settings・初回 Setup 画面を追記（`api/endpoints.md` §3 と整合）し、構成図の kabuステーション提供元表記を「三菱UFJ eスマート証券（旧auカブコム証券）」に統一 | issue #387 |
 | 1.6 | 2026-10-07 | スコープのFast Screener母集団を「全銘柄」から「監視銘柄」へ訂正（既定のランキング監視では最大45銘柄、`scan.full_scan_enabled: true`のときだけ全銘柄。FR-SCHED-9） | issue #673（#651/#653の方針転換への追随） |
+| 1.7 | 2026-10-07 | ドキュメントマップに環境構築ドキュメント（`environment/setup.md`・`ci.md`・`setup/history.md`）の行を追加 | issue #678 |
