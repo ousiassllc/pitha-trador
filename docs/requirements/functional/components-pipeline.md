@@ -47,7 +47,7 @@ screen_score =
 
 | 対象 | 周期 |
 |------|------|
-| 全体スキャン | 60秒ごと |
+| 全体スキャン | 60秒ごと（`scan.full_scan_enabled: true`のときのみ。**既定オフ**。既定ではランキング監視が毎分、監視銘柄だけを対象にする。FR-SCHED-7/9） |
 | 候補銘柄更新 | 15〜30秒ごと |
 | ポジション保有銘柄 | 5〜15秒ごと |
 
@@ -106,7 +106,7 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
   - `max_trade_loss_pct`はポジションサイジングで強制する（§4.8 FR-ENTRY-3）。1単元（100株）でもStop Lossに掛かった時の損失が上限を超える場合は`max_trade_loss_pct`理由で拒否する
   - `config/risk.yaml`の各上限は起動時（`LoadRisk`/`LoadRiskBytes`）に検証し、範囲外の項目があれば項目名（例: `paper.max_daily_loss_pct`）を含むエラーで起動を失敗させる（違反は全件まとめて報告する）。`risk.yaml`/`strategy.yaml`は未知のキーをキー名付きエラーとして拒否する（strict decode）。キーの欠落は0として読み込まれ、`max_daily_loss_pct`=0・`max_consecutive_losses`=0は損失も連敗も無い状態でKill Switchを発動し続けるため（手動再開しても1分周期の判定で即再発動する）、「上限なし」の意味では扱わない。`max_position_per_symbol_pct`/`max_total_exposure_pct`/`max_daily_loss_pct`/`max_trade_loss_pct`/`max_spread_bps`/`market_adverse_return_5m_pct`は正（>0）、`max_open_positions`/`max_same_direction_positions`/`max_consecutive_losses`は1以上、`cooldown_after_loss_minutes`/`force_flat_before_market_close_minutes`は0以上、`heartbeat_timeout_minutes`はPaperは0以上・Liveは1以上（0・欠落ではFR-RISK-6のデッドマンスイッチが無警告で無効化されるため）。`initial_capital`はこの検証の対象外（上記の未設定扱い）。Paperは常に検証し、Liveは`live`セクションに1つでも値が定義されている場合のみ検証する（`live`セクションが無い場合はLive未運用として未検証）
 - FR-RISK-2: 以下のいずれかでKill Switch（新規取引停止）を発動する: 日次損失上限到達、連敗上限到達、市場データ停止、Jev API連続失敗、Broker API異常、想定外ポジション発生、約定差異検知、DB書き込み失敗が一定回数継続、operator_heartbeat_timeout（Live専用、FR-RISK-6参照）、オペレーターによる手動Kill（`POST /api/v1/system/kill`。reason=`operator_manual`）
-- FR-RISK-3: Kill Switch発動時、必要に応じて保有ポジションをクローズする（強制決済の対象reasonは`architecture/overview/flows.md` §10.3。オペレーターの手動Killも UC-11 の「強制決済」として全ポジションをクローズする）
+- FR-RISK-3: Kill Switch発動時、必要に応じて保有ポジションをクローズする（強制決済の対象reasonは`architecture/overview/flows.md` §10.3。強制決済は通知（Wails・Slack）より先に実行し、Slackの遅延・不達で決済を遅らせない。通知は決済が失敗しても試行し、通知失敗はログのみ。オペレーターの手動Killも UC-11 の「強制決済」として全ポジションをクローズする）
 - FR-RISK-4: Kill SwitchはUI（Wailsアプリ）とサーバー内部処理の両方から操作可能とする。Phase 7の発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）
 - FR-RISK-5: Kill Switch発動・自動再開・解除を監査ログ（`kill_switch_events`・`kill_switch_resolutions`、追記専用）に記録する。通常のRisk拒否（`max_open_positions`・`max_total_exposure_pct`・`max_spread_bps`・`market_adverse_to_direction`・`max_trade_loss_pct`・`cooldown_after_loss`等、FR-RISK-1）は`Engine.Check`が`(false, reason)`を返すだけで`kill_switch_events`には書かず、理由を`trade_signals.reject_reason`（Policy Engineが保存）とslogに残す。手動Killは`operator_manual`として`kill_switch_events`に、手動Resumeによる解除は`resolved_by=manual`として`kill_switch_resolutions`に残る（Kill Switchを伴わない手動Pause/Resumeはslogの監査行`risk: audit: manual pause|resume`に記録する）
 - FR-RISK-6（dead-man's switch、Live専用）: Wailsアプリの認証済みUIリクエストを「操作者ハートビート」として記録する。立会時間中に`heartbeat_timeout_minutes`（初期値120分）を超えてハートビートが途絶した場合（最後のハートビートがその営業日の寄り付き前なら、寄り付き（9:00 JST）からの経過時間で判定する。立会時間外（昼休みを含む）は判定しない）、Risk Engineは自動的に新規エントリーを停止する（保有ポジションのExitルールは継続）。オペレーターがUIを再度操作した時点でこの停止理由は自動解消する（解消判定は「発動時刻より後の本物のハートビートが記録され、かつそれが`heartbeat_timeout_minutes`以内」であること。発動判定用の寄り付きクランプは解消判定には使わず、寄り付き前の時間帯でも操作者不在のまま自動解消しない）。画面が自動で発火する再同期・ポーリング・WebSocket再接続はオペレーターの操作ではないためハートビートに数えない（`architecture/overview/flows.md` §10.4）
