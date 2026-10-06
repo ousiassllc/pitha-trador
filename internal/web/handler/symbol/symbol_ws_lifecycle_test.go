@@ -25,7 +25,7 @@ func TestWebSocket_ClientCloseEndsHandlerPromptly(t *testing.T) {
 	const longInterval = time.Hour
 
 	h := symbol.NewSymbolHandler(
-		&fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastPrice: 1}},
+		&fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastPrice: 1, LastScanAt: timePtr(time.Now())}},
 		symbol.SymbolRiskParams{},
 	)
 	h.SetTickInterval(longInterval)
@@ -108,7 +108,7 @@ func dialSymbolWS(t *testing.T, provider symbol.SymbolProvider) (context.Context
 // would show "接続が切れています" although the connection is fine).
 func TestSymbolHandler_WebSocket_StateErrorKeepsConnectionOpen(t *testing.T) {
 	provider := &failingFirstSymbolProvider{
-		fakeSymbolProvider: &fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastPrice: 100}},
+		fakeSymbolProvider: &fakeSymbolProvider{state: execution.SymbolState{Symbol: "7203", LastPrice: 100, LastScanAt: timePtr(time.Now())}},
 		failures:           2,
 		err:                errors.New("database is locked"),
 	}

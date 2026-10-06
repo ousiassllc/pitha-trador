@@ -1,0 +1,50 @@
+package organisms
+
+import (
+	"fmt"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+)
+
+// JevPanel is Symbol Detail's "Jev判定" panel: the symbol's latest Jev
+// Trader decision, or empty signal badges when d is nil (Jev Trader has
+// not evaluated the symbol yet).
+templ JevPanel(d *domain.JevDecision) {
+	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" id="jev-panel" data-testid="jev-panel">
+		<h2 class="text-lg font-semibold text-slate-900">Jev判定</h2>
+		if d == nil {
+			@molecules.SignalBadgeGroup(nil, nil, nil)
+		} else {
+			@molecules.SignalBadgeGroup(d.Direction, d.Confidence, d.EntryQuality)
+			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+				<div>
+					<dt class="text-sm text-slate-500">Regime</dt>
+					<dd class="text-sm font-medium text-slate-900">{ derefString(d.Regime) }</dd>
+				</div>
+				<div>
+					<dt class="text-sm text-slate-500">Toxic Flow</dt>
+					<dd class="text-sm font-medium text-slate-900">{ derefPct(d.ToxicFlow) }</dd>
+				</div>
+				<div>
+					<dt class="text-sm text-slate-500">Liquidity Stress</dt>
+					<dd class="text-sm font-medium text-slate-900">{ derefPct(d.LiquidityStressed) }</dd>
+				</div>
+			</dl>
+		}
+	</section>
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return "—"
+	}
+	return *s
+}
+
+func derefPct(f *float64) string {
+	if f == nil {
+		return "—"
+	}
+	return fmt.Sprintf("%.2f", *f)
+}

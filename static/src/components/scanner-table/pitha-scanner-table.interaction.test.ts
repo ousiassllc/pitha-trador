@@ -1,12 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
-import {
-  createScannerTable,
-  FakeWebSocket,
-  flush,
-  installFakes,
-  item,
-  mount,
-} from './scanner-test-support';
+import { FakeWebSocket } from '../lib/ws-test-support';
+import { createScannerTable, flush, installFakes, item, mount } from './scanner-test-support';
 import { COLUMNS } from './scanner-view';
 
 installFakes();
@@ -90,7 +84,7 @@ describe('pitha-scanner-table interaction', () => {
     expect(el.querySelectorAll('thead th')[0].getAttribute('aria-sort')).toBe('none');
   });
 
-  test('keeps the as-of caption in the server format after a /ws/scanner push', async () => {
+  test('keeps the as-of caption in the JST SSR format after a /ws/scanner push', async () => {
     const { el } = await mount([item()]);
 
     FakeWebSocket.instances[0].emit('message', {
@@ -102,9 +96,9 @@ describe('pitha-scanner-table interaction', () => {
     });
     await el.updateComplete;
 
-    // Same offset as the SSR/API RFC 3339 value, no UTC "Z" conversion.
+    // Same JST label as the SSR caption; fractional seconds dropped.
     expect(el.querySelector('caption')?.textContent?.trim()).toBe(
-      'Scanner Dashboard — as of 2026-09-26T10:15:30+09:00',
+      'Scanner Dashboard — as of 2026-09-26 10:15:30 JST',
     );
   });
 

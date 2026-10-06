@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/version"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
 func render(t *testing.T, c templ.Component) string {
@@ -30,7 +31,7 @@ var htmxConfigRe = regexp.MustCompile(`<meta name="htmx-config" content="([^"]*)
 // generic-toast script clones `#toast-template`.
 func TestShells_WireHTMXErrorToasts(t *testing.T) {
 	for name, page := range map[string]templ.Component{
-		"Shell":      layout.Shell("t"),
+		"Shell":      layout.Shell("t", organisms.NavNone),
 		"SetupShell": layout.SetupShell("t"),
 	} {
 		out := render(t, page)
@@ -80,7 +81,7 @@ func TestShells_WireHTMXErrorToasts(t *testing.T) {
 // responseHandling wiring must survive.
 func TestShells_DisableHTMXDynamicExecution(t *testing.T) {
 	for name, page := range map[string]templ.Component{
-		"Shell":      layout.Shell("t"),
+		"Shell":      layout.Shell("t", organisms.NavNone),
 		"SetupShell": layout.SetupShell("t"),
 	} {
 		m := htmxConfigRe.FindStringSubmatch(render(t, page))
@@ -113,7 +114,7 @@ func TestShell_HeaderShowsVersionLinkedToSettingsUpdatePanel(t *testing.T) {
 	version.Version = "v1.2.3"
 	t.Cleanup(func() { version.Version = original })
 
-	out := render(t, layout.Shell("t"))
+	out := render(t, layout.Shell("t", organisms.NavNone))
 
 	if !regexp.MustCompile(`<a[^>]*id="header-version"[^>]*href="/settings#update-panel"[^>]*>v1\.2\.3</a>`).MatchString(out) {
 		t.Errorf("Shell header has no version link to /settings#update-panel; body=%s", out)
@@ -127,7 +128,7 @@ func TestShell_HeaderShowsVersionLinkedToSettingsUpdatePanel(t *testing.T) {
 // app's start page, ahead of the nav without displacing the version /
 // StatusDot / Kill Switch items that follow it.
 func TestShell_HeaderShowsLogoBeforeNav(t *testing.T) {
-	out := render(t, layout.Shell("t"))
+	out := render(t, layout.Shell("t", organisms.NavNone))
 
 	logoLink := regexp.MustCompile(`(?s)<a\b[^>]*\bid="header-logo"[^>]*>.*?</a>`).FindString(out)
 	if logoLink == "" {
@@ -159,5 +160,55 @@ func TestShell_HeaderShowsLogoBeforeNav(t *testing.T) {
 	}
 	if !regexp.MustCompile(`<nav\b[^>]*\baria-label="[^"]+"`).MatchString(out) {
 		t.Errorf("header <nav> must carry an aria-label; body=%s", out)
+	}
+}
+
+// The current page's nav link (and only it) carries aria-current="page"
+// (issue #631); pages outside the nav (the error page) mark nothing.
+func TestShell_NavMarksCurrentPage(t *testing.T) {
+	anchor := regexp.MustCompile(`<a\b[^>]*\bhref="(/[a-z]+)"[^>]*>`)
+	tests := []struct {
+		current organisms.NavItem
+		want    string
+	}{
+		{organisms.NavScanner, "/scanner"},
+		{organisms.NavPerformance, "/performance"},
+		{organisms.NavCalibration, "/calibration"},
+		{organisms.NavActivity, "/activity"},
+		{organisms.NavSettings, "/settings"},
+		{organisms.NavNone, ""},
+	}
+	for _, tt := range tests {
+		out := render(t, layout.Shell("t", tt.current))
+		nav := regexp.MustCompile(`(?s)<nav\b.*?</nav>`).FindString(out)
+		var marked []string
+		for _, m := range anchor.FindAllStringSubmatch(nav, -1) {
+			if strings.Contains(m[0], `aria-current="page"`) {
+				marked = append(marked, m[1])
+			}
+		}
+		switch {
+		case tt.want == "" && len(marked) != 0:
+			t.Errorf("current=%q: marked %v, want none", tt.current, marked)
+		case tt.want != "" && (len(marked) != 1 || marked[0] != tt.want):
+			t.Errorf("current=%q: marked %v, want only %s; nav=%s", tt.current, marked, tt.want, nav)
+		}
+	}
+}
+
+// The three banner frames share one placement convention (issue #625):
+// own full-width last row, collapsed while empty.
+func TestShell_BannerFramesShareOrderLastWFullEmptyHidden(t *testing.T) {
+	out := render(t, layout.Shell("t", organisms.NavNone))
+	for _, id := range []string{"config-banner", "update-banner", "marketdata-banner"} {
+		tag := regexp.MustCompile(`(?s)<div\b[^>]*\bid="` + id + `"[^>]*>`).FindString(out)
+		if tag == "" {
+			t.Fatalf("no #%s in header; body=%s", id, out)
+		}
+		for _, c := range []string{"order-last", "w-full", "empty:hidden"} {
+			if !strings.Contains(tag, c) {
+				t.Errorf("#%s lacks %s: %s", id, c, tag)
+			}
+		}
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -56,7 +57,7 @@ type Services struct {
 	Jobs        *jobqueue.JobRepository
 	Positions   *trading.PositionRepository
 	Orders      *trading.OrderRepository
-	Outcomes    *judgement.CalibrationRepository
+	Outcomes    *calrepo.CalibrationRepository
 	KillSwitch  *system.KillSwitchRepository
 	Settings    *system.RuntimeSettingsRepository
 	Proposals   *judgement.ProposalRepository
@@ -78,7 +79,7 @@ type Services struct {
 	Backtest      *backtestsource.Source
 	Activity      *activityfeed.Service
 	Governor      *selfimprove.Governor
-	ErrorLogs     *logging.Exporter // read-only export of LogDir (FR-ERRLOG-2)
+	ErrorLogs     *logging.Exporter // read-only export of State.Paths.LogDir (FR-ERRLOG-2)
 
 	Scheduler *scheduler.Scheduler
 	Updater   *updater.SchedulerAdapter // nil on cmd/server (issue #76)
@@ -153,7 +154,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	traderHandler := svc.buildPolicyAndBacktest(state, executionConfig)
 	svc.buildGovernor(state.Strategy, secrets, alertChannels)
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
-	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy)
+	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy, state.Paths.LogDir)
 
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueMarketData, marketDataHandler.HandleMarketData)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)

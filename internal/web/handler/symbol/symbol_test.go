@@ -9,7 +9,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
 
@@ -63,7 +62,7 @@ func (f *fakeSymbolProvider) ListPositions(context.Context, int) ([]domain.Posit
 	return f.positions, nil
 }
 
-func (f *fakeSymbolProvider) Close(_ context.Context, _ int64, reason string, _ float64, _ fillmodel.Book, _ time.Time) (domain.Position, error) {
+func (f *fakeSymbolProvider) CloseAtMarket(_ context.Context, _ int64, reason string, _ time.Time) (domain.Position, error) {
 	f.closeCalls++
 	f.closeReason = reason
 	return f.closeResult, f.closeErr

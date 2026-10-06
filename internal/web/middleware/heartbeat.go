@@ -18,21 +18,15 @@ type HeartbeatRecorder interface {
 	RecordHeartbeat(ctx context.Context, at time.Time) error
 }
 
-// backgroundPollPaths are routes the page fetches by itself on a timer
-// (`hx-trigger="... every Ns"`, organisms/header.templ). They run whether or
-// not anyone is at the screen, so they must not count as operator activity.
-// Any new `every Ns` polling route MUST be added here, otherwise one open
-// tab keeps the dead-man's switch (FR-RISK-6) alive forever.
-var backgroundPollPaths = map[string]bool{
-	"/system/update-status":     true, // #update-banner, every 60s
-	"/system/marketdata-status": true, // #marketdata-banner, every 30s
-}
-
 // BackgroundHeader (value "1") marks a request the page fires by itself, not as a
 // consequence of an operator action: a Kill Switch push or WebSocket
 // reconnect making pitha-kill-switch-panel resync `GET /api/v1/system/status`,
-// and the `systemStateChanged`-triggered `GET /system/status` refresh of
-// Header. Such requests run whether or not anyone is at the screen, so
+// the `systemStateChanged`-triggered `GET /system/status` refresh of
+// Header, and Header's `every Ns` banner polls (`#update-banner`,
+// `#marketdata-banner`). This header is the only exclusion mechanism for
+// such timer/event-driven fetches: every new `hx-trigger="... every Ns"`
+// element MUST send it via `hx-headers`, and the server keeps no path list
+// that could be forgotten. Such requests run whether or not anyone is at the screen, so
 // they must not extend the dead-man's switch (FR-RISK-6): otherwise the
 // push that follows an operator_heartbeat_timeout Kill Switch would
 // itself refresh the heartbeat and let AutoResume lift it unattended.
@@ -55,8 +49,8 @@ const heartbeatMinInterval = 10 * time.Second
 // carrying the valid session cookie count, so an unauthenticated probe
 // cannot keep the dead-man's switch alive. Requests that are not operator
 // activity are skipped: `/static/...`, WebSocket upgrades (opened and
-// re-opened automatically by the page), and background timer polls
-// (backgroundPollPaths).
+// re-opened automatically by the page), and requests carrying
+// BackgroundHeader (timer polls, push-triggered resyncs).
 //
 // A recording failure is logged and otherwise ignored: a heartbeat write
 // error must not block the request it accompanies (Risk Engine's own
@@ -88,10 +82,8 @@ func newHeartbeat(recorder HeartbeatRecorder, minInterval time.Duration, now fun
 }
 
 func countsAsOperatorActivity(c *gin.Context) bool {
-	path := c.Request.URL.Path
 	return Authenticated(c.Request.Context()) &&
-		!isStaticPath(path) &&
+		!isStaticPath(c.Request.URL.Path) &&
 		!isWebSocketUpgrade(c.Request) &&
-		!backgroundPollPaths[path] &&
 		c.GetHeader(BackgroundHeader) != backgroundValue
 }

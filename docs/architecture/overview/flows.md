@@ -13,16 +13,51 @@ sequenceDiagram
     participant DB as SQLite
     participant SCHED as Scheduler（自前Worker）
 
+    App->>App: `startup.RunMain`でプロセスを開始（`cmd/desktop`・`cmd/server`共通。日次JSONログを`PITHA_LOG_DIR`（未設定ならDBと同じ親ディレクトリの絶対パス`logs/`。作業ディレクトリに依存しない）へ設定し、以降の`run`が返した致命的エラーはERRORで記録して終了コード1にする。ログ用ディレクトリ・ファイルを作れない場合は標準エラー出力へフォールバックして起動を継続。#547）
     App->>App: 多重起動ロック`app.lock`を取得（`bootstrap.AcquireInstanceLock`。DBを開く前。取得失敗時は`bootstrap.Run`・`Recover`に到達せず終了。desktopは終了コード0、serverは非0）
     App->>DB: マイグレーション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON, WAL）
     App->>SCHED: 前回クラッシュ時の`running`状態ジョブを`pending`へ復帰（`Scheduler.Recover`）
     App->>App: 銘柄マスタCSVから`instruments`をupsert（`syncUniverse`。失敗・CSV不在はログのみで継続。kabuステーション不達の影響を受けない）
     App->>KABU: /kabusapi/token でトークン発行
     KABU-->>App: token（失敗しても起動を継続し、バックグラウンドで再試行）
-    App->>SCHED: 周期ジョブ登録（60s/15-30s/5-15s）
+    App->>SCHED: robfig/cronへ周期ジョブ登録（60秒フルスキャン＋分単位以上の保守ジョブ）
+    App->>App: 候補更新ループ（15-30秒、`candidates.Run`）と保有ポジション再評価ループ（5-15秒、`heldposition.Monitor.Run`）を別goroutineで起動（cronのジョブ登録ではない）。LunaとNEWS_FEEDの両方が設定済みの場合のみ、News Ingestのティッカー（`newsIngestTicker`。起動直後に1回、以降1分周期。§13）も別goroutineで起動する
     App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始
     App->>App: WebView起動・Scanner Dashboard表示
 ```
+
+#### 停止フロー
+
+`bootstrap.Services.Start`が起動したgoroutineは`Start`へ渡したcontextに紐づくため、停止はcontextの取り消し→`Services.Stop()`（Schedulerのcronとワーカーを止め、候補更新・保有監視・PushFeed・News Ingestのgoroutineと実行中ジョブの終了を待つ）の順で行い、DBを閉じるのはその後（`defer`）に限る。
+
+```mermaid
+sequenceDiagram
+    participant OS as OS/Wails
+    participant App as アプリ（cmd/server／cmd/desktop）
+    participant HTTP as HTTPサーバー（serverのみ）
+    participant SVC as bootstrap.Services
+    participant DB as SQLite
+
+    alt cmd/server
+        OS->>App: SIGINT/SIGTERM（`signal.NotifyContext`のcontext取り消し。`Services.Start`のgoroutineにも伝わる）
+        App->>HTTP: `httpServer.shutdown(10s)`: 新規接続の受付停止と処理中リクエストの待機（最大10秒）
+        App->>HTTP: サーバーcontextを取り消してWebSocketハンドラを終了させ、返るまで待機（最大10秒。`http.Server.Shutdown`は乗っ取り済み接続を待たないため`handlerTracker`で待つ）。失敗はERRORログのみで続行
+        App->>SVC: `Services.Stop()`（ワーカー・バックグラウンドgoroutineの終了待ち）
+        App->>DB: deferで`State.Close`（DBクローズ）、`app.lock`解放。`run`が返り`RunMain`が終了コード0で終了
+    else cmd/desktop
+        OS->>App: Wailsの`OnShutdown`（`App.shutdown`）
+        App->>SVC: `OnStartup`で作ったcontextの`cancel`
+        App->>SVC: `Services.Stop()`（ワーカー・バックグラウンドgoroutineの終了待ち）
+        App->>App: ネイティブ通知の後始末（`runtime.CleanupNotifications`）
+        opt 自動アップデートの`QuitForUpdate`でインストーラーが記録済み
+            App->>App: 検証済みインストーラーを`/S`（サイレント）で切り離して起動（失敗はERRORログのみ。`updater.BuildSilentInstallCommand`）
+        end
+        App->>DB: `wails.Run`が返った後、deferで`State.Close`、`app.lock`解放
+    end
+```
+
+- serverでListenAndServeが自発的に失敗した場合も、contextを取り消して`Services.Stop()`を呼んでから`server error`として`run`が返り、`RunMain`がERRORログ＋終了コード1にする
+- desktopの`OnStartup`で`Services.Start`が失敗した場合は、ログに記録してネイティブのエラーダイアログを表示し、`runtime.Quit`で上記の`OnShutdown`に進む
 
 ### 10.2 スキャン〜発注フロー
 
@@ -84,7 +119,7 @@ sequenceDiagram
 
 - 自動再開（解消）は発動時刻より後に記録された本物のハートビートが`heartbeat_timeout_minutes`以内にあることを条件とする。発動判定の寄り付きクランプ（最後のハートビートを当日の寄り付きに切り上げる）は解消判定には使わない（寄り付き前は経過時間が負になり、操作者不在でも毎朝解消されてしまうため）
 - ハートビートは有効なセッションCookieを持つ認証済みリクエスト（ページ/アクション/API呼び出し）を更新対象とする（`internal/router.WithHeartbeatRecorder` でSessionミドルウェアの直後に登録）。Cookieを持たないリクエストは対象外とし、外部からの無認証GETでdead-man's switchを延命できないようにする
-- 操作者の操作ではないリクエストは更新対象外とする: `/static/...`、WebSocketのUpgrade（画面が自動で再接続する）、画面が自動ポーリングするルート（現状 `GET /system/update-status`（`every 60s`）と `GET /system/marketdata-status`（`every 30s`）。周期ポーリング（`hx-trigger="every Ns"`）を追加するときは必ず `backgroundPollPaths` にも追加する。漏れると認証済みタブ1つでデッドマンスイッチが無効化される）
+- 操作者の操作ではないリクエストは更新対象外とする: `/static/...`、WebSocketのUpgrade（画面が自動で再接続する）、画面が自動ポーリングするリクエスト。自動ポーリング（`hx-trigger="... every Ns"`）は現状 `Header` の `#update-banner`（`GET /system/update-status`、`every 60s`）と `#marketdata-banner`（`GET /system/marketdata-status`、`every 30s`）で、いずれも下記の `X-Pitha-Background: 1` を `hx-headers` で付ける。サーバー側にURLパスの除外一覧は持たない（追加漏れが安全機構を無効化する構造を避けるため）。周期ポーリングを追加するときは必ず `hx-headers` に同ヘッダを付ける（付け忘れるとそのリクエストは操作者操作として数えられる）。`updateStatusChanged` を契機とする `#update-banner` の再取得も同じ要素の `hx-headers` で引き続き除外される
 - 自動発火の再同期リクエストも更新対象外とする（FR-RISK-6）。`pitha-kill-switch-panel` の再同期（初回・`kill_switch` / `state_changed` push受信時・WebSocket再接続後の `GET /api/v1/system/status`）と、`systemStateChanged` を契機とするHeaderの `#header-status`（`GET /system/status`）、`pitha-activity-feed` のWebSocket再接続後のスナップショット再取得（`GET /api/v1/activity`、`?type=kill_switch&limit=10`）は専用ヘッダ `X-Pitha-Background: 1`（`middleware.BackgroundHeader`、Lit側は `lib/api.ts` の `get(path, { background: true })`、htmx側は `hx-headers`）を付け、Heartbeatミドルウェアが除外する。これらは操作者不在でも発火するため、`operator_heartbeat_timeout` のKill Switch発動後のpushが自らハートビートを更新し、`AutoResume` が無人のまま解除してしまうことを防ぐ
 - 書き込みはスロットリングする: ミドルウェアが最終記録時刻をメモリ保持し、10秒以内の更新対象リクエストではSQLiteへ書き込まない（タイムアウトは分単位のため精度に影響しない。書き込み失敗時は次のリクエストで即再試行する）
 - Paper Trading運用中は実資金リスクがないためハートビート監視を適用しない（`requirements/functional.md` §4.7 表の heartbeat_timeout_minutes は Live のみ設定）

@@ -13,8 +13,15 @@ pre-commit:
       # from there. With `root`, lefthook passes only static/ files, as
       # paths relative to static/.
       root: static/
-      glob: "**/*.{ts,css}"
+      glob: "**/*.{ts,css,json,mjs}"
       run: bunx biome check {staged_files}
+    typecheck:
+      # CI's lint job runs `tsc --noEmit`; biome alone does not catch type
+      # errors (issues #197/#198). tsc checks the whole project, so no
+      # {staged_files}; it needs static/node_modules (bun install).
+      root: static/
+      glob: "**/*.ts"
+      run: bun run typecheck
     linterly:
       run: linterly check
 

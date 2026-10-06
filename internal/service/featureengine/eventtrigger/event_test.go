@@ -119,8 +119,8 @@ func TestDetectEvent_OrderbookImbalanceChangedTriggers(t *testing.T) {
 // condition.
 func TestDetectEvent_VWAPCrossedTriggers(t *testing.T) {
 	now := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
-	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 1990, Feature: domain.Feature{PriceVsVWAPBps: -5}}
-	curr := domain.Snapshot{Timestamp: now, Price: 2010, Feature: domain.Feature{PriceVsVWAPBps: 5}}
+	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 1990, Feature: domain.Feature{VWAP: 2000, PriceVsVWAPBps: -5}}
+	curr := domain.Snapshot{Timestamp: now, Price: 2010, Feature: domain.Feature{VWAP: 2000, PriceVsVWAPBps: 5}}
 
 	sig := eventtrigger.Detect(prev, curr, nil, quietThresholds(), false)
 
@@ -135,7 +135,11 @@ func TestDetectEvent_HighLowBreakTriggers(t *testing.T) {
 	now := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
 	prev := domain.Snapshot{Timestamp: now.Add(-time.Minute), Price: 2010, Feature: domain.Feature{PriceVsVWAPBps: 10}}
 	curr := domain.Snapshot{Timestamp: now, Price: 2100, Feature: domain.Feature{PriceVsVWAPBps: 10}}
-	history := []domain.Snapshot{{Price: 1990}, {Price: 2010}, {Price: 2005}}
+	history := []domain.Snapshot{
+		{Timestamp: now.Add(-4 * time.Minute), Price: 1990},
+		{Timestamp: now.Add(-3 * time.Minute), Price: 2010},
+		{Timestamp: now.Add(-2 * time.Minute), Price: 2005},
+	}
 
 	sig := eventtrigger.Detect(prev, curr, history, quietThresholds(), false)
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -43,7 +44,7 @@ const horizonDataGrace = 5 * time.Minute
 type Labeler struct {
 	decisions *judgement.DecisionRepository
 	snapshots *market.SnapshotRepository
-	outcomes  *judgement.CalibrationRepository
+	outcomes  *calrepo.CalibrationRepository
 	now       func() time.Time
 }
 
@@ -58,7 +59,7 @@ func WithClock(now func() time.Time) Option {
 
 // NewLabeler returns a Labeler that loads decisions via decisions, market
 // data via snapshots, and persists calibration_outcomes rows via outcomes.
-func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, outcomes *judgement.CalibrationRepository, opts ...Option) *Labeler {
+func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, outcomes *calrepo.CalibrationRepository, opts ...Option) *Labeler {
 	l := &Labeler{decisions: decisions, snapshots: snapshots, outcomes: outcomes, now: time.Now}
 	for _, opt := range opts {
 		opt(l)
@@ -67,7 +68,7 @@ func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.Snaps
 }
 
 // HandleJob processes one outcome-labeling queue job
-// (judgement.OutcomeLabelJobPayload): it loads the identified
+// (calrepo.OutcomeLabelJobPayload): it loads the identified
 // jev_decisions row, the market_snapshots bars from the decision's
 // timestamp through horizon_minutes later, computes and persists the
 // resulting calibration_outcomes row (FR-CAL-4). Its signature matches
@@ -87,7 +88,7 @@ func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.Snaps
 // (CalibrationRepository.MarkUnlabelable; still no calibration_outcomes
 // row) and succeeds, so PendingLabels stops returning it (issue #481).
 func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
-	var payload judgement.OutcomeLabelJobPayload
+	var payload calrepo.OutcomeLabelJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
 		return fmt.Errorf("calibration: decode outcome-labeling job payload: %w", err)
 	}

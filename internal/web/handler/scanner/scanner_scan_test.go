@@ -145,7 +145,7 @@ func getScanAt(t *testing.T, src scanner.CandidateSource, now func() time.Time, 
 
 func TestScannerHandler_Page_ShowsFunnelSummaryButNotSymbolList(t *testing.T) {
 	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner", false)
-	for _, want := range []string{`data-testid="scan-panel"`, `data-testid="scan-funnel-universe">4<`, `data-testid="scan-funnel-features">3<`, `data-testid="scan-funnel-fast">1<`, `data-testid="scan-funnel-scout">1<`, "スキャン対象を見る", `data-testid="scan-refresh"`, "1.5s", "2026-10-03T09:00:01Z"} {
+	for _, want := range []string{`data-testid="scan-panel"`, `data-testid="scan-funnel-universe">4<`, `data-testid="scan-funnel-features">3<`, `data-testid="scan-funnel-fast">1<`, `data-testid="scan-funnel-scout">1<`, "スキャン対象を見る", `data-testid="scan-refresh"`, "1.5s", "最終サイクル 2026-10-03 18:00:01 JST"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing %q", want)
 		}

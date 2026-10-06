@@ -1,12 +1,6 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
-import {
-  FakeWebSocket,
-  flush,
-  installFakes,
-  item,
-  mount,
-  type ScannerTableElement,
-} from './scanner-test-support';
+import { FakeWebSocket } from '../lib/ws-test-support';
+import { flush, installFakes, item, mount, type ScannerTableElement } from './scanner-test-support';
 
 installFakes();
 
@@ -61,7 +55,7 @@ describe('pitha-scanner-table', () => {
 
     expect(el.querySelector('[data-testid="scanner-count"]')?.textContent).toContain('2');
     expect(el.querySelector('caption')?.textContent?.trim()).toBe(
-      'Scanner Dashboard — as of 2026-09-26T10:15:00+09:00',
+      'Scanner Dashboard — as of 2026-09-26 10:15:00 JST',
     );
 
     const cells = (symbol: string) => el.querySelectorAll(`tr[data-symbol="${symbol}"] td`);
@@ -115,6 +109,20 @@ describe('pitha-scanner-table', () => {
 
     expect(el.querySelector('[data-testid="scanner-empty"]')).toBeNull();
     expect(el.querySelector('[data-testid="scanner-count"]')?.textContent).toContain('1');
+  });
+
+  // Before the first scan cycle the server reports Go's zero time (issue #614).
+  test('shows a no-data caption instead of a 0001-01-01 timestamp for the zero as_of', async () => {
+    const { el } = await mount([]);
+
+    FakeWebSocket.instances[0].emit('message', {
+      data: JSON.stringify({ type: 'scanner_update', items: [], as_of: '0001-01-01T00:00:00Z' }),
+    });
+    await el.updateComplete;
+
+    expect(el.querySelector('caption')?.textContent?.trim()).toBe(
+      'Scanner Dashboard — データ未取得',
+    );
   });
 
   // The first update cycle used to close and reopen the socket (issue #170).

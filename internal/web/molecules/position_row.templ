@@ -22,7 +22,7 @@ templ PositionRow(p domain.Position) {
 		<td class="px-3 py-2">{ fmt.Sprintf("%.2f", p.CurrentPrice) }</td>
 		<td class="px-3 py-2">{ formatPnL(p.UnrealizedPnL) }</td>
 		<td class="px-3 py-2">{ formatNilablePnL(p.RealizedPnL) }</td>
-		<td class="px-3 py-2">{ p.OpenedAt.Format(time.RFC3339) }</td>
+		<td class="px-3 py-2">{ atoms.FormatJST(p.OpenedAt) }</td>
 		if p.IsOpen() {
 			<td class="px-3 py-2">—</td>
 			<td class="px-3 py-2">
@@ -65,7 +65,7 @@ func formatClosedAt(t *time.Time) string {
 	if t == nil {
 		return "—"
 	}
-	return t.Format(time.RFC3339)
+	return atoms.FormatJST(*t)
 }
 
 func formatExitReason(r *string) string {

@@ -1,24 +1,73 @@
 package atoms
 
-// InputProps is Input's input. Type is empty for "text". Attrs carries
-// everything else (placeholder, required, autocomplete, data-testid, ...);
-// a `true` value renders a bare boolean attribute.
+// fieldBase is the border/shape shared by Input and Select, so a form
+// control's look changes in one place. Layout and spacing (width, padding,
+// margin, text size) come from the caller's Class.
+const fieldBase = "rounded-md border border-slate-300"
+
+// InputProps is Input's input. Type is empty for "text". Class carries the
+// layout/spacing classes appended to the shared border style (empty keeps
+// the default `flex-1 px-3 py-1`, a row-filling field; pass e.g.
+// `mt-1 px-3 py-1` to opt out of `flex-1` inside a stacked label). Attrs
+// carries everything else (placeholder, required, min, value,
+// autocomplete, data-testid, ...); a `true` value renders a bare boolean
+// attribute.
 type InputProps struct {
 	ID    string
 	Name  string
 	Type  string
+	Class string
 	Attrs templ.Attributes
 }
 
-// Input renders a text-like <input> with the shared border/padding style.
+// Input renders a text-like <input> with the shared border style. An empty
+// ID or Name omits the attribute (an empty `id=""` is invalid HTML).
 templ Input(props InputProps) {
 	<input
-		id={ props.ID }
-		class="flex-1 rounded-md border border-slate-300 px-3 py-1"
+		if props.ID != "" {
+			id={ props.ID }
+		}
+		class={ fieldClass(props.Class, "flex-1 px-3 py-1") }
 		type={ inputType(props.Type) }
-		name={ props.Name }
+		if props.Name != "" {
+			name={ props.Name }
+		}
 		{ props.Attrs... }
 	/>
+}
+
+// SelectProps is Select's input. Class is as in InputProps (empty keeps the
+// default `px-3 py-1`). Attrs carries everything else (data-testid,
+// required, ...). The <option>s are Select's children.
+type SelectProps struct {
+	ID    string
+	Name  string
+	Class string
+	Attrs templ.Attributes
+}
+
+// Select renders a <select> with the shared border style around its
+// <option> children. An empty ID or Name omits the attribute.
+templ Select(props SelectProps) {
+	<select
+		if props.ID != "" {
+			id={ props.ID }
+		}
+		if props.Name != "" {
+			name={ props.Name }
+		}
+		class={ fieldClass(props.Class, "px-3 py-1") }
+		{ props.Attrs... }
+	>
+		{ children... }
+	</select>
+}
+
+func fieldClass(class, fallback string) string {
+	if class == "" {
+		class = fallback
+	}
+	return fieldBase + " " + class
 }
 
 func inputType(t string) string {

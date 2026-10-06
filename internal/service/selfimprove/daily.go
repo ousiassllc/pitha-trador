@@ -11,6 +11,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 )
 
+// MinCalibrationSamples is the fewest labeled Calibration samples (LONG +
+// SHORT, over the last shadowBacktestLookbackDays business days) Sol's
+// daily analysis needs: with less, the metrics it would weigh are noise and
+// the day is skipped (logged at info level, not a SkippedStages entry,
+// since no AI API failed).
+const MinCalibrationSamples = 30
+
 // DirectionCalibrationSource supplies the recent per-direction Calibration
 // metrics Sol's daily analysis reads (FR-SELFIMPROVE-1).
 // *internal/service/calibration.Service implements it.
@@ -122,6 +129,11 @@ func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibratio
 	long, short, err := calibration.DirectionMetricsSince(ctx, since)
 	if err != nil {
 		return result, errors.Join(append(errs, fmt.Errorf("selfimprove: load calibration metrics: %w", err))...)
+	}
+	if total := long.SampleCount + short.SampleCount; total < MinCalibrationSamples {
+		slog.InfoContext(ctx, "selfimprove: skipping Sol analysis: too few labeled calibration samples",
+			"samples", total, "min_samples", MinCalibrationSamples, "since", since)
+		return result, errors.Join(errs...)
 	}
 	proposal, proposed, err := g.ProposeDaily(ctx, long, short)
 	if err != nil {

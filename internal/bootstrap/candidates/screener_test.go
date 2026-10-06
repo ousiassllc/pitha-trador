@@ -18,6 +18,17 @@ func lenientFastScreener() config.FastScreenerConfig {
 	}
 }
 
+// validLenientFastScreener is lenientFastScreener with every FR-FS-4
+// invariant met (positive thresholds and weights), as a real
+// config.LoadStrategy result always is.
+func validLenientFastScreener() config.FastScreenerConfig {
+	cfg := lenientFastScreener()
+	cfg.MinPrice, cfg.MinTurnover5mJPY = 1, 1
+	cfg.MinVolumeRatio, cfg.MinAbsReturn5mPct, cfg.MinRealizedVolatility = 0.01, 0.0001, 0.0001
+	cfg.Weights = config.FastScreenerWeights{VolumeRatio: 1}
+	return cfg
+}
+
 func TestRefresh_ScreenScoreIncludesBreakoutStrengthFromSnapshotHistory(t *testing.T) {
 	refresher := newTestRefresher(t)
 	cfg := lenientFastScreener()
@@ -61,16 +72,24 @@ func TestRefresh_ScreenScoreIncludesBreakoutStrengthFromSnapshotHistory(t *testi
 
 func TestRefresh_RuntimeSettingsOverrideStrategyFilters(t *testing.T) {
 	refresher := newTestRefresher(t)
-	refresher.Strategy.FastScreener = lenientFastScreener()
+	refresher.Strategy.FastScreener = validLenientFastScreener()
 
 	inst := mustCreateInstrument(t, refresher, "7203")
-	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
-		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: time.Now().UTC(),
-		Price: 2500, Volume: 1000, Turnover: 2_500_000, SpreadBps: ptrF(10),
-		Feature: domain.Feature{
-			VWAP: 2490, VolumeRatio5m: ptrF(1.5), Return5m: ptrF(0.5), RealizedVol5m: ptrF(0.01),
-		},
-	}}); err != nil {
+	now := time.Now().UTC().Truncate(time.Minute)
+	bar := func(at time.Time, turnover float64) domain.Snapshot {
+		return domain.Snapshot{
+			InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at,
+			Price: 2500, Volume: 1000, Turnover: turnover, SpreadBps: ptrF(10),
+			Feature: domain.Feature{
+				VWAP: 2490, VolumeRatio5m: ptrF(1.5), Return5m: ptrF(0.5), RealizedVol5m: ptrF(0.01),
+			},
+		}
+	}
+	// The validated base needs min_turnover_5m_jpy > 0, which needs a bar
+	// 5 minutes back for the cumulative turnover difference.
+	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{
+		bar(now.Add(-5*time.Minute), 1_000_000), bar(now, 2_500_000),
+	}); err != nil {
 		t.Fatalf("InsertBatch: %v", err)
 	}
 	ctx := context.Background()

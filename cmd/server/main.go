@@ -9,21 +9,17 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
-	"github.com/ousiassllc/pitha-trador/internal/logging"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
-	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 )
 
 // defaultAddr uses 48080 instead of the far more commonly-claimed 8080
@@ -34,36 +30,25 @@ import (
 // (docs/api/endpoints.md §1); see EnvAllowNonLoopback in addr.go.
 const defaultAddr = "127.0.0.1:48080"
 
-// shutdownTimeout bounds how long a SIGINT/SIGTERM waits for in-flight
-// HTTP requests (including open WebSocket streams) before closing them.
+// shutdownTimeout bounds each of the two SIGINT/SIGTERM shutdown phases
+// (httpServer.shutdown): waiting for in-flight HTTP requests, then for the
+// WebSocket handlers (hijacked connections http.Server.Shutdown neither
+// waits for nor closes) to return once the server context is canceled.
 const shutdownTimeout = 10 * time.Second
 
 func main() {
-	// run returns instead of calling log.Fatal so its defers (DB and log
-	// writer Close, lock Release) always run; only then is the process
-	// exited non-zero.
-	if err := run(); err != nil {
-		log.Fatal(err)
-	}
+	// run returns instead of exiting so its defers (DB Close, lock Release)
+	// always run; RunMain then logs a returned error at ERROR level and
+	// the process exits non-zero.
+	os.Exit(startup.RunMain("server", bootstrap.ResolveLogDir, run))
 }
 
 func run() error {
-	logWriter, err := logging.NewRotatingWriter(bootstrap.LogDir)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = logWriter.Close() }()
-	slog.SetDefault(logging.New(logWriter, slog.LevelInfo))
-
 	// Single-instance guard (the same app.lock cmd/desktop takes), acquired
 	// before bootstrap.Run/BuildServices/Services.Start so a second process
 	// never recovers the first one's running jobs or starts a second
 	// Scheduler/PUSH subscription/Kill Switch against the shared DB.
 	lock, err := bootstrap.AcquireInstanceLock(bootstrap.AppLockName)
-	if errors.Is(err, singleinstance.ErrAlreadyRunning) {
-		slog.Error("server: another instance is already running; exiting", "error", err)
-		return err
-	}
 	if err != nil {
 		return err
 	}
@@ -72,8 +57,8 @@ func run() error {
 	// bootstrap.Run opens (creating/migrating) the SQLite DB and loads
 	// config/strategy.yaml + config/risk.yaml (issue #42,
 	// docs/architecture/overview.md §10.1). This entrypoint has no
-	// window at all, so failing the process (main's log.Fatal) is the only
-	// sensible option.
+	// window at all, so failing the process (RunMain's ERROR log and
+	// non-zero exit) is the only sensible option.
 	state, err := bootstrap.Run(bootstrap.Config{})
 	if err != nil {
 		return err
@@ -108,14 +93,10 @@ func run() error {
 		return err
 	}
 
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           engine,
-		ReadHeaderTimeout: 10 * time.Second,
-	}
+	srv := newHTTPServer(addr, engine)
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Printf("pitha-trador server listening on %s", addr) //nolint:gosec // G706: addr is the server's own fixed listen address, not user input
+		slog.Info("pitha-trador server listening", "addr", addr)
 		err := safego.Try("http server", srv.ListenAndServe)
 		serveErr <- err
 	}()
@@ -128,14 +109,13 @@ func run() error {
 	case <-ctx.Done():
 	}
 
-	log.Print("pitha-trador server shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	slog.Info("pitha-trador server shutting down")
+	if err := srv.shutdown(shutdownTimeout); err != nil {
 		slog.Error("server: graceful HTTP shutdown failed", "error", err)
 	}
 	// Blocks until every Scheduler worker (and its in-flight job) has
 	// exited, before the deferred state.Close closes the DB under them.
+	// The WebSocket handlers have already returned (srv.shutdown).
 	services.Stop()
 	return nil
 }

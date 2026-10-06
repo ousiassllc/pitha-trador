@@ -97,7 +97,9 @@ func finishRisk(cfg *RiskConfig, err error) (*RiskConfig, error) {
 // Paper is always validated. Live is validated only when the live section
 // defines at least one value: like initial_capital, a risk.yaml with no
 // live section simply isn't set up for Live (no Live limits to misapply).
-// Every violation is reported at once.
+// Every violation is reported at once. heartbeat_timeout_minutes must be
+// >= 1 for Live (a 0 would silently disable the dead-man's switch) but may be
+// 0 for Paper, where it does not apply.
 func (c *RiskConfig) Validate() error {
 	errs := c.Paper.validate("paper")
 	if c.Live != (RiskLimits{}) {
@@ -141,7 +143,13 @@ func (l RiskLimits) validate(mode string) []error {
 	atLeastOne("max_consecutive_losses", l.MaxConsecutiveLosses)
 	nonNegative("cooldown_after_loss_minutes", l.CooldownAfterLossMinutes)
 	nonNegative("force_flat_before_market_close_minutes", l.ForceFlatBeforeMarketCloseMinutes)
-	nonNegative("heartbeat_timeout_minutes", l.HeartbeatTimeoutMinutes)
+	if mode == "live" {
+		// FR-RISK-6's dead-man's switch is Live-only and a 0 disables it
+		// (autoresume), so a missing or typo'd key must not slip through.
+		atLeastOne("heartbeat_timeout_minutes", l.HeartbeatTimeoutMinutes)
+	} else {
+		nonNegative("heartbeat_timeout_minutes", l.HeartbeatTimeoutMinutes)
+	}
 	return errs
 }
 

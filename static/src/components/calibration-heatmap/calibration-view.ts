@@ -44,23 +44,66 @@ export function bucketMidpointPct(range: string): number {
   return Math.round(((low + high) / 2) * 100);
 }
 
-// heatmapColor maps a [0,1] direction_accuracy to a red(low)->green(high)
-// background color for the confidence-band heatmap
+// Heatmap cell text colors: dark slate on light backgrounds, white on dark.
+export const DARK_TEXT = '#0f172a';
+export const LIGHT_TEXT = '#ffffff';
+// WCAG 2.x AA contrast for normal text; the cells use 0.75rem text.
+export const MIN_CONTRAST = 4.5;
+
+export interface CellColors {
+  background: string;
+  color: string;
+}
+
+// hslLuminance is the WCAG 2.x relative luminance of an hsl() color
+// (hue in degrees, saturation and lightness in [0,1]).
+function hslLuminance(hue: number, saturation: number, lightness: number): number {
+  const a = saturation * Math.min(lightness, 1 - lightness);
+  const channel = (n: number): number => {
+    const k = (n + hue / 30) % 12;
+    const c = lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(8) + 0.0722 * channel(4);
+}
+
+const DARK_TEXT_LUMINANCE = 0.0088; // relative luminance of #0f172a
+
+// contrastRatio is the WCAG contrast of two relative luminances.
+export function contrastRatio(a: number, b: number): number {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+// heatmapColors maps a [0,1] direction_accuracy to a red(low)->green(high)
+// background and a text color for the confidence-band heatmap
 // (docs/components/overview.md §5.3 "confidence帯別カラーヒートマップ").
-export function heatmapColor(directionAccuracy: number): string {
+// The text is dark slate while that reaches MIN_CONTRAST on hsl(h, 70%, 45%);
+// on the red/orange end it switches to white and the background is darkened
+// just enough for white to reach MIN_CONTRAST (neither text color does at the
+// crossover with the 45% lightness).
+export function heatmapColors(directionAccuracy: number): CellColors {
   const hue = Math.max(0, Math.min(1, directionAccuracy)) * 120;
-  return `hsl(${hue}, 70%, 45%)`;
+  const luminanceAt = (percent: number): number => hslLuminance(hue, 0.7, percent / 100);
+  if (contrastRatio(luminanceAt(45), DARK_TEXT_LUMINANCE) >= MIN_CONTRAST) {
+    return { background: `hsl(${hue}, 70%, 45%)`, color: DARK_TEXT };
+  }
+  let percent = 45;
+  while (percent > 0 && contrastRatio(luminanceAt(percent), 1) < MIN_CONTRAST) percent--;
+  return { background: `hsl(${hue}, 70%, ${percent}%)`, color: LIGHT_TEXT };
 }
 
 // NO_DATA_COLOR is the neutral (grey) heatmap background of a band with no
-// labeled samples, visibly distinct from heatmapColor's red(0% accuracy).
+// labeled samples, visibly distinct from heatmapColors' red(0% accuracy).
 export const NO_DATA_COLOR = 'hsl(0, 0%, 75%)';
 
-// bucketColor is a band's heatmap background: heatmapColor of its observed
-// accuracy, or NO_DATA_COLOR when it has no samples (the API returns 0 for
-// every metric of an empty band, which is "no data", not "0% accurate").
-export function bucketColor(bucket: CalibrationBucket): string {
-  return bucket.sample_count > 0 ? heatmapColor(bucket.direction_accuracy) : NO_DATA_COLOR;
+// bucketColors is a band's heatmap colors: heatmapColors of its observed
+// accuracy, or the neutral grey with dark text when it has no samples (the
+// API returns 0 for every metric of an empty band, which is "no data", not
+// "0% accurate").
+export function bucketColors(bucket: CalibrationBucket): CellColors {
+  return bucket.sample_count > 0
+    ? heatmapColors(bucket.direction_accuracy)
+    : { background: NO_DATA_COLOR, color: DARK_TEXT };
 }
 
 // hasLabeledSamples reports whether the response is based on any labeled

@@ -2,6 +2,7 @@ package execution_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -14,11 +15,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
-// testEngine bundles a real (in-memory-SQLite-backed) Engine plus its
-// underlying instrument fixture, mirroring the pattern
-// internal/service/risk's tests use for a real system.KillSwitchRepository
-// (rather than a hand-rolled fake).
+// testEngine bundles a real (SQLite-backed) Engine plus its underlying
+// instrument fixture (as internal/service/risk's tests do for the kill switch).
 type testEngine struct {
+	db          *sql.DB
 	engine      *execution.Engine
 	orders      *trading.OrderRepository
 	positions   *trading.PositionRepository
@@ -57,7 +57,7 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	}, cfg)
 
 	return testEngine{
-		engine: engine, orders: orders, positions: positions, snapshots: snapshots,
+		db: db, engine: engine, orders: orders, positions: positions, snapshots: snapshots,
 		instruments: instruments, decisions: decisions, signals: signals, instrument: inst,
 	}
 }

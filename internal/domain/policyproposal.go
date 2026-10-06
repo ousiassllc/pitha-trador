@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/config"
 )
 
 // PolicyProposal status values (docs/architecture/er.md §policy_proposals
@@ -236,8 +238,8 @@ func validateConfidenceStep(c PolicyChange) error {
 	if err != nil {
 		return fmt.Errorf("domain: policy change %q new_value: %w", c.Key, err)
 	}
-	if newValue < 0 || newValue > 1 {
-		return fmt.Errorf("domain: policy change %q new_value %v is outside the [0, 1] confidence range", c.Key, newValue)
+	if !config.IsProbabilityThreshold(newValue) {
+		return fmt.Errorf("domain: policy change %q new_value %v is outside the (0, 1] threshold range enforced by config validation", c.Key, newValue)
 	}
 	if magnitude := math.Abs(newValue - oldValue); magnitude > MaxConfidenceThresholdStep+floatMagnitudeEpsilon {
 		return fmt.Errorf("domain: policy change %q moves value by %.4f, exceeding FR-SELFIMPROVE-3's ±%.2f cap", c.Key, magnitude, MaxConfidenceThresholdStep)

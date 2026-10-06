@@ -1,11 +1,8 @@
 package pages
 
 import (
-	"fmt"
-
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
-	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -19,14 +16,9 @@ type SymbolDetailProps struct {
 	// (internal/web/handler/symbol maps execution.SymbolState.Position
 	// onto it, so pages stay decoupled from internal/service).
 	Position *domain.Position
-	// AllowedPositionPct/StopLossPct/TakeProfitPct mirror
-	// internal/web/handler/symbol.SymbolRiskParams (duplicated here rather than
-	// imported, to avoid pages importing handler - internal/web/handler
-	// already imports internal/web/pages, so the reverse import would
-	// cycle).
-	AllowedPositionPct float64
-	StopLossPct        float64
-	TakeProfitPct      float64
+	// Risk is the symbol's risk figures for the "Risk" panel
+	// (internal/web/handler/symbol maps its SymbolRiskParams onto it).
+	Risk organisms.RiskParams
 	// LatestTrader is the symbol's latest Jev Trader decision for the
 	// "Jev判定" panel (execution.SymbolState.LatestTraderDecision: no
 	// row-count window or age limit, the same definition as the Scanner),
@@ -47,7 +39,7 @@ type SymbolDetailProps struct {
 // (internal/web/handler/symbol.SymbolHandler.Page) renders this for a normal
 // navigation.
 templ SymbolDetailPage(props SymbolDetailProps) {
-	@layout.Shell(props.Symbol) {
+	@layout.Shell(props.Symbol, organisms.NavScanner) {
 		<h1 class="text-2xl font-bold text-slate-900">{ props.Symbol }</h1>
 		<pitha-price-chart
 			candles-url={ symbolCandlesURL(props.Symbol) }
@@ -55,9 +47,9 @@ templ SymbolDetailPage(props SymbolDetailProps) {
 		></pitha-price-chart>
 		<script type="module" src="/static/dist/js/price-chart/pitha-price-chart.js"></script>
 
-		@jevPanel(props.LatestTrader)
-		@riskPanel(props)
-		@positionPanel(props.Position)
+		@organisms.JevPanel(props.LatestTrader)
+		@organisms.RiskPanel(props.Risk)
+		@organisms.PositionPanel(props.Position)
 		@organisms.DecisionHistoryList(props.Decisions)
 	}
 }
@@ -72,92 +64,4 @@ func symbolCandlesURL(symbol string) string {
 // symbolWSURL is the `/ws/symbols/{symbol}` URL handed to pitha-price-chart.
 func symbolWSURL(symbol string) string {
 	return "/ws/symbols/" + organisms.EscapeSymbolSegment(symbol)
-}
-
-templ jevPanel(d *domain.JevDecision) {
-	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" id="jev-panel" data-testid="jev-panel">
-		<h2 class="text-lg font-semibold text-slate-900">Jev判定</h2>
-		if d == nil {
-			@molecules.SignalBadgeGroup(nil, nil, nil)
-		} else {
-			@molecules.SignalBadgeGroup(d.Direction, d.Confidence, d.EntryQuality)
-			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-				<div>
-					<dt class="text-sm text-slate-500">Regime</dt>
-					<dd class="text-sm font-medium text-slate-900">{ derefString(d.Regime) }</dd>
-				</div>
-				<div>
-					<dt class="text-sm text-slate-500">Toxic Flow</dt>
-					<dd class="text-sm font-medium text-slate-900">{ derefPct(d.ToxicFlow) }</dd>
-				</div>
-				<div>
-					<dt class="text-sm text-slate-500">Liquidity Stress</dt>
-					<dd class="text-sm font-medium text-slate-900">{ derefPct(d.LiquidityStressed) }</dd>
-				</div>
-			</dl>
-		}
-	</section>
-}
-
-templ riskPanel(props SymbolDetailProps) {
-	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" id="risk-panel" data-testid="risk-panel">
-		<h2 class="text-lg font-semibold text-slate-900">Risk</h2>
-		<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-			<div>
-				<dt class="text-sm text-slate-500">Allowed Position</dt>
-				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", props.AllowedPositionPct) }</dd>
-			</div>
-			<div>
-				<dt class="text-sm text-slate-500">Stop</dt>
-				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", props.StopLossPct) }</dd>
-			</div>
-			<div>
-				<dt class="text-sm text-slate-500">Take Profit</dt>
-				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", props.TakeProfitPct) }</dd>
-			</div>
-		</dl>
-	</section>
-}
-
-templ positionPanel(position *domain.Position) {
-	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" id="position-panel" data-testid="position-panel">
-		<h2 class="text-lg font-semibold text-slate-900">Position</h2>
-		if position == nil {
-			<p class="mt-4 text-sm text-slate-500">No open position.</p>
-		} else {
-			<table class="mt-4 w-full border-collapse text-left text-sm">
-				<thead>
-					<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-						<th scope="col" class="px-3 py-2">Symbol</th>
-						<th scope="col" class="px-3 py-2">Side</th>
-						<th scope="col" class="px-3 py-2">Qty</th>
-						<th scope="col" class="px-3 py-2">Entry</th>
-						<th scope="col" class="px-3 py-2">Current</th>
-						<th scope="col" class="px-3 py-2">Unrealized P&amp;L</th>
-						<th scope="col" class="px-3 py-2">Realized P&amp;L</th>
-						<th scope="col" class="px-3 py-2">Opened</th>
-						<th scope="col" class="px-3 py-2">Closed</th>
-						<th scope="col" class="px-3 py-2">Exit reason / Action</th>
-					</tr>
-				</thead>
-				<tbody>
-					@molecules.PositionRow(*position)
-				</tbody>
-			</table>
-		}
-	</section>
-}
-
-func derefString(s *string) string {
-	if s == nil {
-		return "—"
-	}
-	return *s
-}
-
-func derefPct(f *float64) string {
-	if f == nil {
-		return "—"
-	}
-	return fmt.Sprintf("%.2f", *f)
 }

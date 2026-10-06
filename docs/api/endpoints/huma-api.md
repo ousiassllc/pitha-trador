@@ -38,7 +38,7 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 ### GET /api/v1/scanner/scan
 
 最新のスキャンサイクル（`internal/bootstrap/candidates`の候補更新サイクル）の結果を返す。ファネル件数・状態別/理由別の件数・銘柄ごとの判定（絞り込み＋ページング）。Scanner Dashboardのスキャン状況パネル（`GET /scanner/scan`）と同じデータで、メモリ上の最新1サイクル分のみを読む（`GET /api/v1/scanner`・`/ws/scanner`の経路は共有しない）。サイクル未実行なら`has_cycle=false`で他は空。
-クエリ: `q`（銘柄コード/名称の部分一致、大文字小文字無視）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード。未知の値は400）, `page`（1始まり。範囲外は最終ページに丸める）, `page_size`（既定50、最大200）。
+クエリ: `q`（銘柄コード/名称の部分一致、大文字小文字無視。最大64文字）, `status`（`passed`/`excluded`/`missing`）, `reason`（理由コード。最大32文字。長さ内で未知の値は400）, `page`（1始まり。範囲外は最終ページに丸める）, `page_size`（既定50、最大200）。`q`/`reason`の最大長超過・`status`の許容値外・`page`/`page_size`の範囲外はHumaの入力検証エラー（422）になる。
 
 ```json
 // Output（抜粋）
@@ -100,6 +100,8 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 | `interval` | string | `1m` 固定（MVP。`1m`以外は422） |
 
 パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、`/symbols/{symbol}`系ルート共通）。`from`/`to`がRFC3339でない場合、`symbol`/`interval`が範囲外の場合はいずれも422。
+
+`from > to`、または`to - from`が7日を超える場合は400（保持期間90日分の全行を1リクエストで読み込ませないための上限。画面の既定は6時間。リポジトリは呼ばれない）。
 
 各点の`volume`は**1分足あたりの出来高**（バー単位）で、保存済みの累積セッション出来高（`market_snapshots.volume`、kabuステーションAPIの`TradingVolume`）の隣接スナップショット間差分（`cur - prev`）。累積値が後退した場合（新セッション）は当該バーの累積値自体を返し、負値にはしない。応答の先頭バーは前のスナップショットを持たないため、`Feature.Volume1m`（累積差分）があればその値、なければ`0`。`open`/`high`/`low`/`close`は1バー1サンプルの価格で同値。
 
@@ -178,6 +180,8 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 ```
 
 500（いずれも固定メッセージ。原因はslogへ。`api/endpoints.md` §7）は、ログディレクトリを読めないとき、およびエクスポータ未注入のとき（`router.WithErrorLogExporter`の組み立て漏れ。`router.New()`の既定は常に失敗するエクスポータで、空の200ダウンロードが「エラー0件」に見えるのを避ける）。Setup Guardの対象で、必須認証情報が未設定の間は503 JSON。
+
+認証: このGETは安全メソッドでありながら、有効なセッションCookieを必須とする（FR-ERRLOG-6。ログをCookieなしの呼び出し元へ渡さないため。`api/endpoints.md` §1）。Cookieが無い・無効な場合は403（`missing or invalid session cookie`）で、他の`/api/v1`のGET（Cookie不要）とは異なる。
 
 ### エンドポイント一覧表
 

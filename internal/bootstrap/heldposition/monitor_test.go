@@ -176,3 +176,34 @@ func TestMonitor_CycleContinuesPastPanickingPosition(t *testing.T) {
 		t.Fatalf("Cycle = (%d, %v), snaps %+v; want 6758 and 9984 evaluated", n, err, exits.snaps)
 	}
 }
+
+// Regression test for issue #545: the snapshot carries the conventional
+// Bid=buy / Ask=sell quote (kabuステーションAPI's BidPrice is the best
+// SELL quote) and its spread, so an exit fills across the spread.
+func TestMonitor_CycleSnapshotCarriesSwappedQuoteAndSpread(t *testing.T) {
+	sell, buy := 2408.5, 2407.5
+	boards := &fakeBoards{boards: map[string]marketdata.Board{
+		"7203": {CurrentPrice: 2408, BidPrice: &sell, AskPrice: &buy},
+		"6758": {CurrentPrice: 900, BidPrice: &buy, AskPrice: &sell}, // crossed
+		"9984": {CurrentPrice: 100},                                  // no book
+	}}
+	exits := &fakeExits{}
+	open := []domain.Position{held(1, "7203"), held(2, "6758"), held(3, "9984")}
+	if n, err := monitor(true, fakePositions{open: open}, boards, exits).Cycle(context.Background()); err != nil || n != 3 {
+		t.Fatalf("Cycle = (%d, %v), want (3, nil)", n, err)
+	}
+
+	s := exits.snaps[0]
+	if s.Bid == nil || *s.Bid != buy || s.Ask == nil || *s.Ask != sell {
+		t.Fatalf("Bid/Ask = %v/%v, want %v/%v", s.Bid, s.Ask, buy, sell)
+	}
+	if s.SpreadBps == nil || *s.SpreadBps <= 0 {
+		t.Errorf("SpreadBps = %v, want > 0", s.SpreadBps)
+	}
+	if c := exits.snaps[1]; c.SpreadBps != nil {
+		t.Errorf("crossed book SpreadBps = %v, want nil", *c.SpreadBps)
+	}
+	if n := exits.snaps[2]; n.Bid != nil || n.Ask != nil || n.SpreadBps != nil {
+		t.Errorf("board without a book: Bid/Ask/SpreadBps = %v/%v/%v, want all nil (fill falls back to the last price)", n.Bid, n.Ask, n.SpreadBps)
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+
 	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver (also registered by internal/repository)
 )
 
@@ -60,7 +62,7 @@ func verifyCopy(ctx context.Context, path string) (err error) {
 // connection (no migrations, no instrumented driver: it is not the live
 // database). Callers must close it.
 func openBackupCopy(path string) (*sql.DB, error) {
-	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_busy_timeout=60000", path))
+	conn, err := sql.Open("sqlite", sqlitedb.FileURI(path, "mode=rw&_busy_timeout=60000"))
 	if err != nil {
 		return nil, fmt.Errorf("backup: open backup %q: %w", path, err)
 	}

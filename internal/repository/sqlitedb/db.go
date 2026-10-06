@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
@@ -60,8 +61,33 @@ import (
 // busy_timeout retry path instead. Together, `_busy_timeout` and
 // `_txlock=immediate` eliminate the intermittent "database is locked (5)
 // (SQLITE_BUSY)" failures seen under concurrent writers (issue #39).
+//
+// path is embedded as the path component of a `file:` URI, so '%', '?' and
+// '#' are percent-escaped (issue #538): left as-is, '#' (fragment) or '?'
+// (query) would truncate the file name and SQLite would create/migrate a
+// different file than the one ensurePrivateFile just pre-created at 0600,
+// and '%XX' would be mis-decoded. A Windows drive-letter path becomes
+// `/C:/...` so it is not read as a URI authority.
 func dsn(path string) string {
-	return fmt.Sprintf("file:%s?_foreign_keys=1&_journal_mode=WAL&_busy_timeout=60000&_txlock=immediate", path)
+	return FileURI(path, "_foreign_keys=1&_journal_mode=WAL&_busy_timeout=60000&_txlock=immediate")
+}
+
+// FileURI builds the `file:` URI modernc.org/sqlite opens for the database
+// file at path with the given query (without the leading '?'). It is the
+// single place that escapes path (see dsn), shared with internal/service/
+// backup, which opens copies of the database under operator-chosen
+// directories (issue #591).
+func FileURI(path, query string) string {
+	return "file:" + uriPath(path) + "?" + query
+}
+
+var uriPathEscaper = strings.NewReplacer("%", "%25", "?", "%3F", "#", "%23")
+
+func uriPath(path string) string {
+	if filepath.VolumeName(path) != "" {
+		path = "/" + filepath.ToSlash(path)
+	}
+	return uriPathEscaper.Replace(path)
 }
 
 const (

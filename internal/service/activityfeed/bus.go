@@ -9,17 +9,34 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
+// subscriber is the bus's per-subscriber state, guarded by Service.mu.
+type subscriber struct {
+	// lagged is set when job messages were dropped because the channel's
+	// job quota was full; the subscriber is owed a Message{Resync: true}.
+	lagged bool
+}
+
 // Subscribe registers a new bus subscriber. cancel unregisters it and
-// closes the returned channel; call it exactly once.
+// closes the returned channel; call it exactly once. The channel is also
+// closed by the bus itself when the subscriber falls so far behind that a
+// kill switch / decision event cannot be queued (see publishPriority).
 func (s *Service) Subscribe() (messages <-chan Message, cancel func()) {
-	ch := make(chan Message, subscriberBuffer)
+	ch := make(chan Message, jobMessageBuffer+priorityMessageBuffer)
 	s.mu.Lock()
-	s.subs[ch] = struct{}{}
+	s.subs[ch] = &subscriber{}
 	s.mu.Unlock()
 	return ch, func() {
 		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.removeLocked(ch)
+	}
+}
+
+// removeLocked unregisters ch and closes it; a no-op when the bus already
+// dropped it. s.mu must be held.
+func (s *Service) removeLocked(ch chan Message) {
+	if _, ok := s.subs[ch]; ok {
 		delete(s.subs, ch)
-		s.mu.Unlock()
 		close(ch)
 	}
 }
@@ -30,17 +47,66 @@ func (s *Service) hasSubscribers() bool {
 	return len(s.subs) > 0
 }
 
-// publish delivers msg to every subscriber without blocking; a subscriber
-// whose buffer is full misses it (the writer must never stall on a slow
-// WebSocket client).
-func (s *Service) publish(msg Message) {
+// publishJob delivers a job event or queue update without blocking (the
+// writer must never stall on a slow WebSocket client). These are lossy: a
+// subscriber already holding jobMessageBuffer messages misses it, and is
+// marked lagged so it gets a Resync message once it has room (issue #536).
+// Only the job quota is used, so the priorityMessageBuffer headroom stays
+// free for publishPriority.
+func (s *Service) publishJob(msg Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for ch, sub := range s.subs {
+		s.sendResyncLocked(ch, sub)
+		if len(ch) >= jobMessageBuffer {
+			sub.lagged = true
+			continue
+		}
+		ch <- msg // room guaranteed: only senders hold s.mu, receivers only free space
+	}
+}
+
+// publishPriority delivers a kill switch / Jev decision event. It never
+// competes with job messages for room. If a subscriber is so far behind
+// that even the reserved headroom is full, the event cannot be queued, so
+// the subscriber is closed instead of silently losing it: the WebSocket
+// handler then ends the connection and the client reconnects and re-fetches
+// the snapshot, which contains the event (issue #536).
+func (s *Service) publishPriority(msg Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for ch := range s.subs {
 		select {
 		case ch <- msg:
 		default:
+			slog.Warn("activityfeed: subscriber too slow for a priority event; closing it to force a resync")
+			s.removeLocked(ch)
 		}
+	}
+}
+
+// sendResyncLocked delivers the owed Resync to a lagged subscriber that
+// has room again. s.mu must be held.
+func (s *Service) sendResyncLocked(ch chan Message, sub *subscriber) {
+	if sub.lagged && len(ch) < jobMessageBuffer {
+		ch <- Message{Resync: true}
+		sub.lagged = false
+	}
+}
+
+// resyncLagged delivers pending Resync messages and, while any subscriber
+// is still lagged (its buffer has not drained), schedules another flush so
+// the notification is not lost when job traffic stops.
+func (s *Service) resyncLagged() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stillLagged := false
+	for ch, sub := range s.subs {
+		s.sendResyncLocked(ch, sub)
+		stillLagged = stillLagged || sub.lagged
+	}
+	if stillLagged {
+		s.scheduleFlushLocked()
 	}
 }
 
@@ -56,18 +122,24 @@ func (s *Service) ObserveJob(_ context.Context, job jobqueue.Job) {
 		return
 	}
 	ev := jobEvent(job)
-	s.publish(Message{Event: &ev})
+	s.publishJob(Message{Event: &ev})
 	s.markQueueDirty(job.Queue)
 }
 
 func (s *Service) markQueueDirty(queue string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.scheduleFlushLocked()
+	s.dirtyQueues[queue] = struct{}{}
+}
+
+// scheduleFlushLocked arms the coalescing timer unless one is pending
+// (dirtyQueues non-nil). s.mu must be held.
+func (s *Service) scheduleFlushLocked() {
 	if s.dirtyQueues == nil {
 		s.dirtyQueues = make(map[string]struct{})
 		time.AfterFunc(s.queueUpdateInterval, s.flushQueueUpdates)
 	}
-	s.dirtyQueues[queue] = struct{}{}
 }
 
 // flushQueueUpdates publishes the current depth of every queue marked dirty
@@ -75,6 +147,7 @@ func (s *Service) markQueueDirty(queue string) {
 // queues stay dirty and are retried after queueUpdateInterval, for as long
 // as there are subscribers.
 func (s *Service) flushQueueUpdates() {
+	defer s.resyncLagged()
 	s.mu.Lock()
 	dirty := s.dirtyQueues
 	s.dirtyQueues = nil
@@ -105,7 +178,7 @@ func (s *Service) flushQueueUpdates() {
 			continue
 		}
 		c := byQueue[queue]
-		s.publish(Message{QueueUpdate: &QueueUpdate{
+		s.publishJob(Message{QueueUpdate: &QueueUpdate{
 			Queue: queue, Pending: c.Pending, Running: c.Running, FailedRecent: c.FailedSince,
 		}})
 	}
@@ -117,7 +190,7 @@ func (s *Service) ObserveDecision(_ context.Context, d domain.JevDecision) {
 		return
 	}
 	ev := decisionEvent(d)
-	s.publish(Message{Event: &ev})
+	s.publishPriority(Message{Event: &ev})
 }
 
 // ObserveKillSwitch is a system.KillSwitchObserver.
@@ -126,5 +199,5 @@ func (s *Service) ObserveKillSwitch(_ context.Context, ke domain.KillSwitchEvent
 		return
 	}
 	ev := killSwitchEvent(ke)
-	s.publish(Message{Event: &ev})
+	s.publishPriority(Message{Event: &ev})
 }

@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -71,8 +73,10 @@ type Result struct {
 	// Version is the newer release's tag_name, set whenever Ready.
 	Version string
 	// InstallerPath is the verified installer's local temp-file path, set
-	// whenever Ready. The caller is responsible for removing it once
-	// installed.
+	// whenever Ready. It lives in a per-download temp directory that is
+	// not removed once the installer has run (a running installer cannot
+	// delete itself on Windows): the next startup removes it via
+	// tempcleanup.CleanupStale.
 	InstallerPath string
 }
 
@@ -215,16 +219,9 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 	}
 
 	status := Status{CheckedAt: time.Now(), Available: true, Version: release.TagName}
-	safe, reason := c.gate.SafeToUpdate(ctx)
-	if !safe {
-		slog.Info("updater: newer release available but not safe to update yet",
-			"current", version.Version, "latest", release.TagName, "reason", reason.Detail)
-		status.Blocked = true
-		status.BlockedKind = reason.Kind
-		c.setStatus(status)
+	if c.holdBack(ctx, &status, release.TagName, "before download") {
 		return Result{}, nil
 	}
-	c.setStatus(status)
 
 	assets, err := selectAssets(release.Assets)
 	if err != nil {
@@ -236,8 +233,35 @@ func (c *Checker) check(ctx context.Context) (Result, error) {
 		return Result{}, fmt.Errorf("updater: download/verify %s: %w", release.TagName, err)
 	}
 
+	// The download can take minutes (up to defaultDownloadTimeout), during
+	// which a position may have opened, the Kill Switch fired or an order
+	// been submitted; the caller quits and installs right after Ready, so
+	// re-evaluate the gate now (issue #535). The unused installer is
+	// discarded; the next check downloads it again.
+	if c.holdBack(ctx, &status, release.TagName, "after download") {
+		_ = os.RemoveAll(filepath.Dir(installerPath))
+		return Result{}, nil
+	}
+
 	slog.Info("updater: new release downloaded and verified", "version", release.TagName, "installer", installerPath)
 	status.Ready = true
 	c.setStatus(status)
 	return Result{Ready: true, Version: release.TagName, InstallerPath: installerPath}, nil
+}
+
+// holdBack evaluates SafeGate. When it does not pass it records status as
+// Blocked (so the scheduler retries soon, SchedulerAdapter.UpdatePending)
+// and reports true; otherwise it records status unchanged and reports
+// false. phase only labels the log line.
+func (c *Checker) holdBack(ctx context.Context, status *Status, tag, phase string) bool {
+	safe, reason := c.gate.SafeToUpdate(ctx)
+	if !safe {
+		slog.Info("updater: newer release available but not safe to update yet",
+			"current", version.Version, "latest", tag, "phase", phase, "reason", reason.Detail)
+		status.Ready = false
+		status.Blocked = true
+		status.BlockedKind = reason.Kind
+	}
+	c.setStatus(*status)
+	return !safe
 }

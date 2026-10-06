@@ -25,7 +25,8 @@ export interface ActivityAPIResponse {
 // Mirrors docs/api/endpoints.md §6 `/ws/activity` message shapes.
 export type ActivityWsMessage =
   | { type: 'job_update'; queue: string; pending: number; running: number; failed_recent?: number }
-  | { type: 'activity_event'; event: ActivityEvent };
+  | { type: 'activity_event'; event: ActivityEvent }
+  | { type: 'resync' };
 
 export const EVENT_TYPES = ['job', 'jev_scout', 'jev_trader', 'kill_switch'] as const;
 export const QUEUES = [

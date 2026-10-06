@@ -28,9 +28,19 @@ const (
 	// queue's FailedRecent (functional.md FR-ACT-1 "直近failed件数").
 	FailedWindow = time.Hour
 
-	// subscriberBuffer is each subscriber's channel capacity; a subscriber
-	// slower than this many pending messages misses the overflow.
-	subscriberBuffer = 64
+	// jobMessageBuffer is how many pending job events / queue updates a
+	// subscriber may hold. They are high volume (a 4,000-symbol full scan
+	// is thousands of transitions a minute) and lossy by design: past this
+	// the subscriber misses them and is told to resync (Message.Resync).
+	jobMessageBuffer = 64
+
+	// priorityMessageBuffer is extra channel capacity reserved for kill
+	// switch and Jev decision events, which are rare and important. Job
+	// message bursts cannot use it, so they never crowd those events out.
+	// A subscriber so slow that even this fills up is dropped (its channel
+	// is closed) rather than losing an event silently: the client then
+	// reconnects and re-fetches the snapshot.
+	priorityMessageBuffer = 64
 
 	// queueUpdateInterval is how long ObserveJob coalesces job transitions
 	// before computing one set of queue-depth updates (within
@@ -88,10 +98,13 @@ type Query struct {
 }
 
 // Message is one bus notification to `/ws/activity` subscribers: exactly
-// one of QueueUpdate/Event is non-nil.
+// one of QueueUpdate/Event is non-nil, or Resync is set.
 type Message struct {
 	QueueUpdate *QueueUpdate
 	Event       *domain.ActivityEvent
+	// Resync tells the subscriber it missed job events or queue updates
+	// (its buffer overflowed) and must re-fetch the snapshot.
+	Resync bool
 }
 
 // QueueUpdate is a queue's new depth after a job state transition.
@@ -114,7 +127,7 @@ type Service struct {
 	queueUpdateInterval time.Duration
 
 	mu   sync.Mutex
-	subs map[chan Message]struct{}
+	subs map[chan Message]*subscriber
 	// dirtyQueues are the queues with transitions not yet reported as a
 	// QueueUpdate; non-nil while a flush is scheduled (bus.go).
 	dirtyQueues map[string]struct{}
@@ -127,7 +140,7 @@ func New(jobs JobSource, decisions DecisionSource, killSwitch KillSwitchSource) 
 		decisions: decisions,
 		killSw:    killSwitch,
 		now:       func() time.Time { return time.Now().UTC() },
-		subs:      make(map[chan Message]struct{}),
+		subs:      make(map[chan Message]*subscriber),
 
 		queueUpdateInterval: queueUpdateInterval,
 	}

@@ -1,6 +1,9 @@
 package pages
 
-import "github.com/ousiassllc/pitha-trador/internal/web/layout"
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
 
 // CalibrationPage is the Calibration full page (functional.md §5.4):
 // layout.Shell around the `pitha-calibration-heatmap` island
@@ -15,7 +18,7 @@ import "github.com/ousiassllc/pitha-trador/internal/web/layout"
 // (internal/web/handler/calibration.CalibrationHandler.Page) renders this for every
 // request.
 templ CalibrationPage() {
-	@layout.Shell("Calibration") {
+	@layout.Shell("Calibration", organisms.NavCalibration) {
 		<h1 class="text-2xl font-bold text-slate-900">Calibration</h1>
 		<pitha-calibration-heatmap calibration-url="/api/v1/calibration"></pitha-calibration-heatmap>
 		<script type="module" src="/static/dist/js/calibration-heatmap/pitha-calibration-heatmap.js"></script>

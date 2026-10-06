@@ -59,11 +59,16 @@ func TestNew_WithHeartbeatRecorderSkipsNonOperatorTraffic(t *testing.T) {
 	engine := router.New(router.WithHeartbeatRecorder(recorder))
 	authed := authorize(t, engine, httptest.NewRequest(http.MethodGet, "/scanner", nil))
 
-	for _, path := range []string{"/system/update-status", "/static/dist/app.js"} {
+	// Header's `every Ns` banner polls carry the marker via hx-headers.
+	for _, path := range []string{"/system/update-status", "/system/marketdata-status"} {
 		r := httptest.NewRequest(http.MethodGet, path, nil)
+		r.Header.Set(middleware.BackgroundHeader, "1")
 		r.AddCookie(authed.Cookies()[0])
 		engine.ServeHTTP(httptest.NewRecorder(), r)
 	}
+	static := httptest.NewRequest(http.MethodGet, "/static/dist/app.js", nil)
+	static.AddCookie(authed.Cookies()[0])
+	engine.ServeHTTP(httptest.NewRecorder(), static)
 	ws := httptest.NewRequest(http.MethodGet, "/ws/system", nil)
 	ws.Header.Set("Upgrade", "websocket")
 	ws.AddCookie(authed.Cookies()[0])

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
+import { installFakeWebSocket } from '../lib/ws-test-support';
 import { PithaScannerTable } from './pitha-scanner-table';
 
 // Regression test for the Scanner Dashboard showing two <table>s (every
@@ -36,32 +37,18 @@ import { PithaScannerTable } from './pitha-scanner-table';
 const TAG = 'pitha-scanner-table-hydration-test';
 
 type ScannerTableElement = HTMLElement & { updateComplete: Promise<boolean> };
-type Listener = (event: unknown) => void;
-
-class FakeWebSocket {
-  private listeners: Record<string, Listener[]> = {};
-  constructor(public readonly url: string) {}
-  addEventListener(type: string, listener: Listener): void {
-    if (!this.listeners[type]) {
-      this.listeners[type] = [];
-    }
-    this.listeners[type].push(listener);
-  }
-  close(): void {}
-}
 
 let originalFetch: typeof fetch;
-let originalWebSocket: typeof WebSocket;
+let restoreWebSocket: () => void;
 
 beforeEach(() => {
   originalFetch = globalThis.fetch;
-  originalWebSocket = globalThis.WebSocket;
-  globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+  restoreWebSocket = installFakeWebSocket();
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  globalThis.WebSocket = originalWebSocket;
+  restoreWebSocket();
   document.body.innerHTML = '';
 });
 
@@ -83,7 +70,7 @@ async function flush(el: ScannerTableElement): Promise<void> {
 const SSR_MARKUP = `
   <details data-testid="scanner-column-help"><summary>列の意味</summary></details>
   <table>
-    <caption>Scanner Dashboard — as of 2026-09-28T00:00:00+09:00</caption>
+    <caption>Scanner Dashboard — as of 2026-09-28 00:00:00 JST</caption>
     <thead><tr><th>銘柄</th></tr></thead>
     <tbody><tr data-symbol="SSR1"><td>SSR1</td></tr></tbody>
   </table>

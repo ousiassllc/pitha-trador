@@ -53,6 +53,11 @@ export function isWsDisconnected(status: WsStatus): boolean {
 
 export interface WsClientOptions<T> {
   onOpen?: () => void;
+  // Fires once on the first open after the connection was lost (never on the
+  // initial open). Events pushed while the socket was down are gone, so
+  // components re-fetch their state here instead of tracking it themselves.
+  // Use onStatusChange only to display the connection state.
+  onReconnect?: () => void;
   onMessage?: (message: T) => void;
   onClose?: (event: CloseEvent) => void;
   onStatusChange?: (status: WsStatus) => void;
@@ -63,6 +68,9 @@ export class WsClient<T = unknown> {
   private retries = 0;
   private closedByUser = false;
   private reconnectTimer: number | null = null;
+  // True from the first lost connection until the next successful open,
+  // which is what onReconnect fires on.
+  private wasDisconnected = false;
 
   constructor(
     private readonly url: string,
@@ -95,6 +103,10 @@ export class WsClient<T = unknown> {
       stableTimer = window.setTimeout(markHealthy, STABLE_CONNECTION_MS);
       this.options.onStatusChange?.('open');
       this.options.onOpen?.();
+      if (this.wasDisconnected) {
+        this.wasDisconnected = false;
+        this.options.onReconnect?.();
+      }
     });
 
     socket.addEventListener('message', (event: MessageEvent<string>) => {
@@ -117,6 +129,7 @@ export class WsClient<T = unknown> {
       if (this.closedByUser) return;
       const backoff = Math.min(INITIAL_BACKOFF_MS * 2 ** this.retries, MAX_BACKOFF_MS);
       this.retries += 1;
+      this.wasDisconnected = true;
       this.options.onStatusChange?.(this.retries > MAX_RETRIES ? 'failed' : 'reconnecting');
       this.reconnectTimer = window.setTimeout(() => this.connect(), backoff);
     });

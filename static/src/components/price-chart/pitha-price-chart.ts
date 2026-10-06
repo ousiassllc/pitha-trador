@@ -10,7 +10,6 @@ import {
   type ISeriesApi,
   type SeriesMarker,
   type Time,
-  type UTCTimestamp,
 } from 'lightweight-charts';
 import { css, html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -18,58 +17,30 @@ import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
-import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
+import { type Bar, foldTick, toBarTime, toUTCTimestamp } from './bars';
+import {
+  type ChartSummary,
+  describeChart,
+  EMPTY_SUMMARY,
+  MAIN_SCALE_MARGINS,
+  VOLUME_COLOR,
+  VOLUME_SCALE_MARGINS,
+  vwapSeriesData,
+} from './chart-data';
+import type {
+  Candle,
+  CandlesAPIResponse,
+  JevUpdateMessage,
+  SymbolMessage,
+  TickMessage,
+} from './chart-types';
 import { formatCrosshairTime, formatTickMark } from './jst-time';
 
-// Mirrors docs/api/endpoints.md §5 `GET /api/v1/symbols/{symbol}/candles`
-// item shape (internal/web/handler/symbol.candleOutput).
-export interface Candle {
-  time: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  vwap: number;
-}
-
-interface CandlesAPIResponse {
-  symbol: string;
-  candles: Candle[];
-}
-
-// Mirrors docs/api/endpoints.md §6's `/ws/symbols/{symbol}` message
-// shapes (internal/web/handler/symbol.symbolTickMessage/symbolJevUpdateMessage).
-interface TickMessage {
-  type: 'tick';
-  price: number;
-}
-
-interface JevUpdateMessage {
-  type: 'jev_update';
-  direction: string | null;
-  confidence: number | null;
-}
-
-type SymbolMessage = TickMessage | JevUpdateMessage;
-
 const CHART_HEIGHT = 400;
-const BAR_SECONDS = 60;
-
-interface Bar {
-  time: UTCTimestamp;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-}
 const LONG_MARKER_COLOR = '#16a34a';
 const SHORT_MARKER_COLOR = '#dc2626';
-
-function toUTCTimestamp(iso: string): UTCTimestamp {
-  return Math.floor(new Date(iso).getTime() / 1000) as UTCTimestamp;
-}
 
 @customElement('pitha-price-chart')
 export class PithaPriceChart extends LitElement {
@@ -92,6 +63,8 @@ export class PithaPriceChart extends LitElement {
 
   @state() private error: string | null = null;
   @state() private wsStatus: WsStatus = 'connecting';
+  // Feeds the canvas's accessible name (role="img"); updated as data arrives.
+  @state() private summary: ChartSummary = EMPTY_SUMMARY;
 
   private readonly containerRef = createRef<HTMLDivElement>();
   private chart: IChartApi | null = null;
@@ -105,21 +78,50 @@ export class PithaPriceChart extends LitElement {
   // into it instead of stacking new bars.
   private lastBar: Bar | null = null;
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    // Re-attached after a removal: firstUpdated does not run again, but the
+    // rendered container survives, so rebuild what disconnectedCallback tore down.
+    if (this.hasUpdated) this.start();
+  }
+
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.chart?.remove();
     this.chart = null;
+    this.candleSeries = null;
+    this.vwapSeries = null;
+    this.volumeSeries = null;
+    this.lastBar = null;
+    this.markers = [];
+    this.lastDirection = null;
+    this.summary = EMPTY_SUMMARY;
+    this.stopWs();
+  }
+
+  // firstUpdated (not connectedCallback) for the first start so
+  // this.containerRef.value is guaranteed populated: createChart needs a
+  // real, already-rendered DOM element to attach its canvas to.
+  protected override firstUpdated(): void {
+    this.start();
+  }
+
+  private start(): void {
+    this.initChart();
+    this.loadInitial();
+    this.subscribeWs();
+  }
+
+  private stopWs(): void {
     this.wsClient?.close();
     this.wsClient = null;
   }
 
-  // firstUpdated (not connectedCallback) so this.containerRef.value is
-  // guaranteed populated: createChart needs a real, already-rendered DOM
-  // element to attach its canvas to.
-  protected override firstUpdated(): void {
-    this.initChart();
-    this.loadInitial();
-    this.subscribeWs();
+  private resetMarkers(): void {
+    this.markers = [];
+    this.lastDirection = null;
+    this.summary = EMPTY_SUMMARY; // the previous symbol's values
+    this.candleSeries?.setMarkers([]);
   }
 
   private initChart(): void {
@@ -139,7 +141,10 @@ export class PithaPriceChart extends LitElement {
     });
     this.candleSeries = this.chart.addCandlestickSeries();
     this.vwapSeries = this.chart.addLineSeries({ color: '#2962ff', lineWidth: 1 });
-    this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', color: '#9ca3af' });
+    this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', color: VOLUME_COLOR });
+    // Keep the volume bars in their own bottom band, clear of the candles/VWAP.
+    this.volumeSeries.priceScale().applyOptions({ scaleMargins: VOLUME_SCALE_MARGINS });
+    this.chart.priceScale('right').applyOptions({ scaleMargins: MAIN_SCALE_MARGINS });
   }
 
   // `background` marks a resync the page fires by itself (WS reconnect), so
@@ -151,7 +156,7 @@ export class PithaPriceChart extends LitElement {
     }
     try {
       const response = await get<CandlesAPIResponse>(this.candlesUrl, { background });
-      this.applyCandles(response.candles);
+      this.applyCandles(response.symbol, response.candles);
       this.error = null;
     } catch (err) {
       this.error = err instanceof Error ? err.message : String(err);
@@ -159,7 +164,7 @@ export class PithaPriceChart extends LitElement {
     }
   }
 
-  private applyCandles(candles: Candle[]): void {
+  private applyCandles(symbol: string, candles: Candle[]): void {
     if (!this.candleSeries || !this.vwapSeries || !this.volumeSeries) return;
     const bars: Bar[] = candles.map((c) => ({
       time: toUTCTimestamp(c.time),
@@ -170,30 +175,27 @@ export class PithaPriceChart extends LitElement {
     }));
     this.candleSeries.setData(bars);
     this.lastBar = bars.at(-1) ?? null;
-    this.vwapSeries.setData(candles.map((c) => ({ time: toUTCTimestamp(c.time), value: c.vwap })));
+    this.vwapSeries.setData(vwapSeriesData(candles));
     this.volumeSeries.setData(
       candles.map((c) => ({ time: toUTCTimestamp(c.time), value: c.volume })),
     );
+    const lastVwap = candles.filter((c) => c.vwap > 0).at(-1)?.vwap ?? null;
+    this.summary = { ...this.summary, symbol, close: this.lastBar?.close ?? null, vwap: lastVwap };
   }
 
   private subscribeWs(): void {
+    this.wsStatus = 'connecting';
     if (!this.wsUrl) {
       logger.error('pitha-price-chart: ws-url is not set');
       return;
     }
-    // Ticks build bars from the client clock, so bars of the minutes the
+    // Ticks build bars from snapshot times, so bars of the minutes the
     // socket was down are missing until the candles are re-fetched (#336).
-    let wasDisconnected = false;
     this.wsClient = new WsClient<SymbolMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;
-        if (isWsDisconnected(status)) {
-          wasDisconnected = true;
-        } else if (status === 'open' && wasDisconnected) {
-          wasDisconnected = false;
-          void this.loadInitial(true);
-        }
       },
+      onReconnect: () => void this.loadInitial(true),
       onMessage: (message) => {
         if (message.type === 'tick') {
           this.applyTick(message);
@@ -204,42 +206,34 @@ export class PithaPriceChart extends LitElement {
     });
   }
 
-  // applyTick folds a price tick into the current 1-minute bar (a new bar
-  // only when the minute changes), matching the candles endpoint's
-  // resolution. A non-positive price means the server has no snapshot yet
-  // and would drag the chart's autoscale to 0, so it is ignored.
+  // applyTick draws a price tick folded into the bar of its snapshot time
+  // (see foldTick).
   private applyTick(message: TickMessage): void {
-    if (!this.candleSeries || !(message.price > 0)) return;
-    const price = message.price;
-    // Never go back in time: series.update rejects a bar older than the last.
-    const minute = Math.floor(Date.now() / 1000 / BAR_SECONDS) * BAR_SECONDS;
-    const time = Math.max(minute, this.lastBar?.time ?? 0) as UTCTimestamp;
-    const bar: Bar =
-      this.lastBar && this.lastBar.time === time
-        ? {
-            ...this.lastBar,
-            high: Math.max(this.lastBar.high, price),
-            low: Math.min(this.lastBar.low, price),
-            close: price,
-          }
-        : { time, open: price, high: price, low: price, close: price };
+    if (!this.candleSeries) return;
+    const bar = foldTick(this.lastBar, message.price, message.time);
+    if (!bar) return;
     this.lastBar = bar;
     this.candleSeries.update(bar);
+    this.summary = { ...this.summary, close: bar.close };
   }
 
   // applyJevUpdate draws an up/down arrow marker on direction changes
-  // (docs/components/overview.md §5.1: "LONG転換で上向き矢印"). A repeat
-  // of the same direction (or no direction yet) draws nothing.
+  // (docs/components/overview.md §5.1: "LONG転換で上向き矢印"), on the bar
+  // of the decision's own time. The first message after (re)connecting is the
+  // server's current state, not a change, so it only seeds lastDirection; a
+  // repeat of the same direction (or no direction) draws nothing.
   private applyJevUpdate(message: JevUpdateMessage): void {
-    if (!this.candleSeries || !message.direction || message.direction === this.lastDirection) {
-      this.lastDirection = message.direction;
-      return;
-    }
+    const previous = this.lastDirection;
     this.lastDirection = message.direction;
+    this.summary = { ...this.summary, direction: message.direction };
+    if (!this.candleSeries || !message.direction) return;
+    if (previous === null || previous === message.direction) return;
+    const time = toBarTime(message.time);
+    if (time === null) return;
 
     const isLong = message.direction === 'LONG';
     const marker: SeriesMarker<Time> = {
-      time: Math.floor(Date.now() / 1000) as UTCTimestamp,
+      time,
       position: isLong ? 'belowBar' : 'aboveBar',
       color: isLong ? LONG_MARKER_COLOR : SHORT_MARKER_COLOR,
       shape: isLong ? 'arrowUp' : 'arrowDown',
@@ -251,7 +245,12 @@ export class PithaPriceChart extends LitElement {
 
   protected override render() {
     return html`
-      <div ${ref(this.containerRef)} class="pitha-price-chart-container"></div>
+      <div
+        ${ref(this.containerRef)}
+        class="pitha-price-chart-container"
+        role="img"
+        aria-label=${describeChart(this.summary)}
+      ></div>
       ${renderWsDisconnected(this.wsStatus)}
       ${this.error ? html`<p class="pitha-price-chart-error" role="alert">${this.error}</p>` : ''}
     `;
@@ -261,11 +260,14 @@ export class PithaPriceChart extends LitElement {
   // recorded old value is undefined: firstUpdated has already loaded the
   // candles and opened the socket, and redoing both would double them.
   protected override updated(changed: PropertyValues<this>): void {
-    if (changed.get('candlesUrl') !== undefined && this.candleSeries) {
-      this.loadInitial();
-    }
-    if (changed.get('wsUrl') !== undefined && this.wsClient) {
-      this.wsClient.close();
+    if (!this.chart) return;
+    const candlesChanged = changed.get('candlesUrl') !== undefined;
+    const wsChanged = changed.get('wsUrl') !== undefined;
+    // Markers and the last direction belong to the previous symbol.
+    if (candlesChanged || wsChanged) this.resetMarkers();
+    if (candlesChanged) this.loadInitial();
+    if (wsChanged) {
+      this.stopWs();
       this.subscribeWs();
     }
   }

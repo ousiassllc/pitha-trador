@@ -172,13 +172,6 @@ export function formatConfidence(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
 }
 
-// The server's RFC 3339 timestamp without fractional seconds, matching the
-// SSR caption (Go's time.RFC3339); `as_of` values from the API/WebSocket
-// carry nanoseconds (RFC3339Nano) but the same offset.
-export function formatAsOf(asOf: string): string {
-  return asOf.replace(/\.\d+/, '');
-}
-
 export function formatSignedNullable(value: number | null, decimals: number): string {
   return value === null ? '—' : formatSigned(value, decimals);
 }

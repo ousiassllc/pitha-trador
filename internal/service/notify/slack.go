@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -85,13 +87,13 @@ func (n *SlackNotifier) PostMessage(ctx context.Context, text string) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.webhookURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("notify: build slack webhook request: %w", err)
+		return fmt.Errorf("notify: build slack webhook request: %w", withoutURL(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := n.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("notify: post slack webhook: %w", err)
+		return fmt.Errorf("notify: post slack webhook: %w", withoutURL(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -99,6 +101,19 @@ func (n *SlackNotifier) PostMessage(ctx context.Context, text string) error {
 		return fmt.Errorf("notify: slack webhook returned status %d: %s", resp.StatusCode, readErrorBody(resp.Body))
 	}
 	return nil
+}
+
+// withoutURL strips the request URL from a *url.Error (net/http and
+// http.NewRequest wrap their failures in one, whose message embeds the full
+// URL). A Slack Incoming Webhook URL's path is the secret token, and callers
+// log the returned error, so only the underlying cause (e.g. "connection
+// refused", context.DeadlineExceeded) is kept; errors.Is/As still reach it.
+func withoutURL(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return urlErr.Err
+	}
+	return err
 }
 
 // readErrorBody returns at most maxErrorBodyBytes of body for embedding in

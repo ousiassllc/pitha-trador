@@ -7,10 +7,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
-// CalibrationSource supplies Calibration's aggregated outcomes
-// (internal/service/calibration.Service satisfies it).
+// CalibrationSource answers whether a confidence bucket is populated
+// enough (internal/service/calibration.Service satisfies it).
 type CalibrationSource interface {
-	Metrics(ctx context.Context) (domain.CalibrationMetrics, error)
+	// BucketHasSamples reports whether the confidence bucket containing
+	// confidence holds at least min labeled samples (false when it is in
+	// no bucket). It must be cheap and independent of the labeling
+	// history's size: it runs on every directional Jev trader job.
+	BucketHasSamples(ctx context.Context, confidence float64, min int) (bool, error)
 }
 
 // HandlerOption configures optional Handler behavior.
@@ -38,16 +42,9 @@ func (h *Handler) calibrated(ctx context.Context, d domain.JevDecision) (bool, e
 		return false, nil
 	}
 
-	metrics, err := h.calib.Metrics(ctx)
+	enough, err := h.calib.BucketHasSamples(ctx, *d.Confidence, minSamples)
 	if err != nil {
-		return false, fmt.Errorf("load calibration metrics: %w", err)
+		return false, fmt.Errorf("count calibration samples: %w", err)
 	}
-	for i, r := range domain.DefaultConfidenceBucketRanges {
-		last := i == len(domain.DefaultConfidenceBucketRanges)-1
-		c := *d.Confidence
-		if c >= r.Low && (c < r.High || (last && c == r.High)) {
-			return i < len(metrics.Buckets) && metrics.Buckets[i].SampleCount >= minSamples, nil
-		}
-	}
-	return false, nil
+	return enough, nil
 }

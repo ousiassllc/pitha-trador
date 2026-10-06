@@ -21,7 +21,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { get, post } from '../lib/api';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
-import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 
 export type SystemStatus = 'running' | 'paused' | 'killed';
@@ -117,6 +117,11 @@ export class PithaKillSwitchPanel extends LitElement {
   @state() private wsStatus: WsStatus = 'connecting';
 
   private wsClient: WsClient<SystemWsMessage> | null = null;
+  // Request generations (see resync / performAction / onKillSwitchPush):
+  // resyncSeq is bumped by anything that supersedes in-flight GETs,
+  // actionSeq by anything that supersedes an in-flight action POST.
+  private resyncSeq = 0;
+  private actionSeq = 0;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -139,10 +144,16 @@ export class PithaKillSwitchPanel extends LitElement {
       logger.error('pitha-kill-switch-panel: status-url is not set');
       return;
     }
+    // Only the latest request may touch state: a slower, older response must
+    // not overwrite what a later resync, action or kill push established.
+    const seq = ++this.resyncSeq;
     try {
-      this.applyState(await get<SystemStateResponse>(this.statusUrl, { background: true }));
+      const response = await get<SystemStateResponse>(this.statusUrl, { background: true });
+      if (seq !== this.resyncSeq) return;
+      this.applyState(response);
       this.error = null;
     } catch (err) {
+      if (seq !== this.resyncSeq) return;
       this.error = err instanceof Error ? err.message : String(err);
       logger.error('pitha-kill-switch-panel: failed to load status', { error: err });
     }
@@ -153,17 +164,11 @@ export class PithaKillSwitchPanel extends LitElement {
       logger.error('pitha-kill-switch-panel: ws-url is not set');
       return;
     }
-    let wasDisconnected = false;
     this.wsClient = new WsClient<SystemWsMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;
-        if (isWsDisconnected(status)) {
-          wasDisconnected = true;
-        } else if (status === 'open' && wasDisconnected) {
-          wasDisconnected = false;
-          void this.resync();
-        }
       },
+      onReconnect: () => void this.resync(),
       onMessage: (message) => {
         if (message.type === 'kill_switch') {
           this.onKillSwitchPush();
@@ -177,6 +182,10 @@ export class PithaKillSwitchPanel extends LitElement {
   // The push only says "killed"; which actions are allowed from there is
   // the server's call, so drop every action until resync() returns them.
   private onKillSwitchPush(): void {
+    // Everything issued before the push (GETs and an action's POST) can only
+    // describe an older state; resync() below fetches the new one.
+    this.resyncSeq += 1;
+    this.actionSeq += 1;
     this.status = 'killed';
     this.canPause = false;
     this.canResume = false;
@@ -203,9 +212,16 @@ export class PithaKillSwitchPanel extends LitElement {
       return;
     }
     this.busy = true;
+    // The POST response is the newest word on the state: GETs still in
+    // flight predate it, and only a later action / kill push may override it.
+    this.resyncSeq += 1;
+    const seq = ++this.actionSeq;
     try {
-      this.applyState(await post<SystemStateResponse>(url));
-      this.error = null;
+      const response = await post<SystemStateResponse>(url);
+      if (seq === this.actionSeq) {
+        this.applyState(response);
+        this.error = null;
+      }
     } catch (err) {
       logger.error(`pitha-kill-switch-panel: ${url} failed`, { error: err });
       // The server may have changed state despite the failure (Kill sets
@@ -235,7 +251,7 @@ export class PithaKillSwitchPanel extends LitElement {
   protected override render() {
     return html`
       <div class="pitha-kill-switch-panel" data-status=${this.status}>
-        <span class="pitha-kill-switch-panel-status">${this.status}</span>
+        <span class="pitha-kill-switch-panel-status" role="status" aria-live="polite">${this.status}</span>
         ${this.canPause ? html`<button type="button" ?disabled=${this.busy} @click=${this.onPause}>Pause</button>` : ''}
         ${this.canResume ? html`<button type="button" ?disabled=${this.busy} @click=${this.onResume}>Resume</button>` : ''}
         ${this.canKill ? html`<button type="button" class="pitha-kill-switch-panel-kill" ?disabled=${this.busy} @click=${this.onKill}>Kill</button>` : ''}

@@ -1,0 +1,49 @@
+package organisms
+
+import (
+	"fmt"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// BacktestFormValues is the Performance page's Walk Forward backtest
+// request, echoed back into the form so a rerun starts from the last
+// submitted values. From/To are YYYY-MM-DD dates (To inclusive).
+type BacktestFormValues struct {
+	From           string
+	To             string
+	TrainingDays   int
+	ValidationDays int
+	ForwardDays    int
+}
+
+// backtestFieldClass keeps each input at its natural width under its
+// label (atoms.Input's default `flex-1` is for row-filling fields).
+const backtestFieldClass = "mt-1 px-3 py-1"
+
+// BacktestForm renders the Performance page's Walk Forward backtest request
+// form (functional.md §5.3, FR-BT-2): a plain GET form to `/performance`,
+// so a run is a bookmarkable URL.
+templ BacktestForm(form BacktestFormValues) {
+	<form class="mt-4 flex flex-wrap items-end gap-4" method="get" action="/performance" data-testid="backtest-form">
+		@backtestField("From", atoms.InputProps{Name: "from", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.From, "required": true}})
+		@backtestField("To", atoms.InputProps{Name: "to", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.To, "required": true}})
+		@backtestField("Training days", daysInput("training_days", form.TrainingDays))
+		@backtestField("Validation days", daysInput("validation_days", form.ValidationDays))
+		@backtestField("Forward days", daysInput("forward_days", form.ForwardDays))
+		@atoms.Button(atoms.ButtonProps{Type: "submit"}) {
+			Run backtest
+		}
+	</form>
+}
+
+templ backtestField(label string, input atoms.InputProps) {
+	<label class="flex flex-col text-sm text-slate-600">
+		{ label }
+		@atoms.Input(input)
+	</label>
+}
+
+func daysInput(name string, days int) atoms.InputProps {
+	return atoms.InputProps{Name: name, Type: "number", Class: backtestFieldClass, Attrs: templ.Attributes{"min": "1", "value": fmt.Sprintf("%d", days)}}
+}

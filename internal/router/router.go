@@ -45,6 +45,7 @@ func New(opts ...Option) *gin.Engine {
 
 	engine := gin.New()
 	settingsStore := useMiddleware(engine, o)
+	engine.NoRoute(noRoute)
 	h := registerPages(engine, o, settingsStore)
 	registerAPI(engine, o, h)
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	configdefaults "github.com/ousiassllc/pitha-trador/config"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
@@ -88,6 +89,7 @@ func newTestEnvWithNews(t testing.TB, feedCfg newsfeed.FeedConfig, lunaCfg assis
 	executionConfig.Calendar = marketcalendar.TSE
 	executionConfig.Now = barClock
 	boards := &fakeBoards{}
+	candidates := screener.NewLiveSource()
 	return testEnv{
 		Handler: &Handler{
 			Boards:        boards,
@@ -98,8 +100,8 @@ func newTestEnvWithNews(t testing.TB, feedCfg newsfeed.FeedConfig, lunaCfg assis
 				Orders: trading.NewOrderRepository(conn), Positions: positions, Snapshots: snapshots,
 				Decisions: decisions, Signals: trading.NewSignalRepository(conn), Instruments: instruments,
 			}, executionConfig),
-			Screener:     screener.NewLiveSource(),
-			News:         newsfeed.NewService(newsfeed.NewFeedClient(feedCfg), assist.NewLuna(assist.NewClient(lunaCfg)), instruments),
+			Screener:     candidates,
+			News:         newsfeed.NewService(newsfeed.NewFeedClient(feedCfg), assist.NewLuna(assist.NewClient(lunaCfg)), newstargets.New(candidates, positions)),
 			Scheduler:    scheduler.New(jobs, instruments),
 			EventTrigger: strategy.Scan.EventTrigger,
 			Now:          barClock,

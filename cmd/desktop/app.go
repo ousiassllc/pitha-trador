@@ -4,11 +4,13 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
+	"github.com/ousiassllc/pitha-trador/internal/service/updater/tempcleanup"
 )
 
 // App is the Wails-bound application struct. It holds the Wails runtime
@@ -29,11 +31,33 @@ type App struct {
 	// runs on Wails' separate shutdown goroutine.
 	mu               sync.Mutex
 	pendingInstaller string
+
+	// initNotifications/cleanupNotifications are Wails' native notification
+	// lifecycle calls; they are fields only so tests can observe them
+	// without a Wails runtime.
+	initNotifications    func(context.Context) error
+	cleanupNotifications func(context.Context)
 }
 
 // NewApp creates a new App instance.
 func NewApp() *App {
-	return &App{}
+	return &App{
+		initNotifications:    runtime.InitializeNotifications,
+		cleanupNotifications: runtime.CleanupNotifications,
+	}
+}
+
+// setupNotifications initializes Wails' native notification service, which
+// runtime.SendNotification requires before its first use ("This must be
+// called before sending any notifications"; on Windows it sets the toast
+// AppID, icon and activation callback - issue #549). A failure is logged and
+// otherwise ignored: the app still runs, and KillSwitchTriggered /
+// KillSwitchAutoResumed then return (and the risk fan-out logs) the
+// SendNotification error.
+func (a *App) setupNotifications(ctx context.Context) {
+	if err := a.initNotifications(ctx); err != nil {
+		slog.Error("desktop: initialize native notifications failed", "error", err)
+	}
 }
 
 // startup is Wails' OnStartup hook: it saves the runtime context, then
@@ -43,7 +67,10 @@ func NewApp() *App {
 // trade or scan, so it is reported in a native error dialog and the app
 // quits rather than running with its background processing silently dead.
 func (a *App) startup(ctx context.Context) {
+	startedAt := time.Now()
 	a.ctx = ctx
+	a.setupNotifications(ctx)
+	cleanupStaleUpdateDownloads(startedAt)
 
 	runCtx, cancel := context.WithCancel(ctx)
 	a.cancel = cancel
@@ -56,6 +83,21 @@ func (a *App) startup(ctx context.Context) {
 			Message: err.Error(),
 		})
 		runtime.Quit(ctx)
+	}
+}
+
+// cleanupStaleUpdateDownloads removes the installer directories a previous
+// self-update left in the temp directory (tempcleanup.CleanupStale;
+// the installer cannot delete itself, so the restarted app does). A failure
+// is only logged: it must never keep the app from starting.
+func cleanupStaleUpdateDownloads(startedAt time.Time) {
+	removed, err := tempcleanup.CleanupStale(startedAt)
+	if err != nil {
+		slog.Warn("desktop: clean up stale update downloads failed", "removed", removed, "error", err)
+		return
+	}
+	if removed > 0 {
+		slog.Info("desktop: removed stale update downloads", "removed", removed)
 	}
 }
 
@@ -83,11 +125,12 @@ func (a *App) QuitForUpdate(installerPath string) {
 // installer itself (build/windows/installer/project.nsi's silent-launch
 // customization) restarts the new pitha-trador.exe once installation
 // completes.
-func (a *App) shutdown(context.Context) {
+func (a *App) shutdown(ctx context.Context) {
 	if a.cancel != nil {
 		a.cancel()
 	}
 	a.services.Stop()
+	a.cleanupNotifications(ctx)
 
 	a.mu.Lock()
 	installerPath := a.pendingInstaller

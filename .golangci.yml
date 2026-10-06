@@ -37,6 +37,54 @@ linters:
           deny:
             - pkg: github.com/ousiassllc/pitha-trador/internal/service
               desc: Templ layers must not import service; take plain props and map them in web/handler (components/overview.md §3)
+        # docs/components/overview.md §3: Atomic Design dependencies point one
+        # way (atoms -> molecules -> organisms -> layout -> pages) and only
+        # layout (the assembly layer) may import web/middleware (issue #521).
+        atoms-direction:
+          files:
+            - "**/internal/web/atoms/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/molecules
+              desc: Templ layers depend downward only (components/overview.md §3)
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/organisms
+              desc: Templ layers depend downward only (components/overview.md §3)
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/pages
+              desc: Templ layers depend downward only (components/overview.md §3)
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/layout
+              desc: Templ layers depend downward only (components/overview.md §3)
+        molecules-direction:
+          files:
+            - "**/internal/web/molecules/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/organisms
+              desc: Templ layers depend downward only (components/overview.md §3)
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/pages
+              desc: Templ layers depend downward only (components/overview.md §3)
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/layout
+              desc: Templ layers depend downward only (components/overview.md §3)
+        organisms-direction:
+          files:
+            - "**/internal/web/organisms/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/pages
+              desc: Templ layers depend downward only (components/overview.md §3)
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/layout
+              desc: Templ layers depend downward only (components/overview.md §3)
+        layout-direction:
+          files:
+            - "**/internal/web/layout/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/pages
+              desc: Templ layers depend downward only (components/overview.md §3)
+        templ-parts-no-middleware:
+          files:
+            - "**/internal/web/atoms/**"
+            - "**/internal/web/molecules/**"
+            - "**/internal/web/organisms/**"
+            - "**/internal/web/pages/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/web/middleware
+              desc: only web/layout and web/handler may use web/middleware; take values as props (components/overview.md §3)
     gosec:
       excludes:
         # G304 (file path from a variable): every os.Open/ReadFile/Create

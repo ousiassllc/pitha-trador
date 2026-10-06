@@ -1,0 +1,52 @@
+package organisms
+
+import (
+	"fmt"
+	"time"
+)
+
+// BacktestFold is one Walk Forward fold's Forward period and metrics.
+// ForwardEnd is the exclusive end of the day-granular period.
+type BacktestFold struct {
+	ForwardStart time.Time
+	ForwardEnd   time.Time
+	Forward      PerformanceSummary
+}
+
+// BacktestFoldTable is the Performance page's "Folds" panel: each fold's
+// Forward period and out-of-sample metrics (FR-BT-1).
+templ BacktestFoldTable(folds []BacktestFold) {
+	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="backtest-folds">
+		<h2 class="text-lg font-semibold text-slate-900">Folds</h2>
+		<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="Walk Forward 結果（フォールド別）">
+			<thead>
+				<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
+					<th scope="col" class="px-3 py-2">Forward period</th>
+					<th scope="col" class="px-3 py-2">Trades</th>
+					<th scope="col" class="px-3 py-2">Win Rate</th>
+					<th scope="col" class="px-3 py-2">Expectancy</th>
+					<th scope="col" class="px-3 py-2">Max Drawdown</th>
+					<th scope="col" class="px-3 py-2">Net PnL</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, f := range folds {
+					<tr class="border-b border-slate-100">
+						<td class="px-3 py-2">{ f.ForwardStart.Format("2006-01-02") } – { lastDay(f.ForwardEnd) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%d", f.Forward.TradeCount) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%.1f%%", f.Forward.WinRate*100) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", f.Forward.Expectancy) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", f.Forward.MaxDrawdownPct) }</td>
+						<td class="px-3 py-2">{ fmt.Sprintf("%.2f%%", f.Forward.NetPnLPct) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</section>
+}
+
+// lastDay renders the final (inclusive) day of a day-granular period whose
+// exclusive end is end.
+func lastDay(end time.Time) string {
+	return end.Add(-time.Nanosecond).Format("2006-01-02")
+}

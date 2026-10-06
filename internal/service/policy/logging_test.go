@@ -9,6 +9,9 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
 
@@ -37,16 +40,35 @@ func decodeLogLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	return lines
 }
 
-func TestEngine_Decide_LogsTradeSignalDecided(t *testing.T) {
+func TestEngine_Evaluate_LogsTradeSignalDecidedOncePerEvaluation(t *testing.T) {
+	db := newHandlerTestDB(t)
+	instrument, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
+		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
+	})
+	if err != nil {
+		t.Fatalf("Create instrument: %v", err)
+	}
+	in := passingInput(domain.JevDirectionLong)
+	in.InstrumentID = instrument.ID
+	saved, err := judgement.NewDecisionRepository(db).Insert(context.Background(), domain.JevDecision{
+		InstrumentID: instrument.ID, Symbol: "7203", Timestamp: in.Timestamp, DecisionType: domain.JevDecisionTypeTrader,
+		StateHash: "hash", StateJSON: "{}", QuestionVersion: "v1", ResponseJSON: "{}", ModelID: "test-model",
+	})
+	if err != nil {
+		t.Fatalf("Insert decision: %v", err)
+	}
+	in.Decision.ID = saved.ID
 	buf := captureLogs(t)
-	e := policy.NewEngine(testThresholds(), fakeRiskChecker{passed: true}, nil)
+	e := policy.NewEngine(testThresholds(), fakeRiskChecker{passed: true}, trading.NewSignalRepository(db))
 
-	e.Decide(context.Background(), passingInput(domain.JevDirectionLong))
+	if _, err := e.Evaluate(context.Background(), in); err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
 
-	found := false
+	count := 0
 	for _, line := range decodeLogLines(t, buf) {
 		if line["msg"] == "policy: trade signal decided" {
-			found = true
+			count++
 			if line["direction"] != domain.JevDirectionLong {
 				t.Errorf("direction = %v, want %q", line["direction"], domain.JevDirectionLong)
 			}
@@ -55,8 +77,23 @@ func TestEngine_Decide_LogsTradeSignalDecided(t *testing.T) {
 			}
 		}
 	}
-	if !found {
-		t.Fatalf("no 'policy: trade signal decided' log line; lines: %+v", decodeLogLines(t, buf))
+	if count != 1 {
+		t.Fatalf("'policy: trade signal decided' lines = %d, want 1; lines: %+v", count, decodeLogLines(t, buf))
+	}
+}
+
+// Decide is the side-effect-free path backtest replay calls on every
+// bar; it must not inflate the §5.1 Signal count.
+func TestEngine_Decide_DoesNotLogTradeSignalDecided(t *testing.T) {
+	buf := captureLogs(t)
+	e := policy.NewEngine(testThresholds(), fakeRiskChecker{passed: true}, nil)
+
+	e.Decide(context.Background(), passingInput(domain.JevDirectionLong))
+
+	for _, line := range decodeLogLines(t, buf) {
+		if line["msg"] == "policy: trade signal decided" {
+			t.Fatalf("Decide must not emit the Signal count log line: %+v", line)
+		}
 	}
 }
 

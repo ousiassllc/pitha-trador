@@ -22,43 +22,49 @@ type Subject struct {
 	Timestamp time.Time
 }
 
-// decisionFilter and snapshotFilter return the vec0 id constraint (plus
-// its bound args) that drops the subject's own rows. sqlite-vec accepts
-// only equality/IN constraints on the id column during a KNN scan, so the
-// exclusion is expressed as a positive IN over the allowed ids rather than
-// NOT IN or a range on the key.
+// selfRows names the rows of one table that are the subject's own (or too
+// close to it) and must not come back as similar past cases: the rows of
+// table matching cond (bound with args). The zero value excludes nothing.
 //
-//   - decisions: same-symbol decisions at or after the subject timestamp
-//     are excluded (the current state's own Scout decision when Trader
-//     runs). Earlier decisions stay: only the supplementary snapshot
-//     search carries the recency guard.
-//   - snapshots: same-symbol snapshots newer than
-//     Timestamp - SnapshotRecencyGuard are excluded.
-//
-// An empty filter means no restriction.
-func (sub Subject) decisionFilter(labeledOnly bool) (string, []any) {
-	var filter string
-	var args []any
-	switch {
-	case sub.Symbol == "" && !labeledOnly:
-		return "", nil
-	case sub.Symbol == "":
-		filter = labeledDecisionFilter
-	default:
-		allowed := `SELECT id FROM jev_decisions WHERE symbol <> ? OR timestamp < ?`
-		args = []any{sub.Symbol, sqlutil.FormatTime(sub.Timestamp)}
-		filter = `decision_id IN (` + allowed + `)`
-		if labeledOnly {
-			filter = `decision_id IN (SELECT jev_decision_id FROM calibration_outcomes WHERE jev_decision_id IN (` + allowed + `))`
-		}
-	}
-	return filter, args
+// The exclusion is applied in Go after the KNN search (searchExcluding), not
+// as a vec0 id constraint: sqlite-vec only accepts equality/IN on the id
+// column during a KNN scan, so the only SQL form is a positive
+// "id IN (SELECT id FROM ... WHERE NOT self)" whose subquery materializes
+// nearly every row of the history on each call (issue #528). The excluded
+// set is only the subject symbol's last few rows, so over-fetching a small
+// margin and dropping them afterwards is cheap.
+type selfRows struct {
+	table string
+	cond  string
+	args  []any
 }
 
-func (sub Subject) snapshotFilter() (string, []any) {
+func (r selfRows) active() bool { return r.table != "" }
+
+// decisionSelf selects the subject symbol's decisions at or after the
+// subject timestamp (the current state's own Scout decision when Trader
+// runs). Earlier decisions stay: only the supplementary snapshot search
+// carries the recency guard.
+func (sub Subject) decisionSelf() selfRows {
 	if sub.Symbol == "" {
-		return "", nil
+		return selfRows{}
 	}
-	return `snapshot_id IN (SELECT id FROM market_snapshots WHERE symbol <> ? OR timestamp <= ?)`,
-		[]any{sub.Symbol, sqlutil.FormatTime(sub.Timestamp.Add(-SnapshotRecencyGuard))}
+	return selfRows{
+		table: "jev_decisions",
+		cond:  "symbol = ? AND timestamp >= ?",
+		args:  []any{sub.Symbol, sqlutil.FormatTime(sub.Timestamp)},
+	}
+}
+
+// snapshotSelf selects the subject symbol's snapshots newer than
+// Timestamp - SnapshotRecencyGuard.
+func (sub Subject) snapshotSelf() selfRows {
+	if sub.Symbol == "" {
+		return selfRows{}
+	}
+	return selfRows{
+		table: "market_snapshots",
+		cond:  "symbol = ? AND timestamp > ?",
+		args:  []any{sub.Symbol, sqlutil.FormatTime(sub.Timestamp.Add(-SnapshotRecencyGuard))},
+	}
 }

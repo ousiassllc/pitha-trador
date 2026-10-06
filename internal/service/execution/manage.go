@@ -61,6 +61,12 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 
 	unrealized := positionSign(position.Side) * float64(position.Quantity) * (snap.Price - position.EntryPrice)
 	marked, err := e.positions.Mark(ctx, position.ID, snap.Price, unrealized, now)
+	if errors.Is(err, domain.ErrPositionNotFound) {
+		// A manual close / CloseAll (which hold closeMu, not snapshotMu)
+		// closed the position between GetOpenByInstrument and Mark: a
+		// concurrent close is normal, not a failure of this update.
+		return result, nil
+	}
 	if err != nil {
 		return SnapshotResult{}, fmt.Errorf("execution: mark position %d to market: %w", position.ID, err)
 	}
@@ -83,10 +89,14 @@ func (e *Engine) OnSnapshot(ctx context.Context, snap domain.Snapshot) (Snapshot
 	if err != nil {
 		return SnapshotResult{}, fmt.Errorf("execution: evaluate exit for position %d: %w", position.ID, err)
 	}
-	if mkt.VWAP != nil {
-		e.vwapObs.Record(snap.InstrumentID, vwapcross.Observation{PositionID: position.ID, Price: snap.Price, VWAP: *mkt.VWAP})
-	}
 	if !exit {
+		// The baseline moves only when no exit was judged: when an exit
+		// fires but Close fails or is deferred (昼休み), keeping the previous
+		// baseline lets the next evaluation judge the same VWAP cross again
+		// instead of mistaking the adverse side for "already crossed".
+		if mkt.VWAP != nil {
+			e.vwapObs.Record(snap.InstrumentID, vwapcross.Observation{PositionID: position.ID, Price: snap.Price, VWAP: *mkt.VWAP})
+		}
 		result.Position = &position
 		return result, nil
 	}
@@ -125,7 +135,7 @@ func (e *Engine) fillPendingEntries(ctx context.Context, snap domain.Snapshot) [
 	}
 
 	var filled []EntryResult
-	for _, order := range orders {
+	for _, order := range e.rejectStaleMarketOrders(ctx, orders, snap.Timestamp) {
 		if order.Status != domain.OrderStatusPending || order.OrderType != domain.OrderTypeLimit {
 			continue
 		}
@@ -153,7 +163,7 @@ func (e *Engine) rejectIfPositionOpen(ctx context.Context, order domain.PaperOrd
 	if _, err := e.positions.GetOpenByInstrument(ctx, order.InstrumentID); err != nil {
 		return
 	}
-	if _, err := e.orders.UpdateStatus(ctx, order.ID, domain.OrderStatusRejected); err != nil {
+	if err := e.rejectOrder(ctx, order); err != nil {
 		slog.ErrorContext(ctx, "execution: reject pending entry order", "symbol", order.Symbol, "order_id", order.ID, "error", err)
 	}
 }

@@ -27,6 +27,10 @@ type Archiver struct {
 	dir           string
 	retentionDays int
 	now           func() time.Time
+	// syncFile / closeFile are os.File.Sync / Close; fields so tests can
+	// inject the failures a real disk produces.
+	syncFile  func(*os.File) error
+	closeFile func(*os.File) error
 }
 
 // NewArchiver returns an Archiver over dir. retentionDays defaults to
@@ -35,7 +39,11 @@ func NewArchiver(dir string, retentionDays int) *Archiver {
 	if retentionDays <= 0 {
 		retentionDays = DefaultRetentionDays
 	}
-	return &Archiver{dir: dir, retentionDays: retentionDays, now: time.Now}
+	return &Archiver{
+		dir: dir, retentionDays: retentionDays, now: time.Now,
+		syncFile:  (*os.File).Sync,
+		closeFile: (*os.File).Close,
+	}
 }
 
 // Rotate implements internal/service/scheduler.LogRotator by delegating
@@ -76,9 +84,12 @@ func (a *Archiver) Archive(ctx context.Context) error {
 	return nil
 }
 
-// compress gzips dir/name to dir/name.gz and removes dir/name once the
-// archive is durably written.
-func (a *Archiver) compress(name string) (err error) {
+// compress gzips dir/name to dir/name.gz and removes dir/name only after
+// the archive has been flushed (gzip trailer), fsynced and closed
+// successfully. Any failure before that removes the partial archive and
+// keeps the original log, so one of the two complete copies always
+// survives a crash or a power loss.
+func (a *Archiver) compress(name string) error {
 	srcPath := filepath.Join(a.dir, name)
 	dstPath := srcPath + ".gz"
 
@@ -88,29 +99,40 @@ func (a *Archiver) compress(name string) (err error) {
 	}
 	defer func() { _ = src.Close() }()
 
-	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logFileMode)
-	if err != nil {
-		return fmt.Errorf("logging: create archive %q: %w", dstPath, err)
-	}
-	defer func() {
-		if cerr := dst.Close(); err == nil {
-			err = cerr
-		}
-	}()
-
-	gz := gzip.NewWriter(dst)
-	if _, copyErr := io.Copy(gz, src); copyErr != nil {
-		_ = gz.Close()
+	if err := a.writeArchive(dstPath, src); err != nil {
 		_ = os.Remove(dstPath)
-		return fmt.Errorf("logging: compress %q: %w", srcPath, copyErr)
-	}
-	if closeErr := gz.Close(); closeErr != nil {
-		_ = os.Remove(dstPath)
-		return fmt.Errorf("logging: finalize archive %q: %w", dstPath, closeErr)
+		return fmt.Errorf("logging: archive %q: %w", srcPath, err)
 	}
 
 	if rmErr := os.Remove(srcPath); rmErr != nil {
 		return fmt.Errorf("logging: remove archived source %q: %w", srcPath, rmErr)
+	}
+	return nil
+}
+
+// writeArchive gzips src into dstPath and makes it durable (gzip Close,
+// then Sync, then Close of the file). The caller removes dstPath on error.
+func (a *Archiver) writeArchive(dstPath string, src io.Reader) error {
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logFileMode)
+	if err != nil {
+		return fmt.Errorf("create %q: %w", dstPath, err)
+	}
+	gz := gzip.NewWriter(dst)
+	if _, err := io.Copy(gz, src); err != nil {
+		_ = gz.Close()
+		_ = dst.Close()
+		return fmt.Errorf("compress: %w", err)
+	}
+	if err := gz.Close(); err != nil {
+		_ = dst.Close()
+		return fmt.Errorf("finalize gzip stream: %w", err)
+	}
+	if err := a.syncFile(dst); err != nil {
+		_ = dst.Close()
+		return fmt.Errorf("sync %q: %w", dstPath, err)
+	}
+	if err := a.closeFile(dst); err != nil {
+		return fmt.Errorf("close %q: %w", dstPath, err)
 	}
 	return nil
 }

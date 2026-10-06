@@ -1,6 +1,7 @@
 // Stateless templates for pitha-activity-feed's Job Queues table and Recent
 // Kill Switch Events section, split out of the element to keep it small.
 import { html, nothing } from 'lit';
+import { formatJstDateTime } from '../lib/jst-datetime';
 import { lightDomErrorClass } from '../lib/styles';
 import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 
@@ -8,13 +9,13 @@ export function renderQueueStatus(queues: QueueStatus[]) {
   return html`
     <section id="queue-status" data-testid="queue-status" class="mt-6">
       <h2 class="mb-2 text-lg font-semibold text-slate-900">Job Queues</h2>
-      <table class="w-full border-collapse text-left text-sm">
+      <table class="w-full border-collapse text-left text-sm" aria-label="キュー状況">
         <thead>
           <tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-            <th class="px-3 py-2">Queue</th>
-            <th class="px-3 py-2">Pending</th>
-            <th class="px-3 py-2">Running</th>
-            <th class="px-3 py-2">Failed (recent)</th>
+            <th scope="col" class="px-3 py-2">Queue</th>
+            <th scope="col" class="px-3 py-2">Pending</th>
+            <th scope="col" class="px-3 py-2">Running</th>
+            <th scope="col" class="px-3 py-2">Failed (recent)</th>
           </tr>
         </thead>
         <tbody>
@@ -54,7 +55,7 @@ export function renderKillSwitchEvents(
           ? html`<ul class="text-sm">
               ${events.map(
                 (e) =>
-                  html`<li class="py-1"><span class="text-slate-500">${e.timestamp}</span> ${e.detail}</li>`,
+                  html`<li class="py-1"><span class="text-slate-500">${formatJstDateTime(e.timestamp)}</span> ${e.detail}</li>`,
               )}
             </ul>`
           : error

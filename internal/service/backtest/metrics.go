@@ -63,17 +63,22 @@ type Metrics struct {
 	TradeCount int
 	WinRate    float64
 
-	// AvgProfit/AvgLoss are the mean GrossReturnPct of winning (>0) and
-	// losing (<0) trades respectively (AvgLoss <= 0). Both are 0 when
-	// there are no trades in that bucket.
+	// AvgProfit/AvgLoss are the mean NetReturnPct (after fill-model
+	// slippage/spread/tick grid and fees) of winning (>0) and losing (<0)
+	// trades respectively (AvgLoss <= 0). Both are 0 when there are no
+	// trades in that bucket.
 	AvgProfit float64
 	AvgLoss   float64
 
-	// ProfitFactor is sum(winning GrossReturnPct) / -sum(losing
-	// GrossReturnPct). +Inf when there are wins and no losses; 0 when
+	// ProfitFactor is sum(winning NetReturnPct) / -sum(losing
+	// NetReturnPct). +Inf when there are wins and no losses; 0 when
 	// there are no trades at all.
 	ProfitFactor float64
-	// Expectancy is the mean GrossReturnPct across every trade.
+	// Expectancy is the mean NetReturnPct across every trade - the same
+	// cost-inclusive basis as WinRate and MaxDrawdownPct, so the
+	// Self-Improvement approval gate (FR-SELFIMPROVE-4) sees execution
+	// costs. The cost-free price return remains available as
+	// GrossPnLPct (the sum, not the mean).
 	Expectancy float64
 	// MaxDrawdownPct is the largest peak-to-trough decline of the
 	// cumulative NetReturnPct equity curve, trades taken in
@@ -87,8 +92,14 @@ type Metrics struct {
 }
 
 // Aggregate computes Metrics over trades (FR-BT-1). trades need not be
-// sorted; Aggregate sorts a copy by ExitTimestamp before computing
-// MaxDrawdownPct's running equity curve.
+// sorted; Aggregate sorts a copy before computing MaxDrawdownPct's
+// running equity curve. Order convention: ascending ExitTimestamp;
+// trades exiting at the same instant are applied gains first, then
+// losses (highest NetReturnPct first) - the ordering that reports the
+// largest drawdown any ordering of that instant could (the peak is
+// registered before the trough) and so the conservative one - with
+// EntryTimestamp, Symbol and InstrumentID as further tie-breakers, so
+// the result depends only on the set of trades, never on input order.
 func Aggregate(trades []Trade) Metrics {
 	if len(trades) == 0 {
 		return Metrics{}
@@ -96,7 +107,7 @@ func Aggregate(trades []Trade) Metrics {
 
 	sorted := make([]Trade, len(trades))
 	copy(sorted, trades)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ExitTimestamp.Before(sorted[j].ExitTimestamp) })
+	sort.Slice(sorted, func(i, j int) bool { return tradeLess(sorted[i], sorted[j]) })
 
 	var (
 		m                                     Metrics
@@ -114,12 +125,12 @@ func Aggregate(trades []Trade) Metrics {
 		sumNet += tr.NetReturnPct
 
 		switch {
-		case tr.GrossReturnPct > 0:
+		case tr.NetReturnPct > 0:
 			wins++
-			sumWin += tr.GrossReturnPct
-		case tr.GrossReturnPct < 0:
+			sumWin += tr.NetReturnPct
+		case tr.NetReturnPct < 0:
 			losses++
-			sumLoss += tr.GrossReturnPct
+			sumLoss += tr.NetReturnPct
 		}
 
 		equity += tr.NetReturnPct
@@ -144,7 +155,7 @@ func Aggregate(trades []Trade) Metrics {
 	case sumWin > 0:
 		m.ProfitFactor = math.Inf(1)
 	}
-	m.Expectancy = sumGross / float64(m.TradeCount)
+	m.Expectancy = sumNet / float64(m.TradeCount)
 	m.MaxDrawdownPct = maxDD
 	m.GrossPnLPct = sumGross
 	m.SlippagePnLPct = sumSlippage
@@ -152,4 +163,28 @@ func Aggregate(trades []Trade) Metrics {
 	m.NetPnLPct = sumNet
 
 	return m
+}
+
+// tradeLess is the total order Aggregate's equity curve uses: see
+// Aggregate's doc comment.
+func tradeLess(a, b Trade) bool {
+	if !a.ExitTimestamp.Equal(b.ExitTimestamp) {
+		return a.ExitTimestamp.Before(b.ExitTimestamp)
+	}
+	if a.NetReturnPct != b.NetReturnPct {
+		return a.NetReturnPct > b.NetReturnPct
+	}
+	if !a.EntryTimestamp.Equal(b.EntryTimestamp) {
+		return a.EntryTimestamp.Before(b.EntryTimestamp)
+	}
+	if a.Symbol != b.Symbol {
+		return a.Symbol < b.Symbol
+	}
+	if a.InstrumentID != b.InstrumentID {
+		return a.InstrumentID < b.InstrumentID
+	}
+	if a.Direction != b.Direction {
+		return a.Direction < b.Direction
+	}
+	return a.ExitReason < b.ExitReason
 }

@@ -13,9 +13,11 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
@@ -57,7 +59,7 @@ func (s *Services) buildRepositories(db *sql.DB) {
 	s.Jobs = jobqueue.NewJobRepository(db)
 	s.Positions = trading.NewPositionRepository(db)
 	s.Orders = trading.NewOrderRepository(db)
-	s.Outcomes = judgement.NewCalibrationRepository(db)
+	s.Outcomes = calrepo.NewCalibrationRepository(db)
 	s.KillSwitch = system.NewKillSwitchRepository(db)
 	s.Settings = system.NewRuntimeSettingsRepository(db)
 	s.Proposals = judgement.NewProposalRepository(db)
@@ -98,14 +100,14 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	lunaClient := assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey})
 	newsFeed := newsfeed.NewFeedClient(newsfeed.FeedConfig{URL: secrets.NewsFeedURL, APIKey: secrets.NewsFeedAPIKey})
 	s.newsEnabled = lunaClient.Configured() && newsFeed.Configured()
-	s.News = newsfeed.NewService(newsFeed, assist.NewLuna(lunaClient), s.Instruments)
+	s.Screener = screener.NewLiveSource() // News Ingest polls its candidates; shared with buildJevPipeline
+	s.News = newsfeed.NewService(newsFeed, assist.NewLuna(lunaClient), newstargets.New(s.Screener, s.Positions), newsfeed.WithSessionGate(marketcalendarOpen))
 }
 
 // buildJevPipeline builds RAG, Feature Engine, Screener and the Jev Scout/Trader.
 func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig) {
 	s.RAG = rag.NewService(db, s.Decisions, s.Snapshots)
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
-	s.Screener = screener.NewLiveSource()
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout, jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener))
 	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, jev.WithNewsSource(s.News))
 }
@@ -176,7 +178,7 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(s.Risk),
 		scheduler.WithRiskMonitor(s.Risk),
 		scheduler.WithAutoResumer(s.Risk),
-		scheduler.WithLogRotator(logging.NewArchiver(LogDir, 0)),
+		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0)),
 		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
@@ -197,9 +199,9 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 // buildMarketDataPipeline builds the PUSH feed, the Scanner Dashboard
 // candidate refresher and the log exporter, and returns the market-data
 // queue Handler wired onto them.
-func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig) *marketdatajob.Handler {
+func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logDir string) *marketdatajob.Handler {
 	s.PushFeed = pushfeed.New(s.Instruments, s.MarketData, marketdata.DefaultPushURL, defaultKabuExchange)
-	s.ErrorLogs = logging.NewExporter(LogDir)
+	s.ErrorLogs = logging.NewExporter(logDir)
 	s.candidates = &candidates.Refresher{
 		Instruments: s.Instruments, Snapshots: s.Snapshots, Settings: s.Settings, Jobs: s.Jobs,
 		Decisions: s.Decisions, Positions: s.Positions,

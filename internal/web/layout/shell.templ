@@ -36,9 +36,9 @@ const htmxConfig = `{"allowEval":false,"allowScriptTags":false,"includeIndicator
 // (nav + StatusDot + `pitha-kill-switch-panel`) is rendered on every
 // page here rather than per-page, since it is "全ページ共通"
 // (components/overview.md §3).
-templ Shell(title string) {
+templ Shell(title string, current organisms.NavItem) {
 	@document(title) {
-		@organisms.Header(middleware.SystemStateFrom(ctx))
+		@organisms.Header(middleware.SystemStateFrom(ctx), current)
 		<main class="mx-auto max-w-6xl px-6 py-8">
 			{ children... }
 		</main>

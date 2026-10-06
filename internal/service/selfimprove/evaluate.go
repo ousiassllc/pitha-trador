@@ -47,13 +47,9 @@ func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool
 	now := g.now()
 	period := backtest.Period{Start: businessDaysBefore(now, shadowBacktestLookbackDays), End: now}
 
-	baselineMetrics, err := g.runShadowBacktest(ctx, period, nil)
+	baselineMetrics, candidateMetrics, err := g.runShadowBacktests(ctx, period, candidate)
 	if err != nil {
-		return false, fmt.Errorf("selfimprove: baseline shadow backtest for proposal %d: %w", proposalID, err)
-	}
-	candidateMetrics, err := g.runShadowBacktest(ctx, period, &candidate)
-	if err != nil {
-		return false, fmt.Errorf("selfimprove: candidate shadow backtest for proposal %d: %w", proposalID, err)
+		return false, fmt.Errorf("selfimprove: shadow backtest for proposal %d: %w", proposalID, err)
 	}
 
 	cmp := assist.BacktestComparison{
@@ -61,6 +57,8 @@ func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool
 		CandidateExpectancy:     candidateMetrics.Expectancy,
 		BaselineMaxDrawdownPct:  baselineMetrics.MaxDrawdownPct,
 		CandidateMaxDrawdownPct: candidateMetrics.MaxDrawdownPct,
+		BaselineTradeCount:      baselineMetrics.TradeCount,
+		CandidateTradeCount:     candidateMetrics.TradeCount,
 	}
 	backtestResultJSON, err := json.Marshal(cmp)
 	if err != nil {

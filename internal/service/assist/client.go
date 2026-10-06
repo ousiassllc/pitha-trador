@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/httpbody"
+	"github.com/ousiassllc/pitha-trador/internal/textutil"
 )
 
 const (
@@ -24,6 +26,9 @@ const (
 	// maxResponseBytes caps how much of an AI API response is read, so a
 	// misbehaving endpoint cannot exhaust memory.
 	maxResponseBytes = 1 << 20
+
+	statusRateLimited = http.StatusTooManyRequests
+	statusOverloaded  = 529
 )
 
 // ErrNotConfigured is returned by Client.PostJSON (and therefore by
@@ -33,15 +38,20 @@ const (
 // (FR-LUNA-4, overview.md §8) instead of the process stopping.
 var ErrNotConfigured = errors.New("assist: external AI API is not configured")
 
+// ErrInvalidResponse marks a 200 response whose body cannot be decoded.
+// It is never retried: repeating the request returns the same body.
+var ErrInvalidResponse = errors.New("assist: invalid response")
+
 // APIError is returned when an external AI API responds with a non-200
-// status.
+// status. Body holds the full (size-capped) response, but Error() embeds
+// only a short single-line excerpt (see jev.APIError).
 type APIError struct {
 	StatusCode int
 	Body       string
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("assist: api error (status %d): %s", e.StatusCode, e.Body)
+	return fmt.Sprintf("assist: api error (status %d): %s", e.StatusCode, textutil.Excerpt(e.Body, textutil.ErrorBodyExcerptBytes))
 }
 
 // Config configures a Client.
@@ -106,29 +116,42 @@ func (c *Client) Configured() bool {
 }
 
 // PostJSON POSTs req as JSON to c's BaseURL+path and decodes the 200
-// response into resp. Failed attempts are retried per Config; once
-// MaxAttempts is exhausted the last error is returned wrapped. An
-// unconfigured client fails immediately with ErrNotConfigured (no retry).
+// response into resp. Failed attempts are retried per Config using Jev's
+// policy (internal/service/jev): transport errors, 5xx, 429 and 529 are
+// retried up to MaxAttempts, 429/529 backing off from the first retry
+// while other failures retry once immediately; 401, 422 and every other
+// 4xx, an undecodable body (ErrInvalidResponse) and an oversized body
+// (httpbody.ErrTooLarge) fail at once because repeating the request
+// cannot fix them. Once MaxAttempts is exhausted the last error is
+// returned wrapped. An unconfigured client fails immediately with
+// ErrNotConfigured (no retry).
 func (c *Client) PostJSON(ctx context.Context, path string, req, resp any) error {
 	if !c.Configured() {
 		return ErrNotConfigured
 	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("assist: encode request: %w", err)
+	}
 
 	var lastErr error
 	for attempt := 1; attempt <= c.maxAttempts; attempt++ {
-		lastErr = c.doPost(ctx, path, req, resp)
+		lastErr = c.doPost(ctx, path, body, resp)
 		if lastErr == nil {
 			return nil
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if !retryable(lastErr) {
+			slog.Error("assist: api call failed", "label", c.label, "path", path, "error", lastErr)
+			return fmt.Errorf("assist: %s call failed: %w", c.label, lastErr)
+		}
 		if attempt == c.maxAttempts {
 			break
 		}
-		if attempt >= 2 {
-			backoff := c.retryBaseDelay * time.Duration(1<<uint(attempt-2))
-			timer := time.NewTimer(backoff)
+		if delay, ok := c.retryDelay(lastErr, attempt); ok {
+			timer := time.NewTimer(delay)
 			select {
 			case <-ctx.Done():
 				timer.Stop()
@@ -141,12 +164,34 @@ func (c *Client) PostJSON(ctx context.Context, path string, req, resp any) error
 	return fmt.Errorf("assist: %s call failed after %d attempts: %w", c.label, c.maxAttempts, lastErr)
 }
 
-func (c *Client) doPost(ctx context.Context, path string, req, resp any) error {
-	body, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("assist: encode request: %w", err)
+// retryable reports whether err may succeed on a repeated request.
+func retryable(err error) bool {
+	if errors.Is(err, ErrInvalidResponse) || errors.Is(err, httpbody.ErrTooLarge) {
+		return false
 	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode >= 500 || apiErr.StatusCode == statusRateLimited
+	}
+	return true // transport error
+}
 
+// retryDelay returns how long to wait before the attempt that follows
+// failed attempt number attempt (1-based), and false if it should be made
+// immediately.
+func (c *Client) retryDelay(err error, attempt int) (time.Duration, bool) {
+	n := attempt - 2 // first retry immediate, backoff from the second
+	var apiErr *APIError
+	if errors.As(err, &apiErr) && (apiErr.StatusCode == statusRateLimited || apiErr.StatusCode == statusOverloaded) {
+		n = attempt - 1 // throttled: back off from the first retry
+	}
+	if n < 0 {
+		return 0, false
+	}
+	return c.retryBaseDelay * time.Duration(1<<uint(n)), true
+}
+
+func (c *Client) doPost(ctx context.Context, path string, body []byte, resp any) error {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("assist: build request: %w", err)
@@ -162,7 +207,7 @@ func (c *Client) doPost(ctx context.Context, path string, req, resp any) error {
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
-	respBody, err := io.ReadAll(io.LimitReader(httpResp.Body, maxResponseBytes))
+	respBody, err := httpbody.ReadAll(httpResp.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("assist: read response body: %w", err)
 	}
@@ -170,7 +215,7 @@ func (c *Client) doPost(ctx context.Context, path string, req, resp any) error {
 		return &APIError{StatusCode: httpResp.StatusCode, Body: string(respBody)}
 	}
 	if err := json.Unmarshal(respBody, resp); err != nil {
-		return fmt.Errorf("assist: decode response: %w", err)
+		return fmt.Errorf("%w: decode: %v", ErrInvalidResponse, err)
 	}
 	return nil
 }

@@ -27,8 +27,8 @@ const labeledDecisionFilter = `decision_id IN (SELECT jev_decision_id FROM calib
 // k*decisionCandidateFactor nearest decisions of any kind (labeled
 // ones already included are not repeated).
 func (s *Service) decisionMatches(ctx context.Context, v Vector, k int, sub Subject) ([]match, error) {
-	labeledFilter, labeledArgs := sub.decisionFilter(true)
-	matches, err := s.search(ctx, "jev_decision_vectors", "decision_id", labeledFilter, labeledArgs, v, k)
+	self := sub.decisionSelf()
+	matches, err := s.searchExcluding(ctx, "jev_decision_vectors", "decision_id", labeledDecisionFilter, nil, v, k, self)
 	if err != nil {
 		return nil, fmt.Errorf("rag: search similar labeled decisions: %w", err)
 	}
@@ -36,8 +36,7 @@ func (s *Service) decisionMatches(ctx context.Context, v Vector, k int, sub Subj
 		return matches, nil
 	}
 
-	anyFilter, anyArgs := sub.decisionFilter(false)
-	pool, err := s.search(ctx, "jev_decision_vectors", "decision_id", anyFilter, anyArgs, v, k*decisionCandidateFactor)
+	pool, err := s.searchExcluding(ctx, "jev_decision_vectors", "decision_id", "", nil, v, k*decisionCandidateFactor, self)
 	if err != nil {
 		return nil, fmt.Errorf("rag: search similar decisions: %w", err)
 	}

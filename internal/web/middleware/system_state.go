@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/gin-gonic/gin"
 
@@ -33,12 +34,13 @@ func SystemStateFrom(ctx context.Context) domain.SystemState {
 // templates via SystemStateFrom, so organisms.Header can server-render
 // the Kill Switch panel's status and which actions are currently allowed
 // (HATEOAS: the server, not the client, decides). A read error yields ""
-// (unknown): Header then renders no action buttons and lets the panel's
+// (unknown) and is logged at ERROR: Header then renders no action buttons and lets the panel's
 // own status fetch fill them in.
 func SystemState(reader SystemStateReader) gin.HandlerFunc {
 	read := func(ctx context.Context) domain.SystemState {
 		state, _, err := reader.State(ctx)
 		if err != nil {
+			slog.ErrorContext(ctx, "middleware: read system state for header", "error", err)
 			return ""
 		}
 		return state

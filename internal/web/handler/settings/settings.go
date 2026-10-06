@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
+	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
@@ -227,7 +228,7 @@ func (h *SettingsHandler) row(ctx context.Context, key, label, notice string) mo
 		slog.Error("settings: read stored secret; treating as unset so the screen still renders", "key", key, "error", err)
 		ok = false
 	}
-	return molecules.SecretFieldRowProps{Key: key, Label: label, Hint: settingsHints[key], Configured: ok, Notice: notice}
+	return molecules.SecretFieldRowProps{Key: key, Label: label, Hint: settingsHints[key], Configured: ok, Notice: notice, CSRFField: middleware.CSRFFormField, CSRFToken: middleware.CSRFToken(ctx)}
 }
 
 // settingsHints is the per-key input guidance shown under a Settings

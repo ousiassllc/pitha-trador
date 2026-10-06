@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -36,7 +37,7 @@ type labelerFixtures struct {
 	labeler    *calibration.Labeler
 	decisions  *judgement.DecisionRepository
 	snapshots  *market.SnapshotRepository
-	outcomes   *judgement.CalibrationRepository
+	outcomes   *calrepo.CalibrationRepository
 	instrument domain.Instrument
 	// now is the Labeler's clock; the zero value is before every
 	// decision's data grace period, i.e. "data may still be landing".
@@ -56,7 +57,7 @@ func newLabelerFixtures(t *testing.T) labelerFixtures {
 
 	decisions := judgement.NewDecisionRepository(db)
 	snapshots := market.NewSnapshotRepository(db)
-	outcomes := judgement.NewCalibrationRepository(db)
+	outcomes := calrepo.NewCalibrationRepository(db)
 	now := new(time.Time)
 	return labelerFixtures{
 		db:         db,
@@ -99,7 +100,7 @@ func (f labelerFixtures) insertSnapshots(t *testing.T, prices map[time.Duration]
 
 func (f labelerFixtures) handleJob(t *testing.T, decisionID int64, horizonMinutes int) error {
 	t.Helper()
-	payload, err := json.Marshal(judgement.OutcomeLabelJobPayload{JevDecisionID: decisionID, HorizonMinutes: horizonMinutes})
+	payload, err := json.Marshal(calrepo.OutcomeLabelJobPayload{JevDecisionID: decisionID, HorizonMinutes: horizonMinutes})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
@@ -107,7 +108,7 @@ func (f labelerFixtures) handleJob(t *testing.T, decisionID int64, horizonMinute
 }
 
 // getOutcome reads one calibration_outcomes row directly (bypassing
-// judgement.CalibrationRepository, which intentionally has no
+// calrepo.CalibrationRepository, which intentionally has no
 // query-by-decision method) for these tests to assert Labeler.HandleJob's
 // computed values against.
 func (f labelerFixtures) getOutcome(t *testing.T, decisionID int64, horizonMinutes int) domain.CalibrationOutcome {

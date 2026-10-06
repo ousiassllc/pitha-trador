@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { watchToastRegion } from './pitha-htmx-errors';
 
 const TOAST_HTML =
@@ -222,5 +222,69 @@ describe('toast region inside an open modal dialog', () => {
     fire('htmx:sendError');
     await flush();
     expect(calls).toBe(0);
+  });
+});
+
+// WCAG 2.2.1: an error toast must not vanish while the user is still reading
+// it (pointer over it) or has focus inside it.
+describe('auto-dismiss', () => {
+  const DISMISS_AFTER_MS = 8000;
+  const flushObserver = () => Promise.resolve();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function landToast(): Promise<HTMLElement> {
+    const region = document.getElementById('toast-region') as HTMLElement;
+    watchToastRegion(region);
+    fire('htmx:sendError');
+    await flushObserver();
+    return region.querySelector('[data-toast]') as HTMLElement;
+  }
+
+  test('removes the toast after 8 seconds when nothing interacts with it', async () => {
+    const toast = await landToast();
+
+    vi.advanceTimersByTime(DISMISS_AFTER_MS - 1);
+    expect(toast.isConnected).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(toast.isConnected).toBe(false);
+  });
+
+  test('keeps a hovered toast until the pointer leaves, then restarts the countdown', async () => {
+    const toast = await landToast();
+
+    vi.advanceTimersByTime(DISMISS_AFTER_MS - 1000);
+    toast.dispatchEvent(new Event('mouseenter'));
+    vi.advanceTimersByTime(DISMISS_AFTER_MS * 3);
+    expect(toast.isConnected).toBe(true);
+
+    toast.dispatchEvent(new Event('mouseleave'));
+    vi.advanceTimersByTime(DISMISS_AFTER_MS - 1);
+    expect(toast.isConnected).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(toast.isConnected).toBe(false);
+  });
+
+  test('keeps a toast with focus inside it, and stays while hovered after focus leaves', async () => {
+    const toast = await landToast();
+
+    toast.dispatchEvent(new Event('focusin'));
+    toast.dispatchEvent(new Event('mouseenter'));
+    vi.advanceTimersByTime(DISMISS_AFTER_MS * 3);
+    expect(toast.isConnected).toBe(true);
+
+    toast.dispatchEvent(new Event('focusout'));
+    vi.advanceTimersByTime(DISMISS_AFTER_MS * 3);
+    expect(toast.isConnected).toBe(true);
+
+    toast.dispatchEvent(new Event('mouseleave'));
+    vi.advanceTimersByTime(DISMISS_AFTER_MS);
+    expect(toast.isConnected).toBe(false);
   });
 });

@@ -9,7 +9,16 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/textutil"
 )
+
+// maxLastErrorBytes bounds jobs.last_error: a handler error can embed an
+// external API's response body, and the column is read back by the
+// Activity/audit screens.
+const maxLastErrorBytes = 1024
+
+// recordTimeout bounds the completion write made after a handler returns.
+const recordTimeout = 5 * time.Second
 
 func (s *Scheduler) runWorker(ctx context.Context, queue string) {
 	defer s.wg.Done()
@@ -52,16 +61,34 @@ func (s *Scheduler) processNext(ctx context.Context, queue string, handler Handl
 	}
 
 	if err := safeHandle(ctx, handler, job); err != nil {
-		if markErr := s.jobs.MarkFailed(ctx, job.ID, time.Now().UTC(), err.Error()); markErr != nil {
-			slog.Error("scheduler: mark job failed", "job_id", job.ID, "error", markErr)
+		if ctx.Err() != nil && errors.Is(err, context.Canceled) {
+			// Interrupted by shutdown: leave the job status='running' so
+			// Recover re-queues it on the next start.
+			slog.Info("scheduler: job interrupted by shutdown", "queue", queue, "job_id", job.ID)
+			return true
 		}
+		s.record(ctx, "mark job failed", job.ID, func(c context.Context) error {
+			return s.jobs.MarkFailed(c, job.ID, time.Now().UTC(), textutil.Truncate(err.Error(), maxLastErrorBytes))
+		})
 		return true
 	}
 
-	if err := s.jobs.MarkSucceeded(ctx, job.ID, time.Now().UTC()); err != nil {
-		slog.Error("scheduler: mark job succeeded", "job_id", job.ID, "error", err)
-	}
+	s.record(ctx, "mark job succeeded", job.ID, func(c context.Context) error {
+		return s.jobs.MarkSucceeded(c, job.ID, time.Now().UTC())
+	})
 	return true
+}
+
+// record persists a job's final status. It detaches from ctx's
+// cancellation (bounded by recordTimeout) so that a handler that already
+// finished is recorded even when shutdown cancelled ctx in the meantime;
+// otherwise the job would stay 'running' and Recover would re-run it.
+func (s *Scheduler) record(ctx context.Context, what string, jobID int64, fn func(context.Context) error) {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
+	defer cancel()
+	if err := fn(rctx); err != nil {
+		slog.Error("scheduler: "+what, "job_id", jobID, "error", err)
+	}
 }
 
 // safeHandle runs handler and converts a panic into an error (logging the

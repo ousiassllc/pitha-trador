@@ -188,7 +188,17 @@ func (h *ActivityHandler) WebSocket(c *gin.Context) {
 	}
 }
 
+// activityResyncMessage is `{"type":"resync"}`: the server dropped job
+// events/queue updates for this client (it read too slowly), so the client
+// must re-fetch `GET /api/v1/activity`.
+type activityResyncMessage struct {
+	Type string `json:"type"`
+}
+
 func activityWSPayload(msg activityfeed.Message) any {
+	if msg.Resync {
+		return activityResyncMessage{Type: "resync"}
+	}
 	if msg.QueueUpdate != nil {
 		u := msg.QueueUpdate
 		return activityJobUpdateMessage{

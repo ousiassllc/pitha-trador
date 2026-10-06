@@ -122,15 +122,22 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 	inputSlot := make([]int, 0, len(actives))
 	funnel := domain.ScanFunnel{Universe: len(actives)}
 	inputs := make([]screener.Input, 0, len(actives))
+	// The latest bar plus featureengine.HistoryLookbackBars prior bars per
+	// instrument: enough for both the trailing turnover and
+	// ComputeScreenSignals' 15-minute volatility window. Fetched in one
+	// query without raw_data_json (issue #546) instead of a full-board
+	// ListByInstrument per active stock every cycle.
+	ids := make([]int64, len(actives))
+	for i, inst := range actives {
+		ids[i] = inst.ID
+	}
+	history, err := r.Snapshots.ListHistoryByInstruments(ctx, ids, featureengine.HistoryLookbackBars+1)
+	if err != nil {
+		return fmt.Errorf("candidates: list snapshot history: %w", err)
+	}
 	for slot, inst := range actives {
 		symbols[slot] = domain.ScanSymbol{InstrumentID: inst.ID, Symbol: inst.Symbol, Name: inst.Name, Market: inst.Market}
-		// The latest bar plus featureengine.HistoryLookbackBars prior
-		// bars: enough for both the trailing turnover and
-		// ComputeScreenSignals' 15-minute volatility window.
-		bars, err := r.Snapshots.ListByInstrument(ctx, inst.ID, featureengine.HistoryLookbackBars+1)
-		if err != nil {
-			return fmt.Errorf("candidates: list snapshots for %q: %w", inst.Symbol, err)
-		}
+		bars := history[inst.ID]
 		if len(bars) == 0 {
 			symbols[slot].Reasons = symbols[slot].Reasons.Add(domain.ScreenReasonNoSnapshot)
 			continue
@@ -217,10 +224,11 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 // for this cycle: r.Strategy.FastScreener (config/strategy.yaml with
 // PITHA_FAST_SCREENER_* env overrides already applied by
 // config.LoadStrategy) overridden by every screener.* runtime_settings
-// key currently in the DB. It is read per cycle so a DB change takes
-// effect on the next refresh without a restart.
+// key in the DB (re-validated against FR-FS-4 when any applied). Read per
+// cycle so a DB change takes effect on the next refresh without a restart.
 func (r *Refresher) fastScreenerConfig(ctx context.Context) (config.FastScreenerConfig, error) {
 	cfg := r.Strategy.FastScreener
+	overridden := false
 	for _, key := range config.FastScreenerSettingKeys() {
 		raw, ok, err := r.Settings.Get(ctx, key)
 		if err != nil {
@@ -231,6 +239,15 @@ func (r *Refresher) fastScreenerConfig(ctx context.Context) (config.FastScreener
 		}
 		if err := config.ApplyFastScreenerSetting(&cfg, key, raw); err != nil {
 			return config.FastScreenerConfig{}, fmt.Errorf("candidates: %w", err)
+		}
+		overridden = true
+	}
+	// The YAML+env base was validated by config.LoadStrategy; an override
+	// layer must not break FR-FS-4's invariants either (a bad DB value would
+	// silently disable the filters or empty the candidate list, issue #617).
+	if overridden {
+		if err := config.ValidateFastScreenerOverrides(cfg); err != nil {
+			return config.FastScreenerConfig{}, fmt.Errorf("candidates: invalid screener.* runtime settings: %w", err)
 		}
 	}
 	return cfg, nil

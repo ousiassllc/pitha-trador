@@ -230,3 +230,37 @@ func TestSlackNotifier_MaintenanceFailed_PostsTaskAndCount(t *testing.T) {
 		t.Fatalf("got = %v", got)
 	}
 }
+
+// TestSlackNotifier_PostMessage_TransportErrorOmitsWebhookURL regresses
+// issue #534: a Slack webhook URL's path is a secret, and net/http's
+// *url.Error embeds the whole URL in its message, which callers log.
+func TestSlackNotifier_PostMessage_TransportErrorOmitsWebhookURL(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	url := srv.URL + "/services/T000/B000/SECRETTOKEN"
+	srv.Close() // nothing listens any more: connection refused
+
+	n := notify.NewSlackNotifier(notify.Config{WebhookURL: url})
+	err := n.PostMessage(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("PostMessage: err = nil, want a connection error")
+	}
+	for _, leaked := range []string{"SECRETTOKEN", "/services/", "T000"} {
+		if strings.Contains(err.Error(), leaked) {
+			t.Errorf("error %q leaks webhook URL part %q", err, leaked)
+		}
+	}
+	if !strings.Contains(err.Error(), "post slack webhook") || !strings.Contains(err.Error(), "connection refused") {
+		t.Errorf("error %q lost its operation or underlying cause", err)
+	}
+}
+
+func TestSlackNotifier_PostMessage_InvalidURLErrorOmitsWebhookURL(t *testing.T) {
+	n := notify.NewSlackNotifier(notify.Config{WebhookURL: "https://hooks.slack.com/services/SECRETTOKEN\x7f"})
+	err := n.PostMessage(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("PostMessage: err = nil, want a request build error")
+	}
+	if strings.Contains(err.Error(), "SECRETTOKEN") {
+		t.Errorf("error %q leaks the webhook URL", err)
+	}
+}

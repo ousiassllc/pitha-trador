@@ -10,9 +10,10 @@
 import { html, LitElement, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
+import { formatJstDateTime } from '../lib/jst-datetime';
 import { logger } from '../lib/logger';
 import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
-import { isWsDisconnected, resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
+import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import {
   type ActivityAPIResponse,
@@ -74,6 +75,8 @@ export class PithaActivityFeed extends LitElement {
   @state() private queueFilter = '';
   @state() private error: string | null = null;
   @state() private wsStatus: WsStatus = 'connecting';
+  // RFC 3339 time of the latest snapshot; the table caption mirrors the SSR "as of".
+  @state() private asOf = '';
 
   private wsClient: WsClient<ActivityWsMessage> | null = null;
   private snapshotGeneration = 0;
@@ -114,6 +117,7 @@ export class PithaActivityFeed extends LitElement {
       if (generation !== this.snapshotGeneration) return;
       this.queues = response.queues;
       this.events = response.events;
+      this.asOf = response.as_of;
       this.loaded = true;
       this.error = null;
     } catch (err) {
@@ -146,17 +150,13 @@ export class PithaActivityFeed extends LitElement {
     }
     // The server sends nothing on connect, so events emitted while the
     // socket was down are lost unless the snapshots are re-fetched (#221).
-    let wasDisconnected = false;
     this.wsClient = new WsClient<ActivityWsMessage>(resolveWsUrl(this.wsUrl), {
       onStatusChange: (status) => {
         this.wsStatus = status;
-        if (isWsDisconnected(status)) {
-          wasDisconnected = true;
-        } else if (status === 'open' && wasDisconnected) {
-          wasDisconnected = false;
-          void this.loadSnapshot(true);
-          void this.loadKillSwitchEvents(true);
-        }
+      },
+      onReconnect: () => {
+        void this.loadSnapshot(true);
+        void this.loadKillSwitchEvents(true);
       },
       onMessage: (message) => this.onWsMessage(message),
     });
@@ -174,6 +174,10 @@ export class PithaActivityFeed extends LitElement {
             }
           : q,
       );
+    } else if (message.type === 'resync') {
+      // The server dropped messages for this slow client (#536).
+      void this.loadSnapshot(true);
+      void this.loadKillSwitchEvents(true);
     } else if (message.type === 'activity_event') {
       const { event } = message;
       if (this.matchesFilter(event)) {
@@ -235,21 +239,22 @@ export class PithaActivityFeed extends LitElement {
             </select>
           </label>
         </div>
-        <table class="w-full border-collapse text-left text-sm">
+        <table class="w-full border-collapse text-left text-sm" aria-label="アクティビティフィード">
+          ${this.asOf ? html`<caption class="mb-2 text-left text-sm text-slate-500">as of ${formatJstDateTime(this.asOf)}</caption>` : nothing}
           <thead>
             <tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-              <th class="px-3 py-2">Time</th>
-              <th class="px-3 py-2">Type</th>
-              <th class="px-3 py-2">Symbol</th>
-              <th class="px-3 py-2">Detail</th>
-              <th class="px-3 py-2">Latency (ms)</th>
+              <th scope="col" class="px-3 py-2">Time</th>
+              <th scope="col" class="px-3 py-2">Type</th>
+              <th scope="col" class="px-3 py-2">Symbol</th>
+              <th scope="col" class="px-3 py-2">Detail</th>
+              <th scope="col" class="px-3 py-2">Latency (ms)</th>
             </tr>
           </thead>
           <tbody>
             ${this.events.map(
               (e) => html`
                 <tr class="border-b border-slate-100" data-event-type=${e.type}>
-                  <td class="px-3 py-2">${e.timestamp}</td>
+                  <td class="px-3 py-2">${formatJstDateTime(e.timestamp)}</td>
                   <td class="px-3 py-2 font-medium text-slate-900">${e.type}</td>
                   <td class="px-3 py-2">${e.symbol ?? '—'}</td>
                   <td class="px-3 py-2">${e.detail}</td>

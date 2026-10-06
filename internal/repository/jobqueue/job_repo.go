@@ -125,41 +125,56 @@ func (r *JobRepository) Get(ctx context.Context, id int64) (Job, error) {
 // scheduled_at is due (<= now), marks it running (incrementing attempts
 // and setting started_at), and returns it. It returns ErrJobNotFound if no
 // job on queue is currently due.
+//
+// It deliberately avoids a transaction: with the DSN's _txlock=immediate
+// every BeginTx would take the database write lock, and the scheduler
+// polls every queue every 200ms even when idle (issue #541). The oldest
+// due job is found with a plain read (no write lock, so an empty queue
+// costs nothing), then claimed with an UPDATE guarded by status =
+// 'pending'. That UPDATE is atomic: when another worker claimed the same
+// job in between, it affects no row and the next oldest candidate is
+// tried, so a job is never handed out twice.
 func (r *JobRepository) ClaimNext(ctx context.Context, queue string, now time.Time) (Job, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return Job{}, fmt.Errorf("repository: begin claim transaction for queue %q: %w", queue, err)
-	}
+	startedAt := now.UTC()
+	for {
+		job, err := r.oldestDue(ctx, queue, now)
+		if err != nil {
+			return Job{}, err
+		}
 
-	row := tx.QueryRowContext(ctx,
+		res, err := r.db.ExecContext(ctx,
+			`UPDATE jobs SET status = ?, attempts = attempts + 1, started_at = ? WHERE id = ? AND status = ?`,
+			JobStatusRunning, sqlutil.FormatTime(startedAt), job.ID, JobStatusPending,
+		)
+		if err != nil {
+			return Job{}, fmt.Errorf("repository: claim job %d: %w", job.ID, err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return Job{}, fmt.Errorf("repository: claim job %d: %w", job.ID, err)
+		}
+		if n == 0 {
+			continue // lost the race for this job; look at the next one
+		}
+
+		job.Status = JobStatusRunning
+		job.Attempts++
+		job.StartedAt = &startedAt
+		r.notify(ctx, job)
+		return job, nil
+	}
+}
+
+// oldestDue returns the oldest pending job on queue due at now, or
+// ErrJobNotFound.
+func (r *JobRepository) oldestDue(ctx context.Context, queue string, now time.Time) (Job, error) {
+	return scanJob(r.db.QueryRowContext(ctx,
 		jobSelectColumns+` FROM jobs
 		 WHERE queue = ? AND status = ? AND scheduled_at <= ?
 		 ORDER BY scheduled_at ASC
 		 LIMIT 1`,
 		queue, JobStatusPending, sqlutil.FormatTime(now),
-	)
-	job, err := scanJob(row)
-	if err != nil {
-		return Job{}, errors.Join(err, tx.Rollback())
-	}
-
-	startedAt := now.UTC()
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE jobs SET status = ?, attempts = attempts + 1, started_at = ? WHERE id = ?`,
-		JobStatusRunning, sqlutil.FormatTime(startedAt), job.ID,
-	); err != nil {
-		return Job{}, errors.Join(fmt.Errorf("repository: claim job %d: %w", job.ID, err), tx.Rollback())
-	}
-
-	if err := tx.Commit(); err != nil {
-		return Job{}, fmt.Errorf("repository: commit claim of job %d: %w", job.ID, err)
-	}
-
-	job.Status = JobStatusRunning
-	job.Attempts++
-	job.StartedAt = &startedAt
-	r.notify(ctx, job)
-	return job, nil
+	))
 }
 
 // MarkSucceeded marks the job as succeeded with the given finish time. It

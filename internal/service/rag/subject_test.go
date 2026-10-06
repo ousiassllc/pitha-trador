@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
@@ -15,7 +16,7 @@ type subjectFixture struct {
 	svc       *rag.Service
 	snapshots *market.SnapshotRepository
 	decisions *judgement.DecisionRepository
-	outcomes  *judgement.CalibrationRepository
+	outcomes  *calrepo.CalibrationRepository
 	insts     map[string]domain.Instrument
 }
 
@@ -29,7 +30,7 @@ func newSubjectFixture(t *testing.T, symbols ...string) subjectFixture {
 		svc:       rag.NewService(db, decisions, snapshots),
 		snapshots: snapshots,
 		decisions: decisions,
-		outcomes:  judgement.NewCalibrationRepository(db),
+		outcomes:  calrepo.NewCalibrationRepository(db),
 		insts:     map[string]domain.Instrument{},
 	}
 	for _, s := range symbols {

@@ -235,3 +235,5 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.42 | 2026-10-05 | §4.8にFR-ENTRY-8（約定モデル: 呼値単位・スプレッド・滑り・手数料・昼休みは約定しない・寄り引けは板寄せの別約定）を新設し、§4.11 FR-BT-4のコストモデルをスリッページ固定5bps/手数料0bpsからPaper Tradingと共用の約定モデルへ更新 | issue #509 |
 | 1.43 | 2026-10-05 | FR-FS-1に特別気配・ストップ高/安の除外、FR-POLICY-3に約定不能・貸借なしショートのNONEを追記 | issue #511 |
 | 1.44 | 2026-10-05 | FR-SCHED-2（`components-platform.md`）にkabu情報APIのプロセス全体レート制限と、60秒で取り切れない銘柄の扱い（同一サイクル継続・次tickスキップ）を追記 | issue #514 |
+| 1.45 | 2026-10-05 | FR-LUNA-1のNews Ingest対象をFast Screener候補＋保有銘柄に限定し、立会時間外は停止・並列度上限を設けた | issue #531 |
+| 1.46 | 2026-10-05 | `functional/components-pipeline.md`のFR-FS-2（`normalized_volume_ratio`=`volume_ratio_5m`の定義）、FR-FE-5（`realized_vol_*`の欠損規則を分離）、FR-SCAN-2（再評価抑制の適用範囲を即時再評価経路に限定）、FR-POLICY-4（`PITHA_POLICY_*`環境変数とDB `runtime_settings`の優先順位）、FR-RISK-5（監査ログ対象をKill Switch発動・再開・解除に限定）を実装に合わせて修正 | 実装との乖離解消（#517/#564/#571/#572/#573） |

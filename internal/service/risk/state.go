@@ -142,23 +142,25 @@ func (e *Engine) recordKillSwitch(ctx context.Context, reason string, detail map
 	return ev, nil
 }
 
-// enforceKillSwitch notifies about ev and, for forceCloseReasons, closes
-// every open position (FR-RISK-3).
+// enforceKillSwitch closes every open position for forceCloseReasons
+// (FR-RISK-3) and then notifies about ev. The force-close runs first: the
+// notification is a best-effort alert on top of the enforcement path
+// (non-functional.md §5.2), and a slow or unreachable Slack (10s HTTP
+// timeout per channel) must not delay closing positions while losses grow.
+// The notification is attempted even when CloseAll fails, and a Notifier
+// failure is logged, not returned.
 func (e *Engine) enforceKillSwitch(ctx context.Context, ev domain.KillSwitchEvent) error {
 	reason := ev.Reason
-	// A Slack/Wails outage must never block Kill Switch enforcement
-	// itself (non-functional.md §5.2 is best-effort alerting on top of
-	// the enforcement path, not a precondition for it), so a Notifier
-	// failure here is logged, not returned.
+	var closeErr error
+	if forceCloseReasons[reason] {
+		if err := e.closer.CloseAll(ctx, reason); err != nil {
+			closeErr = fmt.Errorf("risk: close positions after kill switch %q: %w", reason, err)
+		}
+	}
 	if err := e.notifier.KillSwitchTriggered(ctx, ev, autoResumableReasons[reason]); err != nil {
 		slog.Error("risk: kill switch notification failed", "reason", reason, "error", err)
 	}
-	if forceCloseReasons[reason] {
-		if err := e.closer.CloseAll(ctx, reason); err != nil {
-			return fmt.Errorf("risk: close positions after kill switch %q: %w", reason, err)
-		}
-	}
-	return nil
+	return closeErr
 }
 
 // triggerIfNotActive is TriggerKillSwitch, made idempotent per reason: it

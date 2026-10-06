@@ -25,6 +25,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/quote"
 )
 
 // DefaultInterval is the tick used when config/strategy.yaml's
@@ -112,11 +113,14 @@ func (m Monitor) evaluate(ctx context.Context, p domain.Position, now time.Time)
 		return false
 	}
 	// A transient snapshot (never persisted: market_snapshots stays
-	// the 1-minute bar series): just the price and session VWAP the
-	// exit conditions read.
+	// the 1-minute bar series): the price, session VWAP and the quote
+	// the exit conditions and the fill model read. The quote is built the
+	// same way as the market-data job's persisted bar (package quote) so an
+	// exit fills at the same price whichever path fires first.
 	snap := domain.Snapshot{
 		InstrumentID: p.InstrumentID, Symbol: p.Symbol, Timestamp: now.UTC(),
-		Price: board.CurrentPrice, Feature: domain.Feature{VWAP: board.VWAP},
+		Price: board.CurrentPrice, Bid: quote.Bid(board), Ask: quote.Ask(board), SpreadBps: quote.SpreadBps(board),
+		Feature: domain.Feature{VWAP: board.VWAP},
 	}
 	if _, err := m.Exits.OnSnapshot(ctx, snap); err != nil {
 		slog.Error("heldposition: exit evaluation failed", "symbol", p.Symbol, "position_id", p.ID, "error", err)

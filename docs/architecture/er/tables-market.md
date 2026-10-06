@@ -65,6 +65,32 @@ erDiagram
         numeric realized_vol_5m
         numeric market_return_5m
         numeric sector_return_5m
+        numeric market_return_1m
+        numeric stock_vs_sector_relative_strength
+        numeric market_breadth
+        numeric return_3m
+        numeric return_30m
+        numeric high_distance_5m
+        numeric low_distance_5m
+        numeric session_high_distance
+        numeric session_low_distance
+        numeric vwap_slope
+        integer vwap_cross_direction
+        integer volume_1m
+        integer volume_5m
+        numeric volume_ratio_1m
+        numeric turnover_1m
+        numeric turnover_5m
+        numeric atr_1m
+        numeric atr_5m
+        numeric realized_vol_15m
+        numeric volatility_expansion_ratio
+        numeric bid_depth
+        numeric ask_depth
+        numeric buy_trade_ratio
+        numeric sell_trade_ratio
+        numeric trade_flow_imbalance
+        numeric microprice
         integer special_quote
         varchar price_limit
         integer lendable
@@ -81,7 +107,7 @@ erDiagram
 | timestamp | text | NOT NULL | スナップショット時刻（RFC3339、1分足） |
 | price | numeric(12,2) | NOT NULL | |
 | bid / ask | numeric(12,2) | NULL可 | 一般的な意味（bid=最良買気配、ask=最良売気配、bid < ask）。kabuステーションAPIの`AskPrice`（最良買気配）→bid、`BidPrice`（最良売気配）→askに入れ替えて保存する。板情報取得不可時はNULL |
-| spread_bps | numeric(8,2) | NULL可 | (ask − bid)/mid×10000（0以上）。bid/ask欠損・mid=0・**逆転板（bid > ask、特別気配・寄り前後・片側が古い値）は欠損（NULL）**として扱う。上限比較のみのスプレッドガード（Fast Screener/Policy/Risk）が負値を素通りさせないため、NULLは`missing_spread`/`data_missing`で保守的に除外される（issue #465）。同じ理由で`microprice`も逆転板ではNULL。`orderbook_imbalance`は数量のみから算出するため逆転板でも算出する |
+| spread_bps | numeric(8,2) | NULL可 | (ask − bid)/mid×10000（0以上）。bid/ask欠損・mid=0・**逆転板（bid > ask、特別気配・寄り前後・片側が古い値）は欠損（NULL）**として扱う。上限比較のみのスプレッドガード（Fast Screener/Policy/Risk）が負値を素通りさせないため、NULLは層ごとに保守的に除外される: Fast Screenerは`missing_spread`（`domain.ScreenReasonMissingSpread`）、Policy Engineは`missing_data`（`policy.ReasonMissingData`）、Risk Engineは拒否理由文言`risk_engine_error: spread_bps missing (data_missing)`（`data_missing`は文言であり、独立したreasonコードは無い）（issue #465）。同じ理由で`microprice`も逆転板ではNULL。`orderbook_imbalance`は数量のみから算出するため逆転板でも算出する |
 | volume | integer | NOT NULL | |
 | turnover | numeric(18,2) | NOT NULL | |
 | return_1m / return_5m / return_15m | numeric(8,4) | NULL可（起動直後等は算出不可） | **小数比**（0.004 = +0.4%）。Scanner API/画面は×100して%表示し、Fast Screenerの`min_abs_return_5m_pct`（%）との比較も×100して行う（`domain.RatioToPercent`） |
@@ -113,13 +139,13 @@ erDiagram
 | raw_data_json | text | NOT NULL | kabuステーションAPI生レスポンス（JSON文字列、再計算・監査用） |
 | created_at | text | NOT NULL | |
 
-インデックス: `UNIQUE (instrument_id, timestamp)`, `INDEX (symbol, timestamp DESC)`
+インデックス: `UNIQUE (instrument_id, timestamp)`, `INDEX (symbol, timestamp DESC)`, `INDEX (timestamp)`（`(timestamp)`は保持期間パージ`internal/service/retention`の期限切れ`id`取得`WHERE timestamp < ? ORDER BY timestamp, id LIMIT ?`を範囲走査にし、整列も発生させないための索引。既存2本は`timestamp`単独の範囲を引けない。マイグレーション000027。issue #533）
 
 bid/ask系カラムの注意（issue #458）: 修正前に保存された`bid`/`ask`/`bid_depth`/`ask_depth`/`spread_bps`/`orderbook_imbalance`/`microprice`は、kabuステーションAPIの売/買命名を入れ替えずに保存していたため、bid/ask・数量が逆で`spread_bps`が常に負だった。保持期間（90日）で自然に消えるため再計算は行わず、過去分をスクリーニング・分析に使う場合はこの点に留意する（`raw_data_json`に生のBidPrice/AskPriceが残る）。ただしRAG検索対象の派生インデックス`market_snapshot_vectors`は、修正前の符号反転ベクトルが類似事例を歪めるため、マイグレーション`000023`で全件削除済み（`market_snapshots`本体は残す。issue #469, #470）。
 
 ベクトルインデックス: `market_snapshot_vectors`（後述「ベクトルインデックス」参照、`rowid = market_snapshots.id`）
 
-運用上の注意: 高頻度書き込みテーブルのため、周期実行1サイクル分（スクリーニング対象銘柄分）を1トランザクションにまとめて書き込み、SQLiteのWAL書き込みコストを抑える。保持期間は90日で、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`timestamp`が90日より古い行を`market_snapshot_vectors`の対応行とともにバッチ削除する（`non-functional.md` §3）。
+運用上の注意: 高頻度書き込みテーブルのため、周期実行1サイクル分（スクリーニング対象銘柄分）を1トランザクションにまとめて書き込み、SQLiteのWAL書き込みコストを抑える。保持期間は90日で、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`timestamp`が90日より古い行を`market_snapshot_vectors`の対応行とともにバッチ削除する（期限切れ`id`は上記`INDEX (timestamp)`の範囲走査で取得する。`non-functional.md` §3）。
 
 ## jev_decisions
 
@@ -165,7 +191,7 @@ erDiagram
 | request_cost | numeric(10,6) | NULL可 | API課金額（USD等）。TypeSafe AI公式API（`/v1/systemone`）は課金額を返さず`usage`のトークン数のみのため、現行実装は常にNULL |
 | created_at | text | NOT NULL | |
 
-インデックス: `INDEX (instrument_id, timestamp DESC)`, `INDEX (decision_type)`, `INDEX (state_hash)`, `INDEX (decision_type, timestamp)`, `INDEX (timestamp)`, `INDEX (instrument_id, decision_type, timestamp DESC, id DESC)`（`INDEX (instrument_id, decision_type, timestamp DESC, id DESC)`は銘柄ごとの最新Trader/Scout判断`LatestTraderByInstruments`/`LatestTrader`/`LatestScout`が銘柄駆動で先頭1行だけ索引seekするための索引で、全Trader行の走査を避ける。マイグレーション000025、`internal/repository/judgement/decision_plan_test.go`が`EXPLAIN QUERY PLAN`で固定。issue #498）（`(decision_type, timestamp)`と`(timestamp)`はActivity Logの直近判断`ListRecent`が`ORDER BY timestamp DESC, id DESC LIMIT N`を全走査・整列なしで引くため。マイグレーション000020）。`(decision_type, timestamp)`は`ListRecent`専用ではなく、Outcome Labeling（FR-CAL-4）が毎分走る`CalibrationRepository.PendingLabels`（`decision_type='trader'`かつ`timestamp`の範囲、下限は`now-24h`）の範囲走査にも必須で（issue #484）、`internal/repository/judgement/calibration_plan_test.go`が`EXPLAIN QUERY PLAN`で`jev_decisions_type_timestamp_idx`の範囲検索を固定している。この索引を変更・削除すると`jev_decisions`全履歴（保持期間なし）の走査へ退行する
+インデックス: `INDEX (instrument_id, timestamp DESC)`, `INDEX (decision_type)`, `INDEX (state_hash)`, `INDEX (decision_type, timestamp)`, `INDEX (timestamp)`, `INDEX (instrument_id, decision_type, timestamp DESC, id DESC)`, `INDEX (decision_type, direction, confidence)`（`(decision_type, direction, confidence)`はJev Traderジョブごとのキャリブレーション判定`CountLabeledSamplesInConfidenceRange`がconfidence帯を索引範囲検索し、閾値（`MinCalibrationSamples`）件で`LIMIT`打ち切りして履歴行数に依存させないための索引。マイグレーション000028、`internal/repository/judgement/calibration_plan_test.go`が`EXPLAIN QUERY PLAN`で固定。issue #603）（`INDEX (instrument_id, decision_type, timestamp DESC, id DESC)`は銘柄ごとの最新Trader/Scout判断`LatestTraderByInstruments`/`LatestTrader`/`LatestScout`が銘柄駆動で先頭1行だけ索引seekするための索引で、全Trader行の走査を避ける。マイグレーション000025、`internal/repository/judgement/decision_plan_test.go`が`EXPLAIN QUERY PLAN`で固定。issue #498）（`(decision_type, timestamp)`と`(timestamp)`はActivity Logの直近判断`ListRecent`が`ORDER BY timestamp DESC, id DESC LIMIT N`を全走査・整列なしで引くため。マイグレーション000020）。`(decision_type, timestamp)`は`ListRecent`専用ではなく、Outcome Labeling（FR-CAL-4）が毎分走る`CalibrationRepository.PendingLabels`（`decision_type='trader'`かつ`timestamp`の範囲、下限は`now-24h`）の範囲走査にも必須で（issue #484）、`internal/repository/judgement/calibration_plan_test.go`が`EXPLAIN QUERY PLAN`で`jev_decisions_type_timestamp_idx`の範囲検索を固定している。この索引を変更・削除すると`jev_decisions`全履歴（保持期間なし）の走査へ退行する
 
 ベクトルインデックス: `jev_decision_vectors`（`rowid = jev_decisions.id`）
 
