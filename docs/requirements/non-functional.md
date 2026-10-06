@@ -74,6 +74,7 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 ### 5.1 必須ログ（構造化JSON、レベル別）
 
 - Market data fetch latency / エラー率
+- Market data job の区間別所要（1件が1秒を超えたとき`marketdatajob: slow market-data job`をWARNで出力し、`latest_ms`（板取得）・`history_ms`・`context_ms`・`symbol_ms`（銘柄情報）・`cycle_ms`（特徴量の保存とRAG索引）・`execution_ms`を併記する。約4,000銘柄を1サイクルで処理する前提のため、1件1秒超でサイクルが間に合わなくなる支配区間を特定するためのログ）
 - Jev API latency / エラー率
 - スキャン対象銘柄数、Scout呼び出し回数、Trader呼び出し回数
 - Signal count（生成シグナル数。`policy: trade signal decided`ログ。永続化する`Evaluate`のみが出力し、バックテスト再現の`Decide`は出力しない）
