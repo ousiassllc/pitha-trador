@@ -20,7 +20,11 @@
 //     `#marketdata-banner`, issue #626): the container is the fixed
 //     `role="status"` live region; a poll answering the markup already shown
 //     is not swapped, so a screen reader announces a banner only when it
-//     appears or changes, not on every poll.
+//     appears or changes, not on every poll;
+//   - focus after a swap that removed the clicked button (issue #676): htmx
+//     restores focus only to a same-`id` element, so a button that carries
+//     `data-focus-after-swap="<id>"` hands focus to that element when the
+//     swap left it on `<body>` (`htmx:afterSwap`).
 // The toast markup lives only in templ (`#toast-template`, atoms.Toast).
 
 import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
@@ -31,6 +35,8 @@ const DISMISS_AFTER_MS = 8000;
 const REGIONS = '#toast-region, [data-toast-region]';
 
 const LIVE_BANNER_LAST = 'liveBannerLast';
+
+const FOCUS_AFTER_SWAP = 'data-focus-after-swap';
 
 interface ResponseDetail {
   xhr?: XMLHttpRequest;
@@ -106,6 +112,24 @@ export function onBeforeSwap(event: Event): void {
   // htmx's `responseHandling` targets `#toast-region`, which an open modal dialog makes inert.
   const inDialog = dialogRegion();
   if (inDialog) detail.target = inDialog;
+}
+
+/**
+ * `htmx:afterSwap`: htmx has already restored focus to a same-`id` element when it could; if the
+ * clicked button is gone and focus fell to `<body>`, move it to the element named by the button's
+ * `data-focus-after-swap` (an id; made programmatically focusable) so keyboard users keep their place (issue #676).
+ */
+export function onAfterSwap(event: Event): void {
+  const trigger = (event as CustomEvent<{ requestConfig?: { elt?: Element } }>).detail
+    ?.requestConfig?.elt;
+  const targetId = trigger?.getAttribute(FOCUS_AFTER_SWAP);
+  if (!targetId || trigger?.isConnected) return;
+  const active = document.activeElement;
+  if (active && active !== document.body) return;
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+  target.focus();
 }
 
 /** `htmx:responseError`: generic toast when the server sent no toast of its own. */
@@ -190,6 +214,7 @@ export function watchToastRegion(target: HTMLElement): void {
 
 export function init(): void {
   document.addEventListener('htmx:beforeSwap', onBeforeSwap);
+  document.addEventListener('htmx:afterSwap', onAfterSwap);
   document.addEventListener('htmx:responseError', onResponseError);
   document.addEventListener('htmx:sendError', onNoResponse);
   document.addEventListener('htmx:timeout', onNoResponse);

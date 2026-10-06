@@ -168,6 +168,7 @@ export function formatSigned(value: number, decimals: number): string {
 
 // 0..1 confidence as a whole percent. Math.round and Go's math.Round both
 // round halves up for non-negative values (Go's %.0f would round to even).
+// The SSR side is the single shared atoms.FormatConfidence (issue #677).
 export function formatConfidence(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
 }

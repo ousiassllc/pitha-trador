@@ -117,7 +117,7 @@ templ scannerRow(c domain.Candidate) {
 				@atoms.Badge(atoms.Direction(*c.JevDirection))
 			}
 		</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatConfidence(c.JevConfidence) }</td>
+		<td class="px-3 py-2 text-right tabular-nums">{ atoms.FormatConfidence(c.JevConfidence) }</td>
 		<td class="px-3 py-2">
 			if c.EntryQuality == nil {
 				<span class="text-slate-400">—</span>
@@ -183,16 +183,6 @@ func formatSignedNilFloat(v *float64, decimals int) string {
 		return "—"
 	}
 	return formatSignedFloat(*v, decimals)
-}
-
-// formatConfidence renders a 0..1 confidence as a whole percent, rounding
-// half away from zero like Math.round in scanner-view.ts's formatConfidence
-// (fmt's %.0f would round half to even).
-func formatConfidence(v *float64) string {
-	if v == nil {
-		return "—"
-	}
-	return formatFloat(math.Round(*v*100), 0) + "%" // formatFloat drops the sign of -0, like `${-0}` in JS
 }
 
 // EscapeSymbolSegment percent-escapes symbol as one URL path segment.
