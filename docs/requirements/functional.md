@@ -254,3 +254,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.59 | 2026-10-07 | FR-SCHED-2（`components-platform.md`）のフルスキャン時のPUSH登録を「最大50」から実装（`pushfeed.MaxRegisterSymbols`＝API登録上限50−REST回転用10）・`non-functional.md` §2.3・`architecture/overview/integrations.md` §5に合わせ「最大40（API登録上限50のうちREST回転用に10件を空ける）」へ訂正（#672の取り残し） | issue #699 |
 | 1.60 | 2026-10-07 | FR-SCAN-8の失敗表示を、下位エラーの生文字列ではなく失敗種別ごとの固定文言とし、下位エラーは`slog`のみに記録する旨に訂正 | issue #700 |
 | 1.61 | 2026-10-08 | FR-EXIT-2にcontinuation_probability低下Exitのしきい値`min(0.60, 方向別エントリーしきい値)`（エントリーしきい値はstrategy.yaml < env < `runtime_settings`の現行値）を追記し、エントリーしきい値を0.60未満へ下げた直後の即Exitを防ぐ | issue #714 |
+| 1.62 | 2026-10-08 | FR-EXIT-2のcontinuation_probability低下Exitしきい値を、ポジション開設時の値の固定ではなく「評価時点で有効な方向別エントリーしきい値」を1回のExit評価につき1回だけ読む仕様と明記（実装コメントの「エントリー時の値」表現を訂正） | issue #716 |

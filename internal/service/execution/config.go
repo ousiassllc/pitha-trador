@@ -36,11 +36,12 @@ type Config struct {
 	// continuation_probability低下 exit condition's threshold (FR-EXIT-1,
 	// FR-EXIT-2). Defaults to 0.60, the bundled policy.long/short.
 	// min_continuation_probability entry threshold. The threshold actually
-	// applied is min(this, the position side's current entry threshold)
-	// when Deps.EntryThresholds is set (exitthreshold.go): once
+	// applied is min(this, the entry threshold currently in force for the
+	// position's side), read once per EvaluateExit call, when
+	// Deps.EntryThresholds is set (exitthreshold.go): once
 	// continuation_probability drops back below the level Policy Engine
-	// required to enter, Execution treats the original setup as no longer
-	// intact, but never stricter than the level the position was admitted under.
+	// currently requires to enter, Execution treats the original setup as
+	// no longer intact, but never stricter than that level.
 	MinContinuationProbability float64
 
 	// CooldownAfterLossMinutes/ForceFlatBeforeMarketCloseMinutes mirror
