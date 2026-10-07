@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 // StrategyConfig mirrors config/strategy.yaml: Scheduler周期・Fast Screener
@@ -31,6 +32,14 @@ type ScanConfig struct {
 	HeldPositionIntervalSecondsMin     int   `yaml:"held_position_interval_seconds_min"`
 	HeldPositionIntervalSecondsMax     int   `yaml:"held_position_interval_seconds_max"`
 	JevScoutMinIntervalSeconds         int   `yaml:"jev_scout_min_interval_seconds"`
+	// FullScanMaxSnapshotAgeSeconds is how old a market_snapshots bar may be
+	// during a session before it is stale (stale_snapshot, issue #686) when
+	// full_scan_enabled is true: a REST symbol is refreshed only once per
+	// full cycle (about 8 minutes at 8 calls/s over ~4,000 symbols), so the
+	// ranking-watch 3 minutes (domain.MaxSnapshotAge) would drop most of
+	// them. Unset/non-positive is derived from the rate cap
+	// (withScanIntervalDefaults); ranking-watch mode ignores it.
+	FullScanMaxSnapshotAgeSeconds int `yaml:"full_scan_max_snapshot_age_seconds"`
 	// KabuInfoAPIMaxPerSecond is the process-wide cap on kabuステーション
 	// 情報API / 銘柄登録API calls (GetBoard, GetSymbol, RegisterSymbols).
 	// Official cap is 10/s; default 8. Values above 10 are clamped.
@@ -42,6 +51,18 @@ type ScanConfig struct {
 // FullScanOn reports whether the 60秒 full REST scan is enabled: false unless
 // scan.full_scan_enabled is explicitly true.
 func (c ScanConfig) FullScanOn() bool { return c.FullScanEnabled != nil && *c.FullScanEnabled }
+
+// SnapshotMaxAge returns how old a bar may be during a session before it is
+// stale: rankingWatchAge (domain.MaxSnapshotAge) in ranking-watch mode, and
+// the longer full-scan age when full scan is on. An unset full-scan age
+// (a ScanConfig that bypassed the loader's defaults) falls back to
+// rankingWatchAge.
+func (c ScanConfig) SnapshotMaxAge(rankingWatchAge time.Duration) time.Duration {
+	if c.FullScanOn() && c.FullScanMaxSnapshotAgeSeconds > 0 {
+		return time.Duration(c.FullScanMaxSnapshotAgeSeconds) * time.Second
+	}
+	return rankingWatchAge
+}
 
 // EventTriggerConfig holds FR-SCAN-1/FR-SCAN-2's event-driven
 // re-evaluation thresholds (functional.md §4.3): a symbol whose

@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
@@ -115,7 +116,9 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig) {
 	s.RAG = rag.NewService(db, s.Decisions, s.Snapshots)
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
-	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout, jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener))
+	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
+		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener),
+		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)))
 	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, jev.WithNewsSource(s.News))
 }
 
@@ -160,7 +163,9 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig)
-	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk}, policy.WithCalibration(s.Calibration))
+	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk},
+		policy.WithCalibration(s.Calibration),
+		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)))
 }
 
 // buildGovernor builds the Self-Improvement Governor. Sol/Opus (issue #82,

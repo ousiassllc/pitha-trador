@@ -170,7 +170,7 @@ func Run(cfg config.FastScreenerConfig, inputs []Input) []domain.Candidate {
 
 // Screen is Run that also reports each input's exclusion reasons, for the
 // Scanner Dashboard's per-symbol view (issue #303). It adds only a
-// two-byte-per-input Reasons slice over Run.
+// four-byte-per-input Reasons slice over Run.
 func Screen(cfg config.FastScreenerConfig, inputs []Input) Result {
 	type ranked struct {
 		idx       int

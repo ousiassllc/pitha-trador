@@ -35,6 +35,13 @@ func WithClock(now func() time.Time) HandlerOption {
 	return func(h *Handler) { h.now = now }
 }
 
+// WithSnapshotMaxAge sets how old the latest bar may be before HandleJob
+// skips the job as stale (default domain.MaxSnapshotAge, the ranking-watch
+// value; full-scan mode passes the longer full-scan age, issue #686).
+func WithSnapshotMaxAge(d time.Duration) HandlerOption {
+	return func(h *Handler) { h.snapshotMaxAge = d }
+}
+
 // calibrated reports whether decision's confidence bucket has enough
 // labeled Calibration samples to trust (Input.Calibrated). Always true
 // without a CalibrationSource, a zero MinCalibrationSamples, or a NONE

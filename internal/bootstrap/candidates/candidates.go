@@ -135,12 +135,15 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("candidates: list snapshot history: %w", err)
 	}
-	// A bar older than domain.MaxSnapshotAge is stale only during a session
+	// A bar older than the mode's max age (domain.MaxSnapshotAge in
+	// ranking-watch mode, scan.full_scan_max_snapshot_age_seconds in
+	// full-scan mode, issue #686) is stale only during a session
 	// (issue #685): off-session the retained watch list is shown from stored
 	// data (#668), but once the session opens a bar kept from the previous
 	// session / an earlier watch period must not reach Jev Scout until
 	// market-data writes a fresh one.
 	checkStale := r.inSession(startedAt)
+	maxAge := r.Strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)
 	for slot, inst := range actives {
 		symbols[slot] = domain.ScanSymbol{InstrumentID: inst.ID, Symbol: inst.Symbol, Name: inst.Name, Market: inst.Market}
 		bars := history[inst.ID]
@@ -172,7 +175,7 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 			TurnoverMissing:     t == nil,
 			BreakoutStrength:    signals.BreakoutStrength,
 			VolatilityExpansion: signals.VolatilityExpansion,
-			Stale:               checkStale && bars[0].IsStale(startedAt),
+			Stale:               checkStale && bars[0].IsStale(startedAt, maxAge),
 		})
 		inputSlot = append(inputSlot, slot)
 	}

@@ -116,15 +116,16 @@ type ScoutJobPayload struct {
 // question group and persists every completed call to jev_decisions
 // (decision_type=scout, FR-SCOUT-3).
 type Scout struct {
-	client     *Client
-	decisions  *judgement.DecisionRepository
-	snapshots  *market.SnapshotRepository
-	jobs       *jobqueue.JobRepository
-	rag        *rag.Service
-	thresholds config.JevScoutConfig
-	news       NewsSource
-	recorder   ScoutRecorder
-	now        func() time.Time
+	client         *Client
+	decisions      *judgement.DecisionRepository
+	snapshots      *market.SnapshotRepository
+	jobs           *jobqueue.JobRepository
+	rag            *rag.Service
+	thresholds     config.JevScoutConfig
+	news           NewsSource
+	recorder       ScoutRecorder
+	now            func() time.Time
+	snapshotMaxAge time.Duration
 }
 
 // NewScout returns a Scout that calls client, persists decisions via
@@ -138,15 +139,16 @@ type Scout struct {
 func NewScout(client *Client, decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, jobs *jobqueue.JobRepository, ragService *rag.Service, thresholds config.JevScoutConfig, opts ...Option) *Scout {
 	o := newOptions(opts)
 	return &Scout{
-		client:     client,
-		decisions:  decisions,
-		snapshots:  snapshots,
-		jobs:       jobs,
-		rag:        ragService,
-		thresholds: thresholds,
-		news:       o.news,
-		recorder:   o.recorder,
-		now:        o.now,
+		client:         client,
+		decisions:      decisions,
+		snapshots:      snapshots,
+		jobs:           jobs,
+		rag:            ragService,
+		thresholds:     thresholds,
+		news:           o.news,
+		recorder:       o.recorder,
+		now:            o.now,
+		snapshotMaxAge: o.snapshotMaxAge,
 	}
 }
 
@@ -235,7 +237,7 @@ func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	if len(snapshots) == 0 {
 		return fmt.Errorf("jev: no market snapshot recorded yet for %q", payload.Symbol)
 	}
-	if snapshots[0].IsStale(s.now().UTC()) {
+	if snapshots[0].IsStale(s.now().UTC(), s.snapshotMaxAge) {
 		slog.Info("jev: skip scout, latest snapshot is stale", "symbol", payload.Symbol, "snapshot_at", snapshots[0].Timestamp)
 		return nil
 	}
