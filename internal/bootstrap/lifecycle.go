@@ -55,8 +55,8 @@ func (s *Services) Start(ctx context.Context) error {
 		defer s.wg.Done()
 		scan := s.strategy.Scan
 		heldposition.Monitor{
-			Positions: s.Positions, Boards: s.MarketData, Exits: s.Execution,
-			Exchange: defaultKabuExchange, Open: marketcalendarOpen,
+			Positions: s.Positions, Boards: s.PushFeed, Exits: s.Execution,
+			Open: marketcalendarOpen,
 		}.Run(ctx, time.Duration(scan.HeldPositionIntervalSecondsMin)*time.Second, time.Duration(scan.HeldPositionIntervalSecondsMax)*time.Second)
 	}()
 

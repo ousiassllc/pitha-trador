@@ -102,3 +102,4 @@
 | 1.95 | 2026-10-07 | §3のツリーに`domain/universe.go`（JPX取込の失敗種別）を追加し、`bootstrap/universe/`の説明にJPX一覧の取得・`Importer.ImportJPX`を追記。レイヤー依存ルールの`web/**`の基盤パッケージ列挙を実importに合わせ`internal/logging`・`web/middleware`・`web/apierror`を追加（`internal/config`は`handler/{symbol,settings}`、`internal/version`は`handler/system`・`organisms`）。`web/handler`のパッケージコメントも同じ表現へ統一 | issue #704・#705・#706 |
 | 1.96 | 2026-10-08 | §3の`.linterlyignore`方針の許容リストに、`wails dev`が生成する`.gitignore`済みのバインディング・`runtime.d.ts`の`static/wailsjs/**`を追記し、実ファイル・`environment/setup.md`と同じ4種の列挙に揃えた | issue #715（#555追加分の記述漏れ解消） |
 | 1.97 | 2026-10-08 | §5のトークン失敗の記述に、`4001007`/`4001017`継続時のバナー強調（`TokenStatus.Persistent`）と、メンテ明けの手動再ログイン運用（自動GUIログインはスコープ外、確認項目は`non-functional.md` §3.1）を追記 | issue #712 |
+| 1.98 | 2026-10-08 | §5（`integrations.md`）に、PUSH/RESTの役割分担（REST `/board`はPUSH登録済み銘柄の薄い補完。`heldposition.Monitor`も`pushfeed.Feed.Latest`経由）とレート逼迫時の方針（監視リスト件数・ランキング種別を削らない）、登録直後の初回板〜5秒の既知制限と再検討トリガーを追記 | issue #709・#713 |

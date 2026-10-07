@@ -161,6 +161,40 @@ func TestRun_RegistersAndServesPushBoards(t *testing.T) {
 	}
 }
 
+// Issue #709: REST /board is only the thin supplement for PUSH-covered
+// symbols. Once a PUSH board has arrived, repeated Latest calls (the 5〜15秒
+// held-position loop and the per-minute market-data jobs) must be served from
+// it without any further REST poll.
+func TestLatest_FreshPushBoardNeedsNoRESTPoll(t *testing.T) {
+	f := newFakeKabu(t, marketdata.Board{Symbol: "1000", CurrentPrice: 1},
+		marketdata.Board{Symbol: "1000", CurrentPrice: 2555})
+	feed := pushfeed.New(fakeUniverse{stocks(1)}, f.client, f.wsURL(), 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { feed.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if b, err := feed.Latest(ctx, "1000"); err == nil && b.CurrentPrice == 2555 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("PUSH board never served")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	before := f.boardFetches()
+	for range 20 {
+		if b, err := feed.Latest(ctx, "1000"); err != nil || b.CurrentPrice != 2555 {
+			t.Fatalf("Latest = (%+v, %v), want the PUSH board (2555)", b, err)
+		}
+	}
+	if after := f.boardFetches(); after != before {
+		t.Errorf("REST /board fetched %d times while a fresh PUSH board existed, want 0", after-before)
+	}
+}
+
 func TestLatest_FallsBackToRESTWithoutPushBoard(t *testing.T) {
 	f := newFakeKabu(t, marketdata.Board{Symbol: "1000", CurrentPrice: 2400})
 	feed := pushfeed.New(fakeUniverse{}, f.client, f.wsURL(), 1)

@@ -19,7 +19,7 @@ func (f parityPositions) ListOpen(context.Context) ([]domain.Position, error) {
 
 type parityBoards struct{ board marketdata.Board }
 
-func (f parityBoards) GetBoard(context.Context, string, int) (marketdata.Board, error) {
+func (f parityBoards) Latest(context.Context, string) (marketdata.Board, error) {
 	return f.board, nil
 }
 
@@ -59,7 +59,7 @@ func TestHeldPositionSnapshotQuoteMatchesPersistedBar(t *testing.T) {
 			exits := &parityExits{}
 			held := heldposition.Monitor{
 				Positions: parityPositions{domain.Position{ID: 1, InstrumentID: inst.ID, Symbol: "7203"}},
-				Boards:    parityBoards{board}, Exits: exits, Exchange: 1,
+				Boards:    parityBoards{board}, Exits: exits,
 				Open: func(time.Time) bool { return true },
 			}
 			if n, err := held.Cycle(context.Background()); err != nil || n != 1 || len(exits.snaps) != 1 {
