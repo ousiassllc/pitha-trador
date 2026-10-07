@@ -171,3 +171,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.61 | 2026-10-07 | §4 `POST /settings/:key`の検証規則に、`NEWS_FEED_ENABLED`は`on`/`off`のみ受け付け（大文字小文字無視・小文字へ正規化して保存）、それ以外は400である旨を追記 | issue #675 |
 | 1.62 | 2026-10-07 | `GET /api/v1/positions`・`GET /api/v1/orders`（`endpoints/huma-api.md`）に出力スキーマ（`items`の全フィールド・`null`条件・RFC 3339時刻・新しい順・`side`の値域・`exit_reason`/`fees`/`slippage_bps`の意味）を追記 | issue #680 |
 | 1.63 | 2026-10-07 | `GET /api/v1/positions`（`endpoints/huma-api.md`）に、`unrealized_pnl`は保有中のみ有効でクローズ済み行は`0`である旨を追記。`GET /api/v1/symbols/{symbol}/candles`に出力スキーマ（`symbol`/`candles`のラップ形状・`time`（RFC 3339 UTC）・`vwap`（`Feature.VWAP`、算出不能時`0`）・時刻昇順）を追記 | issue #682, #683 |
+| 1.64 | 2026-10-07 | `GET /api/v1/symbols/{symbol}/candles`（`endpoints/huma-api.md`）に、未登録銘柄は404（`unknown symbol`）である旨と、`from`含む・`to`含まない半開区間`[from, to)`である旨を追記 | issue #684 |

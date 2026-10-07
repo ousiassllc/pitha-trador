@@ -105,13 +105,15 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
 | クエリ | 型 | 説明 |
 |-------|-----|------|
-| `from` | string(RFC3339) | 取得開始時刻（省略時は`to`の6時間前） |
-| `to` | string(RFC3339) | 取得終了時刻（省略時は現在） |
+| `from` | string(RFC3339) | 取得開始時刻（含む。省略時は`to`の6時間前） |
+| `to` | string(RFC3339) | 取得終了時刻（含まない。省略時は現在） |
 | `interval` | string | `1m` 固定（MVP。`1m`以外は422） |
 
 パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、`/symbols/{symbol}`系ルート共通）。`from`/`to`がRFC3339でない場合、`symbol`/`interval`が範囲外の場合はいずれも422。
 
 `from > to`、または`to - from`が7日を超える場合は400（保持期間90日分の全行を1リクエストで読み込ませないための上限。画面の既定は6時間。リポジトリは呼ばれない）。
+
+取得区間は半開区間`[from, to)`（`timestamp >= from AND timestamp < to`）で、`from`ちょうどのバーは含まれ、`to`ちょうどのバーは返らない。`{symbol}`が未登録銘柄の場合は404（`unknown symbol`。`decisions`・`signals/{symbol}`と同じ）。
 
 各点の`volume`は**1分足あたりの出来高**（バー単位）で、保存済みの累積セッション出来高（`market_snapshots.volume`、kabuステーションAPIの`TradingVolume`）の隣接スナップショット間差分（`cur - prev`）。累積値が後退した場合（新セッション）は当該バーの累積値自体を返し、負値にはしない。応答の先頭バーは前のスナップショットを持たないため、`Feature.Volume1m`（累積差分）があればその値、なければ`0`。`open`/`high`/`low`/`close`は1バー1サンプルの価格で同値。
 
