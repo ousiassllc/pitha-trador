@@ -93,8 +93,9 @@ type Deps struct {
 	Signals     *trading.SignalRepository
 	Instruments *market.InstrumentRepository
 	// EntryThresholds lowers the continuation_probability低下 exit
-	// threshold to the position side's entry threshold (FR-EXIT-2).
-	// nil keeps Config.MinContinuationProbability as is.
+	// threshold to the entry threshold currently in force for the
+	// position's side (FR-EXIT-2). nil keeps
+	// Config.MinContinuationProbability as is.
 	EntryThresholds EntryThresholdSource
 }
 
