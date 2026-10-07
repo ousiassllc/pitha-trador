@@ -76,9 +76,11 @@ type Loader struct {
 // NewLoader returns a Loader reading via the given repositories. maxStale is
 // how old a bar may be and still count as the current market: callers pass
 // ScanConfig.SnapshotMaxAge(domain.MaxSnapshotAge), i.e. the 3-minute
-// ranking-watch age, or the longer full-scan age when every index row is only
-// refreshed once per full REST cycle (issue #692). A non-positive maxStale
-// falls back to domain.MaxSnapshotAge.
+// ranking-watch age, or the longer full-scan age (issue #692). Only the
+// freshness check of the latest bar is widened: the window reference
+// tolerance (FR-FE-5) is not, so with the ~8 minute bar spacing of a full scan
+// the returns stay nil (issues #693/#694/#696). A non-positive maxStale falls
+// back to domain.MaxSnapshotAge.
 func NewLoader(instruments Instruments, snapshots Snapshots, maxStale time.Duration) *Loader {
 	if maxStale <= 0 {
 		maxStale = domain.MaxSnapshotAge

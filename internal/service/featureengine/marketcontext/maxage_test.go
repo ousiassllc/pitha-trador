@@ -14,12 +14,14 @@ import (
 // one full REST cycle of ~4,000 symbols plus a margin (issue #686).
 const fullScanAge = 620 * time.Second
 
-// Regression for #692: the allowed bar age used to be a fixed 3 minutes, so
-// with scan.full_scan_enabled: true (index rows refreshed once per ~8 minute
-// full REST cycle) market_return_1m/5m, sector_return_5m and market_breadth
-// were missing for most of the cycle. The age is now injected: the Loader
-// accepts a bar exactly as old as maxStale and ignores anything older, for
-// the ranking-watch 3 minutes (unchanged) and the full-scan age alike.
+// TestLoader_MaxStaleFollowsInjectedAge pins only the latest-bar freshness
+// check (issue #692): the allowed bar age used to be a fixed 3 minutes and is
+// now injected, so the Loader accepts a bar exactly as old as maxStale and
+// ignores anything older, for the ranking-watch 3 minutes (unchanged) and the
+// full-scan age alike. The index bars here are packed one minute apart; this
+// does NOT make market_return_*/sector_return_5m work under
+// scan.full_scan_enabled: true, whose ~8 minute bar spacing fails the window
+// reference tolerance (FR-FE-5); see maxage_spacing_test.go.
 func TestLoader_MaxStaleFollowsInjectedAge(t *testing.T) {
 	at := time.Date(2026, 10, 7, 1, 30, 0, 0, time.UTC)
 	for _, mode := range []struct {
