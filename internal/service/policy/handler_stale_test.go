@@ -25,11 +25,16 @@ func TestHandler_HandleJob_SkipsStaleSnapshot(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		age       time.Duration
+		maxAge    time.Duration // 0 keeps the default (ranking-watch) domain.MaxSnapshotAge
 		wantStale bool
 	}{
-		{"exactly max age is fresh", domain.MaxSnapshotAge, false},
-		{"just over max age is stale", domain.MaxSnapshotAge + time.Nanosecond, true},
-		{"previous session", 17 * time.Hour, true},
+		{"exactly max age is fresh", domain.MaxSnapshotAge, 0, false},
+		{"just over max age is stale", domain.MaxSnapshotAge + time.Nanosecond, 0, true},
+		{"previous session", 17 * time.Hour, 0, true},
+		// Issue #686: full-scan mode passes the longer full-scan age.
+		{"8 min bar is stale in ranking-watch mode", 8 * time.Minute, 0, true},
+		{"8 min bar is fresh within the full-scan age", 8 * time.Minute, 620 * time.Second, false},
+		{"just over the full-scan age is stale", 620*time.Second + time.Nanosecond, 620 * time.Second, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := newHandlerTestDB(t)
@@ -39,8 +44,11 @@ func TestHandler_HandleJob_SkipsStaleSnapshot(t *testing.T) {
 			client := jev.NewClient(jev.Config{BaseURL: traderServer(t, passingTraderResponse(domain.JevDirectionLong)).URL, MaxAttempts: 1})
 			trader := jev.NewTrader(client, decisions, rag.NewService(db, decisions, snapshots))
 			executor := &recordingExecutor{}
-			handler := policy.NewHandler(trader, snapshots, policy.NewEngine(testThresholds(), nil, signals), executor,
-				policy.WithClock(func() time.Time { return barAt.Add(tc.age) }))
+			opts := []policy.HandlerOption{policy.WithClock(func() time.Time { return barAt.Add(tc.age) })}
+			if tc.maxAge > 0 {
+				opts = append(opts, policy.WithSnapshotMaxAge(tc.maxAge))
+			}
+			handler := policy.NewHandler(trader, snapshots, policy.NewEngine(testThresholds(), nil, signals), executor, opts...)
 			inst := mustCreateInstrumentAndSnapshot(t, db, "7203", 10)
 
 			payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: "7203"})

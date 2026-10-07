@@ -69,19 +69,31 @@ func TestRefresh_StaleBarKeptVisibleButNotScouted(t *testing.T) {
 	}
 }
 
-// The staleness boundary is domain.MaxSnapshotAge: exactly that old is
-// still fresh, one nanosecond more is stale.
+// The staleness boundary is domain.MaxSnapshotAge in ranking-watch mode and
+// scan.full_scan_max_snapshot_age_seconds in full-scan mode (issue #686): a
+// full-scan REST bar is refreshed only once per ~8 min cycle, so a bar older
+// than 3 minutes but within the full-scan age is not stale. Exactly that
+// old is still fresh, one nanosecond more is stale.
 func TestRefresh_StaleBoundary(t *testing.T) {
+	const fullScanAge = 620 * time.Second
 	for _, tc := range []struct {
 		name      string
+		fullScan  bool
 		age       time.Duration
 		wantStale bool
 	}{
-		{"exactly max age", domain.MaxSnapshotAge, false},
-		{"just over max age", domain.MaxSnapshotAge + time.Nanosecond, true},
+		{"ranking: exactly max age", false, domain.MaxSnapshotAge, false},
+		{"ranking: just over max age", false, domain.MaxSnapshotAge + time.Nanosecond, true},
+		{"ranking: 8 min bar", false, 8 * time.Minute, true},
+		{"full scan: 8 min bar is within the cycle", true, 8 * time.Minute, false},
+		{"full scan: exactly the full-scan age", true, fullScanAge, false},
+		{"full scan: just over the full-scan age", true, fullScanAge + time.Nanosecond, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			refresher, _, clock := newScoutCooldownRefresher(t)
+			fullScan := tc.fullScan
+			refresher.Strategy.Scan.FullScanEnabled = &fullScan
+			refresher.Strategy.Scan.FullScanMaxSnapshotAgeSeconds = int(fullScanAge / time.Second)
 			*clock = clock.Add(tc.age)
 			if err := refresher.Refresh(context.Background()); err != nil {
 				t.Fatalf("Refresh: %v", err)

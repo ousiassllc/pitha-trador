@@ -3,6 +3,7 @@ package strategyflow_test
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 )
@@ -19,6 +20,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 		HeldPositionIntervalSecondsMax:     config.DefaultHeldPositionIntervalSecondsMax,
 		JevScoutMinIntervalSeconds:         config.DefaultJevScoutMinIntervalSeconds,
 		KabuInfoAPIMaxPerSecond:            config.DefaultKabuInfoAPIMaxPerSecond,
+		FullScanMaxSnapshotAgeSeconds:      620, // ceil(4000/8) + 2×60 (issue #686)
 	}
 	tests := []struct {
 		name string
@@ -46,6 +48,7 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 				HeldPositionIntervalSecondsMax:     3,
 				JevScoutMinIntervalSeconds:         90,
 				KabuInfoAPIMaxPerSecond:            config.DefaultKabuInfoAPIMaxPerSecond,
+				FullScanMaxSnapshotAgeSeconds:      740, // 500 + 2×120
 			},
 		},
 		{
@@ -61,6 +64,35 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 				HeldPositionIntervalSecondsMax:     30,
 				JevScoutMinIntervalSeconds:         config.DefaultJevScoutMinIntervalSeconds,
 				KabuInfoAPIMaxPerSecond:            config.DefaultKabuInfoAPIMaxPerSecond,
+				FullScanMaxSnapshotAgeSeconds:      620,
+			},
+		},
+		{
+			"unset age follows a lowered rate cap",
+			"scan:\n  kabu_info_api_max_per_second: 4\n",
+			config.ScanConfig{
+				FullScanIntervalSeconds:            config.DefaultFullScanIntervalSeconds,
+				CandidateRefreshIntervalSecondsMin: config.DefaultCandidateRefreshIntervalSecondsMin,
+				CandidateRefreshIntervalSecondsMax: config.DefaultCandidateRefreshIntervalSecondsMax,
+				HeldPositionIntervalSecondsMin:     config.DefaultHeldPositionIntervalSecondsMin,
+				HeldPositionIntervalSecondsMax:     config.DefaultHeldPositionIntervalSecondsMax,
+				JevScoutMinIntervalSeconds:         config.DefaultJevScoutMinIntervalSeconds,
+				KabuInfoAPIMaxPerSecond:            4,
+				FullScanMaxSnapshotAgeSeconds:      1120, // 1000 + 2×60
+			},
+		},
+		{
+			"explicit full-scan snapshot age is kept",
+			"scan:\n  full_scan_max_snapshot_age_seconds: 900\n",
+			config.ScanConfig{
+				FullScanIntervalSeconds:            config.DefaultFullScanIntervalSeconds,
+				CandidateRefreshIntervalSecondsMin: config.DefaultCandidateRefreshIntervalSecondsMin,
+				CandidateRefreshIntervalSecondsMax: config.DefaultCandidateRefreshIntervalSecondsMax,
+				HeldPositionIntervalSecondsMin:     config.DefaultHeldPositionIntervalSecondsMin,
+				HeldPositionIntervalSecondsMax:     config.DefaultHeldPositionIntervalSecondsMax,
+				JevScoutMinIntervalSeconds:         config.DefaultJevScoutMinIntervalSeconds,
+				KabuInfoAPIMaxPerSecond:            config.DefaultKabuInfoAPIMaxPerSecond,
+				FullScanMaxSnapshotAgeSeconds:      900,
 			},
 		},
 	}
@@ -75,6 +107,30 @@ func TestLoadStrategyBytes_FillsUnusableScanIntervals(t *testing.T) {
 			got.RankingMeasure = config.RankingMeasureConfig{}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("Scan intervals = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Issue #686: ranking-watch mode keeps the caller's (3-minute) age; only
+// full-scan mode switches to scan.full_scan_max_snapshot_age_seconds.
+func TestScanConfig_SnapshotMaxAge(t *testing.T) {
+	on, off := true, false
+	const rankingAge = 3 * time.Minute
+	tests := []struct {
+		name string
+		cfg  config.ScanConfig
+		want time.Duration
+	}{
+		{"full scan unset", config.ScanConfig{FullScanMaxSnapshotAgeSeconds: 620}, rankingAge},
+		{"full scan off", config.ScanConfig{FullScanEnabled: &off, FullScanMaxSnapshotAgeSeconds: 620}, rankingAge},
+		{"full scan on", config.ScanConfig{FullScanEnabled: &on, FullScanMaxSnapshotAgeSeconds: 620}, 620 * time.Second},
+		{"full scan on without an age", config.ScanConfig{FullScanEnabled: &on}, rankingAge},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.SnapshotMaxAge(rankingAge); got != tc.want {
+				t.Errorf("SnapshotMaxAge = %v, want %v", got, tc.want)
 			}
 		})
 	}

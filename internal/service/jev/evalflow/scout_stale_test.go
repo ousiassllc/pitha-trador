@@ -27,11 +27,17 @@ func TestScout_HandleJob_SkipsStaleSnapshot(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		age       time.Duration
+		maxAge    time.Duration // 0 keeps the default (ranking-watch) domain.MaxSnapshotAge
 		wantStale bool
 	}{
-		{"exactly max age is fresh", domain.MaxSnapshotAge, false},
-		{"just over max age is stale", domain.MaxSnapshotAge + time.Nanosecond, true},
-		{"previous session", 17 * time.Hour, true},
+		{"exactly max age is fresh", domain.MaxSnapshotAge, 0, false},
+		{"just over max age is stale", domain.MaxSnapshotAge + time.Nanosecond, 0, true},
+		{"previous session", 17 * time.Hour, 0, true},
+		// Issue #686: a full-scan REST bar is only refreshed once per ~8 min
+		// cycle, so the full-scan age (WithSnapshotMaxAge) lets it through.
+		{"8 min bar is stale in ranking-watch mode", 8 * time.Minute, 0, true},
+		{"8 min bar is fresh within the full-scan age", 8 * time.Minute, 620 * time.Second, false},
+		{"just over the full-scan age is stale", 620*time.Second + time.Nanosecond, 620 * time.Second, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var calls atomic.Int32
@@ -53,9 +59,12 @@ func TestScout_HandleJob_SkipsStaleSnapshot(t *testing.T) {
 				t.Fatalf("insert snapshot: %v", err)
 			}
 			decisions := judgement.NewDecisionRepository(db)
+			opts := []jev.Option{jev.WithClock(func() time.Time { return barAt.Add(tc.age) })}
+			if tc.maxAge > 0 {
+				opts = append(opts, jev.WithSnapshotMaxAge(tc.maxAge))
+			}
 			scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1}), decisions, snapshots, jobs,
-				rag.NewService(db, decisions, snapshots), testThresholds(),
-				jev.WithClock(func() time.Time { return barAt.Add(tc.age) }))
+				rag.NewService(db, decisions, snapshots), testThresholds(), opts...)
 
 			payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
 			job, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueJevScout, string(payload), time.Now().UTC())

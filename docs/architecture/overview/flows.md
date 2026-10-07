@@ -183,7 +183,7 @@ sequenceDiagram
 | 障害 | 対応 |
 |------|------|
 | Jev API失敗 | 1回目リトライ→2回目以降exponential backoff→継続失敗でnew entry停止。既存ポジションはコードベースExit Ruleで継続管理 |
-| Market Data欠損 | 現状: 銘柄単位のstale判定（`StatusTracker`）による新規取引禁止は未実装（記録のみ）。ただし立会中に最新の足が3分（`domain.MaxSnapshotAge`）超古い銘柄はJev Scout/Trader/Paper Entryへ進まない（issue #685）。全体の`market_data_down` Kill Switch（`GetBoard`5回連続失敗）で新規取引を停止する。銘柄単位の禁止はPhase 7移行前に実装する（`overview/integrations.md` §5） |
+| Market Data欠損 | 現状: 銘柄単位のstale判定（`StatusTracker`）による新規取引禁止は未実装（記録のみ）。ただし立会中に最新の足が3分（`domain.MaxSnapshotAge`。`scan.full_scan_enabled: true`では`scan.full_scan_max_snapshot_age_seconds`）超古い銘柄はJev Scout/Trader/Paper Entryへ進まない（issue #685）。全体の`market_data_down` Kill Switch（`GetBoard`5回連続失敗）で新規取引を停止する。銘柄単位の禁止はPhase 7移行前に実装する（`overview/integrations.md` §5） |
 | kabuステーションAPI異常 | Kill Switch発動条件に該当。新規取引停止、必要に応じ強制決済 |
 | DB書き込み失敗継続 | Kill Switch発動条件に該当 |
 | Wailsプロセスクラッシュ | `--supervise`起動の監視プロセス（`internal/supervisor`）が自動再起動する（`architecture/overview/integrations.md` §9）。プロセス停止中は新規エントリーも行われない（既存ポジションはkabuステーション側の待機注文/手動介入を前提）。再起動後、`jobs`テーブルの中断ジョブを`pending`へ復帰させ処理を再開する |
