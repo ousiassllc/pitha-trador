@@ -67,6 +67,24 @@ func (s *Scheduler) processNext(ctx context.Context, queue string, handler Handl
 			slog.Info("scheduler: job interrupted by shutdown", "queue", queue, "job_id", job.ID)
 			return true
 		}
+		var deferred *jobqueue.DeferredError
+		var skipped *jobqueue.SkippedError
+		switch {
+		case errors.As(err, &deferred):
+			slog.Info("scheduler: job deferred (not failed), will retry",
+				"queue", queue, "job_id", job.ID, "retry_at", deferred.RetryAt, "reason", deferred.Reason)
+			s.record(ctx, "reschedule deferred job", job.ID, func(c context.Context) error {
+				return s.jobs.Reschedule(c, job.ID, deferred.RetryAt.UTC(), textutil.Truncate(deferred.Reason, maxLastErrorBytes))
+			})
+			return true
+		case errors.As(err, &skipped):
+			slog.Info("scheduler: job skipped (not failed), permanently nothing to do",
+				"queue", queue, "job_id", job.ID, "reason", skipped.Reason)
+			s.record(ctx, "mark job skipped", job.ID, func(c context.Context) error {
+				return s.jobs.MarkSkipped(c, job.ID, time.Now().UTC(), textutil.Truncate(skipped.Reason, maxLastErrorBytes))
+			})
+			return true
+		}
 		s.record(ctx, "mark job failed", job.ID, func(c context.Context) error {
 			return s.jobs.MarkFailed(c, job.ID, time.Now().UTC(), textutil.Truncate(err.Error(), maxLastErrorBytes))
 		})

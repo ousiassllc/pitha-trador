@@ -22,7 +22,11 @@ import (
 const defaultPollInterval = 200 * time.Millisecond
 
 // Handler processes a single claimed job. A non-nil error marks the job
-// failed (jobqueue.JobRepository.MarkFailed); nil marks it succeeded.
+// failed (jobqueue.JobRepository.MarkFailed); nil marks it succeeded. Two
+// non-failing outcomes exist (issue #710): an error built by jobqueue.Defer
+// puts the job back to pending at the given time (Reschedule), and one
+// built by jobqueue.Skip ends it as succeeded with a "skipped:" note
+// (MarkSkipped).
 type Handler func(ctx context.Context, job jobqueue.Job) error
 
 // fullScanPayload is the JSON body enqueued onto the market-data queue (and

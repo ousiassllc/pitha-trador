@@ -16,16 +16,17 @@ import (
 
 // DefaultHorizonsMinutes are the judgment horizons Outcome Labeling
 // evaluates each Jev trader decision at (functional.md §4.12,
-// docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/20
-// 等").
-var DefaultHorizonsMinutes = []int{5, 10, 20}
+// docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/15
+// 等"): short holds of a few minutes up to about 15 minutes, matching the
+// small-edge-stacking style the strategy is judged on (issue #711).
+var DefaultHorizonsMinutes = []int{5, 10, 15}
 
 // horizonBarTolerance is how far before decision.Timestamp+horizon the
 // last market_snapshots bar of a labeling window may fall (two 1-minute
 // bars: one missed cycle plus timestamp jitter). A window that ends
 // earlier - because the horizon crosses the lunch break (11:30-12:30),
 // the close (15:30), or a data gap - is not labeled (FR-CAL-4), so a
-// shortened horizon is never recorded as the full 5/10/20-minute outcome.
+// shortened horizon is never recorded as the full 5/10/15-minute outcome.
 const horizonBarTolerance = 2 * time.Minute
 
 // horizonDataGrace is how long after decision timestamp + horizon the
@@ -35,6 +36,10 @@ const horizonBarTolerance = 2 * time.Minute
 // close, outage) never will, so the pair is recorded as skipped instead of
 // being retried (issue #481).
 const horizonDataGrace = 5 * time.Minute
+
+// horizonRetryInterval is how long a deferred (not yet labelable) job waits
+// before its next attempt: one 1-minute market_snapshots bar.
+const horizonRetryInterval = time.Minute
 
 // Labeler turns one Jev trader decision (jev_decisions,
 // decision_type=trader) into a calibration_outcomes row for one judgment
@@ -79,14 +84,15 @@ func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.Snaps
 // If the market_snapshots bars do not (yet) reach the horizon - the last
 // bar is more than horizonBarTolerance before decision timestamp +
 // horizon_minutes, or the entry bar is missing - HandleJob never records a
-// shortened horizon as the full-horizon outcome. Within horizonDataGrace of
-// the horizon it returns an error and persists nothing (the data may still
-// be landing), so internal/service/scheduler.EnqueueOutcomeLabeling's next
-// periodic scan re-enqueues the pair - no separate retry queue is needed.
-// Past the grace period the gap is permanent (lunch break, close, outage):
-// HandleJob records the pair as unlabelable
+// shortened horizon as the full-horizon outcome and never fails the job
+// (issue #710). Within horizonDataGrace of the horizon it persists nothing
+// and returns jobqueue.Defer (the data may still be landing): the job goes
+// back to pending and is retried after horizonRetryInterval; the pair also
+// stays in PendingLabels. Past the grace period the gap is permanent (lunch
+// break, close, outage): HandleJob records the pair as unlabelable
 // (CalibrationRepository.MarkUnlabelable; still no calibration_outcomes
-// row) and succeeds, so PendingLabels stops returning it (issue #481).
+// row) and returns jobqueue.Skip, so the job ends succeeded with a
+// "skipped:" note and PendingLabels stops returning the pair (issue #481).
 func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	var payload calrepo.OutcomeLabelJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
@@ -156,22 +162,27 @@ func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	return nil
 }
 
-// shortWindow handles a window that does not reach the horizon: an error
-// (retried by the next scan) while the data may still land, or - once
-// horizonDataGrace has passed since decision timestamp + horizon - a
-// permanent skip marker and nil. Either way no calibration_outcomes row is
-// written, so a shortened horizon is never recorded (FR-CAL-4).
+// shortWindow handles a window that does not reach the horizon, without
+// ever failing the job (issue #710): while the data may still land (within
+// horizonDataGrace of decision timestamp + horizon) it returns
+// jobqueue.Defer, so the scheduler puts the job back to pending (retried at
+// the next scan cadence); once the grace has passed the gap is permanent
+// and it records the skip marker and returns jobqueue.Skip, which ends the
+// job as succeeded with a "skipped:" note. Either way no calibration_outcomes
+// row is written, so a shortened horizon is never recorded (FR-CAL-4).
 func (l *Labeler) shortWindow(ctx context.Context, decision domain.JevDecision, horizonMinutes int, reason string) error {
 	horizon := time.Duration(horizonMinutes) * time.Minute
-	if l.now().Before(decision.Timestamp.Add(horizon + horizonDataGrace)) {
-		return fmt.Errorf("calibration: decision %d horizon %dm not labelable yet: %s", decision.ID, horizonMinutes, reason)
+	now := l.now()
+	if now.Before(decision.Timestamp.Add(horizon + horizonDataGrace)) {
+		return jobqueue.Defer(now.Add(horizonRetryInterval),
+			fmt.Sprintf("decision %d horizon %dm not labelable yet: %s", decision.ID, horizonMinutes, reason))
 	}
 	if err := l.outcomes.MarkUnlabelable(ctx, decision.ID, horizonMinutes, reason); err != nil {
 		return fmt.Errorf("calibration: %w", err)
 	}
 	slog.Info("calibration: decision horizon permanently unlabelable, skipping (no shortened-horizon outcome recorded)",
 		"jev_decision_id", decision.ID, "horizon_minutes", horizonMinutes, "reason", reason)
-	return nil
+	return jobqueue.Skip(fmt.Sprintf("decision %d horizon %dm permanently unlabelable: %s", decision.ID, horizonMinutes, reason))
 }
 
 // percentReturn is the % price return from entry to price (1.0 == +1%,

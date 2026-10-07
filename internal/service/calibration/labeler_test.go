@@ -221,16 +221,15 @@ func TestLabeler_HandleJob_NoneDirectionLeavesWasDirectionCorrectNil(t *testing.
 	}
 }
 
-func TestLabeler_HandleJob_InsufficientDataReturnsError(t *testing.T) {
+func TestLabeler_HandleJob_InsufficientDataIsDeferredNotFailed(t *testing.T) {
 	f := newLabelerFixtures(t)
 	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
 	decision := f.insertDecision(t, base, domain.JevDirectionLong, 0.82)
 	// Only the entry bar exists; the 5-minute horizon bar hasn't landed yet.
 	f.insertSnapshots(t, map[time.Duration]float64{0: 1000}, base)
 
-	err := f.handleJob(t, decision.ID, 5)
-	if err == nil {
-		t.Fatalf("HandleJob succeeded with no horizon-boundary snapshot yet, want an error")
+	if err := f.handleJob(t, decision.ID, 5); !isDeferred(err) {
+		t.Fatalf("HandleJob error = %v, want jobqueue.Defer (pending, not a failure) with no horizon-boundary snapshot yet", err)
 	}
 }
 
