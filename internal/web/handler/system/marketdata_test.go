@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -20,6 +21,7 @@ func TestMarketDataHandler_Status(t *testing.T) {
 		name     string
 		source   system.MarketDataStatusSource
 		want     []string
+		notWant  []string
 		wantNone bool
 	}{
 		{name: "token ok renders nothing", source: fakeTokenStatus{}, wantNone: true},
@@ -33,6 +35,29 @@ func TestMarketDataHandler_Status(t *testing.T) {
 			name:   "kabu station unreachable",
 			source: fakeTokenStatus{Issue: marketdata.TokenIssueUnreachable},
 			want:   []string{`data-issue="unreachable"`, "起動"},
+		},
+		{
+			name:    "not logged in right after the first failure is the ordinary banner",
+			source:  fakeTokenStatus{Issue: marketdata.TokenIssueNotLoggedIn, Code: 4001007, Failures: 1, Since: time.Now()},
+			want:    []string{`data-issue="not_logged_in"`, "ログアウト", "自動的に再試行します。", `href="/settings"`},
+			notWant: []string{"data-persistent", "お待ちください"},
+		},
+		{
+			name:   "persistent not logged in escalates with elapsed time and failure count",
+			source: fakeTokenStatus{Issue: marketdata.TokenIssueNotLoggedIn, Code: 4001017, Failures: 7, Since: time.Now().Add(-12 * time.Minute)},
+			want: []string{
+				`data-testid="marketdata-banner"`, `data-issue="not_logged_in"`, `data-persistent="true"`,
+				"未ログインの状態が続いています", "10分以上継続", "失敗 7回", "4001007 / 4001017",
+				"ログアウト", "再ログインしてから、そのままお待ちください", "二重起動", "/token",
+			},
+			// issue #305: login-only guidance, never steering to the API password / 「APIを利用する」.
+			notWant: []string{"KABU_API_PASSWORD", "APIシステム設定", "起動していること", `href="/settings"`},
+		},
+		{
+			name:    "persistent escalation is only for not logged in",
+			source:  fakeTokenStatus{Issue: marketdata.TokenIssueBadPassword, Code: 4001013, Failures: 9, Since: time.Now().Add(-time.Hour)},
+			want:    []string{`data-issue="bad_password"`, "KABU_API_PASSWORD"},
+			notWant: []string{"data-persistent"},
 		},
 	}
 	for _, tt := range tests {
@@ -52,6 +77,11 @@ func TestMarketDataHandler_Status(t *testing.T) {
 			for _, w := range tt.want {
 				if !strings.Contains(body, w) {
 					t.Errorf("body missing %q:\n%s", w, body)
+				}
+			}
+			for _, w := range tt.notWant {
+				if strings.Contains(body, w) {
+					t.Errorf("body must not contain %q:\n%s", w, body)
 				}
 			}
 		})

@@ -2,6 +2,7 @@ package system
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -30,12 +31,15 @@ func NewMarketDataHandler(source MarketDataStatusSource) *MarketDataHandler {
 
 // Status implements `GET /system/marketdata-status`: Header's
 // `#marketdata-banner` fragment (organisms.MarketDataBanner), non-empty
-// only while the last kabuステーションAPI token issuance failed.
+// only while the last kabuステーションAPI token issuance failed, and
+// escalated while a not_logged_in streak persists (issue #712).
 func (h *MarketDataHandler) Status(c *gin.Context) {
-	var issue, guidance string
+	var props organisms.MarketDataBannerProps
 	if h.source != nil {
 		status := h.source.TokenStatus()
-		issue, guidance = string(status.Issue), status.Guidance()
+		props.Issue, props.Guidance = string(status.Issue), status.Guidance()
+		props.Failures = status.Failures
+		props.Persistent, props.Elapsed = status.Persistent(time.Now())
 	}
-	shared.RenderHTML(c, http.StatusOK, organisms.MarketDataBanner(issue, guidance))
+	shared.RenderHTML(c, http.StatusOK, organisms.MarketDataBanner(props))
 }

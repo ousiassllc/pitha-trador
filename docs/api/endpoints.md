@@ -62,7 +62,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | POST | `/settings/:key` | 単一キーの保存（フォーム項目`value`）。他キーには一切影響しない。`:key`が許可キー一覧（`internal/config`のallow-list: JEV_*/KABU_API_PASSWORD/SLACK_WEBHOOK_URL/LUNA_*/NEWS_FEED_*（NEWS_FEED_ENABLEDを含む）/SOL_*/OPUS_*）に無い場合、または`value`が前後空白トリム後に空の場合は400（空入力で保存済みの値が消えることはない）。`value`は保存前に前後空白をトリムし、キー別に検証する（URL系6キー: `http`/`https`かつホスト非空、`NEWS_FEED_ENABLED`: `on`/`off`のみ（大文字小文字無視、小文字へ正規化して保存。`false`/`0`/`no`等は400）、その他: 制御文字・改行を含まない）。違反は400で保存せず、Setup Guardも解除されない。反映はアプリ再起動後（issue #79/#235） | 更新後の`SecretFieldRow`フラグメント |
 | DELETE | `/settings/:key` | 単一キーの削除。他キーには一切影響しない。`:key`が許可キー一覧に無い場合は400（issue #79） | 更新後の`SecretFieldRow`フラグメント |
 | GET | `/system/secrets-status` | 任意キー（SLACK_WEBHOOK_URL等）の未設定を知らせる全ページ共通バナー（`Header`の`#config-banner`が`load`と、`POST`/`DELETE /settings/:key`のHTMX成功応答が発火する`HX-Trigger: secretsStatusChanged`イベント（`secretsStatusChanged from:body`）で取得）のフラグメント。必須2キー（JEV_API_KEY/KABU_API_PASSWORD）はSetup Guardが`/setup`へ誘導するため対象外。全て設定済みなら空 | `SecretsBanner` |
-| GET | `/system/marketdata-status` | 市況データ接続エラーを知らせる全ページ共通バナー（`Header`の`#marketdata-banner`が`load`・30秒周期で取得）のフラグメント。kabuステーションAPIのトークン発行が失敗している間だけ、原因（未起動・API未有効 / 未ログイン `4001007`・`4001017` / API利用不可 `4001008` / APIパスワード不正 `4001013`）と対処を表示。トークン取得済みなら空 | `MarketDataBanner` |
+| GET | `/system/marketdata-status` | 市況データ接続エラーを知らせる全ページ共通バナー（`Header`の`#marketdata-banner`が`load`・30秒周期で取得）のフラグメント。kabuステーションAPIのトークン発行が失敗している間だけ、原因（未起動・API未有効 / 未ログイン `4001007`・`4001017` / API利用不可 `4001008` / APIパスワード不正 `4001013`）と対処を表示。未ログイン`4001007`・`4001017`が連続5回以上または5分以上続くときは継続時間・失敗回数・「再ログインしてから待つ」を示す強調表示（`data-persistent="true"`）に切り替わる。トークン取得済みなら空 | `MarketDataBanner` |
 | POST | `/positions/:id/close` | 手動決済（成行Paper Exit）。約定価格・手数料は約定モデル（`requirements/functional/components-pipeline.md` FR-ENTRY-8: 呼値・スプレッド・滑り・寄り引け）で決まり、昼休み（11:30〜12:30）・立会時間外は約定しないため409を返してポジションを保持する。約定価格・板は`Engine.CloseAtMarket`が`CloseAll`と同じ選択（`CurrentPrice`＋同じ足の最新スナップショットの板）で決め、スナップショットの読み取りに失敗した場合は板なしで約定させず500（エラーログ）を返す | ポジション行フラグメント |
 
 ### システム状態遷移（`POST /api/v1/system/*`）
@@ -178,3 +178,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.68 | 2026-10-07 | `GET /api/v1/scanner/scan`系（`endpoints/huma-api.md`）の`stale_snapshot`の`label`を、閾値がモード別のため秒数を含まない閾値非依存の文言とし、実際の閾値は`config/strategy.yaml`の設定で確認する旨を追記 | issue #690, #691 |
 | 1.69 | 2026-10-07 | §4`GET /system/secrets-status`の取得契機に、Settingsの`POST`/`DELETE /settings/:key`成功応答の`HX-Trigger: secretsStatusChanged`を追記 | issue #695 |
 | 1.70 | 2026-10-07 | §4`POST /scanner/universe/import`の失敗表示を、下位エラーの生文字列ではなく失敗種別ごとの固定文言とし、下位エラーは`slog`のみに記録する旨に訂正 | issue #700 |
+| 1.71 | 2026-10-08 | §4`GET /system/marketdata-status`に、未ログイン`4001007`/`4001017`の継続時の強調表示を追記 | issue #712 |
