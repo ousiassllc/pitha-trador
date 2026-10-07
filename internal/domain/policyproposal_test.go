@@ -3,6 +3,7 @@ package domain_test
 import (
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
@@ -139,5 +140,19 @@ func TestValidatePolicyChanges_ConfidenceRangeMatchesConfigThresholds(t *testing
 				t.Fatalf("ValidatePolicyChanges(%s -> %s) error = %v, wantErr %v", tc.old, tc.new, err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// config.PolicySettingKeys (Settings screen) and PolicyProposalKeys
+// (Self-Improvement loop) address the same runtime_settings keys.
+func TestPolicyProposalKeys_MatchConfigPolicySettingKeys(t *testing.T) {
+	keys := config.PolicySettingKeys()
+	if len(keys) != len(domain.PolicyProposalKeys) {
+		t.Fatalf("len(config.PolicySettingKeys) = %d, want %d", len(keys), len(domain.PolicyProposalKeys))
+	}
+	for _, key := range keys {
+		if !domain.PolicyProposalKeys[key] {
+			t.Errorf("config policy setting key %q is not in domain.PolicyProposalKeys", key)
+		}
 	}
 }

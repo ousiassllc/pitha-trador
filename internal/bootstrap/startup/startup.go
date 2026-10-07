@@ -4,28 +4,45 @@
 package startup
 
 import (
+	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
-// EnvLogDir overrides the directory LogDir returns.
-const EnvLogDir = "PITHA_LOG_DIR"
+// DefaultLogDir is the log directory used while the Settings screen has not
+// configured one: "logs" next to the SQLite DB at dbPath (like the instance
+// locks), so it never depends on the process's working directory (a
+// machine-scope install or an autostarted process may run from an
+// unwritable one).
+func DefaultLogDir(dbPath string) string {
+	return filepath.Join(filepath.Dir(dbPath), "logs")
+}
 
 // LogDir returns the absolute directory the daily JSON logs are written to
 // (RunMain), the Scheduler's logging.Archiver compresses old files in and
 // the error-log logging.Exporter reads (requirements/non-functional.md §5):
-// EnvLogDir when set, otherwise "logs" next to the SQLite DB at dbPath (like
-// the instance locks), so it never depends on the process's working
-// directory (a machine-scope install or an autostarted process may run from
-// an unwritable one).
+// the Settings screen's log directory (runtime_settings config.KeyLogDir,
+// issue #708) when one is stored in the database at dbPath, otherwise
+// DefaultLogDir. It is read once when the process starts - the logger is
+// installed before the database is opened for the application - so a change
+// made in Settings applies after the next restart. An unreadable or invalid
+// stored value falls back to the default rather than keeping the application
+// from logging at all.
 func LogDir(dbPath string) string {
-	if v := os.Getenv(EnvLogDir); v != "" {
-		return v
+	raw, ok, err := sqlitedb.PeekRuntimeSetting(context.Background(), dbPath, config.KeyLogDir)
+	if err == nil && ok {
+		var dir string
+		if json.Unmarshal([]byte(raw), &dir) == nil && filepath.IsAbs(dir) {
+			return dir
+		}
 	}
-	return filepath.Join(filepath.Dir(dbPath), "logs")
+	return DefaultLogDir(dbPath)
 }
 
 // setupLogging installs the process-wide JSON slog logger writing to the

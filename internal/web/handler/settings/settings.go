@@ -57,6 +57,7 @@ func (StaticSecretsStore) Delete(context.Context, string) error              { r
 // #80).
 type SettingsHandler struct {
 	store SecretsStore
+	ops   OperationalSettings // nil until WithOperationalSettings
 }
 
 // NewSettingsHandler returns a SettingsHandler backed by store.
@@ -72,7 +73,7 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 // degrades that key to "unset" so it still renders and accepts a value.
 func (h *SettingsHandler) Page(c *gin.Context) {
 	ctx := c.Request.Context()
-	props := pages.SettingsProps{Connections: h.connections(ctx, settingsConnections)}
+	props := pages.SettingsProps{Connections: h.connections(ctx, settingsConnections), Operational: h.opsGroupsProps(ctx)}
 	shared.RenderHTML(c, http.StatusOK, pages.SettingsPage(props))
 }
 

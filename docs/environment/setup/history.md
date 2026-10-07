@@ -45,3 +45,4 @@
 | 1.46 | 2026-10-07 | Lint節の有効linter一覧に`unused`を追加（`staticcheck`のU1000相当の未使用コードを`make lint`/CIで検出し、テストコードの未使用ヘルパーの再発を防ぐ） | issue #671 |
 | 1.47 | 2026-10-07 | 「銘柄マスタの投入」節のJPX取得失敗時の表示を、下位エラーの生文字列ではなく失敗種別ごとの固定文言とし、下位エラーは`slog`のみに記録する旨に訂正 | issue #700 |
 | 1.48 | 2026-10-07 | Lint節のdepguardを「8ルール」に訂正し、#702で追加した`web-no-bootstrap`（`internal/web/**`から`internal/bootstrap/**`のimportを拒否。`bootstrap` → `web`の一方向のみ）を追記 | issue #704 |
+| 1.49 | 2026-10-08 | 環境変数表から`PITHA_LOG_DIR`/`PITHA_BACKUP_DIR`/`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`を削除し、Settings画面で設定する運用項目の節（保存先キー・未設定時の挙動・再起動の要否）を追加 | issue #708 |

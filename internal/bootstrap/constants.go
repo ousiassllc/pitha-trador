@@ -6,12 +6,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
-// EnvBackupDir names the environment variable holding the destination
-// directory of the daily SQLite backup (requirements/non-functional.md §3):
-// a location outside the local application disk (external drive / synced
-// cloud folder). Unset or empty disables the backup job.
-const EnvBackupDir = "PITHA_BACKUP_DIR"
-
 // defaultTokenRefreshInterval is how often Services.Start reissues the
 // kabuステーションAPI token (marketdata.Client.Start). The API does not
 // publish an exact token TTL (docs/architecture/overview.md §5), so 20

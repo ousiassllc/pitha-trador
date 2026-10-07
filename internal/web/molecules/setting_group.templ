@@ -1,0 +1,49 @@
+package molecules
+
+import "strconv"
+
+// SettingGroupProps is one operator-editable settings group on the Settings
+// screen (issue #708): ID is a stable slug (also the card/modal id suffix),
+// Name and Description what the operator sees in the list, Note a
+// when-does-it-apply paragraph (restart needed or not) shown in the modal,
+// and Fields the rows edited in it. State is derived from the fields.
+type SettingGroupProps struct {
+	ID          string
+	Name        string
+	Description string
+	Note        string
+	Fields      []SettingFieldRowProps
+}
+
+// ModalID is the id of the group's Modal; the card's open button targets it.
+func (p SettingGroupProps) ModalID() string { return "modal-" + p.ID }
+
+// StatusID is the id of the group's SettingGroupStatus; Save/Reset answer
+// with an out-of-band copy carrying the same id so the list stays current
+// while the modal is open.
+func (p SettingGroupProps) StatusID() string { return "setting-group-status-" + p.ID }
+
+// OverriddenCount is how many of the group's fields hold a stored value.
+func (p SettingGroupProps) OverriddenCount() int {
+	n := 0
+	for _, field := range p.Fields {
+		if field.Overridden {
+			n++
+		}
+	}
+	return n
+}
+
+// SettingGroupStatus is the group's status badge: how many of its fields
+// are overridden in Settings (the rest use the default). oob renders it as
+// an `hx-swap-oob="true"` fragment (replacing the element with the same id).
+templ SettingGroupStatus(props SettingGroupProps, oob bool) {
+	<span id={ props.StatusID() } class="inline-flex flex-wrap items-center gap-1" data-testid={ props.StatusID() } { oobAttrs(oob)... }>
+		if props.OverriddenCount() > 0 {
+			<span class="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">設定済み</span>
+		} else {
+			<span class="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">既定を使用</span>
+		}
+		<span class="text-xs font-normal text-slate-500">{ strconv.Itoa(props.OverriddenCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
+	</span>
+}

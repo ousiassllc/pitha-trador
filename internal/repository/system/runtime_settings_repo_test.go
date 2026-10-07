@@ -66,3 +66,22 @@ func TestRuntimeSettingsRepository_Set_OverwritesExistingKey(t *testing.T) {
 		t.Fatalf("Get: value = %q, ok = %v, want %q, true", value, ok, "false")
 	}
 }
+
+func TestRuntimeSettingsRepository_Delete_RemovesKeyAndToleratesMissing(t *testing.T) {
+	db := newTestDB(t)
+	repo := system.NewRuntimeSettingsRepository(db)
+	ctx := context.Background()
+
+	if err := repo.Set(ctx, "system.backup_dir", `"/mnt/backup"`, time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := repo.Delete(ctx, "system.backup_dir"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, ok, err := repo.Get(ctx, "system.backup_dir"); err != nil || ok {
+		t.Fatalf("Get after Delete: ok = %v, err = %v, want not found", ok, err)
+	}
+	if err := repo.Delete(ctx, "system.backup_dir"); err != nil {
+		t.Fatalf("Delete of a missing key: %v", err)
+	}
+}

@@ -1,0 +1,34 @@
+package organisms
+
+import "github.com/ousiassllc/pitha-trador/internal/web/molecules"
+
+// SettingGroupList is the operator-editable settings list of the Settings
+// screen (issue #708): one molecules.SettingsCard per group with its status
+// badge, plus one molecules.Modal per group holding that group's
+// molecules.SettingFieldRow forms. Every row keeps its own independent
+// `POST`/`DELETE /ops-settings/:key` forms, so editing one field never
+// touches another's stored value. The modals open through the `pitha-modal`
+// script, which the hosting page must load.
+templ SettingGroupList(groups []molecules.SettingGroupProps) {
+	<ul class="flex flex-col gap-3" data-testid="setting-group-list">
+		for _, group := range groups {
+			@molecules.SettingsCard(molecules.SettingsCardProps{
+				ID:          group.ID,
+				ModalID:     group.ModalID(),
+				Name:        group.Name,
+				Description: group.Description,
+				ActionLabel: "設定する",
+				Status:      molecules.SettingGroupStatus(group, false),
+			})
+		}
+	</ul>
+	for _, group := range groups {
+		@molecules.Modal(group.ModalID(), group.Name) {
+			<p class="text-sm text-slate-600">{ group.Description }</p>
+			<p class="text-sm text-slate-600" data-testid={ group.ModalID() + "-note" }>{ group.Note }</p>
+			for _, field := range group.Fields {
+				@molecules.SettingFieldRow(field)
+			}
+		}
+	}
+}

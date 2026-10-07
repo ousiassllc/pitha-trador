@@ -4,13 +4,13 @@ package bootstrap
 // dependency order; each stores what it constructs on the *Services receiver.
 
 import (
+	"context"
 	"database/sql"
-	"log/slog"
-	"os"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backupjob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
@@ -28,7 +28,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
-	"github.com/ousiassllc/pitha-trador/internal/service/backup"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
@@ -196,13 +195,10 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithAutoResumer(s.Risk),
 		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0)),
 		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
+		scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
-	if dir := os.Getenv(EnvBackupDir); dir != "" {
-		schedOpts = append(schedOpts, scheduler.WithDatabaseBackuper(backup.New(state.DB, dir, 0)))
-	} else {
-		slog.Warn("bootstrap: daily database backup disabled: " + EnvBackupDir + " is not set (requirements/non-functional.md §3)")
-	}
+	backupjob.WarnIfDisabled(context.Background(), s.Settings)
 	if s.strategy != nil && !s.strategy.Scan.FullScanOn() {
 		schedOpts = append(schedOpts, scheduler.WithFullScanDisabled())
 	}
