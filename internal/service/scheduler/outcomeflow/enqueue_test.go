@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -93,7 +94,7 @@ func TestScheduler_EnqueueOutcomeLabeling_EnqueuesDueDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnqueueOutcomeLabeling: %v", err)
 	}
-	// due's 5/10/20-minute horizons have all elapsed by now (21 minutes
+	// due's 5/10/15-minute horizons have all elapsed by now (21 minutes
 	// later); notDueYet's have not (decided 1 minute ago).
 	if count != len(scheduler.DefaultOutcomeLabelHorizonsMinutes) {
 		t.Fatalf("EnqueueOutcomeLabeling count = %d, want %d (one per horizon for the one due decision)",
@@ -225,7 +226,7 @@ func TestScheduler_EnqueueOutcomeLabeling_DedupesPendingAndRunningPairs(t *testi
 
 // A pair the labeler marked permanently unlabelable is never re-enqueued
 // again, however many scans run (issue #481 acceptance: no unbounded job
-// growth for a 15:25 decision's 20-minute horizon).
+// growth for a 15:25 decision's 15-minute horizon).
 func TestScheduler_EnqueueOutcomeLabeling_SkipsPermanentlyUnlabelablePairs(t *testing.T) {
 	db := newTestDB(t)
 	instruments := market.NewInstrumentRepository(db)
@@ -237,7 +238,7 @@ func TestScheduler_EnqueueOutcomeLabeling_SkipsPermanentlyUnlabelablePairs(t *te
 	inst := mustCreateInstrument(t, instruments, "7203", true)
 	base := time.Date(2026, 9, 27, 15, 25, 0, 0, time.UTC)
 	decision := mustInsertTraderDecision(t, decisions, inst.ID, "7203", base)
-	if err := outcomes.MarkUnlabelable(ctx, decision.ID, 20, "window closed at 15:30"); err != nil {
+	if err := outcomes.MarkUnlabelable(ctx, decision.ID, 15, "window closed at 15:30"); err != nil {
 		t.Fatalf("MarkUnlabelable: %v", err)
 	}
 
@@ -258,8 +259,8 @@ func TestScheduler_EnqueueOutcomeLabeling_SkipsPermanentlyUnlabelablePairs(t *te
 			}
 		}
 	}
-	if n := countLabelingJobsForHorizon(t, jobs, 20); n != 0 {
-		t.Fatalf("outcome-labeling jobs for the skipped 20m pair = %d, want 0", n)
+	if n := countLabelingJobsForHorizon(t, jobs, 15); n != 0 {
+		t.Fatalf("outcome-labeling jobs for the skipped 15m pair = %d, want 0", n)
 	}
 }
 
@@ -280,4 +281,12 @@ func countLabelingJobsForHorizon(t *testing.T, jobs *jobqueue.JobRepository, hor
 		}
 	}
 	return n
+}
+
+// Issue #711: Outcome Labeling's judgment horizons are the short-hold
+// 5/10/15 minutes, not the former 5/10/20.
+func TestDefaultOutcomeLabelHorizonsMinutes_AreFiveTenFifteen(t *testing.T) {
+	if want := []int{5, 10, 15}; !reflect.DeepEqual(scheduler.DefaultOutcomeLabelHorizonsMinutes, want) {
+		t.Fatalf("DefaultOutcomeLabelHorizonsMinutes = %v, want %v", scheduler.DefaultOutcomeLabelHorizonsMinutes, want)
+	}
 }

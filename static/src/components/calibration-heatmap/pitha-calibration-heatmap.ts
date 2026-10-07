@@ -45,6 +45,9 @@ export class PithaCalibrationHeatmap extends LitElement {
   @state() private brierScore: number | null = null;
   @state() private logLoss: number | null = null;
   @state() private expectedCalibrationError: number | null = null;
+  @state() private tradeCount = 0;
+  @state() private pnlBrierScore = 0;
+  @state() private pnlLogLoss = 0;
   @state() private error: string | null = null;
   @state() private loading = false;
 
@@ -116,6 +119,9 @@ export class PithaCalibrationHeatmap extends LitElement {
       this.brierScore = response.brier_score;
       this.logLoss = response.log_loss;
       this.expectedCalibrationError = response.expected_calibration_error;
+      this.tradeCount = response.trade_count;
+      this.pnlBrierScore = response.pnl_brier_score;
+      this.pnlLogLoss = response.pnl_log_loss;
       this.applyBuckets(response.buckets);
       this.error = null;
     } catch (err) {
@@ -191,7 +197,9 @@ export class PithaCalibrationHeatmap extends LitElement {
                     : html`<span class="no-data">データなし</span>`
                 }
                 <span class="bucket-pnl">
-                  ${b.trade_count} trades / ${formatYen(b.total_pnl)} (${b.avg_pnl_pct.toFixed(2)}%)
+                  ${b.trade_count} trades / ${formatYen(b.total_pnl)} (${b.avg_pnl_pct.toFixed(2)}%)${
+                    b.trade_count > 0 ? html` / win ${(b.trade_win_rate * 100).toFixed(1)}%` : ''
+                  }
                 </span>
               </li>
             `,
@@ -238,6 +246,16 @@ export class PithaCalibrationHeatmap extends LitElement {
                 <dd>${this.logLoss?.toFixed(3)}</dd>
                 <dt>Expected Calibration Error</dt>
                 <dd>${this.expectedCalibrationError?.toFixed(3)}</dd>
+                ${
+                  this.tradeCount > 0
+                    ? html`
+                      <dt>PnL Brier Score (n=${this.tradeCount})</dt>
+                      <dd>${this.pnlBrierScore.toFixed(3)}</dd>
+                      <dt>PnL Log Loss</dt>
+                      <dd>${this.pnlLogLoss.toFixed(3)}</dd>
+                    `
+                    : ''
+                }
               </dl>
             `
             : ''

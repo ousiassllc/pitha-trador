@@ -26,7 +26,7 @@ func TestService_BucketHasSamples_MatchesMetricsBuckets(t *testing.T) {
 	confidences := []float64{0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.79, 0.80, 0.90, 0.95, 1.00}
 	for i, c := range confidences {
 		d := f.insertDecision(t, base.Add(time.Duration(i)*time.Minute), domain.JevDirectionLong, c)
-		for _, horizon := range []int{5, 20} {
+		for _, horizon := range []int{5, 15} {
 			if _, err := f.outcomes.Insert(ctx, domain.CalibrationOutcome{
 				JevDecisionID: d.ID, HorizonMinutes: horizon, WasDirectionCorrect: ptr(true),
 			}); err != nil {

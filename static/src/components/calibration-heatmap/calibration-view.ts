@@ -12,6 +12,7 @@ export interface CalibrationBucket {
   trade_count: number;
   total_pnl: number;
   avg_pnl_pct: number;
+  trade_win_rate: number;
 }
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `by_direction[]`
@@ -31,6 +32,9 @@ export interface CalibrationAPIResponse {
   brier_score: number;
   log_loss: number;
   expected_calibration_error: number;
+  trade_count: number;
+  pnl_brier_score: number;
+  pnl_log_loss: number;
 }
 
 // bucketMidpointPct parses e.g. "0.70-0.80" into 75. The reliability

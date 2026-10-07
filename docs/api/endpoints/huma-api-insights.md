@@ -30,15 +30,15 @@
 {
   "buckets": [
     { "range": "0.50-0.60", "avg_confidence": 0.55, "direction_accuracy": 0.51, "avg_future_return_pct": -0.05,
-      "sample_count": 80, "trade_count": 6, "total_pnl": -1800, "avg_pnl_pct": -0.21 },
+      "sample_count": 80, "trade_count": 6, "total_pnl": -1800, "avg_pnl_pct": -0.21, "trade_win_rate": 0.5 },
     { "range": "0.60-0.70", "avg_confidence": 0.65, "direction_accuracy": 0.55, "avg_future_return_pct": 0.02,
-      "sample_count": 64, "trade_count": 9, "total_pnl": 400, "avg_pnl_pct": 0.03 },
+      "sample_count": 64, "trade_count": 9, "total_pnl": 400, "avg_pnl_pct": 0.03, "trade_win_rate": 0.5 },
     { "range": "0.70-0.80", "avg_confidence": 0.75, "direction_accuracy": 0.63, "avg_future_return_pct": 0.11,
-      "sample_count": 41, "trade_count": 12, "total_pnl": 5200, "avg_pnl_pct": 0.18 },
+      "sample_count": 41, "trade_count": 12, "total_pnl": 5200, "avg_pnl_pct": 0.18, "trade_win_rate": 0.5 },
     { "range": "0.80-0.90", "avg_confidence": 0.85, "direction_accuracy": 0.71, "avg_future_return_pct": 0.24,
-      "sample_count": 22, "trade_count": 7, "total_pnl": 6100, "avg_pnl_pct": 0.31 },
+      "sample_count": 22, "trade_count": 7, "total_pnl": 6100, "avg_pnl_pct": 0.31, "trade_win_rate": 0.5 },
     { "range": "0.90-1.00", "avg_confidence": 0.94, "direction_accuracy": 0.78, "avg_future_return_pct": 0.39,
-      "sample_count": 9, "trade_count": 3, "total_pnl": 3300, "avg_pnl_pct": 0.42 }
+      "sample_count": 9, "trade_count": 3, "total_pnl": 3300, "avg_pnl_pct": 0.42, "trade_win_rate": 0.5 }
   ],
   "by_direction": [
     { "direction": "LONG", "sample_count": 120, "direction_accuracy": 0.62, "avg_future_return_pct": 0.14 },
@@ -46,11 +46,16 @@
   ],
   "brier_score": 0.19,
   "log_loss": 0.52,
-  "expected_calibration_error": 0.06
+  "expected_calibration_error": 0.06,
+  "trade_count": 20,
+  "pnl_brier_score": 0.27,
+  "pnl_log_loss": 0.74
 }
 ```
 
 `by_direction`は予測方向（`LONG`/`SHORT`、常に両方を返す）別の方向別平均リターン（`avg_future_return_pct`は方向調整済み＝SHORTは下落が正）と的中率（FR-CAL-2）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`はconfidence bucket別PnL（FR-CAL-2）で、`positions.entry_order_id` → `paper_orders.trade_signal_id` → `trade_signals.jev_decision_id`で辿れるTrader判断由来のクローズ済みポジションの件数・実現損益合計（JPY）・エントリー金額に対する平均リターン（%）。手動エントリーは含まない。指標は`jev_decisions.question_version`で分離せず、全版のTrader判断（`trader-v2`/`trader-v3`等）を混在して集計する（版別・現行版のみの絞り込みやクエリは無い）。
+
+実現トレードPnLをground truthとする評価（FR-CAL-5）: バケットの`trade_win_rate`は`trade_count`のうち`realized_pnl > 0`の割合（`trade_count`が0なら0）、トップレベルの`trade_count`は`pnl_brier_score`/`pnl_log_loss`の対象となったクローズ済みポジション数（confidenceがどのバケットにも入らないものを除く。0件なら両スコアも0）。両スコアはconfidenceを予測確率、`realized_pnl > 0`を結果としたBrier Score/Log Loss。`realized_pnl`は両約定の手数料控除後・約定モデル（FR-ENTRY-8）の呼値/スプレッド/滑りを織り込んだ値。判定水平線の既定は5/10/15分。
 
 ### GET /api/v1/policy-proposals
 

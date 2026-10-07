@@ -56,6 +56,7 @@ type calibrationBucketOutput struct {
 	TradeCount         int     `json:"trade_count" doc:"Number of closed positions entered on a signal derived from a decision in this band."`
 	TotalPnL           float64 `json:"total_pnl" doc:"Sum of realized PnL (JPY) of those closed positions."`
 	AvgPnLPct          float64 `json:"avg_pnl_pct" doc:"Average realized return (%) of those closed positions relative to their entry notional."`
+	TradeWinRate       float64 `json:"trade_win_rate" doc:"Share of those closed positions with a positive realized PnL (the realized-PnL ground truth's hit rate; 0 when trade_count is 0)."`
 }
 
 // calibrationDirectionOutput mirrors docs/api/endpoints.md's
@@ -76,6 +77,9 @@ type CalibrationAPIOutput struct {
 		BrierScore               float64                      `json:"brier_score" doc:"Mean squared error between confidence and realized outcome (0=perfect, 0.25=random-guess baseline)."`
 		LogLoss                  float64                      `json:"log_loss" doc:"Mean binary cross-entropy between confidence and realized outcome."`
 		ExpectedCalibrationError float64                      `json:"expected_calibration_error" doc:"Weighted average gap between each bucket's confidence and observed accuracy."`
+		TradeCount               int                          `json:"trade_count" doc:"Number of closed positions (traced to a trader decision) behind pnl_brier_score and pnl_log_loss."`
+		PnLBrierScore            float64                      `json:"pnl_brier_score" doc:"Brier Score against the realized-PnL ground truth: confidence vs. (realized PnL > 0) over those closed positions (0 when trade_count is 0)."`
+		PnLLogLoss               float64                      `json:"pnl_log_loss" doc:"Log Loss against the realized-PnL ground truth, same samples as pnl_brier_score (0 when trade_count is 0)."`
 	}
 }
 
@@ -102,6 +106,7 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, _ *struct{}) (*
 			TradeCount:         b.TradeCount,
 			TotalPnL:           b.TotalPnL,
 			AvgPnLPct:          b.AvgPnLPct,
+			TradeWinRate:       b.TradeWinRate,
 		}
 	}
 	out.Body.ByDirection = make([]calibrationDirectionOutput, len(metrics.ByDirection))
@@ -116,6 +121,9 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, _ *struct{}) (*
 	out.Body.BrierScore = metrics.BrierScore
 	out.Body.LogLoss = metrics.LogLoss
 	out.Body.ExpectedCalibrationError = metrics.ExpectedCalibrationError
+	out.Body.TradeCount = metrics.TradeCount
+	out.Body.PnLBrierScore = metrics.PnLBrierScore
+	out.Body.PnLLogLoss = metrics.PnLLogLoss
 	return out, nil
 }
 

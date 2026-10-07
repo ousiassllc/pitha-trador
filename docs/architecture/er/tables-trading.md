@@ -121,7 +121,7 @@ erDiagram
 |-------|-----|------|------|
 | id | integer | PK（AUTOINCREMENT） | |
 | jev_decision_id | integer | FK → jev_decisions.id, NOT NULL | decision_type=trader対象 |
-| horizon_minutes | integer | NOT NULL | 5 / 10 / 20 等 |
+| horizon_minutes | integer | NOT NULL | 5 / 10 / 15 等（既定の判定水平線は5/10/15分。FR-CAL-5、issue #711。20分の既存行は残るが新規には作らない） |
 | future_return | numeric(8,4) | NOT NULL | **百分率（%）**（1.0 = +1%）。`entry`（判断時刻の足の価格）から水平線末尾の足の価格への `(price − entry)/entry × 100`。方向調整は**しない**（shortでも価格上昇なら正）。`market_snapshots.return_*`の小数比（0.004 = +0.4%）とは単位が異なり、×100の換算を要する |
 | max_adverse_excursion | numeric(8,4) | NOT NULL | **百分率（%）**。窓内の方向調整済みリターン（short は符号反転）の最小値（0以下。含み損の最大幅）。`direction=NONE`はlong扱い（調整係数+1） |
 | max_favorable_excursion | numeric(8,4) | NOT NULL | **百分率（%）**。窓内の方向調整済みリターンの最大値（0以上。含み益の最大幅） |
@@ -132,7 +132,7 @@ erDiagram
 
 ## calibration_label_skips
 
-水平線まで足が揃わないことが確定した`(jev_decision_id, horizon_minutes)`の終端マーカー（マイグレーション000024、issue #481）。`calibration_outcomes`は作らず（短縮horizonを記録しない）、`PendingLabels`が当該ペアを再投入対象から外すためだけに使う。`internal/service/calibration.Labeler`が、判断時刻+horizon+5分の猶予後も窓が揃わない場合に書き込む（`INSERT OR IGNORE`で冪等）。
+水平線まで足が揃わないことが確定した`(jev_decision_id, horizon_minutes)`の終端マーカー（マイグレーション000024、issue #481）。`calibration_outcomes`は作らず（短縮horizonを記録しない）、`PendingLabels`が当該ペアを再投入対象から外すためだけに使う。`internal/service/calibration.Labeler`が、判断時刻+horizon+5分の猶予後も窓が揃わない場合に書き込む（`INSERT OR IGNORE`で冪等）。猶予内は何も書かず、ジョブは`failed`ではなく`pending`へ戻して再試行する。マーカー記録時のジョブは`failed`ではなくskipとして`succeeded`で終了する（`jobs.last_error`に`skipped: …`の注記。issue #710）。
 
 ```mermaid
 erDiagram

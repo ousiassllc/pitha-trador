@@ -1,6 +1,8 @@
 package calibration_test
 
 import (
+	"math"
+	"reflect"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -175,5 +177,61 @@ func TestWithTradePnL_AggregatesPerBucketAndIgnoresOutOfRange(t *testing.T) {
 	}
 	if byRange["0.90-1.00"].TradeCount != 1 || byRange["0.50-0.60"].TradeCount != 0 || byRange["0.50-0.60"].AvgPnLPct != 0 {
 		t.Fatalf("buckets = %+v, want 1 trade in 0.90-1.00 and none below 0.50 counted", got.Buckets)
+	}
+}
+
+func TestWithTradePnL_RealizedPnLGroundTruthWinRateAndScores(t *testing.T) {
+	trades := []domain.DecisionTrade{
+		{Confidence: 0.80, RealizedPnL: 500, ReturnPct: 0.5},
+		{Confidence: 0.80, RealizedPnL: -200, ReturnPct: -0.2},
+		{Confidence: 0.60, RealizedPnL: 0, ReturnPct: 0}, // break-even is not a win
+		{Confidence: 0.30, RealizedPnL: 9999, ReturnPct: 9},
+	}
+
+	got := calibration.WithTradePnL(calibration.Metrics(nil), trades)
+
+	byRange := map[string]domain.ConfidenceBucket{}
+	for _, b := range got.Buckets {
+		byRange[b.Range] = b
+	}
+	if wr := byRange["0.80-0.90"].TradeWinRate; !almostEqual(wr, 0.5) {
+		t.Errorf("0.80-0.90 TradeWinRate = %v, want 0.5", wr)
+	}
+	if wr := byRange["0.60-0.70"].TradeWinRate; !almostEqual(wr, 0) {
+		t.Errorf("0.60-0.70 TradeWinRate = %v, want 0 (PnL 0 is not a win)", wr)
+	}
+	if byRange["0.50-0.60"].TradeWinRate != 0 {
+		t.Errorf("empty bucket TradeWinRate = %v, want 0", byRange["0.50-0.60"].TradeWinRate)
+	}
+	if got.TradeCount != 3 {
+		t.Fatalf("TradeCount = %d, want 3 (out-of-range confidence ignored)", got.TradeCount)
+	}
+	// outcomes 1, 0, 0 at confidences 0.8, 0.8, 0.6.
+	wantBrier := (0.2*0.2 + 0.8*0.8 + 0.6*0.6) / 3
+	if !almostEqual(got.PnLBrierScore, wantBrier) {
+		t.Errorf("PnLBrierScore = %v, want %v", got.PnLBrierScore, wantBrier)
+	}
+	wantLogLoss := (-math.Log(0.8) - math.Log(0.2) - math.Log(0.4)) / 3
+	if !almostEqual(got.PnLLogLoss, wantLogLoss) {
+		t.Errorf("PnLLogLoss = %v, want %v", got.PnLLogLoss, wantLogLoss)
+	}
+	// The price-path ground truth is untouched.
+	if got.BrierScore != 0 || got.SampleCount != 0 {
+		t.Errorf("BrierScore/SampleCount = %v/%d, want unchanged 0/0", got.BrierScore, got.SampleCount)
+	}
+}
+
+func TestWithTradePnL_NoTradesLeavesPnLScoresZero(t *testing.T) {
+	got := calibration.WithTradePnL(calibration.Metrics(nil), nil)
+	if got.TradeCount != 0 || got.PnLBrierScore != 0 || got.PnLLogLoss != 0 {
+		t.Fatalf("got %+v, want zero trade count and PnL scores", got)
+	}
+}
+
+// Issue #711: the judgment horizons are the short-hold 5/10/15 minutes, not
+// the former 5/10/20.
+func TestDefaultHorizonsMinutes_AreFiveTenFifteen(t *testing.T) {
+	if want := []int{5, 10, 15}; !reflect.DeepEqual(calibration.DefaultHorizonsMinutes, want) {
+		t.Fatalf("DefaultHorizonsMinutes = %v, want %v", calibration.DefaultHorizonsMinutes, want)
 	}
 }
