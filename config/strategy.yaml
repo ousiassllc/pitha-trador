@@ -28,6 +28,12 @@ scan:
   # このためスキャン状況パネルのユニバースは監視銘柄（最大45）になり、
   # market_breadthも監視銘柄だけの集計になる。
   # 明示的にtrueにしたときだけ全件投入する。
+  # 注意（#693/#694/#696）: trueでは各銘柄の足が全件RESTの1周（約8分）に1回しか
+  # 書かれず、Feature Engineの窓の基準バー許容（max(窓幅/2, 90秒)。FR-FE-5）を
+  # 超えるため、return_*・volume_*・turnover_*・market_return_*・
+  # sector_return_5m・market_breadthが全銘柄で常に欠損になる。Fast Screenerの
+  # 通過は0件（候補は空）で、market_adverse_to_directionゲートも働かない。
+  # サポートする運用は既定のfalse（ランキング監視）。trueで起動すると警告ログを出す。
   full_scan_enabled: false
   # 対象ユニバース全体を再スキャンする周期（秒）。functional.md §4.3。
   full_scan_interval_seconds: 60
@@ -55,6 +61,9 @@ scan:
   # 既定620＝ceil(4000/8)+2×60。kabu_info_api_max_per_secondを下げる場合は
   # 1周が延びるため引き上げること。未設定/0以下は 4000/上限＋2×周期 で補完する。
   # full_scan_enabled: false（既定）のときは使われない（3分固定）。
+  # 注意: これが緩めるのは「最新の足の鮮度判定」だけ。窓の基準バーの許容
+  # （FR-FE-5）は変わらないため、620秒にしても全件スキャンの履歴ベース特徴量は
+  # 算出されない（上のfull_scan_enabledの注意を参照）。
   full_scan_max_snapshot_age_seconds: 620
   # FR-SCAN-1/FR-SCAN-2: 通常周期を待たず再評価する（しきい値以上）/
   # Jev呼び出しをスキップする（すべてしきい値未満かつイベントなし）判定の

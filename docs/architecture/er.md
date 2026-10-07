@@ -84,3 +84,4 @@ erDiagram
 | 1.33 | 2026-10-07 | `er/tables-trading.md`の`positions.unrealized_pnl`に、保有中のみ有効でクローズ時に`0`へリセットする旨を追記（`PositionRepository.Close`/`CloseWithExitOrder`が`closePosition`で設定）。スキーマ変更なし | issue #682 |
 | 1.34 | 2026-10-07 | `er/tables-trading.md`の`positions.unrealized_pnl`に、#682以前にクローズされた過去行もマイグレーション000029で`0`へ揃えた旨を追記（保有中の行は不変、downはno-op） | issue #688 |
 | 1.35 | 2026-10-07 | `er/tables-market.md`の`market_snapshots.market_breadth`の対象窓を「直近3分」固定から許容年齢（ランキング監視3分／`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`）へ訂正。スキーマ変更なし | issue #692 |
+| 1.36 | 2026-10-07 | `er/tables-market.md`の`market_snapshots.market_breadth`に、`scan.full_scan_enabled: true`では足が約8分間隔で各銘柄の`return_5m`が欠損のため常にNULLになる旨を追記。スキーマ変更なし | issue #693・#694・#696 |
