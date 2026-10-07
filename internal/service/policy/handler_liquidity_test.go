@@ -42,7 +42,7 @@ func runHandleJob(t *testing.T, turnover5m *float64, calib policy.CalibrationSou
 
 	th := testThresholds() // MinTurnover5mJPY: 3,000,000
 	th.Policy.MinCalibrationSamples = 20
-	var opts []policy.HandlerOption
+	opts := []policy.HandlerOption{policy.WithClock(fixtureNow)}
 	if calib != nil {
 		opts = append(opts, policy.WithCalibration(calib))
 	}

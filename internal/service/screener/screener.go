@@ -31,6 +31,11 @@ type Input struct {
 	// (insufficient history) rather than a genuine 0. The filter outcome is
 	// unchanged; only the reason reported when the floor is not met differs.
 	TurnoverMissing bool
+	// Stale marks Snapshot as older than domain.MaxSnapshotAge during a
+	// session (issue #685): it is excluded with
+	// domain.ScreenReasonStaleSnapshot and never becomes a candidate, so no
+	// Jev Scout is enqueued on its outdated numbers.
+	Stale bool
 
 	BreakoutStrength    *float64
 	VolatilityExpansion *float64
@@ -53,6 +58,9 @@ func PassesFilter(cfg config.FastScreenerConfig, in Input) bool {
 // missing-data reason, not as a threshold failure. It does not allocate.
 func FilterReasons(cfg config.FastScreenerConfig, in Input) domain.ScreenReasons {
 	var r domain.ScreenReasons
+	if in.Stale {
+		r = r.Add(domain.ScreenReasonStaleSnapshot)
+	}
 	if in.Snapshot.Price < cfg.MinPrice {
 		r = r.Add(domain.ScreenReasonMinPrice)
 	}

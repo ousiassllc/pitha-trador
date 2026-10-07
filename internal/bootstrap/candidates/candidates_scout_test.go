@@ -26,14 +26,20 @@ func newScoutCooldownRefresher(t *testing.T) (*Refresher, domain.Instrument, *ti
 		MinPrice: 0, MaxPrice: 1_000_000, MaxSpreadBps: 100, TopN: 10,
 	}
 	inst := mustCreateInstrument(t, refresher, "7203")
-	if _, err := refresher.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
-		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: clock,
+	insertFreshBar(t, refresher, inst, clock)
+	return refresher, inst, &clock
+}
+
+// insertFreshBar stores an always-passing bar for inst stamped at.
+func insertFreshBar(t *testing.T, r *Refresher, inst domain.Instrument, at time.Time) {
+	t.Helper()
+	if _, err := r.Snapshots.InsertBatch(context.Background(), []domain.Snapshot{{
+		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at,
 		Price: 2500, Volume: 1000, Turnover: 2_500_000, SpreadBps: ptrF(10),
 		Feature: domain.Feature{VWAP: 2490, PriceVsVWAPBps: 40, VolumeRatio5m: ptrF(1.5), Return5m: ptrF(0.5), RealizedVol5m: ptrF(0.01)},
 	}}); err != nil {
 		t.Fatalf("InsertBatch: %v", err)
 	}
-	return refresher, inst, &clock
 }
 
 // Issue #388: running Refresh on the 15-30s cadence must not run Jev Scout
@@ -136,7 +142,7 @@ func TestRefresh_SkipsSymbolWithEventDrivenJevScoutJob(t *testing.T) {
 // Once the periodic orphan recovery has failed it, Refresh re-enqueues the
 // symbol after the cooldown; a running row inside the threshold is kept.
 func TestRefresh_ReScoutsSymbolAfterOrphanedJevScoutRecovered(t *testing.T) {
-	refresher, _, clock := newScoutCooldownRefresher(t)
+	refresher, inst, clock := newScoutCooldownRefresher(t)
 	ctx := context.Background()
 	if err := refresher.Refresh(ctx); err != nil {
 		t.Fatalf("Refresh: %v", err)
@@ -161,6 +167,7 @@ func TestRefresh_ReScoutsSymbolAfterOrphanedJevScoutRecovered(t *testing.T) {
 	if err := orphans.FailAll(ctx, refresher.Jobs, *clock); err != nil {
 		t.Fatalf("FailAll: %v", err)
 	}
+	insertFreshBar(t, refresher, inst, *clock) // keep the bar fresh (issue #685)
 	if err := refresher.Refresh(ctx); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
@@ -181,6 +188,7 @@ func TestRefresh_ReScoutsSymbolAfterOrphanedJevScoutRecovered(t *testing.T) {
 		t.Fatalf("orphan status = %q, want failed", got.Status)
 	}
 	*clock = clock.Add(time.Duration(refresher.Strategy.Scan.JevScoutMinIntervalSeconds+1) * time.Second)
+	insertFreshBar(t, refresher, inst, *clock) // the stored bar would be stale (issue #685)
 	if err := refresher.Refresh(ctx); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}

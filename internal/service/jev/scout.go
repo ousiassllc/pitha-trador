@@ -124,6 +124,7 @@ type Scout struct {
 	thresholds config.JevScoutConfig
 	news       NewsSource
 	recorder   ScoutRecorder
+	now        func() time.Time
 }
 
 // NewScout returns a Scout that calls client, persists decisions via
@@ -145,6 +146,7 @@ func NewScout(client *Client, decisions *judgement.DecisionRepository, snapshots
 		thresholds: thresholds,
 		news:       o.news,
 		recorder:   o.recorder,
+		now:        o.now,
 	}
 }
 
@@ -212,8 +214,13 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 // the instrument's latest market state, evaluates it via Evaluate, and -
 // on a FR-SCOUT-2 pass - enqueues a jev-trader job carrying the same
 // payload so Jev Trader (a later sub-scope) picks up the candidate next
-// (functional.md §4.4). Its signature matches
-// internal/service/scheduler.Handler, so it can be registered directly:
+// (functional.md §4.4). A latest bar older than domain.MaxSnapshotAge (a
+// bar kept from a previous session or an earlier watch period) is skipped
+// - the job completes without a Jev call or a jev-trader job, since a
+// retry would see the same bar - so a job queued before the bar went
+// stale cannot reach Jev on outdated numbers (issue #685). Its signature
+// matches internal/service/scheduler.Handler, so it can be registered
+// directly:
 // scheduler.RegisterHandler(jobqueue.JobQueueJevScout, scout.HandleJob).
 func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	var payload ScoutJobPayload
@@ -227,6 +234,10 @@ func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 	if len(snapshots) == 0 {
 		return fmt.Errorf("jev: no market snapshot recorded yet for %q", payload.Symbol)
+	}
+	if snapshots[0].IsStale(s.now().UTC()) {
+		slog.Info("jev: skip scout, latest snapshot is stale", "symbol", payload.Symbol, "snapshot_at", snapshots[0].Timestamp)
+		return nil
 	}
 
 	_, passed, err := s.Evaluate(ctx, payload.InstrumentID, StateFromSnapshot(snapshots[0]))

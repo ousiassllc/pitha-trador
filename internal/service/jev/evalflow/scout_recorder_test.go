@@ -45,7 +45,7 @@ func runScoutJob(t *testing.T, server *httptest.Server) ([]recordedScout, error)
 	rec := &scoutRecorderStub{}
 	decisions := judgement.NewDecisionRepository(db)
 	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1}), decisions, snapshots, jobs,
-		rag.NewService(db, decisions, snapshots), testThresholds(), jev.WithScoutRecorder(rec))
+		rag.NewService(db, decisions, snapshots), testThresholds(), jev.WithScoutRecorder(rec), jev.WithClock(fixtureNow))
 
 	payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
 	job, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueJevScout, string(payload), time.Now().UTC())

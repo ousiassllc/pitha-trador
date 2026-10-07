@@ -56,3 +56,18 @@ const (
 	PriceLimitUp   PriceLimit = "up"
 	PriceLimitDown PriceLimit = "down"
 )
+
+// MaxSnapshotAge is how old a market_snapshots bar may be, measured against
+// the wall clock during a trading session, before it counts as stale
+// (issue #685). It matches the 3 minutes marketcontext allows an index bar
+// and is three times the 60-second ranking-watch (market-data) cycle, so a
+// healthy watch list always carries bars younger than this; a bar left
+// from the previous session or from before the symbol re-entered the watch
+// list is older. A stale bar must not reach Jev Scout/Trader or Paper Entry.
+const MaxSnapshotAge = 3 * time.Minute
+
+// IsStale reports whether s is older than MaxSnapshotAge at now. A bar
+// exactly MaxSnapshotAge old is still fresh.
+func (s Snapshot) IsStale(now time.Time) bool {
+	return now.Sub(s.Timestamp) > MaxSnapshotAge
+}

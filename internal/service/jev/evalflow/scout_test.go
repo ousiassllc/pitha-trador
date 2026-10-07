@@ -31,6 +31,10 @@ func newTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
+// fixtureNow is the pinned wall clock for HandleJob tests: 30s after the
+// fixture bars' 09:31 timestamp, so they count as fresh (issue #685).
+func fixtureNow() time.Time { return time.Date(2026, 9, 27, 9, 31, 30, 0, time.UTC) }
+
 func testThresholds() config.JevScoutConfig {
 	return config.JevScoutConfig{MinInterestingNow: 0.65, MinLiquidityOk: 0.70, MinAbnormalActivity: 0.55}
 }
@@ -192,7 +196,7 @@ func TestScout_HandleJob_EnqueuesJevTraderJobOnPass(t *testing.T) {
 	}
 
 	ragService := rag.NewService(db, judgement.NewDecisionRepository(db), snapshots)
-	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), judgement.NewDecisionRepository(db), snapshots, jobs, ragService, testThresholds())
+	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), judgement.NewDecisionRepository(db), snapshots, jobs, ragService, testThresholds(), jev.WithClock(fixtureNow))
 
 	payload, err := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
 	if err != nil {
@@ -240,7 +244,7 @@ func TestScout_HandleJob_NoJevTraderJobOnFail(t *testing.T) {
 	}
 
 	ragService := rag.NewService(db, judgement.NewDecisionRepository(db), snapshots)
-	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), judgement.NewDecisionRepository(db), snapshots, jobs, ragService, testThresholds())
+	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: server.URL}), judgement.NewDecisionRepository(db), snapshots, jobs, ragService, testThresholds(), jev.WithClock(fixtureNow))
 
 	payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: inst.Symbol})
 	job, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueJevScout, string(payload), time.Now().UTC())

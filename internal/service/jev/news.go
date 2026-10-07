@@ -1,6 +1,10 @@
 package jev
 
-import "github.com/ousiassllc/pitha-trador/internal/domain"
+import (
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+)
 
 // NewsSource supplies an instrument's recent Luna-classified news
 // (FR-LUNA-3). *internal/service/newsfeed.Service implements it. ok=false
@@ -15,6 +19,13 @@ type Option func(*options)
 type options struct {
 	news     NewsSource
 	recorder ScoutRecorder
+	now      func() time.Time
+}
+
+// WithClock sets the wall clock Scout.HandleJob judges snapshot staleness
+// against (default time.Now; tests pin it). Scout only.
+func WithClock(now func() time.Time) Option {
+	return func(o *options) { o.now = now }
 }
 
 // ScoutRecorder is told each Jev Scout verdict as it is reached, so the
@@ -40,7 +51,7 @@ func WithNewsSource(source NewsSource) Option {
 }
 
 func newOptions(opts []Option) options {
-	var o options
+	o := options{now: time.Now}
 	for _, opt := range opts {
 		opt(&o)
 	}

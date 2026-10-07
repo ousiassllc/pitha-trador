@@ -135,6 +135,12 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("candidates: list snapshot history: %w", err)
 	}
+	// A bar older than domain.MaxSnapshotAge is stale only during a session
+	// (issue #685): off-session the retained watch list is shown from stored
+	// data (#668), but once the session opens a bar kept from the previous
+	// session / an earlier watch period must not reach Jev Scout until
+	// market-data writes a fresh one.
+	checkStale := r.inSession(startedAt)
 	for slot, inst := range actives {
 		symbols[slot] = domain.ScanSymbol{InstrumentID: inst.ID, Symbol: inst.Symbol, Name: inst.Name, Market: inst.Market}
 		bars := history[inst.ID]
@@ -166,6 +172,7 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 			TurnoverMissing:     t == nil,
 			BreakoutStrength:    signals.BreakoutStrength,
 			VolatilityExpansion: signals.VolatilityExpansion,
+			Stale:               checkStale && bars[0].IsStale(startedAt),
 		})
 		inputSlot = append(inputSlot, slot)
 	}
@@ -218,39 +225,6 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// fastScreenerConfig returns the FR-FS-1/FR-FS-3 filter/weight settings
-// for this cycle: r.Strategy.FastScreener (config/strategy.yaml with
-// PITHA_FAST_SCREENER_* env overrides already applied by
-// config.LoadStrategy) overridden by every screener.* runtime_settings
-// key in the DB (re-validated against FR-FS-4 when any applied). Read per
-// cycle so a DB change takes effect on the next refresh without a restart.
-func (r *Refresher) fastScreenerConfig(ctx context.Context) (config.FastScreenerConfig, error) {
-	cfg := r.Strategy.FastScreener
-	overridden := false
-	for _, key := range config.FastScreenerSettingKeys() {
-		raw, ok, err := r.Settings.Get(ctx, key)
-		if err != nil {
-			return config.FastScreenerConfig{}, fmt.Errorf("candidates: read runtime setting %s: %w", key, err)
-		}
-		if !ok {
-			continue
-		}
-		if err := config.ApplyFastScreenerSetting(&cfg, key, raw); err != nil {
-			return config.FastScreenerConfig{}, fmt.Errorf("candidates: %w", err)
-		}
-		overridden = true
-	}
-	// The YAML+env base was validated by config.LoadStrategy; an override
-	// layer must not break FR-FS-4's invariants either (a bad DB value would
-	// silently disable the filters or empty the candidate list, issue #617).
-	if overridden {
-		if err := config.ValidateFastScreenerOverrides(cfg); err != nil {
-			return config.FastScreenerConfig{}, fmt.Errorf("candidates: invalid screener.* runtime settings: %w", err)
-		}
-	}
-	return cfg, nil
 }
 
 // enqueueJevScout enqueues one jev-scout queue job (jev.ScoutJobPayload)
