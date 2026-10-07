@@ -1,6 +1,6 @@
 // Package heldposition is FR-SCHED-4's 保有ポジション監視・Exit評価 loop
 // (issue #156): every 5〜15 seconds it re-prices each open Paper position
-// from a fresh kabuステーション board and runs Execution's exit evaluation,
+// from the latest kabuステーション board and runs Execution's exit evaluation,
 // so Stop Loss / Trailing Stop / Take Profit / 最大保有時間 / 引け前強制決済
 // are judged on that cadence instead of only on the 60-second full scan's
 // 1-minute bar.
@@ -38,9 +38,12 @@ type Positions interface {
 	ListOpen(ctx context.Context) ([]domain.Position, error)
 }
 
-// Boards fetches a live board (marketdata.Client).
+// Boards returns the latest board of a symbol (*pushfeed.Feed): the PUSH
+// board when it is fresh, a REST poll only as the thin supplement when it is
+// stale or missing (issue #709). Held symbols are always in the PUSH watch
+// list, so the 5〜15秒 loop does not add a REST /board per position per tick.
 type Boards interface {
-	GetBoard(ctx context.Context, symbol string, exchange int) (marketdata.Board, error)
+	Latest(ctx context.Context, symbol string) (marketdata.Board, error)
 }
 
 // Exits evaluates exit conditions for one price update (execution.Engine).
@@ -56,8 +59,6 @@ type Monitor struct {
 	Positions Positions
 	Boards    Boards
 	Exits     Exits
-	// Exchange is the kabuステーションAPI market code boards are fetched for.
-	Exchange int
 	// Open reports whether t is inside a trading session.
 	Open func(t time.Time) bool
 	// Now defaults to time.Now.
@@ -102,7 +103,7 @@ func (m Monitor) Cycle(ctx context.Context) (int, error) {
 // evaluate prices one position from its board and runs the exit
 // evaluation, reporting whether the position was evaluated.
 func (m Monitor) evaluate(ctx context.Context, p domain.Position, now time.Time) bool {
-	board, err := m.Boards.GetBoard(ctx, p.Symbol, m.Exchange)
+	board, err := m.Boards.Latest(ctx, p.Symbol)
 	if err != nil {
 		slog.Warn("heldposition: board fetch failed", "symbol", p.Symbol, "error", err)
 		return false

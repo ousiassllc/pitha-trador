@@ -24,7 +24,7 @@ type fakeBoards struct {
 	calls  []string
 }
 
-func (f *fakeBoards) GetBoard(_ context.Context, symbol string, exchange int) (marketdata.Board, error) {
+func (f *fakeBoards) Latest(_ context.Context, symbol string) (marketdata.Board, error) {
 	f.calls = append(f.calls, symbol)
 	if b, ok := f.boards[symbol]; ok {
 		return b, nil
@@ -41,7 +41,7 @@ func (f *fakeExits) OnSnapshot(_ context.Context, snap domain.Snapshot) (executi
 
 func monitor(open bool, positions fakePositions, boards *fakeBoards, exits *fakeExits) heldposition.Monitor {
 	return heldposition.Monitor{
-		Positions: positions, Boards: boards, Exits: exits, Exchange: 1,
+		Positions: positions, Boards: boards, Exits: exits,
 		Open: func(time.Time) bool { return open },
 		Now:  func() time.Time { return time.Date(2026, 9, 29, 1, 0, 0, 0, time.UTC) },
 	}

@@ -20,14 +20,16 @@
 
 | 区間 | 目標 |
 |------|------|
-| kabuステーションAPI取得 → Feature Engine算出 | 500ms以内 / 銘柄バッチ |
-| Fast Screener（全銘柄→上位N） | 2秒以内 |
+| 板の取得 → Feature Engine算出（1銘柄。既定のランキング監視。板はPUSH優先で、直近30秒以内のPUSH板が無いときだけREST `/board`で補う。下記の登録直後の初回板を除く） | 500ms以内 / 銘柄バッチ（監視銘柄＝最大45件＋指数行。`scan.full_scan_enabled: true`のフルスキャンは約4,000銘柄で§2.3の保証範囲に従う） |
+| Fast Screener（監視銘柄→上位N。`scan.full_scan_enabled: true`では全銘柄→上位N） | 2秒以内 |
 | Jev Scout 1回呼び出し | 3秒以内（タイムアウト5秒） |
 | Jev Trader 1回呼び出し | 3秒以内（タイムアウト5秒） |
 | Risk Engine判定 | 100ms以内（外部呼び出しなし） |
 | Paper発注〜約定シミュレーション | 200ms以内 |
 | UI（Scanner Dashboard）へのライブ反映 | WebSocket経由で1秒以内 |
 
+- **登録直後の初回板〜5秒は既知制限（現状許容、issue #713）**: PUSH登録していない銘柄へのREST `/board`は、kabuステーション側で約5秒かかる（#650実測p50≒5,006ms、[kabusapi#656](https://github.com/kabucom/kabusapi/issues/656)）。ランキング監視＋PUSH前提では監視リストの入れ替えは毎分最大5銘柄なので、新規に監視入りした銘柄の最初の板（PUSH初回到達までのREST補完を含む）がこの遅延を受けることを既知コストとして許容し、上の板取得の目標値には含めない。いまは最適化の対象にしない。**再検討のトリガー**: 監視リストのchurnが高く初回板待ちが実害になる、初回板待ちが直列の`market-data`ワーカーや候補更新・Jev Scoutのスループットを毀損する（`marketdatajob: slow market-data job`の`latest_ms`が常態化する等）、#652の実機計測で未登録`/board`の遅延が変わった、のいずれか（`architecture/overview/integrations.md` §5）。
+- **レート逼迫時の方針（issue #709）**: kabu情報APIのレート逼迫（429/`4001006`）への第一手段は流量の平準化（`scan.kabu_info_api_max_per_second`・backoff再試行・次サイクルへの持ち越し。§2.3）であり、監視リスト件数（最大45件）・ランキング種別・ユニバースの削減は主経路にしない。REST `/board`はPUSH登録済み銘柄の補完に限り、PUSH外ユニバースの定期フルRESTは既定にしない（FR-SCHED-7）。補完頻度（`BoardMaxAge`＝30秒等）は#652の実機計測結果で見直せる暫定値（`architecture/overview/integrations.md` §5）。
 - Jev API（Scout/Trader）の「タイムアウト5秒」は**HTTP 1試行あたり**の上限とする（`internal/service/jev` の `defaultHTTPTimeout`）。失敗時は最大4試行（初回＋リトライ3回。1回目リトライは即時、2回目以降は500ms・1秒の指数バックオフ）で、全試行失敗時の1呼び出しあたり最悪所要時間は 4×5秒＋1.5秒 = 21.5秒。候補再評価周期（15〜30秒、§2.1）の下限を超え得るが、Scout/TraderのJev呼び出しはJobキュー（`jev-scout`/`jev-trader`）経由の非同期処理で周期を塞がない（両呼び出しがともに全試行失敗した場合の合計は最悪43秒）。「最大4試行・1回目リトライは即時・500ms/1秒バックオフ」は実装（`internal/service/jev/client.go` の `defaultMaxAttempts`/`defaultRetryBaseDelay`）の値であり、`architecture/overview/integrations.md` §6 にも同内容を明記する 429（レート制限）/529（過負荷）は即時再試行せず1回目リトライからbackoff（500ms・1秒・2秒）するため最悪 4×5秒＋3.5秒 = 23.5秒。401/422と不正応答は再試行しない（`architecture/overview/integrations.md` §6）。
 
 ### 2.3 スループット・スケーラビリティ
@@ -168,3 +170,4 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.29 | 2026-10-07 | §2.3に、`scan.full_scan_enabled: true`では約8分間隔の足が窓の基準バーの許容（FR-FE-5）を超えるため履歴ベース特徴量が常に欠損となり候補が空・`market_adverse_to_direction`が不活性になること（`scan.full_scan_max_snapshot_age_seconds`は鮮度判定だけを緩める）と、サポートする運用は既定のランキング監視で起動時にWARNログを出すことを追記 | issue #693・#694・#696 |
 | 1.30 | 2026-10-07 | §2.3の「全銘柄を60秒サイクルで処理できること」を`scan.full_scan_enabled: true`（明示オプトイン）のときの設計目標に限定し、PUSH登録40銘柄・「保証できる範囲」も同モードの値と明記、既定のランキング監視は監視リスト最大45件（残り5件がREST回転用）と補足 | issue #698 |
 | 1.31 | 2026-10-08 | §3.1を追加し、メンテ明け・寄り前のkabuステーション手動再ログイン運用（朝の起動チェック）と`4001007`/`4001017`継続時の確認項目（ログイン状態・他プロセスの`/token`競合・二重起動）を明記 | issue #712 |
+| 1.32 | 2026-10-08 | §2.2のレイテンシ表の板取得・Fast Screener行を既定のランキング監視前提（PUSH優先・REST補完。フルスキャンは`scan.full_scan_enabled: true`のとき）に直し、登録直後の初回板〜5秒の既知制限・再検討トリガーとレート逼迫時の方針（監視リスト件数・ランキング種別を削らない）を追記 | issue #709・#713 |
