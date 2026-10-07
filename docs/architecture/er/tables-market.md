@@ -119,7 +119,7 @@ erDiagram
 | market_return_1m / market_return_5m | numeric | NULL可 | `kind=market_index`銘柄（TOPIX/Nikkei225）のreturnの平均 |
 | sector_return_5m | numeric | NULL可 | 銘柄の`sector`と一致する`kind=sector_index`銘柄のreturn。該当指数なしはNULL |
 | stock_vs_sector_relative_strength | numeric | NULL可 | return_5m − sector_return_5m |
-| market_breadth | numeric | NULL可 | 直近3分以内の全アクティブ株式の最新return_5mのうち（上昇数−下落数）/銘柄数。[-1, 1] |
+| market_breadth | numeric | NULL可 | 許容年齢以内（ランキング監視は直近3分、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`＝同梱620秒。FR-FE-4）の全アクティブ株式の最新return_5mのうち（上昇数−下落数）/銘柄数。[-1, 1] |
 | return_3m / return_30m | numeric | NULL可 | 履歴不足時はNULL |
 | high_distance_5m / low_distance_5m | numeric | NULL可 | 直近5分の高値/安値に対する `price/x − 1` |
 | session_high_distance / session_low_distance | numeric | NULL可 | kabuの当日高値/安値（HighPrice/LowPrice）に対する `price/x − 1` |

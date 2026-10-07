@@ -52,7 +52,7 @@ func TestLoader_SharesMarketWideValuesAcrossStocks(t *testing.T) {
 	f.bars(t, autoIdx, idxBars(500, 505)...)
 
 	src := &countingSources{f: f}
-	loader := marketcontext.NewLoader(src, src)
+	loader := marketcontext.NewLoader(src, src, domain.MaxSnapshotAge)
 	for i, stock := range stocks {
 		mc := loader.Load(context.Background(), stock, now.Add(time.Duration(i)*time.Second))
 		wantValue(t, stock.Symbol+" MarketReturn5m", mc.MarketReturn5m, 0.01)
@@ -70,7 +70,7 @@ func TestLoader_RecomputesAfterTTLAndNeverServesFutureValues(t *testing.T) {
 	f := newLoaderFixture(t)
 	stock := f.instrument(t, "7203", domain.InstrumentKindStock, nil)
 	src := &countingSources{f: f}
-	loader := marketcontext.NewLoader(src, src)
+	loader := marketcontext.NewLoader(src, src, domain.MaxSnapshotAge)
 	ctx := context.Background()
 	now := time.Now().UTC()
 

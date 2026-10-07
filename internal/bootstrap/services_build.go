@@ -227,7 +227,8 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logD
 	return &marketdatajob.Handler{
 		Boards: s.PushFeed, Instruments: s.Instruments, Snapshots: s.Snapshots, FeatureEngine: s.FeatureEngine,
 		Execution: s.Execution, Screener: s.Screener, News: s.News, Scheduler: s.Scheduler,
-		EventTrigger: strategy.Scan.EventTrigger,
-		Symbols:      symbolcache.New(s.MarketData, defaultKabuExchange),
+		EventTrigger:        strategy.Scan.EventTrigger,
+		MarketContextMaxAge: strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge),
+		Symbols:             symbolcache.New(s.MarketData, defaultKabuExchange),
 	}
 }

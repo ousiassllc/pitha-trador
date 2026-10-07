@@ -96,3 +96,4 @@
 | 1.89 | 2026-10-07 | `overview/flows.md`の`market-data`ジョブ節を、既定のランキング監視が指数行（`market_index`・監視銘柄の`sector_index`）も毎サイクル投入すること、立会時間外は保有・注文中のみ投入し候補リストは直前の監視リストを保存済みデータで表示し続けることに更新 | issue #668, #670 |
 | 1.90 | 2026-10-07 | §5の異常時記述を、スナップショット`Timestamp`の鮮度を立会中に`domain.MaxSnapshotAge`（3分）で確認する（`candidates.Refresher`の`stale_snapshot`除外・Scout/Trader`HandleJob`のスキップ・Paper Entryの壁時計立会判定）実装へ訂正。`overview/flows.md`のMarket Data欠損行も同様 | issue #685 |
 | 1.91 | 2026-10-07 | §5/`overview/flows.md`のスナップショット鮮度の閾値を、ランキング監視は`domain.MaxSnapshotAge`（3分）、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）と記述 | issue #686 |
+| 1.92 | 2026-10-07 | §5の鮮度記述に、市況コンテキスト（`marketcontext.Loader`）の指数バー・ブレッドス許容も`ScanConfig.SnapshotMaxAge(domain.MaxSnapshotAge)`を`marketdatajob.Handler.MarketContextMaxAge`経由で注入する旨を追記（`stale_snapshot`と同じ値） | issue #692 |
