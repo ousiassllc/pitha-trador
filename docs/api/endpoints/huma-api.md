@@ -115,6 +115,20 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
 各点の`volume`は**1分足あたりの出来高**（バー単位）で、保存済みの累積セッション出来高（`market_snapshots.volume`、kabuステーションAPIの`TradingVolume`）の隣接スナップショット間差分（`cur - prev`）。累積値が後退した場合（新セッション）は当該バーの累積値自体を返し、負値にはしない。応答の先頭バーは前のスナップショットを持たないため、`Feature.Volume1m`（累積差分）があればその値、なければ`0`。`open`/`high`/`low`/`close`は1バー1サンプルの価格で同値。
 
+出力は`{"symbol": "7203", "candles": [...]}`（`candles`は時刻昇順）。
+
+```json
+// Output（抜粋）
+{
+  "symbol": "7203",
+  "candles": [
+    {"time": "2026-10-07T00:01:00Z", "open": 2831.5, "high": 2831.5, "low": 2831.5, "close": 2831.5, "volume": 1200, "vwap": 2829.4}
+  ]
+}
+```
+
+`time`はRFC 3339（UTC、末尾`Z`）。`vwap`は当該スナップショットの`Feature.VWAP`（算出不能時は`0`）。`volume`は`int64`、他の価格系フィールドは円。
+
 ### GET /api/v1/symbols/{symbol}/decisions
 
 Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）。新しい順。未登録銘柄は404。
@@ -179,6 +193,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 - `realized_pnl`/`closed_at`/`exit_reason`は**未クローズ（保有中）で`null`**。`realized_pnl`はエントリー・Exit両注文の`fees`を差し引いた値
 - `exit_reason`の値は`stop_loss`/`take_profit`/`trailing_stop`/`jev_direction_reversed`/`continuation_probability_dropped`/`vwap_cross`/`max_holding`/`force_flat_before_close`/`manual`/`force_close`（意味は`architecture/er/tables-trading.md`の`positions.exit_reason`）
 - `opened_at`/`closed_at`はRFC 3339（UTC、末尾`Z`）
+- `unrealized_pnl`は**保有中のみ有効**で、クローズ済み行は`0`（クローズ時に`0`へリセットする。実現損益と二重計上しないため。`current_price`はクローズ時の約定価格）
 
 ### GET /api/v1/orders
 

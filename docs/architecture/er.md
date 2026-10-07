@@ -81,3 +81,4 @@ erDiagram
 | 1.30 | 2026-10-05 | 実装との乖離を是正: 「数値精度」の丸め処理は存在せずfloat64を無加工保存と訂正、マイグレーションドライバを`database/sqlite`（modernc）へ訂正、`secrets`許可キー13個の明記、`market_snapshots`のER図に全列を反映、`calibration_outcomes`の`future_return`/`max_*_excursion`の単位（%）を明記 | issue #565, #569, #574, #575, #576 |
 | 1.31 | 2026-10-06 | `er/tables-market.md`の`market_snapshots`索引に`INDEX (timestamp)`、`er/tables-system.md`の`jobs`索引に`INDEX (status, finished_at)`（いずれもマイグレーション000027、retentionの期限切れ行取得用）を追記し、`jobs`の索引を3本と訂正。スキーマ変更なし | issue #533, #615, #616 |
 | 1.32 | 2026-10-07 | `er/tables-market.md`の`jev_decisions`索引説明が参照する`calibration_plan_test.go`のパスを実在する`internal/repository/calibration/`に訂正（#601でjudgementから分離済み）。スキーマ変更なし | issue #659 |
+| 1.33 | 2026-10-07 | `er/tables-trading.md`の`positions.unrealized_pnl`に、保有中のみ有効でクローズ時に`0`へリセットする旨を追記（`PositionRepository.Close`/`CloseWithExitOrder`が`closePosition`で設定）。スキーマ変更なし | issue #682 |

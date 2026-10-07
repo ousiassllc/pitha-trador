@@ -101,8 +101,9 @@ func (r *PositionRepository) Mark(ctx context.Context, id int64, currentPrice, u
 }
 
 // Close closes an open position (Paper Exit, functional.md FR-EXIT-1):
-// links exitOrderID, sets closedAt/exitReason/realizedPnL, and marks the
-// final current_price. It returns ErrPositionNotFound if id does not
+// links exitOrderID, sets closedAt/exitReason/realizedPnL, marks the final
+// current_price and resets unrealized_pnl to 0 (a closed position holds no
+// unrealized P&L; issue #682). It returns ErrPositionNotFound if id does not
 // exist or is already closed.
 func (r *PositionRepository) Close(ctx context.Context, id, exitOrderID int64, exitPrice, realizedPnL float64, exitReason string, now time.Time) (domain.Position, error) {
 	return closePosition(ctx, r.db, id, exitOrderID, exitPrice, realizedPnL, exitReason, now)
@@ -113,7 +114,7 @@ func (r *PositionRepository) Close(ctx context.Context, id, exitOrderID int64, e
 func closePosition(ctx context.Context, x sqlutil.Executor, id, exitOrderID int64, exitPrice, realizedPnL float64, exitReason string, now time.Time) (domain.Position, error) {
 	res, err := x.ExecContext(ctx,
 		`UPDATE positions
-		 SET exit_order_id = ?, current_price = ?, realized_pnl = ?, closed_at = ?, exit_reason = ?, updated_at = ?
+		 SET exit_order_id = ?, current_price = ?, unrealized_pnl = 0, realized_pnl = ?, closed_at = ?, exit_reason = ?, updated_at = ?
 		 WHERE id = ? AND closed_at IS NULL`,
 		exitOrderID, exitPrice, realizedPnL, sqlutil.FormatTime(now), exitReason, sqlutil.FormatTime(now), id,
 	)
