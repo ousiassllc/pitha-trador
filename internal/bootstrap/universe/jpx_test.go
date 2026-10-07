@@ -214,7 +214,7 @@ func TestImporter_ImportJPX_FailureLeavesTheMasterUntouched(t *testing.T) {
 			srv := serve(t, tc.status, tc.body)
 			repo := &recordingRepo{}
 			_, err := universe.NewImporter(repo, srv.Client()).WithURL(srv.URL).ImportJPX(context.Background())
-			if err == nil || !strings.Contains(err.Error(), tc.want) || !errors.Is(err, universe.ErrJPXFormat) {
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !errors.Is(err, domain.ErrJPXFormat) {
 				t.Fatalf("err = %v, want ErrJPXFormat containing %q", err, tc.want)
 			}
 			if len(repo.upserted) != 0 {
@@ -229,7 +229,7 @@ func TestImporter_ImportJPX_FailureLeavesTheMasterUntouched(t *testing.T) {
 		srv.Close()
 		repo := &recordingRepo{}
 		_, err := universe.NewImporter(repo, nil).WithURL(url).ImportJPX(context.Background())
-		if err == nil || !strings.Contains(err.Error(), "接続できません") || !errors.Is(err, universe.ErrJPXConnect) {
+		if err == nil || !strings.Contains(err.Error(), "接続できません") || !errors.Is(err, domain.ErrJPXConnect) {
 			t.Fatalf("err = %v, want ErrJPXConnect", err)
 		}
 		if len(repo.upserted) != 0 {
@@ -242,7 +242,7 @@ func TestImporter_ImportJPX_ReportsRepositoryFailure(t *testing.T) {
 	srv := serve(t, http.StatusOK, jpxWorkbook(t, jpxHeader, bulkStocks(1200)...))
 	repo := &recordingRepo{err: fmt.Errorf("disk full")}
 	_, err := universe.NewImporter(repo, srv.Client()).WithURL(srv.URL).ImportJPX(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "disk full") || !errors.Is(err, universe.ErrJPXSave) {
+	if err == nil || !strings.Contains(err.Error(), "disk full") || !errors.Is(err, domain.ErrJPXSave) {
 		t.Fatalf("err = %v, want ErrJPXSave wrapping the repository error", err)
 	}
 }

@@ -13,7 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 )
 
@@ -127,9 +127,9 @@ func TestUniverseImport_FailureShowsFixedMessageAndLogsTheCause(t *testing.T) {
 		cause string
 		want  string
 	}{
-		{"connect failed", fmt.Errorf("%w: %w", universe.ErrJPXConnect, errors.New(`Get "https://www.jpx.co.jp/x.xlsx": dial tcp 127.0.0.53:53: lookup failed`)), "dial tcp", "JPXに接続できませんでした"},
-		{"format changed", fmt.Errorf("%w: %w", universe.ErrJPXFormat, errors.New(`header: missing required column "code"`)), "missing required column", "JPX側で公開URLや形式が変わった可能性"},
-		{"save failed", fmt.Errorf("%w: %w", universe.ErrJPXSave, errors.New("sqlite: disk I/O error")), "disk I/O error", "銘柄マスタへの保存に失敗しました"},
+		{"connect failed", fmt.Errorf("%w: %w", domain.ErrJPXConnect, errors.New(`Get "https://www.jpx.co.jp/x.xlsx": dial tcp 127.0.0.53:53: lookup failed`)), "dial tcp", "JPXに接続できませんでした"},
+		{"format changed", fmt.Errorf("%w: %w", domain.ErrJPXFormat, errors.New(`header: missing required column "code"`)), "missing required column", "JPX側で公開URLや形式が変わった可能性"},
+		{"save failed", fmt.Errorf("%w: %w", domain.ErrJPXSave, errors.New("sqlite: disk I/O error")), "disk I/O error", "銘柄マスタへの保存に失敗しました"},
 		{"unclassified", errors.New("boom: internal detail"), "internal detail", "原因を特定できませんでした"},
 	}
 	for _, tc := range tests {

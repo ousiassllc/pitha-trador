@@ -98,3 +98,4 @@
 | 1.91 | 2026-10-07 | §5/`overview/flows.md`のスナップショット鮮度の閾値を、ランキング監視は`domain.MaxSnapshotAge`（3分）、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）と記述 | issue #686 |
 | 1.92 | 2026-10-07 | §5の鮮度記述に、市況コンテキスト（`marketcontext.Loader`）の指数バー・ブレッドス許容も`ScanConfig.SnapshotMaxAge(domain.MaxSnapshotAge)`を`marketdatajob.Handler.MarketContextMaxAge`経由で注入する旨を追記（`stale_snapshot`と同じ値） | issue #692 |
 | 1.93 | 2026-10-07 | §5（`integrations.md`）の「銘柄登録・PUSH購読」「API登録銘柄リストの50件上限とRESTの回転」を、ユニバース先頭40件の登録（`RegisterUniverse`）・候補/保有銘柄を優先しない・約4,000銘柄の大半がREST、という記述を`scan.full_scan_enabled: true`のときだけの挙動に限定し、既定はランキング監視（監視リスト最大45件、保有・注文中は固定枠で優先。FR-SCHED-9）である旨を冒頭で明示 | issue #698 |
+| 1.94 | 2026-10-07 | §3のレイヤー依存ルールに、depguard `web-no-bootstrap`（`internal/web/**`から`internal/bootstrap/**`のimportを拒否。`bootstrap` → `web`の一方向のみ）を追記し、handlerが分類するセンチネルエラーの例にJPX銘柄マスタ取得の失敗種別（`domain.ErrJPXConnect`/`ErrJPXFormat`/`ErrJPXSave`）を追加 | issue #702 |
