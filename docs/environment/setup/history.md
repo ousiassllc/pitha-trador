@@ -44,3 +44,4 @@
 | 1.45 | 2026-10-07 | 銘柄マスタの`market_index`/`sector_index`について、既定のランキング監視でも市場コンテキスト算出用に毎サイクル取得され（`market_breadth`は監視銘柄の集計）、指数行が無い・停止時のみ欠損になる旨に訂正 | issue #670 |
 | 1.46 | 2026-10-07 | Lint節の有効linter一覧に`unused`を追加（`staticcheck`のU1000相当の未使用コードを`make lint`/CIで検出し、テストコードの未使用ヘルパーの再発を防ぐ） | issue #671 |
 | 1.47 | 2026-10-07 | 「銘柄マスタの投入」節のJPX取得失敗時の表示を、下位エラーの生文字列ではなく失敗種別ごとの固定文言とし、下位エラーは`slog`のみに記録する旨に訂正 | issue #700 |
+| 1.48 | 2026-10-07 | Lint節のdepguardを「8ルール」に訂正し、#702で追加した`web-no-bootstrap`（`internal/web/**`から`internal/bootstrap/**`のimportを拒否。`bootstrap` → `web`の一方向のみ）を追記 | issue #704 |
