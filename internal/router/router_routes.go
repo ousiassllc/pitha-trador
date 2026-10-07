@@ -73,6 +73,11 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/ws/activity", h.activity.WebSocket)
 
 	settingsHandler := settings.NewSettingsHandler(settingsStore)
+	if o.operationalSettings != nil {
+		settingsHandler.WithOperationalSettings(o.operationalSettings)
+		engine.POST("/ops-settings/:key", settingsHandler.SaveOps)
+		engine.DELETE("/ops-settings/:key", settingsHandler.ResetOps)
+	}
 	engine.GET("/setup", settingsHandler.SetupPage)
 	engine.GET("/settings", settingsHandler.Page)
 	engine.POST("/settings/:key", settingsHandler.Save)

@@ -104,3 +104,4 @@
 | 1.97 | 2026-10-08 | §5のトークン失敗の記述に、`4001007`/`4001017`継続時のバナー強調（`TokenStatus.Persistent`）と、メンテ明けの手動再ログイン運用（自動GUIログインはスコープ外、確認項目は`non-functional.md` §3.1）を追記 | issue #712 |
 | 1.98 | 2026-10-08 | §5（`integrations.md`）に、PUSH/RESTの役割分担（REST `/board`はPUSH登録済み銘柄の薄い補完。`heldposition.Monitor`も`pushfeed.Feed.Latest`経由）とレート逼迫時の方針（監視リスト件数・ランキング種別を削らない）、登録直後の初回板〜5秒の既知制限と再検討トリガーを追記 | issue #709・#713 |
 | 1.99 | 2026-10-08 | §フロー（`overview/flows.md`）の`outcome-labeling`の判定水平線を5/10/15分へ更新し、未ラベル時はジョブをfailedにせずpending再試行・恒久不能はskip（`succeeded`終了）とする旨を反映 | issue #710, #711 |
+| 1.100 | 2026-10-08 | `startup`のログディレクトリ解決を`PITHA_LOG_DIR`からSettings画面（`runtime_settings`の`system.log_dir`、起動時にDBを読み取り専用参照）へ変更。フロー図の起動記述を更新。`integrations.md`にSettings画面管理の非シークレット設定の節を追記 | issue #708 |

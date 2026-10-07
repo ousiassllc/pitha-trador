@@ -1,0 +1,102 @@
+package molecules
+
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// SettingFieldRowProps is SettingFieldRow's input: Key is the
+// runtime_settings key (also the `/ops-settings/:key` path segment), Label
+// the heading, Hint optional input guidance, Value the effective value
+// shown in the field (the stored value, else the lower-priority default for
+// thresholds; empty for an unset path), DefaultLabel what applies while
+// nothing is stored (e.g. "0.7", "無効"), Overridden whether a value is
+// stored, Options the allowed values of an enumerated field (a <select>;
+// empty for a free-text field), Placeholder the empty-field hint, Warning an
+// operator hint about the stored value, and Notice the outcome message of
+// the save/reset that just rendered this row. CSRFField / CSRFToken are the
+// hidden form field name and token the plain `method="post"` fallback
+// submits (resolved by the handler, issue #142).
+type SettingFieldRowProps struct {
+	Key          string
+	Label        string
+	Hint         string
+	Value        string
+	DefaultLabel string
+	Overridden   bool
+	Options      []string
+	Placeholder  string
+	Warning      string
+	Notice       string
+	CSRFField    string
+	CSRFToken    string
+}
+
+// SettingFieldRow is one operator-editable, non-secret Settings field
+// (issue #708) with its own independent save and reset forms: saving posts
+// only this row's value to `POST /ops-settings/:key`, resetting calls
+// `DELETE /ops-settings/:key` (the stored value is removed and the default
+// applies again), each swapping this row alone. Unlike SecretFieldRow the
+// current value is shown, because nothing here is a credential. The reset
+// button is rendered only while a value is stored.
+templ SettingFieldRow(props SettingFieldRowProps) {
+	<form
+		class="flex flex-col gap-1 text-sm text-slate-600"
+		method="post"
+		action={ templ.SafeURL("/ops-settings/" + props.Key) }
+		hx-post={ "/ops-settings/" + props.Key }
+		hx-target="this"
+		hx-swap="outerHTML"
+		data-testid={ "setting-field-row-" + props.Key }
+	>
+		<input type="hidden" name={ props.CSRFField } value={ props.CSRFToken }/>
+		<label class="flex flex-col gap-1" for={ "setting-input-" + props.Key }>
+			<span class="flex items-center gap-2">
+				{ props.Label }
+				if props.Overridden {
+					<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
+				}
+			</span>
+		</label>
+		<div class="flex items-center gap-2">
+			if len(props.Options) > 0 {
+				@atoms.Select(atoms.SelectProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{"required": true}}) {
+					for _, option := range props.Options {
+						<option value={ option } selected?={ option == props.Value }>{ option }</option>
+					}
+				}
+			} else {
+				@atoms.Input(atoms.InputProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{
+					"required":     true,
+					"autocomplete": "off",
+					"value":        props.Value,
+					"placeholder":  props.Placeholder,
+				}})
+			}
+			@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"id": "save-setting-" + props.Key, "data-testid": "save-setting-" + props.Key}}) {
+				保存
+			}
+			if props.Overridden {
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDangerOutline, Attrs: templ.Attributes{
+					"id":                    "reset-setting-" + props.Key,
+					"data-focus-after-swap": "setting-input-" + props.Key,
+					"hx-delete":             "/ops-settings/" + props.Key,
+					"hx-params":             "none",
+					"hx-confirm":            props.Label + " を既定に戻しますか？",
+					"data-testid":           "reset-setting-" + props.Key,
+				}}) {
+					既定に戻す
+				}
+			}
+		</div>
+		<p class="text-xs text-slate-500" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
+		if props.Hint != "" {
+			<p class="text-xs text-slate-500" data-testid={ "hint-" + props.Key }>{ props.Hint }</p>
+		}
+		if props.Warning != "" {
+			<p class="text-xs text-red-700" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
+		}
+		if props.Notice != "" {
+			<p class="text-xs text-green-800" role="status" data-testid={ "notice-" + props.Key }>{ props.Notice }</p>
+		}
+	</form>
+}

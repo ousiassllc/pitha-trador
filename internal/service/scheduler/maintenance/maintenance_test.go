@@ -125,3 +125,34 @@ func TestRunNow_RunsEvenAfterTodaysSuccess(t *testing.T) {
 		t.Fatalf("calls = %d, want 2", c.calls)
 	}
 }
+
+// A skipped task (not enabled in Settings yet) is neither a success nor a
+// failure: it is retried on the very next CatchUp, never notifies, and
+// succeeds as soon as it is enabled.
+func TestCatchUp_SkippedTaskIsRetriedWithoutFailureAccounting(t *testing.T) {
+	now := time.Date(2026, 10, 8, 9, 0, 0, 0, time.Local)
+	state := newMemoryState()
+	notifier := &fakeNotifier{}
+	c := &counter{err: ErrSkipped}
+	r := NewRunner(state, WithClock(fixedClock(&now)), WithNotifier(notifier))
+	r.Add(Task{Name: "backup", Label: "backup", Run: c.run})
+
+	for i := 0; i < FailureNotifyThreshold+1; i++ {
+		r.CatchUp(context.Background())
+	}
+	if c.calls != FailureNotifyThreshold+1 {
+		t.Fatalf("calls = %d, want %d (no retry delay for a skipped task)", c.calls, FailureNotifyThreshold+1)
+	}
+	if len(notifier.calls) != 0 {
+		t.Fatalf("notifier called %v for a skipped task, want never", notifier.calls)
+	}
+	if _, ok, _ := state.Get(context.Background(), "system.maintenance.backup.last_success_date"); ok {
+		t.Fatal("a skipped task recorded a success date")
+	}
+
+	c.err = nil // the operator configured the backup directory
+	r.CatchUp(context.Background())
+	if got, _, _ := state.Get(context.Background(), "system.maintenance.backup.last_success_date"); got != `"2026-10-08"` {
+		t.Fatalf("persisted date after enabling = %s, want \"2026-10-08\"", got)
+	}
+}

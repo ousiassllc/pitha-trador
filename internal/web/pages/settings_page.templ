@@ -11,6 +11,9 @@ import (
 // each carrying all of that service's keys.
 type SettingsProps struct {
 	Connections []molecules.ConnectionProps
+	// Operational are the operator-editable, non-secret settings groups
+	// (issue #708); empty hides the section.
+	Operational []molecules.SettingGroupProps
 }
 
 // SettingsPage is the Settings screen (issue #57 スコープ item 6, issue
@@ -29,12 +32,21 @@ templ SettingsPage(props SettingsProps) {
 		<h1 class="text-2xl font-bold text-slate-900">Settings</h1>
 		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form">
 			<p class="text-sm text-slate-600">
-				接続先を選ぶと、その接続先のキー・URL・モデル名を編集できます。項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。保存・削除の反映にはアプリの再起動が必要です。
+				接続先を選ぶと、その接続先のキー・URL・モデル名を編集できます。項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。接続先の保存・削除の反映にはアプリの再起動が必要です。
 			</p>
 			<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
 				<h2 id="settings-connections-heading" class="text-lg font-semibold text-slate-900">接続先</h2>
 				@organisms.ConnectionList(props.Connections)
 			</section>
+			if len(props.Operational) > 0 {
+				<section class="flex flex-col gap-3" aria-labelledby="settings-operational-heading">
+					<h2 id="settings-operational-heading" class="text-lg font-semibold text-slate-900">運用設定</h2>
+					<p class="text-sm text-slate-600">
+						バックアップ先・ログディレクトリ・Policy Engine / Fast Screener のしきい値を編集できます。優先順位は config/strategy.yaml の値 &lt; ここで保存した値です。項目ごとに保存でき、「既定に戻す」で保存した値を消して既定（strategy.yaml・既定ディレクトリ・無効）に戻せます。反映のタイミング（再起動の要否）は各項目の説明に記載しています。
+					</p>
+					@organisms.SettingGroupList(props.Operational)
+				</section>
+			}
 			<section class="flex flex-col gap-3" aria-labelledby="settings-system-heading">
 				<h2 id="settings-system-heading" class="text-lg font-semibold text-slate-900">システム</h2>
 				<ul class="flex flex-col gap-3" data-testid="system-list">

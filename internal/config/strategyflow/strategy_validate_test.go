@@ -159,34 +159,6 @@ func TestLoadStrategy_RejectsInvalidFile(t *testing.T) {
 	}
 }
 
-// Env overrides are applied before validation, so an out-of-range value
-// that arrives via PITHA_* must be rejected like one from the YAML.
-func TestLoadStrategy_RejectsInvalidEnvOverrides(t *testing.T) {
-	tests := []struct {
-		env, value, wantKey string
-	}{
-		{"PITHA_POLICY_LONG_MIN_PROBABILITY", "0", "policy.long.min_probability"},
-		{"PITHA_POLICY_LONG_MIN_PROBABILITY", "1.5", "policy.long.min_probability"},
-		{"PITHA_POLICY_LONG_MIN_PROBABILITY", "NaN", "policy.long.min_probability"},
-		{"PITHA_POLICY_SHORT_MIN_ENTRY_QUALITY", "stong", "policy.short.min_entry_quality"},
-		{"PITHA_POLICY_SHORT_MIN_ENTRY_QUALITY", "", "policy.short.min_entry_quality"},
-		{"PITHA_POLICY_LONG_MIN_CONTINUATION_PROBABILITY", "-0.1", "policy.long.min_continuation_probability"},
-		{"PITHA_POLICY_SHORT_MAX_TOXIC_FLOW", "0", "policy.short.max_toxic_flow"},
-		{"PITHA_POLICY_LONG_MAX_LIQUIDITY_STRESSED", "2", "policy.long.max_liquidity_stressed"},
-		{"PITHA_FAST_SCREENER_TOP_N", "0", "fast_screener.top_n"},
-		{"PITHA_FAST_SCREENER_MAX_PRICE", "50", "fast_screener.max_price"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.env+"="+tc.value, func(t *testing.T) {
-			t.Setenv(tc.env, tc.value)
-			_, err := config.LoadStrategy(repoPath(t, config.DefaultStrategyPath))
-			if err == nil || !strings.Contains(err.Error(), tc.wantKey) {
-				t.Fatalf("LoadStrategy with %s=%q error = %v, want one naming %q", tc.env, tc.value, err, tc.wantKey)
-			}
-		})
-	}
-}
-
 // config must not import internal/domain outside tests (doc.go), so its
 // entry-quality list is a copy; it has to cover exactly the domain values.
 func TestEntryQualityValues_MatchDomain(t *testing.T) {

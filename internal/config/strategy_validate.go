@@ -24,9 +24,10 @@ var entryQualityValues = []string{"poor", "fair", "good", "strong", "exceptional
 // value fails startup rather than being silently replaced. Every violation
 // is reported at once, keyed by its YAML path.
 //
-// LoadStrategy/LoadStrategyBytes call it after the PITHA_POLICY_* and
-// PITHA_FAST_SCREENER_* environment overrides have been applied, so an
-// invalid override is rejected too. scan.* is not checked here (it is
+// LoadStrategy/LoadStrategyBytes call it after the scan.* defaults are
+// filled. runtime_settings overrides (Settings screen) are validated
+// separately when they are saved (ValidatePolicyOverrides /
+// ValidateFastScreenerOverrides). scan.* is not checked here (it is
 // default-filled by the loaders beforehand), except scan.ranking_measure's
 // types/exchanges, which kabuステーション would reject with a 400.
 func (c *StrategyConfig) Validate() error {

@@ -9,7 +9,7 @@ import (
 )
 
 // EntryThresholdSource supplies the currently-active policy.* entry
-// thresholds (config/strategy.yaml < PITHA_POLICY_* env < runtime_settings,
+// thresholds (config/strategy.yaml < runtime_settings (Settings screen / self-improvement),
 // FR-POLICY-4). internal/service/selfimprove.RuntimePolicy implements it;
 // the composition root injects the same instance Policy Engine reads, so
 // the continuation_probability低下 exit follows the entry threshold

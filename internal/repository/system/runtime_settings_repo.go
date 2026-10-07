@@ -54,3 +54,12 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.upd
 	}
 	return nil
 }
+
+// Delete removes key's row (the value falls back to its lower-priority
+// source, e.g. config/*.yaml); deleting a missing key is not an error.
+func (r *RuntimeSettingsRepository) Delete(ctx context.Context, key string) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM runtime_settings WHERE key = ?`, key); err != nil {
+		return fmt.Errorf("repository: delete runtime setting %q: %w", key, err)
+	}
+	return nil
+}

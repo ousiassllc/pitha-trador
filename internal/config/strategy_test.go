@@ -62,36 +62,24 @@ func TestLoadStrategy_ReturnsErrorForInvalidYAML(t *testing.T) {
 	}
 }
 
-func TestLoadStrategy_AppliesPolicyEnvOverrides(t *testing.T) {
+// Issue #708: PITHA_POLICY_* / PITHA_FAST_SCREENER_* are no longer an
+// override layer; the Settings screen (runtime_settings) replaces them.
+func TestLoadStrategy_IgnoresRemovedEnvOverrides(t *testing.T) {
 	t.Setenv("PITHA_POLICY_LONG_MIN_PROBABILITY", "0.75")
-	t.Setenv("PITHA_POLICY_LONG_MIN_ENTRY_QUALITY", "exceptional")
-	t.Setenv("PITHA_POLICY_SHORT_MAX_TOXIC_FLOW", "0.20")
+	t.Setenv("PITHA_POLICY_SHORT_MAX_TOXIC_FLOW", "not-a-number")
+	t.Setenv("PITHA_FAST_SCREENER_MIN_PRICE", "250")
+	t.Setenv("PITHA_FAST_SCREENER_TOP_N", "abc")
 
 	cfg, err := config.LoadStrategy(repoPath(t, config.DefaultStrategyPath))
 	if err != nil {
 		t.Fatalf("LoadStrategy(%q) returned error: %v", config.DefaultStrategyPath, err)
 	}
 
-	if got, want := cfg.Policy.Long.MinProbability, 0.75; got != want {
-		t.Errorf("Policy.Long.MinProbability = %v, want %v (PITHA_POLICY_LONG_MIN_PROBABILITY override)", got, want)
+	if got := cfg.Policy.Long.MinProbability; got == 0.75 {
+		t.Errorf("Policy.Long.MinProbability = %v, want the YAML value (PITHA_POLICY_* is no longer read)", got)
 	}
-	if got, want := cfg.Policy.Long.MinEntryQuality, "exceptional"; got != want {
-		t.Errorf("Policy.Long.MinEntryQuality = %q, want %q (PITHA_POLICY_LONG_MIN_ENTRY_QUALITY override)", got, want)
-	}
-	if got, want := cfg.Policy.Short.MaxToxicFlow, 0.20; got != want {
-		t.Errorf("Policy.Short.MaxToxicFlow = %v, want %v (PITHA_POLICY_SHORT_MAX_TOXIC_FLOW override)", got, want)
-	}
-	// An unset env var must not disturb the YAML-sourced value.
-	if got, want := cfg.Policy.Short.MinProbability, 0.68; got != want {
-		t.Errorf("Policy.Short.MinProbability = %v, want %v (no override set, YAML value must be kept)", got, want)
-	}
-}
-
-func TestLoadStrategy_ReturnsErrorForInvalidPolicyEnvOverride(t *testing.T) {
-	t.Setenv("PITHA_POLICY_LONG_MIN_PROBABILITY", "not-a-number")
-
-	if _, err := config.LoadStrategy(repoPath(t, config.DefaultStrategyPath)); err == nil {
-		t.Fatalf("LoadStrategy(%q) returned nil error, want error for invalid PITHA_POLICY_LONG_MIN_PROBABILITY", config.DefaultStrategyPath)
+	if got := cfg.FastScreener.MinPrice; got == 250 {
+		t.Errorf("FastScreener.MinPrice = %v, want the YAML value (PITHA_FAST_SCREENER_* is no longer read)", got)
 	}
 }
 

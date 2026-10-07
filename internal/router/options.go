@@ -24,24 +24,25 @@ var defaultCandidateRefreshInterval = scanner.CandidateRefreshInterval{
 }
 
 type options struct {
-	candidateSource   scanner.CandidateSource
-	candidateRefresh  scanner.CandidateRefreshInterval
-	universeImporter  scanner.UniverseImporter
-	systemEngine      system.SystemEngine
-	symbolProvider    symbol.SymbolProvider
-	symbolRiskParams  symbol.SymbolRiskParams
-	insightProvider   insightapi.Provider
-	calibrationSource calibration.CalibrationSource
-	proposalSource    proposals.PolicyProposalSource
-	backtestRunner    performance.BacktestRunner
-	activitySource    activity.ActivitySource
-	secretsStore      settings.SecretsStore // nil until WithSecretsStore; also gates the Setup Guard
-	updateController  system.UpdateController
-	marketDataStatus  system.MarketDataStatusSource
-	errorLogExporter  system.ErrorLogExporter
-	heartbeatRecorder middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
-	allowedHosts      []string                     // nil until WithAllowedHosts: no Host/Origin validation
-	wsBase            string                       // "" until WithWebSocketBase: WebSockets use the page's own origin
+	candidateSource     scanner.CandidateSource
+	candidateRefresh    scanner.CandidateRefreshInterval
+	universeImporter    scanner.UniverseImporter
+	systemEngine        system.SystemEngine
+	symbolProvider      symbol.SymbolProvider
+	symbolRiskParams    symbol.SymbolRiskParams
+	insightProvider     insightapi.Provider
+	calibrationSource   calibration.CalibrationSource
+	proposalSource      proposals.PolicyProposalSource
+	backtestRunner      performance.BacktestRunner
+	activitySource      activity.ActivitySource
+	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
+	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
+	updateController    system.UpdateController
+	marketDataStatus    system.MarketDataStatusSource
+	errorLogExporter    system.ErrorLogExporter
+	heartbeatRecorder   middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
+	allowedHosts        []string                     // nil until WithAllowedHosts: no Host/Origin validation
+	wsBase              string                       // "" until WithWebSocketBase: WebSockets use the page's own origin
 }
 
 // Option configures New.
@@ -149,6 +150,13 @@ func WithBacktestRunner(runner performance.BacktestRunner) Option {
 // guard is installed, so unrelated route tests need not seed secrets.
 func WithSecretsStore(store settings.SecretsStore) Option {
 	return func(o *options) { o.secretsStore = store }
+}
+
+// WithOperationalSettings enables the Settings screen's 運用設定 section
+// and its `POST`/`DELETE /ops-settings/:key` routes, backed by ops (issue
+// #708); without it the section is hidden and the routes answer 404.
+func WithOperationalSettings(ops settings.OperationalSettings) Option {
+	return func(o *options) { o.operationalSettings = ops }
 }
 
 // WithUpdateController enables the update notification routes (`GET

@@ -1,11 +1,6 @@
 package config
 
-import (
-	"fmt"
-	"os"
-	"strconv"
-	"time"
-)
+import "time"
 
 // StrategyConfig mirrors config/strategy.yaml: Scheduler周期・Fast Screener
 // しきい値・Policy Engineしきい値（docs/requirements/functional.md §4.2,
@@ -154,16 +149,16 @@ type PolicyDirectionThresholds struct {
 }
 
 // LoadStrategy reads and parses the strategy configuration YAML file at
-// path (conventionally DefaultStrategyPath) into a StrategyConfig, then
-// applies any PITHA_POLICY_LONG_*/PITHA_POLICY_SHORT_* (FR-POLICY-4) and
-// PITHA_FAST_SCREENER_* (FR-FS-1/FR-FS-3) environment variable overrides
-// on top of it, fills unset scan.* values with their defaults, and finally
-// fails with an error naming every offending key when fast_screener.*,
-// jev_scout.* or policy.* is missing/out of range (see
-// StrategyConfig.Validate). runtime_settings-backed overrides are layered
-// on top of this result at read time: policy.* by internal/service/selfimprove.
+// path (conventionally DefaultStrategyPath) into a StrategyConfig, fills
+// unset scan.* values with their defaults, and finally fails with an error
+// naming every offending key when fast_screener.*, jev_scout.* or policy.*
+// is missing/out of range (see StrategyConfig.Validate). There is no
+// environment-variable override layer: runtime_settings-backed overrides
+// (editable from the Settings screen, issue #708) are layered on top of
+// this result at read time - policy.* by internal/service/selfimprove.
 // RuntimePolicy, screener.* by ApplyFastScreenerSetting
-// (docs/architecture/er.md §runtime_settings).
+// (docs/architecture/er.md §runtime_settings), so the priority is
+// config/strategy.yaml < runtime_settings.
 func LoadStrategy(path string) (*StrategyConfig, error) {
 	cfg, err := loadYAMLFile[StrategyConfig](path)
 	return finishStrategy(cfg, err)
@@ -172,7 +167,7 @@ func LoadStrategy(path string) (*StrategyConfig, error) {
 // LoadStrategyBytes parses data (conventionally an embedded copy of
 // config/strategy.yaml, github.com/ousiassllc/pitha-trador/config's
 // configdefaults.DefaultStrategyYAML) as a StrategyConfig, applying the
-// same environment overrides, defaults and validation as LoadStrategy.
+// same defaults and validation as LoadStrategy.
 // internal/bootstrap falls back to this when no
 // strategy.yaml is found on disk (explicit path, PITHA_STRATEGY_PATH, nor
 // next to the running executable) so a distributed .exe with no
@@ -183,13 +178,9 @@ func LoadStrategyBytes(data []byte) (*StrategyConfig, error) {
 }
 
 // finishStrategy applies LoadStrategy/LoadStrategyBytes' shared post-parse
-// steps: environment overrides, scan.* defaults, then validation (which
-// must run last so it sees the overridden values).
+// steps: scan.* defaults, then validation.
 func finishStrategy(cfg *StrategyConfig, err error) (*StrategyConfig, error) {
 	if err != nil {
-		return nil, err
-	}
-	if err := applyEnvOverrides(cfg); err != nil {
 		return nil, err
 	}
 	withScanIntervalDefaults(&cfg.Scan)
@@ -199,50 +190,4 @@ func finishStrategy(cfg *StrategyConfig, err error) (*StrategyConfig, error) {
 		return nil, err
 	}
 	return cfg, nil
-}
-
-func applyEnvOverrides(cfg *StrategyConfig) error {
-	if err := applyPolicyEnvOverrides(&cfg.Policy); err != nil {
-		return err
-	}
-	return applyFastScreenerEnvOverrides(&cfg.FastScreener)
-}
-
-func applyPolicyEnvOverrides(cfg *PolicyConfig) error {
-	if err := applyPolicyDirectionEnvOverrides("PITHA_POLICY_LONG_", &cfg.Long); err != nil {
-		return err
-	}
-	return applyPolicyDirectionEnvOverrides("PITHA_POLICY_SHORT_", &cfg.Short)
-}
-
-func applyPolicyDirectionEnvOverrides(prefix string, t *PolicyDirectionThresholds) error {
-	if err := envFloatOverride(prefix+"MIN_PROBABILITY", &t.MinProbability); err != nil {
-		return err
-	}
-	if v, ok := os.LookupEnv(prefix + "MIN_ENTRY_QUALITY"); ok {
-		t.MinEntryQuality = v
-	}
-	if err := envFloatOverride(prefix+"MIN_CONTINUATION_PROBABILITY", &t.MinContinuationProbability); err != nil {
-		return err
-	}
-	if err := envFloatOverride(prefix+"MAX_TOXIC_FLOW", &t.MaxToxicFlow); err != nil {
-		return err
-	}
-	return envFloatOverride(prefix+"MAX_LIQUIDITY_STRESSED", &t.MaxLiquidityStressed)
-}
-
-// envFloatOverride sets *dest to the value of the environment variable
-// key, parsed as a float64, when key is set; it is a no-op when key is
-// unset.
-func envFloatOverride(key string, dest *float64) error {
-	v, ok := os.LookupEnv(key)
-	if !ok {
-		return nil
-	}
-	f, err := strconv.ParseFloat(v, 64)
-	if err != nil {
-		return fmt.Errorf("config: parse %s=%q as float: %w", key, v, err)
-	}
-	*dest = f
-	return nil
 }

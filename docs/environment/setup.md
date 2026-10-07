@@ -90,7 +90,7 @@ make dev
 
 ### 環境変数
 
-アプリ本体は`.env`を自動では読み込まない。以下はプロセス環境変数として設定する（一覧の雛形は`.env.example`）。API/Secret系（上記のJev/kabu/Slack/Luna/Sol/Opus/News）はSettings画面で入力するため対象外。
+アプリ本体は`.env`を自動では読み込まない。以下はプロセス環境変数として設定する（一覧の雛形は`.env.example`）。API/Secret系（上記のJev/kabu/Slack/Luna/Sol/Opus/News）とバックアップ先・ログディレクトリ・Policy/Fast Screenerしきい値（下記「Settings画面で設定する運用項目」）はSettings画面で入力するため対象外。
 
 | 変数 | 参照元 | 既定値・挙動 |
 |---|---|---|
@@ -99,13 +99,26 @@ make dev
 | `PITHA_SERVER_ALLOWED_HOSTS` | `cmd/server` | `PITHA_SERVER_ALLOW_NON_LOOPBACK=1`のときのみ有効。Hostヘッダとして受け付ける追加ホスト名（カンマ区切り、DNS rebinding対策のHost検証。loopback名（`localhost`/`127.0.0.1`/`::1`）とワイルドカード以外の`PITHA_SERVER_ADDR`のホストは常に許可） |
 | `SWAGGER_ENABLED` | `internal/router` | `true`のときのみ`/swagger`を有効化。未設定・それ以外は無効＝オプトイン（後述「Swagger / OpenAPI」） |
 | `PITHA_DB_PATH` | `internal/bootstrap` | SQLite DBファイルのパス。未設定（または空）は`os.UserConfigDir()`配下の`pitha-trador/pitha.db`（Windowsは`%AppData%\pitha-trador\pitha.db`）。`secrets`テーブルを含むため、DBファイルは`0600`で作成/絞り込み（`-wal`/`-shm`も同モード）、新規作成する親ディレクトリ・`logs/`・インスタンスロックのディレクトリは`0700`、ログ/ロックファイルは`0600`（非Windows。既存の親ディレクトリのモードは変更しない） |
-| `PITHA_LOG_DIR` | `internal/bootstrap/startup` | 日次JSONログ（全ログ`<日付>.log`とERRORのみの`<日付>-error.log`）・`.gz`アーカイブ・エラーログのダウンロードが共有するログディレクトリ。未設定（または空）はDBファイルの親ディレクトリ配下の`logs/`（作業ディレクトリには依存しない）。作成できない場合は標準エラー出力へフォールバックして起動を継続する。起動失敗などの致命エラーはERRORレベルで記録する |
-| `PITHA_BACKUP_DIR` | `internal/bootstrap` | SQLite DBの日次バックアップ（`requirements/non-functional.md` §3）の退避先ディレクトリ。ローカルディスク外（外部ドライブ・クラウド同期フォルダ等）を指定する。ディレクトリ自体は事前に存在している必要がある（作成しない。未マウントの場合はバックアップが失敗しSlack/ログで通知される）。Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。未設定・空のときはバックアップ無効（起動ログに警告）。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する |
 | `PITHA_UNIVERSE_PATH` | `internal/bootstrap` | 銘柄マスタCSVの場所（「銘柄マスタの投入」節）。優先順位は本環境変数 > 実行ファイルと同じディレクトリの`config/universe.csv`。どちらも無ければCSV同期をスキップする |
 | `PITHA_STRATEGY_PATH` / `PITHA_RISK_PATH` | `internal/bootstrap` | `config/strategy.yaml`・`config/risk.yaml`の場所。優先順位は明示指定 > 本環境変数 > 実行ファイルと同じディレクトリの`config/*.yaml` > 埋め込み既定値（`architecture/overview.md` §9） |
 | `PITHA_STATIC_DIR` | `internal/router` | 設定すると`/static/...`を`go:embed`ではなく指定ディレクトリ（存在するディレクトリのみ有効。`make dev`は`static/src`）から配信する。未設定・不正パスは埋め込みにフォールバック |
-| `PITHA_POLICY_LONG_*` / `PITHA_POLICY_SHORT_*` | `internal/config` | `config/strategy.yaml`の`policy.long`/`policy.short`のしきい値を起動時に上書きする（FR-POLICY-4）。サフィックスは`MIN_PROBABILITY`・`MIN_ENTRY_QUALITY`・`MIN_CONTINUATION_PROBABILITY`・`MAX_TOXIC_FLOW`・`MAX_LIQUIDITY_STRESSED`。数値は不正値だと起動エラー。上書き後の値も確率系は`(0, 1]`、`MIN_ENTRY_QUALITY`は`poor`/`fair`/`good`/`strong`/`exceptional`のいずれかでなければ項目名付きの起動エラー（FR-POLICY-2a） |
-| `PITHA_FAST_SCREENER_*` | `internal/config` | `fast_screener`のフィルター・重みを起動時に上書きする（FR-FS-1/FR-FS-3、名前は`.env.example`と`requirements/functional.md`参照）。DB `runtime_settings`の`screener.*`が最優先。上書き後の値も`top_n >= 1`・価格/しきい値は正・`max_price >= min_price`などを満たさなければ項目名付きの起動エラー（FR-FS-4） |
+
+### Settings画面で設定する運用項目
+
+プロセス起動・配布・開発インフラ以外の運用ノブは環境変数ではなくSettings画面（`/settings`の「運用設定」）から編集する（issue #708）。値は`runtime_settings`テーブル（`architecture/er/tables-system.md`）に保存され、項目ごとに「保存」と「既定に戻す」（保存値の削除）ができる。保存値はAPIキーと違い画面に表示される。
+
+| 項目（Settings） | `runtime_settings`キー | 未設定時 | 反映 |
+|---|---|---|---|
+| バックアップ先ディレクトリ | `system.backup_dir` | 日次バックアップ無効（起動ログに警告。`/settings`で設定すれば解消） | **再起動不要**。保存後、Schedulerの次回メンテナンスチェック（10分以内）から動く。未設定の間はスキップされ失敗扱いにならず、設定後にその日のバックアップが実行される |
+| ログディレクトリ | `system.log_dir` | DBファイルの親ディレクトリ配下の`logs/` | **再起動が必要**（ログは起動時に開くため。DBは起動前に読み取り専用で参照する）。不正値（相対パス等）は既定にフォールバック |
+| Policy Engine（ロング/ショート）のしきい値 | `policy.{long,short}.*` | `config/strategy.yaml`の`policy.*` | **再起動不要**（評価のたびに再読込）。自己改善ループ（Sol/Opus）も同じキーを更新するため、後から書き込んだ方が有効 |
+| Fast Screenerのフィルター・重み | `screener.*` | `config/strategy.yaml`の`fast_screener.*` | **再起動不要**（次の候補更新から） |
+
+- 優先順位は`config/strategy.yaml` < `runtime_settings`（Settings画面）。以前の環境変数による上書き（`PITHA_POLICY_LONG_*`/`PITHA_POLICY_SHORT_*`/`PITHA_FAST_SCREENER_*`/`PITHA_LOG_DIR`/`PITHA_BACKUP_DIR`）は廃止した（設定されていても無視される）。
+- バックアップ先はローカルディスク外（外部ドライブ・クラウド同期フォルダ等）の**既存ディレクトリの絶対パス**を指定する。ディレクトリ自体は作成しない。存在しない間（未マウントなど）はローカルへ退避せずバックアップが失敗し、連続失敗時にSlack/ログで通知される（Settingsの該当項目にも警告を表示する）。
+- バックアップの内容: Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する。
+- ログディレクトリは日次JSONログ（全ログ`<日付>.log`とERRORのみの`<日付>-error.log`）・`.gz`アーカイブ・エラーログのダウンロードが共有する。作成できない場合は標準エラー出力へフォールバックして起動を継続する。起動失敗などの致命エラーはERRORレベルで記録する。
+- 値は保存時に検証される（確率系しきい値は`(0, 1]`、`min_entry_quality`は`poor`/`fair`/`good`/`strong`/`exceptional`、`top_n >= 1`・価格/しきい値は正・`max_price >= min_price`・重みは0以上で合計が正、パスは絶対パス）。不正値は400で拒否し保存しない（FR-POLICY-2a / FR-FS-4）。
 
 ### 銘柄マスタの投入
 

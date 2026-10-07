@@ -5,10 +5,12 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
@@ -59,6 +61,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithBacktestRunner(services.Backtest),
 		router.WithActivitySource(services.Activity),
 		router.WithSecretsStore(secretsRepo),
+		router.WithOperationalSettings(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath))),
 		router.WithMarketDataStatus(services.MarketData),
 		router.WithErrorLogExporter(services.ErrorLogs),
 		router.WithUniverseImporter(universe.NewImporter(services.Instruments, nil)),

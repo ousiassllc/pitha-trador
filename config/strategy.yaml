@@ -12,8 +12,10 @@
 # 既定値補完はしない）。キー欠落・範囲外（top_n < 1、jev_scout.min_* や
 # policy の確率系しきい値が (0, 1] 外、min_entry_quality が
 # poor/fair/good/strong/exceptional 以外、など）は項目名付きのエラーで
-# 起動に失敗する。PITHA_POLICY_* / PITHA_FAST_SCREENER_* で上書きした後の値も
-# 同じ検証を通る（FR-FS-4 / FR-SCOUT-2a / FR-POLICY-2a）。
+# 起動に失敗する（FR-FS-4 / FR-SCOUT-2a / FR-POLICY-2a）。Settings 画面
+# （/settings の運用設定）で保存した policy.* / fast_screener.* の値は
+# runtime_settings に保存され、この yaml の値より優先される（yaml < Settings）。
+# 環境変数による上書き（PITHA_POLICY_* / PITHA_FAST_SCREENER_*）は廃止した。
 
 scan:
   # *_seconds は正の整数で、max >= min であること。未設定/0以下は設定ローダーが

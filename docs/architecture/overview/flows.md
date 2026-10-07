@@ -13,7 +13,7 @@ sequenceDiagram
     participant DB as SQLite
     participant SCHED as Scheduler（自前Worker）
 
-    App->>App: `startup.RunMain`でプロセスを開始（`cmd/desktop`・`cmd/server`共通。日次JSONログを`PITHA_LOG_DIR`（未設定ならDBと同じ親ディレクトリの絶対パス`logs/`。作業ディレクトリに依存しない）へ設定し、以降の`run`が返した致命的エラーはERRORで記録して終了コード1にする。ログ用ディレクトリ・ファイルを作れない場合は標準エラー出力へフォールバックして起動を継続。#547）
+    App->>App: `startup.RunMain`でプロセスを開始（`cmd/desktop`・`cmd/server`共通。日次JSONログをSettings画面で設定したログディレクトリ（`runtime_settings`の`system.log_dir`。起動前にDBを読み取り専用で参照するため変更は再起動後に反映。未設定ならDBと同じ親ディレクトリの絶対パス`logs/`。作業ディレクトリに依存しない）へ設定し、以降の`run`が返した致命的エラーはERRORで記録して終了コード1にする。ログ用ディレクトリ・ファイルを作れない場合は標準エラー出力へフォールバックして起動を継続。#547）
     App->>App: 多重起動ロック`app.lock`を取得（`bootstrap.AcquireInstanceLock`。DBを開く前。取得失敗時は`bootstrap.Run`・`Recover`に到達せず終了。desktopは終了コード0、serverは非0）
     App->>DB: マイグレーション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON, WAL）
     App->>SCHED: 前回クラッシュ時の`running`状態ジョブを`pending`へ復帰（`Scheduler.Recover`）
