@@ -253,3 +253,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.58 | 2026-10-07 | §1のUC-1・§2の主要処理フロー・§7のMVP完了条件を、全ユニバースの60秒スキャン前提から既定のランキング監視（監視銘柄。FR-SCHED-9）へ訂正（全銘柄スキャンは`scan.full_scan_enabled: true`の明示オプトインのみで、FR-SCHED-7の制約付き） | issue #697 |
 | 1.59 | 2026-10-07 | FR-SCHED-2（`components-platform.md`）のフルスキャン時のPUSH登録を「最大50」から実装（`pushfeed.MaxRegisterSymbols`＝API登録上限50−REST回転用10）・`non-functional.md` §2.3・`architecture/overview/integrations.md` §5に合わせ「最大40（API登録上限50のうちREST回転用に10件を空ける）」へ訂正（#672の取り残し） | issue #699 |
 | 1.60 | 2026-10-07 | FR-SCAN-8の失敗表示を、下位エラーの生文字列ではなく失敗種別ごとの固定文言とし、下位エラーは`slog`のみに記録する旨に訂正 | issue #700 |
+| 1.61 | 2026-10-08 | FR-EXIT-2にcontinuation_probability低下Exitのしきい値`min(0.60, 方向別エントリーしきい値)`（エントリーしきい値はstrategy.yaml < env < `runtime_settings`の現行値）を追記し、エントリーしきい値を0.60未満へ下げた直後の即Exitを防ぐ | issue #714 |

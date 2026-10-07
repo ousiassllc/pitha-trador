@@ -33,6 +33,11 @@ type testEngine struct {
 
 func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	t.Helper()
+	return newTestEngineWithThresholds(t, cfg, nil)
+}
+
+func newTestEngineWithThresholds(t *testing.T, cfg execution.Config, entry execution.EntryThresholdSource) testEngine {
+	t.Helper()
 	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -55,12 +60,13 @@ func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	positions := trading.NewPositionRepository(db)
 	snapshots := market.NewSnapshotRepository(db)
 	engine := execution.NewEngine(execution.Deps{
-		Orders:      orders,
-		Positions:   positions,
-		Snapshots:   snapshots,
-		Decisions:   judgement.NewDecisionRepository(db),
-		Signals:     trading.NewSignalRepository(db),
-		Instruments: instruments,
+		Orders:          orders,
+		Positions:       positions,
+		Snapshots:       snapshots,
+		Decisions:       judgement.NewDecisionRepository(db),
+		Signals:         trading.NewSignalRepository(db),
+		Instruments:     instruments,
+		EntryThresholds: entry,
 	}, cfg)
 
 	return testEngine{db: db, engine: engine, orders: orders, positions: positions, snapshots: snapshots, instrument: inst}
