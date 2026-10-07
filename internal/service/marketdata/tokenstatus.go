@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 )
 
 // kabuステーションAPIの /token が返すエラーコード
@@ -31,16 +32,56 @@ const (
 	TokenIssueRejected    TokenIssue = "rejected"      // /token は成功するが情報系APIが新トークンも拒否
 )
 
+// A not_logged_in failure streak is "persistent" (issue #712) once it has
+// repeated this many times or lasted this long: kabuステーション is still
+// not logged in well after the app's own retries, so the operator has to log
+// in by hand (post-maintenance morning routine) and the banner says so
+// prominently.
+const (
+	persistentFailures = 5
+	persistentElapsed  = 5 * time.Minute
+)
+
 // TokenStatus is a snapshot of the last token issuance outcome (Client.
 // TokenStatus). Code is the kabuステーションAPI error code when the failure
-// carried one (0 otherwise).
+// carried one (0 otherwise). Failures and Since describe the current streak
+// of consecutive failures with the same Issue (Since is when it began);
+// they are zero for TokenIssueRejected, which has no /token failure.
 type TokenStatus struct {
-	Issue TokenIssue
-	Code  int
+	Issue    TokenIssue
+	Code     int
+	Failures int
+	Since    time.Time
 }
 
 // Failed reports whether the last token issuance failed.
 func (s TokenStatus) Failed() bool { return s.Issue != TokenIssueNone }
+
+// Persistent reports whether a not_logged_in (4001007 / 4001017) streak has
+// repeated or lasted long enough that the UI should escalate beyond the
+// ordinary banner (issue #712), and how long it has lasted at now.
+func (s TokenStatus) Persistent(now time.Time) (bool, time.Duration) {
+	if s.Issue != TokenIssueNotLoggedIn || s.Since.IsZero() {
+		return false, 0
+	}
+	elapsed := max(now.Sub(s.Since), 0)
+	return s.Failures >= persistentFailures || elapsed >= persistentElapsed, elapsed
+}
+
+// streak extends prev's failure streak with s, the status of the latest
+// issuance: a repeat of the same Issue keeps Since and counts up, a new
+// failure starts a streak at now, and success (no failure) clears it.
+func (s TokenStatus) streak(prev TokenStatus, now time.Time) TokenStatus {
+	switch {
+	case !s.Failed():
+		return s
+	case prev.Issue == s.Issue:
+		s.Failures, s.Since = prev.Failures+1, prev.Since
+	default:
+		s.Failures, s.Since = 1, now
+	}
+	return s
+}
 
 // Guidance words, for the operator, what to check for the failure. It
 // returns "" when the last issuance did not fail.

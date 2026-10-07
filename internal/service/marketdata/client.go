@@ -51,7 +51,8 @@ type Config struct {
 	Status *StatusTracker
 	// InfoAPIMaxPerSecond caps GetBoard/GetSymbol/RegisterSymbols (default 8, max 10).
 	InfoAPIMaxPerSecond int
-	// Clock drives the info-API limiter; tests inject infolimit.ManualClock.
+	// Clock drives the info-API limiter and stamps token failure streaks
+	// (TokenStatus.Since); tests inject infolimit.ManualClock.
 	Clock infolimit.Clock
 }
 
@@ -63,6 +64,7 @@ type Client struct {
 	apiPassword string
 	httpClient  *http.Client
 	status      *StatusTracker
+	now         func() time.Time
 
 	boardFailures  domain.FailureStreak
 	brokerFailures domain.FailureStreak
@@ -101,11 +103,16 @@ func NewClient(cfg Config) *Client {
 	if status == nil {
 		status = NewStatusTracker()
 	}
+	now := time.Now
+	if cfg.Clock != nil {
+		now = cfg.Clock.Now
+	}
 	return &Client{
 		baseURL:     baseURL,
 		apiPassword: cfg.APIPassword,
 		httpClient:  httpClient,
 		status:      status,
+		now:         now,
 		limiter:     infolimit.New(cfg.InfoAPIMaxPerSecond, cfg.Clock),
 	}
 }
@@ -138,7 +145,7 @@ func (c *Client) IssueToken(ctx context.Context) (string, error) {
 	token, err := c.issueToken(ctx)
 	status := classifyTokenError(err)
 	c.mu.Lock()
-	c.tokenStatus = status
+	c.tokenStatus = status.streak(c.tokenStatus, c.now())
 	if err == nil {
 		c.token = token
 	}

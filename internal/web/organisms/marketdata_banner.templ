@@ -1,26 +1,55 @@
 package organisms
 
+import "fmt"
+
 // MarketDataBanner renders the 全ページ共通の市況データ接続エラー通知
 // (issue #295): Header's `#marketdata-banner` fetches it via
 // `GET /system/marketdata-status` (hx-trigger="load, every 30s"), the same
-// self-correcting pattern `#update-banner` uses. guidance is the operator
-// facing cause + remedy of the last failed kabuステーションAPI token
-// issuance (marketdata.TokenStatus.Guidance), or "" while the token is
-// fine, in which case nothing is rendered. issue is the cause's machine
-// name (marketdata.TokenIssue), exposed as `data-issue` for tests/styling.
+// self-correcting pattern `#update-banner` uses. props.Guidance is the
+// operator facing cause + remedy of the last failed kabuステーションAPI
+// token issuance (marketdata.TokenStatus.Guidance), or "" while the token
+// is fine, in which case nothing is rendered. props.Issue is the cause's
+// machine name (marketdata.TokenIssue), exposed as `data-issue` for
+// tests/styling.
+//
+// When props.Persistent (a 4001007/4001017 streak that keeps repeating or
+// lasting, issue #712) the banner turns into the louder
+// MarketDataPersistentBanner: still the same login-only guidance (issue
+// #305), plus how long/how often it has failed and "re-login, then wait".
 //
 // The banner has no role of its own: `#marketdata-banner` is the fixed
 // `role="status"` live region and a poll answering unchanged markup is not
 // swapped, so it is announced only when it appears or changes (issue #626).
-templ MarketDataBanner(issue, guidance string) {
-	if guidance != "" {
-		<div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" data-testid="marketdata-banner" data-issue={ issue }>
+templ MarketDataBanner(props MarketDataBannerProps) {
+	if props.Guidance != "" && props.Persistent {
+		@MarketDataPersistentBanner(props)
+	} else if props.Guidance != "" {
+		<div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" data-testid="marketdata-banner" data-issue={ props.Issue }>
 			<p>
 				<span class="font-semibold">市況データを取得できません。</span>
-				{ guidance }
+				{ props.Guidance }
 				自動的に再試行します。
 				<a class="font-semibold underline" href="/settings">設定画面</a>
 			</p>
 		</div>
 	}
+}
+
+// MarketDataPersistentBanner is MarketDataBanner's escalated form for a
+// persistent not_logged_in streak (issue #712): the operator has to log in
+// to kabuステーション by hand (post-maintenance morning routine; the app
+// never logs in for them). It states the elapsed time and failure count,
+// repeats the cause-specific guidance unchanged (login state only, never the
+// API password or 「APIを利用する」, issue #305) and tells them to wait after
+// logging in because the retry is automatic.
+templ MarketDataPersistentBanner(props MarketDataBannerProps) {
+	<div class="rounded-md border-2 border-red-800 bg-red-700 px-4 py-4 text-sm text-white shadow-md" data-testid="marketdata-banner" data-issue={ props.Issue } data-persistent="true">
+		<p class="text-base font-bold">kabuステーションに未ログインの状態が続いています。市況データを取得できません。</p>
+		<p class="mt-1" data-testid="marketdata-banner-streak">
+			{ formatPersistentElapsed(props.Elapsed) }以上継続・トークン発行の失敗 { fmt.Sprint(props.Failures) }回（4001007 / 4001017）
+		</p>
+		<p class="mt-2">{ props.Guidance }</p>
+		<p class="mt-2 font-semibold">再ログインしてから、そのままお待ちください。自動的に再試行し、成功するとこの表示は消えます。</p>
+		<p class="mt-2">ログイン済みなのに続く場合は、別のプロセス（本アプリの二重起動や他のAPIツール）が同じkabuステーションの /token を呼んでいないか確認してください。</p>
+	</div>
 }
