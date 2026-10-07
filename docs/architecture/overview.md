@@ -220,7 +220,7 @@ pitha-trador/
 - サブパッケージは、親パッケージがその子をimportする場合に親をimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る。**例外**: 親が本番コードでimportしない補助サブパッケージは親の公開型を参照してよい。`service/marketdata/quote`（`marketdata.Board`）・`service/jev/jevtest`（`jev.Client`向けのhttptestハンドラ。`jev`の公開型を参照）・`service/risk/multinotify`（`risk.Notifier`）の3つで、いずれも親は子をimportせず（子をimportするのは`bootstrap`配下の組み立て役とテストのみ）、循環は起きない
 - 分割後の呼び出し元はサブパッケージ名で修飾する（例: `jobqueue.Job`、`sqlitedb.Open`）。センチネルエラーは返すパッケージが定義する（他レイヤーが分類する必要がある場合は従来どおり`domain/`に置く）
 - テストは対象コードと同じサブパッケージへ移設する。`service/risk`のようにパッケージ内結合が強くコードを分割できない場合、または本番コードは上限内でも外部テスト（`package X_test`）を足すとディレクトリ2000行を超える場合のみ、外部テストをテスト専用サブパッケージ（`*flow`等）へ分離する。各テスト専用サブパッケージは自前のヘルパーを持ち、兄弟テストパッケージ同士はimportしない
-- `.linterlyignore`に手書きソースの除外を置かない。許容するのは自動生成物`*_templ.go`・実行時ログ`**/logs/**`・ライセンス全文`LICENSE`（手書きソースではない定型文）のみ（詳細は`environment/setup.md`）
+- `.linterlyignore`に手書きソースの除外を置かない。許容するのは自動生成物`*_templ.go`・実行時ログ`**/logs/**`・`wails dev`生成の`.gitignore`済みバインディング`static/wailsjs/**`・ライセンス全文`LICENSE`（手書きソースではない定型文）のみ（詳細は`environment/setup.md`）
 
 #### 分割後の構成（後続Issueの設計判断）
 
