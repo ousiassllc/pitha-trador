@@ -80,17 +80,6 @@ import (
 // what is already shown, so only a new/changed banner is announced. All
 // three banner frames share `order-last w-full empty:hidden` (issue #625):
 // they sit on their own full-width last row and, when empty, take no space.
-//
-// headerStatusTrigger is `#header-status`'s hx-trigger: an unknown state
-// (see Header) additionally fetches the badge on `load`.
-func headerStatusTrigger(state domain.SystemState) string {
-	const onChange = "systemStateChanged from:closest header"
-	if state == "" {
-		return "load, " + onChange
-	}
-	return onChange
-}
-
 templ Header(state domain.SystemState, current NavItem) {
 	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
 		<div class="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
@@ -159,4 +148,14 @@ templ Header(state domain.SystemState, current NavItem) {
 		</div>
 		@KillSwitchPanel(state)
 	</header>
+}
+
+// headerStatusTrigger is `#header-status`'s hx-trigger: an unknown state
+// (see Header) additionally fetches the badge on `load`.
+func headerStatusTrigger(state domain.SystemState) string {
+	const onChange = "systemStateChanged from:closest header"
+	if state == "" {
+		return "load, " + onChange
+	}
+	return onChange
 }
