@@ -22,6 +22,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
+// fixtureNow is the pinned wall clock for HandleJob tests: 30s after the
+// fixture bars' 09:31 timestamp, so they count as fresh (issue #685).
+func fixtureNow() time.Time { return time.Date(2026, 9, 27, 9, 31, 30, 0, time.UTC) }
+
 func newHandlerTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha_test.db"))
@@ -80,7 +84,7 @@ func newHandlerFixture(t *testing.T, resp jev.TraderResponse) handlerFixture {
 
 	engine := policy.NewEngine(testThresholds(), nil, signals)
 	executor := &recordingExecutor{}
-	handler := policy.NewHandler(trader, snapshots, engine, executor)
+	handler := policy.NewHandler(trader, snapshots, engine, executor, policy.WithClock(fixtureNow))
 
 	return handlerFixture{db: db, handler: handler, engine: engine, signals: signals, jobs: jobqueue.NewJobRepository(db), executor: executor}
 }
@@ -184,7 +188,7 @@ func TestHandler_HandleJob_PersistsNoneTradeSignalAndReturnsErrorOnJevAPIFailure
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
 	trader := jev.NewTrader(client, decisions, ragService)
 	engine := policy.NewEngine(testThresholds(), nil, signals)
-	handler := policy.NewHandler(trader, snapshots, engine, nil)
+	handler := policy.NewHandler(trader, snapshots, engine, nil, policy.WithClock(fixtureNow))
 
 	inst := mustCreateInstrumentAndSnapshot(t, db, "7203", 10)
 	payloadJSON, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: "7203"})

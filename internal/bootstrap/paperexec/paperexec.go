@@ -31,8 +31,15 @@ type Executor struct {
 // rather than failing the jev-trader job: these are Execution's own
 // per-symbol gates rejecting a repeat entry, not an error in processing this signal. Likewise a signal
 // that reaches Execution after the session ended (a job queued before the
-// close) is dropped: retrying would be equally invalid.
+// close) is dropped: retrying would be equally invalid. Enter judges the
+// session at snap.Timestamp, so the wall clock (Engine Config.Now) must be
+// inside the entry session too: a stale bar stamped inside a session cannot
+// open a position while the market is closed (issue #685).
 func (p Executor) ExecuteSignal(ctx context.Context, signal domain.TradeSignal, snap domain.Snapshot) error {
+	if !p.Engine.EntrySessionOpenNow() {
+		slog.InfoContext(ctx, "bootstrap: paper entry skipped", "symbol", signal.Symbol, "signal_id", signal.ID, "reason", execution.ErrOutsideTradingSession.Error())
+		return nil
+	}
 	quantity := p.Sizer.PositionSize(ctx, snap.Price)
 	if quantity <= 0 {
 		return nil // no lot fits the risk limits (PositionSize logged why)

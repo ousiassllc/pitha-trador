@@ -57,7 +57,7 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 上の例（`universe: 3800`）は`scan.full_scan_enabled: true`のとき（母集団＝有効な`stock`全件）の値。既定のランキング監視（FR-SCHED-9）では母集団が監視銘柄（最大45）になり、`funnel.universe`・`total`・`items`はその範囲に限られる（監視外の銘柄は現れない。FR-SCAN-3/4）。立会時間外は直前の立会時間内サイクルの監視リスト（＋保有・注文中）を保存済みデータで評価した結果を返す（FR-SCAN-7）。
 
 - `status`: `passed`=Fast Screener候補、`excluded`=閾値で落ちた／上位N件の外（`top_n_cutoff`）、`missing`=値を算出できず判定不能（欠損理由が1つでもあれば`missing`を優先）
-- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、約定不能の`special_quote`（特別気配）/`limit_up`（ストップ高）/`limit_down`（ストップ安）（`kind=threshold`、`status=excluded`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
+- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、約定不能の`special_quote`（特別気配）/`limit_up`（ストップ高）/`limit_down`（ストップ安）（`kind=threshold`、`status=excluded`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`stale_snapshot`（立会中に最新の足が3分超古い。FR-SCAN-7）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
 - `funnel.scout_*`は候補に対するJev Scoutの判定済み件数（サイクル公開後にジョブが完了するたび増える。`scout`が`null`=候補外または判定待ち、`error`=Jev呼び出し失敗）
 
 ### GET /api/v1/scanner/scan/export

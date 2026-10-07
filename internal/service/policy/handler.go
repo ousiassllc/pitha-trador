@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
@@ -35,6 +37,7 @@ type Handler struct {
 	engine    *Engine
 	executor  SignalExecutor
 	calib     CalibrationSource // optional, see WithCalibration
+	now       func() time.Time  // wall clock for the snapshot staleness check
 }
 
 // NewHandler returns a Handler that evaluates jev-trader queue jobs via
@@ -42,7 +45,7 @@ type Handler struct {
 // row via snapshots, and hands every approved signal to executor. A nil
 // executor only records signals (no order is ever placed).
 func NewHandler(trader *jev.Trader, snapshots *market.SnapshotRepository, engine *Engine, executor SignalExecutor, opts ...HandlerOption) *Handler {
-	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor}
+	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor, now: time.Now}
 	for _, opt := range opts {
 		opt(h)
 	}
@@ -75,6 +78,13 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 	if len(snapshots) == 0 {
 		return fmt.Errorf("policy: no market snapshot recorded yet for %q", payload.Symbol)
+	}
+	if snapshots[0].IsStale(h.now().UTC()) {
+		// Skip (nil): a retry would read the same bar, and a stale bar's price
+		// and session timing must not reach Jev Trader or Paper Entry
+		// (issue #685). No trade_signals row: nothing was evaluated.
+		slog.Info("policy: skip jev-trader, latest snapshot is stale", "symbol", payload.Symbol, "snapshot_at", snapshots[0].Timestamp)
+		return nil
 	}
 	snap := snapshots[0]
 

@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
@@ -26,6 +27,12 @@ type HandlerOption func(*Handler)
 // samples is not calibrated and becomes NONE.
 func WithCalibration(src CalibrationSource) HandlerOption {
 	return func(h *Handler) { h.calib = src }
+}
+
+// WithClock sets the wall clock Handler judges snapshot staleness against
+// (default time.Now; tests pin it).
+func WithClock(now func() time.Time) HandlerOption {
+	return func(h *Handler) { h.now = now }
 }
 
 // calibrated reports whether decision's confidence bucket has enough
