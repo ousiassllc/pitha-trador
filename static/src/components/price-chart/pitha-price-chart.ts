@@ -55,6 +55,11 @@ export class PithaPriceChart extends LitElement {
         width: 100%;
         height: ${CHART_HEIGHT}px;
       }
+      .pitha-price-chart-empty {
+        margin: 0;
+        color: #475569;
+        font-size: 0.875rem;
+      }
     `,
   ];
 
@@ -65,6 +70,9 @@ export class PithaPriceChart extends LitElement {
   @state() private wsStatus: WsStatus = 'connecting';
   // Feeds the canvas's accessible name (role="img"); updated as data arrives.
   @state() private summary: ChartSummary = EMPTY_SUMMARY;
+  // True once a load returned no candles (off-hours: the default window is the
+  // last 6 hours) and no tick has built a bar since; shows the empty-state text.
+  @state() private empty = false;
 
   private readonly containerRef = createRef<HTMLDivElement>();
   private chart: IChartApi | null = null;
@@ -96,6 +104,7 @@ export class PithaPriceChart extends LitElement {
     this.markers = [];
     this.lastDirection = null;
     this.summary = EMPTY_SUMMARY;
+    this.empty = false;
     this.stopWs();
   }
 
@@ -121,6 +130,7 @@ export class PithaPriceChart extends LitElement {
     this.markers = [];
     this.lastDirection = null;
     this.summary = EMPTY_SUMMARY; // the previous symbol's values
+    this.empty = false;
     this.candleSeries?.setMarkers([]);
   }
 
@@ -175,6 +185,7 @@ export class PithaPriceChart extends LitElement {
     }));
     this.candleSeries.setData(bars);
     this.lastBar = bars.at(-1) ?? null;
+    this.empty = this.lastBar === null;
     this.vwapSeries.setData(vwapSeriesData(candles));
     this.volumeSeries.setData(
       candles.map((c) => ({ time: toUTCTimestamp(c.time), value: c.volume })),
@@ -213,6 +224,7 @@ export class PithaPriceChart extends LitElement {
     const bar = foldTick(this.lastBar, message.price, message.time);
     if (!bar) return;
     this.lastBar = bar;
+    this.empty = false;
     this.candleSeries.update(bar);
     this.summary = { ...this.summary, close: bar.close };
   }
@@ -251,6 +263,11 @@ export class PithaPriceChart extends LitElement {
         role="img"
         aria-label=${describeChart(this.summary)}
       ></div>
+      ${
+        this.empty
+          ? html`<p class="pitha-price-chart-empty" role="status">表示できる足がありません（立会時間外、またはまだ市況データが保存されていません）</p>`
+          : ''
+      }
       ${renderWsDisconnected(this.wsStatus)}
       ${this.error ? html`<p class="pitha-price-chart-error" role="alert">${this.error}</p>` : ''}
     `;
