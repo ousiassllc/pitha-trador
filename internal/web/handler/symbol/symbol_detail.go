@@ -127,8 +127,8 @@ type CandlesAPIOutput struct {
 }
 
 // defaultCandlesLookback is how far back `from` defaults to when the
-// caller omits it (docs/api/endpoints.md §5 lists `from`/`to` as
-// optional query params with no stated default).
+// caller omits it (6 hours before `to`, per the candles section of
+// docs/api/endpoints/huma-api.md).
 const defaultCandlesLookback = 6 * time.Hour
 
 // maxCandlesSpan caps `to - from`. 1-minute bars run ~330/day per symbol, so
