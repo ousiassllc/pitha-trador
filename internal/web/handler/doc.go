@@ -16,8 +16,11 @@
 // Sibling subpackages MUST NOT import each other and subpackages MUST NOT
 // import this package.
 //
-// This package tree MUST depend only on internal/service and internal/domain
-// (plus Templ under internal/web). It MUST NOT depend on internal/repository
-// directly. See docs/architecture/overview.md §3 for the layer dependency
-// rules (handler → service → repository → domain).
+// This package tree may import internal/service and internal/domain, the
+// foundation packages internal/config, internal/version and internal/logging,
+// internal/web/middleware, internal/web/apierror and the Templ layers under
+// internal/web. It MUST NOT import internal/repository or internal/bootstrap
+// (depguard web-no-repository / web-no-bootstrap). See
+// docs/architecture/overview.md §3 for the layer dependency rules
+// (handler → service → repository → domain).
 package handler
