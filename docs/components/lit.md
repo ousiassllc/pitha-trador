@@ -26,10 +26,12 @@ export class PithaPriceChart extends LitElement {
   @property({ type: String, attribute: 'candles-url' }) candlesUrl = '';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
 
-  // リアクティブ（再描画のトリガー）なのは error と wsStatus のみ。
+  // リアクティブ（再描画のトリガー）なのは error・wsStatus・summary・empty の4つ。
   // チャート/系列/WsClient は非リアクティブな通常の private フィールド（DOM は createRef の containerRef 経由で掴む）
   @state() private error: string | null = null;
   @state() private wsStatus: WsStatus = 'connecting';
+  @state() private summary: ChartSummary = EMPTY_SUMMARY; // キャンバスの aria-label 用の要約（describeChart）
+  @state() private empty = false; // 初回 candles が0件のときの空状態テキスト表示
 
   private readonly containerRef = createRef<HTMLDivElement>();
   private chart: IChartApi | null = null;

@@ -272,3 +272,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.75 | 2026-10-07 | §5.1（`lit.md`）`pitha-price-chart`が初回の`candles`0件（立会時間外・休場明け）のとき`role="status"`の可視の空状態テキストを表示する旨を追記 | issue #687 |
 | 1.76 | 2026-10-07 | §3`SecretsBanner`・§4「未設定バナー」を、`#config-banner`が`load`に加えてSettings/Setup の`POST`/`DELETE /settings/:key`成功応答の`HX-Trigger: secretsStatusChanged`（`secretsStatusChanged from:body`）で再取得する記述へ更新 | issue #695 |
 | 1.77 | 2026-10-07 | `ScanPanel`の`UniverseImportError`を、下位エラーの生文字列ではなく失敗種別ごとの固定文言とし、下位エラーは`slog`のみに記録する旨を追記 | issue #700 |
+| 1.78 | 2026-10-07 | §5.1（`lit.md`）`pitha-price-chart`のコード断片と注記を、リアクティブ状態は`error`・`wsStatus`・`summary`・`empty`の4つである実装に合わせて訂正 | issue #703 |

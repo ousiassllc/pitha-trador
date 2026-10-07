@@ -26,6 +26,15 @@ linters:
           deny:
             - pkg: github.com/ousiassllc/pitha-trador/internal/repository
               desc: web layer must not import repository; use service/domain (architecture/overview.md §3)
+        # docs/architecture/overview.md §3: bootstrap is the composition root
+        # (bootstrap -> web is the only direction); web must not import it
+        # (issue #702). Handler-classified errors live in domain/.
+        web-no-bootstrap:
+          files:
+            - "**/internal/web/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/bootstrap
+              desc: web layer must not import bootstrap (composition root); share types via domain/ (architecture/overview.md §3)
         # docs/components/overview.md §3: Templ layers take plain props
         # (domain types allowed); handler maps service results onto them.
         templ-no-service:

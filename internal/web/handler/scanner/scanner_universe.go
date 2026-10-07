@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
@@ -16,7 +15,7 @@ import (
 
 // UniverseImporter lets the Scanner Dashboard offer the 銘柄マスタ未投入
 // guidance and the operator-confirmed JPX import (issue #508).
-// internal/bootstrap/universe.Importer implements it. With none wired (the
+// bootstrap/universe.Importer implements it. With none wired (the
 // router default) the scan panel keeps its plain "no cycle yet" empty state
 // and `POST /scanner/universe/import` 404s.
 type UniverseImporter interface {
@@ -92,11 +91,11 @@ func (h *ScannerHandler) UniverseImport(c *gin.Context) {
 // caller and never shown (issue #700).
 func universeImportReason(err error) string {
 	switch {
-	case errors.Is(err, universe.ErrJPXConnect):
+	case errors.Is(err, domain.ErrJPXConnect):
 		return "JPXに接続できませんでした（ネットワークを確認してください）。"
-	case errors.Is(err, universe.ErrJPXFormat):
+	case errors.Is(err, domain.ErrJPXFormat):
 		return "JPXの銘柄一覧を解釈できませんでした（JPX側で公開URLや形式が変わった可能性があります）。"
-	case errors.Is(err, universe.ErrJPXSave):
+	case errors.Is(err, domain.ErrJPXSave):
 		return "銘柄マスタへの保存に失敗しました。"
 	default:
 		return "原因を特定できませんでした。詳細はログを確認してください。"
