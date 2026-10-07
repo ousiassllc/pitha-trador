@@ -175,3 +175,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.65 | 2026-10-07 | `GET /api/v1/scan`系（`endpoints/huma-api.md`）の理由コードに欠損の`stale_snapshot`（立会中に最新の足が3分超古い銘柄。FR-SCAN-5/7）を追記 | issue #685 |
 | 1.66 | 2026-10-07 | `GET /api/v1/symbols/{symbol}/candles`（`endpoints/huma-api.md`）の取得窓が現在時刻基準のため時間外は`candles`が空になりうる旨と、`pitha-price-chart`の空状態表示を追記 | issue #687 |
 | 1.67 | 2026-10-07 | `GET /api/v1/scan`系（`endpoints/huma-api.md`）の`stale_snapshot`の説明を、ランキング監視は3分超・`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）超へ訂正 | issue #686 |
+| 1.68 | 2026-10-07 | `GET /api/v1/scanner/scan`系（`endpoints/huma-api.md`）の`stale_snapshot`の`label`を、閾値がモード別のため秒数を含まない閾値非依存の文言とし、実際の閾値は`config/strategy.yaml`の設定で確認する旨を追記 | issue #690, #691 |
