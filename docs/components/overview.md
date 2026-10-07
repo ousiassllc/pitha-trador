@@ -269,3 +269,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.72 | 2026-10-07 | §5.2（`lit.md`）`pitha-scanner-table`の行順の既定をSSRと同じサーバー順（ScreenScore降順）に統一し、列ソートはヘッダークリック後のみ（未選択時は`aria-sort="none"`）と明記 | issue #674 |
 | 1.73 | 2026-10-07 | §4に「HTMX swap後のフォーカス」（置換されるボタンへの安定した`id`と、消えるボタン用の`data-focus-after-swap`＋`pitha-htmx-errors.ts`の`onAfterSwap`、#676）を追加。`SignalBadgeGroup`の確信度整形を`atoms.FormatConfidence`に一本化しScannerと丸めを統一（#677） | issue #676, #677 |
 | 1.74 | 2026-10-07 | §4「HTMX swap後のフォーカス」に`PositionRow`のCloseボタン（`close-position-<ID>`。決済で行ごと置換され決済済みの行にはボタンが無いため、`data-focus-after-swap="position-row-<ID>"`で置換後の行へフォーカスを移す）を追加 | issue #681 |
+| 1.75 | 2026-10-07 | §5.1（`lit.md`）`pitha-price-chart`が初回の`candles`0件（立会時間外・休場明け）のとき`role="status"`の可視の空状態テキストを表示する旨を追記 | issue #687 |

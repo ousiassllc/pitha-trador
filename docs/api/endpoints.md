@@ -173,3 +173,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.63 | 2026-10-07 | `GET /api/v1/positions`（`endpoints/huma-api.md`）に、`unrealized_pnl`は保有中のみ有効でクローズ済み行は`0`である旨を追記。`GET /api/v1/symbols/{symbol}/candles`に出力スキーマ（`symbol`/`candles`のラップ形状・`time`（RFC 3339 UTC）・`vwap`（`Feature.VWAP`、算出不能時`0`）・時刻昇順）を追記 | issue #682, #683 |
 | 1.64 | 2026-10-07 | `GET /api/v1/symbols/{symbol}/candles`（`endpoints/huma-api.md`）に、未登録銘柄は404（`unknown symbol`）である旨と、`from`含む・`to`含まない半開区間`[from, to)`である旨を追記 | issue #684 |
 | 1.65 | 2026-10-07 | `GET /api/v1/scan`系（`endpoints/huma-api.md`）の理由コードに欠損の`stale_snapshot`（立会中に最新の足が3分超古い銘柄。FR-SCAN-5/7）を追記 | issue #685 |
+| 1.66 | 2026-10-07 | `GET /api/v1/symbols/{symbol}/candles`（`endpoints/huma-api.md`）の取得窓が現在時刻基準のため時間外は`candles`が空になりうる旨と、`pitha-price-chart`の空状態表示を追記 | issue #687 |

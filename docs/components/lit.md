@@ -64,6 +64,7 @@ export class PithaPriceChart extends LitElement {
 ```
 
 - `tick`は1分足に集約する: メッセージの`time`（スナップショット時刻。クライアント時計は使わない）の分（`floor(time/60)*60`）のバーの`high/low/close`を更新し、分が変わったときのみ新しいバーを追加する（集約は`price-chart/bars.ts`の`foldTick`）。`price <= 0`・時刻不正・最新バーより古いスナップショットの`tick`は無視する。サーバーは`LastPrice > 0`かつ新しいスナップショットが現れたときだけ`tick`を送るため、場外・スキャン停止中に偽の足は増えない（issue #183, #557）
+- 初回の`candles`が0件（`candles-url`は`from`/`to`を付けず既定の直近6時間を取得するため、最終足から6時間以上経った立会時間外・休場明けに起こる）のときは、キャンバスが空白のままにならないよう、可視の空状態テキスト「表示できる足がありません（立会時間外、またはまだ市況データが保存されていません）」を`role="status"`の`.pitha-price-chart-empty`で表示する（`@state() empty`）。`tick`が最初の足を作った時点・足を含む再取得で消え、取得失敗は従来どおり`role="alert"`の`.pitha-price-chart-error`で区別する（issue #687）
 - `jev_update`（`direction`/`confidence`/`time`）は`direction`が変化したときのみ、チャート上のマーカー（例: LONG転換で上向き矢印）として描画する。マーカーはクライアント時計ではなくメッセージの`time`（判断時刻）を含む1分足（`bars.ts`の`toBarTime`）に置く。接続直後（再購読直後を含む）の最初の`jev_update`は現在の方向を伝える初期状態であり転換ではないため描画せず、`lastDirection`の初期化にだけ使う（以降の方向変化のみ描画。issue #624）。同一`direction`の繰り返しや`confidence`のみの変化では描画せず、`entry_quality`は`jev_update`に載らないため扱わない。Symbol DetailのJev判定パネルはSSRのみで、`jev_update`では更新されない（ページ再読み込みで更新。issue #362）
 - `candles-url`/`ws-url`属性が変化した場合は`updated()`ライフサイクルで再取得・再購読し、前銘柄の方向マーカー（`markers`・`lastDirection`・`setMarkers([])`）も消す（issue #562）。銘柄はURLに含めてサーバーが注入するため、`symbol`属性は持たない（HATEOAS。issue #409）
 - ペインは縦に分割する: 出来高ヒストグラムのオーバーレイ価格スケールに`scaleMargins: { top: 0.8, bottom: 0 }`、メイン価格スケール（`'right'`）に`{ top: 0.1, bottom: 0.25 }`を設定し、出来高を下部20%に半透明（`rgba(156, 163, 175, 0.5)`）で描いてローソク足・VWAPを覆わない（`price-chart/chart-data.ts`。issue #634）

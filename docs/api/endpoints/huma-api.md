@@ -111,7 +111,7 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
 パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、`/symbols/{symbol}`系ルート共通）。`from`/`to`がRFC3339でない場合、`symbol`/`interval`が範囲外の場合はいずれも422。
 
-`from > to`、または`to - from`が7日を超える場合は400（保持期間90日分の全行を1リクエストで読み込ませないための上限。画面の既定は6時間。リポジトリは呼ばれない）。
+`from > to`、または`to - from`が7日を超える場合は400（保持期間90日分の全行を1リクエストで読み込ませないための上限。画面の既定は6時間。リポジトリは呼ばれない）。取得窓は現在時刻基準のため、最終足から6時間以上経った立会時間外・休場明けは`candles`が空配列になりうる（200。`pitha-price-chart`は空のとき可視の空状態テキストを表示する。`components/lit.md` §5.1、issue #687）。
 
 取得区間は半開区間`[from, to)`（`timestamp >= from AND timestamp < to`）で、`from`ちょうどのバーは含まれ、`to`ちょうどのバーは返らない。`{symbol}`が未登録銘柄の場合は404（`unknown symbol`。`decisions`・`signals/{symbol}`と同じ）。
 
