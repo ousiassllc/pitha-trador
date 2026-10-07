@@ -84,7 +84,7 @@ func (e *Engine) EvaluateExit(ctx context.Context, position domain.Position, mkt
 		if reversed(position.Side, mkt.Decision.Direction) {
 			return domain.ExitReasonJevDirectionReversed, true, nil
 		}
-		if mkt.Decision.ContinuationProbability != nil && *mkt.Decision.ContinuationProbability < e.cfg.MinContinuationProbability {
+		if mkt.Decision.ContinuationProbability != nil && e.continuationProbDrop(ctx, position.Side, *mkt.Decision.ContinuationProbability) {
 			return domain.ExitReasonContinuationProbDrop, true, nil
 		}
 	}

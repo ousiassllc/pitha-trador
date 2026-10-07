@@ -63,7 +63,9 @@ type Engine struct {
 	decisions   *judgement.DecisionRepository
 	signals     *trading.SignalRepository
 	instruments *market.InstrumentRepository
-	cfg         Config
+	// entryThresholds is nil when Deps.EntryThresholds was left unset.
+	entryThresholds EntryThresholdSource
+	cfg             Config
 
 	mu        sync.Mutex
 	cooldowns map[string]time.Time // symbol -> cooldown_until (functional.md §4.9)
@@ -90,6 +92,10 @@ type Deps struct {
 	Decisions   *judgement.DecisionRepository
 	Signals     *trading.SignalRepository
 	Instruments *market.InstrumentRepository
+	// EntryThresholds lowers the continuation_probability低下 exit
+	// threshold to the position side's entry threshold (FR-EXIT-2).
+	// nil keeps Config.MinContinuationProbability as is.
+	EntryThresholds EntryThresholdSource
 }
 
 // Config returns the Entry/Exit rule set Engine was built with (Now
@@ -109,14 +115,15 @@ func NewEngine(deps Deps, cfg Config) *Engine {
 		panic("execution: NewEngine: deps.Positions is required")
 	}
 	return &Engine{
-		orders:      deps.Orders,
-		positions:   deps.Positions,
-		snapshots:   deps.Snapshots,
-		decisions:   deps.Decisions,
-		signals:     deps.Signals,
-		instruments: deps.Instruments,
-		cfg:         cfg.withDefaults(),
-		cooldowns:   make(map[string]time.Time),
+		orders:          deps.Orders,
+		positions:       deps.Positions,
+		snapshots:       deps.Snapshots,
+		decisions:       deps.Decisions,
+		signals:         deps.Signals,
+		instruments:     deps.Instruments,
+		entryThresholds: deps.EntryThresholds,
+		cfg:             cfg.withDefaults(),
+		cooldowns:       make(map[string]time.Time),
 	}
 }
 

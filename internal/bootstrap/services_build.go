@@ -124,16 +124,19 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 
 // buildRiskAndExecution builds the paper Execution Engine and the Risk Engine
 // guarding it, and returns the execution config the backtest source reuses.
-func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels alerts.Channels, notifiers []risk.Notifier, now func() time.Time) execution.Config {
+// runtimePolicy supplies the entry thresholds FR-EXIT-2's continuation_probability
+// low-water exit never exceeds (#714).
+func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels alerts.Channels, notifiers []risk.Notifier, now func() time.Time, runtimePolicy selfimprove.RuntimePolicy) execution.Config {
 	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(limits))
 	executionConfig.Now = now // nil keeps time.Now
 	s.Execution = execution.NewEngine(execution.Deps{
-		Orders:      s.Orders,
-		Positions:   s.Positions,
-		Snapshots:   s.Snapshots,
-		Decisions:   s.Decisions,
-		Signals:     s.Signals,
-		Instruments: s.Instruments,
+		Orders:          s.Orders,
+		Positions:       s.Positions,
+		Snapshots:       s.Snapshots,
+		Decisions:       s.Decisions,
+		Signals:         s.Signals,
+		Instruments:     s.Instruments,
+		EntryThresholds: runtimePolicy,
 	}, executionConfig)
 
 	s.Risk = newRiskEngine(limits, riskRepositories{
@@ -155,10 +158,10 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 // buildPolicyAndBacktest builds the Policy Engine, calibration and backtest
 // source, and returns the jev-trader queue Handler. runtimePolicy is
 // strategy.yaml's policy.* thresholds overridden by every applied
-// Self-Improvement proposal; signals and backtests both read it, so an
-// approved (or rolled-back) change applies on the next evaluation (#52).
-func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config) *policy.Handler {
-	runtimePolicy := selfimprove.NewRuntimePolicy(s.Settings, s.Proposals, state.Strategy.Policy)
+// Self-Improvement proposal; signals, backtests and the Execution Engine's
+// continuation_probability低下 exit all read it, so an approved (or
+// rolled-back) change applies on the next evaluation (#52, #714).
+func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config, runtimePolicy selfimprove.RuntimePolicy) *policy.Handler {
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
