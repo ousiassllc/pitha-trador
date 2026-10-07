@@ -13,6 +13,15 @@ const (
 	// Missing-data reasons: the instrument could not be judged on the
 	// value. These make ScreenReasons.Status() ScanStatusMissing.
 	ScreenReasonNoSnapshot ScreenReason = iota
+	// ScreenReasonStaleSnapshot: the latest bar is older than the
+	// mode-dependent maximum snapshot age during a session (issue #685):
+	// MaxSnapshotAge for ranking watch, scan.full_scan_max_snapshot_age_seconds
+	// when scan.full_scan_enabled (issue #686). The label deliberately carries
+	// no seconds because the static table cannot see that threshold (issue #690).
+	// It is e.g. one kept from the previous session or from before the symbol
+	// joined the ranking watch list. It clears once a fresh market-data bar
+	// arrives.
+	ScreenReasonStaleSnapshot
 	ScreenReasonMissingTurnover
 	ScreenReasonMissingSpread
 	ScreenReasonMissingVolumeRatio
@@ -49,6 +58,7 @@ type screenReasonInfo struct {
 
 var screenReasonInfos = [screenReasonCount]screenReasonInfo{
 	ScreenReasonNoSnapshot:         {"no_snapshot", "市況データ未取得（特徴量が未算出）", true},
+	ScreenReasonStaleSnapshot:      {"stale_snapshot", "市況データが古い（立会中に最新の足が許容経過時間を超過。次の市況取得までJev評価しない）", true},
 	ScreenReasonMissingTurnover:    {"missing_turnover", "売買代金の算出に必要な履歴が不足", true},
 	ScreenReasonMissingSpread:      {"missing_spread", "板情報なし（スプレッド不明）", true},
 	ScreenReasonMissingVolumeRatio: {"missing_volume_ratio", "出来高倍率を算出できない（履歴不足）", true},

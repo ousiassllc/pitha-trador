@@ -45,3 +45,11 @@ func (e *Engine) sessionOpen(now time.Time) bool {
 	return e.cfg.Calendar.IsOpen(now) &&
 		(closeAt == nil || now.Before(closeAt.Add(-time.Duration(e.cfg.ForceFlatBeforeMarketCloseMinutes)*time.Minute)))
 }
+
+// EntrySessionOpenNow reports whether new entries are allowed at the
+// wall clock (Config.Now). Enter judges the session at EntryRequest.Now,
+// which the live paper path sets to the evaluated bar's timestamp; this
+// lets that caller also require the real time to be inside the session, so
+// an old bar stamped inside a session cannot open a position outside one
+// (issue #685).
+func (e *Engine) EntrySessionOpenNow() bool { return e.sessionOpen(e.cfg.Now()) }

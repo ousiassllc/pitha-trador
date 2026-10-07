@@ -1,6 +1,10 @@
 package jev
 
-import "github.com/ousiassllc/pitha-trador/internal/domain"
+import (
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+)
 
 // NewsSource supplies an instrument's recent Luna-classified news
 // (FR-LUNA-3). *internal/service/newsfeed.Service implements it. ok=false
@@ -13,8 +17,24 @@ type NewsSource interface {
 type Option func(*options)
 
 type options struct {
-	news     NewsSource
-	recorder ScoutRecorder
+	news           NewsSource
+	recorder       ScoutRecorder
+	now            func() time.Time
+	snapshotMaxAge time.Duration
+}
+
+// WithClock sets the wall clock Scout.HandleJob judges snapshot staleness
+// against (default time.Now; tests pin it). Scout only.
+func WithClock(now func() time.Time) Option {
+	return func(o *options) { o.now = now }
+}
+
+// WithSnapshotMaxAge sets how old the latest bar may be before
+// Scout.HandleJob skips the job as stale (default domain.MaxSnapshotAge,
+// the ranking-watch value; full-scan mode passes the longer full-scan age,
+// issue #686). Scout only.
+func WithSnapshotMaxAge(d time.Duration) Option {
+	return func(o *options) { o.snapshotMaxAge = d }
 }
 
 // ScoutRecorder is told each Jev Scout verdict as it is reached, so the
@@ -40,7 +60,7 @@ func WithNewsSource(source NewsSource) Option {
 }
 
 func newOptions(opts []Option) options {
-	var o options
+	o := options{now: time.Now, snapshotMaxAge: domain.MaxSnapshotAge}
 	for _, opt := range opts {
 		opt(&o)
 	}

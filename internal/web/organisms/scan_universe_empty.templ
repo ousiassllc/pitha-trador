@@ -48,6 +48,8 @@ templ scanUniverseEmpty(importError string) {
 				"hx-disabled-elt": "this",
 				"hx-indicator":    "#scan-universe-import-progress",
 				"hx-sync":         "this:drop",
+				"id":              "scan-universe-import",
+				"data-focus-after-swap": "scan-universe-imported",
 				"data-testid":     "scan-universe-import",
 			}}) {
 				JPXから取得して投入する
@@ -67,7 +69,7 @@ templ scanUniverseEmpty(importError string) {
 // rendered for count 0 (no import ran, or it failed).
 templ scanUniverseImported(count int) {
 	if count > 0 {
-		<p class="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" role="status" data-testid="scan-universe-imported">
+		<p id="scan-universe-imported" tabindex="-1" class="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" role="status" data-testid="scan-universe-imported">
 			JPXの東証上場銘柄一覧から { strconv.Itoa(count) } 銘柄を銘柄マスタに投入しました。次のスキャンサイクルから対象になります（再起動は不要です。サイクルは立会時間中に60秒ごとに実行されます）。
 		</p>
 	}

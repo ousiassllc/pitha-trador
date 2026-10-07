@@ -54,8 +54,10 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 }
 ```
 
+上の例（`universe: 3800`）は`scan.full_scan_enabled: true`のとき（母集団＝有効な`stock`全件）の値。既定のランキング監視（FR-SCHED-9）では母集団が監視銘柄（最大45）になり、`funnel.universe`・`total`・`items`はその範囲に限られる（監視外の銘柄は現れない。FR-SCAN-3/4）。立会時間外は直前の立会時間内サイクルの監視リスト（＋保有・注文中）を保存済みデータで評価した結果を返す（FR-SCAN-7）。
+
 - `status`: `passed`=Fast Screener候補、`excluded`=閾値で落ちた／上位N件の外（`top_n_cutoff`）、`missing`=値を算出できず判定不能（欠損理由が1つでもあれば`missing`を優先）
-- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、約定不能の`special_quote`（特別気配）/`limit_up`（ストップ高）/`limit_down`（ストップ安）（`kind=threshold`、`status=excluded`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
+- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、約定不能の`special_quote`（特別気配）/`limit_up`（ストップ高）/`limit_down`（ストップ安）（`kind=threshold`、`status=excluded`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`stale_snapshot`（立会中に最新の足が古すぎる: ランキング監視は3分超、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）超。FR-SCAN-7。`label`は閾値がモード別のため秒数を含まず「許容経過時間を超過」と表し、実際の閾値は`config/strategy.yaml`の上記設定で確認する。issue #690）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
 - `funnel.scout_*`は候補に対するJev Scoutの判定済み件数（サイクル公開後にジョブが完了するたび増える。`scout`が`null`=候補外または判定待ち、`error`=Jev呼び出し失敗）
 
 ### GET /api/v1/scanner/scan/export
@@ -103,15 +105,31 @@ Symbol Detail向け統合情報（価格・Jev判定・Riskパラメータ）。
 
 | クエリ | 型 | 説明 |
 |-------|-----|------|
-| `from` | string(RFC3339) | 取得開始時刻（省略時は`to`の6時間前） |
-| `to` | string(RFC3339) | 取得終了時刻（省略時は現在） |
+| `from` | string(RFC3339) | 取得開始時刻（含む。省略時は`to`の6時間前） |
+| `to` | string(RFC3339) | 取得終了時刻（含まない。省略時は現在） |
 | `interval` | string | `1m` 固定（MVP。`1m`以外は422） |
 
 パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、`/symbols/{symbol}`系ルート共通）。`from`/`to`がRFC3339でない場合、`symbol`/`interval`が範囲外の場合はいずれも422。
 
-`from > to`、または`to - from`が7日を超える場合は400（保持期間90日分の全行を1リクエストで読み込ませないための上限。画面の既定は6時間。リポジトリは呼ばれない）。
+`from > to`、または`to - from`が7日を超える場合は400（保持期間90日分の全行を1リクエストで読み込ませないための上限。画面の既定は6時間。リポジトリは呼ばれない）。取得窓は現在時刻基準のため、最終足から6時間以上経った立会時間外・休場明けは`candles`が空配列になりうる（200。`pitha-price-chart`は空のとき可視の空状態テキストを表示する。`components/lit.md` §5.1、issue #687）。
+
+取得区間は半開区間`[from, to)`（`timestamp >= from AND timestamp < to`）で、`from`ちょうどのバーは含まれ、`to`ちょうどのバーは返らない。`{symbol}`が未登録銘柄の場合は404（`unknown symbol`。`decisions`・`signals/{symbol}`と同じ）。
 
 各点の`volume`は**1分足あたりの出来高**（バー単位）で、保存済みの累積セッション出来高（`market_snapshots.volume`、kabuステーションAPIの`TradingVolume`）の隣接スナップショット間差分（`cur - prev`）。累積値が後退した場合（新セッション）は当該バーの累積値自体を返し、負値にはしない。応答の先頭バーは前のスナップショットを持たないため、`Feature.Volume1m`（累積差分）があればその値、なければ`0`。`open`/`high`/`low`/`close`は1バー1サンプルの価格で同値。
+
+出力は`{"symbol": "7203", "candles": [...]}`（`candles`は時刻昇順）。
+
+```json
+// Output（抜粋）
+{
+  "symbol": "7203",
+  "candles": [
+    {"time": "2026-10-07T00:01:00Z", "open": 2831.5, "high": 2831.5, "low": 2831.5, "close": 2831.5, "volume": 1200, "vwap": 2829.4}
+  ]
+}
+```
+
+`time`はRFC 3339（UTC、末尾`Z`）。`vwap`は当該スナップショットの`Feature.VWAP`（算出不能時は`0`）。`volume`は`int64`、他の価格系フィールドは円。
 
 ### GET /api/v1/symbols/{symbol}/decisions
 
@@ -151,6 +169,34 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 |-------|-----|------|
 | `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
 
+出力は`{"items": [...]}`で、**開始（`opened_at`）が新しい順**。保有中の行とクローズ済みの行を同じ形式で返す。
+
+```json
+// Output（抜粋）
+{
+  "items": [
+    {
+      "id": 12, "symbol": "7203", "side": "LONG", "quantity": 100,
+      "entry_price": 2831.5, "current_price": 2840.0, "unrealized_pnl": 850.0,
+      "realized_pnl": null, "opened_at": "2026-10-07T00:12:03Z",
+      "closed_at": null, "exit_reason": null
+    },
+    {
+      "id": 11, "symbol": "6758", "side": "SHORT", "quantity": 200,
+      "entry_price": 3410.0, "current_price": 3398.5, "unrealized_pnl": 0.0,
+      "realized_pnl": 2300.0, "opened_at": "2026-10-07T00:05:41Z",
+      "closed_at": "2026-10-07T01:02:17Z", "exit_reason": "take_profit"
+    }
+  ]
+}
+```
+
+- `side`は`LONG`/`SHORT`（`paper_orders.side`の`BUY`/`SELL`とは別）。`quantity`は株数、`entry_price`/`current_price`/`unrealized_pnl`/`realized_pnl`は円
+- `realized_pnl`/`closed_at`/`exit_reason`は**未クローズ（保有中）で`null`**。`realized_pnl`はエントリー・Exit両注文の`fees`を差し引いた値
+- `exit_reason`の値は`stop_loss`/`take_profit`/`trailing_stop`/`jev_direction_reversed`/`continuation_probability_dropped`/`vwap_cross`/`max_holding`/`force_flat_before_close`/`manual`/`force_close`（意味は`architecture/er/tables-trading.md`の`positions.exit_reason`）
+- `opened_at`/`closed_at`はRFC 3339（UTC、末尾`Z`）
+- `unrealized_pnl`は**保有中のみ有効**で、クローズ済み行は`0`（クローズ時に`0`へリセットする。実現損益と二重計上しないため。`current_price`はクローズ時の約定価格）
+
 ### GET /api/v1/orders
 
 `paper_orders`一覧（ステータスフィルタ `?status=` 対応）。
@@ -159,6 +205,32 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 |-------|-----|------|
 | `status` | string | `PENDING`/`FILLED`/`CANCELLED`/`REJECTED`でフィルタ（省略時は全件。それ以外は422） |
 | `limit` | integer | 件数上限（既定100、1〜500。範囲外は422） |
+
+出力は`{"items": [...]}`で、**`submitted_at`が新しい順**。
+
+```json
+// Output（抜粋）
+{
+  "items": [
+    {
+      "id": 25, "symbol": "7203", "side": "BUY", "order_type": "MARKET", "quantity": 100,
+      "limit_price": null, "status": "FILLED", "submitted_at": "2026-10-07T00:12:02Z",
+      "filled_at": "2026-10-07T00:12:03Z", "filled_price": 2831.5,
+      "fees": 0.0, "slippage_bps": 1.8
+    },
+    {
+      "id": 26, "symbol": "6758", "side": "SELL", "order_type": "LIMIT", "quantity": 200,
+      "limit_price": 3410.0, "status": "PENDING", "submitted_at": "2026-10-07T00:20:41Z",
+      "filled_at": null, "filled_price": null, "fees": 0.0, "slippage_bps": null
+    }
+  ]
+}
+```
+
+- `side`は`BUY`/`SELL`、`order_type`は`MARKET`/`LIMIT`、`status`は`PENDING`/`FILLED`/`CANCELLED`/`REJECTED`
+- `limit_price`は成行（`MARKET`）で`null`。`filled_at`/`filled_price`/`slippage_bps`は**未約定で`null`**
+- `fees`は約定手数料（円。約定時に`FeeBps`×約定代金を記録、既定0。未約定は`0`）。`slippage_bps`は約定時の直近価格（シグナル価格）に対する不利方向のbps（負は有利。FR-ENTRY-8、`architecture/er/tables-trading.md`の`paper_orders`）
+- `submitted_at`/`filled_at`はRFC 3339（UTC、末尾`Z`）
 
 ### GET /api/v1/system/status / POST /api/v1/system/pause / resume / kill
 
@@ -197,7 +269,7 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 |---------|------|------|
 | GET | `/api/v1/scanner` | 候補銘柄一覧 |
 | GET | `/api/v1/scanner/scan` | 最新スキャンサイクルのファネル件数・銘柄別の判定（通過/除外/欠損と理由） |
-| GET | `/api/v1/scanner/scan/export` | 最新スキャンサイクルの銘柄ごとの判定をCSVでダウンロード（絞り込みはscanと同じ、ページングなしの全件、UTF-8 BOM付き） | `internal/web/handler/scanner` |
+| GET | `/api/v1/scanner/scan/export` | 最新スキャンサイクルの銘柄ごとの判定をCSVでダウンロード（絞り込みはscanと同じ、ページングなしの全件、UTF-8 BOM付き） |
 | GET | `/api/v1/symbols/{symbol}` | 銘柄詳細 |
 | GET | `/api/v1/symbols/{symbol}/candles` | チャート用系列データ |
 | GET | `/api/v1/symbols/{symbol}/decisions` | Jev判断履歴 |

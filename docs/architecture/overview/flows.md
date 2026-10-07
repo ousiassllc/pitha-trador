@@ -20,15 +20,16 @@ sequenceDiagram
     App->>App: 銘柄マスタCSVから`instruments`をupsert（`syncUniverse`。失敗・CSV不在はログのみで継続。kabuステーション不達の影響を受けない）
     App->>KABU: /kabusapi/token でトークン発行
     KABU-->>App: token（失敗しても起動を継続し、バックグラウンドで再試行）
-    App->>SCHED: robfig/cronへ周期ジョブ登録（60秒フルスキャン＋分単位以上の保守ジョブ）
+    App->>SCHED: robfig/cronへ周期ジョブ登録（分単位以上の保守ジョブ。60秒フルスキャンは`scan.full_scan_enabled: true`のときだけ登録し、既定ではオフ＝登録しない。FR-SCHED-7）
     App->>App: 候補更新ループ（15-30秒、`candidates.Run`）と保有ポジション再評価ループ（5-15秒、`heldposition.Monitor.Run`）を別goroutineで起動（cronのジョブ登録ではない）。Luna（既定Jev。`LUNA_BASE_URL`で差し替え可）が使え、かつニュースフィードが`NEWS_FEED_ENABLED=off`でない場合のみ（既定ではJevキーだけで有効）、News Ingestのティッカー（`newsIngestTicker`。起動直後に1回、以降1分周期。§13）も別goroutineで起動する
-    App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始
+    App->>App: ランキング監視ループ（`rankingwatch.Watcher.Run`。既定＝`scan.full_scan_enabled`が`true`でないとき。毎分kabu `GET /ranking`で監視銘柄（PUSH登録最大45件）を決め、`market-data`投入・Fast Screener対象に使う。FR-SCHED-9）と、`scan.ranking_measure.enabled`のときだけ`/ranking`計測ループ（`rankingmeasure`。FR-SCHED-8）を別goroutineで起動
+    App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始（既定のランキング監視では全銘柄ではなく、登録リストを空にしたうえで直近の監視リストだけを登録し、監視リストが決まるたびに`PUT /register`で更新する）
     App->>App: WebView起動・Scanner Dashboard表示
 ```
 
 #### 停止フロー
 
-`bootstrap.Services.Start`が起動したgoroutineは`Start`へ渡したcontextに紐づくため、停止はcontextの取り消し→`Services.Stop()`（Schedulerのcronとワーカーを止め、候補更新・保有監視・PushFeed・News Ingestのgoroutineと実行中ジョブの終了を待つ）の順で行い、DBを閉じるのはその後（`defer`）に限る。
+`bootstrap.Services.Start`が起動したgoroutineは`Start`へ渡したcontextに紐づくため、停止はcontextの取り消し→`Services.Stop()`（Schedulerのcronとワーカーを止め、候補更新・保有監視・ランキング監視/計測・PushFeed・News Ingestのgoroutineと実行中ジョブの終了を待つ）の順で行い、DBを閉じるのはその後（`defer`）に限る。
 
 ```mermaid
 sequenceDiagram
@@ -63,7 +64,7 @@ sequenceDiagram
 
 `requirements/functional.md` §2 主要処理フロー（シーケンス図）を参照。アーキテクチャ上の要点は以下。
 
-- Scheduler（自前Worker、`jobs`テーブル）のフルスキャンが銘柄ごとに `market-data` ジョブをenqueueする。特徴量の算出・永続化は `market-data` ジョブ内で同期実行される。`feature-calc` キューはフルスキャンが投入せず、以前のバージョンが残した未処理ジョブを消化するだけの互換用の空ハンドラとして残っている（`market-data` → `feature-calc` の連鎖ではない。FR-SCHED-1）。`jev-scout` は候補更新サイクル（`bootstrap/candidates`）と、`market-data` ジョブ内のイベント再評価（FR-SCAN-1）からenqueueされ、`jev-trader` は `jev-scout` ジョブがenqueueする。各Serviceはdomainモデルを介して疎結合に連携する
+- `market-data` ジョブは、既定ではランキング監視（FR-SCHED-9。`internal/bootstrap/rankingwatch`が毎分kabu `GET /ranking`で決めた監視銘柄）が`Scheduler.EnqueueMarketData`で銘柄ごとにenqueueする。`scan.full_scan_enabled: true`のときだけ、Scheduler（自前Worker、`jobs`テーブル）の60秒フルスキャンが全銘柄（`market_index`/`sector_index`を含む）にenqueueする（FR-SCHED-2/7。既定のランキング監視も、市場コンテキスト算出用の有効な`market_index`全件と監視銘柄の`sector`に一致する`sector_index`を毎サイクル同じジョブで投入する。このとき`market_breadth`は監視銘柄だけの集計になる。立会時間外は保有・注文中の銘柄だけを投入し、候補リスト・スキャン対象の一覧は直前の立会時間内サイクルの監視リストを保存済みデータで表示し続ける）。特徴量の算出・永続化は `market-data` ジョブ内で同期実行される。`feature-calc` キューはフルスキャンが投入せず、以前のバージョンが残した未処理ジョブを消化するだけの互換用の空ハンドラとして残っている（`market-data` → `feature-calc` の連鎖ではない。FR-SCHED-1）。`jev-scout` は候補更新サイクル（`bootstrap/candidates`）と、`market-data` ジョブ内のイベント再評価（FR-SCAN-1）からenqueueされ、`jev-trader` は `jev-scout` ジョブがenqueueする。各Serviceはdomainモデルを介して疎結合に連携する
 - `jev-scout`/`jev-trader`の直前にRAG Context Builder（§7）が類似局面を検索し文脈を付与する
 - Risk判定・Paper発注は独立したキュー（ジョブ）を持たず、`jev-trader`ジョブ内でPolicy Engine → Risk Engine → Execution（Paper）を同期実行する。Risk Engineは必ずPolicy Engineの直後に評価され、Risk Engineの承認なしにExecutionへは到達しない
 - `outcome-labeling` は毎分のcron（`@every 1m`）が、判定水平線（5/10/20分）を経過したJev判断を拾ってenqueueする（約定・Exitを契機にはしない。判断から24時間以内のものに限り（`PendingLabels`へ下限`now-24h`を渡し`jev_decisions`の`(decision_type, timestamp)`索引で範囲走査する）、ラベル済み・恒久的にラベル不能と確定済み（`calibration_label_skips`）・pending/running中のペアは除く）。`analytics` は平日15:40 JSTのSol/Opus自己改善バッチ（`integrations.md` §8）専用のキューである。いずれも売買パスとは独立に非同期実行し、UIの応答性に影響を与えない
@@ -81,11 +82,11 @@ sequenceDiagram
     RE->>RE: 日次損失上限/連敗上限/異常検知/ハートビート途絶を検出
     RE->>DB: kill_switch_events登録（reason, detail_json）
     RE->>EX: 新規エントリー停止指示
-    RE->>TRAY: ネイティブ通知発火
-    RE->>SLACK: Webhook通知送信（reason・自動/手動再開区分を含む）
     opt reasonが daily_loss_limit / unexpected_position / fill_discrepancy / consecutive_losses / db_write_failure / broker_api_error / operator_manual
         RE->>EX: 保有ポジション強制クローズ指示（必要な場合。未解除かつ建玉が残る間は1分周期で再実行する）
     end
+    RE->>TRAY: ネイティブ通知発火（強制決済の後）
+    RE->>SLACK: Webhook通知送信（reason・自動/手動再開区分を含む。強制決済の後）
     alt 自動再開対象（market_data_down / jev_api_down / operator_heartbeat_timeout）
         RE->>RE: 発動条件の解消を定期監視
         RE->>DB: kill_switch_resolutions に resolved_by=auto の解除行を追記
@@ -95,6 +96,8 @@ sequenceDiagram
         Note over RE: オペレーターがUI（pitha-kill-switch-panel）で明示的にresumeするまで停止を維持。consecutive_losses / daily_loss_limit のResumeは再開ベースラインを記録し、以後の連敗数・日次実現損失はその時刻以降のクローズ分のみで判定する（再発動ループの防止。`requirements/functional/components-pipeline.md` FR-RISK-7）
     end
 ```
+
+発動時の実行順序は「`kill_switch_events`登録 → 強制決済（該当reasonのみ）→ 通知」である（`risk.Engine.TriggerKillSwitch`→`enforceKillSwitch`、#628）。通知（ネイティブ・Slack）は最善努力のアラートであり、Slackの遅延・不達（チャネルごと10秒のHTTPタイムアウト）が損失拡大中の決済を遅らせないよう決済を先に行う。通知は`CloseAll`が失敗した場合も試行し、通知の失敗はログに残すだけで`TriggerKillSwitch`のエラーには含めない（返るのは決済の失敗のみ）。
 
 検知（市場データ停止・Jev API異常・Broker API異常・想定外ポジション・約定差異・DB書き込み失敗・日次損失上限・連敗上限）と自動再開の解消監視は、SchedulerのCronトリガー（各1分周期、`WithRiskMonitor`/`WithAutoResumer`）が`risk.Engine.RunPeriodicChecks`/`AutoResume`を呼ぶことで実行する。日次損失上限（`daily_loss_limit`、`CheckDailyLossLimit`）・連敗上限（`consecutive_losses`、`CheckConsecutiveLosses`）はシグナル到来を待たずこの周期処理でも評価され、到達時はKill Switch発動＋強制決済を伴う（Policy Engine候補ごとの判定と同一の上限）。「日次損失接近」（`CheckDailyLossWarning`）は警告のみでKill Switchは発動しない。同じ周期処理で、Kill Switch未解除かつ建玉が残る間の強制決済再試行（`RetryForceClose`）も実行する。判定基準の詳細は`requirements/functional.md` FR-RISK-2/FR-RISK-7を参照。
 
@@ -180,7 +183,7 @@ sequenceDiagram
 | 障害 | 対応 |
 |------|------|
 | Jev API失敗 | 1回目リトライ→2回目以降exponential backoff→継続失敗でnew entry停止。既存ポジションはコードベースExit Ruleで継続管理 |
-| Market Data欠損 | 現状: 銘柄単位のstale判定による新規取引禁止は未実装（`StatusTracker`は記録のみ）。全体の`market_data_down` Kill Switch（`GetBoard`5回連続失敗）で新規取引を停止する。銘柄単位の禁止はPhase 7移行前に実装する（`overview/integrations.md` §5） |
+| Market Data欠損 | 現状: 銘柄単位のstale判定（`StatusTracker`）による新規取引禁止は未実装（記録のみ）。ただし立会中に最新の足が3分（`domain.MaxSnapshotAge`。`scan.full_scan_enabled: true`では`scan.full_scan_max_snapshot_age_seconds`）超古い銘柄はJev Scout/Trader/Paper Entryへ進まない（issue #685）。全体の`market_data_down` Kill Switch（`GetBoard`5回連続失敗）で新規取引を停止する。銘柄単位の禁止はPhase 7移行前に実装する（`overview/integrations.md` §5） |
 | kabuステーションAPI異常 | Kill Switch発動条件に該当。新規取引停止、必要に応じ強制決済 |
 | DB書き込み失敗継続 | Kill Switch発動条件に該当 |
 | Wailsプロセスクラッシュ | `--supervise`起動の監視プロセス（`internal/supervisor`）が自動再起動する（`architecture/overview/integrations.md` §9）。プロセス停止中は新規エントリーも行われない（既存ポジションはkabuステーション側の待機注文/手動介入を前提）。再起動後、`jobs`テーブルの中断ジョブを`pending`へ復帰させ処理を再開する |

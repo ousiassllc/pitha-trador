@@ -16,15 +16,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 )
 
-// maxStale is how old an index instrument's latest bar (or a stock's latest
-// bar, for market_breadth) may be before it is ignored rather than read as
-// the current market: three full-scan intervals.
-const maxStale = 3 * time.Minute
-
 // cacheTTL is how long a computed market-wide value (or one sector's value)
-// is served to later Load calls. It is far below maxStale and below the
-// 1-minute bar interval, so cached values stay current while every stock of
-// a scan cycle shares one read of the index history and the stock universe.
+// is served to later Load calls. It is far below the Loader's maxStale (the
+// shortest, ranking-watch value being domain.MaxSnapshotAge = 3 min) and
+// below the 1-minute bar interval, so cached values stay current while every
+// stock of a scan cycle shares one read of the index history and the stock
+// universe.
 const cacheTTL = 30 * time.Second
 
 // Context is the functional.md §4.1 市場コンテキスト input set for one
@@ -66,15 +63,29 @@ type sectorLevel struct {
 type Loader struct {
 	instruments Instruments
 	snapshots   Snapshots
+	// maxStale is how old an index instrument's latest bar (or a stock's
+	// latest bar, for market_breadth) may be before it is ignored rather
+	// than read as the current market (issue #692).
+	maxStale time.Duration
 
 	mu      sync.Mutex
 	market  *marketLevel
 	sectors map[string]sectorLevel
 }
 
-// NewLoader returns a Loader reading via the given repositories.
-func NewLoader(instruments Instruments, snapshots Snapshots) *Loader {
-	return &Loader{instruments: instruments, snapshots: snapshots, sectors: map[string]sectorLevel{}}
+// NewLoader returns a Loader reading via the given repositories. maxStale is
+// how old a bar may be and still count as the current market: callers pass
+// ScanConfig.SnapshotMaxAge(domain.MaxSnapshotAge), i.e. the 3-minute
+// ranking-watch age, or the longer full-scan age (issue #692). Only the
+// freshness check of the latest bar is widened: the window reference
+// tolerance (FR-FE-5) is not, so with the ~8 minute bar spacing of a full scan
+// the returns stay nil (issues #693/#694/#696). A non-positive maxStale falls
+// back to domain.MaxSnapshotAge.
+func NewLoader(instruments Instruments, snapshots Snapshots, maxStale time.Duration) *Loader {
+	if maxStale <= 0 {
+		maxStale = domain.MaxSnapshotAge
+	}
+	return &Loader{instruments: instruments, snapshots: snapshots, maxStale: maxStale, sectors: map[string]sectorLevel{}}
 }
 
 // fresh reports whether a value computed at computedAt may serve a Load at
@@ -124,13 +135,13 @@ func (l *Loader) marketLevel(ctx context.Context, at time.Time) marketLevel {
 	for _, idx := range markets {
 		bars, barsOK := l.indexBars(ctx, idx)
 		ok = ok && barsOK
-		r1m = append(r1m, featureengine.IndexReturn(at, bars, time.Minute, maxStale))
-		r5m = append(r5m, featureengine.IndexReturn(at, bars, 5*time.Minute, maxStale))
+		r1m = append(r1m, featureengine.IndexReturn(at, bars, time.Minute, l.maxStale))
+		r5m = append(r5m, featureengine.IndexReturn(at, bars, 5*time.Minute, l.maxStale))
 	}
 	m.return1m = featureengine.MeanReturn(r1m)
 	m.return5m = featureengine.MeanReturn(r5m)
 
-	returns, err := l.instruments.LatestStockReturns5m(ctx, at.Add(-maxStale), at)
+	returns, err := l.instruments.LatestStockReturns5m(ctx, at.Add(-l.maxStale), at)
 	if err != nil {
 		slog.Warn("bootstrap: list stock returns for market breadth", "error", err)
 		ok = false
@@ -160,7 +171,7 @@ func (l *Loader) sectorReturn5m(ctx context.Context, sector string, at time.Time
 		if idx.Sector != nil && *idx.Sector == sector {
 			bars, barsOK := l.indexBars(ctx, idx)
 			ok = ok && barsOK
-			sr = append(sr, featureengine.IndexReturn(at, bars, 5*time.Minute, maxStale))
+			sr = append(sr, featureengine.IndexReturn(at, bars, 5*time.Minute, l.maxStale))
 		}
 	}
 	result := featureengine.MeanReturn(sr)

@@ -4,8 +4,10 @@
 // (値上がり率・値下がり率・売買高・売買代金・TICK回数・売買高急増・売買代金急増)
 // is fetched about once a minute and drives a watch list of at most
 // MaxWatched symbols. The watch list is the PUSH registration, the set of
-// symbols market-data jobs are enqueued for, and the universe of the Fast
-// Screener candidates.
+// symbols market-data jobs are enqueued for (together with the market-context
+// index rows), and the universe of the Fast Screener candidates; outside the
+// session the candidate list keeps the last watch list while PUSH and
+// ingestion cover the held symbols only (Selector.Retain).
 //
 // Held (open position / pending order) symbols occupy fixed slots, at most
 // MaxReplacePerCycle ranked symbols are replaced per cycle, and a ranked
@@ -49,10 +51,7 @@ type Selector struct {
 // ranking is empty or failed, which drops every ranked symbol at once (only
 // held ones remain) rather than keeping stale ones.
 func (s *Selector) Update(now time.Time, held, ranked []string) (watch []string, added, removed int) {
-	heldSet := unique(held)
-	if len(heldSet) > MaxWatched {
-		heldSet = heldSet[:MaxWatched]
-	}
+	heldSet := heldSlots(held)
 	isHeld := make(map[string]bool, len(heldSet))
 	for _, sym := range heldSet {
 		isHeld[sym] = true
@@ -135,6 +134,51 @@ func (s *Selector) Update(now time.Time, held, ranked []string) (watch []string,
 	}
 	slices.Sort(rankedSyms)
 	return append(watch, rankedSyms...), added, removed
+}
+
+// Retain is the off-session counterpart of Update (no ranking is requested
+// outside the trading session): watch is the held symbols only - what PUSH
+// registration and market-data ingestion use - while screen also keeps the
+// ranked symbols of the last in-session cycle (held first, then the ranked
+// ones in symbol order), so the candidate list can go on showing the last
+// watch list from the stored data (FR-SCAN-7, non-functional.md §3). The ranked
+// state and its MinHold timestamps survive, so the next session continues
+// from it instead of replacing everything at once. Ranked symbols that became
+// held move to a fixed slot; if held symbols took slots away, the oldest
+// ranked ones are dropped.
+func (s *Selector) Retain(held []string) (watch, screen []string) {
+	watch = heldSlots(held)
+	for _, sym := range watch {
+		delete(s.ranked, sym)
+	}
+	rankedSyms := make([]string, 0, len(s.ranked))
+	for sym := range s.ranked {
+		rankedSyms = append(rankedSyms, sym)
+	}
+	slices.SortFunc(rankedSyms, func(a, b string) int {
+		if c := s.ranked[b].Compare(s.ranked[a]); c != 0 { // newest first
+			return c
+		}
+		return strings.Compare(a, b)
+	})
+	if slots := MaxWatched - len(watch); len(rankedSyms) > slots {
+		for _, sym := range rankedSyms[slots:] {
+			delete(s.ranked, sym)
+		}
+		rankedSyms = rankedSyms[:slots]
+	}
+	slices.Sort(rankedSyms)
+	return watch, append(slices.Clone(watch), rankedSyms...)
+}
+
+// heldSlots returns the held symbols that occupy fixed slots: de-duplicated and
+// at most MaxWatched.
+func heldSlots(held []string) []string {
+	heldSet := unique(held)
+	if len(heldSet) > MaxWatched {
+		heldSet = heldSet[:MaxWatched]
+	}
+	return heldSet
 }
 
 // unique returns symbols without empty entries and duplicates, order kept.

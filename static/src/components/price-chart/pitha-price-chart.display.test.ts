@@ -157,3 +157,32 @@ describe('pitha-price-chart text alternative (issue #637)', () => {
     expect(name).toContain('Jev方向 SHORT');
   });
 });
+
+describe('pitha-price-chart empty state (issue #687)', () => {
+  const emptyNotice = (el: ChartElement) =>
+    el.shadowRoot?.querySelector('.pitha-price-chart-empty') ?? null;
+
+  test('shows a visible role="status" message when no candles come back', async () => {
+    const el = await mount([]);
+
+    const notice = emptyNotice(el);
+    expect(notice?.getAttribute('role')).toBe('status');
+    expect(notice?.textContent).toContain('表示できる足がありません');
+  });
+
+  test('shows no empty-state message while candles exist', async () => {
+    const el = await mount([candle(baseMs, 100)]);
+
+    expect(emptyNotice(el)).toBeNull();
+  });
+
+  test('clears the message once a tick builds the first bar', async () => {
+    const el = await mount([]);
+    expect(emptyNotice(el)).not.toBeNull();
+
+    send({ type: 'tick', price: 104, time: iso(baseMs + 10_000) });
+    await el.updateComplete;
+
+    expect(emptyNotice(el)).toBeNull();
+  });
+});

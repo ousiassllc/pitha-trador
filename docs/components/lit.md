@@ -26,10 +26,12 @@ export class PithaPriceChart extends LitElement {
   @property({ type: String, attribute: 'candles-url' }) candlesUrl = '';
   @property({ type: String, attribute: 'ws-url' }) wsUrl = '';
 
-  // リアクティブ（再描画のトリガー）なのは error と wsStatus のみ。
+  // リアクティブ（再描画のトリガー）なのは error・wsStatus・summary・empty の4つ。
   // チャート/系列/WsClient は非リアクティブな通常の private フィールド（DOM は createRef の containerRef 経由で掴む）
   @state() private error: string | null = null;
   @state() private wsStatus: WsStatus = 'connecting';
+  @state() private summary: ChartSummary = EMPTY_SUMMARY; // キャンバスの aria-label 用の要約（describeChart）
+  @state() private empty = false; // 初回 candles が0件のときの空状態テキスト表示
 
   private readonly containerRef = createRef<HTMLDivElement>();
   private chart: IChartApi | null = null;
@@ -64,21 +66,22 @@ export class PithaPriceChart extends LitElement {
 ```
 
 - `tick`は1分足に集約する: メッセージの`time`（スナップショット時刻。クライアント時計は使わない）の分（`floor(time/60)*60`）のバーの`high/low/close`を更新し、分が変わったときのみ新しいバーを追加する（集約は`price-chart/bars.ts`の`foldTick`）。`price <= 0`・時刻不正・最新バーより古いスナップショットの`tick`は無視する。サーバーは`LastPrice > 0`かつ新しいスナップショットが現れたときだけ`tick`を送るため、場外・スキャン停止中に偽の足は増えない（issue #183, #557）
+- 初回の`candles`が0件（`candles-url`は`from`/`to`を付けず既定の直近6時間を取得するため、最終足から6時間以上経った立会時間外・休場明けに起こる）のときは、キャンバスが空白のままにならないよう、可視の空状態テキスト「表示できる足がありません（立会時間外、またはまだ市況データが保存されていません）」を`role="status"`の`.pitha-price-chart-empty`で表示する（`@state() empty`）。`tick`が最初の足を作った時点・足を含む再取得で消え、取得失敗は従来どおり`role="alert"`の`.pitha-price-chart-error`で区別する（issue #687）
 - `jev_update`（`direction`/`confidence`/`time`）は`direction`が変化したときのみ、チャート上のマーカー（例: LONG転換で上向き矢印）として描画する。マーカーはクライアント時計ではなくメッセージの`time`（判断時刻）を含む1分足（`bars.ts`の`toBarTime`）に置く。接続直後（再購読直後を含む）の最初の`jev_update`は現在の方向を伝える初期状態であり転換ではないため描画せず、`lastDirection`の初期化にだけ使う（以降の方向変化のみ描画。issue #624）。同一`direction`の繰り返しや`confidence`のみの変化では描画せず、`entry_quality`は`jev_update`に載らないため扱わない。Symbol DetailのJev判定パネルはSSRのみで、`jev_update`では更新されない（ページ再読み込みで更新。issue #362）
 - `candles-url`/`ws-url`属性が変化した場合は`updated()`ライフサイクルで再取得・再購読し、前銘柄の方向マーカー（`markers`・`lastDirection`・`setMarkers([])`）も消す（issue #562）。銘柄はURLに含めてサーバーが注入するため、`symbol`属性は持たない（HATEOAS。issue #409）
 - ペインは縦に分割する: 出来高ヒストグラムのオーバーレイ価格スケールに`scaleMargins: { top: 0.8, bottom: 0 }`、メイン価格スケール（`'right'`）に`{ top: 0.1, bottom: 0.25 }`を設定し、出来高を下部20%に半透明（`rgba(156, 163, 175, 0.5)`）で描いてローソク足・VWAPを覆わない（`price-chart/chart-data.ts`。issue #634）
 - VWAPラインは`vwap > 0`の点だけを描画する。`vwap`は`float64`でnullを送れず、未約定などで0が返るが、0を描くと価格軸が0起点に崩れるため、`vwap <= 0`のローソク足は`WhitespaceData`（時間軸の位置は保ち、線は途切れる）にする（`vwapSeriesData`。issue #635）
 - チャートのコンテナは`role="img"`と空でない`aria-label`（銘柄・最新終値・最新VWAP・直近のJev方向。`describeChart`）を持ち、初期ロード・`tick`・`jev_update`の適用時に更新する。`aria-live`は付けず、要約のみを更新する（issue #637）
-- 出来高ヒストグラムは`candles`の`volume'（1分足あたりの出来高。サーバーが累積セッション値の差分に変換済みで、クライアントでは再計算しない。issue #474）をそのまま描画する
+- 出来高ヒストグラムは`candles`の`volume`（1分足あたりの出来高。サーバーが累積セッション値の差分に変換済みで、クライアントでは再計算しない。issue #474）をそのまま描画する
 - `candles-url`/`ws-url`は他コンポーネントと同様に未設定なら`logger.error`を出して該当の取得・購読を行わない
 - `/ws/symbols/{symbol}`が切断されている間（`reconnecting`/`failed`）はチャート下に「接続が切れています」を表示する。`tick`はスナップショット時刻で足を作るため切断中の足は欠落する。切断後に`open`へ復帰した時は`candles-url`を`background: true`で再取得して足を補う（操作者不在でも発火するためハートビートに数えさせない。FR-RISK-6、issue #336）
 - 時間軸・クロスヘアは**JST（Asia/Tokyo）表示**とする。lightweight-charts v4は`UTCTimestamp`を既定でUTC表記するため、そのままでは東証の立会時間09:00〜15:30が00:00〜06:30に見える。`createChart`に`localization.timeFormatter`（クロスヘア、`YYYY-MM-DD HH:mm`）と`timeScale.tickMarkFormatter`（目盛、`HH:mm`/日/月/年）として`price-chart/jst-time.ts`の`formatCrosshairTime`/`formatTickMark`を渡し、`timeScale.timeVisible: true`・`secondsVisible: false`（足が1分単位のため）にする。ゾーンは`Intl.DateTimeFormat`に`timeZone: 'Asia/Tokyo'`を固定し、ホスト/Wailsのタイムゾーンに依存しない。系列・マーカー・ティック足に渡す時刻はこれまで通りepoch秒（UTC）のままで、表示時にのみJSTへ変換する（issue #478）
 
 ### 5.2 pitha-scanner-table
 
-- 初期データを`GET /api/v1/scanner`で取得しレンダリング、以後`/ws/scanner`のPUSHで行を更新・ソート順を再計算する
+- 初期データを`GET /api/v1/scanner`で取得しレンダリング、以後`/ws/scanner`のPUSHで行を更新する。行順の既定は**サーバー順（ScreenScore降順。`screener.Screen`の出力順）**で、SSRフォールバックと同じ並びのまま受信順に描画する（ハイドレートで行が入れ替わらない。共有ゴールデン`scanner-contract.json`の行順をSSR・Litの両契約テストが検証する。issue #674）
 - `api-url`/`ws-url`はTemplから属性で注入し、コンポーネントは既定値を持たない（HATEOAS）。未設定なら`logger.error`を出して該当の取得・購読を行わない
-- 列ヘッダクリックでクライアント内ソート（サーバー往復不要）
+- 列ヘッダクリックでクライアント内ソート（サーバー往復不要）。`sortKey`は初期値`null`（未選択）で、クリックした列を昇順、同じ列の再クリックで降順に切り替える。未選択の間は全列`aria-sort="none"`・▲/▼なし（SSRの列見出しも並び順表示を持たない）で、`/ws/scanner`のPUSHで届いたitemsも受信順のまま描画する。ソート列を選択した後は、PUSHのたびにその列で再ソートする
   - エントリー品質列は辞書順ではなく品質順（poor < fair < good < strong < exceptional）でソートする。順序表は`scanner-view.ts`の`ENTRY_QUALITY_RANK`で、正本は`internal/domain/jevdecision.go`の`JevEntryQuality*`（worst→best）。未知値・nullは先頭（昇順時。降順は逆順）。値の意味づけや挙動の判断は行わず、表示順のみに使う（issue #493）
 - SSRフォールバック（`organisms.ScannerTableFallback`）と同一の見た目で描画する（issue #239）: ページ上部に候補件数（`data-testid="scanner-count"`）、`<caption>`に最終更新時刻（`as_of`。REST・`/ws/scanner`はRFC 3339で返し、画面表示はSSR・Litとも`2006-01-02 15:04:05 JST`形式のJST表記（`atoms.FormatJST` / `lib/jst-datetime.ts`）で、秒未満は表示しない）、列見出しは日本語ラベル＋`title`ツールチップ、1m/5m Returnは符号付き（正=`+`緑・負=`-`赤・0/欠損=灰。0は符号なし）、Jev方向・エントリー品質はバッジ（`atoms.Badge`/`atoms.EntryQualityBadge`と同じ配色）、Confidenceは`%`表示、0件時は空状態メッセージ（`data-testid="scanner-empty"`。初回データ取得前は表示しない。`role="status"`はLit側のみ）。ハイドレーションは最初のデータ（REST応答または`/ws/scanner`のPUSH）が届くまでSSR描画を残し、初回取得に失敗してもSSR描画は消さない。列見出しは`<button>`（Tab＋Enter/Spaceで並べ替え、`aria-sort`、▲/▼表示）で、列の説明はマウス向けの`title`に加え、表の上の`<details data-testid="scanner-column-help">`（見出し「列の意味」、ラベル/説明の`<dl>`。SSRと同一）で、キーボード・タッチ・スクリーンリーダーからも読める（`title`と`aria-describedby`の二重読み上げは避ける）。数値は小数丸めをGoと揃える（ちょうど中間は0から遠い方へ）。列定義・書式・配色を変える場合はGo側`scannerColumns`と本コンポーネントの`COLUMNS`を必ず同時に更新し、共有ゴールデン`scanner-contract.json`（`scanner_table_contract_test.go`/`scanner-contract.test.ts`が検証）も更新する
 - 銘柄行は通常の `<a href="{detail_url}">` として描画する。`detail_url`は`GET /api/v1/scanner`・`/ws/scanner`の各itemにサーバーが入れる銘柄詳細リンク（`organisms.SymbolHref`。SSR行と同一規則）で、Litは`/symbols/`を知らずエンコードもせずそのまま`href`に使う（HATEOAS、issue #383。共有ゴールデン`scanner-contract.json`の`item.detail_url`をSSR・API・Litの3者が検証し、特殊文字を含む銘柄でもハイドレート前後で`href`が一致する）。Litはハイパーメディアリンクの外側に出ず、通常のブラウザナビゲーションとしてページ遷移する。HTMXリクエストは発火しない = HTMX↔Lit境界ルール§「Litは HTMXリクエストをトリガーしない」に準拠

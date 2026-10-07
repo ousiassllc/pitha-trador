@@ -71,14 +71,24 @@ func WithFullScanDisabled() Option {
 	return func(s *Scheduler) { s.fullScanDisabled = true }
 }
 
+// fullScanLimitationWarning is the startup warning logged when the full scan
+// is on (scan.full_scan_enabled: true; issues #693/#694/#696): one REST cycle
+// takes about 8 minutes, so a symbol's bars are further apart than the window
+// reference tolerance of the Feature Engine (FR-FE-5).
+const fullScanLimitationWarning = "scheduler: full scan on (scan.full_scan_enabled: true): bars arrive about every 8 minutes, " +
+	"longer than the window reference tolerance (FR-FE-5), so history-based features (return_1m/3m/5m, volume_*, turnover_*, " +
+	"market_return_*, sector_return_5m, market_breadth) stay missing, the Fast Screener passes no candidates and the " +
+	"market_adverse_to_direction gate is inactive; the ranking watch (scan.full_scan_enabled: false, the default) is the supported mode"
+
 // addFullScanTrigger registers the cron trigger that enqueues the full scan
 // every interval, or only logs that it is off when WithFullScanDisabled was
-// given.
+// given. When it is on it first logs fullScanLimitationWarning.
 func (s *Scheduler) addFullScanTrigger(ctx context.Context, interval time.Duration) error {
 	if s.fullScanDisabled {
 		slog.Info("scheduler: full scan off (scan.full_scan_enabled is not true): only the ranking watch list is ingested")
 		return nil
 	}
+	slog.Warn(fullScanLimitationWarning, "interval", interval)
 	spec := fmt.Sprintf("@every %s", interval)
 	if _, err := s.cron.AddFunc(spec, func() {
 		if _, err := s.EnqueueFullScan(ctx, time.Now().UTC()); err != nil {

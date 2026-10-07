@@ -89,7 +89,7 @@ erDiagram
 | quantity | integer | NOT NULL | |
 | entry_price | numeric(12,2) | NOT NULL | |
 | current_price | numeric(12,2) | NOT NULL | 保有中はSchedulerが定期更新 |
-| unrealized_pnl | numeric(14,2) | NOT NULL, DEFAULT 0 | |
+| unrealized_pnl | numeric(14,2) | NOT NULL, DEFAULT 0 | 保有中のみ有効（Mark周期で更新）。クローズ時（`closePosition`）に`0`へリセットし、クローズ済み行は実現損益（`realized_pnl`）のみを持つ。#682以前にクローズされた過去行もマイグレーション000029で`0`へ揃えた（保有中の行は不変、downはno-op） |
 | realized_pnl | numeric(14,2) | NULL可 | クローズ時に確定 |
 | opened_at | text | NOT NULL | |
 | closed_at | text | NULL可 | |

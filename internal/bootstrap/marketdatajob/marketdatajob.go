@@ -54,6 +54,11 @@ type Handler struct {
 	// EventTrigger holds FR-SCAN-1/FR-SCAN-2's thresholds
 	// (config/strategy.yaml scan.event_trigger).
 	EventTrigger config.EventTriggerConfig
+	// MarketContextMaxAge is how old an index/stock bar may be and still
+	// count as the current market for the market context (issue #692):
+	// ScanConfig.SnapshotMaxAge(domain.MaxSnapshotAge). Unset or
+	// non-positive means domain.MaxSnapshotAge (marketcontext.NewLoader).
+	MarketContextMaxAge time.Duration
 	// Symbols supplies each stock's 貸借区分 and 値幅上限/下限 (issue #511).
 	// nil leaves the flags unknown, which restricts nothing.
 	Symbols SymbolSource
@@ -71,7 +76,7 @@ type Handler struct {
 // marketContextLoader returns the Handler's shared market context Loader.
 func (h *Handler) marketContextLoader() *marketcontext.Loader {
 	h.marketContextOnce.Do(func() {
-		h.marketContext = marketcontext.NewLoader(h.Instruments, h.Snapshots)
+		h.marketContext = marketcontext.NewLoader(h.Instruments, h.Snapshots, h.MarketContextMaxAge)
 	})
 	return h.marketContext
 }

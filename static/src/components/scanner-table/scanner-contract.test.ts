@@ -87,6 +87,20 @@ describe('SSR/Lit scanner contract', () => {
     });
   }
 
+  // Both sides keep the server order (ScreenScore descending) until a header is
+  // clicked, so the rows must not reshuffle at hydration (issue #674).
+  test('rows keep the given (server) order, like the SSR fallback', async () => {
+    const el = await render(contract.rows.map((row) => row.item as ScannerItem));
+
+    const symbols = [...el.querySelectorAll('tbody tr')].map((tr) =>
+      tr.getAttribute('data-symbol'),
+    );
+    expect(symbols).toEqual(contract.rows.map((row) => row.item.symbol));
+    for (const th of el.querySelectorAll('thead th')) {
+      expect(th.getAttribute('aria-sort')).toBe('none');
+    }
+  });
+
   test('empty state text matches the golden message', async () => {
     const el = await render([]);
 

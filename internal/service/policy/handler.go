@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
@@ -30,11 +32,13 @@ type SignalExecutor interface {
 // trade_signals row is a decision log, not a Jev API I/O log, so Policy
 // Engine still records that no signal was generated and why.
 type Handler struct {
-	trader    *jev.Trader
-	snapshots *market.SnapshotRepository
-	engine    *Engine
-	executor  SignalExecutor
-	calib     CalibrationSource // optional, see WithCalibration
+	trader         *jev.Trader
+	snapshots      *market.SnapshotRepository
+	engine         *Engine
+	executor       SignalExecutor
+	calib          CalibrationSource // optional, see WithCalibration
+	now            func() time.Time  // wall clock for the snapshot staleness check
+	snapshotMaxAge time.Duration     // see WithSnapshotMaxAge
 }
 
 // NewHandler returns a Handler that evaluates jev-trader queue jobs via
@@ -42,7 +46,7 @@ type Handler struct {
 // row via snapshots, and hands every approved signal to executor. A nil
 // executor only records signals (no order is ever placed).
 func NewHandler(trader *jev.Trader, snapshots *market.SnapshotRepository, engine *Engine, executor SignalExecutor, opts ...HandlerOption) *Handler {
-	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor}
+	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor, now: time.Now, snapshotMaxAge: domain.MaxSnapshotAge}
 	for _, opt := range opts {
 		opt(h)
 	}
@@ -75,6 +79,13 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 	if len(snapshots) == 0 {
 		return fmt.Errorf("policy: no market snapshot recorded yet for %q", payload.Symbol)
+	}
+	if snapshots[0].IsStale(h.now().UTC(), h.snapshotMaxAge) {
+		// Skip (nil): a retry would read the same bar, and a stale bar's price
+		// and session timing must not reach Jev Trader or Paper Entry
+		// (issue #685). No trade_signals row: nothing was evaluated.
+		slog.Info("policy: skip jev-trader, latest snapshot is stale", "symbol", payload.Symbol, "snapshot_at", snapshots[0].Timestamp)
+		return nil
 	}
 	snap := snapshots[0]
 

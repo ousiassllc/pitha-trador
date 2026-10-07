@@ -3,7 +3,6 @@ package universe
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -84,10 +83,10 @@ func (i *Importer) ImportJPX(ctx context.Context) (int, error) {
 	}
 	ins, err := ParseJPX(bytes.NewReader(body))
 	if err != nil {
-		return 0, fmt.Errorf("JPXの銘柄一覧の形式を解釈できませんでした（JPX側で形式が変わった可能性があります）: %w", err)
+		return 0, fmt.Errorf("%w: %w", domain.ErrJPXFormat, err)
 	}
 	if _, err := i.repo.Upsert(ctx, ins); err != nil {
-		return 0, fmt.Errorf("銘柄マスタへの保存に失敗しました: %w", err)
+		return 0, fmt.Errorf("%w: %w", domain.ErrJPXSave, err)
 	}
 	return len(ins), nil
 }
@@ -95,23 +94,23 @@ func (i *Importer) ImportJPX(ctx context.Context) (int, error) {
 func (i *Importer) fetch(ctx context.Context) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, i.url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("JPXへのリクエストを作成できませんでした: %w", err)
+		return nil, fmt.Errorf("%w: JPXへのリクエストを作成できませんでした: %w", domain.ErrJPXConnect, err)
 	}
 	req.Header.Set("User-Agent", "pitha-trador")
 	resp, err := i.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("JPXに接続できませんでした（ネットワークを確認してください）: %w", err)
+		return nil, fmt.Errorf("%w: %w", domain.ErrJPXConnect, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("JPXが HTTP %d を返しました（一覧のURLが変更された可能性があります）", resp.StatusCode)
+		return nil, fmt.Errorf("%w: JPXが HTTP %d を返しました（一覧のURLが変更された可能性があります）", domain.ErrJPXFormat, resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxJPXBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("JPXの応答を読み取れませんでした: %w", err)
+		return nil, fmt.Errorf("%w: JPXの応答を読み取れませんでした: %w", domain.ErrJPXConnect, err)
 	}
 	if len(body) > maxJPXBytes {
-		return nil, errors.New("JPXの応答が想定より大きいため中止しました（一覧ではない可能性があります）")
+		return nil, fmt.Errorf("%w: JPXの応答が想定より大きいため中止しました（一覧ではない可能性があります）", domain.ErrJPXFormat)
 	}
 	return body, nil
 }

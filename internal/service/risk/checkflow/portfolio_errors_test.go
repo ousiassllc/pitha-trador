@@ -13,10 +13,9 @@ import (
 
 var errPortfolioDown = errors.New("database is locked")
 
-// erroring wraps a healthy portfolio and fails exactly one method, so each
+// erroring is a risk.PortfolioProvider that fails exactly one method, so each
 // portfolio read is proven to fail closed on its own.
 type erroring struct {
-	fakePortfolio
 	failing string
 }
 

@@ -74,6 +74,9 @@ func (h *health) logHeldError(now time.Time) {
 func (h *health) logEnqueueError(now time.Time, err error) {
 	h.logOther(now, "enqueue", "enqueue market-data jobs failed", "error", err)
 }
+func (h *health) logIndexError(now time.Time, err error) {
+	h.logOther(now, "index", "list market index instruments failed, ingesting the watch list only", "error", err)
+}
 func (h *health) logRegisterError(now time.Time, err error) {
 	h.logOther(now, "register", "PUSH registration failed, retrying next cycle", "error", err)
 }

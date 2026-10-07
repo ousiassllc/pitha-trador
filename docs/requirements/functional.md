@@ -4,7 +4,7 @@
 
 | ID | ユースケース | 主アクター | 概要 |
 |----|------------|-----------|------|
-| UC-1 | 市場スキャン | Scheduler | 対象ユニバースを周期的にスキャンし、特徴量を算出する |
+| UC-1 | 市場スキャン | Scheduler | 監視銘柄（既定のランキング監視。`scan.full_scan_enabled: true`のときだけ全銘柄）を周期的にスキャンし、特徴量を算出する |
 | UC-2 | 候補絞り込み | Fast Screener | 数値条件・スコアで候補銘柄を機械的に絞り込む |
 | UC-3 | 深掘り判定 | Jev Scout | 候補銘柄が今分析する価値があるかを判定する |
 | UC-4 | 売買方向判定 | Jev Trader | Scout通過銘柄の方向・レジーム・エントリー品質を判定する |
@@ -59,7 +59,7 @@ sequenceDiagram
     participant EX as Execution
     participant DB as SQLite
 
-    SCH->>MD: universe snapshot取得（`instruments`の対象銘柄の板をkabuステーションAPIから取得）
+    SCH->>MD: 監視銘柄の板取得（既定はランキング監視 FR-SCHED-9 が決めた監視銘柄。`scan.full_scan_enabled: true`のときだけ有効な全銘柄。kabuステーションAPIから取得）
     MD->>FE: 生データ
     FE->>FS: 特徴量
     FS->>FS: screen_score算出・上位N銘柄選定
@@ -124,12 +124,14 @@ stateDiagram-v2
 
 候補表の上に**スキャン状況パネル**を置く（issue #303。動作確認・「なぜこの銘柄が候補に出ないか」の調査用）:
 
-- FR-SCAN-3: 最新サイクルの**ファネル件数**（ユニバース → 特徴量算出 → Fast Screener通過 → Scout通過）と、最終サイクルの時刻・所要時間を表示する。Scout通過は候補に対するJev Scoutの判定が済んだ分までの件数（判定済み件数も併記）
-- FR-SCAN-4: 「スキャン対象を見る」で、ユニバース全銘柄（最大約4,000）のコード・名称・市場・状態（通過/除外/データ欠損）・理由・Scout結果を一覧する。検索（コード/名称）、状態・理由での絞り込み、ページング（既定50件・最大200件）を備え、1回に描画する行数を抑える
-- FR-SCAN-5: 除外は落ちた条件（FR-FS-1の閾値名＋上位N件の外）を、欠損は取得できなかった値（板情報なし・履歴不足（FR-FE-5）・市況データ未取得）を、理由コードと人が読めるラベルで示す。全フィルターを評価し複数の理由を併記する
+- FR-SCAN-3: 最新サイクルの**ファネル件数**（ユニバース → 特徴量算出 → Fast Screener通過 → Scout通過）と、最終サイクルの時刻・所要時間を表示する。Scout通過は候補に対するJev Scoutの判定が済んだ分までの件数（判定済み件数も併記）。「ユニバース」はスキャン対象の銘柄数で、既定のランキング監視（FR-SCHED-9）では監視銘柄（最大45）、`scan.full_scan_enabled: true`のときだけ有効な`stock`の全件（最大約4,000）になる。パネルのラベル・ツールチップにもこの旨を示す
+- FR-SCAN-4: 「スキャン対象を見る」で、ユニバース（FR-SCAN-3。`scan.full_scan_enabled: true`のときは有効な`stock`の全件・最大約4,000。既定のランキング監視ではFR-SCHED-9の監視銘柄（最大45）で、監視外の銘柄は一覧に現れず、その除外理由も付かない）のコード・名称・市場・状態（通過/除外/データ欠損）・理由・Scout結果を一覧する。検索（コード/名称）、状態・理由での絞り込み、ページング（既定50件・最大200件）を備え、1回に描画する行数を抑える
+- FR-SCAN-5: 除外は落ちた条件（FR-FS-1の閾値名＋上位N件の外）を、欠損は取得できなかった値（板情報なし・履歴不足（FR-FE-5）・市況データ未取得）に加え、立会中に最新の足が古すぎる市況データ（`stale_snapshot`。ランキング監視では`domain.MaxSnapshotAge`の3分超、`scan.full_scan_enabled: true`では全件RESTが1周約8分かかるため`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）超。FR-SCAN-7/FR-SCHED-9）を、理由コードと人が読めるラベルで示す。`stale_snapshot`のラベルは閾値がモード別のため秒数を含めず「許容経過時間を超過」と表し、実際の閾値は上記の設定値で確認する（Scanner行・理由フィルタ・`GET /api/v1/scanner/scan`・CSVで同一文言。issue #690/#691）。全フィルターを評価し複数の理由を併記する
+  - `scan.full_scan_enabled: true`では各銘柄の足が約8分間隔のため、`stale_snapshot`の許容（同梱620秒）を通過しても短窓の履歴ベース特徴量が全銘柄で履歴不足（FR-FE-5）の欠損となり、`missing_return_5m`・`missing_volume_ratio`・`missing_realized_vol`等で全銘柄が外れて候補は空のままになる（620秒が緩めるのは最新の足の鮮度判定だけ。FR-SCHED-7・issue #693）
 - FR-SCAN-6: 結果は**開いた時点のスナップショット**で、「更新」ボタン・絞り込み・ページ送りで再取得する（`/ws/scanner`には流さず、その挙動は変えない）。保持は最新1サイクル分のメモリ上のみで、再起動後・初回サイクル完了前は「まだスキャンサイクルが実行されていません」の空状態を表示する
-- FR-SCAN-7: 東証の立会時間外（土日・祝日・年末年始休場・昼休み・9:00前/15:30後。判定は`marketcalendar`、`non-functional.md` §3）は、スキャン状況パネルの先頭に「現在は東証の立会時間外のため、市場データ取得・フルスキャン・Jev Scoutは停止中です。表示は保存済みデータに基づきます」旨の停止通知（`data-testid="scan-offhours"`）を、サイクル未実行の空状態・サイクルありの双方で表示し、次回の立会開始時刻（JST。前場9:00／後場12:30、土日・祝日・年末年始をスキップ）を併記する。立会時間中は表示しない。「更新」ボタンは立会時間外でも無効化せず、押下すると保存済みデータを再取得して同じ通知を再描画する（新規スキャンは走らない）。通知はスキャン状況パネルに限り、全ページ共通のバナーにはしない
-- FR-SCAN-8: 有効な`stock`が1件も無い（銘柄マスタ未投入）間、スキャン状況パネルは「まだスキャンサイクルが実行されていません」の代わりに「銘柄マスタが未投入です」の案内（`data-testid="scan-universe-empty"`）を表示し、銘柄マスタCSVの置き場所（`PITHA_UNIVERSE_PATH`／実行ファイルと同じディレクトリの`config/universe.csv`）と、JPXの東証上場銘柄一覧（`data_j.xlsx`）を取得して投入する選択肢を示す。取得は運用者が「JPXから取得して投入する」を押した場合に限り1回だけ行い（起動時・定期の自動取得はしない）、株式のみをCSVと同じ検証で投入して再起動なしで次のスキャンサイクルから対象にする。失敗（ネットワーク・HTTPエラー・形式変更）はマスタを変更せず原因とCSV投入の案内を表示する。有効な`stock`があるときは案内も取得も提供しない（`environment/setup.md`「銘柄マスタの投入」）
+- FR-SCAN-7: 東証の立会時間外（土日・祝日・年末年始休場・昼休み・9:00前/15:30後。判定は`marketcalendar`、`non-functional.md` §3）は、スキャン状況パネルの先頭に「現在は東証の立会時間外のため、市場データ取得・フルスキャン・Jev Scoutは停止中です。表示は保存済みデータに基づきます」旨の停止通知（`data-testid="scan-offhours"`）を、サイクル未実行の空状態・サイクルありの双方で表示し、次回の立会開始時刻（JST。前場9:00／後場12:30、土日・祝日・年末年始をスキップ）を併記する。立会時間中は表示しない。「更新」ボタンは立会時間外でも無効化せず、押下すると保存済みデータを再取得して同じ通知を再描画する（新規スキャンは走らない）。既定のランキング監視でも、立会時間外・昼休みの候補リストとスキャン対象の一覧は直前の立会時間内サイクルの監視リスト（＋保有・注文中）を保存済みデータで評価して表示し続ける（FR-SCHED-9。PUSH登録・`market-data`投入は保有・注文中の銘柄だけに停止する。プロセス再起動直後の立会時間外は直前のリストが無いため保有・注文中の銘柄だけ）。立会再開直後は、保存済みの最新の足が`domain.MaxSnapshotAge`（3分。市況コンテキストの指数バーの許容と同じ。立会時間外は判定しない）より古い銘柄（`scan.full_scan_enabled: true`では、各銘柄の足は全件RESTの1周（約8分）に1回しか更新されないため、3分ではなく`scan.full_scan_max_snapshot_age_seconds`＝1周＋次サイクルの待ち・余裕、同梱620秒を超えたものとする。issue #686）を、一覧には残したまま`stale_snapshot`（欠損）で除外しJev Scoutへ投入しない。保持した監視リストの銘柄も、`market-data`が新しい足を書くまで評価しない（issue #685）。通知はスキャン状況パネルに限り、全ページ共通のバナーにはしない
+  - 上記の`scan.full_scan_max_snapshot_age_seconds`は`stale_snapshot`（最新の足の鮮度）だけの許容で、全件スキャンの履歴ベース特徴量の欠損（FR-SCHED-7・FR-FE-5）は解消しない
+- FR-SCAN-8: 有効な`stock`が1件も無い（銘柄マスタ未投入）間、スキャン状況パネルは「まだスキャンサイクルが実行されていません」の代わりに「銘柄マスタが未投入です」の案内（`data-testid="scan-universe-empty"`）を表示し、銘柄マスタCSVの置き場所（`PITHA_UNIVERSE_PATH`／実行ファイルと同じディレクトリの`config/universe.csv`）と、JPXの東証上場銘柄一覧（`data_j.xlsx`）を取得して投入する選択肢を示す。取得は運用者が「JPXから取得して投入する」を押した場合に限り1回だけ行い（起動時・定期の自動取得はしない）、株式のみをCSVと同じ検証で投入して再起動なしで次のスキャンサイクルから対象にする。失敗（ネットワーク・HTTPエラー・形式変更・保存失敗）はマスタを変更せず、失敗種別ごとの固定文言とCSV投入の案内を表示する（下位エラーは画面に出さず`slog`のみに記録する。issue #700）。有効な`stock`があるときは案内も取得も提供しない（`environment/setup.md`「銘柄マスタの投入」）
 
 ### 5.2 Symbol Detail
 
@@ -163,7 +165,7 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 ## 7. MVP完了条件
 
 - 対象銘柄マスタ（`instruments`: `stock`と`market_index`/`sector_index`）を銘柄マスタCSVから起動時に自動投入でき（kabuステーションAPIには上場銘柄一覧の取得手段が無いため。手順は`environment/setup.md`「銘柄マスタの投入」）、投入された銘柄の価格・板をkabuステーションAPI経由で自動取得できる
-- 60秒周期でスキャンできる
+- ランキング監視が60秒周期で監視銘柄を更新しスキャンできる（全銘柄の60秒スキャンは`scan.full_scan_enabled: true`の明示オプトインで、FR-SCHED-7の制約付き）
 - Fast Screenerで候補を絞れる
 - Jev Scout / Traderを自動実行できる
 - 判断結果をDB保存できる
@@ -240,3 +242,16 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.47 | 2026-10-06 | §4.10に FR-SCHED-7（全銘柄RESTスキャンを`scan.full_scan_enabled`で停止）・FR-SCHED-8（kabu `/ranking`計測ループ`scan.ranking_measure`。件数・`duration_ms`・`CurrentPriceTime`・HTTP/kabuコードのみをログ出力し、価格は保存・出力しない）を追加 | issue #652（#651 段階0） |
 | 1.48 | 2026-10-06 | §4.10のFR-SCHED-7を既定オフ（`scan.full_scan_enabled`省略時・同梱既定を`false`へ変更。`true`明示時のみ全件投入）に改め、FR-SCHED-2をフルスキャン明示オン時の記述と明記、FR-SCHED-9（kabu `GET /ranking`の毎分取得で決めるランキング監視。PUSH最大45銘柄・保有固定枠・入れ替え毎分最大5・最低5分保持・空/失敗時は候補0件で自動復帰）を追加。寄り前監視リスト（J-Quants Light）は未実装 | PR #653 の方針変更（#651の結論に従いランキング方式を既定化。#652） |
 | 1.49 | 2026-10-06 | §4.16のFR-LUNA-1/2/4とSettings（FR-SETTINGS-1）を、Luna/Sol/Opus既定=Jev・ニュースフィード既定=やのしん・`NEWS_FEED_ENABLED`・フィード失敗時のフェイルセーフ（ニュースフラグ非立て・バックオフ・Activity Feedの`news_feed`イベント）へ更新。§4.15のイベント種別に`news_feed`を追加 | issue #273 |
+| 1.50 | 2026-10-07 | §4.3の周期表「全体スキャン」を既定オフ（`scan.full_scan_enabled: true`のときのみ60秒、既定はランキング監視。FR-SCHED-7/9）と併記。FR-RISK-3にKill Switch発動時の実行順序（強制決済を通知より先に実行、通知は決済失敗時も試行、通知失敗はログのみ）を追記 | issue #654, #655 |
+| 1.51 | 2026-10-07 | 既定のランキング監視（FR-SCHED-9）の挙動を仕様化: FR-SCAN-3/4のユニバース・スキャン対象一覧の母集団は監視銘柄（最大45。全銘柄は`scan.full_scan_enabled: true`のみ）、FR-SCAN-7/FR-SCHED-9は立会時間外・昼休みも候補リスト・スキャン対象を直前の立会時間内の監視リスト（＋保有・注文中）で保存済みデータ表示し続け、PUSH登録・`market-data`投入だけ保有・注文中に停止、FR-SCHED-7/9・FR-FE-4は指数行（`market_index`全件・監視銘柄の`sector_index`）を毎サイクル投入し`market_breadth`は監視銘柄の集計になる旨を追記 | issue #668, #669, #670 |
+| 1.52 | 2026-10-07 | FR-SETTINGS-2（`functional/components-platform.md`）の検証規則に、`NEWS_FEED_ENABLED`は`on`/`off`のみ（大文字小文字無視・小文字へ正規化して保存）で、それ以外は400とする旨を追記 | issue #675 |
+| 1.53 | 2026-10-07 | FR-SCAN-5/FR-SCAN-7に理由コード`stale_snapshot`（立会中に最新の足が`domain.MaxSnapshotAge`=3分超古い銘柄をScannerに残したままJev Scoutへ投入しない）を追記し、FR-SCHED-9に立会再開後の古い保存足の扱い（Scout/Trader`HandleJob`のスキップ・Paper Entryの壁時計による立会判定）を追記 | issue #685 |
+| 1.54 | 2026-10-07 | FR-SCAN-5/FR-SCAN-7の`stale_snapshot`の閾値を、ランキング監視は`domain.MaxSnapshotAge`（3分）のまま、`scan.full_scan_enabled: true`は全件REST1周（約8分）に合わせた`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）へ分離。全件スキャン時に約8分周期のREST銘柄が常時除外される回帰を解消 | issue #686 |
+| 1.55 | 2026-10-07 | FR-SCAN-5に、`stale_snapshot`のラベルは閾値がモード別（3分／`scan.full_scan_max_snapshot_age_seconds`）のため秒数を含めない閾値非依存の文言とし、実際の閾値は設定値で確認する旨を追記 | issue #690, #691 |
+| 1.56 | 2026-10-07 | FR-FE-4の市場コンテキスト（`market_return_1m/5m`・`sector_return_5m`・`market_breadth`）の許容年齢を3分固定から`stale_snapshot`（FR-SCAN-5/7）と同じ値へ改め、ランキング監視は`domain.MaxSnapshotAge`（3分）、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）と書き分け。全件スキャン時に指数行の足が3分超古くなり`market_adverse_to_direction`が素通りする取りこぼしを解消 | issue #692 |
+| 1.57 | 2026-10-07 | FR-SCHED-2/7・FR-FE-4/5・FR-SCAN-5/7に、`scan.full_scan_enabled: true`では足が約8分間隔で窓の基準バーの許容（FR-FE-5）を超えるため履歴ベース特徴量（`return_1m/3m/5m`・`volume_*`・`turnover_*`・`market_return_*`・`sector_return_5m`・`market_breadth`）が常に欠損となり候補が空・`market_adverse_to_direction`が機能しないこと、`scan.full_scan_max_snapshot_age_seconds`（620秒）は最新の足の鮮度判定だけを緩めること（#692・#686の「620秒で市況コンテキストが機能する」記述を訂正）、サポートする運用は既定のランキング監視であること、起動時のWARNログを明記 | issue #693・#694・#696 |
+| 1.58 | 2026-10-07 | §1のUC-1・§2の主要処理フロー・§7のMVP完了条件を、全ユニバースの60秒スキャン前提から既定のランキング監視（監視銘柄。FR-SCHED-9）へ訂正（全銘柄スキャンは`scan.full_scan_enabled: true`の明示オプトインのみで、FR-SCHED-7の制約付き） | issue #697 |
+| 1.59 | 2026-10-07 | FR-SCHED-2（`components-platform.md`）のフルスキャン時のPUSH登録を「最大50」から実装（`pushfeed.MaxRegisterSymbols`＝API登録上限50−REST回転用10）・`non-functional.md` §2.3・`architecture/overview/integrations.md` §5に合わせ「最大40（API登録上限50のうちREST回転用に10件を空ける）」へ訂正（#672の取り残し） | issue #699 |
+| 1.60 | 2026-10-07 | FR-SCAN-8の失敗表示を、下位エラーの生文字列ではなく失敗種別ごとの固定文言とし、下位エラーは`slog`のみに記録する旨に訂正 | issue #700 |
+| 1.61 | 2026-10-08 | FR-EXIT-2にcontinuation_probability低下Exitのしきい値`min(0.60, 方向別エントリーしきい値)`（エントリーしきい値はstrategy.yaml < env < `runtime_settings`の現行値）を追記し、エントリーしきい値を0.60未満へ下げた直後の即Exitを防ぐ | issue #714 |
+| 1.62 | 2026-10-08 | FR-EXIT-2のcontinuation_probability低下Exitしきい値を、ポジション開設時の値の固定ではなく「評価時点で有効な方向別エントリーしきい値」を1回のExit評価につき1回だけ読む仕様と明記（実装コメントの「エントリー時の値」表現を訂正） | issue #716 |

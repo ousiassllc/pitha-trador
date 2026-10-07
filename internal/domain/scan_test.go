@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,5 +138,17 @@ func TestScanCycle_Summary(t *testing.T) {
 	}
 	if sum.ByReason[domain.ScreenReasonMinPrice] != 3 || sum.ByReason[domain.ScreenReasonMaxSpread] != 3 || sum.ByReason[domain.ScreenReasonNoSnapshot] != 2 {
 		t.Fatalf("ByReason = %v", sum.ByReason)
+	}
+}
+
+// The stale_snapshot threshold is mode-dependent (MaxSnapshotAge for ranking
+// watch, scan.full_scan_max_snapshot_age_seconds for full scan), so the static
+// label must not hard-code either value (issue #690).
+func TestScreenReason_StaleSnapshotLabelIsThresholdAgnostic(t *testing.T) {
+	label := domain.ScreenReasonStaleSnapshot.Label()
+	for _, hard := range []string{"3分", "10分", "180", "620", "秒"} {
+		if strings.Contains(label, hard) {
+			t.Errorf("stale_snapshot label %q hard-codes %q", label, hard)
+		}
 	}
 }

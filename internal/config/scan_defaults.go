@@ -16,6 +16,15 @@ const (
 	DefaultKabuInfoAPIMaxPerSecond = 8
 	// OfficialKabuInfoAPIMaxPerSecond is the kabuステーションAPI FAQ cap.
 	OfficialKabuInfoAPIMaxPerSecond = 10
+	// FullScanUniverseEstimate is the REST universe size (functional.md
+	// FR-SCAN-3: 有効なstock全件、最大約4,000) the default full-scan snapshot
+	// age is derived from.
+	FullScanUniverseEstimate = 4000
+	// fullScanSnapshotAgeTicks is how many full_scan_interval_seconds ticks the
+	// derived full-scan snapshot age adds on top of one full REST cycle: one
+	// for the wait before the next cycle starts (the next 60s tick after the
+	// previous cycle ends) and one of margin.
+	fullScanSnapshotAgeTicks = 2
 )
 
 // withScanIntervalDefaults makes every scan.*_seconds interval usable: an
@@ -59,4 +68,21 @@ func withScanIntervalDefaults(cfg *ScanConfig) {
 			"requested", cfg.KabuInfoAPIMaxPerSecond, "official_cap", OfficialKabuInfoAPIMaxPerSecond)
 		cfg.KabuInfoAPIMaxPerSecond = OfficialKabuInfoAPIMaxPerSecond
 	}
+	if cfg.FullScanMaxSnapshotAgeSeconds <= 0 {
+		cfg.FullScanMaxSnapshotAgeSeconds = DefaultFullScanMaxSnapshotAgeSeconds(cfg.KabuInfoAPIMaxPerSecond, cfg.FullScanIntervalSeconds)
+		if cfg.FullScanOn() {
+			slog.Warn("config: scan.full_scan_max_snapshot_age_seconds is not set (or not positive) in strategy.yaml; deriving it from the info-API rate cap",
+				"default_seconds", cfg.FullScanMaxSnapshotAgeSeconds)
+		}
+	}
+}
+
+// DefaultFullScanMaxSnapshotAgeSeconds derives the full-scan snapshot age
+// that covers one full REST cycle (FullScanUniverseEstimate symbols at
+// maxPerSecond calls/s, rounded up) plus the wait for the next cycle and a
+// margin (fullScanSnapshotAgeTicks × intervalSeconds): 500 + 120 = 620 s with
+// the shipped 8/s and 60 s (issue #686).
+func DefaultFullScanMaxSnapshotAgeSeconds(maxPerSecond, intervalSeconds int) int {
+	cycle := (FullScanUniverseEstimate + maxPerSecond - 1) / maxPerSecond
+	return cycle + fullScanSnapshotAgeTicks*intervalSeconds
 }

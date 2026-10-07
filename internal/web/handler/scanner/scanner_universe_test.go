@@ -1,8 +1,11 @@
 package scanner_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 )
 
@@ -106,7 +110,7 @@ func TestUniverseImport_SuccessRegistersAndExplainsNextCycle(t *testing.T) {
 	if code != http.StatusOK || imp.imports != 1 {
 		t.Fatalf("status %d, imports %d; want 200 and one import", code, imp.imports)
 	}
-	for _, want := range []string{`data-testid="scan-universe-imported"`, "3707 銘柄", "再起動は不要"} {
+	for _, want := range []string{`data-testid="scan-universe-imported"`, `id="scan-universe-imported"`, "3707 銘柄", "再起動は不要"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("response missing %q", want)
 		}
@@ -116,16 +120,42 @@ func TestUniverseImport_SuccessRegistersAndExplainsNextCycle(t *testing.T) {
 	}
 }
 
-func TestUniverseImport_FailureShowsCauseAndKeepsCSVRoute(t *testing.T) {
-	imp := &fakeImporter{empty: true, importErr: errors.New("JPXに接続できませんでした")}
-	code, body := serveUniverse(universeEngine(imp, scanSource{}), http.MethodPost, "/scanner/universe/import")
-	if code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 so HTMX swaps the panel", code)
+func TestUniverseImport_FailureShowsFixedMessageAndLogsTheCause(t *testing.T) {
+	tests := []struct {
+		name  string
+		err   error
+		cause string
+		want  string
+	}{
+		{"connect failed", fmt.Errorf("%w: %w", domain.ErrJPXConnect, errors.New(`Get "https://www.jpx.co.jp/x.xlsx": dial tcp 127.0.0.53:53: lookup failed`)), "dial tcp", "JPXに接続できませんでした"},
+		{"format changed", fmt.Errorf("%w: %w", domain.ErrJPXFormat, errors.New(`header: missing required column "code"`)), "missing required column", "JPX側で公開URLや形式が変わった可能性"},
+		{"save failed", fmt.Errorf("%w: %w", domain.ErrJPXSave, errors.New("sqlite: disk I/O error")), "disk I/O error", "銘柄マスタへの保存に失敗しました"},
+		{"unclassified", errors.New("boom: internal detail"), "internal detail", "原因を特定できませんでした"},
 	}
-	for _, want := range []string{`data-testid="scan-universe-import-error"`, "JPXに接続できませんでした", "変更していません", "PITHA_UNIVERSE_PATH", "scan-universe-import\""} {
-		if !strings.Contains(body, want) {
-			t.Errorf("response missing %q", want)
-		}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			prev := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+			t.Cleanup(func() { slog.SetDefault(prev) })
+
+			imp := &fakeImporter{empty: true, importErr: tc.err}
+			code, body := serveUniverse(universeEngine(imp, scanSource{}), http.MethodPost, "/scanner/universe/import")
+			if code != http.StatusOK {
+				t.Fatalf("status = %d, want 200 so HTMX swaps the panel", code)
+			}
+			for _, want := range []string{`data-testid="scan-universe-import-error"`, tc.want, "変更していません", "PITHA_UNIVERSE_PATH", "scan-universe-import\"", `id="scan-universe-import"`} {
+				if !strings.Contains(body, want) {
+					t.Errorf("response missing %q", want)
+				}
+			}
+			if strings.Contains(body, tc.cause) {
+				t.Errorf("response leaks the low-level cause %q", tc.cause)
+			}
+			if !strings.Contains(logs.String(), tc.cause) {
+				t.Errorf("slog missing the cause %q: %s", tc.cause, logs.String())
+			}
+		})
 	}
 }
 

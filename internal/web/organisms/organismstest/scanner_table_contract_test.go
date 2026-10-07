@@ -25,26 +25,38 @@ type scannerContract struct {
 	} `json:"columns"`
 	EmptyMessage string `json:"emptyMessage"`
 	Rows         []struct {
-		Name string `json:"name"`
-		Item struct {
-			Symbol          string   `json:"symbol"`
-			DetailURL       string   `json:"detail_url"`
-			Price           float64  `json:"price"`
-			Return1m        *float64 `json:"return_1m"`
-			Return5m        *float64 `json:"return_5m"`
-			VolumeRatio5m   *float64 `json:"volume_ratio_5m"`
-			PriceVsVWAPBps  float64  `json:"price_vs_vwap_bps"`
-			SpreadBps       *float64 `json:"spread_bps"`
-			JevDirection    *string  `json:"jev_direction"`
-			JevConfidence   *float64 `json:"jev_confidence"`
-			EntryQuality    *string  `json:"entry_quality"`
-			CurrentPosition *float64 `json:"current_position"`
-		} `json:"item"`
-		Cells          []string `json:"cells"`
-		ReturnClasses  []string `json:"returnClasses"`
-		DirectionClass string   `json:"directionClass"`
-		QualityClass   string   `json:"qualityClass"`
+		Name           string              `json:"name"`
+		Item           scannerContractItem `json:"item"`
+		Cells          []string            `json:"cells"`
+		ReturnClasses  []string            `json:"returnClasses"`
+		DirectionClass string              `json:"directionClass"`
+		QualityClass   string              `json:"qualityClass"`
 	} `json:"rows"`
+}
+
+type scannerContractItem struct {
+	Symbol          string   `json:"symbol"`
+	DetailURL       string   `json:"detail_url"`
+	Price           float64  `json:"price"`
+	Return1m        *float64 `json:"return_1m"`
+	Return5m        *float64 `json:"return_5m"`
+	VolumeRatio5m   *float64 `json:"volume_ratio_5m"`
+	PriceVsVWAPBps  float64  `json:"price_vs_vwap_bps"`
+	SpreadBps       *float64 `json:"spread_bps"`
+	JevDirection    *string  `json:"jev_direction"`
+	JevConfidence   *float64 `json:"jev_confidence"`
+	EntryQuality    *string  `json:"entry_quality"`
+	CurrentPosition *float64 `json:"current_position"`
+}
+
+func (it scannerContractItem) candidate() domain.Candidate {
+	return domain.Candidate{
+		Symbol: it.Symbol, Price: it.Price,
+		Return1m: percentToRatio(it.Return1m), Return5m: percentToRatio(it.Return5m),
+		VolumeRatio5m: it.VolumeRatio5m, PriceVsVWAPBps: it.PriceVsVWAPBps, SpreadBps: it.SpreadBps,
+		JevDirection: it.JevDirection, JevConfidence: it.JevConfidence,
+		EntryQuality: it.EntryQuality, CurrentPosition: it.CurrentPosition,
+	}
 }
 
 // percentToRatio turns the contract's percent-unit return (the API/Lit
@@ -175,13 +187,7 @@ func TestScannerTableFallback_MatchesLitContract_Rows(t *testing.T) {
 	for _, row := range contract.Rows {
 		t.Run(row.Name, func(t *testing.T) {
 			it := row.Item
-			doc := parseHTML(t, renderScannerTable(t, []domain.Candidate{{
-				Symbol: it.Symbol, Price: it.Price,
-				Return1m: percentToRatio(it.Return1m), Return5m: percentToRatio(it.Return5m),
-				VolumeRatio5m: it.VolumeRatio5m, PriceVsVWAPBps: it.PriceVsVWAPBps, SpreadBps: it.SpreadBps,
-				JevDirection: it.JevDirection, JevConfidence: it.JevConfidence,
-				EntryQuality: it.EntryQuality, CurrentPosition: it.CurrentPosition,
-			}}))
+			doc := parseHTML(t, renderScannerTable(t, []domain.Candidate{it.candidate()}))
 
 			trs := findAll(doc, func(n *html.Node) bool { return n.Data == "tr" && attr(n, "data-symbol") != "" })
 			if len(trs) != 1 {
@@ -215,6 +221,33 @@ func TestScannerTableFallback_MatchesLitContract_Rows(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The SSR fallback renders candidates in the order given (screener.Screen's
+// ScreenScore-descending order) with no sort indicator, and the Lit component
+// keeps that order until a header is clicked (issue #674).
+func TestScannerTableFallback_MatchesLitContract_RowOrder(t *testing.T) {
+	contract := loadScannerContract(t)
+	candidates := make([]domain.Candidate, 0, len(contract.Rows))
+	want := make([]string, 0, len(contract.Rows))
+	for _, row := range contract.Rows {
+		candidates = append(candidates, row.Item.candidate())
+		want = append(want, row.Item.Symbol)
+	}
+	doc := parseHTML(t, renderScannerTable(t, candidates))
+
+	var got []string
+	for _, tr := range findAll(doc, func(n *html.Node) bool { return n.Data == "tr" && attr(n, "data-symbol") != "" }) {
+		got = append(got, attr(tr, "data-symbol"))
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("row order = %v, want %v", got, want)
+	}
+	for i, th := range findAll(doc, tag("th")) {
+		if v := attr(th, "aria-sort"); v != "" && v != "none" {
+			t.Errorf("column %d aria-sort = %q, want unsorted", i, v)
+		}
 	}
 }
 

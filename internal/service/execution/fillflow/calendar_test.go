@@ -65,3 +65,24 @@ func TestEngine_OnSnapshot_ForceFlatsBeforeMarketClose(t *testing.T) {
 		t.Fatalf("position = %+v, %v; want exit reason %q", closed, err, domain.ExitReasonForceFlatBeforeClose)
 	}
 }
+
+// Issue #685: EntrySessionOpenNow judges the wall clock (Config.Now), not
+// a bar timestamp, and applies the same force-flat window as Enter.
+func TestEngine_EntrySessionOpenNow_UsesWallClock(t *testing.T) {
+	for name, tc := range map[string]struct {
+		now  time.Time
+		want bool
+	}{
+		"in session":        {jstAt(29, 10, 0), true},
+		"night":             {jstAt(29, 20, 0), false},
+		"force-flat window": {jstAt(29, 15, 20), false},
+		"holiday":           {jstAt(22, 10, 0), false},
+	} {
+		cfg := execution.DefaultConfig()
+		cfg.Calendar = marketcalendar.TSE
+		cfg.Now = func() time.Time { return tc.now }
+		if got := newTestEngine(t, cfg).engine.EntrySessionOpenNow(); got != tc.want {
+			t.Errorf("%s: EntrySessionOpenNow = %v, want %v", name, got, tc.want)
+		}
+	}
+}

@@ -84,3 +84,17 @@ func TestMainNav_MarksOnlyCurrent(t *testing.T) {
 		t.Errorf("NavNone must mark nothing")
 	}
 }
+
+// #config-banner refetches on the event Settings' Save/Delete responses
+// fire (issue #695), like #update-banner does for updateStatusChanged; it
+// is operator-initiated, so it carries no X-Pitha-Background header.
+func TestHeader_ConfigBannerRefetchesOnSecretsStatusChanged(t *testing.T) {
+	html := renderComponent(t, organisms.Header(domain.SystemState(""), organisms.NavNone))
+	tag := containerTag(t, html, "config-banner")
+	if !strings.Contains(tag, `hx-trigger="load, secretsStatusChanged from:body"`) {
+		t.Errorf("#config-banner lacks the secretsStatusChanged trigger: %s", tag)
+	}
+	if strings.Contains(tag, "X-Pitha-Background") {
+		t.Errorf("#config-banner refetch is operator-initiated, must not be background: %s", tag)
+	}
+}

@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -14,7 +15,7 @@ import (
 
 // UniverseImporter lets the Scanner Dashboard offer the 銘柄マスタ未投入
 // guidance and the operator-confirmed JPX import (issue #508).
-// internal/bootstrap/universe.Importer implements it. With none wired (the
+// bootstrap/universe.Importer implements it. With none wired (the
 // router default) the scan panel keeps its plain "no cycle yet" empty state
 // and `POST /scanner/universe/import` 404s.
 type UniverseImporter interface {
@@ -49,7 +50,8 @@ func (h *ScannerHandler) universeEmpty(ctx context.Context) bool {
 // endpoints.md §3): the operator's consent to download JPX's 東証上場銘柄一覧
 // and register its stocks. It answers with the refreshed scan panel
 // (`#scan-panel`): the import's result, or - on failure, with the master
-// unchanged - its cause plus the manual-CSV route, as a normal 200 so HTMX
+// unchanged - a fixed per-kind reason (never the error text, issue #700)
+// plus the manual-CSV route, as a normal 200 so HTMX
 // swaps it. It only runs while the master has no active stock (409
 // otherwise), so an operator-supplied master is never overwritten.
 func (h *ScannerHandler) UniverseImport(c *gin.Context) {
@@ -79,7 +81,23 @@ func (h *ScannerHandler) UniverseImport(c *gin.Context) {
 	}
 	panel.UniverseImported = imported
 	if importErr != nil {
-		panel.UniverseImportError = importErr.Error()
+		panel.UniverseImportError = universeImportReason(importErr)
 	}
 	shared.RenderHTML(c, http.StatusOK, organisms.ScanPanel(panel))
+}
+
+// universeImportReason maps an ImportJPX failure onto a fixed operator-facing
+// text. The error itself (URL/DNS, SQLite, ParseJPX detail) is logged by the
+// caller and never shown (issue #700).
+func universeImportReason(err error) string {
+	switch {
+	case errors.Is(err, domain.ErrJPXConnect):
+		return "JPXに接続できませんでした（ネットワークを確認してください）。"
+	case errors.Is(err, domain.ErrJPXFormat):
+		return "JPXの銘柄一覧を解釈できませんでした（JPX側で公開URLや形式が変わった可能性があります）。"
+	case errors.Is(err, domain.ErrJPXSave):
+		return "銘柄マスタへの保存に失敗しました。"
+	default:
+		return "原因を特定できませんでした。詳細はログを確認してください。"
+	}
 }

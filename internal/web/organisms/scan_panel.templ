@@ -56,11 +56,11 @@ templ ScanPanel(v ScanPanelView) {
 			<h2 class="text-base font-semibold text-slate-900">スキャン状況</h2>
 			<div class="flex items-center gap-2">
 				if !v.Open {
-					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonOutline, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanPanelURL, "hx-target": "#scan-panel", "hx-swap": "outerHTML", "data-testid": "scan-open"}}) {
+					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonOutline, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanPanelURL, "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-open", "data-focus-after-swap": "scan-list-heading", "data-testid": "scan-open"}}) {
 						スキャン対象を見る
 					}
 				}
-				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Query.Page, v.Open), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "data-testid": "scan-refresh"}}) {
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Query.Page, v.Open), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-refresh", "data-testid": "scan-refresh"}}) {
 					更新
 				}
 			</div>
@@ -104,7 +104,7 @@ templ scanOffHours(nextOpen time.Time) {
 
 templ scanFunnel(v ScanPanelView) {
 	<ol class="mt-3 grid gap-2 sm:grid-cols-4" data-testid="scan-funnel">
-		@funnelStep("ユニバース", "スキャン対象の東証上場銘柄数", strconv.Itoa(v.Cycle.Funnel.Universe), "scan-funnel-universe")
+		@funnelStep("ユニバース", "スキャン対象の銘柄数。ランキング監視（既定）では監視銘柄（最大45）、scan.full_scan_enabled: true のときだけ東証上場の全銘柄", strconv.Itoa(v.Cycle.Funnel.Universe), "scan-funnel-universe")
 		@funnelStep("特徴量算出", "市況データ（特徴量）が算出できた銘柄数", strconv.Itoa(v.Cycle.Funnel.FeatureComputed), "scan-funnel-features")
 		@funnelStep("Fast Screener通過", "足切り条件を満たし上位N件に入った銘柄数（Jev Scout候補）", strconv.Itoa(v.Cycle.Funnel.FastScreenerPassed), "scan-funnel-fast")
 		@funnelStep("Scout通過", "Jev Scoutの判定が済んだ候補のうち通過した銘柄数（"+strconv.Itoa(v.Cycle.Funnel.ScoutEvaluated)+"/"+strconv.Itoa(v.Cycle.Funnel.FastScreenerPassed)+"件判定済み）", strconv.Itoa(v.Cycle.Funnel.ScoutPassed), "scan-funnel-scout")
@@ -123,6 +123,7 @@ templ funnelStep(label, hint, count, testID string) {
 const scanFieldClass = "mt-1 px-2 py-1 text-sm"
 
 templ scanList(v ScanPanelView) {
+	<h3 id="scan-list-heading" tabindex="-1" class="sr-only">スキャン対象銘柄</h3>
 	<form class="mt-4 flex flex-wrap items-end gap-3 text-sm" method="get" action={ scanPanelURL } hx-get={ scanPanelURL } hx-target="#scan-panel" hx-swap="outerHTML" hx-trigger="submit, change from:#scan-status, change from:#scan-reason" data-testid="scan-filter">
 		<label class="flex flex-col text-xs text-slate-600">
 			銘柄コード・名称
@@ -148,12 +149,12 @@ templ scanList(v ScanPanelView) {
 				}
 			}
 		</label>
-		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Type: "submit"}) {
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Type: "submit", Attrs: templ.Attributes{"id": "scan-filter-submit"}}) {
 			絞り込む
 		}
 	</form>
 	<div class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
-		<p data-testid="scan-total">
+		<p id="scan-total" tabindex="-1" class="outline-none" data-testid="scan-total">
 			該当 <span class="font-semibold text-slate-900">{ strconv.Itoa(v.Page.Total) }</span> 銘柄
 			（{ strconv.Itoa(v.Page.Page) } / { strconv.Itoa(v.Page.Pages) } ページ）
 		</p>
@@ -183,86 +184,18 @@ templ scanList(v ScanPanelView) {
 	}
 	<nav class="mt-3 flex items-center justify-between text-xs" aria-label="ページ送り" data-testid="scan-pager">
 		if v.Page.Page > 1 {
-			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page-1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "data-testid": "scan-prev"}}) {
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page-1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-prev", "data-focus-after-swap": "scan-total", "data-testid": "scan-prev"}}) {
 				前へ
 			}
 		} else {
 			<span></span>
 		}
 		if v.Page.Page < v.Page.Pages {
-			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page+1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "data-testid": "scan-next"}}) {
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page+1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-next", "data-focus-after-swap": "scan-total", "data-testid": "scan-next"}}) {
 				次へ
 			}
 		}
 	</nav>
-}
-
-templ scanOption(value, label string, selected bool) {
-	<option value={ value } selected?={ selected }>{ label }</option>
-}
-
-templ scanRow(s domain.ScanSymbol, scout domain.ScoutOutcome) {
-	<tr class="border-b border-slate-100 align-top last:border-b-0 hover:bg-slate-50" data-symbol={ s.Symbol } data-status={ string(s.Status()) }>
-		<td class="px-3 py-2 font-medium">
-			<a class="text-sky-700 underline-offset-2 hover:underline" href={ SymbolHref(s.Symbol) }>{ s.Symbol }</a>
-		</td>
-		<td class="px-3 py-2">{ s.Name }</td>
-		<td class="whitespace-nowrap px-3 py-2">{ s.Market }</td>
-		<td class="whitespace-nowrap px-3 py-2">
-			<span class={ "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium", scanStatusClass(s.Status()) }>{ scanStatusLabel(s.Status()) }</span>
-		</td>
-		<td class="px-3 py-2 text-xs text-slate-700">
-			if reasons := s.Reasons.List(); len(reasons) == 0 {
-				<span class="text-slate-400">—</span>
-			} else {
-				<ul>
-					for _, r := range reasons {
-						<li data-reason={ r.Code() }>{ r.Label() }</li>
-					}
-				</ul>
-			}
-		</td>
-		<td class="whitespace-nowrap px-3 py-2 text-xs">{ scanScoutLabel(s, scout) }</td>
-	</tr>
-}
-
-func scanStatusLabel(s domain.ScanStatus) string {
-	switch s {
-	case domain.ScanStatusPassed:
-		return "通過"
-	case domain.ScanStatusMissing:
-		return "データ欠損"
-	default:
-		return "除外"
-	}
-}
-
-func scanStatusClass(s domain.ScanStatus) string {
-	switch s {
-	case domain.ScanStatusPassed:
-		return "bg-green-100 text-green-800"
-	case domain.ScanStatusMissing:
-		return "bg-amber-100 text-amber-800"
-	default:
-		return "bg-gray-100 text-gray-600"
-	}
-}
-
-// scanScoutLabel is the Scout column: only a Fast Screener candidate has
-// a Scout stage; until its job completes it is pending.
-func scanScoutLabel(s domain.ScanSymbol, o domain.ScoutOutcome) string {
-	switch {
-	case s.Status() != domain.ScanStatusPassed:
-		return "—"
-	case o == domain.ScoutPassed:
-		return "通過"
-	case o == domain.ScoutFailed:
-		return "不通過"
-	case o == domain.ScoutError:
-		return "判定エラー"
-	default:
-		return "判定待ち"
-	}
 }
 
 // scanHref is the panel URL for q at page. Only non-default parts are

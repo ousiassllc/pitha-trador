@@ -1,8 +1,6 @@
 package molecules
 
 import (
-	"fmt"
-
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 )
 
@@ -17,7 +15,7 @@ templ SignalBadgeGroup(direction *string, confidence *float64, entryQuality *str
 	} else {
 		<span class="inline-flex items-center gap-2">
 			@atoms.Badge(toDirection(*direction))
-			<span class="text-xs text-slate-600">{ formatConfidence(confidence) }</span>
+			<span class="text-xs text-slate-600">{ atoms.FormatConfidence(confidence) }</span>
 			<span class="text-xs font-medium text-slate-800">{ formatEntryQuality(entryQuality) }</span>
 		</span>
 	}
@@ -32,13 +30,6 @@ func toDirection(s string) atoms.Direction {
 	default:
 		return atoms.DirectionNone
 	}
-}
-
-func formatConfidence(v *float64) string {
-	if v == nil {
-		return "—"
-	}
-	return fmt.Sprintf("%.0f%%", *v*100)
 }
 
 func formatEntryQuality(v *string) string {
