@@ -70,6 +70,6 @@ func WarnIfDisabled(ctx context.Context, settings *system.RuntimeSettingsReposit
 		return
 	}
 	if dir == "" {
-		slog.Warn("bootstrap: daily database backup disabled: no backup directory is configured; set it at /settings (システム > バックアップ先) (requirements/non-functional.md §3)")
+		slog.Warn("bootstrap: daily database backup disabled: no backup directory is configured; set it at /settings (運用設定 > バックアップ先) (requirements/non-functional.md §3)")
 	}
 }
