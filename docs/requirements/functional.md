@@ -4,7 +4,7 @@
 
 | ID | ユースケース | 主アクター | 概要 |
 |----|------------|-----------|------|
-| UC-1 | 市場スキャン | Scheduler | 対象ユニバースを周期的にスキャンし、特徴量を算出する |
+| UC-1 | 市場スキャン | Scheduler | 監視銘柄（既定のランキング監視。`scan.full_scan_enabled: true`のときだけ全銘柄）を周期的にスキャンし、特徴量を算出する |
 | UC-2 | 候補絞り込み | Fast Screener | 数値条件・スコアで候補銘柄を機械的に絞り込む |
 | UC-3 | 深掘り判定 | Jev Scout | 候補銘柄が今分析する価値があるかを判定する |
 | UC-4 | 売買方向判定 | Jev Trader | Scout通過銘柄の方向・レジーム・エントリー品質を判定する |
@@ -59,7 +59,7 @@ sequenceDiagram
     participant EX as Execution
     participant DB as SQLite
 
-    SCH->>MD: universe snapshot取得（`instruments`の対象銘柄の板をkabuステーションAPIから取得）
+    SCH->>MD: 監視銘柄の板取得（既定はランキング監視 FR-SCHED-9 が決めた監視銘柄。`scan.full_scan_enabled: true`のときだけ有効な全銘柄。kabuステーションAPIから取得）
     MD->>FE: 生データ
     FE->>FS: 特徴量
     FS->>FS: screen_score算出・上位N銘柄選定
@@ -165,7 +165,7 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 ## 7. MVP完了条件
 
 - 対象銘柄マスタ（`instruments`: `stock`と`market_index`/`sector_index`）を銘柄マスタCSVから起動時に自動投入でき（kabuステーションAPIには上場銘柄一覧の取得手段が無いため。手順は`environment/setup.md`「銘柄マスタの投入」）、投入された銘柄の価格・板をkabuステーションAPI経由で自動取得できる
-- 60秒周期でスキャンできる
+- ランキング監視が60秒周期で監視銘柄を更新しスキャンできる（全銘柄の60秒スキャンは`scan.full_scan_enabled: true`の明示オプトインで、FR-SCHED-7の制約付き）
 - Fast Screenerで候補を絞れる
 - Jev Scout / Traderを自動実行できる
 - 判断結果をDB保存できる
@@ -250,3 +250,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.55 | 2026-10-07 | FR-SCAN-5に、`stale_snapshot`のラベルは閾値がモード別（3分／`scan.full_scan_max_snapshot_age_seconds`）のため秒数を含めない閾値非依存の文言とし、実際の閾値は設定値で確認する旨を追記 | issue #690, #691 |
 | 1.56 | 2026-10-07 | FR-FE-4の市場コンテキスト（`market_return_1m/5m`・`sector_return_5m`・`market_breadth`）の許容年齢を3分固定から`stale_snapshot`（FR-SCAN-5/7）と同じ値へ改め、ランキング監視は`domain.MaxSnapshotAge`（3分）、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）と書き分け。全件スキャン時に指数行の足が3分超古くなり`market_adverse_to_direction`が素通りする取りこぼしを解消 | issue #692 |
 | 1.57 | 2026-10-07 | FR-SCHED-2/7・FR-FE-4/5・FR-SCAN-5/7に、`scan.full_scan_enabled: true`では足が約8分間隔で窓の基準バーの許容（FR-FE-5）を超えるため履歴ベース特徴量（`return_1m/3m/5m`・`volume_*`・`turnover_*`・`market_return_*`・`sector_return_5m`・`market_breadth`）が常に欠損となり候補が空・`market_adverse_to_direction`が機能しないこと、`scan.full_scan_max_snapshot_age_seconds`（620秒）は最新の足の鮮度判定だけを緩めること（#692・#686の「620秒で市況コンテキストが機能する」記述を訂正）、サポートする運用は既定のランキング監視であること、起動時のWARNログを明記 | issue #693・#694・#696 |
+| 1.58 | 2026-10-07 | §1のUC-1・§2の主要処理フロー・§7のMVP完了条件を、全ユニバースの60秒スキャン前提から既定のランキング監視（監視銘柄。FR-SCHED-9）へ訂正（全銘柄スキャンは`scan.full_scan_enabled: true`の明示オプトインのみで、FR-SCHED-7の制約付き） | issue #697 |
