@@ -19,7 +19,13 @@ type loaderFixture struct {
 	loader      *marketcontext.Loader
 }
 
+// newLoaderFixture is a ranking-watch Loader (domain.MaxSnapshotAge).
 func newLoaderFixture(t *testing.T) loaderFixture {
+	t.Helper()
+	return newLoaderFixtureWithAge(t, domain.MaxSnapshotAge)
+}
+
+func newLoaderFixtureWithAge(t *testing.T, maxStale time.Duration) loaderFixture {
 	t.Helper()
 	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
@@ -27,7 +33,7 @@ func newLoaderFixture(t *testing.T) loaderFixture {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	instruments, snapshots := market.NewInstrumentRepository(db), market.NewSnapshotRepository(db)
-	return loaderFixture{instruments, snapshots, marketcontext.NewLoader(instruments, snapshots)}
+	return loaderFixture{instruments, snapshots, marketcontext.NewLoader(instruments, snapshots, maxStale)}
 }
 
 func (f loaderFixture) instrument(t *testing.T, symbol, kind string, sector *string) domain.Instrument {
