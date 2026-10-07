@@ -37,7 +37,9 @@ import (
 // organisms.SecretsBanner listing the still-unset optional keys
 // (SLACK_WEBHOOK_URL etc.; the two required keys JEV_API_KEY/
 // KABU_API_PASSWORD are Setup Guard's business) with a link to
-// `/settings`, or nothing once every one is configured.
+// `/settings`, or nothing once every one is configured. It also refetches
+// on the `secretsStatusChanged` event Settings' Save/Delete responses fire
+// (issue #695), so the banner follows a just-saved or just-deleted key.
 //
 // `#update-banner` is the same pattern for issue #76's update
 // notification: `GET /system/update-status`
@@ -107,7 +109,7 @@ templ Header(state domain.SystemState, current NavItem) {
 			id="config-banner"
 			class="order-last w-full empty:hidden"
 			hx-get="/system/secrets-status"
-			hx-trigger="load"
+			hx-trigger="load, secretsStatusChanged from:body"
 			hx-target="this"
 			hx-swap="innerHTML"
 		></div>

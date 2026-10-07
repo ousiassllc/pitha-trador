@@ -199,3 +199,31 @@ func TestSettingsHandler_Save_NewsFeedEnabledAcceptsOnlyOnOff(t *testing.T) {
 		t.Fatalf("invalid value changed the store to %q", got)
 	}
 }
+
+// issue #695: a successful HTMX Save/Delete fires secretsStatusChanged so
+// Header's #config-banner refetches the unset-optional-keys list; failures
+// and the non-HTMX redirect fire nothing.
+func TestSettingsHandler_SaveAndDelete_FireSecretsStatusChanged(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := newFakeSecretsStore()
+	engine := settingsRouter(settings.NewSettingsHandler(store))
+
+	if got := postSetting(engine, config.KeySlackWebhookURL, url.Values{"value": {"https://hooks.example/x"}}).Header().Get("HX-Trigger"); got != "secretsStatusChanged" {
+		t.Errorf("Save HX-Trigger = %q, want secretsStatusChanged", got)
+	}
+	if got := deleteSetting(engine, config.KeySlackWebhookURL).Header().Get("HX-Trigger"); got != "secretsStatusChanged" {
+		t.Errorf("Delete HX-Trigger = %q, want secretsStatusChanged", got)
+	}
+
+	if rec := postSetting(engine, config.KeySlackWebhookURL, url.Values{"value": {""}}); rec.Code != http.StatusBadRequest || rec.Header().Get("HX-Trigger") != "" {
+		t.Errorf("rejected Save status/HX-Trigger = %d/%q, want 400 and none", rec.Code, rec.Header().Get("HX-Trigger"))
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/settings/"+config.KeySlackWebhookURL, strings.NewReader(url.Values{"value": {"v"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+	if got := rec.Header().Get("HX-Trigger"); got != "" {
+		t.Errorf("non-HTMX redirect HX-Trigger = %q, want none", got)
+	}
+}

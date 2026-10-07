@@ -166,6 +166,11 @@ func (h *SettingsHandler) Status(c *gin.Context) {
 	shared.RenderHTML(c, http.StatusOK, organisms.SecretsBanner(missing))
 }
 
+// secretsStatusChangedEvent is the HX-Trigger event a successful Save/Delete
+// fires so the Header's `#config-banner` refreshes immediately instead of
+// staying stale until the next page load (organisms.Header's doc comment).
+const secretsStatusChangedEvent = "secretsStatusChanged"
+
 // renderRow answers a successful Save/Delete. An HTMX request gets the
 // refreshed SecretFieldRow fragment plus an out-of-band copy of the owning
 // connection's status badge, so the list behind the open modal shows the
@@ -174,7 +179,9 @@ func (h *SettingsHandler) Status(c *gin.Context) {
 // follows the required badges (issue #325). The row form's plain
 // `method="post"` fallback (JS disabled) would otherwise render a bare
 // fragment as the whole page, so it is redirected back to the screen it
-// came from instead (the notice is only shown on the HTMX path).
+// came from instead (the notice is only shown on the HTMX path). The
+// response also fires secretsStatusChangedEvent so Header's #config-banner
+// refetches the unset-optional-keys list (issue #695).
 func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
 	returnPath := settingsReturnPath(c)
 	if c.GetHeader("HX-Request") != "true" {
@@ -182,6 +189,7 @@ func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
 		return
 	}
 	ctx := c.Request.Context()
+	c.Header("HX-Trigger", secretsStatusChangedEvent)
 	comps := []templ.Component{molecules.SecretFieldRow(h.row(ctx, key, settingsLabel(key), notice))}
 	if conn, ok := connectionByKey(key); ok {
 		comps = append(comps, molecules.ConnectionStatus(h.connectionProps(ctx, conn), true))
