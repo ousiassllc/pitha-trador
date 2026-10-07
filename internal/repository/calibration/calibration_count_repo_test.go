@@ -28,7 +28,7 @@ func TestCalibrationRepository_CountLabeledSamplesInConfidenceRange(t *testing.T
 		if direction != domain.JevDirectionNone {
 			correct = ptr(true)
 		}
-		for _, horizon := range []int{5, 20} {
+		for _, horizon := range []int{5, 15} {
 			if _, err := outcomes.Insert(ctx, domain.CalibrationOutcome{JevDecisionID: d.ID, HorizonMinutes: horizon, WasDirectionCorrect: correct}); err != nil {
 				t.Fatalf("insert outcome: %v", err)
 			}

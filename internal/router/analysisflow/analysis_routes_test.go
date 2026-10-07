@@ -193,7 +193,7 @@ func TestNew_APICalibrationReturnsMetricsFromWithCalibrationSourceOption(t *test
 	source := calibration.StaticCalibrationSource{
 		Metrics_: domain.CalibrationMetrics{
 			Buckets: []domain.ConfidenceBucket{
-				{Range: "0.50-0.60", AvgConfidence: 0.55, DirectionAccuracy: 0.51, AvgFutureReturnPct: -0.05, TradeCount: 3, TotalPnL: -1200, AvgPnLPct: -0.4},
+				{Range: "0.50-0.60", AvgConfidence: 0.55, DirectionAccuracy: 0.51, AvgFutureReturnPct: -0.05, TradeCount: 3, TotalPnL: -1200, AvgPnLPct: -0.4, TradeWinRate: 0.25},
 			},
 			ByDirection: []domain.DirectionMetric{
 				{Direction: domain.JevDirectionLong, SampleCount: 10, DirectionAccuracy: 0.6, AvgFutureReturnPct: 0.12},
@@ -201,6 +201,9 @@ func TestNew_APICalibrationReturnsMetricsFromWithCalibrationSourceOption(t *test
 			BrierScore:               0.19,
 			LogLoss:                  0.52,
 			ExpectedCalibrationError: 0.06,
+			TradeCount:               3,
+			PnLBrierScore:            0.31,
+			PnLLogLoss:               0.88,
 		},
 	}
 	engine := router.New(router.WithCalibrationSource(source))
@@ -217,7 +220,8 @@ func TestNew_APICalibrationReturnsMetricsFromWithCalibrationSourceOption(t *test
 		t.Fatalf("expected body to contain the injected calibration metrics, got %q", body)
 	}
 	for _, want := range []string{
-		`"avg_confidence":0.55`, `"trade_count":3`, `"total_pnl":-1200`, `"avg_pnl_pct":-0.4`,
+		`"avg_confidence":0.55`, `"trade_count":3`, `"total_pnl":-1200`, `"avg_pnl_pct":-0.4`, `"trade_win_rate":0.25`,
+		`"pnl_brier_score":0.31`, `"pnl_log_loss":0.88`, `"expected_calibration_error":0.06,"trade_count":3`,
 		`"by_direction":[{"direction":"LONG","sample_count":10,"direction_accuracy":0.6,"avg_future_return_pct":0.12}`,
 	} {
 		if !strings.Contains(body, want) {

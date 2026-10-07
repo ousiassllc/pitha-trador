@@ -56,11 +56,14 @@ var DefaultConfidenceBucketRanges = []ConfidenceBucketRange{
 // correct and the average direction-adjusted future return, among every
 // labeled trader decision/horizon outcome whose Confidence fell in Range.
 // AvgConfidence is those outcomes' mean Confidence (the Reliability
-// Curve's x-axis value). TradeCount/TotalPnL/AvgPnLPct are FR-CAL-2's
-// "confidence bucket別PnL": the closed positions entered on a signal
-// derived from a trader decision whose Confidence fell in Range (see
-// DecisionTrade), independent of SampleCount, which counts outcome
-// horizons.
+// Curve's x-axis value). TradeCount/TotalPnL/AvgPnLPct/TradeWinRate are
+// FR-CAL-2's "confidence bucket別PnL" and the realized-PnL ground truth
+// (issue #711): the closed positions entered on a signal derived from a
+// trader decision whose Confidence fell in Range (see DecisionTrade),
+// independent of SampleCount, which counts outcome horizons.
+// TradeWinRate is the share of those positions whose RealizedPnL was
+// positive (0 when TradeCount is 0), the realized-PnL counterpart of
+// DirectionAccuracy.
 type ConfidenceBucket struct {
 	Range              string
 	AvgConfidence      float64
@@ -70,6 +73,7 @@ type ConfidenceBucket struct {
 	TradeCount         int
 	TotalPnL           float64
 	AvgPnLPct          float64
+	TradeWinRate       float64
 }
 
 // DirectionMetric is one predicted direction's (LONG or SHORT) aggregated
@@ -88,6 +92,12 @@ type DirectionMetric struct {
 // Reliability Curve (Buckets) plus Brier Score, Log Loss, and Expected
 // Calibration Error computed over every labeled trader decision/horizon
 // outcome, and the per-direction (LONG, SHORT) breakdown in ByDirection.
+// TradeCount, PnLBrierScore and PnLLogLoss are the same two scores computed
+// against the realized-PnL ground truth instead of the price-path one
+// (issue #711): over every closed position traced to a trader decision
+// (DecisionTrade) whose Confidence falls in a bucket, the predicted
+// probability is Confidence and the outcome is RealizedPnL > 0. They are 0
+// when TradeCount is 0.
 type CalibrationMetrics struct {
 	Buckets                  []ConfidenceBucket
 	ByDirection              []DirectionMetric
@@ -95,13 +105,19 @@ type CalibrationMetrics struct {
 	LogLoss                  float64
 	ExpectedCalibrationError float64
 	SampleCount              int
+	TradeCount               int
+	PnLBrierScore            float64
+	PnLLogLoss               float64
 }
 
 // DecisionTrade is one closed position joined back to the Jev trader
 // decision that produced its entry (positions.entry_order_id ->
 // paper_orders.trade_signal_id -> trade_signals.jev_decision_id), for
 // internal/service/calibration.WithTradePnL to fold into each
-// ConfidenceBucket's PnL. RealizedPnL is positions.realized_pnl (JPY);
+// ConfidenceBucket's PnL and the realized-PnL ground truth (issue #711).
+// RealizedPnL is positions.realized_pnl (JPY), net of both fills' fees and
+// priced by the fill model's spread/slippage (FR-ENTRY-8); a trade is a
+// "win" iff RealizedPnL > 0;
 // ReturnPct is RealizedPnL relative to the entry notional
 // (entry_price*quantity), in percent.
 type DecisionTrade struct {
