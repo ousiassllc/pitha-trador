@@ -33,8 +33,8 @@ func TestSelector_RetainMovesNewlyHeldSymbolsToFixedSlotsAndCapsTheList(t *testi
 	if !slices.Equal(watch, held) {
 		t.Errorf("watch = %v, want the held symbols %v", watch, held)
 	}
-	if len(screen) != rankingwatch.MaxWatched {
-		t.Fatalf("screen = %d symbols, want the cap %d", len(screen), rankingwatch.MaxWatched)
+	if len(screen) != rankingwatch.DefaultMaxWatched {
+		t.Fatalf("screen = %d symbols, want the cap %d", len(screen), rankingwatch.DefaultMaxWatched)
 	}
 	if n := count(screen, "R000"); n != 1 {
 		t.Errorf("R000 appears %d times, want 1 (its fixed held slot)", n)
@@ -45,7 +45,7 @@ func TestSelector_RetainMovesNewlyHeldSymbolsToFixedSlotsAndCapsTheList(t *testi
 // break: a symbol put in at t0 is replaceable right after the lunch break.
 func TestSelector_RetainKeepsMinHoldTimestamps(t *testing.T) {
 	var s rankingwatch.Selector
-	full := codes("R", 0, rankingwatch.MaxWatched)
+	full := codes("R", 0, rankingwatch.DefaultMaxWatched)
 	s.Update(t0, nil, full)
 	s.Retain(nil)
 

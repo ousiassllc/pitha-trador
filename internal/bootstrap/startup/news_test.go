@@ -21,7 +21,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
 // inSession is inside the 前場 so News Ingest's 東証立会時間 gate is open.
@@ -218,8 +217,8 @@ func TestServices_StartAndStopToleratesYanoshinDown(t *testing.T) {
 	}))
 	t.Cleanup(kabu.Close)
 
-	svc := buildNews(t, config.Secrets{JevAPIKey: "jev-key", JevBaseURL: "http://127.0.0.1:1"}, bootstrap.WithYanoshinBaseURL(yanoshin.URL))
-	svc.MarketData = marketdata.NewClient(marketdata.Config{BaseURL: kabu.URL + "/kabusapi", APIPassword: "test-password"})
+	svc := buildNews(t, config.Secrets{JevAPIKey: "jev-key", JevBaseURL: "http://127.0.0.1:1"},
+		bootstrap.WithYanoshinBaseURL(yanoshin.URL), bootstrap.WithKabuBaseURL(kabu.URL+"/kabusapi"))
 	if !svc.NewsIngestEnabled() {
 		t.Fatal("news ingest is not enabled; the test would prove nothing")
 	}

@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
 func TestClient_RegisterSymbols_RequiresToken(t *testing.T) {
 	client := marketdata.NewClient(marketdata.Config{BaseURL: "http://unused.invalid"})
-	if _, err := client.RegisterSymbols(context.Background(), nil); err != marketdata.ErrNoToken {
-		t.Errorf("RegisterSymbols before token issuance: err = %v, want %v", err, marketdata.ErrNoToken)
+	if _, err := client.RegisterSymbols(context.Background(), nil); err != broker.ErrNoSession {
+		t.Errorf("RegisterSymbols before token issuance: err = %v, want %v", err, broker.ErrNoSession)
 	}
 }
 
@@ -182,8 +183,8 @@ func TestClient_GetBoard_MarksStaleOnError(t *testing.T) {
 
 func TestClient_GetBoard_RequiresToken(t *testing.T) {
 	client := marketdata.NewClient(marketdata.Config{BaseURL: "http://unused.invalid"})
-	if _, err := client.GetBoard(context.Background(), "7203", marketdata.ExchangeTSE); err != marketdata.ErrNoToken {
-		t.Errorf("GetBoard before token issuance: err = %v, want %v", err, marketdata.ErrNoToken)
+	if _, err := client.GetBoard(context.Background(), "7203", marketdata.ExchangeTSE); err != broker.ErrNoSession {
+		t.Errorf("GetBoard before token issuance: err = %v, want %v", err, broker.ErrNoSession)
 	}
 }
 

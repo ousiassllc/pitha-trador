@@ -9,7 +9,7 @@ import (
 
 	"errors"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
 func TestWatcher_RankingDrivesWatchListRegistrationAndIngestion(t *testing.T) {
@@ -92,7 +92,7 @@ func TestWatcher_HeldReadErrorKeepsPreviousHeldSymbols(t *testing.T) {
 func TestWatcher_RegistrationFailureOrPanicIsRetriedNextCycle(t *testing.T) {
 	r := newRig(t, "7203")
 	r.src.set([]string{"7203"}, nil, false)
-	r.reg.err = marketdata.ErrNoToken
+	r.reg.err = broker.ErrNoSession
 	r.cycle()
 	r.reg.err, r.reg.panics = nil, true
 	r.cycle()

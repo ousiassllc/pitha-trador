@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/infolimit"
 )
 
@@ -36,7 +37,7 @@ type RegisterSuccess struct {
 func (c *Client) RegisterSymbols(ctx context.Context, symbols []RegisterSymbol) (RegisterSuccess, error) {
 	token, ok := c.Token()
 	if !ok {
-		return RegisterSuccess{}, ErrNoToken
+		return RegisterSuccess{}, broker.ErrNoSession
 	}
 
 	var resp RegisterSuccess
@@ -175,7 +176,7 @@ func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Boa
 	token, ok := c.Token()
 	if !ok {
 		c.boardFailures.Fail()
-		return Board{}, ErrNoToken
+		return Board{}, broker.ErrNoSession
 	}
 
 	var board Board
@@ -183,7 +184,7 @@ func (c *Client) GetBoard(ctx context.Context, symbol string, exchange int) (Boa
 	if err := c.withRestSlot(ctx, RegisterSymbol{Symbol: symbol, Exchange: exchange}, func() error {
 		return c.doInfo(ctx, http.MethodGet, path, token, nil, &board)
 	}); err != nil {
-		if !errors.Is(err, ErrRateLimited) {
+		if !errors.Is(err, broker.ErrRateLimited) {
 			c.status.MarkStale(symbol, err)
 			if countsAsFeedFailure(err) {
 				c.boardFailures.Fail()
@@ -224,7 +225,7 @@ func (c *Client) doInfoOnce(ctx context.Context, method, path, token string, bod
 			return err
 		}
 	}
-	return fmt.Errorf("%w: %w", ErrRateLimited, last)
+	return fmt.Errorf("%w: %w", broker.ErrRateLimited, last)
 }
 
 // RateLimitStats reports the process-wide information-API limiter.

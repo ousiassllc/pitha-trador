@@ -87,3 +87,4 @@ erDiagram
 | 1.36 | 2026-10-07 | `er/tables-market.md`の`market_snapshots.market_breadth`に、`scan.full_scan_enabled: true`では足が約8分間隔で各銘柄の`return_5m`が欠損のため常にNULLになる旨を追記。スキーマ変更なし | issue #693・#694・#696 |
 | 1.37 | 2026-10-08 | `er/tables-trading.md`の`calibration_outcomes.horizon_minutes`を5/10/15等へ更新（既定の判定水平線を5/10/20から変更、既存の20分行は残る）、`calibration_label_skips`に猶予内はpending再試行・マーカー記録時はジョブをskipとして`succeeded`終了する旨を追記。スキーマ変更なし | issue #710, #711 |
 | 1.38 | 2026-10-08 | `er/tables-system.md`の`runtime_settings`から環境変数の上書き層を削除（`config/strategy.yaml` < `runtime_settings`）し、Settings画面が保存する`system.backup_dir`/`system.log_dir`キーを追記。スキーマ変更なし | issue #708 |
+| 1.39 | 2026-10-08 | `er/tables-market.md`の`market_snapshots.raw_data_json`の説明を「kabuステーションAPI生レスポンス」から「ブローカーの生レスポンス」へ一般化。スキーマ・保存内容は変更なし | issue #722 |

@@ -8,13 +8,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
+// fakeTokenStatus is a broker session whose status is the kabu adapter's
+// mapping of a token issuance outcome, so the banner texts asserted below are
+// the kabu adapter's own guidance (issues #295, #712).
 type fakeTokenStatus marketdata.TokenStatus
 
-func (f fakeTokenStatus) TokenStatus() marketdata.TokenStatus { return marketdata.TokenStatus(f) }
+func (f fakeTokenStatus) Status() broker.SessionStatus {
+	return kabu.SessionStatusOf(marketdata.TokenStatus(f))
+}
 
 func TestMarketDataHandler_Status(t *testing.T) {
 	tests := []struct {

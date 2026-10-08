@@ -6,22 +6,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
-type countingGetter struct {
+type countingSource struct {
 	calls int
 	err   error
 }
 
-func (g *countingGetter) GetSymbol(context.Context, string, int) (marketdata.SymbolInfo, error) {
+func (g *countingSource) SymbolInfo(context.Context, string) (broker.SymbolInfo, error) {
 	g.calls++
-	return marketdata.SymbolInfo{Symbol: "7203"}, g.err
+	return broker.SymbolInfo{}, g.err
 }
 
 func TestCache_FetchesOncePerSymbolPerJSTDayAndDoesNotCacheErrors(t *testing.T) {
-	g := &countingGetter{err: errors.New("boom")}
-	c := New(g, marketdata.ExchangeTSE)
+	g := &countingSource{err: errors.New("boom")}
+	c := New(g)
 	now := time.Date(2026, 10, 5, 0, 30, 0, 0, jst) // 00:30 JST
 	c.now = func() time.Time { return now }
 	ctx := context.Background()

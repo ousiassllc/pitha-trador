@@ -10,55 +10,54 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
 
 func fptr(v float64) *float64 { return &v }
 
-// kabuステーションAPI names quotes from the trader's side: BidPrice is the
-// best SELL quote and AskPrice the best BUY quote (BoardSuccess sample:
-// BidPrice 2408.5 > AskPrice 2407.5). readingFromBoard must swap them into
-// the conventional Bid=buy / Ask=sell Reading (issue #458).
-func TestReadingFromBoard_SwapsKabuSellBuyNaming(t *testing.T) {
-	board := marketdata.Board{
-		CurrentPrice: 2408,
-		BidPrice:     fptr(2408.5), BidQty: fptr(100), // best sell
-		AskPrice: fptr(2407.5), AskQty: fptr(200), // best buy
-		Sell1: &marketdata.BoardLevel{Price: 2408.5, Qty: 100},
-		Sell2: &marketdata.BoardLevel{Price: 2409, Qty: 50},
-		Buy1:  &marketdata.BoardLevel{Price: 2407.5, Qty: 200},
+// readingFromQuote is a plain field-by-field mapping: broker.Quote already
+// uses the conventional naming (Bid = best buy, Ask = best sell), so nothing
+// is swapped here (the kabu swap lives in the adapter, kabu/quote; issue #458).
+func TestReadingFromQuote_MapsFieldsWithoutSwapping(t *testing.T) {
+	q := broker.Quote{
+		Price: 2408, VWAP: 2400, Volume: 1000, Turnover: 2.4e6, High: fptr(2420), Low: fptr(2390),
+		Bid: fptr(2407.5), BidQty: fptr(200), Ask: fptr(2408.5), AskQty: fptr(100),
+		BidDepth: fptr(200), AskDepth: fptr(150), SpecialQuote: true,
 	}
 
-	r := readingFromBoard(board)
+	r := readingFromQuote(q)
 
 	if *r.Bid != 2407.5 || *r.Ask != 2408.5 {
-		t.Errorf("Bid/Ask = %v/%v, want 2407.5/2408.5", *r.Bid, *r.Ask)
+		t.Errorf("Bid/Ask = %v/%v, want 2407.5/2408.5 (unswapped)", *r.Bid, *r.Ask)
 	}
 	if *r.BidQty != 200 || *r.AskQty != 100 {
-		t.Errorf("BidQty/AskQty = %v/%v, want 200/100", *r.BidQty, *r.AskQty)
+		t.Errorf("BidQty/AskQty = %v/%v, want 200/100 (unswapped)", *r.BidQty, *r.AskQty)
 	}
 	if *r.BidDepth != 200 || *r.AskDepth != 150 {
-		t.Errorf("BidDepth/AskDepth = %v/%v, want 200/150 (buy/sell levels)", *r.BidDepth, *r.AskDepth)
+		t.Errorf("BidDepth/AskDepth = %v/%v, want 200/150", *r.BidDepth, *r.AskDepth)
+	}
+	if r.Price != 2408 || r.VWAP != 2400 || r.Volume != 1000 || r.Turnover != 2.4e6 || *r.SessionHigh != 2420 || *r.SessionLow != 2390 || !r.SpecialQuote {
+		t.Errorf("reading = %+v, scalar fields not carried over", r)
 	}
 }
 
-func TestReadingFromBoard_MissingQuotesStayNil(t *testing.T) {
-	r := readingFromBoard(marketdata.Board{CurrentPrice: 2408})
+func TestReadingFromQuote_MissingQuotesStayNil(t *testing.T) {
+	r := readingFromQuote(broker.Quote{Price: 2408})
 	if r.Bid != nil || r.Ask != nil || r.BidQty != nil || r.AskQty != nil || r.BidDepth != nil || r.AskDepth != nil {
-		t.Errorf("reading = %+v, want all board fields nil", r)
+		t.Errorf("reading = %+v, want all book fields nil", r)
 	}
 }
 
 // The official sample must persist a positive spread and a buy-heavy
 // (positive) orderbook imbalance, not the pre-fix negative values.
-func TestHandleMarketData_KabuSampleBoardYieldsPositiveSpreadAndImbalance(t *testing.T) {
+func TestHandleMarketData_SampleQuoteYieldsPositiveSpreadAndImbalance(t *testing.T) {
 	env := newTestEnv(t)
-	env.Fake.board = marketdata.Board{
-		Symbol: "7203", CurrentPrice: 2408, VWAP: 2400, TradingVolume: 1000000, TradingValue: 2.4e9,
-		BidPrice: fptr(2408.5), BidQty: fptr(100),
-		AskPrice: fptr(2407.5), AskQty: fptr(200),
+	env.Fake.quote = broker.Quote{
+		Symbol: "7203", Price: 2408, VWAP: 2400, Volume: 1000000, Turnover: 2.4e9,
+		Ask: fptr(2408.5), AskQty: fptr(100), // best sell
+		Bid: fptr(2407.5), BidQty: fptr(200), // best buy
 	}
 	inst := mustCreateInstrument(t, env, "7203")
 
@@ -84,16 +83,16 @@ func TestHandleMarketData_KabuSampleBoardYieldsPositiveSpreadAndImbalance(t *tes
 	}
 }
 
-// A board whose spread exceeds max_spread_bps must be excluded by Fast
+// A quote whose spread exceeds max_spread_bps must be excluded by Fast
 // Screener (FR-FS-1) and exceed the Risk Engine's limit too, both of which
 // read the persisted SpreadBps; before the fix it was always negative so
 // neither guard could fire.
 func TestHandleMarketData_WideSpreadBoardTripsSpreadGuards(t *testing.T) {
 	env := newTestEnv(t)
-	env.Fake.board = marketdata.Board{
-		Symbol: "7203", CurrentPrice: 2500, VWAP: 2490, TradingVolume: 1000000, TradingValue: 2.49e9,
-		BidPrice: fptr(2530), BidQty: fptr(100), // best sell
-		AskPrice: fptr(2470), AskQty: fptr(100), // best buy
+	env.Fake.quote = broker.Quote{
+		Symbol: "7203", Price: 2500, VWAP: 2490, Volume: 1000000, Turnover: 2.49e9,
+		Ask: fptr(2530), AskQty: fptr(100), // best sell
+		Bid: fptr(2470), BidQty: fptr(100), // best buy
 	}
 	inst := mustCreateInstrument(t, env, "7203")
 

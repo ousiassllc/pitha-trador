@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
 const (
@@ -98,7 +100,7 @@ func (c *Client) releaseRestSlots(ctx context.Context) error {
 func (c *Client) unregister(ctx context.Context, syms []RegisterSymbol) error {
 	token, ok := c.Token()
 	if !ok {
-		return ErrNoToken
+		return broker.ErrNoSession
 	}
 	err := c.doInfo(ctx, http.MethodPut, "/unregister", token, registerRequest{Symbols: syms}, nil)
 	var api *APIError
@@ -125,7 +127,7 @@ func (c *Client) UnregisterSymbols(ctx context.Context, symbols []RegisterSymbol
 func (c *Client) UnregisterAll(ctx context.Context) error {
 	token, ok := c.Token()
 	if !ok {
-		return ErrNoToken
+		return broker.ErrNoSession
 	}
 	if err := c.doInfo(ctx, http.MethodPut, "/unregister/all", token, nil, nil); err != nil {
 		return err

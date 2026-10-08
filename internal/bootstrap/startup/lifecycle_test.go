@@ -11,11 +11,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
 // newServices builds Services on a fresh temp DB whose kabuステーションAPI
-// answers every token request with a 500 (so MarketData.Start's initial
+// answers every token request with a 500 (so Broker.Start's initial
 // token issuance fails deterministically) and whose Jev points at a closed
 // local port, so nothing here dials a real host.
 func newServices(t *testing.T) *bootstrap.Services {
@@ -25,13 +24,12 @@ func newServices(t *testing.T) *bootstrap.Services {
 		t.Fatalf("Run: %v", err)
 	}
 	t.Cleanup(func() { _ = state.Close() })
-	svc := bootstrap.BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"}, bootstrap.WithJevMaxAttempts(1))
 	kabu := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
 	t.Cleanup(kabu.Close)
-	svc.MarketData = marketdata.NewClient(marketdata.Config{BaseURL: kabu.URL + "/kabusapi", APIPassword: "test-password"})
-	return svc
+	return bootstrap.BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"},
+		bootstrap.WithJevMaxAttempts(1), bootstrap.WithKabuBaseURL(kabu.URL+"/kabusapi"))
 }
 
 // A failed initial kabu token must not fail Start, and Start -> ctx cancel
@@ -45,8 +43,8 @@ func TestServices_StartToleratesTokenFailureAndStopReturnsAfterCancel(t *testing
 	if err := svc.Start(ctx); err != nil {
 		t.Fatalf("Start with a failing kabu token: err = %v, want nil", err)
 	}
-	if _, held := svc.MarketData.Token(); held {
-		t.Fatal("kabu token held after a 500 token response; the test double is not failing")
+	if !svc.Broker.Status().Failed() {
+		t.Fatal("broker session healthy after a 500 token response; the test double is not failing")
 	}
 
 	cancel()

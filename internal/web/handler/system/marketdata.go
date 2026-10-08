@@ -6,16 +6,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
 // MarketDataStatusSource is what `GET /system/marketdata-status` needs from
-// the kabuステーションAPI client: the outcome of its last token issuance.
-// *marketdata.Client implements it directly.
+// the broker adapter: the state of its session (broker.Session).
 type MarketDataStatusSource interface {
-	TokenStatus() marketdata.TokenStatus
+	Status() broker.SessionStatus
 }
 
 // MarketDataHandler implements `GET /system/marketdata-status` (issue
@@ -31,13 +30,13 @@ func NewMarketDataHandler(source MarketDataStatusSource) *MarketDataHandler {
 
 // Status implements `GET /system/marketdata-status`: Header's
 // `#marketdata-banner` fragment (organisms.MarketDataBanner), non-empty
-// only while the last kabuステーションAPI token issuance failed, and
-// escalated while a not_logged_in streak persists (issue #712).
+// only while the broker session is failing (kabu: the last token issuance
+// failed), and escalated while a not_logged_in streak persists (issue #712).
 func (h *MarketDataHandler) Status(c *gin.Context) {
 	var props organisms.MarketDataBannerProps
 	if h.source != nil {
-		status := h.source.TokenStatus()
-		props.Issue, props.Guidance = string(status.Issue), status.Guidance()
+		status := h.source.Status()
+		props.Issue, props.Guidance = string(status.Issue), status.Guidance
 		props.Failures = status.Failures
 		props.Persistent, props.Elapsed = status.Persistent(time.Now())
 	}

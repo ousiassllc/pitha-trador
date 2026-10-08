@@ -8,32 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
-
-func fp(v float64) *float64 { return &v }
-
-func TestSymbolInfo_PriceLimit(t *testing.T) {
-	info := marketdata.SymbolInfo{UpperLimit: fp(2500), LowerLimit: fp(2000)}
-	cases := []struct {
-		price float64
-		want  domain.PriceLimit
-	}{
-		{2500, domain.PriceLimitUp},
-		{2000, domain.PriceLimitDown},
-		{2499, domain.PriceLimitNone},
-		{2001, domain.PriceLimitNone},
-	}
-	for _, c := range cases {
-		if got := info.PriceLimit(c.price); got != c.want {
-			t.Errorf("PriceLimit(%v) = %q, want %q", c.price, got, c.want)
-		}
-	}
-	if got := (marketdata.SymbolInfo{}).PriceLimit(1); got != domain.PriceLimitNone {
-		t.Errorf("unknown limits: PriceLimit = %q, want none", got)
-	}
-}
 
 func TestBoard_IsSpecialQuote(t *testing.T) {
 	cases := []struct {
@@ -69,7 +46,7 @@ func TestClient_GetSymbol_DecodesLendabilityAndLimits(t *testing.T) {
 	defer server.Close()
 
 	client := marketdata.NewClient(marketdata.Config{BaseURL: server.URL, APIPassword: "secret"})
-	if _, err := client.GetSymbol(context.Background(), "7203", marketdata.ExchangeTSE); !errors.Is(err, marketdata.ErrNoToken) {
+	if _, err := client.GetSymbol(context.Background(), "7203", marketdata.ExchangeTSE); !errors.Is(err, broker.ErrNoSession) {
 		t.Fatalf("before token: err = %v, want ErrNoToken", err)
 	}
 	if _, err := client.IssueToken(context.Background()); err != nil {

@@ -12,7 +12,7 @@ import (
 
 // Start launches every background goroutine this build's composition
 // root owns: kabuステーションAPI token issuance/refresh
-// (marketdata.Client.Start), the candidate-refresh ticker (issue #45),
+// (broker.Session.Start), the candidate-refresh ticker (issue #45),
 // the PUSH subscription (pushfeed), and the Scheduler's worker pool + full-scan/self-improve/
 // outcome-labeling/operator-heartbeat/log-rotation cron triggers
 // (scheduler.Scheduler.Start), after first recovering any job left
@@ -26,20 +26,15 @@ func (s *Services) Start(ctx context.Context) error {
 
 	s.syncUniverse(ctx)
 
-	if err := s.MarketData.Start(ctx, defaultTokenRefreshInterval); err != nil {
-		// kabuステーションAPI not reachable at startup (dev machine
-		// without the kabuステーションアプリ running, issue #44's own
-		// scope note) must not prevent the rest of the process (Scanner
-		// Dashboard, API, other queues) from starting: log and continue
-		// with no token. MarketData.Start keeps retrying in the background
-		// (issue #295) and the header banner (`/system/marketdata-status`)
-		// tells the operator the cause. Every GetBoard call until a token
-		// is obtained simply fails (ErrNoToken or a request error) and
-		// marketdatajob.Handler's own per-job error handling already
-		// covers that.
-		status := s.MarketData.TokenStatus()
-		slog.Error("bootstrap: kabuステーションAPI initial token issuance failed, continuing without a token",
-			"issue", status.Issue, "guidance", status.Guidance(), "error", err)
+	if err := s.Broker.Start(ctx); err != nil {
+		// The broker API being unreachable at startup (no broker app on a dev
+		// machine, issue #44) must not stop the rest of the process: log and
+		// continue without a session. Session.Start keeps retrying (issue
+		// #295); the header banner shows the cause and every quote fetch fails
+		// (broker.ErrNoSession or a request error) per job meanwhile.
+		status := s.Broker.Status()
+		slog.Error("bootstrap: broker initial session establishment failed, continuing without a session",
+			"broker", s.Broker.Capabilities().Name, "issue", status.Issue, "guidance", status.Guidance, "error", err)
 	}
 
 	fullScanInterval := time.Duration(s.strategy.Scan.FullScanIntervalSeconds) * time.Second
@@ -55,13 +50,13 @@ func (s *Services) Start(ctx context.Context) error {
 		defer s.wg.Done()
 		scan := s.strategy.Scan
 		heldposition.Monitor{
-			Positions: s.Positions, Boards: s.PushFeed, Exits: s.Execution,
+			Positions: s.Positions, Quotes: s.Broker, Exits: s.Execution,
 			Open: marketcalendarOpen,
 		}.Run(ctx, time.Duration(scan.HeldPositionIntervalSecondsMin)*time.Second, time.Duration(scan.HeldPositionIntervalSecondsMax)*time.Second)
 	}()
 
 	s.wg.Add(1) // startup symbol registration + PUSH subscription (flows.md §10.1)
-	go func() { defer s.wg.Done(); s.PushFeed.Run(ctx) }()
+	go func() { defer s.wg.Done(); s.Broker.Run(ctx) }()
 
 	s.startRankingWatch(ctx)
 	s.startRankingMeasure(ctx)

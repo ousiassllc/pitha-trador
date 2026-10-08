@@ -8,30 +8,15 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
-const (
-	// DefaultInterval is how often the ranking is fetched (issue #651:
-	// 毎分).
-	DefaultInterval = time.Minute
-	// DefaultExchange is the ExchangeDivision fetched: 東証全体, matching the
-	// exchange code symbols are registered and polled with.
-	DefaultExchange = "T"
-)
-
-// DefaultTypes are the GET /ranking 種別 fetched: 1 値上がり率, 2 値下がり率,
-// 3 売買高上位, 4 売買代金上位, 5 TICK回数, 6 売買高急増, 7 売買代金急増.
-var DefaultTypes = []int{1, 2, 3, 4, 5, 6, 7}
+// DefaultInterval is how often the ranking is fetched (issue #651: 毎分).
+const DefaultInterval = time.Minute
 
 // errPanicked marks a ranking request that panicked (already logged with its
 // stack by safego).
 var errPanicked = errors.New("rankingwatch: ranking request panicked")
-
-// Source fetches one ranking's symbol codes in rank order
-// (*marketdata.Client). It must return nothing but codes.
-type Source interface {
-	RankingSymbols(ctx context.Context, rankType int, exchange string) ([]string, error)
-}
 
 // HeldSource lists the symbols with an open position or pending order (Held).
 type HeldSource interface {
@@ -44,7 +29,7 @@ type Universe interface {
 	ListActiveByKind(ctx context.Context, kind string) ([]domain.Instrument, error)
 }
 
-// Registrar makes the watch list the PUSH registration (*pushfeed.Feed).
+// Registrar makes the watch list the stream subscription (broker.StreamFeed).
 type Registrar interface {
 	SetWatch(ctx context.Context, symbols []string) error
 }
@@ -59,16 +44,17 @@ type Ingester interface {
 // jobs (plus those of the market-context index rows). A cycle never fails: an empty or failed ranking leaves only the held
 // symbols (see Selector.Update) and the next cycle tries again.
 type Watcher struct {
-	Source    Source
+	// Source supplies the ranked candidate symbols (broker.CandidateSource);
+	// it must return nothing but codes.
+	Source    broker.CandidateSource
 	Held      HeldSource
 	Universe  Universe
 	Registrar Registrar
 	Ingester  Ingester
 	List      *Watchlist
-	// Types and Exchange select the rankings; they default to DefaultTypes
-	// and DefaultExchange.
-	Types    []int
-	Exchange string
+	// MaxWatched is the watch list cap (broker.Capabilities.MaxStreamSymbols);
+	// zero means DefaultMaxWatched.
+	MaxWatched int
 	// Open reports whether t is inside a trading session; outside it no
 	// ranking is requested and PUSH registration and market-data ingestion
 	// cover the held symbols only, while the candidate list (List) keeps
@@ -98,6 +84,7 @@ func (w *Watcher) Cycle(ctx context.Context) {
 func (w *Watcher) cycle(ctx context.Context) {
 	now := w.now()
 	start := time.Now()
+	w.selector.Max = w.MaxWatched
 	stocks, err := w.Universe.ListActiveByKind(ctx, domain.InstrumentKindStock)
 	if err != nil {
 		if ctx.Err() == nil {
