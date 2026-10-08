@@ -1,16 +1,16 @@
 // Package heldposition is FR-SCHED-4's 保有ポジション監視・Exit評価 loop
 // (issue #156): every 5〜15 seconds it re-prices each open Paper position
-// from the latest kabuステーション board and runs Execution's exit evaluation,
+// from the latest broker quote and runs Execution's exit evaluation,
 // so Stop Loss / Trailing Stop / Take Profit / 最大保有時間 / 引け前強制決済
 // are judged on that cadence instead of only on the 60-second full scan's
 // 1-minute bar.
 //
 // The evaluation is pure code (no Jev call, FR-EXIT-3) and runs only inside
-// a trading session: off-hours no board is fetched (non-functional.md §3).
+// a trading session: off-hours no quote is fetched (non-functional.md §3).
 // It is deliberately not gated by the Kill Switch: exits must keep working
 // while new entries are halted.
 //
-// It is composition-root glue (it joins marketdata and execution), so it
+// It is composition-root glue (it joins the broker quote feed and execution), so it
 // lives under internal/bootstrap rather than internal/service.
 package heldposition
 
@@ -23,9 +23,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/quote"
+	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 )
 
 // DefaultInterval is the tick used when config/strategy.yaml's
@@ -38,12 +38,13 @@ type Positions interface {
 	ListOpen(ctx context.Context) ([]domain.Position, error)
 }
 
-// Boards returns the latest board of a symbol (*pushfeed.Feed): the PUSH
-// board when it is fresh, a REST poll only as the thin supplement when it is
-// stale or missing (issue #709). Held symbols are always in the PUSH watch
-// list, so the 5〜15秒 loop does not add a REST /board per position per tick.
-type Boards interface {
-	Latest(ctx context.Context, symbol string) (marketdata.Board, error)
+// Quotes returns the latest quote of a symbol (broker.StreamFeed): the
+// streamed quote when it is fresh, a REST poll only as the thin supplement
+// when it is stale or missing (issue #709). Held symbols are always in the
+// stream's watch list, so the 5〜15秒 loop does not add a REST poll per
+// position per tick.
+type Quotes interface {
+	Latest(ctx context.Context, symbol string) (broker.Quote, error)
 }
 
 // Exits evaluates exit conditions for one price update (execution.Engine).
@@ -57,7 +58,7 @@ type Exits interface {
 // Monitor evaluates every open position once per Cycle.
 type Monitor struct {
 	Positions Positions
-	Boards    Boards
+	Quotes    Quotes
 	Exits     Exits
 	// Open reports whether t is inside a trading session.
 	Open func(t time.Time) bool
@@ -100,28 +101,28 @@ func (m Monitor) Cycle(ctx context.Context) (int, error) {
 	return evaluated, nil
 }
 
-// evaluate prices one position from its board and runs the exit
+// evaluate prices one position from its quote and runs the exit
 // evaluation, reporting whether the position was evaluated.
 func (m Monitor) evaluate(ctx context.Context, p domain.Position, now time.Time) bool {
-	board, err := m.Boards.Latest(ctx, p.Symbol)
+	q, err := m.Quotes.Latest(ctx, p.Symbol)
 	if err != nil {
 		slog.Warn("heldposition: board fetch failed", "symbol", p.Symbol, "error", err)
 		return false
 	}
-	if !board.HasPrice() {
+	if !q.HasPrice() {
 		// 寄り付き前・未約定: price 0 would stop out / close at a bogus -100%.
-		slog.Warn("heldposition: board has no current price, skipping", "symbol", p.Symbol, "current_price", board.CurrentPrice)
+		slog.Warn("heldposition: board has no current price, skipping", "symbol", p.Symbol, "current_price", q.Price)
 		return false
 	}
 	// A transient snapshot (never persisted: market_snapshots stays
 	// the 1-minute bar series): the price, session VWAP and the quote
-	// the exit conditions and the fill model read. The quote is built the
-	// same way as the market-data job's persisted bar (package quote) so an
-	// exit fills at the same price whichever path fires first.
+	// the exit conditions and the fill model read. The quote comes from the
+	// same broker.Quote as the market-data job's persisted bar so an exit
+	// fills at the same price whichever path fires first.
 	snap := domain.Snapshot{
 		InstrumentID: p.InstrumentID, Symbol: p.Symbol, Timestamp: now.UTC(),
-		Price: board.CurrentPrice, Bid: quote.Bid(board), Ask: quote.Ask(board), SpreadBps: quote.SpreadBps(board),
-		Feature: domain.Feature{VWAP: board.VWAP},
+		Price: q.Price, Bid: q.Bid, Ask: q.Ask, SpreadBps: featureengine.SpreadBps(q.Bid, q.Ask),
+		Feature: domain.Feature{VWAP: q.VWAP},
 	}
 	if _, err := m.Exits.OnSnapshot(ctx, snap); err != nil {
 		slog.Error("heldposition: exit evaluation failed", "symbol", p.Symbol, "position_id", p.ID, "error", err)

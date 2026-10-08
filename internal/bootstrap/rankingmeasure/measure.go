@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/safego"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
@@ -75,7 +76,7 @@ func (m Measurer) measure(ctx context.Context, rankType int, exchange string) {
 		if errors.As(err, &api) {
 			attrs = append(attrs, "http_status", api.StatusCode, "kabu_code", api.Code)
 		}
-		attrs = append(attrs, "rate_limited", marketdata.IsRateLimit(err) || errors.Is(err, marketdata.ErrRateLimited), "error", err)
+		attrs = append(attrs, "rate_limited", broker.IsRateLimited(err), "error", err)
 		slog.Warn("rankingmeasure: ranking measured", attrs...)
 		return
 	}

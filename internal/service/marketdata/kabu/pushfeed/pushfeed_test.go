@@ -15,8 +15,9 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
-	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu/pushfeed"
 )
 
 type fakeUniverse struct{ stocks []domain.Instrument }
@@ -148,11 +149,11 @@ func TestRun_RegistersAndServesPushBoards(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Latest: %v", err)
 		}
-		if board.CurrentPrice == 2555 {
+		if board.Price == 2555 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("PUSH board never served; last price %v", board.CurrentPrice)
+			t.Fatalf("PUSH board never served; last price %v", board.Price)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -176,7 +177,7 @@ func TestLatest_FreshPushBoardNeedsNoRESTPoll(t *testing.T) {
 
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if b, err := feed.Latest(ctx, "1000"); err == nil && b.CurrentPrice == 2555 {
+		if b, err := feed.Latest(ctx, "1000"); err == nil && b.Price == 2555 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -186,7 +187,7 @@ func TestLatest_FreshPushBoardNeedsNoRESTPoll(t *testing.T) {
 	}
 	before := f.boardFetches()
 	for range 20 {
-		if b, err := feed.Latest(ctx, "1000"); err != nil || b.CurrentPrice != 2555 {
+		if b, err := feed.Latest(ctx, "1000"); err != nil || b.Price != 2555 {
 			t.Fatalf("Latest = (%+v, %v), want the PUSH board (2555)", b, err)
 		}
 	}
@@ -199,7 +200,7 @@ func TestLatest_FallsBackToRESTWithoutPushBoard(t *testing.T) {
 	f := newFakeKabu(t, marketdata.Board{Symbol: "1000", CurrentPrice: 2400})
 	feed := pushfeed.New(fakeUniverse{}, f.client, f.wsURL(), 1)
 	board, err := feed.Latest(context.Background(), "1000")
-	if err != nil || board.CurrentPrice != 2400 || f.boardFetches() != 1 {
+	if err != nil || board.Price != 2400 || f.boardFetches() != 1 {
 		t.Fatalf("Latest = (%+v, %v), REST fetches %d; want the REST board (2400) after one fetch", board, err, f.boardFetches())
 	}
 }
@@ -209,7 +210,7 @@ func TestLatest_FallsBackToRESTWithoutPushBoard(t *testing.T) {
 func TestLatest_RejectsBoardWithoutCurrentPrice(t *testing.T) {
 	f := newFakeKabu(t, marketdata.Board{Symbol: "1000", CurrentPrice: 0, VWAP: 0})
 	feed := pushfeed.New(fakeUniverse{}, f.client, f.wsURL(), 1)
-	if _, err := feed.Latest(context.Background(), "1000"); !errors.Is(err, marketdata.ErrPriceUnavailable) {
+	if _, err := feed.Latest(context.Background(), "1000"); !errors.Is(err, broker.ErrPriceUnavailable) {
 		t.Fatalf("Latest err = %v, want ErrPriceUnavailable", err)
 	}
 }

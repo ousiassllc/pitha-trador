@@ -28,15 +28,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
-	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
@@ -64,8 +63,7 @@ type Services struct {
 	Proposals   *judgement.ProposalRepository
 
 	RAG           *rag.Service
-	MarketData    *marketdata.Client
-	PushFeed      *pushfeed.Feed // startup registration + PUSH subscription (flows.md §10.1)
+	Broker        broker.Broker // the selected broker adapter (newBroker; currently kabu)
 	FeatureEngine *featureengine.Engine
 	Screener      *screener.LiveSource
 	Jev           *jev.Client
@@ -103,6 +101,7 @@ type buildSettings struct {
 	jevMaxAttempts int
 	executionNow   func() time.Time
 	yanoshinURL    string
+	kabuURL        string
 	newsNow        func() time.Time
 }
 
@@ -126,6 +125,12 @@ func WithNotifiers(notifiers ...risk.Notifier) BuildOption {
 // avoid the production retry backoff. n <= 0 keeps the production policy.
 func WithJevMaxAttempts(n int) BuildOption {
 	return func(s *buildSettings) { s.jevMaxAttempts = n }
+}
+
+// WithKabuBaseURL points the kabuステーションAPI adapter at baseURL instead of
+// marketdata.DefaultBaseURL (an httptest server in tests).
+func WithKabuBaseURL(baseURL string) BuildOption {
+	return func(s *buildSettings) { s.kabuURL = baseURL }
 }
 
 // WithYanoshinBaseURL points the default news feed (やのしん TDnet WebAPI) at

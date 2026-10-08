@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
@@ -44,7 +45,7 @@ func TestClient_Healthy_MarketDataDownAfterConsecutiveBoardFailures(t *testing.T
 
 	healthy := func() bool {
 		t.Helper()
-		ok, err := client.Healthy(ctx)
+		ok, err := broker.MarketDataChecker{Health: client}.Healthy(ctx)
 		if err != nil {
 			t.Fatalf("Healthy: %v", err)
 		}

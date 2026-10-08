@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/infolimit"
 )
@@ -120,7 +121,7 @@ func TestClient_GetBoard_Retries4001006ThenSucceeds(t *testing.T) {
 	if client.Status().IsStale("7203") {
 		t.Fatal("symbol marked stale after a recovered 4001006")
 	}
-	ok, err := client.Healthy(context.Background())
+	ok, err := broker.MarketDataChecker{Health: client}.Healthy(context.Background())
 	if err != nil || !ok {
 		t.Fatalf("Healthy = (%v, %v), want true (4001006 is not market_data_down)", ok, err)
 	}
@@ -137,7 +138,7 @@ func TestClient_GetBoard_Exhausted4001006IsErrRateLimited(t *testing.T) {
 	clock := infolimit.NewManualClock(time.Time{})
 	client := issuedClient(t, server, clock, 8)
 	_, err := client.GetBoard(context.Background(), "9997", marketdata.ExchangeTSE)
-	if !errors.Is(err, marketdata.ErrRateLimited) {
+	if !errors.Is(err, broker.ErrRateLimited) {
 		t.Fatalf("GetBoard err = %v, want ErrRateLimited", err)
 	}
 	if !marketdata.IsRateLimit(err) {
@@ -149,7 +150,7 @@ func TestClient_GetBoard_Exhausted4001006IsErrRateLimited(t *testing.T) {
 	if status, ok := client.Status().Status("9997"); ok {
 		t.Fatalf("ErrRateLimited recorded status %+v, want no stale mark", status)
 	}
-	ok, herr := client.Healthy(context.Background())
+	ok, herr := broker.MarketDataChecker{Health: client}.Healthy(context.Background())
 	if herr != nil || !ok {
 		t.Fatalf("Healthy = (%v, %v), want true", ok, herr)
 	}

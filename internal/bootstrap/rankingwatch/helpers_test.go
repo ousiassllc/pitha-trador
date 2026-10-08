@@ -14,7 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
-// fakeSource answers every ranking type with symbols, or fails/panics.
+// fakeSource answers every Candidates call with symbols, or fails/panics.
 type fakeSource struct {
 	mu      sync.Mutex
 	symbols []string
@@ -23,7 +23,7 @@ type fakeSource struct {
 	calls   int
 }
 
-func (f *fakeSource) RankingSymbols(_ context.Context, _ int, _ string) ([]string, error) {
+func (f *fakeSource) Candidates(context.Context) ([]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
@@ -122,7 +122,7 @@ func newRig(t *testing.T, universe ...string) *rig {
 	}
 	r.w = &rankingwatch.Watcher{
 		Source: r.src, Held: r.held, Universe: insts, Registrar: r.reg, Ingester: r.ing, List: r.list,
-		Types: []int{1, 2}, Now: func() time.Time { return r.now },
+		Now: func() time.Time { return r.now },
 	}
 	prev := slog.Default()
 	slog.SetDefault(slog.New(slog.NewTextHandler(r.logs, nil)))

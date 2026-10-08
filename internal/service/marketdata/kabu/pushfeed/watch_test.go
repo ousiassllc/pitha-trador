@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
-	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu/pushfeed"
 )
 
 func symbolsOf(regs []marketdata.RegisterSymbol) []string {

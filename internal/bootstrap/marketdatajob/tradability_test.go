@@ -6,15 +6,15 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
 type fakeSymbols struct {
-	info marketdata.SymbolInfo
+	info broker.SymbolInfo
 	err  error
 }
 
-func (f fakeSymbols) Get(context.Context, string) (marketdata.SymbolInfo, error) {
+func (f fakeSymbols) Get(context.Context, string) (broker.SymbolInfo, error) {
 	return f.info, f.err
 }
 
@@ -24,11 +24,11 @@ func bptr(v bool) *bool { return &v }
 // reach the persisted snapshot (issue #511).
 func TestHandleMarketData_PersistsTradabilityFlags(t *testing.T) {
 	env := newTestEnv(t)
-	env.Symbols = fakeSymbols{info: marketdata.SymbolInfo{MarginSell: bptr(false), UpperLimit: fptr(2500), LowerLimit: fptr(2000)}}
-	env.Fake.board = marketdata.Board{
-		Symbol: "7203", CurrentPrice: 2500, VWAP: 2490, TradingVolume: 1000000, TradingValue: 2.49e9,
-		BidPrice: fptr(2500.5), BidQty: fptr(100), AskPrice: fptr(2500), AskQty: fptr(100),
-		BidSign: "0102",
+	env.Symbols = fakeSymbols{info: broker.SymbolInfo{Lendable: bptr(false), UpperLimit: fptr(2500), LowerLimit: fptr(2000)}}
+	env.Fake.quote = broker.Quote{
+		Symbol: "7203", Price: 2500, VWAP: 2490, Volume: 1000000, Turnover: 2.49e9,
+		Ask: fptr(2500.5), AskQty: fptr(100), Bid: fptr(2500), BidQty: fptr(100),
+		SpecialQuote: true,
 	}
 	inst := mustCreateInstrument(t, env, "7203")
 
@@ -50,8 +50,8 @@ func TestHandleMarketData_PersistsTradabilityFlags(t *testing.T) {
 func TestHandleMarketData_SymbolInfoFailureLeavesFlagsUnknown(t *testing.T) {
 	env := newTestEnv(t)
 	env.Symbols = fakeSymbols{err: errors.New("boom")}
-	env.Fake.board = marketdata.Board{
-		Symbol: "7203", CurrentPrice: 2500, VWAP: 2490, TradingVolume: 1000000, TradingValue: 2.49e9,
+	env.Fake.quote = broker.Quote{
+		Symbol: "7203", Price: 2500, VWAP: 2490, Volume: 1000000, Turnover: 2.49e9,
 	}
 	inst := mustCreateInstrument(t, env, "7203")
 

@@ -13,7 +13,7 @@ type MarketDataBannerProps struct {
 	// Guidance is the cause-specific remedy (marketdata.TokenStatus.Guidance).
 	Guidance string
 	// Persistent escalates the banner for a not_logged_in streak that keeps
-	// repeating or lasting (marketdata.TokenStatus.Persistent): the
+	// repeating or lasting (broker.SessionStatus.Persistent): the
 	// post-maintenance manual kabuステーション re-login is still pending.
 	Persistent bool
 	// Failures is the number of consecutive failed token issuances.

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/infolimit"
 )
@@ -88,7 +89,7 @@ func TestClient_GetBoard_ReissuesRevokedToken(t *testing.T) {
 	if held, _ := client.Token(); held != server.current {
 		t.Errorf("held token = %q, want the reissued %q", held, server.current)
 	}
-	if healthy, _ := client.Healthy(ctx); !healthy {
+	if healthy, _ := (broker.MarketDataChecker{Health: client}).Healthy(ctx); !healthy {
 		t.Error("Healthy() = false after a recovered revocation")
 	}
 	if client.Status().IsStale("7203") {
@@ -173,7 +174,7 @@ func TestClient_GetBoard_FailedReissueReturnsOriginalError(t *testing.T) {
 	if got := server.tokenCalls.Load() - before; got != 1 {
 		t.Errorf("/token calls = %d, want 1 within the throttle window", got)
 	}
-	if healthy, _ := client.Healthy(ctx); healthy {
+	if healthy, _ := (broker.MarketDataChecker{Health: client}).Healthy(ctx); healthy {
 		t.Error("Healthy() = true after 5 unrecovered 401s, want false")
 	}
 
@@ -183,7 +184,7 @@ func TestClient_GetBoard_FailedReissueReturnsOriginalError(t *testing.T) {
 	if _, err := client.GetBoard(ctx, "7203", marketdata.ExchangeTSE); err != nil {
 		t.Fatalf("GetBoard after the throttle window: %v", err)
 	}
-	if healthy, _ := client.Healthy(ctx); !healthy {
+	if healthy, _ := (broker.MarketDataChecker{Health: client}).Healthy(ctx); !healthy {
 		t.Error("Healthy() = false after recovery")
 	}
 }

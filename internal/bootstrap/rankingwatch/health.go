@@ -1,11 +1,10 @@
 package rankingwatch
 
 import (
-	"errors"
 	"log/slog"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
 // errorLogEvery is the minimum gap between two repeated failure lines of the
@@ -39,7 +38,7 @@ func (h *health) report(now time.Time, res rankingResult, held, watch, added, re
 		if h.lastLogged.IsZero() || now.Sub(h.lastLogged) >= errorLogEvery {
 			h.lastLogged = now
 			slog.Warn("rankingwatch: ranking failed, zero ranked candidates until the next cycle",
-				append(attrs, "consecutive_failures", h.failures, "error_code", errorCode(res.err), "rate_limited", marketdata.IsRateLimit(res.err) || errors.Is(res.err, marketdata.ErrRateLimited), "error", res.err)...)
+				append(attrs, "consecutive_failures", h.failures, "error_code", broker.ErrorCode(res.err), "rate_limited", broker.IsRateLimited(res.err), "error", res.err)...)
 		}
 	case len(res.symbols) == 0:
 		h.recovered()
@@ -91,13 +90,4 @@ func (h *health) logOther(now time.Time, kind, msg string, attrs ...any) {
 	}
 	h.other[kind] = now
 	slog.Warn("rankingwatch: "+msg, attrs...)
-}
-
-// errorCode is the kabu error code of err, or 0.
-func errorCode(err error) int {
-	var api *marketdata.APIError
-	if errors.As(err, &api) {
-		return api.Code
-	}
-	return 0
 }

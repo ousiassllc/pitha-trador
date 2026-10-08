@@ -9,9 +9,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
 func marketDataJob(t *testing.T, inst domain.Instrument) jobqueue.Job {
@@ -25,8 +25,8 @@ func marketDataJob(t *testing.T, inst domain.Instrument) jobqueue.Job {
 
 func TestHandleMarketData_FetchesComputesAndPersistsSnapshot(t *testing.T) {
 	env := newTestEnv(t)
-	env.Fake.board = marketdata.Board{
-		Symbol: "7203", CurrentPrice: 2500, VWAP: 2490, TradingVolume: 1000000, TradingValue: 2.49e9,
+	env.Fake.quote = broker.Quote{
+		Symbol: "7203", Price: 2500, VWAP: 2490, Volume: 1000000, Turnover: 2.49e9,
 	}
 	inst := mustCreateInstrument(t, env, "7203")
 
@@ -51,7 +51,7 @@ func TestHandleMarketData_FetchesComputesAndPersistsSnapshot(t *testing.T) {
 
 func TestHandleMarketData_DefersRateLimitedFetchWithoutFailing(t *testing.T) {
 	env := newTestEnv(t)
-	env.Fake.err = marketdata.ErrRateLimited
+	env.Fake.err = broker.ErrRateLimited
 	inst := mustCreateInstrument(t, env, "9997")
 
 	if err := env.HandleMarketData(context.Background(), marketDataJob(t, inst)); err != nil {
@@ -68,10 +68,10 @@ func TestHandleMarketData_DefersRateLimitedFetchWithoutFailing(t *testing.T) {
 
 func TestHandleMarketData_ReturnsErrorWithoutSwallowingOnFetchFailure(t *testing.T) {
 	env := newTestEnv(t)
-	env.Fake.err = marketdata.ErrNoToken
+	env.Fake.err = broker.ErrNoSession
 	inst := mustCreateInstrument(t, env, "9999")
 
-	if err := env.HandleMarketData(context.Background(), marketDataJob(t, inst)); !errors.Is(err, marketdata.ErrNoToken) {
+	if err := env.HandleMarketData(context.Background(), marketDataJob(t, inst)); !errors.Is(err, broker.ErrNoSession) {
 		t.Fatalf("HandleMarketData error = %v, want the board failure returned as-is", err)
 	}
 
@@ -102,8 +102,8 @@ func TestHandleFeatureCalc_IsANoOp(t *testing.T) {
 // stop-loss threshold closes the open position.
 func TestHandleMarketData_ClosesPaperPositionWhenNewBarHitsStopLoss(t *testing.T) {
 	env := newTestEnv(t)
-	env.Fake.board = marketdata.Board{
-		Symbol: "7203", CurrentPrice: 2400, VWAP: 2450, TradingVolume: 1000000, TradingValue: 2.4e9,
+	env.Fake.quote = broker.Quote{
+		Symbol: "7203", Price: 2400, VWAP: 2450, Volume: 1000000, Turnover: 2.4e9,
 	}
 	inst := mustCreateInstrument(t, env, "7203")
 	if _, err := env.Execution.Enter(context.Background(), execution.EntryRequest{
@@ -140,8 +140,8 @@ func TestHandleMarketData_ClosesPaperPositionWhenNewBarHitsStopLoss(t *testing.T
 func TestHandleMarketData_KeepsPaperPositionOpenWhenStopLossBarArrivesAtLunchBreak(t *testing.T) {
 	env := newTestEnv(t)
 	env.Now = func() time.Time { return time.Date(2026, 9, 29, 12, 0, 0, 0, marketcalendar.JST) }
-	env.Fake.board = marketdata.Board{
-		Symbol: "7203", CurrentPrice: 2400, VWAP: 2450, TradingVolume: 1000000, TradingValue: 2.4e9,
+	env.Fake.quote = broker.Quote{
+		Symbol: "7203", Price: 2400, VWAP: 2450, Volume: 1000000, Turnover: 2.4e9,
 	}
 	inst := mustCreateInstrument(t, env, "7203")
 	if _, err := env.Execution.Enter(context.Background(), execution.EntryRequest{

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
@@ -66,7 +67,7 @@ func TestClient_Healthy_BoardFailureClassification(t *testing.T) {
 					t.Fatal("GetBoard unexpectedly succeeded")
 				}
 			}
-			healthy, err := client.Healthy(ctx)
+			healthy, err := broker.MarketDataChecker{Health: client}.Healthy(ctx)
 			if err != nil {
 				t.Fatalf("Healthy: %v", err)
 			}

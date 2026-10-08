@@ -19,31 +19,30 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/marketcontext"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/quote"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
 
-// BoardSource returns the latest board for a symbol (*pushfeed.Feed).
-type BoardSource interface {
-	Latest(ctx context.Context, symbol string) (marketdata.Board, error)
+// QuoteSource returns the latest quote for a symbol (broker.StreamFeed).
+type QuoteSource interface {
+	Latest(ctx context.Context, symbol string) (broker.Quote, error)
 }
 
 // SymbolSource returns a symbol's 銘柄情報 (貸借・値幅制限) for the entry
 // eligibility flags (*symbolcache.Cache). Optional on Handler.
 type SymbolSource interface {
-	Get(ctx context.Context, symbol string) (marketdata.SymbolInfo, error)
+	Get(ctx context.Context, symbol string) (broker.SymbolInfo, error)
 }
 
 // Handler is the market-data queue Handler over the dependencies it uses.
 type Handler struct {
-	Boards        BoardSource
+	Quotes        QuoteSource
 	Instruments   *market.InstrumentRepository
 	Snapshots     *market.SnapshotRepository
 	FeatureEngine *featureengine.Engine
@@ -98,7 +97,7 @@ type marketDataJobPayload struct {
 
 // HandleMarketData is the market-data queue Handler (issue #44): it
 // fetches symbol's current 時価情報・板情報 (the fresh PUSH board else a REST
-// poll; never a price-0 board - Boards.Latest), computes its Feature
+// poll; never a price-0 quote - Quotes.Latest), computes its Feature
 // values against featureengine.HistoryLookbackBars prior bars, persists
 // one market_snapshots row via FeatureEngine.RunCycle (which also indexes
 // it for RAG - FR-RAG-1), then runs Paper Trading's position management
@@ -116,10 +115,10 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 	pt := newPhaseTimer()
 	defer pt.warnIfSlow(payload.Symbol)
 
-	board, err := h.Boards.Latest(ctx, payload.Symbol)
+	quote, err := h.Quotes.Latest(ctx, payload.Symbol)
 	if err != nil {
-		if errors.Is(err, marketdata.ErrRateLimited) {
-			slog.Warn("marketdatajob: defer board fetch to next cycle (kabu info api rate limited)",
+		if errors.Is(err, broker.ErrRateLimited) {
+			slog.Warn("marketdatajob: defer board fetch to next cycle (broker info api rate limited)",
 				"symbol", payload.Symbol)
 			return nil
 		}
@@ -133,7 +132,7 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 	}
 	pt.mark("history")
 
-	rawJSON, err := json.Marshal(board)
+	rawJSON, err := json.Marshal(quote.Raw)
 	if err != nil {
 		return fmt.Errorf("marketdatajob: encode raw board data for %q: %w", payload.Symbol, err)
 	}
@@ -146,7 +145,7 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 	now := h.now()
 	mc := h.marketContextLoader().Load(ctx, inst, now)
 	pt.mark("context")
-	current := readingFromBoard(board)
+	current := readingFromQuote(quote)
 	h.applySymbolInfo(ctx, &current, inst, payload.Symbol)
 	pt.mark("symbol")
 	input := featureengine.Input{
@@ -247,39 +246,30 @@ func (h *Handler) applySymbolInfo(ctx context.Context, r *featureengine.Reading,
 		slog.Warn("marketdatajob: fetch symbol info failed; lendable/price-limit unknown", "symbol", symbol, "error", err)
 		return
 	}
-	r.Lendable = info.MarginSell
+	r.Lendable = info.Lendable
 	r.PriceLimit = info.PriceLimit(r.Price)
 }
 
-// readingFromBoard translates a marketdata.Board into the
-// featureengine.Reading Compute expects (doc.go: "Callers translate
-// marketdata.Board into the featureengine.Reading this package expects").
-//
-// kabuステーションAPI names the best quotes from the trader's side: BidPrice/
-// BidQty is the best SELL (offer) quote and AskPrice/AskQty the best BUY
-// (bid) quote (kabu_STATION_API.yaml BoardSuccess), the reverse of the
-// conventional meaning featureengine.Reading uses (Bid = best buy quote,
-// Ask = best sell quote). The mapping is therefore swapped here, and
-// likewise the depth: Buy1..10 is Reading.BidDepth, Sell1..10 AskDepth.
-func readingFromBoard(board marketdata.Board) featureengine.Reading {
-	r := featureengine.Reading{
-		Price:        board.CurrentPrice,
-		VWAP:         board.VWAP,
-		Volume:       int64(board.TradingVolume),
-		Turnover:     board.TradingValue,
-		SessionHigh:  board.HighPrice,
-		SessionLow:   board.LowPrice,
-		Bid:          quote.Bid(board),
-		Ask:          quote.Ask(board),
-		BidQty:       board.AskQty,
-		AskQty:       board.BidQty,
-		SpecialQuote: board.IsSpecialQuote(),
+// readingFromQuote translates a broker.Quote into the featureengine.Reading
+// Compute expects (featureengine doc.go: "Callers translate the broker's
+// quote into the featureengine.Reading this package expects"). Bid/Ask already
+// use the conventional meaning (Bid = best buy quote, Ask = best sell quote);
+// the broker adapter owns any naming quirk of its API, so this is a plain
+// field-by-field mapping.
+func readingFromQuote(q broker.Quote) featureengine.Reading {
+	return featureengine.Reading{
+		Price:        q.Price,
+		VWAP:         q.VWAP,
+		Volume:       int64(q.Volume),
+		Turnover:     q.Turnover,
+		SessionHigh:  q.High,
+		SessionLow:   q.Low,
+		Bid:          q.Bid,
+		Ask:          q.Ask,
+		BidQty:       q.BidQty,
+		AskQty:       q.AskQty,
+		BidDepth:     q.BidDepth,
+		AskDepth:     q.AskDepth,
+		SpecialQuote: q.SpecialQuote,
 	}
-	if d, ok := board.BuyDepth(); ok {
-		r.BidDepth = &d
-	}
-	if d, ok := board.SellDepth(); ok {
-		r.AskDepth = &d
-	}
-	return r
 }

@@ -14,20 +14,22 @@ import (
 // registration and the Fast Screener candidates follow the watch list instead
 // of the universe.
 func (s *Services) buildRankingWatch() {
-	if s.strategy.Scan.FullScanOn() {
+	caps := s.Broker.Capabilities()
+	if s.strategy.Scan.FullScanOn() || !caps.Ranking {
 		return
 	}
 	s.watchlist = &rankingwatch.Watchlist{}
-	s.PushFeed.UseWatchlist()
+	s.Broker.UseWatchlist()
 	s.candidates.Watch = s.watchlist
 	s.rankingWatcher = &rankingwatch.Watcher{
-		Source:    s.MarketData,
-		Held:      rankingwatch.Held{Positions: s.Positions, Orders: s.Orders},
-		Universe:  s.Instruments,
-		Registrar: s.PushFeed,
-		Ingester:  s.Scheduler,
-		List:      s.watchlist,
-		Open:      marketcalendarOpen,
+		Source:     s.Broker,
+		Held:       rankingwatch.Held{Positions: s.Positions, Orders: s.Orders},
+		Universe:   s.Instruments,
+		Registrar:  s.Broker,
+		Ingester:   s.Scheduler,
+		List:       s.watchlist,
+		Open:       marketcalendarOpen,
+		MaxWatched: caps.MaxStreamSymbols,
 	}
 }
 
@@ -38,8 +40,8 @@ func (s *Services) startRankingWatch(ctx context.Context) {
 	if s.rankingWatcher == nil {
 		return
 	}
-	slog.Info("bootstrap: ranking watch enabled (scan.full_scan_enabled is not true): GET /ranking drives the PUSH watch list",
-		"interval_seconds", int(rankingwatch.DefaultInterval/time.Second), "max_watched", rankingwatch.MaxWatched,
+	slog.Info("bootstrap: ranking watch enabled (scan.full_scan_enabled is not true): the broker ranking drives the stream watch list",
+		"interval_seconds", int(rankingwatch.DefaultInterval/time.Second), "max_watched", s.Broker.Capabilities().MaxStreamSymbols,
 		"max_replace_per_cycle", rankingwatch.MaxReplacePerCycle, "min_hold_minutes", int(rankingwatch.MinHold/time.Minute))
 	s.wg.Add(1)
 	go func() { defer s.wg.Done(); s.rankingWatcher.Run(ctx, rankingwatch.DefaultInterval) }()

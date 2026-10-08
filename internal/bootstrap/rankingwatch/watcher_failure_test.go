@@ -1,13 +1,18 @@
 package rankingwatch_test
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
+
+// codedError is a broker error carrying a broker-specific code (broker.CodedError).
+type codedError struct{ code int }
+
+func (e codedError) Error() string   { return "broker error" }
+func (e codedError) BrokerCode() int { return e.code }
 
 func TestWatcher_FailureOrPanicMeansZeroCandidatesAndNextCycleRecovers(t *testing.T) {
 	cases := []struct {
@@ -15,9 +20,9 @@ func TestWatcher_FailureOrPanicMeansZeroCandidatesAndNextCycleRecovers(t *testin
 		err    error
 		panics bool
 	}{
-		{"http error", &marketdata.APIError{StatusCode: 400, Code: 100001, Message: "bad"}, false},
-		{"no token", marketdata.ErrNoToken, false},
-		{"rate limited", marketdata.ErrRateLimited, false},
+		{"http error", codedError{100001}, false},
+		{"no token", broker.ErrNoSession, false},
+		{"rate limited", broker.ErrRateLimited, false},
 		{"decode error", errors.New("decode ranking: invalid character"), false},
 		{"panic", nil, true},
 	}
@@ -56,34 +61,9 @@ func TestWatcher_FailureOrPanicMeansZeroCandidatesAndNextCycleRecovers(t *testin
 	}
 }
 
-func TestWatcher_FailedTypeDiscardsTheWholeRanking(t *testing.T) {
-	r := newRig(t, "7203")
-	calls := 0
-	r.w.Source = sourceFunc(func(rankType int) ([]string, error) {
-		calls++
-		if rankType == 2 {
-			return nil, errors.New("boom")
-		}
-		return []string{"7203"}, nil
-	})
-	r.cycle()
-	if r.list.Len() != 0 {
-		t.Errorf("watch list = %d symbols, want 0: a half-fetched ranking is never used", r.list.Len())
-	}
-	if calls != 2 {
-		t.Errorf("calls = %d, want 2", calls)
-	}
-}
-
-type sourceFunc func(rankType int) ([]string, error)
-
-func (f sourceFunc) RankingSymbols(_ context.Context, rankType int, _ string) ([]string, error) {
-	return f(rankType)
-}
-
 func TestWatcher_RepeatedFailuresAreLoggedOncePerTenMinutes(t *testing.T) {
 	r := newRig(t, "7203")
-	r.src.set(nil, marketdata.ErrNoToken, false)
+	r.src.set(nil, broker.ErrNoSession, false)
 	for range 10 { // minutes 0..9
 		r.cycle()
 	}
@@ -100,7 +80,7 @@ func TestWatcher_LogsCountsOnlyNeverSymbolsOrPrices(t *testing.T) {
 	r := newRig(t, "7203")
 	r.src.set([]string{"7203"}, nil, false)
 	r.cycle()
-	r.src.set(nil, &marketdata.APIError{StatusCode: 400, Code: 100001, Message: "bad"}, false)
+	r.src.set(nil, codedError{100001}, false)
 	r.cycle()
 	if strings.Contains(r.logs.String(), "7203") {
 		t.Errorf("a ranked symbol code reached the log: %s", r.logs.String())

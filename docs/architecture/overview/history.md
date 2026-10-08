@@ -105,3 +105,4 @@
 | 1.98 | 2026-10-08 | §5（`integrations.md`）に、PUSH/RESTの役割分担（REST `/board`はPUSH登録済み銘柄の薄い補完。`heldposition.Monitor`も`pushfeed.Feed.Latest`経由）とレート逼迫時の方針（監視リスト件数・ランキング種別を削らない）、登録直後の初回板〜5秒の既知制限と再検討トリガーを追記 | issue #709・#713 |
 | 1.99 | 2026-10-08 | §フロー（`overview/flows.md`）の`outcome-labeling`の判定水平線を5/10/15分へ更新し、未ラベル時はジョブをfailedにせずpending再試行・恒久不能はskip（`succeeded`終了）とする旨を反映 | issue #710, #711 |
 | 1.100 | 2026-10-08 | `startup`のログディレクトリ解決を`PITHA_LOG_DIR`からSettings画面（`runtime_settings`の`system.log_dir`、起動時にDBを読み取り専用参照）へ変更。フロー図の起動記述を更新。`integrations.md`にSettings画面管理の非シークレット設定の節を追記 | issue #708 |
+| 1.101 | 2026-10-08 | ブローカーアダプタ境界`internal/service/broker`（中立`Quote`/`SymbolInfo`/`SessionStatus`と各interface）を新設し、kabu実装を`service/marketdata/kabu`（`pushfeed`・`quote`を配下へ移動）として包む。`overview.md`のディレクトリ構成・§4コンポーネント表（Market Data Client→ブローカーアダプタ）、`integrations.md` §5（共通境界の節を追加し既存のkabu記述を「kabuアダプタ」の節へ）を更新。中立パッケージからkabuアダプタのimportをdepguardで禁止。kabu利用時の挙動は変更なし | issue #722 |

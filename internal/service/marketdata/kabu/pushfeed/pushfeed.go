@@ -1,8 +1,9 @@
 // Package pushfeed wires kabuステーションAPI's PUSH subscription
 // (flows.md §10.1 起動時フロー, integrations.md §5): it registers the
 // scan universe, keeps the latest PUSH board per symbol, and serves
-// market-data jobs a usable board - the fresh PUSH one when present,
-// otherwise a REST poll.
+// market-data jobs a usable quote - the fresh PUSH one when present,
+// otherwise a REST poll. It is part of the kabu adapter (it implements
+// broker.StreamFeed) and is wired by internal/service/marketdata/kabu.
 package pushfeed
 
 import (
@@ -14,7 +15,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu/quote"
 )
 
 const (
@@ -122,7 +125,7 @@ func (f *Feed) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if !errors.Is(err, marketdata.ErrNoToken) {
+		if !errors.Is(err, broker.ErrNoSession) {
 			slog.Warn("pushfeed: PUSH subscription ended, retrying", "error", err, "retry_in", retry)
 		}
 		timer := time.NewTimer(retry)
@@ -136,21 +139,21 @@ func (f *Feed) Run(ctx context.Context) {
 	}
 }
 
-// Latest returns symbol's board: a PUSH board received within
-// BoardMaxAge, otherwise a REST poll. A board without a usable current
-// price (0 before 寄り付き/未約定; Board.HasPrice) is never returned:
-// callers get marketdata.ErrPriceUnavailable instead, so a price-0 bar is
-// never persisted (issue #173).
-func (f *Feed) Latest(ctx context.Context, symbol string) (marketdata.Board, error) {
+// Latest returns symbol's quote: a PUSH board received within BoardMaxAge,
+// otherwise a REST poll. A board without a usable current price (0 before
+// 寄り付き/未約定; Board.HasPrice) is never returned: callers get
+// broker.ErrPriceUnavailable instead, so a price-0 bar is never persisted
+// (issue #173).
+func (f *Feed) Latest(ctx context.Context, symbol string) (broker.Quote, error) {
 	board, ok := f.boards.Fresh(symbol, time.Now(), BoardMaxAge)
 	if !ok {
 		var err error
 		if board, err = f.Broker.GetBoard(ctx, symbol, f.Exchange); err != nil {
-			return marketdata.Board{}, err
+			return broker.Quote{}, err
 		}
 	}
 	if !board.HasPrice() {
-		return marketdata.Board{}, fmt.Errorf("%w: %s", marketdata.ErrPriceUnavailable, symbol)
+		return broker.Quote{}, fmt.Errorf("%w: %s", broker.ErrPriceUnavailable, symbol)
 	}
-	return board, nil
+	return quote.FromBoard(board), nil
 }
