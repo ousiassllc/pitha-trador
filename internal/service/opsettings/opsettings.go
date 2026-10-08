@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
 
 // Store is the runtime_settings access Service needs;
@@ -69,12 +70,14 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 }
 
 // Keys returns every key Service manages: the backup and log directories,
-// the policy thresholds, the screener thresholds, then the broker settings.
+// the policy thresholds, the screener thresholds, the broker settings, then
+// the 立花 監視銘柄ソース settings.
 func Keys() []string {
 	keys := []string{config.KeyBackupDir, config.KeyLogDir}
 	keys = append(keys, config.PolicySettingKeys()...)
 	keys = append(keys, config.FastScreenerSettingKeys()...)
-	return append(keys, config.BrokerSettingKeys()...)
+	keys = append(keys, config.BrokerSettingKeys()...)
+	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
 
 // IsKnownKey reports whether key is one of Keys.
@@ -89,6 +92,7 @@ const (
 	kindInteger
 	kindPrivateKey // a 立花 秘密鍵 file path: a path whose file content is validated
 	kindBroker     // a broker selection / 立花 setting validated by config.NormalizeBrokerSetting
+	kindSource     // a 立花 監視銘柄ソース setting validated by tachibanasource.NormalizeTachibanaSourceSetting
 )
 
 func kindOf(key string) kind {
@@ -99,6 +103,8 @@ func kindOf(key string) kind {
 		return kindPrivateKey
 	case config.IsBrokerSettingKey(key):
 		return kindBroker
+	case tachibanasource.IsTachibanaSourceSettingKey(key):
+		return kindSource
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
 	case key == "screener.top_n":
@@ -189,6 +195,8 @@ func (s *Service) defaultText(key string) string {
 		return s.defaultLogDir
 	case kindOf(key) == kindPrivateKey || kindOf(key) == kindBroker:
 		return config.BrokerSettingDefault(key)
+	case kindOf(key) == kindSource:
+		return tachibanasource.TachibanaSourceDefault(key)
 	case kindOf(key) == kindEntryQuality:
 		v, _ := config.PolicySettingValue(s.policy, key)
 		return v.(string)
@@ -214,7 +222,7 @@ func decodeText(key, raw string) (string, error) {
 	switch kindOf(key) {
 	case kindEntryQuality:
 		return decodeString(key, raw)
-	case kindBroker:
+	case kindBroker, kindSource:
 		return decodeBroker(key, raw)
 	}
 	var f float64

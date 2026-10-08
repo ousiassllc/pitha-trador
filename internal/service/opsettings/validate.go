@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
 
 // encode parses raw (already trimmed, non-empty) for key into the JSON
@@ -33,6 +34,12 @@ func encode(key, raw string) (string, error) {
 		value = raw
 	case kindBroker:
 		v, err := config.NormalizeBrokerSetting(key, raw)
+		if err != nil {
+			return "", &InvalidValueError{Reason: err.Error()}
+		}
+		value = v
+	case kindSource:
+		v, err := tachibanasource.NormalizeTachibanaSourceSetting(key, raw)
 		if err != nil {
 			return "", &InvalidValueError{Reason: err.Error()}
 		}
@@ -93,6 +100,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return invalidIf(config.ValidateFastScreenerOverrides(cfg))
+	case strings.HasPrefix(key, "broker.tachibana.screen."):
+		return s.validateTachibanaSource(ctx, key, encoded)
 	}
 	return nil
 }

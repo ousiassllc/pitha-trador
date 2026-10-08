@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"slices"
+
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
@@ -42,9 +44,10 @@ const (
 // must cover opsettings.Keys() exactly once (settings_ops_groups_test.go).
 // They replace the removed PITHA_BACKUP_DIR / PITHA_LOG_DIR /
 // PITHA_POLICY_* / PITHA_FAST_SCREENER_* environment variables.
-var opsGroups = []opsGroup{
+var opsGroups = slices.Concat([]opsGroup{
 	brokerGroup,
 	tachibanaGroup,
+}, tachibanaSourceGroups, []opsGroup{
 	{
 		id:          "backup",
 		name:        "バックアップ先",
@@ -94,7 +97,7 @@ var opsGroups = []opsGroup{
 			{key: "screener.weights.volatility_expansion", label: "重み: ボラティリティ拡大"},
 		},
 	},
-}
+})
 
 // policyGroup builds the LONG or SHORT Policy Engine group; prefix is
 // "policy.long." or "policy.short.".
