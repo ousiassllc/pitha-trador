@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// MarketDataBannerProps is MarketDataBanner's input (issues #295, #712).
+// MarketDataBannerProps is MarketDataBanner's input (issues #295, #712, #739).
 type MarketDataBannerProps struct {
 	// Issue is the cause's machine name (marketdata.TokenIssue), "" while
 	// the token is fine.
@@ -20,6 +20,11 @@ type MarketDataBannerProps struct {
 	Failures int
 	// Elapsed is how long the streak has lasted.
 	Elapsed time.Duration
+	// Environment is the 立花 e支店 environment ("demo" / "production",
+	// config.TachibanaEnvDemo / TachibanaEnvProduction) the failing session
+	// belongs to, "" for kabu. When set the banner always shows which
+	// environment it is about (issue #739).
+	Environment string
 }
 
 // persistentElapsedStep coarsens the shown elapsed time: the banner is a
