@@ -129,6 +129,10 @@ func (s *Session) attempt(ctx context.Context) error {
 		return err
 	}
 	s.succeeded()
+	if s.cfg.OnLogin != nil {
+		s.wg.Add(1)
+		go func() { defer s.wg.Done(); s.cfg.OnLogin(ctx) }()
+	}
 	return nil
 }
 

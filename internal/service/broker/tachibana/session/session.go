@@ -67,6 +67,10 @@ type Config struct {
 	Clock tachibana.Clock
 	// Notifier receives operator notices (Slack, Activity); may be nil.
 	Notifier Notifier
+	// OnLogin runs in the background after every successful login (the
+	// master's morning fetch hangs on it). It must return when ctx is done;
+	// Wait waits for it. May be nil.
+	OnLogin func(ctx context.Context)
 }
 
 // Session keeps one login alive: it logs in at start, once every morning

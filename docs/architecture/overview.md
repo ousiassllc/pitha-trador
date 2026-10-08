@@ -98,7 +98,7 @@ pitha-trador/
 │   │   └── snapshotcols/         # market_snapshotsのFeature列とdomain.Featureの対応表（INSERT/SELECT用。`market`が本番コードで使う`domain`のみに依存するリーフ）
 │   ├── service/                  # domain, repositoryに依存
 │   │   ├── broker/               # ブローカー中立の境界（`Quote`/`SymbolInfo`/`SessionStatus`、`Session`/`QuoteSource`/`StreamFeed`/`SymbolInfoSource`/`CandidateSource`/`Health`/`Capabilities`、`MarketDataChecker`。`domain`のみに依存。issue #722）
-│   │   │   └── tachibana/        # 立花証券 e支店APIアダプタ（#724）。直下＝REQUEST I/Fクライアント（直列キュー・`p_no`/`p_sd_date`・Shift-JIS・IPv4固定・RSA-OAEPの仮想URL復号・`APIError`）、`session/`＝ログイン・毎朝の再認証・状態・通知、`adapter/`＝`broker.Broker`の実装（`bootstrap.newBroker`のみがimport）、`tachibanatest/`＝フェイク時計・フェイクe支店サーバ（テスト支援）
+│   │   │   └── tachibana/        # 立花証券 e支店APIアダプタ（#724）。直下＝REQUEST I/Fクライアント（直列キュー・`p_no`/`p_sd_date`・Shift-JIS・IPv4固定・RSA-OAEPの仮想URL復号・`APIError`）、`session/`＝ログイン・毎朝の再認証・状態・通知、`market/`＝マスタ（朝1回の`SymbolInfo`）・全銘柄マスタ・時価スナップショット（#735）、`adapter/`＝`broker.Broker`の実装（`bootstrap.newBroker`のみがimport）、`tachibanatest/`＝フェイク時計・フェイクe支店サーバ（テスト支援）
 │   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS。kabuアダプタの下回り）（boardflow/=板取得・PUSHのテスト・#658）
 │   │   │   ├── kabu/             # kabuアダプタ（`marketdata.Client`＋`pushfeed`を`broker.Broker`として包む。`Adapter`・`SessionStatusOf`・`Candidates`＝`/ranking`種別1〜7のインターリーブ。`bootstrap`の`newBroker`のみがimport）
 │   │   │   │   ├── pushfeed/     # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き。`broker.StreamFeed`の実体）

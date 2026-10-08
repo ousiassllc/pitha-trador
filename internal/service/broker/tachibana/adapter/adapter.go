@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/session"
 )
 
@@ -42,6 +43,7 @@ type Config struct {
 type Adapter struct {
 	client  *tachibana.Client
 	session *session.Session
+	master  *market.Master
 }
 
 var _ broker.Broker = (*Adapter)(nil)
@@ -54,6 +56,7 @@ func New(cfg Config) *Adapter {
 		HTTPClient:        cfg.HTTPClient,
 		Clock:             cfg.Clock,
 	})
+	master := market.NewMaster(client, cfg.Clock)
 	sess := session.New(session.Config{
 		Client:     client,
 		AuthID:     cfg.Credentials.AuthID,
@@ -62,8 +65,9 @@ func New(cfg Config) *Adapter {
 		APIVersion: path.Base(urlPath(cfg.Settings.BaseURL())),
 		Clock:      cfg.Clock,
 		Notifier:   cfg.Notifier,
+		OnLogin:    master.LoadWithRetry,
 	})
-	return &Adapter{client: client, session: sess}
+	return &Adapter{client: client, session: sess, master: master}
 }
 
 // Client is the REQUEST I/F client the adapter's data paths use.
