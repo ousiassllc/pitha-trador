@@ -91,3 +91,4 @@ erDiagram
 | 1.40 | 2026-10-08 | `er/tables-system.md`の`secrets`許可キーを17件（立花の`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`/`TACHIBANA_DEMO_SECOND_PASSWORD`を追加。本番の第二暗証番号は持たない）、`runtime_settings`に`broker.provider`と立花の接続設定8件（秘密鍵はパスのみ保存）を追記 | issue #733 |
 | 1.41 | 2026-10-08 | `er/tables-market.md`に立花の夜間の日足取得（issue #729）の`daily_bars`（銘柄×立会日の日足。無調整値と分割換算値）と`daily_bar_runs`（1夜1行の実行記録）を追加（マイグレーション`000030`）。どちらも他のテーブルとFKを持たないためER図の関連は変えない | issue #729 |
 | 1.42 | 2026-10-08 | `er/tables-market.md`に立花の監視リスト（issue #730）の`watch_lists`（1立会日1行。確定方法・基準日・理由）と`watch_list_entries`（銘柄・枠の由来・選ばれた指標。最大120件）を追加（マイグレーション`000031`）。他のテーブルとFKを持たないためER図の関連は変えない | issue #730 |
+| 1.43 | 2026-10-08 | `er/tables-system.md`の立花の監視銘柄ソース設定の説明に日中の接続側のキー（`event.max_connects_per_day`・`rest_quote.*`）が起動時に1回読まれることを追記し、`er/tables-market.md`の`watch_lists`の説明を日中監視（issue #731。`tachibanawatch.Monitor`が03:30〜15:30に読む）へ更新。スキーマ変更なし | issue #731 |

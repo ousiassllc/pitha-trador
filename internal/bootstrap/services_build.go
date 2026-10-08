@@ -199,7 +199,9 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
 	backupjob.WarnIfDisabled(context.Background(), s.Settings)
-	if s.strategy != nil && !s.strategy.Scan.FullScanOn() {
+	// 立花: never the full REST scan (issue #731, #720): the saved watch list is
+	// the only ingestion, whatever scan.full_scan_enabled says.
+	if s.strategy != nil && (!s.strategy.Scan.FullScanOn() || s.isTachibana()) {
 		schedOpts = append(schedOpts, scheduler.WithFullScanDisabled())
 	}
 	if autoUpdate != nil {

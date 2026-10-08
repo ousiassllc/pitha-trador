@@ -272,7 +272,7 @@ erDiagram
 
 ## watch_lists / watch_list_entries
 
-立花証券選択時の監視リスト（最大120件。issue #730、親 #726）。引け後に翌立会日分を1日1件確定して保存し、翌朝のEVENT購読・market-data投入・Fast Screenerの母集団になる（接続は#731）。`daily_bars`と同じく自己利用のローカル保存で、持つのは銘柄コードと選定理由だけ（価格の生値は持たない）。直近60日より古いリストは保存のたびに削除する。
+立花証券選択時の監視リスト（最大120件。issue #730、親 #726）。引け後に翌立会日分を1日1件確定して保存し、`tachibanawatch.Monitor`（issue #731）が03:30〜15:30のあいだ読み、EVENT購読・market-data投入・Fast Screenerの母集団にする。`daily_bars`と同じく自己利用のローカル保存で、持つのは銘柄コードと選定理由だけ（価格の生値は持たない）。直近60日より古いリストは保存のたびに削除する。
 
 ### watch_lists
 

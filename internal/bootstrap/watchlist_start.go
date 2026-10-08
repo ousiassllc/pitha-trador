@@ -38,6 +38,39 @@ func (s *Services) startWatchList(ctx context.Context) {
 	slog.Info("bootstrap: 立花 watch list decision enabled", "max_symbols", a.Capabilities().MaxStreamSymbols)
 	s.wg.Add(1)
 	go func() { defer s.wg.Done(); decider.Run(ctx) }()
+
+	if s.tachibanaMonitor != nil {
+		slog.Info("bootstrap: 立花 daytime watch enabled: the saved watch list drives the EVENT subscription and market-data ingestion; no full scan",
+			"max_symbols", a.Capabilities().MaxStreamSymbols, "event_max_connects_per_day", s.tachibana.EventMaxConnectsPerDay,
+			"rest_min_interval_seconds", s.tachibana.RestQuote.MinIntervalSeconds, "rest_requests_per_round", s.tachibana.RestQuote.RequestsPerRound)
+		s.wg.Add(1)
+		go func() { defer s.wg.Done(); s.tachibanaMonitor.Run(ctx) }()
+	}
+}
+
+// isTachibana reports whether the 立花 adapter is the selected broker.
+func (s *Services) isTachibana() bool {
+	_, ok := s.Broker.(*adapter.Adapter)
+	return ok
+}
+
+// buildTachibanaMonitor builds the daytime watch (issue #731, #726): the
+// saved watch list becomes the EVENT subscription, the market-data jobs and
+// the Fast Screener's universe (candidates.Refresher.Watch), the way the
+// ranking watch does for kabu. 立花 has no 全銘柄 REST scan: the Scheduler's is
+// off for it (buildScheduler).
+func (s *Services) buildTachibanaMonitor() {
+	s.watchlist = &rankingwatch.Watchlist{}
+	s.candidates.Watch = s.watchlist
+	s.tachibanaMonitor = tachibanawatch.NewMonitor(tachibanawatch.MonitorConfig{
+		Source:    tachibanawatch.Source{Lists: s.WatchLists},
+		Held:      rankingwatch.Held{Positions: s.Positions, Orders: s.Orders},
+		Universe:  s.Instruments,
+		Registrar: s.Broker,
+		Ingester:  s.Scheduler,
+		List:      s.watchlist,
+		Max:       s.Broker.Capabilities().MaxStreamSymbols,
+	})
 }
 
 // watchlistRouterOptions serves the Watchlist screen and the banner's
