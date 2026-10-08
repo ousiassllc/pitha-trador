@@ -48,6 +48,56 @@ var columns = func() string {
 // quotes of the chunks that did succeed are returned together with the error.
 func FetchQuotes(ctx context.Context, client *tachibana.Client, prio tachibana.Priority, symbols []string) (map[string]broker.Quote, error) {
 	out := make(map[string]broker.Quote, len(symbols))
+	rows, err := fetchRows(ctx, client, prio, symbols)
+	for symbol, r := range rows {
+		if q, ok := toQuote(r); ok {
+			out[symbol] = q
+		}
+	}
+	return out, err
+}
+
+// FetchFields is FetchQuotes without the translation: the raw item values of
+// every answered row (item name such as "pDPP" to value, plus "sIssueCode"),
+// keyed by symbol. The EVENT feed merges them into its per-symbol state.
+func FetchFields(ctx context.Context, client *tachibana.Client, prio tachibana.Priority, symbols []string) (map[string]map[string]string, error) {
+	rows, err := fetchRows(ctx, client, prio, symbols)
+	out := make(map[string]map[string]string, len(rows))
+	for symbol, r := range rows {
+		fields := make(map[string]string, len(r))
+		for k, v := range r {
+			fields[k] = string(v)
+		}
+		out[symbol] = fields
+	}
+	return out, err
+}
+
+// QuoteFromFields translates item values keyed like FetchFields' (pDPP,
+// pQBP, ...; the EVENT feed uses the same names) into a Quote for symbol.
+// ok is false without a positive 現在値.
+func QuoteFromFields(symbol string, fields map[string]string) (broker.Quote, bool) {
+	r := make(row, len(fields)+1)
+	for k, v := range fields {
+		r[k] = value(v)
+	}
+	r["sIssueCode"] = value(symbol)
+	q, ok := toQuote(r)
+	if ok {
+		raw := make(map[string]string, len(fields)+1)
+		for k, v := range fields {
+			raw[k] = v
+		}
+		raw["sIssueCode"] = symbol
+		q.Raw = raw
+	}
+	return q, ok
+}
+
+// fetchRows sends the 時価 requests and returns the answered rows by symbol;
+// on an error it returns the rows of the chunks that succeeded.
+func fetchRows(ctx context.Context, client *tachibana.Client, prio tachibana.Priority, symbols []string) (map[string]row, error) {
+	out := make(map[string]row, len(symbols))
 	for _, chunk := range chunks(dedupe(symbols), MaxSymbolsPerRequest) {
 		var resp struct {
 			Rows []row `json:"aCLMMfdsMarketPrice"`
@@ -57,8 +107,8 @@ func FetchQuotes(ctx context.Context, client *tachibana.Client, prio tachibana.P
 			return out, err
 		}
 		for _, r := range resp.Rows {
-			if q, ok := toQuote(r); ok {
-				out[q.Symbol] = q
+			if code := r.text("sIssueCode"); code != "" {
+				out[code] = r
 			}
 		}
 	}

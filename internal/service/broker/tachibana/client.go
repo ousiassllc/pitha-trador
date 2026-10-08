@@ -63,6 +63,7 @@ type Client struct {
 	validUntil time.Time // the 03:30 close; zero while there is no session
 	gen        uint64
 	observer   SessionObserver
+	changed    chan struct{} // closed (and replaced) when a login installs a new session
 
 	// outOfHours is true while the session is down because the broker is
 	// closed: failures then are expected and not feed failures.
@@ -86,11 +87,16 @@ func NewClient(cfg Config) *Client {
 		http:    orDefaultHTTPClient(cfg.HTTPClient),
 		clock:   OrReal(cfg.Clock),
 		limiter: newRateWindow(limit),
+		changed: make(chan struct{}),
 	}
 }
 
 // RequestsPerSecond is the effective queue-wide request budget.
 func (c *Client) RequestsPerSecond() int { return c.limiter.limit }
+
+// NewHTTPClient is the default HTTP client: IPv4 only (the broker answers
+// IPv6 with 10005), no redirects. The EVENT WebSocket dial uses it too.
+func NewHTTPClient() *http.Client { return orDefaultHTTPClient(nil) }
 
 // orDefaultHTTPClient is hc, or a client that dials IPv4 only (IPv6 sources
 // are refused by the broker with 10005) and never follows redirects (a

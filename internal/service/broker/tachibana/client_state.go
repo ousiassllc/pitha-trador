@@ -110,6 +110,8 @@ func (c *Client) setSession(urls virtualURLs, validUntil time.Time) uint64 {
 	c.urls, c.haveURLs, c.validUntil = urls, true, validUntil
 	c.gen++
 	c.outOfHours.Store(false)
+	close(c.changed)
+	c.changed = make(chan struct{})
 	return c.gen
 }
 

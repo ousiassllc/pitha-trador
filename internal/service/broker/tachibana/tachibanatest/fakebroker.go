@@ -60,6 +60,7 @@ type FakeBroker struct {
 	respond    Responder
 	logins     int
 	loginExtra map[string]any
+	events     []*EventConn
 }
 
 // New starts a fake broker; clk stamps the requests it records.
@@ -172,6 +173,10 @@ func ControlError(errno, text string) map[string]any {
 }
 
 func (f *FakeBroker) serve(w http.ResponseWriter, r *http.Request) {
+	if isWebSocket(r) {
+		f.serveEvent(w, r)
+		return
+	}
 	raw, _ := io.ReadAll(r.Body)
 	sjis, err := japanese.ShiftJIS.NewDecoder().Bytes(raw)
 	if err != nil {

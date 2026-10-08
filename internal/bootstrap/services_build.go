@@ -85,7 +85,7 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	if s.strategy != nil {
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
 	}
-	s.Broker = newBroker(cfg.brokerSettings, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, alertChannels.BrokerNotices(s.Activity))
+	s.Broker = newBroker(cfg.brokerSettings, s.tachibanaSource(cfg.brokerSettings), secrets, cfg.kabuURL, infoAPIMax, s.Instruments, alertChannels.BrokerNotices(s.Activity))
 	s.Jev = jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		Model:   secrets.JevModel,
