@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
 func newState(t *testing.T) *bootstrap.State {
@@ -41,10 +42,11 @@ func TestLoadBrokerSettings_DefaultsToKabu(t *testing.T) {
 	}
 }
 
-// The selection saved in Settings is what the next start reads. The tachibana
-// adapter does not exist yet (issue #724), so BuildServices must still come up
-// - on kabu - instead of failing on the saved selection.
-func TestLoadBrokerSettings_ReadsSavedSelectionAndBuildStillComesUp(t *testing.T) {
+// The selection saved in Settings is what the next start reads: BuildServices
+// builds the 立花 adapter (issue #724), and a selection that is not usable yet
+// (no 秘密鍵 path saved) comes up as a failed session with guidance, never as a
+// build failure.
+func TestLoadBrokerSettings_ReadsSavedSelectionAndBuildsTachibana(t *testing.T) {
 	state := newState(t)
 	repo := system.NewRuntimeSettingsRepository(state.DB)
 	ctx := context.Background()
@@ -68,7 +70,22 @@ func TestLoadBrokerSettings_ReadsSavedSelectionAndBuildStillComesUp(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if svc := bootstrap.BuildServices(state, secrets, bootstrap.WithBrokerSettings(got)); svc.Broker == nil {
-		t.Fatal("BuildServices produced no broker")
+	svc := bootstrap.BuildServices(state, secrets, bootstrap.WithBrokerSettings(got))
+	if svc.Broker == nil || svc.Broker.Capabilities().Name != config.BrokerTachibana {
+		t.Fatalf("broker = %+v, want the tachibana adapter", svc.Broker)
+	}
+	if caps := svc.Broker.Capabilities(); caps.Ranking || caps.MaxStreamSymbols != 120 {
+		t.Errorf("capabilities = %+v, want no ranking and 120 stream symbols", caps)
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+	err = svc.Broker.Start(runCtx)
+	cancel()
+	svc.Broker.Run(runCtx) // returns once the session loop has stopped
+	if err == nil {
+		t.Fatal("Start without a 秘密鍵 must report a failed session")
+	}
+	if st := svc.Broker.Status(); st.Issue != broker.SessionIssueKeyMismatch || st.Guidance == "" {
+		t.Errorf("status = %+v, want key_mismatch with guidance", st)
 	}
 }

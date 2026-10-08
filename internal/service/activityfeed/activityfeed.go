@@ -131,6 +131,9 @@ type Service struct {
 	// newsErrors are the recent news_feed events, oldest first
 	// (news_errors.go).
 	newsErrors []domain.ActivityEvent
+	// brokerNotices are the recent broker_notice events, oldest first
+	// (broker_notices.go).
+	brokerNotices []domain.ActivityEvent
 	// dirtyQueues are the queues with transitions not yet reported as a
 	// QueueUpdate; non-nil while a flush is scheduled (bus.go).
 	dirtyQueues map[string]struct{}
@@ -244,6 +247,9 @@ func (s *Service) collectEvents(ctx context.Context, q Query, limit int) ([]doma
 	}
 	if q.Type == "" || q.Type == domain.ActivityTypeNewsFeed {
 		events = append(events, s.newsErrorEvents(ctx)...)
+	}
+	if q.Type == "" || q.Type == domain.ActivityTypeBrokerNotice {
+		events = append(events, s.brokerNoticeEvents(ctx)...)
 	}
 	return events, nil
 }

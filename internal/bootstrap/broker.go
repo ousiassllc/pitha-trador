@@ -2,11 +2,12 @@ package bootstrap
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/adapter"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/session"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu/pushfeed"
@@ -32,17 +33,20 @@ func WithBrokerSettings(b config.BrokerSettings) BuildOption {
 
 // newBroker is the one place a broker adapter is chosen (integrations.md §5.1);
 // everything downstream takes the neutral broker.Broker. selected is the
-// runtime_settings choice (LoadBrokerSettings). Only the kabu adapter exists
-// so far: until the 立花 adapter lands (issue #724) a tachibana selection is
-// reported as an error in the log and kabu is started, so a saved selection
-// can never keep the app from coming up. kabuBaseURL is empty in production
-// (marketdata.DefaultBaseURL); universe is what the adapter subscribes to
-// without a ranking watch list. Nothing is started here (broker.Session.Start
-// does that).
-func newBroker(selected config.BrokerSettings, secrets config.Secrets, kabuBaseURL string, kabuInfoAPIMaxPerSecond int, universe pushfeed.Universe) broker.Broker {
+// runtime_settings choice (LoadBrokerSettings): kabu (default) or the 立花
+// e支店 adapter (issue #724), whose operator notices go to notices. kabuBaseURL
+// is empty in production (marketdata.DefaultBaseURL); universe is what the
+// kabu adapter subscribes to without a ranking watch list. Nothing is started
+// here (broker.Session.Start does that): a 立花 selection with a missing 認証ID
+// or 秘密鍵 builds fine and reports the problem as a failed session, the same
+// way an unreachable kabuステーション does.
+func newBroker(selected config.BrokerSettings, secrets config.Secrets, kabuBaseURL string, kabuInfoAPIMaxPerSecond int, universe pushfeed.Universe, notices session.Notifier) broker.Broker {
 	if selected.Provider == config.BrokerTachibana {
-		slog.Error("bootstrap: broker.provider=tachibana is selected but the tachibana adapter is not implemented yet (issue #724); starting with kabu",
-			"environment", selected.Tachibana.Environment)
+		return adapter.New(adapter.Config{
+			Settings:    selected.Tachibana,
+			Credentials: secrets.TachibanaCredentials(selected.Tachibana.Environment),
+			Notifier:    notices,
+		})
 	}
 	client := marketdata.NewClient(marketdata.Config{
 		BaseURL:             kabuBaseURL,

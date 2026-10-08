@@ -23,6 +23,13 @@ import "fmt"
 templ MarketDataBanner(props MarketDataBannerProps) {
 	if props.Guidance != "" && props.Persistent {
 		@MarketDataPersistentBanner(props)
+	} else if props.Guidance == "" && props.Notice != "" {
+		<div class="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-testid="marketdata-notice">
+			<p>
+				{ props.Notice }
+				<a class="font-semibold underline" href="/settings">設定画面</a>
+			</p>
+		</div>
 	} else if props.Guidance != "" {
 		<div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" data-testid="marketdata-banner" data-issue={ props.Issue }>
 			<p>

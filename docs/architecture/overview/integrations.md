@@ -12,7 +12,7 @@
 
 - **中立の型**: `Quote`（現在値・VWAP・累積出来高/売買代金・当日高安・**最良買`Bid`/最良売`Ask`と数量**・買/売の板厚・特別気配フラグ・`Raw`＝ブローカーの応答）、`SymbolInfo`（`Lendable`・値幅上下限、`PriceLimit`判定）、`SessionStatus`（`Issue`・`Code`・`Guidance`・連続失敗`Failures`/`Since`・`Persistent()`。原因は`unreachable`/`not_logged_in`/`api_disabled`/`bad_password`/`unknown`/`rejected`）。`Quote`のBid/Askは一般的な命名で、ブローカーAPIの命名差（kabuの売/買入れ替え）はアダプタが吸収する。`Quote.Raw`のJSONが`market_snapshots.raw_data_json`に保存される（`domain.Snapshot.RawDataJSON`＝ブローカーの応答。スキーマ・保存内容は変更しない）
 - **interface**: `Session`（`Start(ctx)`・`Status()`）、`QuoteSource`（RESTスナップショット`Quote`）、`StreamFeed`（`SetWatch`・`UseWatchlist`・`Latest`＝ストリーム優先＋REST補完・`Run`）、`SymbolInfoSource`、`CandidateSource`（`Candidates`＝監視候補を順位順に）、`Health`（`BoardFailures`＝`market_data_down`用、`BrokerFailures`＝`broker_api_error`用の`*domain.FailureStreak`）、`Capabilities`（`Name`・`MaxStreamSymbols`・`Ranking`・`RequestsPerSecond`）。`broker.Broker`はこれらの束で、`broker.MarketDataChecker`が`Health.BoardFailures`の5回連続失敗を`risk.HealthChecker`（`market_data_down`）へ写像する。発注系（`OrderGateway`）は定義しない（#55の範囲）
-- **選択**: `bootstrap.newBroker`が唯一のファクトリ（`internal/bootstrap/broker.go`）。現時点では常にkabuアダプタを返す（選択設定`broker.provider`は#723、立花証券アダプタは#724。仕様は§5.3）。`Services.Broker`として配線し、`Start`は`Broker.Start`、PUSH/ストリームは`Broker.Run`、ランキング監視は`Broker.Candidates`/`SetWatch`（件数上限は`Capabilities.MaxStreamSymbols`）を使う
+- **選択**: `bootstrap.newBroker`が唯一のファクトリ（`internal/bootstrap/broker.go`）。Settingsの`broker.provider`（#723）で選んだkabuアダプタまたは立花証券アダプタ（`internal/service/broker/tachibana/adapter`。#724・#727。仕様は§5.3）を返す。立花の認証ID・秘密鍵パスが未設定でも組み立ては成功し、ログインの失敗（`bad_password`）として案内する。`Services.Broker`として配線し、`Start`は`Broker.Start`、PUSH/ストリームは`Broker.Run`、ランキング監視は`Broker.Candidates`/`SetWatch`（件数上限は`Capabilities.MaxStreamSymbols`）を使う
 - **依存の向き**: 中立パッケージ（`featureengine`/`execution`/`risk`/`policy`/`screener`/`symbolcache`/`broker`、`bootstrap`配下の`rankingwatch`/`marketdatajob`/`heldposition`）はkabuアダプタ（`internal/service/marketdata`配下すべて）をimportしない。`.golangci.yml`のdepguardルール`broker-neutral-no-adapter`で強制する（テストも同じ）。アダプタをimportするのは`bootstrap`の組み立て役と、kabu専用の`rankingmeasure`（FR-SCHED-8。中立化しない）のみ
 
 ### 5.2 kabuアダプタ（kabuステーションAPI連携）
@@ -51,6 +51,19 @@
 - **発注**: 本節のアダプタは市況データ（読み取り）のみ。`OrderGateway`は#55まで定義せず、本番の第二暗証番号は保持しない。認証ID・秘密鍵・仮想URLの扱いは`non-functional.md` §4
 - **保存**: `Quote.Raw`＝立花の応答を`market_snapshots.raw_data_json`に保存する（自己利用のローカル保存に限る。`architecture/er/tables-market.md`、`non-functional.md` §6）
 
+**実装（issue #727。認証・セッション・REQUEST I/Fクライアント。マスタ・時価・EVENTは#735・#737）**: `internal/service/broker/tachibana`（クライアント）・`tachibana/session`（ログイン管理）・`tachibana/adapter`（`broker.Broker`）。`.golangci.yml`のdepguard（`broker-neutral-no-tachibana`）で、中立パッケージはこのツリーをimportしない。
+
+- **認証**: `Client.Login`が`{base}/auth/`へ`CLMAuthLoginRequest`をHTTPS POSTする（`{"p_no","p_sd_date","sCLMID","sAuthId","sJsonOfmt":"4"}`。GETは使わない）。応答は`p_errno`→`sResultCode`→`sKinsyouhouMidokuFlg=1`（`ErrDocumentsUnread`。仮想URL未発行）の順に検査する。仮想URL5種（`sUrlRequest`/`sUrlMaster`/`sUrlPrice`/`sUrlEvent`/`sUrlEventWebSocket`）はbase64デコードしRSA-OAEP（ハッシュ・MGF1ともSHA-256）で復号する（鍵はPEMのPKCS#8またはPKCS#1。`LoadPrivateKey`はログインのたびに読み直し、差し替えを再起動なしで反映する）。復号結果はhttp(s)/ws(s)のURLでなければ拒否する
+- **仮想URLの秘匿**: 仮想URLはメモリ内の`virtualURLs`にだけ保持し、この型は`String`/`GoString`/`LogValue`で自分自身を`[redacted]`にする（`%v`・`%+v`・`%#v`・slogのどれでも出ない）。`*url.Error`（URL全文を含む）は`transportError`で取り除き、原因だけを`errors.Is/As`で辿れる形で返す。ログ・エラー・`SessionStatus`・通知に認証ID・秘密鍵・仮想URLを含めないことをテストで保証する。第二暗証番号は保持も送信もしない
+- **REQUEST I/Fクライアント**: REQUEST/MASTER/PRICEの3仮想URLをまたいで**同時に1要求だけ**（優先度付きゲート。ログイン・ログアウト＞保有銘柄の時価＞監視銘柄の時価＞マスタ（朝1回）＞夜間の日足取得。同優先度はFIFO）。ゲートを`p_no`の採番から応答の受信まで保持するため、送信順＝採番順が保証される。秒間上限は直近1秒の窓で数えて超えない（Settingsの`request_max_per_second`。1〜10、既定1）。夜間の日足取得（`PriorityHistory`）は8:00〜15:30 JSTにはキューから出ず15:30まで待つ。全銘柄の時価を日中に巡回する要求種別は定義しない。発注の`sCLMID`（`CLMKabuNewOrder`等）はコードに存在しない（テストで保証）
+- **`p_no`/`p_sd_date`**: `p_no`はログインの1から要求ごとに+1し、再ログイン（成功時）で1に戻る。上限9999999999を超える前に「再ログインが必要」で失敗する。`p_errno=6`は再送せずERRORログ。`p_sd_date`は送信直前のJSTを`YYYY.MM.DD-HH:MM:SS.TTT`（ミリ秒3桁）で付ける。`p_errno=8`は`SessionStatus`にNTP同期の案内（`unknown`・Code 8）を出し、次の成功で消える
+- **文字コード・接続**: 要求・応答ともShift-JIS（`golang.org/x/text/encoding/japanese`）、応答は`sJsonOfmt=4`（項目名）。応答はREQUEST/PRICEが`httpbody.DefaultMaxBytes`（4 MiB）、MASTERはその4倍まで。接続は`tcp4`ダイヤラでIPv4固定、リダイレクトは追従しない
+- **エラー分類**: `tachibana.APIError{Errno, ResultCode, Text}`（`broker.CodedError`）。`Kind()`は セッション失効（`p_errno=2`）／時間外（`-62`）／混雑（`-2`・`-3`。`broker.RateLimitedError`）／停止（`9`・`-12`）／引数（`-1`）／採番（`6`）／時計（`8`）／業務（`sResultCode`≠0）。`market_data_down`は通信失敗・混雑・停止・セッション失効などフィード全体の失敗だけを数え、`-62`・引数エラー・業務エラー・個別銘柄のデータ無し（`ErrNoData`）は数えない。閉局中（03:30〜05:30）の「セッション無し」も数えない。`broker_api_error`はHTTP 5xxの連続（kabuと同じ定義）
+- **セッション状態機械**（`session.Session`）: 有効（`phaseActive`。03:30まで待つ）→03:30に閉局（`phaseClosed`。`SessionStatus.Issue=out_of_hours`・案内文・`NextReauth`。仮想URLは`Client`が03:30以降は使わない）→05:35（既定。Settingsの`reauth_time`）に再認証→有効。再認証の失敗（`phaseRetry`）は5秒から倍々で上限5分のバックオフで再試行し、閉局中の`-62`は開局（05:30）まで待つ。8:30を過ぎても成功していなければ`login_overdue`通知（1停止期間に1回）。当日は同じ仮想URLを使い回し、日中の再認証は`p_errno=2`を受けたときだけ（最小間隔30秒・1時間に3回まで。上限超過は次の定時再認証まで待つ。ログイン後2分以内の喪失が2回続くと「別プロセス・別ツールとの取り合い」として`SessionStatus.Issue=rejected`＋`contention`通知）。アプリ終了時は`CLMAuthLogoutRequest`で仮想URLを無効化する
+- **通知**: `session.Notifier`（`bootstrap/alerts.Channels.BrokerNotices`が実装）。種別は`login_overdue`・`contention`・`documents_unread`・`api_spec_update`・`document_update`。いずれもWARNログに出し、Activity feed（`broker_notice`イベント。インメモリのみ・直近50件。`/api/v1/activity`の`type=broker_notice`）とSlack（`SLACK_WEBHOOK_URL`設定時）へ送る
+- **版数・書面の監視**: ログインのたびに`sUpdateInformAPISpecFunction`/`sUpdateInformWebDocument`を前回値と比べ、「予定日≧当日（JST）かつ前回値と異なる」ときだけ通知する（マニュアル【注意２】）。API予定日が当日以降のあいだ`SessionStatus.VersionRetiring`が真になり、全ページ共通の接続バナー（`#marketdata-banner`）が失敗ではない注意として表示する。`sKinsyouhouMidokuFlg=1`は`api_disabled`＋「標準Webで書面を確認してください」（`DocumentsUnread`）。接頭辞（`e_api_v4r10`）はSettingsのbase URLにだけ存在し、コードは版数を持たない（`SessionStatus.APIVersion`はURLの末尾から表示用に取る）
+- **実機でしか確認できない項目（#725）**: 実サーバでの流量上限の実測、10本板がPRICEで取れるか、03:30閉局〜05:30開局の実際の応答コード（`-62`の想定）、`sResultCode`の細かな分類。デモ環境へ接続できない環境では`httptest`のフェイクe支店（Shift-JIS・RSA-OAEP）で検証している
+
 ### 5.4 ブローカー機能比較
 
 | 項目 | kabu（既定・フォールバック） | 立花証券（#724〜） |
@@ -60,7 +73,7 @@
 | ストリーム | PUSH（WebSocket）。登録上限50（うちREST回転用10） | EVENT WebSocket。最大120銘柄。再接続で購読変更 |
 | ランキング | あり（`/ranking`種別1〜7）→ランキング監視（FR-SCHED-9） | なし。夜間の日足スクリーニングで翌日の監視リストを選ぶ（#726） |
 | 板・歩み値 | 板あり | 時価（EVENT）。歩み値は取得できない |
-| 流量 | 情報API 10件/秒（本システムの既定8件/秒） | 秒10件（設計上限・保証なし）。日中のポーリングを控える |
+| 流量 | 情報API 10件/秒（本システムの既定8件/秒） | 秒10件（設計上限・保証なし）。本システムの既定は秒1件・同時1要求の直列キュー。日中のポーリングを控える |
 | 時刻の扱い | 不要 | `p_sd_date`（±30秒、NTP必須）、`p_no`の単調増加 |
 | 失効 | `401`/`4001009`で再発行 | ログアウト・多重ログイン・03:30閉局。03:30〜05:30はログイン不可 |
 | 文字コード・形式 | UTF-8 JSON | Shift-JIS、`sJsonOfmt`、POST |

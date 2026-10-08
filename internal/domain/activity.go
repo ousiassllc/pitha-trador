@@ -13,6 +13,10 @@ const (
 	// classification, issue #273). Unlike the others it is kept in memory
 	// only (no table).
 	ActivityTypeNewsFeed = "news_feed"
+	// ActivityTypeBrokerNotice is an operator notice of the broker adapter
+	// (立花 e支店: login overdue, login contention, unread 書面, announced API
+	// release / 書面 update date; issue #727). Kept in memory only.
+	ActivityTypeBrokerNotice = "broker_notice"
 )
 
 // ActivityEvent is one entry of System Activity Log's merged feed, derived
