@@ -20,6 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
@@ -62,6 +63,10 @@ type Services struct {
 	Settings    *system.RuntimeSettingsRepository
 	Proposals   *judgement.ProposalRepository
 
+	// DailyBars/DailyBarRuns store the 立花 nightly 日足 batch (issue #729).
+	DailyBars    *market.DailyBarRepository
+	DailyBarRuns *market.DailyBarRunRepository
+
 	RAG           *rag.Service
 	Broker        broker.Broker // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
 	FeatureEngine *featureengine.Engine
@@ -85,6 +90,10 @@ type Services struct {
 
 	strategy *config.StrategyConfig
 	wg       sync.WaitGroup
+
+	// tachibana are the 立花 監視銘柄ソース settings read at start-up (the
+	// defaults unless 立花 is selected); the nightly daily-bar batch reads them.
+	tachibana tachibanasource.TachibanaSourceSettings
 
 	newsEnabled bool
 	candidates  *candidates.Refresher

@@ -3,6 +3,7 @@ package adapter
 import (
 	"context"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana/market"
@@ -30,4 +31,18 @@ func (a *Adapter) SymbolInfo(_ context.Context, symbol string) (broker.SymbolInf
 // Issues fetches the 全銘柄マスタ (for the universe import to come).
 func (a *Adapter) Issues(ctx context.Context) ([]market.Issue, error) {
 	return market.FetchIssues(ctx, a.client)
+}
+
+// DailyBarTargets returns the symbols of the last loaded master with their
+// 市場区分 and 前日終値: the universe of the nightly daily-bar batch before the
+// Settings narrow it down. market.ErrMasterNotLoaded until the morning master
+// has been fetched once.
+func (a *Adapter) DailyBarTargets(context.Context) ([]domain.DailyBarTarget, error) {
+	return a.master.DailyBarTargets()
+}
+
+// DailyBars fetches symbol's whole 日足 history (oldest first) at the history
+// priority: the request never leaves the queue between 8:00 and 15:30 JST.
+func (a *Adapter) DailyBars(ctx context.Context, symbol string) ([]domain.DailyBar, error) {
+	return market.FetchHistory(ctx, a.client, symbol)
 }

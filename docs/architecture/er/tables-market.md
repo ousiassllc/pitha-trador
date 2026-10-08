@@ -237,3 +237,35 @@ erDiagram
 | created_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id, timestamp DESC)`, `INDEX (risk_passed)`
+
+## daily_bars
+
+立花証券 e支店APIの夜間バッチ（issue #729、親 #726）が取り込む日足。1銘柄1立会日1行。**自己利用のローカル保存に限り、外部へ出す経路は作らない**（#720）。`instruments`には紐付けない（スクリーニングの母集団は監視対象の`instruments`より広い全銘柄のため、`symbol`は`instruments`にない銘柄も持つ）。マイグレーションは`000030_create_daily_bars_tables`。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| symbol | varchar(10) | NOT NULL, PK（`trade_date`と複合） | 銘柄コード |
+| trade_date | text | NOT NULL, CHECK `YYYY-MM-DD` | 立会日（JST） |
+| open / high / low / close | numeric | NOT NULL | 無調整の4本値（`pDOP`/`pDHP`/`pDLP`/`pDPP`） |
+| volume | numeric | NOT NULL | 無調整の出来高（`pDV`） |
+| adj_open / adj_high / adj_low / adj_close / adj_volume | numeric | NOT NULL | 株式分割換算係数で換算した値（`pDOPxK`等）。応答に無いときは無調整値と同じ。売買代金は応答に無いため持たない |
+| created_at | text | NOT NULL, DEFAULT | 保存時刻（上書きでも更新される） |
+
+`WITHOUT ROWID`（主キーは`(symbol, trade_date)`）。同じ立会日を再保存すると上書きする。取得は`CLMMfdsGetMarketPriceHistory`で、2回目以降は保存済みの最新日より新しい立会日だけを書く。最新日の換算値（`adj_close`/`adj_volume`）が変わった銘柄は株式分割とみなし、その銘柄の履歴を取得し直して置き換える。
+
+## daily_bar_runs
+
+夜間の日足バッチの実行記録（1夜1行。issue #729）。二重実行の防止、中断した夜の再開位置、失敗した夜の判定（後続の監視リスト確定が前営業日のリストの引き継ぎや`fixed`への切り替えに使う）に使う。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| run_date | text | PK, CHECK `YYYY-MM-DD` | 夜の基準日（その夜が属する立会日。00:00〜07:59は前日の夜） |
+| status | text | NOT NULL, CHECK IN ('running','succeeded','failed') | `succeeded`は全対象銘柄を試した夜（全銘柄が失敗した夜は`failed`）。`failed`は中断した夜（`error`に理由） |
+| started_at / finished_at | text | started_at NOT NULL | 最初の開始と直近の終了（UTC。固定9桁の小数秒） |
+| symbols | integer | NOT NULL | 対象ユニバースの銘柄数 |
+| requests | integer | NOT NULL | 日足の要求数（再開分を含む累計） |
+| saved_bars | integer | NOT NULL | 保存した日足の本数 |
+| failed | integer | NOT NULL | 要求に失敗した銘柄数 |
+| duration_ms | integer | NOT NULL | 所要時間（再開分を含む累計） |
+| cursor | text | NOT NULL, DEFAULT '' | 最後に処理した銘柄コード（再開はその次から） |
+| error | text | NOT NULL, DEFAULT '' | 中断の理由（価格の生値は含めない） |

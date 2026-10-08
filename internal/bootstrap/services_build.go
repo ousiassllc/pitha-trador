@@ -53,6 +53,8 @@ import (
 func (s *Services) buildRepositories(db *sql.DB) {
 	s.Instruments = market.NewInstrumentRepository(db)
 	s.Snapshots = market.NewSnapshotRepository(db)
+	s.DailyBars = market.NewDailyBarRepository(db)
+	s.DailyBarRuns = market.NewDailyBarRunRepository(db)
 	s.Decisions = judgement.NewDecisionRepository(db)
 	s.Signals = trading.NewSignalRepository(db)
 	s.Jobs = jobqueue.NewJobRepository(db)
@@ -85,7 +87,8 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	if s.strategy != nil {
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
 	}
-	s.Broker = newBroker(cfg.brokerSettings, s.tachibanaSource(cfg.brokerSettings), secrets, cfg.kabuURL, infoAPIMax, s.Instruments, alertChannels.BrokerNotices(s.Activity))
+	s.tachibana = s.tachibanaSource(cfg.brokerSettings)
+	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, alertChannels.BrokerNotices(s.Activity))
 	s.Jev = jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		Model:   secrets.JevModel,
