@@ -17,8 +17,8 @@
 | UC-11 | Kill Switch操作 | 個人トレーダー | UIまたはサーバーから新規取引停止・強制決済を行う |
 | UC-12 | バックテスト実行 | 個人トレーダー | Paper Trading開始前に過去データで戦略を検証する |
 | UC-13 | システムアクティビティ確認 | 個人トレーダー | Log画面でジョブキュー実行状況・直近のJev呼び出し・Kill Switch関連イベントをリアルタイムに確認する |
-| UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/kabuステーション/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する |
-| UC-15 | 初回セットアップ | 個人トレーダー | 必須認証情報（Jev/kabuステーション）が未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
+| UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/ブローカー（kabuステーション・立花証券。`broker.provider`で1つを選択）/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する |
+| UC-15 | 初回セットアップ | 個人トレーダー | 選択したブローカーの必須認証情報（既定のkabuなら`KABU_API_PASSWORD`）とJevが未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
 | UC-16 | エラーログ取得 | 個人トレーダー（運用者） | Settings画面から期間・レベルを指定してエラーログをダウンロードし、調査・共有に使う |
 
 ```mermaid
@@ -88,6 +88,7 @@ sequenceDiagram
 ## 3. 対象市場とスコープ
 
 - 対象: 東証上場銘柄、現物またはPaper Trading
+- 市場データ・ブローカー: 1プロセスで1つを選ぶ（kabuステーションAPI＝既定・フォールバック、立花証券・e支店API。FR-BROKER-1・2）。対象銘柄は両ブローカーとも東証上場銘柄で、立花証券はランキング・歩み値が無い。本システムは市況データの読み取りのみで、発注は#55まで行わない（`architecture/overview/integrations.md` §5）
 - 基本時間軸: 1分足
 - MVP戦略: 短期モメンタム / 出来高急増 / ブレイクアウト / VWAP乖離からの継続・反転
 - 想定保有時間: 最短数分、基本5〜15分（短い保有で小さなエッジを積み上げることを「勝ち」とする。FR-CAL-5）、原則として日跨ぎしない
@@ -99,7 +100,7 @@ sequenceDiagram
 | 節 | ファイル |
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
-| §4.10〜§4.19（Scheduler/Worker〜エラーログのダウンロード） | `docs/requirements/functional/components-platform.md` |
+| §4.10〜§4.20（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用） | `docs/requirements/functional/components-platform.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -259,3 +260,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.64 | 2026-10-08 | §3の想定保有時間を基本5〜15分へ、§8の評価の問いを5/10/15分後＋実現トレードPnLへ更新。FR-CAL-4（`components-platform.md`）の猶予内の未ラベルをジョブ失敗ではなくpending再試行、恒久不能をskip（`succeeded`終了）と明記しFR-ACT-1の`failed`件数に数えない旨を追記、FR-CAL-5（勝ちの定義・判定水平線5/10/15・実現トレードPnL GTの定義）を新設、FR-SCHED-1の水平線列挙を更新 | issue #710, #711 |
 | 1.65 | 2026-10-08 | §4.18 FR-SETTINGS-7を追加（Settings画面の「運用設定」: バックアップ先・ログディレクトリ・Policy/Fast Screenerしきい値の編集と再起動の要否）。FR-FS-3・FR-POLICY-4・FR-EXIT-2の優先順位を`config/strategy.yaml` < `runtime_settings`（Settings/自己改善）に更新し、`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`環境変数の上書き層を廃止 | issue #708 |
 | 1.66 | 2026-10-08 | FR-SCHED-4/9/10（`functional/components-platform.md`）の「kabu `GET /ranking`」「PUSH」を、ブローカーの候補ソース（`broker.CandidateSource`）／ストリーム（`broker.StreamFeed`。既定＝kabuアダプタ）として記述。監視リスト上限45は`Capabilities.MaxStreamSymbols`由来。要件の挙動は変更なし | issue #722 |
+| 1.67 | 2026-10-08 | UC-14/15をブローカー選択前提に更新、§3にブローカー選択の方針、§4.20（FR-BROKER-1〜5。ブローカー選択・kabuフォールバック・立花のセッション/再認証・API版数と書面の監視・夜間日足スクリーニングと日中EVENT受信）を追加し、FR-SCHED-9に立花選択時の扱いを追記 | issue #721（#720の決定） |

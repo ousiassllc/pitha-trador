@@ -136,7 +136,7 @@ erDiagram
 | special_quote | integer | NOT NULL, DEFAULT 0, CHECK IN (0,1) | 特別気配（板の`BidSign`/`AskSign`が`0102`特別気配または`0108`停止前特別気配）なら1。Fast Screener（`special_quote`除外）とPolicy Engine（NONE）が約定不能として外す（issue #511、マイグレーション000026） |
 | price_limit | varchar(10) | NOT NULL, DEFAULT '', CHECK IN ('','up','down') | ストップ高（`up`）/ストップ安（`down`）。取得時の現値が銘柄情報（`/symbol`）の`UpperLimit`/`LowerLimit`以上/以下のとき。該当なし・値幅不明は`''`。Fast Screener（`limit_up`/`limit_down`除外）とPolicy Engine（NONE）が使う |
 | lendable | integer | NULL可, CHECK IN (0,1) | 貸借銘柄か（銘柄情報`MarginSell`＝制度信用売建可）。**NULL=不明**（000026以前の行・銘柄情報の取得失敗・指数）。0（貸借なし）のときだけPolicy Engineがショートを`not_lendable`で外す。銘柄情報は`symbolcache.Cache`が銘柄ごとに1営業日（JST）1回だけ取得する |
-| raw_data_json | text | NOT NULL | ブローカーの生レスポンス（JSON文字列、再計算・監査用。ブローカー中立`broker.Quote.Raw`のJSON。kabuアダプタではkabuステーションAPIの板応答。立花証券での扱いは別途決定） |
+| raw_data_json | text | NOT NULL | ブローカーの生レスポンス（JSON文字列、再計算・監査用。ブローカー中立`broker.Quote.Raw`のJSON。kabuアダプタではkabuステーションAPIの板応答、立花証券アダプタでは立花の時価応答。**立花の応答も自己の証券投資目的のローカル保存に限り保存する**。第三者提供・再配信はしない（エラーログ・エクスポート等に出さない。`non-functional.md` §6）。仮想URL・認証ID・秘密鍵など認証情報は含めない） |
 | created_at | text | NOT NULL | |
 
 インデックス: `UNIQUE (instrument_id, timestamp)`, `INDEX (symbol, timestamp DESC)`, `INDEX (timestamp)`（`(timestamp)`は保持期間パージ`internal/service/retention`の期限切れ`id`取得`WHERE timestamp < ? ORDER BY timestamp, id LIMIT ?`を範囲走査にし、整列も発生させないための索引。既存2本は`timestamp`単独の範囲を引けない。マイグレーション000027。issue #533）
@@ -146,6 +146,8 @@ bid/ask系カラムの注意（issue #458）: 修正前に保存された`bid`/`
 ベクトルインデックス: `market_snapshot_vectors`（後述「ベクトルインデックス」参照、`rowid = market_snapshots.id`）
 
 運用上の注意: 高頻度書き込みテーブルのため、周期実行1サイクル分（スクリーニング対象銘柄分）を1トランザクションにまとめて書き込み、SQLiteのWAL書き込みコストを抑える。保持期間は90日で、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`timestamp`が90日より古い行を`market_snapshot_vectors`の対応行とともにバッチ削除する（期限切れ`id`は上記`INDEX (timestamp)`の範囲走査で取得する。`non-functional.md` §3）。
+
+立花証券選択時の保存方針（issue #721。#720の決定）: 取得した時価・板（`market_snapshots`の各カラムと`raw_data_json`）のローカル保存と分析（特徴量・バックテスト・キャリブレーション・RAG索引）は、自己の証券投資目的に限り行う。これは`non-functional.md` §6の方針（API専用ページの「蓄積、編集および加工等は禁止」とインターネット取引規程第18条を、自己利用の範囲で解釈）に従う。**第三者への提供・再配信の経路は作らない**（DBバックアップは操作者本人の退避先に限る）。保存量は日中に全銘柄を巡回しないため監視銘柄（最大120件）に限られ、保持期間は同じ90日。夜間の日足スクリーニングの結果と翌日の監視リスト用テーブルは#726で追加する（本方針に従う）。kabu選択時の`/ranking`の値は従来どおり保存しない（FR-SCHED-8）。
 
 ## jev_decisions
 

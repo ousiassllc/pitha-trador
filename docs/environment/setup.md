@@ -8,7 +8,7 @@
 - フロントエンド（リッチアイランドのみ）: Lit + TypeScript、ビルドは esbuild、パッケージマネージャは **bun** に固定
 - スタイリング: Tailwind CSS
 - DB: SQLite（`modernc.org/sqlite`、アプリ内蔵）+ golang-migrate + sqlite-vec（ベクトル検索）
-- 外部API: kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券）、Jev / Sol / Opus / Luna API
+- 外部API: ブローカーAPI（kabuステーションAPI＝三菱UFJ eスマート証券・旧auカブコム証券、または立花証券・e支店API。1プロセスで1つを選択）、Jev / Sol / Opus / Luna API
 
 技術スタックの詳細は `docs/architecture/overview.md` §2 技術スタック、レイヤー構造は同§3 を参照。本ドキュメントは開発環境・Lint/Format/Linterly/Git Hooks/Swagger の構築方針を扱う。CI/CD（GitHub Actions）の詳細は `environment/ci.md` に分割している。
 
@@ -63,7 +63,22 @@ pitha-trador/
 | linterly | v0.3.3（`ci.yml`の`LINTERLY_VERSION`と同版。`GOTOOLCHAIN=auto go install github.com/ousiassllc/linterly/cmd/linterly@v0.3.3`） | 行数制限の検査（`make lint`・pre-commit。下記「Linterly」節） |
 | govulncheck | v1.7.0（`ci.yml`の`GOVULNCHECK_VERSION`。`go install golang.org/x/vuln/cmd/govulncheck@v1.7.0`） | 既知脆弱性の検査。CIの`lint`ジョブ専用（`make lint`には含まれない。ローカル実行は任意） |
 | Lefthook | 最新（`go install github.com/evilmartians/lefthook@latest` または `bun add -D lefthook`） | Git Hooks |
-| kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）提供 | Windows実機での市場データ・発注検証（開発時はモックサーバーで代替可） |
+| kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）提供 | kabuをブローカーに選ぶ場合（既定）のWindows実機での市場データ・発注検証（開発時はモックサーバーで代替可） |
+
+### 立花証券（e支店API）の事前準備（ブローカーに立花証券を選ぶ場合。issue #721）
+
+ブローカーは1プロセスで1つを選ぶ（`broker.provider`。既定kabu。切替はSettings＋再起動。`architecture/overview/integrations.md` §5）。立花証券を選ぶ場合は、アプリを動かす前に次を**操作者が標準Webで行う**（一次資料: [API専用ページ「３．ご利用方法」](https://www.e-shiten.jp/e_api/mfds_json_api_menu.html)、[v4r9スケジュール告知](https://www.e-shiten.jp/api/20260513.html)）。立花証券を選ばない（kabuのまま）場合は不要。
+
+1. **口座**: 立花証券・e支店の口座を開設する（API利用に口座が必要）。
+2. **パスキー登録**: 標準Web（本番）のログインでパスキーを登録する。本番のAPI（v4r9以降）の利用にはパスキー認証が必要で、登録後は標準Webの電話番号認証は使えない。
+3. **API利用設定**: 標準Webの「お客様情報」→「e支店・API利用設定」で、既定の「利用しない」を**「利用する」**に変更する。
+4. **認証IDの取得**: 同じ画面で認証ID（`sAuthId`）を取得する。
+5. **秘密鍵・公開鍵の作成と公開鍵の登録**: 同じ画面で鍵を作成（利用者自身でも作成可）し、公開鍵を登録する。**秘密鍵は自分で管理する**（ファイルに保存し、OS権限で本人のみ読み取り可にする。Gitやクラウド共有に置かない。DBには本文を保存しない。`requirements/non-functional.md` §4）。
+6. **書面の確認**: 各種書面（金商法交付書面等）を標準Webで既読にする。未読だと再認証が正常でも仮想URLが発行されずAPIが使えない。書面は追加・変更のたびに再確認が要る。
+7. **デモ環境**: デモは本番とは**別の**デモ標準Web（`https://demo.e-shiten.jp`。[デモ環境の案内](https://www.e-shiten.jp/Service/demo.html)）で、上記3〜5（API利用設定・認証ID・鍵）を**デモ専用に**設定する。デモの認証ID・秘密鍵・公開鍵は本番と別セットで、デモはパスキー認証が不要。まずデモで検証し（#724・#725）、本番は読み取り（市況データ）のみで検証してから既定の切替を判断する。
+8. **PC環境**: インターネットに直結（IPv4。IPv6のみの回線では`10005`で失敗する）し、PC時計をNTPで正確に合わせる（APIが要求の時刻`p_sd_date`を30秒の範囲で検査する）。API側の固定IP登録は任意で、動的IP回線では使わない。
+
+取得した認証ID・秘密鍵のパスはSettings画面で入力する（実装は#723・#724）。発注は#55まで行わないため、第二暗証番号は本番では登録・保持しない。
 
 ### 初回セットアップ手順
 
