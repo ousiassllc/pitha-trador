@@ -37,6 +37,7 @@ type options struct {
 	activitySource      activity.ActivitySource
 	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
 	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
+	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	errorLogExporter    system.ErrorLogExporter
@@ -157,6 +158,13 @@ func WithSecretsStore(store settings.SecretsStore) Option {
 // #708); without it the section is hidden and the routes answer 404.
 func WithOperationalSettings(ops settings.OperationalSettings) Option {
 	return func(o *options) { o.operationalSettings = ops }
+}
+
+// WithBrokerSession lets the Settings screen's 立花証券 e支店 card show the
+// running broker adapter's session state (issue #738); the card shows it
+// only while that adapter is 立花.
+func WithBrokerSession(session settings.BrokerSession) Option {
+	return func(o *options) { o.brokerSession = session }
 }
 
 // WithUpdateController enables the update notification routes (`GET

@@ -31,7 +31,10 @@ const (
 // connection holds a key the app cannot start without, and Fields the keys
 // edited in its modal - the main credential first, then optional URL/model
 // overrides. DefaultLabel names what the connection uses while nothing is
-// stored ("" when it needs its own configuration).
+// stored ("" when it needs its own configuration). Badges and Details are
+// the connection's non-secret extras (issue #738: 立花証券 e支店's 接続環境
+// badge and its session state); the owning handler must never put a
+// credential, key or session URL in them.
 type ConnectionProps struct {
 	ID           string
 	Name         string
@@ -39,6 +42,42 @@ type ConnectionProps struct {
 	DefaultLabel string
 	Required     bool
 	Fields       []SecretFieldRowProps
+	Badges       []ConnectionBadge
+	Details      []ConnectionDetail
+}
+
+// BadgeTone picks a ConnectionBadge's color.
+type BadgeTone string
+
+const (
+	BadgeInfo    BadgeTone = "info"
+	BadgeWarning BadgeTone = "warning"
+	BadgeDanger  BadgeTone = "danger"
+)
+
+// ConnectionBadge is an extra status badge on a connection's card.
+type ConnectionBadge struct {
+	ID   string // stable slug, the `connection-badge-<ID>` test id suffix
+	Text string
+	Tone BadgeTone
+}
+
+func (t BadgeTone) class() string {
+	switch t {
+	case BadgeDanger:
+		return "bg-red-100 text-red-800"
+	case BadgeWarning:
+		return "bg-yellow-100 text-yellow-800"
+	default:
+		return "bg-blue-100 text-blue-800"
+	}
+}
+
+// ConnectionDetail is one "label: value" status line of a connection's card.
+type ConnectionDetail struct {
+	ID    string // stable slug, the `connection-detail-<ID>` test id suffix
+	Label string
+	Value string
 }
 
 // ModalID is the id of the connection's Modal; the card's open button
@@ -138,6 +177,12 @@ templ ConnectionStatus(props ConnectionProps, oob bool) {
 			<span class="rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800">必須</span>
 		}
 		<span class="text-xs font-normal text-slate-500">{ strconv.Itoa(props.ConfiguredCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
+		for _, badge := range props.Badges {
+			<span class={ "rounded-full px-2 py-1 text-xs font-medium " + badge.Tone.class() } data-testid={ "connection-badge-" + props.ID + "-" + badge.ID }>{ badge.Text }</span>
+		}
+		for _, detail := range props.Details {
+			<span class="basis-full text-xs font-normal text-slate-600" data-testid={ "connection-detail-" + props.ID + "-" + detail.ID }>{ detail.Label }: { detail.Value }</span>
+		}
 	</span>
 }
 

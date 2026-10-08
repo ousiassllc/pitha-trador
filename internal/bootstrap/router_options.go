@@ -63,6 +63,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithSecretsStore(secretsRepo),
 		router.WithOperationalSettings(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath))),
 		router.WithMarketDataStatus(services.Broker),
+		router.WithBrokerSession(services.Broker),
 		router.WithErrorLogExporter(services.ErrorLogs),
 		router.WithUniverseImporter(universe.NewImporter(services.Instruments, nil)),
 		router.WithCandidateRefreshInterval(scanner.CandidateRefreshInterval{

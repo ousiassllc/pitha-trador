@@ -58,6 +58,9 @@ func (StaticSecretsStore) Delete(context.Context, string) error              { r
 type SettingsHandler struct {
 	store SecretsStore
 	ops   OperationalSettings // nil until WithOperationalSettings
+	// session is the running broker adapter, for the 立花 card's session
+	// state (nil until WithBrokerSession).
+	session BrokerSession
 }
 
 // NewSettingsHandler returns a SettingsHandler backed by store.
@@ -198,6 +201,9 @@ func (h *SettingsHandler) connections(ctx context.Context, conns []connection) [
 // broker, issue #734).
 func (h *SettingsHandler) connectionProps(ctx context.Context, conn connection, required []string) molecules.ConnectionProps {
 	props := molecules.ConnectionProps{ID: conn.id, Name: conn.name, Description: conn.description, DefaultLabel: conn.defaultLabel}
+	if conn.id == tachibanaConnectionID {
+		props.Badges, props.Details = h.tachibanaStatus(ctx)
+	}
 	for _, field := range conn.fields {
 		props.Fields = append(props.Fields, h.row(ctx, field.key, field.label, ""))
 		if slices.Contains(required, field.key) {
