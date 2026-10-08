@@ -55,7 +55,7 @@ func TestBuildServices_OutcomeLabelingFeedsCalibrationMetrics(t *testing.T) {
 
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		metrics, err := svc.Calibration.Metrics(ctx)
+		metrics, err := svc.Calibration.Metrics(ctx, 0)
 		if err != nil {
 			t.Fatalf("Calibration.Metrics: %v", err)
 		}

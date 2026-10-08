@@ -31,7 +31,7 @@ describe('pitha-calibration-heatmap', () => {
     expect(el.shadowRoot?.textContent).toContain('0.90-1.00');
     expect(el.shadowRoot?.textContent).toContain('51.0%');
     expect(el.shadowRoot?.textContent).toContain('0.190'); // brier_score
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/calibration');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/calibration?horizon=all');
   });
 
   test('colors each cell by its direction_accuracy without a style attribute binding', async () => {

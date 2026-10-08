@@ -135,6 +135,7 @@ type DecisionTrade struct {
 type LabeledSample struct {
 	Direction           string
 	Confidence          float64
+	HorizonMinutes      int
 	FutureReturn        float64
 	WasDirectionCorrect bool
 }
