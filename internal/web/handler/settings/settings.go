@@ -77,24 +77,6 @@ func (h *SettingsHandler) Page(c *gin.Context) {
 	shared.RenderHTML(c, http.StatusOK, pages.SettingsPage(props))
 }
 
-// SetupPage implements `GET /setup` (issue #80, FR-SETUP-2): the
-// connections in setupConnectionIDs (Jev and
-// kabuステーション, holding the required keys, plus the optional Slack) in
-// the same organisms.ConnectionList as Settings (issue #302), posting to
-// the same `POST`/`DELETE /settings/:key` routes. Complete reports whether
-// every required key is stored; `/setup` stays reachable afterwards.
-func (h *SettingsHandler) SetupPage(c *gin.Context) {
-	ctx := c.Request.Context()
-	var offered []connection
-	for _, id := range setupConnectionIDs {
-		if conn, ok := connectionByID(id); ok {
-			offered = append(offered, conn)
-		}
-	}
-	complete := len(h.unsetKeys(ctx, config.RequiredSecretKeys())) == 0
-	shared.RenderHTML(c, http.StatusOK, pages.SetupPage(pages.SetupProps{Connections: h.connections(ctx, offered), Complete: complete}))
-}
-
 // Save implements `POST /settings/:key`: it stores the form's `value`
 // under the single key in the path and touches no other key (issue #79).
 // The value is trimmed and validated per key (config.NormalizeSecretValue,
@@ -193,31 +175,32 @@ func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
 	c.Header("HX-Trigger", secretsStatusChangedEvent)
 	comps := []templ.Component{molecules.SecretFieldRow(h.row(ctx, key, settingsLabel(key), notice))}
 	if conn, ok := connectionByKey(key); ok {
-		comps = append(comps, molecules.ConnectionStatus(h.connectionProps(ctx, conn), true))
+		comps = append(comps, molecules.ConnectionStatus(h.connectionProps(ctx, conn, h.requiredSecretKeys(ctx)), true))
 	}
 	if returnPath == "/setup" {
-		complete := len(h.unsetKeys(ctx, config.RequiredSecretKeys())) == 0
-		comps = append(comps, molecules.SetupStatus(complete, true))
+		comps = append(comps, molecules.SetupStatus(h.setupComplete(ctx), true))
 	}
 	shared.RenderHTML(c, http.StatusOK, templ.Join(comps...))
 }
 
 // connections builds the props of every connection in conns, in order.
 func (h *SettingsHandler) connections(ctx context.Context, conns []connection) []molecules.ConnectionProps {
+	required, _ := h.requirements(ctx)
 	props := make([]molecules.ConnectionProps, len(conns))
 	for i, conn := range conns {
-		props[i] = h.connectionProps(ctx, conn)
+		props[i] = h.connectionProps(ctx, conn, required.SecretKeys)
 	}
 	return props
 }
 
 // connectionProps builds one connection's props; it is Required when it
-// holds a key of config.RequiredSecretKeys.
-func (h *SettingsHandler) connectionProps(ctx context.Context, conn connection) molecules.ConnectionProps {
+// holds one of the required secrets keys (which depend on the selected
+// broker, issue #734).
+func (h *SettingsHandler) connectionProps(ctx context.Context, conn connection, required []string) molecules.ConnectionProps {
 	props := molecules.ConnectionProps{ID: conn.id, Name: conn.name, Description: conn.description, DefaultLabel: conn.defaultLabel}
 	for _, field := range conn.fields {
 		props.Fields = append(props.Fields, h.row(ctx, field.key, field.label, ""))
-		if slices.Contains(config.RequiredSecretKeys(), field.key) {
+		if slices.Contains(required, field.key) {
 			props.Required = true
 		}
 	}

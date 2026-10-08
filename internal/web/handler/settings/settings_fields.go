@@ -113,11 +113,6 @@ var settingsConnections = []connection{
 	},
 }
 
-// setupConnectionIDs are the connections the first-run Setup screen (issue
-// #80) offers: the ones holding the two required keys plus Slack. The
-// other connections are configured later on Settings.
-var setupConnectionIDs = []string{"jev", "kabu", "slack"}
-
 // defaultedKeys are the override-only keys whose unset state is the normal
 // one (a default applies), so the global secrets banner never nags about
 // them.

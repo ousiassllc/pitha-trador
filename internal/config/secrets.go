@@ -100,8 +100,9 @@ var optionalSecretKeys = []string{KeyJevBaseURL, KeyJevModel, KeySlackWebhookURL
 	KeyTachibanaDemoAuthID, KeyTachibanaProdAuthID, KeyTachibanaDemoSecondPassword}
 
 // RequiredSecretKeys returns the keys whose absence keeps the app
-// unusable (JEV_API_KEY/KABU_API_PASSWORD): the Setup Guard redirects to
-// `/setup` until every one is stored (issues #80, #271).
+// unusable with the default kabu broker (JEV_API_KEY/KABU_API_PASSWORD): the
+// Setup Guard redirects to `/setup` until every one is stored (issues #80,
+// #271). RequiredSetup derives the broker-dependent set (issue #734).
 func RequiredSecretKeys() []string {
 	return append([]string{}, requiredSecretKeys...)
 }

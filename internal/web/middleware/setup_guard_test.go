@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
 
@@ -31,7 +32,7 @@ func serve(t *testing.T, store middleware.SecretsReader, method, path string) *h
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(middleware.SetupGuard(store, []string{"A", "B"}))
+	engine.Use(middleware.SetupGuard(store, middleware.StaticSetupRequirements("A", "B")))
 	engine.NoRoute(func(c *gin.Context) { c.String(http.StatusOK, "reached") })
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(method, path, nil))
@@ -49,6 +50,12 @@ func TestSetupGuard_Exemptions(t *testing.T) {
 		{http.MethodPost, "/settings/A", false},
 		{http.MethodDelete, "/settings/A", false},
 		{http.MethodGet, "/settings/A", true},
+		// The broker selection and 立花 settings rows are part of setup (issue #734).
+		{http.MethodPost, "/ops-settings/broker.provider", false},
+		{http.MethodDelete, "/ops-settings/broker.tachibana.demo.private_key_path", false},
+		{http.MethodPost, "/ops-settings/policy.long.min_probability", true},
+		{http.MethodPost, "/ops-settings/system.backup_dir", true},
+		{http.MethodGet, "/ops-settings/broker.provider", true},
 		{http.MethodGet, "/settings", true},
 		{http.MethodGet, "/staticfoo", true},
 		{http.MethodGet, "/scanner", true},
@@ -67,7 +74,7 @@ func TestSetupGuard_NonNavigationRequestsGetProtocolAppropriateResponses(t *test
 	unset := stubSecrets{values: map[string]string{"A": "x"}}
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	engine.Use(middleware.SetupGuard(unset, []string{"A", "B"}))
+	engine.Use(middleware.SetupGuard(unset, middleware.StaticSetupRequirements("A", "B")))
 
 	do := func(method, path string, headers map[string]string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, nil)
@@ -118,5 +125,37 @@ func TestSetupGuard_StoreErrorCountsAsUnset(t *testing.T) {
 	rec := serve(t, stubSecrets{err: errors.New("db is locked")}, http.MethodGet, "/scanner")
 	if rec.Code != http.StatusFound {
 		t.Fatalf("GET /scanner with unreadable store = %d, want 302", rec.Code)
+	}
+}
+
+// issue #734: what the guard requires follows the selected broker/environment
+// per request, and an unset 秘密鍵 path keeps it closed even with every secret.
+func TestSetupGuard_RequirementsFollowBrokerAndEnvironment(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	secrets := stubSecrets{values: map[string]string{config.KeyJevAPIKey: "j", config.KeyTachibanaDemoAuthID: "d"}}
+	serveWith := func(b config.BrokerSettings) *httptest.ResponseRecorder {
+		engine := gin.New()
+		engine.Use(middleware.SetupGuard(secrets, func(context.Context) config.SetupRequirements { return config.RequiredSetup(b) }))
+		engine.NoRoute(func(c *gin.Context) { c.String(http.StatusOK, "reached") })
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/scanner", nil))
+		return rec
+	}
+	demo := config.TachibanaSettings{Environment: config.TachibanaEnvDemo, DemoPrivateKeyPath: "/keys/demo.pem"}
+	tests := []struct {
+		name    string
+		broker  config.BrokerSettings
+		through bool
+	}{
+		{"kabu needs KABU_API_PASSWORD", config.BrokerSettings{Provider: config.BrokerKabu}, false},
+		{"tachibana demo with ID and key path, no KABU_API_PASSWORD", config.BrokerSettings{Provider: config.BrokerTachibana, Tachibana: demo}, true},
+		{"tachibana demo without key path", config.BrokerSettings{Provider: config.BrokerTachibana, Tachibana: config.TachibanaSettings{Environment: config.TachibanaEnvDemo}}, false},
+		{"tachibana production needs the production ID", config.BrokerSettings{Provider: config.BrokerTachibana, Tachibana: config.TachibanaSettings{Environment: config.TachibanaEnvProduction, ProdPrivateKeyPath: "/keys/prod.pem"}}, false},
+	}
+	for _, tc := range tests {
+		rec := serveWith(tc.broker)
+		if got := rec.Code == http.StatusOK; got != tc.through {
+			t.Errorf("%s: through = %v (code %d), want %v", tc.name, got, rec.Code, tc.through)
+		}
 	}
 }

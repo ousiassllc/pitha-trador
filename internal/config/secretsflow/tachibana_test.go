@@ -45,29 +45,29 @@ func TestSecrets_TachibanaCredentials_ProductionNeverCarriesSecondPassword(t *te
 
 func TestRequiredSetup_SwitchesWithBrokerAndEnvironment(t *testing.T) {
 	tests := []struct {
-		name         string
-		broker       config.BrokerSettings
-		wantSecrets  []string
-		wantSettings []string
+		name        string
+		broker      config.BrokerSettings
+		wantSecrets []string
+		wantPathKey string
 	}{
-		{"zero value is kabu", config.BrokerSettings{}, []string{config.KeyJevAPIKey, config.KeyKabuAPIPassword}, nil},
-		{"kabu", config.BrokerSettings{Provider: config.BrokerKabu}, []string{config.KeyJevAPIKey, config.KeyKabuAPIPassword}, nil},
+		{"zero value is kabu", config.BrokerSettings{}, []string{config.KeyJevAPIKey, config.KeyKabuAPIPassword}, ""},
+		{"kabu", config.BrokerSettings{Provider: config.BrokerKabu}, []string{config.KeyJevAPIKey, config.KeyKabuAPIPassword}, ""},
 		{
 			"tachibana demo",
 			config.BrokerSettings{Provider: config.BrokerTachibana, Tachibana: config.TachibanaSettings{Environment: config.TachibanaEnvDemo}},
-			[]string{config.KeyJevAPIKey, config.KeyTachibanaDemoAuthID}, []string{config.KeyTachibanaDemoPrivateKeyPath},
+			[]string{config.KeyJevAPIKey, config.KeyTachibanaDemoAuthID}, config.KeyTachibanaDemoPrivateKeyPath,
 		},
 		{
 			"tachibana production",
 			config.BrokerSettings{Provider: config.BrokerTachibana, Tachibana: config.TachibanaSettings{Environment: config.TachibanaEnvProduction}},
-			[]string{config.KeyJevAPIKey, config.KeyTachibanaProdAuthID}, []string{config.KeyTachibanaProdPrivateKeyPath},
+			[]string{config.KeyJevAPIKey, config.KeyTachibanaProdAuthID}, config.KeyTachibanaProdPrivateKeyPath,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := config.RequiredSetup(tc.broker)
-			if !slices.Equal(got.SecretKeys, tc.wantSecrets) || !slices.Equal(got.SettingKeys, tc.wantSettings) {
-				t.Errorf("RequiredSetup = %+v, want secrets %v settings %v", got, tc.wantSecrets, tc.wantSettings)
+			if !slices.Equal(got.SecretKeys, tc.wantSecrets) || got.PrivateKeyPathKey != tc.wantPathKey || got.PrivateKeyPathSet {
+				t.Errorf("RequiredSetup = %+v, want secrets %v, path key %q, path unset", got, tc.wantSecrets, tc.wantPathKey)
 			}
 			if slices.Contains(got.SecretKeys, "TACHIBANA_PROD_SECOND_PASSWORD") {
 				t.Error("a 本番 第二暗証番号 must never be required")
@@ -130,5 +130,18 @@ func TestTachibanaSettings_SelectsEnvironmentValues(t *testing.T) {
 	s.Environment = config.TachibanaEnvDemo
 	if s.BaseURL() != "d" || s.PrivateKeyPath() != "/d.pem" || s.Production() {
 		t.Errorf("demo selection = %q %q", s.BaseURL(), s.PrivateKeyPath())
+	}
+}
+
+func TestRequiredSetup_ReportsWhetherTheSelectedEnvironmentsKeyPathIsSet(t *testing.T) {
+	b := config.BrokerSettings{Provider: config.BrokerTachibana, Tachibana: config.TachibanaSettings{
+		Environment: config.TachibanaEnvDemo, DemoPrivateKeyPath: "/keys/demo.pem", // production's is unset
+	}}
+	if got := config.RequiredSetup(b); !got.PrivateKeyPathSet || got.PrivateKeyPathKey != config.KeyTachibanaDemoPrivateKeyPath {
+		t.Errorf("demo = %+v, want the demo path reported as set", got)
+	}
+	b.Tachibana.Environment = config.TachibanaEnvProduction
+	if got := config.RequiredSetup(b); got.PrivateKeyPathSet || got.PrivateKeyPathKey != config.KeyTachibanaProdPrivateKeyPath {
+		t.Errorf("production = %+v, want the production path reported as unset", got)
 	}
 }

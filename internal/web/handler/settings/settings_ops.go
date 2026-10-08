@@ -24,6 +24,9 @@ type OperationalSettings interface {
 	Get(ctx context.Context, key string) (opsettings.Value, error)
 	Save(ctx context.Context, key, raw string) error
 	Reset(ctx context.Context, key string) error
+	// Broker is the effective broker selection and 立花 settings (issue
+	// #734: the Setup screen and Setup Guard follow it).
+	Broker(ctx context.Context) (config.BrokerSettings, error)
 }
 
 // WithOperationalSettings enables the 運用設定 section of `GET /settings`
@@ -158,10 +161,13 @@ func (h *SettingsHandler) opsKey(c *gin.Context) (string, bool) {
 // redirected back to /settings.
 func (h *SettingsHandler) renderOpsRow(c *gin.Context, key, notice string) {
 	if c.GetHeader("HX-Request") != "true" {
-		c.Redirect(http.StatusSeeOther, "/settings")
+		c.Redirect(http.StatusSeeOther, settingsReturnPath(c))
 		return
 	}
 	ctx := c.Request.Context()
+	if refreshesSetup(c, key) {
+		c.Header("HX-Refresh", "true")
+	}
 	group, _ := opsGroupByKey(key)
 	props := h.opsGroupProps(ctx, group, key, notice)
 	var row molecules.SettingFieldRowProps
@@ -170,5 +176,9 @@ func (h *SettingsHandler) renderOpsRow(c *gin.Context, key, notice string) {
 			row = field
 		}
 	}
-	shared.RenderHTML(c, http.StatusOK, templ.Join(molecules.SettingFieldRow(row), molecules.SettingGroupStatus(props, true)))
+	comps := []templ.Component{molecules.SettingFieldRow(row), molecules.SettingGroupStatus(props, true)}
+	if settingsReturnPath(c) == "/setup" {
+		comps = append(comps, molecules.SetupStatus(h.setupComplete(ctx), true))
+	}
+	shared.RenderHTML(c, http.StatusOK, templ.Join(comps...))
 }

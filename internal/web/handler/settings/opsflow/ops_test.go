@@ -1,4 +1,6 @@
-package settings_test
+// Package opsflow tests the Settings screen's 運用設定 section (issue #708, #733)
+// through the handler with the real opsettings.Service over an in-memory store.
+package opsflow_test
 
 import (
 	"context"

@@ -138,26 +138,28 @@ type BrokerSettings struct {
 	Tachibana TachibanaSettings
 }
 
-// SetupRequirements are what must be stored before the app is usable: the
-// `secrets` keys and the runtime_settings keys (SettingKeys, whose value is a
-// path that must be set). Which ones depend on the selected broker.
+// SetupRequirements are what must be stored before the app is usable
+// (Setup Guard, issue #734): the `secrets` keys, plus - for 立花 - the
+// runtime_settings key of the selected environment's 秘密鍵 path
+// (PrivateKeyPathKey, "" for kabu) and whether it has a value.
 type SetupRequirements struct {
-	SecretKeys  []string
-	SettingKeys []string
+	SecretKeys        []string
+	PrivateKeyPathKey string
+	PrivateKeyPathSet bool
 }
 
-// RequiredSetup returns what the broker b needs (issue #734). kabu: Jev API
-// key and kabuステーション API password. tachibana: Jev API key plus the
-// selected environment's 認証ID and 秘密鍵 path; KABU_API_PASSWORD is optional
-// then (only the fallback broker uses it).
+// RequiredSetup returns what the broker b needs. kabu (also the zero value):
+// Jev API key and kabuステーション API password. tachibana: Jev API key plus
+// the selected environment's 認証ID and 秘密鍵 path; KABU_API_PASSWORD is
+// optional then (only the fallback broker uses it).
 func RequiredSetup(b BrokerSettings) SetupRequirements {
 	if b.Provider != BrokerTachibana {
-		return SetupRequirements{SecretKeys: []string{KeyJevAPIKey, KeyKabuAPIPassword}}
+		return SetupRequirements{SecretKeys: RequiredSecretKeys()}
 	}
 	if b.Tachibana.Production() {
-		return SetupRequirements{SecretKeys: []string{KeyJevAPIKey, KeyTachibanaProdAuthID}, SettingKeys: []string{KeyTachibanaProdPrivateKeyPath}}
+		return SetupRequirements{SecretKeys: []string{KeyJevAPIKey, KeyTachibanaProdAuthID}, PrivateKeyPathKey: KeyTachibanaProdPrivateKeyPath, PrivateKeyPathSet: b.Tachibana.ProdPrivateKeyPath != ""}
 	}
-	return SetupRequirements{SecretKeys: []string{KeyJevAPIKey, KeyTachibanaDemoAuthID}, SettingKeys: []string{KeyTachibanaDemoPrivateKeyPath}}
+	return SetupRequirements{SecretKeys: []string{KeyJevAPIKey, KeyTachibanaDemoAuthID}, PrivateKeyPathKey: KeyTachibanaDemoPrivateKeyPath, PrivateKeyPathSet: b.Tachibana.DemoPrivateKeyPath != ""}
 }
 
 var reauthTimePattern = regexp.MustCompile(`^\d{1,2}:\d{2}$`)
