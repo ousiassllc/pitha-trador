@@ -12,10 +12,24 @@ import (
 
 // sensitiveKeyParts are the (lower-case) substrings that mark an attribute
 // key as secret (FR-ERRLOG-3 (a)).
-var sensitiveKeyParts = []string{"api_key", "apikey", "api-key", "password", "passwd", "token", "secret", "authorization", "webhook"}
+var sensitiveKeyParts = []string{
+	"api_key", "apikey", "api-key", "password", "passwd", "token", "secret", "authorization", "webhook",
+	// 立花証券 e支店API: 認証ID・秘密鍵・第二暗証番号・仮想URL.
+	"authid", "auth_id", "auth-id",
+	"private_key", "privatekey", "private-key",
+	"second_password", "secondpassword", "second-password", "second_pwd", "secondpwd",
+	"virtual_url", "virtualurl", "virtual-url",
+}
 
 func isSensitiveKey(key string) bool {
 	key = strings.ToLower(key)
+	// "second" alone (第二暗証番号) and the sUrl* virtual URLs (sUrlRequest,
+	// sUrlMaster, sUrlPrice, sUrlEvent, sUrlEventWebSocket) are matched
+	// exactly / by prefix: a substring "second" would also hide "seconds"
+	// and the like.
+	if key == "second" || strings.HasPrefix(key, "surl") {
+		return true
+	}
 	for _, part := range sensitiveKeyParts {
 		if strings.Contains(key, part) {
 			return true
@@ -33,10 +47,35 @@ var (
 	// non-Bearer schemes); the scheme stays, like Bearer's.
 	basicAuthRe = regexp.MustCompile(`(?i)(\bauthorization\s*[:=]\s*(?:basic|digest|negotiate)\s+)[^\s&"'#,;]+`)
 	queryRe     = regexp.MustCompile(`(?i)((?:token|api[_-]?key|password|passwd|secret|authorization)=)[^&\s"'#]+`)
+
+	// 立花証券 e支店API (FR-ERRLOG-3 (b)). tachibanaKeyPattern names the
+	// credential fields: sAuthId / auth_id, private_key, 第二暗証番号
+	// (sSecondPassword), and the sUrl* / virtual_url virtual URLs.
+	tachibanaKeyPattern = `(?:auth[_-]?id|private[_-]?key|second[_-]?(?:password|pwd)|surl[a-z]*|virtual[_-]?url)`
+	// tachibanaQueryRe: key=value in a URL query, "second=" included.
+	tachibanaQueryRe = regexp.MustCompile(`(?i)((?:` + tachibanaKeyPattern + `|\bsecond)=)[^&\s"'#]+`)
+	// tachibanaJSONRe: the JSON form that appears when a request body or
+	// query is echoed into an error string, plain ("sAuthId":"v"),
+	// backslash-escaped (\"sAuthId\":\"v\") or percent-encoded
+	// (%22sAuthId%22%3A%22v%22). Group 1 keeps the key and quotes, group 2
+	// the closing quote.
+	tachibanaJSONRe = regexp.MustCompile(`(?is)(` + tachibanaKeyPattern + `(?:\\?"|%22)\s*(?::|%3A)\s*(?:\\?"|%22)).*?(\\?"|%22)`)
+	// tachibanaVirtualURLRe: a virtual URL issued by login (request / master
+	// / price / event / event-websocket) carries the session token in its
+	// path, so the whole URL is the secret. The login URL ".../auth/" is
+	// short and public, hence the 16-character floor on the token path.
+	tachibanaVirtualURLRe = regexp.MustCompile(`(?i)\b(?:https?|wss?)://[a-z0-9.\-]*e-shiten\.jp/e_api_v[0-9a-z]+/[a-z0-9_\-%=.~+/]{16,}[^\s"'<>\\]*`)
+	// pemPrivateKeyRe: a PEM private key body (an unterminated one is
+	// masked to the end of the string).
+	pemPrivateKeyRe = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)`)
 )
 
 func maskString(s string) string {
 	s = slackWebhookRe.ReplaceAllLiteralString(s, redacted)
+	s = tachibanaVirtualURLRe.ReplaceAllLiteralString(s, redacted)
+	s = pemPrivateKeyRe.ReplaceAllLiteralString(s, redacted)
+	s = tachibanaJSONRe.ReplaceAllString(s, "${1}"+redacted+"${2}")
+	s = tachibanaQueryRe.ReplaceAllString(s, "${1}"+redacted)
 	s = bearerRe.ReplaceAllString(s, "${1}"+redacted)
 	s = basicAuthRe.ReplaceAllString(s, "${1}"+redacted)
 	return queryRe.ReplaceAllString(s, "${1}"+redacted)

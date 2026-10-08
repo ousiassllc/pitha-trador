@@ -18,6 +18,22 @@ const (
 	SessionIssueRejected    SessionIssue = "rejected"      // 認証は成功するが以降の要求が拒否される
 )
 
+// The causes below are the 立花 e支店 adapter's (issue #739; the kabu adapter
+// never reports them). SessionIssueAPIDisabled doubles as 立花's API利用設定
+// 「利用しない」 and SessionIssueUnreachable as "the e支店 server cannot be
+// reached". The banner words the remedy per cause from the Issue alone, so
+// the adapter never has to put guidance (or anything credential-like) in
+// SessionStatus.Guidance.
+const (
+	SessionIssueBadAuthID       SessionIssue = "bad_auth_id"      // 認証IDが誤り (本番/デモの取り違えを含む)
+	SessionIssueKeyMismatch     SessionIssue = "key_mismatch"     // 秘密鍵と登録済み公開鍵の不一致 / 鍵の復号失敗
+	SessionIssueDocumentsUnread SessionIssue = "documents_unread" // 書面未読で仮想URLが発行されない
+	SessionIssueIPRejected      SessionIssue = "ip_rejected"      // 10005: IPv6のみの回線・固定IP登録との不一致
+	SessionIssueClockSkew       SessionIssue = "clock_skew"       // p_errno=8: PC時計とサーバ時刻が30秒超ずれ
+	SessionIssueOutOfHours      SessionIssue = "out_of_hours"     // 03:30〜05:30のログイン停止帯などサービス時間外
+	SessionIssueSessionConflict SessionIssue = "session_conflict" // 多重ログインで仮想URLが失効
+)
+
 // A not_logged_in failure streak is "persistent" (issue #712) once it has
 // repeated this many times or lasted this long: the broker still wants a
 // login well after the app's own retries, so the operator has to log in by

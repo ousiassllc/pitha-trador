@@ -92,7 +92,11 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/system/update-panel", updateHandler.Panel)
 	engine.POST("/system/update-check", updateHandler.Check)
 
-	engine.GET("/system/marketdata-status", system.NewMarketDataHandler(o.marketDataStatus).Status)
+	marketDataHandler := system.NewMarketDataHandler(o.marketDataStatus)
+	if o.operationalSettings != nil {
+		marketDataHandler.WithBrokerSelection(o.operationalSettings)
+	}
+	engine.GET("/system/marketdata-status", marketDataHandler.Status)
 
 	return h
 }

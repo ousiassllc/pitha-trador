@@ -177,11 +177,13 @@ func WithUpdateController(controller system.UpdateController) Option {
 	return func(o *options) { o.updateController = controller }
 }
 
-// WithMarketDataStatus enables `GET /system/marketdata-status` (issue
-// #295), the header banner telling the operator why the kabuステーション
-// API token could not be issued. cmd/desktop and cmd/server pass
-// internal/bootstrap's *marketdata.Client; without it the route renders
-// nothing.
+// WithMarketDataStatus enables `GET /system/marketdata-status` (issues #295,
+// #739), the header banner telling the operator why the broker session
+// (kabu: the kabuステーションAPI token; 立花: the e支店 login) is failing.
+// cmd/desktop and cmd/server pass internal/bootstrap's broker.Broker;
+// without it the route renders nothing. With WithOperationalSettings the
+// banner follows the broker selection (立花: per-cause guidance and the
+// demo / production environment).
 func WithMarketDataStatus(source system.MarketDataStatusSource) Option {
 	return func(o *options) { o.marketDataStatus = source }
 }
