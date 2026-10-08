@@ -1,7 +1,9 @@
 package system
 
 import (
+	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,8 +27,23 @@ type MarketDataStatusSource interface {
 // MarketDataHandler implements `GET /system/marketdata-status` (issues #295,
 // #739). A nil source (router-level tests) renders nothing.
 type MarketDataHandler struct {
-	source    MarketDataStatusSource
-	selection BrokerSelection
+	source      MarketDataStatusSource
+	selection   BrokerSelection
+	watchNotice WatchNoticeSource
+}
+
+// WatchNoticeSource tells whether the 立花 watch list in use is a stand-in
+// because the nightly daily bars could not be used (issue #730): the operator
+// notice to show on the banner, or "" when the list is the planned one.
+type WatchNoticeSource interface {
+	WatchNotice(ctx context.Context) string
+}
+
+// WithWatchNotice adds the watch list fallback notice to the banner. It
+// returns h for chaining.
+func (h *MarketDataHandler) WithWatchNotice(source WatchNoticeSource) *MarketDataHandler {
+	h.watchNotice = source
+	return h
 }
 
 // NewMarketDataHandler returns a MarketDataHandler backed by source.
@@ -64,6 +81,11 @@ func (h *MarketDataHandler) Status(c *gin.Context) {
 		}
 		if status.VersionRetiring {
 			props.Notice = versionRetiringNotice
+		}
+	}
+	if h.watchNotice != nil {
+		if n := h.watchNotice.WatchNotice(c.Request.Context()); n != "" {
+			props.Notice = strings.TrimSpace(props.Notice + " " + n)
 		}
 	}
 	shared.RenderHTML(c, http.StatusOK, organisms.MarketDataBanner(props))

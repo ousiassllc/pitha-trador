@@ -26,7 +26,8 @@ type MarketDataBannerProps struct {
 	// environment it is about (issue #739).
 	Environment string
 	// Notice is a non-failure heads-up of the broker (立花 e支店: 書面未読は
-	// 失敗として Guidance に出る。ここは API の版数更新の予告, issue #727). It
+	// 失敗として Guidance に出る。ここは API の版数更新の予告, issue #727; the 立花 watch list fell back to a stand-in
+	// because the daily bars were unusable, issue #730). It
 	// is shown only while Guidance is empty.
 	Notice string
 }

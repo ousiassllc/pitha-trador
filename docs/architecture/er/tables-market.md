@@ -269,3 +269,29 @@ erDiagram
 | duration_ms | integer | NOT NULL | 所要時間（再開分を含む累計） |
 | cursor | text | NOT NULL, DEFAULT '' | 最後に処理した銘柄コード（再開はその次から） |
 | error | text | NOT NULL, DEFAULT '' | 中断の理由（価格の生値は含めない） |
+
+## watch_lists / watch_list_entries
+
+立花証券選択時の監視リスト（最大120件。issue #730、親 #726）。引け後に翌立会日分を1日1件確定して保存し、翌朝のEVENT購読・market-data投入・Fast Screenerの母集団になる（接続は#731）。`daily_bars`と同じく自己利用のローカル保存で、持つのは銘柄コードと選定理由だけ（価格の生値は持たない）。直近60日より古いリストは保存のたびに削除する。
+
+### watch_lists
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| list_date | text | PK, CHECK `YYYY-MM-DD` | リストが使われる立会日（JST）。休場日は飛ばした翌立会日 |
+| source | text | NOT NULL, CHECK IN ('daily_screen','fixed','carried_over','fixed_fallback') | 確定方法。`daily_screen`＝日足スクリーニング、`fixed`＝運用者の固定リスト、`carried_over`＝日足を使えず前営業日のリストを引き継いだ、`fixed_fallback`＝日足を使えず固定リスト（固定リストが無ければ保有・注文中のみ）へ切り替えた |
+| reason | text | NOT NULL, DEFAULT '' | 確定の説明。代替リスト（`carried_over`/`fixed_fallback`）では日足を使えなかった理由と切り替え先（バナー・Activityにもこの文を出す） |
+| basis_date | text | NOT NULL, DEFAULT '' | スクリーニングに使った日足の立会日（使わないときは空） |
+| decided_at | text | NOT NULL | 確定時刻（UTC。固定9桁の小数秒） |
+
+### watch_list_entries
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| list_date | text | NOT NULL, PK（`position`と複合） | `watch_lists.list_date`（FKは張らない。`Save`が1トランザクションで入れ替える） |
+| position | integer | NOT NULL, CHECK >= 0 | 購読・表示順（0起点。保有・注文中が先頭） |
+| symbol | varchar(10) | NOT NULL | 銘柄コード |
+| origin | text | NOT NULL, CHECK IN ('held','manual','screen','fixed') | 枠の由来。`held`＝保有・注文中の固定枠、`manual`＝手動指定、`screen`＝スクリーニング上位、`fixed`＝固定リスト |
+| indicators | text | NOT NULL, DEFAULT '' | `screen`のとき選ばれた指標（`gain_rate`/`loss_rate`/`volume`/`turnover`/`volume_surge`/`turnover_surge`/`range_rate`のカンマ区切り。設定順） |
+
+`WITHOUT ROWID`（主キーは`(list_date, position)`）。同じ`list_date`を再保存するとエントリごと置き換える。`GET /watchlist`が直近7立会日分を表示する。

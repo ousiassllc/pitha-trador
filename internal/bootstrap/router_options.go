@@ -49,7 +49,7 @@ func LoadSecrets(ctx context.Context, state *State) (*system.SecretsRepository, 
 // the caller.
 func RouterOptions(services *Services, state *State, secretsRepo *system.SecretsRepository) []router.Option {
 	scan := state.Strategy.Scan
-	return []router.Option{
+	opts := []router.Option{
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
 		router.WithHeartbeatRecorder(services.Risk),
@@ -71,4 +71,5 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 			Max: time.Duration(scan.CandidateRefreshIntervalSecondsMax) * time.Second,
 		}),
 	}
+	return append(opts, services.watchlistRouterOptions()...)
 }

@@ -9,6 +9,7 @@ type NavItem string
 const (
 	NavNone        NavItem = ""
 	NavScanner     NavItem = "scanner"
+	NavWatchlist   NavItem = "watchlist"
 	NavPerformance NavItem = "performance"
 	NavCalibration NavItem = "calibration"
 	NavActivity    NavItem = "activity"
@@ -24,6 +25,7 @@ var navEntries = []struct {
 	Href  templ.SafeURL
 }{
 	{NavScanner, "Scanner", "/scanner"},
+	{NavWatchlist, "Watchlist", "/watchlist"},
 	{NavPerformance, "Performance", "/performance"},
 	{NavCalibration, "Calibration", "/calibration"},
 	{NavActivity, "Activity", "/activity"},

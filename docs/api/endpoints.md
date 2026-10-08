@@ -48,6 +48,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/settings` | Settings画面（「運用設定」節にバックアップ先・ログディレクトリ・Policy/Fast Screenerしきい値の編集を含む。`POST`/`DELETE /ops-settings/:key`、`environment/setup.md`）。接続先別（Jev/kabuステーション/立花証券 e支店/Slack/Luna/ニュースフィード/Sol/Opus）の一覧で、各接続先のモーダルに許可キー（`internal/config`のallow-list）の`SecretFieldRow`をまとめ、各行が独立した保存・削除フォームを持つ。保存済みの値は再表示せず「設定済み」バッジのみ表示する。「システム」節からアップデート（`#update-panel`）とエラーログのダウンロード（`#error-log-panel`、`GET /api/v1/logs/errors`を呼ぶフォーム。FR-ERRLOG-1）のモーダルを開く（issue #57/#79/#267/#302） |
 | GET | `/setup` | 初回セットアップ画面。Settingsと同じ接続先一覧・モーダルで、Jev・選択中のブローカーの接続先（kabuステーション／立花証券 e支店）・任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。運用設定の「ブローカー」（立花選択時は立花の接続設定も）を`POST`/`DELETE /ops-settings/:key`で保存でき、ブローカー/環境の保存後は`HX-Refresh`で再読込する。Setup Guardの例外で、セットアップ完了後も直接アクセスできる（issue #80/#302） |
 | GET | `/activity` | System Activity Log画面。`<pitha-activity-feed>`アイランド（SSRフォールバック: キュー状況＋アクティビティ一覧）を埋め込んだフルページ |
+| GET | `/watchlist` | Watchlist画面（issue #730）。立花証券選択時の監視リスト（直近7立会日分。確定方法・基準日・確定時刻・理由、銘柄ごとの枠の由来`held`/`manual`/`screen`/`fixed`と選ばれた指標）と使用中のリストを表示するサーバ描画のフルページ（アイランドなし）。kabu選択時は「立花選択時のみ」の案内を表示する |
 | GET | `/swagger` | Swagger UI（Stoplight Elements）。`SWAGGER_ENABLED=true`のときのみ登録、既定は404。詳細は§1・`environment/setup.md`「Swagger / OpenAPI」 |
 
 ## 4. アクションルート
@@ -186,3 +187,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.74 | 2026-10-08 | §1 Setup Guardの必須キーを選択ブローカー・環境（kabu／立花デモ／立花本番）に応じて切り替え、`/ops-settings/:key`のブローカー系キーをGuard例外に追加。§3 `GET /setup`が選択中のブローカーの接続先と運用設定（ブローカー選択）を表示 | issue #734 |
 | 1.75 | 2026-10-08 | §4`GET /system/marketdata-status`を立花証券選択時の原因別案内とデモ/本番バッジ（`data-environment`）に対応（kabu選択時は不変） | issue #739 |
 | 1.76 | 2026-10-08 | §5の`GET /api/v1/activity`の`type`に`broker_notice`（立花アダプタの運用者向け通知。インメモリ直近50件）を追加 | issue #727 |
+| 1.77 | 2026-10-08 | §3に`GET /watchlist`ページルートを追加。`GET /system/marketdata-status`のバナーに、立花の監視リストが日足を使えず代替リスト（固定リスト切替／前営業日リスト引き継ぎ）になっている間の注意表示（`data-testid="marketdata-notice"`）を追加 | issue #730 |

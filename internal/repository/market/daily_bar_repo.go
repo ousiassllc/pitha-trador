@@ -106,3 +106,29 @@ func (r *DailyBarRepository) Save(ctx context.Context, symbol string, bars []dom
 	}
 	return len(bars), nil
 }
+
+// Recent returns, for every symbol, its latest perSymbol bars dated since or
+// later, ordered by symbol and then oldest first. It is the screening's
+// window: the bars of the newest day plus the history its surge ratios are
+// measured against.
+func (r *DailyBarRepository) Recent(ctx context.Context, since string, perSymbol int) ([]domain.DailyBar, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT `+dailyBarColumns+` FROM (
+		SELECT `+dailyBarColumns+`, ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY trade_date DESC) AS rn
+		FROM daily_bars WHERE trade_date >= ?) WHERE rn <= ? ORDER BY symbol, trade_date`, since, perSymbol)
+	if err != nil {
+		return nil, fmt.Errorf("repository: recent daily bars since %q: %w", since, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []domain.DailyBar
+	for rows.Next() {
+		b, err := scanDailyBar(rows)
+		if err != nil {
+			return nil, fmt.Errorf("repository: scan recent daily bar: %w", err)
+		}
+		out = append(out, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("repository: recent daily bars since %q: %w", since, err)
+	}
+	return out, nil
+}

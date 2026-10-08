@@ -66,6 +66,8 @@ type Services struct {
 	// DailyBars/DailyBarRuns store the 立花 nightly 日足 batch (issue #729).
 	DailyBars    *market.DailyBarRepository
 	DailyBarRuns *market.DailyBarRunRepository
+	// WatchLists stores the 立花 監視リスト decided each night (issue #730).
+	WatchLists *market.WatchListRepository
 
 	RAG           *rag.Service
 	Broker        broker.Broker // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)

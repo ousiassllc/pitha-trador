@@ -1,7 +1,9 @@
 package system_test
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -144,5 +146,38 @@ func TestMarketDataHandler_Status_BrokerNotices(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+type fakeWatchNotice string
+
+func (f fakeWatchNotice) WatchNotice(context.Context) string { return string(f) }
+
+// Issue #730: a stand-in 立花 watch list (the daily bars were unusable) shows
+// as the amber notice, next to the version heads-up and below an error.
+func TestMarketDataHandler_Status_WatchListNotice(t *testing.T) {
+	render := func(status broker.SessionStatus, notice string) string {
+		gin.SetMode(gin.TestMode)
+		engine := gin.New()
+		engine.GET("/system/marketdata-status", system.NewMarketDataHandler(fixedStatus(status)).WithWatchNotice(fakeWatchNotice(notice)).Status)
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/marketdata-status", nil))
+		return rec.Body.String()
+	}
+
+	body := render(broker.SessionStatus{}, "監視リストを前営業日から引き継ぎました。")
+	if !strings.Contains(body, `data-testid="marketdata-notice"`) || !strings.Contains(body, "前営業日から引き継ぎました") {
+		t.Errorf("notice missing: %s", body)
+	}
+	body = render(broker.SessionStatus{VersionRetiring: true}, "監視リストを前営業日から引き継ぎました。")
+	if !strings.Contains(body, "リリース予定日") || !strings.Contains(body, "前営業日から引き継ぎました") {
+		t.Errorf("both notices must show: %s", body)
+	}
+	if body = render(broker.SessionStatus{}, ""); strings.Contains(body, "marketdata-notice") {
+		t.Errorf("no notice expected: %s", body)
+	}
+	body = render(broker.SessionStatus{Issue: broker.SessionIssueUnreachable, Guidance: "接続できません。"}, "監視リストを前営業日から引き継ぎました。")
+	if !strings.Contains(body, `data-testid="marketdata-banner"`) || strings.Contains(body, "前営業日から引き継ぎました") {
+		t.Errorf("an error outranks the notice: %s", body)
 	}
 }

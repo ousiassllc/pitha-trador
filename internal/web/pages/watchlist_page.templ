@@ -1,0 +1,91 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+// WatchlistPage is the Watchlist full page (issue #730, child of #726): the
+// 立花 監視リスト decided after each close - which 立会日 it is for, how it was
+// decided (日足スクリーニング / 固定リスト / 日足を使えず引き継ぎ・切り替え) and,
+// per symbol, whether it holds a fixed slot (保有・注文中), was named by the
+// operator or was selected by which screening indicators. The list in use now
+// is marked. `GET /watchlist` (internal/web/handler/watchlist.Handler)
+// renders it; it is server-rendered only (no island).
+templ WatchlistPage(view domain.WatchListView) {
+	@layout.Shell("Watchlist", organisms.NavWatchlist) {
+		<h1 class="text-2xl font-bold text-slate-900">Watchlist</h1>
+		<p class="mt-1 text-sm text-slate-600">
+			立花証券の監視銘柄は、引け後の日足スクリーニング（または固定リスト）で翌営業日分が前夜に確定し、翌朝のEVENT購読に使われます。設定は
+			<a class="font-semibold underline" href="/settings">設定画面</a>
+			で変更できます。
+		</p>
+		if !view.Enabled {
+			<p class="mt-6 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" data-testid="watchlist-disabled">
+				監視リストは立花証券を選択しているときだけ確定されます（kabuステーション選択時は /ranking を使います）。
+			</p>
+		} else if len(view.Lists) == 0 {
+			<p class="mt-6 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" data-testid="watchlist-empty">
+				確定済みの監視リストはまだありません。最初の夜間バッチ（日足取得）の後に作られます。
+			</p>
+		}
+		for _, list := range view.Lists {
+			@watchlistSection(list, list.ListDate == view.ActiveDate)
+		}
+	}
+}
+
+templ watchlistSection(list domain.WatchList, active bool) {
+	<section class="mt-6" data-testid="watchlist" data-list-date={ list.ListDate } data-source={ list.Source } data-active={ strconv.FormatBool(active) }>
+		<h2 class="text-lg font-semibold text-slate-900">
+			{ list.ListDate } の監視リスト
+			if active {
+				<span class="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800" data-testid="watchlist-active">使用中</span>
+			}
+			if list.Fallback() {
+				<span class="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900" data-testid="watchlist-fallback">代替リスト</span>
+			}
+		</h2>
+		<dl class="mt-2 grid gap-x-4 gap-y-1 text-sm text-slate-700 sm:grid-cols-[max-content_1fr]">
+			<dt class="font-medium">確定方法</dt>
+			<dd>{ label(watchSourceLabels, list.Source) }</dd>
+			if list.BasisDate != "" {
+				<dt class="font-medium">基準日（日足）</dt>
+				<dd>{ list.BasisDate }</dd>
+			}
+			<dt class="font-medium">確定時刻</dt>
+			<dd>{ atoms.FormatJST(list.DecidedAt) }</dd>
+			<dt class="font-medium">内容</dt>
+			<dd>{ list.Reason }</dd>
+			<dt class="font-medium">銘柄数</dt>
+			<dd>{ strconv.Itoa(len(list.Entries)) } 件</dd>
+		</dl>
+		<table class="mt-3 w-full text-left text-sm">
+			<caption class="sr-only">{ list.ListDate } の監視銘柄一覧</caption>
+			<thead class="border-b border-slate-300 text-xs text-slate-600">
+				<tr>
+					<th scope="col" class="py-1 pr-4">#</th>
+					<th scope="col" class="py-1 pr-4">銘柄</th>
+					<th scope="col" class="py-1 pr-4">枠の由来</th>
+					<th scope="col" class="py-1">選ばれた指標</th>
+				</tr>
+			</thead>
+			<tbody>
+				for i, e := range list.Entries {
+					<tr class="border-b border-slate-100" data-testid="watchlist-row" data-symbol={ e.Symbol } data-origin={ e.Origin }>
+						<td class="py-1 pr-4 text-slate-500">{ strconv.Itoa(i + 1) }</td>
+						<td class="py-1 pr-4 font-mono">
+							<a class="underline" href={ templ.URL("/symbols/" + e.Symbol) }>{ e.Symbol }</a>
+						</td>
+						<td class="py-1 pr-4">{ label(watchOriginLabels, e.Origin) }</td>
+						<td class="py-1">{ indicatorsText(e.Indicators) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</section>
+}
