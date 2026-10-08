@@ -109,7 +109,7 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 |-------|-----|------|
 | `limit` | integer | フィード件数（既定200、1〜500。範囲外は422） |
 | `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー）。許容値は`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6種で、範囲外は422。`job`イベントのみが対象で、指定時は`jev_scout`/`jev_trader`/`kill_switch`イベントは含まれない |
-| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch` / `news_feed`（ニュース取得・Luna分類の失敗。インメモリ直近50件。省略時は全種別。範囲外は422） |
+| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch` / `news_feed`（ニュース取得・Luna分類の失敗。インメモリ直近50件）/ `broker_notice`（ブローカーアダプタの運用者向け通知。立花の再認証遅延・取り合い・書面未読・API版数/書面更新予告。インメモリ直近50件。省略時は全種別。範囲外は422） |
 
 ```json
 // Output（抜粋）

@@ -57,7 +57,7 @@ const (
 	DefaultTachibanaDemoBaseURL = "https://demo-kabuka.e-shiten.jp/e_api_v4r10/"
 	DefaultTachibanaProdBaseURL = "https://kabuka.e-shiten.jp/e_api_v4r10/"
 
-	DefaultTachibanaRequestMaxPerSecond = 3
+	DefaultTachibanaRequestMaxPerSecond = 1
 	TachibanaRequestMaxPerSecondMin     = 1
 	TachibanaRequestMaxPerSecondMax     = 10
 

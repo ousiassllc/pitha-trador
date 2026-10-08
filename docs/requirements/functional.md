@@ -148,7 +148,7 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 
 ### 5.5 System Activity Log
 
-表示項目: キュー別（6キュー）の`pending`/`running`/直近`failed`件数、直近アクティビティ一覧（時刻・種別 [job/jev_scout/jev_trader/kill_switch/news_feed]・対象銘柄・詳細・latency_ms）、直近Kill Switchイベント。キュー種別・イベント種別でフィルタ可能とする。新規イベント発生に応じて`/ws/activity`経由でライブ更新する（§4.15）。
+表示項目: キュー別（6キュー）の`pending`/`running`/直近`failed`件数、直近アクティビティ一覧（時刻・種別 [job/jev_scout/jev_trader/kill_switch/news_feed/broker_notice]・対象銘柄・詳細・latency_ms）、直近Kill Switchイベント。キュー種別・イベント種別でフィルタ可能とする。新規イベント発生に応じて`/ws/activity`経由でライブ更新する（§4.15）。
 
 ## 6. MVPフェーズ
 
@@ -266,3 +266,5 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.70 | 2026-10-08 | UC-14/UC-15を立花証券 e支店対応の文言へ更新し、§4.17 FR-SETTINGS-4に立花証券 e支店カード（環境バッジ・本番時の「発注は行いません（#55 まで）」・`SessionStatus`由来の秘密を含まない状態表示）を追記（ブローカー選択・立花の認証情報とカードの環境バッジ、ブローカー依存の必須認証情報） | issue #738 |
 | 1.71 | 2026-10-08 | §4.19 FR-ERRLOG-3のマスク対象に立花証券 e支店APIの認証ID・秘密鍵・第二暗証番号・仮想URLを追加（属性キー`authid`/`auth_id`/`private_key`/`second`/`second_password`/`surl*`/`virtual_url`、文字列中の`sAuthId=`等のクエリ・JSON形式・PEM秘密鍵・立花の仮想URL） | issue #736 |
 | 1.72 | 2026-10-08 | §4.17 FR-SETTINGS-5の接続バナーを立花証券選択時の原因別案内（認証ID誤り／鍵不一致・復号失敗／API利用設定「利用しない」／書面未読／IP不正10005／時計ずれp_errno=8／時間外／セッション取り合い）とデモ/本番の環境バッジ常時表示に対応（kabu選択時は不変。認証情報・仮想URLはバナーに出さない） | issue #739 |
+| 1.73 | 2026-10-08 | §4.17 FR-SETTINGS-5に立花証券選択時のセッション状態バナー（閉局中`out_of_hours`・時計ずれ・取り合い・API版数予告の注意表示）、FR-BROKER-3に8:30通知・Activity feed・ログアウトを追記 | issue #727 |
+| 1.74 | 2026-10-08 | §4.3 FR-SCHED-10に立花証券選択時のEVENT/REST役割分担（30秒の鮮度・REST補完は1要求最大120銘柄・既定60秒に1要求・EVENT接続回数の予算） | issue #737 |

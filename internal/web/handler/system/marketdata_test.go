@@ -94,3 +94,55 @@ func TestMarketDataHandler_Status(t *testing.T) {
 		})
 	}
 }
+
+type fixedStatus broker.SessionStatus
+
+func (f fixedStatus) Status() broker.SessionStatus { return broker.SessionStatus(f) }
+
+// Issue #727: the 立花 adapter's version heads-up is a notice, not an error; an
+// error (or the nightly closed hours) keeps the error banner.
+func TestMarketDataHandler_Status_BrokerNotices(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  broker.SessionStatus
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "version retiring while the session is fine shows the amber notice",
+			status:  broker.SessionStatus{VersionRetiring: true},
+			want:    []string{`data-testid="marketdata-notice"`, "リリース予定日", `href="/settings"`},
+			notWant: []string{`data-testid="marketdata-banner"`},
+		},
+		{
+			name:    "an error outranks the notice",
+			status:  broker.SessionStatus{Issue: broker.SessionIssueUnreachable, Guidance: "接続できません。", VersionRetiring: true},
+			want:    []string{`data-testid="marketdata-banner"`, `data-issue="unreachable"`},
+			notWant: []string{"marketdata-notice"},
+		},
+		{
+			name:   "nightly closed hours use the ordinary banner with the schedule guidance",
+			status: broker.SessionStatus{Issue: broker.SessionIssueOutOfHours, Guidance: "開局後（05:35）に自動で再ログインします。"},
+			want:   []string{`data-issue="out_of_hours"`, "05:35"},
+		},
+		{name: "nothing to say renders nothing", status: broker.SessionStatus{}, notWant: []string{"marketdata-"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			engine := gin.New()
+			engine.GET("/system/marketdata-status", system.NewMarketDataHandler(fixedStatus(tt.status)).Status)
+			body := serve(engine, http.MethodGet, "/system/marketdata-status").Body.String()
+			for _, w := range tt.want {
+				if !strings.Contains(body, w) {
+					t.Errorf("body missing %q:\n%s", w, body)
+				}
+			}
+			for _, w := range tt.notWant {
+				if strings.Contains(body, w) {
+					t.Errorf("body must not contain %q:\n%s", w, body)
+				}
+			}
+		})
+	}
+}

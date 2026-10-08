@@ -25,6 +25,10 @@ type MarketDataBannerProps struct {
 	// belongs to, "" for kabu. When set the banner always shows which
 	// environment it is about (issue #739).
 	Environment string
+	// Notice is a non-failure heads-up of the broker (立花 e支店: 書面未読は
+	// 失敗として Guidance に出る。ここは API の版数更新の予告, issue #727). It
+	// is shown only while Guidance is empty.
+	Notice string
 }
 
 // persistentElapsedStep coarsens the shown elapsed time: the banner is a

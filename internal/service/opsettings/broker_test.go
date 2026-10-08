@@ -172,7 +172,7 @@ func TestSave_BrokerSettingsAreStoredAsNormalizedJSONScalars(t *testing.T) {
 			t.Errorf("row %s = %s, want %s", key, store.rows[key], w)
 		}
 	}
-	if v, _ := svc.Get(ctx, config.KeyTachibanaRequestMaxPerSecond); v.Current != "5" || v.Default != "3" || !v.Overridden {
+	if v, _ := svc.Get(ctx, config.KeyTachibanaRequestMaxPerSecond); v.Current != "5" || v.Default != "1" || !v.Overridden {
 		t.Errorf("request rate = %+v", v)
 	}
 	if v, _ := svc.Get(ctx, config.KeyBrokerProvider); v.Current != "tachibana" || v.Default != "kabu" {
@@ -205,7 +205,7 @@ func TestLoadBroker_DefaultsWhenNothingStoredAndStoredValuesOtherwise(t *testing
 	}
 	if got.Provider != config.BrokerKabu || got.Tachibana.Environment != config.TachibanaEnvDemo || got.Tachibana.Production() ||
 		got.Tachibana.BaseURL() != config.DefaultTachibanaDemoBaseURL || got.Tachibana.ProdBaseURL != config.DefaultTachibanaProdBaseURL ||
-		got.Tachibana.RequestMaxPerSecond != 3 || got.Tachibana.ReauthTime != "05:35" || got.Tachibana.PrivateKeyPath() != "" {
+		got.Tachibana.RequestMaxPerSecond != 1 || got.Tachibana.ReauthTime != "05:35" || got.Tachibana.PrivateKeyPath() != "" {
 		t.Errorf("defaults = %+v", got)
 	}
 
@@ -236,7 +236,7 @@ func TestLoadBroker_MalformedRowFallsBackToDefaultAndStoreErrorFails(t *testing.
 	if err != nil {
 		t.Fatalf("a malformed row must not fail start-up: %v", err)
 	}
-	if got.Provider != config.BrokerKabu || got.Tachibana.Environment != config.TachibanaEnvDemo || got.Tachibana.RequestMaxPerSecond != 3 {
+	if got.Provider != config.BrokerKabu || got.Tachibana.Environment != config.TachibanaEnvDemo || got.Tachibana.RequestMaxPerSecond != 1 {
 		t.Errorf("malformed rows = %+v, want the defaults", got)
 	}
 	if _, err := opsettings.LoadBroker(ctx, &fakeStore{getErr: errors.New("boom")}); err == nil {

@@ -185,3 +185,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.73 | 2026-10-08 | §4の`POST`/`DELETE /settings/:key`の許可キーを17件（立花の認証ID2件とデモの第二暗証番号。本番の第二暗証番号は無い）へ、`POST`/`DELETE /ops-settings/:key`を33キー（`broker.provider`・`broker.tachibana.*`8件を追加。秘密鍵パスは保存時にファイル検証）へ更新 | issue #733 |
 | 1.74 | 2026-10-08 | §1 Setup Guardの必須キーを選択ブローカー・環境（kabu／立花デモ／立花本番）に応じて切り替え、`/ops-settings/:key`のブローカー系キーをGuard例外に追加。§3 `GET /setup`が選択中のブローカーの接続先と運用設定（ブローカー選択）を表示 | issue #734 |
 | 1.75 | 2026-10-08 | §4`GET /system/marketdata-status`を立花証券選択時の原因別案内とデモ/本番バッジ（`data-environment`）に対応（kabu選択時は不変） | issue #739 |
+| 1.76 | 2026-10-08 | §5の`GET /api/v1/activity`の`type`に`broker_notice`（立花アダプタの運用者向け通知。インメモリ直近50件）を追加 | issue #727 |

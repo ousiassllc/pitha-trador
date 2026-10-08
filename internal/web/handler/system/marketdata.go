@@ -11,6 +11,11 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
+// versionRetiringNotice is the banner heads-up while the broker has announced
+// an API release (立花 e支店, issue #727): not a failure, so the connection
+// banner stays out of the way of the real errors.
+const versionRetiringNotice = "証券会社のAPIの更新（リリース予定日）が告知されています。変更内容を確認し、接続先URLの版数を更新してください。"
+
 // MarketDataStatusSource is what `GET /system/marketdata-status` needs from
 // the broker adapter: the state of its session (broker.Session).
 type MarketDataStatusSource interface {
@@ -56,6 +61,9 @@ func (h *MarketDataHandler) Status(c *gin.Context) {
 				props.Guidance, props.Environment = tachibanaGuidance(status.Issue, environment), environment
 				props.Persistent = false
 			}
+		}
+		if status.VersionRetiring {
+			props.Notice = versionRetiringNotice
 		}
 	}
 	shared.RenderHTML(c, http.StatusOK, organisms.MarketDataBanner(props))
