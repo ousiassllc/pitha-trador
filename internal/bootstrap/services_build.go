@@ -55,6 +55,7 @@ func (s *Services) buildRepositories(db *sql.DB) {
 	s.Snapshots = market.NewSnapshotRepository(db)
 	s.DailyBars = market.NewDailyBarRepository(db)
 	s.DailyBarRuns = market.NewDailyBarRunRepository(db)
+	s.WatchLists = market.NewWatchListRepository(db)
 	s.Decisions = judgement.NewDecisionRepository(db)
 	s.Signals = trading.NewSignalRepository(db)
 	s.Jobs = jobqueue.NewJobRepository(db)

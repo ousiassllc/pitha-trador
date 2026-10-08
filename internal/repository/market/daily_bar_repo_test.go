@@ -95,3 +95,37 @@ func TestDailyBarRunRepository_SaveGet(t *testing.T) {
 		t.Fatalf("Get = %+v", got)
 	}
 }
+
+func TestDailyBarRepository_RecentKeepsTheLatestBarsPerSymbol(t *testing.T) {
+	ctx := context.Background()
+	repo := market.NewDailyBarRepository(newTestDB(t))
+	for _, symbol := range []string{"7203", "6758"} {
+		var bars []domain.DailyBar
+		for _, date := range []string{"2026-09-01", "2026-10-05", "2026-10-06", "2026-10-07"} {
+			b := testBar(date, 100)
+			b.Symbol = symbol
+			bars = append(bars, b)
+		}
+		if _, err := repo.Save(ctx, symbol, bars, false); err != nil {
+			t.Fatalf("Save %s: %v", symbol, err)
+		}
+	}
+
+	got, err := repo.Recent(ctx, "2026-10-01", 2)
+	if err != nil {
+		t.Fatalf("Recent: %v", err)
+	}
+	var keys []string
+	for _, b := range got {
+		keys = append(keys, b.Symbol+"@"+b.TradeDate)
+	}
+	want := []string{"6758@2026-10-06", "6758@2026-10-07", "7203@2026-10-06", "7203@2026-10-07"}
+	if len(keys) != len(want) {
+		t.Fatalf("Recent = %v, want %v", keys, want)
+	}
+	for i := range want {
+		if keys[i] != want[i] {
+			t.Fatalf("Recent = %v, want %v", keys, want)
+		}
+	}
+}

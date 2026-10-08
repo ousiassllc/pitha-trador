@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
@@ -35,6 +36,7 @@ type options struct {
 	proposalSource      proposals.PolicyProposalSource
 	backtestRunner      performance.BacktestRunner
 	activitySource      activity.ActivitySource
+	watchlistSource     watchlist.Source
 	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
 	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
 	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
@@ -130,6 +132,15 @@ func WithPolicyProposalSource(source proposals.PolicyProposalSource) Option {
 // activity.StaticActivitySource default only serves router-level tests.
 func WithActivitySource(source activity.ActivitySource) Option {
 	return func(o *options) { o.activitySource = source }
+}
+
+// WithWatchlistSource overrides `GET /watchlist`'s backing
+// internal/web/handler/watchlist.Source. cmd/desktop and cmd/server pass
+// internal/bootstrap's internal/bootstrap/tachibanawatch.Viewer when 立花 is
+// selected; the idle watchlist.StaticSource default (kabu selected, router-level
+// tests) renders the "not maintained" notice.
+func WithWatchlistSource(source watchlist.Source) Option {
+	return func(o *options) { o.watchlistSource = source }
 }
 
 // WithBacktestRunner overrides `GET /performance`'s backing

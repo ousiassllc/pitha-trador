@@ -61,6 +61,7 @@ func (s *Services) Start(ctx context.Context) error {
 	s.startRankingWatch(ctx)
 	s.startRankingMeasure(ctx)
 	s.startDailyBars(ctx)
+	s.startWatchList(ctx)
 
 	if s.NewsIngestEnabled() {
 		s.wg.Add(1)
