@@ -101,7 +101,7 @@ lefthook install
 make dev
 ```
 
-`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`/`NEWS_FEED_ENABLED`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。Luna/Sol/Opusは既定でJev（`JEV_API_KEY`のみ）、ニュースフィードは既定でやのしんTDnet WebAPI（キー不要）で動くため、`LUNA_*`/`SOL_*`/`OPUS_*`/`NEWS_FEED_*`は役ごと・フィードの任意の差し替え（`NEWS_FEED_ENABLED`に`off`でニュース取り込みを停止）であり、未入力でも起動は失敗しない（issue #273）。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
+`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`/`NEWS_FEED_ENABLED`/`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`/`TACHIBANA_DEMO_SECOND_PASSWORD`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。Luna/Sol/Opusは既定でJev（`JEV_API_KEY`のみ）、ニュースフィードは既定でやのしんTDnet WebAPI（キー不要）で動くため、`LUNA_*`/`SOL_*`/`OPUS_*`/`NEWS_FEED_*`は役ごと・フィードの任意の差し替え（`NEWS_FEED_ENABLED`に`off`でニュース取り込みを停止）であり、未入力でも起動は失敗しない（issue #273）。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
 
 ### 環境変数
 
@@ -128,11 +128,15 @@ make dev
 | ログディレクトリ | `system.log_dir` | DBファイルの親ディレクトリ配下の`logs/` | **再起動が必要**（ログは起動時に開くため。DBは起動前に読み取り専用で参照する）。不正値（相対パス等）は既定にフォールバック |
 | Policy Engine（ロング/ショート）のしきい値 | `policy.{long,short}.*` | `config/strategy.yaml`の`policy.*` | **再起動不要**（評価のたびに再読込）。自己改善ループ（Sol/Opus）も同じキーを更新するため、後から書き込んだ方が有効 |
 | Fast Screenerのフィルター・重み | `screener.*` | `config/strategy.yaml`の`fast_screener.*` | **再起動不要**（次の候補更新から） |
+| 使用するブローカー | `broker.provider`（`kabu`\|`tachibana`） | `kabu`（従来どおり） | **再起動が必要**（起動時に1回読む）。自動フェイルオーバーはなく、切替は手動＋再起動 |
+| 立花証券 e支店 接続設定 | `broker.tachibana.environment`（`demo`\|`production`）・`broker.tachibana.{demo,production}.base_url`・`broker.tachibana.{demo,production}.private_key_path`・`broker.tachibana.request_max_per_second`（1〜10）・`broker.tachibana.reauth_time`（05:30〜08:00） | デモ環境・`https://demo-kabuka.e-shiten.jp/e_api_v4r10/`（本番は`https://kabuka.e-shiten.jp/e_api_v4r10/`）・毎秒3（暫定）・05:35。秘密鍵パスは未設定（=立花は使えない） | **再起動が必要**。認証ID（`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`）と任意のデモ第二暗証番号（`TACHIBANA_DEMO_SECOND_PASSWORD`）は「接続先」の「立花証券 e支店」で入力する（`secrets`、再起動で反映） |
 
 - 優先順位は`config/strategy.yaml` < `runtime_settings`（Settings画面）。以前の環境変数による上書き（`PITHA_POLICY_LONG_*`/`PITHA_POLICY_SHORT_*`/`PITHA_FAST_SCREENER_*`/`PITHA_LOG_DIR`/`PITHA_BACKUP_DIR`）は廃止した（設定されていても無視される）。
 - バックアップ先はローカルディスク外（外部ドライブ・クラウド同期フォルダ等）の**既存ディレクトリの絶対パス**を指定する。ディレクトリ自体は作成しない。存在しない間（未マウントなど）はローカルへ退避せずバックアップが失敗し、連続失敗時にSlack/ログで通知される（Settingsの該当項目にも警告を表示する）。
 - バックアップの内容: Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する。
 - ログディレクトリは日次JSONログ（全ログ`<日付>.log`とERRORのみの`<日付>-error.log`）・`.gz`アーカイブ・エラーログのダウンロードが共有する。作成できない場合は標準エラー出力へフォールバックして起動を継続する。起動失敗などの致命エラーはERRORレベルで記録する。
+- 立花証券 e支店APIを使う場合の事前準備（デモ/本番で別々に行う）: ①標準Web（e支店のWebサイト）にパスキーでログインできるよう登録する → ②「API利用設定」を開いて「利用する」にする → ③表示（自動発行）された**認証ID**を控え、Settingsの「立花証券 e支店」へ入力する → ④RSA 2048または4096ビットの鍵ペアを作る（例: `openssl genrsa -out tachibana-demo.pem 2048` ＋ `openssl rsa -in tachibana-demo.pem -pubout -out tachibana-demo.pub.pem`）→ ⑤**公開鍵だけ**を利用設定画面へ登録する → ⑥秘密鍵ファイルを同期されないフォルダに置き（OS権限でユーザーのみ読み取り可: `chmod 600`）、その**絶対パス**をSettingsの「立花証券 e支店（接続設定）」へ入力する。秘密鍵は立花側に保存されず、紛失すると再作成・再登録が必要で、中身はDB・ログ・画面に保存・表示されない（パスのみ保存。保存時にPEM・RSA 2048/4096・秘密鍵であること（公開鍵・証明書は400）を検証し、OneDrive/Dropbox/Googleドライブ等の同期フォルダ配下は警告する）。
+- 立花の「固定IP登録」（利用設定画面の任意設定）はアプリでは扱わない。動的IP回線（家庭用回線など）では**登録しない**こと。登録すると回線のIPが変わったときに立花から締め出され、再登録するまで接続できない。本番の第二暗証番号はアプリに保存せず（保存先はない。issue #55で扱う）、デモの第二暗証番号はデモ発注スモーク（任意）専用で本番環境では使わない。
 - 値は保存時に検証される（確率系しきい値は`(0, 1]`、`min_entry_quality`は`poor`/`fair`/`good`/`strong`/`exceptional`、`top_n >= 1`・価格/しきい値は正・`max_price >= min_price`・重みは0以上で合計が正、パスは絶対パス）。不正値は400で拒否し保存しない（FR-POLICY-2a / FR-FS-4）。
 
 ### 銘柄マスタの投入

@@ -63,7 +63,7 @@ type Services struct {
 	Proposals   *judgement.ProposalRepository
 
 	RAG           *rag.Service
-	Broker        broker.Broker // the selected broker adapter (newBroker; currently kabu)
+	Broker        broker.Broker // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
 	FeatureEngine *featureengine.Engine
 	Screener      *screener.LiveSource
 	Jev           *jev.Client
@@ -103,6 +103,7 @@ type buildSettings struct {
 	yanoshinURL    string
 	kabuURL        string
 	newsNow        func() time.Time
+	brokerSettings config.BrokerSettings
 }
 
 // BuildOption customises BuildServices' optional inputs.

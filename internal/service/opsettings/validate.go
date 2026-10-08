@@ -23,6 +23,20 @@ func encode(key, raw string) (string, error) {
 			return "", err
 		}
 		value = raw
+	case kindPrivateKey:
+		if err := validatePath(raw); err != nil {
+			return "", err
+		}
+		if err := validatePrivateKeyFile(raw); err != nil {
+			return "", err
+		}
+		value = raw
+	case kindBroker:
+		v, err := config.NormalizeBrokerSetting(key, raw)
+		if err != nil {
+			return "", &InvalidValueError{Reason: err.Error()}
+		}
+		value = v
 	case kindEntryQuality:
 		value = raw // the allowed values are checked with the effective config
 	case kindInteger:

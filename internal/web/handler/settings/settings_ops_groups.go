@@ -43,6 +43,8 @@ const (
 // They replace the removed PITHA_BACKUP_DIR / PITHA_LOG_DIR /
 // PITHA_POLICY_* / PITHA_FAST_SCREENER_* environment variables.
 var opsGroups = []opsGroup{
+	brokerGroup,
+	tachibanaGroup,
 	{
 		id:          "backup",
 		name:        "バックアップ先",

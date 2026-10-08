@@ -4,7 +4,7 @@
 
 ## runtime_settings
 
-Fast Screener（`screener.*`）とPolicy Engine（`policy.*`）のしきい値をコード再デプロイなしで上書きするKey-Valueストア。値は `config/strategy.yaml` < `runtime_settings` の順で読み取り時に重ね合わせる（環境変数による上書き層は無い。`config/*.yaml` の値をDBへロード/シードする処理はなく、行が無ければyamlの値がそのまま使われる）。Settings画面（`/settings`の「運用設定」、`internal/service/opsettings`）が`screener.*`・`policy.{long,short}.*`に加え、`system.backup_dir`（日次バックアップの退避先。未設定で無効）・`system.log_dir`（ログディレクトリ。起動時に読み取り専用で参照するため反映は再起動後）の行を保存・削除する（保存＝upsert、「既定に戻す」＝行の削除）。値は常にJSON文字列/数値。Riskの閾値は対象外（`config/risk.yaml` のみで管理し、`risk.*` キーはもたない）。操作者ハートビート（dead-man's switch、`architecture/overview.md` §10.4）の`system.last_ui_heartbeat_at`のような高頻度更新の単一値もこのテーブルで保持する。
+Fast Screener（`screener.*`）とPolicy Engine（`policy.*`）のしきい値をコード再デプロイなしで上書きするKey-Valueストア。値は `config/strategy.yaml` < `runtime_settings` の順で読み取り時に重ね合わせる（環境変数による上書き層は無い。`config/*.yaml` の値をDBへロード/シードする処理はなく、行が無ければyamlの値がそのまま使われる）。Settings画面（`/settings`の「運用設定」、`internal/service/opsettings`）が`screener.*`・`policy.{long,short}.*`に加え、`system.backup_dir`（日次バックアップの退避先。未設定で無効）・`system.log_dir`（ログディレクトリ。起動時に読み取り専用で参照するため反映は再起動後）の行を保存・削除する（保存＝upsert、「既定に戻す」＝行の削除）。値は常にJSON文字列/数値。Riskの閾値は対象外（`config/risk.yaml` のみで管理し、`risk.*` キーはもたない）。操作者ハートビート（dead-man's switch、`architecture/overview.md` §10.4）の`system.last_ui_heartbeat_at`のような高頻度更新の単一値もこのテーブルで保持する。さらにブローカー選択`broker.provider`（`kabu`既定|`tachibana`）と立花証券 e支店API用の`broker.tachibana.environment`（`demo`既定|`production`）・`broker.tachibana.{demo,production}.base_url`・`broker.tachibana.{demo,production}.private_key_path`（秘密鍵PEMの絶対パス。**鍵の中身はDBに保存しない**）・`broker.tachibana.request_max_per_second`（1〜10、暫定既定3）・`broker.tachibana.reauth_time`（`HH:MM`、既定`05:35`、05:30〜08:00）をSettings画面が保存する（issue #733。起動時に1回だけ読むため反映は再起動後。`opsettings.Keys()`は計33件）。
 
 ```mermaid
 erDiagram
@@ -36,7 +36,7 @@ erDiagram
 
 | カラム | 型 | 制約 | 説明 |
 |-------|-----|------|------|
-| key | varchar(100) | PK | 許可キーは`internal/config/secrets.go`の`AllowedSecretKeys`の14個のみ。必須: `JEV_API_KEY`, `KABU_API_PASSWORD`。任意: `JEV_BASE_URL`, `JEV_MODEL`, `SLACK_WEBHOOK_URL`, `LUNA_API_KEY`, `LUNA_BASE_URL`, `NEWS_FEED_URL`, `NEWS_FEED_API_KEY`, `NEWS_FEED_ENABLED`（`on`/`off`のみ）, `SOL_API_KEY`, `SOL_BASE_URL`, `OPUS_API_KEY`, `OPUS_BASE_URL`（キー一覧の正は`AllowedSecretKeys`） |
+| key | varchar(100) | PK | 許可キーは`internal/config/secrets.go`の`AllowedSecretKeys`の17個のみ。必須: `JEV_API_KEY`, `KABU_API_PASSWORD`（`KABU_API_PASSWORD`は立花選択時は任意＝issue #734）。任意: `JEV_BASE_URL`, `JEV_MODEL`, `SLACK_WEBHOOK_URL`, `LUNA_API_KEY`, `LUNA_BASE_URL`, `NEWS_FEED_URL`, `NEWS_FEED_API_KEY`, `NEWS_FEED_ENABLED`（`on`/`off`のみ）, `SOL_API_KEY`, `SOL_BASE_URL`, `OPUS_API_KEY`, `OPUS_BASE_URL`, `TACHIBANA_DEMO_AUTH_ID`, `TACHIBANA_PROD_AUTH_ID`, `TACHIBANA_DEMO_SECOND_PASSWORD`（立花証券 e支店API。認証IDはデモ/本番別、第二暗証番号はデモのみで、**本番の第二暗証番号のキーは存在しない**＝#55で追加。キー一覧の正は`AllowedSecretKeys`） |
 | encrypted_value | text | NOT NULL | AES-256-GCMで暗号化した値。先頭にランダムnonceを連結しbase64（StdEncoding）でエンコードした文字列 |
 | updated_at | text | NOT NULL | |
 

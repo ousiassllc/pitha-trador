@@ -2,9 +2,15 @@ package settings_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -186,5 +192,71 @@ func TestOpsRoutes_NonHTMXRedirectsBackToSettings(t *testing.T) {
 	rec := opsRequest(engine, http.MethodPost, "screener.top_n", url.Values{"value": {"30"}}, false)
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/settings" || store.rows["screener.top_n"] != "30" {
 		t.Errorf("status = %d, location = %q, store = %v", rec.Code, rec.Header().Get("Location"), store.rows)
+	}
+}
+
+func TestSaveOps_PrivateKeyPathIsValidatedAndNeverShownBack(t *testing.T) {
+	engine, store := opsRouter()
+	dir := t.TempDir()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	good := filepath.Join(dir, "demo.pem")
+	if err := os.WriteFile(good, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pub, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public := filepath.Join(dir, "public.pem")
+	if err := os.WriteFile(public, pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pub}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	notPEM := filepath.Join(dir, "plain.txt")
+	if err := os.WriteFile(notPEM, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, path := range map[string]string{"missing": filepath.Join(dir, "none.pem"), "not pem": notPEM, "public key": public} {
+		rec := opsRequest(engine, http.MethodPost, config.KeyTachibanaDemoPrivateKeyPath, url.Values{"value": {path}}, true)
+		if rec.Code != http.StatusBadRequest || len(store.rows) != 0 {
+			t.Errorf("%s: status = %d, store = %v, want 400 and no write", name, rec.Code, store.rows)
+		}
+	}
+
+	rec := opsRequest(engine, http.MethodPost, config.KeyTachibanaDemoPrivateKeyPath, url.Values{"value": {good}}, true)
+	if rec.Code != http.StatusOK || store.rows[config.KeyTachibanaDemoPrivateKeyPath] != `"`+good+`"` {
+		t.Fatalf("status = %d, store = %v", rec.Code, store.rows)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-testid="overridden-`+config.KeyTachibanaDemoPrivateKeyPath+`"`) {
+		t.Errorf("the saved row must show 設定済み; body=%s", body)
+	}
+	if strings.Contains(body, good) {
+		t.Errorf("the saved path is shown back; body=%s", body)
+	}
+
+	page := httptest.NewRecorder()
+	engine.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	if strings.Contains(page.Body.String(), good) {
+		t.Error("the Settings page shows the stored private key path")
+	}
+}
+
+func TestSaveOps_BrokerProviderIsStoredAndBadValuesAre400(t *testing.T) {
+	engine, store := opsRouter()
+	if rec := opsRequest(engine, http.MethodPost, config.KeyBrokerProvider, url.Values{"value": {"tachibana"}}, true); rec.Code != http.StatusOK || store.rows[config.KeyBrokerProvider] != `"tachibana"` {
+		t.Fatalf("status = %d, store = %v", rec.Code, store.rows)
+	}
+	if rec := opsRequest(engine, http.MethodPost, config.KeyBrokerProvider, url.Values{"value": {"unknown"}}, true); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown provider status = %d, want 400", rec.Code)
+	}
+	if rec := opsRequest(engine, http.MethodPost, config.KeyTachibanaReauthTime, url.Values{"value": {"04:00"}}, true); rec.Code != http.StatusBadRequest {
+		t.Errorf("out-of-window reauth time status = %d, want 400", rec.Code)
+	}
+	if rec := opsRequest(engine, http.MethodDelete, config.KeyBrokerProvider, nil, true); rec.Code != http.StatusOK || len(store.rows) != 0 {
+		t.Errorf("reset status = %d, store = %v, want the row removed (kabu again)", rec.Code, store.rows)
 	}
 }

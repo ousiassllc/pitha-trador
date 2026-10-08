@@ -53,6 +53,16 @@ var settingsConnections = []connection{
 		},
 	},
 	{
+		id:          "tachibana",
+		name:        "立花証券 e支店",
+		description: "立花証券 e支店API の認証情報です。認証ID は利用設定画面で発行されるもので、デモ環境と本番環境で別です。接続環境・秘密鍵ファイル・接続先 URL は、設定画面の「立花証券 e支店（接続設定）」で指定します。本番の第二暗証番号は保存できません。",
+		fields: []settingsField{
+			{config.KeyTachibanaDemoAuthID, "TACHIBANA_DEMO_AUTH_ID（デモ・認証ID）"},
+			{config.KeyTachibanaProdAuthID, "TACHIBANA_PROD_AUTH_ID（本番・認証ID）"},
+			{config.KeyTachibanaDemoSecondPassword, "TACHIBANA_DEMO_SECOND_PASSWORD（デモ・第二暗証番号・任意）"},
+		},
+	},
+	{
 		id:          "slack",
 		name:        "Slack",
 		description: "通知の送信先となる Slack の Incoming Webhook URL です（任意）。",
@@ -115,4 +125,5 @@ var defaultedKeys = []string{
 	config.KeyJevBaseURL, config.KeyJevModel,
 	config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
 	config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
+	config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword,
 }

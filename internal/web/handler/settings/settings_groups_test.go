@@ -62,6 +62,7 @@ func TestSettingsHandler_Page_GroupsKeysIntoOneModalPerConnection(t *testing.T) 
 		"news-feed": {config.KeyNewsFeedAPIKey, config.KeyNewsFeedURL, config.KeyNewsFeedEnabled},
 		"sol":       {config.KeySolAPIKey, config.KeySolBaseURL},
 		"opus":      {config.KeyOpusAPIKey, config.KeyOpusBaseURL},
+		"tachibana": {config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword},
 	}
 	var all []string
 	for id, keys := range want {
@@ -97,7 +98,7 @@ func TestSettingsHandler_Page_CardStateReflectsStoredKeys(t *testing.T) {
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
 	body := rec.Body.String()
 
-	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "slack": "unset", "sol": "default", "opus": "default", "news-feed": "default"} {
+	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "tachibana": "unset", "slack": "unset", "sol": "default", "opus": "default", "news-feed": "default"} {
 		if want := `data-testid="connection-status-` + id + `"`; !strings.Contains(body, want) {
 			t.Fatalf("no status for %s", id)
 		}

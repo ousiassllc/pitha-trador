@@ -69,11 +69,12 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 }
 
 // Keys returns every key Service manages: the backup and log directories,
-// the policy thresholds, then the screener thresholds.
+// the policy thresholds, the screener thresholds, then the broker settings.
 func Keys() []string {
 	keys := []string{config.KeyBackupDir, config.KeyLogDir}
 	keys = append(keys, config.PolicySettingKeys()...)
-	return append(keys, config.FastScreenerSettingKeys()...)
+	keys = append(keys, config.FastScreenerSettingKeys()...)
+	return append(keys, config.BrokerSettingKeys()...)
 }
 
 // IsKnownKey reports whether key is one of Keys.
@@ -86,12 +87,18 @@ const (
 	kindEntryQuality
 	kindNumber
 	kindInteger
+	kindPrivateKey // a 立花 秘密鍵 file path: a path whose file content is validated
+	kindBroker     // a broker selection / 立花 setting validated by config.NormalizeBrokerSetting
 )
 
 func kindOf(key string) kind {
 	switch {
 	case key == config.KeyBackupDir || key == config.KeyLogDir:
 		return kindPath
+	case config.IsPrivateKeyPathKey(key):
+		return kindPrivateKey
+	case config.IsBrokerSettingKey(key):
+		return kindBroker
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
 	case key == "screener.top_n":
@@ -112,14 +119,17 @@ func (s *Service) Get(ctx context.Context, key string) (Value, error) {
 	}
 	v := Value{Key: key, Overridden: stored, Default: s.defaultText(key)}
 	switch {
-	case kindOf(key) == kindPath:
+	case kindOf(key) == kindPath || kindOf(key) == kindPrivateKey:
 		if stored {
 			if v.Current, err = decodeString(key, raw); err != nil {
 				return Value{}, err
 			}
 		}
-		if key == config.KeyBackupDir && v.Current != "" {
+		switch {
+		case key == config.KeyBackupDir && v.Current != "":
 			v.Warning = backupDirWarning(v.Current)
+		case kindOf(key) == kindPrivateKey && v.Current != "":
+			v.Warning = privateKeyWarning(v.Current)
 		}
 	case stored:
 		if v.Current, err = decodeText(key, raw); err != nil {
@@ -177,6 +187,8 @@ func (s *Service) defaultText(key string) string {
 		return ""
 	case key == config.KeyLogDir:
 		return s.defaultLogDir
+	case kindOf(key) == kindPrivateKey || kindOf(key) == kindBroker:
+		return config.BrokerSettingDefault(key)
 	case kindOf(key) == kindEntryQuality:
 		v, _ := config.PolicySettingValue(s.policy, key)
 		return v.(string)
@@ -199,8 +211,11 @@ func decodeString(key, raw string) (string, error) {
 
 // decodeText renders a stored threshold row as text.
 func decodeText(key, raw string) (string, error) {
-	if kindOf(key) == kindEntryQuality {
+	switch kindOf(key) {
+	case kindEntryQuality:
 		return decodeString(key, raw)
+	case kindBroker:
+		return decodeBroker(key, raw)
 	}
 	var f float64
 	if err := json.Unmarshal([]byte(raw), &f); err != nil {
