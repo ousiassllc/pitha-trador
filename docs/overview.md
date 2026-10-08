@@ -21,7 +21,7 @@
 - Policy Engine（Jev 出力 → 取引候補への変換）・Risk Engine（ポジションサイズ／損失上限／Kill Switch）
 - Paper Trading による Entry/Exit・ポジション管理・PnL 集計
 - Jev 判断と将来値動きの紐付け・Calibration（Brier Score 等）
-- Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Performance・Calibration・System Activity Log・Settings・初回 Setup 画面）
+- Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Watchlist（立花選択時の監視リスト）・Performance・Calibration・System Activity Log・Settings・初回 Setup 画面）
 - Jev RAG（過去の類似局面を sqlite-vec で検索し Jev への文脈として注入）による判断品質の継続的な底上げ
 - Luna（ニュース分類・イベント抽出。News Ingestが取得した見出し・本文を実際の外部AI APIへ送信し、bullish/bearish/neutralとイベント種別を判定）による市場コンテキストの補助的拡張
 - Sol（振り返り分析）・Opus（改善提案レビュー）を実際の外部AI API呼び出しとして実装し、Policy Engineしきい値を自己改善するループ（Risk Engineのリミット値は対象外。Opusの承認は既存の決定的バックテストしきい値との併用条件とし、AIは追加の拒否権としてのみ働く）
