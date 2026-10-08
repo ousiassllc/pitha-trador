@@ -1,16 +1,18 @@
 # アーキテクチャ設計: 外部・内部連携（§5〜§9・§12〜§13）
 
-`docs/architecture/overview.md` から分割した章。§5 ブローカーアダプタ連携（共通境界・kabuアダプタ） / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携。節番号は分割前と同一で、コードコメント等の `overview.md §<番号>` は本ファイルの同番号の節を指す。
+`docs/architecture/overview.md` から分割した章。§5 ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ・機能比較） / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携。節番号は分割前と同一で、コードコメント等の `overview.md §<番号>` は本ファイルの同番号の節を指す。
 
-## 5. ブローカーアダプタ連携（共通境界・kabuアダプタ）
+## 5. ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ）
 
-### 5.1 共通境界（ブローカーアダプタ）
+### 5.1 共通境界（ブローカーアダプタ）と運用方針
+
+**方針（issue #721。#720の決定）**: ブローカーは**1プロセスで1つ**を選ぶ（Settingsの`broker.provider`。既定`kabu`。#723）。kabuは**フォールバックとして実装と設定を残す**。切替は手動（Settings＋再起動）で、自動フェイルオーバーと2社同時接続は対象外。立花証券はまずデモ環境で検証し（#724・#725）、本番は読み取り（市況データ）のみで検証してから既定切替を判断する。**発注は#55（blocked）まで行わない**（立花の本番の第二暗証番号は保持しない）。背景は、kabuが人手のログインを前提とし、ログインのパスキー必須化（2026年10月末目標）で無人運用がさらに難しくなること。
 
 ブローカー（証券会社API）の差分は1か所に閉じ込める（issue #722。kabu利用時の挙動は変えない）。境界は`internal/service/broker`で、利用側は`marketdatajob`・`heldposition`・`symbolcache`・`rankingwatch`（選択ロジック）・`web/handler/system`（接続バナー）・Risk Engineのヘルスチェックで、いずれもブローカー固有の型を受け渡さずこのパッケージの型だけを使う。
 
 - **中立の型**: `Quote`（現在値・VWAP・累積出来高/売買代金・当日高安・**最良買`Bid`/最良売`Ask`と数量**・買/売の板厚・特別気配フラグ・`Raw`＝ブローカーの応答）、`SymbolInfo`（`Lendable`・値幅上下限、`PriceLimit`判定）、`SessionStatus`（`Issue`・`Code`・`Guidance`・連続失敗`Failures`/`Since`・`Persistent()`。原因は`unreachable`/`not_logged_in`/`api_disabled`/`bad_password`/`unknown`/`rejected`）。`Quote`のBid/Askは一般的な命名で、ブローカーAPIの命名差（kabuの売/買入れ替え）はアダプタが吸収する。`Quote.Raw`のJSONが`market_snapshots.raw_data_json`に保存される（`domain.Snapshot.RawDataJSON`＝ブローカーの応答。スキーマ・保存内容は変更しない）
 - **interface**: `Session`（`Start(ctx)`・`Status()`）、`QuoteSource`（RESTスナップショット`Quote`）、`StreamFeed`（`SetWatch`・`UseWatchlist`・`Latest`＝ストリーム優先＋REST補完・`Run`）、`SymbolInfoSource`、`CandidateSource`（`Candidates`＝監視候補を順位順に）、`Health`（`BoardFailures`＝`market_data_down`用、`BrokerFailures`＝`broker_api_error`用の`*domain.FailureStreak`）、`Capabilities`（`Name`・`MaxStreamSymbols`・`Ranking`・`RequestsPerSecond`）。`broker.Broker`はこれらの束で、`broker.MarketDataChecker`が`Health.BoardFailures`の5回連続失敗を`risk.HealthChecker`（`market_data_down`）へ写像する。発注系（`OrderGateway`）は定義しない（#55の範囲）
-- **選択**: `bootstrap.newBroker`が唯一のファクトリ（`internal/bootstrap/broker.go`）。現時点では常にkabuアダプタを返す（選択設定は#723、立花証券アダプタは#724）。`Services.Broker`として配線し、`Start`は`Broker.Start`、PUSH/ストリームは`Broker.Run`、ランキング監視は`Broker.Candidates`/`SetWatch`（件数上限は`Capabilities.MaxStreamSymbols`）を使う
+- **選択**: `bootstrap.newBroker`が唯一のファクトリ（`internal/bootstrap/broker.go`）。現時点では常にkabuアダプタを返す（選択設定`broker.provider`は#723、立花証券アダプタは#724。仕様は§5.3）。`Services.Broker`として配線し、`Start`は`Broker.Start`、PUSH/ストリームは`Broker.Run`、ランキング監視は`Broker.Candidates`/`SetWatch`（件数上限は`Capabilities.MaxStreamSymbols`）を使う
 - **依存の向き**: 中立パッケージ（`featureengine`/`execution`/`risk`/`policy`/`screener`/`symbolcache`/`broker`、`bootstrap`配下の`rankingwatch`/`marketdatajob`/`heldposition`）はkabuアダプタ（`internal/service/marketdata`配下すべて）をimportしない。`.golangci.yml`のdepguardルール`broker-neutral-no-adapter`で強制する（テストも同じ）。アダプタをimportするのは`bootstrap`の組み立て役と、kabu専用の`rankingmeasure`（FR-SCHED-8。中立化しない）のみ
 
 ### 5.2 kabuアダプタ（kabuステーションAPI連携）
@@ -33,6 +35,36 @@
 - **異常時**: kabuステーションAPI無応答・エラー時、`marketdata.StatusTracker`が銘柄ごとのstale状態を記録する（`GetBoard`失敗で`MarkStale`、成功で`MarkFresh`）。ただし現状の実装はこの記録を新規取引の可否判定に使わない（`StatusTracker.IsStale`の呼び出し元は無い）。銘柄単位のstale判定（`StatusTracker`）による新規取引禁止は未実装だが、スナップショット`Timestamp`の鮮度は立会中に`domain.MaxSnapshotAge`（3分。ランキング監視の60秒周期の3倍、市況コンテキスト（`marketcontext.Loader`）の指数バー・ブレッドス許容も同じ値を注入する（issue #692）。`scan.full_scan_enabled: true`では全件REST1周が約8分のため`scan.full_scan_max_snapshot_age_seconds`＝同梱620秒）で確認する（issue #685/#686）: `candidates.Refresher`は古い最新足の銘柄を`stale_snapshot`で除外してScannerには残しJev Scoutへ投入せず、Jev Scout/Trader（`HandleJob`）は古い最新足のジョブを再試行なしでスキップし、Paper Entryは`Enter`のセッション判定（足の時刻）に加え壁時計も立会中であることを要求する。Riskは鮮度を見ない。新規取引を止める安全装置として有効なのは、`GetBoard`のフィード側失敗（通信エラー・5xx・認証系4xx。銘柄単位の`4002001`等は除く）の5回連続で発動する全体の`market_data_down` Kill Switch（FR-RISK-7、`requirements/functional/components-pipeline.md`）のみで、他銘柄の取得成功でカウンタがリセットされるため、特定の1銘柄だけ取得できない状態は検知されない。銘柄単位の禁止はPhase 7（実売買）移行前に実装する（鮮度の閾値は取引時間帯を考慮して別途定める）
 - **応答ボディの上限**: 応答ボディは`internal/httpbody`の`ReadAll`で4 MiB（`httpbody.DefaultMaxBytes`）まで読み、超過は`httpbody.ErrTooLarge`を含む読み取りエラー（`marketdata: read response body`）として失敗させる（`APIError`にもステータス判定にも進まない）
 - **認証情報の入力経路**: `APIPassword`は`.env`/環境変数ではなく、アプリ内のSettings画面（`/settings`）から入力し、`secrets`テーブル（`internal/repository/system.SecretsRepository`、AES-256-GCMで暗号化）にDB保存する（issue #57）。必須2キー（JEV_API_KEY/KABU_API_PASSWORD）が未設定でもアプリは起動するが、Setup Guard（§10.5）が全ページを`/setup`へ誘導する。接続先URL・モデル名などの上書き用キー（JEV_BASE_URL/JEV_MODEL等）は任意で、Settings画面では接続先別のモーダル内に必須キーと並べて任意項目として表示する。空欄（未設定）は既定値を意味し、保存済みの上書き値は項目ごとの削除（`DELETE /settings/:key`）で既定値へ戻せる（issue #271・#272・#302）。`/setup`には必須2キーと任意のSLACK_WEBHOOK_URLだけを表示する。Jev/kabuステーションAPI依存機能はエラーログを出しつつ動作を継続する。入力はキー単位で保存・削除する（`POST`/`DELETE /settings/:key`、`internal/config`のallow-list外のキーは400）ため、あるキーの操作が他キーの値に影響することはない（issue #79）。設定変更はアプリ再起動後に反映される（ホットリロードは範囲外）
+
+### 5.3 立花証券アダプタ（e支店・API。issue #721の仕様。実装は#724〜#726）
+
+立花証券・ｅ支店・APIを`broker.Broker`として包むアダプタ。以下は設計上の制約と運用方針で、一次資料は[API専用ページ](https://www.e-shiten.jp/e_api/mfds_json_api_menu.html)、[v4r9スケジュール告知](https://www.e-shiten.jp/api/20260513.html)、[APIご利用に関するお願い（負荷）](https://www.e-shiten.jp/api/20260310.html)、[Q&A（仮想URL・時刻チェック等）](https://www.e-shiten.jp/QA/answer14.html)、[デモ環境](https://www.e-shiten.jp/Service/demo.html)。kabuと違いアプリのインストールは要らず、インターネット直結（IPv4のみ。IPv6では`10005`）で同一ホストに常駐アプリを要しない。
+
+- **認証**: 認証ID（`sAuthId`）＋秘密鍵の公開鍵暗号化方式（v4r9以降。電話認証は無い。現行はv4r10で、v4r9は2026-09-27に廃止）。事前準備は標準Webでのパスキー登録・API利用設定「利用する」・認証ID取得・秘密鍵作成と公開鍵登録（`environment/setup.md`）。**本番とデモは認証ID・秘密鍵・公開鍵が別セット**。各種書面（金商法交付書面等）が未読だと、応答が正常でも仮想URLが発行されずAPIが使えない（標準Webで既読にする）
+- **仮想URLとセッション**: ログインで5種（REQUEST・MASTER・PRICE・EVENT・EVENT-WebSocket）の仮想URLが発行される（1顧客1仮想URL）。失効条件は①ログアウト②多重ログイン（同じ認証IDでの再ログイン。別プロセスや二重起動との取り合い）③03:30の閉局（④API利用設定の「利用しない」／「無効化」、⑤運営側のロックも）。03:30〜05:30はログインできない。**毎朝1回（既定05:35。Settingsで変更可）自動で再認証**し、当日は同じ仮想URLを使い回す。再認証は`p_errno=2`等のセッション失効を受けたときだけで、WebSocket切断は再ログインせず同じ仮想URLで再接続する。再認証の失敗・多重ログインは`SessionStatus`の原因別案内とSlack（`non-functional.md` §5.2）で通知する
+- **REQUEST I/F**: 一問一答（直列。同時に1要求）で、流量の設計上限は秒10件（保証値ではない）。要求ごとに`p_no`（ログインの値を初期値に毎回+1以上。前回以下は拒否）と`p_sd_date`（`YYYY.MM.DD-HH:MM:SS.TTT`。サーバ時刻と30秒を超えてずれると`p_errno=8`。PC時計のNTP同期が必須）を付ける。日本語コードはShift-JISで、`sJsonOfmt`に`5`を指定して項目名のJSONで受け、HTTPS POSTを使う（v4r8以降。GETは使わず、URLに認証情報を残さない）
+- **EVENT I/F（WebSocket）**: 1接続のみ（後から接続すると先の接続は切られる。切断完了を待って次を接続する）。時価は**最大120銘柄**まで購読でき、購読銘柄の変更は再接続で行う。時価は間引かれ、遅れて届くことがある。通知は`EC`（注文約定）・`SS`（システムステータス）・`US`（運用ステータス）・`KP`（キープアライブ）・時価で、時価と`SS`/`KP`を使う（`EC`は発注が入る#55以降）。時価REST（PRICE。`CLMMfdsGetMarketPrice`）も1要求最大120銘柄だが、ポーリングには使わない
+- **マスタ**: 銘柄マスタ等は朝1回（05:30〜08:00。システム更新後で負荷が小さい）取得して日中は取得しない。v4r10は`CLMMfdsGetMasterData`が廃止され、`CLMStkGetIssueMstKabu`等の個別問合取得になった。日足（`CLMMfdsGetMarketPriceHistory`）の最新は取引終了後の18:00〜翌03:30に更新される
+- **ランキング・歩み値は無い**: `Capabilities.Ranking`は偽で、FR-SCHED-9のランキング監視は起動しない（歩み値は[Q&A](https://www.e-shiten.jp/QA/answer14.html)のとおり取得できない）。監視銘柄は**夜間（18:00以降）の日足スクリーニングで翌日の120銘柄を選び**、日中はEVENTで常時受信する（#726。`Capabilities.MaxStreamSymbols`＝120）。日中に全銘柄の時価を巡回しない
+- **負荷方針**: 日中（8:00〜15:30）に高負荷になる大量・頻繁な時価取得とポーリングを控える（`non-functional.md` §2.3）。REST時価は補完・保有確認だけで既定60秒に1要求以下、EVENTの接続・切断は1日10回程度まで
+- **API版数の廃止監視**: ログイン応答の`sUpdateInformAPISpecFunction`／`sUpdateInformWebDocument`の変化を検知して通知する。後続版は並行リリース後に旧版が廃止される（v4r10の並行リリース2026-08-29→v4r9廃止2026-09-27）ため、接頭辞・I/Fの変更に約30日以内に追従する（運用は`non-functional.md` §3）
+- **発注**: 本節のアダプタは市況データ（読み取り）のみ。`OrderGateway`は#55まで定義せず、本番の第二暗証番号は保持しない。認証ID・秘密鍵・仮想URLの扱いは`non-functional.md` §4
+- **保存**: `Quote.Raw`＝立花の応答を`market_snapshots.raw_data_json`に保存する（自己利用のローカル保存に限る。`architecture/er/tables-market.md`、`non-functional.md` §6）
+
+### 5.4 ブローカー機能比較
+
+| 項目 | kabu（既定・フォールバック） | 立花証券（#724〜） |
+|------|------------------------------|--------------------|
+| 提供形態 | 同一Windows上のkabuステーション（`localhost:18080`） | インターネット直結（IPv4のみ）、アプリ不要 |
+| 認証 | APIパスワード→トークン。人手のGUIログインが前提 | 認証ID＋秘密鍵。毎朝自動で再認証（既定05:35） |
+| ストリーム | PUSH（WebSocket）。登録上限50（うちREST回転用10） | EVENT WebSocket。最大120銘柄。再接続で購読変更 |
+| ランキング | あり（`/ranking`種別1〜7）→ランキング監視（FR-SCHED-9） | なし。夜間の日足スクリーニングで翌日の監視リストを選ぶ（#726） |
+| 板・歩み値 | 板あり | 時価（EVENT）。歩み値は取得できない |
+| 流量 | 情報API 10件/秒（本システムの既定8件/秒） | 秒10件（設計上限・保証なし）。日中のポーリングを控える |
+| 時刻の扱い | 不要 | `p_sd_date`（±30秒、NTP必須）、`p_no`の単調増加 |
+| 失効 | `401`/`4001009`で再発行 | ログアウト・多重ログイン・03:30閉局。03:30〜05:30はログイン不可 |
+| 文字コード・形式 | UTF-8 JSON | Shift-JIS、`sJsonOfmt`、POST |
+| 環境 | 本番 | 本番とデモ（別の認証ID・鍵）。まずデモで検証 |
 
 ## 6. Jev API連携
 
