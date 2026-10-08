@@ -158,53 +158,16 @@ func (w *Watcher) register(ctx context.Context, now time.Time, watch []string) {
 }
 
 // enqueue enqueues market-data jobs for the watched symbols that are in the
-// universe, plus the index rows the market context needs (marketIndexes).
+// universe, plus the index rows the market context needs (IngestSet).
 func (w *Watcher) enqueue(ctx context.Context, now time.Time, watch []string, byCode map[string]domain.Instrument) {
-	instruments := make([]domain.Instrument, 0, len(watch))
-	sectors := make(map[string]struct{})
-	for _, sym := range watch {
-		if inst, ok := byCode[sym]; ok {
-			instruments = append(instruments, inst)
-			if inst.Sector != nil {
-				sectors[*inst.Sector] = struct{}{}
-			}
+	instruments := IngestSet(ctx, w.Universe, watch, byCode, func(err error) {
+		if ctx.Err() == nil {
+			w.health.logIndexError(now, err)
 		}
-	}
-	instruments = append(instruments, w.marketIndexes(ctx, now, sectors)...)
+	})
 	if _, err := w.Ingester.EnqueueMarketData(ctx, instruments, now); err != nil && ctx.Err() == nil {
 		w.health.logEnqueueError(now, err)
 	}
-}
-
-// marketIndexes lists the active market_index rows and the sector_index rows
-// of the given sectors: the instruments the market context (market_return_*,
-// sector_return_5m; FR-FE-4) is derived from, which the full scan ingests
-// along with every stock but the watch list does not contain (issue #670;
-// without them the Risk Engine's market_adverse_to_direction gate would find
-// no market return). A failed listing is logged and skipped.
-func (w *Watcher) marketIndexes(ctx context.Context, now time.Time, sectors map[string]struct{}) []domain.Instrument {
-	var out []domain.Instrument
-	for _, kind := range []string{domain.InstrumentKindMarketIndex, domain.InstrumentKindSectorIndex} {
-		rows, err := w.Universe.ListActiveByKind(ctx, kind)
-		if err != nil {
-			if ctx.Err() == nil {
-				w.health.logIndexError(now, err)
-			}
-			continue
-		}
-		for _, inst := range rows {
-			if kind == domain.InstrumentKindSectorIndex {
-				if inst.Sector == nil {
-					continue
-				}
-				if _, ok := sectors[*inst.Sector]; !ok {
-					continue
-				}
-			}
-			out = append(out, inst)
-		}
-	}
-	return out
 }
 
 // Run calls Cycle immediately and then every interval until ctx is done.

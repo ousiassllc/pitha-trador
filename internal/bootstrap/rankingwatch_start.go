@@ -14,6 +14,10 @@ import (
 // registration and the Fast Screener candidates follow the watch list instead
 // of the universe.
 func (s *Services) buildRankingWatch() {
+	if s.isTachibana() {
+		s.buildTachibanaMonitor()
+		return
+	}
 	caps := s.Broker.Capabilities()
 	if s.strategy.Scan.FullScanOn() || !caps.Ranking {
 		return
