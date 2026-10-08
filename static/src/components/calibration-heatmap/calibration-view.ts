@@ -24,9 +24,29 @@ export interface CalibrationDirection {
   avg_future_return_pct: number;
 }
 
+// The `horizon` query values of GET /api/v1/calibration (judgment horizon in
+// minutes, or "all" = every current horizon together; legacy horizons such as
+// 20 minutes are never aggregated). Mirrors calibration.HorizonAll and
+// service/calibration.DefaultHorizonsMinutes.
+export const HORIZON_OPTIONS = ['5', '10', '15', 'all'] as const;
+export type HorizonOption = (typeof HORIZON_OPTIONS)[number];
+export const DEFAULT_HORIZON: HorizonOption = 'all';
+
+// horizonLabel is the operator-facing name of a horizon, e.g. "5分" / "全体".
+export function horizonLabel(horizon: HorizonOption): string {
+  return horizon === 'all' ? '全体' : `${horizon}分`;
+}
+
+// calibrationUrlFor appends the horizon selection to the injected
+// calibration-url.
+export function calibrationUrlFor(baseUrl: string, horizon: HorizonOption): string {
+  return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}horizon=${horizon}`;
+}
+
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's response body
 // (internal/web/handler/calibration.CalibrationAPIOutput).
 export interface CalibrationAPIResponse {
+  horizon: HorizonOption;
   buckets: CalibrationBucket[];
   by_direction: CalibrationDirection[];
   brier_score: number;

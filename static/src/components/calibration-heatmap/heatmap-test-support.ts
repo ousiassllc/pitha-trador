@@ -38,6 +38,7 @@ export const bucket = (overrides: Partial<CalibrationBucket> = {}): CalibrationB
 export const response = (
   overrides: Partial<CalibrationAPIResponse> = {},
 ): CalibrationAPIResponse => ({
+  horizon: 'all',
   buckets: [bucket()],
   by_direction: [],
   brier_score: 0.19,

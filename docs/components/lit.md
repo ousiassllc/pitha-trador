@@ -90,6 +90,7 @@ export class PithaPriceChart extends LitElement {
 
 - `GET /api/v1/calibration`のバケット別データからreliability curve（lightweight-chartsのラインシリーズ）とconfidence帯別カラーヒートマップを描画する
 - リアルタイム性は不要なため WebSocket は使用しない。ページ再訪問時・手動更新ボタン押下時に再フェッチする
+- ホライズン切替（issue #719）: 「5分 / 10分 / 15分 / 全体」のボタン（`horizon-selector.ts`の`renderHorizonSelector`。選択中は`aria-pressed="true"`）を持ち、押すと`calibration-url`に`?horizon=<5|10|15|all>`を付けて再フェッチする（既定`all`。更新ボタンも選択中のホライズンで再取得）。画面には応答の`horizon`を「集計ホライズン: 5分」のように常に表示し、実現PnL（trades / JPY）がホライズンに依存しない旨を注記する。切替中に古い応答が後から届いても無視する（最後の要求のみ反映）
 - DOMから外して再挿入された場合は、`disconnectedCallback`で破棄したチャートを`connectedCallback`で作り直し、保持済みのバケットから曲線を再描画する（`pitha-price-chart`と対称。issue #523）
 - `calibration-url`はTemplから属性で注入し、コンポーネントは既定値を持たない（HATEOAS）。未設定なら`logger.error`を出して取得を行わない（`fetch('')`で現在ページを取得しない。初回・更新ボタンとも同様。issue #494）
 - 空帯・サンプルなしの扱い: APIはサンプル0件の帯・全体でも`direction_accuracy`/`avg_future_return_pct`/`avg_confidence`/`brier_score`等を`0`で返す（「データなし」と「実測0」を値では区別できない）。そのためコンポーネントは`sample_count`で判定する

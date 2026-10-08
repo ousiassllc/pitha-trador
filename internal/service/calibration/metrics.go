@@ -33,15 +33,27 @@ func NewService(outcomes *calrepo.CalibrationRepository, trades TradeSource) *Se
 	return &Service{outcomes: outcomes, trades: trades}
 }
 
-// Metrics loads every labeled Jev trader decision/horizon outcome and
-// aggregates them via the package-level Metrics function, then adds each
-// confidence bucket's realized PnL from the closed positions those
-// decisions opened (WithTradePnL, FR-CAL-2/3). It
-// matches internal/web/handler/calibration.CalibrationSource's signature, so a
+// AllHorizons is Metrics's horizon argument meaning every current
+// DefaultHorizonsMinutes entry together (legacy horizons such as the
+// pre-#711 20 minutes are never included).
+const AllHorizons = 0
+
+// Metrics loads the labeled Jev trader decision/horizon outcomes of one
+// judgment horizon (horizonMinutes, e.g. 5/10/15; AllHorizons = all of
+// DefaultHorizonsMinutes) and aggregates them via the package-level
+// Metrics function, then adds each confidence bucket's realized PnL from
+// the closed positions those decisions opened (WithTradePnL, FR-CAL-2/3).
+// The realized PnL does not depend on the horizon: it is the same for
+// every horizonMinutes. It matches
+// internal/web/handler/calibration.CalibrationSource's signature, so a
 // *Service can be passed directly to
 // internal/router.WithCalibrationSource.
-func (s *Service) Metrics(ctx context.Context) (domain.CalibrationMetrics, error) {
-	samples, err := s.outcomes.ListLabeledSamples(ctx)
+func (s *Service) Metrics(ctx context.Context, horizonMinutes int) (domain.CalibrationMetrics, error) {
+	horizons := DefaultHorizonsMinutes
+	if horizonMinutes != AllHorizons {
+		horizons = []int{horizonMinutes}
+	}
+	samples, err := s.outcomes.ListLabeledSamples(ctx, horizons)
 	if err != nil {
 		return domain.CalibrationMetrics{}, fmt.Errorf("calibration: load labeled samples: %w", err)
 	}
@@ -154,12 +166,13 @@ func bucketIndex(ranges []domain.ConfidenceBucketRange, confidence float64) (int
 }
 
 // DirectionMetricsSince aggregates the labeled outcomes of Jev trader
-// decisions timestamped at or after since into separate LONG and SHORT
+// decisions timestamped at or after since (over DefaultHorizonsMinutes
+// only, so legacy-horizon labels do not mix in) into separate LONG and SHORT
 // CalibrationMetrics - the per-direction input Sol's daily analysis
 // (internal/service/selfimprove, FR-SELFIMPROVE-1) weighs against each
 // direction's own policy.* thresholds.
 func (s *Service) DirectionMetricsSince(ctx context.Context, since time.Time) (long, short domain.CalibrationMetrics, err error) {
-	samples, err := s.outcomes.ListLabeledSamplesSince(ctx, since)
+	samples, err := s.outcomes.ListLabeledSamplesSince(ctx, since, DefaultHorizonsMinutes)
 	if err != nil {
 		return domain.CalibrationMetrics{}, domain.CalibrationMetrics{}, fmt.Errorf("calibration: load labeled samples since %s: %w", since, err)
 	}
