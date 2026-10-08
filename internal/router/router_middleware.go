@@ -3,7 +3,6 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -46,7 +45,7 @@ func useMiddleware(engine *gin.Engine, o options) settings.SecretsStore {
 	} else {
 		// Registered before any route so it also covers NoRoute and the
 		// `/api/v1` group; StaticFS below is exempt inside the guard.
-		engine.Use(middleware.SetupGuard(settingsStore, config.RequiredSecretKeys()))
+		engine.Use(middleware.SetupGuard(settingsStore, settings.SetupRequirementsFrom(o.operationalSettings)))
 	}
 	// Header (every full page) SSRs the Kill Switch panel's state and
 	// allowed actions from this; it reads lazily, so /static, fragments,

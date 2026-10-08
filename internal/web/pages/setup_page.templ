@@ -7,17 +7,26 @@ import (
 )
 
 // SetupProps is SetupPage's input: the connections to offer
-// (internal/web/handler/settings.SettingsHandler.SetupPage) - the ones
-// holding the required keys plus the optional Slack one - and whether every
-// required key is already stored.
+// (internal/web/handler/settings.SettingsHandler.SetupPage) - Jev, the
+// selected broker's connection and the optional Slack one -, the broker
+// selection / 立花 settings groups (Operational, empty without
+// OperationalSettings), whether everything required is already stored, and
+// the selected broker: Tachibana is true when 立花証券 e支店 is selected (its
+// 認証ID and 秘密鍵 path are required instead of KABU_API_PASSWORD, issue
+// #734) and Production when its 本番 environment is.
 type SetupProps struct {
 	Connections []molecules.ConnectionProps
+	Operational []molecules.SettingGroupProps
 	Complete    bool
+	Tachibana   bool
+	Production  bool
 }
 
 // SetupPage is the first-run Setup screen (issue #80, FR-SETUP-2).
 // middleware.SetupGuard redirects every other route here until
-// JEV_API_KEY/KABU_API_PASSWORD are both stored. Since issue #302 it uses
+// everything the selected broker needs is stored (JEV_API_KEY plus
+// KABU_API_PASSWORD, or for 立花 the environment's 認証ID and 秘密鍵 path).
+// Since issue #302 it uses
 // the same organisms.ConnectionList as Settings - a list of connections,
 // each opening a modal of its keys - restricted to Jev, kabuステーション
 // and the optional Slack; saving and deleting post to the same `POST`/
@@ -31,12 +40,25 @@ templ SetupPage(props SetupProps) {
 		<h1 class="text-2xl font-bold text-slate-900">初期セットアップ</h1>
 		<div class="mt-4 flex flex-col gap-4" data-testid="setup-form">
 			<p class="text-sm text-slate-600">
-				利用を始めるには、「必須」と表示された接続先（Jev の JEV_API_KEY と kabuステーションの KABU_API_PASSWORD）を開いて保存してください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+				if props.Tachibana {
+					利用を始めるには、「必須」と表示された接続先（Jev の JEV_API_KEY と、立花証券 e支店の選択中の環境（
+					if props.Production {
+						本番
+					} else {
+						デモ
+					}
+					）の認証ID）を開いて保存し、あわせて「立花証券 e支店（接続設定）」で選択中の環境の秘密鍵ファイルのパスを保存してください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+				} else {
+					利用を始めるには、「必須」と表示された接続先（Jev の JEV_API_KEY と kabuステーションの KABU_API_PASSWORD）を開いて保存してください。立花証券 e支店を使う場合は、先に「ブローカー」で tachibana を選んでください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+				}
 			</p>
 			<p class="text-sm text-slate-600" data-testid="setup-advanced-note">
 				接続先 URL やモデル名は未入力で既定値が使われます。Luna・Sol・Opus・ニュースフィードなどの接続先は、セットアップ後に設定画面から追加できます。
 			</p>
 			@organisms.ConnectionList(props.Connections)
+			if len(props.Operational) > 0 {
+				@organisms.SettingGroupList(props.Operational)
+			}
 		</div>
 		@molecules.SetupStatus(props.Complete, false)
 		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>

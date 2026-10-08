@@ -95,7 +95,7 @@ static/
 
 - `SecretFieldRow`（Settings画面の1項目。ラベル・「設定済み」バッジ・値入力（`type=password`）と保存ボタン・削除ボタン（設定済みのときのみ）・直近の保存/削除結果の通知を持ち、保存は`POST /settings/:key`、削除は`DELETE /settings/:key`で行の`outerHTML`のみ差し替える。他項目の値には影響しない。issue #79）
 - `Modal`（ネイティブ`<dialog>`のシェル。`aria-labelledby`でタイトルに紐付け、タイトル行に「閉じる」ボタンを持つ。`pitha-modal`が開閉・フォーカス復帰・URLハッシュからの自動オープンを担う。失敗トースト用の`[data-toast-region]`も内包する。バックドロップクリックで閉じるのは`pointerdown`も`<dialog>`自身で始まった場合のみで、入力欄からドラッグしてダイアログ外で離しても閉じない。issue #302/#353/#633）
-- `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）と`SetupStatus`（Setup画面の「必須項目はすべて設定済みです」＋`/scanner`への「続ける」リンク／「必須項目をすべて保存すると…」メッセージ。リンクは完了時のみ描画。`id="setup-status"`で、`/setup`発の保存・削除の応答に必須キー充足状態を再計算して`hx-swap-oob`で同梱する。issue #325）
+- `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。`ConnectionProps.Badges`/`Details`で接続先固有の秘密を含まないバッジ・状態行（立花証券 e支店の環境バッジ・セッション状態、issue #738）も描画する。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）と`SetupStatus`（Setup画面の「必須項目はすべて設定済みです」＋`/scanner`への「続ける」リンク／「必須項目をすべて保存すると…」メッセージ。リンクは完了時のみ描画。`id="setup-status"`で、`/setup`発の保存・削除の応答に必須キー充足状態を再計算して`hx-swap-oob`で同梱する。issue #325）
 - `SettingFieldRow`（Settings画面「運用設定」の1項目。シークレットと異なり現在値を表示する入力（列挙値は`<select>`）と保存ボタン・「既定に戻す」ボタン（保存値があるときのみ）・既定値の表示・警告・直近の結果通知を持ち、保存は`POST /ops-settings/:key`・既定に戻すは`DELETE /ops-settings/:key`の行単位swap。`internal/web/molecules/setting_field_row.templ`、issue #708）と`SettingGroupStatus`（グループの「設定済み／既定を使用」バッジと保存済み項目数。保存・削除の応答に`hx-swap-oob`で同梱する）
 - `SignalBadgeGroup`（direction + confidence + entry_quality の組み合わせ表示。確信度の整数%整形は`atoms.FormatConfidence`（半分は0から遠ざける丸め。`0.125`→`13%`。`nil`は`—`）に一本化し、Scanner候補表のSSR（`ScannerTableFallback`）と共有する。`%.0f`の偶数丸めだと同じ値が画面によって`12%`/`13%`と食い違うため。Lit側は`Math.round`で同値。issue #677）
 - `PositionRow`
@@ -278,3 +278,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.79 | 2026-10-08 | `MarketDataBanner`の入力を`MarketDataBannerProps`にし、未ログイン`4001007`/`4001017`の継続時の強調形`MarketDataPersistentBanner`を追加 | issue #712 |
 | 1.80 | 2026-10-08 | moleculesに`SettingFieldRow`・`SettingGroupStatus`、organismsに`SettingGroupList`を追加し、`SettingsPage`に「運用設定」節（`SettingsProps.Operational`）を追記 | issue #708 |
 | 1.81 | 2026-10-08 | §2の`calibration-heatmap/`に`horizon-selector.ts`を追記、§5.3（`lit.md`）に`pitha-calibration-heatmap`のホライズン切替（5/10/15/全体、`?horizon=`）と集計ホライズン表示を追記 | issue #719 |
+| 1.82 | 2026-10-08 | `ConnectionProps`に`Badges`/`Details`を追加し、`ConnectionStatus`が接続先固有の環境バッジ・状態行（立花証券 e支店カード）を描画する旨を追記 | issue #738 |

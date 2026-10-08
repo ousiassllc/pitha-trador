@@ -17,7 +17,7 @@
 | UC-11 | Kill Switch操作 | 個人トレーダー | UIまたはサーバーから新規取引停止・強制決済を行う |
 | UC-12 | バックテスト実行 | 個人トレーダー | Paper Trading開始前に過去データで戦略を検証する |
 | UC-13 | システムアクティビティ確認 | 個人トレーダー | Log画面でジョブキュー実行状況・直近のJev呼び出し・Kill Switch関連イベントをリアルタイムに確認する |
-| UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/ブローカー（kabuステーション・立花証券。`broker.provider`で1つを選択）/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する |
+| UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/ブローカー（kabuステーション・立花証券。`broker.provider`で1つを選択）/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する。立花証券 e支店のカードには接続環境（デモ/本番）を常にバッジで表示する |
 | UC-15 | 初回セットアップ | 個人トレーダー | 選択したブローカーの必須認証情報（既定のkabuなら`KABU_API_PASSWORD`）とJevが未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
 | UC-16 | エラーログ取得 | 個人トレーダー（運用者） | Settings画面から期間・レベルを指定してエラーログをダウンロードし、調査・共有に使う |
 
@@ -261,3 +261,6 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.65 | 2026-10-08 | §4.18 FR-SETTINGS-7を追加（Settings画面の「運用設定」: バックアップ先・ログディレクトリ・Policy/Fast Screenerしきい値の編集と再起動の要否）。FR-FS-3・FR-POLICY-4・FR-EXIT-2の優先順位を`config/strategy.yaml` < `runtime_settings`（Settings/自己改善）に更新し、`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`環境変数の上書き層を廃止 | issue #708 |
 | 1.66 | 2026-10-08 | FR-SCHED-4/9/10（`functional/components-platform.md`）の「kabu `GET /ranking`」「PUSH」を、ブローカーの候補ソース（`broker.CandidateSource`）／ストリーム（`broker.StreamFeed`。既定＝kabuアダプタ）として記述。監視リスト上限45は`Capabilities.MaxStreamSymbols`由来。要件の挙動は変更なし | issue #722 |
 | 1.67 | 2026-10-08 | UC-14/15をブローカー選択前提に更新、§3にブローカー選択の方針、§4.20（FR-BROKER-1〜5。ブローカー選択・kabuフォールバック・立花のセッション/再認証・API版数と書面の監視・夜間日足スクリーニングと日中EVENT受信）を追加し、FR-SCHED-9に立花選択時の扱いを追記 | issue #721（#720の決定） |
+| 1.68 | 2026-10-08 | §4.17 FR-SETTINGS-1の許可キーを17件（立花の`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`/`TACHIBANA_DEMO_SECOND_PASSWORD`を追加。本番の第二暗証番号のキーは設けず、デモの第二暗証番号を本番で読み込み・送信しない）、FR-SETTINGS-7の運用設定キーを33件（`broker.provider`と立花の接続設定8件、秘密鍵はファイル＋OS権限で保護し保存時に検証・同期フォルダ警告）へ更新 | issue #733 |
+| 1.69 | 2026-10-08 | §4.18 FR-SETUP-1/2を選択ブローカー・環境依存の必須キー（kabu＝JEV_API_KEY＋KABU_API_PASSWORD、立花＝JEV_API_KEY＋選択環境の認証ID＋秘密鍵パス。立花選択時KABU_API_PASSWORDは任意）と、選択ブローカーの接続先・ブローカー選択を提示する`/setup`へ更新 | issue #734 |
+| 1.70 | 2026-10-08 | UC-14/UC-15を立花証券 e支店対応の文言へ更新し、§4.17 FR-SETTINGS-4に立花証券 e支店カード（環境バッジ・本番時の「発注は行いません（#55 まで）」・`SessionStatus`由来の秘密を含まない状態表示）を追記（ブローカー選択・立花の認証情報とカードの環境バッジ、ブローカー依存の必須認証情報） | issue #738 |

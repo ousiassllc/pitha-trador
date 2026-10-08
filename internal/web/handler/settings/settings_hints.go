@@ -11,6 +11,10 @@ var settingsHints = map[string]string{
 	config.KeyJevBaseURL: "未設定の場合は既定値 " + jev.DefaultBaseURL + " を使用します。上書きする場合はホスト名のみ入力してください（/v1/systemone などのパスは付けないでください）。",
 	config.KeyJevModel:   "未設定の場合は既定値 " + jev.DefaultModel + " を使用します。",
 
+	config.KeyTachibanaDemoAuthID:         "デモ環境の認証ID（立花証券の利用設定画面で自動発行されます）。保存済みの値は表示しません。",
+	config.KeyTachibanaProdAuthID:         "本番環境の認証ID（立花証券の利用設定画面で自動発行されます）。保存済みの値は表示しません。",
+	config.KeyTachibanaDemoSecondPassword: "デモ発注スモーク（任意）専用です。本番環境では読み込みも送信もしません。本番の第二暗証番号は保存できません。",
+
 	config.KeyLunaBaseURL:     assistOverrideHint("Luna", "/v1/classify"),
 	config.KeySolBaseURL:      assistOverrideHint("Sol", "/v1/analyze"),
 	config.KeyOpusBaseURL:     assistOverrideHint("Opus", "/v1/review"),

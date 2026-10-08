@@ -73,6 +73,9 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/ws/activity", h.activity.WebSocket)
 
 	settingsHandler := settings.NewSettingsHandler(settingsStore)
+	if o.brokerSession != nil {
+		settingsHandler.WithBrokerSession(o.brokerSession)
+	}
 	if o.operationalSettings != nil {
 		settingsHandler.WithOperationalSettings(o.operationalSettings)
 		engine.POST("/ops-settings/:key", settingsHandler.SaveOps)

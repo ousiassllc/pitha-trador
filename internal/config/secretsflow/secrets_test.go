@@ -206,17 +206,19 @@ func TestIsAllowedSecretKey_AcceptsEveryConfigKeyAndNothingElse(t *testing.T) {
 		config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyJevModel, config.KeyKabuAPIPassword, config.KeySlackWebhookURL,
 		config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
 		config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
+		config.KeyTachibanaDemoAuthID, config.KeyTachibanaProdAuthID, config.KeyTachibanaDemoSecondPassword,
 	} {
 		if !config.IsAllowedSecretKey(key) {
 			t.Errorf("IsAllowedSecretKey(%q) = false, want true", key)
 		}
 	}
-	for _, key := range []string{"", "jev_api_key", "PITHA_ENCRYPTION_KEY", "JEV_API_KEY ", "../JEV_API_KEY"} {
+	// There is no 本番 第二暗証番号 key (issue #55 adds it).
+	for _, key := range []string{"", "jev_api_key", "PITHA_ENCRYPTION_KEY", "JEV_API_KEY ", "../JEV_API_KEY", "TACHIBANA_PROD_SECOND_PASSWORD"} {
 		if config.IsAllowedSecretKey(key) {
 			t.Errorf("IsAllowedSecretKey(%q) = true, want false", key)
 		}
 	}
-	if got := len(config.AllowedSecretKeys()); got != 14 {
-		t.Errorf("len(AllowedSecretKeys()) = %d, want 14", got)
+	if got := len(config.AllowedSecretKeys()); got != 17 {
+		t.Errorf("len(AllowedSecretKeys()) = %d, want 17", got)
 	}
 }

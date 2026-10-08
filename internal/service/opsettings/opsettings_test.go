@@ -60,7 +60,7 @@ func TestKeys_CoverEveryManagedKeyOnce(t *testing.T) {
 		}
 		seen[k] = true
 	}
-	if want := 2 + len(config.PolicySettingKeys()) + len(config.FastScreenerSettingKeys()); len(seen) != want {
+	if want := 2 + len(config.PolicySettingKeys()) + len(config.FastScreenerSettingKeys()) + len(config.BrokerSettingKeys()); len(seen) != want {
 		t.Errorf("len(Keys) = %d, want %d", len(seen), want)
 	}
 }

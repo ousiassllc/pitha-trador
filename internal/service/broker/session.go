@@ -34,12 +34,25 @@ const (
 // on what to check ("" when nothing failed). Failures and Since describe the
 // current streak of consecutive failures with the same Issue (Since is when
 // it began).
+//
+// The remaining fields are for adapters with a login session of their own
+// (立花 e支店, issue #738) and stay zero for the others: LoggedInAt is the
+// last successful login, NextReauth when the next scheduled re-login is due,
+// APIVersion the API version label the broker reported, and DocumentsUnread /
+// VersionRetiring the broker's 書面未読 and 版数更新の予告 notices. They never
+// carry credentials or session URLs, so the UI may show them as they are.
 type SessionStatus struct {
 	Issue    SessionIssue
 	Code     int
 	Guidance string
 	Failures int
 	Since    time.Time
+
+	LoggedInAt      time.Time
+	NextReauth      time.Time
+	APIVersion      string
+	DocumentsUnread bool
+	VersionRetiring bool
 }
 
 // Failed reports whether the session is currently failing.

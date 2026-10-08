@@ -88,3 +88,4 @@ erDiagram
 | 1.37 | 2026-10-08 | `er/tables-trading.md`の`calibration_outcomes.horizon_minutes`を5/10/15等へ更新（既定の判定水平線を5/10/20から変更、既存の20分行は残る）、`calibration_label_skips`に猶予内はpending再試行・マーカー記録時はジョブをskipとして`succeeded`終了する旨を追記。スキーマ変更なし | issue #710, #711 |
 | 1.38 | 2026-10-08 | `er/tables-system.md`の`runtime_settings`から環境変数の上書き層を削除（`config/strategy.yaml` < `runtime_settings`）し、Settings画面が保存する`system.backup_dir`/`system.log_dir`キーを追記。スキーマ変更なし | issue #708 |
 | 1.39 | 2026-10-08 | `er/tables-market.md`の`market_snapshots.raw_data_json`の説明を「kabuステーションAPI生レスポンス」から「ブローカーの生レスポンス」へ一般化。スキーマ・保存内容は変更なし | issue #722 |
+| 1.40 | 2026-10-08 | `er/tables-system.md`の`secrets`許可キーを17件（立花の`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`/`TACHIBANA_DEMO_SECOND_PASSWORD`を追加。本番の第二暗証番号は持たない）、`runtime_settings`に`broker.provider`と立花の接続設定8件（秘密鍵はパスのみ保存）を追記 | issue #733 |
