@@ -79,11 +79,9 @@ func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 		if sample.WasDirectionCorrect {
 			outcome = 1.0
 		}
-		diff := sample.Confidence - outcome
-		brierSum += diff * diff
-
-		p := math.Min(math.Max(sample.Confidence, probabilityEpsilon), 1-probabilityEpsilon)
-		logLossSum += -(outcome*math.Log(p) + (1-outcome)*math.Log(1-p))
+		brier, logLoss := binaryScores(sample.Confidence, outcome)
+		brierSum += brier
+		logLossSum += logLoss
 
 		signedReturn := sample.FutureReturn
 		if sample.Direction == domain.JevDirectionShort {
@@ -132,6 +130,15 @@ func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 	}
 
 	return metrics
+}
+
+// binaryScores returns the squared error and the binary cross-entropy of
+// predicting probability confidence for an outcome of 0 or 1 (the
+// per-sample terms Brier Score and Log Loss average).
+func binaryScores(confidence, outcome float64) (brier, logLoss float64) {
+	diff := confidence - outcome
+	p := math.Min(math.Max(confidence, probabilityEpsilon), 1-probabilityEpsilon)
+	return diff * diff, -(outcome*math.Log(p) + (1-outcome)*math.Log(1-p))
 }
 
 // bucketIndex returns the index of the first range in ranges containing

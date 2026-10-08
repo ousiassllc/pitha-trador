@@ -242,17 +242,17 @@ func TestCalibrationRepository_MarkUnlabelableExcludesPairFromPendingLabels(t *t
 	decision := insertTraderDecision(t, decisions, instID, base, domain.JevDirectionLong)
 
 	for range 2 {
-		if err := outcomes.MarkUnlabelable(ctx, decision.ID, 20, "close"); err != nil {
+		if err := outcomes.MarkUnlabelable(ctx, decision.ID, 15, "close"); err != nil {
 			t.Fatalf("MarkUnlabelable: %v", err)
 		}
 	}
 
-	pending, err := outcomes.PendingLabels(ctx, []int{5, 20}, now.Add(-24*time.Hour), now)
+	pending, err := outcomes.PendingLabels(ctx, []int{5, 15}, now.Add(-24*time.Hour), now)
 	if err != nil {
 		t.Fatalf("PendingLabels: %v", err)
 	}
 	if len(pending) != 1 || pending[0].HorizonMinutes != 5 || pending[0].JevDecisionID != decision.ID {
-		t.Fatalf("PendingLabels = %+v, want only the 5m pair (20m is unlabelable)", pending)
+		t.Fatalf("PendingLabels = %+v, want only the 5m pair (15m is unlabelable)", pending)
 	}
 	samples, err := outcomes.ListLabeledSamples(ctx)
 	if err != nil {

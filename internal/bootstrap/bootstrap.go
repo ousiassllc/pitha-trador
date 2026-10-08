@@ -28,9 +28,8 @@ import (
 
 // Env* are the environment variables that override the default DB/config
 // file locations below (issue #42's "環境変数での上書き" decision).
-// Unlike internal/config's own PITHA_POLICY_*/PITHA_SECRETS-style
-// variables (which override individual config *values*), these three
-// override *file paths* - useful for a production deployment that keeps
+// These three override *file paths* (config *values* are edited in the
+// Settings screen, not through the environment, issue #708) - useful for a production deployment that keeps
 // its SQLite file and edited config/*.yaml copies outside the installed
 // application directory.
 const (

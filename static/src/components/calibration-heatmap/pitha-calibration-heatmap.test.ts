@@ -64,8 +64,17 @@ describe('pitha-calibration-heatmap', () => {
     const { el } = await mount(
       response({
         buckets: [
-          bucket({ trade_count: 3, total_pnl: 1200, avg_pnl_pct: 0.4, avg_confidence: 0.76 }),
+          bucket({
+            trade_count: 3,
+            total_pnl: 1200,
+            avg_pnl_pct: 0.4,
+            trade_win_rate: 2 / 3,
+            avg_confidence: 0.76,
+          }),
         ],
+        trade_count: 3,
+        pnl_brier_score: 0.2346,
+        pnl_log_loss: 0.6789,
         by_direction: [
           {
             direction: 'LONG',
@@ -87,6 +96,10 @@ describe('pitha-calibration-heatmap', () => {
     expect(text).toContain('3 trades');
     expect(text).toContain('+1,200 JPY');
     expect(text).toContain('conf 0.76');
+    expect(text).toContain('win 66.7%');
+    expect(text).toContain('PnL Brier Score');
+    expect(text).toContain('0.235');
+    expect(text).toContain('0.679');
     const rows = el.shadowRoot?.querySelectorAll('[data-testid="calibration-direction-row"]');
     expect(rows?.length).toBe(2);
     expect(rows?.[1]?.textContent).toContain('SHORT');
@@ -133,6 +146,9 @@ describe('pitha-calibration-heatmap', () => {
         brier_score: 0,
         log_loss: 0,
         expected_calibration_error: 0,
+        trade_count: 0,
+        pnl_brier_score: 0,
+        pnl_log_loss: 0,
       }),
     );
 

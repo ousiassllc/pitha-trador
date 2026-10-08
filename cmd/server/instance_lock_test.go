@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
-	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
 )
 
@@ -16,7 +15,6 @@ import (
 // before bootstrap.Run opens/migrates the DB (and so before
 // Services.Start could recover the first instance's running jobs).
 func TestRun_SecondInstanceExitsBeforeBootstrap(t *testing.T) {
-	t.Setenv(startup.EnvLogDir, filepath.Join(t.TempDir(), "logs"))
 	prev := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(prev) })
 

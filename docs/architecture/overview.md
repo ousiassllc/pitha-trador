@@ -54,7 +54,7 @@ pitha-trador/
 │   │   ├── newstargets/          # News Ingestの対象銘柄（Fast Screener候補＋保有ポジション銘柄。全銘柄は取得しない。#531）
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
 │   │   ├── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
-│   │   ├── startup/              # desktop/server共通のプロセス起動処理（`RunMain`: ログ設定→`run`実行→致命的エラーのERROR記録と終了コード決定、`LogDir`/`EnvLogDir`=`PITHA_LOG_DIR`: ログディレクトリ解決。`internal/logging`のみに依存。#547・#551・#552）
+│   │   ├── startup/              # desktop/server共通のプロセス起動処理（`RunMain`: ログ設定→`run`実行→致命的エラーのERROR記録と終了コード決定、`LogDir`/`DefaultLogDir`: ログディレクトリ解決（Settings画面の`runtime_settings` `system.log_dir`をDBから読み取り専用で参照、未設定は既定）。`internal/logging`のみに依存。#547・#551・#552）
 │   │   ├── runflow/              # テスト専用: `Run`（config解決・DB open）・`DefaultDBPath`・`BuildServices`（空secrets）・`RouterOptions`+`LoadSecrets`（Setup Guard配線）の回帰テスト。linterlyの2000行/ディレクトリ制限のため`bootstrap`直下から分離（#658）
 │   │   └── universe/             # 銘柄マスタCSVのパース・検証と`instruments`へのupsert（`Parse`/`SyncFile`。#389）、JPX東証上場銘柄一覧の取得・パース（`jpx.go`）と`Importer.ImportJPX`（`jpx_import.go`。`POST /scanner/universe/import`経由。`domain`のみに依存。#508・#700・#702）
 │   ├── config/                   # config/*.yamlの型付きローダー、AES-256-GCM秘密情報ヘルパー（他の内部パッケージに依存しない）

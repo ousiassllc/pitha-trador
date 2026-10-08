@@ -13,7 +13,7 @@ sequenceDiagram
     participant DB as SQLite
     participant SCHED as Scheduler（自前Worker）
 
-    App->>App: `startup.RunMain`でプロセスを開始（`cmd/desktop`・`cmd/server`共通。日次JSONログを`PITHA_LOG_DIR`（未設定ならDBと同じ親ディレクトリの絶対パス`logs/`。作業ディレクトリに依存しない）へ設定し、以降の`run`が返した致命的エラーはERRORで記録して終了コード1にする。ログ用ディレクトリ・ファイルを作れない場合は標準エラー出力へフォールバックして起動を継続。#547）
+    App->>App: `startup.RunMain`でプロセスを開始（`cmd/desktop`・`cmd/server`共通。日次JSONログをSettings画面で設定したログディレクトリ（`runtime_settings`の`system.log_dir`。起動前にDBを読み取り専用で参照するため変更は再起動後に反映。未設定ならDBと同じ親ディレクトリの絶対パス`logs/`。作業ディレクトリに依存しない）へ設定し、以降の`run`が返した致命的エラーはERRORで記録して終了コード1にする。ログ用ディレクトリ・ファイルを作れない場合は標準エラー出力へフォールバックして起動を継続。#547）
     App->>App: 多重起動ロック`app.lock`を取得（`bootstrap.AcquireInstanceLock`。DBを開く前。取得失敗時は`bootstrap.Run`・`Recover`に到達せず終了。desktopは終了コード0、serverは非0）
     App->>DB: マイグレーション適用確認（golang-migrate）・接続初期化（PRAGMA foreign_keys=ON, WAL）
     App->>SCHED: 前回クラッシュ時の`running`状態ジョブを`pending`へ復帰（`Scheduler.Recover`）
@@ -67,7 +67,7 @@ sequenceDiagram
 - `market-data` ジョブは、既定ではランキング監視（FR-SCHED-9。`internal/bootstrap/rankingwatch`が毎分kabu `GET /ranking`で決めた監視銘柄）が`Scheduler.EnqueueMarketData`で銘柄ごとにenqueueする。`scan.full_scan_enabled: true`のときだけ、Scheduler（自前Worker、`jobs`テーブル）の60秒フルスキャンが全銘柄（`market_index`/`sector_index`を含む）にenqueueする（FR-SCHED-2/7。既定のランキング監視も、市場コンテキスト算出用の有効な`market_index`全件と監視銘柄の`sector`に一致する`sector_index`を毎サイクル同じジョブで投入する。このとき`market_breadth`は監視銘柄だけの集計になる。立会時間外は保有・注文中の銘柄だけを投入し、候補リスト・スキャン対象の一覧は直前の立会時間内サイクルの監視リストを保存済みデータで表示し続ける）。特徴量の算出・永続化は `market-data` ジョブ内で同期実行される。`feature-calc` キューはフルスキャンが投入せず、以前のバージョンが残した未処理ジョブを消化するだけの互換用の空ハンドラとして残っている（`market-data` → `feature-calc` の連鎖ではない。FR-SCHED-1）。`jev-scout` は候補更新サイクル（`bootstrap/candidates`）と、`market-data` ジョブ内のイベント再評価（FR-SCAN-1）からenqueueされ、`jev-trader` は `jev-scout` ジョブがenqueueする。各Serviceはdomainモデルを介して疎結合に連携する
 - `jev-scout`/`jev-trader`の直前にRAG Context Builder（§7）が類似局面を検索し文脈を付与する
 - Risk判定・Paper発注は独立したキュー（ジョブ）を持たず、`jev-trader`ジョブ内でPolicy Engine → Risk Engine → Execution（Paper）を同期実行する。Risk Engineは必ずPolicy Engineの直後に評価され、Risk Engineの承認なしにExecutionへは到達しない
-- `outcome-labeling` は毎分のcron（`@every 1m`）が、判定水平線（5/10/20分）を経過したJev判断を拾ってenqueueする（約定・Exitを契機にはしない。判断から24時間以内のものに限り（`PendingLabels`へ下限`now-24h`を渡し`jev_decisions`の`(decision_type, timestamp)`索引で範囲走査する）、ラベル済み・恒久的にラベル不能と確定済み（`calibration_label_skips`）・pending/running中のペアは除く）。`analytics` は平日15:40 JSTのSol/Opus自己改善バッチ（`integrations.md` §8）専用のキューである。いずれも売買パスとは独立に非同期実行し、UIの応答性に影響を与えない
+- `outcome-labeling` は毎分のcron（`@every 1m`）が、判定水平線（5/10/15分。FR-CAL-5）を経過したJev判断を拾ってenqueueする（約定・Exitを契機にはしない。判断から24時間以内のものに限り（`PendingLabels`へ下限`now-24h`を渡し`jev_decisions`の`(decision_type, timestamp)`索引で範囲走査する）、ラベル済み・恒久的にラベル不能と確定済み（`calibration_label_skips`）・pending/running中のペアは除く）。`analytics` は平日15:40 JSTのSol/Opus自己改善バッチ（`integrations.md` §8）専用のキューである。いずれも売買パスとは独立に非同期実行し、UIの応答性に影響を与えない
 
 ### 10.3 Kill Switchフロー（発動〜再開）
 

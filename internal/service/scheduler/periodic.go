@@ -104,7 +104,7 @@ func WithUpdateChecker(checker UpdateChecker) Option {
 
 // outcomeLabelingCronSpec is how often Start's Outcome Labeling trigger
 // (WithOutcomeLabelSource) runs EnqueueOutcomeLabeling: once per 1-minute
-// market_snapshots bar, so each 5/10/20-minute horizon is labeled within
+// market_snapshots bar, so each 5/10/15-minute horizon is labeled within
 // a minute of elapsing.
 const outcomeLabelingCronSpec = "@every 1m"
 
@@ -132,9 +132,10 @@ const updateCheckCronSpec = "@every 6h"
 
 // outcomeLabelRetryWindow bounds how long after its decision a pending
 // (decision, horizon) pair keeps being re-enqueued. Labeler.HandleJob
-// fails (persisting nothing) while the decision's horizon window has no
-// market data yet; once the gap is confirmed permanent it marks the pair
-// unlabelable and PendingLabels drops it. This bound is the backstop for
+// defers its job (back to pending, persisting nothing, never failed) while
+// the decision's horizon window has no market data yet; once the gap is
+// confirmed permanent it marks the pair unlabelable, ends the job as
+// skipped (succeeded), and PendingLabels drops it (issue #710). This bound is the backstop for
 // anything older (kabuステーションAPI outage, process downtime) so a pair is
 // never re-enqueued forever. It is passed to PendingLabels as the lower
 // bound (asOf - window) so the SQL scan is a range scan over recent
@@ -143,9 +144,9 @@ const outcomeLabelRetryWindow = 24 * time.Hour
 
 // DefaultOutcomeLabelHorizonsMinutes are the judgment horizons Outcome
 // Labeling evaluates each Jev trader decision at (functional.md §4.12,
-// docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/20
-// 等").
-var DefaultOutcomeLabelHorizonsMinutes = []int{5, 10, 20}
+// docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/15
+// 等", issue #711).
+var DefaultOutcomeLabelHorizonsMinutes = []int{5, 10, 15}
 
 // EnqueueOutcomeLabeling enqueues one outcome-labeling job
 // (jobqueue.JobQueueOutcomeLabeling) for every Jev trader decision

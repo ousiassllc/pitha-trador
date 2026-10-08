@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 )
 
 // isolateLogging restores the process-wide slog default after the test and
@@ -24,7 +25,6 @@ func isolateLogging(t *testing.T) (dbPath string) {
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	dbPath = filepath.Join(t.TempDir(), "data", "pitha.db")
 	t.Setenv(bootstrap.EnvDBPath, dbPath)
-	t.Setenv(startup.EnvLogDir, "")
 	return dbPath
 }
 
@@ -44,14 +44,44 @@ func TestResolveLogDir_NextToDBAndIndependentOfWorkingDirectory(t *testing.T) {
 	}
 }
 
-func TestResolveLogDir_EnvOverride(t *testing.T) {
-	isolateLogging(t)
+// storeLogDirSetting writes the Settings screen's log directory (issue #708)
+// into the database at dbPath, the way the Settings screen stores it.
+func storeLogDirSetting(t *testing.T, dbPath, jsonValue string) {
+	t.Helper()
+	conn, err := sqlitedb.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO runtime_settings (key, value, updated_at) VALUES (?, ?, '2026-10-08T00:00:00Z')`, config.KeyLogDir, jsonValue); err != nil {
+		t.Fatalf("store log dir setting: %v", err)
+	}
+	if err := conn.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+}
+
+func TestResolveLogDir_UsesSettingsLogDir(t *testing.T) {
+	dbPath := isolateLogging(t)
 	override := filepath.Join(t.TempDir(), "custom-logs")
-	t.Setenv(startup.EnvLogDir, override)
+	encoded, err := json.Marshal(override)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storeLogDirSetting(t, dbPath, string(encoded))
 
 	got, err := bootstrap.ResolveLogDir()
 	if err != nil || got != override {
 		t.Fatalf("ResolveLogDir = (%q, %v), want %q", got, err, override)
+	}
+}
+
+func TestResolveLogDir_InvalidSettingFallsBackToDefault(t *testing.T) {
+	dbPath := isolateLogging(t)
+	storeLogDirSetting(t, dbPath, `"relative/logs"`)
+
+	got, err := bootstrap.ResolveLogDir()
+	if want := filepath.Join(filepath.Dir(dbPath), "logs"); err != nil || got != want {
+		t.Fatalf("ResolveLogDir = (%q, %v), want the default %q", got, err, want)
 	}
 }
 
@@ -146,12 +176,16 @@ func TestRunMain_SuccessExitsZeroWithoutErrorRecords(t *testing.T) {
 // An unwritable log directory must not stop the app from starting: logging
 // falls back to stderr and the run function still executes.
 func TestRunMain_UnwritableLogDirFallsBackToStderr(t *testing.T) {
-	isolateLogging(t)
+	dbPath := isolateLogging(t)
 	blocker := filepath.Join(t.TempDir(), "file")
 	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv(startup.EnvLogDir, filepath.Join(blocker, "logs")) // parent is a regular file
+	encoded, err := json.Marshal(filepath.Join(blocker, "logs")) // parent is a regular file
+	if err != nil {
+		t.Fatal(err)
+	}
+	storeLogDirSetting(t, dbPath, string(encoded))
 
 	stderr, err := os.CreateTemp(t.TempDir(), "stderr")
 	if err != nil {

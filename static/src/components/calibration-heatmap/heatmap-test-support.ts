@@ -31,6 +31,7 @@ export const bucket = (overrides: Partial<CalibrationBucket> = {}): CalibrationB
   trade_count: 0,
   total_pnl: 0,
   avg_pnl_pct: 0,
+  trade_win_rate: 0,
   ...overrides,
 });
 
@@ -42,6 +43,9 @@ export const response = (
   brier_score: 0.19,
   log_loss: 0.52,
   expected_calibration_error: 0.06,
+  trade_count: 0,
+  pnl_brier_score: 0,
+  pnl_log_loss: 0,
   ...overrides,
 });
 

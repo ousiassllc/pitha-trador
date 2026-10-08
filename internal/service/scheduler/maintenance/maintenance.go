@@ -17,6 +17,7 @@ package maintenance
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -37,6 +38,14 @@ const (
 	dayLayout    = "2006-01-02"
 	settingKeyFm = "system.maintenance.%s.last_success_date"
 )
+
+// ErrSkipped is what a Task's Run returns when it has nothing to do right
+// now because the operator has not enabled it (e.g. no backup directory is
+// configured in Settings yet). The run counts neither as a success (the
+// task is tried again on the next CatchUp, so enabling it takes effect
+// within one check interval) nor as a failure (no retry delay, no
+// notification).
+var ErrSkipped = errors.New("maintenance: task skipped")
 
 // State persists each task's last successful run date.
 // *system.RuntimeSettingsRepository implements it.
@@ -151,6 +160,10 @@ func (r *Runner) RunNow(ctx context.Context, name string) {
 // run executes task and records the outcome. r.mu must be held.
 func (r *Runner) run(ctx context.Context, task Task, now time.Time) {
 	err := task.Run(ctx)
+	if errors.Is(err, ErrSkipped) {
+		slog.Debug("scheduler: maintenance task skipped", "task", task.Name)
+		return
+	}
 	if err == nil {
 		delete(r.failures, task.Name)
 		delete(r.retryAt, task.Name)

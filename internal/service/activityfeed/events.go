@@ -19,7 +19,14 @@ func jobEvent(job jobqueue.Job) domain.ActivityEvent {
 
 	detail := fmt.Sprintf("queue=%s status=%s attempts=%d", job.Queue, job.Status, job.Attempts)
 	if job.LastError != nil && *job.LastError != "" {
-		detail += " error=" + *job.LastError
+		// Only failed jobs carry a real error; pending (deferred) and
+		// succeeded (skipped) rows carry an operator note in last_error
+		// (issue #710), which must not read as a failure.
+		key := " note="
+		if job.Status == jobqueue.JobStatusFailed {
+			key = " error="
+		}
+		detail += key + *job.LastError
 	}
 
 	var latency *int

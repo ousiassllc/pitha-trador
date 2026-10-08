@@ -49,7 +49,7 @@ func TestHeader_PolledBannersAreFixedLiveRegions(t *testing.T) {
 }
 
 func TestBanners_BodiesCarryNoRole(t *testing.T) {
-	market := renderComponent(t, organisms.MarketDataBanner("bad_password", "KABU_API_PASSWORD を確認してください。"))
+	market := renderComponent(t, organisms.MarketDataBanner(organisms.MarketDataBannerProps{Issue: "bad_password", Guidance: "KABU_API_PASSWORD を確認してください。"}))
 	update := renderComponent(t, organisms.UpdateBanner(organisms.UpdateBannerProps{Available: true, Version: "v9.9.9"}))
 	for name, html := range map[string]string{"MarketDataBanner": market, "UpdateBanner": update} {
 		if !strings.Contains(html, "data-testid=") {

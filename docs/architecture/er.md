@@ -85,3 +85,5 @@ erDiagram
 | 1.34 | 2026-10-07 | `er/tables-trading.md`の`positions.unrealized_pnl`に、#682以前にクローズされた過去行もマイグレーション000029で`0`へ揃えた旨を追記（保有中の行は不変、downはno-op） | issue #688 |
 | 1.35 | 2026-10-07 | `er/tables-market.md`の`market_snapshots.market_breadth`の対象窓を「直近3分」固定から許容年齢（ランキング監視3分／`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`）へ訂正。スキーマ変更なし | issue #692 |
 | 1.36 | 2026-10-07 | `er/tables-market.md`の`market_snapshots.market_breadth`に、`scan.full_scan_enabled: true`では足が約8分間隔で各銘柄の`return_5m`が欠損のため常にNULLになる旨を追記。スキーマ変更なし | issue #693・#694・#696 |
+| 1.37 | 2026-10-08 | `er/tables-trading.md`の`calibration_outcomes.horizon_minutes`を5/10/15等へ更新（既定の判定水平線を5/10/20から変更、既存の20分行は残る）、`calibration_label_skips`に猶予内はpending再試行・マーカー記録時はジョブをskipとして`succeeded`終了する旨を追記。スキーマ変更なし | issue #710, #711 |
+| 1.38 | 2026-10-08 | `er/tables-system.md`の`runtime_settings`から環境変数の上書き層を削除（`config/strategy.yaml` < `runtime_settings`）し、Settings画面が保存する`system.backup_dir`/`system.log_dir`キーを追記。スキーマ変更なし | issue #708 |
