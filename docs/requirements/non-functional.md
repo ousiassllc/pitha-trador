@@ -50,6 +50,7 @@
 - 単一Windowsホスト・単一プロセス（Wails）構成のため、将来的にスキャン対象拡大や複数戦略同時運用が必要になった場合は、Scheduler/Worker層をプロセス分離・別ホスト化できるよう、内部レイヤー（domain/repository/service）をWailsプロセスに直接依存させない設計とする（詳細は`architecture/overview.md`）
 - **立花証券EVENT・REST補完の目安（issue #737）**: EVENT（WebSocket）は1接続のみ・最大120銘柄で、接続・切断は**1日10回程度まで**（Settingsの`broker.tachibana.event.max_connects_per_day`（#728）。既定10。購読銘柄の入れ替え＝再接続を数え、使い切ると入れ替えを止める。障害復旧の再接続は止めずにログへ記録）。切断・KP途絶（15秒無受信）・`ST`受信では**再ログインせず同じ仮想URLで再接続**する（バックオフ2秒〜5分。再認証は`ST`の`p_errno=2`等のセッション失効のときだけ）。REST時価の補完は**EVENTの値が30秒より古い銘柄だけをまとめて1要求（最大120銘柄）**で、**頻度は既定60秒に1要求まで**（`broker.tachibana.rest_quote.min_interval_seconds`（#728）。既定60）。
 - **立花証券選択時の流量・負荷方針（issue #721。#720の決定。仕様は`architecture/overview/integrations.md` §5.3）**: REQUEST I/Fは同時1要求・最大10件/秒（設計上限であり保証値ではない。**本システムのキュー全体の既定は1件/秒**で、Settingsの`broker.tachibana.request_max_per_second`（1〜10）で変更する。REQUEST/MASTER/PRICEの3仮想URLをまたぐ1本の直列キューで、優先度は セッション＞保有銘柄の時価＞監視銘柄の時価＞マスタ＞夜間の日足取得。夜間の日足取得は8:00〜15:30にキューから出さない。環境変数では設定しない。#727）で、8:00〜15:30は大量・頻繁な時価取得（`CLMMfdsGetMarketPrice`）とポーリングを控える。マスタは5:30〜8:00に朝1回だけ取得し、ポーリングではなくEVENT（WebSocket）を使う。**日中に全銘柄の時価を巡回しない**（全銘柄の絞り込みは夜間18:00以降の日足で行い、翌日の120銘柄を選ぶ。#726）。日中はEVENTで120銘柄を常時受信し、REST時価は補完・保有確認だけ（既定60秒に1要求以下）とする。EVENTの接続・切断は1日10回程度までとし、ログインは毎朝1回（5:30以降）で仮想URLを当日使い回す（WebSocket切断は再ログインせず同じ仮想URLで再接続。再認証は`p_errno=2`等のセッション失効のときだけ）。これらの既定値はSettings画面で変えられ、環境変数では持たない。上のkabu情報APIの流量（`scan.kabu_info_api_max_per_second`・PUSH登録上限）はkabu選択時のもの
+- **立花の夜間の日足取得（issue #729。#726）**: 引け後に全銘柄の日足（`CLMMfdsGetMarketPriceHistory`。1要求1銘柄・毎回全期間を返す）を取得し、`daily_bars`へ保存する（約4,000銘柄なら約4,000要求）。**実行は設定時刻（`broker.tachibana.nightly.run_time`。既定18:00。8:00〜15:30は選べない）以降だけ**で、実行中に8:00になれば要求を止めて中断する（時刻ガード。キュー側も8:00〜15:30は日足の要求を出さない二重の備え）。速度は`broker.tachibana.nightly.max_per_second`（既定1件/秒。0.1〜3）以下で、キュー全体の上限（`broker.tachibana.request_max_per_second`）にも従い、REQUEST/MASTER/PRICEをまたぐ直列キューに最低優先度（夜間の日足取得）で流す。既定1件/秒なら約4,000銘柄で約67分で、18:00開始なら20時前に終わる。失敗した夜（セッション失効・03:30の閉局・日中への突入）は保存済みの位置から10分おきに再開し、8:00になれば次の夜まで止める。ユニバースは市場区分（プライム・スタンダード・グロース・その他）・価格下限（銘柄マスタの前日終値）・除外銘柄で絞る。環境変数では設定しない
 
 ## 3. 可用性
 
@@ -124,6 +125,7 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 - Risk拒否件数
 - kabuステーションAPI（Broker）latency / エラー
 - 立花証券選択時（#727）: `tachibana:`ログ。ログイン成功（INFO。次回再認証時刻・有効期限）、03:30の閉局（INFO）、ログイン失敗（WARN。`issue`・`code`・`failures`・`retry_in`。認証ID・仮想URLは出さない）、`p_errno=2`による再ログイン（WARN）、`p_errno=6`（ERROR。採番バグ）、`p_errno=8`（WARN。NTP同期の案内）、運用者向け通知（WARN。`kind`＝`login_overdue`/`contention`/`documents_unread`/`api_spec_update`/`document_update`）、ログアウト（INFO）
+- 立花の夜間の日足取得ログ（issue #729。`bootstrap:`の有効化ログと`tachibana: nightly daily bars started`/`finished`/`did not finish`）: `run_date`・`symbols`（ユニバース件数）・`requests`・`saved_bars`・`failed`（取得に失敗した銘柄数）・`duration_ms`、中断時は`reason`のみを記録する。日足の価格・出来高などの生値と銘柄別の内容はログにもDBの実行記録にも出さない（個々の失敗はDEBUGで銘柄コードとエラーだけ）。夜ごとの結果は`daily_bar_runs`に残る（`architecture/er/tables-market.md`）
 - DB latency / エラー（エラーはERROR、100ms以上の低速クエリはWARN、それ未満の正常クエリはDEBUG。ワーカーのアイドルポーリングでログが肥大化しないよう、正常クエリはINFOで記録しない）
 
 ### 5.2 即時Slack通知対象
@@ -203,3 +205,4 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.36 | 2026-10-08 | §5.3のエラーログのエクスポートのマスク対象に立花証券 e支店APIの認証ID・秘密鍵・第二暗証番号・仮想URLを追加（詳細はFR-ERRLOG-3） | issue #736 |
 | 1.37 | 2026-10-08 | 立花証券アダプタの認証・セッション・REQUEST I/Fクライアント（issue #727）を反映: §1にp_errno=8のNTP案内、§2.3にキュー全体の既定1件/秒と優先度・夜間の日足取得の時間帯制限、§3に03:30閉局〜05:35再認証・バックオフ・8:30通知・日中再認証の制限・終了時ログアウト、§4に仮想URLの秘匿実装、§5.1/§5.2に立花のログと通知種別を追記 | issue #727 |
 | 1.38 | 2026-10-08 | 立花証券のEVENT WebSocketとLatest補完（issue #737）を反映: §2.3にEVENT接続・切断の1日の予算（既定10）、再接続の方針、REST補完の頻度上限（既定60秒に1要求）を追記 | issue #737 |
+| 1.39 | 2026-10-08 | 立花の夜間の日足取得（issue #729）を反映: §2.3に実行時刻・8:00〜15:30の時刻ガード・速度・ユニバース・失敗した夜の再開、§5.1に件数・`duration_ms`・失敗件数のみのログ（価格の生値は出さない）を追記 | issue #729 |

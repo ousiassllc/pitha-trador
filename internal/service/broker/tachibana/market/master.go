@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana"
 )
@@ -43,9 +44,10 @@ type Master struct {
 	loadMu   sync.Mutex // serializes Load
 	retrying atomic.Bool
 
-	mu   sync.Mutex // guards day and info
-	day  string
-	info map[string]broker.SymbolInfo
+	mu      sync.Mutex // guards day, info and targets
+	day     string
+	info    map[string]broker.SymbolInfo
+	targets []domain.DailyBarTarget // the last loaded master's symbols, kept across days
 }
 
 // NewMaster returns an empty Master reading through client.
@@ -70,15 +72,21 @@ func (m *Master) Load(ctx context.Context) error {
 		return err
 	}
 	info := make(map[string]broker.SymbolInfo, len(resp.Rows))
+	targets := make([]domain.DailyBarTarget, 0, len(resp.Rows))
 	for _, r := range resp.Rows {
 		code := r.text("sIssueCode")
 		if code == "" || r.text("sZyouzyouSizyou") != marketTSE {
 			continue
 		}
 		info[code] = symbolInfo(r)
+		t := domain.DailyBarTarget{Symbol: code, Market: segmentOf(r.text("sZyouzyouKubun"))}
+		if prev := r.num("sZenzituOwarine"); prev != nil {
+			t.PrevClose = *prev
+		}
+		targets = append(targets, t)
 	}
 	m.mu.Lock()
-	m.day, m.info = today, info
+	m.day, m.info, m.targets = today, info, targets
 	m.mu.Unlock()
 	slog.Info("tachibana: market master loaded", "symbols", len(info))
 	return nil
@@ -127,6 +135,21 @@ func (m *Master) Info(symbol string) (broker.SymbolInfo, error) {
 		return broker.SymbolInfo{}, fmt.Errorf("%w: symbol %s is not in the master", tachibana.ErrNoData, symbol)
 	}
 	return info, nil
+}
+
+// DailyBarTargets returns the symbols of the last loaded master, each with its
+// 市場区分 and 前日終値: the universe the nightly daily-bar batch narrows down
+// with the Settings. Unlike Info it is not tied to today's load, because the
+// listing barely changes between days and the master is fetched once in the
+// morning, not again for the night batch. ErrMasterNotLoaded before the first
+// load.
+func (m *Master) DailyBarTargets() ([]domain.DailyBarTarget, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.targets == nil {
+		return nil, ErrMasterNotLoaded
+	}
+	return append([]domain.DailyBarTarget(nil), m.targets...), nil
 }
 
 // symbolInfo maps one master row: sSinyouC 1 is 貸借銘柄; sNehabaMax/Min are
