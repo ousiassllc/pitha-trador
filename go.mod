@@ -1,6 +1,6 @@
 module github.com/ousiassllc/pitha-trador
 
-go 1.25.14
+go 1.26.0
 
 require (
 	github.com/a-h/templ v0.3.1020
@@ -13,7 +13,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/wailsapp/wails/v2 v2.16.0
 	github.com/xuri/excelize/v2 v2.11.0
-	golang.org/x/mod v0.38.0
+	golang.org/x/mod v0.41.0
 	golang.org/x/net v0.57.0
 	golang.org/x/text v0.40.0
 	modernc.org/sqlite v1.59.0
