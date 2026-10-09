@@ -7,8 +7,8 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/heldposition"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
 type parityPositions struct{ p domain.Position }
@@ -17,10 +17,10 @@ func (f parityPositions) ListOpen(context.Context) ([]domain.Position, error) {
 	return []domain.Position{f.p}, nil
 }
 
-type parityBoards struct{ board marketdata.Board }
+type parityQuotes struct{ quote broker.Quote }
 
-func (f parityBoards) Latest(context.Context, string) (marketdata.Board, error) {
-	return f.board, nil
+func (f parityQuotes) Latest(context.Context, string) (broker.Quote, error) {
+	return f.quote, nil
 }
 
 type parityExits struct{ snaps []domain.Snapshot }
@@ -32,21 +32,21 @@ func (f *parityExits) OnSnapshot(_ context.Context, snap domain.Snapshot) (execu
 
 // Regression test for issue #545: the held-position monitor's transient
 // snapshot must carry the same Bid/Ask/SpreadBps as the bar the 60-second
-// market-data job persists for the same board (a crossed book included),
+// market-data job persists for the same quote (a crossed book included),
 // otherwise an exit fills at a different price depending on which path
 // evaluates it first.
 func TestHeldPositionSnapshotQuoteMatchesPersistedBar(t *testing.T) {
-	boards := map[string]marketdata.Board{
-		"normal": {Symbol: "7203", CurrentPrice: 2408, VWAP: 2400, TradingVolume: 1000000, TradingValue: 2.4e9,
-			BidPrice: fptr(2408.5), BidQty: fptr(100), AskPrice: fptr(2407.5), AskQty: fptr(200)},
-		"crossed": {Symbol: "7203", CurrentPrice: 2408, VWAP: 2400, TradingVolume: 1000000, TradingValue: 2.4e9,
-			BidPrice: fptr(2407), BidQty: fptr(100), AskPrice: fptr(2409), AskQty: fptr(200)},
-		"no quote": {Symbol: "7203", CurrentPrice: 2408, VWAP: 2400, TradingVolume: 1000000, TradingValue: 2.4e9},
+	quotes := map[string]broker.Quote{
+		"normal": {Symbol: "7203", Price: 2408, VWAP: 2400, Volume: 1000000, Turnover: 2.4e9,
+			Ask: fptr(2408.5), AskQty: fptr(100), Bid: fptr(2407.5), BidQty: fptr(200)},
+		"crossed": {Symbol: "7203", Price: 2408, VWAP: 2400, Volume: 1000000, Turnover: 2.4e9,
+			Ask: fptr(2407), AskQty: fptr(100), Bid: fptr(2409), BidQty: fptr(200)},
+		"no quote": {Symbol: "7203", Price: 2408, VWAP: 2400, Volume: 1000000, Turnover: 2.4e9},
 	}
-	for name, board := range boards {
+	for name, q := range quotes {
 		t.Run(name, func(t *testing.T) {
 			env := newTestEnv(t)
-			env.Fake.board = board
+			env.Fake.quote = q
 			inst := mustCreateInstrument(t, env, "7203")
 			if err := env.HandleMarketData(context.Background(), marketDataJob(t, inst)); err != nil {
 				t.Fatalf("HandleMarketData: %v", err)
@@ -59,7 +59,7 @@ func TestHeldPositionSnapshotQuoteMatchesPersistedBar(t *testing.T) {
 			exits := &parityExits{}
 			held := heldposition.Monitor{
 				Positions: parityPositions{domain.Position{ID: 1, InstrumentID: inst.ID, Symbol: "7203"}},
-				Boards:    parityBoards{board}, Exits: exits,
+				Quotes:    parityQuotes{q}, Exits: exits,
 				Open: func(time.Time) bool { return true },
 			}
 			if n, err := held.Cycle(context.Background()); err != nil || n != 1 || len(exits.snaps) != 1 {

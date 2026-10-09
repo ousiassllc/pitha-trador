@@ -30,7 +30,7 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 ```text
 internal/web/
 ├── apierror/           # /api/v1 の huma.NewError 上書き（5xx は固定メッセージのみ返し原因を slog へ。issue #215）
-├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go, scanner_universe.go, scanner_export.go）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go, settings_hints.go）, activity/, shared/（render.goのバッファ描画`RenderHTML`・action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
+├── handler/            # 直下はdoc.goのみ。責務別サブパッケージ: scanner/（scanner.go, scanner_scan.go, scanner_universe.go, scanner_export.go）, watchlist/（watchlist.go。issue #730）, performance/（performance.go, performance_view.go）, calibration/, proposals/（proposals.go）, swagger/, symbol/（symbol*.go）, system/（system.go, update.go, error_log.go, marketdata.go ほか）, settings/（settings.go, settings_fields.go, settings_hints.go）, activity/, shared/（render.goのバッファ描画`RenderHTML`・action_error.goのToast/ErrorPage応答・ws_poll.goのWebSocketポーリング・ws_accept.goのWebSocket Upgrade。*_ws.goはWebSocket）
 ├── insightapi/         # 判断履歴・シグナル・実績の読み取り専用JSON API（Huma登録）
 ├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
 ├── atoms/              # Badge（+ EntryQualityBadge）, StatusDot, Toast, Button（+ ButtonLink）, Input, Select, timefmt.go（`atoms.FormatJST`/`JST`/`TimeLayoutJST`: SSR時刻表示の唯一の書式。`2026-10-05 09:30:00 JST`）
@@ -44,7 +44,7 @@ static/
     ├── components/
     │   ├── price-chart/           pitha-price-chart.ts / bars.ts（1分足`Bar`と`foldTick`等の足の集約ヘルパー）/ chart-data.ts（系列データ・ペイン配置・代替テキストの純粋ヘルパー）/ chart-types.ts（応答・WebSocketメッセージの型）/ jst-time.ts（時間軸・クロスヘアのJST整形）
     │   ├── scanner-table/         pitha-scanner-table.ts / scanner-types.ts（`GET /api/v1/scanner`の応答型）/ scanner-view.ts（列定義・書式・配色・バッジの表示ヘルパー）/ scanner-contract.json（SSRフォールバックとLitの表示契約。Go側`scanner_table_contract_test.go`・`handler/scanner/scanner_test.go`とTS側`scanner-contract.test.ts`が共有する唯一の契約ファイル）
-    │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）/ calibration-styles.ts（Shadow DOM用スタイル`heatmapStyles`と`CHART_HEIGHT`。行数上限のため分離）
+    │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）/ calibration-styles.ts（Shadow DOM用スタイル`heatmapStyles`と`CHART_HEIGHT`。行数上限のため分離）/ horizon-selector.ts（ホライズン切替ボタンと集計ホライズン表示。#719）
     │   ├── activity-feed/         pitha-activity-feed.ts / activity-feed-types.ts（応答型と定数）/ activity-feed-views.ts（Job Queues表・直近Kill Switchイベントの無状態テンプレート）
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
@@ -95,7 +95,7 @@ static/
 
 - `SecretFieldRow`（Settings画面の1項目。ラベル・「設定済み」バッジ・値入力（`type=password`）と保存ボタン・削除ボタン（設定済みのときのみ）・直近の保存/削除結果の通知を持ち、保存は`POST /settings/:key`、削除は`DELETE /settings/:key`で行の`outerHTML`のみ差し替える。他項目の値には影響しない。issue #79）
 - `Modal`（ネイティブ`<dialog>`のシェル。`aria-labelledby`でタイトルに紐付け、タイトル行に「閉じる」ボタンを持つ。`pitha-modal`が開閉・フォーカス復帰・URLハッシュからの自動オープンを担う。失敗トースト用の`[data-toast-region]`も内包する。バックドロップクリックで閉じるのは`pointerdown`も`<dialog>`自身で始まった場合のみで、入力欄からドラッグしてダイアログ外で離しても閉じない。issue #302/#353/#633）
-- `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）と`SetupStatus`（Setup画面の「必須項目はすべて設定済みです」＋`/scanner`への「続ける」リンク／「必須項目をすべて保存すると…」メッセージ。リンクは完了時のみ描画。`id="setup-status"`で、`/setup`発の保存・削除の応答に必須キー充足状態を再計算して`hx-swap-oob`で同梱する。issue #325）
+- `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。`ConnectionProps.Badges`/`Details`で接続先固有の秘密を含まないバッジ・状態行（立花証券 e支店の環境バッジ・セッション状態、issue #738）も描画する。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）と`SetupStatus`（Setup画面の「必須項目はすべて設定済みです」＋`/scanner`への「続ける」リンク／「必須項目をすべて保存すると…」メッセージ。リンクは完了時のみ描画。`id="setup-status"`で、`/setup`発の保存・削除の応答に必須キー充足状態を再計算して`hx-swap-oob`で同梱する。issue #325）
 - `SettingFieldRow`（Settings画面「運用設定」の1項目。シークレットと異なり現在値を表示する入力（列挙値は`<select>`）と保存ボタン・「既定に戻す」ボタン（保存値があるときのみ）・既定値の表示・警告・直近の結果通知を持ち、保存は`POST /ops-settings/:key`・既定に戻すは`DELETE /ops-settings/:key`の行単位swap。`internal/web/molecules/setting_field_row.templ`、issue #708）と`SettingGroupStatus`（グループの「設定済み／既定を使用」バッジと保存済み項目数。保存・削除の応答に`hx-swap-oob`で同梱する）
 - `SignalBadgeGroup`（direction + confidence + entry_quality の組み合わせ表示。確信度の整数%整形は`atoms.FormatConfidence`（半分は0から遠ざける丸め。`0.125`→`13%`。`nil`は`—`）に一本化し、Scanner候補表のSSR（`ScannerTableFallback`）と共有する。`%.0f`の偶数丸めだと同じ値が画面によって`12%`/`13%`と食い違うため。Lit側は`Math.round`で同値。issue #677）
 - `PositionRow`
@@ -130,6 +130,7 @@ static/
 - `SymbolDetailPage`（`pitha-price-chart` アイランドを埋め込む。Jev/Risk/Positionパネルは`organisms`の`JevPanel`/`RiskPanel`/`PositionPanel`で、pagesは組み立てのみ。issue #630）
 - `PerformancePage`（`organisms.BacktestFoldTable`などの組み立てのみ。issue #630）
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
+- `WatchlistPage`（issue #730。立花の監視リストをサーバ描画で一覧表示。アイランドなし）
 - `SettingsPage`（接続先別の一覧。Jev/kabuステーション/Slack/Luna/ニュースフィード/Sol/Opusの各行（`SettingsCard`）に設定済み／一部設定済み／未設定（Luna/ニュースフィード/Sol/Opusは既定のJev・やのしんで動く間「既定（…）を使用」）の`ConnectionStatus`を出し、「設定する」で`Modal`を開く。モーダルにその接続先のキー・URL・モデル名の`SecretFieldRow`をまとめる（`organisms.ConnectionList`）。「運用設定」節（`SettingGroupList`。バックアップ先・ログディレクトリ・Policy/Fast Screenerしきい値。`SettingsProps.Operational`、`router.WithOperationalSettings`未指定なら非表示）と「システム」節のアップデート（`#update-panel`、`UpdatePanel`）とエラーログ（`ErrorLogPanel`）も同じ`SettingsCard`＋`Modal`で開く。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。issue #57/#79/#267/#302）
 - `SetupPage`（初回セットアップ画面。Settingsと同じ`ConnectionList`で、必須2キーを持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須2キーがすべて設定済みなら完了表示と`/scanner`への「続ける」リンクを出す（未設定の間はリンクごとレンダリングしない。issue #352）。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80/#302）
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
@@ -166,7 +167,7 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 
 `api/endpoints.md` §2〜4 のルーティング定義に対応する。要点のみ再掲する。
 
-- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/activity`, `/settings`, `/setup`）は常にフルページを返し、`HX-Request`では分岐しない（失敗時のみ`HX-Request`にはトーストを返す）。HTMXフラグメントの取得は`GET /scanner/scan`（スキャン状況パネル）と、`Header`等が取得するフラグメントのGETルート（`GET /system/status`・`/system/update-status`・`/system/update-panel`・`/system/secrets-status`・`/system/marketdata-status`）が担う
+- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/watchlist`, `/activity`, `/settings`, `/setup`）は常にフルページを返し、`HX-Request`では分岐しない（失敗時のみ`HX-Request`にはトーストを返す）。HTMXフラグメントの取得は`GET /scanner/scan`（スキャン状況パネル）と、`Header`等が取得するフラグメントのGETルート（`GET /system/status`・`/system/update-status`・`/system/update-panel`・`/system/secrets-status`・`/system/marketdata-status`）が担う
 - アクションルート（`POST /positions/:id/close`, `POST /system/update-check`, `POST /scanner/universe/import`, `POST`/`DELETE /settings/:key`）は常にフラグメントを返す。Kill Switch操作（pause/resume/kill）はHTMXアクションルートを持たず、Litの`pitha-kill-switch-panel`が`/api/v1/system/*`を呼ぶ
 - **状態バッジの更新**: システム状態変更（pause/resume/kill）後は、`pitha-kill-switch-panel`が`systemStateChanged`イベントを発火し、Headerの`StatusDot`が`GET /system/status`で再取得される。OOBスワップは「副作用の反映」のみに限定する
 - **ローディング**: HTMXアクションは`hx-disabled-elt="this"`（必要に応じ`hx-indicator`）で二重送信を防ぐ（例: 「今すぐアップデートを確認」`#update-check-progress`、ポジション手動決済）。`hx-indicator`の表示はhtmx既定のインライン`<style>`に頼れない（`includeIndicatorStyles:false`。次項）ため、インジケーター要素はTailwindの`.htmx-request`バリアント等で自前でスタイルする。Kill Switch操作はLitの`pitha-kill-switch-panel`が`busy`状態でボタンを無効化する。スケルトンスクリーンは使わない
@@ -277,3 +278,6 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.78 | 2026-10-07 | §5.1（`lit.md`）`pitha-price-chart`のコード断片と注記を、リアクティブ状態は`error`・`wsStatus`・`summary`・`empty`の4つである実装に合わせて訂正 | issue #703 |
 | 1.79 | 2026-10-08 | `MarketDataBanner`の入力を`MarketDataBannerProps`にし、未ログイン`4001007`/`4001017`の継続時の強調形`MarketDataPersistentBanner`を追加 | issue #712 |
 | 1.80 | 2026-10-08 | moleculesに`SettingFieldRow`・`SettingGroupStatus`、organismsに`SettingGroupList`を追加し、`SettingsPage`に「運用設定」節（`SettingsProps.Operational`）を追記 | issue #708 |
+| 1.81 | 2026-10-08 | §2の`calibration-heatmap/`に`horizon-selector.ts`を追記、§5.3（`lit.md`）に`pitha-calibration-heatmap`のホライズン切替（5/10/15/全体、`?horizon=`）と集計ホライズン表示を追記 | issue #719 |
+| 1.82 | 2026-10-08 | `ConnectionProps`に`Badges`/`Details`を追加し、`ConnectionStatus`が接続先固有の環境バッジ・状態行（立花証券 e支店カード）を描画する旨を追記 | issue #738 |
+| 1.83 | 2026-10-08 | §3/§4にWatchlist画面（`GET /watchlist`、`pages.WatchlistPage`、`organisms.NavWatchlist`、`handler/watchlist`）を追加 | issue #730 |

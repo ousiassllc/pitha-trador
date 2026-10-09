@@ -17,10 +17,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
@@ -35,24 +35,24 @@ var tradingHours = time.Date(2026, 9, 29, 10, 0, 0, 0, marketcalendar.JST)
 // tradingHours, still inside the session.
 func barClock() time.Time { return tradingHours.Add(time.Minute) }
 
-// fakeBoards is the BoardSource stand-in: it returns board (or err) for
+// fakeQuotes is the QuoteSource stand-in: it returns quote (or err) for
 // every symbol.
-type fakeBoards struct {
-	board marketdata.Board
+type fakeQuotes struct {
+	quote broker.Quote
 	err   error
 }
 
-func (f *fakeBoards) Latest(context.Context, string) (marketdata.Board, error) {
-	return f.board, f.err
+func (f *fakeQuotes) Latest(context.Context, string) (broker.Quote, error) {
+	return f.quote, f.err
 }
 
 // testEnv is a Handler over a fresh DB, the compiled-in strategy.yaml/
-// risk.yaml defaults and a fakeBoards source, plus the repositories tests
+// risk.yaml defaults and a fakeQuotes source, plus the repositories tests
 // assert through.
 type testEnv struct {
 	*Handler
 	DB        *sql.DB
-	Fake      *fakeBoards
+	Fake      *fakeQuotes
 	Jobs      *jobqueue.JobRepository
 	Positions *trading.PositionRepository
 }
@@ -88,11 +88,11 @@ func newTestEnvWithNews(t testing.TB, feedCfg newsfeed.FeedConfig, lunaCfg assis
 	executionConfig := execution.ConfigFromRiskLimits(riskCfg.Paper)
 	executionConfig.Calendar = marketcalendar.TSE
 	executionConfig.Now = barClock
-	boards := &fakeBoards{}
+	quotes := &fakeQuotes{}
 	candidates := screener.NewLiveSource()
 	return testEnv{
 		Handler: &Handler{
-			Boards:        boards,
+			Quotes:        quotes,
 			Instruments:   instruments,
 			Snapshots:     snapshots,
 			FeatureEngine: featureengine.NewEngine(snapshots, rag.NewService(conn, decisions, snapshots)),
@@ -106,7 +106,7 @@ func newTestEnvWithNews(t testing.TB, feedCfg newsfeed.FeedConfig, lunaCfg assis
 			EventTrigger: strategy.Scan.EventTrigger,
 			Now:          barClock,
 		},
-		DB: conn, Fake: boards, Jobs: jobs, Positions: positions,
+		DB: conn, Fake: quotes, Jobs: jobs, Positions: positions,
 	}
 }
 

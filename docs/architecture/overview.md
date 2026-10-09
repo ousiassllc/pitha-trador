@@ -2,7 +2,7 @@
 
 ## 1. 設計方針
 
-- **単一プロセス・単一バイナリ**: Wails によりネイティブデスクトップアプリとして単一の Go プロセスに全機能（HTTP/HTMXサーバー、Scheduler/Worker、kabuステーションAPI連携、Jevアダプタ）を同居させる。単一Windowsホスト構成（`requirements/non-functional.md` §1）に合わせ、ネットワーク越しの分散構成は取らない
+- **単一プロセス・単一バイナリ**: Wails によりネイティブデスクトップアプリとして単一の Go プロセスに全機能（HTTP/HTMXサーバー、Scheduler/Worker、ブローカーAPI連携（kabuステーションAPI／立花証券）、Jevアダプタ）を同居させる。単一Windowsホスト構成（`requirements/non-functional.md` §1）に合わせ、ネットワーク越しの分散構成は取らない
 - **バックエンドファースト（HALT思想）**: フロントエンドはAPIサーバー（Gin）に内蔵し、SPAを作らない。判断に迷ったらサーバー側に寄せる。詳細は `components/overview.md`
 - **計算とJev判断の分離**: 価格・リターン・VWAP・ATR・板インバランス等の計算可能な値はGoコードで計算する。Jevは解釈（regime/direction/toxic flow等）のみを担当する（`docs/overview.md`「含まないもの」の「LLMへの価格計算・ポジションサイズ計算の委任」を継続遵守）
 - **SQLite中心のインフラ最小化**: Postgres/Redis/BullMQ/Celeryのような別プロセスのミドルウェアを一切持ち込まず、DB・Job Queue・ベクトル検索インデックスをすべて**単一のSQLiteファイル**（アプリ内蔵）で完結させる。Wailsの単一実行ファイル配布と最も相性がよく、Windowsホストへの事前インストール作業をゼロにする
@@ -30,7 +30,7 @@
 | Job Queue / Scheduler | 自前Workerプール（`jobs`テーブル + goroutine） | market-data, feature-calc, jev-scout, jev-trader, outcome-labeling, analytics の6キュー（`feature-calc`は互換用の空ジョブで、特徴量算出は`market-data`ジョブ内で完結する。Risk判定・Paper発注は`jev-trader`内で同期実行しキューを持たない）。単一プロセス前提のためRedis/River等の外部キューは不要。`architecture/er.md` の`jobs`テーブルで永続化・再起動時リカバリ |
 | 周期実行 | robfig/cron ＋自前ループ | robfig/cron（`Scheduler`）は60秒フルスキャン（`scan.full_scan_enabled: true`のときだけ。既定はオフで、毎分のランキング監視`bootstrap/rankingwatch`が代替。FR-SCHED-7/9。ランキング監視はcronのジョブ登録ではなく別goroutine）と分単位以上の保守ジョブ（孤児回復・Outcome Labeling・ハートビート/リスク監視・自動再開・アップデート確認・日次の自己改善/バックアップ等）のトリガー。15-30秒の候補更新は`internal/bootstrap/candidates`の自前ループ（`min`+ジッター）、5-15秒の保有ポジション再評価は`internal/bootstrap/lifecycle.go`が起動する別goroutine（`heldposition.Monitor.Run`）で、いずれもcronのジョブ登録ではない |
 | リアルタイムPush | `github.com/coder/websocket` | Scanner Dashboard/Symbol DetailへのUI即時反映（`nhooyr.io/websocket`はメンテナがcoder/websocketへ移管し非推奨化されたため、フォーク後継のcoder/websocketを採用） |
-| 市場データ・発注 | kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券） | 1分足・板・発注（REST + PUSH WebSocket） |
+| 市場データ・発注 | ブローカーAPI（`internal/service/broker`の境界。1プロセスで1つを選択）: kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券。既定・フォールバック）／立花証券・e支店API（インターネット直結。#724〜。認証ID＋RSA秘密鍵、Shift-JIS JSON/HTTPS POST、`golang.org/x/text`＝Shift-JIS変換） | 1分足・板・時価（REST + ストリーム。kabuはPUSH WebSocket、立花はEVENT WebSocket）。発注は#55まで行わない（`overview/integrations.md` §5） |
 | Jevアダプタ | 独自HTTPクライアント | Jev API（外部LLM判断レイヤー）呼び出し |
 | Luna/Sol/Opusアダプタ | 独自HTTPクライアント | ニュース分類（Luna）・振り返り分析（Sol）・改善提案レビュー（Opus）呼び出し（§8） |
 | ロギング | slog（構造化JSON） | `requirements/non-functional.md` §5 準拠 |
@@ -46,7 +46,7 @@ pitha-trador/
 ├── internal/
 │   ├── bootstrap/                # 両エントリーポイント共通の起動処理の組み立て役（composition root）。直下は DB open+マイグレーション・config/*.yamlの4段階解決（bootstrap.go）、`Services`組み立て・起動停止（services.go, services_build.go, lifecycle.go）、定数（constants.go）、Riskエンジン配線・取引時間判定・自己改善ジョブ（risk.go, session.go, selfimprove_job.go）、secrets読込とrouterオプション列の共通化（router_options.go: `LoadSecrets`/`RouterOptions`。#372）、起動時の銘柄マスタCSV同期（universe.go: `syncUniverse`・`PITHA_UNIVERSE_PATH`。#389）、多重起動ロックの取得（instance_lock.go: `AcquireInstanceLock`・`AppLockName`/`SupervisorLockName`。desktop/server共通の`app.lock`・`supervisor.lock`。#468）、ニュースフィード選択とNews Ingest起動判定（services_news.go: `newNewsFeed`・`NewsIngestEnabled`。#273）、ランキング監視の組み立て（rankingwatch_start.go: `buildRankingWatch`・`startRankingWatch`。FR-SCHED-9）、ランキング計測ループの起動（rankingmeasure_start.go: `startRankingMeasure`。FR-SCHED-8）のみ
 │   │   ├── candidates/           # 候補銘柄の定期更新（Fast Screener実行・最新Jev Trader判断と保有ポジションの候補への付与（#492）・jev-scoutのenqueue・更新間隔ティッカー。#246）
-│   │   ├── marketdatajob/        # market-data / feature-calc（空ジョブ）ジョブハンドラ（板→Reading変換・特徴量算出・イベント再評価enqueue。#246）
+│   │   ├── marketdatajob/        # market-data / feature-calc（空ジョブ）ジョブハンドラ（中立`broker.Quote`→Reading変換・特徴量算出・イベント再評価enqueue。#246）
 │   │   ├── backtestsource/       # Backtest Engine向けのDB読み出しソース（`backtestsource.Source`。#246）
 │   │   ├── heldposition/         # FR-SCHED-4 保有ポジション監視・Exit評価ループ（5〜15秒周期、最新板で再評価）
 │   │   ├── rankingmeasure/       # FR-SCHED-8 kabu `/ranking`計測ループ（`scan.ranking_measure`でオプトイン。件数・`duration_ms`・`CurrentPriceTime`・HTTP/kabuコードだけをログに出し、価格は保存・出力しない。#652）
@@ -97,11 +97,14 @@ pitha-trador/
 │   │   ├── decisiontrade/        # クローズ済みポジションと開始時のJev判断の結合読み取り（FR-CAL-2の帯別PnL用。複数リソース群を跨ぐ読み取りの置き場。本番コードは`domain`のみに依存し、他テーブルはSQLで直接結合する）
 │   │   └── snapshotcols/         # market_snapshotsのFeature列とdomain.Featureの対応表（INSERT/SELECT用。`market`が本番コードで使う`domain`のみに依存するリーフ）
 │   ├── service/                  # domain, repositoryに依存
-│   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS）（boardflow/=板取得・PUSHのテスト・#658）
-│   │   │   ├── feedfail/         # テスト専用: GetBoard失敗のうちmarket_data_downの連続失敗に数えるもの（#532）
-│   │   │   ├── logflow/          # テスト専用: GetBoardの構造化ログ（ディレクトリ行数上限対応で移動）
+│   │   ├── broker/               # ブローカー中立の境界（`Quote`/`SymbolInfo`/`SessionStatus`、`Session`/`QuoteSource`/`StreamFeed`/`SymbolInfoSource`/`CandidateSource`/`Health`/`Capabilities`、`MarketDataChecker`。`domain`のみに依存。issue #722）
+│   │   │   └── tachibana/        # 立花証券 e支店APIアダプタ（#724）。直下＝REQUEST I/Fクライアント（直列キュー・`p_no`/`p_sd_date`・Shift-JIS・IPv4固定・RSA-OAEPの仮想URL復号・`APIError`）、`session/`＝ログイン・毎朝の再認証・状態・通知、`market/`＝マスタ（朝1回の`SymbolInfo`）・全銘柄マスタ・時価スナップショット（#735）、`event/`＝EVENT I/F（WebSocket）受信・パーサ・`Latest`（EVENT優先＋REST補完。#737）、`adapter/`＝`broker.Broker`の実装（`bootstrap.newBroker`のみがimport）、`tachibanatest/`＝フェイク時計・フェイクe支店サーバ（テスト支援）
+│   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS。kabuアダプタの下回り）（boardflow/=板取得・PUSHのテスト・#658）
+│   │   │   ├── kabu/             # kabuアダプタ（`marketdata.Client`＋`pushfeed`を`broker.Broker`として包む。`Adapter`・`SessionStatusOf`・`Candidates`＝`/ranking`種別1〜7のインターリーブ。`bootstrap`の`newBroker`のみがimport）
+│   │   │   │   ├── pushfeed/     # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き。`broker.StreamFeed`の実体）
+│   │   │   │   └── quote/        # kabuステーションAPIの板を中立`broker.Quote`へ変換（`FromBoard`。売/買の入れ替えの単一定義。`marketdata`・`broker`に依存する本番コード）
+│   │   │   ├── feedfail/・logflow/ # テスト専用: GetBoard失敗のうちmarket_data_downの連続失敗に数えるもの（#532）／GetBoardの構造化ログ（ディレクトリ行数上限対応で移動）
 │   │   │   ├── infolimit/        # 情報API・銘柄登録のプロセス全体レート制限（公式10件/秒、既定8。issue #514）
-│   │   │   ├── quote/            # kabuステーションAPIの板を一般的なbid/askへ変換（`Bid`/`Ask`/`SpreadBps`。売/買の入れ替えの単一定義。`bootstrap/marketdatajob`と`bootstrap/heldposition`が共用。`marketdata`・`featureengine`に依存する本番コード）
 │   │   │   ├── rateflow/         # テスト専用: 情報APIレート上限と4001006の回帰テスト（#514）
 │   │   │   ├── rankingflow/      # テスト専用: `MeasureRanking`（`/ranking`の件数・同順位・`CurrentPriceTime`への縮約）の回帰テスト（#652）
 │   │   │   ├── slotflow/         # テスト専用: REST登録銘柄リスト（上限50件）のスロット回転・`UnregisterAll`/`UnregisterSymbols`の回帰テスト（ディレクトリ行数上限のため`marketdata`から分離）
@@ -110,8 +113,7 @@ pitha-trador/
 │   │   ├── featureengine/        # 特徴量算出
 │   │   │   ├── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
 │   │   │   └── marketcontext/    # 市場コンテキスト（指数リターン・市場ブレッドス）の`Loader`。全銘柄共通値を30秒キャッシュして共有（#622。旧`marketcontextflow`のテストも同居）
-│   │   ├── pushfeed/             # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き）
-│   │   ├── symbolcache/          # kabuステーションAPI銘柄情報（貸借・値幅上下限）の1営業日キャッシュ（issue #511）
+│   │   ├── symbolcache/          # ブローカー銘柄情報（貸借・値幅上下限）の1営業日キャッシュ（`broker.SymbolInfoSource`。issue #511）
 │   │   ├── screener/             # Fast Screener・screen_score算出
 │   │   ├── jev/                  # Jevアダプタ（client.go, evaluate.go, scout.go, trader.go, schemas.go, questions*.go, prompt_version.go, systemone/=ワイヤ層, jevtest/=テスト用フェイク, clientflow/=Clientテスト, evalflow/=Scout/Trader/News評価呼び出しテスト・#658）
 │   │   ├── rag/                  # 埋め込み生成・sqlite-vec類似検索（§7）
@@ -217,7 +219,7 @@ pitha-trador/
 
 - 兄弟サブパッケージ同士は本番コードでimportしない。共有コードは`sqlutil`/`sqlitedb`/`handler/shared`のようなリーフ・ヘルパー用サブパッケージへ切り出す。リソース群を跨ぐ読み取りは`decisiontrade`のように専用サブパッケージ（本番コードは`domain`のみに依存し、他テーブルはSQLで直接結合する）へ置く。**本番コードの例外は`market` → `snapshotcols`のみ**（`market_snapshots`のFeature列対応表を共有する`domain`のみに依存するリーフ。逆向きは禁止）
 - **テスト専用のクロスリソース読み取り例外**: `decisiontrade`・`snapshotcols`の外部テスト（`_test.go`）は、データ準備と列対応の整合検証のため兄弟群（`judgement`/`market`/`trading`。`snapshotcols`のテストは`market`）の公開APIと`sqlitedb.Open`をimportしてよい。この例外は`_test.go`に閉じ、本番コードへ広げない。それ以外の群のテストは他リソース群のデータをSQLで直接用意する
-- サブパッケージは、親パッケージがその子をimportする場合に親をimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る。**例外**: 親が本番コードでimportしない補助サブパッケージは親の公開型を参照してよい。`service/marketdata/quote`（`marketdata.Board`）・`service/jev/jevtest`（`jev.Client`向けのhttptestハンドラ。`jev`の公開型を参照）・`service/risk/multinotify`（`risk.Notifier`）の3つで、いずれも親は子をimportせず（子をimportするのは`bootstrap`配下の組み立て役とテストのみ）、循環は起きない
+- サブパッケージは、親パッケージがその子をimportする場合に親をimportしない（循環回避）。親（`bootstrap`）は組み立て役として子を参照してよく、子は依存を引数（構造体・小さなインターフェース）で受け取る。**例外**: 親が本番コードでimportしない補助サブパッケージは親の公開型を参照してよい。`service/marketdata/kabu/quote`（`marketdata.Board`）・`service/jev/jevtest`（`jev.Client`向けのhttptestハンドラ。`jev`の公開型を参照）・`service/risk/multinotify`（`risk.Notifier`）の3つで、いずれも親は子をimportせず（子をimportするのは`bootstrap`配下の組み立て役とテストのみ）、循環は起きない
 - 分割後の呼び出し元はサブパッケージ名で修飾する（例: `jobqueue.Job`、`sqlitedb.Open`）。センチネルエラーは返すパッケージが定義する（他レイヤーが分類する必要がある場合は従来どおり`domain/`に置く）
 - テストは対象コードと同じサブパッケージへ移設する。`service/risk`のようにパッケージ内結合が強くコードを分割できない場合、または本番コードは上限内でも外部テスト（`package X_test`）を足すとディレクトリ2000行を超える場合のみ、外部テストをテスト専用サブパッケージ（`*flow`等）へ分離する。各テスト専用サブパッケージは自前のヘルパーを持ち、兄弟テストパッケージ同士はimportしない
 - `.linterlyignore`に手書きソースの除外を置かない。許容するのは自動生成物`*_templ.go`・実行時ログ`**/logs/**`・`wails dev`生成の`.gitignore`済みバインディング`static/wailsjs/**`・ライセンス全文`LICENSE`（手書きソースではない定型文）のみ（詳細は`environment/setup.md`）
@@ -256,7 +258,7 @@ handler → service → repository → domain
 
 | コンポーネント | 責務 | 実装場所 |
 |---------------|------|---------|
-| Market Data Client | kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理。情報API・銘柄登録は`infolimit`でプロセス全体の秒間上限を守る。`MeasureRanking`（`ranking.go`）は`GET /ranking`の応答を件数・同順位の重複数・`CurrentPriceTime`だけへ縮約する計測専用の取得で、価格はデコードしない（FR-SCHED-8、#652）。`rateflow`はテスト専用 | `internal/service/marketdata`（`infolimit`, `rateflow`） |
+| ブローカーアダプタ（kabu／立花証券。旧Market Data Client） | 境界は`internal/service/broker`（中立`Quote`/`SymbolInfo`/`SessionStatus`と`Session`/`QuoteSource`/`StreamFeed`/`SymbolInfoSource`/`CandidateSource`/`Health`/`Capabilities`。選択は`bootstrap.newBroker`の1か所（Settingsの`broker.provider`。kabu／立花証券）。中立パッケージからkabuアダプタ・立花アダプタ（`service/broker/tachibana`）のimportはdepguardで禁止。立花アダプタ（#724・#727）は`tachibana`（REQUEST I/Fクライアント: 同時1要求の優先度キュー・秒間上限・`p_no`/`p_sd_date`・Shift-JIS・IPv4固定）、`tachibana/session`（ログイン・毎朝の再認証・状態・通知）、`tachibana/adapter`（`broker.Broker`実装）から成り、`Capabilities.Ranking`は偽・`MaxStreamSymbols`は120。`overview/integrations.md` §5）。kabuアダプタ（`service/marketdata/kabu`）は以下を包む: kabuステーションAPIからの1分足・板・約定データ取得（REST）、リアルタイム価格のPUSH WebSocket受信、トークン管理。情報API・銘柄登録は`infolimit`でプロセス全体の秒間上限を守る。`MeasureRanking`（`ranking.go`）は`GET /ranking`の応答を件数・同順位の重複数・`CurrentPriceTime`だけへ縮約する計測専用の取得で、価格はデコードしない（FR-SCHED-8、#652）。`rateflow`はテスト専用。立花証券アダプタ（計画。#724〜#726）: 立花証券・e支店APIを`broker.Broker`として包む（認証ID＋秘密鍵のログイン、毎朝の自動再認証、REQUEST I/F（直列・Shift-JIS・`p_no`/`p_sd_date`）、EVENT I/F WebSocket最大120銘柄、マスタの朝1回取得）。ランキング・歩み値が無いため監視銘柄は夜間の日足スクリーニングで選ぶ。`broker.provider`で1つを選択し（既定kabu。手動切替）、発注は#55まで行わない（`overview/integrations.md` §5.3・§5.4） | `internal/service/broker`、`internal/service/marketdata`（`kabu`, `infolimit`, `rateflow`） |
 | Feature Engine | 価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出（`requirements/functional.md` §4.1）。`marketcontext`は市場コンテキストの算出とキャッシュ | `internal/service/featureengine`（`eventtrigger`, `marketcontext`） |
 | Fast Screener | 数値フィルター・screen_score算出・上位N銘柄選定（§4.2） | `internal/service/screener` |
 | Jev Adapter (Scout/Trader) | 構造化状態と型付き質問（`noul`/`choice`）をTypeSafe AI公式API（`POST /v1/systemone`）へ送信し、回答をScoutResponse/TraderResponseへ変換する（§4.4, §4.5, §6）。ワイヤ層は`systemone`、テスト用フェイクは`jevtest`、`clientflow`はテスト専用 | `internal/service/jev`（`systemone`, `jevtest`, `clientflow`） |
@@ -276,7 +278,7 @@ handler → service → repository → domain
 | Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |
 | Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
-| Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/candidates`・`bootstrap/heldposition`・`service/marketdata`・`service/pushfeed`・`service/scheduler`（`updatecheck`含む）から使う | `internal/safego` |
+| Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/candidates`・`bootstrap/heldposition`・`service/marketdata`・`service/marketdata/kabu/pushfeed`・`service/scheduler`（`updatecheck`含む）から使う | `internal/safego` |
 | Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、secrets読込・routerオプション共通化、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-dataジョブ、互換用の空feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`rankingmeasure`（FR-SCHED-8 kabu `/ranking`計測ループ。`scan.ranking_measure`でオプトイン、計測値のみログ出力）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）、`startup`（desktop/server共通の`RunMain`・ログディレクトリ解決）、`universe`（銘柄マスタCSVのパースとJPX一覧の取込を`instruments`へのupsertで行う）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `rankingmeasure`, `paperexec`, `alerts`, `startup`, `universe`） |
 | Logging | slog JSON出力・日次ローテーション・30日超のgzipアーカイブ・エラーログのエクスポート（`requirements/non-functional.md` §5・§5.3、フローは`overview/flows.md` §10.6） | `internal/logging` |
 | Supervisor | 子プロセスの異常終了時の指数バックオフ再起動（1秒〜5分、1分安定でリセット）。終了コード0で監視終了。`cmd/desktop`の`--supervise`起動でのみ使う（`requirements/non-functional.md` §3） | `internal/supervisor` |
@@ -293,6 +295,6 @@ handler → service → repository → domain
 
 | 節 | ファイル |
 |----|----------|
-| §5 kabuステーションAPI連携 / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 | `docs/architecture/overview/integrations.md` |
+| §5 ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ・機能比較） / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 | `docs/architecture/overview/integrations.md` |
 | §10 通信フロー（§10.1〜§10.6）/ §11 障害対応方針 | `docs/architecture/overview/flows.md` |
 | 改訂履歴（1.0〜。`overview.md`と`overview/`配下の全体の改訂を追記する） | `docs/architecture/overview/history.md` |

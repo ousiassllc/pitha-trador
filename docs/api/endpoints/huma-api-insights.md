@@ -25,9 +25,14 @@
 
 ### GET /api/v1/calibration
 
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `horizon` | string | 集計する判定水平線（分）: `5` / `10` / `15` / `all`（既定`all`）。`all`は現行水平線`5`/`10`/`15`のラベルをまとめて集計する。範囲外（`20`・数値以外・`0`等）は422 |
+
 ```json
 // Output（抜粋）
 {
+  "horizon": "all",
   "buckets": [
     { "range": "0.50-0.60", "avg_confidence": 0.55, "direction_accuracy": 0.51, "avg_future_return_pct": -0.05,
       "sample_count": 80, "trade_count": 6, "total_pnl": -1800, "avg_pnl_pct": -0.21, "trade_win_rate": 0.5 },
@@ -56,6 +61,8 @@
 `by_direction`は予測方向（`LONG`/`SHORT`、常に両方を返す）別の方向別平均リターン（`avg_future_return_pct`は方向調整済み＝SHORTは下落が正）と的中率（FR-CAL-2）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`はconfidence bucket別PnL（FR-CAL-2）で、`positions.entry_order_id` → `paper_orders.trade_signal_id` → `trade_signals.jev_decision_id`で辿れるTrader判断由来のクローズ済みポジションの件数・実現損益合計（JPY）・エントリー金額に対する平均リターン（%）。手動エントリーは含まない。指標は`jev_decisions.question_version`で分離せず、全版のTrader判断（`trader-v2`/`trader-v3`等）を混在して集計する（版別・現行版のみの絞り込みやクエリは無い）。
 
 実現トレードPnLをground truthとする評価（FR-CAL-5）: バケットの`trade_win_rate`は`trade_count`のうち`realized_pnl > 0`の割合（`trade_count`が0なら0）、トップレベルの`trade_count`は`pnl_brier_score`/`pnl_log_loss`の対象となったクローズ済みポジション数（confidenceがどのバケットにも入らないものを除く。0件なら両スコアも0）。両スコアはconfidenceを予測確率、`realized_pnl > 0`を結果としたBrier Score/Log Loss。`realized_pnl`は両約定の手数料控除後・約定モデル（FR-ENTRY-8）の呼値/スプレッド/滑りを織り込んだ値。判定水平線の既定は5/10/15分。
+
+`horizon`（issue #719）はビン・方向別・Brier/Log Loss/ECEの全指標を、指定した水平線の`calibration_outcomes`行だけで再計算する（`ListLabeledSamples`が`horizon_minutes`で絞る）。応答の`horizon`は集計した水平線をそのまま返す（画面の表示用）。`all`は`calibration.DefaultHorizonsMinutes`（5/10/15）のみを合算し、#711以前の旧20分ラベルは混ざらない（旧ラベルはAPIからも選べない）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`/`trade_win_rate`と`pnl_brier_score`/`pnl_log_loss`は実現トレードPnLに基づくためホライズンに依存せず、どの`horizon`でも同じ値を返す。
 
 ### GET /api/v1/policy-proposals
 
@@ -102,7 +109,7 @@ System Activity Log向けの直近アクティビティ・キュー状況スナ�
 |-------|-----|------|
 | `limit` | integer | フィード件数（既定200、1〜500。範囲外は422） |
 | `queue` | string | `jobs.queue`でフィルタ（省略時は全キュー）。許容値は`market-data`/`feature-calc`/`jev-scout`/`jev-trader`/`outcome-labeling`/`analytics`の6種で、範囲外は422。`job`イベントのみが対象で、指定時は`jev_scout`/`jev_trader`/`kill_switch`イベントは含まれない |
-| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch` / `news_feed`（ニュース取得・Luna分類の失敗。インメモリ直近50件。省略時は全種別。範囲外は422） |
+| `type` | string | イベント種別でフィルタ: `job` / `jev_scout` / `jev_trader` / `kill_switch` / `news_feed`（ニュース取得・Luna分類の失敗。インメモリ直近50件）/ `broker_notice`（ブローカーアダプタの運用者向け通知。立花の再認証遅延・取り合い・書面未読・API版数/書面更新予告。インメモリ直近50件。省略時は全種別。範囲外は422） |
 
 ```json
 // Output（抜粋）

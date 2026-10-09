@@ -161,7 +161,7 @@ func TestDefaultDBPath_ReturnsPithaTradorSubpath(t *testing.T) {
 // JEV_MODEL/SLACK_WEBHOOK_URL etc.) must never fail
 // startup: config.LoadSecretsFromDB returns a zero-value config.Secrets
 // whenever the operator has not yet visited the Settings screen, and
-// BuildServices must construct every internal/service/marketdata.Client
+// BuildServices must construct every broker adapter
 // and internal/service/jev.Client (and simply skip the optional Slack
 // channel) from that zero value without panicking.
 func TestBuildServices_EmptySecretsDoesNotPanic(t *testing.T) {
@@ -173,8 +173,8 @@ func TestBuildServices_EmptySecretsDoesNotPanic(t *testing.T) {
 	t.Cleanup(func() { _ = state.Close() })
 
 	svc := bootstrap.BuildServices(state, config.Secrets{})
-	if svc.MarketData == nil {
-		t.Error("BuildServices: Services.MarketData is nil")
+	if svc.Broker == nil {
+		t.Error("BuildServices: Services.Broker is nil")
 	}
 	if svc.Jev == nil {
 		t.Error("BuildServices: Services.Jev is nil")

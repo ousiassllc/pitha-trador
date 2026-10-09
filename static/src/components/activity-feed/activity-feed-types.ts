@@ -28,7 +28,14 @@ export type ActivityWsMessage =
   | { type: 'activity_event'; event: ActivityEvent }
   | { type: 'resync' };
 
-export const EVENT_TYPES = ['job', 'jev_scout', 'jev_trader', 'kill_switch', 'news_feed'] as const;
+export const EVENT_TYPES = [
+  'job',
+  'jev_scout',
+  'jev_trader',
+  'kill_switch',
+  'news_feed',
+  'broker_notice',
+] as const;
 export const QUEUES = [
   'market-data',
   'feature-calc',

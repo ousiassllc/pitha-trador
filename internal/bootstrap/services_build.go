@@ -28,16 +28,15 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
-	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/retention"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
@@ -54,6 +53,9 @@ import (
 func (s *Services) buildRepositories(db *sql.DB) {
 	s.Instruments = market.NewInstrumentRepository(db)
 	s.Snapshots = market.NewSnapshotRepository(db)
+	s.DailyBars = market.NewDailyBarRepository(db)
+	s.DailyBarRuns = market.NewDailyBarRunRepository(db)
+	s.WatchLists = market.NewWatchListRepository(db)
 	s.Decisions = judgement.NewDecisionRepository(db)
 	s.Signals = trading.NewSignalRepository(db)
 	s.Jobs = jobqueue.NewJobRepository(db)
@@ -86,10 +88,8 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	if s.strategy != nil {
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
 	}
-	s.MarketData = marketdata.NewClient(marketdata.Config{
-		APIPassword:         secrets.KabuAPIPassword,
-		InfoAPIMaxPerSecond: infoAPIMax,
-	})
+	s.tachibana = s.tachibanaSource(cfg.brokerSettings)
+	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, alertChannels.BrokerNotices(s.Activity))
 	s.Jev = jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		Model:   secrets.JevModel,
@@ -145,9 +145,9 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 		positions:  s.Positions,
 		orders:     s.Orders,
 	}, riskSignals{
-		marketData: s.MarketData,
+		marketData: broker.MarketDataChecker{Health: s.Broker},
 		jevAPI:     s.Jev,
-		brokerAPI:  s.MarketData.BrokerFailures(),
+		brokerAPI:  s.Broker.BrokerFailures(),
 		dbWrite:    sqlitedb.DBWriteFailures,
 	}, s.Execution, alertChannels.RiskNotifier(notifiers))
 	s.Insight = insight.NewReader(s.Execution, s.Instruments, s.Signals, s.Positions)
@@ -199,7 +199,9 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
 	backupjob.WarnIfDisabled(context.Background(), s.Settings)
-	if s.strategy != nil && !s.strategy.Scan.FullScanOn() {
+	// 立花: never the full REST scan (issue #731, #720): the saved watch list is
+	// the only ingestion, whatever scan.full_scan_enabled says.
+	if s.strategy != nil && (!s.strategy.Scan.FullScanOn() || s.isTachibana()) {
 		schedOpts = append(schedOpts, scheduler.WithFullScanDisabled())
 	}
 	if autoUpdate != nil {
@@ -211,11 +213,10 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 	s.Scheduler = scheduler.New(s.Jobs, s.Instruments, schedOpts...)
 }
 
-// buildMarketDataPipeline builds the PUSH feed, the Scanner Dashboard
+// buildMarketDataPipeline builds the Scanner Dashboard
 // candidate refresher and the log exporter, and returns the market-data
 // queue Handler wired onto them.
 func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logDir string) *marketdatajob.Handler {
-	s.PushFeed = pushfeed.New(s.Instruments, s.MarketData, marketdata.DefaultPushURL, defaultKabuExchange)
 	s.ErrorLogs = logging.NewExporter(logDir)
 	s.candidates = &candidates.Refresher{
 		Instruments: s.Instruments, Snapshots: s.Snapshots, Settings: s.Settings, Jobs: s.Jobs,
@@ -224,10 +225,10 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logD
 	}
 	s.buildRankingWatch()
 	return &marketdatajob.Handler{
-		Boards: s.PushFeed, Instruments: s.Instruments, Snapshots: s.Snapshots, FeatureEngine: s.FeatureEngine,
+		Quotes: s.Broker, Instruments: s.Instruments, Snapshots: s.Snapshots, FeatureEngine: s.FeatureEngine,
 		Execution: s.Execution, Screener: s.Screener, News: s.News, Scheduler: s.Scheduler,
 		EventTrigger:        strategy.Scan.EventTrigger,
 		MarketContextMaxAge: strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge),
-		Symbols:             symbolcache.New(s.MarketData, defaultKabuExchange),
+		Symbols:             symbolcache.New(s.Broker),
 	}
 }

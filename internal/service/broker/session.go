@@ -1,0 +1,86 @@
+package broker
+
+import "time"
+
+// SessionIssue classifies why the broker session is not usable, so the UI
+// can tell the operator what to fix (issue #295) instead of one generic
+// error. SessionIssueNone means the session is fine (or none was attempted
+// yet). The adapter maps its own failure causes onto these.
+type SessionIssue string
+
+const (
+	SessionIssueNone        SessionIssue = ""
+	SessionIssueUnreachable SessionIssue = "unreachable"   // 接続できない: 常駐アプリ未起動 / API未有効
+	SessionIssueNotLoggedIn SessionIssue = "not_logged_in" // 人手ログインが必要 / セッション切れ
+	SessionIssueAPIDisabled SessionIssue = "api_disabled"  // API利用設定が未完了
+	SessionIssueBadPassword SessionIssue = "bad_password"  // 認証情報が不正
+	SessionIssueUnknown     SessionIssue = "unknown"       // 上記以外
+	SessionIssueRejected    SessionIssue = "rejected"      // 認証は成功するが以降の要求が拒否される
+)
+
+// The causes below are the 立花 e支店 adapter's (issue #739; the kabu adapter
+// never reports them). SessionIssueAPIDisabled doubles as 立花's API利用設定
+// 「利用しない」 and SessionIssueUnreachable as "the e支店 server cannot be
+// reached". The banner words the remedy per cause from the Issue alone, so
+// the adapter never has to put guidance (or anything credential-like) in
+// SessionStatus.Guidance.
+const (
+	SessionIssueBadAuthID       SessionIssue = "bad_auth_id"      // 認証IDが誤り (本番/デモの取り違えを含む)
+	SessionIssueKeyMismatch     SessionIssue = "key_mismatch"     // 秘密鍵と登録済み公開鍵の不一致 / 鍵の復号失敗
+	SessionIssueDocumentsUnread SessionIssue = "documents_unread" // 書面未読で仮想URLが発行されない
+	SessionIssueIPRejected      SessionIssue = "ip_rejected"      // 10005: IPv6のみの回線・固定IP登録との不一致
+	SessionIssueClockSkew       SessionIssue = "clock_skew"       // p_errno=8: PC時計とサーバ時刻が30秒超ずれ
+	SessionIssueOutOfHours      SessionIssue = "out_of_hours"     // 03:30〜05:30のログイン停止帯などサービス時間外
+	SessionIssueSessionConflict SessionIssue = "session_conflict" // 多重ログインで仮想URLが失効
+)
+
+// A not_logged_in failure streak is "persistent" (issue #712) once it has
+// repeated this many times or lasted this long: the broker still wants a
+// login well after the app's own retries, so the operator has to log in by
+// hand (post-maintenance morning routine) and the banner says so
+// prominently.
+const (
+	persistentFailures = 5
+	persistentElapsed  = 5 * time.Minute
+)
+
+// SessionStatus is a snapshot of the broker session's state (Session.Status).
+// Issue is the cause; Code is the broker-specific error code when the failure
+// carried one (0 otherwise); Guidance is the adapter's operator-facing text
+// on what to check ("" when nothing failed). Failures and Since describe the
+// current streak of consecutive failures with the same Issue (Since is when
+// it began).
+//
+// The remaining fields are for adapters with a login session of their own
+// (立花 e支店, issue #738) and stay zero for the others: LoggedInAt is the
+// last successful login, NextReauth when the next scheduled re-login is due,
+// APIVersion the API version label the broker reported, and DocumentsUnread /
+// VersionRetiring the broker's 書面未読 and 版数更新の予告 notices. They never
+// carry credentials or session URLs, so the UI may show them as they are.
+type SessionStatus struct {
+	Issue    SessionIssue
+	Code     int
+	Guidance string
+	Failures int
+	Since    time.Time
+
+	LoggedInAt      time.Time
+	NextReauth      time.Time
+	APIVersion      string
+	DocumentsUnread bool
+	VersionRetiring bool
+}
+
+// Failed reports whether the session is currently failing.
+func (s SessionStatus) Failed() bool { return s.Issue != SessionIssueNone }
+
+// Persistent reports whether a not_logged_in streak has repeated or lasted
+// long enough that the UI should escalate beyond the ordinary banner (issue
+// #712), and how long it has lasted at now.
+func (s SessionStatus) Persistent(now time.Time) (bool, time.Duration) {
+	if s.Issue != SessionIssueNotLoggedIn || s.Since.IsZero() {
+		return false, 0
+	}
+	elapsed := max(now.Sub(s.Since), 0)
+	return s.Failures >= persistentFailures || elapsed >= persistentElapsed, elapsed
+}

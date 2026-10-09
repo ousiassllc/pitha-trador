@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// MarketDataBannerProps is MarketDataBanner's input (issues #295, #712).
+// MarketDataBannerProps is MarketDataBanner's input (issues #295, #712, #739).
 type MarketDataBannerProps struct {
 	// Issue is the cause's machine name (marketdata.TokenIssue), "" while
 	// the token is fine.
@@ -13,13 +13,23 @@ type MarketDataBannerProps struct {
 	// Guidance is the cause-specific remedy (marketdata.TokenStatus.Guidance).
 	Guidance string
 	// Persistent escalates the banner for a not_logged_in streak that keeps
-	// repeating or lasting (marketdata.TokenStatus.Persistent): the
+	// repeating or lasting (broker.SessionStatus.Persistent): the
 	// post-maintenance manual kabuステーション re-login is still pending.
 	Persistent bool
 	// Failures is the number of consecutive failed token issuances.
 	Failures int
 	// Elapsed is how long the streak has lasted.
 	Elapsed time.Duration
+	// Environment is the 立花 e支店 environment ("demo" / "production",
+	// config.TachibanaEnvDemo / TachibanaEnvProduction) the failing session
+	// belongs to, "" for kabu. When set the banner always shows which
+	// environment it is about (issue #739).
+	Environment string
+	// Notice is a non-failure heads-up of the broker (立花 e支店: 書面未読は
+	// 失敗として Guidance に出る。ここは API の版数更新の予告, issue #727; the 立花 watch list fell back to a stand-in
+	// because the daily bars were unusable, issue #730). It
+	// is shown only while Guidance is empty.
+	Notice string
 }
 
 // persistentElapsedStep coarsens the shown elapsed time: the banner is a

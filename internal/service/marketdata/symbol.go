@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
 // SymbolInfo is the subset of 銘柄情報 (kabu_STATION_API.yaml
@@ -23,25 +23,12 @@ type SymbolInfo struct {
 	LowerLimit *float64 `json:"LowerLimit"`
 }
 
-// PriceLimit reports whether price sits at the day's upper limit
-// (ストップ高) or lower limit (ストップ安), or domain.PriceLimitNone when
-// it is neither or the limits are unknown.
-func (s SymbolInfo) PriceLimit(price float64) domain.PriceLimit {
-	switch {
-	case s.UpperLimit != nil && price >= *s.UpperLimit:
-		return domain.PriceLimitUp
-	case s.LowerLimit != nil && price <= *s.LowerLimit:
-		return domain.PriceLimitDown
-	}
-	return domain.PriceLimitNone
-}
-
 // GetSymbol fetches 銘柄情報 for symbol@exchange over REST
 // (GET /symbol/{symbol}@{exchange}).
 func (c *Client) GetSymbol(ctx context.Context, symbol string, exchange int) (SymbolInfo, error) {
 	token, ok := c.Token()
 	if !ok {
-		return SymbolInfo{}, ErrNoToken
+		return SymbolInfo{}, broker.ErrNoSession
 	}
 	var info SymbolInfo
 	path := fmt.Sprintf("/symbol/%s@%d", symbol, exchange)

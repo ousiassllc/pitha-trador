@@ -69,10 +69,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	brokerSettings, err := bootstrap.LoadBrokerSettings(context.Background(), state)
+	if err != nil {
+		return err
+	}
 
 	// No WithAutoUpdate: cmd/server is headless and has no installer to run, so
 	// issue #65's unattended self-update never wires in here.
-	services := bootstrap.BuildServices(state, secrets)
+	services := bootstrap.BuildServices(state, secrets, bootstrap.WithBrokerSettings(brokerSettings))
 
 	allowNonLoopback := os.Getenv(EnvAllowNonLoopback) == "1"
 	addr, err := resolveListenAddr(os.Getenv("PITHA_SERVER_ADDR"), allowNonLoopback)

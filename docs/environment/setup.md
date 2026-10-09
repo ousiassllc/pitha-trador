@@ -8,7 +8,7 @@
 - フロントエンド（リッチアイランドのみ）: Lit + TypeScript、ビルドは esbuild、パッケージマネージャは **bun** に固定
 - スタイリング: Tailwind CSS
 - DB: SQLite（`modernc.org/sqlite`、アプリ内蔵）+ golang-migrate + sqlite-vec（ベクトル検索）
-- 外部API: kabuステーションAPI（三菱UFJ eスマート証券、旧auカブコム証券）、Jev / Sol / Opus / Luna API
+- 外部API: ブローカーAPI（kabuステーションAPI＝三菱UFJ eスマート証券・旧auカブコム証券、または立花証券・e支店API。1プロセスで1つを選択）、Jev / Sol / Opus / Luna API
 
 技術スタックの詳細は `docs/architecture/overview.md` §2 技術スタック、レイヤー構造は同§3 を参照。本ドキュメントは開発環境・Lint/Format/Linterly/Git Hooks/Swagger の構築方針を扱う。CI/CD（GitHub Actions）の詳細は `environment/ci.md` に分割している。
 
@@ -63,7 +63,22 @@ pitha-trador/
 | linterly | v0.3.3（`ci.yml`の`LINTERLY_VERSION`と同版。`GOTOOLCHAIN=auto go install github.com/ousiassllc/linterly/cmd/linterly@v0.3.3`） | 行数制限の検査（`make lint`・pre-commit。下記「Linterly」節） |
 | govulncheck | v1.7.0（`ci.yml`の`GOVULNCHECK_VERSION`。`go install golang.org/x/vuln/cmd/govulncheck@v1.7.0`） | 既知脆弱性の検査。CIの`lint`ジョブ専用（`make lint`には含まれない。ローカル実行は任意） |
 | Lefthook | 最新（`go install github.com/evilmartians/lefthook@latest` または `bun add -D lefthook`） | Git Hooks |
-| kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）提供 | Windows実機での市場データ・発注検証（開発時はモックサーバーで代替可） |
+| kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）提供 | kabuをブローカーに選ぶ場合（既定）のWindows実機での市場データ・発注検証（開発時はモックサーバーで代替可） |
+
+### 立花証券（e支店API）の事前準備（ブローカーに立花証券を選ぶ場合。issue #721）
+
+ブローカーは1プロセスで1つを選ぶ（`broker.provider`。既定kabu。切替はSettings＋再起動。`architecture/overview/integrations.md` §5）。立花証券を選ぶ場合は、アプリを動かす前に次を**操作者が標準Webで行う**（一次資料: [API専用ページ「３．ご利用方法」](https://www.e-shiten.jp/e_api/mfds_json_api_menu.html)、[v4r9スケジュール告知](https://www.e-shiten.jp/api/20260513.html)）。立花証券を選ばない（kabuのまま）場合は不要。
+
+1. **口座**: 立花証券・e支店の口座を開設する（API利用に口座が必要）。
+2. **パスキー登録**: 標準Web（本番）のログインでパスキーを登録する。本番のAPI（v4r9以降）の利用にはパスキー認証が必要で、登録後は標準Webの電話番号認証は使えない。
+3. **API利用設定**: 標準Webの「お客様情報」→「e支店・API利用設定」で、既定の「利用しない」を**「利用する」**に変更する。
+4. **認証IDの取得**: 同じ画面で認証ID（`sAuthId`）を取得する。
+5. **秘密鍵・公開鍵の作成と公開鍵の登録**: 同じ画面で鍵を作成（利用者自身でも作成可）し、公開鍵を登録する。**秘密鍵は自分で管理する**（ファイルに保存し、OS権限で本人のみ読み取り可にする。Gitやクラウド共有に置かない。DBには本文を保存しない。`requirements/non-functional.md` §4）。
+6. **書面の確認**: 各種書面（金商法交付書面等）を標準Webで既読にする。未読だと再認証が正常でも仮想URLが発行されずAPIが使えない。書面は追加・変更のたびに再確認が要る。
+7. **デモ環境**: デモは本番とは**別の**デモ標準Web（`https://demo.e-shiten.jp`。[デモ環境の案内](https://www.e-shiten.jp/Service/demo.html)）で、上記3〜5（API利用設定・認証ID・鍵）を**デモ専用に**設定する。デモの認証ID・秘密鍵・公開鍵は本番と別セットで、デモはパスキー認証が不要。まずデモで検証し（#724・#725）、本番は読み取り（市況データ）のみで検証してから既定の切替を判断する。
+8. **PC環境**: インターネットに直結（IPv4。IPv6のみの回線では`10005`で失敗する）し、PC時計をNTPで正確に合わせる（APIが要求の時刻`p_sd_date`を30秒の範囲で検査する）。API側の固定IP登録は任意で、動的IP回線では使わない。
+
+取得した認証ID・秘密鍵のパスはSettings画面で入力する（#723・#733。立花アダプタの実装は#724）。発注は#55まで行わないため、第二暗証番号は本番では登録・保持しない。
 
 ### 初回セットアップ手順
 
@@ -86,7 +101,7 @@ lefthook install
 make dev
 ```
 
-`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`/`NEWS_FEED_ENABLED`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。Luna/Sol/Opusは既定でJev（`JEV_API_KEY`のみ）、ニュースフィードは既定でやのしんTDnet WebAPI（キー不要）で動くため、`LUNA_*`/`SOL_*`/`OPUS_*`/`NEWS_FEED_*`は役ごと・フィードの任意の差し替え（`NEWS_FEED_ENABLED`に`off`でニュース取り込みを停止）であり、未入力でも起動は失敗しない（issue #273）。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
+`JEV_API_KEY`/`JEV_BASE_URL`/`JEV_MODEL`/`KABU_API_PASSWORD`/`SLACK_WEBHOOK_URL`/`LUNA_API_KEY`/`LUNA_BASE_URL`/`SOL_API_KEY`/`SOL_BASE_URL`/`OPUS_API_KEY`/`OPUS_BASE_URL`/`NEWS_FEED_URL`/`NEWS_FEED_API_KEY`/`NEWS_FEED_ENABLED`/`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`/`TACHIBANA_DEMO_SECOND_PASSWORD`は`.env`では設定しない（issue #57、Luna/Sol/Opus/News Ingest分は`architecture/overview.md` §8・§13）。アプリ起動後、Settings画面（`/settings`）から入力する。Luna/Sol/Opusは既定でJev（`JEV_API_KEY`のみ）、ニュースフィードは既定でやのしんTDnet WebAPI（キー不要）で動くため、`LUNA_*`/`SOL_*`/`OPUS_*`/`NEWS_FEED_*`は役ごと・フィードの任意の差し替え（`NEWS_FEED_ENABLED`に`off`でニュース取り込みを停止）であり、未入力でも起動は失敗しない（issue #273）。必須2キー（`JEV_API_KEY`/`KABU_API_PASSWORD`）が未設定（`JEV_BASE_URL`は既定値`https://api.typesafe.ai`があり、`JEV_MODEL`（既定`jev-latest`）とともにSettings画面のJev接続先モーダル内の任意項目から上書きする。issue #271・#272・#274）の間は、初回起動時にどのページを開いても専用のSetup画面（`/setup`）へリダイレクトされ、そこで入力を完了すると通常画面へ進める（issue #80）。詳細は`docs/architecture/overview.md` §5・§6・§8・§10.5・§13を参照。
 
 ### 環境変数
 
@@ -113,11 +128,16 @@ make dev
 | ログディレクトリ | `system.log_dir` | DBファイルの親ディレクトリ配下の`logs/` | **再起動が必要**（ログは起動時に開くため。DBは起動前に読み取り専用で参照する）。不正値（相対パス等）は既定にフォールバック |
 | Policy Engine（ロング/ショート）のしきい値 | `policy.{long,short}.*` | `config/strategy.yaml`の`policy.*` | **再起動不要**（評価のたびに再読込）。自己改善ループ（Sol/Opus）も同じキーを更新するため、後から書き込んだ方が有効 |
 | Fast Screenerのフィルター・重み | `screener.*` | `config/strategy.yaml`の`fast_screener.*` | **再起動不要**（次の候補更新から） |
+| 使用するブローカー | `broker.provider`（`kabu`\|`tachibana`） | `kabu`（従来どおり） | **再起動が必要**（起動時に1回読む）。自動フェイルオーバーはなく、切替は手動＋再起動 |
+| 立花証券 e支店 接続設定 | `broker.tachibana.environment`（`demo`\|`production`）・`broker.tachibana.{demo,production}.base_url`・`broker.tachibana.{demo,production}.private_key_path`・`broker.tachibana.request_max_per_second`（1〜10）・`broker.tachibana.reauth_time`（05:30〜08:00） | デモ環境・`https://demo-kabuka.e-shiten.jp/e_api_v4r10/`（本番は`https://kabuka.e-shiten.jp/e_api_v4r10/`）・毎秒1（日中の負荷を抑える既定。設計上限は10）・05:35。秘密鍵パスは未設定（=立花は使えない） | **再起動が必要**。認証ID（`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`）と任意のデモ第二暗証番号（`TACHIBANA_DEMO_SECOND_PASSWORD`）は「接続先」の「立花証券 e支店」で入力する（`secrets`、再起動で反映） |
+| 立花の監視銘柄ソース | `broker.tachibana.candidate_source`（`daily_screen`\|`fixed`）・`broker.tachibana.{manual_symbols,fixed_symbols}`（銘柄コードのカンマ区切り、最大120件）・`broker.tachibana.nightly.{run_time,max_per_second,markets,min_price_jpy,exclude_symbols}`（夜間日足バッチ）・`broker.tachibana.screen.<指標>.{weight,top_n}`（`gain_rate`/`loss_rate`/`volume`/`turnover`/`volume_surge`/`turnover_surge`/`range_rate`）・`broker.tachibana.event.max_connects_per_day`・`broker.tachibana.rest_quote.{min_interval_seconds,requests_per_round}` | `daily_screen`・手動/固定リストは空・夜間バッチは18:00以降（翌01:00以降も可。08:00〜15:30は保存時に拒否）・0.1〜3件/秒（既定1）・市場区分`prime,standard,growth`・株価下限0（除外なし）・除外銘柄なし・各指標は重み1/上位10件・EVENT接続・切断は1日10回（1〜20）・REST時価補助は60秒に1要求以下（間隔10〜3600秒・1回1要求、1〜3） | **再起動不要**（次の夜間バッチ・次の監視リスト確定・次回のEVENT接続から。環境変数は使わない）。値は保存時に検証され、不正値は400で保存しない。重み>0かつ上位件数>=1の指標が1つも残らない保存も拒否する。kabu選択時の監視（FR-SCHED-9）には影響しない |
 
 - 優先順位は`config/strategy.yaml` < `runtime_settings`（Settings画面）。以前の環境変数による上書き（`PITHA_POLICY_LONG_*`/`PITHA_POLICY_SHORT_*`/`PITHA_FAST_SCREENER_*`/`PITHA_LOG_DIR`/`PITHA_BACKUP_DIR`）は廃止した（設定されていても無視される）。
 - バックアップ先はローカルディスク外（外部ドライブ・クラウド同期フォルダ等）の**既存ディレクトリの絶対パス**を指定する。ディレクトリ自体は作成しない。存在しない間（未マウントなど）はローカルへ退避せずバックアップが失敗し、連続失敗時にSlack/ログで通知される（Settingsの該当項目にも警告を表示する）。
 - バックアップの内容: Schedulerの日次ジョブ（起動直後・10分ごとの未実行検出と毎日16:00）が`PRAGMA wal_checkpoint(TRUNCATE)`後の整合コピーを`daily/pitha-YYYY-MM-DD.db`へ保存し（`secrets`テーブルは空にし、`0700`/`0600`で作成）、90日超の日次分は削除、各ISO週の最初のバックアップ分を`weekly/pitha-YYYY-MM-DD.db.gz`（日付はその週の月曜）として52週保持する。復元はアプリ停止後にバックアップファイルを`PITHA_DB_PATH`（既定パス）へ置き換え、Setup画面でAPIキー・パスワードを再入力する。
 - ログディレクトリは日次JSONログ（全ログ`<日付>.log`とERRORのみの`<日付>-error.log`）・`.gz`アーカイブ・エラーログのダウンロードが共有する。作成できない場合は標準エラー出力へフォールバックして起動を継続する。起動失敗などの致命エラーはERRORレベルで記録する。
+- 立花証券 e支店APIを使う場合は、事前準備（標準Webでのパスキー登録 → API利用設定「利用する」→ 認証ID取得 → 鍵作成・公開鍵登録。デモ/本番で別々に行う）を上記「立花証券（e支店API）の事前準備」で済ませ、取得した**認証ID**を「接続先」の「立花証券 e支店」へ、**秘密鍵ファイルの絶対パス**を運用設定の「立花証券 e支店（接続設定）」へ入力する。秘密鍵（RSA 2048/4096のPEM、例: `openssl genrsa -out tachibana-demo.pem 2048`）はDB・ログ・画面に保存・表示せず、パスのみ保存する。保存時にPEM・RSA 2048/4096・秘密鍵であること（公開鍵・証明書は400）を検証し、OneDrive/Dropbox/Googleドライブ等の同期フォルダ配下は警告する。ファイルは同期されないフォルダに置き、OS権限（`chmod 600`等）でユーザーのみ読み取り可にする。「PEM本文を`secrets`に保存」は、暗号鍵がアプリ埋め込みシード由来で実質的な保護にならないため採らない。
+- 立花の「固定IP登録」（利用設定画面の任意設定）はアプリでは扱わない。動的IP回線（家庭用回線など）では**登録しない**こと。登録すると回線のIPが変わったときに立花から締め出され、再登録するまで接続できない。本番の第二暗証番号はアプリに保存せず（保存先はない。issue #55で扱う）、デモの第二暗証番号はデモ発注スモーク（任意）専用で本番環境では使わない。
 - 値は保存時に検証される（確率系しきい値は`(0, 1]`、`min_entry_quality`は`poor`/`fair`/`good`/`strong`/`exceptional`、`top_n >= 1`・価格/しきい値は正・`max_price >= min_price`・重みは0以上で合計が正、パスは絶対パス）。不正値は400で拒否し保存しない（FR-POLICY-2a / FR-FS-4）。
 
 ### 銘柄マスタの投入

@@ -30,10 +30,6 @@ const (
 	ExchangeNighttime = 24 // 夜間
 )
 
-// ErrNoToken is returned by methods that require a token when none has
-// been issued yet (call IssueToken or Start first).
-var ErrNoToken = errors.New("marketdata: no token issued yet")
-
 // Config configures a Client.
 type Config struct {
 	// BaseURL is the kabuステーションAPI base URL, e.g.

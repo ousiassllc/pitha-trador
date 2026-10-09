@@ -77,6 +77,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	brokerSettings, err := bootstrap.LoadBrokerSettings(context.Background(), state)
+	if err != nil {
+		return err
+	}
 
 	// app is also the Risk Engine's native OS toast Notifier (notify.go),
 	// fanned out alongside the structured-log and Slack channels
@@ -85,7 +89,7 @@ func run() error {
 	// #65's unattended self-update, which cmd/server never wires in at
 	// all.
 	app := NewApp()
-	services := bootstrap.BuildServices(state, secrets, bootstrap.WithAutoUpdate(app), bootstrap.WithNotifiers(app))
+	services := bootstrap.BuildServices(state, secrets, bootstrap.WithBrokerSettings(brokerSettings), bootstrap.WithAutoUpdate(app), bootstrap.WithNotifiers(app))
 	app.services = services
 
 	wsListeners, wsBase := listenWebSocket()

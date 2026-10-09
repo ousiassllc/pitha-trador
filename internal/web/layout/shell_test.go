@@ -172,6 +172,7 @@ func TestShell_NavMarksCurrentPage(t *testing.T) {
 		want    string
 	}{
 		{organisms.NavScanner, "/scanner"},
+		{organisms.NavWatchlist, "/watchlist"},
 		{organisms.NavPerformance, "/performance"},
 		{organisms.NavCalibration, "/calibration"},
 		{organisms.NavActivity, "/activity"},

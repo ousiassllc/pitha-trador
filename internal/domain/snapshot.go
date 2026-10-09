@@ -38,8 +38,9 @@ type Snapshot struct {
 	// could not be fetched): only an explicit false blocks a short.
 	Lendable *bool
 
-	// RawDataJSON is the kabuステーションAPI response for this bar, kept
-	// verbatim for re-calculation/audit purposes.
+	// RawDataJSON is the broker's response for this bar (broker.Quote.Raw;
+	// kabuステーションAPI's board for the kabu adapter), kept verbatim for
+	// re-calculation/audit purposes.
 	RawDataJSON string
 
 	CreatedAt time.Time

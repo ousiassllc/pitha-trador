@@ -14,14 +14,14 @@
 
 ### 含むもの
 
-- 東証上場銘柄・1 分足を基本時間軸とした市場データ取得（kabu ステーション API 経由）
+- 東証上場銘柄・1 分足を基本時間軸とした市場データ取得（ブローカーAPI経由。kabu ステーション API を既定とし、立花証券 e 支店 API を選択可能。1 プロセスで 1 社、切替は手動）
 - Feature Engine による価格・VWAP・出来高・ボラティリティ・板/約定・市場コンテキスト特徴量の算出
-- Fast Screener による段階的候補絞り込み（監視銘柄 → 上位N件（既定`top_n=20`） → Jev Scout。監視銘柄は既定ではkabuランキング取得の最大45銘柄、`scan.full_scan_enabled: true` のときだけ有効な全銘柄。FR-SCHED-9）
+- Fast Screener による段階的候補絞り込み（監視銘柄 → 上位N件（既定`top_n=20`） → Jev Scout。監視銘柄は既定ではkabuランキング取得の最大45銘柄（立花証券選択時は夜間の日足スクリーニングで選ぶ翌日の120銘柄）、`scan.full_scan_enabled: true` のときだけ有効な全銘柄。FR-SCHED-9）
 - Jev Scout（深掘り価値判定）・Jev Trader（方向・レジーム・エントリー品質判定）
 - Policy Engine（Jev 出力 → 取引候補への変換）・Risk Engine（ポジションサイズ／損失上限／Kill Switch）
 - Paper Trading による Entry/Exit・ポジション管理・PnL 集計
 - Jev 判断と将来値動きの紐付け・Calibration（Brier Score 等）
-- Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Performance・Calibration・System Activity Log・Settings・初回 Setup 画面）
+- Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Watchlist（立花選択時の監視リスト）・Performance・Calibration・System Activity Log・Settings・初回 Setup 画面）
 - Jev RAG（過去の類似局面を sqlite-vec で検索し Jev への文脈として注入）による判断品質の継続的な底上げ
 - Luna（ニュース分類・イベント抽出。News Ingestが取得した見出し・本文を実際の外部AI APIへ送信し、bullish/bearish/neutralとイベント種別を判定）による市場コンテキストの補助的拡張
 - Sol（振り返り分析）・Opus（改善提案レビュー）を実際の外部AI API呼び出しとして実装し、Policy Engineしきい値を自己改善するループ（Risk Engineのリミット値は対象外。Opusの承認は既存の決定的バックテストしきい値との併用条件とし、AIは追加の拒否権としてのみ働く）
@@ -67,14 +67,14 @@ graph TD
             SOL_GOV["Self-Improvement Governor\n(Sol/Opus連携)"]
             DB[("SQLite\n（アプリ内蔵）")]
         end
-        KABU["kabuステーションAPI\n(三菱UFJ eスマート証券（旧auカブコム証券）常駐アプリ)"]
+        BROKER["ブローカーAPI（1つを選択）\n・kabuステーションAPI（既定・フォールバック。同一ホストの常駐アプリ）\n・立花証券 e支店API（インターネット直結。ホスト外のクラウドAPI）"]
     end
     JEVAPI["Jev API (外部)"]
     SOLAPI["Sol / Opus / Luna API (外部)"]
 
     UI <--> API
     API --> MD
-    MD <--> KABU
+    MD <--> BROKER
     MD --> FE --> FS --> JS
     JS -->|"通過"| JT
     JS -.->|"API呼び出し"| JEVAPI
@@ -86,7 +86,7 @@ graph TD
     SOL_GOV <--> DB
     SOL_GOV --> PE
     JT --> PE --> RE --> EX
-    EX <--> KABU
+    EX <--> BROKER
     EX --> CAL
     CAL --> DB
     FE --> DB
@@ -106,7 +106,7 @@ graph TD
 |------------|------|------|
 | 機能要件 | `docs/requirements/functional.md`（§4は `docs/requirements/functional/` に分割） | スキャン〜Jev判定〜Policy/Risk〜Paper執行〜Calibrationのユースケースと画面別機能一覧 |
 | 非機能要件 | `docs/requirements/non-functional.md` | 性能・可用性(24/365目標)・セキュリティ・監視(ログ+Slack)・コンプライアンス前提 |
-| アーキテクチャ設計 | `docs/architecture/overview.md`（§5〜§13は `docs/architecture/overview/` に分割） | Go レイヤードアーキテクチャ、kabuステーションAPI/RAG/自己改善ループ連携、Wails単一プロセス構成、SQLite上の自前Scheduler/Worker設計 |
+| アーキテクチャ設計 | `docs/architecture/overview.md`（§5〜§13は `docs/architecture/overview/` に分割） | Go レイヤードアーキテクチャ、ブローカー（kabuステーションAPI／立花証券）/RAG/自己改善ループ連携、Wails単一プロセス構成、SQLite上の自前Scheduler/Worker設計 |
 | ER / データモデル | `docs/architecture/er.md`（テーブル定義は `docs/architecture/er/` に分割） | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes/calibration_label_skips/kill_switch_events/kill_switch_resolutions/runtime_settings/secrets/policy_proposals/jobs のSQLiteテーブル定義とsqlite-vecベクトルインデックス |
 | API 仕様 | `docs/api/endpoints.md` | Huma JSON API（/api/v1/...）と HTMX ページ/アクションルートの仕様 |
 | コンポーネント設計 | `docs/components/overview.md`（§5〜§9は `docs/components/lit.md`・`runtime.md` に分割） | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
@@ -116,7 +116,7 @@ graph TD
 
 具体的な日付は未定。フェーズ順序を計画とする（詳細は `requirements/functional.md` の MVP フェーズ節を参照）。
 
-- Phase 0: Data — 市場データ取得（kabuステーションAPI接続）、1分足保存、Feature Engine構築
+- Phase 0: Data — 市場データ取得（ブローカーAPI接続。既定はkabuステーションAPI、立花証券は#724以降）、1分足保存、Feature Engine構築
 - Phase 1: Scanner — Fast Screener、Scanner Dashboard、Top候補表示
 - Phase 2: Jev Scout — Jev API接続、Scout Questions実装、Decision Log保存
 - Phase 3: Jev Trader — LONG/SHORT/NONE判定、Policy Engine
@@ -139,7 +139,8 @@ graph TD
 | Regime | Jev Traderが判定する相場状態（TREND / RANGE / BREAKOUT / CHAOTIC） |
 | Toxic Flow | 現在の板/約定フローがエントリーに対して不利・不安定であることを示す指標 |
 | Calibration | Jevのconfidence/probabilityと実際の市場結果の対応関係を検証するプロセス（Brier Score等） |
-| kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）が提供する、Windows常駐アプリ経由のローカルREST API。市場データ取得・発注に使用 |
+| kabuステーションAPI | 三菱UFJ eスマート証券（旧auカブコム証券）が提供する、Windows常駐アプリ経由のローカルREST API。市場データ取得・発注に使用（既定のブローカー。立花証券へ手動で切り替えられ、フォールバックとして残す） |
+| 立花証券・e支店API | 立花証券が提供する、インターネット経由（認証ID＋秘密鍵、仮想URL、REQUEST I/F＋EVENT I/F WebSocket）の株式API。kabuの代替ブローカー。ランキング・歩み値は無く、本システムでは市況データの読み取りのみに使う（発注は#55まで行わない） |
 | HALT | HTMX + Atomic Design + Lit + Templ によるサーバー内蔵型フロントエンドアーキテクチャ |
 | Wails | Goバックエンドと Web 技術によるUIを単一のネイティブデスクトップアプリとしてパッケージするフレームワーク |
 | Paper Trading | 実資金を用いず注文・約定を模擬する検証運用 |
@@ -165,3 +166,4 @@ graph TD
 | 1.5 | 2026-10-04 | スコープの画面一覧に System Activity Log・Settings・初回 Setup 画面を追記（`api/endpoints.md` §3 と整合）し、構成図の kabuステーション提供元表記を「三菱UFJ eスマート証券（旧auカブコム証券）」に統一 | issue #387 |
 | 1.6 | 2026-10-07 | スコープのFast Screener母集団を「全銘柄」から「監視銘柄」へ訂正（既定のランキング監視では最大45銘柄、`scan.full_scan_enabled: true`のときだけ全銘柄。FR-SCHED-9） | issue #673（#651/#653の方針転換への追随） |
 | 1.7 | 2026-10-07 | ドキュメントマップに環境構築ドキュメント（`environment/setup.md`・`ci.md`・`setup/history.md`）の行を追加 | issue #678 |
+| 1.8 | 2026-10-08 | 市場データの取得元を「kabuステーションAPI」固定から選択式のブローカー（kabu＝既定・フォールバック／立花証券・e支店API。1プロセス1社、手動切替）へ更新。スコープ・システム全体像・ドキュメントマップ・Phase 0・用語集に立花証券を追加 | issue #721（#720の決定） |

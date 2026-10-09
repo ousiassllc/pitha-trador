@@ -1,20 +1,29 @@
 package system_test
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
+// fakeTokenStatus is a broker session whose status is the kabu adapter's
+// mapping of a token issuance outcome, so the banner texts asserted below are
+// the kabu adapter's own guidance (issues #295, #712).
 type fakeTokenStatus marketdata.TokenStatus
 
-func (f fakeTokenStatus) TokenStatus() marketdata.TokenStatus { return marketdata.TokenStatus(f) }
+func (f fakeTokenStatus) Status() broker.SessionStatus {
+	return kabu.SessionStatusOf(marketdata.TokenStatus(f))
+}
 
 func TestMarketDataHandler_Status(t *testing.T) {
 	tests := []struct {
@@ -85,5 +94,90 @@ func TestMarketDataHandler_Status(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+type fixedStatus broker.SessionStatus
+
+func (f fixedStatus) Status() broker.SessionStatus { return broker.SessionStatus(f) }
+
+// Issue #727: the 立花 adapter's version heads-up is a notice, not an error; an
+// error (or the nightly closed hours) keeps the error banner.
+func TestMarketDataHandler_Status_BrokerNotices(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  broker.SessionStatus
+		want    []string
+		notWant []string
+	}{
+		{
+			name:    "version retiring while the session is fine shows the amber notice",
+			status:  broker.SessionStatus{VersionRetiring: true},
+			want:    []string{`data-testid="marketdata-notice"`, "リリース予定日", `href="/settings"`},
+			notWant: []string{`data-testid="marketdata-banner"`},
+		},
+		{
+			name:    "an error outranks the notice",
+			status:  broker.SessionStatus{Issue: broker.SessionIssueUnreachable, Guidance: "接続できません。", VersionRetiring: true},
+			want:    []string{`data-testid="marketdata-banner"`, `data-issue="unreachable"`},
+			notWant: []string{"marketdata-notice"},
+		},
+		{
+			name:   "nightly closed hours use the ordinary banner with the schedule guidance",
+			status: broker.SessionStatus{Issue: broker.SessionIssueOutOfHours, Guidance: "開局後（05:35）に自動で再ログインします。"},
+			want:   []string{`data-issue="out_of_hours"`, "05:35"},
+		},
+		{name: "nothing to say renders nothing", status: broker.SessionStatus{}, notWant: []string{"marketdata-"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			engine := gin.New()
+			engine.GET("/system/marketdata-status", system.NewMarketDataHandler(fixedStatus(tt.status)).Status)
+			body := serve(engine, http.MethodGet, "/system/marketdata-status").Body.String()
+			for _, w := range tt.want {
+				if !strings.Contains(body, w) {
+					t.Errorf("body missing %q:\n%s", w, body)
+				}
+			}
+			for _, w := range tt.notWant {
+				if strings.Contains(body, w) {
+					t.Errorf("body must not contain %q:\n%s", w, body)
+				}
+			}
+		})
+	}
+}
+
+type fakeWatchNotice string
+
+func (f fakeWatchNotice) WatchNotice(context.Context) string { return string(f) }
+
+// Issue #730: a stand-in 立花 watch list (the daily bars were unusable) shows
+// as the amber notice, next to the version heads-up and below an error.
+func TestMarketDataHandler_Status_WatchListNotice(t *testing.T) {
+	render := func(status broker.SessionStatus, notice string) string {
+		gin.SetMode(gin.TestMode)
+		engine := gin.New()
+		engine.GET("/system/marketdata-status", system.NewMarketDataHandler(fixedStatus(status)).WithWatchNotice(fakeWatchNotice(notice)).Status)
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/marketdata-status", nil))
+		return rec.Body.String()
+	}
+
+	body := render(broker.SessionStatus{}, "監視リストを前営業日から引き継ぎました。")
+	if !strings.Contains(body, `data-testid="marketdata-notice"`) || !strings.Contains(body, "前営業日から引き継ぎました") {
+		t.Errorf("notice missing: %s", body)
+	}
+	body = render(broker.SessionStatus{VersionRetiring: true}, "監視リストを前営業日から引き継ぎました。")
+	if !strings.Contains(body, "リリース予定日") || !strings.Contains(body, "前営業日から引き継ぎました") {
+		t.Errorf("both notices must show: %s", body)
+	}
+	if body = render(broker.SessionStatus{}, ""); strings.Contains(body, "marketdata-notice") {
+		t.Errorf("no notice expected: %s", body)
+	}
+	body = render(broker.SessionStatus{Issue: broker.SessionIssueUnreachable, Guidance: "接続できません。"}, "監視リストを前営業日から引き継ぎました。")
+	if !strings.Contains(body, `data-testid="marketdata-banner"`) || strings.Contains(body, "前営業日から引き継ぎました") {
+		t.Errorf("an error outranks the notice: %s", body)
 	}
 }

@@ -1,17 +1,11 @@
 package marketdata
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
-
-// unhealthyAfterBoardFailures is how many consecutive GetBoard failures
-// countsAsFeedFailure accepts (no token, transport error, 5xx, auth/token
-// 4xx, undecodable body) Healthy treats as FR-RISK-2's 市場データ停止.
-const unhealthyAfterBoardFailures = 5
 
 // codeAPIKeyMismatch is kabuステーションAPI 4001009 (APIキー不一致). With
 // the 4001007/4001008/4001013/4001017 codes in tokenstatus.go it marks an
@@ -44,15 +38,11 @@ func countsAsFeedFailure(err error) bool {
 	return apiErr.StatusCode < http.StatusBadRequest // body-level failure on an HTTP 200
 }
 
-// Healthy implements internal/service/risk.HealthChecker for the
-// market_data_down Kill Switch (FR-RISK-2 trigger, FR-RISK-7 auto-resume
-// check): the market data feed counts as stopped once
-// unhealthyAfterBoardFailures consecutive feed-level GetBoard failures
-// (see countsAsFeedFailure) have occurred, and
-// as recovered by the first success after that.
-func (c *Client) Healthy(context.Context) (bool, error) {
-	return c.boardFailures.ConsecutiveFailures() < unhealthyAfterBoardFailures, nil
-}
+// BoardFailures is the streak of consecutive feed-level GetBoard failures
+// (see countsAsFeedFailure: no token, transport error, 5xx, auth/token 4xx,
+// undecodable body), which broker.MarketDataChecker turns into FR-RISK-2's
+// 市場データ停止 (the market_data_down Kill Switch).
+func (c *Client) BoardFailures() *domain.FailureStreak { return &c.boardFailures }
 
 // BrokerFailures is the streak of consecutive kabuステーションAPI calls
 // (any endpoint) that got an HTTP 5xx response, feeding FR-RISK-2's

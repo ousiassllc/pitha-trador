@@ -3,6 +3,7 @@ package calibration
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,10 @@ import (
 // database) wired in. *internal/service/calibration.Service implements
 // this directly.
 type CalibrationSource interface {
-	Metrics(ctx context.Context) (domain.CalibrationMetrics, error)
+	// Metrics aggregates the labeled outcomes of one judgment horizon in
+	// minutes, or of every current horizon when horizonMinutes is 0 (the
+	// query's "all"). Realized PnL does not depend on the horizon.
+	Metrics(ctx context.Context, horizonMinutes int) (domain.CalibrationMetrics, error)
 }
 
 // StaticCalibrationSource is a fixed CalibrationSource, used as
@@ -30,7 +34,7 @@ type StaticCalibrationSource struct {
 	Metrics_ domain.CalibrationMetrics
 }
 
-func (s StaticCalibrationSource) Metrics(context.Context) (domain.CalibrationMetrics, error) {
+func (s StaticCalibrationSource) Metrics(context.Context, int) (domain.CalibrationMetrics, error) {
 	return s.Metrics_, nil
 }
 
@@ -68,10 +72,22 @@ type calibrationDirectionOutput struct {
 	AvgFutureReturnPct float64 `json:"avg_future_return_pct" doc:"Average direction-adjusted future return (%) over those outcomes."`
 }
 
+// HorizonAll is the `horizon` query value selecting every current
+// judgment horizon (5/10/15 minutes together); legacy horizons (e.g. the
+// pre-#711 20 minutes) are never included.
+const HorizonAll = "all"
+
+// CalibrationAPIInput is the query of `GET /api/v1/calibration`. The enum
+// mirrors internal/service/calibration.DefaultHorizonsMinutes.
+type CalibrationAPIInput struct {
+	Horizon string `query:"horizon" enum:"5,10,15,all" default:"all" doc:"Judgment horizon in minutes to aggregate (5, 10 or 15), or all for the current horizons together (legacy horizons such as 20 are excluded). Realized PnL columns do not depend on it."`
+}
+
 // CalibrationAPIOutput is the Huma response body for
 // `GET /api/v1/calibration` (docs/api/endpoints.md).
 type CalibrationAPIOutput struct {
 	Body struct {
+		Horizon                  string                       `json:"horizon" enum:"5,10,15,all" doc:"The judgment horizon (minutes, or \"all\") every metric below is aggregated over, echoing the request."`
 		Buckets                  []calibrationBucketOutput    `json:"buckets"`
 		ByDirection              []calibrationDirectionOutput `json:"by_direction"`
 		BrierScore               float64                      `json:"brier_score" doc:"Mean squared error between confidence and realized outcome (0=perfect, 0.25=random-guess baseline)."`
@@ -88,13 +104,18 @@ type CalibrationAPIOutput struct {
 // average confidence, average future return and realized PnL, the
 // per-direction average return, plus Brier Score, Log Loss, and Expected
 // Calibration Error (functional.md FR-CAL-2/3).
-func (h *CalibrationHandler) APICalibration(ctx context.Context, _ *struct{}) (*CalibrationAPIOutput, error) {
-	metrics, err := h.source.Metrics(ctx)
+func (h *CalibrationHandler) APICalibration(ctx context.Context, in *CalibrationAPIInput) (*CalibrationAPIOutput, error) {
+	horizonMinutes := 0
+	if in.Horizon != HorizonAll {
+		horizonMinutes, _ = strconv.Atoi(in.Horizon) // the enum tag admits only numeric values besides "all"
+	}
+	metrics, err := h.source.Metrics(ctx, horizonMinutes)
 	if err != nil {
 		return nil, huma.Error500InternalServerError("load calibration metrics failed", err)
 	}
 
 	out := &CalibrationAPIOutput{}
+	out.Body.Horizon = in.Horizon
 	out.Body.Buckets = make([]calibrationBucketOutput, len(metrics.Buckets))
 	for i, b := range metrics.Buckets {
 		out.Body.Buckets[i] = calibrationBucketOutput{

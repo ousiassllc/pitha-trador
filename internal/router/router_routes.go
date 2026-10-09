@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/swagger"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 )
 
@@ -66,6 +67,8 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 
 	engine.GET("/calibration", h.calibration.Page)
 
+	engine.GET("/watchlist", watchlist.NewHandler(o.watchlistSource).Page)
+
 	performanceHandler := performance.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
 	engine.GET("/performance", performanceHandler.Page)
 
@@ -73,6 +76,9 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/ws/activity", h.activity.WebSocket)
 
 	settingsHandler := settings.NewSettingsHandler(settingsStore)
+	if o.brokerSession != nil {
+		settingsHandler.WithBrokerSession(o.brokerSession)
+	}
 	if o.operationalSettings != nil {
 		settingsHandler.WithOperationalSettings(o.operationalSettings)
 		engine.POST("/ops-settings/:key", settingsHandler.SaveOps)
@@ -89,7 +95,14 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/system/update-panel", updateHandler.Panel)
 	engine.POST("/system/update-check", updateHandler.Check)
 
-	engine.GET("/system/marketdata-status", system.NewMarketDataHandler(o.marketDataStatus).Status)
+	marketDataHandler := system.NewMarketDataHandler(o.marketDataStatus)
+	if o.operationalSettings != nil {
+		marketDataHandler.WithBrokerSelection(o.operationalSettings)
+	}
+	if n, ok := o.watchlistSource.(system.WatchNoticeSource); ok {
+		marketDataHandler.WithWatchNotice(n)
+	}
+	engine.GET("/system/marketdata-status", marketDataHandler.Status)
 
 	return h
 }

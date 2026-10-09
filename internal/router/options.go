@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
@@ -35,8 +36,10 @@ type options struct {
 	proposalSource      proposals.PolicyProposalSource
 	backtestRunner      performance.BacktestRunner
 	activitySource      activity.ActivitySource
+	watchlistSource     watchlist.Source
 	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
 	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
+	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	errorLogExporter    system.ErrorLogExporter
@@ -131,6 +134,15 @@ func WithActivitySource(source activity.ActivitySource) Option {
 	return func(o *options) { o.activitySource = source }
 }
 
+// WithWatchlistSource overrides `GET /watchlist`'s backing
+// internal/web/handler/watchlist.Source. cmd/desktop and cmd/server pass
+// internal/bootstrap's internal/bootstrap/tachibanawatch.Viewer when 立花 is
+// selected; the idle watchlist.StaticSource default (kabu selected, router-level
+// tests) renders the "not maintained" notice.
+func WithWatchlistSource(source watchlist.Source) Option {
+	return func(o *options) { o.watchlistSource = source }
+}
+
 // WithBacktestRunner overrides `GET /performance`'s backing
 // internal/web/handler/performance.BacktestRunner. cmd/desktop and cmd/server pass
 // internal/bootstrap/backtestsource's Source; the empty
@@ -159,6 +171,13 @@ func WithOperationalSettings(ops settings.OperationalSettings) Option {
 	return func(o *options) { o.operationalSettings = ops }
 }
 
+// WithBrokerSession lets the Settings screen's 立花証券 e支店 card show the
+// running broker adapter's session state (issue #738); the card shows it
+// only while that adapter is 立花.
+func WithBrokerSession(session settings.BrokerSession) Option {
+	return func(o *options) { o.brokerSession = session }
+}
+
 // WithUpdateController enables the update notification routes (`GET
 // /system/update-status`, `GET /system/update-panel`, `POST
 // /system/update-check`, issue #76) backed by controller. cmd/desktop
@@ -169,11 +188,13 @@ func WithUpdateController(controller system.UpdateController) Option {
 	return func(o *options) { o.updateController = controller }
 }
 
-// WithMarketDataStatus enables `GET /system/marketdata-status` (issue
-// #295), the header banner telling the operator why the kabuステーション
-// API token could not be issued. cmd/desktop and cmd/server pass
-// internal/bootstrap's *marketdata.Client; without it the route renders
-// nothing.
+// WithMarketDataStatus enables `GET /system/marketdata-status` (issues #295,
+// #739), the header banner telling the operator why the broker session
+// (kabu: the kabuステーションAPI token; 立花: the e支店 login) is failing.
+// cmd/desktop and cmd/server pass internal/bootstrap's broker.Broker;
+// without it the route renders nothing. With WithOperationalSettings the
+// banner follows the broker selection (立花: per-cause guidance and the
+// demo / production environment).
 func WithMarketDataStatus(source system.MarketDataStatusSource) Option {
 	return func(o *options) { o.marketDataStatus = source }
 }

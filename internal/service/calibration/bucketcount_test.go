@@ -36,7 +36,7 @@ func TestService_BucketHasSamples_MatchesMetricsBuckets(t *testing.T) {
 	}
 
 	svc := calibration.NewService(f.outcomes, noTrades{})
-	metrics, err := svc.Metrics(ctx)
+	metrics, err := svc.Metrics(ctx, calibration.AllHorizons)
 	if err != nil {
 		t.Fatalf("Metrics: %v", err)
 	}

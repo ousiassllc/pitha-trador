@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
 // getRanking is GET /ranking for rankType (種別 1〜15) and exchange
@@ -13,7 +15,7 @@ import (
 func (c *Client) getRanking(ctx context.Context, rankType int, exchange string, out any) error {
 	token, ok := c.Token()
 	if !ok {
-		return ErrNoToken
+		return broker.ErrNoSession
 	}
 	q := url.Values{"Type": {strconv.Itoa(rankType)}, "ExchangeDivision": {exchange}}
 	return c.doInfo(ctx, http.MethodGet, "/ranking?"+q.Encode(), token, nil, out)

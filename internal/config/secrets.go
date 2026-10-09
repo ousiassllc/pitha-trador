@@ -67,6 +67,18 @@ const (
 	KeySolBaseURL  = "SOL_BASE_URL"
 	KeyOpusAPIKey  = "OPUS_API_KEY"
 	KeyOpusBaseURL = "OPUS_BASE_URL"
+	// KeyTachibanaDemoAuthID / KeyTachibanaProdAuthID are the 認証ID of the
+	// 立花証券 e支店API (issued per environment on its 利用設定 screen), and
+	// KeyTachibanaDemoSecondPassword the デモ環境's 第二暗証番号 (used only by
+	// the optional demo order smoke, issue #725). They are optional keys in
+	// the static sense - the Setup Guard requires the selected broker's and
+	// environment's ID (RequiredSetup, issue #734). There is deliberately no
+	// 本番 第二暗証番号 key: it arrives with the Production/Paper split of
+	// issue #55, and Secrets.TachibanaCredentials never returns one for
+	// TachibanaEnvProduction.
+	KeyTachibanaDemoAuthID         = "TACHIBANA_DEMO_AUTH_ID"
+	KeyTachibanaProdAuthID         = "TACHIBANA_PROD_AUTH_ID"
+	KeyTachibanaDemoSecondPassword = "TACHIBANA_DEMO_SECOND_PASSWORD"
 )
 
 // Switch values of KeyNewsFeedEnabled.
@@ -84,11 +96,13 @@ var requiredSecretKeys = []string{KeyJevAPIKey, KeyKabuAPIPassword}
 // optionalSecretKeys are loaded like requiredSecretKeys but never reported
 // as missing.
 var optionalSecretKeys = []string{KeyJevBaseURL, KeyJevModel, KeySlackWebhookURL, KeyLunaAPIKey, KeyLunaBaseURL, KeyNewsFeedURL, KeyNewsFeedAPIKey, KeyNewsFeedEnabled,
-	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL}
+	KeySolAPIKey, KeySolBaseURL, KeyOpusAPIKey, KeyOpusBaseURL,
+	KeyTachibanaDemoAuthID, KeyTachibanaProdAuthID, KeyTachibanaDemoSecondPassword}
 
 // RequiredSecretKeys returns the keys whose absence keeps the app
-// unusable (JEV_API_KEY/KABU_API_PASSWORD): the Setup Guard redirects to
-// `/setup` until every one is stored (issues #80, #271).
+// unusable with the default kabu broker (JEV_API_KEY/KABU_API_PASSWORD): the
+// Setup Guard redirects to `/setup` until every one is stored (issues #80,
+// #271). RequiredSetup derives the broker-dependent set (issue #734).
 func RequiredSecretKeys() []string {
 	return append([]string{}, requiredSecretKeys...)
 }
@@ -141,6 +155,31 @@ type Secrets struct {
 	SolBaseURL  string
 	OpusAPIKey  string
 	OpusBaseURL string
+	// TachibanaDemoAuthID / TachibanaProdAuthID are the 立花 認証ID per
+	// environment. The デモ 第二暗証番号 is unexported so it can only leave
+	// Secrets through TachibanaCredentials, which withholds it in 本番.
+	TachibanaDemoAuthID         string
+	TachibanaProdAuthID         string
+	tachibanaDemoSecondPassword string
+}
+
+// TachibanaCredentials are the secrets the 立花 adapter uses in one
+// environment. SecondPassword is empty in 本番: the app never holds a
+// production 第二暗証番号 before issue #55, so no request it builds can carry
+// one.
+type TachibanaCredentials struct {
+	AuthID         string
+	SecondPassword string
+}
+
+// TachibanaCredentials returns the credentials of environment env
+// (TachibanaEnvDemo or TachibanaEnvProduction; anything else is treated as
+// production, the stricter one).
+func (s Secrets) TachibanaCredentials(env string) TachibanaCredentials {
+	if env == TachibanaEnvDemo {
+		return TachibanaCredentials{AuthID: s.TachibanaDemoAuthID, SecondPassword: s.tachibanaDemoSecondPassword}
+	}
+	return TachibanaCredentials{AuthID: s.TachibanaProdAuthID}
 }
 
 // NewsFeedOff reports whether the operator switched the news feed off
@@ -210,5 +249,9 @@ func LoadSecretsFromDB(ctx context.Context, repo SecretsRepository) (Secrets, []
 		SolBaseURL:      values[KeySolBaseURL],
 		OpusAPIKey:      values[KeyOpusAPIKey],
 		OpusBaseURL:     values[KeyOpusBaseURL],
+
+		TachibanaDemoAuthID:         values[KeyTachibanaDemoAuthID],
+		TachibanaProdAuthID:         values[KeyTachibanaProdAuthID],
+		tachibanaDemoSecondPassword: values[KeyTachibanaDemoSecondPassword],
 	}, missing, nil
 }

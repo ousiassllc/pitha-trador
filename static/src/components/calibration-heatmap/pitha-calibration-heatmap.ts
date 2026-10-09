@@ -25,9 +25,13 @@ import {
   type CalibrationAPIResponse,
   type CalibrationBucket,
   type CalibrationDirection,
+  calibrationUrlFor,
+  DEFAULT_HORIZON,
   formatYen,
+  type HorizonOption,
   hasLabeledSamples,
 } from './calibration-view';
+import { renderHorizonSelector } from './horizon-selector';
 
 const ACCURACY_LINE_COLOR = '#2563eb';
 const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';
@@ -39,6 +43,10 @@ export class PithaCalibrationHeatmap extends LitElement {
 
   @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 
+  // The horizon selected on screen; `shownHorizon` is the one the rendered
+  // figures were actually aggregated over (the response's echo).
+  @state() private horizon: HorizonOption = DEFAULT_HORIZON;
+  @state() private shownHorizon: HorizonOption | null = null;
   @state() private buckets: CalibrationBucket[] = [];
   @state() private byDirection: CalibrationDirection[] = [];
   @state() private hasSamples = false;
@@ -51,6 +59,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   @state() private error: string | null = null;
   @state() private loading = false;
 
+  private loadSeq = 0;
   private readonly containerRef = createRef<HTMLDivElement>();
   private chart: IChartApi | null = null;
   private accuracySeries: ISeriesApi<'Line'> | null = null;
@@ -110,9 +119,15 @@ export class PithaCalibrationHeatmap extends LitElement {
       logger.error('pitha-calibration-heatmap: calibration-url is not set');
       return;
     }
+    const seq = ++this.loadSeq;
     this.loading = true;
     try {
-      const response = await get<CalibrationAPIResponse>(this.calibrationUrl);
+      const response = await get<CalibrationAPIResponse>(
+        calibrationUrlFor(this.calibrationUrl, this.horizon),
+      );
+      // A newer request (horizon switched meanwhile) supersedes this one.
+      if (seq !== this.loadSeq) return;
+      this.shownHorizon = response.horizon;
       this.buckets = response.buckets;
       this.byDirection = response.by_direction;
       this.hasSamples = hasLabeledSamples(response);
@@ -125,10 +140,11 @@ export class PithaCalibrationHeatmap extends LitElement {
       this.applyBuckets(response.buckets);
       this.error = null;
     } catch (err) {
+      if (seq !== this.loadSeq) return;
       this.error = err instanceof Error ? err.message : String(err);
       logger.error('pitha-calibration-heatmap: failed to load calibration metrics', { error: err });
     } finally {
-      this.loading = false;
+      if (seq === this.loadSeq) this.loading = false;
     }
   }
 
@@ -156,12 +172,19 @@ export class PithaCalibrationHeatmap extends LitElement {
     void this.load();
   }
 
+  private onHorizonChange(horizon: HorizonOption): void {
+    if (horizon === this.horizon) return;
+    this.horizon = horizon;
+    void this.load();
+  }
+
   protected override render() {
     return html`
       <div class="pitha-calibration-heatmap">
         <button type="button" @click=${this.onRefresh} ?disabled=${this.loading}>
           ${this.loading ? '更新中…' : '更新'}
         </button>
+        ${renderHorizonSelector(this.horizon, this.shownHorizon, (option) => this.onHorizonChange(option))}
         ${
           this.error
             ? html`<p class="pitha-calibration-heatmap-error" role="alert">${this.error}</p>`

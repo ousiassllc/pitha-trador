@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 )
 
@@ -90,7 +91,7 @@ func TestClient_MeasureRanking_ReturnsAPIError(t *testing.T) {
 
 func TestClient_MeasureRanking_NoToken(t *testing.T) {
 	client := marketdata.NewClient(marketdata.Config{BaseURL: "http://127.0.0.1:1", APIPassword: "secret"})
-	if _, err := client.MeasureRanking(context.Background(), 1, "T"); !errors.Is(err, marketdata.ErrNoToken) {
+	if _, err := client.MeasureRanking(context.Background(), 1, "T"); !errors.Is(err, broker.ErrNoSession) {
 		t.Fatalf("err = %v, want ErrNoToken", err)
 	}
 }
@@ -146,7 +147,7 @@ func TestClient_RankingSymbols_FailuresAreReturned(t *testing.T) {
 		t.Fatal("decode error was swallowed")
 	}
 	noToken := marketdata.NewClient(marketdata.Config{BaseURL: "http://127.0.0.1:1", APIPassword: "secret"})
-	if _, err := noToken.RankingSymbols(context.Background(), 1, "T"); !errors.Is(err, marketdata.ErrNoToken) {
+	if _, err := noToken.RankingSymbols(context.Background(), 1, "T"); !errors.Is(err, broker.ErrNoSession) {
 		t.Fatalf("err = %v, want ErrNoToken", err)
 	}
 }

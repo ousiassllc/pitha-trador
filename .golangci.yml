@@ -95,6 +95,43 @@ linters:
           deny:
             - pkg: github.com/ousiassllc/pitha-trador/internal/web/middleware
               desc: only web/layout and web/handler may use web/middleware; take values as props (components/overview.md §3)
+        # docs/architecture/overview/integrations.md §5: the broker-neutral
+        # packages talk to internal/service/broker only; the kabu adapter
+        # (internal/service/marketdata and everything beneath it, kabu/ and
+        # kabu/pushfeed included) is wired in
+        # bootstrap alone (issue #722). Tests of these packages follow the
+        # same rule: they use neutral fakes.
+        broker-neutral-no-adapter:
+          files:
+            - "**/internal/service/featureengine/**"
+            - "**/internal/service/execution/**"
+            - "**/internal/service/risk/**"
+            - "**/internal/service/policy/**"
+            - "**/internal/service/screener/**"
+            - "**/internal/service/symbolcache/**"
+            - "**/internal/service/broker/**"
+            - "**/internal/bootstrap/rankingwatch/**"
+            - "**/internal/bootstrap/marketdatajob/**"
+            - "**/internal/bootstrap/heldposition/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/service/marketdata
+              desc: broker-neutral packages must not import the kabu adapter; use internal/service/broker (architecture/overview/integrations.md §5)
+        # The 立花 adapter (internal/service/broker/tachibana and everything
+        # beneath it, issue #724) is wired in bootstrap alone as well.
+        broker-neutral-no-tachibana:
+          files:
+            - "**/internal/service/featureengine/**"
+            - "**/internal/service/execution/**"
+            - "**/internal/service/risk/**"
+            - "**/internal/service/policy/**"
+            - "**/internal/service/screener/**"
+            - "**/internal/service/symbolcache/**"
+            - "**/internal/bootstrap/rankingwatch/**"
+            - "**/internal/bootstrap/marketdatajob/**"
+            - "**/internal/bootstrap/heldposition/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana
+              desc: broker-neutral packages must not import the tachibana adapter; use internal/service/broker (architecture/overview/integrations.md §5)
     gosec:
       excludes:
         # G304 (file path from a variable): every os.Open/ReadFile/Create

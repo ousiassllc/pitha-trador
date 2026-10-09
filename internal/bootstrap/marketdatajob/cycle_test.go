@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
 // universeSize is non-functional.md §2.3's upper bound on the symbol master.
@@ -74,7 +74,7 @@ func runFullScanCycle(t testing.TB, env testEnv, now time.Time) int {
 // asserted here because they depend on the host's disk.)
 func TestFullScanCycle_OneMarketDataJobPerInstrument(t *testing.T) {
 	env := newTestEnv(t)
-	env.Fake.board = marketdata.Board{CurrentPrice: 2500, VWAP: 2490, TradingVolume: 1000000, TradingValue: 2.49e9}
+	env.Fake.quote = broker.Quote{Price: 2500, VWAP: 2490, Volume: 1000000, Turnover: 2.49e9}
 	seedUniverse(t, env, 50)
 
 	if n := runFullScanCycle(t, env, time.Now().UTC()); n != 50 {
@@ -95,7 +95,7 @@ func BenchmarkFullScanCycle(b *testing.B) {
 	for _, size := range []int{500, 1000, universeSize} {
 		b.Run(fmt.Sprintf("Universe%d", size), func(b *testing.B) {
 			env := newTestEnv(b)
-			env.Fake.board = marketdata.Board{CurrentPrice: 2500, VWAP: 2490, TradingVolume: 1000000, TradingValue: 2.49e9}
+			env.Fake.quote = broker.Quote{Price: 2500, VWAP: 2490, Volume: 1000000, Turnover: 2.49e9}
 			seedUniverse(b, env, size)
 			b.ResetTimer()
 			for range b.N {

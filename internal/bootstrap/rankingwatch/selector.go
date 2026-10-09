@@ -14,9 +14,9 @@
 // symbol stays at least MinHold. An empty or failed ranking yields no ranked
 // symbol at all - only the held ones - and the next cycle recovers by itself.
 //
-// The ranking's prices and board data are never decoded (marketdata.Client.
-// RankingSymbols keeps symbol codes only), stored or logged (kabu利用規約,
-// kabusapi#1343).
+// The ranking's prices and board data are never decoded (kabu adapter:
+// marketdata.Client.RankingSymbols keeps symbol codes only), stored or logged
+// (kabu利用規約, kabusapi#1343).
 package rankingwatch
 
 import (
@@ -26,10 +26,12 @@ import (
 )
 
 const (
-	// MaxWatched is the most symbols registered for PUSH. kabu station caps
-	// the API登録銘柄リスト at 50, shared with REST /board and /symbol
-	// registrations; 5 stay free for those.
-	MaxWatched = 45
+	// DefaultMaxWatched is the watch list cap used when Selector.Max is unset:
+	// the kabu adapter's broker.Capabilities.MaxStreamSymbols (kabu station
+	// caps the API登録銘柄リスト at 50, shared with REST /board and /symbol
+	// registrations; 5 stay free for those). Bootstrap sets Watcher.MaxWatched
+	// from the selected adapter's capabilities.
+	DefaultMaxWatched = 45
 	// MaxReplacePerCycle is how many ranked symbols one cycle may replace
 	// (drop for a newly ranked one). Free slots are filled without this cap.
 	MaxReplacePerCycle = 5
@@ -41,8 +43,17 @@ const (
 // Selector decides the watch list from the held symbols and the ranking. It
 // is not safe for concurrent use; Watcher calls it from one goroutine.
 type Selector struct {
+	// Max is the most symbols on the watch list; zero means DefaultMaxWatched.
+	Max int
 	// ranked maps each ranking-selected (non-held) symbol to when it was put in.
 	ranked map[string]time.Time
+}
+
+func (s *Selector) limit() int {
+	if s.Max > 0 {
+		return s.Max
+	}
+	return DefaultMaxWatched
 }
 
 // Update returns the watch list for this cycle (held symbols first, then the
@@ -51,7 +62,7 @@ type Selector struct {
 // ranking is empty or failed, which drops every ranked symbol at once (only
 // held ones remain) rather than keeping stale ones.
 func (s *Selector) Update(now time.Time, held, ranked []string) (watch []string, added, removed int) {
-	heldSet := heldSlots(held)
+	heldSet := s.heldSlots(held)
 	isHeld := make(map[string]bool, len(heldSet))
 	for _, sym := range heldSet {
 		isHeld[sym] = true
@@ -70,7 +81,7 @@ func (s *Selector) Update(now time.Time, held, ranked []string) (watch []string,
 		}
 	}
 
-	slots := MaxWatched - len(heldSet)
+	slots := s.limit() - len(heldSet)
 	target := make([]string, 0, slots)
 	inTarget := make(map[string]bool, slots)
 	for _, sym := range unique(ranked) {
@@ -147,7 +158,7 @@ func (s *Selector) Update(now time.Time, held, ranked []string) (watch []string,
 // held move to a fixed slot; if held symbols took slots away, the oldest
 // ranked ones are dropped.
 func (s *Selector) Retain(held []string) (watch, screen []string) {
-	watch = heldSlots(held)
+	watch = s.heldSlots(held)
 	for _, sym := range watch {
 		delete(s.ranked, sym)
 	}
@@ -161,7 +172,7 @@ func (s *Selector) Retain(held []string) (watch, screen []string) {
 		}
 		return strings.Compare(a, b)
 	})
-	if slots := MaxWatched - len(watch); len(rankedSyms) > slots {
+	if slots := s.limit() - len(watch); len(rankedSyms) > slots {
 		for _, sym := range rankedSyms[slots:] {
 			delete(s.ranked, sym)
 		}
@@ -172,11 +183,11 @@ func (s *Selector) Retain(held []string) (watch, screen []string) {
 }
 
 // heldSlots returns the held symbols that occupy fixed slots: de-duplicated and
-// at most MaxWatched.
-func heldSlots(held []string) []string {
+// at most the watch list cap.
+func (s *Selector) heldSlots(held []string) []string {
 	heldSet := unique(held)
-	if len(heldSet) > MaxWatched {
-		heldSet = heldSet[:MaxWatched]
+	if limit := s.limit(); len(heldSet) > limit {
+		heldSet = heldSet[:limit]
 	}
 	return heldSet
 }

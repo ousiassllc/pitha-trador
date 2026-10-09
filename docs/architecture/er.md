@@ -40,7 +40,7 @@ erDiagram
 
 | ファイル | テーブル / セクション |
 |----------|----------------------|
-| `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `trade_signals` |
+| `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `trade_signals` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs`、ベクトルインデックス（sqlite-vec） |
 
@@ -87,3 +87,8 @@ erDiagram
 | 1.36 | 2026-10-07 | `er/tables-market.md`の`market_snapshots.market_breadth`に、`scan.full_scan_enabled: true`では足が約8分間隔で各銘柄の`return_5m`が欠損のため常にNULLになる旨を追記。スキーマ変更なし | issue #693・#694・#696 |
 | 1.37 | 2026-10-08 | `er/tables-trading.md`の`calibration_outcomes.horizon_minutes`を5/10/15等へ更新（既定の判定水平線を5/10/20から変更、既存の20分行は残る）、`calibration_label_skips`に猶予内はpending再試行・マーカー記録時はジョブをskipとして`succeeded`終了する旨を追記。スキーマ変更なし | issue #710, #711 |
 | 1.38 | 2026-10-08 | `er/tables-system.md`の`runtime_settings`から環境変数の上書き層を削除（`config/strategy.yaml` < `runtime_settings`）し、Settings画面が保存する`system.backup_dir`/`system.log_dir`キーを追記。スキーマ変更なし | issue #708 |
+| 1.39 | 2026-10-08 | `er/tables-market.md`の`market_snapshots.raw_data_json`の説明を「kabuステーションAPI生レスポンス」から「ブローカーの生レスポンス」へ一般化。スキーマ・保存内容は変更なし | issue #722 |
+| 1.40 | 2026-10-08 | `er/tables-system.md`の`secrets`許可キーを17件（立花の`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`/`TACHIBANA_DEMO_SECOND_PASSWORD`を追加。本番の第二暗証番号は持たない）、`runtime_settings`に`broker.provider`と立花の接続設定8件（秘密鍵はパスのみ保存）を追記 | issue #733 |
+| 1.41 | 2026-10-08 | `er/tables-market.md`に立花の夜間の日足取得（issue #729）の`daily_bars`（銘柄×立会日の日足。無調整値と分割換算値）と`daily_bar_runs`（1夜1行の実行記録）を追加（マイグレーション`000030`）。どちらも他のテーブルとFKを持たないためER図の関連は変えない | issue #729 |
+| 1.42 | 2026-10-08 | `er/tables-market.md`に立花の監視リスト（issue #730）の`watch_lists`（1立会日1行。確定方法・基準日・理由）と`watch_list_entries`（銘柄・枠の由来・選ばれた指標。最大120件）を追加（マイグレーション`000031`）。他のテーブルとFKを持たないためER図の関連は変えない | issue #730 |
+| 1.43 | 2026-10-08 | `er/tables-system.md`の立花の監視銘柄ソース設定の説明に日中の接続側のキー（`event.max_connects_per_day`・`rest_quote.*`）が起動時に1回読まれることを追記し、`er/tables-market.md`の`watch_lists`の説明を日中監視（issue #731。`tachibanawatch.Monitor`が03:30〜15:30に読む）へ更新。スキーマ変更なし | issue #731 |

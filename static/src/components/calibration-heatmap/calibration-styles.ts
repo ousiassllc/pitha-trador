@@ -21,6 +21,24 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap button {
     align-self: flex-start;
   }
+  .pitha-calibration-heatmap-horizons {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .pitha-calibration-heatmap-horizons button[aria-pressed='true'] {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #ffffff;
+  }
+  .pitha-calibration-heatmap-horizon {
+    margin: 0;
+    font-size: 0.875rem;
+  }
+  .pitha-calibration-heatmap-horizon .note {
+    margin-left: 0.75rem;
+    color: #475569;
+    font-size: 0.75rem;
+  }
   .pitha-calibration-heatmap-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));

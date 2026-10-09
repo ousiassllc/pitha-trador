@@ -148,7 +148,7 @@ func TestCalibrationRepository_ListLabeledSamples(t *testing.T) {
 		t.Fatalf("seed none outcome: %v", err)
 	}
 
-	samples, err := outcomes.ListLabeledSamples(ctx)
+	samples, err := outcomes.ListLabeledSamples(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListLabeledSamples: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestCalibrationRepository_ListLabeledSamplesSince(t *testing.T) {
 		t.Fatalf("seed recent outcome: %v", err)
 	}
 
-	samples, err := outcomes.ListLabeledSamplesSince(ctx, cutoff)
+	samples, err := outcomes.ListLabeledSamplesSince(ctx, cutoff, nil)
 	if err != nil {
 		t.Fatalf("ListLabeledSamplesSince: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestCalibrationRepository_MarkUnlabelableExcludesPairFromPendingLabels(t *t
 	if len(pending) != 1 || pending[0].HorizonMinutes != 5 || pending[0].JevDecisionID != decision.ID {
 		t.Fatalf("PendingLabels = %+v, want only the 5m pair (15m is unlabelable)", pending)
 	}
-	samples, err := outcomes.ListLabeledSamples(ctx)
+	samples, err := outcomes.ListLabeledSamples(ctx, nil)
 	if err != nil {
 		t.Fatalf("ListLabeledSamples: %v", err)
 	}

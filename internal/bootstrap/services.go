@@ -19,7 +19,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/tachibanawatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
@@ -28,15 +30,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
-	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
-	"github.com/ousiassllc/pitha-trador/internal/service/pushfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
@@ -63,9 +64,14 @@ type Services struct {
 	Settings    *system.RuntimeSettingsRepository
 	Proposals   *judgement.ProposalRepository
 
+	// DailyBars/DailyBarRuns store the 立花 nightly 日足 batch (issue #729).
+	DailyBars    *market.DailyBarRepository
+	DailyBarRuns *market.DailyBarRunRepository
+	// WatchLists stores the 立花 監視リスト decided each night (issue #730).
+	WatchLists *market.WatchListRepository
+
 	RAG           *rag.Service
-	MarketData    *marketdata.Client
-	PushFeed      *pushfeed.Feed // startup registration + PUSH subscription (flows.md §10.1)
+	Broker        broker.Broker // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
 	FeatureEngine *featureengine.Engine
 	Screener      *screener.LiveSource
 	Jev           *jev.Client
@@ -88,12 +94,18 @@ type Services struct {
 	strategy *config.StrategyConfig
 	wg       sync.WaitGroup
 
+	// tachibana are the 立花 監視銘柄ソース settings read at start-up (the
+	// defaults unless 立花 is selected); the nightly daily-bar batch reads them.
+	tachibana tachibanasource.TachibanaSourceSettings
+
 	newsEnabled bool
 	candidates  *candidates.Refresher
 	// watchlist/rankingWatcher are set unless scan.full_scan_enabled is true
-	// (rankingwatch_start.go).
-	watchlist      *rankingwatch.Watchlist
-	rankingWatcher *rankingwatch.Watcher
+	// (rankingwatch_start.go); tachibanaMonitor is the 立花 counterpart, set
+	// whenever the 立花 adapter is selected (watchlist_start.go).
+	watchlist        *rankingwatch.Watchlist
+	rankingWatcher   *rankingwatch.Watcher
+	tachibanaMonitor *tachibanawatch.Monitor
 }
 
 // buildSettings collects BuildServices' optional inputs; see BuildOption.
@@ -103,7 +115,9 @@ type buildSettings struct {
 	jevMaxAttempts int
 	executionNow   func() time.Time
 	yanoshinURL    string
+	kabuURL        string
 	newsNow        func() time.Time
+	brokerSettings config.BrokerSettings
 }
 
 // BuildOption customises BuildServices' optional inputs.
@@ -126,6 +140,12 @@ func WithNotifiers(notifiers ...risk.Notifier) BuildOption {
 // avoid the production retry backoff. n <= 0 keeps the production policy.
 func WithJevMaxAttempts(n int) BuildOption {
 	return func(s *buildSettings) { s.jevMaxAttempts = n }
+}
+
+// WithKabuBaseURL points the kabuステーションAPI adapter at baseURL instead of
+// marketdata.DefaultBaseURL (an httptest server in tests).
+func WithKabuBaseURL(baseURL string) BuildOption {
+	return func(s *buildSettings) { s.kabuURL = baseURL }
 }
 
 // WithYanoshinBaseURL points the default news feed (やのしん TDnet WebAPI) at

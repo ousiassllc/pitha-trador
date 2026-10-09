@@ -23,15 +23,36 @@ import "fmt"
 templ MarketDataBanner(props MarketDataBannerProps) {
 	if props.Guidance != "" && props.Persistent {
 		@MarketDataPersistentBanner(props)
+	} else if props.Guidance == "" && props.Notice != "" {
+		<div class="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-testid="marketdata-notice">
+			<p>
+				{ props.Notice }
+				<a class="font-semibold underline" href="/settings">設定画面</a>
+			</p>
+		</div>
 	} else if props.Guidance != "" {
 		<div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" data-testid="marketdata-banner" data-issue={ props.Issue }>
 			<p>
 				<span class="font-semibold">市況データを取得できません。</span>
+				if props.Environment != "" {
+					@marketDataEnvironmentBadge(props.Environment)
+				}
 				{ props.Guidance }
 				自動的に再試行します。
 				<a class="font-semibold underline" href="/settings">設定画面</a>
 			</p>
 		</div>
+	}
+}
+
+// marketDataEnvironmentBadge names the 立花 environment the banner is about.
+// 本番 is drawn in the solid danger tone so it is never mistaken for the
+// デモ environment's banner.
+templ marketDataEnvironmentBadge(environment string) {
+	if environment == "production" {
+		<span class="mx-1 inline-block rounded bg-red-700 px-2 py-0.5 text-xs font-semibold text-white" data-testid="marketdata-banner-environment" data-environment="production">立花証券 本番環境</span>
+	} else {
+		<span class="mx-1 inline-block rounded border border-sky-300 bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800" data-testid="marketdata-banner-environment" data-environment="demo">立花証券 デモ環境</span>
 	}
 }
 

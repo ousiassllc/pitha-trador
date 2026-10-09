@@ -9,6 +9,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -23,6 +24,9 @@ type OperationalSettings interface {
 	Get(ctx context.Context, key string) (opsettings.Value, error)
 	Save(ctx context.Context, key, raw string) error
 	Reset(ctx context.Context, key string) error
+	// Broker is the effective broker selection and 立花 settings (issue
+	// #734: the Setup screen and Setup Guard follow it).
+	Broker(ctx context.Context) (config.BrokerSettings, error)
 }
 
 // WithOperationalSettings enables the 運用設定 section of `GET /settings`
@@ -67,6 +71,10 @@ func (h *SettingsHandler) opsRow(ctx context.Context, field opsField, notice str
 	}
 	row.Value, row.Overridden, row.Warning = value.Current, value.Overridden, value.Warning
 	row.DefaultLabel = defaultLabel(value.Default)
+	if config.IsPrivateKeyPathKey(field.key) {
+		// Like a secret: only 設定済み is shown back, never the stored path.
+		row.Value, row.DefaultLabel = "", "未設定"
+	}
 	return row
 }
 
@@ -153,10 +161,13 @@ func (h *SettingsHandler) opsKey(c *gin.Context) (string, bool) {
 // redirected back to /settings.
 func (h *SettingsHandler) renderOpsRow(c *gin.Context, key, notice string) {
 	if c.GetHeader("HX-Request") != "true" {
-		c.Redirect(http.StatusSeeOther, "/settings")
+		c.Redirect(http.StatusSeeOther, settingsReturnPath(c))
 		return
 	}
 	ctx := c.Request.Context()
+	if refreshesSetup(c, key) {
+		c.Header("HX-Refresh", "true")
+	}
 	group, _ := opsGroupByKey(key)
 	props := h.opsGroupProps(ctx, group, key, notice)
 	var row molecules.SettingFieldRowProps
@@ -165,5 +176,9 @@ func (h *SettingsHandler) renderOpsRow(c *gin.Context, key, notice string) {
 			row = field
 		}
 	}
-	shared.RenderHTML(c, http.StatusOK, templ.Join(molecules.SettingFieldRow(row), molecules.SettingGroupStatus(props, true)))
+	comps := []templ.Component{molecules.SettingFieldRow(row), molecules.SettingGroupStatus(props, true)}
+	if settingsReturnPath(c) == "/setup" {
+		comps = append(comps, molecules.SetupStatus(h.setupComplete(ctx), true))
+	}
+	shared.RenderHTML(c, http.StatusOK, templ.Join(comps...))
 }

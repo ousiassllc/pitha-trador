@@ -27,6 +27,31 @@ sequenceDiagram
     App->>App: WebView起動・Scanner Dashboard表示
 ```
 
+**立花証券選択時（issue #721。`broker.provider`が立花のとき。ログイン・再認証は#727で実装、マスタ・EVENTは#735・#737）**: 上の図の`KABU`は立花証券（e支店API）に置き換わり、起動時のトークン発行の代わりに次を行う。①認証ID＋秘密鍵でログインし、5種の仮想URL（REQUEST/MASTER/PRICE/EVENT/EVENT-WebSocket）を得る（03:30〜05:30はログインしない。失敗しても起動は継続し、再試行する）。②朝1回マスタを取得する（05:30〜08:00）。③EVENT（WebSocket）で監視銘柄（夜間の日足スクリーニングで選んだ最大120銘柄。#726）を購読する。ランキング監視ループ（`rankingwatch`）は起動しない（ランキングが無い）。④毎朝05:35（既定）に再認証し、WebSocket切断は再ログインせず同じ仮想URLで再接続する（`p_errno=2`等のセッション失効のときだけ再認証。`overview/integrations.md` §5.3）。
+
+**立花証券の毎朝の再認証（issue #727。`tachibana/session`）**:
+
+```mermaid
+sequenceDiagram
+    participant S as session.Session
+    participant C as tachibana.Client
+    participant E as e支店API
+    S->>C: Login（認証ID・秘密鍵。起動時）
+    C->>E: POST {base}/auth/ CLMAuthLoginRequest（p_no=1）
+    E-->>C: 暗号化された仮想URL5種
+    C-->>S: RSA-OAEPで復号しメモリに保持（当日03:30まで有効）
+    Note over S,E: 日中は同じ仮想URLを使い回す。再認証しない
+    Note over S: 03:30 閉局: Issue=out_of_hours、仮想URLの使用を止める
+    Note over S: 05:35（既定）に再認証。ログイン停止帯の-62は開局まで待つ
+    S->>C: Login
+    C->>E: POST {base}/auth/（p_noを1から）
+    alt 失敗
+        S->>S: 5秒から倍々で上限5分のバックオフで再試行（8:30超でlogin_overdue通知）
+    end
+    Note over S,E: 日中のp_errno=2（セッション失効）だけ追加の再認証（最小間隔30秒・1時間に3回まで）
+    S->>E: 終了時 CLMAuthLogoutRequest
+```
+
 #### 停止フロー
 
 `bootstrap.Services.Start`が起動したgoroutineは`Start`へ渡したcontextに紐づくため、停止はcontextの取り消し→`Services.Stop()`（Schedulerのcronとワーカーを止め、候補更新・保有監視・ランキング監視/計測・PushFeed・News Ingestのgoroutineと実行中ジョブの終了を待つ）の順で行い、DBを閉じるのはその後（`defer`）に限る。
@@ -184,6 +209,6 @@ sequenceDiagram
 |------|------|
 | Jev API失敗 | 1回目リトライ→2回目以降exponential backoff→継続失敗でnew entry停止。既存ポジションはコードベースExit Ruleで継続管理 |
 | Market Data欠損 | 現状: 銘柄単位のstale判定（`StatusTracker`）による新規取引禁止は未実装（記録のみ）。ただし立会中に最新の足が3分（`domain.MaxSnapshotAge`。`scan.full_scan_enabled: true`では`scan.full_scan_max_snapshot_age_seconds`）超古い銘柄はJev Scout/Trader/Paper Entryへ進まない（issue #685）。全体の`market_data_down` Kill Switch（`GetBoard`5回連続失敗）で新規取引を停止する。銘柄単位の禁止はPhase 7移行前に実装する（`overview/integrations.md` §5） |
-| kabuステーションAPI異常 | Kill Switch発動条件に該当。新規取引停止、必要に応じ強制決済 |
+| ブローカーAPI異常（kabuステーションAPI／立花証券） | Kill Switch発動条件に該当。新規取引停止、必要に応じ強制決済。立花選択時は毎朝の再認証失敗・多重ログイン・書面未読も接続バナーとSlackで通知する（`requirements/non-functional.md` §3、§5.2） |
 | DB書き込み失敗継続 | Kill Switch発動条件に該当 |
 | Wailsプロセスクラッシュ | `--supervise`起動の監視プロセス（`internal/supervisor`）が自動再起動する（`architecture/overview/integrations.md` §9）。プロセス停止中は新規エントリーも行われない（既存ポジションはkabuステーション側の待機注文/手動介入を前提）。再起動後、`jobs`テーブルの中断ジョブを`pending`へ復帰させ処理を再開する |

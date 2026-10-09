@@ -17,8 +17,8 @@
 | UC-11 | Kill Switch操作 | 個人トレーダー | UIまたはサーバーから新規取引停止・強制決済を行う |
 | UC-12 | バックテスト実行 | 個人トレーダー | Paper Trading開始前に過去データで戦略を検証する |
 | UC-13 | システムアクティビティ確認 | 個人トレーダー | Log画面でジョブキュー実行状況・直近のJev呼び出し・Kill Switch関連イベントをリアルタイムに確認する |
-| UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/kabuステーション/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する |
-| UC-15 | 初回セットアップ | 個人トレーダー | 必須認証情報（Jev/kabuステーション）が未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
+| UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/ブローカー（kabuステーション・立花証券。`broker.provider`で1つを選択）/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する。立花証券 e支店のカードには接続環境（デモ/本番）を常にバッジで表示する |
+| UC-15 | 初回セットアップ | 個人トレーダー | 選択したブローカーの必須認証情報（既定のkabuなら`KABU_API_PASSWORD`）とJevが未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
 | UC-16 | エラーログ取得 | 個人トレーダー（運用者） | Settings画面から期間・レベルを指定してエラーログをダウンロードし、調査・共有に使う |
 
 ```mermaid
@@ -88,6 +88,7 @@ sequenceDiagram
 ## 3. 対象市場とスコープ
 
 - 対象: 東証上場銘柄、現物またはPaper Trading
+- 市場データ・ブローカー: 1プロセスで1つを選ぶ（kabuステーションAPI＝既定・フォールバック、立花証券・e支店API。FR-BROKER-1・2）。対象銘柄は両ブローカーとも東証上場銘柄で、立花証券はランキング・歩み値が無い。本システムは市況データの読み取りのみで、発注は#55まで行わない（`architecture/overview/integrations.md` §5）
 - 基本時間軸: 1分足
 - MVP戦略: 短期モメンタム / 出来高急増 / ブレイクアウト / VWAP乖離からの継続・反転
 - 想定保有時間: 最短数分、基本5〜15分（短い保有で小さなエッジを積み上げることを「勝ち」とする。FR-CAL-5）、原則として日跨ぎしない
@@ -99,7 +100,7 @@ sequenceDiagram
 | 節 | ファイル |
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
-| §4.10〜§4.19（Scheduler/Worker〜エラーログのダウンロード） | `docs/requirements/functional/components-platform.md` |
+| §4.10〜§4.20（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用） | `docs/requirements/functional/components-platform.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -147,7 +148,7 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 
 ### 5.5 System Activity Log
 
-表示項目: キュー別（6キュー）の`pending`/`running`/直近`failed`件数、直近アクティビティ一覧（時刻・種別 [job/jev_scout/jev_trader/kill_switch/news_feed]・対象銘柄・詳細・latency_ms）、直近Kill Switchイベント。キュー種別・イベント種別でフィルタ可能とする。新規イベント発生に応じて`/ws/activity`経由でライブ更新する（§4.15）。
+表示項目: キュー別（6キュー）の`pending`/`running`/直近`failed`件数、直近アクティビティ一覧（時刻・種別 [job/jev_scout/jev_trader/kill_switch/news_feed/broker_notice]・対象銘柄・詳細・latency_ms）、直近Kill Switchイベント。キュー種別・イベント種別でフィルタ可能とする。新規イベント発生に応じて`/ws/activity`経由でライブ更新する（§4.15）。
 
 ## 6. MVPフェーズ
 
@@ -258,3 +259,15 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.63 | 2026-10-08 | FR-SCHED-4（保有ポジション監視）の板取得をPUSH優先の`pushfeed.Feed.Latest`（PUSHが古い・欠落のときだけREST）に揃え、新規FR-SCHED-10にPUSH/RESTの役割分担（REST `/board`はPUSH登録済み銘柄の薄い補完、監視リスト件数・ランキング種別をレート対策で削らない）と登録直後の初回板〜5秒の既知制限を追記（`components-platform.md`） | issue #709・#713 |
 | 1.64 | 2026-10-08 | §3の想定保有時間を基本5〜15分へ、§8の評価の問いを5/10/15分後＋実現トレードPnLへ更新。FR-CAL-4（`components-platform.md`）の猶予内の未ラベルをジョブ失敗ではなくpending再試行、恒久不能をskip（`succeeded`終了）と明記しFR-ACT-1の`failed`件数に数えない旨を追記、FR-CAL-5（勝ちの定義・判定水平線5/10/15・実現トレードPnL GTの定義）を新設、FR-SCHED-1の水平線列挙を更新 | issue #710, #711 |
 | 1.65 | 2026-10-08 | §4.18 FR-SETTINGS-7を追加（Settings画面の「運用設定」: バックアップ先・ログディレクトリ・Policy/Fast Screenerしきい値の編集と再起動の要否）。FR-FS-3・FR-POLICY-4・FR-EXIT-2の優先順位を`config/strategy.yaml` < `runtime_settings`（Settings/自己改善）に更新し、`PITHA_POLICY_*`/`PITHA_FAST_SCREENER_*`環境変数の上書き層を廃止 | issue #708 |
+| 1.66 | 2026-10-08 | FR-SCHED-4/9/10（`functional/components-platform.md`）の「kabu `GET /ranking`」「PUSH」を、ブローカーの候補ソース（`broker.CandidateSource`）／ストリーム（`broker.StreamFeed`。既定＝kabuアダプタ）として記述。監視リスト上限45は`Capabilities.MaxStreamSymbols`由来。要件の挙動は変更なし | issue #722 |
+| 1.67 | 2026-10-08 | UC-14/15をブローカー選択前提に更新、§3にブローカー選択の方針、§4.20（FR-BROKER-1〜5。ブローカー選択・kabuフォールバック・立花のセッション/再認証・API版数と書面の監視・夜間日足スクリーニングと日中EVENT受信）を追加し、FR-SCHED-9に立花選択時の扱いを追記 | issue #721（#720の決定） |
+| 1.68 | 2026-10-08 | §4.17 FR-SETTINGS-1の許可キーを17件（立花の`TACHIBANA_DEMO_AUTH_ID`/`TACHIBANA_PROD_AUTH_ID`/`TACHIBANA_DEMO_SECOND_PASSWORD`を追加。本番の第二暗証番号のキーは設けず、デモの第二暗証番号を本番で読み込み・送信しない）、FR-SETTINGS-7の運用設定キーを33件（`broker.provider`と立花の接続設定8件、秘密鍵はファイル＋OS権限で保護し保存時に検証・同期フォルダ警告）へ更新 | issue #733 |
+| 1.69 | 2026-10-08 | §4.18 FR-SETUP-1/2を選択ブローカー・環境依存の必須キー（kabu＝JEV_API_KEY＋KABU_API_PASSWORD、立花＝JEV_API_KEY＋選択環境の認証ID＋秘密鍵パス。立花選択時KABU_API_PASSWORDは任意）と、選択ブローカーの接続先・ブローカー選択を提示する`/setup`へ更新 | issue #734 |
+| 1.70 | 2026-10-08 | UC-14/UC-15を立花証券 e支店対応の文言へ更新し、§4.17 FR-SETTINGS-4に立花証券 e支店カード（環境バッジ・本番時の「発注は行いません（#55 まで）」・`SessionStatus`由来の秘密を含まない状態表示）を追記（ブローカー選択・立花の認証情報とカードの環境バッジ、ブローカー依存の必須認証情報） | issue #738 |
+| 1.71 | 2026-10-08 | §4.19 FR-ERRLOG-3のマスク対象に立花証券 e支店APIの認証ID・秘密鍵・第二暗証番号・仮想URLを追加（属性キー`authid`/`auth_id`/`private_key`/`second`/`second_password`/`surl*`/`virtual_url`、文字列中の`sAuthId=`等のクエリ・JSON形式・PEM秘密鍵・立花の仮想URL） | issue #736 |
+| 1.72 | 2026-10-08 | §4.17 FR-SETTINGS-5の接続バナーを立花証券選択時の原因別案内（認証ID誤り／鍵不一致・復号失敗／API利用設定「利用しない」／書面未読／IP不正10005／時計ずれp_errno=8／時間外／セッション取り合い）とデモ/本番の環境バッジ常時表示に対応（kabu選択時は不変。認証情報・仮想URLはバナーに出さない） | issue #739 |
+| 1.73 | 2026-10-08 | §4.17 FR-SETTINGS-5に立花証券選択時のセッション状態バナー（閉局中`out_of_hours`・時計ずれ・取り合い・API版数予告の注意表示）、FR-BROKER-3に8:30通知・Activity feed・ログアウトを追記 | issue #727 |
+| 1.74 | 2026-10-08 | §4.3 FR-SCHED-10に立花証券選択時のEVENT/REST役割分担（30秒の鮮度・REST補完は1要求最大120銘柄・既定60秒に1要求・EVENT接続回数の予算） | issue #737 |
+| 1.75 | 2026-10-08 | §4.10 FR-SCHED-9に立花証券選択時の夜間の日足取得（`daily_screen`のみ。設定時刻以降・8:00〜15:30は実行しない・設定速度以下で直列・差分のみ保存・夜ごとの実行記録）を追記 | issue #729 |
+| 1.76 | 2026-10-08 | §4.10 FR-SCHED-9に立花証券選択時の監視リスト確定（`daily_screen`＝日足スクリーニングで保有・手動指定・上位銘柄から最大120件、`fixed`＝固定リスト、日足を使えない夜の固定リスト切替／前営業日リスト引き継ぎとActivity・バナー通知、寄り前は前夜のリスト）とWatchlist画面を追記 | issue #730 |
+| 1.77 | 2026-10-08 | §4.10 FR-SCHED-9に立花証券選択時の日中監視（確定した監視リストをEVENT購読・`market-data`投入・Fast Screenerへ接続。03:30〜15:30のみ登録・日中の入れ替えなし・保有銘柄の追加は1回の再接続にまとめる・フルスキャンは常に無効）、FR-SCHED-10にWebSocket切断時の同一仮想URL再接続と日中のREST補完の位置づけを追記 | issue #731 |

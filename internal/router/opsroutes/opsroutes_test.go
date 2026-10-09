@@ -26,6 +26,9 @@ func (f *fakeOps) Get(_ context.Context, key string) (opsettings.Value, error) {
 }
 func (f *fakeOps) Save(_ context.Context, key, _ string) error { f.saved = key; return nil }
 func (f *fakeOps) Reset(context.Context, string) error         { return nil }
+func (f *fakeOps) Broker(context.Context) (config.BrokerSettings, error) {
+	return config.BrokerSettings{}, nil
+}
 
 // postOps loads a page from engine for a session + CSRF token, then POSTs a
 // backup directory to `/ops-settings/:key`.

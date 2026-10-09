@@ -15,10 +15,6 @@ import (
 )
 
 // newTestServices builds a *Services backed by a fresh temp-dir SQLite DB.
-// When kabuServer is non-nil, MarketData is rebound to it (mirroring
-// internal/service/marketdata's own test-double pattern - client_test.go's
-// httptest.NewServer usage) instead of the real kabuステーションAPI
-// DefaultBaseURL BuildServices would otherwise use.
 func newTestServices(t *testing.T) *Services {
 	t.Helper()
 	state, err := Run(Config{DBPath: filepath.Join(t.TempDir(), "pitha.db")})
