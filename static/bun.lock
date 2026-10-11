@@ -6,7 +6,7 @@
       "name": "pitha-trador-static",
       "dependencies": {
         "@stoplight/elements": "^9.0.25",
-        "lightweight-charts": "^4",
+        "lightweight-charts": "^5",
         "lit": "^3.3.3",
       },
       "devDependencies": {
@@ -672,7 +672,7 @@
 
     "lightningcss-win32-x64-msvc": ["lightningcss-win32-x64-msvc@1.32.0", "", { "os": "win32", "cpu": "x64" }, "sha512-Amq9B/SoZYdDi1kFrojnoqPLxYhQ4Wo5XiL8EVJrVsB8ARoC1PWW6VGtT0WKCemjy8aC+louJnjS7U18x3b06Q=="],
 
-    "lightweight-charts": ["lightweight-charts@4.2.3", "", { "dependencies": { "fancy-canvas": "2.1.0" } }, "sha512-5kS/2hY3wNYNzhnS8Gb+GAS07DX8GPF2YVDnd2NMC85gJVQ6RLU6YrXNgNJ6eg0AnWPwCnvaGtYmGky3HiLQEw=="],
+    "lightweight-charts": ["lightweight-charts@5.2.1", "", { "dependencies": { "fancy-canvas": "2.1.0" } }, "sha512-IVwoK1RLFiLPubaKIjNbtjWLnpPMqiABSrTay6whmNa8L1+19292VtHJ+BWyPUuLCwF0tcQlhEWd1CLB2a1nsQ=="],
 
     "liquid-json": ["liquid-json@0.3.1", "", {}, "sha512-wUayTU8MS827Dam6MxgD72Ui+KOSF+u/eIqpatOtjnvgJ0+mnDq33uC2M7J0tPK+upe/DpUAuK4JUU89iBoNKQ=="],
 
