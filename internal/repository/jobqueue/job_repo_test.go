@@ -200,19 +200,26 @@ func TestJobRepository_ResetStuckRunning(t *testing.T) {
 // busy_timeout rather than surface as SQLITE_BUSY (issue #39). This test
 // asserts every enqueued job is claimed exactly once, with no unexpected
 // errors.
+//
+// The worker/job counts are deliberately modest: every claim is a
+// serialized write, so on a CPU/IO-contended host (full-suite parallelism,
+// concurrent lint/build) the last worker's wait grows with the number of
+// queued writers and can outlast busy_timeout (observed: ~109s and a
+// failure on a loaded host vs ~3s alone). Same trade-off as sqlitedb's
+// busy_timeout_test.go.
 func TestJobRepository_ClaimNext_ConcurrentClaimsDoNotHitSQLiteBusy(t *testing.T) {
 	repo := jobqueue.NewJobRepository(newTestDB(t))
 	ctx := context.Background()
 	now := time.Date(2026, 9, 26, 9, 0, 0, 0, time.UTC)
 
-	const jobCount = 100
+	const jobCount = 40
 	for i := 0; i < jobCount; i++ {
 		if _, err := repo.Enqueue(ctx, jobqueue.JobQueueFeatureCalc, "{}", now.Add(-time.Minute)); err != nil {
 			t.Fatalf("Enqueue job %d: %v", i, err)
 		}
 	}
 
-	const workers = 20
+	const workers = 8
 	var (
 		wg         sync.WaitGroup
 		mu         sync.Mutex

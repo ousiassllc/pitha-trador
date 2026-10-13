@@ -59,7 +59,7 @@ pitha-trador/
 | bun | `.bun-version`記載のバージョン（CIと同一） | フロントエンド（Lit/TypeScript）の依存管理・ビルド |
 | golang-migrate CLI | v4（`go install github.com/golang-migrate/migrate/v4/cmd/migrate@latest`） | マイグレーションファイルの手動生成・確認用（アプリ起動時は自動適用） |
 | templ CLI | `go.mod`の`a-h/templ`と同版（現在v0.3.1020。CIは`ci.yml`の`TEMPL_VERSION`。`go install github.com/a-h/templ/cmd/templ@v0.3.1020`） | `templ generate`。`make generate`・`make dev`が実行するため、`make lint`/`make test`/`make build`・lefthookのpre-commit/pre-pushに必須 |
-| golangci-lint | v2.14.0（`ci.yml`の`GOLANGCI_LINT_VERSION`と同版。`GOTOOLCHAIN=auto go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`。`go >= 1.26`を要求するため`GOTOOLCHAIN=auto`が要る） | Go lint（`make lint`・pre-commit） |
+| golangci-lint | v2.14.0（`ci.yml`の`GOLANGCI_LINT_VERSION`と同版。`GOTOOLCHAIN=auto go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`。`go >= 1.26`を要求。`go.mod`の1.26.9で満たされるが、将来の版上げに備え`GOTOOLCHAIN=auto`は保険として残している） | Go lint（`make lint`・pre-commit） |
 | linterly | v0.3.3（`ci.yml`の`LINTERLY_VERSION`と同版。`GOTOOLCHAIN=auto go install github.com/ousiassllc/linterly/cmd/linterly@v0.3.3`） | 行数制限の検査（`make lint`・pre-commit。下記「Linterly」節） |
 | govulncheck | v1.7.0（`ci.yml`の`GOVULNCHECK_VERSION`。`go install golang.org/x/vuln/cmd/govulncheck@v1.7.0`） | 既知脆弱性の検査。CIの`lint`ジョブ専用（`make lint`には含まれない。ローカル実行は任意） |
 | Lefthook | 最新（`go install github.com/evilmartians/lefthook@latest` または `bun add -D lefthook`） | Git Hooks |
