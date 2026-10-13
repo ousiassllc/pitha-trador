@@ -2,7 +2,7 @@
 
 ## 概要
 
-- 言語: Go 1.25+（`go.mod`の`go 1.25.14`に準拠。バックエンド・Scheduler・アダプタ全般）
+- 言語: Go 1.26+（`go.mod`の`go 1.26.9`に準拠。バックエンド・Scheduler・アダプタ全般）
 - デスクトップシェル: Wails v2（WebView2、ネイティブウィンドウ/通知。OSトレイは未対応）
 - サーバー: Gin + Huma（`/api/v1/...`）、Templ + HTMX（SSR）
 - フロントエンド（リッチアイランドのみ）: Lit + TypeScript、ビルドは esbuild、パッケージマネージャは **bun** に固定
