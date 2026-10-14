@@ -92,6 +92,7 @@ pitha-trador/
 │   │   ├── jobqueue/             # jobsテーブル・キュー名/状態定数（`Job`, `JobRepository`, `ErrJobNotFound`）
 │   │   ├── judgement/            # jev_decisions / policy_proposals（`DecisionRepository`, `ProposalRepository`）
 │   │   ├── calibration/          # calibration_outcomes / calibration_label_skips（`CalibrationRepository`。`judgement`から分離: linterlyのディレクトリ2000行制限、issue #601）
+│   │   ├── metalabel/            # metalabel_models / metalabel_predictions（`Repository`。メタラベリングのモデル版・OOS指標と判断ごとの予測、issue #757）
 │   │   ├── trading/              # trade_signals / paper_orders / positions（`SignalRepository`, `OrderRepository`, `PositionRepository`）
 │   │   ├── system/               # kill_switch_events / runtime_settings / secrets（`KillSwitchRepository`, `RuntimeSettingsRepository`, `SecretsRepository`）
 │   │   ├── decisiontrade/        # クローズ済みポジションと開始時のJev判断の結合読み取り（FR-CAL-2の帯別PnL用。複数リソース群を跨ぐ読み取りの置き場。本番コードは`domain`のみに依存し、他テーブルはSQLで直接結合する）
@@ -138,6 +139,7 @@ pitha-trador/
 │   │   │   └── latestdecision/    # テスト専用: 最新Jev Trader判断の件数窓・経過時間上限なしの単一定義（`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`/`LatestScout`と`execution.Engine.State`の`LatestTraderDecision`）の回帰テスト（行数上限のためexecution/judgementから分離、#496/#497/#499）
 │   │   ├── fillmodel/             # 約定モデル（FR-ENTRY-8。呼値・スプレッド・滑り・手数料。Paper Trading(`execution`)とBacktest Engineが共用する本番コード、#509）
 │   │   ├── calibration/           # Outcome labeling・Brier/Log Loss算出
+│   │   ├── metalabel/             # メタラベリングのモデル版・OOS指標の保存（`Store.SaveModel`/`LatestActiveModel`）と判断ごとの予測の記録（`RecordPrediction`）。有効モデル無しは見送り（issue #757）
 │   │   ├── backtest/              # Backtest Engine（Walk Forward評価・Governor用シャドーバックテスト）（replayflow/=リプレイのテスト・#658）
 │   │   ├── assist/                # Luna/Sol/Opusアダプタ（jevflow/=Jev経由ロール解決のテスト・#658）
 │   │   │   ├── luna.go
@@ -268,6 +270,7 @@ handler → service → repository → domain
 | Risk Engine | ポジションサイズ・損失上限・Kill Switch（§4.7）。全レイヤーの中で最終拒否権を持つ。サイズ算出（FR-ENTRY-3）・同方向ゲート（FR-RISK-1、`correlation`）・ポートフォリオ状態の導出・複数チャネル通知はサブパッケージ。`killswitchflow`・`checkflow`・`monitorflow`はテスト専用 | `internal/service/risk`（`sizing`, `correlation`, `repoportfolio`, `multinotify`, `killswitchflow`, `checkflow`, `monitorflow`） |
 | Execution | Paper Entry/Exit・kabuステーションAPI発注（実売買移行時）。約定価格・手数料は`fillmodel`の約定モデル（呼値・スプレッド・滑り・手数料・昼休み・寄り引け。FR-ENTRY-8）で決め、バックテスト（`backtest`）と同じモデルを共用する。Jev Trader応答項目の復元は`enrich`（`execution`のExit条件・Symbol Detail、`bootstrap/backtestsource`のバックテスト入力、`rag`の類似判断が共用）、FR-EXIT-1 VWAP逆クロス判定は`vwapcross`。`closerace`・`closeflow`・`pendingfill`・`latestdecision`・`fillflow`・`exitflow`はテスト専用（`latestdecision`は最新Trader判断の単一定義の回帰テスト、`fillflow`は約定モデル・立会時間のテスト） | `internal/service/execution`（`enrich`, `vwapcross`, `closerace`, `closeflow`, `pendingfill`, `latestdecision`, `fillflow`, `exitflow`）・`internal/service/fillmodel` |
 | Calibration | Outcome Labeling、Brier Score/Log Loss/ECE算出（§4.12） | `internal/service/calibration` |
+| Meta-Label Store | メタラベリング（Jev判断への入る/見送る二次モデル、issue #752）のモデル版・OOS指標の保存と判断ごとの予測の記録。有効モデルが無いときは呼び出し側が見送りに倒す（`LatestActiveModel`が見つからない） | `internal/service/metalabel` |
 | Self-Improvement Governor | Sol提案の受理、Opusレビュー依頼、シャドーバックテスト実行、`runtime_settings`への適用・ロールバック（§8、FR-SELFIMPROVE-1〜7）。`governorflow`はテスト専用 | `internal/service/selfimprove`（`governorflow`） |
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
 | Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`scan.full_scan_enabled`が`true`でない（既定）とき`WithFullScanDisabled`（`fullscan.go`）で60秒フルスキャンのcronトリガーを登録せず`market-data`全件投入を行わない（FR-SCHED-7、#652）。代わりにランキング監視（`bootstrap/rankingwatch`）が`EnqueueMarketData`で監視銘柄のジョブだけを投入する（FR-SCHED-9）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`・`outcomeflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `outcomeflow`, `orphans`） |
