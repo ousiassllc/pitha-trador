@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
@@ -109,6 +110,19 @@ var opsGroups = slices.Concat([]opsGroup{
 			{key: orderflowsettings.KeyShort, label: "短期窓（秒）", hint: "1 以上の整数です。短期 < 中期 < 長期（最大 600 秒）にしてください。既定は 10 秒です。"},
 			{key: orderflowsettings.KeyMid, label: "中期窓（秒）", hint: "短期窓より大きくしてください。既定は 30 秒です。"},
 			{key: orderflowsettings.KeyLong, label: "長期窓（秒）", hint: "中期窓より大きく、600 秒以下にしてください。既定は 60 秒です。"},
+		},
+	},
+	{
+		id:          "triple_barrier",
+		name:        "キャリブレーションのラベル（トリプルバリア）",
+		description: "Jev の判断に正解・不正解のラベルを付けるときの利確（TP）・損切り（SL）の幅、時間切れ（timeout）、売買コストの想定です。先に触れたバリアでラベルを決め、コスト控除後のリターンで評価します（issue #760、親 #751）。",
+		note: "TP・SL はコストを差し引いた後のリターン（bps、1 bps = 0.01%）の幅です。TP は価格が有利に TP+コスト、SL は不利に SL−コスト動いたときに触れます。" +
+			"保存した値は再起動不要で、以降に付くラベルから反映されます（付与済みのラベルは変わりません）。環境変数では設定できません。",
+		fields: []opsField{
+			{key: barriersettings.KeyTakeProfitBps, label: "利確幅 TP（bps）", hint: "0 より大きく 1000 以下です。既定は 30 bps です。"},
+			{key: barriersettings.KeyStopLossBps, label: "損切り幅 SL（bps）", hint: "0 より大きく 1000 以下で、コスト想定より大きくしてください。既定は 30 bps です。"},
+			{key: barriersettings.KeyTimeoutMinutes, label: "時間切れ（分）", hint: "1〜60 の整数です。この時間内にどちらのバリアにも触れなければ、その時点のコスト控除後リターンで評価します。既定は 10 分です。"},
+			{key: barriersettings.KeyCostBps, label: "コスト想定（bps）", hint: "手数料＋スプレッド＋スリッページの往復合計です。0 以上 1000 以下で、損切り幅より小さくしてください。既定は 10 bps です。"},
 		},
 	},
 })
