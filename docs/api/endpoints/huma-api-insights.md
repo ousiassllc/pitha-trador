@@ -56,7 +56,16 @@
   "trade_count": 20,
   "pnl_brier_score": 0.27,
   "pnl_log_loss": 0.74,
-  "triple_barrier": { "sample_count": 120, "tp_count": 38, "sl_count": 46, "timeout_count": 36, "tp_rate": 0.317, "sl_rate": 0.383, "timeout_rate": 0.3, "ev_net_bps": 1.8 }
+  "triple_barrier": { "sample_count": 120, "tp_count": 38, "sl_count": 46, "timeout_count": 36, "tp_rate": 0.317, "sl_rate": 0.383, "timeout_rate": 0.3, "ev_net_bps": 1.8 },
+  "meta_model": {
+    "version": "lr-20261014-210000", "algorithm": "logistic", "status": "rejected", "reject_reason": "oos_auc_not_above_minimum",
+    "active_version": "lr-20261013-210000", "trained_at": "2026-10-14T12:00:00Z",
+    "train_start": "2026-09-01T00:00:00Z", "train_end": "2026-10-01T00:00:00Z",
+    "oos_start": "2026-10-01T00:00:00Z", "oos_end": "2026-10-14T00:00:00Z", "train_samples": 300, "oos_samples": 120,
+    "oos_auc": 0.48, "oos_ev_bps": null,
+    "oos_calibration": [ { "mean_predicted": 0.55, "observed_rate": 0.5, "count": 40 } ],
+    "llm_cutoff": "2026-09-01"
+  }
 }
 ```
 
@@ -65,6 +74,8 @@
 実現トレードPnLをground truthとする評価（FR-CAL-5）: バケットの`trade_win_rate`は`trade_count`のうち`realized_pnl > 0`の割合（`trade_count`が0なら0）、トップレベルの`trade_count`は`pnl_brier_score`/`pnl_log_loss`の対象となったクローズ済みポジション数（confidenceがどのバケットにも入らないものを除く。0件なら両スコアも0）。両スコアはconfidenceを予測確率、`realized_pnl > 0`を結果としたBrier Score/Log Loss。`realized_pnl`は両約定の手数料控除後・約定モデル（FR-ENTRY-8）の呼値/スプレッド/滑りを織り込んだ値。判定水平線の既定は5/10/15分。
 
 トリプルバリア（FR-CAL-4、issue #767）: トップレベルと各バケットの`triple_barrier`は、トリプルバリアのラベル（`barrier_hit`のある`calibration_outcomes`行。旧ラベルは含めない）の`sample_count`（件数）、`tp_count`/`sl_count`/`timeout_count`（先に触れたバリア別の件数）、`tp_rate`/`sl_rate`/`timeout_rate`（各件数÷`sample_count`、0〜1）、`ev_net_bps`（EV（net）＝コスト控除後リターン`net_return_bps`の平均、1判断あたりのbps）を返す。ラベルが0件の帯・全体は全て0（画面は`sample_count`で「ラベルなし」を判定する）。`direction_accuracy`等は従来どおり旧ラベルとトリプルバリアのラベルの両方を`sample_count`に数える。
+
+メタラベリングのOOS指標（FR-META-5、issue #766）: `meta_model`は最新のメタラベリングモデル（`metalabel_models`の`trained_at`が最新の行。`rejected`も含む）の報告で、`version`/`algorithm`/`status`（`active`=採用、`rejected`=記録のみで`reject_reason`に理由）/`trained_at`/`train_start`〜`train_end`（学習窓）/`train_samples`/`oos_samples`に加え、**Jev評価期間**`oos_start`〜`oos_end`（OOS窓。判断は`llm_cutoff`以降のものだけが対象。`llm_cutoff`は応答時点のSettings `metalabel.llm_cutoff`（UTC日付`YYYY-MM-DD`）、`oos_auc`（0.5=無能力）、`oos_ev_bps`（OOS上でDecideが採ったシグナルの平均純リターン、bps）、`oos_calibration[]`（較正後確率のビンごとの`mean_predicted`・`observed_rate`・`count`）を返す。`oos_auc`/`oos_ev_bps`は定義できないとき`null`。`active_version`は推論で使われているモデル（最新の`active`。無ければ空文字で、その間のエントリーは見送り）で、最新モデルが`rejected`のとき`version`と異なる。モデルが1件も無い、または取得元が未配線のときは`meta_model`キー自体を省く。`horizon`には依存しない。実装は`internal/service/metalabel.Reporter`で、`internal/bootstrap/metalabeljob.CalibrationSource`が`calibration.Service`（`Metrics`）と合成して`router.WithCalibrationSource`へ渡す。ハンドラは取得元が`calibration.MetaModelSource`（`Report`）も実装していれば`meta_model`を返す。
 
 `horizon`（issue #719）はビン・方向別・Brier/Log Loss/ECEの全指標を、指定した水平線の`calibration_outcomes`行だけで再計算する（`ListLabeledSamples`が`horizon_minutes`で絞る）。応答の`horizon`は集計した水平線をそのまま返す（画面の表示用）。`all`は`calibration.DefaultHorizonsMinutes`（5/10/15）と全てのトリプルバリアのラベルを合算し（トリプルバリアのhorizonはSettingsのtimeoutで任意の1〜60分のため、5/10/15以外の値は`all`でのみ集計される。`ListCurrentLabeledSamples`）、#711以前の旧20分ラベルは混ざらない（旧ラベルはAPIからも選べない）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`/`trade_win_rate`と`pnl_brier_score`/`pnl_log_loss`は実現トレードPnLに基づくためホライズンに依存せず、どの`horizon`でも同じ値を返す。
 

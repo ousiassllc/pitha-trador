@@ -34,6 +34,7 @@ import {
   hasLabeledSamples,
 } from './calibration-view';
 import { renderHorizonSelector } from './horizon-selector';
+import { type MetaModel, renderMetaModel } from './meta-model-view';
 
 const ACCURACY_LINE_COLOR = '#2563eb';
 const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';
@@ -59,6 +60,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   @state() private pnlBrierScore = 0;
   @state() private pnlLogLoss = 0;
   @state() private barrier: BarrierStats | null = null;
+  @state() private metaModel: MetaModel | null | undefined;
   @state() private error: string | null = null;
   @state() private loading = false;
 
@@ -141,6 +143,7 @@ export class PithaCalibrationHeatmap extends LitElement {
       this.pnlBrierScore = response.pnl_brier_score;
       this.pnlLogLoss = response.pnl_log_loss;
       this.barrier = response.triple_barrier;
+      this.metaModel = response.meta_model ?? null;
       this.applyBuckets(response.buckets);
       this.error = null;
     } catch (err) {
@@ -265,6 +268,7 @@ export class PithaCalibrationHeatmap extends LitElement {
             : ''
         }
         ${renderBarrierSummary(this.barrier)}
+        ${renderMetaModel(this.metaModel)}
         ${
           this.brierScore !== null && this.hasSamples
             ? html`

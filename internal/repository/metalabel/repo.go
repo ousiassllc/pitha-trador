@@ -73,6 +73,22 @@ func (r *Repository) LatestActiveModel(ctx context.Context) (Model, bool, error)
 	return m, true, nil
 }
 
+// LatestModel returns the model with the greatest TrainedAt whatever its
+// status (the newest ID breaking a tie), or (zero, false, nil) when none was
+// ever stored. Unlike LatestActiveModel it can return a rejected model: the
+// Calibration screen shows what the newest retraining produced.
+func (r *Repository) LatestModel(ctx context.Context) (Model, bool, error) {
+	m, err := scanModel(r.db.QueryRowContext(ctx, `SELECT `+modelColumns+` FROM metalabel_models
+		ORDER BY trained_at DESC, id DESC LIMIT 1`))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Model{}, false, nil
+	}
+	if err != nil {
+		return Model{}, false, err
+	}
+	return m, true, nil
+}
+
 func scanModel(row sqlutil.RowScanner) (Model, error) {
 	var (
 		m                                                 Model

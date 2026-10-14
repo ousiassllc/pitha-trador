@@ -144,7 +144,7 @@ Total PnL, Daily PnL, Win Rate, Profit Factor, Expectancy, Max Drawdown, Average
 
 ### 5.4 Calibration
 
-confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。
+confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。あわせて、最新のメタラベリングモデルのOOS AUC・OOS EV・OOS較正曲線とJev評価期間（OOS窓）を表示する（FR-META-5）。
 
 ### 5.5 System Activity Log
 
@@ -282,3 +282,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.86 | 2026-10-14 | §4.16にFR-LUNA-6（TDnet開示スコア: 銘柄・時刻から[-1,1]のスコアを算出しメタモデルの特徴量`tdnet_score`として取得。開示なしは0）を追加（issue #763・親 #752） |
 | 1.87 | 2026-10-14 | §4.5にFR-META-4（メタラベリングのウォークフォワード夜間再学習: パージ／エンバーゴ付き時系列分割・OOS指標とバージョンの保存・LLM cutoff以降に限定したJev特徴量の評価と期間のログ・学習失敗時に既存モデルを維持）を追加し、FR-SETTINGS-7に`metalabel.llm_cutoff`を追加（issue #764・親 #752） |
 | 1.88 | 2026-10-14 | §4.6にFR-POLICY-6（ライブのエントリー判定をJevの`confidence >= 0.68`しきい値からメタラベリングの較正後EV判定へ置き換え: モデル無し・欠損はNONE、判断ごとの予測値を`metalabel_predictions`へ保存、旧ロジックとの比較ログ、`policy_version`は`policy-v2`）を追加し、FR-POLICY-1/2を旧ロジック（バックテストのリプレイ用）と明記（issue #765・親 #752） |
+| 1.89 | 2026-10-14 | §4.5にFR-META-5（最新のメタラベリングモデルのOOS AUC・較正曲線・EVとJev評価期間をCalibration画面に表示）を追加し、§4.12 FR-CAL-2・§5.4に表示を追記（issue #766・親 #752） |

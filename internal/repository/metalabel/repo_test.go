@@ -91,6 +91,32 @@ func TestRepository_LatestActiveModelSkipsRejectedAndPicksNewest(t *testing.T) {
 	}
 }
 
+func TestRepository_LatestModelIncludesRejectedAndPicksNewest(t *testing.T) {
+	r := metalabel.NewRepository(newTestDB(t))
+	ctx := context.Background()
+	base := time.Date(2026, 10, 1, 17, 0, 0, 0, time.UTC)
+
+	if _, found, err := r.LatestModel(ctx); err != nil || found {
+		t.Fatalf("empty store: found %v, err %v, want not found", found, err)
+	}
+	for _, m := range []metalabel.Model{
+		sampleModel("old-active", metalabel.ModelActive, base),
+		sampleModel("newest-rejected", metalabel.ModelRejected, base.AddDate(0, 0, 2)),
+		sampleModel("new-active", metalabel.ModelActive, base.AddDate(0, 0, 1)),
+	} {
+		if _, err := r.InsertModel(ctx, m); err != nil {
+			t.Fatalf("InsertModel %s: %v", m.Version, err)
+		}
+	}
+	got, found, err := r.LatestModel(ctx)
+	if err != nil || !found {
+		t.Fatalf("LatestModel = found %v, err %v", found, err)
+	}
+	if got.Version != "newest-rejected" || got.Status != metalabel.ModelRejected {
+		t.Errorf("latest = %q (%s), want newest-rejected (rejected)", got.Version, got.Status)
+	}
+}
+
 func TestRepository_InsertModelRejectsDuplicateVersion(t *testing.T) {
 	r := metalabel.NewRepository(newTestDB(t))
 	ctx := context.Background()
