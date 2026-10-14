@@ -101,3 +101,4 @@ erDiagram
 | 1.47 | 2026-10-14 | `er/tables-trading.md`の`calibration_outcomes`: トリプルバリアのラベルでは`horizon_minutes`=Settingsのtimeout、`was_direction_correct`=`net_return_bps > 0`と明記。スキーマ変更なし | issue #762 |
 | 1.48 | 2026-10-14 | マイグレーション000034を追加し、`er/tables-metalabel.md`に`metalabel_models`（モデル版・学習窓/OOS窓・OOS指標）と`metalabel_predictions`（判断ごとの較正後確率・EV・take/skip・サイズ）を新設。全体ER図に関係線を追加 | issue #757 |
 | 1.49 | 2026-10-14 | `er/tables-system.md`の`runtime_settings`キーに`metalabel.{model,calibration,retrain_time,min_ev_bps}`（メタラベリングの二次モデル設定）を追加。スキーマ変更なし | issue #759 |
+| 1.50 | 2026-10-14 | `er/tables-market.md`の`jev_decisions`に`data_age_ms`（判断時点の市場データの古さ、migration 000035）、`er/tables-system.md`の`runtime_settings`キー例に`scan.snapshot_max_age_seconds`（ランキング監視の足の鮮度上限、既定20秒）を追加（issue #754） |

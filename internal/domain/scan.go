@@ -15,7 +15,7 @@ const (
 	ScreenReasonNoSnapshot ScreenReason = iota
 	// ScreenReasonStaleSnapshot: the latest bar is older than the
 	// mode-dependent maximum snapshot age during a session (issue #685):
-	// MaxSnapshotAge for ranking watch, scan.full_scan_max_snapshot_age_seconds
+	// DefaultMaxSnapshotAge for ranking watch, scan.full_scan_max_snapshot_age_seconds
 	// when scan.full_scan_enabled (issue #686). The label deliberately carries
 	// no seconds because the static table cannot see that threshold (issue #690).
 	// It is e.g. one kept from the previous session or from before the symbol

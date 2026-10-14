@@ -42,10 +42,13 @@ var _ broker.Broker = (*Adapter)(nil)
 
 // New returns an Adapter over client whose PUSH feed registers universe's
 // stocks (or the ranking watch list, UseWatchlist). flow, when non-nil,
-// accumulates OFI from the PUSH best quotes (issue #750).
-func New(client *marketdata.Client, universe pushfeed.Universe, flow *orderflow.Tracker) *Adapter {
+// accumulates OFI from the PUSH best quotes (issue #750). boardMaxAge is how
+// old a PUSH board may be before a REST poll is preferred (issue #754); zero
+// means pushfeed.DefaultBoardMaxAge.
+func New(client *marketdata.Client, universe pushfeed.Universe, flow *orderflow.Tracker, boardMaxAge time.Duration) *Adapter {
 	feed := pushfeed.New(universe, client, marketdata.DefaultPushURL, Exchange)
 	feed.OrderFlow = flow
+	feed.BoardMaxAge = boardMaxAge
 	return &Adapter{client: client, feed: feed}
 }
 

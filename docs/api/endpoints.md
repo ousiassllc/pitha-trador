@@ -192,3 +192,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.78 | 2026-10-14 | §4に`GET /system/daily-halt`（1日の損失上限・利益確保・最大取引回数による新規エントリー停止バナー）を追加。`/ops-settings/:key`の許可キーに`risk.daily_loss_limit_jpy`・`risk.profit_lock.trigger_jpy`・`risk.profit_lock.giveback_pct`・`risk.max_daily_trades`を追加 | issue #753 |
 | 1.79 | 2026-10-14 | `GET /api/v1/calibration`（`api/endpoints/huma-api-insights.md`）に`triple_barrier`（EV（net）・tp/sl/timeout到達率。トップレベルとバケット別）を追加。`horizon=all`にトリプルバリアのラベルを含める | issue #767・親 #751 |
 | 1.80 | 2026-10-14 | `GET /api/v1/calibration`（`api/endpoints/huma-api-insights.md`）に`meta_model`（最新のメタラベリングモデルのOOS AUC・較正曲線・EVとJev評価期間。モデルが無ければ省略）を追加 | issue #766・親 #752 |
+| 1.81 | 2026-10-14 | `endpoints/huma-api.md`の`stale_snapshot`の説明を、ランキング監視の閾値が3分固定からSettingsの`scan.snapshot_max_age_seconds`（既定20秒）へ変わったことに合わせて更新（issue #754、`functional.md` FR-FE-7） |

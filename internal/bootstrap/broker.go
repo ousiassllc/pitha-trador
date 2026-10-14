@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -58,8 +59,8 @@ func (s *Services) tachibanaSource(selected config.BrokerSettings) tachibanasour
 // kabu adapter subscribes to without a ranking watch list. Nothing is started
 // here (broker.Session.Start does that): a 立花 selection with a missing 認証ID
 // or 秘密鍵 builds fine and reports the problem as a failed session, the same
-// way an unreachable kabuステーション does.
-func newBroker(selected config.BrokerSettings, source tachibanasource.TachibanaSourceSettings, secrets config.Secrets, kabuBaseURL string, kabuInfoAPIMaxPerSecond int, universe pushfeed.Universe, flow *orderflow.Tracker, notices session.Notifier) broker.Broker {
+// way an unreachable kabuステーション does. pushMaxAge: PUSH board max age (#754).
+func newBroker(selected config.BrokerSettings, source tachibanasource.TachibanaSourceSettings, secrets config.Secrets, kabuBaseURL string, kabuInfoAPIMaxPerSecond int, universe pushfeed.Universe, flow *orderflow.Tracker, pushMaxAge time.Duration, notices session.Notifier) broker.Broker {
 	if selected.Provider == config.BrokerTachibana {
 		return adapter.New(adapter.Config{
 			Settings:    selected.Tachibana,
@@ -73,5 +74,5 @@ func newBroker(selected config.BrokerSettings, source tachibanasource.TachibanaS
 		APIPassword:         secrets.KabuAPIPassword,
 		InfoAPIMaxPerSecond: kabuInfoAPIMaxPerSecond,
 	})
-	return kabu.New(client, universe, flow)
+	return kabu.New(client, universe, flow, pushMaxAge)
 }

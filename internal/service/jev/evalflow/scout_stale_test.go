@@ -19,19 +19,19 @@ import (
 )
 
 // Issue #685: HandleJob must not call Jev (billed) nor enqueue a
-// jev-trader job on a bar older than domain.MaxSnapshotAge, and must
+// jev-trader job on a bar older than domain.DefaultMaxSnapshotAge, and must
 // return nil (a retry would see the same bar - no retry storm). A bar
-// exactly MaxSnapshotAge old is still fresh.
+// exactly DefaultMaxSnapshotAge old is still fresh.
 func TestScout_HandleJob_SkipsStaleSnapshot(t *testing.T) {
 	barAt := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
 	for _, tc := range []struct {
 		name      string
 		age       time.Duration
-		maxAge    time.Duration // 0 keeps the default (ranking-watch) domain.MaxSnapshotAge
+		maxAge    time.Duration // 0 keeps the default (ranking-watch) domain.DefaultMaxSnapshotAge
 		wantStale bool
 	}{
-		{"exactly max age is fresh", domain.MaxSnapshotAge, 0, false},
-		{"just over max age is stale", domain.MaxSnapshotAge + time.Nanosecond, 0, true},
+		{"exactly max age is fresh", domain.DefaultMaxSnapshotAge, 0, false},
+		{"just over max age is stale", domain.DefaultMaxSnapshotAge + time.Nanosecond, 0, true},
 		{"previous session", 17 * time.Hour, 0, true},
 		// Issue #686: a full-scan REST bar is only refreshed once per ~8 min
 		// cycle, so the full-scan age (WithSnapshotMaxAge) lets it through.

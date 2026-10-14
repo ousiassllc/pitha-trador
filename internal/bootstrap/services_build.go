@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
@@ -94,7 +95,8 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	// OFI is accumulated from kabu's PUSH best quotes only (issue #750); the
 	// 立花 adapter never feeds it, so its OFI features stay nil.
 	s.OrderFlow = orderflow.NewTracker()
-	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, s.OrderFlow, alertChannels.BrokerNotices(s.Activity))
+	s.rankingWatchMaxAge = snapshotagesettings.Load(context.Background(), s.Settings)
+	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, s.OrderFlow, s.rankingWatchMaxAge, alertChannels.BrokerNotices(s.Activity))
 	s.Jev = jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		Model:   secrets.JevModel,
@@ -122,7 +124,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
 		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener),
-		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)))
+		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
 	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, jev.WithNewsSource(s.News))
 }
 
@@ -172,7 +174,7 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig)
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk},
 		policy.WithCalibration(s.Calibration), policy.WithTDnetScorer(s.News),
-		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)))
+		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
 }
 
 // buildGovernor builds the Self-Improvement Governor. Sol/Opus (issue #82,
@@ -226,7 +228,7 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logD
 	s.candidates = &candidates.Refresher{
 		Instruments: s.Instruments, Snapshots: s.Snapshots, Settings: s.Settings, Jobs: s.Jobs,
 		Decisions: s.Decisions, Positions: s.Positions,
-		Screener: s.Screener, Strategy: strategy, InSession: marketcalendarOpen,
+		Screener: s.Screener, Strategy: strategy, InSession: marketcalendarOpen, RankingWatchMaxAge: s.rankingWatchMaxAge,
 	}
 	s.buildRankingWatch()
 	return &marketdatajob.Handler{
@@ -234,7 +236,7 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logD
 		Execution: s.Execution, Screener: s.Screener, News: s.News, Scheduler: s.Scheduler,
 		OrderFlow: s.OrderFlow, OrderFlowSettings: s.Settings,
 		EventTrigger:        strategy.Scan.EventTrigger,
-		MarketContextMaxAge: strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge),
+		MarketContextMaxAge: strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge),
 		Symbols:             symbolcache.New(s.Broker),
 	}
 }

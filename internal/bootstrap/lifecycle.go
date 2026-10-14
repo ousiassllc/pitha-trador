@@ -10,6 +10,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
 
+// newsPollInterval is how often News Ingest polls the news feed for the
+// candidates and held symbols, in the TSE session only (FR-LUNA-1, #531).
+const newsPollInterval = time.Minute
+
 // Start launches every background goroutine this build's composition
 // root owns: kabuステーションAPI token issuance/refresh
 // (broker.Session.Start), the candidate-refresh ticker (issue #45),

@@ -48,8 +48,8 @@ INSERT INTO jev_decisions (
 	model_id, request_cost, created_at,
 	ofi_short, ofi_mid, ofi_long,
 	ofi_window_short_seconds, ofi_window_mid_seconds, ofi_window_long_seconds,
-	microprice_dev_bps
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	microprice_dev_bps, data_age_ms
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // Insert writes a single jev_decisions row.
 func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (domain.JevDecision, error) {
@@ -64,7 +64,7 @@ func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (
 		d.LatencyMs, d.ModelID, sqlutil.NullableFloat64(d.RequestCost), sqlutil.FormatTime(createdAt),
 		sqlutil.NullableFloat64(d.OrderFlow.OFIShort), sqlutil.NullableFloat64(d.OrderFlow.OFIMid), sqlutil.NullableFloat64(d.OrderFlow.OFILong),
 		sqlutil.NullableInt64(d.OrderFlow.OFIWindowShortSeconds), sqlutil.NullableInt64(d.OrderFlow.OFIWindowMidSeconds), sqlutil.NullableInt64(d.OrderFlow.OFIWindowLongSeconds),
-		sqlutil.NullableFloat64(d.OrderFlow.MicropriceDevBps),
+		sqlutil.NullableFloat64(d.OrderFlow.MicropriceDevBps), sqlutil.NullableInt64(d.DataAgeMS),
 	)
 	if err != nil {
 		return domain.JevDecision{}, fmt.Errorf(
@@ -227,7 +227,7 @@ SELECT id, instrument_id, symbol, timestamp, decision_type, state_hash, state_js
 	model_id, request_cost, created_at,
 	ofi_short, ofi_mid, ofi_long,
 	ofi_window_short_seconds, ofi_window_mid_seconds, ofi_window_long_seconds,
-	microprice_dev_bps`
+	microprice_dev_bps, data_age_ms`
 
 func scanDecision(row sqlutil.RowScanner) (domain.JevDecision, error) {
 	var (
@@ -243,7 +243,7 @@ func scanDecision(row sqlutil.RowScanner) (domain.JevDecision, error) {
 		&d.ModelID, sqlutil.NullFloat(&d.RequestCost), &createdAt,
 		sqlutil.NullFloat(&d.OrderFlow.OFIShort), sqlutil.NullFloat(&d.OrderFlow.OFIMid), sqlutil.NullFloat(&d.OrderFlow.OFILong),
 		sqlutil.NullInt64(&d.OrderFlow.OFIWindowShortSeconds), sqlutil.NullInt64(&d.OrderFlow.OFIWindowMidSeconds), sqlutil.NullInt64(&d.OrderFlow.OFIWindowLongSeconds),
-		sqlutil.NullFloat(&d.OrderFlow.MicropriceDevBps),
+		sqlutil.NullFloat(&d.OrderFlow.MicropriceDevBps), sqlutil.NullInt64(&d.DataAgeMS),
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.JevDecision{}, ErrDecisionNotFound

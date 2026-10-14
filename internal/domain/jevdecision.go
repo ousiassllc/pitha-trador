@@ -96,6 +96,10 @@ type JevDecision struct {
 	// RequestCost is the API billing cost of the call (e.g. USD), or nil
 	// when the provider does not report per-call cost.
 	RequestCost *float64
+	// DataAgeMS is how old the market bar was, in milliseconds, when the
+	// decision was made (issue #754), the same value the state sent to Jev
+	// carries as data_age_ms; nil when unknown.
+	DataAgeMS *int64
 	// OrderFlow holds the order-flow features (OFI over the configured
 	// windows, microprice deviation) of the market snapshot the decision
 	// was made on (issue #750), kept for later learning and analysis. It

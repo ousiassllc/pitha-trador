@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
 
@@ -127,6 +128,12 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return invalidIf(windows.Validate())
+	case snapshotagesettings.IsKey(key):
+		// A single stand-alone value: only its own range is checked.
+		if _, err := snapshotagesettings.Parse(encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
 	case dailyguardsettings.IsKey(key):
 		// Each threshold stands alone (0 disables it), so only its own range is checked.
 		var limits dailyguardsettings.Limits

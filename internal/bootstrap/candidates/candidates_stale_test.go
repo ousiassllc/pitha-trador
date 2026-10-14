@@ -69,30 +69,38 @@ func TestRefresh_StaleBarKeptVisibleButNotScouted(t *testing.T) {
 	}
 }
 
-// The staleness boundary is domain.MaxSnapshotAge in ranking-watch mode and
-// scan.full_scan_max_snapshot_age_seconds in full-scan mode (issue #686): a
-// full-scan REST bar is refreshed only once per ~8 min cycle, so a bar older
-// than 3 minutes but within the full-scan age is not stale. Exactly that
+// The staleness boundary is Refresher.RankingWatchMaxAge (the Settings value,
+// default domain.DefaultMaxSnapshotAge = 20s; issue #754) in ranking-watch
+// mode and scan.full_scan_max_snapshot_age_seconds in full-scan mode (issue
+// #686): a full-scan REST bar is refreshed only once per ~8 min cycle, so a
+// bar older than the ranking-watch age but within the full-scan age is not
+// stale. Exactly that
 // old is still fresh, one nanosecond more is stale.
 func TestRefresh_StaleBoundary(t *testing.T) {
 	const fullScanAge = 620 * time.Second
 	for _, tc := range []struct {
-		name      string
-		fullScan  bool
-		age       time.Duration
-		wantStale bool
+		name       string
+		fullScan   bool
+		rankingAge time.Duration // Refresher.RankingWatchMaxAge; 0 = the default
+		age        time.Duration
+		wantStale  bool
 	}{
-		{"ranking: exactly max age", false, domain.MaxSnapshotAge, false},
-		{"ranking: just over max age", false, domain.MaxSnapshotAge + time.Nanosecond, true},
-		{"ranking: 8 min bar", false, 8 * time.Minute, true},
-		{"full scan: 8 min bar is within the cycle", true, 8 * time.Minute, false},
-		{"full scan: exactly the full-scan age", true, fullScanAge, false},
-		{"full scan: just over the full-scan age", true, fullScanAge + time.Nanosecond, true},
+		{"ranking: exactly max age", false, 0, domain.DefaultMaxSnapshotAge, false},
+		{"ranking: just over max age", false, 0, domain.DefaultMaxSnapshotAge + time.Nanosecond, true},
+		{"ranking: 8 min bar", false, 0, 8 * time.Minute, true},
+		{"ranking: a 60s bar is stale by default (20s)", false, 0, time.Minute, true},
+		{"ranking: Settings value widens the limit", false, 90 * time.Second, time.Minute, false},
+		{"ranking: Settings value tightens the limit", false, 5 * time.Second, 6 * time.Second, true},
+		{"full scan: 8 min bar is within the cycle", true, 0, 8 * time.Minute, false},
+		{"full scan: the ranking-watch Settings value is ignored", true, 5 * time.Second, 8 * time.Minute, false},
+		{"full scan: exactly the full-scan age", true, 0, fullScanAge, false},
+		{"full scan: just over the full-scan age", true, 0, fullScanAge + time.Nanosecond, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			refresher, _, clock := newScoutCooldownRefresher(t)
 			fullScan := tc.fullScan
 			refresher.Strategy.Scan.FullScanEnabled = &fullScan
+			refresher.RankingWatchMaxAge = tc.rankingAge
 			refresher.Strategy.Scan.FullScanMaxSnapshotAgeSeconds = int(fullScanAge / time.Second)
 			*clock = clock.Add(tc.age)
 			if err := refresher.Refresh(context.Background()); err != nil {

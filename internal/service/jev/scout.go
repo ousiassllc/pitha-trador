@@ -28,8 +28,10 @@ func Passes(cfg config.JevScoutConfig, resp ScoutResponse) bool {
 }
 
 // StateFromSnapshot builds the ScoutState Jev evaluates from one
-// instrument's market_snapshots row (domain.Snapshot).
-func StateFromSnapshot(snap domain.Snapshot) ScoutState {
+// instrument's market_snapshots row (domain.Snapshot); now is the decision
+// time, from which data_age_ms (the bar's age) is derived (issue #754).
+func StateFromSnapshot(snap domain.Snapshot, now time.Time) ScoutState {
+	dataAgeMS := max(now.Sub(snap.Timestamp), 0).Milliseconds()
 	return ScoutState{
 		Symbol:             snap.Symbol,
 		Timestamp:          snap.Timestamp,
@@ -75,6 +77,7 @@ func StateFromSnapshot(snap domain.Snapshot) ScoutState {
 		StockVsSectorRelativeStrength: snap.Feature.StockVsSectorRelativeStrength,
 		MarketBreadth:                 snap.Feature.MarketBreadth,
 
+		DataAgeMS: &dataAgeMS,
 		OrderFlow: snap.Feature.OrderFlowFeatures,
 	}
 }
@@ -200,6 +203,7 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 		LatencyMs:       int(latency.Milliseconds()),
 		ModelID:         resp.ModelID,
 		RequestCost:     resp.RequestCost,
+		DataAgeMS:       state.DataAgeMS,
 		OrderFlow:       state.OrderFlow,
 	}
 
@@ -219,7 +223,7 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 // the instrument's latest market state, evaluates it via Evaluate, and -
 // on a FR-SCOUT-2 pass - enqueues a jev-trader job carrying the same
 // payload so Jev Trader (a later sub-scope) picks up the candidate next
-// (functional.md §4.4). A latest bar older than domain.MaxSnapshotAge (a
+// (functional.md §4.4). A latest bar older than domain.DefaultMaxSnapshotAge (a
 // bar kept from a previous session or an earlier watch period) is skipped
 // - the job completes without a Jev call or a jev-trader job, since a
 // retry would see the same bar - so a job queued before the bar went
@@ -245,7 +249,7 @@ func (s *Scout) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		return nil
 	}
 
-	_, passed, err := s.Evaluate(ctx, payload.InstrumentID, StateFromSnapshot(snapshots[0]))
+	_, passed, err := s.Evaluate(ctx, payload.InstrumentID, StateFromSnapshot(snapshots[0], s.now().UTC()))
 	s.record(payload.Symbol, passed, err)
 	if err != nil {
 		return err

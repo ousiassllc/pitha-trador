@@ -28,7 +28,7 @@ func TestLoader_MaxStaleFollowsInjectedAge(t *testing.T) {
 		name     string
 		maxStale time.Duration
 	}{
-		{"ranking watch", domain.MaxSnapshotAge},
+		{"ranking watch", domain.MarketContextMaxAge},
 		{"full scan", fullScanAge},
 	} {
 		for _, age := range []time.Duration{
@@ -72,23 +72,23 @@ func TestLoader_MaxStaleFollowsInjectedAge(t *testing.T) {
 }
 
 // A non-positive age (a Handler that was never given one) behaves like the
-// ranking-watch domain.MaxSnapshotAge rather than ignoring every bar.
+// ranking-watch domain.MarketContextMaxAge rather than ignoring every bar.
 func TestNewLoader_NonPositiveAgeFallsBackToRankingWatchAge(t *testing.T) {
 	at := time.Date(2026, 10, 7, 1, 30, 0, 0, time.UTC)
 	f := newLoaderFixtureWithAge(t, 0)
 	stock := f.instrument(t, "7203", domain.InstrumentKindStock, nil)
 	topix := f.instrument(t, "TOPIX", domain.InstrumentKindMarketIndex, nil)
 	f.bars(t, topix,
-		domain.Snapshot{Timestamp: at.Add(-domain.MaxSnapshotAge - 5*time.Minute), Price: 1000},
-		domain.Snapshot{Timestamp: at.Add(-domain.MaxSnapshotAge), Price: 1010})
+		domain.Snapshot{Timestamp: at.Add(-domain.MarketContextMaxAge - 5*time.Minute), Price: 1000},
+		domain.Snapshot{Timestamp: at.Add(-domain.MarketContextMaxAge), Price: 1010})
 	wantValue(t, "MarketReturn5m", f.loader.Load(context.Background(), stock, at).MarketReturn5m, 0.01)
 }
 
 // cacheTTL must stay well below the shortest allowed age (the ranking-watch
-// domain.MaxSnapshotAge) so a cached value is never served long enough to
+// domain.MarketContextMaxAge) so a cached value is never served long enough to
 // outlive the bars it was computed from (issue #692).
 func TestCacheTTL_WellBelowAllowedAge(t *testing.T) {
-	if marketcontext.CacheTTL*4 > domain.MaxSnapshotAge {
-		t.Errorf("cacheTTL = %v, want at most a quarter of domain.MaxSnapshotAge (%v)", marketcontext.CacheTTL, domain.MaxSnapshotAge)
+	if marketcontext.CacheTTL*4 > domain.MarketContextMaxAge {
+		t.Errorf("cacheTTL = %v, want at most a quarter of domain.MarketContextMaxAge (%v)", marketcontext.CacheTTL, domain.MarketContextMaxAge)
 	}
 }

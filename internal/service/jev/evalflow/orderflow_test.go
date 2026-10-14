@@ -3,6 +3,7 @@ package evalflow_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -27,13 +28,14 @@ func TestStateFromSnapshot_CarriesOrderFlowButNeverSendsItToJev(t *testing.T) {
 	snap := domain.Snapshot{Symbol: "7203", Price: 2100, Timestamp: time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)}
 	snap.Feature.OrderFlowFeatures = orderFlowFixture()
 
-	state := jev.StateFromSnapshot(snap)
+	now := snap.Timestamp.Add(5 * time.Second)
+	state := jev.StateFromSnapshot(snap, now)
 	if !reflect.DeepEqual(state.OrderFlow, snap.Feature.OrderFlowFeatures) {
 		t.Fatalf("state.OrderFlow = %+v, want the snapshot's %+v", state.OrderFlow, snap.Feature.OrderFlowFeatures)
 	}
 	// A jittering OFI must not change the state Jev sees (and hashes for
 	// FR-SCAN-2's unchanged-state suppression).
-	bare := jev.StateFromSnapshot(domain.Snapshot{Symbol: "7203", Price: 2100, Timestamp: snap.Timestamp})
+	bare := jev.StateFromSnapshot(domain.Snapshot{Symbol: "7203", Price: 2100, Timestamp: snap.Timestamp}, now)
 	if a, b := marshalState(t, state), marshalState(t, bare); a != b {
 		t.Fatalf("OFI changed the Jev state JSON:\n%s\n%s", a, b)
 	}
@@ -107,4 +109,61 @@ func marshalState(t *testing.T, s jev.ScoutState) string {
 		t.Fatalf("marshal state: %v", err)
 	}
 	return string(b)
+}
+
+// The state Jev sees carries data_age_ms (issue #754): the bar's age at the
+// decision time, floored at zero, and a decision row persists the same value.
+func TestStateFromSnapshot_DataAgeMS(t *testing.T) {
+	ts := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
+	for name, tc := range map[string]struct {
+		now  time.Time
+		want int64
+	}{
+		"five seconds old": {ts.Add(5 * time.Second), 5000},
+		"sub-second":       {ts.Add(1250 * time.Millisecond), 1250},
+		"clock behind bar": {ts.Add(-time.Second), 0},
+	} {
+		state := jev.StateFromSnapshot(domain.Snapshot{Symbol: "7203", Price: 2100, Timestamp: ts}, tc.now)
+		if state.DataAgeMS == nil || *state.DataAgeMS != tc.want {
+			t.Errorf("%s: DataAgeMS = %v, want %d", name, state.DataAgeMS, tc.want)
+		}
+		if want := fmt.Sprintf(`"data_age_ms":%d`, tc.want); !strings.Contains(marshalState(t, state), want) {
+			t.Errorf("%s: state JSON lacks %s: %s", name, want, marshalState(t, state))
+		}
+	}
+}
+
+func TestScoutAndTrader_Evaluate_PersistDataAge(t *testing.T) {
+	db := newTestDB(t)
+	decisions := judgement.NewDecisionRepository(db)
+	inst := mustCreateInstrument(t, market.NewInstrumentRepository(db), "7203")
+	ragService := rag.NewService(db, decisions, market.NewSnapshotRepository(db))
+	state := jev.ScoutState{Symbol: "7203", Timestamp: time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC), Price: 2100, DataAgeMS: new(int64(7300))}
+
+	scoutSrv := scoutServer(t, jev.ScoutResponse{InterestingNow: 0.8, LiquidityOk: 0.9, AbnormalActivity: 0.6, ModelID: "m"})
+	scout := jev.NewScout(jev.NewClient(jev.Config{BaseURL: scoutSrv.URL}), decisions, market.NewSnapshotRepository(db), nil, ragService, testThresholds())
+	scoutDecision, _, err := scout.Evaluate(context.Background(), inst.ID, state)
+	if err != nil {
+		t.Fatalf("Scout.Evaluate: %v", err)
+	}
+
+	traderSrv := traderServer(t, jev.TraderResponse{
+		Direction: domain.JevDirectionLong, Regime: domain.JevRegimeTrend, EntryQuality: domain.JevEntryQualityGood,
+		Confidence: 0.7, ModelID: "m",
+	})
+	trader := jev.NewTrader(jev.NewClient(jev.Config{BaseURL: traderSrv.URL}), decisions, ragService)
+	traderDecision, err := trader.Evaluate(context.Background(), inst.ID, state)
+	if err != nil {
+		t.Fatalf("Trader.Evaluate: %v", err)
+	}
+
+	for name, id := range map[string]int64{"scout": scoutDecision.ID, "trader": traderDecision.ID} {
+		saved, err := decisions.Get(context.Background(), id)
+		if err != nil {
+			t.Fatalf("%s Get: %v", name, err)
+		}
+		if saved.DataAgeMS == nil || *saved.DataAgeMS != 7300 {
+			t.Errorf("%s: saved DataAgeMS = %v, want 7300", name, saved.DataAgeMS)
+		}
+	}
 }

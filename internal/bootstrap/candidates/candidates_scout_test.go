@@ -45,13 +45,18 @@ func insertFreshBar(t *testing.T, r *Refresher, inst domain.Instrument, at time.
 // Issue #388: running Refresh on the 15-30s cadence must not run Jev Scout
 // for the same symbol more than once a minute (non-functional.md §2.1).
 func TestRefresh_ScoutsEachCandidateAtMostOncePerMinute(t *testing.T) {
-	refresher, _, clock := newScoutCooldownRefresher(t)
+	refresher, inst, clock := newScoutCooldownRefresher(t)
 	ctx := context.Background()
 
 	var scoutedAt []time.Time
 	start := *clock
 	for _, step := range []time.Duration{0, 20, 40, 60, 80, 100, 120, 140, 160, 180} {
 		*clock = start.Add(step * time.Second)
+		// The market-data job keeps writing bars; each refresh sees a fresh one
+		// (the stale gate, issue #754, is not what this test is about).
+		if step > 0 {
+			insertFreshBar(t, refresher, inst, *clock)
+		}
 		if err := refresher.Refresh(ctx); err != nil {
 			t.Fatalf("Refresh at +%ds: %v", step, err)
 		}

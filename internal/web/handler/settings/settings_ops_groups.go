@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
@@ -99,6 +100,17 @@ var opsGroups = slices.Concat([]opsGroup{
 			{key: "screener.weights.breakout_strength", label: "重み: ブレイクアウト強度"},
 			{key: "screener.weights.orderbook_imbalance", label: "重み: 板の偏り"},
 			{key: "screener.weights.volatility_expansion", label: "重み: ボラティリティ拡大"},
+		},
+	},
+	{
+		id:          "snapshot-age",
+		name:        "データの鮮度（ランキング監視）",
+		description: "ランキング監視モード（既定）で、Jev Scout / Trader と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）です。これより古い足では判断に進まず、そのジョブは見送られます（issue #754）。",
+		note: "立会時間中のみ適用されます。全銘柄 REST モード（scan.full_scan_enabled: true）では config/strategy.yaml の scan.full_scan_max_snapshot_age_seconds が使われ、この値は影響しません。" +
+			"価格は kabu の PUSH を優先し、PUSH が古い・未着のときだけ REST に切り替えます。Jev に渡す state と判断ログには、判断時点でのデータの古さ（data_age_ms）が含まれます。" +
+			"保存した値の反映にはアプリの再起動が必要です。環境変数では設定できません。",
+		fields: []opsField{
+			{key: snapshotagesettings.Key, label: "足の鮮度上限（秒）", hint: "1〜600 の整数です。既定は 20 秒です。大きくするほど古いデータで判断することになります。"},
 		},
 	},
 	{
