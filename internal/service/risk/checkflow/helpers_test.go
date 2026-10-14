@@ -51,6 +51,7 @@ type fakePortfolio struct {
 	dailyLossPct      float64
 	consecutiveLosses int
 	lastLossAt        time.Time
+	dailyActivity     risk.DailyActivity
 }
 
 func (f fakePortfolio) OpenPositionCount(context.Context) (int, error) {
@@ -76,6 +77,9 @@ func (f fakePortfolio) ConsecutiveLosses(context.Context, time.Time) (int, error
 }
 func (f fakePortfolio) LastLossAt(context.Context, time.Time) (time.Time, error) {
 	return f.lastLossAt, nil
+}
+func (f fakePortfolio) DailyActivity(context.Context) (risk.DailyActivity, error) {
+	return f.dailyActivity, nil
 }
 
 type fakeCloser struct {

@@ -103,6 +103,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 		marketDataHandler.WithWatchNotice(n)
 	}
 	engine.GET("/system/marketdata-status", marketDataHandler.Status)
+	engine.GET("/system/daily-halt", system.NewDailyHaltHandler(o.dailyHaltSource).Status)
 
 	return h
 }

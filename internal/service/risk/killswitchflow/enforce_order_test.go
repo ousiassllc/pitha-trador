@@ -40,6 +40,8 @@ func (r *orderRecorder) KillSwitchAutoResumed(context.Context, domain.KillSwitch
 
 func (r *orderRecorder) DailyLossWarning(context.Context, float64, float64) error { return nil }
 
+func (r *orderRecorder) DailyEntryHalted(context.Context, domain.DailyEntryHalt) error { return nil }
+
 func newOrderEngine(t *testing.T, rec *orderRecorder) *risk.Engine {
 	t.Helper()
 	db := newTestDB(t)

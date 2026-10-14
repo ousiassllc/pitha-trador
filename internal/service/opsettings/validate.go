@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
@@ -110,6 +111,13 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return invalidIf(windows.Validate())
+	case dailyguardsettings.IsKey(key):
+		// Each threshold stands alone (0 disables it), so only its own range is checked.
+		var limits dailyguardsettings.Limits
+		if err := dailyguardsettings.Apply(&limits, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
 	case strings.HasPrefix(key, "broker.tachibana.screen."):
 		return s.validateTachibanaSource(ctx, key, encoded)
 	}

@@ -49,6 +49,7 @@ var opsGroups = slices.Concat([]opsGroup{
 	brokerGroup,
 	tachibanaGroup,
 }, tachibanaSourceGroups, []opsGroup{
+	dailyGuardGroup,
 	{
 		id:          "backup",
 		name:        "バックアップ先",

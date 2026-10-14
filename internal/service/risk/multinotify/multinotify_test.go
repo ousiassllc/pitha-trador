@@ -12,8 +12,8 @@ import (
 // countingNotifier records how many times each risk.Notifier method was
 // called, failing every call with failWith when it is non-nil.
 type countingNotifier struct {
-	triggered, resumed, dailyLossCalls int
-	failWith                           error
+	triggered, resumed, dailyLossCalls, haltedCalls int
+	failWith                                        error
 }
 
 func (n *countingNotifier) KillSwitchTriggered(context.Context, domain.KillSwitchEvent, bool) error {
@@ -28,6 +28,11 @@ func (n *countingNotifier) KillSwitchAutoResumed(context.Context, domain.KillSwi
 
 func (n *countingNotifier) DailyLossWarning(context.Context, float64, float64) error {
 	n.dailyLossCalls++
+	return n.failWith
+}
+
+func (n *countingNotifier) DailyEntryHalted(context.Context, domain.DailyEntryHalt) error {
+	n.haltedCalls++
 	return n.failWith
 }
 
