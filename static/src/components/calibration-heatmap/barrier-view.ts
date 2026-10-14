@@ -9,7 +9,7 @@ export function formatBps(bps: number): string {
   return `${bps > 0 ? '+' : ''}${bps.toFixed(1)} bps`;
 }
 
-const formatRate = (rate: number): string => `${(rate * 100).toFixed(1)}%`;
+export const formatRate = (rate: number): string => `${(rate * 100).toFixed(1)}%`;
 
 // renderBucketBarrier is the one-line barrier summary inside a band's heatmap
 // cell: the band's EV (net) and its tp/sl/timeout reach rates; nothing for a

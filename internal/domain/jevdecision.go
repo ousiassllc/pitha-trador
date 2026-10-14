@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain/marketregime"
+)
 
 // Jev decision_type values (docs/architecture/er.md §jev_decisions CHECK
 // constraint).
@@ -105,5 +109,9 @@ type JevDecision struct {
 	// was made on (issue #750), kept for later learning and analysis. It
 	// is not part of StateJSON, so it never changes StateHash.
 	OrderFlow OrderFlowFeatures
-	CreatedAt time.Time
+	// MarketRegime is the market regime and A/B arm the decision was made
+	// under (issue #755), persisted with it; the zero value means it was not
+	// assessed. It is not part of StateJSON, so it never changes StateHash.
+	MarketRegime marketregime.Assessment
+	CreatedAt    time.Time
 }

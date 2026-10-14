@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/domain/marketregime"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -89,6 +90,13 @@ type ScoutState struct {
 	// jev_decisions row they persist so the values a decision was made with
 	// stay available for later learning and analysis.
 	OrderFlow domain.OrderFlowFeatures `json:"-"`
+
+	// MarketRegime is the market regime and A/B arm the decision is made
+	// under (issue #755). It is never sent to Jev (json:"-": the arm must not
+	// bias the answer, and it would perturb state_hash); Trader copies it onto
+	// the jev_decisions row it persists. Policy Engine, which acts on the
+	// decision, reads the same assessment.
+	MarketRegime marketregime.Assessment `json:"-"`
 }
 
 // ScoutRequest is the input of Client.Scout: the current market state,

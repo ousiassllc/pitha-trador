@@ -38,6 +38,7 @@ type Handler struct {
 	executor       SignalExecutor
 	calib          CalibrationSource // optional, see WithCalibration
 	tdnet          TDnetScorer       // optional, see WithTDnetScorer
+	regime         RegimeAssessor    // optional, see WithRegimeAssessor
 	now            func() time.Time  // wall clock for the snapshot staleness check
 	snapshotMaxAge time.Duration     // see WithSnapshotMaxAge
 }
@@ -90,7 +91,11 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 	snap := snapshots[0]
 
-	decision, err := h.trader.Evaluate(ctx, payload.InstrumentID, jev.StateFromSnapshot(snap, h.now().UTC()))
+	state := jev.StateFromSnapshot(snap, h.now().UTC())
+	if h.regime != nil {
+		state.MarketRegime = h.regime.Assess(ctx, snap)
+	}
+	decision, err := h.trader.Evaluate(ctx, payload.InstrumentID, state)
 	if err != nil {
 		if _, sigErr := h.engine.Evaluate(ctx, Input{
 			InstrumentID: payload.InstrumentID,

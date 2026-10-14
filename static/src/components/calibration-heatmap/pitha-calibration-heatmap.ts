@@ -18,6 +18,7 @@ import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
+import { type ABArm, renderABArms } from './ab-arms-view';
 import { renderBarrierSummary, renderBucketBarrier } from './barrier-view';
 import { heatmapStyles } from './calibration-styles';
 import {
@@ -61,6 +62,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   @state() private pnlLogLoss = 0;
   @state() private barrier: BarrierStats | null = null;
   @state() private metaModel: MetaModel | null | undefined;
+  @state() private abArms: ABArm[] | undefined;
   @state() private error: string | null = null;
   @state() private loading = false;
 
@@ -144,6 +146,7 @@ export class PithaCalibrationHeatmap extends LitElement {
       this.pnlLogLoss = response.pnl_log_loss;
       this.barrier = response.triple_barrier;
       this.metaModel = response.meta_model ?? null;
+      this.abArms = response.ab_arms;
       this.applyBuckets(response.buckets);
       this.error = null;
     } catch (err) {
@@ -269,6 +272,7 @@ export class PithaCalibrationHeatmap extends LitElement {
         }
         ${renderBarrierSummary(this.barrier)}
         ${renderMetaModel(this.metaModel)}
+        ${renderABArms(this.abArms)}
         ${
           this.brierScore !== null && this.hasSamples
             ? html`

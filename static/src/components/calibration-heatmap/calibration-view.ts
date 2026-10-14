@@ -1,5 +1,6 @@
 // Response shape and pure presentation helpers for `pitha-calibration-heatmap`
 // (split out of the component to keep it within the linterly per-file limit).
+import type { ABArm } from './ab-arms-view';
 import type { MetaModel } from './meta-model-view';
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `triple_barrier`
@@ -77,6 +78,9 @@ export interface CalibrationAPIResponse {
   // The newest meta-labeling model's OOS metrics (issue #766); omitted until
   // a model was trained.
   meta_model?: MetaModel;
+  // The paper A/B comparison of the momentum and regime-switching arms
+  // (issue #755); omitted when no source is wired.
+  ab_arms?: ABArm[];
 }
 
 // bucketMidpointPct parses e.g. "0.70-0.80" into 75. The reliability

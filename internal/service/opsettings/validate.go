@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
@@ -154,6 +155,13 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 		// Each field stands alone: Apply checks the single value's range.
 		meta := metalabelsettings.Default()
 		if err := metalabelsettings.Apply(&meta, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case regimesettings.IsKey(key):
+		// Each field stands alone: Apply checks the single value's range.
+		regime := regimesettings.Default()
+		if err := regimesettings.Apply(&regime, key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil

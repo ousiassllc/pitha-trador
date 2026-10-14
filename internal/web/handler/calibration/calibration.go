@@ -124,6 +124,7 @@ type CalibrationAPIOutput struct {
 		PnLLogLoss               float64                      `json:"pnl_log_loss" doc:"Log Loss against the realized-PnL ground truth, same samples as pnl_brier_score (0 when trade_count is 0)."`
 		TripleBarrier            calibrationBarrierOutput     `json:"triple_barrier" doc:"Triple-barrier EV (net) and tp/sl/timeout reach rates over every triple-barrier label in the aggregated horizon."`
 		MetaModel                *metaModelOutput             `json:"meta_model,omitempty" doc:"The newest meta-labeling model's OOS metrics (AUC, calibration curve, EV) and Jev evaluation period (issue #766); omitted when no model was ever trained or no source is wired. Independent of horizon."`
+		ABArms                   []abArmOutput                `json:"ab_arms,omitempty" doc:"Paper A/B comparison of the fixed momentum arm and the regime-switching arm (issue #755): each arm's win rate and EV after costs over its closed positions, overall and per market regime. Independent of horizon; omitted when no source is wired."`
 	}
 }
 
@@ -180,6 +181,7 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, in *Calibration
 		return nil, err
 	}
 	out.Body.MetaModel = meta
+	out.Body.ABArms = abArmsResponse(metrics.ABArms)
 	return out, nil
 }
 
