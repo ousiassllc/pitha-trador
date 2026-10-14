@@ -40,6 +40,25 @@ func (s *Store) LatestActiveModel(ctx context.Context) (repo.Model, bool, error)
 	return s.repo.LatestActiveModel(ctx)
 }
 
+// ActiveModel returns the newest model that passed the OOS bar, ready to score
+// with (ParseModel), or (nil, nil) when there is none: the caller MUST then
+// skip the signal. A stored model this build cannot use (another feature
+// layout or algorithm, damaged parameters) is an error, never a model.
+func (s *Store) ActiveModel(ctx context.Context) (*Model, error) {
+	stored, found, err := s.repo.LatestActiveModel(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("metalabel: load the active model: %w", err)
+	}
+	if !found {
+		return nil, nil
+	}
+	m, err := ParseModel(stored)
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
 // RecordPrediction validates and stores p, returning it with ID and CreatedAt
 // set. A model records one prediction per Jev decision.
 func (s *Store) RecordPrediction(ctx context.Context, p repo.Prediction) (repo.Prediction, error) {

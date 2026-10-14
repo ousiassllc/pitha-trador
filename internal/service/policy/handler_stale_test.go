@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -44,11 +45,12 @@ func TestHandler_HandleJob_SkipsStaleSnapshot(t *testing.T) {
 			client := jev.NewClient(jev.Config{BaseURL: traderServer(t, passingTraderResponse(domain.JevDirectionLong)).URL, MaxAttempts: 1})
 			trader := jev.NewTrader(client, decisions, rag.NewService(db, decisions, snapshots))
 			executor := &recordingExecutor{}
-			opts := []policy.HandlerOption{policy.WithClock(func() time.Time { return barAt.Add(tc.age) })}
+			opts := []policy.HandlerOption{policy.WithClock(func() time.Time { return barAt.Add(tc.age) }), policy.WithTDnetScorer(policytest.TDnet(0))}
 			if tc.maxAge > 0 {
 				opts = append(opts, policy.WithSnapshotMaxAge(tc.maxAge))
 			}
-			handler := policy.NewHandler(trader, snapshots, policy.NewEngine(testThresholds(), nil, signals), executor, opts...)
+			store := policytest.NewStore(t, db, policytest.TakingModel())
+			handler := policy.NewHandler(trader, snapshots, policy.NewEngine(testThresholds(), nil, signals, policytest.Option(store, store)), executor, opts...)
 			inst := mustCreateInstrumentAndSnapshot(t, db, "7203", 10)
 
 			payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: "7203"})

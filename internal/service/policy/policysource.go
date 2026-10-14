@@ -22,17 +22,17 @@ type PolicySource interface {
 }
 
 // signalPolicyVersion is the trade_signals.policy_version recorded for a
-// live signal: Version alone on the baseline thresholds, or
-// "<Version>+<applied_policy_version>" (e.g. "policy-v1+sol-12") while a
+// live signal: MetaVersion alone on the baseline thresholds, or
+// "<MetaVersion>+<applied_policy_version>" (e.g. "policy-v2+sol-12") while a
 // Self-Improvement proposal's thresholds are in effect, so every signal
 // identifies the applied version that produced it (FR-POLICY-5,
 // FR-SELFIMPROVE-5/7). The column is VARCHAR(20): the suffix fits up to
 // a six-digit proposal id.
 func signalPolicyVersion(applied string) string {
 	if applied == "" {
-		return Version
+		return MetaVersion
 	}
-	return Version + "+" + applied
+	return MetaVersion + "+" + applied
 }
 
 // Option configures an Engine beyond NewEngine's required dependencies.
@@ -52,7 +52,7 @@ func WithPolicySource(src PolicySource) Option {
 // trade_signals.policy_version identifying them.
 func (e *Engine) currentThresholds(ctx context.Context) (Thresholds, string, error) {
 	if e.policy == nil {
-		return e.thresholds, Version, nil
+		return e.thresholds, MetaVersion, nil
 	}
 	current, err := e.policy.CurrentThresholds(ctx)
 	if err != nil {

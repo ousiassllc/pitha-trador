@@ -1,8 +1,9 @@
-// Package metalabeljob is the composition root's nightly meta-labeling
-// retraining job (issue #764, parent #752): the daily maintenance task that
+// Package metalabeljob is the composition root's meta-labeling wiring (issue
+// #764/#765, parent #752). Job is the nightly retraining: the daily maintenance task that
 // trains from the stored triple-barrier labels and saves the model, from the
 // Settings retrain time on, with its settings read from the Settings screen's
-// runtime_settings.
+// runtime_settings. PolicyOption wires the live entry rule from the same
+// settings.
 package metalabeljob
 
 import (
@@ -16,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	servicemetalabel "github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
@@ -87,4 +89,21 @@ func retrainDue(now time.Time, at string) (bool, error) {
 	}
 	n := now.In(jst)
 	return n.Hour()*60+n.Minute() >= t.Hour()*60+t.Minute(), nil
+}
+
+// PolicyOption wires the live entry rule (issue #765): the Policy Engine enters
+// a candidate only when the active model's calibrated EV clears the Settings
+// minimum EV (read at every decision, so a change applies without a restart),
+// and stores each verdict. The model and predictions live in db.
+func PolicyOption(db *sql.DB, settings *system.RuntimeSettingsRepository) policy.Option {
+	store := servicemetalabel.NewStore(metalabel.NewRepository(db))
+	return policy.WithMetaModel(store, store, func(ctx context.Context) (servicemetalabel.DecideConfig, error) {
+		s, err := metalabelsettings.Load(ctx, settings)
+		if err != nil {
+			return servicemetalabel.DecideConfig{}, err
+		}
+		cfg := servicemetalabel.DefaultDecideConfig()
+		cfg.MinEVBps = s.MinEVBps
+		return cfg, nil
+	})
 }

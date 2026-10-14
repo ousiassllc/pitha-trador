@@ -37,6 +37,7 @@ type Handler struct {
 	engine         *Engine
 	executor       SignalExecutor
 	calib          CalibrationSource // optional, see WithCalibration
+	tdnet          TDnetScorer       // optional, see WithTDnetScorer
 	now            func() time.Time  // wall clock for the snapshot staleness check
 	snapshotMaxAge time.Duration     // see WithSnapshotMaxAge
 }
@@ -113,6 +114,10 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	in.Timestamp = decision.Timestamp
 	in.Decision = &decision
 	in.Calibrated = calibrated
+	if h.tdnet != nil {
+		score := h.tdnet.TDnetScore(payload.Symbol, h.now().UTC())
+		in.TDnetScore = &score
+	}
 	signal, err := h.engine.Evaluate(ctx, in)
 	if err != nil {
 		return fmt.Errorf("policy: evaluate trade signal for %q: %w", payload.Symbol, err)

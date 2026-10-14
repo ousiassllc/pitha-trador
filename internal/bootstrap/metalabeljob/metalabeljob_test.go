@@ -4,13 +4,20 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
 )
 
@@ -107,5 +114,46 @@ func TestJob_TaskIsRegisteredUnderItsName(t *testing.T) {
 	task := job.Task()
 	if task.Name != TaskName || task.Label == "" || task.Run == nil {
 		t.Fatalf("Task = %+v", task)
+	}
+}
+
+// Without a stored model the wired Policy Engine never enters: Evaluate
+// persists a NONE whose reason is the model-less skip, even for a candidate
+// that clears every guard.
+func TestPolicyOption_NoStoredModelIsSafeSideNone(t *testing.T) {
+	job, settings := newJob(t)
+	ctx := context.Background()
+	instrument, err := market.NewInstrumentRepository(job.db).Create(ctx, domain.Instrument{Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true})
+	if err != nil {
+		t.Fatalf("Create instrument: %v", err)
+	}
+	f := func(v float64) *float64 { return &v }
+	str := func(v string) *string { return &v }
+	saved, err := judgement.NewDecisionRepository(job.db).Insert(ctx, domain.JevDecision{
+		InstrumentID: instrument.ID, Symbol: "7203", Timestamp: time.Now(), DecisionType: domain.JevDecisionTypeTrader,
+		StateHash: "hash", StateJSON: "{}", QuestionVersion: "v1", ResponseJSON: "{}", ModelID: "test-model",
+	})
+	if err != nil {
+		t.Fatalf("Insert decision: %v", err)
+	}
+	side := config.PolicyDirectionThresholds{MinEntryQuality: "strong", MinContinuationProbability: 0.6, MaxToxicFlow: 0.35, MaxLiquidityStressed: 0.25}
+	th := policy.Thresholds{Policy: config.PolicyConfig{Long: side, Short: side}, MaxSpreadBps: 50}
+	engine := policy.NewEngine(th, nil, trading.NewSignalRepository(job.db), PolicyOption(job.db, settings))
+
+	sig, err := engine.Evaluate(ctx, policy.Input{
+		InstrumentID: instrument.ID, Symbol: "7203", Timestamp: time.Now(), SpreadBps: f(10), EntryPriceReference: f(2000),
+		Decision: &domain.JevDecision{
+			ID: saved.ID, Direction: str(domain.JevDirectionLong), EntryQuality: str(domain.JevEntryQualityStrong), Confidence: f(0.99),
+			ContinuationProbability: f(0.9), ToxicFlow: f(0.1), LiquidityStressed: f(0.1),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if sig.Direction != domain.JevDirectionNone || sig.RejectReason == nil || !strings.HasPrefix(*sig.RejectReason, policy.ReasonMetaSkip) {
+		t.Fatalf("signal = %+v, want NONE with %s even at confidence 0.99", sig, policy.ReasonMetaSkip)
+	}
+	if sig.PolicyVersion != policy.MetaVersion {
+		t.Errorf("PolicyVersion = %q, want %q", sig.PolicyVersion, policy.MetaVersion)
 	}
 }

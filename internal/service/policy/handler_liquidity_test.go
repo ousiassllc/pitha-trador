@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -26,6 +27,11 @@ func (f fakeCalibration) BucketHasSamples(_ context.Context, confidence float64,
 		}
 	}
 	return false, nil
+}
+
+func withTurnover(f domain.Feature, turnover5m *float64) domain.Feature {
+	f.Turnover5m = turnover5m
+	return f
 }
 
 // runHandleJob runs one jev-trader job for a fresh instrument whose latest
@@ -42,11 +48,12 @@ func runHandleJob(t *testing.T, turnover5m *float64, calib policy.CalibrationSou
 
 	th := testThresholds() // MinTurnover5mJPY: 3,000,000
 	th.Policy.MinCalibrationSamples = 20
-	opts := []policy.HandlerOption{policy.WithClock(fixtureNow)}
+	opts := []policy.HandlerOption{policy.WithClock(fixtureNow), policy.WithTDnetScorer(policytest.TDnet(0))}
 	if calib != nil {
 		opts = append(opts, policy.WithCalibration(calib))
 	}
-	handler := policy.NewHandler(trader, snapshots, policy.NewEngine(th, nil, signals), nil, opts...)
+	store := policytest.NewStore(t, db, policytest.TakingModel())
+	handler := policy.NewHandler(trader, snapshots, policy.NewEngine(th, nil, signals, policytest.Option(store, store)), nil, opts...)
 
 	inst, err := market.NewInstrumentRepository(db).Create(context.Background(), domain.Instrument{
 		Symbol: "7203", Name: "Toyota", Market: "TSE Prime", IsActive: true,
@@ -57,7 +64,7 @@ func runHandleJob(t *testing.T, turnover5m *float64, calib policy.CalibrationSou
 	if _, err := snapshots.Insert(context.Background(), domain.Snapshot{
 		InstrumentID: inst.ID, Symbol: "7203", Timestamp: time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC),
 		Price: 2110.5, SpreadBps: ptr(10.0), Volume: 1000, Turnover: 900_000_000,
-		Feature: domain.Feature{Turnover5m: turnover5m},
+		Feature: withTurnover(policytest.Feature(), turnover5m),
 	}); err != nil {
 		t.Fatalf("insert snapshot: %v", err)
 	}
@@ -89,15 +96,29 @@ func TestHandler_HandleJob_ThinLiquidityFromSnapshotTurnover5m(t *testing.T) {
 	}
 }
 
-// Regression for #163: Calibrated was hard-wired true on the live path.
-func TestHandler_HandleJob_NotCalibratedWhenConfidenceBucketHasTooFewSamples(t *testing.T) {
+// The confidence-bucket calibration gate (regression for #163: Calibrated was
+// hard-wired true on the live path) belongs to the legacy threshold rule. The
+// live meta-labeling rule does not use Jev's confidence as a probability, so a
+// thinly populated bucket no longer blocks an entry the model takes; the
+// legacy rule's verdict is only logged next to it (issue #765).
+func TestHandler_HandleJob_ConfidenceBucketCalibrationDoesNotGateTheMetaRule(t *testing.T) {
+	buf := captureLogs(t)
 	// Confidence 0.68 falls in the "0.60-0.70" bucket (index 1).
 	sig := runHandleJob(t, ptr(50_000_000.0), fakeCalibration{sampleCounts: [5]int{0, 19, 0, 0, 0}})
-	if sig.Direction != domain.JevDirectionNone || sig.RejectReason == nil || !strings.HasPrefix(*sig.RejectReason, policy.ReasonNotCalibrated) {
-		t.Fatalf("signal = %+v, want NONE with %s", sig, policy.ReasonNotCalibrated)
+	if sig.Direction != domain.JevDirectionLong {
+		t.Fatalf("signal = %+v, want LONG on the model's verdict although the bucket is not calibrated", sig)
 	}
-
-	if sig := runHandleJob(t, ptr(50_000_000.0), fakeCalibration{sampleCounts: [5]int{0, 20, 0, 0, 0}}); sig.Direction != domain.JevDirectionLong {
-		t.Errorf("bucket at the minimum: Direction = %q, want LONG", sig.Direction)
+	found := false
+	for _, line := range decodeLogLines(t, buf) {
+		if line["msg"] == "policy: meta-label vs legacy entry decision" {
+			found = true
+			reason, _ := line["legacy_reason"].(string)
+			if line["legacy_direction"] != domain.JevDirectionNone || !strings.HasPrefix(reason, policy.ReasonNotCalibrated) || line["agree"] != false {
+				t.Errorf("comparison line = %+v, want the legacy rule's not_calibrated NONE", line)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no comparison log line; lines: %+v", decodeLogLines(t, buf))
 	}
 }

@@ -19,6 +19,9 @@ const AlgorithmLogisticRegression = "logistic_regression"
 // a win and a loss in bps (both after trading costs, from net_return_bps).
 // The primary signal (Jev's direction) is not part of it.
 type Model struct {
+	// ID is metalabel_models.id of the stored row the model was parsed from
+	// (ParseModel); 0 for a model that is not stored.
+	ID int64
 	// Version is metalabel_models.version.
 	Version string
 	// FeatureNames is the vector layout the weights were learned for.
@@ -66,7 +69,7 @@ func ParseModel(m repo.Model) (Model, error) {
 	if err := json.Unmarshal([]byte(m.ParamsJSON), &p); err != nil {
 		return Model{}, fmt.Errorf("metalabel: decode model %q params: %w", m.Version, err)
 	}
-	model := Model{Version: m.Version, FeatureNames: slices.Clone(m.FeatureNames), LR: p.LogisticRegression, Calibrator: p.Calibrator, WinBps: p.WinBps, LossBps: p.LossBps}
+	model := Model{ID: m.ID, Version: m.Version, FeatureNames: slices.Clone(m.FeatureNames), LR: p.LogisticRegression, Calibrator: p.Calibrator, WinBps: p.WinBps, LossBps: p.LossBps}
 	if err := model.validate(); err != nil {
 		return Model{}, fmt.Errorf("metalabel: model %q: %w", m.Version, err)
 	}

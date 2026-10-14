@@ -167,11 +167,11 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 // rolled-back) change applies on the next evaluation (#52, #714).
 func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config, runtimePolicy selfimprove.RuntimePolicy) *policy.Handler {
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
-	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy))
+	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy), metalabeljob.PolicyOption(state.DB, s.Settings))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig)
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk},
-		policy.WithCalibration(s.Calibration),
+		policy.WithCalibration(s.Calibration), policy.WithTDnetScorer(s.News),
 		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)))
 }
 

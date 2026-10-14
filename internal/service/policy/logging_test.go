@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 )
 
 func captureLogs(t *testing.T) *bytes.Buffer {
@@ -59,7 +60,8 @@ func TestEngine_Evaluate_LogsTradeSignalDecidedOncePerEvaluation(t *testing.T) {
 	}
 	in.Decision.ID = saved.ID
 	buf := captureLogs(t)
-	e := policy.NewEngine(testThresholds(), fakeRiskChecker{passed: true}, trading.NewSignalRepository(db))
+	e := policy.NewEngine(testThresholds(), fakeRiskChecker{passed: true}, trading.NewSignalRepository(db),
+		policytest.Option(policytest.ModelOf(policytest.TakingModel()), &policytest.Predictions{}))
 
 	if _, err := e.Evaluate(context.Background(), in); err != nil {
 		t.Fatalf("Evaluate: %v", err)
