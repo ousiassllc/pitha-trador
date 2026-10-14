@@ -47,7 +47,7 @@ type Handler struct {
 // row via snapshots, and hands every approved signal to executor. A nil
 // executor only records signals (no order is ever placed).
 func NewHandler(trader *jev.Trader, snapshots *market.SnapshotRepository, engine *Engine, executor SignalExecutor, opts ...HandlerOption) *Handler {
-	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor, now: time.Now, snapshotMaxAge: domain.MaxSnapshotAge}
+	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor, now: time.Now, snapshotMaxAge: domain.DefaultMaxSnapshotAge}
 	for _, opt := range opts {
 		opt(h)
 	}
@@ -90,7 +90,7 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 	snap := snapshots[0]
 
-	decision, err := h.trader.Evaluate(ctx, payload.InstrumentID, jev.StateFromSnapshot(snap))
+	decision, err := h.trader.Evaluate(ctx, payload.InstrumentID, jev.StateFromSnapshot(snap, h.now().UTC()))
 	if err != nil {
 		if _, sigErr := h.engine.Evaluate(ctx, Input{
 			InstrumentID: payload.InstrumentID,

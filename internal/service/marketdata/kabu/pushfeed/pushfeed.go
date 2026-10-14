@@ -28,9 +28,11 @@ const (
 	// marketdata.RestRotationSlots stay free for the REST poll to rotate
 	// through (marketdata.Client.withRestSlot).
 	MaxRegisterSymbols = marketdata.MaxRegisteredSymbols - marketdata.RestRotationSlots
-	// BoardMaxAge is how old a PUSH board may be to be preferred over a
-	// REST poll.
-	BoardMaxAge = 30 * time.Second
+	// DefaultBoardMaxAge is how old a PUSH board may be to be preferred over
+	// a REST poll unless Feed.BoardMaxAge says otherwise. It equals the
+	// default ranking-watch snapshot max age, so a bar built from a PUSH
+	// board is never staler than the gate that later judges it (issue #754).
+	DefaultBoardMaxAge = domain.DefaultMaxSnapshotAge
 
 	retryMin = 2 * time.Second
 	retryMax = time.Minute
@@ -63,6 +65,11 @@ type Feed struct {
 	// accumulate OFI (issue #750). Only PUSH boards are observed: REST
 	// polls arrive too sparsely to form per-event order flow.
 	OrderFlow *orderflow.Tracker
+	// BoardMaxAge is how old a PUSH board may be to be preferred over a REST
+	// poll (issue #754: PUSH first, REST only when PUSH is stale or absent).
+	// Zero or negative means DefaultBoardMaxAge. Bootstrap sets it to the
+	// Settings screen's snapshot max age.
+	BoardMaxAge time.Duration
 
 	boards *marketdata.BoardCache
 	watch  watchState // ranking-driven registration (watch.go)
@@ -154,13 +161,18 @@ func (f *Feed) onBoard(b marketdata.Board) {
 	}
 }
 
-// Latest returns symbol's quote: a PUSH board received within BoardMaxAge,
+// Latest returns symbol's quote: a PUSH board received within the board max
+// age (Feed.BoardMaxAge),
 // otherwise a REST poll. A board without a usable current price (0 before
 // 寄り付き/未約定; Board.HasPrice) is never returned: callers get
 // broker.ErrPriceUnavailable instead, so a price-0 bar is never persisted
 // (issue #173).
 func (f *Feed) Latest(ctx context.Context, symbol string) (broker.Quote, error) {
-	board, ok := f.boards.Fresh(symbol, time.Now(), BoardMaxAge)
+	maxAge := f.BoardMaxAge
+	if maxAge <= 0 {
+		maxAge = DefaultBoardMaxAge
+	}
+	board, ok := f.boards.Fresh(symbol, time.Now(), maxAge)
 	if !ok {
 		var err error
 		if board, err = f.Broker.GetBoard(ctx, symbol, f.Exchange); err != nil {

@@ -42,7 +42,11 @@ type Refresher struct {
 	Decisions *judgement.DecisionRepository
 	Positions *trading.PositionRepository
 	Strategy  *config.StrategyConfig
-	Watch     Watch // ranking watch list restricting screening; nil screens all
+	// RankingWatchMaxAge is how old a bar may be in ranking-watch mode before
+	// it is stale (the Settings screen's scan.snapshot_max_age_seconds, issue
+	// #754); zero or negative means domain.DefaultMaxSnapshotAge.
+	RankingWatchMaxAge time.Duration
+	Watch              Watch // ranking watch list restricting screening; nil screens all
 	// InSession reports whether t is inside a trading session; a nil
 	// InSession is always in session.
 	InSession func(time.Time) bool
@@ -135,7 +139,7 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("candidates: list snapshot history: %w", err)
 	}
-	// A bar older than the mode's max age (domain.MaxSnapshotAge in
+	// A bar older than the mode's max age (RankingWatchMaxAge in
 	// ranking-watch mode, scan.full_scan_max_snapshot_age_seconds in
 	// full-scan mode, issue #686) is stale only during a session
 	// (issue #685): off-session the retained watch list is shown from stored
@@ -143,7 +147,11 @@ func (r *Refresher) Refresh(ctx context.Context) error {
 	// session / an earlier watch period must not reach Jev Scout until
 	// market-data writes a fresh one.
 	checkStale := r.inSession(startedAt)
-	maxAge := r.Strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)
+	rankingAge := r.RankingWatchMaxAge
+	if rankingAge <= 0 {
+		rankingAge = domain.DefaultMaxSnapshotAge
+	}
+	maxAge := r.Strategy.Scan.SnapshotMaxAge(rankingAge)
 	for slot, inst := range actives {
 		symbols[slot] = domain.ScanSymbol{InstrumentID: inst.ID, Symbol: inst.Symbol, Name: inst.Name, Market: inst.Market}
 		bars := history[inst.ID]

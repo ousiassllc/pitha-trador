@@ -19,18 +19,18 @@ import (
 
 // Issue #685: HandleJob must neither run Jev Trader / persist a signal /
 // hand anything to the executor on a bar older than
-// domain.MaxSnapshotAge, nor fail (no retry storm). A bar exactly that
+// domain.DefaultMaxSnapshotAge, nor fail (no retry storm). A bar exactly that
 // old is still fresh. The fixture bar is stamped 2026-09-27 09:31 UTC.
 func TestHandler_HandleJob_SkipsStaleSnapshot(t *testing.T) {
 	barAt := time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC)
 	for _, tc := range []struct {
 		name      string
 		age       time.Duration
-		maxAge    time.Duration // 0 keeps the default (ranking-watch) domain.MaxSnapshotAge
+		maxAge    time.Duration // 0 keeps the default (ranking-watch) domain.DefaultMaxSnapshotAge
 		wantStale bool
 	}{
-		{"exactly max age is fresh", domain.MaxSnapshotAge, 0, false},
-		{"just over max age is stale", domain.MaxSnapshotAge + time.Nanosecond, 0, true},
+		{"exactly max age is fresh", domain.DefaultMaxSnapshotAge, 0, false},
+		{"just over max age is stale", domain.DefaultMaxSnapshotAge + time.Nanosecond, 0, true},
 		{"previous session", 17 * time.Hour, 0, true},
 		// Issue #686: full-scan mode passes the longer full-scan age.
 		{"8 min bar is stale in ranking-watch mode", 8 * time.Minute, 0, true},

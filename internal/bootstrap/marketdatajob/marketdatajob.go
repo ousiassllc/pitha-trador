@@ -57,8 +57,8 @@ type Handler struct {
 	EventTrigger config.EventTriggerConfig
 	// MarketContextMaxAge is how old an index/stock bar may be and still
 	// count as the current market for the market context (issue #692):
-	// ScanConfig.SnapshotMaxAge(domain.MaxSnapshotAge). Unset or
-	// non-positive means domain.MaxSnapshotAge (marketcontext.NewLoader).
+	// ScanConfig.SnapshotMaxAge(domain.MarketContextMaxAge). Unset or
+	// non-positive means domain.MarketContextMaxAge (marketcontext.NewLoader).
 	MarketContextMaxAge time.Duration
 	// Symbols supplies each stock's 貸借区分 and 値幅上限/下限 (issue #511).
 	// nil leaves the flags unknown, which restricts nothing.

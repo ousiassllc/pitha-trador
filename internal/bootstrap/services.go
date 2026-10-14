@@ -93,8 +93,9 @@ type Services struct {
 	Scheduler *scheduler.Scheduler
 	Updater   *updater.SchedulerAdapter // nil on cmd/server (issue #76)
 
-	strategy *config.StrategyConfig
-	wg       sync.WaitGroup
+	strategy           *config.StrategyConfig
+	wg                 sync.WaitGroup
+	rankingWatchMaxAge time.Duration // Settings snapshot staleness limit (issue #754)
 
 	// tachibana are the 立花 監視銘柄ソース settings read at start-up (the
 	// defaults unless 立花 is selected); the nightly daily-bar batch reads them.

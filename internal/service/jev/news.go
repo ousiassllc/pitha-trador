@@ -30,7 +30,7 @@ func WithClock(now func() time.Time) Option {
 }
 
 // WithSnapshotMaxAge sets how old the latest bar may be before
-// Scout.HandleJob skips the job as stale (default domain.MaxSnapshotAge,
+// Scout.HandleJob skips the job as stale (default domain.DefaultMaxSnapshotAge,
 // the ranking-watch value; full-scan mode passes the longer full-scan age,
 // issue #686). Scout only.
 func WithSnapshotMaxAge(d time.Duration) Option {
@@ -60,7 +60,7 @@ func WithNewsSource(source NewsSource) Option {
 }
 
 func newOptions(opts []Option) options {
-	o := options{now: time.Now, snapshotMaxAge: domain.MaxSnapshotAge}
+	o := options{now: time.Now, snapshotMaxAge: domain.DefaultMaxSnapshotAge}
 	for _, opt := range opts {
 		opt(&o)
 	}

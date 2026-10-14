@@ -141,7 +141,7 @@ func TestScanCycle_Summary(t *testing.T) {
 	}
 }
 
-// The stale_snapshot threshold is mode-dependent (MaxSnapshotAge for ranking
+// The stale_snapshot threshold is mode-dependent (DefaultMaxSnapshotAge for ranking
 // watch, scan.full_scan_max_snapshot_age_seconds for full scan), so the static
 // label must not hard-code either value (issue #690).
 func TestScreenReason_StaleSnapshotLabelIsThresholdAgnostic(t *testing.T) {

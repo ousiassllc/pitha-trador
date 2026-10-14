@@ -31,7 +31,7 @@ type Input struct {
 	// (insufficient history) rather than a genuine 0. The filter outcome is
 	// unchanged; only the reason reported when the floor is not met differs.
 	TurnoverMissing bool
-	// Stale marks Snapshot as older than domain.MaxSnapshotAge during a
+	// Stale marks Snapshot as older than domain.DefaultMaxSnapshotAge during a
 	// session (issue #685): it is excluded with
 	// domain.ScreenReasonStaleSnapshot and never becomes a candidate, so no
 	// Jev Scout is enqueued on its outdated numbers.

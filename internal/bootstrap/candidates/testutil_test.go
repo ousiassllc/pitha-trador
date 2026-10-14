@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -55,6 +56,10 @@ func newTestRefresherWithOrders(t *testing.T) (*Refresher, *trading.OrderReposit
 		Positions:   trading.NewPositionRepository(conn),
 		Screener:    screener.NewLiveSource(),
 		Strategy:    &config.StrategyConfig{},
+		// Outside a session no bar is stale (issue #754's 20s default would
+		// flag the minute-truncated bars most tests insert); tests of the
+		// stale_snapshot gate switch InSession on themselves.
+		InSession: func(time.Time) bool { return false },
 	}, trading.NewOrderRepository(conn)
 }
 

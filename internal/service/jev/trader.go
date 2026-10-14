@@ -103,6 +103,7 @@ func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutSt
 		LatencyMs:               int(latency.Milliseconds()),
 		ModelID:                 resp.ModelID,
 		RequestCost:             resp.RequestCost,
+		DataAgeMS:               state.DataAgeMS,
 		OrderFlow:               state.OrderFlow,
 	}
 

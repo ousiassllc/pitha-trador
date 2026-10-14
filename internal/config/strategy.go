@@ -31,7 +31,7 @@ type ScanConfig struct {
 	// during a session before it is stale (stale_snapshot, issue #686) when
 	// full_scan_enabled is true: a REST symbol is refreshed only once per
 	// full cycle (about 8 minutes at 8 calls/s over ~4,000 symbols), so the
-	// ranking-watch 3 minutes (domain.MaxSnapshotAge) would drop most of
+	// ranking-watch 3 minutes (domain.DefaultMaxSnapshotAge) would drop most of
 	// them. Unset/non-positive is derived from the rate cap
 	// (withScanIntervalDefaults); ranking-watch mode ignores it.
 	FullScanMaxSnapshotAgeSeconds int `yaml:"full_scan_max_snapshot_age_seconds"`
@@ -48,7 +48,7 @@ type ScanConfig struct {
 func (c ScanConfig) FullScanOn() bool { return c.FullScanEnabled != nil && *c.FullScanEnabled }
 
 // SnapshotMaxAge returns how old a bar may be during a session before it is
-// stale: rankingWatchAge (domain.MaxSnapshotAge) in ranking-watch mode, and
+// stale: rankingWatchAge (domain.DefaultMaxSnapshotAge) in ranking-watch mode, and
 // the longer full-scan age when full scan is on. An unset full-scan age
 // (a ScanConfig that bypassed the loader's defaults) falls back to
 // rankingWatchAge.

@@ -23,9 +23,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
-// fixtureNow is the pinned wall clock for HandleJob tests: 30s after the
-// fixture bars' 09:31 timestamp, so they count as fresh (issue #685).
-func fixtureNow() time.Time { return time.Date(2026, 9, 27, 9, 31, 30, 0, time.UTC) }
+// fixtureNow is the pinned wall clock for HandleJob tests: 10s after the
+// fixture bars' 09:31 timestamp, so they count as fresh (issues #685, #754: 20s limit).
+func fixtureNow() time.Time { return time.Date(2026, 9, 27, 9, 31, 10, 0, time.UTC) }
 
 func newHandlerTestDB(t *testing.T) *sql.DB {
 	t.Helper()

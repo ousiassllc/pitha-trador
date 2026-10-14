@@ -58,21 +58,28 @@ const (
 	PriceLimitDown PriceLimit = "down"
 )
 
-// MaxSnapshotAge is how old a market_snapshots bar may be, measured against
-// the wall clock during a trading session, before it counts as stale
-// (issue #685) in ranking-watch mode (scan.full_scan_enabled: false). It
-// matches the 3 minutes marketcontext allows an index bar and is three times
-// the 60-second ranking-watch (market-data) cycle, so a healthy watch list
-// always carries bars younger than this; a bar left from the previous
+// DefaultMaxSnapshotAge is how old a market_snapshots bar may be, measured
+// against the wall clock during a trading session, before it counts as stale
+// (issues #685, #754) in ranking-watch mode (scan.full_scan_enabled: false)
+// while the Settings screen's scan.snapshot_max_age_seconds is unset
+// (snapshotagesettings). A 5-15 minute horizon decision must not rest on a
+// minute-old bar, so the default is tight; a bar left from the previous
 // session or from before the symbol re-entered the watch list is older. A
 // stale bar must not reach Jev Scout/Trader or Paper Entry. Full-scan mode
 // refreshes a symbol only once per REST cycle (about 8 minutes), so it uses
 // the longer scan.full_scan_max_snapshot_age_seconds instead (issue #686).
-const MaxSnapshotAge = 3 * time.Minute
+const DefaultMaxSnapshotAge = 20 * time.Second
+
+// MarketContextMaxAge is how old an index bar may be, in ranking-watch mode,
+// and still feed the market context (functional.md FR-FE-4). Index bars are
+// refreshed once per 60-second cycle, so unlike a stock bar judged against
+// DefaultMaxSnapshotAge they are allowed three cycles of age.
+const MarketContextMaxAge = 3 * time.Minute
 
 // IsStale reports whether s is older than maxAge at now. A bar exactly
-// maxAge old is still fresh. maxAge is MaxSnapshotAge in ranking-watch mode
-// and the full-scan age in full-scan mode (issue #686).
+// maxAge old is still fresh. maxAge is the ranking-watch snapshot max age
+// (DefaultMaxSnapshotAge or the Settings value) in ranking-watch mode and
+// the full-scan age in full-scan mode (issue #686).
 func (s Snapshot) IsStale(now time.Time, maxAge time.Duration) bool {
 	return now.Sub(s.Timestamp) > maxAge
 }

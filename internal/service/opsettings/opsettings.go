@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
 
@@ -75,14 +76,15 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 
 // Keys returns every key Service manages: the backup and log directories,
 // the policy thresholds, the screener thresholds, the OFI windows, the
-// daily entry-halt thresholds, the triple-barrier label settings, the
-// meta-labeling settings, the broker settings, then the 立花 監視銘柄ソース
+// ranking-watch snapshot max age, the daily entry-halt thresholds, the
+// triple-barrier label settings, the meta-labeling settings, the broker settings, then the 立花 監視銘柄ソース
 // settings.
 func Keys() []string {
 	keys := []string{config.KeyBackupDir, config.KeyLogDir}
 	keys = append(keys, config.PolicySettingKeys()...)
 	keys = append(keys, config.FastScreenerSettingKeys()...)
 	keys = append(keys, orderflowsettings.Keys()...)
+	keys = append(keys, snapshotagesettings.Key)
 	keys = append(keys, dailyguardsettings.Keys()...)
 	keys = append(keys, barriersettings.Keys()...)
 	keys = append(keys, metalabelsettings.Keys()...)
@@ -120,7 +122,7 @@ func kindOf(key string) kind {
 		return kindMetaLabel
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key):
+	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber
@@ -219,6 +221,8 @@ func (s *Service) defaultText(key string) string {
 	case orderflowsettings.IsKey(key):
 		seconds, _ := orderflowsettings.Default().Seconds(key)
 		return strconv.Itoa(seconds)
+	case snapshotagesettings.IsKey(key):
+		return strconv.Itoa(snapshotagesettings.DefaultSeconds)
 	case dailyguardsettings.IsKey(key):
 		return "0"
 	case barriersettings.IsKey(key):

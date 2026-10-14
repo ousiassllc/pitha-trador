@@ -76,6 +76,13 @@ type ScoutState struct {
 	// context only; it never overrides Jev's judgment (FR-LUNA-5).
 	NewsContext *domain.NewsContext `json:"news_context,omitempty"`
 
+	// DataAgeMS is how old the market bar was, in milliseconds, when the
+	// decision was made (issue #754): now minus the bar's timestamp, never
+	// negative. nil when the state was not built for a live decision
+	// (StateFromSnapshot is always given the decision time). It is sent to
+	// Jev inside the state and copied onto jev_decisions.data_age_ms.
+	DataAgeMS *int64 `json:"data_age_ms,omitempty"`
+
 	// OrderFlow is the snapshot's order-flow features (issue #750). It is
 	// never sent to Jev (json:"-": a jittering OFI would also defeat
 	// FR-SCAN-2's state_hash suppression); Scout/Trader copy it onto the
