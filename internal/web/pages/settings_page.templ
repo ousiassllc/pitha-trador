@@ -21,8 +21,8 @@ type SettingsProps struct {
 // kabuステーション, Slack, Luna, ニュースフィード, Sol, Opus - each showing
 // whether it is configured and opening a modal with all of that
 // connection's keys, URL and model name (organisms.ConnectionList), plus a
-// システム section whose アップデート and エラーログ entries open the
-// UpdatePanel and ErrorLogPanel in modals of their own. Every field keeps
+// システム section whose アップデート, エラーログ and データエクスポート entries open the
+// UpdatePanel, ErrorLogPanel and DataExportPanel in modals of their own. Every field keeps
 // its own independent save (`POST /settings/:key`) and delete (`DELETE
 // /settings/:key`) form (internal/web/handler/settings.SettingsHandler.
 // Save/Delete) - a blank or untouched field can never clear another
@@ -64,6 +64,13 @@ templ SettingsPage(props SettingsProps) {
 						Description: "調査や共有のために、エラーログをダウンロードできます。",
 						ActionLabel: "開く",
 					})
+					@molecules.SettingsCard(molecules.SettingsCardProps{
+						ID:          "data-export",
+						ModalID:     "modal-data-export",
+						Name:        "データエクスポート",
+						Description: "取引ログ・判断ログ・計測ログを期間を指定して ZIP でダウンロードできます。",
+						ActionLabel: "開く",
+					})
 				</ul>
 			</section>
 		</div>
@@ -79,6 +86,9 @@ templ SettingsPage(props SettingsProps) {
 		}
 		@molecules.Modal("modal-error-log", "エラーログ") {
 			@organisms.ErrorLogPanel()
+		}
+		@molecules.Modal("modal-data-export", "データエクスポート") {
+			@organisms.DataExportPanel()
 		}
 		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}

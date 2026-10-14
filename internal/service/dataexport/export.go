@@ -152,5 +152,9 @@ func writeTable(ctx context.Context, zw *zip.Writer, kind Kind, t Table, req Req
 	for i, c := range t.Columns {
 		names[i] = c.Name
 	}
-	return FileManifest{Name: t.Name, Path: path, Rows: rows, Columns: names}, nil
+	fm := FileManifest{Name: t.Name, Path: path, Rows: rows, Columns: names}
+	if t.Truncated != nil {
+		fm.Truncated = t.Truncated()
+	}
+	return fm, nil
 }

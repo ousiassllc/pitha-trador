@@ -1,6 +1,7 @@
-// Package dataexport builds the local export archive of the trade log and the
-// decision log (issues #768/#770/#771): for a period and a set of kinds it
-// writes a ZIP holding one CSV or JSONL file per table plus manifest.json
+// Package dataexport builds the local export archive of the trade log, the
+// decision log and the measurement log (issues #768/#770/#771/#772/#773):
+// for a period and a set of kinds it writes a ZIP holding one CSV or JSONL
+// file per table plus manifest.json
 // (schema version, period, per-kind row counts).
 //
 // Secrets (tokens, passwords, API keys, 第二暗証番号, ...) are masked on every
@@ -27,6 +28,9 @@ const (
 	// KindDecisions is the decision log: Jev requests/responses, features,
 	// skip/reject reasons and after-the-fact labels, linked by decision_id.
 	KindDecisions Kind = "decisions"
+	// KindMetrics is the measurement log: the INFO-and-above records of the
+	// daily JSON log (issue #772).
+	KindMetrics Kind = "metrics"
 )
 
 // Period is the half-open time range [From, To) an export covers.
@@ -57,6 +61,9 @@ type Table struct {
 	// without holding the period in memory, and returns the first error
 	// (including emit's).
 	Read func(ctx context.Context, p Period, emit func(Row) error) error
+	// Truncated, when set, reports after Read whether the source dropped
+	// rows of the period to fit its own size cap; the manifest records it.
+	Truncated func() bool
 }
 
 // Collector supplies the tables of one Kind. The first table is the kind's

@@ -1,10 +1,12 @@
 package startup_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -15,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/service/dataexport"
 )
 
 // isolateLogging restores the process-wide slog default after the test and
@@ -151,6 +154,53 @@ func TestLogDir_WriterArchiverAndExporterShareOneDirectory(t *testing.T) {
 	if !bytes.Contains(res.Data, []byte("shared dir marker")) {
 		t.Fatalf("exported records do not contain the logged error: %q", res.Data)
 	}
+}
+
+// issue #773: dataexport.NewLocal (as RouterOptions wires it) reads the same log directory as the writer
+// (measurement log) and the real database (trade / decision log) - one ZIP
+// with all three kinds and a manifest.
+func TestDataExport_ExportsAllKindsFromTheSharedLogDirAndDB(t *testing.T) {
+	isolateLogging(t)
+	t.Chdir(t.TempDir())
+
+	state, err := bootstrap.Run(bootstrap.Config{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	defer func() { _ = state.Close() }()
+	startup.RunMain("test", bootstrap.ResolveLogSetup, func() error { slog.Error("data export marker"); return nil })
+
+	services := bootstrap.BuildServices(state, config.Secrets{})
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	var buf bytes.Buffer
+	manifest, err := dataexport.NewLocal(state.DB, services.ErrorLogs).Export(context.Background(), &buf, dataexport.Request{
+		Kinds:  []dataexport.Kind{dataexport.KindTrades, dataexport.KindDecisions, dataexport.KindMetrics},
+		Period: dataexport.Period{From: today.AddDate(0, 0, -1), To: today.AddDate(0, 0, 2)},
+		Format: dataexport.FormatJSONL,
+	})
+	if err != nil || len(manifest.Kinds) != 3 {
+		t.Fatalf("Export: kinds = %+v, err = %v, want trades, decisions, metrics", manifest.Kinds, err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatalf("read archive: %v", err)
+	}
+	for _, f := range zr.File {
+		if f.Name != "metrics/metrics.jsonl" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+		body, _ := io.ReadAll(rc)
+		_ = rc.Close()
+		if !bytes.Contains(body, []byte("data export marker")) {
+			t.Fatalf("metrics file lacks the logged record: %q", body)
+		}
+		return
+	}
+	t.Fatal("archive has no metrics/metrics.jsonl")
 }
 
 func readLogRecords(t *testing.T, dir string) []map[string]any {

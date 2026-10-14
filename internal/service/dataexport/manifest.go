@@ -23,7 +23,8 @@ type ManifestPeriod struct {
 }
 
 // KindManifest describes one exported kind. Rows is the row count of its
-// primary table (its first file): trades = orders, decisions = decisions.
+// primary table (its first file): trades = orders, decisions = decisions,
+// metrics = metrics.
 type KindManifest struct {
 	Kind  Kind           `json:"kind"`
 	Rows  int64          `json:"rows"`
@@ -36,6 +37,9 @@ type FileManifest struct {
 	Path    string   `json:"path"`
 	Rows    int64    `json:"rows"`
 	Columns []string `json:"columns"`
+	// Truncated is set when older rows of the period were dropped to fit
+	// the source's size cap (the measurement log's 10 MiB).
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 func writeManifest(zw *zip.Writer, m Manifest, modified time.Time) error {
