@@ -26,24 +26,55 @@ const DefaultRetentionDays = 30
 type Archiver struct {
 	dir           string
 	retentionDays int
-	now           func() time.Time
+	// retentionSource, when set, is asked for the retention on every pass
+	// (the Settings screen's runtime_settings value, issue #772); it
+	// overrides retentionDays.
+	retentionSource func(context.Context) int
+	now             func() time.Time
 	// syncFile / closeFile are os.File.Sync / Close; fields so tests can
 	// inject the failures a real disk produces.
 	syncFile  func(*os.File) error
 	closeFile func(*os.File) error
 }
 
+// ArchiverOption configures NewArchiver.
+type ArchiverOption func(*Archiver)
+
+// WithRetentionSource makes the Archiver ask source for the retention in
+// days at the start of every Archive pass instead of using the fixed
+// retentionDays, so a value changed in the Settings screen applies on the
+// next pass without a restart (issue #772). A result <= 0 means
+// DefaultRetentionDays.
+func WithRetentionSource(source func(context.Context) int) ArchiverOption {
+	return func(a *Archiver) { a.retentionSource = source }
+}
+
 // NewArchiver returns an Archiver over dir. retentionDays defaults to
 // DefaultRetentionDays when <= 0.
-func NewArchiver(dir string, retentionDays int) *Archiver {
+func NewArchiver(dir string, retentionDays int, opts ...ArchiverOption) *Archiver {
 	if retentionDays <= 0 {
 		retentionDays = DefaultRetentionDays
 	}
-	return &Archiver{
+	a := &Archiver{
 		dir: dir, retentionDays: retentionDays, now: time.Now,
 		syncFile:  (*os.File).Sync,
 		closeFile: (*os.File).Close,
 	}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
+}
+
+// retention returns the retention in days for one pass.
+func (a *Archiver) retention(ctx context.Context) int {
+	if a.retentionSource != nil {
+		if days := a.retentionSource(ctx); days > 0 {
+			return days
+		}
+		return DefaultRetentionDays
+	}
+	return a.retentionDays
 }
 
 // Rotate implements internal/service/scheduler.LogRotator by delegating
@@ -62,7 +93,7 @@ func (a *Archiver) Archive(ctx context.Context) error {
 		return fmt.Errorf("logging: read log directory %q: %w", a.dir, err)
 	}
 
-	cutoff := a.now().UTC().AddDate(0, 0, -a.retentionDays)
+	cutoff := a.now().UTC().AddDate(0, 0, -a.retention(ctx))
 	for _, entry := range entries {
 		if err := ctx.Err(); err != nil {
 			return err

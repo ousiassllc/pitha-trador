@@ -5,6 +5,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -78,6 +79,19 @@ var opsGroups = slices.Concat([]opsGroup{
 			hint:        "絶対パスで入力してください。ディレクトリが作成できない場合、アプリは標準エラー出力へログを出して起動を続けます。",
 			placeholder: "未設定（既定を使用）",
 		}},
+	},
+	{
+		id:          "logsettings",
+		name:        "ログのレベルと保持期間",
+		description: "日次 JSON ログに書き出す最低レベルと、ログファイルを圧縮せずに置いておく日数です（issue #772）。INFO 以上に計測ログ（#652 のメトリクスなど）が含まれ、期間指定のエクスポートの元になります。",
+		note: "ログレベルは起動時に一度だけ読むため、保存・既定に戻すの反映にはアプリの再起動が必要です。error にするとエクスポートできる計測ログ（INFO）や WARN が残りません。" +
+			"保持期間は再起動不要で、次のメンテナンスチェック（10 分以内）から反映されます。環境変数では設定できません。",
+		fields: []opsField{
+			{key: config.KeyLogLevel, label: "ログレベル", options: logsettings.Levels,
+				hint: "debug / info / warn / error のいずれかです。既定は info です。debug はデータベースの正常クエリも記録するため、ログが大きくなります。"},
+			{key: config.KeyLogRetentionDays, label: "ログの保持期間（日）", placeholder: "30",
+				hint: "1〜3650 の整数です。この日数より古い日次ログは gzip で圧縮アーカイブされます。既定は 30 日です。"},
+		},
 	},
 	policyGroup("policy-long", "Policy Engine（ロング）", "policy.long.", "ロング"),
 	policyGroup("policy-short", "Policy Engine（ショート）", "policy.short.", "ショート"),

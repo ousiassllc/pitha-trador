@@ -231,12 +231,11 @@ func resolveConfigPath(explicit, envVar, defaultRelPath string) (path string, ok
 	return candidate, true
 }
 
-// ResolveLogDir returns the absolute log directory (startup.LogDir) for the
-// DB path resolved like Run does, independent of the working directory.
-func ResolveLogDir() (string, error) {
+// ResolveLogSetup returns startup.LogDir and startup.LogLevel for the DB path resolved like Run does.
+func ResolveLogSetup() (startup.LogSetup, error) {
 	dbPath, err := resolveDBPath("")
 	if err != nil {
-		return "", err
+		return startup.LogSetup{}, err // zero Level is INFO
 	}
-	return startup.LogDir(dbPath), nil
+	return startup.LogSetup{Dir: startup.LogDir(dbPath), Level: startup.LogLevel(dbPath)}, nil
 }
