@@ -2,6 +2,25 @@ package domain
 
 import "time"
 
+// Calibration label versions (calibration_outcomes.label_version, issue
+// #756): which labeling method produced an outcome row.
+const (
+	// CalibrationLabelVersionClose is the legacy close-price-only label
+	// (migration 000033 backfills every pre-existing row with it).
+	CalibrationLabelVersionClose = 1
+	// CalibrationLabelVersionTripleBarrier is the triple-barrier label
+	// (TP/SL/timeout, cost-adjusted net return).
+	CalibrationLabelVersionTripleBarrier = 2
+)
+
+// Triple-barrier outcomes (calibration_outcomes.barrier_hit): which barrier
+// was touched first. Legacy close-only rows carry no barrier (empty string).
+const (
+	BarrierHitTakeProfit = "tp"
+	BarrierHitStopLoss   = "sl"
+	BarrierHitTimeout    = "timeout"
+)
+
 // CalibrationOutcome mirrors one calibration_outcomes row: a single Jev
 // trader decision's realized outcome at one judgment horizon
 // (docs/architecture/er.md §calibration_outcomes, functional.md §4.12
@@ -28,7 +47,21 @@ type CalibrationOutcome struct {
 	// (er.md: "direction=NONEの場合NULL"), otherwise true iff FutureReturn's
 	// sign matches Direction (LONG: positive; SHORT: negative).
 	WasDirectionCorrect *bool
-	CreatedAt           time.Time
+	// BarrierHit is the triple-barrier label: BarrierHitTakeProfit/
+	// BarrierHitStopLoss/BarrierHitTimeout, whichever was touched first.
+	// Empty for legacy close-only rows (LabelVersion ==
+	// CalibrationLabelVersionClose), which are persisted as NULL.
+	BarrierHit string
+	// NetReturnBps is the direction-adjusted return in bps after trading
+	// costs (fees, spread, slippage). Nil for legacy rows.
+	NetReturnBps *float64
+	// EntryRefPrice is the executable reference price the barriers were
+	// measured from (LONG: ask, SHORT: bid). Nil for legacy rows.
+	EntryRefPrice *float64
+	// LabelVersion is the labeling method (CalibrationLabelVersion*). Zero
+	// is treated as CalibrationLabelVersionClose on Insert.
+	LabelVersion int
+	CreatedAt    time.Time
 }
 
 // ConfidenceBucketRange is one static confidence band Calibration groups
@@ -138,4 +171,11 @@ type LabeledSample struct {
 	HorizonMinutes      int
 	FutureReturn        float64
 	WasDirectionCorrect bool
+	// BarrierHit, NetReturnBps, EntryRefPrice and LabelVersion mirror the
+	// same-named CalibrationOutcome fields (issue #756) so aggregations can
+	// tell legacy close-only labels apart from triple-barrier ones.
+	BarrierHit    string
+	NetReturnBps  *float64
+	EntryRefPrice *float64
+	LabelVersion  int
 }
