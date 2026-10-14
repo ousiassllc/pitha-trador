@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
@@ -77,7 +78,7 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 
 // Keys returns every key Service manages: the backup and log directories,
 // the policy thresholds, the screener thresholds, the OFI windows, the
-// ranking-watch snapshot max age, the daily entry-halt thresholds, the
+// ranking-watch snapshot max age, the log level and retention, the daily entry-halt thresholds, the
 // triple-barrier label settings, the meta-labeling settings, the market
 // regime settings, the broker settings, then the 立花 監視銘柄ソース
 // settings.
@@ -87,6 +88,7 @@ func Keys() []string {
 	keys = append(keys, config.FastScreenerSettingKeys()...)
 	keys = append(keys, orderflowsettings.Keys()...)
 	keys = append(keys, snapshotagesettings.Key)
+	keys = append(keys, logsettings.Keys()...)
 	keys = append(keys, dailyguardsettings.Keys()...)
 	keys = append(keys, barriersettings.Keys()...)
 	keys = append(keys, metalabelsettings.Keys()...)
@@ -109,6 +111,7 @@ const (
 	kindBroker     // a broker selection / 立花 setting validated by config.NormalizeBrokerSetting
 	kindSource     // a 立花 監視銘柄ソース setting validated by tachibanasource.NormalizeTachibanaSourceSetting
 	kindMetaLabel  // a meta-labeling setting (JSON string, or the minimum EV number) validated by metalabelsettings
+	kindLog        // the log level (JSON string) or the log retention in days (JSON integer), validated by logsettings
 )
 
 func kindOf(key string) kind {
@@ -123,6 +126,8 @@ func kindOf(key string) kind {
 		return kindSource
 	case metalabelsettings.IsKey(key):
 		return kindMetaLabel
+	case logsettings.IsKey(key):
+		return kindLog
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
 	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key):
@@ -226,6 +231,10 @@ func (s *Service) defaultText(key string) string {
 		return strconv.Itoa(seconds)
 	case snapshotagesettings.IsKey(key):
 		return strconv.Itoa(snapshotagesettings.DefaultSeconds)
+	case key == config.KeyLogLevel:
+		return logsettings.DefaultLevelText
+	case key == config.KeyLogRetentionDays:
+		return strconv.Itoa(logsettings.DefaultRetentionDays)
 	case dailyguardsettings.IsKey(key):
 		return "0"
 	case barriersettings.IsKey(key):
@@ -256,7 +265,7 @@ func decodeText(key, raw string) (string, error) {
 	switch kindOf(key) {
 	case kindEntryQuality:
 		return decodeString(key, raw)
-	case kindBroker, kindSource, kindMetaLabel:
+	case kindBroker, kindSource, kindMetaLabel, kindLog:
 		return decodeBroker(key, raw)
 	}
 	var f float64

@@ -40,7 +40,7 @@ func main() {
 	// run returns instead of exiting so its defers (DB Close, lock Release)
 	// always run; RunMain then logs a returned error at ERROR level and
 	// the process exits non-zero.
-	os.Exit(startup.RunMain("server", bootstrap.ResolveLogDir, run))
+	os.Exit(startup.RunMain("server", bootstrap.ResolveLogSetup, run))
 }
 
 func run() error {

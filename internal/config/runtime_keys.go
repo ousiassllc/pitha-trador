@@ -12,3 +12,18 @@ const (
 	// SQLite DB. Read once at process start.
 	KeyLogDir = "system.log_dir"
 )
+
+// runtime_settings keys for the log level and the local log retention
+// (issue #772; requirements/non-functional.md §5.2). Parsing, bounds and
+// defaults live in internal/config/logsettings.
+const (
+	// KeyLogLevel is the minimum level of the daily JSON log: a JSON string,
+	// "debug" | "info" | "warn" | "error". Unset keeps "info", the level that
+	// carries the metrics records the metrics export reads. Read once at
+	// process start.
+	KeyLogLevel = "system.log_level"
+	// KeyLogRetentionDays is how many days of daily log files stay
+	// uncompressed before the Archiver gzips them: a JSON integer. Unset keeps
+	// 30. Read on every archival pass, so no restart is needed.
+	KeyLogRetentionDays = "system.log_retention_days"
+)

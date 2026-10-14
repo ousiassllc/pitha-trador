@@ -29,7 +29,7 @@ func main() {
 	// always run; RunMain then logs a returned error at ERROR level (so the
 	// error-log export contains the reason the app did not start) and the
 	// process exits non-zero.
-	os.Exit(startup.RunMain("desktop", bootstrap.ResolveLogDir, run))
+	os.Exit(startup.RunMain("desktop", bootstrap.ResolveLogSetup, run))
 }
 
 func run() error {

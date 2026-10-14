@@ -28,11 +28,17 @@ func isolateLogging(t *testing.T) (dbPath string) {
 	return dbPath
 }
 
+// resolveLogDir is the directory half of bootstrap.ResolveLogSetup.
+func resolveLogDir() (string, error) {
+	setup, err := bootstrap.ResolveLogSetup()
+	return setup.Dir, err
+}
+
 func TestResolveLogDir_NextToDBAndIndependentOfWorkingDirectory(t *testing.T) {
 	dbPath := isolateLogging(t)
 	t.Chdir(t.TempDir())
 
-	got, err := bootstrap.ResolveLogDir()
+	got, err := resolveLogDir()
 	if err != nil {
 		t.Fatalf("ResolveLogDir: %v", err)
 	}
@@ -48,11 +54,16 @@ func TestResolveLogDir_NextToDBAndIndependentOfWorkingDirectory(t *testing.T) {
 // into the database at dbPath, the way the Settings screen stores it.
 func storeLogDirSetting(t *testing.T, dbPath, jsonValue string) {
 	t.Helper()
+	storeSetting(t, dbPath, config.KeyLogDir, jsonValue)
+}
+
+func storeSetting(t *testing.T, dbPath, key, jsonValue string) {
+	t.Helper()
 	conn, err := sqlitedb.Open(dbPath)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if _, err := conn.Exec(`INSERT INTO runtime_settings (key, value, updated_at) VALUES (?, ?, '2026-10-08T00:00:00Z')`, config.KeyLogDir, jsonValue); err != nil {
+	if _, err := conn.Exec(`INSERT INTO runtime_settings (key, value, updated_at) VALUES (?, ?, '2026-10-08T00:00:00Z')`, key, jsonValue); err != nil {
 		t.Fatalf("store log dir setting: %v", err)
 	}
 	if err := conn.Close(); err != nil {
@@ -69,7 +80,7 @@ func TestResolveLogDir_UsesSettingsLogDir(t *testing.T) {
 	}
 	storeLogDirSetting(t, dbPath, string(encoded))
 
-	got, err := bootstrap.ResolveLogDir()
+	got, err := resolveLogDir()
 	if err != nil || got != override {
 		t.Fatalf("ResolveLogDir = (%q, %v), want %q", got, err, override)
 	}
@@ -79,9 +90,34 @@ func TestResolveLogDir_InvalidSettingFallsBackToDefault(t *testing.T) {
 	dbPath := isolateLogging(t)
 	storeLogDirSetting(t, dbPath, `"relative/logs"`)
 
-	got, err := bootstrap.ResolveLogDir()
+	got, err := resolveLogDir()
 	if want := filepath.Join(filepath.Dir(dbPath), "logs"); err != nil || got != want {
 		t.Fatalf("ResolveLogDir = (%q, %v), want the default %q", got, err, want)
+	}
+}
+
+func TestResolveLogSetup_LevelFollowsSettings(t *testing.T) {
+	dbPath := isolateLogging(t)
+
+	setup, err := bootstrap.ResolveLogSetup()
+	if err != nil || setup.Level != slog.LevelInfo {
+		t.Fatalf("unset: ResolveLogSetup = (%+v, %v), want INFO", setup, err)
+	}
+
+	storeSetting(t, dbPath, config.KeyLogLevel, `"warn"`)
+	setup, err = bootstrap.ResolveLogSetup()
+	if err != nil || setup.Level != slog.LevelWarn {
+		t.Fatalf("stored warn: ResolveLogSetup = (%+v, %v), want WARN", setup, err)
+	}
+}
+
+func TestResolveLogSetup_InvalidLevelFallsBackToInfo(t *testing.T) {
+	dbPath := isolateLogging(t)
+	storeSetting(t, dbPath, config.KeyLogLevel, `"loud"`)
+
+	setup, err := bootstrap.ResolveLogSetup()
+	if err != nil || setup.Level != slog.LevelInfo {
+		t.Fatalf("ResolveLogSetup = (%+v, %v), want INFO", setup, err)
 	}
 }
 
@@ -97,7 +133,7 @@ func TestLogDir_WriterArchiverAndExporterShareOneDirectory(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	defer func() { _ = state.Close() }()
-	dir, err := bootstrap.ResolveLogDir()
+	dir, err := resolveLogDir()
 	if err != nil {
 		t.Fatalf("ResolveLogDir: %v", err)
 	}
@@ -105,7 +141,7 @@ func TestLogDir_WriterArchiverAndExporterShareOneDirectory(t *testing.T) {
 		t.Fatalf("State.Paths = %+v, want LogDir %q", state.Paths, dir)
 	}
 
-	startup.RunMain("test", bootstrap.ResolveLogDir, func() error { slog.Error("shared dir marker"); return nil })
+	startup.RunMain("test", bootstrap.ResolveLogSetup, func() error { slog.Error("shared dir marker"); return nil })
 
 	services := bootstrap.BuildServices(state, config.Secrets{})
 	res, err := services.ErrorLogs.Export(context.Background(), 1, slog.LevelError)
@@ -138,12 +174,12 @@ func readLogRecords(t *testing.T, dir string) []map[string]any {
 // must reach the log file at ERROR level, exactly once.
 func TestRunMain_LogsReturnedErrorAtErrorLevelOnce(t *testing.T) {
 	isolateLogging(t)
-	dir, err := bootstrap.ResolveLogDir()
+	dir, err := resolveLogDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if code := startup.RunMain("test", bootstrap.ResolveLogDir, func() error { return errors.New("db is gone") }); code != 1 {
+	if code := startup.RunMain("test", bootstrap.ResolveLogSetup, func() error { return errors.New("db is gone") }); code != 1 {
 		t.Fatalf("RunMain exit code = %d, want 1", code)
 	}
 	var errorRecords []map[string]any
@@ -159,11 +195,11 @@ func TestRunMain_LogsReturnedErrorAtErrorLevelOnce(t *testing.T) {
 
 func TestRunMain_SuccessExitsZeroWithoutErrorRecords(t *testing.T) {
 	isolateLogging(t)
-	dir, err := bootstrap.ResolveLogDir()
+	dir, err := resolveLogDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := startup.RunMain("test", bootstrap.ResolveLogDir, func() error { slog.Info("hello"); return nil }); code != 0 {
+	if code := startup.RunMain("test", bootstrap.ResolveLogSetup, func() error { slog.Info("hello"); return nil }); code != 0 {
 		t.Fatalf("RunMain exit code = %d, want 0", code)
 	}
 	for _, rec := range readLogRecords(t, dir) {
@@ -197,7 +233,7 @@ func TestRunMain_UnwritableLogDirFallsBackToStderr(t *testing.T) {
 	t.Cleanup(func() { os.Stderr = prevStderr })
 
 	ran := false
-	code := startup.RunMain("test", bootstrap.ResolveLogDir, func() error { ran = true; return errors.New("late failure") })
+	code := startup.RunMain("test", bootstrap.ResolveLogSetup, func() error { ran = true; return errors.New("late failure") })
 	if !ran || code != 1 {
 		t.Fatalf("ran = %v, exit code = %d; want the run function to execute and exit 1", ran, code)
 	}

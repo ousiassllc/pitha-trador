@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
@@ -64,6 +65,20 @@ func encode(key, raw string) (string, error) {
 			return "", &InvalidValueError{Reason: err.Error()}
 		}
 		value = v
+	case kindLog:
+		if key == config.KeyLogLevel {
+			v, err := logsettings.NormalizeLevel(raw)
+			if err != nil {
+				return "", &InvalidValueError{Reason: err.Error()}
+			}
+			value = v
+			break
+		}
+		n, err := strconv.ParseInt(raw, 10, 32)
+		if err != nil {
+			return "", &InvalidValueError{Reason: fmt.Sprintf("%q は整数ではありません", raw)}
+		}
+		value = n
 	case kindEntryQuality:
 		value = raw // the allowed values are checked with the effective config
 	case kindInteger:
@@ -132,6 +147,12 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 	case snapshotagesettings.IsKey(key):
 		// A single stand-alone value: only its own range is checked.
 		if _, err := snapshotagesettings.Parse(encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case key == config.KeyLogRetentionDays:
+		// A single stand-alone value: only its own range is checked.
+		if _, err := logsettings.ParseRetentionDays(encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil

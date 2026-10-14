@@ -141,6 +141,7 @@ Settings画面（`GET /settings`）で認証情報と運用設定を管理する
 - FR-ERRLOG-4: 出力は合計10MiBを上限とし、新しい記録を優先して古い側から切り捨てる。切り捨てが発生した場合は応答ヘッダ`X-Pitha-Truncated: true`で示す。上限を使い切った後は、より古い日のファイルを全件は読まず、対象レベルの記録が1件でもあるか（切り捨ての有無）だけ確認して打ち切る
 - FR-ERRLOG-5: 該当0件でも`200`と空ファイルを返す（フォーム送信が無反応に見えないため）。`days`/`level`が範囲外・不正なら422。ログディレクトリを読めない場合、およびエクスポータ未注入（組み立て漏れ）の場合は500（固定メッセージ。原因はslogへ。`api/endpoints.md` §7）
 - FR-ERRLOG-6: 読み取り専用で、日次ローテーション・アーカイブ（`non-functional.md` §5）と並行実行できる。書き込み中の当日ファイルは読み取り時点までのスナップショットとし、末尾の不完全な行は捨てる。有効なセッションCookieを必須とし、操作者の操作として操作者ハートビート（FR-RISK-6）の更新対象になる
+- FR-ERRLOG-8（計測ログの期間抽出。issue #772）: `logging.Exporter`は、エラーログのエクスポート（FR-ERRLOG-1〜7）に加えて、期間`[from, to)`（レコードの`time`基準。UTC日付のファイルを読み、プレーン・`.log.gz`とも対象）のINFO以上のレコード（#652の`rankingmeasure:`等の計測ログを含む）を取り出せる（`ExportRange`/`ExportMetrics`）。マスク（FR-ERRLOG-3）・10MiB上限と`Truncated`（FR-ERRLOG-4）・時刻順・読み取り専用（FR-ERRLOG-6）は同じで、既存の`Export`の挙動は変わらない。ログレベルと保持期間（既定INFO・30日）はSettingsの運用設定（`system.log_level`/`system.log_retention_days`。`environment/setup.md`）で変更する。Settings画面からの期間・種類の選択とZIP・manifestへの同梱は#768の別サブissue（#773等）で扱う
 - FR-ERRLOG-7（実装時確認）: Wails（WebView2）が`Content-Disposition: attachment`の応答を保存できるかはWindows実機で確認して確定する。保存できない場合は`cmd/desktop`が保存ダイアログ経由で同一内容を保存する経路を追加する
 
 ### 4.20 ブローカー選択と立花証券の運用（issue #721。実装は#722〜#726）

@@ -201,6 +201,7 @@ sequenceDiagram
 
 - `internal/logging`に読み取り専用のExporterを置き、`web/handler/system`がインターフェース越しに呼ぶ（`bootstrap`が`LogDir`を渡して組み立て、`router`のOptionで注入する。`web` → `repository/**`の禁止は変わらない）。書き込み側の`RotatingWriter`・`Archiver`とは独立で、ログファイルを変更しない
 - 当日の書き込み中ファイルは読み取り時点までを対象とし、末尾の不完全行は捨てる。`.log.gz`は透過的に展開する
+- 計測ログ（INFO以上）の期間抽出（FR-ERRLOG-8）は同じExporterの`ExportRange`/`ExportMetrics`（期間`[from, to)`をレコード時刻で絞る。ファイルの選び方・マスク・上限は共通）で、ログレベルと保持期間はSettings（`system.log_level`は起動時にstartupが読み、`system.log_retention_days`は`Archiver`が実行ごとに読む）。
 - マスク規則と上限は FR-ERRLOG-3/4 に従う。ダウンロード操作は操作者の操作としてハートビート更新対象（§10.4）
 
 ### 10.7 取引ログ・判断ログのエクスポート
