@@ -66,7 +66,15 @@ func (s *Service) Metrics(ctx context.Context, horizonMinutes int) (domain.Calib
 	if err != nil {
 		return domain.CalibrationMetrics{}, fmt.Errorf("calibration: load decision trades: %w", err)
 	}
-	return WithTradePnL(Metrics(samples), trades), nil
+	metrics := WithTradePnL(Metrics(samples), trades)
+	if src, ok := s.trades.(RegimeTradeSource); ok {
+		regimeTrades, err := src.ListRegimeTrades(ctx)
+		if err != nil {
+			return domain.CalibrationMetrics{}, fmt.Errorf("calibration: load regime trades: %w", err)
+		}
+		metrics.ABArms = ABArms(regimeTrades)
+	}
+	return metrics, nil
 }
 
 // Metrics computes Calibration's evaluation metrics (functional.md

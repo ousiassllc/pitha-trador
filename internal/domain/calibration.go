@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain/marketregime"
+)
 
 // Calibration label versions (calibration_outcomes.label_version, issue
 // #756): which labeling method produced an outcome row.
@@ -156,6 +160,9 @@ type DirectionMetric struct {
 // probability is Confidence and the outcome is RealizedPnL > 0. They are 0
 // when TradeCount is 0. Barrier is the triple-barrier EV (net) and
 // per-barrier reach rates over every triple-barrier label (issue #767).
+// ABArms is the paper A/B comparison of the momentum and regime-switching
+// arms (issue #755): each arm's win rate and EV after costs over its closed
+// positions; nil when no source is wired.
 type CalibrationMetrics struct {
 	Buckets                  []ConfidenceBucket
 	ByDirection              []DirectionMetric
@@ -167,6 +174,7 @@ type CalibrationMetrics struct {
 	PnLBrierScore            float64
 	PnLLogLoss               float64
 	Barrier                  BarrierStats
+	ABArms                   []marketregime.ArmStats
 }
 
 // DecisionTrade is one closed position joined back to the Jev trader

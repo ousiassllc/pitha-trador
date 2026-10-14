@@ -62,21 +62,21 @@ func (e *Engine) decideDirection(in Input, th Thresholds, meta *metaEntry) (dire
 		return none(reasonf(ReasonMissingData))
 	}
 
-	var side string
-	var thresholds config.PolicyDirectionThresholds
-	switch *d.Direction {
-	case domain.JevDirectionLong:
-		side, thresholds = domain.JevDirectionLong, th.Policy.Long
-	case domain.JevDirectionShort:
-		if in.Lendable != nil && !*in.Lendable {
-			return none(reasonf(ReasonNotLendable))
-		}
-		side, thresholds = domain.JevDirectionShort, th.Policy.Short
-	default:
-		return none(reasonf(ReasonJevNone))
+	side, thresholds, reversion, reject := chooseSide(in, th)
+	if reject != nil {
+		return none(reject)
 	}
 	if meta != nil {
-		return e.decideMeta(side, thresholds, in, meta)
+		return e.decideMeta(side, thresholds, in, meta, reversion)
+	}
+	if reversion {
+		// The reversion side is not Jev's momentum direction, so Jev's
+		// confidence in it is no probability and only the hard guards apply.
+		if reason := flowGuards(thresholds, d); reason != nil {
+			return none(reason)
+		}
+		score := *d.Confidence
+		return side, &score, nil, nil
 	}
 	direction, score, reason = e.evaluateThreshold(side, thresholds, d, true)
 	return direction, score, reason, nil
@@ -102,14 +102,26 @@ func (e *Engine) evaluateThreshold(direction string, t config.PolicyDirectionThr
 	if *d.ContinuationProbability < t.MinContinuationProbability {
 		return domain.JevDirectionNone, nil, reasonf("%s: continuation_probability=%.4f < min=%.4f", ReasonContinuationProbabilityBelowThreshold, *d.ContinuationProbability, t.MinContinuationProbability)
 	}
-	if *d.ToxicFlow > t.MaxToxicFlow {
-		return domain.JevDirectionNone, nil, reasonf("%s: toxic_flow=%.4f > max=%.4f", ReasonToxicFlowAboveThreshold, *d.ToxicFlow, t.MaxToxicFlow)
-	}
-	if *d.LiquidityStressed > t.MaxLiquidityStressed {
-		return domain.JevDirectionNone, nil, reasonf("%s: liquidity_stressed=%.4f > max=%.4f", ReasonLiquidityStressedAboveThreshold, *d.LiquidityStressed, t.MaxLiquidityStressed)
+	if reason := flowGuards(t, d); reason != nil {
+		return domain.JevDirectionNone, nil, reason
 	}
 	score := probability
 	return direction, &score, nil
+}
+
+// flowGuards is the toxic-flow and liquidity-stress part of FR-POLICY-1/2's
+// hard guards, shared by the momentum rule and the VWAP reversion rule (whose
+// side is not Jev's, so entry_quality and continuation_probability, which
+// describe Jev's momentum direction, do not apply to it). It returns the NONE
+// reason, or nil when both clear t.
+func flowGuards(t config.PolicyDirectionThresholds, d *domain.JevDecision) *string {
+	if *d.ToxicFlow > t.MaxToxicFlow {
+		return reasonf("%s: toxic_flow=%.4f > max=%.4f", ReasonToxicFlowAboveThreshold, *d.ToxicFlow, t.MaxToxicFlow)
+	}
+	if *d.LiquidityStressed > t.MaxLiquidityStressed {
+		return reasonf("%s: liquidity_stressed=%.4f > max=%.4f", ReasonLiquidityStressedAboveThreshold, *d.LiquidityStressed, t.MaxLiquidityStressed)
+	}
+	return nil
 }
 
 // reasonf formats a reject_reason string and returns it as *string

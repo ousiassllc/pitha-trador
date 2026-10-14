@@ -134,16 +134,22 @@ func metaFeatures(in Input) metalabel.Features {
 	return metalabel.NewFeatures(in.OrderFlow, in.SpreadBps, in.Return1m, jevScore, in.TDnetScore)
 }
 
-// decideMeta is the meta-labeling entry rule for a screened candidate: Jev's
-// side is the primary signal, the model decides whether to take it. The
+// decideMeta is the meta-labeling entry rule for a screened candidate: the
+// side is the primary signal (Jev's, or the VWAP reversion side when reversion
+// is set), the model decides whether to take it. The
 // entry_quality/continuation/toxic-flow/liquidity guards still apply (they are
-// hard safety conditions, not a probability); only the confidence threshold is
-// replaced by the model's verdict.
-func (e *Engine) decideMeta(side string, t config.PolicyDirectionThresholds, in Input, m *metaEntry) (string, *float64, *string, *metalabel.Decision) {
+// hard safety conditions, not a probability; a reversion side keeps only the
+// toxic-flow and liquidity ones, see flowGuards); only the confidence
+// threshold is replaced by the model's verdict.
+func (e *Engine) decideMeta(side string, t config.PolicyDirectionThresholds, in Input, m *metaEntry, reversion bool) (string, *float64, *string, *metalabel.Decision) {
 	if m.unavailable != "" {
 		return domain.JevDirectionNone, nil, reasonf("%s: %s", ReasonMetaModelUnavailable, m.unavailable), nil
 	}
-	if direction, score, reason := e.evaluateThreshold(side, t, in.Decision, false); reason != nil {
+	if reversion {
+		if reason := flowGuards(t, in.Decision); reason != nil {
+			return domain.JevDirectionNone, nil, reason, nil
+		}
+	} else if direction, score, reason := e.evaluateThreshold(side, t, in.Decision, false); reason != nil {
 		return direction, score, reason, nil
 	}
 	verdict := metalabel.Decide(m.model, side, metaFeatures(in), m.cfg)

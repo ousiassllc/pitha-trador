@@ -189,6 +189,11 @@ erDiagram
         integer ofi_window_long_seconds
         numeric microprice_dev_bps
         integer data_age_ms
+        text market_regime
+        text ab_arm
+        numeric regime_volatility_bps
+        numeric regime_autocorr
+        numeric vwap_z
         text created_at
     }
 ```
@@ -213,6 +218,11 @@ erDiagram
 | ofi_window_short_seconds / ofi_window_mid_seconds / ofi_window_long_seconds | integer | NULL可 | 上記OFIの窓幅（秒）。窓幅は設定で変わるため判断ごとに保存する（000032） |
 | microprice_dev_bps | numeric | NULL可 | 判断時点のマイクロプライスのミッドからの乖離（bps）（000032） |
 | data_age_ms | integer | NULL可 | 判断時点での市場データ（最新の足）の古さ（ミリ秒、判断時刻−足の時刻、0以上）。Jevへ渡したstateの`data_age_ms`と同じ値で、`state_json`にも含まれる。後から判断の鮮度と成績の関係を分析するために使う（000035、issue #754、`functional.md` FR-FE-7） |
+| market_regime | text | NULL可 | 判断時点の相場状態（レジーム）: `trend` / `mean_revert` / `unknown`（CHECK制約）。市場指数（`instruments.kind = market_index`）の1分足リターンのボラティリティと1次自己相関から判定する（`internal/service/regime`）。未評価（旧行・判定器なし）はNULL（000036、issue #755・親 #751、`functional.md` FR-REGIME-1） |
+| ab_arm | text | NULL可 | 判断が属するA/Bのアーム: `momentum`（モメンタム固定）/ `regime`（レジーム切替）（CHECK制約）。Settings `regime.ab_enabled`が無効のあいだは全判断が`momentum`。未評価はNULL（000036）。アーム別のコスト控除後EV・勝率の集計元 |
+| regime_volatility_bps | numeric | NULL可 | レジーム判定の根拠: 窓内の市場指数の1分足リターンの標準偏差（bps）。算出できなければNULL（000036） |
+| regime_autocorr | numeric | NULL可 | レジーム判定の根拠: 窓内の市場指数の1分足リターンの1次自己相関（-1〜1。正=トレンド、負=平均回帰）。算出できなければNULL（000036） |
+| vwap_z | numeric | NULL可 | 平均回帰レジームのときの、銘柄の寄り付き以降のVWAP乖離のzスコア（最新の足の`price_vs_vwap_bps`÷寄り付き以降の足のその二乗平均平方根。正=VWAPより上）。平均回帰以外のレジーム・算出不能はNULL（000036） |
 | created_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id, timestamp DESC)`, `INDEX (decision_type)`, `INDEX (state_hash)`, `INDEX (decision_type, timestamp)`, `INDEX (timestamp)`, `INDEX (instrument_id, decision_type, timestamp DESC, id DESC)`, `INDEX (decision_type, direction, confidence)`（`(decision_type, direction, confidence)`はJev Traderジョブごとのキャリブレーション判定`CountLabeledSamplesInConfidenceRange`がconfidence帯を索引範囲検索し、閾値（`MinCalibrationSamples`）件で`LIMIT`打ち切りして履歴行数に依存させないための索引。マイグレーション000028、`internal/repository/calibration/calibration_plan_test.go`が`EXPLAIN QUERY PLAN`で固定。issue #603）（`INDEX (instrument_id, decision_type, timestamp DESC, id DESC)`は銘柄ごとの最新Trader/Scout判断`LatestTraderByInstruments`/`LatestTrader`/`LatestScout`が銘柄駆動で先頭1行だけ索引seekするための索引で、全Trader行の走査を避ける。マイグレーション000025、`internal/repository/judgement/decision_plan_test.go`が`EXPLAIN QUERY PLAN`で固定。issue #498）（`(decision_type, timestamp)`と`(timestamp)`はActivity Logの直近判断`ListRecent`が`ORDER BY timestamp DESC, id DESC LIMIT N`を全走査・整列なしで引くため。マイグレーション000020）。`(decision_type, timestamp)`は`ListRecent`専用ではなく、Outcome Labeling（FR-CAL-4）が毎分走る`CalibrationRepository.PendingLabels`（`decision_type='trader'`かつ`timestamp`の範囲、下限は`now-24h`）の範囲走査にも必須で（issue #484）、`internal/repository/calibration/calibration_plan_test.go`が`EXPLAIN QUERY PLAN`で`jev_decisions_type_timestamp_idx`の範囲検索を固定している。この索引を変更・削除すると`jev_decisions`全履歴（保持期間なし）の走査へ退行する

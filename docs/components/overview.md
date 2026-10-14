@@ -44,7 +44,7 @@ static/
     ├── components/
     │   ├── price-chart/           pitha-price-chart.ts / bars.ts（1分足`Bar`と`foldTick`等の足の集約ヘルパー）/ chart-data.ts（系列データ・ペイン配置・代替テキストの純粋ヘルパー）/ chart-types.ts（応答・WebSocketメッセージの型）/ jst-time.ts（時間軸・クロスヘアのJST整形）
     │   ├── scanner-table/         pitha-scanner-table.ts / scanner-types.ts（`GET /api/v1/scanner`の応答型）/ scanner-view.ts（列定義・書式・配色・バッジの表示ヘルパー）/ scanner-contract.json（SSRフォールバックとLitの表示契約。Go側`scanner_table_contract_test.go`・`handler/scanner/scanner_test.go`とTS側`scanner-contract.test.ts`が共有する唯一の契約ファイル）
-    │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）/ calibration-styles.ts（Shadow DOM用スタイル`heatmapStyles`と`CHART_HEIGHT`。行数上限のため分離）/ horizon-selector.ts（ホライズン切替ボタンと集計ホライズン表示。#719）/ barrier-view.ts（トリプルバリアのEV（net）・到達率の表示。#767）/ meta-model-view.ts（メタラベリングモデルのOOS指標・Jev評価期間の型と表示。#766）
+    │   ├── calibration-heatmap/   pitha-calibration-heatmap.ts / calibration-view.ts（応答型と表示用の純粋ヘルパー）/ calibration-styles.ts（Shadow DOM用スタイル`heatmapStyles`と`CHART_HEIGHT`。行数上限のため分離）/ horizon-selector.ts（ホライズン切替ボタンと集計ホライズン表示。#719）/ barrier-view.ts（トリプルバリアのEV（net）・到達率の表示。#767）/ meta-model-view.ts（メタラベリングモデルのOOS指標・Jev評価期間の型と表示。#766）/ ab-arms-view.ts（paper A/B比較のアーム別・レジーム別EV・勝率の型と表示。#755）
     │   ├── activity-feed/         pitha-activity-feed.ts / activity-feed-types.ts（応答型と定数）/ activity-feed-views.ts（Job Queues表・直近Kill Switchイベントの無状態テンプレート）
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
@@ -286,3 +286,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.84 | 2026-10-14 | organismsに`DailyHaltBanner`を追加し、`Header`に`#daily-halt-banner`枠（`GET /system/daily-halt`）を追記 | issue #753 |
 | 1.85 | 2026-10-14 | §2の`calibration-heatmap/`に`barrier-view.ts`を追記、§5.3（`lit.md`）に`pitha-calibration-heatmap`のトリプルバリアEV（net）・到達率の表示を追記 | issue #767 |
 | 1.86 | 2026-10-14 | §2の`calibration-heatmap/`に`meta-model-view.ts`を追記、§5.3（`lit.md`）に`pitha-calibration-heatmap`のメタラベリングモデルOOS指標（AUC・較正曲線・EV）とJev評価期間の表示を追記 | issue #766 |
+| 1.87 | 2026-10-14 | §2の`calibration-heatmap/`に`ab-arms-view.ts`を追記、§5.3（`lit.md`）に`pitha-calibration-heatmap`のA/Bアーム別EV・勝率の表示を追記 | issue #755 |

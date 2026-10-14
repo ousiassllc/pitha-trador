@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
@@ -77,7 +78,8 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 // Keys returns every key Service manages: the backup and log directories,
 // the policy thresholds, the screener thresholds, the OFI windows, the
 // ranking-watch snapshot max age, the daily entry-halt thresholds, the
-// triple-barrier label settings, the meta-labeling settings, the broker settings, then the 立花 監視銘柄ソース
+// triple-barrier label settings, the meta-labeling settings, the market
+// regime settings, the broker settings, then the 立花 監視銘柄ソース
 // settings.
 func Keys() []string {
 	keys := []string{config.KeyBackupDir, config.KeyLogDir}
@@ -88,6 +90,7 @@ func Keys() []string {
 	keys = append(keys, dailyguardsettings.Keys()...)
 	keys = append(keys, barriersettings.Keys()...)
 	keys = append(keys, metalabelsettings.Keys()...)
+	keys = append(keys, regimesettings.Keys()...)
 	keys = append(keys, config.BrokerSettingKeys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
@@ -122,7 +125,7 @@ func kindOf(key string) kind {
 		return kindMetaLabel
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key):
+	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber
@@ -230,6 +233,9 @@ func (s *Service) defaultText(key string) string {
 		return text
 	case metalabelsettings.IsKey(key):
 		text, _ := metalabelsettings.Default().Text(key)
+		return text
+	case regimesettings.IsKey(key):
+		text, _ := regimesettings.Default().Text(key)
 		return text
 	default:
 		v, _ := config.FastScreenerSettingValue(s.screener, key)

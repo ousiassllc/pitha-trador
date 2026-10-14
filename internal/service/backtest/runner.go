@@ -148,6 +148,9 @@ type SplitResult struct {
 type Result struct {
 	Splits   []SplitResult
 	Combined Metrics
+	// ByRegime is Combined split by the market regime of the decision that
+	// opened each trade (issue #755).
+	ByRegime []RegimeMetrics
 }
 
 // Run executes a full Walk Forward backtest (FR-BT-2) over a single
@@ -231,6 +234,8 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 			i++
 			continue
 		}
+		// sig is not NONE, so in.Decision is set.
+		trade.Regime, trade.ABArm = in.Decision.MarketRegime.Regime, in.Decision.MarketRegime.ABArm
 		trades = append(trades, trade)
 		consumedUpTo = bars[exitIdx].Timestamp
 		i = exitIdx + 1
