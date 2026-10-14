@@ -46,6 +46,10 @@ type Scheduler struct {
 	// makes EnqueueOutcomeLabeling a no-op and skips Start's
 	// outcome-labeling trigger.
 	outcomeLabels *calrepo.CalibrationRepository
+	// outcomeHorizons returns the horizons EnqueueOutcomeLabeling labels
+	// each decision at (WithOutcomeLabelHorizons); nil means
+	// DefaultOutcomeLabelHorizonsMinutes.
+	outcomeHorizons func(ctx context.Context) ([]int, error)
 	// heartbeatChecker is optional (WithHeartbeatChecker): a nil value
 	// makes CheckOperatorHeartbeat a no-op, the same deferral
 	// outcomeLabels above already documents.
@@ -111,6 +115,15 @@ func WithPollInterval(d time.Duration) Option {
 // Unset by default. *calrepo.CalibrationRepository implements this directly.
 func WithOutcomeLabelSource(repo *calrepo.CalibrationRepository) Option {
 	return func(s *Scheduler) { s.outcomeLabels = repo }
+}
+
+// WithOutcomeLabelHorizons makes EnqueueOutcomeLabeling label each decision
+// at the horizons horizons returns on every scan, instead of
+// DefaultOutcomeLabelHorizonsMinutes: the triple-barrier timeout is a
+// Settings value (issue #760), so the label window follows it without a
+// restart.
+func WithOutcomeLabelHorizons(horizons func(ctx context.Context) ([]int, error)) Option {
+	return func(s *Scheduler) { s.outcomeHorizons = horizons }
 }
 
 // New returns a Scheduler backed by jobs/instruments.

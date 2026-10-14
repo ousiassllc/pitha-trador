@@ -34,8 +34,9 @@ func NewService(outcomes *calrepo.CalibrationRepository, trades TradeSource) *Se
 }
 
 // AllHorizons is Metrics's horizon argument meaning every current
-// DefaultHorizonsMinutes entry together (legacy horizons such as the
-// pre-#711 20 minutes are never included).
+// DefaultHorizonsMinutes entry together plus every triple-barrier label,
+// whose horizon is the Settings timeout (issue #760). Legacy close-only
+// horizons such as the pre-#711 20 minutes are never included.
 const AllHorizons = 0
 
 // Metrics loads the labeled Jev trader decision/horizon outcomes of one
@@ -49,11 +50,15 @@ const AllHorizons = 0
 // *Service can be passed directly to
 // internal/router.WithCalibrationSource.
 func (s *Service) Metrics(ctx context.Context, horizonMinutes int) (domain.CalibrationMetrics, error) {
-	horizons := DefaultHorizonsMinutes
-	if horizonMinutes != AllHorizons {
-		horizons = []int{horizonMinutes}
+	var (
+		samples []domain.LabeledSample
+		err     error
+	)
+	if horizonMinutes == AllHorizons {
+		samples, err = s.outcomes.ListCurrentLabeledSamples(ctx, DefaultHorizonsMinutes)
+	} else {
+		samples, err = s.outcomes.ListLabeledSamples(ctx, []int{horizonMinutes})
 	}
-	samples, err := s.outcomes.ListLabeledSamples(ctx, horizons)
 	if err != nil {
 		return domain.CalibrationMetrics{}, fmt.Errorf("calibration: load labeled samples: %w", err)
 	}
@@ -172,7 +177,7 @@ func bucketIndex(ranges []domain.ConfidenceBucketRange, confidence float64) (int
 // (internal/service/selfimprove, FR-SELFIMPROVE-1) weighs against each
 // direction's own policy.* thresholds.
 func (s *Service) DirectionMetricsSince(ctx context.Context, since time.Time) (long, short domain.CalibrationMetrics, err error) {
-	samples, err := s.outcomes.ListLabeledSamplesSince(ctx, since, DefaultHorizonsMinutes)
+	samples, err := s.outcomes.ListCurrentLabeledSamplesSince(ctx, since, DefaultHorizonsMinutes)
 	if err != nil {
 		return domain.CalibrationMetrics{}, domain.CalibrationMetrics{}, fmt.Errorf("calibration: load labeled samples since %s: %w", since, err)
 	}

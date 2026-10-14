@@ -143,7 +143,8 @@ const updateCheckCronSpec = "@every 6h"
 const outcomeLabelRetryWindow = 24 * time.Hour
 
 // DefaultOutcomeLabelHorizonsMinutes are the judgment horizons Outcome
-// Labeling evaluates each Jev trader decision at (functional.md §4.12,
+// Labeling evaluates each Jev trader decision at unless
+// WithOutcomeLabelHorizons overrides them (functional.md §4.12,
 // docs/architecture/er.md §calibration_outcomes "horizon_minutes: 5/10/15
 // 等", issue #711).
 var DefaultOutcomeLabelHorizonsMinutes = []int{5, 10, 15}
@@ -163,7 +164,14 @@ func (s *Scheduler) EnqueueOutcomeLabeling(ctx context.Context, now time.Time) (
 		return 0, nil
 	}
 
-	pending, err := s.outcomeLabels.PendingLabels(ctx, DefaultOutcomeLabelHorizonsMinutes, now.Add(-outcomeLabelRetryWindow), now)
+	horizons := DefaultOutcomeLabelHorizonsMinutes
+	if s.outcomeHorizons != nil {
+		var err error
+		if horizons, err = s.outcomeHorizons(ctx); err != nil {
+			return 0, fmt.Errorf("scheduler: resolve outcome label horizons: %w", err)
+		}
+	}
+	pending, err := s.outcomeLabels.PendingLabels(ctx, horizons, now.Add(-outcomeLabelRetryWindow), now)
 	if err != nil {
 		return 0, fmt.Errorf("scheduler: list pending outcome labels: %w", err)
 	}

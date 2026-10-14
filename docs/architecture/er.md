@@ -95,3 +95,4 @@ erDiagram
 | 1.44 | 2026-10-14 | `er/tables-market.md`の`market_snapshots`と`jev_decisions`にOFI（`ofi_short/mid/long`・窓幅・`microprice_dev_bps`、migration 000032、issue #750）、`er/tables-system.md`の`runtime_settings`キーに`orderflow.ofi_window_*_seconds`を追加 |
 | 1.45 | 2026-10-14 | `er/tables-trading.md`の`calibration_outcomes`にトリプルバリアのラベル列（`barrier_hit`・`net_return_bps`・`entry_ref_price`・`label_version`、migration 000033。既存行は`label_version=1`の旧ラベルとして区別、issue #756・親 #751）を追加 | issue #756 |
 | 1.46 | 2026-10-14 | `er/tables-system.md`の`runtime_settings`キーに`calibration.barrier_{tp,sl,cost}_bps`・`calibration.barrier_timeout_minutes`（トリプルバリアラベルの設定）を追加。スキーマ変更なし | issue #760 |
+| 1.47 | 2026-10-14 | `er/tables-trading.md`の`calibration_outcomes`: トリプルバリアのラベルでは`horizon_minutes`=Settingsのtimeout、`was_direction_correct`=`net_return_bps > 0`と明記。スキーマ変更なし | issue #762 |
