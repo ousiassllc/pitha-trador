@@ -203,6 +203,33 @@ sequenceDiagram
 - 当日の書き込み中ファイルは読み取り時点までを対象とし、末尾の不完全行は捨てる。`.log.gz`は透過的に展開する
 - マスク規則と上限は FR-ERRLOG-3/4 に従う。ダウンロード操作は操作者の操作としてハートビート更新対象（§10.4）
 
+### 10.7 取引ログ・判断ログのエクスポート
+
+`requirements/functional/components-platform.md` §4.21（FR-EXPORT-1〜6）の実装詳細。
+
+```mermaid
+sequenceDiagram
+    participant C as 呼び出し側（Settings操作は#773）
+    participant SVC as dataexport.Service
+    participant COL as Collector（Trades / Decisions）
+    participant REPO as repository（trading / decisiontrade / judgement / decisionsnapshot / calibration）
+    participant W as io.Writer（ローカルのZIP）
+
+    C->>SVC: Export(w, 期間[from,to), 種類, CSV|JSONL)
+    SVC->>SVC: 期間・種類・形式の検証（不正は何も書かず ErrInvalidRequest）
+    loop 種類 × テーブル
+        SVC->>COL: Tables()
+        COL->>REPO: Each*InRange（SQLiteの行ストリーム）
+        REPO-->>SVC: 1行ずつ
+        SVC->>SVC: 行正規化・秘密情報マスク（logging.MaskString / MaskJSONText / IsSensitiveKey）
+        SVC->>W: <種類>/<テーブル>.<csv|jsonl>
+    end
+    SVC->>W: manifest.json（スキーマバージョン・期間・行数）
+```
+
+- 期間読み出しは`Each*InRange`（`sqlutil.Each`で行をストリーミング）で、期間の全行をメモリに載せない。条件は半開区間`[from, to)`で、各テーブルの時刻索引に乗る列（`submitted_at`・`timestamp`・`closed_at`）で絞る。ただし`decisionsnapshot`は`jev_decisions`の`timestamp`に`market_snapshots`の`(instrument_id, timestamp)`を結合する
+- マスクは行正規化の1箇所で全値に適用するため、コレクタが個別に呼び忘れることはない。`dataexport`は`io.Writer`以外の出力先（ネットワーク・ファイル作成）を持たない
+
 ## 11. 障害対応方針
 
 | 障害 | 対応 |
