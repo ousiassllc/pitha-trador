@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
@@ -43,6 +44,20 @@ func encode(key, raw string) (string, error) {
 		value = v
 	case kindSource:
 		v, err := tachibanasource.NormalizeTachibanaSourceSetting(key, raw)
+		if err != nil {
+			return "", &InvalidValueError{Reason: err.Error()}
+		}
+		value = v
+	case kindMetaLabel:
+		if !metalabelsettings.IsStringKey(key) {
+			f, err := strconv.ParseFloat(raw, 64)
+			if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+				return "", &InvalidValueError{Reason: fmt.Sprintf("%q は数値ではありません", raw)}
+			}
+			value = f
+			break
+		}
+		v, err := metalabelsettings.Normalize(key, raw)
 		if err != nil {
 			return "", &InvalidValueError{Reason: err.Error()}
 		}
@@ -128,6 +143,13 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return invalidIf(barriers.Validate())
+	case metalabelsettings.IsKey(key):
+		// Each field stands alone: Apply checks the single value's range.
+		meta := metalabelsettings.Default()
+		if err := metalabelsettings.Apply(&meta, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
 	case strings.HasPrefix(key, "broker.tachibana.screen."):
 		return s.validateTachibanaSource(ctx, key, encoded)
 	}

@@ -278,3 +278,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.82 | 2026-10-14 | §4.12 FR-CAL-2にトリプルバリアのEV（net）・バリア別（tp/sl/timeout）到達率の集計と、キャリブレーション画面・`GET /api/v1/calibration`への表示を追加（issue #767・親 #751） |
 | 1.83 | 2026-10-14 | §4.5にFR-TRADER-4（Jevの出力を一次シグナルとtake/skipの判断材料に整理し、`jev.Score`として特徴量に取り出す。質問・スキーマは不変）を追加（issue #761・親 #752） |
 | 1.84 | 2026-10-14 | §4.5にFR-META-1〜3（メタラベリングの二次モデル: 8特徴量ベクトル・ロジスティック回帰・Platt/isotonic較正・較正後EVでのtake/skipとKellyサイズ・モデル無し/欠損は見送り）を追加（issue #758・親 #752） |
+| 1.85 | 2026-10-14 | FR-SETTINGS-7にメタラベリングの設定（`metalabel.{model,calibration,retrain_time,min_ev_bps}`。モデル/較正/再学習時刻/最低EV、保存時検証・不正値は既定で動作・env不可）を追加（issue #759・親 #752） |
