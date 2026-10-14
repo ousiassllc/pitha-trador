@@ -276,3 +276,5 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.80 | 2026-10-14 | FR-SETTINGS-7にトリプルバリアラベルの設定（`calibration.barrier_{tp,sl,cost}_bps`・`calibration.barrier_timeout_minutes`。範囲検証・コスト想定<損切り幅・env不可）を追加（issue #760・親 #751） |
 | 1.81 | 2026-10-14 | §4.12 FR-CAL-4をトリプルバリア方式に更新（執行可能価格（LONG=ask/SHORT=bid、Jev応答後）を基準に、TP/SL/timeoutのうち先に触れたバリアでラベルを決め、コスト控除後のnet return・触れたバリア・基準価格・`label_version=2`を保存。flat=不正解を廃止。horizonはSettingsのtimeout。issue #762・親 #751） |
 | 1.82 | 2026-10-14 | §4.12 FR-CAL-2にトリプルバリアのEV（net）・バリア別（tp/sl/timeout）到達率の集計と、キャリブレーション画面・`GET /api/v1/calibration`への表示を追加（issue #767・親 #751） |
+| 1.83 | 2026-10-14 | §4.5にFR-TRADER-4（Jevの出力を一次シグナルとtake/skipの判断材料に整理し、`jev.Score`として特徴量に取り出す。質問・スキーマは不変）を追加（issue #761・親 #752） |
+| 1.84 | 2026-10-14 | §4.5にFR-META-1〜3（メタラベリングの二次モデル: 8特徴量ベクトル・ロジスティック回帰・Platt/isotonic較正・較正後EVでのtake/skipとKellyサイズ・モデル無し/欠損は見送り）を追加（issue #758・親 #752） |

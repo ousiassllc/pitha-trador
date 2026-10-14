@@ -155,3 +155,16 @@ type TraderResponse struct {
 	ModelID                 string   `json:"model_id"`
 	RequestCost             *float64 `json:"request_cost,omitempty"`
 }
+
+// Score returns r as take/skip material (issue #761, parent #752
+// メタラベリング): Direction is the primary signal's candidate side, and
+// EntryQuality, ToxicFlow, LiquidityStressed, ContinuationProbability and
+// Confidence become the Score a secondary model takes as a feature. Jev's
+// answer is not read as a prediction of where the price goes: FR-TRADER-2
+// (see the type comment) still holds, the values are evidence a calibrated
+// model weighs. It fails when an answer is outside its documented range, which
+// systemone's response validation already rules out for a response returned
+// by Client.Trader.
+func (r TraderResponse) Score() (Score, error) {
+	return NewScore(r.EntryQuality, r.ToxicFlow, r.LiquidityStressed, r.ContinuationProbability, r.Confidence)
+}
