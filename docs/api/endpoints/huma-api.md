@@ -263,6 +263,10 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 
 認証: このGETは安全メソッドでありながら、有効なセッションCookieを必須とする（FR-ERRLOG-6。ログをCookieなしの呼び出し元へ渡さないため。`api/endpoints.md` §1）。Cookieが無い・無効な場合は403（`missing or invalid session cookie`）で、他の`/api/v1`のGET（Cookie不要）とは異なる。
 
+### GET /api/v1/export
+
+取引ログ・判断ログ・計測ログのエクスポート（ZIP添付）。詳細は`docs/api/endpoints/huma-api-export.md`。
+
 ### エンドポイント一覧表
 
 | メソッド | パス | 概要 |
@@ -287,3 +291,4 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 | GET | `/api/v1/openapi.json` | OpenAPI 3.1スペック（Huma自動生成） |
 | GET | `/api/v1/activity` | System Activity Log向けキュー状況・直近アクティビティ |
 | GET | `/api/v1/logs/errors` | エラーログのダウンロード（NDJSON添付、秘密情報マスク済み） |
+| GET | `/api/v1/export` | 取引ログ・判断ログ・計測ログのエクスポート（期間・種類・形式指定、ZIP添付、秘密情報マスク済み） |

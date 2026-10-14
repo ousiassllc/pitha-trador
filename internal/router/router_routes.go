@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
@@ -137,6 +138,7 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	huma.Get(api, "/positions", h.symbol.APIPositions)
 	huma.Get(api, "/orders", h.symbol.APIOrders)
 	huma.Get(api, "/logs/errors", system.NewErrorLogHandler(o.errorLogExporter).APIErrorLogs)
+	huma.Get(api, "/export", export.NewHandler(o.dataExporter).API)
 	insightapi.New(o.insightProvider).Register(api)
 	huma.Get(api, "/calibration", h.calibration.APICalibration)
 	huma.Get(api, "/policy-proposals", proposals.NewPolicyProposalHandler(o.proposalSource).APIPolicyProposals)

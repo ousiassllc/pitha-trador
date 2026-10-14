@@ -155,7 +155,7 @@ pitha-trador/
 │   │   │   └── checkflow/         # テスト専用: ダウンロード堅牢化・Status分類のテスト。`updater`の行数上限のため分離（#398）
 │   │   ├── activityfeed/          # jobs/jev_decisions/kill_switch_events集約の読み取り専用フィード（System Activity Log向け、§12）
 │   │   ├── insight/               # 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）
-│   │   ├── dataexport/            # 取引ログ・判断ログの期間エクスポート（CSV/JSONLのZIP＋`manifest.json`、秘密情報のマスク、ローカル出力のみ。`requirements/functional/components-platform.md` §4.21）
+│   │   ├── dataexport/            # 取引ログ・判断ログ・計測ログの期間エクスポート（CSV/JSONLのZIP＋`manifest.json`、秘密情報のマスク、ローカル出力のみ。`requirements/functional/components-platform.md` §4.21）
 │   │   ├── backup/                # 日次SQLiteバックアップ（daily 90日 + weekly gzip、`requirements/non-functional.md` §3）
 │   │   ├── retention/             # jobs / market_snapshotsの期限切れ行パージ（`requirements/non-functional.md` §3）
 │   │   └── scheduler/             # 自前Workerプール定義・周期ジョブ登録
@@ -282,7 +282,7 @@ handler → service → repository → domain
 | Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9）。`checkflow`はテスト専用 | `internal/service/updater`（`checkflow`） |
 | Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |
 | Backup | 日次SQLiteバックアップ（daily 90日保持 + ISO週ごとのweekly gzip、`requirements/non-functional.md` §3） | `internal/service/backup` |
-| Data Export | 取引ログ（注文・約定・決済・損益）・判断ログ（Jevリクエスト/レスポンス・特徴量・skip/reject理由・後付けラベルを`decision_id`で紐付け）の期間エクスポート。`internal/logging`のマスク規則を全値に適用し、`io.Writer`へZIPを書くだけで外部送信経路を持たない（`requirements/functional/components-platform.md` §4.21、フローは`overview/flows.md` §10.7） | `internal/service/dataexport` |
+| Data Export | 取引ログ（注文・約定・決済・損益）・判断ログ（Jevリクエスト/レスポンス・特徴量・skip/reject理由・後付けラベルを`decision_id`で紐付け）・計測ログ（INFO以上）の期間エクスポート（Settingsの「データエクスポート」から`GET /api/v1/export`）。`internal/logging`のマスク規則を全値に適用し、`io.Writer`へZIPを書くだけで外部送信経路を持たない（`requirements/functional/components-platform.md` §4.21、フローは`overview/flows.md` §10.7） | `internal/service/dataexport` |
 | Retention | `jobs`（成功7日・失敗30日）・`market_snapshots`（90日）の期限切れ行のパージ。監査系テーブルは対象外 | `internal/service/retention` |
 | Background Task Guard | 常駐goroutine（候補更新・保有監視・PushFeed・News Ingest・トークン再発行）のpanic回復（FR-SCHED-6）。`Recover`（defer用）・`Run`（panic有無を返す）・`Try`（panicをerrorに変換）・`Loop`（待機→1サイクルを`Try`で保護し、panicもエラーもログに残して継続）を提供し、panicは`slog`にスタックトレース付きで記録する。`cmd/server`・`bootstrap`・`bootstrap/candidates`・`bootstrap/heldposition`・`service/marketdata`・`service/marketdata/kabu/pushfeed`・`service/scheduler`（`updatecheck`含む）から使う | `internal/safego` |
 | Bootstrap | desktop/server共通の起動処理（DB open+マイグレーション、`config/*.yaml`解決、secrets読込・routerオプション共通化、サービス組み立て・ジョブ登録。§10.1）。サブパッケージ: `candidates`（候補銘柄の定期更新）、`marketdatajob`（market-dataジョブ、互換用の空feature-calcジョブ）、`backtestsource`（Backtest用DB読み出し）、`heldposition`（FR-SCHED-4 保有ポジション5〜15秒Exit監視）、`rankingmeasure`（FR-SCHED-8 kabu `/ranking`計測ループ。`scan.ranking_measure`でオプトイン、計測値のみログ出力）、`paperexec`（Policy→Execution Paperアダプタ）、`alerts`（アラート宛先）、`startup`（desktop/server共通の`RunMain`・ログディレクトリ解決）、`universe`（銘柄マスタCSVのパースとJPX一覧の取込を`instruments`へのupsertで行う）。分割方針は§3 | `internal/bootstrap`（`candidates`, `marketdatajob`, `backtestsource`, `heldposition`, `rankingmeasure`, `paperexec`, `alerts`, `startup`, `universe`） |
