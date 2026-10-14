@@ -84,6 +84,11 @@ type Input struct {
 	MarketReturn5m *float64
 	SectorReturn5m *float64
 	MarketBreadth  *float64
+
+	// OrderFlow is the OFI over the configured windows (issue #750), taken
+	// by the caller from the PUSH best-quote history and passed through
+	// unchanged. The zero value leaves every OFI field nil.
+	OrderFlow OrderFlow
 }
 
 // Compute derives one instrument's Feature values for the bar at
@@ -101,7 +106,7 @@ func Compute(in Input) domain.Feature {
 	high5m, low5m := trailingRange(series, at, 5*time.Minute)
 	buyRatio, sellRatio, flowImbalance := tradeFlow(series, at, 5*time.Minute)
 
-	return domain.Feature{
+	f := domain.Feature{
 		Return1m:  returnOverWindow(series, at, cur.Price, time.Minute),
 		Return3m:  returnOverWindow(series, at, cur.Price, 3*time.Minute),
 		Return5m:  ret5m,
@@ -145,6 +150,9 @@ func Compute(in Input) domain.Feature {
 		StockVsSectorRelativeStrength: difference(ret5m, in.SectorReturn5m),
 		MarketBreadth:                 in.MarketBreadth,
 	}
+	f.MicropriceDevBps = micropriceDevBps(cur)
+	in.OrderFlow.apply(&f)
+	return f
 }
 
 // ReturnOverWindow computes (currentPrice / referencePrice) - 1, where

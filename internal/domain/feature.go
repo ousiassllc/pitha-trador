@@ -71,6 +71,9 @@ type Feature struct {
 	TradeFlowImbalance *float64
 	Microprice         *float64
 
+	// 板の需給 (issue #750): OFI and microprice deviation.
+	OrderFlowFeatures
+
 	// 市場コンテキスト: MarketReturn1m/5m are the mean return of the
 	// tracked market-index instruments (instruments.kind=market_index,
 	// e.g. TOPIX/Nikkei225), SectorReturn5m the return of the tracked
@@ -83,6 +86,30 @@ type Feature struct {
 	SectorReturn5m                *float64
 	StockVsSectorRelativeStrength *float64
 	MarketBreadth                 *float64
+}
+
+// OrderFlowFeatures are the order-book supply/demand features of issue #750,
+// embedded in Feature and copied onto every jev_decisions row, so a
+// decision keeps the values it was made with for later learning and
+// analysis. OFIShort/OFIMid/OFILong are the Order Flow Imbalance
+// (Cont-Kukanov-Stoikov: signed change of the best-quote quantities, buy
+// pressure positive, in shares) summed over the trailing OFIWindow*Seconds
+// windows (Settings; default 10/30/60). They are nil when no PUSH
+// best-quote event fell inside the window, and the window widths are nil
+// whenever the OFI source is not running, so a stored value is always
+// interpretable even after the windows are changed. MicropriceDevBps is
+// (Microprice - mid)/mid in bps; nil whenever Microprice is nil or the mid
+// is not positive. These are features / filters only: no order is ever
+// placed from them. They are deliberately not part of the state sent to Jev (a
+// jittering OFI would defeat FR-SCAN-2's unchanged-state suppression).
+type OrderFlowFeatures struct {
+	OFIShort              *float64
+	OFIMid                *float64
+	OFILong               *float64
+	OFIWindowShortSeconds *int64
+	OFIWindowMidSeconds   *int64
+	OFIWindowLongSeconds  *int64
+	MicropriceDevBps      *float64
 }
 
 // RatioToPercent converts a Feature return (a decimal ratio, 0.004 == +0.4%)

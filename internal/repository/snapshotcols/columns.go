@@ -55,7 +55,7 @@ func reqCol[T any](name string, field func(*domain.Snapshot) *T) Column {
 // Columns is every market_snapshots column between
 // turnover and raw_data_json, in table order for the original columns
 // followed by those added in migration 000016 and, after the Feature
-// columns, the tradability columns of migration 000026.
+// columns, the tradability columns of migration 000026 and the order-flow columns of migration 000032.
 var Columns = []Column{
 	f64Col("return_1m", func(s *domain.Snapshot) **float64 { return &s.Feature.Return1m }),
 	f64Col("return_5m", func(s *domain.Snapshot) **float64 { return &s.Feature.Return5m }),
@@ -98,6 +98,14 @@ var Columns = []Column{
 	reqCol("special_quote", func(s *domain.Snapshot) *bool { return &s.SpecialQuote }),
 	reqCol("price_limit", func(s *domain.Snapshot) *domain.PriceLimit { return &s.PriceLimit }),
 	boolPtrCol("lendable", func(s *domain.Snapshot) **bool { return &s.Lendable }),
+
+	f64Col("ofi_short", func(s *domain.Snapshot) **float64 { return &s.Feature.OFIShort }),
+	f64Col("ofi_mid", func(s *domain.Snapshot) **float64 { return &s.Feature.OFIMid }),
+	f64Col("ofi_long", func(s *domain.Snapshot) **float64 { return &s.Feature.OFILong }),
+	i64Col("ofi_window_short_seconds", func(s *domain.Snapshot) **int64 { return &s.Feature.OFIWindowShortSeconds }),
+	i64Col("ofi_window_mid_seconds", func(s *domain.Snapshot) **int64 { return &s.Feature.OFIWindowMidSeconds }),
+	i64Col("ofi_window_long_seconds", func(s *domain.Snapshot) **int64 { return &s.Feature.OFIWindowLongSeconds }),
+	f64Col("microprice_dev_bps", func(s *domain.Snapshot) **float64 { return &s.Feature.MicropriceDevBps }),
 }
 
 // Names is the comma-joined column list of Columns.

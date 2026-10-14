@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu/quote"
+	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 )
 
 const (
@@ -58,6 +59,10 @@ type Feed struct {
 	URL string
 	// Exchange is the kabu exchange code registered and polled.
 	Exchange int
+	// OrderFlow, when set, is fed every PUSH board's best quote so it can
+	// accumulate OFI (issue #750). Only PUSH boards are observed: REST
+	// polls arrive too sparsely to form per-event order flow.
+	OrderFlow *orderflow.Tracker
 
 	boards *marketdata.BoardCache
 	watch  watchState // ranking-driven registration (watch.go)
@@ -116,7 +121,7 @@ func (f *Feed) Run(ctx context.Context) {
 				return err
 			}
 			connectedAt := time.Now()
-			err := push.Run(ctx, func(b marketdata.Board) { f.boards.Put(b, time.Now()) })
+			err := push.Run(ctx, f.onBoard)
 			if time.Since(connectedAt) >= retryMax { // was stable: restart the backoff
 				retry = retryMin
 			}
@@ -136,6 +141,16 @@ func (f *Feed) Run(ctx context.Context) {
 		case <-timer.C:
 		}
 		retry = min(retry*2, retryMax)
+	}
+}
+
+// onBoard stores a PUSH board in the cache and feeds its best quote to the
+// OFI tracker.
+func (f *Feed) onBoard(b marketdata.Board) {
+	now := time.Now()
+	f.boards.Put(b, now)
+	if f.OrderFlow != nil {
+		f.OrderFlow.Observe(b.Symbol, quote.FromBoard(b), now)
 	}
 }
 

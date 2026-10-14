@@ -75,6 +75,13 @@ type ScoutState struct {
 	// context - Luna disabled, failing, or nothing recent. It is auxiliary
 	// context only; it never overrides Jev's judgment (FR-LUNA-5).
 	NewsContext *domain.NewsContext `json:"news_context,omitempty"`
+
+	// OrderFlow is the snapshot's order-flow features (issue #750). It is
+	// never sent to Jev (json:"-": a jittering OFI would also defeat
+	// FR-SCAN-2's state_hash suppression); Scout/Trader copy it onto the
+	// jev_decisions row they persist so the values a decision was made with
+	// stay available for later learning and analysis.
+	OrderFlow domain.OrderFlowFeatures `json:"-"`
 }
 
 // ScoutRequest is the input of Client.Scout: the current market state,

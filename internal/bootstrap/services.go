@@ -37,6 +37,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
@@ -71,7 +72,8 @@ type Services struct {
 	WatchLists *market.WatchListRepository
 
 	RAG           *rag.Service
-	Broker        broker.Broker // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
+	Broker        broker.Broker      // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
+	OrderFlow     *orderflow.Tracker // OFI from kabu PUSH best quotes (issue #750)
 	FeatureEngine *featureengine.Engine
 	Screener      *screener.LiveSource
 	Jev           *jev.Client

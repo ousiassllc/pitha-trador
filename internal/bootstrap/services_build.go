@@ -36,6 +36,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
+	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/retention"
@@ -89,7 +90,10 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
 	}
 	s.tachibana = s.tachibanaSource(cfg.brokerSettings)
-	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, alertChannels.BrokerNotices(s.Activity))
+	// OFI is accumulated from kabu's PUSH best quotes only (issue #750); the
+	// 立花 adapter never feeds it, so its OFI features stay nil.
+	s.OrderFlow = orderflow.NewTracker()
+	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, s.OrderFlow, alertChannels.BrokerNotices(s.Activity))
 	s.Jev = jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		Model:   secrets.JevModel,
@@ -227,6 +231,7 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logD
 	return &marketdatajob.Handler{
 		Quotes: s.Broker, Instruments: s.Instruments, Snapshots: s.Snapshots, FeatureEngine: s.FeatureEngine,
 		Execution: s.Execution, Screener: s.Screener, News: s.News, Scheduler: s.Scheduler,
+		OrderFlow: s.OrderFlow, OrderFlowSettings: s.Settings,
 		EventTrigger:        strategy.Scan.EventTrigger,
 		MarketContextMaxAge: strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge),
 		Symbols:             symbolcache.New(s.Broker),

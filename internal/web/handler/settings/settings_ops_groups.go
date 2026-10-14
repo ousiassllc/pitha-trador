@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
@@ -95,6 +96,18 @@ var opsGroups = slices.Concat([]opsGroup{
 			{key: "screener.weights.breakout_strength", label: "重み: ブレイクアウト強度"},
 			{key: "screener.weights.orderbook_imbalance", label: "重み: 板の偏り"},
 			{key: "screener.weights.volatility_expansion", label: "重み: ボラティリティ拡大"},
+		},
+	},
+	{
+		id:          "orderflow",
+		name:        "板の需給（OFI）",
+		description: "kabu の PUSH 最良気配の数量変化から求める Order Flow Imbalance を集計するローリング窓の幅（秒）です。マイクロプライス乖離とあわせて特徴量として保存します（issue #750）。",
+		note: "保存した値は再起動不要で、次の市場データ取得（次の 1 分足）から反映されます。" +
+			"OFI は特徴量・フィルタ用途に限り、OFI 単独で発注することはありません。立花証券を選択している間は PUSH 最良気配を取得しないため、OFI は算出されません。",
+		fields: []opsField{
+			{key: orderflowsettings.KeyShort, label: "短期窓（秒）", hint: "1 以上の整数です。短期 < 中期 < 長期（最大 600 秒）にしてください。既定は 10 秒です。"},
+			{key: orderflowsettings.KeyMid, label: "中期窓（秒）", hint: "短期窓より大きくしてください。既定は 30 秒です。"},
+			{key: orderflowsettings.KeyLong, label: "長期窓（秒）", hint: "中期窓より大きく、600 秒以下にしてください。既定は 60 秒です。"},
 		},
 	},
 })
