@@ -100,7 +100,7 @@ sequenceDiagram
 | 節 | ファイル |
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
-| §4.10〜§4.20（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用） | `docs/requirements/functional/components-platform.md` |
+| §4.10〜§4.21（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート） | `docs/requirements/functional/components-platform.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -285,3 +285,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.89 | 2026-10-14 | §4.5にFR-META-5（最新のメタラベリングモデルのOOS AUC・較正曲線・EVとJev評価期間をCalibration画面に表示）を追加し、§4.12 FR-CAL-2・§5.4に表示を追記（issue #766・親 #752） |
 | 1.90 | 2026-10-14 | §4.1にFR-FE-7（ランキング監視の足の鮮度上限を3分→Settingsの`scan.snapshot_max_age_seconds`・既定20秒へ引き締め、Jev stateと判断ログに`data_age_ms`、価格はPUSH優先）を追加し、FR-SCAN-5/7の`stale_snapshot`の閾値を更新。市況コンテキストの指数バー許容は`domain.MarketContextMaxAge`（3分）として分離（issue #754） |
 | 1.91 | 2026-10-14 | §4.6にFR-REGIME-1（市場指数の1分足リターンのボラティリティと自己相関で相場状態を trend / mean_revert / unknown に判定し判断ごとに保存、平均回帰レジームでは寄り付き以降のVWAP乖離zスコアで逆張りするVWAP回帰モードへ切替、paperのA/B比較（固定モメンタム vs レジーム切替）。窓幅・しきい値・A/B有効はSettings）を追加し、FR-SETTINGS-7・§4.12 FR-CAL-2に設定とアーム別EV・勝率の表示を追記（issue #755・親 #751） |
+| 1.92 | 2026-10-15 | §4.21（FR-EXPORT-1〜6）を追加: 取引ログ（注文・約定・決済・損益）と判断ログ（Jevリクエスト/レスポンス・レイテンシ・特徴量・skip/reject理由・後付けラベルを`decision_id`で紐付け）を、期間指定でCSV/JSONLのZIP＋`manifest.json`（スキーマバージョン・期間・種類ごとの行数）としてエクスポートする`internal/service/dataexport`と、秘密情報のマスク・redactionテスト・ローカル出力のみの方針を定義（issue #770・#771、親 #768。計測ログ#772・Settings操作#773は後続） |

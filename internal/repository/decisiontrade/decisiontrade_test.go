@@ -3,6 +3,7 @@ package decisiontrade_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -129,5 +130,65 @@ func TestCalibrationRepository_ListDecisionTrades(t *testing.T) {
 	// insertTraderDecision fixes confidence at 0.82; notional = 1000*100.
 	if trade.Confidence != 0.82 || trade.RealizedPnL != 500 || trade.ReturnPct != 0.5 {
 		t.Fatalf("trade = %+v, want confidence 0.82, realized 500, return 0.5%%", trade)
+	}
+}
+
+func TestRepository_EachClosedInRange(t *testing.T) {
+	ctx := context.Background()
+	db := newTestDB(t)
+	inst, err := market.NewInstrumentRepository(db).Create(ctx, domain.Instrument{
+		Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true,
+	})
+	if err != nil {
+		t.Fatalf("create instrument: %v", err)
+	}
+	trades := decisiontrade.New(db)
+	decisions := judgement.NewDecisionRepository(db)
+	seed := &repositoryDB{
+		signals: trading.NewSignalRepository(db), orders: trading.NewOrderRepository(db),
+		positions: trading.NewPositionRepository(db),
+	}
+	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
+
+	// Closed at base+1m (signal-linked) and base+1h+1m (manual entry: no
+	// signal/decision, still a closed trade).
+	linked := insertTraderDecision(t, decisions, inst.ID, base, domain.JevDirectionLong)
+	openDecisionTrade(t, seed, linked, true, 500)
+	manual := insertTraderDecision(t, decisions, inst.ID, base.Add(time.Hour), domain.JevDirectionLong)
+	openDecisionTrade(t, seed, manual, false, -300)
+
+	var got []decisiontrade.ClosedTrade
+	collect := func(c decisiontrade.ClosedTrade) error { got = append(got, c); return nil }
+	if err := trades.EachClosedInRange(ctx, base, base.Add(2*time.Hour), collect); err != nil {
+		t.Fatalf("EachClosedInRange: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("closed trades = %+v, want both", got)
+	}
+	first, second := got[0], got[1]
+	if first.JevDecisionID == nil || *first.JevDecisionID != linked.ID || first.TradeSignalID == nil ||
+		first.DecisionConfidence == nil || *first.DecisionConfidence != 0.82 {
+		t.Errorf("linked trade = %+v, want signal/decision/confidence", first)
+	}
+	if first.ExitOrderID == nil || first.RealizedPnL != 500 || first.ReturnPct != 0.5 {
+		t.Errorf("linked trade pnl = %+v, want realized 500, return 0.5%%", first)
+	}
+	if second.JevDecisionID != nil || second.TradeSignalID != nil || second.RealizedPnL != -300 {
+		t.Errorf("manual trade = %+v, want no signal/decision and realized -300", second)
+	}
+
+	// Half-open on closed_at: the first trade closed at base+1m.
+	got = nil
+	if err := trades.EachClosedInRange(ctx, base.Add(time.Minute), base.Add(time.Hour), collect); err != nil {
+		t.Fatalf("EachClosedInRange (narrow): %v", err)
+	}
+	if len(got) != 1 || got[0].PositionID != first.PositionID {
+		t.Fatalf("closed in [base+1m, base+1h) = %+v, want only the first (from inclusive, to exclusive)", got)
+	}
+
+	// fn's error stops the read and stays matchable.
+	stop := errors.New("stop")
+	if err := trades.EachClosedInRange(ctx, base, base.Add(2*time.Hour), func(decisiontrade.ClosedTrade) error { return stop }); !errors.Is(err, stop) {
+		t.Fatalf("err = %v, want it to wrap fn's error", err)
 	}
 }

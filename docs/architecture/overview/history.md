@@ -113,3 +113,4 @@
 | 1.106 | 2026-10-08 | §5.3 立花証券アダプタに夜間の日足取得（issue #729。`bootstrap/dailybars`、`market.FetchHistory`）を追記: 設定時刻以降・8:00〜15:30は実行しない時刻ガード・設定速度以下で直列・`daily_bars`への差分のみの保存・`daily_bar_runs`の実行記録と失敗した夜の再開・件数と`duration_ms`のみのログ | issue #729 |
 | 1.107 | 2026-10-08 | §5.3 立花証券アダプタに監視リストの確定（issue #730。`bootstrap/tachibanawatch`、`watch_lists`/`watch_list_entries`）を追記: `daily_screen`（保有・注文中→手動指定→日足スクリーニング上位、最大120）・`fixed`・日足を使えない夜の固定リスト切替／前営業日リスト引き継ぎとActivity・バナー通知・寄り前は前夜のリストを使用 | issue #730 |
 | 1.108 | 2026-10-08 | §5.3 立花証券アダプタに日中監視（issue #731。`bootstrap/tachibanawatch`の`Monitor`）を追記し、EVENTの接続元の注意を更新: 確定リストを03:30〜15:30のみ`SetWatch`・`market-data`投入・Fast Screenerへ接続、日中の入れ替えなし・保有銘柄の追加は1回の再接続にまとめて接続回数の予算に計上、立花ではフルスキャンを常に無効にし日中はREST補完のみ | issue #731 |
+| 1.109 | 2026-10-15 | 取引ログ・判断ログのエクスポート基盤を追加（issue #770・#771、親 #768）: §3のservice層・コンポーネント表に`internal/service/dataexport`、repository層に複数リソース読み取り`decisionsnapshot`（`market`の行数上限のため分離）、§10.7に通信フロー、§4.21（FR-EXPORT-1〜6）への参照を追記 |

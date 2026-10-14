@@ -1,6 +1,6 @@
-# 機能要件: コンポーネント別機能要件（§4.10〜§4.20 基盤・運用）
+# 機能要件: コンポーネント別機能要件（§4.10〜§4.21 基盤・運用）
 
-`docs/requirements/functional.md` §4 から分割した章。§4.10 Scheduler / Worker / §4.11 バックテスト / §4.12 Jevキャリブレーション / §4.13 Jev RAG / §4.14 自己改善ループ / §4.15 System Activity Feed / §4.16 Luna ニュース分類・News Ingest / §4.17 環境設定 / §4.18 初回セットアップ誘導 / §4.19 エラーログのダウンロード / §4.20 ブローカー選択と立花証券の運用。節番号・FR-ID は分割前と同一。
+`docs/requirements/functional.md` §4 から分割した章。§4.10 Scheduler / Worker / §4.11 バックテスト / §4.12 Jevキャリブレーション / §4.13 Jev RAG / §4.14 自己改善ループ / §4.15 System Activity Feed / §4.16 Luna ニュース分類・News Ingest / §4.17 環境設定 / §4.18 初回セットアップ誘導 / §4.19 エラーログのダウンロード / §4.20 ブローカー選択と立花証券の運用 / §4.21 取引ログ・判断ログのエクスポート。節番号・FR-ID は分割前と同一。
 
 ### 4.10 Scheduler / Worker
 
@@ -152,3 +152,14 @@ Settings画面（`GET /settings`）で認証情報と運用設定を管理する
 - FR-BROKER-3: 立花証券選択時のセッション・再認証（issue #727で実装）。認証ID＋秘密鍵でログインし、毎朝05:30以降（既定05:35、Settingsで変更可）に1回自動で再認証して当日は同じ仮想URLを使い回す。03:30〜05:30のログイン停止帯ではログインしない。WebSocketが切れても再ログインせず同じ仮想URLで再接続し、`p_errno=2`等のセッション失効のときだけ再認証する。再認証の失敗（8:30までに成功しない場合）・多重ログイン・書面未読・API版数/書面更新の予告は`broker.SessionStatus`（FR-SETTINGS-5の接続バナー）・Activity feed（`broker_notice`）・Slackで原因別に通知する。アプリは再認証に失敗しても継続起動し、終了時はログアウトして仮想URLを無効化する
 - FR-BROKER-4: 立花証券選択時のAPI版数・書面の監視。ログイン応答の`sUpdateInformAPISpecFunction`/`sUpdateInformWebDocument`の変化を検知してSlackへ通知し（`non-functional.md` §5.2）、「リリース＆改定情報」の定期確認（週1）と、並行リリースから約30日以内の追従を運用とする（`non-functional.md` §3、§3.1）。書面未読では仮想URLが発行されないため、バナーで標準Webでの既読を案内する
 - FR-BROKER-5: 立花証券選択時は、ランキング・歩み値が無いため（`Capabilities.Ranking`が偽）、監視銘柄は夜間（18:00以降）の日足スクリーニングで翌日の120銘柄（`Capabilities.MaxStreamSymbols`）を選び（#726）、日中はEVENT（WebSocket）で常時受信する。日中に全銘柄の時価を巡回せず、REST時価は補完・保有確認だけ（既定60秒に1要求以下。`non-functional.md` §2.3）。発注は#55まで行わない
+
+### 4.21 取引ログ・判断ログのエクスポート（issue #768。実装は#770〜#773）
+
+現状のエラーログのダウンロード（§4.19）はWARN以上のログだけが対象で、成功パス（正常な発注・約定・判断）の記録を取り出せない。判断精度の事後検証（判断と結果の突合）と学習データ作成（#751/#752）のため、DBに永続化済みの取引ログ・判断ログを期間指定でエクスポートする。**本節は#770（共通基盤＋取引ログ）・#771（判断ログ）の範囲**で、計測ログ（INFO、#772）とSettingsからの操作（#773）は後続。新規テーブル・マイグレーションは追加しない。
+
+- FR-EXPORT-1: エクスポート本体は`internal/service/dataexport`。期間`[from, to)`（UTC、`from`含む・`to`含まず）と種類（`trades`/`decisions`）と形式（CSVまたはJSONL）を受け取り、種類ごとに`<種類>/<テーブル>.<csv|jsonl>`をZIPへ同梱し、最後に`manifest.json`を書く。期間が空（`from >= to`）・種類なし/不明/重複・形式不明は`ErrInvalidRequest`で、何も書かずに拒否する。0件の期間でもヘッダ行付きの空ファイルと行数0のmanifestを出力する。行はDBからストリーミングし、期間の全行をメモリに保持しない
+- FR-EXPORT-2: `manifest.json`は`schema_version`（現在1。テーブル・列の改名/削除/型変更で上げ、列・テーブルの追加では上げない）・`generated_at`・`format`・`period`（`from`/`to`）・`kinds[]`（`kind`・`rows`・`files[]`（`name`/`path`/`rows`/`columns`））を持つ。種類の`rows`は主テーブル（`trades`は`orders`、`decisions`は`decisions`）の行数で、`files[].rows`は各ファイルの行数
+- FR-EXPORT-3: 取引ログ（`trades`）は`paper_orders`/`positions`/`trade_signals`から、`orders`（注文・約定。発注時刻`submitted_at`が期間内。約定価格・手数料・スリッページを含む）、`signals`（`trade_signals`。`timestamp`が期間内）、`closed_positions`（決済・損益。`closed_at`が期間内の`positions`に、`entry_order_id`の注文から辿ったシグナル/判断（`decision_id`）と、`exit_order_id`の約定価格を結合。`realized_pnl`・`return_pct`（`realized_pnl`÷（建値×数量）×100）・`exit_reason`を含む）を出力する。シグナル/判断を持たない手動建玉も決済として出力する（`decision_id`は空）。**Paper取引のみ**が対象（#55はblockedのまま）
+- FR-EXPORT-4: 判断ログ（`decisions`）は`jev_decisions`の`timestamp`が期間内の判断を対象に、すべて`decision_id`（`jev_decisions.id`＝`trade_signals.jev_decision_id`＝`calibration_outcomes.jev_decision_id`）で紐付けて出力する: `decisions`（Jevへのリクエスト`request_state_json`＝送信した`state_json`、レスポンス`response_json`、`question_version`、`latency_ms`、`model_id`、方向・確信度、板の需給偏り・市場レジームの文脈）、`features`（判断した足の`market_snapshots`の特徴量。足は`(instrument_id, timestamp)`で引き、`raw_data_json`は含めない。保持期間（90日）で足が消えた判断は行なし）、`signals`（Policy Engineの結果。`risk_passed`・`reject_reason`＝skip/reject理由。`jev_decision_id`を持たないシグナルは取引ログ側にのみ出る）、`outcomes`（`calibration_outcomes`の後付けラベル。水平線ごと）、`label_skips`（`calibration_label_skips`＝水平線まで足が揃わずラベルを付けないと確定した組と理由）。JSONLでは`request_state_json`/`response_json`が有効なJSONなら入れ子のオブジェクトとして書く
+- FR-EXPORT-5: 秘密情報（トークン・パスワード・APIキー・第二暗証番号・立花証券の認証ID/秘密鍵/仮想URL）を出力に含めない。§4.19 FR-ERRLOG-3と同じ規則（`internal/logging`の`IsSensitiveKey`/`MaskString`/`MaskJSONText`）を、全行・全値が通る1箇所（`dataexport`の行正規化）で適用する: キー名が秘密を示す列は値ごと、文字列値は埋め込まれたBearerトークン・`token=`等のクエリ・Slack Webhook・仮想URL・PEM秘密鍵を、JSON列（`request_state_json`/`response_json`）はJSON文書としてキー単位・値単位で`[REDACTED]`へ置換する。JSONとして不正な保存値も平文として同じマスクを通す。マスクが漏れないことは、全表の自由記述・JSON列に秘密を仕込んだredactionテスト（CSV/JSONLの両形式）で検証する
+- FR-EXPORT-6: 出力はローカルのみ。`dataexport`は呼び出し側の`io.Writer`にZIPを書くだけで、ネットワーク接続・共有・送信の経路を持たない（立花証券の利用規約に配慮し、第三者への共有・送信機能は設けない）
