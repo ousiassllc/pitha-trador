@@ -264,3 +264,58 @@ func TestRepositoryPortfolioProvider_Since_IgnoresPositionsClosedBeforeBaseline(
 		t.Fatalf("DailyLossPct after new loss = (%v, %v), want (0.1, nil)", got, err)
 	}
 }
+
+// issue #753: DailyActivity feeds the daily entry-halt rules with today's
+// (JST) realized + unrealized P&L in yen and the number of positions opened
+// today.
+func TestRepositoryPortfolioProvider_DailyActivity_CountsTodaysPnLAndTrades(t *testing.T) {
+	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
+	ctx := context.Background()
+
+	if got, err := provider.DailyActivity(ctx); err != nil || got.PnLJPY != 0 || got.Trades != 0 {
+		t.Fatalf("DailyActivity (no history) = (%+v, %v), want zero", got, err)
+	}
+
+	// Yesterday (JST): a closed loss that belongs to neither the P&L nor the trade count.
+	yesterday := portfolioTestNow.Add(-24 * time.Hour)
+	old := mustOpenPosition(t, positions, orders, instrumentID, yesterday)
+	mustClosePosition(t, positions, orders, old, -9_999, yesterday.Add(time.Minute))
+
+	// Today: a +500 win, a -2,000 loss and an open position marked -300.
+	won := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow)
+	mustClosePosition(t, positions, orders, won, 500, portfolioTestNow.Add(time.Minute))
+	lost := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow.Add(2*time.Minute))
+	mustClosePosition(t, positions, orders, lost, -2_000, portfolioTestNow.Add(3*time.Minute))
+	open := mustOpenPosition(t, positions, orders, instrumentID, portfolioTestNow.Add(4*time.Minute))
+	if _, err := positions.Mark(ctx, open.ID, 2097, -300, portfolioTestNow.Add(5*time.Minute)); err != nil {
+		t.Fatalf("Mark: %v", err)
+	}
+
+	got, err := provider.DailyActivity(ctx)
+	if err != nil {
+		t.Fatalf("DailyActivity: %v", err)
+	}
+	if got.PnLJPY != 500-2_000-300 || got.Trades != 3 {
+		t.Fatalf("DailyActivity = %+v, want PnL %d over 3 trades (today only)", got, 500-2_000-300)
+	}
+}
+
+func TestRepositoryPortfolioProvider_DailyActivity_DayBoundaryIsJST(t *testing.T) {
+	provider, positions, orders, instrumentID := newPortfolioTestFixtures(t)
+
+	// portfolioTestNow is 2026-09-29 12:00 JST; 00:00 JST is 15:00 UTC the day before.
+	justAfterMidnight := time.Date(2026, 9, 28, 15, 0, 0, 0, time.UTC)
+	p := mustOpenPosition(t, positions, orders, instrumentID, justAfterMidnight)
+	mustClosePosition(t, positions, orders, p, -700, justAfterMidnight.Add(time.Minute))
+	justBefore := justAfterMidnight.Add(-time.Second)
+	q := mustOpenPosition(t, positions, orders, instrumentID, justBefore.Add(-time.Minute))
+	mustClosePosition(t, positions, orders, q, -5_000, justBefore)
+
+	got, err := provider.DailyActivity(context.Background())
+	if err != nil {
+		t.Fatalf("DailyActivity: %v", err)
+	}
+	if got.PnLJPY != -700 || got.Trades != 1 {
+		t.Fatalf("DailyActivity = %+v, want only the position from 00:00 JST on (-700, 1 trade)", got)
+	}
+}

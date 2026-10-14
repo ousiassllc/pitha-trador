@@ -94,6 +94,10 @@ func (f fakePortfolio) LastLossAt(_ context.Context, since time.Time) (time.Time
 	return last, nil
 }
 
+func (fakePortfolio) DailyActivity(context.Context) (risk.DailyActivity, error) {
+	return risk.DailyActivity{}, nil
+}
+
 type fakeCloser struct{ closed []string }
 
 func (f *fakeCloser) CloseAll(_ context.Context, reason string) error {

@@ -146,6 +146,10 @@ type Engine struct {
 
 	// triggerMu serializes triggerIfNotActive's check-then-insert (state.go).
 	triggerMu sync.Mutex
+
+	// dailyGuardMu serializes evaluateDailyGuard's read-modify-write of the
+	// system.daily_guard row (dailyguard.go).
+	dailyGuardMu sync.Mutex
 }
 
 // NewEngine returns an Engine built from cfg, applying every documented

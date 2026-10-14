@@ -1,0 +1,34 @@
+package organisms
+
+// DailyHaltBannerProps is DailyHaltBanner's input (issue #753, FR-RISK-8).
+type DailyHaltBannerProps struct {
+	// Reason is the halt rule's machine name (domain.DailyHaltReason*),
+	// exposed as `data-reason`; "" while entries are allowed.
+	Reason string
+	// Label names the rule (domain.DailyEntryHalt.Label).
+	Label string
+	// Message states the figures that reached the rule.
+	Message string
+}
+
+// DailyHaltBanner renders the 全ページ共通の新規エントリー停止通知: Header's
+// `#daily-halt-banner` fetches it via `GET /system/daily-halt`
+// (hx-trigger="load, every 30s"), the same self-correcting pattern as
+// `#marketdata-banner`. It names the rule that stopped new entries for the
+// trading day (1日の損失上限 / 利益確保 / 最大取引回数) with the figures, and
+// says that exits continue and the halt lifts on the next trading day.
+// Nothing is rendered while props.Reason is empty. The banner has no role
+// of its own: the container is the fixed `role="status"` live region
+// (issue #626).
+templ DailyHaltBanner(props DailyHaltBannerProps) {
+	if props.Reason != "" {
+		<div class="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-testid="daily-halt-banner" data-reason={ props.Reason }>
+			<p>
+				<span class="font-semibold">本日の新規エントリーを停止しました（{ props.Label }）。</span>
+				{ props.Message }
+				保有中のポジションの決済は通常どおり行われ、翌営業日に自動で解除されます。
+				<a class="font-semibold underline" href="/settings">設定画面</a>
+			</p>
+		</div>
+	}
+}

@@ -144,6 +144,14 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
 - 強制決済の再試行: 強制決済対象reason（`architecture/overview/flows.md` §10.3）のKill Switchが未解除のまま保有ポジションが残っている場合、同じ1分周期で全ポジションの強制決済を再実行する（発動時の一度きりの決済が一時的に失敗しても、Killed状態のまま建玉が残り続けないようにする。決済は冪等）
 - 日次損失上限の80%到達時のSlack通知（`non-functional.md` §5.2）も同じ1分周期の検知で行う
 
+- FR-RISK-8（1日の損失上限・利益確保・最大取引回数、issue #753）: デイトレードの日次ルールとして、次の3つのいずれかに達したらその取引日（JST）は新規エントリーを止める。いずれも`risk.yaml`ではなくSettings画面の「運用設定」（FR-SETTINGS-7、「1日の損失上限・利益確保」）で設定し、0または未設定でそのルールは無効（既定は全て無効）。保有中ポジションの決済は通常どおり行い、Kill Switchのように強制決済はしない（`kill_switch_events`にも記録しない）。
+  - 1日の損失上限（`risk.daily_loss_limit_jpy`、円）: 当日（JST）にクローズしたポジションの実現損益と保有中ポジションの含み損益の合計が`-上限`以下になったら停止（reason=`daily_loss_limit_jpy`）。`max_daily_loss_pct`（`risk.yaml`、率・Kill Switchで強制決済）とは別のルールで併用でき、円の上限を先に置くことで新規だけを止め、率の上限は最終防衛線として強制決済を行う
+  - 利益確保（profit lock、`risk.profit_lock.trigger_jpy`・`risk.profit_lock.giveback_pct`）: 当日の合計損益の最高値が発動額（円）に達した後、最高値からの戻しが許容戻し率（%、0より大きく100以下）以上になったら停止（reason=`profit_lock`。トレーリング方式で、最高値は1分周期の判定と`Check`の都度更新）。2つのうちどちらかが0なら無効
+  - 1日の最大取引回数（`risk.max_daily_trades`）: 当日にオープンしたポジション数（保有中・クローズ済みの合計）が回数に達したら停止（reason=`max_daily_trades`）
+  - 停止はその日のうちはラッチされる（損益が戻っても、しきい値を緩めても再開しない。そのルールを0にして無効化すると解除される）。状態は`runtime_settings`の`system.daily_guard`（取引日・当日の損益最高値・停止reason/メッセージ/時刻）に保存し、再起動をまたぐ。取引日（JST）が替わると最初の判定で状態が初期化され、翌営業日に自動で解除される（`marketcalendar`の休場日は新規エントリー自体が無い）
+  - 停止理由は、`Check`の拒否理由（`trade_signals.reject_reason`、`daily_loss_limit_jpy: 当日損益 …`等）、全ページ共通バナー（`GET /system/daily-halt`、`DailyHaltBanner`。`Header`の`#daily-halt-banner`が`load`・30秒周期で取得）、`risk.Notifier.DailyEntryHalted`（Slack・ネイティブ通知・構造化ログ。1回の停止につき1回）、`slog`の警告ログに出る
+  - 判定は`Check`（候補ごと。Kill Switch系の上限の後・市場データ系の判定の前）と1分周期の`RunPeriodicChecks`（`CheckDailyGuard`）で行う。当日損益・取引回数を読めない場合は、いずれかのルールが有効な間は`risk_engine_error`で拒否する（fail-closed）。検証はPaperのみ（#55 Liveはblockedのまま）
+
 ### 4.8 Entry / Exit
 
 - FR-ENTRY-1: 成行想定Paper Entry・指値Paper Entryの両方を選択可能とする。現状はExecutionエンジン（`internal/service/execution`）が両方を実装しており（`EntryRequest.OrderType`/`LimitPrice`、`Config.PreferLimit`、PENDING指値の約定処理`TryFillPending`）、本番経路（Policy → `paperexec` → Execution）は`OrderType`/`LimitPrice`を指定しないため常に成行想定で発注する。`Config.PreferLimit`は`config/*.yaml`・環境変数・`runtime_settings`のいずれにも設定キーが無く既定のfalse（成行）固定であり、運用で指値Entryを選ぶ手段は未提供（本番経路への配線は実売買移行時にFR-ENTRY-2と併せて行う）

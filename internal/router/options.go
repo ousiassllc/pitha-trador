@@ -42,6 +42,7 @@ type options struct {
 	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
+	dailyHaltSource     system.DailyHaltSource
 	errorLogExporter    system.ErrorLogExporter
 	heartbeatRecorder   middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
 	allowedHosts        []string                     // nil until WithAllowedHosts: no Host/Origin validation
@@ -197,6 +198,15 @@ func WithUpdateController(controller system.UpdateController) Option {
 // demo / production environment).
 func WithMarketDataStatus(source system.MarketDataStatusSource) Option {
 	return func(o *options) { o.marketDataStatus = source }
+}
+
+// WithDailyHaltSource enables `GET /system/daily-halt` (issue #753), the
+// header banner telling the operator which daily entry-halt rule (損失上限 /
+// 利益確保 / 最大取引回数) stopped new entries today. cmd/desktop and cmd/
+// server pass internal/bootstrap's Risk Engine; without it the route
+// renders nothing.
+func WithDailyHaltSource(source system.DailyHaltSource) Option {
+	return func(o *options) { o.dailyHaltSource = source }
 }
 
 // WithErrorLogExporter overrides `GET /api/v1/logs/errors`'s backing

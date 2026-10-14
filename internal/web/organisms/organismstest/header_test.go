@@ -22,7 +22,7 @@ func containerTag(t *testing.T, html, id string) string {
 // full-width last row that collapses while empty.
 func TestHeader_BannerFramesShareOneConvention(t *testing.T) {
 	html := renderComponent(t, organisms.Header(domain.SystemState(""), organisms.NavNone))
-	for _, id := range []string{"config-banner", "update-banner", "marketdata-banner"} {
+	for _, id := range []string{"config-banner", "update-banner", "marketdata-banner", "daily-halt-banner"} {
 		tag := containerTag(t, html, id)
 		for _, c := range []string{"order-last", "w-full", "empty:hidden"} {
 			if !strings.Contains(tag, c) {
@@ -38,7 +38,7 @@ func TestHeader_BannerFramesShareOneConvention(t *testing.T) {
 // responses.
 func TestHeader_PolledBannersAreFixedLiveRegions(t *testing.T) {
 	html := renderComponent(t, organisms.Header(domain.SystemState(""), organisms.NavNone))
-	for _, id := range []string{"update-banner", "marketdata-banner"} {
+	for _, id := range []string{"update-banner", "marketdata-banner", "daily-halt-banner"} {
 		tag := containerTag(t, html, id)
 		for _, want := range []string{`role="status"`, `aria-live="polite"`, "data-live-banner"} {
 			if !strings.Contains(tag, want) {

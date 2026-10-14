@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -71,6 +72,9 @@ func (h *SettingsHandler) opsRow(ctx context.Context, field opsField, notice str
 	}
 	row.Value, row.Overridden, row.Warning = value.Current, value.Overridden, value.Warning
 	row.DefaultLabel = defaultLabel(value.Default)
+	if dailyguardsettings.IsKey(field.key) && value.Default == "0" {
+		row.DefaultLabel = "0（無効）"
+	}
 	if config.IsPrivateKeyPathKey(field.key) {
 		// Like a secret: only 設定済み is shown back, never the stored path.
 		row.Value, row.DefaultLabel = "", "未設定"

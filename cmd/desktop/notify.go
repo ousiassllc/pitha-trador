@@ -36,6 +36,7 @@ const (
 	killSwitchTriggeredEvent = "kill-switch:triggered"
 	killSwitchResumedEvent   = "kill-switch:auto-resumed"
 	dailyLossWarningEvent    = "risk:daily-loss-warning"
+	dailyEntryHaltedEvent    = "risk:daily-entry-halted"
 )
 
 // killSwitchNotificationBody renders the native OS toast body
@@ -106,5 +107,23 @@ func (a *App) DailyLossWarning(_ context.Context, currentPct, limitPct float64) 
 		"currentPct": currentPct,
 		"limitPct":   limitPct,
 	})
+	return nil
+}
+
+// DailyEntryHalted implements risk.Notifier's daily entry-halt alert
+// (issue #753): a native OS toast naming the rule and the figures, plus an
+// event for the UI. Exits continue; the halt lifts on the next trading day.
+func (a *App) DailyEntryHalted(_ context.Context, halt domain.DailyEntryHalt) error {
+	if a.ctx == nil {
+		return errWailsNotStarted
+	}
+	if err := runtime.SendNotification(a.ctx, runtime.NotificationOptions{
+		ID:    "daily-entry-halted",
+		Title: "新規エントリー停止: " + halt.Label(),
+		Body:  halt.Message,
+	}); err != nil {
+		return fmt.Errorf("desktop: send daily entry halt native notification: %w", err)
+	}
+	runtime.EventsEmit(a.ctx, dailyEntryHaltedEvent, map[string]any{"reason": halt.Reason, "message": halt.Message})
 	return nil
 }
