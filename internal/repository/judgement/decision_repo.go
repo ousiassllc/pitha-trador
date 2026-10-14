@@ -45,8 +45,11 @@ const insertDecisionSQL = `
 INSERT INTO jev_decisions (
 	instrument_id, symbol, timestamp, decision_type, state_hash, state_json,
 	question_version, response_json, direction, confidence, latency_ms,
-	model_id, request_cost, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	model_id, request_cost, created_at,
+	ofi_short, ofi_mid, ofi_long,
+	ofi_window_short_seconds, ofi_window_mid_seconds, ofi_window_long_seconds,
+	microprice_dev_bps
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // Insert writes a single jev_decisions row.
 func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (domain.JevDecision, error) {
@@ -59,6 +62,9 @@ func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (
 		d.InstrumentID, d.Symbol, sqlutil.FormatTime(d.Timestamp), d.DecisionType, d.StateHash, d.StateJSON,
 		d.QuestionVersion, d.ResponseJSON, sqlutil.NullableString(d.Direction), sqlutil.NullableFloat64(d.Confidence),
 		d.LatencyMs, d.ModelID, sqlutil.NullableFloat64(d.RequestCost), sqlutil.FormatTime(createdAt),
+		sqlutil.NullableFloat64(d.OrderFlow.OFIShort), sqlutil.NullableFloat64(d.OrderFlow.OFIMid), sqlutil.NullableFloat64(d.OrderFlow.OFILong),
+		sqlutil.NullableInt64(d.OrderFlow.OFIWindowShortSeconds), sqlutil.NullableInt64(d.OrderFlow.OFIWindowMidSeconds), sqlutil.NullableInt64(d.OrderFlow.OFIWindowLongSeconds),
+		sqlutil.NullableFloat64(d.OrderFlow.MicropriceDevBps),
 	)
 	if err != nil {
 		return domain.JevDecision{}, fmt.Errorf(
@@ -218,7 +224,10 @@ func (r *DecisionRepository) ListByInstrumentRange(ctx context.Context, instrume
 const decisionSelectColumns = `
 SELECT id, instrument_id, symbol, timestamp, decision_type, state_hash, state_json,
 	question_version, response_json, direction, confidence, latency_ms,
-	model_id, request_cost, created_at`
+	model_id, request_cost, created_at,
+	ofi_short, ofi_mid, ofi_long,
+	ofi_window_short_seconds, ofi_window_mid_seconds, ofi_window_long_seconds,
+	microprice_dev_bps`
 
 func scanDecision(row sqlutil.RowScanner) (domain.JevDecision, error) {
 	var (
@@ -232,6 +241,9 @@ func scanDecision(row sqlutil.RowScanner) (domain.JevDecision, error) {
 		&d.ID, &d.InstrumentID, &d.Symbol, &timestamp, &d.DecisionType, &d.StateHash, &d.StateJSON,
 		&d.QuestionVersion, &d.ResponseJSON, &direction, sqlutil.NullFloat(&d.Confidence), &d.LatencyMs,
 		&d.ModelID, sqlutil.NullFloat(&d.RequestCost), &createdAt,
+		sqlutil.NullFloat(&d.OrderFlow.OFIShort), sqlutil.NullFloat(&d.OrderFlow.OFIMid), sqlutil.NullFloat(&d.OrderFlow.OFILong),
+		sqlutil.NullInt64(&d.OrderFlow.OFIWindowShortSeconds), sqlutil.NullInt64(&d.OrderFlow.OFIWindowMidSeconds), sqlutil.NullInt64(&d.OrderFlow.OFIWindowLongSeconds),
+		sqlutil.NullFloat(&d.OrderFlow.MicropriceDevBps),
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.JevDecision{}, ErrDecisionNotFound

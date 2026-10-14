@@ -96,5 +96,10 @@ type JevDecision struct {
 	// RequestCost is the API billing cost of the call (e.g. USD), or nil
 	// when the provider does not report per-call cost.
 	RequestCost *float64
-	CreatedAt   time.Time
+	// OrderFlow holds the order-flow features (OFI over the configured
+	// windows, microprice deviation) of the market snapshot the decision
+	// was made on (issue #750), kept for later learning and analysis. It
+	// is not part of StateJSON, so it never changes StateHash.
+	OrderFlow OrderFlowFeatures
+	CreatedAt time.Time
 }

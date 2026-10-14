@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu/pushfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 )
 
 type fakeUniverse struct{ stocks []domain.Instrument }
@@ -249,5 +250,56 @@ func TestRun_SurvivesPanicAndResubscribes(t *testing.T) {
 			t.Fatal("Run never re-registered the universe after the panic")
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// Issue #750: every PUSH board's best quote feeds the OFI tracker, with kabu's
+// swapped Bid/Ask naming translated (kabu AskPrice/AskQty is the best BUY
+// quote). A REST poll never does.
+func TestRun_FeedsOrderFlowFromPushBoards(t *testing.T) {
+	// Conventional bid 100 x 10 / ask 101 x 20, then the bid grows to 15 (+5).
+	push := func(buyQty float64) marketdata.Board {
+		return marketdata.Board{
+			Symbol: "1000", CurrentPrice: 100,
+			BidPrice: new(101.0), BidQty: new(20.0), AskPrice: new(100.0), AskQty: new(buyQty),
+		}
+	}
+	f := newFakeKabu(t, marketdata.Board{Symbol: "1000", CurrentPrice: 1}, push(10), push(15))
+	feed := pushfeed.New(fakeUniverse{stocks(1)}, f.client, f.wsURL(), 1)
+	feed.OrderFlow = orderflow.NewTracker()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { feed.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if got := feed.OrderFlow.Sum("1000", time.Now().Add(time.Second), time.Minute); got != nil {
+			if *got != 5 {
+				t.Fatalf("OFI = %v, want 5", *got)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("PUSH boards never reached the OFI tracker")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestLatest_RESTPollDoesNotFeedOrderFlow(t *testing.T) {
+	f := newFakeKabu(t, marketdata.Board{
+		Symbol: "1000", CurrentPrice: 100,
+		BidPrice: new(101.0), BidQty: new(20.0), AskPrice: new(100.0), AskQty: new(10.0),
+	})
+	feed := pushfeed.New(fakeUniverse{}, f.client, f.wsURL(), 1)
+	feed.OrderFlow = orderflow.NewTracker()
+	for range 3 {
+		if _, err := feed.Latest(context.Background(), "1000"); err != nil {
+			t.Fatalf("Latest: %v", err)
+		}
+	}
+	if got := feed.OrderFlow.Sum("1000", time.Now().Add(time.Second), time.Minute); got != nil {
+		t.Fatalf("OFI from REST polls = %v, want nil", *got)
 	}
 }

@@ -74,6 +74,8 @@ func StateFromSnapshot(snap domain.Snapshot) ScoutState {
 		MarketReturn1m:                snap.Feature.MarketReturn1m,
 		StockVsSectorRelativeStrength: snap.Feature.StockVsSectorRelativeStrength,
 		MarketBreadth:                 snap.Feature.MarketBreadth,
+
+		OrderFlow: snap.Feature.OrderFlowFeatures,
 	}
 }
 
@@ -198,6 +200,7 @@ func (s *Scout) Evaluate(ctx context.Context, instrumentID int64, state ScoutSta
 		LatencyMs:       int(latency.Milliseconds()),
 		ModelID:         resp.ModelID,
 		RequestCost:     resp.RequestCost,
+		OrderFlow:       state.OrderFlow,
 	}
 
 	saved, err := s.decisions.Insert(ctx, decision)
