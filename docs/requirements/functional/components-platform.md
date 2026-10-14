@@ -104,6 +104,7 @@ News Ingest（`internal/service/newsfeed`）が対象銘柄に関連するニュ
 - FR-LUNA-3: Luna応答は当該銘柄の直近ニュース文脈としてインメモリキャッシュ（直近N件、TTL付き、DB非永続）に保持し、Jev Scout/Trader呼び出し時に`jev_decisions.state_json`（既存カラム）内の`news_context`フィールドとして注入する。これによりFR-SCAN-1の「ニュースフラグ発生」トリガーを実装する
 - FR-LUNA-4: Luna失敗時、およびニュースフィード（やのしん等）の停止・遅延・タイムアウト時は、ニュースフラグを立てずその銘柄をスキップし、通常のFast Screener/Jev/発注フロー・起動に影響を与えない（Jev同様、失敗時は機能低下のみでシステム全体を止めないフェイルセーフ）。フィード取得は短いタイムアウトとし、連続失敗時はバックオフして問い合わせ頻度を落とす。エラーはログとSystem Activity Feed（`news_feed`）に出す。Jev・フィードが使えなくても起動は失敗しない（issue #273）
 - FR-LUNA-5: Lunaの分類結果はJevの判断そのものを上書きしない。あくまでJev Scout/Traderへの補助的な文脈情報としてのみ用いる（`architecture/overview.md` §8「Lunaは高頻度側の補助コンポーネント」の方針を継続）
+- FR-LUNA-6（TDnet開示スコア、issue #763・親 #752）: `newsfeed.Service.TDnetScore(symbol, at)`（純関数`newsfeed.ScoreNewsContext(items, at, ttl)`への委譲。学習側は`jev_decisions.state_json`の`news_context`から判断時点のスコアを同じ規則で再計算する）は、FR-LUNA-3のキャッシュにある当該銘柄の開示のうち`(at-TTL, at]`に公開されたものについて、Lunaの`sentiment`（bullish=+1 / bearish=-1 / neutral・不明=0）に鮮度の線形重み（公開直後1、TTL経過で0）を掛けた和を`[-1, 1]`にクランプした値を返し、メタモデルの特徴量`tdnet_score`（FR-META-1）として使う。`at`より後に公開された開示は無視する（先読みしない）。有効な開示が無い銘柄（キャッシュなし・TTL切れ・未来のみ）は中立の`0`を返す（「算出不能」ではない）。スコアはFR-LUNA-5のとおりJevの判断を上書きせず、二次モデルの入力としてのみ用いる。
 
 ### 4.17 環境設定（Settings）
 
