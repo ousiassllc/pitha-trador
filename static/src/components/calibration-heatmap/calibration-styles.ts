@@ -60,6 +60,9 @@ export const heatmapStyles = css`
     font-size: 1rem;
     font-weight: 600;
   }
+  .pitha-calibration-heatmap-cell .bucket-barrier {
+    margin-top: 0.125rem;
+  }
   .pitha-calibration-heatmap-summary {
     display: grid;
     grid-template-columns: max-content 1fr;

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -73,14 +74,15 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 
 // Keys returns every key Service manages: the backup and log directories,
 // the policy thresholds, the screener thresholds, the OFI windows, the
-// daily entry-halt thresholds, the broker settings, then the 立花 監視銘柄
-// ソース settings.
+// daily entry-halt thresholds, the triple-barrier label settings, the broker
+// settings, then the 立花 監視銘柄ソース settings.
 func Keys() []string {
 	keys := []string{config.KeyBackupDir, config.KeyLogDir}
 	keys = append(keys, config.PolicySettingKeys()...)
 	keys = append(keys, config.FastScreenerSettingKeys()...)
 	keys = append(keys, orderflowsettings.Keys()...)
 	keys = append(keys, dailyguardsettings.Keys()...)
+	keys = append(keys, barriersettings.Keys()...)
 	keys = append(keys, config.BrokerSettingKeys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
@@ -112,7 +114,7 @@ func kindOf(key string) kind {
 		return kindSource
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key):
+	case key == "screener.top_n" || orderflowsettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key):
 		return kindInteger
 	default:
 		return kindNumber
@@ -213,6 +215,9 @@ func (s *Service) defaultText(key string) string {
 		return strconv.Itoa(seconds)
 	case dailyguardsettings.IsKey(key):
 		return "0"
+	case barriersettings.IsKey(key):
+		text, _ := barriersettings.Default().Text(key)
+		return text
 	default:
 		v, _ := config.FastScreenerSettingValue(s.screener, key)
 		return formatNumber(v)

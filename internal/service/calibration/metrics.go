@@ -34,8 +34,9 @@ func NewService(outcomes *calrepo.CalibrationRepository, trades TradeSource) *Se
 }
 
 // AllHorizons is Metrics's horizon argument meaning every current
-// DefaultHorizonsMinutes entry together (legacy horizons such as the
-// pre-#711 20 minutes are never included).
+// DefaultHorizonsMinutes entry together plus every triple-barrier label,
+// whose horizon is the Settings timeout (issue #760). Legacy close-only
+// horizons such as the pre-#711 20 minutes are never included.
 const AllHorizons = 0
 
 // Metrics loads the labeled Jev trader decision/horizon outcomes of one
@@ -49,11 +50,15 @@ const AllHorizons = 0
 // *Service can be passed directly to
 // internal/router.WithCalibrationSource.
 func (s *Service) Metrics(ctx context.Context, horizonMinutes int) (domain.CalibrationMetrics, error) {
-	horizons := DefaultHorizonsMinutes
-	if horizonMinutes != AllHorizons {
-		horizons = []int{horizonMinutes}
+	var (
+		samples []domain.LabeledSample
+		err     error
+	)
+	if horizonMinutes == AllHorizons {
+		samples, err = s.outcomes.ListCurrentLabeledSamples(ctx, DefaultHorizonsMinutes)
+	} else {
+		samples, err = s.outcomes.ListLabeledSamples(ctx, []int{horizonMinutes})
 	}
-	samples, err := s.outcomes.ListLabeledSamples(ctx, horizons)
 	if err != nil {
 		return domain.CalibrationMetrics{}, fmt.Errorf("calibration: load labeled samples: %w", err)
 	}
@@ -71,13 +76,17 @@ func (s *Service) Metrics(ctx context.Context, horizonMinutes int) (domain.Calib
 // (domain.ConfidenceBucket per domain.DefaultConfidenceBucketRanges) and
 // the Expected Calibration Error derived from it. A sample's Confidence
 // falling outside every bucket range still counts toward
-// BrierScore/LogLoss but not toward any bucket or the ECE.
+// BrierScore/LogLoss but not toward any bucket or the ECE. Triple-barrier
+// labels (BarrierHit set) additionally feed Barrier - the EV (net) and the
+// tp/sl/timeout reach rates, overall and per band (issue #767).
 func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 	ranges := domain.DefaultConfidenceBucketRanges
 	buckets := make([]domain.ConfidenceBucket, len(ranges))
 	bucketConfidenceSum := make([]float64, len(ranges))
 	bucketCorrectSum := make([]float64, len(ranges))
 	bucketReturnSum := make([]float64, len(ranges))
+	bucketBarrier := make([]barrierAccumulator, len(ranges))
+	var barrier barrierAccumulator
 	dirCorrect := map[string]float64{}
 	dirReturn := map[string]float64{}
 	dirCount := map[string]int{}
@@ -100,6 +109,7 @@ func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 			signedReturn = -signedReturn
 		}
 
+		barrier.add(sample)
 		dirCount[sample.Direction]++
 		dirCorrect[sample.Direction] += outcome
 		dirReturn[sample.Direction] += signedReturn
@@ -109,10 +119,11 @@ func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 			bucketConfidenceSum[idx] += sample.Confidence
 			bucketCorrectSum[idx] += outcome
 			bucketReturnSum[idx] += signedReturn
+			bucketBarrier[idx].add(sample)
 		}
 	}
 
-	metrics := domain.CalibrationMetrics{Buckets: buckets, SampleCount: len(samples)}
+	metrics := domain.CalibrationMetrics{Buckets: buckets, SampleCount: len(samples), Barrier: barrier.stats()}
 	if len(samples) > 0 {
 		metrics.BrierScore = brierSum / float64(len(samples))
 		metrics.LogLoss = logLossSum / float64(len(samples))
@@ -120,6 +131,7 @@ func Metrics(samples []domain.LabeledSample) domain.CalibrationMetrics {
 
 	var eceSum float64
 	for i := range buckets {
+		buckets[i].Barrier = bucketBarrier[i].stats()
 		if buckets[i].SampleCount == 0 {
 			continue
 		}
@@ -172,7 +184,7 @@ func bucketIndex(ranges []domain.ConfidenceBucketRange, confidence float64) (int
 // (internal/service/selfimprove, FR-SELFIMPROVE-1) weighs against each
 // direction's own policy.* thresholds.
 func (s *Service) DirectionMetricsSince(ctx context.Context, since time.Time) (long, short domain.CalibrationMetrics, err error) {
-	samples, err := s.outcomes.ListLabeledSamplesSince(ctx, since, DefaultHorizonsMinutes)
+	samples, err := s.outcomes.ListCurrentLabeledSamplesSince(ctx, since, DefaultHorizonsMinutes)
 	if err != nil {
 		return domain.CalibrationMetrics{}, domain.CalibrationMetrics{}, fmt.Errorf("calibration: load labeled samples since %s: %w", since, err)
 	}

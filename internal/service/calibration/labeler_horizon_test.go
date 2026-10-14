@@ -89,16 +89,16 @@ func TestLabeler_HandleJob_LastBarWithinToleranceIsLabeled(t *testing.T) {
 	decision := f.insertDecision(t, base, domain.JevDirectionLong, 0.82)
 	f.insertSnapshots(t, map[time.Duration]float64{
 		0:                               1000,
-		10*time.Minute + 5*time.Second:  1010,
-		15*time.Minute - 90*time.Second: 1030, // 13.5m: one missed bar before the 15m horizon
+		10*time.Minute + 5*time.Second:  1001,
+		15*time.Minute - 90*time.Second: 1003, // 13.5m: one missed bar before the 15m horizon
 	}, base)
 
 	if err := f.handleJob(t, decision.ID, 15); err != nil {
 		t.Fatalf("HandleJob: %v", err)
 	}
-	o := f.getOutcome(t, decision.ID, 15)
-	if !almostEqual(o.FutureReturn, 3.0) {
-		t.Fatalf("FutureReturn = %v, want ~3.0", o.FutureReturn)
+	o := f.getTripleBarrier(t, decision.ID, 15)
+	if !almostEqual(o.futureReturn, 0.3) || o.barrierHit != domain.BarrierHitTimeout {
+		t.Fatalf("future_return/barrier_hit = %v/%q, want ~0.3/timeout (+30 bps: no barrier touched)", o.futureReturn, o.barrierHit)
 	}
 }
 
@@ -141,7 +141,9 @@ func TestLabeler_HandleJob_ShortWindowIsTransientThenPermanentlySkipped(t *testi
 		0:               1000,
 		5 * time.Minute: 1020, // 15:30 close bar
 	}, base)
-	horizonEnd := base.Add(15 * time.Minute)
+	// The entry bar may land up to entryWaitTolerance (3 minutes) after the
+	// Jev response, so the data may still be landing until then.
+	horizonEnd := base.Add(15*time.Minute + 3*time.Minute)
 	key := [2]int64{decision.ID, 15}
 
 	// Within the grace period: error, nothing persisted, still pending.
@@ -202,11 +204,11 @@ func TestLabeler_HandleJob_MissingEntryBarIsSkippedAfterGrace(t *testing.T) {
 	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
 	decision := f.insertDecision(t, base, domain.JevDirectionLong, 0.82)
 	f.insertSnapshots(t, map[time.Duration]float64{
-		1 * time.Minute: 1000,
+		4 * time.Minute: 1000, // past the 3-minute entry wait after the response
 		5 * time.Minute: 1010,
 	}, base)
 
-	*f.now = base.Add(10 * time.Minute)
+	*f.now = base.Add(14 * time.Minute) // response + 3m entry wait + 5m horizon + 5m grace = 13m
 	if err := f.handleJob(t, decision.ID, 5); !isSkipped(err) {
 		t.Fatalf("HandleJob error = %v, want jobqueue.Skip (permanent skip, not a failure)", err)
 	}

@@ -83,6 +83,28 @@ var DefaultConfidenceBucketRanges = []ConfidenceBucketRange{
 	{Range: "0.90-1.00", Low: 0.90, High: 1.00},
 }
 
+// BarrierStats aggregates triple-barrier labels (issue #767, parent #751):
+// the labeled outcomes with a BarrierHit, i.e. LabelVersion
+// CalibrationLabelVersionTripleBarrier rows of a LONG/SHORT decision. Legacy
+// close-only labels carry no barrier and are not counted. Every field is 0
+// when SampleCount is 0.
+type BarrierStats struct {
+	// SampleCount is the number of triple-barrier labels aggregated.
+	SampleCount int
+	// TPCount/SLCount/TimeoutCount split SampleCount by the barrier touched
+	// first (BarrierHitTakeProfit/StopLoss/Timeout).
+	TPCount      int
+	SLCount      int
+	TimeoutCount int
+	// TPRate/SLRate/TimeoutRate are the count shares of SampleCount (0..1).
+	TPRate      float64
+	SLRate      float64
+	TimeoutRate float64
+	// EVNetBps is the expected value per decision: the mean NetReturnBps
+	// (direction-adjusted, after trading costs) over the labels.
+	EVNetBps float64
+}
+
 // ConfidenceBucket is one ConfidenceBucketRange's aggregated calibration
 // outcomes (functional.md FR-CAL-2/3, docs/api/endpoints.md §GET
 // /api/v1/calibration "buckets"): how often the predicted Direction was
@@ -96,7 +118,8 @@ var DefaultConfidenceBucketRanges = []ConfidenceBucketRange{
 // independent of SampleCount, which counts outcome horizons.
 // TradeWinRate is the share of those positions whose RealizedPnL was
 // positive (0 when TradeCount is 0), the realized-PnL counterpart of
-// DirectionAccuracy.
+// DirectionAccuracy. Barrier is the band's triple-barrier EV (net) and
+// per-barrier reach rates (issue #767).
 type ConfidenceBucket struct {
 	Range              string
 	AvgConfidence      float64
@@ -107,6 +130,7 @@ type ConfidenceBucket struct {
 	TotalPnL           float64
 	AvgPnLPct          float64
 	TradeWinRate       float64
+	Barrier            BarrierStats
 }
 
 // DirectionMetric is one predicted direction's (LONG or SHORT) aggregated
@@ -130,7 +154,8 @@ type DirectionMetric struct {
 // (issue #711): over every closed position traced to a trader decision
 // (DecisionTrade) whose Confidence falls in a bucket, the predicted
 // probability is Confidence and the outcome is RealizedPnL > 0. They are 0
-// when TradeCount is 0.
+// when TradeCount is 0. Barrier is the triple-barrier EV (net) and
+// per-barrier reach rates over every triple-barrier label (issue #767).
 type CalibrationMetrics struct {
 	Buckets                  []ConfidenceBucket
 	ByDirection              []DirectionMetric
@@ -141,6 +166,7 @@ type CalibrationMetrics struct {
 	TradeCount               int
 	PnLBrierScore            float64
 	PnLLogLoss               float64
+	Barrier                  BarrierStats
 }
 
 // DecisionTrade is one closed position joined back to the Jev trader

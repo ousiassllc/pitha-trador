@@ -273,3 +273,6 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.77 | 2026-10-08 | §4.10 FR-SCHED-9に立花証券選択時の日中監視（確定した監視リストをEVENT購読・`market-data`投入・Fast Screenerへ接続。03:30〜15:30のみ登録・日中の入れ替えなし・保有銘柄の追加は1回の再接続にまとめる・フルスキャンは常に無効）、FR-SCHED-10にWebSocket切断時の同一仮想URL再接続と日中のREST補完の位置づけを追記 | issue #731 |
 | 1.78 | 2026-10-14 | §4.1にFR-FE-6（板の需給偏りOFI ofi_short/mid/long・microprice_dev_bps、窓幅はSettings、欠損・板寄せ・数量0はNULL、特徴量・フィルタ用途限定）を追加し、FR-SETTINGS-7にOFI窓幅（`orderflow.ofi_window_*_seconds`）を追加（issue #750） |
 | 1.79 | 2026-10-14 | §4.7にFR-RISK-8（1日の損失上限（円）・利益確保（profit lock）・1日の最大取引回数。到達で当日の新規エントリーを停止し決済は継続、停止理由をバナー・通知・ログ・拒否理由に表示、翌営業日に自動解除。しきい値はSettingsの運用設定、0で無効）を追加。FR-SETTINGS-7に4キーを追記 | issue #753 |
+| 1.80 | 2026-10-14 | FR-SETTINGS-7にトリプルバリアラベルの設定（`calibration.barrier_{tp,sl,cost}_bps`・`calibration.barrier_timeout_minutes`。範囲検証・コスト想定<損切り幅・env不可）を追加（issue #760・親 #751） |
+| 1.81 | 2026-10-14 | §4.12 FR-CAL-4をトリプルバリア方式に更新（執行可能価格（LONG=ask/SHORT=bid、Jev応答後）を基準に、TP/SL/timeoutのうち先に触れたバリアでラベルを決め、コスト控除後のnet return・触れたバリア・基準価格・`label_version=2`を保存。flat=不正解を廃止。horizonはSettingsのtimeout。issue #762・親 #751） |
+| 1.82 | 2026-10-14 | §4.12 FR-CAL-2にトリプルバリアのEV（net）・バリア別（tp/sl/timeout）到達率の集計と、キャリブレーション画面・`GET /api/v1/calibration`への表示を追加（issue #767・親 #751） |

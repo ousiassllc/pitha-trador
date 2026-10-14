@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -63,7 +64,7 @@ func TestKeys_CoverEveryManagedKeyOnce(t *testing.T) {
 		}
 		seen[k] = true
 	}
-	if want := 2 + len(config.PolicySettingKeys()) + len(config.FastScreenerSettingKeys()) + len(orderflowsettings.Keys()) + len(dailyguardsettings.Keys()) + len(config.BrokerSettingKeys()) + len(tachibanasource.TachibanaSourceSettingKeys()); len(seen) != want {
+	if want := 2 + len(config.PolicySettingKeys()) + len(config.FastScreenerSettingKeys()) + len(orderflowsettings.Keys()) + len(dailyguardsettings.Keys()) + len(barriersettings.Keys()) + len(config.BrokerSettingKeys()) + len(tachibanasource.TachibanaSourceSettingKeys()); len(seen) != want {
 		t.Errorf("len(Keys) = %d, want %d", len(seen), want)
 	}
 }

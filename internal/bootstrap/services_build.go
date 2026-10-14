@@ -194,6 +194,7 @@ func (s *Services) buildGovernor(strategy *config.StrategyConfig, secrets config
 func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, autoUpdate updater.Quitter) {
 	schedOpts := []scheduler.Option{
 		scheduler.WithOutcomeLabelSource(s.Outcomes),
+		scheduler.WithOutcomeLabelHorizons(calibration.TimeoutHorizons(s.Settings)),
 		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(s.Risk),
 		scheduler.WithRiskMonitor(s.Risk),
 		scheduler.WithAutoResumer(s.Risk),
