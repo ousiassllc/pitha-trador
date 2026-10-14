@@ -19,6 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -82,9 +83,10 @@ func newHandlerFixture(t *testing.T, resp jev.TraderResponse) handlerFixture {
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
 	trader := jev.NewTrader(client, decisions, ragService)
 
-	engine := policy.NewEngine(testThresholds(), nil, signals)
+	store := policytest.NewStore(t, db, policytest.TakingModel())
+	engine := policy.NewEngine(testThresholds(), nil, signals, policytest.Option(store, store))
 	executor := &recordingExecutor{}
-	handler := policy.NewHandler(trader, snapshots, engine, executor, policy.WithClock(fixtureNow))
+	handler := policy.NewHandler(trader, snapshots, engine, executor, policy.WithClock(fixtureNow), policy.WithTDnetScorer(policytest.TDnet(0)))
 
 	return handlerFixture{db: db, handler: handler, engine: engine, signals: signals, jobs: jobqueue.NewJobRepository(db), executor: executor}
 }
@@ -102,6 +104,7 @@ func mustCreateInstrumentAndSnapshot(t *testing.T, db *sql.DB, symbol string, sp
 		InstrumentID: inst.ID, Symbol: symbol,
 		Timestamp: time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC),
 		Price:     2110.5, SpreadBps: ptr(spreadBps), Volume: 1000, Turnover: 2_110_500,
+		Feature: policytest.Feature(),
 	})
 	if err != nil {
 		t.Fatalf("create snapshot fixture: %v", err)
@@ -187,7 +190,8 @@ func TestHandler_HandleJob_PersistsNoneTradeSignalAndReturnsErrorOnJevAPIFailure
 
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
 	trader := jev.NewTrader(client, decisions, ragService)
-	engine := policy.NewEngine(testThresholds(), nil, signals)
+	store := policytest.NewStore(t, db, policytest.TakingModel())
+	engine := policy.NewEngine(testThresholds(), nil, signals, policytest.Option(store, store))
 	handler := policy.NewHandler(trader, snapshots, engine, nil, policy.WithClock(fixtureNow))
 
 	inst := mustCreateInstrumentAndSnapshot(t, db, "7203", 10)

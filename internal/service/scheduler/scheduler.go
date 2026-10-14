@@ -75,6 +75,7 @@ type Scheduler struct {
 	// dataPurger is optional (WithDataPurger): a nil value makes Start
 	// skip the retention-purge maintenance task (non-functional.md §3).
 	dataPurger DataPurger
+	extraTasks []maintenance.Task // WithMaintenanceTask
 	// updateChecker is optional (WithUpdateChecker, issue #65): a nil
 	// value makes CheckForUpdate a no-op and skips Start's update-check
 	// trigger entirely (cmd/server never configures it - it has no

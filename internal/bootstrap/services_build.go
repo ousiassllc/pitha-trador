@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backupjob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/metalabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -166,11 +167,11 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 // rolled-back) change applies on the next evaluation (#52, #714).
 func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config, runtimePolicy selfimprove.RuntimePolicy) *policy.Handler {
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
-	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy))
+	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy), metalabeljob.PolicyOption(state.DB, s.Settings))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig)
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk},
-		policy.WithCalibration(s.Calibration),
+		policy.WithCalibration(s.Calibration), policy.WithTDnetScorer(s.News),
 		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)))
 }
 
@@ -196,11 +197,10 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithOutcomeLabelSource(s.Outcomes),
 		scheduler.WithOutcomeLabelHorizons(calibration.TimeoutHorizons(s.Settings)),
 		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(s.Risk),
-		scheduler.WithRiskMonitor(s.Risk),
-		scheduler.WithAutoResumer(s.Risk),
+		scheduler.WithRiskMonitor(s.Risk), scheduler.WithAutoResumer(s.Risk),
 		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0)),
-		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
-		scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
+		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})), scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
+		scheduler.WithMaintenanceTask(metalabeljob.New(state.DB, s.Settings).Task()),
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
 	backupjob.WarnIfDisabled(context.Background(), s.Settings)

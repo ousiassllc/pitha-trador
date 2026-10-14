@@ -40,6 +40,12 @@ func WithMaintenanceNotifier(notifier maintenance.Notifier) Option {
 	return func(s *Scheduler) { s.maintenanceNotifier = notifier }
 }
 
+// WithMaintenanceTask adds a daily catch-up task; Run returns
+// maintenance.ErrSkipped while not due (meta-labeling retraining, #764).
+func WithMaintenanceTask(task maintenance.Task) Option {
+	return func(s *Scheduler) { s.extraTasks = append(s.extraTasks, task) }
+}
+
 // addMaintenanceTriggers registers the daily database-backup,
 // data-retention purge and log-archival tasks, each only when its Option
 // configured the dependency it drives. Each runs once per day with
@@ -60,7 +66,10 @@ func (s *Scheduler) addMaintenanceTriggers(ctx context.Context) error {
 	if s.logRotator != nil {
 		runner.Add(maintenance.Task{Name: taskLogRotation, Label: "ログアーカイブ", Run: s.RotateLogs})
 	}
-	if s.databaseBackuper == nil && s.dataPurger == nil && s.logRotator == nil {
+	for _, task := range s.extraTasks {
+		runner.Add(task)
+	}
+	if s.databaseBackuper == nil && s.dataPurger == nil && s.logRotator == nil && len(s.extraTasks) == 0 {
 		return nil
 	}
 

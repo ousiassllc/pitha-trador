@@ -2,7 +2,9 @@
 // meta-labeling secondary model (issue #759, parent #752): which model
 // algorithm and calibration method it uses, the time of day of the nightly
 // retraining, and the minimum expected value (bps) a signal must clear to be
-// taken (internal/service/metalabel.DecideConfig.MinEVBps). They live in
+// taken (internal/service/metalabel.DecideConfig.MinEVBps), and the date the
+// LLM's training data ends, from which the Jev-feature evaluation of the
+// nightly retraining is restricted (issue #764). They live in
 // runtime_settings (docs/architecture/er.md §runtime_settings) under Keys;
 // there is no yaml or environment source.
 package metalabelsettings
@@ -19,13 +21,14 @@ import (
 	"time"
 )
 
-// runtime_settings keys. Model, Calibration and RetrainTime are JSON strings,
-// MinEVBps a JSON number.
+// runtime_settings keys. Model, Calibration, RetrainTime and LLMCutoff are JSON
+// strings, MinEVBps a JSON number.
 const (
 	KeyModel       = "metalabel.model"
 	KeyCalibration = "metalabel.calibration"
 	KeyRetrainTime = "metalabel.retrain_time"
 	KeyMinEVBps    = "metalabel.min_ev_bps"
+	KeyLLMCutoff   = "metalabel.llm_cutoff"
 )
 
 // Model algorithms (metalabel_models.algorithm).
@@ -45,6 +48,9 @@ const (
 	DefaultCalibration = CalibrationPlatt
 	DefaultRetrainTime = "18:00"
 	DefaultMinEVBps    = 0.0
+	// DefaultLLMCutoff is a placeholder: the operator MUST set the real
+	// training-data cutoff of the Jev model they use (arXiv:2512.23847).
+	DefaultLLMCutoff = "2026-01-01"
 )
 
 // MaxMinEVBps is the largest minimum expected value accepted (bps): well above
@@ -79,21 +85,26 @@ type Settings struct {
 	// MinEVBps is the minimum calibrated expected value (bps, >= 0) a signal
 	// must exceed to be taken. A take always needs EV > 0 even at 0.
 	MinEVBps float64
+	// LLMCutoff ("YYYY-MM-DD", UTC) is when the Jev model's training data ends;
+	// the OOS evaluation uses only decisions on or after it.
+	LLMCutoff string
 }
 
 // Default returns the shipped settings: logistic regression with Platt
-// calibration, retraining at 18:00 and no extra EV margin.
+// calibration, 18:00 retraining, no EV margin and DefaultLLMCutoff.
 func Default() Settings {
-	return Settings{Model: DefaultModel, Calibration: DefaultCalibration, RetrainTime: DefaultRetrainTime, MinEVBps: DefaultMinEVBps}
+	return Settings{Model: DefaultModel, Calibration: DefaultCalibration, RetrainTime: DefaultRetrainTime, MinEVBps: DefaultMinEVBps, LLMCutoff: DefaultLLMCutoff}
 }
 
 // Keys returns every runtime_settings key Apply accepts.
-func Keys() []string { return []string{KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps} }
+func Keys() []string {
+	return []string{KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps, KeyLLMCutoff}
+}
 
 // IsKey reports whether key is one of Keys.
 func IsKey(key string) bool {
 	switch key {
-	case KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps:
+	case KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps, KeyLLMCutoff:
 		return true
 	}
 	return false
@@ -115,6 +126,8 @@ func (s Settings) Text(key string) (text string, ok bool) {
 		return s.RetrainTime, true
 	case KeyMinEVBps:
 		return fmt.Sprintf("%g", s.MinEVBps), true
+	case KeyLLMCutoff:
+		return s.LLMCutoff, true
 	}
 	return "", false
 }
@@ -123,9 +136,9 @@ var retrainTimePattern = regexp.MustCompile(`^\d{1,2}:\d{2}$`)
 
 // Normalize validates the operator's text for a string key and returns the
 // canonical value to store: the lower-cased, trimmed model or calibration
-// name, or the zero-padded "HH:MM" retrain time. It rejects an unknown name,
-// a malformed time, and a time inside the trading-hours window
-// [RetrainBlockedFrom, RetrainBlockedTo).
+// name, the zero-padded "HH:MM" retrain time, or the "YYYY-MM-DD" LLM cutoff.
+// It rejects an unknown name, a malformed time or date, and a time inside the
+// trading-hours window [RetrainBlockedFrom, RetrainBlockedTo).
 func Normalize(key, raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	switch key {
@@ -135,6 +148,8 @@ func Normalize(key, raw string) (string, error) {
 		return oneOf(key, strings.ToLower(raw), Calibrations)
 	case KeyRetrainTime:
 		return normalizeRetrainTime(raw)
+	case KeyLLMCutoff:
+		return normalizeLLMCutoff(raw)
 	}
 	return "", fmt.Errorf("metalabelsettings: %q is not a string meta-labeling setting key", key)
 }
@@ -202,6 +217,8 @@ func Apply(s *Settings, key, jsonValue string) error {
 		s.Calibration = v
 	case KeyRetrainTime:
 		s.RetrainTime = v
+	case KeyLLMCutoff:
+		s.LLMCutoff = v
 	}
 	return nil
 }
@@ -225,6 +242,9 @@ func (s Settings) Validate() error {
 	if math.IsNaN(s.MinEVBps) || s.MinEVBps < 0 || s.MinEVBps > MaxMinEVBps {
 		errs = append(errs, fmt.Errorf("%s は 0 以上 %g 以下で指定してください", KeyMinEVBps, MaxMinEVBps))
 	}
+	if v, err := normalizeLLMCutoff(s.LLMCutoff); err != nil || v != s.LLMCutoff {
+		errs = append(errs, fmt.Errorf("%s は YYYY-MM-DD 形式の日付で指定してください", KeyLLMCutoff))
+	}
 	return errors.Join(errs...)
 }
 
@@ -238,7 +258,7 @@ type Store interface {
 // stored row over its default. A row that no longer parses or validates (the
 // Settings screen stores only valid ones, so this is a hand-edited or
 // damaged row) is rejected: it is logged and the shipped defaults apply for
-// all four settings, never a half-applied set. Only a store read failure is
+// every setting, never a half-applied set. Only a store read failure is
 // an error.
 func Load(ctx context.Context, store Store) (Settings, error) {
 	s := Default()

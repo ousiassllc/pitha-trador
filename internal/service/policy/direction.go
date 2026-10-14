@@ -5,6 +5,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/textutil"
 )
 
@@ -15,52 +16,70 @@ const maxRejectReasonBytes = 255
 // decideDirection implements FR-POLICY-1〜3's decision tree, in order:
 // API失敗 -> データ欠損/未評価 -> キャリブレーション対象外 -> スプレッド/
 // 流動性 -> 特別気配/ストップ高安 -> Jevのdirection別（ショートは貸借銘柄
-// のみ）しきい値評価. It does not consult RiskChecker; Decide applies that
-// as the final gate.
-func (e *Engine) decideDirection(in Input, th Thresholds) (direction string, score *float64, reason *string) {
+// のみ）の評価. It does not consult RiskChecker; decide applies that as the
+// final gate.
+//
+// The last step depends on meta. A nil meta is the legacy rule (the backtest
+// replay and the comparison log): Jev's confidence must clear
+// policy.*.min_probability and its confidence bucket must be calibrated. A
+// non-nil meta is the live rule (issue #765): the meta-labeling model's
+// expected-value verdict decides, so Jev's confidence is no probability and
+// the confidence-bucket calibration gate does not apply; verdict is the
+// model's answer when the candidate reached it.
+func (e *Engine) decideDirection(in Input, th Thresholds, meta *metaEntry) (direction string, score *float64, reason *string, verdict *metalabel.Decision) {
+	none := func(reason *string) (string, *float64, *string, *metalabel.Decision) {
+		return domain.JevDirectionNone, nil, reason, nil
+	}
 	if in.APIErr != nil {
-		return domain.JevDirectionNone, nil, reasonf("%s: %v", ReasonAPIError, in.APIErr)
+		return none(reasonf("%s: %v", ReasonAPIError, in.APIErr))
 	}
 	if in.Decision == nil {
-		return domain.JevDirectionNone, nil, reasonf(ReasonMissingData)
+		return none(reasonf(ReasonMissingData))
 	}
-	if !in.Calibrated {
-		return domain.JevDirectionNone, nil, reasonf(ReasonNotCalibrated)
+	if meta == nil && !in.Calibrated {
+		return none(reasonf(ReasonNotCalibrated))
 	}
 	if in.SpreadBps == nil {
-		return domain.JevDirectionNone, nil, reasonf(ReasonMissingData)
+		return none(reasonf(ReasonMissingData))
 	}
 	if *in.SpreadBps > th.MaxSpreadBps {
-		return domain.JevDirectionNone, nil, reasonf("%s: spread_bps=%.2f > max=%.2f", ReasonSpreadTooWide, *in.SpreadBps, th.MaxSpreadBps)
+		return none(reasonf("%s: spread_bps=%.2f > max=%.2f", ReasonSpreadTooWide, *in.SpreadBps, th.MaxSpreadBps))
 	}
 	if in.Turnover5mJPY != nil && *in.Turnover5mJPY < th.MinTurnover5mJPY {
-		return domain.JevDirectionNone, nil, reasonf("%s: turnover_5m_jpy=%.0f < min=%.0f", ReasonThinLiquidity, *in.Turnover5mJPY, th.MinTurnover5mJPY)
+		return none(reasonf("%s: turnover_5m_jpy=%.0f < min=%.0f", ReasonThinLiquidity, *in.Turnover5mJPY, th.MinTurnover5mJPY))
 	}
 
 	if in.SpecialQuote {
-		return domain.JevDirectionNone, nil, reasonf(ReasonSpecialQuote)
+		return none(reasonf(ReasonSpecialQuote))
 	}
 	if in.PriceLimit != domain.PriceLimitNone {
-		return domain.JevDirectionNone, nil, reasonf("%s: stop_%s", ReasonPriceLimit, in.PriceLimit)
+		return none(reasonf("%s: stop_%s", ReasonPriceLimit, in.PriceLimit))
 	}
 
 	d := in.Decision
 	if d.Direction == nil || d.EntryQuality == nil || d.Confidence == nil ||
 		d.ContinuationProbability == nil || d.ToxicFlow == nil || d.LiquidityStressed == nil {
-		return domain.JevDirectionNone, nil, reasonf(ReasonMissingData)
+		return none(reasonf(ReasonMissingData))
 	}
 
+	var side string
+	var thresholds config.PolicyDirectionThresholds
 	switch *d.Direction {
 	case domain.JevDirectionLong:
-		return e.evaluateThreshold(domain.JevDirectionLong, th.Policy.Long, d)
+		side, thresholds = domain.JevDirectionLong, th.Policy.Long
 	case domain.JevDirectionShort:
 		if in.Lendable != nil && !*in.Lendable {
-			return domain.JevDirectionNone, nil, reasonf(ReasonNotLendable)
+			return none(reasonf(ReasonNotLendable))
 		}
-		return e.evaluateThreshold(domain.JevDirectionShort, th.Policy.Short, d)
+		side, thresholds = domain.JevDirectionShort, th.Policy.Short
 	default:
-		return domain.JevDirectionNone, nil, reasonf(ReasonJevNone)
+		return none(reasonf(ReasonJevNone))
 	}
+	if meta != nil {
+		return e.decideMeta(side, thresholds, in, meta)
+	}
+	direction, score, reason = e.evaluateThreshold(side, thresholds, d, true)
+	return direction, score, reason, nil
 }
 
 // evaluateThreshold implements FR-POLICY-1 (direction ==
@@ -68,10 +87,13 @@ func (e *Engine) decideDirection(in Input, th Thresholds) (direction string, sco
 // domain.JevDirectionShort)'s compound AND condition: probability,
 // entry_quality, continuation_probability, toxic_flow and
 // liquidity_stressed must all clear t. Any single failure is NONE
-// (functional.md FR-POLICY-3's generic "確信度不足").
-func (e *Engine) evaluateThreshold(direction string, t config.PolicyDirectionThresholds, d *domain.JevDecision) (string, *float64, *string) {
+// (functional.md FR-POLICY-3's generic "確信度不足"). withProbability is false
+// for the live meta-labeling rule, which replaces the probability condition
+// (Jev's confidence against min_probability) with the model's verdict and
+// keeps the other four as hard guards.
+func (e *Engine) evaluateThreshold(direction string, t config.PolicyDirectionThresholds, d *domain.JevDecision, withProbability bool) (string, *float64, *string) {
 	probability := *d.Confidence
-	if probability < t.MinProbability {
+	if withProbability && probability < t.MinProbability {
 		return domain.JevDirectionNone, nil, reasonf("%s: probability=%.4f < min=%.4f", ReasonProbabilityBelowThreshold, probability, t.MinProbability)
 	}
 	if entryQualityRank[*d.EntryQuality] < entryQualityRank[t.MinEntryQuality] {

@@ -19,6 +19,7 @@ func TestSaveOps_MetaLabelSettingsAreEditable(t *testing.T) {
 		metalabelsettings.KeyCalibration: {"isotonic", `"isotonic"`},
 		metalabelsettings.KeyRetrainTime: {"19:30", `"19:30"`},
 		metalabelsettings.KeyMinEVBps:    {"3.5", `3.5`},
+		metalabelsettings.KeyLLMCutoff:   {"2025-09-30", `"2025-09-30"`},
 	} {
 		rec := opsRequest(engine, http.MethodPost, key, url.Values{"value": {tc.raw}}, true)
 		if rec.Code != http.StatusOK {
@@ -43,6 +44,7 @@ func TestSaveOps_MetaLabelRejectsInvalidValues(t *testing.T) {
 		"time during session": {metalabelsettings.KeyRetrainTime, "11:00"},
 		"negative min EV":     {metalabelsettings.KeyMinEVBps, "-1"},
 		"min EV text":         {metalabelsettings.KeyMinEVBps, "abc"},
+		"malformed cutoff":    {metalabelsettings.KeyLLMCutoff, "2025/09/30"},
 	} {
 		rec := opsRequest(engine, http.MethodPost, tc.key, url.Values{"value": {tc.raw}}, true)
 		if rec.Code != http.StatusBadRequest {
