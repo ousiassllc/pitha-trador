@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backupjob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/metalabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -196,11 +197,10 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		scheduler.WithOutcomeLabelSource(s.Outcomes),
 		scheduler.WithOutcomeLabelHorizons(calibration.TimeoutHorizons(s.Settings)),
 		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(s.Risk),
-		scheduler.WithRiskMonitor(s.Risk),
-		scheduler.WithAutoResumer(s.Risk),
+		scheduler.WithRiskMonitor(s.Risk), scheduler.WithAutoResumer(s.Risk),
 		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0)),
-		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
-		scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
+		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})), scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
+		scheduler.WithMaintenanceTask(metalabeljob.New(state.DB, s.Settings).Task()),
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
 	backupjob.WarnIfDisabled(context.Background(), s.Settings)

@@ -13,6 +13,8 @@
 // configured minimum; every doubtful case is a skip). It never touches the Store
 // or a scheduler.
 //
-// This package depends only on internal/repository
-// (internal/service/doc.go).
+// The nightly walk-forward retraining on top of this core (issue #764) lives in
+// the training sub-package.
+//
+// This package depends only on internal/repository (internal/service/doc.go).
 package metalabel
