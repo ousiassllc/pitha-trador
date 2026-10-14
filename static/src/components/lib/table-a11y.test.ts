@@ -24,6 +24,7 @@ describe('Lit table templates', () => {
     expect(withTables.map((s) => s.file).sort()).toEqual([
       'activity-feed/activity-feed-views.ts',
       'activity-feed/pitha-activity-feed.ts',
+      'calibration-heatmap/meta-model-view.ts',
       'calibration-heatmap/pitha-calibration-heatmap.ts',
       'scanner-table/pitha-scanner-table.ts',
     ]);

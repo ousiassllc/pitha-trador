@@ -1,5 +1,6 @@
 // Response shape and pure presentation helpers for `pitha-calibration-heatmap`
 // (split out of the component to keep it within the linterly per-file limit).
+import type { MetaModel } from './meta-model-view';
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `triple_barrier`
 // object (internal/web/handler/calibration.calibrationBarrierOutput): the EV
@@ -73,6 +74,9 @@ export interface CalibrationAPIResponse {
   pnl_brier_score: number;
   pnl_log_loss: number;
   triple_barrier: BarrierStats;
+  // The newest meta-labeling model's OOS metrics (issue #766); omitted until
+  // a model was trained.
+  meta_model?: MetaModel;
 }
 
 // bucketMidpointPct parses e.g. "0.70-0.80" into 75. The reliability

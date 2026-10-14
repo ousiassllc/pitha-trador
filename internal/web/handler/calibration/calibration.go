@@ -44,7 +44,10 @@ type CalibrationHandler struct {
 	source CalibrationSource
 }
 
-// NewCalibrationHandler returns a CalibrationHandler backed by source.
+// NewCalibrationHandler returns a CalibrationHandler backed by source. When
+// source also implements MetaModelSource, the response reports the newest
+// meta-labeling model's OOS metrics (issue #766); otherwise `meta_model` is
+// omitted.
 func NewCalibrationHandler(source CalibrationSource) *CalibrationHandler {
 	return &CalibrationHandler{source: source}
 }
@@ -120,6 +123,7 @@ type CalibrationAPIOutput struct {
 		PnLBrierScore            float64                      `json:"pnl_brier_score" doc:"Brier Score against the realized-PnL ground truth: confidence vs. (realized PnL > 0) over those closed positions (0 when trade_count is 0)."`
 		PnLLogLoss               float64                      `json:"pnl_log_loss" doc:"Log Loss against the realized-PnL ground truth, same samples as pnl_brier_score (0 when trade_count is 0)."`
 		TripleBarrier            calibrationBarrierOutput     `json:"triple_barrier" doc:"Triple-barrier EV (net) and tp/sl/timeout reach rates over every triple-barrier label in the aggregated horizon."`
+		MetaModel                *metaModelOutput             `json:"meta_model,omitempty" doc:"The newest meta-labeling model's OOS metrics (AUC, calibration curve, EV) and Jev evaluation period (issue #766); omitted when no model was ever trained or no source is wired. Independent of horizon."`
 	}
 }
 
@@ -171,6 +175,11 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, in *Calibration
 	out.Body.PnLBrierScore = metrics.PnLBrierScore
 	out.Body.PnLLogLoss = metrics.PnLLogLoss
 	out.Body.TripleBarrier = barrierOutput(metrics.Barrier)
+	meta, err := h.metaModel(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out.Body.MetaModel = meta
 	return out, nil
 }
 
