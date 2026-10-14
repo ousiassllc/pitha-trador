@@ -6,6 +6,13 @@
 // model, and records the per-decision predictions. Callers MUST treat "no
 // active model" (LatestActiveModel's found == false) as skip, never take.
 //
+// The secondary model (issue #758) is the pure core: Features/Features.Vector
+// (the 8-feature input, signed towards the candidate side), TrainLogisticRegression
+// and Train, the Platt/isotonic Calibrator, Model.Predict (expected value from
+// the calibrated probability) and Decide (take only when EV > 0 and above the
+// configured minimum; every doubtful case is a skip). It never touches the Store
+// or a scheduler.
+//
 // This package depends only on internal/repository
 // (internal/service/doc.go).
 package metalabel
