@@ -2,6 +2,7 @@ package calibration
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -14,7 +15,8 @@ import (
 // ListLabeledSamples* aggregate; the callers append the optional horizon
 // and timestamp conditions.
 const labeledSamplesQuery = `
-SELECT d.direction, d.confidence, o.horizon_minutes, o.future_return, o.was_direction_correct
+SELECT d.direction, d.confidence, o.horizon_minutes, o.future_return, o.was_direction_correct,
+	o.barrier_hit, o.net_return_bps, o.entry_ref_price, o.label_version
 FROM calibration_outcomes o
 JOIN jev_decisions d ON d.id = o.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.direction IN ('LONG', 'SHORT') AND d.confidence IS NOT NULL`
@@ -42,10 +44,15 @@ func (r *CalibrationRepository) queryLabeledSamples(ctx context.Context, query s
 
 	var out []domain.LabeledSample
 	for rows.Next() {
-		var s domain.LabeledSample
-		if err := rows.Scan(&s.Direction, &s.Confidence, &s.HorizonMinutes, &s.FutureReturn, &s.WasDirectionCorrect); err != nil {
+		var (
+			s          domain.LabeledSample
+			barrierHit sql.NullString
+		)
+		if err := rows.Scan(&s.Direction, &s.Confidence, &s.HorizonMinutes, &s.FutureReturn, &s.WasDirectionCorrect,
+			&barrierHit, sqlutil.NullFloat(&s.NetReturnBps), sqlutil.NullFloat(&s.EntryRefPrice), &s.LabelVersion); err != nil {
 			return nil, fmt.Errorf("repository: scan labeled calibration sample: %w", err)
 		}
+		s.BarrierHit = barrierHit.String
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {

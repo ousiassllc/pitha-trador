@@ -113,6 +113,10 @@ erDiagram
         numeric max_adverse_excursion
         numeric max_favorable_excursion
         boolean was_direction_correct
+        text barrier_hit
+        numeric net_return_bps
+        numeric entry_ref_price
+        integer label_version
         text created_at
     }
 ```
@@ -126,6 +130,10 @@ erDiagram
 | max_adverse_excursion | numeric(8,4) | NOT NULL | **百分率（%）**。窓内の方向調整済みリターン（short は符号反転）の最小値（0以下。含み損の最大幅）。`direction=NONE`はlong扱い（調整係数+1） |
 | max_favorable_excursion | numeric(8,4) | NOT NULL | **百分率（%）**。窓内の方向調整済みリターンの最大値（0以上。含み益の最大幅） |
 | was_direction_correct | boolean | NULL可 | direction=NONEの場合NULL |
+| barrier_hit | text | NULL可, CHECK (`tp`/`sl`/`timeout`) | トリプルバリア方式のラベル（issue #756、マイグレーション000033）。利確（`tp`）・損切り（`sl`）・時間切れ（`timeout`）のうち先に触れたバリア。旧ラベル（`label_version=1`）の行はNULL |
+| net_return_bps | numeric | NULL可 | 売買コスト（手数料＋スプレッド＋スリッページ想定）を差し引いた後の方向調整済みリターン（**bps**。`future_return`の百分率%とは単位が異なる）。旧ラベルの行はNULL |
+| entry_ref_price | numeric | NULL可 | バリア幅と損益の基準にした執行できる価格（LONGはask、SHORTはbid。Jevの応答を受け取った後の時点）。旧ラベルの行はNULL |
+| label_version | integer | NOT NULL, DEFAULT 1 | ラベル方式の版（`internal/domain/calibration.go`の`CalibrationLabelVersion*`）。`1`=旧ラベル（終値のみで判定。マイグレーション000033が既存行を全てこの値で埋める。新列は上記のとおりNULL）、`2`=トリプルバリア。旧ラベルと新ラベルはこの列で区別し、混ぜて集計しない |
 | created_at | text | NOT NULL | |
 
 インデックス: `UNIQUE (jev_decision_id, horizon_minutes)`
