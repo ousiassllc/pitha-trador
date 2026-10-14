@@ -18,8 +18,10 @@ import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
+import { renderBarrierSummary, renderBucketBarrier } from './barrier-view';
 import { heatmapStyles } from './calibration-styles';
 import {
+  type BarrierStats,
   bucketColors,
   bucketMidpointPct,
   type CalibrationAPIResponse,
@@ -56,6 +58,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   @state() private tradeCount = 0;
   @state() private pnlBrierScore = 0;
   @state() private pnlLogLoss = 0;
+  @state() private barrier: BarrierStats | null = null;
   @state() private error: string | null = null;
   @state() private loading = false;
 
@@ -137,6 +140,7 @@ export class PithaCalibrationHeatmap extends LitElement {
       this.tradeCount = response.trade_count;
       this.pnlBrierScore = response.pnl_brier_score;
       this.pnlLogLoss = response.pnl_log_loss;
+      this.barrier = response.triple_barrier;
       this.applyBuckets(response.buckets);
       this.error = null;
     } catch (err) {
@@ -224,6 +228,7 @@ export class PithaCalibrationHeatmap extends LitElement {
                     b.trade_count > 0 ? html` / win ${(b.trade_win_rate * 100).toFixed(1)}%` : ''
                   }
                 </span>
+                ${renderBucketBarrier(b.triple_barrier)}
               </li>
             `,
           )}
@@ -259,6 +264,7 @@ export class PithaCalibrationHeatmap extends LitElement {
             ? html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-no-samples">サンプルなし（ラベル付き判断がまだありません）</p>`
             : ''
         }
+        ${renderBarrierSummary(this.barrier)}
         ${
           this.brierScore !== null && this.hasSamples
             ? html`

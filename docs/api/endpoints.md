@@ -190,3 +190,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.76 | 2026-10-08 | §5の`GET /api/v1/activity`の`type`に`broker_notice`（立花アダプタの運用者向け通知。インメモリ直近50件）を追加 | issue #727 |
 | 1.77 | 2026-10-08 | §3に`GET /watchlist`ページルートを追加。`GET /system/marketdata-status`のバナーに、立花の監視リストが日足を使えず代替リスト（固定リスト切替／前営業日リスト引き継ぎ）になっている間の注意表示（`data-testid="marketdata-notice"`）を追加 | issue #730 |
 | 1.78 | 2026-10-14 | §4に`GET /system/daily-halt`（1日の損失上限・利益確保・最大取引回数による新規エントリー停止バナー）を追加。`/ops-settings/:key`の許可キーに`risk.daily_loss_limit_jpy`・`risk.profit_lock.trigger_jpy`・`risk.profit_lock.giveback_pct`・`risk.max_daily_trades`を追加 | issue #753 |
+| 1.79 | 2026-10-14 | `GET /api/v1/calibration`（`api/endpoints/huma-api-insights.md`）に`triple_barrier`（EV（net）・tp/sl/timeout到達率。トップレベルとバケット別）を追加。`horizon=all`にトリプルバリアのラベルを含める | issue #767・親 #751 |
