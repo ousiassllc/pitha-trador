@@ -61,3 +61,9 @@ func (n *LogNotifier) AIStageSkipped(ctx context.Context, stage string, cause er
 	n.logger.WarnContext(ctx, "alert: self-improvement AI stage skipped, retry next business day", "stage", stage, "error", cause)
 	return nil
 }
+
+func (n *LogNotifier) DailyEntryHalted(ctx context.Context, halt domain.DailyEntryHalt) error {
+	n.logger.WarnContext(ctx, "alert: daily entry halt, new entries stopped for the trading day",
+		"reason", halt.Reason, "reason_label", halt.Label(), "message", halt.Message, "day", halt.Day)
+	return nil
+}

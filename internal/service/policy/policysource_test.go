@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 )
 
 // mutablePolicySource returns whatever current holds at call time,
@@ -37,7 +38,7 @@ func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create instrument: %v", err)
 	}
-	in := passingInput(domain.JevDirectionLong) // confidence exactly 0.68
+	in := passingInput(domain.JevDirectionLong)
 	in.InstrumentID = instrument.ID
 	saved, err := judgement.NewDecisionRepository(db).Insert(context.Background(), domain.JevDecision{
 		InstrumentID: instrument.ID, Symbol: "7203", Timestamp: in.Timestamp, DecisionType: domain.JevDecisionTypeTrader,
@@ -49,24 +50,27 @@ func TestEngine_Evaluate_UsesPolicySourceThresholdsAtEachCall(t *testing.T) {
 	in.Decision.ID = saved.ID
 
 	source := &mutablePolicySource{current: testThresholds().Policy}
-	engine := policy.NewEngine(testThresholds(), nil, trading.NewSignalRepository(db), policy.WithPolicySource(source))
+	engine := policy.NewEngine(testThresholds(), nil, trading.NewSignalRepository(db), policy.WithPolicySource(source),
+		policytest.Option(policytest.ModelOf(policytest.TakingModel()), &policytest.Predictions{}))
 
 	first, err := engine.Evaluate(context.Background(), in)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
 	if first.Direction != domain.JevDirectionLong {
-		t.Fatalf("first Direction = %q, want LONG at the 0.68 boundary", first.Direction)
+		t.Fatalf("first Direction = %q, want LONG at the toxic_flow boundary 0.35", first.Direction)
 	}
 
-	// An applied proposal raises long.min_probability past the decision.
-	source.current.Long.MinProbability = 0.70
+	// An applied proposal tightens long.max_toxic_flow below the decision's
+	// 0.35. (min_probability no longer matters to the live rule: the model's
+	// expected value replaced it.)
+	source.current.Long.MaxToxicFlow = 0.30
 	second, err := engine.Evaluate(context.Background(), in)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
 	if second.Direction != domain.JevDirectionNone {
-		t.Errorf("second Direction = %q, want NONE once the source's min_probability is 0.70", second.Direction)
+		t.Errorf("second Direction = %q, want NONE once the source's max_toxic_flow is 0.30", second.Direction)
 	}
 }
 
@@ -90,13 +94,14 @@ func TestEngine_Evaluate_RecordsAppliedPolicyVersionAndRevertsAfterRollback(t *t
 	in.Decision.ID = saved.ID
 
 	source := &mutablePolicySource{current: testThresholds().Policy}
-	engine := policy.NewEngine(testThresholds(), nil, trading.NewSignalRepository(db), policy.WithPolicySource(source))
+	engine := policy.NewEngine(testThresholds(), nil, trading.NewSignalRepository(db), policy.WithPolicySource(source),
+		policytest.Option(policytest.ModelOf(policytest.TakingModel()), &policytest.Predictions{}))
 
 	for _, step := range []struct{ applied, want string }{
-		{"", policy.Version},
-		{"sol-12", "policy-v1+sol-12"},
-		{"sol-999999", "policy-v1+sol-999999"}, // must still fit VARCHAR(20)
-		{"", policy.Version},                   // after a rollback
+		{"", policy.MetaVersion},
+		{"sol-12", "policy-v2+sol-12"},
+		{"sol-999999", "policy-v2+sol-999999"}, // must still fit VARCHAR(20)
+		{"", policy.MetaVersion},               // after a rollback
 	} {
 		source.applied = step.applied
 		sig, err := engine.Evaluate(context.Background(), in)

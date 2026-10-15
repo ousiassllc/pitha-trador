@@ -44,23 +44,48 @@ type CalibrationHandler struct {
 	source CalibrationSource
 }
 
-// NewCalibrationHandler returns a CalibrationHandler backed by source.
+// NewCalibrationHandler returns a CalibrationHandler backed by source. When
+// source also implements MetaModelSource, the response reports the newest
+// meta-labeling model's OOS metrics (issue #766); otherwise `meta_model` is
+// omitted.
 func NewCalibrationHandler(source CalibrationSource) *CalibrationHandler {
 	return &CalibrationHandler{source: source}
+}
+
+// calibrationBarrierOutput is the triple-barrier aggregate (issue #767) of
+// a confidence band or of the whole response: the EV (net) and how often
+// each barrier was reached first.
+type calibrationBarrierOutput struct {
+	SampleCount  int     `json:"sample_count" doc:"Number of triple-barrier labels aggregated (legacy close-only labels are not counted)."`
+	TPCount      int     `json:"tp_count" doc:"Labels whose take-profit barrier was touched first."`
+	SLCount      int     `json:"sl_count" doc:"Labels whose stop-loss barrier was touched first."`
+	TimeoutCount int     `json:"timeout_count" doc:"Labels that touched neither barrier before the timeout."`
+	TPRate       float64 `json:"tp_rate" doc:"tp_count / sample_count (0..1; 0 when sample_count is 0)."`
+	SLRate       float64 `json:"sl_rate" doc:"sl_count / sample_count (0..1; 0 when sample_count is 0)."`
+	TimeoutRate  float64 `json:"timeout_rate" doc:"timeout_count / sample_count (0..1; 0 when sample_count is 0)."`
+	EVNetBps     float64 `json:"ev_net_bps" doc:"Expected value per decision: mean direction-adjusted return after trading costs (bps) over the labels (0 when sample_count is 0)."`
+}
+
+func barrierOutput(s domain.BarrierStats) calibrationBarrierOutput {
+	return calibrationBarrierOutput{
+		SampleCount: s.SampleCount, TPCount: s.TPCount, SLCount: s.SLCount, TimeoutCount: s.TimeoutCount,
+		TPRate: s.TPRate, SLRate: s.SLRate, TimeoutRate: s.TimeoutRate, EVNetBps: s.EVNetBps,
+	}
 }
 
 // calibrationBucketOutput mirrors docs/api/endpoints.md's `buckets[]`
 // item shape.
 type calibrationBucketOutput struct {
-	Range              string  `json:"range" doc:"Confidence band, e.g. \"0.50-0.60\"."`
-	AvgConfidence      float64 `json:"avg_confidence" doc:"Mean predicted confidence of labeled decisions in this band (the reliability curve's x-axis value)."`
-	DirectionAccuracy  float64 `json:"direction_accuracy" doc:"Share of labeled decisions in this band whose predicted direction matched the realized future return."`
-	AvgFutureReturnPct float64 `json:"avg_future_return_pct" doc:"Average direction-adjusted future return (%) among labeled decisions in this band."`
-	SampleCount        int     `json:"sample_count" doc:"Number of labeled decision/horizon outcomes in this band."`
-	TradeCount         int     `json:"trade_count" doc:"Number of closed positions entered on a signal derived from a decision in this band."`
-	TotalPnL           float64 `json:"total_pnl" doc:"Sum of realized PnL (JPY) of those closed positions."`
-	AvgPnLPct          float64 `json:"avg_pnl_pct" doc:"Average realized return (%) of those closed positions relative to their entry notional."`
-	TradeWinRate       float64 `json:"trade_win_rate" doc:"Share of those closed positions with a positive realized PnL (the realized-PnL ground truth's hit rate; 0 when trade_count is 0)."`
+	Range              string                   `json:"range" doc:"Confidence band, e.g. \"0.50-0.60\"."`
+	AvgConfidence      float64                  `json:"avg_confidence" doc:"Mean predicted confidence of labeled decisions in this band (the reliability curve's x-axis value)."`
+	DirectionAccuracy  float64                  `json:"direction_accuracy" doc:"Share of labeled decisions in this band whose predicted direction matched the realized future return."`
+	AvgFutureReturnPct float64                  `json:"avg_future_return_pct" doc:"Average direction-adjusted future return (%) among labeled decisions in this band."`
+	SampleCount        int                      `json:"sample_count" doc:"Number of labeled decision/horizon outcomes in this band."`
+	TradeCount         int                      `json:"trade_count" doc:"Number of closed positions entered on a signal derived from a decision in this band."`
+	TotalPnL           float64                  `json:"total_pnl" doc:"Sum of realized PnL (JPY) of those closed positions."`
+	AvgPnLPct          float64                  `json:"avg_pnl_pct" doc:"Average realized return (%) of those closed positions relative to their entry notional."`
+	TradeWinRate       float64                  `json:"trade_win_rate" doc:"Share of those closed positions with a positive realized PnL (the realized-PnL ground truth's hit rate; 0 when trade_count is 0)."`
+	TripleBarrier      calibrationBarrierOutput `json:"triple_barrier" doc:"Triple-barrier EV (net) and tp/sl/timeout reach rates of the labeled decisions in this band."`
 }
 
 // calibrationDirectionOutput mirrors docs/api/endpoints.md's
@@ -73,14 +98,15 @@ type calibrationDirectionOutput struct {
 }
 
 // HorizonAll is the `horizon` query value selecting every current
-// judgment horizon (5/10/15 minutes together); legacy horizons (e.g. the
-// pre-#711 20 minutes) are never included.
+// judgment horizon (5/10/15 minutes together) plus every triple-barrier
+// label, whose horizon is the Settings timeout (issue #760); legacy horizons
+// (e.g. the pre-#711 20 minutes) are never included.
 const HorizonAll = "all"
 
 // CalibrationAPIInput is the query of `GET /api/v1/calibration`. The enum
 // mirrors internal/service/calibration.DefaultHorizonsMinutes.
 type CalibrationAPIInput struct {
-	Horizon string `query:"horizon" enum:"5,10,15,all" default:"all" doc:"Judgment horizon in minutes to aggregate (5, 10 or 15), or all for the current horizons together (legacy horizons such as 20 are excluded). Realized PnL columns do not depend on it."`
+	Horizon string `query:"horizon" enum:"5,10,15,all" default:"all" doc:"Judgment horizon in minutes to aggregate (5, 10 or 15), or all for the current horizons together plus every triple-barrier label whatever its timeout (legacy horizons such as 20 are excluded). Realized PnL columns do not depend on it."`
 }
 
 // CalibrationAPIOutput is the Huma response body for
@@ -96,6 +122,9 @@ type CalibrationAPIOutput struct {
 		TradeCount               int                          `json:"trade_count" doc:"Number of closed positions (traced to a trader decision) behind pnl_brier_score and pnl_log_loss."`
 		PnLBrierScore            float64                      `json:"pnl_brier_score" doc:"Brier Score against the realized-PnL ground truth: confidence vs. (realized PnL > 0) over those closed positions (0 when trade_count is 0)."`
 		PnLLogLoss               float64                      `json:"pnl_log_loss" doc:"Log Loss against the realized-PnL ground truth, same samples as pnl_brier_score (0 when trade_count is 0)."`
+		TripleBarrier            calibrationBarrierOutput     `json:"triple_barrier" doc:"Triple-barrier EV (net) and tp/sl/timeout reach rates over every triple-barrier label in the aggregated horizon."`
+		MetaModel                *metaModelOutput             `json:"meta_model,omitempty" doc:"The newest meta-labeling model's OOS metrics (AUC, calibration curve, EV) and Jev evaluation period (issue #766); omitted when no model was ever trained or no source is wired. Independent of horizon."`
+		ABArms                   []abArmOutput                `json:"ab_arms,omitempty" doc:"Paper A/B comparison of the fixed momentum arm and the regime-switching arm (issue #755): each arm's win rate and EV after costs over its closed positions, overall and per market regime. Independent of horizon; omitted when no source is wired."`
 	}
 }
 
@@ -128,6 +157,7 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, in *Calibration
 			TotalPnL:           b.TotalPnL,
 			AvgPnLPct:          b.AvgPnLPct,
 			TradeWinRate:       b.TradeWinRate,
+			TripleBarrier:      barrierOutput(b.Barrier),
 		}
 	}
 	out.Body.ByDirection = make([]calibrationDirectionOutput, len(metrics.ByDirection))
@@ -145,6 +175,13 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, in *Calibration
 	out.Body.TradeCount = metrics.TradeCount
 	out.Body.PnLBrierScore = metrics.PnLBrierScore
 	out.Body.PnLLogLoss = metrics.PnLLogLoss
+	out.Body.TripleBarrier = barrierOutput(metrics.Barrier)
+	meta, err := h.metaModel(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out.Body.MetaModel = meta
+	out.Body.ABArms = abArmsResponse(metrics.ABArms)
 	return out, nil
 }
 

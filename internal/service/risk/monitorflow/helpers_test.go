@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
 func testLimits() config.RiskLimits {
@@ -39,7 +40,8 @@ func testLimits() config.RiskLimits {
 // fakePortfolio is a risk.PortfolioProvider reporting a fixed daily loss;
 // every other reading is zero (matching risk.ZeroPortfolioProvider).
 type fakePortfolio struct {
-	dailyLossPct float64
+	dailyLossPct  float64
+	dailyActivity risk.DailyActivity
 }
 
 func (fakePortfolio) OpenPositionCount(context.Context) (int, error) { return 0, nil }
@@ -54,6 +56,9 @@ func (f fakePortfolio) DailyLossPct(context.Context, time.Time) (float64, error)
 func (fakePortfolio) ConsecutiveLosses(context.Context, time.Time) (int, error) { return 0, nil }
 func (fakePortfolio) LastLossAt(context.Context, time.Time) (time.Time, error) {
 	return time.Time{}, nil
+}
+func (f fakePortfolio) DailyActivity(context.Context) (risk.DailyActivity, error) {
+	return f.dailyActivity, nil
 }
 
 type fakeCloser struct {
@@ -88,6 +93,7 @@ type fakeNotifier struct {
 	triggered   []killSwitchTriggeredCall
 	autoResumed []domain.KillSwitchEvent
 	dailyLoss   []dailyLossWarningCall
+	halted      []domain.DailyEntryHalt
 }
 
 func (f *fakeNotifier) KillSwitchTriggered(_ context.Context, ev domain.KillSwitchEvent, autoResumable bool) error {
@@ -102,6 +108,11 @@ func (f *fakeNotifier) KillSwitchAutoResumed(_ context.Context, ev domain.KillSw
 
 func (f *fakeNotifier) DailyLossWarning(_ context.Context, currentPct, limitPct float64) error {
 	f.dailyLoss = append(f.dailyLoss, dailyLossWarningCall{currentPct: currentPct, limitPct: limitPct})
+	return f.err
+}
+
+func (f *fakeNotifier) DailyEntryHalted(_ context.Context, halt domain.DailyEntryHalt) error {
+	f.halted = append(f.halted, halt)
 	return f.err
 }
 

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -25,6 +26,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/eventtrigger"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine/marketcontext"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 	"github.com/ousiassllc/pitha-trador/internal/service/screener"
 )
@@ -55,8 +57,8 @@ type Handler struct {
 	EventTrigger config.EventTriggerConfig
 	// MarketContextMaxAge is how old an index/stock bar may be and still
 	// count as the current market for the market context (issue #692):
-	// ScanConfig.SnapshotMaxAge(domain.MaxSnapshotAge). Unset or
-	// non-positive means domain.MaxSnapshotAge (marketcontext.NewLoader).
+	// ScanConfig.SnapshotMaxAge(domain.MarketContextMaxAge). Unset or
+	// non-positive means domain.MarketContextMaxAge (marketcontext.NewLoader).
 	MarketContextMaxAge time.Duration
 	// Symbols supplies each stock's 貸借区分 and 値幅上限/下限 (issue #511).
 	// nil leaves the flags unknown, which restricts nothing.
@@ -64,6 +66,12 @@ type Handler struct {
 	// Now is the clock stamping each bar (default time.Now). Tests pin it so
 	// Execution's session gate does not depend on the wall clock (issue #512).
 	Now func() time.Time
+	// OrderFlow holds the PUSH best-quote OFI history (issue #750); nil
+	// leaves every OFI feature nil. OrderFlowSettings supplies the window
+	// widths (runtime_settings, re-read each job so a Settings change
+	// applies from the next bar); nil means the default 10s/30s/60s.
+	OrderFlow         *orderflow.Tracker
+	OrderFlowSettings orderflowsettings.Store
 
 	// marketContext shares the market-wide context (index returns, breadth)
 	// across all jobs instead of re-reading it per symbol (issue #622); it
@@ -156,6 +164,7 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 		MarketReturn5m: mc.MarketReturn5m,
 		SectorReturn5m: mc.SectorReturn5m,
 		MarketBreadth:  mc.MarketBreadth,
+		OrderFlow:      h.orderFlow(ctx, payload.Symbol, now),
 	}
 
 	persisted, err := h.FeatureEngine.RunCycle(ctx, []featureengine.CycleInput{{
@@ -182,6 +191,30 @@ func (h *Handler) HandleMarketData(ctx context.Context, job jobqueue.Job) error 
 	}
 	pt.mark("execution")
 	return nil
+}
+
+// orderFlow reads symbol's OFI over the configured windows at now. It is
+// best effort like applySymbolInfo: unreadable or invalid window settings
+// fall back to the defaults (orderflowsettings.Load), and a failed read is
+// logged and leaves the OFI features nil - the bar is still persisted.
+func (h *Handler) orderFlow(ctx context.Context, symbol string, now time.Time) featureengine.OrderFlow {
+	if h.OrderFlow == nil {
+		return featureengine.OrderFlow{}
+	}
+	windows := orderflowsettings.Default()
+	if h.OrderFlowSettings != nil {
+		var err error
+		if windows, err = orderflowsettings.Load(ctx, h.OrderFlowSettings); err != nil {
+			slog.Warn("marketdatajob: read OFI window settings failed; OFI unknown", "symbol", symbol, "error", err)
+			return featureengine.OrderFlow{}
+		}
+	}
+	return featureengine.OrderFlow{
+		ShortWindow: windows.Short, MidWindow: windows.Mid, LongWindow: windows.Long,
+		Short: h.OrderFlow.Sum(symbol, now, windows.Short),
+		Mid:   h.OrderFlow.Sum(symbol, now, windows.Mid),
+		Long:  h.OrderFlow.Sum(symbol, now, windows.Long),
+	}
 }
 
 // enqueueEventReevaluation implements FR-SCAN-1/FR-SCAN-2 for one freshly

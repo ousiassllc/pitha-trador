@@ -100,3 +100,36 @@ func TestArchiver_CompressesOldErrorLogsToo(t *testing.T) {
 		t.Errorf("recent error log should remain: %v", err)
 	}
 }
+
+// Issue #772: with a retention source the Archiver asks for the retention on
+// every pass, so a value changed in Settings applies without a restart.
+func TestArchiver_RetentionSourceIsReadEveryPass(t *testing.T) {
+	dir := t.TempDir()
+	writeLogFile(t, dir, "2026-09-20.log", "week old\n") // 7 days before "now"
+
+	days := 30
+	a := NewArchiver(dir, 0, WithRetentionSource(func(context.Context) int { return days }))
+	a.now = func() time.Time { return time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC) }
+
+	if err := a.Archive(context.Background()); err != nil {
+		t.Fatalf("Archive (30 days): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "2026-09-20.log")); err != nil {
+		t.Fatalf("a 7-day-old log was archived under a 30-day retention: %v", err)
+	}
+
+	days = 3
+	if err := a.Archive(context.Background()); err != nil {
+		t.Fatalf("Archive (3 days): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "2026-09-20.log.gz")); err != nil {
+		t.Fatalf("a 7-day-old log was not archived under a 3-day retention: %v", err)
+	}
+}
+
+func TestArchiver_RetentionSourceNonPositiveMeansDefault(t *testing.T) {
+	a := NewArchiver(t.TempDir(), 5, WithRetentionSource(func(context.Context) int { return 0 }))
+	if got := a.retention(context.Background()); got != DefaultRetentionDays {
+		t.Fatalf("retention = %d, want %d", got, DefaultRetentionDays)
+	}
+}

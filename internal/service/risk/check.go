@@ -40,6 +40,12 @@ import (
 // (losslimit.go) so they fire without waiting for a candidate. Both limits are measured from the manual-resume
 // baseline (baseline.go), so a Resume is not immediately undone by the
 // history that caused the Kill Switch.
+//
+// The daily entry-halt rules (dailyguard.go, FR-RISK-8: loss limit in yen,
+// profit lock, daily trade count) reject with their own reason
+// (domain.DailyHaltReason*) once reached, for the rest of the trading day;
+// they run after the Kill Switch limits above and before the market-data
+// checks, never force-close positions, and are off unless configured.
 func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string) (bool, string) {
 	state, events, err := e.State(ctx)
 	if err != nil {
@@ -116,6 +122,13 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 			slog.Error("risk: consecutive_losses kill switch failed", "error", err)
 		}
 		return false, fmt.Sprintf("%s: consecutive_losses=%d max=%d", ReasonMaxConsecutiveLosses, losses, e.limits.MaxConsecutiveLosses)
+	}
+	halt, err := e.dailyGuard(ctx)
+	if err != nil {
+		return e.failClosed("read daily entry halt", err)
+	}
+	if halt != nil {
+		return false, fmt.Sprintf("%s: %s", halt.Reason, halt.Message)
 	}
 
 	if e.snapshots == nil {

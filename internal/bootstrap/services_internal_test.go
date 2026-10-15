@@ -15,7 +15,9 @@ import (
 )
 
 // newTestServices builds a *Services backed by a fresh temp-dir SQLite DB.
-func newTestServices(t *testing.T) *Services {
+func newTestServices(t *testing.T) *Services { svc, _ := newTestServicesWithState(t); return svc }
+
+func newTestServicesWithState(t *testing.T) (*Services, *State) {
 	t.Helper()
 	state, err := Run(Config{DBPath: filepath.Join(t.TempDir(), "pitha.db")})
 	if err != nil {
@@ -24,11 +26,9 @@ func newTestServices(t *testing.T) *Services {
 	t.Cleanup(func() { _ = state.Close() })
 	// Jev calls fail after one attempt (WithJevMaxAttempts below): tests here
 	// only need a Handler to run, not the real 1.5s retry backoff (issue #236).
-
 	// JevBaseURL points at a closed local port: an empty one would fall back
 	// to the production host (issue #271) and make these tests dial it.
-	svc := BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"}, WithJevMaxAttempts(1), WithExecutionClock(func() time.Time { return tradingHours.Add(time.Minute) }))
-	return svc
+	return BuildServices(state, config.Secrets{KabuAPIPassword: "test-password", JevBaseURL: "http://127.0.0.1:1"}, WithJevMaxAttempts(1), WithExecutionClock(func() time.Time { return tradingHours.Add(time.Minute) })), state
 }
 
 func mustCreateInstrument(t *testing.T, svc *Services, symbol string) domain.Instrument {
@@ -221,7 +221,7 @@ func TestBuildServices_RegistersJevTraderHandler(t *testing.T) {
 	if len(signals) != 1 {
 		t.Fatalf("len(signals) = %d, want 1 (policy.Handler records a trade_signals row even on Jev Trader API error)", len(signals))
 	}
-	if signals[0].PolicyVersion != policy.Version {
-		t.Errorf("signals[0].PolicyVersion = %q, want %q", signals[0].PolicyVersion, policy.Version)
+	if signals[0].PolicyVersion != policy.MetaVersion {
+		t.Errorf("signals[0].PolicyVersion = %q, want %q", signals[0].PolicyVersion, policy.MetaVersion)
 	}
 }

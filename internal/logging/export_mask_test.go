@@ -39,3 +39,30 @@ func TestMaskString_PatternsCaseInsensitive(t *testing.T) {
 		})
 	}
 }
+
+// The data export (internal/service/dataexport) reuses the masking rules
+// through the exported wrappers.
+func TestMaskJSONText(t *testing.T) {
+	got := MaskJSONText(`{"api_key":"k","nested":{"sSecondPassword":"s","note":"Bearer abc.def"},"n":1.50}`)
+	for _, leaked := range []string{`"k"`, `"s"`, "abc.def"} {
+		if strings.Contains(got, leaked) {
+			t.Errorf("%q survived: %s", leaked, got)
+		}
+	}
+	if !strings.Contains(got, `"n":1.50`) {
+		t.Errorf("number text changed: %s", got)
+	}
+}
+
+func TestMaskJSONText_InvalidJSONIsMaskedAsText(t *testing.T) {
+	got := MaskJSONText(`oops: password=hunter2 {`)
+	if strings.Contains(got, "hunter2") {
+		t.Errorf("secret survived in non-JSON text: %s", got)
+	}
+}
+
+func TestIsSensitiveKey_Exported(t *testing.T) {
+	if !IsSensitiveKey("API_KEY") || !IsSensitiveKey("sSecondPassword") || IsSensitiveKey("symbol") {
+		t.Error("IsSensitiveKey does not follow the log export's key rules")
+	}
+}

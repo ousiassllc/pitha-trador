@@ -46,6 +46,9 @@ func (e erroring) ConsecutiveLosses(ctx context.Context, _ time.Time) (int, erro
 func (e erroring) LastLossAt(ctx context.Context, _ time.Time) (time.Time, error) {
 	return time.Time{}, e.fail("LastLossAt")
 }
+func (e erroring) DailyActivity(ctx context.Context) (risk.DailyActivity, error) {
+	return risk.DailyActivity{}, e.fail("DailyActivity")
+}
 
 func TestEngine_Check_FailsClosedWhenAnyPortfolioReadErrors(t *testing.T) {
 	for _, method := range []string{

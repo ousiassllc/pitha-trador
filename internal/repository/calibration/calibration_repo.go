@@ -18,7 +18,8 @@ var ErrCalibrationOutcomeNotFound = errors.New("repository: calibration outcome 
 
 // CalibrationRepository persists calibration_outcomes rows: Outcome
 // Labeling's realized future_return/max_adverse_excursion/
-// max_favorable_excursion/was_direction_correct for each Jev trader
+// max_favorable_excursion/was_direction_correct (and the triple-barrier
+// barrier_hit/net_return_bps/entry_ref_price/label_version, issue #756) for each Jev trader
 // decision at each judgment horizon (docs/architecture/er.md
 // §calibration_outcomes, functional.md §4.12).
 type CalibrationRepository struct {
@@ -33,8 +34,9 @@ func NewCalibrationRepository(db *sql.DB) *CalibrationRepository {
 const insertCalibrationOutcomeSQL = `
 INSERT INTO calibration_outcomes (
 	jev_decision_id, horizon_minutes, future_return, max_adverse_excursion,
-	max_favorable_excursion, was_direction_correct, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?)`
+	max_favorable_excursion, was_direction_correct, barrier_hit, net_return_bps,
+	entry_ref_price, label_version, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // Insert writes a single calibration_outcomes row (internal/service/
 // calibration.Labeler.HandleJob, FR-CAL-4). A duplicate
@@ -46,9 +48,15 @@ func (r *CalibrationRepository) Insert(ctx context.Context, o domain.Calibration
 		createdAt = time.Now().UTC()
 	}
 
+	if o.LabelVersion == 0 {
+		o.LabelVersion = domain.CalibrationLabelVersionClose
+	}
+
 	res, err := r.db.ExecContext(ctx, insertCalibrationOutcomeSQL,
 		o.JevDecisionID, o.HorizonMinutes, o.FutureReturn, o.MaxAdverseExcursion,
-		o.MaxFavorableExcursion, sqlutil.NullableBool(o.WasDirectionCorrect), sqlutil.FormatTime(createdAt),
+		o.MaxFavorableExcursion, sqlutil.NullableBool(o.WasDirectionCorrect),
+		nullableBarrierHit(o.BarrierHit), sqlutil.NullableFloat64(o.NetReturnBps),
+		sqlutil.NullableFloat64(o.EntryRefPrice), o.LabelVersion, sqlutil.FormatTime(createdAt),
 	)
 	if err != nil {
 		return domain.CalibrationOutcome{}, fmt.Errorf(
@@ -68,7 +76,8 @@ func (r *CalibrationRepository) Insert(ctx context.Context, o domain.Calibration
 
 const calibrationOutcomeSelectColumns = `
 SELECT id, jev_decision_id, horizon_minutes, future_return, max_adverse_excursion,
-	max_favorable_excursion, was_direction_correct, created_at`
+	max_favorable_excursion, was_direction_correct, barrier_hit, net_return_bps,
+	entry_ref_price, label_version, created_at`
 
 // Get returns the calibration_outcomes row with the given id, or
 // ErrCalibrationOutcomeNotFound.
@@ -118,12 +127,14 @@ func (r *CalibrationRepository) ListByDecisionIDs(ctx context.Context, decisionI
 
 func scanCalibrationOutcome(row sqlutil.RowScanner) (domain.CalibrationOutcome, error) {
 	var (
-		o         domain.CalibrationOutcome
-		createdAt string
+		o          domain.CalibrationOutcome
+		barrierHit sql.NullString
+		createdAt  string
 	)
 	err := row.Scan(
 		&o.ID, &o.JevDecisionID, &o.HorizonMinutes, &o.FutureReturn, &o.MaxAdverseExcursion,
-		&o.MaxFavorableExcursion, sqlutil.NullBool(&o.WasDirectionCorrect), &createdAt,
+		&o.MaxFavorableExcursion, sqlutil.NullBool(&o.WasDirectionCorrect),
+		&barrierHit, sqlutil.NullFloat(&o.NetReturnBps), sqlutil.NullFloat(&o.EntryRefPrice), &o.LabelVersion, &createdAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.CalibrationOutcome{}, ErrCalibrationOutcomeNotFound
@@ -131,11 +142,21 @@ func scanCalibrationOutcome(row sqlutil.RowScanner) (domain.CalibrationOutcome, 
 	if err != nil {
 		return domain.CalibrationOutcome{}, fmt.Errorf("repository: scan calibration outcome: %w", err)
 	}
+	o.BarrierHit = barrierHit.String
 	o.CreatedAt, err = sqlutil.ParseTime(createdAt)
 	if err != nil {
 		return domain.CalibrationOutcome{}, err
 	}
 	return o, nil
+}
+
+// nullableBarrierHit maps the empty BarrierHit of a legacy close-only label
+// to NULL.
+func nullableBarrierHit(barrierHit string) any {
+	if barrierHit == "" {
+		return nil
+	}
+	return barrierHit
 }
 
 // PendingLabel identifies one (jev_decision_id, horizon_minutes) pair

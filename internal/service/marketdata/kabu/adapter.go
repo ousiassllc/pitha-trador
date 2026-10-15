@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/infolimit"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu/pushfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu/quote"
+	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 )
 
 const (
@@ -40,12 +41,15 @@ type Adapter struct {
 var _ broker.Broker = (*Adapter)(nil)
 
 // New returns an Adapter over client whose PUSH feed registers universe's
-// stocks (or the ranking watch list, UseWatchlist).
-func New(client *marketdata.Client, universe pushfeed.Universe) *Adapter {
-	return &Adapter{
-		client: client,
-		feed:   pushfeed.New(universe, client, marketdata.DefaultPushURL, Exchange),
-	}
+// stocks (or the ranking watch list, UseWatchlist). flow, when non-nil,
+// accumulates OFI from the PUSH best quotes (issue #750). boardMaxAge is how
+// old a PUSH board may be before a REST poll is preferred (issue #754); zero
+// means pushfeed.DefaultBoardMaxAge.
+func New(client *marketdata.Client, universe pushfeed.Universe, flow *orderflow.Tracker, boardMaxAge time.Duration) *Adapter {
+	feed := pushfeed.New(universe, client, marketdata.DefaultPushURL, Exchange)
+	feed.OrderFlow = flow
+	feed.BoardMaxAge = boardMaxAge
+	return &Adapter{client: client, feed: feed}
 }
 
 // Client is the underlying kabuステーションAPI client, for kabu-only tools

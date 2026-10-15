@@ -92,7 +92,7 @@ func TestSettingsPage_UpdatePanelLivesInModalOpenedByHash(t *testing.T) {
 // Modals are native dialogs labelled by their title (a11y, issue #302).
 func TestSettingsPage_ModalsAreLabelledDialogs(t *testing.T) {
 	body := renderSettings(t, pages.SettingsProps{Connections: testConnections()})
-	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log"} {
+	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log", "modal-data-export"} {
 		for _, want := range []string{`<dialog id="` + id + `"`, `aria-labelledby="` + id + `-title"`, `id="` + id + `-title"`, `data-testid="` + id + `-close"`} {
 			if !strings.Contains(body, want) {
 				t.Errorf("modal %s lacks %q", id, want)
@@ -106,7 +106,7 @@ func TestSettingsPage_ModalsAreLabelledDialogs(t *testing.T) {
 // to stay dismissible (issue #353).
 func TestSettingsPage_EachModalHasItsOwnToastRegion(t *testing.T) {
 	body := renderSettings(t, pages.SettingsProps{Connections: testConnections()})
-	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log"} {
+	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log", "modal-data-export"} {
 		start := strings.Index(body, `<dialog id="`+id+`"`)
 		if start < 0 {
 			t.Fatalf("no <dialog id=%s>", id)
@@ -137,6 +137,35 @@ func TestSettingsPage_ErrorLogPanelIsPlainDownloadForm(t *testing.T) {
 	}
 }
 
+// FR-EXPORT-7: the データエクスポート section is a plain GET form to the
+// export API - dates required, all three kinds checked, CSV default, no
+// share/upload action.
+func TestSettingsPage_DataExportPanelIsPlainDownloadForm(t *testing.T) {
+	body := renderSettings(t, pages.SettingsProps{})
+
+	for _, want := range []string{
+		`id="data-export-panel"`,
+		`<form method="get" action="/api/v1/export" hx-disable`,
+		`name="from"`,
+		`name="to"`,
+		`value="trades"`,
+		`value="decisions"`,
+		`value="metrics"`,
+		`<option value="csv" selected>`,
+		`<option value="jsonl">`,
+		`<dialog id="modal-data-export"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SettingsPage lacks %q", want)
+		}
+	}
+	start := strings.Index(body, `id="data-export-panel"`)
+	panel := body[start : start+strings.Index(body[start:], "</section>")]
+	if got := strings.Count(panel, `type="checkbox"`); got != 3 || strings.Count(panel, "checked") != 3 {
+		t.Errorf("data export panel has %d checkboxes / %d checked, want 3 all checked", got, strings.Count(panel, "checked"))
+	}
+}
+
 // FR-ERRLOG-1: the エラーログ section lives on Settings only; the first-run
 // Setup screen (no Header, no session-guarded fragments) must not offer it.
 func TestSetupPage_HasNoErrorLogPanel(t *testing.T) {
@@ -146,7 +175,7 @@ func TestSetupPage_HasNoErrorLogPanel(t *testing.T) {
 			t.Fatalf("render: %v", err)
 		}
 		body := buf.String()
-		for _, unwanted := range []string{`error-log-panel`, `/api/v1/logs/errors`} {
+		for _, unwanted := range []string{`error-log-panel`, `/api/v1/logs/errors`, `data-export-panel`, `/api/v1/export`} {
 			if strings.Contains(body, unwanted) {
 				t.Errorf("complete=%v: SetupPage contains %q, want the error log panel on Settings only", complete, unwanted)
 			}

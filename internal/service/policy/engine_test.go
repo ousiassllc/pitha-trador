@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 )
 
 func testThresholds() policy.Thresholds {
@@ -49,7 +50,7 @@ func passingDecision(direction string) domain.JevDecision {
 }
 
 func passingInput(direction string) policy.Input {
-	return policy.Input{
+	return policytest.WithInputs(policy.Input{
 		InstrumentID:        1,
 		Symbol:              "7203",
 		Timestamp:           time.Date(2026, 9, 27, 9, 31, 0, 0, time.UTC),
@@ -57,7 +58,7 @@ func passingInput(direction string) policy.Input {
 		SpreadBps:           ptr(10.0),
 		EntryPriceReference: ptr(2110.5),
 		Calibrated:          true,
-	}
+	})
 }
 
 func decisionPtr(d domain.JevDecision) *domain.JevDecision { return &d }

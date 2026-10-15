@@ -13,7 +13,7 @@ import (
 // false): the watcher is built and the PUSH feed and candidate refresh follow
 // its watch list. An explicit true restores the full scan and builds none.
 // The market context's allowed bar age follows the mode like stale_snapshot
-// (domain.MaxSnapshotAge, or the full-scan 620s; issue #692).
+// (domain.MarketContextMaxAge, or the full-scan 620s; issue #692).
 func TestBuildServices_RankingWatchIsDefaultAndFullScanOptIn(t *testing.T) {
 	yes, no := true, false
 	for name, tc := range map[string]struct {
@@ -21,8 +21,8 @@ func TestBuildServices_RankingWatchIsDefaultAndFullScanOptIn(t *testing.T) {
 		wantWatch bool
 		wantAge   time.Duration
 	}{
-		"omitted": {nil, true, domain.MaxSnapshotAge},
-		"false":   {&no, true, domain.MaxSnapshotAge},
+		"omitted": {nil, true, domain.MarketContextMaxAge},
+		"false":   {&no, true, domain.MarketContextMaxAge},
 		"true":    {&yes, false, 620 * time.Second},
 	} {
 		t.Run(name, func(t *testing.T) {

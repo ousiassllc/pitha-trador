@@ -2,6 +2,7 @@ package calibration
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -14,15 +15,17 @@ import (
 // ListLabeledSamples* aggregate; the callers append the optional horizon
 // and timestamp conditions.
 const labeledSamplesQuery = `
-SELECT d.direction, d.confidence, o.horizon_minutes, o.future_return, o.was_direction_correct
+SELECT d.direction, d.confidence, o.horizon_minutes, o.future_return, o.was_direction_correct,
+	o.barrier_hit, o.net_return_bps, o.entry_ref_price, o.label_version
 FROM calibration_outcomes o
 JOIN jev_decisions d ON d.id = o.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.direction IN ('LONG', 'SHORT') AND d.confidence IS NOT NULL`
 
 // horizonCondition returns the SQL condition restricting
 // o.horizon_minutes to horizons (with its args), or "" when horizons is
-// empty (no restriction).
-func horizonCondition(horizons []int) (string, []any) {
+// empty (no restriction). With orTripleBarrier a triple-barrier label also
+// matches whatever its horizon.
+func horizonCondition(horizons []int, orTripleBarrier bool) (string, []any) {
 	if len(horizons) == 0 {
 		return "", nil
 	}
@@ -30,7 +33,13 @@ func horizonCondition(horizons []int) (string, []any) {
 	for i, h := range horizons {
 		args[i] = h
 	}
-	return " AND o.horizon_minutes IN (?" + strings.Repeat(",?", len(horizons)-1) + ")", args
+	in := "o.horizon_minutes IN (?" + strings.Repeat(",?", len(horizons)-1) + ")"
+	if orTripleBarrier {
+		// A triple-barrier label's horizon is the Settings timeout (issue
+		// #760), which need not be one of horizons.
+		return fmt.Sprintf(" AND (%s OR o.label_version = %d)", in, domain.CalibrationLabelVersionTripleBarrier), args
+	}
+	return " AND " + in, args
 }
 
 func (r *CalibrationRepository) queryLabeledSamples(ctx context.Context, query string, args []any) ([]domain.LabeledSample, error) {
@@ -42,10 +51,15 @@ func (r *CalibrationRepository) queryLabeledSamples(ctx context.Context, query s
 
 	var out []domain.LabeledSample
 	for rows.Next() {
-		var s domain.LabeledSample
-		if err := rows.Scan(&s.Direction, &s.Confidence, &s.HorizonMinutes, &s.FutureReturn, &s.WasDirectionCorrect); err != nil {
+		var (
+			s          domain.LabeledSample
+			barrierHit sql.NullString
+		)
+		if err := rows.Scan(&s.Direction, &s.Confidence, &s.HorizonMinutes, &s.FutureReturn, &s.WasDirectionCorrect,
+			&barrierHit, sqlutil.NullFloat(&s.NetReturnBps), sqlutil.NullFloat(&s.EntryRefPrice), &s.LabelVersion); err != nil {
 			return nil, fmt.Errorf("repository: scan labeled calibration sample: %w", err)
 		}
+		s.BarrierHit = barrierHit.String
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {
@@ -67,7 +81,17 @@ func (r *CalibrationRepository) queryLabeledSamples(ctx context.Context, query s
 // legacy 20-minute one (issue #719); an empty horizons applies no horizon
 // restriction.
 func (r *CalibrationRepository) ListLabeledSamples(ctx context.Context, horizons []int) ([]domain.LabeledSample, error) {
-	cond, args := horizonCondition(horizons)
+	cond, args := horizonCondition(horizons, false)
+	return r.queryLabeledSamples(ctx, labeledSamplesQuery+cond, args)
+}
+
+// ListCurrentLabeledSamples is ListLabeledSamples that also returns every
+// triple-barrier label (label_version 2) whatever its horizon: that
+// horizon is the Settings timeout (issue #760), which can be any number of
+// minutes, while the horizons restriction still keeps legacy close-only
+// labels of other horizons (e.g. the pre-#711 20 minutes) out.
+func (r *CalibrationRepository) ListCurrentLabeledSamples(ctx context.Context, horizons []int) ([]domain.LabeledSample, error) {
+	cond, args := horizonCondition(horizons, true)
 	return r.queryLabeledSamples(ctx, labeledSamplesQuery+cond, args)
 }
 
@@ -77,7 +101,17 @@ func (r *CalibrationRepository) ListLabeledSamples(ctx context.Context, horizons
 // Calibration指標", not the full historical dataset ListLabeledSamples
 // itself serves (Calibration screen's all-time Reliability Curve).
 func (r *CalibrationRepository) ListLabeledSamplesSince(ctx context.Context, since time.Time, horizons []int) ([]domain.LabeledSample, error) {
-	cond, args := horizonCondition(horizons)
+	return r.listLabeledSamplesSince(ctx, since, horizons, false)
+}
+
+// ListCurrentLabeledSamplesSince is ListLabeledSamplesSince that also
+// returns every triple-barrier label, as ListCurrentLabeledSamples.
+func (r *CalibrationRepository) ListCurrentLabeledSamplesSince(ctx context.Context, since time.Time, horizons []int) ([]domain.LabeledSample, error) {
+	return r.listLabeledSamplesSince(ctx, since, horizons, true)
+}
+
+func (r *CalibrationRepository) listLabeledSamplesSince(ctx context.Context, since time.Time, horizons []int, orTripleBarrier bool) ([]domain.LabeledSample, error) {
+	cond, args := horizonCondition(horizons, orTripleBarrier)
 	return r.queryLabeledSamples(ctx,
 		labeledSamplesQuery+" AND d.timestamp >= ?"+cond,
 		append([]any{sqlutil.FormatTime(since)}, args...),

@@ -39,6 +39,8 @@ func (r *syncRecorder) KillSwitchAutoResumed(context.Context, domain.KillSwitchE
 
 func (r *syncRecorder) DailyLossWarning(context.Context, float64, float64) error { return nil }
 
+func (r *syncRecorder) DailyEntryHalted(context.Context, domain.DailyEntryHalt) error { return nil }
+
 func (r *syncRecorder) reset() {
 	r.mu.Lock()
 	defer r.mu.Unlock()

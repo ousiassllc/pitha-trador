@@ -61,3 +61,13 @@ func (m Notifier) DailyLossWarning(ctx context.Context, currentPct, limitPct flo
 	}
 	return errors.Join(errs...)
 }
+
+func (m Notifier) DailyEntryHalted(ctx context.Context, halt domain.DailyEntryHalt) error {
+	var errs []error
+	for _, n := range m.Notifiers {
+		if err := n.DailyEntryHalted(ctx, halt); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}

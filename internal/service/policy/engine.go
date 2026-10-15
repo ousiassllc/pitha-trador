@@ -11,17 +11,16 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 )
 
-// Version identifies this build's Policy Engine threshold-evaluation
-// logic, persisted to trade_signals.policy_version
-// (docs/architecture/er.md §trade_signals, functional.md FR-POLICY-4/5).
-// Bump it whenever the LONG/SHORT/NONE decision logic itself changes
-// materially. Evaluate (the live path) records it alone while the
-// config/strategy.yaml baseline thresholds are in effect, and suffixed
-// with the applied Self-Improvement proposal's policy_version
-// ("policy-v1+sol-12") while a runtime_settings override applied by
-// FR-SELFIMPROVE-5 is, returning to plain Version after a rollback
-// (see PolicySource.AppliedPolicyVersion). Decide, the backtest replay
-// path, always records plain Version.
+// Version identifies the legacy threshold-evaluation logic (Jev's confidence
+// against policy.*.min_probability), persisted to trade_signals.policy_version
+// (docs/architecture/er.md §trade_signals, functional.md FR-POLICY-4/5) by
+// Decide, the backtest replay path. Bump it whenever that logic changes
+// materially. The live Evaluate path records MetaVersion (meta.go) instead -
+// alone on the config/strategy.yaml baseline thresholds, suffixed with the
+// applied Self-Improvement proposal's policy_version ("policy-v2+sol-12") while
+// a runtime_settings override applied by FR-SELFIMPROVE-5 is in effect,
+// returning to plain MetaVersion after a rollback (see
+// PolicySource.AppliedPolicyVersion).
 const Version = "policy-v1"
 
 // FR-POLICY-3 reject_reason prefixes: every NONE trade_signals row's
@@ -150,6 +149,15 @@ type Input struct {
 	PriceLimit   domain.PriceLimit
 	Lendable     *bool
 
+	// OrderFlow, Return1m and TDnetScore are the meta-labeling model's inputs
+	// besides the spread and Jev's answer (issue #765): the snapshot's order-flow
+	// features and 1-minute return (InputFromSnapshot) and the TDnet disclosure
+	// score (Handler, WithTDnetScorer). nil means not available this cycle,
+	// which makes the model skip the entry.
+	OrderFlow  domain.OrderFlowFeatures
+	Return1m   *float64
+	TDnetScore *float64
+
 	// Calibrated is false when Calibration (functional.md §4.9) does not
 	// yet cover the decision - its confidence bucket has too few labeled
 	// samples (FR-POLICY-3 "キャリブレーション対象外"). Handler derives it
@@ -169,6 +177,8 @@ type Engine struct {
 	risk       RiskChecker
 	signals    *trading.SignalRepository
 	policy     PolicySource // optional, see WithPolicySource
+	meta       *metaWiring  // optional, see WithMetaModel
+	now        func() time.Time
 }
 
 // NewEngine returns an Engine using thresholds and risk to decide, and
@@ -178,7 +188,7 @@ func NewEngine(thresholds Thresholds, risk RiskChecker, signals *trading.SignalR
 	if risk == nil {
 		risk = AlwaysPassRiskChecker{}
 	}
-	e := &Engine{thresholds: thresholds, risk: risk, signals: signals}
+	e := &Engine{thresholds: thresholds, risk: risk, signals: signals, now: time.Now}
 	for _, opt := range opts {
 		opt(e)
 	}
@@ -199,25 +209,35 @@ func NewEngine(thresholds Thresholds, risk RiskChecker, signals *trading.SignalR
 // narrower count than every direction=none signal, since some become
 // none for other FR-POLICY-1〜3 reasons - missing data, calibration
 // exclusion, spread too wide, ...).
+//
+// Decide is the legacy threshold rule (Jev's confidence against
+// policy.*.min_probability): the backtest replay and the self-improvement
+// shadow backtests have no stored meta-labeling models to consult. The live
+// path, Evaluate, enters on the meta-labeling model's verdict instead.
 func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
-	return e.decide(ctx, in, e.thresholds)
+	sig, _ := e.decide(ctx, in, e.thresholds, nil, Version)
+	return sig
 }
 
-func (e *Engine) decide(ctx context.Context, in Input, th Thresholds) domain.TradeSignal {
+// decide runs the decision tree with meta's entry rule (legacy when nil) and
+// then the Risk Engine's gate. The returned entryDetail has the direction
+// before that gate and the model's verdict.
+func (e *Engine) decide(ctx context.Context, in Input, th Thresholds, meta *metaEntry, version string) (domain.TradeSignal, entryDetail) {
 	sig := domain.TradeSignal{
 		InstrumentID:        in.InstrumentID,
 		Symbol:              in.Symbol,
 		Timestamp:           in.Timestamp,
 		Direction:           domain.JevDirectionNone,
 		EntryPriceReference: in.EntryPriceReference,
-		PolicyVersion:       Version,
+		PolicyVersion:       version,
 	}
 	if in.Decision != nil {
 		id := in.Decision.ID
 		sig.JevDecisionID = &id
 	}
 
-	direction, score, reason := e.decideDirection(in, th)
+	direction, score, reason, verdict := e.decideDirection(in, th, meta)
+	detail := entryDetail{candidate: direction, verdict: verdict}
 
 	if direction != domain.JevDirectionNone {
 		passed, riskReason := e.risk.Check(ctx, in.InstrumentID, direction)
@@ -239,21 +259,29 @@ func (e *Engine) decide(ctx context.Context, in Input, th Thresholds) domain.Tra
 	sig.RiskPassed = direction != domain.JevDirectionNone
 	sig.RejectReason = reason
 
-	return sig
+	return sig, detail
 }
 
 // Evaluate decides in against the currently-active thresholds
 // (currentThresholds) and persists the result via the Engine's
-// SignalRepository (FR-POLICY-5). Every call emits one structured JSON
-// "policy: trade signal decided" log line, the §5.1 "Signal count（生成
-// シグナル数）" source (see Decide).
+// SignalRepository (FR-POLICY-5). It is the live path: the entry rule is the
+// meta-labeling model's expected-value verdict (WithMetaModel; no model, or none
+// wired, is NONE), which is stored as a metalabel_predictions row per Jev
+// decision and logged next to what the legacy confidence threshold would have
+// done ("policy: meta-label vs legacy entry decision"). Every call emits one
+// structured JSON "policy: trade signal decided" log line, the §5.1 "Signal
+// count（生成シグナル数）" source (see Decide).
 func (e *Engine) Evaluate(ctx context.Context, in Input) (domain.TradeSignal, error) {
 	th, policyVersion, err := e.currentThresholds(ctx)
 	if err != nil {
 		return domain.TradeSignal{}, err
 	}
-	sig := e.decide(ctx, in, th)
-	sig.PolicyVersion = policyVersion
+	meta := e.loadMeta(ctx)
+	sig, detail := e.decide(ctx, in, th, meta, policyVersion)
+	if err := e.recordPrediction(ctx, in, meta, detail.verdict); err != nil {
+		return domain.TradeSignal{}, err
+	}
+	e.logComparison(in, th, meta, detail)
 	rejectReason := ""
 	if sig.RejectReason != nil {
 		rejectReason = *sig.RejectReason

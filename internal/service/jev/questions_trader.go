@@ -39,6 +39,14 @@ var entryQualityOptions = []systemone.Option{
 }
 
 // traderQuestions is the FR-TRADER-1 question group (functional.md §4.5).
+//
+// The group is read as meta-labeling input (issue #761, parent #752), not as
+// a price forecast: qDirection names the primary signal's candidate side
+// (LONG/SHORT, or NONE for no candidate), and the other five answers are the
+// material for whether to take that candidate. TraderResponse.Score turns
+// them into the Score feature the secondary model
+// (internal/service/metalabel) consumes. The wording below is unchanged, so
+// TraderQuestionVersion stays put.
 var traderQuestions = map[string]systemone.Question{
 	qDirection: systemone.ChoiceQuestion(
 		withStateGuide("Decide which direction a disciplined intraday momentum trader should take in `market` over the next several minutes (a short intraday horizon, minutes rather than hours), or NONE if there is no clear edge. "+

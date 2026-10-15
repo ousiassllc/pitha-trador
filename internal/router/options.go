@@ -5,6 +5,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
@@ -42,7 +43,9 @@ type options struct {
 	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
+	dailyHaltSource     system.DailyHaltSource
 	errorLogExporter    system.ErrorLogExporter
+	dataExporter        export.DataExporter
 	heartbeatRecorder   middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
 	allowedHosts        []string                     // nil until WithAllowedHosts: no Host/Origin validation
 	wsBase              string                       // "" until WithWebSocketBase: WebSockets use the page's own origin
@@ -199,6 +202,15 @@ func WithMarketDataStatus(source system.MarketDataStatusSource) Option {
 	return func(o *options) { o.marketDataStatus = source }
 }
 
+// WithDailyHaltSource enables `GET /system/daily-halt` (issue #753), the
+// header banner telling the operator which daily entry-halt rule (損失上限 /
+// 利益確保 / 最大取引回数) stopped new entries today. cmd/desktop and cmd/
+// server pass internal/bootstrap's Risk Engine; without it the route
+// renders nothing.
+func WithDailyHaltSource(source system.DailyHaltSource) Option {
+	return func(o *options) { o.dailyHaltSource = source }
+}
+
 // WithErrorLogExporter overrides `GET /api/v1/logs/errors`'s backing
 // system.ErrorLogExporter (FR-ERRLOG-2). cmd/desktop and cmd/server pass
 // internal/bootstrap's *logging.Exporter over the log directory. Without it
@@ -208,14 +220,15 @@ func WithErrorLogExporter(exporter system.ErrorLogExporter) Option {
 	return func(o *options) { o.errorLogExporter = exporter }
 }
 
-// WithHeartbeatRecorder enables operator heartbeat recording (FR-RISK-6,
-// middleware.Heartbeat): every authenticated UI request (session cookie
-// present; `/static`, WebSocket upgrades and background timer polls
-// excepted) calls recorder.RecordHeartbeat. cmd/desktop and cmd/server
-// pass internal/bootstrap's real internal/service/risk.Engine; without it
-// (router-level tests only) no heartbeat is written. Live's dead-man's
-// switch (Engine.CheckHeartbeatTimeout, run every minute by the Scheduler)
-// would fire spuriously if a Live build ran without it.
+// WithDataExporter backs `GET /api/v1/export` (FR-EXPORT-7); unset, it is a 500.
+func WithDataExporter(e export.DataExporter) Option { return func(o *options) { o.dataExporter = e } }
+
+// WithHeartbeatRecorder enables operator heartbeat recording (FR-RISK-6, middleware.Heartbeat):
+// every authenticated UI request (session cookie present; `/static`, WebSocket upgrades and
+// background timer polls excepted) calls recorder.RecordHeartbeat. cmd/desktop and cmd/server
+// pass internal/bootstrap's real internal/service/risk.Engine; without it (router-level tests
+// only) no heartbeat is written. Live's dead-man's switch (Engine.CheckHeartbeatTimeout, run
+// every minute by the Scheduler) would fire spuriously if a Live build ran without it.
 func WithHeartbeatRecorder(recorder middleware.HeartbeatRecorder) Option {
 	return func(o *options) { o.heartbeatRecorder = recorder }
 }

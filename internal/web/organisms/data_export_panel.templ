@@ -1,0 +1,60 @@
+package organisms
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// DataExportPanel renders the Settings screen's データエクスポート section
+// (`#data-export-panel`, FR-EXPORT-7, issue #773): a plain GET form to
+// `/api/v1/export` whose `Content-Disposition: attachment` ZIP the
+// browser/WebView saves as a file. Like ErrorLogPanel it carries `hx-disable`
+// (a swapped-in download would show nothing) and no script. The fields mirror
+// the endpoint's query: `from`/`to` (UTC dates, both included, at most 366
+// days apart), `kinds` (trades / decisions / metrics, all preselected, at
+// least one) and `format` (csv default / jsonl). The data only ever goes to
+// the local file - there is no share or upload action (FR-EXPORT-6).
+templ DataExportPanel() {
+	<section id="data-export-panel" class="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="data-export-panel">
+		<h3 class="sr-only">データエクスポート</h3>
+		<p>
+			取引ログ（注文・約定・決済・損益）・判断ログ（Jev へのリクエスト／レスポンス・レイテンシ・特徴量・skip／reject 理由・後付けラベル）・計測ログ（INFO 以上）を、期間を指定して ZIP でダウンロードできます。ZIP には種類ごとのファイルと、スキーマバージョン・期間・種類ごとの行数を記した <code>manifest.json</code> が入ります。API キー・パスワード・トークン・Slack Webhook URL などの秘密情報は <code>[REDACTED]</code> に置き換えられます。データはこの端末にダウンロードされるだけで、外部へは送信されません。立花証券の利用規約に配慮し、第三者への共有・送信にはご利用にならないでください。計測ログは最大 10 MiB で、超えた場合は古い記録から切り捨てられ、manifest.json の <code>truncated</code> に記録されます。
+		</p>
+		<form method="get" action="/api/v1/export" hx-disable class="flex flex-col gap-3" data-testid="data-export-form">
+			<div class="flex flex-wrap items-end gap-3">
+				<label class="flex flex-col gap-1">
+					<span class="font-medium text-slate-700">開始日（UTC）</span>
+					@atoms.Input(atoms.InputProps{Name: "from", Type: "date", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"required": true, "data-testid": "data-export-from"}})
+				</label>
+				<label class="flex flex-col gap-1">
+					<span class="font-medium text-slate-700">終了日（UTC・含む）</span>
+					@atoms.Input(atoms.InputProps{Name: "to", Type: "date", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"required": true, "data-testid": "data-export-to"}})
+				</label>
+				<label class="flex flex-col gap-1">
+					<span class="font-medium text-slate-700">形式</span>
+					@atoms.Select(atoms.SelectProps{Name: "format", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "data-export-format"}}) {
+						<option value="csv" selected>CSV</option>
+						<option value="jsonl">JSONL</option>
+					}
+				</label>
+			</div>
+			<fieldset class="flex flex-wrap gap-4" data-testid="data-export-kinds">
+				<legend class="mb-1 font-medium text-slate-700">種類（1 つ以上）</legend>
+				<label class="flex items-center gap-2">
+					@atoms.Input(atoms.InputProps{Name: "kinds", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: templ.Attributes{"value": "trades", "checked": true}})
+					<span>取引ログ</span>
+				</label>
+				<label class="flex items-center gap-2">
+					@atoms.Input(atoms.InputProps{Name: "kinds", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: templ.Attributes{"value": "decisions", "checked": true}})
+					<span>判断ログ</span>
+				</label>
+				<label class="flex items-center gap-2">
+					@atoms.Input(atoms.InputProps{Name: "kinds", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: templ.Attributes{"value": "metrics", "checked": true}})
+					<span>計測ログ</span>
+				</label>
+			</fieldset>
+			<div>
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "data-export-download"}}) {
+					ダウンロード
+				}
+			</div>
+		</form>
+	</section>
+}

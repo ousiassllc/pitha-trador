@@ -1,5 +1,22 @@
 // Response shape and pure presentation helpers for `pitha-calibration-heatmap`
 // (split out of the component to keep it within the linterly per-file limit).
+import type { ABArm } from './ab-arms-view';
+import type { MetaModel } from './meta-model-view';
+
+// Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `triple_barrier`
+// object (internal/web/handler/calibration.calibrationBarrierOutput): the EV
+// (net, bps) and tp/sl/timeout reach rates of the triple-barrier labels
+// (issue #767). All 0 when sample_count is 0.
+export interface BarrierStats {
+  sample_count: number;
+  tp_count: number;
+  sl_count: number;
+  timeout_count: number;
+  tp_rate: number;
+  sl_rate: number;
+  timeout_rate: number;
+  ev_net_bps: number;
+}
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `buckets[]` item
 // shape (internal/web/handler/calibration.calibrationBucketOutput).
@@ -13,6 +30,7 @@ export interface CalibrationBucket {
   total_pnl: number;
   avg_pnl_pct: number;
   trade_win_rate: number;
+  triple_barrier: BarrierStats;
 }
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `by_direction[]`
@@ -26,8 +44,9 @@ export interface CalibrationDirection {
 
 // The `horizon` query values of GET /api/v1/calibration (judgment horizon in
 // minutes, or "all" = every current horizon together; legacy horizons such as
-// 20 minutes are never aggregated). Mirrors calibration.HorizonAll and
-// service/calibration.DefaultHorizonsMinutes.
+// 20 minutes are never aggregated; "all" also includes every triple-barrier
+// label, whose horizon is the Settings timeout). Mirrors
+// calibration.HorizonAll and service/calibration.DefaultHorizonsMinutes.
 export const HORIZON_OPTIONS = ['5', '10', '15', 'all'] as const;
 export type HorizonOption = (typeof HORIZON_OPTIONS)[number];
 export const DEFAULT_HORIZON: HorizonOption = 'all';
@@ -55,6 +74,13 @@ export interface CalibrationAPIResponse {
   trade_count: number;
   pnl_brier_score: number;
   pnl_log_loss: number;
+  triple_barrier: BarrierStats;
+  // The newest meta-labeling model's OOS metrics (issue #766); omitted until
+  // a model was trained.
+  meta_model?: MetaModel;
+  // The paper A/B comparison of the momentum and regime-switching arms
+  // (issue #755); omitted when no source is wired.
+  ab_arms?: ABArm[];
 }
 
 // bucketMidpointPct parses e.g. "0.70-0.80" into 75. The reliability

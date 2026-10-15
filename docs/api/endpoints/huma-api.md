@@ -57,7 +57,7 @@ Fast Screener通過〜Jev Trader評価済みの候補銘柄一覧を返す。`re
 上の例（`universe: 3800`）は`scan.full_scan_enabled: true`のとき（母集団＝有効な`stock`全件）の値。既定のランキング監視（FR-SCHED-9）では母集団が監視銘柄（最大45）になり、`funnel.universe`・`total`・`items`はその範囲に限られる（監視外の銘柄は現れない。FR-SCAN-3/4）。立会時間外は直前の立会時間内サイクルの監視リスト（＋保有・注文中）を保存済みデータで評価した結果を返す（FR-SCAN-7）。
 
 - `status`: `passed`=Fast Screener候補、`excluded`=閾値で落ちた／上位N件の外（`top_n_cutoff`）、`missing`=値を算出できず判定不能（欠損理由が1つでもあれば`missing`を優先）
-- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、約定不能の`special_quote`（特別気配）/`limit_up`（ストップ高）/`limit_down`（ストップ安）（`kind=threshold`、`status=excluded`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`stale_snapshot`（立会中に最新の足が古すぎる: ランキング監視は3分超、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）超。FR-SCAN-7。`label`は閾値がモード別のため秒数を含まず「許容経過時間を超過」と表し、実際の閾値は`config/strategy.yaml`の上記設定で確認する。issue #690）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
+- 理由コード: 閾値は`min_price`/`max_price`/`min_turnover_5m_jpy`/`max_spread_bps`/`min_volume_ratio`/`min_abs_return_5m_pct`/`min_realized_volatility`（`kind=threshold`）、約定不能の`special_quote`（特別気配）/`limit_up`（ストップ高）/`limit_down`（ストップ安）（`kind=threshold`、`status=excluded`）、`top_n_cutoff`。欠損は`no_snapshot`（市況データ未取得）/`stale_snapshot`（立会中に最新の足が古すぎる: ランキング監視はSettingsの`scan.snapshot_max_age_seconds`（既定20秒。FR-FE-7）超、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）超。FR-SCAN-7。`label`は閾値がモード別のため秒数を含まず「許容経過時間を超過」と表し、実際の閾値はランキング監視ではSettings画面の「データの鮮度（ランキング監視）」、全銘柄REST有効時は`config/strategy.yaml`の上記設定で確認する。issue #690）/`missing_turnover`/`missing_spread`（板情報なし）/`missing_volume_ratio`/`missing_return_5m`/`missing_realized_vol`（`kind=missing`）。1銘柄が複数の理由を持ちうる（全フィルターを評価する）
 - `funnel.scout_*`は候補に対するJev Scoutの判定済み件数（サイクル公開後にジョブが完了するたび増える。`scout`が`null`=候補外または判定待ち、`error`=Jev呼び出し失敗）
 
 ### GET /api/v1/scanner/scan/export
@@ -154,7 +154,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
     {
       "id": 3, "symbol": "7203", "timestamp": "2026-09-27T09:31:00Z",
       "direction": "LONG", "score": 0.74, "entry_price_reference": 2831.5,
-      "policy_version": "policy-v1", "risk_passed": false, "reject_reason": "spread_too_wide",
+      "policy_version": "policy-v2", "risk_passed": false, "reject_reason": "spread_too_wide",
       "jev_decision_id": 2
     }
   ]
@@ -263,6 +263,10 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 
 認証: このGETは安全メソッドでありながら、有効なセッションCookieを必須とする（FR-ERRLOG-6。ログをCookieなしの呼び出し元へ渡さないため。`api/endpoints.md` §1）。Cookieが無い・無効な場合は403（`missing or invalid session cookie`）で、他の`/api/v1`のGET（Cookie不要）とは異なる。
 
+### GET /api/v1/export
+
+取引ログ・判断ログ・計測ログのエクスポート（ZIP添付）。詳細は`docs/api/endpoints/huma-api-export.md`。
+
 ### エンドポイント一覧表
 
 | メソッド | パス | 概要 |
@@ -287,3 +291,4 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 | GET | `/api/v1/openapi.json` | OpenAPI 3.1スペック（Huma自動生成） |
 | GET | `/api/v1/activity` | System Activity Log向けキュー状況・直近アクティビティ |
 | GET | `/api/v1/logs/errors` | エラーログのダウンロード（NDJSON添付、秘密情報マスク済み） |
+| GET | `/api/v1/export` | 取引ログ・判断ログ・計測ログのエクスポート（期間・種類・形式指定、ZIP添付、秘密情報マスク済み） |

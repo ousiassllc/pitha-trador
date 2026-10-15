@@ -126,6 +126,18 @@ templ Header(state domain.SystemState, current NavItem) {
 			hx-target="this"
 			hx-swap="innerHTML"
 		></div>
+		<div
+			id="daily-halt-banner"
+			class="order-last w-full empty:hidden"
+			role="status"
+			aria-live="polite"
+			data-live-banner
+			hx-get="/system/daily-halt"
+			hx-headers='{"X-Pitha-Background":"1"}'
+			hx-trigger="load, every 30s"
+			hx-target="this"
+			hx-swap="innerHTML"
+		></div>
 		<a
 			id="header-version"
 			class="text-xs text-slate-500 hover:text-slate-900"

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/scheduler"
 )
 
 func TestBuildServices_OutcomeLabelingFeedsCalibrationMetrics(t *testing.T) {
@@ -14,13 +13,14 @@ func TestBuildServices_OutcomeLabelingFeedsCalibrationMetrics(t *testing.T) {
 	inst := mustCreateInstrument(t, svc, "7203")
 	ctx := context.Background()
 
-	// One Jev Trader LONG decision followed by 20 rising 1-minute bars,
-	// all far enough in the past that every horizon has elapsed.
+	// One Jev Trader LONG decision plus 20 rising quoted 1-minute bars, long past.
 	decidedAt := time.Now().UTC().Add(-time.Hour).Truncate(time.Minute)
 	for i := 0; i <= 20; i++ {
+		price := 2500 + float64(i)
 		if _, err := svc.Snapshots.Insert(ctx, domain.Snapshot{
 			InstrumentID: inst.ID, Symbol: inst.Symbol,
-			Timestamp: decidedAt.Add(time.Duration(i) * time.Minute), Price: 2500 + float64(i),
+			Timestamp: decidedAt.Add(time.Duration(i) * time.Minute), Price: price,
+			Bid: &price, Ask: &price,
 		}); err != nil {
 			t.Fatalf("insert snapshot %d: %v", i, err)
 		}
@@ -29,7 +29,7 @@ func TestBuildServices_OutcomeLabelingFeedsCalibrationMetrics(t *testing.T) {
 	if _, err := svc.Decisions.Insert(ctx, domain.JevDecision{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: decidedAt, DecisionType: domain.JevDecisionTypeTrader,
 		StateHash: "hash", StateJSON: "{}", QuestionVersion: "v1", ResponseJSON: "{}",
-		Direction: &direction, Confidence: &confidence, ModelID: "test-model",
+		Direction: &direction, Confidence: &confidence, ModelID: "test-model", CreatedAt: decidedAt,
 	}); err != nil {
 		t.Fatalf("insert trader decision: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestBuildServices_OutcomeLabelingFeedsCalibrationMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnqueueOutcomeLabeling: %v", err)
 	}
-	want := len(scheduler.DefaultOutcomeLabelHorizonsMinutes)
+	want := 1 // the Settings timeout is the one horizon (issue #760)
 	if enqueued != want {
 		t.Fatalf("EnqueueOutcomeLabeling = %d, want %d (outcome labeling wired to the calibration repository)", enqueued, want)
 	}

@@ -100,7 +100,7 @@ sequenceDiagram
 | 節 | ファイル |
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
-| §4.10〜§4.20（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用） | `docs/requirements/functional/components-platform.md` |
+| §4.10〜§4.21（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート） | `docs/requirements/functional/components-platform.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -127,10 +127,10 @@ stateDiagram-v2
 
 - FR-SCAN-3: 最新サイクルの**ファネル件数**（ユニバース → 特徴量算出 → Fast Screener通過 → Scout通過）と、最終サイクルの時刻・所要時間を表示する。Scout通過は候補に対するJev Scoutの判定が済んだ分までの件数（判定済み件数も併記）。「ユニバース」はスキャン対象の銘柄数で、既定のランキング監視（FR-SCHED-9）では監視銘柄（最大45）、`scan.full_scan_enabled: true`のときだけ有効な`stock`の全件（最大約4,000）になる。パネルのラベル・ツールチップにもこの旨を示す
 - FR-SCAN-4: 「スキャン対象を見る」で、ユニバース（FR-SCAN-3。`scan.full_scan_enabled: true`のときは有効な`stock`の全件・最大約4,000。既定のランキング監視ではFR-SCHED-9の監視銘柄（最大45）で、監視外の銘柄は一覧に現れず、その除外理由も付かない）のコード・名称・市場・状態（通過/除外/データ欠損）・理由・Scout結果を一覧する。検索（コード/名称）、状態・理由での絞り込み、ページング（既定50件・最大200件）を備え、1回に描画する行数を抑える
-- FR-SCAN-5: 除外は落ちた条件（FR-FS-1の閾値名＋上位N件の外）を、欠損は取得できなかった値（板情報なし・履歴不足（FR-FE-5）・市況データ未取得）に加え、立会中に最新の足が古すぎる市況データ（`stale_snapshot`。ランキング監視では`domain.MaxSnapshotAge`の3分超、`scan.full_scan_enabled: true`では全件RESTが1周約8分かかるため`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）超。FR-SCAN-7/FR-SCHED-9）を、理由コードと人が読めるラベルで示す。`stale_snapshot`のラベルは閾値がモード別のため秒数を含めず「許容経過時間を超過」と表し、実際の閾値は上記の設定値で確認する（Scanner行・理由フィルタ・`GET /api/v1/scanner/scan`・CSVで同一文言。issue #690/#691）。全フィルターを評価し複数の理由を併記する
+- FR-SCAN-5: 除外は落ちた条件（FR-FS-1の閾値名＋上位N件の外）を、欠損は取得できなかった値（板情報なし・履歴不足（FR-FE-5）・市況データ未取得）に加え、立会中に最新の足が古すぎる市況データ（`stale_snapshot`。ランキング監視ではSettingsの`scan.snapshot_max_age_seconds`（既定`domain.DefaultMaxSnapshotAge`＝20秒。issue #754）超、`scan.full_scan_enabled: true`では全件RESTが1周約8分かかるため`scan.full_scan_max_snapshot_age_seconds`（同梱620秒）超。FR-SCAN-7/FR-SCHED-9）を、理由コードと人が読めるラベルで示す。`stale_snapshot`のラベルは閾値がモード別のため秒数を含めず「許容経過時間を超過」と表し、実際の閾値は上記の設定値で確認する（Scanner行・理由フィルタ・`GET /api/v1/scanner/scan`・CSVで同一文言。issue #690/#691）。全フィルターを評価し複数の理由を併記する
   - `scan.full_scan_enabled: true`では各銘柄の足が約8分間隔のため、`stale_snapshot`の許容（同梱620秒）を通過しても短窓の履歴ベース特徴量が全銘柄で履歴不足（FR-FE-5）の欠損となり、`missing_return_5m`・`missing_volume_ratio`・`missing_realized_vol`等で全銘柄が外れて候補は空のままになる（620秒が緩めるのは最新の足の鮮度判定だけ。FR-SCHED-7・issue #693）
 - FR-SCAN-6: 結果は**開いた時点のスナップショット**で、「更新」ボタン・絞り込み・ページ送りで再取得する（`/ws/scanner`には流さず、その挙動は変えない）。保持は最新1サイクル分のメモリ上のみで、再起動後・初回サイクル完了前は「まだスキャンサイクルが実行されていません」の空状態を表示する
-- FR-SCAN-7: 東証の立会時間外（土日・祝日・年末年始休場・昼休み・9:00前/15:30後。判定は`marketcalendar`、`non-functional.md` §3）は、スキャン状況パネルの先頭に「現在は東証の立会時間外のため、市場データ取得・フルスキャン・Jev Scoutは停止中です。表示は保存済みデータに基づきます」旨の停止通知（`data-testid="scan-offhours"`）を、サイクル未実行の空状態・サイクルありの双方で表示し、次回の立会開始時刻（JST。前場9:00／後場12:30、土日・祝日・年末年始をスキップ）を併記する。立会時間中は表示しない。「更新」ボタンは立会時間外でも無効化せず、押下すると保存済みデータを再取得して同じ通知を再描画する（新規スキャンは走らない）。既定のランキング監視でも、立会時間外・昼休みの候補リストとスキャン対象の一覧は直前の立会時間内サイクルの監視リスト（＋保有・注文中）を保存済みデータで評価して表示し続ける（FR-SCHED-9。PUSH登録・`market-data`投入は保有・注文中の銘柄だけに停止する。プロセス再起動直後の立会時間外は直前のリストが無いため保有・注文中の銘柄だけ）。立会再開直後は、保存済みの最新の足が`domain.MaxSnapshotAge`（3分。市況コンテキストの指数バーの許容と同じ。立会時間外は判定しない）より古い銘柄（`scan.full_scan_enabled: true`では、各銘柄の足は全件RESTの1周（約8分）に1回しか更新されないため、3分ではなく`scan.full_scan_max_snapshot_age_seconds`＝1周＋次サイクルの待ち・余裕、同梱620秒を超えたものとする。issue #686）を、一覧には残したまま`stale_snapshot`（欠損）で除外しJev Scoutへ投入しない。保持した監視リストの銘柄も、`market-data`が新しい足を書くまで評価しない（issue #685）。通知はスキャン状況パネルに限り、全ページ共通のバナーにはしない
+- FR-SCAN-7: 東証の立会時間外（土日・祝日・年末年始休場・昼休み・9:00前/15:30後。判定は`marketcalendar`、`non-functional.md` §3）は、スキャン状況パネルの先頭に「現在は東証の立会時間外のため、市場データ取得・フルスキャン・Jev Scoutは停止中です。表示は保存済みデータに基づきます」旨の停止通知（`data-testid="scan-offhours"`）を、サイクル未実行の空状態・サイクルありの双方で表示し、次回の立会開始時刻（JST。前場9:00／後場12:30、土日・祝日・年末年始をスキップ）を併記する。立会時間中は表示しない。「更新」ボタンは立会時間外でも無効化せず、押下すると保存済みデータを再取得して同じ通知を再描画する（新規スキャンは走らない）。既定のランキング監視でも、立会時間外・昼休みの候補リストとスキャン対象の一覧は直前の立会時間内サイクルの監視リスト（＋保有・注文中）を保存済みデータで評価して表示し続ける（FR-SCHED-9。PUSH登録・`market-data`投入は保有・注文中の銘柄だけに停止する。プロセス再起動直後の立会時間外は直前のリストが無いため保有・注文中の銘柄だけ）。立会再開直後は、保存済みの最新の足がSettingsの`scan.snapshot_max_age_seconds`（既定`domain.DefaultMaxSnapshotAge`＝20秒。立会時間外は判定しない。市況コンテキストの指数バーの許容は別で、ランキング監視では`domain.MarketContextMaxAge`＝3分）より古い銘柄（`scan.full_scan_enabled: true`では、各銘柄の足は全件RESTの1周（約8分）に1回しか更新されないため、ランキング監視の許容ではなく`scan.full_scan_max_snapshot_age_seconds`＝1周＋次サイクルの待ち・余裕、同梱620秒を超えたものとする。issue #686）を、一覧には残したまま`stale_snapshot`（欠損）で除外しJev Scoutへ投入しない。保持した監視リストの銘柄も、`market-data`が新しい足を書くまで評価しない（issue #685）。通知はスキャン状況パネルに限り、全ページ共通のバナーにはしない
   - 上記の`scan.full_scan_max_snapshot_age_seconds`は`stale_snapshot`（最新の足の鮮度）だけの許容で、全件スキャンの履歴ベース特徴量の欠損（FR-SCHED-7・FR-FE-5）は解消しない
 - FR-SCAN-8: 有効な`stock`が1件も無い（銘柄マスタ未投入）間、スキャン状況パネルは「まだスキャンサイクルが実行されていません」の代わりに「銘柄マスタが未投入です」の案内（`data-testid="scan-universe-empty"`）を表示し、銘柄マスタCSVの置き場所（`PITHA_UNIVERSE_PATH`／実行ファイルと同じディレクトリの`config/universe.csv`）と、JPXの東証上場銘柄一覧（`data_j.xlsx`）を取得して投入する選択肢を示す。取得は運用者が「JPXから取得して投入する」を押した場合に限り1回だけ行い（起動時・定期の自動取得はしない）、株式のみをCSVと同じ検証で投入して再起動なしで次のスキャンサイクルから対象にする。失敗（ネットワーク・HTTPエラー・形式変更・保存失敗）はマスタを変更せず、失敗種別ごとの固定文言とCSV投入の案内を表示する（下位エラーは画面に出さず`slog`のみに記録する。issue #700）。有効な`stock`があるときは案内も取得も提供しない（`environment/setup.md`「銘柄マスタの投入」）
 
@@ -144,7 +144,7 @@ Total PnL, Daily PnL, Win Rate, Profit Factor, Expectancy, Max Drawdown, Average
 
 ### 5.4 Calibration
 
-confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。
+confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。あわせて、最新のメタラベリングモデルのOOS AUC・OOS EV・OOS較正曲線とJev評価期間（OOS窓）を表示する（FR-META-5）。
 
 ### 5.5 System Activity Log
 
@@ -271,3 +271,19 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.75 | 2026-10-08 | §4.10 FR-SCHED-9に立花証券選択時の夜間の日足取得（`daily_screen`のみ。設定時刻以降・8:00〜15:30は実行しない・設定速度以下で直列・差分のみ保存・夜ごとの実行記録）を追記 | issue #729 |
 | 1.76 | 2026-10-08 | §4.10 FR-SCHED-9に立花証券選択時の監視リスト確定（`daily_screen`＝日足スクリーニングで保有・手動指定・上位銘柄から最大120件、`fixed`＝固定リスト、日足を使えない夜の固定リスト切替／前営業日リスト引き継ぎとActivity・バナー通知、寄り前は前夜のリスト）とWatchlist画面を追記 | issue #730 |
 | 1.77 | 2026-10-08 | §4.10 FR-SCHED-9に立花証券選択時の日中監視（確定した監視リストをEVENT購読・`market-data`投入・Fast Screenerへ接続。03:30〜15:30のみ登録・日中の入れ替えなし・保有銘柄の追加は1回の再接続にまとめる・フルスキャンは常に無効）、FR-SCHED-10にWebSocket切断時の同一仮想URL再接続と日中のREST補完の位置づけを追記 | issue #731 |
+| 1.78 | 2026-10-14 | §4.1にFR-FE-6（板の需給偏りOFI ofi_short/mid/long・microprice_dev_bps、窓幅はSettings、欠損・板寄せ・数量0はNULL、特徴量・フィルタ用途限定）を追加し、FR-SETTINGS-7にOFI窓幅（`orderflow.ofi_window_*_seconds`）を追加（issue #750） |
+| 1.79 | 2026-10-14 | §4.7にFR-RISK-8（1日の損失上限（円）・利益確保（profit lock）・1日の最大取引回数。到達で当日の新規エントリーを停止し決済は継続、停止理由をバナー・通知・ログ・拒否理由に表示、翌営業日に自動解除。しきい値はSettingsの運用設定、0で無効）を追加。FR-SETTINGS-7に4キーを追記 | issue #753 |
+| 1.80 | 2026-10-14 | FR-SETTINGS-7にトリプルバリアラベルの設定（`calibration.barrier_{tp,sl,cost}_bps`・`calibration.barrier_timeout_minutes`。範囲検証・コスト想定<損切り幅・env不可）を追加（issue #760・親 #751） |
+| 1.81 | 2026-10-14 | §4.12 FR-CAL-4をトリプルバリア方式に更新（執行可能価格（LONG=ask/SHORT=bid、Jev応答後）を基準に、TP/SL/timeoutのうち先に触れたバリアでラベルを決め、コスト控除後のnet return・触れたバリア・基準価格・`label_version=2`を保存。flat=不正解を廃止。horizonはSettingsのtimeout。issue #762・親 #751） |
+| 1.82 | 2026-10-14 | §4.12 FR-CAL-2にトリプルバリアのEV（net）・バリア別（tp/sl/timeout）到達率の集計と、キャリブレーション画面・`GET /api/v1/calibration`への表示を追加（issue #767・親 #751） |
+| 1.83 | 2026-10-14 | §4.5にFR-TRADER-4（Jevの出力を一次シグナルとtake/skipの判断材料に整理し、`jev.Score`として特徴量に取り出す。質問・スキーマは不変）を追加（issue #761・親 #752） |
+| 1.84 | 2026-10-14 | §4.5にFR-META-1〜3（メタラベリングの二次モデル: 8特徴量ベクトル・ロジスティック回帰・Platt/isotonic較正・較正後EVでのtake/skipとKellyサイズ・モデル無し/欠損は見送り）を追加（issue #758・親 #752） |
+| 1.85 | 2026-10-14 | FR-SETTINGS-7にメタラベリングの設定（`metalabel.{model,calibration,retrain_time,min_ev_bps}`。モデル/較正/再学習時刻/最低EV、保存時検証・不正値は既定で動作・env不可）を追加（issue #759・親 #752） |
+| 1.86 | 2026-10-14 | §4.16にFR-LUNA-6（TDnet開示スコア: 銘柄・時刻から[-1,1]のスコアを算出しメタモデルの特徴量`tdnet_score`として取得。開示なしは0）を追加（issue #763・親 #752） |
+| 1.87 | 2026-10-14 | §4.5にFR-META-4（メタラベリングのウォークフォワード夜間再学習: パージ／エンバーゴ付き時系列分割・OOS指標とバージョンの保存・LLM cutoff以降に限定したJev特徴量の評価と期間のログ・学習失敗時に既存モデルを維持）を追加し、FR-SETTINGS-7に`metalabel.llm_cutoff`を追加（issue #764・親 #752） |
+| 1.88 | 2026-10-14 | §4.6にFR-POLICY-6（ライブのエントリー判定をJevの`confidence >= 0.68`しきい値からメタラベリングの較正後EV判定へ置き換え: モデル無し・欠損はNONE、判断ごとの予測値を`metalabel_predictions`へ保存、旧ロジックとの比較ログ、`policy_version`は`policy-v2`）を追加し、FR-POLICY-1/2を旧ロジック（バックテストのリプレイ用）と明記（issue #765・親 #752） |
+| 1.89 | 2026-10-14 | §4.5にFR-META-5（最新のメタラベリングモデルのOOS AUC・較正曲線・EVとJev評価期間をCalibration画面に表示）を追加し、§4.12 FR-CAL-2・§5.4に表示を追記（issue #766・親 #752） |
+| 1.90 | 2026-10-14 | §4.1にFR-FE-7（ランキング監視の足の鮮度上限を3分→Settingsの`scan.snapshot_max_age_seconds`・既定20秒へ引き締め、Jev stateと判断ログに`data_age_ms`、価格はPUSH優先）を追加し、FR-SCAN-5/7の`stale_snapshot`の閾値を更新。市況コンテキストの指数バー許容は`domain.MarketContextMaxAge`（3分）として分離（issue #754） |
+| 1.91 | 2026-10-14 | §4.6にFR-REGIME-1（市場指数の1分足リターンのボラティリティと自己相関で相場状態を trend / mean_revert / unknown に判定し判断ごとに保存、平均回帰レジームでは寄り付き以降のVWAP乖離zスコアで逆張りするVWAP回帰モードへ切替、paperのA/B比較（固定モメンタム vs レジーム切替）。窓幅・しきい値・A/B有効はSettings）を追加し、FR-SETTINGS-7・§4.12 FR-CAL-2に設定とアーム別EV・勝率の表示を追記（issue #755・親 #751） |
+| 1.92 | 2026-10-15 | §4.21（FR-EXPORT-1〜6）を追加: 取引ログ（注文・約定・決済・損益）と判断ログ（Jevリクエスト/レスポンス・レイテンシ・特徴量・skip/reject理由・後付けラベルを`decision_id`で紐付け）を、期間指定でCSV/JSONLのZIP＋`manifest.json`（スキーマバージョン・期間・種類ごとの行数）としてエクスポートする`internal/service/dataexport`と、秘密情報のマスク・redactionテスト・ローカル出力のみの方針を定義（issue #770・#771、親 #768。計測ログ#772・Settings操作#773は後続） |
+| 1.93 | 2026-10-15 | §4.21にFR-EXPORT-7を追加し、FR-EXPORT-1・2を計測ログ（`metrics`）とmanifestの`files[].truncated`に対応させた: Settingsの「データエクスポート」節（期間・種類・形式の指定と`GET /api/v1/export`によるZIPダウンロード）と、計測ログ（INFO以上、マスク・10MiB上限）の`dataexport`への組み込み（issue #773、親 #768） |

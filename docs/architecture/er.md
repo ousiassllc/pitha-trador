@@ -28,6 +28,8 @@ erDiagram
     jev_decisions ||--o{ trade_signals : "シグナルの根拠になる"
     jev_decisions ||--o{ calibration_outcomes : "結果が紐付く"
     jev_decisions ||--o{ calibration_label_skips : "ラベル付け不能と確定した水平線を持つ"
+    jev_decisions ||--o{ metalabel_predictions : "二次モデルの予測が紐付く"
+    metalabel_models ||--o{ metalabel_predictions : "予測する"
     trade_signals ||--o{ paper_orders : "発注の根拠になる"
     paper_orders ||--o| positions : "エントリー約定になる"
     paper_orders ||--o| positions : "Exit約定になる"
@@ -42,6 +44,7 @@ erDiagram
 |----------|----------------------|
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `trade_signals` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` |
+| `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions`（メタラベリングの二次モデルとOOS指標・判断ごとの予測） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs`、ベクトルインデックス（sqlite-vec） |
 
 ## 改訂履歴
@@ -92,3 +95,11 @@ erDiagram
 | 1.41 | 2026-10-08 | `er/tables-market.md`に立花の夜間の日足取得（issue #729）の`daily_bars`（銘柄×立会日の日足。無調整値と分割換算値）と`daily_bar_runs`（1夜1行の実行記録）を追加（マイグレーション`000030`）。どちらも他のテーブルとFKを持たないためER図の関連は変えない | issue #729 |
 | 1.42 | 2026-10-08 | `er/tables-market.md`に立花の監視リスト（issue #730）の`watch_lists`（1立会日1行。確定方法・基準日・理由）と`watch_list_entries`（銘柄・枠の由来・選ばれた指標。最大120件）を追加（マイグレーション`000031`）。他のテーブルとFKを持たないためER図の関連は変えない | issue #730 |
 | 1.43 | 2026-10-08 | `er/tables-system.md`の立花の監視銘柄ソース設定の説明に日中の接続側のキー（`event.max_connects_per_day`・`rest_quote.*`）が起動時に1回読まれることを追記し、`er/tables-market.md`の`watch_lists`の説明を日中監視（issue #731。`tachibanawatch.Monitor`が03:30〜15:30に読む）へ更新。スキーマ変更なし | issue #731 |
+| 1.44 | 2026-10-14 | `er/tables-market.md`の`market_snapshots`と`jev_decisions`にOFI（`ofi_short/mid/long`・窓幅・`microprice_dev_bps`、migration 000032、issue #750）、`er/tables-system.md`の`runtime_settings`キーに`orderflow.ofi_window_*_seconds`を追加 |
+| 1.45 | 2026-10-14 | `er/tables-trading.md`の`calibration_outcomes`にトリプルバリアのラベル列（`barrier_hit`・`net_return_bps`・`entry_ref_price`・`label_version`、migration 000033。既存行は`label_version=1`の旧ラベルとして区別、issue #756・親 #751）を追加 | issue #756 |
+| 1.46 | 2026-10-14 | `er/tables-system.md`の`runtime_settings`キーに`calibration.barrier_{tp,sl,cost}_bps`・`calibration.barrier_timeout_minutes`（トリプルバリアラベルの設定）を追加。スキーマ変更なし | issue #760 |
+| 1.47 | 2026-10-14 | `er/tables-trading.md`の`calibration_outcomes`: トリプルバリアのラベルでは`horizon_minutes`=Settingsのtimeout、`was_direction_correct`=`net_return_bps > 0`と明記。スキーマ変更なし | issue #762 |
+| 1.48 | 2026-10-14 | マイグレーション000034を追加し、`er/tables-metalabel.md`に`metalabel_models`（モデル版・学習窓/OOS窓・OOS指標）と`metalabel_predictions`（判断ごとの較正後確率・EV・take/skip・サイズ）を新設。全体ER図に関係線を追加 | issue #757 |
+| 1.49 | 2026-10-14 | `er/tables-system.md`の`runtime_settings`キーに`metalabel.{model,calibration,retrain_time,min_ev_bps}`（メタラベリングの二次モデル設定）を追加。スキーマ変更なし | issue #759 |
+| 1.50 | 2026-10-14 | `er/tables-market.md`の`jev_decisions`に`data_age_ms`（判断時点の市場データの古さ、migration 000035）、`er/tables-system.md`の`runtime_settings`キー例に`scan.snapshot_max_age_seconds`（ランキング監視の足の鮮度上限、既定20秒）を追加（issue #754） |
+| 1.51 | 2026-10-14 | `er/tables-market.md`の`jev_decisions`に`market_regime`・`ab_arm`・`regime_volatility_bps`・`regime_autocorr`・`vwap_z`（判断時点の相場状態・A/Bアーム・その根拠、migration 000036）を追加し、`er/tables-system.md`の`runtime_settings`キー例に`regime.*`を追加 | issue #755・親 #751 |

@@ -1,4 +1,4 @@
-package settings_test
+package pageflow_test
 
 import (
 	"context"

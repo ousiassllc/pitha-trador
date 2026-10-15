@@ -68,25 +68,35 @@ func (e *Exporter) Export(ctx context.Context, days int, minLevel slog.Level) (E
 	if days < 1 {
 		return ExportResult{}, fmt.Errorf("logging: export days must be >= 1, got %d", days)
 	}
+	today := e.now().UTC()
+	names := make([]string, days)
+	for i := range names {
+		names[i] = today.AddDate(0, 0, -i).Format(dailyFileLayout)
+	}
+	return e.export(ctx, names, minLevel, nil)
+}
+
+// export reads the day files in dayNames (newest first), keeps the records
+// at or above minLevel (and inside window when non-nil) and merges them in
+// time order under the MaxExportBytes cap.
+func (e *Exporter) export(ctx context.Context, dayNames []string, minLevel slog.Level, window *timeWindow) (ExportResult, error) {
 	if info, err := os.Stat(e.dir); err != nil {
 		return ExportResult{}, fmt.Errorf("logging: read log directory %q: %w", e.dir, err)
 	} else if !info.IsDir() {
 		return ExportResult{}, fmt.Errorf("logging: log directory %q is not a directory", e.dir)
 	}
 
-	today := e.now().UTC()
 	var (
 		perDay    [][]exportedRecord // newest day first
 		remaining = e.maxBytes
 		truncated bool
 	)
 	// Newest day first so the byte budget is spent on the newest records.
-	for i := range days {
+	for _, day := range dayNames {
 		if err := ctx.Err(); err != nil {
 			return ExportResult{}, err
 		}
-		day := today.AddDate(0, 0, -i).Format(dailyFileLayout)
-		records, dropped, err := e.collectDay(ctx, day, minLevel, remaining)
+		records, dropped, err := e.collectDay(ctx, day, minLevel, window, remaining)
 		if err != nil {
 			return ExportResult{}, err
 		}
@@ -118,7 +128,7 @@ func (e *Exporter) Export(ctx context.Context, days int, minLevel slog.Level) (E
 // match, the oldest are dropped (dropped = true). With no budget left it
 // only looks for a first matching record (dropped = true) and stops there
 // instead of reading the rest of the file. ctx is checked while reading.
-func (e *Exporter) collectDay(ctx context.Context, day string, minLevel slog.Level, budget int) (records []exportedRecord, dropped bool, err error) {
+func (e *Exporter) collectDay(ctx context.Context, day string, minLevel slog.Level, window *timeWindow, budget int) (records []exportedRecord, dropped bool, err error) {
 	r, err := e.openDay(day)
 	if err != nil {
 		return nil, false, err
@@ -135,14 +145,17 @@ func (e *Exporter) collectDay(ctx context.Context, day string, minLevel slog.Lev
 		if !ok {
 			return false
 		}
-		if budget <= 0 {
-			dropped = true
-			return true
-		}
 		if rec.at.IsZero() {
 			rec.at = last
 		}
 		last = rec.at
+		if window != nil && !window.contains(rec.at) {
+			return false
+		}
+		if budget <= 0 {
+			dropped = true
+			return true
+		}
 		records = append(records, rec)
 		size += len(rec.line)
 		for size > budget && len(records) > 0 {

@@ -1,0 +1,14 @@
+ALTER TABLE jev_decisions DROP COLUMN microprice_dev_bps;
+ALTER TABLE jev_decisions DROP COLUMN ofi_window_long_seconds;
+ALTER TABLE jev_decisions DROP COLUMN ofi_window_mid_seconds;
+ALTER TABLE jev_decisions DROP COLUMN ofi_window_short_seconds;
+ALTER TABLE jev_decisions DROP COLUMN ofi_long;
+ALTER TABLE jev_decisions DROP COLUMN ofi_mid;
+ALTER TABLE jev_decisions DROP COLUMN ofi_short;
+ALTER TABLE market_snapshots DROP COLUMN microprice_dev_bps;
+ALTER TABLE market_snapshots DROP COLUMN ofi_window_long_seconds;
+ALTER TABLE market_snapshots DROP COLUMN ofi_window_mid_seconds;
+ALTER TABLE market_snapshots DROP COLUMN ofi_window_short_seconds;
+ALTER TABLE market_snapshots DROP COLUMN ofi_long;
+ALTER TABLE market_snapshots DROP COLUMN ofi_mid;
+ALTER TABLE market_snapshots DROP COLUMN ofi_short;

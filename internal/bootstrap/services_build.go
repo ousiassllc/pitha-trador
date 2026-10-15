@@ -13,9 +13,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backupjob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/metalabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
@@ -36,6 +39,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
+	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/retention"
@@ -89,7 +93,11 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
 	}
 	s.tachibana = s.tachibanaSource(cfg.brokerSettings)
-	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, alertChannels.BrokerNotices(s.Activity))
+	// OFI is accumulated from kabu's PUSH best quotes only (issue #750); the
+	// 立花 adapter never feeds it, so its OFI features stay nil.
+	s.OrderFlow = orderflow.NewTracker()
+	s.rankingWatchMaxAge = snapshotagesettings.Load(context.Background(), s.Settings)
+	s.Broker = newBroker(cfg.brokerSettings, s.tachibana, secrets, cfg.kabuURL, infoAPIMax, s.Instruments, s.OrderFlow, s.rankingWatchMaxAge, alertChannels.BrokerNotices(s.Activity))
 	s.Jev = jev.NewClient(jev.Config{
 		BaseURL: secrets.JevBaseURL,
 		Model:   secrets.JevModel,
@@ -117,7 +125,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
 		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener),
-		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)))
+		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
 	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, jev.WithNewsSource(s.News))
 }
 
@@ -162,12 +170,12 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 // rolled-back) change applies on the next evaluation (#52, #714).
 func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config, runtimePolicy selfimprove.RuntimePolicy) *policy.Handler {
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
-	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy))
+	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy), metalabeljob.PolicyOption(state.DB, s.Settings))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig)
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk},
-		policy.WithCalibration(s.Calibration),
-		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge)))
+		policy.WithCalibration(s.Calibration), policy.WithTDnetScorer(s.News), policy.WithRegimeStore(s.Instruments, s.Snapshots, s.Settings, state.Strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge)),
+		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
 }
 
 // buildGovernor builds the Self-Improvement Governor. Sol/Opus (issue #82,
@@ -190,12 +198,12 @@ func (s *Services) buildGovernor(strategy *config.StrategyConfig, secrets config
 func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, autoUpdate updater.Quitter) {
 	schedOpts := []scheduler.Option{
 		scheduler.WithOutcomeLabelSource(s.Outcomes),
+		scheduler.WithOutcomeLabelHorizons(calibration.TimeoutHorizons(s.Settings)),
 		scheduler.WithSessionGate(marketcalendarOpen), scheduler.WithHeartbeatChecker(s.Risk),
-		scheduler.WithRiskMonitor(s.Risk),
-		scheduler.WithAutoResumer(s.Risk),
-		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0)),
-		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})),
-		scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
+		scheduler.WithRiskMonitor(s.Risk), scheduler.WithAutoResumer(s.Risk),
+		scheduler.WithLogRotator(logging.NewArchiver(state.Paths.LogDir, 0, logging.WithRetentionSource(logsettings.RetentionSource(s.Settings)))),
+		scheduler.WithDataPurger(retention.New(state.DB, retention.Policy{})), scheduler.WithDatabaseBackuper(backupjob.New(state.DB, s.Settings)),
+		scheduler.WithMaintenanceTask(metalabeljob.New(state.DB, s.Settings).Task()),
 		scheduler.WithMaintenanceState(s.Settings), scheduler.WithMaintenanceNotifier(notify.MaintenanceChannel(alertChannels.Log, alertChannels.Slack)),
 	}
 	backupjob.WarnIfDisabled(context.Background(), s.Settings)
@@ -221,14 +229,15 @@ func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logD
 	s.candidates = &candidates.Refresher{
 		Instruments: s.Instruments, Snapshots: s.Snapshots, Settings: s.Settings, Jobs: s.Jobs,
 		Decisions: s.Decisions, Positions: s.Positions,
-		Screener: s.Screener, Strategy: strategy, InSession: marketcalendarOpen,
+		Screener: s.Screener, Strategy: strategy, InSession: marketcalendarOpen, RankingWatchMaxAge: s.rankingWatchMaxAge,
 	}
 	s.buildRankingWatch()
 	return &marketdatajob.Handler{
 		Quotes: s.Broker, Instruments: s.Instruments, Snapshots: s.Snapshots, FeatureEngine: s.FeatureEngine,
 		Execution: s.Execution, Screener: s.Screener, News: s.News, Scheduler: s.Scheduler,
+		OrderFlow: s.OrderFlow, OrderFlowSettings: s.Settings,
 		EventTrigger:        strategy.Scan.EventTrigger,
-		MarketContextMaxAge: strategy.Scan.SnapshotMaxAge(domain.MaxSnapshotAge),
+		MarketContextMaxAge: strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge),
 		Symbols:             symbolcache.New(s.Broker),
 	}
 }

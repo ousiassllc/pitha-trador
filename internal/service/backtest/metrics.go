@@ -56,6 +56,12 @@ type Trade struct {
 	// FeeReturnPct's fee deduction: the realistic "what this trade would
 	// actually have returned" figure.
 	NetReturnPct float64
+
+	// Regime and ABArm are the market regime and A/B arm of the Jev decision
+	// that opened the trade (issue #755; domain.Regime* / domain.ABArm*); ""
+	// when it was made before the regime was assessed.
+	Regime string
+	ABArm  string
 }
 
 // Metrics is one backtest run's aggregated trade statistics (FR-BT-1).

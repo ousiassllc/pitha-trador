@@ -50,3 +50,4 @@
 | 1.51 | 2026-10-08 | 「Settings画面で設定する運用項目」に`broker.provider`と立花証券 e支店の接続設定を追加し、立花の事前準備（標準Webでのパスキー登録→API利用設定「利用する」→認証ID取得→鍵作成・公開鍵登録をデモ/本番別）、秘密鍵の保管・固定IPの注意を追記 | issue #733 |
 | 1.52 | 2026-10-08 | 「Settings画面で設定する運用項目」に立花の監視銘柄ソース設定（候補ソース・手動/固定銘柄・夜間日足バッチ・スクリーニング指標・EVENT接続予算・REST時価補助）を追加 | issue #728 |
 | 1.53 | 2026-10-12 | Goを1.25.14から1.26.9へ更新（1.25系は標準ライブラリ`net/http`等のgovulncheck検出の修正が提供されないため。`golang.org/x/net`も0.61.0へ更新）。mainのCI `lint`のgovulncheck失敗で自動リリースが止まっていた件の対応 | main CI（govulncheck） |
+| 1.54 | 2026-10-15 | 「Settings画面で設定する運用項目」にログレベル（`system.log_level`）とログの保持期間（`system.log_retention_days`）を追加（issue #772） |

@@ -77,6 +77,8 @@ func (f labelerFixtures) insertDecision(t *testing.T, timestamp time.Time, direc
 		DecisionType: domain.JevDecisionTypeTrader, StateHash: "hash", StateJSON: "{}",
 		QuestionVersion: "v1", ResponseJSON: "{}", Direction: ptr(direction),
 		Confidence: ptr(confidence), ModelID: "test-model",
+		// The Jev response lands right at the decision's bar.
+		CreatedAt: timestamp,
 	})
 	if err != nil {
 		t.Fatalf("insert trader decision: %v", err)
@@ -91,6 +93,9 @@ func (f labelerFixtures) insertSnapshots(t *testing.T, prices map[time.Duration]
 		snaps = append(snaps, domain.Snapshot{
 			InstrumentID: f.instrument.ID, Symbol: f.instrument.Symbol,
 			Timestamp: base.Add(offset), Price: price,
+			// A zero-spread quote at the last price, for tests that only
+			// need the bars to exist.
+			Bid: ptr(price), Ask: ptr(price),
 		})
 	}
 	if _, err := f.snapshots.InsertBatch(context.Background(), snaps); err != nil {
@@ -107,118 +112,64 @@ func (f labelerFixtures) handleJob(t *testing.T, decisionID int64, horizonMinute
 	return f.labeler.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payload)})
 }
 
-// getOutcome reads one calibration_outcomes row directly (bypassing
-// calrepo.CalibrationRepository, which intentionally has no
-// query-by-decision method) for these tests to assert Labeler.HandleJob's
-// computed values against.
-func (f labelerFixtures) getOutcome(t *testing.T, decisionID int64, horizonMinutes int) domain.CalibrationOutcome {
+// bar is one market_snapshots row of a labeler test: the last price plus
+// the executable bid/ask quotes.
+type bar struct {
+	price, bid, ask float64
+}
+
+// insertBars writes bars at base+offset. A zero bid/ask is stored as NULL
+// (no quote).
+func (f labelerFixtures) insertBars(t *testing.T, base time.Time, bars map[time.Duration]bar) {
+	t.Helper()
+	var snaps []domain.Snapshot
+	for offset, b := range bars {
+		s := domain.Snapshot{
+			InstrumentID: f.instrument.ID, Symbol: f.instrument.Symbol,
+			Timestamp: base.Add(offset), Price: b.price,
+		}
+		if b.bid > 0 {
+			s.Bid = ptr(b.bid)
+		}
+		if b.ask > 0 {
+			s.Ask = ptr(b.ask)
+		}
+		snaps = append(snaps, s)
+	}
+	if _, err := f.snapshots.InsertBatch(context.Background(), snaps); err != nil {
+		t.Fatalf("insert snapshots: %v", err)
+	}
+}
+
+// storedOutcome is the triple-barrier part of one calibration_outcomes row.
+type storedOutcome struct {
+	barrierHit    string
+	netReturnBps  float64
+	entryRefPrice float64
+	labelVersion  int
+	futureReturn  float64
+	correct       sql.NullBool
+}
+
+func (f labelerFixtures) getTripleBarrier(t *testing.T, decisionID int64, horizonMinutes int) storedOutcome {
 	t.Helper()
 	var (
-		o       domain.CalibrationOutcome
-		correct sql.NullBool
+		o       storedOutcome
+		hit     sql.NullString
+		net     sql.NullFloat64
+		entry   sql.NullFloat64
+		version int
 	)
 	err := f.db.QueryRow(
-		`SELECT future_return, max_adverse_excursion, max_favorable_excursion, was_direction_correct
+		`SELECT barrier_hit, net_return_bps, entry_ref_price, label_version, future_return, was_direction_correct
 		FROM calibration_outcomes WHERE jev_decision_id = ? AND horizon_minutes = ?`,
 		decisionID, horizonMinutes,
-	).Scan(&o.FutureReturn, &o.MaxAdverseExcursion, &o.MaxFavorableExcursion, &correct)
+	).Scan(&hit, &net, &entry, &version, &o.futureReturn, &o.correct)
 	if err != nil {
 		t.Fatalf("query calibration outcome for decision %d (horizon %dm): %v", decisionID, horizonMinutes, err)
 	}
-	if correct.Valid {
-		v := correct.Bool
-		o.WasDirectionCorrect = &v
-	}
+	o.barrierHit, o.netReturnBps, o.entryRefPrice, o.labelVersion = hit.String, net.Float64, entry.Float64, version
 	return o
-}
-
-func TestLabeler_HandleJob_LongDirectionCorrect(t *testing.T) {
-	f := newLabelerFixtures(t)
-	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
-	decision := f.insertDecision(t, base, domain.JevDirectionLong, 0.82)
-	f.insertSnapshots(t, map[time.Duration]float64{
-		0:               1000,   // entry
-		1 * time.Minute: 1010,   // +1.0%
-		2 * time.Minute: 990,    // -1.0%
-		3 * time.Minute: 1005,   // +0.5%
-		4 * time.Minute: 1020,   // +2.0%
-		5 * time.Minute: 1004.1, // +0.41% (horizon boundary)
-	}, base)
-
-	if err := f.handleJob(t, decision.ID, 5); err != nil {
-		t.Fatalf("HandleJob: %v", err)
-	}
-
-	o := f.getOutcome(t, decision.ID, 5)
-	if !almostEqual(o.FutureReturn, 0.41) {
-		t.Fatalf("FutureReturn = %v, want ~0.41", o.FutureReturn)
-	}
-	if !almostEqual(o.MaxFavorableExcursion, 2.0) {
-		t.Fatalf("MaxFavorableExcursion = %v, want ~2.0 (the +4min bar)", o.MaxFavorableExcursion)
-	}
-	if !almostEqual(o.MaxAdverseExcursion, -1.0) {
-		t.Fatalf("MaxAdverseExcursion = %v, want ~-1.0 (the +2min bar)", o.MaxAdverseExcursion)
-	}
-	if o.WasDirectionCorrect == nil || !*o.WasDirectionCorrect {
-		t.Fatalf("WasDirectionCorrect = %v, want true (positive future_return for LONG)", o.WasDirectionCorrect)
-	}
-}
-
-func TestLabeler_HandleJob_ShortDirectionIncorrect(t *testing.T) {
-	f := newLabelerFixtures(t)
-	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
-	decision := f.insertDecision(t, base, domain.JevDirectionShort, 0.7)
-	f.insertSnapshots(t, map[time.Duration]float64{
-		0:               1000, // entry
-		1 * time.Minute: 1005, // price rose: adverse to a SHORT
-		5 * time.Minute: 1020, // +2.0% raw: price rose, bad for a SHORT
-	}, base)
-
-	if err := f.handleJob(t, decision.ID, 5); err != nil {
-		t.Fatalf("HandleJob: %v", err)
-	}
-
-	o := f.getOutcome(t, decision.ID, 5)
-	if !almostEqual(o.FutureReturn, 2.0) {
-		t.Fatalf("FutureReturn = %v, want ~2.0 (raw, direction-neutral)", o.FutureReturn)
-	}
-	// Direction-adjusted for SHORT: -2.0% is the worst point (MAE), 0% (entry, never favorable) is the best (MFE).
-	if !almostEqual(o.MaxAdverseExcursion, -2.0) {
-		t.Fatalf("MaxAdverseExcursion = %v, want ~-2.0", o.MaxAdverseExcursion)
-	}
-	if !almostEqual(o.MaxFavorableExcursion, 0) {
-		t.Fatalf("MaxFavorableExcursion = %v, want 0 (price only ever rose)", o.MaxFavorableExcursion)
-	}
-	if o.WasDirectionCorrect == nil || *o.WasDirectionCorrect {
-		t.Fatalf("WasDirectionCorrect = %v, want false (price rose against a SHORT)", o.WasDirectionCorrect)
-	}
-}
-
-func TestLabeler_HandleJob_NoneDirectionLeavesWasDirectionCorrectNil(t *testing.T) {
-	f := newLabelerFixtures(t)
-	base := time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
-	decision, err := f.decisions.Insert(context.Background(), domain.JevDecision{
-		InstrumentID: f.instrument.ID, Symbol: f.instrument.Symbol, Timestamp: base,
-		DecisionType: domain.JevDecisionTypeTrader, StateHash: "hash", StateJSON: "{}",
-		QuestionVersion: "v1", ResponseJSON: "{}", Direction: ptr(domain.JevDirectionNone),
-		ModelID: "test-model",
-	})
-	if err != nil {
-		t.Fatalf("insert NONE decision: %v", err)
-	}
-	f.insertSnapshots(t, map[time.Duration]float64{
-		0:               1000,
-		5 * time.Minute: 1010,
-	}, base)
-
-	if err := f.handleJob(t, decision.ID, 5); err != nil {
-		t.Fatalf("HandleJob: %v", err)
-	}
-
-	o := f.getOutcome(t, decision.ID, 5)
-	if o.WasDirectionCorrect != nil {
-		t.Fatalf("WasDirectionCorrect = %v, want nil for direction=NONE", *o.WasDirectionCorrect)
-	}
 }
 
 func TestLabeler_HandleJob_InsufficientDataIsDeferredNotFailed(t *testing.T) {

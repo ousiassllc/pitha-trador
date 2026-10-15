@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, mock } from 'bun:test';
-import type { CalibrationAPIResponse, CalibrationBucket } from './calibration-view';
+import type { BarrierStats, CalibrationAPIResponse, CalibrationBucket } from './calibration-view';
 
 // createChart needs a real canvas: the real library arms deferred timers under
 // happy-dom that throw "Value is null" after the test ends. Stub it and
@@ -22,6 +22,18 @@ mock.module('lightweight-charts', () => ({
 
 export type HeatmapElement = HTMLElement & { updateComplete: Promise<boolean> };
 
+export const barrier = (overrides: Partial<BarrierStats> = {}): BarrierStats => ({
+  sample_count: 0,
+  tp_count: 0,
+  sl_count: 0,
+  timeout_count: 0,
+  tp_rate: 0,
+  sl_rate: 0,
+  timeout_rate: 0,
+  ev_net_bps: 0,
+  ...overrides,
+});
+
 export const bucket = (overrides: Partial<CalibrationBucket> = {}): CalibrationBucket => ({
   range: '0.70-0.80',
   avg_confidence: 0.75,
@@ -32,6 +44,7 @@ export const bucket = (overrides: Partial<CalibrationBucket> = {}): CalibrationB
   total_pnl: 0,
   avg_pnl_pct: 0,
   trade_win_rate: 0,
+  triple_barrier: barrier(),
   ...overrides,
 });
 
@@ -47,6 +60,7 @@ export const response = (
   trade_count: 0,
   pnl_brier_score: 0,
   pnl_log_loss: 0,
+  triple_barrier: barrier(),
   ...overrides,
 });
 

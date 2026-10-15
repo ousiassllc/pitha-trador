@@ -37,6 +37,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
+	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
@@ -71,7 +72,8 @@ type Services struct {
 	WatchLists *market.WatchListRepository
 
 	RAG           *rag.Service
-	Broker        broker.Broker // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
+	Broker        broker.Broker      // the selected broker adapter (newBroker; kabu until the 立花 adapter, #724)
+	OrderFlow     *orderflow.Tracker // OFI from kabu PUSH best quotes (issue #750)
 	FeatureEngine *featureengine.Engine
 	Screener      *screener.LiveSource
 	Jev           *jev.Client
@@ -91,8 +93,9 @@ type Services struct {
 	Scheduler *scheduler.Scheduler
 	Updater   *updater.SchedulerAdapter // nil on cmd/server (issue #76)
 
-	strategy *config.StrategyConfig
-	wg       sync.WaitGroup
+	strategy           *config.StrategyConfig
+	wg                 sync.WaitGroup
+	rankingWatchMaxAge time.Duration // Settings snapshot staleness limit (issue #754)
 
 	// tachibana are the 立花 監視銘柄ソース settings read at start-up (the
 	// defaults unless 立花 is selected); the nightly daily-bar batch reads them.
@@ -200,7 +203,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevScout, svc.Scout.HandleJob)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevTrader, traderHandler.HandleJob)
-	svc.Scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling, calibration.NewLabeler(svc.Decisions, svc.Snapshots, svc.Outcomes).HandleJob)
+	svc.Scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling, calibration.NewLabeler(svc.Decisions, svc.Snapshots, svc.Outcomes, calibration.WithBarrierSettings(svc.Settings)).HandleJob)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueAnalytics, svc.handleSelfImprove)
 
 	return svc

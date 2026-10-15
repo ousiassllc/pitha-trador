@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain/marketregime"
+)
 
 // Jev decision_type values (docs/architecture/er.md §jev_decisions CHECK
 // constraint).
@@ -96,5 +100,18 @@ type JevDecision struct {
 	// RequestCost is the API billing cost of the call (e.g. USD), or nil
 	// when the provider does not report per-call cost.
 	RequestCost *float64
-	CreatedAt   time.Time
+	// DataAgeMS is how old the market bar was, in milliseconds, when the
+	// decision was made (issue #754), the same value the state sent to Jev
+	// carries as data_age_ms; nil when unknown.
+	DataAgeMS *int64
+	// OrderFlow holds the order-flow features (OFI over the configured
+	// windows, microprice deviation) of the market snapshot the decision
+	// was made on (issue #750), kept for later learning and analysis. It
+	// is not part of StateJSON, so it never changes StateHash.
+	OrderFlow OrderFlowFeatures
+	// MarketRegime is the market regime and A/B arm the decision was made
+	// under (issue #755), persisted with it; the zero value means it was not
+	// assessed. It is not part of StateJSON, so it never changes StateHash.
+	MarketRegime marketregime.Assessment
+	CreatedAt    time.Time
 }

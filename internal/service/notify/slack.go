@@ -170,6 +170,17 @@ func (n *SlackNotifier) DailyLossWarning(ctx context.Context, currentPct, limitP
 	return n.PostMessage(ctx, text)
 }
 
+// DailyEntryHalted implements internal/service/risk.Notifier's daily
+// entry-halt alert (issue #753, FR-RISK-8): a loss limit / profit lock /
+// trade count rule stopped new entries for the trading day. Exits continue.
+func (n *SlackNotifier) DailyEntryHalted(ctx context.Context, halt domain.DailyEntryHalt) error {
+	text := fmt.Sprintf(
+		":octagonal_sign: 新規エントリー停止: %s（reason=%s）\n%s\n本日の新規エントリーは停止しました（決済は継続）。翌営業日に自動で解除されます。",
+		halt.Label(), halt.Reason, halt.Message,
+	)
+	return n.PostMessage(ctx, text)
+}
+
 // JevAPIErrorRateExceeded implements internal/service/jev.AlertNotifier:
 // §5.2's "Jev APIエラー率上昇（しきい値超過）".
 func (n *SlackNotifier) JevAPIErrorRateExceeded(ctx context.Context, rate, threshold float64) error {

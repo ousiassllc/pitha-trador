@@ -19,10 +19,10 @@ type loaderFixture struct {
 	loader      *marketcontext.Loader
 }
 
-// newLoaderFixture is a ranking-watch Loader (domain.MaxSnapshotAge).
+// newLoaderFixture is a ranking-watch Loader (domain.MarketContextMaxAge).
 func newLoaderFixture(t *testing.T) loaderFixture {
 	t.Helper()
-	return newLoaderFixtureWithAge(t, domain.MaxSnapshotAge)
+	return newLoaderFixtureWithAge(t, domain.MarketContextMaxAge)
 }
 
 func newLoaderFixtureWithAge(t *testing.T, maxStale time.Duration) loaderFixture {

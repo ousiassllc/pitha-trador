@@ -94,6 +94,13 @@ erDiagram
         integer special_quote
         varchar price_limit
         integer lendable
+        numeric ofi_short
+        numeric ofi_mid
+        numeric ofi_long
+        integer ofi_window_short_seconds
+        integer ofi_window_mid_seconds
+        integer ofi_window_long_seconds
+        numeric microprice_dev_bps
         text raw_data_json
         text created_at
     }
@@ -119,7 +126,7 @@ erDiagram
 | market_return_1m / market_return_5m | numeric | NULL可 | `kind=market_index`銘柄（TOPIX/Nikkei225）のreturnの平均 |
 | sector_return_5m | numeric | NULL可 | 銘柄の`sector`と一致する`kind=sector_index`銘柄のreturn。該当指数なしはNULL |
 | stock_vs_sector_relative_strength | numeric | NULL可 | return_5m − sector_return_5m |
-| market_breadth | numeric | NULL可 | 許容年齢以内（ランキング監視は直近3分、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`＝同梱620秒。FR-FE-4）の全アクティブ株式の最新return_5mのうち（上昇数−下落数）/銘柄数。[-1, 1]。`scan.full_scan_enabled: true`では足が約8分間隔で各銘柄の`return_5m`が欠損（FR-FE-5）のため常にNULL（FR-SCHED-7） |
+| market_breadth | numeric | NULL可 | 許容年齢以内（ランキング監視は直近3分、`scan.full_scan_enabled: true`は`scan.full_scan_max_snapshot_age_seconds`＝同梱620秒。FR-FE-4）の全アクティブ株式の最新return_5mのうち（上昇数−下落数）/銘柄数。[-1, 1]。`scan.full_scan_enabled: true`では足が約8分間隔で各銘柄の`return_5m`が欠損（FR-FE-6）のため常にNULL（FR-SCHED-7） |
 | return_3m / return_30m | numeric | NULL可 | 履歴不足時はNULL |
 | high_distance_5m / low_distance_5m | numeric | NULL可 | 直近5分の高値/安値に対する `price/x − 1` |
 | session_high_distance / session_low_distance | numeric | NULL可 | kabuの当日高値/安値（HighPrice/LowPrice）に対する `price/x − 1` |
@@ -136,6 +143,9 @@ erDiagram
 | special_quote | integer | NOT NULL, DEFAULT 0, CHECK IN (0,1) | 特別気配（板の`BidSign`/`AskSign`が`0102`特別気配または`0108`停止前特別気配）なら1。Fast Screener（`special_quote`除外）とPolicy Engine（NONE）が約定不能として外す（issue #511、マイグレーション000026） |
 | price_limit | varchar(10) | NOT NULL, DEFAULT '', CHECK IN ('','up','down') | ストップ高（`up`）/ストップ安（`down`）。取得時の現値が銘柄情報（`/symbol`）の`UpperLimit`/`LowerLimit`以上/以下のとき。該当なし・値幅不明は`''`。Fast Screener（`limit_up`/`limit_down`除外）とPolicy Engine（NONE）が使う |
 | lendable | integer | NULL可, CHECK IN (0,1) | 貸借銘柄か（銘柄情報`MarginSell`＝制度信用売建可）。**NULL=不明**（000026以前の行・銘柄情報の取得失敗・指数）。0（貸借なし）のときだけPolicy Engineがショートを`not_lendable`で外す。銘柄情報は`symbolcache.Cache`が銘柄ごとに1営業日（JST）1回だけ取得する |
+| ofi_short / ofi_mid / ofi_long | numeric | NULL可 | 板の需給偏り（OFI、issue #750、`functional.md` FR-FE-6）。kabu PUSHの最良気配の数量変化（Cont–Kukanov–Stoikov）を、バー時刻から遡る短/中/長ローリング窓（既定10/30/60秒）で合計した株数（買い圧力が正）。**NULL=窓内にイベントなし・気配欠損・板寄せ中・数量0・PUSH非稼働（立花選択時など）**。0は「釣り合い」であり欠損ではない（000032） |
+| ofi_window_short_seconds / ofi_window_mid_seconds / ofi_window_long_seconds | integer | NULL可 | そのバーのOFIに使った窓幅（秒、Settings画面の`orderflow.ofi_window_*_seconds`）。OFI算出が動いていないバーはNULL（000032） |
+| microprice_dev_bps | numeric | NULL可 | `(microprice − mid)/mid × 10000`（bps）。micropriceがNULLまたはmidが0以下のときNULL（000032） |
 | raw_data_json | text | NOT NULL | ブローカーの生レスポンス（JSON文字列、再計算・監査用。ブローカー中立`broker.Quote.Raw`のJSON。kabuアダプタではkabuステーションAPIの板応答、立花証券アダプタでは立花の時価応答。**立花の応答も自己の証券投資目的のローカル保存に限り保存する**。第三者提供・再配信はしない（エラーログ・エクスポート等に出さない。`non-functional.md` §6）。仮想URL・認証ID・秘密鍵など認証情報は含めない） |
 | created_at | text | NOT NULL | |
 
@@ -171,6 +181,19 @@ erDiagram
         integer latency_ms
         varchar model_id
         numeric request_cost
+        numeric ofi_short
+        numeric ofi_mid
+        numeric ofi_long
+        integer ofi_window_short_seconds
+        integer ofi_window_mid_seconds
+        integer ofi_window_long_seconds
+        numeric microprice_dev_bps
+        integer data_age_ms
+        text market_regime
+        text ab_arm
+        numeric regime_volatility_bps
+        numeric regime_autocorr
+        numeric vwap_z
         text created_at
     }
 ```
@@ -191,6 +214,15 @@ erDiagram
 | latency_ms | integer | NOT NULL | |
 | model_id | varchar(100) | NOT NULL | |
 | request_cost | numeric(10,6) | NULL可 | API課金額（USD等）。TypeSafe AI公式API（`/v1/systemone`）は課金額を返さず`usage`のトークン数のみのため、現行実装は常にNULL |
+| ofi_short / ofi_mid / ofi_long | numeric | NULL可 | 判断時点のスナップショット（`market_snapshots`）のOFI（issue #750、`functional.md` FR-FE-6）。Jevへの入力（`state_json`）には含めず、`state_hash`にも影響しない。後から学習・分析（メタラベリング等）に使う（000032） |
+| ofi_window_short_seconds / ofi_window_mid_seconds / ofi_window_long_seconds | integer | NULL可 | 上記OFIの窓幅（秒）。窓幅は設定で変わるため判断ごとに保存する（000032） |
+| microprice_dev_bps | numeric | NULL可 | 判断時点のマイクロプライスのミッドからの乖離（bps）（000032） |
+| data_age_ms | integer | NULL可 | 判断時点での市場データ（最新の足）の古さ（ミリ秒、判断時刻−足の時刻、0以上）。Jevへ渡したstateの`data_age_ms`と同じ値で、`state_json`にも含まれる。後から判断の鮮度と成績の関係を分析するために使う（000035、issue #754、`functional.md` FR-FE-7） |
+| market_regime | text | NULL可 | 判断時点の相場状態（レジーム）: `trend` / `mean_revert` / `unknown`（CHECK制約）。市場指数（`instruments.kind = market_index`）の1分足リターンのボラティリティと1次自己相関から判定する（`internal/service/regime`）。未評価（旧行・判定器なし）はNULL（000036、issue #755・親 #751、`functional.md` FR-REGIME-1） |
+| ab_arm | text | NULL可 | 判断が属するA/Bのアーム: `momentum`（モメンタム固定）/ `regime`（レジーム切替）（CHECK制約）。Settings `regime.ab_enabled`が無効のあいだは全判断が`momentum`。未評価はNULL（000036）。アーム別のコスト控除後EV・勝率の集計元 |
+| regime_volatility_bps | numeric | NULL可 | レジーム判定の根拠: 窓内の市場指数の1分足リターンの標準偏差（bps）。算出できなければNULL（000036） |
+| regime_autocorr | numeric | NULL可 | レジーム判定の根拠: 窓内の市場指数の1分足リターンの1次自己相関（-1〜1。正=トレンド、負=平均回帰）。算出できなければNULL（000036） |
+| vwap_z | numeric | NULL可 | 平均回帰レジームのときの、銘柄の寄り付き以降のVWAP乖離のzスコア（最新の足の`price_vs_vwap_bps`÷寄り付き以降の足のその二乗平均平方根。正=VWAPより上）。平均回帰以外のレジーム・算出不能はNULL（000036） |
 | created_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id, timestamp DESC)`, `INDEX (decision_type)`, `INDEX (state_hash)`, `INDEX (decision_type, timestamp)`, `INDEX (timestamp)`, `INDEX (instrument_id, decision_type, timestamp DESC, id DESC)`, `INDEX (decision_type, direction, confidence)`（`(decision_type, direction, confidence)`はJev Traderジョブごとのキャリブレーション判定`CountLabeledSamplesInConfidenceRange`がconfidence帯を索引範囲検索し、閾値（`MinCalibrationSamples`）件で`LIMIT`打ち切りして履歴行数に依存させないための索引。マイグレーション000028、`internal/repository/calibration/calibration_plan_test.go`が`EXPLAIN QUERY PLAN`で固定。issue #603）（`INDEX (instrument_id, decision_type, timestamp DESC, id DESC)`は銘柄ごとの最新Trader/Scout判断`LatestTraderByInstruments`/`LatestTrader`/`LatestScout`が銘柄駆動で先頭1行だけ索引seekするための索引で、全Trader行の走査を避ける。マイグレーション000025、`internal/repository/judgement/decision_plan_test.go`が`EXPLAIN QUERY PLAN`で固定。issue #498）（`(decision_type, timestamp)`と`(timestamp)`はActivity Logの直近判断`ListRecent`が`ORDER BY timestamp DESC, id DESC LIMIT N`を全走査・整列なしで引くため。マイグレーション000020）。`(decision_type, timestamp)`は`ListRecent`専用ではなく、Outcome Labeling（FR-CAL-4）が毎分走る`CalibrationRepository.PendingLabels`（`decision_type='trader'`かつ`timestamp`の範囲、下限は`now-24h`）の範囲走査にも必須で（issue #484）、`internal/repository/calibration/calibration_plan_test.go`が`EXPLAIN QUERY PLAN`で`jev_decisions_type_timestamp_idx`の範囲検索を固定している。この索引を変更・削除すると`jev_decisions`全履歴（保持期間なし）の走査へ退行する
@@ -231,7 +263,7 @@ erDiagram
 | direction | varchar(10) | NOT NULL, CHECK IN ('LONG','SHORT','NONE') | |
 | score | numeric(6,4) | NULL可 | Policy Engine内部スコア |
 | entry_price_reference | numeric(12,2) | NULL可 | |
-| policy_version | varchar(20) | NOT NULL | Policy Engineのロジック版`policy-v1`。自己改善の適用提案のしきい値が有効な間は`policy-v1+sol-12`のように`policy_proposals.applied_policy_version`を付加（`functional.md` FR-POLICY-4/5, FR-SELFIMPROVE-5） |
+| policy_version | varchar(20) | NOT NULL | Policy Engineのロジック版。ライブ経路（メタラベリングのEV判定）は`policy-v2`、バックテストのリプレイ（旧しきい値ルール）は`policy-v1`。自己改善の適用提案のしきい値が有効な間は`policy-v2+sol-12`のように`policy_proposals.applied_policy_version`を付加（`functional.md` FR-POLICY-4/5, FR-SELFIMPROVE-5） |
 | risk_passed | boolean | NOT NULL | Risk Engine通過可否 |
 | reject_reason | varchar(255) | NULL可 | risk_passed=false時の理由。Policy Engineの理由（`spread_too_wide`等）、またはRisk Engine拒否時の`risk_engine_rejected: <Risk理由>`（例: `risk_engine_rejected: market_adverse_to_direction`。Risk理由が空なら`risk_engine_rejected`のみ） |
 | created_at | text | NOT NULL | |

@@ -41,6 +41,7 @@ func (e *Engine) RunPeriodicChecks(ctx context.Context) error {
 		e.CheckPositionReconciliation(ctx),
 		e.CheckDailyLossLimit(ctx),
 		e.CheckConsecutiveLosses(ctx),
+		e.CheckDailyGuard(ctx),
 		e.CheckDailyLossWarning(ctx),
 		// Last: also retries the flatten a detector above just failed.
 		e.RetryForceClose(ctx),

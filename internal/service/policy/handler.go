@@ -37,6 +37,8 @@ type Handler struct {
 	engine         *Engine
 	executor       SignalExecutor
 	calib          CalibrationSource // optional, see WithCalibration
+	tdnet          TDnetScorer       // optional, see WithTDnetScorer
+	regime         RegimeAssessor    // optional, see WithRegimeAssessor
 	now            func() time.Time  // wall clock for the snapshot staleness check
 	snapshotMaxAge time.Duration     // see WithSnapshotMaxAge
 }
@@ -46,7 +48,7 @@ type Handler struct {
 // row via snapshots, and hands every approved signal to executor. A nil
 // executor only records signals (no order is ever placed).
 func NewHandler(trader *jev.Trader, snapshots *market.SnapshotRepository, engine *Engine, executor SignalExecutor, opts ...HandlerOption) *Handler {
-	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor, now: time.Now, snapshotMaxAge: domain.MaxSnapshotAge}
+	h := &Handler{trader: trader, snapshots: snapshots, engine: engine, executor: executor, now: time.Now, snapshotMaxAge: domain.DefaultMaxSnapshotAge}
 	for _, opt := range opts {
 		opt(h)
 	}
@@ -89,7 +91,11 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	}
 	snap := snapshots[0]
 
-	decision, err := h.trader.Evaluate(ctx, payload.InstrumentID, jev.StateFromSnapshot(snap))
+	state := jev.StateFromSnapshot(snap, h.now().UTC())
+	if h.regime != nil {
+		state.MarketRegime = h.regime.Assess(ctx, snap)
+	}
+	decision, err := h.trader.Evaluate(ctx, payload.InstrumentID, state)
 	if err != nil {
 		if _, sigErr := h.engine.Evaluate(ctx, Input{
 			InstrumentID: payload.InstrumentID,
@@ -113,6 +119,10 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	in.Timestamp = decision.Timestamp
 	in.Decision = &decision
 	in.Calibrated = calibrated
+	if h.tdnet != nil {
+		score := h.tdnet.TDnetScore(payload.Symbol, h.now().UTC())
+		in.TDnetScore = &score
+	}
 	signal, err := h.engine.Evaluate(ctx, in)
 	if err != nil {
 		return fmt.Errorf("policy: evaluate trade signal for %q: %w", payload.Symbol, err)

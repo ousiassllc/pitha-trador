@@ -36,6 +36,10 @@ type Notifier interface {
 	KillSwitchTriggered(ctx context.Context, ev domain.KillSwitchEvent, autoResumable bool) error
 	KillSwitchAutoResumed(ctx context.Context, ev domain.KillSwitchEvent) error
 	DailyLossWarning(ctx context.Context, currentPct, limitPct float64) error
+	// DailyEntryHalted reports that a daily entry-halt rule (dailyguard.go,
+	// FR-RISK-8: loss limit / profit lock / trade count) stopped new entries
+	// for the rest of the trading day. It is called once per halt.
+	DailyEntryHalted(ctx context.Context, halt domain.DailyEntryHalt) error
 }
 
 // NoopNotifier is NewEngine's default Notifier when Config.Notifier is
@@ -49,3 +53,5 @@ func (NoopNotifier) KillSwitchTriggered(context.Context, domain.KillSwitchEvent,
 func (NoopNotifier) KillSwitchAutoResumed(context.Context, domain.KillSwitchEvent) error { return nil }
 
 func (NoopNotifier) DailyLossWarning(context.Context, float64, float64) error { return nil }
+
+func (NoopNotifier) DailyEntryHalted(context.Context, domain.DailyEntryHalt) error { return nil }

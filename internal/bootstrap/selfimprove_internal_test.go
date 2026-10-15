@@ -9,16 +9,18 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 )
 
 func TestBuildServices_AppliedPolicySettingReachesLivePolicyEngine(t *testing.T) {
-	svc := newTestServices(t)
+	svc, state := newTestServicesWithState(t)
 	inst := mustCreateInstrument(t, svc, "7203")
 	ctx := context.Background()
 	at := time.Date(2026, 9, 28, 1, 0, 0, 0, time.UTC)
+	policytest.NewStore(t, state.DB, policytest.TakingModel()) // the live rule enters on the model's verdict
 
 	direction, entryQuality := domain.JevDirectionLong, domain.JevEntryQualityStrong
-	confidence, continuation, toxic, stressed := 0.75, 0.8, 0.1, 0.1
+	confidence, continuation, toxic, stressed, spread, price := 0.75, 0.8, 0.1, 0.1, 5.0, 2500.0
 	decision, err := svc.Decisions.Insert(ctx, domain.JevDecision{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at, DecisionType: domain.JevDecisionTypeTrader,
 		StateHash: "hash", StateJSON: "{}", QuestionVersion: "v1", ResponseJSON: "{}", ModelID: "test-model",
@@ -27,30 +29,27 @@ func TestBuildServices_AppliedPolicySettingReachesLivePolicyEngine(t *testing.T)
 	if err != nil {
 		t.Fatalf("insert decision: %v", err)
 	}
-	decision.EntryQuality, decision.ContinuationProbability = &entryQuality, &continuation
-	decision.ToxicFlow, decision.LiquidityStressed = &toxic, &stressed
-	spread, price := 5.0, 2500.0
+	decision.EntryQuality, decision.ContinuationProbability, decision.ToxicFlow, decision.LiquidityStressed = &entryQuality, &continuation, &toxic, &stressed
 	// Risk Engine fails closed without the instrument's latest snapshot.
 	if _, err := svc.Snapshots.Insert(ctx, domain.Snapshot{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at, Price: price, SpreadBps: &spread, RawDataJSON: "{}",
 	}); err != nil {
 		t.Fatalf("insert snapshot: %v", err)
 	}
-	in := policy.Input{
+	in := policytest.WithInputs(policy.Input{
 		InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: at, Decision: &decision,
 		SpreadBps: &spread, EntryPriceReference: &price, Calibrated: true,
-	}
-
+	})
 	if sig, err := svc.Policy.Evaluate(ctx, in); err != nil || sig.Direction != domain.JevDirectionLong {
 		t.Fatalf("Evaluate before override = (%q, %v), want LONG under strategy.yaml's thresholds", sig.Direction, err)
 	}
 
 	// What Governor writes when it applies a proposal (FR-SELFIMPROVE-5).
-	if err := svc.Settings.Set(ctx, domain.PolicyKeyLongMinProbability, "0.80", at); err != nil {
+	if err := svc.Settings.Set(ctx, domain.PolicyKeyLongMaxToxicFlow, "0.05", at); err != nil {
 		t.Fatalf("settings.Set: %v", err)
 	}
 	if sig, err := svc.Policy.Evaluate(ctx, in); err != nil || sig.Direction != domain.JevDirectionNone {
-		t.Fatalf("Evaluate after override = (%q, %v), want NONE once long.min_probability is 0.80", sig.Direction, err)
+		t.Fatalf("Evaluate after override = (%q, %v), want NONE once long.max_toxic_flow is 0.05", sig.Direction, err)
 	}
 }
 

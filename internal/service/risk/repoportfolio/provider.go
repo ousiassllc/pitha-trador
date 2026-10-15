@@ -15,6 +15,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
 
 // recentClosedPositionsLimit bounds how many of the most-recently-opened
@@ -133,6 +134,45 @@ func (p *Provider) SymbolExposurePct(ctx context.Context, instrumentID int64) (f
 		}
 	}
 	return notional / p.initialCapital * 100, nil
+}
+
+// DailyActivity is today's (JST) result for the daily entry-halt rules
+// (risk.DailyActivity): the realized P&L of positions closed today plus the
+// unrealized P&L of every open position, in yen, and the number of positions
+// opened today (open ones and ones already closed today). Unlike
+// DailyLossPct it ignores the manual-resume baseline: the halt is a
+// per-trading-day discipline, not a Kill Switch to be resumed.
+func (p *Provider) DailyActivity(ctx context.Context) (risk.DailyActivity, error) {
+	now := p.now().In(tradingDayZone)
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, tradingDayZone)
+	dayEnd := dayStart.AddDate(0, 0, 1)
+	closed, err := p.positions.ListClosedBetween(ctx, dayStart, dayEnd)
+	if err != nil {
+		return risk.DailyActivity{}, err
+	}
+	open, err := p.positions.ListOpen(ctx)
+	if err != nil {
+		return risk.DailyActivity{}, err
+	}
+	var activity risk.DailyActivity
+	openedToday := func(pos domain.Position) bool {
+		return !pos.OpenedAt.Before(dayStart) && pos.OpenedAt.Before(dayEnd)
+	}
+	for _, pos := range closed {
+		if pos.RealizedPnL != nil {
+			activity.PnLJPY += *pos.RealizedPnL
+		}
+		if openedToday(pos) {
+			activity.Trades++
+		}
+	}
+	for _, pos := range open {
+		activity.PnLJPY += pos.UnrealizedPnL
+		if openedToday(pos) {
+			activity.Trades++
+		}
+	}
+	return activity, nil
 }
 
 // DailyLossPct is today's (JST) net loss as a percentage of initialCapital:

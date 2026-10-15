@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/domain/marketregime"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -75,6 +76,27 @@ type ScoutState struct {
 	// context - Luna disabled, failing, or nothing recent. It is auxiliary
 	// context only; it never overrides Jev's judgment (FR-LUNA-5).
 	NewsContext *domain.NewsContext `json:"news_context,omitempty"`
+
+	// DataAgeMS is how old the market bar was, in milliseconds, when the
+	// decision was made (issue #754): now minus the bar's timestamp, never
+	// negative. nil when the state was not built for a live decision
+	// (StateFromSnapshot is always given the decision time). It is sent to
+	// Jev inside the state and copied onto jev_decisions.data_age_ms.
+	DataAgeMS *int64 `json:"data_age_ms,omitempty"`
+
+	// OrderFlow is the snapshot's order-flow features (issue #750). It is
+	// never sent to Jev (json:"-": a jittering OFI would also defeat
+	// FR-SCAN-2's state_hash suppression); Scout/Trader copy it onto the
+	// jev_decisions row they persist so the values a decision was made with
+	// stay available for later learning and analysis.
+	OrderFlow domain.OrderFlowFeatures `json:"-"`
+
+	// MarketRegime is the market regime and A/B arm the decision is made
+	// under (issue #755). It is never sent to Jev (json:"-": the arm must not
+	// bias the answer, and it would perturb state_hash); Trader copies it onto
+	// the jev_decisions row it persists. Policy Engine, which acts on the
+	// decision, reads the same assessment.
+	MarketRegime marketregime.Assessment `json:"-"`
 }
 
 // ScoutRequest is the input of Client.Scout: the current market state,
@@ -147,4 +169,17 @@ type TraderResponse struct {
 	Confidence              float64  `json:"confidence"`
 	ModelID                 string   `json:"model_id"`
 	RequestCost             *float64 `json:"request_cost,omitempty"`
+}
+
+// Score returns r as take/skip material (issue #761, parent #752
+// メタラベリング): Direction is the primary signal's candidate side, and
+// EntryQuality, ToxicFlow, LiquidityStressed, ContinuationProbability and
+// Confidence become the Score a secondary model takes as a feature. Jev's
+// answer is not read as a prediction of where the price goes: FR-TRADER-2
+// (see the type comment) still holds, the values are evidence a calibrated
+// model weighs. It fails when an answer is outside its documented range, which
+// systemone's response validation already rules out for a response returned
+// by Client.Trader.
+func (r TraderResponse) Score() (Score, error) {
+	return NewScore(r.EntryQuality, r.ToxicFlow, r.LiquidityStressed, r.ContinuationProbability, r.Confidence)
 }

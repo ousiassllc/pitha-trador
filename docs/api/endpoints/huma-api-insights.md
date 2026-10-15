@@ -27,7 +27,7 @@
 
 | クエリ | 型 | 説明 |
 |-------|-----|------|
-| `horizon` | string | 集計する判定水平線（分）: `5` / `10` / `15` / `all`（既定`all`）。`all`は現行水平線`5`/`10`/`15`のラベルをまとめて集計する。範囲外（`20`・数値以外・`0`等）は422 |
+| `horizon` | string | 集計する判定水平線（分）: `5` / `10` / `15` / `all`（既定`all`）。`all`は現行水平線`5`/`10`/`15`のラベルと、トリプルバリアのラベル（horizonはSettingsのtimeout。FR-CAL-4）をまとめて集計する。範囲外（`20`・数値以外・`0`等）は422 |
 
 ```json
 // Output（抜粋）
@@ -35,7 +35,8 @@
   "horizon": "all",
   "buckets": [
     { "range": "0.50-0.60", "avg_confidence": 0.55, "direction_accuracy": 0.51, "avg_future_return_pct": -0.05,
-      "sample_count": 80, "trade_count": 6, "total_pnl": -1800, "avg_pnl_pct": -0.21, "trade_win_rate": 0.5 },
+      "sample_count": 80, "trade_count": 6, "total_pnl": -1800, "avg_pnl_pct": -0.21, "trade_win_rate": 0.5,
+      "triple_barrier": { "sample_count": 30, "tp_count": 6, "sl_count": 14, "timeout_count": 10, "tp_rate": 0.2, "sl_rate": 0.467, "timeout_rate": 0.333, "ev_net_bps": -9.4 } },
     { "range": "0.60-0.70", "avg_confidence": 0.65, "direction_accuracy": 0.55, "avg_future_return_pct": 0.02,
       "sample_count": 64, "trade_count": 9, "total_pnl": 400, "avg_pnl_pct": 0.03, "trade_win_rate": 0.5 },
     { "range": "0.70-0.80", "avg_confidence": 0.75, "direction_accuracy": 0.63, "avg_future_return_pct": 0.11,
@@ -54,7 +55,25 @@
   "expected_calibration_error": 0.06,
   "trade_count": 20,
   "pnl_brier_score": 0.27,
-  "pnl_log_loss": 0.74
+  "pnl_log_loss": 0.74,
+  "triple_barrier": { "sample_count": 120, "tp_count": 38, "sl_count": 46, "timeout_count": 36, "tp_rate": 0.317, "sl_rate": 0.383, "timeout_rate": 0.3, "ev_net_bps": 1.8 },
+  "ab_arms": [
+    { "arm": "momentum", "trade_count": 12, "win_rate": 0.417, "ev_net_bps": -2.1, "total_pnl": -3200,
+      "by_regime": [ { "regime": "trend", "trade_count": 8, "win_rate": 0.5, "ev_net_bps": 1.4, "total_pnl": 900 },
+                     { "regime": "mean_revert", "trade_count": 4, "win_rate": 0.25, "ev_net_bps": -9.8, "total_pnl": -4100 } ] },
+    { "arm": "regime", "trade_count": 11, "win_rate": 0.545, "ev_net_bps": 3.2, "total_pnl": 2600,
+      "by_regime": [ { "regime": "trend", "trade_count": 7, "win_rate": 0.571, "ev_net_bps": 1.9, "total_pnl": 700 },
+                     { "regime": "mean_revert", "trade_count": 4, "win_rate": 0.5, "ev_net_bps": 5.6, "total_pnl": 1900 } ] }
+  ],
+  "meta_model": {
+    "version": "lr-20261014-210000", "algorithm": "logistic", "status": "rejected", "reject_reason": "oos_auc_not_above_minimum",
+    "active_version": "lr-20261013-210000", "trained_at": "2026-10-14T12:00:00Z",
+    "train_start": "2026-09-01T00:00:00Z", "train_end": "2026-10-01T00:00:00Z",
+    "oos_start": "2026-10-01T00:00:00Z", "oos_end": "2026-10-14T00:00:00Z", "train_samples": 300, "oos_samples": 120,
+    "oos_auc": 0.48, "oos_ev_bps": null,
+    "oos_calibration": [ { "mean_predicted": 0.55, "observed_rate": 0.5, "count": 40 } ],
+    "llm_cutoff": "2026-09-01"
+  }
 }
 ```
 
@@ -62,7 +81,13 @@
 
 実現トレードPnLをground truthとする評価（FR-CAL-5）: バケットの`trade_win_rate`は`trade_count`のうち`realized_pnl > 0`の割合（`trade_count`が0なら0）、トップレベルの`trade_count`は`pnl_brier_score`/`pnl_log_loss`の対象となったクローズ済みポジション数（confidenceがどのバケットにも入らないものを除く。0件なら両スコアも0）。両スコアはconfidenceを予測確率、`realized_pnl > 0`を結果としたBrier Score/Log Loss。`realized_pnl`は両約定の手数料控除後・約定モデル（FR-ENTRY-8）の呼値/スプレッド/滑りを織り込んだ値。判定水平線の既定は5/10/15分。
 
-`horizon`（issue #719）はビン・方向別・Brier/Log Loss/ECEの全指標を、指定した水平線の`calibration_outcomes`行だけで再計算する（`ListLabeledSamples`が`horizon_minutes`で絞る）。応答の`horizon`は集計した水平線をそのまま返す（画面の表示用）。`all`は`calibration.DefaultHorizonsMinutes`（5/10/15）のみを合算し、#711以前の旧20分ラベルは混ざらない（旧ラベルはAPIからも選べない）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`/`trade_win_rate`と`pnl_brier_score`/`pnl_log_loss`は実現トレードPnLに基づくためホライズンに依存せず、どの`horizon`でも同じ値を返す。
+トリプルバリア（FR-CAL-4、issue #767）: トップレベルと各バケットの`triple_barrier`は、トリプルバリアのラベル（`barrier_hit`のある`calibration_outcomes`行。旧ラベルは含めない）の`sample_count`（件数）、`tp_count`/`sl_count`/`timeout_count`（先に触れたバリア別の件数）、`tp_rate`/`sl_rate`/`timeout_rate`（各件数÷`sample_count`、0〜1）、`ev_net_bps`（EV（net）＝コスト控除後リターン`net_return_bps`の平均、1判断あたりのbps）を返す。ラベルが0件の帯・全体は全て0（画面は`sample_count`で「ラベルなし」を判定する）。`direction_accuracy`等は従来どおり旧ラベルとトリプルバリアのラベルの両方を`sample_count`に数える。
+
+A/B比較（FR-REGIME-1、issue #755）: `ab_arms`はpaperの固定モメンタム（`momentum`）とレジーム切替（`regime`）の2アームを常にこの順で返す（Settings `regime.ab_enabled`が無効のあいだは全判断が`momentum`アームなので`regime`は0件）。各アームは、そのアームの判断（`jev_decisions.ab_arm`）から建てられクローズ済み（`closed_at`と`realized_pnl`が非NULL）の`positions`の`trade_count`（件数）、`win_rate`（`realized_pnl > 0`の割合、0〜1）、`ev_net_bps`（EV（net）＝`realized_pnl`÷エントリー想定元本の平均、1建玉あたりのbps。`realized_pnl`は両約定の手数料控除後・約定モデル（FR-ENTRY-8）の呼値/スプレッド/滑りを織り込んだ値＝コスト控除後）、`total_pnl`（円）と、そのアームのレジーム別（`by_regime[]`。`regime`は`trend`/`mean_revert`/`unknown`、建玉があるレジームのみ、この順）を返す。建玉が0件のアーム・レジームは件数も勝率・EV・損益も0（画面は`trade_count`で判定する）。判断のdirectionが`NONE`でもVWAP回帰で建てた建玉は数える。レジーム・アームが未評価の判断（旧行）と手動エントリーは含めない。実現PnLに基づくため`horizon`に依存しない。取得元（`calibration.RegimeTradeSource`＝`decisiontrade.Repository`）が未配線なら`ab_arms`キー自体を省く。
+
+メタラベリングのOOS指標（FR-META-5、issue #766）: `meta_model`は最新のメタラベリングモデル（`metalabel_models`の`trained_at`が最新の行。`rejected`も含む）の報告で、`version`/`algorithm`/`status`（`active`=採用、`rejected`=記録のみで`reject_reason`に理由）/`trained_at`/`train_start`〜`train_end`（学習窓）/`train_samples`/`oos_samples`に加え、**Jev評価期間**`oos_start`〜`oos_end`（OOS窓。判断は`llm_cutoff`以降のものだけが対象。`llm_cutoff`は応答時点のSettings `metalabel.llm_cutoff`（UTC日付`YYYY-MM-DD`）、`oos_auc`（0.5=無能力）、`oos_ev_bps`（OOS上でDecideが採ったシグナルの平均純リターン、bps）、`oos_calibration[]`（較正後確率のビンごとの`mean_predicted`・`observed_rate`・`count`）を返す。`oos_auc`/`oos_ev_bps`は定義できないとき`null`。`active_version`は推論で使われているモデル（最新の`active`。無ければ空文字で、その間のエントリーは見送り）で、最新モデルが`rejected`のとき`version`と異なる。モデルが1件も無い、または取得元が未配線のときは`meta_model`キー自体を省く。`horizon`には依存しない。実装は`internal/service/metalabel.Reporter`で、`internal/bootstrap/metalabeljob.CalibrationSource`が`calibration.Service`（`Metrics`）と合成して`router.WithCalibrationSource`へ渡す。ハンドラは取得元が`calibration.MetaModelSource`（`Report`）も実装していれば`meta_model`を返す。
+
+`horizon`（issue #719）はビン・方向別・Brier/Log Loss/ECEの全指標を、指定した水平線の`calibration_outcomes`行だけで再計算する（`ListLabeledSamples`が`horizon_minutes`で絞る）。応答の`horizon`は集計した水平線をそのまま返す（画面の表示用）。`all`は`calibration.DefaultHorizonsMinutes`（5/10/15）と全てのトリプルバリアのラベルを合算し（トリプルバリアのhorizonはSettingsのtimeoutで任意の1〜60分のため、5/10/15以外の値は`all`でのみ集計される。`ListCurrentLabeledSamples`）、#711以前の旧20分ラベルは混ざらない（旧ラベルはAPIからも選べない）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`/`trade_win_rate`と`pnl_brier_score`/`pnl_log_loss`は実現トレードPnLに基づくためホライズンに依存せず、どの`horizon`でも同じ値を返す。
 
 ### GET /api/v1/policy-proposals
 

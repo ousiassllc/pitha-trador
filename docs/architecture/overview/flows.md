@@ -201,7 +201,36 @@ sequenceDiagram
 
 - `internal/logging`に読み取り専用のExporterを置き、`web/handler/system`がインターフェース越しに呼ぶ（`bootstrap`が`LogDir`を渡して組み立て、`router`のOptionで注入する。`web` → `repository/**`の禁止は変わらない）。書き込み側の`RotatingWriter`・`Archiver`とは独立で、ログファイルを変更しない
 - 当日の書き込み中ファイルは読み取り時点までを対象とし、末尾の不完全行は捨てる。`.log.gz`は透過的に展開する
+- 計測ログ（INFO以上）の期間抽出（FR-ERRLOG-8）は同じExporterの`ExportRange`/`ExportMetrics`（期間`[from, to)`をレコード時刻で絞る。ファイルの選び方・マスク・上限は共通）で、ログレベルと保持期間はSettings（`system.log_level`は起動時にstartupが読み、`system.log_retention_days`は`Archiver`が実行ごとに読む）。
 - マスク規則と上限は FR-ERRLOG-3/4 に従う。ダウンロード操作は操作者の操作としてハートビート更新対象（§10.4）
+
+### 10.7 取引ログ・判断ログ・計測ログのエクスポート
+
+`requirements/functional/components-platform.md` §4.21（FR-EXPORT-1〜7）の実装詳細。Settingsの「データエクスポート」節が`GET /api/v1/export`（`handler/export`）を呼び、ハンドラが一時ファイルへ`Export`してからZIPを返す。
+
+```mermaid
+sequenceDiagram
+    participant C as 呼び出し側（`GET /api/v1/export`）
+    participant SVC as dataexport.Service
+    participant COL as Collector（Trades / Decisions / Metrics）
+    participant REPO as repository（trading / decisiontrade / judgement / decisionsnapshot / calibration）/ logging.Exporter（計測ログ）
+    participant W as io.Writer（ローカルのZIP）
+
+    C->>SVC: Export(w, 期間[from,to), 種類, CSV|JSONL)
+    SVC->>SVC: 期間・種類・形式の検証（不正は何も書かず ErrInvalidRequest）
+    loop 種類 × テーブル
+        SVC->>COL: Tables()
+        COL->>REPO: Each*InRange（SQLiteの行ストリーム）
+        REPO-->>SVC: 1行ずつ
+        SVC->>SVC: 行正規化・秘密情報マスク（logging.MaskString / MaskJSONText / IsSensitiveKey）
+        SVC->>W: <種類>/<テーブル>.<csv|jsonl>
+    end
+    SVC->>W: manifest.json（スキーマバージョン・期間・行数）
+```
+
+- 期間読み出しは`Each*InRange`（`sqlutil.Each`で行をストリーミング）で、期間の全行をメモリに載せない。条件は半開区間`[from, to)`で、各テーブルの時刻索引に乗る列（`submitted_at`・`timestamp`・`closed_at`）で絞る。ただし`decisionsnapshot`は`jev_decisions`の`timestamp`に`market_snapshots`の`(instrument_id, timestamp)`を結合する
+- 計測ログ（`metrics`）は`logging.Exporter.ExportMetrics`（ログディレクトリの日次ログ。マスク済み・10MiB上限）の結果を1レコード1行に展開し、上限で切り捨てた場合はmanifestの`files[].truncated`に記録する
+- マスクは行正規化の1箇所で全値に適用するため、コレクタが個別に呼び忘れることはない。`dataexport`は`io.Writer`以外の出力先（ネットワーク・ファイル作成）を持たない
 
 ## 11. 障害対応方針
 

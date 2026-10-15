@@ -11,6 +11,13 @@ import (
 	"unicode"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
 
@@ -44,6 +51,34 @@ func encode(key, raw string) (string, error) {
 			return "", &InvalidValueError{Reason: err.Error()}
 		}
 		value = v
+	case kindMetaLabel:
+		if !metalabelsettings.IsStringKey(key) {
+			f, err := strconv.ParseFloat(raw, 64)
+			if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+				return "", &InvalidValueError{Reason: fmt.Sprintf("%q は数値ではありません", raw)}
+			}
+			value = f
+			break
+		}
+		v, err := metalabelsettings.Normalize(key, raw)
+		if err != nil {
+			return "", &InvalidValueError{Reason: err.Error()}
+		}
+		value = v
+	case kindLog:
+		if key == config.KeyLogLevel {
+			v, err := logsettings.NormalizeLevel(raw)
+			if err != nil {
+				return "", &InvalidValueError{Reason: err.Error()}
+			}
+			value = v
+			break
+		}
+		n, err := strconv.ParseInt(raw, 10, 32)
+		if err != nil {
+			return "", &InvalidValueError{Reason: fmt.Sprintf("%q は整数ではありません", raw)}
+		}
+		value = n
 	case kindEntryQuality:
 		value = raw // the allowed values are checked with the effective config
 	case kindInteger:
@@ -100,6 +135,57 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return invalidIf(config.ValidateFastScreenerOverrides(cfg))
+	case orderflowsettings.IsKey(key):
+		windows := orderflowsettings.Default()
+		if err := s.overlay(ctx, orderflowsettings.Keys(), func(k, raw string) error { return orderflowsettings.Apply(&windows, k, raw) }); err != nil {
+			return err
+		}
+		if err := orderflowsettings.Apply(&windows, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return invalidIf(windows.Validate())
+	case snapshotagesettings.IsKey(key):
+		// A single stand-alone value: only its own range is checked.
+		if _, err := snapshotagesettings.Parse(encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case key == config.KeyLogRetentionDays:
+		// A single stand-alone value: only its own range is checked.
+		if _, err := logsettings.ParseRetentionDays(encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case dailyguardsettings.IsKey(key):
+		// Each threshold stands alone (0 disables it), so only its own range is checked.
+		var limits dailyguardsettings.Limits
+		if err := dailyguardsettings.Apply(&limits, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case barriersettings.IsKey(key):
+		barriers := barriersettings.Default()
+		if err := s.overlay(ctx, barriersettings.Keys(), func(k, raw string) error { return barriersettings.Apply(&barriers, k, raw) }); err != nil {
+			return err
+		}
+		if err := barriersettings.Apply(&barriers, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return invalidIf(barriers.Validate())
+	case metalabelsettings.IsKey(key):
+		// Each field stands alone: Apply checks the single value's range.
+		meta := metalabelsettings.Default()
+		if err := metalabelsettings.Apply(&meta, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case regimesettings.IsKey(key):
+		// Each field stands alone: Apply checks the single value's range.
+		regime := regimesettings.Default()
+		if err := regimesettings.Apply(&regime, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
 	case strings.HasPrefix(key, "broker.tachibana.screen."):
 		return s.validateTachibanaSource(ctx, key, encoded)
 	}

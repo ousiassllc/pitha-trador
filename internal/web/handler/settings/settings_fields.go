@@ -29,7 +29,7 @@ type connection struct {
 // order. Labels match the literal names operators previously set in `.env`
 // so the migration away from it stays recognizable. Every key here must be
 // in config.AllowedSecretKeys (the per-key routes' allow-list), and the
-// groups together must cover it exactly once, which settings_groups_test.go
+// groups together must cover it exactly once, which pageflow/groups_test.go
 // asserts. Luna/Sol/Opus default to Jev and the news feed to the やのしん TDnet
 // WebAPI (issue #273), so their fields are optional overrides only; the Jev
 // key alone enables them.

@@ -54,6 +54,7 @@ func RunPortfolio(ctx context.Context, cfgs []RunConfig, wf WalkForwardConfig) (
 		combinedTrades = append(combinedTrades, forward...)
 	}
 	result.Combined = Aggregate(combinedTrades)
+	result.ByRegime = AggregateByRegime(combinedTrades)
 	return result, nil
 }
 

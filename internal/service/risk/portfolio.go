@@ -54,6 +54,12 @@ type PortfolioProvider interface {
 	// engine.go's Check doc comment for why this is not a
 	// kill_switch_events row).
 	LastLossAt(ctx context.Context, since time.Time) (time.Time, error)
+
+	// DailyActivity returns today's (JST) realized + unrealized P&L in yen
+	// and how many positions were opened today, for the daily entry-halt
+	// rules (dailyguard.go, FR-RISK-8). Unlike DailyLossPct it ignores the
+	// manual-resume baseline.
+	DailyActivity(ctx context.Context) (DailyActivity, error)
 }
 
 // ZeroPortfolioProvider is NewEngine's default PortfolioProvider when
@@ -83,4 +89,8 @@ func (ZeroPortfolioProvider) ConsecutiveLosses(context.Context, time.Time) (int,
 
 func (ZeroPortfolioProvider) LastLossAt(context.Context, time.Time) (time.Time, error) {
 	return time.Time{}, nil
+}
+
+func (ZeroPortfolioProvider) DailyActivity(context.Context) (DailyActivity, error) {
+	return DailyActivity{}, nil
 }

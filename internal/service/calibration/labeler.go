@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
@@ -43,13 +44,15 @@ const horizonRetryInterval = time.Minute
 
 // Labeler turns one Jev trader decision (jev_decisions,
 // decision_type=trader) into a calibration_outcomes row for one judgment
-// horizon (functional.md FR-CAL-4): future_return, max_adverse_excursion,
-// max_favorable_excursion, and was_direction_correct, computed from the
-// market_snapshots bars between the decision and horizon_minutes later.
+// horizon (functional.md FR-CAL-4) by the triple-barrier method (issue #762,
+// parent #751): the first of take-profit, stop-loss and timeout touched on
+// the market_snapshots bars after the Jev response decides the label, with
+// cost-inclusive barrier widths from Settings (barriersettings).
 type Labeler struct {
 	decisions *judgement.DecisionRepository
 	snapshots *market.SnapshotRepository
 	outcomes  *calrepo.CalibrationRepository
+	barriers  barriersettings.Store
 	now       func() time.Time
 }
 
@@ -62,6 +65,14 @@ func WithClock(now func() time.Time) Option {
 	return func(l *Labeler) { l.now = now }
 }
 
+// WithBarrierSettings makes HandleJob read the TP/SL/cost widths from the
+// runtime settings in store on every job, so a Settings change applies to
+// the next label without a restart. Without it the barriersettings defaults
+// apply.
+func WithBarrierSettings(store barriersettings.Store) Option {
+	return func(l *Labeler) { l.barriers = store }
+}
+
 // NewLabeler returns a Labeler that loads decisions via decisions, market
 // data via snapshots, and persists calibration_outcomes rows via outcomes.
 func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, outcomes *calrepo.CalibrationRepository, opts ...Option) *Labeler {
@@ -72,27 +83,44 @@ func NewLabeler(decisions *judgement.DecisionRepository, snapshots *market.Snaps
 	return l
 }
 
+// loadBarriers returns the effective barrier widths.
+func (l *Labeler) loadBarriers(ctx context.Context) (barriersettings.Barriers, error) {
+	if l.barriers == nil {
+		return barriersettings.Default(), nil
+	}
+	return barriersettings.Load(ctx, l.barriers)
+}
+
 // HandleJob processes one outcome-labeling queue job
-// (calrepo.OutcomeLabelJobPayload): it loads the identified
-// jev_decisions row, the market_snapshots bars from the decision's
-// timestamp through horizon_minutes later, computes and persists the
-// resulting calibration_outcomes row (FR-CAL-4). Its signature matches
+// (calrepo.OutcomeLabelJobPayload): it loads the identified jev_decisions
+// row and the market_snapshots bars after the Jev response, and persists the
+// triple-barrier calibration_outcomes row (FR-CAL-4). Its signature matches
 // internal/service/scheduler.Handler, so it can be registered directly:
 // scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling,
 // labeler.HandleJob).
 //
-// If the market_snapshots bars do not (yet) reach the horizon - the last
-// bar is more than horizonBarTolerance before decision timestamp +
-// horizon_minutes, or the entry bar is missing - HandleJob never records a
-// shortened horizon as the full-horizon outcome and never fails the job
-// (issue #710). Within horizonDataGrace of the horizon it persists nothing
-// and returns jobqueue.Defer (the data may still be landing): the job goes
-// back to pending and is retried after horizonRetryInterval; the pair also
-// stays in PendingLabels. Past the grace period the gap is permanent (lunch
-// break, close, outage): HandleJob records the pair as unlabelable
-// (CalibrationRepository.MarkUnlabelable; still no calibration_outcomes
-// row) and returns jobqueue.Skip, so the job ends succeeded with a
-// "skipped:" note and PendingLabels stops returning the pair (issue #481).
+// The label is measured from an executable entry reference price on the
+// first bar at or after the Jev response (the decision's created_at, within
+// entryWaitTolerance): the ask for LONG, the bid for SHORT. From that bar
+// the path runs for the job's horizon_minutes, which is the Settings timeout
+// the scheduler enqueued the job with. A take-profit is touched when the
+// gross return less the assumed cost reaches the TP width, a stop-loss when
+// it falls to the SL width; whichever is touched first decides the label,
+// and reaching neither is a timeout graded by its net return (a flat result
+// is no longer "wrong"). A direction-NONE decision has no side to price, so
+// it records the raw price path with no barrier fields.
+//
+// If the bars do not (yet) cover the path - no entry bar, or the last bar is
+// more than horizonBarTolerance before the timeout - HandleJob never records
+// a shortened window and never fails the job (issue #710). Within
+// horizonDataGrace of the latest the data could land it persists nothing and
+// returns jobqueue.Defer: the job goes back to pending and is retried after
+// horizonRetryInterval; the pair also stays in PendingLabels. Past the grace
+// period the gap is permanent (lunch break, close, outage): HandleJob
+// records the pair as unlabelable (CalibrationRepository.MarkUnlabelable;
+// still no calibration_outcomes row) and returns jobqueue.Skip, so the job
+// ends succeeded with a "skipped:" note and PendingLabels stops returning
+// the pair (issue #481).
 func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	var payload calrepo.OutcomeLabelJobPayload
 	if err := json.Unmarshal([]byte(job.PayloadJSON), &payload); err != nil {
@@ -103,77 +131,153 @@ func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	if err != nil {
 		return fmt.Errorf("calibration: load jev decision %d: %w", payload.JevDecisionID, err)
 	}
-
-	horizon := time.Duration(payload.HorizonMinutes) * time.Minute
-	// +1s margin: SnapshotRepository.ListByInstrumentRange's `to` bound is
-	// exclusive, so this still includes the bar landing exactly on the
-	// horizon boundary.
-	window, err := l.snapshots.ListByInstrumentRange(ctx, decision.InstrumentID, decision.Timestamp, decision.Timestamp.Add(horizon+time.Second))
+	barriers, err := l.loadBarriers(ctx)
 	if err != nil {
-		return fmt.Errorf("calibration: load market snapshots for decision %d: %w", payload.JevDecisionID, err)
-	}
-	if len(window) < 2 || !window[0].Timestamp.Equal(decision.Timestamp) {
-		return l.shortWindow(ctx, decision, payload.HorizonMinutes, "no entry bar or no later bars in the horizon window")
-	}
-	if last := window[len(window)-1].Timestamp; last.Before(decision.Timestamp.Add(horizon - horizonBarTolerance)) {
-		return l.shortWindow(ctx, decision, payload.HorizonMinutes,
-			fmt.Sprintf("market data ends at %s, short of the horizon (lunch break, close, or data gap)", last.Format(time.RFC3339)))
+		return fmt.Errorf("calibration: load triple-barrier settings: %w", err)
 	}
 
 	direction := domain.JevDirectionNone
 	if decision.Direction != nil {
 		direction = *decision.Direction
 	}
-	factor := 1.0
-	if direction == domain.JevDirectionShort {
-		factor = -1.0
+	responseAt := responseTime(decision)
+	timeout := time.Duration(payload.HorizonMinutes) * time.Minute
+	// +1s margin: SnapshotRepository.ListByInstrumentRange's `to` bound is
+	// exclusive, so this still includes a bar landing exactly on the latest
+	// timeout boundary.
+	window, err := l.snapshots.ListByInstrumentRange(ctx, decision.InstrumentID, responseAt, responseAt.Add(entryWaitTolerance+timeout+time.Second))
+	if err != nil {
+		return fmt.Errorf("calibration: load market snapshots for decision %d: %w", payload.JevDecisionID, err)
 	}
 
-	entryPrice := window[0].Price
-	mfe, mae := 0.0, 0.0
-	for _, snap := range window[1:] {
-		adjusted := percentReturn(entryPrice, snap.Price) * factor
-		if adjusted > mfe {
-			mfe = adjusted
+	entryIdx, entryRef := findEntry(window, direction, responseAt)
+	if entryIdx < 0 {
+		return l.shortWindow(ctx, decision, payload.HorizonMinutes, responseAt,
+			"no bar with an executable entry quote within "+entryWaitTolerance.String()+" of the Jev response")
+	}
+	deadline := window[entryIdx].Timestamp.Add(timeout)
+	path := window[entryIdx+1:]
+	for len(path) > 0 && path[len(path)-1].Timestamp.After(deadline) {
+		path = path[:len(path)-1]
+	}
+	if len(path) == 0 || path[len(path)-1].Timestamp.Before(deadline.Add(-horizonBarTolerance)) {
+		reason := "no bars after the entry bar"
+		if len(path) > 0 {
+			reason = fmt.Sprintf("market data ends at %s, short of the timeout (lunch break, close, or data gap)", path[len(path)-1].Timestamp.Format(time.RFC3339))
 		}
-		if adjusted < mae {
-			mae = adjusted
-		}
-	}
-	futureReturn := percentReturn(entryPrice, window[len(window)-1].Price)
-
-	var wasDirectionCorrect *bool
-	if direction != domain.JevDirectionNone {
-		correct := (direction == domain.JevDirectionLong && futureReturn > 0) ||
-			(direction == domain.JevDirectionShort && futureReturn < 0)
-		wasDirectionCorrect = &correct
+		return l.shortWindow(ctx, decision, payload.HorizonMinutes, responseAt, reason)
 	}
 
-	if _, err := l.outcomes.Insert(ctx, domain.CalibrationOutcome{
-		JevDecisionID:         decision.ID,
-		HorizonMinutes:        payload.HorizonMinutes,
-		FutureReturn:          futureReturn,
-		MaxAdverseExcursion:   mae,
-		MaxFavorableExcursion: mfe,
-		WasDirectionCorrect:   wasDirectionCorrect,
-	}); err != nil {
+	outcome := labelPath(path, entryRef, direction, barriers)
+	outcome.JevDecisionID = decision.ID
+	outcome.HorizonMinutes = payload.HorizonMinutes
+	if _, err := l.outcomes.Insert(ctx, outcome); err != nil {
 		return fmt.Errorf("calibration: persist outcome for decision %d (horizon %dm): %w", payload.JevDecisionID, payload.HorizonMinutes, err)
 	}
 	return nil
 }
 
+// responseTime is when Jev's response was received: the decision row is
+// written right after the call returns, so its created_at, never earlier
+// than the decision's bar timestamp.
+func responseTime(d domain.JevDecision) time.Time {
+	if d.CreatedAt.After(d.Timestamp) {
+		return d.CreatedAt
+	}
+	return d.Timestamp
+}
+
+// findEntry returns the index of the first bar within entryWaitTolerance of
+// responseAt that carries the executable entry quote, and that quote: the
+// ask for LONG, the bid for SHORT, the bar's last price for a NONE decision
+// (no side to price). It returns -1 when there is none.
+func findEntry(window []domain.Snapshot, direction string, responseAt time.Time) (int, float64) {
+	for i, bar := range window {
+		if bar.Timestamp.Sub(responseAt) > entryWaitTolerance {
+			break
+		}
+		quote := bar.Price
+		switch direction {
+		case domain.JevDirectionLong:
+			quote = ptrOrZero(bar.Ask)
+		case domain.JevDirectionShort:
+			quote = ptrOrZero(bar.Bid)
+		}
+		if quote > 0 {
+			return i, quote
+		}
+	}
+	return -1, 0
+}
+
+func ptrOrZero(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+// labelPath computes the calibration_outcomes row (without its identity) for
+// path, the bars after the entry bar through the timeout, measured from
+// entryRef. Price excursions (FutureReturn, MAE, MFE) run to the bar that
+// ended the label.
+func labelPath(path []domain.Snapshot, entryRef float64, direction string, barriers barriersettings.Barriers) domain.CalibrationOutcome {
+	factor := 1.0
+	if direction == domain.JevDirectionShort {
+		factor = -1.0
+	}
+	points := make([]barrierPoint, len(path))
+	for i, bar := range path {
+		gross := grossReturnBps(entryRef, bar.Price, factor)
+		points[i] = barrierPoint{Favorable: gross, Adverse: gross, Close: gross}
+	}
+
+	end := len(path) - 1
+	var hit barrierOutcome
+	if direction != domain.JevDirectionNone {
+		hit = firstBarrier(points, barriers)
+		end = hit.Index
+	}
+
+	mfe, mae := 0.0, 0.0
+	for _, bar := range path[:end+1] {
+		adjusted := percentReturn(entryRef, bar.Price) * factor
+		mfe = max(mfe, adjusted)
+		mae = min(mae, adjusted)
+	}
+	outcome := domain.CalibrationOutcome{
+		FutureReturn:          percentReturn(entryRef, path[end].Price),
+		MaxAdverseExcursion:   mae,
+		MaxFavorableExcursion: mfe,
+		LabelVersion:          domain.CalibrationLabelVersionTripleBarrier,
+	}
+	if direction == domain.JevDirectionNone {
+		return outcome
+	}
+
+	// Correct iff the trade made money after costs: a take-profit always
+	// does, a stop-loss never, a timeout by the sign of its net return.
+	correct := hit.NetReturnBps > 0
+	outcome.WasDirectionCorrect = &correct
+	outcome.BarrierHit = hit.Hit
+	outcome.NetReturnBps = &hit.NetReturnBps
+	outcome.EntryRefPrice = &entryRef
+	return outcome
+}
+
 // shortWindow handles a window that does not reach the horizon, without
 // ever failing the job (issue #710): while the data may still land (within
-// horizonDataGrace of decision timestamp + horizon) it returns
+// horizonDataGrace of the latest the data could land: the Jev response +
+// entryWaitTolerance + horizon) it returns
 // jobqueue.Defer, so the scheduler puts the job back to pending (retried at
 // the next scan cadence); once the grace has passed the gap is permanent
 // and it records the skip marker and returns jobqueue.Skip, which ends the
 // job as succeeded with a "skipped:" note. Either way no calibration_outcomes
 // row is written, so a shortened horizon is never recorded (FR-CAL-4).
-func (l *Labeler) shortWindow(ctx context.Context, decision domain.JevDecision, horizonMinutes int, reason string) error {
+func (l *Labeler) shortWindow(ctx context.Context, decision domain.JevDecision, horizonMinutes int, responseAt time.Time, reason string) error {
 	horizon := time.Duration(horizonMinutes) * time.Minute
 	now := l.now()
-	if now.Before(decision.Timestamp.Add(horizon + horizonDataGrace)) {
+	if now.Before(responseAt.Add(entryWaitTolerance + horizon + horizonDataGrace)) {
 		return jobqueue.Defer(now.Add(horizonRetryInterval),
 			fmt.Sprintf("decision %d horizon %dm not labelable yet: %s", decision.ID, horizonMinutes, reason))
 	}

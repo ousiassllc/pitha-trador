@@ -45,8 +45,12 @@ const insertDecisionSQL = `
 INSERT INTO jev_decisions (
 	instrument_id, symbol, timestamp, decision_type, state_hash, state_json,
 	question_version, response_json, direction, confidence, latency_ms,
-	model_id, request_cost, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	model_id, request_cost, created_at,
+	ofi_short, ofi_mid, ofi_long,
+	ofi_window_short_seconds, ofi_window_mid_seconds, ofi_window_long_seconds,
+	microprice_dev_bps, data_age_ms,
+	market_regime, ab_arm, regime_volatility_bps, regime_autocorr, vwap_z
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // Insert writes a single jev_decisions row.
 func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (domain.JevDecision, error) {
@@ -59,6 +63,11 @@ func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (
 		d.InstrumentID, d.Symbol, sqlutil.FormatTime(d.Timestamp), d.DecisionType, d.StateHash, d.StateJSON,
 		d.QuestionVersion, d.ResponseJSON, sqlutil.NullableString(d.Direction), sqlutil.NullableFloat64(d.Confidence),
 		d.LatencyMs, d.ModelID, sqlutil.NullableFloat64(d.RequestCost), sqlutil.FormatTime(createdAt),
+		sqlutil.NullableFloat64(d.OrderFlow.OFIShort), sqlutil.NullableFloat64(d.OrderFlow.OFIMid), sqlutil.NullableFloat64(d.OrderFlow.OFILong),
+		sqlutil.NullableInt64(d.OrderFlow.OFIWindowShortSeconds), sqlutil.NullableInt64(d.OrderFlow.OFIWindowMidSeconds), sqlutil.NullableInt64(d.OrderFlow.OFIWindowLongSeconds),
+		sqlutil.NullableFloat64(d.OrderFlow.MicropriceDevBps), sqlutil.NullableInt64(d.DataAgeMS),
+		nullableText(d.MarketRegime.Regime), nullableText(d.MarketRegime.ABArm),
+		sqlutil.NullableFloat64(d.MarketRegime.VolatilityBps), sqlutil.NullableFloat64(d.MarketRegime.Autocorr), sqlutil.NullableFloat64(d.MarketRegime.VWAPZ),
 	)
 	if err != nil {
 		return domain.JevDecision{}, fmt.Errorf(
@@ -218,13 +227,19 @@ func (r *DecisionRepository) ListByInstrumentRange(ctx context.Context, instrume
 const decisionSelectColumns = `
 SELECT id, instrument_id, symbol, timestamp, decision_type, state_hash, state_json,
 	question_version, response_json, direction, confidence, latency_ms,
-	model_id, request_cost, created_at`
+	model_id, request_cost, created_at,
+	ofi_short, ofi_mid, ofi_long,
+	ofi_window_short_seconds, ofi_window_mid_seconds, ofi_window_long_seconds,
+	microprice_dev_bps, data_age_ms,
+	market_regime, ab_arm, regime_volatility_bps, regime_autocorr, vwap_z`
 
 func scanDecision(row sqlutil.RowScanner) (domain.JevDecision, error) {
 	var (
 		d         domain.JevDecision
 		timestamp string
 		direction sql.NullString
+		regime    sql.NullString
+		abArm     sql.NullString
 		createdAt string
 	)
 
@@ -232,6 +247,11 @@ func scanDecision(row sqlutil.RowScanner) (domain.JevDecision, error) {
 		&d.ID, &d.InstrumentID, &d.Symbol, &timestamp, &d.DecisionType, &d.StateHash, &d.StateJSON,
 		&d.QuestionVersion, &d.ResponseJSON, &direction, sqlutil.NullFloat(&d.Confidence), &d.LatencyMs,
 		&d.ModelID, sqlutil.NullFloat(&d.RequestCost), &createdAt,
+		sqlutil.NullFloat(&d.OrderFlow.OFIShort), sqlutil.NullFloat(&d.OrderFlow.OFIMid), sqlutil.NullFloat(&d.OrderFlow.OFILong),
+		sqlutil.NullInt64(&d.OrderFlow.OFIWindowShortSeconds), sqlutil.NullInt64(&d.OrderFlow.OFIWindowMidSeconds), sqlutil.NullInt64(&d.OrderFlow.OFIWindowLongSeconds),
+		sqlutil.NullFloat(&d.OrderFlow.MicropriceDevBps), sqlutil.NullInt64(&d.DataAgeMS),
+		&regime, &abArm,
+		sqlutil.NullFloat(&d.MarketRegime.VolatilityBps), sqlutil.NullFloat(&d.MarketRegime.Autocorr), sqlutil.NullFloat(&d.MarketRegime.VWAPZ),
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.JevDecision{}, ErrDecisionNotFound
@@ -243,6 +263,7 @@ func scanDecision(row sqlutil.RowScanner) (domain.JevDecision, error) {
 	if direction.Valid {
 		d.Direction = &direction.String
 	}
+	d.MarketRegime.Regime, d.MarketRegime.ABArm = regime.String, abArm.String
 
 	d.Timestamp, err = sqlutil.ParseTime(timestamp)
 	if err != nil {
@@ -253,4 +274,12 @@ func scanDecision(row sqlutil.RowScanner) (domain.JevDecision, error) {
 		return domain.JevDecision{}, err
 	}
 	return d, nil
+}
+
+// nullableText maps "" (not assessed) to SQL NULL.
+func nullableText(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

@@ -4,6 +4,10 @@ import (
 	"slices"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
@@ -48,6 +52,9 @@ var opsGroups = slices.Concat([]opsGroup{
 	brokerGroup,
 	tachibanaGroup,
 }, tachibanaSourceGroups, []opsGroup{
+	dailyGuardGroup,
+	metaLabelGroup,
+	regimeGroup,
 	{
 		id:          "backup",
 		name:        "バックアップ先",
@@ -73,6 +80,19 @@ var opsGroups = slices.Concat([]opsGroup{
 			placeholder: "未設定（既定を使用）",
 		}},
 	},
+	{
+		id:          "logsettings",
+		name:        "ログのレベルと保持期間",
+		description: "日次 JSON ログに書き出す最低レベルと、ログファイルを圧縮せずに置いておく日数です（issue #772）。INFO 以上に計測ログ（#652 のメトリクスなど）が含まれ、期間指定のエクスポートの元になります。",
+		note: "ログレベルは起動時に一度だけ読むため、保存・既定に戻すの反映にはアプリの再起動が必要です。error にするとエクスポートできる計測ログ（INFO）や WARN が残りません。" +
+			"保持期間は再起動不要で、次のメンテナンスチェック（10 分以内）から反映されます。環境変数では設定できません。",
+		fields: []opsField{
+			{key: config.KeyLogLevel, label: "ログレベル", options: logsettings.Levels,
+				hint: "debug / info / warn / error のいずれかです。既定は info です。debug はデータベースの正常クエリも記録するため、ログが大きくなります。"},
+			{key: config.KeyLogRetentionDays, label: "ログの保持期間（日）", placeholder: "30",
+				hint: "1〜3650 の整数です。この日数より古い日次ログは gzip で圧縮アーカイブされます。既定は 30 日です。"},
+		},
+	},
 	policyGroup("policy-long", "Policy Engine（ロング）", "policy.long.", "ロング"),
 	policyGroup("policy-short", "Policy Engine（ショート）", "policy.short.", "ショート"),
 	{
@@ -95,6 +115,42 @@ var opsGroups = slices.Concat([]opsGroup{
 			{key: "screener.weights.breakout_strength", label: "重み: ブレイクアウト強度"},
 			{key: "screener.weights.orderbook_imbalance", label: "重み: 板の偏り"},
 			{key: "screener.weights.volatility_expansion", label: "重み: ボラティリティ拡大"},
+		},
+	},
+	{
+		id:          "snapshot-age",
+		name:        "データの鮮度（ランキング監視）",
+		description: "ランキング監視モード（既定）で、Jev Scout / Trader と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）です。これより古い足では判断に進まず、そのジョブは見送られます（issue #754）。",
+		note: "立会時間中のみ適用されます。全銘柄 REST モード（scan.full_scan_enabled: true）では config/strategy.yaml の scan.full_scan_max_snapshot_age_seconds が使われ、この値は影響しません。" +
+			"価格は kabu の PUSH を優先し、PUSH が古い・未着のときだけ REST に切り替えます。Jev に渡す state と判断ログには、判断時点でのデータの古さ（data_age_ms）が含まれます。" +
+			"保存した値の反映にはアプリの再起動が必要です。環境変数では設定できません。",
+		fields: []opsField{
+			{key: snapshotagesettings.Key, label: "足の鮮度上限（秒）", hint: "1〜600 の整数です。既定は 20 秒です。大きくするほど古いデータで判断することになります。"},
+		},
+	},
+	{
+		id:          "orderflow",
+		name:        "板の需給（OFI）",
+		description: "kabu の PUSH 最良気配の数量変化から求める Order Flow Imbalance を集計するローリング窓の幅（秒）です。マイクロプライス乖離とあわせて特徴量として保存します（issue #750）。",
+		note: "保存した値は再起動不要で、次の市場データ取得（次の 1 分足）から反映されます。" +
+			"OFI は特徴量・フィルタ用途に限り、OFI 単独で発注することはありません。立花証券を選択している間は PUSH 最良気配を取得しないため、OFI は算出されません。",
+		fields: []opsField{
+			{key: orderflowsettings.KeyShort, label: "短期窓（秒）", hint: "1 以上の整数です。短期 < 中期 < 長期（最大 600 秒）にしてください。既定は 10 秒です。"},
+			{key: orderflowsettings.KeyMid, label: "中期窓（秒）", hint: "短期窓より大きくしてください。既定は 30 秒です。"},
+			{key: orderflowsettings.KeyLong, label: "長期窓（秒）", hint: "中期窓より大きく、600 秒以下にしてください。既定は 60 秒です。"},
+		},
+	},
+	{
+		id:          "triple_barrier",
+		name:        "キャリブレーションのラベル（トリプルバリア）",
+		description: "Jev の判断に正解・不正解のラベルを付けるときの利確（TP）・損切り（SL）の幅、時間切れ（timeout）、売買コストの想定です。先に触れたバリアでラベルを決め、コスト控除後のリターンで評価します（issue #760、親 #751）。",
+		note: "TP・SL はコストを差し引いた後のリターン（bps、1 bps = 0.01%）の幅です。TP は価格が有利に TP+コスト、SL は不利に SL−コスト動いたときに触れます。" +
+			"保存した値は再起動不要で、以降に付くラベルから反映されます（付与済みのラベルは変わりません）。環境変数では設定できません。",
+		fields: []opsField{
+			{key: barriersettings.KeyTakeProfitBps, label: "利確幅 TP（bps）", hint: "0 より大きく 1000 以下です。既定は 30 bps です。"},
+			{key: barriersettings.KeyStopLossBps, label: "損切り幅 SL（bps）", hint: "0 より大きく 1000 以下で、コスト想定より大きくしてください。既定は 30 bps です。"},
+			{key: barriersettings.KeyTimeoutMinutes, label: "時間切れ（分）", hint: "1〜60 の整数です。この時間内にどちらのバリアにも触れなければ、その時点のコスト控除後リターンで評価します。既定は 10 分です。"},
+			{key: barriersettings.KeyCostBps, label: "コスト想定（bps）", hint: "手数料＋スプレッド＋スリッページの往復合計です。0 以上 1000 以下で、損切り幅より小さくしてください。既定は 10 bps です。"},
 		},
 	},
 })
