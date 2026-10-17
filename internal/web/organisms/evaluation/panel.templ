@@ -1,0 +1,185 @@
+package evaluation
+
+import "fmt"
+
+// EvaluationPanel is the 実績評価 section of the Performance page (issue
+// #777): "is it winning?" as a 合格ライン verdict (an input to the pre-Live
+// checks only; nothing gates on it) and the figures behind it. err replaces
+// the content when the evaluation could not be read.
+templ EvaluationPanel(p Panel, err string) {
+	<section class="mt-8" aria-labelledby="evaluation-heading" data-testid="evaluation-panel">
+		<h2 id="evaluation-heading" class="text-lg font-semibold text-slate-900">実績評価（勝てているか）</h2>
+		if err != "" {
+			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="evaluation-error">{ err }</p>
+		} else {
+			<p class="mt-1 text-xs text-slate-500">
+				損益は手数料控除後の実現損益（円）。[ ] は95%信頼区間（同じ日の取引は相関するため日単位でまとめて評価）。サンプルが基準未満の指標は「判定不能」。{ p.Capital }（{ p.CapitalNote }）
+			</p>
+			@verdictBlock(p)
+			@costBlock(p)
+			@evalTable(Table{ID: "overall", Title: "全期間", KeyHeader: "区分", Rows: []Row{p.Overall}})
+			for _, t := range p.Tables {
+				@evalTable(t)
+			}
+			@jevBlock(p.Jev)
+			@metaBlock(p.Meta)
+		}
+	</section>
+}
+
+func verdictClass(status string) string {
+	switch status {
+	case "pass":
+		return "border-green-300 bg-green-50 text-green-900"
+	case "fail":
+		return "border-red-300 bg-red-50 text-red-900"
+	}
+	return "border-amber-300 bg-amber-50 text-amber-900"
+}
+
+templ verdictBlock(p Panel) {
+	<div class={ "mt-4 rounded-md border px-4 py-3 text-sm " + verdictClass(p.Verdict) } data-testid="evaluation-verdict" data-status={ p.Verdict }>
+		<p class="font-semibold">合格ライン: { p.VerdictText }</p>
+		<p class="mt-1 text-xs">{ p.Criteria }</p>
+		<ul class="mt-2 list-inside list-disc">
+			for _, c := range p.Checks {
+				<li data-testid={ "evaluation-check-" + c.ID } data-status={ c.Status }>{ c.Label }: 実績 { c.Actual } / 基準 { c.Required } → { c.StatusText }</li>
+			}
+		</ul>
+		<p class="mt-2 text-xs">Live前チェックの材料であり、判定結果で Live が許可・拒否されることはない（#55 は人が判断する）。</p>
+	</div>
+}
+
+templ costBlock(p Panel) {
+	<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3" data-testid="evaluation-costs">
+		for _, c := range p.Costs {
+			<div>
+				<dt class="text-sm text-slate-500">{ c.Label }</dt>
+				<dd class="text-sm font-medium text-slate-900">{ c.Value }</dd>
+			</div>
+		}
+	</dl>
+}
+
+templ cell(c Cell) {
+	if c.Undetermined {
+		<td class="px-2 py-1 text-right text-slate-400" title={ c.Title }>{ c.Text }</td>
+	} else {
+		<td class="px-2 py-1 text-right text-slate-900" title={ c.Title }>{ c.Text }</td>
+	}
+}
+
+templ evalTable(t Table) {
+	<div class="mt-6 overflow-x-auto" data-testid={ "evaluation-table-" + t.ID }>
+		<h3 class="text-sm font-semibold text-slate-700">{ t.Title }</h3>
+		<table class="mt-1 min-w-full text-xs">
+			<caption class="sr-only">{ t.Title }の実績指標</caption>
+			<thead>
+				<tr class="text-right text-slate-500">
+					<th scope="col" class="px-2 py-1 text-left">{ t.KeyHeader }</th>
+					<th scope="col" class="px-2 py-1">n</th>
+					<th scope="col" class="px-2 py-1">損益(円)</th>
+					<th scope="col" class="px-2 py-1">勝率</th>
+					<th scope="col" class="px-2 py-1">EV(円/取引)</th>
+					<th scope="col" class="px-2 py-1">EV(bps/取引)</th>
+					<th scope="col" class="px-2 py-1">PF</th>
+					<th scope="col" class="px-2 py-1">最大DD(円)</th>
+					<th scope="col" class="px-2 py-1">最大DD(資金比)</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, r := range t.Rows {
+					<tr class="border-t border-slate-200" data-key={ r.Key }>
+						<th scope="row" class="px-2 py-1 text-left font-medium text-slate-900">{ r.Key }</th>
+						<td class="px-2 py-1 text-right">{ fmt.Sprintf("%d", r.N) }</td>
+						<td class="px-2 py-1 text-right">{ r.NetPnL }</td>
+						@cell(r.WinRate)
+						@cell(r.EVJPY)
+						@cell(r.EVBps)
+						@cell(r.ProfitFactor)
+						@cell(r.DDJPY)
+						@cell(r.DDPct)
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ jevBlock(rows []JevRow) {
+	<div class="mt-6 overflow-x-auto" data-testid="evaluation-jev">
+		<h3 class="text-sm font-semibold text-slate-700">Jevの方向的中率とBrier（ラベル版別・同値除く）</h3>
+		if len(rows) == 0 {
+			<p class="mt-1 text-xs text-slate-500">ラベル付き判断がまだありません。</p>
+		} else {
+			<table class="mt-1 min-w-full text-xs">
+				<caption class="sr-only">Jevの方向的中率とBrier</caption>
+				<thead>
+					<tr class="text-right text-slate-500">
+						<th scope="col" class="px-2 py-1 text-left">ラベル</th>
+						<th scope="col" class="px-2 py-1">n</th>
+						<th scope="col" class="px-2 py-1">方向的中率</th>
+						<th scope="col" class="px-2 py-1">Brier</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, r := range rows {
+						<tr class="border-t border-slate-200">
+							<th scope="row" class="px-2 py-1 text-left font-medium text-slate-900">{ r.Label }</th>
+							<td class="px-2 py-1 text-right">{ fmt.Sprintf("%d", r.N) }</td>
+							@cell(r.HitRate)
+							@cell(r.Brier)
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}
+
+templ metaBlock(rows []MetaRow) {
+	<div class="mt-6 overflow-x-auto" data-testid="evaluation-meta">
+		<h3 class="text-sm font-semibold text-slate-700">メタモデル: OOS指標と同じ取引・同じ期間のPaper実績EV</h3>
+		if len(rows) == 0 {
+			<p class="mt-1 text-xs text-slate-500">学習済みのメタモデルがありません。</p>
+		} else {
+			<table class="mt-1 min-w-full text-xs">
+				<caption class="sr-only">メタモデルのOOS指標とPaper実績EV</caption>
+				<thead>
+					<tr class="text-right text-slate-500">
+						<th scope="col" class="px-2 py-1 text-left">版</th>
+						<th scope="col" class="px-2 py-1">状態</th>
+						<th scope="col" class="px-2 py-1">OOS期間</th>
+						<th scope="col" class="px-2 py-1">OOS n</th>
+						<th scope="col" class="px-2 py-1">OOS AUC</th>
+						<th scope="col" class="px-2 py-1">OOS EV(bps)</th>
+						<th scope="col" class="px-2 py-1">採用取引 n</th>
+						<th scope="col" class="px-2 py-1">予測EV(bps)</th>
+						<th scope="col" class="px-2 py-1">実現EV(bps)</th>
+						<th scope="col" class="px-2 py-1">差(実現−予測)</th>
+						<th scope="col" class="px-2 py-1">OOS期間内の全取引 n</th>
+						<th scope="col" class="px-2 py-1">同期間のPaper EV(bps)</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, r := range rows {
+						<tr class="border-t border-slate-200" data-key={ r.Version }>
+							<th scope="row" class="px-2 py-1 text-left font-medium text-slate-900">{ r.Version }</th>
+							<td class="px-2 py-1 text-right">{ r.Status }</td>
+							<td class="px-2 py-1 text-right">{ r.OOSWindow }</td>
+							<td class="px-2 py-1 text-right">{ r.OOSSamples }</td>
+							@cell(r.OOSAUC)
+							@cell(r.OOSEV)
+							<td class="px-2 py-1 text-right">{ fmt.Sprintf("%d", r.LinkedN) }</td>
+							@cell(r.PredictedEV)
+							@cell(r.RealizedEV)
+							@cell(r.EVGap)
+							<td class="px-2 py-1 text-right">{ fmt.Sprintf("%d", r.WindowN) }</td>
+							@cell(r.WindowEV)
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</div>
+}

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/evalprovider"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/metalabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
@@ -54,7 +55,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithHeartbeatRecorder(services.Risk),
 		router.WithSymbolProvider(services.Execution),
 		router.WithSymbolRiskParams(symbol.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config(), services.Risk.AllowedPositionPct)),
-		router.WithInsightProvider(services.Insight),
+		router.WithInsightProvider(evalprovider.New(services.Insight, state.DB, services.Risk.Limits().InitialCapital)),
 		router.WithCalibrationSource(metalabeljob.NewCalibrationSource(services.Calibration, state.DB, services.Settings)),
 		router.WithPolicyProposalSource(services.Proposals),
 		router.WithBacktestRunner(services.Backtest),

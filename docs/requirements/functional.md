@@ -142,6 +142,8 @@ stateDiagram-v2
 
 Total PnL, Daily PnL, Win Rate, Profit Factor, Expectancy, Max Drawdown, Average Hold Time, Sharpe/Sortino参考値, Signal countを表示する。
 
+その下に「実績評価」節として、円建て・資金比の最大ドローダウン（`initial_capital`併記）、期間（日・週）・方向・exit_reason・メタモデル版・A/Bアーム別の指標、サンプル数と95%信頼区間（基準未満は「判定不能」）、コスト内訳（グロス/ネット）、Jevの的中率・Brier、メタモデルのOOSとPaper実績EVの並列、「勝てているか」の合格ライン判定を表示する（FR-EVAL-1〜5。定義・基準値・検証済みSQLは`functional/performance-evaluation.md`）。
+
 ### 5.4 Calibration
 
 confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。あわせて、最新のメタラベリングモデルのOOS AUC・OOS EV・OOS較正曲線とJev評価期間（OOS窓）を表示する（FR-META-5）。

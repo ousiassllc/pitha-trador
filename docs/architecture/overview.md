@@ -97,6 +97,7 @@ pitha-trador/
 │   │   ├── system/               # kill_switch_events / runtime_settings / secrets（`KillSwitchRepository`, `RuntimeSettingsRepository`, `SecretsRepository`）
 │   │   ├── decisionsnapshot/     # 判断ごとの判断した足（market_snapshots）の期間読み取り（判断ログのエクスポート用。`decisiontrade`と同様に複数リソース群を跨ぐ読み取り。`market`の行数上限のため分離）
 │   │   ├── decisiontrade/        # クローズ済みポジションと開始時のJev判断の結合読み取り（FR-CAL-2の帯別PnL用。複数リソース群を跨ぐ読み取りの置き場。本番コードは`domain`のみに依存し、他テーブルはSQLで直接結合する）
+│   │   ├── actuals/              # 実績評価（issue #777）の読み取り専用入力: クローズ済みPaper建玉と約定コスト・A/Bアーム・メタ予測、Jev判断の採点、`metalabel_models`（`Reader`。`decisiontrade`と同様に複数リソース群を跨ぐ読み取りで、`sqlutil`のみに依存。`actualstest/`は合成DBの種データ）
 │   │   └── snapshotcols/         # market_snapshotsのFeature列とdomain.Featureの対応表（INSERT/SELECT用。`market`が本番コードで使う`domain`のみに依存するリーフ）
 │   ├── service/                  # domain, repositoryに依存
 │   │   ├── broker/               # ブローカー中立の境界（`Quote`/`SymbolInfo`/`SessionStatus`、`Session`/`QuoteSource`/`StreamFeed`/`SymbolInfoSource`/`CandidateSource`/`Health`/`Capabilities`、`MarketDataChecker`。`domain`のみに依存。issue #722）
@@ -155,6 +156,7 @@ pitha-trador/
 │   │   │   └── checkflow/         # テスト専用: ダウンロード堅牢化・Status分類のテスト。`updater`の行数上限のため分離（#398）
 │   │   ├── activityfeed/          # jobs/jev_decisions/kill_switch_events集約の読み取り専用フィード（System Activity Log向け、§12）
 │   │   ├── insight/               # 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）
+│   │   ├── actuals/               # 実績評価と合格ライン（issue #777、`requirements/functional/performance-evaluation.md`）: 期間・方向・exit_reason・メタモデル版・A/Bアーム別の指標と信頼区間、コスト内訳、OOS並列。読み取り専用・表示時計算
 │   │   ├── dataexport/            # 取引ログ・判断ログ・計測ログの期間エクスポート（CSV/JSONLのZIP＋`manifest.json`、秘密情報のマスク、ローカル出力のみ。`requirements/functional/components-platform.md` §4.21）
 │   │   ├── backup/                # 日次SQLiteバックアップ（daily 90日 + weekly gzip、`requirements/non-functional.md` §3）
 │   │   ├── retention/             # jobs / market_snapshotsの期限切れ行パージ（`requirements/non-functional.md` §3）
@@ -193,6 +195,7 @@ pitha-trador/
 │       ├── atoms/
 │       ├── molecules/
 │       ├── organisms/
+│       │   ├── evaluation/       # 実績評価節（`EvaluationPanel`。表示整形済みのplain propsだけを受け取る。`organisms`のディレクトリ行数上限のため別パッケージ）
 │       │   └── organismstest/    # テスト専用: `organisms`のブラックボックステスト（`doc.go`ほか。linterlyのディレクトリ行数上限のため分離。非公開ヘルパーのテストは`organisms`直下）
 │       ├── pages/
 │       └── layout/
