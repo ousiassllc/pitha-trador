@@ -3,6 +3,7 @@ package dailyguardsettings_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ type seedStore struct {
 	rows   map[string]string
 	getErr error
 	setErr error
+	okSets int // Sets that succeed before setErr applies
 }
 
 func (s *seedStore) Get(_ context.Context, key string) (string, bool, error) {
@@ -22,7 +24,10 @@ func (s *seedStore) Get(_ context.Context, key string) (string, bool, error) {
 
 func (s *seedStore) Set(_ context.Context, key, value string, _ time.Time) error {
 	if s.setErr != nil {
-		return s.setErr
+		if s.okSets == 0 {
+			return s.setErr
+		}
+		s.okSets--
 	}
 	s.rows[key] = value
 	return nil
@@ -106,5 +111,23 @@ func TestSeedPaperDefaults_StoreFailuresAreErrors(t *testing.T) {
 	}
 	if err := dailyguardsettings.SeedPaperDefaults(context.Background(), &seedStore{rows: map[string]string{}, setErr: errors.New("db down")}, seedNow); err == nil {
 		t.Error("a write failure was swallowed")
+	}
+}
+
+// A failure after some values were stored says it was a partial seed; a failure
+// of the very first write stores nothing and does not.
+func TestSeedPaperDefaults_PartialWriteErrorSaysSo(t *testing.T) {
+	store := &seedStore{rows: map[string]string{}, setErr: errors.New("db down"), okSets: 2}
+	err := dailyguardsettings.SeedPaperDefaults(context.Background(), store, seedNow)
+	if err == nil || !strings.Contains(err.Error(), "一部の初期値のみ保存済み") {
+		t.Fatalf("err = %v, want a partial-seed message", err)
+	}
+	if _, ok := store.rows[dailyguardsettings.SeededMarkerKey]; ok || len(store.rows) != 2 {
+		t.Fatalf("rows = %v, want two seeded rows and no marker", store.rows)
+	}
+
+	store = &seedStore{rows: map[string]string{}, setErr: errors.New("db down")}
+	if err := dailyguardsettings.SeedPaperDefaults(context.Background(), store, seedNow); err == nil || strings.Contains(err.Error(), "一部") {
+		t.Fatalf("first-write failure err = %v, want no partial-seed message", err)
 	}
 }

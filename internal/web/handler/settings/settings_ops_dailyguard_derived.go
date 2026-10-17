@@ -73,7 +73,8 @@ func ruleItem(key, label string, capital float64, rule dailyguardsettings.Rule) 
 // formatNumber renders v without a trailing ".0" (1, 0.5, 33.33).
 func formatNumber(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
 
-// formatYen renders v with thousands separators (5,000; 1,234,567.5).
+// formatYen renders v with thousands separators (5,000; 1,234,567.5). It is
+// not shared with organisms.yen, which rounds to whole yen and adds a ¥ sign.
 func formatYen(v float64) string {
 	text := formatNumber(v)
 	intPart, frac, hasFrac := strings.Cut(text, ".")

@@ -17,6 +17,10 @@ const SeededMarkerKey = "system.daily_guard_defaults_seeded"
 // 最大20回); the owner must review the actual operating capital and tolerable
 // loss before Live. They are seeded rather than coded as defaults so the
 // risk engine's behaviour with nothing stored (everything off) is unchanged.
+//
+// Premise: this build is Paper-only (internal/bootstrap/risk.go), so the seed
+// runs unconditionally. It MUST be gated on Paper before any Live build is
+// added, or Live would start with Paper guide values.
 var paperDefaults = []struct{ key, value string }{
 	{KeyOperatingCapitalJPY, "500000"},
 	{KeyLossLimitPct, "1"},
@@ -43,7 +47,7 @@ type SeedStore interface {
 // A partial write failure is NOT retried: the marker is written last, so if
 // seeding stops midway the error is returned, the next start finds some
 // rows stored and only writes the marker, and the rows already written stay
-// as they are.
+// as they are. The returned error says so ("一部の初期値のみ保存済み").
 func SeedPaperDefaults(ctx context.Context, store SeedStore, now time.Time) error {
 	if _, done, err := store.Get(ctx, SeededMarkerKey); err != nil {
 		return fmt.Errorf("dailyguardsettings: read %s: %w", SeededMarkerKey, err)
@@ -59,8 +63,11 @@ func SeedPaperDefaults(ctx context.Context, store SeedStore, now time.Time) erro
 		anyStored = anyStored || ok
 	}
 	if !anyStored {
-		for _, d := range paperDefaults {
+		for i, d := range paperDefaults {
 			if err := store.Set(ctx, d.key, d.value, now); err != nil {
+				if i > 0 {
+					return fmt.Errorf("dailyguardsettings: seed %s (一部の初期値のみ保存済み: %d/%d): %w", d.key, i, len(paperDefaults), err)
+				}
 				return fmt.Errorf("dailyguardsettings: seed %s: %w", d.key, err)
 			}
 		}

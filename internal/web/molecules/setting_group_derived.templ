@@ -2,8 +2,9 @@ package molecules
 
 // SettingDerivedItem is one line of a group's 計算結果 panel: Key a stable
 // slug (the line's test id suffix), Label what is computed, Value the
-// result (e.g. "5,000 円"), Detail how it was derived and Off whether the
-// rule is disabled (the value is then shown muted).
+// result (e.g. "5,000 円"; empty renders no value span), Detail how it was
+// derived and Off whether the rule is disabled (the value is then shown
+// muted).
 type SettingDerivedItem struct {
 	Key    string
 	Label  string
@@ -22,15 +23,15 @@ func (p SettingGroupProps) DerivedID() string { return "setting-group-derived-" 
 // an operating capital and percentages). oob renders it as an
 // `hx-swap-oob="true"` fragment (replacing the element with the same id).
 templ SettingGroupDerived(props SettingGroupProps, oob bool) {
-	<section id={ props.DerivedID() } class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" data-testid={ props.DerivedID() } { oobAttrs(oob)... }>
+	<section id={ props.DerivedID() } class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" data-testid={ props.DerivedID() } aria-live="polite" aria-label="計算結果" { oobAttrs(oob)... }>
 		<p class="font-semibold text-slate-800">計算結果</p>
 		<ul class="flex flex-col gap-1">
 			for _, item := range props.Derived {
 				<li class="flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
 					<span class="text-slate-600">{ item.Label }</span>
-					if item.Off {
+					if item.Value != "" && item.Off {
 						<span class="font-medium text-slate-500">{ item.Value }</span>
-					} else {
+					} else if item.Value != "" {
 						<span class="font-medium text-slate-900">{ item.Value }</span>
 					}
 					if item.Detail != "" {
