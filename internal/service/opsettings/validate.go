@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
@@ -171,7 +172,12 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 		if err := barriersettings.Apply(&barriers, key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
 		}
-		return invalidIf(barriers.Validate())
+		if err := barriers.Validate(); err != nil {
+			return invalidIf(err)
+		}
+		return s.validateLabelCostAgainst(ctx, barriers)
+	case costsettings.IsKey(key):
+		return s.validateCost(ctx, key, encoded)
 	case metalabelsettings.IsKey(key):
 		// Each field stands alone: Apply checks the single value's range.
 		meta := metalabelsettings.Default()

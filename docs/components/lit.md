@@ -11,6 +11,7 @@
 | `pitha-price-chart` | ローソク足＋VWAP＋出来高チャート、Jevシグナルのマーカー表示 | Symbol Detail | `GET /api/v1/symbols/{symbol}/candles`（初期）＋ `/ws/symbols/{symbol}`（ライブ） |
 | `pitha-scanner-table` | 候補銘柄のソート可能なライブテーブル | Scanner Dashboard | `GET /api/v1/scanner`（初期）＋ `/ws/scanner`（15〜30秒更新） |
 | `pitha-calibration-heatmap` | confidence帯別 reliability curve / 的中率ヒートマップ | Calibration | `GET /api/v1/calibration` |
+| `pitha-exit-alignment` | ラベル基準と実出口の整合（対応表・不一致警告・ラベル対再生の比較・OOS EVとPaper実績。WebSocketなし、`alignment-url`を一度取得。issue #774） | Calibration | `GET /api/v1/calibration/exit-alignment` |
 | `pitha-activity-feed` | キュー別pending/running/failed件数・直近アクティビティ一覧・直近Kill Switchイベントのライブ表示（type/queueフィルタ付き） | System Activity Log | `GET /api/v1/activity`（初期・フィルタ変更時）＋ `/ws/activity`（ライブ） |
 | `pitha-kill-switch-panel` | システム状態表示・Kill Switch発動/解除操作 | 全ページ共通（Header内アイランド） | `GET/POST /api/v1/system/*` |
 

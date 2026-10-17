@@ -83,7 +83,7 @@ func snapshotAt(instrumentID int64, price float64, at time.Time) domain.Snapshot
 // exact fill prices (the cost model is covered by ../fill_test.go).
 func costlessConfig() execution.Config {
 	cfg := execution.DefaultConfig()
-	cfg.Fill = fillmodel.Model{}
+	cfg.Fill = fillmodel.Costs{}
 	return cfg
 }
 

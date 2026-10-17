@@ -22,7 +22,7 @@ type Sessions interface {
 // of the bar price itself, 昼休み・立会時間外 bars never fill, and 寄り/引け
 // bars fill as the 板寄せ rather than as a 1-minute ザラ場 bar.
 type executor struct {
-	cost     fillmodel.Model
+	cost     fillmodel.Costs
 	sessions Sessions
 }
 
@@ -33,10 +33,11 @@ func (x executor) phase(bar domain.Snapshot) marketcalendar.Phase {
 	return x.sessions.PhaseAt(bar.Timestamp)
 }
 
-// fill is the price a market order of side gets on bar; ok is false when
-// the bar is not tradable (昼休み・立会時間外).
-func (x executor) fill(bar domain.Snapshot, side string) (price float64, ok bool) {
-	price, err := x.cost.Market(side, bar.Price, fillmodel.BookOf(bar), x.phase(bar))
+// fill is the price a market order of side gets on bar for a position of
+// direction (the cost settings price LONG and SHORT separately); ok is false
+// when the bar is not tradable (昼休み・立会時間外).
+func (x executor) fill(bar domain.Snapshot, direction, side string) (price float64, ok bool) {
+	price, err := x.cost.For(direction).Market(side, bar.Price, fillmodel.BookOf(bar), x.phase(bar))
 	return price, err == nil
 }
 
@@ -77,8 +78,8 @@ func (x executor) closeAt(t time.Time) (time.Time, bool) {
 // entryFill) and closed on exitBar (filled at exitFill) with reason. The
 // returns are direction-adjusted percentages: gross between the two bars' last
 // prices, slippage between the two fills, net after the fill model's fees on
-// both fills.
-func newTrade(entry, exitBar domain.Snapshot, direction string, entryFill, exitFill float64, reason string, feeBps float64) Trade {
+// both fills (and a SHORT's 貸株料).
+func newTrade(entry, exitBar domain.Snapshot, direction string, entryFill, exitFill float64, reason string, roundTripFeeBps float64) Trade {
 	sign := 1.0
 	if direction == domain.JevDirectionShort {
 		sign = -1.0
@@ -88,7 +89,9 @@ func newTrade(entry, exitBar domain.Snapshot, direction string, entryFill, exitF
 	// return between the two actual fills, before fees.
 	slippageReturnPct := sign * (exitFill/entryFill - 1) * 100
 
-	feeDeductionPct := feeBps / 100 * 2
+	// Commission on both fills (a fixed fee at the reference notional) plus
+	// the SHORT 貸株料, as % of the entry price.
+	feeDeductionPct := roundTripFeeBps / 100
 	return Trade{
 		InstrumentID:      entry.InstrumentID,
 		Symbol:            entry.Symbol,

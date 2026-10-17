@@ -134,7 +134,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 // runtimePolicy supplies the entry thresholds FR-EXIT-2's continuation_probability
 // low-water exit never exceeds (#714).
 func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels alerts.Channels, notifiers []risk.Notifier, now func() time.Time, runtimePolicy selfimprove.RuntimePolicy) execution.Config {
-	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(limits))
+	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(limits).WithCostSettings(s.Settings))
 	executionConfig.Now = now // nil keeps time.Now
 	s.Execution = execution.NewEngine(execution.Deps{
 		Orders:          s.Orders,

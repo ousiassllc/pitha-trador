@@ -120,6 +120,35 @@ LLM学習データ終了日の状態（FR-META-6、issue #776）: `meta_model_cu
 
 `horizon`（issue #719）はビン・方向別・Brier/Log Loss/ECEの全指標を、指定した水平線の`calibration_outcomes`行だけで再計算する（`ListLabeledSamples`が`horizon_minutes`で絞る）。応答の`horizon`は集計した水平線をそのまま返す（画面の表示用）。`all`は`calibration.DefaultHorizonsMinutes`（5/10/15）と全てのトリプルバリアのラベルを合算し（トリプルバリアのhorizonはSettingsのtimeoutで任意の1〜60分のため、5/10/15以外の値は`all`でのみ集計される。`ListCurrentLabeledSamples`）、#711以前の旧20分ラベルは混ざらない（旧ラベルはAPIからも選べない）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`/`trade_win_rate`と`pnl_brier_score`/`pnl_log_loss`は実現トレードPnLに基づくためホライズンに依存せず、どの`horizon`でも同じ値を返す。
 
+### GET /api/v1/calibration/exit-alignment
+
+ラベル基準（トリプルバリア）と実出口の整合（FR-CAL-4A、issue #774）。クエリ`days`（1〜365、既定30）は、ラベルと再生を比べる判断の窓（現在から遡る日数）。出力は計算のみで、市場データ由来の値を保存しない（`calibration_outcomes`・`market_snapshots`・`jev_decisions`・`positions`・`metalabel_models`から読み取り時に計算）。取得元（`CalibrationSource`が`AlignmentSource`も実装）が未配線のときは`rows`・`warnings`が空配列、`comparison`・`oos_paper`は省略する。
+
+```json
+// Output（抜粋）
+{
+  "rows": [
+    { "key": "take_profit", "item": "利確", "label_text": "TP 30 - ... グロス +40 bps", "exit_text": "+120 bps", "comparable": true, "aligned": false }
+  ],
+  "warnings": [ { "code": "take_profit_mismatch", "message": "..." } ],
+  "tolerance_bps": 5, "tolerance_minutes": 1,
+  "comparison": {
+    "from": "2026-09-17T00:00:00Z", "to": "2026-10-17T00:00:00Z", "horizon_minutes": 10,
+    "replayed_count": 40, "skipped_count": 3,
+    "label_net_bps": { "count": 40, "mean": 4.2, "std_dev": 21.0, "min": -30, "p5": -28, "p25": -12, "median": 3, "p75": 20, "p95": 30, "max": 30 },
+    "replay_net_bps": { "count": 40, "mean": -1.1, "std_dev": 35.0, "min": -70, "p5": -60, "p25": -20, "median": 0, "p75": 15, "p95": 60, "max": 120 },
+    "diff_bps": { "count": 40, "mean": -5.3, "std_dev": 28.0, "min": -90, "p5": -60, "p25": -15, "median": -2, "p75": 5, "p95": 40, "max": 80 },
+    "label_tp_count": 12, "label_sl_count": 15, "label_timeout_count": 13,
+    "replay_exits": [ { "reason": "max_holding", "count": 21 } ], "paper_exits": [],
+    "not_evaluated_exits": ["jev_direction_reversed", "continuation_probability_dropped", "force_flat_before_close"],
+    "cost_long_bps": 10, "cost_short_bps": 10
+  },
+  "oos_paper": { "model_version": "v1", "oos_start": "...", "oos_end": "...", "oos_ev_bps": 12.0, "paper_trades": 0, "paper_mean_bps": null, "diff_bps": null }
+}
+```
+
+（上記の数値は形式の例で、実績ではない。）`warnings[].code`は`take_profit_mismatch`・`stop_loss_mismatch`・`horizon_mismatch`・`cost_mismatch`・`cost_direction_asymmetry`。`comparison.diff_bps`は再生−ラベルで、平均が負ならラベルが実出口より楽観的。`oos_paper.paper_mean_bps`・`diff_bps`は決済済みポジションが無いとき`null`（画面は「データ無し」）。
+
 ### GET /api/v1/policy-proposals
 
 Sol/Opus自己改善ループ（`architecture/overview.md` §8）の監査用読み取り専用API。`policy_proposals`の提案・レビュー・適用・ロールバック履歴を返す。UIページは持たず、外部監視・手動確認用に提供する（実際の外部AI API呼び出しの結果を追跡できるようにするため、`requirements/functional.md` FR-SELFIMPROVE-7〜9）。

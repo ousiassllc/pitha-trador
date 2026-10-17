@@ -2,9 +2,11 @@ package replayflow_test
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
@@ -20,6 +22,16 @@ func jstAt(h, m int) time.Time {
 // fillTrades replays one LONG decision at decisionAt over bars at times
 // priced by prices (SpreadBps 10), under cost and the TSE sessions (or none).
 func fillTrades(t *testing.T, times []time.Time, prices []float64, decisionAt time.Time, cost fillmodel.Model, sessions backtest.Sessions) []backtest.Trade {
+	t.Helper()
+	return fillTradesCosts(t, times, prices, decisionAt, fillmodel.Uniform(cost), sessions)
+}
+
+func fillTradesCosts(t *testing.T, times []time.Time, prices []float64, decisionAt time.Time, cost fillmodel.Costs, sessions backtest.Sessions) []backtest.Trade {
+	t.Helper()
+	return fillTradesDirection(t, times, prices, decisionAt, domain.JevDirectionLong, cost, sessions)
+}
+
+func fillTradesDirection(t *testing.T, times []time.Time, prices []float64, decisionAt time.Time, direction string, cost fillmodel.Costs, sessions backtest.Sessions) []backtest.Trade {
 	t.Helper()
 	const instrumentID = int64(1)
 	// A leading bar gives the first real bar its Return1m, a model input the
@@ -38,13 +50,15 @@ func fillTrades(t *testing.T, times []time.Time, prices []float64, decisionAt ti
 			InstrumentID: instrumentID, Timestamp: ts, Price: prices[i], SpreadBps: ptr(10.0), Feature: feature,
 		})
 	}
+	thresholds := testThresholds()
+	thresholds.Policy.Short = thresholds.Policy.Long
 	cfg := backtest.RunConfig{
 		InstrumentID: instrumentID,
 		Symbol:       "7203",
 		Snapshots:    bars,
-		Decisions:    backtest.NewSliceDecisionSource([]domain.JevDecision{longDecision(instrumentID, decisionAt)}),
+		Decisions:    backtest.NewSliceDecisionSource([]domain.JevDecision{directionDecision(instrumentID, decisionAt, direction)}),
 		Models:       takingModels(),
-		Thresholds:   testThresholds(),
+		Thresholds:   thresholds,
 		Exit:         backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute},
 		Cost:         cost,
 		Sessions:     sessions,
@@ -109,10 +123,10 @@ func TestReplay_OpeningAuctionPaysNoSpread(t *testing.T) {
 }
 
 // TestReplay_ClosingAuctionUsesAuctionSlippage: a bar in the 15:25-15:30
-// クロージング・オークション exits with AuctionSlippageBps, not SlippageBps.
+// クロージング・オークション exits with the auction slippage, not SlippageBps.
 func TestReplay_ClosingAuctionUsesAuctionSlippage(t *testing.T) {
 	prices := []float64{2000, 2030, 2030, 2030}
-	cost := fillmodel.Model{SlippageBps: 0, AuctionSlippageBps: 100} // 1% = 20 yen
+	cost := fillmodel.Model{SlippageBps: 0, OpeningSlippageBps: 100, ClosingSlippageBps: 100} // 1% = 20 yen
 	// entry 15:24 (ザラ場), TP on the 15:25 bar (引けの板寄せ)
 	trades := fillTrades(t, minutes(jstAt(15, 24), 4), prices, jstAt(15, 24), cost, marketcalendar.TSE)
 	if len(trades) != 1 {
@@ -156,4 +170,59 @@ func TestReplay_LunchBreakNeverFills(t *testing.T) {
 			t.Fatalf("without sessions: %+v, want a take_profit exit (control)", control)
 		}
 	})
+}
+
+// TestReplay_NetReturnFollowsTheCostSettings: the backtest prices its fills
+// with the cost settings' Costs, so raising the commission and the slippage
+// lowers a trade's net return by their round trip (#779).
+func TestReplay_NetReturnFollowsTheCostSettings(t *testing.T) {
+	prices := []float64{2000, 2000, 2030, 2030}
+	run := func(s costsettings.Settings) backtest.Trade {
+		t.Helper()
+		trades := fillTradesCosts(t, minutes(jstAt(10, 0), 4), prices, jstAt(10, 0), fillmodel.FromSettings(s), marketcalendar.TSE)
+		if len(trades) != 1 {
+			t.Fatalf("len(trades) = %d, want 1", len(trades))
+		}
+		return trades[0]
+	}
+	base := run(costsettings.Default())
+	costly := costsettings.Default()
+	costly.FeeBps = 5
+	costly.Long.ContinuousBps = 20
+	got := run(costly)
+
+	if !(got.NetReturnPct < base.NetReturnPct) {
+		t.Fatalf("NetReturnPct = %v with the costlier settings, want below %v", got.NetReturnPct, base.NetReturnPct)
+	}
+	if want := base.FeeReturnPct - 0.10; math.Abs(got.FeeReturnPct-want) > 1e-9 { // 5 bps on both fills = 0.10%
+		t.Errorf("FeeReturnPct = %v, want %v", got.FeeReturnPct, want)
+	}
+	if !(got.SlippageReturnPct < base.SlippageReturnPct) {
+		t.Errorf("SlippageReturnPct = %v, want below %v (slippage 20 bps vs 2)", got.SlippageReturnPct, base.SlippageReturnPct)
+	}
+}
+
+// TestReplay_ShortBorrowFeeIsInTheFeeReturn: a SHORT trade pays the 貸株料, a
+// LONG one does not.
+func TestReplay_ShortBorrowFeeIsInTheFeeReturn(t *testing.T) {
+	prices := []float64{2000, 2000, 1970, 1970}
+	s := costsettings.Default()
+	s.ShortBorrowBps = 7
+	shortTrades := fillTradesDirection(t, minutes(jstAt(10, 0), 4), prices, jstAt(10, 0), domain.JevDirectionShort, fillmodel.FromSettings(s), marketcalendar.TSE)
+	if len(shortTrades) != 1 {
+		t.Fatalf("len(shortTrades) = %d, want 1", len(shortTrades))
+	}
+	if got, want := shortTrades[0].GrossReturnPct-shortTrades[0].FeeReturnPct, 0.07; math.Abs(got-want) > 1e-9 {
+		t.Errorf("fee deduction of the SHORT trade = %v%%, want %v%% (7 bps 貸株料, no commission)", got, want)
+	}
+	longTrades := fillTradesDirection(t, minutes(jstAt(10, 0), 4), []float64{2000, 2000, 2030, 2030}, jstAt(10, 0), domain.JevDirectionLong, fillmodel.FromSettings(s), marketcalendar.TSE)
+	if len(longTrades) != 1 || longTrades[0].FeeReturnPct != longTrades[0].GrossReturnPct {
+		t.Errorf("LONG trade paid a fee with only a 貸株料 set: %+v", longTrades)
+	}
+}
+
+func directionDecision(instrumentID int64, ts time.Time, direction string) domain.JevDecision {
+	d := longDecision(instrumentID, ts)
+	d.Direction = ptr(direction)
+	return d
 }

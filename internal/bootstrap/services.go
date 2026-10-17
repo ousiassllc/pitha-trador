@@ -203,7 +203,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevScout, svc.Scout.HandleJob)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevTrader, traderHandler.HandleJob)
-	svc.Scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling, calibration.NewLabeler(svc.Decisions, svc.Snapshots, svc.Outcomes, calibration.WithBarrierSettings(svc.Settings)).HandleJob)
+	svc.Scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling, calibration.NewLabeler(svc.Decisions, svc.Snapshots, svc.Outcomes, calibration.WithBarrierSettings(svc.Settings), calibration.WithCostSettings(svc.Settings)).HandleJob)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueAnalytics, svc.handleSelfImprove)
 
 	return svc

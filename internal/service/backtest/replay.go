@@ -168,7 +168,7 @@ func (s *sim) stepFlat(ctx context.Context, st *instState, idx int, entries bool
 		return nil
 	}
 
-	entryFill, ok := st.x.fill(bar, entrySide(sig.Direction))
+	entryFill, ok := st.x.fill(bar, sig.Direction, entrySide(sig.Direction))
 	if !ok || !st.entrySessionOpen(bar.Timestamp) || bar.Timestamp.Before(st.cooldownUntil) {
 		// 昼休み・立会時間外・引け前、または銘柄の損失後クールダウン中: live Enter
 		// fails (ErrOutsideTradingSession / ErrSymbolInCooldown) and the
@@ -211,7 +211,7 @@ func (s *sim) stepOpen(ctx context.Context, st *instState, idx int) error {
 	if err != nil {
 		return fmt.Errorf("backtest: exit evaluation for %q at %s: %w", st.cfg.Symbol, bar.Timestamp, err)
 	}
-	fill, canFill := st.x.fill(bar, exitSide(op.direction))
+	fill, canFill := st.x.fill(bar, op.direction, exitSide(op.direction))
 	switch {
 	case exit && canFill:
 		s.closePosition(st, bar, reason, fill)
@@ -235,7 +235,7 @@ func (op *openTrade) trackBest(price float64) {
 // closePosition books the trade of st's open position, closed on bar at fill.
 func (s *sim) closePosition(st *instState, bar domain.Snapshot, reason string, fill float64) {
 	op := st.open
-	trade := newTrade(op.entryBar, bar, op.direction, op.entryFill, fill, reason, st.cfg.Cost.FeeBps)
+	trade := newTrade(op.entryBar, bar, op.direction, op.entryFill, fill, reason, st.cfg.Cost.For(op.direction).RoundTripFeeBps())
 	trade.InstrumentID, trade.Symbol = st.cfg.InstrumentID, st.cfg.Symbol
 	trade.Regime, trade.ABArm, trade.Quantity = op.regime, op.abArm, op.quantity
 	s.trades = append(s.trades, trade)
