@@ -11,7 +11,7 @@ import (
 )
 
 // Comparer replays the labeled decisions of a window under the actual exit
-// (*calibration.ExitReplayer implements it).
+// (*Replayer implements it).
 type Comparer interface {
 	Compare(ctx context.Context, from, to time.Time, rule ExitConfig) (LabelExitComparison, error)
 }

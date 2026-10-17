@@ -139,10 +139,10 @@ pitha-trador/
 │   │   │   ├── closerace/         # テスト専用: 決済競合（手動決済/CloseAll/Exitモニタ）の回帰テスト（行数上限のためexecutionから分離）
 │   │   │   ├── closeflow/         # テスト専用: `Engine.Close`/`CloseAll`の回帰テスト（行数上限のためexecutionから分離、#248）
 │   │   │   └── latestdecision/    # テスト専用: 最新Jev Trader判断の件数窓・経過時間上限なしの単一定義（`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`/`LatestScout`と`execution.Engine.State`の`LatestTraderDecision`）の回帰テスト（行数上限のためexecution/judgementから分離、#496/#497/#499）
-│   │   ├── fillmodel/             # 約定モデル（FR-ENTRY-8。呼値・スプレッド・滑り・手数料。Paper Trading(`execution`)とBacktest Engineが共用する本番コード、#509）
-│   │   ├── calibration/           # Outcome labeling・Brier/Log Loss算出
+│   │   ├── fillmodel/             # 約定モデル（FR-ENTRY-8。呼値・スプレッド・滑り・手数料。Paper Trading(`execution`)とBacktest Engineが共用する本番コード、#509。コストの値はSettingsの`cost.*`（`config/costsettings`、`SettingsSource`が読む）が唯一の出所で、ラベルのコスト（`calibration`）も同じ設定に従う、#779）
+│   │   ├── calibration/           # Outcome labeling・Brier/Log Loss算出（ラベル基準と実出口の整合の検知・比較は別パッケージ`exitalign/`、#774）
 │   │   ├── metalabel/             # メタラベリングのモデル版・OOS指標の保存（`Store.SaveModel`/`LatestActiveModel`）と判断ごとの予測の記録（`RecordPrediction`）。有効モデル無しは見送り（issue #757）。二次モデルの純粋なコア（特徴量ベクトル・ロジスティック回帰・Platt/isotonic較正・EV算出と`Decide`のtake/skip・サイズ。issue #758）も同パッケージ
-│   │   ├── backtest/              # Backtest Engine（Walk Forward評価・Governor用シャドーバックテスト）（replayflow/=リプレイのテスト・#658）
+│   │   ├── backtest/              # Backtest Engine（Walk Forward評価・Governor用シャドーバックテスト。出口判定は`execution/exitcond`をPaperと共用、#775）（replayflow/=リプレイのテスト・#658、parity/=Paper実績との突き合わせ検証・metahistory/=その時点のメタモデル・simrisk/=Risk Engine再現・sensitivity/=コスト感度表・#779）
 │   │   ├── assist/                # Luna/Sol/Opusアダプタ（jevflow/=Jev経由ロール解決のテスト・#658）
 │   │   │   ├── luna.go
 │   │   │   ├── sol.go
@@ -280,7 +280,7 @@ handler → service → repository → domain
 | Luna/Sol/Opus Adapter | ニュース分類（Luna）・振り返り分析（Sol）・提案レビュー（Opus）のAPI呼び出し | `internal/service/assist` |
 | Scheduler/Worker | `jobs`テーブルを介した自前Workerプールによるキュー処理・周期実行トリガー（§4.10）。`scan.full_scan_enabled`が`true`でない（既定）とき`WithFullScanDisabled`（`fullscan.go`）で60秒フルスキャンのcronトリガーを登録せず`market-data`全件投入を行わない（FR-SCHED-7、#652）。代わりにランキング監視（`bootstrap/rankingwatch`）が`EnqueueMarketData`で監視銘柄のジョブだけを投入する（FR-SCHED-9）。`updatecheck`はアップデート確認ジョブの再試行、`orphans`は孤児`running`ジョブの`failed`回復、`maintenanceflow`・`outcomeflow`はテスト専用 | `internal/service/scheduler`（`updatecheck`, `maintenance`, `maintenanceflow`, `outcomeflow`, `orphans`） |
 | Activity Feed | `jobs`/`jev_decisions`/`kill_switch_events`を集約し、System Activity Log向けのキュー状況・直近アクティビティを提供（新規永続テーブルなし、§12）。HTTP/WebSocket公開は`web/handler/activity` | `internal/service/activityfeed`・`internal/web/handler/activity` |
-| Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8）。ライブと同じ判断フロー（その時点で有効だったメタモデルのtake/skip・Risk Engine・全Exit条件）を再生し、残る差はFR-BT-4に一覧する。約定はPaper Tradingと同じ約定モデル（呼値・スプレッド・滑り2bps/板寄せ5bps・手数料0bps・昼休み・寄り引け、`fillmodel.Default`）で行う（`requirements/functional/components-platform.md` FR-BT-4） | `internal/service/backtest` |
+| Backtest Engine | Walk Forward評価とGovernor用シャドーバックテスト（未来情報混入の検査・損益指標算出。§8）。ライブと同じ判断フロー（その時点で有効だったメタモデルのtake/skip・Risk Engine・全Exit条件）を再生し、残る差はFR-BT-4に一覧する。約定はPaper Tradingと同じ約定モデル（呼値・スプレッド・昼休み・寄り引け。滑り・手数料・SHORT貸株料はSettingsの売買コスト設定`cost.*`を約定ごとに読む。既定は滑り2bps/板寄せ5bps・手数料0bps、FR-COST-1）で行う（`requirements/functional/components-platform.md` FR-BT-4） | `internal/service/backtest` |
 | Notifier | Slack Incoming Webhookによる即時アラート送信（Kill Switch発動・障害等。§10.3） | `internal/service/notify` |
 | Updater | GitHub Releasesの新版検知・安全ゲート（建玉なし・Kill Switch非発動・直近発注なし）・インストーラ検証。desktopビルドのみ配線（§9）。`checkflow`はテスト専用 | `internal/service/updater`（`checkflow`） |
 | Insight | 判断履歴・シグナル・実績サマリーの読み取り専用クエリ（`api/endpoints.md` §5）。HTTP公開は`internal/web/insightapi` | `internal/service/insight` |
