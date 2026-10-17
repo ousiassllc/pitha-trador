@@ -47,6 +47,8 @@ erDiagram
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions`（メタラベリングの二次モデルとOOS指標・判断ごとの予測） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs`、ベクトルインデックス（sqlite-vec） |
 
+Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読むだけで、テーブルも列も追加しない。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -103,3 +105,4 @@ erDiagram
 | 1.49 | 2026-10-14 | `er/tables-system.md`の`runtime_settings`キーに`metalabel.{model,calibration,retrain_time,min_ev_bps}`（メタラベリングの二次モデル設定）を追加。スキーマ変更なし | issue #759 |
 | 1.50 | 2026-10-14 | `er/tables-market.md`の`jev_decisions`に`data_age_ms`（判断時点の市場データの古さ、migration 000035）、`er/tables-system.md`の`runtime_settings`キー例に`scan.snapshot_max_age_seconds`（ランキング監視の足の鮮度上限、既定20秒）を追加（issue #754） |
 | 1.51 | 2026-10-14 | `er/tables-market.md`の`jev_decisions`に`market_regime`・`ab_arm`・`regime_volatility_bps`・`regime_autocorr`・`vwap_z`（判断時点の相場状態・A/Bアーム・その根拠、migration 000036）を追加し、`er/tables-system.md`の`runtime_settings`キー例に`regime.*`を追加 | issue #755・親 #751 |
+| 1.52 | 2026-10-17 | Paper 実績 MCP は既存テーブルの読み取り専用であり、新規テーブルを追加しない旨を追記。スキーマ変更なし | issue #783 |
