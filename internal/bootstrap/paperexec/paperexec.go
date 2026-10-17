@@ -42,7 +42,7 @@ func (p Executor) ExecuteSignal(ctx context.Context, signal domain.TradeSignal, 
 	}
 	// The order quantity comes from the Risk limits alone (FR-ENTRY-3). The
 	// meta-model's Decision.SizeFraction (Kelly-based) is deliberately NOT
-	// used here: it is recorded in metalabel_predictions only, so every take
+	// used here: it is recorded in metalabel_predictions and the logs only, so every take
 	// is sized the same whatever its EV. This is fixed until the meta-model's
 	// probability calibration is validated on Paper results (issue #781);
 	// do not wire it in without that decision being reopened there.

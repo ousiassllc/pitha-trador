@@ -140,7 +140,7 @@ pitha-trador/
 │   │   │   └── latestdecision/    # テスト専用: 最新Jev Trader判断の件数窓・経過時間上限なしの単一定義（`DecisionRepository.LatestTrader`/`LatestTraderByInstruments`/`LatestScout`と`execution.Engine.State`の`LatestTraderDecision`）の回帰テスト（行数上限のためexecution/judgementから分離、#496/#497/#499）
 │   │   ├── fillmodel/             # 約定モデル（FR-ENTRY-8。呼値・スプレッド・滑り・手数料。Paper Trading(`execution`)とBacktest Engineが共用する本番コード、#509）
 │   │   ├── calibration/           # Outcome labeling・Brier/Log Loss算出
-│   │   ├── metalabel/             # メタラベリングのモデル版・OOS指標の保存（`Store.SaveModel`/`LatestActiveModel`）と判断ごとの予測の記録（`RecordPrediction`）。有効モデル無しは見送り（issue #757）。二次モデルの純粋なコア（特徴量ベクトル・ロジスティック回帰・Platt/isotonic較正・EV算出と`Decide`のtake/skip・サイズ比。サイズ比は記録専用で発注数量には使わない（issue #781）。issue #758）も同パッケージ
+│   │   ├── metalabel/             # メタラベリングのモデル版・OOS指標の保存（`Store.SaveModel`/`LatestActiveModel`）と判断ごとの予測の記録（`RecordPrediction`）。有効モデル無しは見送り（issue #757）。二次モデルの純粋なコア（特徴量ベクトル・ロジスティック回帰・Platt/isotonic較正・EV算出と`Decide`のtake/skip・サイズ比（記録専用、issue #781）。issue #758）も同パッケージ
 │   │   ├── backtest/              # Backtest Engine（Walk Forward評価・Governor用シャドーバックテスト）（replayflow/=リプレイのテスト・#658）
 │   │   ├── assist/                # Luna/Sol/Opusアダプタ（jevflow/=Jev経由ロール解決のテスト・#658）
 │   │   │   ├── luna.go
