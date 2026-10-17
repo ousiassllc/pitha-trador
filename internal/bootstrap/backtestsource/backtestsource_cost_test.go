@@ -31,6 +31,7 @@ func TestSource_BacktestFollowsTheCostSettings(t *testing.T) {
 		})
 		inst := mustCreateInstrument(t, env, "7203")
 		base := time.Date(2026, 9, 1, 9, 0, 0, 0, marketcalendar.JST)
+		storeTakingModel(t, env, base.Add(-time.Hour))
 		recordLiveBars(t, env, inst, base, 30)
 		period := backtest.Period{Start: base, End: base.Add(30 * time.Minute)}
 		configs, err := env.Source.RunConfigs(context.Background(), period)
