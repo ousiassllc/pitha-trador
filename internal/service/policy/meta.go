@@ -162,7 +162,8 @@ func (e *Engine) decideMeta(side string, t config.PolicyDirectionThresholds, in 
 
 // recordPrediction stores the model's verdict for the decision in. Nothing is
 // stored without a model (there is no model row to reference) or a persisted
-// Jev decision.
+// Jev decision. SizeFraction is stored for analysis only: the order quantity
+// ignores it (issue #781, FR-META-3).
 func (e *Engine) recordPrediction(ctx context.Context, in Input, m *metaEntry, verdict *metalabel.Decision) error {
 	if verdict == nil || m == nil || m.model == nil || in.Decision == nil || in.Decision.ID == 0 || e.meta == nil {
 		return nil
