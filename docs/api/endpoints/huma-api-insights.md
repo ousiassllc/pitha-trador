@@ -23,6 +23,32 @@
 }
 ```
 
+### GET /api/v1/performance/evaluation
+
+実績評価（issue #777、`requirements/functional/performance-evaluation.md`）。クローズ済みPaper建玉を読み取り専用で集計し、サンプル数・95%信頼区間・合格ライン判定つきで返す（書き込み・市場データの生値の出力なし）。
+
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `from` | string | `closed_at`の範囲の最初のJST日（`YYYY-MM-DD`）。省略は最初から |
+| `to` | string | 最後のJST日（`YYYY-MM-DD`、その日を含む）。省略は現在まで。形式不正と`to`が`from`より前は422 |
+
+`overall`と、`by_day`/`by_week`/`by_direction`/`by_exit_reason`/`by_meta_model`/`by_ab_arm`の各要素（`key`+同じ指標）は、`n`・`days`・`wins`、円の`net_pnl_jpy`・`fees_jpy`・`slippage_jpy`（約定価格に含まれる分。`slippage_recorded_fills`は記録のある約定数）・`gross_before_fees_jpy`・`gross_before_costs_jpy`、および指標`win_rate`/`ev_jpy`/`ev_bps`/`profit_factor`/`max_drawdown_jpy`/`max_drawdown_pct`（資金比%）を持つ。各指標は`{n, value, lo, hi, has_ci, defined, reliable}`で、`reliable: false`は「判定不能」（サンプルまたは取引日数が基準未満、定義不能、区間なし。`value`は参考値）。`initial_capital`は`risk.yaml`の値（Paperでは仮置き。0以下は未設定で資金比は判定不能）、`criteria`は適用した基準値。`jev[]`は`label_version`別の`hit_rate`・`brier`、`meta[]`はメタモデルごとにOOS（`oos_auc`・`oos_expected_bps`・`oos_samples`・`oos_reliable`）と、採用取引の`linked`・`predicted_ev_bps`・`ev_gap_bps`（実現−予測）、OOS期間内の全取引`in_oos_window`を並べる。`verdict`は`{status: pass|fail|undetermined, checks[]}`で、`checks[].key`は`period_days`/`trades`/`ev_lower_bound`/`max_drawdown`（`required`・`actual`・`status`）。Live前チェックの材料であり、判定がLive切替・取引・設定に接続されることはない。
+
+```json
+// Output（抜粋）
+{
+  "initial_capital": 30000000,
+  "criteria": { "min_sample": 30, "min_clusters": 5, "min_days": 20, "min_trades": 100, "min_ev_lower_bps": 0, "max_drawdown_pct": 5 },
+  "overall": {
+    "n": 6, "days": 3, "wins": 3, "net_pnl_jpy": -1000, "fees_jpy": 100,
+    "win_rate": { "n": 6, "value": 0.5, "lo": 0.1, "hi": 0.9, "has_ci": true, "defined": true, "reliable": false },
+    "max_drawdown_jpy": { "n": 6, "value": 1760, "lo": 0, "hi": 3000, "has_ci": true, "defined": true, "reliable": false },
+    "max_drawdown_pct": { "n": 6, "value": 0.0059, "lo": 0, "hi": 0.01, "has_ci": true, "defined": true, "reliable": false }
+  },
+  "verdict": { "status": "undetermined", "checks": [ { "key": "trades", "required": 100, "actual": 6, "has_actual": true, "status": "undetermined" } ] }
+}
+```
+
 ### GET /api/v1/calibration
 
 | クエリ | 型 | 説明 |
