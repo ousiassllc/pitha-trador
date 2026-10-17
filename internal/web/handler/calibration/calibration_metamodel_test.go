@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 )
@@ -125,5 +127,53 @@ func TestCalibrationHandler_APICalibration_MetaModelSourceErrorIs500(t *testing.
 	code, _ := getMetaCalibration(t, sourceWithMeta{metaSource: metaSource{err: errors.New("boom")}})
 	if code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", code)
+	}
+}
+
+type cutoffSource struct {
+	calibration.StaticCalibrationSource
+	info metalabelsettings.CutoffInfo
+	err  error
+}
+
+func (s cutoffSource) Cutoff(context.Context) (metalabelsettings.CutoffInfo, error) {
+	return s.info, s.err
+}
+
+// Issue #776: the cutoff setting's status and warning are reported even before
+// any model was trained, and a source error is a 500.
+func TestCalibrationHandler_APICalibration_MetaModelCutoff(t *testing.T) {
+	code, raw := getMetaCalibration(t, cutoffSource{info: metalabelsettings.CutoffInfo{
+		Cutoff: "2026-01-01", Status: "placeholder", Warning: "仮置きのままです",
+		Model: "jev-x", ConfirmedOn: "2026-10-17", Source: "vendor docs",
+	}})
+	if code != http.StatusOK {
+		t.Fatalf("status = %d (body=%s)", code, raw)
+	}
+	var body struct {
+		MetaModel       map[string]any `json:"meta_model"`
+		MetaModelCutoff map[string]any `json:"meta_model_cutoff"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("Unmarshal: %v (body=%s)", err, raw)
+	}
+	if body.MetaModel != nil {
+		t.Errorf("meta_model = %v, want omitted without a model", body.MetaModel)
+	}
+	for key, want := range map[string]any{
+		"llm_cutoff": "2026-01-01", "status": "placeholder", "warning": "仮置きのままです",
+		"model": "jev-x", "confirmed_on": "2026-10-17", "source": "vendor docs",
+	} {
+		if body.MetaModelCutoff[key] != want {
+			t.Errorf("meta_model_cutoff.%s = %v, want %v", key, body.MetaModelCutoff[key], want)
+		}
+	}
+
+	if code, _ := getMetaCalibration(t, cutoffSource{err: errors.New("boom")}); code != http.StatusInternalServerError {
+		t.Errorf("source error: status = %d, want 500", code)
+	}
+	_, raw = getMetaCalibration(t, calibration.StaticCalibrationSource{})
+	if strings.Contains(string(raw), "meta_model_cutoff") {
+		t.Errorf("meta_model_cutoff present without a source: %s", raw)
 	}
 }

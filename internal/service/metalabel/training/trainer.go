@@ -158,6 +158,7 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	if err != nil {
 		return repo.Model{}, err
 	}
+	logCutoffWarning(ctx, settings)
 	now := t.now().UTC()
 
 	stored, err := t.source.ListTrainingRows(ctx, now.Add(-t.lookback), now)
@@ -177,7 +178,7 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 		"oos_start", split.OOSStart, "oos_end", split.OOSEnd,
 		"oos_after_llm_cutoff", !split.OOSStart.Before(cutoff),
 		"fit_samples", len(split.Fit), "calibration_samples", len(split.Calibrate), "oos_samples", len(split.OOS),
-		"purged", split.Purged, "embargo", t.walk.Embargo, "dropped_incomplete", dropped)
+		"purged", split.Purged, "embargo", t.walk.Embargo, "dropped_incomplete", dropped, "fit_before_llm_cutoff", fitBeforeCutoff(split))
 
 	version := "lr-" + now.Format("20060102-150405")
 	model, err := metalabel.Train(samples(split.Fit), samples(split.Calibrate), metalabel.TrainOptions{
@@ -192,6 +193,10 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 
 	eval := Evaluate(model, split.OOS, metalabel.DecideConfig{MinEVBps: settings.MinEVBps, KellyFraction: metalabel.DefaultKellyFraction})
 	status, reason := t.acceptance.Judge(eval)
+	if r, detail := cutoffGate(settings, split.OOS); r != "" {
+		status, reason = repo.ModelRejected, r
+		slog.WarnContext(ctx, "metalabel: model not adopted: the LLM cutoff does not support the OOS evaluation", "reject_reason", r, "detail", detail)
+	}
 
 	params, err := model.ParamsJSON()
 	if err != nil {

@@ -34,8 +34,9 @@ import {
   type HorizonOption,
   hasLabeledSamples,
 } from './calibration-view';
+import { renderDirectionTable } from './direction-view';
 import { renderHorizonSelector } from './horizon-selector';
-import { type MetaModel, renderMetaModel } from './meta-model-view';
+import { type LLMCutoffInfo, type MetaModel, renderMetaModel } from './meta-model-view';
 
 const ACCURACY_LINE_COLOR = '#2563eb';
 const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';
@@ -62,6 +63,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   @state() private pnlLogLoss = 0;
   @state() private barrier: BarrierStats | null = null;
   @state() private metaModel: MetaModel | null | undefined;
+  @state() private metaModelCutoff: LLMCutoffInfo | undefined;
   @state() private abArms: ABArm[] | undefined;
   @state() private error: string | null = null;
   @state() private loading = false;
@@ -146,6 +148,7 @@ export class PithaCalibrationHeatmap extends LitElement {
       this.pnlLogLoss = response.pnl_log_loss;
       this.barrier = response.triple_barrier;
       this.metaModel = response.meta_model ?? null;
+      this.metaModelCutoff = response.meta_model_cutoff;
       this.abArms = response.ab_arms;
       this.applyBuckets(response.buckets);
       this.error = null;
@@ -239,39 +242,14 @@ export class PithaCalibrationHeatmap extends LitElement {
             `,
           )}
         </ul>
-        <table
-          class="pitha-calibration-heatmap-directions"
-          data-testid="calibration-direction-table"
-          aria-label="方向別キャリブレーション"
-        >
-          <thead>
-            <tr>
-              <th scope="col">Direction</th>
-              <th scope="col">Samples</th>
-              <th scope="col">Accuracy</th>
-              <th scope="col">Avg return</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${this.byDirection.map(
-              (d) => html`
-                <tr data-testid="calibration-direction-row">
-                  <td>${d.direction}</td>
-                  <td>${d.sample_count}</td>
-                  <td>${d.sample_count > 0 ? `${(d.direction_accuracy * 100).toFixed(1)}%` : '—'}</td>
-                  <td>${d.sample_count > 0 ? `${d.avg_future_return_pct.toFixed(2)}%` : '—'}</td>
-                </tr>
-              `,
-            )}
-          </tbody>
-        </table>
+        ${renderDirectionTable(this.byDirection)}
         ${
           this.brierScore !== null && !this.hasSamples
             ? html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-no-samples">サンプルなし（ラベル付き判断がまだありません）</p>`
             : ''
         }
         ${renderBarrierSummary(this.barrier)}
-        ${renderMetaModel(this.metaModel)}
+        ${renderMetaModel(this.metaModel, this.metaModelCutoff)}
         ${renderABArms(this.abArms)}
         ${
           this.brierScore !== null && this.hasSamples

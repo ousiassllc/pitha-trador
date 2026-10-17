@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { installHeatmapHarness, mount, response } from './heatmap-test-support';
-import type { MetaModel } from './meta-model-view';
+import type { LLMCutoffInfo, MetaModel } from './meta-model-view';
 
 // Dynamic: a static import would load the component before the mock exists.
 await import('./pitha-calibration-heatmap');
@@ -30,6 +30,16 @@ const metaModel = (overrides: Partial<MetaModel> = {}): MetaModel => ({
   oos_ev_bps: 3.5,
   oos_calibration: [{ mean_predicted: 0.55, observed_rate: 0.5, count: 40 }],
   llm_cutoff: '2026-09-01',
+  ...overrides,
+});
+
+const cutoffInfo = (overrides: Partial<LLMCutoffInfo> = {}): LLMCutoffInfo => ({
+  llm_cutoff: '2026-09-01',
+  status: 'confirmed',
+  warning: '',
+  model: '',
+  confirmed_on: '',
+  source: '',
   ...overrides,
 });
 
@@ -110,5 +120,52 @@ describe('pitha-calibration-heatmap meta-labeling model', () => {
 
     expect(el.shadowRoot?.querySelector('[data-testid="calibration-metamodel"]')).toBeNull();
     expect(text(el, 'calibration-metamodel-none')).toContain('未学習');
+  });
+
+  // Issue #776: a placeholder cutoff is flagged on the screen, even before any
+  // model exists, and the rejection reason is readable.
+  test('warns while the LLM cutoff is the placeholder, with or without a model', async () => {
+    const placeholder = cutoffInfo({
+      llm_cutoff: '2026-01-01',
+      status: 'placeholder',
+      warning: '仮置きのままです',
+    });
+    const withModel = await mount(
+      response({
+        meta_model: metaModel({
+          status: 'rejected',
+          reject_reason: 'llm_cutoff_placeholder',
+          active_version: 'v2',
+        }),
+        meta_model_cutoff: placeholder,
+      }),
+    );
+    expect(text(withModel.el, 'calibration-metamodel-cutoff-warning')).toBe('仮置きのままです');
+    expect(text(withModel.el, 'calibration-metamodel-status')).toContain(
+      'LLM 学習データの終わりが仮置きのまま',
+    );
+
+    document.body.innerHTML = '';
+    const noModel = await mount(response({ meta_model_cutoff: placeholder }));
+    expect(text(noModel.el, 'calibration-metamodel-cutoff-warning')).toBe('仮置きのままです');
+    expect(text(noModel.el, 'calibration-metamodel-none')).toContain('未学習');
+  });
+
+  test('shows no warning but the recorded provenance once the cutoff is confirmed', async () => {
+    const { el } = await mount(
+      response({
+        meta_model: metaModel(),
+        meta_model_cutoff: cutoffInfo({
+          model: 'jev-x',
+          confirmed_on: '2026-10-17',
+          source: 'vendor docs',
+        }),
+      }),
+    );
+
+    expect(text(el, 'calibration-metamodel-cutoff-warning')).toBeUndefined();
+    expect(text(el, 'calibration-metamodel-cutoff-provenance')).toContain(
+      'jev-x / 2026-10-17 / vendor docs',
+    );
   });
 });

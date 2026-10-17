@@ -40,7 +40,7 @@ func TestDefault_IsValidAndShown(t *testing.T) {
 	if _, ok := d.Text("metalabel.unknown"); ok {
 		t.Error("Text accepted an unknown key")
 	}
-	if len(metalabelsettings.Keys()) != 5 {
+	if len(metalabelsettings.Keys()) != 8 {
 		t.Errorf("Keys = %v", metalabelsettings.Keys())
 	}
 }
@@ -138,7 +138,8 @@ func TestApply_RejectsInvalidStoredValues(t *testing.T) {
 }
 
 func TestValidate_NamesEveryBadKey(t *testing.T) {
-	err := metalabelsettings.Settings{Model: "x", Calibration: "y", RetrainTime: "10:00", MinEVBps: -1, LLMCutoff: "soon"}.Validate()
+	err := metalabelsettings.Settings{Model: "x", Calibration: "y", RetrainTime: "10:00", MinEVBps: -1, LLMCutoff: "soon",
+		LLMCutoffModel: "a\nb", LLMCutoffConfirmedOn: "x", LLMCutoffSource: "a\tb"}.Validate()
 	if err == nil {
 		t.Fatal("Validate accepted bad settings")
 	}

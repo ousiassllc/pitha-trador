@@ -36,6 +36,26 @@ export interface MetaModel {
   llm_cutoff: string;
 }
 
+// Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `meta_model_cutoff`
+// object (internal/web/handler/calibration.llmCutoffOutput; issue #776).
+export interface LLMCutoffInfo {
+  llm_cutoff: string;
+  status: 'placeholder' | 'unverified' | 'confirmed';
+  warning: string;
+  model: string;
+  confirmed_on: string;
+  source: string;
+}
+
+// REJECT_REASON_LABELS names the machine reject reasons the nightly retraining
+// records (internal/service/metalabel/training); an unknown reason is shown raw.
+const REJECT_REASON_LABELS: Record<string, string> = {
+  llm_cutoff_placeholder: 'LLM 学習データの終わりが仮置きのまま',
+  llm_model_changed: 'Jev のモデルが切り替わった（cutoff 未再確認）',
+};
+
+const rejectReasonLabel = (reason: string): string => REJECT_REASON_LABELS[reason] ?? reason;
+
 const formatPercent = (rate: number): string => `${(rate * 100).toFixed(1)}%`;
 
 // periodLabel renders a window as "start 〜 end" in JST.
@@ -47,7 +67,7 @@ function renderStatus(model: MetaModel) {
   const inForce = model.active_version
     ? `採用中のモデルは ${model.active_version} のまま`
     : '採用中のモデルなし（エントリーは見送り）';
-  return html`不採用（${model.reject_reason}）— ${inForce}`;
+  return html`不採用（${rejectReasonLabel(model.reject_reason)}）— ${inForce}`;
 }
 
 function renderCalibrationCurve(bins: MetaModelCalibrationBin[]) {
@@ -80,18 +100,40 @@ function renderCalibrationCurve(bins: MetaModelCalibrationBin[]) {
   `;
 }
 
+// renderCutoff shows the cutoff setting's warning (placeholder / unrecorded
+// provenance) and, when recorded, its provenance (issue #776).
+function renderCutoff(cutoff: LLMCutoffInfo | undefined) {
+  if (cutoff === undefined) return '';
+  const provenance = [cutoff.model, cutoff.confirmed_on, cutoff.source].filter((v) => v !== '');
+  return html`
+    ${
+      cutoff.warning
+        ? html`<p role="alert" data-testid="calibration-metamodel-cutoff-warning">${cutoff.warning}</p>`
+        : ''
+    }
+    ${
+      provenance.length > 0
+        ? html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-metamodel-cutoff-provenance">
+            LLM 学習データ終了日の根拠: ${provenance.join(' / ')}
+          </p>`
+        : ''
+    }
+  `;
+}
+
 // renderMetaModel is the OOS block: the model, its OOS AUC / EV and the Jev
 // evaluation period (the OOS window, never before the LLM cutoff), then the
 // reliability curve of its calibrated probability. `model` is undefined until
 // a response arrived (nothing shown) and null when no model was trained yet.
-export function renderMetaModel(model: MetaModel | null | undefined) {
+export function renderMetaModel(model: MetaModel | null | undefined, cutoff?: LLMCutoffInfo) {
   if (model === undefined) return '';
   if (model === null) {
-    return html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-metamodel-none">
+    return html`${renderCutoff(cutoff)}<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-metamodel-none">
       メタラベリングモデルは未学習です（ラベルが貯まると夜間に学習されます）
     </p>`;
   }
   return html`
+    ${renderCutoff(cutoff)}
     <dl class="pitha-calibration-heatmap-summary" data-testid="calibration-metamodel" aria-label="メタラベリングモデル（OOS）">
       <dt>モデル</dt>
       <dd data-testid="calibration-metamodel-version">${model.version}（${model.algorithm}）</dd>

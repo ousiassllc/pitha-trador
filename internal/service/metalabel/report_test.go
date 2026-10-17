@@ -114,3 +114,32 @@ func TestReporter_PropagatesErrors(t *testing.T) {
 		t.Errorf("settings error = %v, want boom", err)
 	}
 }
+
+func TestReporter_CutoffReportsStatusAndProvenanceWithoutAnyModel(t *testing.T) {
+	loaded := func(mut func(*metalabelsettings.Settings)) *metalabel.Reporter {
+		return metalabel.NewReporter(fakeReportRepo{}, func(context.Context) (metalabelsettings.Settings, error) {
+			s := metalabelsettings.Default()
+			mut(&s)
+			return s, nil
+		})
+	}
+
+	placeholder, err := loaded(func(*metalabelsettings.Settings) {}).Cutoff(context.Background())
+	if err != nil || placeholder.Status != metalabelsettings.CutoffPlaceholder || placeholder.Warning == "" || placeholder.Cutoff != metalabelsettings.DefaultLLMCutoff {
+		t.Fatalf("placeholder = %+v, %v", placeholder, err)
+	}
+	confirmed, err := loaded(func(s *metalabelsettings.Settings) {
+		s.LLMCutoff, s.LLMCutoffModel, s.LLMCutoffConfirmedOn, s.LLMCutoffSource = "2026-09-01", "jev-x", "2026-10-17", "vendor docs"
+	}).Cutoff(context.Background())
+	if err != nil || confirmed.Status != metalabelsettings.CutoffConfirmed || confirmed.Warning != "" ||
+		confirmed.Model != "jev-x" || confirmed.ConfirmedOn != "2026-10-17" || confirmed.Source != "vendor docs" {
+		t.Fatalf("confirmed = %+v, %v", confirmed, err)
+	}
+
+	boom := errors.New("settings down")
+	if _, err := metalabel.NewReporter(fakeReportRepo{}, func(context.Context) (metalabelsettings.Settings, error) {
+		return metalabelsettings.Settings{}, boom
+	}).Cutoff(context.Background()); !errors.Is(err, boom) {
+		t.Errorf("settings failure = %v, want it wrapped", err)
+	}
+}

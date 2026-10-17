@@ -6,6 +6,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
@@ -74,4 +75,37 @@ func (h *CalibrationHandler) metaModel(ctx context.Context) (*metaModelOutput, e
 		return nil, nil
 	}
 	return metaModelResponse(report), nil
+}
+
+// LLMCutoffSource supplies the Jev training-data cutoff setting (issue #776) for
+// `GET /api/v1/calibration`'s `meta_model_cutoff`. A CalibrationSource that also
+// implements it (internal/bootstrap/metalabeljob.CalibrationSource) enables it.
+type LLMCutoffSource interface {
+	Cutoff(ctx context.Context) (metalabelsettings.CutoffInfo, error)
+}
+
+// llmCutoffOutput mirrors docs/api/endpoints.md's `meta_model_cutoff` object.
+type llmCutoffOutput struct {
+	LLMCutoff   string `json:"llm_cutoff" doc:"Settings metalabel.llm_cutoff (YYYY-MM-DD, UTC): the OOS evaluation uses only decisions on or after it."`
+	Status      string `json:"status" enum:"placeholder,unverified,confirmed" doc:"placeholder: unset or the shipped default, so no model is adopted; unverified: a real date whose Jev model is not recorded; confirmed: a real date with the Jev model recorded."`
+	Warning     string `json:"warning" doc:"Operator-facing warning; empty when confirmed."`
+	Model       string `json:"model" doc:"Jev model name the cutoff was confirmed for (metalabel.llm_cutoff_model); empty when not recorded."`
+	ConfirmedOn string `json:"confirmed_on" doc:"Date the operator confirmed the cutoff (YYYY-MM-DD); empty when not recorded."`
+	Source      string `json:"source" doc:"Evidence of the cutoff (metalabel.llm_cutoff_source); empty when not recorded."`
+}
+
+// llmCutoff returns the response's `meta_model_cutoff`: nil (omitted) without a source.
+func (h *CalibrationHandler) llmCutoff(ctx context.Context) (*llmCutoffOutput, error) {
+	src, ok := h.source.(LLMCutoffSource)
+	if !ok {
+		return nil, nil
+	}
+	info, err := src.Cutoff(ctx)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("load llm cutoff failed", err)
+	}
+	return &llmCutoffOutput{
+		LLMCutoff: info.Cutoff, Status: info.Status, Warning: info.Warning,
+		Model: info.Model, ConfirmedOn: info.ConfirmedOn, Source: info.Source,
+	}, nil
 }

@@ -66,3 +66,13 @@ func (r *Reporter) Report(ctx context.Context) (domain.MetaModelReport, bool, er
 	}
 	return report, true, nil
 }
+
+// Cutoff returns the LLM cutoff setting with its status and provenance
+// (issue #776), whether or not any model was trained.
+func (r *Reporter) Cutoff(ctx context.Context) (metalabelsettings.CutoffInfo, error) {
+	s, err := r.settings(ctx)
+	if err != nil {
+		return metalabelsettings.CutoffInfo{}, fmt.Errorf("metalabel: read settings: %w", err)
+	}
+	return s.CutoffInfo(), nil
+}
