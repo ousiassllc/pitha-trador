@@ -40,6 +40,12 @@ func (p Executor) ExecuteSignal(ctx context.Context, signal domain.TradeSignal, 
 		slog.InfoContext(ctx, "bootstrap: paper entry skipped", "symbol", signal.Symbol, "signal_id", signal.ID, "reason", execution.ErrOutsideTradingSession.Error())
 		return nil
 	}
+	// The order quantity comes from the Risk limits alone (FR-ENTRY-3). The
+	// meta-model's Decision.SizeFraction (Kelly-based) is deliberately NOT
+	// used here: it is recorded in metalabel_predictions only, so every take
+	// is sized the same whatever its EV. This is fixed until the meta-model's
+	// probability calibration is validated on Paper results (issue #781);
+	// do not wire it in without that decision being reopened there.
 	quantity := p.Sizer.PositionSize(ctx, snap.Price)
 	if quantity <= 0 {
 		return nil // no lot fits the risk limits (PositionSize logged why)
