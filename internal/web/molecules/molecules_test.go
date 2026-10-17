@@ -106,3 +106,21 @@ func TestSettingGroupDerived_AnnouncesUpdatesAndSkipsEmptyValue(t *testing.T) {
 		}
 	}
 }
+
+// Warning lines are amber with a 注意: prefix and headings group the lines
+// below them; both escape their text.
+func TestSettingGroupDerived_RendersWarningsAndHeadings(t *testing.T) {
+	props := molecules.SettingGroupProps{ID: "g", Derived: []molecules.SettingDerivedItem{
+		{Key: "h", Heading: true, Label: "整合チェック", Detail: "表示のみ"},
+		{Key: "w", Warn: true, Label: "<script>alert(1)</script> が異なります"},
+	}}
+	html := render(t, molecules.SettingGroupDerived(props, false))
+	for _, want := range []string{"整合チェック", "表示のみ", "text-amber-800", "注意:", "&lt;script&gt;alert(1)&lt;/script&gt; が異なります"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("missing %q: %s", want, html)
+		}
+	}
+	if strings.Contains(html, "<script>") {
+		t.Errorf("warning text is not escaped: %s", html)
+	}
+}

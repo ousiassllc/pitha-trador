@@ -290,3 +290,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.87 | 2026-10-14 | §2の`calibration-heatmap/`に`ab-arms-view.ts`を追記、§5.3（`lit.md`）に`pitha-calibration-heatmap`のA/Bアーム別EV・勝率の表示を追記 | issue #755 |
 | 1.88 | 2026-10-15 | organismsに`DataExportPanel`を追加し、`SettingsPage`の「システム」節に「データエクスポート」カード（`modal-data-export`）を置く | issue #773・親 #768 |
 | 1.89 | 2026-10-17 | moleculesに`SettingGroupDerived`（運用設定グループの「計算結果」パネル）を追加 | issue #782 |
+| 1.90 | 2026-10-17 | `SettingGroupDerived`の`SettingDerivedItem`に`Warn`（琥珀色の「注意:」付き警告行）と`Heading`（見出し行）を追加し、日次ガードの「計算結果」に「整合チェック」「Live 前チェック」を表示（コンポーネント名の変更なし） | issue #782 |

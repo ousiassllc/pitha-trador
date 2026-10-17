@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
@@ -208,5 +209,19 @@ func TestDailyGuard_SeedMarkerIsNotASettingsKey(t *testing.T) {
 	svc := newService(&fakeStore{rows: map[string]string{}})
 	if _, err := svc.Get(context.Background(), dailyguardsettings.SeededMarkerKey); err == nil {
 		t.Fatal("the internal seed marker must not be a Settings key")
+	}
+}
+
+// issue #782: the risk.yaml reference is optional, read-only and carries
+// initial_capital and max_daily_loss_pct.
+func TestRiskReference_UnsetUntilWired(t *testing.T) {
+	svc := newService(&fakeStore{rows: map[string]string{}})
+	if _, ok := svc.RiskReference(); ok {
+		t.Fatal("RiskReference ok before WithRiskReference")
+	}
+	svc.WithRiskReference(config.RiskLimits{InitialCapital: 30_000_000, MaxDailyLossPct: 1.5})
+	ref, ok := svc.RiskReference()
+	if !ok || ref.InitialCapitalJPY != 30_000_000 || ref.MaxDailyLossPct != 1.5 {
+		t.Fatalf("RiskReference = %+v, %v", ref, ok)
 	}
 }

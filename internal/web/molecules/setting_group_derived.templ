@@ -4,13 +4,17 @@ package molecules
 // slug (the line's test id suffix), Label what is computed, Value the
 // result (e.g. "5,000 円"; empty renders no value span), Detail how it was
 // derived and Off whether the rule is disabled (the value is then shown
-// muted).
+// muted). Warn marks a warning line (amber, prefixed 注意:) and Heading a
+// sub-heading that groups the lines below it (Label is its text, Detail a
+// muted remark).
 type SettingDerivedItem struct {
-	Key    string
-	Label  string
-	Value  string
-	Detail string
-	Off    bool
+	Key     string
+	Label   string
+	Value   string
+	Detail  string
+	Off     bool
+	Warn    bool
+	Heading bool
 }
 
 // DerivedID is the id of the group's SettingGroupDerived; Save/Reset answer
@@ -27,17 +31,31 @@ templ SettingGroupDerived(props SettingGroupProps, oob bool) {
 		<p class="font-semibold text-slate-800">計算結果</p>
 		<ul class="flex flex-col gap-1">
 			for _, item := range props.Derived {
-				<li class="flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
-					<span class="text-slate-600">{ item.Label }</span>
-					if item.Value != "" && item.Off {
-						<span class="font-medium text-slate-500">{ item.Value }</span>
-					} else if item.Value != "" {
-						<span class="font-medium text-slate-900">{ item.Value }</span>
-					}
-					if item.Detail != "" {
-						<span class="text-xs text-slate-500">{ item.Detail }</span>
-					}
-				</li>
+				if item.Heading {
+					<li class="mt-2 flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
+						<span class="font-semibold text-slate-800">{ item.Label }</span>
+						if item.Detail != "" {
+							<span class="text-xs text-slate-500">{ item.Detail }</span>
+						}
+					</li>
+				} else if item.Warn {
+					<li class="flex flex-wrap items-baseline gap-x-2 text-amber-800" data-testid={ props.DerivedID() + "-" + item.Key }>
+						<span class="font-semibold">注意:</span>
+						<span>{ item.Label }</span>
+					</li>
+				} else {
+					<li class="flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
+						<span class="text-slate-600">{ item.Label }</span>
+						if item.Value != "" && item.Off {
+							<span class="font-medium text-slate-500">{ item.Value }</span>
+						} else if item.Value != "" {
+							<span class="font-medium text-slate-900">{ item.Value }</span>
+						}
+						if item.Detail != "" {
+							<span class="text-xs text-slate-500">{ item.Detail }</span>
+						}
+					</li>
+				}
 			}
 		</ul>
 	</section>
