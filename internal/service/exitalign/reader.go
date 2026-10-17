@@ -7,7 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
-	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/domain/metamodel"
 )
 
 // Comparer replays the labeled decisions of a window under the actual exit
@@ -19,7 +19,7 @@ type Comparer interface {
 // ModelReporter returns the newest meta-labeling model's report, or ok=false
 // when none was ever trained (*metalabel.Reporter implements it).
 type ModelReporter interface {
-	Report(ctx context.Context) (domain.MetaModelReport, bool, error)
+	Report(ctx context.Context) (metamodel.Report, bool, error)
 }
 
 // Settings is the runtime_settings read access Reader needs.

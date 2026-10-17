@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 )
 
 // shadowBacktestLookbackDays is FR-SELFIMPROVE-4's "直近20営業日相当".
@@ -57,6 +58,20 @@ type Governor struct {
 	// used for any of the 10 PolicyProposalKeys runtime_settings has no
 	// override for yet.
 	baseline config.PolicyConfig
+
+	// models and limits rate limit the apply of policy.* changes and keep
+	// them out of the window of a meta-labeling model adoption (issue #780,
+	// FR-SELFIMPROVE-10). Without WithChangeGuard no limit applies.
+	models ModelAdoptionSource
+	limits changeguard.Limits
+}
+
+// ModelAdoptionSource tells when the meta-labeling model in force was adopted;
+// *internal/service/metalabel.Store implements it.
+type ModelAdoptionSource interface {
+	// LastAdoptedAt returns the adoption time of the active model, or
+	// (zero, false, nil) when none is in force.
+	LastAdoptedAt(ctx context.Context) (time.Time, bool, error)
 }
 
 // Option configures a Governor beyond NewGovernor's required
@@ -80,6 +95,14 @@ func WithSol(sol *assist.Sol) Option {
 // deterministic thresholds can be approved.
 func WithOpus(opus *assist.Opus) Option {
 	return func(g *Governor) { g.opus = opus }
+}
+
+// WithChangeGuard limits how often policy.* thresholds change (a proposal is
+// rejected with the reason when applying it would break limits) and keeps them
+// out of the freeze after a meta-labeling model adoption (models). The
+// automatic rollback of FR-SELFIMPROVE-6 is a safety action and never blocked.
+func WithChangeGuard(limits changeguard.Limits, models ModelAdoptionSource) Option {
+	return func(g *Governor) { g.limits, g.models = limits, models }
 }
 
 // WithNow overrides time.Now (tests).

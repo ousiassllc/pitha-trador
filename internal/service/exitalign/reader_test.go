@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
-	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/domain/metamodel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/exitalign"
 )
@@ -31,11 +31,11 @@ func (f *fakeComparer) Compare(_ context.Context, from, to time.Time, rule exita
 }
 
 type fakeReporter struct {
-	report domain.MetaModelReport
+	report metamodel.Report
 	ok     bool
 }
 
-func (f fakeReporter) Report(context.Context) (domain.MetaModelReport, bool, error) {
+func (f fakeReporter) Report(context.Context) (metamodel.Report, bool, error) {
 	return f.report, f.ok, nil
 }
 
@@ -99,7 +99,7 @@ func TestReader_AlignmentPropagatesCompareError(t *testing.T) {
 // same window; without closed positions there is no mean ("データ無し").
 func TestReader_OOSPaper(t *testing.T) {
 	ctx := context.Background()
-	report := domain.MetaModelReport{Version: "v1", OOSStart: now.Add(-48 * time.Hour), OOSEnd: now.Add(-24 * time.Hour), OOSEVBps: ptr(12.0)}
+	report := metamodel.Report{Version: "v1", OOSStart: now.Add(-48 * time.Hour), OOSEnd: now.Add(-24 * time.Hour), OOSEVBps: ptr(12.0)}
 
 	none := &fakePositions{}
 	got, err := exitalign.NewReader(settingsStore{}, shippedExit(), nil, fakeReporter{report, true}, none).Alignment(ctx, time.Hour)

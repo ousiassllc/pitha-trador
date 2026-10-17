@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/exitcond"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
@@ -39,53 +40,55 @@ type replayedExit struct {
 }
 
 // replayExit replays a position entered at entryRef on entryBar through path
-// (the bars after it, ascending) under rule, evaluating the conditions bar by
-// bar in the order execution.Engine.EvaluateExit does: fixed stop-loss, fixed
-// take-profit, trailing stop, VWAP逆クロス, then the maximum holding time. The
-// exit is at the triggering bar's price (gross), less costBps. ok=false when
-// no condition triggered and the bars end more than calibration.HorizonBarTolerance before
-// the maximum holding time (the data does not cover the rule).
+// (the bars after it, ascending) under rule, bar by bar with
+// exitcond.Evaluate - the one evaluation Paper Trading and the backtest replay
+// use (issue #775), so the priority order cannot drift: fixed stop-loss, fixed
+// take-profit, trailing stop, VWAP逆クロス, maximum holding time. The
+// conditions market_snapshots has no data for (Jev方向反転,
+// continuation_probability低下, 引け前強制決済: NotEvaluatedExits) are disabled
+// by passing no decision and no close time. The exit is at the triggering
+// bar's price (gross), less costBps. ok=false when no condition triggered and
+// the bars end more than calibration.HorizonBarTolerance before the maximum
+// holding time (the data does not cover the rule).
 func replayExit(entryBar domain.Snapshot, path []domain.Snapshot, entryRef float64, direction string, rule ExitConfig, costBps float64) (replayedExit, bool) {
 	factor := 1.0
+	side := domain.PositionSideLong
 	if direction == domain.JevDirectionShort {
-		factor = -1.0
+		factor, side = -1.0, domain.PositionSideShort
 	}
+	params := exitcond.Params{
+		StopLossPct: rule.StopLossPct, TakeProfitPct: rule.TakeProfitPct,
+		TrailingStopPct: rule.TrailingStopPct, MaxHolding: rule.maxHolding(),
+	}
+	position := domain.Position{Side: side, EntryPrice: entryRef, OpenedAt: entryBar.Timestamp}
 	best := entryRef
-	prevPrice, prevVWAP, havePrev := entryRef, 0.0, false
+	var prev *vwapcross.Observation
 	if entryBar.Feature.VWAP > 0 {
-		prevPrice, prevVWAP, havePrev = entryBar.Price, entryBar.Feature.VWAP, true
+		prev = &vwapcross.Observation{Price: entryBar.Price, VWAP: entryBar.Feature.VWAP}
 	}
 	exitAt := func(bar domain.Snapshot, reason string) (replayedExit, bool) {
 		return replayedExit{NetBps: grossReturnBps(entryRef, bar.Price, factor) - costBps, Reason: reason}, true
 	}
 	for _, bar := range path {
-		retPct := grossReturnBps(entryRef, bar.Price, factor) / 100
-		switch {
-		case rule.StopLossPct > 0 && retPct <= -rule.StopLossPct:
-			return exitAt(bar, domain.ExitReasonStopLoss)
-		case rule.TakeProfitPct > 0 && retPct >= rule.TakeProfitPct:
-			return exitAt(bar, domain.ExitReasonTakeProfit)
-		}
 		if factor*bar.Price > factor*best {
 			best = bar.Price
 		}
-		if rule.TrailingStopPct > 0 && factor*(best-bar.Price)/best*100 >= rule.TrailingStopPct {
-			return exitAt(bar, domain.ExitReasonTrailingStop)
+		mkt := exitcond.Market{Price: bar.Price, Now: bar.Timestamp}
+		if bar.Feature.VWAP > 0 {
+			vwap := bar.Feature.VWAP
+			mkt.VWAP, mkt.PrevVWAP = &vwap, prev
+		}
+		reason, exit, err := exitcond.Evaluate(params, position, mkt, exitcond.Lookups{
+			BestPrice: func() (float64, error) { return best, nil },
+		})
+		if err != nil { // BestPrice never fails
+			return replayedExit{}, false
+		}
+		if exit {
+			return exitAt(bar, reason)
 		}
 		if bar.Feature.VWAP > 0 {
-			// No previous evaluation: the entry price against the current VWAP,
-			// as EvaluateExit does.
-			pPrice, pVWAP := prevPrice, bar.Feature.VWAP
-			if havePrev {
-				pPrice, pVWAP = prevPrice, prevVWAP
-			}
-			if vwapcross.Crossed(direction, pPrice, pVWAP, bar.Price, bar.Feature.VWAP) {
-				return exitAt(bar, domain.ExitReasonVWAPCross)
-			}
-			prevPrice, prevVWAP, havePrev = bar.Price, bar.Feature.VWAP, true
-		}
-		if rule.maxHolding() > 0 && bar.Timestamp.Sub(entryBar.Timestamp) >= rule.maxHolding() {
-			return exitAt(bar, domain.ExitReasonMaxHolding)
+			prev = &vwapcross.Observation{Price: bar.Price, VWAP: bar.Feature.VWAP}
 		}
 	}
 	if rule.maxHolding() > 0 && len(path) > 0 && path[len(path)-1].Timestamp.After(entryBar.Timestamp.Add(rule.maxHolding()-calibration.HorizonBarTolerance)) {

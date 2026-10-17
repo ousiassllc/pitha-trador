@@ -32,15 +32,15 @@ func RunPortfolio(ctx context.Context, cfgs []RunConfig, wf WalkForwardConfig) (
 	var result Result
 	var combinedTrades []Trade
 	for _, sp := range splits {
-		training, err := replayAll(ctx, cfgs, sp.Training, false)
+		training, err := replay(ctx, cfgs, sp.Training, false)
 		if err != nil {
 			return Result{}, err
 		}
-		validation, err := replayAll(ctx, cfgs, sp.Validation, true)
+		validation, err := replay(ctx, cfgs, sp.Validation, true)
 		if err != nil {
 			return Result{}, err
 		}
-		forward, err := replayAll(ctx, cfgs, sp.Forward, true)
+		forward, err := replay(ctx, cfgs, sp.Forward, true)
 		if err != nil {
 			return Result{}, err
 		}
@@ -57,18 +57,4 @@ func RunPortfolio(ctx context.Context, cfgs []RunConfig, wf WalkForwardConfig) (
 	result.ByRegime = AggregateByRegime(combinedTrades)
 	result.ForwardTrades = combinedTrades
 	return result, nil
-}
-
-// replayAll replays every cfg over window, returning all instruments'
-// trades together.
-func replayAll(ctx context.Context, cfgs []RunConfig, window Period, calibrated bool) ([]Trade, error) {
-	var trades []Trade
-	for _, cfg := range cfgs {
-		t, err := replay(ctx, cfg, window, calibrated)
-		if err != nil {
-			return nil, err
-		}
-		trades = append(trades, t...)
-	}
-	return trades, nil
 }

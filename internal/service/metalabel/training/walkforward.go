@@ -20,6 +20,10 @@ var ErrInsufficientData = errors.New("metalabel: insufficient training data")
 // cost-adjusted outcome.
 type Row struct {
 	JevDecisionID int64
+	// JevModelID is the Jev model that answered ("" when unknown).
+	JevModelID string
+	// Symbol is the decision's instrument, a bootstrap cluster key (#780).
+	Symbol string
 	// DecidedAt is the decision's time and LabelEnd the end of its label
 	// window (DecidedAt + the triple-barrier timeout). The label of a row
 	// depends on prices up to LabelEnd, so a model trained on it has seen the

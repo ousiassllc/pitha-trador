@@ -4,17 +4,27 @@ import (
 	"math"
 	"sort"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
-// Exit reasons a Trade's ExitReason field can hold.
+// Exit reasons a Trade's ExitReason field can hold: FR-EXIT-1's eight
+// conditions under the same names Paper Trading stores in
+// positions.exit_reason (domain.ExitReason*, so the two distributions compare
+// directly), plus ExitReasonDataEnded.
 const (
-	ExitReasonStopLoss   = "stop_loss"
-	ExitReasonTakeProfit = "take_profit"
-	ExitReasonMaxHolding = "max_holding_time"
+	ExitReasonStopLoss             = domain.ExitReasonStopLoss
+	ExitReasonTakeProfit           = domain.ExitReasonTakeProfit
+	ExitReasonTrailingStop         = domain.ExitReasonTrailingStop
+	ExitReasonJevDirectionReversed = domain.ExitReasonJevDirectionReversed
+	ExitReasonContinuationProbDrop = domain.ExitReasonContinuationProbDrop
+	ExitReasonVWAPCross            = domain.ExitReasonVWAPCross
+	ExitReasonMaxHolding           = domain.ExitReasonMaxHolding
+	ExitReasonForceFlatBeforeClose = domain.ExitReasonForceFlatBeforeClose
 	// ExitReasonDataEnded means none of ExitRule's conditions triggered
 	// before the available bars ran out (either the dataset's own end,
 	// or - for a position opened near the very end of it - simply no
-	// further bars exist yet to evaluate).
+	// further bars exist yet to evaluate). It has no Paper counterpart.
 	ExitReasonDataEnded = "data_ended"
 )
 
@@ -62,6 +72,11 @@ type Trade struct {
 	// when it was made before the regime was assessed.
 	Regime string
 	ABArm  string
+
+	// Quantity is the share count the replayed Risk Engine sized the position
+	// to (sizing.Quantity); 0 when the replay ran without a Risk Engine
+	// (RunConfig.Risk nil). Returns above are percentages either way.
+	Quantity int64
 }
 
 // Metrics is one backtest run's aggregated trade statistics (FR-BT-1).

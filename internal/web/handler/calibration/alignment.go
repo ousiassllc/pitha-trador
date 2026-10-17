@@ -47,7 +47,7 @@ type alignmentWarningOutput struct {
 	Message string `json:"message" doc:"Operator-facing description of the mismatch (Japanese)."`
 }
 
-type distributionOutput struct {
+type bpsDistributionOutput struct {
 	Count  int     `json:"count" doc:"Sample size."`
 	Mean   float64 `json:"mean" doc:"Mean (bps)."`
 	StdDev float64 `json:"std_dev" doc:"Population standard deviation (bps)."`
@@ -60,8 +60,8 @@ type distributionOutput struct {
 	Max    float64 `json:"max" doc:"Largest value (bps)."`
 }
 
-func distributionResponse(d exitalign.DistributionBps) distributionOutput {
-	return distributionOutput{Count: d.Count, Mean: d.Mean, StdDev: d.StdDev, Min: d.Min, P5: d.P5, P25: d.P25, Median: d.Median, P75: d.P75, P95: d.P95, Max: d.Max}
+func distributionResponse(d exitalign.DistributionBps) bpsDistributionOutput {
+	return bpsDistributionOutput{Count: d.Count, Mean: d.Mean, StdDev: d.StdDev, Min: d.Min, P5: d.P5, P25: d.P25, Median: d.Median, P75: d.P75, P95: d.P95, Max: d.Max}
 }
 
 type reasonCountOutput struct {
@@ -77,23 +77,23 @@ func reasonCountsResponse(in []exitalign.ReasonCount) []reasonCountOutput {
 	return out
 }
 
-type comparisonOutput struct {
-	From              time.Time           `json:"from" doc:"Start of the compared decision window (inclusive)."`
-	To                time.Time           `json:"to" doc:"End of the compared decision window (exclusive)."`
-	HorizonMinutes    int                 `json:"horizon_minutes" doc:"The label timeout (Settings) of the compared labels."`
-	ReplayedCount     int                 `json:"replayed_count" doc:"Decisions with both the label and the replayed net return."`
-	SkippedCount      int                 `json:"skipped_count" doc:"Labeled decisions whose bars do not cover the exit rules' maximum holding time."`
-	LabelNetBps       distributionOutput  `json:"label_net_bps" doc:"Distribution of the label's net return (bps, after cost)."`
-	ReplayNetBps      distributionOutput  `json:"replay_net_bps" doc:"Distribution of the net return of the same decisions replayed under the actual exit rules (bps, after the same cost)."`
-	DiffBps           distributionOutput  `json:"diff_bps" doc:"Distribution of replay minus label per decision (bps). A negative mean means the label is optimistic against the actual exit."`
-	LabelTPCount      int                 `json:"label_tp_count" doc:"Replayed decisions whose label touched the take-profit first."`
-	LabelSLCount      int                 `json:"label_sl_count" doc:"Replayed decisions whose label touched the stop-loss first."`
-	LabelTimeoutCount int                 `json:"label_timeout_count" doc:"Replayed decisions whose label timed out."`
-	ReplayExits       []reasonCountOutput `json:"replay_exits" doc:"Exit reasons of the replay, most frequent first."`
-	PaperExits        []reasonCountOutput `json:"paper_exits" doc:"Exit reasons (positions.exit_reason) of the paper positions closed in the window, for comparison."`
-	NotEvaluatedExits []string            `json:"not_evaluated_exits" doc:"Exit conditions the replay cannot evaluate from the stored data."`
-	CostLongBps       float64             `json:"cost_long_bps" doc:"The LONG label cost deducted in the replay (bps)."`
-	CostShortBps      float64             `json:"cost_short_bps" doc:"The SHORT label cost deducted in the replay (bps)."`
+type labelExitComparisonOutput struct {
+	From              time.Time             `json:"from" doc:"Start of the compared decision window (inclusive)."`
+	To                time.Time             `json:"to" doc:"End of the compared decision window (exclusive)."`
+	HorizonMinutes    int                   `json:"horizon_minutes" doc:"The label timeout (Settings) of the compared labels."`
+	ReplayedCount     int                   `json:"replayed_count" doc:"Decisions with both the label and the replayed net return."`
+	SkippedCount      int                   `json:"skipped_count" doc:"Labeled decisions whose bars do not cover the exit rules' maximum holding time."`
+	LabelNetBps       bpsDistributionOutput `json:"label_net_bps" doc:"Distribution of the label's net return (bps, after cost)."`
+	ReplayNetBps      bpsDistributionOutput `json:"replay_net_bps" doc:"Distribution of the net return of the same decisions replayed under the actual exit rules (bps, after the same cost)."`
+	DiffBps           bpsDistributionOutput `json:"diff_bps" doc:"Distribution of replay minus label per decision (bps). A negative mean means the label is optimistic against the actual exit."`
+	LabelTPCount      int                   `json:"label_tp_count" doc:"Replayed decisions whose label touched the take-profit first."`
+	LabelSLCount      int                   `json:"label_sl_count" doc:"Replayed decisions whose label touched the stop-loss first."`
+	LabelTimeoutCount int                   `json:"label_timeout_count" doc:"Replayed decisions whose label timed out."`
+	ReplayExits       []reasonCountOutput   `json:"replay_exits" doc:"Exit reasons of the replay, most frequent first."`
+	PaperExits        []reasonCountOutput   `json:"paper_exits" doc:"Exit reasons (positions.exit_reason) of the paper positions closed in the window, for comparison."`
+	NotEvaluatedExits []string              `json:"not_evaluated_exits" doc:"Exit conditions the replay cannot evaluate from the stored data."`
+	CostLongBps       float64               `json:"cost_long_bps" doc:"The LONG label cost deducted in the replay (bps)."`
+	CostShortBps      float64               `json:"cost_short_bps" doc:"The SHORT label cost deducted in the replay (bps)."`
 }
 
 type oosPaperOutput struct {
@@ -110,12 +110,12 @@ type oosPaperOutput struct {
 // `GET /api/v1/calibration/exit-alignment`.
 type AlignmentAPIOutput struct {
 	Body struct {
-		Rows             []alignmentRowOutput     `json:"rows" doc:"The label basis versus the actual exit and fill-model cost."`
-		Warnings         []alignmentWarningOutput `json:"warnings" doc:"Mismatches between the label basis and the actual exit or the fill-model cost; empty when everything agrees within the tolerance."`
-		ToleranceBps     float64                  `json:"tolerance_bps" doc:"Provisional tolerance for the take-profit/stop-loss levels (bps)."`
-		ToleranceMinutes float64                  `json:"tolerance_minutes" doc:"Provisional tolerance for the timeout versus the maximum holding time (minutes)."`
-		Comparison       *comparisonOutput        `json:"comparison,omitempty" doc:"Per-decision label net return versus the same decisions replayed under the actual exit rules, computed on read; omitted when no source is wired."`
-		OOSPaper         *oosPaperOutput          `json:"oos_paper,omitempty" doc:"The newest model's OOS EV beside the mean realized paper return over the same window; omitted when no model was ever trained."`
+		Rows             []alignmentRowOutput       `json:"rows" doc:"The label basis versus the actual exit and fill-model cost."`
+		Warnings         []alignmentWarningOutput   `json:"warnings" doc:"Mismatches between the label basis and the actual exit or the fill-model cost; empty when everything agrees within the tolerance."`
+		ToleranceBps     float64                    `json:"tolerance_bps" doc:"Provisional tolerance for the take-profit/stop-loss levels (bps)."`
+		ToleranceMinutes float64                    `json:"tolerance_minutes" doc:"Provisional tolerance for the timeout versus the maximum holding time (minutes)."`
+		Comparison       *labelExitComparisonOutput `json:"comparison,omitempty" doc:"Per-decision label net return versus the same decisions replayed under the actual exit rules, computed on read; omitted when no source is wired."`
+		OOSPaper         *oosPaperOutput            `json:"oos_paper,omitempty" doc:"The newest model's OOS EV beside the mean realized paper return over the same window; omitted when no model was ever trained."`
 	}
 }
 
@@ -145,7 +145,7 @@ func (h *CalibrationHandler) APIAlignment(ctx context.Context, in *AlignmentAPII
 	}
 	out.Body.ToleranceBps, out.Body.ToleranceMinutes = a.ToleranceBps, a.ToleranceMinutes
 	if c := a.Comparison; c != nil {
-		out.Body.Comparison = &comparisonOutput{
+		out.Body.Comparison = &labelExitComparisonOutput{
 			From: c.From, To: c.To, HorizonMinutes: c.HorizonMinutes, ReplayedCount: c.ReplayedCount, SkippedCount: c.SkippedCount,
 			LabelNetBps: distributionResponse(c.LabelNetBps), ReplayNetBps: distributionResponse(c.ReplayNetBps), DiffBps: distributionResponse(c.DiffBps),
 			LabelTPCount: c.LabelTPCount, LabelSLCount: c.LabelSLCount, LabelTimeoutCount: c.LabelTimeoutCount,

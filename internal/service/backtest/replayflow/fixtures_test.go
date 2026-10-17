@@ -5,11 +5,32 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 )
 
 func ptr[T any](v T) *T { return &v }
+
+// fixedModels is a backtest.ModelSource whose one model was in force always.
+type fixedModels struct{ model *metalabel.Model }
+
+func (f fixedModels) ModelAt(time.Time) (*metalabel.Model, error) { return f.model, nil }
+
+// takingModels is the meta-labeling model that takes every candidate: the
+// default replay's entry rule then reduces to the hard guards.
+func takingModels() backtest.ModelSource {
+	m := policytest.TakingModel()
+	return fixedModels{&m}
+}
+
+// flowFeature gives a bar the order-flow inputs the meta-labeling model needs.
+func flowFeature(f domain.Feature) domain.Feature {
+	f.OrderFlowFeatures = policytest.Feature().OrderFlowFeatures
+	return f
+}
 
 // testThresholds mirrors internal/service/policy's own test fixture
 // (engine_test.go's testThresholds): the LONG boundary this package's
@@ -45,7 +66,7 @@ func rampBars(instrumentID int64, base time.Time, n int, startPrice, priceMultip
 			Timestamp:    ts,
 			Price:        price,
 			SpreadBps:    ptr(spreadBps),
-			Feature:      feature,
+			Feature:      flowFeature(feature),
 		})
 		price *= priceMultiplier
 	}

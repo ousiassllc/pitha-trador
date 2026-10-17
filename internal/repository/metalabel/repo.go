@@ -24,7 +24,9 @@ func NewRepository(db *sql.DB) *Repository {
 
 const modelColumns = `id, version, algorithm, label_version, status, reject_reason, trained_at,
 	train_start, train_end, oos_start, oos_end, train_samples, oos_samples,
-	feature_names_json, params_json, oos_auc, oos_expected_value_bps, oos_calibration_json, created_at`
+	feature_names_json, params_json, oos_auc, oos_expected_value_bps, oos_calibration_json,
+	oos_takes, oos_days, oos_ev_ci_low_bps, oos_ev_ci_high_bps, oos_auc_ci_low, oos_auc_ci_high,
+	adoption_json, forward_json, created_at`
 
 // InsertModel stores m and returns it with ID and CreatedAt set. A Version
 // that is already stored is an error (the column is UNIQUE).
@@ -37,16 +39,29 @@ func (r *Repository) InsertModel(ctx context.Context, m Model) (Model, error) {
 	if err != nil {
 		return Model{}, fmt.Errorf("repository: encode calibration curve of meta-label model %q: %w", m.Version, err)
 	}
+	adoption, err := json.Marshal(m.Adoption)
+	if err != nil {
+		return Model{}, fmt.Errorf("repository: encode adoption record of meta-label model %q: %w", m.Version, err)
+	}
+	forward, err := json.Marshal(m.Forward)
+	if err != nil {
+		return Model{}, fmt.Errorf("repository: encode forward evaluation of meta-label model %q: %w", m.Version, err)
+	}
+	evLow, evHigh := intervalBounds(m.OOSEVCI)
+	aucLow, aucHigh := intervalBounds(m.OOSAUCCI)
 	createdAt := time.Now().UTC()
 	res, err := r.db.ExecContext(ctx, `INSERT INTO metalabel_models (
 		version, algorithm, label_version, status, reject_reason, trained_at,
 		train_start, train_end, oos_start, oos_end, train_samples, oos_samples,
-		feature_names_json, params_json, oos_auc, oos_expected_value_bps, oos_calibration_json, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		feature_names_json, params_json, oos_auc, oos_expected_value_bps, oos_calibration_json,
+		oos_takes, oos_days, oos_ev_ci_low_bps, oos_ev_ci_high_bps, oos_auc_ci_low, oos_auc_ci_high,
+		adoption_json, forward_json, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		m.Version, m.Algorithm, m.LabelVersion, m.Status, m.RejectReason, sqlutil.FormatTime(m.TrainedAt),
 		sqlutil.FormatTime(m.TrainStart), sqlutil.FormatTime(m.TrainEnd), sqlutil.FormatTime(m.OOSStart), sqlutil.FormatTime(m.OOSEnd),
 		m.TrainSamples, m.OOSSamples, string(names), m.ParamsJSON,
-		sqlutil.NullableFloat64(m.OOSAUC), sqlutil.NullableFloat64(m.OOSExpectedValueBps), string(curve), sqlutil.FormatTime(createdAt))
+		sqlutil.NullableFloat64(m.OOSAUC), sqlutil.NullableFloat64(m.OOSExpectedValueBps), string(curve),
+		m.OOSTakes, m.OOSDays, evLow, evHigh, aucLow, aucHigh, string(adoption), string(forward), sqlutil.FormatTime(createdAt))
 	if err != nil {
 		return Model{}, fmt.Errorf("repository: insert meta-label model %q: %w", m.Version, err)
 	}
@@ -94,11 +109,14 @@ func scanModel(row sqlutil.RowScanner) (Model, error) {
 		m                                                 Model
 		trainedAt, trainStart, trainEnd, oosStart, oosEnd string
 		names, curve, createdAt                           string
+		adoption, forward                                 string
 		auc, ev                                           sql.NullFloat64
+		evLow, evHigh, aucLow, aucHigh                    sql.NullFloat64
 	)
 	if err := row.Scan(&m.ID, &m.Version, &m.Algorithm, &m.LabelVersion, &m.Status, &m.RejectReason, &trainedAt,
 		&trainStart, &trainEnd, &oosStart, &oosEnd, &m.TrainSamples, &m.OOSSamples,
-		&names, &m.ParamsJSON, &auc, &ev, &curve, &createdAt); err != nil {
+		&names, &m.ParamsJSON, &auc, &ev, &curve,
+		&m.OOSTakes, &m.OOSDays, &evLow, &evHigh, &aucLow, &aucHigh, &adoption, &forward, &createdAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Model{}, err
 		}
@@ -121,6 +139,14 @@ func scanModel(row sqlutil.RowScanner) (Model, error) {
 	if err := json.Unmarshal([]byte(curve), &m.OOSCalibration); err != nil {
 		return Model{}, fmt.Errorf("repository: decode calibration curve of meta-label model %q: %w", m.Version, err)
 	}
+	if err := json.Unmarshal([]byte(adoption), &m.Adoption); err != nil {
+		return Model{}, fmt.Errorf("repository: decode adoption record of meta-label model %q: %w", m.Version, err)
+	}
+	if err := json.Unmarshal([]byte(forward), &m.Forward); err != nil {
+		return Model{}, fmt.Errorf("repository: decode forward evaluation of meta-label model %q: %w", m.Version, err)
+	}
+	m.OOSEVCI = nullInterval(evLow, evHigh)
+	m.OOSAUCCI = nullInterval(aucLow, aucHigh)
 	if auc.Valid {
 		m.OOSAUC = &auc.Float64
 	}
@@ -135,4 +161,19 @@ func nonNil[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+// intervalBounds splits an optional interval into its two nullable columns.
+func intervalBounds(iv *Interval) (low, high any) {
+	if iv == nil {
+		return nil, nil
+	}
+	return iv.Low, iv.High
+}
+
+func nullInterval(low, high sql.NullFloat64) *Interval {
+	if !low.Valid || !high.Valid {
+		return nil
+	}
+	return &Interval{Low: low.Float64, High: high.Float64}
 }

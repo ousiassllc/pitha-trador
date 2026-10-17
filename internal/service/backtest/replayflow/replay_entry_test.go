@@ -23,7 +23,7 @@ func barsAtTimes(instrumentID int64, times []time.Time, startPrice, priceMultipl
 			History:   bars,
 		})
 		bars = append(bars, domain.Snapshot{
-			InstrumentID: instrumentID, Timestamp: ts, Price: price, SpreadBps: ptr(10.0), Feature: feature,
+			InstrumentID: instrumentID, Timestamp: ts, Price: price, SpreadBps: ptr(10.0), Feature: flowFeature(feature),
 		})
 		price *= priceMultiplier
 	}
@@ -37,6 +37,7 @@ func shadowTrades(t *testing.T, instrumentID int64, bars []domain.Snapshot, deci
 		Symbol:       "7203",
 		Snapshots:    bars,
 		Decisions:    backtest.NewSliceDecisionSource(decisions),
+		Models:       takingModels(),
 		Thresholds:   testThresholds(),
 		Exit:         backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute},
 	}
@@ -56,15 +57,17 @@ func TestReplay_DecisionConsumedAfterExit(t *testing.T) {
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
 	bars := rampBars(instrumentID, base, 12, 2000, 1.005, 10) // +1% TP reached after 2 bars
 
-	trades := shadowTrades(t, instrumentID, bars, []domain.JevDecision{longDecision(instrumentID, base)})
+	// The first bar has no 1-minute return (a model input), so decide on the second.
+	first := base.Add(time.Minute)
+	trades := shadowTrades(t, instrumentID, bars, []domain.JevDecision{longDecision(instrumentID, first)})
 	if len(trades) != 1 {
 		t.Fatalf("len(trades) = %d, want 1 (one decision must open at most one trade)", len(trades))
 	}
 
 	// A new decision after the exit opens exactly one more trade.
 	trades = shadowTrades(t, instrumentID, bars, []domain.JevDecision{
-		longDecision(instrumentID, base),
-		longDecision(instrumentID, base.Add(6*time.Minute)),
+		longDecision(instrumentID, first),
+		longDecision(instrumentID, base.Add(7*time.Minute)),
 	})
 	if len(trades) != 2 {
 		t.Fatalf("len(trades) = %d, want 2 (one per decision)", len(trades))
@@ -79,17 +82,18 @@ func TestReplay_DecisionDuringOpenPositionIsDropped(t *testing.T) {
 	bars := rampBars(instrumentID, base, 12, 2000, 1.005, 10) // trade holds bars 0-2
 
 	trades := shadowTrades(t, instrumentID, bars, []domain.JevDecision{
-		longDecision(instrumentID, base),
 		longDecision(instrumentID, base.Add(1*time.Minute)),
+		longDecision(instrumentID, base.Add(2*time.Minute)),
 	})
 	if len(trades) != 1 {
-		t.Fatalf("len(trades) = %d, want 1 (decision at +1m arrived while the position was open)", len(trades))
+		t.Fatalf("len(trades) = %d, want 1 (decision at +2m arrived while the position was open)", len(trades))
 	}
 }
 
 // TestReplay_EntryWithoutHoldingBarIsNotATrade covers #479: an entry on the
-// last bar, or on a bar whose next bar is already past MaxHolding (session
-// gap), must not produce an entry==exit zero-return trade.
+// last bar must not produce an entry==exit zero-return trade. An entry whose
+// next bar is already past MaxHolding (session gap) is closed on that next
+// bar, as live's OnSnapshot does (a real exit bar, not an entry==exit row).
 func TestReplay_EntryWithoutHoldingBarIsNotATrade(t *testing.T) {
 	const instrumentID = int64(1)
 	d := func(h, m int) time.Time { return time.Date(2026, 1, 1, h, m, 0, 0, time.UTC) }
@@ -105,8 +109,8 @@ func TestReplay_EntryWithoutHoldingBarIsNotATrade(t *testing.T) {
 	t.Run("next bar past MaxHolding", func(t *testing.T) {
 		bars := barsAtTimes(instrumentID, []time.Time{d(11, 28), d(11, 29), d(12, 30), d(12, 31)}, 2000, 1.001)
 		trades := shadowTrades(t, instrumentID, bars, []domain.JevDecision{longDecision(instrumentID, d(11, 29))})
-		if len(trades) != 0 {
-			t.Fatalf("len(trades) = %d, want 0: %+v", len(trades), trades)
+		if len(trades) != 1 || trades[0].ExitReason != backtest.ExitReasonMaxHolding || !trades[0].ExitTimestamp.Equal(d(12, 30)) {
+			t.Fatalf("trades = %+v, want one max_holding exit on the 12:30 bar", trades)
 		}
 	})
 }
