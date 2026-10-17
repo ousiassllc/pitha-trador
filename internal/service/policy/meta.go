@@ -16,8 +16,9 @@ import (
 // MetaVersion identifies the live entry rule that replaced the confidence
 // threshold with the meta-labeling model's expected-value verdict (issue #765,
 // parent #752); Evaluate records it (with the applied proposal's suffix, like
-// Version) in trade_signals.policy_version. Version stays the legacy rule's
-// identifier, which the backtest replay (Decide) still runs.
+// Version) in trade_signals.policy_version, and the backtest replay
+// (DecideReplay, issue #775) runs the same rule. Version stays the legacy
+// rule's identifier.
 const MetaVersion = "policy-v2"
 
 // Reasons of a NONE the meta-labeling entry rule produced (FR-POLICY-3's
@@ -74,8 +75,8 @@ type metaWiring struct {
 // policy.*.min_probability (issue #765). Every verdict is stored through
 // predictions, one row per Jev decision. Without this option (or without a
 // model) Evaluate never enters: a NONE whose reject_reason says why.
-// Decide - the backtest replay path, which has no stored models - keeps the
-// legacy threshold rule.
+// DecideReplay is the same rule for the backtest, with the model that was in
+// force at the replayed time.
 func WithMetaModel(models MetaModelSource, predictions PredictionRecorder, config MetaConfigSource) Option {
 	return func(e *Engine) { e.meta = &metaWiring{models: models, predictions: predictions, config: config} }
 }

@@ -1,4 +1,4 @@
-package backtest_test
+package replayflow_test
 
 import (
 	"context"
@@ -19,6 +19,7 @@ func longRunConfig(instrumentID int64, symbol string, bars []domain.Snapshot) ba
 		Symbol:       symbol,
 		Snapshots:    bars,
 		Decisions:    backtest.NewSliceDecisionSource(decisions),
+		Models:       takingModels(),
 		Thresholds:   testThresholds(),
 		Exit:         backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute},
 	}
