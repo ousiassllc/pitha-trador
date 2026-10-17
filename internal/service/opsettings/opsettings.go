@@ -167,6 +167,9 @@ func (s *Service) Get(ctx context.Context, key string) (Value, error) {
 	default:
 		v.Current = v.Default
 	}
+	if key == metalabelsettings.KeyLLMCutoff {
+		v.Warning = s.llmCutoffWarning(ctx)
+	}
 	return v, nil
 }
 

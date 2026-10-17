@@ -2,6 +2,7 @@ package opsflow_test
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -20,6 +21,10 @@ func TestSaveOps_MetaLabelSettingsAreEditable(t *testing.T) {
 		metalabelsettings.KeyRetrainTime: {"19:30", `"19:30"`},
 		metalabelsettings.KeyMinEVBps:    {"3.5", `3.5`},
 		metalabelsettings.KeyLLMCutoff:   {"2025-09-30", `"2025-09-30"`},
+		// issue #776: the cutoff's provenance is recorded as runtime settings too.
+		metalabelsettings.KeyLLMCutoffModel:       {"jev-x", `"jev-x"`},
+		metalabelsettings.KeyLLMCutoffConfirmedOn: {"2026-10-17", `"2026-10-17"`},
+		metalabelsettings.KeyLLMCutoffSource:      {"vendor docs", `"vendor docs"`},
 	} {
 		rec := opsRequest(engine, http.MethodPost, key, url.Values{"value": {tc.raw}}, true)
 		if rec.Code != http.StatusOK {
@@ -45,6 +50,7 @@ func TestSaveOps_MetaLabelRejectsInvalidValues(t *testing.T) {
 		"negative min EV":     {metalabelsettings.KeyMinEVBps, "-1"},
 		"min EV text":         {metalabelsettings.KeyMinEVBps, "abc"},
 		"malformed cutoff":    {metalabelsettings.KeyLLMCutoff, "2025/09/30"},
+		"malformed confirmed": {metalabelsettings.KeyLLMCutoffConfirmedOn, "yesterday"},
 	} {
 		rec := opsRequest(engine, http.MethodPost, tc.key, url.Values{"value": {tc.raw}}, true)
 		if rec.Code != http.StatusBadRequest {
@@ -53,5 +59,26 @@ func TestSaveOps_MetaLabelRejectsInvalidValues(t *testing.T) {
 	}
 	if len(store.rows) != 0 {
 		t.Fatalf("rejected values were stored: %v", store.rows)
+	}
+}
+
+// issue #776: the LLM cutoff row warns while it is the placeholder and the
+// warning disappears once a real cutoff with its Jev model is stored.
+func TestSettingsPage_WarnsWhileTheLLMCutoffIsAPlaceholder(t *testing.T) {
+	warning := `data-testid="warning-` + metalabelsettings.KeyLLMCutoff + `"`
+	engine, store := opsRouter()
+	page := func() string {
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+		return rec.Body.String()
+	}
+
+	if body := page(); !strings.Contains(body, warning) || !strings.Contains(body, "仮置き") {
+		t.Fatal("the placeholder cutoff shows no warning on the Settings page")
+	}
+	store.rows[metalabelsettings.KeyLLMCutoff] = `"2026-09-01"`
+	store.rows[metalabelsettings.KeyLLMCutoffModel] = `"jev-x"`
+	if strings.Contains(page(), warning) {
+		t.Error("a confirmed cutoff still shows the warning")
 	}
 }

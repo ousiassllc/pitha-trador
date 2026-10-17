@@ -13,12 +13,15 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 	servicemetalabel "github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 	"github.com/ousiassllc/pitha-trador/internal/service/scheduler/maintenance"
+	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 )
 
 // TaskName is the maintenance task's name (its last-success date is stored
@@ -46,7 +49,10 @@ type Job struct {
 func New(db *sql.DB, settings *system.RuntimeSettingsRepository) *Job {
 	j := &Job{db: db, settings: settings, now: time.Now}
 	repo := metalabel.NewRepository(db)
-	j.trainer = training.NewTrainer(repo, servicemetalabel.NewStore(repo), j.load)
+	// The adoption honours the freeze after a policy.* change of the
+	// self-improvement flow (issue #780).
+	j.trainer = training.NewTrainer(repo, servicemetalabel.NewStore(repo), j.load,
+		training.WithPolicyChanges(judgement.NewProposalRepository(db)))
 	return j
 }
 
@@ -106,4 +112,11 @@ func PolicyOption(db *sql.DB, settings *system.RuntimeSettingsRepository) policy
 		cfg.MinEVBps = s.MinEVBps
 		return cfg, nil
 	})
+}
+
+// ChangeGuard limits the self-improvement flow's policy.* changes against the
+// meta-labeling model adoptions in db (issue #780, FR-SELFIMPROVE-10): the
+// rate limit between changes and the freeze around a model adoption.
+func ChangeGuard(db *sql.DB) selfimprove.Option {
+	return selfimprove.WithChangeGuard(changeguard.DefaultLimits(), servicemetalabel.NewStore(metalabel.NewRepository(db)))
 }

@@ -1,4 +1,4 @@
-package training_test
+package trainingflow_test
 
 import (
 	"errors"

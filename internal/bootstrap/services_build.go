@@ -183,12 +183,12 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 // secrets replace one role each with an external LLM API. With neither Jev
 // nor an override, the stage is skipped every day (assist.ErrNotConfigured)
 // instead of blocking start-up.
-func (s *Services) buildGovernor(strategy *config.StrategyConfig, secrets config.Secrets, alertChannels alerts.Channels) {
+func (s *Services) buildGovernor(strategy *config.StrategyConfig, db *sql.DB, secrets config.Secrets, alertChannels alerts.Channels) {
 	solClient := assist.NewClient(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey})
 	opusClient := assist.NewClient(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey})
 	s.Governor = selfimprove.NewGovernor(s.Proposals, s.Settings, s.Positions,
 		s.Backtest, strategy.Policy,
-		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()),
+		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()), metalabeljob.ChangeGuard(db),
 		selfimprove.WithSol(assist.NewSol(solClient, assist.WithJev(s.Jev))),
 		selfimprove.WithOpus(assist.NewOpus(opusClient, assist.WithJev(s.Jev))))
 }

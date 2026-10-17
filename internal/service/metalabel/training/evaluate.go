@@ -26,6 +26,9 @@ type Evaluation struct {
 	// Calibration is the reliability curve: per non-empty calibrated
 	// probability bin, the mean prediction against the observed win rate.
 	Calibration []repo.CalibrationBin
+	// scored are the rows the model could score, kept for the bootstrap
+	// intervals and the comparison with another model on the same rows.
+	scored []scoredRow
 }
 
 // Evaluate scores m on the out-of-sample rows: AUC, the mean net return of the
@@ -42,13 +45,14 @@ func Evaluate(m metalabel.Model, rows []Row, cfg metalabel.DecideConfig) Evaluat
 		binCount   [calibrationBinCount]int
 		takeReturn float64
 	)
-	for _, r := range rows {
+	for idx, r := range rows {
 		p, err := m.Predict(r.Vector)
 		if err != nil {
 			continue
 		}
 		raws = append(raws, p.Raw)
 		wins = append(wins, r.NetReturnBps > 0)
+		sr := scoredRow{index: idx, day: dayOf(r), symbol: r.Symbol, win: r.NetReturnBps > 0, raw: p.Raw, ret: r.NetReturnBps}
 		i := min(int(p.Calibrated*calibrationBinCount), calibrationBinCount-1)
 		binSum[i] += p.Calibrated
 		binCount[i]++
@@ -58,7 +62,9 @@ func Evaluate(m metalabel.Model, rows []Row, cfg metalabel.DecideConfig) Evaluat
 		if d := metalabel.Decide(&m, r.Direction, r.Features, cfg); d.Action == repo.ActionTake {
 			e.Takes++
 			takeReturn += r.NetReturnBps
+			sr.take = true
 		}
+		e.scored = append(e.scored, sr)
 	}
 	e.Samples = len(raws)
 	e.AUC = auc(raws, wins)

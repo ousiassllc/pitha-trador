@@ -25,8 +25,8 @@ describe('Lit table templates', () => {
       'activity-feed/activity-feed-views.ts',
       'activity-feed/pitha-activity-feed.ts',
       'calibration-heatmap/ab-arms-view.ts',
-      'calibration-heatmap/meta-model-view.ts',
-      'calibration-heatmap/pitha-calibration-heatmap.ts',
+      'calibration-heatmap/direction-view.ts',
+      'calibration-heatmap/meta-model/meta-model-view.ts',
       'scanner-table/pitha-scanner-table.ts',
     ]);
   });

@@ -234,3 +234,46 @@ func ids(ps []domain.PolicyProposal) []int64 {
 	}
 	return out
 }
+
+func TestProposalRepository_LastChangeAt(t *testing.T) {
+	db := newTestDB(t)
+	proposals := judgement.NewProposalRepository(db)
+	ctx := context.Background()
+	base := time.Date(2026, 10, 14, 6, 40, 0, 0, time.UTC)
+
+	if _, found, err := proposals.LastChangeAt(ctx); err != nil || found {
+		t.Fatalf("LastChangeAt on an empty table = found %v, %v; want none", found, err)
+	}
+	insert := func() int64 {
+		p, err := proposals.Insert(ctx, domain.PolicyProposal{ProposedAt: base, RationaleJSON: `{}`, ProposedChangesJSON: `[]`})
+		if err != nil {
+			t.Fatalf("Insert: %v", err)
+		}
+		return p.ID
+	}
+
+	// A pending or rejected proposal changed nothing.
+	pending := insert()
+	if err := proposals.UpdateReview(ctx, insert(), domain.PolicyProposalStatusRejected, "opus", `{}`); err != nil {
+		t.Fatalf("UpdateReview: %v", err)
+	}
+	if _, found, err := proposals.LastChangeAt(ctx); err != nil || found {
+		t.Fatalf("LastChangeAt with no applied proposal = found %v, %v; want none", found, err)
+	}
+
+	// An apply counts; a later automatic rollback is a newer change.
+	applied := base.Add(time.Hour)
+	if err := proposals.MarkApplied(ctx, pending, "sol-1", applied); err != nil {
+		t.Fatalf("MarkApplied: %v", err)
+	}
+	if got, found, err := proposals.LastChangeAt(ctx); err != nil || !found || !got.Equal(applied) {
+		t.Fatalf("LastChangeAt after an apply = %v, %v, %v; want %v", got, found, err, applied)
+	}
+	rolledBack := base.Add(48 * time.Hour)
+	if err := proposals.MarkRolledBack(ctx, pending, rolledBack, "degraded"); err != nil {
+		t.Fatalf("MarkRolledBack: %v", err)
+	}
+	if got, found, err := proposals.LastChangeAt(ctx); err != nil || !found || !got.Equal(rolledBack) {
+		t.Fatalf("LastChangeAt after a rollback = %v, %v, %v; want %v", got, found, err, rolledBack)
+	}
+}

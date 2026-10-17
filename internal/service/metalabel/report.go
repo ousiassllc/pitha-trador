@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
-	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/domain/metamodel"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 )
 
@@ -33,36 +33,37 @@ func NewReporter(r ReportRepository, settings func(context.Context) (metalabelse
 // no model was ever trained. The newest model may be a rejected one: its
 // metrics are what the last retraining produced, and ActiveVersion names the
 // model actually in force.
-func (r *Reporter) Report(ctx context.Context) (domain.MetaModelReport, bool, error) {
+func (r *Reporter) Report(ctx context.Context) (metamodel.Report, bool, error) {
 	m, found, err := r.repo.LatestModel(ctx)
 	if err != nil {
-		return domain.MetaModelReport{}, false, fmt.Errorf("metalabel: load the latest model: %w", err)
+		return metamodel.Report{}, false, fmt.Errorf("metalabel: load the latest model: %w", err)
 	}
 	if !found {
-		return domain.MetaModelReport{}, false, nil
+		return metamodel.Report{}, false, nil
 	}
 	active, hasActive, err := r.repo.LatestActiveModel(ctx)
 	if err != nil {
-		return domain.MetaModelReport{}, false, fmt.Errorf("metalabel: load the active model: %w", err)
+		return metamodel.Report{}, false, fmt.Errorf("metalabel: load the active model: %w", err)
 	}
 	s, err := r.settings(ctx)
 	if err != nil {
-		return domain.MetaModelReport{}, false, fmt.Errorf("metalabel: read settings: %w", err)
+		return metamodel.Report{}, false, fmt.Errorf("metalabel: read settings: %w", err)
 	}
 
-	bins := make([]domain.MetaModelCalibrationBin, len(m.OOSCalibration))
-	for i, b := range m.OOSCalibration {
-		bins[i] = domain.MetaModelCalibrationBin{MeanPredicted: b.MeanPredicted, ObservedRate: b.ObservedRate, Count: b.Count}
-	}
-	report := domain.MetaModelReport{
-		Version: m.Version, Algorithm: m.Algorithm, Status: m.Status, RejectReason: m.RejectReason,
-		TrainedAt: m.TrainedAt, TrainStart: m.TrainStart, TrainEnd: m.TrainEnd, OOSStart: m.OOSStart, OOSEnd: m.OOSEnd,
-		TrainSamples: m.TrainSamples, OOSSamples: m.OOSSamples,
-		OOSAUC: m.OOSAUC, OOSEVBps: m.OOSExpectedValueBps, OOSCalibration: bins,
-		LLMCutoff: s.LLMCutoff,
-	}
+	report := reportOf(m)
+	report.LLMCutoff = s.LLMCutoff
 	if hasActive {
 		report.ActiveVersion = active.Version
 	}
 	return report, true, nil
+}
+
+// Cutoff returns the LLM cutoff setting with its status and provenance
+// (issue #776), whether or not any model was trained.
+func (r *Reporter) Cutoff(ctx context.Context) (metalabelsettings.CutoffInfo, error) {
+	s, err := r.settings(ctx)
+	if err != nil {
+		return metalabelsettings.CutoffInfo{}, fmt.Errorf("metalabel: read settings: %w", err)
+	}
+	return s.CutoffInfo(), nil
 }
