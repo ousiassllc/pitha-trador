@@ -3,6 +3,7 @@ package pages
 import (
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/evaluation"
 )
 
 // PerformanceResult is a Walk Forward backtest's output: the out-of-sample
@@ -21,8 +22,12 @@ type PerformanceProps struct {
 	Form         organisms.BacktestFormValues
 	Actuals      organisms.PerformanceActuals
 	ActualsError string
-	Result       *PerformanceResult
-	Errors       []string
+	// Evaluation is the realized-performance evaluation (issue #777), or
+	// EvaluationError when it could not be read.
+	Evaluation      evaluation.Panel
+	EvaluationError string
+	Result          *PerformanceResult
+	Errors          []string
 }
 
 // PerformancePage is the Performance full page (functional.md §5.3,
@@ -35,6 +40,7 @@ templ PerformancePage(props PerformanceProps) {
 	@layout.Shell("Performance", organisms.NavPerformance) {
 		<h1 class="text-2xl font-bold text-slate-900">Performance</h1>
 		@organisms.PerformanceActualsPanel(props.Actuals, props.ActualsError)
+		@evaluation.EvaluationPanel(props.Evaluation, props.EvaluationError)
 		@organisms.BacktestForm(props.Form)
 		if len(props.Errors) > 0 {
 			<ul class="mt-4 list-inside list-disc rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">

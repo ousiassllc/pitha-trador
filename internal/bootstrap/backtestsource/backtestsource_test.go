@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
@@ -23,6 +24,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 	"github.com/ousiassllc/pitha-trador/internal/service/selfimprove"
 )
 
@@ -36,6 +38,8 @@ type testEnv struct {
 	Instruments *market.InstrumentRepository
 	Snapshots   *market.SnapshotRepository
 	Decisions   *judgement.DecisionRepository
+	Positions   *trading.PositionRepository
+	Models      *metalabel.Repository
 }
 
 func newTestEnv(t *testing.T) testEnv {
@@ -71,7 +75,10 @@ func newTestEnvWith(t *testing.T, tune func(*execution.Config)) testEnv {
 		Decisions:   judgement.NewDecisionRepository(conn),
 	}
 	runtimePolicy := selfimprove.NewRuntimePolicy(system.NewRuntimeSettingsRepository(conn), judgement.NewProposalRepository(conn), strategy.Policy)
-	env.Source = New(env.Instruments, env.Snapshots, env.Decisions, policy.ThresholdsFromStrategy(*strategy), runtimePolicy, execCfg)
+	env.Positions = trading.NewPositionRepository(conn)
+	env.Models = metalabel.NewRepository(conn)
+	env.Source = New(env.Instruments, env.Snapshots, env.Decisions, policy.ThresholdsFromStrategy(*strategy), runtimePolicy, execCfg,
+		Replay{Models: env.Models, MetaSettings: system.NewRuntimeSettingsRepository(conn), Risk: riskCfg.Paper, Positions: env.Positions})
 	return env
 }
 
@@ -114,6 +121,7 @@ func recordLiveBars(t *testing.T, env testEnv, inst domain.Instrument, base time
 		feature := featureengine.Compute(featureengine.Input{
 			Timestamp: ts, Current: featureengine.Reading{Price: price, VWAP: price, Volume: volume, Turnover: turnover}, History: history,
 		})
+		feature.OrderFlowFeatures = policytest.Feature().OrderFlowFeatures
 		if _, err := env.Snapshots.Insert(ctx, domain.Snapshot{
 			InstrumentID: inst.ID, Symbol: inst.Symbol, Timestamp: ts, Price: price,
 			SpreadBps: &spread, Volume: volume, Turnover: turnover, Feature: feature,
@@ -134,6 +142,7 @@ func TestSource_RunWalkForwardReplaysRecordedHistory(t *testing.T) {
 	env := newTestEnv(t)
 	inst := mustCreateInstrument(t, env, "7203")
 	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	storeTakingModel(t, env, base.Add(-time.Hour))
 	recordLiveBars(t, env, inst, base, 90)
 
 	// Start the backtest mid-history so the first bars in range need the
@@ -168,6 +177,7 @@ func TestSource_BacktestFillsMatchPaperExecution(t *testing.T) {
 	ctx := context.Background()
 	inst := mustCreateInstrument(t, env, "7203")
 	base := time.Date(2026, 9, 1, 9, 0, 0, 0, marketcalendar.JST) // 火曜 9:00 JST
+	storeTakingModel(t, env, base.Add(-time.Hour))
 	recordLiveBars(t, env, inst, base, 30)
 
 	period := backtest.Period{Start: base, End: base.Add(30 * time.Minute)}

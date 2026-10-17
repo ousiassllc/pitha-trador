@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -88,6 +89,11 @@ type Settings struct {
 	// LLMCutoff ("YYYY-MM-DD", UTC) is when the Jev model's training data ends;
 	// the OOS evaluation uses only decisions on or after it.
 	LLMCutoff string
+	// LLMCutoffModel, LLMCutoffConfirmedOn and LLMCutoffSource record where
+	// LLMCutoff comes from (provenance, issue #776): the Jev model name it was
+	// confirmed for, the date it was confirmed ("YYYY-MM-DD") and the source.
+	// All are empty until the operator records them.
+	LLMCutoffModel, LLMCutoffConfirmedOn, LLMCutoffSource string
 }
 
 // Default returns the shipped settings: logistic regression with Platt
@@ -98,17 +104,11 @@ func Default() Settings {
 
 // Keys returns every runtime_settings key Apply accepts.
 func Keys() []string {
-	return []string{KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps, KeyLLMCutoff}
+	return []string{KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps, KeyLLMCutoff, KeyLLMCutoffModel, KeyLLMCutoffConfirmedOn, KeyLLMCutoffSource}
 }
 
 // IsKey reports whether key is one of Keys.
-func IsKey(key string) bool {
-	switch key {
-	case KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps, KeyLLMCutoff:
-		return true
-	}
-	return false
-}
+func IsKey(key string) bool { return slices.Contains(Keys(), key) }
 
 // IsStringKey reports whether key's value is a JSON string (everything but
 // KeyMinEVBps).
@@ -129,7 +129,7 @@ func (s Settings) Text(key string) (text string, ok bool) {
 	case KeyLLMCutoff:
 		return s.LLMCutoff, true
 	}
-	return "", false
+	return s.provenanceText(key)
 }
 
 var retrainTimePattern = regexp.MustCompile(`^\d{1,2}:\d{2}$`)
@@ -150,6 +150,8 @@ func Normalize(key, raw string) (string, error) {
 		return normalizeRetrainTime(raw)
 	case KeyLLMCutoff:
 		return normalizeLLMCutoff(raw)
+	case KeyLLMCutoffModel, KeyLLMCutoffConfirmedOn, KeyLLMCutoffSource:
+		return normalizeProvenance(key, raw)
 	}
 	return "", fmt.Errorf("metalabelsettings: %q is not a string meta-labeling setting key", key)
 }
@@ -219,6 +221,8 @@ func Apply(s *Settings, key, jsonValue string) error {
 		s.RetrainTime = v
 	case KeyLLMCutoff:
 		s.LLMCutoff = v
+	default:
+		s.setProvenance(key, v)
 	}
 	return nil
 }
@@ -245,6 +249,7 @@ func (s Settings) Validate() error {
 	if v, err := normalizeLLMCutoff(s.LLMCutoff); err != nil || v != s.LLMCutoff {
 		errs = append(errs, fmt.Errorf("%s は YYYY-MM-DD 形式の日付で指定してください", KeyLLMCutoff))
 	}
+	errs = append(errs, s.validateProvenance()...)
 	return errors.Join(errs...)
 }
 

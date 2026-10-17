@@ -15,7 +15,7 @@ import (
 // holding one LONG position of 100 shares opened at 2000 at opened.
 func vwapCrossEngine(t *testing.T, cfg execution.Config, opened time.Time) testEngine {
 	t.Helper()
-	cfg.Fill = fillmodel.Model{}
+	cfg.Fill = fillmodel.Costs{}
 	cfg.StopLossPct, cfg.TakeProfitPct, cfg.TrailingStopPct, cfg.MaxHoldingMinutes = 0, 0, 0, 0
 	te := newTestEngine(t, cfg)
 	if _, err := te.engine.Enter(context.Background(), execution.EntryRequest{

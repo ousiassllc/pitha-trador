@@ -22,7 +22,7 @@ func snapshotAt(instrumentID int64, price float64, at time.Time) domain.Snapshot
 // logic that pin exact prices, as opposed to fill_test.go's cost model.
 func costlessConfig() execution.Config {
 	cfg := execution.DefaultConfig()
-	cfg.Fill = fillmodel.Model{}
+	cfg.Fill = fillmodel.Costs{}
 	return cfg
 }
 

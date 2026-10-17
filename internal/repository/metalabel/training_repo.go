@@ -16,6 +16,9 @@ import (
 type TrainingRow struct {
 	JevDecisionID int64
 	Symbol        string
+	// JevModelID is the Jev model that answered (jev_decisions.model_id), the
+	// model the LLM cutoff has to describe (issue #776).
+	JevModelID string
 	// DecidedAt is the decision's timestamp (jev_decisions.timestamp).
 	DecidedAt time.Time
 	// Direction is the primary signal's side, LONG or SHORT.
@@ -50,7 +53,7 @@ func (r TrainingRow) LabelEnd() time.Time {
 // between labelings) yields only its newest one.
 func (r *Repository) ListTrainingRows(ctx context.Context, from, to time.Time) ([]TrainingRow, error) {
 	rows, err := r.db.QueryContext(ctx, `
-SELECT d.id, d.symbol, d.timestamp, d.direction, d.state_json, d.response_json,
+SELECT d.id, d.symbol, d.model_id, d.timestamp, d.direction, d.state_json, d.response_json,
 	d.ofi_short, d.ofi_mid, d.ofi_long, d.microprice_dev_bps,
 	o.horizon_minutes, o.net_return_bps
 FROM calibration_outcomes o
@@ -74,7 +77,7 @@ ORDER BY d.timestamp, d.id`,
 			timestamp string
 			net       sql.NullFloat64
 		)
-		if err := rows.Scan(&tr.JevDecisionID, &tr.Symbol, &timestamp, &tr.Direction, &tr.StateJSON, &tr.ResponseJSON,
+		if err := rows.Scan(&tr.JevDecisionID, &tr.Symbol, &tr.JevModelID, &timestamp, &tr.Direction, &tr.StateJSON, &tr.ResponseJSON,
 			sqlutil.NullFloat(&tr.OrderFlow.OFIShort), sqlutil.NullFloat(&tr.OrderFlow.OFIMid), sqlutil.NullFloat(&tr.OrderFlow.OFILong),
 			sqlutil.NullFloat(&tr.OrderFlow.MicropriceDevBps), &tr.HorizonMinutes, &net); err != nil {
 			return nil, fmt.Errorf("repository: scan meta-label training row: %w", err)

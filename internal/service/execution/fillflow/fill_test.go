@@ -17,7 +17,7 @@ import (
 func costEngine(t *testing.T) testEngine {
 	cfg := execution.DefaultConfig()
 	cfg.Calendar = marketcalendar.TSE
-	cfg.Fill = fillmodel.Model{SlippageBps: 1, AuctionSlippageBps: 100, FeeBps: 10}
+	cfg.Fill = fillmodel.Uniform(fillmodel.Model{SlippageBps: 1, OpeningSlippageBps: 100, ClosingSlippageBps: 100, FeeBps: 10})
 	return newTestEngine(t, cfg)
 }
 

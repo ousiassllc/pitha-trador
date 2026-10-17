@@ -13,6 +13,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
@@ -91,6 +92,7 @@ func Keys() []string {
 	keys = append(keys, logsettings.Keys()...)
 	keys = append(keys, dailyguardsettings.Keys()...)
 	keys = append(keys, barriersettings.Keys()...)
+	keys = append(keys, costsettings.Keys()...)
 	keys = append(keys, metalabelsettings.Keys()...)
 	keys = append(keys, regimesettings.Keys()...)
 	keys = append(keys, config.BrokerSettingKeys()...)
@@ -167,6 +169,9 @@ func (s *Service) Get(ctx context.Context, key string) (Value, error) {
 	default:
 		v.Current = v.Default
 	}
+	if key == metalabelsettings.KeyLLMCutoff {
+		v.Warning = s.llmCutoffWarning(ctx)
+	}
 	return v, nil
 }
 
@@ -239,6 +244,9 @@ func (s *Service) defaultText(key string) string {
 		return "0"
 	case barriersettings.IsKey(key):
 		text, _ := barriersettings.Default().Text(key)
+		return text
+	case costsettings.IsKey(key):
+		text, _ := costsettings.Default().Text(key)
 		return text
 	case metalabelsettings.IsKey(key):
 		text, _ := metalabelsettings.Default().Text(key)

@@ -19,4 +19,5 @@ func (h *Handler) Register(api huma.API) {
 	huma.Get(api, "/signals", h.Signals)
 	huma.Get(api, "/signals/{symbol}", h.SymbolSignals)
 	huma.Get(api, "/performance", h.Performance)
+	huma.Get(api, "/performance/evaluation", h.Evaluation)
 }
