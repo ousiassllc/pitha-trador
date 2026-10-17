@@ -158,8 +158,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 		return nil
 	case dailyguardsettings.IsKey(key):
 		// Each threshold stands alone (0 disables it), so only its own range is checked.
-		var limits dailyguardsettings.Limits
-		if err := dailyguardsettings.Apply(&limits, key, encoded); err != nil {
+		var stored dailyguardsettings.Settings
+		if err := dailyguardsettings.Apply(&stored, key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil

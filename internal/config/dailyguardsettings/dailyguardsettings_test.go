@@ -3,6 +3,7 @@ package dailyguardsettings_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
@@ -74,18 +75,65 @@ func TestApply_Ranges(t *testing.T) {
 		key, raw string
 		ok       bool
 	}{
-		"zero disables":           {dailyguardsettings.KeyLossLimitJPY, "0", true},
-		"negative":                {dailyguardsettings.KeyLossLimitJPY, "-0.5", false},
-		"giveback 100":            {dailyguardsettings.KeyProfitLockGivebackPct, "100", true},
-		"giveback just above 100": {dailyguardsettings.KeyProfitLockGivebackPct, "100.01", false},
-		"integer trades":          {dailyguardsettings.KeyMaxTrades, "10", true},
-		"fractional trades":       {dailyguardsettings.KeyMaxTrades, "1.5", false},
-		"string":                  {dailyguardsettings.KeyMaxTrades, `"5"`, false},
-		"unknown key":             {"risk.nope", "1", false},
+		"zero disables":                {dailyguardsettings.KeyLossLimitJPY, "0", true},
+		"negative":                     {dailyguardsettings.KeyLossLimitJPY, "-0.5", false},
+		"giveback 100":                 {dailyguardsettings.KeyProfitLockGivebackPct, "100", true},
+		"giveback just above 100":      {dailyguardsettings.KeyProfitLockGivebackPct, "100.01", false},
+		"integer trades":               {dailyguardsettings.KeyMaxTrades, "10", true},
+		"fractional trades":            {dailyguardsettings.KeyMaxTrades, "1.5", false},
+		"string":                       {dailyguardsettings.KeyMaxTrades, `"5"`, false},
+		"unknown key":                  {"risk.nope", "1", false},
+		"capital":                      {dailyguardsettings.KeyOperatingCapitalJPY, "500000", true},
+		"capital zero":                 {dailyguardsettings.KeyOperatingCapitalJPY, "0", true},
+		"capital negative":             {dailyguardsettings.KeyOperatingCapitalJPY, "-1", false},
+		"capital above 100 is fine":    {dailyguardsettings.KeyOperatingCapitalJPY, "1000000", true},
+		"loss pct":                     {dailyguardsettings.KeyLossLimitPct, "1.5", true},
+		"loss pct 100":                 {dailyguardsettings.KeyLossLimitPct, "100", true},
+		"loss pct above 100":           {dailyguardsettings.KeyLossLimitPct, "100.1", false},
+		"loss pct negative":            {dailyguardsettings.KeyLossLimitPct, "-0.1", false},
+		"trigger pct":                  {dailyguardsettings.KeyProfitLockTriggerPct, "0.5", true},
+		"trigger pct above 100":        {dailyguardsettings.KeyProfitLockTriggerPct, "101", false},
+		"trigger pct negative":         {dailyguardsettings.KeyProfitLockTriggerPct, "-1", false},
+		"loss pct not a number":        {dailyguardsettings.KeyLossLimitPct, `"1"`, false},
+		"direct loss yen above 100":    {dailyguardsettings.KeyLossLimitJPY, "50000", true},
+		"direct trigger yen above 100": {dailyguardsettings.KeyProfitLockTriggerJPY, "20000", true},
 	} {
-		var l dailyguardsettings.Limits
-		if err := dailyguardsettings.Apply(&l, tc.key, tc.raw); (err == nil) != tc.ok {
+		var s dailyguardsettings.Settings
+		if err := dailyguardsettings.Apply(&s, tc.key, tc.raw); (err == nil) != tc.ok {
 			t.Errorf("%s: Apply(%s, %s) error = %v, want ok=%v", name, tc.key, tc.raw, err, tc.ok)
 		}
+	}
+}
+
+func TestApply_RejectedValueLeavesSettingsUntouched(t *testing.T) {
+	var s dailyguardsettings.Settings
+	if err := dailyguardsettings.Apply(&s, dailyguardsettings.KeyLossLimitPct, "101"); err == nil {
+		t.Fatal("Apply accepted 101%")
+	}
+	if s != (dailyguardsettings.Settings{}) {
+		t.Fatalf("Settings = %+v, want untouched", s)
+	}
+}
+
+func TestKeys_ContainsEveryKeyOnceAndIsKeyAgrees(t *testing.T) {
+	want := []string{
+		dailyguardsettings.KeyOperatingCapitalJPY, dailyguardsettings.KeyLossLimitPct, dailyguardsettings.KeyProfitLockTriggerPct,
+		dailyguardsettings.KeyProfitLockGivebackPct, dailyguardsettings.KeyMaxTrades,
+		dailyguardsettings.KeyLossLimitJPY, dailyguardsettings.KeyProfitLockTriggerJPY,
+	}
+	got := dailyguardsettings.Keys()
+	if len(got) != len(want) {
+		t.Fatalf("Keys() = %v, want %v", got, want)
+	}
+	for _, key := range want {
+		if !slices.Contains(got, key) || !dailyguardsettings.IsKey(key) {
+			t.Errorf("key %q missing from Keys()/IsKey", key)
+		}
+	}
+	if dailyguardsettings.IsKey(dailyguardsettings.SeededMarkerKey) {
+		t.Error("the seed marker must not be a Settings key")
+	}
+	if !dailyguardsettings.IsIntegerKey(dailyguardsettings.KeyMaxTrades) || dailyguardsettings.IsIntegerKey(dailyguardsettings.KeyLossLimitPct) {
+		t.Error("MaxTrades must be the only integer key")
 	}
 }
