@@ -46,7 +46,7 @@ func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exi
 	if position.Side == domain.PositionSideShort {
 		exitSide = domain.OrderSideBuy
 	}
-	exit, _, err := e.fillFor(domain.OrderTypeMarket, exitSide, position.Quantity, nil, exitPrice, book, now)
+	exit, _, err := e.fillFor(ctx, position.Side, domain.OrderTypeMarket, exitSide, position.Quantity, nil, exitPrice, book, now)
 	if err != nil {
 		return domain.Position{}, fmt.Errorf("execution: close position %d: %w", positionID, err)
 	}
@@ -54,6 +54,9 @@ func (e *Engine) Close(ctx context.Context, positionID int64, reason string, exi
 	if err != nil {
 		return domain.Position{}, fmt.Errorf("execution: get entry order %d of position %d: %w", position.EntryOrderID, positionID, err)
 	}
+	// 貸株料 of a SHORT position is charged with its exit (a LONG position's
+	// Model has none), so it lands in the exit order's fees and the realized PnL.
+	exit.fee += e.costsFor(ctx, position.Side).BorrowFee(position.EntryPrice, position.Quantity)
 	realizedPnL := positionSign(position.Side)*float64(position.Quantity)*(exit.price-position.EntryPrice) - entryOrder.Fees - exit.fee
 
 	// Submit, fill and close in one transaction: no orphan FILLED exit order.

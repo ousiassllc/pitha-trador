@@ -102,7 +102,9 @@ func closeTrade(bars []domain.Snapshot, entryIdx int, direction string, entryFil
 	// return between the two actual fills, before fees.
 	slippageReturnPct := sign * (exitFill/entryFill - 1) * 100
 
-	feeDeductionPct := x.cost.FeeBps / 100 * 2
+	// Commission on both fills (a fixed fee at the reference notional) plus
+	// the SHORT 貸株料, as % of the entry price.
+	feeDeductionPct := x.cost.RoundTripFeeBps() / 100
 	feeReturnPct := grossReturnPct - feeDeductionPct
 	netReturnPct := slippageReturnPct - feeDeductionPct
 

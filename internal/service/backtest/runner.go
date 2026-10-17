@@ -121,10 +121,10 @@ type RunConfig struct {
 	Risk policy.RiskChecker
 
 	Exit ExitRule
-	// Cost is the fill assumption (fillmodel.Default in production, the
-	// same one Paper Trading uses): FR-BT-1's スリッページ込み/手数料込みPnL
-	// figures come from the fills it produces.
-	Cost fillmodel.Model
+	// Cost is the fill assumption per direction (the Settings cost settings
+	// in production, the same ones Paper Trading uses): FR-BT-1's
+	// スリッページ込み/手数料込みPnL figures come from the fills it produces.
+	Cost fillmodel.Costs
 	// Sessions says which bars are 昼休み/寄り/ザラ場/引け (see Sessions);
 	// nil means every bar is ザラ場.
 	Sessions Sessions
@@ -151,6 +151,9 @@ type Result struct {
 	// ByRegime is Combined split by the market regime of the decision that
 	// opened each trade (issue #755).
 	ByRegime []RegimeMetrics
+	// ForwardTrades are the trades Combined aggregates, for re-pricing them
+	// under another cost assumption (internal/service/backtest/sensitivity).
+	ForwardTrades []Trade
 }
 
 // Run executes a full Walk Forward backtest (FR-BT-2) over a single
@@ -216,7 +219,7 @@ func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) 
 			continue
 		}
 
-		x := executor{cost: cfg.Cost, sessions: cfg.Sessions}
+		x := executor{cost: cfg.Cost.For(sig.Direction), sessions: cfg.Sessions}
 		entryFill, ok := x.fill(bar, entrySide(sig.Direction))
 		if !ok {
 			// 昼休み・立会時間外: the entry cannot fill (live Enter fails

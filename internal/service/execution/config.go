@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
@@ -57,11 +58,17 @@ type Config struct {
 	// for 引け前強制決済 (calendar.go); nil disables both.
 	Calendar MarketCalendar
 
-	// Fill is the cost assumption market orders fill under (slippage,
-	// fees; fillmodel.Default via DefaultConfig). The zero value charges
-	// neither, but a fill still honours the tick grid, the spread and the
-	// session phase (昼休みは約定しない、寄り・引けは別約定: fillmodel).
-	Fill fillmodel.Model
+	// Fill is the cost assumption market orders fill under (slippage, fees,
+	// 貸株料 per direction; fillmodel.Default via DefaultConfig) when Costs
+	// supplies none. The zero value charges nothing, but a fill still honours
+	// the tick grid, the spread and the session phase (昼休みは約定しない、
+	// 寄り・引けは別約定: fillmodel).
+	Fill fillmodel.Costs
+	// Costs, when set, supplies the cost assumption at every fill instead of
+	// Fill (a failing read, logged, falls back to Fill), so a Settings change
+	// applies to the next fill and the next backtest (#779).
+	// WithCostSettings sets it.
+	Costs fillmodel.Source
 
 	// Now defaults to time.Now. Tests override it for deterministic
 	// max-holding/force-flat/cooldown checks.
@@ -96,6 +103,13 @@ func ConfigFromRiskLimits(limits config.RiskLimits) Config {
 	cfg.CooldownAfterLossMinutes = limits.CooldownAfterLossMinutes
 	cfg.ForceFlatBeforeMarketCloseMinutes = limits.ForceFlatBeforeMarketCloseMinutes
 	return cfg
+}
+
+// WithCostSettings returns c with its costs read from the runtime_settings
+// store's cost settings (costsettings) on every fill and backtest.
+func (c Config) WithCostSettings(store costsettings.Store) Config {
+	c.Costs = fillmodel.SettingsSource{Store: store}
+	return c
 }
 
 // withDefaults fills in Now when nil; every other field is used exactly

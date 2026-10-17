@@ -65,11 +65,11 @@ func grossReturnBps(entry, price, factor float64) float64 {
 	return (price - entry) / entry * bpsPerUnit * factor
 }
 
-// entryWaitTolerance is how long after the Jev response the entry bar may
+// EntryWaitTolerance is how long after the Jev response the entry bar may
 // land: the first bar at or after the response is the entry, and a gap
 // longer than this (a missed cycle plus jitter, lunch break, close) means
 // there is no executable entry reference for the decision.
-const entryWaitTolerance = 3 * time.Minute
+const EntryWaitTolerance = 3 * time.Minute
 
 // TimeoutHorizons returns the horizon resolver for
 // scheduler.WithOutcomeLabelHorizons: the one triple-barrier timeout in

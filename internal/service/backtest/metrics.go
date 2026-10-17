@@ -49,8 +49,8 @@ type Trade struct {
 	// grid, 寄り/引けの板寄せ) fillmodel charges on both fills (FR-BT-1
 	// "スリッページ込みPnL").
 	SlippageReturnPct float64
-	// FeeReturnPct subtracts fillmodel.Model.FeeBps (charged on both entry
-	// and exit notional) from GrossReturnPct (FR-BT-1 "手数料込みPnL").
+	// FeeReturnPct subtracts fillmodel.Model.RoundTripFeeBps (the commission
+	// on both entry and exit notional, plus a SHORT's 貸株料) from GrossReturnPct (FR-BT-1 "手数料込みPnL").
 	FeeReturnPct float64
 	// NetReturnPct combines SlippageReturnPct's price adjustment and
 	// FeeReturnPct's fee deduction: the realistic "what this trade would

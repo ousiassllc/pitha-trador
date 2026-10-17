@@ -96,7 +96,7 @@ func TestMarket_SlippageIsAdverseAndOnTheTickGrid(t *testing.T) {
 }
 
 func TestMarket_AuctionsPayNoSpreadButTheirOwnSlippage(t *testing.T) {
-	m := fillmodel.Model{SlippageBps: 1, AuctionSlippageBps: 100} // 1% = 20 yen on 2000
+	m := fillmodel.Model{SlippageBps: 1, OpeningSlippageBps: 100, ClosingSlippageBps: 100} // 1% = 20 yen on 2000
 	book := fillmodel.Book{Bid: 1990, Ask: 2010}
 	for _, phase := range []marketcalendar.Phase{marketcalendar.PhaseOpeningAuction, marketcalendar.PhaseClosingAuction} {
 		if got, err := m.Market(buy, 2000, book, phase); err != nil || got != 2020 {

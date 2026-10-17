@@ -38,9 +38,11 @@ type Source struct {
 	// cost/sessions are Paper Trading's own fill assumption
 	// (execution.Config.Fill/Calendar), so a backtest fills orders exactly
 	// as Execution does (#509): spread, slippage, fees, tick grid, 昼休み,
-	// 寄り/引け.
-	cost     fillmodel.Model
-	sessions backtest.Sessions
+	// 寄り/引け. costSource, when set (execution.Config.Costs), replaces cost
+	// with the Settings cost settings in force at every run (#779).
+	cost       fillmodel.Costs
+	costSource fillmodel.Source
+	sessions   backtest.Sessions
 }
 
 // New builds a Source replaying with thresholds' spread/turnover limits and
@@ -57,8 +59,9 @@ func New(instruments *market.InstrumentRepository, snapshots *market.SnapshotRep
 			TakeProfitPct: exit.TakeProfitPct,
 			MaxHolding:    time.Duration(exit.MaxHoldingMinutes) * time.Minute,
 		},
-		cost:     exit.Fill,
-		sessions: exit.Calendar,
+		cost:       exit.Fill,
+		costSource: exit.Costs,
+		sessions:   exit.Calendar,
 	}
 }
 
@@ -101,6 +104,13 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 		return fmt.Errorf("backtestsource: current policy thresholds for backtest: %w", err)
 	}
 
+	cost := b.cost
+	if b.costSource != nil {
+		if cost, err = b.costSource.Costs(ctx); err != nil {
+			return fmt.Errorf("backtestsource: cost settings for backtest: %w", err)
+		}
+	}
+
 	for _, inst := range instruments {
 		bars, err := b.snapshots.ListHistoryByInstrumentRange(ctx, inst.ID, period.Start, period.End)
 		if err != nil {
@@ -131,7 +141,7 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 			Decisions:    backtest.NewSliceDecisionSource(decisions),
 			Thresholds:   thresholds,
 			Exit:         b.exit,
-			Cost:         b.cost,
+			Cost:         cost,
 			Sessions:     b.sessions,
 		}); err != nil {
 			return err
