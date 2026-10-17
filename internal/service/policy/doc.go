@@ -8,8 +8,10 @@
 // The live entry rule (Engine.Evaluate; meta.go, FR-POLICY-6, issue #765) does
 // not threshold Jev's confidence: Jev's direction is the primary signal and the
 // meta-labeling model (internal/service/metalabel) enters it only when its
-// calibrated expected value is above zero. No model means NONE. Decide, the
-// backtest replay path, keeps the legacy confidence-threshold rule (FR-POLICY-1/2).
+// calibrated expected value is above zero. No model means NONE. The backtest replays
+// the same rule (DecideReplay, issue #775); Decide, the legacy
+// confidence-threshold rule (FR-POLICY-1/2), remains only as the backtest's
+// explicitly named comparison mode.
 //
 // Risk Engine (functional.md §4.7, internal/service/risk.Engine) now
 // exists and satisfies RiskChecker; AlwaysPassRiskChecker remains this

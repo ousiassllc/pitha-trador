@@ -1,4 +1,4 @@
-package backtest_test
+package replayflow_test
 
 import (
 	"context"
@@ -62,6 +62,7 @@ func TestRun_ReportsTradesByRegime(t *testing.T) {
 	cfg := backtest.RunConfig{
 		InstrumentID: instrumentID, Symbol: "7203", Snapshots: bars,
 		Decisions:  backtest.NewSliceDecisionSource(decisions),
+		Models:     takingModels(),
 		Thresholds: testThresholds(),
 		Exit:       backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute},
 	}

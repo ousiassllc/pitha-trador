@@ -8,18 +8,28 @@ package backtestsource
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"slices"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest/metahistory"
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest/parity"
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest/simrisk"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
+	servicemetalabel "github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
 
@@ -27,7 +37,10 @@ import (
 // market_snapshots/jev_decisions history of every active instrument, so
 // a Walk Forward backtest (the Performance page) or a shadow backtest
 // (selfimprove.ShadowBacktestSource) replays exactly the data the live
-// pipeline recorded, under the policy.* thresholds currently in effect.
+// pipeline recorded, under the policy.* thresholds currently in effect, through
+// the live decision flow: the meta-labeling model that was in force at each
+// decision, the Risk Engine's limits and all of FR-EXIT-1's exit conditions
+// (issue #775; docs/requirements/functional/components-platform.md FR-BT-4).
 type Source struct {
 	instruments *market.InstrumentRepository
 	snapshots   *market.SnapshotRepository
@@ -41,11 +54,33 @@ type Source struct {
 	// 寄り/引け.
 	cost     fillmodel.Model
 	sessions backtest.Sessions
+	replay   Replay
+}
+
+// Replay is what the replay of the live decision flow reads besides market
+// history: the stored meta-labeling models and their take/skip setting, the
+// Risk Engine's limits, and the Paper positions the reproducibility check
+// compares with. All of it already exists in the DB or config; a replay stores
+// nothing.
+type Replay struct {
+	Models *metalabel.Repository
+	// MetaSettings supplies the minimum EV (the Settings screen's value in
+	// force now, as the policy.* thresholds are).
+	MetaSettings *system.RuntimeSettingsRepository
+	// Risk is config/risk.yaml's limits of the Paper mode.
+	Risk      config.RiskLimits
+	Positions *trading.PositionRepository
+}
+
+// NewReplay builds the Replay of a database whose models/positions it reads, with
+// the Settings values and Paper risk limits in force.
+func NewReplay(db *sql.DB, settings *system.RuntimeSettingsRepository, risk config.RiskLimits, positions *trading.PositionRepository) Replay {
+	return Replay{Models: metalabel.NewRepository(db), MetaSettings: settings, Risk: risk, Positions: positions}
 }
 
 // New builds a Source replaying with thresholds' spread/turnover limits and
 // current's live policy.* thresholds.
-func New(instruments *market.InstrumentRepository, snapshots *market.SnapshotRepository, decisions *judgement.DecisionRepository, thresholds policy.Thresholds, current policy.PolicySource, exit execution.Config) *Source {
+func New(instruments *market.InstrumentRepository, snapshots *market.SnapshotRepository, decisions *judgement.DecisionRepository, thresholds policy.Thresholds, current policy.PolicySource, exit execution.Config, replay Replay) *Source {
 	return &Source{
 		instruments: instruments,
 		snapshots:   snapshots,
@@ -53,12 +88,17 @@ func New(instruments *market.InstrumentRepository, snapshots *market.SnapshotRep
 		thresholds:  thresholds,
 		policy:      current,
 		exit: backtest.ExitRule{
-			StopLossPct:   exit.StopLossPct,
-			TakeProfitPct: exit.TakeProfitPct,
-			MaxHolding:    time.Duration(exit.MaxHoldingMinutes) * time.Minute,
+			StopLossPct:                exit.StopLossPct,
+			TakeProfitPct:              exit.TakeProfitPct,
+			TrailingStopPct:            exit.TrailingStopPct,
+			MaxHolding:                 time.Duration(exit.MaxHoldingMinutes) * time.Minute,
+			MinContinuationProbability: exit.MinContinuationProbability,
+			ForceFlatBeforeClose:       time.Duration(exit.ForceFlatBeforeMarketCloseMinutes) * time.Minute,
+			CooldownAfterLoss:          time.Duration(exit.CooldownAfterLossMinutes) * time.Minute,
 		},
 		cost:     exit.Fill,
 		sessions: exit.Calendar,
+		replay:   replay,
 	}
 }
 
@@ -100,6 +140,11 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 	if thresholds.Policy, err = b.policy.CurrentThresholds(ctx); err != nil {
 		return fmt.Errorf("backtestsource: current policy thresholds for backtest: %w", err)
 	}
+	models, meta, err := b.metaReplay(ctx)
+	if err != nil {
+		return err
+	}
+	risk := &simrisk.Config{Limits: b.replay.Risk, StopLossPct: b.exit.StopLossPct}
 
 	for _, inst := range instruments {
 		bars, err := b.snapshots.ListHistoryByInstrumentRange(ctx, inst.ID, period.Start, period.End)
@@ -129,6 +174,9 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 			Snapshots:    append(warmup, bars...),
 			WarmupBars:   len(warmup),
 			Decisions:    backtest.NewSliceDecisionSource(decisions),
+			Models:       models,
+			Meta:         meta,
+			Risk:         risk,
 			Thresholds:   thresholds,
 			Exit:         b.exit,
 			Cost:         b.cost,
@@ -148,4 +196,41 @@ func (b *Source) RunWalkForward(ctx context.Context, wf backtest.WalkForwardConf
 		return backtest.Result{}, err
 	}
 	return backtest.RunPortfolio(ctx, configs, wf)
+}
+
+// metaReplay loads the stored active models (the walk-forward history: each
+// decision is scored by the newest model trained before it) and the take/skip
+// policy in force now.
+func (b *Source) metaReplay(ctx context.Context) (*metahistory.Timeline, servicemetalabel.DecideConfig, error) {
+	stored, err := b.replay.Models.ListActiveModels(ctx)
+	if err != nil {
+		return nil, servicemetalabel.DecideConfig{}, fmt.Errorf("backtestsource: load meta-label models for backtest: %w", err)
+	}
+	settings, err := metalabelsettings.Load(ctx, b.replay.MetaSettings)
+	if err != nil {
+		return nil, servicemetalabel.DecideConfig{}, fmt.Errorf("backtestsource: load meta-label settings for backtest: %w", err)
+	}
+	meta := servicemetalabel.DefaultDecideConfig()
+	meta.MinEVBps = settings.MinEVBps
+	return metahistory.New(stored), meta, nil
+}
+
+// VerifyReproducibility replays period exactly as the shadow backtest does and
+// compares the replayed entries and exit reasons with the Paper positions
+// actually opened in it (FR-BT-4): the numbers are in the returned Report, and
+// its verdict is データ無し (not a failure) when Paper made no entry.
+func (b *Source) VerifyReproducibility(ctx context.Context, period backtest.Period, th parity.Thresholds) (parity.Report, error) {
+	configs, err := b.RunConfigs(ctx, period)
+	if err != nil {
+		return parity.Report{}, err
+	}
+	replayed, err := backtest.ShadowBacktestPortfolioTrades(ctx, configs, period)
+	if err != nil {
+		return parity.Report{}, err
+	}
+	positions, err := b.replay.Positions.ListOpenedBetween(ctx, period.Start, period.End)
+	if err != nil {
+		return parity.Report{}, fmt.Errorf("backtestsource: read paper positions for reproducibility check: %w", err)
+	}
+	return parity.Compare(parity.TradesFromPositions(positions), replayed, th), nil
 }

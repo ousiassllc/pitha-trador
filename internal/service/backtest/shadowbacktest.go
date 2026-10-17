@@ -12,14 +12,11 @@ import (
 // Training/Validation split: the Governor already fixes the proposed
 // policy.Thresholds itself (cfg.Thresholds), so there is nothing left
 // for this call to calibrate. Every bar in period is evaluated with
-// Calibrated=true. The caller compares the returned Metrics'
+// entries allowed. The caller compares the returned Metrics'
 // Expectancy/MaxDrawdownPct against its pre-proposal baseline
 // (overview.md §8 "BT-->>GOV: Expectancy / Max Drawdown比較結果").
 func ShadowBacktest(ctx context.Context, cfg RunConfig, period Period) (Metrics, error) {
-	if violations := VerifyNoLookahead(cfg.Snapshots, cfg.WarmupBars); len(violations) > 0 {
-		return Metrics{}, fmt.Errorf("backtest: %d bar(s) fail FR-BT-3 look-ahead check, e.g. %s", len(violations), violations[0])
-	}
-	trades, err := replay(ctx, cfg, period, true)
+	trades, err := ShadowBacktestPortfolioTrades(ctx, []RunConfig{cfg}, period)
 	if err != nil {
 		return Metrics{}, err
 	}
@@ -27,18 +24,27 @@ func ShadowBacktest(ctx context.Context, cfg RunConfig, period Period) (Metrics,
 }
 
 // ShadowBacktestTrades is ShadowBacktest without the final Aggregate
-// step: it returns the raw []Trade replay produced over period, letting
-// a caller combine trades from more than one instrument's RunConfig
-// (each backtest.RunConfig covers a single instrument, DecisionSource's
-// own doc comment) into one Aggregate call before comparing Metrics -
-// exactly what a Self-Improvement Governor's multi-instrument shadow
-// backtest needs (FR-SELFIMPROVE-4's "直近の...20営業日相当"
-// Expectancy/MaxDrawdownPct figures must reflect every instrument's
-// trades combined in chronological order, not each instrument averaged
-// in isolation).
+// step: it returns the raw []Trade replay produced over period for one
+// instrument. With a Risk Engine (cfg.Risk) the portfolio is that one
+// instrument alone, so portfolio-wide limits (max_open_positions, same
+// direction) cannot bind: a multi-instrument replay uses
+// ShadowBacktestPortfolioTrades.
 func ShadowBacktestTrades(ctx context.Context, cfg RunConfig, period Period) ([]Trade, error) {
-	if violations := VerifyNoLookahead(cfg.Snapshots, cfg.WarmupBars); len(violations) > 0 {
-		return nil, fmt.Errorf("backtest: %d bar(s) fail FR-BT-3 look-ahead check, e.g. %s", len(violations), violations[0])
+	return ShadowBacktestPortfolioTrades(ctx, []RunConfig{cfg}, period)
+}
+
+// ShadowBacktestPortfolioTrades replays every instrument of cfgs over
+// period as one portfolio - the shadow backtest FR-SELFIMPROVE-4's
+// Expectancy/MaxDrawdownPct figures need: trades of all instruments in
+// chronological order under one Risk Engine (max_open_positions, same-
+// direction cap, daily loss ... are portfolio-wide), not each
+// instrument in isolation. Every cfg's Snapshots must pass
+// VerifyNoLookahead (FR-BT-3).
+func ShadowBacktestPortfolioTrades(ctx context.Context, cfgs []RunConfig, period Period) ([]Trade, error) {
+	for _, cfg := range cfgs {
+		if violations := VerifyNoLookahead(cfg.Snapshots, cfg.WarmupBars); len(violations) > 0 {
+			return nil, fmt.Errorf("backtest: %s: %d bar(s) fail FR-BT-3 look-ahead check, e.g. %s", cfg.Symbol, len(violations), violations[0])
+		}
 	}
-	return replay(ctx, cfg, period, true)
+	return replay(ctx, cfgs, period, true)
 }

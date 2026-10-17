@@ -1,4 +1,4 @@
-package backtest_test
+package replayflow_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 )
 
 func jstAt(h, m int) time.Time {
@@ -21,6 +22,10 @@ func jstAt(h, m int) time.Time {
 func fillTrades(t *testing.T, times []time.Time, prices []float64, decisionAt time.Time, cost fillmodel.Model, sessions backtest.Sessions) []backtest.Trade {
 	t.Helper()
 	const instrumentID = int64(1)
+	// A leading bar gives the first real bar its Return1m, a model input the
+	// replay never guesses (a decision without it is skipped, as live).
+	times = append([]time.Time{times[0].Add(-time.Minute)}, times...)
+	prices = append([]float64{prices[0]}, prices...)
 	bars := make([]domain.Snapshot, 0, len(times))
 	for i, ts := range times {
 		feature := featureengine.Compute(featureengine.Input{
@@ -28,6 +33,7 @@ func fillTrades(t *testing.T, times []time.Time, prices []float64, decisionAt ti
 			Current:   featureengine.Reading{Price: prices[i], VWAP: prices[i]},
 			History:   bars,
 		})
+		feature.OrderFlowFeatures = policytest.Feature().OrderFlowFeatures
 		bars = append(bars, domain.Snapshot{
 			InstrumentID: instrumentID, Timestamp: ts, Price: prices[i], SpreadBps: ptr(10.0), Feature: feature,
 		})
@@ -37,6 +43,7 @@ func fillTrades(t *testing.T, times []time.Time, prices []float64, decisionAt ti
 		Symbol:       "7203",
 		Snapshots:    bars,
 		Decisions:    backtest.NewSliceDecisionSource([]domain.JevDecision{longDecision(instrumentID, decisionAt)}),
+		Models:       takingModels(),
 		Thresholds:   testThresholds(),
 		Exit:         backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute},
 		Cost:         cost,
@@ -118,8 +125,8 @@ func TestReplay_ClosingAuctionUsesAuctionSlippage(t *testing.T) {
 
 // TestReplay_LunchBreakNeverFills: nothing fills 11:30-12:30. An entry
 // signal on a lunch-break bar is not a trade, and a take-profit reached on
-// a lunch-break bar is not taken (the position holds to the last bar that
-// could fill, MaxHolding here).
+// a lunch-break bar is not taken then: like live, the position is evaluated
+// again on the next bar that can fill, and exits there.
 func TestReplay_LunchBreakNeverFills(t *testing.T) {
 	cost := fillmodel.Model{}
 
@@ -141,8 +148,8 @@ func TestReplay_LunchBreakNeverFills(t *testing.T) {
 		if len(got) != 1 {
 			t.Fatalf("len(trades) = %d, want 1", len(got))
 		}
-		if got[0].ExitReason != backtest.ExitReasonMaxHolding || !got[0].ExitTimestamp.Equal(jstAt(11, 29)) {
-			t.Errorf("trade exit = %q at %v, want max_holding at 11:29 (the lunch-break bar cannot fill)", got[0].ExitReason, got[0].ExitTimestamp)
+		if got[0].ExitReason != backtest.ExitReasonTakeProfit || !got[0].ExitTimestamp.Equal(jstAt(12, 30)) {
+			t.Errorf("trade exit = %q at %v, want take_profit at 12:30 (the lunch-break bars cannot fill)", got[0].ExitReason, got[0].ExitTimestamp)
 		}
 		control := fillTrades(t, times, prices, times[0], cost, nil)
 		if len(control) != 1 || control[0].ExitReason != backtest.ExitReasonTakeProfit {
