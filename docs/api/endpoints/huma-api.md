@@ -284,6 +284,7 @@ Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kil
 | GET | `/api/v1/performance` | 実績集計 |
 | GET | `/api/v1/performance/evaluation` | 実績評価（期間・方向・exit_reason・メタモデル版・A/Bアーム別、信頼区間、合格ライン判定） |
 | GET | `/api/v1/calibration` | Calibrationバケット集計 |
+| GET | `/api/v1/calibration/exit-alignment` | ラベル基準（トリプルバリア）と実出口の整合（対応表・不一致警告・ラベル対再生の比較・OOS EVとPaper実績。FR-CAL-4A） |
 | GET | `/api/v1/policy-proposals` | Sol/Opus自己改善ループの提案・レビュー履歴（監査用） |
 | GET | `/api/v1/system/status` | システム状態と許可される操作の取得（読み取り専用） |
 | POST | `/api/v1/system/pause` | 一時停止 |
