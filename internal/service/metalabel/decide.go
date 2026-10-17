@@ -20,7 +20,8 @@ const (
 )
 
 // DefaultKellyFraction is the share of the full Kelly bet DecideConfig sizes a
-// take with: full Kelly is too aggressive for noisy estimates.
+// take with: full Kelly is too aggressive for noisy estimates. The resulting
+// Decision.SizeFraction is record-only and never sizes an order (issue #781).
 const DefaultKellyFraction = 0.25
 
 // DecideConfig is the secondary model's decision policy.
@@ -28,7 +29,8 @@ type DecideConfig struct {
 	// MinEVBps is the expected value (bps, after costs) a signal must exceed
 	// to be taken, >= 0. A take always needs EV > 0 even when this is 0.
 	MinEVBps float64
-	// KellyFraction scales the Kelly bet size EV/WinBps, in (0, 1].
+	// KellyFraction scales the Kelly bet size EV/WinBps, in (0, 1]. It only
+	// affects the recorded Decision.SizeFraction, not the order quantity.
 	KellyFraction float64
 }
 
@@ -53,8 +55,11 @@ func (c DecideConfig) Validate() error {
 type Decision struct {
 	// Action is repo.ActionTake or repo.ActionSkip.
 	Action string
-	// SizeFraction is the share of the maximum position to open: 0 for a
-	// skip, in (0, 1] for a take.
+	// SizeFraction is the Kelly-based size share: 0 for a skip, in (0, 1] for
+	// a take. It is record-only (metalabel_predictions.size_fraction and the
+	// logs) and is NOT used for the order quantity, which the Risk limits
+	// alone decide (FR-META-3, FR-ENTRY-3). Fixed until the probability
+	// calibration is validated on Paper results (issue #781).
 	SizeFraction float64
 	// RawProbability, CalibratedProbability and ExpectedValueBps are Predict's
 	// values; all zero when the signal was skipped before scoring.
@@ -70,8 +75,8 @@ type Decision struct {
 // Decide runs the secondary model on a primary signal: direction is the
 // candidate side Jev chose (LONG/SHORT) and f the features at that moment.
 // It takes the signal only when the calibrated expected value is above
-// cfg.MinEVBps and above zero; the size is the Kelly bet EV/WinBps scaled by
-// cfg.KellyFraction and capped at 1.
+// cfg.MinEVBps and above zero; the recorded size is the Kelly bet EV/WinBps
+// scaled by cfg.KellyFraction and capped at 1 (record-only, see SizeFraction).
 //
 // Every doubtful case is a skip: no model (m nil, the LatestActiveModel
 // not-found case), a model that cannot score, no LONG/SHORT candidate, a

@@ -81,7 +81,8 @@ type Prediction struct {
 	ExpectedValueBps float64
 	// Action is ActionTake or ActionSkip.
 	Action string
-	// SizeFraction is the position size share (0..1); 0 for a skip.
+	// SizeFraction is the Kelly-based size share (0..1); 0 for a skip. It is
+	// recorded for analysis only and is NOT used for the order quantity (issue #781).
 	SizeFraction float64
 	Reason       string
 	// FeaturesJSON is the feature vector scored, for audit.

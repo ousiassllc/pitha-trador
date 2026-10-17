@@ -103,5 +103,6 @@ erDiagram
 | 1.49 | 2026-10-14 | `er/tables-system.md`の`runtime_settings`キーに`metalabel.{model,calibration,retrain_time,min_ev_bps}`（メタラベリングの二次モデル設定）を追加。スキーマ変更なし | issue #759 |
 | 1.50 | 2026-10-14 | `er/tables-market.md`の`jev_decisions`に`data_age_ms`（判断時点の市場データの古さ、migration 000035）、`er/tables-system.md`の`runtime_settings`キー例に`scan.snapshot_max_age_seconds`（ランキング監視の足の鮮度上限、既定20秒）を追加（issue #754） |
 | 1.51 | 2026-10-14 | `er/tables-market.md`の`jev_decisions`に`market_regime`・`ab_arm`・`regime_volatility_bps`・`regime_autocorr`・`vwap_z`（判断時点の相場状態・A/Bアーム・その根拠、migration 000036）を追加し、`er/tables-system.md`の`runtime_settings`キー例に`regime.*`を追加 | issue #755・親 #751 |
-| 1.52 | 2026-10-17 | `er/tables-system.md`の`runtime_settings`キーに`cost.*`（売買コストの想定: 手数料・スリッページ・SHORT貸株料）を追加。スキーマ変更なし | issue #779 |
-| 1.53 | 2026-10-17 | マイグレーション000037を追加し、`er/tables-metalabel.md`の`metalabel_models`に採用判定の根拠列（`oos_takes`・`oos_days`・`oos_ev_ci_{low,high}_bps`・`oos_auc_ci_{low,high}`・`adoption_json`・`forward_json`）を追加。`er/tables-system.md`の`runtime_settings`キーに`metalabel.llm_cutoff_{model,confirmed_on,source}`（LLM学習データ終了日の出典、issue #776）を追記 | issue #780, #776 |
+| 1.52 | 2026-10-17 | `er/tables-metalabel.md`の`metalabel_predictions.size_fraction`を記録専用（発注数量には使わない）と明記（挙動の変更なし） | issue #781 |
+| 1.53 | 2026-10-17 | `er/tables-system.md`の`runtime_settings`キーに`cost.*`（売買コストの想定: 手数料・スリッページ・SHORT貸株料）を追加。スキーマ変更なし | issue #779 |
+| 1.54 | 2026-10-17 | マイグレーション000037を追加し、`er/tables-metalabel.md`の`metalabel_models`に採用判定の根拠列（`oos_takes`・`oos_days`・`oos_ev_ci_{low,high}_bps`・`oos_auc_ci_{low,high}`・`adoption_json`・`forward_json`）を追加。`er/tables-system.md`の`runtime_settings`キーに`metalabel.llm_cutoff_{model,confirmed_on,source}`（LLM学習データ終了日の出典、issue #776）を追記 | issue #780, #776 |

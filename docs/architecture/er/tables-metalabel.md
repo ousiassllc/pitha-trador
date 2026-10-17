@@ -2,7 +2,7 @@
 
 `docs/architecture/er.md` から分割した章。対象: `metalabel_models` / `metalabel_predictions`（issue #757、親 #752。マイグレーション000034、採用判定の列は000037＝issue #780）。実装は`internal/repository/metalabel`と`internal/service/metalabel`の`Store`。
 
-メタラベリングは、Jevの方向判断（一次シグナル）に対して「入る/見送る」とサイズを決める二次モデルである。学習ラベルは`calibration_outcomes`のトリプルバリア（`label_version=2`、`net_return_bps > 0`で勝ち）。検証は paper のみで行う。**有効なモデルが無いときは見送りに倒す**（`LatestActiveModel`が見つからなければ呼び出し側は`skip`とする）。
+メタラベリングは、Jevの方向判断（一次シグナル）に対して「入る/見送る」を決める二次モデルである。サイズ比（Kelly）は記録するだけで発注数量には使わない（FR-META-3、issue #781）。学習ラベルは`calibration_outcomes`のトリプルバリア（`label_version=2`、`net_return_bps > 0`で勝ち）。検証は paper のみで行う。**有効なモデルが無いときは見送りに倒す**（`LatestActiveModel`が見つからなければ呼び出し側は`skip`とする）。
 
 ## metalabel_models
 
@@ -98,7 +98,7 @@ erDiagram
 | calibrated_probability | numeric | NOT NULL, CHECK (0〜1) | 較正後の勝率 |
 | expected_value_bps | numeric | NOT NULL | 較正後確率から求めたコスト控除後の期待値（bps） |
 | action | text | NOT NULL, CHECK (`take`/`skip`) | 入る/見送る |
-| size_fraction | numeric | NOT NULL, CHECK (0〜1) | `take`の建玉サイズ比率。`skip`は`0`、`take`は正（Storeが検証） |
+| size_fraction | numeric | NOT NULL, CHECK (0〜1) | `take`のサイズ比（Kelly比`EV / WinBps`×`KellyFraction`を1以下に丸めた値）。`skip`は`0`、`take`は正（Storeが検証）。**記録専用で、発注数量には使わない**（数量はRisk上限だけで決まる。FR-META-3・FR-ENTRY-3、issue #781） |
 | reason | text | NOT NULL, DEFAULT `''` | 判定根拠（`skip`の理由など） |
 | features_json | text | NOT NULL, DEFAULT `{}` | 推論に使った特徴量（監査・再現用） |
 | created_at | text | NOT NULL | |
