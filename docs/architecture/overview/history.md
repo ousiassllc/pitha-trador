@@ -116,3 +116,4 @@
 | 1.109 | 2026-10-15 | 取引ログ・判断ログのエクスポート基盤を追加（issue #770・#771、親 #768）: §3のservice層・コンポーネント表に`internal/service/dataexport`、repository層に複数リソース読み取り`decisionsnapshot`（`market`の行数上限のため分離）、§10.7に通信フロー、§4.21（FR-EXPORT-1〜6）への参照を追記 |
 | 1.110 | 2026-10-15 | データエクスポートのSettings操作と計測ログの組み込み（issue #773、親 #768）: `dataexport.Metrics`（`logging.Exporter.ExportMetrics`）を追加し、`GET /api/v1/export`（`web/handler/export`）とSettingsの「データエクスポート」節から取引ログ・判断ログ・計測ログをZIPでダウンロード可能にした。§10.7を更新、§4.21 FR-EXPORT-7を参照 |
 | 1.111 | 2026-10-17 | 読み取り専用 Paper 実績 MCP の仕様を `architecture/paper-results-mcp.md`（エラーは `paper-results-mcp-errors.md`、ツールは `api/endpoints/paper-results-mcp.md`）に追加。`overview.md` 本文は 300 行を超えているため構成図へは追記せず、文書マップは `docs/overview.md` | issue #783 |
+| 1.112 | 2026-10-17 | Paper 実績 MCP の必須認証を API キーだけにし、経路をプライベートトンネル一般（Tailscale、任意の Cloudflare Tunnel、その他）へ改めた。本文の構成図は 300 行を超えているため変更せず、詳細は `paper-results-mcp.md` 1.1 | 悠太さん指示。Cloudflare を必須にしない |

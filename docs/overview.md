@@ -109,7 +109,7 @@ graph TD
 | アーキテクチャ設計 | `docs/architecture/overview.md`（§5〜§13は `docs/architecture/overview/` に分割） | Go レイヤードアーキテクチャ、ブローカー（kabuステーションAPI／立花証券）/RAG/自己改善ループ連携、Wails単一プロセス構成、SQLite上の自前Scheduler/Worker設計 |
 | ER / データモデル | `docs/architecture/er.md`（テーブル定義は `docs/architecture/er/` に分割） | instruments/market_snapshots/jev_decisions/trade_signals/paper_orders/positions/calibration_outcomes/calibration_label_skips/kill_switch_events/kill_switch_resolutions/runtime_settings/secrets/policy_proposals/jobs のSQLiteテーブル定義とsqlite-vecベクトルインデックス |
 | API 仕様 | `docs/api/endpoints.md` | Huma JSON API（/api/v1/...）と HTMX ページ/アクションルートの仕様 |
-| Paper 実績 MCP（読み取り専用） | `docs/architecture/paper-results-mcp.md`（ツールは `docs/api/endpoints/paper-results-mcp.md`、エラーは `docs/architecture/paper-results-mcp-errors.md`、プロセスは `docs/components/paper-results-mcp.md`） | リモートの Grok Bot が Cloudflare Tunnel 経由で、Windows PC 上の loopback MCP から Paper の実績・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読む仕様。既定オフ。推奨は Cloudflare Access のサービストークンと別 API キーの二重認証。DB は `mode=ro`。板・時価の生データと `secrets` は出さない。kabu の状態を読む #347 の MCP とは別プロセス。実装は含まない |
+| Paper 実績 MCP（読み取り専用） | `docs/architecture/paper-results-mcp.md`（ツールは `docs/api/endpoints/paper-results-mcp.md`、エラーは `docs/architecture/paper-results-mcp-errors.md`、プロセスは `docs/components/paper-results-mcp.md`） | リモートの Grok Bot がプライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他）経由で、Windows PC 上の MCP から Paper の実績・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読む仕様。既定オフ。必須の認証は別 API キー。待受の既定は `127.0.0.1:48110`。DB は `mode=ro`。板・時価の生データと `secrets` は出さない。kabu の状態を読む #347 の MCP とは別プロセス。実装は含まない |
 | コンポーネント設計 | `docs/components/overview.md`（§5〜§9は `docs/components/lit.md`・`runtime.md` に分割） | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
 | 環境構築 | `docs/environment/setup.md`（CI/CDは `docs/environment/ci.md`、改訂履歴は `docs/environment/setup/history.md` に分割） | 開発環境・必要ツール・環境変数・銘柄マスタ投入・Makefile・Lint/Format/Linterly/Git Hooks・Swagger/OpenAPI・CI/CD |
 
@@ -169,3 +169,4 @@ graph TD
 | 1.7 | 2026-10-07 | ドキュメントマップに環境構築ドキュメント（`environment/setup.md`・`ci.md`・`setup/history.md`）の行を追加 | issue #678 |
 | 1.8 | 2026-10-08 | 市場データの取得元を「kabuステーションAPI」固定から選択式のブローカー（kabu＝既定・フォールバック／立花証券・e支店API。1プロセス1社、手動切替）へ更新。スコープ・システム全体像・ドキュメントマップ・Phase 0・用語集に立花証券を追加 | issue #721（#720の決定） |
 | 1.9 | 2026-10-17 | ドキュメントマップに読み取り専用 Paper 実績 MCP（`architecture/paper-results-mcp.md`、ツールは `api/endpoints/paper-results-mcp.md`、エラーは `architecture/paper-results-mcp-errors.md`）を追加 | issue #783。実装は範囲外 |
+| 1.10 | 2026-10-17 | ドキュメントマップの Paper 実績 MCP を、必須認証は API キー、経路はプライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他）へ改めた | 悠太さん指示。Cloudflare を必須にしない |

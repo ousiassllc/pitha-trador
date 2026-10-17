@@ -109,7 +109,7 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 
 ## 8. Paper 実績 MCP（アプリの HTTP とは別）
 
-Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモートの Grok Bot が読む MCP は、本節までの Huma / HTMX / WebSocket には含めない。待受は `127.0.0.1:48110` の別プロセス、認証はセッション Cookie ではなく Cloudflare Access と別 API キーである。ツール一覧・入出力・上限は `docs/api/endpoints/paper-results-mcp.md`、接続と読み取り専用 DB は `docs/architecture/paper-results-mcp.md`、エラー表は `docs/architecture/paper-results-mcp-errors.md`（issue #783）。
+Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモートの Grok Bot が読む MCP は、本節までの Huma / HTMX / WebSocket には含めない。待受の既定は `127.0.0.1:48110` の別プロセス、認証はセッション Cookie ではなく MCP 自身の別 API キーである。経路はプライベートトンネルで、Cloudflare は必須ではない。ツール一覧・入出力・上限は `docs/api/endpoints/paper-results-mcp.md`、接続と読み取り専用 DB は `docs/architecture/paper-results-mcp.md`、エラー表は `docs/architecture/paper-results-mcp-errors.md`（issue #783）。
 
 ## 改訂履歴
 
@@ -200,3 +200,4 @@ Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモー
 | 1.82 | 2026-10-14 | `GET /api/v1/calibration`（`api/endpoints/huma-api-insights.md`）に`ab_arms`（paper A/B比較のアーム別・レジーム別のコスト控除後EV・勝率。取得元が未配線なら省略）を追加。`/ops-settings/:key`の許可キーに`regime.{ab_enabled,window_minutes,autocorr_threshold,min_volatility_bps,vwap_z_threshold}`を追加 | issue #755・親 #751 |
 | 1.83 | 2026-10-15 | §5に`GET /api/v1/export`（取引ログ・判断ログ・計測ログのZIPエクスポート。期間・種類・形式指定、Cookie必須で未認証403、期間最大366日。`api/endpoints/huma-api-export.md`）を追加。§3の`/settings`にデータエクスポート節を追記 | issue #773・親 #768 |
 | 1.84 | 2026-10-17 | §8 を追加し、Paper 実績 MCP のツール仕様（`endpoints/paper-results-mcp.md`）が Huma `/api/v1` とは別待受であると明記 | issue #783 |
+| 1.85 | 2026-10-17 | §8 の認証を MCP 自身の API キーへ改め、経路はプライベートトンネルで Cloudflare は必須ではないと明記 | 悠太さん指示。Cloudflare を必須にしない |

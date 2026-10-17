@@ -290,3 +290,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.92 | 2026-10-15 | §4.21（FR-EXPORT-1〜6）を追加: 取引ログ（注文・約定・決済・損益）と判断ログ（Jevリクエスト/レスポンス・レイテンシ・特徴量・skip/reject理由・後付けラベルを`decision_id`で紐付け）を、期間指定でCSV/JSONLのZIP＋`manifest.json`（スキーマバージョン・期間・種類ごとの行数）としてエクスポートする`internal/service/dataexport`と、秘密情報のマスク・redactionテスト・ローカル出力のみの方針を定義（issue #770・#771、親 #768。計測ログ#772・Settings操作#773は後続） |
 | 1.93 | 2026-10-15 | §4.21にFR-EXPORT-7を追加し、FR-EXPORT-1・2を計測ログ（`metrics`）とmanifestの`files[].truncated`に対応させた: Settingsの「データエクスポート」節（期間・種類・形式の指定と`GET /api/v1/export`によるZIPダウンロード）と、計測ログ（INFO以上、マスク・10MiB上限）の`dataexport`への組み込み（issue #773、親 #768） |
 | 1.94 | 2026-10-17 | UC-17 と §4.22（FR-MCP-1〜8）を追加。Paper 実績・Jev 判断を読む読み取り専用 MCP。新規テーブルは追加しない | issue #783（仕様のみ。実装は別作業） |
+| 1.95 | 2026-10-17 | FR-MCP-1 に待受の範囲（既定 loopback、Tailscale 直接待受は tailnet の IP、`0.0.0.0` は拒否）を足し、FR-MCP-2 の必須認証を API キーだけにした。FR-MCP-8 の実機確認を選んだ経路（Tailscale または Cloudflare Tunnel）へ変えた | 悠太さん指示。Cloudflare を必須にしない |

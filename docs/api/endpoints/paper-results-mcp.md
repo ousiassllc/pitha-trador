@@ -2,7 +2,7 @@
 
 `docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
-トランスポートは HTTP の MCP である（stdio ではない）。**要確認**: Grok Bot のコネクタが要求する MCP over HTTP の版（Streamable HTTP か、旧来の HTTP+SSE か）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストが §アーキテクチャ 3.3 の認証を必要とする。URL を知っているだけではツール一覧も返さない。
+トランスポートは HTTP の MCP である（stdio ではない）。**要確認**: Grok Bot のコネクタが要求する MCP over HTTP の版（Streamable HTTP か、旧来の HTTP+SSE か）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。
 
 ## 1. 期間
 
@@ -157,7 +157,7 @@
 | `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文 |
 | `jev_decisions` の `ofi_*` / `microprice_dev_bps` / `vwap_z` / `regime_volatility_bps` / `regime_autocorr` | `000032`・`000036`。板・価格由来の特徴量 |
 | `secrets` の全列 | `000013`。`key` 名も返さない |
-| API キー、MCP の `api_key`、Access の Client-Secret、証券会社の認証情報 | ローカル設定と `secrets`。ログにも出さない |
+| API キー、MCP の `api_key`、証券会社の認証情報。Cloudflare を使うときの Client-Secret も | ローカル設定と `secrets`。ログにも出さない |
 | `metalabel_models.params_json` / `feature_names_json` / `oos_calibration_json` | `000034` |
 | `metalabel_predictions` の行の中身（`features_json` を含む） | `000034`。件数だけ |
 | `kill_switch_events.detail_json` | `000009` / `000017` |
@@ -172,16 +172,19 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 ## 5. 受け入れ条件（テストで確認できること）
 
 - 既定の設定ファイル（`enabled: false`）では `127.0.0.1:48110` に接続できない
-- `enabled: true` かつキーが正しいときだけ待受し、ツールが応答する
-- キー無し・誤ったキー・（照合を有効にしたときの）Access ヘッダ不一致は 401 で、そのリクエストの経路で SQL が 0 件である
+- `enabled: true` かつ `api_key` が非空で、そのキーが正しいときだけ待受し、ツールが応答する。`api_key` が空なら待受しない
+- `listen` が `0.0.0.0` のときは起動しない。Tailscale で直接待つ設定は、その PC の tailnet 側アドレスだけを bind する
+- キー無し・誤ったキーは 401 で、そのリクエストの経路で SQL が 0 件である
 - MCP が開いた接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
-- Cloudflare Tunnel 経由の実機確認は自動テストの対象外とする。実装完了時に、キーを伏せた呼び出し記録を残す（#783 の実機条件）
+- 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）
+- Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
 
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-17 | 新規作成 | issue #783。ツールの入出力・上限・出さない列を、既存マイグレーションの列名で固定 |
+| 1.1 | 2026-10-17 | 受け入れ条件の実機確認を、選んだ経路（Tailscale または Cloudflare Tunnel）経由に変えた。Tailscale は tailnet 外から届かないことも確認する。必須の 401 は API キーだけ | 悠太さん指示。Cloudflare を必須にしない |

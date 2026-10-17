@@ -6,7 +6,7 @@
 
 - エントリーポイントは将来 `cmd/paper-results-mcp`。Wails の `cmd/desktop` にも `cmd/server` の Gin にもルートを足さない。根拠: デスクトップのページはセッション Cookie と loopback の AssetServer が前提で、リモートの Grok Bot とは認証が別である（`docs/api/endpoints.md` §1）
 - アプリ本体と同時に動いてよい。DB はアプリが単一ライター、本プロセスは `mode=ro` の読み手（`docs/architecture/er.md` の同時実行は WAL。本プロセスは WAL のモード変更もチェックポイントもしない）
-- #347 の kabu ステータス MCP とは別バイナリ・別設定ファイル・別ポート（`127.0.0.1:48110`）。あちらが main に入ったあともパッケージを共有しない
+- #347 の kabu ステータス MCP とは別バイナリ・別設定ファイル・別ポート（既定 `127.0.0.1:48110`。Tailscale で直接待つときは tailnet の IP）。あちらが main に入ったあともパッケージを共有しない。経路の実装（Tailscale も Cloudflare も含む）はこのプロセスに埋め込まない
 
 ## 2. パッケージ
 
@@ -23,10 +23,11 @@
 
 ## 3. テスト
 
-受け入れ条件は `docs/api/endpoints/paper-results-mcp.md` §5。単体テストは一時ディレクトリの SQLite（マイグレーション適用済みのテスト DB）と、httptest 相当の HTTP で行う。トンネルと Cloudflare Access の実アカウントは CI に置かない。
+受け入れ条件は `docs/api/endpoints/paper-results-mcp.md` §5。単体テストは一時ディレクトリの SQLite（マイグレーション適用済みのテスト DB）と、httptest 相当の HTTP で行う。Tailscale も Cloudflare も、トンネルのアカウントは CI に置かない。
 
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-17 | 新規作成 | issue #783。HALT の画面仕様とは別プロセスであると明記 |
+| 1.1 | 2026-10-17 | 経路の実装をプロセスに埋め込まないことと、CI に Tailscale・Cloudflare のアカウントを置かないことを明記 | 悠太さん指示。Cloudflare を必須にしない |

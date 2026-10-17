@@ -6,22 +6,28 @@
 
 ## 1. 目的
 
-実績の DB は Windows PC の `%AppData%\pitha-trador\pitha.db`（`internal/bootstrap/bootstrap.go` の `DefaultDBPath`。環境変数 `PITHA_DB_PATH` があればそれを優先）。Grok Bot はその PC では動かない。いまは DB ファイルを手渡しして集計している。本 MCP は、その手渡しの代わりに、認証を通した読み取りだけをトンネル越しに届ける。
+実績の DB は Windows PC の `%AppData%\pitha-trador\pitha.db`（`internal/bootstrap/bootstrap.go` の `DefaultDBPath`。環境変数 `PITHA_DB_PATH` があればそれを優先）。Grok Bot はその PC では動かない。いまは DB ファイルを手渡しして集計している。本 MCP は、その手渡しの代わりに、認証を通した読み取りだけをプライベートな経路で届ける。
 
 ```mermaid
 flowchart LR
     Grok["Grok Bot（リモート）"]
-    Access["Cloudflare Access\n（サービストークン）"]
-    Tunnel["Cloudflare Tunnel\n（同一 PC の cloudflared）"]
-    MCP["Paper 実績 MCP\n127.0.0.1:48110"]
+    subgraph path["プライベート経路（どれか一つ）"]
+        TS["Tailscale"]
+        CF["Cloudflare Tunnel（任意）"]
+        OT["その他"]
+    end
+    MCP["Paper 実績 MCP\nAPI キー必須"]
     DB[("SQLite\nmode=ro")]
-    Grok -->|"HTTPS と認証ヘッダ"| Access
-    Access --> Tunnel
-    Tunnel -->|"loopback のみ"| MCP
-    MCP -->|"認証通過後だけ"| DB
+    Grok -->|"Authorization: Bearer"| TS
+    Grok --> CF
+    Grok --> OT
+    TS --> MCP
+    CF --> MCP
+    OT --> MCP
+    MCP -->|"キー一致のあとだけ"| DB
 ```
 
-MCP はアプリ本体（Wails / `cmd/server`）とは別プロセスで、同じ Windows ユーザーのセッションで動く。話しかたは HTTP である（stdio ではない）。待受は loopback だけにし、インターネットへ直接は公開しない。外から届く道は Cloudflare Tunnel だけである（悠太さん決定、2026-10-17。公開の入口をトンネルに限る）。
+MCP はアプリ本体（Wails / `cmd/server`）とは別プロセスで、同じ Windows ユーザーのセッションで動く。話しかたは HTTP である（stdio ではない）。インターネットへ直接は公開しない。外へ届ける経路は実装に依存せず、§3.2 のどれを選んでも同じ MCP・同じ API キーで動く（悠太さん、2026-10-17。Cloudflare を必須にしない。Tailscale も検討する）。
 
 ## 2. issue #347 との関係
 
@@ -30,11 +36,11 @@ MCP はアプリ本体（Wails / `cmd/server`）とは別プロセスで、同�
 | 項目 | #347 kabu ステータス MCP | 本仕様（#783） |
 |------|--------------------------|----------------|
 | 読むもの | 同一 PC の kabu `POST /token` と、`secrets` の `KABU_API_PASSWORD` | アプリの SQLite の集計・ラベル。`secrets` は読まない |
-| トンネル | プライベートトンネル（Tailscale 等）。インターネット非公開 | Cloudflare Tunnel。待受自体は loopback |
-| 認証 | コネクタ用の別 API キー。無い・不一致は kabu へ繋ぐ前に拒否 | 推奨は二重（§3.3）。キー不一致は SQL を発行する前に拒否 |
+| トンネル | プライベートトンネル（Tailscale 等）。インターネット非公開 | 同じ方針。選択肢は §3.2。Cloudflare は必須にしない |
+| 認証 | コネクタ用の別 API キー。無い・不一致は kabu へ繋ぐ前に拒否 | 必須は別 API キー（§3.3）。不一致は SQL の前に拒否 |
 | 既定 | オフ。PC 上のローカル設定だけ。Grok からは戻せない | 同じ。ただしオフのとき待受しない（下の差分） |
 | オフの応答 | キー一致のあと `issue=mcp_disabled` を返す | TCP 待受を開かない（接続不可）。#783 の受け入れ条件 |
-| ポート | MCP が kabu の localhost:18080（検証時 18081）を叩く | 本 MCP の待受は `127.0.0.1:48110`。kabu のポートは使わない |
+| ポート | MCP が kabu の localhost:18080（検証時 18081）を叩く | 既定の待受は `127.0.0.1:48110`。kabu のポートは使わない |
 | プロセスと鍵 | アプリの HTTP を叩かない。鍵は `KABU_API_PASSWORD` とは別 | 別プロセス・別の設定ファイル・別の API キー。#347 のツールは呼ばない |
 
 衝突させない。#347 のスイッチやコネクタ鍵を、本 MCP のオン/オフや鍵に流用しない。kabu の待受やログイン状態は本 MCP のツールに出さない。#347 の仕様文は本仕様で書き換えない（main 未マージの別文書のまま）。
@@ -45,36 +51,29 @@ MCP はアプリ本体（Wails / `cmd/server`）とは別プロセスで、同�
 
 - 既定はオフ。オフの間はポートを bind しない。プロセスが起動していても接続は拒否される（`paper-results-mcp-errors.md` の `not_listening`）
 - オンは Windows PC のローカル設定ファイルだけが行う（§3.4）。Grok Bot のツール引数、コネクタ、DB の `runtime_settings` からはオンに戻せない
-- オンのとき bind するのは `127.0.0.1:48110` だけである。`0.0.0.0`・LAN・非 loopback は起動を拒否する（`cmd/server` の `PITHA_SERVER_ALLOW_NON_LOOPBACK` に相当する抜け道は置かない）。根拠: 外への出口はトンネルに一本化し、アプリの待受（`127.0.0.1:48080`）や kabu（18080/18081）とポートを分けて衝突を避ける
-- `48110` が使用中なら、別インターフェースへ逃げずに起動失敗とする
-- Grok Bot に登録する URL はトンネルの HTTPS ホスト名である。`http://127.0.0.1:48110` も kabu の URL も登録しない
+- 既定の bind は `127.0.0.1:48110`。経路の実装（Tailscale の転送、Cloudflare Tunnel、その他）はここへ向ける。アプリの待受（`127.0.0.1:48080`）や kabu（18080/18081）とはポートを分ける
+- Tailscale でこのプロセスが直接待つときは、`listen` をその PC の tailnet 側アドレス（Tailscale の仮想インターフェースにいま割り当てられているアドレス）へ限る。ポートは既定の 48110。インターフェースが無い、または指定アドレスがそのインターフェースに無いときは、別のインターフェースへ逃げずに起動失敗とする
+- `0.0.0.0`・`::`・LAN・それ以外の公開インターフェースは起動を拒否する（`cmd/server` の `PITHA_SERVER_ALLOW_NON_LOOPBACK` に相当する抜け道は置かない）。根拠: インターネットへ直接出さず、届く範囲を tailnet かトンネルのメンバーに限る
+- 指定ポートが使用中なら、別インターフェースへ逃げずに起動失敗とする
+- Grok Bot に登録する URL は、選んだ経路の名前（Tailscale のホスト名、またはトンネルの HTTPS 名）である。`http://127.0.0.1:48110` も kabu の URL も登録しない
 
-### 3.2 Cloudflare Tunnel と Access
+### 3.2 経路
 
-同一 PC の `cloudflared` が、トンネルの ingress を `http://127.0.0.1:48110` へ向ける。ポート転送で待受を LAN やインターネットへ出さない。
+経路は次のどれかで、MCP の実装は経路を知らない。どれも同じプロセス・同じ API キー（§3.3）で動く。アカウント・ホスト名の実値は本リポジトリに書かない。
 
-Cloudflare Access はトンネルの入口でサービストークンを要求する第一因子である。クライアントが提示するヘッダは `CF-Access-Client-Id` と `CF-Access-Client-Secret`（URL・クエリ・パスには置かない）。Access のポリシー自体は Cloudflare 側の設定であり、本リポジトリにはアカウント ID・トークン・ホスト名の実値を書かない。
+| 経路 | 位置づけ | 待受 | 届く範囲 |
+|------|----------|------|----------|
+| Tailscale | 選択肢。#347 の「プライベートトンネル」に最も近い | 既定は loopback へ転送。直接待つときは tailnet の IP だけ（§3.1） | tailnet の中だけ。tailnet 外からは届かない |
+| Cloudflare Tunnel | 任意。使う場合は §3.5 の Access を併用してよい | loopback へ転送する | トンネルの入口。待受自体はインターネットへ出さない |
+| その他のプライベートトンネル | 選択肢 | loopback へ転送する | そのトンネルのメンバーだけ |
 
-**要確認**: `cloudflared` がオリジン（本 MCP）までこの 2 ヘッダを転送するか。転送されない構成でオリジンがヘッダ照合を必須にすると、Access を通過した正規クライアントも拒否される。実装の最初の確認項目にし、転送の有無をテストで固定する。転送されないと分かった場合の読み替えは §3.3 の「Access 単独」とする（エッジの Access が第一因子、オリジンは API キーのみ）。
+### 3.3 必須の認証
 
-### 3.3 二重認証
+必須は MCP 自身の別 API キーだけである。根拠: 経路が Tailscale でも Cloudflare でも、URL を知っているだけでは DB に届かせない。入口の製品には依存しない。
 
-推奨は二重である。根拠: 入口（Access）とアプリ（API キー）を分けると、片方の設定漏れだけでは DB に届かない。
-
-| モード | 成立するか | 条件 |
-|--------|------------|------|
-| 二重（推奨） | 成立する | エッジの Access サービストークンに加え、MCP が `Authorization: Bearer` の API キーを検証する。ローカル設定 `verify_access_headers: true` かつ `api_key` が非空。ヘッダ転送が確認できた場合、オリジンは `CF-Access-Client-Id` / `CF-Access-Client-Secret` もローカル設定と定数時間で比較する |
-| API キーのみ | 成立する | `verify_access_headers: false` かつ `api_key` が非空。トンネルに Access が無くてもオリジンはキーで拒否できる。起動時に WARN を1回出す（入口がキーだけである旨。キーの値は出さない） |
-| Access のみ | リモート入口としては成立する | `verify_access_headers: true` かつ `api_key` が空。loopback は Access を経由しないため、同一 PC の別プロセスはキー無しで届く。起動時に WARN を1回出す。リモートの「URL を知っているだけ」を拒むのはエッジの Access に依存する |
-| どちらも無し | 成立しない | `enabled: true` でも待受しない。ログは `paper-results-mcp: refusing to listen: no auth configured`（秘密は出さない） |
-
-検査順は、待受が開いているリクエストに対して次のとおり。どちらも SQL より前に行う。
-
-1. `verify_access_headers` が true のとき、2 つの Access ヘッダがローカル設定と一致しなければ `access_denied`。DB は開かない
-2. `api_key` が非空のとき、`Authorization: Bearer` が一致しなければ `unauthorized`。DB は開かない
-3. 両方を通過したときだけツールの SQL に進む
-
-キーが無いことと違うことは、クライアントには同じ固定文で返す（どちらが空だったかは返さない）。提示された値はログ・標準出力・標準エラー・ツール戻り値に出さない。比較は定数時間で行う。
+- `api_key` が空なら `enabled: true` でも待受しない。ログは `paper-results-mcp: refusing to listen: no auth configured`（秘密は出さない）。§3.5 の Access 設定があっても、API キーが空なら同じである
+- 待受が開いているリクエストで、`Authorization: Bearer` が無い、または一致しなければ `unauthorized`。SQL は発行せず、DB 接続も新規に開かない
+- 無いことと違うことは、クライアントには同じ固定文で返す。提示された値はログ・標準出力・標準エラー・ツール戻り値に出さない。比較は定数時間で行う
 
 ### 3.4 ローカル設定
 
@@ -83,13 +82,34 @@ Cloudflare Access はトンネルの入口でサービストークンを要求�
 | フィールド | 意味 | 既定 |
 |------------|------|------|
 | `enabled` | 待受を開くか | `false` |
-| `listen` | 待受アドレス | `127.0.0.1:48110`。loopback 以外は起動失敗 |
-| `api_key` | MCP 自身の API キー | 空。空は「キー因子なし」 |
-| `verify_access_headers` | オリジンで Access ヘッダを照合するか | `true` |
+| `listen` | 待受アドレス | `127.0.0.1:48110`。許す値は §3.1 |
+| `api_key` | MCP 自身の API キー。必須 | 空。空のあいだは待受しない |
+
+Cloudflare を使うときの追加フィールドは §3.5。既定では置かない。
+
+ファイルの権限はユーザーのみ読み取り可（アプリの DB ファイルと同じ `0600`）。Git にコミットしない。値の例を仕様書・ログ・テストの失敗メッセージに埋め込まない。読み取れない・JSON でない場合はオフと同じく待受しない。
+
+### 3.5 Cloudflare を使う場合のオプション
+
+本節は必須ではない。Tailscale やその他の経路では読まなくてよい。Cloudflare Tunnel を選んだときだけ使う。
+
+同一 PC の `cloudflared` が、トンネルの ingress を `http://127.0.0.1:48110` へ向ける。ポート転送で待受を LAN やインターネットへ出さない。
+
+Cloudflare を使うときの推奨は二重である。エッジの Cloudflare Access（サービストークン）と、必須の API キーを重ねる。根拠: 入口とアプリを分けると、片方の設定漏れだけでは DB に届かない。Access は API キーの代わりにならない。Access だけでは待受しない（§3.3）。必須要件・受け入れ条件・FR-MCP には含めない。
+
+クライアントが Access へ提示するヘッダは `CF-Access-Client-Id` と `CF-Access-Client-Secret`（URL・クエリ・パスには置かない）。ポリシーは Cloudflare 側の設定であり、アカウント ID・トークン・ホスト名の実値は本リポジトリに書かない。
+
+オリジンでもヘッダを照合するときは、ローカル設定に次を足す。既定は照合しない。
+
+| フィールド | 意味 | 既定 |
+|------------|------|------|
+| `verify_access_headers` | オリジンで Access ヘッダを照合するか | `false` |
 | `access_client_id` | 照合する Client-Id | 空 |
 | `access_client_secret` | 照合する Client-Secret | 空 |
 
-ファイルの権限はユーザーのみ読み取り可（アプリの DB ファイルと同じ `0600`）。Git にコミットしない。値の例を仕様書・ログ・テストの失敗メッセージに埋め込まない。読み取れない・JSON でない場合はオフと同じく待受しない。
+`verify_access_headers` が true で、id または secret が空なら待受しない（照合が空のまま通るのを避ける。値はログに出さない）。true かつ両方あるリクエストでは、API キーの検査より前に 2 ヘッダを定数時間で比較し、無い・不一致は `access_denied`。SQL は発行しない。`message` は `unauthorized` と同じ文で、どちらが欠けたかは返さない。
+
+**要確認（本節の中だけ）**: `cloudflared` がオリジンまでこの 2 ヘッダを転送するか。転送されない構成でオリジン照合を必須にすると、Access を通過した正規クライアントも拒否される。転送されないと分かった場合は `verify_access_headers` を false のままにし、エッジの Access とオリジンの API キーで足りるとする。オリジン照合を必須要件にはしない。
 
 ## 4. DB
 
@@ -136,3 +156,4 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-17 | 新規作成 | issue #783。読み取り専用 Paper 実績 MCP の仕様。実装は範囲外 |
+| 1.1 | 2026-10-17 | 必須の認証を API キーだけにし、経路を Tailscale・任意の Cloudflare Tunnel・その他のプライベートトンネルへ一般化した。Cloudflare Access は §3.5 の任意 | 悠太さん指示。Cloudflare を必須にしない。Tailscale も検討する |

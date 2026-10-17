@@ -170,11 +170,11 @@ Settings画面（`GET /settings`）で認証情報と運用設定を管理する
 
 リモートの Grok Bot が Paper の実績を確認するために、Windows PC 上の SQLite を読む MCP。画面は増やさない。詳細は `architecture/paper-results-mcp.md`、ツールのフィールドと上限の数値は `api/endpoints/paper-results-mcp.md`、エラー表は `architecture/paper-results-mcp-errors.md`。新規テーブルは作らない。kabu の状態を読む #347 の MCP とは別プロセスで、あちらのツール・鍵・ポートは使わない。
 
-- FR-MCP-1: 既定はオフ。オン/オフは Windows PC のローカル設定ファイルだけで、Grok Bot と `runtime_settings` からは切り替えられない。オフのときは待受しない（接続不可）
-- FR-MCP-2: 認証は推奨として二重（Cloudflare Access のサービストークンと、MCP 自身の別 API キー）。どちらか単独でも、ローカル設定でその因子を有効にしたときは成立する。どちらも無い状態では待受しない。キーが無い・一致しないリクエストは SQL を発行する前に拒否する。キーはログとツール戻り値に出さない
+- FR-MCP-1: 既定はオフ。オン/オフは Windows PC のローカル設定ファイルだけで、Grok Bot と `runtime_settings` からは切り替えられない。オフのときは待受しない（接続不可）。待受の既定は `127.0.0.1:48110`。Tailscale で直接待つときはその PC の tailnet 側アドレスだけ。`0.0.0.0` は起動を拒否する。インターネットへ直接は公開しない
+- FR-MCP-2: 必須の認証は MCP 自身の別 API キー（`Authorization: Bearer`）だけである。キーが空なら待受しない。キーが無い・一致しないリクエストは SQL を発行する前に拒否する。キーはログとツール戻り値に出さない。経路が Tailscale・任意の Cloudflare Tunnel・その他のプライベートトンネルのどれでも、同じ MCP と同じ API キーで動く。Cloudflare Access は Cloudflare を使う場合の任意であり、本要件の必須にしない
 - FR-MCP-3: DB は `mode=ro` で開き、`PRAGMA query_only=ON` とする。マイグレーションと `PRAGMA wal_checkpoint` は実行しない。`sqlitedb.Open` は使わない。アプリ本体の書き込みを妨げない（`busy_timeout` は 1 秒）
 - FR-MCP-4: ツールは `paper_performance_summary` / `paper_daily_pnl` / `paper_trades` / `jev_calibration` / `metalabel_history` / `risk_rejections` / `kill_switch_history` / `collection_status` の 8 つ。戻り値は API 仕様のホワイトリスト列だけとする
 - FR-MCP-5: `market_snapshots.raw_data_json`、`jev_decisions.state_json` と `response_json`、板・時価・気配の列、`secrets`、API キー、証券会社の認証情報は返さない。集計・件数・ラベルと、Paper の約定記録（建値・決済値・損益・手数料）に限る
 - FR-MCP-6: 取得量の上限（行数・期間・クエリ時間・同時実行）は API 仕様 §2 の表に従う。上限を超えたとき部分結果は返さない
 - FR-MCP-7: 認証失敗・オフ・DB ロック・上限超過・期間不正は `architecture/paper-results-mcp-errors.md` の固定 `code` と `message` で返す
-- FR-MCP-8: 受け入れ条件は API 仕様 §5。テスト用 DB で集計値が手計算と一致し、認証失敗が SQL 0 件であり、戻り値とログに生データと秘密が含まれないことを自動テストで確認する。トンネル経由の実機確認は自動テストの外とし、キーを伏せた記録を残す
+- FR-MCP-8: 受け入れ条件は API 仕様 §5。テスト用 DB で集計値が手計算と一致し、認証失敗が SQL 0 件であり、戻り値とログに生データと秘密が含まれないことを自動テストで確認する。選んだ経路（Tailscale または Cloudflare Tunnel）経由の実機確認は自動テストの外とし、キーを伏せた記録を残す。Tailscale のときは tailnet の外から届かないことも記録する
