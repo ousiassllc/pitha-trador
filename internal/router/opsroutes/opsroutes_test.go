@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -28,6 +29,9 @@ func (f *fakeOps) Save(_ context.Context, key, _ string) error { f.saved = key; 
 func (f *fakeOps) Reset(context.Context, string) error         { return nil }
 func (f *fakeOps) Broker(context.Context) (config.BrokerSettings, error) {
 	return config.BrokerSettings{}, nil
+}
+func (f *fakeOps) DailyGuard(context.Context) (dailyguardsettings.Resolved, error) {
+	return dailyguardsettings.Resolved{}, nil
 }
 
 // postOps loads a page from engine for a session + CSRF token, then POSTs a

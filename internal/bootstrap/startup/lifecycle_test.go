@@ -10,6 +10,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
@@ -100,5 +101,75 @@ func TestServices_StartRecoversStuckJobsBeforeStartingScheduler(t *testing.T) {
 			t.Fatalf("recovered job status = %q after 5s, want %q", job.Status, jobqueue.JobStatusSucceeded)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// startAndStop runs svc.Start and returns once it has, stopping the
+// background goroutines when the test ends.
+func startAndStop(t *testing.T, svc *bootstrap.Services) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(svc.Stop)
+	t.Cleanup(cancel)
+	if err := svc.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+}
+
+func storedRow(t *testing.T, svc *bootstrap.Services, key string) (string, bool) {
+	t.Helper()
+	value, ok, err := svc.Settings.Get(context.Background(), key)
+	if err != nil {
+		t.Fatalf("Settings.Get %s: %v", key, err)
+	}
+	return value, ok
+}
+
+// The real startup path stores the daily-guard Paper initial values and the
+// marker (issue #782).
+func TestServices_StartSeedsDailyGuardPaperDefaults(t *testing.T) {
+	svc := newServices(t)
+	startAndStop(t, svc)
+
+	for key, want := range map[string]string{
+		dailyguardsettings.KeyOperatingCapitalJPY:   "500000",
+		dailyguardsettings.KeyLossLimitPct:          "1",
+		dailyguardsettings.KeyProfitLockTriggerPct:  "0.5",
+		dailyguardsettings.KeyProfitLockGivebackPct: "50",
+		dailyguardsettings.KeyMaxTrades:             "20",
+		dailyguardsettings.SeededMarkerKey:          "true",
+	} {
+		if got, ok := storedRow(t, svc, key); !ok || got != want {
+			t.Errorf("after Start %s = %q (stored=%v), want %q", key, got, ok, want)
+		}
+	}
+	for _, key := range []string{dailyguardsettings.KeyLossLimitJPY, dailyguardsettings.KeyProfitLockTriggerJPY} {
+		if got, ok := storedRow(t, svc, key); ok {
+			t.Errorf("after Start %s = %q, want no direct yen row", key, got)
+		}
+	}
+}
+
+// A database that already holds a legacy yen row only gets the marker.
+func TestServices_StartWithLegacyDailyGuardRowOnlyWritesMarker(t *testing.T) {
+	svc := newServices(t)
+	if err := svc.Settings.Set(context.Background(), dailyguardsettings.KeyLossLimitJPY, "50000", time.Now().UTC()); err != nil {
+		t.Fatalf("Settings.Set: %v", err)
+	}
+	startAndStop(t, svc)
+
+	if got, ok := storedRow(t, svc, dailyguardsettings.SeededMarkerKey); !ok || got != "true" {
+		t.Errorf("marker = %q (stored=%v), want true", got, ok)
+	}
+	if got, ok := storedRow(t, svc, dailyguardsettings.KeyLossLimitJPY); !ok || got != "50000" {
+		t.Errorf("legacy row = %q (stored=%v), want it untouched at 50000", got, ok)
+	}
+	for _, key := range dailyguardsettings.Keys() {
+		if key == dailyguardsettings.KeyLossLimitJPY {
+			continue
+		}
+		if got, ok := storedRow(t, svc, key); ok {
+			t.Errorf("after Start %s = %q, want no seeded row next to a legacy one", key, got)
+		}
 	}
 }
