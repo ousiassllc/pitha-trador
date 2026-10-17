@@ -27,7 +27,6 @@ describe('Lit table templates', () => {
       'calibration-heatmap/ab-arms-view.ts',
       'calibration-heatmap/direction-view.ts',
       'calibration-heatmap/meta-model/meta-model-view.ts',
-      'calibration-heatmap/pitha-calibration-heatmap.ts',
       'exit-alignment/exit-alignment-view.ts',
       'scanner-table/pitha-scanner-table.ts',
     ]);
