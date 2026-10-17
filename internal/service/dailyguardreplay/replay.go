@@ -22,7 +22,7 @@ var Limitations = []string{
 }
 
 // Trade is one position as recorded. A zero ClosedAt means it was still open
-// when read (or closed after the range read): it counts as an opened trade
+// when read: it counts as an opened trade
 // and has no close. PnLMissing marks a NULL realized P&L of a closed
 // position, counted as 0 yen like the engine does.
 type Trade struct {

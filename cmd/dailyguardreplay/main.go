@@ -1,5 +1,6 @@
 // Command dailyguardreplay replays the FR-RISK-8 daily entry-halt rules over
-// the Paper positions recorded in a pitha-trador database and prints, per JST
+// the positions recorded in a pitha-trador database (the positions table has
+// no mode column, so point -db at a Paper database) and prints, per JST
 // trading day, the result with and without the rules (issue #782).
 //
 // Every position opened or closed in the range is read: a day's trade count
