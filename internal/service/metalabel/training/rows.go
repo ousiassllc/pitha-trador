@@ -63,6 +63,6 @@ func buildRow(tr repo.TrainingRow) (Row, bool) {
 	}
 	return Row{
 		JevDecisionID: tr.JevDecisionID, DecidedAt: tr.DecidedAt, LabelEnd: tr.LabelEnd(),
-		JevModelID: tr.JevModelID, Direction: tr.Direction, Features: features, Vector: vector, NetReturnBps: tr.NetReturnBps,
+		JevModelID: tr.JevModelID, Symbol: tr.Symbol, Direction: tr.Direction, Features: features, Vector: vector, NetReturnBps: tr.NetReturnBps,
 	}, true
 }

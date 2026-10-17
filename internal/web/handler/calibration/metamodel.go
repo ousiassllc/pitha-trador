@@ -7,7 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
-	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/domain/metamodel"
 )
 
 // MetaModelSource supplies the newest meta-labeling model's OOS report
@@ -16,7 +16,7 @@ import (
 type MetaModelSource interface {
 	// Report returns the newest stored model's report, or (zero, false, nil)
 	// when no model was ever trained.
-	Report(ctx context.Context) (domain.MetaModelReport, bool, error)
+	Report(ctx context.Context) (metamodel.Report, bool, error)
 }
 
 // metaModelCalibrationBinOutput is one point of the model's OOS reliability
@@ -45,14 +45,25 @@ type metaModelOutput struct {
 	OOSEVBps       *float64                        `json:"oos_ev_bps" nullable:"true" doc:"Mean cost-adjusted EV (bps) of the OOS samples the calibrated model would take; null when undefined."`
 	OOSCalibration []metaModelCalibrationBinOutput `json:"oos_calibration" doc:"OOS reliability curve of the calibrated probability."`
 	LLMCutoff      string                          `json:"llm_cutoff" doc:"Settings LLM training-data cutoff (YYYY-MM-DD, UTC); the OOS evaluation uses only decisions on or after it."`
+	// How the model was judged (issue #780).
+	OOSTakes   int               `json:"oos_takes" doc:"Number of OOS signals the calibrated model took (the sample behind oos_ev_bps)."`
+	OOSDays    int               `json:"oos_days" doc:"Number of JST trading days the OOS samples span (the bootstrap's resampling units)."`
+	OOSEVCI    *intervalOutput   `json:"oos_ev_ci,omitempty" doc:"Cluster-bootstrap confidence interval of oos_ev_bps (same-day, same-symbol decisions resampled together); omitted when undefined."`
+	OOSAUCCI   *intervalOutput   `json:"oos_auc_ci,omitempty" doc:"Cluster-bootstrap confidence interval of oos_auc; omitted when undefined."`
+	Criteria   *criteriaOutput   `json:"criteria,omitempty" doc:"The adoption bar this model was judged against; omitted for a model stored before issue #780."`
+	Comparison *comparisonOutput `json:"comparison,omitempty" doc:"The comparison with the model in force on the same OOS rows; omitted when there was none."`
+	Gate       *gateOutput       `json:"gate,omitempty" doc:"The change-rate limit that blocked an otherwise adoptable model; omitted when none did."`
+	Forward    *forwardOutput    `json:"forward,omitempty" doc:"Forward (holdout) evaluation of this model on decisions made after it was trained, separate from the adoption criteria; omitted until evaluated."`
 }
 
-func metaModelResponse(r domain.MetaModelReport) *metaModelOutput {
+func metaModelResponse(r metamodel.Report) *metaModelOutput {
 	bins := make([]metaModelCalibrationBinOutput, len(r.OOSCalibration))
 	for i, b := range r.OOSCalibration {
 		bins[i] = metaModelCalibrationBinOutput{MeanPredicted: b.MeanPredicted, ObservedRate: b.ObservedRate, Count: b.Count}
 	}
 	return &metaModelOutput{
+		OOSTakes: r.OOSTakes, OOSDays: r.OOSDays, OOSEVCI: intervalResponse(r.OOSEVCI), OOSAUCCI: intervalResponse(r.OOSAUCCI),
+		Criteria: criteriaResponse(r.Criteria), Comparison: comparisonResponse(r.Comparison), Gate: gateResponse(r.Gate), Forward: forwardResponse(r.Forward),
 		Version: r.Version, Algorithm: r.Algorithm, Status: r.Status, RejectReason: r.RejectReason,
 		ActiveVersion: r.ActiveVersion, TrainedAt: r.TrainedAt, TrainStart: r.TrainStart, TrainEnd: r.TrainEnd,
 		OOSStart: r.OOSStart, OOSEnd: r.OOSEnd, TrainSamples: r.TrainSamples, OOSSamples: r.OOSSamples,

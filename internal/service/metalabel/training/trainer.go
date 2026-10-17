@@ -11,53 +11,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 )
-
-// Reasons recorded in metalabel_models.reject_reason for a model that learned
-// but did not meet the acceptance bar.
-const (
-	RejectOOSSamples = "oos_samples_below_minimum"
-	RejectAUC        = "oos_auc_not_above_minimum"
-	RejectTakes      = "oos_takes_below_minimum"
-	RejectEV         = "oos_expected_value_not_positive"
-)
-
-// AcceptanceConfig is the OOS bar a freshly trained model must clear to be
-// adopted. A model below it is still stored (status rejected) so its metrics
-// stay on record, but LatestActiveModel never returns it, so the previous
-// model (or, with none, a skip) stays in force.
-type AcceptanceConfig struct {
-	// MinOOSSamples is the fewest scored OOS rows an evaluation is trusted on.
-	MinOOSSamples int
-	// MinAUC is the OOS AUC the model must exceed (0.5 is no better than chance).
-	MinAUC float64
-	// MinTakes is the fewest OOS signals the model must have taken for their
-	// mean EV to mean anything; that EV must also be positive.
-	MinTakes int
-}
-
-// DefaultAcceptanceConfig returns 30 OOS samples, an AUC above 0.5 and at
-// least 10 taken signals with a positive mean EV.
-func DefaultAcceptanceConfig() AcceptanceConfig {
-	return AcceptanceConfig{MinOOSSamples: 30, MinAUC: 0.5, MinTakes: 10}
-}
-
-// Judge returns repo.ModelActive with an empty reason when e clears the bar,
-// otherwise repo.ModelRejected with why.
-func (c AcceptanceConfig) Judge(e Evaluation) (status, reason string) {
-	switch {
-	case e.Samples < c.MinOOSSamples:
-		return repo.ModelRejected, RejectOOSSamples
-	case e.AUC == nil || !(*e.AUC > c.MinAUC):
-		return repo.ModelRejected, RejectAUC
-	case e.Takes < c.MinTakes:
-		return repo.ModelRejected, RejectTakes
-	case e.EVBps == nil || !(*e.EVBps > 0):
-		return repo.ModelRejected, RejectEV
-	}
-	return repo.ModelActive, ""
-}
 
 // DefaultLookback is how far back the nightly training reads labeled decisions.
 const DefaultLookback = 90 * 24 * time.Hour
@@ -68,9 +24,21 @@ type TrainingSource interface {
 	ListTrainingRows(ctx context.Context, from, to time.Time) ([]repo.TrainingRow, error)
 }
 
-// ModelSaver stores a trained model; *Store implements it.
-type ModelSaver interface {
+// ModelStore is the model storage the Trainer needs; *metalabel.Store
+// implements it: saving a trained model, the model currently in force (the
+// one a candidate is compared with and whose last adoption rate limits the
+// next) and the forward evaluation of that model.
+type ModelStore interface {
 	SaveModel(ctx context.Context, m repo.Model) (repo.Model, error)
+	LatestActiveModel(ctx context.Context) (repo.Model, bool, error)
+	UpdateForward(ctx context.Context, id int64, f repo.Forward) error
+}
+
+// PolicyChangeSource tells when the self-improvement flow last changed the
+// policy.* thresholds (FR-SELFIMPROVE-10); *judgement.ProposalRepository
+// implements it.
+type PolicyChangeSource interface {
+	LastChangeAt(ctx context.Context) (time.Time, bool, error)
 }
 
 // SettingsLoader returns the effective meta-labeling settings (Settings
@@ -86,12 +54,17 @@ type SettingsLoader func(ctx context.Context) (metalabelsettings.Settings, error
 // the previous model - or no model, which is a skip - stays in force.
 type Trainer struct {
 	source     TrainingSource
-	saver      ModelSaver
+	store      ModelStore
 	settings   SettingsLoader
 	walk       WalkForwardConfig
 	acceptance AcceptanceConfig
 	lookback   time.Duration
 	now        func() time.Time
+	// policyChanges and limits rate limit the adoption against the
+	// self-improvement flow's changes (issue #780); without a source only the
+	// model-swap rate limit applies.
+	policyChanges PolicyChangeSource
+	limits        changeguard.Limits
 }
 
 // TrainerOption configures a Trainer.
@@ -108,15 +81,25 @@ func WithAcceptance(cfg AcceptanceConfig) TrainerOption {
 // WithLookback overrides DefaultLookback.
 func WithLookback(d time.Duration) TrainerOption { return func(t *Trainer) { t.lookback = d } }
 
+// WithPolicyChanges makes the adoption honour the freeze after a policy.* change
+// the self-improvement flow applied (issue #780).
+func WithPolicyChanges(src PolicyChangeSource) TrainerOption {
+	return func(t *Trainer) { t.policyChanges = src }
+}
+
+// WithChangeLimits overrides changeguard.DefaultLimits.
+func WithChangeLimits(l changeguard.Limits) TrainerOption { return func(t *Trainer) { t.limits = l } }
+
 // WithClock overrides time.Now (tests).
 func WithClock(now func() time.Time) TrainerOption { return func(t *Trainer) { t.now = now } }
 
-// NewTrainer returns a Trainer reading from source and storing through saver,
+// NewTrainer returns a Trainer reading from source and storing through store,
 // with the settings settings returns at each run.
-func NewTrainer(source TrainingSource, saver ModelSaver, settings SettingsLoader, opts ...TrainerOption) *Trainer {
+func NewTrainer(source TrainingSource, store ModelStore, settings SettingsLoader, opts ...TrainerOption) *Trainer {
 	t := &Trainer{
-		source: source, saver: saver, settings: settings,
+		source: source, store: store, settings: settings,
 		walk: DefaultWalkForwardConfig(), acceptance: DefaultAcceptanceConfig(), lookback: DefaultLookback, now: time.Now,
+		limits: changeguard.DefaultLimits(),
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -131,6 +114,9 @@ func NewTrainer(source TrainingSource, saver ModelSaver, settings SettingsLoader
 // models untouched.
 func (t *Trainer) Retrain(ctx context.Context) error {
 	_, err := t.Train(ctx)
+	// The model in force is monitored on decisions made since it was trained
+	// whether or not tonight's training produced anything.
+	t.evaluateForward(ctx)
 	if errors.Is(err, ErrInsufficientData) {
 		slog.Warn("metalabel: nightly retraining skipped; the existing model (or a skip) stays in force", "reason", err)
 		return nil
@@ -191,30 +177,35 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 		return repo.Model{}, fmt.Errorf("metalabel: train %s: %w", version, err)
 	}
 
-	eval := Evaluate(model, split.OOS, metalabel.DecideConfig{MinEVBps: settings.MinEVBps, KellyFraction: metalabel.DefaultKellyFraction})
-	status, reason := t.acceptance.Judge(eval)
-	if r, detail := cutoffGate(settings, split.OOS); r != "" {
-		status, reason = repo.ModelRejected, r
-		slog.WarnContext(ctx, "metalabel: model not adopted: the LLM cutoff does not support the OOS evaluation", "reject_reason", r, "detail", detail)
+	decide := metalabel.DecideConfig{MinEVBps: settings.MinEVBps, KellyFraction: metalabel.DefaultKellyFraction}
+	eval := Evaluate(model, split.OOS, decide)
+	verdict, err := t.judge(ctx, now, settings, split, eval)
+	if err != nil {
+		return repo.Model{}, err
 	}
 
 	params, err := model.ParamsJSON()
 	if err != nil {
 		return repo.Model{}, err
 	}
-	saved, err := t.saver.SaveModel(ctx, repo.Model{
+	saved, err := t.store.SaveModel(ctx, repo.Model{
 		Version: version, Algorithm: metalabel.AlgorithmLogisticRegression, LabelVersion: domain.CalibrationLabelVersionTripleBarrier,
-		Status: status, RejectReason: reason, TrainedAt: now,
+		Status: verdict.status, RejectReason: verdict.reason, TrainedAt: now,
 		TrainStart: split.TrainStart, TrainEnd: split.TrainEnd, OOSStart: split.OOSStart, OOSEnd: split.OOSEnd,
 		TrainSamples: len(split.Fit) + len(split.Calibrate), OOSSamples: eval.Samples,
 		FeatureNames: model.FeatureNames, ParamsJSON: params,
 		OOSAUC: eval.AUC, OOSExpectedValueBps: eval.EVBps, OOSCalibration: eval.Calibration,
+		OOSTakes: eval.Takes, OOSDays: verdict.intervals.Days, OOSEVCI: verdict.intervals.EV, OOSAUCCI: verdict.intervals.AUC,
+		Adoption: verdict.adoption,
 	})
 	if err != nil {
 		return repo.Model{}, fmt.Errorf("metalabel: save model %s: %w", version, err)
 	}
-	slog.Info("metalabel: model trained", "version", version, "status", status, "reject_reason", reason,
-		"oos_samples", eval.Samples, "oos_auc", derefFloat(eval.AUC), "oos_takes", eval.Takes, "oos_ev_bps", derefFloat(eval.EVBps))
+	slog.Info("metalabel: model trained", "version", version, "status", verdict.status, "reject_reason", verdict.reason,
+		"oos_samples", eval.Samples, "oos_takes", eval.Takes, "oos_days", verdict.intervals.Days,
+		"oos_auc", derefFloat(eval.AUC), "oos_auc_ci", formatInterval(verdict.intervals.AUC),
+		"oos_ev_bps", derefFloat(eval.EVBps), "oos_ev_ci", formatInterval(verdict.intervals.EV),
+		"min_oos_samples", t.acceptance.MinOOSSamples, "min_takes", t.acceptance.MinTakes, "min_oos_days", t.acceptance.MinOOSDays)
 	return saved, nil
 }
 

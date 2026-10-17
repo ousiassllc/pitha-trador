@@ -143,3 +143,40 @@ func TestReporter_CutoffReportsStatusAndProvenanceWithoutAnyModel(t *testing.T) 
 		t.Errorf("settings failure = %v, want it wrapped", err)
 	}
 }
+
+// Issue #780: the report carries how the newest model was judged.
+func TestReporter_CarriesTheAdoptionRecord(t *testing.T) {
+	ev := 2.0
+	m := repo.Model{
+		Version: "v5", Status: repo.ModelRejected, RejectReason: "model_swap_rate_limited",
+		OOSTakes: 600, OOSDays: 6, OOSEVCI: &repo.Interval{Low: 0.4, High: 5}, OOSAUCCI: &repo.Interval{Low: 0.51, High: 0.57},
+		Adoption: repo.Adoption{
+			Criteria:   repo.Criteria{MinOOSSamples: 1084, MinTakes: 542, MinOOSDays: 5, MinAUCLower: 0.5, Alpha: 0.01, Resamples: 2000},
+			Comparison: &repo.Comparison{ActiveVersion: "v4", Comparable: true, PairedSamples: 1100, DiffBps: 1, DiffCI: &repo.Interval{Low: 0.1, High: 1.9}},
+			Gate:       &repo.Gate{Reason: "model_swap_rate_limited", Detail: "2 of 5", Until: "2026-10-21T15:00:00Z"},
+		},
+		Forward: repo.Forward{EvaluatedAt: "2026-10-20T09:00:00Z", Samples: 300, Takes: 100, Days: 3, EVBps: &ev, EVCI: &repo.Interval{Low: -1, High: 5}},
+	}
+	got, _, err := metalabel.NewReporter(fakeReportRepo{latest: &m}, cutoffSettings("")).Report(context.Background())
+	if err != nil {
+		t.Fatalf("Report: %v", err)
+	}
+	if got.OOSTakes != 600 || got.OOSDays != 6 || got.OOSEVCI == nil || got.OOSEVCI.Low != 0.4 || got.OOSAUCCI == nil || got.OOSAUCCI.High != 0.57 {
+		t.Errorf("OOS counts/intervals = %d %d %+v %+v", got.OOSTakes, got.OOSDays, got.OOSEVCI, got.OOSAUCCI)
+	}
+	if got.Criteria == nil || got.Criteria.MinTakes != 542 || got.Criteria.Resamples != 2000 {
+		t.Errorf("Criteria = %+v", got.Criteria)
+	}
+	if got.Comparison == nil || got.Comparison.ActiveVersion != "v4" || got.Comparison.DiffCI == nil || got.Comparison.DiffCI.Low != 0.1 {
+		t.Errorf("Comparison = %+v", got.Comparison)
+	}
+	if got.Gate == nil || got.Gate.Reason != "model_swap_rate_limited" || got.Forward.Takes != 100 || got.Forward.EVCI == nil || got.Forward.EVCI.High != 5 {
+		t.Errorf("Gate/Forward = %+v / %+v", got.Gate, got.Forward)
+	}
+	// A model stored before the adoption record existed has none.
+	legacy := repo.Model{Version: "v1", Status: repo.ModelActive}
+	got, _, err = metalabel.NewReporter(fakeReportRepo{latest: &legacy}, cutoffSettings("")).Report(context.Background())
+	if err != nil || got.Criteria != nil || got.Comparison != nil || got.Gate != nil || got.Forward.EvaluatedAt != "" {
+		t.Errorf("legacy report = %+v, %v, want no adoption record", got, err)
+	}
+}

@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（メタラベリング）
 
-`docs/architecture/er.md` から分割した章。対象: `metalabel_models` / `metalabel_predictions`（issue #757、親 #752。マイグレーション000034）。実装は`internal/repository/metalabel`と`internal/service/metalabel`の`Store`。
+`docs/architecture/er.md` から分割した章。対象: `metalabel_models` / `metalabel_predictions`（issue #757、親 #752。マイグレーション000034、採用判定の列は000037＝issue #780）。実装は`internal/repository/metalabel`と`internal/service/metalabel`の`Store`。
 
 メタラベリングは、Jevの方向判断（一次シグナル）に対して「入る/見送る」とサイズを決める二次モデルである。学習ラベルは`calibration_outcomes`のトリプルバリア（`label_version=2`、`net_return_bps > 0`で勝ち）。検証は paper のみで行う。**有効なモデルが無いときは見送りに倒す**（`LatestActiveModel`が見つからなければ呼び出し側は`skip`とする）。
 
@@ -31,6 +31,14 @@ erDiagram
         numeric oos_auc
         numeric oos_expected_value_bps
         text oos_calibration_json
+        integer oos_takes
+        integer oos_days
+        numeric oos_ev_ci_low_bps
+        numeric oos_ev_ci_high_bps
+        numeric oos_auc_ci_low
+        numeric oos_auc_ci_high
+        text adoption_json
+        text forward_json
         text created_at
     }
     metalabel_predictions {
@@ -56,7 +64,7 @@ erDiagram
 | algorithm | text | NOT NULL, CHECK (`<> ''`) | 学習アルゴリズム名（例: `logistic_regression`） |
 | label_version | integer | NOT NULL | 学習に使ったラベルの版（`calibration_outcomes.label_version`。`2`=トリプルバリア） |
 | status | text | NOT NULL, CHECK (`active`/`rejected`) | `active`=採用可、`rejected`=OOS指標が基準に届かず不採用（記録のみ） |
-| reject_reason | text | NOT NULL, DEFAULT `''` | `rejected`の理由。`active`は空。OOS基準未達は`oos_samples_below_minimum`等、`metalabel.llm_cutoff`が仮置きのままなら`llm_cutoff_placeholder`、OOS窓のJevモデルがcutoff確認時と異なれば`llm_model_changed`（FR-META-6、issue #776。いずれも既存の有効モデルは更新されない） |
+| reject_reason | text | NOT NULL, DEFAULT `''` | `rejected`の理由。`active`は空。OOS基準未達は`oos_samples_below_minimum`/`oos_days_below_minimum`/`oos_takes_below_minimum`/`oos_ev_ci_not_positive`/`oos_auc_ci_not_above_minimum`（FR-META-7）、現行モデルを有意に上回らなければ`candidate_not_better_than_active`・比較不能なら`active_model_not_comparable`、変更頻度制限なら`model_swap_rate_limited`・`policy_change_freeze`、`metalabel.llm_cutoff`が仮置きのままなら`llm_cutoff_placeholder`、OOS窓のJevモデルがcutoff確認時と異なれば`llm_model_changed`（FR-META-6、issue #776。いずれも既存の有効モデルは更新されない） |
 | trained_at | text | NOT NULL | 学習実行時刻（UTC）。最新の有効モデルは`status='active'`で`trained_at`が最大の行 |
 | train_start / train_end | text | NOT NULL | 学習窓（UTC） |
 | oos_start / oos_end | text | NOT NULL | OOS窓（UTC）。LLMのcutoff以降だけでJev特徴量を評価できるよう、窓を必ず保存し画面・ログに出せるようにする。`oos_start`は`train_end`以降（Storeが検証。情報漏洩の防止） |
@@ -66,6 +74,12 @@ erDiagram
 | oos_auc | numeric | NULL可, CHECK (0〜1) | OOSのAUC。OOSが片側のラベルだけ等で未定義ならNULL |
 | oos_expected_value_bps | numeric | NULL可 | 較正後に`take`とした標本のコスト控除後平均EV（bps）。未定義ならNULL |
 | oos_calibration_json | text | NOT NULL, DEFAULT `[]` | OOSの較正曲線 `[{"mean_predicted":…,"observed_rate":…,"count":…}]` |
+| oos_takes | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | OOSで較正後に`take`とした件数（`oos_expected_value_bps`の母数。FR-META-7、issue #780） |
+| oos_days | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | OOS標本が属する取引日（JST）の数＝ブートストラップの再抽出単位（同日クラスタ）の数 |
+| oos_ev_ci_low_bps / oos_ev_ci_high_bps | numeric | NULL可 | 1 takeあたりEVの信頼区間（下側・上側、bps）。同日・同銘柄の相関を考慮したクラスタ・ブートストラップ。未定義（営業日不足等）ならNULL |
+| oos_auc_ci_low / oos_auc_ci_high | numeric | NULL可 | OOS AUCの信頼区間（下側・上側）。未定義ならNULL |
+| adoption_json | text | NOT NULL, DEFAULT `{}` | 採用判定の根拠: `criteria`（判定に使った基準値。最小OOS件数・take件数・営業日数・信頼区間の水準・乱数シード）、`comparison`（同一OOSでの現行モデルとの比較。件数・各モデルの平均純リターン・差と区間・比較不能の理由）、`gate`（変更頻度制限で採用を止めた理由・詳細・解除時刻）。値は集計指標と判定メタデータのみで、板・気配などの市場データは含まない |
+| forward_json | text | NOT NULL, DEFAULT `{}` | 採用後の前向き評価（学習後の判断だけでの件数・take数・営業日数・EVと区間・`degraded`）。夜間再学習が現行の有効モデルについて更新する。採用判断・`status`は変えない |
 | created_at | text | NOT NULL | |
 
 インデックス: `(status, trained_at)`（最新の有効モデルの取得）

@@ -1,7 +1,7 @@
 // Response shape and pure presentation helpers for `pitha-calibration-heatmap`
 // (split out of the component to keep it within the linterly per-file limit).
 import type { ABArm } from './ab-arms-view';
-import type { LLMCutoffInfo, MetaModel } from './meta-model-view';
+import type { LLMCutoffInfo, MetaModel } from './meta-model/meta-model-view';
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `triple_barrier`
 // object (internal/web/handler/calibration.calibrationBarrierOutput): the EV

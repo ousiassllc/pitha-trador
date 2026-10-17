@@ -85,6 +85,7 @@ MVP必須要件ではないが、Phase 6（Continuous Loop）の一部として�
 - FR-SELFIMPROVE-7: Sol/Opusの提案・レビュー・適用・ロールバックはすべて`policy_proposals`と`runtime_settings`の変更履歴として監査可能な形で保存する
 - FR-SELFIMPROVE-8: Solが生成した`proposed_changes_json`は、`selfimprove`サービスがFR-SELFIMPROVE-2（対象キーは`policy.*`のみ）・FR-SELFIMPROVE-3（変更幅上限）を機械的に検証する。逸脱する提案は`policy_proposals.status=rejected`（`review_json.reason=llm_output_out_of_bounds`）として却下し、LLM出力の内容を無条件に信用しない
 - FR-SELFIMPROVE-9: Opusの承認判定は、既存の決定的シャドーバックテストしきい値（FR-SELFIMPROVE-4）とOpus APIによる定性レビューの両方を満たした場合にのみ`approved`とする。Opus APIは決定的しきい値を満たす提案を追加で却下できる（安全側の拒否権）が、決定的しきい値を満たさない提案を承認へ覆すことはできない
+- FR-SELFIMPROVE-10（変更頻度の制限と凍結、issue #780・親 #752）: `policy.*`しきい値の変更は、(a) 前回の変更（提案の適用または自動ロールバック。`policy_proposals.applied_at`・`rolled_back_at`の最新）から**5営業日**（東証の取引日、FR-SELFIMPROVE-4と同じ数え方）空け、(b) メタラベリングの有効モデルを採用してから**3営業日**は行わない（`internal/service/changeguard`、`selfimprove.WithChangeGuard`）。メタモデルの再学習による入れ替えと自己改善の変更が同じ窓に重ならないようにし、成績の変化をどちらの変更によるか切り分ける（メタモデル側の制限はFR-META-7）。判定はOpusのレビュー（シャドーバックテスト）の前に行い、制限内の提案は適用せず`status=rejected`・`reviewed_by=governor`・`review_json.reason`（`policy_change_rate_limited`＝前回の変更から5営業日未満、`model_adoption_freeze`＝モデル採用から3営業日未満）・`review_json.detail`（経過日数と解除日）を記録してWARNログに出す（`policy_proposals`から後で監査できる）。承認済みで適用に失敗した提案の再適用（FR-SELFIMPROVE-5）と、FR-SELFIMPROVE-6の自動ロールバックは安全側の操作として制限しない（ロールバックは「変更」として次の制限の起点になる）。変更幅の上限（FR-SELFIMPROVE-3）・承認ゲート（FR-SELFIMPROVE-4）・日次ガードの既定値は変えない。
 
 ### 4.15 System Activity Feed
 

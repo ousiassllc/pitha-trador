@@ -1,4 +1,4 @@
-package training_test
+package trainingflow_test
 
 import (
 	"math"
@@ -13,25 +13,34 @@ import (
 func TestAcceptanceConfig_Judge(t *testing.T) {
 	cfg := training.DefaultAcceptanceConfig()
 	f := func(v float64) *float64 { return &v }
-	good := training.Evaluation{Samples: 100, AUC: f(0.6), Takes: 40, EVBps: f(3)}
-	if status, reason := cfg.Judge(good); status != repo.ModelActive || reason != "" {
+	iv := func(low, high float64) *repo.Interval { return &repo.Interval{Low: low, High: high} }
+	good := training.Evaluation{Samples: cfg.MinOOSSamples, AUC: f(0.56), Takes: cfg.MinTakes, EVBps: f(5)}
+	goodIv := training.Intervals{Days: cfg.MinOOSDays, EV: iv(0.5, 9), AUC: iv(0.51, 0.6)}
+	if status, reason := cfg.Judge(good, goodIv); status != repo.ModelActive || reason != "" {
 		t.Fatalf("good evaluation = %q (%s), want active", status, reason)
 	}
 	for name, tc := range map[string]struct {
-		mut  func(*training.Evaluation)
-		want string
+		mutE  func(*training.Evaluation)
+		mutIv func(*training.Intervals)
+		want  string
 	}{
-		"few samples":   {func(e *training.Evaluation) { e.Samples = 5 }, training.RejectOOSSamples},
-		"undefined AUC": {func(e *training.Evaluation) { e.AUC = nil }, training.RejectAUC},
-		"chance AUC":    {func(e *training.Evaluation) { e.AUC = f(0.5) }, training.RejectAUC},
-		"few takes":     {func(e *training.Evaluation) { e.Takes = 2 }, training.RejectTakes},
-		"no EV":         {func(e *training.Evaluation) { e.EVBps = nil }, training.RejectEV},
-		"negative EV":   {func(e *training.Evaluation) { e.EVBps = f(-1) }, training.RejectEV},
-		"zero EV":       {func(e *training.Evaluation) { e.EVBps = f(0) }, training.RejectEV},
+		"few samples":        {func(e *training.Evaluation) { e.Samples-- }, nil, training.RejectOOSSamples},
+		"few days":           {nil, func(i *training.Intervals) { i.Days-- }, training.RejectOOSDays},
+		"few takes":          {func(e *training.Evaluation) { e.Takes-- }, nil, training.RejectTakes},
+		"undefined EV CI":    {nil, func(i *training.Intervals) { i.EV = nil }, training.RejectEV},
+		"EV CI includes 0":   {nil, func(i *training.Intervals) { i.EV = iv(0, 9) }, training.RejectEV},
+		"EV CI below 0":      {nil, func(i *training.Intervals) { i.EV = iv(-4, -1) }, training.RejectEV},
+		"undefined AUC CI":   {nil, func(i *training.Intervals) { i.AUC = nil }, training.RejectAUC},
+		"AUC CI includes .5": {nil, func(i *training.Intervals) { i.AUC = iv(0.5, 0.6) }, training.RejectAUC},
 	} {
-		e := good
-		tc.mut(&e)
-		if status, reason := cfg.Judge(e); status != repo.ModelRejected || reason != tc.want {
+		e, ivs := good, goodIv
+		if tc.mutE != nil {
+			tc.mutE(&e)
+		}
+		if tc.mutIv != nil {
+			tc.mutIv(&ivs)
+		}
+		if status, reason := cfg.Judge(e, ivs); status != repo.ModelRejected || reason != tc.want {
 			t.Errorf("%s: Judge = %q (%s), want rejected (%s)", name, status, reason, tc.want)
 		}
 	}

@@ -13,17 +13,17 @@ import (
 	"github.com/danielgtaylor/huma/v2/humatest"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
-	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/domain/metamodel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 )
 
 type metaSource struct {
-	report domain.MetaModelReport
+	report metamodel.Report
 	found  bool
 	err    error
 }
 
-func (s metaSource) Report(context.Context) (domain.MetaModelReport, bool, error) {
+func (s metaSource) Report(context.Context) (metamodel.Report, bool, error) {
 	return s.report, s.found, s.err
 }
 
@@ -46,13 +46,13 @@ func getMetaCalibration(t *testing.T, source calibration.CalibrationSource) (int
 // curve and EV, plus the Jev evaluation period.
 func TestCalibrationHandler_APICalibration_MetaModel(t *testing.T) {
 	auc, ev := 0.61, 3.5
-	code, raw := getMetaCalibration(t, sourceWithMeta{metaSource: metaSource{found: true, report: domain.MetaModelReport{
+	code, raw := getMetaCalibration(t, sourceWithMeta{metaSource: metaSource{found: true, report: metamodel.Report{
 		Version: "v3", Algorithm: "logistic", Status: "rejected", RejectReason: "oos auc below bar", ActiveVersion: "v2",
 		TrainedAt:  time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC),
 		TrainStart: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), TrainEnd: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
 		OOSStart: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), OOSEnd: time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC),
 		TrainSamples: 300, OOSSamples: 120, OOSAUC: &auc, OOSEVBps: &ev,
-		OOSCalibration: []domain.MetaModelCalibrationBin{{MeanPredicted: 0.55, ObservedRate: 0.5, Count: 40}},
+		OOSCalibration: []metamodel.CalibrationBin{{MeanPredicted: 0.55, ObservedRate: 0.5, Count: 40}},
 		LLMCutoff:      "2026-09-01",
 	}}})
 	if code != http.StatusOK {
@@ -85,7 +85,7 @@ func TestCalibrationHandler_APICalibration_MetaModel(t *testing.T) {
 }
 
 func TestCalibrationHandler_APICalibration_MetaModelUndefinedMetricsAreNull(t *testing.T) {
-	_, raw := getMetaCalibration(t, sourceWithMeta{metaSource: metaSource{found: true, report: domain.MetaModelReport{Version: "v1", Status: "rejected"}}})
+	_, raw := getMetaCalibration(t, sourceWithMeta{metaSource: metaSource{found: true, report: metamodel.Report{Version: "v1", Status: "rejected"}}})
 	var body struct {
 		MetaModel map[string]any `json:"meta_model"`
 	}
@@ -175,5 +175,64 @@ func TestCalibrationHandler_APICalibration_MetaModelCutoff(t *testing.T) {
 	_, raw = getMetaCalibration(t, calibration.StaticCalibrationSource{})
 	if strings.Contains(string(raw), "meta_model_cutoff") {
 		t.Errorf("meta_model_cutoff present without a source: %s", raw)
+	}
+}
+
+// Issue #780: the response carries how the model was judged: OOS counts, the
+// confidence intervals, the criteria, the comparison, a blocking gate and the
+// forward evaluation; a model stored before that has nulls instead.
+func TestCalibrationHandler_APICalibration_MetaModelAdoptionRecord(t *testing.T) {
+	ev := 4.0
+	code, raw := getMetaCalibration(t, sourceWithMeta{metaSource: metaSource{found: true, report: metamodel.Report{
+		Version: "v4", Status: "rejected", RejectReason: "model_swap_rate_limited",
+		OOSTakes: 600, OOSDays: 6, OOSEVCI: &metamodel.Interval{Low: 0.5, High: 7}, OOSAUCCI: &metamodel.Interval{Low: 0.51, High: 0.57},
+		Criteria:   &metamodel.Criteria{MinOOSSamples: 1084, MinTakes: 542, MinOOSDays: 5, MinAUCLower: 0.5, Alpha: 0.01, Resamples: 2000},
+		Comparison: &metamodel.Comparison{ActiveVersion: "v2", Comparable: true, PairedSamples: 1200, DiffBps: 1.5, DiffCI: &metamodel.Interval{Low: 0.2, High: 2.8}},
+		Gate:       &metamodel.Gate{Reason: "model_swap_rate_limited", Detail: "2 of 5 trading days", Until: "2026-10-21T15:00:00Z"},
+		Forward:    metamodel.Forward{EvaluatedAt: "2026-10-20T09:00:00Z", From: "2026-10-14T09:00:00Z", Samples: 300, Takes: 100, Days: 3, EVBps: &ev, EVCI: &metamodel.Interval{Low: -1, High: 9}},
+	}}})
+	if code != http.StatusOK {
+		t.Fatalf("status = %d (body=%s)", code, raw)
+	}
+	var body struct {
+		MetaModel map[string]any `json:"meta_model"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("Unmarshal: %v (body=%s)", err, raw)
+	}
+	m := body.MetaModel
+	if m["oos_takes"] != float64(600) || m["oos_days"] != float64(6) {
+		t.Errorf("oos_takes/oos_days = %v/%v", m["oos_takes"], m["oos_days"])
+	}
+	for key, want := range map[string]map[string]any{
+		"oos_ev_ci": {"low": 0.5, "high": float64(7)}, "oos_auc_ci": {"low": 0.51, "high": 0.57},
+		"criteria":   {"min_oos_samples": float64(1084), "min_takes": float64(542), "min_oos_days": float64(5), "alpha": 0.01, "resamples": float64(2000)},
+		"comparison": {"active_version": "v2", "comparable": true, "paired_samples": float64(1200), "diff_bps": 1.5},
+		"gate":       {"reason": "model_swap_rate_limited", "until": "2026-10-21T15:00:00Z"},
+		"forward":    {"samples": float64(300), "takes": float64(100), "ev_bps": 4.0, "degraded": false},
+	} {
+		got, _ := m[key].(map[string]any)
+		for k, v := range want {
+			if got[k] != v {
+				t.Errorf("meta_model.%s.%s = %v, want %v", key, k, got[k], v)
+			}
+		}
+	}
+	if ci, _ := m["comparison"].(map[string]any)["diff_ci"].(map[string]any); ci["low"] != 0.2 {
+		t.Errorf("comparison.diff_ci = %v", ci)
+	}
+
+	// A model stored before the adoption record existed: the fields are omitted, not zero values.
+	_, raw = getMetaCalibration(t, sourceWithMeta{metaSource: metaSource{found: true, report: metamodel.Report{Version: "v1", Status: "active"}}})
+	var legacy struct {
+		MetaModel map[string]any `json:"meta_model"`
+	}
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"criteria", "comparison", "gate", "forward", "oos_ev_ci"} {
+		if v, present := legacy.MetaModel[key]; present {
+			t.Errorf("legacy meta_model.%s = %v, want it omitted", key, v)
+		}
 	}
 }

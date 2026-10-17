@@ -3,8 +3,9 @@
 // the Jev evaluation period. Split out of the component to keep it within the
 // linterly per-file limit.
 import { html } from 'lit';
-import { formatJstDateTime } from '../lib/jst-datetime';
-import { formatBps } from './barrier-view';
+import { formatJstDateTime } from '../../lib/jst-datetime';
+import { formatBps } from '../barrier-view';
+import { type MetaModelAdoption, renderAdoption } from './meta-model-adoption-view';
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `meta_model.oos_calibration[]`
 // item shape (internal/web/handler/calibration.metaModelCalibrationBinOutput).
@@ -17,7 +18,7 @@ export interface MetaModelCalibrationBin {
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `meta_model` object
 // (internal/web/handler/calibration.metaModelOutput). Absent from the
 // response until a model was trained.
-export interface MetaModel {
+export interface MetaModel extends MetaModelAdoption {
   version: string;
   algorithm: string;
   status: 'active' | 'rejected';
@@ -52,6 +53,15 @@ export interface LLMCutoffInfo {
 const REJECT_REASON_LABELS: Record<string, string> = {
   llm_cutoff_placeholder: 'LLM 学習データの終わりが仮置きのまま',
   llm_model_changed: 'Jev のモデルが切り替わった（cutoff 未再確認）',
+  oos_samples_below_minimum: 'OOS 件数が基準未満',
+  oos_days_below_minimum: 'OOS の営業日数が基準未満',
+  oos_takes_below_minimum: 'OOS の take 件数が基準未満',
+  oos_ev_ci_not_positive: 'EV の信頼区間の下限が 0 以下',
+  oos_auc_ci_not_above_minimum: 'AUC の信頼区間の下限が 0.5 以下',
+  candidate_not_better_than_active: '現行モデルより有意に良くない',
+  active_model_not_comparable: '現行モデルと比較できない',
+  model_swap_rate_limited: 'モデル入れ替えの頻度制限中',
+  policy_change_freeze: 'しきい値変更直後の凍結期間中',
 };
 
 const rejectReasonLabel = (reason: string): string => REJECT_REASON_LABELS[reason] ?? reason;
@@ -153,6 +163,7 @@ export function renderMetaModel(model: MetaModel | null | undefined, cutoff?: LL
       <dd data-testid="calibration-metamodel-auc">${model.oos_auc === null ? '—' : model.oos_auc.toFixed(3)}</dd>
       <dt>OOS EV（net, エントリーした判断あたり）</dt>
       <dd data-testid="calibration-metamodel-ev">${model.oos_ev_bps === null ? '—' : formatBps(model.oos_ev_bps)}</dd>
+      ${renderAdoption(model)}
     </dl>
     ${renderCalibrationCurve(model.oos_calibration)}
   `;

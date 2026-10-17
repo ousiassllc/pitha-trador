@@ -1,4 +1,4 @@
-package training_test
+package trainingflow_test
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
 )
 
@@ -69,6 +70,21 @@ func (f failingSaver) SaveModel(context.Context, repo.Model) (repo.Model, error)
 	return repo.Model{}, f.err
 }
 
+func (failingSaver) LatestActiveModel(context.Context) (repo.Model, bool, error) {
+	return repo.Model{}, false, nil
+}
+
+func (failingSaver) UpdateForward(context.Context, int64, repo.Forward) error { return nil }
+
+// lenientAcceptance is a bar the small, strongly learnable fixtures of these tests
+// clear: the default bar needs hundreds of OOS takes (see the noise simulation
+// and the adoption tests, which use the defaults).
+func lenientAcceptance() training.AcceptanceConfig {
+	c := training.DefaultAcceptanceConfig()
+	c.MinOOSSamples, c.MinTakes, c.MinOOSDays = 100, 40, 3
+	return c
+}
+
 func settingsOf(mut func(*metalabelsettings.Settings)) training.SettingsLoader {
 	return func(context.Context) (metalabelsettings.Settings, error) {
 		s := metalabelsettings.Default()
@@ -80,9 +96,14 @@ func settingsOf(mut func(*metalabelsettings.Settings)) training.SettingsLoader {
 	}
 }
 
-func newTrainer(src training.TrainingSource, saver training.ModelSaver, settings training.SettingsLoader, opts ...training.TrainerOption) *training.Trainer {
-	opts = append([]training.TrainerOption{training.WithClock(func() time.Time { return trainNow })}, opts...)
-	return training.NewTrainer(src, saver, settings, opts...)
+// newTrainer returns a Trainer on the lenient bar and without change limits
+// (both overridable by opts); the adoption tests pass the real ones.
+func newTrainer(src training.TrainingSource, store training.ModelStore, settings training.SettingsLoader, opts ...training.TrainerOption) *training.Trainer {
+	opts = append([]training.TrainerOption{
+		training.WithClock(func() time.Time { return trainNow }),
+		training.WithAcceptance(lenientAcceptance()), training.WithChangeLimits(changeguard.Limits{}),
+	}, opts...)
+	return training.NewTrainer(src, store, settings, opts...)
 }
 
 // captureLogs routes slog to a buffer for the test and returns it.

@@ -1,4 +1,4 @@
-package training_test
+package trainingflow_test
 
 import (
 	"context"
@@ -99,8 +99,7 @@ func TestTrainer_JevModelChangeRejectsUntilTheCutoffIsReconfirmed(t *testing.T) 
 		t.Fatalf("Train = %+v, %v, want active once the cutoff is re-confirmed", adopted, err)
 	}
 	// A cutoff with no recorded model (unverified) only warns.
-	unverified, err := newTrainer(&fakeSource{rows: rows}, store, confirmedFor(""),
-		training.WithClock(func() time.Time { return trainNow.Add(2 * time.Hour) })).Train(ctx)
+	unverified, err := newTrainer(&fakeSource{rows: rows}, newStore(t), confirmedFor("")).Train(ctx)
 	if err != nil || unverified.Status != repo.ModelActive {
 		t.Fatalf("Train = %+v, %v, want active for an unverified (warn-only) cutoff", unverified, err)
 	}

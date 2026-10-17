@@ -36,7 +36,7 @@ import {
 } from './calibration-view';
 import { renderDirectionTable } from './direction-view';
 import { renderHorizonSelector } from './horizon-selector';
-import { type LLMCutoffInfo, type MetaModel, renderMetaModel } from './meta-model-view';
+import { type LLMCutoffInfo, type MetaModel, renderMetaModel } from './meta-model/meta-model-view';
 
 const ACCURACY_LINE_COLOR = '#2563eb';
 const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';

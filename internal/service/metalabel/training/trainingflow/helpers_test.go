@@ -1,4 +1,8 @@
-package training_test
+// Package trainingflow_test holds the black-box tests of the meta-labeling
+// training package (internal/service/metalabel/training). They only use its
+// exported API and live in their own directory to keep that package within the
+// linterly directory line budget.
+package trainingflow_test
 
 import (
 	"math"
