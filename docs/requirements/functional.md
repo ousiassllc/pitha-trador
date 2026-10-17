@@ -20,6 +20,7 @@
 | UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/ブローカー（kabuステーション・立花証券。`broker.provider`で1つを選択）/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する。立花証券 e支店のカードには接続環境（デモ/本番）を常にバッジで表示する |
 | UC-15 | 初回セットアップ | 個人トレーダー | 選択したブローカーの必須認証情報（既定のkabuなら`KABU_API_PASSWORD`）とJevが未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
 | UC-16 | エラーログ取得 | 個人トレーダー（運用者） | Settings画面から期間・レベルを指定してエラーログをダウンロードし、調査・共有に使う |
+| UC-17 | Paper実績の遠隔参照 | Grok Bot（リモート） | 認証を通した読み取り専用 MCP で、Paper の損益・取引・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読む。売買と設定変更はしない（§4.22） |
 
 ```mermaid
 graph TD
@@ -42,6 +43,7 @@ graph TD
     User --> UC12[バックテスト実行]
     User --> UC13[システムアクティビティ確認]
     User --> UC16[エラーログ取得]
+    Grok((Grok Bot)) --> UC17[Paper実績の遠隔参照]
 ```
 
 ## 2. 主要処理フロー
@@ -100,7 +102,7 @@ sequenceDiagram
 | 節 | ファイル |
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
-| §4.10〜§4.21（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート） | `docs/requirements/functional/components-platform.md` |
+| §4.10〜§4.22（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート・Paper実績MCP） | `docs/requirements/functional/components-platform.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -287,3 +289,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.91 | 2026-10-14 | §4.6にFR-REGIME-1（市場指数の1分足リターンのボラティリティと自己相関で相場状態を trend / mean_revert / unknown に判定し判断ごとに保存、平均回帰レジームでは寄り付き以降のVWAP乖離zスコアで逆張りするVWAP回帰モードへ切替、paperのA/B比較（固定モメンタム vs レジーム切替）。窓幅・しきい値・A/B有効はSettings）を追加し、FR-SETTINGS-7・§4.12 FR-CAL-2に設定とアーム別EV・勝率の表示を追記（issue #755・親 #751） |
 | 1.92 | 2026-10-15 | §4.21（FR-EXPORT-1〜6）を追加: 取引ログ（注文・約定・決済・損益）と判断ログ（Jevリクエスト/レスポンス・レイテンシ・特徴量・skip/reject理由・後付けラベルを`decision_id`で紐付け）を、期間指定でCSV/JSONLのZIP＋`manifest.json`（スキーマバージョン・期間・種類ごとの行数）としてエクスポートする`internal/service/dataexport`と、秘密情報のマスク・redactionテスト・ローカル出力のみの方針を定義（issue #770・#771、親 #768。計測ログ#772・Settings操作#773は後続） |
 | 1.93 | 2026-10-15 | §4.21にFR-EXPORT-7を追加し、FR-EXPORT-1・2を計測ログ（`metrics`）とmanifestの`files[].truncated`に対応させた: Settingsの「データエクスポート」節（期間・種類・形式の指定と`GET /api/v1/export`によるZIPダウンロード）と、計測ログ（INFO以上、マスク・10MiB上限）の`dataexport`への組み込み（issue #773、親 #768） |
+| 1.94 | 2026-10-17 | UC-17 と §4.22（FR-MCP-1〜8）を追加。Paper 実績・Jev 判断を読む読み取り専用 MCP。新規テーブルは追加しない | issue #783（仕様のみ。実装は別作業） |

@@ -107,6 +107,10 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 - ビジネスエラー（例: 未登録銘柄の404 `unknown symbol`）はカスタムエラーも同じProblem Details形式に統一する。なお`POST /api/v1/system/resume`にRisk Engineによる拒否経路はなく、人手のResumeは常にRunningへ戻る（失敗は500固定メッセージ。FR-RISK-4）
 - アクションルート（HTMX）の失敗（4xx/5xx）は該当ステータスと`atoms.Toast`フラグメントを返し、クライアントが`#toast-region`へ表示する（`components/overview.md` §4「エラー表示」）。SSRページルート（`/scanner`・`/symbols/:symbol`・`/activity`）の失敗は、フルページ遷移には`pages.ErrorPage`（ステータス＋固定メッセージ。`err.Error()`は画面に出さずslogへ）、HTMXには同じトーストフラグメントを返す。`/symbols/:symbol`は銘柄形式（`^[0-9A-Za-z]+$`・1〜16文字、JSON APIの`SymbolPathInput`と同じ）に反する値と`ErrInstrumentUnknown`のみ404、他は500（issue #143/#382）。`pitha-price-chart`へ渡す`candles-url`/`ws-url`は`organisms.EscapeSymbolSegment`（`SymbolHref`と同じ規則）で銘柄をパスエスケープして組み立てる。`POST`/`DELETE /settings/:key`の成功応答は、HTMXリクエスト（`HX-Request: true`）には行フラグメント、それ以外（JS無効のフォーム送信）には送信元画面（`/setup`または`/settings`）への303リダイレクトを返す。失敗応答（400/500）はHTMXリクエストにはトースト、それ以外には`pages.ErrorPage`（完全なHTML）を返す（issue #184） 未定義のパス・メソッド（どのルートにも一致しないリクエスト）は`internal/router/router_noroute.go`の`NoRoute`が同じ振り分けで応じる: `/api/v1`配下は`application/problem+json`の404（`not found`）、WebSocket Upgradeは本文なしの404、HTMXはトースト、それ以外のフルページ遷移は`pages.ErrorPage(404)`（gin既定のtext/plain 404は返さない、issue #605）
 
+## 8. Paper 実績 MCP（アプリの HTTP とは別）
+
+Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモートの Grok Bot が読む MCP は、本節までの Huma / HTMX / WebSocket には含めない。待受は `127.0.0.1:48110` の別プロセス、認証はセッション Cookie ではなく Cloudflare Access と別 API キーである。ツール一覧・入出力・上限は `docs/api/endpoints/paper-results-mcp.md`、接続と読み取り専用 DB は `docs/architecture/paper-results-mcp.md`、エラー表は `docs/architecture/paper-results-mcp-errors.md`（issue #783）。
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -195,3 +199,4 @@ WebSocketクライアント実装は `components/overview.md` の `lib/ws.ts`（
 | 1.81 | 2026-10-14 | `endpoints/huma-api.md`の`stale_snapshot`の説明を、ランキング監視の閾値が3分固定からSettingsの`scan.snapshot_max_age_seconds`（既定20秒）へ変わったことに合わせて更新（issue #754、`functional.md` FR-FE-7） |
 | 1.82 | 2026-10-14 | `GET /api/v1/calibration`（`api/endpoints/huma-api-insights.md`）に`ab_arms`（paper A/B比較のアーム別・レジーム別のコスト控除後EV・勝率。取得元が未配線なら省略）を追加。`/ops-settings/:key`の許可キーに`regime.{ab_enabled,window_minutes,autocorr_threshold,min_volatility_bps,vwap_z_threshold}`を追加 | issue #755・親 #751 |
 | 1.83 | 2026-10-15 | §5に`GET /api/v1/export`（取引ログ・判断ログ・計測ログのZIPエクスポート。期間・種類・形式指定、Cookie必須で未認証403、期間最大366日。`api/endpoints/huma-api-export.md`）を追加。§3の`/settings`にデータエクスポート節を追記 | issue #773・親 #768 |
+| 1.84 | 2026-10-17 | §8 を追加し、Paper 実績 MCP のツール仕様（`endpoints/paper-results-mcp.md`）が Huma `/api/v1` とは別待受であると明記 | issue #783 |

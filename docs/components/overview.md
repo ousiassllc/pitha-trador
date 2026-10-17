@@ -195,6 +195,7 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 |----|----------|
 | §5 Lit Web Components 仕様（§5.1〜§5.5）/ §6 API クライアント / WebSocket（`lib/`） | `docs/components/lit.md` |
 | §7 Wails統合 / §8 エラーハンドリング（要約）/ §9 テスト戦略 | `docs/components/runtime.md` |
+| Paper 実績 MCP（画面外の別プロセス） | `docs/components/paper-results-mcp.md` | issue #783。HALT のページには出さない |
 
 ## 改訂履歴
 
@@ -289,3 +290,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.86 | 2026-10-14 | §2の`calibration-heatmap/`に`meta-model-view.ts`を追記、§5.3（`lit.md`）に`pitha-calibration-heatmap`のメタラベリングモデルOOS指標（AUC・較正曲線・EV）とJev評価期間の表示を追記 | issue #766 |
 | 1.87 | 2026-10-14 | §2の`calibration-heatmap/`に`ab-arms-view.ts`を追記、§5.3（`lit.md`）に`pitha-calibration-heatmap`のA/Bアーム別EV・勝率の表示を追記 | issue #755 |
 | 1.88 | 2026-10-15 | organismsに`DataExportPanel`を追加し、`SettingsPage`の「システム」節に「データエクスポート」カード（`modal-data-export`）を置く | issue #773・親 #768 |
+| 1.89 | 2026-10-17 | 分割章の表に Paper 実績 MCP（`paper-results-mcp.md`）を追加。画面コンポーネントは増やさない | issue #783 |
