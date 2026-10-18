@@ -2,6 +2,7 @@ package replayflow_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -143,6 +144,26 @@ func TestDefaultReplay_MinimumEVRaisesTheBar(t *testing.T) {
 	cfg.Meta.MinEVBps = 50
 	if got := replayTrades(t, cfg); len(got) != 0 {
 		t.Fatalf("min EV 50 bps: %d trades, want 0 (EV 24 bps does not clear it)", len(got))
+	}
+}
+
+// The trade carries the model's EV at the entry decision (issue #779), so the
+// cost sensitivity table can tell "predicted worth taking" from "realized net
+// above zero". The legacy confidence rule consults no model: no EV.
+func TestDefaultReplay_TradeCarriesThePredictedEV(t *testing.T) {
+	bars, decisions := metaRamp(0.95)
+	cfg := replayConfig(1, "7203", bars, decisions, liveExit())
+	got := replayTrades(t, cfg)
+	// The taking model scores p = sigmoid(2); a win pays 30 bps and a loss costs 20.
+	wantEV := 50/(1+math.Exp(-2)) - 20
+	if len(got) != 1 || got[0].PredictedEVBps == nil || math.Abs(*got[0].PredictedEVBps-wantEV) > 1e-9 {
+		t.Fatalf("trades = %+v, want one trade with predicted EV %v bps", got, wantEV)
+	}
+
+	cfg.Entry = backtest.EntryLegacyConfidence
+	got = replayTrades(t, cfg)
+	if len(got) != 1 || got[0].PredictedEVBps != nil {
+		t.Fatalf("legacy trades = %+v, want one trade without a predicted EV", got)
 	}
 }
 

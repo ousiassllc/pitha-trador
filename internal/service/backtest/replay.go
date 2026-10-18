@@ -163,7 +163,7 @@ func (s *sim) stepFlat(ctx context.Context, st *instState, idx int, entries bool
 	if s.portfolio != nil {
 		s.portfolio.Candidate(bar)
 	}
-	sig := st.decideEntry(ctx, in)
+	sig, predictedEVBps := st.decideEntry(ctx, in)
 	if sig.Direction == domain.JevDirectionNone {
 		return nil
 	}
@@ -187,6 +187,7 @@ func (s *sim) stepFlat(ctx context.Context, st *instState, idx int, entries bool
 		best: entryFill, lastFillIdx: idx,
 		// sig is not NONE, so in.Decision is set.
 		regime: in.Decision.MarketRegime.Regime, abArm: in.Decision.MarketRegime.ABArm,
+		predictedEVBps: predictedEVBps,
 	}
 	op.trackBest(bar.Price)
 	st.open = op
@@ -238,6 +239,7 @@ func (s *sim) closePosition(st *instState, bar domain.Snapshot, reason string, f
 	trade := newTrade(op.entryBar, bar, op.direction, op.entryFill, fill, reason, st.cfg.Cost.For(op.direction).RoundTripFeeBps())
 	trade.InstrumentID, trade.Symbol = st.cfg.InstrumentID, st.cfg.Symbol
 	trade.Regime, trade.ABArm, trade.Quantity = op.regime, op.abArm, op.quantity
+	trade.PredictedEVBps = op.predictedEVBps
 	s.trades = append(s.trades, trade)
 
 	if s.portfolio != nil {

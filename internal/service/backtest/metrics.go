@@ -73,6 +73,12 @@ type Trade struct {
 	Regime string
 	ABArm  string
 
+	// PredictedEVBps is the meta-labeling model's calibrated expected value
+	// (bps, net of the label's cost) at the decision that opened the trade:
+	// what the entry rule saw, not what the trade realized. nil when no model
+	// scored the entry (EntryLegacyConfidence).
+	PredictedEVBps *float64
+
 	// Quantity is the share count the replayed Risk Engine sized the position
 	// to (sizing.Quantity); 0 when the replay ran without a Risk Engine
 	// (RunConfig.Risk nil). Returns above are percentages either way.
