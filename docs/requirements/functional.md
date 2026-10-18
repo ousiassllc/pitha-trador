@@ -20,6 +20,7 @@
 | UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/ブローカー（kabuステーション・立花証券。`broker.provider`で1つを選択）/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する。立花証券 e支店のカードには接続環境（デモ/本番）を常にバッジで表示する |
 | UC-15 | 初回セットアップ | 個人トレーダー | 選択したブローカーの必須認証情報（既定のkabuなら`KABU_API_PASSWORD`）とJevが未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
 | UC-16 | エラーログ取得 | 個人トレーダー（運用者） | Settings画面から期間・レベルを指定してエラーログをダウンロードし、調査・共有に使う |
+| UC-17 | Paper実績の遠隔参照 | Grok Bot（リモート） | 認証を通した読み取り専用 MCP で、Paper の損益・取引・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読む。売買と設定変更はしない（§4.22） |
 
 ```mermaid
 graph TD
@@ -42,6 +43,7 @@ graph TD
     User --> UC12[バックテスト実行]
     User --> UC13[システムアクティビティ確認]
     User --> UC16[エラーログ取得]
+    Grok((Grok Bot)) --> UC17[Paper実績の遠隔参照]
 ```
 
 ## 2. 主要処理フロー
@@ -100,7 +102,7 @@ sequenceDiagram
 | 節 | ファイル |
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
-| §4.10〜§4.21（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート） | `docs/requirements/functional/components-platform.md` |
+| §4.10〜§4.22（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート・Paper実績MCP） | `docs/requirements/functional/components-platform.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -297,3 +299,5 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.99 | 2026-10-17 | §4.5にFR-META-7（採用基準を信頼区間（同日・同銘柄の相関を考慮したクラスタ・ブートストラップ）の下限判定に変更し、最小標本を想定エッジ・ばらつきからの逆算（OOS 1084・take 542・5営業日）で引き上げ、現行モデルとの同一OOS比較、モデル入れ替えの5営業日の頻度制限と変更後の凍結、採用判断に使わない期間での前向き評価、基準値・結果の`metalabel_models`（マイグレーション000037）・画面・ログへの表示、効果の無い合成データでの偽採用率5%以下の検証）を追加し、§4.14にFR-SELFIMPROVE-10（`policy.*`変更の5営業日の頻度制限とモデル採用後3営業日の凍結、制限時は却下して理由を記録）を追加（issue #780・親 #752） |
 | 1.100 | 2026-10-17 | §4.12にFR-CAL-4A（メタモデルのラベル基準と実出口の整合: 差を許容し検知する(c)案、対応表、不一致警告、ラベル対再生の比較、OOS EVとPaper実績の並記。issue #774）を追加し、§4.8にFR-COST-1（手数料・スリッページ・SHORT貸株料をSettingsの設定にしてPaper・バックテスト・ラベルが同じ値を参照、SHORTの扱い、既定値の根拠と見直し基準、コスト感度表。issue #779）を追加。FR-EXIT-2・FR-ENTRY-8・FR-SETTINGS-7に相互参照を追記 |
 | 1.101 | 2026-10-17 | §5.3 Performanceに「実績評価」節（FR-EVAL-1〜5: 円建て・資金比の最大DD、期間・方向・exit_reason・メタモデル版・A/Bアーム別の指標、サンプル数と95%信頼区間、コスト内訳、Jevの的中率・Brier、メタモデルのOOSとPaper実績EVの並列、合格ライン判定。`functional/performance-evaluation.md`、検証済みSQL）を追加し、Performance画面・`GET /api/v1/performance/evaluation`に反映（issue #777） |
+| 1.102 | 2026-10-17 | UC-17 と §4.22（FR-MCP-1〜8）を追加。Paper 実績・Jev 判断を読む読み取り専用 MCP。新規テーブルは追加しない | issue #783（仕様のみ。実装は別作業） |
+| 1.103 | 2026-10-17 | FR-MCP-1 に待受の範囲（既定 loopback、Tailscale 直接待受は tailnet の IP、`0.0.0.0` は拒否）を足し、FR-MCP-2 の必須認証を API キーだけにした。FR-MCP-8 の実機確認を選んだ経路（Tailscale または Cloudflare Tunnel）へ変えた | 悠太さん指示。Cloudflare を必須にしない |

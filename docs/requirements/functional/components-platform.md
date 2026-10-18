@@ -1,6 +1,6 @@
-# 機能要件: コンポーネント別機能要件（§4.10〜§4.21 基盤・運用）
+# 機能要件: コンポーネント別機能要件（§4.10〜§4.22 基盤・運用）
 
-`docs/requirements/functional.md` §4 から分割した章。§4.10 Scheduler / Worker / §4.11 バックテスト / §4.12 Jevキャリブレーション / §4.13 Jev RAG / §4.14 自己改善ループ / §4.15 System Activity Feed / §4.16 Luna ニュース分類・News Ingest / §4.17 環境設定 / §4.18 初回セットアップ誘導 / §4.19 エラーログのダウンロード / §4.20 ブローカー選択と立花証券の運用 / §4.21 取引ログ・判断ログのエクスポート。節番号・FR-ID は分割前と同一。
+`docs/requirements/functional.md` §4 から分割した章。§4.10 Scheduler / Worker / §4.11 バックテスト / §4.12 Jevキャリブレーション / §4.13 Jev RAG / §4.14 自己改善ループ / §4.15 System Activity Feed / §4.16 Luna ニュース分類・News Ingest / §4.17 環境設定 / §4.18 初回セットアップ誘導 / §4.19 エラーログのダウンロード / §4.20 ブローカー選択と立花証券の運用 / §4.21 取引ログ・判断ログのエクスポート / §4.22 Paper実績MCP。節番号・FR-ID は分割前と同一。
 
 ### 4.10 Scheduler / Worker
 
@@ -188,3 +188,16 @@ Settings画面（`GET /settings`）で認証情報と運用設定を管理する
 - FR-EXPORT-5: 秘密情報（トークン・パスワード・APIキー・第二暗証番号・立花証券の認証ID/秘密鍵/仮想URL）を出力に含めない。§4.19 FR-ERRLOG-3と同じ規則（`internal/logging`の`IsSensitiveKey`/`MaskString`/`MaskJSONText`）を、全行・全値が通る1箇所（`dataexport`の行正規化）で適用する: キー名が秘密を示す列は値ごと、文字列値は埋め込まれたBearerトークン・`token=`等のクエリ・Slack Webhook・仮想URL・PEM秘密鍵を、JSON列（`request_state_json`/`response_json`）はJSON文書としてキー単位・値単位で`[REDACTED]`へ置換する。JSONとして不正な保存値も平文として同じマスクを通す。マスクが漏れないことは、全表の自由記述・JSON列に秘密を仕込んだredactionテスト（CSV/JSONLの両形式）で検証する
 - FR-EXPORT-6: 出力はローカルのみ。`dataexport`は呼び出し側の`io.Writer`にZIPを書くだけで、ネットワーク接続・共有・送信の経路を持たない（立花証券の利用規約に配慮し、第三者への共有・送信機能は設けない）
 - FR-EXPORT-7: Settings画面（`GET /settings`）に「データエクスポート」節（`#data-export-panel`、接続先一覧の「システム」節のカードからモーダルで開く）を置き、`GET /api/v1/export`（`api/endpoints/huma-api.md`）を呼ぶ。入力は開始日・終了日（UTC日付。終了日を含む。`<input type="date">`、必須）・種類（取引ログ/判断ログ/計測ログのチェックボックス。既定は全選択、1つ以上）・形式（CSV既定/JSONL）で、ブラウザ標準のフォーム送信（JS・HTMX不使用）でZIPを保存する。計測ログ（`metrics`）は`dataexport.Metrics`が`logging.Exporter.ExportMetrics`（FR-ERRLOG-8）の結果（INFO以上のslogレコード。マスク済み）を、1レコード1行の`metrics`テーブル（`time`/`level`/`msg`/`record`（レコード全体のJSON。属性が計測値））にして時刻順で出力する。`GET /api/v1/export`は有効なセッションCookieを必須とし（無ければ403）、1回の期間は最大366日（超過・開始日が終了日より後は422）、アーカイブは一時ファイルに作ってから送信するため失敗時に壊れたZIPを返さず、期間全体をメモリに保持しない。エクスポートしたデータを第三者へ共有・送信する機能は持たない（FR-EXPORT-6）。UIの説明文にも、秘密情報が`[REDACTED]`に置き換わること・外部へ送信されないこと・立花証券の利用規約に配慮し第三者へ共有しないことを明記する
+
+### 4.22 Paper 実績の読み取り専用 MCP（issue #783）
+
+リモートの Grok Bot が Paper の実績を確認するために、Windows PC 上の SQLite を読む MCP。画面は増やさない。詳細は `architecture/paper-results-mcp.md`、ツールのフィールドと上限の数値は `api/endpoints/paper-results-mcp.md`、エラー表は `architecture/paper-results-mcp-errors.md`。新規テーブルは作らない。kabu の状態を読む #347 の MCP とは別プロセスで、あちらのツール・鍵・ポートは使わない。
+
+- FR-MCP-1: 既定はオフ。オン/オフは Windows PC のローカル設定ファイルだけで、Grok Bot と `runtime_settings` からは切り替えられない。オフのときは待受しない（接続不可）。待受の既定は `127.0.0.1:48110`。Tailscale で直接待つときはその PC の tailnet 側アドレスだけ。`0.0.0.0` は起動を拒否する。インターネットへ直接は公開しない
+- FR-MCP-2: 必須の認証は MCP 自身の別 API キー（`Authorization: Bearer`）だけである。キーが空なら待受しない。キーが無い・一致しないリクエストは SQL を発行する前に拒否する。キーはログとツール戻り値に出さない。経路が Tailscale・任意の Cloudflare Tunnel・その他のプライベートトンネルのどれでも、同じ MCP と同じ API キーで動く。Cloudflare Access は Cloudflare を使う場合の任意であり、本要件の必須にしない
+- FR-MCP-3: DB は `mode=ro` で開き、`PRAGMA query_only=ON` とする。マイグレーションと `PRAGMA wal_checkpoint` は実行しない。`sqlitedb.Open` は使わない。アプリ本体の書き込みを妨げない（`busy_timeout` は 1 秒）
+- FR-MCP-4: ツールは `paper_performance_summary` / `paper_daily_pnl` / `paper_trades` / `jev_calibration` / `metalabel_history` / `risk_rejections` / `kill_switch_history` / `collection_status` の 8 つ。戻り値は API 仕様のホワイトリスト列だけとする
+- FR-MCP-5: `market_snapshots.raw_data_json`、`jev_decisions.state_json` と `response_json`、板・時価・気配の列、`secrets`、API キー、証券会社の認証情報は返さない。集計・件数・ラベルと、Paper の約定記録（建値・決済値・損益・手数料）に限る
+- FR-MCP-6: 取得量の上限（行数・期間・クエリ時間・同時実行）は API 仕様 §2 の表に従う。上限を超えたとき部分結果は返さない
+- FR-MCP-7: 認証失敗・オフ・DB ロック・上限超過・期間不正は `architecture/paper-results-mcp-errors.md` の固定 `code` と `message` で返す
+- FR-MCP-8: 受け入れ条件は API 仕様 §5。テスト用 DB で集計値が手計算と一致し、認証失敗が SQL 0 件であり、戻り値とログに生データと秘密が含まれないことを自動テストで確認する。選んだ経路（Tailscale または Cloudflare Tunnel）経由の実機確認は自動テストの外とし、キーを伏せた記録を残す。Tailscale のときは tailnet の外から届かないことも記録する

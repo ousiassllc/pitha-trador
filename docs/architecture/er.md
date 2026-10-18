@@ -47,6 +47,8 @@ erDiagram
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions`（メタラベリングの二次モデルとOOS指標・判断ごとの予測） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs`、ベクトルインデックス（sqlite-vec） |
 
+Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読むだけで、テーブルも列も追加しない。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -106,3 +108,4 @@ erDiagram
 | 1.52 | 2026-10-17 | `er/tables-metalabel.md`の`metalabel_predictions.size_fraction`を記録専用（発注数量には使わない）と明記（挙動の変更なし） | issue #781 |
 | 1.53 | 2026-10-17 | `er/tables-system.md`の`runtime_settings`キーに`cost.*`（売買コストの想定: 手数料・スリッページ・SHORT貸株料）を追加。スキーマ変更なし | issue #779 |
 | 1.54 | 2026-10-17 | マイグレーション000037を追加し、`er/tables-metalabel.md`の`metalabel_models`に採用判定の根拠列（`oos_takes`・`oos_days`・`oos_ev_ci_{low,high}_bps`・`oos_auc_ci_{low,high}`・`adoption_json`・`forward_json`）を追加。`er/tables-system.md`の`runtime_settings`キーに`metalabel.llm_cutoff_{model,confirmed_on,source}`（LLM学習データ終了日の出典、issue #776）を追記 | issue #780, #776 |
+| 1.55 | 2026-10-17 | Paper 実績 MCP は既存テーブルの読み取り専用であり、新規テーブルを追加しない旨を追記。スキーマ変更なし | issue #783 |

@@ -197,6 +197,7 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 |----|----------|
 | §5 Lit Web Components 仕様（§5.1〜§5.5）/ §6 API クライアント / WebSocket（`lib/`） | `docs/components/lit.md` |
 | §7 Wails統合 / §8 エラーハンドリング（要約）/ §9 テスト戦略 | `docs/components/runtime.md` |
+| Paper 実績 MCP（画面外の別プロセス） | `docs/components/paper-results-mcp.md` | issue #783。HALT のページには出さない |
 
 ## 改訂履歴
 
@@ -295,3 +296,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.90 | 2026-10-17 | `SettingGroupDerived`の`SettingDerivedItem`に`Warn`（琥珀色の「注意:」付き警告行）と`Heading`（見出し行）を追加し、日次ガードの「計算結果」に「整合チェック」「Live 前チェック」を表示（コンポーネント名の変更なし） | issue #782 |
 | 1.91 | 2026-10-17 | §2に`exit-alignment/`、§5（`lit.md`）に`pitha-exit-alignment`（Calibration画面のラベル基準と実出口の整合ブロック。`GET /api/v1/calibration/exit-alignment`）を追記 |
 | 1.92 | 2026-10-17 | §2の`calibration-heatmap/`に`meta-model/`（`meta-model-adoption-view.ts`＝採用判定の根拠。#780）と`direction-view.ts`を追記し、§5（`lit.md`）にLLM学習データ終了日の警告・出典（#776）と採用判定の根拠（#780）を追記。§3に`PerformancePage`の「実績評価」節`evaluation.EvaluationPanel`（#777）を追記 |
+| 1.93 | 2026-10-17 | 分割章の表に Paper 実績 MCP（`paper-results-mcp.md`）を追加。画面コンポーネントは増やさない | issue #783 |

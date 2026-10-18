@@ -110,6 +110,7 @@ kabu選択時の方針: メンテナンス明け・セッション切れ後のka
 - HTMXフォームにはCSRFトークンを付与する（HALT標準構成に準拠。ローカル単一ユーザーでも実装は省略しない）
 - 実売買（Phase 7）へ移行しても、発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）。安全性はRisk Engine側のLive専用の厳格なリミット（`requirements/functional.md` §4.7）と、操作者ハートビートが一定時間途絶した場合に自動で新規エントリーを停止するdead-man's switch（FR-RISK-6）で担保する
 - Risk Engineの拒否・Kill Switch発動・実売買発注はすべて監査ログ（追記専用ログ）に記録する。`kill_switch_events` / `kill_switch_resolutions`はDBトリガーで`UPDATE`/`DELETE`を拒否して追記専用を強制する（`architecture/er.md` §kill_switch_events）。ハッシュチェーン等によるDBファイル自体の改ざん検知は行わない
+- **Paper 実績 MCP（issue #783）**: リモートから DB を読む経路は、loopback または tailnet の IP に限定した別プロセスと、プライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他。`architecture/paper-results-mcp.md` §3.2）に限る。インターネットへ直接は公開しない。待受は既定オフで、`0.0.0.0` への bind は起動を拒否する。必須の認証は、DB にも Git にも置かない別 API キーである。キー不一致は SQL の前に拒否し、ログとツール戻り値に鍵・`secrets`・板や時価の生データを出さない。Cloudflare Access は Cloudflare Tunnel を使う場合の任意の追加であり、API キーの代わりにしない。読み取りは `mode=ro`（`query_only`）で、マイグレーションと WAL チェックポイントはしない。クエリ時間の上限は 3 秒、同時実行は 2、`busy_timeout` は 1 秒（アプリ本体の 60 秒とは別）。数値の一覧は `api/endpoints/paper-results-mcp.md` §2
 
 ## 5. 監視・アラート
 
@@ -160,6 +161,7 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 - Jevのconfidence/probabilityをそのまま実勝率として扱わない（Calibrationで独自検証する）
 - 実資金投入前に十分なバックテスト・Paper Trading・スリッページ/手数料/流動性を含む検証を行う
 - 市場データの取得元は選択したブローカー（kabuステーション／立花証券）の利用規約・規程に従う。kabu選択時の`/ranking`の値を保存・出力しない方針はFR-SCHED-8・§5.1のとおり
+- Paper 実績 MCP がリモートへ返すのは集計・件数・ラベルと Paper の約定記録に限る（FR-MCP-5）。板・時価の生データは返さない。kabu データの保存を続けるかの扱いは #778 の現状のまま（保存は継続、リスクは理解済み、公式回答待ち）であり、本仕様は規約の適否を判断しない
 - 免責: 短期売買は損失リスクが高く、本仕様はソフトウェア設計・研究用途を想定する
 - **立花証券選択時の情報利用（issue #721。#720の決定。立花には問い合わせず、公開資料で判断した）**: 立花のAPI専用ページ「４．ご利用にあたって」は「当社提供情報は、蓄積、編集および加工等は禁止しております」とし、利用は[インターネット取引規程](https://www.e-shiten.jp/TorihikiRule/stipulation/pdf/int_kitei.pdf)の範囲内を求める。規程第18条は自己の証券投資目的に限る利用・第三者提供の禁止・過負荷の禁止を定める。本システムの方針は次のとおり。
   - **自己の証券投資目的に限り、取得した時価・板のローカル保存と分析（特徴量・バックテスト・キャリブレーション等）は可**とする（`market_snapshots`・`raw_data_json`等。`architecture/er/tables-market.md`）。
@@ -214,3 +216,5 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.40 | 2026-10-08 | 立花の監視リスト確定（issue #730）を反映: §2.3に日足だけを読んで翌立会日の監視リスト（最大120）を確定し日中に差し替えないこと・日足を使えない夜の切り替えと通知、§5.1に確定ログ（件数・出所のみ。価格の生値は出さない）を追記 | issue #730 |
 | 1.41 | 2026-10-08 | 立花の日中監視（issue #731）を反映: §2.3に確定リストでのEVENT常時受信（03:30〜15:30のみ登録・日中の入れ替えなし・保有銘柄の追加は1回の再接続にまとめて1日の接続回数の予算に計上）と、日中は全銘柄のREST巡回をしない（フルスキャン常時無効・REST時価は補完のみ）こと、§5.1に日中監視のログ（件数のみ）を追記 | issue #731 |
 | 1.42 | 2026-10-15 | 計測ログ（INFO以上）の期間抽出・ログレベル・ログ保持期間のSettings化（issue #772）を反映: §5.2のログ保持期間（既定30日）とログレベル（既定INFO）を`runtime_settings`（`system.log_retention_days`/`system.log_level`）から設定可能にし、§5.3に計測ログの期間抽出（`Exporter.ExportRange`/`ExportMetrics`。マスク・10MiB上限はエラーログと共通）を追記 |
+| 1.43 | 2026-10-17 | §4 と §6 に Paper 実績 MCP の認証・読み取り専用・生データを出さないことを追記（クエリ 3 秒、同時 2、busy_timeout 1 秒）。#778 の保存方針は現状のまま参照し、規約の適否は判断しない | issue #783 |
+| 1.44 | 2026-10-17 | §4 の Paper 実績 MCP を、必須認証は API キー、経路はプライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他）へ改めた。`0.0.0.0` の拒否は維持する | 悠太さん指示。Cloudflare を必須にしない |
