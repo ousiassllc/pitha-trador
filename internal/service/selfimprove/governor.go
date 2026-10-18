@@ -24,10 +24,12 @@ const shadowBacktestLookbackDays = assist.MinBacktestDays
 const calibrationLookbackDays = 20
 
 // ShadowBacktestPeriod is the window the shadow backtest replays when it runs
-// at now: the last shadowBacktestLookbackDays business days up to now
-// (cmd/backtestverify defaults to the same window).
+// at now: from JST midnight of the shadowBacktestLookbackDays-th business day
+// before now up to now, so the window holds that many whole trading days
+// before today (the first day is not cut off at now's clock time).
+// cmd/backtestverify defaults to the same window.
 func ShadowBacktestPeriod(now time.Time) backtest.Period {
-	return backtest.Period{Start: businessDaysBefore(now, shadowBacktestLookbackDays), End: now}
+	return backtest.Period{Start: jstMidnight(businessDaysBefore(now, shadowBacktestLookbackDays)), End: now}
 }
 
 // postApplyTrackingDays is FR-SELFIMPROVE-6's "適用後5営業日相当".

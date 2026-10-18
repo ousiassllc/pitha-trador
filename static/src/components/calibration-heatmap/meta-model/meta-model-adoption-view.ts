@@ -18,7 +18,7 @@ export interface MetaModelAdoption {
   oos_days: number;
   oos_ev_ci?: Interval;
   // The verdict on the OOS EV; min_detectable_edge_bps is the 判定不能 line.
-  oos_ev_verdict: 'no_data' | 'undetermined' | 'positive' | 'negative';
+  oos_ev_verdict: 'no_data' | 'undetermined' | 'positive' | 'negative' | 'not_significant';
   min_detectable_edge_bps: number;
   oos_auc_ci?: Interval;
   criteria?: {
@@ -60,9 +60,12 @@ const aucInterval = (iv: Interval | undefined): string =>
   iv === undefined ? '—' : `${iv.low.toFixed(3)} 〜 ${iv.high.toFixed(3)}`;
 
 // evVerdictText is the verdict on the OOS EV (issue #780): データ無し without
-// takes, 判定不能 for an edge below what the sample can detect.
+// takes, 判定不能 for an edge below what the sample can detect that the
+// interval cannot separate from 0. The cut-off is never presented as proof of
+// safety, and the figures are not a promise of any return.
 function evVerdictText(a: MetaModelAdoption): string {
-  const cutoff = '足切りであり、安全の証明ではありません。';
+  const cutoff =
+    '足切りであり、安全の証明ではありません。数字は仮定つきで、リターンの保証ではありません。';
   switch (a.oos_ev_verdict) {
     case 'no_data':
       return 'データ無し';
@@ -70,8 +73,10 @@ function evVerdictText(a: MetaModelAdoption): string {
       return `正のエッジ（信頼区間の下限が 0 を超過）。${cutoff}`;
     case 'negative':
       return `負のエッジ（信頼区間の上限が 0 未満）。${cutoff}`;
+    case 'not_significant':
+      return `有意なエッジなし（信頼区間が 0 をまたぐ）。${cutoff}`;
     default:
-      return `判定不能（約${a.min_detectable_edge_bps} bps 未満のエッジは検出できません）。${cutoff}`;
+      return `判定不能（約${a.min_detectable_edge_bps} bps 未満のエッジは検出力不足で見分けられません）。${cutoff}`;
   }
 }
 

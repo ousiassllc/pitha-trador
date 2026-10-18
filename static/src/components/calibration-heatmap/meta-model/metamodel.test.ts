@@ -258,7 +258,7 @@ describe('pitha-calibration-heatmap meta-labeling model', () => {
           meta_model: metaModel({
             oos_takes: 600,
             oos_ev_bps: 4,
-            oos_ev_ci: { low: 0.5, high: 7 },
+            oos_ev_ci: { low: -3, high: 11 },
             oos_ev_verdict: 'undetermined',
             min_detectable_edge_bps: 11,
           }),
@@ -267,8 +267,26 @@ describe('pitha-calibration-heatmap meta-labeling model', () => {
 
       const verdict = text(el, 'calibration-metamodel-ev-verdict');
       expect(verdict).toContain('判定不能');
-      expect(verdict).toContain('約11 bps 未満のエッジは検出できません');
+      expect(verdict).toContain('約11 bps 未満のエッジは検出力不足で見分けられません');
+      expect(verdict).toContain('リターンの保証ではありません');
       expect(verdict).toContain('足切りであり、安全の証明ではありません');
+    });
+
+    test('shows 有意なエッジなし, not 判定不能, for a large EV whose interval straddles 0', async () => {
+      const { el } = await mount(
+        response({
+          meta_model: metaModel({
+            oos_takes: 600,
+            oos_ev_bps: 15,
+            oos_ev_ci: { low: -2, high: 32 },
+            oos_ev_verdict: 'not_significant',
+          }),
+        }),
+      );
+
+      const verdict = text(el, 'calibration-metamodel-ev-verdict');
+      expect(verdict).toContain('有意なエッジなし');
+      expect(verdict).not.toContain('判定不能');
     });
 
     test('shows a positive verdict only with the cut-off wording', async () => {

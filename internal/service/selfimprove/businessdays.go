@@ -31,14 +31,20 @@ func shiftBusinessDays(t time.Time, days, step int) time.Time {
 	return d
 }
 
-// tradingDaysIn counts the TSE trading days (JST dates) the period touches,
-// both end dates included: the number the shadow backtest is held to
-// assist.MinBacktestDays with. A period ending after a close or on a closed
-// day still counts its trading days, and one starting mid-day counts that day.
+// tradingDaysIn counts the TSE trading days whose whole session
+// (OpenAt..CloseAt) lies inside the period: the number the shadow backtest is
+// held to assist.MinBacktestDays with. A day cut off by the period's start or
+// end (a window starting mid-day, or ending before the close) is not counted,
+// so a window short of 30 whole days never reads as 30.
 func tradingDaysIn(p backtest.Period) int {
 	n := 0
 	for d, last := jstNoon(p.Start), jstNoon(p.End); !d.After(last); d = d.AddDate(0, 0, 1) {
-		if marketcalendar.TSE.IsTradingDay(d) {
+		open, ok := marketcalendar.TSE.OpenAt(d)
+		if !ok {
+			continue
+		}
+		closeAt, _ := marketcalendar.TSE.CloseAt(d)
+		if !open.Before(p.Start) && !closeAt.After(p.End) {
 			n++
 		}
 	}
@@ -49,4 +55,10 @@ func tradingDaysIn(p backtest.Period) int {
 func jstNoon(t time.Time) time.Time {
 	y, m, d := t.In(marketcalendar.JST).Date()
 	return time.Date(y, m, d, 12, 0, 0, 0, marketcalendar.JST)
+}
+
+// jstMidnight is 00:00 of t's JST date.
+func jstMidnight(t time.Time) time.Time {
+	y, m, d := t.In(marketcalendar.JST).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, marketcalendar.JST)
 }

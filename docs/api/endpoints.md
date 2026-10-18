@@ -207,4 +207,4 @@ Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモー
 | 1.88 | 2026-10-17 | §8 を追加し、Paper 実績 MCP のツール仕様（`endpoints/paper-results-mcp.md`）が Huma `/api/v1` とは別待受であると明記 | issue #783 |
 | 1.89 | 2026-10-17 | §8 の認証を MCP 自身の API キーへ改め、経路はプライベートトンネルで Cloudflare は必須ではないと明記 | 悠太さん指示。Cloudflare を必須にしない |
 | 1.90 | 2026-10-18 | §3 `/performance/cost-sensitivity`に`predicted_ev_trade_count`・`predicted_ev_positive_share`（予測EVベースの割合）を追加し、`positive_share`は実現再生netベースと明記。Performanceのバックテストフォームにエクスポートボタンを追記 | issue #779（残件） |
-| 1.91 | 2026-10-19 | §3 `GET /api/v1/calibration`の`meta_model`に`oos_ev_verdict`（`no_data`/`undetermined`/`positive`/`negative`）と`min_detectable_edge_bps`（約11）を追加。約11 bps未満のEVは判定不能、take数0はデータ無し（足切りであり安全の証明ではない） | issue #780の決定（2026-10-19） |
+| 1.91 | 2026-10-19 | §3 `GET /api/v1/calibration`の`meta_model`に`oos_ev_verdict`（`no_data`/`undetermined`/`positive`/`negative`/`not_significant`）と`min_detectable_edge_bps`（約11）を追加。区間が0をまたぐ約11 bps未満のEVは判定不能、take数0はデータ無し（足切りであり安全の証明ではない） | issue #780の決定（2026-10-19） |

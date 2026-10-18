@@ -237,8 +237,8 @@ func TestCalibrationHandler_APICalibration_MetaModelAdoptionRecord(t *testing.T)
 	}
 }
 
-// Issue #780: an OOS EV below the detectable edge (about 11 bps) is 判定不能
-// even when its interval lies above 0; no takes stays データ無し.
+// Issue #780: an OOS EV below the detectable edge (about 11 bps) whose interval
+// straddles 0 is 判定不能; no takes stays データ無し.
 func TestCalibrationHandler_APICalibration_MetaModelEVVerdict(t *testing.T) {
 	small, large := 4.0, 15.0
 	tests := map[string]struct {
@@ -246,8 +246,12 @@ func TestCalibrationHandler_APICalibration_MetaModelEVVerdict(t *testing.T) {
 		want   string
 	}{
 		"no takes is no data": {metamodel.Report{Version: "v1", Status: "rejected"}, "no_data"},
-		"4 bps with an interval above 0 is undetermined": {
-			metamodel.Report{Version: "v2", Status: "active", OOSTakes: 600, OOSEVBps: &small, OOSEVCI: &metamodel.Interval{Low: 0.5, High: 7}}, "undetermined"},
+		"4 bps with an interval above 0 is positive": {
+			metamodel.Report{Version: "v2", Status: "active", OOSTakes: 600, OOSEVBps: &small, OOSEVCI: &metamodel.Interval{Low: 0.5, High: 7}}, "positive"},
+		"4 bps with an interval straddling 0 is undetermined": {
+			metamodel.Report{Version: "v4", Status: "rejected", OOSTakes: 600, OOSEVBps: &small, OOSEVCI: &metamodel.Interval{Low: -3, High: 11}}, "undetermined"},
+		"15 bps with an interval straddling 0 is not significant": {
+			metamodel.Report{Version: "v5", Status: "rejected", OOSTakes: 600, OOSEVBps: &large, OOSEVCI: &metamodel.Interval{Low: -2, High: 32}}, "not_significant"},
 		"15 bps with an interval above 0 is positive": {
 			metamodel.Report{Version: "v3", Status: "active", OOSTakes: 600, OOSEVBps: &large, OOSEVCI: &metamodel.Interval{Low: 3, High: 27}}, "positive"},
 	}

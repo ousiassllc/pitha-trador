@@ -81,35 +81,52 @@ func TestBusinessDays_JudgesJSTDate(t *testing.T) {
 	}
 }
 
-// The shadow backtest period built from the lookback spans exactly
-// MinBacktestDays trading days (29 would be rejected as insufficient_samples,
-// issue #780), wherever "now" falls - including a closed day.
-func TestShadowBacktestPeriod_SpansTheMinimumTradingDays(t *testing.T) {
-	for name, now := range map[string]time.Time{
-		"weekday":                 time.Date(2026, 10, 14, 16, 10, 0, 0, marketcalendar.JST),
-		"saturday":                time.Date(2026, 10, 17, 3, 0, 0, 0, marketcalendar.JST),
-		"after a holiday weekend": time.Date(2026, 9, 24, 9, 30, 0, 0, marketcalendar.JST),
-	} {
+// The shadow backtest window holds exactly MinBacktestDays whole trading days
+// before today (issue #780: 29 is rejected as insufficient_samples), wherever
+// "now" falls: before the open, mid-session, on a closed day, after a holiday
+// weekend and across Golden Week. A window that already closed today's
+// session has one more whole day.
+func TestShadowBacktestPeriod_HoldsTheMinimumWholeTradingDays(t *testing.T) {
+	tests := map[string]struct {
+		now  time.Time
+		want int
+	}{
+		"before the open":         {time.Date(2026, 10, 14, 8, 0, 0, 0, marketcalendar.JST), assist.MinBacktestDays},
+		"mid-session":             {time.Date(2026, 10, 14, 12, 0, 0, 0, marketcalendar.JST), assist.MinBacktestDays},
+		"after the close":         {time.Date(2026, 10, 14, 16, 10, 0, 0, marketcalendar.JST), assist.MinBacktestDays + 1},
+		"saturday":                {time.Date(2026, 10, 17, 3, 0, 0, 0, marketcalendar.JST), assist.MinBacktestDays},
+		"after a holiday weekend": {time.Date(2026, 9, 24, 9, 30, 0, 0, marketcalendar.JST), assist.MinBacktestDays},
+		"across Golden Week":      {time.Date(2026, 5, 8, 8, 0, 0, 0, marketcalendar.JST), assist.MinBacktestDays},
+	}
+	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			p := ShadowBacktestPeriod(now)
-			got := tradingDaysIn(p)
-			want := assist.MinBacktestDays
-			if marketcalendar.TSE.IsTradingDay(now) {
-				want++ // the start day and today are both included
+			p := ShadowBacktestPeriod(tc.now)
+			if got := tradingDaysIn(p); got != tc.want {
+				t.Errorf("tradingDaysIn(%v..%v) = %d, want %d", p.Start, p.End, got, tc.want)
 			}
-			if got != want {
-				t.Errorf("tradingDaysIn(%v..%v) = %d, want %d", p.Start, p.End, got, want)
+			// Cutting the first day short (a window starting mid-day) leaves 29
+			// whole days: one short of the minimum, never read as 30.
+			p.Start = p.Start.Add(12 * time.Hour)
+			if got := tradingDaysIn(p); got != tc.want-1 {
+				t.Errorf("window starting mid-day: tradingDaysIn = %d, want %d", got, tc.want-1)
 			}
 		})
 	}
 }
 
-func TestTradingDaysIn_CountsWholeJSTDates(t *testing.T) {
+func TestTradingDaysIn_CountsOnlyWholeSessions(t *testing.T) {
 	got := tradingDaysIn(backtest.Period{
-		Start: time.Date(2026, 10, 14, 23, 59, 0, 0, marketcalendar.JST), // Wed
-		End:   time.Date(2026, 10, 16, 0, 1, 0, 0, marketcalendar.JST),   // Fri
+		Start: time.Date(2026, 10, 14, 12, 0, 0, 0, marketcalendar.JST),  // Wed, cut off
+		End:   time.Date(2026, 10, 16, 15, 29, 0, 0, marketcalendar.JST), // Fri, before the close
+	})
+	if got != 1 {
+		t.Errorf("Wed noon..Fri 15:29 = %d whole trading days, want 1 (Thu only)", got)
+	}
+	got = tradingDaysIn(backtest.Period{
+		Start: time.Date(2026, 10, 14, 0, 0, 0, 0, marketcalendar.JST),
+		End:   time.Date(2026, 10, 16, 15, 30, 0, 0, marketcalendar.JST), // exactly the close
 	})
 	if got != 3 {
-		t.Errorf("Wed..Fri = %d trading days, want 3 (a partial first/last day counts)", got)
+		t.Errorf("Wed 00:00..Fri 15:30 = %d whole trading days, want 3", got)
 	}
 }
