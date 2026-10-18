@@ -9,8 +9,9 @@
 -- 規約:
 --   * 全クエリは SELECT のみ（書き込みなし）。板・時価の生値（market_snapshots、jev_decisions.state_json、
 --     response_json、metalabel_predictions.features_json）は読まない・出力しない。出力は集計値だけ。
---   * 期間: 各クエリ先頭の params CTE の from_ts / to_ts（UTC。保存形式は RFC3339 文字列なので辞書順比較で足りる）を
---     書き換える。既定は全期間。initial_capital は config/risk.yaml の paper.initial_capital（Paper では
+--   * 期間: Q1〜Q5 は先頭の params CTE の from_ts / to_ts（UTC。保存形式は RFC3339 文字列なので辞書順比較で足りる）を
+--     書き換える。既定は全期間。params を持たない Q0・Q6〜Q9 は全期間が対象（絞り方は docs/requirements/functional/performance-evaluation.md §6）。
+--     initial_capital（Q3 の params）は config/risk.yaml の paper.initial_capital（Paper では
 --     仮置きの値。口座残高ではない）に合わせて書き換える。
 --   * 円÷円の比はSQLiteの整数除算に注意（NUMERIC列は整数値だと整数で保存されるため）。bpsは先に 10000.0 を掛けてから割る。
 --   * 日付はJST（UTC+9）の暦日。週は strftime('%W')（月曜始まり・第0週あり。ISO週とは年初・年末で異なる）。
