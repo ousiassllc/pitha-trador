@@ -261,6 +261,14 @@ func TestSource_ForEachRunConfigReadsSnapshotsWithoutRawData(t *testing.T) {
 	if cfg.WarmupBars == 0 || len(cfg.Snapshots) <= cfg.WarmupBars {
 		t.Fatalf("WarmupBars = %d of %d snapshots; want warmup and in-range bars", cfg.WarmupBars, len(cfg.Snapshots))
 	}
+	// The replay is the live decision flow: the meta-label entry rule and the
+	// Risk Engine, not the legacy threshold with AlwaysPassRiskChecker.
+	if cfg.Entry != backtest.EntryMeta {
+		t.Errorf("Entry = %q, want backtest.EntryMeta", cfg.Entry)
+	}
+	if cfg.Risk == nil {
+		t.Error("Risk = nil, want the simulated Risk Engine configured from the Paper risk limits")
+	}
 	for i, s := range cfg.Snapshots {
 		if s.RawDataJSON != "" {
 			t.Fatalf("Snapshots[%d].RawDataJSON = %q, want empty", i, s.RawDataJSON)

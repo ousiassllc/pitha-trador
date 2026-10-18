@@ -41,6 +41,7 @@
 ```text
 pitha-trador/
 ├── cmd/
+│   ├── backtestverify/           # バックテスト再現性の検証ツール（FR-BT-4・#775。読み取り専用のCLI。`bootstrap.Run`の`ReadOnly`・`backtestsource.NewForDB`で組んだ`Source.VerifyReproducibility`を`parity.Provisional`で実行し、不合格は終了コード1）
 │   ├── dailyguardreplay/         # 日次エントリー停止ルール（FR-RISK-8）の再現ツール（読み取り専用CLI、#782）。`-db`のSQLiteを`sqlitedb.OpenReadOnly`（`mode=ro`、マイグレーションなし・DBファイルは変更しない）で開き、`trading.PositionRepository.ListTouchingBetween`の範囲内で建てた・決済したPaperポジション（未決済を含む）を`service/dailyguardreplay`で再生して取引日（JST）ごとの表を出す
 │   ├── desktop/                  # Wailsエントリーポイント（main.go, app.go, notify.go, ws_listener.go, wails.json）。`main`は`cmd/server`と同じく`startup.RunMain`で始まる。`ws_listener.go`はWindowsのみの`/ws/...`専用ループバックリスナー。`--supervise`起動（main.goの`superviseSelf`）と`build/windows/installer/project.nsi`のStartupショートカット（自動起動）を含む
 │   └── server/                   # ヘッドレス起動（Wails非依存のnet/httpサーバー。main.go, addr.go, shutdown.go。CI・WebView2が動かない環境向け）。`main`は`startup.RunMain`（ログ設定と致命的エラーのERROR記録・終了コード。#547）で始まり、`bootstrap.AcquireInstanceLock(bootstrap.AppLockName)`で`app.lock`を取得してから`bootstrap.Run`へ進む（取得失敗時は非0終了。#468）。`shutdown.go`はSIGINT/SIGTERM時のHTTP停止とWebSocketハンドラの終了待ち（`httpServer.shutdown`。§10.1の停止フロー）

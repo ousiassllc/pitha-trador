@@ -9,7 +9,6 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/assist"
-	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 )
 
 // EvaluateProposal runs FR-SELFIMPROVE-4's shadow backtest for a pending
@@ -49,7 +48,7 @@ func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool
 	}
 
 	now := g.now()
-	period := backtest.Period{Start: businessDaysBefore(now, shadowBacktestLookbackDays), End: now}
+	period := ShadowBacktestPeriod(now)
 
 	baselineMetrics, candidateMetrics, err := g.runShadowBacktests(ctx, period, candidate)
 	if err != nil {
