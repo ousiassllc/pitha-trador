@@ -67,6 +67,8 @@ type Service struct {
 	policy        config.PolicyConfig
 	screener      config.FastScreenerConfig
 	defaultLogDir string
+	// riskReference is set by WithRiskReference (nil: no consistency check).
+	riskReference *dailyguardsettings.RiskReference
 	now           func() time.Time
 }
 
@@ -203,10 +205,24 @@ func (s *Service) Save(ctx context.Context, key, raw string) error {
 
 // Reset removes key's stored value so the lower-priority source applies
 // again (yaml for thresholds, "disabled" / the default directory for the
-// paths). Resetting an unset key is not an error.
+// paths). Resetting an unset key is not an error. For the keys whose validity
+// depends on other stored rows (policy, screener, order-flow windows, the
+// triple-barrier and cost settings) the default is checked the way Save checks
+// a value, so a reset cannot leave an invalid combination behind (saving
+// SL 60 and a 15 bps fee, then resetting SL, would put the label cost at or
+// above the default SL): that is an *InvalidValueError and nothing is deleted.
 func (s *Service) Reset(ctx context.Context, key string) error {
 	if !IsKnownKey(key) {
 		return ErrUnknownKey
+	}
+	if crossValidated(key) {
+		encoded, err := encode(key, s.defaultText(key))
+		if err != nil {
+			return err
+		}
+		if err := s.validateEffective(ctx, key, encoded); err != nil {
+			return err
+		}
 	}
 	if err := s.store.Delete(ctx, key); err != nil {
 		return fmt.Errorf("opsettings: reset %s: %w", key, err)

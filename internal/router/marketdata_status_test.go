@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
@@ -21,17 +22,17 @@ func (f failingSession) Status() broker.SessionStatus {
 	return broker.SessionStatus{Issue: f.issue, Guidance: "kabuステーションを起動してください。"}
 }
 
-// brokerSelectionOps is the OperationalSettings stand-in whose only job is
-// the broker selection the marketdata banner follows.
+// brokerSelectionOps is the OperationalSettings stand-in for the broker selection the banner follows.
 type brokerSelectionOps struct{ selected config.BrokerSettings }
 
-func (brokerSelectionOps) Get(context.Context, string) (opsettings.Value, error) {
-	return opsettings.Value{}, nil
-}
-func (brokerSelectionOps) Save(context.Context, string, string) error { return nil }
-func (brokerSelectionOps) Reset(context.Context, string) error        { return nil }
+func (brokerSelectionOps) Get(context.Context, string) (v opsettings.Value, _ error) { return }
+func (brokerSelectionOps) Save(context.Context, string, string) error                { return nil }
+func (brokerSelectionOps) Reset(context.Context, string) error                       { return nil }
 func (b brokerSelectionOps) Broker(context.Context) (config.BrokerSettings, error) {
 	return b.selected, nil
+}
+func (brokerSelectionOps) DailyGuard(context.Context) (dailyguardsettings.Resolved, error) {
+	return dailyguardsettings.Resolved{}, nil
 }
 
 // issue #739: the route follows the saved broker selection.

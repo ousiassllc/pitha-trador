@@ -40,6 +40,17 @@ var base = time.Date(2026, 9, 27, 9, 0, 0, 0, time.UTC)
 // returns the stored net return.
 func labelNet(t *testing.T, direction string, grossBps float64, store settingsStore) float64 {
 	t.Helper()
+	net, err := runLabel(t, direction, grossBps, store)
+	if err != nil {
+		t.Fatalf("HandleJob: %v", err)
+	}
+	return net
+}
+
+// runLabel labels one 5-minute decision whose path ends grossBps in favour and
+// returns the stored net return, or the HandleJob error.
+func runLabel(t *testing.T, direction string, grossBps float64, store settingsStore) (float64, error) {
+	t.Helper()
 	ctx := context.Background()
 	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -75,13 +86,22 @@ func labelNet(t *testing.T, direction string, grossBps float64, store settingsSt
 	labeler := calibration.NewLabeler(decisions, snapshots, outcomes, calibration.WithCostSettings(store))
 	payload, _ := json.Marshal(calrepo.OutcomeLabelJobPayload{JevDecisionID: decision.ID, HorizonMinutes: 5})
 	if err := labeler.HandleJob(ctx, jobqueue.Job{PayloadJSON: string(payload)}); err != nil {
-		t.Fatalf("HandleJob: %v", err)
+		return 0, err
 	}
 	got, err := outcomes.ListByDecisionIDs(ctx, []int64{decision.ID})
 	if err != nil || len(got) != 1 || got[0].NetReturnBps == nil || got[0].BarrierHit != domain.BarrierHitTimeout {
 		t.Fatalf("stored outcomes = %+v, %v; want one timeout label with a net return", got, err)
 	}
-	return *got[0].NetReturnBps
+	return *got[0].NetReturnBps, nil
+}
+
+// A cost setting that lifts the label cost to the stop-loss width (default SL
+// 30 bps, base cost 10, a 15 bps fee adds 30) makes the labeling job fail
+// instead of storing a label whose stop-loss sits on the profit side.
+func TestLabelFailsWhenTheCostSettingsReachTheStopLoss(t *testing.T) {
+	if _, err := runLabel(t, domain.JevDirectionLong, 25, settingsStore{costsettings.KeyFeeBps: "15"}); err == nil {
+		t.Fatal("HandleJob with label cost 40 >= SL 30 succeeded, want an error")
+	}
 }
 
 // Changing a cost setting changes the label's net return by the change of the

@@ -111,3 +111,37 @@ func TestCost_BarrierSaveChecksTheLabelCost(t *testing.T) {
 		t.Fatalf("Save SL 25: %v", err)
 	}
 }
+
+// Reset is checked like Save: with SL 60 and a 15 bps fee (label cost 10 + 30 =
+// 40) the default SL of 30 would sit below the label cost, so resetting SL is
+// rejected and the stored SL stays. Resetting the fee, which only lowers the
+// cost, still works.
+func TestCost_ResetChecksTheEffectiveCombination(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeStore{rows: map[string]string{}}
+	svc := newService(store)
+	if err := svc.Save(ctx, barriersettings.KeyStopLossBps, "60"); err != nil {
+		t.Fatalf("Save SL: %v", err)
+	}
+	if err := svc.Save(ctx, costsettings.KeyFeeBps, "15"); err != nil {
+		t.Fatalf("Save fee: %v", err)
+	}
+
+	var invalid *opsettings.InvalidValueError
+	if err := svc.Reset(ctx, barriersettings.KeyStopLossBps); !errors.As(err, &invalid) {
+		t.Fatalf("Reset SL error = %v, want *InvalidValueError", err)
+	}
+	if got := store.rows[barriersettings.KeyStopLossBps]; got != "60" {
+		t.Fatalf("stored SL after rejected Reset = %q, want 60", got)
+	}
+
+	if err := svc.Reset(ctx, costsettings.KeyFeeBps); err != nil {
+		t.Fatalf("Reset fee: %v", err)
+	}
+	if err := svc.Reset(ctx, barriersettings.KeyStopLossBps); err != nil {
+		t.Fatalf("Reset SL after the fee is back at its default: %v", err)
+	}
+	if len(store.rows) != 0 {
+		t.Fatalf("rows left after both Resets: %v", store.rows)
+	}
+}

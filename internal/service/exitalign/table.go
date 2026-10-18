@@ -112,7 +112,7 @@ func Correspondence(b barriersettings.Barriers, exit ExitConfig, costs costsetti
 		bps(slLabel), disabledOr(exit.StopLossPct > 0, "-"+bps(slExit)+" bps"), ToleranceBps)
 	add(horizonOK, WarnHorizon, "ラベルのタイムアウト（%d 分）と実出口の最大保有時間（%s）が一致しません（許容 %g 分）。",
 		b.TimeoutMinutes(), disabledOr(exit.MaxHoldingMinutes > 0, minutesText(exit.MaxHoldingMinutes)), ToleranceMinutes)
-	add(costOK, WarnCost, "ラベルのコスト（LONG %s / SHORT %s bps）が約定モデルの往復コスト（LONG %s / SHORT %s bps、スプレッド除く）と整合しません（差は 0〜%g bps の範囲であるべきです）。",
+	add(costOK, WarnCost, "barrier の基底コスト（calibration.barrier_cost_bps）が既定から外れています。ラベルのコスト（LONG %s / SHORT %s bps）と約定モデルの往復コスト（LONG %s / SHORT %s bps、スプレッド除く）の差は 0〜%g bps の範囲であるべきです。手数料・スリッページを変えてもラベルのコストが同じだけ動くため、この警告は変わりません。",
 		bps(labelCost), bps(labelCostShort), bps(fillCost), bps(fillCostShort), MaxCostAllowanceBps)
 	add(math.Abs(labelCostShort-labelCost) <= ToleranceBps, WarnCostSides, "ラベルのコストが LONG（%s bps）と SHORT（%s bps）で %g bps を超えて異なります。上の表は LONG の値です。",
 		bps(labelCost), bps(labelCostShort), ToleranceBps)

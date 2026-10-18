@@ -1,14 +1,46 @@
-package opsettings_test
+// Package orderflowflow_test checks the order-flow window settings saved
+// through opsettings.Service. It lives in its own directory to keep
+// internal/service/opsettings within the linterly directory budget.
+package orderflowflow_test
 
 import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 )
+
+type fakeStore struct {
+	rows   map[string]string
+	getErr error
+}
+
+func (f *fakeStore) Get(_ context.Context, key string) (string, bool, error) {
+	if f.getErr != nil {
+		return "", false, f.getErr
+	}
+	v, ok := f.rows[key]
+	return v, ok, nil
+}
+
+func (f *fakeStore) Set(_ context.Context, key, value string, _ time.Time) error {
+	f.rows[key] = value
+	return nil
+}
+
+func (f *fakeStore) Delete(_ context.Context, key string) error {
+	delete(f.rows, key)
+	return nil
+}
+
+func newService(store *fakeStore) *opsettings.Service {
+	return opsettings.New(store, config.StrategyConfig{}, "/data/logs")
+}
 
 func TestOrderFlowWindows_DefaultsAndSave(t *testing.T) {
 	ctx := context.Background()
@@ -131,6 +163,11 @@ func TestDailyGuardThresholds_SaveRejectsInvalid(t *testing.T) {
 		"fractional trade count":  {dailyguardsettings.KeyMaxTrades, "2.5"},
 		"negative trade count":    {dailyguardsettings.KeyMaxTrades, "-1"},
 		"negative profit trigger": {dailyguardsettings.KeyProfitLockTriggerJPY, "-5"},
+		"negative capital":        {dailyguardsettings.KeyOperatingCapitalJPY, "-1"},
+		"loss pct above 100":      {dailyguardsettings.KeyLossLimitPct, "100.1"},
+		"negative loss pct":       {dailyguardsettings.KeyLossLimitPct, "-0.5"},
+		"trigger pct above 100":   {dailyguardsettings.KeyProfitLockTriggerPct, "101"},
+		"negative trigger pct":    {dailyguardsettings.KeyProfitLockTriggerPct, "-1"},
 	} {
 		err := svc.Save(ctx, tc.key, tc.raw)
 		var invalid *opsettings.InvalidValueError
@@ -143,5 +180,79 @@ func TestDailyGuardThresholds_SaveRejectsInvalid(t *testing.T) {
 	}
 	if len(store.rows) != 0 {
 		t.Fatalf("rejected values were stored: %v", store.rows)
+	}
+}
+
+// issue #782: DailyGuard resolves the stored rows (capital × percent, or the
+// direct yen rows) and follows a capital change.
+func TestDailyGuard_ResolvesFromStore(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeStore{rows: map[string]string{}}
+	svc := newService(store)
+
+	r, err := svc.DailyGuard(ctx)
+	if err != nil || r.Limits.AnyEnabled() || r.CapitalJPY != 0 {
+		t.Fatalf("DailyGuard with nothing stored = %+v, %v; want everything off", r, err)
+	}
+
+	for key, raw := range map[string]string{
+		dailyguardsettings.KeyOperatingCapitalJPY:  "500000",
+		dailyguardsettings.KeyLossLimitPct:         "1",
+		dailyguardsettings.KeyProfitLockTriggerPct: "0.5",
+		dailyguardsettings.KeyLossLimitJPY:         "50000",
+	} {
+		if err := svc.Save(ctx, key, raw); err != nil {
+			t.Fatalf("Save %s: %v", key, err)
+		}
+	}
+	r, err = svc.DailyGuard(ctx)
+	if err != nil || r.Limits.LossLimitJPY != 5000 || r.Limits.ProfitLockTriggerJPY != 2500 || r.CapitalJPY != 500000 {
+		t.Fatalf("DailyGuard = %+v, %v; want 5000 / 2500 from 500000", r, err)
+	}
+	if r.LossLimit.Source != dailyguardsettings.SourcePercent {
+		t.Fatalf("LossLimit source = %v, want percent (percent beats the direct 50000)", r.LossLimit.Source)
+	}
+
+	if err := svc.Save(ctx, dailyguardsettings.KeyOperatingCapitalJPY, "1000000"); err != nil {
+		t.Fatalf("Save capital: %v", err)
+	}
+	if r, _ := svc.DailyGuard(ctx); r.Limits.LossLimitJPY != 10000 || r.Limits.ProfitLockTriggerJPY != 5000 {
+		t.Fatalf("after doubling the capital: %+v", r.Limits)
+	}
+
+	// Resetting the percent falls back to the direct yen row.
+	if err := svc.Reset(ctx, dailyguardsettings.KeyLossLimitPct); err != nil {
+		t.Fatalf("Reset: %v", err)
+	}
+	if r, _ := svc.DailyGuard(ctx); r.Limits.LossLimitJPY != 50000 || r.LossLimit.Source != dailyguardsettings.SourceDirect {
+		t.Fatalf("after resetting the percent: %+v", r)
+	}
+}
+
+func TestDailyGuard_ReadFailureIsAnError(t *testing.T) {
+	store := &fakeStore{rows: map[string]string{}, getErr: errors.New("db down")}
+	if _, err := newService(store).DailyGuard(context.Background()); err == nil {
+		t.Fatal("DailyGuard swallowed a store read failure")
+	}
+}
+
+func TestDailyGuard_SeedMarkerIsNotASettingsKey(t *testing.T) {
+	svc := newService(&fakeStore{rows: map[string]string{}})
+	if _, err := svc.Get(context.Background(), dailyguardsettings.SeededMarkerKey); err == nil {
+		t.Fatal("the internal seed marker must not be a Settings key")
+	}
+}
+
+// issue #782: the risk.yaml reference is optional, read-only and carries
+// initial_capital and max_daily_loss_pct.
+func TestRiskReference_UnsetUntilWired(t *testing.T) {
+	svc := newService(&fakeStore{rows: map[string]string{}})
+	if _, ok := svc.RiskReference(); ok {
+		t.Fatal("RiskReference ok before WithRiskReference")
+	}
+	svc.WithRiskReference(config.RiskLimits{InitialCapital: 30_000_000, MaxDailyLossPct: 1.5})
+	ref, ok := svc.RiskReference()
+	if !ok || ref.InitialCapitalJPY != 30_000_000 || ref.MaxDailyLossPct != 1.5 {
+		t.Fatalf("RiskReference = %+v, %v", ref, ok)
 	}
 }

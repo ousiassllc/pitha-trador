@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -34,10 +35,15 @@ func settingsEngine(t *testing.T, store settingsStore) testEngine {
 
 func enterDirection(t *testing.T, te testEngine, direction string, book fillmodel.Book) execution.EntryResult {
 	t.Helper()
+	return enterDirectionAt(t, te, direction, book, jstAt(29, 10, 0))
+}
+
+func enterDirectionAt(t *testing.T, te testEngine, direction string, book fillmodel.Book, now time.Time) execution.EntryResult {
+	t.Helper()
 	signal := longSignal(te.instrument.ID)
 	signal.Direction = direction
 	result, err := te.engine.Enter(context.Background(), execution.EntryRequest{
-		Signal: signal, Quantity: 100, Price: 2000, Book: book, Now: jstAt(29, 10, 0),
+		Signal: signal, Quantity: 100, Price: 2000, Book: book, Now: now,
 	})
 	if err != nil {
 		t.Fatalf("Enter %s: %v", direction, err)
@@ -45,30 +51,40 @@ func enterDirection(t *testing.T, te testEngine, direction string, book fillmode
 	return result
 }
 
-// Changing the cost settings changes the next Paper fill's price and fee,
-// without rebuilding the Engine (#779).
+// Changing the stored cost settings changes the next Paper fill's price and
+// fee on the SAME Engine, without rebuilding it (#779): two LONG entries of 100
+// shares on one Engine, with the settings edited between them.
 func TestEnter_FollowsTheCostSettings(t *testing.T) {
+	ctx := context.Background()
 	store := settingsStore{}
+	te := settingsEngine(t, store)
 	book := fillmodel.Book{Bid: 1999, Ask: 2001}
 
-	before := enterDirection(t, settingsEngine(t, store), domain.JevDirectionLong, book)
 	// The defaults: ask 2001 + 2 bps = 2001.4 -> 2002, no fee.
+	before := enterDirectionAt(t, te, domain.JevDirectionLong, book, jstAt(29, 10, 0))
 	if got := before.Position.EntryPrice; got != 2002 {
 		t.Fatalf("EntryPrice at the defaults = %v, want 2002", got)
 	}
 	if before.Order.Fees != 0 {
 		t.Fatalf("Fees at the defaults = %v, want 0", before.Order.Fees)
 	}
+	if _, err := te.engine.Close(ctx, before.Position.ID, domain.ExitReasonManual, 2000, fillmodel.Book{}, jstAt(29, 10, 5)); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
 
-	store[costsettings.KeySlippageLongContinuous] = "30" // ask 2001 + 30 bps = 2007.0 -> 2008
+	store[costsettings.KeySlippageLongContinuous] = "30" // ask 2001 + 30 bps = 2007.003 -> 2008
 	store[costsettings.KeyFeeBps] = "10"
 	store[costsettings.KeyFeeFixedJPY] = "55"
-	after := enterDirection(t, settingsEngine(t, store), domain.JevDirectionLong, book)
+	after := enterDirectionAt(t, te, domain.JevDirectionLong, book, jstAt(29, 10, 10))
 	if got := after.Position.EntryPrice; got != 2008 {
 		t.Errorf("EntryPrice after raising the slippage = %v, want 2008", got)
 	}
-	if want := 2008.0*100*10/10000 + 55; after.Order.Fees != want {
-		t.Errorf("Fees after the fee settings = %v, want %v (10 bps of the notional + 55 JPY)", after.Order.Fees, want)
+	if got, want := after.Position.EntryPrice-before.Position.EntryPrice, 6.0; got != want {
+		t.Errorf("entry price rose by %v, want %v (28 bps more slippage on 2001, ceiled to the tick)", got, want)
+	}
+	// 10 bps of the 2008 * 100 notional (200.8 JPY) + 55 JPY.
+	if got, want := after.Order.Fees-before.Order.Fees, 255.8; got < want-1e-9 || got > want+1e-9 {
+		t.Errorf("fee rose by %v, want %v (10 bps of the notional + 55 JPY)", got, want)
 	}
 }
 

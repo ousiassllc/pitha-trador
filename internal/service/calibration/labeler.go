@@ -154,6 +154,12 @@ func (l *Labeler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 			return fmt.Errorf("calibration: load cost settings: %w", err)
 		}
 	}
+	// The label cost the settings imply must still leave a valid barrier set
+	// (cost below the stop-loss): fail the job rather than write a label whose
+	// stop-loss sits on the profit side.
+	if err := barriers.Validate(); err != nil {
+		return fmt.Errorf("calibration: effective triple-barrier settings are invalid: %w", err)
+	}
 	responseAt := ResponseTime(decision)
 	timeout := time.Duration(payload.HorizonMinutes) * time.Minute
 	// +1s margin: SnapshotRepository.ListByInstrumentRange's `to` bound is

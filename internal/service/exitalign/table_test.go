@@ -205,3 +205,20 @@ func TestCorrespondence_CostAndTrailing(t *testing.T) {
 		t.Errorf("LONG/SHORT label cost gap of 8 bps does not warn: %v", warnings)
 	}
 }
+
+// cost_mismatch reports the base cost (calibration.barrier_cost_bps) straying
+// from the defaults, not the fee or slippage: the label cost moves with the
+// fill model's round-trip cost, so changing either leaves the gap, and the
+// warning, as it was.
+func TestCostWarning_IgnoresFeeAndSlippageChanges(t *testing.T) {
+	b := barriersettings.Default()
+	exit := shippedExit()
+	costs := costsettings.Default()
+	costs.FeeBps = 10
+	costs.Long.ContinuousBps = 12
+	costs.Short.ContinuousBps = 12
+	_, warnings := exitalign.Correspondence(b, exit, costs)
+	if warningCodes(warnings)[exitalign.WarnCost] {
+		t.Errorf("raising the fee and slippage on the default base cost warns: %v", warnings)
+	}
+}
