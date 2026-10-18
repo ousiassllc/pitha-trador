@@ -87,7 +87,7 @@
 sqlite3 -readonly -header -column pitha.db ".read tools/verify-queries.sql"
 ```
 
-期間は、`params`CTE（`from_ts`/`to_ts`、UTC、既定は全期間）を持つQ1〜Q5の先頭の値を書き換える（Q1〜Q4は`positions.closed_at`、Q5は`jev_decisions.timestamp`で絞る）。`params`を持たないQ0（データの在庫）・Q6・Q7・Q8・Q9は全期間が対象で、期間を絞るときは`WHERE`に次を足す: Q6・Q7は`d.timestamp >= '…' AND d.timestamp < '…'`（Q5と同じ列）、Q8の`linked`は`p.closed_at >= '…' AND p.closed_at < '…'`（Q9はモデルごとのOOS窓`oos_start`〜`oos_end`で決まり、期間の指定は受け付けない）。`initial_capital`はQ3の`params`を書き換える。`go test ./internal/repository/actuals/`が、空DBと合成DB（`internal/repository/actuals/actualstest`）で全クエリを実行し（構文・列名の検証、読み取り専用接続でも実行）、合成DBでは手計算の期待値（件数・勝率・EV・円建て最大DD・コスト・Brier・メタモデル比較）と照合する。画面側の集計（`internal/service/actuals`）も同じ合成DBの同じ期待値でテストしている。
+期間は、`params`CTE（`from_ts`/`to_ts`、UTC、既定は全期間）を持つQ1〜Q5・Q10の先頭の値を書き換える（Q1〜Q4は`positions.closed_at`、Q5は`jev_decisions.timestamp`、Q10は`paper_orders.filled_at`で絞る）。`params`を持たないQ0（データの在庫）・Q6・Q7・Q8・Q9は全期間が対象で、期間を絞るときは`WHERE`に次を足す: Q6・Q7は`d.timestamp >= '…' AND d.timestamp < '…'`（Q5と同じ列）、Q8の`linked`は`p.closed_at >= '…' AND p.closed_at < '…'`（Q9はモデルごとのOOS窓`oos_start`〜`oos_end`で決まり、期間の指定は受け付けない）。`initial_capital`はQ3の`params`を書き換える。`go test ./internal/repository/actuals/`が、空DBと合成DB（`internal/repository/actuals/actualstest`）で全クエリを実行し（構文・列名の検証、読み取り専用接続でも実行）、合成DBでは手計算の期待値（件数・勝率・EV・円建て最大DD・コスト・Brier・メタモデル比較）と照合する。画面側の集計（`internal/service/actuals`）も同じ合成DBの同じ期待値でテストしている。
 
 ## 7. 実データの実行記録
 
