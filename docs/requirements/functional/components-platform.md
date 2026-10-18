@@ -191,7 +191,7 @@ Settings画面（`GET /settings`）で認証情報と運用設定を管理する
 
 ### 4.22 Paper 実績の読み取り専用 MCP（issue #783）
 
-リモートの Grok Bot が Paper の実績を確認するために、Windows PC 上の SQLite を読む MCP。画面は増やさない。詳細は `architecture/paper-results-mcp.md`、ツールのフィールドと上限の数値は `api/endpoints/paper-results-mcp.md`、エラー表は `architecture/paper-results-mcp-errors.md`。新規テーブルは作らない。kabu の状態を読む #347 の MCP とは別プロセスで、あちらのツール・鍵・ポートは使わない。
+リモートの Grok Bot が Paper の実績を確認するために、Windows PC 上の SQLite を読む MCP。画面は増やさない。実装済み（`cmd/paper-results-mcp`、`internal/service/paperresultsmcp`。起動と設定は `components/paper-results-mcp.md` §4）。詳細は `architecture/paper-results-mcp.md`、ツールのフィールドと上限の数値は `api/endpoints/paper-results-mcp.md`、エラー表は `architecture/paper-results-mcp-errors.md`。新規テーブルは作らない。kabu の状態を読む #347 の MCP とは別プロセスで、あちらのツール・鍵・ポートは使わない。
 
 - FR-MCP-1: 既定はオフ。オン/オフは Windows PC のローカル設定ファイルだけで、Grok Bot と `runtime_settings` からは切り替えられない。オフのときは待受しない（接続不可）。待受の既定は `127.0.0.1:48110`。Tailscale で直接待つときはその PC の tailnet 側アドレスだけ。`0.0.0.0` は起動を拒否する。インターネットへ直接は公開しない
 - FR-MCP-2: 必須の認証は MCP 自身の別 API キー（`Authorization: Bearer`）だけである。キーが空なら待受しない。キーが無い・一致しないリクエストは SQL を発行する前に拒否する。キーはログとツール戻り値に出さない。経路が Tailscale・任意の Cloudflare Tunnel・その他のプライベートトンネルのどれでも、同じ MCP と同じ API キーで動く。Cloudflare Access は Cloudflare を使う場合の任意であり、本要件の必須にしない

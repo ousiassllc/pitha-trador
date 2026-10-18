@@ -33,6 +33,8 @@
 
 期間の不正は `invalid_period` のまま分ける（テストが期間と引数を区別できるようにするため）。
 
+**実装での載せ方（MCP の JSON-RPC 2.0 over HTTP）**: エラー応答は上表の HTTP ステータスで返し、ボディは `{"jsonrpc":"2.0","id":…,"code":"<code>","message":"<固定文>","error":{"code":-32000,"message":"<固定文>","data":{"code":"<code>"}}}`。成功は HTTP 200 の JSON-RPC `result` で、`structuredContent` が `{"tool":"<名前>","data":{…}}`、`content[0].text` が同じ JSON の文字列。JSON-RPC として不正なボディ（解析不能・バッチ・`jsonrpc` が 2.0 でない）は認証通過後に 400、未対応メソッドは `-32601`。
+
 ## 3. ログに残すもの / 残さないもの
 
 残す: `tool`、`code`、`duration_ms`、`from`、`to`、返した件数。認証失敗は `code` だけ（ツール名がまだ決まっていなければ `tool` は空）。
@@ -45,3 +47,4 @@
 |----|------|---------|---------|
 | 1.0 | 2026-10-17 | 新規作成 | issue #783。#347 のエラー表の書式（code・条件・固定の案内文）に合わせた |
 | 1.1 | 2026-10-17 | 必須の認証失敗を `unauthorized` だけにした。`access_denied` は Cloudflare の任意照合のときだけ | 悠太さん指示。Cloudflare Access を必須要件から外す |
+| 1.2 | 2026-10-18 | 実装での JSON-RPC への載せ方を §2 に追記。`message` と HTTP の表は変更なし | issue #783 の実装 |
