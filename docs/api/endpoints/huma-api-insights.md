@@ -23,6 +23,32 @@
 }
 ```
 
+### GET /api/v1/performance/evaluation
+
+実績評価（issue #777、`requirements/functional/performance-evaluation.md`）。クローズ済みPaper建玉を読み取り専用で集計し、サンプル数・95%信頼区間・合格ライン判定つきで返す（書き込み・市場データの生値の出力なし）。
+
+| クエリ | 型 | 説明 |
+|-------|-----|------|
+| `from` | string | `closed_at`の範囲の最初のJST日（`YYYY-MM-DD`）。省略は最初から |
+| `to` | string | 最後のJST日（`YYYY-MM-DD`、その日を含む）。省略は現在まで。形式不正と`to`が`from`より前は422 |
+
+`overall`と、`by_day`/`by_week`/`by_direction`/`by_exit_reason`/`by_meta_model`/`by_ab_arm`の各要素（`key`+同じ指標）は、`n`・`days`・`wins`、円の`net_pnl_jpy`・`fees_jpy`・`slippage_jpy`（約定価格に含まれる分。`slippage_recorded_fills`は記録のある約定数）・`gross_before_fees_jpy`・`gross_before_costs_jpy`、および指標`win_rate`/`ev_jpy`/`ev_bps`/`profit_factor`/`max_drawdown_jpy`/`max_drawdown_pct`（資金比%）を持つ。各指標は`{n, value, lo, hi, has_ci, defined, reliable}`で、`reliable: false`は「判定不能」（サンプルまたは取引日数が基準未満、定義不能、区間なし。`value`は参考値）。`initial_capital`は`risk.yaml`の値（Paperでは仮置き。0以下は未設定で資金比は判定不能）、`criteria`は適用した基準値。`jev[]`は`label_version`別の`hit_rate`・`brier`、`meta[]`はメタモデルごとにOOS（`oos_auc`・`oos_expected_bps`・`oos_samples`・`oos_reliable`）と、採用取引の`linked`・`predicted_ev_bps`・`ev_gap_bps`（実現−予測）、OOS期間内の全取引`in_oos_window`を並べる。`verdict`は`{status: pass|fail|undetermined, checks[]}`で、`checks[].key`は`period_days`/`trades`/`ev_lower_bound`/`max_drawdown`（`required`・`actual`・`status`）。Live前チェックの材料であり、判定がLive切替・取引・設定に接続されることはない。
+
+```json
+// Output（抜粋）
+{
+  "initial_capital": 30000000,
+  "criteria": { "min_sample": 30, "min_clusters": 5, "min_days": 20, "min_trades": 100, "min_ev_lower_bps": 0, "max_drawdown_pct": 5 },
+  "overall": {
+    "n": 6, "days": 3, "wins": 3, "net_pnl_jpy": -1000, "fees_jpy": 100,
+    "win_rate": { "n": 6, "value": 0.5, "lo": 0.1, "hi": 0.9, "has_ci": true, "defined": true, "reliable": false },
+    "max_drawdown_jpy": { "n": 6, "value": 1760, "lo": 0, "hi": 3000, "has_ci": true, "defined": true, "reliable": false },
+    "max_drawdown_pct": { "n": 6, "value": 0.0059, "lo": 0, "hi": 0.01, "has_ci": true, "defined": true, "reliable": false }
+  },
+  "verdict": { "status": "undetermined", "checks": [ { "key": "trades", "required": 100, "actual": 6, "has_actual": true, "status": "undetermined" } ] }
+}
+```
+
 ### GET /api/v1/calibration
 
 | クエリ | 型 | 説明 |
@@ -66,11 +92,12 @@
                      { "regime": "mean_revert", "trade_count": 4, "win_rate": 0.5, "ev_net_bps": 5.6, "total_pnl": 1900 } ] }
   ],
   "meta_model": {
-    "version": "lr-20261014-210000", "algorithm": "logistic", "status": "rejected", "reject_reason": "oos_auc_not_above_minimum",
+    "version": "lr-20261014-210000", "algorithm": "logistic", "status": "rejected", "reject_reason": "oos_auc_ci_not_above_minimum",
     "active_version": "lr-20261013-210000", "trained_at": "2026-10-14T12:00:00Z",
     "train_start": "2026-09-01T00:00:00Z", "train_end": "2026-10-01T00:00:00Z",
     "oos_start": "2026-10-01T00:00:00Z", "oos_end": "2026-10-14T00:00:00Z", "train_samples": 300, "oos_samples": 120,
-    "oos_auc": 0.48, "oos_ev_bps": null,
+    "oos_auc": 0.48, "oos_ev_bps": null, "oos_takes": 40, "oos_days": 3,
+    "criteria": { "min_oos_samples": 1084, "min_takes": 542, "min_oos_days": 5, "min_ev_lower_bps": 0, "min_auc_lower": 0.5, "alpha": 0.01, "resamples": 2000 },
     "oos_calibration": [ { "mean_predicted": 0.55, "observed_rate": 0.5, "count": 40 } ],
     "llm_cutoff": "2026-09-01"
   }
@@ -87,7 +114,40 @@ A/B比較（FR-REGIME-1、issue #755）: `ab_arms`はpaperの固定モメンタ�
 
 メタラベリングのOOS指標（FR-META-5、issue #766）: `meta_model`は最新のメタラベリングモデル（`metalabel_models`の`trained_at`が最新の行。`rejected`も含む）の報告で、`version`/`algorithm`/`status`（`active`=採用、`rejected`=記録のみで`reject_reason`に理由）/`trained_at`/`train_start`〜`train_end`（学習窓）/`train_samples`/`oos_samples`に加え、**Jev評価期間**`oos_start`〜`oos_end`（OOS窓。判断は`llm_cutoff`以降のものだけが対象。`llm_cutoff`は応答時点のSettings `metalabel.llm_cutoff`（UTC日付`YYYY-MM-DD`）、`oos_auc`（0.5=無能力）、`oos_ev_bps`（OOS上でDecideが採ったシグナルの平均純リターン、bps）、`oos_calibration[]`（較正後確率のビンごとの`mean_predicted`・`observed_rate`・`count`）を返す。`oos_auc`/`oos_ev_bps`は定義できないとき`null`。`active_version`は推論で使われているモデル（最新の`active`。無ければ空文字で、その間のエントリーは見送り）で、最新モデルが`rejected`のとき`version`と異なる。モデルが1件も無い、または取得元が未配線のときは`meta_model`キー自体を省く。`horizon`には依存しない。実装は`internal/service/metalabel.Reporter`で、`internal/bootstrap/metalabeljob.CalibrationSource`が`calibration.Service`（`Metrics`）と合成して`router.WithCalibrationSource`へ渡す。ハンドラは取得元が`calibration.MetaModelSource`（`Report`）も実装していれば`meta_model`を返す。
 
+LLM学習データ終了日の状態（FR-META-6、issue #776）: `meta_model_cutoff`はSettings `metalabel.llm_cutoff`の状態で、モデルが未学習でも返る（ソース未配線のときは省略）。`llm_cutoff`（UTC日付`YYYY-MM-DD`）、`status`（`placeholder`=未設定または既定の仮置きで、夜間再学習のモデルは`reject_reason=llm_cutoff_placeholder`で不採用／`unverified`=実日付だが確認したJevモデル名が未記録／`confirmed`）、`warning`（運用者向けの警告。`confirmed`のときは空）、出典の`model`（`metalabel.llm_cutoff_model`）・`confirmed_on`・`source`（未記録は空文字）。`meta_model.reject_reason`は`llm_cutoff_placeholder`（cutoff仮置き）・`llm_model_changed`（OOS窓のJevモデルがcutoff確認時のモデルと異なる）を取り得る。
+
+採用判定の根拠（FR-META-7、issue #780）: `meta_model`は`oos_takes`（OOSでtakeした件数）・`oos_days`（OOSが跨ぐ取引日数）・`oos_ev_ci`・`oos_auc_ci`（クラスタ・ブートストラップの信頼区間`{low, high}`。未定義のときは省略）に加え、判定に使った基準`criteria`（`min_oos_samples`/`min_takes`/`min_oos_days`/`min_ev_lower_bps`/`min_auc_lower`/`alpha`/`resamples`）、現行モデルとの同一OOS比較`comparison`（`active_version`/`comparable`/`note`/`paired_samples`/`candidate_bps`/`active_bps`/`diff_bps`/`diff_ci`）、変更頻度制限で止めた場合の`gate`（`reason`/`detail`/`until`）、採用後の前向き評価`forward`（`evaluated_at`/`from`/`samples`/`takes`/`days`/`ev_bps`/`ev_ci`/`degraded`）を返す（#780以前に保存したモデルでは`criteria`以下は省略）。`reject_reason`は`oos_samples_below_minimum`/`oos_days_below_minimum`/`oos_takes_below_minimum`/`oos_ev_ci_not_positive`/`oos_auc_ci_not_above_minimum`/`candidate_not_better_than_active`/`active_model_not_comparable`/`model_swap_rate_limited`/`policy_change_freeze`も取り得る。
+
 `horizon`（issue #719）はビン・方向別・Brier/Log Loss/ECEの全指標を、指定した水平線の`calibration_outcomes`行だけで再計算する（`ListLabeledSamples`が`horizon_minutes`で絞る）。応答の`horizon`は集計した水平線をそのまま返す（画面の表示用）。`all`は`calibration.DefaultHorizonsMinutes`（5/10/15）と全てのトリプルバリアのラベルを合算し（トリプルバリアのhorizonはSettingsのtimeoutで任意の1〜60分のため、5/10/15以外の値は`all`でのみ集計される。`ListCurrentLabeledSamples`）、#711以前の旧20分ラベルは混ざらない（旧ラベルはAPIからも選べない）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`/`trade_win_rate`と`pnl_brier_score`/`pnl_log_loss`は実現トレードPnLに基づくためホライズンに依存せず、どの`horizon`でも同じ値を返す。
+
+### GET /api/v1/calibration/exit-alignment
+
+ラベル基準（トリプルバリア）と実出口の整合（FR-CAL-4A、issue #774）。クエリ`days`（1〜365、既定30）は、ラベルと再生を比べる判断の窓（現在から遡る日数）。出力は計算のみで、市場データ由来の値を保存しない（`calibration_outcomes`・`market_snapshots`・`jev_decisions`・`positions`・`metalabel_models`から読み取り時に計算）。取得元（`CalibrationSource`が`AlignmentSource`も実装）が未配線のときは`rows`・`warnings`が空配列、`comparison`・`oos_paper`は省略する。
+
+```json
+// Output（抜粋）
+{
+  "rows": [
+    { "key": "take_profit", "item": "利確", "label_text": "TP 30 - ... グロス +40 bps", "exit_text": "+120 bps", "comparable": true, "aligned": false }
+  ],
+  "warnings": [ { "code": "take_profit_mismatch", "message": "..." } ],
+  "tolerance_bps": 5, "tolerance_minutes": 1,
+  "comparison": {
+    "from": "2026-09-17T00:00:00Z", "to": "2026-10-17T00:00:00Z", "horizon_minutes": 10,
+    "replayed_count": 40, "skipped_count": 3,
+    "label_net_bps": { "count": 40, "mean": 4.2, "std_dev": 21.0, "min": -30, "p5": -28, "p25": -12, "median": 3, "p75": 20, "p95": 30, "max": 30 },
+    "replay_net_bps": { "count": 40, "mean": -1.1, "std_dev": 35.0, "min": -70, "p5": -60, "p25": -20, "median": 0, "p75": 15, "p95": 60, "max": 120 },
+    "diff_bps": { "count": 40, "mean": -5.3, "std_dev": 28.0, "min": -90, "p5": -60, "p25": -15, "median": -2, "p75": 5, "p95": 40, "max": 80 },
+    "label_tp_count": 12, "label_sl_count": 15, "label_timeout_count": 13,
+    "replay_exits": [ { "reason": "max_holding", "count": 21 } ], "paper_exits": [],
+    "not_evaluated_exits": ["jev_direction_reversed", "continuation_probability_dropped", "force_flat_before_close"],
+    "cost_long_bps": 10, "cost_short_bps": 10
+  },
+  "oos_paper": { "model_version": "v1", "oos_start": "...", "oos_end": "...", "oos_ev_bps": 12.0, "paper_trades": 0, "paper_mean_bps": null, "diff_bps": null }
+}
+```
+
+（上記の数値は形式の例で、実績ではない。）`warnings[].code`は`take_profit_mismatch`・`stop_loss_mismatch`・`horizon_mismatch`・`cost_mismatch`・`cost_direction_asymmetry`。`comparison.diff_bps`は再生−ラベルで、平均が負ならラベルが実出口より楽観的。`oos_paper.paper_mean_bps`・`diff_bps`は決済済みポジションが無いとき`null`（画面は「データ無し」）。
 
 ### GET /api/v1/policy-proposals
 

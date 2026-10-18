@@ -30,11 +30,16 @@
 // outside the live Feature Engine pipeline (e.g. an externally-imported
 // historical dataset).
 //
-// RunConfig.Risk defaults to policy.AlwaysPassRiskChecker: the live Risk
-// Engine's limits depend on live account/Kill Switch state a historical
-// replay does not have. ExitRule implements only the FR-EXIT-1 subset
-// (fixed Stop Loss/Take Profit/max holding time) needed to close a
-// backtest position deterministically; Trailing Stop/Jev方向反転/
-// continuation_probability低下/VWAP逆クロス/引け前強制決済 are live-only
-// (internal/service/execution).
+// The replay follows the live decision flow (issue #775,
+// docs/requirements/functional/components-platform.md FR-BT-4). Recorded
+// (replayed): Jev Trader decisions, bar features, stored meta-labeling
+// models. Recomputed: the hard guards and the meta-labeling take/skip
+// (policy.Engine.DecideReplay, with the model trained before each decision -
+// metahistory; none in force means no entry), the Risk Engine (simrisk, over
+// a simulated portfolio; state a replay cannot know is treated as inactive),
+// fills (fillmodel) and every FR-EXIT-1 exit condition in the live priority
+// order (execution/exitcond, the function Paper Trading itself uses).
+// RunConfig.Entry's legacy confidence rule is an explicitly named comparison
+// mode (CompareEntryRules), never the default. parity compares a replay with
+// the actual Paper trades of a period.
 package backtest

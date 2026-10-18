@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 )
@@ -38,6 +39,23 @@ func (s *Store) SaveModel(ctx context.Context, m repo.Model) (repo.Model, error)
 // (zero, false, nil) when there is none. The caller MUST then skip the signal.
 func (s *Store) LatestActiveModel(ctx context.Context) (repo.Model, bool, error) {
 	return s.repo.LatestActiveModel(ctx)
+}
+
+// LastAdoptedAt returns when the model currently in force was adopted (its
+// training time: the nightly retraining adopts at the moment it trains), or
+// (zero, false, nil) when none is.
+func (s *Store) LastAdoptedAt(ctx context.Context) (time.Time, bool, error) {
+	m, found, err := s.repo.LatestActiveModel(ctx)
+	if err != nil || !found {
+		return time.Time{}, false, err
+	}
+	return m.TrainedAt, true, nil
+}
+
+// UpdateForward stores the forward (holdout) evaluation of model id; it does
+// not touch the model's status or adoption record.
+func (s *Store) UpdateForward(ctx context.Context, id int64, f repo.Forward) error {
+	return s.repo.UpdateForward(ctx, id, f)
 }
 
 // ActiveModel returns the newest model that passed the OOS bar, ready to score

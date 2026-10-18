@@ -53,3 +53,21 @@ func wrapRange(err error, what string, from, to time.Time) error {
 	}
 	return fmt.Errorf("repository: read %s in [%s, %s): %w", what, from.UTC().Format(time.RFC3339), to.UTC().Format(time.RFC3339), err)
 }
+
+// ListTouchingBetween returns every position opened or closed in
+// [start, end) - closed ones and still-open ones alike - oldest opened
+// first (then id). It is the read of cmd/dailyguardreplay (issue #782): a
+// day's trade count is by open day and its realized P&L by close day, so the
+// replay needs both the positions opened in the range and the ones closed
+// in it.
+func (r *PositionRepository) ListTouchingBetween(ctx context.Context, start, end time.Time) ([]domain.Position, error) {
+	from, to := sqlutil.FormatTime(start), sqlutil.FormatTime(end)
+	rows, err := r.db.QueryContext(ctx,
+		positionSelectColumns+` WHERE (opened_at >= ? AND opened_at < ?) OR (closed_at >= ? AND closed_at < ?) ORDER BY opened_at ASC, id ASC`,
+		from, to, from, to,
+	)
+	if err != nil {
+		return nil, wrapRange(err, "positions opened or closed", start, end)
+	}
+	return scanPositions(rows)
+}

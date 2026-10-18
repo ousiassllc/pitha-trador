@@ -12,10 +12,9 @@ import (
 )
 
 // Version identifies the legacy threshold-evaluation logic (Jev's confidence
-// against policy.*.min_probability), persisted to trade_signals.policy_version
-// (docs/architecture/er.md §trade_signals, functional.md FR-POLICY-4/5) by
-// Decide, the backtest replay path. Bump it whenever that logic changes
-// materially. The live Evaluate path records MetaVersion (meta.go) instead -
+// against policy.*.min_probability), which Decide - the explicitly named
+// comparison mode of the backtest (backtest.EntryLegacyConfidence) - runs.
+// Bump it whenever that logic changes materially. The live Evaluate path records MetaVersion (meta.go) instead -
 // alone on the config/strategy.yaml baseline thresholds, suffixed with the
 // applied Self-Improvement proposal's policy_version ("policy-v2+sol-12") while
 // a runtime_settings override applied by FR-SELFIMPROVE-5 is in effect,
@@ -211,9 +210,10 @@ func NewEngine(thresholds Thresholds, risk RiskChecker, signals *trading.SignalR
 // exclusion, spread too wide, ...).
 //
 // Decide is the legacy threshold rule (Jev's confidence against
-// policy.*.min_probability): the backtest replay and the self-improvement
-// shadow backtests have no stored meta-labeling models to consult. The live
-// path, Evaluate, enters on the meta-labeling model's verdict instead.
+// policy.*.min_probability), kept only for the backtest's explicitly named
+// legacy comparison mode (backtest.EntryLegacyConfidence, issue #775). The
+// live path, Evaluate, and the backtest replay (DecideReplay) enter on the
+// meta-labeling model's verdict instead.
 func (e *Engine) Decide(ctx context.Context, in Input) domain.TradeSignal {
 	sig, _ := e.decide(ctx, in, e.thresholds, nil, Version)
 	return sig

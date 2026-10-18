@@ -1,7 +1,7 @@
 // Response shape and pure presentation helpers for `pitha-calibration-heatmap`
 // (split out of the component to keep it within the linterly per-file limit).
 import type { ABArm } from './ab-arms-view';
-import type { MetaModel } from './meta-model-view';
+import type { LLMCutoffInfo, MetaModel } from './meta-model/meta-model-view';
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `triple_barrier`
 // object (internal/web/handler/calibration.calibrationBarrierOutput): the EV
@@ -78,6 +78,9 @@ export interface CalibrationAPIResponse {
   // The newest meta-labeling model's OOS metrics (issue #766); omitted until
   // a model was trained.
   meta_model?: MetaModel;
+  // The Jev model's training-data cutoff setting with its status and warning
+  // (issue #776); shown even before a model was trained.
+  meta_model_cutoff?: LLMCutoffInfo;
   // The paper A/B comparison of the momentum and regime-switching arms
   // (issue #755); omitted when no source is wired.
   ab_arms?: ABArm[];

@@ -124,7 +124,7 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 - ランキング監視ログ（`rankingwatch:`。FR-SCHED-9。既定で毎分出力）: `watch list updated`/`ranking is empty`/`ranking failed`/`ranking recovered`に`ranked_rows`（ランキング件数）・`ranked_in_universe`・`held`・`watch`・`added`・`removed`・`duration_ms`、失敗時は`error_code`（kabuコード）・`rate_limited`・`consecutive_failures`・`error`のみを記録する。ランキングの価格・出来高・銘柄コードはログにもDBにも出さない。失敗・空の繰り返しは10分に1回に間引く
 - Jev API latency / エラー率
 - スキャン対象銘柄数、Scout呼び出し回数、Trader呼び出し回数
-- Signal count（生成シグナル数。`policy: trade signal decided`ログ。永続化する`Evaluate`のみが出力し、バックテスト再現の`Decide`は出力しない）
+- Signal count（生成シグナル数。`policy: trade signal decided`ログ。永続化する`Evaluate`のみが出力し、バックテスト再現（`DecideReplay`/`Decide`）は出力しない）
 - Risk拒否件数
 - kabuステーションAPI（Broker）latency / エラー
 - 立花証券選択時（#727）: `tachibana:`ログ。ログイン成功（INFO。次回再認証時刻・有効期限）、03:30の閉局（INFO）、ログイン失敗（WARN。`issue`・`code`・`failures`・`retry_in`。認証ID・仮想URLは出さない）、`p_errno=2`による再ログイン（WARN）、`p_errno=6`（ERROR。採番バグ）、`p_errno=8`（WARN。NTP同期の案内）、運用者向け通知（WARN。`kind`＝`login_overdue`/`contention`/`documents_unread`/`api_spec_update`/`document_update`）、ログアウト（INFO）

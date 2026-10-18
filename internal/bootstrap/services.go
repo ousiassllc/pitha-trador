@@ -195,7 +195,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	runtimePolicy := selfimprove.NewRuntimePolicy(svc.Settings, svc.Proposals, state.Strategy.Policy)
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow, runtimePolicy)
 	traderHandler := svc.buildPolicyAndBacktest(state, executionConfig, runtimePolicy)
-	svc.buildGovernor(state.Strategy, secrets, alertChannels)
+	svc.buildGovernor(state.Strategy, state.DB, secrets, alertChannels)
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
 	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy, state.Paths.LogDir)
 
@@ -203,7 +203,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevScout, svc.Scout.HandleJob)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevTrader, traderHandler.HandleJob)
-	svc.Scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling, calibration.NewLabeler(svc.Decisions, svc.Snapshots, svc.Outcomes, calibration.WithBarrierSettings(svc.Settings)).HandleJob)
+	svc.Scheduler.RegisterHandler(jobqueue.JobQueueOutcomeLabeling, calibration.NewLabeler(svc.Decisions, svc.Snapshots, svc.Outcomes, calibration.WithBarrierSettings(svc.Settings), calibration.WithCostSettings(svc.Settings)).HandleJob)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueAnalytics, svc.handleSelfImprove)
 
 	return svc

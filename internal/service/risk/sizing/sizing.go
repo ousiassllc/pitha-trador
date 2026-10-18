@@ -43,6 +43,10 @@ const (
 // percentages (0.6 means 0.6%). When not even one lot fits it returns
 // quantity 0 and the Reason* constant of the binding limit, so Check can
 // reject with the limit that actually prevented the trade.
+//
+// The quantity depends on the Risk limits only. The meta-model's Kelly-based
+// SizeFraction (FR-META-3) does not scale it and never raises these limits
+// (issue #781: record-only until the probability calibration is validated).
 func Quantity(limits config.RiskLimits, stopLossPct, price, totalExposurePct float64) (int64, string) {
 	if limits.InitialCapital <= 0 || price <= 0 || math.IsNaN(price) || math.IsInf(price, 0) {
 		return 0, ReasonInvalidInput

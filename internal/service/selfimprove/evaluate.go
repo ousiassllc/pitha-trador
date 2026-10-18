@@ -35,6 +35,10 @@ func (g *Governor) EvaluateProposal(ctx context.Context, proposalID int64) (bool
 		return false, fmt.Errorf("selfimprove: proposal %d failed validation: %w", proposalID, err)
 	}
 
+	if blocked, err := g.rejectIfChangeBlocked(ctx, proposalID); err != nil || blocked {
+		return false, err
+	}
+
 	current, err := g.CurrentThresholds(ctx)
 	if err != nil {
 		return false, err

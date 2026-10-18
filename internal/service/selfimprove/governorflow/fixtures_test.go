@@ -148,8 +148,13 @@ func newUptrendSource(instrumentID int64, base time.Time, baseline config.Policy
 		Symbol:       "7203",
 		Snapshots:    bars,
 		Decisions:    backtest.NewSliceDecisionSource(decisions),
-		Thresholds:   policy.Thresholds{Policy: baseline, MaxSpreadBps: 50},
-		Exit:         backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute},
+		// These tests need an entry rule that responds to
+		// policy.*.min_probability (they raise it past the fixture's 0.80). The
+		// live rule does not use it (the model's verdict replaces it, #765), so
+		// the fixture uses the explicitly named legacy comparison mode.
+		Entry:      backtest.EntryLegacyConfidence,
+		Thresholds: policy.Thresholds{Policy: baseline, MaxSpreadBps: 50},
+		Exit:       backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute},
 	}
 	// Replicate the instrument so each pass yields at least
 	// assist.MinBacktestTrades trades (one copy trades only a few times

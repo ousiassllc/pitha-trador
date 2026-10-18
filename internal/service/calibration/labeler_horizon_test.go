@@ -81,7 +81,7 @@ func TestLabeler_HandleJob_HorizonCrossingLunchBreakIsNotLabeled(t *testing.T) {
 	}
 }
 
-// A last bar within horizonBarTolerance of the horizon time (one missed
+// A last bar within HorizonBarTolerance of the horizon time (one missed
 // 1-minute cycle) still labels the decision.
 func TestLabeler_HandleJob_LastBarWithinToleranceIsLabeled(t *testing.T) {
 	f := newLabelerFixtures(t)
@@ -141,7 +141,7 @@ func TestLabeler_HandleJob_ShortWindowIsTransientThenPermanentlySkipped(t *testi
 		0:               1000,
 		5 * time.Minute: 1020, // 15:30 close bar
 	}, base)
-	// The entry bar may land up to entryWaitTolerance (3 minutes) after the
+	// The entry bar may land up to EntryWaitTolerance (3 minutes) after the
 	// Jev response, so the data may still be landing until then.
 	horizonEnd := base.Add(15*time.Minute + 3*time.Minute)
 	key := [2]int64{decision.ID, 15}

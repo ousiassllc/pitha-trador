@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/actuals"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
@@ -66,18 +67,24 @@ const (
 
 const dateLayout = "2006-01-02"
 
+// actualsRange is the whole history: the page evaluates every closed position.
+var actualsRange actuals.Range
+
 // PerformanceHandler implements `GET /performance` (docs/api/endpoints.md
 // §3), the Performance page and its backtest execution path (UC-12).
 type PerformanceHandler struct {
-	runner  BacktestRunner
-	actuals PerformanceSource
-	now     func() time.Time
+	runner     BacktestRunner
+	actuals    PerformanceSource
+	evaluation actuals.Evaluator
+	now        func() time.Time
 }
 
 // NewPerformanceHandler returns a PerformanceHandler running backtests with
-// runner and reading the realized performance from actuals.
-func NewPerformanceHandler(runner BacktestRunner, actuals PerformanceSource) *PerformanceHandler {
-	return &PerformanceHandler{runner: runner, actuals: actuals, now: time.Now}
+// runner and reading the realized performance from source. When source
+// also implements actuals.Evaluator it supplies the 実績評価 section (issue
+// #777); otherwise that section shows the evaluation of an empty database.
+func NewPerformanceHandler(runner BacktestRunner, source PerformanceSource) *PerformanceHandler {
+	return &PerformanceHandler{runner: runner, actuals: source, evaluation: actuals.EvaluatorOf(source), now: time.Now}
 }
 
 // Page implements `GET /performance`: it always shows the realized (Paper)
@@ -97,6 +104,13 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 		status, props.ActualsError = http.StatusInternalServerError, "実績の取得に失敗しました。"
 	}
 	props.Actuals = performanceActuals(actuals)
+
+	evaluated, err := h.evaluation.Evaluate(c.Request.Context(), actualsRange)
+	if err != nil {
+		slog.ErrorContext(c.Request.Context(), "handler: performance evaluation", "error", err)
+		status, props.EvaluationError = http.StatusInternalServerError, "実績評価の取得に失敗しました。"
+	}
+	props.Evaluation = evaluationPanel(evaluated)
 
 	if c.Query("from") != "" {
 		form, wf, errs := parseBacktestForm(c)

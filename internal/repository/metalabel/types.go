@@ -52,7 +52,19 @@ type Model struct {
 	OOSAUC              *float64
 	OOSExpectedValueBps *float64
 	OOSCalibration      []CalibrationBin
-	CreatedAt           time.Time
+	// OOSTakes is the number of OOS signals the calibrated model took (the
+	// sample of OOSExpectedValueBps) and OOSDays the number of JST trading
+	// days the OOS rows span (the bootstrap's resampling units); the
+	// intervals below are cluster-bootstrap intervals (issue #780), nil when
+	// undefined.
+	OOSTakes, OOSDays int
+	OOSEVCI           *Interval
+	OOSAUCCI          *Interval
+	// Adoption is the criteria and comparison the model was judged by, and
+	// Forward its holdout evaluation after adoption (issue #780).
+	Adoption  Adoption
+	Forward   Forward
+	CreatedAt time.Time
 }
 
 // Prediction mirrors one metalabel_predictions row: a model's
@@ -69,7 +81,8 @@ type Prediction struct {
 	ExpectedValueBps float64
 	// Action is ActionTake or ActionSkip.
 	Action string
-	// SizeFraction is the position size share (0..1); 0 for a skip.
+	// SizeFraction is the Kelly-based size share (0..1); 0 for a skip. It is
+	// recorded for analysis only and is NOT used for the order quantity (issue #781).
 	SizeFraction float64
 	Reason       string
 	// FeaturesJSON is the feature vector scored, for audit.

@@ -144,6 +144,8 @@ stateDiagram-v2
 
 Total PnL, Daily PnL, Win Rate, Profit Factor, Expectancy, Max Drawdown, Average Hold Time, Sharpe/Sortino参考値, Signal countを表示する。
 
+その下に「実績評価」節として、円建て・資金比の最大ドローダウン（`initial_capital`併記）、期間（日・週）・方向・exit_reason・メタモデル版・A/Bアーム別の指標、サンプル数と95%信頼区間（基準未満は「判定不能」）、コスト内訳（グロス/ネット）、Jevの的中率・Brier、メタモデルのOOSとPaper実績EVの並列、「勝てているか」の合格ライン判定を表示する（FR-EVAL-1〜5。定義・基準値・検証済みSQLは`functional/performance-evaluation.md`）。
+
 ### 5.4 Calibration
 
 confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均future returnを表示する。あわせて、最新のメタラベリングモデルのOOS AUC・OOS EV・OOS較正曲線とJev評価期間（OOS窓）を表示する（FR-META-5）。
@@ -289,5 +291,13 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.91 | 2026-10-14 | §4.6にFR-REGIME-1（市場指数の1分足リターンのボラティリティと自己相関で相場状態を trend / mean_revert / unknown に判定し判断ごとに保存、平均回帰レジームでは寄り付き以降のVWAP乖離zスコアで逆張りするVWAP回帰モードへ切替、paperのA/B比較（固定モメンタム vs レジーム切替）。窓幅・しきい値・A/B有効はSettings）を追加し、FR-SETTINGS-7・§4.12 FR-CAL-2に設定とアーム別EV・勝率の表示を追記（issue #755・親 #751） |
 | 1.92 | 2026-10-15 | §4.21（FR-EXPORT-1〜6）を追加: 取引ログ（注文・約定・決済・損益）と判断ログ（Jevリクエスト/レスポンス・レイテンシ・特徴量・skip/reject理由・後付けラベルを`decision_id`で紐付け）を、期間指定でCSV/JSONLのZIP＋`manifest.json`（スキーマバージョン・期間・種類ごとの行数）としてエクスポートする`internal/service/dataexport`と、秘密情報のマスク・redactionテスト・ローカル出力のみの方針を定義（issue #770・#771、親 #768。計測ログ#772・Settings操作#773は後続） |
 | 1.93 | 2026-10-15 | §4.21にFR-EXPORT-7を追加し、FR-EXPORT-1・2を計測ログ（`metrics`）とmanifestの`files[].truncated`に対応させた: Settingsの「データエクスポート」節（期間・種類・形式の指定と`GET /api/v1/export`によるZIPダウンロード）と、計測ログ（INFO以上、マスク・10MiB上限）の`dataexport`への組み込み（issue #773、親 #768） |
-| 1.94 | 2026-10-17 | UC-17 と §4.22（FR-MCP-1〜8）を追加。Paper 実績・Jev 判断を読む読み取り専用 MCP。新規テーブルは追加しない | issue #783（仕様のみ。実装は別作業） |
-| 1.95 | 2026-10-17 | FR-MCP-1 に待受の範囲（既定 loopback、Tailscale 直接待受は tailnet の IP、`0.0.0.0` は拒否）を足し、FR-MCP-2 の必須認証を API キーだけにした。FR-MCP-8 の実機確認を選んだ経路（Tailscale または Cloudflare Tunnel）へ変えた | 悠太さん指示。Cloudflare を必須にしない |
+| 1.94 | 2026-10-17 | FR-META-1/3・FR-POLICY-6・FR-ENTRY-3に、メタモデルのサイズ比`SizeFraction`（`size_fraction`）は記録専用で発注数量には使わず、数量はRisk上限だけで決まる（Paperの評価はサイズ一定前提）ことを明記。確率較正がPaper実績で検証されるまで固定し、再検討は上限付きハーフケリー以下を前提にissue #781で行う（挙動の変更なし） | issue #781 |
+| 1.95 | 2026-10-17 | FR-RISK-8の円のしきい値を運用資金（`risk.operating_capital_jpy`）×率（`risk.daily_loss_limit_pct`・`risk.profit_lock.trigger_pct`）から導出する方式にし（率が円の直接指定より優先、直接指定は互換のため維持）、Paperの初期値（運用資金50万円・損失1%・発動0.5%・戻し50%・最大20回、要見直し）を1回だけ投入する。FR-SETTINGS-7に3キーを追加。issue #782は一部のみ対応（Live側の未設定時の扱い・Paperでの比較評価は未対応） | issue #782 |
+| 1.96 | 2026-10-17 | FR-RISK-8に、日次ガード設定の整合チェック（`risk.yaml`の`initial_capital`・`max_daily_loss_pct`との比較、表示のみ）、Live前チェック（無効なルールの警告のみ・拒否はしない。Live既定有効化の基準は決定待ち）、記録済みPaperポジションに3ルールを当てはめる読み取り専用の再現ツール`cmd/dailyguardreplay`（確定損益のみで含み損益は再現できない制限付き）を追記。FR-SETTINGS-7の「計算結果」パネルに2つの見出しを追記。issue #782は一部のみ対応（Paper記録ベースの評価の結論とLive既定有効化の基準はオーナー決定待ち） | issue #782 |
+| 1.97 | 2026-10-17 | §4.11 FR-BT-4・§4.14 FR-SELFIMPROVE-4を、バックテスト／シャドーバックテストがライブと同じ判断フロー（判断時刻より前に学習済みのメタモデルのtake/skip・Risk Engine・FR-EXIT-1の全Exit条件）を再生する実装（issue #775）に合わせて更新: 記録の再生と再計算の区別、モデルが無い期間の扱い、再現できないKill Switch等の扱い、旧`confidence >= min_probability`規則を比較専用モードへ限定、Paper実績との突き合わせ検証（暫定下限・データ無し）、残る差の一覧を追記 |
+| 1.98 | 2026-10-17 | §4.5にFR-META-6（`metalabel.llm_cutoff`が未設定・仮置きのままならメタモデルを`rejected`（`llm_cutoff_placeholder`）として不採用にし既存の有効モデルを更新しない、Jevモデル切替時（`llm_model_changed`）の不採用、cutoffの出典（モデル名・確認日・出典）の保存、Settings/Calibration画面と夜間ログの警告、fit・較正データの扱いの決定と影響評価）を追加し、FR-SETTINGS-7に出典の3キーを追記（issue #776・親 #752） |
+| 1.99 | 2026-10-17 | §4.5にFR-META-7（採用基準を信頼区間（同日・同銘柄の相関を考慮したクラスタ・ブートストラップ）の下限判定に変更し、最小標本を想定エッジ・ばらつきからの逆算（OOS 1084・take 542・5営業日）で引き上げ、現行モデルとの同一OOS比較、モデル入れ替えの5営業日の頻度制限と変更後の凍結、採用判断に使わない期間での前向き評価、基準値・結果の`metalabel_models`（マイグレーション000037）・画面・ログへの表示、効果の無い合成データでの偽採用率5%以下の検証）を追加し、§4.14にFR-SELFIMPROVE-10（`policy.*`変更の5営業日の頻度制限とモデル採用後3営業日の凍結、制限時は却下して理由を記録）を追加（issue #780・親 #752） |
+| 1.100 | 2026-10-17 | §4.12にFR-CAL-4A（メタモデルのラベル基準と実出口の整合: 差を許容し検知する(c)案、対応表、不一致警告、ラベル対再生の比較、OOS EVとPaper実績の並記。issue #774）を追加し、§4.8にFR-COST-1（手数料・スリッページ・SHORT貸株料をSettingsの設定にしてPaper・バックテスト・ラベルが同じ値を参照、SHORTの扱い、既定値の根拠と見直し基準、コスト感度表。issue #779）を追加。FR-EXIT-2・FR-ENTRY-8・FR-SETTINGS-7に相互参照を追記 |
+| 1.101 | 2026-10-17 | §5.3 Performanceに「実績評価」節（FR-EVAL-1〜5: 円建て・資金比の最大DD、期間・方向・exit_reason・メタモデル版・A/Bアーム別の指標、サンプル数と95%信頼区間、コスト内訳、Jevの的中率・Brier、メタモデルのOOSとPaper実績EVの並列、合格ライン判定。`functional/performance-evaluation.md`、検証済みSQL）を追加し、Performance画面・`GET /api/v1/performance/evaluation`に反映（issue #777） |
+| 1.102 | 2026-10-17 | UC-17 と §4.22（FR-MCP-1〜8）を追加。Paper 実績・Jev 判断を読む読み取り専用 MCP。新規テーブルは追加しない | issue #783（仕様のみ。実装は別作業） |
+| 1.103 | 2026-10-17 | FR-MCP-1 に待受の範囲（既定 loopback、Tailscale 直接待受は tailnet の IP、`0.0.0.0` は拒否）を足し、FR-MCP-2 の必須認証を API キーだけにした。FR-MCP-8 の実機確認を選んだ経路（Tailscale または Cloudflare Tunnel）へ変えた | 悠太さん指示。Cloudflare を必須にしない |
