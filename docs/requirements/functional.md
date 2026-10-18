@@ -302,3 +302,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.102 | 2026-10-17 | UC-17 と §4.22（FR-MCP-1〜8）を追加。Paper 実績・Jev 判断を読む読み取り専用 MCP。新規テーブルは追加しない | issue #783（仕様のみ。実装は別作業） |
 | 1.103 | 2026-10-17 | FR-MCP-1 に待受の範囲（既定 loopback、Tailscale 直接待受は tailnet の IP、`0.0.0.0` は拒否）を足し、FR-MCP-2 の必須認証を API キーだけにした。FR-MCP-8 の実機確認を選んだ経路（Tailscale または Cloudflare Tunnel）へ変えた | 悠太さん指示。Cloudflare を必須にしない |
 | 1.104 | 2026-10-18 | §4.22 に実装済みである旨を追記（`cmd/paper-results-mcp`、`internal/service/paperresultsmcp`）。FR-MCP-1〜8 の内容は変更なし | issue #783 の実装 |
+| 1.105 | 2026-10-18 | FR-BT-4の再現性の検証に、運用者向けの実行手順（読み取り専用のCLI`cmd/backtestverify`。期間は`-from`/`-to`か省略時の直近20営業日、終了コードは合格・データ無し0／不合格1／エラー2、しきい値は`parity.Provisional`のまま変えられない）を追記し、「実行導線は無い」の記述を置き換えた | issue #775の残件（再現性検証の実行導線）。下限・期間の値は変更していない |
