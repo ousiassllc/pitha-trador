@@ -41,10 +41,12 @@ type ModelSource interface {
 
 // decideEntry runs the entry rule on in (bar's Policy Engine input, Decision
 // set when one is available) with st's engine: the Risk Engine gate, when the
-// replay has one, is part of the engine.
-func (st *instState) decideEntry(ctx context.Context, in policy.Input) domain.TradeSignal {
+// replay has one, is part of the engine. The second result is the meta-labeling
+// model's expected value (bps) behind a take, nil when no model scored the
+// candidate (the legacy confidence rule, or a skip).
+func (st *instState) decideEntry(ctx context.Context, in policy.Input) (domain.TradeSignal, *float64) {
 	if st.cfg.Entry == EntryLegacyConfidence {
-		return st.engine.Decide(ctx, in)
+		return st.engine.Decide(ctx, in), nil
 	}
 	var model *metalabel.Model
 	var modelErr error
@@ -58,8 +60,11 @@ func (st *instState) decideEntry(ctx context.Context, in policy.Input) domain.Tr
 	if meta == (metalabel.DecideConfig{}) {
 		meta = metalabel.DefaultDecideConfig()
 	}
-	sig, _ := st.engine.DecideReplay(ctx, in, model, modelErr, meta)
-	return sig
+	sig, verdict := st.engine.DecideReplay(ctx, in, model, modelErr, meta)
+	if verdict == nil {
+		return sig, nil
+	}
+	return sig, &verdict.ExpectedValueBps
 }
 
 // tdnetScore is the TDnet disclosure score the model's feature carries: the

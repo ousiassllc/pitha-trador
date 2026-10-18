@@ -73,10 +73,11 @@
 
 ## 6. 検証済みSQL（FR-EVAL-5）
 
-`tools/verify-queries.sql`は、画面と同じ指標を`sqlite3`で独立に再計算するクエリ集（Q0〜Q9、`-- name: Qn`で区切り）。実スキーマ（`db/migrations` 000004・6・7・8・11・33・34・35・36）に対して検証済みで、次を満たす。
+`tools/verify-queries.sql`は、画面と同じ指標を`sqlite3`で独立に再計算するクエリ集（Q0〜Q10、`-- name: Qn`で区切り）。実スキーマ（`db/migrations` 000004・6・7・8・11・33・34・35・36）に対して検証済みで、次を満たす。
 
 - `calibration_outcomes`は`label_version`で絞る／分ける（Q5〜Q7）。固定の「コスト0.1%」仮定ではなく、実際の約定コスト（`paper_orders.fees`・`slippage_bps`、Q4）とコスト控除後ラベル（`net_return_bps`、Q6）を使う。
 - 実取引と予測の結合: `positions.entry_order_id → paper_orders.trade_signal_id → trade_signals.jev_decision_id → jev_decisions / metalabel_predictions`（Q2・Q8）。入力の古さは`jev_decisions.data_age_ms`（Q7）。
+- 約定スリッページの分布（Q10、コスト想定の見直し基準の入力。`components-pipeline.md` FR-COST-1「見直し」）: `paper_orders.slippage_bps`を、`filled_at`のJST時間帯（`open`＝前場・後場の寄りの最初の1分（9:00台・12:30台の最初の1分）、`close`＝15:25以降のクロージング・オークション、`regular`＝それ以外のザラ場。境界は`marketcalendar.Calendar.PhaseAt`と同じ）×建玉の売買方向（`positions.side`）に分け、約定件数`fills`・平均`mean_slippage_bps`・95パーセンタイル`p95_slippage_bps`（最近順位法: 昇順で`ceil(0.95×n)`番目）を出す。対象は`FILLED`で`filled_at`と`slippage_bps`が記録された約定（NULLは数えない）。想定値（2bps／5bps）や1.5倍・3倍のしきい値はクエリに埋め込まず、生の分布だけを出す（判定は運用者が出力と`cost.*`の設定値を突き合わせて行う）。合成DBで時間帯の境界・件数・平均・p95を手計算と照合する（`internal/repository/actuals/verifysql_test.go`）
 - 円÷円の比はSQLiteでは整数除算になる（NUMERIC列は整数値だと整数で保存される）ため、bpsは先に`10000.0`を掛けてから割る（合成DBでの検証で実際に見つかった不具合の修正）。
 - `state_json`の特徴量（`return_5m`等）は市場データ由来のため読まない。
 

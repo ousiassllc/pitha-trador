@@ -28,7 +28,12 @@ func serveSensitivity(t *testing.T, runner performance.BacktestRunner, target st
 const sensitivityQuery = "/performance/cost-sensitivity?from=2026-09-01&to=2026-09-20"
 
 func syntheticResult() backtest.Result {
-	return backtest.Result{ForwardTrades: []backtest.Trade{{NetReturnPct: 0.30}, {NetReturnPct: 0.04}, {NetReturnPct: -0.20}, {NetReturnPct: 0.10}}}
+	ev := func(v float64) *float64 { return &v }
+	// Predicted EVs (bps) of 8, 3 and 1 on three trades; the 4th has none.
+	return backtest.Result{ForwardTrades: []backtest.Trade{
+		{NetReturnPct: 0.30, PredictedEVBps: ev(8)}, {NetReturnPct: 0.04, PredictedEVBps: ev(3)},
+		{NetReturnPct: -0.20, PredictedEVBps: ev(1)}, {NetReturnPct: 0.10},
+	}}
 }
 
 // Issue #779: the cost sensitivity table (extra cost 0/2/5/10 bps -> Expectancy
@@ -44,11 +49,11 @@ func TestCostSensitivity_ExportsCSV(t *testing.T) {
 	if !strings.Contains(rec.Header().Get("Content-Disposition"), "cost-sensitivity.csv") {
 		t.Errorf("Content-Disposition = %q, want a cost-sensitivity.csv attachment", rec.Header().Get("Content-Disposition"))
 	}
-	want := "extra_cost_bps,trade_count,expectancy_pct,expectancy_bps,positive_share\n" +
-		"0,4,0.0600,6.00,0.7500\n" +
-		"2,4,0.0400,4.00,0.7500\n" +
-		"5,4,0.0100,1.00,0.5000\n" +
-		"10,4,-0.0400,-4.00,0.2500\n"
+	want := "extra_cost_bps,trade_count,expectancy_pct,expectancy_bps,positive_share,predicted_ev_trade_count,predicted_ev_positive_share\n" +
+		"0,4,0.0600,6.00,0.7500,3,1.0000\n" +
+		"2,4,0.0400,4.00,0.7500,3,0.6667\n" +
+		"5,4,0.0100,1.00,0.5000,3,0.3333\n" +
+		"10,4,-0.0400,-4.00,0.2500,3,0.0000\n"
 	if rec.Body.String() != want {
 		t.Fatalf("CSV =\n%s\nwant\n%s", rec.Body, want)
 	}
@@ -61,16 +66,21 @@ func TestCostSensitivity_JSON(t *testing.T) {
 	}
 	var body struct {
 		Rows []struct {
-			ExtraCostBps  float64 `json:"extra_cost_bps"`
-			ExpectancyBps float64 `json:"expectancy_bps"`
-			PositiveShare float64 `json:"positive_share"`
+			ExtraCostBps             float64 `json:"extra_cost_bps"`
+			ExpectancyBps            float64 `json:"expectancy_bps"`
+			PositiveShare            float64 `json:"positive_share"`
+			PredictedEVTradeCount    int     `json:"predicted_ev_trade_count"`
+			PredictedEVPositiveShare float64 `json:"predicted_ev_positive_share"`
 		} `json:"rows"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || len(body.Rows) != 4 {
 		t.Fatalf("body = %s (err %v), want 4 rows", rec.Body, err)
 	}
-	if last := body.Rows[3]; last.ExtraCostBps != 10 || last.PositiveShare != 0.25 {
-		t.Errorf("last row = %+v, want extra 10 bps and share 0.25", last)
+	if last := body.Rows[3]; last.ExtraCostBps != 10 || last.PositiveShare != 0.25 || last.PredictedEVTradeCount != 3 || last.PredictedEVPositiveShare != 0 {
+		t.Errorf("last row = %+v, want extra 10 bps, share 0.25, 3 predicted-EV trades, predicted share 0", last)
+	}
+	if mid := body.Rows[1]; mid.ExtraCostBps != 2 || mid.PredictedEVPositiveShare < 0.666 || mid.PredictedEVPositiveShare > 0.667 {
+		t.Errorf("2 bps row = %+v, want predicted share 2/3", mid)
 	}
 }
 

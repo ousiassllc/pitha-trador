@@ -54,6 +54,8 @@ type openTrade struct {
 	quantity  int64
 	regime    string
 	abArm     string
+	// predictedEVBps is the model's EV at the entry decision (Trade.PredictedEVBps).
+	predictedEVBps *float64
 
 	// best is the best bar price since the entry (Trailing Stop's baseline),
 	// prev the price/VWAP observed at the last evaluation that did not exit

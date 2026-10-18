@@ -23,7 +23,10 @@ const backtestFieldClass = "mt-1 px-3 py-1"
 
 // BacktestForm renders the Performance page's Walk Forward backtest request
 // form (functional.md §5.3, FR-BT-2): a plain GET form to `/performance`,
-// so a run is a bookmarkable URL.
+// so a run is a bookmarkable URL. The second submit button sends the same
+// fields to the cost sensitivity export (`/performance/cost-sensitivity`,
+// issue #779), which runs the backtest with the values currently in the form
+// and downloads the CSV; a plain submit, as the other downloads are.
 templ BacktestForm(form BacktestFormValues) {
 	<form class="mt-4 flex flex-wrap items-end gap-4" method="get" action="/performance" data-testid="backtest-form">
 		@backtestField("From", atoms.InputProps{Name: "from", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.From, "required": true}})
@@ -33,6 +36,11 @@ templ BacktestForm(form BacktestFormValues) {
 		@backtestField("Forward days", daysInput("forward_days", form.ForwardDays))
 		@atoms.Button(atoms.ButtonProps{Type: "submit"}) {
 			Run backtest
+		}
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Type: "submit", Attrs: templ.Attributes{
+			"formaction": "/performance/cost-sensitivity", "name": "format", "value": "csv", "data-testid": "cost-sensitivity-export",
+		}}) {
+			Download cost sensitivity (CSV)
 		}
 	</form>
 }

@@ -23,13 +23,23 @@ type costSensitivityRow struct {
 	TradeCount    int     `json:"trade_count"`
 	ExpectancyPct float64 `json:"expectancy_pct"`
 	ExpectancyBps float64 `json:"expectancy_bps"`
+	// PositiveShare is the share of trades whose realized replay net return
+	// minus the extra cost is above 0 (the JSON key predates the predicted-EV
+	// column and is kept).
 	PositiveShare float64 `json:"positive_share"`
+	// PredictedEVTradeCount / PredictedEVPositiveShare: over the trades that
+	// carry the model's predicted EV, the share whose predicted EV bps minus
+	// the extra cost is above 0.
+	PredictedEVTradeCount    int     `json:"predicted_ev_trade_count"`
+	PredictedEVPositiveShare float64 `json:"predicted_ev_positive_share"`
 }
 
 // CostSensitivity implements `GET /performance/cost-sensitivity` (issue #779):
 // it runs the Performance form's Walk Forward backtest (same query
-// parameters) and prints how its Forward trades' Expectancy and the share of
-// still-profitable trades change when 0 / 2 / 5 / 10 bps of extra round-trip
+// parameters) and prints how its Forward trades' Expectancy, the share of
+// still-profitable trades (realized replay net) and the share the model still
+// predicted to be worth taking (predicted EV, bps) change when 0 / 2 / 5 / 10
+// bps of extra round-trip
 // cost are added. `format=csv` (the default) downloads a CSV, `format=json`
 // returns the rows as JSON. 400 on invalid input, 500 on a run failure, 503 on
 // a timeout, as the page does.
