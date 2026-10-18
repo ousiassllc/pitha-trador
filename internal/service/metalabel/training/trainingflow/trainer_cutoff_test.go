@@ -104,3 +104,45 @@ func TestTrainer_JevModelChangeRejectsUntilTheCutoffIsReconfirmed(t *testing.T) 
 		t.Fatalf("Train = %+v, %v, want active for an unverified (warn-only) cutoff", unverified, err)
 	}
 }
+
+// Issue #780 (decided 2026-10-19): an unverified cutoff (a real date, no
+// recorded Jev model) adopts with a warning in Paper but stops the adoption in
+// the pre-Live check, keeping the model in force.
+func TestTrainer_UnverifiedCutoffWarnsInPaperAndBlocksBeforeLive(t *testing.T) {
+	unverified := settingsOf(func(s *metalabelsettings.Settings) { s.LLMCutoffModel = "" })
+	ctx := context.Background()
+	rows := trainingRows(3000, 26)
+
+	for name, opts := range map[string][]training.TrainerOption{
+		"default is Paper": nil,
+		"explicit Paper":   {training.WithMode(metalabelsettings.ModePaper)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			logs := captureLogs(t)
+			saved, err := newTrainer(&fakeSource{rows: rows}, newStore(t), unverified, opts...).Train(ctx)
+			if err != nil || saved.Status != repo.ModelActive || saved.RejectReason != "" {
+				t.Fatalf("Train = %+v, %v, want active with a warning in Paper", saved, err)
+			}
+			if !strings.Contains(logs.String(), "cutoff_status=unverified") {
+				t.Errorf("Paper adoption did not log the unverified warning:\n%s", logs.String())
+			}
+		})
+	}
+
+	t.Run("Live", func(t *testing.T) {
+		store := newStore(t)
+		active, err := newTrainer(&fakeSource{rows: rows}, store, settingsOf(func(s *metalabelsettings.Settings) { s.LLMCutoffModel = "jev-x" }),
+			training.WithMode(metalabelsettings.ModeLive)).Train(ctx)
+		if err != nil || active.Status != repo.ModelActive {
+			t.Fatalf("a confirmed cutoff must still adopt in Live: %+v, %v", active, err)
+		}
+		blocked, err := newTrainer(&fakeSource{rows: rows}, store, unverified, training.WithMode(metalabelsettings.ModeLive),
+			training.WithClock(func() time.Time { return trainNow.Add(time.Hour) })).Train(ctx)
+		if err != nil || blocked.Status != repo.ModelRejected || blocked.RejectReason != training.RejectLLMCutoffUnverified {
+			t.Fatalf("Train = %+v, %v, want rejected (llm_cutoff_unverified) in Live", blocked, err)
+		}
+		if got, found, err := store.LatestActiveModel(ctx); err != nil || !found || got.ID != active.ID {
+			t.Errorf("LatestActiveModel = %+v, %v, %v, want the earlier model %d kept in force", got, found, err, active.ID)
+		}
+	})
+}

@@ -101,8 +101,8 @@ func TestVerify_ExitCodeFollowsTheVerdict(t *testing.T) {
 }
 
 func TestParsePeriod(t *testing.T) {
-	// Friday 2026-10-16 15:00 JST. Counting back 20 TSE business days skips
-	// 10/12 (スポーツの日) and 9/21-9/23 (敬老の日・国民の休日・秋分の日).
+	// Friday 2026-10-16 15:00 JST. Counting back 30 TSE business days skips
+	// 10/12 (スポーツの日) and 9/21-9/23 (敬老の日・国民の休日・秋分の日), landing on 8/31.
 	now := time.Date(2026, 10, 16, 15, 0, 0, 0, jst)
 
 	got, err := parsePeriod("2026-10-01", "2026-10-16", now)
@@ -118,9 +118,9 @@ func TestParsePeriod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parsePeriod default: %v", err)
 	}
-	want = backtest.Period{Start: time.Date(2026, 9, 14, 15, 0, 0, 0, jst), End: now}
+	want = backtest.Period{Start: time.Date(2026, 8, 31, 15, 0, 0, 0, jst), End: now}
 	if !got.Start.Equal(want.Start) || !got.End.Equal(want.End) {
-		t.Errorf("default period = %v, want the last 20 business days %v", got, want)
+		t.Errorf("default period = %v, want the last 30 business days %v", got, want)
 	}
 
 	for name, args := range map[string][2]string{

@@ -109,3 +109,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.53 | 2026-10-17 | `er/tables-system.md`の`runtime_settings`キーに`cost.*`（売買コストの想定: 手数料・スリッページ・SHORT貸株料）を追加。スキーマ変更なし | issue #779 |
 | 1.54 | 2026-10-17 | マイグレーション000037を追加し、`er/tables-metalabel.md`の`metalabel_models`に採用判定の根拠列（`oos_takes`・`oos_days`・`oos_ev_ci_{low,high}_bps`・`oos_auc_ci_{low,high}`・`adoption_json`・`forward_json`）を追加。`er/tables-system.md`の`runtime_settings`キーに`metalabel.llm_cutoff_{model,confirmed_on,source}`（LLM学習データ終了日の出典、issue #776）を追記 | issue #780, #776 |
 | 1.55 | 2026-10-17 | Paper 実績 MCP は既存テーブルの読み取り専用であり、新規テーブルを追加しない旨を追記。スキーマ変更なし | issue #783 |
+| 1.56 | 2026-10-19 | `er/tables-metalabel.md`の`reject_reason`に、Live前チェックで`metalabel.llm_cutoff_model`が未記録のときの`llm_cutoff_unverified`を追記（スキーマ変更なし） | issue #780の決定（unverifiedはPaperは警告のみ・Live前は不採用） |

@@ -29,7 +29,7 @@ func (t *Trainer) judge(ctx context.Context, now time.Time, s metalabelsettings.
 	v := verdict{intervals: eval.Intervals(t.acceptance, seed), adoption: repo.Adoption{Criteria: t.acceptance.criteria(seed)}}
 	v.status, v.reason = t.acceptance.Judge(eval, v.intervals)
 
-	if r, detail := cutoffGate(s, split.OOS); r != "" {
+	if r, detail := cutoffGate(s, t.mode, split.OOS); r != "" {
 		v.status, v.reason = repo.ModelRejected, r
 		slog.WarnContext(ctx, "metalabel: model not adopted: the LLM cutoff does not support the OOS evaluation", "reject_reason", r, "detail", detail)
 	}

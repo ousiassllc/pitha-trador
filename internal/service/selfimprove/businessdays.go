@@ -3,6 +3,7 @@ package selfimprove
 import (
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
 
@@ -28,4 +29,24 @@ func shiftBusinessDays(t time.Time, days, step int) time.Time {
 		}
 	}
 	return d
+}
+
+// tradingDaysIn counts the TSE trading days (JST dates) the period touches,
+// both end dates included: the number the shadow backtest is held to
+// assist.MinBacktestDays with. A period ending after a close or on a closed
+// day still counts its trading days, and one starting mid-day counts that day.
+func tradingDaysIn(p backtest.Period) int {
+	n := 0
+	for d, last := jstNoon(p.Start), jstNoon(p.End); !d.After(last); d = d.AddDate(0, 0, 1) {
+		if marketcalendar.TSE.IsTradingDay(d) {
+			n++
+		}
+	}
+	return n
+}
+
+// jstNoon is noon of t's JST date.
+func jstNoon(t time.Time) time.Time {
+	y, m, d := t.In(marketcalendar.JST).Date()
+	return time.Date(y, m, d, 12, 0, 0, 0, marketcalendar.JST)
 }

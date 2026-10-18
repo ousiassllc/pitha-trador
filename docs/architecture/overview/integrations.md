@@ -162,7 +162,7 @@ sequenceDiagram
     SOL-->>GOV: 改善提案（rationale + proposed_changes: policy.*キーのみ）
     GOV->>GOV: 提案の対象キー・変更幅を機械的に検証（FR-SELFIMPROVE-8。逸脱時はstatus=rejectedとして以降の処理をスキップ）
     GOV->>DB: policy_proposals挿入（status=pending）
-    GOV->>BT: 直近20営業日相当のシャドーバックテスト実行（提案後しきい値）
+    GOV->>BT: 直近30営業日相当のシャドーバックテスト実行（提案後しきい値）
     BT-->>GOV: Expectancy / Max Drawdown比較結果
     GOV->>GOV: 決定的しきい値判定（Expectancy非悪化 かつ Max Drawdown悪化が相対10%以内、FR-SELFIMPROVE-4）
     GOV->>OPUS: 提案 + シャドーバックテスト結果 + 決定的判定結果でレビュー依頼（Opus API、実際の外部AI呼び出し）

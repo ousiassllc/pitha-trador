@@ -236,3 +236,33 @@ func TestCalibrationHandler_APICalibration_MetaModelAdoptionRecord(t *testing.T)
 		}
 	}
 }
+
+// Issue #780: an OOS EV below the detectable edge (about 11 bps) is 判定不能
+// even when its interval lies above 0; no takes stays データ無し.
+func TestCalibrationHandler_APICalibration_MetaModelEVVerdict(t *testing.T) {
+	small, large := 4.0, 15.0
+	tests := map[string]struct {
+		report metamodel.Report
+		want   string
+	}{
+		"no takes is no data": {metamodel.Report{Version: "v1", Status: "rejected"}, "no_data"},
+		"4 bps with an interval above 0 is undetermined": {
+			metamodel.Report{Version: "v2", Status: "active", OOSTakes: 600, OOSEVBps: &small, OOSEVCI: &metamodel.Interval{Low: 0.5, High: 7}}, "undetermined"},
+		"15 bps with an interval above 0 is positive": {
+			metamodel.Report{Version: "v3", Status: "active", OOSTakes: 600, OOSEVBps: &large, OOSEVCI: &metamodel.Interval{Low: 3, High: 27}}, "positive"},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, raw := getMetaCalibration(t, sourceWithMeta{metaSource: metaSource{found: true, report: tc.report}})
+			var body struct {
+				MetaModel map[string]any `json:"meta_model"`
+			}
+			if err := json.Unmarshal(raw, &body); err != nil {
+				t.Fatalf("Unmarshal: %v (body=%s)", err, raw)
+			}
+			if body.MetaModel["oos_ev_verdict"] != tc.want || body.MetaModel["min_detectable_edge_bps"] != 11.0 {
+				t.Errorf("verdict/min = %v/%v, want %s/11", body.MetaModel["oos_ev_verdict"], body.MetaModel["min_detectable_edge_bps"], tc.want)
+			}
+		})
+	}
+}

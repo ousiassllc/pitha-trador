@@ -46,14 +46,17 @@ type metaModelOutput struct {
 	OOSCalibration []metaModelCalibrationBinOutput `json:"oos_calibration" doc:"OOS reliability curve of the calibrated probability."`
 	LLMCutoff      string                          `json:"llm_cutoff" doc:"Settings LLM training-data cutoff (YYYY-MM-DD, UTC); the OOS evaluation uses only decisions on or after it."`
 	// How the model was judged (issue #780).
-	OOSTakes   int               `json:"oos_takes" doc:"Number of OOS signals the calibrated model took (the sample behind oos_ev_bps)."`
-	OOSDays    int               `json:"oos_days" doc:"Number of JST trading days the OOS samples span (the bootstrap's resampling units)."`
-	OOSEVCI    *intervalOutput   `json:"oos_ev_ci,omitempty" doc:"Cluster-bootstrap confidence interval of oos_ev_bps (same-day, same-symbol decisions resampled together); omitted when undefined."`
-	OOSAUCCI   *intervalOutput   `json:"oos_auc_ci,omitempty" doc:"Cluster-bootstrap confidence interval of oos_auc; omitted when undefined."`
-	Criteria   *criteriaOutput   `json:"criteria,omitempty" doc:"The adoption bar this model was judged against; omitted for a model stored before issue #780."`
-	Comparison *comparisonOutput `json:"comparison,omitempty" doc:"The comparison with the model in force on the same OOS rows; omitted when there was none."`
-	Gate       *gateOutput       `json:"gate,omitempty" doc:"The change-rate limit that blocked an otherwise adoptable model; omitted when none did."`
-	Forward    *forwardOutput    `json:"forward,omitempty" doc:"Forward (holdout) evaluation of this model on decisions made after it was trained, separate from the adoption criteria; omitted until evaluated."`
+	OOSTakes int             `json:"oos_takes" doc:"Number of OOS signals the calibrated model took (the sample behind oos_ev_bps)."`
+	OOSDays  int             `json:"oos_days" doc:"Number of JST trading days the OOS samples span (the bootstrap's resampling units)."`
+	OOSEVCI  *intervalOutput `json:"oos_ev_ci,omitempty" doc:"Cluster-bootstrap confidence interval of oos_ev_bps (same-day, same-symbol decisions resampled together); omitted when undefined."`
+	// The verdict on the EV (issue #780): a cut-off, not a proof of safety.
+	OOSEVVerdict         string            `json:"oos_ev_verdict" enum:"no_data,undetermined,positive,negative" doc:"no_data: the model took no OOS signal (stays so until the Paper run has trades); undetermined (判定不能): |oos_ev_bps| is below min_detectable_edge_bps or the interval is undefined, so neither an edge nor its absence can be claimed; positive/negative: |oos_ev_bps| is at least min_detectable_edge_bps and oos_ev_ci excludes 0 on that side. A cut-off, not a proof of safety."`
+	MinDetectableEdgeBps float64           `json:"min_detectable_edge_bps" doc:"The smallest mean net EV per take (bps) detected with 80% power under the documented assumptions (about 11); a smaller |oos_ev_bps| is undetermined. Not a return guarantee."`
+	OOSAUCCI             *intervalOutput   `json:"oos_auc_ci,omitempty" doc:"Cluster-bootstrap confidence interval of oos_auc; omitted when undefined."`
+	Criteria             *criteriaOutput   `json:"criteria,omitempty" doc:"The adoption bar this model was judged against; omitted for a model stored before issue #780."`
+	Comparison           *comparisonOutput `json:"comparison,omitempty" doc:"The comparison with the model in force on the same OOS rows; omitted when there was none."`
+	Gate                 *gateOutput       `json:"gate,omitempty" doc:"The change-rate limit that blocked an otherwise adoptable model; omitted when none did."`
+	Forward              *forwardOutput    `json:"forward,omitempty" doc:"Forward (holdout) evaluation of this model on decisions made after it was trained, separate from the adoption criteria; omitted until evaluated."`
 }
 
 func metaModelResponse(r metamodel.Report) *metaModelOutput {
@@ -63,6 +66,7 @@ func metaModelResponse(r metamodel.Report) *metaModelOutput {
 	}
 	return &metaModelOutput{
 		OOSTakes: r.OOSTakes, OOSDays: r.OOSDays, OOSEVCI: intervalResponse(r.OOSEVCI), OOSAUCCI: intervalResponse(r.OOSAUCCI),
+		OOSEVVerdict: metamodel.EVVerdict(r.OOSTakes, r.OOSEVBps, r.OOSEVCI), MinDetectableEdgeBps: metamodel.MinDetectableEdgeBps,
 		Criteria: criteriaResponse(r.Criteria), Comparison: comparisonResponse(r.Comparison), Gate: gateResponse(r.Gate), Forward: forwardResponse(r.Forward),
 		Version: r.Version, Algorithm: r.Algorithm, Status: r.Status, RejectReason: r.RejectReason,
 		ActiveVersion: r.ActiveVersion, TrainedAt: r.TrainedAt, TrainStart: r.TrainStart, TrainEnd: r.TrainEnd,

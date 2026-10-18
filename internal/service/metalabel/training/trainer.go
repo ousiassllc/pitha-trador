@@ -60,6 +60,7 @@ type Trainer struct {
 	acceptance AcceptanceConfig
 	lookback   time.Duration
 	now        func() time.Time
+	mode       metalabelsettings.Mode
 	// policyChanges and limits rate limit the adoption against the
 	// self-improvement flow's changes (issue #780); without a source only the
 	// model-swap rate limit applies.
@@ -81,6 +82,10 @@ func WithAcceptance(cfg AcceptanceConfig) TrainerOption {
 // WithLookback overrides DefaultLookback.
 func WithLookback(d time.Duration) TrainerOption { return func(t *Trainer) { t.lookback = d } }
 
+// WithMode sets the operating mode the adoption is judged for; the default is
+// metalabelsettings.ModePaper, where an unverified LLM cutoff only warns.
+func WithMode(m metalabelsettings.Mode) TrainerOption { return func(t *Trainer) { t.mode = m } }
+
 // WithPolicyChanges makes the adoption honour the freeze after a policy.* change
 // the self-improvement flow applied (issue #780).
 func WithPolicyChanges(src PolicyChangeSource) TrainerOption {
@@ -99,7 +104,7 @@ func NewTrainer(source TrainingSource, store ModelStore, settings SettingsLoader
 	t := &Trainer{
 		source: source, store: store, settings: settings,
 		walk: DefaultWalkForwardConfig(), acceptance: DefaultAcceptanceConfig(), lookback: DefaultLookback, now: time.Now,
-		limits: changeguard.DefaultLimits(),
+		limits: changeguard.DefaultLimits(), mode: metalabelsettings.ModePaper,
 	}
 	for _, opt := range opts {
 		opt(t)

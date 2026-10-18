@@ -15,7 +15,7 @@
 //
 // -from and -to are JST dates (YYYY-MM-DD), both inclusive: the period is
 // [-from 00:00, -to + 1 day 00:00) JST. With neither, the period is the shadow
-// backtest's own window (selfimprove.ShadowBacktestPeriod: the last 20 TSE
+// backtest's own window (selfimprove.ShadowBacktestPeriod: the last 30 TSE
 // business days up to now, FR-SELFIMPROVE-4); giving only one is an error.
 //
 // It is read-only: the database is opened with SQLite mode=ro (no migration;
@@ -107,7 +107,7 @@ func parseArgs(args []string, stderr io.Writer, now time.Time) (dbPath string, p
 	fs := flag.NewFlagSet("backtestverify", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	db := fs.String("db", "", "path to the pitha-trador SQLite database (opened read-only; default PITHA_DB_PATH, then the per-user pitha.db)")
-	fromText := fs.String("from", "", "first day, JST, YYYY-MM-DD (default: with -to unset, the last 20 business days)")
+	fromText := fs.String("from", "", "first day, JST, YYYY-MM-DD (default: with -to unset, the last 30 business days)")
 	toText := fs.String("to", "", "last day (inclusive), JST, YYYY-MM-DD")
 	if err := fs.Parse(args); err != nil {
 		return "", backtest.Period{}, err
@@ -126,7 +126,7 @@ func parsePeriod(fromText, toText string, now time.Time) (backtest.Period, error
 	case fromText == "" && toText == "":
 		return selfimprove.ShadowBacktestPeriod(now), nil
 	case fromText == "" || toText == "":
-		return backtest.Period{}, errors.New("-from and -to must be given together (YYYY-MM-DD, JST), or neither for the last 20 business days")
+		return backtest.Period{}, errors.New("-from and -to must be given together (YYYY-MM-DD, JST), or neither for the last 30 business days")
 	}
 	from, err := time.ParseInLocation(dayLayout, fromText, marketcalendar.JST)
 	if err != nil {

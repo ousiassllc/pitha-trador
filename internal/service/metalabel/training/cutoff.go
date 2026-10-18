@@ -22,18 +22,26 @@ const (
 	// other than the one the cutoff was confirmed for
 	// (metalabel.llm_cutoff_model); the cutoff must be confirmed again.
 	RejectLLMModelChanged = "llm_model_changed"
+	// RejectLLMCutoffUnverified: Live only. The cutoff is a real date, but the
+	// Jev model it was confirmed for is not recorded, so a model switch could
+	// not be detected; Paper adopts with a warning instead.
+	RejectLLMCutoffUnverified = "llm_cutoff_unverified"
 )
 
 // cutoffGate returns the reject reason (with a human-readable detail) when the
-// LLM cutoff cannot support adopting a model evaluated on oos, or "" when it
-// can. A cutoff whose Jev model is not recorded is only a warning
-// (metalabelsettings.CutoffUnverified), so Paper operation is not blocked for
-// an operator who set just the date.
-func cutoffGate(s metalabelsettings.Settings, oos []Row) (reason, detail string) {
-	if s.CutoffStatus() == metalabelsettings.CutoffPlaceholder {
+// LLM cutoff cannot support adopting a model evaluated on oos in mode, or ""
+// when it can. A cutoff whose Jev model is not recorded
+// (metalabelsettings.CutoffUnverified) is only a warning in Paper, so Paper
+// operation is not blocked for an operator who set just the date, but it
+// stops the adoption before Live (issue #780, decided 2026-10-19).
+func cutoffGate(s metalabelsettings.Settings, mode metalabelsettings.Mode, oos []Row) (reason, detail string) {
+	switch s.CutoffStatus() {
+	case metalabelsettings.CutoffPlaceholder:
 		return RejectLLMCutoffPlaceholder, fmt.Sprintf("metalabel.llm_cutoff is %s (unset or the placeholder default)", s.LLMCutoff)
-	}
-	if s.LLMCutoffModel == "" {
+	case metalabelsettings.CutoffUnverified:
+		if mode == metalabelsettings.ModeLive {
+			return RejectLLMCutoffUnverified, fmt.Sprintf("metalabel.llm_cutoff %s has no recorded Jev model (%s); Live needs it", s.LLMCutoff, metalabelsettings.KeyLLMCutoffModel)
+		}
 		return "", ""
 	}
 	var others []string

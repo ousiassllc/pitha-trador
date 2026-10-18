@@ -38,7 +38,7 @@ func reviewInput(baseExp, candExp, baseDD, candDD float64) assist.OpusReviewInpu
 		Comparison: assist.BacktestComparison{
 			BaselineExpectancy: baseExp, CandidateExpectancy: candExp,
 			BaselineMaxDrawdownPct: baseDD, CandidateMaxDrawdownPct: candDD,
-			BaselineTradeCount: 30, CandidateTradeCount: 30,
+			BaselineTradeCount: 300, CandidateTradeCount: 300, BacktestDays: 30,
 		},
 	}
 }
@@ -154,6 +154,7 @@ func TestOpus_Review_InsufficientBacktestTradesRejectsWithoutCallingAPI(t *testi
 			// Expectancy/drawdown "pass" (candidate better): only the sample size can reject.
 			in := reviewInput(0.20, 0.25, 5, 5)
 			in.Comparison.BaselineTradeCount, in.Comparison.CandidateTradeCount = tc.baseline, tc.candidate
+			in.Comparison.BacktestDays = assist.MinBacktestDays
 
 			approved, reviewJSON, err := opus.Review(context.Background(), in)
 			if err != nil || approved {
@@ -173,16 +174,65 @@ func TestOpus_Review_InsufficientBacktestTradesRejectsWithoutCallingAPI(t *testi
 	}
 }
 
-func TestOpus_Review_ProceedsToAPIAtExactlyMinBacktestTrades(t *testing.T) {
+func TestOpus_Review_ProceedsToAPIAtExactlyTheMinimum(t *testing.T) {
 	opus, calls, _ := opusFixture(t, `{"verdict":"approve","reason":"fine"}`)
 	in := reviewInput(0.20, 0.25, 5, 5)
 	in.Comparison.BaselineTradeCount, in.Comparison.CandidateTradeCount = assist.MinBacktestTrades, assist.MinBacktestTrades
+	in.Comparison.BacktestDays = assist.MinBacktestDays
 
 	approved, reviewJSON, err := opus.Review(context.Background(), in)
 	if err != nil || !approved {
-		t.Fatalf("Review = (%v, %s, %v), want approved at the minimum trade count", approved, reviewJSON, err)
+		t.Fatalf("Review = (%v, %s, %v), want approved at exactly the minimum", approved, reviewJSON, err)
 	}
 	if review := decodeReview(t, reviewJSON); !review.SufficientSamples || calls.Load() != 1 {
 		t.Errorf("review = %+v, API calls = %d, want sufficient samples and 1 call", review, calls.Load())
+	}
+}
+
+// The decided floor of issue #780 (2026-10-19): at least 100 trades per side
+// AND at least 30 trading days; the boundary values are 99/100 and 29/30.
+func TestOpus_MinimumsAreTheDecidedFloor(t *testing.T) {
+	if assist.MinBacktestTrades != 100 || assist.MinBacktestDays != 30 {
+		t.Fatalf("floor = %d trades / %d days, want 100 / 30 (issue #780 decision)", assist.MinBacktestTrades, assist.MinBacktestDays)
+	}
+}
+
+func TestOpus_Review_BoundaryOfTradesAndDays(t *testing.T) {
+	tests := map[string]struct {
+		baseline, candidate, days int
+		wantApproved              bool
+	}{
+		"99 trades on the baseline side":  {99, 100, 30, false},
+		"99 trades on the candidate side": {100, 99, 30, false},
+		"100 trades each, 30 days":        {100, 100, 30, true},
+		"29 days with enough trades":      {500, 500, 29, false},
+		"30 days with enough trades":      {500, 500, 30, true},
+		"enough trades but no days":       {500, 500, 0, false},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			opus, calls, _ := opusFixture(t, `{"verdict":"approve","reason":"fine"}`)
+			in := reviewInput(0.20, 0.25, 5, 5)
+			in.Comparison.BaselineTradeCount, in.Comparison.CandidateTradeCount, in.Comparison.BacktestDays = tc.baseline, tc.candidate, tc.days
+
+			approved, reviewJSON, err := opus.Review(context.Background(), in)
+			if err != nil || approved != tc.wantApproved {
+				t.Fatalf("Review = (%v, %v), want approved=%v", approved, err, tc.wantApproved)
+			}
+			review := decodeReview(t, reviewJSON)
+			if review.SufficientSamples != tc.wantApproved {
+				t.Errorf("SufficientSamples = %v, want %v", review.SufficientSamples, tc.wantApproved)
+			}
+			wantCalls := int32(0)
+			if tc.wantApproved {
+				wantCalls = 1
+			}
+			if calls.Load() != wantCalls {
+				t.Errorf("Opus API called %d time(s), want %d", calls.Load(), wantCalls)
+			}
+			if !tc.wantApproved && !strings.Contains(review.Reason, "not a proof of safety") {
+				t.Errorf("reason = %q, want the cut-off-is-not-safety wording", review.Reason)
+			}
+		})
 	}
 }

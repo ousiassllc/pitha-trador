@@ -25,7 +25,7 @@ func reviewInput(baseExp, candExp, baseDD, candDD float64) assist.OpusReviewInpu
 		Comparison: assist.BacktestComparison{
 			BaselineExpectancy: baseExp, CandidateExpectancy: candExp,
 			BaselineMaxDrawdownPct: baseDD, CandidateMaxDrawdownPct: candDD,
-			BaselineTradeCount: 30, CandidateTradeCount: 30,
+			BaselineTradeCount: 300, CandidateTradeCount: 300, BacktestDays: 30,
 		},
 	}
 }

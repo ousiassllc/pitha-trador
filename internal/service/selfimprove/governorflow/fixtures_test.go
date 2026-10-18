@@ -130,8 +130,8 @@ func (f fakeShadowBacktestSource) ForEachRunConfig(_ context.Context, _ backtest
 }
 
 // uptrendInstrumentCopies is how many identical RunConfigs newUptrendSource
-// returns.
-const uptrendInstrumentCopies = 5
+// returns: one copy makes 3 trades, so 40 copies clear assist.MinBacktestTrades (100).
+const uptrendInstrumentCopies = 40
 
 // newUptrendSource builds a fakeShadowBacktestSource whose
 // RunConfigs' Thresholds.Policy are baseline: a 10-bar steady uptrend with
