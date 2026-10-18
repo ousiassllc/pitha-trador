@@ -26,6 +26,9 @@ templ SettingGroupList(groups []molecules.SettingGroupProps) {
 		@molecules.Modal(group.ModalID(), group.Name) {
 			<p class="text-sm text-slate-600">{ group.Description }</p>
 			<p class="text-sm text-slate-600" data-testid={ group.ModalID() + "-note" }>{ group.Note }</p>
+			if len(group.Derived) > 0 {
+				@molecules.SettingGroupDerived(group, false)
+			}
 			for _, field := range group.Fields {
 				@molecules.SettingFieldRow(field)
 			}

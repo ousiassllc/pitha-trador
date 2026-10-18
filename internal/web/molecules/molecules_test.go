@@ -82,3 +82,45 @@ func TestPositionRow_CloseButtonHandsFocusToReplacedRow(t *testing.T) {
 		t.Errorf("closed row must not render the Close button: %s", closedHTML)
 	}
 }
+
+// The 計算結果 panel is announced politely when an out-of-band swap replaces it
+// (issue #782), keeps its id and test id, and a line without a value renders
+// no empty value span.
+func TestSettingGroupDerived_AnnouncesUpdatesAndSkipsEmptyValue(t *testing.T) {
+	props := molecules.SettingGroupProps{ID: "g", Derived: []molecules.SettingDerivedItem{
+		{Key: "error", Label: "読み取れませんでした", Off: true},
+		{Key: "ok", Label: "上限", Value: "5,000 円"},
+	}}
+	for _, oob := range []bool{false, true} {
+		html := render(t, molecules.SettingGroupDerived(props, oob))
+		for _, want := range []string{`id="setting-group-derived-g"`, `data-testid="setting-group-derived-g"`, `aria-live="polite"`, `aria-label="計算結果"`, "読み取れませんでした", ">5,000 円<"} {
+			if !strings.Contains(html, want) {
+				t.Errorf("oob=%v: missing %q: %s", oob, want, html)
+			}
+		}
+		if strings.Contains(html, "></span>") {
+			t.Errorf("oob=%v: an empty value span is rendered: %s", oob, html)
+		}
+		if got := strings.Contains(html, `hx-swap-oob="true"`); got != oob {
+			t.Errorf("hx-swap-oob present = %v, want %v", got, oob)
+		}
+	}
+}
+
+// Warning lines are amber with a 注意: prefix and headings group the lines
+// below them; both escape their text.
+func TestSettingGroupDerived_RendersWarningsAndHeadings(t *testing.T) {
+	props := molecules.SettingGroupProps{ID: "g", Derived: []molecules.SettingDerivedItem{
+		{Key: "h", Heading: true, Label: "整合チェック", Detail: "表示のみ"},
+		{Key: "w", Warn: true, Label: "<script>alert(1)</script> が異なります"},
+	}}
+	html := render(t, molecules.SettingGroupDerived(props, false))
+	for _, want := range []string{"整合チェック", "表示のみ", "text-amber-800", "注意:", "&lt;script&gt;alert(1)&lt;/script&gt; が異なります"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("missing %q: %s", want, html)
+		}
+	}
+	if strings.Contains(html, "<script>") {
+		t.Errorf("warning text is not escaped: %s", html)
+	}
+}

@@ -80,3 +80,59 @@ func TestSignalRepository_EachByDecisionRange_OnlySignalsOfDecisionsInPeriod(t *
 		t.Fatalf("signals = %+v, want only the one tied to the in-range decision", got)
 	}
 }
+
+func TestPositionRepository_ListTouchingBetween(t *testing.T) {
+	positions, orders, instrumentID := openTestPositionRepo(t)
+	ctx := context.Background()
+	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	hour := func(h int) time.Time { return base.Add(time.Duration(h) * time.Hour) }
+
+	// add opens a position at openedAt and, when closedAt is non-zero, closes it.
+	add := func(openedAt, closedAt time.Time) int64 {
+		entry := insertFilledEntryOrder(t, orders, instrumentID, openedAt)
+		opened, err := positions.Open(ctx, domain.Position{
+			InstrumentID: instrumentID, EntryOrderID: entry.ID, Symbol: "7203",
+			Side: domain.PositionSideLong, Quantity: 100, EntryPrice: 2100, CurrentPrice: 2100, OpenedAt: openedAt,
+		})
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		if closedAt.IsZero() {
+			return opened.ID
+		}
+		exitOrder, err := orders.Insert(ctx, domain.PaperOrder{
+			InstrumentID: instrumentID, Symbol: "7203", Side: domain.OrderSideSell,
+			OrderType: domain.OrderTypeMarket, Quantity: 100, Status: domain.OrderStatusFilled, SubmittedAt: closedAt,
+		})
+		if err != nil {
+			t.Fatalf("insert exit order: %v", err)
+		}
+		if _, err := positions.Close(ctx, opened.ID, exitOrder.ID, 2100, 0, domain.ExitReasonManual, closedAt); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+		return opened.ID
+	}
+
+	// Window is [hour 24, hour 48).
+	add(hour(1), hour(2))                   // opened and closed before: excluded
+	closedInside := add(hour(20), hour(30)) // opened before, closed inside
+	inside := add(hour(25), hour(26))       // opened and closed inside
+	closedAfter := add(hour(40), hour(60))  // opened inside, closed after
+	add(hour(48), hour(49))                 // opened at the (exclusive) end: excluded
+	// Last: an instrument has at most one open position.
+	stillOpen := add(hour(47), time.Time{}) // opened inside, still open
+
+	got, err := positions.ListTouchingBetween(ctx, hour(24), hour(48))
+	if err != nil {
+		t.Fatalf("ListTouchingBetween: %v", err)
+	}
+	want := []int64{closedInside, inside, closedAfter, stillOpen}
+	if len(got) != len(want) {
+		t.Fatalf("ListTouchingBetween = %d positions %+v, want ids %v", len(got), got, want)
+	}
+	for i, id := range want {
+		if got[i].ID != id {
+			t.Errorf("position %d = id %d, want %d (oldest opened first)", i, got[i].ID, id)
+		}
+	}
+}

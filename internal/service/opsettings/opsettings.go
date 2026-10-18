@@ -66,6 +66,8 @@ type Service struct {
 	policy        config.PolicyConfig
 	screener      config.FastScreenerConfig
 	defaultLogDir string
+	// riskReference is set by WithRiskReference (nil: no consistency check).
+	riskReference *dailyguardsettings.RiskReference
 	now           func() time.Time
 }
 

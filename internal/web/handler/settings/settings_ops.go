@@ -28,6 +28,10 @@ type OperationalSettings interface {
 	// Broker is the effective broker selection and 立花 settings (issue
 	// #734: the Setup screen and Setup Guard follow it).
 	Broker(ctx context.Context) (config.BrokerSettings, error)
+	// DailyGuard is the effective daily entry-halt configuration (issue
+	// #782): the yen thresholds derived from the operating capital, shown in
+	// the group's 計算結果 panel.
+	DailyGuard(ctx context.Context) (dailyguardsettings.Resolved, error)
 }
 
 // WithOperationalSettings enables the 運用設定 section of `GET /settings`
@@ -56,6 +60,9 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 		}
 		props.Fields = append(props.Fields, h.opsRow(ctx, field, rowNotice))
 	}
+	if group.id == dailyGuardGroup.id {
+		props.Derived = h.dailyGuardDerived(ctx)
+	}
 	return props
 }
 
@@ -74,6 +81,9 @@ func (h *SettingsHandler) opsRow(ctx context.Context, field opsField, notice str
 	row.DefaultLabel = defaultLabel(value.Default)
 	if dailyguardsettings.IsKey(field.key) && value.Default == "0" {
 		row.DefaultLabel = "0（無効）"
+		if field.key == dailyguardsettings.KeyOperatingCapitalJPY {
+			row.DefaultLabel = "0（未設定）"
+		}
 	}
 	if config.IsPrivateKeyPathKey(field.key) {
 		// Like a secret: only 設定済み is shown back, never the stored path.
@@ -161,8 +171,8 @@ func (h *SettingsHandler) opsKey(c *gin.Context) (string, bool) {
 
 // renderOpsRow answers a successful save/reset like renderRow does for
 // secrets: an HTMX request gets the refreshed row plus the group's status
-// badge out-of-band; the row form's plain `method="post"` fallback is
-// redirected back to /settings.
+// badge (and 計算結果 panel, if it has one) out-of-band; the row form's plain
+// `method="post"` fallback is redirected back to /settings.
 func (h *SettingsHandler) renderOpsRow(c *gin.Context, key, notice string) {
 	if c.GetHeader("HX-Request") != "true" {
 		c.Redirect(http.StatusSeeOther, settingsReturnPath(c))
@@ -181,6 +191,9 @@ func (h *SettingsHandler) renderOpsRow(c *gin.Context, key, notice string) {
 		}
 	}
 	comps := []templ.Component{molecules.SettingFieldRow(row), molecules.SettingGroupStatus(props, true)}
+	if len(props.Derived) > 0 {
+		comps = append(comps, molecules.SettingGroupDerived(props, true))
+	}
 	if settingsReturnPath(c) == "/setup" {
 		comps = append(comps, molecules.SetupStatus(h.setupComplete(ctx), true))
 	}
