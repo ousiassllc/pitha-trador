@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/execution/exitcond"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/vwapcross"
 )
 
@@ -48,90 +49,48 @@ func (mkt MarketContext) now() time.Time {
 }
 
 // EvaluateExit implements FR-EXIT-1's eight exit conditions, evaluated
-// together in a fixed priority order (matching
-// internal/service/backtest's closeTrade precedent for the subset it
-// shares): fixed Stop Loss, fixed Take Profit, Trailing Stop, Jev方向反
-// 転, continuation_probability低下, VWAP逆クロス, max holding time, then
-// 引け前強制決済. It returns the first triggered condition's
-// domain.ExitReason* and true, or ("", false) if none has triggered yet.
+// together in the fixed priority order of exitcond.Evaluate (shared with the
+// backtest replay): fixed Stop Loss, fixed Take Profit, Trailing Stop, Jev方向
+// 反転, continuation_probability低下, VWAP逆クロス, max holding time, then 引け
+// 前強制決済. It returns the first triggered condition's domain.ExitReason*
+// and true, or ("", false) if none has triggered yet.
 //
 // FR-EXIT-3: every condition except the two Jev-derived ones
 // (mkt.Decision == nil disables just those two) keeps working from
 // position/mkt alone, so a Jev API outage never stops Exit management.
 func (e *Engine) EvaluateExit(ctx context.Context, position domain.Position, mkt MarketContext) (string, bool, error) {
-	sign := positionSign(position.Side)
-	retPct := sign * (mkt.Price/position.EntryPrice - 1) * 100
 	now := mkt.now()
-
-	if e.cfg.StopLossPct > 0 && retPct <= -e.cfg.StopLossPct {
-		return domain.ExitReasonStopLoss, true, nil
+	params := exitcond.Params{
+		StopLossPct:          e.cfg.StopLossPct,
+		TakeProfitPct:        e.cfg.TakeProfitPct,
+		TrailingStopPct:      e.cfg.TrailingStopPct,
+		MaxHolding:           time.Duration(e.cfg.MaxHoldingMinutes) * time.Minute,
+		ForceFlatBeforeClose: time.Duration(e.cfg.ForceFlatBeforeMarketCloseMinutes) * time.Minute,
 	}
-	if e.cfg.TakeProfitPct > 0 && retPct >= e.cfg.TakeProfitPct {
-		return domain.ExitReasonTakeProfit, true, nil
+	lookups := exitcond.Lookups{
+		ContinuationDropped: func(p float64) bool { return e.continuationProbDrop(ctx, position.Side, p) },
 	}
-
-	if e.cfg.TrailingStopPct > 0 {
-		triggered, err := e.trailingStopTriggered(ctx, position, mkt.Price, sign, now)
-		if err != nil {
-			return "", false, err
-		}
-		if triggered {
-			return domain.ExitReasonTrailingStop, true, nil
-		}
+	if e.snapshots != nil {
+		lookups.BestPrice = func() (float64, error) { return e.bestPriceSinceOpen(ctx, position, mkt.Price, now) }
 	}
-
-	if mkt.Decision != nil {
-		if reversed(position.Side, mkt.Decision.Direction) {
-			return domain.ExitReasonJevDirectionReversed, true, nil
-		}
-		if mkt.Decision.ContinuationProbability != nil && e.continuationProbDrop(ctx, position.Side, *mkt.Decision.ContinuationProbability) {
-			return domain.ExitReasonContinuationProbDrop, true, nil
-		}
-	}
-
-	if mkt.VWAP != nil {
-		prevPrice, prevVWAP := position.EntryPrice, *mkt.VWAP // no previous evaluation: entry price vs current VWAP
-		if mkt.PrevVWAP != nil {
-			prevPrice, prevVWAP = mkt.PrevVWAP.Price, mkt.PrevVWAP.VWAP
-		}
-		if vwapcross.Crossed(position.Side, prevPrice, prevVWAP, mkt.Price, *mkt.VWAP) {
-			return domain.ExitReasonVWAPCross, true, nil
-		}
-	}
-
-	if e.cfg.MaxHoldingMinutes > 0 {
-		maxHolding := time.Duration(e.cfg.MaxHoldingMinutes) * time.Minute
-		if now.Sub(position.OpenedAt) >= maxHolding {
-			return domain.ExitReasonMaxHolding, true, nil
-		}
-	}
-
-	if mkt.MarketCloseAt != nil {
-		forceFlatAt := mkt.MarketCloseAt.Add(-time.Duration(e.cfg.ForceFlatBeforeMarketCloseMinutes) * time.Minute)
-		if !now.Before(forceFlatAt) {
-			return domain.ExitReasonForceFlatBeforeClose, true, nil
-		}
-	}
-
-	return "", false, nil
+	return exitcond.Evaluate(params, position, exitcond.Market{
+		Price: mkt.Price, VWAP: mkt.VWAP, PrevVWAP: mkt.PrevVWAP, Decision: mkt.Decision,
+		MarketCloseAt: mkt.MarketCloseAt, Now: now,
+	}, lookups)
 }
 
-// trailingStopTriggered reports whether position's price has retraced
-// TrailingStopPct from the best price reached since OpenedAt (the peak
-// for a LONG, the trough for a SHORT), derived from
-// market.SnapshotRepository.ListByInstrumentRange rather than a
-// dedicated positions column (doc.go). It returns false without error
-// when Engine has no SnapshotRepository configured (Deps.Snapshots was
-// left nil).
-func (e *Engine) trailingStopTriggered(ctx context.Context, position domain.Position, currentPrice, sign float64, now time.Time) (bool, error) {
-	if e.snapshots == nil {
-		return false, nil
-	}
+// bestPriceSinceOpen is Trailing Stop's baseline: the best price position
+// has reached since OpenedAt (the peak for a LONG, the trough for a SHORT),
+// derived from market.SnapshotRepository.ListByInstrumentRange rather than a
+// dedicated positions column (doc.go). Callers only use it when Engine has a
+// SnapshotRepository configured (Deps.Snapshots).
+func (e *Engine) bestPriceSinceOpen(ctx context.Context, position domain.Position, currentPrice float64, now time.Time) (float64, error) {
 	history, err := e.snapshots.ListByInstrumentRange(ctx, position.InstrumentID, position.OpenedAt, now)
 	if err != nil {
-		return false, fmt.Errorf("execution: trailing stop lookback for position %d: %w", position.ID, err)
+		return 0, fmt.Errorf("execution: trailing stop lookback for position %d: %w", position.ID, err)
 	}
 
+	sign := exitcond.Sign(position.Side)
 	best := position.EntryPrice
 	for _, snap := range history {
 		if sign*snap.Price > sign*best {
@@ -141,24 +100,5 @@ func (e *Engine) trailingStopTriggered(ctx context.Context, position domain.Posi
 	if sign*currentPrice > sign*best {
 		best = currentPrice
 	}
-
-	retracedPct := sign * (best - currentPrice) / best * 100
-	return retracedPct >= e.cfg.TrailingStopPct, nil
-}
-
-// reversed reports whether jevDirection is the opposite of positionSide
-// (a LONG position with a SHORT Jev direction, or vice versa) - Jev方向
-// 反転.
-func reversed(positionSide string, jevDirection *string) bool {
-	if jevDirection == nil {
-		return false
-	}
-	switch positionSide {
-	case domain.PositionSideLong:
-		return *jevDirection == domain.JevDirectionShort
-	case domain.PositionSideShort:
-		return *jevDirection == domain.JevDirectionLong
-	default:
-		return false
-	}
+	return best, nil
 }

@@ -21,6 +21,13 @@ var metaLabelGroup = opsGroup{
 		{key: metalabelsettings.KeyMinEVBps, label: "最低 EV（bps）", placeholder: "0",
 			hint: "較正後の期待値（コスト控除後）がこの値を超えたときだけ「入る」にします。0 以上 1000 以下で、0 でも EV が 0 以下なら見送ります。既定は 0 bps です。"},
 		{key: metalabelsettings.KeyLLMCutoff, label: "Jev モデルの学習データの終わり（YYYY-MM-DD）", placeholder: metalabelsettings.DefaultLLMCutoff,
-			hint: "Jev（LLM）が学習し終えた日付です。夜間再学習の検証（OOS）は、この日以降の判断だけで行います（LLM が結果を既に知っている期間で評価しない：look-ahead bias 対策）。使っている Jev のモデルの実際の日付に合わせてください。既定は " + metalabelsettings.DefaultLLMCutoff + " です。"},
+			hint: "Jev（LLM）が学習し終えた日付です。夜間再学習の検証（OOS）は、この日以降の判断だけで行います（LLM が結果を既に知っている期間で評価しない：look-ahead bias 対策）。使っている Jev のモデルの実際の日付に合わせてください。" +
+				"既定は仮置きの " + metalabelsettings.DefaultLLMCutoff + " で、仮置きのままの間はメタモデルを採用しません（不採用として記録）。"},
+		{key: metalabelsettings.KeyLLMCutoffModel, label: "学習データの終わりを確認した Jev のモデル名", placeholder: "例: jev-xxxx",
+			hint: "上の日付を確認した Jev のモデル名（判断に記録される model_id と同じ表記）です。実際に応答しているモデルがこれと異なると、cutoff を確認し直すまで夜間再学習のモデルを採用しません。未記録だとモデルの切り替わりを検知できません。"},
+		{key: metalabelsettings.KeyLLMCutoffConfirmedOn, label: "学習データの終わりを確認した日（YYYY-MM-DD）", placeholder: "例: 2026-10-17",
+			hint: "運用者が上の日付を公式情報などで確認した日です（記録用）。"},
+		{key: metalabelsettings.KeyLLMCutoffSource, label: "学習データの終わりの出典", placeholder: "例: ベンダーの公式ドキュメントの URL",
+			hint: "上の日付の根拠（公式ドキュメントの URL や問い合わせ先など。200 文字以内）です（記録用）。"},
 	},
 }

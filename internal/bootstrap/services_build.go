@@ -134,7 +134,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 // runtimePolicy supplies the entry thresholds FR-EXIT-2's continuation_probability
 // low-water exit never exceeds (#714).
 func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels alerts.Channels, notifiers []risk.Notifier, now func() time.Time, runtimePolicy selfimprove.RuntimePolicy) execution.Config {
-	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(limits))
+	executionConfig := withTradingCalendar(execution.ConfigFromRiskLimits(limits).WithCostSettings(s.Settings))
 	executionConfig.Now = now // nil keeps time.Now
 	s.Execution = execution.NewEngine(execution.Deps{
 		Orders:          s.Orders,
@@ -172,7 +172,7 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy), metalabeljob.PolicyOption(state.DB, s.Settings))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
-	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig)
+	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig, backtestsource.NewReplay(state.DB, s.Settings, state.Risk.Paper, s.Positions))
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk},
 		policy.WithCalibration(s.Calibration), policy.WithTDnetScorer(s.News), policy.WithRegimeStore(s.Instruments, s.Snapshots, s.Settings, state.Strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge)),
 		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
@@ -183,12 +183,12 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 // secrets replace one role each with an external LLM API. With neither Jev
 // nor an override, the stage is skipped every day (assist.ErrNotConfigured)
 // instead of blocking start-up.
-func (s *Services) buildGovernor(strategy *config.StrategyConfig, secrets config.Secrets, alertChannels alerts.Channels) {
+func (s *Services) buildGovernor(strategy *config.StrategyConfig, db *sql.DB, secrets config.Secrets, alertChannels alerts.Channels) {
 	solClient := assist.NewClient(assist.Config{Label: "sol", BaseURL: secrets.SolBaseURL, APIKey: secrets.SolAPIKey})
 	opusClient := assist.NewClient(assist.Config{Label: "opus", BaseURL: secrets.OpusBaseURL, APIKey: secrets.OpusAPIKey})
 	s.Governor = selfimprove.NewGovernor(s.Proposals, s.Settings, s.Positions,
 		s.Backtest, strategy.Policy,
-		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()),
+		selfimprove.WithNotifier(alertChannels.SelfImproveNotifier()), metalabeljob.ChangeGuard(db),
 		selfimprove.WithSol(assist.NewSol(solClient, assist.WithJev(s.Jev))),
 		selfimprove.WithOpus(assist.NewOpus(opusClient, assist.WithJev(s.Jev))))
 }

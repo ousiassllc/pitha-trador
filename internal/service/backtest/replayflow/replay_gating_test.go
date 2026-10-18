@@ -38,12 +38,13 @@ func flaggedTrades(t *testing.T, decision domain.JevDecision, mark func(*domain.
 		mark(&bars[i])
 	}
 	decision.InstrumentID = instrumentID
-	decision.Timestamp = base
+	decision.Timestamp = base.Add(time.Minute) // the first bar has no 1-minute return (a model input)
 	cfg := shortThresholds()
 	cfg.InstrumentID = instrumentID
 	cfg.Symbol = "7203"
 	cfg.Snapshots = bars
 	cfg.Decisions = backtest.NewSliceDecisionSource([]domain.JevDecision{decision})
+	cfg.Models = takingModels()
 	cfg.Exit = backtest.ExitRule{StopLossPct: 5, TakeProfitPct: 1.0, MaxHolding: 10 * time.Minute}
 	period := backtest.Period{Start: base, End: base.Add(12 * time.Minute)}
 	trades, err := backtest.ShadowBacktestTrades(context.Background(), cfg, period)
@@ -98,6 +99,7 @@ func TestRun_DecisionBeforeWindowIsNotReusedAcrossWindows(t *testing.T) {
 	cfg.Decisions = backtest.NewSliceDecisionSource([]domain.JevDecision{
 		longDecision(instrumentID, base.Add(25*time.Minute)), // inside Validation
 	})
+	cfg.Models = takingModels()
 	cfg.Exit = backtest.ExitRule{MaxHolding: 5 * time.Minute}
 	wf := backtest.WalkForwardConfig{
 		Start: base, End: base.Add(60 * time.Minute),
@@ -133,7 +135,7 @@ func TestReplay_DoesNotLogTradeSignalDecided(t *testing.T) {
 	const instrumentID = int64(1)
 	base := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
 	bars := rampBars(instrumentID, base, 30, 2000, 1.005, 10)
-	trades := shadowTrades(t, instrumentID, bars, []domain.JevDecision{longDecision(instrumentID, base)})
+	trades := shadowTrades(t, instrumentID, bars, []domain.JevDecision{longDecision(instrumentID, base.Add(time.Minute))})
 	if len(trades) == 0 {
 		t.Fatal("fixture produced no trade; the replay path was not exercised")
 	}

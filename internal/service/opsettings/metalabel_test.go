@@ -86,3 +86,34 @@ func TestMetaLabel_SaveRejectsInvalid(t *testing.T) {
 		t.Fatalf("rejected values were stored: %v", store.rows)
 	}
 }
+
+// issue #776: the LLM cutoff row carries a warning while it is the placeholder
+// (or has no recorded Jev model) and none once both are stored.
+func TestMetaLabel_LLMCutoffWarning(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeStore{rows: map[string]string{}}
+	svc := newService(store)
+	warning := func() string {
+		v, err := svc.Get(ctx, metalabelsettings.KeyLLMCutoff)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		return v.Warning
+	}
+
+	if warning() == "" {
+		t.Error("the placeholder cutoff has no warning")
+	}
+	if err := svc.Save(ctx, metalabelsettings.KeyLLMCutoff, "2026-09-01"); err != nil {
+		t.Fatal(err)
+	}
+	if warning() == "" {
+		t.Error("a real cutoff with no recorded Jev model has no warning")
+	}
+	if err := svc.Save(ctx, metalabelsettings.KeyLLMCutoffModel, "jev-x"); err != nil {
+		t.Fatal(err)
+	}
+	if w := warning(); w != "" {
+		t.Errorf("confirmed cutoff still warns: %s", w)
+	}
+}

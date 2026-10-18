@@ -71,7 +71,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/watchlist", watchlist.NewHandler(o.watchlistSource).Page)
 
 	performanceHandler := performance.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
-	engine.GET("/performance", performanceHandler.Page)
+	performanceHandler.Register(engine)
 
 	engine.GET("/activity", h.activity.Page)
 	engine.GET("/ws/activity", h.activity.WebSocket)
@@ -140,7 +140,7 @@ func registerAPI(engine *gin.Engine, o options, h handlers) {
 	huma.Get(api, "/logs/errors", system.NewErrorLogHandler(o.errorLogExporter).APIErrorLogs)
 	huma.Get(api, "/export", export.NewHandler(o.dataExporter).API)
 	insightapi.New(o.insightProvider).Register(api)
-	huma.Get(api, "/calibration", h.calibration.APICalibration)
+	h.calibration.Register(api)
 	huma.Get(api, "/policy-proposals", proposals.NewPolicyProposalHandler(o.proposalSource).APIPolicyProposals)
 	huma.Get(api, "/activity", h.activity.APIActivity)
 }

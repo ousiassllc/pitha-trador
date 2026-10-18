@@ -41,8 +41,8 @@ type Option func(*Engine)
 // WithPolicySource makes Evaluate read Thresholds.Policy from src on every
 // call instead of using NewEngine's static thresholds.Policy, so an
 // applied (or rolled-back) policy proposal takes effect on the very next
-// live signal without a restart. Decide - the backtest replay path, which
-// pins its own thresholds - is unaffected.
+// live signal without a restart. Decide/DecideReplay - the backtest
+// replay paths, which pin their own thresholds - are unaffected.
 func WithPolicySource(src PolicySource) Option {
 	return func(e *Engine) { e.policy = src }
 }

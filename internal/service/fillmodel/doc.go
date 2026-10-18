@@ -10,11 +10,17 @@
 //     at the bid; a half spread around the last price when only SpreadBps
 //     is known);
 //   - 滑り: Model.SlippageBps beyond the touch, adverse to the order;
-//   - 手数料: Model.FeeBps of the notional per fill;
+//   - 手数料: Model.FeeBps of the notional plus Model.FeeFixedJPY per fill;
+//     SHORT: Model.ShortBorrowBps (貸株料) once per position;
 //   - 昼休み・立会時間外: nothing fills (marketcalendar.PhaseClosed);
 //   - 寄り・引けの気配: the opening/closing auction crosses at one price, so
 //     no spread is paid, but the indicative price can move before the
-//     板寄せ: Model.AuctionSlippageBps instead of SlippageBps.
+//     板寄せ: Model.OpeningSlippageBps / ClosingSlippageBps instead of
+//     SlippageBps.
+//
+// Costs holds one Model per direction and is built from the Settings-screen
+// cost settings (internal/config/costsettings), the single source Paper
+// fills, the backtest and the triple-barrier label cost all read (#779).
 //
 // Everything here is a pure function of its inputs: no I/O, no clock.
 package fillmodel

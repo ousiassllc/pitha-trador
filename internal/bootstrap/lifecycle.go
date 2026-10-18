@@ -17,12 +17,11 @@ const newsPollInterval = time.Minute
 
 // Start launches every background goroutine this build's composition root owns: kabuステーションAPI
 // token issuance/refresh (broker.Session.Start), the candidate-refresh ticker (issue #45), the PUSH
-// subscription (pushfeed), and the Scheduler's worker pool + full-scan/self-improve/
-// outcome-labeling/operator-heartbeat/log-rotation cron triggers (scheduler.Scheduler.Start), after
-// first recovering any job left "running" by a previous crash (scheduler.Scheduler.Recover) and
-// storing the daily-guard Paper initial values once (dailyguardseed.Run, issue #782). All run until
-// ctx is done or Stop is called. cmd/desktop calls it from Wails' OnStartup and cmd/server from
-// main, each stopping it on shutdown.
+// subscription (pushfeed), and the Scheduler's worker pool + cron triggers (full-scan, self-improve,
+// outcome-labeling, operator-heartbeat, log-rotation; scheduler.Scheduler.Start), after recovering any
+// job a previous crash left "running" (scheduler.Scheduler.Recover) and storing the daily-guard Paper
+// initial values once (dailyguardseed.Run, issue #782). All run until ctx is done or Stop is called;
+// cmd/desktop (Wails' OnStartup) and cmd/server (main) call it and stop it on shutdown.
 func (s *Services) Start(ctx context.Context) error {
 	if _, err := s.Scheduler.Recover(ctx); err != nil {
 		return fmt.Errorf("bootstrap: recover jobs: %w", err)

@@ -116,7 +116,7 @@ func (e *Engine) Enter(ctx context.Context, req EntryRequest) (EntryResult, erro
 		side = domain.OrderSideSell
 	}
 
-	f, fills, err := e.fillFor(orderType, side, req.Quantity, req.LimitPrice, req.Price, req.Book, now)
+	f, fills, err := e.fillFor(ctx, direction, orderType, side, req.Quantity, req.LimitPrice, req.Price, req.Book, now)
 	if err != nil {
 		return EntryResult{}, err
 	}
@@ -170,7 +170,7 @@ func (e *Engine) TryFillPending(ctx context.Context, orderID int64, direction st
 	if order.Status != domain.OrderStatusPending || order.OrderType != domain.OrderTypeLimit || order.LimitPrice == nil {
 		return EntryResult{}, false, nil
 	}
-	f, fills, err := e.fillFor(order.OrderType, order.Side, order.Quantity, order.LimitPrice, currentPrice, book, now)
+	f, fills, err := e.fillFor(ctx, direction, order.OrderType, order.Side, order.Quantity, order.LimitPrice, currentPrice, book, now)
 	if errors.Is(err, ErrOutsideTradingSession) || (err == nil && !fills) {
 		return EntryResult{}, false, nil
 	}

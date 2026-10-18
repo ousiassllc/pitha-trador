@@ -11,6 +11,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -85,6 +86,9 @@ func (h *SettingsHandler) opsRow(ctx context.Context, field opsField, notice str
 			row.DefaultLabel = "0（未設定）"
 		}
 	}
+	if metalabelsettings.IsKey(field.key) && value.Default == "" {
+		row.DefaultLabel = "未設定"
+	}
 	if config.IsPrivateKeyPathKey(field.key) {
 		// Like a secret: only 設定済み is shown back, never the stored path.
 		row.Value, row.DefaultLabel = "", "未設定"
@@ -146,7 +150,13 @@ func (h *SettingsHandler) ResetOps(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.ops.Reset(c.Request.Context(), key); err != nil {
+	err := h.ops.Reset(c.Request.Context(), key)
+	var invalid *opsettings.InvalidValueError
+	if errors.As(err, &invalid) {
+		shared.RespondPageError(c, http.StatusBadRequest, "既定に戻せません: "+invalid.Reason)
+		return
+	}
+	if err != nil {
 		slog.Error("settings: reset operational setting", "key", key, "error", err)
 		shared.RespondPageError(c, http.StatusInternalServerError, "既定に戻すのに失敗しました。")
 		return

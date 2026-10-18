@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
+	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 )
 
 // testEngine bundles a real (SQLite-backed) Engine plus the repositories and
@@ -31,6 +32,14 @@ type testEngine struct {
 
 func newTestEngine(t *testing.T, cfg execution.Config) testEngine {
 	t.Helper()
+	return newTestEngineWithCosts(t, cfg, nil)
+}
+
+// newTestEngineWithCosts is newTestEngine with Config.Costs set to costs (nil
+// leaves Config.Fill in force).
+func newTestEngineWithCosts(t *testing.T, cfg execution.Config, costs fillmodel.Source) testEngine {
+	t.Helper()
+	cfg.Costs = costs
 	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)

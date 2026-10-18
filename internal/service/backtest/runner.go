@@ -2,12 +2,13 @@ package backtest
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/backtest/simrisk"
 	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
+	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
 
@@ -38,51 +39,31 @@ type DecisionSource interface {
 // shadow backtest's recent Jev Trader calls, or a test fixture) most
 // naturally has.
 type SliceDecisionSource struct {
-	decisions []domain.JevDecision // sorted ascending by Timestamp
+	byInstrument map[int64][]domain.JevDecision // each sorted ascending by Timestamp
 }
 
 // NewSliceDecisionSource returns a SliceDecisionSource over decisions,
-// sorting a copy by Timestamp.
+// grouping a copy by instrument and sorting each group by Timestamp.
 func NewSliceDecisionSource(decisions []domain.JevDecision) *SliceDecisionSource {
-	sorted := make([]domain.JevDecision, len(decisions))
-	copy(sorted, decisions)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Timestamp.Before(sorted[j].Timestamp) })
-	return &SliceDecisionSource{decisions: sorted}
-}
-
-// Decision implements DecisionSource, scanning for the latest decision at
-// or before ts for instrumentID.
-func (s *SliceDecisionSource) Decision(_ context.Context, instrumentID int64, ts time.Time) (domain.JevDecision, bool, error) {
-	var best domain.JevDecision
-	found := false
-	for _, d := range s.decisions {
-		if d.InstrumentID != instrumentID {
-			continue
-		}
-		if d.Timestamp.After(ts) {
-			break
-		}
-		best, found = d, true
+	byInstrument := make(map[int64][]domain.JevDecision)
+	for _, d := range decisions {
+		byInstrument[d.InstrumentID] = append(byInstrument[d.InstrumentID], d)
 	}
-	return best, found, nil
+	for _, list := range byInstrument {
+		sort.SliceStable(list, func(i, j int) bool { return list[i].Timestamp.Before(list[j].Timestamp) })
+	}
+	return &SliceDecisionSource{byInstrument: byInstrument}
 }
 
-// ExitRule is the simplified subset of FR-EXIT-1 this backtest replay
-// evaluates bar-by-bar to close a position once Policy Engine opens one:
-// fixed Stop Loss, fixed Take Profit, and max holding time
-// (config/strategy.yaml has no exit.* section yet - FR-EXIT-2's initial
-// values are stop_loss_pct=0.6 / take_profit_pct=1.2 /
-// max_holding_minutes=20 - so a caller passes them explicitly). Trailing
-// Stop / Jev方向反転 / continuation_probability低下 / VWAP逆クロス / 引け
-// 前強制決済 (FR-EXIT-1's remaining conditions) belong to Risk Engine &
-// Paper Trading Execution (issue #8, a later sub-scope) once real
-// position management exists; this subset is enough to close every
-// backtest position deterministically and produce FR-BT-1's metrics
-// end-to-end. A zero-valued field disables that condition.
-type ExitRule struct {
-	StopLossPct   float64
-	TakeProfitPct float64
-	MaxHolding    time.Duration
+// Decision implements DecisionSource: the latest decision at or before ts for
+// instrumentID (the last one given on a timestamp tie).
+func (s *SliceDecisionSource) Decision(_ context.Context, instrumentID int64, ts time.Time) (domain.JevDecision, bool, error) {
+	list := s.byInstrument[instrumentID]
+	n := sort.Search(len(list), func(i int) bool { return list[i].Timestamp.After(ts) })
+	if n == 0 {
+		return domain.JevDecision{}, false, nil
+	}
+	return list[n-1], true, nil
 }
 
 // RunConfig is everything one backtest replay needs for a single
@@ -108,23 +89,35 @@ type RunConfig struct {
 
 	Decisions DecisionSource
 
+	// Entry selects the entry rule. The zero value is EntryMeta, the live
+	// rule: the meta-labeling model's verdict (issue #775).
+	Entry EntryMode
+	// Models supplies, for each decision time, the meta-labeling model that
+	// was already trained and active then (EntryMeta). nil means no model ever
+	// existed: every entry is skipped, as live does without an active model.
+	Models ModelSource
+	// Meta is the meta-labeling take/skip policy (minimum EV); the zero value
+	// means metalabel.DefaultDecideConfig.
+	Meta metalabel.DecideConfig
+
 	// Thresholds is the Policy Engine LONG/SHORT threshold set to
 	// evaluate against - the value a Self-Improvement Governor shadow
 	// backtest overrides with a proposed change (overview.md §8
 	// "GOV->>BT: 直近20営業日相当のシャドーバックテスト実行（提案後しき
 	// い値）") without touching the live runtime_settings.
 	Thresholds policy.Thresholds
-	// Risk defaults to policy.AlwaysPassRiskChecker when nil (via
-	// policy.NewEngine), as doc.go explains: the live Risk Engine's limits
-	// depend on live account/Kill Switch state a historical replay does
-	// not have (functional.md §4.11 FR-BT-4).
-	Risk policy.RiskChecker
+	// Risk, when set, runs the replay through a simulated Risk Engine
+	// (simrisk): the FR-RISK-1/2 limits against a portfolio shared by every
+	// instrument of the replay, and position sizing. nil replays without any
+	// Risk Engine (an explicit comparison mode). Every RunConfig of one
+	// portfolio replay must carry the same Risk.
+	Risk *simrisk.Config
 
 	Exit ExitRule
-	// Cost is the fill assumption (fillmodel.Default in production, the
-	// same one Paper Trading uses): FR-BT-1's スリッページ込み/手数料込みPnL
-	// figures come from the fills it produces.
-	Cost fillmodel.Model
+	// Cost is the fill assumption per direction (the Settings cost settings
+	// in production, the same ones Paper Trading uses): FR-BT-1's
+	// スリッページ込み/手数料込みPnL figures come from the fills it produces.
+	Cost fillmodel.Costs
 	// Sessions says which bars are 昼休み/寄り/ザラ場/引け (see Sessions);
 	// nil means every bar is ザラ場.
 	Sessions Sessions
@@ -151,6 +144,9 @@ type Result struct {
 	// ByRegime is Combined split by the market regime of the decision that
 	// opened each trade (issue #755).
 	ByRegime []RegimeMetrics
+	// ForwardTrades are the trades Combined aggregates, for re-pricing them
+	// under another cost assumption (internal/service/backtest/sensitivity).
+	ForwardTrades []Trade
 }
 
 // Run executes a full Walk Forward backtest (FR-BT-2) over a single
@@ -158,87 +154,4 @@ type Result struct {
 // RunConfig.
 func Run(ctx context.Context, cfg RunConfig, wf WalkForwardConfig) (Result, error) {
 	return RunPortfolio(ctx, []RunConfig{cfg}, wf)
-}
-
-// replay walks cfg.Snapshots forward through window, evaluating Policy
-// Engine at every bar whose Timestamp falls in [window.Start, window.End)
-// (calibrated fixes policy.Input.Calibrated for all of them), opening a
-// Trade whenever it produces a LONG/SHORT signal and closing it per
-// cfg.Exit/cfg.Cost before resuming - one open position at a time per
-// instrument, matching functional.md §4.9's per-symbol "position" state.
-func replay(ctx context.Context, cfg RunConfig, window Period, calibrated bool) ([]Trade, error) {
-	bars := cfg.Snapshots
-	engine := policy.NewEngine(cfg.Thresholds, cfg.Risk, nil)
-
-	start := sort.Search(len(bars), func(k int) bool { return !bars[k].Timestamp.Before(window.Start) })
-
-	var trades []Trade
-	// A decision visible at the window's first bar was recorded before
-	// the window: a previous window (or the warm-up history) already
-	// evaluated or skipped it, so it is treated as consumed up to the
-	// last bar before the window (FR-BT-4: one decision, at most one
-	// entry - across Walk Forward windows too).
-	var consumedUpTo time.Time
-	if start > 0 {
-		consumedUpTo = bars[start-1].Timestamp
-	}
-	for i := start; i < len(bars); {
-		bar := bars[i]
-		if !bar.Timestamp.Before(window.End) {
-			break
-		}
-
-		decision, ok, err := cfg.Decisions.Decision(ctx, cfg.InstrumentID, bar.Timestamp)
-		if err != nil {
-			return nil, fmt.Errorf("backtest: decision lookup for %q at %s: %w", cfg.Symbol, bar.Timestamp, err)
-		}
-		// Each Jev Trader decision is evaluated at most once (FR-BT-4):
-		// live, one decision yields at most one Policy evaluation/signal,
-		// so a decision already evaluated (or skipped while a position was
-		// open) is treated as absent rather than re-entered after an exit.
-		if ok && !decision.Timestamp.After(consumedUpTo) {
-			ok = false
-		}
-
-		in := policy.InputFromSnapshot(bar)
-		in.InstrumentID = cfg.InstrumentID
-		in.Symbol = cfg.Symbol
-		in.Timestamp = bar.Timestamp
-		in.Calibrated = calibrated
-		if ok {
-			in.Decision = &decision
-			consumedUpTo = decision.Timestamp
-		}
-
-		sig := engine.Decide(ctx, in)
-		if sig.Direction == domain.JevDirectionNone {
-			i++
-			continue
-		}
-
-		x := executor{cost: cfg.Cost, sessions: cfg.Sessions}
-		entryFill, ok := x.fill(bar, entrySide(sig.Direction))
-		if !ok {
-			// 昼休み・立会時間外: the entry cannot fill (live Enter fails
-			// with ErrOutsideTradingSession), and the decision is spent.
-			i++
-			continue
-		}
-
-		trade, exitIdx := closeTrade(bars, i, sig.Direction, entryFill, cfg.Exit, x, cfg.InstrumentID, cfg.Symbol)
-		if exitIdx == i {
-			// No bar to hold through (last bar, or the next bar is already
-			// past MaxHolding - session/overnight gap): the entry could not
-			// have been filled and held, so it is not a trade (zero-return
-			// entry==exit rows would dilute TradeCount/Expectancy/WinRate).
-			i++
-			continue
-		}
-		// sig is not NONE, so in.Decision is set.
-		trade.Regime, trade.ABArm = in.Decision.MarketRegime.Regime, in.Decision.MarketRegime.ABArm
-		trades = append(trades, trade)
-		consumedUpTo = bars[exitIdx].Timestamp
-		i = exitIdx + 1
-	}
-	return trades, nil
 }
