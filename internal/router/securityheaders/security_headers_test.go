@@ -1,4 +1,4 @@
-package router_test
+package securityheaders_test
 
 import (
 	"net/http"

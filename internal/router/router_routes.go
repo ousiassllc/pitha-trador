@@ -9,8 +9,10 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/admin"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
@@ -69,6 +71,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/calibration", h.calibration.Page)
 
 	engine.GET("/watchlist", watchlist.NewHandler(o.watchlistSource).Page)
+	engine.GET("/admin", admin.NewHandler(swaggerEnabled()).Page)
 
 	performanceHandler := performance.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
 	performanceHandler.Register(engine)
@@ -84,6 +87,10 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 		settingsHandler.WithOperationalSettings(o.operationalSettings)
 		engine.POST("/ops-settings/:key", settingsHandler.SaveOps)
 		engine.DELETE("/ops-settings/:key", settingsHandler.ResetOps)
+	}
+	if o.mcpSettings != nil {
+		settingsHandler.WithMCPSettings()
+		mcpsettings.New(o.mcpSettings).Register(engine)
 	}
 	engine.GET("/setup", settingsHandler.SetupPage)
 	engine.GET("/settings", settingsHandler.Page)

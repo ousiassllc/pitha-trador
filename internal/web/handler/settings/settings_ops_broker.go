@@ -21,7 +21,7 @@ var brokerGroup = opsGroup{
 // tachibanaGroup holds the 立花 operational settings. 認証ID / 第二暗証番号 are
 // secrets (the 立花証券 e支店 connection); the 秘密鍵 itself stays a file.
 var tachibanaGroup = opsGroup{
-	id:          "tachibana",
+	id:          "tachibana-conn",
 	name:        "立花証券 e支店（接続設定）",
 	description: "立花証券 e支店API を使う場合の接続環境・接続先・秘密鍵ファイルの設定です。認証ID は「接続先」の「立花証券 e支店」で入力します。",
 	note:        brokerRestartNote + "秘密鍵の中身は DB に保存せず、ファイルのパスだけを保存します（ファイルは OS のユーザー権限で保護してください）。",

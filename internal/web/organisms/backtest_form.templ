@@ -28,7 +28,7 @@ const backtestFieldClass = "mt-1 px-3 py-1"
 // issue #779), which runs the backtest with the values currently in the form
 // and downloads the CSV; a plain submit, as the other downloads are.
 templ BacktestForm(form BacktestFormValues) {
-	<form class="mt-4 flex flex-wrap items-end gap-4" method="get" action="/performance" data-testid="backtest-form">
+	<form id="backtest" class="mt-4 flex flex-wrap items-end gap-4" method="get" action="/performance" data-testid="backtest-form">
 		@backtestField("From", atoms.InputProps{Name: "from", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.From, "required": true}})
 		@backtestField("To", atoms.InputProps{Name: "to", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.To, "required": true}})
 		@backtestField("Training days", daysInput("training_days", form.TrainingDays))

@@ -50,6 +50,10 @@ func TestSetupGuard_Exemptions(t *testing.T) {
 		{http.MethodPost, "/settings/A", false},
 		{http.MethodDelete, "/settings/A", false},
 		{http.MethodGet, "/settings/A", true},
+		// The MCP settings (issue #792) are not part of setup.
+		{http.MethodPost, "/settings/mcp", true},
+		{http.MethodPost, "/settings/mcp/key", true},
+		{http.MethodGet, "/settings/mcp-panel", true},
 		// The broker selection and 立花 settings rows are part of setup (issue #734).
 		{http.MethodPost, "/ops-settings/broker.provider", false},
 		{http.MethodDelete, "/ops-settings/broker.tachibana.demo.private_key_path", false},

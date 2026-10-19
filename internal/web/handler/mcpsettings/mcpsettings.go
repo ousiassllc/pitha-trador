@@ -1,0 +1,89 @@
+package mcpsettings
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/mcp"
+)
+
+// Admin is the subset of *admin.Service the handlers need.
+type Admin interface {
+	View(ctx context.Context) admin.View
+	Update(ctx context.Context, enabled bool, listen string) error
+	RegenerateKey(ctx context.Context) (string, error)
+}
+
+// Handler implements the MCP settings routes.
+type Handler struct {
+	admin Admin
+}
+
+// New returns a Handler over a.
+func New(a Admin) *Handler { return &Handler{admin: a} }
+
+// Register mounts the routes on engine.
+func (h *Handler) Register(engine *gin.Engine) {
+	engine.GET("/settings/mcp-panel", h.Panel)
+	engine.POST("/settings/mcp", h.Save)
+	engine.POST("/settings/mcp/key", h.Regenerate)
+}
+
+// Panel implements `GET /settings/mcp-panel`: the panel with the key masked.
+func (h *Handler) Panel(c *gin.Context) {
+	h.render(c, "", "")
+}
+
+// Save implements `POST /settings/mcp`: form `enabled` (a checked checkbox
+// sends a value, an unchecked one nothing) and `listen`. An address outside
+// the loopback / tailnet rule is a 422 and nothing is saved; success
+// re-renders the panel.
+func (h *Handler) Save(c *gin.Context) {
+	noStore(c)
+	ctx := c.Request.Context()
+	err := h.admin.Update(ctx, c.PostForm("enabled") != "", c.PostForm("listen"))
+	switch {
+	case errors.Is(err, settings.ErrListenNotAllowed):
+		shared.RespondActionError(c, http.StatusUnprocessableEntity, "待受アドレスが許可されていません。127.0.0.1 などの loopback か、この PC の tailnet アドレス（host:port の IP リテラル）だけ指定できます。0.0.0.0・LAN のアドレス・ホスト名は使えません。保存していません。")
+		return
+	case err != nil:
+		slog.ErrorContext(ctx, "mcpsettings: save", "error", err)
+		shared.RespondActionError(c, http.StatusInternalServerError, "MCP 設定の保存に失敗しました。")
+		return
+	}
+	h.render(c, "保存しました。反映するには paper-results-mcp を再起動してください。", "")
+}
+
+// Regenerate implements `POST /settings/mcp/key`: it generates a new key and
+// answers with the panel including the one-time reveal block. It is the only
+// response that ever contains the key, so it is never cacheable.
+func (h *Handler) Regenerate(c *gin.Context) {
+	noStore(c)
+	ctx := c.Request.Context()
+	key, err := h.admin.RegenerateKey(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "mcpsettings: regenerate key", "error", err)
+		shared.RespondActionError(c, http.StatusInternalServerError, "API キーの生成に失敗しました。")
+		return
+	}
+	h.render(c, "API キーを生成しました。MCP を再起動すると新しいキーが有効になります。", key)
+}
+
+func (h *Handler) render(c *gin.Context, notice, revealedKey string) {
+	noStore(c)
+	v := h.admin.View(c.Request.Context())
+	shared.RenderHTML(c, http.StatusOK, mcp.Panel(panelProps(v, notice, revealedKey)))
+}
+
+// noStore keeps every response of this package out of browser and proxy
+// caches: the key action's body holds the plaintext key.
+func noStore(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+}

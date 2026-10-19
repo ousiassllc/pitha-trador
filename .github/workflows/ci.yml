@@ -187,6 +187,19 @@ jobs:
             echo "value=dev" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Build paper-results-mcp.exe (windows/amd64)
+        # Issue #792: the installer (project.nsi) ships this exe next to
+        # the app. It must exist in cmd/desktop/build/bin before the
+        # "wails build" step below runs makensis. Releases still attach only
+        # the installer and the checksums.
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          mkdir -p cmd/desktop/build/bin
+          go build -trimpath -o cmd/desktop/build/bin/paper-results-mcp.exe ./cmd/paper-results-mcp
+
       - name: wails build (windows/amd64, NSIS installer)
         working-directory: cmd/desktop
         # config.LoadSecretsFromDB (internal/config/secrets.go, issue #57)

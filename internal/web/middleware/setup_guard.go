@@ -53,7 +53,7 @@ func StaticSetupRequirements(keys ...string) SetupRequirementsFunc {
 // Exempt from the redirect, because the Setup screen cannot work without
 // them: SetupPath itself, the static assets it links (`/static/...`) and
 // the per-key save/delete routes it posts to (`POST`/`DELETE
-// /settings/:key`, issue #79) and the broker selection/立花 settings rows
+// /settings/:key` for secrets keys, issue #79) and the broker selection/立花 settings rows
 // (`POST`/`DELETE /ops-settings/:key` for config.IsBrokerSettingKey keys,
 // issue #734), since choosing the broker is part of setting it up. Every other route - including `GET
 // /settings`, `/api/v1/...` and WebSocket upgrades - is answered as above.
@@ -95,11 +95,20 @@ func setupGuardExempt(method, path string) bool {
 	case path == "/static" || strings.HasPrefix(path, "/static/"):
 		return true
 	case strings.HasPrefix(path, "/settings/"):
-		return method == http.MethodPost || method == http.MethodDelete
+		return (method == http.MethodPost || method == http.MethodDelete) && isSecretKeyPath(path)
 	case strings.HasPrefix(path, "/ops-settings/"):
 		return (method == http.MethodPost || method == http.MethodDelete) && config.IsBrokerSettingKey(strings.TrimPrefix(path, "/ops-settings/"))
 	}
 	return false
+}
+
+// isSecretKeyPath reports whether path is `/settings/:key` for a secrets key.
+// `/settings/mcp` and `/settings/mcp/key` (the MCP settings of issue #792) are
+// siblings of `:key` in the router but are not part of setup, so the guard
+// keeps them closed until setup is complete.
+func isSecretKeyPath(path string) bool {
+	key := strings.TrimPrefix(path, "/settings/")
+	return key != "mcp" && !strings.Contains(key, "/")
 }
 
 func setupSatisfied(ctx context.Context, store SecretsReader, required config.SetupRequirements) bool {
