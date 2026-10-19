@@ -9,8 +9,9 @@
 -- 規約:
 --   * 全クエリは SELECT のみ（書き込みなし）。板・時価の生値（market_snapshots、jev_decisions.state_json、
 --     response_json、metalabel_predictions.features_json）は読まない・出力しない。出力は集計値だけ。
---   * 期間: 各クエリ先頭の params CTE の from_ts / to_ts（UTC。保存形式は RFC3339 文字列なので辞書順比較で足りる）を
---     書き換える。既定は全期間。initial_capital は config/risk.yaml の paper.initial_capital（Paper では
+--   * 期間: Q1〜Q5・Q10 は先頭の params CTE の from_ts / to_ts（UTC。保存形式は RFC3339 文字列なので辞書順比較で足りる）を
+--     書き換える。既定は全期間。params を持たない Q0・Q6〜Q9 は全期間が対象（絞り方は docs/requirements/functional/performance-evaluation.md §6）。
+--     initial_capital（Q3 の params）は config/risk.yaml の paper.initial_capital（Paper では
 --     仮置きの値。口座残高ではない）に合わせて書き換える。
 --   * 円÷円の比はSQLiteの整数除算に注意（NUMERIC列は整数値だと整数で保存されるため）。bpsは先に 10000.0 を掛けてから割る。
 --   * 日付はJST（UTC+9）の暦日。週は strftime('%W')（月曜始まり・第0週あり。ISO週とは年初・年末で異なる）。
@@ -184,3 +185,35 @@ FROM metalabel_models m
 LEFT JOIN positions p ON p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL AND p.entry_price * p.quantity > 0
   AND p.closed_at >= m.oos_start AND p.closed_at < m.oos_end
 GROUP BY m.id ORDER BY m.trained_at, m.id;
+
+-- name: Q10 Paperの約定スリッページ（paper_orders.slippage_bps）の分布: 時間帯（寄り・ザラ場・引け）×方向の件数・平均・95パーセンタイル
+-- コスト見直し基準（docs/requirements/functional/components-pipeline.md FR-COST-1「見直し」）の入力となる生の分布だけを出す。
+-- 想定値（2bps／5bps）や1.5倍・3倍との比較はしない（見る人が出力と cost.* の設定値を突き合わせる）。見直しの目安（約定100件以上）は fills の合計。
+-- 時間帯は filled_at をJSTにしたときの分（internal/service/marketcalendar の PhaseAt と同じ境界）:
+--   open    = 9:00台の最初の1分（9:00〜9:00:59）と、12:30台の最初の1分（12:30〜12:30:59）。前場・後場の寄り
+--   close   = 15:25以降（大引けのクロージング・オークション。15:30に閉まる）
+--   regular = それ以外の立会時間（ザラ場）
+-- 方向 direction は約定が属する建玉の side（LONG/SHORT）。paper_orders.side は BUY/SELL でエントリーとExitで逆になるため使わない。
+-- p95_slippage_bps は最近順位法（昇順に並べて ceil(0.95*n) 番目の値）。fills が少ないうちは最大値に近づく。
+-- 対象は status='FILLED' で filled_at と slippage_bps が記録された約定。slippage_bps は呼値丸め・スプレッド込みの、直近価格に対する不利方向のbps。
+WITH params(from_ts, to_ts) AS (VALUES ('0000-01-01T00:00:00Z', '9999-12-31T00:00:00Z')),
+f AS (
+  SELECT CASE WHEN strftime('%H:%M', o.filled_at, '+9 hours') IN ('09:00', '12:30') THEN 'open'
+              WHEN strftime('%H:%M', o.filled_at, '+9 hours') >= '15:25' THEN 'close'
+              ELSE 'regular' END AS session,
+         p.side AS direction, o.slippage_bps AS bps
+  FROM paper_orders o
+  JOIN positions p ON p.entry_order_id = o.id OR p.exit_order_id = o.id, params
+  WHERE o.status = 'FILLED' AND o.filled_at IS NOT NULL AND o.slippage_bps IS NOT NULL
+    AND o.filled_at >= from_ts AND o.filled_at < to_ts
+),
+r AS (
+  SELECT session, direction, bps,
+         ROW_NUMBER() OVER (PARTITION BY session, direction ORDER BY bps) AS rn,
+         COUNT(*) OVER (PARTITION BY session, direction) AS n
+  FROM f
+)
+SELECT session, direction, MAX(n) AS fills, ROUND(AVG(bps), 4) AS mean_slippage_bps,
+       MAX(CASE WHEN rn = (95 * n + 99) / 100 THEN bps END) AS p95_slippage_bps
+FROM r GROUP BY session, direction
+ORDER BY CASE session WHEN 'open' THEN 0 WHEN 'regular' THEN 1 ELSE 2 END, direction;

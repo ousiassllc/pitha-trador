@@ -17,6 +17,9 @@ export interface MetaModelAdoption {
   oos_takes: number;
   oos_days: number;
   oos_ev_ci?: Interval;
+  // The verdict on the OOS EV; min_detectable_edge_bps is the 判定不能 line.
+  oos_ev_verdict: 'no_data' | 'undetermined' | 'positive' | 'negative' | 'not_significant';
+  min_detectable_edge_bps: number;
   oos_auc_ci?: Interval;
   criteria?: {
     min_oos_samples: number;
@@ -56,6 +59,27 @@ const bpsInterval = (iv: Interval | undefined): string =>
 const aucInterval = (iv: Interval | undefined): string =>
   iv === undefined ? '—' : `${iv.low.toFixed(3)} 〜 ${iv.high.toFixed(3)}`;
 
+// evVerdictText is the verdict on the OOS EV (issue #780): データ無し without
+// takes, 判定不能 for an edge below what the sample can detect that the
+// interval cannot separate from 0. The cut-off is never presented as proof of
+// safety, and the figures are not a promise of any return.
+function evVerdictText(a: MetaModelAdoption): string {
+  const cutoff =
+    '足切りであり、安全の証明ではありません。数字は仮定つきで、リターンの保証ではありません。';
+  switch (a.oos_ev_verdict) {
+    case 'no_data':
+      return 'データ無し';
+    case 'positive':
+      return `正のエッジ（信頼区間の下限が 0 を超過）。${cutoff}`;
+    case 'negative':
+      return `負のエッジ（信頼区間の上限が 0 未満）。${cutoff}`;
+    case 'not_significant':
+      return `有意なエッジなし（信頼区間が 0 をまたぐ）。${cutoff}`;
+    default:
+      return `判定不能（約${a.min_detectable_edge_bps} bps 未満のエッジは検出力不足で見分けられません）。${cutoff}`;
+  }
+}
+
 // confidenceLabel names the interval level: alpha is the one-sided tail.
 const confidenceLabel = (alpha: number): string => `${((1 - 2 * alpha) * 100).toFixed(0)}%信頼区間`;
 
@@ -67,7 +91,7 @@ function renderCriteria(a: MetaModelAdoption) {
     <dd data-testid="calibration-metamodel-criteria">
       OOS ${c.min_oos_samples} 件以上・take ${c.min_takes} 件以上・${c.min_oos_days} 営業日以上、
       EV の${confidenceLabel(c.alpha)}の下限 &gt; ${formatBps(c.min_ev_lower_bps)}、AUC の下限 &gt;
-      ${c.min_auc_lower.toFixed(2)}（クラスタ・ブートストラップ ${c.resamples} 回）
+      ${c.min_auc_lower.toFixed(2)}（クラスタ・ブートストラップ ${c.resamples} 回）。足切りであり、安全の証明ではありません
     </dd>
   `;
 }
@@ -103,6 +127,8 @@ export function renderAdoption(model: MetaModelAdoption) {
     <dd data-testid="calibration-metamodel-takes">${model.oos_takes} / ${model.oos_days}</dd>
     <dt>OOS EV の信頼区間</dt>
     <dd data-testid="calibration-metamodel-ev-ci">${bpsInterval(model.oos_ev_ci)}</dd>
+    <dt>OOS EV の判定</dt>
+    <dd data-testid="calibration-metamodel-ev-verdict">${evVerdictText(model)}</dd>
     <dt>OOS AUC の信頼区間</dt>
     <dd data-testid="calibration-metamodel-auc-ci">${aucInterval(model.oos_auc_ci)}</dd>
     ${renderCriteria(model)} ${renderComparison(model)}

@@ -12,7 +12,7 @@ import (
 )
 
 // MinCalibrationSamples is the fewest labeled Calibration samples (LONG +
-// SHORT, over the last shadowBacktestLookbackDays business days) Sol's
+// SHORT, over the last calibrationLookbackDays business days) Sol's
 // daily analysis needs: with less, the metrics it would weigh are noise and
 // the day is skipped (logged at info level, not a SkippedStages entry,
 // since no AI API failed).
@@ -54,7 +54,7 @@ type DailyResult struct {
 // every applied proposal (reverting degraded ones), retries the Opus
 // review of any proposal an earlier Opus API failure left pending, then
 // has Sol analyze the last
-// shadowBacktestLookbackDays business days of Calibration data per
+// calibrationLookbackDays business days of Calibration data per
 // direction (FR-SELFIMPROVE-1) and, when Sol proposes a change that passes
 // FR-SELFIMPROVE-8's machine validation, runs the shadow backtest + Opus
 // review and applies an approved proposal immediately
@@ -125,7 +125,7 @@ func (g *Governor) RunDaily(ctx context.Context, calibration DirectionCalibratio
 		return result, errors.Join(errs...)
 	}
 
-	since := businessDaysBefore(g.now(), shadowBacktestLookbackDays)
+	since := businessDaysBefore(g.now(), calibrationLookbackDays)
 	long, short, err := calibration.DirectionMetricsSince(ctx, since)
 	if err != nil {
 		return result, errors.Join(append(errs, fmt.Errorf("selfimprove: load calibration metrics: %w", err))...)

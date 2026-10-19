@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain/metamodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
@@ -110,6 +111,30 @@ func wilsonUpper(k, n int) float64 {
 // shift of sd 12%. The design (RequiredTakes) assumes AssumedPower (80%); the
 // documented criterion is that the measured power reaches it.
 func TestAdoptionPower_AtTheMinimumSampleOverMinimumDays(t *testing.T) {
+	power, summary := measurePower(t, AssumedEdgeBps)
+	t.Log(summary)
+	if power < AssumedPower {
+		t.Skipf("documented power criterion not met: %s", summary)
+	}
+}
+
+// The decided detectable edge (issue #780, 2026-10-19: about 11 bps, shown as
+// 判定不能 below it) is the edge the bar finds with the documented power: the
+// seeded measurement at metamodel.MinDetectableEdgeBps must reach 75% (80.7%
+// when this was written), so a change of the assumptions (sigma, the day shift,
+// the minimum sample) that moves the real figure away from 11 bps fails here.
+func TestAdoptionPower_AtTheMinimumDetectableEdge(t *testing.T) {
+	power, summary := measurePower(t, metamodel.MinDetectableEdgeBps)
+	t.Log(summary)
+	if power < 0.75 {
+		t.Errorf("the bar detects an edge of %.0f bps with power %.1f%%, want about %.0f%%: %s", metamodel.MinDetectableEdgeBps, 100*power, 100*AssumedPower, summary)
+	}
+}
+
+// measurePower is the share of seeded OOS sets of a model that truly earns
+// edgeBps per take that the real adoption decision adopts.
+func measurePower(t *testing.T, edgeBps float64) (float64, string) {
+	t.Helper()
 	c := DefaultAcceptanceConfig()
 	days := make([]string, c.MinOOSDays)
 	perDay := make([]int, c.MinOOSDays)
@@ -129,7 +154,7 @@ func TestAdoptionPower_AtTheMinimumSampleOverMinimumDays(t *testing.T) {
 		for _, i := range rng.Perm(c.MinOOSSamples)[:c.MinTakes] {
 			taken[i] = true
 		}
-		e := oosSet(rng, days, perDay, func(i int) bool { return taken[i] }, AssumedEdgeBps)
+		e := oosSet(rng, days, perDay, func(i int) bool { return taken[i] }, edgeBps)
 		if e.Samples != c.MinOOSSamples || e.Takes != c.MinTakes {
 			t.Errorf("trial %d: %d samples / %d takes, want exactly the minimum %d / %d", trial, e.Samples, e.Takes, c.MinOOSSamples, c.MinTakes)
 		}
@@ -143,11 +168,8 @@ func TestAdoptionPower_AtTheMinimumSampleOverMinimumDays(t *testing.T) {
 		reasons[r]++
 	}
 	power := float64(hits) / trials
-	t.Logf("measured power %.1f%% (%d/%d adopted; reasons %v), documented %.0f%%", 100*power, hits, trials, reasons, 100*AssumedPower)
-	if power < AssumedPower {
-		t.Skipf("documented power criterion not met: measured %.1f%% < %.0f%% (%d/%d trials, %d days, %d OOS, %d takes, edge %.0f bps, day shift sd %.0f%%)",
-			100*power, 100*AssumedPower, hits, trials, c.MinOOSDays, c.MinOOSSamples, c.MinTakes, AssumedEdgeBps, 100*dayShiftSD)
-	}
+	return power, fmt.Sprintf("edge %.0f bps: measured power %.1f%% (%d/%d adopted; reasons %v), documented %.0f%% (%d days, %d OOS, %d takes, day shift sd %.0f%%)",
+		edgeBps, 100*power, hits, trials, reasons, 100*AssumedPower, c.MinOOSDays, c.MinOOSSamples, c.MinTakes, 100*dayShiftSD)
 }
 
 // falseAdoptionBound is the bound FR-META-7 documents for the false adoption rate.

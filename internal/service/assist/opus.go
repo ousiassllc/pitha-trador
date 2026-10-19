@@ -26,17 +26,27 @@ const (
 // meaningful "10% of zero" to be lenient about.
 const MaxDrawdownDegradationTolerance = 0.10
 
-// MinBacktestTrades is the fewest shadow-backtest trades each side (the
-// baseline and the candidate pass) must have for the deterministic
-// Expectancy/Max Drawdown comparison to count as evidence. Below it the
-// comparison is noise - with zero trades both sides are Expectancy 0 /
-// Max Drawdown 0, which would trivially satisfy "not worse" - so the
-// proposal is rejected as ReasonInsufficientSamples without consulting
-// the Opus API.
-const MinBacktestTrades = 10
+// MinBacktestTrades and MinBacktestDays are the floor (issue #780, decided
+// 2026-10-19: at least 100 trades AND at least 30 business days) the shadow
+// backtest must clear for the deterministic Expectancy/Max Drawdown
+// comparison to count as evidence: MinBacktestTrades is the fewest trades
+// each side (the baseline and the candidate pass) must have, MinBacktestDays
+// the fewest TSE trading days the replayed period must span. Below either the
+// comparison is noise - with zero trades both sides are Expectancy 0 / Max
+// Drawdown 0, which would trivially satisfy "not worse" - so the proposal is
+// rejected as ReasonInsufficientSamples without consulting the Opus API.
+//
+// This is a cut-off, not a proof of safety: a proposal that clears it can
+// still be a chance result, and the figures hold only under the assumptions
+// of FR-SELFIMPROVE-4 (they do not promise any return).
+const (
+	MinBacktestTrades = 100
+	MinBacktestDays   = 30
+)
 
 // ReasonInsufficientSamples is the review_json.reason prefix recorded when
-// a side of the shadow backtest has fewer than MinBacktestTrades trades.
+// a side of the shadow backtest has fewer than MinBacktestTrades trades or
+// the replayed period spans fewer than MinBacktestDays trading days.
 const ReasonInsufficientSamples = "insufficient_samples"
 
 // backtestMagnitudeEpsilon absorbs float64 arithmetic noise in the
@@ -62,6 +72,10 @@ type BacktestComparison struct {
 	// side's metrics (0 in rows stored before they were recorded).
 	BaselineTradeCount  int `json:"baseline_trade_count"`
 	CandidateTradeCount int `json:"candidate_trade_count"`
+	// BacktestDays is the number of TSE trading days the replayed period
+	// spans (0 in rows stored before it was recorded, which therefore never
+	// count as enough evidence).
+	BacktestDays int `json:"backtest_days"`
 }
 
 // OpusReviewInput is everything Opus reviews for one proposal: Sol's
@@ -91,6 +105,7 @@ type OpusReview struct {
 	CandidateMaxDrawdownPct float64 `json:"candidate_max_drawdown_pct"`
 	BaselineTradeCount      int     `json:"baseline_trade_count"`
 	CandidateTradeCount     int     `json:"candidate_trade_count"`
+	BacktestDays            int     `json:"backtest_days"`
 	SufficientSamples       bool    `json:"sufficient_samples"`
 	Reason                  string  `json:"reason"`
 }
@@ -158,7 +173,8 @@ type OpusResponse struct {
 // policy_proposals.review_json.
 //
 // The deterministic rule is evaluated first: a proposal with fewer than
-// MinBacktestTrades shadow-backtest trades on either side has no evidence
+// MinBacktestTrades shadow-backtest trades on either side, or a replayed
+// period of fewer than MinBacktestDays trading days, has no evidence
 // to judge and is rejected as ReasonInsufficientSamples; one whose shadow-
 // backtest Expectancy is worse than baseline or whose Max Drawdown
 // degradation exceeds MaxDrawdownDegradationTolerance (relative) is
@@ -173,7 +189,8 @@ func (o *Opus) Review(ctx context.Context, in OpusReviewInput) (bool, string, er
 	expectancyNotWorse := cmp.CandidateExpectancy >= cmp.BaselineExpectancy
 	maxDrawdownBudget := cmp.BaselineMaxDrawdownPct * (1 + MaxDrawdownDegradationTolerance)
 	maxDrawdownWithinBudget := cmp.CandidateMaxDrawdownPct <= maxDrawdownBudget+backtestMagnitudeEpsilon
-	sufficientSamples := cmp.BaselineTradeCount >= MinBacktestTrades && cmp.CandidateTradeCount >= MinBacktestTrades
+	sufficientSamples := cmp.BaselineTradeCount >= MinBacktestTrades && cmp.CandidateTradeCount >= MinBacktestTrades &&
+		cmp.BacktestDays >= MinBacktestDays
 	deterministicPassed := sufficientSamples && expectancyNotWorse && maxDrawdownWithinBudget
 
 	review := OpusReview{
@@ -186,6 +203,7 @@ func (o *Opus) Review(ctx context.Context, in OpusReviewInput) (bool, string, er
 		CandidateMaxDrawdownPct: cmp.CandidateMaxDrawdownPct,
 		BaselineTradeCount:      cmp.BaselineTradeCount,
 		CandidateTradeCount:     cmp.CandidateTradeCount,
+		BacktestDays:            cmp.BacktestDays,
 		SufficientSamples:       sufficientSamples,
 	}
 
@@ -272,8 +290,9 @@ func encodeReview(review OpusReview) (bool, string, error) {
 func deterministicRejectReason(sufficientSamples bool, cmp BacktestComparison, expectancyNotWorse, maxDrawdownWithinBudget bool) string {
 	switch {
 	case !sufficientSamples:
-		return fmt.Sprintf("%s: shadow backtest needs at least %d trades per side, got baseline=%d candidate=%d (FR-SELFIMPROVE-4)",
-			ReasonInsufficientSamples, MinBacktestTrades, cmp.BaselineTradeCount, cmp.CandidateTradeCount)
+		return fmt.Sprintf("%s: shadow backtest needs at least %d trades per side over at least %d trading days, got baseline=%d candidate=%d over %d days; "+
+			"a cut-off, not a proof of safety (FR-SELFIMPROVE-4)",
+			ReasonInsufficientSamples, MinBacktestTrades, MinBacktestDays, cmp.BaselineTradeCount, cmp.CandidateTradeCount, cmp.BacktestDays)
 	case !expectancyNotWorse && !maxDrawdownWithinBudget:
 		return "shadow backtest Expectancy worsened and Max Drawdown exceeded the 10% relative budget (FR-SELFIMPROVE-4)"
 	case !expectancyNotWorse:

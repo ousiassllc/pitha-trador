@@ -103,7 +103,7 @@ type RunConfig struct {
 	// Thresholds is the Policy Engine LONG/SHORT threshold set to
 	// evaluate against - the value a Self-Improvement Governor shadow
 	// backtest overrides with a proposed change (overview.md §8
-	// "GOV->>BT: 直近20営業日相当のシャドーバックテスト実行（提案後しき
+	// "GOV->>BT: 直近30営業日相当のシャドーバックテスト実行（提案後しき
 	// い値）") without touching the live runtime_settings.
 	Thresholds policy.Thresholds
 	// Risk, when set, runs the replay through a simulated Risk Engine

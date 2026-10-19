@@ -27,24 +27,21 @@ import (
 )
 
 // Env* are the environment variables that override the default DB/config
-// file locations below (issue #42's "環境変数での上書き" decision).
-// These three override *file paths* (config *values* are edited in the
-// Settings screen, not through the environment, issue #708) - useful for a production deployment that keeps
-// its SQLite file and edited config/*.yaml copies outside the installed
-// application directory.
+// file locations below (issue #42's "環境変数での上書き" decision). They
+// override *file paths* only (config *values* are edited in the Settings
+// screen, issue #708) - useful for a deployment that keeps its SQLite file
+// and edited config/*.yaml outside the installed application directory.
 const (
 	EnvDBPath       = "PITHA_DB_PATH"
 	EnvStrategyPath = "PITHA_STRATEGY_PATH"
 	EnvRiskPath     = "PITHA_RISK_PATH"
 )
 
-// embeddedConfigSource is the ResolvedPaths.StrategyPath/RiskPath value
-// Run reports when it fell back to configdefaults' compiled-in YAML
-// rather than reading any file from disk - i.e. none of an explicit
-// bootstrap.Config field, the PITHA_STRATEGY_PATH/PITHA_RISK_PATH
-// environment variable, nor a config/*.yaml next to the running
-// executable (loadConfigOrEmbedded's steps 1-3) applied
-// (docs/architecture/overview.md §9, issue #59).
+// embeddedConfigSource is the ResolvedPaths.StrategyPath/RiskPath value Run
+// reports when it fell back to configdefaults' compiled-in YAML: none of an
+// explicit Config field, the PITHA_STRATEGY_PATH/PITHA_RISK_PATH variable
+// nor a config/*.yaml next to the executable applied
+// (loadConfigOrEmbedded's steps 1-3; docs/architecture/overview.md §9, issue #59).
 const embeddedConfigSource = "(embedded default)"
 
 // DefaultDBPath returns the conventional per-user SQLite database file
@@ -73,6 +70,8 @@ type Config struct {
 	DBPath       string
 	StrategyPath string
 	RiskPath     string
+	// ReadOnly opens the DB via sqlitedb.OpenReadOnly (cmd/backtestverify).
+	ReadOnly bool
 }
 
 // ResolvedPaths is the concrete (DBPath, StrategyPath, RiskPath) triple
@@ -106,19 +105,19 @@ type State struct {
 // introduced so a `wails build`/`go build ./cmd/server` .exe distributed
 // with no accompanying config/ directory still starts.
 //
-// Callers (cmd/desktop, cmd/server) treat any returned error as fatal: an
-// unopenable DB or unparsable config file leaves the process with no
-// usable state to serve requests from, so both entrypoints log the error
-// and exit rather than attempt to run degraded (issue #42's
-// error-handling decision - see each cmd/ call site's own comment for why
-// cmd/desktop does not attempt a pre-window native dialog here).
+// cmd/desktop and cmd/server treat any returned error as fatal: with no usable
+// DB or config there is nothing to serve (issue #42; see their call sites).
 func Run(cfg Config) (*State, error) {
 	dbPath, err := resolveDBPath(cfg.DBPath)
 	if err != nil {
 		return nil, err
 	}
 
-	db, err := sqlitedb.Open(dbPath)
+	open := sqlitedb.Open
+	if cfg.ReadOnly {
+		open = sqlitedb.OpenReadOnly
+	}
+	db, err := open(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: open db %q: %w", dbPath, err)
 	}

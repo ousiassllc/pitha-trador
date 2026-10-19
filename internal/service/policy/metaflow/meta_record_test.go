@@ -214,9 +214,10 @@ func TestEvaluate_LogsTheComparisonWithTheLegacyThreshold(t *testing.T) {
 	}
 }
 
-// Decide - the backtest replay path - has no stored model and keeps the legacy
-// threshold rule: it is not changed by the meta-labeling entry rule.
-func TestDecide_ReplayKeepsTheLegacyThresholdRule(t *testing.T) {
+// Decide is the legacy threshold rule, kept only for the backtest's explicitly
+// named legacy comparison mode (the replay itself uses DecideReplay): it is not
+// changed by the meta-labeling entry rule.
+func TestDecide_KeepsTheLegacyThresholdRule(t *testing.T) {
 	e := policy.NewEngine(testThresholds(), nil, nil, policytest.Option(policytest.ModelOf(policytest.SkippingModel()), &policytest.Predictions{}))
 	in := passingInput(domain.JevDirectionLong)
 	if sig := e.Decide(context.Background(), in); sig.Direction != domain.JevDirectionLong || sig.PolicyVersion != policy.Version {

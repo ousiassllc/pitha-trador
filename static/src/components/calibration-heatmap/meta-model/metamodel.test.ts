@@ -30,6 +30,8 @@ const metaModel = (overrides: Partial<MetaModel> = {}): MetaModel => ({
   oos_ev_bps: 3.5,
   oos_takes: 0,
   oos_days: 0,
+  oos_ev_verdict: 'no_data',
+  min_detectable_edge_bps: 11,
   oos_calibration: [{ mean_predicted: 0.55, observed_rate: 0.5, count: 40 }],
   llm_cutoff: '2026-09-01',
   ...overrides,
@@ -239,5 +241,70 @@ describe('pitha-calibration-heatmap meta-labeling model', () => {
     expect(text(el, 'calibration-metamodel-comparison')).toBeUndefined();
     expect(text(el, 'calibration-metamodel-gate')).toBeUndefined();
     expect(text(el, 'calibration-metamodel-forward')).toBeUndefined();
+  });
+
+  // Issue #780: an EV below the detectable edge is 判定不能, no takes stays
+  // データ無し, and the cut-off is never presented as proof of safety.
+  describe('OOS EV verdict', () => {
+    test('shows データ無し while the model took no OOS signal', async () => {
+      const { el } = await mount(response({ meta_model: metaModel() }));
+
+      expect(text(el, 'calibration-metamodel-ev-verdict')).toBe('データ無し');
+    });
+
+    test('shows 判定不能 with the detectable-edge line for an edge below it', async () => {
+      const { el } = await mount(
+        response({
+          meta_model: metaModel({
+            oos_takes: 600,
+            oos_ev_bps: 4,
+            oos_ev_ci: { low: -3, high: 11 },
+            oos_ev_verdict: 'undetermined',
+            min_detectable_edge_bps: 11,
+          }),
+        }),
+      );
+
+      const verdict = text(el, 'calibration-metamodel-ev-verdict');
+      expect(verdict).toContain('判定不能');
+      expect(verdict).toContain('約11 bps 未満のエッジは検出力不足で見分けられません');
+      expect(verdict).toContain('リターンの保証ではありません');
+      expect(verdict).toContain('足切りであり、安全の証明ではありません');
+    });
+
+    test('shows 有意なエッジなし, not 判定不能, for a large EV whose interval straddles 0', async () => {
+      const { el } = await mount(
+        response({
+          meta_model: metaModel({
+            oos_takes: 600,
+            oos_ev_bps: 15,
+            oos_ev_ci: { low: -2, high: 32 },
+            oos_ev_verdict: 'not_significant',
+          }),
+        }),
+      );
+
+      const verdict = text(el, 'calibration-metamodel-ev-verdict');
+      expect(verdict).toContain('有意なエッジなし');
+      expect(verdict).not.toContain('判定不能');
+    });
+
+    test('shows a positive verdict only with the cut-off wording', async () => {
+      const { el } = await mount(
+        response({
+          meta_model: metaModel({
+            oos_takes: 600,
+            oos_ev_bps: 15,
+            oos_ev_ci: { low: 3, high: 27 },
+            oos_ev_verdict: 'positive',
+          }),
+        }),
+      );
+
+      const verdict = text(el, 'calibration-metamodel-ev-verdict');
+      expect(verdict).toContain('正のエッジ');
+      expect(verdict).not.toContain('判定不能');
+      expect(verdict).toContain('安全の証明ではありません');
+    });
   });
 });

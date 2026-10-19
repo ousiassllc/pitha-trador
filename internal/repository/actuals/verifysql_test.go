@@ -128,8 +128,8 @@ func expect(t *testing.T, name string, r row, want map[string]any) {
 // without a syntax or column-name error, and writes nothing.
 func TestVerifyQueries_EmptyDatabase(t *testing.T) {
 	names, queries := verifyQueries(t)
-	if len(names) != 10 {
-		t.Fatalf("found queries %v, want Q0..Q9", names)
+	if len(names) != 11 {
+		t.Fatalf("found queries %v, want Q0..Q10", names)
 	}
 	db := openDB(t)
 	for _, name := range names {
@@ -241,4 +241,84 @@ func TestVerifyQueries_ReadOnlyConnection(t *testing.T) {
 	for _, name := range names {
 		run(t, ro, name, queries[name])
 	}
+}
+
+// Q10 buckets paper_orders.slippage_bps by the JST session of filled_at (the
+// marketcalendar boundaries: 寄り = the first minute of each session, 引け =
+// 15:25 on) and by position side, and prints the fill count, the mean and the
+// nearest-rank p95. The expected figures are computed by hand from the rows
+// below.
+func TestVerifyQueries_SlippageDistributionQ10(t *testing.T) {
+	db := openDB(t)
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := db.Exec(query, args...); err != nil {
+			t.Fatalf("%s: %v", query, err)
+		}
+	}
+	exec(`INSERT INTO instruments (id, symbol, name, market) VALUES (1, '7203', 'A', 'TSE')`)
+	nextID := 0
+	// order inserts a FILLED paper order (filled at utc "HH:MM:SS" on 2026-10-12)
+	// and the position it opened; slippage nil is an unrecorded value.
+	order := func(side, status, utc string, slippage any, withPosition bool) {
+		t.Helper()
+		nextID++
+		var filledAt any
+		if utc != "" {
+			filledAt = "2026-10-12T" + utc + ".000000000Z"
+		}
+		exec(`INSERT INTO paper_orders (id, instrument_id, symbol, side, order_type, quantity, status, submitted_at, filled_at, filled_price, slippage_bps)
+			VALUES (?, 1, '7203', ?, 'MARKET', 100, ?, '2026-10-12T00:00:00.000000000Z', ?, 1000, ?)`,
+			nextID, map[string]string{"LONG": "BUY", "SHORT": "SELL"}[side], status, filledAt, slippage)
+		if withPosition {
+			exec(`INSERT INTO positions (id, instrument_id, entry_order_id, symbol, side, quantity, entry_price, current_price, opened_at, closed_at)
+				VALUES (?, 1, ?, '7203', ?, 100, 1000, 1000, '2026-10-12T00:00:00.000000000Z', '2026-10-12T06:30:00.000000000Z')`, nextID, nextID, side)
+		}
+	}
+	filled := func(side, utc string, slippage float64) { order(side, "FILLED", utc, slippage, true) }
+
+	// LONG 寄り: 9:00:00 and 9:00:59 JST (前場), 12:30:00 JST (後場).
+	filled("LONG", "00:00:00", 4)
+	filled("LONG", "00:00:59", 6)
+	filled("LONG", "03:30:00", 8)
+	// LONG ザラ場, slippage 1..20: 9:01:00 (first ザラ場 second), 12:31:00 and
+	// 15:24:59 (last ザラ場 second) JST, then 17 fills between 10:00 and 10:16.
+	filled("LONG", "00:01:00", 1)
+	filled("LONG", "03:31:00", 2)
+	filled("LONG", "06:24:59", 3)
+	for i := 0; i < 17; i++ {
+		filled("LONG", fmt.Sprintf("01:%02d:00", i), float64(4+i))
+	}
+	// SHORT ザラ場 with a price improvement (negative slippage).
+	filled("SHORT", "02:00:00", -2.5)
+	filled("SHORT", "02:01:00", 1.5)
+	// SHORT 引け: 15:25:00 and 15:29:59 JST.
+	filled("SHORT", "06:25:00", 7)
+	filled("SHORT", "06:29:59", 9)
+	// Not part of the distribution: no recorded slippage, a pending order, an
+	// order no position refers to.
+	order("LONG", "FILLED", "01:30:00", nil, true)
+	order("LONG", "PENDING", "", 50, true)
+	order("LONG", "FILLED", "01:31:00", 100, false)
+
+	_, queries := verifyQueries(t)
+	got := run(t, db, "Q10", queries["Q10"])
+	if len(got) != 4 {
+		t.Fatalf("Q10 rows = %v, want 4 (open LONG, regular LONG/SHORT, close SHORT)", got)
+	}
+	// Rows come ordered open, regular, close, then by direction.
+	wantOrder := [][2]string{{"open", "LONG"}, {"regular", "LONG"}, {"regular", "SHORT"}, {"close", "SHORT"}}
+	for i, w := range wantOrder {
+		if got[i]["session"] != w[0] || got[i]["direction"] != w[1] {
+			t.Errorf("Q10 row %d = %v/%v, want %v/%v", i, got[i]["session"], got[i]["direction"], w[0], w[1])
+		}
+	}
+	expect(t, "Q10 open LONG", find(got, map[string]any{"session": "open", "direction": "LONG"}),
+		map[string]any{"fills": 3.0, "mean_slippage_bps": 6.0, "p95_slippage_bps": 8.0}) // ceil(0.95*3) = 3rd
+	expect(t, "Q10 regular LONG", find(got, map[string]any{"session": "regular", "direction": "LONG"}),
+		map[string]any{"fills": 20.0, "mean_slippage_bps": 10.5, "p95_slippage_bps": 19.0}) // ceil(0.95*20) = 19th
+	expect(t, "Q10 regular SHORT", find(got, map[string]any{"session": "regular", "direction": "SHORT"}),
+		map[string]any{"fills": 2.0, "mean_slippage_bps": -0.5, "p95_slippage_bps": 1.5}) // ceil(0.95*2) = 2nd
+	expect(t, "Q10 close SHORT", find(got, map[string]any{"session": "close", "direction": "SHORT"}),
+		map[string]any{"fills": 2.0, "mean_slippage_bps": 8.0, "p95_slippage_bps": 9.0})
 }

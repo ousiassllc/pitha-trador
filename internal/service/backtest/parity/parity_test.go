@@ -1,6 +1,7 @@
 package parity_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -150,8 +151,74 @@ func TestTradesFromPositions(t *testing.T) {
 	}
 }
 
-func TestProvisionalBoundIsLoose(t *testing.T) {
-	if parity.Provisional.MinEntryMatchRate <= 0 || parity.Provisional.MinExitReasonMatchRate <= 0 || parity.Provisional.Tolerance <= 0 {
-		t.Fatalf("Provisional = %+v, want positive bounds", parity.Provisional)
+// provisionalFixture is total Paper entries (symbols S000.. all closed by
+// take_profit) of which the replay reproduces the first entryMatched, closing
+// the first exitMatched of those for the same reason and the rest by stop_loss.
+func provisionalFixture(total, entryMatched, exitMatched int) (actual, replay []backtest.Trade) {
+	for i := range total {
+		symbol := fmt.Sprintf("S%03d", i)
+		actual = append(actual, trade(symbol, 0, domain.ExitReasonTakeProfit))
+		if i >= entryMatched {
+			continue
+		}
+		reason := domain.ExitReasonStopLoss
+		if i < exitMatched {
+			reason = domain.ExitReasonTakeProfit
+		}
+		replay = append(replay, trade(symbol, 0, reason))
+	}
+	return actual, replay
+}
+
+// The verdict under Provisional splits exactly at its bounds: a rate equal to
+// the lower bound passes and one just below fails.
+func TestCompare_ProvisionalSplitsAtItsBounds(t *testing.T) {
+	tests := []struct {
+		name                                  string
+		entryMatched, exitMatched             int
+		wantVerdict                           parity.Verdict
+		wantEntryMatchRate, wantExitMatchRate float64
+	}{
+		{"entry rate at the bound passes", 50, 50, parity.VerdictPass, 0.5, 1},
+		{"entry rate just below the bound fails", 49, 49, parity.VerdictFail, 0.49, 1},
+		{"exit_reason rate at the bound passes", 100, 50, parity.VerdictPass, 1, 0.5},
+		{"exit_reason rate just below the bound fails", 100, 49, parity.VerdictFail, 1, 0.49},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, replay := provisionalFixture(100, tc.entryMatched, tc.exitMatched)
+			report := parity.Compare(actual, replay, parity.Provisional)
+			if report.Verdict != tc.wantVerdict {
+				t.Errorf("Verdict = %q, want %q (entry %v, recall %v, exit_reason %v)", report.Verdict, tc.wantVerdict, report.EntryMatchRate, report.Recall, report.ExitReasonMatchRate)
+			}
+			if report.EntryMatchRate != tc.wantEntryMatchRate || report.Recall != tc.wantEntryMatchRate || report.ExitReasonMatchRate != tc.wantExitMatchRate {
+				t.Errorf("rates = entry %v recall %v exit_reason %v, want %v / %v / %v", report.EntryMatchRate, report.Recall, report.ExitReasonMatchRate, tc.wantEntryMatchRate, tc.wantEntryMatchRate, tc.wantExitMatchRate)
+			}
+			if (report.Err() != nil) != (tc.wantVerdict == parity.VerdictFail) {
+				t.Errorf("Err = %v, want it set exactly for a failing verdict", report.Err())
+			}
+		})
+	}
+}
+
+// Provisional's time tolerance is inclusive: an entry exactly Tolerance apart
+// is the same entry, one nanosecond further is not.
+func TestCompare_ProvisionalToleranceIsInclusive(t *testing.T) {
+	actual := []backtest.Trade{trade("7203", 0, domain.ExitReasonTakeProfit)}
+	for _, tc := range []struct {
+		name        string
+		offset      time.Duration
+		wantMatched int
+	}{
+		{"at the tolerance", parity.Provisional.Tolerance, 1},
+		{"just past the tolerance", parity.Provisional.Tolerance + time.Nanosecond, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			replayed := trade("7203", 0, domain.ExitReasonTakeProfit)
+			replayed.EntryTimestamp = replayed.EntryTimestamp.Add(tc.offset)
+			if got := parity.Compare(actual, []backtest.Trade{replayed}, parity.Provisional).MatchedEntries; got != tc.wantMatched {
+				t.Errorf("MatchedEntries = %d, want %d", got, tc.wantMatched)
+			}
+		})
 	}
 }

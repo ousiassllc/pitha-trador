@@ -13,8 +13,24 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
 )
 
-// shadowBacktestLookbackDays is FR-SELFIMPROVE-4's "直近20営業日相当".
-const shadowBacktestLookbackDays = 20
+// shadowBacktestLookbackDays is FR-SELFIMPROVE-4's "直近30営業日相当": the
+// shadow backtest must span at least assist.MinBacktestDays trading days to
+// count as evidence (issue #780), so the window is exactly that long.
+const shadowBacktestLookbackDays = assist.MinBacktestDays
+
+// calibrationLookbackDays is FR-SELFIMPROVE-1's "直近20営業日" window of the
+// Calibration metrics Sol analyzes. It is separate from the shadow backtest
+// window: #780 lengthened only the latter.
+const calibrationLookbackDays = 20
+
+// ShadowBacktestPeriod is the window the shadow backtest replays when it runs
+// at now: from JST midnight of the shadowBacktestLookbackDays-th business day
+// before now up to now, so the window holds that many whole trading days
+// before today (the first day is not cut off at now's clock time).
+// cmd/backtestverify defaults to the same window.
+func ShadowBacktestPeriod(now time.Time) backtest.Period {
+	return backtest.Period{Start: jstMidnight(businessDaysBefore(now, shadowBacktestLookbackDays)), End: now}
+}
 
 // postApplyTrackingDays is FR-SELFIMPROVE-6's "適用後5営業日相当".
 const postApplyTrackingDays = 5

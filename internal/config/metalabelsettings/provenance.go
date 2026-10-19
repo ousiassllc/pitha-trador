@@ -25,6 +25,16 @@ const (
 // MaxProvenanceLen is the longest model name / source text accepted (characters).
 const MaxProvenanceLen = 200
 
+// Mode is the operating mode a model adoption is judged for.
+type Mode string
+
+const (
+	// ModePaper is the default: an unverified cutoff only warns.
+	ModePaper Mode = "paper"
+	// ModeLive is the pre-Live check: an unverified cutoff stops the adoption.
+	ModeLive Mode = "live"
+)
+
 // Cutoff statuses (CutoffStatus).
 const (
 	// CutoffPlaceholder: LLMCutoff is unset or the shipped placeholder
@@ -32,7 +42,8 @@ const (
 	// nightly retraining never adopts a model.
 	CutoffPlaceholder = "placeholder"
 	// CutoffUnverified: a real cutoff, but the Jev model it was confirmed for
-	// is not recorded, so a Jev model switch cannot be detected (warning only).
+	// is not recorded, so a Jev model switch cannot be detected. A warning in
+	// Paper; the adoption is stopped before Live (ModeLive).
 	CutoffUnverified = "unverified"
 	// CutoffConfirmed: a real cutoff with the Jev model recorded.
 	CutoffConfirmed = "confirmed"
@@ -58,7 +69,7 @@ func (s Settings) CutoffWarning() string {
 			"夜間再学習のモデルは採用されず「不採用」として記録されます。実際の日付と根拠を設定してください。"
 	case CutoffUnverified:
 		return "学習データの終わりの根拠（Jev のモデル名・確認日・出典）が未記録です。Jev のモデルが切り替わっても検知できません。" +
-			"確認した Jev のモデル名を " + KeyLLMCutoffModel + " に記録してください。"
+			"Paper では警告のまま採用されますが、Live 前チェックでは採用を止めます。確認した Jev のモデル名を " + KeyLLMCutoffModel + " に記録してください。"
 	}
 	return ""
 }

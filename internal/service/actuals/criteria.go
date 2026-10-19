@@ -1,8 +1,8 @@
 package actuals
 
 // Criteria are the documented thresholds of the evaluation (issue #777
-// 要件2/4; docs/requirements/functional/components-platform.md の「実績評価と
-// 合格ライン」). They are code defaults, not runtime settings: nothing in the
+// 要件2/4; docs/requirements/functional/performance-evaluation.md §4
+// 合格ライン（FR-EVAL-4）). They are code defaults, not runtime settings: nothing in the
 // evaluation is editable from the Settings screen, and nothing gates Live
 // trading on it (#55 stays a human decision).
 type Criteria struct {

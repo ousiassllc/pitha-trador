@@ -53,6 +53,7 @@ export interface LLMCutoffInfo {
 const REJECT_REASON_LABELS: Record<string, string> = {
   llm_cutoff_placeholder: 'LLM 学習データの終わりが仮置きのまま',
   llm_model_changed: 'Jev のモデルが切り替わった（cutoff 未再確認）',
+  llm_cutoff_unverified: 'LLM 学習データの終わりの根拠が未記録（Live 前チェックで採用を止める）',
   oos_samples_below_minimum: 'OOS 件数が基準未満',
   oos_days_below_minimum: 'OOS の営業日数が基準未満',
   oos_takes_below_minimum: 'OOS の take 件数が基準未満',

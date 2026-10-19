@@ -64,7 +64,7 @@ erDiagram
 | algorithm | text | NOT NULL, CHECK (`<> ''`) | 学習アルゴリズム名（例: `logistic_regression`） |
 | label_version | integer | NOT NULL | 学習に使ったラベルの版（`calibration_outcomes.label_version`。`2`=トリプルバリア） |
 | status | text | NOT NULL, CHECK (`active`/`rejected`) | `active`=採用可、`rejected`=OOS指標が基準に届かず不採用（記録のみ） |
-| reject_reason | text | NOT NULL, DEFAULT `''` | `rejected`の理由。`active`は空。OOS基準未達は`oos_samples_below_minimum`/`oos_days_below_minimum`/`oos_takes_below_minimum`/`oos_ev_ci_not_positive`/`oos_auc_ci_not_above_minimum`（FR-META-7）、現行モデルを有意に上回らなければ`candidate_not_better_than_active`・比較不能なら`active_model_not_comparable`、変更頻度制限なら`model_swap_rate_limited`・`policy_change_freeze`、`metalabel.llm_cutoff`が仮置きのままなら`llm_cutoff_placeholder`、OOS窓のJevモデルがcutoff確認時と異なれば`llm_model_changed`（FR-META-6、issue #776。いずれも既存の有効モデルは更新されない） |
+| reject_reason | text | NOT NULL, DEFAULT `''` | `rejected`の理由。`active`は空。OOS基準未達は`oos_samples_below_minimum`/`oos_days_below_minimum`/`oos_takes_below_minimum`/`oos_ev_ci_not_positive`/`oos_auc_ci_not_above_minimum`（FR-META-7）、現行モデルを有意に上回らなければ`candidate_not_better_than_active`・比較不能なら`active_model_not_comparable`、変更頻度制限なら`model_swap_rate_limited`・`policy_change_freeze`、`metalabel.llm_cutoff`が仮置きのままなら`llm_cutoff_placeholder`、OOS窓のJevモデルがcutoff確認時と異なれば`llm_model_changed`、Live前チェックで出典未記録なら`llm_cutoff_unverified`（FR-META-6、issue #776・#780。いずれも既存の有効モデルは更新されない） |
 | trained_at | text | NOT NULL | 学習実行時刻（UTC）。最新の有効モデルは`status='active'`で`trained_at`が最大の行 |
 | train_start / train_end | text | NOT NULL | 学習窓（UTC） |
 | oos_start / oos_end | text | NOT NULL | OOS窓（UTC）。LLMのcutoff以降だけでJev特徴量を評価できるよう、窓を必ず保存し画面・ログに出せるようにする。`oos_start`は`train_end`以降（Storeが検証。情報漏洩の防止） |
