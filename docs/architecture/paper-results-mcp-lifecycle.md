@@ -24,11 +24,11 @@ issue #795。`docs/architecture/paper-results-mcp.md`（#783）の MCP を、Set
 
 - 新パッケージ `internal/service/paperresultsmcp/proc`（`Manager`）。子プロセスの起動・停止・状態を持つ。`settings` だけに依存する（`readdb`・`query`・アプリのリポジトリには依存しない）。
 - `internal/service/paperresultsmcp/admin` が `Manager` を持ち、`View`（状態表示）と `Start` / `Stop` / `Restart` / `AutoStart` / `Shutdown` を提供する。ハンドラ（`internal/web/handler/mcpsettings`）とパネル（`internal/web/organisms/mcp`）は `admin` だけを見る。
-- `internal/bootstrap` が `admin.Service` を 1 つ作り、`Services.Start` の末尾で `AutoStart`、`Services.Stop` で `Shutdown` を呼ぶ。`cmd/desktop` の `OnStartup`/`OnShutdown` と `cmd/server` の終了経路はどちらも `Services.Start`/`Stop` を通るので、両方で同じ挙動になる。
+- `internal/bootstrap/mcpwire` が `admin.Service` を 1 つ作り（`New`）、`Start`（`AutoStart` を別 goroutine で）・`Stop`（`Shutdown`）・`RouterOptions`（Settings のカード）を提供する。`cmd/desktop`（`App.startup`/`App.shutdown`）と `cmd/server`（起動・終了経路）が同じ関数を呼ぶので、両方で同じ挙動になる。`internal/bootstrap` 本体（`Services`）には置かない: ディレクトリの行数上限（linterly）に余裕がなく、MCP の起動管理はアプリの背景サービス（Scheduler など）の起動・停止順序とも独立だからである。
 
 ## 4. 自動起動
 
-`Services.Start` が、DB を開いてマイグレーションを終えたあとに `AutoStart` を呼ぶ。条件は `Start` と同じで、次をすべて満たすときだけ起動する。
+`Services.Start` が成功したあと（Wails の `OnStartup`、`cmd/server` の起動経路）に `mcpwire.Start` が `AutoStart` を呼ぶ。`Services.Start` が失敗したときは呼ばない（失敗したアプリの後ろに MCP を残さない）。条件は `Start` と同じで、次をすべて満たすときだけ起動する。
 
 1. 設定ファイルが読める（権限 `0600`、JSON が正しい）
 2. `enabled=true`
@@ -43,7 +43,7 @@ issue #795。`docs/architecture/paper-results-mcp.md`（#783）の MCP を、Set
 
 | 場面 | 動き |
 |------|------|
-| 通常終了（`Services.Stop`、Wails の `OnShutdown`、`cmd/server` の SIGINT/SIGTERM と待受失敗） | `Shutdown` が子を止め（Unix 系は SIGTERM、5 秒で kill。Windows は終了させる）、終了を待ち、以後の起動を拒否する。自動更新のインストーラーは `Services.Stop` のあとに起動するので、MCP の実行ファイルが使用中のまま置換されることはない |
+| 通常終了（Wails の `OnShutdown`、`cmd/server` の SIGINT/SIGTERM と待受失敗。どちらも `Services.Stop` より前に `mcpwire.Stop`） | `Shutdown` が子を止め（Unix 系は SIGTERM、5 秒で kill。Windows は終了させる）、終了を待ち、以後の起動を拒否する。自動更新のインストーラーは `OnShutdown`（`mcpwire.Stop` と `Services.Stop`）のあとに起動するので、MCP の実行ファイルが使用中のまま置換されることはない |
 | アプリが異常終了・kill された | **Windows**: 子を Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`）に入れる。ジョブのハンドルはアプリだけが持ち、アプリのプロセスが消えると OS がハンドルを閉じて子を終了させる。ハンドルは閉じない。**Linux**: `Pdeathsig=SIGKILL`（親スレッドの終了で発火するため、起動と待機を専用のロック済みスレッドで行う）。その他の OS は異常終了への保護がない（本番は Windows）。入れられなかった場合は子を止めて起動失敗にする（孤児を作らない側に倒す） |
 | `--supervise` によるアプリの再起動 | 監督プロセス（`internal/supervisor`）は子のアプリだけを見る。アプリが異常終了すると上の経路で MCP も消え、再起動した新しいアプリの `AutoStart` が MCP を起動する。旧 MCP がまだ消えきっていない場合に備え、`AutoStart` は待受アドレスが応答しなくなるまで最大 5 秒待ってから起動する。それでも応答するなら（アプリの外で起動された MCP）起動せず、二重起動しない |
 | 操作者が終了コード 0 で終了（監督も終了） | 通常終了と同じ。MCP も止まる |

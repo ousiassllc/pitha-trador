@@ -19,7 +19,7 @@
 | 設定ファイルの書き込み（原子的・`0600`）と API キーの生成（`pitha-mcp-` + 32 バイトの乱数）。Settings 画面から使う | `internal/service/paperresultsmcp/settings`（`Save`、`GenerateAPIKey`） |
 | Settings 画面側の設定サービス（状態表示・有効/待受アドレスの保存・API キー再生成・起動/停止/再起動・アプリ起動時の自動起動・アプリ終了時の停止） | `internal/service/paperresultsmcp/admin` |
 | MCP 子プロセスの起動・停止・状態（二重起動の防止、環境変数の許可リスト、孤児の防止＝Windows の Job Object、終了理由の分類）。issue #795、設計は `architecture/paper-results-mcp-lifecycle.md` | `internal/service/paperresultsmcp/proc` |
-| アプリ本体への配線（`Services.Start` で自動起動、`Services.Stop` で停止。`cmd/desktop` と `cmd/server` が `bootstrap.WithMCP(mcpwire.New())` を渡す） | `internal/bootstrap`（`mcp_lifecycle.go`）、`internal/bootstrap/mcpwire` |
+| アプリ本体への配線（`mcpwire.New` でサービスを作り、`mcpwire.Start` で自動起動、`mcpwire.Stop` で停止、`mcpwire.RouterOptions` で Settings のカードを配線。`cmd/desktop` の `App.startup`/`App.shutdown` と `cmd/server` の起動・終了経路が呼ぶ。`internal/bootstrap` 本体には置かない） | `internal/bootstrap/mcpwire`、`cmd/desktop`、`cmd/server` |
 | Settings 画面の MCP パネルのハンドラと画面部品（`GET /settings/mcp-panel`、`POST /settings/mcp`、`POST /settings/mcp/key`、`POST /settings/mcp/{start,stop,restart}`） | `internal/web/handler/mcpsettings`、`internal/web/organisms/mcp`、`static/src/components/copy-button` |
 | DB を `mode=ro` + `PRAGMA query_only=ON` で開く（`sqlitedb.Open` は呼ばない） | `internal/service/paperresultsmcp/readdb` |
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
@@ -67,9 +67,9 @@ MCP は別プロセスのまま、アプリが子プロセスとして起動す�
 
 **操作**: Settings 画面の MCP パネルの「起動」「停止」「再起動」ボタン（`POST /settings/mcp/start`・`stop`・`restart`。CSRF ヘッダ必須、Setup 完了後のみ）。起動できるのは、保存された設定が有効・API キーあり・待受アドレスが許可範囲のときだけ（プロセスが自分で拒否する条件と同じ。満たさないときはプロセスを作らず、理由を 422 で返す）。待受アドレスが応答しているとき（アプリの外で起動された MCP を含む）と、アプリが起動した子がいるときは、起動しない（409）。「再起動」は停止してから保存済みの設定で起動し直す（設定の保存・API キーの再生成の反映はこれで行う）。
 
-**アプリ起動時**: アプリの起動（`Services.Start`）の最後に、保存された設定が有効・API キーあり・待受アドレスが許可範囲のとき MCP も同時に起動する。無効（既定）・キー空・不正アドレス・設定ファイルが使えない場合は起動しない。画面には「次回起動時も自動で起動します」（起動しないときは理由）と出す。アプリがクラッシュして `--supervise` に再起動されたときは、前の MCP のポートが閉じるまで最大 5 秒待ってから起動する。それでも応答する（アプリの外で起動された）ときは起動しない。
+**アプリ起動時**: アプリの背景サービスの起動（`Services.Start`）が成功した直後（`cmd/desktop` の `OnStartup`、`cmd/server` の `Services.Start` の後）に、保存された設定が有効・API キーあり・待受アドレスが許可範囲のとき MCP も同時に起動する。無効（既定）・キー空・不正アドレス・設定ファイルが使えない場合は起動しない。画面には「次回起動時も自動で起動します」（起動しないときは理由）と出す。アプリがクラッシュして `--supervise` に再起動されたときは、前の MCP のポートが閉じるまで最大 5 秒待ってから起動する。それでも応答する（アプリの外で起動された）ときは起動しない。
 
-**アプリ終了時**: アプリの終了（`Services.Stop`。Wails の `OnShutdown` と `cmd/server` の終了経路の両方）で MCP も止める（Unix 系は SIGTERM、5 秒で kill。Windows は終了させる）。終了を始めたあとの起動は拒否する。アプリが異常終了・kill された場合は、OS が MCP を止める: Windows は子を Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`）に入れ、アプリのプロセスが消えるとハンドルが閉じて子が終了する。Linux は `Pdeathsig=SIGKILL`。Job Object に入れられなかったときは起動を失敗として子を止める。
+**アプリ終了時**: アプリの終了（Wails の `OnShutdown` と `cmd/server` の終了経路の両方。`Services.Stop` より前）で MCP も止める（Unix 系は SIGTERM、5 秒で kill。Windows は終了させる）。終了を始めたあとの起動は拒否する。アプリが異常終了・kill された場合は、OS が MCP を止める: Windows は子を Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`）に入れ、アプリのプロセスが消えるとハンドルが閉じて子が終了する。Linux は `Pdeathsig=SIGKILL`。Job Object に入れられなかったときは起動を失敗として子を止める。
 
 **Windows の再起動後**: PC を再起動したあとは、インストーラーのスタートアップショートカット（`--supervise`、既定ON。`requirements/non-functional.md` §3）でアプリが立ち上がり、その起動と同時に MCP も起動する。MCP 用の自動起動（スタートアップ・タスクスケジューラへの登録）は作らない。ホスト再起動後の無人復帰は Windows の自動ログオンが前提である。
 
