@@ -148,6 +148,7 @@
 | `daily_bar_run_failed_count` | 期間内（`run_date`）の `daily_bar_runs.status='failed'` の件数 |
 | `label_skip_count` | 期間内（`calibration_label_skips.created_at`）の件数 |
 | `job_failures` | 期間内（`finished_at`）に `failed` で終わったジョブの内訳。`total`、`by_day[]`（`date` は JST 日・`count`）、`by_queue[]`（`queue`・`count`。キューの順）、`by_error_code[]`（`code`・`count`）、`by_day_and_error_code[]`（`date`・`code`・`count`。「10/6 の 4002006 は N 件」はこれで引ける）。どの一覧も合計は `total`。`skipped_total` / `skipped_by_queue[]` は `last_error` が `skipped: ` で始まる `succeeded` のジョブ（`jobqueue.Skip` による終端スキップ。`jobs[].succeeded_count` に含まれる）の件数 |
+| `alerts[]` | いま出ている警告（期間ではなく現在）。要素は `code` と `since`（条件が始まった時刻、UTC RFC3339）だけで、自由文は返さない。無ければ `[]`。`code` は固定: `kabu_not_logged_in`（取引日の 08:45〜15:30 に kabu が未ログイン〔4001007〕。08:45 の時点で既に続いていた、または後から 5 分続いた）/ `market_data_idle`（立会中〔9:00〜11:30・12:30〜15:30〕に `market-data` ジョブが成功も失敗も 5 分間ゼロ。立会の開始から数える）。非取引日と対象時間外は出さず、条件が解けると消える。アプリ内の検知（`health_alerts`、`000039`）が保存した行を読み、検知の最終確認（`health_alert_checks`）が 2 分より古い間はアプリが止まっているとみなして行を使わず、立会中なら `jobs` から `market_data_idle` だけを導く。health_today（#808）も同じ状態（`query.HealthAlerts`）を読む |
 | `retention` | `succeeded_job_days`（7）/ `failed_job_days`（30）と固定の注記。完了ジョブは `internal/service/retention` が成功 7 日・失敗 30 日で削除するため、期間がそれより前に及ぶと成功は先に消え、`jobs[]` と `job_failures` に出ない（失敗は 30 日残る） |
 
 `job_failures` の `code` は `jobs.last_error` の先頭 256 バイトから、固定パターン（kabu `code 4002006` / 立花 `p_errno=-62`・`sResultCode=NNN`）の数値トークン（`-` 付きでもよい 1〜8 桁）だけを取り出した値で、無ければ `unknown`。取り出しはプロセス内で行い、`last_error` の本文は返さない（SQL に `last_error` が現れるのは `substr(last_error, 1, N)`（N は 256 以下）の形だけで、`readonly_db_test` が確認する）。
@@ -156,7 +157,7 @@
 
 ## 4. 出さないもの
 
-ツールの戻り値はホワイトリスト方式とする。テーブルの `SELECT *` は禁止する。下の表は、列が存在してもツールに載せないものの一覧である（マイグレーション `000001`〜`000038` で確認した名前）。
+ツールの戻り値はホワイトリスト方式とする。テーブルの `SELECT *` は禁止する。下の表は、列が存在してもツールに載せないものの一覧である（マイグレーション `000001`〜`000039` で確認した名前）。
 
 | 出さないもの | 確認した場所 |
 |--------------|----------------|
@@ -197,3 +198,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.0 | 2026-10-17 | 新規作成 | issue #783。ツールの入出力・上限・出さない列を、既存マイグレーションの列名で固定 |
 | 1.1 | 2026-10-17 | 受け入れ条件の実機確認を、選んだ経路（Tailscale または Cloudflare Tunnel）経由に変えた。Tailscale は tailnet 外から届かないことも確認する。必須の 401 は API キーだけ | 悠太さん指示。Cloudflare を必須にしない |
 | 1.2 | 2026-10-18 | トランスポートの要確認を、Streamable HTTP（POST のみ・JSON 応答）で実装した旨の回答に改めた。ツール・上限・ホワイトリストは変更なし | issue #783 の実装 |
+| 1.3 | 2026-10-20 | §3.8 `collection_status` に `alerts[]`（`code`・`since`。`kabu_not_logged_in` / `market_data_idle`）を追加。マイグレーション `000039` の `health_alerts` / `health_alert_checks` を読む | issue #802 |

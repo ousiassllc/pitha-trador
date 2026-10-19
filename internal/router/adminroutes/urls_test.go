@@ -43,6 +43,7 @@ func TestURLs_ExistingRoutesAreAlive(t *testing.T) {
 		{"/system/update-panel", "/system/update-panel", http.StatusOK},
 		{"/system/marketdata-status", "/system/marketdata-status", http.StatusOK},
 		{"/system/daily-halt", "/system/daily-halt", http.StatusOK},
+		{"/system/health-alerts", "/system/health-alerts", http.StatusOK},
 		{"/settings/mcp-panel", "/settings/mcp-panel", http.StatusOK},
 		{"/admin", "/admin", http.StatusOK},
 	}

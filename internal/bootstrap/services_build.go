@@ -15,6 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/metalabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newswire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
@@ -108,9 +109,9 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	})
 
 	luna := assist.NewLuna(assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}), assist.WithJev(s.Jev))
-	feed, feedOn := newNewsFeed(secrets, cfg.yanoshinURL)
+	feed, feedOn := newswire.NewFeed(secrets, cfg.yanoshinURL)
 	s.newsEnabled = feedOn && luna.Configured()
-	logNewsIngest(s.newsEnabled, feedOn)
+	newswire.LogIngest(s.newsEnabled, feedOn)
 	s.Screener = screener.NewLiveSource() // News Ingest polls its candidates; shared with buildJevPipeline
 	newsOpts := []newsfeed.Option{newsfeed.WithSessionGate(marketcalendarOpen), newsfeed.WithErrorObserver(s.Activity.ObserveNewsFeedError)}
 	if cfg.newsNow != nil {

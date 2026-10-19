@@ -19,8 +19,9 @@ const newsPollInterval = time.Minute
 // Start launches every background goroutine this build's composition root owns: the broker session
 // (broker.Session.Start) and PUSH subscription, the candidate-refresh ticker (issue #45), the Scheduler's
 // worker pool + cron triggers (scheduler.Scheduler.Start; Recover first resets jobs a crash left "running"),
-// the daily-guard Paper seeding (dailyguardseed.Run, #782) and the once-a-minute failed-job summary by error
-// code (jobfailurelog, #803). All run until ctx is done or Stop is called; cmd/desktop and cmd/server stop them.
+// the daily-guard Paper seeding (dailyguardseed.Run, #782), the once-a-minute failed-job summary by error
+// code (jobfailurelog, #803) and the trading-hours health alert check (#802). All run until ctx is done or
+// Stop is called; cmd/desktop and cmd/server stop them.
 func (s *Services) Start(ctx context.Context) error {
 	if _, err := s.Scheduler.Recover(ctx); err != nil {
 		return fmt.Errorf("bootstrap: recover jobs: %w", err)
@@ -64,6 +65,8 @@ func (s *Services) Start(ctx context.Context) error {
 	s.startRankingWatch(ctx)
 	s.startRankingMeasure(ctx)
 	s.startDailyBars(ctx)
+	s.wg.Add(1)
+	go func() { defer s.wg.Done(); s.HealthAlerts.Run(ctx) }()
 	s.startWatchList(ctx)
 	jobfailurelog.Start(ctx, &s.wg, s.Jobs) // issue #803
 

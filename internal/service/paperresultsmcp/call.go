@@ -102,5 +102,5 @@ func (s *Server) execute(ctx context.Context, run runFunc, rng query.Range) (any
 		return nil, 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	return run(ctx, toolEnv{q: tx, r: rng, capitalJPY: s.opts.CapitalJPY})
+	return run(ctx, toolEnv{q: tx, r: rng, capitalJPY: s.opts.CapitalJPY, now: s.now()})
 }

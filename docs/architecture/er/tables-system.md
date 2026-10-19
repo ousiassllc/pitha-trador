@@ -123,6 +123,25 @@ erDiagram
 
 保持期間: 完了行のみを対象に、Schedulerの日次（起動時catch-up付き）ジョブ（`internal/service/retention`）が`succeeded`は`finished_at`から7日、`failed`は30日経過後にバッチ削除する（期限切れ行は`INDEX (status, finished_at)`の範囲検索で取得する）。`pending`/`running`は削除しない。`ClaimNext`や`QueueCounts`の集計コストとDBファイルの肥大を抑えるための措置で、Activity Logが参照する直近の行は保持期間内に残る（`non-functional.md` §3）。
 
+## health_alerts / health_alert_checks（立会中の市況データ停止の警告、issue #802）
+
+アプリ内の検知（`internal/service/healthalert.Detector`）が30秒ごとに書き、全ページ共通バナーとPaper 実績 MCP（別プロセス・読み取り専用接続）が読む（マイグレーション000039）。自由文は持たない。
+
+`health_alerts`: いま出ている警告。1コード=1行。条件が解けると行ごと消えるので履歴は持たない。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| code | text | PK, CHECK (`<> ''`) | 固定コード: `kabu_not_logged_in`（取引日の08:45〜15:30にkabuが未ログイン〔4001007〕。08:45の時点で既に続いていた、または後から5分続いた）/ `market_data_idle`（立会中に`market-data`ジョブが成功も失敗も5分間ゼロ） |
+| since | text | NOT NULL | 条件が始まった時刻（UTC） |
+| checked_at | text | NOT NULL | 検知が最後にこの条件を確かめた時刻（UTC） |
+
+`health_alert_checks`: 検知の心拍。1行だけ（`id = 1`、CHECK）。`checked_at`が2分より古い間はアプリが動いていないので、MCPは`health_alerts`の行を使わない。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK, CHECK (`= 1`) | 常に1 |
+| checked_at | text | NOT NULL | 検知の最終確認時刻（UTC） |
+
 ## ベクトルインデックス（sqlite-vec）
 
 RAG類似検索（`functional.md` FR-RAG-1〜3）のため、[sqlite-vec](https://github.com/asg017/sqlite-vec)拡張の`vec0`仮想テーブルを用いる。標準化済み特徴量ベクトルは14次元固定（return_1m, return_5m, return_15m, price_vs_vwap_bps, volume_ratio_1m, volume_ratio_5m, spread_bps, orderbook_imbalance, realized_vol_5m, realized_vol_15m, volatility_expansion_ratio, market_return_5m, sector_return_5m, stock_vs_sector_relative_strength の14項目を標準化し結合）。

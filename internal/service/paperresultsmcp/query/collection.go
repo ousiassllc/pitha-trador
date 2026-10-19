@@ -33,15 +33,20 @@ type Collection struct {
 	// JobFailures breaks the failed jobs of the period down by JST day, queue
 	// and error code and counts the terminal skips (issue #801).
 	JobFailures JobFailures `json:"job_failures"`
+	// Alerts are the health alerts active now (issue #802): fixed codes
+	// (AlertKabuNotLoggedIn, AlertMarketDataIdle) with when they began.
+	// They describe the present, not the period.
+	Alerts []Alert `json:"alerts"`
 	// Retention documents how long finished jobs are kept, which bounds every
 	// job count above.
 	Retention RetentionNote `json:"retention"`
 }
 
-// CollectionStatus reads the collection health of r. market_snapshots is
-// touched only for MAX(timestamp) and existence checks per trading day (both
-// served by market_snapshots_timestamp_idx); no price or raw column is read.
-func CollectionStatus(ctx context.Context, q Q, r Range) (Collection, error) {
+// CollectionStatus reads the collection health of r, and the alerts active at
+// now. market_snapshots is touched only for MAX(timestamp) and existence
+// checks per trading day (both served by market_snapshots_timestamp_idx); no
+// price or raw column is read.
+func CollectionStatus(ctx context.Context, q Q, r Range, now time.Time) (Collection, error) {
 	from, to := r.bounds()
 	c := Collection{MissingSessionDates: []string{}, Jobs: []JobStatus{}}
 
@@ -89,6 +94,9 @@ SELECT COUNT(*) FROM calibration_label_skips WHERE created_at >= ? AND created_a
 		return Collection{}, fmt.Errorf("query: label skips: %w", err)
 	}
 	if c.JobFailures, err = jobFailures(ctx, q, from, to); err != nil {
+		return Collection{}, err
+	}
+	if c.Alerts, err = HealthAlerts(ctx, q, now); err != nil {
 		return Collection{}, err
 	}
 	c.Retention = retentionNote()

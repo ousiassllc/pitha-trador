@@ -126,3 +126,4 @@
 | 1.119 | 2026-10-19 | issue #780の決定を反映: シャドーバックテストの期間を直近30営業日相当へ（`GOV->>BT`の記述）。判定の足切り（各側100件以上・30営業日以上）は安全の証明ではない | 悠太さん承認の決定（issue #780）に図を合わせるため |
 | 1.120 | 2026-10-19 | §フロー（`overview/flows.md`）の起動・停止に、Paper 実績 MCP の自動起動（`Services.Start`の後）・停止（`Services.Stop`の前）・異常終了時の孤児防止・`--supervise` 後の復帰を追記（issue #795。`bootstrap/mcpwire`の`Start`/`Stop`・`service/paperresultsmcp/proc` を追加。`bootstrap`本体は変更しない） | issue #795 |
 | 1.121 | 2026-10-20 | §3のbootstrapツリーに`internal/bootstrap/jobfailurelog`（失敗ジョブを1分ごとにエラーコード別へ集約して`-error.log`へ出す）を追記 | issue #803 |
+| 1.122 | 2026-10-20 | `internal/service/healthalert`（立会中の市況データ停止の検知）と`GET /system/health-alerts`バナーを構成に追加 | issue #802 |

@@ -133,7 +133,7 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("kill switch", kill, "events")
 	want("kill event", first(kill, "events"), "id triggered_at reason resolved_at resolved_by")
 	coll := data("collection_status", period)
-	want("collection", coll, "latest_snapshot_at missing_session_dates jobs daily_bar_run_failed_count label_skip_count job_failures retention")
+	want("collection", coll, "latest_snapshot_at missing_session_dates jobs daily_bar_run_failed_count label_skip_count job_failures alerts retention")
 	want("job", first(coll, "jobs"), "queue succeeded_count failed_count latest_succeeded_finished_at")
 	failures := coll["job_failures"].(map[string]any)
 	want("job failures", failures, "total by_day by_queue by_error_code by_day_and_error_code skipped_total skipped_by_queue")
