@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,10 @@ type CountingDriver struct {
 	onSQL func(ctx context.Context, query string) error
 }
 
+// driverSeq makes every registered name unique: sql.Register panics on a
+// duplicate, and the same test runs again under `go test -count=N`.
+var driverSeq atomic.Int64
+
 // NewCountingDriver registers a uniquely named wrapper of the sqlite driver.
 func NewCountingDriver(t *testing.T) (name string, d *CountingDriver) {
 	t.Helper()
@@ -37,7 +42,7 @@ func NewCountingDriver(t *testing.T) (name string, d *CountingDriver) {
 		t.Fatal(err)
 	}
 	d = &CountingDriver{inner: inner}
-	name = "counting-" + strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())
+	name = "counting-" + strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()) + "-" + strconv.FormatInt(driverSeq.Add(1), 10)
 	sql.Register(name, d)
 	return name, d
 }
