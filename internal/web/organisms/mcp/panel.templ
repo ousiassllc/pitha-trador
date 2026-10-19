@@ -1,0 +1,197 @@
+package mcp
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// PanelProps is Panel's input (issue #792). The owning handler
+// (internal/web/handler/mcpsettings) fills it from the MCP admin service,
+// which never holds the API key: RevealedKey is the only field that ever
+// carries one, and only on the response to the "generate / regenerate" action.
+type PanelProps struct {
+	Enabled bool
+	Listen  string
+	// State is "listening", "stopped" or "no_key"; Note explains a stopped
+	// state in operator-facing words (empty when there is nothing to add).
+	State string
+	Note  string
+	// KeyConfigured: a key is stored (its value is never shown again).
+	KeyConfigured bool
+	// URL and AuthHeader are what to register in the Grok Bot; AuthHeader
+	// is always the masked form.
+	URL        string
+	AuthHeader string
+	// ExePath/ExeExists: where the installer places paper-results-mcp.
+	ExePath      string
+	ExeExists    bool
+	SettingsPath string
+	// Warning is a settings file problem shown above the form (empty: none).
+	Warning string
+	// Notice is the outcome of the action that produced this fragment.
+	Notice string
+	// RevealedKey is the freshly generated key, shown once. Empty on every
+	// other render, so a reload only ever shows the masked form.
+	RevealedKey string
+}
+
+// Panel renders the Settings screen's MCP section (`#mcp-panel`'s content):
+// the state (待受中 / 停止中 / キー未設定), the enable switch and listen address
+// (saved by `POST /settings/mcp`), the API key generate / regenerate action
+// (`POST /settings/mcp/key`), the values to register in the Grok Bot with the
+// key masked, and where paper-results-mcp and its settings file live. The MCP
+// is a separate process this screen never starts or stops, so the panel says
+// a (re)start of that process is needed after a change.
+//
+// The reveal block carries `hx-history="false"` (htmx must not snapshot the
+// key into its history cache) and `autocomplete="off"`; its copy buttons are
+// handled by static/src/components/copy-button.
+templ Panel(props PanelProps) {
+	<section class="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="mcp-panel">
+		<h3 class="sr-only">MCP</h3>
+		<p>
+			Grok Bot などから Paper の実績と Jev の判断を読み取るための、読み取り専用の MCP エンドポイントです。MCP は本体とは別のプロセス（paper-results-mcp）で動き、既定ではオフ・API キーが未設定の間は待ち受けません。
+		</p>
+		if props.Notice != "" {
+			<p class="text-emerald-700" role="status" data-testid="mcp-notice">{ props.Notice }</p>
+		}
+		if props.Warning != "" {
+			<p class="text-amber-700" role="status" data-testid="mcp-warning">{ props.Warning }</p>
+		}
+		if props.RevealedKey != "" {
+			@keyReveal(props.RevealedKey)
+		}
+		<div class="flex flex-col gap-1" data-testid="mcp-state" data-state={ props.State }>
+			<span class="flex flex-wrap items-center gap-2 font-semibold text-slate-900">
+				状態:
+				@stateBadge(props.State)
+			</span>
+			if props.Note != "" {
+				<span data-testid="mcp-state-note">{ props.Note }</span>
+			}
+			<span>待受アドレス: <code data-testid="mcp-listen">{ props.Listen }</code></span>
+		</div>
+		<form class="flex flex-col gap-3" hx-post="/settings/mcp" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-form">
+			<label class="flex items-center gap-2">
+				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: enabledAttrs(props.Enabled)})
+				<span class="font-medium text-slate-700">MCP を有効にする</span>
+			</label>
+			<label class="flex flex-col gap-1">
+				<span class="font-medium text-slate-700">待受アドレス（ホスト:ポート）</span>
+				@atoms.Input(atoms.InputProps{Name: "listen", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"value": props.Listen, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-listen-input"}})
+				<span class="text-xs text-slate-500">許可されるのは 127.0.0.1 / ::1（この PC 内のみ）と、この PC の tailnet アドレス（100.64.0.0/10・fd7a:115c:a1e0::/48）だけです。0.0.0.0・LAN・ホスト名は保存できません。空にすると 127.0.0.1:48110 になります。</span>
+			</label>
+			<div>
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-save"}}) {
+					保存
+				}
+			</div>
+		</form>
+		<div class="flex flex-col gap-2" data-testid="mcp-key">
+			<span class="font-medium text-slate-700">
+				API キー:
+				if props.KeyConfigured {
+					設定済み（画面には表示されません）
+				} else {
+					未設定
+				}
+			</span>
+			<div>
+				@atoms.Button(atoms.ButtonProps{Variant: keyButtonVariant(props.KeyConfigured), Attrs: keyButtonAttrs(props.KeyConfigured)}) {
+					if props.KeyConfigured {
+						API キーを再生成
+					} else {
+						API キーを生成
+					}
+				}
+			</div>
+			<span class="text-xs text-slate-500">生成したキーは生成直後に一度だけ表示されます。再生成すると古いキーは MCP を再起動した時点で使えなくなり、Grok Bot の登録も更新が必要です。</span>
+		</div>
+		<dl class="flex flex-col gap-2" data-testid="mcp-bot-values">
+			<dt class="font-medium text-slate-700">Grok Bot に登録する値</dt>
+			<dd class="flex flex-wrap items-center gap-2">
+				URL: <code id="mcp-url" data-testid="mcp-url">{ props.URL }</code>
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"data-copy-from": "mcp-url", "data-testid": "mcp-copy-url"}}) {
+					コピー
+				}
+			</dd>
+			<dd>ヘッダー: <code data-testid="mcp-auth-header">{ props.AuthHeader }</code></dd>
+		</dl>
+		<dl class="flex flex-col gap-1" data-testid="mcp-locations">
+			<dt class="font-medium text-slate-700">paper-results-mcp の配置先</dt>
+			<dd class="flex flex-wrap items-center gap-2">
+				<code data-testid="mcp-exe-path">{ props.ExePath }</code>
+				if props.ExeExists {
+					<span class="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800" data-testid="mcp-exe-found">見つかる</span>
+				} else {
+					<span class="rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800" data-testid="mcp-exe-missing">見つからない</span>
+				}
+			</dd>
+			<dt class="font-medium text-slate-700">設定ファイルの場所</dt>
+			<dd><code data-testid="mcp-settings-path">{ props.SettingsPath }</code></dd>
+		</dl>
+		<p class="text-xs text-slate-500" data-testid="mcp-restart-note">
+			この画面は MCP プロセスの起動・停止を行いません（読み取り専用の別プロセスとして分離するためです）。paper-results-mcp は別途起動してください。設定を保存した後、反映するには paper-results-mcp を再起動する必要があります。
+		</p>
+	</section>
+}
+
+// keyReveal is the one-time display of a freshly generated key.
+templ keyReveal(key string) {
+	<div class="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3" role="alert" hx-history="false" autocomplete="off" data-clear-on-close data-testid="mcp-key-reveal">
+		<p class="font-semibold text-amber-900">新しい API キー（この表示は一度きりです。今すぐコピーしてください）</p>
+		<div class="flex flex-wrap items-center gap-2">
+			@atoms.Input(atoms.InputProps{ID: "mcp-new-key", Class: "bg-white px-3 py-2 font-mono", Attrs: templ.Attributes{"readonly": true, "value": key, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-new-key"}})
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"data-copy-from": "mcp-new-key", "data-testid": "mcp-copy-key"}}) {
+				キーをコピー
+			}
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			<code id="mcp-new-header" class="break-all" data-testid="mcp-new-header">Authorization: Bearer { key }</code>
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"data-copy-from": "mcp-new-header", "data-testid": "mcp-copy-header"}}) {
+				ヘッダーをコピー
+			}
+		</div>
+		<p class="text-xs text-amber-900">このキーは二度と表示されません。画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。MCP を再起動すると新しいキーが有効になります。</p>
+	</div>
+}
+
+templ stateBadge(state string) {
+	switch state {
+		case "listening":
+			<span class="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">待受中</span>
+		case "no_key":
+			<span class="inline-flex items-center rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-800">キー未設定</span>
+		default:
+			<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">停止中</span>
+	}
+}
+
+func enabledAttrs(enabled bool) templ.Attributes {
+	attrs := templ.Attributes{"value": "on", "data-testid": "mcp-enabled"}
+	if enabled {
+		attrs["checked"] = true
+	}
+	return attrs
+}
+
+func keyButtonVariant(configured bool) atoms.ButtonVariant {
+	if configured {
+		return atoms.ButtonDangerOutline
+	}
+	return atoms.ButtonPrimary
+}
+
+// keyButtonAttrs: regenerating asks for confirmation, since it
+// invalidates the key the Grok Bot already holds; the first generation has
+// nothing to lose.
+func keyButtonAttrs(configured bool) templ.Attributes {
+	attrs := templ.Attributes{
+		"hx-post":         "/settings/mcp/key",
+		"hx-target":       "#mcp-panel",
+		"hx-swap":         "innerHTML",
+		"hx-disabled-elt": "this",
+		"data-testid":     "mcp-generate-key",
+	}
+	if configured {
+		attrs["hx-confirm"] = "API キーを再生成します。古いキーは使えなくなります（MCP の再起動後）。よろしいですか？"
+	}
+	return attrs
+}

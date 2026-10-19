@@ -19,6 +19,7 @@ const (
 // re-implements the transition table), and every URL the component calls.
 templ KillSwitchPanel(state domain.SystemState) {
 	<pitha-kill-switch-panel
+		id="kill-switch"
 		status={ string(state) }
 		can-pause?={ state.CanPause() }
 		can-resume?={ state.CanResume() }

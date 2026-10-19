@@ -61,11 +61,21 @@ type SettingsHandler struct {
 	// session is the running broker adapter, for the 立花 card's session
 	// state (nil until WithBrokerSession).
 	session BrokerSession
+	// mcp shows the 外部連携 section's MCP card (issue #792); the panel
+	// itself is served by internal/web/handler/mcpsettings.
+	mcp bool
 }
 
 // NewSettingsHandler returns a SettingsHandler backed by store.
 func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 	return &SettingsHandler{store: store}
+}
+
+// WithMCPSettings shows the MCP card (modal `modal-mcp`) on the Settings
+// screen; call it only when the MCP panel routes are registered.
+func (h *SettingsHandler) WithMCPSettings() *SettingsHandler {
+	h.mcp = true
+	return h
 }
 
 // Page implements `GET /settings`: one molecules.ConnectionProps per
@@ -76,7 +86,7 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 // degrades that key to "unset" so it still renders and accepts a value.
 func (h *SettingsHandler) Page(c *gin.Context) {
 	ctx := c.Request.Context()
-	props := pages.SettingsProps{Connections: h.connections(ctx, settingsConnections), Operational: h.opsGroupsProps(ctx)}
+	props := pages.SettingsProps{Connections: h.connections(ctx, settingsConnections), Operational: h.opsGroupsProps(ctx), MCP: h.mcp}
 	shared.RenderHTML(c, http.StatusOK, pages.SettingsPage(props))
 }
 

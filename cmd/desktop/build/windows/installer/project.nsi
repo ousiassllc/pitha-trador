@@ -104,6 +104,12 @@ Section
 
     !insertmacro wails.files
 
+    # paper-results-mcp.exe (issue #792): the read-only Paper results MCP
+    # process, built by ci.yml into build\bin before "wails build" and
+    # installed next to the app. The Settings screen shows this path; the
+    # uninstaller removes it with $INSTDIR.
+    File "..\..\bin\paper-results-mcp.exe"
+
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 

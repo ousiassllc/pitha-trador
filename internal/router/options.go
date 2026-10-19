@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
@@ -41,6 +42,7 @@ type options struct {
 	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
 	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
 	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
+	mcpSettings         mcpsettings.Admin            // nil until WithMCPSettings: no MCP card
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	dailyHaltSource     system.DailyHaltSource
@@ -172,6 +174,15 @@ func WithSecretsStore(store settings.SecretsStore) Option {
 // #708); without it the section is hidden and the routes answer 404.
 func WithOperationalSettings(ops settings.OperationalSettings) Option {
 	return func(o *options) { o.operationalSettings = ops }
+}
+
+// WithMCPSettings enables the Settings screen's MCP card (`modal-mcp`) and
+// the `GET /settings/mcp-panel`, `POST /settings/mcp` and `POST
+// /settings/mcp/key` routes, backed by admin (issue #792); without it the card
+// is hidden and the routes answer 404. cmd/desktop and cmd/server pass
+// internal/bootstrap's *admin.Service over the MCP's settings file.
+func WithMCPSettings(admin mcpsettings.Admin) Option {
+	return func(o *options) { o.mcpSettings = admin }
 }
 
 // WithBrokerSession lets the Settings screen's 立花証券 e支店 card show the

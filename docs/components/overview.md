@@ -35,7 +35,7 @@ internal/web/
 ├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
 ├── atoms/              # Badge（+ EntryQualityBadge）, StatusDot, Toast, Button（+ ButtonLink）, Input, Select, timefmt.go（`atoms.FormatJST`/`JST`/`TimeLayoutJST`: SSR時刻表示の唯一の書式。`2026-10-05 09:30:00 JST`）
 ├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SetupStatus
-├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）。scan_format.go（ScanPanelの書式ヘルパー: 次回開場時刻・サイクル所要時間。`atoms.FormatJST`系の書式を使う）
+├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）。scan_format.go（ScanPanelの書式ヘルパー: 次回開場時刻・サイクル所要時間。`atoms.FormatJST`系の書式を使う）。mcp/（Settings画面の MCP パネル`Panel`。issue #792）
 ├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
 └── layout/             # Shell, SetupShell
 
@@ -50,6 +50,7 @@ static/
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
     │   ├── modal/                 pitha-modal.ts（Litではない。`molecules.Modal`の`<dialog>`開閉・フォーカス復帰・URLハッシュ自動オープン）
+    │   ├── copy-button/           pitha-copy-button.ts（Litではない。`[data-copy-from]`のコピーボタンと、閉じたダイアログの`[data-clear-on-close]`表示（API キーの一度きりの表示）の削除。issue #792）
     │   └── lib/
     │       ├── api.ts
     │       ├── ws.ts / ws-status.ts    # WebSocket接続と接続状態表示
@@ -103,7 +104,7 @@ static/
 
 ### organisms
 
-- `Header`（ナビゲーション（`MainNav`。`layout.Shell`が各ページのナビ項目`organisms.NavItem`を渡し、現在ページのリンクだけに`aria-current="page"`と強調（`font-semibold text-slate-900`）を付ける。Symbol Detailは所属の`NavScanner`、`ErrorPage`は`NavNone`で何も付けない。issue #631）＋`SystemStatusBadge`（`StatusDot`）。Kill Switch状態のOOB更新対象。`layout.Shell`が`middleware.SystemStateFrom`で解決して渡す現在状態から`KillSwitchPanel`を描画する。organisms自身は`web/middleware`をimportしない）
+- `Header`（ナビゲーション（`MainNav`。`layout.Shell`が各ページのナビ項目`organisms.NavItem`を渡し、現在ページのリンクだけに`aria-current="page"`と強調（`font-semibold text-slate-900`）を付ける。Symbol Detailは所属の`NavScanner`、`ErrorPage`は`NavNone`で何も付けない。issue #631。項目は Scanner / Watchlist / Performance / Calibration / Activity / 管理（`NavAdmin`、`/admin`）/ Settings の順で、「管理」が管理ハブ`AdminPage`（`organisms.AdminHub`が`adminhub`の登録簿をカテゴリ別に描く）への入口になり、`Shell`を使う全ページから1操作でハブへ戻れる。`/setup`だけは`Header`を持たない例外。画面一覧とハブの構成は`docs/components/screens.md`。issue #793）＋`SystemStatusBadge`（`StatusDot`）。Kill Switch状態のOOB更新対象。`layout.Shell`が`middleware.SystemStateFrom`で解決して渡す現在状態から`KillSwitchPanel`を描画する。organisms自身は`web/middleware`をimportしない）
 - `SystemStatusBadge`（システム状態の`StatusDot`フラグメント。`Header`内`#header-status`と`GET /system/status`が返す。`domain.SystemState`→`atoms.State`の変換を担い、atomsを`internal/domain`から切り離す）
 - `KillSwitchPanel`（`pitha-kill-switch-panel`を、現在状態に基づく`status`/`can-pause`/`can-resume`/`can-kill`と各URL属性付きで出力する。issue #106）
 - `ScannerTableFallback`（JS無効時/初回SSR描画用の候補件数＋候補銘柄テーブル＋0件時の空状態。日本語列見出し＋ツールチップ、符号付きReturnの色分け、Jev方向/エントリー品質バッジ。ハイドレーション後は同一の見た目で`pitha-scanner-table`が引き継ぐ。列定義・書式・配色・空状態文言はGo側`scannerColumns`とLit側`COLUMNS`/`scanner-view.ts`で二重管理のため、共有ゴールデン`static/src/components/scanner-table/scanner-contract.json`を`scanner_table_contract_test.go`と`scanner-contract.test.ts`の双方が検証して乖離を防ぐ。小数の丸めはJSの`toFixed`に揃え、ちょうど中間の値は0から遠い方へ丸める（Goの`%f`は偶数丸めのため`formatFloat`で補正。例: 12.5→13）。符号は正のみ`+`（0は符号なし）、確信度は四捨五入（half away from zero）、銘柄リンクは非予約文字以外をパーセントエンコード。表の上に列の意味を`<details data-testid="scanner-column-help">`（`<dl>`）で常時表示可能にし、hover専用の`title`を補う。SSRの空状態は初回描画のため`role="status"`を持たない。issue #239。初回スキャン完了前（`as_of`がゼロ時刻）のcaptionは`Scanner Dashboard — データ未取得`でLit側も同じ。issue #614）
@@ -135,7 +136,9 @@ static/
 - `evaluation.EvaluationPanel`（Performance画面の「実績評価」節`organisms/evaluation`。`Panel`は表示整形済みのplain props（切り口別の指標表・合格ライン・コスト内訳・Jev採点・メタモデルのOOS対Paper）だけを受け取り、基準未満は「判定不能」を明示する。読み取りに失敗したときは`EvaluationError`を表示する。`organisms`のディレクトリ行数上限のため別パッケージ。issue #777）
 - `CalibrationPage`（`pitha-calibration-heatmap` アイランドを埋め込む）
 - `WatchlistPage`（issue #730。立花の監視リストをサーバ描画で一覧表示。アイランドなし）
+- `AdminPage`（管理ハブ`GET /admin`。`layout.Shell("管理", organisms.NavAdmin)`＋`organisms.AdminHub(sections)`。カテゴリごとの項目一覧（名前・できること・リンク）で、登録簿は`internal/web/adminhub`。issue #793）
 - `SettingsPage`（接続先別の一覧。Jev/kabuステーション/Slack/Luna/ニュースフィード/Sol/Opusの各行（`SettingsCard`）に設定済み／一部設定済み／未設定（Luna/ニュースフィード/Sol/Opusは既定のJev・やのしんで動く間「既定（…）を使用」）の`ConnectionStatus`を出し、「設定する」で`Modal`を開く。モーダルにその接続先のキー・URL・モデル名の`SecretFieldRow`をまとめる（`organisms.ConnectionList`）。「運用設定」節（`SettingGroupList`。バックアップ先・ログディレクトリ・Policy/Fast Screenerしきい値。`SettingsProps.Operational`、`router.WithOperationalSettings`未指定なら非表示）と「システム」節のアップデート（`#update-panel`、`UpdatePanel`）・エラーログ（`ErrorLogPanel`）・データエクスポート（`DataExportPanel`）も同じ`SettingsCard`＋`Modal`で開く。値は再表示せず設定済み状態のみ表示し、項目ごとに独立して`secrets`テーブルへ暗号化保存・削除する。issue #57/#79/#267/#302）
+- `mcp.Panel`（`internal/web/organisms/mcp`。Settings画面「外部連携」節のカード「MCP（Paper 実績・Jev 判断の読み取り専用エンドポイント）」（カードID`mcp`、`SettingsCard`、`SettingsProps.MCP`が真のときだけ。`router.WithMCPSettings`未配線なら非表示）が開く`Modal`（ID`modal-mcp`。ハブからのリンクは`/settings#modal-mcp`）の中身。`GET /settings/mcp-panel`を`hx-trigger="load"`で遅延取得するフラグメント（`#mcp-panel`）なので、待受の有無を調べるTCP接続は`/settings`本体を遅くしない。項目: 状態バッジ（待受中／停止中／キー未設定。停止中は理由の注記）、待受アドレス、有効化チェック、待受アドレス入力と「保存」（`POST /settings/mcp`。許可外のアドレスは422で保存せず、`atoms.Toast`で日本語のエラーを出す）、API キーの状態と「API キーを生成」（設定済みなら「API キーを再生成」で、古いキーが（MCPの再起動後に）使えなくなる旨の`hx-confirm`つき。`POST /settings/mcp/key`）、Grok Bot に登録する値（URL＋コピーボタン、伏せ字の`Authorization: Bearer ●●●●●●●●`）、`paper-results-mcp`の配置先と見つかる／見つからない、設定ファイルの場所、「MCP プロセスは別途起動する。設定変更の反映に再起動が要る。この画面は起動・停止しない」の注記。API キーは生成直後の応答にだけ、一度きりの表示ブロック（読み取り専用の欄・`Authorization: Bearer <キー>`・コピーボタン・再表示しない旨。`hx-history="false"`・`autocomplete="off"`・`data-clear-on-close`。応答は`Cache-Control: no-store`）で出し、以後は伏せ字のみ。設定ファイルが読めない・権限が緩いときは警告を出す。コピーボタンは`static/src/components/copy-button/pitha-copy-button.ts`（`[data-copy-from="<id>"]`のテキストを`navigator.clipboard.writeText`でコピーし、ダイアログを閉じると`[data-clear-on-close]`の表示ブロックを消す。インラインJSなし）。issue #792）
 - `SetupPage`（初回セットアップ画面。Settingsと同じ`ConnectionList`で、必須2キーを持つJev・kabuステーションと任意のSlackを表示し、保存・削除は`POST`/`DELETE /settings/:key`を共用する。必須2キーがすべて設定済みなら完了表示と`/scanner`への「続ける」リンクを出す（未設定の間はリンクごとレンダリングしない。issue #352）。`Header`を含まない`layout.SetupShell`で描画。`requirements/functional.md` §4.18、issue #80/#302）
 - `ErrorPage`（SSRページ失敗時の全ページエラー画面。`layout.Shell`（`Header`込み）でステータスコード＋固定メッセージ（`err.Error()`は表示しない）＋`/scanner`への戻りリンクを描画し、`shared.RespondPageError`（`internal/web/handler/shared`）が使用する。`api/endpoints.md` §7、issue #143）
 - `ActivityLogPage`（`QueueStatusPanel` + `pitha-activity-feed` アイランドを埋め込む。`requirements/functional.md` §5.5）
@@ -166,12 +169,11 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 
 **表のアクセシビリティ（issue #544）**: `internal/web`のtemplに書く`<table>`は、すべての`<th>`に`scope`（列見出しは`scope="col"`）を付け、表ごとに`aria-label`（または`<caption>`）で目的を与える。`internal/web/table_a11y_test.go`が全`.templ`を静的に検査する。
 
-
 ## 4. HTMX パターン
 
 `api/endpoints.md` §2〜4 のルーティング定義に対応する。要点のみ再掲する。
 
-- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/watchlist`, `/activity`, `/settings`, `/setup`）は常にフルページを返し、`HX-Request`では分岐しない（失敗時のみ`HX-Request`にはトーストを返す）。HTMXフラグメントの取得は`GET /scanner/scan`（スキャン状況パネル）と、`Header`等が取得するフラグメントのGETルート（`GET /system/status`・`/system/update-status`・`/system/update-panel`・`/system/secrets-status`・`/system/marketdata-status`）が担う
+- ページルート（`/scanner`, `/symbols/:symbol`, `/performance`, `/calibration`, `/watchlist`, `/activity`, `/admin`, `/settings`, `/setup`）は常にフルページを返し、`HX-Request`では分岐しない（失敗時のみ`HX-Request`にはトーストを返す）。HTMXフラグメントの取得は`GET /scanner/scan`（スキャン状況パネル）と、`Header`等が取得するフラグメントのGETルート（`GET /system/status`・`/system/update-status`・`/system/update-panel`・`/system/secrets-status`・`/system/marketdata-status`）が担う
 - アクションルート（`POST /positions/:id/close`, `POST /system/update-check`, `POST /scanner/universe/import`, `POST`/`DELETE /settings/:key`）は常にフラグメントを返す。Kill Switch操作（pause/resume/kill）はHTMXアクションルートを持たず、Litの`pitha-kill-switch-panel`が`/api/v1/system/*`を呼ぶ
 - **状態バッジの更新**: システム状態変更（pause/resume/kill）後は、`pitha-kill-switch-panel`が`systemStateChanged`イベントを発火し、Headerの`StatusDot`が`GET /system/status`で再取得される。OOBスワップは「副作用の反映」のみに限定する
 - **ローディング**: HTMXアクションは`hx-disabled-elt="this"`（必要に応じ`hx-indicator`）で二重送信を防ぐ（例: 「今すぐアップデートを確認」`#update-check-progress`、ポジション手動決済）。`hx-indicator`の表示はhtmx既定のインライン`<style>`に頼れない（`includeIndicatorStyles:false`。次項）ため、インジケーター要素はTailwindの`.htmx-request`バリアント等で自前でスタイルする。Kill Switch操作はLitの`pitha-kill-switch-panel`が`busy`状態でボタンを無効化する。スケルトンスクリーンは使わない
@@ -198,6 +200,7 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | §5 Lit Web Components 仕様（§5.1〜§5.5）/ §6 API クライアント / WebSocket（`lib/`） | `docs/components/lit.md` |
 | §7 Wails統合 / §8 エラーハンドリング（要約）/ §9 テスト戦略 | `docs/components/runtime.md` |
 | Paper 実績 MCP（画面外の別プロセス） | `docs/components/paper-results-mcp.md` | issue #783。HALT のページには出さない |
+| 画面一覧・管理ハブ（ナビ構造・戻り導線） | `docs/components/screens.md` | issue #793。管理系の全画面の URL・できること・カテゴリ |
 
 ## 改訂履歴
 
@@ -297,3 +300,5 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.91 | 2026-10-17 | §2に`exit-alignment/`、§5（`lit.md`）に`pitha-exit-alignment`（Calibration画面のラベル基準と実出口の整合ブロック。`GET /api/v1/calibration/exit-alignment`）を追記 |
 | 1.92 | 2026-10-17 | §2の`calibration-heatmap/`に`meta-model/`（`meta-model-adoption-view.ts`＝採用判定の根拠。#780）と`direction-view.ts`を追記し、§5（`lit.md`）にLLM学習データ終了日の警告・出典（#776）と採用判定の根拠（#780）を追記。§3に`PerformancePage`の「実績評価」節`evaluation.EvaluationPanel`（#777）を追記 |
 | 1.93 | 2026-10-17 | 分割章の表に Paper 実績 MCP（`paper-results-mcp.md`）を追加。画面コンポーネントは増やさない | issue #783 |
+| 1.94 | 2026-10-19 | §2に`organisms/mcp`と`copy-button/`を、§3に`mcp.Panel`（Settings画面の MCP カード/モーダル。状態・保存・API キーの一度きりの表示と伏せ字）を追記 | issue #792 |
+| 1.95 | 2026-10-19 | メインナビに「管理」（`NavAdmin`、`/admin`）を追加し、管理ハブ（`AdminPage`・`AdminHub`）を organisms/pages に追加。ナビ構造・画面一覧・戻り導線の規則を分割章`docs/components/screens.md`に新設 | issue #793 |

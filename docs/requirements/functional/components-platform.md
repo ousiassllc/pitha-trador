@@ -191,7 +191,7 @@ Settings画面（`GET /settings`）で認証情報と運用設定を管理する
 
 ### 4.22 Paper 実績の読み取り専用 MCP（issue #783）
 
-リモートの Grok Bot が Paper の実績を確認するために、Windows PC 上の SQLite を読む MCP。画面は増やさない。実装済み（`cmd/paper-results-mcp`、`internal/service/paperresultsmcp`。起動と設定は `components/paper-results-mcp.md` §4）。詳細は `architecture/paper-results-mcp.md`、ツールのフィールドと上限の数値は `api/endpoints/paper-results-mcp.md`、エラー表は `architecture/paper-results-mcp-errors.md`。新規テーブルは作らない。kabu の状態を読む #347 の MCP とは別プロセスで、あちらのツール・鍵・ポートは使わない。
+リモートの Grok Bot が Paper の実績を確認するために、Windows PC 上の SQLite を読む MCP。MCP 自体の画面は持たず、設定は Settings 画面の MCP カードで行う（FR-MCP-9〜12、issue #792）。実装済み（`cmd/paper-results-mcp`、`internal/service/paperresultsmcp`。起動と設定は `components/paper-results-mcp.md` §4）。詳細は `architecture/paper-results-mcp.md`、ツールのフィールドと上限の数値は `api/endpoints/paper-results-mcp.md`、エラー表は `architecture/paper-results-mcp-errors.md`。新規テーブルは作らない。kabu の状態を読む #347 の MCP とは別プロセスで、あちらのツール・鍵・ポートは使わない。
 
 - FR-MCP-1: 既定はオフ。オン/オフは Windows PC のローカル設定ファイルだけで、Grok Bot と `runtime_settings` からは切り替えられない。オフのときは待受しない（接続不可）。待受の既定は `127.0.0.1:48110`。Tailscale で直接待つときはその PC の tailnet 側アドレスだけ。`0.0.0.0` は起動を拒否する。インターネットへ直接は公開しない
 - FR-MCP-2: 必須の認証は MCP 自身の別 API キー（`Authorization: Bearer`）だけである。キーが空なら待受しない。キーが無い・一致しないリクエストは SQL を発行する前に拒否する。キーはログとツール戻り値に出さない。経路が Tailscale・任意の Cloudflare Tunnel・その他のプライベートトンネルのどれでも、同じ MCP と同じ API キーで動く。Cloudflare Access は Cloudflare を使う場合の任意であり、本要件の必須にしない
@@ -201,3 +201,17 @@ Settings画面（`GET /settings`）で認証情報と運用設定を管理する
 - FR-MCP-6: 取得量の上限（行数・期間・クエリ時間・同時実行）は API 仕様 §2 の表に従う。上限を超えたとき部分結果は返さない
 - FR-MCP-7: 認証失敗・オフ・DB ロック・上限超過・期間不正は `architecture/paper-results-mcp-errors.md` の固定 `code` と `message` で返す
 - FR-MCP-8: 受け入れ条件は API 仕様 §5。テスト用 DB で集計値が手計算と一致し、認証失敗が SQL 0 件であり、戻り値とログに生データと秘密が含まれないことを自動テストで確認する。選んだ経路（Tailscale または Cloudflare Tunnel）経由の実機確認は自動テストの外とし、キーを伏せた記録を残す。Tailscale のときは tailnet の外から届かないことも記録する
+- FR-MCP-9: Settings 画面（`GET /settings`）の「外部連携」節に、カード「MCP（Paper 実績・Jev 判断の読み取り専用エンドポイント）」（`settings-card-mcp`、モーダル `modal-mcp`、`/settings#modal-mcp`）を置く。中身は `GET /settings/mcp-panel` を `load` で取得するフラグメントで、`/settings` 本体は TCP 接続しない。カードは MCP 設定サービスが配線されたときだけ表示する。パネルは、状態（待受中／停止中／キー未設定）、有効化のチェック、待受アドレス、API キーの生成・再生成、Grok Bot に登録する値（URL と、伏せ字の `Authorization: Bearer ●●●●●●●●`）、`paper-results-mcp` の配置先（アプリ本体と同じフォルダ。見つかる／見つからない）、設定ファイルの場所を示し、MCP プロセスは別途起動すること・設定変更の反映に再起動が要ることを書く。この画面は MCP プロセスを起動・停止しない。受け入れ条件: 設定ファイルが無ければ「停止中（無効）」で TCP 接続しない／有効でキーが空なら「キー未設定」で接続しない／有効でキーがあり接続できれば「待受中」、できなければ「停止中」。設定ファイルが読めない・権限が緩いときは「停止中」と警告を示し、キーの内容は出さない
+- FR-MCP-10: 有効/無効と待受アドレスの保存（`POST /settings/mcp`）は、サーバー側で FR-MCP-1 と同じ規則を検証する。許すのは `127.0.0.1`・`::1` と、この PC のインターフェースにある tailnet アドレス（IP リテラルの `host:port`）だけ。`0.0.0.0`・`::`・ホスト部が空・LAN・ホスト名・ポート 0・この PC に無い tailnet アドレスは 422 で拒否し、設定ファイルは変えない。空欄は `127.0.0.1:48110`。保存は API キーと Cloudflare Access の項目を保つ。ファイルは一時ファイルに書いて fsync し rename で置き換える（`0600`）
+- FR-MCP-11: API キーの生成・再生成（`POST /settings/mcp/key`）は、`pitha-mcp-` ＋ 32 バイトの乱数のキーを設定ファイルにだけ保存し、その応答に一度だけ表示する（読み取り専用の欄、`Authorization: Bearer <キー>` の全文、コピーボタン、再表示しない旨）。応答は `Cache-Control: no-store`、表示部は `hx-history="false"` と `autocomplete="off"`。以後のパネル・`/settings`・ログには、キーの文字を一切出さず伏せ字だけを出す。再生成の確認では、古いキーが（MCP の再起動後に）使えなくなると伝える
+- FR-MCP-12: API キーは DB（`secrets` を含む）に保存せず、ログ・データエクスポート（FR-EXPORT）・DB バックアップ・`View` の文字列化に入れない。保存・再生成のログに出すのは `enabled` / `listen` / `key_configured` だけである。受け入れ条件: 生成後の `GET /settings`・`GET /settings/mcp-panel`・保存応答、取得したログ、エクスポート ZIP、バックアップ（日次・週次）、DB ファイルにキーのバイト列が含まれないことを自動テストで確認する
+
+### 4.23 管理ハブ（issue #793）
+
+管理系の画面・機能（Settings の各ダイアログを含む）は、一覧ページ「管理」（`GET /admin`）からカテゴリ別に辿れる。一覧は画面名・URL・できること・カテゴリの表（`docs/components/screens.md`）と同じ内容を持つ。
+
+- FR-ADMIN-1: `GET /admin` は、運用／成績・検証／リスク・資金設定／ブローカー・データ接続／外部連携／ログ・エクスポートの6カテゴリに、各項目の名前・できること（1行）・リンクを載せる。項目は URL を持つ画面への直リンクか、`/settings#<ダイアログ id>`（Settings の該当ダイアログを開く）である。専用 URL を持たない Kill Switch はヘッダーのパネルがあるページ（`/scanner#kill-switch`）へ誘導し、その旨を説明に書く。`/swagger` は `SWAGGER_ENABLED=true` のときだけ載せる。
+- FR-ADMIN-2: Settings 画面の全カード（接続先・運用設定・システム）は、いずれかのハブ項目から開ける。Settings にカードを足すときは同時にハブ項目を足す（`internal/web/adminhub` の登録簿。完全性は router 層のテストで検査する）。ナビの各項目（管理自身を除く）もハブに載る。
+- FR-ADMIN-3: 既存の画面の URL・API・ルートは変えない。`/` は `/scanner` へ、`/setup` は Setup Guard の既存挙動のまま。`/admin` は他のページと同じく Setup Guard の対象で、必須の接続が未設定の間は `/setup` へ送る。
+- FR-ADMIN-4: `layout.Shell` を使う全ページのメインナビに「管理」（`/admin`、「Settings」の直前）を置き、各管理画面から1操作でハブへ戻れる。「管理」は `/admin` でだけ `aria-current="page"` を付ける。例外は `/setup`（ヘッダーを持たない初回専用画面）と `/swagger`（静的なドキュメント画面）。
+- FR-ADMIN-5: Symbol Detail（`/symbols/:symbol`）はパラメータ付きで Scanner の候補から開く画面のため、ハブにはリンクを置かず、画面一覧の表にだけ載せる。

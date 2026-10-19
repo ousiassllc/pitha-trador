@@ -7,6 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/evalprovider"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/exitalignjob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -73,5 +74,5 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 			Max: time.Duration(scan.CandidateRefreshIntervalSecondsMax) * time.Second,
 		}),
 	}
-	return append(opts, services.watchlistRouterOptions()...)
+	return append(append(opts, mcpwire.RouterOptions()...), services.watchlistRouterOptions()...)
 }

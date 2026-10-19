@@ -102,7 +102,7 @@ sequenceDiagram
 | 節 | ファイル |
 |----|----------|
 | §4.1〜§4.9（Feature Engine〜状態管理） | `docs/requirements/functional/components-pipeline.md` |
-| §4.10〜§4.22（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート・Paper実績MCP） | `docs/requirements/functional/components-platform.md` |
+| §4.10〜§4.23（Scheduler/Worker〜エラーログのダウンロード・ブローカー選択と立花証券の運用・取引ログ/判断ログのエクスポート・Paper実績MCP・管理ハブ） | `docs/requirements/functional/components-platform.md` |
 
 ## 5. 画面別機能（Wails デスクトップアプリ）
 
@@ -304,3 +304,5 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.104 | 2026-10-18 | §4.22 に実装済みである旨を追記（`cmd/paper-results-mcp`、`internal/service/paperresultsmcp`）。FR-MCP-1〜8 の内容は変更なし | issue #783 の実装 |
 | 1.105 | 2026-10-18 | FR-BT-4の再現性の検証に、運用者向けの実行手順（読み取り専用のCLI`cmd/backtestverify`。期間は`-from`/`-to`か省略時の直近20営業日、終了コードは合格・データ無し0／不合格1／エラー2、しきい値は`parity.Provisional`のまま変えられない）を追記し、「実行導線は無い」の記述を置き換えた | issue #775の残件（再現性検証の実行導線）。下限・期間の値は変更していない |
 | 1.106 | 2026-10-19 | issue #780の決定（2026-10-19）を反映: FR-SELFIMPROVE-4のシャドーバックテストの足切りを各側100件以上かつ30営業日以上に引き上げ（足切りであり安全の証明ではない旨を明記。Calibration指標のFR-SELFIMPROVE-1は直近20営業日のまま）、FR-META-6の`unverified`をPaperは警告のまま採用可・Live前チェックは不採用（`llm_cutoff_unverified`）に、FR-META-7に、区間が0をまたぐ約11 bps未満のEVを「判定不能」、take数0を「データ無し」とする判定を追加 | 悠太さん承認の決定（issue #780）に仕様を合わせるため |
+| 1.107 | 2026-10-19 | §4.22 に FR-MCP-9〜12 を追加（Settings 画面の MCP カード: 状態表示・有効/待受アドレスのサーバー側検証と保存・API キーの一度きりの表示と伏せ字・キーを DB/ログ/エクスポート/バックアップに入れない）。FR-MCP-1〜8 は変更なし | issue #792 |
+| 1.108 | 2026-10-19 | §4.23 に FR-ADMIN-1〜5 を追加（管理ハブ `GET /admin`: 全管理画面・Settings の全ダイアログをカテゴリ別に一覧、既存 URL は不変、各画面からのメインナビ「管理」での戻り導線） | issue #793 |
