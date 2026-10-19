@@ -1,4 +1,4 @@
-package settings_test
+package pageflow_test
 
 import (
 	"errors"
@@ -18,10 +18,9 @@ func TestSettingsHandler_Page_ShowsConfiguredStateNotValues(t *testing.T) {
 	store := newFakeSecretsStore()
 	store.values[config.KeyJevAPIKey] = "super-secret-value"
 	h := settings.NewSettingsHandler(store)
-	engine := gin.New()
-	engine.GET("/settings", h.Page)
+	engine := settingsRouter(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings/integrations", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -45,11 +44,10 @@ func TestSettingsHandler_Page_ShowsConfiguredStateNotValues(t *testing.T) {
 func TestSettingsHandler_Page_ShowsJevBaseURLHint(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := settings.NewSettingsHandler(newFakeSecretsStore())
-	engine := gin.New()
-	engine.GET("/settings", h.Page)
+	engine := settingsRouter(h)
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/integrations", nil))
 
 	body := rec.Body.String()
 	if !strings.Contains(body, `data-testid="hint-JEV_BASE_URL"`) || !strings.Contains(body, "https://api.typesafe.ai") {
@@ -131,10 +129,9 @@ func TestSettingsHandler_Page_StoreErrorDegradesGracefully(t *testing.T) {
 	store.getErr = errors.New("db is locked")
 	store.getErrKey = config.KeyJevBaseURL
 	h := settings.NewSettingsHandler(store)
-	engine := gin.New()
-	engine.GET("/settings", h.Page)
+	engine := settingsRouter(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings/integrations", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 
@@ -179,15 +176,13 @@ func TestSettingsHandler_Status_StoreErrorDegradesGracefully(t *testing.T) {
 
 // TestSettingsHandler_Page_RendersOneIndependentRowPerAllowedKey covers
 // issue #79: every allow-listed key (incl. the Luna/Sol/Opus/News Feed
-// ones) gets its own row/form, and the screen has no shared form.
+// ones) gets its own row/form across the Settings pages (issue #805), and
+// the screens have no shared form.
 func TestSettingsHandler_Page_RendersOneIndependentRowPerAllowedKey(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore()))
 
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
-
-	body := rec.Body.String()
+	body := allPagesBody(t, engine)
 	for _, key := range config.AllowedSecretKeys() {
 		if !strings.Contains(body, `data-testid="secret-field-row-`+key+`"`) {
 			t.Errorf("Settings page has no row for %s", key)

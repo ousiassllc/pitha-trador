@@ -10,6 +10,11 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
+// systemDialogs are the system cards' dialogs the maintenance page holds
+// (settingspages): SettingsPage renders a fixed card only when its dialog id
+// is in SettingsProps.Dialogs.
+var systemDialogs = []string{"modal-update", "modal-error-log", "modal-data-export"}
+
 func renderSettings(t *testing.T, props pages.SettingsProps) string {
 	t.Helper()
 	var buf bytes.Buffer
@@ -32,7 +37,7 @@ func testConnections() []molecules.ConnectionProps {
 // issue #302: each connection is a card whose button opens a dialog holding
 // all of that connection's fields - and only those.
 func TestSettingsPage_EachConnectionOpensItsOwnModalWithAllItsFields(t *testing.T) {
-	body := renderSettings(t, pages.SettingsProps{Connections: testConnections()})
+	body := renderSettings(t, pages.SettingsProps{Connections: testConnections(), Dialogs: systemDialogs})
 
 	for _, id := range []string{"alpha", "beta"} {
 		for _, want := range []string{`data-testid="settings-card-` + id + `"`, `data-modal-open="modal-` + id + `"`, `<dialog id="modal-` + id + `"`} {
@@ -56,7 +61,7 @@ func TestSettingsPage_EachConnectionOpensItsOwnModalWithAllItsFields(t *testing.
 // The list shows the 設定済み/未設定 state per connection, and 必須 while a
 // required connection is unset.
 func TestSettingsPage_CardShowsConnectionState(t *testing.T) {
-	body := renderSettings(t, pages.SettingsProps{Connections: testConnections()})
+	body := renderSettings(t, pages.SettingsProps{Connections: testConnections(), Dialogs: systemDialogs})
 
 	for id, state := range map[string]string{"alpha": "configured", "beta": "unset"} {
 		want := `id="connection-status-` + id + `" class="inline-flex flex-wrap items-center gap-1" data-state="` + state + `"`
@@ -77,7 +82,7 @@ func TestSettingsPage_CardShowsConnectionState(t *testing.T) {
 // panel now lives in a modal, which pitha-modal opens from the hash, so the
 // panel must sit inside a <dialog> and the modal script must be loaded.
 func TestSettingsPage_UpdatePanelLivesInModalOpenedByHash(t *testing.T) {
-	body := renderSettings(t, pages.SettingsProps{})
+	body := renderSettings(t, pages.SettingsProps{Dialogs: systemDialogs})
 
 	dialog := strings.Index(body, `<dialog id="modal-update"`)
 	panel := strings.Index(body, `id="update-panel"`)
@@ -91,7 +96,7 @@ func TestSettingsPage_UpdatePanelLivesInModalOpenedByHash(t *testing.T) {
 
 // Modals are native dialogs labelled by their title (a11y, issue #302).
 func TestSettingsPage_ModalsAreLabelledDialogs(t *testing.T) {
-	body := renderSettings(t, pages.SettingsProps{Connections: testConnections()})
+	body := renderSettings(t, pages.SettingsProps{Connections: testConnections(), Dialogs: systemDialogs})
 	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log", "modal-data-export"} {
 		for _, want := range []string{`<dialog id="` + id + `"`, `aria-labelledby="` + id + `-title"`, `id="` + id + `-title"`, `data-testid="` + id + `-close"`} {
 			if !strings.Contains(body, want) {
@@ -105,7 +110,7 @@ func TestSettingsPage_ModalsAreLabelledDialogs(t *testing.T) {
 // included, so each dialog must carry its own toast region for failure toasts
 // to stay dismissible (issue #353).
 func TestSettingsPage_EachModalHasItsOwnToastRegion(t *testing.T) {
-	body := renderSettings(t, pages.SettingsProps{Connections: testConnections()})
+	body := renderSettings(t, pages.SettingsProps{Connections: testConnections(), Dialogs: systemDialogs})
 	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log", "modal-data-export"} {
 		start := strings.Index(body, `<dialog id="`+id+`"`)
 		if start < 0 {
@@ -121,7 +126,7 @@ func TestSettingsPage_EachModalHasItsOwnToastRegion(t *testing.T) {
 // The エラーログ section is a plain GET form to the download API (FR-ERRLOG-1):
 // 7 days and ERROR-only preselected, HTMX kept out via hx-disable.
 func TestSettingsPage_ErrorLogPanelIsPlainDownloadForm(t *testing.T) {
-	body := renderSettings(t, pages.SettingsProps{})
+	body := renderSettings(t, pages.SettingsProps{Dialogs: systemDialogs})
 
 	for _, want := range []string{
 		`id="error-log-panel"`,
@@ -141,7 +146,7 @@ func TestSettingsPage_ErrorLogPanelIsPlainDownloadForm(t *testing.T) {
 // export API - dates required, all three kinds checked, CSV default, no
 // share/upload action.
 func TestSettingsPage_DataExportPanelIsPlainDownloadForm(t *testing.T) {
-	body := renderSettings(t, pages.SettingsProps{})
+	body := renderSettings(t, pages.SettingsProps{Dialogs: systemDialogs})
 
 	for _, want := range []string{
 		`id="data-export-panel"`,

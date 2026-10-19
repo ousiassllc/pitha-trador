@@ -69,7 +69,7 @@ func TestSettingsPage_WarnsWhileTheLLMCutoffIsAPlaceholder(t *testing.T) {
 	engine, store := opsRouter()
 	page := func() string {
 		rec := httptest.NewRecorder()
-		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/results", nil))
 		return rec.Body.String()
 	}
 

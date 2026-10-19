@@ -13,6 +13,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
+	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
 )
 
 type fakeSession struct {
@@ -30,7 +31,9 @@ func cardEngine(secrets memSecrets, runtime memRuntime, session settings.BrokerS
 		h.WithBrokerSession(session)
 	}
 	engine := gin.New()
-	engine.GET("/settings", h.Page)
+	for _, page := range settingspages.Pages() {
+		engine.GET(page.Path(), h.SubPage(page, false))
+	}
 	engine.POST("/settings/:key", h.Save)
 	return engine
 }
@@ -39,7 +42,7 @@ func testID(body, id string) bool { return strings.Contains(body, `data-testid="
 
 func TestTachibanaCard_ShowsTheEnvironmentAlways(t *testing.T) {
 	// Nothing stored, kabu selected: the card still names the environment.
-	body := get(cardEngine(memSecrets{}, memRuntime{}, nil), "/settings")
+	body := get(cardEngine(memSecrets{}, memRuntime{}, nil), "/settings/broker")
 	if !hasCard(body, "tachibana") || !testID(body, "connection-badge-tachibana-environment") || !strings.Contains(body, "デモ環境") {
 		t.Errorf("the default card must show the デモ environment; body=%s", body)
 	}
@@ -53,7 +56,7 @@ func TestTachibanaCard_ShowsTheEnvironmentAlways(t *testing.T) {
 
 func TestTachibanaCard_ProductionSaysNoOrdersUntilIssue55(t *testing.T) {
 	runtime := memRuntime{config.KeyBrokerProvider: `"tachibana"`, config.KeyTachibanaEnvironment: `"production"`}
-	body := get(cardEngine(memSecrets{}, runtime, nil), "/settings")
+	body := get(cardEngine(memSecrets{}, runtime, nil), "/settings/broker")
 	for _, id := range []string{"connection-badge-tachibana-environment", "connection-badge-tachibana-no-orders", "connection-badge-tachibana-selected"} {
 		if !testID(body, id) {
 			t.Errorf("production card lacks %s", id)
@@ -71,7 +74,7 @@ func TestTachibanaCard_ShowsSessionStateOnlyWhileTheTachibanaAdapterRuns(t *test
 	}
 	runtime := memRuntime{config.KeyBrokerProvider: `"tachibana"`}
 
-	body := get(cardEngine(memSecrets{}, runtime, fakeSession{name: "tachibana", status: status}), "/settings")
+	body := get(cardEngine(memSecrets{}, runtime, fakeSession{name: "tachibana", status: status}), "/settings/broker")
 	for id, want := range map[string]string{
 		"connection-detail-tachibana-last-login":       "2026-10-08 14:35:00 JST",
 		"connection-detail-tachibana-next-reauth":      "2026-10-09 14:35:00 JST",
@@ -90,11 +93,11 @@ func TestTachibanaCard_ShowsSessionStateOnlyWhileTheTachibanaAdapterRuns(t *test
 	}
 
 	// kabu keeps running until the restart: its status is not 立花's.
-	body = get(cardEngine(memSecrets{}, runtime, fakeSession{name: "kabu", status: status}), "/settings")
+	body = get(cardEngine(memSecrets{}, runtime, fakeSession{name: "kabu", status: status}), "/settings/broker")
 	if strings.Contains(body, "connection-detail-tachibana-") {
 		t.Error("a kabu session must not be shown as the 立花 session")
 	}
-	body = get(cardEngine(memSecrets{}, runtime, fakeSession{name: "tachibana"}), "/settings")
+	body = get(cardEngine(memSecrets{}, runtime, fakeSession{name: "tachibana"}), "/settings/broker")
 	if !strings.Contains(body, "最終ログイン: —") || !strings.Contains(body, "API 版数: 不明") {
 		t.Error("a session that never logged in must show placeholders")
 	}
@@ -121,7 +124,7 @@ func TestTachibanaCard_NeverEchoesSecretsAndShowsOnlyConfigured(t *testing.T) {
 	}}
 	engine := cardEngine(secrets, runtime, session)
 
-	pages := map[string]string{"settings page": get(engine, "/settings")}
+	pages := map[string]string{"settings page": get(engine, "/settings/broker")}
 	save := httptest.NewRequest(http.MethodPost, "/settings/"+config.KeyTachibanaDemoAuthID, strings.NewReader("value=AUTHID-new-0000"))
 	save.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	save.Header.Set("HX-Request", "true")

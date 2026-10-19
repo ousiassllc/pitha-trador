@@ -1,8 +1,9 @@
-// Package adminroutes holds the router-level tests of the admin hub (issue
-// #793): every admin screen stays reachable at its current URL, the hub
-// lists every Settings dialog and main-nav page, and every hub-listed page
-// links back to `/admin`.
-package adminroutes_test
+// Package settingsroutes holds the router-level tests of the Settings area
+// (issue #805, which folded the admin hub of issue #793 into Settings): every
+// admin screen stays reachable at its URL, `/settings` lists the pages, the
+// pages together render every Settings dialog once, and every main-nav screen
+// is reachable from them.
+package settingsroutes_test
 
 import (
 	"context"
@@ -56,7 +57,7 @@ func (tachibanaSession) Status() broker.SessionStatus { return broker.SessionSta
 
 // newEngine returns the router wired like production for the Settings screen:
 // operational settings, a broker session and the MCP settings, so /settings
-// renders every card and dialog.
+// renders every card and dialog across its pages.
 func newEngine(t *testing.T, s secrets) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)

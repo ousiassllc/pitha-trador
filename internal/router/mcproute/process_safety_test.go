@@ -55,7 +55,7 @@ func TestProcessResponsesNeverContainTheKey(t *testing.T) {
 	for time.Now().Before(deadline) && !strings.Contains(a.get("/settings/mcp-panel").Body.String(), `data-state="error"`) {
 		time.Sleep(time.Millisecond)
 	}
-	bodies = append(bodies, a.get("/settings/mcp-panel").Body.String(), a.get("/settings").Body.String())
+	bodies = append(bodies, a.get("/settings/mcp-panel").Body.String(), a.get("/settings/integrations").Body.String())
 	add(a.post("/settings/mcp/restart", url.Values{}, true))
 	add(a.post("/settings/mcp/stop", url.Values{}, true))
 	add(a.post("/settings/mcp/stop", url.Values{}, true)) // 409

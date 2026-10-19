@@ -105,17 +105,6 @@ func defaultLabel(def string) string {
 	return def
 }
 
-func (h *SettingsHandler) opsGroupsProps(ctx context.Context) []molecules.SettingGroupProps {
-	if h.ops == nil {
-		return nil
-	}
-	groups := make([]molecules.SettingGroupProps, len(opsGroups))
-	for i, group := range opsGroups {
-		groups[i] = h.opsGroupProps(ctx, group, "", "")
-	}
-	return groups
-}
-
 // SaveOps implements `POST /ops-settings/:key`: it validates and stores the
 // form's `value` under the single key in the path and touches no other key.
 // An unknown key is a 404/400, a blank or invalid value is a 400 carrying the

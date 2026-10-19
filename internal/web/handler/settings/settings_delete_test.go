@@ -100,7 +100,7 @@ func TestSettingsHandler_SaveAndDelete_FailuresRenderToastFragment(t *testing.T)
 
 // The row form's plain `method="post"` fallback (no JS) must not get a
 // bare SecretFieldRow fragment as a whole page: it is redirected back to
-// the screen it was submitted from (issue #110), after the write went
+// the screen it was submitted from (issue #110; a Settings page since #805), after the write went
 // through.
 func TestSettingsHandler_NonHTMXSaveAndDelete_RedirectBackToOriginScreen(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -110,6 +110,8 @@ func TestSettingsHandler_NonHTMXSaveAndDelete_RedirectBackToOriginScreen(t *test
 	for _, tc := range []struct{ referer, want string }{
 		{"", "/settings"},
 		{"http://127.0.0.1:48080/settings", "/settings"},
+		{"http://127.0.0.1:48080/settings/integrations", "/settings/integrations"},
+		{"http://127.0.0.1:48080/settings/unknown", "/settings"},
 		{"http://127.0.0.1:48080/setup", "/setup"},
 		{"https://evil.example/anything", "/settings"},
 	} {
