@@ -112,6 +112,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	}
 	engine.GET("/system/marketdata-status", marketDataHandler.Status)
 	engine.GET("/system/daily-halt", system.NewDailyHaltHandler(o.dailyHaltSource).Status)
+	engine.GET("/system/health-alerts", system.NewHealthAlertHandler(o.healthAlertSource).Status)
 
 	return h
 }

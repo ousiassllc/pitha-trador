@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
@@ -21,6 +22,7 @@ type toolEnv struct {
 	q          query.Q
 	r          query.Range
 	capitalJPY float64
+	now        time.Time
 }
 
 // tool is one entry of the dispatch table. The table is the complete set of
@@ -236,7 +238,7 @@ var tools = []tool{
 	},
 	{
 		name:        "collection_status",
-		description: "データ収集の状態: スナップショットの鮮度と欠損日、ジョブ件数、日足失敗、ラベルスキップ（読み取り専用）",
+		description: "データ収集の状態: スナップショットの鮮度と欠損日、ジョブ件数と失敗の内訳、日足失敗、ラベルスキップ、いまの警告（kabu未ログイン・market-data無稼働。固定コードと開始時刻。読み取り専用）",
 		schema:      periodSchema(nil),
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 			var a periodArgs
@@ -244,7 +246,7 @@ var tools = []tool{
 				return a, nil, err
 			}
 			return a, func(ctx context.Context, e toolEnv) (any, int, error) {
-				c, err := query.CollectionStatus(ctx, e.q, e.r)
+				c, err := query.CollectionStatus(ctx, e.q, e.r, e.now)
 				return c, len(c.MissingSessionDates), err
 			}, nil
 		},

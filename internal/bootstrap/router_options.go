@@ -65,6 +65,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithOperationalSettings(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits())),
 		router.WithMarketDataStatus(services.Broker),
 		router.WithDailyHaltSource(services.Risk),
+		router.WithHealthAlertSource(services.HealthAlerts),
 		router.WithBrokerSession(services.Broker),
 		router.WithErrorLogExporter(services.ErrorLogs),
 		router.WithDataExporter(dataexport.NewLocal(state.DB, services.ErrorLogs)),
