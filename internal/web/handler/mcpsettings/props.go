@@ -1,7 +1,10 @@
 package mcpsettings
 
 import (
+	"fmt"
+
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proc"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/mcp"
 )
 
@@ -12,7 +15,7 @@ func panelProps(v admin.View, notice, revealedKey string) mcp.PanelProps {
 		Enabled:       v.Enabled,
 		Listen:        v.Listen,
 		State:         string(v.State),
-		Note:          reasonText(v.Reason),
+		Note:          stateNote(v),
 		KeyConfigured: v.KeyConfigured,
 		URL:           v.URL,
 		AuthHeader:    v.AuthHeader,
@@ -22,6 +25,50 @@ func panelProps(v admin.View, notice, revealedKey string) mcp.PanelProps {
 		Warning:       loadWarning(v.LoadError),
 		Notice:        notice,
 		RevealedKey:   revealedKey,
+		Managed:       v.Managed,
+		External:      v.External,
+		AutoStart:     v.AutoStart,
+		AutoStartNote: autoStartNote(v),
+		ConfigChanged: v.ConfigChanged,
+	}
+}
+
+// stateNote words the state in operator-facing sentences. It uses fixed
+// strings and the exit code only: nothing the process printed is shown.
+func stateNote(v admin.View) string {
+	switch v.State {
+	case admin.StateStarting:
+		return "アプリが MCP を起動しました。待受を確認しています。"
+	case admin.StateError:
+		return failureText(v.Failure, v.ExitCode)
+	case admin.StateListening:
+		if v.External {
+			return "アプリの外で起動された MCP が待ち受けています。この画面からは停止できません（二重には起動しません）。"
+		}
+		return ""
+	}
+	return reasonText(v.Reason)
+}
+
+func failureText(k proc.FailureKind, code int) string {
+	switch k {
+	case proc.FailExeMissing:
+		return "起動に失敗しました: paper-results-mcp の実行ファイルが見つかりません。"
+	case proc.FailSpawn:
+		return "起動に失敗しました: OS がプロセスを開始できませんでした。"
+	case proc.FailPortInUse:
+		return "起動に失敗しました: 待受アドレスのポートがすでに使われています。別のアドレスを保存するか、使っているものを止めてから再起動してください。"
+	case proc.FailRefused:
+		return "MCP は待受を拒否して終了しました（API キー・待受アドレス・有効/無効の設定を確認してください）。"
+	case proc.FailSettings:
+		return "MCP は設定ファイルを使えず終了しました。保存または API キーの生成で作り直してください。"
+	case proc.FailNotListening:
+		return "MCP は動いていますが、待受アドレスで待ち受けていません。再起動してください。"
+	default:
+		if code < 0 {
+			return "MCP が強制終了されました。再起動してください。"
+		}
+		return fmt.Sprintf("MCP が異常終了しました（終了コード %d）。再起動してください。", code)
 	}
 }
 
@@ -33,10 +80,37 @@ func reasonText(r admin.Reason) string {
 		return "設定ファイルを使えないため、MCP は待ち受けません。"
 	case admin.ReasonListenNotAllowed:
 		return "保存されている待受アドレスは許可範囲外のため、MCP は待ち受けません。許可されたアドレスで保存し直してください。"
+	case admin.ReasonAccessIncomplete:
+		return "Cloudflare Access のオリジン照合が有効なのに ID またはシークレットが空のため、MCP は待ち受けません。"
+	case admin.ReasonStopping:
+		return "停止しています。"
 	case admin.ReasonNotRunning:
-		return "有効ですが、そのアドレスで待ち受けている MCP が見つかりません。paper-results-mcp を起動してください（設定の変更後は再起動が必要です）。"
+		return "有効ですが、そのアドレスで待ち受けている MCP が見つかりません。「起動」を押してください。"
 	default:
 		return ""
+	}
+}
+
+// autoStartNote tells whether the MCP comes back with the application: the
+// stored settings decide (enabled, key, permitted address), the same rule the
+// application applies at start-up.
+func autoStartNote(v admin.View) string {
+	if v.AutoStart {
+		return "次回起動時も自動で起動します（アプリの起動と同時に MCP も起動し、アプリの終了で止まります）。"
+	}
+	switch v.AutoStartBlocked {
+	case admin.ReasonDisabled:
+		return "自動では起動しません（無効です）。有効にして保存すると、次回からアプリと同時に起動します。"
+	case admin.ReasonNoKey:
+		return "自動では起動しません（API キーが未設定です）。"
+	case admin.ReasonListenNotAllowed:
+		return "自動では起動しません（待受アドレスが許可範囲外です）。"
+	case admin.ReasonAccessIncomplete:
+		return "自動では起動しません（Cloudflare Access の ID またはシークレットが空です）。"
+	case admin.ReasonExeMissing:
+		return "自動では起動しません（paper-results-mcp の実行ファイルが見つかりません。アプリ本体と同じフォルダに置いてください）。"
+	default:
+		return "自動では起動しません（設定ファイルを使えません）。"
 	}
 }
 

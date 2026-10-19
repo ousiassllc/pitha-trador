@@ -23,6 +23,12 @@ type InterfaceAddrs func() ([]net.Addr, error)
 // §3.1: only a loopback address, or this PC's own tailnet address, is allowed.
 var ErrListenNotAllowed = errors.New("paper-results-mcp: listen address is not allowed (loopback or this PC's tailnet address only)")
 
+// ErrTailnetNotAssigned is wrapped (together with ErrListenNotAllowed) when
+// the address is a tailnet address that no local interface has right now.
+// Unlike every other refusal it can clear by itself: Tailscale may not have
+// brought its interface up yet just after the PC logs on.
+var ErrTailnetNotAssigned = errors.New("tailnet address is not assigned to a local interface")
+
 // ValidateListen reports whether addr ("host:port") may be bound. The host
 // must be an IP literal - a name could resolve to a LAN or public address -
 // and either loopback, or a tailnet address (100.64.0.0/10,
@@ -80,5 +86,5 @@ func requireLocalAddress(ip netip.Addr, ifaceAddrs InterfaceAddrs) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("%w: tailnet address is not assigned to a local interface", ErrListenNotAllowed)
+	return fmt.Errorf("%w: %w", ErrListenNotAllowed, ErrTailnetNotAssigned)
 }

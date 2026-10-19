@@ -17,6 +17,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/singleinstance"
@@ -91,11 +92,12 @@ func run() error {
 	app := NewApp()
 	services := bootstrap.BuildServices(state, secrets, bootstrap.WithBrokerSettings(brokerSettings), bootstrap.WithAutoUpdate(app), bootstrap.WithNotifiers(app))
 	app.services = services
+	app.mcp = mcpwire.New() // started by app.startup, stopped by app.shutdown (issue #795)
 
 	wsListeners, wsBase := listenWebSocket()
 
 	engine := router.New(append(
-		bootstrap.RouterOptions(services, state, secretsRepo),
+		append(bootstrap.RouterOptions(services, state, secretsRepo), mcpwire.RouterOptions(app.mcp)...),
 		router.WithWebSocketBase(wsBase),
 		router.WithAllowedHosts(middleware.WailsHosts()...),
 		router.WithUpdateController(services.Updater),

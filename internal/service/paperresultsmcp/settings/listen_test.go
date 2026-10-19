@@ -70,8 +70,14 @@ func TestValidateListen(t *testing.T) {
 // refusal, never a different interface.
 func TestValidateListenTailnetWithoutInterface(t *testing.T) {
 	noTailnet := fakeIfaces("127.0.0.1/8", "192.168.1.20/24")
-	if err := ValidateListen("100.101.102.103:48110", noTailnet); !errors.Is(err, ErrListenNotAllowed) {
-		t.Fatalf("err = %v, want ErrListenNotAllowed", err)
+	if err := ValidateListen("100.101.102.103:48110", noTailnet); !errors.Is(err, ErrListenNotAllowed) || !errors.Is(err, ErrTailnetNotAssigned) {
+		t.Fatalf("err = %v, want ErrListenNotAllowed wrapping ErrTailnetNotAssigned (the one refusal that can clear by itself)", err)
+	}
+	// Every other refusal is permanent and must not look like "wait for Tailscale".
+	for _, addr := range []string{"0.0.0.0:48110", "192.168.1.20:48110", "10.0.0.5:48110", "example.com:48110", "[::]:48110"} {
+		if err := ValidateListen(addr, noTailnet); !errors.Is(err, ErrListenNotAllowed) || errors.Is(err, ErrTailnetNotAssigned) {
+			t.Errorf("%s: err = %v, want a permanent ErrListenNotAllowed", addr, err)
+		}
 	}
 	failing := func() ([]net.Addr, error) { return nil, errors.New("boom") }
 	if err := ValidateListen("100.101.102.103:48110", failing); err == nil {

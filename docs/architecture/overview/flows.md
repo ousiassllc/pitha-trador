@@ -54,6 +54,8 @@ sequenceDiagram
 
 #### 停止フロー
 
+Paper 実績 MCP（issue #795）: `Services.Start`の成功後（desktopの`OnStartup`・serverの`Services.Start`の後）に`mcpwire.Start`が`admin.Service.AutoStart`を別goroutineで呼び、保存された設定が有効・API キーあり・待受アドレスが許可範囲のときだけ`paper-results-mcp`を子プロセスとして起動する（無効・キー空・不正アドレスでは何もしない）。終了時は`Services.Stop()`より前に`mcpwire.Stop`（`admin.Service.Shutdown`）が子を止め、以後の起動を拒否する。アプリが異常終了・killされたときはOS（WindowsはJob Objectのkill-on-close）が子を止めるので、`--supervise`で再起動された新しいアプリの`AutoStart`が再び起動する（`architecture/paper-results-mcp-lifecycle.md`）。
+
 `bootstrap.Services.Start`が起動したgoroutineは`Start`へ渡したcontextに紐づくため、停止はcontextの取り消し→`Services.Stop()`（Schedulerのcronとワーカーを止め、候補更新・保有監視・ランキング監視/計測・PushFeed・News Ingestのgoroutineと実行中ジョブの終了を待つ）の順で行い、DBを閉じるのはその後（`defer`）に限る。
 
 ```mermaid

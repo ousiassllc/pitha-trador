@@ -112,7 +112,7 @@ templ SettingsPage(props SettingsProps) {
 				// Filled in by `GET /settings/mcp-panel` (internal/web/organisms/mcp)
 				// on load, so the reachability probe never slows `/settings`;
 				// the panel's forms swap this element's content in place.
-				<div id="mcp-panel" hx-get="/settings/mcp-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+				<div id="mcp-panel" hx-get="/settings/mcp-panel" hx-trigger="load, mcp-refresh from:body" hx-target="this" hx-swap="innerHTML"></div>
 			}
 			<script type="module" src="/static/dist/js/copy-button/pitha-copy-button.js"></script>
 		}
