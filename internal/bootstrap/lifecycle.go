@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/dailyguardseed"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/heldposition"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/jobfailurelog"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
 
@@ -15,13 +16,11 @@ import (
 // candidates and held symbols, in the TSE session only (FR-LUNA-1, #531).
 const newsPollInterval = time.Minute
 
-// Start launches every background goroutine this build's composition root owns: kabuステーションAPI
-// token issuance/refresh (broker.Session.Start), the candidate-refresh ticker (issue #45), the PUSH
-// subscription (pushfeed), and the Scheduler's worker pool + cron triggers (full-scan, self-improve,
-// outcome-labeling, operator-heartbeat, log-rotation; scheduler.Scheduler.Start), after recovering any
-// job a previous crash left "running" (scheduler.Scheduler.Recover) and storing the daily-guard Paper
-// initial values once (dailyguardseed.Run, issue #782). All run until ctx is done or Stop is called;
-// cmd/desktop (Wails' OnStartup) and cmd/server (main) call it and stop it on shutdown.
+// Start launches every background goroutine this build's composition root owns: the broker session
+// (broker.Session.Start) and PUSH subscription, the candidate-refresh ticker (issue #45), the Scheduler's
+// worker pool + cron triggers (scheduler.Scheduler.Start; Recover first resets jobs a crash left "running"),
+// the daily-guard Paper seeding (dailyguardseed.Run, #782) and the once-a-minute failed-job summary by error
+// code (jobfailurelog, #803). All run until ctx is done or Stop is called; cmd/desktop and cmd/server stop them.
 func (s *Services) Start(ctx context.Context) error {
 	if _, err := s.Scheduler.Recover(ctx); err != nil {
 		return fmt.Errorf("bootstrap: recover jobs: %w", err)
@@ -66,6 +65,7 @@ func (s *Services) Start(ctx context.Context) error {
 	s.startRankingMeasure(ctx)
 	s.startDailyBars(ctx)
 	s.startWatchList(ctx)
+	jobfailurelog.Start(ctx, &s.wg, s.Jobs) // issue #803
 
 	if s.NewsIngestEnabled() {
 		s.wg.Add(1)
