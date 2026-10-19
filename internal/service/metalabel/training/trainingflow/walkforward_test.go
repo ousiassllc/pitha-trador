@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
 )
 
@@ -144,6 +145,35 @@ func TestSplitWalkForward_PurgeCanStarveTheFitSet(t *testing.T) {
 	rows := wfRows(300, time.Hour, 15*time.Minute, wfNow.Add(-48*time.Hour))
 	if _, err := training.SplitWalkForward(rows, wfNow, time.Time{}, cfg); !errors.Is(err, training.ErrInsufficientData) {
 		t.Fatalf("error = %v, want ErrInsufficientData", err)
+	}
+}
+
+// Issue #799: the error carries a fixed reason code and the shortfall, so a
+// skipped retraining can be recorded without parsing the message.
+func TestSplitWalkForward_InsufficientDataCarriesTheFixedCodeAndCounts(t *testing.T) {
+	asInsufficient := func(err error) *training.InsufficientDataError {
+		t.Helper()
+		var e *training.InsufficientDataError
+		if !errors.As(err, &e) {
+			t.Fatalf("error = %v, want *InsufficientDataError", err)
+		}
+		return e
+	}
+
+	cfg := wfConfig() // MinFit 10 + MinCalibration 5 = 15 required
+	_, err := training.SplitWalkForward(wfRows(12, time.Hour, 15*time.Minute, wfNow.Add(-48*time.Hour)), wfNow, time.Time{}, cfg)
+	if e := asInsufficient(err); e.Code != repo.SkipTooFewRowsBeforeOOS || e.Usable != 12 || e.Required != 15 {
+		t.Errorf("before the OOS window: %+v, want too_few_rows_before_oos 12 of 15", e)
+	}
+
+	// 300 rows pass the first check (255 needed) but the 23h embargo removes
+	// the fit rows that end too close to the calibration start.
+	cfg = wfConfig()
+	cfg.MinFit, cfg.MinCalibration, cfg.Embargo = 250, 5, 23*time.Hour
+	_, err = training.SplitWalkForward(wfRows(300, time.Hour, 15*time.Minute, wfNow.Add(-48*time.Hour)), wfNow, time.Time{}, cfg)
+	e := asInsufficient(err)
+	if e.Code != repo.SkipTooFewRowsAfterPurge || e.Required != 255 || e.Usable <= 5 || e.Usable >= 255 {
+		t.Errorf("after purging: %+v, want too_few_rows_after_purge short of the 255 required", e)
 	}
 }
 

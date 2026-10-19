@@ -51,8 +51,11 @@ func New(db *sql.DB, settings *system.RuntimeSettingsRepository) *Job {
 	repo := metalabel.NewRepository(db)
 	// The adoption honours the freeze after a policy.* change of the
 	// self-improvement flow (issue #780).
-	j.trainer = training.NewTrainer(repo, servicemetalabel.NewStore(repo), j.load,
-		training.WithPolicyChanges(judgement.NewProposalRepository(db)))
+	store := servicemetalabel.NewStore(repo)
+	// A retraining skipped for lack of data is recorded for the Calibration
+	// screen and the MCP (issue #799).
+	j.trainer = training.NewTrainer(repo, store, j.load,
+		training.WithPolicyChanges(judgement.NewProposalRepository(db)), training.WithSkipRecorder(store))
 	return j
 }
 

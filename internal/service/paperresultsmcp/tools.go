@@ -177,7 +177,7 @@ var tools = []tool{
 	},
 	{
 		name:        "metalabel_history",
-		description: "メタモデルの採用/却下履歴と OOS AUC/EV、予測の take/skip 件数（読み取り専用）",
+		description: "メタモデルの採用/却下履歴と OOS AUC/EV、予測の take/skip 件数、データ不足による再学習の見送り（固定コードと必要件数中の件数。読み取り専用）",
 		schema:      periodSchema(map[string]any{"limit": limitProp(maxMetalabelList)}),
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 			var a struct {

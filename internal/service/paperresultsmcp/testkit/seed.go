@@ -29,13 +29,14 @@ const (
 	SentinelDetail    = "SENTINEL_DETAIL_JSON"
 	SentinelBarError  = "SENTINEL_DAILY_BAR_ERROR"
 	SentinelSkip      = "SENTINEL_SKIP_REASON"
-	SentinelPriceCol  = 98765.4321 // a market_snapshots price no tool may return
+	SentinelSkipCode  = "SENTINEL_RETRAIN_SKIP_CODE" // an unknown metalabel_retrain_skips.reason_code
+	SentinelPriceCol  = 98765.4321                   // a market_snapshots price no tool may return
 )
 
 func Sentinels() []string {
 	return []string{SentinelRaw, SentinelState, SentinelResponse, SentinelSecretKey, SentinelSecret,
 		SentinelRuntime, SentinelParams, SentinelFeatures, SentinelPayload, SentinelLastError,
-		SentinelDetail, SentinelBarError, SentinelSkip, "98765.4321"}
+		SentinelDetail, SentinelBarError, SentinelSkip, SentinelSkipCode, "98765.4321"}
 }
 
 // Stored renders an RFC3339 UTC instant the way the application stores it.

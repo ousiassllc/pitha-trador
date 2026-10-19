@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 )
 
@@ -151,8 +152,10 @@ func SplitWalkForward(rows []Row, now, llmCutoff time.Time, cfg WalkForwardConfi
 	pre, purged := purge(pre, oosStart, cfg.Embargo)
 	s.Purged += purged
 	if len(pre) < cfg.MinFit+cfg.MinCalibration {
-		return Split{}, fmt.Errorf("%w: %d usable rows before the OOS window, need at least %d for fit and calibration",
-			ErrInsufficientData, len(pre), cfg.MinFit+cfg.MinCalibration)
+		return Split{}, &InsufficientDataError{
+			Code: repo.SkipTooFewRowsBeforeOOS, Usable: len(pre), Required: cfg.MinFit + cfg.MinCalibration,
+			Detail: fmt.Sprintf("%d usable rows before the OOS window, need at least %d for fit and calibration", len(pre), cfg.MinFit+cfg.MinCalibration),
+		}
 	}
 
 	nCal := max(cfg.MinCalibration, int(float64(len(pre))*cfg.CalibrationFraction+0.5))
@@ -168,8 +171,13 @@ func SplitWalkForward(rows []Row, now, llmCutoff time.Time, cfg WalkForwardConfi
 	s.Fit, purged = purge(before, calStart, cfg.Embargo)
 	s.Purged += purged
 	if len(s.Fit) < cfg.MinFit || len(s.Calibrate) < cfg.MinCalibration {
-		return Split{}, fmt.Errorf("%w: %d fit and %d calibration rows after purging, need %d and %d",
-			ErrInsufficientData, len(s.Fit), len(s.Calibrate), cfg.MinFit, cfg.MinCalibration)
+		// Each set counts at most up to its own minimum, so the total stays
+		// below the requirement it is shown against ("必要130件中 x件").
+		return Split{}, &InsufficientDataError{
+			Code: repo.SkipTooFewRowsAfterPurge, Usable: min(len(s.Fit), cfg.MinFit) + min(len(s.Calibrate), cfg.MinCalibration),
+			Required: cfg.MinFit + cfg.MinCalibration,
+			Detail:   fmt.Sprintf("%d fit and %d calibration rows after purging, need %d and %d", len(s.Fit), len(s.Calibrate), cfg.MinFit, cfg.MinCalibration),
+		}
 	}
 
 	s.TrainStart = s.Fit[0].DecidedAt

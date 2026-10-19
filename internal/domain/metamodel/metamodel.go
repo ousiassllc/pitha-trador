@@ -102,3 +102,13 @@ type Report struct {
 	// before which no decision is evaluated.
 	LLMCutoff string
 }
+
+// RetrainSkip is one nightly retraining that stored no model for lack of
+// usable labeled history (issue #799). Code is a fixed reason code (the
+// internal/repository/metalabel Skip* constants), never free text.
+type RetrainSkip struct {
+	SkippedAt time.Time
+	Code      string
+	// UsableRows of RequiredRows: "必要130件中 x件".
+	UsableRows, RequiredRows int
+}

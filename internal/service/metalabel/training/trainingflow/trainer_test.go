@@ -182,3 +182,62 @@ func TestTrainer_TooLittleOrOneSidedHistoryIsNotAFailureAndStoresNothing(t *test
 		t.Errorf("skipped retraining was not logged:\n%s", logs.String())
 	}
 }
+
+// recordingSkips is a training.SkipRecorder keeping what it is given.
+type recordingSkips struct {
+	got []repo.RetrainSkip
+	err error
+}
+
+func (r *recordingSkips) RecordRetrainSkip(_ context.Context, s repo.RetrainSkip) error {
+	r.got = append(r.got, s)
+	return r.err
+}
+
+// Issue #799: a retraining skipped for lack of data is recorded with a fixed
+// code and the shortfall, not just logged; storing nothing stays a success.
+func TestTrainer_RetrainRecordsTheSkipWithFixedCodeAndCounts(t *testing.T) {
+	ctx := context.Background()
+	oneSided := trainingRows(3000, 7)
+	for i := range oneSided {
+		oneSided[i].NetReturnBps = 25
+	}
+	for name, tc := range map[string]struct {
+		rows     []repo.TrainingRow
+		wantCode string
+	}{
+		"no history": {nil, repo.SkipTooFewRowsBeforeOOS},
+		"few rows":   {trainingRows(40, 8), repo.SkipTooFewRowsBeforeOOS},
+		"one-sided":  {oneSided, repo.SkipTrainingDataUnusable},
+	} {
+		rec := &recordingSkips{}
+		tr := newTrainer(&fakeSource{rows: tc.rows}, newStore(t), settingsOf(nil), training.WithSkipRecorder(rec))
+		if err := tr.Retrain(ctx); err != nil {
+			t.Fatalf("%s: Retrain error = %v, want nil", name, err)
+		}
+		if len(rec.got) != 1 {
+			t.Fatalf("%s: recorded %d skips, want 1", name, len(rec.got))
+		}
+		got := rec.got[0]
+		if got.ReasonCode != tc.wantCode || got.RequiredRows != 130 || got.UsableRows < 0 || got.UsableRows > len(tc.rows) || !got.SkippedAt.Equal(trainNow) {
+			t.Errorf("%s: skip = %+v, want code %s, required 130, at %v", name, got, tc.wantCode, trainNow)
+		}
+	}
+}
+
+func TestTrainer_RetrainRecordsNothingWhenAModelIsTrainedAndFailsWhenTheSkipCannotBeStored(t *testing.T) {
+	ctx := context.Background()
+	rec := &recordingSkips{}
+	if err := newTrainer(&fakeSource{rows: trainingRows(3000, 5)}, newStore(t), settingsOf(nil), training.WithSkipRecorder(rec)).Retrain(ctx); err != nil {
+		t.Fatalf("Retrain: %v", err)
+	}
+	if len(rec.got) != 0 {
+		t.Errorf("a trained night recorded %d skips, want none", len(rec.got))
+	}
+
+	boom := errors.New("db down")
+	failing := &recordingSkips{err: boom}
+	if err := newTrainer(&fakeSource{}, newStore(t), settingsOf(nil), training.WithSkipRecorder(failing)).Retrain(ctx); !errors.Is(err, boom) {
+		t.Errorf("Retrain error = %v, want it to wrap the recorder error so the task fails visibly", err)
+	}
+}

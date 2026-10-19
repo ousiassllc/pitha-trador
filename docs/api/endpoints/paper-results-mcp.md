@@ -114,6 +114,8 @@
 
 `data.prediction_counts`: `metalabel_predictions.predicted_at` が期間内の行の `take` と `skip` の件数だけ（`action` の CHECK は `take` / `skip`。`000034`）。
 
+`data.retrain_skips[]`: 夜間再学習がデータ不足で見送られた記録（`metalabel_retrain_skips.skipped_at` が期間内、新しい順、最大 `limit` 件。`000038`）。フィールドは `skipped_at` / `reason_code` / `usable_rows` / `required_rows`。`usable_rows` 件が `required_rows` 件に足りない（「必要 130 件中 87 件」は `required_rows=130`・`usable_rows=87`）。`reason_code` は固定コードで、自由文は返さない: `too_few_rows_before_oos`（検証期間より前の使えるラベル付き判断が fit+較正の最小件数に足りない）/ `too_few_rows_after_purge`（purge・embargo 後に fit か較正が最小件数に足りない）/ `training_data_unusable`（件数はあるがラベルが片側だけ等で学習できない）。未知のコードは `other`。
+
 返さない: `params_json`、`feature_names_json`、`oos_calibration_json`、`features_json`、確率・EV の行そのもの。
 
 ### 3.6 `risk_rejections`
@@ -121,6 +123,8 @@
 引数: `from`, `to`。対象は期間内（`trade_signals.timestamp`）の行。
 
 `data.risk_passed_count`: `risk_passed` が真の件数。`data.other_reject_count`: `risk_passed` が偽で、`reject_reason` が `risk_engine_rejected:` で始まらない件数（理由文は返さない）。
+
+`data.other_reject_breakdown[]`: `other_reject_count` の内訳（`reason` と `count`。件数の多い順、同数は `reason` 昇順）。`reject_reason` の最初の `:` より前（前後の空白を除く）を固定コードに正規化する。コードは Policy の理由コードそのもの（`jev_none` / `probability_below_threshold` / `entry_quality_below_threshold` / `continuation_probability_below_threshold` / `toxic_flow_above_threshold` / `liquidity_stressed_above_threshold` / `spread_too_wide` / `thin_liquidity` / `special_quote` / `price_limit` / `not_lendable` / `missing_data` / `api_error` / `not_calibrated` / `meta_model_unavailable` / `vwap_z_unavailable` / `vwap_not_extreme`。`internal/service/policy/engine.go`・`meta.go`・`regime.go`）。`meta_skip: <reason> (p=… ev_bps=…)` は `meta_skip:<reason>`（`no_active_model` / `model_unusable` / `no_candidate` / `missing_feature` / `invalid_config` / `predict_failed` / `ev_not_above_minimum`。`internal/service/metalabel/decide.go`）にし、確率・EV の数値は返さない。知らない理由は `meta_skip:other`、知らないコードは `other`、`reject_reason` が NULL か空は `unknown`。内訳の合計は `other_reject_count` と一致する。板・価格・エラー文は返さない。
 
 `data.buckets[]`: `risk_engine_rejected:` の直後から、次の `:` または末尾までのトークン（前後の空白を除く）を `reason` とし、その件数。トークンが空なら `unknown`。詳細（`count=` や円金額、エラー文）は返さない。日次停止は `Check` が `daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades` を返し、Policy が `risk_engine_rejected:` を付ける（`internal/service/risk/check.go`、`internal/service/policy/engine.go`）ので、バケット名はそのコードになる。
 
@@ -143,12 +147,16 @@
 | `jobs[]` | キュー `market-data` / `feature-calc` / `jev-scout` / `jev-trader` / `outcome-labeling` / `analytics` ごとに、期間内（`finished_at`）の `succeeded_count` / `failed_count` と、`status=succeeded` の最新 `finished_at` |
 | `daily_bar_run_failed_count` | 期間内（`run_date`）の `daily_bar_runs.status='failed'` の件数 |
 | `label_skip_count` | 期間内（`calibration_label_skips.created_at`）の件数 |
+| `job_failures` | 期間内（`finished_at`）に `failed` で終わったジョブの内訳。`total`、`by_day[]`（`date` は JST 日・`count`）、`by_queue[]`（`queue`・`count`。キューの順）、`by_error_code[]`（`code`・`count`）、`by_day_and_error_code[]`（`date`・`code`・`count`。「10/6 の 4002006 は N 件」はこれで引ける）。どの一覧も合計は `total`。`skipped_total` / `skipped_by_queue[]` は `last_error` が `skipped: ` で始まる `succeeded` のジョブ（`jobqueue.Skip` による終端スキップ。`jobs[].succeeded_count` に含まれる）の件数 |
+| `retention` | `succeeded_job_days`（7）/ `failed_job_days`（30）と固定の注記。完了ジョブは `internal/service/retention` が成功 7 日・失敗 30 日で削除するため、期間がそれより前に及ぶと成功は先に消え、`jobs[]` と `job_failures` に出ない（失敗は 30 日残る） |
 
-返さない: `jobs.payload_json`、`jobs.last_error`、`daily_bar_runs.error`、`daily_bars` の価格・出来高、スキップ理由の自由文。
+`job_failures` の `code` は `jobs.last_error` の先頭 256 バイトから、固定パターン（kabu `code 4002006` / 立花 `p_errno=-62`・`sResultCode=NNN`）の数値トークン（`-` 付きでもよい 1〜8 桁）だけを取り出した値で、無ければ `unknown`。取り出しはプロセス内で行い、`last_error` の本文は返さない（SQL に `last_error` が現れるのは `substr(last_error, 1, N)`（N は 256 以下）の形だけで、`readonly_db_test` が確認する）。
+
+返さない: `jobs.payload_json`、`jobs.last_error` の本文、`daily_bar_runs.error`、`daily_bars` の価格・出来高、スキップ理由の自由文。
 
 ## 4. 出さないもの
 
-ツールの戻り値はホワイトリスト方式とする。テーブルの `SELECT *` は禁止する。下の表は、列が存在してもツールに載せないものの一覧である（マイグレーション `000001`〜`000036` で確認した名前）。
+ツールの戻り値はホワイトリスト方式とする。テーブルの `SELECT *` は禁止する。下の表は、列が存在してもツールに載せないものの一覧である（マイグレーション `000001`〜`000038` で確認した名前）。
 
 | 出さないもの | 確認した場所 |
 |--------------|----------------|
@@ -161,7 +169,7 @@
 | `metalabel_models.params_json` / `feature_names_json` / `oos_calibration_json` | `000034` |
 | `metalabel_predictions` の行の中身（`features_json` を含む） | `000034`。件数だけ |
 | `kill_switch_events.detail_json` | `000009` / `000017` |
-| `jobs.payload_json` / `jobs.last_error` | `000003` |
+| `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
 | `runtime_settings` の値 | 秘密鍵のパス等が入りうる。本 MCP は読まない |

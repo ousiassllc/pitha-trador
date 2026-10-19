@@ -14,6 +14,12 @@ import (
 type fakeReportRepo struct {
 	latest, active       *repo.Model
 	latestErr, activeErr error
+	skips                []repo.RetrainSkip
+	skipsErr             error
+}
+
+func (f fakeReportRepo) ListRetrainSkips(_ context.Context, limit int) ([]repo.RetrainSkip, error) {
+	return f.skips[:min(limit, len(f.skips))], f.skipsErr
 }
 
 func (f fakeReportRepo) LatestModel(context.Context) (repo.Model, bool, error) {
@@ -178,5 +184,29 @@ func TestReporter_CarriesTheAdoptionRecord(t *testing.T) {
 	got, _, err = metalabel.NewReporter(fakeReportRepo{latest: &legacy}, cutoffSettings("")).Report(context.Background())
 	if err != nil || got.Criteria != nil || got.Comparison != nil || got.Gate != nil || got.Forward.EvaluatedAt != "" {
 		t.Errorf("legacy report = %+v, %v, want no adoption record", got, err)
+	}
+}
+
+func TestReporter_RetrainSkipsMapRowsToFixedCodesAndCountsWithoutAModel(t *testing.T) {
+	at := time.Date(2026, 10, 19, 18, 0, 0, 0, time.UTC)
+	rep := metalabel.NewReporter(fakeReportRepo{skips: []repo.RetrainSkip{
+		{SkippedAt: at, ReasonCode: repo.SkipTooFewRowsBeforeOOS, UsableRows: 87, RequiredRows: 130},
+	}}, cutoffSettings(""))
+	got, err := rep.RetrainSkips(context.Background())
+	if err != nil || len(got) != 1 {
+		t.Fatalf("RetrainSkips = %v, %v, want one skip", got, err)
+	}
+	if got[0].Code != repo.SkipTooFewRowsBeforeOOS || got[0].UsableRows != 87 || got[0].RequiredRows != 130 || !got[0].SkippedAt.Equal(at) {
+		t.Errorf("skip = %+v, want too_few_rows_before_oos 87/130 at %v", got[0], at)
+	}
+	if _, found, _ := rep.Report(context.Background()); found {
+		t.Error("Report found a model; skips must be readable with no model trained")
+	}
+}
+
+func TestReporter_RetrainSkipsPropagatesTheRepositoryError(t *testing.T) {
+	boom := errors.New("db down")
+	if _, err := metalabel.NewReporter(fakeReportRepo{skipsErr: boom}, cutoffSettings("")).RetrainSkips(context.Background()); !errors.Is(err, boom) {
+		t.Fatalf("RetrainSkips error = %v, want it to wrap %v", err, boom)
 	}
 }

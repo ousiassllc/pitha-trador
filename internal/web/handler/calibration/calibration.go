@@ -125,6 +125,7 @@ type CalibrationAPIOutput struct {
 		TripleBarrier            calibrationBarrierOutput     `json:"triple_barrier" doc:"Triple-barrier EV (net) and tp/sl/timeout reach rates over every triple-barrier label in the aggregated horizon."`
 		MetaModel                *metaModelOutput             `json:"meta_model,omitempty" doc:"The newest meta-labeling model's OOS metrics (AUC, calibration curve, EV) and Jev evaluation period (issue #766); omitted when no model was ever trained or no source is wired. Independent of horizon."`
 		MetaModelCutoff          *llmCutoffOutput             `json:"meta_model_cutoff,omitempty" doc:"The Jev model's training-data cutoff setting with its status (placeholder / unverified / confirmed), warning and provenance (issue #776); reported even before any model was trained; omitted when no source is wired. Independent of horizon."`
+		MetaModelSkips           []retrainSkipOutput          `json:"meta_model_skips,omitempty" doc:"The newest skipped nightly meta-model retrainings (issue #799), newest first, each with a fixed reason_code and usable_rows of required_rows; reported even before any model was trained; omitted when none was skipped or no source is wired. Independent of horizon."`
 		ABArms                   []abArmOutput                `json:"ab_arms,omitempty" doc:"Paper A/B comparison of the fixed momentum arm and the regime-switching arm (issue #755): each arm's win rate and EV after costs over its closed positions, overall and per market regime. Independent of horizon; omitted when no source is wired."`
 	}
 }
@@ -183,6 +184,9 @@ func (h *CalibrationHandler) APICalibration(ctx context.Context, in *Calibration
 	}
 	out.Body.MetaModel = meta
 	if out.Body.MetaModelCutoff, err = h.llmCutoff(ctx); err != nil {
+		return nil, err
+	}
+	if out.Body.MetaModelSkips, err = h.retrainSkips(ctx); err != nil {
 		return nil, err
 	}
 	out.Body.ABArms = abArmsResponse(metrics.ABArms)
