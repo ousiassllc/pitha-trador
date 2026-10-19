@@ -89,6 +89,7 @@ func (m *Manager) AutoStart(ctx context.Context) {
 	cfg, loadErr := settings.Load(m.opts.ConfigPath)
 	err := m.Check(cfg, loadErr)
 	if errors.Is(err, settings.ErrTailnetNotAssigned) {
+		slog.InfoContext(ctx, "paper-results-mcp: waiting for the tailnet address to be assigned", "up_to", m.opts.AddressWait)
 		cfg, err = m.awaitAddress(ctx)
 	}
 	if err != nil {
@@ -100,7 +101,7 @@ func (m *Manager) AutoStart(ctx context.Context) {
 	m.awaitHandover(ctx, cfg.Listen)
 	switch err := m.start(ctx); {
 	case err == nil:
-	case errors.Is(err, ErrAlreadyListening), errors.Is(err, ErrClosed), errors.Is(err, context.Canceled):
+	case errors.Is(err, ErrAlreadyListening), errors.Is(err, ErrAlreadyRunning), errors.Is(err, ErrClosed), errors.Is(err, context.Canceled):
 		slog.InfoContext(ctx, "paper-results-mcp: not starting with the application", "reason", err.Error())
 	default:
 		slog.WarnContext(ctx, "paper-results-mcp: could not start with the application", "reason", err.Error())

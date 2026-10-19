@@ -59,7 +59,7 @@ type PanelProps struct {
 // key into its history cache) and `autocomplete="off"`; its copy buttons are
 // handled by static/src/components/copy-button.
 templ Panel(props PanelProps) {
-	<section class="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="mcp-panel" { pollAttrs(props.State)... }>
+	<section class="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="mcp-panel" { pollAttrs(props)... }>
 		<h3 class="sr-only">MCP</h3>
 		<p>
 			Grok Bot などから Paper の実績と Jev の判断を読み取るための、読み取り専用の MCP エンドポイントです。MCP は本体とは別のプロセス（paper-results-mcp）で動き、既定ではオフ・API キーが未設定の間は待ち受けません。
@@ -209,8 +209,11 @@ templ processControls(props PanelProps) {
 // pollAttrs makes a "starting" panel reload itself until the state settles
 // (the swap replaces this element, so the polling ends with it). Other
 // states never poll.
-func pollAttrs(state string) templ.Attributes {
-	if state != "starting" {
+//
+// A panel that shows the one-time API key never polls: the swap would erase
+// the only display of the key.
+func pollAttrs(props PanelProps) templ.Attributes {
+	if props.State != "starting" || props.RevealedKey != "" {
 		return nil
 	}
 	return templ.Attributes{"hx-get": "/settings/mcp-panel", "hx-trigger": "every 2s", "hx-target": "#mcp-panel", "hx-swap": "innerHTML"}

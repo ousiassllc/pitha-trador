@@ -27,7 +27,7 @@ var ErrListenNotAllowed = errors.New("paper-results-mcp: listen address is not a
 // the address is a tailnet address that no local interface has right now.
 // Unlike every other refusal it can clear by itself: Tailscale may not have
 // brought its interface up yet just after the PC logs on.
-var ErrTailnetNotAssigned = errors.New("paper-results-mcp: tailnet address is not assigned to a local interface")
+var ErrTailnetNotAssigned = errors.New("tailnet address is not assigned to a local interface")
 
 // ValidateListen reports whether addr ("host:port") may be bound. The host
 // must be an IP literal - a name could resolve to a LAN or public address -

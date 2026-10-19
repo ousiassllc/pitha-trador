@@ -46,7 +46,7 @@ issue #795。`docs/architecture/paper-results-mcp.md`（#783）の MCP を、Set
 | 場面 | 動き |
 |------|------|
 | 通常終了（Wails の `OnShutdown`、`cmd/server` の SIGINT/SIGTERM と待受失敗。どちらも `Services.Stop` より前に `mcpwire.Stop`） | `Shutdown` が子を止め（Unix 系は SIGTERM、5 秒で kill。Windows は終了させる）、終了を待ち、以後の起動を拒否する。自動更新のインストーラーは `OnShutdown`（`mcpwire.Stop` と `Services.Stop`）のあとに起動するので、MCP の実行ファイルが使用中のまま置換されることはない |
-| アプリが異常終了・kill された | **Windows**: 子を `CREATE_SUSPENDED` で作り、Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`）に入れてから `NtResumeProcess` で動かす（ジョブに入る前には 1 命令も実行しないので、アプリがその間に消えても孤児は残らない）。ジョブのハンドルはアプリだけが持ち、アプリのプロセスが消えると OS がハンドルを閉じて子を終了させる。ハンドルは閉じない。ジョブの作成に失敗しても次の起動で再試行する**Linux**: `Pdeathsig=SIGKILL`（親スレッドの終了で発火するため、起動と待機を専用のロック済みスレッドで行う）。その他の OS は異常終了への保護がない（本番は Windows）。入れられなかった場合は子を止めて起動失敗にする（孤児を作らない側に倒す） |
+| アプリが異常終了・kill された | **Windows**: 子を `CREATE_SUSPENDED` で作り、Job Object（`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`）に入れてから `NtResumeProcess` で動かす（ジョブに入る前には 1 命令も実行しないので、アプリがその間に消えても孤児は残らない）。ジョブのハンドルはアプリだけが持ち、アプリのプロセスが消えると OS がハンドルを閉じて子を終了させる。ハンドルは閉じない。ジョブの作成に失敗しても次の起動で再試行する。**Linux**: `Pdeathsig=SIGKILL`（親スレッドの終了で発火するため、起動と待機を専用のロック済みスレッドで行う）。その他の OS は異常終了への保護がない（本番は Windows）。入れられなかった場合は子を止めて起動失敗にする（孤児を作らない側に倒す） |
 | `--supervise` によるアプリの再起動 | 監督プロセス（`internal/supervisor`）は子のアプリだけを見る。アプリが異常終了すると上の経路で MCP も消え、再起動した新しいアプリの `AutoStart` が MCP を起動する。旧 MCP がまだ消えきっていない場合に備え、`AutoStart` は待受アドレスが応答しなくなるまで最大 5 秒待ってから起動する。それでも応答するなら（アプリの外で起動された MCP）起動せず、二重起動しない |
 | 操作者が終了コード 0 で終了（監督も終了） | 通常終了と同じ。MCP も止まる |
 
@@ -67,6 +67,8 @@ issue #795。`docs/architecture/paper-results-mcp.md`（#783）の MCP を、Set
 - Grok Bot 側への URL と `Authorization` ヘッダーの登録（アプリの外）
 - Tailscale / トンネルの設定（アプリの外。`paper-results-mcp.md` §4）
 - ホスト再起動後の無人復帰に必要な Windows の自動ログオンの設定（アプリの外）
+- 待受アドレスが tailnet アドレスのとき、Tailscale が 90 秒以内に上がらないと自動起動しない（その後の自動再試行はない。画面の「起動」か「再起動」、または Tailscale が上がってからのアプリ再起動で復帰する。loopback の既定では起きない）
+- 設定の保存・API キーの再生成は、動いている MCP には「再起動」まで効かない（画面に「設定が保存されています…再起動で反映」と出す。無効化・キーの失効を即時にしたいときは「停止」または「再起動」を押す）
 - インストーラー（`--supervise` のスタートアップ項目）を入れないと PC 再起動後の復帰は起きない（既定ON）
 
 上記以外に、MCP を使うために行う操作（起動コマンド、タスクスケジューラへの登録、JSON の手書き）は残さない。
