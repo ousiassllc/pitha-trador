@@ -55,7 +55,7 @@ func TestNew_UpdateCheckRouteIs404WithoutUpdater(t *testing.T) {
 func TestNew_SettingsAndHeaderEmbedUpdateSlots(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
-	router.New().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	router.New().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/maintenance", nil))
 	body := rec.Body.String()
 	for _, want := range []string{`id="update-banner"`, `id="update-panel"`} {
 		if !strings.Contains(body, want) {

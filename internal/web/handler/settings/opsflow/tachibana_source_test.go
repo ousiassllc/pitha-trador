@@ -13,7 +13,7 @@ import (
 func TestSettingsPage_ShowsTachibanaSourceCards(t *testing.T) {
 	engine, _ := opsRouter()
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/broker", nil))
 	body := rec.Body.String()
 	for _, id := range []string{"tachibana-source", "tachibana-nightly", "tachibana-screen", "tachibana-intraday"} {
 		if !strings.Contains(body, `data-testid="settings-card-`+id+`"`) {

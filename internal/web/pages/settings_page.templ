@@ -1,58 +1,112 @@
 package pages
 
 import (
+	"slices"
+	"strconv"
+
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
 )
 
-// SettingsProps is SettingsPage's input: one molecules.ConnectionProps per
-// external service (internal/web/handler/settings.SettingsHandler.Page),
-// each carrying all of that service's keys.
+// SettingsProps is SettingsPage's input: one page under Settings (issue
+// #805) with only the cards and dialogs the settingspages registry places on
+// it (internal/web/handler/settings.SettingsHandler.SubPage).
 type SettingsProps struct {
+	Page settingspages.Page
+	// Dialogs are the ids of the page's dialogs (settingspages.DialogsOf);
+	// Has tells the template which of the fixed system/MCP cards to render.
+	Dialogs []string
+	// Connections are the external services of this page, one
+	// molecules.ConnectionProps each carrying all of that service's keys.
 	Connections []molecules.ConnectionProps
-	// Operational are the operator-editable, non-secret settings groups
-	// (issue #708); empty hides the section.
+	// Operational are the operator-editable, non-secret settings groups of
+	// this page (issue #708); empty hides the section.
 	Operational []molecules.SettingGroupProps
-	// MCP shows the 外部連携 section's MCP card and modal (issue #792); false
-	// (no MCP admin service wired) hides them.
+	// MCP shows the MCP card and modal (issue #792); false (no MCP admin
+	// service wired) hides them.
 	MCP bool
+	// Links are the page's links to screens outside Settings.
+	Links []settingspages.Link
 }
 
-// SettingsPage is the Settings screen (issue #57 スコープ item 6, issue
-// #79, reorganised by issue #302): a list of connections - Jev,
-// kabuステーション, Slack, Luna, ニュースフィード, Sol, Opus - each showing
-// whether it is configured and opening a modal with all of that
-// connection's keys, URL and model name (organisms.ConnectionList), plus a
-// システム section whose アップデート, エラーログ and データエクスポート entries open the
-// UpdatePanel, ErrorLogPanel and DataExportPanel in modals of their own. Every field keeps
+// Has reports whether the page holds the dialog with the given id.
+func (p SettingsProps) Has(modalID string) bool { return slices.Contains(p.Dialogs, modalID) }
+
+func (p SettingsProps) hasSystem() bool {
+	return p.Has("modal-update") || p.Has("modal-error-log") || p.Has("modal-data-export")
+}
+
+// SettingsHubPage is the Settings entry (`GET /settings`, issue #805): the
+// single Settings item of the main navigation lists the pages under it, each
+// opening a page of detailed settings. It replaces the former admin hub. The
+// `data-hash-routes` map (settingspages.HashRoutes) lets pitha-settings-hub
+// forward an old `/settings#modal-<id>` link to the page that now holds the
+// dialog, since the server never sees a URL fragment.
+templ SettingsHubPage(pageList []settingspages.Page) {
+	@layout.Shell("Settings", organisms.NavSettings) {
+		<h1 class="text-2xl font-bold text-slate-900">Settings</h1>
+		<div class="mt-4 flex flex-col gap-6" data-testid="settings-hub" data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
+			<p class="text-sm text-slate-600">
+				設定したい項目のページを選んでください。接続先・しきい値・保存先などの詳細な設定と、関連する画面（Scanner・Performance など）へのリンクをページごとにまとめています。
+			</p>
+			<ul class="flex flex-col gap-3" data-testid="settings-page-list">
+				for _, p := range pageList {
+					@molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{
+						ID:          "page-" + p.ID,
+						Name:        p.Name,
+						Description: p.Summary,
+						Href:        p.Path(),
+						ActionLabel: "開く",
+					})
+				}
+			</ul>
+		</div>
+		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>
+	}
+}
+
+// SettingsPage is one page under Settings (issue #805; the screen itself is
+// issue #57 スコープ item 6, issue #79, reorganised by issue #302): it lists
+// the connections (organisms.ConnectionList), setting groups, MCP card and
+// system entries the settingspages registry places on the page, each opening a
+// modal with its forms, plus links to the related screens. Every field keeps
 // its own independent save (`POST /settings/:key`) and delete (`DELETE
 // /settings/:key`) form (internal/web/handler/settings.SettingsHandler.
 // Save/Delete) - a blank or untouched field can never clear another
 // field's stored value.
 templ SettingsPage(props SettingsProps) {
-	@layout.Shell("Settings", organisms.NavSettings) {
-		<h1 class="text-2xl font-bold text-slate-900">Settings</h1>
-		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form">
-			<p class="text-sm text-slate-600">
-				接続先を選ぶと、その接続先のキー・URL・モデル名を編集できます。項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。接続先の保存・削除の反映にはアプリの再起動が必要です。
-			</p>
-			<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
-				<h2 id="settings-connections-heading" class="text-lg font-semibold text-slate-900">接続先</h2>
-				@organisms.ConnectionList(props.Connections)
-			</section>
+	@layout.Shell("Settings / "+props.Page.Name, organisms.NavSettings) {
+		<nav aria-label="パンくず" class="text-sm text-slate-600" data-testid="settings-breadcrumb">
+			<a class="hover:text-slate-900" href={ templ.SafeURL(settingspages.BasePath) }>Settings</a>
+			<span aria-hidden="true"> / </span>
+			<span aria-current="page">{ props.Page.Name }</span>
+		</nav>
+		<h1 class="mt-2 text-2xl font-bold text-slate-900">{ props.Page.Name }</h1>
+		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID }>
+			<p class="text-sm text-slate-600">{ props.Page.Summary }</p>
+			if len(props.Connections) > 0 {
+				<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
+					<h2 id="settings-connections-heading" class="text-lg font-semibold text-slate-900">接続先</h2>
+					<p class="text-sm text-slate-600">
+						接続先を選ぶと、その接続先のキー・URL・モデル名を編集できます。項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。接続先の保存・削除の反映にはアプリの再起動が必要です。
+					</p>
+					@organisms.ConnectionList(props.Connections)
+				</section>
+			}
 			if len(props.Operational) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-operational-heading">
-					<h2 id="settings-operational-heading" class="text-lg font-semibold text-slate-900">運用設定</h2>
+					<h2 id="settings-operational-heading" class="text-lg font-semibold text-slate-900">設定項目</h2>
 					<p class="text-sm text-slate-600">
-						バックアップ先・ログディレクトリ・Policy Engine / Fast Screener のしきい値を編集できます。優先順位は config/strategy.yaml の値 &lt; ここで保存した値です。項目ごとに保存でき、「既定に戻す」で保存した値を消して既定（strategy.yaml・既定ディレクトリ・無効）に戻せます。反映のタイミング（再起動の要否）は各項目の説明に記載しています。
+						優先順位は config/strategy.yaml の値 &lt; ここで保存した値です。項目ごとに保存でき、「既定に戻す」で保存した値を消して既定（strategy.yaml・既定ディレクトリ・無効）に戻せます。反映のタイミング（再起動の要否）は各項目の説明に記載しています。
 					</p>
 					@organisms.SettingGroupList(props.Operational)
 				</section>
 			}
-			if props.MCP {
+			if props.MCP && props.Has("modal-mcp") {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-integrations-heading">
-					<h2 id="settings-integrations-heading" class="text-lg font-semibold text-slate-900">外部連携</h2>
+					<h2 id="settings-integrations-heading" class="text-lg font-semibold text-slate-900">MCP</h2>
 					<ul class="flex flex-col gap-3" data-testid="integrations-list">
 						@molecules.SettingsCard(molecules.SettingsCardProps{
 							ID:          "mcp",
@@ -64,53 +118,83 @@ templ SettingsPage(props SettingsProps) {
 					</ul>
 				</section>
 			}
-			<section class="flex flex-col gap-3" aria-labelledby="settings-system-heading">
-				<h2 id="settings-system-heading" class="text-lg font-semibold text-slate-900">システム</h2>
-				<ul class="flex flex-col gap-3" data-testid="system-list">
-					@molecules.SettingsCard(molecules.SettingsCardProps{
-						ID:          "update",
-						ModalID:     "modal-update",
-						Name:        "アップデート",
-						Description: "現在のバージョンと最終確認結果を確認し、新しいバージョンを今すぐ確認できます。",
-						ActionLabel: "開く",
-					})
-					@molecules.SettingsCard(molecules.SettingsCardProps{
-						ID:          "error-log",
-						ModalID:     "modal-error-log",
-						Name:        "エラーログ",
-						Description: "調査や共有のために、エラーログをダウンロードできます。",
-						ActionLabel: "開く",
-					})
-					@molecules.SettingsCard(molecules.SettingsCardProps{
-						ID:          "data-export",
-						ModalID:     "modal-data-export",
-						Name:        "データエクスポート",
-						Description: "取引ログ・判断ログ・計測ログを期間を指定して ZIP でダウンロードできます。",
-						ActionLabel: "開く",
-					})
-				</ul>
-			</section>
+			if props.hasSystem() {
+				<section class="flex flex-col gap-3" aria-labelledby="settings-system-heading">
+					<h2 id="settings-system-heading" class="text-lg font-semibold text-slate-900">システム</h2>
+					<ul class="flex flex-col gap-3" data-testid="system-list">
+						if props.Has("modal-update") {
+							@molecules.SettingsCard(molecules.SettingsCardProps{
+								ID:          "update",
+								ModalID:     "modal-update",
+								Name:        "アップデート",
+								Description: "現在のバージョンと最終確認結果を確認し、新しいバージョンを今すぐ確認できます。",
+								ActionLabel: "開く",
+							})
+						}
+						if props.Has("modal-error-log") {
+							@molecules.SettingsCard(molecules.SettingsCardProps{
+								ID:          "error-log",
+								ModalID:     "modal-error-log",
+								Name:        "エラーログ",
+								Description: "調査や共有のために、エラーログをダウンロードできます。",
+								ActionLabel: "開く",
+							})
+						}
+						if props.Has("modal-data-export") {
+							@molecules.SettingsCard(molecules.SettingsCardProps{
+								ID:          "data-export",
+								ModalID:     "modal-data-export",
+								Name:        "データエクスポート",
+								Description: "取引ログ・判断ログ・計測ログを期間を指定して ZIP でダウンロードできます。",
+								ActionLabel: "開く",
+							})
+						}
+					</ul>
+				</section>
+			}
+			if len(props.Links) > 0 {
+				<section class="flex flex-col gap-3" aria-labelledby="settings-links-heading">
+					<h2 id="settings-links-heading" class="text-lg font-semibold text-slate-900">関連画面</h2>
+					<ul class="flex flex-col gap-3" data-testid="settings-links">
+						for i, link := range props.Links {
+							@molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{
+								ID:          "link-" + strconv.Itoa(i),
+								Name:        link.Name,
+								Description: link.Description,
+								Href:        link.Href,
+								ActionLabel: "開く",
+							})
+						}
+					</ul>
+				</section>
+			}
 		</div>
-		@molecules.Modal("modal-update", "アップデート") {
-			// Header's version link lands here (`/settings#update-panel`):
-			// pitha-modal opens the dialog containing the hash target, and
-			// `:target` rings the panel once arrived. Filled in by `GET
-			// /system/update-panel` (organisms.UpdatePanel) on load and
-			// swapped in place by its "今すぐアップデートを確認" button;
-			// `empty:hidden` keeps the not-yet-loaded wrapper from showing a
-			// bare ring.
-			<div id="update-panel" class="scroll-mt-4 rounded-md target:ring-2 target:ring-blue-500 empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+		if props.Has("modal-update") {
+			@molecules.Modal("modal-update", "アップデート") {
+				// Header's version link lands here
+				// (`/settings/maintenance#update-panel`): pitha-modal opens the
+				// dialog containing the hash target, and `:target` rings the
+				// panel once arrived. Filled in by `GET /system/update-panel`
+				// (organisms.UpdatePanel) on load and swapped in place by its
+				// "今すぐアップデートを確認" button; `empty:hidden` keeps the
+				// not-yet-loaded wrapper from showing a bare ring.
+				<div id="update-panel" class="scroll-mt-4 rounded-md target:ring-2 target:ring-blue-500 empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+			}
 		}
-		@molecules.Modal("modal-error-log", "エラーログ") {
-			@organisms.ErrorLogPanel()
+		if props.Has("modal-error-log") {
+			@molecules.Modal("modal-error-log", "エラーログ") {
+				@organisms.ErrorLogPanel()
+			}
 		}
-		@molecules.Modal("modal-data-export", "データエクスポート") {
-			@organisms.DataExportPanel()
+		if props.Has("modal-data-export") {
+			@molecules.Modal("modal-data-export", "データエクスポート") {
+				@organisms.DataExportPanel()
+			}
 		}
-		if props.MCP {
+		if props.MCP && props.Has("modal-mcp") {
 			@molecules.Modal("modal-mcp", "MCP（Paper 実績・Jev 判断の読み取り専用エンドポイント）") {
 				// Filled in by `GET /settings/mcp-panel` (internal/web/organisms/mcp)
-				// on load, so the reachability probe never slows `/settings`;
+				// on load, so the reachability probe never slows the page;
 				// the panel's forms swap this element's content in place.
 				<div id="mcp-panel" hx-get="/settings/mcp-panel" hx-trigger="load, mcp-refresh from:body" hx-target="this" hx-swap="innerHTML"></div>
 			}

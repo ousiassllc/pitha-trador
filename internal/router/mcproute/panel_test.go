@@ -13,20 +13,20 @@ import (
 
 func TestSettingsPage_MCPCardNeedsWithMCPSettings(t *testing.T) {
 	a := newApp(t, fullSecrets{})
-	body := a.get("/settings").Body.String()
-	for _, want := range []string{`id="modal-mcp"`, `data-testid="settings-card-mcp"`, `hx-get="/settings/mcp-panel"`, `hx-trigger="load"`, "外部連携"} {
+	body := a.get("/settings/integrations").Body.String()
+	for _, want := range []string{`id="modal-mcp"`, `data-testid="settings-card-mcp"`, `hx-get="/settings/mcp-panel"`, `hx-trigger="load, mcp-refresh from:body"`, "外部連携"} {
 		if !strings.Contains(body, want) {
-			t.Errorf("with the service wired, /settings lacks %q", want)
+			t.Errorf("with the service wired, /settings/integrations lacks %q", want)
 		}
 	}
 	// The probe runs only in the lazily loaded fragment.
 	if a.dials != 0 {
-		t.Errorf("GET /settings dialled %d times; the TCP probe belongs to the panel fragment", a.dials)
+		t.Errorf("GET /settings/integrations dialled %d times; the TCP probe belongs to the panel fragment", a.dials)
 	}
 
-	rec := newAppWithout(t).get("/settings")
+	rec := newAppWithout(t).get("/settings/integrations")
 	if strings.Contains(rec.Body.String(), "modal-mcp") || strings.Contains(rec.Body.String(), "mcp-panel") {
-		t.Error("without WithMCPSettings, /settings must not show the MCP card")
+		t.Error("without WithMCPSettings, /settings/integrations must not show the MCP card")
 	}
 }
 

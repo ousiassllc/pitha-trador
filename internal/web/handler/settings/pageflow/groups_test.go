@@ -44,15 +44,14 @@ func modalSection(t *testing.T, body, id string) string {
 // issue #302: each connection's key, URL and model name live together in
 // that connection's modal. The grouping is pinned exactly so that adding or
 // moving a key is a deliberate test change; together the modals cover the
-// allow-list exactly once. Luna/Sol/Opus/News Feed are optional overrides of
+// allow-list exactly once, each connection on exactly one Settings page
+// (issue #805). Luna/Sol/Opus/News Feed are optional overrides of
 // their defaults (Jev / やのしん, issue #273).
 func TestSettingsHandler_Page_GroupsKeysIntoOneModalPerConnection(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore()))
 
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
-	body := rec.Body.String()
+	body := allPagesBody(t, engine)
 
 	want := map[string][]string{
 		"jev":       {config.KeyJevAPIKey, config.KeyJevBaseURL, config.KeyJevModel},
@@ -71,8 +70,11 @@ func TestSettingsHandler_Page_GroupsKeysIntoOneModalPerConnection(t *testing.T) 
 			t.Errorf("modal-%s keys = %v, want %v", id, got, keys)
 		}
 		all = append(all, keys...)
-		if !strings.Contains(body, `data-testid="settings-card-`+id+`"`) {
-			t.Errorf("no list card for connection %s", id)
+		if n := strings.Count(body, `data-testid="settings-card-`+id+`"`); n != 1 {
+			t.Errorf("connection %s has %d list cards across the Settings pages, want exactly 1", id, n)
+		}
+		if n := strings.Count(body, `<dialog id="modal-`+id+`"`); n != 1 {
+			t.Errorf("connection %s has %d dialogs across the Settings pages, want exactly 1", id, n)
 		}
 	}
 	slices.Sort(all)
@@ -94,9 +96,7 @@ func TestSettingsHandler_Page_CardStateReflectsStoredKeys(t *testing.T) {
 	store.values[config.KeyLunaBaseURL] = "https://luna.example.com"
 	engine := settingsRouter(settings.NewSettingsHandler(store))
 
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
-	body := rec.Body.String()
+	body := allPagesBody(t, engine)
 
 	for id, state := range map[string]string{"jev": "configured", "luna": "partial", "kabu": "unset", "tachibana": "unset", "slack": "unset", "sol": "default", "opus": "default", "news-feed": "default"} {
 		if want := `data-testid="connection-status-` + id + `"`; !strings.Contains(body, want) {

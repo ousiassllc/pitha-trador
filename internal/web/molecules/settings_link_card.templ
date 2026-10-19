@@ -1,0 +1,32 @@
+package molecules
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// SettingsLinkCardProps is SettingsLinkCard's input: the heading and
+// explanation, the link target and the link's text.
+type SettingsLinkCardProps struct {
+	ID          string
+	Name        string
+	Description string
+	Href        string
+	ActionLabel string
+}
+
+// SettingsLinkCard is one row of the Settings hub's page list and of a
+// Settings page's 関連画面 list (issue #805): like SettingsCard, but the button
+// is a link to another page instead of one that opens a dialog. The list item
+// is addressed in tests by `settings-link-<ID>`.
+templ SettingsLinkCard(props SettingsLinkCardProps) {
+	<li class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-4" data-testid={ "settings-link-" + props.ID }>
+		<div class="flex min-w-0 flex-1 flex-col gap-1">
+			<span class="font-semibold text-slate-900">{ props.Name }</span>
+			<p class="text-sm text-slate-600">{ props.Description }</p>
+		</div>
+		@atoms.ButtonLink(atoms.ButtonProps{Variant: atoms.ButtonOutline, Attrs: templ.Attributes{
+			"href":        string(templ.URL(props.Href)),
+			"data-testid": "open-" + props.ID,
+		}}) {
+			{ props.ActionLabel }
+		}
+	</li>
+}

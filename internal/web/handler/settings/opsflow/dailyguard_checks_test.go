@@ -35,7 +35,7 @@ func riskRouter(ref bool) (*gin.Engine, *memRuntimeStore) {
 
 func settingsBody(engine *gin.Engine) string {
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/risk", nil))
 	return rec.Body.String()
 }
 

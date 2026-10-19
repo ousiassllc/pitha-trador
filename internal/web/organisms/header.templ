@@ -56,9 +56,9 @@ import (
 // failed, and nothing otherwise (re-polled every 30s).
 //
 // `#header-version` shows the running build's internal/version.Version on
-// every page and links to Settings' アップデート section (`/settings#update-
-// panel`), where the version is detailed and the manual update check
-// lives. The check button itself is deliberately not in the header: a
+// every page and links to Settings' アップデート section
+// (`/settings/maintenance#update-panel`), where the version is detailed and
+// the manual update check lives. The check button itself is deliberately not in the header: a
 // verified installer found by a check restarts the app, so it stays on a
 // single, explicit Settings screen.
 //
@@ -141,7 +141,7 @@ templ Header(state domain.SystemState, current NavItem) {
 		<a
 			id="header-version"
 			class="text-xs text-slate-500 hover:text-slate-900"
-			href="/settings#update-panel"
+			href="/settings/maintenance#update-panel"
 			title="アップデートの確認（設定）"
 			data-testid="header-version"
 		>{ version.Version }</a>

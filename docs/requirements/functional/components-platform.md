@@ -210,12 +210,12 @@ Settings画面（`GET /settings`）で認証情報と運用設定を管理する
 - FR-MCP-15: アプリ起動時、保存された設定が有効・API キーあり・待受アドレスが許可範囲なら、MCP も同時に起動する。無効（既定）・キー空・不正アドレス・設定ファイルが使えないときは起動しない。画面の状態表示に「次回起動時も自動で起動します」（起動しないときはその理由）を出す。アプリ終了時は MCP も止める。Windows ログオン時のアプリ自動起動（スタートアップショートカットの `--supervise`、`non-functional.md` §3）はすでにあり、新しい自動起動は作らない。PC 再起動後はその経路でアプリと MCP が復帰する（ホスト再起動後の無人復帰は Windows の自動ログオンが前提）。待受アドレスが tailnet アドレスでまだ PC に割り当てられていない（ログオン直後で Tailscale が上がっていない）ときだけ、最大 90 秒待ってから判定し直す
 - FR-MCP-16: アプリが異常終了・kill されても MCP が孤児で残らない（Windows は子を一時停止で作り、Job Object の kill-on-close に入れてから動かす。Linux は `Pdeathsig`）。`--supervise` によるアプリの再起動後に MCP も復帰し、前の MCP のポートが閉じるまで待ってから起動し、二重に起動しない。受け入れ条件: 自動起動する／しない条件、二重起動しない、キー平文が出ない（引数・環境・ログ・画面・子の出力）、アプリ終了時に止まる、アプリを kill しても孤児が残らない、起動失敗・異常終了が状態に出る、3 つの API が CSRF 対策済み・認証必須であることを自動テストで確認する（設計は `architecture/paper-results-mcp-lifecycle.md`）
 
-### 4.23 管理ハブ（issue #793）
+### 4.23 Settings の構成（issue #793・#805）
 
-管理系の画面・機能（Settings の各ダイアログを含む）は、一覧ページ「管理」（`GET /admin`）からカテゴリ別に辿れる。一覧は画面名・URL・できること・カテゴリの表（`docs/components/screens.md`）と同じ内容を持つ。
+管理系の画面・機能（Settings の各ダイアログを含む）は、メインナビの「Settings」1つから辿れる。「Settings」（`GET /settings`）はページの一覧で、各ページ（`GET /settings/<page id>`）が詳細設定と関連画面へのリンクを持つ。旧「管理ハブ」（`GET /admin`、issue #793）は #805 で Settings に統合した。一覧は画面名・URL・できること・ページの表（`docs/components/screens.md`）と同じ内容を持つ。
 
-- FR-ADMIN-1: `GET /admin` は、運用／成績・検証／リスク・資金設定／ブローカー・データ接続／外部連携／ログ・エクスポートの6カテゴリに、各項目の名前・できること（1行）・リンクを載せる。項目は URL を持つ画面への直リンクか、`/settings#<ダイアログ id>`（Settings の該当ダイアログを開く）である。専用 URL を持たない Kill Switch はヘッダーのパネルがあるページ（`/scanner#kill-switch`）へ誘導し、その旨を説明に書く。`/swagger` は `SWAGGER_ENABLED=true` のときだけ載せる。
-- FR-ADMIN-2: Settings 画面の全カード（接続先・運用設定・システム）は、いずれかのハブ項目から開ける。Settings にカードを足すときは同時にハブ項目を足す（`internal/web/adminhub` の登録簿。完全性は router 層のテストで検査する）。ナビの各項目（管理自身を除く）もハブに載る。
-- FR-ADMIN-3: 既存の画面の URL・API・ルートは変えない。`/` は `/scanner` へ、`/setup` は Setup Guard の既存挙動のまま。`/admin` は他のページと同じく Setup Guard の対象で、必須の接続が未設定の間は `/setup` へ送る。
-- FR-ADMIN-4: `layout.Shell` を使う全ページのメインナビに「管理」（`/admin`、「Settings」の直前）を置き、各管理画面から1操作でハブへ戻れる。「管理」は `/admin` でだけ `aria-current="page"` を付ける。例外は `/setup`（ヘッダーを持たない初回専用画面）と `/swagger`（静的なドキュメント画面）。
-- FR-ADMIN-5: Symbol Detail（`/symbols/:symbol`）はパラメータ付きで Scanner の候補から開く画面のため、ハブにはリンクを置かず、画面一覧の表にだけ載せる。
+- FR-ADMIN-1: `GET /settings` は、運用／成績・検証／リスク・資金／ブローカー・データ／外部連携／ログ・エクスポートの6ページ（`/settings/operations`・`results`・`risk`・`broker`・`integrations`・`maintenance`）への名前・要約・リンクを載せる。各ページは、そのページに属する接続先・設定項目・システムのカード（`/settings/<page id>#<ダイアログ id>` でダイアログを開く）と、Settings の外の関連画面（Scanner・Performance など）へのリンクを載せる。専用 URL を持たない Kill Switch は、ヘッダーのパネルがあるページ（`/scanner#kill-switch`）へ誘導し、その旨を説明に書く。`/swagger` は `SWAGGER_ENABLED=true` のときだけ載せる。
+- FR-ADMIN-2: Settings 画面の全カード（接続先・設定項目・システム）は、ちょうど1つのページに置かれ、そのページから開ける。全運用設定キー（`opsettings.Keys()`）は、いずれか1ページで編集できる。カードを足すときは同時にそのページを決める（`internal/web/settingspages` の登録簿。完全性は router 層・handler 層のテストで検査する）。今後の設定グループ・ページの追加も登録簿への追記で足りる。メインナビの各項目（Settings 自身を除く）は、いずれかのページのリンクに載る。
+- FR-ADMIN-3: 既存の画面の URL・API・ルートは変えない。`/` は `/scanner` へ、`/setup` は Setup Guard の既存挙動のまま。旧 `/admin` は `/settings` へ 301 でリダイレクトする。旧 `/settings#modal-<id>`（ハッシュ付きの直リンク。ヘッダーのバージョン表示の旧リンク先 `#update-panel` を含む）は、一覧ページの対応表を元にクライアント側で `/settings/<page id>#<id>` へ転送する。`/settings` と各ページは他のページと同じく Setup Guard の対象で、必須の接続が未設定の間は `/setup` へ送る。
+- FR-ADMIN-4: `layout.Shell` を使う全ページのメインナビは「Settings」1項目で、単独の「管理」は置かない。「Settings」は `/settings` とその下のすべてのページで `aria-current="page"` を付け、各ページはパンくずからも一覧へ戻れる。例外は `/setup`（ヘッダーを持たない初回専用画面）と `/swagger`（静的なドキュメント画面）。
+- FR-ADMIN-5: Symbol Detail（`/symbols/:symbol`）はパラメータ付きで Scanner の候補から開く画面のため、Settings のページにはリンクを置かず、画面一覧の表にだけ載せる。
