@@ -36,7 +36,10 @@ func TestScheduler_Start_HandlerPanicMarksJobFailedAndKeepsWorkerAlive(t *testin
 	instruments := market.NewInstrumentRepository(db)
 	jobs := jobqueue.NewJobRepository(db)
 
-	now := time.Now().UTC()
+	// Both jobs are already due when the poll runs (a scheduled_at in the
+	// future would make the second one's claim depend on how fast the poll
+	// is), the panicking one first in the queue order.
+	now := time.Now().UTC().Add(-time.Minute)
 	panicJob, err := jobs.Enqueue(context.Background(), jobqueue.JobQueueMarketData, `{"boom":true}`, now)
 	if err != nil {
 		t.Fatalf("Enqueue panic job: %v", err)
