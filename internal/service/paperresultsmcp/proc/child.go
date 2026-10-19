@@ -53,7 +53,9 @@ func osSpawn(spec Spec) (Child, error) {
 		tail: &tailBuffer{},
 		done: make(chan struct{}),
 	}
-	c.cmd.Env = spec.Env
+	// A nil Env would make os/exec hand over the application's whole
+	// environment: an allow-list that matched nothing must stay empty.
+	c.cmd.Env = append([]string{}, spec.Env...)
 	c.cmd.Stderr = c.tail
 	c.cmd.SysProcAttr = sysProcAttr()
 	started := make(chan error, 1)

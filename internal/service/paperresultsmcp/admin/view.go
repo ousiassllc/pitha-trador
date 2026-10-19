@@ -46,6 +46,11 @@ const (
 	// ReasonAccessIncomplete: Cloudflare Access header verification is on
 	// without an id or secret, so the process refuses to listen.
 	ReasonAccessIncomplete Reason = "access_incomplete"
+	// ReasonStopping: the application is ending the process it started.
+	ReasonStopping Reason = "stopping"
+	// ReasonExeMissing: paper-results-mcp is not beside the application, so
+	// it cannot start (shown for AutoStartBlocked only).
+	ReasonExeMissing Reason = "exe_missing"
 	// ReasonNotRunning: configured to listen, but nothing answers at the
 	// address (not started yet).
 	ReasonNotRunning Reason = "not_running"
@@ -122,11 +127,18 @@ func (s *Service) View(ctx context.Context) View {
 		AutoStartBlocked: blockedReason(check),
 	}
 	v.ExePath, v.ExeExists = s.exe()
+	if v.AutoStart && !v.ExeExists {
+		// Enabled and valid, but nothing to launch: do not promise it.
+		v.AutoStart, v.AutoStartBlocked = false, ReasonExeMissing
+	}
 	v.State, v.Reason = s.state(ctx, st, check, &v)
 	return v
 }
 
 func (s *Service) state(ctx context.Context, st proc.Status, check error, v *View) (State, Reason) {
+	if st.Stopping {
+		return StateStopped, ReasonStopping
+	}
 	if st.Running {
 		switch {
 		case s.opts.Dial(ctx, st.Listen) == nil:

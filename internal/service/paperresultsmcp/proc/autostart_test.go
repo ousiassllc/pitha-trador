@@ -2,11 +2,15 @@ package proc_test
 
 import (
 	"context"
+	"errors"
+	"net"
 	"os"
 	"runtime"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proc"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
 
@@ -110,4 +114,113 @@ func TestAutoStart_NothingStartsAfterShutdown(t *testing.T) {
 	if r.spawns() != 0 {
 		t.Fatal("AutoStart spawned after Shutdown")
 	}
+}
+
+// The tailnet interface may come up after the application does (right after
+// logon): AutoStart waits for the address instead of giving up at once.
+func TestAutoStart_WaitsForATailnetAddressToAppear(t *testing.T) {
+	const tailnet = "100.101.102.103:48110"
+	var calls atomic.Int32
+	r := newRig(t)
+	r.seed(settings.Settings{Enabled: true, Listen: tailnet, APIKey: secretKey})
+	r.m = proc.New(proc.Options{
+		ConfigPath: r.path, ExePath: func() (string, error) { return r.exe, nil },
+		InterfaceAddrs: func() ([]net.Addr, error) {
+			if calls.Add(1) < 4 { // Tailscale is not up yet for the first few looks
+				return nil, nil
+			}
+			return tailnetIfaces()
+		},
+		Dial: func(context.Context, string) error { return errors.New("closed") },
+		Spawn: func(s proc.Spec) (proc.Child, error) {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			k := newFakeChild()
+			r.specs, r.kids = append(r.specs, s), append(r.kids, k)
+			return k, nil
+		},
+		ReadyWait: 20 * time.Millisecond, PollInterval: 2 * time.Millisecond, AddressPoll: 2 * time.Millisecond, AddressWait: 5 * time.Second,
+	})
+	t.Cleanup(r.m.Shutdown)
+	r.m.AutoStart(context.Background())
+	if r.spawns() != 1 {
+		t.Fatalf("spawned %d, want 1 once the tailnet address appeared", r.spawns())
+	}
+}
+
+func TestAutoStart_GivesUpWhenTheTailnetAddressNeverAppears(t *testing.T) {
+	r := newRig(t)
+	r.seed(settings.Settings{Enabled: true, Listen: "100.64.0.9:48110", APIKey: secretKey}) // not on this host
+	r.m = proc.New(proc.Options{
+		ConfigPath: r.path, ExePath: func() (string, error) { return r.exe, nil }, InterfaceAddrs: tailnetIfaces,
+		Dial: func(context.Context, string) error { return errors.New("closed") },
+		Spawn: func(proc.Spec) (proc.Child, error) {
+			t.Error("spawned without a valid address")
+			return newFakeChild(), nil
+		},
+		AddressPoll: 2 * time.Millisecond, AddressWait: 30 * time.Millisecond,
+	})
+	r.m.AutoStart(context.Background())
+}
+
+// Shutdown is never kept waiting by an AutoStart that waits for an address.
+func TestAutoStart_ShutdownEndsTheWaitForAnAddress(t *testing.T) {
+	r := newRig(t)
+	r.seed(settings.Settings{Enabled: true, Listen: "100.64.0.9:48110", APIKey: secretKey})
+	polled := make(chan struct{}, 1)
+	m := proc.New(proc.Options{
+		ConfigPath: r.path,
+		ExePath:    func() (string, error) { return r.exe, nil },
+		InterfaceAddrs: func() ([]net.Addr, error) {
+			select {
+			case polled <- struct{}{}:
+			default:
+			}
+			return tailnetIfaces()
+		},
+		Dial:        func(context.Context, string) error { return errors.New("closed") },
+		Spawn:       func(proc.Spec) (proc.Child, error) { t.Error("spawned after Shutdown"); return newFakeChild(), nil },
+		AddressPoll: 2 * time.Millisecond, AddressWait: time.Hour,
+	})
+	done := make(chan struct{})
+	go func() { m.AutoStart(context.Background()); close(done) }()
+	<-polled // AutoStart is inside its wait for the address
+	m.Shutdown()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("AutoStart kept waiting for an address after Shutdown")
+	}
+}
+
+// Shutdown is never kept waiting by the hand-over wait either.
+func TestAutoStart_ShutdownEndsTheHandoverWait(t *testing.T) {
+	r := newRig(t)
+	r.seedValid()
+	polled := make(chan struct{}, 1)
+	m := proc.New(proc.Options{
+		ConfigPath:     r.path,
+		ExePath:        func() (string, error) { return r.exe, nil },
+		InterfaceAddrs: tailnetIfaces,
+		Dial: func(context.Context, string) error { // the old process never lets go
+			select {
+			case polled <- struct{}{}:
+			default:
+			}
+			return nil
+		},
+		Spawn:        func(proc.Spec) (proc.Child, error) { t.Error("spawned next to a listener"); return newFakeChild(), nil },
+		HandoverWait: time.Hour, PollInterval: 2 * time.Millisecond,
+	})
+	done := make(chan struct{})
+	go func() { m.AutoStart(context.Background()); close(done) }()
+	<-polled // AutoStart is inside the hand-over wait
+	shut := make(chan struct{})
+	go func() { m.Shutdown(); close(shut) }()
+	select {
+	case <-shut:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Shutdown blocked behind the hand-over wait")
+	}
+	<-done
 }

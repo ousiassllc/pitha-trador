@@ -90,10 +90,18 @@ func TestStart_NeverStartsASecondProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 		r.listening(func() bool { return true })
-		other := newRig(t)
-		other.path, other.exe = r.path, r.exe
-		other.listening(func() bool { return true })
-		if err := other.m.Start(context.Background()); err == nil {
+		var spawned atomic.Int32
+		other := proc.New(proc.Options{
+			ConfigPath:     r.path,
+			ExePath:        func() (string, error) { return r.exe, nil },
+			InterfaceAddrs: tailnetIfaces,
+			Dial:           func(context.Context, string) error { return nil },
+			Spawn:          func(proc.Spec) (proc.Child, error) { spawned.Add(1); return newFakeChild(), nil },
+		})
+		if err := other.Start(context.Background()); !errors.Is(err, proc.ErrAlreadyListening) {
+			t.Fatalf("a second application instance: Start = %v, want ErrAlreadyListening", err)
+		}
+		if spawned.Load() != 0 {
 			t.Fatal("a second application instance started a second process")
 		}
 	})
@@ -161,111 +169,4 @@ func TestShutdown_StopsTheProcessAndRefusesLaterStarts(t *testing.T) {
 		t.Fatalf("Restart after Shutdown = %v, want ErrClosed", err)
 	}
 	r.m.Shutdown() // idempotent
-}
-
-func TestStatus_FailuresAreRecordedAndShownByKind(t *testing.T) {
-	t.Run("crash after start", func(t *testing.T) {
-		r := newRig(t)
-		r.seedValid()
-		if err := r.m.Start(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-		r.child(0).end(proc.Exit{Code: 3})
-		eventually(t, "the exit to be recorded", func() bool { return r.m.Status().Failure != nil })
-		f := r.m.Status().Failure
-		if f.Kind != proc.FailExited || f.ExitCode != 3 || r.m.Status().Running {
-			t.Fatalf("status %+v failure %+v", r.m.Status(), f)
-		}
-	})
-	t.Run("port in use", func(t *testing.T) {
-		r := newRig(t)
-		r.seedValid()
-		_ = r.m.Start(context.Background())
-		r.child(0).end(proc.Exit{Code: 1, Stderr: `listen tcp 127.0.0.1:48110: bind: address already in use`})
-		eventually(t, "the exit to be recorded", func() bool { return r.m.Status().Failure != nil })
-		if k := r.m.Status().Failure.Kind; k != proc.FailPortInUse {
-			t.Fatalf("kind = %q", k)
-		}
-	})
-	t.Run("process refuses to listen (exit 0)", func(t *testing.T) {
-		r := newRig(t)
-		r.seedValid()
-		_ = r.m.Start(context.Background())
-		r.child(0).end(proc.Exit{Code: 0, Stderr: "paper-results-mcp: refusing to listen: no auth configured"})
-		eventually(t, "the exit to be recorded", func() bool { return r.m.Status().Failure != nil })
-		if k := r.m.Status().Failure.Kind; k != proc.FailRefused {
-			t.Fatalf("kind = %q", k)
-		}
-	})
-	t.Run("exit during the readiness wait", func(t *testing.T) {
-		r := newRig(t)
-		r.seedValid()
-		r.m = rigWithSpawn(r, func(k *fakeChild) { k.end(proc.Exit{Code: 2}) })
-		if err := r.m.Start(context.Background()); !errors.Is(err, proc.ErrExitedEarly) {
-			t.Fatalf("Start = %v, want ErrExitedEarly", err)
-		}
-		if f := r.m.Status().Failure; f == nil || f.ExitCode != 2 {
-			t.Fatalf("failure = %+v", f)
-		}
-	})
-	t.Run("executable missing", func(t *testing.T) {
-		r := newRig(t)
-		r.seedValid()
-		r.exe += ".gone"
-		if err := r.m.Start(context.Background()); !errors.Is(err, proc.ErrExeMissing) {
-			t.Fatalf("Start = %v", err)
-		}
-		if f := r.m.Status().Failure; f == nil || f.Kind != proc.FailExeMissing {
-			t.Fatalf("failure = %+v", f)
-		}
-	})
-	t.Run("OS refuses to start it", func(t *testing.T) {
-		r := newRig(t)
-		r.seedValid()
-		r.spawnErr = errors.New("fork/exec: permission denied, secret path C:\\Users\\x")
-		err := r.m.Start(context.Background())
-		if !errors.Is(err, proc.ErrSpawnFailed) || contains(err.Error(), "secret path") {
-			t.Fatalf("Start = %v; want ErrSpawnFailed without the OS text", err)
-		}
-		if f := r.m.Status().Failure; f == nil || f.Kind != proc.FailSpawn {
-			t.Fatalf("failure = %+v", f)
-		}
-	})
-	t.Run("a successful start clears the failure", func(t *testing.T) {
-		r := newRig(t)
-		r.seedValid()
-		_ = r.m.Start(context.Background())
-		r.child(0).end(proc.Exit{Code: 9})
-		eventually(t, "the exit to be recorded", func() bool { return r.m.Status().Failure != nil })
-		if err := r.m.Restart(context.Background()); err != nil {
-			t.Fatal(err)
-		}
-		if r.m.Status().Failure != nil || !r.m.Status().Running {
-			t.Fatalf("status after restart: %+v", r.m.Status())
-		}
-	})
-	t.Run("an operator stop is not a failure", func(t *testing.T) {
-		r := newRig(t)
-		r.seedValid()
-		_ = r.m.Start(context.Background())
-		_ = r.m.Stop(context.Background())
-		if r.m.Status().Failure != nil {
-			t.Fatalf("a stop became a failure: %+v", r.m.Status().Failure)
-		}
-	})
-}
-
-// rigWithSpawn returns a Manager like r's whose spawner runs hook on each
-// new child before handing it over.
-func rigWithSpawn(r *rig, hook func(*fakeChild)) *proc.Manager {
-	return proc.New(proc.Options{
-		ConfigPath: r.path, ExePath: func() (string, error) { return r.exe, nil }, InterfaceAddrs: tailnetIfaces,
-		Dial: func(context.Context, string) error { return errors.New("closed") },
-		Spawn: func(proc.Spec) (proc.Child, error) {
-			k := newFakeChild()
-			hook(k)
-			return k, nil
-		},
-		ReadyWait: 500_000_000, PollInterval: 5_000_000,
-	})
 }

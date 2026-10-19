@@ -2,6 +2,7 @@ package proc_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -43,8 +44,8 @@ func TestTheKeyNeverLeavesTheSettingsFile(t *testing.T) {
 	if strings.Contains(r.logs.String(), secretKey) || strings.Contains(r.logs.String(), "pitha-mcp-") {
 		t.Errorf("the log contains the key:\n%s", r.logs)
 	}
-	if strings.Contains(strings.Join([]string{r.m.Status().Listen}, ""), secretKey) {
-		t.Error("status contains the key")
+	if got := fmt.Sprintf("%+v %+v", r.m.Status(), r.m.Status().Failure); strings.Contains(got, secretKey) {
+		t.Errorf("status contains the key: %s", got)
 	}
 }
 
@@ -81,6 +82,16 @@ func TestChildEnvIsAnAllowList(t *testing.T) {
 	for _, bad := range []string{"JEV_API_KEY", "KABU_API_PASSWORD", "SLACK_WEBHOOK_URL", "HTTPS_PROXY", "PITHA_MCP_KEY", secretKey, "\n=C:", "NOEQUALS"} {
 		if strings.Contains(got, bad) {
 			t.Errorf("ChildEnv forwarded %q", bad)
+		}
+	}
+}
+
+// An allow-list that matches nothing stays empty: a nil result would make
+// os/exec hand over the application's whole environment.
+func TestChildEnvIsNeverNil(t *testing.T) {
+	for _, environ := range [][]string{nil, {"JEV_API_KEY=x", "HTTPS_PROXY=y"}} {
+		if got := proc.ChildEnv(environ); got == nil || len(got) != 0 {
+			t.Errorf("ChildEnv(%v) = %#v, want an empty non-nil slice", environ, got)
 		}
 	}
 }

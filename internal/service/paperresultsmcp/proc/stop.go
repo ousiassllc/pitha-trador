@@ -55,9 +55,17 @@ func (m *Manager) startableListen() string {
 
 // Restart stops the process the application started (if any) and starts it
 // again with the current settings.
+//
+// The stored settings are checked first: a restart that could not start again
+// (disabled, no key, an address outside the rule) is refused without touching
+// the running process, so a failed restart never turns into a silent stop.
 func (m *Manager) Restart(ctx context.Context) error {
 	m.opMu.Lock()
 	defer m.opMu.Unlock()
+	cfg, loadErr := settings.Load(m.opts.ConfigPath)
+	if err := m.Check(cfg, loadErr); err != nil {
+		return err
+	}
 	if err := m.stop(ctx); err != nil && !errors.Is(err, ErrNotRunning) {
 		return err
 	}
@@ -72,9 +80,18 @@ func (m *Manager) Restart(ctx context.Context) error {
 // answering; one that keeps answering is a process started outside the
 // application, and no second one is started. It never fails the application:
 // outcomes are logged by reason only.
+//
+// A tailnet listen address may not be assigned yet when the application
+// starts right after the PC logs on (Tailscale brings its interface up
+// later): AutoStart waits for it up to AddressWait before giving up. Waiting
+// holds no lock, so Shutdown is never kept waiting.
 func (m *Manager) AutoStart(ctx context.Context) {
 	cfg, loadErr := settings.Load(m.opts.ConfigPath)
-	if err := m.Check(cfg, loadErr); err != nil {
+	err := m.Check(cfg, loadErr)
+	if errors.Is(err, settings.ErrTailnetNotAssigned) {
+		cfg, err = m.awaitAddress(ctx)
+	}
+	if err != nil {
 		slog.InfoContext(ctx, "paper-results-mcp: not starting with the application", "reason", err.Error())
 		return
 	}
@@ -87,6 +104,30 @@ func (m *Manager) AutoStart(ctx context.Context) {
 		slog.InfoContext(ctx, "paper-results-mcp: not starting with the application", "reason", err.Error())
 	default:
 		slog.WarnContext(ctx, "paper-results-mcp: could not start with the application", "reason", err.Error())
+	}
+}
+
+// awaitAddress polls the stored settings until they pass Check, the tailnet
+// address stops being the only problem, the application is closing, ctx ends
+// or AddressWait runs out. It returns the last settings and Check result.
+func (m *Manager) awaitAddress(ctx context.Context) (settings.Settings, error) {
+	deadline := time.NewTimer(m.opts.AddressWait)
+	defer deadline.Stop()
+	tick := time.NewTicker(m.opts.AddressPoll)
+	defer tick.Stop()
+	for {
+		cfg, loadErr := settings.Load(m.opts.ConfigPath)
+		err := m.Check(cfg, loadErr)
+		if !errors.Is(err, settings.ErrTailnetNotAssigned) || m.closed.Load() {
+			return cfg, err
+		}
+		select {
+		case <-ctx.Done():
+			return cfg, err
+		case <-deadline.C:
+			return cfg, err
+		case <-tick.C:
+		}
 	}
 }
 

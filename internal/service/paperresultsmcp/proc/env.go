@@ -18,13 +18,12 @@ var passedEnv = []string{
 	"PITHA_DB_PATH", "PITHA_RISK_PATH",
 }
 
-// PassedEnvNames lists the variable names ChildEnv lets through.
-func PassedEnvNames() []string { return append([]string(nil), passedEnv...) }
-
 // ChildEnv filters environ ("NAME=value" entries, as os.Environ returns) down
-// to passedEnv. Names are compared case-insensitively, as Windows does.
+// to passedEnv. Names are compared case-insensitively everywhere (as Windows
+// does; on Unix a lower-case "path" is then passed too, which is harmless).
+// The result is never nil.
 func ChildEnv(environ []string) []string {
-	var out []string
+	out := []string{}
 	for _, kv := range environ {
 		// A leading "=" is a Windows per-drive entry ("=C:=C:\"): skip it.
 		i := strings.IndexByte(kv[min(1, len(kv)):], '=')

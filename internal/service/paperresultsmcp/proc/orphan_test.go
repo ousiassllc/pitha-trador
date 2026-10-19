@@ -29,6 +29,17 @@ const (
 func TestHelperProcess(t *testing.T) {
 	switch os.Getenv(helperEnv) {
 	case "mcp":
+		// Report what the application handed over: stdin and stdout must be
+		// the null device (a character device), not a pipe or a file. Written
+		// before the pid file, which is the readiness signal.
+		var stdio string
+		for _, f := range []*os.File{os.Stdin, os.Stdout} {
+			info, err := f.Stat()
+			stdio += strconv.FormatBool(err == nil && info.Mode()&os.ModeCharDevice != 0) + " "
+		}
+		if err := os.WriteFile(os.Getenv(mcpPIDEnv)+".stdio", []byte(stdio), 0o600); err != nil {
+			os.Exit(3)
+		}
 		if err := os.WriteFile(os.Getenv(mcpPIDEnv), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 			os.Exit(3)
 		}
@@ -143,6 +154,9 @@ func TestShutdownEndsTheRealProcess(t *testing.T) {
 	pid := r.pid(t)
 	if !pidAlive(pid) || !m.Status().Running {
 		t.Fatal("setup: the process is not running")
+	}
+	if got, err := os.ReadFile(r.mcpPID + ".stdio"); err != nil || string(got) != "true true " {
+		t.Fatalf("stdin/stdout char-device = %q (%v), want the null device for both", got, err)
 	}
 	m.Shutdown()
 	if pidAlive(pid) {

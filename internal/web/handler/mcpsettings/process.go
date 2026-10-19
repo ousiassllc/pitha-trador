@@ -37,6 +37,17 @@ func (h *Handler) process(c *gin.Context, done string, run func(ctx context.Cont
 	noStore(c)
 	ctx := c.Request.Context()
 	if err := run(ctx); err != nil {
+		if errors.Is(err, context.Canceled) {
+			// The operator closed the page mid-request; what was started
+			// stays started and the next panel read shows it.
+			c.Status(http.StatusRequestTimeout)
+			c.Abort()
+			return
+		}
+		// A failure can change the state shown (error, stopped): ask the
+		// open panel to reload itself, since an error response is not swapped
+		// into it.
+		c.Header("HX-Trigger", "mcp-refresh")
 		status, message := processFailure(err)
 		if status >= http.StatusInternalServerError {
 			slog.ErrorContext(ctx, "mcpsettings: process control", "error", err)

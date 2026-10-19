@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
 
@@ -65,6 +66,10 @@ type Options struct {
 	// (5 s). HandoverWait: how long AutoStart waits for a previous process's
 	// port to close (5 s). PollInterval: probe interval (100 ms).
 	StartGrace, ReadyWait, StopGrace, HandoverWait, PollInterval time.Duration
+	// AddressWait: how long AutoStart waits for a tailnet listen address to
+	// appear on an interface (Tailscale may come up after the application
+	// does) before giving up (90 s); AddressPoll is the probe interval (2 s).
+	AddressWait, AddressPoll time.Duration
 }
 
 func (o *Options) fill() {
@@ -84,7 +89,8 @@ func (o *Options) fill() {
 		v *time.Duration
 		d time.Duration
 	}{{&o.StartGrace, 10 * time.Second}, {&o.ReadyWait, 3 * time.Second}, {&o.StopGrace, 5 * time.Second},
-		{&o.HandoverWait, 5 * time.Second}, {&o.PollInterval, 100 * time.Millisecond}} {
+		{&o.HandoverWait, 5 * time.Second}, {&o.PollInterval, 100 * time.Millisecond},
+		{&o.AddressWait, 90 * time.Second}, {&o.AddressPoll, 2 * time.Second}} {
 		if *d.v == 0 {
 			*d.v = d.d
 		}
@@ -120,6 +126,9 @@ func New(opts Options) *Manager {
 type Status struct {
 	// Running: the application started a process that is alive.
 	Running bool
+	// Stopping: the application is ending that process; it may still answer
+	// on its port for a moment, which is not a process "started elsewhere".
+	Stopping bool
 	// Listen is the address that process was started for (empty if none).
 	Listen    string
 	StartedAt time.Time
@@ -135,9 +144,10 @@ type Status struct {
 
 // Status reports the current process state.
 func (m *Manager) Status() Status {
+	m.reap()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	st := Status{Failure: m.failure}
+	st := Status{Failure: m.failure, Stopping: m.child != nil && m.stopping}
 	if m.child != nil && !m.stopping {
 		st.Running, st.Listen, st.StartedAt = true, m.listen, m.startedAt
 		st.Starting = m.opts.Now().Sub(m.startedAt) < m.opts.StartGrace
@@ -145,6 +155,22 @@ func (m *Manager) Status() Status {
 		st.ConfigChanged = err == nil && !info.ModTime().Equal(m.cfgStamp)
 	}
 	return st
+}
+
+// reap records an exit that happened but whose watcher has not run yet, so a
+// status read never reports a dead process as running.
+func (m *Manager) reap() {
+	m.mu.Lock()
+	child := m.child
+	m.mu.Unlock()
+	if child == nil {
+		return
+	}
+	select {
+	case <-child.Done():
+		m.exited(child)
+	default:
+	}
 }
 
 // ClearFailure forgets the last failure; the screen calls it when the operator
@@ -196,8 +222,7 @@ func (m *Manager) start(ctx context.Context) error {
 	if err := m.Check(cfg, loadErr); err != nil {
 		return err
 	}
-	listen := cfg.Listen
-	cfg = settings.Settings{} // the key is not kept past the check
+	listen := cfg.Listen // the key is read only for the check, never stored or logged
 	exe, err := m.opts.ExePath()
 	if err == nil {
 		err = statExe(exe)
@@ -213,14 +238,16 @@ func (m *Manager) start(ctx context.Context) error {
 	child, err := m.opts.Spawn(Spec{Exe: exe, Args: m.opts.Args(m.opts.ConfigPath), Env: m.opts.Env()})
 	if err != nil {
 		m.fail(&Failure{Kind: FailSpawn, ExitCode: -1, At: m.opts.Now()})
-		slog.WarnContext(ctx, "paper-results-mcp: could not start the process")
+		// The operating system's error (access denied, blocked by security
+		// software, ...) carries no setting and is what an operator needs.
+		slog.WarnContext(ctx, "paper-results-mcp: could not start the process", "exe", exe, "error", err)
 		return ErrSpawnFailed
 	}
 	m.mu.Lock()
 	m.child, m.stopping, m.failure = child, false, nil
 	m.startedAt, m.listen, m.cfgStamp = m.opts.Now(), listen, stamp
 	m.mu.Unlock()
-	go m.watch(child)
+	go safego.Run("paper-results-mcp watch", func() { m.watch(child) })
 	slog.InfoContext(ctx, "paper-results-mcp: process started", "listen", listen)
 	return m.awaitReady(ctx, child, listen)
 }

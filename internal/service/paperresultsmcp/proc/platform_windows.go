@@ -14,19 +14,25 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// createNoWindow keeps the console-subsystem MCP from opening a window.
-const createNoWindow = 0x08000000
+const (
+	// createNoWindow keeps the console-subsystem MCP from opening a window.
+	createNoWindow = 0x08000000
+	// createSuspended starts the process with its main thread stopped, so it
+	// runs no instruction before afterStart has put it into the Job Object.
+	createSuspended = 0x00000004
+	// processSuspendResume is the access right NtResumeProcess needs.
+	processSuspendResume = 0x0800
+)
 
 func sysProcAttr() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{CreationFlags: createNoWindow}
+	return &syscall.SysProcAttr{CreationFlags: createNoWindow | createSuspended}
 }
 
 func lockThread() {}
 
 var (
-	jobOnce   sync.Once
+	jobMu     sync.Mutex
 	jobHandle windows.Handle
-	jobErr    error
 )
 
 // killOnCloseJob returns the process-wide Job Object whose
@@ -34,44 +40,51 @@ var (
 // process in it when the last handle closes. Only this process holds a
 // handle (it is not inheritable and is never closed), so the handle closes
 // when the application ends however it ends - crash, kill, power-off of the
-// session - and the MCP cannot outlive it.
+// session - and the MCP cannot outlive it. A failed creation is not cached:
+// the next start tries again.
 func killOnCloseJob() (windows.Handle, error) {
-	jobOnce.Do(func() {
-		h, err := windows.CreateJobObject(nil, nil)
-		if err != nil {
-			jobErr = fmt.Errorf("create job object: %w", err)
-			return
-		}
-		var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-		info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-		if _, err := windows.SetInformationJobObject(h, windows.JobObjectExtendedLimitInformation,
-			uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
-			_ = windows.CloseHandle(h)
-			jobErr = fmt.Errorf("set job object limits: %w", err)
-			return
-		}
-		jobHandle = h
-	})
-	return jobHandle, jobErr
+	jobMu.Lock()
+	defer jobMu.Unlock()
+	if jobHandle != 0 {
+		return jobHandle, nil
+	}
+	h, err := windows.CreateJobObject(nil, nil)
+	if err != nil {
+		return 0, fmt.Errorf("create job object: %w", err)
+	}
+	var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+	info.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+	if _, err := windows.SetInformationJobObject(h, windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))); err != nil {
+		_ = windows.CloseHandle(h)
+		return 0, fmt.Errorf("set job object limits: %w", err)
+	}
+	jobHandle = h
+	return h, nil
 }
 
-// afterStart puts the started process into the kill-on-close job. A failure
-// is returned so the caller kills the process: an MCP that could outlive the
-// application is never left running. (The window between CreateProcess and
-// this call is microseconds; a kill of the application inside it is the one
-// case that leaves an orphan, and the next start refuses to double up on it.)
+var ntResumeProcess = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtResumeProcess")
+
+// afterStart puts the suspended process into the kill-on-close job and then
+// lets it run. The process executes nothing before it is in the job, so there
+// is no window in which the application could die and leave it behind. A
+// failure is returned so the caller kills the process: an MCP that could
+// outlive the application is never left running.
 func afterStart(cmd *exec.Cmd) error {
 	job, err := killOnCloseJob()
 	if err != nil {
 		return err
 	}
-	h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE, false, uint32(cmd.Process.Pid))
+	h, err := windows.OpenProcess(windows.PROCESS_SET_QUOTA|windows.PROCESS_TERMINATE|processSuspendResume, false, uint32(cmd.Process.Pid))
 	if err != nil {
 		return fmt.Errorf("open process: %w", err)
 	}
 	defer windows.CloseHandle(h)
 	if err := windows.AssignProcessToJobObject(job, h); err != nil {
 		return fmt.Errorf("assign process to job object: %w", err)
+	}
+	if status, _, _ := ntResumeProcess.Call(uintptr(h)); status != 0 {
+		return fmt.Errorf("resume process: NTSTATUS %#x", status)
 	}
 	return nil
 }

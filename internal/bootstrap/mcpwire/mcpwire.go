@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/router"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
@@ -43,7 +44,7 @@ func RouterOptions(svc *admin.Service) []router.Option {
 // to close) and gives up when ctx is canceled. A nil svc is a no-op.
 func Start(ctx context.Context, svc *admin.Service) {
 	if svc != nil {
-		go svc.AutoStart(ctx)
+		go safego.Run("paper-results-mcp autostart", func() { svc.AutoStart(ctx) })
 	}
 }
 

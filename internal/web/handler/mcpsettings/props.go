@@ -82,6 +82,8 @@ func reasonText(r admin.Reason) string {
 		return "保存されている待受アドレスは許可範囲外のため、MCP は待ち受けません。許可されたアドレスで保存し直してください。"
 	case admin.ReasonAccessIncomplete:
 		return "Cloudflare Access のオリジン照合が有効なのに ID またはシークレットが空のため、MCP は待ち受けません。"
+	case admin.ReasonStopping:
+		return "停止しています。"
 	case admin.ReasonNotRunning:
 		return "有効ですが、そのアドレスで待ち受けている MCP が見つかりません。「起動」を押してください。"
 	default:
@@ -105,6 +107,8 @@ func autoStartNote(v admin.View) string {
 		return "自動では起動しません（待受アドレスが許可範囲外です）。"
 	case admin.ReasonAccessIncomplete:
 		return "自動では起動しません（Cloudflare Access の ID またはシークレットが空です）。"
+	case admin.ReasonExeMissing:
+		return "自動では起動しません（paper-results-mcp の実行ファイルが見つかりません。アプリ本体と同じフォルダに置いてください）。"
 	default:
 		return "自動では起動しません（設定ファイルを使えません）。"
 	}

@@ -32,6 +32,8 @@ type fakeChild struct {
 	once      sync.Once
 	exit      proc.Exit
 	terminate atomic.Int32
+	// hold, when set, keeps Terminate waiting until it is closed.
+	hold chan struct{}
 }
 
 func newFakeChild() *fakeChild { return &fakeChild{done: make(chan struct{})} }
@@ -40,6 +42,9 @@ func (c *fakeChild) Done() <-chan struct{} { return c.done }
 func (c *fakeChild) Exit() proc.Exit       { return c.exit }
 func (c *fakeChild) Terminate(time.Duration) {
 	c.terminate.Add(1)
+	if c.hold != nil {
+		<-c.hold
+	}
 	c.end(proc.Exit{Code: -1})
 }
 
@@ -100,6 +105,7 @@ func newRig(t *testing.T) *rig {
 		},
 		ReadyWait: 50 * time.Millisecond, HandoverWait: 200 * time.Millisecond,
 		PollInterval: 5 * time.Millisecond, StopGrace: time.Second, StartGrace: time.Hour,
+		AddressWait: 30 * time.Millisecond, AddressPoll: 2 * time.Millisecond,
 	})
 	t.Cleanup(r.m.Shutdown)
 	return r
