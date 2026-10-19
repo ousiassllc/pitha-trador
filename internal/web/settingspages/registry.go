@@ -136,6 +136,7 @@ var dialogs = []Dialog{
 	{PageOperations, "modal-policy-long", nil},
 	{PageOperations, "modal-policy-short", nil},
 	{PageOperations, "modal-snapshot-age", nil},
+	{PageOperations, "modal-paper-bootstrap", nil},
 
 	// 成績・検証
 	{PageResults, "modal-triple_barrier", nil},

@@ -2,6 +2,13 @@ package domain
 
 import "time"
 
+// PolicyVersionPaperBootstrap is trade_signals.policy_version of a signal the
+// Policy Engine decided on the Paper-only bootstrap entry (issue #798): the
+// legacy threshold rule, used while no meta-labeling model is adopted. An
+// applied proposal's "+<version>" suffix may follow it. Readers that only see
+// the table (the Paper results MCP) match on it.
+const PolicyVersionPaperBootstrap = "policy-vb"
+
 // TradeSignal mirrors one trade_signals row: a Policy Engine trade
 // candidate derived from a Jev Trader decision (docs/architecture/er.md
 // §trade_signals). It is the persisted decision log FR-POLICY-5 requires
