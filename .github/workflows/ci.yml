@@ -119,7 +119,8 @@ jobs:
 
   # The production target is Windows, but lint/test above run on Linux:
   # run the Windows-only single-instance lock (lock_windows.go,
-  # CreateFile dwShareMode=0) test natively. The frontend/templ setup is
+  # CreateFile dwShareMode=0) test natively, and the MCP process control's
+  # kill-on-close Job Object test. The frontend/templ setup is
   # needed because static/src/embed.go must compile for any `go test`.
   test-windows:
     needs: lint
@@ -129,6 +130,11 @@ jobs:
       - uses: ./.github/actions/setup
       - name: go test (singleinstance, windows)
         run: go test ./internal/singleinstance/...
+      # The MCP child process must not outlive a killed application: the
+      # Job Object (platform_windows.go) is only exercised on Windows
+      # (issue #795).
+      - name: go test (paper-results-mcp process control, windows)
+        run: go test ./internal/service/paperresultsmcp/proc/...
 
   build:
     needs: [test, test-windows]

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
@@ -84,8 +85,9 @@ func run() error {
 		return err
 	}
 
+	mcp := mcpwire.New() // started after services.Start, stopped first on exit (issue #795)
 	engine := router.New(append(
-		bootstrap.RouterOptions(services, state, secretsRepo),
+		append(bootstrap.RouterOptions(services, state, secretsRepo), mcpwire.RouterOptions(mcp)...),
 		router.WithAllowedHosts(allowedHosts(addr, allowNonLoopback, os.Getenv(EnvAllowedHosts))...),
 	)...)
 
@@ -96,6 +98,7 @@ func run() error {
 	if err := services.Start(ctx); err != nil {
 		return err
 	}
+	mcpwire.Start(ctx, mcp)
 
 	srv := newHTTPServer(addr, engine)
 	serveErr := make(chan error, 1)
@@ -108,6 +111,7 @@ func run() error {
 	select {
 	case err := <-serveErr:
 		stop()
+		mcpwire.Stop(mcp)
 		services.Stop()
 		return fmt.Errorf("server error: %w", err)
 	case <-ctx.Done():
@@ -120,6 +124,7 @@ func run() error {
 	// Blocks until every Scheduler worker (and its in-flight job) has
 	// exited, before the deferred state.Close closes the DB under them.
 	// The WebSocket handlers have already returned (srv.shutdown).
+	mcpwire.Stop(mcp)
 	services.Stop()
 	return nil
 }

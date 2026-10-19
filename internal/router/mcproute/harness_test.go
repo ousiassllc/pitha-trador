@@ -16,11 +16,13 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proc"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 )
@@ -47,8 +49,10 @@ type app struct {
 	path   string
 	dialOK bool
 	dials  int
-	cookie *http.Cookie
-	csrf   string
+	// children are the processes the fake spawner started (process_test.go).
+	children []*fakeChild
+	cookie   *http.Cookie
+	csrf     string
 }
 
 func newApp(t *testing.T, secrets fullSecrets) *app {
@@ -68,7 +72,10 @@ func newApp(t *testing.T, secrets fullSecrets) *app {
 		InterfaceAddrs: func() ([]net.Addr, error) {
 			return []net.Addr{&net.IPNet{IP: net.ParseIP(tailnetIP), Mask: net.CIDRMask(32, 32)}}, nil
 		},
+		// No test starts a real process: the spawner records and fakes it.
+		Proc: proc.Options{Spawn: a.spawn, ReadyWait: 20 * time.Millisecond, PollInterval: 2 * time.Millisecond},
 	})
+	t.Cleanup(svc.Shutdown)
 	a.svc = svc
 	a.engine = router.New(router.WithSecretsStore(secrets), router.WithMCPSettings(svc))
 	return a

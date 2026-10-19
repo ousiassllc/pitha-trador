@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proc"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
 
@@ -32,12 +33,18 @@ type Options struct {
 	// InterfaceAddrs lists this host's addresses for settings.ValidateListen
 	// (default net.InterfaceAddrs).
 	InterfaceAddrs settings.InterfaceAddrs
+	// Proc holds the process manager's optional overrides (spawner,
+	// environment, timings); the other proc.Options fields are filled from
+	// the ones above. Production leaves it zero.
+	Proc proc.Options
 }
 
 // Service reads and edits the MCP's settings file. It holds no key between
 // calls.
 type Service struct {
 	opts Options
+	// proc starts, stops and watches the MCP process (issue #795).
+	proc *proc.Manager
 	// mu serialises the read-modify-write cycles of Update and RegenerateKey.
 	mu sync.Mutex
 }
@@ -50,7 +57,9 @@ func New(opts Options) *Service {
 	if opts.Dial == nil {
 		opts.Dial = dialTCP
 	}
-	return &Service{opts: opts}
+	p := opts.Proc
+	p.ConfigPath, p.ExePath, p.Dial, p.InterfaceAddrs = opts.Path, opts.ExePath, opts.Dial, opts.InterfaceAddrs
+	return &Service{opts: opts, proc: proc.New(p)}
 }
 
 // ExeName is the MCP process's file name on this platform.
@@ -105,6 +114,7 @@ func (s *Service) Update(ctx context.Context, enabled bool, listen string) error
 	if err := settings.Save(s.opts.Path, cfg); err != nil {
 		return err
 	}
+	s.proc.ClearFailure() // a failure of the old settings is stale now
 	slog.InfoContext(ctx, "paper-results-mcp: settings saved", "enabled", cfg.Enabled, "listen", cfg.Listen, "key_configured", cfg.APIKey != "")
 	return nil
 }
@@ -128,6 +138,7 @@ func (s *Service) RegenerateKey(ctx context.Context) (string, error) {
 	if err := settings.Save(s.opts.Path, cfg); err != nil {
 		return "", err
 	}
+	s.proc.ClearFailure() // a failure of the old key is stale now
 	slog.InfoContext(ctx, "paper-results-mcp: API key regenerated", "enabled", cfg.Enabled, "listen", cfg.Listen, "key_configured", true)
 	return key, nil
 }

@@ -9,8 +9,9 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 type PanelProps struct {
 	Enabled bool
 	Listen  string
-	// State is "listening", "stopped" or "no_key"; Note explains a stopped
-	// state in operator-facing words (empty when there is nothing to add).
+	// State is "listening", "starting", "stopped", "error" or "no_key"; Note
+	// explains it in operator-facing words (empty when there is nothing to
+	// add).
 	State string
 	Note  string
 	// KeyConfigured: a key is stored (its value is never shown again).
@@ -30,15 +31,29 @@ type PanelProps struct {
 	// RevealedKey is the freshly generated key, shown once. Empty on every
 	// other render, so a reload only ever shows the masked form.
 	RevealedKey string
+	// Managed: the application started the running process, so the screen
+	// can stop it. External: the address answers but the application did not
+	// start the process (the screen leaves it alone).
+	Managed  bool
+	External bool
+	// AutoStart: the MCP starts with the application next time too;
+	// AutoStartNote says so (or why not) in operator-facing words.
+	AutoStart     bool
+	AutoStartNote string
+	// ConfigChanged: settings were saved after the process started; it runs
+	// on the old ones until restarted.
+	ConfigChanged bool
 }
 
 // Panel renders the Settings screen's MCP section (`#mcp-panel`'s content):
-// the state (待受中 / 停止中 / キー未設定), the enable switch and listen address
-// (saved by `POST /settings/mcp`), the API key generate / regenerate action
-// (`POST /settings/mcp/key`), the values to register in the Grok Bot with the
-// key masked, and where paper-results-mcp and its settings file live. The MCP
-// is a separate process this screen never starts or stops, so the panel says
-// a (re)start of that process is needed after a change.
+// the state (待受中 / 起動中 / 停止中 / エラー / キー未設定) and whether the MCP
+// starts with the application next time, the 起動 / 停止 / 再起動 buttons
+// (`POST /settings/mcp/{start,stop,restart}`, issue #795), the enable switch
+// and listen address (saved by `POST /settings/mcp`), the API key generate /
+// regenerate action (`POST /settings/mcp/key`), the values to register in the
+// Grok Bot with the key masked, and where paper-results-mcp and its settings
+// file live. The MCP is still a separate process: the application only
+// launches it as a child, and a saved change takes effect on 再起動.
 //
 // The reveal block carries `hx-history="false"` (htmx must not snapshot the
 // key into its history cache) and `autocomplete="off"`; its copy buttons are
@@ -67,7 +82,12 @@ templ Panel(props PanelProps) {
 				<span data-testid="mcp-state-note">{ props.Note }</span>
 			}
 			<span>待受アドレス: <code data-testid="mcp-listen">{ props.Listen }</code></span>
+			<span data-testid="mcp-autostart" data-autostart={ boolAttr(props.AutoStart) }>{ props.AutoStartNote }</span>
+			if props.ConfigChanged {
+				<span class="text-amber-700" data-testid="mcp-config-changed">設定が保存されています。MCP は起動時の設定のまま動いているため、「再起動」を押すと反映されます。</span>
+			}
 		</div>
+		@processControls(props)
 		<form class="flex flex-col gap-3" hx-post="/settings/mcp" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-form">
 			<label class="flex items-center gap-2">
 				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: enabledAttrs(props.Enabled)})
@@ -128,7 +148,7 @@ templ Panel(props PanelProps) {
 			<dd><code data-testid="mcp-settings-path">{ props.SettingsPath }</code></dd>
 		</dl>
 		<p class="text-xs text-slate-500" data-testid="mcp-restart-note">
-			この画面は MCP プロセスの起動・停止を行いません（読み取り専用の別プロセスとして分離するためです）。paper-results-mcp は別途起動してください。設定を保存した後、反映するには paper-results-mcp を再起動する必要があります。
+			MCP は本体とは別のプロセスで、この画面の「起動」で本体の子プロセスとして起動されます（本体の DB 接続・書き込み権限は渡されず、API キーは起動引数・環境変数に載りません）。本体を終了すると MCP も止まります。有効・API キーあり・許可された待受アドレスのときは、本体の起動と同時に MCP も自動で起動します。設定を保存した後、反映するには「再起動」を押してください。
 		</p>
 	</section>
 }
@@ -149,12 +169,16 @@ templ keyReveal(key string) {
 				ヘッダーをコピー
 			}
 		</div>
-		<p class="text-xs text-amber-900">このキーは二度と表示されません。画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。MCP を再起動すると新しいキーが有効になります。</p>
+		<p class="text-xs text-amber-900">このキーは二度と表示されません。画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。「再起動」を押すと新しいキーが有効になります。</p>
 	</div>
 }
 
 templ stateBadge(state string) {
 	switch state {
+		case "starting":
+			<span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">起動中</span>
+		case "error":
+			<span class="inline-flex items-center rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">エラー</span>
 		case "listening":
 			<span class="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">待受中</span>
 		case "no_key":
@@ -162,6 +186,45 @@ templ stateBadge(state string) {
 		default:
 			<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600">停止中</span>
 	}
+}
+
+// processControls: 起動 / 停止 / 再起動. Each is a POST (so it carries the
+// session cookie and CSRF token like every state-changing request). 起動 is
+// offered when nothing runs, 停止 only for a process the application started,
+// 再起動 whenever the application owns the process or the last run failed.
+templ processControls(props PanelProps) {
+	<div class="flex flex-wrap items-center gap-2" data-testid="mcp-process-controls">
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonPrimary, Attrs: processAttrs("start", "mcp-start", props.Managed || props.External || props.State == "listening")}) {
+			起動
+		}
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: processAttrs("stop", "mcp-stop", !props.Managed)}) {
+			停止
+		}
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: processAttrs("restart", "mcp-restart", props.External && !props.Managed)}) {
+			再起動
+		}
+	</div>
+}
+
+func processAttrs(action, testID string, disabled bool) templ.Attributes {
+	attrs := templ.Attributes{
+		"hx-post":         "/settings/mcp/" + action,
+		"hx-target":       "#mcp-panel",
+		"hx-swap":         "innerHTML",
+		"hx-disabled-elt": "this",
+		"data-testid":     testID,
+	}
+	if disabled {
+		attrs["disabled"] = true
+	}
+	return attrs
+}
+
+func boolAttr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 func enabledAttrs(enabled bool) templ.Attributes {

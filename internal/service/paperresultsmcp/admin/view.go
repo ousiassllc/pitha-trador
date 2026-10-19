@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proc"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
 
@@ -19,23 +20,34 @@ const (
 	StateStopped State = "stopped"
 	// StateNoKey: enabled, but without an API key the MCP never listens.
 	StateNoKey State = "no_key"
+	// StateStarting: the application started the process moments ago and it
+	// is not listening yet.
+	StateStarting State = "starting"
+	// StateError: the process failed to start, exited without being stopped,
+	// or is alive but never listened (View.Failure says which).
+	StateError State = "error"
 )
 
-// Reason says why a State is StateStopped; it is empty for the other states.
+// Reason says why a State is StateStopped, or why the MCP will not start with
+// the application (View.AutoStartBlocked); it is empty otherwise.
 type Reason string
 
 const (
 	// ReasonDisabled: the switch is off (the default).
 	ReasonDisabled Reason = "disabled"
+	// ReasonNoKey: enabled, but no API key is stored.
+	ReasonNoKey Reason = "no_key"
 	// ReasonSettingsUnreadable: the settings file cannot be used (LoadError
 	// says how), so the MCP process would not listen either.
 	ReasonSettingsUnreadable Reason = "settings_unreadable"
 	// ReasonListenNotAllowed: the stored address is outside the loopback /
 	// tailnet rule, so the process refuses to bind it.
 	ReasonListenNotAllowed Reason = "listen_not_allowed"
-	// ReasonNotRunning: configured to listen, but the MCP process is not
-	// reachable at the address (not started yet, or started before the
-	// settings changed).
+	// ReasonAccessIncomplete: Cloudflare Access header verification is on
+	// without an id or secret, so the process refuses to listen.
+	ReasonAccessIncomplete Reason = "access_incomplete"
+	// ReasonNotRunning: configured to listen, but nothing answers at the
+	// address (not started yet).
 	ReasonNotRunning Reason = "not_running"
 )
 
@@ -71,41 +83,93 @@ type View struct {
 	ExeExists    bool
 	SettingsPath string
 	LoadError    LoadErrorKind
+
+	// Managed: the process is one the application started (the screen can
+	// stop and restart it). External: the address answers but the
+	// application did not start the process, so the screen leaves it alone.
+	Managed, External bool
+	// Failure and ExitCode describe StateError ("" and 0 otherwise).
+	Failure  proc.FailureKind
+	ExitCode int
+	// ConfigChanged: the settings were saved after the process started; it
+	// keeps the old ones until restarted.
+	ConfigChanged bool
+	// AutoStart: the stored settings are enabled, hold an API key and a
+	// permitted address, so the MCP starts with the application next time
+	// too. Otherwise AutoStartBlocked says why not.
+	AutoStart        bool
+	AutoStartBlocked Reason
 }
 
 // View reports the current settings and state. It dials only when the MCP is
-// enabled, has a key and a valid address, so a default install never makes a
-// network attempt.
+// enabled, has a key and a valid address (or the application started a
+// process), so a default install never makes a network attempt.
 func (s *Service) View(ctx context.Context) View {
 	cfg, loadErr := settings.Load(s.opts.Path)
+	check := s.proc.Check(cfg, loadErr)
+	st := s.proc.Status()
 	v := View{
-		Enabled:       cfg.Enabled,
-		Listen:        cfg.Listen,
-		KeyConfigured: cfg.APIKey != "",
-		URL:           "http://" + cfg.Listen + "/",
-		AuthHeader:    MaskedAuthHeader,
-		SettingsPath:  s.opts.Path,
-		LoadError:     loadErrorKind(loadErr),
+		Enabled:          cfg.Enabled,
+		Listen:           cfg.Listen,
+		KeyConfigured:    cfg.APIKey != "",
+		URL:              "http://" + cfg.Listen + "/",
+		AuthHeader:       MaskedAuthHeader,
+		SettingsPath:     s.opts.Path,
+		LoadError:        loadErrorKind(loadErr),
+		Managed:          st.Running,
+		ConfigChanged:    st.ConfigChanged,
+		AutoStart:        check == nil,
+		AutoStartBlocked: blockedReason(check),
 	}
 	v.ExePath, v.ExeExists = s.exe()
-	v.State, v.Reason = s.state(ctx, cfg, loadErr)
+	v.State, v.Reason = s.state(ctx, st, check, &v)
 	return v
 }
 
-func (s *Service) state(ctx context.Context, cfg settings.Settings, loadErr error) (State, Reason) {
-	switch {
-	case loadErr != nil:
-		return StateStopped, ReasonSettingsUnreadable
-	case !cfg.Enabled:
-		return StateStopped, ReasonDisabled
-	case cfg.APIKey == "":
-		return StateNoKey, ""
-	case settings.ValidateListen(cfg.Listen, s.opts.InterfaceAddrs) != nil:
-		return StateStopped, ReasonListenNotAllowed
-	case s.opts.Dial(ctx, cfg.Listen) != nil:
-		return StateStopped, ReasonNotRunning
+func (s *Service) state(ctx context.Context, st proc.Status, check error, v *View) (State, Reason) {
+	if st.Running {
+		switch {
+		case s.opts.Dial(ctx, st.Listen) == nil:
+			return StateListening, ""
+		case st.Starting:
+			return StateStarting, ""
+		}
+		v.Failure = proc.FailNotListening
+		return StateError, ""
 	}
-	return StateListening, ""
+	if st.Failure != nil {
+		v.Failure, v.ExitCode = st.Failure.Kind, st.Failure.ExitCode
+		return StateError, ""
+	}
+	switch r := blockedReason(check); {
+	case r == ReasonNoKey:
+		return StateNoKey, ""
+	case r != "":
+		return StateStopped, r
+	case s.opts.Dial(ctx, v.Listen) == nil:
+		v.External = true
+		return StateListening, ""
+	}
+	return StateStopped, ReasonNotRunning
+}
+
+// blockedReason maps a proc.Manager.Check error to the Reason the screen
+// words, "" for nil.
+func blockedReason(err error) Reason {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, proc.ErrSettingsUnusable):
+		return ReasonSettingsUnreadable
+	case errors.Is(err, proc.ErrDisabled):
+		return ReasonDisabled
+	case errors.Is(err, proc.ErrNoKey):
+		return ReasonNoKey
+	case errors.Is(err, proc.ErrAccessIncomplete):
+		return ReasonAccessIncomplete
+	default:
+		return ReasonListenNotAllowed
+	}
 }
 
 func (s *Service) exe() (path string, exists bool) {

@@ -7,7 +7,6 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/evalprovider"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/exitalignjob"
-	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -44,7 +43,8 @@ func LoadSecrets(ctx context.Context, state *State) (*system.SecretsRepository, 
 
 // RouterOptions returns the router.Options common to cmd/desktop and
 // cmd/server: every data source/handler dependency BuildServices produced.
-// Entrypoint-specific options (WithAllowedHosts, WithWebSocketBase and
+// Entrypoint-specific options (WithAllowedHosts, WithWebSocketBase,
+// mcpwire.RouterOptions (the Settings MCP card, issue #795) and
 // cmd/desktop's WithUpdateController - services.Updater is nil on
 // cmd/server, which a typed-nil interface would not reveal) are appended by
 // the caller.
@@ -74,5 +74,5 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 			Max: time.Duration(scan.CandidateRefreshIntervalSecondsMax) * time.Second,
 		}),
 	}
-	return append(append(opts, mcpwire.RouterOptions()...), services.watchlistRouterOptions()...)
+	return append(opts, services.watchlistRouterOptions()...)
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/mcpwire"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater"
 	"github.com/ousiassllc/pitha-trador/internal/service/updater/tempcleanup"
 )
@@ -25,6 +27,10 @@ type App struct {
 	// first).
 	services *bootstrap.Services
 	cancel   context.CancelFunc
+	// mcp is the Paper results MCP service (issue #795): startup launches
+	// the MCP process when its settings are enabled, shutdown stops it. Nil
+	// when the per-user config directory is unavailable.
+	mcp *admin.Service
 
 	// mu guards pendingInstaller: QuitForUpdate (issue #65) runs on
 	// internal/service/scheduler's own cron goroutine, while shutdown
@@ -63,7 +69,8 @@ func (a *App) setupNotifications(ctx context.Context) {
 // startup is Wails' OnStartup hook: it saves the runtime context, then
 // starts every background goroutine the composition root owns (Scheduler
 // workers/cron, kabuステーションAPI token refresh, candidate refresh -
-// bootstrap.Services.Start). A Start failure leaves the app unable to
+// bootstrap.Services.Start), then launches the Paper results MCP when its
+// settings are enabled with a key (issue #795). A Start failure leaves the app unable to
 // trade or scan, so it is reported in a native error dialog and the app
 // quits rather than running with its background processing silently dead.
 func (a *App) startup(ctx context.Context) {
@@ -83,7 +90,9 @@ func (a *App) startup(ctx context.Context) {
 			Message: err.Error(),
 		})
 		runtime.Quit(ctx)
+		return
 	}
+	mcpwire.Start(runCtx, a.mcp)
 }
 
 // cleanupStaleUpdateDownloads removes the installer directories a previous
@@ -129,6 +138,9 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.cancel != nil {
 		a.cancel()
 	}
+	// First: the MCP process ends with the application (a crash is covered by
+	// the OS instead: internal/service/paperresultsmcp/proc).
+	mcpwire.Stop(a.mcp)
 	a.services.Stop()
 	a.cleanupNotifications(ctx)
 

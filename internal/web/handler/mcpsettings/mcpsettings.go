@@ -19,6 +19,9 @@ type Admin interface {
 	View(ctx context.Context) admin.View
 	Update(ctx context.Context, enabled bool, listen string) error
 	RegenerateKey(ctx context.Context) (string, error)
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+	Restart(ctx context.Context) error
 }
 
 // Handler implements the MCP settings routes.
@@ -34,6 +37,9 @@ func (h *Handler) Register(engine *gin.Engine) {
 	engine.GET("/settings/mcp-panel", h.Panel)
 	engine.POST("/settings/mcp", h.Save)
 	engine.POST("/settings/mcp/key", h.Regenerate)
+	engine.POST("/settings/mcp/start", h.Start)
+	engine.POST("/settings/mcp/stop", h.Stop)
+	engine.POST("/settings/mcp/restart", h.Restart)
 }
 
 // Panel implements `GET /settings/mcp-panel`: the panel with the key masked.
