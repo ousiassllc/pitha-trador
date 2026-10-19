@@ -13,7 +13,12 @@ import (
 type ReportRepository interface {
 	LatestModel(ctx context.Context) (repo.Model, bool, error)
 	LatestActiveModel(ctx context.Context) (repo.Model, bool, error)
+	ListRetrainSkips(ctx context.Context, limit int) ([]repo.RetrainSkip, error)
 }
+
+// RetrainSkipLimit is how many of the newest skipped retrainings the Calibration
+// screen lists.
+const RetrainSkipLimit = 10
 
 // Reporter builds the Calibration screen's view of the newest meta-labeling
 // model (issue #766): its OOS AUC, reliability curve and EV, and the Jev
@@ -66,4 +71,19 @@ func (r *Reporter) Cutoff(ctx context.Context) (metalabelsettings.CutoffInfo, er
 		return metalabelsettings.CutoffInfo{}, fmt.Errorf("metalabel: read settings: %w", err)
 	}
 	return s.CutoffInfo(), nil
+}
+
+// RetrainSkips returns the newest skipped nightly retrainings (issue #799),
+// newest first, whether or not any model was trained: a skip is exactly why
+// there may be none.
+func (r *Reporter) RetrainSkips(ctx context.Context) ([]metamodel.RetrainSkip, error) {
+	rows, err := r.repo.ListRetrainSkips(ctx, RetrainSkipLimit)
+	if err != nil {
+		return nil, fmt.Errorf("metalabel: load retrain skips: %w", err)
+	}
+	out := make([]metamodel.RetrainSkip, len(rows))
+	for i, s := range rows {
+		out[i] = metamodel.RetrainSkip{SkippedAt: s.SkippedAt, Code: s.ReasonCode, UsableRows: s.UsableRows, RequiredRows: s.RequiredRows}
+	}
+	return out, nil
 }

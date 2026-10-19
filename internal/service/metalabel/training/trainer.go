@@ -66,6 +66,9 @@ type Trainer struct {
 	// model-swap rate limit applies.
 	policyChanges PolicyChangeSource
 	limits        changeguard.Limits
+	// skips records a retraining skipped for lack of data (issue #799); nil
+	// only logs it.
+	skips SkipRecorder
 }
 
 // TrainerOption configures a Trainer.
@@ -113,18 +116,18 @@ func NewTrainer(source TrainingSource, store ModelStore, settings SettingsLoader
 }
 
 // Retrain is the nightly job's entry: it trains and stores one model. Too little
-// labeled history to learn from (ErrInsufficientData) is logged and is not an
-// error: it is the normal state until paper trading has produced labels, and
-// nothing is stored. Every other failure is returned and leaves the stored
-// models untouched.
+// labeled history to learn from (ErrInsufficientData) is not an error: it is the
+// normal state until paper trading has produced labels. Nothing is stored, but
+// the skip is logged and, with a SkipRecorder, recorded with its fixed reason
+// code and counts (issue #799). Every other failure is returned and leaves the
+// stored models untouched.
 func (t *Trainer) Retrain(ctx context.Context) error {
 	_, err := t.Train(ctx)
 	// The model in force is monitored on decisions made since it was trained
 	// whether or not tonight's training produced anything.
 	t.evaluateForward(ctx)
-	if errors.Is(err, ErrInsufficientData) {
-		slog.Warn("metalabel: nightly retraining skipped; the existing model (or a skip) stays in force", "reason", err)
-		return nil
+	if skip, ok := asInsufficient(err); ok {
+		return t.recordSkip(ctx, skip)
 	}
 	return err
 }
@@ -177,7 +180,10 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	})
 	if err != nil {
 		if errors.Is(err, metalabel.ErrInvalidTrainingData) || errors.Is(err, metalabel.ErrInvalidCalibration) {
-			return repo.Model{}, fmt.Errorf("%w: %w", ErrInsufficientData, err)
+			return repo.Model{}, &InsufficientDataError{
+				Code: repo.SkipTrainingDataUnusable, Usable: len(split.Fit) + len(split.Calibrate),
+				Required: t.walk.MinFit + t.walk.MinCalibration, Detail: "the fit and calibration rows cannot be learned from", Cause: err,
+			}
 		}
 		return repo.Model{}, fmt.Errorf("metalabel: train %s: %w", version, err)
 	}

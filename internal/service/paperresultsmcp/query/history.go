@@ -38,10 +38,13 @@ type PredictionCounts struct {
 type MetalabelHistory struct {
 	Models           []Model          `json:"models"`
 	PredictionCounts PredictionCounts `json:"prediction_counts"`
+	// RetrainSkips are the nightly retrainings skipped for lack of data in
+	// the period (newest first, up to the limit; issue #799).
+	RetrainSkips []RetrainSkip `json:"retrain_skips"`
 }
 
-// Metalabel returns up to limit models trained in r (newest first) and the
-// take/skip counts of the predictions made in r.
+// Metalabel returns up to limit models trained in r (newest first), the
+// take/skip counts of the predictions made in r and up to limit retrain skips.
 func Metalabel(ctx context.Context, q Q, r Range, limit int) (MetalabelHistory, error) {
 	from, to := r.bounds()
 	rows, err := q.QueryContext(ctx, `
@@ -87,6 +90,9 @@ FROM metalabel_predictions WHERE predicted_at >= ? AND predicted_at < ?`, from, 
 	if err != nil {
 		return MetalabelHistory{}, fmt.Errorf("query: metalabel prediction counts: %w", err)
 	}
+	if h.RetrainSkips, err = retrainSkips(ctx, q, r, limit); err != nil {
+		return MetalabelHistory{}, err
+	}
 	return h, nil
 }
 
@@ -111,6 +117,11 @@ type RiskRejections struct {
 	RiskPassedCount  int            `json:"risk_passed_count"`
 	OtherRejectCount int            `json:"other_reject_count"`
 	Buckets          []RejectBucket `json:"buckets"`
+	// OtherRejectBreakdown splits other_reject_count (the Policy Engine's own
+	// NONE reasons, not the Risk Engine's) by fixed reject_reason code, e.g.
+	// jev_none or meta_skip:no_active_model; unlisted prefixes are "other" and
+	// a missing reason "unknown". The counts sum to other_reject_count.
+	OtherRejectBreakdown []RejectBucket `json:"other_reject_breakdown"`
 }
 
 // riskPrefix marks a Risk Engine rejection in trade_signals.reject_reason
@@ -166,6 +177,9 @@ GROUP BY reason`, len(riskPrefix)+1, from, to)
 		}
 		return out.Buckets[i].Reason < out.Buckets[j].Reason
 	})
+	if out.OtherRejectBreakdown, err = otherRejectBreakdown(ctx, q, from, to); err != nil {
+		return RiskRejections{}, err
+	}
 	return out, nil
 }
 

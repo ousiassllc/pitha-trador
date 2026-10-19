@@ -37,6 +37,7 @@ import {
 import { renderDirectionTable } from './direction-view';
 import { renderHorizonSelector } from './horizon-selector';
 import { type LLMCutoffInfo, type MetaModel, renderMetaModel } from './meta-model/meta-model-view';
+import { type RetrainSkip, renderRetrainSkips } from './meta-model/retrain-skips-view';
 
 const ACCURACY_LINE_COLOR = '#2563eb';
 const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';
@@ -64,6 +65,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   @state() private barrier: BarrierStats | null = null;
   @state() private metaModel: MetaModel | null | undefined;
   @state() private metaModelCutoff: LLMCutoffInfo | undefined;
+  @state() private retrainSkips: RetrainSkip[] | undefined;
   @state() private abArms: ABArm[] | undefined;
   @state() private error: string | null = null;
   @state() private loading = false;
@@ -149,6 +151,7 @@ export class PithaCalibrationHeatmap extends LitElement {
       this.barrier = response.triple_barrier;
       this.metaModel = response.meta_model ?? null;
       this.metaModelCutoff = response.meta_model_cutoff;
+      this.retrainSkips = response.meta_model_skips;
       this.abArms = response.ab_arms;
       this.applyBuckets(response.buckets);
       this.error = null;
@@ -250,6 +253,7 @@ export class PithaCalibrationHeatmap extends LitElement {
         }
         ${renderBarrierSummary(this.barrier)}
         ${renderMetaModel(this.metaModel, this.metaModelCutoff)}
+        ${renderRetrainSkips(this.retrainSkips)}
         ${renderABArms(this.abArms)}
         ${
           this.brierScore !== null && this.hasSamples

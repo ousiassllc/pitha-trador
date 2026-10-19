@@ -20,6 +20,7 @@ var (
 	_ calibration.CalibrationSource = CalibrationSource{}
 	_ calibration.MetaModelSource   = CalibrationSource{}
 	_ calibration.LLMCutoffSource   = CalibrationSource{}
+	_ calibration.RetrainSkipSource = CalibrationSource{}
 )
 
 func TestCalibrationSource_ReportsTheNewestStoredModelWithTheCurrentCutoff(t *testing.T) {

@@ -81,8 +81,10 @@ func TestJob_RetrainTimeIsJSTNotTheHostZone(t *testing.T) {
 }
 
 // A retraining with no labeled decisions is the normal early-days no-op: it
-// succeeds and stores no model, so inference stays a skip.
-func TestJob_NoHistoryStoresNoModel(t *testing.T) {
+// succeeds and stores no model, so inference stays a skip. The skip itself is
+// recorded with a fixed code and the shortfall (issue #799), and the
+// Calibration source lists it.
+func TestJob_NoHistoryStoresNoModelButRecordsTheSkip(t *testing.T) {
 	job, _ := newJob(t)
 	job.now = clockAt("20:00")
 	if err := job.Run(context.Background()); err != nil {
@@ -90,6 +92,13 @@ func TestJob_NoHistoryStoresNoModel(t *testing.T) {
 	}
 	if _, found, err := metalabel.NewRepository(job.db).LatestActiveModel(context.Background()); err != nil || found {
 		t.Fatalf("LatestActiveModel found = %v, err %v, want no model", found, err)
+	}
+	skips, err := metalabel.NewRepository(job.db).ListRetrainSkips(context.Background(), 10)
+	if err != nil || len(skips) != 1 {
+		t.Fatalf("ListRetrainSkips = %v, %v, want exactly one recorded skip", skips, err)
+	}
+	if got := skips[0]; got.ReasonCode != metalabel.SkipTooFewRowsBeforeOOS || got.UsableRows != 0 || got.RequiredRows != 130 {
+		t.Errorf("skip = %+v, want too_few_rows_before_oos 0/130", got)
 	}
 }
 

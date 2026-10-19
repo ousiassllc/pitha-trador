@@ -139,12 +139,12 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `paper_daily_pnl` | クローズ日（JST）ごとの損益と件数 |
 | `paper_trades` | クローズ済み取引のホワイトリスト列 |
 | `jev_calibration` | `jev_decisions` と `calibration_outcomes` の件数・的中率・バケット・Brier |
-| `metalabel_history` | `metalabel_models` の採用/却下と OOS AUC/EV、予測の take/skip 件数 |
-| `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数 |
+| `metalabel_history` | `metalabel_models` の採用/却下と OOS AUC/EV、予測の take/skip 件数、`metalabel_retrain_skips`（データ不足の再学習見送り。固定コードと必要件数中の件数） |
+| `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数と、それ以外の拒否の固定コード別内訳 |
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
-| `collection_status` | `jobs` の件数、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数 |
+| `collection_status` | `jobs` の件数と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（保持期間の違いを `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数 |
 
-新規テーブルは作らない。根拠: 必要な列はマイグレーション `000001`〜`000036` の既存表にある。
+MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
 
 kabu の板・時価の保存を続けるかは #778 の現状のままである（保存は継続、リスクは理解済み、公式回答待ち）。本仕様は規約の適否を判断しない。リモートへ出す対象から生データを外すのは、その現状を広げないためである。
 

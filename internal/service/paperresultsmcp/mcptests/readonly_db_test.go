@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -47,6 +49,10 @@ func TestDBUnavailable(t *testing.T) {
 // The connection the MCP uses is read-only; across a full run of all eight
 // tools no write, migration, checkpoint, journal-mode change or secrets /
 // raw-column read is ever issued, and SELECT * is never used.
+// boundedLastError is the only form in which a statement may name
+// jobs.last_error: substr(last_error, 1, N).
+var boundedLastError = regexp.MustCompile(`substr\(last_error, 1, ([0-9]+)\)`)
+
 func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 	path, w := testkit.NewMigratedDB(t)
 	testkit.SeedAll(t, w)
@@ -82,6 +88,15 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 		"state_json", "response_json", "params_json", "features_json", "payload_json", "last_error", "detail_json",
 		"encrypted_value", "current_price", "unrealized_pnl", "slippage_bps", "limit_price"}
 	for _, stmt := range counter.StatementLog() {
+		// jobs.last_error is read only through a bounded head (issue #801):
+		// collection_status parses a fixed code token out of it in-process.
+		// Any other mention of the column is still forbidden.
+		stmt = boundedLastError.ReplaceAllStringFunc(stmt, func(m string) string {
+			if n, _ := strconv.Atoi(boundedLastError.FindStringSubmatch(m)[1]); n > 256 {
+				return m // too long a head stays flagged below
+			}
+			return ""
+		})
 		upper := strings.ToUpper(stmt)
 		if strings.Contains(upper, "SELECT *") || strings.Contains(upper, ".*") {
 			t.Errorf("SELECT * style statement: %s", testkit.FirstLine(stmt))

@@ -44,7 +44,7 @@ erDiagram
 |----------|----------------------|
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `trade_signals` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` |
-| `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions`（メタラベリングの二次モデルとOOS指標・判断ごとの予測） |
+| `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs`、ベクトルインデックス（sqlite-vec） |
 
 Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読むだけで、テーブルも列も追加しない。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
@@ -110,3 +110,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.54 | 2026-10-17 | マイグレーション000037を追加し、`er/tables-metalabel.md`の`metalabel_models`に採用判定の根拠列（`oos_takes`・`oos_days`・`oos_ev_ci_{low,high}_bps`・`oos_auc_ci_{low,high}`・`adoption_json`・`forward_json`）を追加。`er/tables-system.md`の`runtime_settings`キーに`metalabel.llm_cutoff_{model,confirmed_on,source}`（LLM学習データ終了日の出典、issue #776）を追記 | issue #780, #776 |
 | 1.55 | 2026-10-17 | Paper 実績 MCP は既存テーブルの読み取り専用であり、新規テーブルを追加しない旨を追記。スキーマ変更なし | issue #783 |
 | 1.56 | 2026-10-19 | `er/tables-metalabel.md`の`reject_reason`に、Live前チェックで`metalabel.llm_cutoff_model`が未記録のときの`llm_cutoff_unverified`を追記（スキーマ変更なし） | issue #780の決定（unverifiedはPaperは警告のみ・Live前は不採用） |
+| 1.57 | 2026-10-20 | マイグレーション000038を追加し、`er/tables-metalabel.md`に`metalabel_retrain_skips`（夜間再学習がデータ不足で見送られた記録。固定の`reason_code`と必要件数中の件数）を新設。Paper 実績 MCP の`metalabel_history`が読む | issue #799 |
