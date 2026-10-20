@@ -20,13 +20,20 @@ import (
 // "value | text | NOT NULL | JSON文字列"); this repository does not
 // interpret or validate them.
 type RuntimeSettingsRepository struct {
-	db *sql.DB
+	db sqlutil.Executor
 }
 
 // NewRuntimeSettingsRepository returns a RuntimeSettingsRepository backed
 // by db.
 func NewRuntimeSettingsRepository(db *sql.DB) *RuntimeSettingsRepository {
 	return &RuntimeSettingsRepository{db: db}
+}
+
+// NewRuntimeSettingsRepositoryOn returns a RuntimeSettingsRepository over
+// ex, typically a *sql.Tx, so a setting can be written in the same
+// transaction as another row (the MCP's audit log, issue #806).
+func NewRuntimeSettingsRepositoryOn(ex sqlutil.Executor) *RuntimeSettingsRepository {
+	return &RuntimeSettingsRepository{db: ex}
 }
 
 // Get returns key's current JSON-encoded value, or ("", false, nil) when

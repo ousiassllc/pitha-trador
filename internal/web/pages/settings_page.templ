@@ -111,7 +111,7 @@ templ SettingsPage(props SettingsProps) {
 						@molecules.SettingsCard(molecules.SettingsCardProps{
 							ID:          "mcp",
 							ModalID:     "modal-mcp",
-							Name:        "MCP（Paper 実績・Jev 判断の読み取り専用エンドポイント）",
+							Name:        "MCP（Paper 実績・Jev 判断の読み取りと、基本設定のホワイトリスト変更）",
 							Description: "Grok Bot などから Paper の実績と Jev の判断を読み取るための MCP の有効/無効・待受アドレス・API キー・状態を確認・設定できます。",
 							ActionLabel: "開く",
 						})
@@ -192,7 +192,7 @@ templ SettingsPage(props SettingsProps) {
 			}
 		}
 		if props.MCP && props.Has("modal-mcp") {
-			@molecules.Modal("modal-mcp", "MCP（Paper 実績・Jev 判断の読み取り専用エンドポイント）") {
+			@molecules.Modal("modal-mcp", "MCP（Paper 実績・Jev 判断の読み取りと、基本設定のホワイトリスト変更）") {
 				// Filled in by `GET /settings/mcp-panel` (internal/web/organisms/mcp)
 				// on load, so the reachability probe never slows the page;
 				// the panel's forms swap this element's content in place.

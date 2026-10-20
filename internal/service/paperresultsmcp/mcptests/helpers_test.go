@@ -172,6 +172,9 @@ var fixedMessages = map[paperresultsmcp.Code]string{
 	paperresultsmcp.CodeQueryTimeout:       "読み取りが時間内に終わりませんでした。",
 	paperresultsmcp.CodeConcurrencyLimited: "同時に処理できる件数を超えています。",
 	paperresultsmcp.CodeInternal:           "読み取りに失敗しました。",
+	paperresultsmcp.CodeWriteDisabled:      "設定の書き込みは許可されていません。settings_write_enable か Settings の「外部連携」で許可してください。",
+	paperresultsmcp.CodeKeyNotAllowed:      "このキーは MCP から変更できません。settings_get に出るキーだけ変更できます。",
+	paperresultsmcp.CodeInvalidValue:       "値が不正です。settings_get の constraint を確認してください。",
 }
 
 // errorBody is the spec error envelope.

@@ -9,6 +9,7 @@ import (
 
 	"modernc.org/sqlite"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/readdb"
 )
@@ -29,6 +30,10 @@ const (
 	CodeQueryTimeout       Code = "query_timeout"
 	CodeConcurrencyLimited Code = "concurrency_limited"
 	CodeInternal           Code = "internal"
+	// The settings tools' codes (issues #806, #807).
+	CodeWriteDisabled Code = "write_disabled"
+	CodeKeyNotAllowed Code = "key_not_allowed"
+	CodeInvalidValue  Code = "invalid_value"
 )
 
 type codeInfo struct {
@@ -49,12 +54,19 @@ var codeTable = map[Code]codeInfo{
 	CodeQueryTimeout:       {http.StatusGatewayTimeout, "読み取りが時間内に終わりませんでした。"},
 	CodeConcurrencyLimited: {http.StatusTooManyRequests, "同時に処理できる件数を超えています。"},
 	CodeInternal:           {http.StatusInternalServerError, "読み取りに失敗しました。"},
+	CodeWriteDisabled:      {http.StatusForbidden, "設定の書き込みは許可されていません。settings_write_enable か Settings の「外部連携」で許可してください。"},
+	CodeKeyNotAllowed:      {http.StatusForbidden, "このキーは MCP から変更できません。settings_get に出るキーだけ変更できます。"},
+	CodeInvalidValue:       {http.StatusUnprocessableEntity, "値が不正です。settings_get の constraint を確認してください。"},
 }
 
 // toolError is a failure with a spec code. cause is for the server log only.
 type toolError struct {
 	code  Code
 	cause error
+	// detail is shown to the client in error.data.detail. Only invalid_value
+	// sets it: the validator's reason, which quotes the caller's own value and
+	// the accepted range (no whitelisted setting is secret).
+	detail string
 }
 
 func (e *toolError) Error() string {
@@ -68,6 +80,9 @@ func (e *toolError) Unwrap() error { return e.cause }
 
 func fail(code Code) *toolError { return &toolError{code: code} }
 
+// failDetail is fail with a client-visible detail (see toolError.detail).
+func failDetail(code Code, detail string) *toolError { return &toolError{code: code, detail: detail} }
+
 // classify maps any error from a tool run to its spec code. ctx is the
 // per-call context: its deadline decides query_timeout even when the driver
 // reports the interruption as a generic error.
@@ -77,19 +92,19 @@ func classify(ctx context.Context, err error) *toolError {
 	case errors.As(err, &te):
 		return te
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return &toolError{CodeQueryTimeout, err}
+		return &toolError{code: CodeQueryTimeout, cause: err}
 	case errors.Is(err, query.ErrLimitExceeded):
-		return &toolError{CodeLimitExceeded, err}
+		return &toolError{code: CodeLimitExceeded, cause: err}
 	case errors.Is(err, query.ErrBadCursor):
-		return &toolError{CodeInvalidArgument, err}
-	case errors.Is(err, readdb.ErrUnavailable), errors.Is(err, sql.ErrConnDone):
-		return &toolError{CodeDBUnavailable, err}
+		return &toolError{code: CodeInvalidArgument, cause: err}
+	case errors.Is(err, readdb.ErrUnavailable), errors.Is(err, mcpset.ErrUnavailable), errors.Is(err, sql.ErrConnDone):
+		return &toolError{code: CodeDBUnavailable, cause: err}
 	case isBusy(err):
-		return &toolError{CodeDBLocked, err}
+		return &toolError{code: CodeDBLocked, cause: err}
 	case isMissingSchema(err):
-		return &toolError{CodeDBUnavailable, err}
+		return &toolError{code: CodeDBUnavailable, cause: err}
 	}
-	return &toolError{CodeInternal, err}
+	return &toolError{code: CodeInternal, cause: err}
 }
 
 // SQLite primary result codes (sqlite3.h).

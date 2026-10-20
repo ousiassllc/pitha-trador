@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/mcp"
@@ -24,13 +25,29 @@ type Admin interface {
 	Restart(ctx context.Context) error
 }
 
+// WriteGate is the settings-write switch and audit log (issue #806); the
+// application's *mcpset.Gate implements it.
+type WriteGate interface {
+	Enabled(ctx context.Context) (bool, error)
+	SetEnabled(ctx context.Context, enabled bool) error
+	Recent(ctx context.Context, limit int) ([]mcpset.Entry, error)
+}
+
 // Handler implements the MCP settings routes.
 type Handler struct {
 	admin Admin
+	gate  WriteGate // nil: the write section is hidden and its route absent
 }
 
 // New returns a Handler over a.
 func New(a Admin) *Handler { return &Handler{admin: a} }
+
+// WithWriteGate shows the settings-write switch and the audit log and mounts
+// `POST /settings/mcp/write`.
+func (h *Handler) WithWriteGate(g WriteGate) *Handler {
+	h.gate = g
+	return h
+}
 
 // Register mounts the routes on engine.
 func (h *Handler) Register(engine *gin.Engine) {
@@ -40,6 +57,28 @@ func (h *Handler) Register(engine *gin.Engine) {
 	engine.POST("/settings/mcp/start", h.Start)
 	engine.POST("/settings/mcp/stop", h.Stop)
 	engine.POST("/settings/mcp/restart", h.Restart)
+	if h.gate != nil {
+		engine.POST("/settings/mcp/write", h.SaveWrite)
+	}
+}
+
+// SaveWrite implements `POST /settings/mcp/write`: form `enabled` (a checked
+// checkbox sends a value, an unchecked one nothing) is the settings-write
+// switch. Like every POST it passes the session cookie and CSRF check.
+func (h *Handler) SaveWrite(c *gin.Context) {
+	noStore(c)
+	ctx := c.Request.Context()
+	on := c.PostForm("enabled") != ""
+	if err := h.gate.SetEnabled(ctx, on); err != nil {
+		slog.ErrorContext(ctx, "mcpsettings: save write switch", "error", err)
+		shared.RespondActionError(c, http.StatusInternalServerError, "設定変更の許可を保存できませんでした。")
+		return
+	}
+	notice := "MCP からの設定変更を禁止しました。"
+	if on {
+		notice = "MCP からの設定変更を許可しました。"
+	}
+	h.render(c, notice, "")
 }
 
 // Panel implements `GET /settings/mcp-panel`: the panel with the key masked.
@@ -84,8 +123,10 @@ func (h *Handler) Regenerate(c *gin.Context) {
 
 func (h *Handler) render(c *gin.Context, notice, revealedKey string) {
 	noStore(c)
-	v := h.admin.View(c.Request.Context())
-	shared.RenderHTML(c, http.StatusOK, mcp.Panel(panelProps(v, notice, revealedKey)))
+	ctx := c.Request.Context()
+	props := panelProps(h.admin.View(ctx), notice, revealedKey)
+	h.addWrite(ctx, &props)
+	shared.RenderHTML(c, http.StatusOK, mcp.Panel(props))
 }
 
 // noStore keeps every response of this package out of browser and proxy

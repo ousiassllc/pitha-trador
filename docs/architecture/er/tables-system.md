@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（運用設定・ジョブ・ベクトル）
 
-`docs/architecture/er.md` から分割した章。対象: `runtime_settings` / `secrets` / `policy_proposals` / `jobs` とsqlite-vecベクトルインデックス。型・規約と全体ER図は `docs/architecture/er.md` を参照。
+`docs/architecture/er.md` から分割した章。対象: `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `mcp_settings_audit` とsqlite-vecベクトルインデックス。型・規約と全体ER図は `docs/architecture/er.md` を参照。
 
 ## runtime_settings
 
@@ -21,6 +21,8 @@ erDiagram
 | key | varchar(100) | PK | 例: `screener.min_price`（Fast Screener全キー: `screener.{min_price,max_price,min_turnover_5m_jpy,max_spread_bps,min_volume_ratio,min_abs_return_5m_pct,min_realized_volatility,top_n}`、`screener.weights.{volume_ratio,abs_return_5m,breakout_strength,orderbook_imbalance,volatility_expansion}`。値は数値のJSON。DB値は`config/strategy.yaml`より優先し、候補更新ごとに読み込む）, `paper.bootstrap_entry_enabled`（メタモデル未採用時にPaperだけ旧しきい値ルールでエントリーするブートストラップ。JSON整数の0/1、既定0＝無効。Paper以外では1を保存できず、保存済みでも無効。FR-POLICY-7、issue #798）, `scan.snapshot_max_age_seconds`（ランキング監視の足の鮮度上限。JSON整数の秒、1〜600、既定20。起動時に読み込む。FR-FE-7、issue #754）, `risk.paper.initial_capital_jpy` / `risk.paper.max_position_per_symbol_pct` / `risk.paper.max_total_exposure_pct` / `risk.paper.max_trade_loss_pct`（PaperのRisk Engineの運用資金（円、0超〜1兆円）と1銘柄上限・総エクスポージャ上限（%、0超〜100）・1回の最大損失（%、0.1〜3.0、両端を含む）。JSON数値。`config/risk.yaml`のPaper値を上書きし、キーごとに保存が無ければ`risk.yaml`の値。Risk Engineが判定のたびに読み込む（再起動不要）。Paperのみ、Liveには効かない。起動時に一度だけ500000/100/100/1を保存（内部マーカー`system.paper_risk_defaults_seeded`、どれかの保存行があれば保存せずマーカーのみ）。`internal/config/papersettings`、issue #804）, `risk.operating_capital_jpy` / `risk.daily_loss_limit_pct` / `risk.profit_lock.trigger_pct` / `risk.profit_lock.giveback_pct` / `risk.max_daily_trades` / `risk.daily_loss_limit_jpy` / `risk.profit_lock.trigger_jpy`（運用資金（円）・損失上限と利益確保の発動の運用資金に対する率（0〜100）・許容戻し率（%）・1日の最大取引回数・円の直接指定（互換）。JSON数値、0または行なしで無効。円のしきい値は運用資金×率（率が直接指定より優先）で導出し、Risk Engineが`Check`のたびと1分周期で読み込む、issue #753・#782、FR-RISK-8）, `system.daily_guard_defaults_seeded`（Paper初期値の投入済みマーカー。JSON `true`。Settingsのキーではない。マーカーが無いときだけ起動時に1回、上記7キーに行が1つも無ければ運用資金500000・損失1・発動0.5・戻し50・最大20回を保存し、その後マーカーを書く。`dailyguardsettings.SeedPaperDefaults`）, `system.daily_guard`（当日の新規エントリー停止状態。JSONオブジェクト`{day,peak_pnl_jpy,halt_reason,halt_message,halted_at}`、`day`はJSTの取引日で、取引日が替わると初期化される。`internal/service/risk`）, `orderflow.ofi_window_{short,mid,long}_seconds`（OFIのローリング窓幅。整数秒のJSON、`1 <= short < mid < long <= 600`、既定10/30/60。バーごとに読み込む、issue #750）, `calibration.barrier_{tp,sl,cost}_bps`・`calibration.barrier_timeout_minutes`（トリプルバリアラベルの利確幅・損切り幅・コスト想定（bps、`0 < tp,sl <= 1000`、`0 <= cost < sl`）と時間切れ（分、1〜60の整数）。数値のJSON、既定30/30/10bps・10分。ラベル付与のたびに読み込む、issue #760）, `metalabel.model`・`metalabel.calibration`・`metalabel.retrain_time`・`metalabel.min_ev_bps`・`metalabel.llm_cutoff`（メタラベリングの二次モデルの設定。モデルは`logistic_regression`、較正は`platt`/`isotonic`、夜間の再学習時刻はJSON文字列の`HH:MM`（JST、`08:00〜16:30`は不可）、最低EVは0〜1000のJSON数値（bps）、Jevの学習データのcutoffはJSON文字列の`YYYY-MM-DD`（UTC日、夜間再学習のOOS評価の下限。issue #764）。出典の記録として`metalabel.llm_cutoff_model`（確認したJevモデル名）・`metalabel.llm_cutoff_confirmed_on`（確認日`YYYY-MM-DD`）・`metalabel.llm_cutoff_source`（出典、200文字以内）も保存できる（既定は空＝未記録。`llm_cutoff`が仮置きのままならモデルは不採用。FR-META-6、issue #776）。既定は`logistic_regression`/`platt`/`18:00`/`0`/`2026-01-01`。保存値が不正なら5項目とも既定で動作し警告ログ（`metalabelsettings.Load`）、issue #759・親 #752）, `regime.ab_enabled`（A/B比較の有効/無効。`0`/`1`のJSON整数、既定0）・`regime.window_minutes`（市場指数の1分足リターンの窓幅、5〜120のJSON整数、既定30）・`regime.autocorr_threshold`（トレンド/平均回帰の自己相関しきい値、0〜1の開区間のJSON数値、既定0.2）・`regime.min_volatility_bps`（ボラティリティ下限（bps）、0〜1000のJSON数値、既定0.5）・`regime.vwap_z_threshold`（VWAP回帰の乖離zスコアしきい値、0超10以下のJSON数値、既定2。相場状態判定とVWAP回帰、保存値が不正ならその項目だけ既定で動作し警告ログ（`regimesettings.Load`）、issue #755・親 #751）, `policy.long.min_probability`（policy.{long,short}.* の許可キーは `internal/domain/policyproposal.go` 参照）, `system.last_ui_heartbeat_at`（認証済みUIリクエストのたびにMiddlewareが更新、FR-RISK-6）, `system.loss_streak_baseline_at` / `system.daily_loss_baseline_at` / `system.fill_discrepancy_baseline_at`（手動Resumeが連敗/日次損失/約定差異のKill Switchを解除した時刻。以後の連敗数・日次実現損失はこれ以降のクローズ分のみ、孤児約定の照合はこれ以降にFILLEDとなった注文のみ対象、FR-RISK-7）, `system.paused` / `system.killed`（Pause/Killの状態そのもの。値は真偽値のJSON、`internal/service/risk`）, `system.daily_loss_warning_notified_at`（日次損失警告の通知重複抑止用に最後に通知した時刻。値はRFC3339のJSON文字列）, `system.maintenance.<task>.last_success_date`（`<task>`は`database_backup` / `data_retention_purge` / `log_rotation`。各メンテナンスタスクの最終成功日で、起動直後・10分ごとの未実行検出（`non-functional.md` §3）の状態保持先。値は`YYYY-MM-DD`のJSON文字列、`internal/service/scheduler/maintenance`）。Riskの閾値（`max_daily_loss_pct`・`heartbeat_timeout_minutes` 等）は `config/risk.yaml` のみで、`risk.*` キーは持たない。売買コストの想定（FR-COST-1、issue #779）は`cost.{fee_bps,fee_fixed_jpy,slippage_{long,short}_{continuous,opening,closing}_bps,short_borrow_bps,reference_notional_jpy}`（値は数値のJSON。既定は変更前の約定モデルと同じ。Paper・バックテスト・ラベルのコストが参照） |
 | value | text | NOT NULL | JSON文字列 |
 | updated_at | text | NOT NULL | |
+
+Paper 実績 MCP の設定書き込みの許可（issue #806）はキー`mcp.settings_write_enabled`（JSON の整数`1`=許可・`0`=禁止。行が無いときは許可。`1`/`0`以外は禁止として扱う）。アプリ（Settings の MCP カード）と MCP プロセスが同じ行を読み書きする（`internal/config/mcpwritesettings`）。MCP がこの表へ書けるのは、`mcpwritesettings.Keys()`のホワイトリストのキーとこのスイッチだけ。
 
 ## secrets
 
@@ -141,6 +143,37 @@ erDiagram
 |-------|-----|------|------|
 | id | integer | PK, CHECK (`= 1`) | 常に1 |
 | checked_at | text | NOT NULL | 検知の最終確認時刻（UTC） |
+
+## mcp_settings_audit（Paper 実績 MCP の設定変更の監査ログ、issue #806・#807）
+
+MCP の設定ツール（`settings_set` / `settings_write_enable` / `settings_write_disable`）と Settings 画面の、ホワイトリストのキーの変更・書き込み許可の切り替えを 1 変更 1 行で記録する（マイグレーション000040。`docs/architecture/paper-results-mcp.md` §7.4）。`settings_audit`と`settings_diff`、Settings の MCP カードが読む。追記のみ（更新・削除しない）。
+
+```mermaid
+erDiagram
+    mcp_settings_audit {
+        integer id PK
+        text at
+        text actor
+        text client
+        text action
+        text setting_key
+        text before_value
+        text after_value
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK, AUTOINCREMENT | 監査の行 ID。`settings_diff`のスナップショット ID（`since_id`） |
+| at | text | NOT NULL | 変更時刻（UTC） |
+| actor | text | NOT NULL, CHECK(`mcp`/`gui`) | 誰が。`mcp`＝Bearer 認証を通った MCP クライアント、`gui`＝Settings 画面 |
+| client | text | NOT NULL, DEFAULT `''` | `actor='mcp'`のとき接続元ホストの IP。ヘッダの値・API キーは入れない。`gui`は空 |
+| action | text | NOT NULL, CHECK(`set`/`reset`/`write_enable`/`write_disable`) | `reset`は GUI のみ（保存値を消して既定へ） |
+| setting_key | text | NOT NULL, 空文字不可 | 変更されたキー。書き込み許可の切り替えは`mcp.settings_write_enabled` |
+| before_value | text | NULL可 | 変更前の値（GUI と同じ文字列）。NULL＝保存値なし（既定が効いていた）。書き込み許可は`1`/`0` |
+| after_value | text | NULL可 | 変更後の値。`reset`では NULL |
+
+インデックス: `(setting_key, id)`。マスク方針: ホワイトリストのキーに秘密は無く値はそのまま入れる。秘密に分類されるキー・ホワイトリスト外のキーの値は`****`にして入れる（`mcpwritesettings.Mask`）。
 
 ## ベクトルインデックス（sqlite-vec）
 

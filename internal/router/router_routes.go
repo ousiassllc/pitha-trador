@@ -92,7 +92,11 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	}
 	if o.mcpSettings != nil {
 		settingsHandler.WithMCPSettings()
-		mcpsettings.New(o.mcpSettings).Register(engine)
+		mcpHandler := mcpsettings.New(o.mcpSettings)
+		if o.mcpWriteGate != nil {
+			mcpHandler.WithWriteGate(o.mcpWriteGate)
+		}
+		mcpHandler.Register(engine)
 	}
 	engine.GET("/setup", settingsHandler.SetupPage)
 	engine.GET(settingspages.BasePath, settingsHandler.Page)
