@@ -43,6 +43,7 @@ type options struct {
 	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
 	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
 	mcpSettings         mcpsettings.Admin            // nil until WithMCPSettings: no MCP card
+	mcpWriteGate        mcpsettings.WriteGate        // nil until WithMCPWriteGate: no write section
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	dailyHaltSource     system.DailyHaltSource
@@ -184,6 +185,13 @@ func WithOperationalSettings(ops settings.OperationalSettings) Option {
 // internal/bootstrap's *admin.Service over the MCP's settings file.
 func WithMCPSettings(admin mcpsettings.Admin) Option {
 	return func(o *options) { o.mcpSettings = admin }
+}
+
+// WithMCPWriteGate adds the settings-write switch and the audit log to the MCP
+// card and mounts `POST /settings/mcp/write` (issue #806). It has an effect
+// only together with WithMCPSettings.
+func WithMCPWriteGate(gate mcpsettings.WriteGate) Option {
+	return func(o *options) { o.mcpWriteGate = gate }
 }
 
 // WithBrokerSession lets the Settings screen's 立花証券 e支店 card show the

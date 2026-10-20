@@ -45,9 +45,9 @@ erDiagram
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `trade_signals` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
-| `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks`、ベクトルインデックス（sqlite-vec） |
+| `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `mcp_settings_audit`、ベクトルインデックス（sqlite-vec） |
 
-Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読むだけで、テーブルも列も追加しない。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
+Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読む。書くのは、設定ツール（issue #806・#807）が `runtime_settings` のホワイトリストのキーと、設定変更の監査表 `mcp_settings_audit`（マイグレーション000040、`er/tables-system.md`）に対して行うものだけ。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
 
 ## 改訂履歴
 
@@ -114,3 +114,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.58 | 2026-10-20 | マイグレーション000039を追加し、`er/tables-system.md`に`health_alerts`（立会中の市況データ停止の警告。固定コードと開始時刻）と`health_alert_checks`（検知の最終確認時刻、1行）を新設。アプリの検知が書き、Paper 実績 MCP の`collection_status`が読む | issue #802 |
 | 1.59 | 2026-10-20 | `er/tables-system.md`の`runtime_settings`に`paper.bootstrap_entry_enabled`を、`er/tables-market.md`の`trade_signals.policy_version`にPaperブートストラップの`policy-vb`を追記（スキーマ変更なし） | issue #798 |
 | 1.60 | 2026-10-20 | `runtime_settings`のキーに`risk.paper.initial_capital_jpy`・`risk.paper.max_position_per_symbol_pct`・`risk.paper.max_total_exposure_pct`・`risk.paper.max_trade_loss_pct`（PaperのRisk Engine用の運用資金・1銘柄／総エクスポージャ上限・1回の最大損失。判定ごとに読み込む）と内部マーカー`system.paper_risk_defaults_seeded`を追加（`er/tables-system.md`） | issue #804 |
+| 1.61 | 2026-10-20 | マイグレーション000040を追加し、`er/tables-system.md`に`mcp_settings_audit`（Paper 実績 MCP の設定ツールと Settings 画面の、ホワイトリストのキーの変更と書き込み許可の切替の監査ログ）を追加。`runtime_settings`のキー`mcp.settings_write_enabled`（書き込み許可、1/0、行なしは許可）を追記 | issue #806・#807 |

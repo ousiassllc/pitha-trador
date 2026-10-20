@@ -19,12 +19,14 @@ func resolveDBPath() (string, error) {
 	return bootstrap.DefaultDBPath()
 }
 
-// paperInitialCapital returns risk.yaml's paper.initial_capital with the
-// application's resolution order: PITHA_RISK_PATH, config/risk.yaml next to
-// the executable, then the compiled-in default. The Live capital is never
-// read; an unset Paper value is config.DefaultPaperInitialCapital (applied by
-// the loader).
-func paperInitialCapital() (float64, error) {
+// paperRiskLimits returns risk.yaml's paper section with the application's
+// resolution order: PITHA_RISK_PATH, config/risk.yaml next to the executable,
+// then the compiled-in default. The Live section is never read; an unset Paper
+// capital is config.DefaultPaperInitialCapital (applied by the loader). It is
+// the fallback of the Paper capital (the Settings value risk.paper.
+// initial_capital_jpy wins, read from the database at call time) and the
+// default the Paper settings show while nothing is stored (issue #806).
+func paperRiskLimits() (*config.RiskLimits, error) {
 	var (
 		risk *config.RiskConfig
 		err  error
@@ -35,9 +37,9 @@ func paperInitialCapital() (float64, error) {
 		risk, err = config.LoadRiskBytes(configdefaults.DefaultRiskYAML)
 	}
 	if err != nil {
-		return 0, fmt.Errorf("load risk config: %w", err)
+		return nil, fmt.Errorf("load risk config: %w", err)
 	}
-	return risk.Paper.InitialCapital, nil
+	return &risk.Paper, nil
 }
 
 func riskPath() string {

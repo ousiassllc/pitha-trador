@@ -1,0 +1,71 @@
+package mcp
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// AuditRow is one row of the settings audit log as the panel shows it. The
+// values are the audit log's: nothing whitelisted is secret, and a
+// secret-class key would already arrive masked.
+type AuditRow struct {
+	At     string
+	By     string
+	What   string
+	Key    string
+	Before string
+	After  string
+}
+
+// writeSection is the settings-write switch (issue #806): whether the MCP may
+// change the whitelisted basic settings (settings_set). It is on by default
+// (while an API key exists the MCP is usable); the MCP can flip it too
+// (settings_write_enable / settings_write_disable), and every flip and every
+// change of a whitelisted setting is in the audit log shown below.
+templ writeSection(props PanelProps) {
+	<div class="flex flex-col gap-2" data-testid="mcp-write">
+		<form class="flex flex-col gap-2" hx-post="/settings/mcp/write" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-write-form">
+			<label class="flex items-center gap-2">
+				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: writeAttrs(props.WriteEnabled)})
+				<span class="font-medium text-slate-700">MCP からの設定変更を許可する</span>
+			</label>
+			<span class="text-xs text-slate-500" data-testid="mcp-write-note">
+				許可すると、MCP（settings_set）から Paper の運用資金・1 銘柄上限・総エクスポージャ・1 回の最大損失、日次ガード、metalabel の LLM cutoff と出典だけを変更できます（Settings 画面と同じ保存先・同じ検証）。Live の値・発注・送金・Kill Switch 解除・API キーなどの秘密は MCP から変更できません。オフにすると settings_set は拒否されます（MCP の settings_write_enable でも戻せます）。既定はオンです。
+			</span>
+			<div>
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-write-save"}}) {
+					保存
+				}
+			</div>
+		</form>
+		<div class="flex flex-col gap-1" data-testid="mcp-audit">
+			<span class="font-medium text-slate-700">設定変更の監査ログ（新しい順・直近 10 件）</span>
+			if len(props.Audit) == 0 {
+				<span class="text-xs text-slate-500" data-testid="mcp-audit-empty">まだ変更はありません。</span>
+			} else {
+				<table class="w-full text-left text-xs" aria-label="設定変更の監査ログ" data-testid="mcp-audit-table">
+					<thead>
+						<tr><th scope="col" class="pr-2">日時</th><th scope="col" class="pr-2">誰が</th><th scope="col" class="pr-2">操作</th><th scope="col" class="pr-2">キー</th><th scope="col" class="pr-2">前</th><th scope="col">後</th></tr>
+					</thead>
+					<tbody>
+						for _, row := range props.Audit {
+							<tr data-testid="mcp-audit-row">
+								<td class="pr-2">{ row.At }</td>
+								<td class="pr-2">{ row.By }</td>
+								<td class="pr-2">{ row.What }</td>
+								<td class="pr-2"><code>{ row.Key }</code></td>
+								<td class="pr-2">{ row.Before }</td>
+								<td>{ row.After }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	</div>
+}
+
+func writeAttrs(enabled bool) templ.Attributes {
+	attrs := templ.Attributes{"value": "on", "data-testid": "mcp-write-enabled"}
+	if enabled {
+		attrs["checked"] = true
+	}
+	return attrs
+}

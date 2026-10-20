@@ -110,7 +110,7 @@ kabu選択時の方針: メンテナンス明け・セッション切れ後のka
 - HTMXフォームにはCSRFトークンを付与する（HALT標準構成に準拠。ローカル単一ユーザーでも実装は省略しない）
 - 実売買（Phase 7）へ移行しても、発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）。安全性はRisk Engine側のLive専用の厳格なリミット（`requirements/functional.md` §4.7）と、操作者ハートビートが一定時間途絶した場合に自動で新規エントリーを停止するdead-man's switch（FR-RISK-6）で担保する
 - Risk Engineの拒否・Kill Switch発動・実売買発注はすべて監査ログ（追記専用ログ）に記録する。`kill_switch_events` / `kill_switch_resolutions`はDBトリガーで`UPDATE`/`DELETE`を拒否して追記専用を強制する（`architecture/er.md` §kill_switch_events）。ハッシュチェーン等によるDBファイル自体の改ざん検知は行わない
-- **Paper 実績 MCP（issue #783）**: リモートから DB を読む経路は、loopback または tailnet の IP に限定した別プロセスと、プライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他。`architecture/paper-results-mcp.md` §3.2）に限る。インターネットへ直接は公開しない。待受は既定オフで、`0.0.0.0` への bind は起動を拒否する。必須の認証は、DB にも Git にも置かない別 API キーである。キー不一致は SQL の前に拒否し、ログとツール戻り値に鍵・`secrets`・板や時価の生データを出さない。Cloudflare Access は Cloudflare Tunnel を使う場合の任意の追加であり、API キーの代わりにしない。読み取りは `mode=ro`（`query_only`）で、マイグレーションと WAL チェックポイントはしない。クエリ時間の上限は 3 秒、同時実行は 2、`busy_timeout` は 1 秒（アプリ本体の 60 秒とは別）。数値の一覧は `api/endpoints/paper-results-mcp.md` §2
+- **Paper 実績 MCP（issue #783）**: リモートから DB を読む経路は、loopback または tailnet の IP に限定した別プロセスと、プライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他。`architecture/paper-results-mcp.md` §3.2）に限る。インターネットへ直接は公開しない。待受は既定オフで、`0.0.0.0` への bind は起動を拒否する。必須の認証は、DB にも Git にも置かない別 API キーである。キー不一致は SQL の前に拒否し、ログとツール戻り値に鍵・`secrets`・板や時価の生データを出さない。Cloudflare Access は Cloudflare Tunnel を使う場合の任意の追加であり、API キーの代わりにしない。読み取りは `mode=ro`（`query_only`）で、マイグレーションと WAL チェックポイントはしない。書き込みは、ホワイトリストの設定ツール（issue #806・#807）が別の狭い接続で `runtime_settings` と監査表 `mcp_settings_audit` にだけ行う（既定で許可。Settings と MCP の両方で切り替えられる。発注・送金・Kill Switch 解除・Live の値・秘密は MCP から書けない。FR-MCP-18〜22）。クエリ時間の上限は 3 秒、同時実行は 2、`busy_timeout` は 1 秒（アプリ本体の 60 秒とは別）。数値の一覧は `api/endpoints/paper-results-mcp.md` §2
 
 ## 5. 監視・アラート
 
@@ -224,3 +224,4 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.45 | 2026-10-19 | §3 の自動起動・クラッシュ時再起動に、Paper 実績 MCP がアプリと同時に起動・終了し、異常終了時に孤児を残さず `--supervise` 後に復帰することを追記（新しい自動起動は作らない） | issue #795 |
 | 1.46 | 2026-10-20 | §5.1に失敗ジョブのエラーコード別集約ログ（`jobfailurelog: jobs failed`。1分ごと・件数・マスク済み代表メッセージ・ERROR）を追記 | issue #803 |
 | 1.47 | 2026-10-20 | §5 に、立会中のkabu未ログイン・market-data無稼働をアプリ内警告とMCPで知らせる旨を追記（Slack等の外部通知は対象外） | issue #802 |
+| 1.48 | 2026-10-20 | §4 の Paper 実績 MCP に、設定ツールだけが別の狭い接続で書くこと（ホワイトリスト・既定で許可・Settings と MCP の両方で切替・監査ログ）を追記。読み取りの `mode=ro` と上限は変更なし | issue #806・#807 |

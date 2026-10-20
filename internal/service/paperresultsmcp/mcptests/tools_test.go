@@ -23,6 +23,17 @@ const healthToday = "health_today"
 // allTools is every tool of the dispatch table.
 var allTools = append(slices.Clone(eightTools), healthToday)
 
+// settingsTools are the tools of issues #806 / #807: the read tools of the
+// whitelisted settings and the only tools that write (settings_set and the
+// write switch), each through mcpset.Writer.
+var settingsTools = []string{
+	"settings_get", "settings_diff", "settings_audit", "settings_set", "settings_write_enable", "settings_write_disable",
+}
+
+// writingTools are the settings tools that change state; every other tool is
+// annotated read-only.
+var writingTools = []string{"settings_set", "settings_write_enable", "settings_write_disable"}
+
 func near(t *testing.T, name string, got *float64, want float64) {
 	t.Helper()
 	if got == nil || math.Abs(*got-want) > 1e-9 {
@@ -44,8 +55,9 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the nine tool names, each marked read-only.
-func TestToolsListReturnsExactlyTheNineTools(t *testing.T) {
+// tools/list returns exactly the nine read tools and the six settings tools;
+// only the three writing settings tools are not marked read-only.
+func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
 	var env struct {
@@ -63,33 +75,38 @@ func TestToolsListReturnsExactlyTheNineTools(t *testing.T) {
 	var names []string
 	for _, tl := range env.Result.Tools {
 		names = append(names, tl.Name)
-		if tl.Annotations["readOnlyHint"] != true || tl.Annotations["destructiveHint"] != false {
-			t.Errorf("%s: not annotated read-only: %v", tl.Name, tl.Annotations)
+		wantReadOnly := !slices.Contains(writingTools, tl.Name)
+		if tl.Annotations["readOnlyHint"] != wantReadOnly || tl.Annotations["destructiveHint"] != false {
+			t.Errorf("%s: annotations %v, want readOnlyHint=%v and destructiveHint=false", tl.Name, tl.Annotations, wantReadOnly)
 		}
 		if tl.InputSchema["additionalProperties"] != false {
 			t.Errorf("%s: schema must reject unknown arguments", tl.Name)
 		}
 	}
 	slices.Sort(names)
-	want := slices.Clone(allTools)
+	want := append(slices.Clone(allTools), settingsTools...)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", names, want)
 	}
-	if got := paperresultsmcp.ToolNames(); len(got) != 9 {
+	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools) {
 		t.Fatalf("dispatch table has %d entries: %v", len(got), got)
 	}
 }
 
-// No write-style tool can exist: the dispatch table (not just tools/list) is
-// scanned for write/order/settings/kill-switch-operation names, and calling
-// such names - or any unknown name - gives the spec'd invalid_argument.
+// No write-style tool can exist beyond the settings tools: the dispatch table
+// (not just tools/list) is scanned for write/order/kill-switch-operation names
+// outside the fixed settings tool set, and calling such names - or any unknown
+// name - gives the spec'd invalid_argument.
 func TestNoWriteToolsExist(t *testing.T) {
 	forbidden := []string{"order", "cancel", "update", "set", "delete", "insert", "write", "create", "place",
 		"submit", "send", "trigger", "resolve", "reset", "clear", "operate", "enable", "disable", "toggle",
 		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
 		"secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
+		if slices.Contains(settingsTools, name) {
+			continue // the whitelisted settings tools; their reach is pinned in settingstests
+		}
 		if !slices.Contains(allTools, name) {
 			t.Errorf("dispatch table has unexpected tool %q", name)
 		}

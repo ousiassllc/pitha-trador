@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つ）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -44,8 +44,8 @@
 | `expectancy_return_pct` | 各行の `realized_pnl / (entry_price * quantity) * 100` の平均。建値が 0 以下の行はリターン 0 として数える（`internal/service/insight.Aggregate` と同じ）。0 件なら `null` |
 | `profit_factor` | 勝ちの合計円 ÷ 負けの合計円の絶対値。負けが 0 件、または対象 0 件なら `null` |
 | `max_drawdown_jpy` | `closed_at` 昇順、同着は `id` 昇順で `realized_pnl` を累積した曲線の、ピークから谷までの最大下落（円）。下落が無ければ 0。0 件なら 0 |
-| `capital_jpy` | `config/risk.yaml` の `paper.initial_capital`。未設定時は `config.DefaultPaperInitialCapital`（500,000）。アプリと同じ yaml 解決順で読む。Live の値は使わない。Settings で保存したPaperの運用資金（`runtime_settings` の `risk.paper.initial_capital_jpy`、issue #804）には追従しない（この値の読み取りは §4 の `health_today` 用固定キーに含まれない）。アプリの資金比と異なる場合は、`capital_jpy` を見て読み分ける |
-| `max_drawdown_capital_ratio` | `max_drawdown_jpy / capital_jpy`。`capital_jpy` が 0 以下、または yaml を読めないときは両方 `null`（円建てのドローダウンは返す） |
+| `capital_jpy` | Paper の資金。`runtime_settings` の `risk.paper.initial_capital_jpy`（Settings で保存した Paper の運用資金、issue #804。読み取り接続で読む）が有効に保存されていればそれ。なければ `config/risk.yaml` の `paper.initial_capital`（MCP プロセスの起動時に読む。未設定時は `config.DefaultPaperInitialCapital`＝500,000。アプリと同じ yaml 解決順）。Live の値は使わない。どちらも使えなければ `null`（issue #806） |
+| `max_drawdown_capital_ratio` | `max_drawdown_jpy / capital_jpy`。`capital_jpy` が 0 以下、または保存値も yaml も使えないときは両方 `null`（円建てのドローダウンは返す） |
 
 `internal/service/insight.Performance.MaxDrawdownPct` はリターン（%）の曲線であり、ここでいう資金比ではない。実装は円の累積を別に計算する。
 
@@ -190,6 +190,60 @@
 
 `runtime_settings` は固定キー（日次ガードの閾値キー、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`）だけを読み取りで読む（§4）。
 
+### 3.10 設定ツール（issue #806・#807）
+
+設定ツールが触れるのは、次のホワイトリストの 15 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
+
+| キー | 単位 | 意味 | 受け付ける値 |
+|------|------|------|--------------|
+| `risk.paper.initial_capital_jpy` | 円 | Paper の運用資金（FR-RISK 各上限と数量算出の基準。issue #804） | 0 円より大きく 1 兆円以下 |
+| `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
+| `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
+| `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
+| `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
+| `risk.daily_loss_limit_pct` | % | 日次損失上限（運用資金比） | 0 以上 100 以下（0 は使わない） |
+| `risk.profit_lock.trigger_pct` | % | 利益確保の発動水準（運用資金比） | 0 以上 100 以下 |
+| `risk.profit_lock.giveback_pct` | % | 利益確保の戻し許容 | 0 以上 100 以下 |
+| `risk.max_daily_trades` | 回 | 1 日の最大エントリー回数 | 0 以上の整数 |
+| `risk.daily_loss_limit_jpy` | 円 | 日次損失上限（円で直接指定） | 0 以上 |
+| `risk.profit_lock.trigger_jpy` | 円 | 利益確保の発動水準（円で直接指定） | 0 以上 |
+| `metalabel.llm_cutoff` | 日付 | Jev が使う LLM の学習データの終端日（UTC） | `YYYY-MM-DD` |
+| `metalabel.llm_cutoff_model` | 文字列 | 上の終端日を確認した Jev のモデル名（出典） | 200 文字以内・制御文字なし |
+| `metalabel.llm_cutoff_confirmed_on` | 日付 | 上の終端日を確認した日（出典） | `YYYY-MM-DD` |
+| `metalabel.llm_cutoff_source` | 文字列 | 上の終端日の根拠（出典） | 200 文字以内・制御文字なし |
+
+Live の値・Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）・秘密・発注・送金・Kill Switch 解除に関するキーは無い。ホワイトリスト外のキーは `key_not_allowed`（HTTP 403）。`value` は文字列でも数値でもよい（Settings 画面に入れる文字列と同じ。数値キーに `2.5` でも `"2.5"` でも可）。真偽値・null・配列・オブジェクトは `invalid_argument`。
+
+### 3.11 `settings_get`
+
+引数なし。`data`:
+
+| フィールド | 定義 |
+|------------|------|
+| `write_enabled` | 書き込み許可（既定 `true`。`runtime_settings` の `mcp.settings_write_enabled`） |
+| `snapshot_id` | 最新の監査行の `id`。変更がまだ無ければ 0。`settings_diff` の `since_id` に渡せる |
+| `items[]` | ホワイトリストの全キー（上の表の順）。`key` / `value`（Settings 画面と同じ文字列）/ `unit`（`yen`・`percent`・`count`・`date`・`text`）/ `source`（`stored`＝保存値、`default`＝保存値なしで既定が効いている）/ `default` / `description` / `constraint`（受け付ける値）/ `warning`（あれば。例: LLM cutoff が仮の値のまま） |
+
+Paper の 4 キーの `default` は `risk.yaml` の Paper 値（なければ #804 の初期値）。秘密に分類されるキーはホワイトリストに無いが、将来載せる場合は `value` と `default` が `****` になる。読み取り専用。
+
+### 3.12 `settings_set`
+
+引数: `key`（必須）、`value`（必須）。処理の順は ①ホワイトリスト（`key_not_allowed`）②書き込み許可（`write_disabled`）③値の検証（`invalid_value`、`invalid_argument`）④保存と監査（同じトランザクション）。`data`: `key` / `unit` / `value`（保存後の値）/ `before`（保存前の保存値。保存値が無かったときは `null`）/ `audit_id` / `at`。保存先は GUI と同じ `runtime_settings` で、アプリには保存後すぐに反映される。書き込みは `readOnlyHint: false`。
+
+### 3.13 `settings_diff`
+
+引数（どちらも省略可。両方は不可で `invalid_argument`）: `since_id`（監査ログの行 ID。その行の保存直後の状態と比べる。0 は最初から。存在しない ID は `invalid_argument`）、`since_at`（RFC3339。その時点の状態と比べる）。両方省略は、直近 1 回の保存の直前との差分。
+
+`data`: `since`（`id`、あれば `at`）、`snapshot_id`（いまの最新）、`changes[]`（値か出どころが違うキーだけ。ホワイトリストの順）。各要素は `key` / `unit` / `before`・`after`（それぞれ `value` と `source`）/ `changed_at` / `changed_by`（`mcp:<IP>` か `gui`）。基準の状態は監査ログから再構成する（`architecture/paper-results-mcp.md` §7.5）。値は §3.11 と同じ表現で、秘密は載らない。読み取り専用。
+
+### 3.14 `settings_audit`
+
+引数: `limit`（既定 50、最大 200）、`before_id`（前回応答の最後の `id`。これより古い行を返す）。`data.entries[]` は新しい順で、`id` / `at`（UTC の RFC3339）/ `actor`（`mcp` か `gui`）/ `client`（`mcp` のときの接続元 IP。`gui` は省略）/ `action`（`set`・`reset`・`write_enable`・`write_disable`）/ `key` / `before` / `after`。`before` / `after` が `null` は「保存値なし（既定が効く）」、`reset` の `after` も `null`。書き込み許可の切り替えは `key` が `mcp.settings_write_enabled`、値は `"1"` / `"0"`。値は GUI と同じ表現で、マスク方針は `architecture/paper-results-mcp.md` §7.4（いまのキーに秘密は無く、そのまま。秘密に分類されるキーは `****`）。読み取り専用。
+
+### 3.15 `settings_write_enable` / `settings_write_disable`
+
+引数なし。書き込み許可を入れる／切る。**書き込みが禁止のあいだも呼べる**（戻せなくなるため）。Bearer 認証は他と同じく必須。`data`: `write_enabled` / `audit_id` / `at`。切り替えは監査ログに残る。Settings 画面の同名のチェック（FR-MCP-18）と同じ値を読み書きする。`readOnlyHint: false`。これらのツールも、発注・送金・Kill Switch・Live の値には触れない。
+
 ## 4. 出さないもの
 
 ツールの戻り値はホワイトリスト方式とする。テーブルの `SELECT *` は禁止する。下の表は、列が存在してもツールに載せないものの一覧である（マイグレーション `000001`〜`000039` で確認した名前）。
@@ -208,7 +262,7 @@
 | `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。`health_today`（§3.9）が読む固定キー（日次ガードの閾値、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`）以外は読まない。固定キーでも値そのものは返さず、解釈した真偽・コード・件数だけを返す |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 15 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 
 Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jpy`）は取引の結果として返す。板やスナップショットの時価列とは別である。
@@ -219,7 +273,9 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - `enabled: true` かつ `api_key` が非空で、そのキーが正しいときだけ待受し、ツールが応答する。`api_key` が空なら待受しない
 - `listen` が `0.0.0.0` のときは起動しない。Tailscale で直接待つ設定は、その PC の tailnet 側アドレスだけを bind する
 - キー無し・誤ったキーは 401 で、そのリクエストの経路で SQL が 0 件である
-- MCP が開いた接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
+- MCP の読み取り接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
+- 設定ツール: ホワイトリストの 15 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
+- 設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
@@ -237,3 +293,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.3 | 2026-10-20 | §3.8 `collection_status` に `alerts[]`（`code`・`since`。`kabu_not_logged_in` / `market_data_idle`）を追加。マイグレーション `000039` の `health_alerts` / `health_alert_checks` を読む | issue #802 |
 | 1.4 | 2026-10-20 | §3.1 `capital_jpy` の既定を 500,000 に更新し、Settings で保存した Paper の運用資金（`runtime_settings`）には追従しない旨（`runtime_settings` を読まない方針を維持）を明記 | issue #804 |
 | 1.5 | 2026-10-20 | §3.9 `health_today` を追加（今日の Paper 取引数・メタモデル・ブートストラップ・kabu/market-data・欠損・日次ガード・Kill Switch・再学習の見送りと、要対応フラグ `needs_attention` / 固定コード `attention_codes[]`）。§4 の `runtime_settings` を、固定キーのみ読み取りで読む記述に改めた | issue #808 |
+| 1.6 | 2026-10-20 | §3.1 `capital_jpy` を、Settings の保存値（`runtime_settings` の `risk.paper.initial_capital_jpy`）に追従し、なければ risk.yaml とする仕様に更新。§3.10〜§3.15 に設定ツール（`settings_get` / `settings_set` / `settings_diff` / `settings_audit` / `settings_write_enable` / `settings_write_disable`）とホワイトリスト 15 キー、§4 の `runtime_settings` の行、§5 の受け入れ条件を追加 | issue #806・#807 |

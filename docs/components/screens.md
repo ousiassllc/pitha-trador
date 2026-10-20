@@ -52,7 +52,7 @@
 | Opus | `/settings/integrations#modal-opus` | Sol の提案を検証する AI（Opus）の接続を設定します（既定は Jev）。 | 外部連携 |
 | ニュースフィード | `/settings/integrations#modal-news-feed` | ニュースの取得元（既定はやのしん TDnet WebAPI）を設定します。 | 外部連携 |
 | Slack | `/settings/integrations#modal-slack` | 通知の送信先となる Slack の Incoming Webhook URL を設定します。 | 外部連携 |
-| MCP | `/settings/integrations#modal-mcp` | Paper 成績を読み取り専用で外部の AI クライアントへ公開する MCP サーバーの有効化・API キーの設定と、起動・停止・再起動ができます。 | 外部連携 |
+| MCP | `/settings/integrations#modal-mcp` | Paper 成績を外部の AI クライアントへ公開し、許可した基本設定だけを変更できる MCP サーバーの有効化・API キーの設定と、起動・停止・再起動、MCP からの設定変更の許可（既定オン）と監査ログの確認ができます。 | 外部連携 |
 | API ドキュメント（Swagger） | `/swagger` | JSON API の仕様を確認します（SWAGGER_ENABLED=true のときだけ表示されます）。 | 外部連携 (SWAGGER_ENABLED=true のときのみ) |
 | アップデート | `/settings/maintenance#modal-update` | 現在のバージョンと最終確認結果を確認し、新しいバージョンを確認します。 | ログ・エクスポート |
 | エラーログ | `/settings/maintenance#modal-error-log` | 調査・共有のためにエラーログをダウンロードします。 | ログ・エクスポート |
@@ -77,3 +77,4 @@
 | 1.1 | 2026-10-19 | 管理ハブの MCP の説明に、起動・停止・再起動ができることを追記（画面は Settings の MCP カードのまま） | issue #795 |
 | 1.2 | 2026-10-20 | 管理ハブ（`/admin`）を Settings に統合: メニューは Settings 1本、`/settings` はページ一覧、詳細は `/settings/<page>`（運用／成績・検証／リスク・資金／ブローカー・データ／外部連携／ログ・エクスポート）。`/admin` と旧 `/settings#modal-<id>` は新ページへ転送。登録簿を `adminhub` から `settingspages` へ | issue #805 |
 | 1.3 | 2026-10-20 | Settings「リスク・資金」ページに「Paper の運用資金・建玉上限・1回の最大損失」カード（`modal-paper-risk`）を追加し、ページ説明を更新 | issue #804 |
+| 1.4 | 2026-10-20 | MCP カードの説明に、MCP からの設定変更の許可（既定オン）と監査ログを追記 | issue #806 |

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"net"
 	"net/http"
 	"time"
 
@@ -17,7 +18,7 @@ type callParams struct {
 
 // handleToolCall validates the call, takes a concurrency slot and runs the
 // tool in one read-only transaction under the 3 s budget.
-func (s *Server) handleToolCall(w http.ResponseWriter, _ *http.Request, req rpcRequest) {
+func (s *Server) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcRequest) {
 	start := s.now()
 	toolName := ""
 	var rng query.Range
@@ -34,12 +35,12 @@ func (s *Server) handleToolCall(w http.ResponseWriter, _ *http.Request, req rpcR
 		}
 		// Only the code is logged for a failure: the cause may quote SQL.
 		s.log.Warn("paper-results-mcp: tool call failed", append(attrs, "code", string(te.code))...)
-		writeError(w, req.ID, te.code)
+		writeFailure(w, req.ID, te)
 	}
 
 	var params callParams
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		finish(&toolError{CodeInvalidArgument, err})
+		finish(&toolError{code: CodeInvalidArgument, cause: err})
 		return
 	}
 	t, ok := findTool(params.Name)
@@ -53,9 +54,11 @@ func (s *Server) handleToolCall(w http.ResponseWriter, _ *http.Request, req rpcR
 		finish(te)
 		return
 	}
-	if rng, te = period.resolve(s.now()); te != nil {
-		finish(te)
-		return
+	if !t.noPeriod {
+		if rng, te = period.resolve(s.now()); te != nil {
+			finish(te)
+			return
+		}
 	}
 
 	select {
@@ -68,7 +71,7 @@ func (s *Server) handleToolCall(w http.ResponseWriter, _ *http.Request, req rpcR
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.opts.QueryTimeout)
 	defer cancel()
-	data, n, err := s.execute(ctx, run, rng)
+	data, n, err := s.execute(ctx, run, rng, clientHost(r))
 	if err != nil {
 		finish(classify(ctx, err))
 		return
@@ -91,8 +94,9 @@ func (s *Server) handleToolCall(w http.ResponseWriter, _ *http.Request, req rpcR
 
 // execute runs one tool on the read-only database inside a single
 // transaction, so all its queries see one snapshot. The transaction is only
-// ever rolled back: nothing is written.
-func (s *Server) execute(ctx context.Context, run runFunc, rng query.Range) (any, int, error) {
+// ever rolled back: nothing is written through it. The settings tools that
+// write do so through env.writer, a separate narrow connection.
+func (s *Server) execute(ctx context.Context, run runFunc, rng query.Range, client string) (any, int, error) {
 	db, err := s.DB()
 	if err != nil {
 		return nil, 0, err
@@ -102,5 +106,18 @@ func (s *Server) execute(ctx context.Context, run runFunc, rng query.Range) (any
 		return nil, 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	return run(ctx, toolEnv{q: tx, r: rng, capitalJPY: s.opts.CapitalJPY, now: s.now()})
+	return run(ctx, toolEnv{
+		q: tx, r: rng, capitalJPY: s.opts.CapitalJPY, now: s.now(),
+		client: client, paperLimits: s.opts.PaperLimits, writer: s.Writer,
+	})
+}
+
+// clientHost is the caller's host for the audit log: the IP of the TCP peer,
+// never a header value (headers are caller-controlled).
+func clientHost(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
