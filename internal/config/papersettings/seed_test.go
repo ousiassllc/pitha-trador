@@ -38,6 +38,7 @@ func TestSeedDefaults_FreshDatabaseStoresThePaperInitialValuesAndMarker(t *testi
 		papersettings.KeyInitialCapitalJPY:       "500000",
 		papersettings.KeyMaxPositionPerSymbolPct: "100",
 		papersettings.KeyMaxTotalExposurePct:     "100",
+		papersettings.KeyMaxTradeLossPct:         "1",
 		papersettings.SeededMarkerKey:            "true",
 	}
 	if len(store.rows) != len(want) {

@@ -6,7 +6,7 @@
 
 - メインナビ（`organisms.MainNav`）は左から Scanner / Watchlist / Performance / Calibration / Activity / **Settings（`/settings`）**。管理系の入口は Settings 1本で、単独の「管理」項目は置かない。`organisms.NavSettings` が Settings を表し、`/settings` と、その下のすべてのページが `layout.Shell(…, organisms.NavSettings)` を使うので、どのページでも Settings だけに `aria-current="page"` が付く。
 - **Settings の階層**: `/settings`（ページ一覧。`pages.SettingsHubPage`）→ `/settings/<page id>`（詳細設定のページ。`pages.SettingsPage`）→ 各カードのダイアログ（`molecules.Modal`）。一覧の各行（`molecules.SettingsLinkCard`）は、ページ名・要約・「開く」リンクを持つ。詳細ページは、パンくず（Settings / ページ名）・そのページに属する接続先カード・設定項目カード・システムカード・関連画面へのリンク（`settingspages.LinksOf`）を並べる。カードの「開く」「設定する」ボタンでダイアログが開き、ダイアログの中で項目ごとに保存・削除する。
-- ページ（この名前・順序で固定。`settingspages.Pages()`）: 運用 `/settings/operations`（スキャン・ポジション・Kill Switch、候補を絞るしきい値）／成績・検証 `/settings/results`（Performance・Calibration・バックテスト、判断のラベル・相場状態）／リスク・資金 `/settings/risk`（損失上限・利益確保・売買コストの想定）／ブローカー・データ `/settings/broker`（kabu・立花の接続と監視銘柄）／外部連携 `/settings/integrations`（Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP）／ログ・エクスポート `/settings/maintenance`（アップデート・エラーログ・データエクスポート・バックアップ・ログ設定）。
+- ページ（この名前・順序で固定。`settingspages.Pages()`）: 運用 `/settings/operations`（スキャン・ポジション・Kill Switch、候補を絞るしきい値）／成績・検証 `/settings/results`（Performance・Calibration・バックテスト、判断のラベル・相場状態）／リスク・資金 `/settings/risk`（Paper の運用資金・建玉上限、損失上限・利益確保・売買コストの想定）／ブローカー・データ `/settings/broker`（kabu・立花の接続と監視銘柄）／外部連携 `/settings/integrations`（Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP）／ログ・エクスポート `/settings/maintenance`（アップデート・エラーログ・データエクスポート・バックアップ・ログ設定）。
 - **戻り導線の規則**: `layout.Shell` を使う全ページはヘッダーのメインナビに「Settings」を持つため、どの画面からも1操作で Settings のページ一覧へ戻れる。詳細ページはパンくずからも一覧へ戻れる。例外は `/setup`（`SetupShell`。ヘッダーを持たない初回専用画面）と `/swagger`（静的なドキュメント画面）。ダイアログを開いたままでもヘッダーは隠れない。
 - **旧 URL**: `/admin` は `/settings` へ 301 でリダイレクトする。旧い `/settings#modal-<id>`（ハッシュ付きの Settings 直リンク）と `/settings#update-panel`（ヘッダーのバージョン表示の旧リンク先）は、サーバーにはハッシュが届かないため、一覧ページが埋め込む対応表（`data-hash-routes`、`settingspages.HashRoutes()`）を `pitha-settings-hub` が読み、該当ページ `/settings/<page id>#<id>` へ `location.replace` で転送する。ヘッダーのバージョン表示の現在のリンク先は `/settings/maintenance#update-panel`。
 - Settings の一覧・各ページは他のページと同じく Setup Guard の対象（`/setup`・`/static`・秘密キーの `POST`/`DELETE /settings/:key` のみが例外）。
@@ -26,6 +26,7 @@
 | Policy Engine（ロング） | `/settings/operations#modal-policy-long` | ロングのシグナルになるための確率・エントリー品質などのしきい値を編集します。 | 運用 |
 | Policy Engine（ショート） | `/settings/operations#modal-policy-short` | ショートのシグナルになるための確率・エントリー品質などのしきい値を編集します。 | 運用 |
 | データの鮮度（ランキング監視） | `/settings/operations#modal-snapshot-age` | Jev の判断と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）を編集します。 | 運用 |
+| Paper ブートストラップ | `/settings/operations#modal-paper-bootstrap` | メタモデル未採用の間だけ Paper で旧ルールのエントリーを許し、ラベルを貯めるスイッチ（既定は無効、Live では必ず無効）を編集します。 | 運用 |
 | Performance | `/performance` | 決済済みポジションの実績（Paper）と評価指標を確認します。 | 成績・検証 |
 | バックテスト（Walk Forward） | `/performance#backtest` | 期間を指定して Walk Forward バックテストを実行し、コスト感度を確認します（Performance 画面の下部）。 | 成績・検証 |
 | Calibration | `/calibration` | Jev の確率予測が実際の結果とどれだけ合っているかをヒートマップで確認します。 | 成績・検証 |
@@ -33,6 +34,7 @@
 | メタラベリング | `/settings/results#modal-metalabel` | 入る／見送るを決める二次モデルの設定と最低 EV を編集します。 | 成績・検証 |
 | 相場状態（レジーム）判定 | `/settings/results#modal-regime` | 相場状態（トレンド／平均回帰）の判定と、VWAP 回帰モードへの切替を編集します。 | 成績・検証 |
 | 板の需給（OFI） | `/settings/results#modal-orderflow` | 板の需給（Order Flow Imbalance）を集計する窓の幅を編集します。 | 成績・検証 |
+| Paper の運用資金・建玉上限・1回の最大損失 | `/settings/risk#modal-paper-risk` | Paper の運用資金（ポジションサイズの分母）・1銘柄の上限・総エクスポージャの上限・1回の取引の最大損失（%）と、日次ガード用の運用資金を並べて編集します。保存は再起動不要で次のリスク判定から反映され、1単元（100株）が運用資金を超える場合は注意を表示します。Paper 専用（Live は変わりません）。 | リスク・資金 |
 | 1日の損失上限・利益確保 | `/settings/risk#modal-daily-guard` | 当日の損益・取引回数が上限に達したら新規エントリーを止める条件を編集します。 | リスク・資金 |
 | 売買コストの想定 | `/settings/risk#modal-trading_cost` | 手数料・スリッページ・貸株料の想定を編集します（Paper・バックテスト・ラベルが共通で参照します）。 | リスク・資金 |
 | 初回セットアップ | `/setup` | 起動に必要な接続（Jev・kabuステーション／立花・Slack など）を順に設定します。必須の接続が未設定の間は他の画面からここへ案内されます。 | ブローカー・データ |
@@ -74,3 +76,4 @@
 | 1.0 | 2026-10-19 | 新規作成（管理ハブ `GET /admin` のナビ構造・画面一覧・保守ルール） | issue #793 |
 | 1.1 | 2026-10-19 | 管理ハブの MCP の説明に、起動・停止・再起動ができることを追記（画面は Settings の MCP カードのまま） | issue #795 |
 | 1.2 | 2026-10-20 | 管理ハブ（`/admin`）を Settings に統合: メニューは Settings 1本、`/settings` はページ一覧、詳細は `/settings/<page>`（運用／成績・検証／リスク・資金／ブローカー・データ／外部連携／ログ・エクスポート）。`/admin` と旧 `/settings#modal-<id>` は新ページへ転送。登録簿を `adminhub` から `settingspages` へ | issue #805 |
+| 1.3 | 2026-10-20 | Settings「リスク・資金」ページに「Paper の運用資金・建玉上限・1回の最大損失」カード（`modal-paper-risk`）を追加し、ページ説明を更新 | issue #804 |

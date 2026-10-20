@@ -185,6 +185,7 @@ func TestServices_StartSeedsPaperRiskDefaults(t *testing.T) {
 		papersettings.KeyInitialCapitalJPY:       "500000",
 		papersettings.KeyMaxPositionPerSymbolPct: "100",
 		papersettings.KeyMaxTotalExposurePct:     "100",
+		papersettings.KeyMaxTradeLossPct:         "1",
 		papersettings.SeededMarkerKey:            "true",
 	} {
 		if got, ok := storedRow(t, svc, key); !ok || got != want {

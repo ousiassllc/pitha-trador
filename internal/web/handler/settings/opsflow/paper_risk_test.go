@@ -38,6 +38,7 @@ func TestSaveOps_PaperRiskValuesAreEditable(t *testing.T) {
 		papersettings.KeyInitialCapitalJPY:        "500000",
 		papersettings.KeyMaxPositionPerSymbolPct:  "100",
 		papersettings.KeyMaxTotalExposurePct:      "100",
+		papersettings.KeyMaxTradeLossPct:          "1.5",
 		dailyguardsettings.KeyOperatingCapitalJPY: "500000",
 	} {
 		rec := opsRequest(engine, http.MethodPost, key, url.Values{"value": {raw}}, true)
@@ -50,7 +51,7 @@ func TestSaveOps_PaperRiskValuesAreEditable(t *testing.T) {
 	}
 
 	body := settingsBody(engine)
-	for _, want := range []string{`name="value"`, "Paper の運用資金（円）", "1 銘柄の上限", "総エクスポージャの上限", "日次ガード用の運用資金（円）", "再起動不要", "Live の値と動作はこの設定の影響を受けず"} {
+	for _, want := range []string{`name="value"`, "Paper の運用資金（円）", "1 銘柄の上限", "総エクスポージャの上限", "1 回の取引の最大損失", "日次ガード用の運用資金（円）", "再起動不要", "Live の値と動作はこの設定の影響を受けず"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Settings page lacks %q", want)
 		}
@@ -71,6 +72,10 @@ func TestSaveOps_PaperRiskRejectsOutOfRangeValues(t *testing.T) {
 		"exposure pct above 100": {papersettings.KeyMaxTotalExposurePct, "150"},
 		"negative exposure pct":  {papersettings.KeyMaxTotalExposurePct, "-1"},
 		"infinite capital":       {papersettings.KeyInitialCapitalJPY, "Inf"},
+		"trade loss below 0.1":   {papersettings.KeyMaxTradeLossPct, "0.09"},
+		"trade loss zero":        {papersettings.KeyMaxTradeLossPct, "0"},
+		"trade loss above 3":     {papersettings.KeyMaxTradeLossPct, "3.1"},
+		"trade loss negative":    {papersettings.KeyMaxTradeLossPct, "-0.5"},
 	} {
 		rec := opsRequest(engine, http.MethodPost, tc.key, url.Values{"value": {tc.raw}}, true)
 		if rec.Code != http.StatusBadRequest {
@@ -170,13 +175,28 @@ func TestPaperRisk_NoticeWhenOneLotExceedsTheCapital(t *testing.T) {
 	}
 }
 
-// issue #804: max_trade_loss_pct stays in risk.yaml; when it binds below the
-// exposure limits the panel says so instead of promising a lot that sizing skips.
+// issue #804: when the max loss per trade binds below the exposure limits
+// (here a saved 0.25%) the panel says so instead of promising a lot that
+// sizing skips; with the Paper initial 1.0% it does not bind at 5,000 yen.
 func TestPaperRisk_TradeLossLimitBindingIsShown(t *testing.T) {
-	engine, store := riskRouterWithLimits(&config.RiskLimits{InitialCapital: 500_000, MaxPositionPerSymbolPct: 100, MaxTotalExposurePct: 100, MaxTradeLossPct: 0.25, MaxDailyLossPct: 1})
-	_ = store
+	engine, store := riskRouterWithLimits(&config.RiskLimits{InitialCapital: 500_000, MaxPositionPerSymbolPct: 100, MaxTotalExposurePct: 100, MaxTradeLossPct: 1.0, MaxDailyLossPct: 1})
 	body := settingsBody(engine)
-	if line := paperLine(t, body, "lot-trade-loss"); !strings.Contains(line, "2,083 円") || !strings.Contains(line, "max_trade_loss_pct 0.25%") {
+	if line := paperLine(t, body, "lot-trade-loss"); !strings.Contains(line, "8,333 円") || !strings.Contains(line, "最大損失 1%") {
+		t.Errorf("trade-loss line = %s", line)
+	}
+	if hasPaperLine(body, "lot-trade-loss-binding") {
+		t.Errorf("the 1.0%% default must not bind below the 5,000 yen exposure ceiling: %s", body)
+	}
+
+	rec := opsRequest(engine, http.MethodPost, papersettings.KeyMaxTradeLossPct, url.Values{"value": {"0.25"}}, true)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if store.rows[papersettings.KeyMaxTradeLossPct] != "0.25" {
+		t.Fatalf("stored = %q", store.rows[papersettings.KeyMaxTradeLossPct])
+	}
+	body = rec.Body.String()
+	if line := paperLine(t, body, "lot-trade-loss"); !strings.Contains(line, "2,083 円") || !strings.Contains(line, "最大損失 0.25%") {
 		t.Errorf("trade-loss line = %s", line)
 	}
 	line := paperLine(t, body, "lot-trade-loss-binding")

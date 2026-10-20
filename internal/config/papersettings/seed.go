@@ -20,11 +20,11 @@ type SeedStore interface {
 }
 
 // SeedDefaults writes the Paper initial values (DefaultInitialCapitalJPY,
-// DefaultMaxPositionPerSymbolPct, DefaultMaxTotalExposurePct) once per
-// database, so an existing install whose on-disk config/risk.yaml still has
-// the old Paper values (30,000,000 円 / 2% / 20%) starts from the issue #804
-// decision too. While SeededMarkerKey is absent: if none of Keys has a stored
-// row it stores the three values, otherwise it stores nothing; either way it
+// DefaultMaxPositionPerSymbolPct, DefaultMaxTotalExposurePct,
+// DefaultMaxTradeLossPct) once per database, so an existing install whose
+// on-disk config/risk.yaml still has the old Paper values (30,000,000 円 / 2% /
+// 20% / 0.25%) starts from the issue #804 decision too. While SeededMarkerKey
+// is absent: if none of Keys has a stored row it stores the four values, otherwise it stores nothing; either way it
 // then stores the marker, so later calls - even after the owner reset the
 // rows to the yaml values - do nothing. It never overwrites a row.
 //
@@ -56,6 +56,7 @@ func SeedDefaults(ctx context.Context, store SeedStore, now time.Time) error {
 			{KeyInitialCapitalJPY, DefaultInitialCapitalJPY},
 			{KeyMaxPositionPerSymbolPct, DefaultMaxPositionPerSymbolPct},
 			{KeyMaxTotalExposurePct, DefaultMaxTotalExposurePct},
+			{KeyMaxTradeLossPct, DefaultMaxTradeLossPct},
 		}
 		for i, d := range defaults {
 			if err := store.Set(ctx, d.key, strconv.FormatFloat(d.value, 'f', -1, 64), now); err != nil {

@@ -31,16 +31,16 @@
 # 両キーとも必須（未設定は他の制限値と同様に起動エラー）。
 # paperは常に検証し、liveはliveセクションに値を1つでも書いた場合のみ検証する。
 
-# Paperの initial_capital / max_position_per_symbol_pct / max_total_exposure_pct は
+# Paperの initial_capital / max_position_per_symbol_pct / max_total_exposure_pct / max_trade_loss_pct は
 # Settings画面（設定 > リスク・資金）の保存値で上書きでき、ここの値は保存値がないときの
 # 既定になる（保存値は次のリスク判定から再起動なしで反映、Paper専用。issue #804）。
-# 初期値は 運用資金50万円・1銘柄100%・総エクスポージャ100%。Liveはこのファイルだけで決まる。
+# 初期値は 運用資金50万円・1銘柄100%・総エクスポージャ100%・1回の最大損失1.0%（Settingsでは0.1〜3.0）。Liveはこのファイルだけで決まる。
 paper:
   initial_capital: 500000
   max_position_per_symbol_pct: 100.0
   max_total_exposure_pct: 100.0
   max_daily_loss_pct: 1.0
-  max_trade_loss_pct: 0.25
+  max_trade_loss_pct: 1.0
   max_open_positions: 5
   max_same_direction_positions: 3
   market_adverse_return_5m_pct: 0.2

@@ -41,12 +41,13 @@ func paperOverlay(s *system.RuntimeSettingsRepository) func(context.Context, con
 	return papersettings.Overlay(s)
 }
 
-func storePaper(t *testing.T, s *system.RuntimeSettingsRepository, capital, symbolPct, totalPct string) {
+func storePaper(t *testing.T, s *system.RuntimeSettingsRepository, capital, symbolPct, totalPct, tradeLossPct string) {
 	t.Helper()
 	for key, value := range map[string]string{
 		papersettings.KeyInitialCapitalJPY:       capital,
 		papersettings.KeyMaxPositionPerSymbolPct: symbolPct,
 		papersettings.KeyMaxTotalExposurePct:     totalPct,
+		papersettings.KeyMaxTradeLossPct:         tradeLossPct,
 	} {
 		if err := s.Set(context.Background(), key, value, time.Now()); err != nil {
 			t.Fatalf("Set %s: %v", key, err)
@@ -68,17 +69,17 @@ func TestPaperOverlay_SavedValuesApplyToTheNextEvaluation(t *testing.T) {
 		t.Fatalf("PositionSize before saving = %d, want 0 (exposure over the yaml cap)", got)
 	}
 
-	storePaper(t, settings, "500000", "100", "100")
+	storePaper(t, settings, "500000", "100", "100", "1.0")
 
 	if passed, reason := e.Check(ctx, 1, domain.JevDirectionLong); !passed {
-		t.Fatalf("Check after saving 500000/100/100 = (false, %q), want passed", reason)
+		t.Fatalf("Check after saving 500000/100/100/1.0 = (false, %q), want passed", reason)
 	}
 	limits, err := e.EffectiveLimits(ctx)
 	if err != nil || limits.InitialCapital != 500_000 || limits.MaxPositionPerSymbolPct != 100 || limits.MaxTotalExposurePct != 100 {
 		t.Fatalf("EffectiveLimits = %+v, %v", limits, err)
 	}
-	if limits.MaxTradeLossPct != 0.25 || limits.MaxOpenPositions != 5 {
-		t.Fatalf("the overlay changed a limit other than the three Paper values: %+v", limits)
+	if limits.MaxTradeLossPct != 1.0 || limits.MaxOpenPositions != 5 {
+		t.Fatalf("the overlay changed a limit other than the four Paper values: %+v", limits)
 	}
 }
 
@@ -87,14 +88,15 @@ func TestPaperOverlay_SavedValuesApplyToTheNextEvaluation(t *testing.T) {
 func TestPaperOverlay_SizingUsesTheSavedCapital(t *testing.T) {
 	ctx := context.Background()
 	e, settings := overlayEngine(t, testLimits(), risk.ZeroPortfolioProvider{}, paperOverlay)
-	storePaper(t, settings, "500000", "100", "100")
+	storePaper(t, settings, "500000", "100", "100", "1.0")
 
-	// 500,000 x 0.25% = 1,250 yen of loss / (2,000 x 0.6% = 12 yen) = 104 shares -> one lot.
-	if got := e.PositionSize(ctx, 2000); got != 100 {
-		t.Fatalf("PositionSize = %d, want 100", got)
+	// 500,000 x 1.0% = 5,000 yen of loss / (2,000 x 0.6% = 12 yen) = 416 shares by
+	// trade loss, 500,000 x 100% / 2,000 = 250 shares by the capital -> two lots.
+	if got := e.PositionSize(ctx, 2000); got != 200 {
+		t.Fatalf("PositionSize = %d, want 200", got)
 	}
-	// 100 shares x 2,000 yen is 40% of 500,000 yen.
-	if got := e.AllowedPositionPct(ctx, 2000); got != 40 {
+	// 200 shares x 2,000 yen is 80% of 500,000 yen.
+	if got := e.AllowedPositionPct(ctx, 2000); got != 80 {
 		t.Fatalf("AllowedPositionPct = %v, want 40", got)
 	}
 }
@@ -109,6 +111,7 @@ func TestPaperOverlay_DamagedRowFallsBackToYamlAndStoreErrorFailsClosed(t *testi
 		papersettings.KeyInitialCapitalJPY:       "0",
 		papersettings.KeyMaxPositionPerSymbolPct: "150",
 		papersettings.KeyMaxTotalExposurePct:     `"abc"`,
+		papersettings.KeyMaxTradeLossPct:         "5",
 	} {
 		if err := settings.Set(ctx, key, bad, time.Now()); err != nil {
 			t.Fatalf("Set %s: %v", key, err)
@@ -143,7 +146,7 @@ func TestLiveEngine_IgnoresPaperRuntimeSettings(t *testing.T) {
 	live.MaxPositionPerSymbolPct = 1
 	live.MaxTotalExposurePct = 10
 	e, settings := overlayEngine(t, live, fakePortfolio{symbolExposurePct: 5, totalExposurePct: 5}, nil)
-	storePaper(t, settings, "500000", "100", "100")
+	storePaper(t, settings, "500000", "100", "100", "1.0")
 
 	// 5% held is over Live's 1% per-symbol cap even though the Paper row says 100%.
 	if passed, reason := e.Check(ctx, 1, domain.JevDirectionLong); passed || !strings.HasPrefix(reason, risk.ReasonMaxPositionPerSymbolPct) {
@@ -156,5 +159,51 @@ func TestLiveEngine_IgnoresPaperRuntimeSettings(t *testing.T) {
 	// Sizing: 10M x 0.25% / (2,000 x 0.6%) = 2,083 shares by trade loss, 10M x 1% / 2,000 = 50 shares by the per-symbol cap -> no lot.
 	if got := e.PositionSize(ctx, 2000); got != 0 {
 		t.Fatalf("PositionSize = %d, want 0 under Live's yaml limits", got)
+	}
+}
+
+// The same pin for the fourth key: Live's max_trade_loss_pct (tiny here, so no
+// lot fits) is not loosened by the Paper row, and the Paper Engine's own 1.0%
+// applies to it. Paper-side: the saved value changes the very next sizing.
+func TestLiveEngine_IgnoresPaperTradeLossSetting(t *testing.T) {
+	ctx := context.Background()
+	live := testLimits()
+	live.InitialCapital = 10_000_000
+	live.MaxPositionPerSymbolPct = 100
+	live.MaxTotalExposurePct = 100
+	live.MaxTradeLossPct = 0.0001
+	e, settings := overlayEngine(t, live, risk.ZeroPortfolioProvider{}, nil)
+	storePaper(t, settings, "500000", "100", "100", "3.0")
+
+	if got := e.PositionSize(ctx, 2000); got != 0 {
+		t.Fatalf("Live PositionSize = %d, want 0: its max_trade_loss_pct is the yaml 0.0001, not the Paper row", got)
+	}
+	if passed, reason := e.Check(ctx, 1, domain.JevDirectionLong); passed || !strings.HasPrefix(reason, risk.ReasonMaxTradeLossPct) {
+		t.Fatalf("Live Check = (%v, %q), want (false, prefix %q)", passed, reason, risk.ReasonMaxTradeLossPct)
+	}
+	if limits, err := e.EffectiveLimits(ctx); err != nil || limits != live {
+		t.Fatalf("Live EffectiveLimits = %+v, %v; want unchanged", limits, err)
+	}
+
+	// The Paper Engine with the same yaml reads the row: 3.0% of 500,000 = 15,000
+	// yen of loss allows 1,250 shares, the 500,000 yen capital 250 -> two lots.
+	paper, paperSettings := overlayEngine(t, live, risk.ZeroPortfolioProvider{}, paperOverlay)
+	storePaper(t, paperSettings, "500000", "100", "100", "3.0")
+	if got := paper.PositionSize(ctx, 2000); got != 200 {
+		t.Fatalf("Paper PositionSize = %d, want 200 under the saved 3.0%%", got)
+	}
+}
+
+// issue #804 acceptance: with 500000/100/100/1.0 saved, a 5,000-yen stock's
+// 100-share lot (500,000 yen) is not rejected by sizing.
+func TestPaperOverlay_FiveThousandYenLotIsNotRejectedBySizing(t *testing.T) {
+	ctx := context.Background()
+	e, settings := overlayEngine(t, testLimits(), risk.ZeroPortfolioProvider{}, paperOverlay)
+	storePaper(t, settings, "500000", "100", "100", "1.0")
+	if got := e.PositionSize(ctx, 5000); got != 100 {
+		t.Fatalf("PositionSize(5000) = %d, want 100", got)
+	}
+	if got := e.AllowedPositionPct(ctx, 5000); got != 100 {
+		t.Fatalf("AllowedPositionPct(5000) = %v, want 100", got)
 	}
 }

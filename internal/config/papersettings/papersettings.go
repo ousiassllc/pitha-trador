@@ -1,7 +1,8 @@
 // Package papersettings holds the Settings-screen values of the Paper Trading
-// operating capital and its two exposure limits (issue #804): the capital
-// every "percentage of account equity" limit and the position sizing are
-// measured against, max_position_per_symbol_pct and max_total_exposure_pct.
+// operating capital and its exposure limits (issue #804): the capital every
+// "percentage of account equity" limit and the position sizing are measured
+// against, max_position_per_symbol_pct, max_total_exposure_pct and
+// max_trade_loss_pct.
 // They live in runtime_settings (docs/architecture/er.md §runtime_settings)
 // under Keys and override config/risk.yaml's paper section key by key; a key
 // with no (valid) stored row keeps the risk.yaml value, so the file stays the
@@ -29,15 +30,28 @@ const (
 	KeyInitialCapitalJPY       = "risk.paper.initial_capital_jpy"
 	KeyMaxPositionPerSymbolPct = "risk.paper.max_position_per_symbol_pct"
 	KeyMaxTotalExposurePct     = "risk.paper.max_total_exposure_pct"
+	KeyMaxTradeLossPct         = "risk.paper.max_trade_loss_pct"
 )
 
 // The Paper initial values (issue #804): 500,000 JPY of capital that may all
-// go into one symbol and into total exposure. SeedDefaults stores them once
-// per database and the shipped config/risk.yaml carries the same numbers.
+// go into one symbol and into total exposure, with a 1.0% loss allowed per
+// trade (a 5,000 JPY stock's 100-share lot then fits sizing at the 0.6%
+// initial stop). SeedDefaults stores them once per database and the shipped
+// config/risk.yaml carries the same numbers.
 const (
 	DefaultInitialCapitalJPY       = 500_000.0
 	DefaultMaxPositionPerSymbolPct = 100.0
 	DefaultMaxTotalExposurePct     = 100.0
+	DefaultMaxTradeLossPct         = 1.0
+)
+
+// The accepted range of KeyMaxTradeLossPct (inclusive), in percent of the
+// capital. Exported so every writer of the key (the Settings screen, the MCP
+// write whitelist, settings_get/diff) applies exactly this check, via Validate
+// or Apply, instead of repeating the numbers.
+const (
+	MinTradeLossPct = 0.1
+	MaxTradeLossPct = 3.0
 )
 
 // MaxCapitalJPY is the largest capital Apply accepts (1 兆円), far above any
@@ -47,7 +61,7 @@ const MaxCapitalJPY = 1e12
 
 // Keys returns every runtime_settings key Apply accepts, in display order.
 func Keys() []string {
-	return []string{KeyInitialCapitalJPY, KeyMaxPositionPerSymbolPct, KeyMaxTotalExposurePct}
+	return []string{KeyInitialCapitalJPY, KeyMaxPositionPerSymbolPct, KeyMaxTotalExposurePct, KeyMaxTradeLossPct}
 }
 
 // IsKey reports whether key is one of Keys.
@@ -59,36 +73,57 @@ type Overrides struct {
 	InitialCapitalJPY       *float64
 	MaxPositionPerSymbolPct *float64
 	MaxTotalExposurePct     *float64
+	MaxTradeLossPct         *float64
+}
+
+// Validate checks n against key's range: the capital is above 0 and at most
+// MaxCapitalJPY, max_position_per_symbol_pct and max_total_exposure_pct are
+// above 0 and at most 100, max_trade_loss_pct is within MinTradeLossPct to
+// MaxTradeLossPct (inclusive). It is the single range check every writer of a
+// Paper key uses.
+func Validate(key string, n float64) error {
+	if math.IsNaN(n) || math.IsInf(n, 0) {
+		return fmt.Errorf("papersettings: %s=%v must be a finite number", key, n)
+	}
+	switch key {
+	case KeyInitialCapitalJPY:
+		if n <= 0 || n > MaxCapitalJPY {
+			return fmt.Errorf("papersettings: %s=%v: 運用資金は 0 円より大きく 1 兆円（1000000000000 円）以下で指定してください", key, n)
+		}
+	case KeyMaxPositionPerSymbolPct, KeyMaxTotalExposurePct:
+		if n <= 0 || n > 100 {
+			return fmt.Errorf("papersettings: %s=%v must be above 0 and at most 100", key, n)
+		}
+	case KeyMaxTradeLossPct:
+		if n < MinTradeLossPct || n > MaxTradeLossPct {
+			return fmt.Errorf("papersettings: %s=%v: 1 回の最大損失は %v〜%v（運用資金に対する %%）で指定してください", key, n, MinTradeLossPct, MaxTradeLossPct)
+		}
+	default:
+		return fmt.Errorf("papersettings: %q is not a Paper risk setting key", key)
+	}
+	return nil
 }
 
 // Apply writes jsonValue - a runtime_settings.value, a JSON number - into the
-// field named by key after checking its range: the capital is above 0 and at
-// most MaxCapitalJPY, each percentage is above 0 and at most 100. o is left
-// untouched on error.
+// field named by key after Validate. o is left untouched on error.
 func Apply(o *Overrides, key, jsonValue string) error {
 	var n float64
 	if err := json.Unmarshal([]byte(jsonValue), &n); err != nil {
 		return fmt.Errorf("papersettings: decode runtime setting %s=%q as a number: %w", key, jsonValue, err)
 	}
-	if math.IsNaN(n) || math.IsInf(n, 0) {
-		return fmt.Errorf("papersettings: runtime setting %s=%q must be a finite number", key, jsonValue)
+	if err := Validate(key, n); err != nil {
+		return err
 	}
 	var target **float64
 	switch key {
 	case KeyInitialCapitalJPY:
-		if n <= 0 || n > MaxCapitalJPY {
-			return fmt.Errorf("papersettings: runtime setting %s=%q: 運用資金は 0 円より大きく 1 兆円（1000000000000 円）以下で指定してください", key, jsonValue)
-		}
 		target = &o.InitialCapitalJPY
 	case KeyMaxPositionPerSymbolPct:
 		target = &o.MaxPositionPerSymbolPct
 	case KeyMaxTotalExposurePct:
 		target = &o.MaxTotalExposurePct
 	default:
-		return fmt.Errorf("papersettings: %q is not a Paper risk setting key", key)
-	}
-	if key != KeyInitialCapitalJPY && (n <= 0 || n > 100) {
-		return fmt.Errorf("papersettings: runtime setting %s=%q must be above 0 and at most 100", key, jsonValue)
+		target = &o.MaxTradeLossPct
 	}
 	*target = &n
 	return nil
@@ -105,6 +140,9 @@ func (o Overrides) Overlay(base config.RiskLimits) config.RiskLimits {
 	}
 	if o.MaxTotalExposurePct != nil {
 		base.MaxTotalExposurePct = *o.MaxTotalExposurePct
+	}
+	if o.MaxTradeLossPct != nil {
+		base.MaxTradeLossPct = *o.MaxTradeLossPct
 	}
 	return base
 }

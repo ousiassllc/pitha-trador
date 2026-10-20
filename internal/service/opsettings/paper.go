@@ -18,6 +18,7 @@ func (s *Service) paperLimitsBase() config.RiskLimits {
 		InitialCapital:          papersettings.DefaultInitialCapitalJPY,
 		MaxPositionPerSymbolPct: papersettings.DefaultMaxPositionPerSymbolPct,
 		MaxTotalExposurePct:     papersettings.DefaultMaxTotalExposurePct,
+		MaxTradeLossPct:         papersettings.DefaultMaxTradeLossPct,
 	}
 }
 
@@ -30,8 +31,10 @@ func (s *Service) paperDefaultText(key string) string {
 		return formatNumber(base.InitialCapital)
 	case papersettings.KeyMaxPositionPerSymbolPct:
 		return formatNumber(base.MaxPositionPerSymbolPct)
-	default:
+	case papersettings.KeyMaxTotalExposurePct:
 		return formatNumber(base.MaxTotalExposurePct)
+	default:
+		return formatNumber(base.MaxTradeLossPct)
 	}
 }
 

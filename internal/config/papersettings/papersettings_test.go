@@ -3,6 +3,7 @@ package papersettings_test
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -34,6 +35,15 @@ func TestApply_Ranges(t *testing.T) {
 		{papersettings.KeyMaxPositionPerSymbolPct, "0.01", true},
 		{papersettings.KeyMaxPositionPerSymbolPct, "0", false},
 		{papersettings.KeyMaxPositionPerSymbolPct, "100.01", false},
+		{papersettings.KeyMaxTradeLossPct, "1", true},
+		{papersettings.KeyMaxTradeLossPct, "0.1", true},
+		{papersettings.KeyMaxTradeLossPct, "3", true},
+		{papersettings.KeyMaxTradeLossPct, "3.0", true},
+		{papersettings.KeyMaxTradeLossPct, "0.09", false},
+		{papersettings.KeyMaxTradeLossPct, "0", false},
+		{papersettings.KeyMaxTradeLossPct, "3.01", false},
+		{papersettings.KeyMaxTradeLossPct, "-1", false},
+		{papersettings.KeyMaxTradeLossPct, `"1"`, false},
 		{papersettings.KeyMaxTotalExposurePct, "100", true},
 		{papersettings.KeyMaxTotalExposurePct, "0", false},
 		{papersettings.KeyMaxTotalExposurePct, "-5", false},
@@ -94,5 +104,47 @@ func TestOverlay_IsTheSameReadAsEffective(t *testing.T) {
 	got, err := papersettings.Overlay(store)(context.Background(), config.RiskLimits{InitialCapital: 1})
 	if err != nil || got.InitialCapital != 123456 {
 		t.Errorf("Overlay = %+v, %v", got, err)
+	}
+}
+
+// Validate is the one range check shared by every writer of a Paper key (the
+// Settings screen, the later MCP write whitelist and settings_get/diff): it
+// takes the bounds from the exported constants, not from copies of the numbers.
+func TestValidate_UsesTheExportedTradeLossRange(t *testing.T) {
+	if err := papersettings.Validate(papersettings.KeyMaxTradeLossPct, papersettings.MinTradeLossPct); err != nil {
+		t.Errorf("the lower bound is rejected: %v", err)
+	}
+	if err := papersettings.Validate(papersettings.KeyMaxTradeLossPct, papersettings.MaxTradeLossPct); err != nil {
+		t.Errorf("the upper bound is rejected: %v", err)
+	}
+	if err := papersettings.Validate(papersettings.KeyMaxTradeLossPct, math.Nextafter(papersettings.MinTradeLossPct, 0)); err == nil {
+		t.Error("just below the lower bound is accepted")
+	}
+	if err := papersettings.Validate(papersettings.KeyMaxTradeLossPct, math.Nextafter(papersettings.MaxTradeLossPct, 100)); err == nil {
+		t.Error("just above the upper bound is accepted")
+	}
+	if err := papersettings.Validate(papersettings.KeyMaxTradeLossPct, math.NaN()); err == nil {
+		t.Error("NaN is accepted")
+	}
+	if err := papersettings.Validate("risk.paper.unknown", 1); err == nil {
+		t.Error("an unknown key is accepted")
+	}
+	if got := papersettings.Keys(); len(got) != 4 || got[3] != papersettings.KeyMaxTradeLossPct {
+		t.Errorf("Keys = %v, want the four Paper keys ending in max_trade_loss_pct", got)
+	}
+	if papersettings.DefaultMaxTradeLossPct < papersettings.MinTradeLossPct || papersettings.DefaultMaxTradeLossPct > papersettings.MaxTradeLossPct {
+		t.Errorf("the default %v is outside its own range", papersettings.DefaultMaxTradeLossPct)
+	}
+}
+
+func TestEffective_TradeLossOverlay(t *testing.T) {
+	base := config.RiskLimits{InitialCapital: 500_000, MaxTradeLossPct: 1}
+	got, err := papersettings.Effective(context.Background(), mapStore{rows: map[string]string{papersettings.KeyMaxTradeLossPct: "2.5"}}, base)
+	if err != nil || got.MaxTradeLossPct != 2.5 || got.InitialCapital != 500_000 {
+		t.Errorf("Effective = %+v, %v", got, err)
+	}
+	got, err = papersettings.Effective(context.Background(), mapStore{rows: map[string]string{papersettings.KeyMaxTradeLossPct: "5"}}, base)
+	if err != nil || got != base {
+		t.Errorf("an out-of-range row must be ignored: %+v, %v", got, err)
 	}
 }

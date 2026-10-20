@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/paperbootstrap"
 )
 
 // Version identifies the legacy threshold-evaluation logic (Jev's confidence
@@ -175,8 +176,9 @@ type Engine struct {
 	thresholds Thresholds
 	risk       RiskChecker
 	signals    *trading.SignalRepository
-	policy     PolicySource // optional, see WithPolicySource
-	meta       *metaWiring  // optional, see WithMetaModel
+	policy     PolicySource          // optional, see WithPolicySource
+	meta       *metaWiring           // optional, see WithMetaModel
+	bootstrap  *paperbootstrap.Entry // optional, see WithPaperBootstrap
 	now        func() time.Time
 }
 
@@ -270,21 +272,28 @@ func (e *Engine) decide(ctx context.Context, in Input, th Thresholds, meta *meta
 // decision and logged next to what the legacy confidence threshold would have
 // done ("policy: meta-label vs legacy entry decision"). Every call emits one
 // structured JSON "policy: trade signal decided" log line, the §5.1 "Signal
-// count（生成シグナル数）" source (see Decide).
+// count（生成シグナル数）" source (see Decide). With WithPaperBootstrap (Paper,
+// switch on, no active model) the entry rule is the legacy threshold rule and
+// the signal is marked policy-vb (issue #798, bootstrap.go).
 func (e *Engine) Evaluate(ctx context.Context, in Input) (domain.TradeSignal, error) {
 	th, policyVersion, err := e.currentThresholds(ctx)
 	if err != nil {
 		return domain.TradeSignal{}, err
 	}
 	meta := e.loadMeta(ctx)
-	sig, detail := e.decide(ctx, in, th, meta, policyVersion)
-	if err := e.recordPrediction(ctx, in, meta, detail.verdict); err != nil {
+	entry, version, bootstrap := e.entryRule(ctx, meta, policyVersion)
+	sig, detail := e.decide(ctx, in, th, entry, version)
+	if err := e.recordPrediction(ctx, in, entry, detail.verdict); err != nil {
 		return domain.TradeSignal{}, err
 	}
-	e.logComparison(in, th, meta, detail)
 	rejectReason := ""
 	if sig.RejectReason != nil {
 		rejectReason = *sig.RejectReason
+	}
+	if bootstrap {
+		paperbootstrap.LogDecided(in.InstrumentID, in.Symbol, sig.Direction, rejectReason, version)
+	} else {
+		e.logComparison(in, th, meta, detail)
 	}
 	slog.Info("policy: trade signal decided",
 		"instrument_id", in.InstrumentID, "symbol", in.Symbol, "direction", sig.Direction,

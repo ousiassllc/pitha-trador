@@ -18,12 +18,13 @@ import (
 func TestPaperSettings_DefaultsAreTheRiskYamlPaperValues(t *testing.T) {
 	ctx := context.Background()
 	svc := newService(&fakeStore{rows: map[string]string{}}).
-		WithRiskReference(config.RiskLimits{InitialCapital: 30_000_000, MaxPositionPerSymbolPct: 2, MaxTotalExposurePct: 20, MaxDailyLossPct: 1})
+		WithRiskReference(config.RiskLimits{InitialCapital: 30_000_000, MaxPositionPerSymbolPct: 2, MaxTotalExposurePct: 20, MaxTradeLossPct: 0.25, MaxDailyLossPct: 1})
 
 	for key, want := range map[string]string{
 		papersettings.KeyInitialCapitalJPY:       "30000000",
 		papersettings.KeyMaxPositionPerSymbolPct: "2",
 		papersettings.KeyMaxTotalExposurePct:     "20",
+		papersettings.KeyMaxTradeLossPct:         "0.25",
 	} {
 		v, err := svc.Get(ctx, key)
 		if err != nil || v.Current != want || v.Default != want || v.Overridden {
@@ -35,8 +36,8 @@ func TestPaperSettings_DefaultsAreTheRiskYamlPaperValues(t *testing.T) {
 func TestPaperSettings_WithoutRiskYamlDefaultToTheIssue804Values(t *testing.T) {
 	svc := newService(&fakeStore{rows: map[string]string{}})
 	limits, err := svc.PaperLimits(context.Background())
-	if err != nil || limits.InitialCapital != 500_000 || limits.MaxPositionPerSymbolPct != 100 || limits.MaxTotalExposurePct != 100 {
-		t.Fatalf("PaperLimits = %+v, %v; want 500000/100/100", limits, err)
+	if err != nil || limits.InitialCapital != 500_000 || limits.MaxPositionPerSymbolPct != 100 || limits.MaxTotalExposurePct != 100 || limits.MaxTradeLossPct != 1 {
+		t.Fatalf("PaperLimits = %+v, %v; want 500000/100/100/1.0", limits, err)
 	}
 }
 
@@ -63,6 +64,9 @@ func TestPaperSettings_SaveValidatesAndStoresThenResetRestoresYaml(t *testing.T)
 		{papersettings.KeyMaxPositionPerSymbolPct, "100.1"},
 		{papersettings.KeyMaxTotalExposurePct, "101"},
 		{papersettings.KeyMaxTotalExposurePct, "abc"},
+		{papersettings.KeyMaxTradeLossPct, "0.09"},
+		{papersettings.KeyMaxTradeLossPct, "3.01"},
+		{papersettings.KeyMaxTradeLossPct, "0"},
 	} {
 		var invalid *opsettings.InvalidValueError
 		if err := svc.Save(ctx, tc.key, tc.raw); !errors.As(err, &invalid) {
@@ -114,4 +118,19 @@ func (f *fakeStore) Delete(_ context.Context, key string) error {
 
 func newService(store *fakeStore) *opsettings.Service {
 	return opsettings.New(store, config.StrategyConfig{}, "/data/logs")
+}
+
+// The accepted range of max_trade_loss_pct is inclusive at both ends.
+func TestPaperSettings_TradeLossRangeIsInclusive(t *testing.T) {
+	ctx := context.Background()
+	store := &fakeStore{rows: map[string]string{}}
+	svc := newService(store)
+	for _, raw := range []string{"0.1", "3", "3.0", "1.5"} {
+		if err := svc.Save(ctx, papersettings.KeyMaxTradeLossPct, raw); err != nil {
+			t.Errorf("Save(%q) = %v, want accepted", raw, err)
+		}
+	}
+	if limits, err := svc.PaperLimits(ctx); err != nil || limits.MaxTradeLossPct != 1.5 {
+		t.Errorf("PaperLimits = %+v, %v; want the last saved 1.5", limits, err)
+	}
 }

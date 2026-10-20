@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -166,8 +167,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 		}
 		return nil
 	case papersettings.IsKey(key):
-		// Each value stands alone (capital > 0, percentages in (0, 100]), so
-		// only its own range is checked.
+		// Each value stands alone, so only its own range (papersettings.Validate)
+		// is checked.
 		var stored papersettings.Overrides
 		if err := papersettings.Apply(&stored, key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
@@ -201,6 +202,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil
+	case paperbootstrapsettings.IsKey(key):
+		return s.validatePaperBootstrap(encoded)
 	case strings.HasPrefix(key, "broker.tachibana.screen."):
 		return s.validateTachibanaSource(ctx, key, encoded)
 	}

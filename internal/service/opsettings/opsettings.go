@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -73,7 +74,9 @@ type Service struct {
 	// paperBase is the Paper limits of config/risk.yaml (WithRiskReference):
 	// what applies to the papersettings keys while nothing is stored.
 	paperBase *config.RiskLimits
-	now       func() time.Time
+	// mode is set by WithTradingMode; the Paper bootstrap switch needs Paper.
+	mode metalabelsettings.Mode
+	now  func() time.Time
 }
 
 // New returns a Service over store with strategy's policy / fast_screener
@@ -104,6 +107,7 @@ func Keys() []string {
 	keys = append(keys, metalabelsettings.Keys()...)
 	keys = append(keys, regimesettings.Keys()...)
 	keys = append(keys, config.BrokerSettingKeys()...)
+	keys = append(keys, paperbootstrapsettings.Keys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
 
@@ -140,7 +144,7 @@ func kindOf(key string) kind {
 		return kindLog
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key):
+	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key):
 		return kindInteger
 	default:
 		return kindNumber
@@ -179,6 +183,9 @@ func (s *Service) Get(ctx context.Context, key string) (Value, error) {
 	}
 	if key == metalabelsettings.KeyLLMCutoff {
 		v.Warning = s.llmCutoffWarning(ctx)
+	}
+	if paperbootstrapsettings.IsKey(key) {
+		v.Warning = s.paperBootstrapWarning(v.Current)
 	}
 	return v, nil
 }
@@ -275,6 +282,8 @@ func (s *Service) defaultText(key string) string {
 	case metalabelsettings.IsKey(key):
 		text, _ := metalabelsettings.Default().Text(key)
 		return text
+	case paperbootstrapsettings.IsKey(key):
+		return paperbootstrapsettings.Text(paperbootstrapsettings.Default)
 	case regimesettings.IsKey(key):
 		text, _ := regimesettings.Default().Text(key)
 		return text
