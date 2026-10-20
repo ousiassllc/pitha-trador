@@ -61,6 +61,7 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 	for _, tool := range eightTools {
 		srv.call(t, tool, period)
 	}
+	srv.call(t, healthToday, map[string]any{})
 
 	db, err := srv.DB()
 	if err != nil {
@@ -83,11 +84,17 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 		t.Fatalf("positions changed: %d, %v", n, err)
 	}
 
+	// runtime_settings is read by health_today through one statement (a fixed
+	// key list, query.ReadableSettingKeys); any other mention stays forbidden.
+	const settingRead = "SELECT value FROM runtime_settings WHERE key = ?"
 	forbidden := []string{"wal_checkpoint", "journal_mode", "schema_migrations", "golang-migrate", "INSERT", "UPDATE ",
 		"DELETE", "CREATE", "DROP", "ALTER", "ATTACH", "VACUUM", "secrets", "runtime_settings", "raw_data_json",
 		"state_json", "response_json", "params_json", "features_json", "payload_json", "last_error", "detail_json",
 		"encrypted_value", "current_price", "unrealized_pnl", "slippage_bps", "limit_price"}
 	for _, stmt := range counter.StatementLog() {
+		if strings.TrimSpace(stmt) == settingRead {
+			continue
+		}
 		// jobs.last_error is read only through a bounded head (issue #801):
 		// collection_status parses a fixed code token out of it in-process.
 		// Any other mention of the column is still forbidden.

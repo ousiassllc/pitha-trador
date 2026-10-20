@@ -44,7 +44,7 @@
 | `expectancy_return_pct` | 各行の `realized_pnl / (entry_price * quantity) * 100` の平均。建値が 0 以下の行はリターン 0 として数える（`internal/service/insight.Aggregate` と同じ）。0 件なら `null` |
 | `profit_factor` | 勝ちの合計円 ÷ 負けの合計円の絶対値。負けが 0 件、または対象 0 件なら `null` |
 | `max_drawdown_jpy` | `closed_at` 昇順、同着は `id` 昇順で `realized_pnl` を累積した曲線の、ピークから谷までの最大下落（円）。下落が無ければ 0。0 件なら 0 |
-| `capital_jpy` | `config/risk.yaml` の `paper.initial_capital`。未設定時は `config.DefaultPaperInitialCapital`（500,000）。アプリと同じ yaml 解決順で読む。Live の値は使わない。Settings で保存したPaperの運用資金（`runtime_settings` の `risk.paper.initial_capital_jpy`、issue #804）には追従しない（本 MCP は `runtime_settings` を読まない。§4）。アプリの資金比と異なる場合は、`capital_jpy` を見て読み分ける |
+| `capital_jpy` | `config/risk.yaml` の `paper.initial_capital`。未設定時は `config.DefaultPaperInitialCapital`（500,000）。アプリと同じ yaml 解決順で読む。Live の値は使わない。Settings で保存したPaperの運用資金（`runtime_settings` の `risk.paper.initial_capital_jpy`、issue #804）には追従しない（この値の読み取りは §4 の `health_today` 用固定キーに含まれない）。アプリの資金比と異なる場合は、`capital_jpy` を見て読み分ける |
 | `max_drawdown_capital_ratio` | `max_drawdown_jpy / capital_jpy`。`capital_jpy` が 0 以下、または yaml を読めないときは両方 `null`（円建てのドローダウンは返す） |
 
 `internal/service/insight.Performance.MaxDrawdownPct` はリターン（%）の曲線であり、ここでいう資金比ではない。実装は円の累積を別に計算する。
@@ -155,6 +155,41 @@
 
 返さない: `jobs.payload_json`、`jobs.last_error` の本文、`daily_bar_runs.error`、`daily_bars` の価格・出来高、スキップ理由の自由文。
 
+### 3.9 `health_today`
+
+引数: なし（`from` / `to` を含む引数は `invalid_argument`）。「今日」は呼び出し時刻の JST の暦日で、取引日かどうかは `marketcalendar.TSE.IsTradingDay` で判定する。1 回の呼び出しで次のすべてを返す。戻り値は固定コード・真偽・件数・時刻だけで、自由文・板・価格・秘密は含まない。
+
+| フィールド | 定義 |
+|------------|------|
+| `date` / `trading_day` | 今日（JST、`YYYY-MM-DD`）と、東証立会日か |
+| `needs_attention` | `attention_codes` が空でなければ `true` |
+| `attention_codes[]` | 要対応の固定コード（下表）。無ければ `[]`。並びは下表の順 |
+| `paper_trades` | `opened_count`（`positions.opened_at` が今日の件数）、`closed_count`（`closed_at` が今日の件数）。価格は返さない |
+| `meta_model` | `adopted`（`metalabel_models.status='active'` が 1 件以上）、`version`・`trained_at`（採用中で最新のもの。無ければ `null`） |
+| `bootstrap` | `enabled`（`runtime_settings` の `paper.bootstrap_entry_enabled`。無い・解釈できない値は `false`。#798）、`effective`（`enabled` かつ採用中モデルが無い。ブートストラップが働く条件。本 MCP は Paper の DB だけを読み、アプリは Live では設定に関わらず使わない）、`signals_today`（今日のシグナルのうち `policy_version` がブートストラップ版のもの） |
+| `market_data` | `kabu_login`（`ok` / `not_logged_in` / `unknown` / `not_watched`）、`market_data`（`running` / `idle` / `not_watched`）、`app_running`（アプリの検知の最終確認が 2 分以内か）、`alerts[]`（`collection_status.alerts[]` と同じ値。`code` と `since`）。`not_watched` は検知が見ない時間（非取引日、08:45〜15:30 の外、`market_data` は立会外・昼休み）。`unknown` は見る時間なのにアプリが止まっていて判断できない状態 |
+| `missing_session_dates[]` | 今日より前の 7 日間（今日の引け後は今日も含む）の東証立会日のうち `market_snapshots` が 0 件の日付。`collection_status.missing_session_dates` と同じ判定 |
+| `daily_guard` | `halted`、`reason`（`daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades`。`halted` でなければ `null`）、`halted_at`（UTC RFC3339）。アプリの `risk.Engine.DailyHalt` と同じく、今日の取引日の停止だけを、その規則が Settings でまだ有効なときに限って返す。停止メッセージの文は返さない |
+| `kill_switch` | `active`（解除されていない `kill_switch_events` がある、または `system.killed` が真）、`unresolved_count`、`since`（未解除で最新の `triggered_at`）、`reasons[]`（未解除の `reason` コード。§3.7 の CHECK 値）、`flag_set`（`system.killed`）。`risk.Engine.State` と同じ判定 |
+| `retrain` | `skipped`（最新の `metalabel_retrain_skips` が 24 時間以内で、それ以後に学習されたモデルが無い）、`latest_skipped_at`、`reason_code`（§3.5 の固定コード。未知は `other`）。見送りが一度も無ければ後ろ 2 つは `null` |
+
+要対応コード（`query.Attention*`。`kabu_not_logged_in` と `market_data_idle` はアプリ内警告（#802）と同じコードで、再導出せず `health_alerts` を読む）:
+
+| コード | 条件 |
+|--------|------|
+| `no_paper_trades_today` | 取引日で、前場の引け（11:30 JST）以後に、今日開いた Paper ポジションが 0 件 |
+| `no_active_model` | 採用中のメタモデルが無い（日によらない） |
+| `kabu_not_logged_in` | `market_data.alerts[]` に同名の警告がある（取引日の 08:45〜15:30 のみ） |
+| `market_data_idle` | `market_data.alerts[]` に同名の警告がある（立会中のみ） |
+| `missing_session` | `missing_session_dates[]` が空でない（取引日・非取引日とも直近 7 日の取引日を見る） |
+| `daily_guard_halted` | `daily_guard.halted` |
+| `kill_switch_active` | `kill_switch.active`（日によらない） |
+| `retrain_skipped` | `retrain.skipped` |
+
+非取引日（土日・祝日）は、取引数・kabu・market-data の判定を行わない（コードを出さない）。モデル・Kill Switch・日次停止・再学習の見送りは状態そのものなので、日によらず出す。
+
+`runtime_settings` は固定キー（日次ガードの閾値キー、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`）だけを読み取りで読む（§4）。
+
 ## 4. 出さないもの
 
 ツールの戻り値はホワイトリスト方式とする。テーブルの `SELECT *` は禁止する。下の表は、列が存在してもツールに載せないものの一覧である（マイグレーション `000001`〜`000039` で確認した名前）。
@@ -173,7 +208,7 @@
 | `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。本 MCP は読まない |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。`health_today`（§3.9）が読む固定キー（日次ガードの閾値、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`）以外は読まない。固定キーでも値そのものは返さず、解釈した真偽・コード・件数だけを返す |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 
 Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jpy`）は取引の結果として返す。板やスナップショットの時価列とは別である。
@@ -188,6 +223,7 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
+- `health_today` は、要対応コード 8 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
 - 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）
 - Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
 
@@ -200,3 +236,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.2 | 2026-10-18 | トランスポートの要確認を、Streamable HTTP（POST のみ・JSON 応答）で実装した旨の回答に改めた。ツール・上限・ホワイトリストは変更なし | issue #783 の実装 |
 | 1.3 | 2026-10-20 | §3.8 `collection_status` に `alerts[]`（`code`・`since`。`kabu_not_logged_in` / `market_data_idle`）を追加。マイグレーション `000039` の `health_alerts` / `health_alert_checks` を読む | issue #802 |
 | 1.4 | 2026-10-20 | §3.1 `capital_jpy` の既定を 500,000 に更新し、Settings で保存した Paper の運用資金（`runtime_settings`）には追従しない旨（`runtime_settings` を読まない方針を維持）を明記 | issue #804 |
+| 1.5 | 2026-10-20 | §3.9 `health_today` を追加（今日の Paper 取引数・メタモデル・ブートストラップ・kabu/market-data・欠損・日次ガード・Kill Switch・再学習の見送りと、要対応フラグ `needs_attention` / 固定コード `attention_codes[]`）。§4 の `runtime_settings` を、固定キーのみ読み取りで読む記述に改めた | issue #808 |

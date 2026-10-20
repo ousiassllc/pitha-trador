@@ -7,7 +7,7 @@
 - エントリーポイントは `cmd/paper-results-mcp`。Wails の `cmd/desktop` にも `cmd/server` の Gin にもルートを足さない。根拠: デスクトップのページはセッション Cookie と loopback の AssetServer が前提で、リモートの Grok Bot とは認証が別である（`docs/api/endpoints.md` §1）
 - アプリ本体と同時に動いてよい。DB はアプリが単一ライター、本プロセスは `mode=ro` の読み手（`docs/architecture/er.md` の同時実行は WAL。本プロセスは WAL のモード変更もチェックポイントもしない）
 - #347 の kabu ステータス MCP とは別バイナリ・別設定ファイル・別ポート（既定 `127.0.0.1:48110`。Tailscale で直接待つときは tailnet の IP）。あちらが main に入ったあともパッケージを共有しない。経路の実装（Tailscale も Cloudflare も含む）はこのプロセスに埋め込まない
-- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、8 つのツールだけを表で持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
+- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、9 つのツールだけを表で持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
 
 ## 2. パッケージ
 
@@ -24,8 +24,10 @@
 | DB を `mode=ro` + `PRAGMA query_only=ON` で開く（`sqlitedb.Open` は呼ばない） | `internal/service/paperresultsmcp/readdb` |
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
+| `health_today` の判定のテスト（要対応コードの入り切り・非取引日・状態の区分。`query.HealthToday` を直接呼ぶ。行数制限のため `mcptests` と分ける） | `internal/service/paperresultsmcp/healthtests` |
 | 東証立会日 | 既存の `internal/service/marketcalendar` |
-| 資金の分母 | `cmd/paper-results-mcp` の `paperInitialCapital`（アプリと同じ risk yaml 解決順。Paper の `initial_capital` のみ。Settings の保存値（`runtime_settings`）には追従しない: 読み取り専用 DB の許可リストに無いため）。DB は `bootstrap.DefaultDBPath` と `PITHA_DB_PATH` |
+| 資金の分母 | `cmd/paper-results-mcp` の `paperInitialCapital`（アプリと同じ risk yaml 解決順。Paper の `initial_capital` のみ。Settings の保存値（`runtime_settings`）には追従しない: `runtime_settings` は `health_today` が読む固定キーしか読まない）。DB は `bootstrap.DefaultDBPath` と `PITHA_DB_PATH` |
+| 今日の健康診断（`health_today`、issue #808） | ツール定義は `internal/service/paperresultsmcp/health_today_tool.go`、SQL と要対応コードは `internal/service/paperresultsmcp/query/health_today*.go`。市況データの警告は `query.HealthAlerts`（#802）、欠損セッションは `collection_status` と同じ関数、東証立会日は `marketcalendar.TSE` を再利用し、再導出しない。`runtime_settings` は固定キーの許可リスト（`query.ReadableSettingKeys`）だけを読む |
 
 `internal/web` からは import しない（depguard の `web-no-repository` を迂回する読み取り画面を増やさない）。
 
@@ -90,3 +92,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.4 | 2026-10-19 | §2 に子プロセス管理（`proc`）とアプリ本体への配線を追加。§4.1 の状態に 起動中・エラーを足し、§4.2 を、画面からの起動・停止・再起動、アプリ起動時の自動起動、アプリ終了時の停止、異常終了時の孤児防止（Job Object）、`--supervise` 後の復帰、子プロセスに渡すもの（キーは設定ファイル経由のみ）に書き換え | issue #795 |
 | 1.5 | 2026-10-19 | §4.2 に、tailnet アドレスの割り当て待ち（最大 90 秒）、Windows の `CREATE_SUSPENDED` + Job Object、アプリの外で起動された MCP の扱いを追記（レビュー指摘の反映） | issue #795 |
 | 1.6 | 2026-10-20 | 資金の分母の説明に、Settings の保存値（`runtime_settings`）には追従しない旨を追記 | issue #804 |
+| 1.7 | 2026-10-20 | §2 に `health_today` の置き場所を追加し、ツール数を 9 に更新。資金の分母の説明を、`runtime_settings` は固定キーだけを読む旨に合わせた | issue #808 |
