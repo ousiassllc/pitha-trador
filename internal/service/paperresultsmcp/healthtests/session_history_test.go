@@ -48,10 +48,10 @@ func TestMissingSessionSeparatesInsufficientHistoryFromRealGap(t *testing.T) {
 			_, w := testkit.HealthyDay(t, afternoon)
 			tt.setup(t, w)
 			h := healthAt(t, w, afternoon)
-			if !slices.Equal(h.MissingSessionDates, tt.wantMissing) && len(h.MissingSessionDates)+len(tt.wantMissing) > 0 {
+			if !slices.Equal(h.MissingSessionDates, tt.wantMissing) {
 				t.Errorf("missing_session_dates = %v, want %v", h.MissingSessionDates, tt.wantMissing)
 			}
-			if !slices.Equal(h.InsufficientHistoryDates, tt.wantNoData) && len(h.InsufficientHistoryDates)+len(tt.wantNoData) > 0 {
+			if !slices.Equal(h.InsufficientHistoryDates, tt.wantNoData) {
 				t.Errorf("insufficient_history_dates = %v, want %v", h.InsufficientHistoryDates, tt.wantNoData)
 			}
 			if got := slices.Contains(h.AttentionCodes, query.AttentionMissingSession); got != tt.wantAttended {

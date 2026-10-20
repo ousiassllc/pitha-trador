@@ -20,7 +20,9 @@ const (
 	AttentionKabuNotLoggedIn = AlertKabuNotLoggedIn
 	// AttentionMarketDataIdle: the #802 alert of the same name is active.
 	AttentionMarketDataIdle = AlertMarketDataIdle
-	// AttentionMissingSession: a recent trading session has no snapshot.
+	// AttentionMissingSession: a recent trading session has no snapshot although
+	// an earlier one does (a real gap). Sessions with no earlier snapshot are not
+	// a warning; they are listed in insufficient_history_dates (#814).
 	AttentionMissingSession = "missing_session"
 	// AttentionDailyGuardHalted: today's daily entry halt is in force.
 	AttentionDailyGuardHalted = "daily_guard_halted"
