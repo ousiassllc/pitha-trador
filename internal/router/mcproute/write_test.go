@@ -91,12 +91,18 @@ func TestWriteToggleOnTheSettingsPanel(t *testing.T) {
 	}
 }
 
+// A failed toggle (for example its audit row could not be written, so the
+// switch change was rolled back, issue #818) answers 500 with the "not saved"
+// toast that the page routes into #toast-region.
 func TestWriteToggleFailureIsReported(t *testing.T) {
 	g := &fakeGate{enabled: true, setErr: errors.New("disk full")}
 	a := newAppWithGate(t, g)
 	rec := a.post("/settings/mcp/write", url.Values{}, true)
 	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "disk full") {
 		t.Fatalf("failure = %d %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `data-testid="toast"`) || !strings.Contains(rec.Body.String(), "設定変更の許可を保存できませんでした") {
+		t.Errorf("failure has no 'not saved' toast: %s", rec.Body.String())
 	}
 	if !g.enabled {
 		t.Error("a failed save changed the switch")
