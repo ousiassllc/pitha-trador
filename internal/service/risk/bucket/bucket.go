@@ -6,6 +6,9 @@
 // so the two keep the same reasons and the same boundary. It is separate from
 // package risk only to keep that directory within linterly's size limit.
 //
+// What a bucket holds is valued at the market, with the same Notional the
+// exposure limits use, so the two never disagree on a position's value.
+//
 // Only entries are checked; an Exit is never held back by a budget.
 package bucket
 
@@ -26,6 +29,18 @@ const (
 	// ReasonBudgetExceeded: what the bucket holds plus this entry would exceed its budget.
 	ReasonBudgetExceeded = "bucket_budget_exceeded"
 )
+
+// Notional is an open position's current market value in yen: quantity at the
+// latest mark, or at the entry price until the first mark arrives (currentPrice
+// <= 0). The live exposure limits (repoportfolio), the backtest's
+// (simrisk) and the stock bucket's holdings all measure with it.
+func Notional(quantity int64, entryPrice, currentPrice float64) float64 {
+	price := currentPrice
+	if price <= 0 {
+		price = entryPrice
+	}
+	return float64(quantity) * price
+}
 
 // Disabled reports whether a bucket with budgetJPY takes no new entry.
 func Disabled(budgetJPY float64) bool { return budgetJPY <= 0 }
@@ -67,8 +82,16 @@ func (p *Provider) StockBudgetJPY(ctx context.Context, capitalJPY float64) (floa
 	return budgets.StockJPY, nil
 }
 
-// StockHeldJPY is what the stock bucket holds now: the sum of entry_price *
-// quantity of its open positions.
+// StockHeldJPY is what the stock bucket holds now: the market value
+// (Notional) of its open positions.
 func (p *Provider) StockHeldJPY(ctx context.Context) (float64, error) {
-	return p.positions.OpenEntryNotionalByBucket(ctx, domain.BucketStock)
+	open, err := p.positions.ListOpenByBucket(ctx, domain.BucketStock)
+	if err != nil {
+		return 0, err
+	}
+	var held float64
+	for _, pos := range open {
+		held += Notional(pos.Quantity, pos.EntryPrice, pos.CurrentPrice)
+	}
+	return held, nil
 }

@@ -201,7 +201,7 @@
 | `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
-| `risk.bucket.stock.budget_jpy` | 円 | Paper の株の予算枠（issue #824）。保有中の株の建玉（取得価格×株数の合計）に今回のエントリー額を足してこの額を超えると新規エントリーを見送る。0 は株の新規エントリーを止める | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
+| `risk.bucket.stock.budget_jpy` | 円 | Paper の株の予算枠（issue #824）。保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足してこの額を超えると新規エントリーを見送る。0 は株の新規エントリーを止める | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.bucket.bond_etf.budget_jpy` | 円 | Paper の債券ETFの予算枠（issue #824）。0 はこの枠を使わない | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
 | `risk.daily_loss_limit_pct` | % | 日次損失上限（運用資金比） | 0 以上 100 以下（0 は使わない） |

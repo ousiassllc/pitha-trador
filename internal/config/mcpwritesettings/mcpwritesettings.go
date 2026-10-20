@@ -80,7 +80,7 @@ var specs = []Spec{
 	{papersettings.KeyMaxPositionPerSymbolPct, UnitPercent, "Paper の 1 銘柄あたりの建玉上限（運用資金に対する %）", "0 より大きく 100 以下", false},
 	{papersettings.KeyMaxTotalExposurePct, UnitPercent, "Paper の総エクスポージャ上限（運用資金に対する %）", "0 より大きく 100 以下", false},
 	{papersettings.KeyMaxTradeLossPct, UnitPercent, "Paper の 1 回の最大損失（運用資金に対する %）", fmt.Sprintf("%v 以上 %v 以下", papersettings.MinTradeLossPct, papersettings.MaxTradeLossPct), false},
-	{bucketsettings.KeyStockBudgetJPY, UnitYen, "Paper の株の予算枠（円）。保有中の株の建玉（取得価格×株数）に今回の額を足してこの額を超える新規エントリーは見送る。0 は株の新規エントリーを止める", bucketConstraint, false},
+	{bucketsettings.KeyStockBudgetJPY, UnitYen, "Paper の株の予算枠（円）。保有中の株の建玉（時価ベース）に今回の額を足してこの額を超える新規エントリーは見送る。0 は株の新規エントリーを止める", bucketConstraint, false},
 	{bucketsettings.KeyBondETFBudgetJPY, UnitYen, "Paper の債券ETFの予算枠（円）。0 はこの枠を使わない", bucketConstraint, false},
 	{dailyguardsettings.KeyOperatingCapitalJPY, UnitYen, "日次ガードの運用資金（円）。日次損失上限・利益確保の発動額を割合から出す基準。0 は未設定", "0 以上 1 兆円以下", false},
 	{dailyguardsettings.KeyLossLimitPct, UnitPercent, "日次損失上限（運用資金に対する %）。到達で新規エントリーを止める。0 は使わない", "0 以上 100 以下", false},

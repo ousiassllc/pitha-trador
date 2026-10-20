@@ -49,6 +49,12 @@ func storeStockBudget(t *testing.T, s *system.RuntimeSettingsRepository, value s
 
 func openStockPosition(t *testing.T, db *sql.DB, quantity int64, entryPrice float64) {
 	t.Helper()
+	openStockPositionMarked(t, db, quantity, entryPrice, entryPrice)
+}
+
+// openStockPositionMarked opens a stock position whose latest mark is currentPrice.
+func openStockPositionMarked(t *testing.T, db *sql.DB, quantity int64, entryPrice, currentPrice float64) {
+	t.Helper()
 	ctx := context.Background()
 	now := time.Now()
 	order, err := trading.NewOrderRepository(db).Insert(ctx, domain.PaperOrder{
@@ -60,7 +66,7 @@ func openStockPosition(t *testing.T, db *sql.DB, quantity int64, entryPrice floa
 	}
 	if _, err := trading.NewPositionRepository(db).Open(ctx, domain.Position{
 		InstrumentID: 1, EntryOrderID: order.ID, Symbol: "7203", Side: domain.PositionSideLong,
-		Quantity: quantity, EntryPrice: entryPrice, CurrentPrice: entryPrice, OpenedAt: now,
+		Quantity: quantity, EntryPrice: entryPrice, CurrentPrice: currentPrice, OpenedAt: now,
 	}); err != nil {
 		t.Fatalf("open position: %v", err)
 	}
@@ -133,5 +139,40 @@ func TestRisk_StockBudgetDoesNotChangeThePercentLimitDenominator(t *testing.T) {
 	}
 	if got := e.PositionSize(ctx, 2000); got != 300 {
 		t.Fatalf("PositionSize with a 600,000 budget = %d, want 300 (sized against the capital)", got)
+	}
+}
+
+// The stock bucket's holdings are valued at the market, like the exposure
+// limits: an unrealized loss frees room that the entry price would still count.
+// 15,000 shares bought at 2,000 (30,000,000 yen, the whole default budget) are
+// worth 15,000,000 at the mark of 1,000.
+func TestRisk_DefaultBudgetCountsHoldingsAtMarketNotEntryPrice(t *testing.T) {
+	e, _, db := bucketEngine(t, true)
+	openStockPositionMarked(t, db, 15_000, 2000, 1000)
+
+	// Entry 600,000 on top of 15,000,000: within the default budget, which an
+	// entry-price valuation (30,000,000 + 600,000) would have rejected.
+	if passed, reason := e.Check(context.Background(), 1, domain.JevDirectionLong); !passed {
+		t.Fatalf("Check = (false, %q), want passed under the default budget", reason)
+	}
+}
+
+// A stock budget below the capital rejects once the market value of the
+// holdings plus the entry goes over it, and not before.
+func TestRisk_BudgetBelowCapitalRejectsOnMarketValueHoldings(t *testing.T) {
+	ctx := context.Background()
+	e, settings, db := bucketEngine(t, true)
+	// 300 shares bought at 2,000, marked 1,500: 450,000 held + this entry's 600,000.
+	openStockPositionMarked(t, db, 300, 2000, 1500)
+
+	storeStockBudget(t, settings, "1049999")
+	passed, reason := e.Check(ctx, 1, domain.JevDirectionLong)
+	if passed || !strings.HasPrefix(reason, risk.ReasonBucketBudgetExceeded) || !strings.Contains(reason, "held_jpy=450000") {
+		t.Fatalf("Check one yen under the market-value total = (%v, %q), want bucket_budget_exceeded with held_jpy=450000", passed, reason)
+	}
+
+	storeStockBudget(t, settings, "1050000")
+	if passed, reason := e.Check(ctx, 1, domain.JevDirectionLong); !passed {
+		t.Fatalf("Check at exactly the market-value total = (false, %q), want passed", reason)
 	}
 }

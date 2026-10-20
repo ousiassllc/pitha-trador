@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 )
 
 // recentClosedPositionsLimit bounds how many of the most-recently-opened
@@ -123,11 +124,7 @@ func (p *Provider) OpenPositionCountBySide(ctx context.Context, side string) (in
 // positionNotional is a position's current market value: quantity at the
 // latest mark, or at entry until the first mark arrives.
 func positionNotional(pos domain.Position) float64 {
-	price := pos.CurrentPrice
-	if price <= 0 {
-		price = pos.EntryPrice
-	}
-	return float64(pos.Quantity) * price
+	return bucket.Notional(pos.Quantity, pos.EntryPrice, pos.CurrentPrice)
 }
 
 func (p *Provider) TotalExposurePct(ctx context.Context) (float64, error) {

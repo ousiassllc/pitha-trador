@@ -22,8 +22,8 @@ type StockBucket interface {
 	// StockBudgetJPY is the stock bucket's budget in force now, for an
 	// operating capital of capitalJPY.
 	StockBudgetJPY(ctx context.Context, capitalJPY float64) (float64, error)
-	// StockHeldJPY is what the stock bucket holds now: the sum of
-	// entry_price * quantity of its open positions.
+	// StockHeldJPY is what the stock bucket holds now: the market value of
+	// its open positions (bucket.Notional, as the exposure limits measure).
 	StockHeldJPY(ctx context.Context) (float64, error)
 }
 

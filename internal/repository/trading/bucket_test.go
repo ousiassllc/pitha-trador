@@ -74,7 +74,7 @@ func TestBucketIsFixedFromAssetClassWhenWritten(t *testing.T) {
 	}
 }
 
-func TestOpenEntryNotionalByBucket_SumsOpenPositionsOfThatBucketAtEntryPrice(t *testing.T) {
+func TestListOpenByBucket_ReturnsOnlyOpenPositionsOfThatBucket(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 	stockID := insertInstrument(t, db, "7203", "x")
@@ -96,19 +96,19 @@ func TestOpenEntryNotionalByBucket_SumsOpenPositionsOfThatBucketAtEntryPrice(t *
 		}
 		return p
 	}
-	open(stockID, "7203", 100, 2000, 2500) // 200,000 at the entry price, not 250,000 at the mark
+	open(stockID, "7203", 100, 2000, 2500)
 	open(bondID, "2510", 10, 1000, 1000)
 
-	if got, err := positions.OpenEntryNotionalByBucket(ctx, domain.BucketStock); err != nil || got != 200000 {
-		t.Errorf("stock held = %v, %v; want 200000", got, err)
-	}
-	if got, err := positions.OpenEntryNotionalByBucket(ctx, domain.BucketBondETF); err != nil || got != 10000 {
-		t.Errorf("bond_etf held = %v, %v; want 10000", got, err)
+	for bucket, want := range map[string][]string{domain.BucketStock: {"7203"}, domain.BucketBondETF: {"2510"}} {
+		got, err := positions.ListOpenByBucket(ctx, bucket)
+		if err != nil || len(got) != 1 || got[0].Symbol != want[0] {
+			t.Errorf("ListOpenByBucket(%s) = %+v, %v; want only %s", bucket, got, err, want[0])
+		}
 	}
 	if _, err := db.ExecContext(ctx, `UPDATE positions SET closed_at = ? WHERE bucket = 'stock'`, "2026-09-27T10:00:00Z"); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := positions.OpenEntryNotionalByBucket(ctx, domain.BucketStock); err != nil || got != 0 {
-		t.Errorf("stock held after the close = %v, %v; want 0", got, err)
+	if got, err := positions.ListOpenByBucket(ctx, domain.BucketStock); err != nil || len(got) != 0 {
+		t.Errorf("ListOpenByBucket(stock) after the close = %+v, %v; want none", got, err)
 	}
 }

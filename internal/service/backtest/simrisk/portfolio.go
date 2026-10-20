@@ -36,8 +36,9 @@ type position struct {
 	lastPrice float64
 }
 
-// notional is live's positionNotional: quantity at the last mark.
-func (p position) notional() float64 { return float64(p.quantity) * p.lastPrice }
+// notional is live's positionNotional (bucket.Notional): quantity at the last
+// mark.
+func (p position) notional() float64 { return bucket.Notional(p.quantity, p.entry, p.lastPrice) }
 
 func (p position) unrealized() float64 {
 	sign := 1.0
@@ -177,12 +178,12 @@ func (p *Portfolio) stockBudget() float64 {
 	return p.cfg.Limits.InitialCapital
 }
 
-// stockHeld is live's StockHeldJPY: the open positions' quantity at the entry
-// price (a backtest trades stocks only).
+// stockHeld is live's StockHeldJPY: the open positions' market value (a
+// backtest trades stocks only), measured like the exposure limits.
 func (p *Portfolio) stockHeld() float64 {
 	var held float64
 	for _, pos := range p.open {
-		held += float64(pos.quantity) * pos.entry
+		held += pos.notional()
 	}
 	return held
 }

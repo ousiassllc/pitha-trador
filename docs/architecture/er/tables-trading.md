@@ -92,7 +92,7 @@ erDiagram
 | quantity | integer | NOT NULL | |
 | entry_price | numeric(12,2) | NOT NULL | |
 | current_price | numeric(12,2) | NOT NULL | 保有中はSchedulerが定期更新 |
-| bucket | varchar(20) | NOT NULL, DEFAULT 'stock', CHECK IN ('stock','bond_etf') | そのポジションを書いた時点の銘柄の`instruments.asset_class`から確定させた予算枠（issue #824、`000041`）。書き込み時に確定し、あとから変えても過去の行は変わらない。`000041`より前の行は`stock`（それまでは株だけ）。Paperの株の枠（`risk.bucket.stock.budget_jpy`）の保有額は、`bucket='stock'`で`closed_at IS NULL`の行の`entry_price × quantity`（取得価格×株数。`current_price`による時価ではない）の合計（`functional.md` FR-RISK-10） |
+| bucket | varchar(20) | NOT NULL, DEFAULT 'stock', CHECK IN ('stock','bond_etf') | そのポジションを書いた時点の銘柄の`instruments.asset_class`から確定させた予算枠（issue #824、`000041`）。書き込み時に確定し、あとから変えても過去の行は変わらない。`000041`より前の行は`stock`（それまでは株だけ）。Paperの株の枠（`risk.bucket.stock.budget_jpy`）の保有額は、`bucket='stock'`で`closed_at IS NULL`の行の時価ベースの合計（`current_price × quantity`。`current_price`が0以下のあいだは`entry_price`を使う。総エクスポージャ上限と同じ計算）（`functional.md` FR-RISK-10） |
 | unrealized_pnl | numeric(14,2) | NOT NULL, DEFAULT 0 | 保有中のみ有効（Mark周期で更新）。クローズ時（`closePosition`）に`0`へリセットし、クローズ済み行は実現損益（`realized_pnl`）のみを持つ。#682以前にクローズされた過去行もマイグレーション000029で`0`へ揃えた（保有中の行は不変、downはno-op） |
 | realized_pnl | numeric(14,2) | NULL可 | クローズ時に確定 |
 | opened_at | text | NOT NULL | |

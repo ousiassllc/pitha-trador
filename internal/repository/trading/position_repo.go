@@ -274,18 +274,13 @@ func scanPosition(row sqlutil.RowScanner) (domain.Position, error) {
 	return p, nil
 }
 
-// OpenEntryNotionalByBucket returns the held amount of bucket's open positions:
-// the sum of entry_price*quantity of every row of that bucket with
-// ClosedAt == nil, in yen (0 with none). It is the "amount the bucket holds
-// now" the budget check of Risk's new entries (issue #824) measures against,
-// at the entry price so a later price move does not change what was spent.
-func (r *PositionRepository) OpenEntryNotionalByBucket(ctx context.Context, bucket string) (float64, error) {
-	var held float64
-	err := r.db.QueryRowContext(ctx,
-		`SELECT COALESCE(SUM(entry_price * quantity), 0) FROM positions WHERE closed_at IS NULL AND bucket = ?`, bucket,
-	).Scan(&held)
+// ListOpenByBucket returns bucket's open positions (ClosedAt == nil), oldest
+// first. The budget check of Risk's new entries (issue #824) values them at
+// the market, like the exposure limits do.
+func (r *PositionRepository) ListOpenByBucket(ctx context.Context, bucket string) ([]domain.Position, error) {
+	rows, err := r.db.QueryContext(ctx, positionSelectColumns+` WHERE closed_at IS NULL AND bucket = ? ORDER BY opened_at ASC`, bucket)
 	if err != nil {
-		return 0, fmt.Errorf("repository: sum open entry notional of bucket %s: %w", bucket, err)
+		return nil, fmt.Errorf("repository: list open positions of bucket %s: %w", bucket, err)
 	}
-	return held, nil
+	return scanPositions(rows)
 }
