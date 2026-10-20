@@ -54,3 +54,39 @@ func TestQuantity_NoInitialCapitalRejects(t *testing.T) {
 		t.Fatalf("Quantity = (%d, %q), want (0, %q)", qty, reason, sizing.ReasonInvalidInput)
 	}
 }
+
+// issue #804: with the Paper initial values (capital 500,000 yen, 100% per
+// symbol, 100% in total, 1.0% loss per trade) one 100-share lot of a
+// 5,000-yen stock (exactly 500,000 yen) is NOT rejected by sizing: 1.0% of
+// 500,000 is 5,000 yen and the 0.6% stop on 100 shares x 5,000 yen loses 3,000.
+func TestQuantity_Paper500kAt5000YenIsNotRejected(t *testing.T) {
+	limits := config.RiskLimits{
+		InitialCapital:          500_000,
+		MaxPositionPerSymbolPct: 100,
+		MaxTotalExposurePct:     100,
+		MaxTradeLossPct:         1.0,
+	}
+	if qty, reason := sizing.Quantity(limits, sizing.DefaultStopLossPct, 5000, 0); qty != 100 || reason != "" {
+		t.Errorf("Quantity at 5,000 yen = (%d, %q), want (100, \"\")", qty, reason)
+	}
+	// The capital binds next: a lot of a 5,001-yen stock costs more than 500,000 yen.
+	if qty, reason := sizing.Quantity(limits, sizing.DefaultStopLossPct, 5001, 0); qty != 0 || reason != sizing.ReasonMaxPositionPerSymbolPct {
+		t.Errorf("Quantity at 5,001 yen = (%d, %q), want (0, %q)", qty, reason, sizing.ReasonMaxPositionPerSymbolPct)
+	}
+}
+
+// With the former risk.yaml Paper max_trade_loss_pct (0.25%) the same lot is
+// stopped by the trade-loss limit (1,250 yen allowed vs 3,000 yen lost), above
+// about 2,083 yen: the reason the Paper default is now 1.0%.
+func TestQuantity_TradeLossLimitBindsBelowTheCapitalAt025Pct(t *testing.T) {
+	limits := config.RiskLimits{InitialCapital: 500_000, MaxPositionPerSymbolPct: 100, MaxTotalExposurePct: 100, MaxTradeLossPct: 0.25}
+	if qty, reason := sizing.Quantity(limits, sizing.DefaultStopLossPct, 5000, 0); qty != 0 || reason != sizing.ReasonMaxTradeLossPct {
+		t.Errorf("Quantity = (%d, %q), want (0, %q)", qty, reason, sizing.ReasonMaxTradeLossPct)
+	}
+	if qty, _ := sizing.Quantity(limits, sizing.DefaultStopLossPct, 2083, 0); qty != 100 {
+		t.Errorf("Quantity at 2,083 yen = %d, want 100", qty)
+	}
+	if qty, _ := sizing.Quantity(limits, sizing.DefaultStopLossPct, 2084, 0); qty != 0 {
+		t.Errorf("Quantity at 2,084 yen = %d, want 0", qty)
+	}
+}

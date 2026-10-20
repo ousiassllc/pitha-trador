@@ -64,6 +64,10 @@ func buildNews(t *testing.T, secrets config.Secrets, opts ...bootstrap.BuildOpti
 		t.Fatalf("Run: %v", err)
 	}
 	t.Cleanup(func() { _ = state.Close() })
+	// The tests enter ordinary-priced stocks and are about the news wiring, not
+	// the Paper capital: give them the roomy pre-#804 Paper limits instead of the
+	// shipped 500,000 yen ones (max_trade_loss_pct would skip a 2,500 yen stock).
+	state.Risk.Paper.InitialCapital, state.Risk.Paper.MaxPositionPerSymbolPct, state.Risk.Paper.MaxTotalExposurePct = 30_000_000, 2, 20
 	secrets.KabuAPIPassword = "test-password"
 	opts = append(opts, bootstrap.WithJevMaxAttempts(1),
 		bootstrap.WithNewsClock(func() time.Time { return inSession.Add(time.Minute) }),

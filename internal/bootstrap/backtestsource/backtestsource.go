@@ -15,6 +15,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -69,7 +70,9 @@ type Replay struct {
 	// MetaSettings supplies the minimum EV (the Settings screen's value in
 	// force now, as the policy.* thresholds are).
 	MetaSettings *system.RuntimeSettingsRepository
-	// Risk is config/risk.yaml's limits of the Paper mode.
+	// Risk is config/risk.yaml's limits of the Paper mode; a replay runs
+	// with the Settings screen's Paper capital and exposure limits
+	// (papersettings, issue #804) laid over it when MetaSettings is set.
 	Risk      config.RiskLimits
 	Positions *trading.PositionRepository
 }
@@ -147,7 +150,13 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 	if err != nil {
 		return err
 	}
-	risk := &simrisk.Config{Limits: b.replay.Risk, StopLossPct: b.exit.StopLossPct}
+	limits := b.replay.Risk
+	if b.replay.MetaSettings != nil {
+		if limits, err = papersettings.Effective(ctx, b.replay.MetaSettings, limits); err != nil {
+			return fmt.Errorf("backtestsource: Paper risk settings for backtest: %w", err)
+		}
+	}
+	risk := &simrisk.Config{Limits: limits, StopLossPct: b.exit.StopLossPct}
 
 	cost := b.cost
 	if b.costSource != nil {

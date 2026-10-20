@@ -1,7 +1,9 @@
 package bootstrap
 
 import (
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
@@ -31,14 +33,20 @@ type riskSignals struct {
 }
 
 // newRiskEngine builds the Paper Trading Risk Engine (this build only
-// runs Paper Trading, so config/risk.yaml's paper limits apply).
+// runs Paper Trading, so config/risk.yaml's paper limits apply). The Paper
+// operating capital and exposure limits are overlaid with the Settings
+// screen's runtime_settings on every evaluation (papersettings, issue #804),
+// so a saved value applies without a restart; risk.yaml stays the fallback.
+// A Live Engine must be built WITHOUT the overlay and the capital source
+// below: Live keeps using config/risk.yaml only.
 func newRiskEngine(limits config.RiskLimits, repos riskRepositories, signals riskSignals, closer risk.PositionCloser, notifier risk.Notifier) *risk.Engine {
 	return risk.NewEngine(risk.Config{
 		Limits:            limits,
+		LimitsOverlay:     papersettings.Overlay(repos.settings),
 		KillSwitch:        repos.killSwitch,
 		Settings:          repos.settings,
 		Snapshots:         repos.snapshots,
-		Portfolio:         repoportfolio.New(repos.positions, limits.InitialCapital),
+		Portfolio:         repoportfolio.New(repos.positions, limits.InitialCapital, repoportfolio.WithCapitalSource(paperrisk.CapitalSource(repos.settings, limits))),
 		Positions:         repos.positions,
 		Orders:            repos.orders,
 		MarketDataHealth:  signals.marketData,

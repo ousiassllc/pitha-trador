@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
@@ -69,7 +70,7 @@ func TestKeys_CoverEveryManagedKeyOnce(t *testing.T) {
 		}
 		seen[k] = true
 	}
-	if want := 2 + len(config.PolicySettingKeys()) + len(config.FastScreenerSettingKeys()) + len(orderflowsettings.Keys()) + 1 /* snapshotagesettings.Key */ + len(logsettings.Keys()) + len(dailyguardsettings.Keys()) + len(barriersettings.Keys()) + len(costsettings.Keys()) + len(metalabelsettings.Keys()) + len(regimesettings.Keys()) + len(paperbootstrapsettings.Keys()) + len(config.BrokerSettingKeys()) + len(tachibanasource.TachibanaSourceSettingKeys()); len(seen) != want {
+	if want := 2 + len(config.PolicySettingKeys()) + len(config.FastScreenerSettingKeys()) + len(orderflowsettings.Keys()) + 1 /* snapshotagesettings.Key */ + len(logsettings.Keys()) + len(dailyguardsettings.Keys()) + len(papersettings.Keys()) + len(barriersettings.Keys()) + len(costsettings.Keys()) + len(metalabelsettings.Keys()) + len(regimesettings.Keys()) + len(paperbootstrapsettings.Keys()) + len(config.BrokerSettingKeys()) + len(tachibanasource.TachibanaSourceSettingKeys()); len(seen) != want {
 		t.Errorf("len(Keys) = %d, want %d", len(seen), want)
 	}
 }

@@ -65,6 +65,10 @@ func newTestEnvWith(t *testing.T, tune func(*execution.Config)) testEnv {
 	if err != nil {
 		t.Fatalf("LoadRiskBytes: %v", err)
 	}
+	// The replay trades an ordinary-priced stock and is about the replay, not the
+	// Paper capital: use the roomy pre-#804 Paper limits instead of the shipped
+	// 500,000 yen ones (max_trade_loss_pct would skip the entries).
+	riskCfg.Paper.InitialCapital, riskCfg.Paper.MaxPositionPerSymbolPct, riskCfg.Paper.MaxTotalExposurePct = 30_000_000, 2, 20
 	execCfg := execution.ConfigFromRiskLimits(riskCfg.Paper)
 	tune(&execCfg)
 	env := testEnv{

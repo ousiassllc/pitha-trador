@@ -1,6 +1,7 @@
 package evalprovider_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -30,7 +31,7 @@ func TestRouter_ServesEvaluationOfDatabase(t *testing.T) {
 	actualstest.Seed(t, db)
 
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithInsightProvider(evalprovider.New(insightapi.StaticProvider{}, db, actualstest.Capital)))
+	engine := router.New(router.WithInsightProvider(evalprovider.New(insightapi.StaticProvider{}, db, func(context.Context) float64 { return actualstest.Capital })))
 
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/performance/evaluation?from=2026-10-12&to=2026-10-14", nil))

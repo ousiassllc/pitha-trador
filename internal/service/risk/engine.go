@@ -1,6 +1,7 @@
 package risk
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -69,6 +70,15 @@ type Config struct {
 	// mode: the dead-man's switch is Live-only).
 	Limits config.RiskLimits
 
+	// LimitsOverlay, when set, is applied to Limits on every evaluation
+	// (Check, PositionSize, AllowedPositionPct, EffectiveLimits) so a value
+	// saved on the Settings screen takes effect without a restart. It may
+	// change only the Paper operating capital and exposure limits
+	// (internal/config/papersettings.Overlay); an Engine built without it
+	// enforces Limits exactly, which is what every Live Engine does. An
+	// error fails the evaluation closed.
+	LimitsOverlay func(ctx context.Context, base config.RiskLimits) (config.RiskLimits, error)
+
 	KillSwitch *system.KillSwitchRepository
 	Settings   *system.RuntimeSettingsRepository
 
@@ -126,6 +136,7 @@ type Config struct {
 // system state machine (FR-RISK-2〜7, state.go/autoresume.go).
 type Engine struct {
 	limits           config.RiskLimits
+	limitsOverlay    func(ctx context.Context, base config.RiskLimits) (config.RiskLimits, error)
 	killSwitch       *system.KillSwitchRepository
 	settings         *system.RuntimeSettingsRepository
 	snapshots        *market.SnapshotRepository
@@ -189,6 +200,7 @@ func NewEngine(cfg Config) *Engine {
 	}
 	return &Engine{
 		limits:            cfg.Limits,
+		limitsOverlay:     cfg.LimitsOverlay,
 		killSwitch:        cfg.KillSwitch,
 		settings:          cfg.Settings,
 		snapshots:         cfg.Snapshots,
@@ -210,6 +222,15 @@ func NewEngine(cfg Config) *Engine {
 
 // Limits returns the Paper/Live threshold set this Engine enforces.
 func (e *Engine) Limits() config.RiskLimits { return e.limits }
+
+// EffectiveLimits returns Limits with the Config.LimitsOverlay applied: the
+// thresholds the next evaluation enforces. Without an overlay it is Limits.
+func (e *Engine) EffectiveLimits(ctx context.Context) (config.RiskLimits, error) {
+	if e.limitsOverlay == nil {
+		return e.limits, nil
+	}
+	return e.limitsOverlay(ctx, e.limits)
+}
 
 func activeReasons(events []domain.KillSwitchEvent) string {
 	reasons := make([]string, len(events))

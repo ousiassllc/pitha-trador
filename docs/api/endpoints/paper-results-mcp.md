@@ -44,7 +44,7 @@
 | `expectancy_return_pct` | 各行の `realized_pnl / (entry_price * quantity) * 100` の平均。建値が 0 以下の行はリターン 0 として数える（`internal/service/insight.Aggregate` と同じ）。0 件なら `null` |
 | `profit_factor` | 勝ちの合計円 ÷ 負けの合計円の絶対値。負けが 0 件、または対象 0 件なら `null` |
 | `max_drawdown_jpy` | `closed_at` 昇順、同着は `id` 昇順で `realized_pnl` を累積した曲線の、ピークから谷までの最大下落（円）。下落が無ければ 0。0 件なら 0 |
-| `capital_jpy` | `config/risk.yaml` の `paper.initial_capital`。未設定時は `config.DefaultPaperInitialCapital`（30,000,000）。アプリと同じ yaml 解決順で読む。Live の値は使わない |
+| `capital_jpy` | `config/risk.yaml` の `paper.initial_capital`。未設定時は `config.DefaultPaperInitialCapital`（500,000）。アプリと同じ yaml 解決順で読む。Live の値は使わない。Settings で保存したPaperの運用資金（`runtime_settings` の `risk.paper.initial_capital_jpy`、issue #804）には追従しない（本 MCP は `runtime_settings` を読まない。§4）。アプリの資金比と異なる場合は、`capital_jpy` を見て読み分ける |
 | `max_drawdown_capital_ratio` | `max_drawdown_jpy / capital_jpy`。`capital_jpy` が 0 以下、または yaml を読めないときは両方 `null`（円建てのドローダウンは返す） |
 
 `internal/service/insight.Performance.MaxDrawdownPct` はリターン（%）の曲線であり、ここでいう資金比ではない。実装は円の累積を別に計算する。
@@ -199,3 +199,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.1 | 2026-10-17 | 受け入れ条件の実機確認を、選んだ経路（Tailscale または Cloudflare Tunnel）経由に変えた。Tailscale は tailnet 外から届かないことも確認する。必須の 401 は API キーだけ | 悠太さん指示。Cloudflare を必須にしない |
 | 1.2 | 2026-10-18 | トランスポートの要確認を、Streamable HTTP（POST のみ・JSON 応答）で実装した旨の回答に改めた。ツール・上限・ホワイトリストは変更なし | issue #783 の実装 |
 | 1.3 | 2026-10-20 | §3.8 `collection_status` に `alerts[]`（`code`・`since`。`kabu_not_logged_in` / `market_data_idle`）を追加。マイグレーション `000039` の `health_alerts` / `health_alert_checks` を読む | issue #802 |
+| 1.4 | 2026-10-20 | §3.1 `capital_jpy` の既定を 500,000 に更新し、Settings で保存した Paper の運用資金（`runtime_settings`）には追従しない旨（`runtime_settings` を読まない方針を維持）を明記 | issue #804 |

@@ -114,10 +114,10 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 
 | 項目 | Paper初期値 | Live初期値（Phase 7） |
 |------|-----------|----------------------|
-| max_position_per_symbol_pct | 2.0 | 1.0 |
-| max_total_exposure_pct | 20.0 | 10.0 |
+| max_position_per_symbol_pct | 100.0（issue #804。Settingsで変更可。変更前は2.0） | 1.0 |
+| max_total_exposure_pct | 100.0（issue #804。Settingsで変更可。変更前は20.0） | 10.0 |
 | max_daily_loss_pct | 1.0 | 0.5 |
-| max_trade_loss_pct | 0.25 | 0.15 |
+| max_trade_loss_pct | 1.0（issue #804。Settingsで変更可、0.1〜3.0。変更前は0.25） | 0.15 |
 | max_open_positions | 5 | 3 |
 | max_same_direction_positions | 3 | 2 |
 | market_adverse_return_5m_pct | 0.2 | 0.15 |
@@ -128,7 +128,7 @@ Risk EngineはJevより優先され、Jevから変更できない。Phase 7（�
 | heartbeat_timeout_minutes（Live専用） | 対象外 | 120 |
 
 - FR-RISK-1: 上記制限のいずれかに抵触する場合、新規取引を拒否する
-  - 「口座資産に対する%」の各上限（max_position_per_symbol_pct / max_total_exposure_pct / max_daily_loss_pct / max_trade_loss_pct）の分母は`config/risk.yaml`の`initial_capital`（想定資金・円。Paper初期値3,000万円、Liveは実運用資金を設定必須）とする。総エクスポージャ・銘柄エクスポージャは保有中ポジションの評価額（数量×現在値）、日次損失率は当日（JST）にクローズしたポジションの実現損益と保有中ポジションの含み損益の合計損失を分母で割った値
+  - 「口座資産に対する%」の各上限（max_position_per_symbol_pct / max_total_exposure_pct / max_daily_loss_pct / max_trade_loss_pct）の分母は`config/risk.yaml`の`initial_capital`（想定資金・円。Paper初期値50万円（issue #804。Settingsで変更可、FR-RISK-9）、Liveは実運用資金を設定必須）とする。総エクスポージャ・銘柄エクスポージャは保有中ポジションの評価額（数量×現在値）、日次損失率は当日（JST）にクローズしたポジションの実現損益と保有中ポジションの含み損益の合計損失を分母で割った値
   - `initial_capital`が未設定（0以下）、またはRisk Engineが判定に必要な状態（ポジション・注文・最新スナップショット・スプレッド）を読み取れない場合は、判定をスキップせず`risk_engine_error`で拒否する（fail-closed。スプレッド欠損は「データ欠損」、FR-POLICY-3）
   - 同じ方向に重ねない制約（相関・市場逆行）: モメンタム・出来高急増・ブレイクアウトは同じ地合いで同じ方向の銘柄に寄るため、銘柄ごとの上限だけでは相場要因でまとめて負けるのを防げない。Risk Engineは新規エントリーの方向（LONG/SHORT）と同じ向きの保有ポジション数を読み、(1)`max_same_direction_positions`以上なら`max_same_direction_positions`理由で拒否する（反対方向の保有は数えない）、(2)同方向を1件以上保有中に、市場全体が保有方向と逆行している（`market_adverse_return_5m_pct`（%）以上、LONGなら下落・SHORTなら上昇）なら`market_adverse_to_direction`理由で拒否する。市場全体の動きは既存の`market_return_5m`（`kind=market_index`の追跡銘柄、TOPIX等。§4.1 FR-FE-4）を使い、先物専用の新規データ取得は要しない。`market_return_5m`が算出不能（指標未追跡・足の欠損）の場合、または同方向の保有が無い場合は市場逆行では拒否しない（相関はポジション間の重なりを抑える制約のため）。判定は最新スナップショット（`market_snapshots`）の値で行い、拒否理由はスプレッド等と同じく`trade_signals.reject_reason`に`risk_engine_rejected: <理由>`（例: `risk_engine_rejected: market_adverse_to_direction`。理由が空なら`risk_engine_rejected`のみ）として記録される
   - `max_trade_loss_pct`はポジションサイジングで強制する（§4.8 FR-ENTRY-3）。1単元（100株）でもStop Lossに掛かった時の損失が上限を超える場合は`max_trade_loss_pct`理由で拒否する
@@ -183,6 +183,16 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
   - 停止はその日のうちはラッチされる（損益が戻っても、しきい値を緩めても再開しない。そのルールを0にして無効化すると解除される）。状態は`runtime_settings`の`system.daily_guard`（取引日・当日の損益最高値・停止reason/メッセージ/時刻）に保存し、再起動をまたぐ。取引日（JST）が替わると最初の判定で状態が初期化され、翌営業日に自動で解除される（`marketcalendar`の休場日は新規エントリー自体が無い）
   - 停止理由は、`Check`の拒否理由（`trade_signals.reject_reason`、`daily_loss_limit_jpy: 当日損益 …`等）、全ページ共通バナー（`GET /system/daily-halt`、`DailyHaltBanner`。`Header`の`#daily-halt-banner`が`load`・30秒周期で取得）、`risk.Notifier.DailyEntryHalted`（Slack・ネイティブ通知・構造化ログ。1回の停止につき1回）、`slog`の警告ログに出る
   - 判定は`Check`（候補ごと。Kill Switch系の上限の後・市場データ系の判定の前）と1分周期の`RunPeriodicChecks`（`CheckDailyGuard`）で行う。当日損益・取引回数を読めない場合は、いずれかのルールが有効な間は`risk_engine_error`で拒否する（fail-closed）。検証はPaperのみ（#55 Liveはblockedのまま）
+
+- FR-RISK-9（Paperの運用資金・1銘柄上限・総エクスポージャ上限・1回の最大損失をSettingsから変更、issue #804）: Paperの`initial_capital`（ポジションサイズ計算と各「口座資産に対する%」上限の分母）・`max_position_per_symbol_pct`・`max_total_exposure_pct`・`max_trade_loss_pct`は、`config/risk.yaml`の手編集だけでなくSettings画面の「リスク・資金」ページ（`GET /settings/risk`）の「Paperの運用資金・建玉上限・1回の最大損失」で変更・保存できる。
+  - 保存先は`runtime_settings`の`risk.paper.initial_capital_jpy`・`risk.paper.max_position_per_symbol_pct`・`risk.paper.max_total_exposure_pct`・`risk.paper.max_trade_loss_pct`（JSON数値。`internal/config/papersettings`、`opsettings`の管理キー）。検証は、資金が0円より大きく1兆円以下、1銘柄・総エクスポージャの各%が0より大きく100以下、`max_trade_loss_pct`が0.1以上3.0以下（両端を含む。範囲外は保存せず400）。キー名と範囲は`papersettings`のエクスポート定数（`KeyMaxTradeLossPct`・`MinTradeLossPct`・`MaxTradeLossPct`）と検証関数`papersettings.Validate`を唯一の定義とし、後続のMCP書き込み許可リスト（#806）・`settings_get`/diff（#807）も同じ定数・関数を使う。未保存のキーは`config/risk.yaml`のPaper値が既定になり、「既定に戻す」でその値に戻る（`risk.yaml`は下限ではなくフォールバック既定）。他の上限（`max_open_positions`・`max_daily_loss_pct`等）はこの画面では変えられず`risk.yaml`のまま
+  - **再起動不要**: Risk Engineは判定のたび（`Check`・`PositionSize`・`AllowedPositionPct`）に保存値を読み直し（`Config.LimitsOverlay`、`dailyguard.go`の日次ガード設定と同じ方式）、`PortfolioProvider`の分母（`repoportfolio.WithCapitalSource`）、`GET /api/v1/performance/evaluation`の資金比、Walk Forwardバックテストの再生も同じ値を使う。保存後の次のリスク判定から反映される。読み取りに失敗したときは`risk_engine_error`で拒否する（fail-closed）。壊れた保存行（範囲外・数値でない値）は警告ログを出して無視し、`risk.yaml`の値を使う（限度が緩むことはない）
+  - Paperの初期値と`risk.yaml`・SeedPaperDefaultsの関係（issue #804の決定）: Paperの初期値は運用資金500,000円・1銘柄100%・総エクスポージャ100%・1回の最大損失1.0%（50万円を同じ銘柄に全部載せてもよい）。同梱の`config/risk.yaml`と`DefaultPaperInitialCapital`をこの値にそろえた（従来は3,000万円・2%・20%・0.25%）。既存のDBはmigrationではなく起動時の一度きりのシード（`papersettings.SeedDefaults`、マーカー`system.paper_risk_defaults_seeded`。4キーのどれにも保存行が無いときだけ4値を保存し、あれば保存せずマーカーだけ書く。保存行は上書きしない。シード失敗は警告ログのみで起動は止めない）で同じ初期値になるため、手元の古い`risk.yaml`（3,000万円・2%・20%）でも運用資金500,000円で動く。日次ガードのシード（#782、`risk.operating_capital_jpy`=500000）と同じ値なので、初期状態では整合チェックの不一致警告は出ない
+  - 日次ガード用の運用資金（`risk.operating_capital_jpy`、FR-RISK-8）は同じ画面でPaperの運用資金の隣に並べて編集でき（ストレージは変えず1行のまま。`dailyguardsettings`が所有）、整合チェック（不一致警告）は`risk.yaml`の値ではなくこの画面で有効なPaperの運用資金と比べる。どちらを保存しても両方の「計算結果」が更新される
+  - 「計算結果」には、有効な上限での1単元（100株）の購入可否として、1銘柄上限・総エクスポージャ上限・1回の最大損失の上限それぞれで1単元を買える株価の上限と、1単元（候補の最高株価＝Fast Screenerの`screener.max_price`×100株）が運用資金を超えるときの注意を表示する。1回の最大損失の上限がこれらより厳しく効く場合（例: 0.25%・初期ストップ0.6%では株価約2,083円が上限）はその旨も表示する（初期値の1.0%では株価約8,333円まで買え、500,000円・100%の上限5,000円より緩いので表示されない）
+  - **Liveは変えない**: この4キーはPaperのRisk Engineにだけ配線する。Live用Engineは`LimitsOverlay`なし・`WithCapitalSource`なしで構築し、`config/risk.yaml`の値だけで判定する（`checkflow`のテストで、Paperの保存値（`max_trade_loss_pct`を含む）がLive Engineに影響しないことを固定）。Liveの値・動作は変更しない
+  - 受け入れ（issue #804の決定）: 500,000・100・100・1.0では、1単元＝50万円（株価5,000円）はサイズ計算（`sizing.Quantity`）で拒否されない（資金・1銘柄・総エクスポージャの各上限に収まり、初期ストップ0.6%での1単元の損失3,000円が上限5,000円以内）。他のガード（最大建玉数・スプレッド等）は別に判定する。旧Paper値の0.25%では株価約2,083円を超える銘柄が`max_trade_loss_pct`で見送られていたため、`max_trade_loss_pct`も4つ目の設定キーにして初期値を1.0%にした（テストで両方を固定）
+  - Paper実績MCP（`cmd/paper-results-mcp`）の資金比は、読み取り専用DBのテーブル許可リストに`runtime_settings`が無いため、引き続き`risk.yaml`の`paper.initial_capital`を使い、Settingsの保存値には追従しない
 
 ### 4.8 Entry / Exit
 
