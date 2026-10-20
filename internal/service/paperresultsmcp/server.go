@@ -4,7 +4,7 @@
 //
 // Transport: MCP "Streamable HTTP" implemented as a small JSON-RPC 2.0
 // handler (POST only, every response a single application/json body). It
-// has exactly eight read tools (tools.go) and no write capability of any
+// has exactly nine read tools (tools.go) and no write capability of any
 // kind: the connection is mode=ro with query_only=ON and the dispatch table
 // is the only way to SQL. Every request - initialize and tools/list
 // included - needs the Bearer API key, checked in constant time before any

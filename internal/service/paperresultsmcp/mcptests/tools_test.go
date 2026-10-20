@@ -11,10 +11,17 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 )
 
+// eightTools are the tools taking the from/to period arguments; health_today
+// (issue #808) takes none, so it is called separately (healthToday).
 var eightTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
 }
+
+const healthToday = "health_today"
+
+// allTools is every tool of the dispatch table.
+var allTools = append(slices.Clone(eightTools), healthToday)
 
 func near(t *testing.T, name string, got *float64, want float64) {
 	t.Helper()
@@ -37,8 +44,8 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the eight tool names, each marked read-only.
-func TestToolsListReturnsExactlyTheEightTools(t *testing.T) {
+// tools/list returns exactly the nine tool names, each marked read-only.
+func TestToolsListReturnsExactlyTheNineTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
 	var env struct {
@@ -64,12 +71,12 @@ func TestToolsListReturnsExactlyTheEightTools(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := slices.Clone(eightTools)
+	want := slices.Clone(allTools)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", names, want)
 	}
-	if got := paperresultsmcp.ToolNames(); len(got) != 8 {
+	if got := paperresultsmcp.ToolNames(); len(got) != 9 {
 		t.Fatalf("dispatch table has %d entries: %v", len(got), got)
 	}
 }
@@ -83,7 +90,7 @@ func TestNoWriteToolsExist(t *testing.T) {
 		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
 		"secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
-		if !slices.Contains(eightTools, name) {
+		if !slices.Contains(allTools, name) {
 			t.Errorf("dispatch table has unexpected tool %q", name)
 		}
 		for _, tok := range strings.Split(name, "_") {

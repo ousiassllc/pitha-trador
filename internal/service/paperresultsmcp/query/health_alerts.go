@@ -41,7 +41,7 @@ func HealthAlerts(ctx context.Context, q Q, now time.Time) ([]Alert, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !checked.IsZero() && now.Sub(checked) <= healthalert.HeartbeatStale {
+	if detectorRunning(checked, now) {
 		return storedAlerts(ctx, q, now)
 	}
 	last, err := lastMarketDataFinish(ctx, q)
@@ -52,6 +52,12 @@ func HealthAlerts(ctx context.Context, q Q, now time.Time) ([]Alert, error) {
 		return []Alert{{Code: AlertMarketDataIdle, Since: since.UTC().Format(time.RFC3339)}}, nil
 	}
 	return []Alert{}, nil
+}
+
+// detectorRunning reports whether the app's detector checked recently enough
+// for its stored rows to be trusted (the app is running).
+func detectorRunning(checked, now time.Time) bool {
+	return !checked.IsZero() && now.Sub(checked) <= healthalert.HeartbeatStale
 }
 
 // lastHealthCheck is the detector's last check time, zero when it never ran.

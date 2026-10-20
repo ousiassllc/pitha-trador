@@ -88,7 +88,7 @@ func limitProp(maxLimit int) map[string]any {
 	return map[string]any{"type": "integer", "minimum": 1, "maximum": maxLimit, "default": min(defaultListLimit, maxLimit)}
 }
 
-// tools is the dispatch table: exactly the eight tools of the API spec §3.
+// tools is the dispatch table: exactly the nine tools of the API spec §3.
 var tools = []tool{
 	{
 		name:        "paper_performance_summary",
@@ -251,6 +251,7 @@ var tools = []tool{
 			}, nil
 		},
 	},
+	healthTodayTool,
 }
 
 // findTool returns the table entry for name.

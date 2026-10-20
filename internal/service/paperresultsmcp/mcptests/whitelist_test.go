@@ -27,6 +27,11 @@ func TestOutputsAndLogsNeverContainRawDataOrSecrets(t *testing.T) {
 		collect(srv.call(t, tool, map[string]any{"from": "bad"}))
 		collect(srv.call(t, tool, args(map[string]any{"unknown": testkit.SentinelRaw})))
 	}
+	for _, a := range []map[string]any{
+		{}, period, {"unknown": testkit.SentinelRaw}, {"from": "2025-01-01", "to": "2026-10-19"},
+	} {
+		collect(srv.call(t, healthToday, a))
+	}
 	for _, extra := range []map[string]any{
 		{"limit": 200}, {"limit": 1}, {"limit": 201}, {"horizon_minutes": 5},
 	} {
@@ -143,6 +148,15 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("failure day code", first(failures, "by_day_and_error_code"), "date code count")
 	want("skipped queue", first(failures, "skipped_by_queue"), "queue count")
 	want("retention", coll["retention"].(map[string]any), "succeeded_job_days failed_job_days note")
+	health := data(healthToday, map[string]any{})
+	want("health", health, "date trading_day needs_attention attention_codes paper_trades meta_model bootstrap market_data missing_session_dates daily_guard kill_switch retrain")
+	want("health paper trades", health["paper_trades"].(map[string]any), "opened_count closed_count")
+	want("health meta model", health["meta_model"].(map[string]any), "adopted version trained_at")
+	want("health bootstrap", health["bootstrap"].(map[string]any), "enabled effective signals_today")
+	want("health market data", health["market_data"].(map[string]any), "kabu_login market_data app_running alerts")
+	want("health daily guard", health["daily_guard"].(map[string]any), "halted reason halted_at")
+	want("health kill switch", health["kill_switch"].(map[string]any), "active unresolved_count since reasons flag_set")
+	want("health retrain", health["retrain"].(map[string]any), "skipped latest_skipped_at reason_code")
 }
 
 // Protocol basics a connector depends on, all behind the key.

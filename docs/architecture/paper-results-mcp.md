@@ -131,7 +131,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは次の 8 つだけである。定義・フィールドは API 仕様。売買・発注・取消・設定変更・`runtime_settings` の更新・Kill Switch の操作はツールにしない。
+ツールは次の 9 つだけである。定義・フィールドは API 仕様。売買・発注・取消・設定変更・`runtime_settings` の更新・Kill Switch の操作はツールにしない。
 
 | ツール | 読むもの |
 |--------|----------|
@@ -143,8 +143,11 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数と、それ以外の拒否の固定コード別内訳 |
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
 | `collection_status` | `jobs` の件数と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（保持期間の違いを `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ） |
+| `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
 
 MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
+
+`health_today`（#808）は、アプリの状態を 1 回で見るために `runtime_settings` を読み取りだけで読む。読むキーは固定の許可リスト（日次ガードの閾値キー、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`。`query.ReadableSettingKeys`）だけで、リスト外のキーは SQL を発行する前に拒否する。値の解釈はアプリと同じ関数（`dailyguardsettings`・`paperbootstrapsettings`）で行い、日次停止のメッセージ文など自由文は戻り値に載せない。書き込みはしない（接続は `mode=ro`）。`readonly_db_test` は `runtime_settings` を読む文を `SELECT value FROM runtime_settings WHERE key = ?` の 1 本だけ許す。
 
 kabu の板・時価の保存を続けるかは #778 の現状のままである（保存は継続、リスクは理解済み、公式回答待ち）。本仕様は規約の適否を判断しない。リモートへ出す対象から生データを外すのは、その現状を広げないためである。
 
@@ -165,3 +168,4 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 | 1.3 | 2026-10-19 | §3.4 に Settings 画面からの設定（有効/待受アドレス/API キー）を追加。原子的な書き込み、サーバー側の検証、鍵の一度きりの表示、DB・ログ・エクスポート・バックアップに入れないこと、プロセスは起動・停止せず反映に再起動が要ることを明記 | issue #792 |
 | 1.4 | 2026-10-19 | §3.4 に、画面からの起動・停止・再起動とアプリ起動時の自動起動・アプリ終了時の停止を追記し、設計メモ `paper-results-mcp-lifecycle.md` への参照を追加。「画面はプロセスを起動も停止もしない」を改めた。DB 読み取り専用・既定オフ・キーが空なら待受しない・待受アドレス検証は変更なし | issue #795 |
 | 1.5 | 2026-10-20 | §5 の `collection_status` に立会中の市況データ停止の警告 `alerts[]` を追加。状態はアプリの検知が `health_alerts`（`000039`）に保存し、MCP は読むだけ。アプリが止まっているときは MCP が `jobs` から `market_data_idle` を導く。DB は読み取り専用のまま | issue #802 |
+| 1.6 | 2026-10-20 | §5 に `health_today`（今日の健康診断。取引数・メタモデル・ブートストラップ・kabu/market-data・欠損・日次ガード・Kill Switch・要対応コード）を追加し、ツール数を 9 にした。`runtime_settings` を固定キーの許可リストで読み取りだけ読む旨を追記。新規テーブルなし | issue #808 |

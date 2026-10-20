@@ -26,6 +26,14 @@ var retrainSkipCodes = map[string]bool{
 	"training_data_unusable":   true,
 }
 
+// normalizeRetrainSkipCode maps a stored code this build does not know to "other".
+func normalizeRetrainSkipCode(code string) string {
+	if !retrainSkipCodes[code] {
+		return retrainSkipCodeOther
+	}
+	return code
+}
+
 // retrainSkips returns up to limit retrain skips decided in r, newest first.
 func retrainSkips(ctx context.Context, q Q, r Range, limit int) ([]RetrainSkip, error) {
 	from, to := r.bounds()
@@ -50,9 +58,7 @@ LIMIT ?`, from, to, limit)
 			return nil, fmt.Errorf("query: scan metalabel retrain skip: %w", err)
 		}
 		s.SkippedAt = FormatOut(at)
-		if !retrainSkipCodes[s.ReasonCode] {
-			s.ReasonCode = retrainSkipCodeOther
-		}
+		s.ReasonCode = normalizeRetrainSkipCode(s.ReasonCode)
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {
