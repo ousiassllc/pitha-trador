@@ -12,19 +12,47 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 )
 
+// SeedStore is the runtime_settings access Seed needs.
+type SeedStore interface {
+	papersettings.SeedStore
+	bucketsettings.SeedStore
+}
+
 // Seed stores the Paper initial capital and exposure limits (500,000 円 / 100%
-// / 100%, papersettings.SeedDefaults) once per database. A failure is logged
-// and never stops startup: the config/risk.yaml Paper values then apply.
+// / 100%, papersettings.SeedDefaults) once per database, then the bucket
+// budgets (bucketsettings.SeedDefaults, issue #824): the stock bucket gets the
+// operating capital in force then - read through engine - and the bond_etf
+// bucket 0, so the behaviour does not change. A failure is logged and never
+// stops startup: the config/risk.yaml Paper values then apply, and a bucket
+// without a row defaults to the same split (stock: the whole capital, bond_etf: 0).
 //
 // Premise: this build is Paper-only. Gate the call on Paper before any Live
 // build is added.
-func Seed(ctx context.Context, store papersettings.SeedStore, now time.Time) {
+func Seed(ctx context.Context, store SeedStore, engine Limits, now time.Time) {
 	if err := papersettings.SeedDefaults(ctx, store, now); err != nil {
 		slog.Warn("paperrisk: seed Paper risk defaults failed; the config/risk.yaml Paper values apply", "error", err)
 	}
+	limits, err := engine.EffectiveLimits(ctx)
+	if err != nil {
+		slog.Warn("paperrisk: read Paper operating capital for the bucket seed failed; the bucket defaults apply", "error", err)
+		return
+	}
+	if err := bucketsettings.SeedDefaults(ctx, store, limits.InitialCapital, now); err != nil {
+		slog.Warn("paperrisk: seed Paper bucket budgets failed; the bucket defaults apply", "error", err)
+	}
+}
+
+// StockBucket is the Paper Risk Engine's stock-bucket budget gate input
+// (risk.Config.StockBucket): the budgets in runtime_settings and the stock
+// bucket's open positions. A Live Engine is built without it.
+func StockBucket(positions *trading.PositionRepository, settings bucketsettings.Store) *bucket.Provider {
+	return bucket.NewProvider(positions, settings)
 }
 
 // CapitalSource reads the Paper operating capital in force now: base's

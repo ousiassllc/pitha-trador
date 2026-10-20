@@ -29,7 +29,7 @@ func (s *Services) Start(ctx context.Context) error {
 	}
 
 	dailyguardseed.Run(ctx, s.Settings, time.Now())
-	paperrisk.Seed(ctx, s.Settings, time.Now())
+	paperrisk.Seed(ctx, s.Settings, s.Risk, time.Now())
 	s.syncUniverse(ctx)
 
 	if err := s.Broker.Start(ctx); err != nil {

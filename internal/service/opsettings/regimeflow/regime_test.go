@@ -1,10 +1,15 @@
-package opsettings_test
+// Package regimeflow_test checks the market-regime settings saved through
+// opsettings.Service (issue #755). It lives in its own directory to keep
+// internal/service/opsettings within the linterly directory budget.
+package regimeflow_test
 
 import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 )
@@ -82,4 +87,25 @@ func TestRegime_SaveRejectsInvalid(t *testing.T) {
 	if len(store.rows) != 0 {
 		t.Fatalf("rejected values were stored: %v", store.rows)
 	}
+}
+
+type fakeStore struct{ rows map[string]string }
+
+func (f *fakeStore) Get(_ context.Context, key string) (string, bool, error) {
+	v, ok := f.rows[key]
+	return v, ok, nil
+}
+
+func (f *fakeStore) Set(_ context.Context, key, value string, _ time.Time) error {
+	f.rows[key] = value
+	return nil
+}
+
+func (f *fakeStore) Delete(_ context.Context, key string) error {
+	delete(f.rows, key)
+	return nil
+}
+
+func newService(store *fakeStore) *opsettings.Service {
+	return opsettings.New(store, config.StrategyConfig{}, "/data/logs")
 }

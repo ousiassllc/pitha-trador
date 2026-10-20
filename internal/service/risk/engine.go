@@ -79,6 +79,12 @@ type Config struct {
 	// error fails the evaluation closed.
 	LimitsOverlay func(ctx context.Context, base config.RiskLimits) (config.RiskLimits, error)
 
+	// StockBucket, when set, adds the Paper stock-bucket budget gates to
+	// Check (issue #824): bucket_disabled while the budget is 0 and
+	// bucket_budget_exceeded when holdings plus the entry go over it. Only the
+	// Paper Engine sets it; a Live Engine has no budget gate.
+	StockBucket StockBucket
+
 	KillSwitch *system.KillSwitchRepository
 	Settings   *system.RuntimeSettingsRepository
 
@@ -137,6 +143,7 @@ type Config struct {
 type Engine struct {
 	limits           config.RiskLimits
 	limitsOverlay    func(ctx context.Context, base config.RiskLimits) (config.RiskLimits, error)
+	stockBucket      StockBucket
 	killSwitch       *system.KillSwitchRepository
 	settings         *system.RuntimeSettingsRepository
 	snapshots        *market.SnapshotRepository
@@ -201,6 +208,7 @@ func NewEngine(cfg Config) *Engine {
 	return &Engine{
 		limits:            cfg.Limits,
 		limitsOverlay:     cfg.LimitsOverlay,
+		stockBucket:       cfg.StockBucket,
 		killSwitch:        cfg.KillSwitch,
 		settings:          cfg.Settings,
 		snapshots:         cfg.Snapshots,

@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
@@ -168,12 +169,18 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 		return nil
 	case papersettings.IsKey(key):
 		// Each value stands alone, so only its own range (papersettings.Validate)
-		// is checked.
+		// is checked; the operating capital is also checked against the bucket
+		// budgets (issue #824).
 		var stored papersettings.Overrides
 		if err := papersettings.Apply(&stored, key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
 		}
+		if key == papersettings.KeyInitialCapitalJPY {
+			return s.validateBucket(ctx, key, encoded)
+		}
 		return nil
+	case bucketsettings.IsKey(key):
+		return s.validateBucket(ctx, key, encoded)
 	case barriersettings.IsKey(key):
 		barriers := barriersettings.Default()
 		if err := s.overlay(ctx, barriersettings.Keys(), func(k, raw string) error { return barriersettings.Apply(&barriers, k, raw) }); err != nil {
@@ -214,7 +221,8 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 // i.e. validateEffective checks it against them rather than on its own.
 func crossValidated(key string) bool {
 	return strings.HasPrefix(key, "policy.") || strings.HasPrefix(key, "screener.") ||
-		orderflowsettings.IsKey(key) || barriersettings.IsKey(key) || costsettings.IsKey(key)
+		orderflowsettings.IsKey(key) || barriersettings.IsKey(key) || costsettings.IsKey(key) ||
+		bucketsettings.IsKey(key) || key == papersettings.KeyInitialCapitalJPY
 }
 
 // overlay feeds every stored row among keys to apply.

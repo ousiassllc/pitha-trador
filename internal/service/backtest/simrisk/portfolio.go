@@ -8,6 +8,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/correlation"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
@@ -18,10 +19,14 @@ var tradingDay = time.FixedZone("JST", 9*60*60)
 // Config is what the simulated Risk Engine needs: the limits (config/risk.yaml
 // paper section in production) and the stop-loss percentage sizing is
 // measured against (execution.Config.StopLossPct; 0 uses
-// sizing.DefaultStopLossPct, as live does).
+// sizing.DefaultStopLossPct, as live does). StockBudgetJPY is the stock
+// bucket's budget (issue #824, bucketsettings): nil means the whole
+// Limits.InitialCapital, the default split, under which the budget gates can
+// not reject anything the percentage limits let through.
 type Config struct {
-	Limits      config.RiskLimits
-	StopLossPct float64
+	Limits         config.RiskLimits
+	StopLossPct    float64
+	StockBudgetJPY *float64
 }
 
 type position struct {
@@ -163,6 +168,25 @@ func (p *Portfolio) OpenCountBySide(side string) int {
 	return n
 }
 
+// stockBudget is the stock bucket's budget in force: Config.StockBudgetJPY, or
+// the whole initial capital.
+func (p *Portfolio) stockBudget() float64 {
+	if p.cfg.StockBudgetJPY != nil {
+		return *p.cfg.StockBudgetJPY
+	}
+	return p.cfg.Limits.InitialCapital
+}
+
+// stockHeld is live's StockHeldJPY: the open positions' quantity at the entry
+// price (a backtest trades stocks only).
+func (p *Portfolio) stockHeld() float64 {
+	var held float64
+	for _, pos := range p.open {
+		held += float64(pos.quantity) * pos.entry
+	}
+	return held
+}
+
 func (p *Portfolio) totalExposurePct() float64 {
 	var notional float64
 	for _, pos := range p.open {
@@ -213,7 +237,8 @@ func (p *Portfolio) lastLossAt() time.Time {
 // Check implements policy.RiskChecker with risk.Engine.Check's rule order
 // and reasons: Kill Switch, cooldown, open positions, same direction,
 // exposure, daily loss, consecutive losses, spread, market adverse, then
-// sizing.
+// sizing; the stock bucket's two budget gates (bucket_disabled before the
+// exposure limits, bucket_budget_exceeded after sizing) sit where live's do.
 func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction string) (bool, string) {
 	lim := p.cfg.Limits
 	if p.killed != "" {
@@ -230,6 +255,10 @@ func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction strin
 	sameDirection := p.OpenCountBySide(direction)
 	if correlation.SameDirectionExceeded(lim, sameDirection) {
 		return false, fmt.Sprintf("%s: direction=%s count=%d max=%d", risk.ReasonMaxSameDirection, direction, sameDirection, lim.MaxSameDirectionPositions)
+	}
+	stockBudget := p.stockBudget()
+	if bucket.Disabled(stockBudget) {
+		return false, bucket.DisabledMessage(domain.BucketStock, stockBudget)
 	}
 	totalPct := p.totalExposurePct()
 	if totalPct >= lim.MaxTotalExposurePct {
@@ -253,8 +282,12 @@ func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction strin
 	if pct, adverse := correlation.MarketAdverse(lim, direction, sameDirection, bar.Feature.MarketReturn5m); adverse {
 		return false, fmt.Sprintf("%s: direction=%s same_direction_positions=%d market_return_5m_pct=%.4f threshold_pct=%.4f", risk.ReasonMarketAdverse, direction, sameDirection, pct, lim.MarketAdverseReturn5mPct)
 	}
-	if qty, reason := sizing.Quantity(lim, p.cfg.StopLossPct, bar.Price, totalPct); qty == 0 {
+	qty, reason := sizing.Quantity(lim, p.cfg.StopLossPct, bar.Price, totalPct)
+	if qty == 0 {
 		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", reason, bar.Price, p.cfg.StopLossPct, lim.MaxTradeLossPct)
+	}
+	if held, amount := p.stockHeld(), float64(qty)*bar.Price; bucket.Exceeded(held, amount, stockBudget) {
+		return false, bucket.ExceededMessage(domain.BucketStock, held, amount, stockBudget)
 	}
 	return true, ""
 }

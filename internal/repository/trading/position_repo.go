@@ -23,12 +23,17 @@ func NewPositionRepository(db *sql.DB) *PositionRepository {
 	return &PositionRepository{db: db}
 }
 
+// bucket is not a caller value: it is the instrument's asset_class at the
+// moment of writing (issue #824), so a later change of the asset class or of
+// the budget settings never rewrites a past row. A missing instrument or an
+// unknown asset class makes the NOT NULL / CHECK constraint reject the row.
 const insertPositionSQL = `
 INSERT INTO positions (
 	instrument_id, entry_order_id, exit_order_id, symbol, side, quantity,
 	entry_price, current_price, unrealized_pnl, realized_pnl, opened_at,
-	closed_at, exit_reason, created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	closed_at, exit_reason, created_at, updated_at, bucket
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+	(SELECT asset_class FROM instruments WHERE id = ?))`
 
 // Open writes a new positions row (Paper Entry, functional.md
 // FR-ENTRY-1). p.ExitOrderID/ClosedAt/ExitReason/RealizedPnL must be nil;
@@ -50,6 +55,7 @@ func openPosition(ctx context.Context, x sqlutil.Executor, p domain.Position) (d
 		p.InstrumentID, p.EntryOrderID, sqlutil.NullableInt64(p.ExitOrderID), p.Symbol, p.Side, p.Quantity,
 		p.EntryPrice, p.CurrentPrice, p.UnrealizedPnL, sqlutil.NullableFloat64(p.RealizedPnL), sqlutil.FormatTime(p.OpenedAt),
 		sqlutil.NullableTime(p.ClosedAt), sqlutil.NullableString(p.ExitReason), sqlutil.FormatTime(now), sqlutil.FormatTime(now),
+		p.InstrumentID,
 	)
 	if err != nil {
 		return domain.Position{}, fmt.Errorf(
@@ -266,4 +272,20 @@ func scanPosition(row sqlutil.RowScanner) (domain.Position, error) {
 		return domain.Position{}, err
 	}
 	return p, nil
+}
+
+// OpenEntryNotionalByBucket returns the held amount of bucket's open positions:
+// the sum of entry_price*quantity of every row of that bucket with
+// ClosedAt == nil, in yen (0 with none). It is the "amount the bucket holds
+// now" the budget check of Risk's new entries (issue #824) measures against,
+// at the entry price so a later price move does not change what was spent.
+func (r *PositionRepository) OpenEntryNotionalByBucket(ctx context.Context, bucket string) (float64, error) {
+	var held float64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(entry_price * quantity), 0) FROM positions WHERE closed_at IS NULL AND bucket = ?`, bucket,
+	).Scan(&held)
+	if err != nil {
+		return 0, fmt.Errorf("repository: sum open entry notional of bucket %s: %w", bucket, err)
+	}
+	return held, nil
 }

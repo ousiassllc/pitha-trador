@@ -13,6 +13,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/costsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
@@ -102,6 +103,7 @@ func Keys() []string {
 	keys = append(keys, logsettings.Keys()...)
 	keys = append(keys, dailyguardsettings.Keys()...)
 	keys = append(keys, papersettings.Keys()...)
+	keys = append(keys, bucketsettings.Keys()...)
 	keys = append(keys, barriersettings.Keys()...)
 	keys = append(keys, costsettings.Keys()...)
 	keys = append(keys, metalabelsettings.Keys()...)
@@ -160,7 +162,7 @@ func (s *Service) Get(ctx context.Context, key string) (Value, error) {
 	if err != nil {
 		return Value{}, fmt.Errorf("opsettings: read %s: %w", key, err)
 	}
-	v := Value{Key: key, Overridden: stored, Default: s.defaultText(key)}
+	v := Value{Key: key, Overridden: stored, Default: s.defaultText(ctx, key)}
 	switch {
 	case kindOf(key) == kindPath || kindOf(key) == kindPrivateKey:
 		if stored {
@@ -229,7 +231,7 @@ func (s *Service) Reset(ctx context.Context, key string) error {
 		return ErrUnknownKey
 	}
 	if crossValidated(key) {
-		encoded, err := encode(key, s.defaultText(key))
+		encoded, err := encode(key, s.defaultText(ctx, key))
 		if err != nil {
 			return err
 		}
@@ -241,56 +243,6 @@ func (s *Service) Reset(ctx context.Context, key string) error {
 		return fmt.Errorf("opsettings: reset %s: %w", key, err)
 	}
 	return nil
-}
-
-// defaultText is what applies to key while nothing is stored.
-func (s *Service) defaultText(key string) string {
-	switch {
-	case key == config.KeyBackupDir:
-		return ""
-	case key == config.KeyLogDir:
-		return s.defaultLogDir
-	case kindOf(key) == kindPrivateKey || kindOf(key) == kindBroker:
-		return config.BrokerSettingDefault(key)
-	case kindOf(key) == kindSource:
-		return tachibanasource.TachibanaSourceDefault(key)
-	case kindOf(key) == kindEntryQuality:
-		v, _ := config.PolicySettingValue(s.policy, key)
-		return v.(string)
-	case strings.HasPrefix(key, "policy."):
-		v, _ := config.PolicySettingValue(s.policy, key)
-		return formatNumber(v.(float64))
-	case orderflowsettings.IsKey(key):
-		seconds, _ := orderflowsettings.Default().Seconds(key)
-		return strconv.Itoa(seconds)
-	case snapshotagesettings.IsKey(key):
-		return strconv.Itoa(snapshotagesettings.DefaultSeconds)
-	case key == config.KeyLogLevel:
-		return logsettings.DefaultLevelText
-	case key == config.KeyLogRetentionDays:
-		return strconv.Itoa(logsettings.DefaultRetentionDays)
-	case dailyguardsettings.IsKey(key):
-		return "0"
-	case papersettings.IsKey(key):
-		return s.paperDefaultText(key)
-	case barriersettings.IsKey(key):
-		text, _ := barriersettings.Default().Text(key)
-		return text
-	case costsettings.IsKey(key):
-		text, _ := costsettings.Default().Text(key)
-		return text
-	case metalabelsettings.IsKey(key):
-		text, _ := metalabelsettings.Default().Text(key)
-		return text
-	case paperbootstrapsettings.IsKey(key):
-		return paperbootstrapsettings.Text(paperbootstrapsettings.Default)
-	case regimesettings.IsKey(key):
-		text, _ := regimesettings.Default().Text(key)
-		return text
-	default:
-		v, _ := config.FastScreenerSettingValue(s.screener, key)
-		return formatNumber(v)
-	}
 }
 
 func decodeString(key, raw string) (string, error) {

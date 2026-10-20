@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/papersizing"
@@ -38,6 +39,10 @@ var paperRiskGroup = opsGroup{
 		{key: papersettings.KeyMaxTradeLossPct, label: "1 回の取引の最大損失（運用資金に対する %）", placeholder: "1.0",
 			hint: "初期ストップ（0.6%）に達したときの損失が運用資金のこの % 以内になるようにサイズを決めます（max_trade_loss_pct。例: 1.0 なら運用資金 50 万円で損失 5,000 円まで）。" +
 				formatPct(papersettings.MinTradeLossPct) + " 以上 " + formatPct(papersettings.MaxTradeLossPct) + " 以下です。"},
+		{key: bucketsettings.KeyStockBudgetJPY, label: "株の予算枠（円）", placeholder: "500000",
+			hint: "株の新規エントリーに使える予算です。保有中の株の建玉（取得価格×株数）に今回の額を足してこの額を超えると見送ります。0 で株の新規エントリーを止めます（保有中の建玉は通常どおり決済されます）。債券ETFの枠との合計が運用資金以下の整数です（issue #824）。"},
+		{key: bucketsettings.KeyBondETFBudgetJPY, label: "債券ETFの予算枠（円）", placeholder: "0",
+			hint: "債券ETFに使える予算です。0 でこの枠を使いません。株の枠との合計が運用資金以下の整数です（issue #824）。"},
 		{key: dailyguardsettings.KeyOperatingCapitalJPY, label: "日次ガード用の運用資金（円）", placeholder: "0（未設定）",
 			hint: "「1日の損失上限・利益確保」の発動額を計算する元になる運用資金です（% × 運用資金 = 円）。Paper の運用資金と同じ値にそろえてください（異なると警告が出ます）。0 で未設定です（% 指定のルールは無効になります）。"},
 	},
