@@ -1,5 +1,5 @@
-// Command paper-results-mcp serves the read-only Paper results MCP over HTTP
-// (issue #783; docs/architecture/paper-results-mcp.md).
+// Command paper-results-mcp serves the Paper results MCP over HTTP: the read
+// tools plus the whitelisted settings tools (issues #783, #806, #807; docs/architecture/paper-results-mcp.md).
 //
 // It is a separate process from the application (cmd/desktop, cmd/server)
 // and is off by default: it binds nothing unless the local settings file
@@ -9,7 +9,8 @@
 //
 // The settings file path can be overridden for a run with -config; the
 // database file is resolved like the application (PITHA_DB_PATH, else the
-// per-user pitha.db) and is only ever opened read-only.
+// per-user pitha.db). Reads use a read-only connection; the settings tools'
+// only write path is the narrow writer of internal/service/paperresultsmcp/mcpset.
 package main
 
 import (
@@ -59,17 +60,21 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("resolve db path: %w", err)
 	}
-	capital, err := paperInitialCapital()
+	var capital float64
+	paper, err := paperRiskLimits()
 	if err != nil {
-		// Without risk.yaml only the capital ratio is lost; the yen drawdown
-		// is still returned (API spec §3.1).
-		slog.Warn("paper-results-mcp: paper capital unavailable; ratio will be null")
-		capital = 0
+		// Without risk.yaml the capital falls back to the Settings value, and
+		// without that the ratio is lost; the yen drawdown is still returned
+		// (API spec §3.1).
+		slog.Warn("paper-results-mcp: risk.yaml unavailable; paper capital comes from the Settings value only")
+		paper = nil
+	} else {
+		capital = paper.InitialCapital
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := paperresultsmcp.New(paperresultsmcp.Options{Settings: cfg, DBPath: dbPath, CapitalJPY: capital})
+	srv := paperresultsmcp.New(paperresultsmcp.Options{Settings: cfg, DBPath: dbPath, CapitalJPY: capital, PaperLimits: paper})
 	return srv.Serve(ctx)
 }

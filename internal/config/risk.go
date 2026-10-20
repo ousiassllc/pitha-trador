@@ -52,7 +52,7 @@ type RiskLimits struct {
 // used when config/risk.yaml's paper.initial_capital is unset (an
 // operator's older on-disk risk.yaml); it equals the shipped
 // config/risk.yaml value.
-const DefaultPaperInitialCapital = 30_000_000
+const DefaultPaperInitialCapital = 500_000
 
 // LoadRisk reads and parses the risk configuration YAML file at path
 // (conventionally DefaultRiskPath) into a RiskConfig, failing with an

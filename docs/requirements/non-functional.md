@@ -110,7 +110,7 @@ kabu選択時の方針: メンテナンス明け・セッション切れ後のka
 - HTMXフォームにはCSRFトークンを付与する（HALT標準構成に準拠。ローカル単一ユーザーでも実装は省略しない）
 - 実売買（Phase 7）へ移行しても、発注確定・Kill Switch操作に人手の追加認証は要求しない（完全自動運用）。安全性はRisk Engine側のLive専用の厳格なリミット（`requirements/functional.md` §4.7）と、操作者ハートビートが一定時間途絶した場合に自動で新規エントリーを停止するdead-man's switch（FR-RISK-6）で担保する
 - Risk Engineの拒否・Kill Switch発動・実売買発注はすべて監査ログ（追記専用ログ）に記録する。`kill_switch_events` / `kill_switch_resolutions`はDBトリガーで`UPDATE`/`DELETE`を拒否して追記専用を強制する（`architecture/er.md` §kill_switch_events）。ハッシュチェーン等によるDBファイル自体の改ざん検知は行わない
-- **Paper 実績 MCP（issue #783）**: リモートから DB を読む経路は、loopback または tailnet の IP に限定した別プロセスと、プライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他。`architecture/paper-results-mcp.md` §3.2）に限る。インターネットへ直接は公開しない。待受は既定オフで、`0.0.0.0` への bind は起動を拒否する。必須の認証は、DB にも Git にも置かない別 API キーである。キー不一致は SQL の前に拒否し、ログとツール戻り値に鍵・`secrets`・板や時価の生データを出さない。Cloudflare Access は Cloudflare Tunnel を使う場合の任意の追加であり、API キーの代わりにしない。読み取りは `mode=ro`（`query_only`）で、マイグレーションと WAL チェックポイントはしない。クエリ時間の上限は 3 秒、同時実行は 2、`busy_timeout` は 1 秒（アプリ本体の 60 秒とは別）。数値の一覧は `api/endpoints/paper-results-mcp.md` §2
+- **Paper 実績 MCP（issue #783）**: リモートから DB を読む経路は、loopback または tailnet の IP に限定した別プロセスと、プライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他。`architecture/paper-results-mcp.md` §3.2）に限る。インターネットへ直接は公開しない。待受は既定オフで、`0.0.0.0` への bind は起動を拒否する。必須の認証は、DB にも Git にも置かない別 API キーである。キー不一致は SQL の前に拒否し、ログとツール戻り値に鍵・`secrets`・板や時価の生データを出さない。Cloudflare Access は Cloudflare Tunnel を使う場合の任意の追加であり、API キーの代わりにしない。読み取りは `mode=ro`（`query_only`）で、マイグレーションと WAL チェックポイントはしない。書き込みは、ホワイトリストの設定ツール（issue #806・#807）が別の狭い接続で `runtime_settings` と監査表 `mcp_settings_audit` にだけ行う（既定で許可。Settings と MCP の両方で切り替えられる。発注・送金・Kill Switch 解除・Live の値・秘密は MCP から書けない。FR-MCP-18〜22）。クエリ時間の上限は 3 秒、同時実行は 2、`busy_timeout` は 1 秒（アプリ本体の 60 秒とは別）。数値の一覧は `api/endpoints/paper-results-mcp.md` §2
 
 ## 5. 監視・アラート
 
@@ -131,6 +131,7 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 - 立花の夜間の日足取得ログ（issue #729。`bootstrap:`の有効化ログと`tachibana: nightly daily bars started`/`finished`/`did not finish`）: `run_date`・`symbols`（ユニバース件数）・`requests`・`saved_bars`・`failed`（取得に失敗した銘柄数）・`duration_ms`、中断時は`reason`のみを記録する。日足の価格・出来高などの生値と銘柄別の内容はログにもDBの実行記録にも出さない（個々の失敗はDEBUGで銘柄コードとエラーだけ）。夜ごとの結果は`daily_bar_runs`に残る（`architecture/er/tables-market.md`）
 - 立花の監視リスト確定ログ（issue #730。`tachibana: watch list decided`/`watch list fell back`/`daily screening done`）: `list_date`・`source`（`daily_screen`/`fixed`/`carried_over`/`fixed_fallback`）・`symbols`（件数）・`held`/`manual`/`screen`/`fixed`（枠の由来ごとの件数）・`basis_date`・`universe`（基準日の日足がある銘柄数）・`picked`、切り替え時は`reason`（日足の取得状況の説明）のみを記録する。日足の価格・出来高などの生値と個々の銘柄コードは出さない
 - 立花の日中監視ログ（issue #731。`tachibanawatch:`・`bootstrap: 立花 daytime watch enabled`）: EVENT購読の設定（INFO。`symbols`＝件数のみ）、確定リストがまだ無い（WARN。1時間に1回。保有・注文中の銘柄だけを監視）、EVENT登録の失敗（WARN。次のサイクルで再試行）、市場指数の取得失敗・market-data投入の失敗（WARN）、起動時の有効化（`max_symbols`・`event_max_connects_per_day`・`rest_min_interval_seconds`・`rest_requests_per_round`）を記録する。銘柄コード・価格の生値は出さない。EVENT接続回数の予算の消費・超過・入れ替え停止のログは`tachibana: EVENT`（#737）のとおり
+- 失敗ジョブの集約ログ（issue #803。`jobfailurelog: jobs failed`をERRORで1分ごとに出力）: 直近1分に`failed`で終わったジョブを`error_code`別にまとめ、1コードにつき1件、`count`（件数）・`queues`（キュー別件数。`market-data=3,jev-scout=1`形式）・`message`（代表メッセージ＝そのコードで最も古い1件の`jobs.last_error`）・`message_queue`・`message_job_id`・`window_start`/`window_end`を出す。これでDBの`jobs.last_error`（30日で消える）を開かなくてもログだけで原因コードが分かる。`error_code`は`last_error`の文言から機械的に決める固定の識別子（`kabu_<kabu APIのcode>`・`tachibana_errno_<p_errno>`・`tachibana_result_<sResultCode>`・`tachibana_http_<status>`・`jev_http_<status>`・`assist_http_<status>`・`orphaned`・`handler_panic`・`broker_no_session`・`broker_rate_limited`・`db_locked`・`timeout`・`network`、該当なしは`unclassified:<パッケージ接頭辞>`または`unclassified`）で、自由文からは作らない。`message`は200バイト以内の1行で、URL・JSON本文（板・価格）・5桁以上の数字・長いトークン・Bearer/APIキー等を`<url>`/`<data>`/`<num>`/`<token>`/`[REDACTED]`に置換済み。前回のtick以降に確定した失敗だけを出し（`finished_at`・`id`のカーソル。同じ失敗を再掲しない。起動前の履歴も出さない）、書込み直後の取りこぼしを避けるため直近10秒分は次のtickに回す。1回に出す記録は最大20コード＋超過分の合計1件（`jobfailurelog: more failed jobs than listed`）に制限する。アプリと同時に開始・終了する
 - DB latency / エラー（エラーはERROR、100ms以上の低速クエリはWARN、それ未満の正常クエリはDEBUG。ワーカーのアイドルポーリングでログが肥大化しないよう、正常クエリはINFOで記録しない）
 
 ### 5.2 即時Slack通知対象
@@ -146,6 +147,8 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 - 日次損失上限接近（例: 上限の80%到達）
 
 - ログは日次ローテーションし、直近30日分（既定。Settingsの`system.log_retention_days`で1〜3650日に変更できる。issue #772）をローカル保持、それ以前は圧縮アーカイブする。ログレベルの既定はINFO（Settingsの`system.log_level`＝`debug`/`info`/`warn`/`error`。起動時に一度だけ読むため変更は再起動後に反映。保持期間は再起動不要で次回のアーカイブ実行から反映）。いずれも環境変数では設定しない（`environment/setup.md`）。ファイルは全ログ`<YYYY-MM-DD>.log`（INFO以上）と、ERRORのみを同時に書き出す`<YYYY-MM-DD>-error.log`の2本をログディレクトリに置く（アーカイブ・保持は両方に同じ規則を適用）。エラーだけをPCのファイルとして直接開いて調べるための分割で、UIからのダウンロード（下記）は従来どおり全ログ側から抽出する
+
+立会中の市況データ停止（kabu未ログイン・market-dataジョブ5分ゼロ）は、Slackへは出さず**アプリ内警告**（全ページ共通バナー）とMCPの`collection_status`で知らせる（FR-SETTINGS-8、issue #802）。非取引日・対象時間外は出さず、条件が解けると自動で消える。
 
 ### 5.3 エラーログのエクスポート
 
@@ -219,3 +222,6 @@ MVPでは構築コストを抑え、構造化ログ＋Slack Webhook通知のみ�
 | 1.43 | 2026-10-17 | §4 と §6 に Paper 実績 MCP の認証・読み取り専用・生データを出さないことを追記（クエリ 3 秒、同時 2、busy_timeout 1 秒）。#778 の保存方針は現状のまま参照し、規約の適否は判断しない | issue #783 |
 | 1.44 | 2026-10-17 | §4 の Paper 実績 MCP を、必須認証は API キー、経路はプライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他）へ改めた。`0.0.0.0` の拒否は維持する | 悠太さん指示。Cloudflare を必須にしない |
 | 1.45 | 2026-10-19 | §3 の自動起動・クラッシュ時再起動に、Paper 実績 MCP がアプリと同時に起動・終了し、異常終了時に孤児を残さず `--supervise` 後に復帰することを追記（新しい自動起動は作らない） | issue #795 |
+| 1.46 | 2026-10-20 | §5.1に失敗ジョブのエラーコード別集約ログ（`jobfailurelog: jobs failed`。1分ごと・件数・マスク済み代表メッセージ・ERROR）を追記 | issue #803 |
+| 1.47 | 2026-10-20 | §5 に、立会中のkabu未ログイン・market-data無稼働をアプリ内警告とMCPで知らせる旨を追記（Slack等の外部通知は対象外） | issue #802 |
+| 1.48 | 2026-10-20 | §4 の Paper 実績 MCP に、設定ツールだけが別の狭い接続で書くこと（ホワイトリスト・既定で許可・Settings と MCP の両方で切替・監査ログ）を追記。読み取りの `mode=ro` と上限は変更なし | issue #806・#807 |

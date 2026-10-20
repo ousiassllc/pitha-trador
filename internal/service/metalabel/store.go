@@ -86,6 +86,24 @@ func (s *Store) RecordPrediction(ctx context.Context, p repo.Prediction) (repo.P
 	return s.repo.InsertPrediction(ctx, p)
 }
 
+// RecordRetrainSkip stores a skipped nightly retraining (issue #799). A skip
+// needs a fixed reason code and non-negative counts.
+func (s *Store) RecordRetrainSkip(ctx context.Context, skip repo.RetrainSkip) error {
+	if skip.ReasonCode == "" {
+		return invalid("retrain skip reason code is empty")
+	}
+	if skip.UsableRows < 0 || skip.RequiredRows < 0 {
+		return invalid("retrain skip counts %d/%d are negative", skip.UsableRows, skip.RequiredRows)
+	}
+	_, err := s.repo.InsertRetrainSkip(ctx, skip)
+	return err
+}
+
+// RetrainSkips returns the newest limit skipped retrainings, newest first.
+func (s *Store) RetrainSkips(ctx context.Context, limit int) ([]repo.RetrainSkip, error) {
+	return s.repo.ListRetrainSkips(ctx, limit)
+}
+
 // PredictionForDecision returns modelID's prediction for jevDecisionID, or
 // (zero, false, nil) when the model did not score that decision.
 func (s *Store) PredictionForDecision(ctx context.Context, modelID, jevDecisionID int64) (repo.Prediction, bool, error) {

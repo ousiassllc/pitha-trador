@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
@@ -61,8 +62,14 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 		}
 		props.Fields = append(props.Fields, h.opsRow(ctx, field, rowNotice))
 	}
-	if group.id == dailyGuardGroup.id {
+	switch group.id {
+	case dailyGuardGroup.id:
 		props.Derived = h.dailyGuardDerived(ctx)
+	case paperRiskGroup.id:
+		props.Derived = h.paperRiskDerived(ctx)
+	case metaLabelGroup.id:
+		props.Derived = h.metaLabelDerived(ctx)
+		props.DerivedTitle = "LLM cutoff の状態と確認手順"
 	}
 	return props
 }
@@ -103,17 +110,6 @@ func defaultLabel(def string) string {
 		return "未設定（無効）"
 	}
 	return def
-}
-
-func (h *SettingsHandler) opsGroupsProps(ctx context.Context) []molecules.SettingGroupProps {
-	if h.ops == nil {
-		return nil
-	}
-	groups := make([]molecules.SettingGroupProps, len(opsGroups))
-	for i, group := range opsGroups {
-		groups[i] = h.opsGroupProps(ctx, group, "", "")
-	}
-	return groups
 }
 
 // SaveOps implements `POST /ops-settings/:key`: it validates and stores the
@@ -204,8 +200,28 @@ func (h *SettingsHandler) renderOpsRow(c *gin.Context, key, notice string) {
 	if len(props.Derived) > 0 {
 		comps = append(comps, molecules.SettingGroupDerived(props, true))
 	}
+	for _, other := range h.derivedSiblings(ctx, key, group) {
+		comps = append(comps, molecules.SettingGroupDerived(other, true))
+	}
 	if settingsReturnPath(c) == "/setup" {
 		comps = append(comps, molecules.SetupStatus(h.setupComplete(ctx), true))
 	}
 	shared.RenderHTML(c, http.StatusOK, templ.Join(comps...))
+}
+
+// derivedSiblings returns the other groups whose 計算結果 panel depends on key
+// and so must be refreshed out-of-band with the saved group's: the daily
+// guard's operating capital sits in the Paper group but feeds the daily
+// guard's panel, and each group's 整合チェック compares the other's values.
+func (h *SettingsHandler) derivedSiblings(ctx context.Context, key string, saved opsGroup) []molecules.SettingGroupProps {
+	if !dailyguardsettings.IsKey(key) && !papersettings.IsKey(key) {
+		return nil
+	}
+	var out []molecules.SettingGroupProps
+	for _, group := range []opsGroup{dailyGuardGroup, paperRiskGroup} {
+		if group.id != saved.id {
+			out = append(out, h.opsGroupProps(ctx, group, "", ""))
+		}
+	}
+	return out
 }

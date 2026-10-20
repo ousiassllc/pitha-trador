@@ -116,8 +116,8 @@ func TestShell_HeaderShowsVersionLinkedToSettingsUpdatePanel(t *testing.T) {
 
 	out := render(t, layout.Shell("t", organisms.NavNone))
 
-	if !regexp.MustCompile(`<a[^>]*id="header-version"[^>]*href="/settings#update-panel"[^>]*>v1\.2\.3</a>`).MatchString(out) {
-		t.Errorf("Shell header has no version link to /settings#update-panel; body=%s", out)
+	if !regexp.MustCompile(`<a[^>]*id="header-version"[^>]*href="/settings/maintenance#update-panel"[^>]*>v1\.2\.3</a>`).MatchString(out) {
+		t.Errorf("Shell header has no version link to /settings/maintenance#update-panel; body=%s", out)
 	}
 	if strings.Contains(out, "/system/update-check") {
 		t.Errorf("Shell must not carry the update-check button; body=%s", out)
@@ -176,7 +176,6 @@ func TestShell_NavMarksCurrentPage(t *testing.T) {
 		{organisms.NavPerformance, "/performance"},
 		{organisms.NavCalibration, "/calibration"},
 		{organisms.NavActivity, "/activity"},
-		{organisms.NavAdmin, "/admin"},
 		{organisms.NavSettings, "/settings"},
 		{organisms.NavNone, ""},
 	}
@@ -198,21 +197,24 @@ func TestShell_NavMarksCurrentPage(t *testing.T) {
 	}
 }
 
-// The 管理 entry (admin hub, issue #793) sits right before Settings and every
-// earlier entry keeps its href.
-func TestShell_NavListsAdminBeforeSettings(t *testing.T) {
+// The menu has a single Settings entry as its last item (issue #805): the
+// former 管理 entry (admin hub, issue #793) is folded into it.
+func TestShell_NavEndsWithSingleSettingsEntry(t *testing.T) {
 	out := render(t, layout.Shell("t", organisms.NavNone))
 	nav := regexp.MustCompile(`(?s)<nav\b.*?</nav>`).FindString(out)
 	var hrefs []string
 	for _, m := range regexp.MustCompile(`<a\b[^>]*\bhref="([^"]+)"`).FindAllStringSubmatch(nav, -1) {
 		hrefs = append(hrefs, m[1])
 	}
-	want := []string{"/scanner", "/watchlist", "/performance", "/calibration", "/activity", "/admin", "/settings"}
+	want := []string{"/scanner", "/watchlist", "/performance", "/calibration", "/activity", "/settings"}
 	if strings.Join(hrefs, " ") != strings.Join(want, " ") {
 		t.Errorf("nav hrefs = %v, want %v", hrefs, want)
 	}
-	if !strings.Contains(nav, ">管理</a>") {
-		t.Errorf("nav lacks the 管理 label; nav=%s", nav)
+	if !strings.Contains(nav, ">Settings</a>") {
+		t.Errorf("nav lacks the Settings label; nav=%s", nav)
+	}
+	if strings.Contains(nav, "管理") {
+		t.Errorf("nav still has a standalone 管理 label; nav=%s", nav)
 	}
 }
 

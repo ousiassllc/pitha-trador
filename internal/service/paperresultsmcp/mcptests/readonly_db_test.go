@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -45,8 +47,16 @@ func TestDBUnavailable(t *testing.T) {
 }
 
 // The connection the MCP uses is read-only; across a full run of all eight
-// tools no write, migration, checkpoint, journal-mode change or secrets /
-// raw-column read is ever issued, and SELECT * is never used.
+// read tools no write, migration, checkpoint, journal-mode change or secrets /
+// raw-column read is ever issued, and SELECT * is never used. The one
+// runtime_settings read is the Paper capital lookup (issue #806), a single-key
+// SELECT of the value.
+var paperCapitalRead = "SELECT value FROM runtime_settings WHERE key = ?"
+
+// boundedLastError is the only form in which a statement may name
+// jobs.last_error: substr(last_error, 1, N).
+var boundedLastError = regexp.MustCompile(`substr\(last_error, 1, ([0-9]+)\)`)
+
 func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 	path, w := testkit.NewMigratedDB(t)
 	testkit.SeedAll(t, w)
@@ -55,6 +65,7 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 	for _, tool := range eightTools {
 		srv.call(t, tool, period)
 	}
+	srv.call(t, healthToday, map[string]any{})
 
 	db, err := srv.DB()
 	if err != nil {
@@ -77,11 +88,27 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 		t.Fatalf("positions changed: %d, %v", n, err)
 	}
 
+	// runtime_settings is read by health_today through one statement (a fixed
+	// key list, query.ReadableSettingKeys); any other mention stays forbidden.
+	const settingRead = "SELECT value FROM runtime_settings WHERE key = ?"
 	forbidden := []string{"wal_checkpoint", "journal_mode", "schema_migrations", "golang-migrate", "INSERT", "UPDATE ",
 		"DELETE", "CREATE", "DROP", "ALTER", "ATTACH", "VACUUM", "secrets", "runtime_settings", "raw_data_json",
 		"state_json", "response_json", "params_json", "features_json", "payload_json", "last_error", "detail_json",
 		"encrypted_value", "current_price", "unrealized_pnl", "slippage_bps", "limit_price"}
 	for _, stmt := range counter.StatementLog() {
+		if strings.TrimSpace(stmt) == settingRead {
+			continue
+		}
+		// jobs.last_error is read only through a bounded head (issue #801):
+		// collection_status parses a fixed code token out of it in-process.
+		// Any other mention of the column is still forbidden.
+		stmt = boundedLastError.ReplaceAllStringFunc(stmt, func(m string) string {
+			if n, _ := strconv.Atoi(boundedLastError.FindStringSubmatch(m)[1]); n > 256 {
+				return m // too long a head stays flagged below
+			}
+			return ""
+		})
+		stmt = strings.ReplaceAll(stmt, paperCapitalRead, "")
 		upper := strings.ToUpper(stmt)
 		if strings.Contains(upper, "SELECT *") || strings.Contains(upper, ".*") {
 			t.Errorf("SELECT * style statement: %s", testkit.FirstLine(stmt))

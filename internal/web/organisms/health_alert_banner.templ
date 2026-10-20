@@ -1,0 +1,51 @@
+package organisms
+
+// HealthAlertView is one active health alert for HealthAlertBanner: its fixed
+// code (domain.HealthAlertKabuNotLoggedIn / HealthAlertMarketDataIdle), exposed
+// as `data-code`, and the JST clock time ("09:15") the condition began.
+type HealthAlertView struct {
+	Code  string
+	Since string
+}
+
+// HealthAlertBanner renders the 全ページ共通の立会中の市況データ停止警告
+// (issue #802): Header's `#health-alert-banner` fetches it via
+// `GET /system/health-alerts` (hx-trigger="load, every 30s"), the same
+// self-correcting pattern as `#daily-halt-banner`. It names each active alert
+// in fixed wording (kabuステーション未ログイン / market-dataの無稼働) and says it
+// clears by itself once the cause is gone. Nothing is rendered without alerts.
+// The banner has no role of its own: the container is the fixed
+// `role="status"` live region (issue #626).
+templ HealthAlertBanner(alerts []HealthAlertView) {
+	for _, a := range alerts {
+		<div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" data-testid="health-alert-banner" data-code={ a.Code }>
+			<p>
+				<span class="font-semibold">{ healthAlertTitle(a.Code) }</span>
+				{ a.Since }から続いています。{ healthAlertAction(a.Code) }
+				原因が解消すると、この表示は自動的に消えます。
+			</p>
+		</div>
+	}
+}
+
+// healthAlertTitle is the fixed headline of an alert code.
+func healthAlertTitle(code string) string {
+	switch code {
+	case "kabu_not_logged_in":
+		return "取引日の朝からkabuステーションに未ログインです。"
+	case "market_data_idle":
+		return "立会中ですが、市況データの取得が止まっています。"
+	}
+	return "市況データの警告があります。"
+}
+
+// healthAlertAction tells the operator what to check for an alert code.
+func healthAlertAction(code string) string {
+	switch code {
+	case "kabu_not_logged_in":
+		return "kabuステーションにログインしてください（ログイン後に自動で再発行します）。"
+	case "market_data_idle":
+		return "アプリが動いているか、ジョブが詰まっていないか（アクティビティ画面）を確認してください。"
+	}
+	return ""
+}

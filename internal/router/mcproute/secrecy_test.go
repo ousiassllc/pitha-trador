@@ -66,7 +66,7 @@ func TestAPIKeyNeverLeavesTheOneRevealResponse(t *testing.T) {
 
 	// Every later render is masked: page, panel, save success and failure.
 	var renders []string
-	renders = append(renders, a.get("/settings").Body.String(), a.get("/settings/mcp-panel").Body.String())
+	renders = append(renders, a.get("/settings/integrations").Body.String(), a.get("/settings/mcp-panel").Body.String())
 	renders = append(renders, a.save("127.0.0.1:48111", true).Body.String(), a.save("0.0.0.0:1", true).Body.String())
 	for i, body := range renders {
 		if strings.Contains(body, key1) {

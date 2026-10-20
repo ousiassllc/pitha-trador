@@ -69,7 +69,7 @@ func TestSettingsPage_WarnsWhileTheLLMCutoffIsAPlaceholder(t *testing.T) {
 	engine, store := opsRouter()
 	page := func() string {
 		rec := httptest.NewRecorder()
-		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/results", nil))
 		return rec.Body.String()
 	}
 
@@ -80,5 +80,48 @@ func TestSettingsPage_WarnsWhileTheLLMCutoffIsAPlaceholder(t *testing.T) {
 	store.rows[metalabelsettings.KeyLLMCutoffModel] = `"jev-x"`
 	if strings.Contains(page(), warning) {
 		t.Error("a confirmed cutoff still shows the warning")
+	}
+}
+
+// issue #809: the meta-labeling group shows the cutoff status (placeholder /
+// unverified / confirmed) with the how-to of confirming the official date.
+// Each save refreshes the panel out-of-band, so entering the date, then the
+// Jev model, moves the status on the screen from 仮置き through 未確認 to 確認済み.
+func TestSettingsPage_ShowsTheCutoffStatusAndHelp(t *testing.T) {
+	engine, _ := opsRouter()
+	status := `data-testid="setting-group-derived-metalabel-cutoff-status"`
+	statusLine := func(body string) string {
+		_, rest, ok := strings.Cut(body, status)
+		if !ok {
+			t.Fatalf("the status line is missing; body=%s", body)
+		}
+		line, _, _ := strings.Cut(rest, "</li>")
+		return line
+	}
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/results", nil))
+	page := rec.Body.String()
+	if !strings.Contains(statusLine(page), "仮置き（placeholder）") {
+		t.Errorf("the default status is not placeholder: %s", statusLine(page))
+	}
+	for _, want := range []string{"公式の日付の確認手順", metalabelsettings.KeyLLMCutoffSource, "knowledge cutoff", "YYYY-MM-DD"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the help lacks %q", want)
+		}
+	}
+
+	for _, step := range []struct{ key, value, want string }{
+		{metalabelsettings.KeyLLMCutoff, "2026-03-31", "未確認（unverified）"},
+		{metalabelsettings.KeyLLMCutoffSource, "https://example.com/model-card", "未確認（unverified）"},
+		{metalabelsettings.KeyLLMCutoffModel, "jev-2026-03", "確認済み（confirmed）"},
+	} {
+		rec := opsRequest(engine, http.MethodPost, step.key, url.Values{"value": {step.value}}, true)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("POST %s: status = %d, body=%s", step.key, rec.Code, rec.Body.String())
+		}
+		if got := statusLine(rec.Body.String()); !strings.Contains(got, step.want) {
+			t.Errorf("after %s the refreshed panel says %s, want %s", step.key, got, step.want)
+		}
 	}
 }

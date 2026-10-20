@@ -1,13 +1,15 @@
-// Package paperresultsmcp is the read-only MCP endpoint that serves Paper
-// results from the application's SQLite to a remote Grok Bot (issue #783;
-// docs/architecture/paper-results-mcp.md).
+// Package paperresultsmcp is the MCP endpoint that serves Paper results from
+// the application's SQLite to a remote Grok Bot (issue #783;
+// docs/architecture/paper-results-mcp.md) and lets it read and change the
+// whitelisted basic settings (issues #806, #807).
 //
 // Transport: MCP "Streamable HTTP" implemented as a small JSON-RPC 2.0
 // handler (POST only, every response a single application/json body). It
-// has exactly eight read tools (tools.go) and no write capability of any
-// kind: the connection is mode=ro with query_only=ON and the dispatch table
-// is the only way to SQL. Every request - initialize and tools/list
-// included - needs the Bearer API key, checked in constant time before any
+// has nine read tools (tools.go) and the settings tools (settings_tools.go)
+// whose only write path is mcpset.Writer: a whitelisted runtime_settings upsert
+// plus its audit row, and the write switch. The read connection is mode=ro
+// with query_only=ON and the dispatch table is the only way to SQL. Every
+// request - initialize and tools/list included - needs the Bearer API key, checked in constant time before any
 // SQL runs or any database connection is opened.
 package paperresultsmcp
 
@@ -22,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/readdb"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
 )
@@ -54,6 +58,10 @@ type Options struct {
 	// CapitalJPY is the Paper initial capital for the drawdown ratio; zero or
 	// negative leaves the ratio null.
 	CapitalJPY float64
+	// PaperLimits is config/risk.yaml's Paper section: the default the Paper
+	// settings keys show while nothing is stored. Nil uses the issue #804
+	// initial values.
+	PaperLimits *config.RiskLimits
 	// Logger receives the operational log (tool, code, duration, period,
 	// count). Nil uses slog.Default.
 	Logger *slog.Logger
@@ -81,6 +89,9 @@ type Server struct {
 
 	mu sync.Mutex
 	db *sql.DB // opened on the first authenticated tool call
+	// writer is the narrow settings write connection, opened on the first
+	// settings write (nothing else ever writes).
+	writer *mcpset.Writer
 }
 
 // New returns a Server. It performs no I/O: nothing is bound and no database
@@ -180,12 +191,16 @@ func (s *Server) ServeListener(ctx context.Context, ln net.Listener) error {
 func (s *Server) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.db == nil {
-		return nil
+	var errs []error
+	if s.db != nil {
+		errs = append(errs, s.db.Close())
+		s.db = nil
 	}
-	err := s.db.Close()
-	s.db = nil
-	return err
+	if s.writer != nil {
+		errs = append(errs, s.writer.Close())
+		s.writer = nil
+	}
+	return errors.Join(errs...)
 }
 
 // DB returns the read-only handle, opening it on first use. A failed
@@ -202,6 +217,24 @@ func (s *Server) DB() (*sql.DB, error) {
 	}
 	s.db = db
 	return db, nil
+}
+
+// Writer returns the settings write connection, opening it on first use. A
+// failed open is not cached. It is reached only from the settings tools that
+// write, after the whitelist and the key check.
+func (s *Server) Writer() (*mcpset.Writer, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.writer != nil {
+		return s.writer, nil
+	}
+	w, err := mcpset.OpenWriter(s.opts.DriverName, s.opts.DBPath, s.opts.PaperLimits)
+	if err != nil {
+		return nil, err
+	}
+	w.SetClock(s.now)
+	s.writer = w
+	return w, nil
 }
 
 // ActiveCalls reports how many tool calls hold a concurrency slot (running

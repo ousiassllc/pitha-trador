@@ -2,6 +2,7 @@ package testkit
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -49,7 +50,8 @@ func SeedJev(t *testing.T, w *sql.DB) {
 }
 
 // SeedMeta: models M1 (active, 10-02), M2 (rejected, 10-05, 250-rune reason)
-// and M3 (outside); 3 take + 2 skip predictions in the period, 1 outside.
+// and M3 (outside); 3 take + 2 skip predictions in the period, 1 outside;
+// retrain skips on 10-03 (87 of 130) and 10-04 (an unknown code), 1 outside.
 func SeedMeta(t *testing.T, w *sql.DB) {
 	t.Helper()
 	model := func(id int, version, status, reason, trained string, auc, ev any) {
@@ -72,10 +74,25 @@ func SeedMeta(t *testing.T, w *sql.DB) {
 			calibrated_probability, expected_value_bps, action, size_fraction, features_json, created_at)
 			VALUES (1, ?, ?, 0.5, 0.5, 1.0, ?, 0.5, ?, ?)`, i+1, Stored(t, p.at), p.action, SentinelFeatures, Stored(t, p.at))
 	}
+	for _, k := range []struct {
+		at, code     string
+		usable, need int
+	}{
+		{"2026-10-03T18:00:00Z", "too_few_rows_before_oos", 87, 130},
+		{"2026-10-04T18:00:00Z", SentinelSkipCode, 12, 130},
+		{"2026-08-03T18:00:00Z", "too_few_rows_before_oos", 5, 130},
+	} {
+		MustExec(t, w, `INSERT INTO metalabel_retrain_skips (skipped_at, reason_code, usable_rows, required_rows, created_at)
+			VALUES (?, ?, ?, ?, ?)`, Stored(t, k.at), k.code, k.usable, k.need, Stored(t, k.at))
+	}
 }
 
-// SeedRisk: 2 passed, 2 other rejects, daily_loss_limit x2, max_daily_trades
-// x1 and unknown x2 Risk Engine rejects in the period; 1 more outside.
+// SeedRisk: 2 passed, 10 other rejects (policy_below_threshold and a NULL
+// reason, plus jev_none x2, meta_skip:no_active_model x2 and
+// meta_skip:ev_not_above_minimum, entry_quality_below_threshold,
+// meta_model_unavailable and a meta_skip with an unknown reason), daily_loss_limit
+// x2, max_daily_trades x1 and unknown x2 Risk Engine rejects in the period;
+// 1 more of each kind outside.
 func SeedRisk(t *testing.T, w *sql.DB) {
 	t.Helper()
 	signals := []struct {
@@ -92,7 +109,16 @@ func SeedRisk(t *testing.T, w *sql.DB) {
 		{"2026-10-01T00:06:00Z", 0, "risk_engine_rejected:  : detail"},
 		{"2026-10-01T00:07:00Z", 0, "policy_below_threshold"},
 		{"2026-10-01T00:08:00Z", 0, nil},
+		{"2026-10-01T00:09:00Z", 0, "jev_none"},
+		{"2026-10-01T00:10:00Z", 0, "jev_none"},
+		{"2026-10-01T00:11:00Z", 0, "meta_skip: no_active_model (p=0.0000 ev_bps=0.00)"},
+		{"2026-10-01T00:12:00Z", 0, "meta_skip: no_active_model (p=0.5123 ev_bps=-3.21)"},
+		{"2026-10-01T00:13:00Z", 0, "meta_skip: ev_not_above_minimum (p=0.5500 ev_bps=1.00)"},
+		{"2026-10-01T00:14:00Z", 0, "meta_skip: " + SentinelSkip + " (p=0.1 ev_bps=0.1)"},
+		{"2026-10-01T00:15:00Z", 0, "entry_quality_below_threshold: entry_quality=\"poor\" < min=\"good\""},
+		{"2026-10-01T00:16:00Z", 0, "meta_model_unavailable: model: " + SentinelDetail},
 		{"2026-08-01T00:00:00Z", 0, "risk_engine_rejected:profit_lock"},
+		{"2026-08-01T00:00:01Z", 0, "jev_none"},
 	}
 	for _, s := range signals {
 		MustExec(t, w, `INSERT INTO trade_signals (instrument_id, symbol, timestamp, direction, policy_version,
@@ -120,16 +146,29 @@ func SeedCollection(t *testing.T, w *sql.DB) {
 			turnover, vwap, price_vs_vwap_bps, raw_data_json) VALUES (1, '7203', ?, ?, 98765.4321, 98765.4321, 100,
 			1.0, 1.0, 1.0, ?)`, Stored(t, ts), SentinelPriceCol, SentinelRaw)
 	}
-	job := func(queue, status, finished string) {
+	jobWithError := func(queue, status, finished, lastError string) {
 		MustExec(t, w, `INSERT INTO jobs (queue, payload_json, status, scheduled_at, finished_at, last_error)
 			VALUES (?, ?, ?, ?, ?, ?)`, queue, SentinelPayload, status, Stored(t, "2026-10-01T00:00:00Z"),
-			Stored(t, finished), SentinelLastError)
+			Stored(t, finished), lastError)
 	}
+	job := func(queue, status, finished string) { jobWithError(queue, status, finished, SentinelLastError) }
 	job("market-data", "succeeded", "2026-10-02T00:00:00Z")
 	job("market-data", "succeeded", "2026-10-03T00:00:00Z")
-	job("market-data", "failed", "2026-10-03T01:00:00Z")
+	job("market-data", "failed", "2026-10-03T01:00:00Z") // no code token: "unknown"
 	job("market-data", "succeeded", "2026-09-01T00:00:00Z")
 	job("jev-trader", "succeeded", "2026-10-17T00:00:00Z")
+	// Failed jobs with a broker code (JST 10-06 and 10-07), one outside the
+	// period; a code is parsed from the error, the rest of the text is a sentinel.
+	const kabuErr = "marketdata: kabu station api error (http 400, code %s): " + SentinelLastError
+	jobWithError("market-data", "failed", "2026-10-05T16:00:00Z", fmt.Sprintf(kabuErr, "4002006"))
+	jobWithError("market-data", "failed", "2026-10-06T02:00:00Z", fmt.Sprintf(kabuErr, "4002006"))
+	jobWithError("jev-scout", "failed", "2026-10-06T03:00:00Z", fmt.Sprintf(kabuErr, "4001007"))
+	jobWithError("jev-scout", "failed", "2026-10-06T15:30:00Z", "tachibana: p_errno=-62: "+SentinelLastError)
+	jobWithError("market-data", "failed", "2026-09-01T00:00:00Z", fmt.Sprintf(kabuErr, "4001007"))
+	// Terminal skips (succeeded with a "skipped:" note) and a plain success note.
+	jobWithError("outcome-labeling", "succeeded", "2026-10-04T00:00:00Z", "skipped: "+SentinelLastError)
+	jobWithError("outcome-labeling", "succeeded", "2026-10-04T01:00:00Z", "skipped: "+SentinelLastError)
+	jobWithError("analytics", "succeeded", "2026-10-04T02:00:00Z", "deferred: "+SentinelLastError)
 	for _, r := range []struct{ date, status string }{
 		{"2026-10-02", "failed"}, {"2026-10-03", "succeeded"}, {"2026-10-04", "failed"}, {"2026-09-01", "failed"},
 	} {

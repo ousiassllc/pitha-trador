@@ -57,6 +57,7 @@ pitha-trador/
 │   │   ├── paperexec/            # Policy Engineのシグナル実行フック→Execution（Paper）のアダプタ
 │   │   ├── alerts/               # 非機能§5.2のアラート宛先（構造化ログ・Slack）とサービス別Notifierの組み立て
 │   │   ├── dailyguardseed/       # 日次エントリー停止ルールのPaper初期値の起動時1回保存（`Run`。`internal/config/dailyguardsettings.SeedPaperDefaults`を呼び、失敗は警告ログのみで起動を止めない。Paper専用ビルド前提。FR-RISK-8、#782）
+│   │   ├── jobfailurelog/        # 失敗ジョブのエラーコード別集約ログ（`Reporter`。`Services.Start`が1分ごとに起動し、前回のtick以降に`failed`になったジョブを`jobqueue.JobRepository.ListFailedAfter`で読み、`error_code`別の件数・マスク済み代表メッセージを`jobfailurelog: jobs failed`としてERRORで`-error.log`へ出す。`Classify`は`jobs.last_error`の文言からコードを決め、`maskMessage`は`logging.MaskString`＋URL・JSON本文・長い数字列・トークンを置換。#803）
 │   │   ├── startup/              # desktop/server共通のプロセス起動処理（`RunMain`: ログ設定→`run`実行→致命的エラーのERROR記録と終了コード決定、`LogDir`/`DefaultLogDir`: ログディレクトリ解決（Settings画面の`runtime_settings` `system.log_dir`をDBから読み取り専用で参照、未設定は既定）。`internal/logging`のみに依存。#547・#551・#552）
 │   │   ├── runflow/              # テスト専用: `Run`（config解決・DB open）・`DefaultDBPath`・`BuildServices`（空secrets）・`RouterOptions`+`LoadSecrets`（Setup Guard配線）の回帰テスト。linterlyの2000行/ディレクトリ制限のため`bootstrap`直下から分離（#658）
 │   │   └── universe/             # 銘柄マスタCSVのパース・検証と`instruments`へのupsert（`Parse`/`SyncFile`。#389）、JPX東証上場銘柄一覧の取得・パース（`jpx.go`）と`Importer.ImportJPX`（`jpx_import.go`。`POST /scanner/universe/import`経由。`domain`のみに依存。#508・#700・#702）
@@ -116,6 +117,7 @@ pitha-trador/
 │   │   │   ├── slotflow/         # テスト専用: REST登録銘柄リスト（上限50件）のスロット回転・`UnregisterAll`/`UnregisterSymbols`の回帰テスト（ディレクトリ行数上限のため`marketdata`から分離）
 │   │   │   └── tokenflow/        # テスト専用: トークン発行・状態・失効時の再発行の回帰テスト（#621）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
+│   │   ├── healthalert/          # 立会中の市況データ停止の警告（kabu未ログイン・market-data 5分無稼働）の判定規則と`Detector`（30秒ごと。状態は`health_alerts`へ保存し、バナーとPaper 実績 MCPの`collection_status.alerts[]`が読む。外部通知なし。issue #802）
 │   │   ├── featureengine/        # 特徴量算出
 │   │   │   ├── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
 │   │   │   └── marketcontext/    # 市場コンテキスト（指数リターン・市場ブレッドス）の`Loader`。全銘柄共通値を30秒キャッシュして共有（#622。旧`marketcontextflow`のテストも同居）
@@ -191,7 +193,7 @@ pitha-trador/
 │       │   ├── shared/            # 共有ヘルパー（`render.go`のTempl描画（`RenderHTML`：バッファに描画し、失敗時はログ＋500で部分的な200を返さない）・`action_error.go`のアクションエラー整形（`RespondActionError`/`RespondPageError`）・`RenderErrorPage`（routerのmiddlewareも使用）・`ws_poll.go`のWebSocketポーリング（`PollWebSocket`）とJSONフレーム送信（`WriteJSON`）・`ws_accept.go`のWebSocket Upgrade（`AcceptWebSocket`：`middleware.WebSocketBase`設定時は`wails.localhost`等のOriginホスト名も許可））。Templ（`web/atoms`・`web/pages`）・標準/外部ライブラリのみに依存するリーフで、他のhandlerサブパッケージに依存しない
 │       │   ├── symbol/            # Symbol List/Detail/Page/Close と `/ws/symbols/:symbol`（symbol*.go）
 │       │   │   └── wsflow/        # テスト専用: `/ws/symbols/:symbol`（tick/jev_updateプッシュ・ライフサイクル・スナップショット）の回帰テスト（行数上限のためsymbolから分離、#658）
-│       │   ├── system/            # System状態・Kill Switch操作・`/ws/system`・自動アップデートUI（system.go, system_ws.go, update.go）・エラーログDL（`GET /api/v1/logs/errors`、error_log.go）・市況データ接続バナー（`GET /system/marketdata-status`、marketdata.go）・新規エントリー停止バナー（`GET /system/daily-halt`、dailyhalt.go、issue #753）
+│       │   ├── system/            # System状態・Kill Switch操作・`/ws/system`・自動アップデートUI（system.go, system_ws.go, update.go）・エラーログDL（`GET /api/v1/logs/errors`、error_log.go）・市況データ接続バナー（`GET /system/marketdata-status`、marketdata.go）・新規エントリー停止バナー（`GET /system/daily-halt`、dailyhalt.go、issue #753）・市況データ停止の警告バナー（`GET /system/health-alerts`、healthalert.go、issue #802）
 │       │   ├── settings/          # `/settings`・認証情報の保存/削除・初回セットアップ画面`/setup`（settings.go）。接続先別のフィールド定義は settings_fields.go
 │       │   └── activity/          # System Activity Log（`GET /api/v1/activity`・`/ws/activity`）
 │       ├── insightapi/            # decisions/signals/performance の読み取り専用JSON API（Huma登録、`service/insight`を使用）

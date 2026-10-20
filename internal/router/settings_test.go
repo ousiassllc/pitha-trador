@@ -40,7 +40,7 @@ func TestNew_SettingsPageRouteIsRegistered(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New()
 
-	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/settings/integrations", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 

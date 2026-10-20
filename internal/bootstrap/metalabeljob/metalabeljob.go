@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
@@ -51,8 +52,11 @@ func New(db *sql.DB, settings *system.RuntimeSettingsRepository) *Job {
 	repo := metalabel.NewRepository(db)
 	// The adoption honours the freeze after a policy.* change of the
 	// self-improvement flow (issue #780).
-	j.trainer = training.NewTrainer(repo, servicemetalabel.NewStore(repo), j.load,
-		training.WithPolicyChanges(judgement.NewProposalRepository(db)))
+	store := servicemetalabel.NewStore(repo)
+	// A retraining skipped for lack of data is recorded for the Calibration
+	// screen and the MCP (issue #799).
+	j.trainer = training.NewTrainer(repo, store, j.load,
+		training.WithPolicyChanges(judgement.NewProposalRepository(db)), training.WithSkipRecorder(store))
 	return j
 }
 
@@ -112,6 +116,15 @@ func PolicyOption(db *sql.DB, settings *system.RuntimeSettingsRepository) policy
 		cfg.MinEVBps = s.MinEVBps
 		return cfg, nil
 	})
+}
+
+// PaperBootstrapOption wires the Paper-only bootstrap entry (issue #798): while
+// no model is adopted and the Settings switch is on, the Policy Engine enters
+// on the legacy threshold rule. This build runs Paper Trading only
+// (internal/bootstrap/risk.go), so the trading mode is Paper; the switch has
+// no effect in any other mode, and must keep that when a Live build is added.
+func PaperBootstrapOption(settings *system.RuntimeSettingsRepository) policy.Option {
+	return policy.WithPaperBootstrap(metalabelsettings.ModePaper, paperbootstrapsettings.Source{Store: settings})
 }
 
 // ChangeGuard limits the self-improvement flow's policy.* changes against the

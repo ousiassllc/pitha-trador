@@ -24,6 +24,11 @@ func newTestServicesWithState(t *testing.T) (*Services, *State) {
 		t.Fatalf("Run: %v", err)
 	}
 	t.Cleanup(func() { _ = state.Close() })
+	// These tests size and fill orders of ordinary-priced stocks (2,500 yen)
+	// and are about the wiring, not the Paper capital: give them the roomy
+	// pre-#804 Paper limits instead of the shipped 500,000 yen ones, under which
+	// max_trade_loss_pct skips any stock above about 2,083 yen.
+	state.Risk.Paper.InitialCapital, state.Risk.Paper.MaxPositionPerSymbolPct, state.Risk.Paper.MaxTotalExposurePct = 30_000_000, 2, 20
 	// Jev calls fail after one attempt (WithJevMaxAttempts below): tests here
 	// only need a Handler to run, not the real 1.5s retry backoff (issue #236).
 	// JevBaseURL points at a closed local port: an empty one would fall back

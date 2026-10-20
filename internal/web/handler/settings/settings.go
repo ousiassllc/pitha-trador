@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"slices"
 
 	"github.com/a-h/templ"
@@ -16,7 +15,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
-	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
 // SecretsStore is the subset of internal/repository/system.SecretsRepository's
@@ -76,18 +74,6 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 func (h *SettingsHandler) WithMCPSettings() *SettingsHandler {
 	h.mcp = true
 	return h
-}
-
-// Page implements `GET /settings`: one molecules.ConnectionProps per
-// connection in settingsConnections (issue #302), each holding all of that
-// service's keys as SecretFieldRow forms for its modal and showing only
-// whether a value is stored, never the value (issue #57). A per-key
-// SecretsStore.Get error no longer 500s the screen (issue #70): h.row
-// degrades that key to "unset" so it still renders and accepts a value.
-func (h *SettingsHandler) Page(c *gin.Context) {
-	ctx := c.Request.Context()
-	props := pages.SettingsProps{Connections: h.connections(ctx, settingsConnections), Operational: h.opsGroupsProps(ctx), MCP: h.mcp}
-	shared.RenderHTML(c, http.StatusOK, pages.SettingsPage(props))
 }
 
 // Save implements `POST /settings/:key`: it stores the form's `value`
@@ -286,14 +272,4 @@ func (h *SettingsHandler) unsetKeys(ctx context.Context, keys []string) []string
 		}
 	}
 	return missing
-}
-
-// settingsReturnPath is where a non-HTMX Save/Delete goes back to: `/setup`
-// when the form was submitted from the Setup screen, `/settings` otherwise.
-// Only these two fixed paths are ever returned, never the raw Referer.
-func settingsReturnPath(c *gin.Context) string {
-	if ref, err := url.Parse(c.GetHeader("Referer")); err == nil && ref.Path == "/setup" {
-		return "/setup"
-	}
-	return "/settings"
 }

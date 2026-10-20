@@ -9,7 +9,6 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
-	"github.com/ousiassllc/pitha-trador/internal/web/handler/admin"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
@@ -22,6 +21,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/watchlist"
 	"github.com/ousiassllc/pitha-trador/internal/web/insightapi"
+	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
 )
 
 // handlers holds the handlers shared between the SSR routes
@@ -71,7 +71,9 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/calibration", h.calibration.Page)
 
 	engine.GET("/watchlist", watchlist.NewHandler(o.watchlistSource).Page)
-	engine.GET("/admin", admin.NewHandler(swaggerEnabled()).Page)
+	// The admin hub (issue #793) is folded into Settings (issue #805); the old
+	// URL keeps opening the Settings entry.
+	engine.GET("/admin", func(c *gin.Context) { c.Redirect(http.StatusMovedPermanently, settingspages.BasePath) })
 
 	performanceHandler := performance.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
 	performanceHandler.Register(engine)
@@ -90,10 +92,17 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	}
 	if o.mcpSettings != nil {
 		settingsHandler.WithMCPSettings()
-		mcpsettings.New(o.mcpSettings).Register(engine)
+		mcpHandler := mcpsettings.New(o.mcpSettings)
+		if o.mcpWriteGate != nil {
+			mcpHandler.WithWriteGate(o.mcpWriteGate)
+		}
+		mcpHandler.Register(engine)
 	}
 	engine.GET("/setup", settingsHandler.SetupPage)
-	engine.GET("/settings", settingsHandler.Page)
+	engine.GET(settingspages.BasePath, settingsHandler.Page)
+	for _, page := range settingspages.Pages() {
+		engine.GET(page.Path(), settingsHandler.SubPage(page, swaggerEnabled()))
+	}
 	engine.POST("/settings/:key", settingsHandler.Save)
 	engine.DELETE("/settings/:key", settingsHandler.Delete)
 	engine.GET("/system/secrets-status", settingsHandler.Status)
@@ -112,6 +121,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	}
 	engine.GET("/system/marketdata-status", marketDataHandler.Status)
 	engine.GET("/system/daily-halt", system.NewDailyHaltHandler(o.dailyHaltSource).Status)
+	engine.GET("/system/health-alerts", system.NewHealthAlertHandler(o.healthAlertSource).Status)
 
 	return h
 }

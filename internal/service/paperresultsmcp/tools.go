@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
@@ -18,18 +21,29 @@ const (
 
 // toolEnv is what a tool needs besides its arguments.
 type toolEnv struct {
-	q          query.Q
-	r          query.Range
+	q query.Q
+	r query.Range
+	// capitalJPY is config/risk.yaml's Paper capital, the fallback of paperCapital.
 	capitalJPY float64
+	now        time.Time
+	// The fields below serve the settings tools (settings_tools.go).
+	client      string                         // the caller's host, for the audit log
+	paperLimits *config.RiskLimits             // risk.yaml's Paper section (defaults of the Paper keys)
+	writer      func() (*mcpset.Writer, error) // the narrow write connection, opened on first use
 }
 
 // tool is one entry of the dispatch table. The table is the complete set of
-// capabilities: there is no other way for a request to reach SQL, and every
-// entry is a read.
+// capabilities: there is no other way for a request to reach SQL. Every entry
+// is a read except the settings tools that set writes (the whitelisted
+// runtime_settings keys and the write switch, via mcpset.Writer).
 type tool struct {
 	name        string
 	description string
 	schema      map[string]any
+	// writes marks a tool that can change state (annotations.readOnlyHint false).
+	writes bool
+	// noPeriod marks a tool without from/to arguments.
+	noPeriod bool
 	// decode parses the arguments (rejecting unknown ones) and returns the
 	// period arguments plus a run function over the resolved period.
 	decode func(raw json.RawMessage) (periodArgs, runFunc, *toolError)
@@ -48,7 +62,7 @@ func strictDecode(raw json.RawMessage, dst any) *toolError {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		return &toolError{CodeInvalidArgument, err}
+		return &toolError{code: CodeInvalidArgument, cause: err}
 	}
 	if _, err := dec.Token(); err != io.EOF {
 		return fail(CodeInvalidArgument)
@@ -86,7 +100,8 @@ func limitProp(maxLimit int) map[string]any {
 	return map[string]any{"type": "integer", "minimum": 1, "maximum": maxLimit, "default": min(defaultListLimit, maxLimit)}
 }
 
-// tools is the dispatch table: exactly the eight tools of the API spec §3.
+// tools is the dispatch table: the nine read tools of the API spec §3, then
+// the settings tools (settings_tools.go).
 var tools = []tool{
 	{
 		name:        "paper_performance_summary",
@@ -98,7 +113,11 @@ var tools = []tool{
 				return a, nil, err
 			}
 			return a, func(ctx context.Context, e toolEnv) (any, int, error) {
-				p, n, err := query.PerformanceSummary(ctx, e.q, e.r, e.capitalJPY)
+				capital, err := e.paperCapital(ctx)
+				if err != nil {
+					return nil, 0, err
+				}
+				p, n, err := query.PerformanceSummary(ctx, e.q, e.r, capital)
 				return p, n, err
 			}, nil
 		},
@@ -177,7 +196,7 @@ var tools = []tool{
 	},
 	{
 		name:        "metalabel_history",
-		description: "メタモデルの採用/却下履歴と OOS AUC/EV、予測の take/skip 件数（読み取り専用）",
+		description: "メタモデルの採用/却下履歴と OOS AUC/EV、予測の take/skip 件数、データ不足による再学習の見送り（固定コードと必要件数中の件数。読み取り専用）",
 		schema:      periodSchema(map[string]any{"limit": limitProp(maxMetalabelList)}),
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 			var a struct {
@@ -236,7 +255,7 @@ var tools = []tool{
 	},
 	{
 		name:        "collection_status",
-		description: "データ収集の状態: スナップショットの鮮度と欠損日、ジョブ件数、日足失敗、ラベルスキップ（読み取り専用）",
+		description: "データ収集の状態: スナップショットの鮮度と欠損日、ジョブ件数と失敗の内訳、日足失敗、ラベルスキップ、いまの警告（kabu未ログイン・market-data無稼働。固定コードと開始時刻。読み取り専用）",
 		schema:      periodSchema(nil),
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 			var a periodArgs
@@ -244,11 +263,12 @@ var tools = []tool{
 				return a, nil, err
 			}
 			return a, func(ctx context.Context, e toolEnv) (any, int, error) {
-				c, err := query.CollectionStatus(ctx, e.q, e.r)
+				c, err := query.CollectionStatus(ctx, e.q, e.r, e.now)
 				return c, len(c.MissingSessionDates), err
 			}, nil
 		},
 	},
+	healthTodayTool,
 }
 
 // findTool returns the table entry for name.

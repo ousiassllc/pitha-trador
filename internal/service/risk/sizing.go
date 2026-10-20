@@ -8,19 +8,12 @@ import (
 )
 
 // PositionSize returns the order quantity for a new entry at price
-// (sizing.Quantity against the live total exposure). Quantity 0 means no
-// entry is allowed - no lot fits the limits, or the exposure could not be
-// read (fail closed); the reason is logged.
+// (sizing.Quantity against the live total exposure and the limits in force
+// now, EffectiveLimits). Quantity 0 means no entry is allowed - no lot fits
+// the limits, or the exposure or limits could not be read (fail closed); the
+// reason is logged.
 func (e *Engine) PositionSize(ctx context.Context, price float64) int64 {
-	total, err := e.portfolio.TotalExposurePct(ctx)
-	if err != nil {
-		slog.ErrorContext(ctx, "risk: read total exposure for sizing failed; entry skipped", "error", err)
-		return 0
-	}
-	qty, reason := sizing.Quantity(e.limits, e.stopLossPct, price, total)
-	if qty == 0 {
-		slog.InfoContext(ctx, "risk: no lot fits the limits; entry skipped", "reason", reason, "price", price)
-	}
+	qty, _ := e.positionSizeAt(ctx, price)
 	return qty
 }
 
@@ -29,9 +22,29 @@ func (e *Engine) PositionSize(ctx context.Context, price float64) int64 {
 // x price / equity), or 0 when not even one lot is allowed. Symbol
 // Detail's allowed_position_pct.
 func (e *Engine) AllowedPositionPct(ctx context.Context, price float64) float64 {
-	qty := e.PositionSize(ctx, price)
+	qty, capital := e.positionSizeAt(ctx, price)
 	if qty == 0 {
 		return 0
 	}
-	return float64(qty) * price / e.limits.InitialCapital * 100
+	return float64(qty) * price / capital * 100
+}
+
+// positionSizeAt is PositionSize plus the equity (operating capital) it was
+// sized against.
+func (e *Engine) positionSizeAt(ctx context.Context, price float64) (qty int64, capital float64) {
+	limits, err := e.EffectiveLimits(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "risk: read risk limit settings for sizing failed; entry skipped", "error", err)
+		return 0, 0
+	}
+	total, err := e.portfolio.TotalExposurePct(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "risk: read total exposure for sizing failed; entry skipped", "error", err)
+		return 0, 0
+	}
+	qty, reason := sizing.Quantity(limits, e.stopLossPct, price, total)
+	if qty == 0 {
+		slog.InfoContext(ctx, "risk: no lot fits the limits; entry skipped", "reason", reason, "price", price)
+	}
+	return qty, limits.InitialCapital
 }

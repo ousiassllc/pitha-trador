@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 )
 
@@ -244,15 +245,23 @@ func TestDailyGuard_SeedMarkerIsNotASettingsKey(t *testing.T) {
 }
 
 // issue #782: the risk.yaml reference is optional, read-only and carries
-// initial_capital and max_daily_loss_pct.
+// initial_capital and max_daily_loss_pct; issue #804: the capital is the
+// Paper operating capital in force (the Settings value over risk.yaml's).
 func TestRiskReference_UnsetUntilWired(t *testing.T) {
-	svc := newService(&fakeStore{rows: map[string]string{}})
-	if _, ok := svc.RiskReference(); ok {
-		t.Fatal("RiskReference ok before WithRiskReference")
+	ctx := context.Background()
+	store := &fakeStore{rows: map[string]string{}}
+	svc := newService(store)
+	if _, ok, err := svc.RiskReference(ctx); ok || err != nil {
+		t.Fatalf("RiskReference ok=%v err=%v before WithRiskReference", ok, err)
 	}
 	svc.WithRiskReference(config.RiskLimits{InitialCapital: 30_000_000, MaxDailyLossPct: 1.5})
-	ref, ok := svc.RiskReference()
-	if !ok || ref.InitialCapitalJPY != 30_000_000 || ref.MaxDailyLossPct != 1.5 {
-		t.Fatalf("RiskReference = %+v, %v", ref, ok)
+	ref, ok, err := svc.RiskReference(ctx)
+	if err != nil || !ok || ref.InitialCapitalJPY != 30_000_000 || ref.MaxDailyLossPct != 1.5 {
+		t.Fatalf("RiskReference = %+v, %v, %v", ref, ok, err)
+	}
+	store.rows[papersettings.KeyInitialCapitalJPY] = "500000"
+	ref, ok, err = svc.RiskReference(ctx)
+	if err != nil || !ok || ref.InitialCapitalJPY != 500_000 || ref.MaxDailyLossPct != 1.5 {
+		t.Fatalf("RiskReference with a stored Paper capital = %+v, %v, %v", ref, ok, err)
 	}
 }

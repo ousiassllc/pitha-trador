@@ -11,7 +11,7 @@
 //     the `<dialog>`: dragging out of an input and releasing outside makes the
 //     browser target the common ancestor, which must not discard the input;
 //   - a URL hash that points at, or inside, a dialog opens it - the header's
-//     version link `/settings#update-panel` lands in the アップデート modal.
+//     version link `/settings/maintenance#update-panel` lands in the アップデート modal.
 //     Closing such a dialog drops the hash so the same link works again.
 // The dialog content is ordinary HTMX markup (SecretFieldRow forms,
 // UpdatePanel), so HTMX swaps inside an open dialog need no help from here.

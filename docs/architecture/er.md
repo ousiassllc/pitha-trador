@@ -44,10 +44,10 @@ erDiagram
 |----------|----------------------|
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `trade_signals` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` |
-| `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions`（メタラベリングの二次モデルとOOS指標・判断ごとの予測） |
-| `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs`、ベクトルインデックス（sqlite-vec） |
+| `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
+| `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `mcp_settings_audit`、ベクトルインデックス（sqlite-vec） |
 
-Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読むだけで、テーブルも列も追加しない。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
+Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読む。書くのは、設定ツール（issue #806・#807）が `runtime_settings` のホワイトリストのキーと、設定変更の監査表 `mcp_settings_audit`（マイグレーション000040、`er/tables-system.md`）に対して行うものだけ。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
 
 ## 改訂履歴
 
@@ -110,3 +110,8 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.54 | 2026-10-17 | マイグレーション000037を追加し、`er/tables-metalabel.md`の`metalabel_models`に採用判定の根拠列（`oos_takes`・`oos_days`・`oos_ev_ci_{low,high}_bps`・`oos_auc_ci_{low,high}`・`adoption_json`・`forward_json`）を追加。`er/tables-system.md`の`runtime_settings`キーに`metalabel.llm_cutoff_{model,confirmed_on,source}`（LLM学習データ終了日の出典、issue #776）を追記 | issue #780, #776 |
 | 1.55 | 2026-10-17 | Paper 実績 MCP は既存テーブルの読み取り専用であり、新規テーブルを追加しない旨を追記。スキーマ変更なし | issue #783 |
 | 1.56 | 2026-10-19 | `er/tables-metalabel.md`の`reject_reason`に、Live前チェックで`metalabel.llm_cutoff_model`が未記録のときの`llm_cutoff_unverified`を追記（スキーマ変更なし） | issue #780の決定（unverifiedはPaperは警告のみ・Live前は不採用） |
+| 1.57 | 2026-10-20 | マイグレーション000038を追加し、`er/tables-metalabel.md`に`metalabel_retrain_skips`（夜間再学習がデータ不足で見送られた記録。固定の`reason_code`と必要件数中の件数）を新設。Paper 実績 MCP の`metalabel_history`が読む | issue #799 |
+| 1.58 | 2026-10-20 | マイグレーション000039を追加し、`er/tables-system.md`に`health_alerts`（立会中の市況データ停止の警告。固定コードと開始時刻）と`health_alert_checks`（検知の最終確認時刻、1行）を新設。アプリの検知が書き、Paper 実績 MCP の`collection_status`が読む | issue #802 |
+| 1.59 | 2026-10-20 | `er/tables-system.md`の`runtime_settings`に`paper.bootstrap_entry_enabled`を、`er/tables-market.md`の`trade_signals.policy_version`にPaperブートストラップの`policy-vb`を追記（スキーマ変更なし） | issue #798 |
+| 1.60 | 2026-10-20 | `runtime_settings`のキーに`risk.paper.initial_capital_jpy`・`risk.paper.max_position_per_symbol_pct`・`risk.paper.max_total_exposure_pct`・`risk.paper.max_trade_loss_pct`（PaperのRisk Engine用の運用資金・1銘柄／総エクスポージャ上限・1回の最大損失。判定ごとに読み込む）と内部マーカー`system.paper_risk_defaults_seeded`を追加（`er/tables-system.md`） | issue #804 |
+| 1.61 | 2026-10-20 | マイグレーション000040を追加し、`er/tables-system.md`に`mcp_settings_audit`（Paper 実績 MCP の設定ツールと Settings 画面の、ホワイトリストのキーの変更と書き込み許可の切替の監査ログ）を追加。`runtime_settings`のキー`mcp.settings_write_enabled`（書き込み許可、1/0、行なしは許可）を追記 | issue #806・#807 |

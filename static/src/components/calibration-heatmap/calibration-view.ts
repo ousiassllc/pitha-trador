@@ -2,6 +2,7 @@
 // (split out of the component to keep it within the linterly per-file limit).
 import type { ABArm } from './ab-arms-view';
 import type { LLMCutoffInfo, MetaModel } from './meta-model/meta-model-view';
+import type { RetrainSkip } from './meta-model/retrain-skips-view';
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `triple_barrier`
 // object (internal/web/handler/calibration.calibrationBarrierOutput): the EV
@@ -81,6 +82,9 @@ export interface CalibrationAPIResponse {
   // The Jev model's training-data cutoff setting with its status and warning
   // (issue #776); shown even before a model was trained.
   meta_model_cutoff?: LLMCutoffInfo;
+  // The newest skipped nightly retrainings (issue #799), newest first; shown
+  // even before a model was trained; omitted when none was skipped.
+  meta_model_skips?: RetrainSkip[];
   // The paper A/B comparison of the momentum and regime-switching arms
   // (issue #755); omitted when no source is wired.
   ab_arms?: ABArm[];

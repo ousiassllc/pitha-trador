@@ -8,6 +8,8 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/dailyguardseed"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/heldposition"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/jobfailurelog"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
 
@@ -15,19 +17,19 @@ import (
 // candidates and held symbols, in the TSE session only (FR-LUNA-1, #531).
 const newsPollInterval = time.Minute
 
-// Start launches every background goroutine this build's composition root owns: kabuステーションAPI
-// token issuance/refresh (broker.Session.Start), the candidate-refresh ticker (issue #45), the PUSH
-// subscription (pushfeed), and the Scheduler's worker pool + cron triggers (full-scan, self-improve,
-// outcome-labeling, operator-heartbeat, log-rotation; scheduler.Scheduler.Start), after recovering any
-// job a previous crash left "running" (scheduler.Scheduler.Recover) and storing the daily-guard Paper
-// initial values once (dailyguardseed.Run, issue #782). All run until ctx is done or Stop is called;
-// cmd/desktop (Wails' OnStartup) and cmd/server (main) call it and stop it on shutdown.
+// Start launches every background goroutine this build's composition root owns: the broker session
+// (broker.Session.Start) and PUSH subscription, the candidate-refresh ticker (issue #45), the Scheduler's
+// worker pool + cron triggers (scheduler.Scheduler.Start; Recover first resets jobs a crash left "running"),
+// the daily-guard and Paper capital seeding (dailyguardseed.Run #782, paperrisk.Seed #804), the once-a-minute failed-job summary by error
+// code (jobfailurelog, #803) and the trading-hours health alert check (#802). All run until ctx is done or
+// Stop is called; cmd/desktop and cmd/server stop them.
 func (s *Services) Start(ctx context.Context) error {
 	if _, err := s.Scheduler.Recover(ctx); err != nil {
 		return fmt.Errorf("bootstrap: recover jobs: %w", err)
 	}
 
 	dailyguardseed.Run(ctx, s.Settings, time.Now())
+	paperrisk.Seed(ctx, s.Settings, time.Now())
 	s.syncUniverse(ctx)
 
 	if err := s.Broker.Start(ctx); err != nil {
@@ -65,7 +67,10 @@ func (s *Services) Start(ctx context.Context) error {
 	s.startRankingWatch(ctx)
 	s.startRankingMeasure(ctx)
 	s.startDailyBars(ctx)
+	s.wg.Add(1)
+	go func() { defer s.wg.Done(); s.HealthAlerts.Run(ctx) }()
 	s.startWatchList(ctx)
+	jobfailurelog.Start(ctx, &s.wg, s.Jobs) // issue #803
 
 	if s.NewsIngestEnabled() {
 		s.wg.Add(1)

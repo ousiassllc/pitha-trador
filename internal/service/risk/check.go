@@ -88,19 +88,23 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if correlation.SameDirectionExceeded(e.limits, sameDirection) {
 		return false, fmt.Sprintf("%s: direction=%s count=%d max=%d", ReasonMaxSameDirection, direction, sameDirection, e.limits.MaxSameDirectionPositions)
 	}
+	limits, err := e.EffectiveLimits(ctx)
+	if err != nil {
+		return e.failClosed("read risk limit settings", err)
+	}
 	totalPct, err := e.portfolio.TotalExposurePct(ctx)
 	if err != nil {
 		return e.failClosed("read total exposure", err)
 	}
-	if totalPct >= e.limits.MaxTotalExposurePct {
-		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", ReasonMaxTotalExposurePct, totalPct, e.limits.MaxTotalExposurePct)
+	if totalPct >= limits.MaxTotalExposurePct {
+		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", ReasonMaxTotalExposurePct, totalPct, limits.MaxTotalExposurePct)
 	}
 	symbolPct, err := e.portfolio.SymbolExposurePct(ctx, instrumentID)
 	if err != nil {
 		return e.failClosed("read symbol exposure", err)
 	}
-	if symbolPct >= e.limits.MaxPositionPerSymbolPct {
-		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", ReasonMaxPositionPerSymbolPct, symbolPct, e.limits.MaxPositionPerSymbolPct)
+	if symbolPct >= limits.MaxPositionPerSymbolPct {
+		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", ReasonMaxPositionPerSymbolPct, symbolPct, limits.MaxPositionPerSymbolPct)
 	}
 
 	dailyLossPct, breached, err := e.dailyLossBreached(ctx)
@@ -147,8 +151,8 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if pct, adverse := correlation.MarketAdverse(e.limits, direction, sameDirection, snapshot.Feature.MarketReturn5m); adverse {
 		return false, fmt.Sprintf("%s: direction=%s same_direction_positions=%d market_return_5m_pct=%.4f threshold_pct=%.4f", ReasonMarketAdverse, direction, sameDirection, pct, e.limits.MarketAdverseReturn5mPct)
 	}
-	if qty, reason := sizing.Quantity(e.limits, e.stopLossPct, snapshot.Price, totalPct); qty == 0 {
-		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", reason, snapshot.Price, e.stopLossPct, e.limits.MaxTradeLossPct)
+	if qty, reason := sizing.Quantity(limits, e.stopLossPct, snapshot.Price, totalPct); qty == 0 {
+		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", reason, snapshot.Price, e.stopLossPct, limits.MaxTradeLossPct)
 	}
 
 	return true, ""

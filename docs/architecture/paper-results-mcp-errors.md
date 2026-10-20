@@ -13,10 +13,13 @@
 | `access_denied` | 401 | 任意。アーキテクチャ §3.5 で `verify_access_headers` が true のときだけ。`CF-Access-Client-Id` または `CF-Access-Client-Secret` が無い、またはローカル設定と一致しない。SQL は発行しない。必須要件の失敗コードではない | 認証に失敗しました。 |
 | `invalid_period` | 422 | `from` / `to` の形式が `YYYY-MM-DD` でない、片方だけ、`to <= from`、期間が 366 日を超える、`to` が JST の翌日より未来 | 期間の指定が不正です。 |
 | `limit_exceeded` | 422 | 要求の `limit` がツール上限を超える、または期間内の集計対象件数が上限（クローズ済み 5,000 件、horizon 8 種）を超える。部分結果は返さない | 取得量が上限を超えています。期間を狭めてください。 |
-| `db_locked` | 503 | `mode=ro` の接続が 1 秒の `busy_timeout` 以内にロックを取れない | データベースが使用中です。しばらくしてから再度呼んでください。 |
-| `db_unavailable` | 503 | DB ファイルが無い、開けない、`PRAGMA query_only=ON` に失敗した、または必要な列が無くツールを実行できない | データベースを読み取れません。 |
+| `db_locked` | 503 | `mode=ro` の接続が 1 秒の `busy_timeout` 以内にロックを取れない。設定の書き込みの接続が 2 秒以内に書き込みロックを取れないときも同じ（何も保存しない） | データベースが使用中です。しばらくしてから再度呼んでください。 |
+| `db_unavailable` | 503 | DB ファイルが無い、開けない（設定の書き込み接続を含む）、`PRAGMA query_only=ON` に失敗した、または必要な列が無くツールを実行できない | データベースを読み取れません。 |
 | `query_timeout` | 504 | ツール 1 回の処理が 3 秒を超えた（待ち時間を含む）。クエリはキャンセルし、自動では再試行しない | 読み取りが時間内に終わりませんでした。 |
 | `concurrency_limited` | 429 | すでに 2 件のツール呼び出しが実行中。3 件目は SQL を始めない | 同時に処理できる件数を超えています。 |
+| `write_disabled` | 403 | `settings_set` を呼んだが、書き込み許可がオフ（`runtime_settings` の `mcp.settings_write_enabled` が `0`、または壊れた値）。何も保存しない。`settings_write_enable` と読み取りのツールは使える | 設定の書き込みは許可されていません。settings_write_enable か Settings の「外部連携」で許可してください。 |
+| `key_not_allowed` | 403 | `settings_set` の `key` がホワイトリスト（API 仕様 §3.10）に無い。未知のキーも、Live・ブートストラップ・秘密・書き込みスイッチ自身などの既知の別キーも同じ。書き込み許可の確認や DB への接触より前に返す | このキーは MCP から変更できません。settings_get に出るキーだけ変更できます。 |
+| `invalid_value` | 422 | ホワイトリストのキーだが、値が GUI の検証（範囲・形式）に通らない。何も保存しない。`error.data.detail` に、検証の理由（呼び出し側が送った値と許容範囲だけを引く固定の文型。秘密は載らない）を付ける | 値が不正です。settings_get の constraint を確認してください。 |
 | `internal` | 500 | 上記以外の失敗。`message` は固定。原因は slog のみ | 読み取りに失敗しました。 |
 
 `unauthorized` は、キーが無いときと違うときで同じ文である。オフかどうかは返さない（#347 が未認証の相手にオフを返さないのと同じ考え方）。オフそのものは待受が無いので、401 とは観測が分かれる（接続拒否か、401 か）。`access_denied` は Cloudflare の任意照合をオンにしたときだけで、`message` は `unauthorized` と同じ文にする（どちらが欠けたかは返さない）。
@@ -29,7 +32,7 @@
 
 | `code` | HTTP | 条件 | `message` |
 |--------|------|------|-----------|
-| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 8 つ以外、またはそのツールが定義していない引数がある | 引数が不正です。 |
+| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 15 個（読み取り 9、設定 6）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻） | 引数が不正です。 |
 
 期間の不正は `invalid_period` のまま分ける（テストが期間と引数を区別できるようにするため）。
 
@@ -37,7 +40,7 @@
 
 ## 3. ログに残すもの / 残さないもの
 
-残す: `tool`、`code`、`duration_ms`、`from`、`to`、返した件数。認証失敗は `code` だけ（ツール名がまだ決まっていなければ `tool` は空）。
+残す: `tool`、`code`、`duration_ms`、`from`、`to`、返した件数。設定ツールの値（保存した値・変更前後）は残さない（それは監査ログの表 `mcp_settings_audit` に残る。API 仕様 §3.14）。認証失敗は `code` だけ（ツール名がまだ決まっていなければ `tool` は空）。
 
 残さない: `Authorization`、`api_key`、SQL の全文、結果の行、`raw_data_json`、`state_json`、`secrets`。Cloudflare の任意照合を使うときも `CF-Access-Client-Id`、`CF-Access-Client-Secret`、`access_client_secret` は残さない。
 
@@ -48,3 +51,5 @@
 | 1.0 | 2026-10-17 | 新規作成 | issue #783。#347 のエラー表の書式（code・条件・固定の案内文）に合わせた |
 | 1.1 | 2026-10-17 | 必須の認証失敗を `unauthorized` だけにした。`access_denied` は Cloudflare の任意照合のときだけ | 悠太さん指示。Cloudflare Access を必須要件から外す |
 | 1.2 | 2026-10-18 | 実装での JSON-RPC への載せ方を §2 に追記。`message` と HTTP の表は変更なし | issue #783 の実装 |
+| 1.3 | 2026-10-20 | `invalid_argument` の条件のツール数を 9 つに更新（`health_today` を追加）。`message` と HTTP の表は変更なし | issue #808 |
+| 1.4 | 2026-10-20 | 設定ツールのコード `write_disabled`（403）・`key_not_allowed`（403）・`invalid_value`（422、`error.data.detail`）を追加。`invalid_argument` の条件と `db_locked` / `db_unavailable` の条件を設定ツールに合わせて追記 | issue #806・#807 |

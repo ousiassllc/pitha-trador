@@ -190,7 +190,7 @@ func TestFailureRefreshesThePanelAndStartingPolls(t *testing.T) {
 	if rec.Header().Get("HX-Trigger") != "mcp-refresh" {
 		t.Errorf("a failed action sets HX-Trigger %q, want mcp-refresh", rec.Header().Get("HX-Trigger"))
 	}
-	if !strings.Contains(a.get("/settings").Body.String(), `hx-trigger="load, mcp-refresh from:body"`) {
+	if !strings.Contains(a.get("/settings/integrations").Body.String(), `hx-trigger="load, mcp-refresh from:body"`) {
 		t.Error("the panel container does not listen for mcp-refresh")
 	}
 

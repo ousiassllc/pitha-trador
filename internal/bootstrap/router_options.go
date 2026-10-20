@@ -7,13 +7,16 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/evalprovider"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/exitalignjob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/dataexport"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/symbol"
 )
@@ -50,21 +53,27 @@ func LoadSecrets(ctx context.Context, state *State) (*system.SecretsRepository, 
 // the caller.
 func RouterOptions(services *Services, state *State, secretsRepo *system.SecretsRepository) []router.Option {
 	scan := state.Strategy.Scan
+	// The MCP's write switch and audit log live in the application's database;
+	// the Settings screen's own changes to the keys the MCP may write are
+	// recorded there too (issue #806).
+	mcpGate := mcpset.NewGate(state.DB)
 	opts := []router.Option{
 		router.WithCandidateSource(services.Screener),
 		router.WithSystemEngine(services.Risk),
 		router.WithHeartbeatRecorder(services.Risk),
 		router.WithSymbolProvider(services.Execution),
 		router.WithSymbolRiskParams(symbol.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config(), services.Risk.AllowedPositionPct)),
-		router.WithInsightProvider(evalprovider.New(services.Insight, state.DB, services.Risk.Limits().InitialCapital)),
+		router.WithInsightProvider(evalprovider.New(services.Insight, state.DB, paperrisk.CapitalNow(services.Risk))),
 		router.WithCalibrationSource(exitalignjob.NewCalibrationSource(services.Calibration, state.DB, services.Settings, services.Execution.Config())),
 		router.WithPolicyProposalSource(services.Proposals),
 		router.WithBacktestRunner(services.Backtest),
 		router.WithActivitySource(services.Activity),
 		router.WithSecretsStore(secretsRepo),
-		router.WithOperationalSettings(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits())),
+		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.ModePaper), mcpGate)),
+		router.WithMCPWriteGate(mcpGate),
 		router.WithMarketDataStatus(services.Broker),
 		router.WithDailyHaltSource(services.Risk),
+		router.WithHealthAlertSource(services.HealthAlerts),
 		router.WithBrokerSession(services.Broker),
 		router.WithErrorLogExporter(services.ErrorLogs),
 		router.WithDataExporter(dataexport.NewLocal(state.DB, services.ErrorLogs)),

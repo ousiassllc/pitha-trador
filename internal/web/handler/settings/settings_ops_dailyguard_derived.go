@@ -10,11 +10,11 @@ import (
 )
 
 // riskReferenceSource is the optional capability of an OperationalSettings
-// that knows config/risk.yaml's limits (*opsettings.Service, via
+// that knows the Paper limits in force (*opsettings.Service, via
 // WithRiskReference). Without it - or with ok false - the 整合チェック is
 // skipped. It is reference data only: nothing here changes the risk engine.
 type riskReferenceSource interface {
-	RiskReference() (ref dailyguardsettings.RiskReference, ok bool)
+	RiskReference(ctx context.Context) (ref dailyguardsettings.RiskReference, ok bool, err error)
 }
 
 // dailyGuardDerived reads the effective daily entry-halt configuration for
@@ -28,12 +28,26 @@ func (h *SettingsHandler) dailyGuardDerived(ctx context.Context) []molecules.Set
 		return []molecules.SettingDerivedItem{{Key: "error", Label: "計算結果を読み取れませんでした", Off: true}}
 	}
 	items := dailyGuardDerivedItems(resolved)
-	if src, ok := h.ops.(riskReferenceSource); ok {
-		if ref, ok := src.RiskReference(); ok {
-			items = append(items, consistencyItems(dailyguardsettings.CheckConsistency(resolved, ref))...)
-		}
+	if ref, ok := h.riskReference(ctx); ok {
+		items = append(items, consistencyItems(dailyguardsettings.CheckConsistency(resolved, ref))...)
 	}
 	return append(items, liveReadinessItems(dailyguardsettings.LiveReadiness(resolved))...)
+}
+
+// riskReference reads what the 整合チェック compares the daily guard with; ok
+// is false when it is unavailable (not wired, or a read failure, which is
+// logged), which skips the check.
+func (h *SettingsHandler) riskReference(ctx context.Context) (ref dailyguardsettings.RiskReference, ok bool) {
+	src, wired := h.ops.(riskReferenceSource)
+	if !wired {
+		return dailyguardsettings.RiskReference{}, false
+	}
+	ref, ok, err := src.RiskReference(ctx)
+	if err != nil {
+		slog.Error("settings: read Paper risk limits for the consistency check; skipping it", "error", err)
+		return dailyguardsettings.RiskReference{}, false
+	}
+	return ref, ok
 }
 
 // consistencyItems is the 整合チェック block: risk.yaml's initial_capital and

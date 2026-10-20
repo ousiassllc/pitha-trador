@@ -82,12 +82,7 @@ func opsRequest(engine *gin.Engine, method, key string, form url.Values, htmx bo
 
 func TestSettingsPage_ShowsEveryOperationalSettingAndHidesItWithoutService(t *testing.T) {
 	engine, _ := opsRouter()
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
-	body := rec.Body.String()
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d", rec.Code)
-	}
+	body := allPagesBody(t, engine)
 	for _, key := range opsettings.Keys() {
 		if n := strings.Count(body, `data-testid="setting-field-row-`+key+`"`); n != 1 {
 			t.Errorf("page renders %d rows for %q, want exactly 1", n, key)
@@ -99,10 +94,9 @@ func TestSettingsPage_ShowsEveryOperationalSettingAndHidesItWithoutService(t *te
 		}
 	}
 
-	plain := httptest.NewRecorder()
-	settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore())).ServeHTTP(plain, httptest.NewRequest(http.MethodGet, "/settings", nil))
-	if strings.Contains(plain.Body.String(), "setting-field-row-") || strings.Contains(plain.Body.String(), "運用設定") {
-		t.Error("the 運用設定 section must be hidden without OperationalSettings")
+	plain := allPagesBody(t, settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore())))
+	if strings.Contains(plain, "setting-field-row-") || strings.Contains(plain, "設定項目") {
+		t.Error("the 設定項目 section must be hidden without OperationalSettings")
 	}
 }
 
@@ -240,9 +234,7 @@ func TestSaveOps_PrivateKeyPathIsValidatedAndNeverShownBack(t *testing.T) {
 		t.Errorf("the saved path is shown back; body=%s", body)
 	}
 
-	page := httptest.NewRecorder()
-	engine.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/settings", nil))
-	if strings.Contains(page.Body.String(), good) {
+	if strings.Contains(allPagesBody(t, engine), good) {
 		t.Error("the Settings page shows the stored private key path")
 	}
 }

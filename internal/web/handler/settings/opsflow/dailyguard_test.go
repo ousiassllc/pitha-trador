@@ -37,7 +37,12 @@ func TestSaveOps_DailyGuardThresholdsAreEditable(t *testing.T) {
 		if store.rows[key] != tc.stored {
 			t.Errorf("stored %s = %q, want %q", key, store.rows[key], tc.stored)
 		}
-		if !strings.Contains(rec.Body.String(), `id="setting-group-status-daily-guard"`) {
+		// The operating capital is set in the Paper group, next to the Paper capital (#804).
+		group := "daily-guard"
+		if key == dailyguardsettings.KeyOperatingCapitalJPY {
+			group = "paper-risk"
+		}
+		if !strings.Contains(rec.Body.String(), `id="setting-group-status-`+group+`"`) {
 			t.Errorf("POST %s: response lacks the group status; body=%s", key, rec.Body.String())
 		}
 	}
@@ -116,7 +121,7 @@ func TestSettingsPage_DailyGuardShowsDerivedYen(t *testing.T) {
 	store.rows[dailyguardsettings.KeyMaxTrades] = "20"
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/risk", nil))
 	body := rec.Body.String()
 	for key, want := range map[string][]string{
 		"capital":             {"運用資金", "500,000 円"},
@@ -140,7 +145,7 @@ func TestSettingsPage_DailyGuardLegacyDirectYenStillShown(t *testing.T) {
 	store.rows[dailyguardsettings.KeyProfitLockTriggerJPY] = "20000"
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/risk", nil))
 	body := rec.Body.String()
 	if line := derivedLine(t, body, "loss-limit"); !strings.Contains(line, "50,000 円") || !strings.Contains(line, "円で直接指定・互換設定") {
 		t.Errorf("loss-limit line = %s", line)
@@ -161,7 +166,7 @@ func TestSettingsPage_DailyGuardPercentWithoutCapitalIsDisabled(t *testing.T) {
 	store.rows[dailyguardsettings.KeyLossLimitPct] = "1"
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/risk", nil))
 	line := derivedLine(t, rec.Body.String(), "loss-limit")
 	if !strings.Contains(line, "無効") || !strings.Contains(line, "運用資金が未設定のため無効") {
 		t.Errorf("loss-limit line = %s", line)
@@ -207,7 +212,7 @@ func TestSettingsPage_DailyGuardYenUsesThousandsSeparators(t *testing.T) {
 	store.rows[dailyguardsettings.KeyLossLimitPct] = "1"
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/risk", nil))
 	body := rec.Body.String()
 	if line := derivedLine(t, body, "capital"); !strings.Contains(line, "123,456,789 円") {
 		t.Errorf("capital line = %s", line)
@@ -226,7 +231,7 @@ func TestSettingsPage_DailyGuardPercentUnderOneYenShowsReason(t *testing.T) {
 	store.rows[dailyguardsettings.KeyLossLimitJPY] = "50000"
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/risk", nil))
 	line := derivedLine(t, rec.Body.String(), "loss-limit")
 	if !strings.Contains(line, "無効") || !strings.Contains(line, "1 円未満") || strings.Contains(line, "50,000") {
 		t.Errorf("loss-limit line = %s", line)
@@ -251,7 +256,7 @@ func TestSettings_DailyGuardDerivedReadFailureShowsUnreadablePanel(t *testing.T)
 	engine.POST("/ops-settings/:key", h.SaveOps)
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/risk", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("page status = %d", rec.Code)
 	}

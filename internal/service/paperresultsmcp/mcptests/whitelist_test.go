@@ -27,6 +27,11 @@ func TestOutputsAndLogsNeverContainRawDataOrSecrets(t *testing.T) {
 		collect(srv.call(t, tool, map[string]any{"from": "bad"}))
 		collect(srv.call(t, tool, args(map[string]any{"unknown": testkit.SentinelRaw})))
 	}
+	for _, a := range []map[string]any{
+		{}, period, {"unknown": testkit.SentinelRaw}, {"from": "2025-01-01", "to": "2026-10-19"},
+	} {
+		collect(srv.call(t, healthToday, a))
+	}
 	for _, extra := range []map[string]any{
 		{"limit": 200}, {"limit": 1}, {"limit": 201}, {"horizon_minutes": 5},
 	} {
@@ -120,19 +125,38 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("bucket", first(version, "buckets"), "low high sample_count hit_rate")
 	want("barrier counts", version["barrier_counts"].(map[string]any), "tp sl timeout")
 	meta := data("metalabel_history", period)
-	want("metalabel", meta, "models prediction_counts")
+	want("metalabel", meta, "models prediction_counts retrain_skips")
 	want("model", first(meta, "models"),
 		"version algorithm label_version status reject_reason reject_reason_truncated trained_at train_start train_end oos_start oos_end train_samples oos_samples oos_auc oos_expected_value_bps")
 	want("prediction counts", meta["prediction_counts"].(map[string]any), "take skip")
+	want("retrain skip", first(meta, "retrain_skips"), "skipped_at reason_code usable_rows required_rows")
 	risk := data("risk_rejections", period)
-	want("risk", risk, "risk_passed_count other_reject_count buckets")
+	want("risk", risk, "risk_passed_count other_reject_count buckets other_reject_breakdown")
 	want("risk bucket", first(risk, "buckets"), "reason count")
+	want("other reject bucket", first(risk, "other_reject_breakdown"), "reason count")
 	kill := data("kill_switch_history", period)
 	want("kill switch", kill, "events")
 	want("kill event", first(kill, "events"), "id triggered_at reason resolved_at resolved_by")
 	coll := data("collection_status", period)
-	want("collection", coll, "latest_snapshot_at missing_session_dates jobs daily_bar_run_failed_count label_skip_count")
+	want("collection", coll, "latest_snapshot_at missing_session_dates jobs daily_bar_run_failed_count label_skip_count job_failures alerts retention")
 	want("job", first(coll, "jobs"), "queue succeeded_count failed_count latest_succeeded_finished_at")
+	failures := coll["job_failures"].(map[string]any)
+	want("job failures", failures, "total by_day by_queue by_error_code by_day_and_error_code skipped_total skipped_by_queue")
+	want("failure day", first(failures, "by_day"), "date count")
+	want("failure queue", first(failures, "by_queue"), "queue count")
+	want("failure code", first(failures, "by_error_code"), "code count")
+	want("failure day code", first(failures, "by_day_and_error_code"), "date code count")
+	want("skipped queue", first(failures, "skipped_by_queue"), "queue count")
+	want("retention", coll["retention"].(map[string]any), "succeeded_job_days failed_job_days note")
+	health := data(healthToday, map[string]any{})
+	want("health", health, "date trading_day needs_attention attention_codes paper_trades meta_model bootstrap market_data missing_session_dates daily_guard kill_switch retrain")
+	want("health paper trades", health["paper_trades"].(map[string]any), "opened_count closed_count")
+	want("health meta model", health["meta_model"].(map[string]any), "adopted version trained_at")
+	want("health bootstrap", health["bootstrap"].(map[string]any), "enabled effective signals_today")
+	want("health market data", health["market_data"].(map[string]any), "kabu_login market_data app_running alerts")
+	want("health daily guard", health["daily_guard"].(map[string]any), "halted reason halted_at")
+	want("health kill switch", health["kill_switch"].(map[string]any), "active unresolved_count since reasons flag_set")
+	want("health retrain", health["retrain"].(map[string]any), "skipped latest_skipped_at reason_code")
 }
 
 // Protocol basics a connector depends on, all behind the key.

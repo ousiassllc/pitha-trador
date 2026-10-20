@@ -43,9 +43,11 @@ type options struct {
 	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
 	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
 	mcpSettings         mcpsettings.Admin            // nil until WithMCPSettings: no MCP card
+	mcpWriteGate        mcpsettings.WriteGate        // nil until WithMCPWriteGate: no write section
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	dailyHaltSource     system.DailyHaltSource
+	healthAlertSource   system.HealthAlertSource
 	errorLogExporter    system.ErrorLogExporter
 	dataExporter        export.DataExporter
 	heartbeatRecorder   middleware.HeartbeatRecorder // nil until WithHeartbeatRecorder: no heartbeat recording
@@ -185,6 +187,13 @@ func WithMCPSettings(admin mcpsettings.Admin) Option {
 	return func(o *options) { o.mcpSettings = admin }
 }
 
+// WithMCPWriteGate adds the settings-write switch and the audit log to the MCP
+// card and mounts `POST /settings/mcp/write` (issue #806). It has an effect
+// only together with WithMCPSettings.
+func WithMCPWriteGate(gate mcpsettings.WriteGate) Option {
+	return func(o *options) { o.mcpWriteGate = gate }
+}
+
 // WithBrokerSession lets the Settings screen's 立花証券 e支店 card show the
 // running broker adapter's session state (issue #738); the card shows it
 // only while that adapter is 立花.
@@ -220,6 +229,14 @@ func WithMarketDataStatus(source system.MarketDataStatusSource) Option {
 // renders nothing.
 func WithDailyHaltSource(source system.DailyHaltSource) Option {
 	return func(o *options) { o.dailyHaltSource = source }
+}
+
+// WithHealthAlertSource enables `GET /system/health-alerts` (issue #802), the
+// header banner for the trading-hours market-data warning (kabu not logged in,
+// no market-data job). cmd/desktop and cmd/server pass internal/bootstrap's
+// health alert detector; without it the route renders nothing.
+func WithHealthAlertSource(source system.HealthAlertSource) Option {
+	return func(o *options) { o.healthAlertSource = source }
 }
 
 // WithErrorLogExporter overrides `GET /api/v1/logs/errors`'s backing

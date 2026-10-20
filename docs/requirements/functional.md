@@ -20,7 +20,7 @@
 | UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/ブローカー（kabuステーション・立花証券。`broker.provider`で1つを選択）/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する。立花証券 e支店のカードには接続環境（デモ/本番）を常にバッジで表示する |
 | UC-15 | 初回セットアップ | 個人トレーダー | 選択したブローカーの必須認証情報（既定のkabuなら`KABU_API_PASSWORD`）とJevが未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
 | UC-16 | エラーログ取得 | 個人トレーダー（運用者） | Settings画面から期間・レベルを指定してエラーログをダウンロードし、調査・共有に使う |
-| UC-17 | Paper実績の遠隔参照 | Grok Bot（リモート） | 認証を通した読み取り専用 MCP で、Paper の損益・取引・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読む。売買と設定変更はしない（§4.22） |
+| UC-17 | Paper実績の遠隔参照 | Grok Bot（リモート） | 認証を通した MCP で、Paper の損益・取引・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読み、ホワイトリストに載った基本設定（Paper の資金・上限、日次ガード、LLM cutoff と出典）だけを一覧・変更・差分確認できる。売買・発注・送金・Kill Switch 解除・Live の値・秘密は扱わない（§4.22） |
 
 ```mermaid
 graph TD
@@ -307,3 +307,10 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.107 | 2026-10-19 | §4.22 に FR-MCP-9〜12 を追加（Settings 画面の MCP カード: 状態表示・有効/待受アドレスのサーバー側検証と保存・API キーの一度きりの表示と伏せ字・キーを DB/ログ/エクスポート/バックアップに入れない）。FR-MCP-1〜8 は変更なし | issue #792 |
 | 1.108 | 2026-10-19 | §4.23 に FR-ADMIN-1〜5 を追加（管理ハブ `GET /admin`: 全管理画面・Settings の全ダイアログをカテゴリ別に一覧、既存 URL は不変、各画面からのメインナビ「管理」での戻り導線） | issue #793 |
 | 1.109 | 2026-10-19 | §4.22 に FR-MCP-13〜16 を追加し、FR-MCP-9 の状態表示を更新（MCP の起動・停止・再起動を Settings 画面から行う、状態に 起動中・エラー、アプリ起動時の自動起動・アプリ終了時の停止・異常終了時の孤児防止、Windows ログオン時の既存の自動起動で再起動後に復帰、キーは設定ファイル経由のみ、二重起動しない）。FR-MCP-1〜12 の読み取り専用・既定オフ・キー空なら待受しない・アドレス検証は変更なし | issue #795 |
+| 1.110 | 2026-10-20 | §4.17 に FR-SETTINGS-8（立会中のkabu未ログイン・market-data無稼働の警告。アプリ内バナーと MCP の `collection_status.alerts[]`。外部通知なし）を追加し、FR-MCP-4 に `alerts` を追記 | issue #802 |
+| 1.111 | 2026-10-20 | §4.23 を「Settings の構成」に改め、FR-ADMIN-1〜4 を更新（管理ハブ`/admin`を Settings に統合: メニューは Settings 1本、`/settings`はページ一覧、詳細は`/settings/<page id>`の6ページ、旧 URL・ハッシュ直リンクは転送） | issue #805 |
+| 1.112 | 2026-10-20 | §4.6にFR-POLICY-7（Paper限定ブートストラップ: メタモデル未採用でSettingsの`paper.bootstrap_entry_enabled`が有効なPaperだけ、旧しきい値ルールで候補を判断してRisk Engineに進める。既定無効・新しいしきい値は作らない・Liveでは設定があっても必ず無効（判断点とSettingsの両方）・`policy-vb`とログでブートストラップ経由と分かる・MCP用の`query.PaperBootstrapUse`）を追加し、FR-SETTINGS-7に1キーを追加。Live・実発注の経路は変更なし | issue #798 |
+| 1.113 | 2026-10-20 | §4.7にFR-RISK-9（Paperの運用資金・1銘柄上限・総エクスポージャ上限・1回の最大損失をSettings「リスク・資金」から変更、`runtime_settings`の`risk.paper.*`4キー、判定ごとに読み直して再起動不要、`config/risk.yaml`はフォールバック既定、Paper初期値は50万円・100%・100%・1.0%（範囲0.1〜3.0）で同梱`risk.yaml`と一度きりのシードをそろえた、日次ガードの運用資金を同画面で揃えて不一致警告を解消、Liveは不変）を追加し、Paper初期値表を更新 | issue #804 |
+| 1.114 | 2026-10-20 | §4.22 の FR-MCP-4 のツールを 9 つに改め（`health_today` を追加）、FR-MCP-17 を追加（今日の健康診断を 1 回で返す読み取り専用ツール。Paper 取引数・メタモデル・ブートストラップ・kabu/market-data（#802 と同じ固定コード）・欠損セッション・日次ガード・Kill Switch・再学習の見送りと、要対応フラグ `needs_attention` と固定コード 8 種。`runtime_settings` は固定キーのみ読み取り。新規テーブルなし） | issue #808 |
+| 1.115 | 2026-10-20 | §4.22 に FR-MCP-18〜22 を追加（MCP の設定ツール `settings_get` / `settings_set` / `settings_diff` / `settings_audit` / `settings_write_enable` / `settings_write_disable`、ホワイトリスト 15 キー、書き込み許可は既定オンで Settings と MCP の両方から切替、監査ログ `mcp_settings_audit` とマスク方針）。FR-MCP-3・4 の読み取り専用の記述を、設定ツールだけが別の狭い接続で書く形に改めた。UC-17 を更新 | issue #806・#807 |
+| 1.116 | 2026-10-20 | FR-META-6 に、LLM cutoff の状態（`placeholder` / `unverified` / `confirmed`）と公式日付の確認手順の短いヘルプを Settings「メタラベリング」に表示する旨を追加。FR-MCP-22 に、`settings_get` の `llm_cutoff_status` と MCP だけで cutoff・出典を更新できる旨を追記（Live 前の unverified 不採用は不変） | issue #809 |

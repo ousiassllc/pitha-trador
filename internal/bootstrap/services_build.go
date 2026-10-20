@@ -15,7 +15,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/metalabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newswire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -108,9 +110,9 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 	})
 
 	luna := assist.NewLuna(assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}), assist.WithJev(s.Jev))
-	feed, feedOn := newNewsFeed(secrets, cfg.yanoshinURL)
+	feed, feedOn := newswire.NewFeed(secrets, cfg.yanoshinURL)
 	s.newsEnabled = feedOn && luna.Configured()
-	logNewsIngest(s.newsEnabled, feedOn)
+	newswire.LogIngest(s.newsEnabled, feedOn)
 	s.Screener = screener.NewLiveSource() // News Ingest polls its candidates; shared with buildJevPipeline
 	newsOpts := []newsfeed.Option{newsfeed.WithSessionGate(marketcalendarOpen), newsfeed.WithErrorObserver(s.Activity.ObserveNewsFeedError)}
 	if cfg.newsNow != nil {
@@ -170,7 +172,7 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 // rolled-back) change applies on the next evaluation (#52, #714).
 func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config, runtimePolicy selfimprove.RuntimePolicy) *policy.Handler {
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
-	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy), metalabeljob.PolicyOption(state.DB, s.Settings))
+	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy), metalabeljob.PolicyOption(state.DB, s.Settings), metalabeljob.PaperBootstrapOption(s.Settings))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig, backtestsource.NewReplay(state.DB, s.Settings, state.Risk.Paper, s.Positions))
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk},
@@ -213,7 +215,7 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 		schedOpts = append(schedOpts, scheduler.WithFullScanDisabled())
 	}
 	if autoUpdate != nil {
-		gate := updater.SafeGate{Positions: repoportfolio.New(s.Positions, state.Risk.Paper.InitialCapital), State: s.Risk, Orders: s.Execution}
+		gate := updater.SafeGate{Positions: repoportfolio.New(s.Positions, state.Risk.Paper.InitialCapital, repoportfolio.WithCapitalSource(paperrisk.CapitalSource(s.Settings, state.Risk.Paper))), State: s.Risk, Orders: s.Execution}
 		checker := updater.NewChecker(updater.Config{Owner: version.GitHubOwner, Repo: version.GitHubRepo, Gate: gate})
 		s.Updater = &updater.SchedulerAdapter{Checker: checker, Quitter: autoUpdate}
 		schedOpts = append(schedOpts, scheduler.WithUpdateChecker(s.Updater))

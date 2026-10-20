@@ -166,8 +166,8 @@ func initializeResult(params json.RawMessage) map[string]any {
 	return map[string]any{
 		"protocolVersion": version,
 		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
-		"serverInfo":      map[string]any{"name": "paper-results-mcp", "version": "1.0.0"},
-		"instructions":    "pitha-trador の Paper 実績・Jev 判断・収集状況を読む読み取り専用ツールだけを提供します。",
+		"serverInfo":      map[string]any{"name": "paper-results-mcp", "version": "1.1.0"},
+		"instructions":    "pitha-trador の Paper 実績・Jev 判断・収集状況を読む読み取りツールと、ホワイトリストにある基本設定を読む・変更する settings_* ツールだけを提供します。発注・送金・Kill Switch 解除・Live の値・秘密情報は扱えません。",
 	}
 }
 
@@ -178,7 +178,7 @@ func toolList() []map[string]any {
 			"name":        t.name,
 			"description": t.description,
 			"inputSchema": t.schema,
-			"annotations": map[string]any{"readOnlyHint": true, "destructiveHint": false, "openWorldHint": false},
+			"annotations": map[string]any{"readOnlyHint": !t.writes, "destructiveHint": false, "openWorldHint": false},
 		}
 	}
 	return list
@@ -211,9 +211,20 @@ func writeRPCError(w http.ResponseWriter, status int, id json.RawMessage, code i
 // document, a JSON-RPC error whose message is the fixed text, and the spec
 // code in both error.data.code and the top-level "code".
 func writeError(w http.ResponseWriter, id json.RawMessage, code Code) {
+	writeFailure(w, id, &toolError{code: code})
+}
+
+// writeFailure is writeError for a tool failure: it adds error.data.detail
+// when the failure carries one.
+func writeFailure(w http.ResponseWriter, id json.RawMessage, te *toolError) {
+	code := te.code
 	info := codeTable[code]
 	if len(id) == 0 {
 		id = json.RawMessage("null")
+	}
+	data := map[string]string{"code": string(code)}
+	if te.detail != "" {
+		data["detail"] = te.detail
 	}
 	writeJSON(w, info.status, map[string]any{
 		"jsonrpc": "2.0",
@@ -223,7 +234,7 @@ func writeError(w http.ResponseWriter, id json.RawMessage, code Code) {
 		"error": rpcErrorBody{
 			Code:    rpcServerError,
 			Message: info.message,
-			Data:    map[string]string{"code": string(code)},
+			Data:    data,
 		},
 	})
 }

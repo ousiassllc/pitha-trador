@@ -1,6 +1,13 @@
 package settings
 
-import "github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+import (
+	"context"
+	"log/slog"
+
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/cutoffpanel"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+)
 
 // metaLabelGroup holds the meta-labeling secondary model's settings (issue
 // #759, parent #752): which model and calibration it uses, when it is
@@ -30,4 +37,20 @@ var metaLabelGroup = opsGroup{
 		{key: metalabelsettings.KeyLLMCutoffSource, label: "学習データの終わりの出典", placeholder: "例: ベンダーの公式ドキュメントの URL",
 			hint: "上の日付の根拠（公式ドキュメントの URL や問い合わせ先など。200 文字以内）です（記録用）。"},
 	},
+}
+
+// metaLabelDerived is the group's read-only panel (issue #809): the LLM cutoff
+// status with its recorded provenance and the how-to of confirming the
+// official date. A read failure is logged and shown as such instead of failing
+// the screen.
+func (h *SettingsHandler) metaLabelDerived(ctx context.Context) []molecules.SettingDerivedItem {
+	items, err := cutoffpanel.Load(func(key string) (string, error) {
+		v, err := h.ops.Get(ctx, key)
+		return v.Current, err
+	})
+	if err != nil {
+		slog.Error("settings: read the LLM cutoff for the status panel; showing it as unreadable", "error", err)
+		return []molecules.SettingDerivedItem{{Key: "error", Label: "LLM cutoff の状態を読み取れませんでした", Off: true}}
+	}
+	return items
 }

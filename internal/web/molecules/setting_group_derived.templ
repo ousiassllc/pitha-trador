@@ -22,13 +22,21 @@ type SettingDerivedItem struct {
 // current while the modal is open.
 func (p SettingGroupProps) DerivedID() string { return "setting-group-derived-" + p.ID }
 
+// DerivedPanelTitle is the title of the group's read-only panel.
+func (p SettingGroupProps) DerivedPanelTitle() string {
+	if p.DerivedTitle != "" {
+		return p.DerivedTitle
+	}
+	return "計算結果"
+}
+
 // SettingGroupDerived is the read-only 計算結果 panel of a group whose
 // effective values are computed from several rows (e.g. yen thresholds from
 // an operating capital and percentages). oob renders it as an
 // `hx-swap-oob="true"` fragment (replacing the element with the same id).
 templ SettingGroupDerived(props SettingGroupProps, oob bool) {
-	<section id={ props.DerivedID() } class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" data-testid={ props.DerivedID() } aria-live="polite" aria-label="計算結果" { oobAttrs(oob)... }>
-		<p class="font-semibold text-slate-800">計算結果</p>
+	<section id={ props.DerivedID() } class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" data-testid={ props.DerivedID() } aria-live="polite" aria-label={ props.DerivedPanelTitle() } { oobAttrs(oob)... }>
+		<p class="font-semibold text-slate-800">{ props.DerivedPanelTitle() }</p>
 		<ul class="flex flex-col gap-1">
 			for _, item := range props.Derived {
 				if item.Heading {

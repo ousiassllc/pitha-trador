@@ -43,12 +43,14 @@ var tradingDayZone = time.FixedZone("JST", 9*60*60)
 // internal/trading.PositionRepository (issue #48).
 //
 // TotalExposurePct/SymbolExposurePct/DailyLossPct measure against the
-// account-equity baseline initialCapital (config/risk.yaml's
-// initial_capital, the same value Execution's position sizing uses); with
-// no baseline they return ErrNoInitialCapital.
+// account-equity baseline (config/risk.yaml's initial_capital, the same
+// value Execution's position sizing uses; WithCapitalSource replaces it with
+// a value read on every call); with no baseline they return
+// ErrNoInitialCapital.
 type Provider struct {
 	positions      *trading.PositionRepository
 	initialCapital float64
+	capitalSource  func(ctx context.Context) (float64, error)
 	now            func() time.Time
 }
 
@@ -58,6 +60,30 @@ type Option func(*Provider)
 // WithClock overrides the clock DailyLossPct uses to find "today".
 func WithClock(now func() time.Time) Option {
 	return func(p *Provider) { p.now = now }
+}
+
+// WithCapitalSource makes the Provider read its account-equity baseline from
+// source on every call instead of using New's fixed initialCapital, so a
+// capital saved on the Settings screen applies at once (issue #804, Paper).
+// A source error is returned as the method's error (the Risk Engine fails
+// closed).
+func WithCapitalSource(source func(ctx context.Context) (float64, error)) Option {
+	return func(p *Provider) { p.capitalSource = source }
+}
+
+// capital is the baseline in force now; <= 0 is ErrNoInitialCapital.
+func (p *Provider) capital(ctx context.Context) (float64, error) {
+	capital := p.initialCapital
+	if p.capitalSource != nil {
+		var err error
+		if capital, err = p.capitalSource(ctx); err != nil {
+			return 0, err
+		}
+	}
+	if capital <= 0 {
+		return 0, ErrNoInitialCapital
+	}
+	return capital, nil
 }
 
 // New returns a Provider
@@ -105,8 +131,9 @@ func positionNotional(pos domain.Position) float64 {
 }
 
 func (p *Provider) TotalExposurePct(ctx context.Context) (float64, error) {
-	if p.initialCapital <= 0 {
-		return 0, ErrNoInitialCapital
+	capital, err := p.capital(ctx)
+	if err != nil {
+		return 0, err
 	}
 	open, err := p.positions.ListOpen(ctx)
 	if err != nil {
@@ -116,12 +143,13 @@ func (p *Provider) TotalExposurePct(ctx context.Context) (float64, error) {
 	for _, pos := range open {
 		notional += positionNotional(pos)
 	}
-	return notional / p.initialCapital * 100, nil
+	return notional / capital * 100, nil
 }
 
 func (p *Provider) SymbolExposurePct(ctx context.Context, instrumentID int64) (float64, error) {
-	if p.initialCapital <= 0 {
-		return 0, ErrNoInitialCapital
+	capital, err := p.capital(ctx)
+	if err != nil {
+		return 0, err
 	}
 	open, err := p.positions.ListOpen(ctx)
 	if err != nil {
@@ -133,7 +161,7 @@ func (p *Provider) SymbolExposurePct(ctx context.Context, instrumentID int64) (f
 			notional += positionNotional(pos)
 		}
 	}
-	return notional / p.initialCapital * 100, nil
+	return notional / capital * 100, nil
 }
 
 // DailyActivity is today's (JST) result for the daily entry-halt rules
@@ -183,8 +211,9 @@ func (p *Provider) DailyActivity(ctx context.Context) (risk.DailyActivity, error
 // daily_loss_limit Kill Switch is not undone by the losses that caused it;
 // open positions' unrealized P&L always counts.
 func (p *Provider) DailyLossPct(ctx context.Context, since time.Time) (float64, error) {
-	if p.initialCapital <= 0 {
-		return 0, ErrNoInitialCapital
+	capital, err := p.capital(ctx)
+	if err != nil {
+		return 0, err
 	}
 	now := p.now().In(tradingDayZone)
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, tradingDayZone)
@@ -205,7 +234,7 @@ func (p *Provider) DailyLossPct(ctx context.Context, since time.Time) (float64, 
 	for _, pos := range open {
 		pnl += pos.UnrealizedPnL
 	}
-	return -pnl / p.initialCapital * 100, nil
+	return -pnl / capital * 100, nil
 }
 
 // recentClosedPositions returns positions.List's recentClosedPositionsLimit

@@ -1,9 +1,12 @@
 package mcpsettings
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proc"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/mcp"
 )
@@ -123,4 +126,62 @@ func loadWarning(k admin.LoadErrorKind) string {
 	default:
 		return ""
 	}
+}
+
+// auditRows is how many audit rows the panel lists.
+const auditRows = 10
+
+// addWrite fills the settings-write section. A read failure hides nothing: the
+// section shows the safe reading (off, no rows) and the failure is logged.
+func (h *Handler) addWrite(ctx context.Context, props *mcp.PanelProps) {
+	if h.gate == nil {
+		return
+	}
+	props.WriteGate = true
+	on, err := h.gate.Enabled(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "mcpsettings: read write switch", "error", err)
+	}
+	props.WriteEnabled = on && err == nil
+	entries, err := h.gate.Recent(ctx, auditRows)
+	if err != nil {
+		slog.ErrorContext(ctx, "mcpsettings: read audit log", "error", err)
+		return
+	}
+	for _, e := range entries {
+		props.Audit = append(props.Audit, auditRow(e))
+	}
+}
+
+func auditRow(e mcpset.Entry) mcp.AuditRow {
+	by := "Settings 画面"
+	if e.Actor == mcpset.ActorMCP {
+		by = "MCP"
+		if e.Client != "" {
+			by += "（" + e.Client + "）"
+		}
+	}
+	return mcp.AuditRow{At: e.At, By: by, What: auditAction(e.Action), Key: e.Key, Before: auditValue(e.Before), After: auditValue(e.After)}
+}
+
+func auditAction(a string) string {
+	switch a {
+	case mcpset.ActionSet:
+		return "変更"
+	case mcpset.ActionReset:
+		return "既定に戻す"
+	case mcpset.ActionWriteEnable:
+		return "書き込みを許可"
+	case mcpset.ActionWriteDisable:
+		return "書き込みを禁止"
+	}
+	return a
+}
+
+// auditValue words a missing value: no stored row, the default applies.
+func auditValue(v *string) string {
+	if v == nil {
+		return "（既定）"
+	}
+	return *v
 }

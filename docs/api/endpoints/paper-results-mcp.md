@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つ）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -44,8 +44,8 @@
 | `expectancy_return_pct` | 各行の `realized_pnl / (entry_price * quantity) * 100` の平均。建値が 0 以下の行はリターン 0 として数える（`internal/service/insight.Aggregate` と同じ）。0 件なら `null` |
 | `profit_factor` | 勝ちの合計円 ÷ 負けの合計円の絶対値。負けが 0 件、または対象 0 件なら `null` |
 | `max_drawdown_jpy` | `closed_at` 昇順、同着は `id` 昇順で `realized_pnl` を累積した曲線の、ピークから谷までの最大下落（円）。下落が無ければ 0。0 件なら 0 |
-| `capital_jpy` | `config/risk.yaml` の `paper.initial_capital`。未設定時は `config.DefaultPaperInitialCapital`（30,000,000）。アプリと同じ yaml 解決順で読む。Live の値は使わない |
-| `max_drawdown_capital_ratio` | `max_drawdown_jpy / capital_jpy`。`capital_jpy` が 0 以下、または yaml を読めないときは両方 `null`（円建てのドローダウンは返す） |
+| `capital_jpy` | Paper の資金。`runtime_settings` の `risk.paper.initial_capital_jpy`（Settings で保存した Paper の運用資金、issue #804。読み取り接続で読む）が有効に保存されていればそれ。なければ `config/risk.yaml` の `paper.initial_capital`（MCP プロセスの起動時に読む。未設定時は `config.DefaultPaperInitialCapital`＝500,000。アプリと同じ yaml 解決順）。Live の値は使わない。どちらも使えなければ `null`（issue #806） |
+| `max_drawdown_capital_ratio` | `max_drawdown_jpy / capital_jpy`。`capital_jpy` が 0 以下、または保存値も yaml も使えないときは両方 `null`（円建てのドローダウンは返す） |
 
 `internal/service/insight.Performance.MaxDrawdownPct` はリターン（%）の曲線であり、ここでいう資金比ではない。実装は円の累積を別に計算する。
 
@@ -114,6 +114,8 @@
 
 `data.prediction_counts`: `metalabel_predictions.predicted_at` が期間内の行の `take` と `skip` の件数だけ（`action` の CHECK は `take` / `skip`。`000034`）。
 
+`data.retrain_skips[]`: 夜間再学習がデータ不足で見送られた記録（`metalabel_retrain_skips.skipped_at` が期間内、新しい順、最大 `limit` 件。`000038`）。フィールドは `skipped_at` / `reason_code` / `usable_rows` / `required_rows`。`usable_rows` 件が `required_rows` 件に足りない（「必要 130 件中 87 件」は `required_rows=130`・`usable_rows=87`）。`reason_code` は固定コードで、自由文は返さない: `too_few_rows_before_oos`（検証期間より前の使えるラベル付き判断が fit+較正の最小件数に足りない）/ `too_few_rows_after_purge`（purge・embargo 後に fit か較正が最小件数に足りない）/ `training_data_unusable`（件数はあるがラベルが片側だけ等で学習できない）。未知のコードは `other`。
+
 返さない: `params_json`、`feature_names_json`、`oos_calibration_json`、`features_json`、確率・EV の行そのもの。
 
 ### 3.6 `risk_rejections`
@@ -121,6 +123,8 @@
 引数: `from`, `to`。対象は期間内（`trade_signals.timestamp`）の行。
 
 `data.risk_passed_count`: `risk_passed` が真の件数。`data.other_reject_count`: `risk_passed` が偽で、`reject_reason` が `risk_engine_rejected:` で始まらない件数（理由文は返さない）。
+
+`data.other_reject_breakdown[]`: `other_reject_count` の内訳（`reason` と `count`。件数の多い順、同数は `reason` 昇順）。`reject_reason` の最初の `:` より前（前後の空白を除く）を固定コードに正規化する。コードは Policy の理由コードそのもの（`jev_none` / `probability_below_threshold` / `entry_quality_below_threshold` / `continuation_probability_below_threshold` / `toxic_flow_above_threshold` / `liquidity_stressed_above_threshold` / `spread_too_wide` / `thin_liquidity` / `special_quote` / `price_limit` / `not_lendable` / `missing_data` / `api_error` / `not_calibrated` / `meta_model_unavailable` / `vwap_z_unavailable` / `vwap_not_extreme`。`internal/service/policy/engine.go`・`meta.go`・`regime.go`）。`meta_skip: <reason> (p=… ev_bps=…)` は `meta_skip:<reason>`（`no_active_model` / `model_unusable` / `no_candidate` / `missing_feature` / `invalid_config` / `predict_failed` / `ev_not_above_minimum`。`internal/service/metalabel/decide.go`）にし、確率・EV の数値は返さない。知らない理由は `meta_skip:other`、知らないコードは `other`、`reject_reason` が NULL か空は `unknown`。内訳の合計は `other_reject_count` と一致する。板・価格・エラー文は返さない。
 
 `data.buckets[]`: `risk_engine_rejected:` の直後から、次の `:` または末尾までのトークン（前後の空白を除く）を `reason` とし、その件数。トークンが空なら `unknown`。詳細（`count=` や円金額、エラー文）は返さない。日次停止は `Check` が `daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades` を返し、Policy が `risk_engine_rejected:` を付ける（`internal/service/risk/check.go`、`internal/service/policy/engine.go`）ので、バケット名はそのコードになる。
 
@@ -143,12 +147,116 @@
 | `jobs[]` | キュー `market-data` / `feature-calc` / `jev-scout` / `jev-trader` / `outcome-labeling` / `analytics` ごとに、期間内（`finished_at`）の `succeeded_count` / `failed_count` と、`status=succeeded` の最新 `finished_at` |
 | `daily_bar_run_failed_count` | 期間内（`run_date`）の `daily_bar_runs.status='failed'` の件数 |
 | `label_skip_count` | 期間内（`calibration_label_skips.created_at`）の件数 |
+| `job_failures` | 期間内（`finished_at`）に `failed` で終わったジョブの内訳。`total`、`by_day[]`（`date` は JST 日・`count`）、`by_queue[]`（`queue`・`count`。キューの順）、`by_error_code[]`（`code`・`count`）、`by_day_and_error_code[]`（`date`・`code`・`count`。「10/6 の 4002006 は N 件」はこれで引ける）。どの一覧も合計は `total`。`skipped_total` / `skipped_by_queue[]` は `last_error` が `skipped: ` で始まる `succeeded` のジョブ（`jobqueue.Skip` による終端スキップ。`jobs[].succeeded_count` に含まれる）の件数 |
+| `alerts[]` | いま出ている警告（期間ではなく現在）。要素は `code` と `since`（条件が始まった時刻、UTC RFC3339）だけで、自由文は返さない。無ければ `[]`。`code` は固定: `kabu_not_logged_in`（取引日の 08:45〜15:30 に kabu が未ログイン〔4001007〕。08:45 の時点で既に続いていた、または後から 5 分続いた）/ `market_data_idle`（立会中〔9:00〜11:30・12:30〜15:30〕に `market-data` ジョブが成功も失敗も 5 分間ゼロ。立会の開始から数える）。非取引日と対象時間外は出さず、条件が解けると消える。アプリ内の検知（`health_alerts`、`000039`）が保存した行を読み、検知の最終確認（`health_alert_checks`）が 2 分より古い間はアプリが止まっているとみなして行を使わず、立会中なら `jobs` から `market_data_idle` だけを導く。health_today（#808）も同じ状態（`query.HealthAlerts`）を読む |
+| `retention` | `succeeded_job_days`（7）/ `failed_job_days`（30）と固定の注記。完了ジョブは `internal/service/retention` が成功 7 日・失敗 30 日で削除するため、期間がそれより前に及ぶと成功は先に消え、`jobs[]` と `job_failures` に出ない（失敗は 30 日残る） |
 
-返さない: `jobs.payload_json`、`jobs.last_error`、`daily_bar_runs.error`、`daily_bars` の価格・出来高、スキップ理由の自由文。
+`job_failures` の `code` は `jobs.last_error` の先頭 256 バイトから、固定パターン（kabu `code 4002006` / 立花 `p_errno=-62`・`sResultCode=NNN`）の数値トークン（`-` 付きでもよい 1〜8 桁）だけを取り出した値で、無ければ `unknown`。取り出しはプロセス内で行い、`last_error` の本文は返さない（SQL に `last_error` が現れるのは `substr(last_error, 1, N)`（N は 256 以下）の形だけで、`readonly_db_test` が確認する）。
+
+返さない: `jobs.payload_json`、`jobs.last_error` の本文、`daily_bar_runs.error`、`daily_bars` の価格・出来高、スキップ理由の自由文。
+
+### 3.9 `health_today`
+
+引数: なし（`from` / `to` を含む引数は `invalid_argument`）。「今日」は呼び出し時刻の JST の暦日で、取引日かどうかは `marketcalendar.TSE.IsTradingDay` で判定する。1 回の呼び出しで次のすべてを返す。戻り値は固定コード・真偽・件数・時刻だけで、自由文・板・価格・秘密は含まない。
+
+| フィールド | 定義 |
+|------------|------|
+| `date` / `trading_day` | 今日（JST、`YYYY-MM-DD`）と、東証立会日か |
+| `needs_attention` | `attention_codes` が空でなければ `true` |
+| `attention_codes[]` | 要対応の固定コード（下表）。無ければ `[]`。並びは下表の順 |
+| `paper_trades` | `opened_count`（`positions.opened_at` が今日の件数）、`closed_count`（`closed_at` が今日の件数）。価格は返さない |
+| `meta_model` | `adopted`（`metalabel_models.status='active'` が 1 件以上）、`version`・`trained_at`（採用中で最新のもの。無ければ `null`） |
+| `bootstrap` | `enabled`（`runtime_settings` の `paper.bootstrap_entry_enabled`。無い・解釈できない値は `false`。#798）、`effective`（`enabled` かつ採用中モデルが無い。ブートストラップが働く条件。本 MCP は Paper の DB だけを読み、アプリは Live では設定に関わらず使わない）、`signals_today`（今日のシグナルのうち `policy_version` がブートストラップ版のもの） |
+| `market_data` | `kabu_login`（`ok` / `not_logged_in` / `unknown` / `not_watched`）、`market_data`（`running` / `idle` / `not_watched`）、`app_running`（アプリの検知の最終確認が 2 分以内か）、`alerts[]`（`collection_status.alerts[]` と同じ値。`code` と `since`）。`not_watched` は検知が見ない時間（非取引日、08:45〜15:30 の外、`market_data` は立会外・昼休み）。`unknown` は見る時間なのにアプリが止まっていて判断できない状態 |
+| `missing_session_dates[]` | 今日より前の 7 日間（今日の引け後は今日も含む）の東証立会日のうち `market_snapshots` が 0 件の日付。`collection_status.missing_session_dates` と同じ判定 |
+| `daily_guard` | `halted`、`reason`（`daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades`。`halted` でなければ `null`）、`halted_at`（UTC RFC3339）。アプリの `risk.Engine.DailyHalt` と同じく、今日の取引日の停止だけを、その規則が Settings でまだ有効なときに限って返す。停止メッセージの文は返さない |
+| `kill_switch` | `active`（解除されていない `kill_switch_events` がある、または `system.killed` が真）、`unresolved_count`、`since`（未解除で最新の `triggered_at`）、`reasons[]`（未解除の `reason` コード。§3.7 の CHECK 値）、`flag_set`（`system.killed`）。`risk.Engine.State` と同じ判定 |
+| `retrain` | `skipped`（最新の `metalabel_retrain_skips` が 24 時間以内で、それ以後に学習されたモデルが無い）、`latest_skipped_at`、`reason_code`（§3.5 の固定コード。未知は `other`）。見送りが一度も無ければ後ろ 2 つは `null` |
+
+要対応コード（`query.Attention*`。`kabu_not_logged_in` と `market_data_idle` はアプリ内警告（#802）と同じコードで、再導出せず `health_alerts` を読む）:
+
+| コード | 条件 |
+|--------|------|
+| `no_paper_trades_today` | 取引日で、前場の引け（11:30 JST）以後に、今日開いた Paper ポジションが 0 件 |
+| `no_active_model` | 採用中のメタモデルが無い（日によらない） |
+| `kabu_not_logged_in` | `market_data.alerts[]` に同名の警告がある（取引日の 08:45〜15:30 のみ） |
+| `market_data_idle` | `market_data.alerts[]` に同名の警告がある（立会中のみ） |
+| `missing_session` | `missing_session_dates[]` が空でない（取引日・非取引日とも直近 7 日の取引日を見る） |
+| `daily_guard_halted` | `daily_guard.halted` |
+| `kill_switch_active` | `kill_switch.active`（日によらない） |
+| `retrain_skipped` | `retrain.skipped` |
+
+非取引日（土日・祝日）は、取引数・kabu・market-data の判定を行わない（コードを出さない）。モデル・Kill Switch・日次停止・再学習の見送りは状態そのものなので、日によらず出す。
+
+`runtime_settings` は固定キー（日次ガードの閾値キー、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`）だけを読み取りで読む（§4）。
+
+### 3.10 設定ツール（issue #806・#807）
+
+設定ツールが触れるのは、次のホワイトリストの 15 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
+
+| キー | 単位 | 意味 | 受け付ける値 |
+|------|------|------|--------------|
+| `risk.paper.initial_capital_jpy` | 円 | Paper の運用資金（FR-RISK 各上限と数量算出の基準。issue #804） | 0 円より大きく 1 兆円以下 |
+| `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
+| `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
+| `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
+| `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
+| `risk.daily_loss_limit_pct` | % | 日次損失上限（運用資金比） | 0 以上 100 以下（0 は使わない） |
+| `risk.profit_lock.trigger_pct` | % | 利益確保の発動水準（運用資金比） | 0 以上 100 以下 |
+| `risk.profit_lock.giveback_pct` | % | 利益確保の戻し許容 | 0 以上 100 以下 |
+| `risk.max_daily_trades` | 回 | 1 日の最大エントリー回数 | 0 以上の整数 |
+| `risk.daily_loss_limit_jpy` | 円 | 日次損失上限（円で直接指定） | 0 以上 |
+| `risk.profit_lock.trigger_jpy` | 円 | 利益確保の発動水準（円で直接指定） | 0 以上 |
+| `metalabel.llm_cutoff` | 日付 | Jev が使う LLM の学習データの終端日（UTC） | `YYYY-MM-DD` |
+| `metalabel.llm_cutoff_model` | 文字列 | 上の終端日を確認した Jev のモデル名（出典） | 200 文字以内・制御文字なし |
+| `metalabel.llm_cutoff_confirmed_on` | 日付 | 上の終端日を確認した日（出典） | `YYYY-MM-DD` |
+| `metalabel.llm_cutoff_source` | 文字列 | 上の終端日の根拠（出典） | 200 文字以内・制御文字なし |
+
+Live の値・Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）・秘密・発注・送金・Kill Switch 解除に関するキーは無い。ホワイトリスト外のキーは `key_not_allowed`（HTTP 403）。`value` は文字列でも数値でもよい（Settings 画面に入れる文字列と同じ。数値キーに `2.5` でも `"2.5"` でも可）。真偽値・null・配列・オブジェクトは `invalid_argument`。
+
+### 3.11 `settings_get`
+
+引数なし。`data`:
+
+| フィールド | 定義 |
+|------------|------|
+| `write_enabled` | 書き込み許可（既定 `true`。`runtime_settings` の `mcp.settings_write_enabled`） |
+| `snapshot_id` | 最新の監査行の `id`。変更がまだ無ければ 0。`settings_diff` の `since_id` に渡せる |
+| `llm_cutoff_status` | LLM cutoff（`metalabel.llm_cutoff` と出典 3 キー）の状態の固定コード。`placeholder`（未設定または仮置き `2026-01-01` のまま。夜間再学習のモデルは採用されない）／`unverified`（実日付だが確認した Jev モデル名 `metalabel.llm_cutoff_model` が未記録。Paper では警告のまま採用、Live 前チェックでは採用を止める）／`confirmed`（実日付とモデル名が記録済み）。Settings 画面の状態表示と同じ分類（`metalabelsettings.Settings.CutoffStatus`） |
+| `items[]` | ホワイトリストの全キー（上の表の順）。`key` / `value`（Settings 画面と同じ文字列）/ `unit`（`yen`・`percent`・`count`・`date`・`text`）/ `source`（`stored`＝保存値、`default`＝保存値なしで既定が効いている）/ `default` / `description` / `constraint`（受け付ける値）/ `warning`（あれば。例: LLM cutoff が仮の値のまま） |
+
+Paper の 4 キーの `default` は `risk.yaml` の Paper 値（なければ #804 の初期値）。秘密に分類されるキーはホワイトリストに無いが、将来載せる場合は `value` と `default` が `****` になる。読み取り専用。
+
+### 3.12 `settings_set`
+
+引数: `key`（必須）、`value`（必須）。処理の順は ①ホワイトリスト（`key_not_allowed`）②書き込み許可（`write_disabled`）③値の検証（`invalid_value`、`invalid_argument`）④保存と監査（同じトランザクション）。`data`: `key` / `unit` / `value`（保存後の値）/ `before`（保存前の保存値。保存値が無かったときは `null`）/ `audit_id` / `at`。LLM cutoff の 4 キー（下記）を書いたときは `llm_cutoff_status`（保存後の状態コード。§3.11 と同じ）も付く。保存先は GUI と同じ `runtime_settings` で、アプリには保存後すぐに反映される。書き込みは `readOnlyHint: false`。
+
+LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデルカード／ドキュメントで、使っている Jev モデルの学習データの終わり（knowledge cutoff）を確認し、`settings_set` を 1 キー 1 回ずつ呼ぶ（順序は任意。推奨は下の順）。
+
+1. `metalabel.llm_cutoff` = `YYYY-MM-DD`（公式の日付。UTC 日）
+2. `metalabel.llm_cutoff_model` = 確認した Jev のモデル名（判断の記録の `model_id` と同じ表記。200 文字以内・制御文字なし）
+3. `metalabel.llm_cutoff_confirmed_on` = 確認した日（`YYYY-MM-DD`）
+4. `metalabel.llm_cutoff_source` = 見たページの URL か文書名（200 文字以内・制御文字なし）
+
+各呼び出しは個別に検証・保存・監査され、途中でも一貫した状態になる: 日付だけ・日付＋確認日＋出典だけ（モデル名なし）は `unverified` のまま（警告が残り、Live 前チェックでは採用が止まる）、モデル名まで記録すると `confirmed` になり、仮置きの警告は消える。仮置き `2026-01-01` を実日付に変えるまでは `placeholder`。公式に日付が載っていないときは推測で入れず仮置きのままにする。各キーの `description` に同じ手順が載る。結果は `settings_get` の `llm_cutoff_status` で確認できる。採用判定（FR-META-6、Live 前の `unverified` 不採用を含む）はこの更新で変わらない。
+
+### 3.13 `settings_diff`
+
+引数（どちらも省略可。両方は不可で `invalid_argument`）: `since_id`（監査ログの行 ID。その行の保存直後の状態と比べる。0 は最初から。存在しない ID は `invalid_argument`）、`since_at`（RFC3339。その時点の状態と比べる）。両方省略は、直近 1 回の保存の直前との差分。
+
+`data`: `since`（`id`、あれば `at`）、`snapshot_id`（いまの最新）、`changes[]`（値か出どころが違うキーだけ。ホワイトリストの順）。各要素は `key` / `unit` / `before`・`after`（それぞれ `value` と `source`）/ `changed_at` / `changed_by`（`mcp:<IP>` か `gui`）。基準の状態は監査ログから再構成する（`architecture/paper-results-mcp.md` §7.5）。値は §3.11 と同じ表現で、秘密は載らない。読み取り専用。
+
+### 3.14 `settings_audit`
+
+引数: `limit`（既定 50、最大 200）、`before_id`（前回応答の最後の `id`。これより古い行を返す）。`data.entries[]` は新しい順で、`id` / `at`（UTC の RFC3339）/ `actor`（`mcp` か `gui`）/ `client`（`mcp` のときの接続元 IP。`gui` は省略）/ `action`（`set`・`reset`・`write_enable`・`write_disable`）/ `key` / `before` / `after`。`before` / `after` が `null` は「保存値なし（既定が効く）」、`reset` の `after` も `null`。書き込み許可の切り替えは `key` が `mcp.settings_write_enabled`、値は `"1"` / `"0"`。値は GUI と同じ表現で、マスク方針は `architecture/paper-results-mcp.md` §7.4（いまのキーに秘密は無く、そのまま。秘密に分類されるキーは `****`）。読み取り専用。
+
+### 3.15 `settings_write_enable` / `settings_write_disable`
+
+引数なし。書き込み許可を入れる／切る。**書き込みが禁止のあいだも呼べる**（戻せなくなるため）。Bearer 認証は他と同じく必須。`data`: `write_enabled` / `audit_id` / `at`。切り替えは監査ログに残る。Settings 画面の同名のチェック（FR-MCP-18）と同じ値を読み書きする。`readOnlyHint: false`。これらのツールも、発注・送金・Kill Switch・Live の値には触れない。
 
 ## 4. 出さないもの
 
-ツールの戻り値はホワイトリスト方式とする。テーブルの `SELECT *` は禁止する。下の表は、列が存在してもツールに載せないものの一覧である（マイグレーション `000001`〜`000036` で確認した名前）。
+ツールの戻り値はホワイトリスト方式とする。テーブルの `SELECT *` は禁止する。下の表は、列が存在してもツールに載せないものの一覧である（マイグレーション `000001`〜`000039` で確認した名前）。
 
 | 出さないもの | 確認した場所 |
 |--------------|----------------|
@@ -161,10 +269,10 @@
 | `metalabel_models.params_json` / `feature_names_json` / `oos_calibration_json` | `000034` |
 | `metalabel_predictions` の行の中身（`features_json` を含む） | `000034`。件数だけ |
 | `kill_switch_events.detail_json` | `000009` / `000017` |
-| `jobs.payload_json` / `jobs.last_error` | `000003` |
+| `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。本 MCP は読まない |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 15 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 
 Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jpy`）は取引の結果として返す。板やスナップショットの時価列とは別である。
@@ -175,10 +283,13 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - `enabled: true` かつ `api_key` が非空で、そのキーが正しいときだけ待受し、ツールが応答する。`api_key` が空なら待受しない
 - `listen` が `0.0.0.0` のときは起動しない。Tailscale で直接待つ設定は、その PC の tailnet 側アドレスだけを bind する
 - キー無し・誤ったキーは 401 で、そのリクエストの経路で SQL が 0 件である
-- MCP が開いた接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
+- MCP の読み取り接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
+- 設定ツール: ホワイトリストの 15 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
+- 設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
+- `health_today` は、要対応コード 8 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
 - 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）
 - Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
 
@@ -189,3 +300,8 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.0 | 2026-10-17 | 新規作成 | issue #783。ツールの入出力・上限・出さない列を、既存マイグレーションの列名で固定 |
 | 1.1 | 2026-10-17 | 受け入れ条件の実機確認を、選んだ経路（Tailscale または Cloudflare Tunnel）経由に変えた。Tailscale は tailnet 外から届かないことも確認する。必須の 401 は API キーだけ | 悠太さん指示。Cloudflare を必須にしない |
 | 1.2 | 2026-10-18 | トランスポートの要確認を、Streamable HTTP（POST のみ・JSON 応答）で実装した旨の回答に改めた。ツール・上限・ホワイトリストは変更なし | issue #783 の実装 |
+| 1.3 | 2026-10-20 | §3.8 `collection_status` に `alerts[]`（`code`・`since`。`kabu_not_logged_in` / `market_data_idle`）を追加。マイグレーション `000039` の `health_alerts` / `health_alert_checks` を読む | issue #802 |
+| 1.4 | 2026-10-20 | §3.1 `capital_jpy` の既定を 500,000 に更新し、Settings で保存した Paper の運用資金（`runtime_settings`）には追従しない旨（`runtime_settings` を読まない方針を維持）を明記 | issue #804 |
+| 1.5 | 2026-10-20 | §3.9 `health_today` を追加（今日の Paper 取引数・メタモデル・ブートストラップ・kabu/market-data・欠損・日次ガード・Kill Switch・再学習の見送りと、要対応フラグ `needs_attention` / 固定コード `attention_codes[]`）。§4 の `runtime_settings` を、固定キーのみ読み取りで読む記述に改めた | issue #808 |
+| 1.6 | 2026-10-20 | §3.1 `capital_jpy` を、Settings の保存値（`runtime_settings` の `risk.paper.initial_capital_jpy`）に追従し、なければ risk.yaml とする仕様に更新。§3.10〜§3.15 に設定ツール（`settings_get` / `settings_set` / `settings_diff` / `settings_audit` / `settings_write_enable` / `settings_write_disable`）とホワイトリスト 15 キー、§4 の `runtime_settings` の行、§5 の受け入れ条件を追加 | issue #806・#807 |
+| 1.7 | 2026-10-20 | §3.11 `settings_get` に `llm_cutoff_status`（`placeholder` / `unverified` / `confirmed`）を追加。§3.12 `settings_set` の LLM cutoff 4 キーの応答に `llm_cutoff_status` を付け、MCP だけで日付と出典を更新する手順を追記 | issue #809 |

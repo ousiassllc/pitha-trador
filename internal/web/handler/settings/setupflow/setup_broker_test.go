@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
+	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
 )
 
 type memSecrets map[string]string
@@ -56,7 +57,9 @@ func newEngine(secrets memSecrets, runtime memRuntime) *gin.Engine {
 	h := settings.NewSettingsHandler(secrets).WithOperationalSettings(opsettings.New(runtime, strategy(), "/data/logs"))
 	engine := gin.New()
 	engine.GET("/setup", h.SetupPage)
-	engine.GET("/settings", h.Page)
+	for _, page := range settingspages.Pages() {
+		engine.GET(page.Path(), h.SubPage(page, false))
+	}
 	engine.POST("/ops-settings/:key", h.SaveOps)
 	return engine
 }
@@ -165,8 +168,8 @@ func TestSaveOps_FromSetupRefreshesThePageAndSetupStatus(t *testing.T) {
 }
 
 func TestSettingsPage_RequiredBadgeFollowsTheSelectedBroker(t *testing.T) {
-	kabu := get(newEngine(memSecrets{}, memRuntime{}), "/settings")
-	tachibana := get(newEngine(memSecrets{}, memRuntime{config.KeyBrokerProvider: `"tachibana"`}), "/settings")
+	kabu := get(newEngine(memSecrets{}, memRuntime{}), "/settings/broker")
+	tachibana := get(newEngine(memSecrets{}, memRuntime{config.KeyBrokerProvider: `"tachibana"`}), "/settings/broker")
 	required := func(body, id string) bool {
 		i := strings.Index(body, `data-testid="settings-card-`+id+`"`)
 		if i < 0 {

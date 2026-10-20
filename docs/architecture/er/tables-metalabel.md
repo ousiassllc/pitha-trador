@@ -104,3 +104,18 @@ erDiagram
 | created_at | text | NOT NULL | |
 
 インデックス: `UNIQUE (model_id, jev_decision_id)`、`(jev_decision_id)`
+
+## metalabel_retrain_skips
+
+夜間再学習がデータ不足で見送られた実行記録（issue #799、親 #752。マイグレーション000038）。見送りはモデルを保存しないため、この表が無いと外から気づけない。1見送り=1行。件数と固定コードだけを持ち、板・価格・自由文は含まない。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK（AUTOINCREMENT） | |
+| skipped_at | text | NOT NULL | 見送りを判定した時刻（UTC） |
+| reason_code | text | NOT NULL, CHECK (`<> ''`) | 固定コード: `too_few_rows_before_oos`（検証窓より前の使えるラベル付き判断がfit+較正の最小件数に足りない）/ `too_few_rows_after_purge`（purge/embargo後にfitか較正が最小件数に足りない）/ `training_data_unusable`（件数はあるがラベルが片側だけ等で学習できない）。理由文は保存しない |
+| usable_rows | integer | NOT NULL, CHECK (`>= 0`) | 使えるラベル付き判断の件数（`too_few_rows_before_oos`は検証窓より前の件数、`too_few_rows_after_purge`はpurge後にfit・較正の各最小件数まで数えた件数）。「必要130件中 x件」のx |
+| required_rows | integer | NOT NULL, CHECK (`>= 0`) | 学習に必要な件数＝fitと較正の最小件数の合計（既定130）。「必要130件中 x件」の130 |
+| created_at | text | NOT NULL | |
+
+インデックス: `(skipped_at)`

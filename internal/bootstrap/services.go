@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/healthalertwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/tachibanawatch"
@@ -34,6 +35,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
+	"github.com/ousiassllc/pitha-trador/internal/service/healthalert"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
@@ -90,8 +92,9 @@ type Services struct {
 	Governor      *selfimprove.Governor
 	ErrorLogs     *logging.Exporter // read-only export of State.Paths.LogDir (FR-ERRLOG-2)
 
-	Scheduler *scheduler.Scheduler
-	Updater   *updater.SchedulerAdapter // nil on cmd/server (issue #76)
+	HealthAlerts *healthalert.Detector // trading-hours market-data alerts (issue #802); Start runs it
+	Scheduler    *scheduler.Scheduler
+	Updater      *updater.SchedulerAdapter // nil on cmd/server (issue #76)
 
 	strategy           *config.StrategyConfig
 	wg                 sync.WaitGroup
@@ -197,6 +200,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	traderHandler := svc.buildPolicyAndBacktest(state, executionConfig, runtimePolicy)
 	svc.buildGovernor(state.Strategy, state.DB, secrets, alertChannels)
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
+	svc.HealthAlerts = healthalertwire.New(state.DB, svc.Jobs, svc.Broker)
 	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy, state.Paths.LogDir)
 
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueMarketData, marketDataHandler.HandleMarketData)

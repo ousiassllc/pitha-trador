@@ -55,10 +55,15 @@ import (
 // logged in / wrong API password, ...) while the last token issuance
 // failed, and nothing otherwise (re-polled every 30s).
 //
+// `#health-alert-banner` (issue #802) is the same pattern for the trading-hours
+// market-data warning: `GET /system/health-alerts` renders
+// organisms.HealthAlertBanner for each active alert (kabu not logged in at
+// 08:45, no market-data job for 5 minutes in a session), nothing otherwise.
+//
 // `#header-version` shows the running build's internal/version.Version on
-// every page and links to Settings' アップデート section (`/settings#update-
-// panel`), where the version is detailed and the manual update check
-// lives. The check button itself is deliberately not in the header: a
+// every page and links to Settings' アップデート section
+// (`/settings/maintenance#update-panel`), where the version is detailed and
+// the manual update check lives. The check button itself is deliberately not in the header: a
 // verified installer found by a check restarts the app, so it stays on a
 // single, explicit Settings screen.
 //
@@ -138,10 +143,22 @@ templ Header(state domain.SystemState, current NavItem) {
 			hx-target="this"
 			hx-swap="innerHTML"
 		></div>
+		<div
+			id="health-alert-banner"
+			class="order-last w-full empty:hidden"
+			role="status"
+			aria-live="polite"
+			data-live-banner
+			hx-get="/system/health-alerts"
+			hx-headers='{"X-Pitha-Background":"1"}'
+			hx-trigger="load, every 30s"
+			hx-target="this"
+			hx-swap="innerHTML"
+		></div>
 		<a
 			id="header-version"
 			class="text-xs text-slate-500 hover:text-slate-900"
-			href="/settings#update-panel"
+			href="/settings/maintenance#update-panel"
 			title="アップデートの確認（設定）"
 			data-testid="header-version"
 		>{ version.Version }</a>
