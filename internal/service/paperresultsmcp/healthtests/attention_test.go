@@ -32,7 +32,8 @@ func healthAt(t *testing.T, w *sql.DB, now time.Time) query.Health {
 	if err != nil {
 		t.Fatalf("HealthToday: %v", err)
 	}
-	if h.AttentionCodes == nil || h.MarketData.Alerts == nil || h.MissingSessionDates == nil || h.KillSwitch.Reasons == nil {
+	if h.AttentionCodes == nil || h.MarketData.Alerts == nil || h.MissingSessionDates == nil ||
+		h.InsufficientHistoryDates == nil || h.KillSwitch.Reasons == nil {
 		t.Fatalf("a list is nil, want an empty one (JSON []): %+v", h)
 	}
 	if h.NeedsAttention != (len(h.AttentionCodes) > 0) {

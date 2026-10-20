@@ -145,7 +145,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数と、それ以外の拒否の固定コード別内訳 |
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
 | `collection_status` | `jobs` の件数と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（保持期間の違いを `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ） |
-| `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
+| `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`。それ以前のスナップショットが無い日は欠損でなく `insufficient_history_dates[]`＝判定不可。#814）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
 
 MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
 
@@ -209,7 +209,7 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 
 - 表 `mcp_settings_audit`（マイグレーション `000040`）。1 変更 1 行: 時刻（UTC）、**誰が**（`actor` = `mcp` か `gui`。`mcp` のときは接続元ホストの IP だけ。ヘッダの値・API キーは記録しない）、操作（`set` / `reset` / `write_enable` / `write_disable`）、キー、**変更前の値**、**変更後の値**
 - MCP からの変更に加え、Settings 画面から行ったホワイトリストのキーの保存・既定への戻し、書き込み許可の切り替えも同じ表に残す（`mcpset.Audited` が `opsettings.Service` を包んで Save / Reset を記録する）。GUI での変更も記録しないと、`settings_diff` が過去の状態を再構成できないため。ホワイトリスト外のキーの GUI での変更は記録しない
-- 監査の書き込みに失敗した GUI の保存は、保存を取り消さない（設定が正で、ログは補助）。MCP の書き込みは、設定と監査を同じトランザクションに入れるので、どちらか一方だけ残ることはない
+- 設定と監査は同じトランザクションに入れる（MCP の書き込みも、GUI の保存・既定への戻しも、書き込み許可のスイッチも同じ）。監査行の書き込みに失敗したら設定の変更も取り消され、保存はエラーになる。設定の書き込みが失敗したら監査行は残らない。どちらか一方だけ残ることはない（`mcpset.Audited`、`mcpset/atomic_test.go`）。例外は、保存済みの値が壊れていて変更前の値を読めないキーで、上書き・リセットを妨げないよう監査なしで変更する（ログに警告を出す）
 - **マスク方針**: ホワイトリストのキーに秘密に分類されるものは 1 つもないため、値はそのまま記録・表示する（`mcpwritesettings.Spec.Secret` はすべて false。テストが固定する）。将来、秘密に分類されるキー（名前に secret・password・token・api_key・private_key・credential を含む、または `Secret` を付けたもの）やホワイトリスト外のキーを監査・ツール出力に載せることになった場合は、**既定で `****` に伏せる**（`mcpwritesettings.Mask`、`maskedEntry`）。API キー・`secrets`・板や時価の生データは、設定ツールの入出力にもログにも出さない
 - 変更前後の値は、運用の分かる値（数値・日付・短い出典テキスト）だけで、自由文の長文（200 文字以内に検証済み）以外は載らない
 - 見えるところ: MCP の `settings_audit`、Settings 画面の MCP カード（直近 10 件。誰が・いつ・何を・前後）。保持期間による削除は設けない（1 変更 1 行で量が少ない）
@@ -239,3 +239,5 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.6 | 2026-10-20 | §5 に `health_today`（今日の健康診断。取引数・メタモデル・ブートストラップ・kabu/market-data・欠損・日次ガード・Kill Switch・要対応コード）を追加し、ツール数を 9 にした。`runtime_settings` を固定キーの許可リストで読み取りだけ読む旨を追記。新規テーブルなし | issue #808 |
 | 1.7 | 2026-10-20 | 設定の読み書きを追加（§7。ホワイトリスト 15 キー、書き込み許可のスイッチ＝`runtime_settings`、狭い書き手、監査ログ `mcp_settings_audit`、`settings_get` / `settings_set` / `settings_diff`）。「MCP は書かない」を「書くのはホワイトリストの設定ツールだけで、書き込み接続は別の狭い書き手」に改めた（§4・§5・§6）。Paper 資金の分母を Settings の保存値に追従させた（§7.6）。読み取り接続・待受・認証は変更なし | issue #806・#807 |
 | 1.8 | 2026-10-20 | §7.5 に、`settings_get` の `llm_cutoff_status` と、`settings_set` の LLM cutoff 4 キー応答の同コードを追記 | issue #809 |
+| 1.9 | 2026-10-20 | §7.4 の GUI の保存を、MCP と同じく設定と監査を 1 トランザクションにする形に改めた（監査の失敗は保存も取り消す）。MCP の書き込み経路は従来から 1 トランザクションで、変更なし | issue #813 |
+| 1.10 | 2026-10-20 | §5 の `health_today` の欠損セッションを、それ以前のスナップショットがある日付だけ（実際の欠損）に改め、履歴が足りず判定できない立会日は `insufficient_history_dates[]` に分けて警告にしない旨を追記。DB は読み取り専用のまま | issue #814 |

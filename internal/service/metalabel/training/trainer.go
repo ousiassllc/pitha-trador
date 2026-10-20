@@ -86,7 +86,7 @@ func WithAcceptance(cfg AcceptanceConfig) TrainerOption {
 func WithLookback(d time.Duration) TrainerOption { return func(t *Trainer) { t.lookback = d } }
 
 // WithMode sets the operating mode the adoption is judged for; the default is
-// metalabelsettings.ModePaper, where an unverified LLM cutoff only warns.
+// metalabelsettings.RuntimeMode (Paper in this build), where an unverified LLM cutoff only warns.
 func WithMode(m metalabelsettings.Mode) TrainerOption { return func(t *Trainer) { t.mode = m } }
 
 // WithPolicyChanges makes the adoption honour the freeze after a policy.* change
@@ -107,7 +107,7 @@ func NewTrainer(source TrainingSource, store ModelStore, settings SettingsLoader
 	t := &Trainer{
 		source: source, store: store, settings: settings,
 		walk: DefaultWalkForwardConfig(), acceptance: DefaultAcceptanceConfig(), lookback: DefaultLookback, now: time.Now,
-		limits: changeguard.DefaultLimits(), mode: metalabelsettings.ModePaper,
+		limits: changeguard.DefaultLimits(), mode: metalabelsettings.RuntimeMode,
 	}
 	for _, opt := range opts {
 		opt(t)

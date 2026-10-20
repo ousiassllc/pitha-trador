@@ -124,7 +124,7 @@ func PolicyOption(db *sql.DB, settings *system.RuntimeSettingsRepository) policy
 // (internal/bootstrap/risk.go), so the trading mode is Paper; the switch has
 // no effect in any other mode, and must keep that when a Live build is added.
 func PaperBootstrapOption(settings *system.RuntimeSettingsRepository) policy.Option {
-	return policy.WithPaperBootstrap(metalabelsettings.ModePaper, paperbootstrapsettings.Source{Store: settings})
+	return policy.WithPaperBootstrap(metalabelsettings.RuntimeMode, paperbootstrapsettings.Source{Store: settings})
 }
 
 // ChangeGuard limits the self-improvement flow's policy.* changes against the

@@ -20,7 +20,9 @@ const (
 	AttentionKabuNotLoggedIn = AlertKabuNotLoggedIn
 	// AttentionMarketDataIdle: the #802 alert of the same name is active.
 	AttentionMarketDataIdle = AlertMarketDataIdle
-	// AttentionMissingSession: a recent trading session has no snapshot.
+	// AttentionMissingSession: a recent trading session has no snapshot although
+	// an earlier one does (a real gap). Sessions with no earlier snapshot are not
+	// a warning; they are listed in insufficient_history_dates (#814).
 	AttentionMissingSession = "missing_session"
 	// AttentionDailyGuardHalted: today's daily entry halt is in force.
 	AttentionDailyGuardHalted = "daily_guard_halted"
@@ -147,11 +149,16 @@ type Health struct {
 	Bootstrap   HealthBootstrap   `json:"bootstrap"`
 	MarketData  HealthMarketData  `json:"market_data"`
 	// MissingSessionDates are the trading days of the last 7 days (today
-	// included once its session closed) with no market snapshot.
-	MissingSessionDates []string         `json:"missing_session_dates"`
-	DailyGuard          HealthDailyGuard `json:"daily_guard"`
-	KillSwitch          HealthKillSwitch `json:"kill_switch"`
-	Retrain             HealthRetrain    `json:"retrain"`
+	// included once its session closed) that have no market snapshot although
+	// an earlier snapshot exists: a real gap, which raises missing_session.
+	MissingSessionDates []string `json:"missing_session_dates"`
+	// InsufficientHistoryDates are the trading days of the same span with no
+	// snapshot and none before them either: the history does not reach back
+	// that far (first start), so they cannot be judged. Never a warning.
+	InsufficientHistoryDates []string         `json:"insufficient_history_dates"`
+	DailyGuard               HealthDailyGuard `json:"daily_guard"`
+	KillSwitch               HealthKillSwitch `json:"kill_switch"`
+	Retrain                  HealthRetrain    `json:"retrain"`
 }
 
 // HealthToday gathers today's health in one read. Every part reuses the
@@ -180,7 +187,7 @@ func HealthToday(ctx context.Context, q Q, now time.Time) (Health, error) {
 	if h.MarketData, err = healthMarketData(ctx, q, now); err != nil {
 		return Health{}, err
 	}
-	if h.MissingSessionDates, err = missingSessionDates(ctx, q, missingRange(now, dayStart)); err != nil {
+	if h.MissingSessionDates, h.InsufficientHistoryDates, err = sessionGaps(ctx, q, missingRange(now, dayStart)); err != nil {
 		return Health{}, err
 	}
 	if h.DailyGuard, err = healthDailyGuard(ctx, q, h.Date); err != nil {
