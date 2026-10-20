@@ -2,6 +2,7 @@ package metalabelsettings
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -58,6 +59,44 @@ func (s Settings) CutoffStatus() string {
 		return CutoffUnverified
 	}
 	return CutoffConfirmed
+}
+
+// IsCutoffKey reports whether key is the LLM cutoff or one of its three
+// provenance keys: the keys that together decide CutoffStatus.
+func IsCutoffKey(key string) bool {
+	switch key {
+	case KeyLLMCutoff, KeyLLMCutoffModel, KeyLLMCutoffConfirmedOn, KeyLLMCutoffSource:
+		return true
+	}
+	return false
+}
+
+// CutoffStatusLabel is the operator-facing name of a CutoffStatus code, with
+// what it means for the nightly adoption (Settings screen, issue #809).
+func CutoffStatusLabel(status string) (label, effect string) {
+	switch status {
+	case CutoffPlaceholder:
+		return "仮置き（placeholder）", "夜間再学習のモデルは採用されません（不採用として記録）。"
+	case CutoffUnverified:
+		return "未確認（unverified）", "Paper では警告のまま採用されますが、Live 前チェックでは採用を止めます。"
+	case CutoffConfirmed:
+		return "確認済み（confirmed）", "夜間再学習のモデルを採用できます。Jev のモデルが切り替わると再確認まで不採用です。"
+	}
+	return status, ""
+}
+
+// CutoffHelp is the short how-to of confirming the official cutoff date and
+// where each value goes (Settings screen, issue #809): where to look and what
+// to enter. The same four keys are what the MCP's settings_set takes.
+func CutoffHelp() []string {
+	return []string{
+		"どこを見る: いま Jev が使っているモデル名（判断の記録 model_id と同じ表記）を調べ、そのモデルのベンダー公式のモデルカード／モデル一覧ドキュメントにある「学習データの終わり（knowledge cutoff / training data cutoff）」の日付を探します。",
+		"学習データの終わり（" + KeyLLMCutoff + "）: 公式の日付を YYYY-MM-DD で入れます。",
+		"モデル名（" + KeyLLMCutoffModel + "）: その日付を確認したモデルの名前を入れます。",
+		"確認日（" + KeyLLMCutoffConfirmedOn + "）: あなたが公式情報を確認した日を YYYY-MM-DD で入れます。",
+		"出典（" + KeyLLMCutoffSource + "）: 見たページの URL か文書名を入れます（" + strconv.Itoa(MaxProvenanceLen) + " 文字以内）。",
+		"公式に日付が載っていないときは推測で入れず、仮置きのままにします。4 つとも入れてください（モデル名まで入れると「確認済み」、日付だけだと「未確認」で、Live 前チェックでは採用が止まります）。",
+	}
 }
 
 // CutoffWarning is the operator-facing warning for the Settings and

@@ -124,3 +124,18 @@ func TestSettingGroupDerived_RendersWarningsAndHeadings(t *testing.T) {
 		t.Errorf("warning text is not escaped: %s", html)
 	}
 }
+
+// A group may title its read-only panel (issue #809); without a title it stays
+// 計算結果.
+func TestSettingGroupDerived_UsesTheGroupsTitle(t *testing.T) {
+	props := molecules.SettingGroupProps{ID: "g", DerivedTitle: "LLM cutoff の状態と確認手順", Derived: []molecules.SettingDerivedItem{{Key: "a", Label: "状態"}}}
+	html := render(t, molecules.SettingGroupDerived(props, false))
+	for _, want := range []string{`aria-label="LLM cutoff の状態と確認手順"`, ">LLM cutoff の状態と確認手順<"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("missing %q: %s", want, html)
+		}
+	}
+	if strings.Contains(html, "計算結果") {
+		t.Errorf("the default title leaks into a titled panel: %s", html)
+	}
+}

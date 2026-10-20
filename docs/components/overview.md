@@ -309,3 +309,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.97 | 2026-10-20 | organismsに`HealthAlertBanner`を追加し、`Header`に`#health-alert-banner`枠（`GET /system/health-alerts`）を追記 | issue #802 |
 | 1.98 | 2026-10-20 | 管理ハブ（`AdminPage`・`AdminHub`・`NavAdmin`）を廃止して Settings に統合: `SettingsHubPage`（`GET /settings`のページ一覧）・`molecules.SettingsLinkCard`・`SettingsPage`の1ページ化（`GET /settings/<page id>`）を追加し、メインナビは Settings 1本、`pitha-settings-hub`で旧ハッシュ直リンクを転送 | issue #805 |
 | 1.99 | 2026-10-20 | §3の`mcp.Panel`に、設定変更の許可チェックと監査ログ（`POST /settings/mcp/write`、`router.WithMCPWriteGate`）を追記 | issue #806 |
+| 1.100 | 2026-10-20 | `SettingGroupProps`に`DerivedTitle`（読み取り専用パネルの見出し。空は「計算結果」）を追加し、Settings「メタラベリング」グループが同パネルに「LLM cutoffの状態と確認手順」（状態＝仮置き/未確認/確認済み、記録済みの日付・モデル名・確認日・出典、公式日付の確認ヘルプ）を表示 | issue #809 |

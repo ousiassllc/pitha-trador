@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 )
 
@@ -45,7 +46,7 @@ func objectSchema(props map[string]any, required ...string) map[string]any {
 var settingsTools = []tool{
 	{
 		name:        "settings_get",
-		description: "MCP から変更できる基本設定（ホワイトリスト）の現在値の一覧。値・単位・出どころ（stored / default）・許容範囲・書き込み許可・スナップショット ID を返す（秘密はマスク。読み取り専用）",
+		description: "MCP から変更できる基本設定（ホワイトリスト）の現在値の一覧。値・単位・出どころ（stored / default）・許容範囲・書き込み許可・スナップショット ID・LLM cutoff の状態コード llm_cutoff_status（placeholder / unverified / confirmed）を返す（秘密はマスク。読み取り専用）",
 		schema:      objectSchema(map[string]any{}),
 		noPeriod:    true,
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
@@ -59,8 +60,10 @@ var settingsTools = []tool{
 		},
 	},
 	{
-		name:        "settings_set",
-		description: "ホワイトリストの設定を 1 つ変更する（Settings 画面と同じ保存先・同じ検証。書き込み許可がオフのときは拒否。変更は監査ログに残る）",
+		name: "settings_set",
+		description: "ホワイトリストの設定を 1 つ変更する（Settings 画面と同じ保存先・同じ検証。書き込み許可がオフのときは拒否。変更は監査ログに残る）。" +
+			"LLM cutoff を更新するときは 4 キーを 1 回ずつ、metalabel.llm_cutoff → metalabel.llm_cutoff_model → metalabel.llm_cutoff_confirmed_on → metalabel.llm_cutoff_source の順に設定する（公式日付の確認手順は各キーの description）。" +
+			"これら 4 キーの応答には llm_cutoff_status が付く。日付だけでは unverified のまま、モデル名まで記録すると confirmed になる",
 		schema: objectSchema(map[string]any{
 			"key":   map[string]any{"type": "string", "description": "settings_get が返すキー"},
 			"value": map[string]any{"type": []string{"string", "number"}, "description": "新しい値（Settings 画面に入れる文字列と同じ。数値キーは数値でも可）"},
@@ -97,10 +100,17 @@ var settingsTools = []tool{
 					return nil, 0, writeFailureOf(err)
 				}
 				spec, _ := mcpwritesettings.Lookup(a.Key)
-				return map[string]any{
+				out := map[string]any{
 					"key": a.Key, "unit": spec.Unit, "value": entry.After, "before": entry.Before,
 					"audit_id": entry.ID, "at": entry.At,
-				}, 1, nil
+				}
+				if metalabelsettings.IsCutoffKey(a.Key) {
+					// The write is committed; a failed status read only omits the field.
+					if status, serr := mcpset.CutoffStatus(ctx, mcpset.ReadStore{Q: e.q}); serr == nil {
+						out["llm_cutoff_status"] = status
+					}
+				}
+				return out, 1, nil
 			}, nil
 		},
 	},
