@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -69,7 +70,10 @@ type Service struct {
 	defaultLogDir string
 	// riskReference is set by WithRiskReference (nil: no consistency check).
 	riskReference *dailyguardsettings.RiskReference
-	now           func() time.Time
+	// paperBase is the Paper limits of config/risk.yaml (WithRiskReference):
+	// what applies to the papersettings keys while nothing is stored.
+	paperBase *config.RiskLimits
+	now       func() time.Time
 }
 
 // New returns a Service over store with strategy's policy / fast_screener
@@ -82,6 +86,7 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 // Keys returns every key Service manages: the backup and log directories,
 // the policy thresholds, the screener thresholds, the OFI windows, the
 // ranking-watch snapshot max age, the log level and retention, the daily entry-halt thresholds, the
+// Paper operating capital and exposure limits, the
 // triple-barrier label settings, the meta-labeling settings, the market
 // regime settings, the broker settings, then the 立花 監視銘柄ソース
 // settings.
@@ -93,6 +98,7 @@ func Keys() []string {
 	keys = append(keys, snapshotagesettings.Key)
 	keys = append(keys, logsettings.Keys()...)
 	keys = append(keys, dailyguardsettings.Keys()...)
+	keys = append(keys, papersettings.Keys()...)
 	keys = append(keys, barriersettings.Keys()...)
 	keys = append(keys, costsettings.Keys()...)
 	keys = append(keys, metalabelsettings.Keys()...)
@@ -258,6 +264,8 @@ func (s *Service) defaultText(key string) string {
 		return strconv.Itoa(logsettings.DefaultRetentionDays)
 	case dailyguardsettings.IsKey(key):
 		return "0"
+	case papersettings.IsKey(key):
+		return s.paperDefaultText(key)
 	case barriersettings.IsKey(key):
 		text, _ := barriersettings.Default().Text(key)
 		return text

@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
@@ -161,6 +162,14 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 		// Each threshold stands alone (0 disables it), so only its own range is checked.
 		var stored dailyguardsettings.Settings
 		if err := dailyguardsettings.Apply(&stored, key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
+	case papersettings.IsKey(key):
+		// Each value stands alone (capital > 0, percentages in (0, 100]), so
+		// only its own range is checked.
+		var stored papersettings.Overrides
+		if err := papersettings.Apply(&stored, key, encoded); err != nil {
 			return &InvalidValueError{Reason: err.Error()}
 		}
 		return nil

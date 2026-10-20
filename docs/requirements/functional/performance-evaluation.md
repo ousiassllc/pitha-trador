@@ -24,7 +24,7 @@
 | Jev方向的中率・Brier | 方向付きのtrader判断（LONG/SHORT）の`calibration_outcomes`ごとの的中（`was_direction_correct`）と、確信度との二乗誤差。**`label_version`別に分けて出し、混ぜない**（1=終値のみ、2=トリプルバリアで「コスト控除後に利益」）。リターンがちょうど0の同値は的中にも外れにも数えない |
 | メタモデルOOS | `metalabel_models`のOOS AUC・OOS EV（bps）・OOS件数・OOS期間。**同じモデルの予測が付いた判断で実際に入った取引の実現EV（bps）と予測EV（`metalabel_predictions.expected_value_bps`）・その差（実現−予測）**、および**OOS期間内にクローズした全取引のPaper EV**を並べる。1判断に複数モデルの予測があるときは最新（最大id）のモデルに紐付ける |
 
-`initial_capital`は`config/risk.yaml`の`paper.initial_capital`（既定3,000万円）。Paperでは**仮置きの値で口座残高ではない**。0以下（未設定）なら資金比ドローダウンは「判定不能」と表示する。
+`initial_capital`は`config/risk.yaml`の`paper.initial_capital`（既定50万円）。アプリのPerformance画面・`GET /api/v1/performance/evaluation`は、Settingsで保存したPaperの運用資金（`risk.paper.initial_capital_jpy`、FR-RISK-9）があればそれを使う。Paperでは**仮置きの値で口座残高ではない**。0以下（未設定）なら資金比ドローダウンは「判定不能」と表示する。
 
 ### 切り口
 

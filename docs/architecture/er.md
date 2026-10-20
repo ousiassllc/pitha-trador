@@ -112,3 +112,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.56 | 2026-10-19 | `er/tables-metalabel.md`の`reject_reason`に、Live前チェックで`metalabel.llm_cutoff_model`が未記録のときの`llm_cutoff_unverified`を追記（スキーマ変更なし） | issue #780の決定（unverifiedはPaperは警告のみ・Live前は不採用） |
 | 1.57 | 2026-10-20 | マイグレーション000038を追加し、`er/tables-metalabel.md`に`metalabel_retrain_skips`（夜間再学習がデータ不足で見送られた記録。固定の`reason_code`と必要件数中の件数）を新設。Paper 実績 MCP の`metalabel_history`が読む | issue #799 |
 | 1.58 | 2026-10-20 | マイグレーション000039を追加し、`er/tables-system.md`に`health_alerts`（立会中の市況データ停止の警告。固定コードと開始時刻）と`health_alert_checks`（検知の最終確認時刻、1行）を新設。アプリの検知が書き、Paper 実績 MCP の`collection_status`が読む | issue #802 |
+| 1.59 | 2026-10-20 | `runtime_settings`のキーに`risk.paper.initial_capital_jpy`・`risk.paper.max_position_per_symbol_pct`・`risk.paper.max_total_exposure_pct`（PaperのRisk Engine用の運用資金と1銘柄／総エクスポージャ上限。判定ごとに読み込む）と内部マーカー`system.paper_risk_defaults_seeded`を追加（`er/tables-system.md`） | issue #804 |

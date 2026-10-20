@@ -38,7 +38,7 @@ const (
 var pages = []Page{
 	{PageOperations, "運用", "スキャン・ポジション・Kill Switch、候補を絞るしきい値"},
 	{PageResults, "成績・検証", "Performance・Calibration・バックテスト、判断のラベル・相場状態の設定"},
-	{PageRisk, "リスク・資金", "損失上限・利益確保・売買コストの想定"},
+	{PageRisk, "リスク・資金", "Paper の運用資金・建玉上限、損失上限・利益確保・売買コストの想定"},
 	{PageBroker, "ブローカー・データ", "kabuステーション・立花証券 e支店の接続と監視銘柄"},
 	{PageIntegrations, "外部連携", "Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP"},
 	{PageMaintenance, "ログ・エクスポート", "アップデート・エラーログ・データエクスポート・バックアップ・ログ設定"},
@@ -144,6 +144,7 @@ var dialogs = []Dialog{
 	{PageResults, "modal-orderflow", nil},
 
 	// リスク・資金
+	{PageRisk, "modal-paper-risk", nil},
 	{PageRisk, "modal-daily-guard", nil},
 	{PageRisk, "modal-trading_cost", nil},
 

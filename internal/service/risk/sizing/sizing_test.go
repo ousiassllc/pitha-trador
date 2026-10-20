@@ -54,3 +54,37 @@ func TestQuantity_NoInitialCapitalRejects(t *testing.T) {
 		t.Fatalf("Quantity = (%d, %q), want (0, %q)", qty, reason, sizing.ReasonInvalidInput)
 	}
 }
+
+// issue #804: with the Paper initial values (capital 500,000 yen, 100% per
+// symbol, 100% in total) the two exposure limits alone leave room for one
+// 100-share lot of a 5,000-yen stock (exactly 500,000 yen), so they never
+// reject it. The unchanged max_trade_loss_pct does: 0.25% of 500,000 is
+// 1,250 yen, but the 0.6% stop on 100 shares x 5,000 yen loses 3,000 yen.
+func TestQuantity_Paper500kAt5000Yen(t *testing.T) {
+	limits := config.RiskLimits{
+		InitialCapital:          500_000,
+		MaxPositionPerSymbolPct: 100,
+		MaxTotalExposurePct:     100,
+		MaxTradeLossPct:         0.25,
+	}
+
+	// The exposure limits alone: a trade-loss limit wide enough not to bind.
+	exposureOnly := limits
+	exposureOnly.MaxTradeLossPct = 100
+	if qty, reason := sizing.Quantity(exposureOnly, sizing.DefaultStopLossPct, 5000, 0); qty != 100 || reason != "" {
+		t.Errorf("exposure limits only: Quantity = (%d, %q), want (100, \"\")", qty, reason)
+	}
+
+	// Current Paper behaviour (max_trade_loss_pct 0.25 stays in risk.yaml): the
+	// trade-loss limit is what stops the lot, not the capital or the exposure.
+	if qty, reason := sizing.Quantity(limits, sizing.DefaultStopLossPct, 5000, 0); qty != 0 || reason != sizing.ReasonMaxTradeLossPct {
+		t.Errorf("with max_trade_loss_pct 0.25: Quantity = (%d, %q), want (0, %q)", qty, reason, sizing.ReasonMaxTradeLossPct)
+	}
+	// The highest price that one lot passes max_trade_loss_pct at is 2,083 yen.
+	if qty, _ := sizing.Quantity(limits, sizing.DefaultStopLossPct, 2083, 0); qty != 100 {
+		t.Errorf("Quantity at 2,083 yen = %d, want 100", qty)
+	}
+	if qty, _ := sizing.Quantity(limits, sizing.DefaultStopLossPct, 2084, 0); qty != 0 {
+		t.Errorf("Quantity at 2,084 yen = %d, want 0", qty)
+	}
+}

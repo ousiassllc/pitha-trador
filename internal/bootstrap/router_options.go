@@ -7,6 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/evalprovider"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/exitalignjob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/universe"
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -56,7 +57,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithHeartbeatRecorder(services.Risk),
 		router.WithSymbolProvider(services.Execution),
 		router.WithSymbolRiskParams(symbol.NewSymbolRiskParams(services.Risk.Limits(), services.Execution.Config(), services.Risk.AllowedPositionPct)),
-		router.WithInsightProvider(evalprovider.New(services.Insight, state.DB, services.Risk.Limits().InitialCapital)),
+		router.WithInsightProvider(evalprovider.New(services.Insight, state.DB, paperrisk.CapitalNow(services.Risk))),
 		router.WithCalibrationSource(exitalignjob.NewCalibrationSource(services.Calibration, state.DB, services.Settings, services.Execution.Config())),
 		router.WithPolicyProposalSource(services.Proposals),
 		router.WithBacktestRunner(services.Backtest),

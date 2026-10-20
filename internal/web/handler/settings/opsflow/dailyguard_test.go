@@ -37,7 +37,12 @@ func TestSaveOps_DailyGuardThresholdsAreEditable(t *testing.T) {
 		if store.rows[key] != tc.stored {
 			t.Errorf("stored %s = %q, want %q", key, store.rows[key], tc.stored)
 		}
-		if !strings.Contains(rec.Body.String(), `id="setting-group-status-daily-guard"`) {
+		// The operating capital is set in the Paper group, next to the Paper capital (#804).
+		group := "daily-guard"
+		if key == dailyguardsettings.KeyOperatingCapitalJPY {
+			group = "paper-risk"
+		}
+		if !strings.Contains(rec.Body.String(), `id="setting-group-status-`+group+`"`) {
 			t.Errorf("POST %s: response lacks the group status; body=%s", key, rec.Body.String())
 		}
 	}

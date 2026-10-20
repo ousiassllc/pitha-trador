@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 )
 
@@ -170,6 +171,24 @@ func TestServices_StartWithLegacyDailyGuardRowOnlyWritesMarker(t *testing.T) {
 		}
 		if got, ok := storedRow(t, svc, key); ok {
 			t.Errorf("after Start %s = %q, want no seeded row next to a legacy one", key, got)
+		}
+	}
+}
+
+// The real startup path stores the Paper capital / exposure initial values
+// and the marker (issue #804): 500,000 yen, 100%, 100%.
+func TestServices_StartSeedsPaperRiskDefaults(t *testing.T) {
+	svc := newServices(t)
+	startAndStop(t, svc)
+
+	for key, want := range map[string]string{
+		papersettings.KeyInitialCapitalJPY:       "500000",
+		papersettings.KeyMaxPositionPerSymbolPct: "100",
+		papersettings.KeyMaxTotalExposurePct:     "100",
+		papersettings.SeededMarkerKey:            "true",
+	} {
+		if got, ok := storedRow(t, svc, key); !ok || got != want {
+			t.Errorf("after Start %s = %q (stored=%v), want %q", key, got, ok, want)
 		}
 	}
 }

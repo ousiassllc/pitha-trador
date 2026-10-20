@@ -12,7 +12,7 @@
 # （max_position_per_symbol_pct / max_total_exposure_pct / max_daily_loss_pct /
 # max_trade_loss_pct）の分母となる想定資金（円）であり、ポジションサイズ算出
 # の基準でもある（functional.md §4.7 / §4.8）。0以下は未設定扱い:
-# Paperは起動時に警告してデフォルト（3,000万円）を使い、Liveは実資金額の設定が必須
+# Paperは起動時に警告してデフォルト（50万円）を使い、Liveは実資金額の設定が必須
 # （未設定のままではRisk Engineが全新規取引をfail-closedで拒否する）。
 #
 # 上記以外の上限は起動時に検証し、範囲外（キーの欠落・タイプミスによる0を含む）は
@@ -31,10 +31,14 @@
 # 両キーとも必須（未設定は他の制限値と同様に起動エラー）。
 # paperは常に検証し、liveはliveセクションに値を1つでも書いた場合のみ検証する。
 
+# Paperの initial_capital / max_position_per_symbol_pct / max_total_exposure_pct は
+# Settings画面（設定 > リスク・資金）の保存値で上書きでき、ここの値は保存値がないときの
+# 既定になる（保存値は次のリスク判定から再起動なしで反映、Paper専用。issue #804）。
+# 初期値は 運用資金50万円・1銘柄100%・総エクスポージャ100%。Liveはこのファイルだけで決まる。
 paper:
-  initial_capital: 30000000
-  max_position_per_symbol_pct: 2.0
-  max_total_exposure_pct: 20.0
+  initial_capital: 500000
+  max_position_per_symbol_pct: 100.0
+  max_total_exposure_pct: 100.0
   max_daily_loss_pct: 1.0
   max_trade_loss_pct: 0.25
   max_open_positions: 5

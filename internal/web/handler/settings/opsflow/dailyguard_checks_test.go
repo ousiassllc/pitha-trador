@@ -20,11 +20,20 @@ import (
 // riskRouter is opsRouter with the risk.yaml reference wired in (initial
 // capital 30,000,000 円, max_daily_loss_pct 1) when ref is true.
 func riskRouter(ref bool) (*gin.Engine, *memRuntimeStore) {
+	if ref {
+		return riskRouterWithLimits(&config.RiskLimits{InitialCapital: 30_000_000, MaxDailyLossPct: 1})
+	}
+	return riskRouterWithLimits(nil)
+}
+
+// riskRouterWithLimits is opsRouter with limits (config/risk.yaml's Paper
+// section) wired in as the risk reference; nil wires none.
+func riskRouterWithLimits(limits *config.RiskLimits) (*gin.Engine, *memRuntimeStore) {
 	gin.SetMode(gin.TestMode)
 	store := &memRuntimeStore{rows: map[string]string{}}
 	svc := opsettings.New(store, opsStrategy(), "/data/logs")
-	if ref {
-		svc.WithRiskReference(config.RiskLimits{InitialCapital: 30_000_000, MaxDailyLossPct: 1})
+	if limits != nil {
+		svc.WithRiskReference(*limits)
 	}
 	h := settings.NewSettingsHandler(newFakeSecretsStore()).WithOperationalSettings(svc)
 	engine := settingsRouter(h)

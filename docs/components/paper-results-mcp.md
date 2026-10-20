@@ -25,7 +25,7 @@
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
 | 東証立会日 | 既存の `internal/service/marketcalendar` |
-| 資金の分母 | `cmd/paper-results-mcp` の `paperInitialCapital`（アプリと同じ risk yaml 解決順。Paper の `initial_capital` のみ）。DB は `bootstrap.DefaultDBPath` と `PITHA_DB_PATH` |
+| 資金の分母 | `cmd/paper-results-mcp` の `paperInitialCapital`（アプリと同じ risk yaml 解決順。Paper の `initial_capital` のみ。Settings の保存値（`runtime_settings`）には追従しない: 読み取り専用 DB の許可リストに無いため）。DB は `bootstrap.DefaultDBPath` と `PITHA_DB_PATH` |
 
 `internal/web` からは import しない（depguard の `web-no-repository` を迂回する読み取り画面を増やさない）。
 
