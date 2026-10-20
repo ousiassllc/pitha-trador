@@ -26,6 +26,7 @@
 | Policy Engine（ロング） | `/settings/operations#modal-policy-long` | ロングのシグナルになるための確率・エントリー品質などのしきい値を編集します。 | 運用 |
 | Policy Engine（ショート） | `/settings/operations#modal-policy-short` | ショートのシグナルになるための確率・エントリー品質などのしきい値を編集します。 | 運用 |
 | データの鮮度（ランキング監視） | `/settings/operations#modal-snapshot-age` | Jev の判断と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）を編集します。 | 運用 |
+| Paper ブートストラップ | `/settings/operations#modal-paper-bootstrap` | メタモデル未採用の間だけ Paper で旧ルールのエントリーを許し、ラベルを貯めるスイッチ（既定は無効、Live では必ず無効）を編集します。 | 運用 |
 | Performance | `/performance` | 決済済みポジションの実績（Paper）と評価指標を確認します。 | 成績・検証 |
 | バックテスト（Walk Forward） | `/performance#backtest` | 期間を指定して Walk Forward バックテストを実行し、コスト感度を確認します（Performance 画面の下部）。 | 成績・検証 |
 | Calibration | `/calibration` | Jev の確率予測が実際の結果とどれだけ合っているかをヒートマップで確認します。 | 成績・検証 |
