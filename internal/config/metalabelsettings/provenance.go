@@ -36,6 +36,13 @@ const (
 	ModeLive Mode = "live"
 )
 
+// RuntimeMode is the operating mode of this build, defined once: the Policy
+// Engine's Paper bootstrap, the Settings screen's Paper-only switch and the
+// retraining adoption check all read it. This build runs Paper Trading only
+// (internal/bootstrap/risk.go), and RuntimeMode is a constant, so nothing at
+// run time can select ModeLive; a Live build would change it here, in one place.
+const RuntimeMode = ModePaper
+
 // Cutoff statuses (CutoffStatus).
 const (
 	// CutoffPlaceholder: LLMCutoff is unset or the shipped placeholder

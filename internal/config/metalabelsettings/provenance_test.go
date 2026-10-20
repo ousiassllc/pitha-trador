@@ -116,3 +116,11 @@ func TestCutoffStatusLabelAndHelp(t *testing.T) {
 		t.Error("IsCutoffKey accepts an unrelated key")
 	}
 }
+
+// This build is Paper-only (issue #815): the single run-mode definition must
+// stay Paper until a Live build is added deliberately.
+func TestRuntimeModeIsPaper(t *testing.T) {
+	if metalabelsettings.RuntimeMode != metalabelsettings.ModePaper {
+		t.Fatalf("RuntimeMode = %q, want %q", metalabelsettings.RuntimeMode, metalabelsettings.ModePaper)
+	}
+}
