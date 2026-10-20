@@ -134,18 +134,9 @@ type sqlExecer interface {
 }
 
 func (w *Writer) inTx(ctx context.Context, fn func(*system.RuntimeSettingsRepository, sqlExecer) error) error {
-	tx, err := w.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("mcpset: begin write transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err := fn(system.NewRuntimeSettingsRepositoryOn(tx), tx); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("mcpset: commit write transaction: %w", err)
-	}
-	return nil
+	return runInTx(ctx, w.db, "write transaction", func(tx *sql.Tx) error {
+		return fn(system.NewRuntimeSettingsRepositoryOn(tx), tx)
+	})
 }
 
 // switchEntry is the audit row of a write switch change.
