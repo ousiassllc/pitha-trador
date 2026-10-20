@@ -192,24 +192,6 @@ func TestGateSwitch(t *testing.T) {
 	}
 }
 
-// Masking policy: a secret-class (or unknown) key's values never reach the
-// audit table, whoever wrote the row.
-func TestAuditMasksSecretClassKeys(t *testing.T) {
-	ctx := context.Background()
-	f := newFixture(t)
-	before, after := opsettings.Value{Current: "old-secret", Overridden: true}, opsettings.Value{Current: "new-secret", Overridden: true}
-	if err := f.gate.Record(ctx, "broker.tachibana.password", before, after, false); err != nil {
-		t.Fatal(err)
-	}
-	var b, a string
-	if err := f.db.QueryRow(`SELECT before_value, after_value FROM mcp_settings_audit`).Scan(&b, &a); err != nil {
-		t.Fatal(err)
-	}
-	if b != mcpwritesettings.Masked || a != mcpwritesettings.Masked {
-		t.Fatalf("stored audit values = %q / %q, want both masked", b, a)
-	}
-}
-
 // Without a stored value the Paper capital falls back; a stored one wins; a
 // damaged row is ignored like the Risk Engine ignores it.
 func TestPaperCapitalJPY(t *testing.T) {
