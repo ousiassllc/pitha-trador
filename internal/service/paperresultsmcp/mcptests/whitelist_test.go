@@ -149,7 +149,7 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("skipped queue", first(failures, "skipped_by_queue"), "queue count")
 	want("retention", coll["retention"].(map[string]any), "succeeded_job_days failed_job_days note")
 	health := data(healthToday, map[string]any{})
-	want("health", health, "date trading_day needs_attention attention_codes paper_trades meta_model bootstrap market_data missing_session_dates daily_guard kill_switch retrain")
+	want("health", health, "date trading_day needs_attention attention_codes paper_trades meta_model bootstrap market_data missing_session_dates insufficient_history_dates daily_guard kill_switch retrain")
 	want("health paper trades", health["paper_trades"].(map[string]any), "opened_count closed_count")
 	want("health meta model", health["meta_model"].(map[string]any), "adopted version trained_at")
 	want("health bootstrap", health["bootstrap"].(map[string]any), "enabled effective signals_today")

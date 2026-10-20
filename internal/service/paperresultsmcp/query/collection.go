@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
 
@@ -111,12 +110,9 @@ func missingSessionDates(ctx context.Context, q Q, r Range) ([]string, error) {
 		if !marketcalendar.TSE.IsTradingDay(day) {
 			continue
 		}
-		var exists bool
-		err := q.QueryRowContext(ctx, `
-SELECT EXISTS (SELECT 1 FROM market_snapshots WHERE timestamp >= ? AND timestamp < ?)`,
-			sqlutil.FormatTime(day), sqlutil.FormatTime(day.AddDate(0, 0, 1))).Scan(&exists)
+		exists, err := snapshotExists(ctx, q, day, day.AddDate(0, 0, 1))
 		if err != nil {
-			return nil, fmt.Errorf("query: snapshot existence: %w", err)
+			return nil, err
 		}
 		if !exists {
 			missing = append(missing, day.Format(time.DateOnly))
