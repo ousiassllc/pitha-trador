@@ -172,10 +172,12 @@ func CheckSave(ctx context.Context, store Store, capitalJPY float64, key, encode
 }
 
 // DefaultText is what applies to key while nothing is stored, for an operating
-// capital of capitalJPY: the stock budget the whole capital, the bond_etf budget 0.
+// capital of capitalJPY: the stock budget the whole capital rounded down to a
+// whole yen (budgets are integers, and the capital need not be), the bond_etf
+// budget 0.
 func DefaultText(key string, capitalJPY float64) string {
 	if key == KeyStockBudgetJPY {
-		return strconv.FormatFloat(capitalJPY, 'f', -1, 64)
+		return strconv.FormatFloat(math.Floor(capitalJPY), 'f', -1, 64)
 	}
 	return "0"
 }

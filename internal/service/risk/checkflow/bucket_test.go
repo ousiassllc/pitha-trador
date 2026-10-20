@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -22,17 +23,24 @@ import (
 // an entry is 300 shares x 2,000 yen = 600,000 yen.
 func bucketEngine(t *testing.T, withBucket bool) (*risk.Engine, *system.RuntimeSettingsRepository, *sql.DB) {
 	t.Helper()
+	return bucketEngineWith(t, withBucket, testLimits(), fakePortfolio{})
+}
+
+// bucketEngineWith is bucketEngine with the limits and the portfolio (the
+// total exposure the percentage limits and sizing see) chosen by the test.
+func bucketEngineWith(t *testing.T, withBucket bool, limits config.RiskLimits, portfolio fakePortfolio) (*risk.Engine, *system.RuntimeSettingsRepository, *sql.DB) {
+	t.Helper()
 	db := newTestDB(t)
 	snapshots := market.NewSnapshotRepository(db)
 	seedSnapshot(t, db, snapshots, 2000, 5)
 	settings := system.NewRuntimeSettingsRepository(db)
 	positions := trading.NewPositionRepository(db)
 	cfg := risk.Config{
-		Limits:     testLimits(),
+		Limits:     limits,
 		KillSwitch: system.NewKillSwitchRepository(db),
 		Settings:   settings,
 		Snapshots:  snapshots,
-		Portfolio:  fakePortfolio{},
+		Portfolio:  portfolio,
 	}
 	if withBucket {
 		cfg.StockBucket = bucket.NewProvider(positions, settings)
@@ -144,14 +152,18 @@ func TestRisk_StockBudgetDoesNotChangeThePercentLimitDenominator(t *testing.T) {
 
 // The stock bucket's holdings are valued at the market, like the exposure
 // limits: an unrealized loss frees room that the entry price would still count.
-// 15,000 shares bought at 2,000 (30,000,000 yen, the whole default budget) are
-// worth 15,000,000 at the mark of 1,000.
+// Capital 30,000,000 and the total exposure limit at 100%: 20,000 shares bought
+// at 2,000 (40,000,000 yen at entry, over the default budget of the whole
+// capital) marked 1,000 are worth 20,000,000 (66.67% of the capital, what the
+// portfolio reports). The entry of 600,000 on top stays within the budget, so
+// the default decides as before; at entry price (40,000,000 + 600,000) it
+// would have been rejected.
 func TestRisk_DefaultBudgetCountsHoldingsAtMarketNotEntryPrice(t *testing.T) {
-	e, _, db := bucketEngine(t, true)
-	openStockPositionMarked(t, db, 15_000, 2000, 1000)
+	limits := testLimits()
+	limits.MaxTotalExposurePct = 100
+	e, _, db := bucketEngineWith(t, true, limits, fakePortfolio{totalExposurePct: 20_000_000.0 / 30_000_000 * 100})
+	openStockPositionMarked(t, db, 20_000, 2000, 1000)
 
-	// Entry 600,000 on top of 15,000,000: within the default budget, which an
-	// entry-price valuation (30,000,000 + 600,000) would have rejected.
 	if passed, reason := e.Check(context.Background(), 1, domain.JevDirectionLong); !passed {
 		t.Fatalf("Check = (false, %q), want passed under the default budget", reason)
 	}
@@ -161,7 +173,7 @@ func TestRisk_DefaultBudgetCountsHoldingsAtMarketNotEntryPrice(t *testing.T) {
 // holdings plus the entry goes over it, and not before.
 func TestRisk_BudgetBelowCapitalRejectsOnMarketValueHoldings(t *testing.T) {
 	ctx := context.Background()
-	e, settings, db := bucketEngine(t, true)
+	e, settings, db := bucketEngineWith(t, true, testLimits(), fakePortfolio{totalExposurePct: 450_000.0 / 30_000_000 * 100})
 	// 300 shares bought at 2,000, marked 1,500: 450,000 held + this entry's 600,000.
 	openStockPositionMarked(t, db, 300, 2000, 1500)
 
@@ -174,5 +186,22 @@ func TestRisk_BudgetBelowCapitalRejectsOnMarketValueHoldings(t *testing.T) {
 	storeStockBudget(t, settings, "1050000")
 	if passed, reason := e.Check(ctx, 1, domain.JevDirectionLong); !passed {
 		t.Fatalf("Check at exactly the market-value total = (false, %q), want passed", reason)
+	}
+}
+
+// A position that has not been marked yet (current_price 0) is held at its
+// entry price: 300 shares at 2,000 = 600,000 + this entry's 600,000.
+func TestRisk_UnmarkedHoldingsCountAtEntryPrice(t *testing.T) {
+	ctx := context.Background()
+	e, settings, db := bucketEngineWith(t, true, testLimits(), fakePortfolio{totalExposurePct: 600_000.0 / 30_000_000 * 100})
+	openStockPositionMarked(t, db, 300, 2000, 0)
+
+	storeStockBudget(t, settings, "1199999")
+	if passed, reason := e.Check(ctx, 1, domain.JevDirectionLong); passed || !strings.Contains(reason, "held_jpy=600000") {
+		t.Fatalf("Check one yen under = (%v, %q), want bucket_budget_exceeded with held_jpy=600000", passed, reason)
+	}
+	storeStockBudget(t, settings, "1200000")
+	if passed, reason := e.Check(ctx, 1, domain.JevDirectionLong); !passed {
+		t.Fatalf("Check at exactly the total = (false, %q), want passed", reason)
 	}
 }
