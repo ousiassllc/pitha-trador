@@ -240,3 +240,4 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.7 | 2026-10-20 | 設定の読み書きを追加（§7。ホワイトリスト 15 キー、書き込み許可のスイッチ＝`runtime_settings`、狭い書き手、監査ログ `mcp_settings_audit`、`settings_get` / `settings_set` / `settings_diff`）。「MCP は書かない」を「書くのはホワイトリストの設定ツールだけで、書き込み接続は別の狭い書き手」に改めた（§4・§5・§6）。Paper 資金の分母を Settings の保存値に追従させた（§7.6）。読み取り接続・待受・認証は変更なし | issue #806・#807 |
 | 1.8 | 2026-10-20 | §7.5 に、`settings_get` の `llm_cutoff_status` と、`settings_set` の LLM cutoff 4 キー応答の同コードを追記 | issue #809 |
 | 1.9 | 2026-10-20 | §7.4 の GUI の保存を、MCP と同じく設定と監査を 1 トランザクションにする形に改めた（監査の失敗は保存も取り消す）。MCP の書き込み経路は従来から 1 トランザクションで、変更なし | issue #813 |
+| 1.10 | 2026-10-20 | §5 の `health_today` の欠損セッションを、それ以前のスナップショットがある日付だけ（実際の欠損）に改め、履歴が足りず判定できない立会日は `insufficient_history_dates[]` に分けて警告にしない旨を追記。DB は読み取り専用のまま | issue #814 |

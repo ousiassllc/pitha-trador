@@ -11,9 +11,9 @@ import (
 
 // sessionGaps splits the TSE trading days (JST) of r that have no
 // market_snapshots row (issue #814). A day with an earlier snapshot is a real
-// gap (missing). A day with no snapshot before it either lies before the
-// history began, e.g. just after the first start, so nothing can be said about
-// it (insufficient). Both lists are empty, never nil, and in date order.
+// gap (missing). A day with no snapshot before it lies before the history
+// began, e.g. just after the first start, so nothing can be said about it
+// (insufficient). Both lists are empty, never nil, and in date order.
 func sessionGaps(ctx context.Context, q Q, r Range) (missing, insufficient []string, err error) {
 	missing, insufficient = []string{}, []string{}
 	for day := r.From.In(JST); day.Before(r.To); day = day.AddDate(0, 0, 1) {
