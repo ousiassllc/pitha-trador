@@ -63,7 +63,8 @@ var settingsTools = []tool{
 		name: "settings_set",
 		description: "ホワイトリストの設定を 1 つ変更する（Settings 画面と同じ保存先・同じ検証。書き込み許可がオフのときは拒否。変更は監査ログに残る）。" +
 			"LLM cutoff を更新するときは 4 キーを 1 回ずつ、metalabel.llm_cutoff → metalabel.llm_cutoff_model → metalabel.llm_cutoff_confirmed_on → metalabel.llm_cutoff_source の順に設定する（公式日付の確認手順は各キーの description）。" +
-			"これら 4 キーの応答には llm_cutoff_status が付く。日付だけでは unverified のまま、モデル名まで記録すると confirmed になる",
+			"これら 4 キーの応答には llm_cutoff_status が付く。日付だけでは unverified のまま、モデル名まで記録すると confirmed になる。" +
+			"予算枠（risk.bucket.stock.budget_jpy / risk.bucket.bond_etf.budget_jpy）は 1 キーずつ保存し、株と債券ETFの合計が運用資金（risk.paper.initial_capital_jpy）を超える保存は拒否される。枠の間で予算を移すときは、減らす方を先に保存してから増やす方を保存する",
 		schema: objectSchema(map[string]any{
 			"key":   map[string]any{"type": "string", "description": "settings_get が返すキー"},
 			"value": map[string]any{"type": []string{"string", "number"}, "description": "新しい値（Settings 画面に入れる文字列と同じ。数値キーは数値でも可）"},

@@ -30,6 +30,7 @@ func TestEveryWhitelistedKeyIsWritable(t *testing.T) {
 	valid := map[string]any{
 		"risk.paper.initial_capital_jpy": 1000000, "risk.paper.max_position_per_symbol_pct": 50,
 		"risk.paper.max_total_exposure_pct": 80, "risk.paper.max_trade_loss_pct": 0.5,
+		"risk.bucket.stock.budget_jpy": 400000, "risk.bucket.bond_etf.budget_jpy": 300000,
 		"risk.operating_capital_jpy": 2000000, "risk.daily_loss_limit_pct": 2, "risk.profit_lock.trigger_pct": 3,
 		"risk.profit_lock.giveback_pct": 40, "risk.max_daily_trades": 7, "risk.daily_loss_limit_jpy": 20000,
 		"risk.profit_lock.trigger_jpy": 30000,

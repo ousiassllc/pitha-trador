@@ -53,6 +53,7 @@ var opsGroups = slices.Concat([]opsGroup{
 	tachibanaGroup,
 }, tachibanaSourceGroups, []opsGroup{
 	paperRiskGroup,
+	bucketGroup,
 	dailyGuardGroup,
 	costGroup,
 	metaLabelGroup,

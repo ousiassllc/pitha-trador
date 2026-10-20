@@ -42,8 +42,8 @@ erDiagram
 
 | ファイル | テーブル / セクション |
 |----------|----------------------|
-| `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `trade_signals` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
-| `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` |
+| `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
+| `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `mcp_settings_audit`、ベクトルインデックス（sqlite-vec） |
 
@@ -115,3 +115,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.59 | 2026-10-20 | `er/tables-system.md`の`runtime_settings`に`paper.bootstrap_entry_enabled`を、`er/tables-market.md`の`trade_signals.policy_version`にPaperブートストラップの`policy-vb`を追記（スキーマ変更なし） | issue #798 |
 | 1.60 | 2026-10-20 | `runtime_settings`のキーに`risk.paper.initial_capital_jpy`・`risk.paper.max_position_per_symbol_pct`・`risk.paper.max_total_exposure_pct`・`risk.paper.max_trade_loss_pct`（PaperのRisk Engine用の運用資金・1銘柄／総エクスポージャ上限・1回の最大損失。判定ごとに読み込む）と内部マーカー`system.paper_risk_defaults_seeded`を追加（`er/tables-system.md`） | issue #804 |
 | 1.61 | 2026-10-20 | マイグレーション000040を追加し、`er/tables-system.md`に`mcp_settings_audit`（Paper 実績 MCP の設定ツールと Settings 画面の、ホワイトリストのキーの変更と書き込み許可の切替の監査ログ）を追加。`runtime_settings`のキー`mcp.settings_write_enabled`（書き込み許可、1/0、行なしは許可）を追記 | issue #806・#807 |
+| 1.62 | 2026-10-20 | マイグレーション000041を追加し、`er/tables-market.md`の`instruments`に`asset_class`（`stock` / `bond_etf`）、`er/tables-trading.md`の`paper_orders`・`positions`・`trade_signals`に`bucket`を追加（書き込み時に`instruments.asset_class`から確定。既存行は`stock`）。`er/tables-system.md`の`runtime_settings`にPaperの予算枠`risk.bucket.{stock,bond_etf}.budget_jpy`と内部マーカー`system.bucket_budgets_seeded`を追記。株の保有額は`positions`の未決済の`entry_price × quantity`の合計（取得価格×株数）。`trade_signals`には予算枠の拒否理由`bucket_disabled` / `bucket_budget_exceeded`も追記し、その章を`.linterly.yml`の300行/ファイル制限のため`er/tables-market.md`から`er/tables-trading.md`へ移した（見出し名・内容は同じ） | issue #824（親 #823） |

@@ -8,14 +8,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
 )
 
-// The pages are the ones issue #805 proposed, in that order. A page added or
-// renamed later must update this list on purpose.
+// The pages are the ones issue #805 proposed plus 資産ごとの予算枠 (issue
+// #824), in that order. A page added or renamed later must update this list on purpose.
 func TestPages_AreTheDeclaredList(t *testing.T) {
 	var got []string
 	for _, p := range settingspages.Pages() {
 		got = append(got, p.Name)
 	}
-	want := []string{"運用", "成績・検証", "リスク・資金", "ブローカー・データ", "外部連携", "ログ・エクスポート"}
+	want := []string{"運用", "成績・検証", "リスク・資金", "資産ごとの予算枠", "ブローカー・データ", "外部連携", "ログ・エクスポート"}
 	if strings.Join(got, "/") != strings.Join(want, "/") {
 		t.Errorf("pages = %v, want %v", got, want)
 	}

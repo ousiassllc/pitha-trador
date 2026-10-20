@@ -194,6 +194,16 @@ FR-RISK-2/FR-RISK-7の検知・自動再開は、Schedulerが1分周期で実行
   - 受け入れ（issue #804の決定）: 500,000・100・100・1.0では、1単元＝50万円（株価5,000円）はサイズ計算（`sizing.Quantity`）で拒否されない（資金・1銘柄・総エクスポージャの各上限に収まり、初期ストップ0.6%での1単元の損失3,000円が上限5,000円以内）。他のガード（最大建玉数・スプレッド等）は別に判定する。旧Paper値の0.25%では株価約2,083円を超える銘柄が`max_trade_loss_pct`で見送られていたため、`max_trade_loss_pct`も4つ目の設定キーにして初期値を1.0%にした（テストで両方を固定）
   - Paper実績MCP（`cmd/paper-results-mcp`）の資金比は、読み取り専用DBのテーブル許可リストに`runtime_settings`が無いため、引き続き`risk.yaml`の`paper.initial_capital`を使い、Settingsの保存値には追従しない
 
+- FR-RISK-10（Paperの資産ごとの予算枠、issue #824、親 #823。Paper専用）: Paperの運用資金（FR-RISK-9）を、資産クラスごとの2つの枠（株`stock`・債券ETF`bond_etf`）に分けて使えるようにする。枠は2つ固定で、Kill Switch・日次ガード・%上限は枠に分けず全体のまま。債券ETFの銘柄の取り込み・エントリー・ルール・日跨ぎ・枠ごとの日次ガード・health/成績の枠別表示・枠の間の移動ツールは今回は持たない。債券ETFの枠は設定として保存できるだけで、新規エントリーの判定は株の枠だけに掛かる。
+  - 保存先は`runtime_settings`の`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`（JSON数値。0以上1兆円以下の整数の円。0はその枠を使わない。`internal/config/bucketsettings`）。Settingsの「資産ごとの予算枠」ページ（`GET /settings/asset-buckets`）とMCP（FR-MCP-20）から保存でき、Paperのリスク判定のたびに保存値を読み直すため再起動不要（FR-SETTINGS-7）。
+  - **合計の制約**: 2つの枠の合計は運用資金（`risk.paper.initial_capital_jpy`）以下。枠の保存（Settings・MCP）、枠の「既定に戻す」、運用資金を下げる保存のどれも同じ検査（`bucketsettings.CheckSave`。`opsettings.Service`の`Save`/`Reset`が通す）にかけ、超えるときは保存せず、監査ログ`mcp_settings_audit`の行も残さない（FR-MCP-21）。枠の間で予算を移すときは、減らす方の枠を先に保存してから増やす方の枠を保存する（枠を移すツールは設けない）。
+  - **既定**: 保存値がない枠は、株が運用資金の全額、債券ETFが0。起動時に1回だけ（DBごと。`bucketsettings.SeedDefaults`、印は`runtime_settings`の`system.bucket_budgets_seeded`）、その時点の運用資金（円未満切り捨て）を株の枠、0を債券ETFの枠として保存する。2キーのどちらかに保存値が既にあれば値は保存せず印だけ残し、既存の行は上書きしない。保存した枠は、その後に運用資金を上げても自動では変わらない。
+  - **判定**（Paperの`Check`だけ。`risk.Config.StockBucket`を持つEngineに限る）: `bucket_disabled`（株の枠が0以下。運用資金・上限の設定を読んだ直後、総エクスポージャ判定の前。メッセージは`bucket_disabled: bucket=stock budget_jpy=…`）と`bucket_budget_exceeded`（サイズ計算の後。株の保有額＋今回のエントリー額（数量×価格）が枠を超える。ちょうど枠に達するのは許可。メッセージは`bucket_budget_exceeded: bucket=stock held_jpy=… entry_jpy=… budget_jpy=…`）で新規エントリーを拒否し、拒否理由は`trade_signals.reject_reason`に残る。**株の保有額は、`positions`の`bucket='stock'`で未決済の行の`entry_price × quantity`の合計（取得価格×株数。時価ではない）**。決済（Exit）は枠で止めない。保有額と枠の読み取りに失敗したときは`risk_engine_error`で拒否する（fail-closed）。%上限（1銘柄・総エクスポージャ・1回の最大損失）の分母は引き続き運用資金全体で、%上限は時価、枠は取得価格で数えるため、含み損が出ている間は時価ベースの%上限より先に株の枠が埋まることがある。
+  - 行の枠（`bucket`）は、銘柄の`instruments.asset_class`から、`positions`・`paper_orders`・`trade_signals`を書く時点で確定し、あとから`asset_class`や枠の設定を変えても過去の行は変わらない（`docs/architecture/er.md`）。
+  - バックテスト（`simrisk`）は同じ2つの判定・同じ境界・同じ拒否理由を使い、株の枠は`bucketsettings.Effective`（保存値、なければ運用資金の全額）で読む（バックテストは株のみ）。
+  - **既定のままの挙動**: 株の枠＝運用資金の全額・債券ETFの枠＝0（保存値なしの既定、および初回起動時に保存される値）では、枠は%上限の分母と同じ額で、債券ETFの枠は使われないため、保有が取得価格どおりの価値であれば枠を設ける前と判定は変わらない。取得価格と時価がずれている間（含み損など）は、%上限を通ったエントリーでも株の枠で見送られることがある（上の判定の項）。
+  - **Liveは変えない**: 枠のキー・判定はPaperだけ。Live用Engineは`StockBucket`なしで作られ、枠の判定を持たず、全口座で1つの枠（従来どおり）として`config/risk.yaml`の上限だけで判定する。
+
 ### 4.8 Entry / Exit
 
 - FR-ENTRY-1: 成行想定Paper Entry・指値Paper Entryの両方を選択可能とする。現状はExecutionエンジン（`internal/service/execution`）が両方を実装しており（`EntryRequest.OrderType`/`LimitPrice`、`Config.PreferLimit`、PENDING指値の約定処理`TryFillPending`）、本番経路（Policy → `paperexec` → Execution）は`OrderType`/`LimitPrice`を指定しないため常に成行想定で発注する。`Config.PreferLimit`は`config/*.yaml`・環境変数・`runtime_settings`のいずれにも設定キーが無く既定のfalse（成行）固定であり、運用で指値Entryを選ぶ手段は未提供（本番経路への配線は実売買移行時にFR-ENTRY-2と併せて行う）

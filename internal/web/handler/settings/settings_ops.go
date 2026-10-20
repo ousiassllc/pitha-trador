@@ -67,6 +67,8 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 		props.Derived = h.dailyGuardDerived(ctx)
 	case paperRiskGroup.id:
 		props.Derived = h.paperRiskDerived(ctx)
+	case bucketGroup.id:
+		props.Derived = h.bucketDerived(ctx)
 	case metaLabelGroup.id:
 		props.Derived = h.metaLabelDerived(ctx)
 		props.DerivedTitle = "LLM cutoff の状態と確認手順"
