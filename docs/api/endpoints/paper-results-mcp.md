@@ -168,7 +168,8 @@
 | `meta_model` | `adopted`（`metalabel_models.status='active'` が 1 件以上）、`version`・`trained_at`（採用中で最新のもの。無ければ `null`） |
 | `bootstrap` | `enabled`（`runtime_settings` の `paper.bootstrap_entry_enabled`。無い・解釈できない値は `false`。#798）、`effective`（`enabled` かつ採用中モデルが無い。ブートストラップが働く条件。本 MCP は Paper の DB だけを読み、アプリは Live では設定に関わらず使わない）、`signals_today`（今日のシグナルのうち `policy_version` がブートストラップ版のもの） |
 | `market_data` | `kabu_login`（`ok` / `not_logged_in` / `unknown` / `not_watched`）、`market_data`（`running` / `idle` / `not_watched`）、`app_running`（アプリの検知の最終確認が 2 分以内か）、`alerts[]`（`collection_status.alerts[]` と同じ値。`code` と `since`）。`not_watched` は検知が見ない時間（非取引日、08:45〜15:30 の外、`market_data` は立会外・昼休み）。`unknown` は見る時間なのにアプリが止まっていて判断できない状態 |
-| `missing_session_dates[]` | 今日より前の 7 日間（今日の引け後は今日も含む）の東証立会日のうち `market_snapshots` が 0 件の日付。`collection_status.missing_session_dates` と同じ判定 |
+| `missing_session_dates[]` | 今日より前の 7 日間（今日の引け後は今日も含む）の東証立会日のうち、`market_snapshots` が 0 件で、**それ以前にスナップショットが 1 件でもある**日付（実際の欠損）。`collection_status.missing_session_dates` は履歴の長さを見ずに 0 件の日をすべて返すので、初回起動直後は両者が異なる（#814） |
+| `insufficient_history_dates[]` | 同じ期間の東証立会日のうち、`market_snapshots` が 0 件で、**それ以前のスナップショットも 1 件も無い**日付（履歴が足りず判定できない。初回起動直後など）。欠損とは区別し、警告にしない（`attention_codes` に出さない）。履歴が 7 日分そろえば `[]`。無ければ `[]`（#814） |
 | `daily_guard` | `halted`、`reason`（`daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades`。`halted` でなければ `null`）、`halted_at`（UTC RFC3339）。アプリの `risk.Engine.DailyHalt` と同じく、今日の取引日の停止だけを、その規則が Settings でまだ有効なときに限って返す。停止メッセージの文は返さない |
 | `kill_switch` | `active`（解除されていない `kill_switch_events` がある、または `system.killed` が真）、`unresolved_count`、`since`（未解除で最新の `triggered_at`）、`reasons[]`（未解除の `reason` コード。§3.7 の CHECK 値）、`flag_set`（`system.killed`）。`risk.Engine.State` と同じ判定 |
 | `retrain` | `skipped`（最新の `metalabel_retrain_skips` が 24 時間以内で、それ以後に学習されたモデルが無い）、`latest_skipped_at`、`reason_code`（§3.5 の固定コード。未知は `other`）。見送りが一度も無ければ後ろ 2 つは `null` |
@@ -181,7 +182,7 @@
 | `no_active_model` | 採用中のメタモデルが無い（日によらない） |
 | `kabu_not_logged_in` | `market_data.alerts[]` に同名の警告がある（取引日の 08:45〜15:30 のみ） |
 | `market_data_idle` | `market_data.alerts[]` に同名の警告がある（立会中のみ） |
-| `missing_session` | `missing_session_dates[]` が空でない（取引日・非取引日とも直近 7 日の取引日を見る） |
+| `missing_session` | `missing_session_dates[]` が空でない（取引日・非取引日とも直近 7 日の取引日を見る）。`insufficient_history_dates[]` だけが空でないときは出さない（データ不足は警告でなく判定不可） |
 | `daily_guard_halted` | `daily_guard.halted` |
 | `kill_switch_active` | `kill_switch.active`（日によらない） |
 | `retrain_skipped` | `retrain.skipped` |
