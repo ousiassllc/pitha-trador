@@ -82,10 +82,10 @@ var specs = []Spec{
 	{dailyguardsettings.KeyMaxTrades, UnitCount, "1 日の最大エントリー回数。0 は使わない", "0 以上の整数", false},
 	{dailyguardsettings.KeyLossLimitJPY, UnitYen, "日次損失上限（円で直接指定。運用資金と % を使わない場合）。0 は使わない", "0 以上", false},
 	{dailyguardsettings.KeyProfitLockTriggerJPY, UnitYen, "利益確保の発動水準（円で直接指定）。0 は使わない", "0 以上", false},
-	{metalabelsettings.KeyLLMCutoff, UnitDate, "Jev が使う LLM の学習データの終端日（UTC）。OOS 評価はこの日以降の判断だけを使う", "YYYY-MM-DD", false},
-	{metalabelsettings.KeyLLMCutoffModel, UnitText, "上の終端日を確認した Jev のモデル名（出典）", fmt.Sprintf("%d 文字以内・制御文字なし", metalabelsettings.MaxProvenanceLen), false},
-	{metalabelsettings.KeyLLMCutoffConfirmedOn, UnitDate, "上の終端日を確認した日（出典）", "YYYY-MM-DD", false},
-	{metalabelsettings.KeyLLMCutoffSource, UnitText, "上の終端日の根拠（公式ページなど。出典）", fmt.Sprintf("%d 文字以内・制御文字なし", metalabelsettings.MaxProvenanceLen), false},
+	{metalabelsettings.KeyLLMCutoff, UnitDate, "Jev が使う LLM の学習データの終端日（UTC）。OOS 評価はこの日以降の判断だけを使う。ベンダー公式のモデルカード／ドキュメントの knowledge cutoff の日付を入れる（公式に無ければ推測せず仮置きのまま）。仮置き（2026-01-01）のままだとメタモデルは採用されない。日付だけでは unverified、下のモデル名まで記録すると confirmed（settings_get の llm_cutoff_status）", "YYYY-MM-DD", false},
+	{metalabelsettings.KeyLLMCutoffModel, UnitText, "上の終端日を確認した Jev のモデル名（出典）。判断の記録の model_id と同じ表記で入れる。実際に応答しているモデルと違うと再確認まで不採用", fmt.Sprintf("%d 文字以内・制御文字なし", metalabelsettings.MaxProvenanceLen), false},
+	{metalabelsettings.KeyLLMCutoffConfirmedOn, UnitDate, "上の終端日を公式情報で確認した日（出典。記録用）", "YYYY-MM-DD", false},
+	{metalabelsettings.KeyLLMCutoffSource, UnitText, "上の終端日の根拠（出典。確認した公式ページの URL か文書名）", fmt.Sprintf("%d 文字以内・制御文字なし", metalabelsettings.MaxProvenanceLen), false},
 }
 
 // Specs returns the whitelist in display order. The slice is a copy.

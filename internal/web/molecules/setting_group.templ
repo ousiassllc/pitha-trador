@@ -7,15 +7,16 @@ import "strconv"
 // Name and Description what the operator sees in the list, Note a
 // when-does-it-apply paragraph (restart needed or not) shown in the modal,
 // and Fields the rows edited in it. State is derived from the fields.
-// Derived, when non-empty, is the read-only 計算結果 panel
-// (SettingGroupDerived) shown above the fields.
+// Derived, when non-empty, is the read-only panel (SettingGroupDerived) shown
+// above the fields, titled DerivedTitle (default 計算結果).
 type SettingGroupProps struct {
-	ID          string
-	Name        string
-	Description string
-	Note        string
-	Fields      []SettingFieldRowProps
-	Derived     []SettingDerivedItem
+	ID           string
+	Name         string
+	Description  string
+	Note         string
+	Fields       []SettingFieldRowProps
+	Derived      []SettingDerivedItem
+	DerivedTitle string
 }
 
 // ModalID is the id of the group's Modal; the card's open button targets it.

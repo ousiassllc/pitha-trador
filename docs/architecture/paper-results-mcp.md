@@ -217,6 +217,7 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 ### 7.5 一覧・変更・差分（#807）
 
 - `settings_get`: ホワイトリストの全キーの現在値を、単位・出どころ（`stored` = 保存値、`default` = 保存値なしで既定が効いている）・既定値・許容範囲つきで返す。書き込み許可と**スナップショット ID**（最新の監査行の `id`。変更がなければ 0）も返す
+- `settings_get` は LLM cutoff の状態の固定コード `llm_cutoff_status`（`placeholder` / `unverified` / `confirmed`。`metalabelsettings.Settings.CutoffStatus` と同じ分類）も返し、`settings_set` は LLM cutoff の 4 キーの応答に同コードを付ける。4 キーを 1 回ずつ書くだけで日付と出典を更新でき、日付だけなら `unverified` のまま（採用判定は変えない）。
 - `settings_set`: キーと値を 1 つ。許可の確認と GUI と同じ検証のあと保存し、監査 ID を返す
 - `settings_diff`: 比較の基準になる**スナップショット**は、監査ログの行 ID（`since_id`。その行の保存**直後**の状態。0 は最初から）か時刻（`since_at`、RFC3339。その時点の状態）。引数なしは「直近 1 回の保存の直前」との差分。現在値と基準の値が違うキーだけを、値・出どころ・最後に変えた時刻と誰がで返す（保存して元の値に戻したキーは差分に出ない）。基準の状態は、監査ログから再構成する（基準より後に監査行があるキーは、その最初の行の「変更前」が基準時点の値。ないキーは変わっていない）。監査を通さずに DB が直接書き換えられた変更は、そのキーに監査行がない限り見えない
 - 3 つで一覧 → 変更 → 差分が確認できる: `settings_get`（`snapshot_id` を控える）→ `settings_set` → `settings_diff`（`since_id` に控えた値）
@@ -237,3 +238,4 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.5 | 2026-10-20 | §5 の `collection_status` に立会中の市況データ停止の警告 `alerts[]` を追加。状態はアプリの検知が `health_alerts`（`000039`）に保存し、MCP は読むだけ。アプリが止まっているときは MCP が `jobs` から `market_data_idle` を導く。DB は読み取り専用のまま | issue #802 |
 | 1.6 | 2026-10-20 | §5 に `health_today`（今日の健康診断。取引数・メタモデル・ブートストラップ・kabu/market-data・欠損・日次ガード・Kill Switch・要対応コード）を追加し、ツール数を 9 にした。`runtime_settings` を固定キーの許可リストで読み取りだけ読む旨を追記。新規テーブルなし | issue #808 |
 | 1.7 | 2026-10-20 | 設定の読み書きを追加（§7。ホワイトリスト 15 キー、書き込み許可のスイッチ＝`runtime_settings`、狭い書き手、監査ログ `mcp_settings_audit`、`settings_get` / `settings_set` / `settings_diff`）。「MCP は書かない」を「書くのはホワイトリストの設定ツールだけで、書き込み接続は別の狭い書き手」に改めた（§4・§5・§6）。Paper 資金の分母を Settings の保存値に追従させた（§7.6）。読み取り接続・待受・認証は変更なし | issue #806・#807 |
+| 1.8 | 2026-10-20 | §7.5 に、`settings_get` の `llm_cutoff_status` と、`settings_set` の LLM cutoff 4 キー応答の同コードを追記 | issue #809 |

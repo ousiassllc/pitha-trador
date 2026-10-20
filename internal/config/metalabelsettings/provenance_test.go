@@ -76,3 +76,43 @@ func TestProvenance_NormalizeApplyAndLoad(t *testing.T) {
 		t.Errorf("default Text(model) = %q, %v, want empty", text, ok)
 	}
 }
+
+// Issue #809: replacing the placeholder date and then recording the Jev model
+// takes the status placeholder -> unverified -> confirmed, and the warning is
+// gone only at confirmed. A date alone never reaches confirmed.
+func TestCutoffStatus_PlaceholderReplacedThenConfirmed(t *testing.T) {
+	s := metalabelsettings.Default()
+	if s.CutoffStatus() != metalabelsettings.CutoffPlaceholder || s.CutoffWarning() == "" {
+		t.Fatalf("default: status %q, warning %q", s.CutoffStatus(), s.CutoffWarning())
+	}
+	s.LLMCutoff = "2026-03-31"
+	s.LLMCutoffConfirmedOn, s.LLMCutoffSource = "2026-10-20", "https://example.com/model-card"
+	if s.CutoffStatus() != metalabelsettings.CutoffUnverified || s.CutoffWarning() == "" {
+		t.Fatalf("date and source without a model: status %q, warning %q", s.CutoffStatus(), s.CutoffWarning())
+	}
+	s.LLMCutoffModel = "jev-2026-03"
+	if s.CutoffStatus() != metalabelsettings.CutoffConfirmed || s.CutoffWarning() != "" {
+		t.Fatalf("with the model: status %q, warning %q", s.CutoffStatus(), s.CutoffWarning())
+	}
+}
+
+func TestCutoffStatusLabelAndHelp(t *testing.T) {
+	for _, status := range []string{metalabelsettings.CutoffPlaceholder, metalabelsettings.CutoffUnverified, metalabelsettings.CutoffConfirmed} {
+		label, effect := metalabelsettings.CutoffStatusLabel(status)
+		if !strings.Contains(label, status) || effect == "" {
+			t.Errorf("CutoffStatusLabel(%q) = %q, %q: want the code in the label and a non-empty effect", status, label, effect)
+		}
+	}
+	help := strings.Join(metalabelsettings.CutoffHelp(), "\n")
+	for _, key := range []string{metalabelsettings.KeyLLMCutoff, metalabelsettings.KeyLLMCutoffModel, metalabelsettings.KeyLLMCutoffConfirmedOn, metalabelsettings.KeyLLMCutoffSource} {
+		if !strings.Contains(help, key) {
+			t.Errorf("the help does not say what goes in %s", key)
+		}
+		if !metalabelsettings.IsCutoffKey(key) {
+			t.Errorf("IsCutoffKey(%s) = false", key)
+		}
+	}
+	if metalabelsettings.IsCutoffKey(metalabelsettings.KeyMinEVBps) {
+		t.Error("IsCutoffKey accepts an unrelated key")
+	}
+}

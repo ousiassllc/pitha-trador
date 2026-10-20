@@ -31,7 +31,7 @@
 | バックテスト（Walk Forward） | `/performance#backtest` | 期間を指定して Walk Forward バックテストを実行し、コスト感度を確認します（Performance 画面の下部）。 | 成績・検証 |
 | Calibration | `/calibration` | Jev の確率予測が実際の結果とどれだけ合っているかをヒートマップで確認します。 | 成績・検証 |
 | キャリブレーションのラベル（トリプルバリア） | `/settings/results#modal-triple_barrier` | 判断に正解・不正解のラベルを付ける利確・損切り幅と時間切れを編集します。 | 成績・検証 |
-| メタラベリング | `/settings/results#modal-metalabel` | 入る／見送るを決める二次モデルの設定と最低 EV を編集します。 | 成績・検証 |
+| メタラベリング | `/settings/results#modal-metalabel` | 入る／見送るを決める二次モデルの設定と最低 EV を編集します。上部に LLM cutoff の状態（仮置き／未確認／確認済み）と、公式の日付の確認手順（どこを見て何を入れるか）を表示します。 | 成績・検証 |
 | 相場状態（レジーム）判定 | `/settings/results#modal-regime` | 相場状態（トレンド／平均回帰）の判定と、VWAP 回帰モードへの切替を編集します。 | 成績・検証 |
 | 板の需給（OFI） | `/settings/results#modal-orderflow` | 板の需給（Order Flow Imbalance）を集計する窓の幅を編集します。 | 成績・検証 |
 | Paper の運用資金・建玉上限・1回の最大損失 | `/settings/risk#modal-paper-risk` | Paper の運用資金（ポジションサイズの分母）・1銘柄の上限・総エクスポージャの上限・1回の取引の最大損失（%）と、日次ガード用の運用資金を並べて編集します。保存は再起動不要で次のリスク判定から反映され、1単元（100株）が運用資金を超える場合は注意を表示します。Paper 専用（Live は変わりません）。 | リスク・資金 |
@@ -78,3 +78,4 @@
 | 1.2 | 2026-10-20 | 管理ハブ（`/admin`）を Settings に統合: メニューは Settings 1本、`/settings` はページ一覧、詳細は `/settings/<page>`（運用／成績・検証／リスク・資金／ブローカー・データ／外部連携／ログ・エクスポート）。`/admin` と旧 `/settings#modal-<id>` は新ページへ転送。登録簿を `adminhub` から `settingspages` へ | issue #805 |
 | 1.3 | 2026-10-20 | Settings「リスク・資金」ページに「Paper の運用資金・建玉上限・1回の最大損失」カード（`modal-paper-risk`）を追加し、ページ説明を更新 | issue #804 |
 | 1.4 | 2026-10-20 | MCP カードの説明に、MCP からの設定変更の許可（既定オン）と監査ログを追記 | issue #806 |
+| 1.5 | 2026-10-20 | Settings「成績・検証」ページの「メタラベリング」カードの説明に、LLM cutoff の状態表示（仮置き／未確認／確認済み）と公式日付の確認手順のヘルプを追記 | issue #809 |

@@ -15,12 +15,15 @@ type settingItem struct {
 	Unit    string `json:"unit"`
 	Source  string `json:"source"`
 	Default string `json:"default"`
+	Warning string `json:"warning"`
 }
 
 type settingsState struct {
-	WriteEnabled bool          `json:"write_enabled"`
-	SnapshotID   int64         `json:"snapshot_id"`
-	Items        []settingItem `json:"items"`
+	WriteEnabled bool  `json:"write_enabled"`
+	SnapshotID   int64 `json:"snapshot_id"`
+	// LLMCutoffStatus is the fixed status code of the LLM cutoff (issue #809).
+	LLMCutoffStatus string        `json:"llm_cutoff_status"`
+	Items           []settingItem `json:"items"`
 }
 
 type settingsDiff struct {

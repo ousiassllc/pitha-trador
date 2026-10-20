@@ -222,13 +222,23 @@ Live の値・Paper ブートストラップのスイッチ（`paper.bootstrap_e
 |------------|------|
 | `write_enabled` | 書き込み許可（既定 `true`。`runtime_settings` の `mcp.settings_write_enabled`） |
 | `snapshot_id` | 最新の監査行の `id`。変更がまだ無ければ 0。`settings_diff` の `since_id` に渡せる |
+| `llm_cutoff_status` | LLM cutoff（`metalabel.llm_cutoff` と出典 3 キー）の状態の固定コード。`placeholder`（未設定または仮置き `2026-01-01` のまま。夜間再学習のモデルは採用されない）／`unverified`（実日付だが確認した Jev モデル名 `metalabel.llm_cutoff_model` が未記録。Paper では警告のまま採用、Live 前チェックでは採用を止める）／`confirmed`（実日付とモデル名が記録済み）。Settings 画面の状態表示と同じ分類（`metalabelsettings.Settings.CutoffStatus`） |
 | `items[]` | ホワイトリストの全キー（上の表の順）。`key` / `value`（Settings 画面と同じ文字列）/ `unit`（`yen`・`percent`・`count`・`date`・`text`）/ `source`（`stored`＝保存値、`default`＝保存値なしで既定が効いている）/ `default` / `description` / `constraint`（受け付ける値）/ `warning`（あれば。例: LLM cutoff が仮の値のまま） |
 
 Paper の 4 キーの `default` は `risk.yaml` の Paper 値（なければ #804 の初期値）。秘密に分類されるキーはホワイトリストに無いが、将来載せる場合は `value` と `default` が `****` になる。読み取り専用。
 
 ### 3.12 `settings_set`
 
-引数: `key`（必須）、`value`（必須）。処理の順は ①ホワイトリスト（`key_not_allowed`）②書き込み許可（`write_disabled`）③値の検証（`invalid_value`、`invalid_argument`）④保存と監査（同じトランザクション）。`data`: `key` / `unit` / `value`（保存後の値）/ `before`（保存前の保存値。保存値が無かったときは `null`）/ `audit_id` / `at`。保存先は GUI と同じ `runtime_settings` で、アプリには保存後すぐに反映される。書き込みは `readOnlyHint: false`。
+引数: `key`（必須）、`value`（必須）。処理の順は ①ホワイトリスト（`key_not_allowed`）②書き込み許可（`write_disabled`）③値の検証（`invalid_value`、`invalid_argument`）④保存と監査（同じトランザクション）。`data`: `key` / `unit` / `value`（保存後の値）/ `before`（保存前の保存値。保存値が無かったときは `null`）/ `audit_id` / `at`。LLM cutoff の 4 キー（下記）を書いたときは `llm_cutoff_status`（保存後の状態コード。§3.11 と同じ）も付く。保存先は GUI と同じ `runtime_settings` で、アプリには保存後すぐに反映される。書き込みは `readOnlyHint: false`。
+
+LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデルカード／ドキュメントで、使っている Jev モデルの学習データの終わり（knowledge cutoff）を確認し、`settings_set` を 1 キー 1 回ずつ呼ぶ（順序は任意。推奨は下の順）。
+
+1. `metalabel.llm_cutoff` = `YYYY-MM-DD`（公式の日付。UTC 日）
+2. `metalabel.llm_cutoff_model` = 確認した Jev のモデル名（判断の記録の `model_id` と同じ表記。200 文字以内・制御文字なし）
+3. `metalabel.llm_cutoff_confirmed_on` = 確認した日（`YYYY-MM-DD`）
+4. `metalabel.llm_cutoff_source` = 見たページの URL か文書名（200 文字以内・制御文字なし）
+
+各呼び出しは個別に検証・保存・監査され、途中でも一貫した状態になる: 日付だけ・日付＋確認日＋出典だけ（モデル名なし）は `unverified` のまま（警告が残り、Live 前チェックでは採用が止まる）、モデル名まで記録すると `confirmed` になり、仮置きの警告は消える。仮置き `2026-01-01` を実日付に変えるまでは `placeholder`。公式に日付が載っていないときは推測で入れず仮置きのままにする。各キーの `description` に同じ手順が載る。結果は `settings_get` の `llm_cutoff_status` で確認できる。採用判定（FR-META-6、Live 前の `unverified` 不採用を含む）はこの更新で変わらない。
 
 ### 3.13 `settings_diff`
 
@@ -294,3 +304,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.4 | 2026-10-20 | §3.1 `capital_jpy` の既定を 500,000 に更新し、Settings で保存した Paper の運用資金（`runtime_settings`）には追従しない旨（`runtime_settings` を読まない方針を維持）を明記 | issue #804 |
 | 1.5 | 2026-10-20 | §3.9 `health_today` を追加（今日の Paper 取引数・メタモデル・ブートストラップ・kabu/market-data・欠損・日次ガード・Kill Switch・再学習の見送りと、要対応フラグ `needs_attention` / 固定コード `attention_codes[]`）。§4 の `runtime_settings` を、固定キーのみ読み取りで読む記述に改めた | issue #808 |
 | 1.6 | 2026-10-20 | §3.1 `capital_jpy` を、Settings の保存値（`runtime_settings` の `risk.paper.initial_capital_jpy`）に追従し、なければ risk.yaml とする仕様に更新。§3.10〜§3.15 に設定ツール（`settings_get` / `settings_set` / `settings_diff` / `settings_audit` / `settings_write_enable` / `settings_write_disable`）とホワイトリスト 15 キー、§4 の `runtime_settings` の行、§5 の受け入れ条件を追加 | issue #806・#807 |
+| 1.7 | 2026-10-20 | §3.11 `settings_get` に `llm_cutoff_status`（`placeholder` / `unverified` / `confirmed`）を追加。§3.12 `settings_set` の LLM cutoff 4 キーの応答に `llm_cutoff_status` を付け、MCP だけで日付と出典を更新する手順を追記 | issue #809 |

@@ -9,6 +9,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
@@ -40,12 +41,28 @@ type Item struct {
 }
 
 // State is settings_get's result: every whitelisted key in whitelist order,
-// the write switch and the snapshot id (the newest audit row; 0 when nothing
-// was ever changed) to give settings_diff later.
+// the write switch, the snapshot id (the newest audit row; 0 when nothing
+// was ever changed) to give settings_diff later, and the LLM cutoff status.
+// LLMCutoffStatus is one of the fixed codes metalabelsettings.CutoffPlaceholder
+// ("placeholder"), CutoffUnverified ("unverified") and CutoffConfirmed
+// ("confirmed"), so the operator sees from the MCP alone whether the cutoff
+// is still the placeholder, or lacks the Jev model that confirms it (#809).
 type State struct {
-	WriteEnabled bool   `json:"write_enabled"`
-	SnapshotID   int64  `json:"snapshot_id"`
-	Items        []Item `json:"items"`
+	WriteEnabled    bool   `json:"write_enabled"`
+	SnapshotID      int64  `json:"snapshot_id"`
+	LLMCutoffStatus string `json:"llm_cutoff_status"`
+	Items           []Item `json:"items"`
+}
+
+// CutoffStatus is the status code of the LLM cutoff setting stored in
+// runtime_settings (metalabelsettings.Settings.CutoffStatus), read through
+// store. The adoption gate classifies the cutoff with the same function.
+func CutoffStatus(ctx context.Context, store metalabelsettings.Store) (string, error) {
+	s, err := metalabelsettings.Load(ctx, store)
+	if err != nil {
+		return "", fmt.Errorf("mcpset: read the LLM cutoff settings: %w", err)
+	}
+	return s.CutoffStatus(), nil
 }
 
 // Current reads the effective value of every whitelisted key. base is
@@ -60,8 +77,12 @@ func Current(ctx context.Context, q query.Q, base *config.RiskLimits) (State, er
 	if err != nil {
 		return State{}, err
 	}
+	cutoff, err := CutoffStatus(ctx, store)
+	if err != nil {
+		return State{}, err
+	}
 	svc := newService(store, base)
-	st := State{WriteEnabled: enabled, SnapshotID: snapshot}
+	st := State{WriteEnabled: enabled, SnapshotID: snapshot, LLMCutoffStatus: cutoff}
 	for _, spec := range mcpwritesettings.Specs() {
 		v, err := svc.Get(ctx, spec.Key)
 		if err != nil {
