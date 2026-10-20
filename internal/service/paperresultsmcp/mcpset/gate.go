@@ -3,7 +3,6 @@ package mcpset
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
@@ -47,22 +46,10 @@ func (g *Gate) SetEnabled(ctx context.Context, enabled bool) error {
 	})
 }
 
-// inTx runs fn in one application-database transaction, stamped now: it
-// commits when fn succeeds and rolls everything back when fn fails, so a
-// setting and its audit row are stored together or not at all (issue #813).
+// inTx runs fn in one application-database transaction (see runInTx),
+// stamped now.
 func (g *Gate) inTx(ctx context.Context, fn func(tx *sql.Tx, now time.Time) error) error {
-	tx, err := g.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("mcpset: begin transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err := fn(tx, g.now()); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("mcpset: commit transaction: %w", err)
-	}
-	return nil
+	return runInTx(ctx, g.db, "transaction", func(tx *sql.Tx) error { return fn(tx, g.now()) })
 }
 
 // Recent returns the newest audit rows, newest first.
@@ -72,13 +59,6 @@ func (g *Gate) Recent(ctx context.Context, limit int) ([]Entry, error) {
 
 // Watches reports whether changes of key are recorded: the whitelisted keys.
 func (g *Gate) Watches(key string) bool { return mcpwritesettings.IsAllowed(key) }
-
-// Record stores a GUI change of key on its own: before and after are the
-// effective values around it, and reset is true for a reset to the default.
-// Audited records inside the change's transaction instead (recordOn).
-func (g *Gate) Record(ctx context.Context, key string, before, after opsettings.Value, reset bool) error {
-	return recordOn(ctx, g.db, g.now(), key, before, after, reset)
-}
 
 // recordOn appends the audit row of a GUI change of key through ex (a
 // transaction, when the row must commit with the change).
