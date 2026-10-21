@@ -288,3 +288,23 @@ ORDER BY ts.id DESC LIMIT 20`)
 		}
 	}
 }
+
+// Anything that is not exactly Paper - an empty or unknown mode included - is
+// treated as Live: the strict policy.* value applies and the Paper keys are
+// never read.
+func TestPolicy_EmptyOrUnknownModeUsesTheLiveValue(t *testing.T) {
+	for _, mode := range []metalabelsettings.Mode{"", "unknown", "PAPER"} {
+		src := &source{s: paperpolicysettings.Defaults()}
+		p := paperentryquality.Policy{Inner: inner{}, Mode: mode, Source: src}
+		got, err := p.CurrentThresholds(context.Background())
+		if err != nil {
+			t.Fatalf("mode %q: %v", mode, err)
+		}
+		if got != testThresholds().Policy || got.Long.MinEntryQuality != "strong" || got.Short.MinEntryQuality != "strong" {
+			t.Errorf("mode %q: thresholds = %+v, want the Live strong values unchanged", mode, got)
+		}
+		if src.reads != 0 {
+			t.Errorf("mode %q: the Paper keys were read %d times", mode, src.reads)
+		}
+	}
+}
