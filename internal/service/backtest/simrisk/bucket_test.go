@@ -89,3 +89,69 @@ func TestPortfolio_BudgetBelowCapitalRejectsOnMarketValueHoldings(t *testing.T) 
 		t.Fatalf("Check at exactly the market-value total = (false, %q), want passed", reason)
 	}
 }
+
+// setAssetClass puts instrumentID in its asset class's bucket.
+func setAssetClass(t *testing.T, p *simrisk.Portfolio, instrumentID int64, assetClass string) {
+	t.Helper()
+	if err := p.SetAssetClass(instrumentID, assetClass); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A stock entry (issue #833) is judged on the stock bucket alone: the bond_etf
+// bucket's budget and holdings neither admit nor hold it back. These cases mirror
+// checkflow's live ones.
+func TestPortfolio_StockEntryIsJudgedOnTheStockBucketOnly(t *testing.T) {
+	// Stock budget 0 is not rescued by a big bond_etf budget.
+	p := simrisk.New(simrisk.Config{Limits: bucketLimits(), StockBudgetJPY: budget(0), BondETFBudgetJPY: budget(10_000_000)})
+	wantRejected(t, p, at(9, 30), 1, domain.JevDirectionLong, risk.ReasonBucketDisabled)
+
+	// 5,000,000 held in a bond ETF (instrument 3) does not count against the
+	// stock budget of exactly this entry's 1,000,000.
+	p = simrisk.New(simrisk.Config{Limits: bucketLimits(), StockBudgetJPY: budget(1_000_000), BondETFBudgetJPY: budget(10_000_000)})
+	setAssetClass(t, p, 3, domain.AssetClassBondETF)
+	p.Open(3, domain.PositionSideLong, 2500, 2000)
+	if ok, reason := check(p, at(9, 30), 1, domain.JevDirectionLong); !ok {
+		t.Fatalf("stock Check with bond_etf holdings = (false, %q), want passed", reason)
+	}
+
+	// The stock bucket's own holdings count: 1,000,000 held + this entry's.
+	p = simrisk.New(simrisk.Config{Limits: bucketLimits(), StockBudgetJPY: budget(1_000_000), BondETFBudgetJPY: budget(10_000_000)})
+	p.Open(2, domain.PositionSideLong, 500, 2000)
+	wantRejected(t, p, at(9, 30), 1, domain.JevDirectionLong, risk.ReasonBucketBudgetExceeded)
+}
+
+// A bond ETF entry is judged on the bond_etf bucket alone: the stock budget and
+// the stock holdings neither admit nor hold it back.
+func TestPortfolio_BondETFEntryIsJudgedOnTheBondETFBucketOnly(t *testing.T) {
+	// Default split: the bond_etf budget is 0, whatever the stock budget.
+	p := simrisk.New(simrisk.Config{Limits: bucketLimits()})
+	setAssetClass(t, p, 1, domain.AssetClassBondETF)
+	wantRejected(t, p, at(9, 30), 1, domain.JevDirectionLong, risk.ReasonBucketDisabled)
+
+	// Stock budget 0 and 5,000,000 held in stocks do not matter: a bond_etf
+	// budget of exactly this entry's 1,000,000 passes.
+	p = simrisk.New(simrisk.Config{Limits: bucketLimits(), StockBudgetJPY: budget(0), BondETFBudgetJPY: budget(1_000_000)})
+	setAssetClass(t, p, 1, domain.AssetClassBondETF)
+	p.Open(2, domain.PositionSideLong, 2500, 2000)
+	if ok, reason := check(p, at(9, 30), 1, domain.JevDirectionLong); !ok {
+		t.Fatalf("bond_etf Check with a bond_etf budget = (false, %q), want passed", reason)
+	}
+
+	// The bond_etf bucket's own holdings count: 1,000,000 held + this entry's.
+	p = simrisk.New(simrisk.Config{Limits: bucketLimits(), StockBudgetJPY: budget(0), BondETFBudgetJPY: budget(1_000_000)})
+	setAssetClass(t, p, 1, domain.AssetClassBondETF)
+	setAssetClass(t, p, 3, domain.AssetClassBondETF)
+	p.Open(3, domain.PositionSideLong, 500, 2000)
+	wantRejected(t, p, at(9, 30), 1, domain.JevDirectionLong, risk.ReasonBucketBudgetExceeded)
+}
+
+func TestPortfolio_SetAssetClassRejectsAnUnknownClass(t *testing.T) {
+	p := simrisk.New(simrisk.Config{Limits: limits()})
+	if err := p.SetAssetClass(1, "crypto"); err == nil {
+		t.Fatal("SetAssetClass(crypto) = nil, want an error")
+	}
+	if err := p.SetAssetClass(1, ""); err != nil {
+		t.Fatalf("SetAssetClass(empty) = %v, want a stock", err)
+	}
+}

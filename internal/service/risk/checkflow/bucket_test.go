@@ -43,7 +43,7 @@ func bucketEngineWith(t *testing.T, withBucket bool, limits config.RiskLimits, p
 		Portfolio:  portfolio,
 	}
 	if withBucket {
-		cfg.StockBucket = bucket.NewProvider(positions, settings)
+		cfg.Buckets = bucket.NewProvider(positions, settings, market.NewInstrumentRepository(db))
 	}
 	return risk.NewEngine(cfg), settings, db
 }

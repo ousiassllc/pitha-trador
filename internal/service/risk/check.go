@@ -28,8 +28,9 @@ import (
 // (sizing.Quantity): the candidate is rejected when not even one lot
 // keeps a stop-out loss within it.
 //
-// An Engine with Config.StockBucket (Paper only, issue #824) also applies the
-// stock bucket's budget: ReasonBucketDisabled (budget 0) right after the
+// An Engine with Config.Buckets (Paper only, issues #824 and #833) also applies
+// the budget of the candidate's bucket - the one of its asset_class, stock or
+// bond_etf, and only that one: ReasonBucketDisabled (budget 0) right after the
 // settings are read, and ReasonBucketBudgetExceeded (what the bucket holds plus
 // this entry's quantity x price over the budget) after sizing. The percentage
 // limits keep measuring against initial_capital.
@@ -98,7 +99,7 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if err != nil {
 		return e.failClosed("read risk limit settings", err)
 	}
-	stockBudget, ok, reason := e.gateStockBucket(ctx, limits.InitialCapital)
+	entryBucket, ok, reason := e.gateBucket(ctx, instrumentID, limits.InitialCapital)
 	if !ok {
 		return false, reason
 	}
@@ -165,7 +166,7 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if qty == 0 {
 		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", sizeReason, snapshot.Price, e.stopLossPct, limits.MaxTradeLossPct)
 	}
-	return e.checkStockBucketBudget(ctx, stockBudget, qty, snapshot.Price)
+	return e.checkBucketBudget(ctx, entryBucket, qty, snapshot.Price)
 }
 
 // failClosed logs err and returns Check's ReasonRiskEngineError rejection.
