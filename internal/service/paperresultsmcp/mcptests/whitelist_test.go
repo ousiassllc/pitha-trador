@@ -20,7 +20,7 @@ func TestOutputsAndLogsNeverContainRawDataOrSecrets(t *testing.T) {
 
 	var bodies []string
 	collect := func(r response) { bodies = append(bodies, string(r.body)) }
-	for _, tool := range eightTools {
+	for _, tool := range periodTools {
 		collect(srv.call(t, tool, period))
 		collect(srv.call(t, tool, map[string]any{}))
 		collect(srv.call(t, tool, map[string]any{"from": "2025-01-01", "to": "2026-10-19"}))
@@ -139,15 +139,25 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("kill event", first(kill, "events"), "id triggered_at reason resolved_at resolved_by")
 	coll := data("collection_status", period)
 	want("collection", coll, "latest_snapshot_at missing_session_dates jobs daily_bar_run_failed_count label_skip_count job_failures alerts retention")
-	want("job", first(coll, "jobs"), "queue succeeded_count failed_count latest_succeeded_finished_at")
+	want("job", first(coll, "jobs"), "queue succeeded_count failed_count latest_succeeded_finished_at retired retired_note")
 	failures := coll["job_failures"].(map[string]any)
-	want("job failures", failures, "total by_day by_queue by_error_code by_day_and_error_code skipped_total skipped_by_queue")
+	want("job failures", failures, "window total by_day by_queue by_error_code by_day_and_error_code skipped_total skipped_by_queue")
+	want("failure window", failures["window"].(map[string]any), "from to max_days truncated note")
 	want("failure day", first(failures, "by_day"), "date count")
 	want("failure queue", first(failures, "by_queue"), "queue count")
 	want("failure code", first(failures, "by_error_code"), "code count")
 	want("failure day code", first(failures, "by_day_and_error_code"), "date code count")
 	want("skipped queue", first(failures, "skipped_by_queue"), "queue count")
 	want("retention", coll["retention"].(map[string]any), "succeeded_job_days failed_job_days note")
+	diag := data("session_diagnostics", period)
+	want("session diagnostics", diag, "window days current unavailable retention note")
+	want("diagnostics window", diag["window"].(map[string]any), "from to max_days truncated")
+	day := first(diag, "days")
+	want("diagnostics day", day, "date snapshot_rows market_data_jobs other_queue_jobs_finished watch_list observations")
+	want("diagnostics market-data jobs", day["market_data_jobs"].(map[string]any), "succeeded failed succeeded_without_snapshot")
+	want("diagnostics watch list", day["watch_list"].(map[string]any), "present source entries")
+	want("diagnostics current", diag["current"].(map[string]any), "kabu_login market_data app_running alerts")
+	want("diagnostics retention", diag["retention"].(map[string]any), "snapshot_days succeeded_job_days failed_job_days")
 	health := data(healthToday, map[string]any{})
 	want("health", health, "date trading_day needs_attention attention_codes paper_trades meta_model bootstrap market_data missing_session_dates insufficient_history_dates daily_guard kill_switch retrain order_proposals")
 	want("health paper trades", health["paper_trades"].(map[string]any), "opened_count closed_count")
