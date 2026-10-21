@@ -69,3 +69,37 @@ func TestBuildRows_NoNewsContextIsNeutralAndIncompleteDecisionsAreDropped(t *tes
 		t.Errorf("tdnet score without news_context = %v, want neutral 0", got)
 	}
 }
+
+// MissingFeatures names, per decision, exactly the features BuildRows cannot
+// complete: no names means BuildRows keeps the row, any name means it drops it
+// (the rule metalabel_training_readiness explains dropped_incomplete with).
+func TestMissingFeatures_AgreesWithBuildRows(t *testing.T) {
+	at := time.Date(2026, 10, 14, 1, 0, 0, 0, time.UTC)
+	ok := decidedRow(at, "LONG", `{"spread_bps":4,"return_1m":0.001}`)
+	noSpread := decidedRow(at, "LONG", `{"return_1m":0.001}`)
+	badState := decidedRow(at, "LONG", `not json`)
+	badAnswer := decidedRow(at, "LONG", `{"spread_bps":4,"return_1m":0.001}`)
+	badAnswer.ResponseJSON = `{"direction":"LONG"}`
+	noFlow := decidedRow(at, "SHORT", `{"spread_bps":4,"return_1m":0.001}`)
+	noFlow.OrderFlow = domain.OrderFlowFeatures{}
+
+	for name, tc := range map[string]struct {
+		row  repo.TrainingRow
+		want []string
+	}{
+		"complete":   {ok, nil},
+		"no spread":  {noSpread, []string{"spread_bps"}},
+		"bad state":  {badState, []string{"spread_bps", "return_1m"}},
+		"bad answer": {badAnswer, []string{"jev_score"}},
+		"no flow":    {noFlow, []string{"ofi_short", "ofi_mid", "ofi_long", "microprice_dev_bps"}},
+	} {
+		got := training.MissingFeatures(tc.row)
+		if fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			t.Errorf("%s: MissingFeatures = %v, want %v", name, got, tc.want)
+		}
+		rows, dropped := training.BuildRows([]repo.TrainingRow{tc.row})
+		if kept := len(got) == 0; kept != (len(rows) == 1 && dropped == 0) {
+			t.Errorf("%s: MissingFeatures %v but BuildRows kept %d dropped %d", name, got, len(rows), dropped)
+		}
+	}
+}

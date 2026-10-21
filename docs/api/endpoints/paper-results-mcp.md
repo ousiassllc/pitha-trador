@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つ。合計 21）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 10 つ（`health_today`・`metalabel_training_readiness` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つ。合計 22。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -277,7 +277,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 |--------------|----------------|
 | `market_snapshots.raw_data_json` | `000002`。ブローカー生レスポンス |
 | `market_snapshots` の価格・板・出来高・特徴量（`price` / `bid` / `ask` / `spread_bps` / `volume` / `vwap` / `ofi_*` / `return_*` など。`000016`・`000026`・`000032`） | 時価・板・気配そのもの。鮮度は件数と時刻だけ |
-| `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文 |
+| `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文。`metalabel_training_readiness`（§3.23）は特徴量の欠けを数えるためにプロセス内で読むが、戻り値には件数と特徴量名しか載せない |
 | `jev_decisions` の `ofi_*` / `microprice_dev_bps` / `vwap_z` / `regime_volatility_bps` / `regime_autocorr` | `000032`・`000036`。板・価格由来の特徴量 |
 | `secrets` の全列 | `000013`。`key` 名も返さない |
 | API キー、MCP の `api_key`、証券会社の認証情報。Cloudflare を使うときの Client-Secret も | ローカル設定と `secrets`。ログにも出さない |
@@ -327,3 +327,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.10 | 2026-10-21 | §3.16〜§3.18（分割章 `paper-results-mcp-proposals.md`）に注文案ツール（`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`。Paper の注文案を受け付けて記録するだけ）を追加し、ツール数を 18 にした。§3.14 の `action` に `order_proposals_enable` / `order_proposals_disable` を追加。§4 に受け付けスイッチの読み取りと `order_proposals.request_hash` / `client` を、§5 に注文案の受け入れ条件を追加。ホワイトリストは 17 キーのまま | issue #827（親 #826） |
 | 1.11 | 2026-10-21 | §3.16〜§3.19（分割章）に `order_proposal_cancel`（取消の依頼を記録するだけ）を追加しツール数を 19 にした。§3.6 の `risk_rejections` に `proposal_risk_passed_count` / `proposal_risk_rejected_count` を追加。§3.3 の `exit_reason` の既知の値に `proposal_close` を追加 | issue #828（親 #826） |
 | 1.12 | 2026-10-21 | §3.17〜§3.22（分割章）に `order_proposals_list` / `order_proposal_summary` を追加し、`order_proposal_get` に結果（signal・order・position・最大損失・損切りと利確に届いたか）を足してツール数を 21 にした（読み取り 9・設定 6・注文案 6）。§3.1 `paper_performance_summary` に `by_origin`、§3.3 `paper_trades` に `origin` を追加。§3.9 `health_today` に `order_proposals` と要対応コード `order_proposal_stalled` を追加（9 種）。読み取り接続のままで、新規テーブルなし | issue #829（親 #826） |
+| 1.13 | 2026-10-21 | §3.23 `metalabel_training_readiness` を追加（分割章 `paper-results-mcp-metalabel.md`。読み取りは 10 ツール、合計 22）。§4 の `state_json` / `response_json` に、特徴量の欠けをプロセス内で数える旨を追記 | issue #848 |

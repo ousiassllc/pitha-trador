@@ -2,7 +2,7 @@
 
 リモートの Grok Bot が、pitha-trador の SQLite に入っている Paper の取引実績・Jev 判断・メタモデル・Risk・収集状況の**集計とラベル**を読む仕様。issue #783（設定の読み書きは #806・#807、Paper の注文案の受け付けは #827）。実装は `cmd/paper-results-mcp` と `internal/service/paperresultsmcp`（実行・設定の手順は `docs/components/paper-results-mcp.md` §4）。
 
-ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
+ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`、メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
 
 ## 1. 目的
 
@@ -133,7 +133,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）だけである（合計 21）。定義・フィールドは API 仕様。
+ツールは、次の読み取りの 10 つ（`health_today`・`metalabel_training_readiness` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）だけである（合計 22）。定義・フィールドは API 仕様。
 
 「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
@@ -148,10 +148,21 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
 | `collection_status` | `jobs` の件数と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（保持期間の違いを `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ） |
 | `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`。それ以前のスナップショットが無い日は欠損でなく `insufficient_history_dates[]`＝判定不可。#814）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、処理されずに止まっている注文案の件数（`order_proposals`。#829）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
+| `metalabel_training_readiness` | メタモデルの学習データがそろっているか（#848）。学習の条件ごとに絞り込んだあとの行数（`jev_decisions` の trader → LONG/SHORT → `calibration_outcomes` の `label_version = 2` → `net_return_bps` → 8 特徴量）、特徴量ごとの欠け件数と `dropped_incomplete`、直近の再学習の見送り（`metalabel_retrain_skips`・`metalabel_models`）、今の `metalabel.llm_cutoff` で分けた学習側（fit＋較正）と OOS 側の行数・必要件数 |
 
 MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
 
 `health_today`（#808）は、アプリの状態を 1 回で見るために `runtime_settings` を読み取りだけで読む。読むキーは固定の許可リスト（日次ガードの閾値キー、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`。`query.ReadableSettingKeys`）だけで、リスト外のキーは SQL を発行する前に拒否する。値の解釈はアプリと同じ関数（`dailyguardsettings`・`paperbootstrapsettings`）で行い、日次停止のメッセージ文など自由文は戻り値に載せない。書き込みはしない（接続は `mode=ro`）。`readonly_db_test` は `runtime_settings` を読む文を `SELECT value FROM runtime_settings WHERE key = ?` の 1 本だけ許す。
+
+`metalabel_training_readiness`（#848。実装は `internal/service/paperresultsmcp/metalabeldiag`）は、夜間の再学習（`internal/service/metalabel/training`）と**同じコードを同じ行に当てて**数える。数字を別に実装すると再学習の判定とずれていくため、次を直接使う（読み取り接続のまま）。
+
+- 行の取り出し: `repo.ListTrainingRowsFrom`（`Trainer` の `ListTrainingRows` と同じ SQL。`label_version = 2`・`net_return_bps` あり・LONG/SHORT・直近 90 日＝`training.DefaultLookback`）。
+- 特徴量の欠け: `training.MissingFeatures`（`BuildRows` と同じ組み立てで、欠けた特徴量名を全部返す）と `training.BuildRows`（残る行・`dropped_incomplete`）。特徴量名と順序は `metalabel.FeatureNames`。
+- 分割と必要件数: `training.SplitWalkForward` を `DefaultWalkForwardConfig`（`MinFit`・`MinCalibration`＝学習側の必要件数。130 は 100＋30）で呼び、OOS 側の必要件数は `DefaultAcceptanceConfig`（`MinOOSSamples`・`MinOOSDays`・`MinTakes`）から取る。**件数（130・1084 など）はこのツールに書かない**。#862 などで既定が変わっても、ツールの数字はそのまま追従する。分割が `ErrInsufficientData` で止まった夜も、`Trainer` が記録するのと同じ理由コードと `usable_rows` / `required_rows` を返し、OOS 側は fit・較正の最小件数を 1 に下げた同じ分割で数える（OOS の窓と行は同じ）。
+- `metalabel.llm_cutoff`: `metalabelsettings.Load` を `runtime_settings` の `metalabel.*` キーだけ読む読み取り専用の Store で呼ぶ（アプリと同じ実効値・既定。`metalabeldiag.metalabelSettingsReader` がリスト外のキーを SQL の前に拒否する。`readonly_db_test` の許可する文は `SELECT value FROM runtime_settings WHERE key = ?` のまま）。
+- 直近の再学習の `dropped_incomplete`: 見送りの行（`metalabel_retrain_skips`）に残っていればその値（`dropped_incomplete_status: "recorded"`）。**残っていない場合は 0 と偽らず `null` にし、理由を `dropped_incomplete_status` で返す**: `not_recorded_in_schema`（この DB の見送り表にその列が無い。#862 のマイグレーション前）、`no_skip_recorded`（直近の再学習は見送りでなくモデルを保存した、または一度も走っていない）。今の学習行から数えた値は `features.dropped_incomplete` にいつでも入る。
+- `state_json` / `response_json` は特徴量の組み立てのために**プロセス内で読むだけ**で、戻り値には件数と特徴量名しか載せない。`readonly_db_test` は、この行取り出しの 1 文（`FROM calibration_outcomes o JOIN jev_decisions d`）だけが両列の名前を含んでよいと固定する。
+- 時間: 取り出す行は 1 回の索引検索（`jev_decisions_type_timestamp_idx` と `calibration_outcomes_decision_horizon_idx`）で、新しい索引・マイグレーションは足さない。行の組み立てはプロセス内で、読み取る行数は `metalabeldiag.MaxReadinessRows`（20,000）まで。超えたら `limit_exceeded`（期間を狭める）。30 日・90 日の計測は `metalabeltests/readiness_perf_test.go`（テストが所要時間と `EXPLAIN QUERY PLAN` をログに出す）。
 
 kabu の板・時価の保存を続けるかは #778 の現状のままである（保存は継続、リスクは理解済み、公式回答待ち）。本仕様は規約の適否を判断しない。リモートへ出す対象から生データを外すのは、その現状を広げないためである。
 
@@ -298,3 +309,4 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.12 | 2026-10-21 | Paper の注文案の受け付けを追加（§8。`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`、受け付けスイッチ `mcp.order_proposals_enabled`、表 `order_proposals`・`order_proposal_events`、マイグレーション `000042`）。§5・§6 の「売買・発注のツールは作らない」を「Paper の注文案を出すツールだけ追加。発注はアプリ。注文の表には書かない。Live の発注・Live の値・Kill Switch の操作は不変」に改めた。§7.3 の書き込み経路を 4 種類に、§7.4 の監査の操作名を 6 つにした。ツール数は 18。ホワイトリストは 17 キーのまま | issue #827（親 #826） |
 | 1.13 | 2026-10-21 | 注文案の取消の依頼 `order_proposal_cancel` を追加（§8.1・§8.5。取消の依頼だけを記録し、実際の取消はアプリ。書き手の変更は 5 種類、ツール数は 19）。注文案のアプリ側の処理（Risk check・Paper 発注・期限・取消・`close`・再起動の回復）を `order-proposal-processing.md` に分けて追記。`risk_rejections` に案の分の件数を追加。ホワイトリストは 17 キーのまま | issue #828（親 #826） |
 | 1.14 | 2026-10-21 | 注文案の読み取りを追加（§5・§8.1。`order_proposals_list` / `order_proposal_summary` を足し、`order_proposal_get` に結果を足した。ツールは 21）。`paper_trades` / `paper_performance_summary` に入り口 `origin`、`health_today` に止まった注文案（要対応コード `order_proposal_stalled`）。すべて読み取り接続のままで、新しい表は無い。GUI の「注文案」画面は同じ読み取りモデルを使う | issue #829（親 #826） |
+| 1.15 | 2026-10-21 | §5 に `metalabel_training_readiness` を追加（メタモデルの学習データの確認。学習の条件ごとの行数・特徴量ごとの欠け・直近の再学習の `dropped_incomplete`・学習側と OOS 側の行数と必要件数。再学習と同じコードを同じ行に当て、必要件数は `DefaultWalkForwardConfig` / `DefaultAcceptanceConfig` から取る）。読み取りは 10 ツール、合計 22。新規テーブル・マイグレーションなし | issue #848 |

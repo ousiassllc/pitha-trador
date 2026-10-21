@@ -264,7 +264,7 @@ SELECT skipped_at, reason_code FROM metalabel_retrain_skips ORDER BY skipped_at 
 		}
 		trainedAfter = !t.Before(skipped)
 	}
-	at, reason := FormatOut(skippedAt), normalizeRetrainSkipCode(code)
+	at, reason := FormatOut(skippedAt), NormalizeRetrainSkipCode(code)
 	return HealthRetrain{
 		Skipped:         !trainedAfter && now.Sub(skipped) <= retrainSkipFreshHours*time.Hour,
 		LatestSkippedAt: &at,

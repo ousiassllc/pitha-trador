@@ -20,7 +20,7 @@ func TestOutputsAndLogsNeverContainRawDataOrSecrets(t *testing.T) {
 
 	var bodies []string
 	collect := func(r response) { bodies = append(bodies, string(r.body)) }
-	for _, tool := range eightTools {
+	for _, tool := range periodTools {
 		collect(srv.call(t, tool, period))
 		collect(srv.call(t, tool, map[string]any{}))
 		collect(srv.call(t, tool, map[string]any{"from": "2025-01-01", "to": "2026-10-19"}))
@@ -158,6 +158,19 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("health kill switch", health["kill_switch"].(map[string]any), "active unresolved_count since reasons flag_set")
 	want("health retrain", health["retrain"].(map[string]any), "skipped latest_skipped_at reason_code")
 	want("health order proposals", health["order_proposals"].(map[string]any), "stalled_count oldest_stalled_since")
+	readiness := data("metalabel_training_readiness", period)
+	want("readiness", readiness, "as_of rows_from rows_to lookback_days matches_nightly_retrain funnel features last_retrain split")
+	want("readiness step", first(readiness, "funnel"), "step condition rows")
+	readyFeatures := readiness["features"].(map[string]any)
+	want("readiness features", readyFeatures, "training_rows usable_rows dropped_incomplete missing")
+	want("readiness feature", first(readyFeatures, "missing"), "feature missing_rows")
+	lastRetrain := readiness["last_retrain"].(map[string]any)
+	want("readiness last retrain", lastRetrain, "last_run latest_skip latest_model_trained_at dropped_incomplete_status")
+	want("readiness latest skip", lastRetrain["latest_skip"].(map[string]any), "skipped_at reason_code usable_rows required_rows dropped_incomplete")
+	readySplit := readiness["split"].(map[string]any)
+	want("readiness split", readySplit, "llm_cutoff llm_cutoff_status oos_start train_ready train_skip_code train oos")
+	want("readiness train", readySplit["train"].(map[string]any), "rows required_rows fit_rows calibration_rows required_fit_rows required_calibration_rows")
+	want("readiness oos", readySplit["oos"].(map[string]any), "rows required_rows days required_days required_takes ready")
 	want("performance by origin", first(data("paper_performance_summary", period), "by_origin"),
 		"origin closed_trade_count win_count loss_count win_rate total_pnl_jpy expectancy_jpy")
 }

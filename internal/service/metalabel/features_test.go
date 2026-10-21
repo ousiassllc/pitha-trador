@@ -85,3 +85,24 @@ func TestNewFeatures_TakesJevScoreValue(t *testing.T) {
 }
 
 // syntheticSamples draws samples whose win probability rises with the first
+
+// MissingNames lists exactly the features Vector refuses, all of them (Vector
+// reports the first), in FeatureNames order.
+func TestFeatures_MissingNamesMatchesVector(t *testing.T) {
+	if got := fullFeatures().MissingNames(); len(got) != 0 {
+		t.Fatalf("MissingNames of a complete set = %v", got)
+	}
+	f := fullFeatures()
+	f.OFIMid, f.SpreadBps, f.TDnetScore = nil, ptr(math.NaN()), ptr(math.Inf(-1))
+	want := []string{metalabel.FeatureOFIMid, metalabel.FeatureSpreadBps, metalabel.FeatureTDnetScore}
+	got := f.MissingNames()
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("MissingNames = %v, want %v", got, want)
+	}
+	if _, err := f.Vector(domain.JevDirectionLong); !errors.Is(err, metalabel.ErrMissingFeature) {
+		t.Errorf("Vector error = %v, want ErrMissingFeature for the same set", err)
+	}
+	if len(metalabel.Features{}.MissingNames()) != len(metalabel.FeatureNames()) {
+		t.Errorf("an empty Features misses every feature")
+	}
+}

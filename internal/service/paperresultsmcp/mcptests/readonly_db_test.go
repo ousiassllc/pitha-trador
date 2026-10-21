@@ -35,7 +35,7 @@ func TestDBUnavailable(t *testing.T) {
 	}
 	_ = ew.Close()
 	srv2 := newTestServer(t, paperresultsmcp.Options{Settings: enabledSettings(), DBPath: empty})
-	for _, tool := range eightTools {
+	for _, tool := range periodTools {
 		srv2.call(t, tool, period).wantError(t, http.StatusServiceUnavailable, paperresultsmcp.CodeDBUnavailable)
 	}
 	// The database that appears later is picked up (a failed open is not cached).
@@ -62,7 +62,7 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 	testkit.SeedAll(t, w)
 	driverName, counter := testkit.NewCountingDriver(t)
 	srv := newTestServer(t, paperresultsmcp.Options{Settings: enabledSettings(), DBPath: path, DriverName: driverName})
-	for _, tool := range eightTools {
+	for _, tool := range periodTools {
 		srv.call(t, tool, period)
 	}
 	srv.call(t, healthToday, map[string]any{})
@@ -113,7 +113,17 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 		if strings.Contains(upper, "SELECT *") || strings.Contains(upper, ".*") {
 			t.Errorf("SELECT * style statement: %s", testkit.FirstLine(stmt))
 		}
+		// metalabel_training_readiness (issue #848) rebuilds each training row's
+		// features in-process with the retraining's own code, which needs
+		// state_json and response_json. Only this one statement (the retraining's
+		// own row query, repo.ListTrainingRowsFrom) may name them; the columns
+		// never reach a response (only counts do: see metalabeltests).
+		trainingRows := strings.Contains(stmt, "FROM calibration_outcomes o") &&
+			strings.Contains(stmt, "JOIN jev_decisions d ON d.id = o.jev_decision_id")
 		for _, f := range forbidden {
+			if trainingRows && (f == "state_json" || f == "response_json") {
+				continue
+			}
 			if strings.Contains(stmt, f) && !strings.HasPrefix(strings.TrimSpace(stmt), "PRAGMA") {
 				// the INSERT/UPDATE rows above are the test's own writes
 				if strings.HasPrefix(strings.TrimSpace(stmt), "INSERT") || strings.HasPrefix(strings.TrimSpace(stmt), "UPDATE") ||

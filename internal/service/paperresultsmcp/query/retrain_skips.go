@@ -26,8 +26,8 @@ var retrainSkipCodes = map[string]bool{
 	"training_data_unusable":   true,
 }
 
-// normalizeRetrainSkipCode maps a stored code this build does not know to "other".
-func normalizeRetrainSkipCode(code string) string {
+// NormalizeRetrainSkipCode maps a stored code this build does not know to "other".
+func NormalizeRetrainSkipCode(code string) string {
 	if !retrainSkipCodes[code] {
 		return retrainSkipCodeOther
 	}
@@ -58,7 +58,7 @@ LIMIT ?`, from, to, limit)
 			return nil, fmt.Errorf("query: scan metalabel retrain skip: %w", err)
 		}
 		s.SkippedAt = FormatOut(at)
-		s.ReasonCode = normalizeRetrainSkipCode(s.ReasonCode)
+		s.ReasonCode = NormalizeRetrainSkipCode(s.ReasonCode)
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {
