@@ -18,8 +18,8 @@ import (
 
 // Issue #685: Enter judges the session at the bar's timestamp, so a stale
 // bar stamped inside 前場 must not open a position while the wall clock
-// (Config.Now) is outside the session. The Sizer is nil on purpose: the
-// wall-clock gate must drop the signal before sizing.
+// (Config.Now) is outside the session. The Risk Engine is nil on purpose: the
+// wall-clock gate must drop the signal before judging it.
 func TestExecuteSignal_DropsStaleBarInsideSessionWhenWallClockOutsideSession(t *testing.T) {
 	db, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
 	if err != nil {

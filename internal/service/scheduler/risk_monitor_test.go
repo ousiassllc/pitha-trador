@@ -50,6 +50,7 @@ func TestScheduler_RiskMonitorAndAutoResume_DetectNotifyRecover(t *testing.T) {
 		Limits:           config.RiskLimits{MaxDailyLossPct: 1.0, MaxConsecutiveLosses: 4},
 		KillSwitch:       killSwitch,
 		Settings:         system.NewRuntimeSettingsRepository(db),
+		Snapshots:        market.NewSnapshotRepository(db),
 		MarketDataHealth: health,
 		Notifier:         notifier,
 	})

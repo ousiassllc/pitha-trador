@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
@@ -104,6 +105,7 @@ func TestNew_LiveDeadMansSwitchStaysQuietWhileOperatorUsesTheUI(t *testing.T) {
 		Limits:     config.RiskLimits{HeartbeatTimeoutMinutes: 120},
 		KillSwitch: system.NewKillSwitchRepository(db),
 		Settings:   system.NewRuntimeSettingsRepository(db),
+		Snapshots:  market.NewSnapshotRepository(db),
 		Now:        func() time.Time { return clock },
 	})
 	engine := router.New(router.WithSystemEngine(engineRisk), router.WithHeartbeatRecorder(engineRisk))

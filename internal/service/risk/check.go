@@ -54,6 +54,12 @@ import (
 // they run after the Kill Switch limits above and before the market-data
 // checks, never force-close positions, and are off unless configured.
 func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string) (bool, string) {
+	return e.check(ctx, instrumentID, direction, nil)
+}
+
+// check is Check; when it passes and sized is non-nil, sized receives the
+// quantity and price the candidate was judged at (CheckThenEnter, entry.go).
+func (e *Engine) check(ctx context.Context, instrumentID int64, direction string, sized *EntrySize) (bool, string) {
 	state, events, err := e.State(ctx)
 	if err != nil {
 		return e.failClosed("read system state", err)
@@ -63,6 +69,14 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		return false, fmt.Sprintf("%s: %s", ReasonKillSwitchActive, activeReasons(events))
 	case domain.SystemStatePaused:
 		return false, ReasonSystemPaused
+	}
+
+	// Fail closed: without a snapshot source no limit that needs a price can
+	// be judged, so a new entry is rejected, not passed (issue #841).
+	// NewEngine refuses a nil Snapshots; this guards an Engine that lost it
+	// afterwards. Check judges new entries only, so exits are not blocked.
+	if e.snapshots == nil {
+		return false, ReasonSnapshotsUnavailable
 	}
 
 	now := e.now()
@@ -146,9 +160,6 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		return false, fmt.Sprintf("%s: %s", halt.Reason, halt.Message)
 	}
 
-	if e.snapshots == nil {
-		return true, ""
-	}
 	snapshot, err := e.latestSnapshot(ctx, instrumentID)
 	if err != nil {
 		return e.failClosed("read latest snapshot", err)
@@ -166,7 +177,11 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if qty == 0 {
 		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", sizeReason, snapshot.Price, e.stopLossPct, limits.MaxTradeLossPct)
 	}
-	return e.checkBucketBudget(ctx, entryBucket, qty, snapshot.Price)
+	passed, reason := e.checkBucketBudget(ctx, entryBucket, qty, snapshot.Price)
+	if passed && sized != nil {
+		*sized = EntrySize{Quantity: qty, Price: snapshot.Price}
+	}
+	return passed, reason
 }
 
 // failClosed logs err and returns Check's ReasonRiskEngineError rejection.

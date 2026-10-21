@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
@@ -49,6 +50,7 @@ func newOrderEngine(t *testing.T, rec *orderRecorder) *risk.Engine {
 		Limits:     testLimits(),
 		KillSwitch: system.NewKillSwitchRepository(db),
 		Settings:   system.NewRuntimeSettingsRepository(db),
+		Snapshots:  market.NewSnapshotRepository(db),
 		Portfolio:  fakePortfolio{},
 		Closer:     rec,
 		Notifier:   rec,

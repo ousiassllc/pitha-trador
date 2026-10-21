@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
@@ -57,6 +58,7 @@ func TestEngine_AutoResume_ResolvesOnlyRecoveredAutoResumableReasons(t *testing.
 		Limits:           testLimits(),
 		KillSwitch:       killSwitch,
 		Settings:         system.NewRuntimeSettingsRepository(db),
+		Snapshots:        market.NewSnapshotRepository(db),
 		Portfolio:        risk.ZeroPortfolioProvider{},
 		MarketDataHealth: fakeHealth{healthy: true},
 		JevAPIHealth:     fakeHealth{healthy: false},

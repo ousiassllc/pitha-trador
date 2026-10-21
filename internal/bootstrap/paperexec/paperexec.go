@@ -21,7 +21,7 @@ import (
 // Trading position at the evaluated snapshot's price.
 type Executor struct {
 	Engine *execution.Engine
-	Sizer  *risk.Engine // FR-ENTRY-3 position sizing
+	Risk   *risk.Engine // FR-RISK-1 judgement and FR-ENTRY-3 position sizing, one step with Enter
 }
 
 // ExecuteSignal enters signal via a Paper market order (Engine's default
@@ -46,17 +46,31 @@ func (p Executor) ExecuteSignal(ctx context.Context, signal domain.TradeSignal, 
 	// is sized the same whatever its EV. This is fixed until the meta-model's
 	// probability calibration is validated on Paper results (issue #781);
 	// do not wire it in without that decision being reopened there.
-	quantity := p.Sizer.PositionSize(ctx, snap.Price)
-	if quantity <= 0 {
-		return nil // no lot fits the risk limits (PositionSize logged why)
-	}
-	result, err := p.Engine.Enter(ctx, execution.EntryRequest{
-		Signal:   signal,
-		Quantity: quantity,
-		Price:    snap.Price,
-		Book:     fillmodel.BookOf(snap),
-		Now:      snap.Timestamp,
+	//
+	// The Risk Engine judges the candidate again here, under the lock that
+	// also covers Enter (issue #839): the Policy Engine's Check ran before the
+	// signal was recorded, and a concurrent entry may have used the room since.
+	// The quantity that judgement settled on is the quantity Enter gets; Enter
+	// is not sized again (issue #840). The fill price still differs from the
+	// judged price by the spread, the slippage assumption and a tick
+	// (risk.EntrySize), so the filled notional can be slightly above the
+	// judged one while the share count is the same.
+	var result execution.EntryResult
+	passed, reason, err := p.Risk.CheckThenEnter(ctx, signal.InstrumentID, signal.Direction, func(size risk.EntrySize) error {
+		var enterErr error
+		result, enterErr = p.Engine.Enter(ctx, execution.EntryRequest{
+			Signal:   signal,
+			Quantity: size.Quantity,
+			Price:    snap.Price,
+			Book:     fillmodel.BookOf(snap),
+			Now:      snap.Timestamp,
+		})
+		return enterErr
 	})
+	if !passed {
+		slog.InfoContext(ctx, "bootstrap: paper entry skipped", "symbol", signal.Symbol, "signal_id", signal.ID, "reason", "risk_engine_rejected_at_entry: "+reason)
+		return nil
+	}
 	switch {
 	case errors.Is(err, execution.ErrPositionAlreadyOpen), errors.Is(err, execution.ErrPendingOrderExists), errors.Is(err, execution.ErrSymbolInCooldown),
 		errors.Is(err, execution.ErrOutsideTradingSession):

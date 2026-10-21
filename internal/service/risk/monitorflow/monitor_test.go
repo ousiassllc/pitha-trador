@@ -46,6 +46,7 @@ func newMonitorFixture(t *testing.T, cfg func(*risk.Config)) *monitorFixture {
 		Limits:     testLimits(),
 		KillSwitch: system.NewKillSwitchRepository(db),
 		Settings:   system.NewRuntimeSettingsRepository(db),
+		Snapshots:  market.NewSnapshotRepository(db),
 		Portfolio:  risk.ZeroPortfolioProvider{},
 		Positions:  f.positions,
 		Orders:     f.orders,

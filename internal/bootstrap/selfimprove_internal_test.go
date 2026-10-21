@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
@@ -96,10 +95,7 @@ func TestBuildServices_RegistersSelfImproveHandler(t *testing.T) {
 func TestPaperExecutor_SkipsEntryWhenNoLotFitsLimits(t *testing.T) {
 	svc := newTestServices(t)
 	inst := mustCreateInstrument(t, svc, "7203")
-	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 400_000, Timestamp: time.Now().UTC()}
-	if err := (paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}).ExecuteSignal(context.Background(), approvedLongSignal(inst), snap); err != nil {
-		t.Fatalf("ExecuteSignal = %v, want nil (skipped)", err)
-	}
+	enterPaper(t, svc, inst, domain.Snapshot{InstrumentID: inst.ID, Symbol: inst.Symbol, Price: 400_000, Timestamp: time.Now().UTC()})
 	if orders, err := svc.Orders.List(context.Background(), "", 10); err != nil || len(orders) != 0 {
 		t.Fatalf("orders = (%+v, %v), want none submitted", orders, err)
 	}
