@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Paper執行・Kill Switch）
 
-`docs/architecture/er.md` から分割した章。対象: `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions`。型・規約と全体ER図は `docs/architecture/er.md` を参照。
+`docs/architecture/er.md` から分割した章。対象: `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` / `order_proposals` / `order_proposal_events`。型・規約と全体ER図は `docs/architecture/er.md` を参照。
 
 ## paper_orders
 
@@ -259,3 +259,58 @@ erDiagram
 | created_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id, timestamp DESC)`, `INDEX (risk_passed)`
+
+## order_proposals
+
+MCP（`order_proposal_submit`）が受け付けた Paper の注文案。1 案 1 行（マイグレーション`000042`、issue #827、`docs/architecture/paper-results-mcp.md` §8）。MCP が書くのは受け付けの`INSERT`（案 1 行と`order_proposal_events`の最初の 1 行を同じトランザクション）だけで、`status`以降の更新と下の 4 つの紐付けはアプリが埋める（issue #828）。
+
+```mermaid
+erDiagram
+    order_proposals ||--o{ order_proposal_events : ""
+    order_proposals {
+        integer id PK
+        text idempotency_key UK
+        text request_hash
+        text received_at
+        text mode "paper のみ"
+        varchar symbol
+        varchar bucket "stock | bond_etf"
+        text action "open_long | close"
+        varchar status "received | processing | waiting_session | rejected | submitted | filled | expired | cancelled | closed | failed"
+        integer instrument_id FK
+        integer trade_signal_id FK
+        integer paper_order_id FK
+        integer position_id FK
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id / idempotency_key / request_hash | integer / text / text | PK / NOT NULL UNIQUE / NOT NULL | `idempotency_key`は 8〜64 文字の再送の識別子。`request_hash`は`idempotency_key`を除いた引数を正規化した SHA-256（16 進）。同じキーで内容が違う再送を拒否する根拠 |
+| received_at / updated_at / expires_at | text | NOT NULL | 受け付け時刻・最後に状態を変えた時刻・有効期限（UTC。受け付けから最大 24 時間）。`(received_at)`と JST の 1 日 20 件の上限の数え上げに使う |
+| client | text | NOT NULL, DEFAULT `''` | 接続元 IP だけ。ヘッダ・API キーは残さない |
+| mode | text | NOT NULL, DEFAULT 'paper', CHECK IN ('paper') | Live の値は入れられない（Live の発注経路は作らない） |
+| symbol / bucket / action | varchar(10) / varchar(20) / text | NOT NULL, bucket は CHECK IN ('stock','bond_etf')、action は CHECK IN ('open_long','close') | 銘柄コード・予算枠・買い（新規）か保有中ポジションの決済か。売り建ては無い |
+| quantity / budget_jpy | integer / numeric | NULL可, CHECK > 0 | `open_long`のとき、どちらか一方（株数／使う金額）。`close`は両方 NULL |
+| order_type / limit_price | varchar(10) / numeric | NOT NULL, CHECK IN ('MARKET','LIMIT') / NULL可 | `LIMIT`のときだけ`limit_price` |
+| stop_loss_price / take_profit_price / exit_plan / max_loss_jpy | numeric / numeric / text / numeric | NULL可, 価格・損失は CHECK > 0 | 答え合わせのための記録。`open_long`は損切り・手じまいの計画（500 文字以内）・最大損失が必須（MCP が検証）。第 1 段階ではアプリの Exit の判定には使わない |
+| rationale / sources_json | text | NOT NULL | 判断の理由（2000 文字以内）と、情報源（`title`・`url`・`retrieved_at`の配列。1〜10 件）の JSON |
+| status / status_reason | varchar(20) / text | NOT NULL, status は CHECK（上の図の 10 値）, DEFAULT 'received' / DEFAULT `''` | 状態と、固定コードの理由。受け付け時は`received`と空 |
+| instrument_id / trade_signal_id / paper_order_id / position_id | integer | FK → instruments / trade_signals / paper_orders / positions, NULL可 | アプリが issue #828 で埋める。最初は NULL |
+
+インデックス: `UNIQUE (idempotency_key)`, `INDEX (received_at)`, `INDEX (status, received_at)`
+
+## order_proposal_events
+
+注文案の状態の変化を 1 行ずつ残す（マイグレーション`000042`）。追記のみで、`UPDATE` / `DELETE`はトリガー（`order_proposal_events_no_update` / `_no_delete`）で拒否する。受け付け時の最初の行は`from_status` NULL・`to_status='received'`・`actor='mcp'`。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK（AUTOINCREMENT） | |
+| proposal_id | integer | FK → order_proposals.id, NOT NULL | |
+| at | text | NOT NULL | 変化の時刻（UTC） |
+| from_status / to_status | varchar(20) | from は NULL可（最初の行だけ）、どちらも`order_proposals.status`と同じ CHECK | 変化前・変化後 |
+| reason_code | text | NOT NULL, DEFAULT `''` | 固定コード（無いときは空） |
+| actor | text | NOT NULL, CHECK IN ('mcp','app','gui') | `mcp`＝`order_proposal_submit`、`app`＝アプリの処理役（issue #828）、`gui`＝Settings 画面 |
+
+インデックス: `INDEX (proposal_id, id)`

@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つ）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 3 つ。合計 18）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -253,11 +253,15 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 
 ### 3.14 `settings_audit`
 
-引数: `limit`（既定 50、最大 200）、`before_id`（前回応答の最後の `id`。これより古い行を返す）。`data.entries[]` は新しい順で、`id` / `at`（UTC の RFC3339）/ `actor`（`mcp` か `gui`）/ `client`（`mcp` のときの接続元 IP。`gui` は省略）/ `action`（`set`・`reset`・`write_enable`・`write_disable`）/ `key` / `before` / `after`。`before` / `after` が `null` は「保存値なし（既定が効く）」、`reset` の `after` も `null`。書き込み許可の切り替えは `key` が `mcp.settings_write_enabled`、値は `"1"` / `"0"`。値は GUI と同じ表現で、マスク方針は `architecture/paper-results-mcp.md` §7.4（いまのキーに秘密は無く、そのまま。秘密に分類されるキーは `****`）。読み取り専用。
+引数: `limit`（既定 50、最大 200）、`before_id`（前回応答の最後の `id`。これより古い行を返す）。`data.entries[]` は新しい順で、`id` / `at`（UTC の RFC3339）/ `actor`（`mcp` か `gui`）/ `client`（`mcp` のときの接続元 IP。`gui` は省略）/ `action`（`set`・`reset`・`write_enable`・`write_disable`・`order_proposals_enable`・`order_proposals_disable`）/ `key` / `before` / `after`。`before` / `after` が `null` は「保存値なし（既定が効く）」、`reset` の `after` も `null`。書き込み許可の切り替えは `key` が `mcp.settings_write_enabled`、注文案の受け付けスイッチの切り替え（§3.16〜§3.18。分割章）は `key` が `mcp.order_proposals_enabled`。どちらも値は `"1"` / `"0"`。値は GUI と同じ表現で、マスク方針は `architecture/paper-results-mcp.md` §7.4（いまのキーに秘密は無く、そのまま。秘密に分類されるキーは `****`）。読み取り専用。
 
 ### 3.15 `settings_write_enable` / `settings_write_disable`
 
 引数なし。書き込み許可を入れる／切る。**書き込みが禁止のあいだも呼べる**（戻せなくなるため）。Bearer 認証は他と同じく必須。`data`: `write_enabled` / `audit_id` / `at`。切り替えは監査ログに残る。Settings 画面の同名のチェック（FR-MCP-18）と同じ値を読み書きする。`readOnlyHint: false`。これらのツールも、発注・送金・Kill Switch・Live の値には触れない。
+
+### 3.16〜3.18 注文案ツール（issue #827）
+
+`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`。Paper の注文案を受け付けて記録するだけ（発注はアプリ。issue #828）。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.18）。
 
 ## 4. 出さないもの
 
@@ -277,7 +281,8 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 | `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 17 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 17 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
+| `order_proposals.request_hash` / `client` | `000042`。照合用のハッシュと接続元 IP。`order_proposal_get` は返さない |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 
 Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jpy`）は取引の結果として返す。板やスナップショットの時価列とは別である。
@@ -291,6 +296,7 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - MCP の読み取り接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
 - 設定ツール: ホワイトリストの 17 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
 - 設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
+- 注文案ツールの受け入れ条件は `paper-results-mcp-proposals.md` §5（スイッチ・同一トランザクション・冪等・引数の規則・1 日の上限・認証なしで SQL 0 件・書き込みの狭さ・`mode` の CHECK・オンにする手段が無いこと）
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
@@ -312,3 +318,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.7 | 2026-10-20 | §3.11 `settings_get` に `llm_cutoff_status`（`placeholder` / `unverified` / `confirmed`）を追加。§3.12 `settings_set` の LLM cutoff 4 キーの応答に `llm_cutoff_status` を付け、MCP だけで日付と出典を更新する手順を追記 | issue #809 |
 | 1.8 | 2026-10-20 | §3.9 `health_today` の `missing_session_dates[]` を、それ以前のスナップショットがある日付だけ（実際の欠損）に改め、履歴が足りず判定できない立会日を `insufficient_history_dates[]` に分けた。`attention_codes` の `missing_session` は `insufficient_history_dates[]` だけが空でないときは出さない | issue #814 |
 | 1.9 | 2026-10-20 | §3.10 のホワイトリストに Paper の予算枠 2 キー（`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`）を足して 17 キーにした（`settings_get` / `settings_diff` にも出る）。§3.12 に、枠の合計が運用資金を超える保存の拒否（監査行なし）と、枠の間で予算を移すときは減らす方を先に保存する手順を追記。§4・§5 の 15 キーを 17 キーに改めた。ツールの数・入出力の形は変更なし | issue #824（親 #823） |
+| 1.10 | 2026-10-21 | §3.16〜§3.18（分割章 `paper-results-mcp-proposals.md`）に注文案ツール（`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`。Paper の注文案を受け付けて記録するだけ）を追加し、ツール数を 18 にした。§3.14 の `action` に `order_proposals_enable` / `order_proposals_disable` を追加。§4 に受け付けスイッチの読み取りと `order_proposals.request_hash` / `client` を、§5 に注文案の受け入れ条件を追加。ホワイトリストは 17 キーのまま | issue #827（親 #826） |

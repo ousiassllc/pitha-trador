@@ -1,12 +1,12 @@
 # Paper 実績 MCP（Grok Bot コネクタ）
 
-リモートの Grok Bot が、pitha-trador の SQLite に入っている Paper の取引実績・Jev 判断・メタモデル・Risk・収集状況の**集計とラベル**を読む仕様。issue #783（設定の読み書きは #806・#807）。実装は `cmd/paper-results-mcp` と `internal/service/paperresultsmcp`（実行・設定の手順は `docs/components/paper-results-mcp.md` §4）。
+リモートの Grok Bot が、pitha-trador の SQLite に入っている Paper の取引実績・Jev 判断・メタモデル・Risk・収集状況の**集計とラベル**を読む仕様。issue #783（設定の読み書きは #806・#807、Paper の注文案の受け付けは #827）。実装は `cmd/paper-results-mcp` と `internal/service/paperresultsmcp`（実行・設定の手順は `docs/components/paper-results-mcp.md` §4）。
 
-ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22（`docs/requirements/functional/components-platform.md` §4.22）。
+ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
 
 ## 1. 目的
 
-実績の DB は Windows PC の `%AppData%\pitha-trador\pitha.db`（`internal/bootstrap/bootstrap.go` の `DefaultDBPath`。環境変数 `PITHA_DB_PATH` があればそれを優先）。Grok Bot はその PC では動かない。いまは DB ファイルを手渡しして集計している。本 MCP は、その手渡しの代わりに、認証を通した読み取りと、ホワイトリストに載った基本設定の読み書き（§7。issue #806・#807）だけをプライベートな経路で届ける。
+実績の DB は Windows PC の `%AppData%\pitha-trador\pitha.db`（`internal/bootstrap/bootstrap.go` の `DefaultDBPath`。環境変数 `PITHA_DB_PATH` があればそれを優先）。Grok Bot はその PC では動かない。いまは DB ファイルを手渡しして集計している。本 MCP は、その手渡しの代わりに、認証を通した読み取りと、ホワイトリストに載った基本設定の読み書き（§7。issue #806・#807）と、Paper の注文案の受け付け（§8。issue #827）だけをプライベートな経路で届ける。
 
 ```mermaid
 flowchart LR
@@ -18,7 +18,7 @@ flowchart LR
     end
     MCP["Paper 実績 MCP\nAPI キー必須"]
     DB[("SQLite\nmode=ro")]
-    DBW[("SQLite\n設定の書き込みだけ（§7）")]
+    DBW[("SQLite\n設定と注文案の書き込みだけ（§7・§8）")]
     Grok -->|"Authorization: Bearer"| TS
     Grok --> CF
     Grok --> OT
@@ -26,7 +26,7 @@ flowchart LR
     CF --> MCP
     OT --> MCP
     MCP -->|"キー一致のあとだけ"| DB
-    MCP -->|"settings_set など。ホワイトリストと書き込み許可を通ったときだけ"| DBW
+    MCP -->|"settings_set・order_proposal_submit など。ホワイトリスト／受け付けスイッチを通ったときだけ"| DBW
 ```
 
 MCP はアプリ本体（Wails / `cmd/server`）とは別プロセスで、同じ Windows ユーザーのセッションで動く（アプリが子プロセスとして起動し、アプリの終了で止まる。`paper-results-mcp-lifecycle.md`）。話しかたは HTTP である（stdio ではない）。インターネットへ直接は公開しない。外へ届ける経路は実装に依存せず、§3.2 のどれを選んでも同じ MCP・同じ API キーで動く（悠太さん、2026-10-17。Cloudflare を必須にしない。Tailscale も検討する）。
@@ -129,11 +129,13 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 - 認証に失敗したリクエストは SQL を発行せず、接続も新規に開かない。起動時の疎通（`SELECT 1`）は、認証設定が §3.3 を満たして待受を開く場合に限り 1 回だけ行ってよい
 - `secrets` への `SELECT` をツールからも疎通確認からも発行しない
 
-読み取りの接続は上の通り `mode=ro` のままで、書き込みを試みた SQL は SQLite が拒否する。その失敗をツールの成功応答にしてはならない（受け入れ条件のテストが、MCP の読み取り接続で `INSERT` がエラーになることを確認する）。設定ツール（§7）の書き込みは、この接続を使わず、別の狭い書き込み接続（§7.3）だけが行う。
+読み取りの接続は上の通り `mode=ro` のままで、書き込みを試みた SQL は SQLite が拒否する。その失敗をツールの成功応答にしてはならない（受け入れ条件のテストが、MCP の読み取り接続で `INSERT` がエラーになることを確認する）。設定ツール（§7）と注文案ツール（§8）の書き込みは、この接続を使わず、別の狭い書き込み接続（§7.3・§8.4）だけが行う。
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）だけである。定義・フィールドは API 仕様。売買・発注・取消・送金・Kill Switch の操作・Live の値の変更・秘密の読み書きはツールにしない。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` だけである。
+ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 3 つ（`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`）だけである（合計 18）。定義・フィールドは API 仕様。
+
+「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
 | ツール | 読むもの |
 |--------|----------|
@@ -155,14 +157,16 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 
 ## 6. 非目標
 
-- 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない
+- 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない。Paper の注文案を受け付けて記録するツール（§8）は、発注ではない。発注するのはアプリで、MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）に書かない
+- 新規の売り建て（SHORT）の注文案は受け付けない（注文案の `action` は買い `open_long` と決済 `close` だけ）
+- 注文案の受け付けを MCP からオンにする手段を作らない（オンにできるのは Settings 画面だけ。§8.2）
 - `market_snapshots.raw_data_json`、`jev_decisions.state_json` / `response_json`、板・気配・時価の列、`secrets`、API キーを戻り値にもログにも出さない（一覧は API 仕様の「出さないもの」）
 - アプリの Gin ルート（セッション Cookie・CSRF・`/api/v1`）に本 MCP を相乗りさせない
 - #347 のツール名（`kabu_station_status` / `kabu_api_error_guidance`）を本 MCP に生やさない
 
 ## 7. 設定の読み書き（issue #806・#807）
 
-Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を MCP から一覧・変更・差分確認できる。「MCP は書かない」という不変条件は「**書くのはホワイトリストの設定ツールだけで、書き込み接続は §7.3 の狭い書き手だけ**」に改めた。それ以外の経路（読み取り 8 ツール、読み取り接続）は従来どおり書けない。
+Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を MCP から一覧・変更・差分確認できる。「MCP は書かない」という不変条件は「**書くのはホワイトリストの設定ツールと、§8 の注文案の受け付けだけで、書き込み接続は §7.3・§8.4 の狭い書き手だけ**」に改めた。それ以外の経路（読み取り 9 ツール、読み取り接続）は従来どおり書けない。
 
 ### 7.1 ホワイトリスト
 
@@ -205,13 +209,13 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 ### 7.3 書き込み経路（狭い書き手）
 
 - 読み取りの接続は `mode=ro`・`query_only=ON` のまま変えない。書き込みは、同じ DB ファイルへの**別接続**（`internal/service/paperresultsmcp/mcpset.Writer`）が、最初の書き込みの呼び出しで初めて開く。ファイルは作らず（`mode=rw`）、マイグレーションも `journal_mode` の変更もしない
-- 書き手が実行する変更は 2 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）。ほかの表・文は発行しない（`mcptests.TestSettingsWritePathIsNarrow` が、実行された文を数えて固定する）
+- 書き手が実行する変更は 4 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）
 - 保存は GUI と同じ `runtime_settings`（`system.RuntimeSettingsRepository`）で、値の形も GUI と同じ（`opsettings` が検証して JSON で保存する）。アプリは毎回この表から読むので、保存後すぐに GUI と各エンジンに反映される（再起動不要）
 - 同じ DB を書く単一ライターはアプリである。書き手は 2 秒の `busy_timeout` と `BEGIN IMMEDIATE` で短く待ち、取れなければ `db_locked`。アプリの書き込みを長く待たせない
 
 ### 7.4 監査ログ
 
-- 表 `mcp_settings_audit`（マイグレーション `000040`）。1 変更 1 行: 時刻（UTC）、**誰が**（`actor` = `mcp` か `gui`。`mcp` のときは接続元ホストの IP だけ。ヘッダの値・API キーは記録しない）、操作（`set` / `reset` / `write_enable` / `write_disable`）、キー、**変更前の値**、**変更後の値**
+- 表 `mcp_settings_audit`（マイグレーション `000040`。操作名は `000042` で拡張）。1 変更 1 行: 時刻（UTC）、**誰が**（`actor` = `mcp` か `gui`。`mcp` のときは接続元ホストの IP だけ。ヘッダの値・API キーは記録しない）、操作（`set` / `reset` / `write_enable` / `write_disable` / `order_proposals_enable` / `order_proposals_disable`。後ろの 2 つは §8.2 の受け付けスイッチ。マイグレーション `000042` で CHECK に足した）、キー、**変更前の値**、**変更後の値**
 - MCP からの変更に加え、Settings 画面から行ったホワイトリストのキーの保存・既定への戻し、書き込み許可の切り替えも同じ表に残す（`mcpset.Audited` が `opsettings.Service` を包んで Save / Reset を記録する）。GUI での変更も記録しないと、`settings_diff` が過去の状態を再構成できないため。ホワイトリスト外のキーの GUI での変更は記録しない
 - 設定と監査は同じトランザクションに入れる（MCP の書き込みも、GUI の保存・既定への戻しも、書き込み許可のスイッチも同じ）。監査行の書き込みに失敗したら設定の変更も取り消され、保存はエラーになる。設定の書き込みが失敗したら監査行は残らない。どちらか一方だけ残ることはない（`mcpset.Audited`、`mcpset/atomic_test.go`）。例外は、保存済みの値が壊れていて変更前の値を読めないキーで、上書き・リセットを妨げないよう監査なしで変更する（ログに警告を出す）
 - **マスク方針**: ホワイトリストのキーに秘密に分類されるものは 1 つもないため、値はそのまま記録・表示する（`mcpwritesettings.Spec.Secret` はすべて false。テストが固定する）。将来、秘密に分類されるキー（名前に secret・password・token・api_key・private_key・credential を含む、または `Secret` を付けたもの）やホワイトリスト外のキーを監査・ツール出力に載せることになった場合は、**既定で `****` に伏せる**（`mcpwritesettings.Mask`、`maskedEntry`）。API キー・`secrets`・板や時価の生データは、設定ツールの入出力にもログにも出さない
@@ -230,6 +234,44 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 
 リターン率・ドローダウン比の分母（`paper_performance_summary` の `capital_jpy`）は、`runtime_settings` の `risk.paper.initial_capital_jpy`（Settings で保存した Paper の運用資金。読み取り接続で 1 キーだけ読む）が有効に保存されていればそれ、なければ `config/risk.yaml` の `paper.initial_capital`（MCP プロセスの起動時に読む。アプリと同じ解決順）とする。壊れた行は無視して yaml の値を使う（Risk Engine と同じ扱い）。Live の資金は使わない。
 
+## 8. Paper の注文案の受け付け（issue #827。親 #826）
+
+あいりが MCP で Paper の「注文案」を出せる。**この節の範囲は、注文案を受け取って形を検証し、記録するところまで**である。銘柄の存在・価格・Risk check・Paper の発注・期限切れの処理・取消の実行は、アプリが行う（issue #828）。MCP 側では見ない。一覧・結果の表示は issue #829。
+
+### 8.1 ツール
+
+| ツール | 内容 |
+|--------|------|
+| `order_proposal_submit`（書き込み） | 注文案を 1 件受け付けて記録する。応答は `proposal_id`・`status`（最初は `received`）・`received_at`・`expires_at`・`replayed` |
+| `order_proposal_get`（読み取り） | `proposal_id` の 1 件の状態（受け付けた内容、`status` と `status_reason`、アプリが埋める `instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id`、イベントの履歴）。受け付けスイッチがオフでも使える |
+| `order_proposals_disable`（書き込み） | 受け付けスイッチをオフにする（§8.2）。引数なし |
+
+`order_proposal_cancel`（取消の依頼）は issue #828 で足す。引数の表・応答は API 仕様 §3.16〜§3.18。`mode` の引数は無く、すべて Paper の案である。
+
+### 8.2 受け付けスイッチ
+
+- キーは `runtime_settings` の `mcp.order_proposals_enabled`（JSON の整数 `1` / `0`）。**行が無いときはオフ**で、値が壊れているときもオフとして扱う。§7.2 の書き込み許可（既定オン）とは別の値で、既定が逆である
+- **オンにできるのは Settings 画面だけ**（「外部連携」→ MCP カードの「MCP からの注文案を受け付ける（Paper のみ）」。`POST /settings/mcp/order-proposals`。セッション Cookie と CSRF が必要。`POST /settings/mcp/write` と同じ作り）。MCP からは `order_proposals_disable` でオフにだけできる。MCP からオンにする手段（ツール・`settings_set`・書き込み許可のツール）は無い。このキーはホワイトリストに入っておらず、`settings_set` は `key_not_allowed` で拒否する
+- 切り替えは §7.4 の監査ログに残る（操作名 `order_proposals_enable`＝GUI のみ、`order_proposals_disable`＝GUI と MCP）。設定と監査は同じトランザクションに入れる
+- オフのあいだ `order_proposal_submit` は `proposals_disabled`（403）で拒否し、何も書かない。すでに記録した案には影響しない
+
+### 8.3 処理の順番（`order_proposal_submit`）
+
+認証（Bearer。失敗なら SQL 0 件）→ 引数の形（`invalid_argument`）→ 期限の範囲（`invalid_argument`）→ 受け付けスイッチ（`proposals_disabled`）→ 1 日の上限（`limit_exceeded`）→ 冪等の確認（`idempotency_conflict`／再送）→ `INSERT`。スイッチ以降は書き込み接続の 1 トランザクション（`BEGIN IMMEDIATE`）の中で順に確認するので、確認と `INSERT` の間に別の受け付けは割り込まない。
+
+- 形の規則: 引数の表は API 仕様 §3.16。未知の引数・`mode` は拒否（`strictDecode`）。文字列は制御文字を拒否（`metalabelsettings` の出典と同じ考え方）。数値は有限の正の値だけ。`open_long` は `quantity` と `budget_jpy` のどちらか 1 つ・`stop_loss_price`・`exit_plan`・`max_loss_jpy` が必須。`LIMIT` のときだけ `limit_price`（`stop_loss_price` は指値より小さい。成行のときの「直近値より下」はアプリが確かめる）。`close` は、保有中ポジション全体の決済で、`quantity`・`budget_jpy`・`stop_loss_price`・`take_profit_price`・`max_loss_jpy` を受け付けない（黙って全量決済にならないよう拒否する）。`bucket` は `stock` / `bond_etf` だけ
+- 上限: 受け付けた案は **JST の 1 日あたり 20 件まで**（仮の値。issue #826 で確認中）。21 件目は `limit_exceeded`。上限と再送の順は上のとおりなので、上限に達した日の同じ案の再送は、元の案ではなく `limit_exceeded` になる
+- 冪等: `idempotency_key`（8〜64 文字、`[A-Za-z0-9_-]`）は `order_proposals` で UNIQUE。同じキーで内容（`idempotency_key` を除いた引数を正規化して SHA-256 にした `request_hash`。文字列の前後の空白・時刻の表記ゆれは吸収する）も同じなら、新しい行を作らず最初の案の `proposal_id` と**いまの**状態を返す（`replayed: true`）。内容が違えば `idempotency_conflict`（409）で、何も書かない
+
+### 8.4 記録と書き込みの狭さ
+
+- 表 `order_proposals`（1 案 1 行）と `order_proposal_events`（状態の変化を 1 行ずつ。追記だけ。トリガーで UPDATE / DELETE を拒否）。マイグレーション `000042`。列・CHECK は ER 図（`docs/architecture/er/tables-trading.md`）
+- `order_proposals.mode` は `CHECK (mode IN ('paper'))` だけ。Live の値は入れられない。Live の発注経路・モード・承認はこの仕様に無い
+- 注文案に **根拠（`rationale`）・損切り（`stop_loss_price`）・最大損失（`max_loss_jpy`）・手じまいの計画（`exit_plan`）・情報源（`sources`）**を必ず残す（`open_long`。`close` は根拠と情報源だけ必須）。あとで約定と損益にひも付けて答え合わせをするため
+- `client` は接続元 IP だけ（ヘッダ・API キーは残さない）
+- 書き手（`mcpset.Writer.SubmitProposal`）は、`order_proposals` 1 行と `order_proposal_events` 1 行（`from_status` が NULL、`to_status` が `received`、`actor` が `mcp`）を**同じトランザクション**で `INSERT` する。片方だけ残ることはない。`instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id` はアプリが #828 で埋める（最初は NULL）
+- MCP は `paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には書かない（`proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）。注文案が Kill Switch・一時停止・日次ガード・予算枠・損失上限・数量でどう扱われるかはアプリの Risk check の役目で、#828 で定める
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -246,3 +288,4 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.9 | 2026-10-20 | §7.4 の GUI の保存を、MCP と同じく設定と監査を 1 トランザクションにする形に改めた（監査の失敗は保存も取り消す）。MCP の書き込み経路は従来から 1 トランザクションで、変更なし | issue #813 |
 | 1.10 | 2026-10-20 | §5 の `health_today` の欠損セッションを、それ以前のスナップショットがある日付だけ（実際の欠損）に改め、履歴が足りず判定できない立会日は `insufficient_history_dates[]` に分けて警告にしない旨を追記。DB は読み取り専用のまま | issue #814 |
 | 1.11 | 2026-10-20 | §7.1 のホワイトリストに Paper の予算枠 2 キー（`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`）を足して 17 キーにした。枠の合計が運用資金を超える保存（枠の保存・運用資金を下げる保存・既定に戻す）の拒否と、枠の間で予算を移すときは減らす方を先に保存する手順を追記。ツール数（15）・読み取り接続・待受・認証は変更なし | issue #824（親 #823） |
+| 1.12 | 2026-10-21 | Paper の注文案の受け付けを追加（§8。`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`、受け付けスイッチ `mcp.order_proposals_enabled`、表 `order_proposals`・`order_proposal_events`、マイグレーション `000042`）。§5・§6 の「売買・発注のツールは作らない」を「Paper の注文案を出すツールだけ追加。発注はアプリ。注文の表には書かない。Live の発注・Live の値・Kill Switch の操作は不変」に改めた。§7.3 の書き込み経路を 4 種類に、§7.4 の監査の操作名を 6 つにした。ツール数は 18。ホワイトリストは 17 キーのまま | issue #827（親 #826） |

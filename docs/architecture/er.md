@@ -34,6 +34,11 @@ erDiagram
     paper_orders ||--o| positions : "エントリー約定になる"
     paper_orders ||--o| positions : "Exit約定になる"
     kill_switch_events ||--o| kill_switch_resolutions : "解除される"
+    order_proposals ||--o{ order_proposal_events : "状態の変化を残す"
+    instruments ||--o{ order_proposals : "案の対象になる（アプリが紐付ける）"
+    trade_signals ||--o{ order_proposals : "案から生まれる（アプリが紐付ける）"
+    paper_orders ||--o| order_proposals : "案の発注になる（アプリが紐付ける）"
+    positions ||--o| order_proposals : "案の約定になる（アプリが紐付ける）"
 ```
 
 ## テーブル定義
@@ -43,11 +48,11 @@ erDiagram
 | ファイル | テーブル / セクション |
 |----------|----------------------|
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
-| `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` |
+| `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` / `order_proposals` / `order_proposal_events` |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `mcp_settings_audit`、ベクトルインデックス（sqlite-vec） |
 
-Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読む。書くのは、設定ツール（issue #806・#807）が `runtime_settings` のホワイトリストのキーと、設定変更の監査表 `mcp_settings_audit`（マイグレーション000040、`er/tables-system.md`）に対して行うものだけ。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
+Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は上の既存テーブルを `mode=ro` で読む。書くのは、設定ツール（issue #806・#807）が `runtime_settings` のホワイトリストのキーと、設定変更の監査表 `mcp_settings_audit`（マイグレーション000040、`er/tables-system.md`）に対して行うものと、注文案ツール（issue #827）が注文案の表 `order_proposals` / `order_proposal_events`（マイグレーション000042、`er/tables-trading.md`）へ 1 案ごとに 2 行を `INSERT` するもの、注文案の受け付けスイッチ（`runtime_settings` の `mcp.order_proposals_enabled`）をオフにするものだけ。`paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には書かない。`secrets`・`market_snapshots.raw_data_json`・`jev_decisions.state_json` は読まない（返す列は `docs/api/endpoints/paper-results-mcp.md` §4）。
 
 ## 改訂履歴
 
@@ -117,3 +122,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.61 | 2026-10-20 | マイグレーション000040を追加し、`er/tables-system.md`に`mcp_settings_audit`（Paper 実績 MCP の設定ツールと Settings 画面の、ホワイトリストのキーの変更と書き込み許可の切替の監査ログ）を追加。`runtime_settings`のキー`mcp.settings_write_enabled`（書き込み許可、1/0、行なしは許可）を追記 | issue #806・#807 |
 | 1.62 | 2026-10-20 | マイグレーション000041を追加し、`er/tables-market.md`の`instruments`に`asset_class`（`stock` / `bond_etf`）、`er/tables-trading.md`の`paper_orders`・`positions`・`trade_signals`に`bucket`を追加（書き込み時に`instruments.asset_class`から確定。既存行は`stock`）。`er/tables-system.md`の`runtime_settings`にPaperの予算枠`risk.bucket.{stock,bond_etf}.budget_jpy`と内部マーカー`system.bucket_budgets_seeded`を追記。株の保有額は`positions`の未決済の行の時価ベースの合計（`current_price`×`quantity`。`current_price`が付くまでは`entry_price`。総エクスポージャ上限と同じ計算）。`trade_signals`には予算枠の拒否理由`bucket_disabled` / `bucket_budget_exceeded`も追記し、その章を`.linterly.yml`の300行/ファイル制限のため`er/tables-market.md`から`er/tables-trading.md`へ移した（見出し名・内容は同じ） | issue #824（親 #823） |
 | 1.63 | 2026-10-21 | `er/tables-system.md`の`runtime_settings`の予算枠（`risk.bucket.*`）の説明を、独立した`key`行から、`risk.paper.*`と同じく`key`行の中へ統合した（同じ主キー列が2行並んで見えないように）。運用資金を既定へ戻す削除が枠の合計を下回るとき拒否される旨を追記（スキーマ変更なし） | issue #838 |
+| 1.64 | 2026-10-21 | マイグレーション000042を追加し、`er/tables-trading.md`に`order_proposals`（MCP の注文案。1 案 1 行。`mode`は`CHECK (mode IN ('paper'))`で Live の値は入らない）と`order_proposal_events`（状態の変化。追記のみ）を、`er/tables-system.md`の`mcp_settings_audit.action`に`order_proposals_enable` / `order_proposals_disable`を、`runtime_settings`のキーに`mcp.order_proposals_enabled`（既定オフ）を追記。全体ER図に関係線を追加 | issue #827（親 #826） |
