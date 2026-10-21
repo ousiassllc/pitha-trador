@@ -16,6 +16,8 @@ type store struct {
 	rows   map[string]string
 	getErr error
 	setErr error
+	// failKey, when set, makes the write of that one key fail with setErr.
+	failKey string
 }
 
 func (s *store) Get(_ context.Context, key string) (string, bool, error) {
@@ -23,12 +25,15 @@ func (s *store) Get(_ context.Context, key string) (string, bool, error) {
 	return v, ok, s.getErr
 }
 
-func (s *store) Set(_ context.Context, key, value string, _ time.Time) error {
-	if s.setErr != nil {
-		return s.setErr
+func (s *store) SetIfAbsent(_ context.Context, key, value string, _ time.Time) (bool, error) {
+	if s.setErr != nil && (s.failKey == "" || s.failKey == key) {
+		return false, s.setErr
+	}
+	if _, ok := s.rows[key]; ok {
+		return false, nil
 	}
 	s.rows[key] = value
-	return nil
+	return true, nil
 }
 
 func TestCapitalSource_ReadsTheSavedCapitalOnEveryCall(t *testing.T) {
