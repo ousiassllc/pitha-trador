@@ -18,7 +18,7 @@
 | `cancel_requested` | `cancelled` | `order_proposal_cancel` の依頼どおりに取り消した |
 | `unknown_symbol` / `inactive_symbol` | `rejected` | `instruments` に無い（株以外の指数を含む）／無効な銘柄（`open_long` だけ。`close` は無効な銘柄でも決済できる） |
 | `bucket_mismatch` | `rejected` | 案の `bucket` が銘柄の `asset_class` の枠（#824 の `stock` / `bond_etf`）と違う |
-| `outside_trading_session` | `waiting_session` | 立会時間外（`open_long` は新規エントリーの時間帯、`close` は取引所が閉まっていない時間帯だけ）。期限内に立会が始まれば進む |
+| `outside_trading_session` | `waiting_session` | 立会時間外（`open_long` は新規エントリーの時間帯、`close` は取引所が閉まっていない時間帯だけ）。期限内に立会が始まれば進む。発注の直前に Execution が時間外と判断した場合（時刻の境目）も `rejected` にせずこの状態で待つ |
 | `stale_quote` | `rejected` | 銘柄の最新の足が無い／古い（Policy・Jev と同じ `SnapshotMaxAge`） |
 | Risk の理由（`kill_switch_active` / `system_paused` / `bucket_disabled` / `bucket_budget_exceeded` / `daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades` ほか） | `rejected` | `risk.Engine` の判断そのまま。`trade_signals` にも残す（§3） |
 | `size_zero` | `rejected` | 案の数量とアプリが決めた数量（`risk.Engine.PositionSize`）の小さいほうが 0 |
@@ -34,7 +34,7 @@
 
 1. **期限**: `expires_at` を過ぎていれば `expired`。以降の手順に進まない（Risk も発注もしない）。
 2. **取消依頼**: `cancel_requested_at` があれば `cancelled`（`cancel_requested`）。発注前なら何も発注しない。
-3. 状態を `processing` にして処理役が取る（`received`／`waiting_session` からの更新は、読んだときの状態を条件にする。別の書き手に負けたら何も書かない）。
+3. 状態を `processing` にして処理役が取る（`received`／`waiting_session` からの更新は、読んだときの状態を条件にする。別の書き手に負けたら何も書かない）。取ったあとにもう一度案を読み、読んでから取るまでの間に `cancel_requested_at` が入っていれば `cancelled`（`cancel_requested`）にする（`processing` になった案への取消依頼は `not_cancellable` なので、ここで読んだ値が最終）。
 4. 銘柄・枠の確認（`unknown_symbol` / `inactive_symbol` / `bucket_mismatch`）。
 5. 立会時間外なら `waiting_session`。最新の足が古ければ `stale_quote`。
 6. **Risk check**: `risk.Engine.CheckThenEnter`（Policy 経路の Paper エントリーと同じ、ロックの中で判断と発注を一続きにする入口）に `LONG` で通す。通った案の `trade_signals` 行を 1 行書く（`policy_version = 'mcp-proposal-v1'`、`jev_decision_id` は NULL、`risk_passed = 1`）。拒否のときも `risk_passed = 0`・`reject_reason = 'risk_engine_rejected: <Risk の理由>'` で 1 行書き、案を `rejected` にして `trade_signal_id` を結ぶ。Kill Switch・一時停止・日次ガード・枠 0・枠超過はここで拒否され、**Execution は呼ばれない**（`Enter` の呼び出し 0 回）。MCP の `risk_rejections` は Policy の拒否と同じ表を数え、案の分は `proposal_risk_passed_count` / `proposal_risk_rejected_count`（`policy_version` で見分ける）で分かる。
@@ -63,3 +63,4 @@ MCP は取消の**依頼を記録するだけ**: `cancel_requested_at` の UPDAT
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規作成。注文案の処理（Risk check・数量・最大損失・発注・期限・取消・`close`・再起動の回復）と理由コード | issue #828（親 #826） |
+| 1.1 | 2026-10-21 | 取る直前に入った取消依頼を取った直後の再読で拾う（§3 手順 3）。発注直前の時間外は `waiting_session`（§2） | S-2-0 研磨 |

@@ -166,6 +166,16 @@ func (p Processor) advance(ctx context.Context, pr orderproposal.Proposal) error
 		return err
 	}
 	pr.Status = orderproposal.StatusProcessing
+	// A cancellation request can land between the read and the claim. Once the
+	// proposal is processing the MCP can no longer record one (not_cancellable),
+	// so what is read now is final: nothing is ordered for a cancelled proposal.
+	fresh, err := p.Proposals.Get(ctx, pr.ID)
+	if err != nil {
+		return p.fail(ctx, pr, proposalstore.Links{}, fmt.Errorf("proposalexec: re-read claimed proposal %d: %w", pr.ID, err))
+	}
+	if fresh.CancelRequested() {
+		return p.settle(ctx, pr, orderproposal.StatusCancelled, ReasonCancelRequested, proposalstore.Links{})
+	}
 	return p.run(ctx, pr, now)
 }
 

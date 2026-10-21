@@ -144,3 +144,36 @@ func TestSubmittedProposal_FilledOrderIsNotCancelledByExpiry(t *testing.T) {
 		t.Fatalf("order = %s, position link = %v; want FILLED with its position", order.Status, got.PositionID)
 	}
 }
+
+// A cancellation request that lands after the processor read the proposal and
+// before it claimed it must still win: nothing is ordered for it.
+func TestCancelRequestedBetweenReadAndClaim_IsCancelledAndNothingIsOrdered(t *testing.T) {
+	f := newFixture(t)
+	id := f.propose(spec{})
+	f.exec.beforeClaim = func() { f.requestCancel(id) }
+	f.cycle()
+	f.wantEnd(id, orderproposal.StatusCancelled, proposalexec.ReasonCancelRequested)
+	if f.count("paper_orders", "") != 0 || f.count("trade_signals", "") != 0 || f.exec.enters != 0 {
+		t.Fatal("a proposal cancelled while being claimed reached Risk or Execution")
+	}
+}
+
+// The session can close between the processor's check and Execution's own: the
+// proposal then waits for the next session (as the document says) instead of
+// being rejected.
+func TestOpenLong_SessionClosingBeforeTheOrderWaitsForTheNextSession(t *testing.T) {
+	f := newFixture(t)
+	*f.clock = at(8, 30, 0)
+	open := true
+	f.exec.sessionOpen = &open
+	id := f.propose(spec{})
+	f.cycle()
+	f.wantEnd(id, orderproposal.StatusWaitingSession, proposalexec.ReasonOutsideSession)
+	if f.count("paper_orders", "") != 0 {
+		t.Fatal("an order went out outside the session")
+	}
+	f.exec.sessionOpen = nil
+	*f.clock = at(10, 0, 30)
+	f.cycle()
+	f.wantEnd(id, orderproposal.StatusFilled, "")
+}

@@ -44,6 +44,8 @@ func checkOrderShape(a Args) error {
 	}
 	if a.Action == ActionClose {
 		switch {
+		case a.OrderType != OrderMarket:
+			return invalid("order_type は action が close のとき MARKET だけ指定できます")
 		case a.Quantity != nil, a.BudgetJPY != nil:
 			return invalid("quantity と budget_jpy は open_long のときだけ指定できます")
 		case a.StopLossPrice != nil, a.TakeProfitPrice != nil, a.MaxLossJPY != nil:

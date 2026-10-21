@@ -27,15 +27,36 @@ func at(hour, minute, second int) time.Time {
 }
 
 // spyExecution counts the calls that place an order, so a test can show that a
-// proposal Risk rejected never reached Enter.
+// proposal Risk rejected never reached Enter. Two hooks let a test stage a race:
+// beforeClaim runs once at the processor's first look at the clock of a
+// proposal (after the proposal was read, before it is claimed), and
+// sessionOpen, when set, is what EntrySessionOpenNow answers (Enter itself still
+// judges the real clock).
 type spyExecution struct {
 	*execution.Engine
-	enters int
+	enters      int
+	beforeClaim func()
+	sessionOpen *bool
 }
 
 func (s *spyExecution) Enter(ctx context.Context, req execution.EntryRequest) (execution.EntryResult, error) {
 	s.enters++
 	return s.Engine.Enter(ctx, req)
+}
+
+func (s *spyExecution) Config() execution.Config {
+	if hook := s.beforeClaim; hook != nil {
+		s.beforeClaim = nil
+		hook()
+	}
+	return s.Engine.Config()
+}
+
+func (s *spyExecution) EntrySessionOpenNow() bool {
+	if s.sessionOpen != nil {
+		return *s.sessionOpen
+	}
+	return s.Engine.EntrySessionOpenNow()
 }
 
 // fixture is the real Paper wiring (Risk Engine, Execution Engine, the 000043

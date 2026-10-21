@@ -146,6 +146,10 @@ func (p Processor) enter(ctx context.Context, pr orderproposal.Proposal, inst do
 		Price: snap.Price, Book: fillmodel.BookOf(snap), Now: now,
 	})
 	if reason, ok := executionRejection(err); ok {
+		if reason == ReasonOutsideSession {
+			// The session closed between the check and the order: wait for the next one.
+			return proposalstore.Change{ToStatus: orderproposal.StatusWaitingSession, Reason: reason, Links: links}, nil
+		}
 		return reject(reason)
 	}
 	if err != nil {

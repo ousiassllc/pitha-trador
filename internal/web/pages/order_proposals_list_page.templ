@@ -90,7 +90,7 @@ templ orderProposalsTable(rows []ProposalRow) {
 					</td>
 					<td class="py-1 pr-3">{ r.ReceivedAt }</td>
 					<td class="py-1 pr-3 font-mono">
-						<a class="underline" href={ templ.SafeURL("/symbols/" + r.Symbol) }>{ r.Symbol }</a>
+						<a class="underline" href={ organisms.SymbolHref(r.Symbol) }>{ r.Symbol }</a>
 					</td>
 					<td class="py-1 pr-3">{ label(proposalBucketLabels, r.Bucket) }</td>
 					<td class="py-1 pr-3">{ label(proposalActionLabels, r.Action) }</td>
