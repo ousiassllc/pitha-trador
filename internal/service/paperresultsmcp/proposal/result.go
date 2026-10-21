@@ -32,14 +32,20 @@ type Result struct {
 }
 
 // SignalResult is the trade_signals row the application wrote for the
-// proposal. RejectCode is the Risk Engine's fixed code (the reason's text is
-// not returned), nil for a signal that passed.
+// proposal. RejectCode is the fixed code of the rejection (the reason's text
+// is not returned), nil when there is none. RiskPassed is true only for a
+// proposal that went on to an order. RejectedAfterRisk tells the two kinds of
+// rejection apart (issue #860): true when the proposal passed the Risk Engine
+// and the application refused it afterwards (RejectCode is then the
+// application's code, e.g. size_zero), false for a Risk Engine rejection and
+// for a proposal that reached an order.
 type SignalResult struct {
-	ID            int64   `json:"id"`
-	At            string  `json:"at"`
-	PolicyVersion string  `json:"policy_version"`
-	RiskPassed    bool    `json:"risk_passed"`
-	RejectCode    *string `json:"reject_code"`
+	ID                int64   `json:"id"`
+	At                string  `json:"at"`
+	PolicyVersion     string  `json:"policy_version"`
+	RiskPassed        bool    `json:"risk_passed"`
+	RejectCode        *string `json:"reject_code"`
+	RejectedAfterRisk bool    `json:"rejected_after_risk"`
 }
 
 // OrderResult is the paper_orders row: the entry order of an open_long
@@ -154,13 +160,14 @@ SELECT timestamp, policy_version, risk_passed, reject_reason FROM trade_signals 
 	if code := riskRejectCode(reason); code != "" {
 		s.RejectCode = &code
 	}
+	s.RejectedAfterRisk = !s.RiskPassed && strings.HasPrefix(strings.TrimSpace(reason.String), orderproposal.PostRiskRejectPrefix)
 	return &s, nil
 }
 
 // riskRejectCode is the fixed code of a "risk_engine_rejected: <code>[: detail]"
 // reason, or of a "proposal_rejected_after_risk: <code>" one (the signal passed
-// Risk but did not become an order, issue #860; risk_passed tells the two
-// apart); a reason of any other shape is "other" and no reason is empty.
+// Risk but did not become an order, issue #860; SignalResult.RejectedAfterRisk
+// tells the two apart); a reason of any other shape is "other" and no reason is empty.
 func riskRejectCode(reason sql.NullString) string {
 	text := strings.TrimSpace(reason.String)
 	if text == "" {

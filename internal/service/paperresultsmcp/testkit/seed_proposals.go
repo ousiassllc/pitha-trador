@@ -197,3 +197,22 @@ func SeedProposalOutcomes(t *testing.T, w *sql.DB) {
 	ClosedPosition(t, w, 4, 6, nil, 100, 3000, "2026-10-14T01:00:00Z", "2026-10-14T05:00:00Z", -300.0, "stop_loss")
 	ClosedPosition(t, w, 5, 7, nil, 100, 3000, "2026-10-14T02:00:00Z", "2026-10-14T05:00:00Z", 100.0, "time_exit")
 }
+
+// Proposals SeedAfterRiskRejection adds (issue #860): one Risk passed and the
+// application refused afterwards, one refused by the Risk Engine.
+const (
+	ProposalRejectedAfterRisk = 101
+	ProposalRejectedByRisk    = 102
+)
+
+// SeedAfterRiskRejection adds a rejected proposal whose signal is
+// risk_passed = 0 with 'proposal_rejected_after_risk: size_zero' and another
+// whose signal is a Risk Engine rejection. The ids are above SeedProposalOutcomes'.
+func SeedAfterRiskRejection(t *testing.T, w *sql.DB) {
+	t.Helper()
+	const policy = "mcp-proposal-v1"
+	TradeSignal(t, w, 101, "2026-10-18T00:00:04Z", policy, false, "proposal_rejected_after_risk: size_zero")
+	TradeSignal(t, w, 102, "2026-10-18T01:00:04Z", policy, false, "risk_engine_rejected: kill_switch_active")
+	Proposal(t, w, ProposalRow{ID: ProposalRejectedAfterRisk, ReceivedAt: "2026-10-18T00:00:00Z", Status: "rejected", Reason: "size_zero", Quantity: 100, Stop: 2400.0, MaxLoss: 20000.0, SignalID: 101})
+	Proposal(t, w, ProposalRow{ID: ProposalRejectedByRisk, ReceivedAt: "2026-10-18T01:00:00Z", Status: "rejected", Reason: "kill_switch_active", Quantity: 100, Stop: 2400.0, MaxLoss: 20000.0, SignalID: 102})
+}

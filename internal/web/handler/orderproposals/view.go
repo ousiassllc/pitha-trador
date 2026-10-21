@@ -78,11 +78,15 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 func linked(r proposal.Result) []pages.ProposalLinked {
 	var out []pages.ProposalLinked
 	if sg := r.Signal; sg != nil {
+		risk := pages.ProposalField{Label: "Risk check", Value: passed(sg.RiskPassed)}
+		reject := pages.ProposalField{Label: "拒否コード", Value: deref(sg.RejectCode)}
+		if sg.RejectedAfterRisk { // passed Risk, refused by the application afterwards (issue #860)
+			risk.Value, reject.Label = "通過", "後段で拒否"
+		}
 		out = append(out, pages.ProposalLinked{Title: "トレードシグナル #" + strconv.FormatInt(sg.ID, 10), Fields: []pages.ProposalField{
 			{Label: "時刻（JST）", Value: jst(sg.At)},
 			{Label: "policy_version", Value: sg.PolicyVersion},
-			{Label: "Risk check", Value: passed(sg.RiskPassed)},
-			{Label: "拒否コード", Value: deref(sg.RejectCode)},
+			risk, reject,
 		}})
 	}
 	if o := r.Order; o != nil {
