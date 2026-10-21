@@ -193,7 +193,7 @@
 
 ### 3.10 設定ツール（issue #806・#807）
 
-設定ツールが触れるのは、次のホワイトリストの 15 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
+設定ツールが触れるのは、次のホワイトリストの 17 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
@@ -201,6 +201,8 @@
 | `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
+| `risk.bucket.stock.budget_jpy` | 円 | Paper の株の予算枠（issue #824）。保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足してこの額を超えると新規エントリーを見送る。0 は株の新規エントリーを止める | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
+| `risk.bucket.bond_etf.budget_jpy` | 円 | Paper の債券ETFの予算枠（issue #824）。0 はこの枠を使わない | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
 | `risk.daily_loss_limit_pct` | % | 日次損失上限（運用資金比） | 0 以上 100 以下（0 は使わない） |
 | `risk.profit_lock.trigger_pct` | % | 利益確保の発動水準（運用資金比） | 0 以上 100 以下 |
@@ -226,7 +228,7 @@ Live の値・Paper ブートストラップのスイッチ（`paper.bootstrap_e
 | `llm_cutoff_status` | LLM cutoff（`metalabel.llm_cutoff` と出典 3 キー）の状態の固定コード。`placeholder`（未設定または仮置き `2026-01-01` のまま。夜間再学習のモデルは採用されない）／`unverified`（実日付だが確認した Jev モデル名 `metalabel.llm_cutoff_model` が未記録。Paper では警告のまま採用、Live 前チェックでは採用を止める）／`confirmed`（実日付とモデル名が記録済み）。Settings 画面の状態表示と同じ分類（`metalabelsettings.Settings.CutoffStatus`） |
 | `items[]` | ホワイトリストの全キー（上の表の順）。`key` / `value`（Settings 画面と同じ文字列）/ `unit`（`yen`・`percent`・`count`・`date`・`text`）/ `source`（`stored`＝保存値、`default`＝保存値なしで既定が効いている）/ `default` / `description` / `constraint`（受け付ける値）/ `warning`（あれば。例: LLM cutoff が仮の値のまま） |
 
-Paper の 4 キーの `default` は `risk.yaml` の Paper 値（なければ #804 の初期値）。秘密に分類されるキーはホワイトリストに無いが、将来載せる場合は `value` と `default` が `****` になる。読み取り専用。
+Paper の 4 キーの `default` は `risk.yaml` の Paper 値（なければ #804 の初期値）。予算枠の `default` は、株が運用資金の全額、債券ETFが 0（枠を設ける前と同じ挙動）。秘密に分類されるキーはホワイトリストに無いが、将来載せる場合は `value` と `default` が `****` になる。読み取り専用。
 
 ### 3.12 `settings_set`
 
@@ -240,6 +242,8 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 4. `metalabel.llm_cutoff_source` = 見たページの URL か文書名（200 文字以内・制御文字なし）
 
 各呼び出しは個別に検証・保存・監査され、途中でも一貫した状態になる: 日付だけ・日付＋確認日＋出典だけ（モデル名なし）は `unverified` のまま（警告が残り、Live 前チェックでは採用が止まる）、モデル名まで記録すると `confirmed` になり、仮置きの警告は消える。仮置き `2026-01-01` を実日付に変えるまでは `placeholder`。公式に日付が載っていないときは推測で入れず仮置きのままにする。各キーの `description` に同じ手順が載る。結果は `settings_get` の `llm_cutoff_status` で確認できる。採用判定（FR-META-6、Live 前の `unverified` 不採用を含む）はこの更新で変わらない。
+
+予算枠（`risk.bucket.stock.budget_jpy` / `risk.bucket.bond_etf.budget_jpy`）の保存（issue #824）: 株と債券ETFの合計が運用資金（`risk.paper.initial_capital_jpy`）を超える値は `invalid_value` で拒否し、設定も監査行も残さない。運用資金を枠の合計より下げる保存も同じく拒否する。枠の間で予算を移すツールは無く、`settings_set` を 1 キーずつ呼ぶ。**減らす方の枠を先に保存し、そのあとで増やす方の枠を保存する**（先に増やす方を保存すると、途中の合計が運用資金を超えて拒否される）。
 
 ### 3.13 `settings_diff`
 
@@ -273,7 +277,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 | `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 15 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 17 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 
 Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jpy`）は取引の結果として返す。板やスナップショットの時価列とは別である。
@@ -285,7 +289,7 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - `listen` が `0.0.0.0` のときは起動しない。Tailscale で直接待つ設定は、その PC の tailnet 側アドレスだけを bind する
 - キー無し・誤ったキーは 401 で、そのリクエストの経路で SQL が 0 件である
 - MCP の読み取り接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
-- 設定ツール: ホワイトリストの 15 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
+- 設定ツール: ホワイトリストの 17 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
 - 設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
@@ -307,3 +311,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.6 | 2026-10-20 | §3.1 `capital_jpy` を、Settings の保存値（`runtime_settings` の `risk.paper.initial_capital_jpy`）に追従し、なければ risk.yaml とする仕様に更新。§3.10〜§3.15 に設定ツール（`settings_get` / `settings_set` / `settings_diff` / `settings_audit` / `settings_write_enable` / `settings_write_disable`）とホワイトリスト 15 キー、§4 の `runtime_settings` の行、§5 の受け入れ条件を追加 | issue #806・#807 |
 | 1.7 | 2026-10-20 | §3.11 `settings_get` に `llm_cutoff_status`（`placeholder` / `unverified` / `confirmed`）を追加。§3.12 `settings_set` の LLM cutoff 4 キーの応答に `llm_cutoff_status` を付け、MCP だけで日付と出典を更新する手順を追記 | issue #809 |
 | 1.8 | 2026-10-20 | §3.9 `health_today` の `missing_session_dates[]` を、それ以前のスナップショットがある日付だけ（実際の欠損）に改め、履歴が足りず判定できない立会日を `insufficient_history_dates[]` に分けた。`attention_codes` の `missing_session` は `insufficient_history_dates[]` だけが空でないときは出さない | issue #814 |
+| 1.9 | 2026-10-20 | §3.10 のホワイトリストに Paper の予算枠 2 キー（`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`）を足して 17 キーにした（`settings_get` / `settings_diff` にも出る）。§3.12 に、枠の合計が運用資金を超える保存の拒否（監査行なし）と、枠の間で予算を移すときは減らす方を先に保存する手順を追記。§4・§5 の 15 キーを 17 キーに改めた。ツールの数・入出力の形は変更なし | issue #824（親 #823） |

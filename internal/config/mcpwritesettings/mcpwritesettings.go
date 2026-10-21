@@ -6,7 +6,8 @@
 // The whitelist is the only way a key becomes writable from the MCP; a key not
 // listed here is rejected before anything is read or stored. It deliberately
 // holds only Paper and operating-capital values: the Paper capital and
-// exposure limits (papersettings), the daily entry-halt thresholds
+// exposure limits (papersettings), the per-asset-class budgets
+// (bucketsettings), the daily entry-halt thresholds
 // (dailyguardsettings) and the LLM cutoff with its provenance
 // (metalabelsettings). It never holds a Live value, the Paper bootstrap
 // switch, a secret, or anything that orders, moves money or releases the Kill
@@ -26,6 +27,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
@@ -70,11 +72,16 @@ type Spec struct {
 	Secret bool
 }
 
+// bucketConstraint is the accepted range of both bucket budgets.
+const bucketConstraint = "0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金（risk.paper.initial_capital_jpy）以下"
+
 var specs = []Spec{
 	{papersettings.KeyInitialCapitalJPY, UnitYen, "Paper の運用資金（円）。1 銘柄・総エクスポージャ・1 回の最大損失の % はこの金額が基準", "0 円より大きく 1 兆円（1000000000000）以下", false},
 	{papersettings.KeyMaxPositionPerSymbolPct, UnitPercent, "Paper の 1 銘柄あたりの建玉上限（運用資金に対する %）", "0 より大きく 100 以下", false},
 	{papersettings.KeyMaxTotalExposurePct, UnitPercent, "Paper の総エクスポージャ上限（運用資金に対する %）", "0 より大きく 100 以下", false},
 	{papersettings.KeyMaxTradeLossPct, UnitPercent, "Paper の 1 回の最大損失（運用資金に対する %）", fmt.Sprintf("%v 以上 %v 以下", papersettings.MinTradeLossPct, papersettings.MaxTradeLossPct), false},
+	{bucketsettings.KeyStockBudgetJPY, UnitYen, "Paper の株の予算枠（円）。保有中の株の建玉（時価ベース）に今回の額を足してこの額を超える新規エントリーは見送る。0 は株の新規エントリーを止める", bucketConstraint, false},
+	{bucketsettings.KeyBondETFBudgetJPY, UnitYen, "Paper の債券ETFの予算枠（円）。0 はこの枠を使わない", bucketConstraint, false},
 	{dailyguardsettings.KeyOperatingCapitalJPY, UnitYen, "日次ガードの運用資金（円）。日次損失上限・利益確保の発動額を割合から出す基準。0 は未設定", "0 以上 1 兆円以下", false},
 	{dailyguardsettings.KeyLossLimitPct, UnitPercent, "日次損失上限（運用資金に対する %）。到達で新規エントリーを止める。0 は使わない", "0 以上 100 以下", false},
 	{dailyguardsettings.KeyProfitLockTriggerPct, UnitPercent, "利益確保の発動水準（運用資金に対する %）。0 は使わない", "0 以上 100 以下", false},

@@ -28,6 +28,12 @@ import (
 // (sizing.Quantity): the candidate is rejected when not even one lot
 // keeps a stop-out loss within it.
 //
+// An Engine with Config.StockBucket (Paper only, issue #824) also applies the
+// stock bucket's budget: ReasonBucketDisabled (budget 0) right after the
+// settings are read, and ReasonBucketBudgetExceeded (what the bucket holds plus
+// this entry's quantity x price over the budget) after sizing. The percentage
+// limits keep measuring against initial_capital.
+//
 // Check fails closed: any error reading the state a limit needs
 // (portfolio/snapshot lookup) or a missing latest price/spread rejects
 // the candidate as ReasonRiskEngineError (issue #161) rather than
@@ -92,6 +98,10 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if err != nil {
 		return e.failClosed("read risk limit settings", err)
 	}
+	stockBudget, ok, reason := e.gateStockBucket(ctx, limits.InitialCapital)
+	if !ok {
+		return false, reason
+	}
 	totalPct, err := e.portfolio.TotalExposurePct(ctx)
 	if err != nil {
 		return e.failClosed("read total exposure", err)
@@ -151,11 +161,11 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if pct, adverse := correlation.MarketAdverse(e.limits, direction, sameDirection, snapshot.Feature.MarketReturn5m); adverse {
 		return false, fmt.Sprintf("%s: direction=%s same_direction_positions=%d market_return_5m_pct=%.4f threshold_pct=%.4f", ReasonMarketAdverse, direction, sameDirection, pct, e.limits.MarketAdverseReturn5mPct)
 	}
-	if qty, reason := sizing.Quantity(limits, e.stopLossPct, snapshot.Price, totalPct); qty == 0 {
-		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", reason, snapshot.Price, e.stopLossPct, limits.MaxTradeLossPct)
+	qty, sizeReason := sizing.Quantity(limits, e.stopLossPct, snapshot.Price, totalPct)
+	if qty == 0 {
+		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", sizeReason, snapshot.Price, e.stopLossPct, limits.MaxTradeLossPct)
 	}
-
-	return true, ""
+	return e.checkStockBucketBudget(ctx, stockBudget, qty, snapshot.Price)
 }
 
 // failClosed logs err and returns Check's ReasonRiskEngineError rejection.

@@ -43,6 +43,7 @@ func newRiskEngine(limits config.RiskLimits, repos riskRepositories, signals ris
 	return risk.NewEngine(risk.Config{
 		Limits:            limits,
 		LimitsOverlay:     papersettings.Overlay(repos.settings),
+		StockBucket:       paperrisk.StockBucket(repos.positions, repos.settings),
 		KillSwitch:        repos.killSwitch,
 		Settings:          repos.settings,
 		Snapshots:         repos.snapshots,

@@ -8,6 +8,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/derivedpanel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/papersizing"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
@@ -27,7 +28,8 @@ var paperRiskGroup = opsGroup{
 		"Paper 専用です。Live の値と動作はこの設定の影響を受けず、config/risk.yaml だけで決まります。" +
 		"運用資金は 0 円より大きく 1 兆円以下、建玉上限の % は 0 より大きく 100 以下、1 回の最大損失の % は " + formatPct(papersettings.MinTradeLossPct) + " 以上 " + formatPct(papersettings.MaxTradeLossPct) + " 以下です。" +
 		"最大建玉数など他の上限は config/risk.yaml のままで、ここでは変えられません。" +
-		"他の上限は別に判定されるため、サイズ計算を通っても他のガードで見送られることがあります。",
+		"他の上限は別に判定されるため、サイズ計算を通っても他のガードで見送られることがあります。" +
+		"株と債券ETFの予算枠（同じ Settings の「資産ごとの予算枠」ページ）の合計より運用資金を下げる保存は拒否されます。",
 	fields: []opsField{
 		{key: papersettings.KeyInitialCapitalJPY, label: "Paper の運用資金（円）", placeholder: "500000",
 			hint: "ポジションサイズ計算と、1 銘柄・総エクスポージャ・日次損失などの % 上限の分母です（例: 500000）。0 円より大きく 1 兆円以下です。"},
@@ -68,7 +70,7 @@ func (h *SettingsHandler) paperRiskDerived(ctx context.Context) []molecules.Sett
 		if resolved, err := h.ops.DailyGuard(ctx); err != nil {
 			slog.Error("settings: read daily guard configuration for the Paper consistency check", "error", err)
 		} else {
-			items = append(items, consistencyItems(dailyguardsettings.CheckConsistency(resolved, ref))...)
+			items = append(items, derivedpanel.ConsistencyItems(dailyguardsettings.CheckConsistency(resolved, ref))...)
 		}
 	}
 	return items

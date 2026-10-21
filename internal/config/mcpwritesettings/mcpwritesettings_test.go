@@ -13,9 +13,13 @@ import (
 func TestWhitelistIsExactlyTheDecidedKeys(t *testing.T) {
 	want := []string{
 		"risk.paper.initial_capital_jpy", "risk.paper.max_position_per_symbol_pct", "risk.paper.max_total_exposure_pct", "risk.paper.max_trade_loss_pct",
+		"risk.bucket.stock.budget_jpy", "risk.bucket.bond_etf.budget_jpy",
 		"risk.operating_capital_jpy", "risk.daily_loss_limit_pct", "risk.profit_lock.trigger_pct", "risk.profit_lock.giveback_pct", "risk.max_daily_trades",
 		"risk.daily_loss_limit_jpy", "risk.profit_lock.trigger_jpy",
 		"metalabel.llm_cutoff", "metalabel.llm_cutoff_model", "metalabel.llm_cutoff_confirmed_on", "metalabel.llm_cutoff_source",
+	}
+	if len(want) != 17 {
+		t.Fatalf("the test lists %d keys, issue #824 makes the whitelist 17", len(want))
 	}
 	if got := mcpwritesettings.Keys(); !slices.Equal(got, want) {
 		t.Fatalf("whitelist = %v\nwant %v", got, want)

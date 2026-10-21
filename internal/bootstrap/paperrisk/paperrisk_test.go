@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 )
 
@@ -68,8 +69,26 @@ func TestCapitalNow_ZeroWhenUnreadable(t *testing.T) {
 
 func TestSeed_FailureDoesNotPanicAndStoresNothing(t *testing.T) {
 	st := &store{rows: map[string]string{}, setErr: errors.New("disk full")}
-	paperrisk.Seed(context.Background(), st, time.Now())
+	paperrisk.Seed(context.Background(), st, fakeLimits{limits: config.RiskLimits{InitialCapital: 500_000}}, time.Now())
 	if len(st.rows) != 0 {
 		t.Errorf("rows = %v, want none", st.rows)
+	}
+}
+
+func TestSeed_StockBucketGetsTheCapitalInForceAndBondETFZero(t *testing.T) {
+	st := &store{rows: map[string]string{}}
+	paperrisk.Seed(context.Background(), st, fakeLimits{limits: config.RiskLimits{InitialCapital: 500_000}}, time.Now())
+	if st.rows[bucketsettings.KeyStockBudgetJPY] != "500000" || st.rows[bucketsettings.KeyBondETFBudgetJPY] != "0" || st.rows[bucketsettings.SeededMarkerKey] != "true" {
+		t.Errorf("rows = %v, want stock 500000 / bond_etf 0 / marker", st.rows)
+	}
+}
+
+func TestSeed_UnreadableCapitalLeavesTheBucketsUnseeded(t *testing.T) {
+	st := &store{rows: map[string]string{}}
+	paperrisk.Seed(context.Background(), st, fakeLimits{err: errors.New("down")}, time.Now())
+	for _, key := range append(bucketsettings.Keys(), bucketsettings.SeededMarkerKey) {
+		if _, ok := st.rows[key]; ok {
+			t.Errorf("%s was stored although the capital could not be read", key)
+		}
 	}
 }

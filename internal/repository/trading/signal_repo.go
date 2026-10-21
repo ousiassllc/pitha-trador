@@ -27,11 +27,14 @@ func NewSignalRepository(db *sql.DB) *SignalRepository {
 	return &SignalRepository{db: db}
 }
 
+// bucket is the instrument's asset_class at the moment of writing (issue #824);
+// see insertPositionSQL.
 const insertSignalSQL = `
 INSERT INTO trade_signals (
 	instrument_id, jev_decision_id, symbol, timestamp, direction, score,
-	entry_price_reference, policy_version, risk_passed, reject_reason, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	entry_price_reference, policy_version, risk_passed, reject_reason, created_at, bucket
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+	(SELECT asset_class FROM instruments WHERE id = ?))`
 
 // Insert writes a single trade_signals row.
 func (r *SignalRepository) Insert(ctx context.Context, s domain.TradeSignal) (domain.TradeSignal, error) {
@@ -43,7 +46,7 @@ func (r *SignalRepository) Insert(ctx context.Context, s domain.TradeSignal) (do
 	res, err := r.db.ExecContext(ctx, insertSignalSQL,
 		s.InstrumentID, sqlutil.NullableInt64(s.JevDecisionID), s.Symbol, sqlutil.FormatTime(s.Timestamp), s.Direction,
 		sqlutil.NullableFloat64(s.Score), sqlutil.NullableFloat64(s.EntryPriceReference), s.PolicyVersion, s.RiskPassed,
-		sqlutil.NullableString(s.RejectReason), sqlutil.FormatTime(createdAt),
+		sqlutil.NullableString(s.RejectReason), sqlutil.FormatTime(createdAt), s.InstrumentID,
 	)
 	if err != nil {
 		return domain.TradeSignal{}, fmt.Errorf(

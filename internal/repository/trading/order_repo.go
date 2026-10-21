@@ -32,12 +32,15 @@ func NewOrderRepository(db *sql.DB) *OrderRepository {
 	return &OrderRepository{db: db}
 }
 
+// bucket is the instrument's asset_class at the moment of writing (issue #824);
+// see insertPositionSQL.
 const insertOrderSQL = `
 INSERT INTO paper_orders (
 	instrument_id, trade_signal_id, symbol, side, order_type, quantity,
 	limit_price, status, submitted_at, filled_at, filled_price, fees,
-	slippage_bps, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	slippage_bps, created_at, bucket
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+	(SELECT asset_class FROM instruments WHERE id = ?))`
 
 // Insert writes a single paper_orders row.
 func (r *OrderRepository) Insert(ctx context.Context, o domain.PaperOrder) (domain.PaperOrder, error) {
@@ -56,6 +59,7 @@ func insertOrder(ctx context.Context, x sqlutil.Executor, o domain.PaperOrder) (
 		o.InstrumentID, sqlutil.NullableInt64(o.TradeSignalID), o.Symbol, o.Side, o.OrderType, o.Quantity,
 		sqlutil.NullableFloat64(o.LimitPrice), o.Status, sqlutil.FormatTime(o.SubmittedAt), sqlutil.NullableTime(o.FilledAt),
 		sqlutil.NullableFloat64(o.FilledPrice), o.Fees, sqlutil.NullableFloat64(o.SlippageBps), sqlutil.FormatTime(createdAt),
+		o.InstrumentID,
 	)
 	if err != nil {
 		return domain.PaperOrder{}, fmt.Errorf(

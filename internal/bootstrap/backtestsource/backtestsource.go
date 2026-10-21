@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -151,12 +152,19 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 		return err
 	}
 	limits := b.replay.Risk
+	risk := &simrisk.Config{StopLossPct: b.exit.StopLossPct}
 	if b.replay.MetaSettings != nil {
 		if limits, err = papersettings.Effective(ctx, b.replay.MetaSettings, limits); err != nil {
 			return fmt.Errorf("backtestsource: Paper risk settings for backtest: %w", err)
 		}
+		// The stock bucket's budget in force (bucketsettings, issue #824), like live.
+		budgets, err := bucketsettings.Effective(ctx, b.replay.MetaSettings, limits.InitialCapital)
+		if err != nil {
+			return fmt.Errorf("backtestsource: bucket budget settings for backtest: %w", err)
+		}
+		risk.StockBudgetJPY = &budgets.StockJPY
 	}
-	risk := &simrisk.Config{Limits: limits, StopLossPct: b.exit.StopLossPct}
+	risk.Limits = limits
 
 	cost := b.cost
 	if b.costSource != nil {

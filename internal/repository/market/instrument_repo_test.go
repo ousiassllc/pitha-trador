@@ -231,3 +231,42 @@ func TestInstrumentRepository_KindDefaultsToStockAndFiltersByKind(t *testing.T) 
 		t.Errorf("Update with empty Kind = %+v (stored %q), %v; want kind kept", updated, got.Kind, err)
 	}
 }
+
+// Issue #824: asset_class defaults to stock, is stored as given, survives an
+// Update with an empty AssetClass, and a re-sync Upsert never moves an existing
+// instrument to another asset class.
+func TestInstrumentRepository_AssetClass(t *testing.T) {
+	repo := openTestDB(t)
+	ctx := context.Background()
+
+	stock, err := repo.Create(ctx, domain.Instrument{Symbol: "7203", Name: "トヨタ自動車", Market: "TSE Prime", IsActive: true})
+	if err != nil || stock.AssetClass != domain.AssetClassStock {
+		t.Fatalf("Create without an asset class = %+v, %v; want stock", stock, err)
+	}
+	bond, err := repo.Create(ctx, domain.Instrument{Symbol: "2510", Name: "債券ETF", Market: "TSE ETF", AssetClass: domain.AssetClassBondETF, IsActive: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.Get(ctx, bond.ID)
+	if err != nil || got.AssetClass != domain.AssetClassBondETF {
+		t.Fatalf("Get = %+v, %v; want bond_etf", got, err)
+	}
+
+	bond.Name = "債券ETF（改）"
+	bond.AssetClass = ""
+	updated, err := repo.Update(ctx, bond)
+	if err != nil || updated.AssetClass != domain.AssetClassBondETF {
+		t.Fatalf("Update with an empty AssetClass = %+v, %v; want bond_etf kept", updated, err)
+	}
+	if _, err := repo.Upsert(ctx, []domain.Instrument{{Symbol: "2510", Name: "債券ETF（再同期）", Market: "TSE ETF"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := repo.Get(ctx, bond.ID); err != nil || got.AssetClass != domain.AssetClassBondETF {
+		t.Fatalf("after a re-sync Upsert = %+v, %v; want bond_etf kept", got, err)
+	}
+
+	bond.AssetClass = "crypto"
+	if _, err := repo.Update(ctx, bond); err == nil {
+		t.Error("Update accepted an unknown asset class, want the CHECK constraint to reject it")
+	}
+}

@@ -166,7 +166,7 @@ Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を 
 
 ### 7.1 ホワイトリスト
 
-MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 15 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
+MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 17 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
@@ -174,6 +174,8 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
+| `risk.bucket.stock.budget_jpy` | 円 | Paper の株の予算枠（issue #824）。保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足してこの額を超えると新規エントリーを見送る。0 は株の新規エントリーを止める。保存がなければ運用資金の全額 | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
+| `risk.bucket.bond_etf.budget_jpy` | 円 | Paper の債券ETFの予算枠（issue #824）。0 はこの枠を使わない。保存がなければ 0。今回は保存だけで、債券ETFのエントリーはまだない | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
 | `risk.daily_loss_limit_pct` | % | 日次損失上限（運用資金比） | 0 以上 100 以下（0 は使わない） |
 | `risk.profit_lock.trigger_pct` | % | 利益確保の発動水準（運用資金比） | 0 以上 100 以下 |
@@ -188,7 +190,9 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 
 入れないもの: Live の値（`risk.live.*` など Live で効く上限・判定・発注可否。この表に Live のキーは 1 つもない）、#798 の Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）、ブローカー・認証情報・`secrets`、発注・送金・Kill Switch 解除に関わるもの、そのほかすべての運用設定（policy・screener・ログ・バックアップ先など）。書き込み許可のスイッチ自体も設定キーではなく、専用ツール（§7.2）だけが切り替える。表を広げるのは仕様の変更（悠太さんの決定）で、テスト（`TestWhitelistIsExactlyTheDecidedKeys`）が内容を固定する。
 
-値の検証は GUI と同一のコードを使う。MCP 専用の検証は作らない。Paper の 4 キーは `papersettings`（`Validate` と `MinTradeLossPct` / `MaxTradeLossPct`。1 回の最大損失は 0.1〜3.0 を含む）、日次ガードは `dailyguardsettings`（`Apply`）、`metalabel.*` は `metalabelsettings`（`Normalize` / `Apply`）で、どれも `internal/service/opsettings` の `Save` を通る。範囲外は `invalid_value`（理由を `error.data.detail` に載せる）で、何も保存しない。
+値の検証は GUI と同一のコードを使う。MCP 専用の検証は作らない。Paper の 4 キーは `papersettings`（`Validate` と `MinTradeLossPct` / `MaxTradeLossPct`。1 回の最大損失は 0.1〜3.0 を含む）、予算枠の 2 キーは `bucketsettings`（`Validate` と、合計の検査 `CheckSave`）、日次ガードは `dailyguardsettings`（`Apply`）、`metalabel.*` は `metalabelsettings`（`Normalize` / `Apply`）で、どれも `internal/service/opsettings` の `Save` を通る。範囲外は `invalid_value`（理由を `error.data.detail` に載せる）で、何も保存しない。
+
+予算枠の合計（株 + 債券ETF）は運用資金（`risk.paper.initial_capital_jpy`）以下でなければならない。この検査は枠の 2 キーの保存、運用資金を下げる保存、「既定に戻す」のどれにも同じように掛かり、超えるときは `invalid_value` で拒否して、設定も監査行も残さない（GUI の保存も同じ）。枠は 1 キーずつ保存するので、枠の間で予算を移すツールは設けない。**移すときは、減らす方の枠を先に保存し、そのあとで増やす方の枠を保存する**（先に増やす方を保存すると、途中の合計が運用資金を超えて拒否される）。運用資金そのものを下げるときも、枠の合計が下がった額に収まるよう、先に枠を減らす。枠は Paper だけの設定で、Live には影響しない。
 
 ### 7.2 書き込み許可のスイッチ
 
@@ -237,7 +241,8 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.4 | 2026-10-19 | §3.4 に、画面からの起動・停止・再起動とアプリ起動時の自動起動・アプリ終了時の停止を追記し、設計メモ `paper-results-mcp-lifecycle.md` への参照を追加。「画面はプロセスを起動も停止もしない」を改めた。DB 読み取り専用・既定オフ・キーが空なら待受しない・待受アドレス検証は変更なし | issue #795 |
 | 1.5 | 2026-10-20 | §5 の `collection_status` に立会中の市況データ停止の警告 `alerts[]` を追加。状態はアプリの検知が `health_alerts`（`000039`）に保存し、MCP は読むだけ。アプリが止まっているときは MCP が `jobs` から `market_data_idle` を導く。DB は読み取り専用のまま | issue #802 |
 | 1.6 | 2026-10-20 | §5 に `health_today`（今日の健康診断。取引数・メタモデル・ブートストラップ・kabu/market-data・欠損・日次ガード・Kill Switch・要対応コード）を追加し、ツール数を 9 にした。`runtime_settings` を固定キーの許可リストで読み取りだけ読む旨を追記。新規テーブルなし | issue #808 |
-| 1.7 | 2026-10-20 | 設定の読み書きを追加（§7。ホワイトリスト 15 キー、書き込み許可のスイッチ＝`runtime_settings`、狭い書き手、監査ログ `mcp_settings_audit`、`settings_get` / `settings_set` / `settings_diff`）。「MCP は書かない」を「書くのはホワイトリストの設定ツールだけで、書き込み接続は別の狭い書き手」に改めた（§4・§5・§6）。Paper 資金の分母を Settings の保存値に追従させた（§7.6）。読み取り接続・待受・認証は変更なし | issue #806・#807 |
+| 1.7 | 2026-10-20 | 設定の読み書きを追加（§7。ホワイトリスト 15 キー（当時。issue #824 で 17 キーになった。版 1.11）、書き込み許可のスイッチ＝`runtime_settings`、狭い書き手、監査ログ `mcp_settings_audit`、`settings_get` / `settings_set` / `settings_diff`）。「MCP は書かない」を「書くのはホワイトリストの設定ツールだけで、書き込み接続は別の狭い書き手」に改めた（§4・§5・§6）。Paper 資金の分母を Settings の保存値に追従させた（§7.6）。読み取り接続・待受・認証は変更なし | issue #806・#807 |
 | 1.8 | 2026-10-20 | §7.5 に、`settings_get` の `llm_cutoff_status` と、`settings_set` の LLM cutoff 4 キー応答の同コードを追記 | issue #809 |
 | 1.9 | 2026-10-20 | §7.4 の GUI の保存を、MCP と同じく設定と監査を 1 トランザクションにする形に改めた（監査の失敗は保存も取り消す）。MCP の書き込み経路は従来から 1 トランザクションで、変更なし | issue #813 |
 | 1.10 | 2026-10-20 | §5 の `health_today` の欠損セッションを、それ以前のスナップショットがある日付だけ（実際の欠損）に改め、履歴が足りず判定できない立会日は `insufficient_history_dates[]` に分けて警告にしない旨を追記。DB は読み取り専用のまま | issue #814 |
+| 1.11 | 2026-10-20 | §7.1 のホワイトリストに Paper の予算枠 2 キー（`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`）を足して 17 キーにした。枠の合計が運用資金を超える保存（枠の保存・運用資金を下げる保存・既定に戻す）の拒否と、枠の間で予算を移すときは減らす方を先に保存する手順を追記。ツール数（15）・読み取り接続・待受・認証は変更なし | issue #824（親 #823） |

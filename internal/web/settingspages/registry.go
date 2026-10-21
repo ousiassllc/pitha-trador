@@ -30,6 +30,7 @@ const (
 	PageOperations   = "operations"
 	PageResults      = "results"
 	PageRisk         = "risk"
+	PageBuckets      = "asset-buckets"
 	PageBroker       = "broker"
 	PageIntegrations = "integrations"
 	PageMaintenance  = "maintenance"
@@ -39,6 +40,7 @@ var pages = []Page{
 	{PageOperations, "運用", "スキャン・ポジション・Kill Switch、候補を絞るしきい値"},
 	{PageResults, "成績・検証", "Performance・Calibration・バックテスト、判断のラベル・相場状態の設定"},
 	{PageRisk, "リスク・資金", "Paper の運用資金・建玉上限、損失上限・利益確保・売買コストの想定"},
+	{PageBuckets, "資産ごとの予算枠", "Paper の運用資金を株・債券ETFの枠に分けた予算（円）と、合計・残額"},
 	{PageBroker, "ブローカー・データ", "kabuステーション・立花証券 e支店の接続と監視銘柄"},
 	{PageIntegrations, "外部連携", "Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP"},
 	{PageMaintenance, "ログ・エクスポート", "アップデート・エラーログ・データエクスポート・バックアップ・ログ設定"},
@@ -148,6 +150,9 @@ var dialogs = []Dialog{
 	{PageRisk, "modal-paper-risk", nil},
 	{PageRisk, "modal-daily-guard", nil},
 	{PageRisk, "modal-trading_cost", nil},
+
+	// 資産ごとの予算枠
+	{PageBuckets, "modal-asset-buckets", nil},
 
 	// ブローカー・データ
 	{PageBroker, "modal-broker", nil},

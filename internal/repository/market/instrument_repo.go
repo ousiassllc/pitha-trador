@@ -34,10 +34,13 @@ func (r *InstrumentRepository) Create(ctx context.Context, in domain.Instrument)
 	if in.Kind == "" {
 		in.Kind = domain.InstrumentKindStock
 	}
+	if in.AssetClass == "" {
+		in.AssetClass = domain.AssetClassStock
+	}
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO instruments (symbol, name, market, sector, kind, is_active, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		in.Symbol, in.Name, in.Market, sqlutil.NullableString(in.Sector), in.Kind, in.IsActive, sqlutil.FormatTime(now), sqlutil.FormatTime(now),
+		`INSERT INTO instruments (symbol, name, market, sector, kind, asset_class, is_active, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		in.Symbol, in.Name, in.Market, sqlutil.NullableString(in.Sector), in.Kind, in.AssetClass, in.IsActive, sqlutil.FormatTime(now), sqlutil.FormatTime(now),
 	)
 	if err != nil {
 		return domain.Instrument{}, fmt.Errorf("repository: create instrument %q: %w", in.Symbol, err)
@@ -61,7 +64,9 @@ func (r *InstrumentRepository) Create(ctx context.Context, in domain.Instrument)
 // whose master fields already match is left alone (updated_at unchanged),
 // making a re-run with the same input a no-op. It returns how many rows
 // were inserted or changed. An empty Kind is stored as
-// domain.InstrumentKindStock.
+// domain.InstrumentKindStock. asset_class is written only for a new symbol
+// (an empty one is stored as domain.AssetClassStock) and never touched on an
+// existing row, so a re-sync cannot move an instrument to another budget bucket.
 func (r *InstrumentRepository) Upsert(ctx context.Context, ins []domain.Instrument) (int, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -70,8 +75,8 @@ func (r *InstrumentRepository) Upsert(ctx context.Context, ins []domain.Instrume
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO instruments (symbol, name, market, sector, kind, is_active, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+		`INSERT INTO instruments (symbol, name, market, sector, kind, asset_class, is_active, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
 		 ON CONFLICT (symbol) DO UPDATE SET
 		   name = excluded.name, market = excluded.market, sector = excluded.sector,
 		   kind = excluded.kind, updated_at = excluded.updated_at
@@ -88,7 +93,10 @@ func (r *InstrumentRepository) Upsert(ctx context.Context, ins []domain.Instrume
 		if in.Kind == "" {
 			in.Kind = domain.InstrumentKindStock
 		}
-		res, err := stmt.ExecContext(ctx, in.Symbol, in.Name, in.Market, sqlutil.NullableString(in.Sector), in.Kind, now, now)
+		if in.AssetClass == "" {
+			in.AssetClass = domain.AssetClassStock
+		}
+		res, err := stmt.ExecContext(ctx, in.Symbol, in.Name, in.Market, sqlutil.NullableString(in.Sector), in.Kind, in.AssetClass, now, now)
 		if err != nil {
 			return 0, fmt.Errorf("repository: upsert instrument %q: %w", in.Symbol, err)
 		}
@@ -107,7 +115,7 @@ func (r *InstrumentRepository) Upsert(ctx context.Context, ins []domain.Instrume
 // Get returns the instrument with the given id, or ErrInstrumentNotFound.
 func (r *InstrumentRepository) Get(ctx context.Context, id int64) (domain.Instrument, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, symbol, name, market, sector, kind, is_active, created_at, updated_at
+		`SELECT id, symbol, name, market, sector, kind, asset_class, is_active, created_at, updated_at
 		 FROM instruments WHERE id = ?`, id)
 	return scanInstrument(row)
 }
@@ -116,7 +124,7 @@ func (r *InstrumentRepository) Get(ctx context.Context, id int64) (domain.Instru
 // ErrInstrumentNotFound.
 func (r *InstrumentRepository) GetBySymbol(ctx context.Context, symbol string) (domain.Instrument, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, symbol, name, market, sector, kind, is_active, created_at, updated_at
+		`SELECT id, symbol, name, market, sector, kind, asset_class, is_active, created_at, updated_at
 		 FROM instruments WHERE symbol = ?`, symbol)
 	return scanInstrument(row)
 }
@@ -125,7 +133,7 @@ func (r *InstrumentRepository) GetBySymbol(ctx context.Context, symbol string) (
 // symbol, for the Fast Screener's scan universe.
 func (r *InstrumentRepository) ListActive(ctx context.Context) ([]domain.Instrument, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, symbol, name, market, sector, kind, is_active, created_at, updated_at
+		`SELECT id, symbol, name, market, sector, kind, asset_class, is_active, created_at, updated_at
 		 FROM instruments WHERE is_active = 1 ORDER BY symbol`)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list active instruments: %w", err)
@@ -152,7 +160,7 @@ func (r *InstrumentRepository) ListActive(ctx context.Context) ([]domain.Instrum
 // context (functional.md §4.1).
 func (r *InstrumentRepository) ListActiveByKind(ctx context.Context, kind string) ([]domain.Instrument, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, symbol, name, market, sector, kind, is_active, created_at, updated_at
+		`SELECT id, symbol, name, market, sector, kind, asset_class, is_active, created_at, updated_at
 		 FROM instruments WHERE is_active = 1 AND kind = ? ORDER BY symbol`, kind)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list active %s instruments: %w", kind, err)
@@ -217,16 +225,17 @@ WHERE i.is_active = 1 AND i.kind = ? AND s.return_5m IS NOT NULL
 	return out, nil
 }
 
-// Update overwrites the mutable fields (name, market, sector, kind, is_active) of
-// the instrument identified by in.ID, refreshing updated_at; an empty Kind
-// keeps the stored kind. It returns
+// Update overwrites the mutable fields (name, market, sector, kind, asset_class,
+// is_active) of the instrument identified by in.ID, refreshing updated_at; an
+// empty Kind or AssetClass keeps the stored value. It returns
 // ErrInstrumentNotFound if no row with that ID exists.
 func (r *InstrumentRepository) Update(ctx context.Context, in domain.Instrument) (domain.Instrument, error) {
 	now := time.Now().UTC()
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE instruments SET name = ?, market = ?, sector = ?, kind = COALESCE(NULLIF(?, ''), kind), is_active = ?, updated_at = ?
+		`UPDATE instruments SET name = ?, market = ?, sector = ?, kind = COALESCE(NULLIF(?, ''), kind),
+		   asset_class = COALESCE(NULLIF(?, ''), asset_class), is_active = ?, updated_at = ?
 		 WHERE id = ?`,
-		in.Name, in.Market, sqlutil.NullableString(in.Sector), in.Kind, in.IsActive, sqlutil.FormatTime(now), in.ID,
+		in.Name, in.Market, sqlutil.NullableString(in.Sector), in.Kind, in.AssetClass, in.IsActive, sqlutil.FormatTime(now), in.ID,
 	)
 	if err != nil {
 		return domain.Instrument{}, fmt.Errorf("repository: update instrument %d: %w", in.ID, err)
@@ -241,12 +250,17 @@ func (r *InstrumentRepository) Update(ctx context.Context, in domain.Instrument)
 	}
 
 	in.UpdatedAt = now
-	if in.Kind == "" {
+	if in.Kind == "" || in.AssetClass == "" {
 		stored, err := r.Get(ctx, in.ID)
 		if err != nil {
 			return domain.Instrument{}, err
 		}
-		in.Kind = stored.Kind
+		if in.Kind == "" {
+			in.Kind = stored.Kind
+		}
+		if in.AssetClass == "" {
+			in.AssetClass = stored.AssetClass
+		}
 	}
 	return in, nil
 }
@@ -259,7 +273,7 @@ func scanInstrument(row sqlutil.RowScanner) (domain.Instrument, error) {
 		updatedAt string
 	)
 
-	err := row.Scan(&inst.ID, &inst.Symbol, &inst.Name, &inst.Market, &sector, &inst.Kind, &inst.IsActive, &createdAt, &updatedAt)
+	err := row.Scan(&inst.ID, &inst.Symbol, &inst.Name, &inst.Market, &sector, &inst.Kind, &inst.AssetClass, &inst.IsActive, &createdAt, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Instrument{}, ErrInstrumentNotFound
 	}
