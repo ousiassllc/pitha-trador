@@ -99,6 +99,9 @@ func newSim(cfgs []RunConfig, window Period) (*sim, error) {
 			s.portfolio = simrisk.New(*risk)
 		}
 		if s.portfolio != nil {
+			if err := s.portfolio.SetAssetClass(cfg.InstrumentID, cfg.AssetClass); err != nil {
+				return nil, fmt.Errorf("backtest: %s: %w", cfg.Symbol, err)
+			}
 			checker = s.portfolio
 		}
 		st.engine = policy.NewEngine(cfg.Thresholds, checker, nil)

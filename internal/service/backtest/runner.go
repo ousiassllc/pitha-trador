@@ -71,6 +71,10 @@ func (s *SliceDecisionSource) Decision(_ context.Context, instrumentID int64, ts
 type RunConfig struct {
 	InstrumentID int64
 	Symbol       string
+	// AssetClass is the instrument's asset_class (domain.AssetClass*; empty is
+	// a stock). The simulated Risk Engine judges its entries against that
+	// class's budget bucket (issue #833).
+	AssetClass string
 
 	// Snapshots is the exact, caller-resolved ascending-by-Timestamp
 	// Snapshot series to replay - the "look-ahead防止のためのデータ供給

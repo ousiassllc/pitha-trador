@@ -149,11 +149,12 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 	}, executionConfig)
 
 	s.Risk = newRiskEngine(limits, riskRepositories{
-		killSwitch: s.KillSwitch,
-		settings:   s.Settings,
-		snapshots:  s.Snapshots,
-		positions:  s.Positions,
-		orders:     s.Orders,
+		killSwitch:  s.KillSwitch,
+		settings:    s.Settings,
+		snapshots:   s.Snapshots,
+		instruments: s.Instruments,
+		positions:   s.Positions,
+		orders:      s.Orders,
 	}, riskSignals{
 		marketData: broker.MarketDataChecker{Health: s.Broker},
 		jevAPI:     s.Jev,

@@ -157,12 +157,13 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 		if limits, err = papersettings.Effective(ctx, b.replay.MetaSettings, limits); err != nil {
 			return fmt.Errorf("backtestsource: Paper risk settings for backtest: %w", err)
 		}
-		// The stock bucket's budget in force (bucketsettings, issue #824), like live.
+		// The buckets' budgets in force (bucketsettings, issues #824, #833), like live.
 		budgets, err := bucketsettings.Effective(ctx, b.replay.MetaSettings, limits.InitialCapital)
 		if err != nil {
 			return fmt.Errorf("backtestsource: bucket budget settings for backtest: %w", err)
 		}
 		risk.StockBudgetJPY = &budgets.StockJPY
+		risk.BondETFBudgetJPY = &budgets.BondETFJPY
 	}
 	risk.Limits = limits
 
@@ -198,6 +199,7 @@ func (b *Source) ForEachRunConfig(ctx context.Context, period backtest.Period, f
 		if err := fn(backtest.RunConfig{
 			InstrumentID: inst.ID,
 			Symbol:       inst.Symbol,
+			AssetClass:   inst.AssetClass,
 			Snapshots:    append(warmup, bars...),
 			WarmupBars:   len(warmup),
 			Decisions:    backtest.NewSliceDecisionSource(decisions),

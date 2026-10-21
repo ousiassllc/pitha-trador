@@ -1,6 +1,9 @@
 // Package bucket is the Paper budget check of a new entry (issue #824, parent
-// #823): the stock bucket may hold at most its budget (internal/config/
-// bucketsettings), and a bucket whose budget is 0 takes no new entry. The
+// #823; per asset class since #833): the bucket of the candidate's asset_class
+// (stock or bond_etf) may hold at most its budget (internal/config/
+// bucketsettings), and a bucket whose budget is 0 takes no new entry. Each
+// entry is judged against its own bucket only, with that bucket's holdings
+// (positions.bucket). The
 // live Risk Engine (internal/service/risk) and the backtest's simulated one
 // (internal/service/backtest/simrisk) both reject through Disabled/Exceeded,
 // so the two keep the same reasons and the same boundary. It is separate from
@@ -33,7 +36,7 @@ const (
 // Notional is an open position's current market value in yen: quantity at the
 // latest mark, or at the entry price until the first mark arrives (currentPrice
 // <= 0). The live exposure limits (repoportfolio), the backtest's
-// (simrisk) and the stock bucket's holdings all measure with it.
+// (simrisk) and the buckets' holdings all measure with it.
 func Notional(quantity int64, entryPrice, currentPrice float64) float64 {
 	price := currentPrice
 	if price <= 0 {
@@ -59,33 +62,72 @@ func ExceededMessage(bucket string, heldJPY, amountJPY, budgetJPY float64) strin
 	return fmt.Sprintf("%s: bucket=%s held_jpy=%.0f entry_jpy=%.0f budget_jpy=%.0f", ReasonBudgetExceeded, bucket, heldJPY, amountJPY, budgetJPY)
 }
 
-// Provider reads the stock bucket's budget and holdings for the Paper Risk
-// Engine (risk.StockBucket). A Live Engine is built without one.
+// Of is the budget bucket an asset class belongs to: one bucket per asset
+// class, named after it. An empty asset class is a stock (as the instruments
+// table defaults it); any other value is an error, so an entry of an unknown
+// class is never judged against the wrong bucket.
+func Of(assetClass string) (string, error) {
+	switch assetClass {
+	case "", domain.AssetClassStock:
+		return domain.BucketStock, nil
+	case domain.AssetClassBondETF:
+		return domain.BucketBondETF, nil
+	}
+	return "", fmt.Errorf("bucket: unknown asset_class %q", assetClass)
+}
+
+// BudgetOf is bucket's budget within b (a bucket name from Of).
+func BudgetOf(b bucketsettings.Budgets, bucket string) float64 {
+	if bucket == domain.BucketBondETF {
+		return b.BondETFJPY
+	}
+	return b.StockJPY
+}
+
+// InstrumentReader is the part of market.InstrumentRepository Provider reads.
+type InstrumentReader interface {
+	Get(ctx context.Context, id int64) (domain.Instrument, error)
+}
+
+// Provider reads the buckets' budgets and holdings, and an instrument's
+// bucket, for the Paper Risk Engine (risk.Buckets). A Live Engine is built
+// without one.
 type Provider struct {
-	positions *trading.PositionRepository
-	settings  bucketsettings.Store
+	positions   *trading.PositionRepository
+	settings    bucketsettings.Store
+	instruments InstrumentReader
 }
 
-// NewProvider returns a Provider over the positions table and the
-// runtime_settings the budgets are stored in.
-func NewProvider(positions *trading.PositionRepository, settings bucketsettings.Store) *Provider {
-	return &Provider{positions: positions, settings: settings}
+// NewProvider returns a Provider over the positions table, the
+// runtime_settings the budgets are stored in and the instruments table.
+func NewProvider(positions *trading.PositionRepository, settings bucketsettings.Store, instruments InstrumentReader) *Provider {
+	return &Provider{positions: positions, settings: settings, instruments: instruments}
 }
 
-// StockBudgetJPY is the stock bucket's budget in force now for an operating
-// capital of capitalJPY (the stored row, else the whole capital).
-func (p *Provider) StockBudgetJPY(ctx context.Context, capitalJPY float64) (float64, error) {
+// BucketOf is the bucket instrumentID's asset class puts its entries in.
+func (p *Provider) BucketOf(ctx context.Context, instrumentID int64) (string, error) {
+	in, err := p.instruments.Get(ctx, instrumentID)
+	if err != nil {
+		return "", err
+	}
+	return Of(in.AssetClass)
+}
+
+// BudgetJPY is bucket's budget in force now for an operating capital of
+// capitalJPY (the stored row, else the default split: the stock bucket the
+// whole capital, the bond_etf bucket 0).
+func (p *Provider) BudgetJPY(ctx context.Context, bucket string, capitalJPY float64) (float64, error) {
 	budgets, err := bucketsettings.Effective(ctx, p.settings, capitalJPY)
 	if err != nil {
 		return 0, err
 	}
-	return budgets.StockJPY, nil
+	return BudgetOf(budgets, bucket), nil
 }
 
-// StockHeldJPY is what the stock bucket holds now: the market value
-// (Notional) of its open positions.
-func (p *Provider) StockHeldJPY(ctx context.Context) (float64, error) {
-	open, err := p.positions.ListOpenByBucket(ctx, domain.BucketStock)
+// HeldJPY is what bucket holds now: the market value (Notional) of its open
+// positions (positions.bucket).
+func (p *Provider) HeldJPY(ctx context.Context, bucket string) (float64, error) {
+	open, err := p.positions.ListOpenByBucket(ctx, bucket)
 	if err != nil {
 		return 0, err
 	}

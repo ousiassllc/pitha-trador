@@ -48,11 +48,11 @@ func Seed(ctx context.Context, store SeedStore, engine Limits, now time.Time) {
 	}
 }
 
-// StockBucket is the Paper Risk Engine's stock-bucket budget gate input
-// (risk.Config.StockBucket): the budgets in runtime_settings and the stock
-// bucket's open positions. A Live Engine is built without it.
-func StockBucket(positions *trading.PositionRepository, settings bucketsettings.Store) *bucket.Provider {
-	return bucket.NewProvider(positions, settings)
+// Buckets is the Paper Risk Engine's budget gate input (risk.Config.Buckets):
+// the budgets in runtime_settings, each bucket's open positions and the
+// instruments' asset classes. A Live Engine is built without it.
+func Buckets(positions *trading.PositionRepository, settings bucketsettings.Store, instruments bucket.InstrumentReader) *bucket.Provider {
+	return bucket.NewProvider(positions, settings, instruments)
 }
 
 // CapitalSource reads the Paper operating capital in force now: base's
