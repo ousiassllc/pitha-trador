@@ -23,7 +23,7 @@ import (
 // this one place; experiments_list / experiment_compare accept min_trades to
 // override it per call.
 //
-// Basis (docs/architecture/paper-results-mcp.md §8.4): the two-sample
+// Basis (docs/architecture/paper-results-mcp-experiments.md §5): the two-sample
 // comparison of the mean net pnl per trade, two-sided alpha 0.05, power 0.8,
 // to detect a difference of half a standard deviation of the per-trade pnl
 // (d = 0.5): n = 2 * (1.96 + 0.84)^2 / d^2 = 62.8 -> 63 per period, +1 for the
