@@ -131,11 +131,12 @@ type ScoutResponse struct {
 
 // TraderRequest is the input of Client.Trader: the same market state
 // format ScoutRequest carries (a Scout-passed candidate is re-evaluated
-// against its current state), the question-set version it is recorded
-// under (prompt_version.go), and the RAG few-shot context (FR-RAG-3)
-// found for that state. It is not the wire body: Client.Trader sends
-// the state as {"market", "similar_past_cases"} next to the typed
-// questions (questions_trader.go).
+// against its current state), the question-set version to send and record
+// it under (prompt_version.go, prompts.go; empty is the build default,
+// TraderQuestionVersion), and the RAG few-shot context (FR-RAG-3) found
+// for that state. It is not the wire body: Client.Trader sends the state
+// as {"market", "similar_past_cases"} next to the typed questions of
+// QuestionVersion (questions_trader.go, questions_trader_v4.go).
 type TraderRequest struct {
 	QuestionVersion string
 	State           ScoutState
@@ -169,6 +170,10 @@ type TraderResponse struct {
 	Confidence              float64  `json:"confidence"`
 	ModelID                 string   `json:"model_id"`
 	RequestCost             *float64 `json:"request_cost,omitempty"`
+	// InputTokens is the input token count the API reported for the call
+	// (usage.input_tokens). It is not part of the recorded response_json
+	// (json:"-"); the shadow prices it (ShadowCostUSD).
+	InputTokens int `json:"-"`
 }
 
 // Score returns r as take/skip material (issue #761, parent #752

@@ -1,0 +1,165 @@
+package jevprompt
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// DayRow is one JST day of shadow cost.
+type DayRow struct {
+	Date  string
+	Calls int
+	USD   string
+}
+
+// PromotionRow is one audit row of a promotion: who, when, from and to.
+type PromotionRow struct {
+	At   string
+	By   string
+	From string
+	To   string
+}
+
+// PanelProps is Panel's input. Cost figures are USD strings already formatted.
+type PanelProps struct {
+	// ShadowRuns is false outside Paper: the shadow never runs there.
+	ShadowRuns       bool
+	Enabled          bool
+	LiveVersion      string
+	CandidateVersion string // "" for none
+	Versions         []string
+	// CapUSD is the daily cost cap; CapIsDefault says it is the proposal
+	// (暫定の案・未承認), not a stored value.
+	CapUSD       string
+	CapIsDefault bool
+	TodayDate    string
+	TodayCalls   int
+	TodayUSD     string
+	TotalCalls   int
+	TotalUSD     string
+	Daily        []DayRow
+	// HaltNote is the reason the shadow is stopped today ("" when it is not).
+	HaltNote   string
+	Promotions []PromotionRow
+	// Notice is the outcome of the action that produced this fragment.
+	Notice string
+}
+
+// Panel renders the section (`#jev-prompt-panel`'s content). The shadow asks a
+// candidate prompt the same question as every live decision and stores the
+// answer apart; it never trades. The promotion switches the live prompt and is
+// the only way a version becomes live.
+templ Panel(props PanelProps) {
+	<section class="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="jev-prompt-panel">
+		<h3 class="sr-only">Jev プロンプトの版とシャドー比較</h3>
+		<p>
+			Jev の trader に送るプロンプトには版があり、判断の記録（jev_decisions.question_version）に残ります。候補の版を「シャドー」で動かすと、ライブの判断ごとに同じ入力で候補の版にも答えさせ、別の表（jev_shadow_decisions）に保存します。シャドーの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも一切使いません。Paper だけで動き、Live では動きません。
+		</p>
+		if props.Notice != "" {
+			<p class="text-emerald-700" role="status" data-testid="jev-prompt-notice">{ props.Notice }</p>
+		}
+		if !props.ShadowRuns {
+			<p class="text-amber-700" role="status" data-testid="jev-prompt-not-paper">この動作モードは Paper ではないため、シャドーは動きません。</p>
+		}
+		<dl class="flex flex-col gap-1" data-testid="jev-prompt-live">
+			<dt class="font-medium text-slate-700">ライブの版</dt>
+			<dd><code data-testid="jev-prompt-live-version">{ props.LiveVersion }</code></dd>
+		</dl>
+		<form class="flex flex-col gap-3" hx-post="/settings/jev-prompt/shadow" hx-target="#jev-prompt-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="jev-prompt-shadow-form">
+			<label class="flex items-center gap-2">
+				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: checkedAttrs(props.Enabled, "jev-prompt-enabled")})
+				<span class="font-medium text-slate-700">シャドーを有効にする（Paper のみ）</span>
+			</label>
+			<span class="text-xs text-slate-500" data-testid="jev-prompt-enabled-note">
+				既定はオフです。オンにすると、ライブの判断ごとに候補の版の LLM 呼び出しが 1 回増え、その費用（request_cost）が発生します。オンにできるのはこの画面だけです。
+			</span>
+			<label class="flex flex-col gap-1">
+				<span class="font-medium text-slate-700">候補の版</span>
+				@atoms.Select(atoms.SelectProps{Name: "candidate", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
+					<option value="" selected?={ props.CandidateVersion == "" }>（なし）</option>
+					for _, v := range props.Versions {
+						if v != props.LiveVersion {
+							<option value={ v } selected?={ v == props.CandidateVersion }>{ v }</option>
+						}
+					}
+				}
+			</label>
+			<label class="flex flex-col gap-1">
+				<span class="font-medium text-slate-700">1 日あたりの費用上限（USD。日本時間の日）</span>
+				@atoms.Input(atoms.InputProps{Name: "cap", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"value": props.CapUSD, "inputmode": "decimal", "autocomplete": "off", "data-testid": "jev-prompt-cap"}})
+				<span class="text-xs text-slate-500" data-testid="jev-prompt-cap-note">
+					超えるとその日のシャドーを止めます（ライブの判断は止まりません。翌日に再開します）。
+					if props.CapIsDefault {
+						<strong class="text-amber-700" data-testid="jev-prompt-cap-unapproved">この値は暫定の案で、まだ承認されていません。</strong>
+						承認された値を決めて入力してください。空にして保存すると暫定の案に戻ります。
+					} else {
+						空にして保存すると暫定の案（未承認）に戻ります。
+					}
+				</span>
+			</label>
+			<div>
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "jev-prompt-shadow-save"}}) {
+					保存
+				}
+			</div>
+		</form>
+		<div class="flex flex-col gap-1" data-testid="jev-prompt-cost">
+			<span class="font-medium text-slate-700">シャドーの費用（request_cost の合計）</span>
+			<span>今日（{ props.TodayDate }）: <strong data-testid="jev-prompt-cost-today">{ props.TodayUSD } USD</strong>（{ itoa(props.TodayCalls) } 回）　累計: <strong data-testid="jev-prompt-cost-total">{ props.TotalUSD } USD</strong>（{ itoa(props.TotalCalls) } 回）</span>
+			if props.HaltNote != "" {
+				<span class="text-amber-700" role="status" data-testid="jev-prompt-halt">{ props.HaltNote }</span>
+			}
+			<span class="text-xs text-slate-500">費用は API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積もりです（API は課金額を返しません）。</span>
+			if len(props.Daily) > 0 {
+				<table class="w-full text-left text-xs" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
+					<thead>
+						<tr><th scope="col" class="pr-2">日（JST）</th><th scope="col" class="pr-2">回数</th><th scope="col">費用（USD）</th></tr>
+					</thead>
+					<tbody>
+						for _, d := range props.Daily {
+							<tr data-testid="jev-prompt-daily-row"><td class="pr-2">{ d.Date }</td><td class="pr-2">{ itoa(d.Calls) }</td><td>{ d.USD }</td></tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+		<form class="flex flex-col gap-2" hx-post="/settings/jev-prompt/promote" hx-target="#jev-prompt-panel" hx-swap="innerHTML" hx-disabled-elt="find button" hx-confirm="ライブの Jev プロンプトの版を切り替えます。以後のすべてのライブの判断（取引の入力）が新しい版になります。よろしいですか？" data-testid="jev-prompt-promote-form">
+			<span class="font-medium text-slate-700">昇格（ライブの版を切り替える）</span>
+			<span class="text-xs text-slate-500">昇格はライブの判断を変えます。自動では行われず、この操作（と MCP の jev_prompt_promote）だけで行われます。昇格は下の記録に残ります。比較の結果は MCP の jev_shadow_compare で見られます。</span>
+			<div class="flex flex-wrap items-center gap-2">
+				@atoms.Select(atoms.SelectProps{Name: "version", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-promote-version"}}) {
+					for _, v := range props.Versions {
+						if v != props.LiveVersion {
+							<option value={ v } selected?={ v == props.CandidateVersion }>{ v }</option>
+						}
+					}
+				}
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Variant: atoms.ButtonDangerOutline, Attrs: templ.Attributes{"data-testid": "jev-prompt-promote"}}) {
+					この版をライブに昇格
+				}
+			</div>
+		</form>
+		<div class="flex flex-col gap-1" data-testid="jev-prompt-promotions">
+			<span class="font-medium text-slate-700">昇格の記録（新しい順・直近 10 件）</span>
+			if len(props.Promotions) == 0 {
+				<span class="text-xs text-slate-500" data-testid="jev-prompt-promotions-empty">まだ昇格していません。</span>
+			} else {
+				<table class="w-full text-left text-xs" aria-label="昇格の記録" data-testid="jev-prompt-promotions-table">
+					<thead>
+						<tr><th scope="col" class="pr-2">日時</th><th scope="col" class="pr-2">誰が</th><th scope="col" class="pr-2">前の版</th><th scope="col">後の版</th></tr>
+					</thead>
+					<tbody>
+						for _, p := range props.Promotions {
+							<tr data-testid="jev-prompt-promotion-row"><td class="pr-2">{ p.At }</td><td class="pr-2">{ p.By }</td><td class="pr-2"><code>{ p.From }</code></td><td><code>{ p.To }</code></td></tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	</section>
+}
+
+func checkedAttrs(on bool, testID string) templ.Attributes {
+	attrs := templ.Attributes{"value": "on", "data-testid": testID}
+	if on {
+		attrs["checked"] = true
+	}
+	return attrs
+}

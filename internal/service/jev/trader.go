@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
@@ -29,6 +30,10 @@ type Trader struct {
 	decisions *judgement.DecisionRepository
 	rag       *rag.Service
 	news      NewsSource
+	// promptSettings resolves the live prompt version (nil: the build default).
+	promptSettings jevshadowsettings.Store
+	// shadow runs a candidate prompt version on the same input (nil: none).
+	shadow *Shadow
 }
 
 // NewTrader returns a Trader that calls client, persists decisions via
@@ -36,7 +41,8 @@ type Trader struct {
 // - the same roles Scout's fields play for Jev Scout (functional.md
 // §4.13, FR-RAG-1〜4).
 func NewTrader(client *Client, decisions *judgement.DecisionRepository, ragService *rag.Service, opts ...Option) *Trader {
-	return &Trader{client: client, decisions: decisions, rag: ragService, news: newOptions(opts).news}
+	o := newOptions(opts)
+	return &Trader{client: client, decisions: decisions, rag: ragService, news: o.news, promptSettings: o.promptSettings, shadow: o.shadow}
 }
 
 // Evaluate builds the RAG few-shot context for state (FR-RAG-2, FR-RAG-3),
@@ -66,7 +72,11 @@ func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutSt
 		return domain.JevDecision{}, fmt.Errorf("jev: encode trader state for %q: %w", state.Symbol, err)
 	}
 
-	resp, latency, err := t.client.Trader(ctx, TraderRequest{QuestionVersion: TraderQuestionVersion, State: state, RAGContext: ragContext})
+	// The live version is read once per call and used for both the request and
+	// the recorded jev_decisions.question_version, so a row always names the
+	// prompt that produced it even if a promotion lands mid-call.
+	version := LiveVersion(ctx, t.promptSettings)
+	resp, latency, err := t.client.Trader(ctx, TraderRequest{QuestionVersion: version, State: state, RAGContext: ragContext})
 	if err != nil {
 		return domain.JevDecision{}, fmt.Errorf("jev: trader evaluation for %q: %w", state.Symbol, err)
 	}
@@ -91,7 +101,7 @@ func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutSt
 		DecisionType:            domain.JevDecisionTypeTrader,
 		StateHash:               hashState(stateJSON),
 		StateJSON:               string(stateJSON),
-		QuestionVersion:         TraderQuestionVersion,
+		QuestionVersion:         version,
 		ResponseJSON:            string(responseJSON),
 		Direction:               &direction,
 		Regime:                  &regime,
@@ -116,6 +126,11 @@ func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutSt
 	if err := t.rag.IndexDecision(ctx, saved.ID, featureInput); err != nil {
 		slog.Error("jev: index decision vector failed", "decision_id", saved.ID, "symbol", state.Symbol, "error", err)
 	}
+
+	// Issue #872: the candidate prompt answers the same state and RAG context in
+	// the background (Paper only, off by default). Submit returns immediately and
+	// the answer goes to jev_shadow_decisions, never back into this decision.
+	t.shadow.Submit(saved, state, ragContext)
 
 	return saved, nil
 }

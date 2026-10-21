@@ -172,6 +172,7 @@ var dialogs = []Dialog{
 	{PageIntegrations, "modal-news-feed", nil},
 	{PageIntegrations, "modal-slack", nil},
 	{PageIntegrations, "modal-mcp", nil},
+	{PageIntegrations, "modal-jev-prompt", nil},
 
 	// ログ・エクスポート. The header's version link used to land on
 	// `/settings#update-panel`.

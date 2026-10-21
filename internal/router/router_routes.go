@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
@@ -99,6 +100,10 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 			mcpHandler.WithWriteGate(o.mcpWriteGate)
 		}
 		mcpHandler.Register(engine)
+	}
+	if o.jevPrompt != nil {
+		settingsHandler.WithJevPromptSettings()
+		jevprompt.New(o.jevPrompt).Register(engine)
 	}
 	engine.GET("/setup", settingsHandler.SetupPage)
 	engine.GET(settingspages.BasePath, settingsHandler.Page)

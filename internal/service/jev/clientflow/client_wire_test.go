@@ -263,8 +263,9 @@ func TestClient_Trader_MapsOfficialResponseWithDirectionConfidence(t *testing.T)
 	want := jev.TraderResponse{
 		Direction: "SHORT", Regime: "BREAKOUT", EntryQuality: "good",
 		ToxicFlow: 0.12, LiquidityStressed: 0.07, ContinuationProbability: 0.58,
-		Confidence: 0.66, // the direction answer's confidence, not regime's (0.7)
-		ModelID:    "jev-1.13.0",
+		Confidence:  0.66, // the direction answer's confidence, not regime's (0.7)
+		ModelID:     "jev-1.13.0",
+		InputTokens: 1534, // usage.input_tokens: the shadow prices it (issue #872); not recorded in response_json
 	}
 	if resp != want {
 		t.Errorf("Trader() = %+v, want %+v", resp, want)

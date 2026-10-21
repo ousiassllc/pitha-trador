@@ -128,7 +128,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
 		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener),
 		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
-	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, jev.WithNewsSource(s.News))
+	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, jev.TraderOptions(db, s.Jev, s.Settings, s.News)...)
 }
 
 // buildRiskAndExecution builds the paper Execution Engine and the Risk Engine

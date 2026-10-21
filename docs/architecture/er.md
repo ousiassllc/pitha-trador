@@ -29,6 +29,7 @@ erDiagram
     jev_decisions ||--o{ calibration_outcomes : "結果が紐付く"
     jev_decisions ||--o{ calibration_label_skips : "ラベル付け不能と確定した水平線を持つ"
     jev_decisions ||--o{ metalabel_predictions : "二次モデルの予測が紐付く"
+    jev_decisions ||--o{ jev_shadow_decisions : "同じ入力の候補の判定が紐付く（取引に使わない）"
     metalabel_models ||--o{ metalabel_predictions : "予測する"
     trade_signals ||--o{ paper_orders : "発注の根拠になる"
     paper_orders ||--o| positions : "エントリー約定になる"
@@ -49,6 +50,7 @@ erDiagram
 |----------|----------------------|
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` / `order_proposals` / `order_proposal_events` |
+| `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `mcp_settings_audit`、ベクトルインデックス（sqlite-vec） |
 
@@ -124,3 +126,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.63 | 2026-10-21 | `er/tables-system.md`の`runtime_settings`の予算枠（`risk.bucket.*`）の説明を、独立した`key`行から、`risk.paper.*`と同じく`key`行の中へ統合した（同じ主キー列が2行並んで見えないように）。運用資金を既定へ戻す削除が枠の合計を下回るとき拒否される旨を追記（スキーマ変更なし） | issue #838 |
 | 1.64 | 2026-10-21 | マイグレーション000042を追加し、`er/tables-trading.md`に`order_proposals`（MCP の注文案。1 案 1 行。`mode`は`CHECK (mode IN ('paper'))`で Live の値は入らない）と`order_proposal_events`（状態の変化。追記のみ）を、`er/tables-system.md`の`mcp_settings_audit.action`に`order_proposals_enable` / `order_proposals_disable`を、`runtime_settings`のキーに`mcp.order_proposals_enabled`（既定オフ）を追記。全体ER図に関係線を追加 | issue #827（親 #826） |
 | 1.65 | 2026-10-21 | マイグレーション000043を追加し、`er/tables-trading.md`の`order_proposals`に`cancel_requested_at`・`applied_quantity`・`computed_max_loss_jpy`・`effective_stop_loss_price`を、`order_proposal_events`に`detail_json`を、`paper_orders (trade_signal_id)`と`positions (entry_order_id)`のインデックスを追加。`positions.exit_reason`に`proposal_close`、`trade_signals.policy_version`に`mcp-proposal-v1`を追記 | issue #828（親 #826） |
+| 1.66 | 2026-10-22 | マイグレーション000048を追加し、`er/tables-jev-shadow.md`に`jev_shadow_decisions`（ライブの Trader の判定と同じ入力を候補のプロンプトの版で判定した結果。取引・RAG・Calibration・メタモデルの学習に使わない別表。費用は入力トークン×公表単価の見積り）と`jev_prompt_promotions`（昇格の監査）を追記。`jev_decisions.question_version`をそのまま正式な版とし（`prompt_version`列は足さない）、`er/tables-market.md`の説明を更新。全体ER図に関係線を追加 | issue #872 |

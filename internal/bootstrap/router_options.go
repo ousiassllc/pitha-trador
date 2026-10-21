@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/dataexport"
+	"github.com/ousiassllc/pitha-trador/internal/service/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
@@ -54,9 +55,7 @@ func LoadSecrets(ctx context.Context, state *State) (*system.SecretsRepository, 
 // the caller.
 func RouterOptions(services *Services, state *State, secretsRepo *system.SecretsRepository) []router.Option {
 	scan := state.Strategy.Scan
-	// The MCP's write switch and audit log live in the application's database;
-	// the Settings screen's own changes to the keys the MCP may write are
-	// recorded there too (issue #806).
+	// The MCP's write switch, audit log and the Settings screen's changes to the keys it may write live in the application's database (issue #806).
 	mcpGate := mcpset.NewGate(state.DB)
 	opts := []router.Option{
 		router.WithCandidateSource(services.Screener),
@@ -73,6 +72,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithSecretsStore(secretsRepo),
 		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.RuntimeMode), mcpGate)),
 		router.WithMCPWriteGate(mcpGate),
+		router.WithJevPromptSettings(jevprompt.New(state.DB)),
 		router.WithMarketDataStatus(services.Broker),
 		router.WithDailyHaltSource(services.Risk),
 		router.WithHealthAlertSource(services.HealthAlerts),
