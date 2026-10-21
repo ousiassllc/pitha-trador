@@ -82,6 +82,9 @@ func (p Processor) mirrorOrder(ctx context.Context, pr orderproposal.Proposal, d
 // other goes back to received to be processed again. The same proposal never
 // gets a second order. It returns how many proposals it settled.
 func (p Processor) Recover(ctx context.Context) (int, error) {
+	if err := p.paperOnly(); err != nil {
+		return 0, err
+	}
 	stuck, err := p.Proposals.Processing(ctx)
 	if err != nil {
 		return 0, err

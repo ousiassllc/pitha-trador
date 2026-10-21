@@ -7,6 +7,10 @@
 - **MCP は記録するだけ**。書くのは `order_proposals` / `order_proposal_events` の INSERT（`order_proposal_submit`）と、取消の依頼（`order_proposal_cancel`。`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。§4）だけで、`paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には書かない。
 - **アプリの処理役（`proposalexec.Processor`）が判断と発注を行う**。5 秒ごとに `received` / `waiting_session` / `submitted` の案（古い順）を 1 件ずつ進める。起動時に 1 回だけ、`processing` のまま止まった案を回復する（§5）。
 - **Paper だけ**。Live の発注・モード・承認は無い。`order_proposals.mode` は `paper` だけ（`000042` の CHECK）。処理役は Paper の Risk Engine と Execution Engine（Policy の経路と同じ実体）にだけ繋ぐ。
+- **処理役自身も Paper でしか動かない**（issue #858）。配線（`wire.go` の「Live の配線は無い」）に頼らず、処理役がモードを持つ。`proposalexec.New` は `metalabelsettings.RuntimeMode`（`internal/bootstrap/services.go`）を受け取り、`metalabelsettings.ModePaper` 以外（空のゼロ値を含む）では何もしない: 案を読まず、状態を変えず、Risk も Execution も呼ばない。守りは 2 か所で、どちらも `Processor.paperOnly` を見る。
+  - `Launch`（`wire.go`）: エラーログ 1 行（`proposalexec: refusing to run outside Paper mode`、`mode=` 付き）を出して戻る。`Recover` もループ（`Run`）も始めず、ゴルーチンも起動しない。
+  - `Cycle`・`Recover`・`Run`（`processor.go`・`submitted.go`）: `Launch` を通らずに直接呼んでも、DB を読む前に `ErrNotPaperMode` を返す（`Run` はログを出して戻る）。
+  - 固定するテスト: `TestProcessor_RefusesToRunOutsidePaperMode`、`TestLaunch_DoesNotStartOutsidePaperMode`（`mode_test.go`。`live`・空のとき 5 表の行が変わらず、Risk の `CheckThenEnter`・Execution の `Enter` / `CloseAtMarket` / `CancelPendingEntry` の呼び出しが 0 回）。
 
 ## 2. 状態と理由コード
 
@@ -64,3 +68,4 @@ MCP は取消の**依頼を記録するだけ**: `cancel_requested_at` の UPDAT
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規作成。注文案の処理（Risk check・数量・最大損失・発注・期限・取消・`close`・再起動の回復）と理由コード | issue #828（親 #826） |
 | 1.1 | 2026-10-21 | 取る直前に入った取消依頼を取った直後の再読で拾う（§3 手順 3）。発注直前の時間外は `waiting_session`（§2） | S-2-0 研磨 |
+| 1.2 | 2026-10-21 | 処理役が Paper 以外では動かない守り（§1）。`New` が `Mode` を受け取り、`Launch` は何も起動せず、`Cycle`・`Recover` は DB を読む前にエラーを返す | issue #858 |
