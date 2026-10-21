@@ -89,3 +89,101 @@ func TestClose_OutsideTheSessionWaitsAndClosesWhenItOpens(t *testing.T) {
 	f.cycle()
 	f.wantEnd(id, orderproposal.StatusClosed, "")
 }
+
+// positionStaysOpen fails unless the position is still open and no exit order
+// was placed: a rejected close left everything as it was.
+func positionStaysOpen(t *testing.T, f *fixture, pos domain.Position) {
+	t.Helper()
+	p, err := f.svc.Positions.Get(context.Background(), pos.ID)
+	if err != nil || !p.IsOpen() || p.ExitReason != nil {
+		t.Fatalf("position = (%+v, %v), want still open", p, err)
+	}
+	if n := f.count("paper_orders", "WHERE side = 'SELL'"); n != 0 || f.exec.closes != 0 {
+		t.Fatalf("exit orders = %d, CloseAtMarket calls = %d; want 0 and 0", n, f.exec.closes)
+	}
+}
+
+// A close proposal only closes a position an order proposal opened (issue
+// #859): the Policy Engine's, the bootstrap's and one with no entry signal at
+// all are rejected as position_not_from_proposal, untouched, even though the
+// symbol is held.
+func TestClose_PositionOpenedByThePolicyEngineIsRejected(t *testing.T) {
+	for _, version := range []string{"policy-v2", "policy-v2+prop-7"} {
+		t.Run(version, func(t *testing.T) {
+			f := newFixture(t)
+			pos := f.openPositionFrom(version, 100, 2500)
+			id := f.propose(closeSpec())
+			f.cycle()
+			p := f.wantEnd(id, orderproposal.StatusRejected, proposalexec.ReasonPositionNotFromProposal)
+			if p.PositionID != nil || p.PaperOrderID != nil {
+				t.Fatalf("links = position %v order %v, want none", p.PositionID, p.PaperOrderID)
+			}
+			positionStaysOpen(t, f, pos)
+		})
+	}
+}
+
+func TestClose_PositionOpenedByBootstrapIsRejected(t *testing.T) {
+	for _, version := range []string{domain.PolicyVersionPaperBootstrap, domain.PolicyVersionPaperBootstrap + "+prop-7"} {
+		t.Run(version, func(t *testing.T) {
+			f := newFixture(t)
+			pos := f.openPositionFrom(version, 100, 2500)
+			id := f.propose(closeSpec())
+			f.cycle()
+			f.wantEnd(id, orderproposal.StatusRejected, proposalexec.ReasonPositionNotFromProposal)
+			positionStaysOpen(t, f, pos)
+		})
+	}
+}
+
+func TestClose_PositionWithoutAnEntrySignalIsRejected(t *testing.T) {
+	f := newFixture(t)
+	pos := f.openPositionFrom("", 100, 2500)
+	id := f.propose(closeSpec())
+	f.cycle()
+	f.wantEnd(id, orderproposal.StatusRejected, proposalexec.ReasonPositionNotFromProposal)
+	positionStaysOpen(t, f, pos)
+}
+
+// Both halves of the definition close: the entry signal of an order proposal
+// (the origin paper_trades reports), and an open_long proposal linked to the
+// position.
+func TestClose_PositionOpenedByAProposalIsClosedBySignalOrByLink(t *testing.T) {
+	t.Run("entry signal", func(t *testing.T) {
+		f := newFixture(t)
+		pos := f.openPositionFrom(orderproposal.PolicyVersion, 100, 2500)
+		id := f.propose(closeSpec())
+		f.cycle()
+		f.wantEnd(id, orderproposal.StatusClosed, "")
+		if p, _ := f.svc.Positions.Get(context.Background(), pos.ID); p.IsOpen() {
+			t.Fatal("the position is still open")
+		}
+	})
+	t.Run("open_long link", func(t *testing.T) {
+		f := newFixture(t)
+		pos := f.openPositionFrom("policy-v2", 100, 2500)
+		entry := f.propose(spec{})
+		if _, err := f.db.Exec(`UPDATE order_proposals SET status = 'filled', position_id = ? WHERE id = ?`, pos.ID, entry); err != nil {
+			t.Fatal(err)
+		}
+		id := f.propose(closeSpec())
+		f.cycle()
+		f.wantEnd(id, orderproposal.StatusClosed, "")
+		if p, _ := f.svc.Positions.Get(context.Background(), pos.ID); p.IsOpen() {
+			t.Fatal("the position is still open")
+		}
+	})
+}
+
+// A rejected close is the Policy Engine's position seen from outside: its
+// origin stays meta_model, and the rejection reads back as the fixed code.
+func TestClose_RejectionIsRecordedForTheOperator(t *testing.T) {
+	f := newFixture(t)
+	f.openPositionFrom("policy-v2", 100, 2500)
+	id := f.propose(closeSpec())
+	t.Log("before:\n" + f.dump(`SELECT p.id, CASE WHEN p.closed_at IS NULL THEN 'open' ELSE 'closed' END AS status, p.exit_reason, ts.policy_version FROM positions p JOIN paper_orders o ON o.id = p.entry_order_id JOIN trade_signals ts ON ts.id = o.trade_signal_id`))
+	f.cycle()
+	t.Log("after:\n" + f.dump(`SELECT p.id, CASE WHEN p.closed_at IS NULL THEN 'open' ELSE 'closed' END AS status, p.exit_reason, ts.policy_version FROM positions p JOIN paper_orders o ON o.id = p.entry_order_id JOIN trade_signals ts ON ts.id = o.trade_signal_id`))
+	t.Log("proposals:\n" + f.dump(`SELECT id, action, status, status_reason, position_id FROM order_proposals WHERE action='close'`))
+	f.wantEnd(id, orderproposal.StatusRejected, proposalexec.ReasonPositionNotFromProposal)
+}

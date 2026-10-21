@@ -91,6 +91,22 @@ func (r *Repository) Get(ctx context.Context, id int64) (orderproposal.Proposal,
 	return scan(r.db.QueryRowContext(ctx, selectColumns+` WHERE id = ?`, id))
 }
 
+// OpenedPosition reports whether an open_long proposal is linked to the
+// position (order_proposals.position_id): the entry was made by a proposal.
+func (r *Repository) OpenedPosition(ctx context.Context, positionID int64) (bool, error) {
+	var found int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT 1 FROM order_proposals WHERE position_id = ? AND action = ? LIMIT 1`,
+		positionID, orderproposal.ActionOpenLong).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("orderproposal: proposal of position %d: %w", positionID, err)
+	}
+	return true, nil
+}
+
 func (r *Repository) list(ctx context.Context, tail string) ([]orderproposal.Proposal, error) {
 	rows, err := r.db.QueryContext(ctx, selectColumns+` `+tail)
 	if err != nil {

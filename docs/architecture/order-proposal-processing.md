@@ -26,6 +26,7 @@
 | `quantity_reduced` | イベント（状態は変わらない） | 案の数量よりアプリの数量が小さく、数量を減らして出した。`detail_json` に `requested_quantity` / `applied_quantity` / `limited_by` |
 | `position_already_open` / `pending_order_exists` / `symbol_in_cooldown` | `rejected` | Execution の銘柄ごとの拒否（同じ銘柄に保有中・板待ちの注文・損失後のクールダウン） |
 | `no_open_position` | `rejected` | `close` なのに保有中のポジションが無い |
+| `position_not_from_proposal` | `rejected` | `close` で、保有中のポジションが注文案で建ったものでない（Policy Engine・ブートストラップが建てたもの、エントリー注文にシグナルが無いもの）。`close` は注文案（`open_long`）で建てたポジションだけ決済する（#859。§3） |
 | `order_rejected` / `order_cancelled` | `rejected` / `cancelled` | 板待ちの注文が Execution 側で拒否・取消になった |
 | `processing_error` | `failed` | 想定外のエラー（原因はログ） |
 | `recovered_after_restart` | イベントの `detail_json` | 再起動で `processing` から回復した（§5） |
@@ -44,7 +45,7 @@
 10. **発注**: Execution の `Enter`（成行／指値は案の `order_type`）。銘柄ごとの拒否は上表のコードで `rejected`。
 11. 約定したら `filled`（`paper_order_id`・`position_id` を結ぶ）。指値で板待ちなら `submitted`。`submitted` の案は、期限・取消の依頼・注文の最終状態を毎周期見て、期限か取消なら Execution の `CancelPendingEntry`（約定処理と同じロックの中で、`PENDING` のときだけ `CANCELLED` にする）で注文を取り消し、案を `expired` / `cancelled` にする。先に約定していれば取消はせず `filled`（約定が勝つ）。
 
-**`close`**: 手順 4 のあと、Risk check を**通さず**（`trade_signals` も書かない）、保有中ポジションを Execution の `CloseAtMarket` で成行決済する（`exit_reason = 'proposal_close'`。`ExitReasonProposalClose`）。Kill Switch・一時停止・日次ガード中でも決済は実行できる（リスクを減らす操作。手動決済・Kill Switch の強制決済と同じ扱い）。保有が無ければ `no_open_position`。成功で `closed`。
+**`close`**: 手順 4 のあと、Risk check を**通さず**（`trade_signals` も書かない）、保有中ポジションを Execution の `CloseAtMarket` で成行決済する（`exit_reason = 'proposal_close'`。`ExitReasonProposalClose`）。Kill Switch・一時停止・日次ガード中でも決済は実行できる（リスクを減らす操作。手動決済・Kill Switch の強制決済と同じ扱い）。保有が無ければ `no_open_position`。**決済するのは注文案で建てたポジションだけ**（#859）: 手順 4 のあと、保有中ポジションの入り口を DB から確かめ、注文案で建ったものでなければ `position_not_from_proposal` で `rejected`（`CloseAtMarket` は呼ばず、ポジションは `open` のまま、`paper_orders` に決済注文は増えない。Kill Switch・一時停止・日次ガード中でも同じ）。「注文案で建った」は、そのポジションの `entry_order_id` の注文の `trade_signal_id` が `policy_version = 'mcp-proposal-v1'` のシグナル（`paper_trades` の `origin = order_proposal` と同じ定義。`origin.Of` を共有する）、またはそのポジションを `position_id` に持つ `open_long` の案がある、のどちらか。推測はしない。受け付け時（`order_proposal_submit`）には判定しない（処理時の保有で決まるため）。成功で `closed`。
 
 ## 4. 取消（`order_proposal_cancel`）
 
@@ -52,7 +53,7 @@ MCP は取消の**依頼を記録するだけ**: `cancel_requested_at` の UPDAT
 
 ## 5. 再起動
 
-`processing` のまま止まった案は、起動時に 1 回だけ回復する。発注の有無は DB から読み、推測しない: `open_long` は、案の `trade_signal_id` を持つ注文が既にあればその結果（約定・取消・拒否・板待ち）を取り、無ければ `received` に戻して最初からやり直す（同じ案で注文が 2 本出ることはない）。`close` は、保有が既に無く `proposal_close` で決済済みなら `closed`、まだ保有中なら `received` に戻す。回復はイベントの `detail_json` に `{"recovered_after_restart":true}` を残す。
+`processing` のまま止まった案は、起動時に 1 回だけ回復する。発注の有無は DB から読み、推測しない: `open_long` は、案の `trade_signal_id` を持つ注文が既にあればその結果（約定・取消・拒否・板待ち）を取り、無ければ `received` に戻して最初からやり直す（同じ案で注文が 2 本出ることはない）。`close` は、保有が既に無く、注文案で建ったポジション（§3 の `close` と同じ判定）が `proposal_close` で決済済みなら `closed`、まだ保有中なら `received` に戻す。Policy Engine やブートストラップのポジションが別の経路で `proposal_close` 決済済みでも、この案は `closed` にしない（`received` に戻り、保有が無いので `no_open_position` で終わる）。回復はイベントの `detail_json` に `{"recovered_after_restart":true}` を残す。
 
 ## 6. 記録する表（5 表）
 
@@ -64,3 +65,4 @@ MCP は取消の**依頼を記録するだけ**: `cancel_requested_at` の UPDAT
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規作成。注文案の処理（Risk check・数量・最大損失・発注・期限・取消・`close`・再起動の回復）と理由コード | issue #828（親 #826） |
 | 1.1 | 2026-10-21 | 取る直前に入った取消依頼を取った直後の再読で拾う（§3 手順 3）。発注直前の時間外は `waiting_session`（§2） | S-2-0 研磨 |
+| 1.2 | 2026-10-21 | `close` は注文案で建てたポジションだけ決済し、それ以外は `position_not_from_proposal`（§2 理由コード表・§3 `close`・§5 再起動）。入り口の判定は `paper_trades` の `origin` と同じ定義 | issue #859 |

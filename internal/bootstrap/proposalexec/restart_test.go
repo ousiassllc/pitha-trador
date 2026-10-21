@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalexec"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 )
@@ -103,4 +104,25 @@ func TestRestart_CloseProposalFollowsWhatHappenedToThePosition(t *testing.T) {
 	if n := f.count("paper_orders", "WHERE side = 'SELL'"); n != 1 {
 		t.Fatalf("exit orders = %d, want 1 (the close was not repeated)", n)
 	}
+}
+
+// A position the Policy Engine opened that is closed with proposal_close by
+// something else is not what a stopped close proposal did: the proposal does
+// not become closed on its account (issue #859); it runs again and ends as
+// no_open_position.
+func TestRestart_CloseDoesNotClaimAPositionNotFromAProposal(t *testing.T) {
+	f := newFixture(t)
+	pos := f.openPositionFrom("policy-v2", 100, 2500)
+	id := f.propose(closeSpec())
+	f.stopMidFlight(id)
+	if _, err := f.svc.Execution.CloseAtMarket(context.Background(), pos.ID, domain.ExitReasonProposalClose, at(9, 45, 0)); err != nil {
+		t.Fatalf("close the model's position: %v", err)
+	}
+	f.recover()
+	got := f.get(id)
+	if got.Status == orderproposal.StatusClosed || got.PositionID != nil {
+		t.Fatalf("proposal = (%s, position %v), want not closed and not linked to the model's position", got.Status, got.PositionID)
+	}
+	f.cycle()
+	f.wantEnd(id, orderproposal.StatusRejected, proposalexec.ReasonNoOpenPosition)
 }
