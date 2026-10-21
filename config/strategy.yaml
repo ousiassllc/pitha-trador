@@ -136,6 +136,11 @@ policy:
   # 0 で無効化。
   min_calibration_samples: 20
   # FR-POLICY-1/2: LONG/SHORTそれぞれのPolicy Engine通過しきい値。
+  # min_entry_quality はここ（と Settings の policy.long|short.min_entry_quality）が
+  # Live 用の値（既定 strong）。Paper で実行中は使われず、runtime_settings の
+  # policy.paper.long|short.min_entry_quality（Paper 専用、保存がなければ good。
+  # Settings 画面と MCP の settings_set で変更。FR-POLICY-8、issue #861）が効く。
+  # ほかのしきい値は Paper と Live で共通。
   long:
     min_probability: 0.68
     min_entry_quality: strong

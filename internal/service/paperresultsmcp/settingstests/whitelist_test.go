@@ -30,6 +30,7 @@ func TestEveryWhitelistedKeyIsWritable(t *testing.T) {
 	valid := map[string]any{
 		"risk.paper.initial_capital_jpy": 1000000, "risk.paper.max_position_per_symbol_pct": 50,
 		"risk.paper.max_total_exposure_pct": 80, "risk.paper.max_trade_loss_pct": 0.5,
+		"policy.paper.long.min_entry_quality": "good", "policy.paper.short.min_entry_quality": "strong",
 		"risk.bucket.stock.budget_jpy": 400000, "risk.bucket.bond_etf.budget_jpy": 300000,
 		"risk.operating_capital_jpy": 2000000, "risk.daily_loss_limit_pct": 2, "risk.profit_lock.trigger_pct": 3,
 		"risk.profit_lock.giveback_pct": 40, "risk.max_daily_trades": 7, "risk.daily_loss_limit_jpy": 20000,
@@ -70,7 +71,11 @@ func TestSettingsSetRejectsEverythingOutsideTheWhitelist(t *testing.T) {
 		"paper.bootstrap_entry_enabled",         // #798: not remotely switchable
 		"risk.live.max_position_per_symbol_pct", // no Live value
 		"risk.live.initial_capital_jpy",
-		"policy.min_entry_quality", // a real setting, just not whitelisted
+		"policy.min_entry_quality",      // a real setting, just not whitelisted
+		"policy.long.min_entry_quality", // #861: the Live threshold; only the Paper keys are writable
+		"policy.short.min_entry_quality",
+		"policy.long.min_probability",
+		"policy.paper.long.min_probability", // there is no Paper probability key
 		"screener.top_n",
 		"metalabel.min_ev_bps", // known to opsettings, not whitelisted
 		"metalabel.model",
@@ -118,6 +123,9 @@ func TestSettingsSetValidatesLikeTheSettingsScreen(t *testing.T) {
 		{"risk.paper.initial_capital_jpy", "abc"},
 		{"risk.daily_loss_limit_pct", 101},
 		{"risk.max_daily_trades", 1.5},
+		{"policy.paper.long.min_entry_quality", "great"}, // not one of poor/fair/good/strong/exceptional
+		{"policy.paper.short.min_entry_quality", 3},
+		{"policy.paper.short.min_entry_quality", "GOOD"},
 		{"risk.operating_capital_jpy", 2e12},
 		{"metalabel.llm_cutoff", "2025-13-45"},
 		{"metalabel.llm_cutoff_confirmed_on", "yesterday"},

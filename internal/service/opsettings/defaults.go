@@ -14,6 +14,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -31,6 +32,8 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 		return config.BrokerSettingDefault(key)
 	case kindOf(key) == kindSource:
 		return tachibanasource.TachibanaSourceDefault(key)
+	case paperpolicysettings.IsKey(key):
+		return paperpolicysettings.Default
 	case kindOf(key) == kindEntryQuality:
 		v, _ := config.PolicySettingValue(s.policy, key)
 		return v.(string)

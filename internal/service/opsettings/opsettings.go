@@ -20,6 +20,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
@@ -97,6 +98,7 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 func Keys() []string {
 	keys := []string{config.KeyBackupDir, config.KeyLogDir}
 	keys = append(keys, config.PolicySettingKeys()...)
+	keys = append(keys, paperpolicysettings.Keys()...)
 	keys = append(keys, config.FastScreenerSettingKeys()...)
 	keys = append(keys, orderflowsettings.Keys()...)
 	keys = append(keys, snapshotagesettings.Key)
