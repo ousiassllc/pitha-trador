@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 )
@@ -24,6 +25,7 @@ func TestEngine_CheckMarketDataHealth_TriggersOnceWhenUnhealthy(t *testing.T) {
 		Limits:           testLimits(),
 		KillSwitch:       killSwitch,
 		Settings:         system.NewRuntimeSettingsRepository(db),
+		Snapshots:        market.NewSnapshotRepository(db),
 		Portfolio:        risk.ZeroPortfolioProvider{},
 		MarketDataHealth: fakeHealth{healthy: false},
 	})
@@ -75,6 +77,7 @@ func TestEngine_CheckJevAPIHealth_TriggersWhenUnhealthy(t *testing.T) {
 		Limits:       testLimits(),
 		KillSwitch:   killSwitch,
 		Settings:     system.NewRuntimeSettingsRepository(db),
+		Snapshots:    market.NewSnapshotRepository(db),
 		Portfolio:    risk.ZeroPortfolioProvider{},
 		JevAPIHealth: fakeHealth{healthy: false},
 	})
@@ -108,6 +111,7 @@ func TestEngine_MarketDataDown_FullDetectAutoResumeCycle(t *testing.T) {
 		Limits:           testLimits(),
 		KillSwitch:       killSwitch,
 		Settings:         system.NewRuntimeSettingsRepository(db),
+		Snapshots:        market.NewSnapshotRepository(db),
 		Portfolio:        risk.ZeroPortfolioProvider{},
 		MarketDataHealth: health,
 	})

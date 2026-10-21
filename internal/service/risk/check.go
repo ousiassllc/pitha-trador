@@ -65,6 +65,14 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		return false, ReasonSystemPaused
 	}
 
+	// Fail closed: without a snapshot source no limit that needs a price can
+	// be judged, so a new entry is rejected, not passed (issue #841).
+	// NewEngine refuses a nil Snapshots; this guards an Engine that lost it
+	// afterwards. Check judges new entries only, so exits are not blocked.
+	if e.snapshots == nil {
+		return false, ReasonSnapshotsUnavailable
+	}
+
 	now := e.now()
 	streakSince, err := e.baselineAt(ctx, settingKeyLossStreakBaselineAt)
 	if err != nil {
@@ -146,9 +154,6 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		return false, fmt.Sprintf("%s: %s", halt.Reason, halt.Message)
 	}
 
-	if e.snapshots == nil {
-		return true, ""
-	}
 	snapshot, err := e.latestSnapshot(ctx, instrumentID)
 	if err != nil {
 		return e.failClosed("read latest snapshot", err)

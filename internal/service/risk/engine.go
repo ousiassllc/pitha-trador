@@ -37,6 +37,11 @@ const (
 	// ReasonRiskEngineError is the fail-closed rejection when Check cannot
 	// read the state a limit needs (DB error, missing snapshot/spread).
 	ReasonRiskEngineError = "risk_engine_error"
+	// ReasonSnapshotsUnavailable rejects a new entry when the Engine has no
+	// snapshot source to price and size it. NewEngine refuses such a Config,
+	// so this only guards an Engine that lost its source after construction
+	// (issue #841); exits are never judged by Check and stay open.
+	ReasonSnapshotsUnavailable = "snapshots_unavailable"
 )
 
 // runtime_settings keys this package owns (er.md §runtime_settings).
@@ -90,10 +95,10 @@ type Config struct {
 	Settings   *system.RuntimeSettingsRepository
 
 	// Snapshots supplies the latest price/spread for FR-RISK-1's
-	// max_spread_bps and max_trade_loss_pct (position sizing) checks. A
-	// nil Snapshots skips those two checks (no snapshot data to check
-	// against); a non-nil one rejects an instrument with no usable
-	// snapshot (fail closed).
+	// max_spread_bps and max_trade_loss_pct (position sizing) checks and for
+	// the budget bucket's sizing. It is required (NewEngine panics without
+	// it): an Engine that cannot price an entry must not approve one. An
+	// instrument with no usable snapshot is rejected (fail closed).
 	Snapshots *market.SnapshotRepository
 
 	// StopLossPct is the FR-EXIT-2 initial stop distance (percent)
@@ -174,13 +179,18 @@ type Engine struct {
 // NewEngine returns an Engine built from cfg, applying every documented
 // placeholder default for a zero-valued optional field. It panics if
 // cfg.KillSwitch or cfg.Settings is nil - both are required for every
-// FR-RISK-2〜7 operation.
+// FR-RISK-2〜7 operation - or if cfg.Snapshots is nil: without it Check
+// cannot price or size an entry, and must not run with its limits skipped
+// (issue #841).
 func NewEngine(cfg Config) *Engine {
 	if cfg.KillSwitch == nil {
 		panic("risk: NewEngine: cfg.KillSwitch is required")
 	}
 	if cfg.Settings == nil {
 		panic("risk: NewEngine: cfg.Settings is required")
+	}
+	if cfg.Snapshots == nil {
+		panic("risk: NewEngine: cfg.Snapshots is required")
 	}
 	if cfg.Portfolio == nil {
 		cfg.Portfolio = ZeroPortfolioProvider{}

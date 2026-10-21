@@ -169,6 +169,7 @@ func newSessionEngine(t *testing.T, clock *time.Time, md risk.HealthChecker) (*r
 		Limits:           limits,
 		KillSwitch:       killSwitch,
 		Settings:         system.NewRuntimeSettingsRepository(db),
+		Snapshots:        market.NewSnapshotRepository(db),
 		Portfolio:        risk.ZeroPortfolioProvider{},
 		MarketDataHealth: md,
 		Calendar:         marketcalendar.TSE,

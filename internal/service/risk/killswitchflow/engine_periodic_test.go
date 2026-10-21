@@ -209,6 +209,7 @@ func TestEngine_Resume_FillDiscrepancy_OrphanDoesNotRefire(t *testing.T) {
 		Limits:     testLimits(),
 		KillSwitch: ks,
 		Settings:   system.NewRuntimeSettingsRepository(db),
+		Snapshots:  market.NewSnapshotRepository(db),
 		Positions:  trading.NewPositionRepository(db),
 		Orders:     orders,
 		Closer:     closer,
