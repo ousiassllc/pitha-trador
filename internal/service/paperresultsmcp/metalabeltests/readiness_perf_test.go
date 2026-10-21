@@ -33,11 +33,12 @@ SELECT i + 1, 15, 0, 0, 0, 1, 'tp', CASE WHEN i % 3 = 0 THEN -20.0 ELSE 30.0 END
 
 // A 30-day call over a realistic volume (about 100 decisions per trading day,
 // 4 KB of state each) is answered inside the MCP's read budget
-// (paperresultsmcp.QueryTimeout, enforced by the server: a slower read would be
-// a 504 query_timeout), and the full 90-day lookback is measured with three
-// times the rows. The timings are logged (go test -v). Under the race detector
-// (about ten times slower, see raceEnabled) the server is given a long timeout
-// and the times are only logged: the budget claim is for the normal build.
+// (paperresultsmcp.QueryTimeout, enforced by the server with its real default:
+// a slower read would be a 504 query_timeout), in the normal build and under
+// the race detector alike (about 1.1 s measured with -race, 2.8 times of room).
+// The full 90-day lookback is measured with three times the rows: it is only
+// held to the budget in the normal build, since -race (about ten times slower)
+// takes just over 3 s for it; the times are logged (go test -v).
 func TestReadinessFitsTheReadBudget(t *testing.T) {
 	now := testkit.FixedNow()
 	path, w := readinessDB(t)
@@ -45,32 +46,27 @@ func TestReadinessFitsTheReadBudget(t *testing.T) {
 	const perDay, days = 100, 90
 	n := perDay * days * 22 / 30 // the 90-day volume
 	bulkSeed(t, w, n, now.Add(-30*time.Minute), int(90*24*time.Hour/time.Second)/n, 4096)
-	opts := paperresultsmcp.Options{DBPath: path}
-	budget := paperresultsmcp.QueryTimeout
-	if raceEnabled {
-		opts.QueryTimeout, budget = time.Minute, time.Minute
-	}
-	srv := newTestServerWith(t, opts, now)
+	srv := newTestServerWith(t, paperresultsmcp.Options{DBPath: path}, now)
 
 	for _, c := range []struct {
 		name string
 		args map[string]any
 		rows int
 		// strict: the call must finish within the server's own read budget (a
-		// 504 query_timeout is the failure). Only the 30-day call carries it.
+		// 504 query_timeout is the failure).
 		strict bool
 	}{
 		{"30 days (default)", map[string]any{}, n / 3, true},
-		{"90 days (the retraining's lookback)", fullLookback, n, false},
+		{"90 days (the retraining's lookback)", fullLookback, n, !raceEnabled},
 	} {
 		start := time.Now()
 		r := srv.call(t, "metalabel_training_readiness", c.args)
 		elapsed := time.Since(start)
-		if r.status != http.StatusOK && (c.strict || raceEnabled) {
-			t.Fatalf("%s: status %d (%s) after %v; the read budget is %v", c.name, r.status, r.body, elapsed, budget)
+		if r.status != http.StatusOK && c.strict {
+			t.Fatalf("%s: status %d (%s) after %v; the read budget is %v", c.name, r.status, r.body, elapsed, paperresultsmcp.QueryTimeout)
 		}
 		if r.status != http.StatusOK {
-			t.Logf("%s: status %d after %v (over the %v read budget; narrow the period to 30 days)", c.name, r.status, elapsed, budget)
+			t.Logf("%s: status %d after %v (over the %v read budget under -race; narrow the period to 30 days)", c.name, r.status, elapsed, paperresultsmcp.QueryTimeout)
 			continue
 		}
 		var d readiness
@@ -78,8 +74,34 @@ func TestReadinessFitsTheReadBudget(t *testing.T) {
 		if tol := c.rows / 20; d.Features.TrainingRows < c.rows-tol || d.Features.TrainingRows > c.rows+tol {
 			t.Errorf("%s: read %d rows, want about %d (within 5%%)", c.name, d.Features.TrainingRows, c.rows)
 		}
-		t.Logf("%s: %d training rows in %v (budget %v)", c.name, d.Features.TrainingRows, elapsed, budget)
+		if c.strict && elapsed >= paperresultsmcp.QueryTimeout {
+			t.Errorf("%s: took %v, not under the %v read budget", c.name, elapsed, paperresultsmcp.QueryTimeout)
+		}
+		t.Logf("%s: %d training rows in %v (budget %v)", c.name, d.Features.TrainingRows, elapsed, paperresultsmcp.QueryTimeout)
 	}
+}
+
+// A 366-day jev_models call (the longest period) over a realistic volume (about
+// 100 decisions per trading day for a year) finishes inside the read budget.
+func TestJevModelsFitsTheReadBudgetOver366Days(t *testing.T) {
+	now := testkit.FixedNow()
+	path, w := readinessDB(t)
+	const n = 100 * 366 * 22 / 30
+	bulkSeed(t, w, n, now.Add(-30*time.Minute), int(366*24*time.Hour/time.Second)/n, 16)
+	srv := newTestServerWith(t, paperresultsmcp.Options{DBPath: path}, now)
+
+	start := time.Now()
+	r := srv.call(t, "jev_models", map[string]any{"from": "2025-10-18", "to": "2026-10-19"})
+	elapsed := time.Since(start)
+	var d jevModels
+	r.data(t, "jev_models", &d)
+	if len(d.Models) != 1 || d.Models[0].Decisions < n*9/10 || len(d.Daily) < 300 {
+		t.Errorf("models = %+v, daily rows = %d; want the one seeded model over about %d decisions", d.Models, len(d.Daily), n)
+	}
+	if elapsed >= paperresultsmcp.QueryTimeout {
+		t.Errorf("366 days took %v, not under the %v read budget", elapsed, paperresultsmcp.QueryTimeout)
+	}
+	t.Logf("jev_models over 366 days: %d decisions, %d daily rows in %v (budget %v)", d.Models[0].Decisions, len(d.Daily), elapsed, paperresultsmcp.QueryTimeout)
 }
 
 // The statements of the tool use the existing indexes: no full scan of

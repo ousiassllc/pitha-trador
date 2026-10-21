@@ -106,11 +106,14 @@ FROM metalabel_retrain_skips ORDER BY skipped_at DESC, id DESC LIMIT 1`).
 		return LastRetrain{}, fmt.Errorf("query: latest retrain skip: %w", err)
 	default:
 		skip.SkippedAt, skip.ReasonCode = query.FormatOut(skippedAt), query.NormalizeRetrainSkipCode(skip.ReasonCode)
-		if dropped.Valid {
+		switch {
+		case hasDropped == 0:
+			out.DroppedIncompleteState = DroppedNotInSchema
+		case dropped.Valid:
 			skip.DroppedIncomplete = &dropped.Int64
 			out.DroppedIncompleteState = DroppedRecorded
-		} else {
-			out.DroppedIncompleteState = DroppedNotInSchema
+		default:
+			out.DroppedIncompleteState = DroppedNotOnRow
 		}
 		out.LatestSkip = &skip
 	}

@@ -138,6 +138,17 @@ func TestReadinessLastRetrain(t *testing.T) {
 		t.Errorf("skip with the column: %+v", d.LastRetrain)
 	}
 
+	// A nullable column (or an old row of it) with no value: the column is
+	// there, the night stored none. Not the same as "not in the schema".
+	testkit.MustExec(t, w, `ALTER TABLE metalabel_retrain_skips ADD COLUMN dropped_nullable INTEGER`)
+	testkit.MustExec(t, w, `ALTER TABLE metalabel_retrain_skips DROP COLUMN dropped_incomplete`)
+	testkit.MustExec(t, w, `ALTER TABLE metalabel_retrain_skips RENAME COLUMN dropped_nullable TO dropped_incomplete`)
+	d = callReadiness(t, srv, fullLookback)
+	s = d.LastRetrain.LatestSkip
+	if s == nil || s.DroppedIncomplete != nil || d.LastRetrain.DroppedIncompleteState != metalabeldiag.DroppedNotOnRow {
+		t.Errorf("skip with a NULL value: %+v", d.LastRetrain)
+	}
+
 	// A model stored after the skip means the last night learned.
 	insertModel(t, w, now.Add(-time.Hour))
 	d = callReadiness(t, srv, fullLookback)

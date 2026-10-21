@@ -64,6 +64,9 @@ const (
 	// DroppedNotInSchema: this database has no dropped_incomplete column on
 	// metalabel_retrain_skips (a build before issue #862), so nothing stored it.
 	DroppedNotInSchema = "not_recorded_in_schema"
+	// DroppedNotOnRow: the column exists but the latest skip's value is NULL
+	// (the column is nullable in this database), so that night stored none.
+	DroppedNotOnRow = "not_recorded_on_row"
 	// DroppedNoSkip: the latest retraining stored a model (or none ran), so
 	// there is no skip to carry it. The live count is Features.DroppedIncomplete.
 	DroppedNoSkip = "no_skip_recorded"

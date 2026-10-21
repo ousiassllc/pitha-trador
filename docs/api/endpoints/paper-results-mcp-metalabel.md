@@ -24,7 +24,7 @@
 | `last_retrain.last_run` | 直近の再学習の結果: `skipped`（直近が見送り）/ `model_stored`（直近がモデルの保存）/ `none`（どちらの記録も無い）。期間によらない最新の記録 |
 | `last_retrain.latest_skip` | 最新の `metalabel_retrain_skips`: `{skipped_at, reason_code, usable_rows, required_rows, dropped_incomplete}`。無ければ `null`。`dropped_incomplete` は見送りの行に残っている値で、**残っていなければ `null`**（0 ではない） |
 | `last_retrain.latest_model_trained_at` | 最新の `metalabel_models.trained_at`（無ければ `null`） |
-| `last_retrain.dropped_incomplete_status` | 見送りの `dropped_incomplete` の有無: `recorded`（`latest_skip.dropped_incomplete` に値がある）/ `not_recorded_in_schema`（この DB の `metalabel_retrain_skips` にその列が無い。列を足すマイグレーション（#862）より前）/ `no_skip_recorded`（直近の再学習は見送りでなくモデルを保存した、または一度も走っていない）。いずれでも、今の学習行から数えた値は `features.dropped_incomplete` で読める |
+| `last_retrain.dropped_incomplete_status` | 見送りの `dropped_incomplete` の有無: `recorded`（`latest_skip.dropped_incomplete` に値がある）/ `not_recorded_in_schema`（この DB の `metalabel_retrain_skips` にその列が無い。列を足すマイグレーション（#862）より前）/`not_recorded_on_row`（列はあるが最新の見送りの値が `NULL`）/ `no_skip_recorded`（直近の再学習は見送りでなくモデルを保存した、または一度も走っていない）。いずれでも、今の学習行から数えた値は `features.dropped_incomplete` で読める |
 | `split.llm_cutoff` / `llm_cutoff_status` | 今の `metalabel.llm_cutoff`（`YYYY-MM-DD`）とその状態（`placeholder` / `unverified` / `confirmed`）。OOS 窓はこの日付より前に始まらない |
 | `split.oos_start` | OOS 窓の始まり（UTC RFC3339） |
 | `split.train_ready` / `train_skip_code` | `training.SplitWalkForward` が学習側（fit＋較正）を作れたか。作れないときの `train_skip_code` は再学習が記録するのと同じ固定コード（`too_few_rows_before_oos` / `too_few_rows_after_purge`）。作れたら `null` |

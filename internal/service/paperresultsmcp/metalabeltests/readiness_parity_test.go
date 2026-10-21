@@ -209,8 +209,10 @@ func TestReadinessMatchesTheNightlyRetrainingWhenItLearns(t *testing.T) {
 	if want := m.OOSStart.UTC().Format(time.RFC3339); d.Split.OOSStart != want {
 		t.Errorf("oos_start = %s, the model stored %s", d.Split.OOSStart, want)
 	}
-	if d.LastRetrain.LastRun != "model_stored" && d.LastRetrain.LastRun != "none" {
-		t.Errorf("no model or skip row was written to the database, last_run = %q", d.LastRetrain.LastRun)
+	// The Trainer ran against a capturing store, so no model or skip row was
+	// written to the database the tool reads.
+	if d.LastRetrain.LastRun != "none" {
+		t.Errorf("last_run = %q, want none: nothing was written to the database", d.LastRetrain.LastRun)
 	}
 }
 

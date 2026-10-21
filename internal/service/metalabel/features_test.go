@@ -84,8 +84,6 @@ func TestNewFeatures_TakesJevScoreValue(t *testing.T) {
 	}
 }
 
-// syntheticSamples draws samples whose win probability rises with the first
-
 // MissingNames lists exactly the features Vector refuses, all of them (Vector
 // reports the first), in FeatureNames order.
 func TestFeatures_MissingNamesMatchesVector(t *testing.T) {
