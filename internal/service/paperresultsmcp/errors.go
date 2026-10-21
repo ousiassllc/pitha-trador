@@ -72,9 +72,11 @@ var codeTable = map[Code]codeInfo{
 type toolError struct {
 	code  Code
 	cause error
-	// detail is shown to the client in error.data.detail. Only invalid_value
-	// sets it: the validator's reason, which quotes the caller's own value and
-	// the accepted range (no whitelisted setting is secret).
+	// detail is shown to the client in error.data.detail: invalid_value's
+	// validator reason (it quotes the caller's own value and the accepted range;
+	// no whitelisted setting is secret), and the order-proposal tools'
+	// invalid_argument / limit_exceeded reasons (they name the argument and the
+	// rule, never a value).
 	detail string
 }
 

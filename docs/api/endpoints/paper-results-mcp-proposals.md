@@ -17,7 +17,7 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 | `bucket` | ○ | `stock` / `bond_etf`（それ以外は拒否） |
 | `action` | ○ | `open_long`（新規の買い）/ `close`（保有中ポジションの決済）。売り建ては無い |
 | `quantity` または `budget_jpy` | `open_long` のとき、どちらか 1 つ | 株数（1 以上の整数）か、使う金額（円）。両方・どちらも無しは拒否。`close` は指定不可（保有中ポジション全体の決済） |
-| `order_type` | ○ | `MARKET` / `LIMIT` |
+| `order_type` | ○ | `MARKET` / `LIMIT`。`close` は `MARKET` だけ（成行で決済する。指値の決済は受け付けない） |
 | `limit_price` | `LIMIT` のとき | 指値。`MARKET` では指定不可 |
 | `stop_loss_price` | `open_long` のとき | 損切りの価格。指値があるときは指値より小さい（買いなので下。成行のときの直近値との比較はアプリが行う）。`close` は指定不可 |
 | `take_profit_price` | 任意 | 利確の価格。`close` は指定不可 |
@@ -106,3 +106,4 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 | 1.0 | 2026-10-21 | 新規作成。注文案ツール 3 つの入出力と受け入れ条件（元の文書の版 1.10 で追加） | issue #827（親 #826） |
 | 1.1 | 2026-10-21 | §3.19 `order_proposal_cancel`（取消の依頼を記録するだけ）と受け入れ条件を追加。§3.16・§3.17 の「アプリが #828 で」を処理役の仕様への参照に改めた | issue #828（親 #826） |
 | 1.2 | 2026-10-21 | §3.17 `order_proposal_get` に結果（signal・order・position・最大損失・損切りと利確に届いたか）とイベントの補足を追加。§3.20 `order_proposals_list`・§3.21 `order_proposal_summary`・§3.22 `origin` を追加。読み取りの 3 ツールの受け入れ条件を追加（ツールは合計 21） | issue #829（親 #826） |
+| 1.3 | 2026-10-21 | §3.16 `order_type`: `close` は `MARKET` だけ（処理役は常に成行で決済するので、指値を受け付けて黙って成行にしない） | S-2-0 研磨 |

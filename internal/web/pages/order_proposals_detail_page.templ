@@ -23,7 +23,7 @@ templ OrderProposalDetailPage(p ProposalDetailProps) {
 		<h1 class="mt-1 text-2xl font-bold text-slate-900" data-testid="order-proposal-title">
 			注文案 #{ strconv.FormatInt(p.ID, 10) }
 			<span class="ml-2 font-mono text-lg">
-				<a class="underline" href={ templ.SafeURL("/symbols/" + p.Symbol) }>{ p.Symbol }</a>
+				<a class="underline" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
 			</span>
 		</h1>
 		<p class="mt-1 text-sm text-slate-700" data-testid="order-proposal-status" data-status={ p.Status }>

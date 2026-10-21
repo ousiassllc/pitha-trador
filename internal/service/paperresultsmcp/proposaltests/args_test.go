@@ -76,6 +76,7 @@ func TestSubmitRefusesBadArguments(t *testing.T) {
 		{"string quantity", with(ok, "quantity", "100")},
 		{"close with quantity", with(ok, "action", "close", "order_type", "MARKET", "limit_price", nil)},
 		{"close with budget_jpy", with(without(ok, "quantity", "limit_price", "stop_loss_price", "exit_plan", "max_loss_jpy"), "action", "close", "order_type", "MARKET", "budget_jpy", 1000)},
+		{"close with a LIMIT order (a close is at market)", with(without(ok, "quantity", "stop_loss_price", "exit_plan", "max_loss_jpy"), "action", "close", "order_type", "LIMIT", "limit_price", 2500)},
 	}
 	srv, w := proposalServer(t)
 	switchOn(t, w)
