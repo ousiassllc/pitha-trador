@@ -28,6 +28,7 @@
 | Policy Engine（ショート） | `/settings/operations#modal-policy-short` | ショートのシグナルになるための確率・エントリー品質などのしきい値を編集します。 | 運用 |
 | データの鮮度（ランキング監視） | `/settings/operations#modal-snapshot-age` | Jev の判断と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）を編集します。 | 運用 |
 | Paper ブートストラップ | `/settings/operations#modal-paper-bootstrap` | メタモデル未採用の間だけ Paper で旧ルールのエントリーを許し、ラベルを貯めるスイッチ（既定は無効、Live では必ず無効）を編集します。 | 運用 |
+| スリープ防止 | `/settings/operations#modal-sleep-guard` | 取引日の 08:45〜大引けだけ PC を自動でスリープさせないスイッチ（既定は無効。Windows のみ。時間外とアプリ終了時は OS の設定に戻ります）を編集します。 | 運用 |
 | Performance | `/performance` | 決済済みポジションの実績（Paper）と評価指標を確認します。 | 成績・検証 |
 | バックテスト（Walk Forward） | `/performance#backtest` | 期間を指定して Walk Forward バックテストを実行し、コスト感度を確認します（Performance 画面の下部）。 | 成績・検証 |
 | Calibration | `/calibration` | Jev の確率予測が実際の結果とどれだけ合っているかをヒートマップで確認します。 | 成績・検証 |
@@ -83,3 +84,4 @@
 | 1.5 | 2026-10-20 | Settings「成績・検証」ページの「メタラベリング」カードの説明に、LLM cutoff の状態表示（仮置き／未確認／確認済み）と公式日付の確認手順のヘルプを追記 | issue #809 |
 | 1.6 | 2026-10-20 | Settings に7つ目のページ「資産ごとの予算枠」（`/settings/asset-buckets`、カード `modal-asset-buckets`。株・債券ETFの予算枠の2キーと、合計・残額の「計算結果」）を追加し、一覧・ページ表を更新。「リスク・資金」ページの Paper 運用資金カードの説明に、枠の合計より下げる保存は拒否される旨を追記 | issue #824 |
 | 1.7 | 2026-10-21 | メインナビと画面一覧に「注文案」（`GET /order-proposals`・`GET /order-proposals/:id`。読み取り専用）を追加。Settings「運用」ページのリンクにも載せる | issue #829 |
+| 1.8 | 2026-10-21 | Settings「運用」ページに「スリープ防止」（`/settings/operations#modal-sleep-guard`）を追加。全ページ共通の警告バナーに、kabu ステーションに接続できない（未起動）場合の文言を追加 | issue #863 |
