@@ -2,7 +2,7 @@
 
 リモートの Grok Bot が、pitha-trador の SQLite に入っている Paper の取引実績・Jev 判断・メタモデル・Risk・収集状況の**集計とラベル**を読む仕様。issue #783（設定の読み書きは #806・#807、Paper の注文案の受け付けは #827）。実装は `cmd/paper-results-mcp` と `internal/service/paperresultsmcp`（実行・設定の手順は `docs/components/paper-results-mcp.md` §4）。
 
-ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
+ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（収集診断 `session_diagnostics` は分割章 `docs/api/endpoints/paper-results-mcp-diagnostics.md`、注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
 
 ## 1. 目的
 
@@ -133,7 +133,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）だけである（合計 21）。定義・フィールドは API 仕様。
+ツールは、次の読み取りの 10 つ（`health_today`・`session_diagnostics` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）だけである（合計 22）。定義・フィールドは API 仕様。
 
 「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
@@ -146,10 +146,15 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `metalabel_history` | `metalabel_models` の採用/却下と OOS AUC/EV、予測の take/skip 件数、`metalabel_retrain_skips`（データ不足の再学習見送り。固定コードと必要件数中の件数） |
 | `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数と、それ以外の拒否の固定コード別内訳 |
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
-| `collection_status` | `jobs` の件数と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（保持期間の違いを `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ） |
+| `collection_status` | `jobs` の件数（`feature-calc` は廃止済みキューと明示。`retired`）と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（内訳は期間の末尾 `JobFailureMaxDays`＝7 日まで。範囲は `job_failures.window` に明記。#850。保持期間の違いは `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ） |
+| `session_diagnostics` | 立会日ごとの診断（#850）。`market_snapshots` の行数、`market-data` ジョブの成功数・失敗数・成功なのに行が無いジョブ数、他キューのジョブ完了数、ウォッチリストの件数（`watch_lists`・`watch_list_entries`）、固定コードの `observations[]`、いまの kabu ログイン・アプリ稼働（`health_alerts`・`health_alert_checks`）。過去日の kabu ログイン状態とアプリ起動記録は DB に無く、`unavailable[]` で明示する |
 | `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`。それ以前のスナップショットが無い日は欠損でなく `insufficient_history_dates[]`＝判定不可。#814）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、処理されずに止まっている注文案の件数（`order_proposals`。#829）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
 
-MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
+MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを SQL の中で取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
+
+`collection_status`（#850）の失敗の内訳は、期間の末尾 7 日（`query.JobFailureMaxDays`。既定の 30 日でも 366 日でも同じ）だけ読む。範囲は `job_failures.window`（`from`・`to`・`max_days`・`truncated`・`note`）に出し、期間のほうが長いときは `truncated=true` である。`jobs[]` の件数・欠損日・ラベルスキップなどは期間全体のままで、内訳だけが短い。7 日は issue #850 の分析コメントの「既定 7 日」を上限に置いたもので、確定した値ではない（上限日数は要確認）。エラーコードは SQL が `last_error` の先頭 256 バイトから `code ` / `p_errno=` / `sResultCode=` の後ろの数字だけを取り出し、(JST 日, コード) でまとめる。銘柄名など本文はグループのキーに入らない（以前は先頭 256 バイトそのものがキーで、銘柄名のせいで 1 万超のグループになっていた）。失敗とスキップはキューごとの別の文で、既存の `(queue, status, finished_at)` 索引（`000019`）の範囲検索になる。索引とマイグレーションは足していない。
+
+`session_diagnostics`（#850）は、`collection_status` を重くしないために別のツールにした。`from`/`to` は他のツールと同じで、期間の末尾 `SessionDiagnosticsMaxDays`（31）日の東証立会日だけを返す（`window.truncated`）。日ごとの数は保持期間（`market_snapshots` 90 日、成功ジョブ 7 日、失敗ジョブ 30 日。`retention`）で消えている可能性のある日は `null` で、0 とは区別する（日の 00:00 が削除の境より前なら `null`）。「成功なのに行が無いジョブ」は、成功した `market-data` ジョブのうち、`payload_json` の固定キー `instrument_id` の銘柄の `market_snapshots` 行が、そのジョブの `started_at`〜`finished_at` の間に無いものの数である（ハンドラは自分の時計でその間に行を書く。板取得がレート制限で見送られると行なしの成功になる）。`payload_json` は SQL の中で突き合わせるだけで返さず、`readonly_db_test` は `json_valid(j.payload_json)` と `json_extract(j.payload_json, '$.instrument_id')` の形だけを許す。`observations[]` は数から決まる固定コード（`no_snapshots` / `no_market_data_jobs` / `all_market_data_jobs_failed` / `succeeded_without_snapshot` / `watch_list_empty` / `other_queues_idle`）で、原因の断定ではなく手がかりである。kabu のログイン状態とアプリの起動記録は日ごとには保存されておらず、いまの状態（`current`）と他キューのジョブ完了数から推すしかない。この限界は応答の `unavailable[]` と `note` に書く。DB は読むだけで、新しい表も索引もない。
 
 `health_today`（#808）は、アプリの状態を 1 回で見るために `runtime_settings` を読み取りだけで読む。読むキーは固定の許可リスト（日次ガードの閾値キー、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`。`query.ReadableSettingKeys`）だけで、リスト外のキーは SQL を発行する前に拒否する。値の解釈はアプリと同じ関数（`dailyguardsettings`・`paperbootstrapsettings`）で行い、日次停止のメッセージ文など自由文は戻り値に載せない。書き込みはしない（接続は `mode=ro`）。`readonly_db_test` は `runtime_settings` を読む文を `SELECT value FROM runtime_settings WHERE key = ?` の 1 本だけ許す。
 
@@ -166,7 +171,7 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 
 ## 7. 設定の読み書き（issue #806・#807）
 
-Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を MCP から一覧・変更・差分確認できる。「MCP は書かない」という不変条件は「**書くのはホワイトリストの設定ツールと、§8 の注文案の受け付けだけで、書き込み接続は §7.3・§8.4 の狭い書き手だけ**」に改めた。それ以外の経路（読み取り 9 ツール、読み取り接続）は従来どおり書けない。
+Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を MCP から一覧・変更・差分確認できる。「MCP は書かない」という不変条件は「**書くのはホワイトリストの設定ツールと、§8 の注文案の受け付けだけで、書き込み接続は §7.3・§8.4 の狭い書き手だけ**」に改めた。それ以外の経路（読み取り 10 ツール、読み取り接続）は従来どおり書けない。
 
 ### 7.1 ホワイトリスト
 
@@ -203,7 +208,7 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 - 保存先は `runtime_settings` のキー `mcp.settings_write_enabled`（JSON の整数 `1` / `0`）。**行が無いときは許可（既定オン）**。MCP は API キーがあるときだけ待受するので、キーがあれば書き込みも既定で使える（悠太さんの決定。issue #806 のコメント）。値が `0` / `1` 以外に壊れているときは禁止として扱う（安全側）
 - 保存先を `runtime_settings` にした理由: アプリ（Settings 画面）と MCP は別プロセスで、同じ DB を見る。`paper-results-mcp.json` はアプリが書き、MCP が起動時に一度読むだけなので、実行中の切り替えが MCP に届かない（再起動が要る）。`runtime_settings` なら両方が毎回同じ値を読む。待受のオン/オフ・API キー（`paper-results-mcp.json`、§3.4）とは別物で、そちらは引き続き DB に置かない
 - 切り替えは両方からできる。**Settings 画面**: 「外部連携」→ MCP カードの「MCP からの設定変更を許可する」チェック（`POST /settings/mcp/write`、セッション Cookie と CSRF が必要）。**MCP**: `settings_write_enable` / `settings_write_disable`（Bearer 認証が必要。書き込みが禁止のあいだも呼べる。禁止のままでは戻せなくなるため）
-- 禁止のあいだ、`settings_set` は `write_disabled`（HTTP 403）で拒否し、何も保存しない。読み取りの 9 ツール・`settings_get` / `settings_diff` / `settings_audit`・スイッチのツールは使える
+- 禁止のあいだ、`settings_set` は `write_disabled`（HTTP 403）で拒否し、何も保存しない。読み取りの 10 ツール・`settings_get` / `settings_diff` / `settings_audit`・スイッチのツールは使える
 - スイッチは設定キーではなく、`settings_set` で書けない（`key_not_allowed`）
 
 ### 7.3 書き込み経路（狭い書き手）
@@ -298,3 +303,4 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.12 | 2026-10-21 | Paper の注文案の受け付けを追加（§8。`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`、受け付けスイッチ `mcp.order_proposals_enabled`、表 `order_proposals`・`order_proposal_events`、マイグレーション `000042`）。§5・§6 の「売買・発注のツールは作らない」を「Paper の注文案を出すツールだけ追加。発注はアプリ。注文の表には書かない。Live の発注・Live の値・Kill Switch の操作は不変」に改めた。§7.3 の書き込み経路を 4 種類に、§7.4 の監査の操作名を 6 つにした。ツール数は 18。ホワイトリストは 17 キーのまま | issue #827（親 #826） |
 | 1.13 | 2026-10-21 | 注文案の取消の依頼 `order_proposal_cancel` を追加（§8.1・§8.5。取消の依頼だけを記録し、実際の取消はアプリ。書き手の変更は 5 種類、ツール数は 19）。注文案のアプリ側の処理（Risk check・Paper 発注・期限・取消・`close`・再起動の回復）を `order-proposal-processing.md` に分けて追記。`risk_rejections` に案の分の件数を追加。ホワイトリストは 17 キーのまま | issue #828（親 #826） |
 | 1.14 | 2026-10-21 | 注文案の読み取りを追加（§5・§8.1。`order_proposals_list` / `order_proposal_summary` を足し、`order_proposal_get` に結果を足した。ツールは 21）。`paper_trades` / `paper_performance_summary` に入り口 `origin`、`health_today` に止まった注文案（要対応コード `order_proposal_stalled`）。すべて読み取り接続のままで、新しい表は無い。GUI の「注文案」画面は同じ読み取りモデルを使う | issue #829（親 #826） |
+| 1.15 | 2026-10-21 | §5 に `session_diagnostics`（立会日ごとの `market_snapshots` 行数・`market-data` ジョブの成功/失敗/成功なのに行なし・ウォッチリスト件数・観測コード）を追加しツールを 22 にした。`collection_status` の失敗の内訳を、エラーコード別を SQL で取り出す形にし、期間の末尾 7 日（上限日数は要確認）だけ読むようにして、`feature-calc` を廃止済みキューと明示した。索引・マイグレーションなし。DB は読み取り専用のまま | issue #850 |
