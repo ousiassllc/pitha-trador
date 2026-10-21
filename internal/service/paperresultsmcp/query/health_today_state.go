@@ -122,6 +122,8 @@ func healthMarketData(ctx context.Context, q Q, now time.Time) (HealthMarketData
 			m.KabuLogin = KabuLoginUnknown
 		case has(AlertKabuNotLoggedIn):
 			m.KabuLogin = KabuLoginNotLoggedIn
+		case has(AlertKabuUnreachable):
+			m.KabuLogin = KabuLoginUnreachable
 		default:
 			m.KabuLogin = KabuLoginOK
 		}

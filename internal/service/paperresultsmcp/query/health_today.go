@@ -19,6 +19,8 @@ const (
 	AttentionNoActiveModel = "no_active_model"
 	// AttentionKabuNotLoggedIn: the #802 alert of the same name is active.
 	AttentionKabuNotLoggedIn = AlertKabuNotLoggedIn
+	// AttentionKabuUnreachable: the #863 alert of the same name is active.
+	AttentionKabuUnreachable = AlertKabuUnreachable
 	// AttentionMarketDataIdle: the #802 alert of the same name is active.
 	AttentionMarketDataIdle = AlertMarketDataIdle
 	// AttentionMissingSession: a recent trading session has no snapshot although
@@ -41,7 +43,8 @@ const (
 // reports them.
 func AttentionCodes() []string {
 	return []string{
-		AttentionNoPaperTradesToday, AttentionNoActiveModel, AttentionKabuNotLoggedIn, AttentionMarketDataIdle,
+		AttentionNoPaperTradesToday, AttentionNoActiveModel, AttentionKabuNotLoggedIn, AttentionKabuUnreachable,
+		AttentionMarketDataIdle,
 		AttentionMissingSession, AttentionDailyGuardHalted, AttentionKillSwitchActive, AttentionRetrainSkipped,
 		AttentionOrderProposalStalled,
 	}
@@ -55,6 +58,7 @@ func AttentionCodes() []string {
 const (
 	KabuLoginOK          = "ok"
 	KabuLoginNotLoggedIn = "not_logged_in"
+	KabuLoginUnreachable = "unreachable"
 	KabuLoginUnknown     = "unknown"
 	MarketDataRunning    = "running"
 	MarketDataIdleStatus = "idle"

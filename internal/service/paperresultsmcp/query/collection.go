@@ -33,7 +33,7 @@ type Collection struct {
 	// and error code and counts the terminal skips (issue #801).
 	JobFailures JobFailures `json:"job_failures"`
 	// Alerts are the health alerts active now (issue #802): fixed codes
-	// (AlertKabuNotLoggedIn, AlertMarketDataIdle) with when they began.
+	// (AlertKabuNotLoggedIn, AlertKabuUnreachable, AlertMarketDataIdle) with when they began.
 	// They describe the present, not the period.
 	Alerts []Alert `json:"alerts"`
 	// Retention documents how long finished jobs are kept, which bounds every

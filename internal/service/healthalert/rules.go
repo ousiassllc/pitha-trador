@@ -18,8 +18,9 @@ const (
 	// IdleThreshold is how long a trading session may pass without a finished
 	// market-data job before market_data_idle is raised.
 	IdleThreshold = 5 * time.Minute
-	// NotLoggedInThreshold is how long a not-logged-in streak must last, after
-	// the 08:45 check, before kabu_not_logged_in is raised.
+	// NotLoggedInThreshold is how long a not-logged-in (or, issue #863,
+	// connection-refused) streak must last, after the 08:45 check, before
+	// kabu_not_logged_in (kabu_unreachable) is raised.
 	NotLoggedInThreshold = 5 * time.Minute
 	// CheckInterval is how often the Detector evaluates the rules.
 	CheckInterval = 30 * time.Second
@@ -54,6 +55,20 @@ func KabuWindow(now time.Time) (start time.Time, ok bool) {
 // existed at 08:45, or has lasted NotLoggedInThreshold; since is when the
 // condition began (the later of the streak start and 08:45).
 func KabuNotLoggedInSince(now, streakStart time.Time) (since time.Time, ok bool) {
+	return kabuStreakSince(now, streakStart)
+}
+
+// KabuUnreachableSince decides kabu_unreachable (issue #863) for a refused-
+// connection streak that began at streakStart, by the same rule as
+// KabuNotLoggedInSince.
+func KabuUnreachableSince(now, streakStart time.Time) (since time.Time, ok bool) {
+	return kabuStreakSince(now, streakStart)
+}
+
+// kabuStreakSince is the rule both kabu alerts share: inside KabuWindow, a
+// streak that already existed at 08:45 raises at once (since 08:45), one that
+// began later after NotLoggedInThreshold (since its start).
+func kabuStreakSince(now, streakStart time.Time) (since time.Time, ok bool) {
 	open, inWindow := KabuWindow(now)
 	if !inWindow || streakStart.IsZero() {
 		return time.Time{}, false
@@ -90,7 +105,7 @@ func IdleSince(now, lastActivity time.Time) (since time.Time, ok bool) {
 // break), whatever a stored row says. An unknown code is not shown.
 func InWindow(code string, now time.Time) bool {
 	switch code {
-	case domain.HealthAlertKabuNotLoggedIn:
+	case domain.HealthAlertKabuNotLoggedIn, domain.HealthAlertKabuUnreachable:
 		_, ok := KabuWindow(now)
 		return ok
 	case domain.HealthAlertMarketDataIdle:
