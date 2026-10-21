@@ -2,6 +2,7 @@ package opsettings
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
@@ -31,5 +32,11 @@ func (s *Service) validateBucket(ctx context.Context, key, encoded string) error
 	if err != nil {
 		return err
 	}
-	return invalidIf(bucketsettings.CheckSave(ctx, s.store, capital, key, encoded))
+	err = bucketsettings.CheckSave(ctx, s.store, capital, key, encoded)
+	var rejected *bucketsettings.RejectedError
+	if errors.As(err, &rejected) {
+		// The user-facing reason carries no package prefix (issue #844).
+		return &InvalidValueError{Reason: rejected.Reason}
+	}
+	return invalidIf(err)
 }

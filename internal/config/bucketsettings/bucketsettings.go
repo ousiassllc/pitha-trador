@@ -56,6 +56,13 @@ type Budgets struct {
 // Total is the budgets' sum.
 func (b Budgets) Total() float64 { return b.StockJPY + b.BondETFJPY }
 
+// RejectedError is a budget change the budget rules refuse (a value out of
+// range, or budgets whose sum exceeds the capital). Reason is the message for
+// the user, without this package's name; Error adds it back as context for logs.
+type RejectedError struct{ Reason string }
+
+func (e *RejectedError) Error() string { return "bucketsettings: " + e.Reason }
+
 // Validate checks n against key's range: a whole number of yen from 0 to
 // MaxBudgetJPY. It is the single range check every writer of a bucket key uses.
 func Validate(key string, n float64) error {
@@ -63,7 +70,7 @@ func Validate(key string, n float64) error {
 		return fmt.Errorf("bucketsettings: %q is not a bucket budget key", key)
 	}
 	if math.IsNaN(n) || math.IsInf(n, 0) || n != math.Trunc(n) || n < 0 || n > MaxBudgetJPY {
-		return fmt.Errorf("bucketsettings: %s=%v: 予算枠は 0 円以上 1 兆円（1000000000000 円）以下の整数で指定してください（0 はその枠を使わない）", key, n)
+		return &RejectedError{Reason: fmt.Sprintf("%s=%v: 予算枠は 0 円以上 1 兆円（1000000000000 円）以下の整数で指定してください（0 はその枠を使わない）", key, n)}
 	}
 	return nil
 }
@@ -86,11 +93,18 @@ func Apply(o *Overrides, key, jsonValue string) error {
 	return nil
 }
 
+// DefaultStockBudgetJPY is the stock budget while no row is stored: the whole
+// operating capital rounded down to a whole yen (budgets are integers, the
+// capital need not be). Resolve, DefaultText and SeedDefaults all use it, so
+// the Risk Engine, the Settings screen and what Reset stores agree.
+func DefaultStockBudgetJPY(capitalJPY float64) float64 { return math.Floor(capitalJPY) }
+
 // Resolve returns the budgets in force for an operating capital of capitalJPY.
 // A bucket with no stored row has its default: the stock bucket the whole
-// capital, the bond_etf bucket 0 - the behaviour before the buckets existed.
+// capital (DefaultStockBudgetJPY), the bond_etf bucket 0 - the behaviour
+// before the buckets existed.
 func (o Overrides) Resolve(capitalJPY float64) Budgets {
-	b := Budgets{StockJPY: capitalJPY}
+	b := Budgets{StockJPY: DefaultStockBudgetJPY(capitalJPY)}
 	if o.StockBudgetJPY != nil {
 		b.StockJPY = *o.StockBudgetJPY
 	}
@@ -104,7 +118,7 @@ func (o Overrides) Resolve(capitalJPY float64) Budgets {
 // the operating capital, they cannot be worth more than it together.
 func CheckTotal(b Budgets, capitalJPY float64) error {
 	if total := b.Total(); total > capitalJPY {
-		return fmt.Errorf("bucketsettings: 枠の合計 %v 円（株 %v 円 + 債券ETF %v 円）が運用資金 %v 円を超えています", total, b.StockJPY, b.BondETFJPY, capitalJPY)
+		return &RejectedError{Reason: fmt.Sprintf("枠の合計 %v 円（株 %v 円 + 債券ETF %v 円）が運用資金 %v 円を超えています", total, b.StockJPY, b.BondETFJPY, capitalJPY)}
 	}
 	return nil
 }
@@ -172,12 +186,11 @@ func CheckSave(ctx context.Context, store Store, capitalJPY float64, key, encode
 }
 
 // DefaultText is what applies to key while nothing is stored, for an operating
-// capital of capitalJPY: the stock budget the whole capital rounded down to a
-// whole yen (budgets are integers, and the capital need not be), the bond_etf
+// capital of capitalJPY: the stock budget DefaultStockBudgetJPY, the bond_etf
 // budget 0.
 func DefaultText(key string, capitalJPY float64) string {
 	if key == KeyStockBudgetJPY {
-		return strconv.FormatFloat(math.Floor(capitalJPY), 'f', -1, 64)
+		return strconv.FormatFloat(DefaultStockBudgetJPY(capitalJPY), 'f', -1, 64)
 	}
 	return "0"
 }
