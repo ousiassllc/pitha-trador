@@ -19,7 +19,7 @@ import (
 )
 
 // bucketEngine is an Engine over a fresh DB with one 2,000-yen snapshot
-// (instrument 1) and the stock-bucket gates of a Paper Engine (withBucket) or
+// (instrument 1) and the bucket gates of a Paper Engine (withBucket: Config.Buckets) or
 // none (a Live-style Engine). testLimits: capital 30,000,000, 2% per symbol, so
 // an entry is 300 shares x 2,000 yen = 600,000 yen.
 func bucketEngine(t *testing.T, withBucket bool) (*risk.Engine, *system.RuntimeSettingsRepository, *sql.DB) {
@@ -125,7 +125,7 @@ func TestRisk_StockBucketBudgetLoweredRejectsExcessWithBucketBudgetExceeded(t *t
 }
 
 // The default split (stock = the whole capital, no stored row or the seeded
-// row) and an Engine without a StockBucket (Live) decide exactly as before.
+// row) and an Engine without Config.Buckets (Live) decide exactly as before.
 func TestRisk_DefaultBucketSplitAndLiveEngineAreUnchanged(t *testing.T) {
 	ctx := context.Background()
 	e, settings, db := bucketEngine(t, true)
@@ -141,7 +141,7 @@ func TestRisk_DefaultBucketSplitAndLiveEngineAreUnchanged(t *testing.T) {
 	live, liveSettings, _ := bucketEngine(t, false)
 	storeStockBudget(t, liveSettings, "0")
 	if passed, reason := live.Check(ctx, 1, domain.JevDirectionLong); !passed {
-		t.Fatalf("Live-style Check (no StockBucket) = (false, %q), want no budget gate", reason)
+		t.Fatalf("Live-style Check (no Buckets) = (false, %q), want no budget gate", reason)
 	}
 }
 
