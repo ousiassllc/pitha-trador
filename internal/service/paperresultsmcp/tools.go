@@ -34,8 +34,9 @@ type toolEnv struct {
 
 // tool is one entry of the dispatch table. The table is the complete set of
 // capabilities: there is no other way for a request to reach SQL. Every entry
-// is a read except the settings tools that set writes (the whitelisted
-// runtime_settings keys and the write switch, via mcpset.Writer).
+// is a read except the tools that set writes (the whitelisted runtime_settings
+// keys, the write switch, order_proposal_submit and order_proposals_disable,
+// all via mcpset.Writer).
 type tool struct {
 	name        string
 	description string
@@ -101,7 +102,8 @@ func limitProp(maxLimit int) map[string]any {
 }
 
 // tools is the dispatch table: the nine read tools of the API spec §3, then
-// the settings tools (settings_tools.go).
+// the settings tools (settings_tools.go) and the order-proposal tools
+// (order_proposal_tools.go).
 var tools = []tool{
 	{
 		name:        "paper_performance_summary",

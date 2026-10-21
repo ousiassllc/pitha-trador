@@ -42,6 +42,17 @@ const KeyWriteEnabled = "mcp.settings_write_enabled"
 // DefaultWriteEnabled is the value while nothing is stored.
 const DefaultWriteEnabled = true
 
+// KeyOrderProposalsEnabled is the runtime_settings key of the order-proposal
+// switch (issue #827): the JSON integer 1 (order_proposal_submit accepts
+// proposals) or 0. Unlike the write switch it is OFF while nothing is stored
+// and while the stored value is damaged. Only the Settings screen turns it on;
+// the MCP can only turn it off (order_proposals_disable). It is not one of
+// Keys, so settings_set cannot write it either.
+const KeyOrderProposalsEnabled = "mcp.order_proposals_enabled"
+
+// DefaultOrderProposalsEnabled is the value while nothing is stored.
+const DefaultOrderProposalsEnabled = false
+
 // Units of a Spec.
 const (
 	UnitYen     = "yen"
@@ -155,12 +166,22 @@ func Text(enabled bool) string {
 // Apply decodes jsonValue - a runtime_settings.value for KeyWriteEnabled, the
 // JSON integer 0 or 1.
 func Apply(jsonValue string) (enabled bool, err error) {
+	return applySwitch(KeyWriteEnabled, jsonValue)
+}
+
+// ApplyOrderProposals decodes jsonValue - a runtime_settings.value for
+// KeyOrderProposalsEnabled, the JSON integer 0 or 1.
+func ApplyOrderProposals(jsonValue string) (enabled bool, err error) {
+	return applySwitch(KeyOrderProposalsEnabled, jsonValue)
+}
+
+func applySwitch(key, jsonValue string) (bool, error) {
 	var n *float64
 	if err := json.Unmarshal([]byte(jsonValue), &n); err != nil {
-		return false, fmt.Errorf("mcpwritesettings: decode runtime setting %s=%q as a number: %w", KeyWriteEnabled, jsonValue, err)
+		return false, fmt.Errorf("mcpwritesettings: decode runtime setting %s=%q as a number: %w", key, jsonValue, err)
 	}
 	if n == nil || (*n != 0 && *n != 1) {
-		return false, fmt.Errorf("mcpwritesettings: runtime setting %s=%q must be 0 or 1", KeyWriteEnabled, jsonValue)
+		return false, fmt.Errorf("mcpwritesettings: runtime setting %s=%q must be 0 or 1", key, jsonValue)
 	}
 	return *n == 1, nil
 }

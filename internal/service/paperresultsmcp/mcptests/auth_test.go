@@ -179,7 +179,11 @@ func TestUnauthorizedRequestsReachNoSQLAndOpenNoConnection(t *testing.T) {
 		"initialize": rpc("initialize", map[string]any{"protocolVersion": "2025-06-18"}),
 		"tools/list": rpc("tools/list", nil),
 		"tools/call": callBody("paper_performance_summary", period),
-		"garbage":    "not json at all",
+		// The order-proposal tools (issue #827) need the key like every request.
+		"order_proposal_submit":   callBody("order_proposal_submit", map[string]any{"idempotency_key": "proposal-0001"}),
+		"order_proposal_get":      callBody("order_proposal_get", map[string]any{"proposal_id": 1}),
+		"order_proposals_disable": callBody("order_proposals_disable", map[string]any{}),
+		"garbage":                 "not json at all",
 	}
 	var messages []string
 	for hn, h := range headers {

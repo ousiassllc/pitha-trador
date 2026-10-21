@@ -46,6 +46,30 @@ func (g *Gate) SetEnabled(ctx context.Context, enabled bool) error {
 	})
 }
 
+// OrderProposalsEnabled reports the order-proposal switch (off while nothing
+// is stored or the stored value is damaged).
+func (g *Gate) OrderProposalsEnabled(ctx context.Context) (bool, error) {
+	return OrderProposalsEnabled(ctx, g.settings)
+}
+
+// SetOrderProposalsEnabled stores the order-proposal switch and records it as
+// a GUI change. It is the only way to turn proposals on: the MCP side
+// (Writer.DisableOrderProposals) can only turn them off.
+func (g *Gate) SetOrderProposalsEnabled(ctx context.Context, enabled bool) error {
+	return g.inTx(ctx, func(tx *sql.Tx, now time.Time) error {
+		store := system.NewRuntimeSettingsRepositoryOn(tx)
+		was, err := OrderProposalsEnabled(ctx, store)
+		if err != nil {
+			return err
+		}
+		if err := store.Set(ctx, mcpwritesettings.KeyOrderProposalsEnabled, mcpwritesettings.Text(enabled), now); err != nil {
+			return err
+		}
+		_, err = insertAudit(ctx, tx, now, proposalSwitchEntry(ActorGUI, "", was, enabled))
+		return err
+	})
+}
+
 // inTx runs fn in one application-database transaction (see runInTx),
 // stamped now.
 func (g *Gate) inTx(ctx context.Context, fn func(tx *sql.Tx, now time.Time) error) error {

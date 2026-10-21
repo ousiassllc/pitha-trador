@@ -4,10 +4,12 @@
 // settings_audit.
 //
 // The MCP's database connection stays mode=ro. The only write path is Writer,
-// a second connection that is used for exactly two operations, each one
+// a second connection that is used for exactly four operations, each one
 // transaction: upsert one whitelisted runtime_settings row plus one
-// mcp_settings_audit row (Writer.Set), and flip the write switch plus its
-// audit row (Writer.SetEnabled). The values are validated and stored by
+// mcp_settings_audit row (Writer.Set), flip the write switch plus its audit
+// row (Writer.SetEnabled), insert one order_proposals row plus its first
+// order_proposal_events row (Writer.SubmitProposal, issue #827), and switch
+// order-proposal intake off plus its audit row (Writer.DisableOrderProposals). The values are validated and stored by
 // internal/service/opsettings over the same runtime_settings repository the
 // Settings screen uses, so the application sees a saved value at once.
 package mcpset
@@ -35,6 +37,10 @@ const (
 	ActionReset        = "reset"
 	ActionWriteEnable  = "write_enable"
 	ActionWriteDisable = "write_disable"
+	// The order-proposal switch (issue #827): enable is the Settings screen's,
+	// disable is the Settings screen's and the MCP's.
+	ActionOrderProposalsEnable  = "order_proposals_enable"
+	ActionOrderProposalsDisable = "order_proposals_disable"
 )
 
 // MaxAuditList is the most audit rows one settings_audit call returns.
@@ -56,8 +62,9 @@ type Entry struct {
 // maskedEntry applies the masking policy: values of a secret-class key (or any
 // key off the whitelist) never reach the table or an output.
 func maskedEntry(e Entry) Entry {
-	if e.Action == ActionWriteEnable || e.Action == ActionWriteDisable {
-		return e // the switch's own "1"/"0"
+	switch e.Action {
+	case ActionWriteEnable, ActionWriteDisable, ActionOrderProposalsEnable, ActionOrderProposalsDisable:
+		return e // a switch's own "1"/"0"
 	}
 	if mcpwritesettings.IsSecret(e.Key) {
 		m := mcpwritesettings.Masked
