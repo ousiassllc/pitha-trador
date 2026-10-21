@@ -17,7 +17,7 @@ package jev
 // defaults, and a promotion (GUI or MCP jev_prompt_promote only, never automatic,
 // never the self-improvement loop) stores another registered version in
 // runtime_settings (jevshadowsettings.KeyLiveVersion), which Trader reads on every
-// call (LiveVersion). The shadow runs a candidate beside it (shadow.go).
+// call (LiveVersion). The shadow runs a candidate beside it (jev/shadow).
 
 // ScoutQuestionVersion is the Jev Scout question-set/prompt version this
 // build sends and records to jev_decisions.question_version

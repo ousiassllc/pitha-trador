@@ -2,6 +2,7 @@ package shadowtests
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
@@ -23,7 +24,8 @@ func deref(p *float64) any {
 }
 
 type compareData struct {
-	Versions []shadowquery.ShadowVersionComparison `json:"versions"`
+	Versions    []shadowquery.ShadowVersionComparison `json:"versions"`
+	OutcomeNote string                                `json:"outcome_note"`
 }
 
 func level(v shadowquery.ShadowVersionComparison, eq string) shadowquery.QualityCount {
@@ -119,7 +121,8 @@ func TestCompareSetsLiveAndShadowEntryQualityDistributionsSideBySide(t *testing.
 // future_return and the shadow's own direction (docs §5.1).
 func TestCompareOutcomesRecomputeTheShadowResultFromItsOwnDirection(t *testing.T) {
 	srv, w := shadowServer(t)
-	// Live LONG decision 1 (poor): future_return +1.0%. Shadow SHORT (fair) -> directional return -1.0, a miss.
+	// Live LONG decision 1 (poor): future_return +1.0% (it stops at the live LONG's take-profit). Shadow SHORT (fair)
+	// disagrees with a directional live decision: its outcome is bounded by the live barrier, so it is NOT scored.
 	liveDecision(t, w, 1, "2026-10-01T01:00:00Z", "trader-v3", "LONG", "poor")
 	shadowDecision(t, w, 1, "trader-v4", "SHORT", "fair", 0.0001, "2026-10-01T01:00:05Z")
 	outcome(t, w, 1, 5, 2, 1.0, 1, "tp", 12.0)
@@ -156,6 +159,9 @@ func TestCompareOutcomesRecomputeTheShadowResultFromItsOwnDirection(t *testing.T
 	}
 	approx(t, "live poor hit rate", livePoor.HitRate, 2.0/3.0)
 	approx(t, "live poor avg directional return", livePoor.AvgDirectionalReturnPct, (1.0-0.5+3.0)/3)
+	if livePoor.Comparable != 3 || livePoor.ExcludedDisagreement != 0 {
+		t.Errorf("live poor comparable/excluded = %d/%d, want 3/0 (the live side is never excluded)", livePoor.Comparable, livePoor.ExcludedDisagreement)
+	}
 	if livePoor.RecordedSamples != 3 {
 		t.Errorf("live poor recorded samples = %d, want 3", livePoor.RecordedSamples)
 	}
@@ -176,16 +182,22 @@ func TestCompareOutcomesRecomputeTheShadowResultFromItsOwnDirection(t *testing.T
 		t.Errorf("shadow good recorded samples = %d, want 2 (both agree with the live direction)", shadowGood.RecordedSamples)
 	}
 
-	// Shadow fair: decision 1, the shadow said SHORT while the live was LONG and the price rose 1.0%:
-	// directional return -1.0, a miss - although the live label says the (LONG) direction was correct.
+	// Shadow fair: decision 1, the shadow said SHORT while the live was LONG and the live label ended at
+	// its take-profit (+1.0%). Scoring it would make it a certain miss only because of the live outcome, so
+	// the row is counted as directional but excluded from the hit rate and the average.
 	shadowFair := outcomeOf(v, 5, 2, "fair").Shadow
-	if shadowFair.Samples != 1 || shadowFair.Directional != 1 {
-		t.Errorf("shadow fair samples/directional = %d/%d, want 1/1", shadowFair.Samples, shadowFair.Directional)
+	if shadowFair.Samples != 1 || shadowFair.Directional != 1 || shadowFair.Comparable != 0 || shadowFair.ExcludedDisagreement != 1 {
+		t.Errorf("shadow fair samples/directional/comparable/excluded = %d/%d/%d/%d, want 1/1/0/1",
+			shadowFair.Samples, shadowFair.Directional, shadowFair.Comparable, shadowFair.ExcludedDisagreement)
 	}
-	approx(t, "shadow fair hit rate (recomputed)", shadowFair.HitRate, 0)
-	approx(t, "shadow fair avg directional return", shadowFair.AvgDirectionalReturnPct, -1.0)
+	if shadowFair.HitRate != nil || shadowFair.AvgDirectionalReturnPct != nil {
+		t.Errorf("shadow fair hit rate / avg = %v / %v, want none for a disagreeing row", shadowFair.HitRate, shadowFair.AvgDirectionalReturnPct)
+	}
 	if shadowFair.RecordedSamples != 0 || shadowFair.RecordedHitRate != nil || shadowFair.RecordedAvgNetReturnBps != nil {
 		t.Errorf("shadow fair recorded fields = %+v, want none (its direction differs from the label's)", shadowFair)
+	}
+	if d.OutcomeNote != shadowquery.OutcomeNote || !strings.Contains(d.OutcomeNote, "excluded_disagreement") {
+		t.Errorf("outcome_note = %q, want the fixed caveat", d.OutcomeNote)
 	}
 
 	// Shadow NONE (decision 3): counted as a sample, not as a directional decision.
@@ -197,6 +209,38 @@ func TestCompareOutcomesRecomputeTheShadowResultFromItsOwnDirection(t *testing.T
 	liveFair := outcomeOf(v, 5, 2, "fair").Live
 	approx(t, "live fair hit rate (SHORT sign flip)", liveFair.HitRate, 1)
 	approx(t, "live fair avg directional return", liveFair.AvgDirectionalReturnPct, 2.0)
+}
+
+// future_return stops at the LIVE direction's barrier, so a shadow that takes
+// the opposite side of a directional live decision would be scored by the live
+// outcome (a stopped-out live LONG makes an opposite shadow SHORT a certain
+// hit). Only rows whose end does not depend on the live direction are scored:
+// the shadow agrees with the live direction, or the live decision was NONE (the
+// label runs to the horizon's end).
+func TestCompareDoesNotScoreAShadowThatDisagreesWithALiveDirection(t *testing.T) {
+	srv, w := shadowServer(t)
+	// Live LONG stopped out (future_return -1.0): the opposite shadow SHORT would "hit" for free.
+	liveDecision(t, w, 1, "2026-10-01T01:00:00Z", "trader-v3", "LONG", "poor")
+	shadowDecision(t, w, 1, "trader-v4", "SHORT", "good", 0.0001, "2026-10-01T01:00:05Z")
+	outcome(t, w, 1, 5, 2, -1.0, 0, "sl", -10.0)
+	// Live LONG took profit (+1.0): the opposite shadow SHORT would "miss" for free.
+	liveDecision(t, w, 2, "2026-10-01T02:00:00Z", "trader-v3", "LONG", "poor")
+	shadowDecision(t, w, 2, "trader-v4", "SHORT", "good", 0.0001, "2026-10-01T02:00:05Z")
+	outcome(t, w, 2, 5, 2, 1.0, 1, "tp", 10.0)
+	// Live NONE (the label runs to the horizon's end, future_return -2.0): the shadow's SHORT is scored.
+	liveDecision(t, w, 3, "2026-10-01T03:00:00Z", "trader-v3", "NONE", "poor")
+	shadowDecision(t, w, 3, "trader-v4", "SHORT", "good", 0.0001, "2026-10-01T03:00:05Z")
+	outcome(t, w, 3, 5, 2, -2.0, nil, nil, nil)
+
+	var d compareData
+	srv.call(t, "jev_shadow_compare", period).data(t, "jev_shadow_compare", &d)
+	good := outcomeOf(d.Versions[0], 5, 2, "good").Shadow
+	if good.Samples != 3 || good.Directional != 3 || good.Comparable != 1 || good.ExcludedDisagreement != 2 {
+		t.Fatalf("shadow good samples/directional/comparable/excluded = %d/%d/%d/%d, want 3/3/1/2",
+			good.Samples, good.Directional, good.Comparable, good.ExcludedDisagreement)
+	}
+	approx(t, "shadow good hit rate (only the live-NONE row is scored)", good.HitRate, 1)
+	approx(t, "shadow good avg directional return", good.AvgDirectionalReturnPct, 2.0)
 }
 
 // The comparison's live side reproduces jev_calibration's counts for the same

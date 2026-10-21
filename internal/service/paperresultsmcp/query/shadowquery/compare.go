@@ -30,23 +30,31 @@ WITH pairs AS (
 //
 // Outcome method. calibration_outcomes is labeled for the LIVE direction: its
 // was_direction_correct, barrier_hit and net_return_bps describe the live
-// direction, and its future_return is the price return (percent) from the
-// live direction's entry reference to the end of the label. For the shadow side
-// the result is recomputed from future_return and the shadow's own direction:
-// directional return = future_return for LONG, -future_return for SHORT; a
-// NONE decision is not a trade (counted in Samples, not Directional); the
-// shadow "hits" when the directional return is above 0. The live side uses the
-// same formula so the two are comparable (OutcomeStats.HitRate,
-// AvgDirectionalReturnPct); the label's own net-of-cost fields are reported
+// direction, and its future_return is the price return (percent) from the live
+// direction's entry reference to the bar that ENDED the live label: the bar of
+// the live direction's take-profit or stop-loss barrier, or the horizon's end
+// when the live direction was NONE or no barrier was hit.
+//
+// So a side's own direction can be scored on future_return (LONG: as is, SHORT:
+// negated; NONE is not a trade) only where that end bar does not depend on the
+// live direction: the side's direction equals the live one (its own barriers),
+// or the live direction is NONE (the horizon's end). Where a directional shadow
+// disagrees with a directional live decision, future_return stops at the live
+// barrier, so the live outcome leaks into the shadow's: live LONG stopped out
+// makes an opposite shadow SHORT a certain "hit", live LONG taking profit makes
+// it a certain "miss". Those rows are NOT scored (OutcomeStats.
+// ExcludedDisagreement counts them) and ShadowComparison.OutcomeNote says so.
+// HitRate and AvgDirectionalReturnPct use the same rule for both sides, over
+// the Comparable rows; the label's own net-of-cost fields are reported
 // separately (Recorded*) and only where the side's direction equals the live
-// one. The recomputation is gross (no cost) and approximate: it reuses the
-// live label's entry price and end bar, so it is evidence for comparing
-// distributions, not a simulated P&L. Real P&L is judged after a promotion by
-// the #871 experiments.
+// one. The recomputation is gross (no cost) and approximate (it reuses the
+// live label's entry price and end bar): evidence for comparing which entries
+// each prompt takes, not a simulated P&L. Real P&L is judged after a promotion
+// by the #871 experiments.
 func Compare(ctx context.Context, q query.Q, r query.Range, version string) (ShadowComparison, error) {
 	from, to := r.Bounds()
 	args := []any{from, to, version, version}
-	out := ShadowComparison{Versions: []ShadowVersionComparison{}}
+	out := ShadowComparison{Versions: []ShadowVersionComparison{}, OutcomeNote: OutcomeNote}
 	index := map[string]int{}
 	slot := func(v string) (*ShadowVersionComparison, error) {
 		if i, ok := index[v]; ok {
@@ -178,6 +186,10 @@ SELECT 'shadow', version, s_eq, COUNT(*) FROM pairs GROUP BY version, s_eq`, arg
 	return rows.Err()
 }
 
+// comparableSQL selects the directional rows whose future_return is not bounded
+// by the live direction's barrier (see Compare).
+const comparableSQL = `dir <> 'NONE' AND (dir = live_dir OR live_dir = 'NONE')`
+
 // outcomeSide is the SQL of one side's outcome rows: side, version, level,
 // horizon, label version, the side's direction, the live direction and the
 // outcome columns.
@@ -191,8 +203,9 @@ func fillOutcomes(ctx context.Context, q query.Q, out *ShadowComparison, index m
 	rows, err := q.QueryContext(ctx, pairsCTE+`
 SELECT side, version, horizon, lv, eq, COUNT(*),
 	COALESCE(SUM(dir <> 'NONE'), 0),
-	COALESCE(SUM(dir <> 'NONE' AND (CASE dir WHEN 'LONG' THEN 1.0 ELSE -1.0 END) * fr > 0), 0),
-	AVG(CASE WHEN dir <> 'NONE' THEN (CASE dir WHEN 'LONG' THEN 1.0 ELSE -1.0 END) * fr END),
+	COALESCE(SUM(`+comparableSQL+`), 0),
+	COALESCE(SUM(`+comparableSQL+` AND (CASE dir WHEN 'LONG' THEN 1.0 ELSE -1.0 END) * fr > 0), 0),
+	AVG(CASE WHEN `+comparableSQL+` THEN (CASE dir WHEN 'LONG' THEN 1.0 ELSE -1.0 END) * fr END),
 	COALESCE(SUM(dir = live_dir AND wdc IS NOT NULL), 0),
 	COALESCE(SUM(dir = live_dir AND wdc = 1), 0),
 	COALESCE(SUM(dir = live_dir AND bh = 'tp'), 0), COALESCE(SUM(dir = live_dir AND bh = 'sl'), 0),
@@ -216,7 +229,7 @@ ORDER BY version, horizon, lv`, args...)
 			avgRet, avgNet sql.NullFloat64
 			recHits        int
 		)
-		if err := rows.Scan(&side, &v, &horizon, &lv, &eq, &s.Samples, &s.Directional, &hits, &avgRet,
+		if err := rows.Scan(&side, &v, &horizon, &lv, &eq, &s.Samples, &s.Directional, &s.Comparable, &hits, &avgRet,
 			&s.RecordedSamples, &recHits, &s.RecordedBarrierCounts.TP, &s.RecordedBarrierCounts.SL,
 			&s.RecordedBarrierCounts.Timeout, &avgNet); err != nil {
 			return fmt.Errorf("query: scan jev shadow outcomes: %w", err)
@@ -225,7 +238,8 @@ ORDER BY version, horizon, lv`, args...)
 		if !eq.Valid || i < 0 {
 			continue
 		}
-		s.HitRate = ratio(hits, s.Directional)
+		s.ExcludedDisagreement = s.Directional - s.Comparable
+		s.HitRate = ratio(hits, s.Comparable)
 		s.AvgDirectionalReturnPct = floatPtr(avgRet)
 		s.RecordedHitRate = ratio(recHits, s.RecordedSamples)
 		if lv == domain.CalibrationLabelVersionTripleBarrier {

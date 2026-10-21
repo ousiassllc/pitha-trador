@@ -37,7 +37,10 @@ func Promote(ctx context.Context, tx sqlutil.Executor, now time.Time, actor, cli
 		return jevshadow.Promotion{}, fmt.Errorf("%w: %q", ErrUnknownVersion, version)
 	}
 	store := system.NewRuntimeSettingsRepositoryOn(tx)
-	from := jev.LiveVersion(ctx, store)
+	from, err := jev.ResolveLiveVersion(ctx, store)
+	if err != nil {
+		return jevshadow.Promotion{}, err
+	}
 	if from == version {
 		return jevshadow.Promotion{}, fmt.Errorf("%w: %q", ErrAlreadyLive, version)
 	}

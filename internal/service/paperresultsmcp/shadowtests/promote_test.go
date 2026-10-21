@@ -35,8 +35,11 @@ func TestCostShowsTodayTotalDailyAndTheUnapprovedProposedCap(t *testing.T) {
 	if c.Enabled || c.CandidateVersion != nil || c.LiveVersion != "trader-v3" {
 		t.Errorf("state = enabled %v candidate %v live %q", c.Enabled, c.CandidateVersion, c.LiveVersion)
 	}
-	if c.DailyCapUSD != jevshadowsettings.ProposedDailyCostCapUSD || !c.CapIsDefault || c.DailyCapApproved {
-		t.Errorf("cap = %v default %v approved %v, want the unapproved proposal", c.DailyCapUSD, c.CapIsDefault, c.DailyCapApproved)
+	if c.DailyCapUSD != jevshadowsettings.ProposedDailyCostCapUSD || !c.CapIsDefault || c.CapSource != shadowquery.CapSourceProposed {
+		t.Errorf("cap = %v default %v source %q, want the unapproved proposal", c.DailyCapUSD, c.CapIsDefault, c.CapSource)
+	}
+	if c.FailureCap != jevshadowsettings.ProposedDailyFailureCap || c.FailureCapSource != shadowquery.CapSourceProposed || c.FailuresToday != 0 {
+		t.Errorf("failure cap = %d (%q) today %d, want the unapproved proposal and 0", c.FailureCap, c.FailureCapSource, c.FailuresToday)
 	}
 	if c.HaltToday != nil || c.LastHalt != nil {
 		t.Errorf("halt = %+v / %+v, want none", c.HaltToday, c.LastHalt)
@@ -50,9 +53,10 @@ func TestCostShowsTodayTotalDailyAndTheUnapprovedProposedCap(t *testing.T) {
 	testkit.Setting(t, w, jevshadowsettings.KeyCandidateVersion, `"trader-v4"`)
 	testkit.Setting(t, w, jevshadowsettings.KeyDailyCostCapUSD, "0.5")
 	testkit.Setting(t, w, jevshadowsettings.KeyHalt, `{"date":"2026-10-18","reason":"daily_cost_cap","spent_usd":0.625,"cap_usd":0.5,"at":"2026-10-18T02:00:00Z"}`)
+	testkit.Setting(t, w, jevshadowsettings.KeyFailures, `{"date":"2026-10-18","count":7}`)
 	var s shadowquery.ShadowCostStatus
 	srv.call(t, "jev_shadow_cost", map[string]any{}).data(t, "jev_shadow_cost", &s)
-	if !s.Enabled || s.CandidateVersion == nil || *s.CandidateVersion != "trader-v4" || s.DailyCapUSD != 0.5 || s.CapIsDefault || s.DailyCapApproved {
+	if !s.Enabled || s.CandidateVersion == nil || *s.CandidateVersion != "trader-v4" || s.DailyCapUSD != 0.5 || s.CapIsDefault || s.CapSource != shadowquery.CapSourceStored {
 		t.Errorf("state = %+v", s)
 	}
 	if s.HaltToday == nil || s.HaltToday.Reason != "daily_cost_cap" || s.HaltToday.SpentUSD != 0.625 || s.LastHalt == nil {

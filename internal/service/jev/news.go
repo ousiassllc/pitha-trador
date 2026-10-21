@@ -24,7 +24,7 @@ type options struct {
 	snapshotMaxAge time.Duration
 	// promptSettings and shadow are Trader-only (issue #872).
 	promptSettings jevshadowsettings.Store
-	shadow         *Shadow
+	shadow         ShadowSubmitter
 }
 
 // WithPromptSettings makes Trader send and record the live prompt version
@@ -38,7 +38,7 @@ func WithPromptSettings(store jevshadowsettings.Store) Option {
 // WithShadow makes Trader hand every completed live decision to shadow, which
 // asks a candidate prompt version about the same input in the background and
 // stores the answer apart from jev_decisions. Trader only.
-func WithShadow(shadow *Shadow) Option {
+func WithShadow(shadow ShadowSubmitter) Option {
 	return func(o *options) { o.shadow = shadow }
 }
 

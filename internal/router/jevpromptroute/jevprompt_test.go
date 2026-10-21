@@ -21,9 +21,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
-	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
-	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/router"
@@ -170,8 +167,9 @@ func TestSavingTheShadowSettings(t *testing.T) {
 			t.Errorf("%s = %q (%v), want %q", key, v, ok, want)
 		}
 	}
-	if body := a.get("/settings/jev-prompt-panel").Body.String(); strings.Contains(body, "暫定の案で、まだ承認されていません") {
-		t.Error("a stored cap is still shown as the unapproved proposal")
+	body := a.get("/settings/jev-prompt-panel").Body.String()
+	if strings.Contains(body, `data-testid="jev-prompt-cap-unapproved"`) || !strings.Contains(body, `data-testid="jev-prompt-cap-effective">0.5 USD`) || strings.Contains(body, "placeholder=") {
+		t.Errorf("a stored cap is shown as the unapproved proposal, or not shown as stored\n%s", body)
 	}
 
 	// Unchecked = off; a blank cap restores the proposal; no candidate clears it.
@@ -184,6 +182,33 @@ func TestSavingTheShadowSettings(t *testing.T) {
 	}
 	if _, ok := a.stored(jevshadowsettings.KeyCandidateVersion); ok {
 		t.Error("an empty candidate did not clear it")
+	}
+}
+
+// While the proposal is in force the cap field is empty and shows it only as a
+// placeholder: switching the shadow on and saving the form untouched must not
+// store the unapproved 0.1 as if a person had chosen it (the GUI and the MCP's
+// cap_source then agree: proposed_unapproved until a person types a value).
+func TestSavingTheFormUntouchedKeepsTheCapUnapproved(t *testing.T) {
+	a := newApp(t)
+	body := a.get("/settings/jev-prompt-panel").Body.String()
+	for _, want := range []string{`placeholder="0.1（暫定の案・未承認）"`, `data-testid="jev-prompt-cap-unapproved"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("default panel lacks %q\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `data-testid="jev-prompt-cap" value=`) || strings.Contains(body, `value="0.1"`) {
+		t.Fatalf("the default panel pre-fills the proposed cap\n%s", body)
+	}
+	// What a browser sends for the untouched cap field is an empty string.
+	if rec := a.post("/settings/jev-prompt/shadow", url.Values{"enabled": {"on"}, "candidate": {"trader-v4"}, "cap": {""}}, true); rec.Code != http.StatusOK {
+		t.Fatalf("save = %d", rec.Code)
+	}
+	if v, ok := a.stored(jevshadowsettings.KeyDailyCostCapUSD); ok {
+		t.Fatalf("saving the untouched form stored the proposed cap %q", v)
+	}
+	if body := a.get("/settings/jev-prompt-panel").Body.String(); !strings.Contains(body, `data-testid="jev-prompt-cap-unapproved"`) {
+		t.Error("the proposal lost its unapproved marking after an untouched save")
 	}
 }
 
@@ -207,95 +232,5 @@ func TestInvalidShadowInputIsRejectedAndSavesNothing(t *testing.T) {
 				t.Errorf("%s: stored %s", name, key)
 			}
 		}
-	}
-}
-
-func TestPromotionIsExplicitAuditedAndShownInThePanel(t *testing.T) {
-	a := newApp(t)
-	if rec := a.post("/settings/jev-prompt/promote", url.Values{"version": {"trader-v4"}}, false); rec.Code == http.StatusOK {
-		t.Fatalf("promotion without CSRF = %d", rec.Code)
-	}
-	if n := a.rows(`SELECT COUNT(*) FROM jev_prompt_promotions`); n != 0 {
-		t.Fatalf("promotion rows = %d before any promotion", n)
-	}
-	// Saving the shadow settings is not a promotion.
-	a.post("/settings/jev-prompt/shadow", url.Values{"enabled": {"on"}, "candidate": {"trader-v4"}, "cap": {"1"}}, true)
-	if _, ok := a.stored(jevshadowsettings.KeyLiveVersion); ok || a.rows(`SELECT COUNT(*) FROM jev_prompt_promotions`) != 0 {
-		t.Fatal("enabling the shadow with a candidate changed the live version")
-	}
-
-	rec := a.post("/settings/jev-prompt/promote", url.Values{"version": {"trader-v4"}}, true)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "trader-v3 から trader-v4 に昇格しました") {
-		t.Fatalf("promote = %d %s", rec.Code, rec.Body.String())
-	}
-	if v, _ := a.stored(jevshadowsettings.KeyLiveVersion); v != `"trader-v4"` {
-		t.Fatalf("live version = %q", v)
-	}
-	var actor, client, from, to string
-	if err := a.db.QueryRow(`SELECT actor, client, from_version, to_version FROM jev_prompt_promotions`).Scan(&actor, &client, &from, &to); err != nil {
-		t.Fatal(err)
-	}
-	if actor != "gui" || client != "" || from != "trader-v3" || to != "trader-v4" {
-		t.Fatalf("audit row = %s %q %s %s", actor, client, from, to)
-	}
-	body := a.get("/settings/jev-prompt-panel").Body.String()
-	for _, want := range []string{`data-testid="jev-prompt-live-version">trader-v4<`, `data-testid="jev-prompt-promotion-row"`, "GUI", "trader-v3", "trader-v4"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("panel after promotion lacks %q", want)
-		}
-	}
-	// The live version is no longer offered as a candidate / target; trader-v3 is now.
-	if strings.Contains(body, `<option value="trader-v4"`) {
-		t.Error("the new live version is still offered")
-	}
-
-	for _, version := range []string{"trader-v4", "trader-v999", ""} {
-		if rec := a.post("/settings/jev-prompt/promote", url.Values{"version": {version}}, true); rec.Code != http.StatusUnprocessableEntity {
-			t.Errorf("promote %q = %d, want 422", version, rec.Code)
-		}
-	}
-	if n := a.rows(`SELECT COUNT(*) FROM jev_prompt_promotions`); n != 1 {
-		t.Errorf("promotion rows = %d, want 1", n)
-	}
-}
-
-func TestPanelShowsTheCostAndWhyTheShadowStopped(t *testing.T) {
-	a := newApp(t)
-	inst, err := market.NewInstrumentRepository(a.db).Create(context.Background(), domain.Instrument{Symbol: "7203", Name: "7203 Inc", Market: "TSE Prime", IsActive: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	decisions := judgement.NewDecisionRepository(a.db)
-	for _, row := range []struct {
-		at   string
-		cost float64
-	}{{"2026-10-21T14:00:00Z", 0.02}, {"2026-10-22T00:30:00Z", 0.03}, {"2026-10-22T01:30:00Z", 0.01}} {
-		live, err := decisions.Insert(context.Background(), domain.JevDecision{
-			InstrumentID: inst.ID, Symbol: "7203", Timestamp: now, DecisionType: domain.JevDecisionTypeTrader,
-			StateHash: "h", StateJSON: "{}", QuestionVersion: "trader-v3", ResponseJSON: "{}", ModelID: "m",
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := a.db.Exec(`INSERT INTO jev_shadow_decisions (jev_decision_id, prompt_version, model_id, response_json, direction, regime, entry_quality,
-			confidence, toxic_flow, liquidity_stressed, continuation_probability, latency_ms, input_tokens, request_cost, created_at)
-			VALUES (?, 'trader-v4', 'm', '{}', 'LONG', 'TREND', 'good', 0.5, 0, 0, 0, 1, 1000, ?, ?)`, live.ID, row.cost, row.at); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := a.settings.Set(context.Background(), jevshadowsettings.KeyHalt, `{"date":"2026-10-22","reason":"daily_cost_cap","spent_usd":0.04,"cap_usd":0.03,"at":"2026-10-22T01:00:00Z"}`, now); err != nil {
-		t.Fatal(err)
-	}
-	body := a.get("/settings/jev-prompt-panel").Body.String()
-	for _, want := range []string{
-		`data-testid="jev-prompt-cost-today">0.04 USD`, `data-testid="jev-prompt-cost-total">0.06 USD`,
-		"1 日の費用上限（0.03 USD）に達したため、今日のシャドーは止まっています", "ライブの判断は続いています",
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("panel lacks %q\n%s", want, body)
-		}
-	}
-	if n := strings.Count(body, `data-testid="jev-prompt-daily-row"`); n != 2 {
-		t.Errorf("daily rows = %d, want 2 (2026-10-21 23:00 JST and 2026-10-22)", n)
 	}
 }

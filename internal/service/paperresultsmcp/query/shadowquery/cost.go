@@ -29,6 +29,13 @@ type DayCost struct {
 	RequestCostUSD float64 `json:"request_cost_usd"`
 }
 
+// CapSource values of jev_shadow_cost: a limit that is the build's proposal
+// (暫定の案・未承認) and one a person stored.
+const (
+	CapSourceProposed = "proposed_unapproved"
+	CapSourceStored   = "stored"
+)
+
 // Spend is a number of shadow calls and their cost.
 type Spend struct {
 	Calls          int     `json:"calls"`
@@ -41,7 +48,10 @@ type ShadowHalt struct {
 	Reason   string  `json:"reason"`
 	SpentUSD float64 `json:"spent_usd"`
 	CapUSD   float64 `json:"cap_usd"`
-	At       string  `json:"at"`
+	// Failures and FailureCap are set for reason daily_failure_cap only.
+	Failures   int    `json:"failures,omitempty"`
+	FailureCap int    `json:"failure_cap,omitempty"`
+	At         string `json:"at"`
 }
 
 // ShadowCostStatus is jev_shadow_cost's data: the shadow's request_cost (today
@@ -51,13 +61,22 @@ type ShadowCostStatus struct {
 	Enabled          bool    `json:"enabled"`
 	CandidateVersion *string `json:"candidate_version"`
 	LiveVersion      string  `json:"live_version"`
-	// DailyCapUSD is the daily cost cap. DailyCapApproved is always false:
-	// the proposed default is 暫定の案・未承認 until a person decides the value
-	// (jevshadowsettings.ProposedDailyCostCapUSD); CapIsDefault tells whether
-	// the cap is that proposal or a value a person stored.
-	DailyCapUSD      float64   `json:"daily_cap_usd"`
-	CapIsDefault     bool      `json:"cap_is_default"`
-	DailyCapApproved bool      `json:"daily_cap_approved"`
+	// DailyCapUSD is the daily cost cap. CapSource says where it comes from, a
+	// fact separate from whether anyone approved it: CapSourceProposed (nothing
+	// stored: the proposal, 暫定の案・未承認,
+	// jevshadowsettings.ProposedDailyCostCapUSD) or CapSourceStored (a value a
+	// person saved on the Settings screen). CapIsDefault is CapSource ==
+	// CapSourceProposed.
+	DailyCapUSD  float64 `json:"daily_cap_usd"`
+	CapIsDefault bool    `json:"cap_is_default"`
+	CapSource    string  `json:"cap_source"`
+	// FailureCap is how many failed shadow calls a JST day may have before the
+	// shadow stops (a constant, jevshadowsettings.ProposedDailyFailureCap:
+	// 暫定の案・未承認, so FailureCapSource is always CapSourceProposed);
+	// FailuresToday is today's count.
+	FailureCap       int       `json:"failure_cap"`
+	FailureCapSource string    `json:"failure_cap_source"`
+	FailuresToday    int       `json:"failures_today"`
 	Today            DayCost   `json:"today"`
 	Total            Spend     `json:"total"`
 	Daily            []DayCost `json:"daily"`
@@ -97,7 +116,8 @@ func (s shadowSettingsReader) Get(ctx context.Context, key string) (string, bool
 func Cost(ctx context.Context, q query.Q, now time.Time, liveDefault string, registered []string) (ShadowCostStatus, error) {
 	cfg := jevshadowsettings.Load(ctx, shadowSettingsReader{q})
 	status := ShadowCostStatus{
-		Enabled: cfg.Enabled, LiveVersion: liveDefault, DailyCapUSD: cfg.CapUSD, CapIsDefault: cfg.CapIsDefault,
+		Enabled: cfg.Enabled, LiveVersion: liveDefault, DailyCapUSD: cfg.CapUSD, CapIsDefault: cfg.CapIsDefault, CapSource: CapSourceStored,
+		FailureCap: jevshadowsettings.ProposedDailyFailureCap, FailureCapSource: CapSourceProposed,
 		Daily: []DayCost{}, RecentPromotions: []Promotion{}, RegisteredVersions: registered,
 	}
 	if cfg.CandidateVersion != "" {
@@ -110,6 +130,10 @@ func Cost(ctx context.Context, q query.Q, now time.Time, liveDefault string, reg
 	from, to := jevshadowsettings.DayBounds(now)
 	today := jevshadowsettings.Day(now)
 	status.Today = DayCost{Date: today}
+	status.FailuresToday = cfg.Failures.FailuresOn(today)
+	if cfg.CapIsDefault {
+		status.CapSource = CapSourceProposed
+	}
 	if err := q.QueryRowContext(ctx, `
 SELECT COUNT(*), COALESCE(SUM(request_cost), 0) FROM jev_shadow_decisions WHERE created_at >= ? AND created_at < ?`,
 		sqlutil.FormatTime(from), sqlutil.FormatTime(to)).Scan(&status.Today.Calls, &status.Today.RequestCostUSD); err != nil {
@@ -141,7 +165,7 @@ FROM jev_shadow_decisions GROUP BY day ORDER BY day DESC LIMIT ?`, MaxShadowCost
 	_ = rows.Close()
 
 	if h := cfg.Halt; h != nil {
-		halt := ShadowHalt{Date: h.Date, Reason: h.Reason, SpentUSD: h.SpentUSD, CapUSD: h.CapUSD, At: h.At}
+		halt := ShadowHalt{Date: h.Date, Reason: h.Reason, SpentUSD: h.SpentUSD, CapUSD: h.CapUSD, Failures: h.Failures, FailureCap: h.FailureCap, At: h.At}
 		status.LastHalt = &halt
 		if h.Date == today {
 			status.HaltToday = &halt

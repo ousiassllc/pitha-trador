@@ -21,6 +21,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/jevtest"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
@@ -36,7 +37,10 @@ type fakeJev struct {
 	mu         sync.Mutex
 	versions   []string
 	failShadow bool
-	holdShadow chan struct{} // when non-nil, candidate calls wait for it to close
+	// invalidShadow makes candidate calls answer 200 with an answer set that fails
+	// validation: the vendor may bill such a call, but nothing is stored for it.
+	invalidShadow bool
+	holdShadow    chan struct{} // when non-nil, candidate calls wait for it to close
 }
 
 func (f *fakeJev) calls(version string) int {
@@ -65,7 +69,7 @@ func (f *fakeJev) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.Lock()
 	f.versions = append(f.versions, version)
-	hold, fail := f.holdShadow, f.failShadow
+	hold, fail, invalid := f.holdShadow, f.failShadow, f.invalidShadow
 	f.mu.Unlock()
 	if version == "trader-v4" {
 		if hold != nil {
@@ -73,6 +77,11 @@ func (f *fakeJev) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if fail {
 			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if invalid {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"model":"jev-test","answers":{}}`))
 			return
 		}
 	}
@@ -97,7 +106,7 @@ type shadowEnv struct {
 	api      *fakeJev
 	client   *jev.Client
 	trader   *jev.Trader
-	shadow   *jev.Shadow
+	shadow   *shadow.Shadow
 	results  *judgement.ShadowRepository
 	settings *system.RuntimeSettingsRepository
 	instID   int64
@@ -121,7 +130,7 @@ func newShadowEnv(t *testing.T, mode metalabelsettings.Mode, api *fakeJev) *shad
 	e.instID = mustCreateInstrument(t, market.NewInstrumentRepository(db), "7203").ID
 	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
 	e.client = client
-	e.shadow = jev.NewShadow(client, e.results, e.settings, mode, e.clock)
+	e.shadow = shadow.New(client, e.results, e.settings, mode, e.clock)
 	e.trader = jev.NewTrader(client, decisions, rag.NewService(db, decisions, market.NewSnapshotRepository(db)),
 		jev.WithPromptSettings(e.settings), jev.WithShadow(e.shadow))
 	return e

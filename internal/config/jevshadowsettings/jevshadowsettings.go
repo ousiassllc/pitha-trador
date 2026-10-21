@@ -5,7 +5,7 @@
 // and the record of a day the shadow was stopped by that cap.
 //
 // Every key lives in runtime_settings (docs/architecture/er.md
-// §runtime_settings) and is read by the application (jev.Trader / jev.Shadow,
+// §runtime_settings) and is read by the application (jev.Trader / jev/shadow.Shadow,
 // the Settings screen) and, read-only, by the Paper results MCP, which share
 // the database but not memory. None of them is on the MCP settings_set
 // whitelist (mcpwritesettings): the shadow switch, the candidate and the cost
@@ -44,14 +44,17 @@ const (
 	// KeyDailyCostCapUSD is the shadow's daily cost cap in USD (a JSON number).
 	// Nothing stored means ProposedDailyCostCapUSD.
 	KeyDailyCostCapUSD = "jev.shadow.daily_cost_cap_usd"
-	// KeyHalt records the day the shadow was stopped by the cost cap (a JSON
-	// object, Halt). The shadow runs again from the next JST day.
+	// KeyHalt records the day the shadow was stopped by the cost or failure cap
+	// (a JSON object, Halt). The shadow runs again from the next JST day.
 	KeyHalt = "jev.shadow.halt"
+	// KeyFailures counts the day's failed shadow calls (a JSON object,
+	// Failures; halt.go).
+	KeyFailures = "jev.shadow.failures"
 )
 
 // Keys returns every key of this package.
 func Keys() []string {
-	return []string{KeyLiveVersion, KeyEnabled, KeyCandidateVersion, KeyDailyCostCapUSD, KeyHalt}
+	return []string{KeyLiveVersion, KeyEnabled, KeyCandidateVersion, KeyDailyCostCapUSD, KeyHalt, KeyFailures}
 }
 
 // DefaultEnabled is the shadow switch while nothing is stored.
@@ -74,9 +77,6 @@ const MaxDailyCostCapUSD = 100.0
 // MaxVersionLen bounds a version name.
 const MaxVersionLen = 40
 
-// HaltReasonDailyCostCap is the Halt.Reason of a day stopped by the cap.
-const HaltReasonDailyCostCap = "daily_cost_cap"
-
 // JST is the fixed Asia/Tokyo offset: the shadow's "day" is a JST day, like the
 // trading session.
 var JST = time.FixedZone("JST", 9*60*60)
@@ -90,41 +90,6 @@ func DayBounds(t time.Time) (from, to time.Time) {
 	local := t.In(JST)
 	start := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, JST)
 	return start.UTC(), start.AddDate(0, 0, 1).UTC()
-}
-
-// Halt is the stored record of a day stopped by the cost cap.
-type Halt struct {
-	// Date is the JST day ("YYYY-MM-DD") the shadow is stopped for.
-	Date string `json:"date"`
-	// Reason is a fixed code (HaltReasonDailyCostCap).
-	Reason string `json:"reason"`
-	// SpentUSD is the day's shadow cost when the cap was reached.
-	SpentUSD float64 `json:"spent_usd"`
-	// CapUSD is the cap that was reached.
-	CapUSD float64 `json:"cap_usd"`
-	// At is when the shadow was stopped (RFC 3339, UTC).
-	At string `json:"at"`
-}
-
-// EncodeHalt renders h as the runtime_settings value of KeyHalt.
-func EncodeHalt(h Halt) (string, error) {
-	b, err := json.Marshal(h)
-	if err != nil {
-		return "", fmt.Errorf("jevshadowsettings: encode %s: %w", KeyHalt, err)
-	}
-	return string(b), nil
-}
-
-// ParseHalt decodes the runtime_settings value of KeyHalt.
-func ParseHalt(jsonValue string) (Halt, error) {
-	var h Halt
-	if err := json.Unmarshal([]byte(jsonValue), &h); err != nil {
-		return Halt{}, fmt.Errorf("jevshadowsettings: decode runtime setting %s=%q: %w", KeyHalt, jsonValue, err)
-	}
-	if _, err := time.Parse(time.DateOnly, h.Date); err != nil || h.Reason == "" {
-		return Halt{}, fmt.Errorf("jevshadowsettings: runtime setting %s=%q needs a date and a reason", KeyHalt, jsonValue)
-	}
-	return h, nil
 }
 
 // Switch renders a switch state as stored: "1" or "0".
@@ -227,8 +192,10 @@ type Settings struct {
 	// ProposedDailyCostCapUSD (unapproved).
 	CapUSD       float64
 	CapIsDefault bool
-	// Halt is the recorded cost-cap stop, nil for none.
+	// Halt is the recorded cost- or failure-cap stop, nil for none.
 	Halt *Halt
+	// Failures is the stored failed-call counter, nil for none.
+	Failures *Failures
 }
 
 // Load reads every key. A stored row that no longer parses (the application
@@ -273,23 +240,35 @@ func Load(ctx context.Context, store Store) Settings {
 			slog.Warn("jevshadowsettings: ignoring the stored halt record", "error", err)
 		}
 	}
+	if raw, ok := read(ctx, store, KeyFailures); ok {
+		if f, err := ParseFailures(raw); err == nil {
+			s.Failures = &f
+		} else {
+			slog.Warn("jevshadowsettings: ignoring the stored failure counter", "error", err)
+		}
+	}
 	return s
 }
 
 // LoadLiveVersion reads only KeyLiveVersion: the stored live version, or ""
 // while nothing (valid) is stored. jev.Trader reads it on every call, so it
-// does not load the other keys.
-func LoadLiveVersion(ctx context.Context, store Store) string {
-	raw, ok := read(ctx, store, KeyLiveVersion)
+// does not load the other keys. A failed READ is an error (the caller must not
+// mistake "could not read" for "nothing promoted"); a stored value that does
+// not parse is logged and treated as nothing stored.
+func LoadLiveVersion(ctx context.Context, store Store) (string, error) {
+	raw, ok, err := store.Get(ctx, KeyLiveVersion)
+	if err != nil {
+		return "", fmt.Errorf("jevshadowsettings: read the live prompt version: %w", err)
+	}
 	if !ok {
-		return ""
+		return "", nil
 	}
 	v, err := ParseVersion(KeyLiveVersion, raw)
 	if err != nil {
 		slog.Warn("jevshadowsettings: ignoring the stored live version", "error", err)
-		return ""
+		return "", nil
 	}
-	return v
+	return v, nil
 }
 
 func read(ctx context.Context, store Store, key string) (string, bool) {

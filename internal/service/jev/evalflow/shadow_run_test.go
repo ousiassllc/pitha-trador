@@ -9,7 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
 )
 
 func TestShadow_PaperEnabled_StoresALinkedRowForEveryLiveDecision(t *testing.T) {
@@ -44,7 +44,7 @@ func TestShadow_PaperEnabled_StoresALinkedRowForEveryLiveDecision(t *testing.T) 
 		if version != "trader-v4" || eq != "good" || dir != "LONG" || mdl != "jev-test" || tokens != 1200 || !strings.Contains(resp, `"entry_quality":"good"`) {
 			t.Errorf("shadow row = %s %s %s %s tokens=%d resp=%s", version, eq, dir, mdl, tokens, resp)
 		}
-		if want := jev.InputCostUSD(1200); cost != want || cost <= 0 {
+		if want := shadow.InputCostUSD(1200); cost != want || cost <= 0 {
 			t.Errorf("request_cost = %v, want the priced input tokens %v", cost, want)
 		}
 	}
@@ -170,7 +170,7 @@ func TestShadow_FailuresDoNotFeedTheJevAPIErrorRate(t *testing.T) {
 func TestShadow_DailyCostCapStopsTheShadowAndLiveContinues(t *testing.T) {
 	e := newShadowEnv(t, metalabelsettings.ModePaper, &fakeJev{})
 	e.enable()
-	perCall := jev.InputCostUSD(1200)
+	perCall := shadow.InputCostUSD(1200)
 	// Room for exactly two calls: the check runs before each call, so spend
 	// after the second reaches the cap and the third is not made.
 	e.set(jevshadowsettings.KeyDailyCostCapUSD, jsonNumber(perCall*2))
@@ -198,5 +198,75 @@ func TestShadow_DailyCostCapStopsTheShadowAndLiveContinues(t *testing.T) {
 	e.shadow.Wait()
 	if n := e.count(`SELECT COUNT(*) FROM jev_shadow_decisions`); n != 3 {
 		t.Fatalf("shadow rows the next day = %d, want 3", n)
+	}
+}
+
+// The cost cap sums stored calls only, so a candidate that answers invalidly
+// every time (a call the vendor may bill but nothing stores) would run forever
+// at a recorded cost of 0. Failed calls count too: the shadow stops for the day
+// at ProposedDailyFailureCap of them, the reason is recorded, the live decision
+// goes on, and the next JST day starts a fresh count.
+func TestShadow_InvalidResponsesStopTheShadowAtTheFailureCapAndLiveContinues(t *testing.T) {
+	e := newShadowEnv(t, metalabelsettings.ModePaper, &fakeJev{invalidShadow: true})
+	e.enable()
+	capN := jevshadowsettings.ProposedDailyFailureCap
+	for range capN + 5 {
+		if live := e.evaluate(); live.ID == 0 {
+			t.Fatal("the live decision stopped")
+		}
+		e.shadow.Wait()
+	}
+	if got := e.api.calls("trader-v4"); got != capN {
+		t.Fatalf("candidate calls = %d, want %d (stopped at the failure cap)", got, capN)
+	}
+	if got := e.api.calls("trader-v3"); got != capN+5 {
+		t.Fatalf("live calls = %d, want %d", got, capN+5)
+	}
+	if n := e.count(`SELECT COUNT(*) FROM jev_shadow_decisions`); n != 0 {
+		t.Fatalf("invalid responses stored %d shadow rows", n)
+	}
+	cfg := jevshadowsettings.Load(context.Background(), e.settings)
+	if cfg.Halt == nil || cfg.Halt.Reason != jevshadowsettings.HaltReasonDailyFailureCap || cfg.Halt.Date != "2026-10-22" ||
+		cfg.Halt.Failures != capN || cfg.Halt.FailureCap != capN {
+		t.Fatalf("halt record = %+v, want the daily_failure_cap stop of 2026-10-22 at %d failures", cfg.Halt, capN)
+	}
+	if got := cfg.Failures.FailuresOn("2026-10-22"); got != capN {
+		t.Fatalf("failure counter = %d, want %d", got, capN)
+	}
+
+	e.now = e.now.Add(24 * time.Hour) // the next JST day: a fresh count
+	e.evaluate()
+	e.shadow.Wait()
+	if got := e.api.calls("trader-v4"); got != capN+1 {
+		t.Fatalf("candidate calls the next day = %d, want %d", got, capN+1)
+	}
+}
+
+// Close (the application's shutdown) cancels the calls in flight instead of
+// waiting out their timeouts, and comparisons submitted afterwards are dropped.
+func TestShadow_CloseCancelsCallsInFlightAndDropsLaterOnes(t *testing.T) {
+	hold := make(chan struct{})
+	e := newShadowEnv(t, metalabelsettings.ModePaper, &fakeJev{holdShadow: hold})
+	t.Cleanup(func() { close(hold) }) // registered after the server's Close, so it runs first: unblocks the held handler
+	e.enable()
+	e.evaluate()
+	deadline := time.Now().Add(10 * time.Second)
+	for e.api.calls("trader-v4") == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the candidate call never started")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	closed := make(chan struct{})
+	go func() { e.trader.Close(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close waited for the held shadow call instead of cancelling it")
+	}
+	e.evaluate()
+	e.shadow.Wait()
+	if got := e.api.calls("trader-v4"); got != 1 {
+		t.Fatalf("candidate calls = %d, want 1 (a comparison submitted after Close is dropped)", got)
 	}
 }

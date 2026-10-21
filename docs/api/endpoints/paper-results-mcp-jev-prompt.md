@@ -2,7 +2,7 @@
 
 `paper-results-mcp.md`（API 仕様）の分割章（ファイルの行数上限のため。章番号は元の文書の §3.23）。Jev の trader のプロンプトの版と、候補の版をライブと並べて動かす「シャドー」の比較・費用・昇格の 3 ツールを定める（issue #872）。共通の引数（期間 §1）・上限（§2）・エラー（`paper-results-mcp-errors.md`）は元の文書と同じ。仕様の背景は `architecture/paper-results-mcp.md` §5.1・§7.3。
 
-シャドーを**有効にする・候補の版を選ぶ・費用の上限を決める**ツールは無い（Settings 画面だけ。`settings_set` のホワイトリストにも無い）。**1 日の費用の上限の値は暫定の案で未承認**であり（`internal/config/jevshadowsettings.ProposedDailyCostCapUSD`）、人が決めるまで承認済みとして扱わない。
+シャドーを**有効にする・候補の版を選ぶ・費用の上限を決める**ツールは無い（Settings 画面だけ。`settings_set` のホワイトリストにも無い）。**1 日の費用の上限の値と 1 日の失敗回数の上限の値は暫定の案で未承認**であり（`internal/config/jevshadowsettings.ProposedDailyCostCapUSD` / `ProposedDailyFailureCap`）、人が決めるまで承認済みとして扱わない。
 
 ## 3.23.1 `jev_shadow_compare`（読み取り専用）
 
@@ -18,14 +18,18 @@
 | `cost` | `calls`（= `pairs`）・`request_cost_usd`（その組のシャドーの `request_cost` の合計）・`avg_latency_ms` |
 | `outcomes[]` | `calibration_outcomes` を `jev_decision_id` で結んだ結果（`JevCalibration` と同じ結び方）。`horizon_minutes` と `label_version` ごと（ラベル版は混ぜない。FR-CAL-4）に `by_entry_quality[]`（5 行）。各行は `live` と `shadow` の結果の統計 |
 
+`data.outcome_note`（固定の文）: 結果の読み方の注意。`calibration_outcomes` はライブの方向に対するラベルで `future_return` はライブのバリアで止まるため、**方向がライブと食い違う行は採点しない**（偏る）。
+
 結果の統計（`live` / `shadow` は同じ形。計算方法は `architecture/paper-results-mcp.md` §5.1）:
 
 | フィールド | 定義 |
 |------------|------|
 | `samples` | `calibration_outcomes` の行がある組の数 |
 | `directional` | そのうち、その側の方向が `NONE` でない数 |
-| `hit_rate` | `directional` のうち、その側の方向で符号を付けた `future_return` が 0 より大きい割合。ライブ側にも同じ式を使う |
-| `avg_directional_return_pct` | その側の方向で符号を付けた `future_return` の平均（%。コストを引かない総リターン） |
+| `comparable` | `directional` のうち採点できる行の数（その側の方向がライブと同じ、またはライブが `NONE`。ライブの終端が結果を決めない行） |
+| `excluded_disagreement` | `directional` − `comparable`。方向がライブの方向と食い違い、`future_return` がライブのバリアで止まるため採点しない行（ライブ側は常に 0） |
+| `hit_rate` | `comparable` のうち、その側の方向で符号を付けた `future_return` が 0 より大きい割合。ライブ側にも同じ式を使う |
+| `avg_directional_return_pct` | `comparable` の、その側の方向で符号を付けた `future_return` の平均（%。コストを引かない総リターン） |
 | `recorded_samples` | ラベルに記録された値が、その側の方向にも当てはまる行の数（その側の方向がライブの方向と同じ行だけ） |
 | `recorded_hit_rate` | その行の `was_direction_correct`（コスト控除後）の割合 |
 | `recorded_barrier_counts` | その行の `barrier_hit` の件数（`label_version` 2 だけ） |
@@ -42,11 +46,12 @@
 | `enabled` | シャドーの有効（`runtime_settings` の `jev.shadow.enabled`）。既定 `false` |
 | `candidate_version` | 候補の版（`jev.shadow.candidate_version`）。無ければ `null` |
 | `live_version` | ライブの版（`jev.trader_prompt_version`。保存が無い・壊れている・このビルドに無い版のときはビルドの既定 `trader-v3`） |
-| `daily_cap_usd` / `cap_is_default` / `daily_cap_approved` | 1 日あたりの費用の上限（JST の日）。`cap_is_default` は保存値が無く暫定の案が効いているか。`daily_cap_approved` は常に `false`（**暫定の案・未承認**） |
+| `daily_cap_usd` / `cap_is_default` / `cap_source` | 1 日あたりの費用の上限（JST の日）。`cap_source` は `proposed_unapproved`（保存値が無く、効いているのは**暫定の案・未承認**の値。`cap_is_default` が `true`）か `stored`（Settings 画面で保存された値）。保存済みと承認済みは別の事実で、`stored` も人が承認した値とは限らない |
+| `failure_cap` / `failure_cap_source` / `failures_today` | 1 日（JST）に許す失敗した呼び出し（応答が不正・保存の失敗・タイムアウトなど。課金されても費用の合計に入らない）の回数の上限と、今日の回数。`failure_cap_source` は常に `proposed_unapproved`（**暫定の案・未承認**の定数） |
 | `today` | JST の今日の `date`・`calls`・`request_cost_usd` |
 | `total` | 累計の `calls`・`request_cost_usd` |
 | `daily[]` | JST の日ごとの費用。新しい順、最大 31 日 |
-| `halt_today` / `last_halt` | 上限で止まった記録（`date`・`reason`（固定コード `daily_cost_cap`）・`spent_usd`・`cap_usd`・`at`）。止まっていなければ `null` |
+| `halt_today` / `last_halt` | 上限で止まった記録（`date`・`reason`（固定コード `daily_cost_cap` または `daily_failure_cap`）・`spent_usd`・`cap_usd`・`failures`・`failure_cap`（後ろの 2 つは `daily_failure_cap` のとき）・`at`）。止まっていなければ `null` |
 | `recent_promotions[]` | `jev_prompt_promotions` の新しい順、最大 10 件（`id`・`at`・`actor`（`mcp` / `gui`）・`client`（IP だけ）・`from_version`・`to_version`） |
 | `registered_versions[]` | このビルドが定義する trader の版（昇格できる版） |
 
@@ -77,3 +82,5 @@
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-22 | 新規作成。`jev_shadow_compare` / `jev_shadow_cost` / `jev_prompt_promote`（元の文書の版 1.13 で追加） | issue #872 |
+| 1.1 | 2026-10-22 | `jev_shadow_compare` に `comparable` / `excluded_disagreement` / `outcome_note` を追加し、方向がライブと食い違う行を採点しない形に改めた（`future_return` がライブのバリアで止まる偏りを避けるため）。`jev_shadow_cost` の `daily_cap_approved` を `cap_source` に置き換え、失敗回数の上限（`failure_cap` ほか）と `daily_failure_cap` の止まった記録を追加 | issue #872 レビュー対応 |
+

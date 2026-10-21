@@ -2,6 +2,8 @@ package evalflow_test
 
 import (
 	"context"
+	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,7 +15,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
 	"github.com/ousiassllc/pitha-trador/internal/service/jevprompt"
+	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
 func TestShadow_CostSumsAreDailyInJSTAndCumulative(t *testing.T) {
@@ -35,7 +39,7 @@ func TestShadow_CostSumsAreDailyInJSTAndCumulative(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	perCall := jev.InputCostUSD(1200)
+	perCall := shadow.InputCostUSD(1200)
 	if today.Calls != 2 || total.Calls != 3 || !near(today.CostUSD, 2*perCall) || !near(total.CostUSD, 3*perCall) {
 		t.Fatalf("today=%+v total=%+v, want 2 and 3 calls of %v", today, total, perCall)
 	}
@@ -126,5 +130,59 @@ func TestDecisionInsertRefusesAMissingPromptVersion(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("a decision without a prompt version must be refused")
+	}
+}
+
+// flakyStore reads runtime_settings through the real repository until fail is set.
+type flakyStore struct {
+	inner jevshadowsettings.Store
+	fail  atomic.Bool
+}
+
+func (f *flakyStore) Get(ctx context.Context, key string) (string, bool, error) {
+	if f.fail.Load() {
+		return "", false, errors.New("settings read failed")
+	}
+	return f.inner.Get(ctx, key)
+}
+
+// A failed READ of the live version must never silently turn a promoted version
+// back into the build default: the Trader keeps the last version it read, and
+// with none read yet it fails the call (nothing is recorded or sent) instead of
+// guessing.
+func TestLiveVersion_ReadFailureKeepsTheLastVersionRead(t *testing.T) {
+	e := newShadowEnv(t, metalabelsettings.ModePaper, &fakeJev{})
+	e.set(jevshadowsettings.KeyLiveVersion, `"trader-v4"`) // a promotion happened
+	store := &flakyStore{inner: e.settings}
+	decisions := judgement.NewDecisionRepository(e.db)
+	newTrader := func() *jev.Trader {
+		return jev.NewTrader(e.client, decisions, rag.NewService(e.db, decisions, market.NewSnapshotRepository(e.db)), jev.WithPromptSettings(store))
+	}
+	state := jev.ScoutState{Symbol: "7203", Timestamp: e.now, Price: 2100}
+
+	// Nothing read yet and the read fails: the call fails, nothing is sent or stored.
+	store.fail.Store(true)
+	fresh := newTrader()
+	if _, err := fresh.Evaluate(context.Background(), e.instID, state); err == nil {
+		t.Fatal("Evaluate succeeded although the live version could not be read")
+	}
+	if e.api.calls("trader-v3") != 0 || e.api.calls("trader-v4") != 0 || e.count(`SELECT COUNT(*) FROM jev_decisions`) != 0 {
+		t.Fatal("a call was sent or recorded without a known live version")
+	}
+
+	// One good read, then the read fails: the promoted version stays.
+	store.fail.Store(false)
+	trader := newTrader()
+	first, err := trader.Evaluate(context.Background(), e.instID, state)
+	if err != nil || first.QuestionVersion != "trader-v4" {
+		t.Fatalf("first decision = %+v, %v; want a trader-v4 one", first, err)
+	}
+	store.fail.Store(true)
+	second, err := trader.Evaluate(context.Background(), e.instID, state)
+	if err != nil {
+		t.Fatalf("Evaluate after a failed read: %v", err)
+	}
+	if second.QuestionVersion != "trader-v4" || e.api.calls("trader-v3") != 0 {
+		t.Fatalf("after a failed read the decision is %q (v3 calls %d); the promoted version must stay", second.QuestionVersion, e.api.calls("trader-v3"))
 	}
 }

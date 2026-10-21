@@ -7,38 +7,40 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 )
 
-// InputPriceUSDPerMtok is TypeSafe's published price of Jev 1.13 / 1.14 per
-// million INPUT tokens (USD 0.042; output tokens are free), from
-// https://docs.typesafe.ai/models as read on 2026-10-22. The API returns no
-// charge, only usage (docs/architecture/overview/integrations.md §6), so the
-// shadow's request_cost is this price times usage.input_tokens: an estimate
-// of the vendor's price list, not a figure checked against an invoice. If the
-// vendor changes the price, this is the one constant to update.
-const InputPriceUSDPerMtok = 0.042
-
-// InputCostUSD is the estimated cost in USD of a call that used tokens input
-// tokens (InputPriceUSDPerMtok).
-func InputCostUSD(tokens int) float64 {
-	return float64(tokens) * InputPriceUSDPerMtok / 1e6
-}
-
-// LiveVersion returns the live Trader prompt version: the one a promotion
-// stored in runtime_settings, else the build default TraderQuestionVersion. A
-// stored version this build does not know (for example after a downgrade)
-// falls back to the build default and is logged: an unknown name must never be
-// sent. A nil store is the build default.
-func LiveVersion(ctx context.Context, store jevshadowsettings.Store) string {
+// ResolveLiveVersion returns the live Trader prompt version: the one a
+// promotion stored in runtime_settings, else the build default
+// TraderQuestionVersion. A stored version this build does not know (for example
+// after a downgrade) or a damaged stored value falls back to the build default
+// and is logged as an error: an unknown name must never be sent. A nil store is
+// the build default. A failed READ of the setting is an error, never the build
+// default: "could not read" must not silently turn a promoted version back into
+// the old one.
+func ResolveLiveVersion(ctx context.Context, store jevshadowsettings.Store) (string, error) {
 	if store == nil {
-		return TraderQuestionVersion
+		return TraderQuestionVersion, nil
 	}
-	stored := jevshadowsettings.LoadLiveVersion(ctx, store)
+	stored, err := jevshadowsettings.LoadLiveVersion(ctx, store)
 	switch {
+	case err != nil:
+		return "", err
 	case stored == "":
-		return TraderQuestionVersion
+		return TraderQuestionVersion, nil
 	case !IsTraderVersion(stored):
 		slog.Error("jev: the stored live trader prompt version is not registered in this build; using the build default",
 			"stored", stored, "default", TraderQuestionVersion)
+		return TraderQuestionVersion, nil
+	}
+	return stored, nil
+}
+
+// LiveVersion is ResolveLiveVersion for display (the Settings screen, the MCP):
+// a failed read is logged and shows the build default. Never use it to decide
+// what to send or record.
+func LiveVersion(ctx context.Context, store jevshadowsettings.Store) string {
+	v, err := ResolveLiveVersion(ctx, store)
+	if err != nil {
+		slog.Error("jev: read the live prompt version for display", "error", err)
 		return TraderQuestionVersion
 	}
-	return stored
+	return v
 }

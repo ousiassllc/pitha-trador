@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -32,8 +33,11 @@ type Trader struct {
 	news      NewsSource
 	// promptSettings resolves the live prompt version (nil: the build default).
 	promptSettings jevshadowsettings.Store
+	// lastLive is the live version the last successful read resolved ("" before
+	// the first one): the fallback when a later read fails.
+	lastLive atomic.Value
 	// shadow runs a candidate prompt version on the same input (nil: none).
-	shadow *Shadow
+	shadow ShadowSubmitter
 }
 
 // NewTrader returns a Trader that calls client, persists decisions via
@@ -75,7 +79,10 @@ func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutSt
 	// The live version is read once per call and used for both the request and
 	// the recorded jev_decisions.question_version, so a row always names the
 	// prompt that produced it even if a promotion lands mid-call.
-	version := LiveVersion(ctx, t.promptSettings)
+	version, err := t.liveVersion(ctx)
+	if err != nil {
+		return domain.JevDecision{}, fmt.Errorf("jev: trader evaluation for %q: %w", state.Symbol, err)
+	}
 	resp, latency, err := t.client.Trader(ctx, TraderRequest{QuestionVersion: version, State: state, RAGContext: ragContext})
 	if err != nil {
 		return domain.JevDecision{}, fmt.Errorf("jev: trader evaluation for %q: %w", state.Symbol, err)
@@ -130,7 +137,45 @@ func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutSt
 	// Issue #872: the candidate prompt answers the same state and RAG context in
 	// the background (Paper only, off by default). Submit returns immediately and
 	// the answer goes to jev_shadow_decisions, never back into this decision.
-	t.shadow.Submit(saved, state, ragContext)
+	if t.shadow != nil {
+		t.shadow.Submit(saved, state, ragContext)
+	}
 
 	return saved, nil
+}
+
+// ShadowSubmitter is the shadow comparison (internal/service/jev/shadow) as the
+// Trader sees it: it receives each completed live decision with the exact state
+// and RAG context it was decided with, never returns anything the Trader could
+// use, and is cancelled at shutdown (Close). It is an interface so the shadow,
+// which calls the Client, lives in its own package.
+type ShadowSubmitter interface {
+	Submit(live domain.JevDecision, state ScoutState, ragContext rag.Context)
+	Close()
+}
+
+// liveVersion resolves the live prompt version for one call. When the setting
+// cannot be read it keeps using the last version it did read (the live version
+// never changes silently); with none yet it fails the call, which the job queue
+// retries, instead of guessing the build default.
+func (t *Trader) liveVersion(ctx context.Context) (string, error) {
+	v, err := ResolveLiveVersion(ctx, t.promptSettings)
+	if err == nil {
+		t.lastLive.Store(v)
+		return v, nil
+	}
+	if last, _ := t.lastLive.Load().(string); last != "" {
+		slog.Error("jev: reading the live prompt version failed; keeping the last one read", "version", last, "error", err)
+		return last, nil
+	}
+	return "", err
+}
+
+// Close stops the shadow comparisons in flight (application shutdown). A nil
+// Trader or one without a shadow is a no-op.
+func (t *Trader) Close() {
+	if t == nil || t.shadow == nil {
+		return
+	}
+	t.shadow.Close()
 }

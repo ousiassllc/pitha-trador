@@ -29,6 +29,10 @@ type PanelProps struct {
 	// (暫定の案・未承認), not a stored value.
 	CapUSD       string
 	CapIsDefault bool
+	// FailureCap and FailuresToday: the cap on failed shadow calls per JST day
+	// (暫定の案・未承認, a constant) and today's count.
+	FailureCap    int
+	FailuresToday int
 	TodayDate    string
 	TodayCalls   int
 	TodayUSD     string
@@ -83,15 +87,18 @@ templ Panel(props PanelProps) {
 			</label>
 			<label class="flex flex-col gap-1">
 				<span class="font-medium text-slate-700">1 日あたりの費用上限（USD。日本時間の日）</span>
-				@atoms.Input(atoms.InputProps{Name: "cap", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"value": props.CapUSD, "inputmode": "decimal", "autocomplete": "off", "data-testid": "jev-prompt-cap"}})
+				@atoms.Input(atoms.InputProps{Name: "cap", Class: "bg-white px-3 py-2", Attrs: capAttrs(props)})
 				<span class="text-xs text-slate-500" data-testid="jev-prompt-cap-note">
 					超えるとその日のシャドーを止めます（ライブの判断は止まりません。翌日に再開します）。
 					if props.CapIsDefault {
+						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（保存した値はありません）。
 						<strong class="text-amber-700" data-testid="jev-prompt-cap-unapproved">この値は暫定の案で、まだ承認されていません。</strong>
-						承認された値を決めて入力してください。空にして保存すると暫定の案に戻ります。
+						欄を空のまま保存すると暫定の案が使われ続けます。値を決めたら入力して保存してください。
 					} else {
-						空にして保存すると暫定の案（未承認）に戻ります。
+						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（この画面で保存された値）。欄を空にして保存すると保存した値を消し、暫定の案（未承認）に戻ります。
 					}
+					<br/>
+					<span data-testid="jev-prompt-failure-cap">失敗した呼び出し（応答が不正・保存に失敗・タイムアウトなど。課金されても費用の合計に入らないため）が 1 日に { itoa(props.FailureCap) } 回に達しても、その日のシャドーを止めます（今日: { itoa(props.FailuresToday) } 回）。この回数は暫定の案で、まだ承認されていません。</span>
 				</span>
 			</label>
 			<div>
@@ -160,6 +167,19 @@ func checkedAttrs(on bool, testID string) templ.Attributes {
 	attrs := templ.Attributes{"value": "on", "data-testid": testID}
 	if on {
 		attrs["checked"] = true
+	}
+	return attrs
+}
+
+// capAttrs is the cap input: while the proposal is in force the field is empty
+// and shows it as a placeholder, so saving the form without typing a value
+// never stores the unapproved proposal as if a person had chosen it.
+func capAttrs(props PanelProps) templ.Attributes {
+	attrs := templ.Attributes{"inputmode": "decimal", "autocomplete": "off", "data-testid": "jev-prompt-cap"}
+	if props.CapIsDefault {
+		attrs["placeholder"] = props.CapUSD + "（暫定の案・未承認）"
+	} else {
+		attrs["value"] = props.CapUSD
 	}
 	return attrs
 }

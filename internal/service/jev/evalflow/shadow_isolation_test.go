@@ -29,7 +29,8 @@ func TestShadowIsNotReferencedByTradingRAGCalibrationOrTraining(t *testing.T) {
 		"internal/repository/trading", "internal/repository/decisiontrade", "internal/repository/decisionsnapshot",
 	}
 	shadowSymbols := []string{
-		"jev_shadow_decisions", "JevShadowDecision", "ShadowRepository", "ShadowResults", "ShadowTrader", "jevshadowsettings", "jev.Shadow", "NewShadow",
+		"jev_shadow_decisions", "ShadowRepository", "ShadowSubmitter", "ShadowTrader", "jevshadowsettings",
+		"service/jev/shadow", "domain/jevshadow", "service/jevprompt",
 	}
 	for _, dir := range consumers {
 		abs := filepath.Join(root, dir)

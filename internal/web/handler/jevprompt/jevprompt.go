@@ -137,6 +137,8 @@ func props(st jevprompt.State, notice string) view.PanelProps {
 		Versions:         st.Versions,
 		CapUSD:           usd(st.CapUSD),
 		CapIsDefault:     st.CapIsDefault,
+		FailureCap:       st.FailureCap,
+		FailuresToday:    st.FailuresToday,
 		TodayDate:        st.Today.Date,
 		TodayCalls:       st.Today.Calls,
 		TodayUSD:         usd(st.Today.CostUSD),
@@ -148,7 +150,12 @@ func props(st jevprompt.State, notice string) view.PanelProps {
 		p.Daily = append(p.Daily, view.DayRow{Date: d.Date, Calls: d.Calls, USD: usd(d.CostUSD)})
 	}
 	if h := st.HaltToday; h != nil {
-		p.HaltNote = "1 日の費用上限（" + usd(h.CapUSD) + " USD）に達したため、今日のシャドーは止まっています（費用 " + usd(h.SpentUSD) + " USD。ライブの判断は続いています。翌日に再開します）。"
+		switch h.Reason {
+		case jevshadowsettings.HaltReasonDailyFailureCap:
+			p.HaltNote = "失敗した呼び出しが 1 日の上限（" + itoa(h.FailureCap) + " 回。暫定の案・未承認）に達したため、今日のシャドーは止まっています（ライブの判断は続いています。翌日に再開します）。"
+		default:
+			p.HaltNote = "1 日の費用上限（" + usd(h.CapUSD) + " USD）に達したため、今日のシャドーは止まっています（費用 " + usd(h.SpentUSD) + " USD。ライブの判断は続いています。翌日に再開します）。"
+		}
 	}
 	for _, pr := range st.Promotions {
 		by := "GUI"
@@ -160,11 +167,11 @@ func props(st jevprompt.State, notice string) view.PanelProps {
 	return p
 }
 
-// usd renders a USD amount without trailing zeros but with enough digits for a
-// sub-cent request cost.
 // usd formats a USD amount with at most 8 decimals and no trailing zeros, so
 // summed float noise (0.0054600000000000004) never reaches the screen.
 func usd(v float64) string {
 	s := strconv.FormatFloat(v, 'f', 8, 64)
 	return strings.TrimSuffix(strings.TrimRight(s, "0"), ".")
 }
+
+func itoa(n int) string { return strconv.Itoa(n) }

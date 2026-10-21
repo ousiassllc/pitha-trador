@@ -54,21 +54,29 @@ type DirectionAgreement struct {
 	Rate  *float64 `json:"rate"`
 }
 
+// OutcomeNote is the fixed caveat jev_shadow_compare returns with its outcomes.
+const OutcomeNote = "calibration_outcomes is labeled for the live direction and future_return stops at the live direction's barrier. " +
+	"A shadow decision whose direction differs from a directional live decision cannot be scored from it (the live outcome would decide the shadow's), " +
+	"so those rows are counted in excluded_disagreement and left out of hit_rate and avg_directional_return_pct (computed over comparable rows only; gross of cost). " +
+	"This compares which entries each prompt takes, not profit and loss."
+
 // OutcomeStats is one side's result for one entry_quality level at one
 // horizon and label version, over the pairs that have a calibration_outcomes
-// row. The first four fields are computed the same way for the live and the
-// shadow side, from the side's own direction and the outcome's future_return
-// (gross, no cost): Samples are the outcomes, Directional those whose
-// direction is not NONE, HitRate the share of them whose direction-signed
-// future_return is above 0, AvgDirectionalReturnPct its mean (percent).
-// The Recorded* fields use the label as the labeler recorded it
-// (was_direction_correct, net of cost; barrier_hit; net_return_bps; label
-// version 2 only) and so exist only where the side's direction equals the
-// live direction the label was made for: all directional rows of the live
-// side, only the agreeing rows of the shadow side.
+// row. Samples are the outcomes, Directional those whose side direction is not
+// NONE, Comparable the directional ones that can be scored from future_return
+// (the side's direction equals the live one, or the live one is NONE),
+// ExcludedDisagreement = Directional - Comparable (always 0 for the live side).
+// HitRate is the share of Comparable rows whose direction-signed future_return
+// is above 0 and AvgDirectionalReturnPct its mean (percent), computed the same
+// way for both sides (gross, no cost). The Recorded* fields use the label as
+// the labeler recorded it (was_direction_correct, net of cost; barrier_hit;
+// net_return_bps; label version 2 only) and so exist only where the side's
+// direction equals the live direction the label was made for.
 type OutcomeStats struct {
 	Samples                 int                 `json:"samples"`
 	Directional             int                 `json:"directional"`
+	Comparable              int                 `json:"comparable"`
+	ExcludedDisagreement    int                 `json:"excluded_disagreement"`
 	HitRate                 *float64            `json:"hit_rate"`
 	AvgDirectionalReturnPct *float64            `json:"avg_directional_return_pct"`
 	RecordedSamples         int                 `json:"recorded_samples"`
@@ -115,6 +123,8 @@ type ShadowVersionComparison struct {
 // ShadowComparison is jev_shadow_compare's data.
 type ShadowComparison struct {
 	Versions []ShadowVersionComparison `json:"versions"`
+	// OutcomeNote is OutcomeNote: how to read the outcomes.
+	OutcomeNote string `json:"outcome_note"`
 }
 
 // pairsCTE selects the (live trader decision, shadow decision) pairs of a

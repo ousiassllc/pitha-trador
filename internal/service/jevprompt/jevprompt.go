@@ -50,10 +50,14 @@ type State struct {
 	// CapIsDefault: the cap is the proposal (暫定の案・未承認), not a value a
 	// person stored.
 	CapIsDefault bool
-	Today        judgement.DayCost
-	Total        judgement.Spend
-	Daily        []judgement.DayCost
-	// HaltToday is set when the cap stopped the shadow on today's JST day.
+	// FailuresToday and FailureCap: the failed shadow calls of today (JST) and
+	// the cap on them (jevshadowsettings.ProposedDailyFailureCap, 暫定の案・未承認).
+	FailuresToday int
+	FailureCap    int
+	Today         judgement.DayCost
+	Total         judgement.Spend
+	Daily         []judgement.DayCost
+	// HaltToday is set when the cost or failure cap stopped the shadow today (JST).
 	HaltToday  *jevshadowsettings.Halt
 	Promotions []jevshadow.Promotion
 }
@@ -86,6 +90,7 @@ func (s *Service) State(ctx context.Context) (State, error) {
 		Versions:         jev.TraderVersions(),
 		CapUSD:           cfg.CapUSD,
 		CapIsDefault:     cfg.CapIsDefault,
+		FailureCap:       jevshadowsettings.ProposedDailyFailureCap,
 	}
 	from, to := jevshadowsettings.DayBounds(now)
 	spend, err := s.results.SpentBetween(ctx, from, to)
@@ -93,6 +98,7 @@ func (s *Service) State(ctx context.Context) (State, error) {
 		return State{}, err
 	}
 	st.Today = judgement.DayCost{Date: jevshadowsettings.Day(now), Spend: spend}
+	st.FailuresToday = cfg.Failures.FailuresOn(st.Today.Date)
 	if st.Total, err = s.results.TotalSpent(ctx); err != nil {
 		return State{}, err
 	}
