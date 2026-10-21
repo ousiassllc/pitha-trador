@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
@@ -63,6 +64,8 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 		return text
 	case paperbootstrapsettings.IsKey(key):
 		return paperbootstrapsettings.Text(paperbootstrapsettings.Default)
+	case sleepguardsettings.IsKey(key):
+		return sleepguardsettings.Text(sleepguardsettings.Default)
 	case regimesettings.IsKey(key):
 		text, _ := regimesettings.Default().Text(key)
 		return text
