@@ -19,7 +19,7 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 | `quantity` または `budget_jpy` | `open_long` のとき、どちらか 1 つ | 株数（1 以上の整数）か、使う金額（円）。両方・どちらも無しは拒否。`close` は指定不可（保有中ポジション全体の決済） |
 | `order_type` | ○ | `MARKET` / `LIMIT`。`close` は `MARKET` だけ（成行で決済する。指値の決済は受け付けない） |
 | `limit_price` | `LIMIT` のとき | 指値。`MARKET` では指定不可 |
-| `stop_loss_price` | `open_long` のとき | 損切りの価格。指値があるときは指値より小さい（買いなので下。成行のときの直近値との比較はアプリが行う）。`close` は指定不可 |
+| `stop_loss_price` | `open_long` のとき | 損切りの価格。指値があるときは指値より小さい（買いなので下。受け付け時の確認）。アプリは処理のとき、最新の足の価格との比較もする: 予想約定価格（成行は最新の足の価格、指値は指値と最新の足の価格の小さいほう）**以上**なら、案は `rejected`・`stop_loss_not_below_price` になり、アプリの損切りに置き換えて進めることはしない（注文も `trade_signals` も作らない。イベントの `detail` に `latest_price`・`expected_entry_price`・`stop_loss_price`）。指値が最新の足の価格より上の指値買いは予想約定価格が最新の足の価格になるので同じ拒否がかかり、最新の足の価格以下の指値では指値より小さいことを受け付け時に確かめているので、かからない。`close` は指定不可 |
 | `take_profit_price` | 任意 | 利確の価格。`close` は指定不可 |
 | `exit_plan` | `open_long` のとき | 手じまいの計画（500 文字以内） |
 | `max_loss_jpy` | `open_long` のとき | あいりが見込む最大損失（円、0 より大きい）。`close` は指定不可 |
@@ -108,3 +108,4 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 | 1.2 | 2026-10-21 | §3.17 `order_proposal_get` に結果（signal・order・position・最大損失・損切りと利確に届いたか）とイベントの補足を追加。§3.20 `order_proposals_list`・§3.21 `order_proposal_summary`・§3.22 `origin` を追加。読み取りの 3 ツールの受け入れ条件を追加（ツールは合計 21） | issue #829（親 #826） |
 | 1.3 | 2026-10-21 | §3.16 `order_type`: `close` は `MARKET` だけ（処理役は常に成行で決済するので、指値を受け付けて黙って成行にしない） | S-2-0 研磨 |
 | 1.4 | 2026-10-21 | §3.16 `action`: `close` は注文案で建てたポジションだけ決済でき、それ以外は処理のとき `position_not_from_proposal`（受け付け時には判定しない） | issue #859 |
+| 1.5 | 2026-10-21 | §3.16 `stop_loss_price`: 処理のとき予想約定価格以上なら `stop_loss_not_below_price` で拒否する（アプリの損切りに黙って置き換えない）。指値買いへのかかり方も書いた | issue #857 |

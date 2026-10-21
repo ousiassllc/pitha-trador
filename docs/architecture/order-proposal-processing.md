@@ -27,6 +27,7 @@
 | `position_already_open` / `pending_order_exists` / `symbol_in_cooldown` | `rejected` | Execution の銘柄ごとの拒否（同じ銘柄に保有中・板待ちの注文・損失後のクールダウン） |
 | `no_open_position` | `rejected` | `close` なのに保有中のポジションが無い |
 | `position_not_from_proposal` | `rejected` | `close` で、保有中のポジションが注文案で建ったものでない（Policy Engine・ブートストラップが建てたもの、エントリー注文にシグナルが無いもの）。`close` は注文案（`open_long`）で建てたポジションだけ決済する（#859。§3） |
+| `stop_loss_not_below_price` | `rejected` | `open_long` の `stop_loss_price` が予想約定価格以上（買いの損切りとして意味がない）。アプリの損切りに置き換えず拒否する（§3 手順 5。#857）。`detail_json` に `latest_price`・`expected_entry_price`・`stop_loss_price` |
 | `order_rejected` / `order_cancelled` | `rejected` / `cancelled` | 板待ちの注文が Execution 側で拒否・取消になった |
 | `processing_error` | `failed` | 想定外のエラー（原因はログ） |
 | `recovered_after_restart` | イベントの `detail_json` | 再起動で `processing` から回復した（§5） |
@@ -37,11 +38,11 @@
 2. **取消依頼**: `cancel_requested_at` があれば `cancelled`（`cancel_requested`）。発注前なら何も発注しない。
 3. 状態を `processing` にして処理役が取る（`received`／`waiting_session` からの更新は、読んだときの状態を条件にする。別の書き手に負けたら何も書かない）。取ったあとにもう一度案を読み、読んでから取るまでの間に `cancel_requested_at` が入っていれば `cancelled`（`cancel_requested`）にする（`processing` になった案への取消依頼は `not_cancellable` なので、ここで読んだ値が最終）。
 4. 銘柄・枠の確認（`unknown_symbol` / `inactive_symbol` / `bucket_mismatch`）。
-5. 立会時間外なら `waiting_session`。最新の足が古ければ `stale_quote`。
+5. 立会時間外なら `waiting_session`。最新の足が古ければ `stale_quote`。続けて**損切りの向き**を見る: 案の `stop_loss_price` が予想約定価格（`expectedEntryPrice`。成行は最新の足の価格、指値は指値と最新の足の価格の小さいほう）**以上**なら `stop_loss_not_below_price` で `rejected`。この拒否は Risk check の前なので、`trade_signals` を書かず、`CheckThenEnter`・`Enter` を呼ばず、`paper_orders`・`positions` も増えない（`detail_json` に判定に使った `latest_price`・`expected_entry_price`・`stop_loss_price` を残す）。成行買いが対象で、指値買いも同じ式で判定する: 指値が最新の足の価格より**上**なら予想約定価格は最新の足の価格なので、損切りがその価格以上のとき（受け付け時の「損切り ＜ 指値」は通っている）に**同じ拒否がかかる**。指値が最新の足の価格**以下**なら予想約定価格は指値で、受け付け時に損切り ＜ 指値を確かめてあるので**かからない**。
 6. **Risk check**: `risk.Engine.CheckThenEnter`（Policy 経路の Paper エントリーと同じ、ロックの中で判断と発注を一続きにする入口）に `LONG` で通す。通った案の `trade_signals` 行を 1 行書く（`policy_version = 'mcp-proposal-v1'`、`jev_decision_id` は NULL、`risk_passed = 1`）。拒否のときも `risk_passed = 0`・`reject_reason = 'risk_engine_rejected: <Risk の理由>'` で 1 行書き、案を `rejected` にして `trade_signal_id` を結ぶ。Kill Switch・一時停止・日次ガード・枠 0・枠超過はここで拒否され、**Execution は呼ばれない**（`Enter` の呼び出し 0 回）。MCP の `risk_rejections` は Policy の拒否と同じ表を数え、案の分は `proposal_risk_passed_count` / `proposal_risk_rejected_count`（`policy_version` で見分ける）で分かる。
 7. Risk が通したときの数量の上限は `risk.Engine.PositionSize`（`CheckThenEnter` が判断した数量。Enter はこの数量を作り直さない）。
 8. **数量**: 案の `quantity`（`budget_jpy` のときは予想約定価格で割って単元に切り捨て）と、アプリが決めた数量の**小さいほう**を注文する。減らしたときは `quantity_reduced` のイベントを残す。小さいほうが 0 なら `size_zero`。
-9. **最大損失**: 注文数量 ×（予想約定価格 − 実際に効く損切り価格）を `computed_max_loss_jpy` に残す（あいりの `max_loss_jpy` とは別に並べる）。実際に効く損切りは、案の `stop_loss_price` とアプリの損切り（エントリーの `StopLossPct` 下）の**エントリーから遠いほう**で、`effective_stop_loss_price` に残す。`運用資金 × max_trade_loss_pct` を超えれば `max_trade_loss`。
+9. **最大損失**: 注文数量 ×（予想約定価格 − 実際に効く損切り価格）を `computed_max_loss_jpy` に残す（あいりの `max_loss_jpy` とは別に並べる）。ここまで来た案の `stop_loss_price` は手順 5 で予想約定価格より下と分かっている。実際に効く損切りは、案の `stop_loss_price` とアプリの損切り（エントリーの `StopLossPct` 下）の**エントリーから遠いほう**で、`effective_stop_loss_price` に残す。`運用資金 × max_trade_loss_pct` を超えれば `max_trade_loss`。
 10. **発注**: Execution の `Enter`（成行／指値は案の `order_type`）。銘柄ごとの拒否は上表のコードで `rejected`。
 11. 約定したら `filled`（`paper_order_id`・`position_id` を結ぶ）。指値で板待ちなら `submitted`。`submitted` の案は、期限・取消の依頼・注文の最終状態を毎周期見て、期限か取消なら Execution の `CancelPendingEntry`（約定処理と同じロックの中で、`PENDING` のときだけ `CANCELLED` にする）で注文を取り消し、案を `expired` / `cancelled` にする。先に約定していれば取消はせず `filled`（約定が勝つ）。
 
@@ -66,3 +67,4 @@ MCP は取消の**依頼を記録するだけ**: `cancel_requested_at` の UPDAT
 | 1.0 | 2026-10-21 | 新規作成。注文案の処理（Risk check・数量・最大損失・発注・期限・取消・`close`・再起動の回復）と理由コード | issue #828（親 #826） |
 | 1.1 | 2026-10-21 | 取る直前に入った取消依頼を取った直後の再読で拾う（§3 手順 3）。発注直前の時間外は `waiting_session`（§2） | S-2-0 研磨 |
 | 1.2 | 2026-10-21 | `close` は注文案で建てたポジションだけ決済し、それ以外は `position_not_from_proposal`（§2 理由コード表・§3 `close`・§5 再起動）。入り口の判定は `paper_trades` の `origin` と同じ定義 | issue #859 |
+| 1.3 | 2026-10-21 | `open_long` の損切りが予想約定価格以上なら `stop_loss_not_below_price` で拒否し、アプリの損切りに黙って置き換えない（§2 理由コード表・§3 手順 5・9）。指値買いへのかかり方も書いた | issue #857 |

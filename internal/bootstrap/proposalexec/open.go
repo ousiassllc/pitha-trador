@@ -2,6 +2,7 @@ package proposalexec
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -51,6 +52,14 @@ func (p Processor) openLong(ctx context.Context, pr orderproposal.Proposal, inst
 	}
 	snap := snaps[0]
 
+	// The proposal's stop must lie below the price the entry is expected to
+	// fill at; one at or above it is no stop for a buy, and is rejected, not
+	// swapped for the application's (issue #857). Before Risk and the signal,
+	// so nothing is written and nothing is ordered.
+	if expected := expectedEntryPrice(pr, snap.Price); pr.StopLossPrice != nil && *pr.StopLossPrice >= expected {
+		return p.rejectStopLoss(ctx, pr, links, snap.Price, expected)
+	}
+
 	var final proposalstore.Change
 	passed, reason, err := p.Risk.CheckThenEnter(ctx, inst.ID, domain.JevDirectionLong, func(size risk.EntrySize) error {
 		var enterErr error
@@ -69,6 +78,25 @@ func (p Processor) openLong(ctx context.Context, pr orderproposal.Proposal, inst
 		return p.settle(ctx, pr, orderproposal.StatusRejected, reasonCode(reason), links)
 	}
 	return p.Proposals.Transition(ctx, pr.ID, orderproposal.StatusProcessing, final)
+}
+
+// rejectStopLoss records a proposal whose stop_loss_price is not below the
+// price the entry is expected to fill at, with the prices the judgement used.
+func (p Processor) rejectStopLoss(ctx context.Context, pr orderproposal.Proposal, links proposalstore.Links, latest, expected float64) error {
+	detail, err := json.Marshal(struct {
+		LatestPrice        float64 `json:"latest_price"`
+		ExpectedEntryPrice float64 `json:"expected_entry_price"`
+		StopLossPrice      float64 `json:"stop_loss_price"`
+	}{latest, expected, *pr.StopLossPrice})
+	if err != nil {
+		return p.fail(ctx, pr, links, fmt.Errorf("proposalexec: stop-loss rejection detail: %w", err))
+	}
+	err = p.Proposals.Transition(ctx, pr.ID, pr.Status, proposalstore.Change{
+		ToStatus: orderproposal.StatusRejected, Reason: ReasonStopLossNotBelowPrice, DetailJSON: string(detail), Links: links})
+	if errors.Is(err, proposalstore.ErrStatusChanged) {
+		return nil
+	}
+	return err
 }
 
 // recordSignal is step 6: one trade_signals row for the proposal, under its own
