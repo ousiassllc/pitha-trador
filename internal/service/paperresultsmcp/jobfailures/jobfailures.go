@@ -229,25 +229,14 @@ func failedByDayAndCode(ctx context.Context, q Q, stmt string, queue, from, to s
 	return nil
 }
 
-// queueCounts lists counts in the order of queues; a queue name outside it
-// (never written by the scheduler) is not reported by name but as "other".
+// queueCounts lists the non-zero counts in the order of queues. Only those
+// queues are read, so no other queue name can appear in counts.
 func queueCounts(queues []string, counts map[string]int) []QueueCount {
 	out := []QueueCount{}
-	known := map[string]bool{}
 	for _, name := range queues {
-		known[name] = true
 		if n := counts[name]; n > 0 {
 			out = append(out, QueueCount{Queue: name, Count: n})
 		}
-	}
-	other := 0
-	for name, n := range counts {
-		if !known[name] {
-			other += n
-		}
-	}
-	if other > 0 {
-		out = append(out, QueueCount{Queue: "other", Count: other})
 	}
 	return out
 }
