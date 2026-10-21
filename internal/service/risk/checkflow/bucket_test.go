@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -15,7 +16,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 )
 
 // bucketEngine is an Engine over a fresh DB with one 2,000-yen snapshot
@@ -44,7 +44,7 @@ func bucketEngineWith(t *testing.T, withBucket bool, limits config.RiskLimits, p
 		Portfolio:  portfolio,
 	}
 	if withBucket {
-		cfg.Buckets = bucket.NewProvider(positions, settings, market.NewInstrumentRepository(db))
+		cfg.Buckets = paperrisk.Buckets(positions, settings, market.NewInstrumentRepository(db))
 	}
 	return risk.NewEngine(cfg), settings, db
 }

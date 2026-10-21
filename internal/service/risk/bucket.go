@@ -14,7 +14,7 @@ const (
 )
 
 // Buckets supplies the Paper budget buckets (stock, bond_etf) for Check's
-// budget gates. bucket.Provider is the production implementation. An Engine
+// budget gates. paperrisk.BucketProvider (bootstrap) is the production implementation. An Engine
 // built without one (every Live Engine) has no budget gate: Live keeps one
 // whole-account bucket.
 type Buckets interface {

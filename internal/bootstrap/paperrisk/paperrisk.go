@@ -14,8 +14,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
-	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 )
 
 // SeedStore is the runtime_settings access Seed needs.
@@ -54,13 +52,6 @@ func Seed(ctx context.Context, store SeedStore, engine Limits, now time.Time) {
 	if err := bucketsettings.SeedDefaults(ctx, store, limits.InitialCapital, now); err != nil {
 		slog.Warn("paperrisk: seed Paper bucket budgets failed; the bucket defaults apply", "error", err)
 	}
-}
-
-// Buckets is the Paper Risk Engine's budget gate input (risk.Config.Buckets):
-// the budgets in runtime_settings, each bucket's open positions and the
-// instruments' asset classes. A Live Engine is built without it.
-func Buckets(positions *trading.PositionRepository, settings bucketsettings.Store, instruments bucket.InstrumentReader) *bucket.Provider {
-	return bucket.NewProvider(positions, settings, instruments)
 }
 
 // CapitalSource reads the Paper operating capital in force now: base's
