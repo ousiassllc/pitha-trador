@@ -39,24 +39,7 @@ func BuildRows(trs []repo.TrainingRow) (rows []Row, dropped int) {
 }
 
 func buildRow(tr repo.TrainingRow) (Row, bool) {
-	var state decisionState
-	if err := json.Unmarshal([]byte(tr.StateJSON), &state); err != nil {
-		return Row{}, false
-	}
-	var answer jev.TraderResponse
-	if err := json.Unmarshal([]byte(tr.ResponseJSON), &answer); err != nil {
-		return Row{}, false
-	}
-	score, err := answer.Score()
-	if err != nil {
-		return Row{}, false
-	}
-	jevScore := score.Value()
-	tdnet := newsfeed.TDnetScoreNeutral
-	if state.NewsContext != nil {
-		tdnet = newsfeed.ScoreNewsContext(state.NewsContext.Items, tr.DecidedAt, newsfeed.DefaultTTL)
-	}
-	features := metalabel.NewFeatures(tr.OrderFlow, state.SpreadBps, state.Return1m, &jevScore, &tdnet)
+	features := buildFeatures(tr)
 	vector, err := features.Vector(tr.Direction)
 	if err != nil {
 		return Row{}, false
@@ -65,4 +48,37 @@ func buildRow(tr repo.TrainingRow) (Row, bool) {
 		JevDecisionID: tr.JevDecisionID, DecidedAt: tr.DecidedAt, LabelEnd: tr.LabelEnd(),
 		JevModelID: tr.JevModelID, Symbol: tr.Symbol, Direction: tr.Direction, Features: features, Vector: vector, NetReturnBps: tr.NetReturnBps,
 	}, true
+}
+
+// MissingFeatures names the features BuildRows cannot complete for tr, in
+// metalabel.FeatureNames order; none means BuildRows keeps the decision. An
+// unreadable state leaves spread_bps and return_1m missing and an unreadable
+// or unscorable answer leaves jev_score missing, so one list covers every
+// reason BuildRows drops a decision. It lets a read-only caller (the Paper
+// results MCP's metalabel_training_readiness) explain dropped_incomplete with
+// the trainer's own rule.
+func MissingFeatures(tr repo.TrainingRow) []string {
+	return buildFeatures(tr).MissingNames()
+}
+
+// buildFeatures rebuilds the features of tr; a feature that cannot be rebuilt
+// stays nil (never a made-up value).
+func buildFeatures(tr repo.TrainingRow) metalabel.Features {
+	var state decisionState
+	if err := json.Unmarshal([]byte(tr.StateJSON), &state); err != nil {
+		state = decisionState{}
+	}
+	var jevScore *float64
+	var answer jev.TraderResponse
+	if err := json.Unmarshal([]byte(tr.ResponseJSON), &answer); err == nil {
+		if score, err := answer.Score(); err == nil {
+			v := score.Value()
+			jevScore = &v
+		}
+	}
+	tdnet := newsfeed.TDnetScoreNeutral
+	if state.NewsContext != nil {
+		tdnet = newsfeed.ScoreNewsContext(state.NewsContext.Items, tr.DecidedAt, newsfeed.DefaultTTL)
+	}
+	return metalabel.NewFeatures(tr.OrderFlow, state.SpreadBps, state.Return1m, jevScore, &tdnet)
 }

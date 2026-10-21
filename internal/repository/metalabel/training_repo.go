@@ -47,12 +47,25 @@ func (r TrainingRow) LabelEnd() time.Time {
 	return r.DecidedAt.Add(time.Duration(r.HorizonMinutes) * time.Minute)
 }
 
+// Querier is the read handle ListTrainingRowsFrom needs: a *sql.DB, a *sql.Tx
+// or the Paper results MCP's read-only query handle.
+type Querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
 // ListTrainingRows returns the triple-barrier-labeled (label_version 2,
 // net_return_bps set) LONG/SHORT trader decisions made in [from, to), oldest
 // first. A decision with several label rows (the timeout setting changed
 // between labelings) yields only its newest one.
 func (r *Repository) ListTrainingRows(ctx context.Context, from, to time.Time) ([]TrainingRow, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	return ListTrainingRowsFrom(ctx, r.db, from, to)
+}
+
+// ListTrainingRowsFrom is ListTrainingRows over any read handle, so a
+// read-only reader (the Paper results MCP) selects exactly the rows the
+// nightly retraining trains on.
+func ListTrainingRowsFrom(ctx context.Context, q Querier, from, to time.Time) ([]TrainingRow, error) {
+	rows, err := q.QueryContext(ctx, `
 SELECT d.id, d.symbol, d.model_id, d.timestamp, d.direction, d.state_json, d.response_json,
 	d.ofi_short, d.ofi_mid, d.ofi_long, d.microprice_dev_bps,
 	o.horizon_minutes, o.net_return_bps
