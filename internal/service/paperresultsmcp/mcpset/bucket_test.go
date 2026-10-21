@@ -3,6 +3,7 @@ package mcpset_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 )
 
 // seedBuckets stores the state after the one-time seed: capital 500,000,
@@ -64,4 +66,26 @@ func TestLoweringCapitalBelowBucketSumRejectedLeavesNoAuditRow(t *testing.T) {
 func invalidValue(err error) (*opsettings.InvalidValueError, bool) {
 	var iv *opsettings.InvalidValueError
 	return iv, errors.As(err, &iv)
+}
+
+// Issue #844: the reason the MCP returns as invalid_value's detail
+// (IsInvalidValue) has no internal package prefix.
+func TestBucketRefusalReasonHasNoPackagePrefix(t *testing.T) {
+	ctx := context.Background()
+	f := newFixture(t)
+	f.seedBuckets(t)
+	for name, tc := range map[string]struct{ key, raw string }{
+		"sum over the capital": {bucketsettings.KeyBondETFBudgetJPY, "1"},
+		"lowered capital":      {papersettings.KeyInitialCapitalJPY, "400000"},
+		"not a whole yen":      {bucketsettings.KeyStockBudgetJPY, "1.5"},
+	} {
+		_, err := f.writer.Set(ctx, "c", tc.key, tc.raw)
+		reason, ok := mcpset.IsInvalidValue(err)
+		if !ok {
+			t.Fatalf("%s: err = %v, want an invalid value", name, err)
+		}
+		if strings.Contains(reason, "bucketsettings:") {
+			t.Errorf("%s: reason %q shows the package prefix", name, reason)
+		}
+	}
 }

@@ -2,7 +2,9 @@ package bucketsettings_test
 
 import (
 	"context"
+	"errors"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
@@ -62,5 +64,24 @@ func TestStockDefault_RiskScreenResetAndSeedAgreeForAFractionalCapital(t *testin
 func TestStockDefault_IntegerCapitalIsUnchanged(t *testing.T) {
 	if got := (bucketsettings.Overrides{}).Resolve(500000).StockJPY; got != 500000 {
 		t.Errorf("Resolve stock = %v, want 500000", got)
+	}
+}
+
+// Issue #844: the user-facing reason of a refusal carries no package prefix;
+// the error itself keeps it as log context.
+func TestRejections_ReasonHasNoPackagePrefix(t *testing.T) {
+	over := bucketsettings.CheckTotal(bucketsettings.Budgets{StockJPY: 300000, BondETFJPY: 300000}, 500000)
+	rangeErr := bucketsettings.Validate(bucketsettings.KeyStockBudgetJPY, -1)
+	for name, err := range map[string]error{"CheckTotal": over, "Validate": rangeErr} {
+		var rejected *bucketsettings.RejectedError
+		if !errors.As(err, &rejected) {
+			t.Fatalf("%s err = %v, want *RejectedError", name, err)
+		}
+		if strings.Contains(rejected.Reason, "bucketsettings:") || rejected.Reason == "" {
+			t.Errorf("%s reason = %q, want a non-empty reason without the package prefix", name, rejected.Reason)
+		}
+		if !strings.HasPrefix(err.Error(), "bucketsettings: ") {
+			t.Errorf("%s Error() = %q, want the package context kept for logs", name, err.Error())
+		}
 	}
 }
