@@ -3,7 +3,6 @@ package bucketsettings
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 	"time"
 )
@@ -58,7 +57,7 @@ func SeedDefaults(ctx context.Context, store SeedStore, capitalJPY float64, now 
 			key   string
 			value float64
 		}{
-			{KeyStockBudgetJPY, math.Floor(capitalJPY)},
+			{KeyStockBudgetJPY, DefaultStockBudgetJPY(capitalJPY)},
 			{KeyBondETFBudgetJPY, 0},
 		}
 		for i, d := range defaults {
