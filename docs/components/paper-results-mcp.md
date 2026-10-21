@@ -26,6 +26,7 @@
 | MCP が書けるキーのホワイトリスト・書き込みスイッチのキー・マスク方針 | `internal/config/mcpwritesettings` |
 | 監査ログの表（マイグレーション `000040`） | `db/migrations/000040_create_mcp_settings_audit.*.sql` |
 | GUI の保存の監査（ホワイトリストのキーの保存・既定への戻しを同じ表に記録） | `internal/service/paperresultsmcp/mcpset`（`Audited`。`opsettings.Service` を包んで Save/Reset を記録）、配線は `internal/bootstrap/router_options.go` |
+| 調整の実験（issue #871）: 語彙・検査・SQL・前後比較と判定（`internal/service/paperresultsmcp/experiment`）、ツール定義（`experiment_tools.go`）、書き込み（`mcpset/experiments.go`。`Writer` と `Gate`）、表（マイグレーション `000047`）、Settings の節（`internal/web/handler/mcpsettings/experiments*.go`、`internal/web/organisms/mcp/experiments.templ`）。テストは `experimenttests` と `experiment` と `internal/router/mcproute/experiments_test.go` |
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
 | `health_today` の判定のテスト（要対応コードの入り切り・非取引日・状態の区分。`query.HealthToday` を直接呼ぶ。行数制限のため `mcptests` と分ける） | `internal/service/paperresultsmcp/healthtests` |
@@ -101,3 +102,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.8 | 2026-10-20 | 設定ツール（`mcpset`・`mcpwritesettings`・監査表 `000040`）を §2 に追加。DB の扱いを「読み取りは `mode=ro`、設定ツールだけが別の狭い書き込み接続」に改め、資金の分母を Settings の保存値に追従に変更。Settings 画面に書き込み許可のチェックと監査ログを追加（§4.1） | issue #806・#807 |
 | 1.9 | 2026-10-21 | 画面の項目に、注文案の受け付けスイッチ（既定オフ。オンは Settings だけ）を追記 | issue #827 |
 | 1.10 | 2026-10-21 | §2 に注文案の読み取り（`proposal`・`origin`・`stalled`）と、GUI の「注文案」画面との関係（読み取りモデルの共有）を追記。ツールは 21 | issue #829 |
+| 1.11 | 2026-10-22 | §2 に調整の実験（`experiment`・`experiment_tools.go`・`mcpset/experiments.go`・Settings の節）を追記。ツールは 25 | issue #871 |

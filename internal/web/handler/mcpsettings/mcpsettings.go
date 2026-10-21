@@ -28,6 +28,7 @@ type Admin interface {
 // WriteGate is the settings-write switch and audit log (issue #806); the
 // application's *mcpset.Gate implements it.
 type WriteGate interface {
+	ExperimentGate
 	Enabled(ctx context.Context) (bool, error)
 	SetEnabled(ctx context.Context, enabled bool) error
 	Recent(ctx context.Context, limit int) ([]mcpset.Entry, error)
@@ -64,6 +65,10 @@ func (h *Handler) Register(engine *gin.Engine) {
 	if h.gate != nil {
 		engine.POST("/settings/mcp/write", h.SaveWrite)
 		engine.POST("/settings/mcp/order-proposals", h.SaveOrderProposals)
+		engine.GET("/settings/mcp/experiments", h.Experiments)
+		engine.POST("/settings/mcp/experiments", h.CreateExperiment)
+		engine.GET("/settings/mcp/experiments/:id", h.CompareExperiment)
+		engine.POST("/settings/mcp/experiments/:id/close", h.CloseExperiment)
 	}
 }
 

@@ -74,6 +74,8 @@ type Performance struct {
 	WinRate                 *float64 `json:"win_rate"`
 	TotalPnlJPY             float64  `json:"total_pnl_jpy"`
 	ExpectancyJPY           *float64 `json:"expectancy_jpy"`
+	AvgWinJPY               *float64 `json:"avg_win_jpy"`  // winSum / WinCount (positive); nil with no win (issue #871)
+	AvgLossJPY              *float64 `json:"avg_loss_jpy"` // lossSum / LossCount (negative); nil with no loss
 	ExpectancyReturnPct     *float64 `json:"expectancy_return_pct"`
 	ProfitFactor            *float64 `json:"profit_factor"`
 	MaxDrawdownJPY          float64  `json:"max_drawdown_jpy"`
@@ -132,9 +134,15 @@ func PerformanceSummary(ctx context.Context, q Q, r Range, capitalJPY float64) (
 		meanPct := returnPctSum / float64(n)
 		p.ExpectancyReturnPct = &meanPct
 	}
+	if p.WinCount > 0 {
+		avgWin := winSum / float64(p.WinCount)
+		p.AvgWinJPY = &avgWin
+	}
 	if p.LossCount > 0 {
 		pf := winSum / math.Abs(lossSum)
 		p.ProfitFactor = &pf
+		avgLoss := lossSum / float64(p.LossCount)
+		p.AvgLossJPY = &avgLoss
 	}
 	if capitalJPY > 0 {
 		p.CapitalJPY = &capitalJPY

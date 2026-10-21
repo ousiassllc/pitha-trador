@@ -17,6 +17,8 @@ type perfData struct {
 	TotalPnlJPY             float64  `json:"total_pnl_jpy"`
 	ExpectancyJPY           *float64 `json:"expectancy_jpy"`
 	ExpectancyReturnPct     *float64 `json:"expectancy_return_pct"`
+	AvgWinJPY               *float64 `json:"avg_win_jpy"`
+	AvgLossJPY              *float64 `json:"avg_loss_jpy"`
 	ProfitFactor            *float64 `json:"profit_factor"`
 	MaxDrawdownJPY          float64  `json:"max_drawdown_jpy"`
 	CapitalJPY              *float64 `json:"capital_jpy"`
@@ -42,6 +44,8 @@ func TestPaperPerformanceSummary(t *testing.T) {
 	near(t, "expectancy_jpy", d.ExpectancyJPY, -100)
 	near(t, "expectancy_return_pct", d.ExpectancyReturnPct, -0.2)
 	near(t, "profit_factor", d.ProfitFactor, 3000.0/3500.0)
+	near(t, "avg_win_jpy", d.AvgWinJPY, 1500)    // (1000 + 2000) / 2
+	near(t, "avg_loss_jpy", d.AvgLossJPY, -1750) // (-3000 - 500) / 2
 	near(t, "capital_jpy", d.CapitalJPY, 30_000_000)
 	near(t, "max_drawdown_capital_ratio", d.MaxDrawdownCapitalRatio, 0.0001)
 	if d.TotalPnlJPY != -500 || d.MaxDrawdownJPY != 3000 {
@@ -72,6 +76,8 @@ func TestPaperPerformanceSummaryEmptyPeriod(t *testing.T) {
 	wantNull(t, "expectancy_jpy", d.ExpectancyJPY)
 	wantNull(t, "expectancy_return_pct", d.ExpectancyReturnPct)
 	wantNull(t, "profit_factor", d.ProfitFactor)
+	wantNull(t, "avg_win_jpy", d.AvgWinJPY)
+	wantNull(t, "avg_loss_jpy", d.AvgLossJPY)
 }
 
 func TestPaperDailyPnL(t *testing.T) {

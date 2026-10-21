@@ -137,12 +137,14 @@ func (r response) data(t *testing.T, tool string, out any) {
 // fixedMessages restate docs/architecture/paper-results-mcp-errors.md §1 for
 // the codes these tests expect.
 var fixedMessages = map[paperresultsmcp.Code]string{
-	paperresultsmcp.CodeUnauthorized:    "認証に失敗しました。",
-	paperresultsmcp.CodeInvalidArgument: "引数が不正です。",
-	paperresultsmcp.CodeLimitExceeded:   "取得量が上限を超えています。期間を狭めてください。",
-	paperresultsmcp.CodeWriteDisabled:   "設定の書き込みは許可されていません。settings_write_enable か Settings の「外部連携」で許可してください。",
-	paperresultsmcp.CodeKeyNotAllowed:   "このキーは MCP から変更できません。settings_get に出るキーだけ変更できます。",
-	paperresultsmcp.CodeInvalidValue:    "値が不正です。settings_get の constraint を確認してください。",
+	paperresultsmcp.CodeUnauthorized:         "認証に失敗しました。",
+	paperresultsmcp.CodeInvalidArgument:      "引数が不正です。",
+	paperresultsmcp.CodeLimitExceeded:        "取得量が上限を超えています。期間を狭めてください。",
+	paperresultsmcp.CodeWriteDisabled:        "設定の書き込みは許可されていません。settings_write_enable か Settings の「外部連携」で許可してください。",
+	paperresultsmcp.CodeKeyNotAllowed:        "このキーは MCP から変更できません。settings_get に出るキーだけ変更できます。",
+	paperresultsmcp.CodeInvalidValue:         "値が不正です。settings_get の constraint を確認してください。",
+	paperresultsmcp.CodeMultipleVariables:    "1 つの実験で変えられる変数は 1 つだけです。changes を 1 つにして、変数ごとに実験を分けてください。",
+	paperresultsmcp.CodeExperimentNotRunning: "この実験はもう終わっています（再び開くことはできません）。",
 }
 
 type errorBody struct {
