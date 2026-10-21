@@ -18,10 +18,22 @@ import (
 // DefaultLookback is how far back the nightly training reads labeled decisions.
 const DefaultLookback = 90 * 24 * time.Hour
 
-// TrainingSource lists the labeled decisions to learn from;
-// *repo.Repository implements it.
+// TrainingSource lists the labeled decisions to learn from and counts them per
+// label version (what a skipped retraining reports); *repo.Repository
+// implements it.
 type TrainingSource interface {
 	ListTrainingRows(ctx context.Context, from, to time.Time) ([]repo.TrainingRow, error)
+	CountLabeledDecisions(ctx context.Context, from, to time.Time) (repo.LabelVersionCounts, error)
+}
+
+// walkForBar is the walk-forward config with the OOS window raised to what the
+// acceptance bar asks for, so a window narrower than the bar can never be set
+// by one config without the other (issue #862).
+func (t *Trainer) walkForBar() WalkForwardConfig {
+	w := t.walk
+	w.OOSMinRows = max(w.OOSMinRows, t.acceptance.MinOOSSamples)
+	w.OOSMinDays = max(w.OOSMinDays, t.acceptance.MinOOSDays)
+	return w
 }
 
 // ModelStore is the model storage the Trainer needs; *metalabel.Store
@@ -155,14 +167,16 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	logCutoffWarning(ctx, settings)
 	now := t.now().UTC()
 
-	stored, err := t.source.ListTrainingRows(ctx, now.Add(-t.lookback), now)
+	from := now.Add(-t.lookback)
+	stored, err := t.source.ListTrainingRows(ctx, from, now)
 	if err != nil {
 		return repo.Model{}, fmt.Errorf("metalabel: load training rows: %w", err)
 	}
 	rows, dropped := BuildRows(stored)
-	split, err := SplitWalkForward(rows, now, cutoff, t.walk)
+	walk := t.walkForBar()
+	split, err := SplitWalkForward(rows, now, cutoff, walk)
 	if err != nil {
-		return repo.Model{}, err
+		return repo.Model{}, t.annotateSkip(ctx, err, from, now, dropped)
 	}
 	// The Jev-feature evaluation window is logged on every run so the
 	// operator can see it never starts before the LLM's cutoff.
@@ -172,7 +186,7 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 		"oos_start", split.OOSStart, "oos_end", split.OOSEnd,
 		"oos_after_llm_cutoff", !split.OOSStart.Before(cutoff),
 		"fit_samples", len(split.Fit), "calibration_samples", len(split.Calibrate), "oos_samples", len(split.OOS),
-		"purged", split.Purged, "embargo", t.walk.Embargo, "dropped_incomplete", dropped, "fit_before_llm_cutoff", fitBeforeCutoff(split))
+		"purged", split.Purged, "embargo", walk.Embargo, "dropped_incomplete", dropped, "fit_before_llm_cutoff", fitBeforeCutoff(split))
 
 	version := "lr-" + now.Format("20060102-150405")
 	model, err := metalabel.Train(samples(split.Fit), samples(split.Calibrate), metalabel.TrainOptions{
@@ -180,10 +194,11 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	})
 	if err != nil {
 		if errors.Is(err, metalabel.ErrInvalidTrainingData) || errors.Is(err, metalabel.ErrInvalidCalibration) {
-			return repo.Model{}, &InsufficientDataError{
+			return repo.Model{}, t.annotateSkip(ctx, &InsufficientDataError{
 				Code: repo.SkipTrainingDataUnusable, Usable: len(split.Fit) + len(split.Calibrate),
-				Required: t.walk.MinFit + t.walk.MinCalibration, Detail: "the fit and calibration rows cannot be learned from", Cause: err,
-			}
+				Required: walk.MinFit + walk.MinCalibration, OOSRows: len(split.OOS), RequiredOOSRows: walk.OOSMinRows,
+				Detail: "the fit and calibration rows cannot be learned from", Cause: err,
+			}, from, now, dropped)
 		}
 		return repo.Model{}, fmt.Errorf("metalabel: train %s: %w", version, err)
 	}

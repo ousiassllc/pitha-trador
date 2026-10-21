@@ -15,7 +15,8 @@ import (
 // from it (docs FR-META-7).
 func TestDefaultAcceptanceConfig_FollowsThePowerAnalysis(t *testing.T) {
 	cfg := training.DefaultAcceptanceConfig()
-	want := training.RequiredTakes(training.AssumedSigmaBps, training.AssumedEdgeBps, training.DefaultAlpha, training.AssumedPower, training.AssumedDesignEffect)
+	deff := training.DesignEffect(training.AssumedRowsPerDay*training.AssumedTakeRate, training.AssumedWinProbDayShiftSD)
+	want := training.RequiredTakes(training.AssumedSigmaBps, training.AssumedEdgeBps, training.DefaultAlpha, training.DesignPower, deff)
 	if cfg.MinTakes != want {
 		t.Errorf("MinTakes = %d, want RequiredTakes = %d", cfg.MinTakes, want)
 	}
@@ -27,7 +28,7 @@ func TestDefaultAcceptanceConfig_FollowsThePowerAnalysis(t *testing.T) {
 	if got := training.RequiredTakes(30, 5, 0.05, 0.8, 1); got < 222 || got > 224 {
 		t.Errorf("RequiredTakes(30, 5, 5%%, 80%%, 1) = %d, want about 223", got)
 	}
-	if cfg.MinAUCLower != 0.5 || cfg.MinEVLowerBps != 0 || cfg.MinOOSDays != 5 || cfg.Alpha != 0.01 || cfg.Resamples != 2000 {
+	if cfg.MinAUCLower != 0.5 || cfg.MinEVLowerBps != 0 || cfg.MinOOSDays != training.DefaultMinOOSDays || cfg.Alpha != 0.01 || cfg.Resamples != 2000 {
 		t.Errorf("defaults = %+v", cfg)
 	}
 }
@@ -70,7 +71,12 @@ func TestDefaultAcceptanceConfig_MatchesTheSpec(t *testing.T) {
 			t.Errorf("FR-META-7 does not state the change limit %q", want)
 		}
 	}
-	for _, want := range []string{"σ=30", "5 bps", "検出力80%"} {
+	walk := training.DefaultWalkForwardConfig()
+	for _, want := range []string{
+		"σ=30", "11 bps", "検出力80%", "デザイン効果", "案",
+		"窓の上限（" + strconv.Itoa(int(walk.OOSMaxWindow.Hours()/24)) + "日", // the OOS window's reach-back limit
+		"fit" + strconv.Itoa(walk.MinFit),                               // the training side's minimum
+	} {
 		if !strings.Contains(fr, want) {
 			t.Errorf("FR-META-7 does not state the assumption %q", want)
 		}

@@ -42,8 +42,11 @@ func TestTrainer_TrainsEvaluatesOutOfSampleAndStoresTheModelVersionAndMetrics(t 
 	if saved.TrainEnd.Add(training.DefaultWalkForwardConfig().Embargo).After(saved.OOSStart) {
 		t.Errorf("train end %v + embargo overlaps the OOS start %v", saved.TrainEnd, saved.OOSStart)
 	}
-	if !saved.OOSEnd.Equal(trainNow) || !saved.OOSStart.Equal(trainNow.Add(-7*24*time.Hour)) {
-		t.Errorf("OOS window = [%v, %v), want the last 7 days", saved.OOSStart, saved.OOSEnd)
+	// The window is sized by the default bar (issue #862), not by a fixed 7 days:
+	// it reaches back to hold the 740 rows and 7 days the proposal asks for (these
+	// fixtures have 72 decisions a JST day, so the rows decide) and no further.
+	if want := training.DefaultAcceptanceConfig().MinOOSSamples; !saved.OOSEnd.Equal(trainNow) || saved.OOSSamples != want || saved.OOSStart.After(trainNow.Add(-7*24*time.Hour)) {
+		t.Errorf("OOS window = [%v, %v) with %d samples, want the newest %d rows, at least 7 days", saved.OOSStart, saved.OOSEnd, saved.OOSSamples, want)
 	}
 	if !src.to.Equal(trainNow) || !src.from.Equal(trainNow.Add(-training.DefaultLookback)) {
 		t.Errorf("rows read from %v to %v", src.from, src.to)
@@ -63,7 +66,7 @@ func TestTrainer_TrainsEvaluatesOutOfSampleAndStoresTheModelVersionAndMetrics(t 
 
 	// The evaluation window and the LLM cutoff it respects are in the log.
 	out := logs.String()
-	for _, want := range []string{"metalabel: walk-forward windows", "llm_cutoff=2026-09-01", "oos_start=2026-10-07", "oos_end=2026-10-14", "oos_after_llm_cutoff=true", "purged="} {
+	for _, want := range []string{"metalabel: walk-forward windows", "llm_cutoff=2026-09-01", "oos_start=" + saved.OOSStart.UTC().Format("2006-01-02T15:04:05.000Z07:00"), "oos_end=2026-10-14", "oos_after_llm_cutoff=true", "purged="} {
 		if !strings.Contains(out, want) {
 			t.Errorf("log lacks %q:\n%s", want, out)
 		}

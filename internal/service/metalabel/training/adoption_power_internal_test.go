@@ -177,9 +177,9 @@ const falseAdoptionBound = 0.05
 
 // The false adoption rate per period: with no edge at all, the probability that
 // at least one nightly retraining over a period of 20 trading days is adopted.
-// Each night judges the OOS window of the latest 5 trading days (260 decisions
-// a day, a random half taken, the day-level shift of sd 12%); the windows roll,
-// so consecutive nights share 4 of 5 days. The model-swap limit (changeguard,
+// Each night judges the OOS window of the latest DefaultMinOOSDays (7) trading
+// days (AssumedRowsPerDay decisions a day, a random half taken, the day-level
+// shift of sd 12%); the windows roll, so consecutive nights share 6 of 7 days. The model-swap limit (changeguard,
 // 5 trading days) is applied after an adoption, which caps the adoptions of a
 // period but cannot change whether the first one happens.
 //
@@ -193,8 +193,8 @@ func TestAdoptionFalseRate_PerPeriodOfRollingNightsWithoutAnEdge(t *testing.T) {
 	const (
 		periods      = 150
 		nights       = 20
-		perDay       = 260
-		windowDays   = 5
+		perDay       = AssumedRowsPerDay
+		windowDays   = DefaultMinOOSDays
 		takeFraction = AssumedTakeRate
 	)
 	c := DefaultAcceptanceConfig()
