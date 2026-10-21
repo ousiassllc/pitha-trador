@@ -24,6 +24,8 @@ erDiagram
 
 Paper 実績 MCP の設定書き込みの許可（issue #806）はキー`mcp.settings_write_enabled`（JSON の整数`1`=許可・`0`=禁止。行が無いときは許可。`1`/`0`以外は禁止として扱う）。アプリ（Settings の MCP カード）と MCP プロセスが同じ行を読み書きする（`internal/config/mcpwritesettings`）。MCP がこの表へ書けるのは、`mcpwritesettings.Keys()`のホワイトリストのキーとこのスイッチだけ。
 
+Paper 実績 MCP の注文案の受け付け（issue #827）はキー`mcp.order_proposals_enabled`（JSON の整数`1`=受け付ける・`0`=受け付けない。**行が無いときも、`1`/`0`以外の壊れた値のときも受け付けない**＝既定オフ。書き込み許可とは既定が逆）。オンにできるのは Settings 画面（`POST /settings/mcp/order-proposals`）だけで、MCP は`order_proposals_disable`でオフにだけできる。`settings_set`のホワイトリストには入らない（`key_not_allowed`）。切り替えは`mcp_settings_audit`に残る。
+
 ## secrets
 
 Settings画面（`/settings`、`functional.md` §4.17）から入力する認証情報（`JEV_API_KEY` / `JEV_BASE_URL` / `KABU_API_PASSWORD` / `SLACK_WEBHOOK_URL` など）のKey-Valueストア（マイグレーション000013）。値は`internal/repository/system.SecretsRepository`が`internal/config.EncryptSecret`（AES-256-GCM）で暗号化して保存し、呼び出し側は平文のみ扱う。鍵はアプリに埋め込みの固定シードから導出されるため、保護対象はDBファイル単体の複製・共有時の平文流出であり、コンパイル済みバイナリを実行・解析できる攻撃者に対する防御ではない（詳細は`config.EncryptSecret`のコメント参照）。
@@ -146,7 +148,7 @@ erDiagram
 
 ## mcp_settings_audit（Paper 実績 MCP の設定変更の監査ログ、issue #806・#807）
 
-MCP の設定ツール（`settings_set` / `settings_write_enable` / `settings_write_disable`）と Settings 画面の、ホワイトリストのキーの変更・書き込み許可の切り替えを 1 変更 1 行で記録する（マイグレーション000040。`docs/architecture/paper-results-mcp.md` §7.4）。`settings_audit`と`settings_diff`、Settings の MCP カードが読む。追記のみ（更新・削除しない）。
+MCP の設定ツール（`settings_set` / `settings_write_enable` / `settings_write_disable`）と Settings 画面の、ホワイトリストのキーの変更・書き込み許可の切り替え、注文案の受け付けスイッチ（`mcp.order_proposals_enabled`。issue #827。`order_proposals_disable`ツールと Settings 画面）の切り替えを 1 変更 1 行で記録する（マイグレーション000040。`docs/architecture/paper-results-mcp.md` §7.4）。`settings_audit`と`settings_diff`、Settings の MCP カードが読む。追記のみ（更新・削除しない）。
 
 ```mermaid
 erDiagram
@@ -168,8 +170,8 @@ erDiagram
 | at | text | NOT NULL | 変更時刻（UTC） |
 | actor | text | NOT NULL, CHECK(`mcp`/`gui`) | 誰が。`mcp`＝Bearer 認証を通った MCP クライアント、`gui`＝Settings 画面 |
 | client | text | NOT NULL, DEFAULT `''` | `actor='mcp'`のとき接続元ホストの IP。ヘッダの値・API キーは入れない。`gui`は空 |
-| action | text | NOT NULL, CHECK(`set`/`reset`/`write_enable`/`write_disable`) | `reset`は GUI のみ（保存値を消して既定へ） |
-| setting_key | text | NOT NULL, 空文字不可 | 変更されたキー。書き込み許可の切り替えは`mcp.settings_write_enabled` |
+| action | text | NOT NULL, CHECK(`set`/`reset`/`write_enable`/`write_disable`/`order_proposals_enable`/`order_proposals_disable`) | `reset`は GUI のみ（保存値を消して既定へ）。`order_proposals_enable`は GUI のみ（MCP からはオンにできない）。後ろの 2 つはマイグレーション`000042`で CHECK に足した |
+| setting_key | text | NOT NULL, 空文字不可 | 変更されたキー。書き込み許可の切り替えは`mcp.settings_write_enabled`、注文案の受け付けの切り替えは`mcp.order_proposals_enabled` |
 | before_value | text | NULL可 | 変更前の値（GUI と同じ文字列）。NULL＝保存値なし（既定が効いていた）。書き込み許可は`1`/`0` |
 | after_value | text | NULL可 | 変更後の値。`reset`では NULL |
 

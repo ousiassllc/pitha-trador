@@ -20,9 +20,9 @@ const newsPollInterval = time.Minute
 // Start launches every background goroutine this build's composition root owns: the broker session
 // (broker.Session.Start) and PUSH subscription, the candidate-refresh ticker (issue #45), the Scheduler's
 // worker pool + cron triggers (scheduler.Scheduler.Start; Recover first resets jobs a crash left "running"),
-// the daily-guard and Paper capital seeding (dailyguardseed.Run #782, paperrisk.Seed #804), the once-a-minute failed-job summary by error
-// code (jobfailurelog, #803) and the trading-hours health alert check (#802). All run until ctx is done or
-// Stop is called; cmd/desktop and cmd/server stop them.
+// the daily-guard and Paper capital seeding (dailyguardseed.Run #782, paperrisk.Seed #804), the once-a-minute failed-job
+// summary by error code (jobfailurelog, #803), the trading-hours health alert check (#802) and the MCP order-proposal
+// processor (#828). All run until ctx is done or Stop is called.
 func (s *Services) Start(ctx context.Context) error {
 	if _, err := s.Scheduler.Recover(ctx); err != nil {
 		return fmt.Errorf("bootstrap: recover jobs: %w", err)
@@ -64,6 +64,7 @@ func (s *Services) Start(ctx context.Context) error {
 	s.wg.Add(1) // startup symbol registration + PUSH subscription (flows.md §10.1)
 	go func() { defer s.wg.Done(); s.Broker.Run(ctx) }()
 
+	s.proposalExec.Launch(ctx, &s.wg) // order proposals of the Paper results MCP (issue #828)
 	s.startRankingWatch(ctx)
 	s.startRankingMeasure(ctx)
 	s.startDailyBars(ctx)
@@ -80,24 +81,19 @@ func (s *Services) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the Scheduler's worker pool and cron triggers
-// (scheduler.Scheduler.Stop) and waits for every extra goroutine Start
-// launched (the candidate-refresh ticker, held-position monitor, PUSH
-// feed, news ingest) to exit. Those extra goroutines are tied to the ctx
-// passed to Start, not to this method: callers cancel that same ctx (e.g.
-// via context.WithCancel in main/OnStartup, canceled from OnShutdown) to
-// stop them, then call Stop to block until they (and the Scheduler) have
-// actually exited.
+// Stop stops the Scheduler's worker pool and cron triggers (scheduler.Scheduler.Stop) and waits for every
+// extra goroutine Start launched (the candidate-refresh ticker, held-position monitor, PUSH feed, news ingest,
+// order-proposal processor) to exit. Those extra goroutines are tied to the ctx passed to Start, not to this
+// method: callers cancel that same ctx (e.g. via context.WithCancel in main/OnStartup, canceled from OnShutdown)
+// to stop them, then call Stop to block until they (and the Scheduler) have actually exited.
 func (s *Services) Stop() {
 	s.Scheduler.Stop()
 	s.wg.Wait()
 }
 
-// newsIngestTicker runs one News Ingest cycle (newsfeed.Service.Poll)
-// every newsPollInterval until ctx is done, starting with an immediate
-// cycle (FR-LUNA-1). A failed cycle is logged and the ticker carries on:
-// News Ingest problems must never affect the rest of the system
-// (FR-LUNA-4).
+// newsIngestTicker runs one News Ingest cycle (newsfeed.Service.Poll) every newsPollInterval until ctx is
+// done, starting with an immediate cycle (FR-LUNA-1). A failed cycle is logged and the ticker carries on:
+// News Ingest problems must never affect the rest of the system (FR-LUNA-4).
 func (s *Services) newsIngestTicker(ctx context.Context) {
 	defer s.wg.Done()
 

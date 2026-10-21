@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/stalled"
 )
 
 // Attention codes of HealthToday.AttentionCodes (issue #808): fixed, never
@@ -31,6 +32,9 @@ const (
 	// AttentionRetrainSkipped: the newest nightly retraining was skipped for
 	// lack of data and no model was trained since.
 	AttentionRetrainSkipped = "retrain_skipped"
+	// AttentionOrderProposalStalled: an order proposal has stayed received or
+	// processing longer than stalled.After (issue #829).
+	AttentionOrderProposalStalled = "order_proposal_stalled"
 )
 
 // AttentionCodes returns every code HealthToday may report, in the order it
@@ -39,6 +43,7 @@ func AttentionCodes() []string {
 	return []string{
 		AttentionNoPaperTradesToday, AttentionNoActiveModel, AttentionKabuNotLoggedIn, AttentionMarketDataIdle,
 		AttentionMissingSession, AttentionDailyGuardHalted, AttentionKillSwitchActive, AttentionRetrainSkipped,
+		AttentionOrderProposalStalled,
 	}
 }
 
@@ -155,10 +160,11 @@ type Health struct {
 	// InsufficientHistoryDates are the trading days of the same span with no
 	// snapshot and none before them either: the history does not reach back
 	// that far (first start), so they cannot be judged. Never a warning.
-	InsufficientHistoryDates []string         `json:"insufficient_history_dates"`
-	DailyGuard               HealthDailyGuard `json:"daily_guard"`
-	KillSwitch               HealthKillSwitch `json:"kill_switch"`
-	Retrain                  HealthRetrain    `json:"retrain"`
+	InsufficientHistoryDates []string          `json:"insufficient_history_dates"`
+	DailyGuard               HealthDailyGuard  `json:"daily_guard"`
+	KillSwitch               HealthKillSwitch  `json:"kill_switch"`
+	Retrain                  HealthRetrain     `json:"retrain"`
+	OrderProposals           stalled.Proposals `json:"order_proposals"`
 }
 
 // HealthToday gathers today's health in one read. Every part reuses the
@@ -197,6 +203,9 @@ func HealthToday(ctx context.Context, q Q, now time.Time) (Health, error) {
 		return Health{}, err
 	}
 	if h.Retrain, err = healthRetrain(ctx, q, now); err != nil {
+		return Health{}, err
+	}
+	if h.OrderProposals, err = stalled.Find(ctx, q, now); err != nil {
 		return Health{}, err
 	}
 	h.AttentionCodes = attentionCodes(h, jstNow)
@@ -242,6 +251,9 @@ func attentionCodes(h Health, jstNow time.Time) []string {
 	}
 	if h.Retrain.Skipped {
 		codes = append(codes, AttentionRetrainSkipped)
+	}
+	if h.OrderProposals.Count > 0 {
+		codes = append(codes, AttentionOrderProposalStalled)
 	}
 	return orderedCodes(codes)
 }

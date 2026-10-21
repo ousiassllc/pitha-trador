@@ -7,7 +7,7 @@
 - エントリーポイントは `cmd/paper-results-mcp`。Wails の `cmd/desktop` にも `cmd/server` の Gin にもルートを足さない。根拠: デスクトップのページはセッション Cookie と loopback の AssetServer が前提で、リモートの Grok Bot とは認証が別である（`docs/api/endpoints.md` §1）
 - アプリ本体と同時に動いてよい。DB の単一ライターはアプリで、本プロセスは `mode=ro` の読み手に加え、設定ツールが呼ばれたときだけ、`runtime_settings` と監査表だけを書く狭い書き込み接続を別に開く（`docs/architecture/er.md` の同時実行は WAL。本プロセスは WAL のモード変更もチェックポイントもしない。短い `busy_timeout` でアプリの書き込みを待たせない。`architecture/paper-results-mcp.md` §7.3）
 - #347 の kabu ステータス MCP とは別バイナリ・別設定ファイル・別ポート（既定 `127.0.0.1:48110`。Tailscale で直接待つときは tailnet の IP）。あちらが main に入ったあともパッケージを共有しない。経路の実装（Tailscale も Cloudflare も含む）はこのプロセスに埋め込まない
-- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 9 つと設定 6 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
+- トランスポートは Streamable HTTP（POST のみ、JSON 応答）。MCP SDK は使わず、JSON-RPC 2.0 の小さなハンドラを `internal/service/paperresultsmcp` に置く。根拠: 認証を最初に行い SQL の前で止めること、ツールを表（読み取り 9 つ、設定 6 つ、注文案 6 つ）だけで持つこと、ログに行を出さないことを、SDK の層を挟まずに保てる。選択の理由は `docs/api/endpoints/paper-results-mcp.md` 冒頭
 
 ## 2. パッケージ
 
@@ -29,11 +29,12 @@
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
 | `health_today` の判定のテスト（要対応コードの入り切り・非取引日・状態の区分。`query.HealthToday` を直接呼ぶ。行数制限のため `mcptests` と分ける） | `internal/service/paperresultsmcp/healthtests` |
+| 注文案の読み取り（issue #829）: 一覧・1 件の全体（紐づくシグナル・注文・ポジション）・集計の SQL と戻り値（`proposal`）、取引の入り口の判定（`origin`）、`health_today` の止まった案（`stalled`）。ツール定義は `order_proposal_read_tools.go`。テストは `proposaltests`（`read_test.go`・`readonly_db_test.go`・`origin_test.go`）と `healthtests`。GUI の「注文案」画面は `proposal` の読み取りだけを `internal/web/handler/orderproposals` の `Source` 経由で使う（配線は `internal/bootstrap/proposalview`） | `internal/service/paperresultsmcp/proposal`、`origin`、`stalled` |
 | 東証立会日 | 既存の `internal/service/marketcalendar` |
 | 資金の分母 | Settings の保存値（`runtime_settings` の `risk.paper.initial_capital_jpy`。読み取り接続で 1 キーだけ読む。`mcpset.PaperCapitalJPY`）、なければ `cmd/paper-results-mcp` の `paperRiskLimits`（アプリと同じ risk yaml 解決順。Paper の `initial_capital` のみ。起動時に読む）。DB は `bootstrap.DefaultDBPath` と `PITHA_DB_PATH` |
 | 今日の健康診断（`health_today`、issue #808） | ツール定義は `internal/service/paperresultsmcp/health_today_tool.go`、SQL と要対応コードは `internal/service/paperresultsmcp/query/health_today*.go`。市況データの警告は `query.HealthAlerts`（#802）、欠損セッションは `collection_status` と同じ関数、東証立会日は `marketcalendar.TSE` を再利用し、再導出しない。`runtime_settings` は固定キーの許可リスト（`query.ReadableSettingKeys`）だけを読む |
 
-`internal/web` からは import しない（depguard の `web-no-repository` を迂回する読み取り画面を増やさない）。
+`internal/web` からは import しない（depguard の `web-no-repository` を迂回する読み取り画面を増やさない）。例外は注文案の読み取りモデル `proposal` だけで（issue #829。GUI の「注文案」画面が MCP と同じ値を出すため。型だけを使い、DB の接続は `internal/bootstrap/proposalview` が渡す）、`query` や `readdb` は import しない。
 
 ## 3. テスト
 
@@ -47,7 +48,7 @@
 
 既定はオフで、何も待ち受けない。オン/オフ・待受アドレス・API キーは Settings 画面の「外部連携」→「MCP（Paper 実績・Jev 判断の読み取りと、基本設定のホワイトリスト変更）」（`/settings/integrations#modal-mcp`）で設定する。手で JSON を作る必要はない（issue #792）。画面は設定ファイルの書き込みに加え、MCP プロセスの起動・停止・再起動を行う（issue #795。§4.2。MCP は別プロセスのまま、アプリは子プロセスとして起動するだけ）。
 
-- 画面の項目: 設定変更の許可（「MCP からの設定変更を許可する」チェックと保存。既定オン。`POST /settings/mcp/write`。issue #806。MCP の `settings_write_enable` / `settings_write_disable` と同じ値を使う）と設定変更の監査ログ（直近 10 件）、状態（待受中 / 起動中 / 停止中 / エラー / キー未設定）と「次回起動時も自動で起動する」表記、起動・停止・再起動のボタン、有効化のチェック、待受アドレス（`host:port`）、API キーの生成・再生成、Grok Bot に登録する値（URL と、伏せ字の `Authorization: Bearer ●●●●●●●●`）、`paper-results-mcp` の配置先（見つかる / 見つからない）、設定ファイルの場所
+- 画面の項目: 設定変更の許可（「MCP からの設定変更を許可する」チェックと保存。既定オン。`POST /settings/mcp/write`。issue #806。MCP の `settings_write_enable` / `settings_write_disable` と同じ値を使う）、注文案の受け付け（「MCP からの注文案を受け付ける（Paper のみ）」チェックと保存。既定オフ。`POST /settings/mcp/order-proposals`。issue #827。オンにできるのはこの画面だけで、MCP の `order_proposals_disable` でオフにできる）と設定変更の監査ログ（直近 10 件。注文案の受け付けの切り替えも載る）、状態（待受中 / 起動中 / 停止中 / エラー / キー未設定）と「次回起動時も自動で起動する」表記、起動・停止・再起動のボタン、有効化のチェック、待受アドレス（`host:port`）、API キーの生成・再生成、Grok Bot に登録する値（URL と、伏せ字の `Authorization: Bearer ●●●●●●●●`）、`paper-results-mcp` の配置先（見つかる / 見つからない）、設定ファイルの場所
 - 待受アドレスの検証はサーバー側で行い、プロセスと同じ規則である。許すのは loopback と、この PC の tailnet アドレス（`100.64.0.0/10`、`fd7a:115c:a1e0::/48`）で、そのアドレスが実際にインターフェースにあるときだけ。`0.0.0.0`・`::`・ホスト部が空・LAN・ホスト名・ポート 0 は 422 で拒否し、ファイルは変えない。空欄は `127.0.0.1:48110`
 - API キーは `pitha-mcp-` + 32 バイトの乱数（URL 安全な base64）。生成・再生成の直後の応答に一度だけ表示し（読み取り専用の欄、`Authorization: Bearer <キー>` の全文、コピーボタン）、応答は `Cache-Control: no-store`、表示部は htmx の履歴キャッシュに入れない（`hx-history="false"`）。パネルを開き直すと常に伏せ字になる。紛失したら再生成する。再生成すると古いキーは、MCP を再起動した時点で使えなくなる（画面の「再起動」で行う）
 - 状態は設定ファイル、アプリが起動した子プロセスの有無、有効かつキーがあるときだけの TCP 接続（300 ms）から決める。ファイルが無ければオフ（停止中・接続しない）。有効でもキーが空なら「キー未設定」（接続しない）。接続できれば「待受中」。アプリが起動して 10 秒以内でまだ接続できなければ「起動中」、10 秒を過ぎても接続できない・起動に失敗した・操作者の停止でなく終了した（異常終了）ときは「エラー」（理由は固定文。終了コードだけを添え、プロセスの出力は出さない）。何も起動しておらず接続もできなければ「停止中」。アプリの外で起動された MCP が待ち受けているときは「待受中」（アプリの外で起動された旨を併記。画面からは停止しない・二重には起動しない）。設定ファイルが読めない・権限が緩い・不正なときは「停止中」と警告を出す。そのまま保存または生成すると、既定値から `0600` で作り直す（既存のキーは失われる）
@@ -98,3 +99,5 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.6 | 2026-10-20 | 資金の分母の説明に、Settings の保存値（`runtime_settings`）には追従しない旨を追記 | issue #804 |
 | 1.7 | 2026-10-20 | §2 に `health_today` の置き場所を追加し、ツール数を 9 に更新。資金の分母の説明を、`runtime_settings` は固定キーだけを読む旨に合わせた | issue #808 |
 | 1.8 | 2026-10-20 | 設定ツール（`mcpset`・`mcpwritesettings`・監査表 `000040`）を §2 に追加。DB の扱いを「読み取りは `mode=ro`、設定ツールだけが別の狭い書き込み接続」に改め、資金の分母を Settings の保存値に追従に変更。Settings 画面に書き込み許可のチェックと監査ログを追加（§4.1） | issue #806・#807 |
+| 1.9 | 2026-10-21 | 画面の項目に、注文案の受け付けスイッチ（既定オフ。オンは Settings だけ）を追記 | issue #827 |
+| 1.10 | 2026-10-21 | §2 に注文案の読み取り（`proposal`・`origin`・`stalled`）と、GUI の「注文案」画面との関係（読み取りモデルの共有）を追記。ツールは 21 | issue #829 |

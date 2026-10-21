@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Paper執行・Kill Switch）
 
-`docs/architecture/er.md` から分割した章。対象: `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions`。型・規約と全体ER図は `docs/architecture/er.md` を参照。
+`docs/architecture/er.md` から分割した章。対象: `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` / `order_proposals` / `order_proposal_events`。型・規約と全体ER図は `docs/architecture/er.md` を参照。
 
 ## paper_orders
 
@@ -97,7 +97,7 @@ erDiagram
 | realized_pnl | numeric(14,2) | NULL可 | クローズ時に確定 |
 | opened_at | text | NOT NULL | |
 | closed_at | text | NULL可 | |
-| exit_reason | varchar(50) | NULL可 | 値は `internal/domain/position.go` の `ExitReason*` 定数（`functional.md` FR-EXIT-1 の8条件＋手動決済＋Kill Switch強制クローズ）: `stop_loss`（固定Stop Loss）/ `take_profit`（固定Take Profit）/ `trailing_stop`（Trailing Stop）/ `jev_direction_reversed`（Jev方向反転）/ `continuation_probability_dropped`（continuation_probability低下）/ `vwap_cross`（VWAP逆クロス）/ `max_holding`（最大保有時間到達）/ `force_flat_before_close`（引け前強制決済）/ `manual`（手動決済 `POST /positions/:id/close`）/ `force_close`（Kill Switchによる強制クローズ） |
+| exit_reason | varchar(50) | NULL可 | 値は `internal/domain/position.go` の `ExitReason*` 定数（`functional.md` FR-EXIT-1 の8条件＋手動決済＋Kill Switch強制クローズ＋注文案の決済）: `stop_loss`（固定Stop Loss）/ `take_profit`（固定Take Profit）/ `trailing_stop`（Trailing Stop）/ `jev_direction_reversed`（Jev方向反転）/ `continuation_probability_dropped`（continuation_probability低下）/ `vwap_cross`（VWAP逆クロス）/ `max_holding`（最大保有時間到達）/ `force_flat_before_close`（引け前強制決済）/ `manual`（手動決済 `POST /positions/:id/close`）/ `force_close`（Kill Switchによる強制クローズ）/ `proposal_close`（MCP の注文案 `close` による決済。issue #828。リスクを減らす操作なので手動決済と同じくKill Switch・一時停止・日次ガード中も実行でき) |
 | created_at / updated_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id)`, `UNIQUE (instrument_id) WHERE closed_at IS NULL`（部分インデックス。SQLite 3.8+対応。同一銘柄の同時保有は1ポジションに制限し、状態管理§4.9の `position` フィールドと整合させる）
@@ -252,10 +252,71 @@ erDiagram
 | direction | varchar(10) | NOT NULL, CHECK IN ('LONG','SHORT','NONE') | |
 | score | numeric(6,4) | NULL可 | Policy Engine内部スコア |
 | entry_price_reference | numeric(12,2) | NULL可 | |
-| policy_version | varchar(20) | NOT NULL | Policy Engineのロジック版。ライブ経路（メタラベリングのEV判定）は`policy-v2`、バックテストの再生は保存せず（`DecideReplay`はライブと同じ`policy-v2`、比較専用の旧しきい値ルールだけが`policy-v1`）。メタモデル未採用のPaperで、Settingsの「Paper ブートストラップ」（`paper.bootstrap_entry_enabled`）が有効なときの旧しきい値ルールの判断は`policy-vb`（LONG/SHORT/NONEのすべて。issue #798）。自己改善の適用提案のしきい値が有効な間は`policy-v2+sol-12`・`policy-vb+sol-12`のように`policy_proposals.applied_policy_version`を付加（`functional.md` FR-POLICY-4/5, FR-SELFIMPROVE-5） |
+| policy_version | varchar(20) | NOT NULL | Policy Engineのロジック版。ライブ経路（メタラベリングのEV判定）は`policy-v2`、バックテストの再生は保存せず（`DecideReplay`はライブと同じ`policy-v2`、比較専用の旧しきい値ルールだけが`policy-v1`）。メタモデル未採用のPaperで、Settingsの「Paper ブートストラップ」（`paper.bootstrap_entry_enabled`）が有効なときの旧しきい値ルールの判断は`policy-vb`（LONG/SHORT/NONEのすべて。issue #798）。自己改善の適用提案のしきい値が有効な間は`policy-v2+sol-12`・`policy-vb+sol-12`のように`policy_proposals.applied_policy_version`を付加（`functional.md` FR-POLICY-4/5, FR-SELFIMPROVE-5）。MCP の注文案（`open_long`）が書いた行は`mcp-proposal-v1`（`jev_decision_id`はNULL。issue #828。`risk_rejections`が Policy の行と見分ける） |
 | risk_passed | boolean | NOT NULL | Risk Engine通過可否 |
 | reject_reason | varchar(255) | NULL可 | risk_passed=false時の理由。Policy Engineの理由（`spread_too_wide`等）、またはRisk Engine拒否時の`risk_engine_rejected: <Risk理由>`（例: `risk_engine_rejected: market_adverse_to_direction`。Risk理由が空なら`risk_engine_rejected`のみ）。Paperの予算枠の拒否理由は`bucket_disabled`（株の枠が0）・`bucket_budget_exceeded`（株の保有額＋今回のエントリー額が枠を超える）（issue #824、`functional.md` FR-RISK-10） |
 | bucket | varchar(20) | NOT NULL, DEFAULT 'stock', CHECK IN ('stock','bond_etf') | そのシグナルを書いた時点の銘柄の`instruments.asset_class`から確定させた予算枠（issue #824、`000041`）。書き込み時に確定し、あとから`asset_class`や枠の設定を変えても過去の行は変わらない。`000041`より前の行は`stock`（それまでは株だけ） |
 | created_at | text | NOT NULL | |
 
 インデックス: `INDEX (instrument_id, timestamp DESC)`, `INDEX (risk_passed)`
+
+## order_proposals
+
+MCP（`order_proposal_submit`）が受け付けた Paper の注文案。1 案 1 行（マイグレーション`000042`、issue #827、`docs/architecture/paper-results-mcp.md` §8）。MCP が書くのは受け付けの`INSERT`（案 1 行と`order_proposal_events`の最初の 1 行を同じトランザクション）だけで、取消の依頼（`order_proposal_cancel`）は`cancel_requested_at`の`UPDATE`とイベント 1 行だけを書く（`000043`、issue #828）。`status`以降の更新と下の紐付け・計算値はアプリの処理役が埋める（`docs/architecture/order-proposal-processing.md`）。
+
+```mermaid
+erDiagram
+    order_proposals ||--o{ order_proposal_events : ""
+    order_proposals {
+        integer id PK
+        text idempotency_key UK
+        text request_hash
+        text received_at
+        text mode "paper のみ"
+        varchar symbol
+        varchar bucket "stock | bond_etf"
+        text action "open_long | close"
+        varchar status "received | processing | waiting_session | rejected | submitted | filled | expired | cancelled | closed | failed"
+        integer instrument_id FK
+        integer trade_signal_id FK
+        integer paper_order_id FK
+        integer position_id FK
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id / idempotency_key / request_hash | integer / text / text | PK / NOT NULL UNIQUE / NOT NULL | `idempotency_key`は 8〜64 文字の再送の識別子。`request_hash`は`idempotency_key`を除いた引数を正規化した SHA-256（16 進）。同じキーで内容が違う再送を拒否する根拠 |
+| received_at / updated_at / expires_at | text | NOT NULL | 受け付け時刻・最後に状態を変えた時刻・有効期限（UTC。受け付けから最大 24 時間）。`(received_at)`と JST の 1 日 20 件の上限の数え上げに使う |
+| client | text | NOT NULL, DEFAULT `''` | 接続元 IP だけ。ヘッダ・API キーは残さない |
+| mode | text | NOT NULL, DEFAULT 'paper', CHECK IN ('paper') | Live の値は入れられない（Live の発注経路は作らない） |
+| symbol / bucket / action | varchar(10) / varchar(20) / text | NOT NULL, bucket は CHECK IN ('stock','bond_etf')、action は CHECK IN ('open_long','close') | 銘柄コード・予算枠・買い（新規）か保有中ポジションの決済か。売り建ては無い |
+| quantity / budget_jpy | integer / numeric | NULL可, CHECK > 0 | `open_long`のとき、どちらか一方（株数／使う金額）。`close`は両方 NULL |
+| order_type / limit_price | varchar(10) / numeric | NOT NULL, CHECK IN ('MARKET','LIMIT') / NULL可 | `LIMIT`のときだけ`limit_price` |
+| stop_loss_price / take_profit_price / exit_plan / max_loss_jpy | numeric / numeric / text / numeric | NULL可, 価格・損失は CHECK > 0 | 答え合わせのための記録。`open_long`は損切り・手じまいの計画（500 文字以内）・最大損失が必須（MCP が検証）。第 1 段階ではアプリの Exit の判定には使わない |
+| rationale / sources_json | text | NOT NULL | 判断の理由（2000 文字以内）と、情報源（`title`・`url`・`retrieved_at`の配列。1〜10 件）の JSON |
+| status / status_reason | varchar(20) / text | NOT NULL, status は CHECK（上の図の 10 値）, DEFAULT 'received' / DEFAULT `''` | 状態と、固定コードの理由。受け付け時は`received`と空 |
+| instrument_id / trade_signal_id / paper_order_id / position_id | integer | FK → instruments / trade_signals / paper_orders / positions, NULL可 | アプリが issue #828 で埋める。最初は NULL |
+
+| cancel_requested_at | text | NULL可 | `order_proposal_cancel`が取消を依頼した時刻（UTC）。NULL は依頼なし。MCP が書く唯一の`UPDATE`列（`000043`）。実際の取消はアプリ |
+| applied_quantity | integer | NULL可, CHECK (> 0) | アプリが実際に注文した（`open_long`）／決済した（`close`）株数。案の数量とアプリが決めた数量（`risk.Engine.PositionSize`）の小さいほう（`000043`） |
+| computed_max_loss_jpy | numeric | NULL可, CHECK (>= 0) | アプリが計算した最大損失（円）＝ 数量 ×（予想約定価格 − 実際に効く損切り価格）。あいりの`max_loss_jpy`と並べて残す（`000043`） |
+| effective_stop_loss_price | numeric | NULL可, CHECK (> 0) | 上の計算に使った損切り価格＝案の損切りとアプリの損切りのうち、エントリーから遠い方（`000043`） |
+
+インデックス: `UNIQUE (idempotency_key)`, `INDEX (received_at)`, `INDEX (status, received_at)`。`000043`は`paper_orders (trade_signal_id)`と`positions (entry_order_id)`のインデックスも足す（再起動時の回復と紐付けの検索用）
+
+## order_proposal_events
+
+注文案の状態の変化を 1 行ずつ残す（マイグレーション`000042`）。追記のみで、`UPDATE` / `DELETE`はトリガー（`order_proposal_events_no_update` / `_no_delete`）で拒否する。受け付け時の最初の行は`from_status` NULL・`to_status='received'`・`actor='mcp'`。
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK（AUTOINCREMENT） | |
+| proposal_id | integer | FK → order_proposals.id, NOT NULL | |
+| at | text | NOT NULL | 変化の時刻（UTC） |
+| from_status / to_status | varchar(20) | from は NULL可（最初の行だけ）、どちらも`order_proposals.status`と同じ CHECK | 変化前・変化後 |
+| reason_code | text | NOT NULL, DEFAULT `''` | 固定コード（無いときは空） |
+| detail_json | text | NOT NULL, DEFAULT `''` | イベントの補足（固定キーの JSON。数量を減らしたときの`{"requested_quantity":…,"applied_quantity":…,"limited_by":…}`、再起動の回復の`{"recovered_after_restart":true}`。無いときは空文字。数値・コードだけで自由文は入れない。`000043`） |
+| actor | text | NOT NULL, CHECK IN ('mcp','app','gui') | `mcp`＝`order_proposal_submit`、`app`＝アプリの処理役（issue #828）、`gui`＝Settings 画面 |
+
+インデックス: `INDEX (proposal_id, id)`

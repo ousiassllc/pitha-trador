@@ -108,13 +108,13 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	}
 
 	want("performance", data("paper_performance_summary", period),
-		"closed_trade_count open_position_count win_count loss_count flat_count win_rate total_pnl_jpy expectancy_jpy expectancy_return_pct profit_factor max_drawdown_jpy capital_jpy max_drawdown_capital_ratio")
+		"closed_trade_count open_position_count win_count loss_count flat_count win_rate total_pnl_jpy expectancy_jpy expectancy_return_pct profit_factor max_drawdown_jpy capital_jpy max_drawdown_capital_ratio by_origin")
 	daily := data("paper_daily_pnl", period)
 	want("daily envelope", daily, "days")
 	want("daily row", first(daily, "days"), "date trade_count pnl_jpy win_count loss_count")
 	trades := data("paper_trades", period)
 	want("trades envelope", trades, "trades next_cursor")
-	want("trade row", first(trades, "trades"), "id symbol side quantity entry_price opened_at exit_price closed_at exit_reason realized_pnl fees_jpy")
+	want("trade row", first(trades, "trades"), "id symbol side quantity entry_price opened_at exit_price closed_at exit_reason realized_pnl fees_jpy origin")
 	cal := data("jev_calibration", period)
 	want("calibration", cal, "decisions horizons")
 	want("decisions", cal["decisions"].(map[string]any), "scout_count trader_count")
@@ -131,7 +131,7 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("prediction counts", meta["prediction_counts"].(map[string]any), "take skip")
 	want("retrain skip", first(meta, "retrain_skips"), "skipped_at reason_code usable_rows required_rows")
 	risk := data("risk_rejections", period)
-	want("risk", risk, "risk_passed_count other_reject_count buckets other_reject_breakdown")
+	want("risk", risk, "risk_passed_count other_reject_count buckets other_reject_breakdown proposal_risk_passed_count proposal_risk_rejected_count")
 	want("risk bucket", first(risk, "buckets"), "reason count")
 	want("other reject bucket", first(risk, "other_reject_breakdown"), "reason count")
 	kill := data("kill_switch_history", period)
@@ -149,7 +149,7 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("skipped queue", first(failures, "skipped_by_queue"), "queue count")
 	want("retention", coll["retention"].(map[string]any), "succeeded_job_days failed_job_days note")
 	health := data(healthToday, map[string]any{})
-	want("health", health, "date trading_day needs_attention attention_codes paper_trades meta_model bootstrap market_data missing_session_dates insufficient_history_dates daily_guard kill_switch retrain")
+	want("health", health, "date trading_day needs_attention attention_codes paper_trades meta_model bootstrap market_data missing_session_dates insufficient_history_dates daily_guard kill_switch retrain order_proposals")
 	want("health paper trades", health["paper_trades"].(map[string]any), "opened_count closed_count")
 	want("health meta model", health["meta_model"].(map[string]any), "adopted version trained_at")
 	want("health bootstrap", health["bootstrap"].(map[string]any), "enabled effective signals_today")
@@ -157,6 +157,9 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("health daily guard", health["daily_guard"].(map[string]any), "halted reason halted_at")
 	want("health kill switch", health["kill_switch"].(map[string]any), "active unresolved_count since reasons flag_set")
 	want("health retrain", health["retrain"].(map[string]any), "skipped latest_skipped_at reason_code")
+	want("health order proposals", health["order_proposals"].(map[string]any), "stalled_count oldest_stalled_since")
+	want("performance by origin", first(data("paper_performance_summary", period), "by_origin"),
+		"origin closed_trade_count win_count loss_count win_rate total_pnl_jpy expectancy_jpy")
 }
 
 // Protocol basics a connector depends on, all behind the key.

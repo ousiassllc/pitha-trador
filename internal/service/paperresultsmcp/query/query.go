@@ -33,7 +33,7 @@ const (
 // pass MaxClosedScan or MaxHorizons.
 var ErrLimitExceeded = errors.New("query: scan limit exceeded")
 
-// ErrBadCursor is returned for a paper_trades cursor that is not one this
+// ErrBadCursor is returned for a paper_trades / order_proposals_list cursor that is not one this
 // package issued.
 var ErrBadCursor = errors.New("query: invalid cursor")
 
@@ -52,6 +52,9 @@ type Range struct {
 func (r Range) bounds() (from, to string) {
 	return sqlutil.FormatTime(r.From), sqlutil.FormatTime(r.To)
 }
+
+// Bounds is the range as the stored TEXT timestamps to compare against.
+func (r Range) Bounds() (from, to string) { return r.bounds() }
 
 // JST is the zone of the calendar days in periods and daily rows. Japan has
 // no DST, so a fixed zone is exact and needs no tzdata.

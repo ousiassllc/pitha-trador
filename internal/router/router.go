@@ -11,6 +11,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
@@ -38,6 +39,7 @@ func New(opts ...Option) *gin.Engine {
 		proposalSource:    proposals.StaticPolicyProposalSource{},
 		backtestRunner:    performance.StaticBacktestRunner{},
 		activitySource:    activity.StaticActivitySource{},
+		orderProposals:    orderproposals.StaticSource{},
 		watchlistSource:   watchlist.StaticSource{},
 		errorLogExporter:  system.UnconfiguredErrorLogExporter{},
 	}

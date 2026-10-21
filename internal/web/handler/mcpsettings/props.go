@@ -143,6 +143,12 @@ func (h *Handler) addWrite(ctx context.Context, props *mcp.PanelProps) {
 		slog.ErrorContext(ctx, "mcpsettings: read write switch", "error", err)
 	}
 	props.WriteEnabled = on && err == nil
+	// Off unless the read succeeds and says on: the intake fails closed.
+	proposals, err := h.gate.OrderProposalsEnabled(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "mcpsettings: read order proposals switch", "error", err)
+	}
+	props.OrderProposalsEnabled = proposals && err == nil
 	entries, err := h.gate.Recent(ctx, auditRows)
 	if err != nil {
 		slog.ErrorContext(ctx, "mcpsettings: read audit log", "error", err)
@@ -174,6 +180,10 @@ func auditAction(a string) string {
 		return "書き込みを許可"
 	case mcpset.ActionWriteDisable:
 		return "書き込みを禁止"
+	case mcpset.ActionOrderProposalsEnable:
+		return "注文案の受け付けをオン"
+	case mcpset.ActionOrderProposalsDisable:
+		return "注文案の受け付けをオフ"
 	}
 	return a
 }

@@ -193,7 +193,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 
 - `side`は`LONG`/`SHORT`（`paper_orders.side`の`BUY`/`SELL`とは別）。`quantity`は株数、`entry_price`/`current_price`/`unrealized_pnl`/`realized_pnl`は円
 - `realized_pnl`/`closed_at`/`exit_reason`は**未クローズ（保有中）で`null`**。`realized_pnl`はエントリー・Exit両注文の`fees`を差し引いた値
-- `exit_reason`の値は`stop_loss`/`take_profit`/`trailing_stop`/`jev_direction_reversed`/`continuation_probability_dropped`/`vwap_cross`/`max_holding`/`force_flat_before_close`/`manual`/`force_close`（意味は`architecture/er/tables-trading.md`の`positions.exit_reason`）
+- `exit_reason`の値は`stop_loss`/`take_profit`/`trailing_stop`/`jev_direction_reversed`/`continuation_probability_dropped`/`vwap_cross`/`max_holding`/`force_flat_before_close`/`manual`/`force_close`/`proposal_close`（意味は`architecture/er/tables-trading.md`の`positions.exit_reason`）
 - `opened_at`/`closed_at`はRFC 3339（UTC、末尾`Z`）
 - `unrealized_pnl`は**保有中のみ有効**で、クローズ済み行は`0`（クローズ時に`0`へリセットする。実現損益と二重計上しないため。`current_price`はクローズ時の約定価格）
 

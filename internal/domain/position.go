@@ -45,7 +45,8 @@ const (
 	// already recorded on the driving kill_switch_events row, so
 	// positions.exit_reason only needs to say "closed by Kill Switch",
 	// not repeat which one.
-	ExitReasonForceClose = "force_close"
+	ExitReasonForceClose    = "force_close"
+	ExitReasonProposalClose = "proposal_close" // an order proposal's close (#828): risk-reducing like manual, never blocked by the Kill Switch
 )
 
 // Position mirrors one positions row: a held (or closed) Paper/Live
