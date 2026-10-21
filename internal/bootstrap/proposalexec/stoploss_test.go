@@ -107,4 +107,7 @@ func TestOpenLong_StaleQuoteIsReportedBeforeTheStopLossCheck(t *testing.T) {
 	id := f.propose(spec{stop: 2600, expires: at(11, 30, 0)})
 	f.cycle()
 	f.wantEnd(id, orderproposal.StatusRejected, proposalexec.ReasonStaleQuote)
+	if f.risk.checks != 0 || f.exec.enters != 0 {
+		t.Fatalf("CheckThenEnter calls = %d, Enter calls = %d; want 0 and 0", f.risk.checks, f.exec.enters)
+	}
 }
