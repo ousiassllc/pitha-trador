@@ -7,13 +7,14 @@ package organisms
 type NavItem string
 
 const (
-	NavNone        NavItem = ""
-	NavScanner     NavItem = "scanner"
-	NavWatchlist   NavItem = "watchlist"
-	NavPerformance NavItem = "performance"
-	NavCalibration NavItem = "calibration"
-	NavActivity    NavItem = "activity"
-	NavSettings    NavItem = "settings"
+	NavNone           NavItem = ""
+	NavScanner        NavItem = "scanner"
+	NavWatchlist      NavItem = "watchlist"
+	NavPerformance    NavItem = "performance"
+	NavOrderProposals NavItem = "order_proposals"
+	NavCalibration    NavItem = "calibration"
+	NavActivity       NavItem = "activity"
+	NavSettings       NavItem = "settings"
 )
 
 // navEntries is the main navigation in display order. Symbol Detail
@@ -27,6 +28,7 @@ var navEntries = []struct {
 	{NavScanner, "Scanner", "/scanner"},
 	{NavWatchlist, "Watchlist", "/watchlist"},
 	{NavPerformance, "Performance", "/performance"},
+	{NavOrderProposals, "注文案", "/order-proposals"},
 	{NavCalibration, "Calibration", "/calibration"},
 	{NavActivity, "Activity", "/activity"},
 	{NavSettings, "Settings", "/settings"},

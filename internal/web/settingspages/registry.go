@@ -188,6 +188,7 @@ var links = []Link{
 	// 運用
 	{PageOperations, "Scanner", "スキャンの絞り込み状況と候補銘柄・Jev の判断を確認します（候補から銘柄詳細へ進めます）。", "/scanner", false},
 	{PageOperations, "Watchlist", "立花の監視リスト（どの銘柄をどう選んだか）を確認します。", "/watchlist", false},
+	{PageOperations, "注文案", "MCP の AI クライアントが出した Paper の注文案と、その後（Risk check・約定・損益）を確認します（読み取り専用）。", "/order-proposals", false},
 	{PageOperations, "Activity", "システムの稼働ログとキューの状況を確認します。", "/activity", false},
 	{PageOperations, "Kill Switch", killSwitchDescription, "/scanner#kill-switch", false},
 

@@ -7,6 +7,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
@@ -38,6 +39,7 @@ type options struct {
 	proposalSource      proposals.PolicyProposalSource
 	backtestRunner      performance.BacktestRunner
 	activitySource      activity.ActivitySource
+	orderProposals      orderproposals.Source
 	watchlistSource     watchlist.Source
 	secretsStore        settings.SecretsStore        // nil until WithSecretsStore; also gates the Setup Guard
 	operationalSettings settings.OperationalSettings // nil until WithOperationalSettings: no 運用設定 section
@@ -139,6 +141,15 @@ func WithPolicyProposalSource(source proposals.PolicyProposalSource) Option {
 // activity.StaticActivitySource default only serves router-level tests.
 func WithActivitySource(source activity.ActivitySource) Option {
 	return func(o *options) { o.activitySource = source }
+}
+
+// WithOrderProposalSource overrides the 注文案 screens' backing
+// internal/web/handler/orderproposals.Source (`GET /order-proposals`, `GET
+// /order-proposals/:id`, issue #829). cmd/desktop and cmd/server pass
+// internal/bootstrap/proposalview's Reader; the empty
+// orderproposals.StaticSource default only serves router-level tests.
+func WithOrderProposalSource(source orderproposals.Source) Option {
+	return func(o *options) { o.orderProposals = source }
 }
 
 // WithWatchlistSource overrides `GET /watchlist`'s backing

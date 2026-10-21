@@ -1,0 +1,123 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+// OrderProposalDetailPage is one 注文案 in full (issue #829): what the MCP
+// client proposed and why (rationale, the plan for the stop and the exit, the
+// loss it expected, its sources), what the application did with it (the
+// timeline of states) and what became of it (the linked signal, order and
+// position with the realized pnl), so the plan can be checked against the
+// outcome. Every free text (rationale, exit plan, a source's title and URL, an
+// event's detail) is escaped by Templ and shown as text; a source URL becomes a
+// link only when the handler judged it http or https, and then it opens with
+// rel="noopener noreferrer". `GET /order-proposals/:id`
+// (internal/web/handler/orderproposals) renders it; it has no buttons.
+templ OrderProposalDetailPage(p ProposalDetailProps) {
+	@layout.Shell("注文案 #"+strconv.FormatInt(p.ID, 10), organisms.NavOrderProposals) {
+		<p class="text-sm"><a class="underline" href="/order-proposals">← 注文案の一覧</a></p>
+		<h1 class="mt-1 text-2xl font-bold text-slate-900" data-testid="order-proposal-title">
+			注文案 #{ strconv.FormatInt(p.ID, 10) }
+			<span class="ml-2 font-mono text-lg">
+				<a class="underline" href={ templ.SafeURL("/symbols/" + p.Symbol) }>{ p.Symbol }</a>
+			</span>
+		</h1>
+		<p class="mt-1 text-sm text-slate-700" data-testid="order-proposal-status" data-status={ p.Status }>
+			{ label(proposalActionLabels, p.Action) }・{ label(proposalBucketLabels, p.Bucket) }・{ p.OrderType } ／ 状態:
+			<span class="font-semibold">{ label(proposalStatusLabels, p.Status) }</span>
+			<span class="font-mono text-xs text-slate-500">{ p.Status }</span>
+			if p.StatusReason != "" {
+				<span class="font-mono text-xs text-slate-500">（理由コード: { p.StatusReason }）</span>
+			}
+		</p>
+		@proposalFields("概要", "order-proposal-summary", p.Summary)
+		<section class="mt-6" data-testid="order-proposal-rationale">
+			<h2 class="text-lg font-semibold text-slate-900">理由</h2>
+			<p class="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{ p.Rationale }</p>
+		</section>
+		<section class="mt-6" data-testid="order-proposal-exit-plan">
+			<h2 class="text-lg font-semibold text-slate-900">手じまいの計画</h2>
+			if p.ExitPlan == "" {
+				<p class="mt-1 text-sm text-slate-600">—</p>
+			} else {
+				<p class="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">{ p.ExitPlan }</p>
+			}
+		</section>
+		@proposalFields("損切り・利確", "order-proposal-plan", p.Plan)
+		@proposalFields("最大損失", "order-proposal-loss", p.Loss)
+		@proposalSources(p.Sources)
+		@proposalEvents(p.Events)
+		for _, l := range p.Linked {
+			@proposalFields(l.Title, "order-proposal-linked", l.Fields)
+		}
+	}
+}
+
+templ proposalFields(title, testID string, fields []ProposalField) {
+	<section class="mt-6" data-testid={ testID }>
+		<h2 class="text-lg font-semibold text-slate-900">{ title }</h2>
+		<dl class="mt-2 grid gap-x-4 gap-y-1 text-sm text-slate-700 sm:grid-cols-[max-content_1fr]">
+			for _, f := range fields {
+				<dt class="font-medium">{ f.Label }</dt>
+				<dd class={ pnlTextClass(f.Sign) }>{ dash(f.Value) }</dd>
+			}
+		</dl>
+	</section>
+}
+
+templ proposalSources(sources []ProposalSource) {
+	<section class="mt-6" data-testid="order-proposal-sources">
+		<h2 class="text-lg font-semibold text-slate-900">情報源</h2>
+		if len(sources) == 0 {
+			<p class="mt-1 text-sm text-slate-600">—</p>
+		} else {
+			<ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-800">
+				for _, s := range sources {
+					<li data-testid="order-proposal-source">
+						<span class="break-words font-medium">{ s.Title }</span>
+						<span class="text-xs text-slate-500">（取得 { s.RetrievedAt }）</span>
+						<br/>
+						if s.Href != "" {
+							<a class="break-all underline" href={ templ.SafeURL(s.Href) } target="_blank" rel="noopener noreferrer">{ s.URL }</a>
+						} else {
+							<span class="break-all font-mono text-xs">{ s.URL }</span>
+						}
+					</li>
+				}
+			</ul>
+		}
+	</section>
+}
+
+templ proposalEvents(events []ProposalEvent) {
+	<section class="mt-6" data-testid="order-proposal-events">
+		<h2 class="text-lg font-semibold text-slate-900">状態の時系列</h2>
+		<table class="mt-2 w-full text-left text-sm">
+			<caption class="sr-only">状態の変化の履歴（古い順）</caption>
+			<thead class="border-b border-slate-300 text-xs text-slate-600">
+				<tr>
+					<th scope="col" class="py-1 pr-3">時刻（JST）</th>
+					<th scope="col" class="py-1 pr-3">変化</th>
+					<th scope="col" class="py-1 pr-3">理由コード</th>
+					<th scope="col" class="py-1 pr-3">主体</th>
+					<th scope="col" class="py-1">補足</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, e := range events {
+					<tr class="border-b border-slate-100" data-testid="order-proposal-event">
+						<td class="py-1 pr-3">{ e.At }</td>
+						<td class="py-1 pr-3 font-mono text-xs">{ dash(e.From) } → { e.To }</td>
+						<td class="py-1 pr-3 font-mono text-xs">{ dash(e.Reason) }</td>
+						<td class="py-1 pr-3">{ e.Actor }</td>
+						<td class="py-1 font-mono text-xs">{ dash(e.Detail) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</section>
+}
