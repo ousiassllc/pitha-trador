@@ -8,11 +8,13 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/budget"
 )
 
 // lastErrorHeadBytes bounds how much of jobs.last_error one statement reads
@@ -21,13 +23,15 @@ import (
 // token, a queue, a JST day and counts are ever returned.
 const lastErrorHeadBytes = 256
 
-// MaxDays is the longest span of job_failures: the failed-job
-// breakdown covers at most this many JST days ending at the period's end, so
-// that a 30- or 366-day collection_status does not scan a failure burst of
-// weeks ago (issue #850). It is also the default, as the default 30-day
-// period is cut to the same span. The value is the issue's "default 7 days";
-// whether it is the right ceiling is still to be confirmed.
-const MaxDays = 7
+// MaxDays is the longest span of job_failures: the failed-job breakdown
+// covers at most this many JST days ending at the period's end, so a 30- or
+// 366-day collection_status does not scan a failure burst of weeks ago (issue
+// #850). It is also the default, as the default 30-day period is cut to the
+// same span. 3 days is the owner's decision (it replaced the first 7-day
+// proposal after a 220,838-row burst inside the window still took about 1.5 s
+// warm and 4 s cold); a burst inside even these days can still spend the time
+// budget, in which case Read returns the part it has (Result.TimedOut).
+const MaxDays = 3
 
 // skippedNotePrefix is how jobqueue records a terminal skip in last_error
 // (internal/repository/jobqueue.Skip); such a job's status is succeeded.
@@ -101,11 +105,12 @@ type DayCodeCount struct {
 // longer than MaxDays and was cut to its last MaxDays days (the counts of the
 // older days are not read, not zero).
 type Window struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
-	MaxDays   int    `json:"max_days"`
-	Truncated bool   `json:"truncated"`
-	Note      string `json:"note"`
+	From          string `json:"from"`
+	To            string `json:"to"`
+	RequestedFrom string `json:"requested_from"`
+	MaxDays       int    `json:"max_days"`
+	Truncated     bool   `json:"truncated"`
+	Note          string `json:"note"`
 }
 
 // Result is the failed jobs finished in Window by JST day, queue and
@@ -124,57 +129,96 @@ type Result struct {
 	// succeeded counts of jobs[]).
 	SkippedTotal   int          `json:"skipped_total"`
 	SkippedByQueue []QueueCount `json:"skipped_by_queue"`
+	// TimedOut is true when the soft time budget (package budget) ran out: every
+	// count above then covers only what was read, and Incomplete lists what was
+	// not ("failed:<queue>:<JST date>" and "skipped:<queue>"). It is false and
+	// Incomplete empty when everything in Window was read.
+	TimedOut   bool     `json:"timed_out"`
+	Incomplete []string `json:"incomplete"`
 }
 
 // window cuts [from, to) to its last MaxDays JST days.
 func window(from, to time.Time) (time.Time, Window) {
-	w := Window{MaxDays: MaxDays}
+	w := Window{MaxDays: MaxDays, RequestedFrom: from.In(jst).Format(time.DateOnly)}
 	if limit := to.AddDate(0, 0, -MaxDays); from.Before(limit) {
 		from, w.Truncated = limit, true
 	}
 	w.From, w.To = from.In(jst).Format(time.DateOnly), to.In(jst).Format(time.DateOnly)
 	w.Note = fmt.Sprintf("failed jobs and terminal skips are read for at most the last %d days of the period (default and ceiling) to keep collection_status fast; "+
-		"jobs[] counts and the other fields cover the whole period", MaxDays)
+		"jobs[] counts and the other fields cover the whole period; when timed_out is true only the part listed as not incomplete was read", MaxDays)
 	if w.Truncated {
 		w.Note += fmt.Sprintf("; the requested period was longer, so only %s to %s (exclusive) is broken down here", w.From, w.To)
 	}
 	return from, w
 }
 
-// Read reads the failed and skipped jobs finished in the last
-// MaxDays days of [periodFrom, periodTo). Each queue is read by its own
-// statements so the (queue, status, finished_at) index answers the range
-// (jobs_queue_status_finished_idx); the error head is reduced to its code
-// token in SQL, so groups are (day, code), not one per message.
+// Read reads the failed and skipped jobs finished in the last MaxDays days of
+// [periodFrom, periodTo). Failures are read per JST day (newest first) and
+// queue so the (queue, status, finished_at) index answers each range
+// (jobs_queue_status_finished_idx) and a spent time budget loses only the
+// statements not yet run; the error head is reduced to its code token in SQL,
+// so groups are (day, code), not one per message. When the soft budget
+// (package budget) runs out, Read returns what it has with TimedOut set.
 func Read(ctx context.Context, q Q, queues []string, periodFrom, periodTo time.Time) (Result, error) {
 	from, win := window(periodFrom, periodTo)
-	fromS, toS := sqlutil.FormatTime(from), sqlutil.FormatTime(periodTo)
-	out := Result{Window: win}
+	out := Result{Window: win, Incomplete: []string{}}
+	soft, cancel := budget.Soft(ctx)
+	defer cancel()
 
 	byDay, byQueue, byCode, byDayCode, skipped := map[string]int{}, map[string]int{}, map[string]int{}, map[[2]string]int{}, map[string]int{}
 	failedSQL := errorCodeSQL("queue = ? AND status = 'failed' AND finished_at >= ? AND finished_at < ?")
-	for _, queue := range queues {
-		if err := failedByDayAndCode(ctx, q, failedSQL, queue, fromS, toS, func(day, code string, n int) {
-			out.Total += n
-			byDay[day] += n
-			byQueue[queue] += n
-			byCode[code] += n
-			byDayCode[[2]string{day, code}] += n
-		}); err != nil {
-			return Result{}, err
+	var days [][2]time.Time
+	for d := from; d.Before(periodTo); d = d.AddDate(0, 0, 1) {
+		end := d.AddDate(0, 0, 1)
+		if end.After(periodTo) {
+			end = periodTo
 		}
+		days = append(days, [2]time.Time{d, end})
+	}
+	// The skip counts are cheap (index range, few rows), so they go first: a
+	// failed-job statement that spends the budget must not take them with it.
+	for _, queue := range queues {
 		var n int
-		err := q.QueryRowContext(ctx, fmt.Sprintf(`
+		err := q.QueryRowContext(soft, fmt.Sprintf(`
 SELECT COUNT(*) FROM jobs
 WHERE queue = ? AND status = 'succeeded' AND finished_at >= ? AND finished_at < ?
-	AND substr(last_error, 1, %d) = '%s'`, len(skippedNotePrefix), skippedNotePrefix), queue, fromS, toS).Scan(&n)
+	AND substr(last_error, 1, %d) = '%s'`, len(skippedNotePrefix), skippedNotePrefix),
+			queue, sqlutil.FormatTime(from), sqlutil.FormatTime(periodTo)).Scan(&n)
 		if err != nil {
-			return Result{}, fmt.Errorf("query: job skips: %w", err)
+			if !budget.Spent(ctx, soft, err) {
+				return Result{}, fmt.Errorf("query: job skips: %w", err)
+			}
+			out.TimedOut = true
+			out.Incomplete = append(out.Incomplete, "skipped:"+queue)
+			continue
 		}
 		skipped[queue] += n
 		out.SkippedTotal += n
 	}
 
+	// Newest day first, and within a day the busiest queue last: its statement
+	// is the one that can spend the budget, and the others are cheap.
+	for i := len(days) - 1; i >= 0; i-- {
+		fromS, toS := sqlutil.FormatTime(days[i][0]), sqlutil.FormatTime(days[i][1])
+		for _, queue := range busiestLast(queues) {
+			groups, err := failedByDayAndCode(soft, q, failedSQL, queue, fromS, toS)
+			if err != nil {
+				if !budget.Spent(ctx, soft, err) {
+					return Result{}, err
+				}
+				out.TimedOut = true
+				out.Incomplete = append(out.Incomplete, fmt.Sprintf("failed:%s:%s", queue, days[i][0].In(jst).Format(time.DateOnly)))
+				continue
+			}
+			for _, g := range groups {
+				out.Total += g.n
+				byDay[g.day] += g.n
+				byQueue[queue] += g.n
+				byCode[g.code] += g.n
+				byDayCode[[2]string{g.day, g.code}] += g.n
+			}
+		}
+	}
 	out.ByDay, out.ByQueue, out.ByErrorCode, out.ByDayAndCode, out.SkippedByQueue =
 		[]DayCount{}, []QueueCount{}, []CodeCount{}, []DayCodeCount{}, []QueueCount{}
 	for d, n := range byDay {
@@ -203,30 +247,56 @@ WHERE queue = ? AND status = 'succeeded' AND finished_at >= ? AND finished_at < 
 	return out, nil
 }
 
+// busiestQueue is the queue that carries one job per symbol per cycle: orders
+// of magnitude more rows than the others, so the one statement likely to
+// spend the time budget.
+const busiestQueue = "market-data"
+
+// busiestLast is queues with busiestQueue, if present, moved to the end.
+func busiestLast(queues []string) []string {
+	out := make([]string, 0, len(queues))
+	for _, q := range queues {
+		if q != busiestQueue {
+			out = append(out, q)
+		}
+	}
+	if slices.Contains(queues, busiestQueue) {
+		out = append(out, busiestQueue)
+	}
+	return out
+}
+
+// group is one (day, code) group of a failed-jobs statement.
+type group struct {
+	day, code string
+	n         int
+}
+
 // failedByDayAndCode runs an errorCodeSQL statement grouped by (day, code)
-// with the arguments (queue, from, to) and calls add for each group, with the
-// code normalised ("unknown" when the token is empty or malformed).
-func failedByDayAndCode(ctx context.Context, q Q, stmt string, queue, from, to string, add func(day, code string, n int)) error {
+// with the arguments (queue, from, to) and returns the groups, with the code
+// normalised ("unknown" when the token is empty or malformed). It returns
+// all of them or an error, never a part.
+func failedByDayAndCode(ctx context.Context, q Q, stmt string, queue, from, to string) ([]group, error) {
 	rows, err := q.QueryContext(ctx, `SELECT day, code, COUNT(*) FROM (`+stmt+`) GROUP BY 1, 2`, queue, from, to)
 	if err != nil {
-		return fmt.Errorf("query: job failures: %w", err)
+		return nil, fmt.Errorf("query: job failures: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
+	var groups []group
 	for rows.Next() {
-		var day, code string
-		var n int
-		if err := rows.Scan(&day, &code, &n); err != nil {
-			return fmt.Errorf("query: scan job failures: %w", err)
+		var g group
+		if err := rows.Scan(&g.day, &g.code, &g.n); err != nil {
+			return nil, fmt.Errorf("query: scan job failures: %w", err)
 		}
-		if !jobErrorCodeToken.MatchString(code) {
-			code = jobErrorCodeNone
+		if !jobErrorCodeToken.MatchString(g.code) {
+			g.code = jobErrorCodeNone
 		}
-		add(day, code, n)
+		groups = append(groups, g)
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("query: job failures: %w", err)
+		return nil, fmt.Errorf("query: job failures: %w", err)
 	}
-	return nil
+	return groups, nil
 }
 
 // queueCounts lists the non-zero counts in the order of queues. Only those

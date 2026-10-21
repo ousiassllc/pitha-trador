@@ -258,7 +258,7 @@ var tools = []tool{
 	},
 	{
 		name:        "collection_status",
-		description: "データ収集の状態: スナップショットの鮮度と欠損日、ジョブ件数と失敗の内訳（失敗の内訳は期間の末尾 7 日まで）、日足失敗、ラベルスキップ、いまの警告（kabu未ログイン・market-data無稼働。固定コードと開始時刻。読み取り専用）",
+		description: "データ収集の状態: スナップショットの鮮度と欠損日、ジョブ件数と失敗の内訳（失敗の内訳は期間の末尾 3 日まで。時間切れのときは job_failures.timed_out）、日足失敗、ラベルスキップ、いまの警告（kabu未ログイン・market-data無稼働。固定コードと開始時刻。読み取り専用）",
 		schema:      periodSchema(nil),
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 			var a periodArgs
@@ -275,7 +275,7 @@ var tools = []tool{
 		name: "session_diagnostics",
 		description: "立会日ごとの収集の診断（読み取り専用）: market_snapshots 行数、market-data ジョブの成功数・失敗数・成功なのに行が無いジョブ数、" +
 			"他キューのジョブ完了数、ウォッチリスト件数と、欠けた日の原因の手がかりになる固定コードの observations。" +
-			"過去日の kabu ログイン状態とアプリ起動記録は DB に無い（現在の状態だけ current に出す）。期間の末尾 31 日だけを読む",
+			"過去日の kabu ログイン状態とアプリ起動記録は DB に無い（現在の状態だけ current に出す）。期間の末尾 14 日だけを読む。時間切れのときは読めた分だけ返し timed_out と incomplete で示す",
 		schema: periodSchema(nil),
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 			var a periodArgs

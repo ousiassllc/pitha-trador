@@ -327,3 +327,4 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.127 | 2026-10-21 | §4.22 の FR-MCP-4 のツール数を 19 にし、FR-MCP-28〜30 を追加（注文案のアプリ側の処理＝Risk check・数量は提案とアプリの小さいほう・最大損失・Paper 発注・期限・取消・再起動の回復、`order_proposal_cancel`＝取消の依頼を記録するだけ、`close` は Kill Switch・一時停止・日次ガード中も実行可）。`positions.exit_reason` に `proposal_close`、`trade_signals.policy_version` に `mcp-proposal-v1` を追加 | issue #828（親 #826） |
 | 1.128 | 2026-10-21 | §4.22 の FR-MCP-4 のツール数を 21 にし、FR-MCP-31〜33 を追加（注文案の読み取り 3 ツール＝一覧・1 件の全体・集計、`origin`、`health_today` の止まった案、GUI の「注文案」画面は読み取りのみ） | issue #829（親 #826） |
 | 1.129 | 2026-10-21 | §4.22 の FR-MCP-4 のツール数を 22 にし、FR-MCP-34 を追加（`session_diagnostics`＝立会日ごとの収集の診断。`collection_status` の失敗の内訳は期間の末尾 7 日・エラーコード別） | issue #850 |
+| 1.130 | 2026-10-22 | FR-MCP-34 を更新: 失敗の内訳の窓を 3 日に確定、`session_diagnostics` の窓を 14 日、時間切れは `timed_out`・`incomplete[]` の部分結果 | issue #850 |

@@ -166,11 +166,11 @@ func TestLongPeriodIsCut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !d.Window.Truncated || d.Window.From != "2026-09-21" || d.Window.To != "2026-10-22" || d.Window.MaxDays != sessiondiag.MaxDays {
+	if !d.Window.Truncated || d.Window.From != "2026-10-08" || d.Window.To != "2026-10-22" || d.Window.MaxDays != sessiondiag.MaxDays {
 		t.Fatalf("window = %+v, want the last %d days marked truncated", d.Window, sessiondiag.MaxDays)
 	}
-	if first := d.Days[0].Date; first < "2026-09-21" {
-		t.Errorf("first day = %s, want no day before the cut at 2026-09-21", first)
+	if first := d.Days[0].Date; first < "2026-10-08" {
+		t.Errorf("first day = %s, want no day before the cut at 2026-10-08", first)
 	}
 }
 

@@ -214,32 +214,7 @@ func TestCollectionStatus(t *testing.T) {
 		} `json:"jobs"`
 		DailyBarFailed int `json:"daily_bar_run_failed_count"`
 		LabelSkips     int `json:"label_skip_count"`
-		JobFailures    struct {
-			Total int `json:"total"`
-			ByDay []struct {
-				Date  string `json:"date"`
-				Count int    `json:"count"`
-			} `json:"by_day"`
-			ByQueue []struct {
-				Queue string `json:"queue"`
-				Count int    `json:"count"`
-			} `json:"by_queue"`
-			ByErrorCode []struct {
-				Code  string `json:"code"`
-				Count int    `json:"count"`
-			} `json:"by_error_code"`
-			ByDayAndCode []struct {
-				Date  string `json:"date"`
-				Code  string `json:"code"`
-				Count int    `json:"count"`
-			} `json:"by_day_and_error_code"`
-			SkippedTotal   int `json:"skipped_total"`
-			SkippedByQueue []struct {
-				Queue string `json:"queue"`
-				Count int    `json:"count"`
-			} `json:"skipped_by_queue"`
-		} `json:"job_failures"`
-		Retention struct {
+		Retention      struct {
 			SucceededJobDays int    `json:"succeeded_job_days"`
 			FailedJobDays    int    `json:"failed_job_days"`
 			Note             string `json:"note"`
@@ -291,38 +266,7 @@ func TestCollectionStatus(t *testing.T) {
 		t.Fatalf("daily_bar_failed=%d label_skips=%d, want 2 / 2", d.DailyBarFailed, d.LabelSkips)
 	}
 
-	// Issue #801: the failures by JST day, queue and broker error code (the
-	// code is the only thing parsed out of last_error), and the skip counts.
-	f := d.JobFailures
-	if f.Total != 5 {
-		t.Fatalf("job_failures.total = %d, want 5 (3 market-data + 2 jev-scout; the 09-01 one is outside)", f.Total)
-	}
-	var byDay, byQueue, byCode, byDayCode []string
-	for _, x := range f.ByDay {
-		byDay = append(byDay, fmt.Sprintf("%s=%d", x.Date, x.Count))
-	}
-	for _, x := range f.ByQueue {
-		byQueue = append(byQueue, fmt.Sprintf("%s=%d", x.Queue, x.Count))
-	}
-	for _, x := range f.ByErrorCode {
-		byCode = append(byCode, fmt.Sprintf("%s=%d", x.Code, x.Count))
-	}
-	for _, x := range f.ByDayAndCode {
-		byDayCode = append(byDayCode, fmt.Sprintf("%s/%s=%d", x.Date, x.Code, x.Count))
-	}
-	for name, c := range map[string]struct{ got, want []string }{
-		"by_day":                {byDay, []string{"2026-10-03=1", "2026-10-06=3", "2026-10-07=1"}},
-		"by_queue":              {byQueue, []string{"market-data=3", "jev-scout=2"}},
-		"by_error_code":         {byCode, []string{"4002006=2", "-62=1", "4001007=1", "unknown=1"}},
-		"by_day_and_error_code": {byDayCode, []string{"2026-10-03/unknown=1", "2026-10-06/4002006=2", "2026-10-06/4001007=1", "2026-10-07/-62=1"}},
-	} {
-		if !slices.Equal(c.got, c.want) {
-			t.Errorf("job_failures.%s = %v, want %v", name, c.got, c.want)
-		}
-	}
-	if f.SkippedTotal != 2 || len(f.SkippedByQueue) != 1 || f.SkippedByQueue[0].Queue != "outcome-labeling" || f.SkippedByQueue[0].Count != 2 {
-		t.Errorf("skipped = %d %+v, want 2 outcome-labeling terminal skips (a deferred note is not one)", f.SkippedTotal, f.SkippedByQueue)
-	}
+	// The failure breakdown (issues #801, #850) is asserted on the seeded database in diagtests.
 	if d.Retention.SucceededJobDays != 7 || d.Retention.FailedJobDays != 30 || d.Retention.Note == "" {
 		t.Errorf("retention = %+v, want succeeded 7 / failed 30 days with a note", d.Retention)
 	}
