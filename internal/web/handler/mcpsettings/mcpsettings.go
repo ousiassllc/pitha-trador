@@ -31,6 +31,10 @@ type WriteGate interface {
 	Enabled(ctx context.Context) (bool, error)
 	SetEnabled(ctx context.Context, enabled bool) error
 	Recent(ctx context.Context, limit int) ([]mcpset.Entry, error)
+	// The order-proposal intake switch (issue #827): off while nothing is
+	// stored. Turning it on is the Settings screen's alone.
+	OrderProposalsEnabled(ctx context.Context) (bool, error)
+	SetOrderProposalsEnabled(ctx context.Context, enabled bool) error
 }
 
 // Handler implements the MCP settings routes.
@@ -59,6 +63,7 @@ func (h *Handler) Register(engine *gin.Engine) {
 	engine.POST("/settings/mcp/restart", h.Restart)
 	if h.gate != nil {
 		engine.POST("/settings/mcp/write", h.SaveWrite)
+		engine.POST("/settings/mcp/order-proposals", h.SaveOrderProposals)
 	}
 }
 
@@ -77,6 +82,27 @@ func (h *Handler) SaveWrite(c *gin.Context) {
 	notice := "MCP からの設定変更を禁止しました。"
 	if on {
 		notice = "MCP からの設定変更を許可しました。"
+	}
+	h.render(c, notice, "")
+}
+
+// SaveOrderProposals implements `POST /settings/mcp/order-proposals`: form
+// `enabled` (a checked checkbox sends a value, an unchecked one nothing) is the
+// order-proposal intake switch (issue #827). It is the only way to turn the
+// intake on; the MCP can only turn it off. Like every POST it passes the
+// session cookie and CSRF check.
+func (h *Handler) SaveOrderProposals(c *gin.Context) {
+	noStore(c)
+	ctx := c.Request.Context()
+	on := c.PostForm("enabled") != ""
+	if err := h.gate.SetOrderProposalsEnabled(ctx, on); err != nil {
+		slog.ErrorContext(ctx, "mcpsettings: save order proposals switch", "error", err)
+		shared.RespondActionError(c, http.StatusInternalServerError, "注文案の受け付けを保存できませんでした。")
+		return
+	}
+	notice := "注文案の受け付けをオフにしました。"
+	if on {
+		notice = "注文案の受け付けをオンにしました。"
 	}
 	h.render(c, notice, "")
 }

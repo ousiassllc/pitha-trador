@@ -48,7 +48,10 @@ type PanelProps struct {
 	// (default on), Audit the newest audit rows.
 	WriteGate    bool
 	WriteEnabled bool
-	Audit        []AuditRow
+	// OrderProposalsEnabled is the order-proposal intake switch (issue #827;
+	// default off).
+	OrderProposalsEnabled bool
+	Audit                 []AuditRow
 }
 
 // Panel renders the Settings screen's MCP section (`#mcp-panel`'s content):
