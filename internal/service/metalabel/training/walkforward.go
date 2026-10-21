@@ -74,9 +74,8 @@ type WalkForwardConfig struct {
 	MinFit, MinCalibration int
 }
 
-// DefaultWalkForwardConfig is the proposed split (issue #862; the numbers await
-// approval, see FR-META-7): an OOS window that holds at least the default bar's
-// samples and days (DefaultAcceptanceConfig) within DefaultOOSMaxWindow, the
+// DefaultWalkForwardConfig is the split decided in issue #862 (see FR-META-7): an
+// OOS window that holds at least the default bar's samples and days (DefaultAcceptanceConfig) within DefaultOOSMaxWindow, the
 // newest quarter of the rest for calibration, a 30-minute embargo (half the
 // longest triple-barrier timeout, 60 minutes) and at least 100 fit and 30
 // calibration rows (the logistic regression has 8 features and a bias: 9

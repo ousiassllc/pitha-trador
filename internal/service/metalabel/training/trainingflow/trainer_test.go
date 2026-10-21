@@ -43,7 +43,7 @@ func TestTrainer_TrainsEvaluatesOutOfSampleAndStoresTheModelVersionAndMetrics(t 
 		t.Errorf("train end %v + embargo overlaps the OOS start %v", saved.TrainEnd, saved.OOSStart)
 	}
 	// The window is sized by the default bar (issue #862), not by a fixed 7 days:
-	// it reaches back to hold the 740 rows and 7 days the proposal asks for (these
+	// it reaches back to hold the 740 rows and 7 days the bar asks for (these
 	// fixtures have 72 decisions a JST day, so the rows decide) and no further.
 	if want := training.DefaultAcceptanceConfig().MinOOSSamples; !saved.OOSEnd.Equal(trainNow) || saved.OOSSamples != want || saved.OOSStart.After(trainNow.Add(-7*24*time.Hour)) {
 		t.Errorf("OOS window = [%v, %v) with %d samples, want the newest %d rows, at least 7 days", saved.OOSStart, saved.OOSEnd, saved.OOSSamples, want)

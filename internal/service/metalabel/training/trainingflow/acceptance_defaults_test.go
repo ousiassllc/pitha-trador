@@ -82,20 +82,19 @@ func TestDefaultAcceptanceConfig_MatchesTheSpec(t *testing.T) {
 			t.Errorf("FR-META-7 does not state the change limit %q", want)
 		}
 	}
-	// The premises the derivation rests on (the numbers are proposals, issue
-	// #862: when they are approved, or changed, update the spec and this list
-	// together; the wording "案" in the spec is not checked).
+	// The premises the derivation rests on (issue #862): change one and the
+	// spec and this list have to change together.
 	walk := training.DefaultWalkForwardConfig()
 	pct := func(f float64) string { return n(int(math.Round(100 * f))) }
 	for _, want := range []string{
-		"σ=" + n(int(training.AssumedSigmaBps)) + " bps",
-		"想定エッジδ=**" + n(int(training.AssumedEdgeBps)) + " bps**",
-		"設計検出力**" + pct(training.DesignPower) + "%**",
-		"sd s=" + pct(training.AssumedWinProbDayShiftSD) + "%",
-		"使える行数" + n(training.AssumedRowsPerDay),
-		"take率" + pct(training.AssumedTakeRate) + "%",
-		"窓の上限（" + n(int(walk.OOSMaxWindow.Hours()/24)) + "日",
-		"fit" + n(walk.MinFit),
+		"**σ=" + n(int(training.AssumedSigmaBps)) + " bps**",
+		"**想定エッジδ=" + n(int(training.AssumedEdgeBps)) + " bps**",
+		"**設計検出力" + pct(training.DesignPower) + "%**",
+		"**日次の共通ずれsd s=" + pct(training.AssumedWinProbDayShiftSD) + "%**",
+		"**1取引日あたり" + n(training.AssumedRowsPerDay) + "行**",
+		"**take率" + pct(training.AssumedTakeRate) + "%**",
+		"**窓の上限" + n(int(walk.OOSMaxWindow.Hours()/24)) + "日**",
+		"**fit" + n(walk.MinFit) + "＋較正" + n(walk.MinCalibration) + "**",
 	} {
 		if !strings.Contains(fr, want) {
 			t.Errorf("FR-META-7 does not state the assumption %q", want)

@@ -224,7 +224,7 @@ func dailyRows(days, perDay int) []training.Row {
 }
 
 // reachConfig holds out at least 7 JST days and 740 rows, as far back as 21
-// days, the shape of the proposed default (issue #862).
+// days, the shape of the default (issue #862).
 func reachConfig() training.WalkForwardConfig {
 	return training.WalkForwardConfig{
 		OOSMinRows: 740, OOSMinDays: 7, OOSMaxWindow: 21 * 24 * time.Hour,

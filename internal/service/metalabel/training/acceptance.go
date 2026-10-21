@@ -29,9 +29,9 @@ const (
 )
 
 // The assumptions the default sample sizes are derived from (documented in
-// FR-META-7; RequiredTakes and DesignEffect are the formulas). The numbers are
-// PROPOSALS of issue #862 and wait for approval; the derivation, the options
-// that were weighed and the measured power are in FR-META-7.
+// FR-META-7; RequiredTakes and DesignEffect are the formulas). The numbers were
+// decided in issue #862; the derivation, the options that were weighed and the
+// measured power are in FR-META-7.
 const (
 	// AssumedSigmaBps is the standard deviation of one taken signal's net
 	// return: bounded by the triple-barrier TP/SL (30 bps each by default).
@@ -117,8 +117,8 @@ func DesignEffect(takesPerDay, winProbDayShiftSD float64) float64 {
 	return 1 + (takesPerDay-1)*rho
 }
 
-// DefaultAcceptanceConfig returns the proposed bar (docs FR-META-7, issue #862,
-// numbers awaiting approval): RequiredTakes for sigma 30 bps, edge 11 bps,
+// DefaultAcceptanceConfig returns the bar decided in issue #862 (docs FR-META-7):
+// RequiredTakes for sigma 30 bps, edge 11 bps,
 // alpha 1%, design power 85% and the design effect of 60 takes a day (120 rows
 // at a 50% take rate) gives 370 takes out of at least 740 OOS samples on at
 // least 7 trading days, with the lower limits of the 98% cluster-bootstrap

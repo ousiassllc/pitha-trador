@@ -40,7 +40,7 @@ func judged(m repo.Model) bool {
 }
 
 // Issue #862: at the current data volume (about 120 usable rows a trading day)
-// the proposed conditions reach an adoption decision after a finite number of
+// the new conditions reach an adoption decision after a finite number of
 // trading days; the conditions before (fixed 7-day OOS, 1084 rows) never do,
 // however long the history grows.
 func TestAcceptance_ReachableAtCurrentDataVolume(t *testing.T) {
@@ -59,7 +59,7 @@ func TestAcceptance_ReachableAtCurrentDataVolume(t *testing.T) {
 			t.Fatalf("%d days: Train: %v", days, err)
 		case judged(m):
 			first = days
-			t.Logf("proposed conditions: the first adoption decision after %d trading days of %d rows (status %s %s, OOS %d rows on %d days)",
+			t.Logf("new conditions: the first adoption decision after %d trading days of %d rows (status %s %s, OOS %d rows on %d days)",
 				days, rowsPerDay, m.Status, m.RejectReason, m.OOSSamples, m.OOSDays)
 			if m.Status != repo.ModelActive {
 				t.Errorf("%d days: status %s (%s), want a model with a real edge adopted", days, m.Status, m.RejectReason)
@@ -67,7 +67,7 @@ func TestAcceptance_ReachableAtCurrentDataVolume(t *testing.T) {
 		}
 	}
 	if first == 0 {
-		t.Fatal("the proposed conditions did not reach an adoption decision within 20 trading days")
+		t.Fatal("the new conditions did not reach an adoption decision within 20 trading days")
 	}
 	// 7 trading days of OOS + more than the 130 rows fit and calibration need:
 	// 8 days leave 120 rows, 9 days leave 240.
@@ -123,7 +123,7 @@ func TestAcceptance_DaysToTheFirstDecisionAcrossTheObservedRowsPerDay(t *testing
 // Issue #862: the guards are intact. A model whose OOS EV lower limit is not
 // above 0, whose AUC lower limit is not above 0.5, or that does not beat the
 // model in force on the same OOS rows is not adopted, with the reason recorded;
-// the proposed bar does not lower any of them.
+// the bar does not lower any of them.
 func TestAcceptance_RejectsModelThatDoesNotBeatBaseline(t *testing.T) {
 	ctx := context.Background()
 
