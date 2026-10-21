@@ -47,10 +47,10 @@ jobs:
       # actions/setup-go (v6+) unconditionally exports GOTOOLCHAIN=local via
       # $GITHUB_ENV, which overrides workflow/job-level `env:` for every later
       # step; only a step-level `env:` takes precedence over it. golangci-lint
-      # v2.14.0 requires go >= 1.26.0, which go.mod (1.26.9) now satisfies;
+      # v2.14.0 requires go >= 1.26.0, which go.mod (1.26.10) now satisfies;
       # GOTOOLCHAIN=auto stays as a safeguard so a tool release that needs
       # a newer Go than go.mod does not fail `go install` with "requires go
-      # >= X (running go 1.26.9; GOTOOLCHAIN=local)". `golangci-lint run`
+      # >= X (running go 1.26.10; GOTOOLCHAIN=local)". `golangci-lint run`
       # itself needs no override: it drives the go.mod toolchain via `go list`.
       - name: Install golangci-lint
         env:

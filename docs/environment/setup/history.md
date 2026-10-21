@@ -51,3 +51,4 @@
 | 1.52 | 2026-10-08 | 「Settings画面で設定する運用項目」に立花の監視銘柄ソース設定（候補ソース・手動/固定銘柄・夜間日足バッチ・スクリーニング指標・EVENT接続予算・REST時価補助）を追加 | issue #728 |
 | 1.53 | 2026-10-12 | Goを1.25.14から1.26.9へ更新（1.25系は標準ライブラリ`net/http`等のgovulncheck検出の修正が提供されないため。`golang.org/x/net`も0.61.0へ更新）。mainのCI `lint`のgovulncheck失敗で自動リリースが止まっていた件の対応 | main CI（govulncheck） |
 | 1.54 | 2026-10-15 | 「Settings画面で設定する運用項目」にログレベル（`system.log_level`）とログの保持期間（`system.log_retention_days`）を追加（issue #772） |
+| 1.55 | 2026-10-21 | `go.mod`のGoを1.26.10へ上げた（#846）のに合わせ、`setup.md`・`ci.md`の「`go.mod`の1.26.9」を1.26.10へ更新。1.53の行はその時点の記録なので変えない | main CI（govulncheck GO-2026-6809）、#846 |
