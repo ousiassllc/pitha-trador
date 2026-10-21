@@ -31,14 +31,14 @@ INSERT INTO calibration_outcomes (jev_decision_id, horizon_minutes, future_retur
 SELECT i + 1, 15, 0, 0, 0, 1, 'tp', CASE WHEN i % 3 = 0 THEN -20.0 ELSE 30.0 END, 100, 2 FROM s`, n)
 }
 
-// A 30-day call over a realistic volume (about 100 decisions per trading day,
-// 4 KB of state each) is answered inside the MCP's read budget
+// A 30-day and a 90-day call over a realistic volume (about 100 decisions per
+// trading day, 4 KB of state each) are answered inside the MCP's read budget
 // (paperresultsmcp.QueryTimeout, enforced by the server with its real default:
-// a slower read would be a 504 query_timeout), in the normal build and under
-// the race detector alike (about 1.1 s measured with -race, 2.8 times of room).
-// The full 90-day lookback is measured with three times the rows: it is only
-// held to the budget in the normal build, since -race (about ten times slower)
-// takes just over 3 s for it; the times are logged (go test -v).
+// a slower read would be a 504 query_timeout). That is a wall-clock claim, so
+// it is held only in the build without the race detector. Under -race (about
+// ten times slower, and a loaded CI runner slower still: the 30-day call took
+// 1.1 s here, only 2.8 times under the budget) the server gets a long timeout
+// and the test checks the row counts and logs the times (go test -v).
 func TestReadinessFitsTheReadBudget(t *testing.T) {
 	now := testkit.FixedNow()
 	path, w := readinessDB(t)
@@ -46,7 +46,11 @@ func TestReadinessFitsTheReadBudget(t *testing.T) {
 	const perDay, days = 100, 90
 	n := perDay * days * 22 / 30 // the 90-day volume
 	bulkSeed(t, w, n, now.Add(-30*time.Minute), int(90*24*time.Hour/time.Second)/n, 4096)
-	srv := newTestServerWith(t, paperresultsmcp.Options{DBPath: path}, now)
+	opts := paperresultsmcp.Options{DBPath: path}
+	if raceEnabled {
+		opts.QueryTimeout = time.Minute
+	}
+	srv := newTestServerWith(t, opts, now)
 
 	for _, c := range []struct {
 		name string
@@ -56,18 +60,14 @@ func TestReadinessFitsTheReadBudget(t *testing.T) {
 		// 504 query_timeout is the failure).
 		strict bool
 	}{
-		{"30 days (default)", map[string]any{}, n / 3, true},
+		{"30 days (default)", map[string]any{}, n / 3, !raceEnabled},
 		{"90 days (the retraining's lookback)", fullLookback, n, !raceEnabled},
 	} {
 		start := time.Now()
 		r := srv.call(t, "metalabel_training_readiness", c.args)
 		elapsed := time.Since(start)
-		if r.status != http.StatusOK && c.strict {
-			t.Fatalf("%s: status %d (%s) after %v; the read budget is %v", c.name, r.status, r.body, elapsed, paperresultsmcp.QueryTimeout)
-		}
 		if r.status != http.StatusOK {
-			t.Logf("%s: status %d after %v (over the %v read budget under -race; narrow the period to 30 days)", c.name, r.status, elapsed, paperresultsmcp.QueryTimeout)
-			continue
+			t.Fatalf("%s: status %d (%s) after %v; the read budget is %v (strict: %v)", c.name, r.status, r.body, elapsed, paperresultsmcp.QueryTimeout, c.strict)
 		}
 		var d readiness
 		r.data(t, "metalabel_training_readiness", &d)
@@ -82,26 +82,78 @@ func TestReadinessFitsTheReadBudget(t *testing.T) {
 }
 
 // A 366-day jev_models call (the longest period) over a realistic volume (about
-// 100 decisions per trading day for a year) finishes inside the read budget.
-func TestJevModelsFitsTheReadBudgetOver366Days(t *testing.T) {
+// 100 decisions per trading day for a year) answers correctly and reads
+// jev_decisions through its timestamp index. Not a wall-clock test (a loaded
+// -race CI runner is several times slower than a laptop): the 3-second claim is
+// TestJevModelsFitsTheReadBudgetOver366DaysWallClock, built without -race only.
+func TestJevModelsOver366Days(t *testing.T) {
 	now := testkit.FixedNow()
 	path, w := readinessDB(t)
 	const n = 100 * 366 * 22 / 30
 	bulkSeed(t, w, n, now.Add(-30*time.Minute), int(366*24*time.Hour/time.Second)/n, 16)
-	srv := newTestServerWith(t, paperresultsmcp.Options{DBPath: path}, now)
+	driverName, counter := testkit.NewCountingDriver(t)
+	srv := newTestServerWith(t, paperresultsmcp.Options{DBPath: path, DriverName: driverName, QueryTimeout: time.Minute}, now)
 
-	start := time.Now()
-	r := srv.call(t, "jev_models", map[string]any{"from": "2025-10-18", "to": "2026-10-19"})
-	elapsed := time.Since(start)
 	var d jevModels
-	r.data(t, "jev_models", &d)
+	srv.call(t, "jev_models", map[string]any{"from": "2025-10-18", "to": "2026-10-19"}).data(t, "jev_models", &d)
 	if len(d.Models) != 1 || d.Models[0].Decisions < n*9/10 || len(d.Daily) < 300 {
 		t.Errorf("models = %+v, daily rows = %d; want the one seeded model over about %d decisions", d.Models, len(d.Daily), n)
 	}
-	if elapsed >= paperresultsmcp.QueryTimeout {
-		t.Errorf("366 days took %v, not under the %v read budget", elapsed, paperresultsmcp.QueryTimeout)
+	var total int64
+	for _, day := range d.Daily {
+		total += day.Decisions
 	}
-	t.Logf("jev_models over 366 days: %d decisions, %d daily rows in %v (budget %v)", d.Models[0].Decisions, len(d.Daily), elapsed, paperresultsmcp.QueryTimeout)
+	if total != d.Models[0].Decisions {
+		t.Errorf("daily rows add up to %d, the model row says %d", total, d.Models[0].Decisions)
+	}
+
+	explained := 0
+	for _, stmt := range counter.StatementLog() {
+		if !strings.Contains(stmt, "FROM jev_decisions") {
+			continue
+		}
+		for _, p := range explainPlan(t, w, stmt) {
+			if strings.Contains(p, "jev_decisions") && !strings.Contains(p, "USING INDEX") && !strings.Contains(p, "USING COVERING INDEX") {
+				t.Errorf("jev_decisions read without an index in %q: %s", testkit.FirstLine(stmt), p)
+			}
+			if strings.Contains(stmt, "GROUP BY") && strings.Contains(p, "jev_decisions") && !strings.Contains(p, "jev_decisions_timestamp_idx (timestamp>? AND timestamp<?)") {
+				t.Errorf("the period read is not a timestamp range search: %s", p)
+			}
+		}
+		explained++
+	}
+	if explained != 2 {
+		t.Fatalf("explained %d jev_decisions statements, want the grouped read and the latest-decision read", explained)
+	}
+}
+
+// explainPlan is the EXPLAIN QUERY PLAN detail lines of stmt (every ? bound to a
+// timestamp text; the plan does not depend on the values).
+func explainPlan(t *testing.T, w *sql.DB, stmt string) []string {
+	t.Helper()
+	args := make([]any, strings.Count(stmt, "?"))
+	for i := range args {
+		args[i] = "2026-07-01T00:00:00.000000000Z"
+	}
+	rows, err := w.Query("EXPLAIN QUERY PLAN "+stmt, args...)
+	if err != nil {
+		t.Fatalf("EXPLAIN %s: %v", testkit.FirstLine(stmt), err)
+	}
+	defer func() { _ = rows.Close() }()
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatal(err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("EXPLAIN QUERY PLAN of %q:\n  %s", testkit.FirstLine(stmt), strings.Join(plan, "\n  "))
+	return plan
 }
 
 // The statements of the tool use the existing indexes: no full scan of
