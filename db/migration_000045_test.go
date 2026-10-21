@@ -15,12 +15,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/db"
 )
 
-// Migration 000046 (issue #860) takes a proposal's trade signal out of the Risk
+// Migration 000045 (issue #860) takes a proposal's trade signal out of the Risk
 // passes when it passed Risk but no order came of it. Rows of a proposal that
 // ordered (filled, submitted), one still processing, a Policy Engine signal and
-// a Risk rejection are not touched; the down migration puts the rewritten rows
-// back.
-func TestMigration000046_RewritesUnorderedProposalSignals(t *testing.T) {
+// a Risk rejection are not touched. The original risk_passed and reject_reason
+// of every rewritten row are kept in trade_signal_rewrites_000045; the down
+// migration restores exactly those values from it and drops the table.
+func TestMigration000045_RewritesUnorderedProposalSignals(t *testing.T) {
 	conn, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "m.db")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -58,10 +59,10 @@ func TestMigration000046_RewritesUnorderedProposalSignals(t *testing.T) {
 		mustExec(t, conn, strings.Replace(insertProposalSQL, "'key-00000001'", "'key-"+strings.Repeat("0", 8-len(itoa(id)))+itoa(id)+"'", 1))
 		mustExec(t, conn, `UPDATE order_proposals SET status = '`+status+`', status_reason = '`+statusReason+`', trade_signal_id = `+itoa(signalID)+` WHERE id = `+itoa(id))
 	}
-	signal(1, "mcp-proposal-v1", 1, "") // rejected size_zero
-	signal(2, "mcp-proposal-v1", 1, "") // failed, no reason code recorded
-	signal(3, "mcp-proposal-v1", 1, "") // filled: has an order
-	signal(4, "mcp-proposal-v1", 1, "") // processing: recovery's
+	signal(1, "mcp-proposal-v1", 1, "legacy text") // rejected size_zero; a reason that must come back verbatim
+	signal(2, "mcp-proposal-v1", 1, "")            // failed, no reason code recorded
+	signal(3, "mcp-proposal-v1", 1, "")            // filled: has an order
+	signal(4, "mcp-proposal-v1", 1, "")            // processing: recovery's
 	signal(5, "mcp-proposal-v1", 0, "risk_engine_rejected: kill_switch_active")
 	signal(6, "policy-v1", 1, "") // the Policy Engine's
 	for id := 7; id <= 11; id++ {
@@ -81,7 +82,27 @@ func TestMigration000046_RewritesUnorderedProposalSignals(t *testing.T) {
 		VALUES (1, 3, '7203', 'BUY', 'MARKET', 100, 'FILLED', 't'), (1, 11, '7203', 'BUY', 'LIMIT', 100, 'CANCELLED', 't')`)
 
 	snapshot := func() string {
-		rows, err := conn.Query(`SELECT id, risk_passed, COALESCE(reject_reason, '-') FROM trade_signals ORDER BY id`)
+		rows, err := conn.Query(`SELECT id, risk_passed, quote(reject_reason) FROM trade_signals ORDER BY id`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = rows.Close() }()
+		var out []string
+		for rows.Next() {
+			var id, passed int
+			var reason string
+			if err := rows.Scan(&id, &passed, &reason); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, itoa(id)+"|"+itoa(passed)+"|"+reason)
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		return strings.Join(out, "\n")
+	}
+	rewrites := func() string {
+		rows, err := conn.Query(`SELECT signal_id, old_risk_passed, quote(old_reject_reason) FROM trade_signal_rewrites_000045 ORDER BY signal_id`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,24 +123,28 @@ func TestMigration000046_RewritesUnorderedProposalSignals(t *testing.T) {
 	}
 	before := snapshot()
 
-	if err := m.Migrate(46); err != nil {
-		t.Fatalf("migrate to 46: %v", err)
+	if err := m.Migrate(45); err != nil {
+		t.Fatalf("migrate to 45: %v", err)
 	}
 	want := strings.Join([]string{
-		"1|0|proposal_rejected_after_risk: size_zero",
-		"2|0|proposal_rejected_after_risk: unknown",
-		"3|1|-",
-		"4|1|-",
-		"5|0|risk_engine_rejected: kill_switch_active",
-		"6|1|-",
-		"7|0|proposal_rejected_after_risk: outside_trading_session",
-		"8|0|proposal_rejected_after_risk: recovered_after_restart",
-		"9|0|proposal_rejected_after_risk: expired",
-		"10|0|proposal_rejected_after_risk: cancel_requested",
-		"11|1|-", // an order came of it: still a Risk pass
+		"1|0|'proposal_rejected_after_risk: size_zero'",
+		"2|0|'proposal_rejected_after_risk: unknown'",
+		"3|1|NULL",
+		"4|1|NULL",
+		"5|0|'risk_engine_rejected: kill_switch_active'",
+		"6|1|NULL",
+		"7|0|'proposal_rejected_after_risk: outside_trading_session'",
+		"8|0|'proposal_rejected_after_risk: recovered_after_restart'",
+		"9|0|'proposal_rejected_after_risk: expired'",
+		"10|0|'proposal_rejected_after_risk: cancel_requested'",
+		"11|1|NULL", // an order came of it: still a Risk pass
 	}, "\n")
 	if got := snapshot(); got != want {
 		t.Fatalf("after up:\n%s\nwant:\n%s", got, want)
+	}
+	// Exactly the rewritten rows are kept, with their values from before.
+	if got, want := rewrites(), "1|1|'legacy text'\n2|1|NULL\n7|1|NULL\n8|1|NULL\n9|1|NULL\n10|1|NULL"; got != want {
+		t.Fatalf("trade_signal_rewrites_000045:\n%s\nwant:\n%s", got, want)
 	}
 
 	if err := m.Migrate(43); err != nil {
@@ -127,6 +152,9 @@ func TestMigration000046_RewritesUnorderedProposalSignals(t *testing.T) {
 	}
 	if got := snapshot(); got != before {
 		t.Fatalf("after down:\n%s\nwant:\n%s", got, before)
+	}
+	if err := conn.QueryRow(`SELECT 1 FROM trade_signal_rewrites_000045`).Scan(new(int)); err == nil {
+		t.Fatal("trade_signal_rewrites_000045 still exists after down")
 	}
 }
 

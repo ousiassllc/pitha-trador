@@ -253,7 +253,7 @@ erDiagram
 | score | numeric(6,4) | NULL可 | Policy Engine内部スコア |
 | entry_price_reference | numeric(12,2) | NULL可 | |
 | policy_version | varchar(20) | NOT NULL | Policy Engineのロジック版。ライブ経路（メタラベリングのEV判定）は`policy-v2`、バックテストの再生は保存せず（`DecideReplay`はライブと同じ`policy-v2`、比較専用の旧しきい値ルールだけが`policy-v1`）。メタモデル未採用のPaperで、Settingsの「Paper ブートストラップ」（`paper.bootstrap_entry_enabled`）が有効なときの旧しきい値ルールの判断は`policy-vb`（LONG/SHORT/NONEのすべて。issue #798）。自己改善の適用提案のしきい値が有効な間は`policy-v2+sol-12`・`policy-vb+sol-12`のように`policy_proposals.applied_policy_version`を付加（`functional.md` FR-POLICY-4/5, FR-SELFIMPROVE-5）。MCP の注文案（`open_long`）が書いた行は`mcp-proposal-v1`（`jev_decision_id`はNULL。issue #828。`risk_rejections`が Policy の行と見分ける） |
-| risk_passed | boolean | NOT NULL | Risk Engine通過可否。MCP の注文案の行は「Risk を通って注文まで進んだ」ときだけ true（Risk を通ったが数量・最大損失・Execution の拒否や失敗・期限切れ・取消で注文にならなかった行は、案の状態を変えるのと同じトランザクションで false に直す。issue #860、`000046`が過去行を直す） |
+| risk_passed | boolean | NOT NULL | Risk Engine通過可否。MCP の注文案の行は「Risk を通って注文まで進んだ」ときだけ true（Risk を通ったが数量・最大損失・Execution の拒否や失敗・期限切れ・取消で注文にならなかった行は、案の状態を変えるのと同じトランザクションで false に直す。issue #860、`000045`が過去行を直す） |
 | reject_reason | varchar(255) | NULL可 | risk_passed=false時の理由。Policy Engineの理由（`spread_too_wide`等）、またはRisk Engine拒否時の`risk_engine_rejected: <Risk理由>`（例: `risk_engine_rejected: market_adverse_to_direction`。Risk理由が空なら`risk_engine_rejected`のみ）。Paperの予算枠の拒否理由は`bucket_disabled`（株の枠が0）・`bucket_budget_exceeded`（株の保有額＋今回のエントリー額が枠を超える）（issue #824、`functional.md` FR-RISK-10）。注文案が Risk を通ったが注文にならなかったときは`proposal_rejected_after_risk: <理由コード>`（`size_zero`・`max_trade_loss`・`position_already_open`・`pending_order_exists`・`symbol_in_cooldown`・`processing_error`・`expired`等。issue #860） |
 | bucket | varchar(20) | NOT NULL, DEFAULT 'stock', CHECK IN ('stock','bond_etf') | そのシグナルを書いた時点の銘柄の`instruments.asset_class`から確定させた予算枠（issue #824、`000041`）。書き込み時に確定し、あとから`asset_class`や枠の設定を変えても過去の行は変わらない。`000041`より前の行は`stock`（それまでは株だけ） |
 | created_at | text | NOT NULL | |
@@ -320,3 +320,6 @@ erDiagram
 | actor | text | NOT NULL, CHECK IN ('mcp','app','gui') | `mcp`＝`order_proposal_submit`、`app`＝アプリの処理役（issue #828）、`gui`＝Settings 画面 |
 
 インデックス: `INDEX (proposal_id, id)`
+
+## trade_signal_rewrites_000045
+マイグレーション000045（issue #860）が書き換えた`trade_signals`の書き換え前の値の退避（1行が書き換えた1行。downがここから戻して表を消す。適用した起動の件数ログはこの表の行数）。カラム: `signal_id`（integer PK, FK → trade_signals(id)）、`old_risk_passed`（boolean NOT NULL）、`old_reject_reason`（varchar(255) NULL可）、`rewritten_at`（text NOT NULL, DEFAULT 現在時刻UTC）。
