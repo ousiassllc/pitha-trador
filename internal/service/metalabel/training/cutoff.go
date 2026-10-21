@@ -46,7 +46,7 @@ func cutoffGate(s metalabelsettings.Settings, mode metalabelsettings.Mode, oos [
 	}
 	var others []string
 	for _, r := range oos {
-		if r.JevModelID != "" && r.JevModelID != s.LLMCutoffModel && !slices.Contains(others, r.JevModelID) {
+		if r.JevModelID != "" && !CutoffModelMatches(s.LLMCutoffModel, r.JevModelID) && !slices.Contains(others, r.JevModelID) {
 			others = append(others, r.JevModelID)
 		}
 	}
@@ -80,4 +80,35 @@ func fitBeforeCutoff(split Split) int {
 		}
 	}
 	return n
+}
+
+// The values of CutoffModelStatus.
+const (
+	// CutoffModelMatch: the Jev model is the one the cutoff was confirmed for.
+	CutoffModelMatch = "match"
+	// CutoffModelMismatch: the Jev model differs, so the cutoff must be
+	// confirmed again (RejectLLMModelChanged).
+	CutoffModelMismatch = "mismatch"
+	// CutoffModelUnset: there is nothing to compare: no cutoff model is
+	// recorded (metalabel.llm_cutoff_model is empty) or no Jev model is known.
+	CutoffModelUnset = "unset"
+)
+
+// CutoffModelMatches reports whether jevModelID is the Jev model the LLM
+// cutoff was confirmed for: an exact string match, no trimming or case
+// folding, so "jev-1.13" and "jev-1.13.0" differ. cutoffGate and the Paper
+// results MCP's jev_models tool share it.
+func CutoffModelMatches(cutoffModel, jevModelID string) bool { return cutoffModel == jevModelID }
+
+// CutoffModelStatus compares the recorded cutoff model with the Jev model that
+// answered last: CutoffModelUnset when either is empty (nothing to compare),
+// otherwise CutoffModelMatch or CutoffModelMismatch by CutoffModelMatches.
+func CutoffModelStatus(cutoffModel, jevModelID string) string {
+	switch {
+	case cutoffModel == "" || jevModelID == "":
+		return CutoffModelUnset
+	case CutoffModelMatches(cutoffModel, jevModelID):
+		return CutoffModelMatch
+	}
+	return CutoffModelMismatch
 }

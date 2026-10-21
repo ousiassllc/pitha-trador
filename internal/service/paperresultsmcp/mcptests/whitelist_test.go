@@ -171,6 +171,11 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("readiness split", readySplit, "llm_cutoff llm_cutoff_status oos_start train_ready train_skip_code train oos")
 	want("readiness train", readySplit["train"].(map[string]any), "rows required_rows fit_rows calibration_rows required_fit_rows required_calibration_rows")
 	want("readiness oos", readySplit["oos"].(map[string]any), "rows required_rows days required_days required_takes ready")
+	models := data("jev_models", period)
+	want("jev models", models, "models daily cutoff")
+	want("jev model", first(models, "models"), "model_id decisions trader_decisions first_seen last_seen")
+	want("jev model day", first(models, "daily"), "date model_id decisions")
+	want("jev model cutoff", models["cutoff"].(map[string]any), "llm_cutoff_model latest_model_id latest_at match")
 	want("performance by origin", first(data("paper_performance_summary", period), "by_origin"),
 		"origin closed_trade_count win_count loss_count win_rate total_pnl_jpy expectancy_jpy")
 }

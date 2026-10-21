@@ -13,11 +13,11 @@ import (
 
 // periodTools are the tools taking the from/to period arguments; health_today
 // (issue #808) takes none, so it is called separately (healthToday). The last
-// is the meta-labeling diagnosis tool (issue #848).
+// two are the meta-labeling diagnosis tools (issues #848, #849).
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
-	"metalabel_training_readiness",
+	"metalabel_training_readiness", "jev_models",
 }
 
 const healthToday = "health_today"
@@ -69,8 +69,8 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the ten read tools, the six settings tools and
-// the six order-proposal tools (22 in all); only the six writing tools are not
+// tools/list returns exactly the eleven read tools, the six settings tools and
+// the six order-proposal tools (23 in all); only the six writing tools are not
 // marked read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)

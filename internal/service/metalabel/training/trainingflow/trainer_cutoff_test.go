@@ -146,3 +146,25 @@ func TestTrainer_UnverifiedCutoffWarnsInPaperAndBlocksBeforeLive(t *testing.T) {
 		}
 	})
 }
+
+// The exact comparison cutoffGate applies per OOS row is the one jev_models
+// reports as match / mismatch / unset: no trimming, case folding or prefix.
+func TestCutoffModelStatus(t *testing.T) {
+	for _, c := range []struct{ cutoff, jev, want string }{
+		{"jev-1.13.0", "jev-1.13.0", training.CutoffModelMatch},
+		{"jev-1.13.0", "jev-1.13", training.CutoffModelMismatch},
+		{"jev-1.13", "jev-1.13.0", training.CutoffModelMismatch},
+		{"jev-1.13.0", "JEV-1.13.0", training.CutoffModelMismatch},
+		{"jev-1.13.0", "jev-1.13.0 ", training.CutoffModelMismatch},
+		{"", "jev-1.13.0", training.CutoffModelUnset},
+		{"jev-1.13.0", "", training.CutoffModelUnset},
+		{"", "", training.CutoffModelUnset},
+	} {
+		if got := training.CutoffModelStatus(c.cutoff, c.jev); got != c.want {
+			t.Errorf("CutoffModelStatus(%q, %q) = %q, want %q", c.cutoff, c.jev, got, c.want)
+		}
+		if got := training.CutoffModelMatches(c.cutoff, c.jev); got != (c.cutoff == c.jev) {
+			t.Errorf("CutoffModelMatches(%q, %q) = %v", c.cutoff, c.jev, got)
+		}
+	}
+}

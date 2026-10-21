@@ -37,8 +37,31 @@
 
 返さない: `jev_decisions` の `state_json` / `response_json` と特徴量の値そのもの（特徴量名と件数だけ）、`calibration_outcomes` の価格・リターン、`metalabel_models` の中身。
 
+### 3.24 `jev_models`
+
+Jev が実際に応答しているモデル名（issue #849）。`metalabel.llm_cutoff` を正しく埋める（`metalabel.llm_cutoff_model` に確認したモデル名を記録する）ために、`jev_decisions.model_id`（Jev の応答の model。例 `jev-1.13.0`）を読む。モデルの指定は secrets の `JEV_MODEL` だけ（暗号化されていて読めない）で、バックエンドが変わると設定を変えなくても `model_id` が変わる。
+
+引数: `from`, `to`（任意。§3.23 と同じ）。件数は期間 `[from, to)` の `jev_decisions.timestamp`（scout と trader の両方）で数える。`cutoff` だけは期間によらず、最新の判断で比べる。
+
+`data`:
+
+| フィールド | 定義 |
+|------------|------|
+| `models[]` | 期間内の `model_id` ごと: `{model_id, decisions, trader_decisions, first_seen, last_seen}`。`first_seen` が早い順。`first_seen` / `last_seen` は期間内でそのモデルが最初・最後に出た判断の時刻（JST、RFC3339 `+09:00`）。`trader_decisions` は `decision_type = 'trader'` の件数（再学習が使う判断） |
+| `daily[]` | JST 日別の `model_id` ごとの件数 `{date, model_id, decisions}`（日付順、同じ日は `model_id` 順）。判断が 1 件も無い日は並べない |
+| `cutoff.llm_cutoff_model` | 今の `metalabel.llm_cutoff_model`（未設定は空文字） |
+| `cutoff.latest_model_id` / `latest_at` | 期間によらず、最新の判断（`timestamp`、同時刻なら `id` の大きいほう）の `model_id` と時刻（JST）。判断が 1 件も無ければ `null` |
+| `cutoff.match` | `llm_cutoff_model` と `latest_model_id` の比較: `match`（完全一致）/ `mismatch`（違う）/ `unset`（どちらかが空で比べられない） |
+
+比較は再学習の cutoff 判定（`internal/service/metalabel/training/cutoff.go` の `cutoffGate`）と**同じ関数**（`training.CutoffModelMatches` = 完全一致。前後の空白・大文字小文字・前方一致は同じとみなさない。`jev-1.13` と `jev-1.13.0` は `mismatch`）で行う。`training.CutoffModelStatus` が `match` / `mismatch` / `unset` を返し、`cutoffGate` も同じ `CutoffModelMatches` を使う。`mismatch` のときは、再学習が `llm_model_changed` で採用を止める（`TestJevModelsAgreesWithTheTrainersCutoffGate`）。
+
+上限: 期間内の別々の `model_id` が 50 を超えたら `limit_exceeded`（`metalabeldiag.MaxJevModels`）。読むのは `jev_decisions` の `timestamp` の索引範囲検索（`jev_decisions_timestamp_idx`）と `model_id` の集計、最新 1 件、`runtime_settings` の `metalabel.*` キーだけ。
+
+返さない: 秘密（`JEV_MODEL` を含む。DB にも無い）、`state_json` / `response_json`、価格・数量。`runtime_settings` は `metalabel.*` 以外のキーを SQL の前に拒否する。
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規作成。§3.23 `metalabel_training_readiness` の入出力と、再学習の判定との一致・既定の窓・上限・`dropped_incomplete` が残っていない場合の表し方 | issue #848 |
+| 1.1 | 2026-10-21 | §3.24 `jev_models` を追加（`model_id` ごとの件数・初回/最後の時刻・日別・`llm_cutoff_model` との完全一致の判定） | issue #849 |

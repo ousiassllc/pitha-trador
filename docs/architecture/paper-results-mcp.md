@@ -133,7 +133,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 10 つ（`health_today`・`metalabel_training_readiness` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）だけである（合計 22）。定義・フィールドは API 仕様。
+ツールは、次の読み取りの 11 つ（`health_today`・`metalabel_training_readiness`・`jev_models` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）だけである（合計 23）。定義・フィールドは API 仕様。
 
 「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
@@ -149,6 +149,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `collection_status` | `jobs` の件数と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（保持期間の違いを `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ） |
 | `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`。それ以前のスナップショットが無い日は欠損でなく `insufficient_history_dates[]`＝判定不可。#814）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、処理されずに止まっている注文案の件数（`order_proposals`。#829）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
 | `metalabel_training_readiness` | メタモデルの学習データがそろっているか（#848）。学習の条件ごとに絞り込んだあとの行数（`jev_decisions` の trader → LONG/SHORT → `calibration_outcomes` の `label_version = 2` → `net_return_bps` → 8 特徴量）、特徴量ごとの欠け件数と `dropped_incomplete`、直近の再学習の見送り（`metalabel_retrain_skips`・`metalabel_models`）、今の `metalabel.llm_cutoff` で分けた学習側（fit＋較正）と OOS 側の行数・必要件数 |
+| `jev_models` | Jev が実際に応答しているモデル名（#849）。期間内の `jev_decisions.model_id` ごとの件数と最初・最後に出た時刻（JST）、JST 日別の件数、`metalabel.llm_cutoff_model`（`runtime_settings` の `metalabel.*` キー）と最新の `model_id` が完全一致するか（`match` / `mismatch` / `unset`）。秘密は返さない |
 
 MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
 
@@ -163,6 +164,8 @@ MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`00003
 - 直近の再学習の `dropped_incomplete`: 見送りの行（`metalabel_retrain_skips`）に残っていればその値（`dropped_incomplete_status: "recorded"`）。**残っていない場合は 0 と偽らず `null` にし、理由を `dropped_incomplete_status` で返す**: `not_recorded_in_schema`（この DB の見送り表にその列が無い。#862 のマイグレーション前）、`no_skip_recorded`（直近の再学習は見送りでなくモデルを保存した、または一度も走っていない）。今の学習行から数えた値は `features.dropped_incomplete` にいつでも入る。
 - `state_json` / `response_json` は特徴量の組み立てのために**プロセス内で読むだけ**で、戻り値には件数と特徴量名しか載せない。`readonly_db_test` は、この行取り出しの 1 文（`FROM calibration_outcomes o JOIN jev_decisions d`）だけが両列の名前を含んでよいと固定する。
 - 時間: 取り出す行は 1 回の索引検索（`jev_decisions_type_timestamp_idx` と `calibration_outcomes_decision_horizon_idx`）で、新しい索引・マイグレーションは足さない。行の組み立てはプロセス内で、読み取る行数は `metalabeldiag.MaxReadinessRows`（20,000）まで。超えたら `limit_exceeded`（期間を狭める）。30 日・90 日の計測は `metalabeltests/readiness_perf_test.go`（テストが所要時間と `EXPLAIN QUERY PLAN` をログに出す）。
+
+`jev_models`（#849。実装は `metalabeldiag`）の一致判定は、再学習の cutoff 判定（`training/cutoff.go` の `cutoffGate`）と同じ関数 `training.CutoffModelMatches`（完全一致。空白・大文字小文字・前方一致は同じとみなさない）を使い、`training.CutoffModelStatus` が `match` / `mismatch` / `unset` を返す。判定を 2 か所に書くと食い違うので、`cutoffGate` も同じ関数に置き換えた（挙動は変えていない）。`JEV_MODEL`（secrets）は暗号化されていて読めず、DB にも無いので、このツールが返すのは応答に入っていた `model_id` と `llm_cutoff_model` だけである。`runtime_settings` は `metalabel.*` のキー（`metalabelsettings.Keys`）だけ読み、他のキーは SQL の前に拒否する（`metalabeldiag.metalabelSettingsReader`）。新しい索引・マイグレーションは足さない（`jev_decisions_timestamp_idx` の範囲検索）。
 
 kabu の板・時価の保存を続けるかは #778 の現状のままである（保存は継続、リスクは理解済み、公式回答待ち）。本仕様は規約の適否を判断しない。リモートへ出す対象から生データを外すのは、その現状を広げないためである。
 
@@ -310,3 +313,4 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.13 | 2026-10-21 | 注文案の取消の依頼 `order_proposal_cancel` を追加（§8.1・§8.5。取消の依頼だけを記録し、実際の取消はアプリ。書き手の変更は 5 種類、ツール数は 19）。注文案のアプリ側の処理（Risk check・Paper 発注・期限・取消・`close`・再起動の回復）を `order-proposal-processing.md` に分けて追記。`risk_rejections` に案の分の件数を追加。ホワイトリストは 17 キーのまま | issue #828（親 #826） |
 | 1.14 | 2026-10-21 | 注文案の読み取りを追加（§5・§8.1。`order_proposals_list` / `order_proposal_summary` を足し、`order_proposal_get` に結果を足した。ツールは 21）。`paper_trades` / `paper_performance_summary` に入り口 `origin`、`health_today` に止まった注文案（要対応コード `order_proposal_stalled`）。すべて読み取り接続のままで、新しい表は無い。GUI の「注文案」画面は同じ読み取りモデルを使う | issue #829（親 #826） |
 | 1.15 | 2026-10-21 | §5 に `metalabel_training_readiness` を追加（メタモデルの学習データの確認。学習の条件ごとの行数・特徴量ごとの欠け・直近の再学習の `dropped_incomplete`・学習側と OOS 側の行数と必要件数。再学習と同じコードを同じ行に当て、必要件数は `DefaultWalkForwardConfig` / `DefaultAcceptanceConfig` から取る）。読み取りは 10 ツール、合計 22。新規テーブル・マイグレーションなし | issue #848 |
+| 1.16 | 2026-10-21 | §5 に `jev_models` を追加（Jev が実際に使っているモデル名の確認。`model_id` ごとの件数と最初・最後の時刻・日別、`llm_cutoff_model` との完全一致の判定。判定は再学習の cutoff 判定と同じ関数）。読み取りは 11 ツール、合計 23。新規テーブル・マイグレーションなし | issue #849 |
