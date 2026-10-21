@@ -38,7 +38,6 @@ func TestRestart_ExpiredProcessingProposalBecomesExpired(t *testing.T) {
 	if !strings.Contains(logs.String(), "count=3 expired=1 received=1 failed=0 still_processing=0") {
 		t.Fatalf("recovery log = %s", logs.String())
 	}
-	t.Logf("recovery log: %s", strings.TrimSpace(logs.String()))
 }
 
 // A proposal that cannot be recovered (its order filled but the position is
@@ -66,11 +65,8 @@ func TestRestart_RecoveryFailureDoesNotLeaveProcessing(t *testing.T) {
 	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "proposal_id=1 ") {
 		t.Fatalf("the failure was not logged with the proposal: %s", logs.String())
 	}
-	t.Logf("recover error: %v\nlog: %s", err, strings.TrimSpace(logs.String()))
 }
 
-// Launch is the startup: it recovers before the loop starts, so right after it
-// no proposal is in processing.
 func TestRestart_LaunchLeavesNothingInProcessing(t *testing.T) {
 	f := newFixture(t)
 	f.propose(spec{expires: at(10, 0, 10)})
@@ -91,5 +87,23 @@ func TestRestart_LaunchLeavesNothingInProcessing(t *testing.T) {
 	if !strings.Contains(logs.String(), "bootstrap: recovered order proposals left in processing\" count=2") {
 		t.Fatalf("startup log lacks the recovery line: %s", logs.String())
 	}
-	t.Logf("startup log:\n%s", logs.String())
+}
+
+// A panic while recovering one proposal is that proposal's failure: it becomes
+// failed and the others are still recovered.
+func TestRestart_RecoveryPanicDoesNotLeaveProcessing(t *testing.T) {
+	f := newFixture(t)
+	broken := f.propose(spec{quantity: 100})
+	f.cycle()
+	f.stopMidFlight(broken) // has a signal: recovery looks its order up
+	other := f.propose(spec{symbol: "6758", quantity: 100})
+	f.mustExec(`UPDATE order_proposals SET status = 'processing' WHERE id = ?`, other)
+	f.proc.Orders = nil // the order lookup now panics
+
+	n, err := f.proc.Recover(context.Background())
+	if err == nil || n != 2 || !strings.Contains(err.Error(), "panic while recovering proposal") {
+		t.Fatalf("Recover = (%d, %v), want 2 and the panic as an error", n, err)
+	}
+	f.wantEnd(broken, orderproposal.StatusFailed, "processing_error")
+	f.wantEnd(other, orderproposal.StatusReceived, "recovered_after_restart")
 }

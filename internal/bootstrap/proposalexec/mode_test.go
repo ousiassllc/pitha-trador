@@ -91,8 +91,6 @@ func (f *fixture) snapshot() string {
 	return b.String()
 }
 
-const statusCounts = `SELECT status, count(*) AS n FROM order_proposals GROUP BY 1 ORDER BY 1`
-
 // captureLog redirects the default logger for the test and returns what it gets.
 func captureLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
@@ -111,7 +109,7 @@ func TestProcessor_RefusesToRunOutsidePaperMode(t *testing.T) {
 	for name, mode := range nonPaperModes {
 		t.Run(name, func(t *testing.T) {
 			f, c := nonPaperFixture(t, mode)
-			before, beforeStatus := f.snapshot(), f.dump(statusCounts)
+			before := f.snapshot()
 			n, err := f.proc.Cycle(context.Background())
 			if !errors.Is(err, proposalexec.ErrNotPaperMode) || n != 0 {
 				t.Fatalf("Cycle = (%d, %v), want (0, ErrNotPaperMode)", n, err)
@@ -125,7 +123,6 @@ func TestProcessor_RefusesToRunOutsidePaperMode(t *testing.T) {
 			if got := c.total(); got != 0 {
 				t.Fatalf("Risk/Execution calls = %d, want 0", got)
 			}
-			t.Logf("Cycle error: %v\nstatus counts before:\n%safter:\n%s", err, beforeStatus, f.dump(statusCounts))
 		})
 	}
 }
@@ -138,7 +135,7 @@ func TestLaunch_DoesNotStartOutsidePaperMode(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			f, c := nonPaperFixture(t, mode)
 			logs := captureLog(t)
-			before, beforeStatus := f.snapshot(), f.dump(statusCounts)
+			before := f.snapshot()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var wg sync.WaitGroup
@@ -161,13 +158,10 @@ func TestLaunch_DoesNotStartOutsidePaperMode(t *testing.T) {
 				strings.Contains(out, "recovered order proposals") {
 				t.Fatalf("log = %q, want exactly the refusal error", out)
 			}
-			t.Logf("log line: %s\nstatus counts before:\n%safter:\n%s", strings.TrimSpace(out), beforeStatus, f.dump(statusCounts))
 		})
 	}
 }
 
-// The same processor in Paper mode does work, so the tests above stop it by the
-// mode and nothing else.
 func TestProcessor_PaperModeStillProcesses(t *testing.T) {
 	f, c := nonPaperFixture(t, metalabelsettings.ModePaper)
 	if n, err := f.proc.Cycle(context.Background()); err != nil || n == 0 || c.total() == 0 {

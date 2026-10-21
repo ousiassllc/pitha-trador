@@ -128,7 +128,14 @@ func (p Processor) logRecovered(ctx context.Context, stuck []orderproposal.Propo
 
 const recoveredDetail = `{"recovered_after_restart":true}`
 
-func (p Processor) recoverOne(ctx context.Context, pr orderproposal.Proposal) error {
+// recoverOne recovers one proposal; like handle, a panic is an error of that
+// proposal only (Recover then marks it failed), never one that stops the others.
+func (p Processor) recoverOne(ctx context.Context, pr orderproposal.Proposal) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("proposalexec: panic while recovering proposal %d: %v", pr.ID, r)
+		}
+	}()
 	if pr.Action == orderproposal.ActionClose {
 		return p.recoverClose(ctx, pr)
 	}

@@ -2,9 +2,7 @@ package proposalexec_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -23,17 +21,7 @@ func (f *fixture) rejections() query.RiskRejections {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	out, _ := json.Marshal(r)
-	f.t.Logf("risk_rejections: %s", out)
 	return r
-}
-
-func breakdown(b []query.RejectBucket) string {
-	var parts []string
-	for _, x := range b {
-		parts = append(parts, fmt.Sprintf("%s=%d", x.Reason, x.Count))
-	}
-	return strings.Join(parts, ",")
 }
 
 // A proposal that passed Risk but was refused afterwards (size_zero,
@@ -49,25 +37,15 @@ func TestRiskRejections_PostRiskProposalRejectionsAreNotRiskPassed(t *testing.T)
 	f.propose(spec{quantity: 100})   // filled
 	f.propose(spec{})                // position_already_open
 	f.cycle()
-	t.Logf("signals before the fix would read risk_passed=1 for all four; now:\n%s", f.dump(signalsOfProposals))
-
 	r := f.rejections()
 	if r.RiskPassedCount != 1 || r.ProposalRiskPassedCount != 1 {
 		t.Fatalf("risk_passed_count = %d, proposal_risk_passed_count = %d; want 1 and 1 (only the filled proposal)", r.RiskPassedCount, r.ProposalRiskPassedCount)
 	}
-	if got, want := breakdown(r.ProposalRejectedAfterRiskBreakdown), "max_trade_loss=1,position_already_open=1,size_zero=1"; r.ProposalRejectedAfterRiskCount != 3 || got != want {
+	if got, want := fmt.Sprint(r.ProposalRejectedAfterRiskBreakdown), "[{max_trade_loss 1} {position_already_open 1} {size_zero 1}]"; r.ProposalRejectedAfterRiskCount != 3 || got != want {
 		t.Fatalf("proposal_rejected_after_risk = %d (%s), want 3 (%s)", r.ProposalRejectedAfterRiskCount, got, want)
 	}
 	if r.OtherRejectCount != 0 || len(r.OtherRejectBreakdown) != 0 || r.ProposalRiskRejectedCount != 0 {
 		t.Fatalf("other_reject_count = %d (%v), proposal_risk_rejected_count = %d (the Risk Engine's own rejections only); want 0, none, 0", r.OtherRejectCount, r.OtherRejectBreakdown, r.ProposalRiskRejectedCount)
-	}
-
-	// A limit order waiting on the book is an order: still a Risk pass.
-	g := newFixture(t)
-	g.propose(spec{orderType: domain.OrderTypeLimit, limit: 2000})
-	g.cycle()
-	if r := g.rejections(); r.RiskPassedCount != 1 || r.ProposalRejectedAfterRiskCount != 0 {
-		t.Fatalf("waiting limit order: risk_passed_count = %d, after-risk = %d; want 1 and 0", r.RiskPassedCount, r.ProposalRejectedAfterRiskCount)
 	}
 }
 
@@ -75,5 +53,27 @@ func (f *fixture) mustExec(q string, args ...any) {
 	f.t.Helper()
 	if _, err := f.db.Exec(q, args...); err != nil {
 		f.t.Fatal(err)
+	}
+}
+
+// A proposal that reached an order keeps risk_passed = 1 and no reject_reason
+// even when its limit order is later cancelled or expires (issue #860).
+func TestRiskRejections_OrderedProposalStaysRiskPassedAfterCancelOrExpiry(t *testing.T) {
+	f := newFixture(t)
+	cancelled := f.propose(spec{orderType: domain.OrderTypeLimit, limit: 2000})
+	f.cycle()
+	f.requestCancel(cancelled)
+	f.cycle()
+	f.wantEnd(cancelled, "cancelled", "cancel_requested")
+	expired := f.propose(spec{orderType: domain.OrderTypeLimit, limit: 2000, expires: at(10, 5, 0)})
+	f.cycle()
+	*f.clock = at(10, 5, 0)
+	f.cycle()
+	f.wantEnd(expired, "expired", "expired")
+	if n := f.count("trade_signals", "WHERE risk_passed = 1 AND reject_reason IS NULL"); n != 2 {
+		t.Fatalf("%d signals still risk_passed=1 without a reason, want 2:\n%s", n, f.dump(signalsOfProposals))
+	}
+	if r := f.rejections(); r.RiskPassedCount != 2 || r.ProposalRejectedAfterRiskCount != 0 {
+		t.Fatalf("risk_passed_count = %d, after-risk = %d; want 2 and 0", r.RiskPassedCount, r.ProposalRejectedAfterRiskCount)
 	}
 }

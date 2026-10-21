@@ -145,7 +145,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 
 ### GET /api/v1/signals / GET /api/v1/signals/{symbol}
 
-`trade_signals`の一覧・銘柄別履歴（`risk_passed`, `reject_reason`含む）。新しい順。`/signals/{symbol}`の未登録銘柄は404。クエリ `limit`（既定100、1〜500。範囲外は422）。パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、違反は422）。
+`trade_signals`の一覧・銘柄別履歴（`risk_passed`, `reject_reason`含む）。新しい順。`policy_version = 'mcp-proposal-v1'`（MCPの注文案。issue #860）の行は、`risk_passed = true` が「Riskを通って注文まで進んだ」ことを表し、Riskを通ったが注文にならなかった案は`risk_passed = false`・`reject_reason = 'proposal_rejected_after_risk: <理由コード>'`になる（Policy経路の行は従来どおり）。`/signals/{symbol}`の未登録銘柄は404。クエリ `limit`（既定100、1〜500。範囲外は422）。パスの`{symbol}`は英数字1〜16文字（`^[0-9A-Za-z]+$`、違反は422）。
 
 ```json
 // Output（抜粋）
