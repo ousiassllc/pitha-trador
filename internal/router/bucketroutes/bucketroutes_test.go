@@ -222,3 +222,70 @@ func TestPageShowsDefaultsWhenNothingStored(t *testing.T) {
 		}
 	}
 }
+
+// Raising the operating capital does not grow the stock budget (issue #834,
+// FR-RISK-10), and both pages say so: the capital page (/settings/risk) and
+// the budgets page (/settings/asset-buckets) each carry the notice in their
+// group's note, so the operator knows to save the stock budget too.
+func TestPagesWarnThatRaisingCapitalDoesNotRaiseStockBudget(t *testing.T) {
+	f := newFixture(t)
+	for _, tc := range []struct{ name, path, noteID string }{
+		{"capital page", "/settings/risk", `data-testid="modal-paper-risk-note"`},
+		{"budgets page", "/settings/asset-buckets", `data-testid="modal-asset-buckets-note"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := f.do(http.MethodGet, tc.path, nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s = %d", tc.path, rec.Code)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, tc.noteID) {
+				t.Fatalf("%s missing the group note %s", tc.path, tc.noteID)
+			}
+			for _, want := range []string{
+				"運用資金を上げても株の枠は自動で増えません",
+				"株の枠も保存してください",
+				"bucket_budget_exceeded",
+			} {
+				if !strings.Contains(body, want) {
+					t.Errorf("%s missing %q", tc.path, want)
+				}
+			}
+		})
+	}
+}
+
+// While part of the operating capital is in no budget (remaining > 0) the
+// budgets page's 計算結果 panel says that part is unused; with nothing left
+// over (or the budgets over the capital) it does not.
+func TestBudgetsPageShowsUnusedCapitalNotice(t *testing.T) {
+	f := newFixture(t)
+	unused := `data-testid="setting-group-derived-asset-buckets-bucket-unused"`
+
+	// capital 500,000 = stock 300,000 + bond_etf 200,000: nothing left over.
+	if body := f.do(http.MethodGet, "/settings/asset-buckets", nil).Body.String(); strings.Contains(body, unused) {
+		t.Fatalf("unused-capital notice shown with remaining 0: %s", body)
+	}
+
+	// Raise the capital by 100,000: the stock budget stays 300,000, so 100,000 is unused.
+	if rec := f.save(papersettings.KeyInitialCapitalJPY, "600000"); rec.Code != http.StatusOK {
+		t.Fatalf("save capital: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := f.stored(t, bucketsettings.KeyStockBudgetJPY); got != "300000" {
+		t.Fatalf("stock budget = %q after raising the capital, want it unchanged (300000)", got)
+	}
+	body := f.do(http.MethodGet, "/settings/asset-buckets", nil).Body.String()
+	for _, want := range []string{unused, "100,000 円 が、どの枠にも割り当てられておらず使われていません"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("budgets page missing %q: %s", want, body)
+		}
+	}
+
+	// Saving the stock budget with the surplus uses it up: the notice goes away.
+	if rec := f.save(bucketsettings.KeyStockBudgetJPY, "400000"); rec.Code != http.StatusOK {
+		t.Fatalf("save stock budget: status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if body := f.do(http.MethodGet, "/settings/asset-buckets", nil).Body.String(); strings.Contains(body, unused) {
+		t.Errorf("unused-capital notice still shown with remaining 0: %s", body)
+	}
+}
