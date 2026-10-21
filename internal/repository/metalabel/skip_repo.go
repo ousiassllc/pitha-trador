@@ -34,15 +34,24 @@ type RetrainSkip struct {
 	// UsableRows is how many usable labeled decisions existed before the OOS
 	// window; RequiredRows how many the training needs ("必要130件中 x件").
 	UsableRows, RequiredRows int
-	CreatedAt                time.Time
+	// OOSRows is how many rows the OOS window held and RequiredOOSRows how many
+	// it reaches back to hold (the bar's MinOOSSamples) (issue #862).
+	OOSRows, RequiredOOSRows int
+	// DroppedIncomplete is the stored rows BuildRows dropped for a missing
+	// feature; LabelV1Rows and LabelV2Rows the labeled decisions of the
+	// lookback per label_version. 0 for a skip recorded before they existed.
+	DroppedIncomplete, LabelV1Rows, LabelV2Rows int
+	CreatedAt                                   time.Time
 }
 
 // InsertRetrainSkip stores s and returns it with ID and CreatedAt set.
 func (r *Repository) InsertRetrainSkip(ctx context.Context, s RetrainSkip) (RetrainSkip, error) {
 	createdAt := time.Now().UTC()
 	res, err := r.db.ExecContext(ctx, `INSERT INTO metalabel_retrain_skips
-		(skipped_at, reason_code, usable_rows, required_rows, created_at) VALUES (?, ?, ?, ?, ?)`,
-		sqlutil.FormatTime(s.SkippedAt), s.ReasonCode, s.UsableRows, s.RequiredRows, sqlutil.FormatTime(createdAt))
+		(skipped_at, reason_code, usable_rows, required_rows, oos_rows, required_oos_rows,
+		dropped_incomplete, label_v1_rows, label_v2_rows, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sqlutil.FormatTime(s.SkippedAt), s.ReasonCode, s.UsableRows, s.RequiredRows, s.OOSRows, s.RequiredOOSRows,
+		s.DroppedIncomplete, s.LabelV1Rows, s.LabelV2Rows, sqlutil.FormatTime(createdAt))
 	if err != nil {
 		return RetrainSkip{}, fmt.Errorf("repository: insert meta-label retrain skip: %w", err)
 	}
@@ -58,7 +67,8 @@ func (r *Repository) InsertRetrainSkip(ctx context.Context, s RetrainSkip) (Retr
 // ListRetrainSkips returns the newest limit skips, newest SkippedAt first (the
 // higher ID first on a tie).
 func (r *Repository) ListRetrainSkips(ctx context.Context, limit int) ([]RetrainSkip, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, skipped_at, reason_code, usable_rows, required_rows, created_at
+	rows, err := r.db.QueryContext(ctx, `SELECT id, skipped_at, reason_code, usable_rows, required_rows, oos_rows, required_oos_rows,
+		dropped_incomplete, label_v1_rows, label_v2_rows, created_at
 		FROM metalabel_retrain_skips ORDER BY skipped_at DESC, id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list meta-label retrain skips: %w", err)
@@ -71,7 +81,8 @@ func (r *Repository) ListRetrainSkips(ctx context.Context, limit int) ([]Retrain
 			s                    RetrainSkip
 			skippedAt, createdAt string
 		)
-		if err := rows.Scan(&s.ID, &skippedAt, &s.ReasonCode, &s.UsableRows, &s.RequiredRows, &createdAt); err != nil {
+		if err := rows.Scan(&s.ID, &skippedAt, &s.ReasonCode, &s.UsableRows, &s.RequiredRows, &s.OOSRows, &s.RequiredOOSRows,
+			&s.DroppedIncomplete, &s.LabelV1Rows, &s.LabelV2Rows, &createdAt); err != nil {
 			return nil, fmt.Errorf("repository: scan meta-label retrain skip: %w", err)
 		}
 		if s.SkippedAt, err = sqlutil.ParseTime(skippedAt); err != nil {

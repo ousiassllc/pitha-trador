@@ -92,8 +92,10 @@ func (s *Store) RecordRetrainSkip(ctx context.Context, skip repo.RetrainSkip) er
 	if skip.ReasonCode == "" {
 		return invalid("retrain skip reason code is empty")
 	}
-	if skip.UsableRows < 0 || skip.RequiredRows < 0 {
-		return invalid("retrain skip counts %d/%d are negative", skip.UsableRows, skip.RequiredRows)
+	for _, n := range []int{skip.UsableRows, skip.RequiredRows, skip.OOSRows, skip.RequiredOOSRows, skip.DroppedIncomplete, skip.LabelV1Rows, skip.LabelV2Rows} {
+		if n < 0 {
+			return invalid("retrain skip counts %+v contain a negative one", skip)
+		}
 	}
 	_, err := s.repo.InsertRetrainSkip(ctx, skip)
 	return err

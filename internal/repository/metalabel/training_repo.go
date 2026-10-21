@@ -93,3 +93,47 @@ ORDER BY d.timestamp, d.id`,
 	}
 	return out, nil
 }
+
+// LabelVersionCounts is how many labeled decisions exist per label_version:
+// V1 the close-only label (no order-flow features, never a training row) and V2
+// the triple-barrier label the model learns from.
+type LabelVersionCounts struct{ V1, V2 int }
+
+// CountLabeledDecisions counts the LONG/SHORT trader decisions made in
+// [from, to) that have a label, per label_version (a decision counts once per
+// version). A version 1 label has no net return by design (migration 000033), so
+// only version 2 labels are required to have one: the V2 count is the labeled
+// decisions ListTrainingRows reads before BuildRows drops the incomplete ones. It is what a skipped retraining reports next to the
+// rows it could use (issue #862); ListTrainingRows reads the same decisions for
+// version 2.
+func (r *Repository) CountLabeledDecisions(ctx context.Context, from, to time.Time) (LabelVersionCounts, error) {
+	rows, err := r.db.QueryContext(ctx, `
+SELECT o.label_version, COUNT(DISTINCT o.jev_decision_id)
+FROM calibration_outcomes o
+JOIN jev_decisions d ON d.id = o.jev_decision_id
+WHERE d.decision_type = 'trader' AND d.direction IN ('LONG', 'SHORT')
+	AND (o.label_version = ? OR o.net_return_bps IS NOT NULL) AND d.timestamp >= ? AND d.timestamp < ?
+GROUP BY o.label_version`, domain.CalibrationLabelVersionClose, sqlutil.FormatTime(from), sqlutil.FormatTime(to))
+	if err != nil {
+		return LabelVersionCounts{}, fmt.Errorf("repository: count labeled decisions in [%s, %s): %w", from, to, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out LabelVersionCounts
+	for rows.Next() {
+		var version, n int
+		if err := rows.Scan(&version, &n); err != nil {
+			return LabelVersionCounts{}, fmt.Errorf("repository: scan labeled decision count: %w", err)
+		}
+		switch version {
+		case domain.CalibrationLabelVersionClose:
+			out.V1 = n
+		case domain.CalibrationLabelVersionTripleBarrier:
+			out.V2 = n
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return LabelVersionCounts{}, fmt.Errorf("repository: count labeled decisions: %w", err)
+	}
+	return out, nil
+}
