@@ -149,8 +149,8 @@ type TrainingReadiness struct {
 
 // TrainingReadinessAt reports whether the labeled Jev decisions of r can feed
 // the meta-labeling retraining. It runs the retraining's own code on the same
-// rows: repo.ListTrainingRowsFrom for the rows, training.BuildRows /
-// MissingFeatures for the features, training.SplitWalkForward with the
+// rows, training.BuildRowsReport (BuildRows plus the missing features) for the
+// features, training.SplitWalkForward with the
 // default walk-forward and acceptance configs for the split and the required
 // counts (so a changed default shows up here without an edit). Read-only.
 func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time.Time) (TrainingReadiness, error) {
@@ -183,9 +183,9 @@ func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time
 	if err != nil {
 		return TrainingReadiness{}, fmt.Errorf("query: training rows: %w", err)
 	}
-	rows, dropped := training.BuildRows(stored)
+	rows, dropped, missing := training.BuildRowsReport(stored)
 	out.Funnel = append(out.Funnel, ReadinessStep{Step: StepFeaturesComplete, Condition: "8 つの特徴量がそろう（BuildRows が残す行 = 学習に使える行）", Rows: int64(len(rows))})
-	out.Features = featureGaps(stored, len(rows), dropped)
+	out.Features = featureGaps(len(stored), len(rows), dropped, missing)
 	if out.LastRetrain, err = lastRetrain(ctx, q); err != nil {
 		return TrainingReadiness{}, err
 	}
@@ -232,17 +232,11 @@ WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?`, v, v
 	}, nil
 }
 
-// featureGaps counts, per feature, the training rows BuildRows cannot complete
-// (training.MissingFeatures is the same rule BuildRows applies).
-func featureGaps(stored []repo.TrainingRow, usable, dropped int) FeatureGaps {
+// featureGaps lists, per feature, the training rows BuildRowsReport counted as
+// lacking it (the rule BuildRows drops a decision by), in FeatureNames order.
+func featureGaps(stored, usable, dropped int, missing map[string]int) FeatureGaps {
 	names := metalabel.FeatureNames()
-	missing := make(map[string]int, len(names))
-	for _, tr := range stored {
-		for _, name := range training.MissingFeatures(tr) {
-			missing[name]++
-		}
-	}
-	g := FeatureGaps{TrainingRows: len(stored), UsableRows: usable, DroppedIncomplete: dropped, Missing: make([]FeatureGap, 0, len(names))}
+	g := FeatureGaps{TrainingRows: stored, UsableRows: usable, DroppedIncomplete: dropped, Missing: make([]FeatureGap, 0, len(names))}
 	for _, name := range names {
 		g.Missing = append(g.Missing, FeatureGap{Feature: name, MissingRows: missing[name]})
 	}

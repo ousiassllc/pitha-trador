@@ -158,7 +158,7 @@ MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`00003
 `metalabel_training_readiness`（#848。実装は `internal/service/paperresultsmcp/metalabeldiag`）は、夜間の再学習（`internal/service/metalabel/training`）と**同じコードを同じ行に当てて**数える。数字を別に実装すると再学習の判定とずれていくため、次を直接使う（読み取り接続のまま）。
 
 - 行の取り出し: `repo.ListTrainingRowsFrom`（`Trainer` の `ListTrainingRows` と同じ SQL。`label_version = 2`・`net_return_bps` あり・LONG/SHORT・直近 90 日＝`training.DefaultLookback`）。
-- 特徴量の欠け: `training.MissingFeatures`（`BuildRows` と同じ組み立てで、欠けた特徴量名を全部返す）と `training.BuildRows`（残る行・`dropped_incomplete`）。特徴量名と順序は `metalabel.FeatureNames`。
+- 特徴量の欠け: `training.BuildRowsReport`（`BuildRows` と同じ組み立てで、残る行・`dropped_incomplete`・特徴量ごとの欠け件数を 1 回の走査で返す）。特徴量名と順序は `metalabel.FeatureNames`。
 - 分割と必要件数: `training.SplitWalkForward` を `DefaultWalkForwardConfig`（`MinFit`・`MinCalibration`＝学習側の必要件数。130 は 100＋30）で呼び、OOS 側の必要件数は `DefaultAcceptanceConfig`（`MinOOSSamples`・`MinOOSDays`・`MinTakes`）から取る。**件数（130・1084 など）はこのツールに書かない**。#862 などで既定が変わっても、ツールの数字はそのまま追従する。分割が `ErrInsufficientData` で止まった夜も、`Trainer` が記録するのと同じ理由コードと `usable_rows` / `required_rows` を返し、OOS 側は fit・較正の最小件数を 1 に下げた同じ分割で数える（OOS の窓と行は同じ）。
 - `metalabel.llm_cutoff`: `metalabelsettings.Load` を `runtime_settings` の `metalabel.*` キーだけ読む読み取り専用の Store で呼ぶ（アプリと同じ実効値・既定。`metalabeldiag.metalabelSettingsReader` がリスト外のキーを SQL の前に拒否する。`readonly_db_test` の許可する文は `SELECT value FROM runtime_settings WHERE key = ?` のまま）。
 - 直近の再学習の `dropped_incomplete`: 見送りの行（`metalabel_retrain_skips`）に残っていればその値（`dropped_incomplete_status: "recorded"`）。**残っていない場合は 0 と偽らず `null` にし、理由を `dropped_incomplete_status` で返す**: `not_recorded_in_schema`（この DB の見送り表にその列が無い。#862 のマイグレーション前）、`no_skip_recorded`（直近の再学習は見送りでなくモデルを保存した、または一度も走っていない）。今の学習行から数えた値は `features.dropped_incomplete` にいつでも入る。
