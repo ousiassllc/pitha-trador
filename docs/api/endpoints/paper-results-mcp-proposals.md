@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP の注文案ツール
 
-`docs/api/endpoints/paper-results-mcp.md` §3.16〜§3.19 の分割章（行数上限のため別ファイル）。issue #827（親 #826）。共通の上限・トランスポート・成功ボディ `{"tool":"<名前>","data":{...}}` は元の文書、エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`、設計は `docs/architecture/paper-results-mcp.md` §8。
+`docs/api/endpoints/paper-results-mcp.md` §3.16〜§3.22 の分割章（行数上限のため別ファイル）。issue #827・#828・#829（親 #826）。共通の上限・トランスポート・成功ボディ `{"tool":"<名前>","data":{...}}` は元の文書、エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`、設計は `docs/architecture/paper-results-mcp.md` §8。
 
 ## 3. ツール
 
@@ -33,9 +33,24 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 
 ### 3.17 `order_proposal_get`
 
-引数: `proposal_id`（必須、1 以上の整数。`order_proposal_submit` の応答の値）。ない ID は `proposal_not_found`（404）。読み取り専用で、受け付けスイッチがオフでも使える。
+引数: `proposal_id`（必須、1 以上の整数。`order_proposal_submit` の応答か `order_proposals_list` の値）。ない ID は `proposal_not_found`（404）。読み取り専用（読み取り接続だけ）で、受け付けスイッチがオフでも使える。
 
-`data`: `proposal_id` / `status` / `status_reason`（固定コード。最初は空）/ `received_at` / `updated_at` / `expires_at` / 受け付けた内容（`symbol`・`bucket`・`action`・`quantity`・`budget_jpy`・`order_type`・`limit_price`・`stop_loss_price`・`take_profit_price`・`exit_plan`・`max_loss_jpy`・`rationale`・`sources[]`。ないものは `null`）/ アプリが埋める紐付け `instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id`（最初は `null`）/ `events[]`（古い順。`at`・`from_status`（最初の行だけ `null`）・`to_status`・`reason_code`・`actor`＝`mcp` / `app` / `gui`）。`request_hash`・接続元 IP は返さない。`status` は `received` / `processing` / `waiting_session` / `rejected` / `submitted` / `filled` / `expired` / `cancelled` / `closed` / `failed`（MCP が書くのは `received` だけで、以降はアプリの処理役が更新する。状態と `status_reason` のコードは `architecture/order-proposal-processing.md` §2）。
+`data`: 提案から結果までを 1 件で返す（issue #829）。
+
+| 項目 | 内容 |
+|------|------|
+| `proposal_id` / `status` / `status_reason`（固定コード。最初は空）/ `received_at` / `updated_at` / `expires_at` | 状態と時刻（UTC の RFC3339）。`status` は §3.20 の固定コード |
+| 受け付けた内容 | `symbol`・`bucket`・`action`・`quantity`・`budget_jpy`・`order_type`・`limit_price`・`stop_loss_price`・`take_profit_price`・`exit_plan`・`max_loss_jpy`・`rationale`・`sources[]`（`title`・`url`・`retrieved_at`）。ないものは `null`。自由文は受け付けたときの文字数の上限内でそのまま返す |
+| 紐付け | `instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id`（アプリが埋める。最初は `null`）、`cancel_requested_at`（`order_proposal_cancel` の依頼の時刻。なければ `null`） |
+| アプリの判断 | `applied_quantity`（アプリが決めた株数。提案とアプリの小さいほう）・`computed_max_loss_jpy`（アプリの最大損失の見積もり）・`effective_stop_loss_price`（その見積もりに使った損切り）。発注前は `null` |
+| `result.signal` | 紐づく `trade_signals` の `id`・`at`・`policy_version`・`risk_passed`・`reject_code`（Risk Engine の固定コード。通ったら `null`。理由の文は返さない）。なければ `null` |
+| `result.order` | 紐づく `paper_orders`（`open_long` は買いの注文、`close` は決済の注文）の `id`・`side`・`order_type`・`status`・`quantity`・`submitted_at`・`filled_at`・`filled_price`・`fees_jpy`。なければ `null` |
+| `result.position` | 紐づく `positions` の `id`・`status`（`open` / `closed`）・`quantity`・`entry_price`・`opened_at`・`closed_at`・`exit_price`（決済注文の約定価格）・`exit_reason`（`stop_loss` / `take_profit` / `proposal_close` など。§3.3）・`realized_pnl`（`positions.realized_pnl` をそのまま。新しい計算はしない）・`holding_minutes`（`opened_at`〜`closed_at` の分）・`fees_jpy`（エントリーと決済の手数料の和）。決済前は後ろの値が `null`。なければ `null` |
+| `result.max_loss` | `proposed_jpy`（あいりの `max_loss_jpy`）・`estimated_jpy`（アプリの見積もり）・`actual_loss_jpy`（決済済みなら `max(0, -realized_pnl)`。利益・引き分けは 0。決済前・ポジションなしは `null`）・`effective_stop_loss_price`・`applied_quantity` |
+| `result.stop_loss_reached` / `result.take_profit_reached` | 決済の約定価格が、案の `stop_loss_price` 以下か、`take_profit_price` 以上か。案にその価格がない・決済前は `null` |
+| `events[]` | 古い順。`at`・`from_status`（最初の行だけ `null`）・`to_status`・`reason_code`・`actor`（`mcp` / `app` / `gui`）・`detail`（アプリが書いた補足。コードと数値だけの JSON。なければ `null`。例: 数量を減らしたときの `requested_quantity` / `applied_quantity`） |
+
+`request_hash`・接続元 IP は返さない。API キー・`secrets`・板や時価の生データは返さない。
 
 ### 3.18 `order_proposals_disable`
 
@@ -51,11 +66,38 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 
 `data`: `proposal_id` / `status`（依頼を受けたときの状態。取消が済むまで変わらない。結果は `order_proposal_get`）/ `cancel_requested_at`（UTC の RFC3339）/ `replayed`。
 
+### 3.20 `order_proposals_list`
+
+引数（すべて任意。未知の引数は `invalid_argument`）: `from` / `to`（JST の日付。`received_at` がこの期間の案。両方省略は直近 30 日。期間の規則と上限は元の文書 §1・§2）、`status`（固定コード 10 種のどれか。範囲外は `invalid_argument`）、`bucket`（`stock` / `bond_etf`）、`limit`（既定 50、最大 200）、`cursor`（前回応答の `next_cursor`）。読み取り専用で、受け付けスイッチがオフでも使える。
+
+`data`: `proposals[]`（`received_at` 降順、同着は `proposal_id` 降順）と `next_cursor`（次のページが無ければ `null`）。各行: `proposal_id`・`status`・`status_reason`・`received_at`・`updated_at`・`expires_at`・`symbol`・`bucket`・`action`・`order_type`・`quantity`・`budget_jpy`・`stop_loss_price`・`max_loss_jpy`（あいりの見込み）・`applied_quantity`・`computed_max_loss_jpy`（アプリの見積もり）・`position_id`・`realized_pnl_jpy`（紐づくポジションが決済済みなら `positions.realized_pnl`、それ以外は `null`）。理由・手じまいの計画・情報源・履歴などの詳細は `order_proposal_get`。`status` の固定コードは `received` / `processing` / `waiting_session` / `submitted` / `filled` / `closed` / `rejected` / `expired` / `cancelled` / `failed`（#827・#828 と同じ）。
+
+### 3.21 `order_proposal_summary`
+
+引数: `from` / `to`（任意。§3.20 と同じ期間）。読み取り専用。
+
+`data`: `total_count`（期間に受け付けた案の件数）、`by_status[]`（`code` と `count`。固定コード 10 種を上の順で、0 件も含めて返す）、`by_reject_reason[]`（`status` が `rejected` の案の `status_reason` ごと。件数の多い順、同数はコード順。拒否が無ければ `[]`）、`by_bucket[]`（`stock` / `bond_etf`）、`filled`（約定した買い案＝紐づく `positions` がある `open_long` の案の結果。`proposal_count`・`open_count`＝まだ決済していない件数・`closed_count`・`win_count`・`loss_count`・`win_rate`・`total_pnl_jpy`・`expectancy_jpy`。`win_rate` と `expectancy_jpy` は決済済みが 0 件なら `null`）。損益は `positions.realized_pnl` の合計と件数だけで、新しい計算はしない。`close` の案は、決済するポジションを別の案やルールが開いているため数えない（二重計上を避ける）。
+
+### 3.22 `origin`（`paper_trades` と `paper_performance_summary`）
+
+元の文書の §3.3 と §3.1 に足す、取引の入り口の区別（issue #829）。ポジションのエントリー注文（`positions.entry_order_id`）の `paper_orders.trade_signal_id` から `trade_signals.policy_version` を引いて決める。決済では変わらない（メタモデルが開いたポジションを注文案の `close` で閉じても `meta_model`）。
+
+| `origin` | 条件 |
+|----------|------|
+| `order_proposal` | `policy_version` が `mcp-proposal-v1`（`orderproposal.PolicyVersion`） |
+| `bootstrap` | `policy_version` が `policy-vb`（`domain.PolicyVersionPaperBootstrap`。ブートストラップ、#798）、または `policy-vb+<適用済み提案>` |
+| `meta_model` | 上の 2 つ以外のシグナル（`policy-v2` と `policy-v2+<適用済み提案>`） |
+| `unknown` | エントリー注文にシグナルが無い（手動の注文など） |
+
+`paper_trades` の各行に `origin` を足す。`paper_performance_summary` は `by_origin[]` を足す（4 種を上の順に常に 1 行ずつ。取引が無い入り口は 0 件。各行: `origin`・`closed_trade_count`・`win_count`・`loss_count`・`win_rate`・`total_pnl_jpy`・`expectancy_jpy`。比率は 0 件なら `null`）。既存の全体の値は変わらない。
+
 ## 5. 受け入れ条件（テストで確認できること）
 
 - 受け付けスイッチがオフ（行なし・`0`・壊れた値）のとき `order_proposal_submit` は `proposals_disabled` でどの表も変わらない。正しい案は `order_proposals` 1 行と `order_proposal_events` 1 行（`received`）が同じトランザクションで入り、片方だけ残らない。同じ `idempotency_key`・同じ内容の再送は行を増やさず同じ `proposal_id` を返し、内容が違えば `idempotency_conflict` で何も書かない。必須項目の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が過去または 24 時間より先・文字数超過・制御文字・未知の引数は `invalid_argument`。JST の 1 日 21 件目は `limit_exceeded`。認証なしの 3 ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `order_proposals` と `order_proposal_events` の `INSERT`（案 1 件につき各 1 行）と、受け付けスイッチをオフにする `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけで、`paper_orders`・`positions`・`trade_signals`・`kill_switch_events` に触れる文は無い。`order_proposals.mode` に `paper` 以外を入れると DB の CHECK で失敗する。Settings 画面でオンにでき、`order_proposals_disable` でオフにでき、MCP からオンにする手段は無い（`settings_set` は `key_not_allowed`）。設定のホワイトリストは 17 キーのまま
 
 - `order_proposal_cancel`（issue #828）は、`received` / `waiting_session` / `submitted` の案に対し `cancel_requested_at` の UPDATE 1 つとイベント 1 行だけを書き、状態は変えず、2 回目の依頼は何も書かない。`filled` などの終わった案と `processing` は `not_cancellable`、ない ID は `proposal_not_found`。受け付けスイッチがオフでも呼べる。実行された更新文は、案の `INSERT`・取消依頼の `UPDATE`（`order_proposals`）とイベントの `INSERT`・スイッチの upsert と監査の `INSERT` だけで、`paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には何も書かない（`proposaltests.TestOrderProposalWritePathIsNarrow`）。
+
+- 読み取りの 3 ツール（issue #829）は、拒否・約定して決済・期限切れ・取消の案を 1 件ずつ入れた DB で、`order_proposals_list`（新しい順・`status`・`bucket`・`limit` / `cursor`）・`order_proposal_get`（提案 → `trade_signals` → `paper_orders` → `positions` の実現損益、最大損失の 3 つの値、損切り・利確に届いたか、イベントの時系列）・`order_proposal_summary`（状態別・拒否理由別・枠別と、約定した案の勝率・期待値・合計損益）が期待どおりの値を返す。`paper_trades` の `origin` は 3 種（と `unknown`）を見分け、`paper_performance_summary` の `by_origin` が入り口ごとに分ける。3 ツールは書き込み接続を開かず、実行した文は `SELECT` だけ（`proposaltests.TestOrderProposalReadToolsUseOnlyReadStatements`）。`health_today` の要対応コード `order_proposal_stalled` は `received` / `processing` が 10 分を超えて止まった案があるときだけ出る（`healthtests`）。
 
 ## 改訂履歴
 
@@ -63,3 +105,4 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規作成。注文案ツール 3 つの入出力と受け入れ条件（元の文書の版 1.10 で追加） | issue #827（親 #826） |
 | 1.1 | 2026-10-21 | §3.19 `order_proposal_cancel`（取消の依頼を記録するだけ）と受け入れ条件を追加。§3.16・§3.17 の「アプリが #828 で」を処理役の仕様への参照に改めた | issue #828（親 #826） |
+| 1.2 | 2026-10-21 | §3.17 `order_proposal_get` に結果（signal・order・position・最大損失・損切りと利確に届いたか）とイベントの補足を追加。§3.20 `order_proposals_list`・§3.21 `order_proposal_summary`・§3.22 `origin` を追加。読み取りの 3 ツールの受け入れ条件を追加（ツールは合計 21） | issue #829（親 #826） |

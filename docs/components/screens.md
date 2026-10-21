@@ -4,7 +4,7 @@
 
 ## 1. ナビゲーション構造
 
-- メインナビ（`organisms.MainNav`）は左から Scanner / Watchlist / Performance / Calibration / Activity / **Settings（`/settings`）**。管理系の入口は Settings 1本で、単独の「管理」項目は置かない。`organisms.NavSettings` が Settings を表し、`/settings` と、その下のすべてのページが `layout.Shell(…, organisms.NavSettings)` を使うので、どのページでも Settings だけに `aria-current="page"` が付く。
+- メインナビ（`organisms.MainNav`）は左から Scanner / Watchlist / Performance / 注文案 / Calibration / Activity / **Settings（`/settings`）**。管理系の入口は Settings 1本で、単独の「管理」項目は置かない。`organisms.NavSettings` が Settings を表し、`/settings` と、その下のすべてのページが `layout.Shell(…, organisms.NavSettings)` を使うので、どのページでも Settings だけに `aria-current="page"` が付く。
 - **Settings の階層**: `/settings`（ページ一覧。`pages.SettingsHubPage`）→ `/settings/<page id>`（詳細設定のページ。`pages.SettingsPage`）→ 各カードのダイアログ（`molecules.Modal`）。一覧の各行（`molecules.SettingsLinkCard`）は、ページ名・要約・「開く」リンクを持つ。詳細ページは、パンくず（Settings / ページ名）・そのページに属する接続先カード・設定項目カード・システムカード・関連画面へのリンク（`settingspages.LinksOf`）を並べる。カードの「開く」「設定する」ボタンでダイアログが開き、ダイアログの中で項目ごとに保存・削除する。
 - ページ（この名前・順序で固定。`settingspages.Pages()`）: 運用 `/settings/operations`（スキャン・ポジション・Kill Switch、候補を絞るしきい値）／成績・検証 `/settings/results`（Performance・Calibration・バックテスト、判断のラベル・相場状態）／リスク・資金 `/settings/risk`（Paper の運用資金・建玉上限、損失上限・利益確保・売買コストの想定）／資産ごとの予算枠 `/settings/asset-buckets`（Paper の運用資金を株・債券ETFの枠に分けた予算（円）と、合計・残額）／ブローカー・データ `/settings/broker`（kabu・立花の接続と監視銘柄）／外部連携 `/settings/integrations`（Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP）／ログ・エクスポート `/settings/maintenance`（アップデート・エラーログ・データエクスポート・バックアップ・ログ設定）。
 - **戻り導線の規則**: `layout.Shell` を使う全ページはヘッダーのメインナビに「Settings」を持つため、どの画面からも1操作で Settings のページ一覧へ戻れる。詳細ページはパンくずからも一覧へ戻れる。例外は `/setup`（`SetupShell`。ヘッダーを持たない初回専用画面）と `/swagger`（静的なドキュメント画面）。ダイアログを開いたままでもヘッダーは隠れない。
@@ -20,6 +20,7 @@
 | Scanner | `/scanner` | スキャンの絞り込み状況と候補銘柄・Jev の判断を確認します（候補から銘柄詳細へ進めます）。 | 運用 |
 | Watchlist | `/watchlist` | 立花の監視リスト（どの銘柄をどう選んだか）を確認します。 | 運用 |
 | Activity | `/activity` | システムの稼働ログとキューの状況を確認します。 | 運用 |
+| 注文案 | `/order-proposals`（詳細は `/order-proposals/:id`） | MCP の AI クライアントが出した Paper の注文案を、期間・状態・枠で絞って一覧し、1 件ずつ理由・損切りと手じまいの計画・最大損失（あいりの見込み・アプリの見積もり・実際の損失）・情報源・状態の時系列・紐づく注文とポジションの損益を確認します（読み取り専用。承認・作成・取消の操作は無い）。 | 運用 |
 | Settings | `/settings` | 設定のページ一覧です。7つのページ（運用／成績・検証／リスク・資金／資産ごとの予算枠／ブローカー・データ／外部連携／ログ・エクスポート）から開きたい設定を選びます。旧 `/admin`（管理ハブ）は `/settings` へ恒久リダイレクトします。 | — |
 | Kill Switch | `/scanner#kill-switch` | 全ページのヘッダー右上にあるパネルで、新規エントリーの一時停止・再開と全決済（Kill Switch）を操作します。専用の URL はないため、ヘッダーのあるページ（Scanner）を開きます。 | 運用 |
 | Fast Screener | `/settings/operations#modal-screener` | 候補を絞り込むしきい値・上位件数・スコア重みを編集します。 | 運用 |
@@ -81,3 +82,4 @@
 | 1.4 | 2026-10-20 | MCP カードの説明に、MCP からの設定変更の許可（既定オン）と監査ログを追記 | issue #806 |
 | 1.5 | 2026-10-20 | Settings「成績・検証」ページの「メタラベリング」カードの説明に、LLM cutoff の状態表示（仮置き／未確認／確認済み）と公式日付の確認手順のヘルプを追記 | issue #809 |
 | 1.6 | 2026-10-20 | Settings に7つ目のページ「資産ごとの予算枠」（`/settings/asset-buckets`、カード `modal-asset-buckets`。株・債券ETFの予算枠の2キーと、合計・残額の「計算結果」）を追加し、一覧・ページ表を更新。「リスク・資金」ページの Paper 運用資金カードの説明に、枠の合計より下げる保存は拒否される旨を追記 | issue #824 |
+| 1.7 | 2026-10-21 | メインナビと画面一覧に「注文案」（`GET /order-proposals`・`GET /order-proposals/:id`。読み取り専用）を追加。Settings「運用」ページのリンクにも載せる | issue #829 |

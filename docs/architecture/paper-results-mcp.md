@@ -133,21 +133,21 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 4 つ（`order_proposal_submit` / `order_proposal_get` / `order_proposal_cancel` / `order_proposals_disable`）だけである（合計 19）。定義・フィールドは API 仕様。
+ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）だけである（合計 21）。定義・フィールドは API 仕様。
 
 「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
 | ツール | 読むもの |
 |--------|----------|
-| `paper_performance_summary` | 期間内のクローズ済み `positions` の件数・勝率・期待値・ドローダウン |
+| `paper_performance_summary` | 期間内のクローズ済み `positions` の件数・勝率・期待値・ドローダウンと、入り口（`origin`）別の件数・勝率・損益（#829） |
 | `paper_daily_pnl` | クローズ日（JST）ごとの損益と件数 |
-| `paper_trades` | クローズ済み取引のホワイトリスト列 |
+| `paper_trades` | クローズ済み取引のホワイトリスト列と、入り口 `origin`（エントリー注文のシグナルの `trade_signals.policy_version` から。#829） |
 | `jev_calibration` | `jev_decisions` と `calibration_outcomes` の件数・的中率・バケット・Brier |
 | `metalabel_history` | `metalabel_models` の採用/却下と OOS AUC/EV、予測の take/skip 件数、`metalabel_retrain_skips`（データ不足の再学習見送り。固定コードと必要件数中の件数） |
 | `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数と、それ以外の拒否の固定コード別内訳 |
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
 | `collection_status` | `jobs` の件数と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（保持期間の違いを `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ） |
-| `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`。それ以前のスナップショットが無い日は欠損でなく `insufficient_history_dates[]`＝判定不可。#814）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
+| `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`。それ以前のスナップショットが無い日は欠損でなく `insufficient_history_dates[]`＝判定不可。#814）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、処理されずに止まっている注文案の件数（`order_proposals`。#829）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
 
 MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
 
@@ -236,18 +236,20 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 
 ## 8. Paper の注文案の受け付け（issue #827。親 #826）
 
-あいりが MCP で Paper の「注文案」を出せる。**MCP の範囲は、注文案を受け取って形を検証し、記録するところまで**である（issue #827）。銘柄の存在・価格・Risk check・Paper の発注・期限切れの処理・取消の実行は、アプリが行う（issue #828。`docs/architecture/order-proposal-processing.md`）。MCP 側では見ない。一覧・結果の表示は issue #829。
+あいりが MCP で Paper の「注文案」を出せる。**MCP の範囲は、注文案を受け取って形を検証し、記録するところまで**である（issue #827）。銘柄の存在・価格・Risk check・Paper の発注・期限切れの処理・取消の実行は、アプリが行う（issue #828。`docs/architecture/order-proposal-processing.md`）。MCP 側では見ない。一覧・結果の表示は issue #829（MCP の読み取り 3 ツールと、GUI の「注文案」画面 `/order-proposals`。読むだけで、承認・作成・取消の操作は無い）。
 
 ### 8.1 ツール
 
 | ツール | 内容 |
 |--------|------|
 | `order_proposal_submit`（書き込み） | 注文案を 1 件受け付けて記録する。応答は `proposal_id`・`status`（最初は `received`）・`received_at`・`expires_at`・`replayed` |
-| `order_proposal_get`（読み取り） | `proposal_id` の 1 件の状態（受け付けた内容、`status` と `status_reason`、アプリが埋める `instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id`、イベントの履歴）。受け付けスイッチがオフでも使える |
+| `order_proposals_list`（読み取り） | 期間（`received_at`）・`status`・`bucket` で絞った案の一覧（`limit` / `cursor`）。各行は案の概要と、決済済みなら実現損益（#829） |
+| `order_proposal_get`（読み取り） | `proposal_id` の 1 件の全体: 受け付けた内容（理由・損切り・手じまいの計画・最大損失・情報源）、`status` と `status_reason`、イベントの時系列、紐づく `trade_signals`・`paper_orders`・`positions`（約定価格・手数料・決済理由・実現損益・保有時間）、あいりの `max_loss_jpy`・アプリの見積もり・実際の損失、損切り／利確に届いたか（#829）。受け付けスイッチがオフでも使える |
+| `order_proposal_summary`（読み取り） | 期間の件数（状態別・拒否理由別・枠別）と、約定した買い案の勝率・期待値・合計損益（#829） |
 | `order_proposal_cancel`（書き込み） | 注文案の取消を**依頼する**（記録するだけ。実際の取消はアプリ。§8.5）。引数は `proposal_id` |
 | `order_proposals_disable`（書き込み） | 受け付けスイッチをオフにする（§8.2）。引数なし |
 
-引数の表・応答は API 仕様 §3.16〜§3.19。`mode` の引数は無く、すべて Paper の案である。
+引数の表・応答は API 仕様 §3.16〜§3.22（分割章）。読み取りの 3 ツールと `origin`・`health_today` の止まった案（#829）は読み取り接続だけで、書き込み接続も新しい表も要らない。`mode` の引数は無く、すべて Paper の案である。
 
 ### 8.2 受け付けスイッチ
 
@@ -295,3 +297,4 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.11 | 2026-10-20 | §7.1 のホワイトリストに Paper の予算枠 2 キー（`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`）を足して 17 キーにした。枠の合計が運用資金を超える保存（枠の保存・運用資金を下げる保存・既定に戻す）の拒否と、枠の間で予算を移すときは減らす方を先に保存する手順を追記。ツール数（15）・読み取り接続・待受・認証は変更なし | issue #824（親 #823） |
 | 1.12 | 2026-10-21 | Paper の注文案の受け付けを追加（§8。`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`、受け付けスイッチ `mcp.order_proposals_enabled`、表 `order_proposals`・`order_proposal_events`、マイグレーション `000042`）。§5・§6 の「売買・発注のツールは作らない」を「Paper の注文案を出すツールだけ追加。発注はアプリ。注文の表には書かない。Live の発注・Live の値・Kill Switch の操作は不変」に改めた。§7.3 の書き込み経路を 4 種類に、§7.4 の監査の操作名を 6 つにした。ツール数は 18。ホワイトリストは 17 キーのまま | issue #827（親 #826） |
 | 1.13 | 2026-10-21 | 注文案の取消の依頼 `order_proposal_cancel` を追加（§8.1・§8.5。取消の依頼だけを記録し、実際の取消はアプリ。書き手の変更は 5 種類、ツール数は 19）。注文案のアプリ側の処理（Risk check・Paper 発注・期限・取消・`close`・再起動の回復）を `order-proposal-processing.md` に分けて追記。`risk_rejections` に案の分の件数を追加。ホワイトリストは 17 キーのまま | issue #828（親 #826） |
+| 1.14 | 2026-10-21 | 注文案の読み取りを追加（§5・§8.1。`order_proposals_list` / `order_proposal_summary` を足し、`order_proposal_get` に結果を足した。ツールは 21）。`paper_trades` / `paper_performance_summary` に入り口 `origin`、`health_today` に止まった注文案（要対応コード `order_proposal_stalled`）。すべて読み取り接続のままで、新しい表は無い。GUI の「注文案」画面は同じ読み取りモデルを使う | issue #829（親 #826） |

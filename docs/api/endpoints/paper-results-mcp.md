@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 4 つ。合計 19）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つ。合計 21）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -46,6 +46,7 @@
 | `max_drawdown_jpy` | `closed_at` 昇順、同着は `id` 昇順で `realized_pnl` を累積した曲線の、ピークから谷までの最大下落（円）。下落が無ければ 0。0 件なら 0 |
 | `capital_jpy` | Paper の資金。`runtime_settings` の `risk.paper.initial_capital_jpy`（Settings で保存した Paper の運用資金、issue #804。読み取り接続で読む）が有効に保存されていればそれ。なければ `config/risk.yaml` の `paper.initial_capital`（MCP プロセスの起動時に読む。未設定時は `config.DefaultPaperInitialCapital`＝500,000。アプリと同じ yaml 解決順）。Live の値は使わない。どちらも使えなければ `null`（issue #806） |
 | `max_drawdown_capital_ratio` | `max_drawdown_jpy / capital_jpy`。`capital_jpy` が 0 以下、または保存値も yaml も使えないときは両方 `null`（円建てのドローダウンは返す） |
+| `by_origin[]` | 取引の入り口（メタモデル / ブートストラップ / 注文案 / 不明）ごとの件数・勝敗・勝率・合計損益・期待値（issue #829。定義は `paper-results-mcp-proposals.md` §3.22）。全体の値は変わらない |
 
 `internal/service/insight.Performance.MaxDrawdownPct` はリターン（%）の曲線であり、ここでいう資金比ではない。実装は円の累積を別に計算する。
 
@@ -76,6 +77,7 @@
 | `exit_reason` | `positions.exit_reason`。既知の値は `stop_loss` / `take_profit` / `trailing_stop` / `jev_direction_reversed` / `continuation_probability_dropped` / `vwap_cross` / `max_holding` / `force_flat_before_close` / `manual` / `force_close` / `proposal_close`（注文案の `close` による決済。`internal/domain/position.go`）。それ以外の非 NULL も、保存された文字列をそのまま返す（切り詰めない。列は `varchar(50)`） |
 | `realized_pnl` | `positions.realized_pnl` |
 | `fees_jpy` | エントリー注文とエグジット注文の `paper_orders.fees` の和。片方が無ければある方だけ。両方無ければ `null` |
+| `origin` | どこから入った取引か: `meta_model` / `bootstrap` / `order_proposal` / `unknown`。エントリー注文のシグナルの `trade_signals.policy_version` で決める（issue #829。`paper-results-mcp-proposals.md` §3.22） |
 
 `next_cursor` は次のページが無いとき `null`。cursor の中身はクライアントが解析する契約ではない。
 
@@ -175,6 +177,7 @@
 | `daily_guard` | `halted`、`reason`（`daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades`。`halted` でなければ `null`）、`halted_at`（UTC RFC3339）。アプリの `risk.Engine.DailyHalt` と同じく、今日の取引日の停止だけを、その規則が Settings でまだ有効なときに限って返す。停止メッセージの文は返さない |
 | `kill_switch` | `active`（解除されていない `kill_switch_events` がある、または `system.killed` が真）、`unresolved_count`、`since`（未解除で最新の `triggered_at`）、`reasons[]`（未解除の `reason` コード。§3.7 の CHECK 値）、`flag_set`（`system.killed`）。`risk.Engine.State` と同じ判定 |
 | `retrain` | `skipped`（最新の `metalabel_retrain_skips` が 24 時間以内で、それ以後に学習されたモデルが無い）、`latest_skipped_at`、`reason_code`（§3.5 の固定コード。未知は `other`）。見送りが一度も無ければ後ろ 2 つは `null` |
+| `order_proposals` | `stalled_count`（`order_proposals.status` が `received` / `processing` のまま、最後の状態の変化 `updated_at` から 10 分を超えた案の数）、`oldest_stalled_since`（その中で最も古い `updated_at`、UTC RFC3339。無ければ `null`）。案の内容は返さない（issue #829） |
 
 要対応コード（`query.Attention*`。`kabu_not_logged_in` と `market_data_idle` はアプリ内警告（#802）と同じコードで、再導出せず `health_alerts` を読む）:
 
@@ -188,6 +191,7 @@
 | `daily_guard_halted` | `daily_guard.halted` |
 | `kill_switch_active` | `kill_switch.active`（日によらない） |
 | `retrain_skipped` | `retrain.skipped` |
+| `order_proposal_stalled` | `order_proposals.stalled_count` が 1 以上（アプリが止まっている・処理が詰まっている可能性。`waiting_session` と `submitted` は待つ設計なので含めない。日によらず出す） |
 
 非取引日（土日・祝日）は、取引数・kabu・market-data の判定を行わない（コードを出さない）。モデル・Kill Switch・日次停止・再学習の見送りは状態そのものなので、日によらず出す。
 
@@ -261,9 +265,9 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 
 引数なし。書き込み許可を入れる／切る。**書き込みが禁止のあいだも呼べる**（戻せなくなるため）。Bearer 認証は他と同じく必須。`data`: `write_enabled` / `audit_id` / `at`。切り替えは監査ログに残る。Settings 画面の同名のチェック（FR-MCP-18）と同じ値を読み書きする。`readOnlyHint: false`。これらのツールも、発注・送金・Kill Switch・Live の値には触れない。
 
-### 3.16〜3.19 注文案ツール（issue #827・#828）
+### 3.16〜3.22 注文案ツール（issue #827・#828・#829）
 
-`order_proposal_submit` / `order_proposal_get` / `order_proposal_cancel` / `order_proposals_disable`。Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ（Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.19）。
+書き込み: `order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable`（Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ。Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。読み取り専用: `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`（提案 → 約定 → 損益のひも付け。issue #829）と、`paper_trades` / `paper_performance_summary` の `origin`。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.22）。
 
 ## 4. 出さないもの
 
@@ -302,7 +306,7 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
-- `health_today` は、要対応コード 8 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
+- `health_today` は、要対応コード 9 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
 - 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）
 - Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
 
@@ -322,3 +326,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.9 | 2026-10-20 | §3.10 のホワイトリストに Paper の予算枠 2 キー（`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`）を足して 17 キーにした（`settings_get` / `settings_diff` にも出る）。§3.12 に、枠の合計が運用資金を超える保存の拒否（監査行なし）と、枠の間で予算を移すときは減らす方を先に保存する手順を追記。§4・§5 の 15 キーを 17 キーに改めた。ツールの数・入出力の形は変更なし | issue #824（親 #823） |
 | 1.10 | 2026-10-21 | §3.16〜§3.18（分割章 `paper-results-mcp-proposals.md`）に注文案ツール（`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`。Paper の注文案を受け付けて記録するだけ）を追加し、ツール数を 18 にした。§3.14 の `action` に `order_proposals_enable` / `order_proposals_disable` を追加。§4 に受け付けスイッチの読み取りと `order_proposals.request_hash` / `client` を、§5 に注文案の受け入れ条件を追加。ホワイトリストは 17 キーのまま | issue #827（親 #826） |
 | 1.11 | 2026-10-21 | §3.16〜§3.19（分割章）に `order_proposal_cancel`（取消の依頼を記録するだけ）を追加しツール数を 19 にした。§3.6 の `risk_rejections` に `proposal_risk_passed_count` / `proposal_risk_rejected_count` を追加。§3.3 の `exit_reason` の既知の値に `proposal_close` を追加 | issue #828（親 #826） |
+| 1.12 | 2026-10-21 | §3.17〜§3.22（分割章）に `order_proposals_list` / `order_proposal_summary` を追加し、`order_proposal_get` に結果（signal・order・position・最大損失・損切りと利確に届いたか）を足してツール数を 21 にした（読み取り 9・設定 6・注文案 6）。§3.1 `paper_performance_summary` に `by_origin`、§3.3 `paper_trades` に `origin` を追加。§3.9 `health_today` に `order_proposals` と要対応コード `order_proposal_stalled` を追加（9 種）。読み取り接続のままで、新規テーブルなし | issue #829（親 #826） |
