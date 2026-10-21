@@ -86,11 +86,18 @@ func Apply(o *Overrides, key, jsonValue string) error {
 	return nil
 }
 
+// DefaultStockBudgetJPY is the stock budget while no row is stored: the whole
+// operating capital rounded down to a whole yen (budgets are integers, the
+// capital need not be). Resolve, DefaultText and SeedDefaults all use it, so
+// the Risk Engine, the Settings screen and what Reset stores agree.
+func DefaultStockBudgetJPY(capitalJPY float64) float64 { return math.Floor(capitalJPY) }
+
 // Resolve returns the budgets in force for an operating capital of capitalJPY.
 // A bucket with no stored row has its default: the stock bucket the whole
-// capital, the bond_etf bucket 0 - the behaviour before the buckets existed.
+// capital (DefaultStockBudgetJPY), the bond_etf bucket 0 - the behaviour
+// before the buckets existed.
 func (o Overrides) Resolve(capitalJPY float64) Budgets {
-	b := Budgets{StockJPY: capitalJPY}
+	b := Budgets{StockJPY: DefaultStockBudgetJPY(capitalJPY)}
 	if o.StockBudgetJPY != nil {
 		b.StockJPY = *o.StockBudgetJPY
 	}
@@ -172,12 +179,11 @@ func CheckSave(ctx context.Context, store Store, capitalJPY float64, key, encode
 }
 
 // DefaultText is what applies to key while nothing is stored, for an operating
-// capital of capitalJPY: the stock budget the whole capital rounded down to a
-// whole yen (budgets are integers, and the capital need not be), the bond_etf
+// capital of capitalJPY: the stock budget DefaultStockBudgetJPY, the bond_etf
 // budget 0.
 func DefaultText(key string, capitalJPY float64) string {
 	if key == KeyStockBudgetJPY {
-		return strconv.FormatFloat(math.Floor(capitalJPY), 'f', -1, 64)
+		return strconv.FormatFloat(DefaultStockBudgetJPY(capitalJPY), 'f', -1, 64)
 	}
 	return "0"
 }
