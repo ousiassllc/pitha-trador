@@ -7,9 +7,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/correlation"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/reason"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
@@ -119,9 +119,9 @@ func (p *Portfolio) raiseKillSwitch() {
 	}
 	lim := p.cfg.Limits
 	if loss := p.dailyLossPct(); loss >= lim.MaxDailyLossPct {
-		p.killed = fmt.Sprintf("%s: daily_loss_pct=%.4f max=%.4f", risk.ReasonMaxDailyLossPct, loss, lim.MaxDailyLossPct)
+		p.killed = fmt.Sprintf("%s: daily_loss_pct=%.4f max=%.4f", reason.MaxDailyLossPct, loss, lim.MaxDailyLossPct)
 	} else if losses := p.consecutiveLosses(); losses >= lim.MaxConsecutiveLosses {
-		p.killed = fmt.Sprintf("%s: consecutive_losses=%d max=%d", risk.ReasonMaxConsecutiveLosses, losses, lim.MaxConsecutiveLosses)
+		p.killed = fmt.Sprintf("%s: consecutive_losses=%d max=%d", reason.MaxConsecutiveLosses, losses, lim.MaxConsecutiveLosses)
 	}
 }
 
@@ -233,15 +233,15 @@ func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction strin
 	}
 	if lastLoss := p.lastLossAt(); !lastLoss.IsZero() {
 		if resumeAt := lastLoss.Add(time.Duration(lim.CooldownAfterLossMinutes) * time.Minute); p.now.Before(resumeAt) {
-			return false, fmt.Sprintf("%s: retry_after=%s", risk.ReasonCooldownAfterLoss, resumeAt.Format(time.RFC3339))
+			return false, fmt.Sprintf("%s: retry_after=%s", reason.CooldownAfterLoss, resumeAt.Format(time.RFC3339))
 		}
 	}
 	if count := len(p.open); count >= lim.MaxOpenPositions {
-		return false, fmt.Sprintf("%s: count=%d max=%d", risk.ReasonMaxOpenPositions, count, lim.MaxOpenPositions)
+		return false, fmt.Sprintf("%s: count=%d max=%d", reason.MaxOpenPositions, count, lim.MaxOpenPositions)
 	}
 	sameDirection := p.OpenCountBySide(direction)
 	if correlation.SameDirectionExceeded(lim, sameDirection) {
-		return false, fmt.Sprintf("%s: direction=%s count=%d max=%d", risk.ReasonMaxSameDirection, direction, sameDirection, lim.MaxSameDirectionPositions)
+		return false, fmt.Sprintf("%s: direction=%s count=%d max=%d", correlation.ReasonMaxSameDirectionPositions, direction, sameDirection, lim.MaxSameDirectionPositions)
 	}
 	entryBucket := p.bucketOf(instrumentID)
 	budget := p.budget(entryBucket)
@@ -250,10 +250,10 @@ func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction strin
 	}
 	totalPct := p.totalExposurePct()
 	if totalPct >= lim.MaxTotalExposurePct {
-		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", risk.ReasonMaxTotalExposurePct, totalPct, lim.MaxTotalExposurePct)
+		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", sizing.ReasonMaxTotalExposurePct, totalPct, lim.MaxTotalExposurePct)
 	}
 	if symbolPct := p.symbolExposurePct(instrumentID); symbolPct >= lim.MaxPositionPerSymbolPct {
-		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", risk.ReasonMaxPositionPerSymbolPct, symbolPct, lim.MaxPositionPerSymbolPct)
+		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", sizing.ReasonMaxPositionPerSymbolPct, symbolPct, lim.MaxPositionPerSymbolPct)
 	}
 	p.raiseKillSwitch()
 	if p.killed != "" {
@@ -262,17 +262,17 @@ func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction strin
 
 	bar := p.candidate
 	if bar.SpreadBps == nil {
-		return false, fmt.Sprintf("%s: spread_bps missing (data_missing)", risk.ReasonRiskEngineError)
+		return false, fmt.Sprintf("%s: spread_bps missing (data_missing)", reason.RiskEngineError)
 	}
 	if *bar.SpreadBps > lim.MaxSpreadBps {
-		return false, fmt.Sprintf("%s: spread_bps=%.2f max=%.2f", risk.ReasonMaxSpreadBps, *bar.SpreadBps, lim.MaxSpreadBps)
+		return false, fmt.Sprintf("%s: spread_bps=%.2f max=%.2f", reason.MaxSpreadBps, *bar.SpreadBps, lim.MaxSpreadBps)
 	}
 	if pct, adverse := correlation.MarketAdverse(lim, direction, sameDirection, bar.Feature.MarketReturn5m); adverse {
-		return false, fmt.Sprintf("%s: direction=%s same_direction_positions=%d market_return_5m_pct=%.4f threshold_pct=%.4f", risk.ReasonMarketAdverse, direction, sameDirection, pct, lim.MarketAdverseReturn5mPct)
+		return false, fmt.Sprintf("%s: direction=%s same_direction_positions=%d market_return_5m_pct=%.4f threshold_pct=%.4f", correlation.ReasonMarketAdverse, direction, sameDirection, pct, lim.MarketAdverseReturn5mPct)
 	}
-	qty, reason := sizing.Quantity(lim, p.cfg.StopLossPct, bar.Price, totalPct)
+	qty, sizeReason := sizing.Quantity(lim, p.cfg.StopLossPct, bar.Price, totalPct)
 	if qty == 0 {
-		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", reason, bar.Price, p.cfg.StopLossPct, lim.MaxTradeLossPct)
+		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", sizeReason, bar.Price, p.cfg.StopLossPct, lim.MaxTradeLossPct)
 	}
 	if held, amount := p.held(entryBucket), float64(qty)*bar.Price; bucket.Exceeded(held, amount, budget) {
 		return false, bucket.ExceededMessage(entryBucket, held, amount, budget)

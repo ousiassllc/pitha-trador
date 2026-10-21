@@ -13,15 +13,17 @@
 // exposure limits use, so the two never disagree on a position's value.
 //
 // Only entries are checked; an Exit is never held back by a budget.
+//
+// The package is pure functions only: it must not import repository/*, so the
+// backtest's simrisk stays free of the database (issue #842). The Paper
+// Provider that reads the budgets and holdings is paperrisk.BucketProvider.
 package bucket
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 )
 
 // Fixed rejection codes of a new entry (they are also the risk.Reason*
@@ -82,58 +84,4 @@ func BudgetOf(b bucketsettings.Budgets, bucket string) float64 {
 		return b.BondETFJPY
 	}
 	return b.StockJPY
-}
-
-// InstrumentReader is the part of market.InstrumentRepository Provider reads.
-type InstrumentReader interface {
-	Get(ctx context.Context, id int64) (domain.Instrument, error)
-}
-
-// Provider reads the buckets' budgets and holdings, and an instrument's
-// bucket, for the Paper Risk Engine (risk.Buckets). A Live Engine is built
-// without one.
-type Provider struct {
-	positions   *trading.PositionRepository
-	settings    bucketsettings.Store
-	instruments InstrumentReader
-}
-
-// NewProvider returns a Provider over the positions table, the
-// runtime_settings the budgets are stored in and the instruments table.
-func NewProvider(positions *trading.PositionRepository, settings bucketsettings.Store, instruments InstrumentReader) *Provider {
-	return &Provider{positions: positions, settings: settings, instruments: instruments}
-}
-
-// BucketOf is the bucket instrumentID's asset class puts its entries in.
-func (p *Provider) BucketOf(ctx context.Context, instrumentID int64) (string, error) {
-	in, err := p.instruments.Get(ctx, instrumentID)
-	if err != nil {
-		return "", err
-	}
-	return Of(in.AssetClass)
-}
-
-// BudgetJPY is bucket's budget in force now for an operating capital of
-// capitalJPY (the stored row, else the default split: the stock bucket the
-// whole capital, the bond_etf bucket 0).
-func (p *Provider) BudgetJPY(ctx context.Context, bucket string, capitalJPY float64) (float64, error) {
-	budgets, err := bucketsettings.Effective(ctx, p.settings, capitalJPY)
-	if err != nil {
-		return 0, err
-	}
-	return BudgetOf(budgets, bucket), nil
-}
-
-// HeldJPY is what bucket holds now: the market value (Notional) of its open
-// positions (positions.bucket).
-func (p *Provider) HeldJPY(ctx context.Context, bucket string) (float64, error) {
-	open, err := p.positions.ListOpenByBucket(ctx, bucket)
-	if err != nil {
-		return 0, err
-	}
-	var held float64
-	for _, pos := range open {
-		held += Notional(pos.Quantity, pos.EntryPrice, pos.CurrentPrice)
-	}
-	return held, nil
 }

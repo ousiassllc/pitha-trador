@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/correlation"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/reason"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
@@ -22,26 +23,26 @@ import (
 // trade_signals.reject_reason (policy/engine.go's
 // ReasonRiskEngineRejected).
 const (
-	ReasonSystemPaused            = "system_paused"
-	ReasonKillSwitchActive        = "kill_switch_active"
-	ReasonCooldownAfterLoss       = "cooldown_after_loss"
-	ReasonMaxOpenPositions        = "max_open_positions"
+	ReasonSystemPaused            = reason.SystemPaused
+	ReasonKillSwitchActive        = reason.KillSwitchActive
+	ReasonCooldownAfterLoss       = reason.CooldownAfterLoss
+	ReasonMaxOpenPositions        = reason.MaxOpenPositions
 	ReasonMaxSameDirection        = correlation.ReasonMaxSameDirectionPositions
 	ReasonMarketAdverse           = correlation.ReasonMarketAdverse
 	ReasonMaxTotalExposurePct     = sizing.ReasonMaxTotalExposurePct
 	ReasonMaxPositionPerSymbolPct = sizing.ReasonMaxPositionPerSymbolPct
-	ReasonMaxDailyLossPct         = "max_daily_loss_pct"
-	ReasonMaxConsecutiveLosses    = "max_consecutive_losses"
-	ReasonMaxSpreadBps            = "max_spread_bps"
+	ReasonMaxDailyLossPct         = reason.MaxDailyLossPct
+	ReasonMaxConsecutiveLosses    = reason.MaxConsecutiveLosses
+	ReasonMaxSpreadBps            = reason.MaxSpreadBps
 	ReasonMaxTradeLossPct         = sizing.ReasonMaxTradeLossPct
 	// ReasonRiskEngineError is the fail-closed rejection when Check cannot
 	// read the state a limit needs (DB error, missing snapshot/spread).
-	ReasonRiskEngineError = "risk_engine_error"
+	ReasonRiskEngineError = reason.RiskEngineError
 	// ReasonSnapshotsUnavailable rejects a new entry when the Engine has no
 	// snapshot source to price and size it. NewEngine refuses such a Config,
 	// so this only guards an Engine that lost its source after construction
 	// (issue #841); exits are never judged by Check and stay open.
-	ReasonSnapshotsUnavailable = "snapshots_unavailable"
+	ReasonSnapshotsUnavailable = reason.SnapshotsUnavailable
 )
 
 // runtime_settings keys this package owns (er.md §runtime_settings).
