@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 3 つ。合計 18）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 4 つ。合計 19）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -73,7 +73,7 @@
 | `opened_at` | `positions.opened_at` |
 | `exit_price` | `positions.exit_order_id` の `paper_orders.filled_price`。注文が無ければ `null` |
 | `closed_at` | `positions.closed_at` |
-| `exit_reason` | `positions.exit_reason`。既知の値は `stop_loss` / `take_profit` / `trailing_stop` / `jev_direction_reversed` / `continuation_probability_dropped` / `vwap_cross` / `max_holding` / `force_flat_before_close` / `manual` / `force_close`（`internal/domain/position.go`）。それ以外の非 NULL も、保存された文字列をそのまま返す（切り詰めない。列は `varchar(50)`） |
+| `exit_reason` | `positions.exit_reason`。既知の値は `stop_loss` / `take_profit` / `trailing_stop` / `jev_direction_reversed` / `continuation_probability_dropped` / `vwap_cross` / `max_holding` / `force_flat_before_close` / `manual` / `force_close` / `proposal_close`（注文案の `close` による決済。`internal/domain/position.go`）。それ以外の非 NULL も、保存された文字列をそのまま返す（切り詰めない。列は `varchar(50)`） |
 | `realized_pnl` | `positions.realized_pnl` |
 | `fees_jpy` | エントリー注文とエグジット注文の `paper_orders.fees` の和。片方が無ければある方だけ。両方無ければ `null` |
 
@@ -125,6 +125,8 @@
 `data.risk_passed_count`: `risk_passed` が真の件数。`data.other_reject_count`: `risk_passed` が偽で、`reject_reason` が `risk_engine_rejected:` で始まらない件数（理由文は返さない）。
 
 `data.other_reject_breakdown[]`: `other_reject_count` の内訳（`reason` と `count`。件数の多い順、同数は `reason` 昇順）。`reject_reason` の最初の `:` より前（前後の空白を除く）を固定コードに正規化する。コードは Policy の理由コードそのもの（`jev_none` / `probability_below_threshold` / `entry_quality_below_threshold` / `continuation_probability_below_threshold` / `toxic_flow_above_threshold` / `liquidity_stressed_above_threshold` / `spread_too_wide` / `thin_liquidity` / `special_quote` / `price_limit` / `not_lendable` / `missing_data` / `api_error` / `not_calibrated` / `meta_model_unavailable` / `vwap_z_unavailable` / `vwap_not_extreme`。`internal/service/policy/engine.go`・`meta.go`・`regime.go`）。`meta_skip: <reason> (p=… ev_bps=…)` は `meta_skip:<reason>`（`no_active_model` / `model_unusable` / `no_candidate` / `missing_feature` / `invalid_config` / `predict_failed` / `ev_not_above_minimum`。`internal/service/metalabel/decide.go`）にし、確率・EV の数値は返さない。知らない理由は `meta_skip:other`、知らないコードは `other`、`reject_reason` が NULL か空は `unknown`。内訳の合計は `other_reject_count` と一致する。板・価格・エラー文は返さない。
+
+`data.proposal_risk_passed_count` / `data.proposal_risk_rejected_count`（issue #828）: 上の件数のうち、MCP の注文案が書いた `trade_signals`（`policy_version` が `mcp-proposal-v1`）の、`risk_passed` が真の件数と偽の件数。注文案の Risk 拒否も `risk_passed_count` から外れた偽の側として `buckets[]` に数えられ、Policy の拒否と `policy_version` で見分けられる。注文案の Risk 以外の拒否理由（銘柄不明・価格が古い等）は `trade_signals` に残らず、`order_proposal_get` の `status_reason` で見る。
 
 `data.buckets[]`: `risk_engine_rejected:` の直後から、次の `:` または末尾までのトークン（前後の空白を除く）を `reason` とし、その件数。トークンが空なら `unknown`。詳細（`count=` や円金額、エラー文）は返さない。日次停止は `Check` が `daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades` を返し、Policy が `risk_engine_rejected:` を付ける（`internal/service/risk/check.go`、`internal/service/policy/engine.go`）ので、バケット名はそのコードになる。
 
@@ -259,9 +261,9 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 
 引数なし。書き込み許可を入れる／切る。**書き込みが禁止のあいだも呼べる**（戻せなくなるため）。Bearer 認証は他と同じく必須。`data`: `write_enabled` / `audit_id` / `at`。切り替えは監査ログに残る。Settings 画面の同名のチェック（FR-MCP-18）と同じ値を読み書きする。`readOnlyHint: false`。これらのツールも、発注・送金・Kill Switch・Live の値には触れない。
 
-### 3.16〜3.18 注文案ツール（issue #827）
+### 3.16〜3.19 注文案ツール（issue #827・#828）
 
-`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`。Paper の注文案を受け付けて記録するだけ（発注はアプリ。issue #828）。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.18）。
+`order_proposal_submit` / `order_proposal_get` / `order_proposal_cancel` / `order_proposals_disable`。Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ（Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.19）。
 
 ## 4. 出さないもの
 
@@ -319,3 +321,4 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 | 1.8 | 2026-10-20 | §3.9 `health_today` の `missing_session_dates[]` を、それ以前のスナップショットがある日付だけ（実際の欠損）に改め、履歴が足りず判定できない立会日を `insufficient_history_dates[]` に分けた。`attention_codes` の `missing_session` は `insufficient_history_dates[]` だけが空でないときは出さない | issue #814 |
 | 1.9 | 2026-10-20 | §3.10 のホワイトリストに Paper の予算枠 2 キー（`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`）を足して 17 キーにした（`settings_get` / `settings_diff` にも出る）。§3.12 に、枠の合計が運用資金を超える保存の拒否（監査行なし）と、枠の間で予算を移すときは減らす方を先に保存する手順を追記。§4・§5 の 15 キーを 17 キーに改めた。ツールの数・入出力の形は変更なし | issue #824（親 #823） |
 | 1.10 | 2026-10-21 | §3.16〜§3.18（分割章 `paper-results-mcp-proposals.md`）に注文案ツール（`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`。Paper の注文案を受け付けて記録するだけ）を追加し、ツール数を 18 にした。§3.14 の `action` に `order_proposals_enable` / `order_proposals_disable` を追加。§4 に受け付けスイッチの読み取りと `order_proposals.request_hash` / `client` を、§5 に注文案の受け入れ条件を追加。ホワイトリストは 17 キーのまま | issue #827（親 #826） |
+| 1.11 | 2026-10-21 | §3.16〜§3.19（分割章）に `order_proposal_cancel`（取消の依頼を記録するだけ）を追加しツール数を 19 にした。§3.6 の `risk_rejections` に `proposal_risk_passed_count` / `proposal_risk_rejected_count` を追加。§3.3 の `exit_reason` の既知の値に `proposal_close` を追加 | issue #828（親 #826） |

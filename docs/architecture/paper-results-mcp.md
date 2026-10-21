@@ -133,7 +133,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 3 つ（`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`）だけである（合計 18）。定義・フィールドは API 仕様。
+ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 4 つ（`order_proposal_submit` / `order_proposal_get` / `order_proposal_cancel` / `order_proposals_disable`）だけである（合計 19）。定義・フィールドは API 仕様。
 
 「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
@@ -209,7 +209,7 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 ### 7.3 書き込み経路（狭い書き手）
 
 - 読み取りの接続は `mode=ro`・`query_only=ON` のまま変えない。書き込みは、同じ DB ファイルへの**別接続**（`internal/service/paperresultsmcp/mcpset.Writer`）が、最初の書き込みの呼び出しで初めて開く。ファイルは作らず（`mode=rw`）、マイグレーションも `journal_mode` の変更もしない
-- 書き手が実行する変更は 4 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）
+- 書き手が実行する変更は 5 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）、⑤取消の依頼（`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。`order_proposal_cancel`。§8.5）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）
 - 保存は GUI と同じ `runtime_settings`（`system.RuntimeSettingsRepository`）で、値の形も GUI と同じ（`opsettings` が検証して JSON で保存する）。アプリは毎回この表から読むので、保存後すぐに GUI と各エンジンに反映される（再起動不要）
 - 同じ DB を書く単一ライターはアプリである。書き手は 2 秒の `busy_timeout` と `BEGIN IMMEDIATE` で短く待ち、取れなければ `db_locked`。アプリの書き込みを長く待たせない
 
@@ -236,7 +236,7 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 
 ## 8. Paper の注文案の受け付け（issue #827。親 #826）
 
-あいりが MCP で Paper の「注文案」を出せる。**この節の範囲は、注文案を受け取って形を検証し、記録するところまで**である。銘柄の存在・価格・Risk check・Paper の発注・期限切れの処理・取消の実行は、アプリが行う（issue #828）。MCP 側では見ない。一覧・結果の表示は issue #829。
+あいりが MCP で Paper の「注文案」を出せる。**MCP の範囲は、注文案を受け取って形を検証し、記録するところまで**である（issue #827）。銘柄の存在・価格・Risk check・Paper の発注・期限切れの処理・取消の実行は、アプリが行う（issue #828。`docs/architecture/order-proposal-processing.md`）。MCP 側では見ない。一覧・結果の表示は issue #829。
 
 ### 8.1 ツール
 
@@ -244,9 +244,10 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 |--------|------|
 | `order_proposal_submit`（書き込み） | 注文案を 1 件受け付けて記録する。応答は `proposal_id`・`status`（最初は `received`）・`received_at`・`expires_at`・`replayed` |
 | `order_proposal_get`（読み取り） | `proposal_id` の 1 件の状態（受け付けた内容、`status` と `status_reason`、アプリが埋める `instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id`、イベントの履歴）。受け付けスイッチがオフでも使える |
+| `order_proposal_cancel`（書き込み） | 注文案の取消を**依頼する**（記録するだけ。実際の取消はアプリ。§8.5）。引数は `proposal_id` |
 | `order_proposals_disable`（書き込み） | 受け付けスイッチをオフにする（§8.2）。引数なし |
 
-`order_proposal_cancel`（取消の依頼）は issue #828 で足す。引数の表・応答は API 仕様 §3.16〜§3.18。`mode` の引数は無く、すべて Paper の案である。
+引数の表・応答は API 仕様 §3.16〜§3.19。`mode` の引数は無く、すべて Paper の案である。
 
 ### 8.2 受け付けスイッチ
 
@@ -269,8 +270,12 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 - `order_proposals.mode` は `CHECK (mode IN ('paper'))` だけ。Live の値は入れられない。Live の発注経路・モード・承認はこの仕様に無い
 - 注文案に **根拠（`rationale`）・損切り（`stop_loss_price`）・最大損失（`max_loss_jpy`）・手じまいの計画（`exit_plan`）・情報源（`sources`）**を必ず残す（`open_long`。`close` は根拠と情報源だけ必須）。あとで約定と損益にひも付けて答え合わせをするため
 - `client` は接続元 IP だけ（ヘッダ・API キーは残さない）
-- 書き手（`mcpset.Writer.SubmitProposal`）は、`order_proposals` 1 行と `order_proposal_events` 1 行（`from_status` が NULL、`to_status` が `received`、`actor` が `mcp`）を**同じトランザクション**で `INSERT` する。片方だけ残ることはない。`instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id` はアプリが #828 で埋める（最初は NULL）
-- MCP は `paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には書かない（`proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）。注文案が Kill Switch・一時停止・日次ガード・予算枠・損失上限・数量でどう扱われるかはアプリの Risk check の役目で、#828 で定める
+- 書き手（`mcpset.Writer.SubmitProposal`）は、`order_proposals` 1 行と `order_proposal_events` 1 行（`from_status` が NULL、`to_status` が `received`、`actor` が `mcp`）を**同じトランザクション**で `INSERT` する。片方だけ残ることはない。`instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id` はアプリが埋める（最初は NULL。`order-proposal-processing.md`）
+- MCP は `paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には書かない（`proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）。注文案が Kill Switch・一時停止・日次ガード・予算枠・損失上限・数量でどう扱われるかはアプリの Risk check の役目で、`order-proposal-processing.md` に定める。`risk_rejections` は案の拒否も数え、`policy_version = 'mcp-proposal-v1'` の分を `proposal_risk_passed_count` / `proposal_risk_rejected_count` に分けて返す
+
+### 8.5 取消の依頼（#828）
+
+`order_proposal_cancel` は**依頼を記録するだけ**で、`order_proposals.cancel_requested_at` の UPDATE 1 つと `order_proposal_events` 1 行（状態は変えない。`reason_code` が `cancel_requested`、`actor` が `mcp`）を同じトランザクションで書く。`paper_orders` には触れない。取り消せるのは `received` / `waiting_session` / `submitted` だけで、それ以外は `not_cancellable`（409）、ない ID は `proposal_not_found`。2 回目の依頼は何も書かず最初の依頼を返す。受け付けスイッチがオフでも使える。実際の取消はアプリが行う
 
 ## 改訂履歴
 
@@ -289,3 +294,4 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | 1.10 | 2026-10-20 | §5 の `health_today` の欠損セッションを、それ以前のスナップショットがある日付だけ（実際の欠損）に改め、履歴が足りず判定できない立会日は `insufficient_history_dates[]` に分けて警告にしない旨を追記。DB は読み取り専用のまま | issue #814 |
 | 1.11 | 2026-10-20 | §7.1 のホワイトリストに Paper の予算枠 2 キー（`risk.bucket.stock.budget_jpy`・`risk.bucket.bond_etf.budget_jpy`）を足して 17 キーにした。枠の合計が運用資金を超える保存（枠の保存・運用資金を下げる保存・既定に戻す）の拒否と、枠の間で予算を移すときは減らす方を先に保存する手順を追記。ツール数（15）・読み取り接続・待受・認証は変更なし | issue #824（親 #823） |
 | 1.12 | 2026-10-21 | Paper の注文案の受け付けを追加（§8。`order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`、受け付けスイッチ `mcp.order_proposals_enabled`、表 `order_proposals`・`order_proposal_events`、マイグレーション `000042`）。§5・§6 の「売買・発注のツールは作らない」を「Paper の注文案を出すツールだけ追加。発注はアプリ。注文の表には書かない。Live の発注・Live の値・Kill Switch の操作は不変」に改めた。§7.3 の書き込み経路を 4 種類に、§7.4 の監査の操作名を 6 つにした。ツール数は 18。ホワイトリストは 17 キーのまま | issue #827（親 #826） |
+| 1.13 | 2026-10-21 | 注文案の取消の依頼 `order_proposal_cancel` を追加（§8.1・§8.5。取消の依頼だけを記録し、実際の取消はアプリ。書き手の変更は 5 種類、ツール数は 19）。注文案のアプリ側の処理（Risk check・Paper 発注・期限・取消・`close`・再起動の回復）を `order-proposal-processing.md` に分けて追記。`risk_rejections` に案の分の件数を追加。ホワイトリストは 17 キーのまま | issue #828（親 #826） |

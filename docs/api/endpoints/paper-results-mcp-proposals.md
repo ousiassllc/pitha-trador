@@ -1,12 +1,12 @@
 # API 仕様: Paper 実績 MCP の注文案ツール
 
-`docs/api/endpoints/paper-results-mcp.md` §3.16〜§3.18 の分割章（行数上限のため別ファイル）。issue #827（親 #826）。共通の上限・トランスポート・成功ボディ `{"tool":"<名前>","data":{...}}` は元の文書、エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`、設計は `docs/architecture/paper-results-mcp.md` §8。
+`docs/api/endpoints/paper-results-mcp.md` §3.16〜§3.19 の分割章（行数上限のため別ファイル）。issue #827（親 #826）。共通の上限・トランスポート・成功ボディ `{"tool":"<名前>","data":{...}}` は元の文書、エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`、設計は `docs/architecture/paper-results-mcp.md` §8。
 
 ## 3. ツール
 
 ### 3.16 `order_proposal_submit`
 
-Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827。親 #826）。発注・Risk check・約定は行わない（アプリが issue #828 で行う）。銘柄の存在・価格・Risk は MCP では見ない。Live には使えない（`mode` の引数は無く、DB の `order_proposals.mode` は `paper` だけ）。`readOnlyHint: false`。仕様は `architecture/paper-results-mcp.md` §8。
+Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827。親 #826）。発注・Risk check・約定は行わない（アプリの処理役が行う。issue #828、`architecture/order-proposal-processing.md`）。銘柄の存在・価格・Risk は MCP では見ない。Live には使えない（`mode` の引数は無く、DB の `order_proposals.mode` は `paper` だけ）。`readOnlyHint: false`。仕様は `architecture/paper-results-mcp.md` §8。
 
 引数（未知の引数・`mode` は `invalid_argument`。文字列は制御文字・改行・タブを拒否。数値は有限の正の値だけ）:
 
@@ -35,7 +35,7 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 
 引数: `proposal_id`（必須、1 以上の整数。`order_proposal_submit` の応答の値）。ない ID は `proposal_not_found`（404）。読み取り専用で、受け付けスイッチがオフでも使える。
 
-`data`: `proposal_id` / `status` / `status_reason`（固定コード。最初は空）/ `received_at` / `updated_at` / `expires_at` / 受け付けた内容（`symbol`・`bucket`・`action`・`quantity`・`budget_jpy`・`order_type`・`limit_price`・`stop_loss_price`・`take_profit_price`・`exit_plan`・`max_loss_jpy`・`rationale`・`sources[]`。ないものは `null`）/ アプリが埋める紐付け `instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id`（最初は `null`）/ `events[]`（古い順。`at`・`from_status`（最初の行だけ `null`）・`to_status`・`reason_code`・`actor`＝`mcp` / `app` / `gui`）。`request_hash`・接続元 IP は返さない。`status` は `received` / `processing` / `waiting_session` / `rejected` / `submitted` / `filled` / `expired` / `cancelled` / `closed` / `failed`（この Issue の範囲で MCP が書くのは `received` だけで、以降はアプリが issue #828 で更新する）。
+`data`: `proposal_id` / `status` / `status_reason`（固定コード。最初は空）/ `received_at` / `updated_at` / `expires_at` / 受け付けた内容（`symbol`・`bucket`・`action`・`quantity`・`budget_jpy`・`order_type`・`limit_price`・`stop_loss_price`・`take_profit_price`・`exit_plan`・`max_loss_jpy`・`rationale`・`sources[]`。ないものは `null`）/ アプリが埋める紐付け `instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id`（最初は `null`）/ `events[]`（古い順。`at`・`from_status`（最初の行だけ `null`）・`to_status`・`reason_code`・`actor`＝`mcp` / `app` / `gui`）。`request_hash`・接続元 IP は返さない。`status` は `received` / `processing` / `waiting_session` / `rejected` / `submitted` / `filled` / `expired` / `cancelled` / `closed` / `failed`（MCP が書くのは `received` だけで、以降はアプリの処理役が更新する。状態と `status_reason` のコードは `architecture/order-proposal-processing.md` §2）。
 
 ### 3.18 `order_proposals_disable`
 
@@ -43,12 +43,23 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 
 **オンにするツールは無い。** 受け付けスイッチ（`runtime_settings` の `mcp.order_proposals_enabled`、1 / 0。行が無い・壊れているときはオフ）をオンにできるのは Settings 画面（「外部連携」→ MCP カード）だけで、`settings_set` で書こうとしても `key_not_allowed` になる。書き込み許可（`settings_write_enable`）とは別の値で、既定が逆（こちらは既定オフ）。
 
+### 3.19 `order_proposal_cancel`
+
+注文案の取消を**依頼する**（issue #828）。**依頼を記録するだけ**で、取消そのもの（案の `cancelled`、板待ちの指値の注文の取消）はアプリが次の周期に行う。`readOnlyHint: false`。引数: `proposal_id`（必須、1 以上の整数）。未知の引数は `invalid_argument`。ない ID は `proposal_not_found`（404）。
+
+取り消せる状態は `received` / `waiting_session` / `submitted` だけ。`filled` / `closed` / `rejected` / `expired` / `cancelled` / `failed` と、アプリが処理中の `processing` は `not_cancellable`（409。何も書かない）。書くのは `order_proposals.cancel_requested_at` と、`order_proposal_events` 1 行（`from_status` と `to_status` は取消の依頼を受けたときの状態のまま、`reason_code` は `cancel_requested`、`actor` は `mcp`）を同じトランザクションで。同じ案への 2 回目以降の依頼は何も書かず最初の依頼を返す（`replayed: true`）。受け付けスイッチがオフでも使える（リスクを減らす操作）。`paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には書かない。
+
+`data`: `proposal_id` / `status`（依頼を受けたときの状態。取消が済むまで変わらない。結果は `order_proposal_get`）/ `cancel_requested_at`（UTC の RFC3339）/ `replayed`。
+
 ## 5. 受け入れ条件（テストで確認できること）
 
 - 受け付けスイッチがオフ（行なし・`0`・壊れた値）のとき `order_proposal_submit` は `proposals_disabled` でどの表も変わらない。正しい案は `order_proposals` 1 行と `order_proposal_events` 1 行（`received`）が同じトランザクションで入り、片方だけ残らない。同じ `idempotency_key`・同じ内容の再送は行を増やさず同じ `proposal_id` を返し、内容が違えば `idempotency_conflict` で何も書かない。必須項目の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が過去または 24 時間より先・文字数超過・制御文字・未知の引数は `invalid_argument`。JST の 1 日 21 件目は `limit_exceeded`。認証なしの 3 ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `order_proposals` と `order_proposal_events` の `INSERT`（案 1 件につき各 1 行）と、受け付けスイッチをオフにする `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけで、`paper_orders`・`positions`・`trade_signals`・`kill_switch_events` に触れる文は無い。`order_proposals.mode` に `paper` 以外を入れると DB の CHECK で失敗する。Settings 画面でオンにでき、`order_proposals_disable` でオフにでき、MCP からオンにする手段は無い（`settings_set` は `key_not_allowed`）。設定のホワイトリストは 17 キーのまま
+
+- `order_proposal_cancel`（issue #828）は、`received` / `waiting_session` / `submitted` の案に対し `cancel_requested_at` の UPDATE 1 つとイベント 1 行だけを書き、状態は変えず、2 回目の依頼は何も書かない。`filled` などの終わった案と `processing` は `not_cancellable`、ない ID は `proposal_not_found`。受け付けスイッチがオフでも呼べる。実行された更新文は、案の `INSERT`・取消依頼の `UPDATE`（`order_proposals`）とイベントの `INSERT`・スイッチの upsert と監査の `INSERT` だけで、`paper_orders`・`positions`・`trade_signals`・`kill_switch_events` には何も書かない（`proposaltests.TestOrderProposalWritePathIsNarrow`）。
 
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規作成。注文案ツール 3 つの入出力と受け入れ条件（元の文書の版 1.10 で追加） | issue #827（親 #826） |
+| 1.1 | 2026-10-21 | §3.19 `order_proposal_cancel`（取消の依頼を記録するだけ）と受け入れ条件を追加。§3.16・§3.17 の「アプリが #828 で」を処理役の仕様への参照に改めた | issue #828（親 #826） |

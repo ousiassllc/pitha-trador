@@ -22,7 +22,8 @@
 | `invalid_value` | 422 | ホワイトリストのキーだが、値が GUI の検証（範囲・形式）に通らない。何も保存しない。`error.data.detail` に、検証の理由（呼び出し側が送った値と許容範囲だけを引く固定の文型。秘密は載らない）を付ける | 値が不正です。settings_get の constraint を確認してください。 |
 | `proposals_disabled` | 403 | `order_proposal_submit` を呼んだが、注文案の受け付けがオフ（`runtime_settings` の `mcp.order_proposals_enabled` の行が無い・`0`・壊れた値。既定はオフ）。何も書かない。`order_proposal_get` と `order_proposals_disable` は使える。オンにできるのは Settings 画面だけ | 注文案の受け付けはオフです。Settings の「外部連携」でオンにしてください（MCP からはオンにできません）。 |
 | `idempotency_conflict` | 409 | `order_proposal_submit` の `idempotency_key` が、内容の違う注文案ですでに使われている（内容が同じなら再送として最初の案を返し、このコードにならない）。何も書かない | この idempotency_key は内容の違う案で使われています。別のキーで出し直してください。 |
-| `proposal_not_found` | 404 | `order_proposal_get` の `proposal_id` の注文案が無い | その proposal_id の注文案はありません。 |
+| `proposal_not_found` | 404 | `order_proposal_get` / `order_proposal_cancel` の `proposal_id` の注文案が無い | その proposal_id の注文案はありません。 |
+| `not_cancellable` | 409 | `order_proposal_cancel` の注文案が、もう取り消せない状態（`filled` / `closed` / `rejected` / `expired` / `cancelled` / `failed`、またはアプリが処理中の `processing`） | この注文案はもう取り消せません（約定済み・終了済み、または処理中）。order_proposal_get で状態を確認してください。 |
 | `internal` | 500 | 上記以外の失敗。`message` は固定。原因は slog のみ | 読み取りに失敗しました。 |
 
 `unauthorized` は、キーが無いときと違うときで同じ文である。オフかどうかは返さない（#347 が未認証の相手にオフを返さないのと同じ考え方）。オフそのものは待受が無いので、401 とは観測が分かれる（接続拒否か、401 か）。`access_denied` は Cloudflare の任意照合をオンにしたときだけで、`message` は `unauthorized` と同じ文にする（どちらが欠けたかは返さない）。
@@ -35,7 +36,7 @@
 
 | `code` | HTTP | 条件 | `message` |
 |--------|------|------|-----------|
-| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 18 個（読み取り 9、設定 6、注文案 3）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満 | 引数が不正です。 |
+| `invalid_argument` | 422 | ツール名が API 仕様 §3 の 19 個（読み取り 9、設定 6、注文案 4）以外、そのツールが定義していない引数がある、`settings_set` の `key` / `value` が欠けている・型が違う、`settings_diff` の指定が不正（両方指定・存在しない ID・RFC3339 でない時刻）、`order_proposal_submit` の引数が API 仕様 §3.16 の規則に合わない（必須の欠け・`bucket` / `action` / `order_type` の範囲外・`quantity` と `budget_jpy` の両方・損切りが指値以上・期限が受け付け時点以前または 24 時間より先・文字数超過・制御文字。`error.data.detail` に規則の理由を付ける。送った値は引用しない）、`order_proposal_get` の `proposal_id` が欠けている・1 未満 | 引数が不正です。 |
 
 期間の不正は `invalid_period` のまま分ける（テストが期間と引数を区別できるようにするため）。
 
@@ -57,3 +58,4 @@
 | 1.3 | 2026-10-20 | `invalid_argument` の条件のツール数を 9 つに更新（`health_today` を追加）。`message` と HTTP の表は変更なし | issue #808 |
 | 1.4 | 2026-10-20 | 設定ツールのコード `write_disabled`（403）・`key_not_allowed`（403）・`invalid_value`（422、`error.data.detail`）を追加。`invalid_argument` の条件と `db_locked` / `db_unavailable` の条件を設定ツールに合わせて追記 | issue #806・#807 |
 | 1.5 | 2026-10-21 | 注文案ツールのコード `proposals_disabled`（403）・`idempotency_conflict`（409）・`proposal_not_found`（404）を追加。`limit_exceeded`（1 日 20 件）と `invalid_argument`（注文案の引数規則。`error.data.detail`）の条件を追記し、ツール数を 18 に更新 | issue #827（親 #826） |
+| 1.6 | 2026-10-21 | `order_proposal_cancel` のコード `not_cancellable`（409）を追加。`proposal_not_found` を取消にも使う。ツール数を 19 に更新 | issue #828（親 #826） |
