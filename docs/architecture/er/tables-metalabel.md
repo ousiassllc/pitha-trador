@@ -116,6 +116,10 @@ erDiagram
 | reason_code | text | NOT NULL, CHECK (`<> ''`) | 固定コード: `too_few_rows_before_oos`（検証窓より前の使えるラベル付き判断がfit+較正の最小件数に足りない）/ `too_few_rows_after_purge`（purge/embargo後にfitか較正が最小件数に足りない）/ `training_data_unusable`（件数はあるがラベルが片側だけ等で学習できない）。理由文は保存しない |
 | usable_rows | integer | NOT NULL, CHECK (`>= 0`) | 使えるラベル付き判断の件数（`too_few_rows_before_oos`は検証窓より前の件数、`too_few_rows_after_purge`はpurge後にfit・較正の各最小件数まで数えた件数）。「必要130件中 x件」のx |
 | required_rows | integer | NOT NULL, CHECK (`>= 0`) | 学習に必要な件数＝fitと較正の最小件数の合計（既定130）。「必要130件中 x件」の130 |
+| oos_rows | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | 見送った時点でOOS窓にあった行数（issue #862。マイグレーション000044。この列ができる前の行は0） |
+| required_oos_rows | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | OOS窓がさかのぼって集める行数＝採用基準の`MinOOSSamples`（案: 740） |
+| dropped_incomplete | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | 特徴量の欠けで`BuildRows`が落とした行数（ラベルはあるが8特徴量がそろわない） |
+| label_v1_rows / label_v2_rows | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | lookback内のラベル付き判断の`label_version`別の件数。v1は終値だけのラベルでOFI・micropriceが無く学習に使えない。「履歴が無い」のか「あるのに使えない」のかを分ける |
 | created_at | text | NOT NULL | |
 
 インデックス: `(skipped_at)`
