@@ -29,9 +29,10 @@ func New(db *sql.DB, instruments *market.InstrumentRepository, snapshots *market
 
 // Launch settles the proposals a previous run left in processing (once, before
 // anything else touches them) and then starts the processing loop on wg until
-// ctx is done. A recovery error is logged and the loop starts anyway: the
-// affected proposals stay in processing until the next start. Outside Paper
-// mode it logs one error and starts nothing: no recovery, no goroutine.
+// ctx is done. Recovery never leaves a proposal in processing: each one is
+// recovered, expired or marked failed, and a failure is logged and the loop
+// starts anyway. Outside Paper mode it logs one error and starts nothing: no
+// recovery, no goroutine.
 func (p Processor) Launch(ctx context.Context, wg *sync.WaitGroup) {
 	if p.paperOnly() != nil {
 		slog.Error("proposalexec: refusing to run outside Paper mode", "mode", p.Mode)

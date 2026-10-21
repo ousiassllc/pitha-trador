@@ -41,11 +41,12 @@
 3. 状態を `processing` にして処理役が取る（`received`／`waiting_session` からの更新は、読んだときの状態を条件にする。別の書き手に負けたら何も書かない）。取ったあとにもう一度案を読み、読んでから取るまでの間に `cancel_requested_at` が入っていれば `cancelled`（`cancel_requested`）にする（`processing` になった案への取消依頼は `not_cancellable` なので、ここで読んだ値が最終）。
 4. 銘柄・枠の確認（`unknown_symbol` / `inactive_symbol` / `bucket_mismatch`）。
 5. 立会時間外なら `waiting_session`。最新の足が古ければ `stale_quote`。
-6. **Risk check**: `risk.Engine.CheckThenEnter`（Policy 経路の Paper エントリーと同じ、ロックの中で判断と発注を一続きにする入口）に `LONG` で通す。通った案の `trade_signals` 行を 1 行書く（`policy_version = 'mcp-proposal-v1'`、`jev_decision_id` は NULL、`risk_passed = 1`）。拒否のときも `risk_passed = 0`・`reject_reason = 'risk_engine_rejected: <Risk の理由>'` で 1 行書き、案を `rejected` にして `trade_signal_id` を結ぶ。Kill Switch・一時停止・日次ガード・枠 0・枠超過はここで拒否され、**Execution は呼ばれない**（`Enter` の呼び出し 0 回）。MCP の `risk_rejections` は Policy の拒否と同じ表を数え、案の分は `proposal_risk_passed_count` / `proposal_risk_rejected_count`（`policy_version` で見分ける）で分かる。
+6. **Risk check**: `risk.Engine.CheckThenEnter`（Policy 経路の Paper エントリーと同じ、ロックの中で判断と発注を一続きにする入口）に `LONG` で通す。通った案の `trade_signals` 行を 1 行書く（`policy_version = 'mcp-proposal-v1'`、`jev_decision_id` は NULL、`risk_passed = 1`。この時点では「Risk を通った」だけで、注文になるとは限らない）。拒否のときも `risk_passed = 0`・`reject_reason = 'risk_engine_rejected: <Risk の理由>'` で 1 行書き、案を `rejected` にして `trade_signal_id` を結ぶ。Kill Switch・一時停止・日次ガード・枠 0・枠超過はここで拒否され、**Execution は呼ばれない**（`Enter` の呼び出し 0 回）。
+   **Risk を通ったが注文にならなかった案**（手順 8〜10 の `size_zero` / `max_trade_loss` / `position_already_open` / `pending_order_exists` / `symbol_in_cooldown`、予期しない失敗の `failed`、発注直前の時間外で `waiting_session` に戻った場合、期限切れ・取消、再起動で `received` に戻した場合）は、案の状態を変えるのと**同じトランザクション**で、その `trade_signals` 行を `risk_passed = 0`・`reject_reason = 'proposal_rejected_after_risk: <理由コード>'` に直す（`proposalstore.Repository.Transition`。その行から出た `paper_orders` が無いときだけ。注文が出ていれば、後で取消・拒否になっても `risk_passed = 1` のまま）。これで `risk_passed = 1` は「Risk を通って注文まで進んだ案」だけになる。MCP の `risk_rejections` は、Policy の拒否と同じ表を数え、案の分は `proposal_risk_passed_count` / `proposal_risk_rejected_count`（`policy_version` で見分ける）、後段で拒否された分は `proposal_rejected_after_risk_count` と理由コード別の `proposal_rejected_after_risk_breakdown` に分ける（`risk_passed_count` にも `other_reject_count` にも入れない）。`000046` が、この修正の前に残った行（#851 以降）を同じ形に直す（Issue #860）。
 7. Risk が通したときの数量の上限は `risk.Engine.PositionSize`（`CheckThenEnter` が判断した数量。Enter はこの数量を作り直さない）。
 8. **数量**: 案の `quantity`（`budget_jpy` のときは予想約定価格で割って単元に切り捨て）と、アプリが決めた数量の**小さいほう**を注文する。減らしたときは `quantity_reduced` のイベントを残す。小さいほうが 0 なら `size_zero`。
 9. **最大損失**: 注文数量 ×（予想約定価格 − 実際に効く損切り価格）を `computed_max_loss_jpy` に残す（あいりの `max_loss_jpy` とは別に並べる）。実際に効く損切りは、案の `stop_loss_price` とアプリの損切り（エントリーの `StopLossPct` 下）の**エントリーから遠いほう**で、`effective_stop_loss_price` に残す。`運用資金 × max_trade_loss_pct` を超えれば `max_trade_loss`。
-10. **発注**: Execution の `Enter`（成行／指値は案の `order_type`）。銘柄ごとの拒否は上表のコードで `rejected`。
+10. **発注**: Execution の `Enter`（成行／指値は案の `order_type`）。銘柄ごとの拒否は上表のコードで `rejected`（手順 6 のとおり `trade_signals` 行は `risk_passed = 0` に直る）。
 11. 約定したら `filled`（`paper_order_id`・`position_id` を結ぶ）。指値で板待ちなら `submitted`。`submitted` の案は、期限・取消の依頼・注文の最終状態を毎周期見て、期限か取消なら Execution の `CancelPendingEntry`（約定処理と同じロックの中で、`PENDING` のときだけ `CANCELLED` にする）で注文を取り消し、案を `expired` / `cancelled` にする。先に約定していれば取消はせず `filled`（約定が勝つ）。
 
 **`close`**: 手順 4 のあと、Risk check を**通さず**（`trade_signals` も書かない）、保有中ポジションを Execution の `CloseAtMarket` で成行決済する（`exit_reason = 'proposal_close'`。`ExitReasonProposalClose`）。Kill Switch・一時停止・日次ガード中でも決済は実行できる（リスクを減らす操作。手動決済・Kill Switch の強制決済と同じ扱い）。保有が無ければ `no_open_position`。成功で `closed`。
@@ -56,11 +57,11 @@ MCP は取消の**依頼を記録するだけ**: `cancel_requested_at` の UPDAT
 
 ## 5. 再起動
 
-`processing` のまま止まった案は、起動時に 1 回だけ回復する。発注の有無は DB から読み、推測しない: `open_long` は、案の `trade_signal_id` を持つ注文が既にあればその結果（約定・取消・拒否・板待ち）を取り、無ければ `received` に戻して最初からやり直す（同じ案で注文が 2 本出ることはない）。`close` は、保有が既に無く `proposal_close` で決済済みなら `closed`、まだ保有中なら `received` に戻す。回復はイベントの `detail_json` に `{"recovered_after_restart":true}` を残す。
+`processing` のまま止まった案は、起動時（`Launch`）に 1 回だけ片づけ、**起動直後に `processing` は 0 件**になる。発注の有無は DB から読み、推測しない: `open_long` は、案の `trade_signal_id` を持つ注文が既にあればその結果（約定・取消・拒否・板待ち。期限を過ぎていても注文の結果が優先）を取り、注文が無ければ、`expires_at` を過ぎていれば**直接 `expired`**（`received` に戻さない）、期限内なら `received` に戻して最初からやり直す（同じ案で注文が 2 本出ることはない）。`close` は、保有が既に無く `proposal_close` で決済済みなら `closed`、まだ保有中なら `received`（期限切れなら `expired`）。回復はイベントの `detail_json` に `{"recovered_after_restart":true}` を残す。1 件の回復の失敗（注文は出ているのに約定のポジションが見つからない等）で他は止まらない: 原因をエラーログ（`proposalexec: proposal failed`）に残し、その案は `failed`（`status_reason = processing_error`）にして `processing` のまま放置しない。回復の結果は `proposalexec: recovery settled proposals left in processing count=… expired=… received=… failed=… still_processing=…` と `bootstrap: recovered order proposals left in processing count=…` のログに出る。テスト: `TestRestart_ExpiredProcessingProposalBecomesExpired`、`TestRestart_RecoveryFailureDoesNotLeaveProcessing`、`TestRestart_LaunchLeavesNothingInProcessing`。
 
 ## 6. 記録する表（5 表）
 
-1 件の案が、`order_proposals`（状態・理由・紐付け）、`order_proposal_events`（変化の履歴）、`trade_signals`（Risk の判断。`open_long` のみ）、`paper_orders`（注文）、`positions`（約定したポジション）に残る。拒否は前の 3 表まで、期限切れ・取消は前の 2 表（板待ちだった指値は注文も `CANCELLED`）、約定は 5 表すべて。`order_proposals` の追加列は `000043`（ER 図 `er/tables-trading.md`）。
+1 件の案が、`order_proposals`（状態・理由・紐付け）、`order_proposal_events`（変化の履歴）、`trade_signals`（Risk の判断。`open_long` のみ。注文にならなかった案の行は `risk_passed = 0`、手順 6）、`paper_orders`（注文）、`positions`（約定したポジション）に残る。拒否は前の 3 表まで、期限切れ・取消は前の 2 表（板待ちだった指値は注文も `CANCELLED`）、約定は 5 表すべて。`order_proposals` の追加列は `000043`（ER 図 `er/tables-trading.md`）。
 
 ## 改訂履歴
 
@@ -69,3 +70,4 @@ MCP は取消の**依頼を記録するだけ**: `cancel_requested_at` の UPDAT
 | 1.0 | 2026-10-21 | 新規作成。注文案の処理（Risk check・数量・最大損失・発注・期限・取消・`close`・再起動の回復）と理由コード | issue #828（親 #826） |
 | 1.1 | 2026-10-21 | 取る直前に入った取消依頼を取った直後の再読で拾う（§3 手順 3）。発注直前の時間外は `waiting_session`（§2） | S-2-0 研磨 |
 | 1.2 | 2026-10-21 | 処理役が Paper 以外では動かない守り（§1）。`New` が `Mode` を受け取り、`Launch` は何も起動せず、`Cycle`・`Recover` は DB を読む前にエラーを返す | issue #858 |
+| 1.3 | 2026-10-21 | Risk を通ったが注文にならなかった案の `trade_signals` を `risk_passed = 0`・`proposal_rejected_after_risk: <コード>` に直す（§3 手順 6、`000046` で過去行も）。再起動の回復は期限切れの案を直接 `expired` にし、1 件の失敗で他を止めず `failed` にする（§5） | issue #860 |

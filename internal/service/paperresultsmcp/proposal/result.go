@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
@@ -157,13 +158,18 @@ SELECT timestamp, policy_version, risk_passed, reject_reason FROM trade_signals 
 }
 
 // riskRejectCode is the fixed code of a "risk_engine_rejected: <code>[: detail]"
-// reason; a reason of any other shape is "other" and no reason is empty.
+// reason, or of a "proposal_rejected_after_risk: <code>" one (the signal passed
+// Risk but did not become an order, issue #860; risk_passed tells the two
+// apart); a reason of any other shape is "other" and no reason is empty.
 func riskRejectCode(reason sql.NullString) string {
 	text := strings.TrimSpace(reason.String)
 	if text == "" {
 		return ""
 	}
 	rest, ok := strings.CutPrefix(text, "risk_engine_rejected:")
+	if !ok {
+		rest, ok = strings.CutPrefix(text, orderproposal.PostRiskRejectPrefix)
+	}
 	if !ok {
 		return "other"
 	}
