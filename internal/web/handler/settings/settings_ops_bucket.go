@@ -11,6 +11,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
+// stockBudgetNoAutoRiseNote is the notice shown on both the operating capital
+// page and this one (issue #834, FR-RISK-10): the stock budget is seeded once
+// at startup from the capital then in force, so a raised capital leaves it as
+// it is and the surplus is refused as bucket_budget_exceeded until the stock
+// budget is saved too.
+const stockBudgetNoAutoRiseNote = "【運用資金を上げても株の枠は自動で増えません】株の枠は起動時に一度だけ、その時点の運用資金で決まり、その後に運用資金を上げても変わりません。" +
+	"増えた分で新規エントリーするには、「資産ごとの予算枠」ページで株の枠も保存してください（枠を超える分は bucket_budget_exceeded で見送られます）。"
+
 // bucketGroup holds the Paper per-asset-class budgets (予算枠, issue #824):
 // how much of the operating capital the stock bucket and the bond ETF bucket
 // may each hold. It sits on its own Settings page; the operating capital they
@@ -20,12 +28,13 @@ var bucketGroup = opsGroup{
 	id:   "asset-buckets",
 	name: "資産ごとの予算枠",
 	description: "Paper の運用資金を、株と債券ETFの 2 つの枠に分けて使える額（円）を決めます（issue #824）。" +
-		"2 つの枠の合計は運用資金以下にします。債券ETFの枠は今のところ保存だけで、債券ETFの取り込み・エントリーはまだありません（issue #823 の第 2 段階以降）。未保存の間は、株の枠が運用資金の全額、債券ETFの枠が 0 円で、枠を設ける前と挙動は変わりません。",
+		"2 つの枠の合計は運用資金以下にします。新規エントリーは銘柄の資産クラスの枠だけで判定され（issue #833）、債券ETFの取り込み・エントリーはまだありません（issue #823 の第 2 段階以降）。未保存の間は、株の枠が運用資金の全額、債券ETFの枠が 0 円で、枠を設ける前と挙動は変わりません。",
 	note: "保存した値は再起動不要で、次のリスク判定から反映されます。Paper 専用です。Live の値と動作はこの設定の影響を受けません。" +
 		"株の枠は、保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足して枠を超えると見送ります。" +
 		"枠を 0 円にするとその枠の新規エントリーを止めます（保有中の建玉は通常どおり決済されます）。" +
 		"2 つの枠の合計が運用資金を超える保存は、運用資金を下げる保存・「既定に戻す」も含めて拒否されます。" +
-		"枠の間で予算を移すときは、減らす方を先に保存してから増やす方を保存してください。",
+		"枠の間で予算を移すときは、減らす方を先に保存してから増やす方を保存してください。" +
+		stockBudgetNoAutoRiseNote,
 	fields: []opsField{
 		{key: bucketsettings.KeyStockBudgetJPY, label: "株の予算枠（円）", placeholder: "500000",
 			hint: "株の新規エントリーに使える予算です。0 で株の新規エントリーを止めます。債券ETFの枠との合計が運用資金以下の、0 以上の整数です。"},

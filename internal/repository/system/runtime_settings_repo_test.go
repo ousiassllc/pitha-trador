@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 )
 
@@ -83,5 +84,32 @@ func TestRuntimeSettingsRepository_Delete_RemovesKeyAndToleratesMissing(t *testi
 	}
 	if err := repo.Delete(ctx, "system.backup_dir"); err != nil {
 		t.Fatalf("Delete of a missing key: %v", err)
+	}
+}
+
+func TestRuntimeSettingsRepository_SetIfAbsent_InsertsOnlyWhenMissing(t *testing.T) {
+	db := newTestDB(t)
+	repo := system.NewRuntimeSettingsRepository(db)
+	ctx := context.Background()
+	first := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+
+	inserted, err := repo.SetIfAbsent(ctx, "risk.paper.initial_capital_jpy", "500000", first)
+	if err != nil || !inserted {
+		t.Fatalf("SetIfAbsent on a missing key = %v, %v, want true, nil", inserted, err)
+	}
+	inserted, err = repo.SetIfAbsent(ctx, "risk.paper.initial_capital_jpy", "999", first.Add(time.Hour))
+	if err != nil || inserted {
+		t.Fatalf("SetIfAbsent on a stored key = %v, %v, want false, nil", inserted, err)
+	}
+	value, ok, err := repo.Get(ctx, "risk.paper.initial_capital_jpy")
+	if err != nil || !ok || value != "500000" {
+		t.Fatalf("Get = %q, %v, %v, want the first value 500000 kept", value, ok, err)
+	}
+	var updatedAt string
+	if err := db.QueryRowContext(ctx, `SELECT updated_at FROM runtime_settings WHERE key = ?`, "risk.paper.initial_capital_jpy").Scan(&updatedAt); err != nil {
+		t.Fatal(err)
+	}
+	if updatedAt != sqlutil.FormatTime(first) {
+		t.Errorf("updated_at = %q, want the first write's %q kept", updatedAt, sqlutil.FormatTime(first))
 	}
 }

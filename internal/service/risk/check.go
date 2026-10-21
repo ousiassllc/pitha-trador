@@ -28,8 +28,9 @@ import (
 // (sizing.Quantity): the candidate is rejected when not even one lot
 // keeps a stop-out loss within it.
 //
-// An Engine with Config.StockBucket (Paper only, issue #824) also applies the
-// stock bucket's budget: ReasonBucketDisabled (budget 0) right after the
+// An Engine with Config.Buckets (Paper only, issues #824 and #833) also applies
+// the budget of the candidate's bucket - the one of its asset_class, stock or
+// bond_etf, and only that one: ReasonBucketDisabled (budget 0) right after the
 // settings are read, and ReasonBucketBudgetExceeded (what the bucket holds plus
 // this entry's quantity x price over the budget) after sizing. The percentage
 // limits keep measuring against initial_capital.
@@ -53,6 +54,12 @@ import (
 // they run after the Kill Switch limits above and before the market-data
 // checks, never force-close positions, and are off unless configured.
 func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string) (bool, string) {
+	return e.check(ctx, instrumentID, direction, nil)
+}
+
+// check is Check; when it passes and sized is non-nil, sized receives the
+// quantity and price the candidate was judged at (CheckThenEnter, entry.go).
+func (e *Engine) check(ctx context.Context, instrumentID int64, direction string, sized *EntrySize) (bool, string) {
 	state, events, err := e.State(ctx)
 	if err != nil {
 		return e.failClosed("read system state", err)
@@ -62,6 +69,14 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		return false, fmt.Sprintf("%s: %s", ReasonKillSwitchActive, activeReasons(events))
 	case domain.SystemStatePaused:
 		return false, ReasonSystemPaused
+	}
+
+	// Fail closed: without a snapshot source no limit that needs a price can
+	// be judged, so a new entry is rejected, not passed (issue #841).
+	// NewEngine refuses a nil Snapshots; this guards an Engine that lost it
+	// afterwards. Check judges new entries only, so exits are not blocked.
+	if e.snapshots == nil {
+		return false, ReasonSnapshotsUnavailable
 	}
 
 	now := e.now()
@@ -98,7 +113,7 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if err != nil {
 		return e.failClosed("read risk limit settings", err)
 	}
-	stockBudget, ok, reason := e.gateStockBucket(ctx, limits.InitialCapital)
+	entryBucket, ok, reason := e.gateBucket(ctx, instrumentID, limits.InitialCapital)
 	if !ok {
 		return false, reason
 	}
@@ -145,9 +160,6 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 		return false, fmt.Sprintf("%s: %s", halt.Reason, halt.Message)
 	}
 
-	if e.snapshots == nil {
-		return true, ""
-	}
 	snapshot, err := e.latestSnapshot(ctx, instrumentID)
 	if err != nil {
 		return e.failClosed("read latest snapshot", err)
@@ -165,7 +177,11 @@ func (e *Engine) Check(ctx context.Context, instrumentID int64, direction string
 	if qty == 0 {
 		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", sizeReason, snapshot.Price, e.stopLossPct, limits.MaxTradeLossPct)
 	}
-	return e.checkStockBucketBudget(ctx, stockBudget, qty, snapshot.Price)
+	passed, reason := e.checkBucketBudget(ctx, entryBucket, qty, snapshot.Price)
+	if passed && sized != nil {
+		*sized = EntrySize{Quantity: qty, Price: snapshot.Price}
+	}
+	return passed, reason
 }
 
 // failClosed logs err and returns Check's ReasonRiskEngineError rejection.

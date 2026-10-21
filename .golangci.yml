@@ -132,6 +132,17 @@ linters:
           deny:
             - pkg: github.com/ousiassllc/pitha-trador/internal/service/broker/tachibana
               desc: broker-neutral packages must not import the tachibana adapter; use internal/service/broker (architecture/overview/integrations.md §5)
+        # The backtest's pure simulation and the pure bucket rules stay free of
+        # the database: no direct repository import (issue #842; `go list
+        # -deps` of simrisk shows no repository/* or database/sql).
+        pure-no-repository:
+          files:
+            - "**/internal/service/backtest/simrisk/**"
+            - "**/internal/service/risk/bucket/**"
+            - "**/internal/service/risk/reason/**"
+          deny:
+            - pkg: github.com/ousiassllc/pitha-trador/internal/repository
+              desc: simrisk and the bucket/reason leaf packages must not import repository (issue #842); keep state behind interfaces
     gosec:
       excludes:
         # G304 (file path from a variable): every os.Open/ReadFile/Create

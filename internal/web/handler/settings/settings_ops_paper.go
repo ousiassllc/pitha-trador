@@ -29,7 +29,8 @@ var paperRiskGroup = opsGroup{
 		"運用資金は 0 円より大きく 1 兆円以下、建玉上限の % は 0 より大きく 100 以下、1 回の最大損失の % は " + formatPct(papersettings.MinTradeLossPct) + " 以上 " + formatPct(papersettings.MaxTradeLossPct) + " 以下です。" +
 		"最大建玉数など他の上限は config/risk.yaml のままで、ここでは変えられません。" +
 		"他の上限は別に判定されるため、サイズ計算を通っても他のガードで見送られることがあります。" +
-		"株と債券ETFの予算枠（同じ Settings の「資産ごとの予算枠」ページ）の合計より運用資金を下げる保存は拒否されます。",
+		"株と債券ETFの予算枠（同じ Settings の「資産ごとの予算枠」ページ）の合計より運用資金を下げる保存は拒否されます。" +
+		stockBudgetNoAutoRiseNote,
 	fields: []opsField{
 		{key: papersettings.KeyInitialCapitalJPY, label: "Paper の運用資金（円）", placeholder: "500000",
 			hint: "ポジションサイズ計算と、1 銘柄・総エクスポージャ・日次損失などの % 上限の分母です（例: 500000）。0 円より大きく 1 兆円以下です。"},

@@ -16,7 +16,7 @@ const SeededMarkerKey = "system.paper_risk_defaults_seeded"
 // *system.RuntimeSettingsRepository implements it.
 type SeedStore interface {
 	Get(ctx context.Context, key string) (value string, ok bool, err error)
-	Set(ctx context.Context, key, value string, updatedAt time.Time) error
+	SetIfAbsent(ctx context.Context, key, value string, updatedAt time.Time) (inserted bool, err error)
 }
 
 // SeedDefaults writes the Paper initial values (DefaultInitialCapitalJPY,
@@ -24,9 +24,12 @@ type SeedStore interface {
 // DefaultMaxTradeLossPct) once per database, so an existing install whose
 // on-disk config/risk.yaml still has the old Paper values (30,000,000 円 / 2% /
 // 20% / 0.25%) starts from the issue #804 decision too. While SeededMarkerKey
-// is absent: if none of Keys has a stored row it stores the four values, otherwise it stores nothing; either way it
-// then stores the marker, so later calls - even after the owner reset the
-// rows to the yaml values - do nothing. It never overwrites a row.
+// is absent: if none of Keys has a stored row it stores the four values,
+// otherwise it stores nothing; either way it then stores the marker, so later
+// calls - even after the owner reset the rows to the yaml values - do nothing.
+// It never overwrites a row: every write is an insert-if-absent
+// (RuntimeSettingsRepository.SetIfAbsent), so a value the Settings screen or the
+// MCP stored between the read and the write survives the seed (issue #837).
 //
 // Premise: this build is Paper-only (internal/bootstrap/risk.go), so the seed
 // runs unconditionally. It MUST be gated on Paper before any Live build is
@@ -59,12 +62,12 @@ func SeedDefaults(ctx context.Context, store SeedStore, now time.Time) error {
 			{KeyMaxTradeLossPct, DefaultMaxTradeLossPct},
 		}
 		for i, d := range defaults {
-			if err := store.Set(ctx, d.key, strconv.FormatFloat(d.value, 'f', -1, 64), now); err != nil {
+			if _, err := store.SetIfAbsent(ctx, d.key, strconv.FormatFloat(d.value, 'f', -1, 64), now); err != nil {
 				return fmt.Errorf("papersettings: seed %s (%d/%d stored): %w", d.key, i, len(defaults), err)
 			}
 		}
 	}
-	if err := store.Set(ctx, SeededMarkerKey, "true", now); err != nil {
+	if _, err := store.SetIfAbsent(ctx, SeededMarkerKey, "true", now); err != nil {
 		return fmt.Errorf("papersettings: write %s: %w", SeededMarkerKey, err)
 	}
 	return nil

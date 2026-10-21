@@ -3,7 +3,6 @@ package bucketsettings
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 	"time"
 )
@@ -17,7 +16,7 @@ const SeededMarkerKey = "system.bucket_budgets_seeded"
 // *system.RuntimeSettingsRepository implements it.
 type SeedStore interface {
 	Get(ctx context.Context, key string) (value string, ok bool, err error)
-	Set(ctx context.Context, key, value string, updatedAt time.Time) error
+	SetIfAbsent(ctx context.Context, key, value string, updatedAt time.Time) (inserted bool, err error)
 }
 
 // SeedDefaults writes the initial budgets once per database: the stock bucket
@@ -26,7 +25,9 @@ type SeedStore interface {
 // SeededMarkerKey is absent: if none of Keys has a stored row it stores both
 // budgets, otherwise it stores nothing; either way it then stores the marker,
 // so later calls - even after the owner reset the rows - do nothing. It never
-// overwrites a row.
+// overwrites a row: every write is an insert-if-absent
+// (RuntimeSettingsRepository.SetIfAbsent), so a value the Settings screen or the
+// MCP stored between the read and the write survives the seed (issue #837).
 //
 // capitalJPY is the operating capital in force when seeding, so it must be
 // read after papersettings.SeedDefaults.
@@ -56,16 +57,16 @@ func SeedDefaults(ctx context.Context, store SeedStore, capitalJPY float64, now 
 			key   string
 			value float64
 		}{
-			{KeyStockBudgetJPY, math.Floor(capitalJPY)},
+			{KeyStockBudgetJPY, DefaultStockBudgetJPY(capitalJPY)},
 			{KeyBondETFBudgetJPY, 0},
 		}
 		for i, d := range defaults {
-			if err := store.Set(ctx, d.key, strconv.FormatFloat(d.value, 'f', -1, 64), now); err != nil {
+			if _, err := store.SetIfAbsent(ctx, d.key, strconv.FormatFloat(d.value, 'f', -1, 64), now); err != nil {
 				return fmt.Errorf("bucketsettings: seed %s (%d/%d stored): %w", d.key, i, len(defaults), err)
 			}
 		}
 	}
-	if err := store.Set(ctx, SeededMarkerKey, "true", now); err != nil {
+	if _, err := store.SetIfAbsent(ctx, SeededMarkerKey, "true", now); err != nil {
 		return fmt.Errorf("bucketsettings: write %s: %w", SeededMarkerKey, err)
 	}
 	return nil

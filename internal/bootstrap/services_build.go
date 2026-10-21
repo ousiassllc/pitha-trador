@@ -149,11 +149,12 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 	}, executionConfig)
 
 	s.Risk = newRiskEngine(limits, riskRepositories{
-		killSwitch: s.KillSwitch,
-		settings:   s.Settings,
-		snapshots:  s.Snapshots,
-		positions:  s.Positions,
-		orders:     s.Orders,
+		killSwitch:  s.KillSwitch,
+		settings:    s.Settings,
+		snapshots:   s.Snapshots,
+		instruments: s.Instruments,
+		positions:   s.Positions,
+		orders:      s.Orders,
 	}, riskSignals{
 		marketData: broker.MarketDataChecker{Health: s.Broker},
 		jevAPI:     s.Jev,
@@ -175,7 +176,7 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy), metalabeljob.PolicyOption(state.DB, s.Settings), metalabeljob.PaperBootstrapOption(s.Settings))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig, backtestsource.NewReplay(state.DB, s.Settings, state.Risk.Paper, s.Positions))
-	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Sizer: s.Risk},
+	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Risk: s.Risk},
 		policy.WithCalibration(s.Calibration), policy.WithTDnetScorer(s.News), policy.WithRegimeStore(s.Instruments, s.Snapshots, s.Settings, state.Strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge)),
 		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
 }

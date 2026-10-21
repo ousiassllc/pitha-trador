@@ -3,10 +3,12 @@ package checkflow_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -14,11 +16,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 )
 
 // bucketEngine is an Engine over a fresh DB with one 2,000-yen snapshot
-// (instrument 1) and the stock-bucket gates of a Paper Engine (withBucket) or
+// (instrument 1) and the bucket gates of a Paper Engine (withBucket: Config.Buckets) or
 // none (a Live-style Engine). testLimits: capital 30,000,000, 2% per symbol, so
 // an entry is 300 shares x 2,000 yen = 600,000 yen.
 func bucketEngine(t *testing.T, withBucket bool) (*risk.Engine, *system.RuntimeSettingsRepository, *sql.DB) {
@@ -43,7 +44,7 @@ func bucketEngineWith(t *testing.T, withBucket bool, limits config.RiskLimits, p
 		Portfolio:  portfolio,
 	}
 	if withBucket {
-		cfg.StockBucket = bucket.NewProvider(positions, settings)
+		cfg.Buckets = paperrisk.Buckets(positions, settings, market.NewInstrumentRepository(db))
 	}
 	return risk.NewEngine(cfg), settings, db
 }
@@ -63,6 +64,14 @@ func openStockPosition(t *testing.T, db *sql.DB, quantity int64, entryPrice floa
 // openStockPositionMarked opens a stock position whose latest mark is currentPrice.
 func openStockPositionMarked(t *testing.T, db *sql.DB, quantity int64, entryPrice, currentPrice float64) {
 	t.Helper()
+	if err := insertStockPosition(db, quantity, entryPrice, currentPrice); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// insertStockPosition is openStockPositionMarked returning the error, for
+// callers outside the test goroutine.
+func insertStockPosition(db *sql.DB, quantity int64, entryPrice, currentPrice float64) error {
 	ctx := context.Background()
 	now := time.Now()
 	order, err := trading.NewOrderRepository(db).Insert(ctx, domain.PaperOrder{
@@ -70,14 +79,15 @@ func openStockPositionMarked(t *testing.T, db *sql.DB, quantity int64, entryPric
 		Quantity: quantity, Status: domain.OrderStatusFilled, SubmittedAt: now,
 	})
 	if err != nil {
-		t.Fatalf("insert entry order: %v", err)
+		return fmt.Errorf("insert entry order: %w", err)
 	}
 	if _, err := trading.NewPositionRepository(db).Open(ctx, domain.Position{
 		InstrumentID: 1, EntryOrderID: order.ID, Symbol: "7203", Side: domain.PositionSideLong,
 		Quantity: quantity, EntryPrice: entryPrice, CurrentPrice: currentPrice, OpenedAt: now,
 	}); err != nil {
-		t.Fatalf("open position: %v", err)
+		return fmt.Errorf("open position: %w", err)
 	}
+	return nil
 }
 
 func TestRisk_StockBucketZeroRejectsEntryWithBucketDisabled(t *testing.T) {
@@ -115,7 +125,7 @@ func TestRisk_StockBucketBudgetLoweredRejectsExcessWithBucketBudgetExceeded(t *t
 }
 
 // The default split (stock = the whole capital, no stored row or the seeded
-// row) and an Engine without a StockBucket (Live) decide exactly as before.
+// row) and an Engine without Config.Buckets (Live) decide exactly as before.
 func TestRisk_DefaultBucketSplitAndLiveEngineAreUnchanged(t *testing.T) {
 	ctx := context.Background()
 	e, settings, db := bucketEngine(t, true)
@@ -131,7 +141,7 @@ func TestRisk_DefaultBucketSplitAndLiveEngineAreUnchanged(t *testing.T) {
 	live, liveSettings, _ := bucketEngine(t, false)
 	storeStockBudget(t, liveSettings, "0")
 	if passed, reason := live.Check(ctx, 1, domain.JevDirectionLong); !passed {
-		t.Fatalf("Live-style Check (no StockBucket) = (false, %q), want no budget gate", reason)
+		t.Fatalf("Live-style Check (no Buckets) = (false, %q), want no budget gate", reason)
 	}
 }
 

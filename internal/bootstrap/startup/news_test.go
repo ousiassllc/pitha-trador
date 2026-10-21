@@ -85,8 +85,12 @@ func openPaperPosition(t *testing.T, svc *bootstrap.Services, symbol string, pri
 		t.Fatalf("Create instrument %q: %v", symbol, err)
 	}
 	signal := domain.TradeSignal{InstrumentID: inst.ID, Symbol: symbol, Direction: domain.JevDirectionLong, RiskPassed: true, PolicyVersion: "v1"}
-	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: symbol, Price: price, Timestamp: inSession}
-	if err := (paperexec.Executor{Engine: svc.Execution, Sizer: svc.Risk}).ExecuteSignal(ctx, signal, snap); err != nil {
+	spread := 0.0
+	snap := domain.Snapshot{InstrumentID: inst.ID, Symbol: symbol, Price: price, Timestamp: inSession, SpreadBps: &spread, RawDataJSON: "{}"}
+	if _, err := svc.Snapshots.Insert(ctx, snap); err != nil {
+		t.Fatalf("insert snapshot %q: %v", symbol, err)
+	}
+	if err := (paperexec.Executor{Engine: svc.Execution, Risk: svc.Risk}).ExecuteSignal(ctx, signal, snap); err != nil {
 		t.Fatalf("ExecuteSignal %q: %v", symbol, err)
 	}
 	position, err := svc.Positions.GetOpenByInstrument(ctx, inst.ID)

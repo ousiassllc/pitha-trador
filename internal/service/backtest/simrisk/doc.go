@@ -5,9 +5,11 @@
 // cooldown and sizing rules as Paper Trading.
 //
 // It reuses the live pure rules (risk/correlation, risk/sizing) and the live
-// rejection reasons (risk.Reason*); only the state is simulated. State a
-// historical replay cannot know is treated as follows (docs/requirements/
-// functional/components-platform.md FR-BT-4):
+// rejection reasons (risk.Reason*, imported from the leaf packages risk/reason,
+// risk/correlation, risk/sizing and risk/bucket so that simrisk does not depend
+// on package risk and its repository/*; issue #842); only the state is
+// simulated. State a historical replay cannot know is treated as follows
+// (docs/requirements/functional/components-platform.md FR-BT-4):
 //
 //   - Operator pause, manual Kill Switch, market-data/Jev/broker-API Kill
 //     Switches and the UI heartbeat are not recorded in a replayable form: they

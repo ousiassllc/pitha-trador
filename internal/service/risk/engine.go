@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/correlation"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/reason"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
@@ -22,21 +23,26 @@ import (
 // trade_signals.reject_reason (policy/engine.go's
 // ReasonRiskEngineRejected).
 const (
-	ReasonSystemPaused            = "system_paused"
-	ReasonKillSwitchActive        = "kill_switch_active"
-	ReasonCooldownAfterLoss       = "cooldown_after_loss"
-	ReasonMaxOpenPositions        = "max_open_positions"
+	ReasonSystemPaused            = reason.SystemPaused
+	ReasonKillSwitchActive        = reason.KillSwitchActive
+	ReasonCooldownAfterLoss       = reason.CooldownAfterLoss
+	ReasonMaxOpenPositions        = reason.MaxOpenPositions
 	ReasonMaxSameDirection        = correlation.ReasonMaxSameDirectionPositions
 	ReasonMarketAdverse           = correlation.ReasonMarketAdverse
 	ReasonMaxTotalExposurePct     = sizing.ReasonMaxTotalExposurePct
 	ReasonMaxPositionPerSymbolPct = sizing.ReasonMaxPositionPerSymbolPct
-	ReasonMaxDailyLossPct         = "max_daily_loss_pct"
-	ReasonMaxConsecutiveLosses    = "max_consecutive_losses"
-	ReasonMaxSpreadBps            = "max_spread_bps"
+	ReasonMaxDailyLossPct         = reason.MaxDailyLossPct
+	ReasonMaxConsecutiveLosses    = reason.MaxConsecutiveLosses
+	ReasonMaxSpreadBps            = reason.MaxSpreadBps
 	ReasonMaxTradeLossPct         = sizing.ReasonMaxTradeLossPct
 	// ReasonRiskEngineError is the fail-closed rejection when Check cannot
 	// read the state a limit needs (DB error, missing snapshot/spread).
-	ReasonRiskEngineError = "risk_engine_error"
+	ReasonRiskEngineError = reason.RiskEngineError
+	// ReasonSnapshotsUnavailable rejects a new entry when the Engine has no
+	// snapshot source to price and size it. NewEngine refuses such a Config,
+	// so this only guards an Engine that lost its source after construction
+	// (issue #841); exits are never judged by Check and stay open.
+	ReasonSnapshotsUnavailable = reason.SnapshotsUnavailable
 )
 
 // runtime_settings keys this package owns (er.md §runtime_settings).
@@ -79,20 +85,21 @@ type Config struct {
 	// error fails the evaluation closed.
 	LimitsOverlay func(ctx context.Context, base config.RiskLimits) (config.RiskLimits, error)
 
-	// StockBucket, when set, adds the Paper stock-bucket budget gates to
-	// Check (issue #824): bucket_disabled while the budget is 0 and
-	// bucket_budget_exceeded when holdings plus the entry go over it. Only the
-	// Paper Engine sets it; a Live Engine has no budget gate.
-	StockBucket StockBucket
+	// Buckets, when set, adds the Paper budget gates to Check (issues #824,
+	// #833), judged on the candidate's own bucket (its asset_class):
+	// bucket_disabled while the budget is 0 and bucket_budget_exceeded when
+	// the bucket's holdings plus the entry go over it. Only the Paper Engine
+	// sets it; a Live Engine has no budget gate.
+	Buckets Buckets
 
 	KillSwitch *system.KillSwitchRepository
 	Settings   *system.RuntimeSettingsRepository
 
 	// Snapshots supplies the latest price/spread for FR-RISK-1's
-	// max_spread_bps and max_trade_loss_pct (position sizing) checks. A
-	// nil Snapshots skips those two checks (no snapshot data to check
-	// against); a non-nil one rejects an instrument with no usable
-	// snapshot (fail closed).
+	// max_spread_bps and max_trade_loss_pct (position sizing) checks and for
+	// the budget bucket's sizing. It is required (NewEngine panics without
+	// it): an Engine that cannot price an entry must not approve one. An
+	// instrument with no usable snapshot is rejected (fail closed).
 	Snapshots *market.SnapshotRepository
 
 	// StopLossPct is the FR-EXIT-2 initial stop distance (percent)
@@ -143,7 +150,7 @@ type Config struct {
 type Engine struct {
 	limits           config.RiskLimits
 	limitsOverlay    func(ctx context.Context, base config.RiskLimits) (config.RiskLimits, error)
-	stockBucket      StockBucket
+	buckets          Buckets
 	killSwitch       *system.KillSwitchRepository
 	settings         *system.RuntimeSettingsRepository
 	snapshots        *market.SnapshotRepository
@@ -168,18 +175,28 @@ type Engine struct {
 	// dailyGuardMu serializes evaluateDailyGuard's read-modify-write of the
 	// system.daily_guard row (dailyguard.go).
 	dailyGuardMu sync.Mutex
+
+	// entryMu serializes CheckThenEnter's judge-then-open section across
+	// every entry path, so concurrent candidates cannot both read the same
+	// holdings and together pass a limit (entry.go, issue #839).
+	entryMu sync.Mutex
 }
 
 // NewEngine returns an Engine built from cfg, applying every documented
 // placeholder default for a zero-valued optional field. It panics if
 // cfg.KillSwitch or cfg.Settings is nil - both are required for every
-// FR-RISK-2〜7 operation.
+// FR-RISK-2〜7 operation - or if cfg.Snapshots is nil: without it Check
+// cannot price or size an entry, and must not run with its limits skipped
+// (issue #841).
 func NewEngine(cfg Config) *Engine {
 	if cfg.KillSwitch == nil {
 		panic("risk: NewEngine: cfg.KillSwitch is required")
 	}
 	if cfg.Settings == nil {
 		panic("risk: NewEngine: cfg.Settings is required")
+	}
+	if cfg.Snapshots == nil {
+		panic("risk: NewEngine: cfg.Snapshots is required")
 	}
 	if cfg.Portfolio == nil {
 		cfg.Portfolio = ZeroPortfolioProvider{}
@@ -208,7 +225,7 @@ func NewEngine(cfg Config) *Engine {
 	return &Engine{
 		limits:            cfg.Limits,
 		limitsOverlay:     cfg.LimitsOverlay,
-		stockBucket:       cfg.StockBucket,
+		buckets:           cfg.Buckets,
 		killSwitch:        cfg.KillSwitch,
 		settings:          cfg.Settings,
 		snapshots:         cfg.Snapshots,

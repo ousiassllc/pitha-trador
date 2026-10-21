@@ -7,9 +7,9 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/correlation"
+	"github.com/ousiassllc/pitha-trador/internal/service/risk/reason"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk/sizing"
 )
 
@@ -19,17 +19,20 @@ var tradingDay = time.FixedZone("JST", 9*60*60)
 // Config is what the simulated Risk Engine needs: the limits (config/risk.yaml
 // paper section in production) and the stop-loss percentage sizing is
 // measured against (execution.Config.StopLossPct; 0 uses
-// sizing.DefaultStopLossPct, as live does). StockBudgetJPY is the stock
-// bucket's budget (issue #824, bucketsettings): nil means the whole
-// Limits.InitialCapital, the default split, under which the budget gates can
-// not reject anything the percentage limits let through.
+// sizing.DefaultStopLossPct, as live does). StockBudgetJPY and
+// BondETFBudgetJPY are the buckets' budgets (issues #824, #833,
+// bucketsettings): nil means the default split - the stock bucket the whole
+// Limits.InitialCapital, the bond_etf bucket 0 - under which the budget gates
+// can not reject a stock entry the percentage limits let through.
 type Config struct {
-	Limits         config.RiskLimits
-	StopLossPct    float64
-	StockBudgetJPY *float64
+	Limits           config.RiskLimits
+	StopLossPct      float64
+	StockBudgetJPY   *float64
+	BondETFBudgetJPY *float64
 }
 
 type position struct {
+	bucket    string
 	side      string
 	quantity  int64
 	entry     float64
@@ -60,6 +63,8 @@ type closed struct {
 type Portfolio struct {
 	cfg  Config
 	open map[int64]*position
+	// buckets is each instrument's budget bucket (SetAssetClass).
+	buckets map[int64]string
 
 	now time.Time
 	day string // trading day of now ("2006-01-02" JST)
@@ -84,7 +89,7 @@ func New(cfg Config) *Portfolio {
 	if cfg.StopLossPct <= 0 {
 		cfg.StopLossPct = sizing.DefaultStopLossPct
 	}
-	return &Portfolio{cfg: cfg, open: map[int64]*position{}}
+	return &Portfolio{cfg: cfg, open: map[int64]*position{}, buckets: map[int64]string{}}
 }
 
 // Advance moves the replay clock to now. On a new trading day the day's
@@ -114,9 +119,9 @@ func (p *Portfolio) raiseKillSwitch() {
 	}
 	lim := p.cfg.Limits
 	if loss := p.dailyLossPct(); loss >= lim.MaxDailyLossPct {
-		p.killed = fmt.Sprintf("%s: daily_loss_pct=%.4f max=%.4f", risk.ReasonMaxDailyLossPct, loss, lim.MaxDailyLossPct)
+		p.killed = fmt.Sprintf("%s: daily_loss_pct=%.4f max=%.4f", reason.MaxDailyLossPct, loss, lim.MaxDailyLossPct)
 	} else if losses := p.consecutiveLosses(); losses >= lim.MaxConsecutiveLosses {
-		p.killed = fmt.Sprintf("%s: consecutive_losses=%d max=%d", risk.ReasonMaxConsecutiveLosses, losses, lim.MaxConsecutiveLosses)
+		p.killed = fmt.Sprintf("%s: consecutive_losses=%d max=%d", reason.MaxConsecutiveLosses, losses, lim.MaxConsecutiveLosses)
 	}
 }
 
@@ -142,7 +147,7 @@ func (p *Portfolio) Size(price float64) int64 {
 
 // Open records a new position.
 func (p *Portfolio) Open(instrumentID int64, side string, quantity int64, entryPrice float64) {
-	p.open[instrumentID] = &position{side: side, quantity: quantity, entry: entryPrice, lastPrice: entryPrice}
+	p.open[instrumentID] = &position{bucket: p.bucketOf(instrumentID), side: side, quantity: quantity, entry: entryPrice, lastPrice: entryPrice}
 }
 
 // Close removes instrumentID's position and records its realized pnl (JPY)
@@ -167,25 +172,6 @@ func (p *Portfolio) OpenCountBySide(side string) int {
 		}
 	}
 	return n
-}
-
-// stockBudget is the stock bucket's budget in force: Config.StockBudgetJPY, or
-// the whole initial capital.
-func (p *Portfolio) stockBudget() float64 {
-	if p.cfg.StockBudgetJPY != nil {
-		return *p.cfg.StockBudgetJPY
-	}
-	return p.cfg.Limits.InitialCapital
-}
-
-// stockHeld is live's StockHeldJPY: the open positions' market value (a
-// backtest trades stocks only), measured like the exposure limits.
-func (p *Portfolio) stockHeld() float64 {
-	var held float64
-	for _, pos := range p.open {
-		held += pos.notional()
-	}
-	return held
 }
 
 func (p *Portfolio) totalExposurePct() float64 {
@@ -238,8 +224,8 @@ func (p *Portfolio) lastLossAt() time.Time {
 // Check implements policy.RiskChecker with risk.Engine.Check's rule order
 // and reasons: Kill Switch, cooldown, open positions, same direction,
 // exposure, daily loss, consecutive losses, spread, market adverse, then
-// sizing; the stock bucket's two budget gates (bucket_disabled before the
-// exposure limits, bucket_budget_exceeded after sizing) sit where live's do.
+// sizing; the candidate's bucket's two budget gates (bucket_disabled before
+// the exposure limits, bucket_budget_exceeded after sizing) sit where live's do.
 func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction string) (bool, string) {
 	lim := p.cfg.Limits
 	if p.killed != "" {
@@ -247,26 +233,27 @@ func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction strin
 	}
 	if lastLoss := p.lastLossAt(); !lastLoss.IsZero() {
 		if resumeAt := lastLoss.Add(time.Duration(lim.CooldownAfterLossMinutes) * time.Minute); p.now.Before(resumeAt) {
-			return false, fmt.Sprintf("%s: retry_after=%s", risk.ReasonCooldownAfterLoss, resumeAt.Format(time.RFC3339))
+			return false, fmt.Sprintf("%s: retry_after=%s", reason.CooldownAfterLoss, resumeAt.Format(time.RFC3339))
 		}
 	}
 	if count := len(p.open); count >= lim.MaxOpenPositions {
-		return false, fmt.Sprintf("%s: count=%d max=%d", risk.ReasonMaxOpenPositions, count, lim.MaxOpenPositions)
+		return false, fmt.Sprintf("%s: count=%d max=%d", reason.MaxOpenPositions, count, lim.MaxOpenPositions)
 	}
 	sameDirection := p.OpenCountBySide(direction)
 	if correlation.SameDirectionExceeded(lim, sameDirection) {
-		return false, fmt.Sprintf("%s: direction=%s count=%d max=%d", risk.ReasonMaxSameDirection, direction, sameDirection, lim.MaxSameDirectionPositions)
+		return false, fmt.Sprintf("%s: direction=%s count=%d max=%d", correlation.ReasonMaxSameDirectionPositions, direction, sameDirection, lim.MaxSameDirectionPositions)
 	}
-	stockBudget := p.stockBudget()
-	if bucket.Disabled(stockBudget) {
-		return false, bucket.DisabledMessage(domain.BucketStock, stockBudget)
+	entryBucket := p.bucketOf(instrumentID)
+	budget := p.budget(entryBucket)
+	if bucket.Disabled(budget) {
+		return false, bucket.DisabledMessage(entryBucket, budget)
 	}
 	totalPct := p.totalExposurePct()
 	if totalPct >= lim.MaxTotalExposurePct {
-		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", risk.ReasonMaxTotalExposurePct, totalPct, lim.MaxTotalExposurePct)
+		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", sizing.ReasonMaxTotalExposurePct, totalPct, lim.MaxTotalExposurePct)
 	}
 	if symbolPct := p.symbolExposurePct(instrumentID); symbolPct >= lim.MaxPositionPerSymbolPct {
-		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", risk.ReasonMaxPositionPerSymbolPct, symbolPct, lim.MaxPositionPerSymbolPct)
+		return false, fmt.Sprintf("%s: exposure_pct=%.4f max=%.4f", sizing.ReasonMaxPositionPerSymbolPct, symbolPct, lim.MaxPositionPerSymbolPct)
 	}
 	p.raiseKillSwitch()
 	if p.killed != "" {
@@ -275,20 +262,20 @@ func (p *Portfolio) Check(_ context.Context, instrumentID int64, direction strin
 
 	bar := p.candidate
 	if bar.SpreadBps == nil {
-		return false, fmt.Sprintf("%s: spread_bps missing (data_missing)", risk.ReasonRiskEngineError)
+		return false, fmt.Sprintf("%s: spread_bps missing (data_missing)", reason.RiskEngineError)
 	}
 	if *bar.SpreadBps > lim.MaxSpreadBps {
-		return false, fmt.Sprintf("%s: spread_bps=%.2f max=%.2f", risk.ReasonMaxSpreadBps, *bar.SpreadBps, lim.MaxSpreadBps)
+		return false, fmt.Sprintf("%s: spread_bps=%.2f max=%.2f", reason.MaxSpreadBps, *bar.SpreadBps, lim.MaxSpreadBps)
 	}
 	if pct, adverse := correlation.MarketAdverse(lim, direction, sameDirection, bar.Feature.MarketReturn5m); adverse {
-		return false, fmt.Sprintf("%s: direction=%s same_direction_positions=%d market_return_5m_pct=%.4f threshold_pct=%.4f", risk.ReasonMarketAdverse, direction, sameDirection, pct, lim.MarketAdverseReturn5mPct)
+		return false, fmt.Sprintf("%s: direction=%s same_direction_positions=%d market_return_5m_pct=%.4f threshold_pct=%.4f", correlation.ReasonMarketAdverse, direction, sameDirection, pct, lim.MarketAdverseReturn5mPct)
 	}
-	qty, reason := sizing.Quantity(lim, p.cfg.StopLossPct, bar.Price, totalPct)
+	qty, sizeReason := sizing.Quantity(lim, p.cfg.StopLossPct, bar.Price, totalPct)
 	if qty == 0 {
-		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", reason, bar.Price, p.cfg.StopLossPct, lim.MaxTradeLossPct)
+		return false, fmt.Sprintf("%s: price=%.2f stop_loss_pct=%.2f max_trade_loss_pct=%.4f", sizeReason, bar.Price, p.cfg.StopLossPct, lim.MaxTradeLossPct)
 	}
-	if held, amount := p.stockHeld(), float64(qty)*bar.Price; bucket.Exceeded(held, amount, stockBudget) {
-		return false, bucket.ExceededMessage(domain.BucketStock, held, amount, stockBudget)
+	if held, amount := p.held(entryBucket), float64(qty)*bar.Price; bucket.Exceeded(held, amount, budget) {
+		return false, bucket.ExceededMessage(entryBucket, held, amount, budget)
 	}
 	return true, ""
 }

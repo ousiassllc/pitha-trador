@@ -14,8 +14,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
-	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
-	"github.com/ousiassllc/pitha-trador/internal/service/risk/bucket"
 )
 
 // SeedStore is the runtime_settings access Seed needs.
@@ -32,11 +30,19 @@ type SeedStore interface {
 // stops startup: the config/risk.yaml Paper values then apply, and a bucket
 // without a row defaults to the same split (stock: the whole capital, bond_etf: 0).
 //
+// The bucket seed runs only after the Paper seed succeeded (issue #836): had it
+// run on the config/risk.yaml capital (e.g. 30,000,000 円) it would store that
+// as the stock budget and its marker would stop the next start from seeding
+// again, leaving the stock budget above the 500,000 円 capital the next start
+// seeds. A failed Paper seed therefore leaves the bucket rows and marker
+// unwritten, and the next start retries both.
+//
 // Premise: this build is Paper-only. Gate the call on Paper before any Live
 // build is added.
 func Seed(ctx context.Context, store SeedStore, engine Limits, now time.Time) {
 	if err := papersettings.SeedDefaults(ctx, store, now); err != nil {
-		slog.Warn("paperrisk: seed Paper risk defaults failed; the config/risk.yaml Paper values apply", "error", err)
+		slog.Warn("paperrisk: seed Paper risk defaults failed; the bucket seed is skipped and both are retried at the next start; the config/risk.yaml Paper values apply", "error", err)
+		return
 	}
 	limits, err := engine.EffectiveLimits(ctx)
 	if err != nil {
@@ -46,13 +52,6 @@ func Seed(ctx context.Context, store SeedStore, engine Limits, now time.Time) {
 	if err := bucketsettings.SeedDefaults(ctx, store, limits.InitialCapital, now); err != nil {
 		slog.Warn("paperrisk: seed Paper bucket budgets failed; the bucket defaults apply", "error", err)
 	}
-}
-
-// StockBucket is the Paper Risk Engine's stock-bucket budget gate input
-// (risk.Config.StockBucket): the budgets in runtime_settings and the stock
-// bucket's open positions. A Live Engine is built without it.
-func StockBucket(positions *trading.PositionRepository, settings bucketsettings.Store) *bucket.Provider {
-	return bucket.NewProvider(positions, settings)
 }
 
 // CapitalSource reads the Paper operating capital in force now: base's
