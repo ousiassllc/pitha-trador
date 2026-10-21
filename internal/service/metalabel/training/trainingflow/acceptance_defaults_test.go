@@ -1,6 +1,7 @@
 package trainingflow_test
 
 import (
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -57,9 +58,19 @@ func TestDefaultAcceptanceConfig_MatchesTheSpec(t *testing.T) {
 		t.Fatal("FR-META-7 is missing from the spec")
 	}
 	cfg := training.DefaultAcceptanceConfig()
-	for name, v := range map[string]int{"最小take件数": cfg.MinTakes, "最小OOS件数": cfg.MinOOSSamples, "最小OOS営業日数": cfg.MinOOSDays, "ブートストラップ回数": cfg.Resamples} {
-		if !strings.Contains(fr, strconv.Itoa(v)) {
-			t.Errorf("FR-META-7 does not state the default %s %d", name, v)
+	// Each default is looked up in the sentence that states it, not anywhere in
+	// the section, so a number that merely appears elsewhere does not pass.
+	n := strconv.Itoa
+	for _, want := range []string{
+		"OOS件数 **" + n(cfg.MinOOSSamples) + "** 以上",
+		"take件数 **" + n(cfg.MinTakes) + "** 以上",
+		"取引日（JST）**" + n(cfg.MinOOSDays) + "** 日以上",
+		"**take " + n(cfg.MinTakes) + " 件**",
+		"**OOS " + n(cfg.MinOOSSamples) + " 件**",
+		"**" + n(cfg.Resamples) + "**回",
+	} {
+		if !strings.Contains(fr, want) {
+			t.Errorf("FR-META-7 does not state the default %q", want)
 		}
 	}
 	limits := changeguard.DefaultLimits()
@@ -71,11 +82,20 @@ func TestDefaultAcceptanceConfig_MatchesTheSpec(t *testing.T) {
 			t.Errorf("FR-META-7 does not state the change limit %q", want)
 		}
 	}
+	// The premises the derivation rests on (the numbers are proposals, issue
+	// #862: when they are approved, or changed, update the spec and this list
+	// together; the wording "案" in the spec is not checked).
 	walk := training.DefaultWalkForwardConfig()
+	pct := func(f float64) string { return n(int(math.Round(100 * f))) }
 	for _, want := range []string{
-		"σ=30", "11 bps", "検出力80%", "デザイン効果", "案",
-		"窓の上限（" + strconv.Itoa(int(walk.OOSMaxWindow.Hours()/24)) + "日", // the OOS window's reach-back limit
-		"fit" + strconv.Itoa(walk.MinFit),                               // the training side's minimum
+		"σ=" + n(int(training.AssumedSigmaBps)) + " bps",
+		"想定エッジδ=**" + n(int(training.AssumedEdgeBps)) + " bps**",
+		"設計検出力**" + pct(training.DesignPower) + "%**",
+		"sd s=" + pct(training.AssumedWinProbDayShiftSD) + "%",
+		"使える行数" + n(training.AssumedRowsPerDay),
+		"take率" + pct(training.AssumedTakeRate) + "%",
+		"窓の上限（" + n(int(walk.OOSMaxWindow.Hours()/24)) + "日",
+		"fit" + n(walk.MinFit),
 	} {
 		if !strings.Contains(fr, want) {
 			t.Errorf("FR-META-7 does not state the assumption %q", want)

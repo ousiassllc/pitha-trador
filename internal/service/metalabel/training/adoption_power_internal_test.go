@@ -105,23 +105,25 @@ func wilsonUpper(k, n int) float64 {
 }
 
 // The power of the bar: the share of OOS sets of a model that truly earns
-// AssumedEdgeBps (5 bps) per take that the real adoption decision adopts, at the
-// minimum sample (DefaultAcceptanceConfig: 1084 OOS decisions, 542 takes) spread
-// over exactly the minimum of 5 trading days, under a day-level win-probability
-// shift of sd 12%. The design (RequiredTakes) assumes AssumedPower (80%); the
-// documented criterion is that the measured power reaches it.
+// AssumedEdgeBps (11 bps) per take that the real adoption decision adopts, at the
+// minimum sample (DefaultAcceptanceConfig: 740 OOS decisions, 370 takes) spread
+// over exactly the minimum of 7 trading days, under a day-level win-probability
+// shift of sd 12%. The design (RequiredTakes at DesignPower 85%) is chosen so
+// that the measured power reaches AssumedPower (80%; 81.8% when issue #862 set
+// it). The measurement is seeded, hence deterministic: a change of the
+// assumptions or of the bar that drops it below 80% fails here.
 func TestAdoptionPower_AtTheMinimumSampleOverMinimumDays(t *testing.T) {
 	power, summary := measurePower(t, AssumedEdgeBps)
 	t.Log(summary)
 	if power < AssumedPower {
-		t.Skipf("documented power criterion not met: %s", summary)
+		t.Errorf("documented power criterion not met: %s", summary)
 	}
 }
 
 // The decided detectable edge (issue #780, 2026-10-19: about 11 bps, shown as
 // 判定不能 below it) is the edge the bar finds with the documented power: the
-// seeded measurement at metamodel.MinDetectableEdgeBps must reach 75% (80.7%
-// when this was written), so a change of the assumptions (sigma, the day shift,
+// seeded measurement at metamodel.MinDetectableEdgeBps must reach 75% (81.8%
+// at the minimum sample of issue #862), so a change of the assumptions (sigma, the day shift,
 // the minimum sample) that moves the real figure away from 11 bps fails here.
 func TestAdoptionPower_AtTheMinimumDetectableEdge(t *testing.T) {
 	power, summary := measurePower(t, metamodel.MinDetectableEdgeBps)

@@ -40,7 +40,7 @@ const (
 	// the same 11 bps the Calibration screen shows as the detectable edge
 	// (metamodel.MinDetectableEdgeBps, issue #780: below it the verdict is
 	// "判定不能"). The earlier 5 bps was not reachable: at 5 bps the day-level
-	// noise alone needs about 27 trading days (FR-META-7).
+	// noise alone leaves the power at 72% after 30 trading days (FR-META-7).
 	AssumedEdgeBps = 11.0
 	// AssumedPower is the chance the real adoption decision (the cluster
 	// bootstrap intervals of the EV and the AUC together) must be measured to

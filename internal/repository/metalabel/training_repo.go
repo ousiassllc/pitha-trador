@@ -103,9 +103,9 @@ type LabelVersionCounts struct{ V1, V2 int }
 // [from, to) that have a label, per label_version (a decision counts once per
 // version). A version 1 label has no net return by design (migration 000033), so
 // only version 2 labels are required to have one: the V2 count is the labeled
-// decisions ListTrainingRows reads before BuildRows drops the incomplete ones. It is what a skipped retraining reports next to the
-// rows it could use (issue #862); ListTrainingRows reads the same decisions for
-// version 2.
+// decisions ListTrainingRows reads before BuildRows drops the incomplete ones.
+// It is what a skipped retraining reports next to the rows it could use (issue
+// #862).
 func (r *Repository) CountLabeledDecisions(ctx context.Context, from, to time.Time) (LabelVersionCounts, error) {
 	rows, err := r.db.QueryContext(ctx, `
 SELECT o.label_version, COUNT(DISTINCT o.jev_decision_id)

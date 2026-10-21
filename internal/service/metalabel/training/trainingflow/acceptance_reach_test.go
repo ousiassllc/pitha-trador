@@ -96,6 +96,30 @@ func TestAcceptance_ReachableAtCurrentDataVolume(t *testing.T) {
 	}
 }
 
+// The days to the first adoption decision across the range of rows a day seen
+// on 2026-10-19/20/21 (99, 114, 145): the OOS window takes the rows the bar asks
+// for (740, or 7 days), the rest has to hold fit and calibration (130 after
+// purging). The PR's estimate is read from this table.
+func TestAcceptance_DaysToTheFirstDecisionAcrossTheObservedRowsPerDay(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct{ perDay, want int }{{99, 10}, {114, 9}, {120, 9}, {145, 9}} {
+		got := 0
+		for days := 1; days <= 20 && got == 0; days++ {
+			m, err := defaultBarTrainer(&fakeSource{rows: noiseRows(days, tc.perDay, 0.02, 0.25, edgeSeed)}, &memStore{}).Train(ctx)
+			if err != nil && !errors.Is(err, training.ErrInsufficientData) {
+				t.Fatalf("%d rows a day, %d days: %v", tc.perDay, days, err)
+			}
+			if err == nil && judged(m) {
+				got = days
+			}
+		}
+		t.Logf("%d rows a day: first adoption decision after %d trading days", tc.perDay, got)
+		if got != tc.want {
+			t.Errorf("%d rows a day: first decision after %d trading days, want %d", tc.perDay, got, tc.want)
+		}
+	}
+}
+
 // Issue #862: the guards are intact. A model whose OOS EV lower limit is not
 // above 0, whose AUC lower limit is not above 0.5, or that does not beat the
 // model in force on the same OOS rows is not adopted, with the reason recorded;
@@ -213,6 +237,27 @@ func TestTrainer_LogsDroppedIncompleteWhenSplitFails(t *testing.T) {
 	if got.DroppedIncomplete != 2 || got.LabelV1Rows != 57 || got.LabelV2Rows != 48 ||
 		got.UsableRows != 0 || got.RequiredRows != 130 || got.OOSRows != 46 || got.RequiredOOSRows != 740 {
 		t.Errorf("recorded skip = %+v", got)
+	}
+}
+
+// The breakdown is a diagnostic: when the per-version counts cannot be read the
+// skip is still recorded (counts 0), with a warning, and the task succeeds.
+func TestTrainer_SkipIsRecordedWithoutVersionCountsWhenTheCountFails(t *testing.T) {
+	logs := captureLogs(t)
+	rec := &recordingSkips{}
+	src := &fakeSource{rows: append(trainingRows(46, 3), trainingRowBroken(1)), v1Rows: 57, countErr: errors.New("db busy")}
+	tr := newTrainer(src, newStore(t), settingsOf(nil), training.WithSkipRecorder(rec))
+	if err := tr.Retrain(context.Background()); err != nil {
+		t.Fatalf("Retrain: %v", err)
+	}
+	if len(rec.got) != 1 {
+		t.Fatalf("recorded %d skips, want 1", len(rec.got))
+	}
+	if got := rec.got[0]; got.LabelV1Rows != 0 || got.LabelV2Rows != 0 || got.DroppedIncomplete != 1 || got.RequiredRows != 130 {
+		t.Errorf("recorded skip = %+v, want version counts 0, dropped_incomplete 1, required 130", got)
+	}
+	if !strings.Contains(logs.String(), "could not count labeled decisions") || !strings.Contains(logs.String(), "db busy") {
+		t.Errorf("no warning about the failed count:\n%s", logs.String())
 	}
 }
 

@@ -88,7 +88,10 @@ func (t *Trainer) recordSkip(ctx context.Context, e *InsufficientDataError) erro
 // annotateSkip fills what a skip reports besides its own counts (issue #862):
 // the rows BuildRows dropped and the labeled decisions of [from, to) per label
 // version, which tell "no history yet" from "history that cannot be used" (the
-// v1 rows have no order-flow features). Any other error passes through.
+// v1 rows have no order-flow features). Any other error passes through. When
+// the counts cannot be read the skip is still recorded, with the version counts
+// left at 0 and a warning: the breakdown is a diagnostic and must not turn a
+// normal skip into a failing task.
 func (t *Trainer) annotateSkip(ctx context.Context, err error, from, to time.Time, dropped int) error {
 	e, ok := asInsufficient(err)
 	if !ok {
@@ -96,7 +99,8 @@ func (t *Trainer) annotateSkip(ctx context.Context, err error, from, to time.Tim
 	}
 	counts, cerr := t.source.CountLabeledDecisions(ctx, from, to)
 	if cerr != nil {
-		return fmt.Errorf("metalabel: count labeled decisions: %w", cerr)
+		slog.Warn("metalabel: could not count labeled decisions per label version; the skip is recorded without them", "error", cerr)
+		counts = repo.LabelVersionCounts{}
 	}
 	e.DroppedIncomplete, e.LabelV1, e.LabelV2 = dropped, counts.V1, counts.V2
 	return e
