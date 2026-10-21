@@ -62,6 +62,25 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.upd
 	return nil
 }
 
+// SetIfAbsent inserts key with value (a JSON-encoded string) only when no row
+// exists for it, in one statement, so it can never overwrite a value another
+// writer stored meanwhile (the start-up seeds, issue #837). It reports whether
+// it inserted the row; false means a row already existed and was left as it is.
+func (r *RuntimeSettingsRepository) SetIfAbsent(ctx context.Context, key, value string, updatedAt time.Time) (bool, error) {
+	res, err := r.db.ExecContext(ctx, `
+INSERT INTO runtime_settings (key, value, updated_at) VALUES (?, ?, ?)
+ON CONFLICT(key) DO NOTHING`,
+		key, value, sqlutil.FormatTime(updatedAt))
+	if err != nil {
+		return false, fmt.Errorf("repository: set runtime setting %q if absent: %w", key, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("repository: set runtime setting %q if absent: rows affected: %w", key, err)
+	}
+	return n > 0, nil
+}
+
 // Delete removes key's row (the value falls back to its lower-priority
 // source, e.g. config/*.yaml); deleting a missing key is not an error.
 func (r *RuntimeSettingsRepository) Delete(ctx context.Context, key string) error {
