@@ -101,3 +101,27 @@ func TestApplyWriteSwitch(t *testing.T) {
 		t.Error("Text")
 	}
 }
+
+// The order-proposal switch (issue #827) is not a setting the MCP can write:
+// settings_set refuses it, and it is off unless the Settings screen stored 1.
+func TestOrderProposalsSwitchIsNotWhitelistedAndDefaultsOff(t *testing.T) {
+	if mcpwritesettings.IsAllowed(mcpwritesettings.KeyOrderProposalsEnabled) {
+		t.Fatal("mcp.order_proposals_enabled is writable as a setting")
+	}
+	if slices.Contains(mcpwritesettings.Keys(), mcpwritesettings.KeyOrderProposalsEnabled) {
+		t.Fatal("mcp.order_proposals_enabled is in Keys")
+	}
+	if mcpwritesettings.DefaultOrderProposalsEnabled {
+		t.Fatal("order proposals are on by default")
+	}
+	for raw, want := range map[string]bool{"1": true, "0": false} {
+		if got, err := mcpwritesettings.ApplyOrderProposals(raw); err != nil || got != want {
+			t.Errorf("ApplyOrderProposals(%s) = %v, %v", raw, got, err)
+		}
+	}
+	for _, raw := range []string{"2", "-1", `"1"`, "true", "", "null"} {
+		if _, err := mcpwritesettings.ApplyOrderProposals(raw); err == nil {
+			t.Errorf("ApplyOrderProposals(%q) accepted", raw)
+		}
+	}
+}

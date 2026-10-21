@@ -167,7 +167,7 @@ func initializeResult(params json.RawMessage) map[string]any {
 		"protocolVersion": version,
 		"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
 		"serverInfo":      map[string]any{"name": "paper-results-mcp", "version": "1.1.0"},
-		"instructions":    "pitha-trador の Paper 実績・Jev 判断・収集状況を読む読み取りツールと、ホワイトリストにある基本設定を読む・変更する settings_* ツールだけを提供します。発注・送金・Kill Switch 解除・Live の値・秘密情報は扱えません。",
+		"instructions":    "pitha-trador の Paper 実績・Jev 判断・収集状況を読む読み取りツールと、ホワイトリストにある基本設定を読む・変更する settings_* ツール、Paper の注文案を出して状態を読む order_proposal* ツールを提供します。注文案は受け付けて記録するだけで、発注するのはアプリです（Risk check のあと）。Live の発注・送金・Kill Switch の操作・Live の値・秘密情報は扱えません。",
 	}
 }
 

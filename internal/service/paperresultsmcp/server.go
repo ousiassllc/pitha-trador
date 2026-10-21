@@ -1,13 +1,16 @@
 // Package paperresultsmcp is the MCP endpoint that serves Paper results from
 // the application's SQLite to a remote Grok Bot (issue #783;
-// docs/architecture/paper-results-mcp.md) and lets it read and change the
-// whitelisted basic settings (issues #806, #807).
+// docs/architecture/paper-results-mcp.md), lets it read and change the
+// whitelisted basic settings (issues #806, #807) and hand in Paper order
+// proposals, which are only recorded here (issue #827).
 //
 // Transport: MCP "Streamable HTTP" implemented as a small JSON-RPC 2.0
 // handler (POST only, every response a single application/json body). It
-// has nine read tools (tools.go) and the settings tools (settings_tools.go)
-// whose only write path is mcpset.Writer: a whitelisted runtime_settings upsert
-// plus its audit row, and the write switch. The read connection is mode=ro
+// has nine read tools (tools.go), the settings tools (settings_tools.go) and
+// the order-proposal tools (order_proposal_tools.go, issue #827). The only
+// write path is mcpset.Writer: a whitelisted runtime_settings upsert plus its
+// audit row, the write switch, one order_proposals row plus its first event,
+// and the order-proposal switch turned off. The read connection is mode=ro
 // with query_only=ON and the dispatch table is the only way to SQL. Every
 // request - initialize and tools/list included - needs the Bearer API key, checked in constant time before any
 // SQL runs or any database connection is opened.

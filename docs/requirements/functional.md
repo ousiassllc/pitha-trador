@@ -20,7 +20,7 @@
 | UC-14 | 環境設定 | 個人トレーダー | Settings画面でJev/ブローカー（kabuステーション・立花証券。`broker.provider`で1つを選択）/Slack/Luna/Sol/Opus/ニュースフィードの認証情報をキー単位で保存・削除する。立花証券 e支店のカードには接続環境（デモ/本番）を常にバッジで表示する |
 | UC-15 | 初回セットアップ | 個人トレーダー | 選択したブローカーの必須認証情報（既定のkabuなら`KABU_API_PASSWORD`）とJevが未設定のとき、Setup画面へ誘導され、入力を完了してから通常画面へ進む |
 | UC-16 | エラーログ取得 | 個人トレーダー（運用者） | Settings画面から期間・レベルを指定してエラーログをダウンロードし、調査・共有に使う |
-| UC-17 | Paper実績の遠隔参照 | Grok Bot（リモート） | 認証を通した MCP で、Paper の損益・取引・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読み、ホワイトリストに載った基本設定（Paper の資金・上限、日次ガード、LLM cutoff と出典）だけを一覧・変更・差分確認できる。売買・発注・送金・Kill Switch 解除・Live の値・秘密は扱わない（§4.22） |
+| UC-17 | Paper実績の遠隔参照 | Grok Bot（リモート） | 認証を通した MCP で、Paper の損益・取引・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読み、ホワイトリストに載った基本設定（Paper の資金・上限、日次ガード、LLM cutoff と出典）だけを一覧・変更・差分確認できる。さらに、Paper の注文案（新規の買いと保有中ポジションの決済）を受け付けて記録できる（受け付けるだけで、発注はアプリが Risk check のあとに行う。受け付けスイッチは既定オフで、オンにできるのは Settings 画面だけ。FR-MCP-23〜27）。Live の発注・送金・Kill Switch の操作と解除・Live の値・秘密は扱わない（§4.22） |
 
 ```mermaid
 graph TD
@@ -323,3 +323,6 @@ confidence帯（0.50-0.60 〜 0.90-1.00）ごとの実方向一致率、平均fu
 | 1.123 | 2026-10-21 | §4.7 の FR-RISK-10 の株の枠の既定値を、運用資金が小数でも円未満切り捨ての 1 か所（`bucketsettings.DefaultStockBudgetJPY`）で決め、Risk の判定・Settings 画面の表示と計算結果・「既定に戻す」・起動時の保存を一致させた。予算枠の保存拒否メッセージ（Settings 画面・MCP の `invalid_value` の detail）から内部の接頭辞 `bucketsettings:` を外した（#835, #844） |
 | 1.124 | 2026-10-21 | FR-RISK-1 にスナップショット取得元の必須化（nil なら Risk Engine を作れず、実行中に無ければ新規を`snapshots_unavailable`で拒否。決済は止めない）、FR-ENTRY-3 に判定で決めた数量を`Enter`へ渡す方針（約定価格のずれは許容し、上限＝気配までの差（最大`max_spread_bps`）＋スリッページ設定（最大1000bps）＋1ティックを明記）と判定から建玉までの直列化を追記。Paper の株枠・総エクスポージャの判定は建玉前に再判定される以外、既定設定の挙動は変更なし | issue #841, #840, #839 |
 | 1.125 | 2026-10-21 | docs の残りを現行の実装に揃えた。§4.11 のバックテスト Risk Engine の判定順序に、候補の銘柄の枠の 2 判定（`bucket_disabled` は同方向上限の後・総エクスポージャの前、`bucket_budget_exceeded` はサイジングの後）と、`backtestsource` が保存済みの両枠の予算（`bucketsettings.Effective`）を読むことを追記。§4.7 の FR-RISK-10 の Live の記述を、コードコメントと同じ「Live 用 Engine はまだ無く、作る場合は枠なしで作る（前提）」に改め、運用資金を既定（`config/risk.yaml`）へ戻す削除が既定の運用資金が枠の合計を下回るとき 400 で拒否される件を FR-RISK-10 と §4.17 の FR-SETTINGS-7 に追記。挙動・コードは変更なし（記述のみ） | issue #838 |
+| 1.126 | 2026-10-21 | §4.22 に FR-MCP-23〜27 を追加（MCP の注文案ツール `order_proposal_submit` / `order_proposal_get` / `order_proposals_disable`、受け付けスイッチ `mcp.order_proposals_enabled`＝既定オフでオンは Settings 画面だけ、冪等・1 日 20 件・根拠と損切りと最大損失の必須記録、`order_proposals` / `order_proposal_events` と MCP の書き込みの範囲、Live の経路を作らないこと）。FR-MCP-3・4・19・21 を注文案ツールに合わせて改め、UC-17 の「売買・発注は扱わない」を「Paper の注文案の受け付けだけ。発注はアプリ」に改めた。ツールは 18、ホワイトリストは 17 キーのまま。新規テーブル 2（マイグレーション000042）。発注・Risk check・期限切れ・取消は issue #828 | issue #827（親 #826） |
+| 1.127 | 2026-10-21 | §4.22 の FR-MCP-4 のツール数を 19 にし、FR-MCP-28〜30 を追加（注文案のアプリ側の処理＝Risk check・数量は提案とアプリの小さいほう・最大損失・Paper 発注・期限・取消・再起動の回復、`order_proposal_cancel`＝取消の依頼を記録するだけ、`close` は Kill Switch・一時停止・日次ガード中も実行可）。`positions.exit_reason` に `proposal_close`、`trade_signals.policy_version` に `mcp-proposal-v1` を追加 | issue #828（親 #826） |
+| 1.128 | 2026-10-21 | §4.22 の FR-MCP-4 のツール数を 21 にし、FR-MCP-31〜33 を追加（注文案の読み取り 3 ツール＝一覧・1 件の全体・集計、`origin`、`health_today` の止まった案、GUI の「注文案」画面は読み取りのみ） | issue #829（親 #826） |

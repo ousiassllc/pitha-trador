@@ -166,7 +166,7 @@ func TestShell_HeaderShowsLogoBeforeNav(t *testing.T) {
 // The current page's nav link (and only it) carries aria-current="page"
 // (issue #631); pages outside the nav (the error page) mark nothing.
 func TestShell_NavMarksCurrentPage(t *testing.T) {
-	anchor := regexp.MustCompile(`<a\b[^>]*\bhref="(/[a-z]+)"[^>]*>`)
+	anchor := regexp.MustCompile(`<a\b[^>]*\bhref="(/[a-z-]+)"[^>]*>`)
 	tests := []struct {
 		current organisms.NavItem
 		want    string
@@ -174,6 +174,7 @@ func TestShell_NavMarksCurrentPage(t *testing.T) {
 		{organisms.NavScanner, "/scanner"},
 		{organisms.NavWatchlist, "/watchlist"},
 		{organisms.NavPerformance, "/performance"},
+		{organisms.NavOrderProposals, "/order-proposals"},
 		{organisms.NavCalibration, "/calibration"},
 		{organisms.NavActivity, "/activity"},
 		{organisms.NavSettings, "/settings"},
@@ -206,7 +207,7 @@ func TestShell_NavEndsWithSingleSettingsEntry(t *testing.T) {
 	for _, m := range regexp.MustCompile(`<a\b[^>]*\bhref="([^"]+)"`).FindAllStringSubmatch(nav, -1) {
 		hrefs = append(hrefs, m[1])
 	}
-	want := []string{"/scanner", "/watchlist", "/performance", "/calibration", "/activity", "/settings"}
+	want := []string{"/scanner", "/watchlist", "/performance", "/order-proposals", "/calibration", "/activity", "/settings"}
 	if strings.Join(hrefs, " ") != strings.Join(want, " ") {
 		t.Errorf("nav hrefs = %v, want %v", hrefs, want)
 	}

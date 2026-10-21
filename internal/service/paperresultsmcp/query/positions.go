@@ -2,11 +2,13 @@ package query
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"math"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/origin"
 )
 
 // closedPosition is the part of a closed positions row the aggregates need.
@@ -14,6 +16,7 @@ type closedPosition struct {
 	closedAt time.Time
 	pnl      float64
 	notional float64 // entry_price * quantity
+	origin   string  // origin.Of the entry signal's policy_version
 }
 
 // loadClosed reads the closed positions of r (closed_at and realized_pnl both
@@ -22,11 +25,13 @@ type closedPosition struct {
 func loadClosed(ctx context.Context, q Q, r Range) ([]closedPosition, error) {
 	from, to := r.bounds()
 	rows, err := q.QueryContext(ctx, `
-SELECT closed_at, realized_pnl, entry_price * quantity
-FROM positions
-WHERE closed_at IS NOT NULL AND realized_pnl IS NOT NULL
-	AND closed_at >= ? AND closed_at < ?
-ORDER BY closed_at ASC, id ASC
+SELECT p.closed_at, p.realized_pnl, p.entry_price * p.quantity, s.policy_version
+FROM positions p
+LEFT JOIN paper_orders e ON e.id = p.entry_order_id
+LEFT JOIN trade_signals s ON s.id = e.trade_signal_id
+WHERE p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
+	AND p.closed_at >= ? AND p.closed_at < ?
+ORDER BY p.closed_at ASC, p.id ASC
 LIMIT ?`, from, to, MaxClosedScan+1)
 	if err != nil {
 		return nil, fmt.Errorf("query: closed positions: %w", err)
@@ -37,11 +42,13 @@ LIMIT ?`, from, to, MaxClosedScan+1)
 	for rows.Next() {
 		var (
 			closedAtText string
+			version      sql.NullString
 			p            closedPosition
 		)
-		if err := rows.Scan(&closedAtText, &p.pnl, &p.notional); err != nil {
+		if err := rows.Scan(&closedAtText, &p.pnl, &p.notional, &version); err != nil {
 			return nil, fmt.Errorf("query: scan closed position: %w", err)
 		}
+		p.origin = origin.Of(version)
 		if p.closedAt, err = sqlutil.ParseTime(closedAtText); err != nil {
 			return nil, err
 		}
@@ -72,6 +79,9 @@ type Performance struct {
 	MaxDrawdownJPY          float64  `json:"max_drawdown_jpy"`
 	CapitalJPY              *float64 `json:"capital_jpy"`
 	MaxDrawdownCapitalRatio *float64 `json:"max_drawdown_capital_ratio"`
+	// ByOrigin splits the closed trades by how they were entered: always one
+	// entry per origin (package origin), zeros for an origin with no trade.
+	ByOrigin []origin.Stat `json:"by_origin"`
 }
 
 // PerformanceSummary aggregates the positions closed in r. capitalJPY is the
@@ -90,7 +100,9 @@ func PerformanceSummary(ctx context.Context, q Q, r Range, capitalJPY float64) (
 
 	p := Performance{ClosedTradeCount: len(closed), OpenPositionCount: open}
 	var winSum, lossSum, returnPctSum, equity, peak float64
+	var byOrigin origin.Tally
 	for _, c := range closed {
+		byOrigin.Add(c.origin, c.pnl)
 		p.TotalPnlJPY += c.pnl
 		switch {
 		case c.pnl > 0:
@@ -112,6 +124,7 @@ func PerformanceSummary(ctx context.Context, q Q, r Range, capitalJPY float64) (
 		peak = math.Max(peak, equity)
 		p.MaxDrawdownJPY = math.Max(p.MaxDrawdownJPY, peak-equity)
 	}
+	p.ByOrigin = byOrigin.Stats()
 	if n := len(closed); n > 0 {
 		p.WinRate = ratio(p.WinCount, n)
 		mean := p.TotalPnlJPY / float64(n)

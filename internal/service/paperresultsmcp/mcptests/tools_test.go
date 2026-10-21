@@ -30,9 +30,21 @@ var settingsTools = []string{
 	"settings_get", "settings_diff", "settings_audit", "settings_set", "settings_write_enable", "settings_write_disable",
 }
 
-// writingTools are the settings tools that change state; every other tool is
-// annotated read-only.
-var writingTools = []string{"settings_set", "settings_write_enable", "settings_write_disable"}
+// proposalTools are the tools of issues #827 / #828 / #829: record a Paper order
+// proposal, ask for its cancellation (the application cancels), switch the
+// intake off (there is no tool that switches it on), and read the proposals
+// back (list, one in full, a summary; these three only read).
+var proposalTools = []string{
+	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
+	"order_proposals_list", "order_proposal_get", "order_proposal_summary",
+}
+
+// writingTools are the tools that change state; every other tool is annotated
+// read-only.
+var writingTools = []string{
+	"settings_set", "settings_write_enable", "settings_write_disable",
+	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
+}
 
 func near(t *testing.T, name string, got *float64, want float64) {
 	t.Helper()
@@ -55,8 +67,9 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the nine read tools and the six settings tools;
-// only the three writing settings tools are not marked read-only.
+// tools/list returns exactly the nine read tools, the six settings tools and
+// the six order-proposal tools (21 in all); only the six writing tools are not
+// marked read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
@@ -84,19 +97,19 @@ func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 		}
 	}
 	slices.Sort(names)
-	want := append(slices.Clone(allTools), settingsTools...)
+	want := slices.Concat(allTools, settingsTools, proposalTools)
 	slices.Sort(want)
 	if !slices.Equal(names, want) {
 		t.Fatalf("tools/list = %v, want exactly %v", names, want)
 	}
-	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools) {
+	if got := paperresultsmcp.ToolNames(); len(got) != len(allTools)+len(settingsTools)+len(proposalTools) {
 		t.Fatalf("dispatch table has %d entries: %v", len(got), got)
 	}
 }
 
-// No write-style tool can exist beyond the settings tools: the dispatch table
+// No write-style tool can exist beyond the settings and order-proposal tools: the dispatch table
 // (not just tools/list) is scanned for write/order/kill-switch-operation names
-// outside the fixed settings tool set, and calling such names - or any unknown
+// outside those fixed tool sets, and calling such names - or any unknown
 // name - gives the spec'd invalid_argument.
 func TestNoWriteToolsExist(t *testing.T) {
 	forbidden := []string{"order", "cancel", "update", "set", "delete", "insert", "write", "create", "place",
@@ -104,8 +117,8 @@ func TestNoWriteToolsExist(t *testing.T) {
 		"close", "remove", "drop", "put", "post", "execute", "exec", "run", "sql", "query", "setting", "settings",
 		"secret", "secrets", "key", "login", "token", "kabu"}
 	for _, name := range paperresultsmcp.ToolNames() {
-		if slices.Contains(settingsTools, name) {
-			continue // the whitelisted settings tools; their reach is pinned in settingstests
+		if slices.Contains(settingsTools, name) || slices.Contains(proposalTools, name) {
+			continue // their reach is pinned in settingstests and proposaltests
 		}
 		if !slices.Contains(allTools, name) {
 			t.Errorf("dispatch table has unexpected tool %q", name)
@@ -127,6 +140,8 @@ func TestNoWriteToolsExist(t *testing.T) {
 		"update_settings", "set_runtime_setting", "delete_position", "insert_trade", "paper_order",
 		"execute_sql", "kabu_station_status", "kabu_api_error_guidance", "paper_performance_summary ",
 		"PAPER_TRADES", "", "../paper_trades",
+		// Nothing turns order proposals on from the MCP.
+		"order_proposals_enable", "order_proposal_enable", "order_proposal_set", "order_proposals_set",
 	} {
 		srv.call(t, name, map[string]any{}).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidArgument)
 	}

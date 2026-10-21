@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/scanner"
@@ -77,6 +78,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 
 	performanceHandler := performance.NewPerformanceHandler(o.backtestRunner, o.insightProvider)
 	performanceHandler.Register(engine)
+	orderproposals.NewHandler(o.orderProposals).Register(engine)
 
 	engine.GET("/activity", h.activity.Page)
 	engine.GET("/ws/activity", h.activity.WebSocket)
