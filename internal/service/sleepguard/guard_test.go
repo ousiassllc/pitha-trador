@@ -190,3 +190,18 @@ func TestSleepGuardSettingsReadFailureKeepsTheState(t *testing.T) {
 		t.Fatal("a failed settings read must not release the PC")
 	}
 }
+
+// Outside the watch window the PC is given back even when the switch cannot
+// be read (a DB outage across the close must not keep the PC awake).
+func TestSleepGuardReleasesOutsideTheWindowEvenIfTheSettingsReadFails(t *testing.T) {
+	r := newRig(true)
+	r.check(t, at(20, 15, 0))
+	r.settings.err = errors.New("db down")
+	r.now = at(20, 15, 30)
+	if err := r.guard.Check(context.Background()); err != nil {
+		t.Fatalf("Check after the close = %v, want the release to succeed", err)
+	}
+	if r.keeper.held {
+		t.Fatal("still held after the close with an unreadable switch")
+	}
+}

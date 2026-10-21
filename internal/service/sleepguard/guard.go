@@ -67,18 +67,24 @@ func New(cfg Config) *Guard {
 }
 
 // Check evaluates the switch and the clock once and moves the Keeper to
-// match. A failure to read the switch leaves the state as it is; a failed
+// match. Outside the watch window a held PC is given back without reading the
+// switch; inside it, a failure to read the switch leaves the state as it is. A failed
 // Hold or Release is retried at the next check.
 func (g *Guard) Check(ctx context.Context) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
+	now := g.cfg.Now()
+	_, inWindow := healthalert.KabuWindow(now)
+	if !inWindow && g.held {
+		// Outside the watch window the switch does not matter: give the PC
+		// back even when the switch cannot be read (the DB is down).
+		return g.release(now, "outside the trading hours")
+	}
 	enabled, err := g.cfg.Settings.SleepGuardEnabled(ctx)
 	if err != nil {
 		return fmt.Errorf("sleepguard: read switch: %w", err)
 	}
-	now := g.cfg.Now()
-	_, inWindow := healthalert.KabuWindow(now)
 	switch want := enabled && inWindow; {
 	case want && !g.held:
 		if err := g.cfg.Keeper.Hold(); err != nil {
