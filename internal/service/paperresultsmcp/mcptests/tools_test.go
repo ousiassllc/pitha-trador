@@ -30,10 +30,14 @@ var settingsTools = []string{
 	"settings_get", "settings_diff", "settings_audit", "settings_set", "settings_write_enable", "settings_write_disable",
 }
 
-// proposalTools are the tools of issues #827 / #828: record a Paper order
-// proposal, read one back, ask for its cancellation (the application cancels),
-// and switch the intake off (there is no tool that switches it on).
-var proposalTools = []string{"order_proposal_submit", "order_proposal_get", "order_proposal_cancel", "order_proposals_disable"}
+// proposalTools are the tools of issues #827 / #828 / #829: record a Paper order
+// proposal, ask for its cancellation (the application cancels), switch the
+// intake off (there is no tool that switches it on), and read the proposals
+// back (list, one in full, a summary; these three only read).
+var proposalTools = []string{
+	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
+	"order_proposals_list", "order_proposal_get", "order_proposal_summary",
+}
 
 // writingTools are the tools that change state; every other tool is annotated
 // read-only.
@@ -64,8 +68,8 @@ func wantNull(t *testing.T, name string, got *float64) {
 }
 
 // tools/list returns exactly the nine read tools, the six settings tools and
-// the three order-proposal tools; only the five writing tools are not marked
-// read-only.
+// the six order-proposal tools (21 in all); only the six writing tools are not
+// marked read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))

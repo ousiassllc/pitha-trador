@@ -120,6 +120,19 @@ func TestEachAttentionCodeOnAndOff(t *testing.T) {
 			testkit.RetrainSkip(t, w, at(17, 3, 0), "too_few_rows_before_oos")
 		}},
 
+		{name: "order_proposal_stalled on: received and not picked up for an hour", want: []string{query.AttentionOrderProposalStalled},
+			setup: func(t *testing.T, w *sql.DB) { stalledProposal(t, w, 1, "received", at(20, 12, 0)) }},
+		{name: "order_proposal_stalled on: processing left behind", want: []string{query.AttentionOrderProposalStalled},
+			setup: func(t *testing.T, w *sql.DB) { stalledProposal(t, w, 1, "processing", at(20, 12, 30)) }},
+		{name: "order_proposal_stalled off: only just received", setup: func(t *testing.T, w *sql.DB) {
+			stalledProposal(t, w, 1, "received", at(20, 12, 55))
+		}},
+		{name: "order_proposal_stalled off: waiting by design, or finished", setup: func(t *testing.T, w *sql.DB) {
+			for i, status := range []string{"waiting_session", "submitted", "filled", "rejected", "expired", "cancelled", "closed", "failed"} {
+				stalledProposal(t, w, int64(i+1), status, at(19, 9, 0))
+			}
+		}},
+
 		{name: "several at once, in the documented order", want: []string{
 			query.AttentionNoPaperTradesToday, query.AttentionNoActiveModel, kabu, query.AttentionKillSwitchActive,
 		}, setup: func(t *testing.T, w *sql.DB) {
@@ -148,12 +161,39 @@ func TestEachAttentionCodeOnAndOff(t *testing.T) {
 // Every code the tool can raise is in the documented list, in this order.
 func TestAttentionCodesAreTheDocumentedFixedSet(t *testing.T) {
 	want := []string{"no_paper_trades_today", "no_active_model", "kabu_not_logged_in", "market_data_idle",
-		"missing_session", "daily_guard_halted", "kill_switch_active", "retrain_skipped"}
+		"missing_session", "daily_guard_halted", "kill_switch_active", "retrain_skipped", "order_proposal_stalled"}
 	if got := query.AttentionCodes(); !slices.Equal(got, want) {
 		t.Fatalf("AttentionCodes = %v, want %v", got, want)
 	}
 	// The two health alerts are the codes of the #802 in-app banner, not a copy.
 	if query.AttentionKabuNotLoggedIn != domain.HealthAlertKabuNotLoggedIn || query.AttentionMarketDataIdle != domain.HealthAlertMarketDataIdle {
 		t.Fatal("health alert codes drifted from the in-app banner (domain.HealthAlert*)")
+	}
+}
+
+// stalledProposal plants an open_long proposal last changed at when.
+func stalledProposal(t *testing.T, w *sql.DB, id int64, status string, when time.Time) {
+	t.Helper()
+	testkit.Proposal(t, w, testkit.ProposalRow{ID: id, ReceivedAt: when.UTC().Format(time.RFC3339), Status: status, Quantity: 100})
+}
+
+// health_today says how many proposals are stuck and since when (the oldest's
+// last change), and nothing else about them.
+func TestStalledProposalsAreCountedWithTheOldestSince(t *testing.T) {
+	now := at(20, 13, 0)
+	_, w := testkit.HealthyDay(t, now)
+	stalledProposal(t, w, 1, "processing", at(20, 12, 0))
+	stalledProposal(t, w, 2, "received", at(20, 11, 0))
+	stalledProposal(t, w, 3, "received", at(20, 12, 58)) // not stalled yet
+	h := healthAt(t, w, now)
+	if h.OrderProposals.Count != 2 || h.OrderProposals.OldestSince == nil || *h.OrderProposals.OldestSince != "2026-10-20T02:00:00Z" {
+		t.Errorf("order_proposals = %+v", h.OrderProposals)
+	}
+	if !slices.Equal(h.AttentionCodes, []string{query.AttentionOrderProposalStalled}) {
+		t.Errorf("attention codes = %v", h.AttentionCodes)
+	}
+	_, w = testkit.HealthyDay(t, now)
+	if h := healthAt(t, w, now); h.OrderProposals.Count != 0 || h.OrderProposals.OldestSince != nil {
+		t.Errorf("no proposals: %+v", h.OrderProposals)
 	}
 }

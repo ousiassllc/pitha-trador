@@ -38,6 +38,15 @@ const (
 	StatusFailed         = "failed"
 )
 
+// Statuses lists every status in the order the read tools report them: the
+// course of a proposal, then how it ended.
+func Statuses() []string {
+	return []string{
+		StatusReceived, StatusProcessing, StatusWaitingSession, StatusSubmitted, StatusFilled,
+		StatusClosed, StatusRejected, StatusExpired, StatusCancelled, StatusFailed,
+	}
+}
+
 // Values of order_proposal_events.actor.
 const (
 	ActorMCP = "mcp"

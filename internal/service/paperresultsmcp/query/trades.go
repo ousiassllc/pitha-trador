@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/origin"
 )
 
 // Trade is one paper_trades row: the whitelisted columns of a closed
@@ -26,6 +27,8 @@ type Trade struct {
 	ExitReason  *string  `json:"exit_reason"`
 	RealizedPnl float64  `json:"realized_pnl"`
 	FeesJPY     *float64 `json:"fees_jpy"`
+	// Origin is how the trade was entered (package origin).
+	Origin string `json:"origin"`
 }
 
 // Trades returns up to limit closed trades in r, newest first (closed_at,
@@ -36,7 +39,7 @@ func Trades(ctx context.Context, q Q, r Range, limit int, cursor string) ([]Trad
 	args := []any{from, to}
 	cursorClause := ""
 	if cursor != "" {
-		closedAt, id, err := decodeCursor(cursor)
+		closedAt, id, err := DecodeCursor(cursor)
 		if err != nil {
 			return nil, "", err
 		}
@@ -47,12 +50,13 @@ func Trades(ctx context.Context, q Q, r Range, limit int, cursor string) ([]Trad
 
 	rows, err := q.QueryContext(ctx, `
 SELECT p.id, p.symbol, p.side, p.quantity, p.entry_price, p.opened_at,
-	x.filled_price, p.closed_at, p.exit_reason, p.realized_pnl,
+	x.filled_price, p.closed_at, p.exit_reason, p.realized_pnl, s.policy_version,
 	CASE WHEN e.id IS NULL AND x.id IS NULL THEN NULL
 		ELSE COALESCE(e.fees, 0) + COALESCE(x.fees, 0) END
 FROM positions p
 LEFT JOIN paper_orders e ON e.id = p.entry_order_id
 LEFT JOIN paper_orders x ON x.id = p.exit_order_id
+LEFT JOIN trade_signals s ON s.id = e.trade_signal_id
 WHERE p.closed_at IS NOT NULL AND p.realized_pnl IS NOT NULL
 	AND p.closed_at >= ? AND p.closed_at < ?`+cursorClause+`
 ORDER BY p.closed_at DESC, p.id DESC
@@ -72,15 +76,17 @@ LIMIT ?`, args...)
 			exitSell sql.NullFloat64
 			reason   sql.NullString
 			fees     sql.NullFloat64
+			version  sql.NullString
 		)
 		if err := rows.Scan(&t.ID, &t.Symbol, &t.Side, &t.Quantity, &t.EntryPrice, &openedAt,
-			&exitSell, &closedAt, &reason, &t.RealizedPnl, &fees); err != nil {
+			&exitSell, &closedAt, &reason, &t.RealizedPnl, &version, &fees); err != nil {
 			return nil, "", fmt.Errorf("query: scan trade: %w", err)
 		}
 		t.OpenedAt = FormatOut(openedAt)
 		t.ClosedAt = FormatOut(closedAt)
 		t.ExitPrice = floatPtr(exitSell)
 		t.FeesJPY = floatPtr(fees)
+		t.Origin = origin.Of(version)
 		if reason.Valid {
 			t.ExitReason = &reason.String
 		}
@@ -88,7 +94,7 @@ LIMIT ?`, args...)
 			// The extra row only proves there is a next page; the cursor
 			// resumes after the last row we return.
 			next := trades[limit-1]
-			return trades, encodeCursor(rawClosedAt, next.ID), rows.Err()
+			return trades, EncodeCursor(rawClosedAt, next.ID), rows.Err()
 		}
 		rawClosedAt = closedAt
 		trades = append(trades, t)
@@ -99,13 +105,15 @@ LIMIT ?`, args...)
 	return trades, "", nil
 }
 
-// encodeCursor packs the stored closed_at text and id of the last row. The
-// client treats it as opaque.
-func encodeCursor(closedAt string, id int64) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(closedAt + "|" + strconv.FormatInt(id, 10)))
+// EncodeCursor packs the stored sort timestamp (closed_at for paper_trades,
+// received_at for order_proposals_list) and id of the last row. The client
+// treats it as opaque.
+func EncodeCursor(at string, id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(at + "|" + strconv.FormatInt(id, 10)))
 }
 
-func decodeCursor(cursor string) (closedAt string, id int64, err error) {
+// DecodeCursor is EncodeCursor's inverse; anything else is ErrBadCursor.
+func DecodeCursor(cursor string) (at string, id int64, err error) {
 	raw, err := base64.RawURLEncoding.DecodeString(cursor)
 	if err != nil {
 		return "", 0, ErrBadCursor

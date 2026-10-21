@@ -20,12 +20,15 @@ type Event struct {
 	ToStatus   string  `json:"to_status"`
 	ReasonCode string  `json:"reason_code"`
 	Actor      string  `json:"actor"`
+	// Detail is the event's detail_json object (codes and numbers only, e.g.
+	// {"requested_quantity":…,"applied_quantity":…}), null when there is none.
+	Detail json.RawMessage `json:"detail"`
 }
 
 // State is the state of one order proposal (order_proposal_get): what
 // was proposed, where it stands, the links the application filled in (issue
-// #828) and its events, oldest first. request_hash and client are not part of
-// it.
+// #828), what became of it (Result, issue #829) and its events, oldest first.
+// request_hash and client are not part of it.
 type State struct {
 	ProposalID      int64    `json:"proposal_id"`
 	Status          string   `json:"status"`
@@ -50,7 +53,16 @@ type State struct {
 	TradeSignalID   *int64   `json:"trade_signal_id"`
 	PaperOrderID    *int64   `json:"paper_order_id"`
 	PositionID      *int64   `json:"position_id"`
-	Events          []Event  `json:"events"`
+	// CancelRequestedAt is when order_proposal_cancel asked for a cancellation.
+	CancelRequestedAt *string `json:"cancel_requested_at"`
+	// AppliedQuantity, ComputedMaxLossJPY and EffectiveStopLossPrice are what
+	// the application decided when it ordered (#828): the shares ordered, its
+	// own maximum-loss estimate and the stop that estimate used.
+	AppliedQuantity        *int64   `json:"applied_quantity"`
+	ComputedMaxLossJPY     *float64 `json:"computed_max_loss_jpy"`
+	EffectiveStopLossPrice *float64 `json:"effective_stop_loss_price"`
+	Result                 Result   `json:"result"`
+	Events                 []Event  `json:"events"`
 }
 
 // Get reads one proposal and its events (ErrNotFound when there is no such
@@ -61,16 +73,19 @@ func Get(ctx context.Context, q query.Q, id int64) (State, error) {
 		received, updated, expires, srcs  string
 		qty, instrument, signal, ord, pos sql.NullInt64
 		budget, limit, stop, take, loss   sql.NullFloat64
-		plan                              sql.NullString
+		plan, cancelRequested             sql.NullString
+		applied                           sql.NullInt64
+		estimate, effectiveStop           sql.NullFloat64
 	)
 	err := q.QueryRowContext(ctx, `
 SELECT id, status, status_reason, received_at, updated_at, expires_at, symbol, bucket, action, quantity, budget_jpy,
        order_type, limit_price, stop_loss_price, take_profit_price, exit_plan, max_loss_jpy, rationale, sources_json,
-       instrument_id, trade_signal_id, paper_order_id, position_id
+       instrument_id, trade_signal_id, paper_order_id, position_id,
+       cancel_requested_at, applied_quantity, computed_max_loss_jpy, effective_stop_loss_price
 FROM order_proposals WHERE id = ?`, id).Scan(
 		&p.ProposalID, &p.Status, &p.StatusReason, &received, &updated, &expires, &p.Symbol, &p.Bucket, &p.Action, &qty, &budget,
 		&p.OrderType, &limit, &stop, &take, &plan, &loss, &p.Rationale, &srcs,
-		&instrument, &signal, &ord, &pos)
+		&instrument, &signal, &ord, &pos, &cancelRequested, &applied, &estimate, &effectiveStop)
 	if errors.Is(err, sql.ErrNoRows) {
 		return State{}, ErrNotFound
 	}
@@ -81,11 +96,19 @@ FROM order_proposals WHERE id = ?`, id).Scan(
 	p.Quantity, p.BudgetJPY, p.LimitPrice = intPtr(qty), floatPtr(budget), floatPtr(limit)
 	p.StopLossPrice, p.TakeProfitPrice, p.MaxLossJPY = floatPtr(stop), floatPtr(take), floatPtr(loss)
 	p.InstrumentID, p.TradeSignalID, p.PaperOrderID, p.PositionID = intPtr(instrument), intPtr(signal), intPtr(ord), intPtr(pos)
+	p.AppliedQuantity, p.ComputedMaxLossJPY, p.EffectiveStopLossPrice = intPtr(applied), floatPtr(estimate), floatPtr(effectiveStop)
 	if plan.Valid {
 		p.ExitPlan = &plan.String
 	}
+	if cancelRequested.Valid {
+		at := query.FormatOut(cancelRequested.String)
+		p.CancelRequestedAt = &at
+	}
 	if err := json.Unmarshal([]byte(srcs), &p.Sources); err != nil {
 		return State{}, fmt.Errorf("proposal: decode order proposal sources: %w", err)
+	}
+	if p.Result, err = result(ctx, q, p); err != nil {
+		return State{}, err
 	}
 	if p.Events, err = events(ctx, q, id); err != nil {
 		return State{}, err
@@ -95,7 +118,7 @@ FROM order_proposals WHERE id = ?`, id).Scan(
 
 func events(ctx context.Context, q query.Q, id int64) ([]Event, error) {
 	rows, err := q.QueryContext(ctx, `
-SELECT at, from_status, to_status, reason_code, actor FROM order_proposal_events WHERE proposal_id = ? ORDER BY id`, id)
+SELECT at, from_status, to_status, reason_code, actor, detail_json FROM order_proposal_events WHERE proposal_id = ? ORDER BY id`, id)
 	if err != nil {
 		return nil, fmt.Errorf("proposal: read order proposal events: %w", err)
 	}
@@ -103,14 +126,18 @@ SELECT at, from_status, to_status, reason_code, actor FROM order_proposal_events
 	events := []Event{}
 	for rows.Next() {
 		var (
-			e    Event
-			at   string
-			from sql.NullString
+			e      Event
+			at     string
+			from   sql.NullString
+			detail string
 		)
-		if err := rows.Scan(&at, &from, &e.ToStatus, &e.ReasonCode, &e.Actor); err != nil {
+		if err := rows.Scan(&at, &from, &e.ToStatus, &e.ReasonCode, &e.Actor, &detail); err != nil {
 			return nil, fmt.Errorf("proposal: scan order proposal event: %w", err)
 		}
 		e.At = query.FormatOut(at)
+		if detail != "" {
+			e.Detail = json.RawMessage(detail)
+		}
 		if from.Valid {
 			e.FromStatus = &from.String
 		}

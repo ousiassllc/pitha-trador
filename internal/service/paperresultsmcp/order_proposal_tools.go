@@ -10,9 +10,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proposal"
 )
 
-// The order-proposal tools (issue #827; docs/api/endpoints/paper-results-mcp.md
-// §3.16-3.18). They accept and record a Paper order proposal; they never place
-// an order. Whether the symbol exists, what it costs and whether Risk lets it
+// The order-proposal tools that write (issues #827, #828; docs/api/endpoints/paper-results-mcp.md
+// §3.16, §3.18, §3.19; the read tools are in order_proposal_read_tools.go).
+// They accept and record a Paper order proposal; they never place an order. Whether the symbol exists, what it costs and whether Risk lets it
 // through are the application's questions (issue #828), not the MCP's.
 
 func init() {
@@ -76,33 +76,6 @@ var orderProposalTools = []tool{
 					return nil, 0, submitFailureOf(err)
 				}
 				return out, 1, nil
-			}, nil
-		},
-	},
-	{
-		name:        "order_proposal_get",
-		description: "出した注文案 1 件の状態（受け付けた内容・状態と理由コード・アプリが埋めた約定や注文への紐付け・状態の変化の履歴）。proposal_id は order_proposal_submit の応答にある（読み取り専用。受け付けスイッチがオフでも使える）",
-		schema: objectSchema(map[string]any{
-			"proposal_id": map[string]any{"type": "integer", "minimum": 1},
-		}, "proposal_id"),
-		noPeriod: true,
-		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
-			var a struct {
-				ProposalID *int64 `json:"proposal_id"`
-			}
-			if err := strictDecode(raw, &a); err != nil {
-				return periodArgs{}, nil, err
-			}
-			if a.ProposalID == nil || *a.ProposalID < 1 {
-				return periodArgs{}, nil, fail(CodeInvalidArgument)
-			}
-			id := *a.ProposalID
-			return periodArgs{}, func(ctx context.Context, e toolEnv) (any, int, error) {
-				p, err := proposal.Get(ctx, e.q, id)
-				if errors.Is(err, proposal.ErrNotFound) {
-					return nil, 0, fail(CodeProposalNotFound)
-				}
-				return p, 1, err
 			}, nil
 		},
 	},
