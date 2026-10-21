@@ -3,6 +3,7 @@ package checkflow_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,14 @@ func openStockPosition(t *testing.T, db *sql.DB, quantity int64, entryPrice floa
 // openStockPositionMarked opens a stock position whose latest mark is currentPrice.
 func openStockPositionMarked(t *testing.T, db *sql.DB, quantity int64, entryPrice, currentPrice float64) {
 	t.Helper()
+	if err := insertStockPosition(db, quantity, entryPrice, currentPrice); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// insertStockPosition is openStockPositionMarked returning the error, for
+// callers outside the test goroutine.
+func insertStockPosition(db *sql.DB, quantity int64, entryPrice, currentPrice float64) error {
 	ctx := context.Background()
 	now := time.Now()
 	order, err := trading.NewOrderRepository(db).Insert(ctx, domain.PaperOrder{
@@ -70,14 +79,15 @@ func openStockPositionMarked(t *testing.T, db *sql.DB, quantity int64, entryPric
 		Quantity: quantity, Status: domain.OrderStatusFilled, SubmittedAt: now,
 	})
 	if err != nil {
-		t.Fatalf("insert entry order: %v", err)
+		return fmt.Errorf("insert entry order: %w", err)
 	}
 	if _, err := trading.NewPositionRepository(db).Open(ctx, domain.Position{
 		InstrumentID: 1, EntryOrderID: order.ID, Symbol: "7203", Side: domain.PositionSideLong,
 		Quantity: quantity, EntryPrice: entryPrice, CurrentPrice: currentPrice, OpenedAt: now,
 	}); err != nil {
-		t.Fatalf("open position: %v", err)
+		return fmt.Errorf("open position: %w", err)
 	}
+	return nil
 }
 
 func TestRisk_StockBucketZeroRejectsEntryWithBucketDisabled(t *testing.T) {

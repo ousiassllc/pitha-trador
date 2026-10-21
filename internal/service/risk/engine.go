@@ -174,6 +174,11 @@ type Engine struct {
 	// dailyGuardMu serializes evaluateDailyGuard's read-modify-write of the
 	// system.daily_guard row (dailyguard.go).
 	dailyGuardMu sync.Mutex
+
+	// entryMu serializes CheckThenEnter's judge-then-open section across
+	// every entry path, so concurrent candidates cannot both read the same
+	// holdings and together pass a limit (entry.go, issue #839).
+	entryMu sync.Mutex
 }
 
 // NewEngine returns an Engine built from cfg, applying every documented
