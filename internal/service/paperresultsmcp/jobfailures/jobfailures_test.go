@@ -162,7 +162,7 @@ func TestReadReturnsWhatItHasWhenTheBudgetRunsOut(t *testing.T) {
 			return false
 		}
 		failedStatements++
-		return failedStatements == 5 // the fifth (jev-scout, oldest day) does not finish
+		return failedStatements == 5 // the fifth (market-data, 10-20) does not finish
 	}}
 	// The call's own deadline (the server's QueryTimeout) is longer than the
 	// soft budget Read works to, so the call itself does not fail.
@@ -172,13 +172,13 @@ func TestReadReturnsWhatItHasWhenTheBudgetRunsOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read = %v, want the partial result, not an error", err)
 	}
-	if !r.TimedOut || r.Total != 4 || len(r.ByDay) != 2 || r.ByDay[0] != (DayCount{"2026-10-20", 2}) || r.ByDay[1] != (DayCount{"2026-10-21", 2}) {
-		t.Errorf("result = %+v, want timed out with the 4 failures of 10-20 and 10-21 (both queues) only", r)
+	if !r.TimedOut || r.Total != 4 || len(r.ByDay) != 3 || r.ByDay[0] != (DayCount{"2026-10-19", 1}) || r.ByDay[1] != (DayCount{"2026-10-20", 1}) || r.ByDay[2] != (DayCount{"2026-10-21", 2}) {
+		t.Errorf("result = %+v, want timed out with jev-scout's 3 failures and market-data's 10-21 one", r)
 	}
-	// Days newest first, market-data (the busiest queue) last within a day; the
+	// market-data (the busiest queue) is read last, newest day first; the
 	// statements after the one that ran out of time fail on their own. The skip
 	// counts were read first, so none of them is missing.
-	want := []string{"failed:jev-scout:2026-10-19", "failed:market-data:2026-10-19"}
+	want := []string{"failed:market-data:2026-10-20", "failed:market-data:2026-10-19"}
 	if !slices.Equal(r.Incomplete, want) {
 		t.Errorf("incomplete = %v, want %v", r.Incomplete, want)
 	}

@@ -153,8 +153,8 @@ func window(from, to time.Time) (time.Time, Window) {
 }
 
 // Read reads the failed and skipped jobs finished in the last MaxDays days of
-// [periodFrom, periodTo). Failures are read per JST day (newest first) and
-// queue so the (queue, status, finished_at) index answers each range
+// [periodFrom, periodTo). Failures are read per queue (the busiest last) and
+// JST day (newest first) so the (queue, status, finished_at) index answers each range
 // (jobs_queue_status_finished_idx) and a spent time budget loses only the
 // statements not yet run; the error head is reduced to its code token in SQL,
 // so groups are (day, code), not one per message. When the soft budget
@@ -196,11 +196,11 @@ WHERE queue = ? AND status = 'succeeded' AND finished_at >= ? AND finished_at < 
 		out.SkippedTotal += n
 	}
 
-	// Newest day first, and within a day the busiest queue last: its statement
-	// is the one that can spend the budget, and the others are cheap.
-	for i := len(days) - 1; i >= 0; i-- {
-		fromS, toS := sqlutil.FormatTime(days[i][0]), sqlutil.FormatTime(days[i][1])
-		for _, queue := range busiestLast(queues) {
+	// The busiest queue goes last, so the statements that can spend the budget
+	// come after every cheap one; within a queue, the newest day goes first.
+	for _, queue := range busiestLast(queues) {
+		for i := len(days) - 1; i >= 0; i-- {
+			fromS, toS := sqlutil.FormatTime(days[i][0]), sqlutil.FormatTime(days[i][1])
 			groups, err := failedByDayAndCode(soft, q, failedSQL, queue, fromS, toS)
 			if err != nil {
 				if !budget.Spent(ctx, soft, err) {
