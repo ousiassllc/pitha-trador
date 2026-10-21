@@ -1,5 +1,6 @@
 // Package proposaltests holds the HTTP-level tests of the order-proposal tools
-// (issue #827): the intake switch, the transaction that records a proposal and
+// (issues #827, #828): the cancellation request, risk_rejections' proposal
+// counts, the intake switch, the transaction that records a proposal and
 // its first event, idempotency, the argument rules, the daily limit and the
 // narrow write path. They live apart from settingstests, which holds the
 // settings tools' tests.
@@ -143,6 +144,7 @@ var fixedMessages = map[paperresultsmcp.Code]string{
 	paperresultsmcp.CodeProposalsDisabled:   "注文案の受け付けはオフです。Settings の「外部連携」でオンにしてください（MCP からはオンにできません）。",
 	paperresultsmcp.CodeIdempotencyConflict: "この idempotency_key は内容の違う案で使われています。別のキーで出し直してください。",
 	paperresultsmcp.CodeProposalNotFound:    "その proposal_id の注文案はありません。",
+	paperresultsmcp.CodeNotCancellable:      "この注文案はもう取り消せません（約定済み・終了済み、または処理中）。order_proposal_get で状態を確認してください。",
 }
 
 type errorBody struct {

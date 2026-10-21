@@ -30,15 +30,16 @@ var settingsTools = []string{
 	"settings_get", "settings_diff", "settings_audit", "settings_set", "settings_write_enable", "settings_write_disable",
 }
 
-// proposalTools are the tools of issue #827: record a Paper order proposal,
-// read one back, and switch the intake off (there is no tool that switches it on).
-var proposalTools = []string{"order_proposal_submit", "order_proposal_get", "order_proposals_disable"}
+// proposalTools are the tools of issues #827 / #828: record a Paper order
+// proposal, read one back, ask for its cancellation (the application cancels),
+// and switch the intake off (there is no tool that switches it on).
+var proposalTools = []string{"order_proposal_submit", "order_proposal_get", "order_proposal_cancel", "order_proposals_disable"}
 
 // writingTools are the tools that change state; every other tool is annotated
 // read-only.
 var writingTools = []string{
 	"settings_set", "settings_write_enable", "settings_write_disable",
-	"order_proposal_submit", "order_proposals_disable",
+	"order_proposal_submit", "order_proposal_cancel", "order_proposals_disable",
 }
 
 func near(t *testing.T, name string, got *float64, want float64) {

@@ -38,6 +38,7 @@ const (
 	CodeProposalsDisabled   Code = "proposals_disabled"
 	CodeIdempotencyConflict Code = "idempotency_conflict"
 	CodeProposalNotFound    Code = "proposal_not_found"
+	CodeNotCancellable      Code = "not_cancellable"
 )
 
 type codeInfo struct {
@@ -64,6 +65,7 @@ var codeTable = map[Code]codeInfo{
 	CodeProposalsDisabled:   {http.StatusForbidden, "注文案の受け付けはオフです。Settings の「外部連携」でオンにしてください（MCP からはオンにできません）。"},
 	CodeIdempotencyConflict: {http.StatusConflict, "この idempotency_key は内容の違う案で使われています。別のキーで出し直してください。"},
 	CodeProposalNotFound:    {http.StatusNotFound, "その proposal_id の注文案はありません。"},
+	CodeNotCancellable:      {http.StatusConflict, "この注文案はもう取り消せません（約定済み・終了済み、または処理中）。order_proposal_get で状態を確認してください。"},
 }
 
 // toolError is a failure with a spec code. cause is for the server log only.

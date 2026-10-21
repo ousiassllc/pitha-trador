@@ -107,6 +107,46 @@ var orderProposalTools = []tool{
 		},
 	},
 	{
+		name: "order_proposal_cancel",
+		description: "出した注文案の取消を依頼する（依頼を記録するだけ。実際の取消はアプリが行い、order_proposal_get で結果を確かめる）。" +
+			"取り消せるのは received / waiting_session / submitted の案だけで、submitted は待っている指値の注文もアプリが取り消す。" +
+			"約定済み・終わった案（filled / closed / rejected / expired / cancelled / failed）と、処理中（processing）の案は not_cancellable。" +
+			"同じ案への 2 回目以降の依頼は新しく記録せず最初の依頼を返す（replayed: true）。受け付けスイッチがオフでも使える（リスクを減らす操作のため）",
+		schema: objectSchema(map[string]any{
+			"proposal_id": map[string]any{"type": "integer", "minimum": 1},
+		}, "proposal_id"),
+		writes:   true,
+		noPeriod: true,
+		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
+			var a struct {
+				ProposalID *int64 `json:"proposal_id"`
+			}
+			if err := strictDecode(raw, &a); err != nil {
+				return periodArgs{}, nil, err
+			}
+			if a.ProposalID == nil || *a.ProposalID < 1 {
+				return periodArgs{}, nil, fail(CodeInvalidArgument)
+			}
+			id := *a.ProposalID
+			return periodArgs{}, func(ctx context.Context, e toolEnv) (any, int, error) {
+				w, err := e.writer()
+				if err != nil {
+					return nil, 0, err
+				}
+				out, err := w.RequestCancel(ctx, id)
+				switch {
+				case errors.Is(err, proposal.ErrNotFound):
+					return nil, 0, fail(CodeProposalNotFound)
+				case errors.Is(err, mcpset.ErrNotCancellable):
+					return nil, 0, fail(CodeNotCancellable)
+				case err != nil:
+					return nil, 0, err
+				}
+				return out, 1, nil
+			}, nil
+		},
+	},
+	{
 		name: "order_proposals_disable",
 		description: "注文案の受け付けをオフにする（order_proposal_submit が proposals_disabled になる。すでに出した案には影響しない）。" +
 			"オンに戻せるのは Settings 画面の「外部連携」だけで、MCP からはオンにできない。切替は監査ログに残る",

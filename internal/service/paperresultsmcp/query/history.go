@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"unicode/utf8"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 )
 
 // Model is one metalabel_history model (API spec §3.5). params_json,
@@ -117,6 +119,16 @@ type RiskRejections struct {
 	RiskPassedCount  int            `json:"risk_passed_count"`
 	OtherRejectCount int            `json:"other_reject_count"`
 	Buckets          []RejectBucket `json:"buckets"`
+	// ProposalRiskPassedCount / ProposalRiskRejectedCount are how many of the
+	// signals above came from order proposals (issue #828) rather than the
+	// Policy Engine: the signals whose policy_version is
+	// orderproposal.PolicyVersion. They are already counted in
+	// risk_passed_count and in buckets; these two let a client tell the
+	// proposals' share. The proposals' own rejection reasons (an unknown
+	// symbol, a stale quote, ...) never reach trade_signals; they are in
+	// order_proposal_get.
+	ProposalRiskPassedCount   int `json:"proposal_risk_passed_count"`
+	ProposalRiskRejectedCount int `json:"proposal_risk_rejected_count"`
 	// OtherRejectBreakdown splits other_reject_count (the Policy Engine's own
 	// NONE reasons, not the Risk Engine's) by fixed reject_reason code, e.g.
 	// jev_none or meta_skip:no_active_model; unlisted prefixes are "other" and
@@ -134,9 +146,12 @@ func Rejections(ctx context.Context, q Q, r Range) (RiskRejections, error) {
 	out := RiskRejections{Buckets: []RejectBucket{}}
 	err := q.QueryRowContext(ctx, `
 SELECT COALESCE(SUM(risk_passed <> 0), 0),
-	COALESCE(SUM(risk_passed = 0 AND (reject_reason IS NULL OR NOT reject_reason GLOB 'risk_engine_rejected:*')), 0)
-FROM trade_signals WHERE timestamp >= ? AND timestamp < ?`, from, to).
-		Scan(&out.RiskPassedCount, &out.OtherRejectCount)
+	COALESCE(SUM(risk_passed = 0 AND (reject_reason IS NULL OR NOT reject_reason GLOB 'risk_engine_rejected:*')), 0),
+	COALESCE(SUM(risk_passed <> 0 AND policy_version = ?), 0),
+	COALESCE(SUM(risk_passed = 0 AND policy_version = ?), 0)
+FROM trade_signals WHERE timestamp >= ? AND timestamp < ?`,
+		orderproposal.PolicyVersion, orderproposal.PolicyVersion, from, to).
+		Scan(&out.RiskPassedCount, &out.OtherRejectCount, &out.ProposalRiskPassedCount, &out.ProposalRiskRejectedCount)
 	if err != nil {
 		return RiskRejections{}, fmt.Errorf("query: risk rejection totals: %w", err)
 	}

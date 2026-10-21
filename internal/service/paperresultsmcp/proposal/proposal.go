@@ -14,12 +14,14 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 )
 
 // Values of the enumerated arguments (and of the order_proposals columns).
 const (
-	ActionOpenLong = "open_long"
-	ActionClose    = "close"
+	ActionOpenLong = orderproposal.ActionOpenLong
+	ActionClose    = orderproposal.ActionClose
 
 	BucketStock   = "stock"
 	BucketBondETF = "bond_etf"
@@ -29,26 +31,27 @@ const (
 )
 
 // Statuses of a proposal. Only StatusReceived is written by the MCP; the rest
-// are the application's (issue #828), listed here so the CHECK in migration
-// 000042 and the code agree on the set.
+// are the application's (issue #828, internal/bootstrap/proposalexec). The
+// values live in domain/orderproposal so both sides and the CHECK in migration 000042 agree
+// on the set.
 const (
-	StatusReceived       = "received"
-	StatusProcessing     = "processing"
-	StatusWaitingSession = "waiting_session"
-	StatusRejected       = "rejected"
-	StatusSubmitted      = "submitted"
-	StatusFilled         = "filled"
-	StatusExpired        = "expired"
-	StatusCancelled      = "cancelled"
-	StatusClosed         = "closed"
-	StatusFailed         = "failed"
+	StatusReceived       = orderproposal.StatusReceived
+	StatusProcessing     = orderproposal.StatusProcessing
+	StatusWaitingSession = orderproposal.StatusWaitingSession
+	StatusRejected       = orderproposal.StatusRejected
+	StatusSubmitted      = orderproposal.StatusSubmitted
+	StatusFilled         = orderproposal.StatusFilled
+	StatusExpired        = orderproposal.StatusExpired
+	StatusCancelled      = orderproposal.StatusCancelled
+	StatusClosed         = orderproposal.StatusClosed
+	StatusFailed         = orderproposal.StatusFailed
 )
 
 // Actors of an order_proposal_events row.
 const (
-	ActorMCP = "mcp"
-	ActorApp = "app"
-	ActorGUI = "gui"
+	ActorMCP = orderproposal.ActorMCP
+	ActorApp = orderproposal.ActorApp
+	ActorGUI = orderproposal.ActorGUI
 )
 
 // Limits fixed by the issue #827 specification.

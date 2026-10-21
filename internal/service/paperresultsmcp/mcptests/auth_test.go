@@ -182,6 +182,7 @@ func TestUnauthorizedRequestsReachNoSQLAndOpenNoConnection(t *testing.T) {
 		// The order-proposal tools (issue #827) need the key like every request.
 		"order_proposal_submit":   callBody("order_proposal_submit", map[string]any{"idempotency_key": "proposal-0001"}),
 		"order_proposal_get":      callBody("order_proposal_get", map[string]any{"proposal_id": 1}),
+		"order_proposal_cancel":   callBody("order_proposal_cancel", map[string]any{"proposal_id": 1}),
 		"order_proposals_disable": callBody("order_proposals_disable", map[string]any{}),
 		"garbage":                 "not json at all",
 	}

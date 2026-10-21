@@ -19,6 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/healthalertwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalexec"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/tachibanawatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -50,10 +51,9 @@ import (
 )
 
 // Services holds every internal/service/* instance the composition root
-// builds, plus the repositories they share. cmd/desktop and cmd/server
-// both call BuildServices once (after bootstrap.Run) and derive their
-// internal/router.New options and Wails/http lifecycle hooks from the
-// returned *Services.
+// builds, plus the repositories they share. cmd/desktop and cmd/server both
+// call BuildServices once (after bootstrap.Run) and derive their
+// internal/router.New options and Wails/http lifecycle hooks from it.
 type Services struct {
 	Instruments *market.InstrumentRepository
 	Snapshots   *market.SnapshotRepository
@@ -112,6 +112,7 @@ type Services struct {
 	watchlist        *rankingwatch.Watchlist
 	rankingWatcher   *rankingwatch.Watcher
 	tachibanaMonitor *tachibanawatch.Monitor
+	proposalExec     proposalexec.Processor // the Paper results MCP's order proposals (issue #828)
 }
 
 // buildSettings collects BuildServices' optional inputs; see BuildOption.
@@ -199,6 +200,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow, runtimePolicy)
 	traderHandler := svc.buildPolicyAndBacktest(state, executionConfig, runtimePolicy)
 	svc.buildGovernor(state.Strategy, state.DB, secrets, alertChannels)
+	svc.proposalExec = proposalexec.New(state.DB, svc.Instruments, svc.Snapshots, svc.Signals, svc.Orders, svc.Positions, svc.Risk, svc.Execution, state.Strategy.Scan.SnapshotMaxAge(svc.rankingWatchMaxAge))
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
 	svc.HealthAlerts = healthalertwire.New(state.DB, svc.Jobs, svc.Broker)
 	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy, state.Paths.LogDir)

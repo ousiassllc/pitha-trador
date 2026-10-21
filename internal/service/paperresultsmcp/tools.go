@@ -35,8 +35,8 @@ type toolEnv struct {
 // tool is one entry of the dispatch table. The table is the complete set of
 // capabilities: there is no other way for a request to reach SQL. Every entry
 // is a read except the tools that set writes (the whitelisted runtime_settings
-// keys, the write switch, order_proposal_submit and order_proposals_disable,
-// all via mcpset.Writer).
+// keys, the write switch, order_proposal_submit, order_proposal_cancel and
+// order_proposals_disable, all via mcpset.Writer).
 type tool struct {
 	name        string
 	description string
