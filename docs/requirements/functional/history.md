@@ -140,3 +140,4 @@
 | 1.133 | 2026-10-22 | FR-MCP-34 を更新: 失敗の内訳の窓を 3 日に確定、`session_diagnostics` の窓を 14 日、時間切れは `timed_out`・`incomplete[]` の部分結果 | issue #850 |
 | 1.134 | 2026-10-22 | §4.22 に FR-MCP-35（調整の実験の記録と前後比較。`experiment_create` / `experiment_close` / `experiments_list` / `experiment_compare`、変数 1 つ、交絡の検出、最低取引件数の下限 64（暫定値。本番の σ は未確認）） を追加 | issue #871 |
 | 1.135 | 2026-10-22 | §4.5 に FR-TRADER-5（Jev プロンプトの版管理・Paper だけのシャドー・費用の上限・明示的な昇格）を追加し、FR-TRADER-3 に版（`question_version` を正式な版とする）を追記。§4.22 に FR-MCP-36 を追加しツール数を 24 にした。費用の上限（既定 0.10 USD）・失敗回数の上限（20 回）・単価（0.042 USD/1M 入力トークン）・同時実行（4）はユーザー決定の確定値。`usage` が無い応答は推定の入力トークン数で費用に入れる | issue #872 |
+| 1.136 | 2026-10-22 | FR-MCP-35 の交絡を、後の期間だけから前の期間と後の期間の両方に直した（`confounders[].period`） | issue #886 |

@@ -71,8 +71,9 @@ func CheckMinTrades(minTrades int) error {
 const (
 	// VerdictAborted: the experiment was given up; it is not judged.
 	VerdictAborted = "aborted"
-	// VerdictConfounded: something other than the variable changed during the
-	// experiment (Confounders lists it), so the comparison says nothing.
+	// VerdictConfounded: something other than the variable changed in the
+	// before or the after period (Confounders lists it), so the comparison
+	// says nothing.
 	VerdictConfounded = "confounded"
 	// VerdictInsufficientTrades: a period has fewer than min_trades closed
 	// trades (min_trades is never below MinTradesFloor). Judgement withheld.

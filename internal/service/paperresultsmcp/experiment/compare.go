@@ -29,11 +29,20 @@ type Diff struct {
 	MaxDrawdownJPY float64 `json:"max_drawdown_jpy"`
 }
 
+// Periods a Confounder was found in.
+const (
+	PeriodBefore = "before"
+	PeriodAfter  = "after"
+)
+
 // Confounder is something other than the experiment's variable that changed
-// while the experiment ran.
+// in the period before or after the experiment's start.
 type Confounder struct {
 	// Kind is setting, model or prompt.
 	Kind string `json:"kind"`
+	// Period is before (the same length just before the start) or after (the
+	// experiment's start to its end): where the change was seen.
+	Period string `json:"period"`
 	// Name is the setting key, or the Jev decision type (scout / trader) whose
 	// model / prompt version changed.
 	Name string `json:"name"`
@@ -94,8 +103,15 @@ func Compare(ctx context.Context, q query.Q, exp Experiment, now time.Time, minT
 	if c.After, afterPnls, err = period(ctx, q, after, capitalJPY, withRejections); err != nil {
 		return Comparison{}, err
 	}
-	if c.Confounders, err = confounders(ctx, q, exp, after); err != nil {
-		return Comparison{}, err
+	for _, p := range []struct {
+		name string
+		r    query.Range
+	}{{PeriodBefore, before}, {PeriodAfter, after}} {
+		found, err := confounders(ctx, q, exp, p.name, p.r)
+		if err != nil {
+			return Comparison{}, err
+		}
+		c.Confounders = append(c.Confounders, found...)
 	}
 	c.Confounded = len(c.Confounders) > 0
 	c.Diff = Diff{
@@ -130,21 +146,20 @@ func period(ctx context.Context, q query.Q, r query.Range, capitalJPY float64, w
 	return p, pnls, nil
 }
 
-// confounders lists what changed during the experiment (the period r, the
-// experiment's start to its end) besides its variable:
+// confounders lists what changed in one period r of the comparison (period is
+// PeriodBefore or PeriodAfter) besides the experiment's variable. It is run on
+// both periods: a change in the before period makes the two periods differ in
+// more than the variable just as one in the after period does.
 //
 //   - a whitelisted setting changed or reset (mcp_settings_audit; the
 //     experiment's own change - its audit_id, or a later save of the target
-//     setting to the same value - does not count, but a later save of the target
-//     to a different value does);
+//     setting to the same value - does not count, but a save of the target to
+//     a different value does);
 //   - more than one Jev model_id, or question_version, was recorded in
 //     jev_decisions for one decision type (scout / trader). For a model or
-//     prompt experiment that variable is allowed two values (before and after)
-//     and no more.
-//
-// The baseline period before the start is not inspected: the issue defines the
-// check over the experiment's own period.
-func confounders(ctx context.Context, q query.Q, exp Experiment, r query.Range) ([]Confounder, error) {
+//     prompt experiment that variable is allowed two values in a period (the
+//     old and the new one, switching near the start) and no more.
+func confounders(ctx context.Context, q query.Q, exp Experiment, period string, r query.Range) ([]Confounder, error) {
 	out := []Confounder{}
 	from, to := sqlutil.FormatTime(r.From), sqlutil.FormatTime(r.To)
 
@@ -170,7 +185,7 @@ WHERE at >= ? AND at < ? AND action IN ('set', 'reset') ORDER BY id`, from, to)
 		if exp.Variable.Kind == KindSetting && key == exp.Variable.Name && afterValue != nil && sameValue(*afterValue, exp.Variable.After) {
 			continue
 		}
-		out = append(out, Confounder{Kind: KindSetting, Name: key, AuditID: &id, At: query.FormatOut(at)})
+		out = append(out, Confounder{Kind: KindSetting, Period: period, Name: key, AuditID: &id, At: query.FormatOut(at)})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("experiment: changed settings: %w", err)
@@ -200,15 +215,15 @@ GROUP BY decision_type, model_id, question_version ORDER BY decision_type, model
 	if err := jev.Err(); err != nil {
 		return nil, fmt.Errorf("experiment: jev models and prompts: %w", err)
 	}
-	out = append(out, changedValues(KindModel, exp.Variable.Kind, models)...)
-	out = append(out, changedValues(KindPrompt, exp.Variable.Kind, prompts)...)
+	out = append(out, changedValues(KindModel, period, exp.Variable.Kind, models)...)
+	out = append(out, changedValues(KindPrompt, period, exp.Variable.Kind, prompts)...)
 	return out, nil
 }
 
 // changedValues reports, for each decision type, the values of one axis (kind)
 // when there are more than allowed: one normally, two when kind is the
 // experiment's own variable.
-func changedValues(kind, target string, seen map[string][]string) []Confounder {
+func changedValues(kind, period, target string, seen map[string][]string) []Confounder {
 	allowed := 1
 	if kind == target {
 		allowed = 2
@@ -216,7 +231,7 @@ func changedValues(kind, target string, seen map[string][]string) []Confounder {
 	var out []Confounder
 	for _, typ := range slices.Sorted(maps.Keys(seen)) {
 		if values := seen[typ]; len(values) > allowed {
-			out = append(out, Confounder{Kind: kind, Name: typ, Values: values})
+			out = append(out, Confounder{Kind: kind, Period: period, Name: typ, Values: values})
 		}
 	}
 	return out
