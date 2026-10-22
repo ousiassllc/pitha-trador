@@ -26,9 +26,9 @@
 
 ### 3.27 `experiments_list`
 
-実験の一覧（新しい順。読み取り専用）。引数: `status`（`running` / `closed` / `aborted`。省略は全部）、`limit`（1〜50、既定 20。超過は `limit_exceeded`）、`min_trades`（64〜10000。**下限 64（暫定・あいり未承認）は上げるのは可、下げるのは不可**。64 未満・10000 超は `invalid_value`（422。理由に指定値と下限を書く）で、黙って 64 に直さない。省略は 64）。
+実験の一覧（新しい順。読み取り専用）。引数: `status`（`running` / `closed` / `aborted`。省略は全部）、`limit`（1〜50、既定 20。超過は `limit_exceeded`）、`min_trades`（64〜10000。**下限 64（暫定値。本番の 1 取引あたり損益の標準偏差 σ は未確認で、測って見直す。あいりの承認も未）は上げるのは可、下げるのは不可**。64 未満・10000 超は `invalid_value`（422。理由に指定値と下限を書く）で、黙って 64 に直さない。省略は 64）。
 
-`data.experiments[]` の各要素: `experiment`（3.25 の形）、`min_trades`、`min_trades_source`（`floor_provisional_unapproved`＝下限の暫定値でまだ承認されていない / `argument_raised`＝呼び出しで下限より上げた）、`before_trades` / `after_trades`（前後のクローズ済み取引件数）、`confounded`、`verdict`、`judged`。1 行ごとに前後の集計 2 回を行う（`limit_exceeded`＝期間内の取引が 5,000 件を超える実験があるとき、一覧全体が失敗する）。
+`data.experiments[]` の各要素: `experiment`（3.25 の形）、`min_trades`、`min_trades_source`（`floor_provisional_unapproved`＝下限の暫定値（σ 未確認。あいりの承認も未） / `argument_raised`＝呼び出しで下限より上げた）、`before_trades` / `after_trades`（前後のクローズ済み取引件数）、`confounded`、`verdict`、`judged`。1 行ごとに前後の集計 2 回を行う（`limit_exceeded`＝期間内の取引が 5,000 件を超える実験があるとき、一覧全体が失敗する）。
 
 ### 3.28 `experiment_compare`
 

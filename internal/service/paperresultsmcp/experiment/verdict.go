@@ -13,25 +13,33 @@ import (
 // invalid_value, never silently replaced (an answer computed on a different
 // minimum than the one asked for would mislead).
 //
-// PROVISIONAL, NOT APPROVED by あいり (issue #871: the implementer proposes,
-// あいり approves, and only then is the value final). It is kept in this one
-// place.
+// PROVISIONAL VALUE (user decision, issue #871): 64 stays as it is, but it is
+// not final. The production standard deviation sigma of the net pnl per trade
+// is NOT measured yet, so the value is to be reviewed once sigma is measured
+// (あいり's approval is still outstanding; nothing treats 64 as approved). It
+// is kept in this one place.
 //
 // Basis (docs/architecture/paper-results-mcp-experiments.md §5): the two-sample
 // comparison of the mean net pnl per trade, two-sided alpha 0.05, power 0.8,
 // to detect a difference of half a standard deviation of the per-trade pnl
 // (d = 0.5): n = 2 * (1.96 + 0.84)^2 / d^2 = 62.8 -> 63 per period, +1 for the
-// t distribution = 64. The real per-trade standard deviation is NOT measured
-// yet (no Paper database was available): it must be checked against the
-// production database before approval.
+// t distribution = 64. That formula is in units of sigma, so how many yen of
+// difference 64 trades can show (d * sigma) is unknown too, until sigma is
+// measured on the production database.
 const MinTradesFloor = 64
+
+// MinTradesProvisionalText is the fixed wording that says MinTradesFloor is a
+// provisional value; the tool descriptions and the Settings note use it.
+const MinTradesProvisionalText = "暫定値（本番の 1 取引あたり損益の標準偏差 σ は未確認。σ を測って見直す予定）"
 
 // MaxMinTrades is the largest min_trades a caller may ask for.
 const MaxMinTrades = 10000
 
 // Where the min_trades of a response came from.
 const (
-	// MinTradesSourceFloor: MinTradesFloor, which is not approved yet.
+	// MinTradesSourceFloor: MinTradesFloor, a provisional value (sigma not
+	// measured yet; to be reviewed). The string keeps "unapproved": the
+	// approval is still outstanding.
 	MinTradesSourceFloor = "floor_provisional_unapproved"
 	// MinTradesSourceRaised: the caller asked for more than the floor.
 	MinTradesSourceRaised = "argument_raised"

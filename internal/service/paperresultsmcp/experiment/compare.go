@@ -48,8 +48,8 @@ type Confounder struct {
 type Comparison struct {
 	Experiment Experiment `json:"experiment"`
 	// MinTrades is the closed-trade count each period needs (never below
-	// MinTradesFloor); MinTradesSource says whether it is the unapproved floor
-	// or a value the caller raised.
+	// MinTradesFloor); MinTradesSource says whether it is the provisional floor
+	// (MinTradesProvisionalText) or a value the caller raised.
 	MinTrades       int    `json:"min_trades"`
 	MinTradesSource string `json:"min_trades_source"`
 	Before          Period `json:"before"`

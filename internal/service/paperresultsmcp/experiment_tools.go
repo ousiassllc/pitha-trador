@@ -156,7 +156,7 @@ var experimentTools = []tool{
 		description: "調整の実験の一覧（新しい順）。状態・期間・変えた変数・前後の取引件数・判定の可否（verdict / judged）つき。" +
 			"判定は 1 取引あたりの純損益（コスト控除後）の平均を前後で Welch の t 検定で比べ、差（後−前）の 95% 信頼区間と最大ドローダウンで決める（勝ち＝improved は、区間の下限が 0 より上かつドローダウンが前以下のときだけ）。" +
 			"前後どちらかの取引件数が min_trades に届かないと insufficient_trades、実験中に対象以外が変わると confounded（どちらも判定なし）。" +
-			"min_trades は下限 64（暫定の案でまだ承認されていない。応答の min_trades_source）。上げるのは可、下げるのは不可（下限未満は invalid_value で拒否）。読み取り専用",
+			"min_trades は下限 64（" + experiment.MinTradesProvisionalText + "。応答の min_trades_source）。上げるのは可、下げるのは不可（下限未満は invalid_value で拒否）。読み取り専用",
 		schema: objectSchema(map[string]any{
 			"status":     map[string]any{"type": "string", "enum": []string{experiment.StatusRunning, experiment.StatusClosed, experiment.StatusAborted}, "description": "状態で絞り込む"},
 			"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": maxExperimentList, "default": defaultExperimentList},
@@ -211,7 +211,7 @@ var experimentTools = []tool{
 			"insufficient_trades（前後どちらかが min_trades 未満。数値は返すが判定しない）/ not_computable（件数は足りるが全取引が同一損益で区間が出ない。判定しない）/ " +
 			"improved（区間の下限が 0 より上、かつ最大ドローダウンが前以下。唯一の勝ち）/ mixed（区間の下限は 0 より上だがドローダウンが悪化。勝ちとは言わない）/ " +
 			"worsened（区間の上限が 0 より下）/ inconclusive（区間が 0 をまたぐ。差があるとも無いとも言えない）。judged は最後の 4 つのとき true。" +
-			"min_trades は下限 64 で上げるのみ可。取引は同日・同相場に偏りうるので区間は楽観的になりうる。前後は別期間で、因果の証明にはならない。読み取り専用",
+			"min_trades は下限 64（" + experiment.MinTradesProvisionalText + "）で上げるのみ可。取引は同日・同相場に偏りうるので区間は楽観的になりうる。前後は別期間で、因果の証明にはならない。読み取り専用",
 		schema: objectSchema(map[string]any{
 			"experiment_id": map[string]any{"type": "integer", "minimum": 1},
 			"min_trades":    minTradesProp(),
@@ -252,7 +252,7 @@ var experimentTools = []tool{
 func minTradesProp() map[string]any {
 	return map[string]any{
 		"type": "integer",
-		"description": "判定に要る前後それぞれの取引件数。下限は " + strconv.Itoa(experiment.MinTradesFloor) + "（暫定・承認前）で、上げるのは可、下げるのは不可。" +
+		"description": "判定に要る前後それぞれの取引件数。下限は " + strconv.Itoa(experiment.MinTradesFloor) + "（" + experiment.MinTradesProvisionalText + "）で、上げるのは可、下げるのは不可。" +
 			"下限未満や " + strconv.Itoa(experiment.MaxMinTrades) + " 超は invalid_value。省略は下限",
 	}
 }

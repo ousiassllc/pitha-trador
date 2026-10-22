@@ -14,12 +14,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/mcp"
 )
 
-// minTradesNote states the minimum number of trades and that it is a
-// proposal nobody approved yet (issue #871).
+// minTradesNote states the minimum number of trades and that the floor is a
+// provisional value (issue #871).
 func minTradesNote(min int, source string) string {
 	note := fmt.Sprintf("判定には、前後それぞれに %d 件以上のクローズ済み取引が要ります（下限は %d 件で、これより下げることはできません）。", min, experiment.MinTradesFloor)
 	if source == experiment.MinTradesSourceFloor {
-		note += "この下限の件数は暫定の案で、まだ承認されていません。"
+		note += "この下限の件数（" + strconv.Itoa(experiment.MinTradesFloor) + " 件）は" + experiment.MinTradesProvisionalText + "です。あいりの承認も未です。"
 	}
 	return note
 }

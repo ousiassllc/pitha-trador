@@ -41,7 +41,7 @@ func experimentForm(extra url.Values) url.Values {
 
 // The card loads the experiments section lazily; the section lists nothing at
 // first, then shows a recorded experiment with its verdict, and the comparison
-// shows the figures with the unapproved minimum stated.
+// shows the figures with the provisional minimum (sigma not measured) stated.
 func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 	a, db := newExperimentsApp(t)
 
@@ -51,7 +51,7 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 	rec := a.get("/settings/mcp/experiments")
 	body := rec.Body.String()
 	if rec.Code != http.StatusOK || !strings.Contains(body, "mcp-experiments-empty") || !strings.Contains(body, `data-testid="mcp-experiment-form"`) ||
-		!strings.Contains(body, "暫定の案で、まだ承認されていません") {
+		!strings.Contains(body, "暫定値") || !strings.Contains(body, "σ は未確認") {
 		t.Fatalf("empty section = %d: %s", rec.Code, body)
 	}
 
@@ -75,7 +75,7 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 	body = rec.Body.String()
 	for _, want := range []string{
 		"実験 1 の前後比較", "1 回の最大損失を 1% から 0.5% に下げる", `data-verdict="insufficient_trades"`, "判定なし（取引件数が足りない）",
-		"暫定の案で、まだ承認されていません", "純損益（コスト控除後）", "1 取引あたりの純損益（判定の基準）", "95% 信頼区間", "Welch の t 検定",
+		"暫定値", "標準偏差 σ は未確認", "純損益（コスト控除後）", "1 取引あたりの純損益（判定の基準）", "95% 信頼区間", "Welch の t 検定",
 		"これより下げることはできません", "平均の勝ち", "平均の負け", "最大ドローダウン", "拒否の種類",
 	} {
 		if rec.Code != http.StatusOK || !strings.Contains(body, want) {
