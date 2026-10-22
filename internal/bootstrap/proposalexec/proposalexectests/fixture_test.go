@@ -1,4 +1,4 @@
-package proposalexec_test
+package proposalexectests
 
 import (
 	"context"
@@ -16,7 +16,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 	"github.com/ousiassllc/pitha-trador/internal/repository/proposalstore"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
-	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/fillmodel"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 )
@@ -24,39 +23,6 @@ import (
 // at is a JST time on 2026-09-29 (Tue), a trading day.
 func at(hour, minute, second int) time.Time {
 	return time.Date(2026, 9, 29, hour, minute, second, 0, marketcalendar.JST)
-}
-
-// spyExecution counts the calls that place an order, so a test can show that a
-// proposal Risk rejected never reached Enter. Two hooks let a test stage a race:
-// beforeClaim runs once at the processor's first look at the clock of a
-// proposal (after the proposal was read, before it is claimed), and
-// sessionOpen, when set, is what EntrySessionOpenNow answers (Enter itself still
-// judges the real clock).
-type spyExecution struct {
-	*execution.Engine
-	enters      int
-	beforeClaim func()
-	sessionOpen *bool
-}
-
-func (s *spyExecution) Enter(ctx context.Context, req execution.EntryRequest) (execution.EntryResult, error) {
-	s.enters++
-	return s.Engine.Enter(ctx, req)
-}
-
-func (s *spyExecution) Config() execution.Config {
-	if hook := s.beforeClaim; hook != nil {
-		s.beforeClaim = nil
-		hook()
-	}
-	return s.Engine.Config()
-}
-
-func (s *spyExecution) EntrySessionOpenNow() bool {
-	if s.sessionOpen != nil {
-		return *s.sessionOpen
-	}
-	return s.Engine.EntrySessionOpenNow()
 }
 
 // fixture is the real Paper wiring (Risk Engine, Execution Engine, the 000043
@@ -68,6 +34,7 @@ type fixture struct {
 	db    *sql.DB
 	inst  domain.Instrument
 	exec  *spyExecution
+	risk  *spyRisk
 	props *proposalstore.Repository
 	proc  proposalexec.Processor
 	clock *time.Time
@@ -90,10 +57,11 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatalf("create instrument: %v", err)
 	}
 	f.exec = &spyExecution{Engine: f.svc.Execution}
+	f.risk = &spyRisk{Risk: f.svc.Risk}
 	f.props = proposalstore.New(state.DB, func() time.Time { return *f.clock })
 	f.proc = proposalexec.Processor{
 		Proposals: f.props, Instruments: f.svc.Instruments, Snapshots: f.svc.Snapshots, Signals: f.svc.Signals,
-		Orders: f.svc.Orders, Positions: f.svc.Positions, Risk: f.svc.Risk, Execution: f.exec,
+		Orders: f.svc.Orders, Positions: f.svc.Positions, Risk: f.risk, Execution: f.exec,
 		SnapshotMaxAge: 5 * time.Minute,
 	}
 	f.quote(2500)
@@ -140,6 +108,9 @@ func (f *fixture) propose(s spec) int64 {
 	}
 	if s.stop == 0 && s.action == orderproposal.ActionOpenLong {
 		s.stop = 2400
+		if s.limit != 0 && s.limit <= s.stop { // the MCP refuses a stop at or above the limit
+			s.stop = s.limit - 100
+		}
 	}
 	if s.expires.IsZero() {
 		s.expires = at(11, 0, 0)
@@ -240,15 +211,41 @@ func (f *fixture) events(id int64) []string {
 	return out
 }
 
-// openPosition opens a LONG position on the instrument directly (as an earlier
-// entry would have), marked at price.
+// openPosition opens a LONG position an order proposal entered, marked at
+// price: an open_long proposal (filled) is linked to it through position_id.
+// It writes no trade_signals row; the signal path of the same judgement is
+// openPositionFrom with orderproposal.PolicyVersion.
 func (f *fixture) openPosition(quantity int64, price float64) domain.Position {
 	f.t.Helper()
+	pos := f.openPositionFrom("", quantity, price)
+	id := f.propose(spec{quantity: quantity})
+	if _, err := f.db.Exec(`UPDATE order_proposals SET status = 'filled', position_id = ?, instrument_id = ? WHERE id = ?`, pos.ID, f.inst.ID, id); err != nil {
+		f.t.Fatalf("link the entry proposal: %v", err)
+	}
+	return pos
+}
+
+// openPositionFrom opens a LONG position on the instrument directly (as an
+// earlier entry would have) whose entry order's signal carries policyVersion
+// (no signal when it is empty), marked at price.
+func (f *fixture) openPositionFrom(policyVersion string, quantity int64, price float64) domain.Position {
+	f.t.Helper()
 	ctx := context.Background()
-	order, err := f.svc.Orders.Insert(ctx, domain.PaperOrder{
+	entry := domain.PaperOrder{
 		InstrumentID: f.inst.ID, Symbol: f.inst.Symbol, Side: domain.OrderSideBuy, OrderType: domain.OrderTypeMarket,
 		Quantity: quantity, Status: domain.OrderStatusFilled, SubmittedAt: at(9, 40, 0),
-	})
+	}
+	if policyVersion != "" {
+		sig, err := f.svc.Signals.Insert(ctx, domain.TradeSignal{
+			InstrumentID: f.inst.ID, Symbol: f.inst.Symbol, Timestamp: at(9, 40, 0), Direction: domain.JevDirectionLong,
+			PolicyVersion: policyVersion, RiskPassed: true, CreatedAt: at(9, 40, 0),
+		})
+		if err != nil {
+			f.t.Fatalf("insert entry signal: %v", err)
+		}
+		entry.TradeSignalID = &sig.ID
+	}
+	order, err := f.svc.Orders.Insert(ctx, entry)
 	if err != nil {
 		f.t.Fatalf("insert entry order: %v", err)
 	}

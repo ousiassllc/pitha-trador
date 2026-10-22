@@ -59,6 +59,16 @@ const (
 	ReasonRecoveredAfterStop = "recovered_after_restart"
 )
 
+// Reasons of a proposal the processor refuses on its own judgement.
+const (
+	// ReasonPositionNotFromProposal: a close for a position the Policy Engine
+	// or the bootstrap opened, not an order proposal (issue #859).
+	ReasonPositionNotFromProposal = "position_not_from_proposal"
+	// ReasonStopLossNotBelowPrice: an open_long whose stop_loss_price is at or
+	// above the price the entry is expected to fill at (issue #857).
+	ReasonStopLossNotBelowPrice = "stop_loss_not_below_price"
+)
+
 // Risk is what the processor needs of risk.Engine. CheckThenEnter judges the
 // entry and runs enter under the lock every Paper entry shares (issue #839).
 type Risk interface {
