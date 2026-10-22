@@ -51,16 +51,35 @@ func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, ti
 	}, latency, nil
 }
 
-// Trader asks the FR-TRADER-1 question group about req's state and
-// returns the answers mapped onto TraderResponse together with the total
-// call latency (including retries). Confidence is the confidence of the
-// direction answer (FR-TRADER-2: Jev's self-reported certainty, not a
-// verified probability). Retry policy: see evaluate.
+// Trader asks the FR-TRADER-1 question group of req.QuestionVersion (empty:
+// the build default, TraderQuestionVersion; an unregistered version is an
+// error and nothing is sent) about req's state and returns the answers mapped
+// onto TraderResponse together with the total call latency (including
+// retries). Confidence is the confidence of the direction answer
+// (FR-TRADER-2: Jev's self-reported certainty, not a verified probability).
+// Retry policy: see evaluate. The call feeds the rolling error rate behind
+// Healthy (the jev_api_down Kill Switch).
 func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse, time.Duration, error) {
-	result, latency, err := c.evaluate(ctx, "trader", true, systemone.Request{
+	return c.trader(ctx, "trader", true, req)
+}
+
+// ShadowTrader is Trader for the shadow (issue #872): the same call with a
+// candidate version, but it never feeds the rolling error rate. A failing
+// candidate must not trip the jev_api_down Kill Switch of the trading flow
+// (the same reason Ask does not).
+func (c *Client) ShadowTrader(ctx context.Context, req TraderRequest) (TraderResponse, time.Duration, error) {
+	return c.trader(ctx, "trader-shadow", false, req)
+}
+
+func (c *Client) trader(ctx context.Context, label string, trackHealth bool, req TraderRequest) (TraderResponse, time.Duration, error) {
+	questions, err := TraderQuestionsFor(req.QuestionVersion)
+	if err != nil {
+		return TraderResponse{}, 0, err
+	}
+	result, latency, err := c.evaluate(ctx, label, trackHealth, systemone.Request{
 		State:     systemOneState{Market: req.State, SimilarPastCases: req.RAGContext},
 		Model:     c.model,
-		Questions: traderQuestions,
+		Questions: questions,
 	})
 	if err != nil {
 		return TraderResponse{}, latency, err
@@ -75,6 +94,8 @@ func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse,
 		ContinuationProbability: result.Noul(qContinuationProbability),
 		Confidence:              direction.Confidence,
 		ModelID:                 result.Model,
+		InputTokens:             result.Usage.InputTokens,
+		RequestBytes:            result.RequestBytes,
 	}, latency, nil
 }
 
@@ -127,6 +148,7 @@ func (c *Client) evaluate(ctx context.Context, label string, trackHealth bool, r
 	for attempt := 1; attempt <= c.maxAttempts; attempt++ {
 		r, callErr := c.post(ctx, req, body)
 		if callErr == nil {
+			r.RequestBytes = len(body)
 			return r, 0, nil
 		}
 		lastErr = callErr

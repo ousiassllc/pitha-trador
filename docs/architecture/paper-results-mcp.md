@@ -133,7 +133,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 12 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）と、`docs/architecture/paper-results-mcp-experiments.md` の調整の実験ツール 4 つ（`experiment_create` / `experiment_close` と、読み取り専用の `experiments_list` / `experiment_compare`。issue #871）だけである（合計 28）。定義・フィールドは API 仕様。
+ツールは、次の読み取りの 12 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）と、`docs/architecture/paper-results-mcp-experiments.md` の調整の実験ツール 4 つ（`experiment_create` / `experiment_close` と、読み取り専用の `experiments_list` / `experiment_compare`。issue #871）と、Jev のプロンプトのツール 3 つ（読み取り専用の `jev_shadow_compare` / `jev_shadow_cost` と、書き込みの `jev_prompt_promote`。issue #872。§5.1・§7.3 ⑥。分割章 `paper-results-mcp-jev-prompt.md`）だけである（合計 31）。定義・フィールドは API 仕様。
 
 「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
@@ -179,7 +179,7 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 
 ## 6. 非目標
 
-- 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない。Paper の注文案を受け付けて記録するツール（§8）は、発注ではない。発注するのはアプリで、MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）に書かない
+- 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない。Paper の注文案を受け付けて記録するツール（§8）は、発注ではない。Jev のシャドーを有効にする・候補の版を選ぶ・費用の上限を決める手段も MCP には作らない（Settings 画面だけ）。発注するのはアプリで、MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）に書かない
 - 新規の売り建て（SHORT）の注文案は受け付けない（注文案の `action` は買い `open_long` と決済 `close` だけ）
 - 注文案の受け付けを MCP からオンにする手段を作らない（オンにできるのは Settings 画面だけ。§8.2）
 - `market_snapshots.raw_data_json`、`jev_decisions.state_json` / `response_json`、板・気配・時価の列、`secrets`、API キーを戻り値にもログにも出さない（一覧は API 仕様の「出さないもの」）
@@ -233,7 +233,7 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 ### 7.3 書き込み経路（狭い書き手）
 
 - 読み取りの接続は `mode=ro`・`query_only=ON` のまま変えない。書き込みは、同じ DB ファイルへの**別接続**（`internal/service/paperresultsmcp/mcpset.Writer`）が、最初の書き込みの呼び出しで初めて開く。ファイルは作らず（`mode=rw`）、マイグレーションも `journal_mode` の変更もしない
-- 書き手が実行する変更は 7 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）、⑤取消の依頼（`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。`order_proposal_cancel`。§8.5）。⑥調整の実験 1 行の `INSERT`（`experiment_create`。`tuning_experiments`。書き込み許可に従う）、⑦実験の終了の `UPDATE` 1 つ（`experiment_close`。`status` と `ended_at` だけ。`running` の行だけ）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）
+- 書き手が実行する変更は 8 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）、⑤取消の依頼（`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。`order_proposal_cancel`。§8.5）、⑥ライブの Jev のプロンプトの版の昇格（`runtime_settings` の `jev.trader_prompt_version` の upsert と `jev_prompt_promotions` への監査 1 行。`jev_prompt_promote`。分割章 §7.3 ⑥）、⑦調整の実験 1 行の `INSERT`（`experiment_create`。`tuning_experiments`。書き込み許可に従う）、⑧実験の終了の `UPDATE` 1 つ（`experiment_close`。`status` と `ended_at` だけ。`running` の行だけ）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）
 - 保存は GUI と同じ `runtime_settings`（`system.RuntimeSettingsRepository`）で、値の形も GUI と同じ（`opsettings` が検証して JSON で保存する）。アプリは毎回この表から読むので、保存後すぐに GUI と各エンジンに反映される（再起動不要）
 - 同じ DB を書く単一ライターはアプリである。書き手は 2 秒の `busy_timeout` と `BEGIN IMMEDIATE` で短く待ち、取れなければ `db_locked`。アプリの書き込みを長く待たせない
 

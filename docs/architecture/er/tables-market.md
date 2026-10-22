@@ -209,7 +209,7 @@ erDiagram
 | decision_type | varchar(10) | NOT NULL, CHECK IN ('scout','trader') | |
 | state_hash | varchar(64) | NOT NULL | 入力状態のハッシュ。再評価抑制の判定に使用（`functional.md` FR-SCAN-2） |
 | state_json | text | NOT NULL | Jevへの入力（JSON文字列、`functional.md` §4.4/4.5参照） |
-| question_version | varchar(20) | NOT NULL | プロンプト/質問セットのバージョン（例: `scout-v3`/`trader-v3`。`scout-v2`/`trader-v2`はRAG文脈に実結果が無いと案内していた旧プロンプトの値、`scout-v1`/`trader-v1`は旧独自スキーマ時代の値） |
+| question_version | varchar(20) | NOT NULL | **Jev のプロンプトの正式な版**（issue #872。`prompt_version`列は足さない。全行が埋まっており、`DecisionRepository.Insert`は空を拒否する）。プロンプト/質問セットのバージョン（例: `scout-v3`/`trader-v3`。Trader の版は昇格（`runtime_settings`の`jev.trader_prompt_version`）で変わり、候補の版は`jev_shadow_decisions`（`er/tables-jev-shadow.md`。この表には混ぜない）に残る。版と文言は質問群のSHA-256をテストで固定して結ぶ。`scout-v2`/`trader-v2`はRAG文脈に実結果が無いと案内していた旧プロンプトの値、`scout-v1`/`trader-v1`は旧独自スキーマ時代の値） |
 | response_json | text | NOT NULL | Jev回答を変換した`ScoutResponse`/`TraderResponse`のJSON文字列（公式APIの生レスポンスそのものではない） |
 | direction | varchar(10) | NULL可, CHECK IN ('LONG','SHORT','NONE') | decision_type=trader時のみ設定 |
 | confidence | numeric(5,4) | NULL可 | |

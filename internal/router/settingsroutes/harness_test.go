@@ -18,8 +18,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlitedb"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
+	"github.com/ousiassllc/pitha-trador/internal/service/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/admin"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/settings"
@@ -56,7 +58,8 @@ func (tachibanaSession) Capabilities() broker.Capabilities {
 func (tachibanaSession) Status() broker.SessionStatus { return broker.SessionStatus{} }
 
 // newEngine returns the router wired like production for the Settings screen:
-// operational settings, a broker session and the MCP settings, so /settings
+// operational settings, a broker session, the MCP settings and the Jev prompt
+// section (issue #872), so /settings
 // renders every card and dialog across its pages.
 func newEngine(t *testing.T, s secrets) *gin.Engine {
 	t.Helper()
@@ -69,11 +72,17 @@ func newEngine(t *testing.T, s secrets) *gin.Engine {
 		Dial:           func(context.Context, string) error { return nil },
 		InterfaceAddrs: func() ([]net.Addr, error) { return nil, nil },
 	})
+	jevDB, err := sqlitedb.Open(filepath.Join(t.TempDir(), "pitha.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = jevDB.Close() })
 	return router.New(
 		router.WithSecretsStore(s),
 		router.WithOperationalSettings(opsettings.New(opsStore{}, strategy, t.TempDir())),
 		router.WithBrokerSession(tachibanaSession{}),
 		router.WithMCPSettings(mcp),
+		router.WithJevPromptSettings(jevprompt.New(jevDB)),
 	)
 }
 

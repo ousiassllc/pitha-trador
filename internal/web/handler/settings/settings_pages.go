@@ -38,6 +38,7 @@ func (h *SettingsHandler) SubPage(page settingspages.Page, swagger bool) gin.Han
 			Connections: h.connections(ctx, connectionsOn(ids)),
 			Operational: h.opsGroupsOn(ctx, ids),
 			MCP:         h.mcp,
+			JevPrompt:   h.jevPrompt,
 			Links:       settingspages.LinksOf(page.ID, swagger),
 		}
 		shared.RenderHTML(c, http.StatusOK, pages.SettingsPage(props))

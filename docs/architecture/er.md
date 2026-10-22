@@ -29,6 +29,7 @@ erDiagram
     jev_decisions ||--o{ calibration_outcomes : "結果が紐付く"
     jev_decisions ||--o{ calibration_label_skips : "ラベル付け不能と確定した水平線を持つ"
     jev_decisions ||--o{ metalabel_predictions : "二次モデルの予測が紐付く"
+    jev_decisions ||--o{ jev_shadow_decisions : "同じ入力の候補の判定が紐付く（取引に使わない）"
     metalabel_models ||--o{ metalabel_predictions : "予測する"
     trade_signals ||--o{ paper_orders : "発注の根拠になる"
     paper_orders ||--o| positions : "エントリー約定になる"
@@ -49,6 +50,7 @@ erDiagram
 |----------|----------------------|
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` / `order_proposals` / `order_proposal_events` |
+| `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `mcp_settings_audit` / `tuning_experiments`、ベクトルインデックス（sqlite-vec） |
 
@@ -129,3 +131,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.68 | 2026-10-21 | `er/tables-system.md`の`runtime_settings`に`power.sleep_guard_enabled`（スリープ防止。JSON整数の0/1、既定0）を、`health_alerts.code`の固定コードに`kabu_unreachable`を追記（マイグレーションなし。`code`はCHECK `<> ''`だけなので列定義は変わらない） | issue #863 |
 | 1.69 | 2026-10-21 | `er/tables-system.md`の`runtime_settings`に`policy.paper.{long,short}.min_entry_quality`（Paperだけで使う最低エントリー品質）を追加（issue #861。マイグレーションなし）。 | Paper の取引が 0 件だったため、Paper の入口のしきい値を Live と分ける |
 | 1.70 | 2026-10-22 | マイグレーション000046を追加し、`er/tables-system.md`に`tuning_experiments`（調整の実験。1 実験 1 行・変数 1 つ。仮説・変えた変数の種類と名前・前後の値・開始/終了時刻・状態。前後の成績は持たず`experiment_compare`が計算）を追加。MCP の書き込みに実験の`INSERT`と終了の`UPDATE`を追記 | issue #871 |
+| 1.71 | 2026-10-22 | マイグレーション000047を追加し、`er/tables-jev-shadow.md`に`jev_shadow_decisions`（ライブの Trader の判定と同じ入力を候補のプロンプトの版で判定した結果。取引・RAG・Calibration・メタモデルの学習に使わない別表。費用は入力トークン×公表単価の見積り。`usage`が無い応答は推定のトークン数で数え`cost_is_estimate`=1を付ける）と`jev_prompt_promotions`（昇格の監査）を追記。`jev_decisions.question_version`をそのまま正式な版とし（`prompt_version`列は足さない）、`er/tables-market.md`の説明を更新。全体ER図に関係線を追加 | issue #872 |

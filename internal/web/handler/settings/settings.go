@@ -62,6 +62,9 @@ type SettingsHandler struct {
 	// mcp shows the 外部連携 section's MCP card (issue #792); the panel
 	// itself is served by internal/web/handler/mcpsettings.
 	mcp bool
+	// jevPrompt shows the Jev prompt card (issue #872); the panel itself is
+	// served by internal/web/handler/jevprompt.
+	jevPrompt bool
 }
 
 // NewSettingsHandler returns a SettingsHandler backed by store.
@@ -73,6 +76,13 @@ func NewSettingsHandler(store SecretsStore) *SettingsHandler {
 // screen; call it only when the MCP panel routes are registered.
 func (h *SettingsHandler) WithMCPSettings() *SettingsHandler {
 	h.mcp = true
+	return h
+}
+
+// WithJevPromptSettings shows the Jev prompt card (modal `modal-jev-prompt`)
+// on the Settings screen; call it only when the panel routes are registered.
+func (h *SettingsHandler) WithJevPromptSettings() *SettingsHandler {
+	h.jevPrompt = true
 	return h
 }
 

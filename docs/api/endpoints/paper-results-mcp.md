@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 12 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つと、調整の実験の 4 つ（分割章 `paper-results-mcp-experiments.md`。issue #871）。合計 28。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23〜§3.24）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 12 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つと、調整の実験の 4 つ（分割章 `paper-results-mcp-experiments.md`。issue #871）と、Jev のプロンプトの 3 つ（issue #872）。合計 31。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23〜§3.24）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -267,7 +267,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 
 ### 3.16〜3.22 注文案ツール（issue #827・#828・#829）
 
-書き込み: `order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable`（Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ。Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。読み取り専用: `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`（提案 → 約定 → 損益のひも付け。issue #829）と、`paper_trades` / `paper_performance_summary` の `origin`。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.22）。
+書き込み: `order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable`（Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ。Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。読み取り専用: `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`（提案 → 約定 → 損益のひも付け。issue #829）と、`paper_trades` / `paper_performance_summary` の `origin`。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.22）。**§3.23 Jev プロンプトのツール（issue #872）**: 読み取り専用: `jev_shadow_compare`（ライブの trader の判断と、同じ入力に対するシャドー＝候補のプロンプトの版の判断を、`entry_quality` の分布・`direction` の一致率・費用・`calibration_outcomes` による結果で並べる）と `jev_shadow_cost`（シャドーの `request_cost` の日次・累計、上限と止まった記録、昇格の記録）。書き込み: `jev_prompt_promote`（ライブの版を候補の版に切り替える明示的な操作。書き込み許可のスイッチに従い、監査に残る。自動では呼ばれず、自己改善ループには経路が無い）。シャドーの有効化・候補の選択・費用の上限は Settings 画面だけで、**費用の上限の値は暫定の案で未承認**。引数・応答・エラーは分割章 `paper-results-mcp-jev-prompt.md` に置く（ファイルの行数上限のため。章番号は同じ §3.23）。
 
 ## 4. 出さないもの
 
@@ -287,7 +287,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 | `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 19 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 19 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。`jev_shadow_cost`（§3.23）の Jev のプロンプトの 6 キー（`jev.trader_prompt_version`・`jev.shadow.enabled`・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`・`jev.shadow.halt`・`jev.shadow.failures`。版の名前・真偽・USD の数値・止まった記録・失敗回数で、秘密は無い）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
 | `order_proposals.request_hash` / `client` | `000042`。照合用のハッシュと接続元 IP。`order_proposal_get` は返さない |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 

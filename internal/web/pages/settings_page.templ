@@ -27,6 +27,9 @@ type SettingsProps struct {
 	// MCP shows the MCP card and modal (issue #792); false (no MCP admin
 	// service wired) hides them.
 	MCP bool
+	// JevPrompt shows the Jev prompt card and modal (issue #872); false (no
+	// service wired) hides them.
+	JevPrompt bool
 	// Links are the page's links to screens outside Settings.
 	Links []settingspages.Link
 }
@@ -118,6 +121,20 @@ templ SettingsPage(props SettingsProps) {
 					</ul>
 				</section>
 			}
+			if props.JevPrompt && props.Has("modal-jev-prompt") {
+				<section class="flex flex-col gap-3" aria-labelledby="settings-jev-prompt-heading">
+					<h2 id="settings-jev-prompt-heading" class="text-lg font-semibold text-slate-900">Jev プロンプト</h2>
+					<ul class="flex flex-col gap-3" data-testid="jev-prompt-list">
+						@molecules.SettingsCard(molecules.SettingsCardProps{
+							ID:          "jev-prompt",
+							ModalID:     "modal-jev-prompt",
+							Name:        "Jev プロンプトの版とシャドー比較",
+							Description: "ライブの版・候補の版のシャドー比較（Paper のみ・既定オフ）・1 日の費用上限・費用・昇格を確認・操作できます。",
+							ActionLabel: "開く",
+						})
+					</ul>
+				</section>
+			}
 			if props.hasSystem() {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-system-heading">
 					<h2 id="settings-system-heading" class="text-lg font-semibold text-slate-900">システム</h2>
@@ -199,6 +216,14 @@ templ SettingsPage(props SettingsProps) {
 				<div id="mcp-panel" hx-get="/settings/mcp-panel" hx-trigger="load, mcp-refresh from:body" hx-target="this" hx-swap="innerHTML"></div>
 			}
 			<script type="module" src="/static/dist/js/copy-button/pitha-copy-button.js"></script>
+		}
+		if props.JevPrompt && props.Has("modal-jev-prompt") {
+			@molecules.Modal("modal-jev-prompt", "Jev プロンプトの版とシャドー比較") {
+				// Filled in by `GET /settings/jev-prompt-panel`
+				// (internal/web/organisms/jevprompt) on load; its forms swap this
+				// element's content in place.
+				<div id="jev-prompt-panel" hx-get="/settings/jev-prompt-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+			}
 		}
 		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}
