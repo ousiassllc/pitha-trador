@@ -34,7 +34,8 @@ func decisionRow(t *testing.T, w *sql.DB, at, decisionType, model, prompt string
 
 const (
 	inside     = "2026-10-02T10:00:00Z" // within [startedAt, endedAt)
-	beforeTime = "2026-10-01T10:00:00Z" // before startedAt
+	midBefore  = "2026-10-01T10:00:00Z" // within the before period [2026-09-29T15:00Z, startedAt)
+	beforeTime = "2026-09-20T10:00:00Z" // earlier than the before period
 	afterTime  = "2026-10-04T10:00:00Z" // after endedAt
 )
 
@@ -55,7 +56,7 @@ func TestAnotherSettingChangingDuringTheExperimentConfounds(t *testing.T) {
 		t.Fatalf("nothing changed yet: confounded=%v verdict=%s", c.Confounded, c.Verdict)
 	}
 
-	// Outside the experiment, or not a tuning variable: not a confounder.
+	// Outside both periods, or not a tuning variable: not a confounder.
 	auditRow(t, w, beforeTime, "set", "risk.max_daily_trades", "5", "3")
 	auditRow(t, w, afterTime, "set", "risk.max_daily_trades", "3", "4")
 	auditRow(t, w, inside, "write_disable", "mcp.settings_write_enabled", "1", "0")
@@ -70,7 +71,7 @@ func TestAnotherSettingChangingDuringTheExperimentConfounds(t *testing.T) {
 		t.Fatalf("confounded=%v verdict=%s judged=%v, want a confounded experiment with no verdict", c.Confounded, c.Verdict, c.Judged)
 	}
 	if len(c.Confounders) != 1 || c.Confounders[0].Kind != experiment.KindSetting || c.Confounders[0].Name != "risk.max_daily_trades" ||
-		c.Confounders[0].AuditID == nil || *c.Confounders[0].AuditID != id {
+		c.Confounders[0].AuditID == nil || *c.Confounders[0].AuditID != id || c.Confounders[0].Period != experiment.PeriodAfter {
 		t.Errorf("confounders = %+v", c.Confounders)
 	}
 	if c.After.Performance.ClosedTradeCount == 0 {
@@ -131,7 +132,7 @@ func TestJevModelOrPromptChangingDuringASettingExperimentConfounds(t *testing.T)
 	e := create(t, srv, createArgs("risk.paper.max_trade_loss_pct", nil))
 	closeAt(t, srv, e.ID, endedAt)
 
-	decisionRow(t, w, beforeTime, "trader", "model-old", "trader-v2") // before the start: fine
+	decisionRow(t, w, beforeTime, "trader", "model-old", "trader-v2") // earlier than the before period: fine
 	decisionRow(t, w, inside, "trader", "model-a", "trader-v3")
 	decisionRow(t, w, "2026-10-03T10:00:00Z", "trader", "model-a", "trader-v3")
 	decisionRow(t, w, inside, "scout", "scout-model", "scout-v1") // another decision type has its own model

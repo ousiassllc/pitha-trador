@@ -35,7 +35,7 @@ const UnsetModel = "未設定（既定のモデル）"
 // the period cannot be shown to have run on one model. A model experiment's own
 // switch - to the model it names as its After - is not a confounder, like a
 // setting experiment's own change.
-func modelSwitches(ctx context.Context, q query.Q, exp Experiment, from, to string) ([]Confounder, error) {
+func modelSwitches(ctx context.Context, q query.Q, exp Experiment, period, from, to string) ([]Confounder, error) {
 	rows, err := q.QueryContext(ctx, `
 SELECT at, before_value, after_value FROM jev_model_changes WHERE at >= ? AND at < ? ORDER BY id`, from, to)
 	if err != nil {
@@ -52,7 +52,7 @@ SELECT at, before_value, after_value FROM jev_model_changes WHERE at >= ? AND at
 		if exp.Variable.Kind == KindModel && after != nil && *after == exp.Variable.After {
 			continue
 		}
-		out = append(out, Confounder{Kind: KindModel, Name: ModelSwitchName, At: query.FormatOut(at), Values: []string{modelOrUnset(before), modelOrUnset(after)}})
+		out = append(out, Confounder{Kind: KindModel, Period: period, Name: ModelSwitchName, At: query.FormatOut(at), Values: []string{modelOrUnset(before), modelOrUnset(after)}})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("experiment: model switches: %w", err)
