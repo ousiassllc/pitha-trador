@@ -234,7 +234,7 @@ func TestTrainer_LogsDroppedIncompleteWhenSplitFails(t *testing.T) {
 		t.Fatalf("recorded %d skips, want 1", len(rec.got))
 	}
 	got := rec.got[0]
-	if got.DroppedIncomplete != 2 || got.LabelV1Rows != 57 || got.LabelV2Rows != 48 ||
+	if got.DroppedIncomplete == nil || *got.DroppedIncomplete != 2 || got.LabelV1Rows != 57 || got.LabelV2Rows != 48 ||
 		got.UsableRows != 0 || got.RequiredRows != 130 || got.OOSRows != 46 || got.RequiredOOSRows != 740 {
 		t.Errorf("recorded skip = %+v", got)
 	}
@@ -253,7 +253,7 @@ func TestTrainer_SkipIsRecordedWithoutVersionCountsWhenTheCountFails(t *testing.
 	if len(rec.got) != 1 {
 		t.Fatalf("recorded %d skips, want 1", len(rec.got))
 	}
-	if got := rec.got[0]; got.LabelV1Rows != 0 || got.LabelV2Rows != 0 || got.DroppedIncomplete != 1 || got.RequiredRows != 130 {
+	if got := rec.got[0]; got.LabelV1Rows != 0 || got.LabelV2Rows != 0 || got.DroppedIncomplete == nil || *got.DroppedIncomplete != 1 || got.RequiredRows != 130 {
 		t.Errorf("recorded skip = %+v, want version counts 0, dropped_incomplete 1, required 130", got)
 	}
 	if !strings.Contains(logs.String(), "could not count labeled decisions") || !strings.Contains(logs.String(), "db busy") {

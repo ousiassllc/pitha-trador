@@ -2,6 +2,7 @@ package metalabel
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -38,20 +39,27 @@ type RetrainSkip struct {
 	// it reaches back to hold (the bar's MinOOSSamples) (issue #862).
 	OOSRows, RequiredOOSRows int
 	// DroppedIncomplete is the stored rows BuildRows dropped for a missing
-	// feature; LabelV1Rows and LabelV2Rows the labeled decisions of the
-	// lookback per label_version. 0 for a skip recorded before they existed.
-	DroppedIncomplete, LabelV1Rows, LabelV2Rows int
-	CreatedAt                                   time.Time
+	// feature. nil is "not recorded" (a skip written before the column existed,
+	// stored as NULL), never 0: a night that dropped nothing records 0.
+	DroppedIncomplete *int
+	// LabelV1Rows and LabelV2Rows are the labeled decisions of the lookback per
+	// label_version; 0 for a skip recorded before they existed.
+	LabelV1Rows, LabelV2Rows int
+	CreatedAt                time.Time
 }
 
 // InsertRetrainSkip stores s and returns it with ID and CreatedAt set.
 func (r *Repository) InsertRetrainSkip(ctx context.Context, s RetrainSkip) (RetrainSkip, error) {
 	createdAt := time.Now().UTC()
+	var dropped sql.NullInt64 // NULL = not recorded
+	if s.DroppedIncomplete != nil {
+		dropped = sql.NullInt64{Int64: int64(*s.DroppedIncomplete), Valid: true}
+	}
 	res, err := r.db.ExecContext(ctx, `INSERT INTO metalabel_retrain_skips
 		(skipped_at, reason_code, usable_rows, required_rows, oos_rows, required_oos_rows,
 		dropped_incomplete, label_v1_rows, label_v2_rows, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		sqlutil.FormatTime(s.SkippedAt), s.ReasonCode, s.UsableRows, s.RequiredRows, s.OOSRows, s.RequiredOOSRows,
-		s.DroppedIncomplete, s.LabelV1Rows, s.LabelV2Rows, sqlutil.FormatTime(createdAt))
+		dropped, s.LabelV1Rows, s.LabelV2Rows, sqlutil.FormatTime(createdAt))
 	if err != nil {
 		return RetrainSkip{}, fmt.Errorf("repository: insert meta-label retrain skip: %w", err)
 	}
@@ -80,10 +88,14 @@ func (r *Repository) ListRetrainSkips(ctx context.Context, limit int) ([]Retrain
 		var (
 			s                    RetrainSkip
 			skippedAt, createdAt string
+			dropped              sql.NullInt64
 		)
 		if err := rows.Scan(&s.ID, &skippedAt, &s.ReasonCode, &s.UsableRows, &s.RequiredRows, &s.OOSRows, &s.RequiredOOSRows,
-			&s.DroppedIncomplete, &s.LabelV1Rows, &s.LabelV2Rows, &createdAt); err != nil {
+			&dropped, &s.LabelV1Rows, &s.LabelV2Rows, &createdAt); err != nil {
 			return nil, fmt.Errorf("repository: scan meta-label retrain skip: %w", err)
+		}
+		if dropped.Valid {
+			s.DroppedIncomplete = new(int(dropped.Int64))
 		}
 		if s.SkippedAt, err = sqlutil.ParseTime(skippedAt); err != nil {
 			return nil, err

@@ -28,10 +28,12 @@ type InsufficientDataError struct {
 	// both sides of the split (issue #862).
 	OOSRows, RequiredOOSRows int
 	// DroppedIncomplete, LabelV1, LabelV2 are filled by the Trainer: the stored
-	// rows BuildRows dropped for a missing feature, and the labeled decisions of
-	// the lookback per label version (v1 close-only, v2 triple-barrier). They
-	// tell a thin history from rows that exist but cannot be used.
-	DroppedIncomplete, LabelV1, LabelV2 int
+	// rows BuildRows dropped for a missing feature (nil while not measured; the
+	// Trainer always sets it, 0 included), and the labeled decisions of the
+	// lookback per label version (v1 close-only, v2 triple-barrier). They tell a
+	// thin history from rows that exist but cannot be used.
+	DroppedIncomplete *int
+	LabelV1, LabelV2  int
 	// Detail is the human-readable message (logs only; never persisted).
 	Detail string
 	// Cause is the learner's error for SkipTrainingDataUnusable.
@@ -69,7 +71,7 @@ func WithSkipRecorder(r SkipRecorder) TrainerOption { return func(t *Trainer) { 
 func (t *Trainer) recordSkip(ctx context.Context, e *InsufficientDataError) error {
 	slog.Warn("metalabel: nightly retraining skipped; the existing model (or a skip) stays in force",
 		"reason", e, "code", e.Code,
-		"dropped_incomplete", e.DroppedIncomplete, "label_v1", e.LabelV1, "label_v2", e.LabelV2,
+		"dropped_incomplete", droppedIncompleteText(e.DroppedIncomplete), "label_v1", e.LabelV1, "label_v2", e.LabelV2,
 		"pre", e.Usable, "required_pre", e.Required, "oos", e.OOSRows, "required_oos", e.RequiredOOSRows)
 	if t.skips == nil {
 		return nil
@@ -102,8 +104,17 @@ func (t *Trainer) annotateSkip(ctx context.Context, err error, from, to time.Tim
 		slog.Warn("metalabel: could not count labeled decisions per label version; the skip is recorded without them", "error", cerr)
 		counts = repo.LabelVersionCounts{}
 	}
-	e.DroppedIncomplete, e.LabelV1, e.LabelV2 = dropped, counts.V1, counts.V2
+	e.DroppedIncomplete, e.LabelV1, e.LabelV2 = &dropped, counts.V1, counts.V2
 	return e
+}
+
+// droppedIncompleteText is the log value of dropped_incomplete: the count, or
+// "unknown" when it was not measured (stored as NULL, never as 0).
+func droppedIncompleteText(n *int) any {
+	if n == nil {
+		return "unknown"
+	}
+	return *n
 }
 
 // asInsufficient returns err's InsufficientDataError, if it is one.
