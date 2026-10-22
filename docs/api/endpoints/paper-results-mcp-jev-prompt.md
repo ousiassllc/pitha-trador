@@ -82,7 +82,7 @@
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
-| 1.0 | 2026-10-22 | 新規作成。`jev_shadow_compare` / `jev_shadow_cost` / `jev_prompt_promote`（元の文書の版 1.13 で追加） | issue #872 |
+| 1.0 | 2026-10-22 | 新規作成。`jev_shadow_compare` / `jev_shadow_cost` / `jev_prompt_promote`（元の文書の版 1.19 で追加） | issue #872 |
 | 1.1 | 2026-10-22 | `jev_shadow_compare` に `comparable` / `excluded_disagreement` / `outcome_note` を追加し、方向がライブと食い違う行を採点しない形に改めた（`future_return` がライブのバリアで止まる偏りを避けるため）。`jev_shadow_cost` の `daily_cap_approved` を `cap_source` に置き換え、失敗回数の上限（`failure_cap` ほか）と `daily_failure_cap` の止まった記録を追加 | issue #872 レビュー対応 |
 | 1.2 | 2026-10-22 | 費用の上限 0.10 USD・失敗回数の上限 20 回・単価 0.042 USD/1M 入力トークン・同時実行 4 をユーザー決定の確定値にし、`cap_source` の値を `default` / `stored`、`failure_cap_source` を `fixed` に改めた（`proposed_unapproved` を廃止）。`usage` が無い応答を推定の入力トークン数で数え、`jev_shadow_cost` に `estimated_calls` / `estimated_cost_usd` を追加 | issue #872 ユーザー決定 |
 | 1.3 | 2026-10-22 | `jev_shadow_cost` に `throttle_active` / `last_throttle` / `throttles_today` / `throttle_cooldown_seconds` / `min_call_interval_seconds` を追加（Jev API の 429/529 によるシャドーの停止と理由。ツール数は変わらない） | issue #883 |
