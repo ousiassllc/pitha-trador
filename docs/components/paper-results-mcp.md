@@ -30,6 +30,7 @@
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
 | `health_today` の判定のテスト（要対応コードの入り切り・非取引日・状態の区分。`query.HealthToday` を直接呼ぶ。行数制限のため `mcptests` と分ける） | `internal/service/paperresultsmcp/healthtests` |
+| `health_today` の日次停止（`daily_guard`）の読み取り（`runtime_settings` の `system.daily_guard` と日次ガードのしきい値から、アプリの `risk.Engine.DailyHalt` と同じ判定。`query` の行数制限のため分け、設定の読み取りは interface 越しで `query` を import しない。issue #863 の PR での切り出し） | `internal/service/paperresultsmcp/dailyhalt` |
 | 注文案の読み取り（issue #829）: 一覧・1 件の全体（紐づくシグナル・注文・ポジション）・集計の SQL と戻り値（`proposal`）、取引の入り口の判定（`origin`）、`health_today` の止まった案（`stalled`）。ツール定義は `order_proposal_read_tools.go`。テストは `proposaltests`（`read_test.go`・`readonly_db_test.go`・`origin_test.go`）と `healthtests`。GUI の「注文案」画面は `proposal` の読み取りだけを `internal/web/handler/orderproposals` の `Source` 経由で使う（配線は `internal/bootstrap/proposalview`） | `internal/service/paperresultsmcp/proposal`、`origin`、`stalled` |
 | 東証立会日 | 既存の `internal/service/marketcalendar` |
 | 資金の分母 | Settings の保存値（`runtime_settings` の `risk.paper.initial_capital_jpy`。読み取り接続で 1 キーだけ読む。`mcpset.PaperCapitalJPY`）、なければ `cmd/paper-results-mcp` の `paperRiskLimits`（アプリと同じ risk yaml 解決順。Paper の `initial_capital` のみ。起動時に読む）。DB は `bootstrap.DefaultDBPath` と `PITHA_DB_PATH` |
@@ -103,5 +104,6 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.8 | 2026-10-20 | 設定ツール（`mcpset`・`mcpwritesettings`・監査表 `000040`）を §2 に追加。DB の扱いを「読み取りは `mode=ro`、設定ツールだけが別の狭い書き込み接続」に改め、資金の分母を Settings の保存値に追従に変更。Settings 画面に書き込み許可のチェックと監査ログを追加（§4.1） | issue #806・#807 |
 | 1.9 | 2026-10-21 | 画面の項目に、注文案の受け付けスイッチ（既定オフ。オンは Settings だけ）を追記 | issue #827 |
 | 1.10 | 2026-10-21 | §2 に注文案の読み取り（`proposal`・`origin`・`stalled`）と、GUI の「注文案」画面との関係（読み取りモデルの共有）を追記。ツールは 21 | issue #829 |
-| 1.11 | 2026-10-21 | §2 に `session_diagnostics` と `collection_status` の失敗の内訳の置き場所を追加 | issue #850 |
-| 1.12 | 2026-10-22 | §2 に調整の実験（`experiment`・`experiment_tools.go`・`mcpset/experiments.go`・Settings の節）を追記。ツールは 25 | issue #871 |
+| 1.11 | 2026-10-22 | 部品の表に `health_today` の日次停止の読み取り `dailyhalt` を追加（`query` の行数制限のため切り出し。挙動は変えない） | issue #863 |
+| 1.12 | 2026-10-21 | §2 に `session_diagnostics` と `collection_status` の失敗の内訳の置き場所を追加 | issue #850 |
+| 1.13 | 2026-10-22 | §2 に調整の実験（`experiment`・`experiment_tools.go`・`mcpset/experiments.go`・Settings の節）を追記。ツールは 25 | issue #871 |
