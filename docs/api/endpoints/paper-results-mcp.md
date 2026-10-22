@@ -152,7 +152,7 @@
 | `daily_bar_run_failed_count` | 期間内（`run_date`）の `daily_bar_runs.status='failed'` の件数 |
 | `label_skip_count` | 期間内（`calibration_label_skips.created_at`）の件数 |
 | `job_failures` | 期間内（`finished_at`）に `failed` で終わったジョブの内訳。`total`、`by_day[]`（`date` は JST 日・`count`）、`by_queue[]`（`queue`・`count`。キューの順）、`by_error_code[]`（`code`・`count`）、`by_day_and_error_code[]`（`date`・`code`・`count`。「10/6 の 4002006 は N 件」はこれで引ける）。どの一覧も合計は `total`。`skipped_total` / `skipped_by_queue[]` は `last_error` が `skipped: ` で始まる `succeeded` のジョブ（`jobqueue.Skip` による終端スキップ。`jobs[].succeeded_count` に含まれる）の件数 |
-| `alerts[]` | いま出ている警告（期間ではなく現在）。要素は `code` と `since`（条件が始まった時刻、UTC RFC3339）だけで、自由文は返さない。無ければ `[]`。`code` は固定: `kabu_not_logged_in`（取引日の 08:45〜15:30 に kabu が未ログイン〔4001007〕。08:45 の時点で既に続いていた、または後から 5 分続いた）/ `market_data_idle`（立会中〔9:00〜11:30・12:30〜15:30〕に `market-data` ジョブが成功も失敗も 5 分間ゼロ。立会の開始から数える）。非取引日と対象時間外は出さず、条件が解けると消える。アプリ内の検知（`health_alerts`、`000039`）が保存した行を読み、検知の最終確認（`health_alert_checks`）が 2 分より古い間はアプリが止まっているとみなして行を使わず、立会中なら `jobs` から `market_data_idle` だけを導く。health_today（#808）も同じ状態（`query.HealthAlerts`）を読む |
+| `alerts[]` | いま出ている警告（期間ではなく現在）。要素は `code` と `since`（条件が始まった時刻、UTC RFC3339）だけで、自由文は返さない。無ければ `[]`。`code` は固定: `kabu_not_logged_in`（取引日の 08:45〜15:30 に kabu が未ログイン〔4001007〕。08:45 の時点で既に続いていた、または後から 5 分続いた）/ `kabu_unreachable`（同じ時間帯・同じ規則で kabu ステーションへの接続が拒否される〔未起動・API 未有効。#863〕）/ `market_data_idle`（立会中〔9:00〜11:30・12:30〜15:30〕に `market-data` ジョブが成功も失敗も 5 分間ゼロ。立会の開始から数える）。非取引日と対象時間外は出さず、条件が解けると消える。アプリ内の検知（`health_alerts`、`000039`）が保存した行を読み、検知の最終確認（`health_alert_checks`）が 2 分より古い間はアプリが止まっているとみなして行を使わず、立会中なら `jobs` から `market_data_idle` だけを導く。health_today（#808）も同じ状態（`query.HealthAlerts`）を読む |
 | `retention` | `succeeded_job_days`（7）/ `failed_job_days`（30）と固定の注記。完了ジョブは `internal/service/retention` が成功 7 日・失敗 30 日で削除するため、期間がそれより前に及ぶと成功は先に消え、`jobs[]` と `job_failures` に出ない（失敗は 30 日残る） |
 
 `job_failures` の `code` は `jobs.last_error` の先頭 256 バイトから、固定パターン（kabu `code 4002006` / 立花 `p_errno=-62`・`sResultCode=NNN`）の数値トークン（`-` 付きでもよい 1〜8 桁）だけを取り出した値で、無ければ `unknown`。取り出しはプロセス内で行い、`last_error` の本文は返さない（SQL に `last_error` が現れるのは `substr(last_error, 1, N)`（N は 256 以下）の形だけで、`readonly_db_test` が確認する）。
@@ -171,7 +171,7 @@
 | `paper_trades` | `opened_count`（`positions.opened_at` が今日の件数）、`closed_count`（`closed_at` が今日の件数）。価格は返さない |
 | `meta_model` | `adopted`（`metalabel_models.status='active'` が 1 件以上）、`version`・`trained_at`（採用中で最新のもの。無ければ `null`） |
 | `bootstrap` | `enabled`（`runtime_settings` の `paper.bootstrap_entry_enabled`。無い・解釈できない値は `false`。#798）、`effective`（`enabled` かつ採用中モデルが無い。ブートストラップが働く条件。本 MCP は Paper の DB だけを読み、アプリは Live では設定に関わらず使わない）、`signals_today`（今日のシグナルのうち `policy_version` がブートストラップ版のもの） |
-| `market_data` | `kabu_login`（`ok` / `not_logged_in` / `unknown` / `not_watched`）、`market_data`（`running` / `idle` / `not_watched`）、`app_running`（アプリの検知の最終確認が 2 分以内か）、`alerts[]`（`collection_status.alerts[]` と同じ値。`code` と `since`）。`not_watched` は検知が見ない時間（非取引日、08:45〜15:30 の外、`market_data` は立会外・昼休み）。`unknown` は見る時間なのにアプリが止まっていて判断できない状態 |
+| `market_data` | `kabu_login`（`ok` / `not_logged_in` / `unreachable` / `unknown` / `not_watched`）、`market_data`（`running` / `idle` / `not_watched`）、`app_running`（アプリの検知の最終確認が 2 分以内か）、`alerts[]`（`collection_status.alerts[]` と同じ値。`code` と `since`）。`not_watched` は検知が見ない時間（非取引日、08:45〜15:30 の外、`market_data` は立会外・昼休み）。`unknown` は見る時間なのにアプリが止まっていて判断できない状態 |
 | `missing_session_dates[]` | 今日より前の 7 日間（今日の引け後は今日も含む）の東証立会日のうち、`market_snapshots` が 0 件で、**それ以前にスナップショットが 1 件でもある**日付（実際の欠損）。`collection_status.missing_session_dates` は履歴の長さを見ずに 0 件の日をすべて返すので、初回起動直後は両者が異なる（#814） |
 | `insufficient_history_dates[]` | 同じ期間の東証立会日のうち、`market_snapshots` が 0 件で、**それ以前のスナップショットも 1 件も無い**日付（履歴が足りず判定できない。初回起動直後など）。欠損とは区別し、警告にしない（`attention_codes` に出さない）。該当が無ければ（履歴が 7 日分そろえば）`[]`（#814） |
 | `daily_guard` | `halted`、`reason`（`daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades`。`halted` でなければ `null`）、`halted_at`（UTC RFC3339）。アプリの `risk.Engine.DailyHalt` と同じく、今日の取引日の停止だけを、その規則が Settings でまだ有効なときに限って返す。停止メッセージの文は返さない |
@@ -179,13 +179,13 @@
 | `retrain` | `skipped`（最新の `metalabel_retrain_skips` が 24 時間以内で、それ以後に学習されたモデルが無い）、`latest_skipped_at`、`reason_code`（§3.5 の固定コード。未知は `other`）。見送りが一度も無ければ後ろ 2 つは `null` |
 | `order_proposals` | `stalled_count`（`order_proposals.status` が `received` / `processing` のまま、最後の状態の変化 `updated_at` から 10 分を超えた案の数）、`oldest_stalled_since`（その中で最も古い `updated_at`、UTC RFC3339。無ければ `null`）。案の内容は返さない（issue #829） |
 
-要対応コード（`query.Attention*`。`kabu_not_logged_in` と `market_data_idle` はアプリ内警告（#802）と同じコードで、再導出せず `health_alerts` を読む）:
+要対応コード（`query.Attention*`。`kabu_not_logged_in`・`kabu_unreachable`・`market_data_idle` はアプリ内警告（#802・#863）と同じコードで、再導出せず `health_alerts` を読む）:
 
 | コード | 条件 |
 |--------|------|
 | `no_paper_trades_today` | 取引日で、前場の引け（11:30 JST）以後に、今日開いた Paper ポジションが 0 件 |
 | `no_active_model` | 採用中のメタモデルが無い（日によらない） |
-| `kabu_not_logged_in` | `market_data.alerts[]` に同名の警告がある（取引日の 08:45〜15:30 のみ） |
+| `kabu_not_logged_in` / `kabu_unreachable` | `market_data.alerts[]` に同名の警告がある（取引日の 08:45〜15:30 のみ。後者は kabu ステーションが未起動・API 未有効で接続が拒否されている状態。#863） |
 | `market_data_idle` | `market_data.alerts[]` に同名の警告がある（立会中のみ） |
 | `missing_session` | `missing_session_dates[]` が空でない（取引日・非取引日とも直近 7 日の取引日を見る）。`insufficient_history_dates[]` だけが空でないときは出さない（データ不足は警告でなく判定不可） |
 | `daily_guard_halted` | `daily_guard.halted` |
@@ -306,9 +306,8 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
-- `health_today` は、要対応コード 9 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
-- 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）
-- Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
+- `health_today` は、要対応コード 10 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
+- 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）。Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
 
 ## 改訂履歴
 

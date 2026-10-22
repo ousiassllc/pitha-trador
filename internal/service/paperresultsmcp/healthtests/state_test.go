@@ -36,6 +36,7 @@ func TestNonTradingDayRaisesNoFalseAlerts(t *testing.T) {
 			_, w := testkit.HealthyDay(t, now)
 			// Alert rows the detector left behind, and a detector that has stopped.
 			testkit.HealthAlert(t, w, domain.HealthAlertKabuNotLoggedIn, now.Add(-time.Hour), now)
+			testkit.HealthAlert(t, w, domain.HealthAlertKabuUnreachable, now.Add(-time.Hour), now)
 			testkit.HealthAlert(t, w, domain.HealthAlertMarketDataIdle, now.Add(-time.Hour), now)
 			testkit.DetectorChecked(t, w, now.Add(-time.Hour))
 			h := healthAt(t, w, now)
@@ -65,6 +66,7 @@ func TestNonTradingDayRaisesNoFalseAlerts(t *testing.T) {
 // ("unknown"), while the idle rule is derived from the jobs.
 func TestMarketDataStatuses(t *testing.T) {
 	kabu, idle := domain.HealthAlertKabuNotLoggedIn, domain.HealthAlertMarketDataIdle
+	unreachable := domain.HealthAlertKabuUnreachable
 	none := func(*testing.T, *sql.DB, time.Time) {}
 	stopped := func(t *testing.T, w *sql.DB, now time.Time) { testkit.DetectorChecked(t, w, now.Add(-10*time.Minute)) }
 	tests := []struct {
@@ -80,6 +82,9 @@ func TestMarketDataStatuses(t *testing.T) {
 		{"in session, kabu logged out", at(20, 10, 0), func(t *testing.T, w *sql.DB, now time.Time) {
 			testkit.HealthAlert(t, w, kabu, at(20, 8, 45), now)
 		}, "not_logged_in", "running", true, []string{kabu}},
+		{"in session, kabu refusing the connection", at(20, 10, 0), func(t *testing.T, w *sql.DB, now time.Time) {
+			testkit.HealthAlert(t, w, unreachable, at(20, 8, 45), now)
+		}, "unreachable", "running", true, []string{unreachable}},
 		{"in session, market data idle", at(20, 10, 0), func(t *testing.T, w *sql.DB, now time.Time) {
 			testkit.HealthAlert(t, w, idle, at(20, 9, 40), now)
 		}, "ok", "idle", true, []string{idle}},
@@ -106,7 +111,7 @@ func TestMarketDataStatuses(t *testing.T) {
 			}
 			var got []string
 			for _, c := range h.AttentionCodes {
-				if c == kabu || c == idle {
+				if c == kabu || c == unreachable || c == idle {
 					got = append(got, c)
 				}
 			}

@@ -16,6 +16,7 @@ import (
 // health_today (#808) reads the same state through HealthAlerts.
 const (
 	AlertKabuNotLoggedIn = domain.HealthAlertKabuNotLoggedIn
+	AlertKabuUnreachable = domain.HealthAlertKabuUnreachable
 	AlertMarketDataIdle  = domain.HealthAlertMarketDataIdle
 )
 

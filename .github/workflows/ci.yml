@@ -135,6 +135,11 @@ jobs:
       # (issue #795).
       - name: go test (paper-results-mcp process control, windows)
         run: go test ./internal/service/paperresultsmcp/proc/...
+      # The sleep guard's Keeper calls SetThreadExecutionState (issue #863);
+      # only the Windows-only test (keeper_windows_test.go) runs here, the
+      # OS-independent guard logic is covered by the Linux test job.
+      - name: go test (sleep guard keeper, windows)
+        run: go test -run 'TestWindowsKeeper' ./internal/service/sleepguard
 
   build:
     needs: [test, test-windows]
