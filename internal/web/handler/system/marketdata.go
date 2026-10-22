@@ -60,13 +60,12 @@ func (h *MarketDataHandler) WithBrokerSelection(selection BrokerSelection) *Mark
 	return h
 }
 
-// Status implements `GET /system/marketdata-status`: Header's
-// `#marketdata-banner` fragment (organisms.MarketDataBanner), non-empty
-// only while the broker session is failing (kabu: the last token issuance
-// failed), and escalated while a not_logged_in streak persists (issue #712).
-// With 立花 selected the guidance is tachibanaGuidance's, the banner always
-// names the environment and the kabu-specific escalation does not apply.
-func (h *MarketDataHandler) Status(c *gin.Context) {
+// BannerProps is the connection banner's content: the cause and remedy of the
+// failing broker session (kabu: the last token issuance), its escalation and
+// notices. `GET /system/marketdata-status` renders it as the header banner
+// and the Home screen (issue #896) reads it for its 要対応 cards, so both name
+// the same condition alike. A nil source yields the zero value (no banner).
+func (h *MarketDataHandler) BannerProps(ctx context.Context) organisms.MarketDataBannerProps {
 	var props organisms.MarketDataBannerProps
 	if h.source != nil {
 		status := h.source.Status()
@@ -74,7 +73,7 @@ func (h *MarketDataHandler) Status(c *gin.Context) {
 		props.Failures = status.Failures
 		props.Persistent, props.Elapsed = status.Persistent(time.Now())
 		if status.Failed() {
-			if environment := h.tachibanaEnvironment(c.Request.Context(), status.Issue); environment != "" {
+			if environment := h.tachibanaEnvironment(ctx, status.Issue); environment != "" {
 				props.Guidance, props.Environment = tachibanaGuidance(status.Issue, environment), environment
 				props.Persistent = false
 			}
@@ -84,9 +83,19 @@ func (h *MarketDataHandler) Status(c *gin.Context) {
 		}
 	}
 	if h.watchNotice != nil {
-		if n := h.watchNotice.WatchNotice(c.Request.Context()); n != "" {
+		if n := h.watchNotice.WatchNotice(ctx); n != "" {
 			props.Notice = strings.TrimSpace(props.Notice + " " + n)
 		}
 	}
-	shared.RenderHTML(c, http.StatusOK, organisms.MarketDataBanner(props))
+	return props
+}
+
+// Status implements `GET /system/marketdata-status`: Header's
+// `#marketdata-banner` fragment (organisms.MarketDataBanner), non-empty
+// only while the broker session is failing (kabu: the last token issuance
+// failed), and escalated while a not_logged_in streak persists (issue #712).
+// With 立花 selected the guidance is tachibanaGuidance's, the banner always
+// names the environment and the kabu-specific escalation does not apply.
+func (h *MarketDataHandler) Status(c *gin.Context) {
+	shared.RenderHTML(c, http.StatusOK, organisms.MarketDataBanner(h.BannerProps(c.Request.Context())))
 }

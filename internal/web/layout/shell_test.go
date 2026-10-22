@@ -134,8 +134,8 @@ func TestShell_HeaderShowsLogoBeforeNav(t *testing.T) {
 	if logoLink == "" {
 		t.Fatalf("Shell header has no #header-logo link; body=%s", out)
 	}
-	if !regexp.MustCompile(`\bhref="/scanner"`).MatchString(logoLink) {
-		t.Errorf("logo link must go to /scanner; link=%s", logoLink)
+	if !regexp.MustCompile(`\bhref="/"`).MatchString(logoLink) {
+		t.Errorf("logo link must go to / (the Home screen, issue #896); link=%s", logoLink)
 	}
 	img := regexp.MustCompile(`<img\b[^>]*>`).FindString(logoLink)
 	if !strings.Contains(img, `src="/static/img/logo.svg"`) || !strings.Contains(img, `alt=""`) {
@@ -223,19 +223,35 @@ func TestShell_NavIsTheFiveEntriesWithDividerBeforeSettings(t *testing.T) {
 	}
 }
 
-// The three banner frames share one placement convention (issue #625):
-// own full-width last row, collapsed while empty.
-func TestShell_BannerFramesShareOrderLastWFullEmptyHidden(t *testing.T) {
+// The banners that stacked under the header on every page are one badge
+// container (issue #896): a collapsed-while-empty live region
+// that links to Home.
+func TestShell_HeaderHasTheAttentionBadgeInsteadOfBanners(t *testing.T) {
 	out := render(t, layout.Shell("t", organisms.NavNone))
-	for _, id := range []string{"config-banner", "update-banner", "marketdata-banner"} {
-		tag := regexp.MustCompile(`(?s)<div\b[^>]*\bid="` + id + `"[^>]*>`).FindString(out)
-		if tag == "" {
-			t.Fatalf("no #%s in header; body=%s", id, out)
+	tag := regexp.MustCompile(`(?s)<div\b[^>]*\bid="attention-badge"[^>]*>`).FindString(out)
+	if tag == "" {
+		t.Fatalf("no #attention-badge in header; body=%s", out)
+	}
+	for _, c := range []string{"empty:hidden", `hx-get="/home/attention-badge"`} {
+		if !strings.Contains(tag, c) {
+			t.Errorf("#attention-badge lacks %s: %s", c, tag)
 		}
-		for _, c := range []string{"order-last", "w-full", "empty:hidden"} {
-			if !strings.Contains(tag, c) {
-				t.Errorf("#%s lacks %s: %s", id, c, tag)
-			}
+	}
+	for _, id := range []string{"config-banner", "update-banner", "marketdata-banner", "daily-halt-banner", "health-alert-banner"} {
+		if strings.Contains(out, `id="`+id+`"`) {
+			t.Errorf("#%s must no longer be stacked in the header", id)
 		}
+	}
+}
+
+// The Home page is the one page whose header shows no badge: it lists the
+// alerts in full itself.
+func TestShell_HomeHeaderHasNoBadgeAndMarksHome(t *testing.T) {
+	out := render(t, layout.Shell("t", organisms.NavHome))
+	if strings.Contains(out, "attention-badge") {
+		t.Errorf("the Home header must not carry the badge; body=%s", out)
+	}
+	if !regexp.MustCompile(`<a[^>]*href="/"[^>]*aria-current="page"[^>]*>ホーム</a>`).MatchString(out) {
+		t.Errorf("ホーム is not marked current on Home; body=%s", out)
 	}
 }

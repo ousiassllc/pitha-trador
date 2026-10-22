@@ -1,0 +1,59 @@
+package homepanels
+
+// itemClass is an attention item's colours: red stops or endangers trading,
+// amber needs a look, blue is a notice.
+func itemClass(level AttentionLevel) string {
+	switch level {
+	case LevelAlert:
+		return "rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+	case LevelWarn:
+		return "rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+	}
+	return "rounded-md border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-800"
+}
+
+// AttentionSection is the 要対応 section (issue #896 §5.2): every condition the
+// header banners used to stack on each page, as cards with where to look. The
+// header shows only 「要対応 N 件」 on the other pages and links here. The body
+// is re-fetched every 30 s.
+templ AttentionSection(v AttentionView) {
+	<section class="mt-6" data-testid="home-attention-section" aria-labelledby="home-attention-title">
+		<h2 id="home-attention-title" class="text-lg font-semibold text-slate-900">要対応</h2>
+		<div
+			id="home-attention"
+			class="mt-2"
+			hx-get={ AttentionURL }
+			hx-headers={ refreshHeaders }
+			hx-trigger="every 30s, secretsStatusChanged from:body, updateStatusChanged from:body"
+			hx-target="this"
+			hx-swap="innerHTML"
+		>
+			@AttentionBody(v)
+		</div>
+	</section>
+}
+
+// AttentionBody is the section's refreshed part: the items, or the one line
+// 「対応が必要なものはありません」 when there are none and every source was read.
+templ AttentionBody(v AttentionView) {
+	if len(v.Items) == 0 && v.Notice == "" {
+		<p class="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" data-testid="attention-none">対応が必要なものはありません</p>
+	} else {
+		<ul class="flex flex-col gap-2">
+			for _, it := range v.Items {
+				<li class={ itemClass(it.Level) } data-testid="attention-item" data-key={ it.Key } data-level={ string(it.Level) }>
+					<p class="font-semibold">{ it.Title }</p>
+					if it.Detail != "" {
+						<p class="mt-0.5 text-xs leading-relaxed">{ it.Detail }</p>
+					}
+					if it.Link.Href != "" {
+						<p class="mt-1">@DestLink(it.Link)</p>
+					}
+				</li>
+			}
+		</ul>
+		if v.Notice != "" {
+			<p class="mt-2 text-xs text-amber-800" data-testid="attention-notice">{ v.Notice }</p>
+		}
+	}
+}

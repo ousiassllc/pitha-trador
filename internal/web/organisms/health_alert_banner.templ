@@ -21,16 +21,17 @@ templ HealthAlertBanner(alerts []HealthAlertView) {
 	for _, a := range alerts {
 		<div class="rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" data-testid="health-alert-banner" data-code={ a.Code }>
 			<p>
-				<span class="font-semibold">{ healthAlertTitle(a.Code) }</span>
-				{ a.Since }から続いています。{ healthAlertAction(a.Code) }
+				<span class="font-semibold">{ HealthAlertTitle(a.Code) }</span>
+				{ a.Since }から続いています。{ HealthAlertAction(a.Code) }
 				原因が解消すると、この表示は自動的に消えます。
 			</p>
 		</div>
 	}
 }
 
-// healthAlertTitle is the fixed headline of an alert code.
-func healthAlertTitle(code string) string {
+// HealthAlertTitle is the fixed headline of an alert code (also the Home
+// screen's 要対応 title, issue #896).
+func HealthAlertTitle(code string) string {
 	switch code {
 	case "kabu_not_logged_in":
 		return "取引日の朝からkabuステーションに未ログインです。"
@@ -42,8 +43,9 @@ func healthAlertTitle(code string) string {
 	return "市況データの警告があります。"
 }
 
-// healthAlertAction tells the operator what to check for an alert code.
-func healthAlertAction(code string) string {
+// HealthAlertAction tells the operator what to check for an alert code (also
+// the Home screen's 要対応 detail).
+func HealthAlertAction(code string) string {
 	switch code {
 	case "kabu_not_logged_in":
 		return "kabuステーションにログインしてください（ログイン後に自動で再発行します）。"

@@ -1,0 +1,198 @@
+package homepanels
+
+import (
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+)
+
+const blockClass = "min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+
+// DetailsSection is the 今日の詳細 section (issue #896 §5.3), collapsible. The
+// summary is static; the body inside is re-fetched every 30 s, so a collapsed
+// section stays collapsed.
+templ DetailsSection(v View) {
+	<details class="mt-6" open data-testid="home-details-section">
+		<summary class="cursor-pointer text-lg font-semibold text-slate-900">今日の詳細</summary>
+		<div
+			id="home-details"
+			class="mt-2"
+			hx-get={ DetailsURL }
+			hx-headers={ refreshHeaders }
+			hx-trigger="every 30s"
+			hx-target="this"
+			hx-swap="innerHTML"
+		>
+			@DetailsBody(v)
+		</div>
+	</details>
+}
+
+// DetailsBody is the section's refreshed part: six blocks, each with its own
+// error line.
+templ DetailsBody(v View) {
+	<div class="grid gap-4 lg:grid-cols-2">
+		@rejectReasonsBlock(v.RejectReasons)
+		@scanBlock(v.Scan)
+		@proposalsBlock(v.Proposals)
+		@tradesBlock(v.Trades)
+		@modelBlock(v.Model)
+		@killEventsBlock(v.KillEvents)
+	</div>
+}
+
+templ rejectReasonsBlock(v RejectReasonsView) {
+	<section class={ blockClass } data-testid="home-reject-reasons" aria-labelledby="home-reject-title">
+		<h3 id="home-reject-title" class="text-sm font-semibold text-slate-700">エントリーしなかった理由（今日）</h3>
+		if v.Err != "" {
+			@cardError(v.Err)
+		} else if len(v.Rows) == 0 {
+			<p class="mt-2 text-sm text-slate-500" data-testid="reject-empty">今日はまだ見送りの記録がありません。</p>
+		} else {
+			<p class="mt-1 text-xs text-slate-500">今日、方向なし（NONE）と判断した { strconv.Itoa(v.Total) } 件の理由別の件数です。</p>
+			<ul class="mt-2 flex flex-col gap-1 text-sm">
+				for _, r := range v.Rows {
+					<li class="flex items-baseline justify-between gap-3" data-testid="reject-row" data-code={ r.Code }>
+						<span>{ r.Label }<span class="ml-1 text-xs text-slate-400">{ r.Code }</span></span>
+						<span class="font-semibold tabular-nums">{ strconv.Itoa(r.Count) }</span>
+					</li>
+				}
+			</ul>
+			if v.EntryQuality != nil {
+				@entryQualityNote(v.EntryQuality)
+			}
+		}
+	</section>
+}
+
+// entryQualityNote is shown when entry quality is the most frequent reason: the
+// minimum in use and where to change it.
+templ entryQualityNote(n *EntryQualityNote) {
+	<div class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="entry-quality-note">
+		<p class="font-semibold">エントリー品質がしきい値に届かない見送りが最も多くなっています。</p>
+		if n.Err != "" {
+			<p class="mt-1" data-testid="entry-quality-error">{ n.Err }</p>
+		} else {
+			<ul class="mt-1">
+				for _, r := range n.Rows {
+					<li data-testid="entry-quality-row" data-side={ r.Side }>
+						{ r.Side }の最低エントリー品質:
+						<span data-testid="entry-quality-paper">Paper { r.Paper }</span> ／
+						<span data-testid="entry-quality-live">Live { r.Live }</span>
+						（いま使われているのは { r.Mode } の { r.Effective }）
+					</li>
+				}
+			</ul>
+		}
+		<p class="mt-1">@DestLink(n.Link)</p>
+	</div>
+}
+
+templ scanBlock(v ScanView) {
+	<section class={ blockClass } data-testid="home-scan" aria-labelledby="home-scan-title">
+		<h3 id="home-scan-title" class="text-sm font-semibold text-slate-700">スキャン状況</h3>
+		if v.Err != "" {
+			@cardError(v.Err)
+		} else if !v.Panel.HasCycle {
+			<p class="mt-2 text-sm text-slate-500" data-testid="scan-none">まだスキャンサイクルが実行されていません。</p>
+		} else {
+			<p class="mt-1 text-xs text-slate-500" data-testid="scan-cycle-meta">最終サイクル { FormatTime(v.Panel.Cycle.FinishedAt) }（所要 { organisms.FormatCycleDuration(v.Panel.Cycle.Duration()) }）</p>
+			@organisms.ScanFunnel(v.Panel)
+		}
+		<p class="mt-2"><a class={ linkClass } href="/scanner">候補銘柄 →</a></p>
+	</section>
+}
+
+templ proposalsBlock(v ProposalsView) {
+	<section class={ blockClass } data-testid="home-proposals" aria-labelledby="home-proposals-title">
+		<h3 id="home-proposals-title" class="text-sm font-semibold text-slate-700">AIの注文提案（今日）</h3>
+		if v.Err != "" {
+			@cardError(v.Err)
+		} else if v.Total == 0 {
+			<p class="mt-2 text-sm text-slate-500" data-testid="proposals-none">今日受け付けた提案はありません。</p>
+		} else {
+			<p class="mt-1 text-sm"><span class="text-2xl font-bold tabular-nums" data-testid="proposals-total">{ strconv.Itoa(v.Total) }</span> 件を受け付けました。</p>
+			<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-700">
+				for _, c := range v.Counts {
+					if c.Count > 0 {
+						<li data-testid="proposals-status">{ c.Label } <span class="font-semibold tabular-nums">{ strconv.Itoa(c.Count) }</span></li>
+					}
+				}
+			</ul>
+			<ul class="mt-2 flex flex-col gap-1 text-xs">
+				for _, p := range v.Latest {
+					<li class="flex justify-between gap-2" data-testid="proposal-row">
+						<span><a class="text-blue-700 underline" href={ ProposalURL(p.ID) }>{ p.Symbol }</a> { p.Action }</span>
+						<span class="text-slate-600">{ p.Status } · { FormatTime(p.ReceivedAt) }</span>
+					</li>
+				}
+			</ul>
+		}
+		<p class="mt-2"><a class={ linkClass } href="/order-proposals">AIの注文提案 →</a></p>
+	</section>
+}
+
+templ tradesBlock(v TradesView) {
+	<section class={ blockClass } data-testid="home-trades" aria-labelledby="home-trades-title">
+		<h3 id="home-trades-title" class="text-sm font-semibold text-slate-700">最近の取引（直近の決済）</h3>
+		if v.Err != "" {
+			@cardError(v.Err)
+		} else if len(v.Rows) == 0 {
+			<p class="mt-2 text-sm text-slate-500" data-testid="trades-none">決済した取引はまだありません。</p>
+		} else {
+			<ul class="mt-2 flex flex-col gap-1 text-xs">
+				for _, t := range v.Rows {
+					<li class="flex items-baseline justify-between gap-2" data-testid="trade-row">
+						<span><a class="font-semibold text-blue-700 underline" href={ SymbolURL(t.Symbol) }>{ t.Symbol }</a> { SideLabel(t.Side) } { strconv.FormatInt(t.Quantity, 10) }株 <span class="text-slate-500">{ FormatTime(t.ClosedAt) }</span></span>
+						<span class={ "font-semibold tabular-nums", PnLClass(t.PnL) }>{ FormatSignedYen(t.PnL) }</span>
+					</li>
+				}
+			</ul>
+		}
+		<p class="mt-2"><a class={ linkClass } href="/performance">成績 →</a></p>
+	</section>
+}
+
+templ modelBlock(v ModelView) {
+	<section class={ blockClass } data-testid="home-model" aria-labelledby="home-model-title">
+		<h3 id="home-model-title" class="text-sm font-semibold text-slate-700">モデル状態</h3>
+		if v.Err != "" {
+			@cardError(v.Err)
+		} else {
+			if v.Adopted {
+				<p class="mt-2 text-sm" data-testid="model-adopted">メタモデル: 採用中
+					if v.Version != "" {
+						<span class="ml-1 font-semibold">{ v.Version }</span>
+					}
+				</p>
+				if !v.TrainedAt.IsZero() {
+					<p class="text-xs text-slate-500" data-testid="model-trained-at">学習日時 { FormatTime(v.TrainedAt) }</p>
+				}
+			} else {
+				<p class="mt-2 text-sm text-amber-800" data-testid="model-not-adopted">メタモデル: 未採用</p>
+			}
+			if v.RetrainNotice != "" {
+				<p class="mt-1 text-xs text-amber-800" data-testid="model-retrain">{ v.RetrainNotice }</p>
+			}
+		}
+		<p class="mt-2"><a class={ linkClass } href="/settings/results">設定 ＞ 予測モデル →</a></p>
+	</section>
+}
+
+templ killEventsBlock(v KillEventsView) {
+	<section class={ blockClass } data-testid="home-kill-events" aria-labelledby="home-kill-title">
+		<h3 id="home-kill-title" class="text-sm font-semibold text-slate-700">最近の Kill Switch</h3>
+		if v.Err != "" {
+			@cardError(v.Err)
+		} else if len(v.Rows) == 0 {
+			<p class="mt-2 text-sm text-slate-500" data-testid="kill-none">最近の Kill Switch はありません。</p>
+		} else {
+			<ul class="mt-2 flex flex-col gap-1 text-xs">
+				for _, e := range v.Rows {
+					<li data-testid="kill-row"><span class="text-slate-500">{ FormatTime(e.At) }</span> { e.Detail }</li>
+				}
+			</ul>
+		}
+		<p class="mt-2"><a class={ linkClass } href="/activity">稼働ログ →</a></p>
+	</section>
+}

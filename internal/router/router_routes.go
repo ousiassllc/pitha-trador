@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
@@ -40,13 +41,6 @@ type handlers struct {
 // on engine and returns the handlers registerAPI reuses.
 func registerPages(engine *gin.Engine, o options, settingsStore settings.SecretsStore) handlers {
 	engine.StaticFS("/static", staticFS())
-	// Scanner Dashboard is the app's home page (organisms/header.templ's nav
-	// lists it first); `/` used to serve a static "Backend skeleton is
-	// running." placeholder left over from #2's initial scaffold, which is
-	// what a freshly launched cmd/desktop window (Wails has no configured
-	// start URL, so it loads "/") or `go run ./cmd/server` + browser would
-	// show instead of any real screen.
-	engine.GET("/", func(c *gin.Context) { c.Redirect(http.StatusFound, "/scanner") })
 	if swaggerEnabled() {
 		engine.GET("/swagger", swagger.SwaggerUI)
 	}
@@ -130,6 +124,20 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET("/system/marketdata-status", marketDataHandler.Status)
 	engine.GET("/system/daily-halt", system.NewDailyHaltHandler(o.dailyHaltSource).Status)
 	engine.GET("/system/health-alerts", system.NewHealthAlertHandler(o.healthAlertSource).Status)
+	scanSource, _ := o.candidateSource.(scanner.ScanSource)
+	home.New(home.Deps{
+		Source:     o.homeSource,
+		State:      o.systemEngine,
+		DailyHalt:  o.dailyHaltSource,
+		MarketData: marketDataHandler,
+		Alerts:     o.healthAlertSource,
+		Secrets:    settingsHandler,
+		Update:     o.updateController,
+		Positions:  o.symbolProvider,
+		Scan:       scanSource,
+		Settings:   o.operationalSettings,
+		Activity:   o.activitySource,
+	}).Register(engine)
 
 	return h
 }

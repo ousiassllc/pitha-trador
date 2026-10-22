@@ -148,14 +148,20 @@ func (h *SettingsHandler) Delete(c *gin.Context) {
 // SecretsStore.Get error degrades that key to "unset" (issue #70) rather
 // than 500ing the banner on every page.
 func (h *SettingsHandler) Status(c *gin.Context) {
+	shared.RenderHTML(c, http.StatusOK, organisms.SecretsBanner(h.UnsetOptionalKeys(c.Request.Context())))
+}
+
+// UnsetOptionalKeys lists the optional secrets-table keys that have no stored
+// value yet (not defaultedKeys). The Home screen's 要対応 list reads it
+// (issue #896), so it and the banner above name the same keys.
+func (h *SettingsHandler) UnsetOptionalKeys(ctx context.Context) []string {
 	var keys []string
 	for _, key := range config.OptionalSecretKeys() {
 		if !slices.Contains(defaultedKeys, key) {
 			keys = append(keys, key)
 		}
 	}
-	missing := h.unsetKeys(c.Request.Context(), keys)
-	shared.RenderHTML(c, http.StatusOK, organisms.SecretsBanner(missing))
+	return h.unsetKeys(ctx, keys)
 }
 
 // secretsStatusChangedEvent is the HX-Trigger event a successful Save/Delete

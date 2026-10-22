@@ -11,6 +11,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/proposals"
@@ -41,6 +42,7 @@ func New(opts ...Option) *gin.Engine {
 		activitySource:    activity.StaticActivitySource{},
 		orderProposals:    orderproposals.StaticSource{},
 		watchlistSource:   watchlist.StaticSource{},
+		homeSource:        home.StaticSource{},
 		errorLogExporter:  system.UnconfiguredErrorLogExporter{},
 	}
 	for _, opt := range opts {

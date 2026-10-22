@@ -1,0 +1,26 @@
+package pages
+
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/homepanels"
+)
+
+// HomePage is the Home screen `GET /` (issue #896): the top row 今日の状況
+// (取引の状態 / 今日の Paper 損益 / 保有ポジション), then 要対応 and the
+// collapsible 今日の詳細. layout.Shell marks ホーム as the current menu entry
+// and, being the page the header badge links to, leaves the badge out (the
+// alerts are listed in full here). Every card re-fetches itself every 30 s
+// (internal/web/handler/home).
+templ HomePage(v homepanels.View) {
+	@layout.Shell("ホーム", organisms.NavHome) {
+		<h1 class="text-2xl font-bold text-slate-900">ホーム</h1>
+		<section class="mt-4 grid gap-4 lg:grid-cols-12" aria-label="今日の状況" data-testid="home-today-row">
+			@homepanels.TradeStatusCard(v.TradeStatus)
+			@homepanels.PnLCard(v.PnL)
+			@homepanels.PositionsCard(v.Positions)
+		</section>
+		@homepanels.AttentionSection(v.Attention)
+		@homepanels.DetailsSection(v)
+	}
+}

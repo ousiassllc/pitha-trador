@@ -20,45 +20,25 @@ import (
 // `GET /api/v1/system/status` on its own connectedCallback.
 //
 // `#header-status`'s `hx-trigger` also listens for `systemStateChanged`
-// bubbling from the enclosing `<header>` element (components/overview.md
-// §5.4's `HeaderWithKillSwitch` pattern, matched here via `from:closest
-// header` - there is exactly one `<header>` per page, so no dedicated
-// hook class is needed; components/overview.md §1's Tailwind-utility-
-// first styling means `class` here only carries layout/appearance
-// utilities): `pitha-kill-switch-panel` dispatches that event after
-// every successful `/api/v1/system/*` call, keeping this StatusDot in
-// sync with actions Lit itself performed.
+// (components/overview.md §5.4's `HeaderWithKillSwitch` pattern): the event
+// `pitha-kill-switch-panel` dispatches after every successful
+// `/api/v1/system/*` call bubbles (and is composed) up to `body`, so the
+// StatusDot follows actions Lit itself performed wherever the panel sits -
+// here in the header, on the Home screen inside the 取引の状態 card
+// (components/overview.md §1's Tailwind-utility-first styling means `class`
+// here only carries layout/appearance utilities).
 //
-// `#config-banner` follows the exact same self-correcting pattern for
-// issue #57's Settings feature: it SSRs empty (Header only knows the
-// system state, so it cannot know secrets-table state at render time
-// either) and immediately calls `GET /system/secrets-status`
-// (internal/web/handler/settings.SettingsHandler.Status), which renders
-// organisms.SecretsBanner listing the still-unset optional keys
-// (SLACK_WEBHOOK_URL etc.; the two required keys JEV_API_KEY/
-// KABU_API_PASSWORD are Setup Guard's business) with a link to
-// `/settings`, or nothing once every one is configured. It also refetches
-// on the `secretsStatusChanged` event Settings' Save/Delete responses fire
-// (issue #695), so the banner follows a just-saved or just-deleted key.
-//
-// `#update-banner` is the same pattern for issue #76's update
-// notification: `GET /system/update-status`
-// (internal/web/handler/system.UpdateHandler.Status) renders organisms.UpdateBanner when a newer
-// release exists (also re-polled every 60s, and immediately on the
-// `updateStatusChanged` event the manual check response fires), or
-// nothing otherwise - including on cmd/server, which has no updater.
-//
-// `#marketdata-banner` (issue #295) is the same pattern for the kabuステー
-// ションAPI token: `GET /system/marketdata-status`
-// (internal/web/handler/system.MarketDataHandler.Status) renders
-// organisms.MarketDataBanner with the cause and remedy (not running / not
-// logged in / wrong API password, ...) while the last token issuance
-// failed, and nothing otherwise (re-polled every 30s).
-//
-// `#health-alert-banner` (issue #802) is the same pattern for the trading-hours
-// market-data warning: `GET /system/health-alerts` renders
-// organisms.HealthAlertBanner for each active alert (kabu not logged in at
-// 08:45, no market-data job for 5 minutes in a session), nothing otherwise.
+// `#attention-badge` (issue #896) replaces the five banners that used to stack
+// under the header on every page (the unset optional keys, the update notice,
+// the broker connection error, the daily entry halt and the market-data health
+// alerts): it fetches `GET /home/attention-badge` (internal/web/handler/home),
+// which renders organisms.AttentionBadge - 「要対応 N 件」 linking to the Home
+// screen, where each of those conditions is listed in full with where to look -
+// or nothing while there is none. It re-polls every 30s and immediately on
+// `secretsStatusChanged` (Settings' Save/Delete, issue #695) and
+// `updateStatusChanged` (the manual update check, issue #76). The Home screen
+// shows the full list itself, so it renders no badge there (current is
+// NavHome), and the Kill Switch panel moves into its 取引の状態 card.
 //
 // `#header-version` shows the running build's internal/version.Version on
 // every page and links to Settings' アップデート section
@@ -77,21 +57,19 @@ import (
 // current is the page's main-navigation entry (layout.Shell passes it
 // through): MainNav marks that link `aria-current="page"` (issue #631).
 //
-// The polled `#update-banner` / `#marketdata-banner` containers are the
-// fixed live regions (`role="status"` `aria-live="polite"`), so the
-// banner bodies carry no role of their own (a `role="alert"` body would be
-// re-inserted and re-announced on every poll, issue #626); `data-live-
-// banner` makes pitha-htmx-errors skip a swap whose markup is identical to
-// what is already shown, so only a new/changed banner is announced. All
-// three banner frames share `order-last w-full empty:hidden` (issue #625):
-// they sit on their own full-width last row and, when empty, take no space.
+// The polled `#attention-badge` container is the fixed live region
+// (`role="status"` `aria-live="polite"`), so the badge carries no role of its
+// own (a `role="alert"` body would be re-inserted and re-announced on every
+// poll, issue #626); `data-live-banner` makes pitha-htmx-errors skip a swap
+// whose markup is identical to what is already shown, so only a new/changed
+// badge is announced. `empty:hidden` takes no space while there is none.
 templ Header(state domain.SystemState, current NavItem) {
 	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
 		<div class="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
 			<a
 				id="header-logo"
 				class="flex shrink-0 items-center gap-2 text-sm font-semibold text-slate-900"
-				href="/scanner"
+				href="/"
 				data-testid="header-logo"
 			>
 				<img class="h-8 w-8" src="/static/img/logo.svg" width="32" height="32" alt=""/>
@@ -99,62 +77,20 @@ templ Header(state domain.SystemState, current NavItem) {
 			</a>
 			@MainNav(current)
 		</div>
-		<div
-			id="config-banner"
-			class="order-last w-full empty:hidden"
-			hx-get="/system/secrets-status"
-			hx-trigger="load, secretsStatusChanged from:body"
-			hx-target="this"
-			hx-swap="innerHTML"
-		></div>
-		<div
-			id="update-banner"
-			class="order-last w-full empty:hidden"
-			role="status"
-			aria-live="polite"
-			data-live-banner
-			hx-get="/system/update-status"
-			hx-headers='{"X-Pitha-Background":"1"}'
-			hx-trigger="load, every 60s, updateStatusChanged from:body"
-			hx-target="this"
-			hx-swap="innerHTML"
-		></div>
-		<div
-			id="marketdata-banner"
-			class="order-last w-full empty:hidden"
-			role="status"
-			aria-live="polite"
-			data-live-banner
-			hx-get="/system/marketdata-status"
-			hx-headers='{"X-Pitha-Background":"1"}'
-			hx-trigger="load, every 30s"
-			hx-target="this"
-			hx-swap="innerHTML"
-		></div>
-		<div
-			id="daily-halt-banner"
-			class="order-last w-full empty:hidden"
-			role="status"
-			aria-live="polite"
-			data-live-banner
-			hx-get="/system/daily-halt"
-			hx-headers='{"X-Pitha-Background":"1"}'
-			hx-trigger="load, every 30s"
-			hx-target="this"
-			hx-swap="innerHTML"
-		></div>
-		<div
-			id="health-alert-banner"
-			class="order-last w-full empty:hidden"
-			role="status"
-			aria-live="polite"
-			data-live-banner
-			hx-get="/system/health-alerts"
-			hx-headers='{"X-Pitha-Background":"1"}'
-			hx-trigger="load, every 30s"
-			hx-target="this"
-			hx-swap="innerHTML"
-		></div>
+		if current != NavHome {
+			<div
+				id="attention-badge"
+				class="empty:hidden"
+				role="status"
+				aria-live="polite"
+				data-live-banner
+				hx-get={ AttentionBadgeURL }
+				hx-headers='{"X-Pitha-Background":"1"}'
+				hx-trigger="load, every 30s, secretsStatusChanged from:body, updateStatusChanged from:body"
+				hx-target="this"
+				hx-swap="innerHTML"
+			></div>
+		}
 		<a
 			id="header-version"
 			class="text-xs text-slate-500 hover:text-slate-900"
@@ -175,14 +111,16 @@ templ Header(state domain.SystemState, current NavItem) {
 				@SystemStatusBadge(state)
 			}
 		</div>
-		@KillSwitchPanel(state)
+		if current != NavHome {
+			@KillSwitchPanel(state)
+		}
 	</header>
 }
 
 // headerStatusTrigger is `#header-status`'s hx-trigger: an unknown state
 // (see Header) additionally fetches the badge on `load`.
 func headerStatusTrigger(state domain.SystemState) string {
-	const onChange = "systemStateChanged from:closest header"
+	const onChange = "systemStateChanged from:body"
 	if state == "" {
 		return "load, " + onChange
 	}
