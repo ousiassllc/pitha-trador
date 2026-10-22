@@ -25,7 +25,8 @@ func TestSettingsPage_MCPCardNeedsWithMCPSettings(t *testing.T) {
 	}
 
 	rec := newAppWithout(t).get("/settings/integrations")
-	if strings.Contains(rec.Body.String(), "modal-mcp") || strings.Contains(rec.Body.String(), "mcp-panel") {
+	// Not a bare "modal-mcp": the page's hash-route map names every dialog id.
+	if strings.Contains(rec.Body.String(), `id="modal-mcp"`) || strings.Contains(rec.Body.String(), `id="mcp-panel"`) {
 		t.Error("without WithMCPSettings, /settings/integrations must not show the MCP card")
 	}
 }

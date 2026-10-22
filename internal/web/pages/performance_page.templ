@@ -62,7 +62,10 @@ templ PerformancePage(props PerformanceProps) {
 			@molecules.TabNav("成績のタブ", resultTabs(tabActuals))
 			@organisms.PerformanceActualsPanel(props.Actuals, props.ActualsError)
 			@evaluation.EvaluationPanel(props.Evaluation, props.EvaluationError)
+			// Only the 実績 tab forwards an old `#backtest` link; on the
+			// バックテスト tab (`?tab=backtest` or a submitted `from`) it would
+			// reload the page and run the backtest a second time.
+			<script type="module" src="/static/dist/js/performance-tabs/pitha-performance-tabs.js"></script>
 		}
-		<script type="module" src="/static/dist/js/performance-tabs/pitha-performance-tabs.js"></script>
 	}
 }

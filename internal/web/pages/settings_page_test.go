@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
+	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
 )
 
 // systemDialogs are the system cards' dialogs the maintenance page holds
@@ -95,6 +96,22 @@ func TestSettingsPage_UpdatePanelLivesInModalOpenedByHash(t *testing.T) {
 }
 
 // Modals are native dialogs labelled by their title (a11y, issue #302).
+// issue #895: a dialog that moved to another page keeps its old
+// `/settings/<old page>#modal-<id>` link working, so every page embeds the
+// hash-route map and loads the script that forwards a hash of another page.
+func TestSettingsPage_EmbedsHashRoutesAndForwardingScript(t *testing.T) {
+	body := renderSettings(t, pages.SettingsProps{Page: settingspages.Page{ID: "operations", Name: "取引ルール"}})
+	for _, want := range []string{
+		`data-hash-routes=`,
+		`&#34;modal-sleep-guard&#34;:&#34;/settings/maintenance&#34;`,
+		`/static/dist/js/settings-hub/pitha-settings-hub.js`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SettingsPage lacks %q", want)
+		}
+	}
+}
+
 func TestSettingsPage_ModalsAreLabelledDialogs(t *testing.T) {
 	body := renderSettings(t, pages.SettingsProps{Connections: testConnections(), Dialogs: systemDialogs})
 	for _, id := range []string{"modal-alpha", "modal-update", "modal-error-log", "modal-data-export"} {
