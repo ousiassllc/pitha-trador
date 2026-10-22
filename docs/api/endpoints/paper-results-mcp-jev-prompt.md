@@ -1,10 +1,10 @@
-# API 仕様: Paper 実績 MCP の Jev プロンプトのツール（§3.23）
+# API 仕様: Paper 実績 MCP の Jev プロンプトのツール（§3.29）
 
-`paper-results-mcp.md`（API 仕様）の分割章（ファイルの行数上限のため。章番号は元の文書の §3.23）。Jev の trader のプロンプトの版と、候補の版をライブと並べて動かす「シャドー」の比較・費用・昇格の 3 ツールを定める（issue #872）。共通の引数（期間 §1）・上限（§2）・エラー（`paper-results-mcp-errors.md`）は元の文書と同じ。仕様の背景は `architecture/paper-results-mcp.md` §5.1・§7.3。
+`paper-results-mcp.md`（API 仕様）の分割章（ファイルの行数上限のため。章番号は元の文書の §3.29）。Jev の trader のプロンプトの版と、候補の版をライブと並べて動かす「シャドー」の比較・費用・昇格の 3 ツールを定める（issue #872）。共通の引数（期間 §1）・上限（§2）・エラー（`paper-results-mcp-errors.md`）は元の文書と同じ。仕様の背景は `architecture/paper-results-mcp.md` §5.1・§7.3。
 
 シャドーを**有効にする・候補の版を選ぶ・費用の上限を決める**ツールは無い（Settings 画面だけ。`settings_set` のホワイトリストにも無い）。**1 日の費用の上限（既定 0.10 USD。Settings 画面で上げ下げできる）と 1 日の失敗回数の上限（20 回。定数）はユーザー決定の確定値**である（`internal/config/jevshadowsettings.DefaultDailyCostCapUSD` / `DailyFailureCap`）。単価（1M 入力トークンあたり 0.042 USD）と同時実行数（4）も確定値だが、費用は公表単価による**見積り**で請求書とは突き合わせていない。
 
-## 3.23.1 `jev_shadow_compare`（読み取り専用）
+## 3.29.1 `jev_shadow_compare`（読み取り専用）
 
 引数: 期間（`from` / `to`。§1）、`prompt_version`（省略可。候補の版の名前。省略は存在するすべての版）。`data.versions[]`（候補の版ごと。最大 10 版、超えたら `limit_exceeded`）:
 
@@ -37,7 +37,7 @@
 
 返さないもの: `response_json`・`state_json` の本文（`entry_quality` の 1 文字列だけを取り出す）。シャドーは取引に使われず、この結果は**ラベルから計算し直した比較**であって、シャドーの取引の損益ではない（シャドーは取引しない）。
 
-## 3.23.2 `jev_shadow_cost`（読み取り専用）
+## 3.29.2 `jev_shadow_cost`（読み取り専用）
 
 引数なし。`data`:
 
@@ -57,7 +57,7 @@
 
 `request_cost` はシャドーの呼び出しだけの合計である。API は課金額を返さないので、アプリが入力トークン数に公表単価（Jev は 1M 入力トークンあたり 0.042 USD、出力は無料。2026-10-22 時点の `docs.typesafe.ai/models`）を掛けた**見積り**で、請求書と突き合わせた値ではない（単価と上限の数字は確定、見積りが請求と一致することは未確認）。応答に `usage` が無い呼び出しは **0 USD と数えず**、リクエスト本文のバイト数を保守的な比（2 バイト = 1 トークン）で割った入力トークン数の推定で費用に入れ、`estimated_calls` / `estimated_cost_usd` に分けて見せる（0 と数えると 1 日の費用の上限をすり抜けるため）。ライブの判断の `jev_decisions.request_cost` は従来どおり常に NULL で、この合計に含まれない。
 
-## 3.23.3 `jev_prompt_promote`（書き込み）
+## 3.29.3 `jev_prompt_promote`（書き込み）
 
 引数: `version`（必須。`registered_versions[]` の 1 つ）。ライブの trader のプロンプトの版を `version` に切り替える。`runtime_settings` の `jev.trader_prompt_version` の upsert と、`jev_prompt_promotions` への監査 1 行を**同じトランザクション**で書く。処理の順:
 
