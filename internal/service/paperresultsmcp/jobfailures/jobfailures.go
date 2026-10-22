@@ -27,9 +27,8 @@ const lastErrorHeadBytes = 256
 // covers at most this many JST days ending at the period's end, so a 30- or
 // 366-day collection_status does not scan a failure burst of weeks ago (issue
 // #850). It is also the default, as the default 30-day period is cut to the
-// same span. 3 days is the owner's decision (it replaced the first 7-day
-// proposal after a 220,838-row burst inside the window still took about 1.5 s
-// warm and 4 s cold); a burst inside even these days can still spend the time
+// same span. 3 days is the owner's decision (a 220,838-row burst inside the
+// window still takes about 1.5 s warm and 4 s cold); a burst inside even these days can still spend the time
 // budget, in which case Read returns the part it has (Result.TimedOut).
 const MaxDays = 3
 
