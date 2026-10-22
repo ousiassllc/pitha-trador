@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 )
@@ -22,6 +23,17 @@ type InsufficientDataError struct {
 	// not be learned from (SkipTrainingDataUnusable), against what fit and
 	// calibration need together ("必要130件中 x件").
 	Usable, Required int
+	// OOSRows of RequiredOOSRows: the rows in the OOS window against the rows
+	// the window reaches back to hold (the bar's MinOOSSamples), so a skip shows
+	// both sides of the split (issue #862).
+	OOSRows, RequiredOOSRows int
+	// DroppedIncomplete, LabelV1, LabelV2 are filled by the Trainer: the stored
+	// rows BuildRows dropped for a missing feature (nil while not measured; the
+	// Trainer always sets it, 0 included), and the labeled decisions of the
+	// lookback per label version (v1 close-only, v2 triple-barrier). They tell a
+	// thin history from rows that exist but cannot be used.
+	DroppedIncomplete *int
+	LabelV1, LabelV2  int
 	// Detail is the human-readable message (logs only; never persisted).
 	Detail string
 	// Cause is the learner's error for SkipTrainingDataUnusable.
@@ -57,17 +69,52 @@ func WithSkipRecorder(r SkipRecorder) TrainerOption { return func(t *Trainer) { 
 // is returned: the maintenance task then fails visibly instead of the skip
 // vanishing.
 func (t *Trainer) recordSkip(ctx context.Context, e *InsufficientDataError) error {
-	slog.Warn("metalabel: nightly retraining skipped; the existing model (or a skip) stays in force", "reason", e)
+	slog.Warn("metalabel: nightly retraining skipped; the existing model (or a skip) stays in force",
+		"reason", e, "code", e.Code,
+		"dropped_incomplete", droppedIncompleteText(e.DroppedIncomplete), "label_v1", e.LabelV1, "label_v2", e.LabelV2,
+		"pre", e.Usable, "required_pre", e.Required, "oos", e.OOSRows, "required_oos", e.RequiredOOSRows)
 	if t.skips == nil {
 		return nil
 	}
 	err := t.skips.RecordRetrainSkip(ctx, repo.RetrainSkip{
 		SkippedAt: t.now().UTC(), ReasonCode: e.Code, UsableRows: e.Usable, RequiredRows: e.Required,
+		DroppedIncomplete: e.DroppedIncomplete, LabelV1Rows: e.LabelV1, LabelV2Rows: e.LabelV2,
+		OOSRows: e.OOSRows, RequiredOOSRows: e.RequiredOOSRows,
 	})
 	if err != nil {
 		return fmt.Errorf("metalabel: record retrain skip: %w", err)
 	}
 	return nil
+}
+
+// annotateSkip fills what a skip reports besides its own counts (issue #862):
+// the rows BuildRows dropped and the labeled decisions of [from, to) per label
+// version, which tell "no history yet" from "history that cannot be used" (the
+// v1 rows have no order-flow features). Any other error passes through. When
+// the counts cannot be read the skip is still recorded, with the version counts
+// left at 0 and a warning: the breakdown is a diagnostic and must not turn a
+// normal skip into a failing task.
+func (t *Trainer) annotateSkip(ctx context.Context, err error, from, to time.Time, dropped int) error {
+	e, ok := asInsufficient(err)
+	if !ok {
+		return err
+	}
+	counts, cerr := t.source.CountLabeledDecisions(ctx, from, to)
+	if cerr != nil {
+		slog.Warn("metalabel: could not count labeled decisions per label version; the skip is recorded without them", "error", cerr)
+		counts = repo.LabelVersionCounts{}
+	}
+	e.DroppedIncomplete, e.LabelV1, e.LabelV2 = &dropped, counts.V1, counts.V2
+	return e
+}
+
+// droppedIncompleteText is the log value of dropped_incomplete: the count, or
+// "unknown" when it was not measured (stored as NULL, never as 0).
+func droppedIncompleteText(n *int) any {
+	if n == nil {
+		return "unknown"
+	}
+	return *n
 }
 
 // asInsufficient returns err's InsufficientDataError, if it is one.

@@ -43,10 +43,23 @@ func (r Row) Sample() metalabel.Sample {
 }
 
 // WalkForwardConfig configures SplitWalkForward.
+//
+// The OOS window is sized by what the adoption bar needs, not by a fixed
+// length (issue #862): with about a hundred usable rows a trading day a fixed
+// 7-day window holds about 5 trading days, 600 rows, so the 1084 rows the
+// earlier bar asked for could never be reached. The window reaches back until
+// it holds OOSMinRows rows and OOSMinDays trading days, but not further than
+// OOSMaxWindow and never before the LLM cutoff; older rows only train.
 type WalkForwardConfig struct {
-	// OOSWindow is the length of the most recent window held out as the
-	// out-of-sample evaluation set, > 0.
-	OOSWindow time.Duration
+	// OOSMinRows is the fewest rows the OOS window reaches back to hold, > 0.
+	// The Trainer raises it to the bar's MinOOSSamples, so the window is never
+	// narrower than what the bar asks for.
+	OOSMinRows int
+	// OOSMinDays is the fewest JST trading days the window reaches back to
+	// span (whole days), > 0; the Trainer raises it to the bar's MinOOSDays.
+	OOSMinDays int
+	// OOSMaxWindow is how far back from now the window may reach, > 0.
+	OOSMaxWindow time.Duration
 	// CalibrationFraction is the share (by time, newest) of the pre-OOS rows
 	// the calibrator is fitted on, in (0, 1); the older rest fits the weights.
 	CalibrationFraction float64
@@ -61,12 +74,17 @@ type WalkForwardConfig struct {
 	MinFit, MinCalibration int
 }
 
-// DefaultWalkForwardConfig returns a week of OOS, the newest quarter of the
-// rest for calibration and a 30-minute embargo (half the longest triple-barrier
-// timeout, 60 minutes).
+// DefaultWalkForwardConfig is the split decided in issue #862 (see FR-META-7): an
+// OOS window that holds at least the default bar's samples and days (DefaultAcceptanceConfig) within DefaultOOSMaxWindow, the
+// newest quarter of the rest for calibration, a 30-minute embargo (half the
+// longest triple-barrier timeout, 60 minutes) and at least 100 fit and 30
+// calibration rows (the logistic regression has 8 features and a bias: 9
+// parameters, so 100 rows is above the rule of thumb of 10 rows per parameter).
 func DefaultWalkForwardConfig() WalkForwardConfig {
+	bar := DefaultAcceptanceConfig()
 	return WalkForwardConfig{
-		OOSWindow: 7 * 24 * time.Hour, CalibrationFraction: 0.25, Embargo: 30 * time.Minute,
+		OOSMinRows: bar.MinOOSSamples, OOSMinDays: bar.MinOOSDays, OOSMaxWindow: DefaultOOSMaxWindow,
+		CalibrationFraction: 0.25, Embargo: 30 * time.Minute,
 		MinFit: 100, MinCalibration: 30,
 	}
 }
@@ -74,8 +92,10 @@ func DefaultWalkForwardConfig() WalkForwardConfig {
 // Validate reports a configuration SplitWalkForward would not accept.
 func (c WalkForwardConfig) Validate() error {
 	switch {
-	case c.OOSWindow <= 0:
-		return fmt.Errorf("metalabel: OOS window %v must be positive", c.OOSWindow)
+	case c.OOSMinRows <= 0 || c.OOSMinDays <= 0:
+		return fmt.Errorf("metalabel: OOS minimum rows/days must be positive (%d/%d)", c.OOSMinRows, c.OOSMinDays)
+	case c.OOSMaxWindow <= 0:
+		return fmt.Errorf("metalabel: OOS max window %v must be positive", c.OOSMaxWindow)
 	case !(c.CalibrationFraction > 0 && c.CalibrationFraction < 1):
 		return fmt.Errorf("metalabel: calibration fraction %v must be in (0, 1)", c.CalibrationFraction)
 	case c.Embargo < 0:
@@ -84,6 +104,42 @@ func (c WalkForwardConfig) Validate() error {
 		return fmt.Errorf("metalabel: minimum fit/calibration sizes must be positive (%d/%d)", c.MinFit, c.MinCalibration)
 	}
 	return nil
+}
+
+// oosStart returns where the OOS window over the time-ordered rows starts: as
+// far back as needed to hold OOSMinRows rows and OOSMinDays trading days (the
+// newest days whole, the bar resamples whole days; the rows may open the oldest
+// day part way), but not before max(now-OOSMaxWindow, llmCutoff), and not after now.
+func (c WalkForwardConfig) oosStart(sorted []Row, now, llmCutoff time.Time) time.Time {
+	floor := now.Add(-c.OOSMaxWindow)
+	if llmCutoff.After(floor) {
+		floor = llmCutoff
+	}
+	if floor.After(now) {
+		return now
+	}
+	first := sort.Search(len(sorted), func(i int) bool { return !sorted[i].DecidedAt.Before(floor) })
+	reachable := sorted[first:]
+	i := min(len(reachable)-c.OOSMinRows, firstRowOfNewestDays(reachable, c.OOSMinDays))
+	if i <= 0 {
+		return floor
+	}
+	return reachable[i].DecidedAt
+}
+
+// firstRowOfNewestDays is the index of the first row of the days-th newest
+// JST day of the time-ordered rows (0 when they span fewer days).
+func firstRowOfNewestDays(rows []Row, days int) int {
+	seen, prev := 0, ""
+	for j := len(rows) - 1; j >= 0; j-- {
+		if d := dayOf(rows[j]); d != prev {
+			seen, prev = seen+1, d
+			if seen > days {
+				return j + 1
+			}
+		}
+	}
+	return 0
 }
 
 // Split is one walk-forward fold: fit (weights) < calibrate < OOS in time,
@@ -108,18 +164,20 @@ type Split struct {
 // SplitWalkForward cuts rows (any order) into a fit, a calibration and an
 // out-of-sample set as of now, for a model that scores Jev features:
 //
-//   - The OOS window is [max(now-OOSWindow, llmCutoff), now): Jev's answers
-//     are only evaluated on decisions on or after the LLM's training-data
-//     cutoff, before which the LLM may already know how the day went
-//     (arXiv:2512.23847 look-ahead bias). With llmCutoff at or after now there
-//     is no OOS window and OOS is empty.
+//   - The OOS window is [oosStart, now) with oosStart as far back as the config
+//     asks (see WalkForwardConfig) and never before max(now-OOSMaxWindow,
+//     llmCutoff): Jev's answers are only evaluated on decisions on or after the
+//     LLM's training-data cutoff, before which the LLM may already know how the
+//     day went (arXiv:2512.23847 look-ahead bias). With llmCutoff at or after
+//     now there is no OOS window and OOS is empty.
 //   - Rows before OOSStart are split by time into fit (older) and calibration
 //     (newest CalibrationFraction).
 //   - A row is purged when its label window ends less than Embargo before the
 //     start of the segment that follows it.
 //
 // It fails with ErrInsufficientData when the fit or calibration set is smaller
-// than the configured minimum.
+// than the configured minimum; the error carries the row counts of both sides
+// and what each needs.
 func SplitWalkForward(rows []Row, now, llmCutoff time.Time, cfg WalkForwardConfig) (Split, error) {
 	if err := cfg.Validate(); err != nil {
 		return Split{}, err
@@ -132,13 +190,7 @@ func SplitWalkForward(rows []Row, now, llmCutoff time.Time, cfg WalkForwardConfi
 	}
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].DecidedAt.Before(sorted[j].DecidedAt) })
 
-	oosStart := now.Add(-cfg.OOSWindow)
-	if llmCutoff.After(oosStart) {
-		oosStart = llmCutoff
-	}
-	if oosStart.After(now) {
-		oosStart = now
-	}
+	oosStart := cfg.oosStart(sorted, now, llmCutoff)
 	s := Split{OOSStart: oosStart, OOSEnd: now, LLMCutoff: llmCutoff}
 
 	var pre []Row
@@ -154,6 +206,7 @@ func SplitWalkForward(rows []Row, now, llmCutoff time.Time, cfg WalkForwardConfi
 	if len(pre) < cfg.MinFit+cfg.MinCalibration {
 		return Split{}, &InsufficientDataError{
 			Code: repo.SkipTooFewRowsBeforeOOS, Usable: len(pre), Required: cfg.MinFit + cfg.MinCalibration,
+			OOSRows: len(s.OOS), RequiredOOSRows: cfg.OOSMinRows,
 			Detail: fmt.Sprintf("%d usable rows before the OOS window, need at least %d for fit and calibration", len(pre), cfg.MinFit+cfg.MinCalibration),
 		}
 	}
@@ -175,8 +228,8 @@ func SplitWalkForward(rows []Row, now, llmCutoff time.Time, cfg WalkForwardConfi
 		// below the requirement it is shown against ("必要130件中 x件").
 		return Split{}, &InsufficientDataError{
 			Code: repo.SkipTooFewRowsAfterPurge, Usable: min(len(s.Fit), cfg.MinFit) + min(len(s.Calibrate), cfg.MinCalibration),
-			Required: cfg.MinFit + cfg.MinCalibration,
-			Detail:   fmt.Sprintf("%d fit and %d calibration rows after purging, need %d and %d", len(s.Fit), len(s.Calibrate), cfg.MinFit, cfg.MinCalibration),
+			Required: cfg.MinFit + cfg.MinCalibration, OOSRows: len(s.OOS), RequiredOOSRows: cfg.OOSMinRows,
+			Detail: fmt.Sprintf("%d fit and %d calibration rows after purging, need %d and %d", len(s.Fit), len(s.Calibrate), cfg.MinFit, cfg.MinCalibration),
 		}
 	}
 
