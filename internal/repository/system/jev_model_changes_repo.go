@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 )
 
@@ -15,20 +16,27 @@ const jevModelActor = "gui"
 
 // inModelTx runs fn in one transaction with the stored JEV_MODEL value as
 // before (nil when unset), so the secret and its jev_model_changes row commit
-// or roll back together (issue #885).
+// or roll back together (issue #885). A stored value that cannot be decrypted
+// (corrupt, or written under another key) is taken as before=nil, not an
+// error: Set and Delete never needed to read the old value, and a Settings
+// screen that could not overwrite or remove an unreadable JEV_MODEL would be
+// stuck with it. The change is then recorded without a previous value; a
+// Delete of such a value has nothing to record (unset to unset).
 func (r *SecretsRepository) inModelTx(ctx context.Context, key string, fn func(tx *sql.Tx, before *string) error) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("repository: begin %q change: %w", key, err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	value, ok, err := getSecret(ctx, tx, key)
+	encrypted, ok, err := getEncryptedSecret(ctx, tx, key)
 	if err != nil {
 		return err
 	}
 	var before *string
 	if ok {
-		before = &value
+		if value, err := config.DecryptSecret(encrypted); err == nil {
+			before = &value
+		}
 	}
 	if err := fn(tx, before); err != nil {
 		return err

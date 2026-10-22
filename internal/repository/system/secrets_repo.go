@@ -43,6 +43,20 @@ func (r *SecretsRepository) Get(ctx context.Context, key string) (string, bool, 
 }
 
 func getSecret(ctx context.Context, q sqlutil.Executor, key string) (string, bool, error) {
+	encrypted, ok, err := getEncryptedSecret(ctx, q, key)
+	if err != nil || !ok {
+		return "", false, err
+	}
+	plaintext, err := config.DecryptSecret(encrypted)
+	if err != nil {
+		return "", false, fmt.Errorf("repository: decrypt secret %q: %w", key, err)
+	}
+	return plaintext, true, nil
+}
+
+// getEncryptedSecret returns key's stored ciphertext, or ("", false, nil) when
+// no row exists for it.
+func getEncryptedSecret(ctx context.Context, q sqlutil.Executor, key string) (string, bool, error) {
 	var encrypted string
 	err := q.QueryRowContext(ctx, `SELECT encrypted_value FROM secrets WHERE key = ?`, key).Scan(&encrypted)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -51,11 +65,7 @@ func getSecret(ctx context.Context, q sqlutil.Executor, key string) (string, boo
 	if err != nil {
 		return "", false, fmt.Errorf("repository: get secret %q: %w", key, err)
 	}
-	plaintext, err := config.DecryptSecret(encrypted)
-	if err != nil {
-		return "", false, fmt.Errorf("repository: decrypt secret %q: %w", key, err)
-	}
-	return plaintext, true, nil
+	return encrypted, true, nil
 }
 
 // Set encrypts plaintext and upserts it under key, stamping updated_at.

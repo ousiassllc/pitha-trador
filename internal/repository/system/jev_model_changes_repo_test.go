@@ -157,3 +157,84 @@ func TestSecretsRepository_JevModelChanges_NeverHoldOtherSecrets(t *testing.T) {
 		}
 	}
 }
+
+// plantUndecryptableModel stores a JEV_MODEL row whose ciphertext cannot be
+// decrypted (corrupt, or written under another key).
+func plantUndecryptableModel(t *testing.T, db *sql.DB) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO secrets (key, encrypted_value, updated_at) VALUES (?, 'not-a-valid-ciphertext', '2026-10-01T00:00:00Z')`, config.KeyJevModel); err != nil {
+		t.Fatalf("plant secret: %v", err)
+	}
+	if _, _, err := system.NewSecretsRepository(db).Get(context.Background(), config.KeyJevModel); err == nil {
+		t.Fatal("the planted JEV_MODEL decrypts; the test needs an undecryptable value")
+	}
+}
+
+// issue #885 review: main upserted and deleted JEV_MODEL without reading the
+// old ciphertext, so a corrupt or key-mismatched value must still be
+// replaceable from the Settings screen. The change is recorded with no
+// previous value.
+func TestSecretsRepository_SetJevModel_OverwritesAnUndecryptableValue(t *testing.T) {
+	db := newTestDB(t)
+	repo := system.NewSecretsRepository(db)
+	ctx := context.Background()
+	plantUndecryptableModel(t, db)
+
+	if err := repo.Set(ctx, config.KeyJevModel, "jev-1.13.0"); err != nil {
+		t.Fatalf("Set over an undecryptable value: %v", err)
+	}
+	if value, ok, err := repo.Get(ctx, config.KeyJevModel); err != nil || !ok || value != "jev-1.13.0" {
+		t.Errorf("stored JEV_MODEL = %q, %v, %v; want jev-1.13.0", value, ok, err)
+	}
+	got := readModelChanges(t, db)
+	if len(got) != 1 || got[0].before != nil || str(got[0].after) != "jev-1.13.0" {
+		t.Errorf("rows = %+v, want one <NULL> -> jev-1.13.0", got)
+	}
+}
+
+func TestSecretsRepository_DeleteJevModel_RemovesAnUndecryptableValue(t *testing.T) {
+	db := newTestDB(t)
+	repo := system.NewSecretsRepository(db)
+	ctx := context.Background()
+	plantUndecryptableModel(t, db)
+
+	if err := repo.Delete(ctx, config.KeyJevModel); err != nil {
+		t.Fatalf("Delete of an undecryptable value: %v", err)
+	}
+	if _, ok, err := repo.Get(ctx, config.KeyJevModel); err != nil || ok {
+		t.Errorf("JEV_MODEL after Delete: ok=%v err=%v, want unset", ok, err)
+	}
+	if got := readModelChanges(t, db); len(got) != 0 {
+		t.Errorf("rows = %+v, want none (nothing readable to record)", got)
+	}
+}
+
+// The secret and its record commit together: when the record cannot be
+// written, the secret is not changed.
+func TestSecretsRepository_JevModel_FailedRecordLeavesTheSecretUnchanged(t *testing.T) {
+	db := newTestDB(t)
+	repo := system.NewSecretsRepository(db)
+	ctx := context.Background()
+	if err := repo.Set(ctx, config.KeyJevModel, "m1"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TRIGGER jev_model_changes_fail BEFORE INSERT ON jev_model_changes BEGIN SELECT RAISE(ABORT, 'record refused'); END`); err != nil {
+		t.Fatalf("create trigger: %v", err)
+	}
+
+	if err := repo.Set(ctx, config.KeyJevModel, "m2"); err == nil {
+		t.Error("Set succeeded although the record could not be written")
+	}
+	if value, _, _ := repo.Get(ctx, config.KeyJevModel); value != "m1" {
+		t.Errorf("JEV_MODEL after the failed Set = %q, want m1", value)
+	}
+	if err := repo.Delete(ctx, config.KeyJevModel); err == nil {
+		t.Error("Delete succeeded although the record could not be written")
+	}
+	if value, ok, _ := repo.Get(ctx, config.KeyJevModel); !ok || value != "m1" {
+		t.Errorf("JEV_MODEL after the failed Delete = %q, %v; want m1 still stored", value, ok)
+	}
+	if n := len(readModelChanges(t, db)); n != 1 {
+		t.Errorf("rows = %d, want only the first Set's 1", n)
+	}
+}
