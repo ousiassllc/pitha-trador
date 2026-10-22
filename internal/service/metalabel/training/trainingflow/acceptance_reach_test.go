@@ -234,14 +234,19 @@ func TestTrainer_LogsDroppedIncompleteWhenSplitFails(t *testing.T) {
 		t.Fatalf("recorded %d skips, want 1", len(rec.got))
 	}
 	got := rec.got[0]
-	if got.DroppedIncomplete == nil || *got.DroppedIncomplete != 2 || got.LabelV1Rows != 57 || got.LabelV2Rows != 48 ||
-		got.UsableRows != 0 || got.RequiredRows != 130 || got.OOSRows != 46 || got.RequiredOOSRows != 740 {
+	if !intIs(got.DroppedIncomplete, 2) || !intIs(got.LabelV1Rows, 57) || !intIs(got.LabelV2Rows, 48) ||
+		got.UsableRows != 0 || got.RequiredRows != 130 || !intIs(got.OOSRows, 46) || !intIs(got.RequiredOOSRows, 740) {
 		t.Errorf("recorded skip = %+v", got)
 	}
 }
 
+// intIs reports whether p is recorded and equals want.
+func intIs(p *int, want int) bool { return p != nil && *p == want }
+
 // The breakdown is a diagnostic: when the per-version counts cannot be read the
-// skip is still recorded (counts 0), with a warning, and the task succeeds.
+// skip is still recorded, with those counts unrecorded (nil, not 0), logged as
+// "unknown", with a warning, and the task succeeds. The counts that were
+// measured (rows dropped, the OOS side) are kept.
 func TestTrainer_SkipIsRecordedWithoutVersionCountsWhenTheCountFails(t *testing.T) {
 	logs := captureLogs(t)
 	rec := &recordingSkips{}
@@ -253,8 +258,11 @@ func TestTrainer_SkipIsRecordedWithoutVersionCountsWhenTheCountFails(t *testing.
 	if len(rec.got) != 1 {
 		t.Fatalf("recorded %d skips, want 1", len(rec.got))
 	}
-	if got := rec.got[0]; got.LabelV1Rows != 0 || got.LabelV2Rows != 0 || got.DroppedIncomplete == nil || *got.DroppedIncomplete != 1 || got.RequiredRows != 130 {
-		t.Errorf("recorded skip = %+v, want version counts 0, dropped_incomplete 1, required 130", got)
+	if got := rec.got[0]; got.LabelV1Rows != nil || got.LabelV2Rows != nil || !intIs(got.DroppedIncomplete, 1) || !intIs(got.OOSRows, 46) || got.RequiredRows != 130 {
+		t.Errorf("recorded skip = %+v, want version counts nil (unrecorded), dropped_incomplete 1, oos 46, required 130", got)
+	}
+	if !strings.Contains(logs.String(), "label_v1=unknown") || !strings.Contains(logs.String(), "label_v2=unknown") {
+		t.Errorf("skip line does not show the unmeasured counts as unknown:\n%s", logs.String())
 	}
 	if !strings.Contains(logs.String(), "could not count labeled decisions") || !strings.Contains(logs.String(), "db busy") {
 		t.Errorf("no warning about the failed count:\n%s", logs.String())

@@ -206,7 +206,7 @@ func SplitWalkForward(rows []Row, now, llmCutoff time.Time, cfg WalkForwardConfi
 	if len(pre) < cfg.MinFit+cfg.MinCalibration {
 		return Split{}, &InsufficientDataError{
 			Code: repo.SkipTooFewRowsBeforeOOS, Usable: len(pre), Required: cfg.MinFit + cfg.MinCalibration,
-			OOSRows: len(s.OOS), RequiredOOSRows: cfg.OOSMinRows,
+			OOSRows: new(len(s.OOS)), RequiredOOSRows: new(cfg.OOSMinRows),
 			Detail: fmt.Sprintf("%d usable rows before the OOS window, need at least %d for fit and calibration", len(pre), cfg.MinFit+cfg.MinCalibration),
 		}
 	}
@@ -228,7 +228,7 @@ func SplitWalkForward(rows []Row, now, llmCutoff time.Time, cfg WalkForwardConfi
 		// below the requirement it is shown against ("必要130件中 x件").
 		return Split{}, &InsufficientDataError{
 			Code: repo.SkipTooFewRowsAfterPurge, Usable: min(len(s.Fit), cfg.MinFit) + min(len(s.Calibrate), cfg.MinCalibration),
-			Required: cfg.MinFit + cfg.MinCalibration, OOSRows: len(s.OOS), RequiredOOSRows: cfg.OOSMinRows,
+			Required: cfg.MinFit + cfg.MinCalibration, OOSRows: new(len(s.OOS)), RequiredOOSRows: new(cfg.OOSMinRows),
 			Detail: fmt.Sprintf("%d fit and %d calibration rows after purging, need %d and %d", len(s.Fit), len(s.Calibrate), cfg.MinFit, cfg.MinCalibration),
 		}
 	}

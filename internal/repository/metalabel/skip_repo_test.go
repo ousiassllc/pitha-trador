@@ -56,7 +56,7 @@ func TestRepository_RetrainSkipKeepsTheRowBreakdown(t *testing.T) {
 	at := time.Date(2026, 10, 26, 9, 8, 0, 0, time.UTC)
 	want := metalabel.RetrainSkip{
 		SkippedAt: at, ReasonCode: metalabel.SkipTooFewRowsBeforeOOS, UsableRows: 38, RequiredRows: 130,
-		OOSRows: 720, RequiredOOSRows: 740, DroppedIncomplete: new(2), LabelV1Rows: 31, LabelV2Rows: 760,
+		OOSRows: new(720), RequiredOOSRows: new(740), DroppedIncomplete: new(2), LabelV1Rows: new(31), LabelV2Rows: new(760),
 	}
 	if _, err := r.InsertRetrainSkip(ctx, want); err != nil {
 		t.Fatalf("InsertRetrainSkip: %v", err)
@@ -66,47 +66,68 @@ func TestRepository_RetrainSkipKeepsTheRowBreakdown(t *testing.T) {
 		t.Fatalf("ListRetrainSkips = %+v, %v, want 1 row", got, err)
 	}
 	g := got[0]
-	if g.UsableRows != 38 || g.RequiredRows != 130 || g.OOSRows != 720 || g.RequiredOOSRows != 740 ||
-		g.DroppedIncomplete == nil || *g.DroppedIncomplete != 2 || g.LabelV1Rows != 31 || g.LabelV2Rows != 760 {
+	if g.UsableRows != 38 || g.RequiredRows != 130 || !hasInts(g, 720, 740, 2, 31, 760) {
 		t.Errorf("read back %+v, want %+v", g, want)
 	}
 
 	var line string
 	if err := db.QueryRowContext(ctx, `SELECT 'reason_code=' || reason_code || ' usable_rows=' || usable_rows || ' required_rows=' || required_rows ||
-		' oos_rows=' || oos_rows || ' required_oos_rows=' || required_oos_rows || ' dropped_incomplete=' || IFNULL(dropped_incomplete, 'NULL') ||
-		' label_v1_rows=' || label_v1_rows || ' label_v2_rows=' || label_v2_rows
+		' oos_rows=' || IFNULL(oos_rows, 'NULL') || ' required_oos_rows=' || IFNULL(required_oos_rows, 'NULL') ||
+		' dropped_incomplete=' || IFNULL(dropped_incomplete, 'NULL') ||
+		' label_v1_rows=' || IFNULL(label_v1_rows, 'NULL') || ' label_v2_rows=' || IFNULL(label_v2_rows, 'NULL')
 		FROM metalabel_retrain_skips ORDER BY id DESC LIMIT 5`).Scan(&line); err != nil {
 		t.Fatalf("SELECT * FROM metalabel_retrain_skips: %v", err)
 	}
 	t.Log(line)
 }
 
-// dropped_incomplete is NULL when it was not recorded and the real count when it
-// was: a night that dropped nothing stores 0, which reads back as 0, not as
-// "not recorded".
-func TestRepository_RetrainSkipDroppedIncompleteDistinguishesZeroFromNotRecorded(t *testing.T) {
+// hasInts reports whether the five breakdown counts of s are all recorded and
+// equal to oos, requiredOOS, dropped, v1, v2.
+func hasInts(s metalabel.RetrainSkip, oos, requiredOOS, dropped, v1, v2 int) bool {
+	for i, p := range []*int{s.OOSRows, s.RequiredOOSRows, s.DroppedIncomplete, s.LabelV1Rows, s.LabelV2Rows} {
+		if p == nil || *p != []int{oos, requiredOOS, dropped, v1, v2}[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// The five breakdown counts are NULL when they were not recorded and the real
+// count when they were: a night that counted 0 stores 0, which reads back as 0,
+// never as "not recorded", and a skip written without them reads back nil.
+func TestRepository_RetrainSkipBreakdownDistinguishesZeroFromNotRecorded(t *testing.T) {
 	db := newTestDB(t)
 	r := metalabel.NewRepository(db)
 	ctx := context.Background()
 	at := time.Date(2026, 10, 26, 9, 8, 0, 0, time.UTC)
 	base := metalabel.RetrainSkip{ReasonCode: metalabel.SkipTooFewRowsBeforeOOS, RequiredRows: 130}
-	for i, dropped := range []*int{nil, new(0), new(3)} {
-		s := base
-		s.SkippedAt, s.DroppedIncomplete = at.Add(time.Duration(i)*time.Hour), dropped
+	zero := base
+	zero.OOSRows, zero.RequiredOOSRows, zero.DroppedIncomplete, zero.LabelV1Rows, zero.LabelV2Rows = new(0), new(0), new(0), new(0), new(0)
+	pos := base
+	pos.OOSRows, pos.RequiredOOSRows, pos.DroppedIncomplete, pos.LabelV1Rows, pos.LabelV2Rows = new(3), new(740), new(2), new(31), new(760)
+	for i, s := range []metalabel.RetrainSkip{base, zero, pos} {
+		s.SkippedAt = at.Add(time.Duration(i) * time.Hour)
 		if _, err := r.InsertRetrainSkip(ctx, s); err != nil {
 			t.Fatalf("InsertRetrainSkip %d: %v", i, err)
 		}
 	}
-	got, err := r.ListRetrainSkips(ctx, 5) // newest first: 3, 0, NULL
+	got, err := r.ListRetrainSkips(ctx, 5) // newest first: positive, zero, not recorded
 	if err != nil || len(got) != 3 {
 		t.Fatalf("ListRetrainSkips = %+v, %v, want 3 rows", got, err)
 	}
-	if got[0].DroppedIncomplete == nil || *got[0].DroppedIncomplete != 3 ||
-		got[1].DroppedIncomplete == nil || *got[1].DroppedIncomplete != 0 || got[2].DroppedIncomplete != nil {
-		t.Errorf("dropped_incomplete read back = %v %v %v, want 3, 0, nil", got[0].DroppedIncomplete, got[1].DroppedIncomplete, got[2].DroppedIncomplete)
+	if !hasInts(got[0], 3, 740, 2, 31, 760) {
+		t.Errorf("positive counts read back as %+v", got[0])
+	}
+	if !hasInts(got[1], 0, 0, 0, 0, 0) {
+		t.Errorf("zero counts read back as %+v, want recorded 0 (not nil)", got[1])
+	}
+	n := got[2]
+	if n.OOSRows != nil || n.RequiredOOSRows != nil || n.DroppedIncomplete != nil || n.LabelV1Rows != nil || n.LabelV2Rows != nil {
+		t.Errorf("a skip written without the counts read back as %+v, want all nil", n)
 	}
 	var nulls int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM metalabel_retrain_skips WHERE dropped_incomplete IS NULL`).Scan(&nulls); err != nil || nulls != 1 {
-		t.Errorf("rows with NULL dropped_incomplete = %d, %v, want 1 (only the one written without it)", nulls, err)
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM metalabel_retrain_skips WHERE dropped_incomplete IS NULL AND label_v1_rows IS NULL
+		AND label_v2_rows IS NULL AND oos_rows IS NULL AND required_oos_rows IS NULL`).Scan(&nulls); err != nil || nulls != 1 {
+		t.Errorf("rows with all five NULL = %d, %v, want 1 (only the one written without them)", nulls, err)
 	}
 }

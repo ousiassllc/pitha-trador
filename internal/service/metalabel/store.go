@@ -92,9 +92,11 @@ func (s *Store) RecordRetrainSkip(ctx context.Context, skip repo.RetrainSkip) er
 	if skip.ReasonCode == "" {
 		return invalid("retrain skip reason code is empty")
 	}
-	counts := []int{skip.UsableRows, skip.RequiredRows, skip.OOSRows, skip.RequiredOOSRows, skip.LabelV1Rows, skip.LabelV2Rows}
-	if skip.DroppedIncomplete != nil {
-		counts = append(counts, *skip.DroppedIncomplete)
+	counts := []int{skip.UsableRows, skip.RequiredRows}
+	for _, n := range []*int{skip.OOSRows, skip.RequiredOOSRows, skip.DroppedIncomplete, skip.LabelV1Rows, skip.LabelV2Rows} {
+		if n != nil {
+			counts = append(counts, *n)
+		}
 	}
 	for _, n := range counts {
 		if n < 0 {

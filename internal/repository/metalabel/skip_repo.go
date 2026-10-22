@@ -35,31 +35,47 @@ type RetrainSkip struct {
 	// UsableRows is how many usable labeled decisions existed before the OOS
 	// window; RequiredRows how many the training needs ("必要130件中 x件").
 	UsableRows, RequiredRows int
+	// The breakdown below (issue #862, migration 000044) is nil when it was not
+	// recorded (a skip written before the columns existed, or one whose counts
+	// could not be read; stored as NULL), never 0: a night with nothing to
+	// count records 0 and readers must not turn nil into 0.
+	//
 	// OOSRows is how many rows the OOS window held and RequiredOOSRows how many
-	// it reaches back to hold (the bar's MinOOSSamples) (issue #862).
-	OOSRows, RequiredOOSRows int
-	// DroppedIncomplete is the stored rows BuildRows dropped for a missing
-	// feature. nil is "not recorded" (a skip written before the column existed,
-	// stored as NULL), never 0: a night that dropped nothing records 0.
+	// it reaches back to hold (the bar's MinOOSSamples).
+	OOSRows, RequiredOOSRows *int
+	// DroppedIncomplete is the stored rows BuildRows dropped for a missing feature.
 	DroppedIncomplete *int
 	// LabelV1Rows and LabelV2Rows are the labeled decisions of the lookback per
-	// label_version; 0 for a skip recorded before they existed.
-	LabelV1Rows, LabelV2Rows int
+	// label_version.
+	LabelV1Rows, LabelV2Rows *int
 	CreatedAt                time.Time
+}
+
+// nullInt is n as a nullable column value: nil is NULL (not recorded).
+func nullInt(n *int) sql.NullInt64 {
+	if n == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*n), Valid: true}
+}
+
+// intPtr is a nullable column value as *int: NULL is nil (not recorded).
+func intPtr(n sql.NullInt64) *int {
+	if !n.Valid {
+		return nil
+	}
+	v := int(n.Int64)
+	return &v
 }
 
 // InsertRetrainSkip stores s and returns it with ID and CreatedAt set.
 func (r *Repository) InsertRetrainSkip(ctx context.Context, s RetrainSkip) (RetrainSkip, error) {
 	createdAt := time.Now().UTC()
-	var dropped sql.NullInt64 // NULL = not recorded
-	if s.DroppedIncomplete != nil {
-		dropped = sql.NullInt64{Int64: int64(*s.DroppedIncomplete), Valid: true}
-	}
 	res, err := r.db.ExecContext(ctx, `INSERT INTO metalabel_retrain_skips
 		(skipped_at, reason_code, usable_rows, required_rows, oos_rows, required_oos_rows,
 		dropped_incomplete, label_v1_rows, label_v2_rows, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		sqlutil.FormatTime(s.SkippedAt), s.ReasonCode, s.UsableRows, s.RequiredRows, s.OOSRows, s.RequiredOOSRows,
-		dropped, s.LabelV1Rows, s.LabelV2Rows, sqlutil.FormatTime(createdAt))
+		sqlutil.FormatTime(s.SkippedAt), s.ReasonCode, s.UsableRows, s.RequiredRows, nullInt(s.OOSRows), nullInt(s.RequiredOOSRows),
+		nullInt(s.DroppedIncomplete), nullInt(s.LabelV1Rows), nullInt(s.LabelV2Rows), sqlutil.FormatTime(createdAt))
 	if err != nil {
 		return RetrainSkip{}, fmt.Errorf("repository: insert meta-label retrain skip: %w", err)
 	}
@@ -88,15 +104,15 @@ func (r *Repository) ListRetrainSkips(ctx context.Context, limit int) ([]Retrain
 		var (
 			s                    RetrainSkip
 			skippedAt, createdAt string
-			dropped              sql.NullInt64
+			oos, requiredOOS     sql.NullInt64
+			dropped, v1, v2      sql.NullInt64
 		)
-		if err := rows.Scan(&s.ID, &skippedAt, &s.ReasonCode, &s.UsableRows, &s.RequiredRows, &s.OOSRows, &s.RequiredOOSRows,
-			&dropped, &s.LabelV1Rows, &s.LabelV2Rows, &createdAt); err != nil {
+		if err := rows.Scan(&s.ID, &skippedAt, &s.ReasonCode, &s.UsableRows, &s.RequiredRows, &oos, &requiredOOS,
+			&dropped, &v1, &v2, &createdAt); err != nil {
 			return nil, fmt.Errorf("repository: scan meta-label retrain skip: %w", err)
 		}
-		if dropped.Valid {
-			s.DroppedIncomplete = new(int(dropped.Int64))
-		}
+		s.OOSRows, s.RequiredOOSRows = intPtr(oos), intPtr(requiredOOS)
+		s.DroppedIncomplete, s.LabelV1Rows, s.LabelV2Rows = intPtr(dropped), intPtr(v1), intPtr(v2)
 		if s.SkippedAt, err = sqlutil.ParseTime(skippedAt); err != nil {
 			return nil, err
 		}

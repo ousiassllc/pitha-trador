@@ -196,7 +196,7 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 		if errors.Is(err, metalabel.ErrInvalidTrainingData) || errors.Is(err, metalabel.ErrInvalidCalibration) {
 			return repo.Model{}, t.annotateSkip(ctx, &InsufficientDataError{
 				Code: repo.SkipTrainingDataUnusable, Usable: len(split.Fit) + len(split.Calibrate),
-				Required: walk.MinFit + walk.MinCalibration, OOSRows: len(split.OOS), RequiredOOSRows: walk.OOSMinRows,
+				Required: walk.MinFit + walk.MinCalibration, OOSRows: new(len(split.OOS)), RequiredOOSRows: new(walk.OOSMinRows),
 				Detail: "the fit and calibration rows cannot be learned from", Cause: err,
 			}, from, now, dropped)
 		}
