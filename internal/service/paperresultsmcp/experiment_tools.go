@@ -207,7 +207,7 @@ var experimentTools = []tool{
 			"前後それぞれについて、paper_performance_summary と同じ指標（取引件数・純損益（コスト控除後）・勝率・平均の勝ち（avg_win_jpy）・平均の負け（avg_loss_jpy）・最大ドローダウン）と、" +
 			"risk_rejections と同じ拒否理由の内訳を返す（クローズ時刻で数える。期間が JST の日の境界なら同じ期間の両ツールの応答と一致する）。" +
 			"per_trade_pnl は 1 取引あたりの純損益（paper_performance_summary と同じ取引集合）の前後の n・平均・標準偏差と、平均の差 diff（後−前）・その 95% 信頼区間（ci_low / ci_high / ci_level）・Welch の t 値と自由度（t / df）。計算できない値は null。" +
-			"verdict は aborted（中止）/ confounded（前の期間か後の期間に対象以外のホワイトリスト設定・Jev のモデル・プロンプトの版が変わった。confounders に列挙し、各要素の period が before / after）/ " +
+			"verdict は aborted（中止）/ confounded（前の期間か後の期間、またはその境目で対象以外のホワイトリスト設定・Jev のモデル・プロンプトの版が変わった。confounders に列挙し、各要素の period が before / after / boundary）/ " +
 			"insufficient_trades（前後どちらかが min_trades 未満。数値は返すが判定しない）/ not_computable（件数は足りるが全取引が同一損益で区間が出ない。判定しない）/ " +
 			"improved（区間の下限が 0 より上、かつ最大ドローダウンが前以下。唯一の勝ち）/ mixed（区間の下限は 0 より上だがドローダウンが悪化。勝ちとは言わない）/ " +
 			"worsened（区間の上限が 0 より下）/ inconclusive（区間が 0 をまたぐ。差があるとも無いとも言えない）。judged は最後の 4 つのとき true。" +

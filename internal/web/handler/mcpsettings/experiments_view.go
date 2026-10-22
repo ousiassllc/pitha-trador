@@ -111,17 +111,20 @@ func rejectRows(before, after *query.RiskRejections) []mcp.RejectRow {
 }
 
 func confounderText(f experiment.Confounder) string {
-	when := "実験中（後の期間）"
-	if f.Period == experiment.PeriodBefore {
-		when = "実験の前の期間"
+	when := "実験中（後の期間）に"
+	switch f.Period {
+	case experiment.PeriodBefore:
+		when = "実験の前の期間に"
+	case experiment.PeriodBoundary:
+		when = "実験の前の期間と後の期間を通して"
 	}
 	switch f.Kind {
 	case experiment.KindSetting:
-		return fmt.Sprintf("交絡: %sに設定 %s が変わりました（%s、監査 ID %d）。", when, f.Name, jst(f.At), deref(f.AuditID))
+		return fmt.Sprintf("交絡: %s設定 %s が変わりました（%s、監査 ID %d）。", when, f.Name, jst(f.At), deref(f.AuditID))
 	case experiment.KindModel:
-		return fmt.Sprintf("交絡: %sに Jev（%s）のモデルが複数使われました: %v。", when, f.Name, f.Values)
+		return fmt.Sprintf("交絡: %s Jev（%s）のモデルが複数使われました: %v。", when, f.Name, f.Values)
 	default:
-		return fmt.Sprintf("交絡: %sに Jev（%s）のプロンプトの版が複数使われました: %v。", when, f.Name, f.Values)
+		return fmt.Sprintf("交絡: %s Jev（%s）のプロンプトの版が複数使われました: %v。", when, f.Name, f.Values)
 	}
 }
 

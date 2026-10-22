@@ -72,8 +72,8 @@ const (
 	// VerdictAborted: the experiment was given up; it is not judged.
 	VerdictAborted = "aborted"
 	// VerdictConfounded: something other than the variable changed in the
-	// before or the after period (Confounders lists it), so the comparison
-	// says nothing.
+	// before or the after period, or across the two (Confounders lists it),
+	// so the comparison says nothing.
 	VerdictConfounded = "confounded"
 	// VerdictInsufficientTrades: a period has fewer than min_trades closed
 	// trades (min_trades is never below MinTradesFloor). Judgement withheld.
@@ -122,9 +122,3 @@ func verdict(c Comparison) string {
 	}
 	return VerdictInconclusive
 }
-
-// confounders lists what changed during the experiment (the period r, the
-// experiment's start to its end) besides its variable:
-//
-//   - a whitelisted setting changed or reset (mcp_settings_audit; the
-//     experiment's own change - its audit_id, or a later save of the target

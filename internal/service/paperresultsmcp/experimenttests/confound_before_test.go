@@ -143,3 +143,103 @@ func TestAModelOrPromptExperimentsOwnSwitchInTheBeforePeriodIsNotAConfounder(t *
 		})
 	}
 }
+
+// 境目の交絡（issue #886 のレビュー）: a Jev model / prompt switch that falls
+// between the periods leaves each period with ONE value, so neither alone sees
+// a change. For every axis other than the experiment's own variable the values
+// of both periods are one set, and two values in it are a confounder with the
+// period "boundary".
+
+func TestAJevSwitchBetweenThePeriodsConfounds(t *testing.T) {
+	cases := []struct {
+		kind                      string
+		beforeModel, beforePrompt string
+		afterModel, afterPrompt   string
+	}{
+		{experiment.KindModel, "model-a", "trader-v3", "model-b", "trader-v3"},
+		{experiment.KindPrompt, "model-a", "trader-v3", "model-a", "trader-v4"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			srv, w, id := settingExperiment(t) // a settings experiment: neither axis is its own
+			decisionRow(t, w, midBefore, "trader", tc.beforeModel, tc.beforePrompt)
+			decisionRow(t, w, inside, "trader", tc.afterModel, tc.afterPrompt)
+			f := wantConfounded(t, confoundersOf(t, srv, id), tc.kind, "trader", experiment.PeriodBoundary)
+			if len(f.Values) != 2 {
+				t.Errorf("values = %v, want the two values", f.Values)
+			}
+		})
+	}
+}
+
+// The experiment's own axis switching old -> new across the periods is the
+// experiment, not a confounder; the other axis switching across them still is.
+func TestAModelOrPromptExperimentsOwnSwitchBetweenThePeriodsIsNotAConfounder(t *testing.T) {
+	cases := []struct {
+		kind, otherKind string
+		otherSwitches   bool
+	}{
+		{experiment.KindModel, experiment.KindPrompt, false},
+		{experiment.KindPrompt, experiment.KindModel, false},
+		{experiment.KindModel, experiment.KindPrompt, true},
+		{experiment.KindPrompt, experiment.KindModel, true},
+	}
+	for _, tc := range cases {
+		name := tc.kind
+		if tc.otherSwitches {
+			name += "+" + tc.otherKind
+		}
+		t.Run(name, func(t *testing.T) {
+			srv, w := newServer(t)
+			e := create(t, srv, map[string]any{
+				"hypothesis": "Jev の " + tc.kind + " を替える",
+				"changes":    []map[string]any{{"kind": tc.kind, "name": "trader", "before": "old", "after": "new"}},
+				"started_at": startedAt,
+			})
+			closeAt(t, srv, e.ID, endedAt)
+			// row is a decision whose own axis is ownValue and whose other axis is otherValue.
+			row := func(at, ownValue, otherValue string) {
+				if tc.kind == experiment.KindModel {
+					decisionRow(t, w, at, "trader", ownValue, otherValue)
+				} else {
+					decisionRow(t, w, at, "trader", otherValue, ownValue)
+				}
+			}
+			afterOther := "other-1"
+			if tc.otherSwitches {
+				afterOther = "other-2"
+			}
+			row(midBefore, "old", "other-1")
+			row(inside, "new", afterOther)
+			c := confoundersOf(t, srv, e.ID)
+			if !tc.otherSwitches {
+				if c.Confounded {
+					t.Fatalf("its own switch between the periods confounded: %+v", c.Confounders)
+				}
+				return
+			}
+			wantConfounded(t, c, tc.otherKind, "trader", experiment.PeriodBoundary)
+		})
+	}
+}
+
+// What a period already reported is not repeated as a boundary confounder.
+func TestABoundaryConfounderIsNotRepeatedForWhatAPeriodReported(t *testing.T) {
+	srv, w, id := settingExperiment(t)
+	decisionRow(t, w, midBefore, "trader", "model-a", "trader-v3")
+	decisionRow(t, w, "2026-10-01T12:00:00Z", "trader", "model-b", "trader-v3")
+	decisionRow(t, w, inside, "trader", "model-c", "trader-v3")
+	wantConfounded(t, confoundersOf(t, srv, id), experiment.KindModel, "trader", experiment.PeriodBefore)
+}
+
+// The after period is [started_at, ended_at): a change at exactly started_at
+// is in it, and one at exactly the end is not.
+func TestAChangeAtTheStartInstantIsInTheAfterPeriod(t *testing.T) {
+	srv, w, id := settingExperiment(t)
+	auditRow(t, w, endedAt, "set", "risk.max_daily_trades", "5", "3")
+	if c := confoundersOf(t, srv, id); c.Confounded {
+		t.Fatalf("a change at the end instant confounded: %+v", c.Confounders)
+	}
+	auditRow(t, w, startedAt, "set", "risk.max_daily_trades", "3", "4")
+	wantConfounded(t, confoundersOf(t, srv, id), experiment.KindSetting, "risk.max_daily_trades", experiment.PeriodAfter)
+}
