@@ -209,7 +209,7 @@ func TestPaperRisk_TradeLossLimitBindingIsShown(t *testing.T) {
 
 // issue #804 (comment): metalabel.llm_cutoff and its provenance keys are
 // edited in the same Settings hierarchy, in the existing メタラベリング dialog
-// (成績・検証 page) - one stored row each, not duplicated next to the capital.
+// (予測モデル page) - one stored row each, not duplicated next to the capital.
 func TestSettings_LLMCutoffKeysAreEditableInTheSameHierarchy(t *testing.T) {
 	engine, _ := opsRouter()
 	rec := httptest.NewRecorder()

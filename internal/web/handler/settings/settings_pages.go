@@ -72,11 +72,20 @@ func (h *SettingsHandler) opsGroupsOn(ctx context.Context, modalIDs []string) []
 	return out
 }
 
+// LegacyBudgetsPage implements `GET /settings/asset-buckets`, the former 資産ごとの
+// 予算枠 page (issue #824), now part of リスク・資金 (issue #895): a 301 to that
+// page. The browser keeps a URL fragment such as `#modal-asset-buckets` across
+// the redirect, so the dialog still opens.
+func (h *SettingsHandler) LegacyBudgetsPage(c *gin.Context) {
+	risk, _ := settingspages.PageByID(settingspages.PageRisk)
+	c.Redirect(http.StatusMovedPermanently, risk.Path())
+}
+
 // Page implements `GET /settings`: the Settings hub listing the pages under
 // it (issue #805, internal/web/settingspages). Each page is served by
 // SubPage.
 func (h *SettingsHandler) Page(c *gin.Context) {
-	shared.RenderHTML(c, http.StatusOK, pages.SettingsHubPage(settingspages.Pages()))
+	shared.RenderHTML(c, http.StatusOK, pages.SettingsHubPage(settingspages.Pages(), settingspages.HubLinks()))
 }
 
 // settingsReturnPath is where a non-HTMX Save/Delete goes back to: `/setup`

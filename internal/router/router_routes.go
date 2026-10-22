@@ -110,6 +110,7 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	for _, page := range settingspages.Pages() {
 		engine.GET(page.Path(), settingsHandler.SubPage(page, swaggerEnabled()))
 	}
+	engine.GET(settingspages.LegacyBucketsPath, settingsHandler.LegacyBudgetsPage)
 	engine.POST("/settings/:key", settingsHandler.Save)
 	engine.DELETE("/settings/:key", settingsHandler.Delete)
 	engine.GET("/system/secrets-status", settingsHandler.Status)

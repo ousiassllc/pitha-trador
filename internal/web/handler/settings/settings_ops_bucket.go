@@ -17,12 +17,12 @@ import (
 // it is and the surplus is refused as bucket_budget_exceeded until the stock
 // budget is saved too.
 const stockBudgetNoAutoRiseNote = "【運用資金を上げても株の枠は自動で増えません】株の枠は起動時に一度だけ、その時点の運用資金で決まり、その後に運用資金を上げても変わりません。" +
-	"増えた分で新規エントリーするには、「資産ごとの予算枠」ページで株の枠も保存してください（枠を超える分は bucket_budget_exceeded で見送られます）。"
+	"増えた分で新規エントリーするには、同じページの「資産ごとの予算枠」で株の枠も保存してください（枠を超える分は bucket_budget_exceeded で見送られます）。"
 
 // bucketGroup holds the Paper per-asset-class budgets (予算枠, issue #824):
 // how much of the operating capital the stock bucket and the bond ETF bucket
-// may each hold. It sits on its own Settings page; the operating capital they
-// split stays in paperRiskGroup. Paper only: Live keeps one whole-account
+// may each hold. It sits on the same Settings page as the operating capital
+// they split, which stays in paperRiskGroup. Paper only: Live keeps one whole-account
 // bucket.
 var bucketGroup = opsGroup{
 	id:   "asset-buckets",

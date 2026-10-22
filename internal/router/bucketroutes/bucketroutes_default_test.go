@@ -41,7 +41,7 @@ func TestPageStockDefaultIsRoundedDownForAFractionalCapital(t *testing.T) {
 		t.Fatalf("Risk's stock budget = %v, want the whole-yen 500000", risk.StockJPY)
 	}
 
-	body := f.do(http.MethodGet, "/settings/asset-buckets", nil).Body.String()
+	body := f.do(http.MethodGet, "/settings/risk", nil).Body.String()
 	shown := "株 " + dailyguardsettings.FormatYen(risk.StockJPY) + " 円 + 債券ETF 0 円"
 	if !strings.Contains(body, shown) {
 		t.Errorf("計算結果 panel does not show the Risk value (%q): %s", shown, body)

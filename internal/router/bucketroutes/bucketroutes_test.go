@@ -182,7 +182,7 @@ func TestValidSaveStoresValueAndAuditRow(t *testing.T) {
 		}
 	}
 
-	page := f.do(http.MethodGet, "/settings/asset-buckets", nil)
+	page := f.do(http.MethodGet, "/settings/risk", nil)
 	body := page.Body.String()
 	if page.Code != http.StatusOK {
 		t.Fatalf("GET page = %d", page.Code)
@@ -198,9 +198,9 @@ func TestValidSaveStoresValueAndAuditRow(t *testing.T) {
 	}
 }
 
-// The page is the only editor of the two budgets (the paper-risk page keeps
-// the capital) and, with nothing stored, shows the defaults: stock = the
-// capital, bond_etf = 0.
+// The リスク・資金 page edits the two budgets next to the capital (issue #895;
+// they were a page of their own, issue #824) and, with nothing stored, shows
+// the defaults: stock = the capital, bond_etf = 0.
 func TestPageShowsDefaultsWhenNothingStored(t *testing.T) {
 	f := newFixture(t)
 	for _, key := range bucketsettings.Keys() {
@@ -208,13 +208,7 @@ func TestPageShowsDefaultsWhenNothingStored(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	risk := f.do(http.MethodGet, "/settings/risk", nil).Body.String()
-	for _, key := range bucketsettings.Keys() {
-		if strings.Contains(risk, `data-testid="setting-field-row-`+key+`"`) {
-			t.Errorf("/settings/risk also edits %s", key)
-		}
-	}
-	body := f.do(http.MethodGet, "/settings/asset-buckets", nil).Body.String()
+	body := f.do(http.MethodGet, "/settings/risk", nil).Body.String()
 	// capital 500,000 = total 500,000 (stock 500,000 + bond_etf 0), remaining 0.
 	for _, want := range []string{"株 500,000 円 + 債券ETF 0 円", ">0 円<"} {
 		if !strings.Contains(body, want) {
@@ -224,14 +218,14 @@ func TestPageShowsDefaultsWhenNothingStored(t *testing.T) {
 }
 
 // Raising the operating capital does not grow the stock budget (issue #834,
-// FR-RISK-10), and both pages say so: the capital page (/settings/risk) and
-// the budgets page (/settings/asset-buckets) each carry the notice in their
-// group's note, so the operator knows to save the stock budget too.
+// FR-RISK-10), and the リスク・資金 page (/settings/risk, which holds both the
+// capital and the budgets since issue #895) says so in each group's note, so
+// the operator knows to save the stock budget too.
 func TestPagesWarnThatRaisingCapitalDoesNotRaiseStockBudget(t *testing.T) {
 	f := newFixture(t)
 	for _, tc := range []struct{ name, path, noteID string }{
-		{"capital page", "/settings/risk", `data-testid="modal-paper-risk-note"`},
-		{"budgets page", "/settings/asset-buckets", `data-testid="modal-asset-buckets-note"`},
+		{"capital group", "/settings/risk", `data-testid="modal-paper-risk-note"`},
+		{"budgets group", "/settings/risk", `data-testid="modal-asset-buckets-note"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := f.do(http.MethodGet, tc.path, nil)
@@ -263,7 +257,7 @@ func TestBudgetsPageShowsUnusedCapitalNotice(t *testing.T) {
 	unused := `data-testid="setting-group-derived-asset-buckets-bucket-unused"`
 
 	// capital 500,000 = stock 300,000 + bond_etf 200,000: nothing left over.
-	if body := f.do(http.MethodGet, "/settings/asset-buckets", nil).Body.String(); strings.Contains(body, unused) {
+	if body := f.do(http.MethodGet, "/settings/risk", nil).Body.String(); strings.Contains(body, unused) {
 		t.Fatalf("unused-capital notice shown with remaining 0: %s", body)
 	}
 
@@ -274,7 +268,7 @@ func TestBudgetsPageShowsUnusedCapitalNotice(t *testing.T) {
 	if got := f.stored(t, bucketsettings.KeyStockBudgetJPY); got != "300000" {
 		t.Fatalf("stock budget = %q after raising the capital, want it unchanged (300000)", got)
 	}
-	body := f.do(http.MethodGet, "/settings/asset-buckets", nil).Body.String()
+	body := f.do(http.MethodGet, "/settings/risk", nil).Body.String()
 	for _, want := range []string{unused, "100,000 円 が、どの枠にも割り当てられておらず使われていません"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("budgets page missing %q: %s", want, body)
@@ -285,7 +279,17 @@ func TestBudgetsPageShowsUnusedCapitalNotice(t *testing.T) {
 	if rec := f.save(bucketsettings.KeyStockBudgetJPY, "400000"); rec.Code != http.StatusOK {
 		t.Fatalf("save stock budget: status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if body := f.do(http.MethodGet, "/settings/asset-buckets", nil).Body.String(); strings.Contains(body, unused) {
+	if body := f.do(http.MethodGet, "/settings/risk", nil).Body.String(); strings.Contains(body, unused) {
 		t.Errorf("unused-capital notice still shown with remaining 0: %s", body)
+	}
+}
+
+// The budget dialog, whose id old `#modal-asset-buckets` links name, is on the
+// リスク・資金 page (issue #895); the retired page's 301 is tested with the real
+// router (settingsroutes.TestAssetBucketsPage_RedirectsToRisk).
+func TestBudgetDialogIsOnTheRiskPage(t *testing.T) {
+	f := newFixture(t)
+	if body := f.do(http.MethodGet, "/settings/risk", nil).Body.String(); !strings.Contains(body, `id="modal-asset-buckets"`) {
+		t.Errorf("/settings/risk renders no modal-asset-buckets dialog")
 	}
 }

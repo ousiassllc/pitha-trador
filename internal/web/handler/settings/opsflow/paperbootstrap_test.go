@@ -27,7 +27,7 @@ func modeRouter(mode metalabelsettings.Mode) (*gin.Engine, *memRuntimeStore) {
 	return engine, store
 }
 
-// issue #798: the bootstrap switch is on the 運用 page with its note, and in
+// issue #798: the bootstrap switch is on the 取引ルール page with its note, and in
 // Paper it can be turned on and reset.
 func TestPaperBootstrap_PaperCanTurnItOn(t *testing.T) {
 	engine, store := modeRouter(metalabelsettings.ModePaper)
@@ -36,7 +36,7 @@ func TestPaperBootstrap_PaperCanTurnItOn(t *testing.T) {
 	engine.ServeHTTP(page, httptest.NewRequest(http.MethodGet, settingspages.BasePath+"/"+settingspages.PageOperations, nil))
 	for _, want := range []string{"modal-paper-bootstrap", `setting-field-row-` + paperbootstrapsettings.Key, "Live では保存値があっても必ず無効", "policy-vb"} {
 		if !strings.Contains(page.Body.String(), want) {
-			t.Errorf("the 運用 page lacks %q", want)
+			t.Errorf("the 取引ルール page lacks %q", want)
 		}
 	}
 
