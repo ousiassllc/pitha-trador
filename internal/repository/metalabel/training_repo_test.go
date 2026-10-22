@@ -92,3 +92,78 @@ func TestRepository_ListTrainingRowsEmpty(t *testing.T) {
 		t.Fatalf("ListTrainingRows = %v, %v, want none", got, err)
 	}
 }
+
+// Issue #862: the count per label_version a skipped retraining reports. A
+// decision counts once per version; the version 1 label has no net return, the
+// version 2 label counts only with one (as ListTrainingRows reads it); decisions
+// that are not LONG/SHORT trader decisions or are outside [from, to) do not.
+// The second query is the one the issue asks to run on a real DB (there
+// calibration_outcomes has no timestamp column, so the decision's is used).
+func TestRepository_CountLabeledDecisionsPerLabelVersion(t *testing.T) {
+	db := newTestDB(t)
+	r := metalabel.NewRepository(db)
+	ctx := context.Background()
+	res, err := db.ExecContext(ctx, `INSERT INTO instruments (symbol, name, market, is_active) VALUES ('7203', 'x', 'TSE Prime', 1)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst, _ := res.LastInsertId()
+	jst := time.FixedZone("JST", 9*3600)
+	base := time.Date(2026, 10, 19, 9, 0, 0, 0, jst).UTC()
+
+	// 10/19: three decisions labeled v1 and v2 (v1 has no net return), one v1 only.
+	for i := range 3 {
+		id := insertTrainingDecision(t, db, inst, "7203", base.Add(time.Duration(i)*time.Minute), "LONG", "trader")
+		insertOutcome(t, db, id, 5, 1, nil) // (decision, horizon) is unique: the v1 label has its own horizon
+		insertOutcome(t, db, id, 15, 2, 4.0)
+	}
+	v1Only := insertTrainingDecision(t, db, inst, "7203", base.Add(10*time.Minute), "SHORT", "trader")
+	insertOutcome(t, db, v1Only, 15, 1, nil)
+	// 10/20: two decisions with only a v2 label, one of them labeled twice (counts once).
+	next := base.Add(24 * time.Hour)
+	for i := range 2 {
+		id := insertTrainingDecision(t, db, inst, "7203", next.Add(time.Duration(i)*time.Minute), "LONG", "trader")
+		insertOutcome(t, db, id, 15, 2, 1.0)
+		if i == 0 {
+			insertOutcome(t, db, id, 30, 2, 2.0)
+		}
+	}
+	// Not counted: a v2 label without a net return, a NONE decision, a scout decision, a decision before the range.
+	noNet := insertTrainingDecision(t, db, inst, "7203", next.Add(20*time.Minute), "LONG", "trader")
+	insertOutcome(t, db, noNet, 15, 2, nil)
+	none := insertTrainingDecision(t, db, inst, "7203", next.Add(21*time.Minute), "NONE", "trader")
+	insertOutcome(t, db, none, 15, 2, 1.0)
+	scout := insertTrainingDecision(t, db, inst, "7203", next.Add(22*time.Minute), "LONG", "scout")
+	insertOutcome(t, db, scout, 15, 2, 1.0)
+	before := insertTrainingDecision(t, db, inst, "7203", base.Add(-time.Hour), "LONG", "trader")
+	insertOutcome(t, db, before, 15, 2, 1.0)
+
+	got, err := r.CountLabeledDecisions(ctx, base, next.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("CountLabeledDecisions: %v", err)
+	}
+	if got.V1 != 4 || got.V2 != 5 {
+		t.Errorf("counts = %+v, want V1 4 (3 + the v1-only one), V2 5 (3 + 2)", got)
+	}
+	if empty, err := r.CountLabeledDecisions(ctx, time.Unix(0, 0), time.Unix(1, 0)); err != nil || empty != (metalabel.LabelVersionCounts{}) {
+		t.Errorf("empty range = %+v, %v, want zero counts", empty, err)
+	}
+
+	rows, err := db.QueryContext(ctx, `SELECT date(d.timestamp,'+9 hours') d, c.label_version, count(*)
+		FROM calibration_outcomes c JOIN jev_decisions d ON d.id = c.jev_decision_id GROUP BY 1,2 ORDER BY 1,2`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var day string
+		var version, n int
+		if err := rows.Scan(&day, &version, &n); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%s label_version=%d rows=%d", day, version, n)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+}

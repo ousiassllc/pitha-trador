@@ -1,6 +1,7 @@
 package trainingflow_test
 
 import (
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -15,7 +16,8 @@ import (
 // from it (docs FR-META-7).
 func TestDefaultAcceptanceConfig_FollowsThePowerAnalysis(t *testing.T) {
 	cfg := training.DefaultAcceptanceConfig()
-	want := training.RequiredTakes(training.AssumedSigmaBps, training.AssumedEdgeBps, training.DefaultAlpha, training.AssumedPower, training.AssumedDesignEffect)
+	deff := training.DesignEffect(training.AssumedRowsPerDay*training.AssumedTakeRate, training.AssumedWinProbDayShiftSD)
+	want := training.RequiredTakes(training.AssumedSigmaBps, training.AssumedEdgeBps, training.DefaultAlpha, training.DesignPower, deff)
 	if cfg.MinTakes != want {
 		t.Errorf("MinTakes = %d, want RequiredTakes = %d", cfg.MinTakes, want)
 	}
@@ -27,7 +29,7 @@ func TestDefaultAcceptanceConfig_FollowsThePowerAnalysis(t *testing.T) {
 	if got := training.RequiredTakes(30, 5, 0.05, 0.8, 1); got < 222 || got > 224 {
 		t.Errorf("RequiredTakes(30, 5, 5%%, 80%%, 1) = %d, want about 223", got)
 	}
-	if cfg.MinAUCLower != 0.5 || cfg.MinEVLowerBps != 0 || cfg.MinOOSDays != 5 || cfg.Alpha != 0.01 || cfg.Resamples != 2000 {
+	if cfg.MinAUCLower != 0.5 || cfg.MinEVLowerBps != 0 || cfg.MinOOSDays != training.DefaultMinOOSDays || cfg.Alpha != 0.01 || cfg.Resamples != 2000 {
 		t.Errorf("defaults = %+v", cfg)
 	}
 }
@@ -56,9 +58,19 @@ func TestDefaultAcceptanceConfig_MatchesTheSpec(t *testing.T) {
 		t.Fatal("FR-META-7 is missing from the spec")
 	}
 	cfg := training.DefaultAcceptanceConfig()
-	for name, v := range map[string]int{"最小take件数": cfg.MinTakes, "最小OOS件数": cfg.MinOOSSamples, "最小OOS営業日数": cfg.MinOOSDays, "ブートストラップ回数": cfg.Resamples} {
-		if !strings.Contains(fr, strconv.Itoa(v)) {
-			t.Errorf("FR-META-7 does not state the default %s %d", name, v)
+	// Each default is looked up in the sentence that states it, not anywhere in
+	// the section, so a number that merely appears elsewhere does not pass.
+	n := strconv.Itoa
+	for _, want := range []string{
+		"OOS件数 **" + n(cfg.MinOOSSamples) + "** 以上",
+		"take件数 **" + n(cfg.MinTakes) + "** 以上",
+		"取引日（JST）**" + n(cfg.MinOOSDays) + "** 日以上",
+		"**take " + n(cfg.MinTakes) + " 件**",
+		"**OOS " + n(cfg.MinOOSSamples) + " 件**",
+		"**" + n(cfg.Resamples) + "**回",
+	} {
+		if !strings.Contains(fr, want) {
+			t.Errorf("FR-META-7 does not state the default %q", want)
 		}
 	}
 	limits := changeguard.DefaultLimits()
@@ -70,7 +82,20 @@ func TestDefaultAcceptanceConfig_MatchesTheSpec(t *testing.T) {
 			t.Errorf("FR-META-7 does not state the change limit %q", want)
 		}
 	}
-	for _, want := range []string{"σ=30", "5 bps", "検出力80%"} {
+	// The premises the derivation rests on (issue #862): change one and the
+	// spec and this list have to change together.
+	walk := training.DefaultWalkForwardConfig()
+	pct := func(f float64) string { return n(int(math.Round(100 * f))) }
+	for _, want := range []string{
+		"**σ=" + n(int(training.AssumedSigmaBps)) + " bps**",
+		"**想定エッジδ=" + n(int(training.AssumedEdgeBps)) + " bps**",
+		"**設計検出力" + pct(training.DesignPower) + "%**",
+		"**日次の共通ずれsd s=" + pct(training.AssumedWinProbDayShiftSD) + "%**",
+		"**1取引日あたり" + n(training.AssumedRowsPerDay) + "行**",
+		"**take率" + pct(training.AssumedTakeRate) + "%**",
+		"**窓の上限" + n(int(walk.OOSMaxWindow.Hours()/24)) + "日**",
+		"**fit" + n(walk.MinFit) + "＋較正" + n(walk.MinCalibration) + "**",
+	} {
 		if !strings.Contains(fr, want) {
 			t.Errorf("FR-META-7 does not state the assumption %q", want)
 		}
