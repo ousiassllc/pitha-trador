@@ -68,7 +68,7 @@ func (h *Handler) List(c *gin.Context) {
 		props.Errors, status = []string{"cursor が正しくありません。一覧の先頭から開き直してください。"}, http.StatusBadRequest
 	case err != nil:
 		slog.ErrorContext(c.Request.Context(), "handler: order proposals list", "error", err)
-		props.LoadError, status = "注文案の取得に失敗しました。", http.StatusInternalServerError
+		props.LoadError, status = "注文提案の取得に失敗しました。", http.StatusInternalServerError
 	default:
 		props.Rows = rows(items)
 		if next != "" {
@@ -82,17 +82,17 @@ func (h *Handler) List(c *gin.Context) {
 func (h *Handler) Detail(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id < 1 {
-		shared.RespondPageError(c, http.StatusNotFound, "注文案が見つかりません。")
+		shared.RespondPageError(c, http.StatusNotFound, "注文提案が見つかりません。")
 		return
 	}
 	state, err := h.source.Get(c.Request.Context(), id)
 	if errors.Is(err, proposal.ErrNotFound) {
-		shared.RespondPageError(c, http.StatusNotFound, "注文案が見つかりません。")
+		shared.RespondPageError(c, http.StatusNotFound, "注文提案が見つかりません。")
 		return
 	}
 	if err != nil {
 		slog.ErrorContext(c.Request.Context(), "handler: order proposal detail", "proposal_id", id, "error", err)
-		shared.RespondPageError(c, http.StatusInternalServerError, "注文案の取得に失敗しました。")
+		shared.RespondPageError(c, http.StatusInternalServerError, "注文提案の取得に失敗しました。")
 		return
 	}
 	shared.RenderHTML(c, http.StatusOK, pages.OrderProposalDetailPage(detail(state)))

@@ -20,7 +20,7 @@ func TestNew_ActivityRoutesServePageAndAPIWithNavLink(t *testing.T) {
 	if page.Code != http.StatusOK {
 		t.Fatalf("GET /activity status = %d: %s", page.Code, page.Body.String())
 	}
-	for _, want := range []string{"<pitha-activity-feed", `data-queue="market-data"`, `href="/activity"`} {
+	for _, want := range []string{"<pitha-activity-feed", `data-queue="market-data"`, `>稼働ログ</h1>`, `aria-current="page"`} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Fatalf("GET /activity body missing %q", want)
 		}

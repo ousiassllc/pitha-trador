@@ -170,7 +170,7 @@ func TestList_BadInputIs400WithTheReason(t *testing.T) {
 
 func TestList_ReadFailureIs500WithoutLeakingIt(t *testing.T) {
 	code, body := get(t, failingSource{errors.New("db exploded: SECRET-DSN")}, "/order-proposals")
-	if code != http.StatusInternalServerError || !strings.Contains(body, "注文案の取得に失敗しました。") || strings.Contains(body, "SECRET-DSN") {
+	if code != http.StatusInternalServerError || !strings.Contains(body, "注文提案の取得に失敗しました。") || strings.Contains(body, "SECRET-DSN") {
 		t.Errorf("status %d, body %s", code, body)
 	}
 }
@@ -184,7 +184,7 @@ func TestDetail_TracesProposalToRealizedPnl(t *testing.T) {
 		t.Fatalf("status = %d", code)
 	}
 	for _, want := range []string{
-		"注文案 #5", `data-status="filled"`, "決算が好調で需給も良い", "引けで手じまう",
+		"注文提案 #5", `data-status="filled"`, "決算が好調で需給も良い", "引けで手じまう",
 		"2,400 円", "2,700 円", "届いた", "届かなかった", // stop reached (exit 2380 <= 2400), take not reached
 		"20,000 円", "15,000 円", "12,030 円", // proposed, estimated, actual loss
 		"トレードシグナル #2", "mcp-proposal-v1", "通過",

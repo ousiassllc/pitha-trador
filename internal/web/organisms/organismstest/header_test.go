@@ -70,14 +70,14 @@ func TestSecretsBanner_HasNoOwnMargin(t *testing.T) {
 
 // Only the current page's link carries aria-current (issue #631).
 func TestMainNav_MarksOnlyCurrent(t *testing.T) {
-	html := renderComponent(t, organisms.MainNav(organisms.NavCalibration))
+	html := renderComponent(t, organisms.MainNav(organisms.NavPerformance))
 	if got := strings.Count(html, `aria-current="page"`); got != 1 {
 		t.Fatalf("aria-current count = %d, want 1: %s", got, html)
 	}
-	if !regexp.MustCompile(`<a[^>]*href="/calibration"[^>]*aria-current="page"[^>]*>Calibration</a>`).MatchString(html) {
-		t.Errorf("aria-current not on Calibration link: %s", html)
+	if !regexp.MustCompile(`<a[^>]*href="/performance"[^>]*aria-current="page"[^>]*>成績</a>`).MatchString(html) {
+		t.Errorf("aria-current not on 成績 link: %s", html)
 	}
-	if !regexp.MustCompile(`class="font-semibold text-slate-900"[^>]*href="/calibration"`).MatchString(html) {
+	if !regexp.MustCompile(`class="font-semibold text-slate-900"[^>]*href="/performance"`).MatchString(html) {
 		t.Errorf("current link not emphasised: %s", html)
 	}
 	if strings.Contains(renderComponent(t, organisms.MainNav(organisms.NavNone)), "aria-current") {

@@ -209,7 +209,7 @@ export class PithaActivityFeed extends LitElement {
   }
 
   // Kill Switch history and the WS / error notices are not part of the SSR
-  // fallback, so they render right away. The Job Queues and Recent Activity
+  // fallback, so they render right away. The ジョブの状況 and 最近の動き
   // tables are SSR'd too: until the first snapshot arrives (see
   // createRenderRoot) the SSR copies stay and only these are added beside them.
   protected override render() {
@@ -222,7 +222,7 @@ export class PithaActivityFeed extends LitElement {
       ${this.renderKillSwitchEvents()}
 
       <section id="activity-feed" data-testid="activity-feed" class="mt-6">
-        <h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Activity</h2>
+        <h2 class="mb-2 text-lg font-semibold text-slate-900">最近の動き</h2>
         <div class="mb-2 flex gap-4 text-sm">
           <label>
             Type

@@ -18,7 +18,7 @@ templ ErrorPage(status int, message string) {
 		<section class="flex flex-col gap-3" data-testid="error-page">
 			<h1 class="text-2xl font-bold text-slate-900">{ strconv.Itoa(status) } { http.StatusText(status) }</h1>
 			<p class="text-sm text-slate-700" role="alert">{ message }</p>
-			<p><a class="text-sm text-blue-700 underline" href="/scanner">Scanner に戻る</a></p>
+			<p><a class="text-sm text-blue-700 underline" href="/scanner">候補銘柄に戻る</a></p>
 		</section>
 	}
 }

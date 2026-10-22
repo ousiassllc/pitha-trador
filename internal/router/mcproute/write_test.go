@@ -137,7 +137,7 @@ func TestOrderProposalsSwitchOnTheSettingsPanel(t *testing.T) {
 	a := newAppWithGate(t, g)
 
 	body := a.get("/settings/mcp-panel").Body.String()
-	for _, want := range []string{`data-testid="mcp-order-proposals-enabled"`, "MCP からの注文案を受け付ける（Paper のみ）", "注文案の受け付けをオン", "注文案の受け付けをオフ", "MCP（100.64.0.9）"} {
+	for _, want := range []string{`data-testid="mcp-order-proposals-enabled"`, "AIからの注文提案を受け付ける（Paper のみ）", "AIからの注文提案の受け付けをオン", "AIからの注文提案の受け付けをオフ", "MCP（100.64.0.9）"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("panel lacks %q", want)
 		}
@@ -175,7 +175,7 @@ func TestOrderProposalsSwitchFailureIsReported(t *testing.T) {
 	a := newAppWithGate(t, g)
 	rec := a.post("/settings/mcp/order-proposals", url.Values{"enabled": {"on"}}, true)
 	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "disk full") ||
-		!strings.Contains(rec.Body.String(), "注文案の受け付けを保存できませんでした") || g.proposals {
+		!strings.Contains(rec.Body.String(), "AIからの注文提案の受け付けを保存できませんでした") || g.proposals {
 		t.Fatalf("failure = %d %s (proposals=%v)", rec.Code, rec.Body.String(), g.proposals)
 	}
 }

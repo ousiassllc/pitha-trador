@@ -16,7 +16,7 @@ import (
 // filters and `/ws/activity` live updates.
 templ ActivityFeedFallback(events []domain.ActivityEvent, asOf time.Time) {
 	<section class="mt-6" id="activity-feed" data-testid="activity-feed">
-		<h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Activity</h2>
+		<h2 class="mb-2 text-lg font-semibold text-slate-900">最近の動き</h2>
 		<table class="w-full border-collapse text-left text-sm" aria-label="アクティビティフィード">
 			<caption class="mb-2 text-left text-sm text-slate-500">{ "as of " + atoms.FormatJST(asOf) }</caption>
 			<thead>

@@ -35,7 +35,7 @@ func serve(t *testing.T, engine *gin.Engine, target string) (int, string) {
 	return rec.Code, rec.Body.String()
 }
 
-// Without a wired source the 注文案 screens are empty but there: the list
+// Without a wired source the AIの注文提案 screens are empty but there: the list
 // says so and marks the nav entry, and an id is a 404.
 func TestNew_OrderProposalRoutesDefaultToAnEmptyList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -58,7 +58,7 @@ func TestNew_OrderProposalRoutesServeTheWiredSource(t *testing.T) {
 		t.Fatalf("GET /order-proposals = %d: %s", code, body)
 	}
 	code, body = serve(t, engine, "/order-proposals/7")
-	if code != http.StatusOK || !strings.Contains(body, "注文案 #7") {
+	if code != http.StatusOK || !strings.Contains(body, "注文提案 #7") {
 		t.Fatalf("GET /order-proposals/7 = %d: %s", code, body)
 	}
 	// Read-only: nothing but GET is routed.

@@ -1,0 +1,39 @@
+package molecules
+
+// Tab is one entry of TabNav: a link to a page (or a view of a page) with
+// the label shown on it.
+type Tab struct {
+	Label string
+	Href  templ.SafeURL
+	// Current marks the tab of the page being shown.
+	Current bool
+}
+
+// tabLinkClass is a tab's styling: the current tab carries the underline.
+func tabLinkClass(current bool) string {
+	const base = "-mb-px border-b-2 px-3 py-2 text-sm font-medium "
+	if current {
+		return base + "border-slate-900 text-slate-900"
+	}
+	return base + "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900"
+}
+
+// TabNav renders the tab bar of a main-menu entry that spans several pages
+// (候補銘柄: 候補・監視リスト, 成績: 実績・バックテスト・予測の精度; issue
+// #895). Each tab is a plain link to its own URL, so a tab keeps working
+// without JavaScript and the Header entry stays highlighted by the page's
+// NavItem; the current tab carries `aria-current="page"`. label names the
+// `<nav>` landmark for assistive technology.
+templ TabNav(label string, tabs []Tab) {
+	<nav aria-label={ label } class="mt-4 flex flex-wrap gap-1 border-b border-slate-200" data-testid="tab-nav">
+		for _, t := range tabs {
+			<a
+				class={ tabLinkClass(t.Current) }
+				href={ t.Href }
+				if t.Current {
+					aria-current="page"
+				}
+			>{ t.Label }</a>
+		}
+	</nav>
+}

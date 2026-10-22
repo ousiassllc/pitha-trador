@@ -37,7 +37,7 @@ func TestDailyHaltHandler_Status(t *testing.T) {
 		wantNone bool
 	}{
 		{name: "halt in force", source: fakeDailyHalt{halt: halt},
-			want: []string{`data-testid="daily-halt-banner"`, `data-reason="profit_lock"`, "利益確保（profit lock）", "+10000円", `href="/settings"`}},
+			want: []string{`data-testid="daily-halt-banner"`, `data-reason="profit_lock"`, "利益確保（profit lock）", "+10000円", `href="/settings/risk"`}},
 		{name: "no halt", source: fakeDailyHalt{}, wantNone: true},
 		{name: "nil source", source: nil, wantNone: true},
 		{name: "read failure shows nothing", source: fakeDailyHalt{err: errors.New("db down")}, wantNone: true},

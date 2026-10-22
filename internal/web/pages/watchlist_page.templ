@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -17,11 +18,12 @@ import (
 // is marked. `GET /watchlist` (internal/web/handler/watchlist.Handler)
 // renders it; it is server-rendered only (no island).
 templ WatchlistPage(view domain.WatchListView) {
-	@layout.Shell("Watchlist", organisms.NavWatchlist) {
-		<h1 class="text-2xl font-bold text-slate-900">Watchlist</h1>
-		<p class="mt-1 text-sm text-slate-600">
+	@layout.Shell("監視リスト", organisms.NavScanner) {
+		<h1 class="text-2xl font-bold text-slate-900">監視リスト</h1>
+		@molecules.TabNav("候補銘柄のタブ", candidateTabs(tabWatchlist))
+		<p class="mt-3 text-sm text-slate-600">
 			立花証券の監視銘柄は、引け後の日足スクリーニング（または固定リスト）で翌営業日分が前夜に確定し、翌朝のEVENT購読に使われます。設定は
-			<a class="font-semibold underline" href="/settings">設定画面</a>
+			<a class="font-semibold underline" href="/settings/broker">設定 ＞ 証券会社・データ</a>
 			で変更できます。
 		</p>
 		if !view.Enabled {

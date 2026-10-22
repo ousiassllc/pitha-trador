@@ -181,9 +181,9 @@ func auditAction(a string) string {
 	case mcpset.ActionWriteDisable:
 		return "書き込みを禁止"
 	case mcpset.ActionOrderProposalsEnable:
-		return "注文案の受け付けをオン"
+		return "AIからの注文提案の受け付けをオン"
 	case mcpset.ActionOrderProposalsDisable:
-		return "注文案の受け付けをオフ"
+		return "AIからの注文提案の受け付けをオフ"
 	}
 	return a
 }

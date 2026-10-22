@@ -1,5 +1,5 @@
-// Stateless templates for pitha-activity-feed's Job Queues table and Recent
-// Kill Switch Events section, split out of the element to keep it small.
+// Stateless templates for pitha-activity-feed's ジョブの状況 table and 最近の
+// Kill Switch section, split out of the element to keep it small.
 import { html, nothing } from 'lit';
 import { formatJstDateTime } from '../lib/jst-datetime';
 import { lightDomErrorClass } from '../lib/styles';
@@ -8,7 +8,7 @@ import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 export function renderQueueStatus(queues: QueueStatus[]) {
   return html`
     <section id="queue-status" data-testid="queue-status" class="mt-6">
-      <h2 class="mb-2 text-lg font-semibold text-slate-900">Job Queues</h2>
+      <h2 class="mb-2 text-lg font-semibold text-slate-900">ジョブの状況</h2>
       <table class="w-full border-collapse text-left text-sm" aria-label="キュー状況">
         <thead>
           <tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
@@ -44,7 +44,7 @@ export function renderKillSwitchEvents(
 ) {
   return html`
     <section id="kill-switch-events" data-testid="kill-switch-events" class="mt-6">
-      <h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Kill Switch Events</h2>
+      <h2 class="mb-2 text-lg font-semibold text-slate-900">最近の Kill Switch</h2>
       ${
         error
           ? html`<p class="pitha-activity-feed-error ${lightDomErrorClass}" role="alert">Failed to load kill switch events: ${error}</p>`

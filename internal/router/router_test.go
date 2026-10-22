@@ -108,7 +108,7 @@ func TestNew_SystemStatusRouteDefaultsToRunning(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "running") {
+	if !strings.Contains(rec.Body.String(), "稼働中") {
 		t.Fatalf("expected the default Running badge, got %q", rec.Body.String())
 	}
 }
