@@ -3,6 +3,7 @@ package shadow
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -167,7 +168,9 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 
 	resp, latency, err := s.client.ShadowTrader(ctx, jev.TraderRequest{QuestionVersion: candidate, State: state, RAGContext: ragContext})
 	if err != nil {
-		s.countFailure(day)
+		if !s.cancelledByClose(err) {
+			s.countFailure(day)
+		}
 		return fmt.Errorf("jev shadow: shadow call for version %q: %w", candidate, err)
 	}
 	responseJSON, err := json.Marshal(resp)
@@ -203,10 +206,20 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 		CostIsEstimate:          estimated,
 		CreatedAt:               s.now().UTC(),
 	}); err != nil {
-		s.countFailure(day)
+		if !s.cancelledByClose(err) {
+			s.countFailure(day)
+		}
 		return fmt.Errorf("jev shadow: persist shadow decision: %w", err)
 	}
 	return nil
+}
+
+// cancelledByClose reports whether err is the cancellation Close caused (not
+// a timeout, which is context.DeadlineExceeded, nor an API failure). Such a
+// call is left out of the failure count: it is neither a failure of the
+// candidate nor stored, so it leaves no cost either.
+func (s *Shadow) cancelledByClose(err error) bool {
+	return s.base.Err() != nil && errors.Is(err, context.Canceled)
 }
 
 // countFailure adds one failed call to the stored counter of the JST day day.
