@@ -12,8 +12,7 @@ import (
 )
 
 // periodTools are the tools taking the from/to period arguments; health_today
-// (issue #808) takes none, so it is called separately (healthToday). The last
-// two are the meta-labeling diagnosis tools (issues #848, #849).
+// (issue #808) takes none, so it is called separately (healthToday).
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",

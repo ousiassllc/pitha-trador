@@ -113,18 +113,12 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 		if strings.Contains(upper, "SELECT *") || strings.Contains(upper, ".*") {
 			t.Errorf("SELECT * style statement: %s", testkit.FirstLine(stmt))
 		}
-		// metalabel_training_readiness (issue #848) rebuilds each training row's
-		// features in-process with the retraining's own code, which needs
-		// state_json and response_json. Only this one statement (the retraining's
-		// own row query, repo.ListTrainingRowsFrom) may name them; the columns
-		// never reach a response (only counts do: see metalabeltests).
+		// metalabel_training_readiness (issue #848) rebuilds each training row's features
+		// in-process: only the retraining's own row query may name state_json/response_json.
 		trainingRows := strings.Contains(stmt, "FROM calibration_outcomes o") &&
 			strings.Contains(stmt, "JOIN jev_decisions d ON d.id = o.jev_decision_id")
 		for _, f := range forbidden {
-			if trainingRows && (f == "state_json" || f == "response_json") {
-				continue
-			}
-			if strings.Contains(stmt, f) && !strings.HasPrefix(strings.TrimSpace(stmt), "PRAGMA") {
+			if strings.Contains(stmt, f) && (!trainingRows || (f != "state_json" && f != "response_json")) && !strings.HasPrefix(strings.TrimSpace(stmt), "PRAGMA") {
 				// the INSERT/UPDATE rows above are the test's own writes
 				if strings.HasPrefix(strings.TrimSpace(stmt), "INSERT") || strings.HasPrefix(strings.TrimSpace(stmt), "UPDATE") ||
 					strings.HasPrefix(strings.TrimSpace(stmt), "DELETE") || strings.HasPrefix(strings.TrimSpace(stmt), "CREATE") {
