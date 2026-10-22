@@ -16,6 +16,13 @@ describe('backtestTabUrl', () => {
     );
   });
 
+  test('a URL that already selects the backtest tab maps to nothing (no second run)', () => {
+    expect(backtestTabUrl('/performance', '?tab=backtest', '#backtest')).toBeNull();
+    expect(
+      backtestTabUrl('/performance', '?from=2025-01-01&to=2025-06-30', '#backtest'),
+    ).toBeNull();
+  });
+
   test('other hashes and other pages map to nothing', () => {
     expect(backtestTabUrl('/performance', '', '')).toBeNull();
     expect(backtestTabUrl('/performance', '', '#other')).toBeNull();

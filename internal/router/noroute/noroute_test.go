@@ -34,7 +34,7 @@ func TestNoRoute_UnknownPageRendersErrorPage(t *testing.T) {
 			t.Errorf("%s: Content-Type = %q, want text/html", target, ct)
 		}
 		body := rec.Body.String()
-		if !strings.Contains(body, "404 Not Found") || !strings.Contains(body, "<html") {
+		if !strings.Contains(body, "404 ページが見つかりません") || !strings.Contains(body, "<html") {
 			t.Errorf("%s: body is not pages.ErrorPage(404): %q", target, body)
 		}
 	}

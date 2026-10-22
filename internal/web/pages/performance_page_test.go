@@ -75,4 +75,13 @@ func TestPerformancePage_TabsSplitActualsFromTheBacktestForm(t *testing.T) {
 	if !regexp.MustCompile(`<a[^>]*href="/performance\?tab=backtest"[^>]*aria-current="page"`).MatchString(backtest) {
 		t.Errorf("the バックテスト tab is not marked current")
 	}
+	// Only the 実績 tab forwards an old `#backtest` link; on the バックテスト tab
+	// the script would reload the page and run the 60s backtest twice.
+	const forwardScript = "/static/dist/js/performance-tabs/pitha-performance-tabs.js"
+	if !strings.Contains(actuals, forwardScript) {
+		t.Errorf("the 実績 tab does not load the #backtest forwarding script")
+	}
+	if strings.Contains(backtest, forwardScript) {
+		t.Errorf("the バックテスト tab loads the #backtest forwarding script")
+	}
 }

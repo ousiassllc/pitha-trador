@@ -46,7 +46,9 @@ func (p SettingsProps) hasSystem() bool {
 // opening a page of detailed settings. It replaces the former admin hub. The
 // `data-hash-routes` map (settingspages.HashRoutes) lets pitha-settings-hub
 // forward an old `/settings#modal-<id>` link to the page that now holds the
-// dialog, since the server never sees a URL fragment.
+// dialog, since the server never sees a URL fragment. SettingsPage embeds the
+// same map so an old `/settings/<page>#modal-<id>` link whose dialog moved to
+// another page (issue #895) is forwarded too.
 templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Link) {
 	@layout.Shell("設定", organisms.NavSettings) {
 		<h1 class="text-2xl font-bold text-slate-900">設定</h1>
@@ -103,7 +105,7 @@ templ SettingsPage(props SettingsProps) {
 			<span aria-current="page">{ props.Page.Name }</span>
 		</nav>
 		<h1 class="mt-2 text-2xl font-bold text-slate-900">{ props.Page.Name }</h1>
-		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID }>
+		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID } data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			<p class="text-sm text-slate-600">{ props.Page.Summary }</p>
 			if len(props.Connections) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
@@ -241,6 +243,7 @@ templ SettingsPage(props SettingsProps) {
 				<div id="jev-prompt-panel" hx-get="/settings/jev-prompt-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 			}
 		}
+		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>
 		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}
 }
