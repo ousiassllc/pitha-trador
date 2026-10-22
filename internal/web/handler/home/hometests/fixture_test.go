@@ -39,8 +39,6 @@ type fixture struct {
 	alertsErr error
 	unsetKeys []string
 	update    updater.Status
-	positions []domain.Position
-	posErr    error
 	cycle     *domain.ScanCycle
 	scanErr   error
 	settings  fakeSettings
@@ -78,7 +76,6 @@ func (f *fixture) engine() *gin.Engine {
 		Alerts:     fakeAlerts{f},
 		Secrets:    fakeSecrets{f},
 		Update:     fakeUpdate{f},
-		Positions:  fakePositions{f},
 		Settings:   &f.settings,
 		Activity:   fakeActivity{f},
 		Now:        func() time.Time { return f.now },
@@ -155,9 +152,16 @@ type fakeSource struct {
 	proposalErr error
 	trades      []home.Trade
 	tradesErr   error
+	// positions are the rows of the positions table (open and closed);
+	// OpenPositions returns the open ones, like the SELECT it stands for.
+	positions []domain.Position
+	posErr    error
+	// healthCalls counts the Health reads, to tell a memoized one from a new one.
+	healthCalls int
 }
 
 func (s *fakeSource) Health(context.Context, time.Time) (home.Health, error) {
+	s.healthCalls++
 	return s.health, s.healthErr
 }
 
@@ -175,6 +179,16 @@ func (s *fakeSource) Proposals(context.Context, time.Time) (home.Proposals, erro
 
 func (s *fakeSource) RecentTrades(context.Context, time.Time, int) ([]home.Trade, error) {
 	return s.trades, s.tradesErr
+}
+
+func (s *fakeSource) OpenPositions(context.Context) ([]domain.Position, error) {
+	var open []domain.Position
+	for _, p := range s.positions {
+		if p.IsOpen() {
+			open = append(open, p)
+		}
+	}
+	return open, s.posErr
 }
 
 type fakeState struct{ f *fixture }
@@ -206,12 +220,6 @@ func (s fakeSecrets) UnsetOptionalKeys(context.Context) []string { return s.f.un
 type fakeUpdate struct{ f *fixture }
 
 func (s fakeUpdate) Status() updater.Status { return s.f.update }
-
-type fakePositions struct{ f *fixture }
-
-func (s fakePositions) ListPositions(context.Context, int) ([]domain.Position, error) {
-	return s.f.positions, s.f.posErr
-}
 
 type fakeScan struct{ f *fixture }
 

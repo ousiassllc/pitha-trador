@@ -30,23 +30,14 @@ type positionsData struct {
 	err  error
 }
 
-// loadPositions reads the open positions. ListPositions returns the newest
-// rows first (closed ones included), so the open ones are the ones with no
-// closed_at.
+// loadPositions reads the open positions (closed_at IS NULL) from the Source,
+// not from a "newest N rows" list: with many newer closed rows an old open
+// position would fall out of such a list, understating the unrealized total
+// and the count the daily guard sees.
 func (h *Handler) loadPositions(ctx context.Context) positionsData {
-	if h.deps.Positions == nil {
-		return positionsData{}
-	}
-	all, err := h.deps.Positions.ListPositions(ctx, positionLimit)
+	open, err := h.deps.Source.OpenPositions(ctx)
 	logRead(ctx, "positions", err)
-	var d positionsData
-	d.err = err
-	for _, p := range all {
-		if p.IsOpen() {
-			d.open = append(d.open, p)
-		}
-	}
-	return d
+	return positionsData{open: open, err: err}
 }
 
 // positions is the 保有ポジション card.
@@ -127,8 +118,8 @@ var rejectLabels = map[string]string{
 const rejectEntryQuality = "entry_quality_below_threshold"
 
 // rejectReasons is the エントリーしなかった理由 block: today's NONE signals by
-// reason, and, when entry quality is the most frequent one, the minimum entry
-// quality in use (Paper / Live) with the link to change it.
+// reason, and, when entry quality is (one of) the most frequent reason(s), the
+// minimum entry quality in use (Paper / Live) with the link to change it.
 func (h *Handler) rejectReasons(ctx context.Context, now time.Time) homepanels.RejectReasonsView {
 	counts, err := h.deps.Source.RejectReasons(ctx, now)
 	logRead(ctx, "reject reasons", err)
@@ -144,8 +135,15 @@ func (h *Handler) rejectReasons(ctx context.Context, now time.Time) homepanels.R
 		}
 		v.Rows = append(v.Rows, homepanels.RejectRow{Code: c.Reason, Label: label, Count: c.Count})
 	}
-	if len(v.Rows) > 0 && v.Rows[0].Code == rejectEntryQuality {
-		v.EntryQuality = h.entryQuality(ctx)
+	// Rows are most frequent first, so the first row holds the maximum count.
+	for _, row := range v.Rows {
+		if row.Count < v.Rows[0].Count {
+			break
+		}
+		if row.Code == rejectEntryQuality {
+			v.EntryQuality = h.entryQuality(ctx)
+			break
+		}
 	}
 	return v
 }

@@ -25,7 +25,7 @@ import (
 // New builds and returns the shared Gin engine in three stages:
 // useMiddleware installs the cross-cutting middleware chain (in
 // router_middleware.go), registerPages registers every SSR page, action
-// and WebSocket route (`GET /` redirects to `/scanner`) plus the opt-in
+// and WebSocket route (`GET /` is the Home screen) plus the opt-in
 // `/swagger` API docs UI, and registerAPI registers the Huma-based
 // `/api/v1` JSON API. docs/api/endpoints.md is the source of truth for
 // the route list.

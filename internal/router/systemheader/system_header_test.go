@@ -151,3 +151,31 @@ func TestNew_EveryNsPollingElementsAreMarkedBackground(t *testing.T) {
 		}
 	}
 }
+
+// Issue #896: `#header-status` listens for `systemStateChanged` on `body`, not
+// on the `header` the panel used to sit in (the panel is inside a card on
+// Home), so every page renders that trigger and exactly one Kill Switch
+// panel, and the panel's event (bubbles + composed, static/ tests) reaches body.
+func TestNew_EveryPageRefreshesHeaderStatusFromBodyEvents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(system.StaticSystemEngine{State_: domain.SystemStateRunning}))
+	for _, path := range []string{"/", "/scanner", "/performance", "/order-proposals", "/settings", "/calibration"} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s = %d, want 200", path, rec.Code)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `id="header-status"`) || !strings.Contains(body, `hx-trigger="systemStateChanged from:body"`) {
+				t.Errorf("%s: #header-status lacks the from:body trigger", path)
+			}
+			if strings.Contains(body, "from:closest header") {
+				t.Errorf("%s: a `from:closest header` trigger is still rendered", path)
+			}
+			if n := strings.Count(body, "<pitha-kill-switch-panel"); n != 1 {
+				t.Errorf("%s: %d Kill Switch panels, want 1", path, n)
+			}
+		})
+	}
+}

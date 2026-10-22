@@ -64,6 +64,18 @@ func TestRejectReasons_EntryQualityNotTopHasNoNote(t *testing.T) {
 	}
 }
 
+// A tie for the most frequent reason counts as "the most frequent": the note is
+// shown whichever of the tied reasons sorts first.
+func TestRejectReasons_EntryQualityTiedForTopShowsTheNote(t *testing.T) {
+	f := newFixture()
+	f.source.rejects = []home.RejectCount{
+		{Reason: "jev_none", Count: 30}, {Reason: "entry_quality_below_threshold", Count: 30}, {Reason: "spread_too_wide", Count: 2},
+	}
+	if body := f.mustGet(t, "/home/details"); count(body, "entry-quality-note") != 1 {
+		t.Errorf("no note although entry quality ties for the top: %s", body)
+	}
+}
+
 func TestRejectReasons_EntryQualityOnTopButSettingUnreadable(t *testing.T) {
 	f := newFixture()
 	f.source.rejects = []home.RejectCount{{Reason: "entry_quality_below_threshold", Count: 3}}

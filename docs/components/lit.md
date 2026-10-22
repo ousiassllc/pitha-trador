@@ -147,7 +147,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 
 - URL属性（`status-url`/`ws-url`/`pause-url`/`resume-url`/`kill-url`）が未設定なら、該当の取得・購読・操作（`status-url`→再同期、`ws-url`→WebSocket購読、`pause-url`等→対応するPOST）を行わず`logger.error`を出す（無言でreturnしない。issue #494）
 - 操作可否は`domain.SystemState.CanPause/CanResume/CanKill`（Running→pause/kill可、Paused→resume/kill可、Killed→resumeのみ）が唯一の定義で、`GET/POST /api/v1/system/*`の応答も`can_pause`/`can_resume`/`can_kill`として返す。状態を読み出せないとき`Header`は操作ボタンを描画せず（`status=""`）、パネルが`status-url`から自己補正する
-- 操作後は`systemStateChanged`を発火し、`Header`の`#header-status`（`hx-trigger="systemStateChanged from:closest header"`）がStatusDotを再取得する
+- 操作後は`systemStateChanged`を発火し、`Header`の`#header-status`（`hx-trigger="systemStateChanged from:body"`）がStatusDotを再取得する
 - 表示（issue #895）: 状態は`Header`のStatusDotバッジ（稼働中／新規停止中／全停止（Kill））1つで示し、パネルの状態文字列は視覚的に隠す（スクリーンリーダー向けの`role="status"`ライブ領域としては残す）。操作ボタンの表示は「新規エントリーを停止」（Pause）・「再開」（Resume）・「全決済して停止」（Kill）
 - Killの確認ダイアログ（`window.confirm`）は、Killが新規エントリー停止に加えて保有中の全ポジションを強制決済する（`Engine.Kill` → `closer.CloseAll`、FR-RISK-3 / UC-11）ことを文言で伝える（issue #194）
 - 操作（Pause/Resume/Kill）のPOSTが失敗したときはエラーを表示したうえで`status-url`から状態を再同期し、`systemStateChanged`も発火する。Killは`system.killed`を先に立ててから強制決済するため、強制決済失敗（500）でもサーバーはKilledのままで、UIが`running`のまま残らないようにする（issue #195）

@@ -3,6 +3,8 @@ package home
 import (
 	"context"
 	"time"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
 
 // Source is the Home screen's read-only access to the database-backed figures
@@ -23,6 +25,10 @@ type Source interface {
 	Proposals(ctx context.Context, now time.Time) (Proposals, error)
 	// RecentTrades is the newest closed trades, at most limit.
 	RecentTrades(ctx context.Context, now time.Time, limit int) ([]Trade, error)
+	// OpenPositions is every open position (closed_at IS NULL), whatever its
+	// age: the set the daily guard counts. It is not "the newest N rows", so
+	// an old open position is never cut off by newer closed ones.
+	OpenPositions(ctx context.Context) ([]domain.Position, error)
 }
 
 // Health is the part of health_today the Home screen shows.
@@ -120,5 +126,10 @@ func (StaticSource) Proposals(context.Context, time.Time) (Proposals, error) {
 
 // RecentTrades implements Source.
 func (StaticSource) RecentTrades(context.Context, time.Time, int) ([]Trade, error) {
+	return nil, nil
+}
+
+// OpenPositions implements Source.
+func (StaticSource) OpenPositions(context.Context) ([]domain.Position, error) {
 	return nil, nil
 }

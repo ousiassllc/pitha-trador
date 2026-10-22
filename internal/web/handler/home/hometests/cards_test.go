@@ -27,7 +27,7 @@ func TestPnL_RealizedPlusUnrealizedOfOpenPositionsOnly(t *testing.T) {
 	f := newFixture()
 	f.source.realized = home.Realized{PnLJPY: 2500, ClosedCount: 3}
 	f.source.health.OpenedToday = 4
-	f.positions = []domain.Position{
+	f.source.positions = []domain.Position{
 		openPosition("7203", 100, 2500, 2530, 3000, jst(20, 9, 10)),
 		openPosition("6758", 200, 1800, 1790, -2000, jst(20, 9, 40)),
 		closedPosition("9984", 99999), // closed: its unrealized/realized are not part of the open sum
@@ -50,7 +50,7 @@ func TestPnL_RealizedPlusUnrealizedOfOpenPositionsOnly(t *testing.T) {
 func TestPnL_LossIsRedAndNegative(t *testing.T) {
 	f := newFixture()
 	f.source.realized = home.Realized{PnLJPY: -4000, ClosedCount: 2}
-	f.positions = []domain.Position{openPosition("7203", 100, 2500, 2470, -3000, jst(20, 9, 10))}
+	f.source.positions = []domain.Position{openPosition("7203", 100, 2500, 2470, -3000, jst(20, 9, 10))}
 	body := f.mustGet(t, "/home/pnl")
 	if got := inner(t, body, "pnl-total"); got != "-7,000円" {
 		t.Errorf("total = %q, want -7,000円", got)
@@ -66,10 +66,26 @@ func TestPnL_RemainingUntilDailyLossLimit(t *testing.T) {
 	f := newFixture()
 	f.settings.guard = dailyguardsettings.Resolved{Limits: dailyguardsettings.Limits{LossLimitJPY: 50000}}
 	f.source.realized = home.Realized{PnLJPY: -10000, ClosedCount: 1}
-	f.positions = []domain.Position{openPosition("7203", 100, 2500, 2480, -2000, jst(20, 9, 10))}
+	f.source.positions = []domain.Position{openPosition("7203", 100, 2500, 2480, -2000, jst(20, 9, 10))}
 	got := inner(t, f.mustGet(t, "/home/pnl"), "pnl-loss-limit")
 	if want := "1日の損失上限（-50,000円）まで あと 38,000円"; got != want {
 		t.Errorf("loss limit line = %q, want %q", got, want)
+	}
+}
+
+// At or past the limit the guard has stopped new entries; a negative "あと" would
+// read as a bug.
+func TestPnL_LossLimitReachedSaysSoInsteadOfANegativeRemainder(t *testing.T) {
+	for name, realized := range map[string]float64{"exactly at the limit": -50000, "beyond the limit": -61000} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture()
+			f.settings.guard = dailyguardsettings.Resolved{Limits: dailyguardsettings.Limits{LossLimitJPY: 50000}}
+			f.source.realized = home.Realized{PnLJPY: realized, ClosedCount: 2}
+			got := inner(t, f.mustGet(t, "/home/pnl"), "pnl-loss-limit")
+			if want := "1日の損失上限（-50,000円）: 損失上限に達しました"; got != want {
+				t.Errorf("loss limit line = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -104,7 +120,7 @@ func TestPositions_EmptyState(t *testing.T) {
 func TestPositions_OnlyOpenOnesAreListedWithLinksAndHeldTime(t *testing.T) {
 	f := newFixture()
 	f.now = jst(20, 11, 15)
-	f.positions = []domain.Position{
+	f.source.positions = []domain.Position{
 		openPosition("7203", 100, 2500, 2530.5, 3050, jst(20, 9, 10)),
 		closedPosition("9984", 777),
 		openPosition("6758", 200, 1800, 1790, -2000, jst(19, 9, 40)),
@@ -165,7 +181,7 @@ func TestPage_FirstRowHasTheThreeCardsInOrder(t *testing.T) {
 func TestPage_FailedReadFailsOnlyItsCard(t *testing.T) {
 	f := newFixture()
 	f.source.realizedErr = errBoom
-	f.posErr = errBoom
+	f.source.posErr = errBoom
 	f.source.rejectsErr = errBoom
 	f.source.proposalErr = errBoom
 	f.source.tradesErr = errBoom

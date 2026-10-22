@@ -133,7 +133,6 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 		Alerts:     o.healthAlertSource,
 		Secrets:    settingsHandler,
 		Update:     o.updateController,
-		Positions:  o.symbolProvider,
 		Scan:       scanSource,
 		Settings:   o.operationalSettings,
 		Activity:   o.activitySource,

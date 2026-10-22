@@ -36,7 +36,6 @@ type Deps struct {
 	Alerts     AlertReader
 	Secrets    SecretsReader
 	Update     UpdateReader
-	Positions  PositionReader
 	Scan       ScanReader
 	Settings   SettingsReader
 	Activity   ActivityReader
@@ -49,6 +48,7 @@ type Deps struct {
 type Handler struct {
 	deps Deps
 	now  func() time.Time
+	memo healthMemo
 }
 
 // New returns a Handler reading from deps; a nil Source is StaticSource.

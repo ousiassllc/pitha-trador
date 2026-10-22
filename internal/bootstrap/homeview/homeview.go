@@ -12,10 +12,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/rejectstats"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
+	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proposal"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/home"
@@ -171,6 +174,19 @@ func parseOut(s *string) time.Time {
 		return time.Time{}
 	}
 	return t
+}
+
+// OpenPositions is every positions row with closed_at IS NULL, newest opened
+// first: the set the daily guard counts (positions.ListOpen), however old.
+func (r Reader) OpenPositions(ctx context.Context) ([]domain.Position, error) {
+	var out []domain.Position
+	err := r.readTx(ctx, func(tx *sql.Tx) error {
+		open, err := trading.ListOpenOn(ctx, tx)
+		out = open
+		return err
+	})
+	slices.Reverse(out)
+	return out, err
 }
 
 var _ home.Source = Reader{}

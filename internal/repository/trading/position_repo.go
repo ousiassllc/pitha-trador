@@ -169,7 +169,13 @@ func (r *PositionRepository) CloseWithExitOrder(ctx context.Context, exitOrder d
 // oldest first, for FR-RISK-1's open-position-count/exposure checks and
 // FR-SCHED-4's held-position Exit re-evaluation cycle.
 func (r *PositionRepository) ListOpen(ctx context.Context) ([]domain.Position, error) {
-	rows, err := r.db.QueryContext(ctx, positionSelectColumns+` WHERE closed_at IS NULL ORDER BY opened_at ASC`)
+	return ListOpenOn(ctx, r.db)
+}
+
+// ListOpenOn is ListOpen over any sqlutil.Querier, so a read-only caller (the
+// Home screen's source) can run it inside its own read-only transaction.
+func ListOpenOn(ctx context.Context, q sqlutil.Querier) ([]domain.Position, error) {
+	rows, err := q.QueryContext(ctx, positionSelectColumns+` WHERE closed_at IS NULL ORDER BY opened_at ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list open positions: %w", err)
 	}

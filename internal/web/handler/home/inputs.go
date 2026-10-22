@@ -16,7 +16,7 @@ import (
 // The narrow views of the existing services the Home screen reads. Each is a
 // subset of what internal/router already wires for the header routes and the
 // APIs (`/api/v1/system/status`, `/system/daily-halt`, `/system/marketdata-status`,
-// `/system/health-alerts`, `/api/v1/positions`, `/api/v1/scanner/scan`,
+// `/system/health-alerts`, `/api/v1/scanner/scan`,
 // `/api/v1/activity`); Home adds no source of its own and writes nothing.
 type (
 	// StateReader is `GET /api/v1/system/status`'s source.
@@ -43,10 +43,6 @@ type (
 	UpdateReader interface {
 		Status() updater.Status
 	}
-	// PositionReader is `GET /api/v1/positions`'s source.
-	PositionReader interface {
-		ListPositions(ctx context.Context, limit int) ([]domain.Position, error)
-	}
 	// ScanReader is the Scanner's scan view source (internal/web/handler/scanner.ScanSource).
 	ScanReader interface {
 		Scan(ctx context.Context) (cycle domain.ScanCycle, ok bool, err error)
@@ -62,10 +58,6 @@ type (
 		Snapshot(ctx context.Context, q activityfeed.Query) (domain.ActivitySnapshot, error)
 	}
 )
-
-// positionLimit is how many positions rows one read asks for: the open ones
-// are among the newest by opened_at, and the screen only ever shows them.
-const positionLimit = 500
 
 // statusInputs are the reads the 取引の状態 card, the 要対応 list and the
 // header badge share. A nil dependency is a source this build does not have
@@ -113,7 +105,7 @@ func (h *Handler) loadStatus(ctx context.Context, now time.Time) statusInputs {
 		in.alerts, in.alertsErr = h.deps.Alerts.Active(ctx)
 		logRead(ctx, "health alerts", in.alertsErr)
 	}
-	in.health, in.healthErr = h.deps.Source.Health(ctx, now)
+	in.health, in.healthErr = h.health(ctx, now, healthBasis(in))
 	logRead(ctx, "health today", in.healthErr)
 	if h.deps.Update != nil {
 		in.update = h.deps.Update.Status()

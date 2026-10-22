@@ -2,10 +2,15 @@ package homeview_test
 
 import (
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/homeview"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
@@ -186,5 +191,36 @@ func TestRecentTrades_NewestClosedFirstLimited(t *testing.T) {
 	}
 	if len(got) != 3 || got[0].PnLJPY != 400 || got[2].PnLJPY != 200 || got[0].Symbol != "7203" || got[0].ExitReason != "take_profit" {
 		t.Errorf("RecentTrades = %+v, want the 3 newest closes (400, 300, 200)", got)
+	}
+}
+
+// The open positions are read by closed_at IS NULL, not from the newest N rows:
+// an open position older than more than 500 closed ones is still returned, as
+// positions.ListOpen (the daily guard's read) returns it.
+func TestOpenPositions_AreNotCutOffByNewerClosedRows(t *testing.T) {
+	_, w := testkit.HealthyDay(t, now) // one open position, opened 09:30 on the 20th
+	testkit.MustExec(t, w, `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 600)
+		INSERT INTO positions (instrument_id, entry_order_id, exit_order_id, symbol, side, quantity, entry_price,
+			current_price, unrealized_pnl, realized_pnl, opened_at, closed_at, exit_reason)
+		SELECT 1, 99, NULL, '7203', 'LONG', 100, 1000, 1000, 0, 10, ?, ?, 'take_profit' FROM n`,
+		testkit.StoredAt(t, testkit.At(20, 10, 0)), testkit.StoredAt(t, testkit.At(20, 11, 0)))
+
+	got, err := reader(t, w).OpenPositions(t.Context())
+	if err != nil {
+		t.Fatalf("OpenPositions: %v", err)
+	}
+	if len(got) != 1 || got[0].ClosedAt != nil || !got[0].OpenedAt.Equal(testkit.At(20, 9, 30)) {
+		t.Fatalf("OpenPositions = %+v, want the one open position opened 09:30", got)
+	}
+
+	// And the Home screen shows and counts it.
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	home.New(home.Deps{Source: reader(t, w), Now: func() time.Time { return now }}).Register(engine)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/home/positions", nil))
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, `data-testid="positions-count">1<span`) || strings.Count(body, `data-testid="position-row"`) != 1 {
+		t.Errorf("GET /home/positions = %d, want the open position listed and counted: %s", rec.Code, body)
 	}
 }
