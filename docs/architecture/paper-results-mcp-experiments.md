@@ -7,7 +7,7 @@
 - 調整は 1 つずつ**実験**として記録する。1 つの実験で変えるのは**変数 1 つだけ**。2 つ以上を同時に変える実験は作れない（`experiment_create` と Settings 画面が作成時に弾く）
 - 前後の比較は、どの実験でも同じ指標: 取引件数、コスト控除後の純損益、勝率、平均の勝ち・平均の負け、最大ドローダウン、拒否理由の内訳
 - **判定の基準は、1 取引あたりの純損益（コスト控除後）の平均の前後差と、最大ドローダウン**。前後の平均を Welch の t 検定で比べ、差（後−前）の 95% 信頼区間を返す。「勝ち（`improved`）」は区間の下限が 0 より上で、かつ最大ドローダウンが前より悪化していないときだけ。合計の損益の大小では判定しない。勝率などは参考として並べるだけ（§4）
-- 最低取引件数（前後それぞれ 64 件。サーバー側の下限）に届くまでは判定しない（`insufficient_trades`。数値は返す）。呼ぶ側は上げられるが下げられない。件数は**暫定の案で、あいりの承認を待っている**（§5）
+- 最低取引件数（前後それぞれ 64 件。サーバー側の下限）に届くまでは判定しない（`insufficient_trades`。数値は返す）。呼ぶ側は上げられるが下げられない。件数は**暫定値**（本番の σ は未確認で、測って見直す。あいりの承認も未。§5）
 - 実験は変更そのものをしない。設定は `settings_set`（または Settings 画面）、モデルの切り替えとプロンプトの版の切り替えは本体側（コード・設定）で行い、実験はそれが**効き始めた時刻**から比べる
 
 ## 2. 変数 1 つ
@@ -73,16 +73,16 @@ $$\Delta=\bar x_2-\bar x_1,\quad SE=\sqrt{\frac{s_1^2}{n_1}+\frac{s_2^2}{n_2}},\
 
 モデルの切り替えは監査されない（`jev_decisions.model_id` にだけ残る）ので、判断が 1 件も無い期間のモデルの変更は検出できない。
 
-## 5. 最低取引件数: 暫定の案（あいり未承認）
+## 5. 最低取引件数: 暫定値（本番の σ は未確認）
 
-**これは確定値ではなく、実装者の案である。あいりの承認があるまで承認済みとして扱わない。** 値は `experiment.MinTradesFloor`（1 か所）で、**サーバー側の下限**。`experiments_list` / `experiment_compare` の `min_trades` 引数は、これを**上げるためだけ**に使える。下限未満の指定は、黙って 64 に置き換えず `invalid_value`（422。理由に指定値と下限を書く）で拒否する（置き換えると、呼んだ値と違う前提の判定が返り、誤読のもとになるため）。応答の `min_trades_source` は `floor_provisional_unapproved`（下限の暫定値。まだ承認されていない）か `argument_raised`（呼び出しで下限より上げた）。Settings 画面にも「暫定の案で、まだ承認されていません」と出す。
+**64 は暫定値である（ユーザー決定: 値は変えず、暫定と明記する）。本番の 1 取引あたり損益の標準偏差 σ は未確認で、σ を測って見直す予定。あいりの承認も未であり、確定値として扱わない。** 値は `experiment.MinTradesFloor`（1 か所）で、**サーバー側の下限**。`experiments_list` / `experiment_compare` の `min_trades` 引数は、これを**上げるためだけ**に使える。下限未満の指定は、黙って 64 に置き換えず `invalid_value`（422。理由に指定値と下限を書く）で拒否する（置き換えると、呼んだ値と違う前提の判定が返り、誤読のもとになるため）。応答の `min_trades_source` は `floor_provisional_unapproved`（下限の暫定値。値の名前の `unapproved` は、あいりの承認が未であることを指す）か `argument_raised`（呼び出しで下限より上げた）。ツールの説明（`experiments_list` / `experiment_compare` の description と `min_trades` の引数の説明）と Settings 画面の注記にも、同じ「暫定値（本番の 1 取引あたり損益の標準偏差 σ は未確認。σ を測って見直す予定）」を出す（`experiment.MinTradesProvisionalText`、`TestToolDescriptionsStateTheFloorIsProvisional`）。
 
-- **案: 前後それぞれ 64 件（下限）**
+- **暫定値: 前後それぞれ 64 件（下限）**
 - 根拠（仮定つきの統計式）: 前後の 1 取引あたりの純損益の平均を比べる 2 標本の検定（両側 $\alpha=0.05$、検出力 $1-\beta=0.8$）で、差が 1 取引あたり損益の標準偏差 $\sigma$ の半分（効果量 $d=0.5$）のとき、1 期間あたり
   $$n = \frac{2\,(z_{1-\alpha/2}+z_{1-\beta})^2}{d^2} = \frac{2\,(1.960+0.842)^2}{0.5^2} = \frac{15.70}{0.25} = 62.8 \to 63$$
   に、t 分布の補正（約 $z_{1-\alpha/2}^2/4 \approx 1$）を足して **64**
 - 効果量を変えたときの件数（同じ式。1 期間あたり）: $d=0.3$ なら 176、$d=0.5$ なら 64、$d=0.8$ なら 26、$d=0.2$ なら 394
-- **実測の $\sigma$ は未確認**。この環境にはクローズ済み取引のある Paper の DB が無く（ローカルの開発 DB は `positions` が 0 件）、1 取引あたり損益のばらつきを測れていない。上の式は $\sigma$ を使わず「$\sigma$ の何倍の差を見分けたいか」で件数を決めているため、実測の $\sigma$ で「円でいくらの差が見分けられるか」は $d \times \sigma$ になる。**本番 DB の `realized_pnl` の標準偏差を確認してから、この $d$（と件数）を承認する**（`SELECT COUNT(*), AVG(realized_pnl), SQRT(AVG(realized_pnl*realized_pnl) - AVG(realized_pnl)*AVG(realized_pnl)) FROM positions WHERE closed_at IS NOT NULL AND realized_pnl IS NOT NULL`）
+- **実測の $\sigma$ は未確認**。この環境にはクローズ済み取引のある Paper の DB が無く（ローカルの開発 DB は `positions` が 0 件）、1 取引あたり損益のばらつきを測れていない。上の式は $\sigma$ を使わず「$\sigma$ の何倍の差を見分けたいか」で件数を決めているため、64 件で円でいくらの差が見えるか（$d \times \sigma$）も**未確認**である（$d=0.5$ は仮定）。**本番 DB の `realized_pnl` の標準偏差を測って、この $d$（と件数）を見直す**（`SELECT COUNT(*), AVG(realized_pnl), SQRT(AVG(realized_pnl*realized_pnl) - AVG(realized_pnl)*AVG(realized_pnl)) FROM positions WHERE closed_at IS NOT NULL AND realized_pnl IS NOT NULL`）
 - 限界: 取引は互いに独立でない（同じ日・同じ相場に偏る）ので、実際に必要な件数はこれより多くなりうる。件数が足りても因果の証明にはならない（§3、§4.1）
 
 ## 6. 書き込み経路と GUI
@@ -90,4 +90,4 @@ $$\Delta=\bar x_2-\bar x_1,\quad SE=\sqrt{\frac{s_1^2}{n_1}+\frac{s_2^2}{n_2}},\
 - 書き込みは `experiment_create`（`tuning_experiments` への `INSERT` 1 件）と `experiment_close`（`status` と `ended_at` の `UPDATE` 1 件。`running` の行だけ）の 2 つだけで、`mcpset.Writer` の別接続（`docs/architecture/paper-results-mcp.md` §7.3）を通り、**書き込み許可のスイッチ（§7.2）に従う**（オフなら `write_disabled`）。設定・監査・取引の表には触れない（`settingstests.TestSettingsWritePathIsNarrow` が実行された文を数えて固定する）
 - `experiments_list` と `experiment_compare` は読み取り接続のままで、`SELECT` だけ（名前付きの列のみ）
 - GUI: Settings「外部連携」の MCP カードに実験の節がある（`GET /settings/mcp/experiments`）。一覧（状態・期間・変数・前後の取引件数・判定）、比較（`GET /settings/mcp/experiments/:id`。前後の指標・拒否理由・交絡）、作成（`POST /settings/mcp/experiments`。変数 1 つだけのフォーム）、終了（`POST /settings/mcp/experiments/:id/close`）。画面は人が操作するので、MCP の書き込み許可のスイッチには従わない（Settings の他の保存と同じ）。作成者は `gui`
-- 実験の一覧・比較に出る件数の既定は暫定の案（§5）。一覧は新しい順に最大 20 件（実験 1 件ごとに前後の集計 2 回）
+- 実験の一覧・比較に出る件数の下限は暫定値（§5）。一覧は新しい順に最大 20 件（実験 1 件ごとに前後の集計 2 回）
