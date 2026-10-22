@@ -1,4 +1,4 @@
-package settings_test
+package secretsflow_test
 
 import (
 	"context"
