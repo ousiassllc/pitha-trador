@@ -1,10 +1,10 @@
 # API 仕様: Paper 実績 MCP の調整の実験ツール
 
-`docs/api/endpoints/paper-results-mcp.md` §3.23〜§3.26 の分割章（行数上限のため別ファイル）。issue #871。設計・判定・最低取引件数の案は `docs/architecture/paper-results-mcp-experiments.md`。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。4 ツールとも `from` / `to` は取らず（`noPeriod`）、期間は実験が決める。
+`docs/api/endpoints/paper-results-mcp.md` §3.25〜§3.28 の分割章（行数上限のため別ファイル）。issue #871。設計・判定・最低取引件数の案は `docs/architecture/paper-results-mcp-experiments.md`。共通の上限・トランスポート・エラー形式は `paper-results-mcp.md` と `docs/architecture/paper-results-mcp-errors.md` に従う。4 ツールとも `from` / `to` は取らず（`noPeriod`）、期間は実験が決める。
 
 ## 3. ツール
 
-### 3.23 `experiment_create`
+### 3.25 `experiment_create`
 
 調整の実験を 1 件記録する。**変更そのものはしない**（設定は先に `settings_set`、モデル・プロンプトの版の切り替えは本体側で行ってから記録する）。書き込み許可（`paper-results-mcp.md` §7.2）がオフなら `write_disabled`（403）。
 
@@ -20,26 +20,26 @@
 
 応答の `data`: 作った実験 `{id, created_at, actor("mcp"), client, hypothesis, variable:{kind, name, before, after, audit_id}, started_at, ended_at(null), status("running")}`。実行文は `tuning_experiments` への `INSERT` 1 件だけ。
 
-### 3.24 `experiment_close`
+### 3.26 `experiment_close`
 
-実行中の実験を終える。引数: `experiment_id`（○）、`status`（`closed`＝終了・判定の対象〔既定〕/ `aborted`＝中止・判定を出さない）、`ended_at`（RFC3339。開始時刻以後・現在以前。省略は今）。ない ID は `experiment_not_found`（404）、終わった実験は `experiment_not_running`（409。再び開けない）、書き込み許可がオフなら `write_disabled`。応答は更新後の実験（3.23 と同じ形）。実行文は `UPDATE tuning_experiments SET status, ended_at WHERE id AND status = 'running'` の 1 件だけ。
+実行中の実験を終える。引数: `experiment_id`（○）、`status`（`closed`＝終了・判定の対象〔既定〕/ `aborted`＝中止・判定を出さない）、`ended_at`（RFC3339。開始時刻以後・現在以前。省略は今）。ない ID は `experiment_not_found`（404）、終わった実験は `experiment_not_running`（409。再び開けない）、書き込み許可がオフなら `write_disabled`。応答は更新後の実験（3.25 と同じ形）。実行文は `UPDATE tuning_experiments SET status, ended_at WHERE id AND status = 'running'` の 1 件だけ。
 
-### 3.25 `experiments_list`
+### 3.27 `experiments_list`
 
 実験の一覧（新しい順。読み取り専用）。引数: `status`（`running` / `closed` / `aborted`。省略は全部）、`limit`（1〜50、既定 20。超過は `limit_exceeded`）、`min_trades`（64〜10000。**下限 64（暫定・あいり未承認）は上げるのは可、下げるのは不可**。64 未満・10000 超は `invalid_value`（422。理由に指定値と下限を書く）で、黙って 64 に直さない。省略は 64）。
 
-`data.experiments[]` の各要素: `experiment`（3.23 の形）、`min_trades`、`min_trades_source`（`floor_provisional_unapproved`＝下限の暫定値でまだ承認されていない / `argument_raised`＝呼び出しで下限より上げた）、`before_trades` / `after_trades`（前後のクローズ済み取引件数）、`confounded`、`verdict`、`judged`。1 行ごとに前後の集計 2 回を行う（`limit_exceeded`＝期間内の取引が 5,000 件を超える実験があるとき、一覧全体が失敗する）。
+`data.experiments[]` の各要素: `experiment`（3.25 の形）、`min_trades`、`min_trades_source`（`floor_provisional_unapproved`＝下限の暫定値でまだ承認されていない / `argument_raised`＝呼び出しで下限より上げた）、`before_trades` / `after_trades`（前後のクローズ済み取引件数）、`confounded`、`verdict`、`judged`。1 行ごとに前後の集計 2 回を行う（`limit_exceeded`＝期間内の取引が 5,000 件を超える実験があるとき、一覧全体が失敗する）。
 
-### 3.26 `experiment_compare`
+### 3.28 `experiment_compare`
 
-実験 1 つの前後比較（読み取り専用）。引数: `experiment_id`（○）、`min_trades`（3.25 と同じ。下限 64、上げるのみ可）。**後** = 実験の開始から終了まで（実行中は今まで）、**前** = 開始の直前の同じ長さ。両方を半開区間 `[from, to)` として、`paper_performance_summary` と `risk_rejections` と**同じ関数**（`query.PerformanceSummary` / `query.Rejections`）で計算する。
+実験 1 つの前後比較（読み取り専用）。引数: `experiment_id`（○）、`min_trades`（3.27 と同じ。下限 64、上げるのみ可）。**後** = 実験の開始から終了まで（実行中は今まで）、**前** = 開始の直前の同じ長さ。両方を半開区間 `[from, to)` として、`paper_performance_summary` と `risk_rejections` と**同じ関数**（`query.PerformanceSummary` / `query.Rejections`）で計算する。
 
 `data`:
 
 | フィールド | 内容 |
 |------------|------|
-| `experiment` | 3.23 の形 |
-| `min_trades` / `min_trades_source` | 判定に要る前後それぞれの件数と、その出どころ（3.25 と同じ） |
+| `experiment` | 3.25 の形 |
+| `min_trades` / `min_trades_source` | 判定に要る前後それぞれの件数と、その出どころ（3.27 と同じ） |
 | `before` / `after` | `{from, to, performance, risk_rejections}`。`performance` は `paper_performance_summary` の `data` と同じフィールド（`closed_trade_count`・`win_count`・`loss_count`・`win_rate`・`total_pnl_jpy`・`avg_win_jpy`・`avg_loss_jpy`・`max_drawdown_jpy`・`profit_factor` ほか。`by_origin[]` を含む）。`risk_rejections` は `risk_rejections` の `data` と同じフィールド（`risk_passed_count`・`buckets[]`・`other_reject_count`・`other_reject_breakdown[]` ほか） |
 | `diff` | 後 − 前: `total_pnl_jpy`・`max_drawdown_jpy`（参考。`max_drawdown_jpy` は判定に使う） |
 | `per_trade_pnl` | 判定の基礎になる検定（Welch の t 検定）。`before` / `after`: `{n, mean_jpy, sd_jpy}`（1 取引あたりの純損益（コスト控除後）の件数・平均・標本標準偏差。`paper_performance_summary` の `closed_trade_count` / `expectancy_jpy` と一致）、`diff`（平均の差、後 − 前）、`ci_low` / `ci_high`（差の信頼区間）、`ci_level`（0.95）、`t`（t 値）、`df`（Welch–Satterthwaite の自由度）。計算できない値（n<2、または前後とも全取引が同じ損益）は `null`。`n` が 0 のとき `mean_jpy` も `null` |
