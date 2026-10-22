@@ -306,9 +306,8 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
-- `health_today` は、要対応コード 9 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
-- 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）
-- Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
+- `health_today` は、要対応コード 10 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
+- 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）。Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
 
 ## 改訂履歴
 
