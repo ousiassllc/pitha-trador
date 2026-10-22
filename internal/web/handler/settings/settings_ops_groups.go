@@ -7,6 +7,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 )
@@ -171,7 +172,8 @@ func policyGroup(id, name, prefix, direction string) opsGroup {
 			"自己改善ループ（Sol / Opus）も同じキーを更新するため、後から書き込んだ方の値が有効です。",
 		fields: []opsField{
 			{key: prefix + "min_probability", label: "最低確率（min_probability）", hint: "0 より大きく 1 以下です。"},
-			{key: prefix + "min_entry_quality", label: "最低エントリー品質（min_entry_quality）", options: entryQualityOptions},
+			{key: prefix + "min_entry_quality", label: "最低エントリー品質・Live（min_entry_quality）", options: entryQualityOptions, hint: "Live で使う値（既定 strong。MCP からは変えられません）。Paper では使われず、下の Paper の値が使われます。"},
+			{key: paperpolicysettings.PaperKeyOf(prefix + "min_entry_quality"), label: "最低エントリー品質・Paper（Paper 専用）", options: entryQualityOptions, hint: "Paper でだけ使う値（既定 good。MCP の settings_set からも変えられます）。他のしきい値は Live と共通です。"},
 			{key: prefix + "min_continuation_probability", label: "継続確率の下限（min_continuation_probability）", hint: "0 より大きく 1 以下です。"},
 			{key: prefix + "max_toxic_flow", label: "有害フロー上限（max_toxic_flow）", hint: "0 より大きく 1 以下です。"},
 			{key: prefix + "max_liquidity_stressed", label: "流動性ストレス上限（max_liquidity_stressed）", hint: "0 より大きく 1 以下です。"},

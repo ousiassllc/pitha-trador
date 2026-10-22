@@ -8,18 +8,19 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
 )
 
-// The whitelist is exactly the keys #806 names. A change here is a decision
+// The whitelist is exactly the keys #806 and #861 name. A change here is a decision
 // about what the MCP may write, so it is pinned verbatim.
 func TestWhitelistIsExactlyTheDecidedKeys(t *testing.T) {
 	want := []string{
 		"risk.paper.initial_capital_jpy", "risk.paper.max_position_per_symbol_pct", "risk.paper.max_total_exposure_pct", "risk.paper.max_trade_loss_pct",
+		"policy.paper.long.min_entry_quality", "policy.paper.short.min_entry_quality", // #861: Paper only; the Live policy.long|short.* are not here
 		"risk.bucket.stock.budget_jpy", "risk.bucket.bond_etf.budget_jpy",
 		"risk.operating_capital_jpy", "risk.daily_loss_limit_pct", "risk.profit_lock.trigger_pct", "risk.profit_lock.giveback_pct", "risk.max_daily_trades",
 		"risk.daily_loss_limit_jpy", "risk.profit_lock.trigger_jpy",
 		"metalabel.llm_cutoff", "metalabel.llm_cutoff_model", "metalabel.llm_cutoff_confirmed_on", "metalabel.llm_cutoff_source",
 	}
-	if len(want) != 17 {
-		t.Fatalf("the test lists %d keys, issue #824 makes the whitelist 17", len(want))
+	if len(want) != 19 {
+		t.Fatalf("the test lists %d keys, issue #861 makes the whitelist 19", len(want))
 	}
 	if got := mcpwritesettings.Keys(); !slices.Equal(got, want) {
 		t.Fatalf("whitelist = %v\nwant %v", got, want)
@@ -122,6 +123,20 @@ func TestOrderProposalsSwitchIsNotWhitelistedAndDefaultsOff(t *testing.T) {
 	for _, raw := range []string{"2", "-1", `"1"`, "true", "", "null"} {
 		if _, err := mcpwritesettings.ApplyOrderProposals(raw); err == nil {
 			t.Errorf("ApplyOrderProposals(%q) accepted", raw)
+		}
+	}
+}
+
+// #861: the Paper minimum entry quality is writable, the Live one is not.
+func TestWhitelistHoldsPaperEntryQualityButNotLive(t *testing.T) {
+	for _, key := range []string{"policy.paper.long.min_entry_quality", "policy.paper.short.min_entry_quality"} {
+		if !mcpwritesettings.IsAllowed(key) {
+			t.Errorf("%s is not whitelisted", key)
+		}
+	}
+	for _, key := range []string{"policy.long.min_entry_quality", "policy.short.min_entry_quality", "policy.long.min_probability"} {
+		if mcpwritesettings.IsAllowed(key) {
+			t.Errorf("Live key %s is whitelisted", key)
 		}
 	}
 }

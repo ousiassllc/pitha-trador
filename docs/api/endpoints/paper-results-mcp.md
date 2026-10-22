@@ -199,14 +199,14 @@
 
 ### 3.10 設定ツール（issue #806・#807）
 
-設定ツールが触れるのは、次のホワイトリストの 17 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
+設定ツールが触れるのは、次のホワイトリストの 19 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
 | `risk.paper.initial_capital_jpy` | 円 | Paper の運用資金（FR-RISK 各上限と数量算出の基準。issue #804） | 0 円より大きく 1 兆円以下 |
-| `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
-| `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
+| `risk.paper.max_position_per_symbol_pct` / `risk.paper.max_total_exposure_pct` | % | Paper の 1 銘柄あたりの建玉上限 / Paper の総エクスポージャ上限 | どちらも 0 より大きく 100 以下 |
 | `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
+| `policy.paper.long.min_entry_quality` / `policy.paper.short.min_entry_quality` | 文字列 | Paper のロング／ショートの最低エントリー品質（issue #861。Paper でだけ効く。保存がなければ `good`。Live の `policy.long.min_entry_quality` / `policy.short.min_entry_quality` は書けず `key_not_allowed`） | `poor` / `fair` / `good` / `strong` / `exceptional` |
 | `risk.bucket.stock.budget_jpy` | 円 | Paper の株の予算枠（issue #824）。保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足してこの額を超えると新規エントリーを見送る。0 は株の新規エントリーを止める | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.bucket.bond_etf.budget_jpy` | 円 | Paper の債券ETFの予算枠（issue #824）。0 はこの枠を使わない | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
@@ -287,7 +287,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 | `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 17 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 19 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
 | `order_proposals.request_hash` / `client` | `000042`。照合用のハッシュと接続元 IP。`order_proposal_get` は返さない |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 
@@ -300,7 +300,7 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - `listen` が `0.0.0.0` のときは起動しない。Tailscale で直接待つ設定は、その PC の tailnet 側アドレスだけを bind する
 - キー無し・誤ったキーは 401 で、そのリクエストの経路で SQL が 0 件である
 - MCP の読み取り接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
-- 設定ツール: ホワイトリストの 17 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
+- 設定ツール: ホワイトリストの 19 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
 - 設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
 - 注文案ツールの受け入れ条件は `paper-results-mcp-proposals.md` §5（スイッチ・同一トランザクション・冪等・引数の規則・1 日の上限・認証なしで SQL 0 件・書き込みの狭さ・`mode` の CHECK・オンにする手段が無いこと）
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する

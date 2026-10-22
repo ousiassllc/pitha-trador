@@ -170,7 +170,7 @@ Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を 
 
 ### 7.1 ホワイトリスト
 
-MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 17 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
+MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 19 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
@@ -178,6 +178,8 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
+| `policy.paper.long.min_entry_quality` | 文字列 | Paper のロングの最低エントリー品質（issue #861）。Jev の `entry_quality` がこれ未満なら `entry_quality_below_threshold` で見送る。Paper でだけ効く。保存がなければ `good` | `poor` / `fair` / `good` / `strong` / `exceptional` |
+| `policy.paper.short.min_entry_quality` | 文字列 | Paper のショートの最低エントリー品質（issue #861）。同上 | 同上 |
 | `risk.bucket.stock.budget_jpy` | 円 | Paper の株の予算枠（issue #824）。保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足してこの額を超えると新規エントリーを見送る。0 は株の新規エントリーを止める。保存がなければ運用資金の全額 | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.bucket.bond_etf.budget_jpy` | 円 | Paper の債券ETFの予算枠（issue #824）。0 はこの枠を使わない。保存がなければ 0。債券ETFの銘柄の新規エントリーはこの枠だけで判定される（issue #833。債券ETFの銘柄の取り込みはまだない） | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
@@ -192,9 +194,9 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | `metalabel.llm_cutoff_confirmed_on` | 日付 | 上の終端日を確認した日（出典） | `YYYY-MM-DD` |
 | `metalabel.llm_cutoff_source` | 文字列 | 上の終端日の根拠（出典） | 200 文字以内・制御文字なし |
 
-入れないもの: Live の値（`risk.live.*` など Live で効く上限・判定・発注可否。この表に Live のキーは 1 つもない）、#798 の Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）、ブローカー・認証情報・`secrets`、発注・送金・Kill Switch 解除に関わるもの、そのほかすべての運用設定（policy・screener・ログ・バックアップ先など）。書き込み許可のスイッチ自体も設定キーではなく、専用ツール（§7.2）だけが切り替える。表を広げるのは仕様の変更（悠太さんの決定）で、テスト（`TestWhitelistIsExactlyTheDecidedKeys`）が内容を固定する。
+入れないもの: Live の値（`risk.live.*` など Live で効く上限・判定・発注可否。この表に Live のキーは 1 つもない。Live の最低エントリー品質 `policy.long.min_entry_quality` / `policy.short.min_entry_quality`（既定 `strong`）も入れず、`key_not_allowed` で拒否する）、#798 の Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）、ブローカー・認証情報・`secrets`、発注・送金・Kill Switch 解除に関わるもの、そのほかすべての運用設定（policy（上の Paper の最低エントリー品質 2 キーを除く）・screener・ログ・バックアップ先など）。書き込み許可のスイッチ自体も設定キーではなく、専用ツール（§7.2）だけが切り替える。表を広げるのは仕様の変更（悠太さんの決定）で、テスト（`TestWhitelistIsExactlyTheDecidedKeys`）が内容を固定する。
 
-値の検証は GUI と同一のコードを使う。MCP 専用の検証は作らない。Paper の 4 キーは `papersettings`（`Validate` と `MinTradeLossPct` / `MaxTradeLossPct`。1 回の最大損失は 0.1〜3.0 を含む）、予算枠の 2 キーは `bucketsettings`（`Validate` と、合計の検査 `CheckSave`）、日次ガードは `dailyguardsettings`（`Apply`）、`metalabel.*` は `metalabelsettings`（`Normalize` / `Apply`）で、どれも `internal/service/opsettings` の `Save` を通る。範囲外は `invalid_value`（理由を `error.data.detail` に載せる）で、何も保存しない。
+値の検証は GUI と同一のコードを使う。MCP 専用の検証は作らない。Paper の最低エントリー品質の 2 キーは `paperpolicysettings`（`Settings.Apply`。`config.IsEntryQuality` で 5 値のどれかに限る。Settings の `policy.*.min_entry_quality` と同じ値の集合）、Paper の 4 キーは `papersettings`（`Validate` と `MinTradeLossPct` / `MaxTradeLossPct`。1 回の最大損失は 0.1〜3.0 を含む）、予算枠の 2 キーは `bucketsettings`（`Validate` と、合計の検査 `CheckSave`）、日次ガードは `dailyguardsettings`（`Apply`）、`metalabel.*` は `metalabelsettings`（`Normalize` / `Apply`）で、どれも `internal/service/opsettings` の `Save` を通る。範囲外は `invalid_value`（理由を `error.data.detail` に載せる）で、何も保存しない。
 
 予算枠の合計（株 + 債券ETF）は運用資金（`risk.paper.initial_capital_jpy`）以下でなければならない。この検査は枠の 2 キーの保存、運用資金を下げる保存、「既定に戻す」のどれにも同じように掛かり、超えるときは `invalid_value` で拒否して、設定も監査行も残さない（GUI の保存も同じ）。枠は 1 キーずつ保存するので、枠の間で予算を移すツールは設けない。**移すときは、減らす方の枠を先に保存し、そのあとで増やす方の枠を保存する**（先に増やす方を保存すると、途中の合計が運用資金を超えて拒否される）。運用資金そのものを下げるときも、枠の合計が下がった額に収まるよう、先に枠を減らす。枠は Paper だけの設定で、Live には影響しない。
 
