@@ -106,53 +106,95 @@ func perf(trades int, pnl, drawdown float64) query.Performance {
 	return query.Performance{ClosedTradeCount: trades, TotalPnlJPY: pnl, MaxDrawdownJPY: drawdown}
 }
 
-func comparison(status string, confounded bool, before, after query.Performance) Comparison {
-	c := Comparison{
-		Experiment: Experiment{Status: status}, MinTrades: 10,
-		Before: Period{Performance: before}, After: Period{Performance: after}, Confounded: confounded,
+// series is n trades alternating mean+spread / mean-spread (an even n has the
+// exact mean and a sample standard deviation of about spread).
+func series(n int, mean, spread float64) []float64 {
+	xs := make([]float64, n)
+	for i := range xs {
+		xs[i] = mean + spread
+		if i%2 == 1 {
+			xs[i] = mean - spread
+		}
 	}
-	c.Diff = Diff{TotalPnlJPY: after.TotalPnlJPY - before.TotalPnlJPY, MaxDrawdownJPY: after.MaxDrawdownJPY - before.MaxDrawdownJPY}
+	return xs
+}
+
+// comparison builds what Compare would hold for the two per-trade series with
+// the given maximum drawdowns, at the floor minimum.
+func comparison(status string, confounded bool, before, after []float64, ddBefore, ddAfter float64) Comparison {
+	c := Comparison{
+		Experiment: Experiment{Status: status}, MinTrades: MinTradesFloor, Confounded: confounded,
+		Before:      Period{Performance: perf(len(before), 0, ddBefore)},
+		After:       Period{Performance: perf(len(after), 0, ddAfter)},
+		PerTradePnl: Welch(before, after),
+	}
+	c.Diff = Diff{MaxDrawdownJPY: ddAfter - ddBefore}
 	return c
 }
 
-// The verdict looks at net pnl and maximum drawdown only, and gives none
-// (insufficient_trades / confounded / aborted) unless both periods reached the
-// minimum number of trades and nothing else changed.
+// The verdict is the 95% interval of the per-trade mean pnl difference plus
+// the drawdown, and gives none (aborted / confounded / insufficient_trades /
+// not_computable) unless the order of the rules lets it get that far. Only an
+// interval wholly above 0 with the drawdown not worse is a win.
 func TestVerdict(t *testing.T) {
+	const n = MinTradesFloor
+	base := series(n, 100, 500)
 	tests := []struct {
 		name string
 		c    Comparison
 		want string
 	}{
-		// 最低件数前は判定なし: either side below the minimum, however good the pnl.
-		{"after below the minimum", comparison(StatusClosed, false, perf(10, 0, 100), perf(9, 9999, 0)), VerdictInsufficientTrades},
-		{"before below the minimum", comparison(StatusClosed, false, perf(9, 0, 100), perf(10, 9999, 0)), VerdictInsufficientTrades},
-		{"no trades at all", comparison(StatusRunning, false, perf(0, 0, 0), perf(0, 0, 0)), VerdictInsufficientTrades},
-		{"confounded beats everything", comparison(StatusClosed, true, perf(10, 0, 100), perf(10, 9999, 0)), VerdictConfounded},
-		{"aborted is never judged", comparison(StatusAborted, false, perf(10, 0, 100), perf(10, 9999, 0)), VerdictAborted},
-		{"higher pnl, no more drawdown", comparison(StatusClosed, false, perf(10, 100, 50), perf(10, 200, 50)), VerdictImproved},
-		{"higher pnl, less drawdown", comparison(StatusClosed, false, perf(10, 100, 50), perf(10, 200, 20)), VerdictImproved},
-		{"lower pnl, no less drawdown", comparison(StatusClosed, false, perf(10, 100, 50), perf(10, 50, 50)), VerdictWorsened},
-		{"lower pnl, more drawdown", comparison(StatusClosed, false, perf(10, 100, 50), perf(10, -50, 80)), VerdictWorsened},
-		{"higher pnl but more drawdown", comparison(StatusClosed, false, perf(10, 100, 50), perf(10, 200, 80)), VerdictMixed},
-		{"lower pnl but less drawdown", comparison(StatusClosed, false, perf(10, 100, 50), perf(10, 50, 20)), VerdictMixed},
-		{"nothing moved", comparison(StatusClosed, false, perf(10, 100, 50), perf(10, 100, 50)), VerdictMixed},
+		// 判定の順: 中止 → 交絡 → 件数不足 → 勝ち負け.
+		{"aborted beats everything", comparison(StatusAborted, true, series(10, 0, 1), series(10, 9999, 1), 100, 0), VerdictAborted},
+		{"confounded beats thin periods", comparison(StatusClosed, true, series(10, 0, 1), series(10, 9999, 1), 100, 0), VerdictConfounded},
+		{"confounded beats a clear win", comparison(StatusClosed, true, base, series(n, 700, 500), 100, 0), VerdictConfounded},
+		{"after below the minimum (63)", comparison(StatusClosed, false, base, series(n-1, 9999, 1), 100, 0), VerdictInsufficientTrades},
+		{"before below the minimum (63)", comparison(StatusClosed, false, series(n-1, 0, 1), series(n, 9999, 1), 100, 0), VerdictInsufficientTrades},
+		{"no trades at all", comparison(StatusRunning, false, nil, nil, 0, 0), VerdictInsufficientTrades},
+		{"enough trades but every pnl identical", comparison(StatusClosed, false, series(n, 100, 0), series(n, 200, 0), 50, 50), VerdictNotComputable},
+		// 勝ち負け.
+		{"interval above 0, drawdown equal: win", comparison(StatusClosed, false, base, series(n, 700, 500), 50, 50), VerdictImproved},
+		{"interval above 0, drawdown smaller: win", comparison(StatusClosed, false, base, series(n, 700, 500), 50, 20), VerdictImproved},
+		{"interval above 0 but drawdown worse: not a win", comparison(StatusClosed, false, base, series(n, 700, 500), 50, 80), VerdictMixed},
+		{"interval crosses 0 (mean up a little): not a win", comparison(StatusClosed, false, base, series(n, 160, 500), 50, 20), VerdictInconclusive},
+		{"interval crosses 0 (mean down a little)", comparison(StatusClosed, false, base, series(n, 40, 500), 50, 50), VerdictInconclusive},
+		{"no change at all", comparison(StatusClosed, false, base, base, 50, 50), VerdictInconclusive},
+		{"interval below 0, drawdown smaller", comparison(StatusClosed, false, series(n, 700, 500), base, 50, 20), VerdictWorsened},
+		{"interval below 0, drawdown worse", comparison(StatusClosed, false, series(n, 700, 500), base, 50, 80), VerdictWorsened},
 	}
 	for _, tt := range tests {
 		if got := verdict(tt.c); got != tt.want {
-			t.Errorf("%s: verdict = %s, want %s", tt.name, got, tt.want)
+			t.Errorf("%s: verdict = %s, want %s (interval %v..%v)", tt.name, got, tt.want, ptr(tt.c.PerTradePnl.CILow), ptr(tt.c.PerTradePnl.CIHigh))
 		}
 	}
 }
 
+func ptr(p *float64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
 // The win rate and the other reference figures never decide.
 func TestVerdictIgnoresTheWinRate(t *testing.T) {
-	worse := perf(10, 100, 50)
-	better := perf(10, 200, 50)
+	n := MinTradesFloor
+	c := comparison(StatusClosed, false, series(n, 100, 500), series(n, 700, 500), 50, 50)
 	rate := 0.1
-	better.WinRate = &rate
-	if got := verdict(comparison(StatusClosed, false, worse, better)); got != VerdictImproved {
+	c.After.Performance.WinRate = &rate
+	if got := verdict(c); got != VerdictImproved {
 		t.Errorf("verdict = %s, want improved despite a lower win rate", got)
+	}
+}
+
+// The total pnl and the drawdown are no longer the rule: a higher total with
+// the same per-trade mean (more trades) is not a win by itself.
+func TestVerdictDoesNotFollowTheTotal(t *testing.T) {
+	n := MinTradesFloor
+	c := comparison(StatusClosed, false, series(n, 100, 500), series(n, 100, 500), 50, 50)
+	c.After.Performance.TotalPnlJPY, c.Diff.TotalPnlJPY = 1e6, 1e6
+	if got := verdict(c); got != VerdictInconclusive {
+		t.Errorf("verdict = %s, want inconclusive: the mean per trade did not move", got)
 	}
 }
 

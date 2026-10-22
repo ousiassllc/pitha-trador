@@ -14,55 +14,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
 
-// DefaultMinTrades is how many closed Paper trades EACH of the two periods
-// needs before an experiment is judged. Fewer is verdict insufficient_trades:
-// the figures are still returned, the win / lose call is not.
-//
-// PROVISIONAL PROPOSAL, NOT APPROVED by あいり (issue #871: the implementer
-// proposes, あいり approves, and only then is the value final). It is kept in
-// this one place; experiments_list / experiment_compare accept min_trades to
-// override it per call.
-//
-// Basis (docs/architecture/paper-results-mcp-experiments.md §5): the two-sample
-// comparison of the mean net pnl per trade, two-sided alpha 0.05, power 0.8,
-// to detect a difference of half a standard deviation of the per-trade pnl
-// (d = 0.5): n = 2 * (1.96 + 0.84)^2 / d^2 = 62.8 -> 63 per period, +1 for the
-// t distribution = 64. The real per-trade standard deviation is NOT measured
-// yet (no Paper database was available): it must be checked against the
-// production database before approval.
-const DefaultMinTrades = 64
-
-// MaxMinTrades is the largest min_trades a caller may ask for.
-const MaxMinTrades = 10000
-
-// Where the min_trades of a response came from.
-const (
-	// MinTradesProvisional: DefaultMinTrades, which is not approved yet.
-	MinTradesProvisional = "default_provisional_unapproved"
-	// MinTradesArgument: the caller's own min_trades.
-	MinTradesArgument = "argument"
-)
-
-// Verdicts. Judged ones (improved, worsened, mixed) compare only the net pnl
-// (after trading costs) and the maximum drawdown; the win rate and the rest
-// are shown for reference and never decide.
-const (
-	// VerdictInsufficientTrades: a period has fewer than min_trades closed trades.
-	VerdictInsufficientTrades = "insufficient_trades"
-	// VerdictConfounded: something other than the variable changed during the
-	// experiment (Confounders lists it), so the comparison says nothing.
-	VerdictConfounded = "confounded"
-	// VerdictAborted: the experiment was given up; it is not judged.
-	VerdictAborted = "aborted"
-	// VerdictImproved: the net pnl is higher and the drawdown no larger.
-	VerdictImproved = "improved"
-	// VerdictWorsened: the net pnl is lower and the drawdown no smaller.
-	VerdictWorsened = "worsened"
-	// VerdictMixed: the net pnl and the drawdown do not point the same way
-	// (or are equal), so there is no clear win or loss.
-	VerdictMixed = "mixed"
-)
-
 // Period is one side of the comparison: the same metrics as
 // paper_performance_summary and risk_rejections give for [From, To).
 type Period struct {
@@ -96,40 +47,51 @@ type Confounder struct {
 // Comparison is experiment_compare's data.
 type Comparison struct {
 	Experiment Experiment `json:"experiment"`
-	// MinTrades is the closed-trade count each period needs; MinTradesSource
-	// says whether it is the unapproved default or the caller's value.
-	MinTrades       int          `json:"min_trades"`
-	MinTradesSource string       `json:"min_trades_source"`
-	Before          Period       `json:"before"`
-	After           Period       `json:"after"`
-	Diff            Diff         `json:"diff"`
-	Confounded      bool         `json:"confounded"`
-	Confounders     []Confounder `json:"confounders"`
-	Verdict         string       `json:"verdict"`
-	// Judged is true when Verdict is a win / lose call (improved, worsened,
-	// mixed) and false when none is given (insufficient_trades, confounded,
-	// aborted).
+	// MinTrades is the closed-trade count each period needs (never below
+	// MinTradesFloor); MinTradesSource says whether it is the unapproved floor
+	// or a value the caller raised.
+	MinTrades       int    `json:"min_trades"`
+	MinTradesSource string `json:"min_trades_source"`
+	Before          Period `json:"before"`
+	After           Period `json:"after"`
+	Diff            Diff   `json:"diff"`
+	// PerTradePnl is the test the verdict rests on (welch.go): the n, mean and
+	// standard deviation of the net pnl per trade of each period, the
+	// difference of the means, its 95% interval, t and the degrees of freedom.
+	PerTradePnl Test         `json:"per_trade_pnl"`
+	Confounded  bool         `json:"confounded"`
+	Confounders []Confounder `json:"confounders"`
+	Verdict     string       `json:"verdict"`
+	// Judged is true when the test gave an answer (improved, worsened, mixed,
+	// inconclusive) and false when judgement is withheld (insufficient_trades,
+	// not_computable, confounded, aborted).
 	Judged bool `json:"judged"`
 }
 
 // Compare compares experiment exp: the positions closed from its start to its
 // end (to now while it runs) against the same length of time just before the
 // start. capitalJPY is the Paper capital (see query.PerformanceSummary); a
-// minTrades of 0 means DefaultMinTrades. withRejections adds each period's
-// risk_rejections.
+// minTrades of 0 means MinTradesFloor, one below it is ErrMinTradesBelowFloor.
+// withRejections adds each period's risk_rejections.
 func Compare(ctx context.Context, q query.Q, exp Experiment, now time.Time, minTrades int, capitalJPY float64, withRejections bool) (Comparison, error) {
-	c := Comparison{Experiment: exp, MinTrades: minTrades, MinTradesSource: MinTradesArgument, Confounders: []Confounder{}}
-	if c.MinTrades == 0 {
-		c.MinTrades, c.MinTradesSource = DefaultMinTrades, MinTradesProvisional
+	if minTrades != 0 {
+		if err := CheckMinTrades(minTrades); err != nil {
+			return Comparison{}, err
+		}
+	}
+	c := Comparison{Experiment: exp, MinTrades: minTrades, MinTradesSource: MinTradesSourceRaised, Confounders: []Confounder{}}
+	if c.MinTrades <= MinTradesFloor {
+		c.MinTrades, c.MinTradesSource = MinTradesFloor, MinTradesSourceFloor
 	}
 	start, end := exp.window(now)
 	before := query.Range{From: start.Add(-end.Sub(start)), To: start}
 	after := query.Range{From: start, To: end}
+	var beforePnls, afterPnls []float64
 	var err error
-	if c.Before, err = period(ctx, q, before, capitalJPY, withRejections); err != nil {
+	if c.Before, beforePnls, err = period(ctx, q, before, capitalJPY, withRejections); err != nil {
 		return Comparison{}, err
 	}
-	if c.After, err = period(ctx, q, after, capitalJPY, withRejections); err != nil {
+	if c.After, afterPnls, err = period(ctx, q, after, capitalJPY, withRejections); err != nil {
 		return Comparison{}, err
 	}
 	if c.Confounders, err = confounders(ctx, q, exp, after); err != nil {
@@ -140,44 +102,32 @@ func Compare(ctx context.Context, q query.Q, exp Experiment, now time.Time, minT
 		TotalPnlJPY:    c.After.Performance.TotalPnlJPY - c.Before.Performance.TotalPnlJPY,
 		MaxDrawdownJPY: c.After.Performance.MaxDrawdownJPY - c.Before.Performance.MaxDrawdownJPY,
 	}
+	c.PerTradePnl = Welch(beforePnls, afterPnls)
 	c.Verdict = verdict(c)
-	c.Judged = c.Verdict == VerdictImproved || c.Verdict == VerdictWorsened || c.Verdict == VerdictMixed
+	switch c.Verdict {
+	case VerdictImproved, VerdictWorsened, VerdictMixed, VerdictInconclusive:
+		c.Judged = true
+	}
 	return c, nil
 }
 
-func period(ctx context.Context, q query.Q, r query.Range, capitalJPY float64, withRejections bool) (Period, error) {
+// period reads one side: its Performance (paper_performance_summary's own
+// calculation) and the net pnl of each of the very trades it counted.
+func period(ctx context.Context, q query.Q, r query.Range, capitalJPY float64, withRejections bool) (Period, []float64, error) {
 	p := Period{From: r.From.UTC().Format(time.RFC3339), To: r.To.UTC().Format(time.RFC3339)}
-	perf, _, err := query.PerformanceSummary(ctx, q, r, capitalJPY)
+	perf, pnls, err := query.PerformanceSummary(ctx, q, r, capitalJPY)
 	if err != nil {
-		return Period{}, err
+		return Period{}, nil, err
 	}
 	p.Performance = perf
 	if withRejections {
 		rr, err := query.Rejections(ctx, q, r)
 		if err != nil {
-			return Period{}, err
+			return Period{}, nil, err
 		}
 		p.RiskRejections = &rr
 	}
-	return p, nil
-}
-
-// verdict applies the rules in order: aborted and confounded experiments and
-// thin periods are not judged; otherwise only net pnl and drawdown decide.
-func verdict(c Comparison) string {
-	switch {
-	case c.Experiment.Status == StatusAborted:
-		return VerdictAborted
-	case c.Confounded:
-		return VerdictConfounded
-	case c.Before.Performance.ClosedTradeCount < c.MinTrades || c.After.Performance.ClosedTradeCount < c.MinTrades:
-		return VerdictInsufficientTrades
-	case c.Diff.TotalPnlJPY > 0 && c.Diff.MaxDrawdownJPY <= 0:
-		return VerdictImproved
-	case c.Diff.TotalPnlJPY < 0 && c.Diff.MaxDrawdownJPY >= 0:
-		return VerdictWorsened
-	}
-	return VerdictMixed
+	return p, pnls, nil
 }
 
 // confounders lists what changed during the experiment (the period r, the

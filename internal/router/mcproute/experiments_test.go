@@ -75,7 +75,8 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 	body = rec.Body.String()
 	for _, want := range []string{
 		"実験 1 の前後比較", "1 回の最大損失を 1% から 0.5% に下げる", `data-verdict="insufficient_trades"`, "判定なし（取引件数が足りない）",
-		"暫定の案で、まだ承認されていません", "純損益（コスト控除後）", "平均の勝ち", "平均の負け", "最大ドローダウン", "拒否の種類",
+		"暫定の案で、まだ承認されていません", "純損益（コスト控除後）", "1 取引あたりの純損益（判定の基準）", "95% 信頼区間", "Welch の t 検定",
+		"これより下げることはできません", "平均の勝ち", "平均の負け", "最大ドローダウン", "拒否の種類",
 	} {
 		if rec.Code != http.StatusOK || !strings.Contains(body, want) {
 			t.Fatalf("comparison lacks %q (%d): %s", want, rec.Code, body)

@@ -14,12 +14,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/db"
 )
 
-// Migration 000047 (issue #871) adds tuning_experiments: one row per tuning
+// Migration 000046 (issue #871) adds tuning_experiments: one row per tuning
 // experiment, with ONE changed variable. The CHECKs hold the shape: a known
 // kind / status / actor, a non-empty hypothesis, two different values, and an
 // end time exactly when the experiment is no longer running. The down
 // migration drops the table.
-func TestMigration000047_TuningExperiments(t *testing.T) {
+func TestMigration000046_TuningExperiments(t *testing.T) {
 	conn, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "m.db")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -37,8 +37,16 @@ func TestMigration000047_TuningExperiments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if err := m.Migrate(47); err != nil {
-		t.Fatalf("migrate to 47: %v", err)
+	// 000044 and 000045 belong to other branches: go up to 43, then to 46
+	// whether or not they are there yet.
+	if err := m.Migrate(43); err != nil {
+		t.Fatalf("migrate to 43: %v", err)
+	}
+	if _, err := conn.Exec(`SELECT 1 FROM tuning_experiments`); err == nil {
+		t.Fatal("tuning_experiments exists before migration 000046")
+	}
+	if err := m.Migrate(46); err != nil {
+		t.Fatalf("migrate to 46: %v", err)
 	}
 
 	const insert = `INSERT INTO tuning_experiments (created_at, actor, client, hypothesis, variable_kind, variable_name,

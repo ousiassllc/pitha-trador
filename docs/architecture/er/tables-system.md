@@ -179,7 +179,7 @@ erDiagram
 
 ## tuning_experiments（調整の実験の記録、issue #871）
 
-調整（設定・Jev のモデル・Jev のプロンプトの版の変更）を 1 つずつ「実験」として残す（マイグレーション`000047`、`docs/architecture/paper-results-mcp-experiments.md`）。**1 実験 1 行・変えるのは変数 1 つだけ**（2 つ以上を同時に変える実験は`experiment_create`と Settings 画面が作成時に弾く。表は 1 行に 1 変数しか持てない形）。前後の成績・拒否理由・交絡は表に持たず、`experiment_compare`が`positions`・`trade_signals`・`mcp_settings_audit`・`jev_decisions`から毎回計算する。書くのは MCP の`experiment_create`（`INSERT`）と`experiment_close`（`UPDATE`。`status`と`ended_at`だけ）と、Settings 画面の同じ操作だけ。
+調整（設定・Jev のモデル・Jev のプロンプトの版の変更）を 1 つずつ「実験」として残す（マイグレーション`000046`、`docs/architecture/paper-results-mcp-experiments.md`）。**1 実験 1 行・変えるのは変数 1 つだけ**（2 つ以上を同時に変える実験は`experiment_create`と Settings 画面が作成時に弾く。表は 1 行に 1 変数しか持てない形）。前後の成績・拒否理由・交絡は表に持たず、`experiment_compare`が`positions`・`trade_signals`・`mcp_settings_audit`・`jev_decisions`から毎回計算する。書くのは MCP の`experiment_create`（`INSERT`）と`experiment_close`（`UPDATE`。`status`と`ended_at`だけ）と、Settings 画面の同じ操作だけ。
 
 ```mermaid
 erDiagram

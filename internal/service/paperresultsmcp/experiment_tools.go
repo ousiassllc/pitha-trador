@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
@@ -153,8 +154,9 @@ var experimentTools = []tool{
 	{
 		name: "experiments_list",
 		description: "調整の実験の一覧（新しい順）。状態・期間・変えた変数・前後の取引件数・判定の可否（verdict / judged）つき。" +
-			"判定は純損益（コスト控除後）と最大ドローダウンだけで決め、前後どちらかの取引件数が min_trades に届かないと insufficient_trades、実験中に対象以外が変わると confounded（判定なし）。" +
-			"min_trades の既定は暫定の案でまだ承認されていない（応答の min_trades_source）。読み取り専用",
+			"判定は 1 取引あたりの純損益（コスト控除後）の平均を前後で Welch の t 検定で比べ、差（後−前）の 95% 信頼区間と最大ドローダウンで決める（勝ち＝improved は、区間の下限が 0 より上かつドローダウンが前以下のときだけ）。" +
+			"前後どちらかの取引件数が min_trades に届かないと insufficient_trades、実験中に対象以外が変わると confounded（どちらも判定なし）。" +
+			"min_trades は下限 64（暫定の案でまだ承認されていない。応答の min_trades_source）。上げるのは可、下げるのは不可（下限未満は invalid_value で拒否）。読み取り専用",
 		schema: objectSchema(map[string]any{
 			"status":     map[string]any{"type": "string", "enum": []string{experiment.StatusRunning, experiment.StatusClosed, experiment.StatusAborted}, "description": "状態で絞り込む"},
 			"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": maxExperimentList, "default": defaultExperimentList},
@@ -204,8 +206,12 @@ var experimentTools = []tool{
 		description: "実験 1 つの前後比較。後 = 実験の開始から終了まで（実行中は今まで）、前 = 開始の直前の同じ長さ。" +
 			"前後それぞれについて、paper_performance_summary と同じ指標（取引件数・純損益（コスト控除後）・勝率・平均の勝ち（avg_win_jpy）・平均の負け（avg_loss_jpy）・最大ドローダウン）と、" +
 			"risk_rejections と同じ拒否理由の内訳を返す（クローズ時刻で数える。期間が JST の日の境界なら同じ期間の両ツールの応答と一致する）。" +
-			"verdict は insufficient_trades（前後どちらかが min_trades 未満。数値は返すが勝ち負けの判定はしない）/ confounded（実験中に対象以外のホワイトリスト設定・Jev のモデル・プロンプトの版が変わった。confounders に列挙）/ " +
-			"aborted（中止）/ improved / worsened / mixed（純損益とドローダウンだけで判定）。読み取り専用",
+			"per_trade_pnl は 1 取引あたりの純損益（paper_performance_summary と同じ取引集合）の前後の n・平均・標準偏差と、平均の差 diff（後−前）・その 95% 信頼区間（ci_low / ci_high / ci_level）・Welch の t 値と自由度（t / df）。計算できない値は null。" +
+			"verdict は aborted（中止）/ confounded（実験中に対象以外のホワイトリスト設定・Jev のモデル・プロンプトの版が変わった。confounders に列挙）/ " +
+			"insufficient_trades（前後どちらかが min_trades 未満。数値は返すが判定しない）/ not_computable（件数は足りるが全取引が同一損益で区間が出ない。判定しない）/ " +
+			"improved（区間の下限が 0 より上、かつ最大ドローダウンが前以下。唯一の勝ち）/ mixed（区間の下限は 0 より上だがドローダウンが悪化。勝ちとは言わない）/ " +
+			"worsened（区間の上限が 0 より下）/ inconclusive（区間が 0 をまたぐ。差があるとも無いとも言えない）。judged は最後の 4 つのとき true。" +
+			"min_trades は下限 64 で上げるのみ可。取引は同日・同相場に偏りうるので区間は楽観的になりうる。前後は別期間で、因果の証明にはならない。読み取り専用",
 		schema: objectSchema(map[string]any{
 			"experiment_id": map[string]any{"type": "integer", "minimum": 1},
 			"min_trades":    minTradesProp(),
@@ -245,18 +251,21 @@ var experimentTools = []tool{
 
 func minTradesProp() map[string]any {
 	return map[string]any{
-		"type": "integer", "minimum": 1, "maximum": experiment.MaxMinTrades,
-		"description": "判定に要る前後それぞれの取引件数。省略は暫定の既定（承認前）",
+		"type": "integer",
+		"description": "判定に要る前後それぞれの取引件数。下限は " + strconv.Itoa(experiment.MinTradesFloor) + "（暫定・承認前）で、上げるのは可、下げるのは不可。" +
+			"下限未満や " + strconv.Itoa(experiment.MaxMinTrades) + " 超は invalid_value。省略は下限",
 	}
 }
 
-// resolveMinTrades validates min_trades; nil is the default (0).
+// resolveMinTrades validates min_trades; nil is "not given" (0). One below the
+// floor is refused with invalid_value and the reason, never raised to the
+// floor behind the caller's back.
 func resolveMinTrades(requested *int) (int, *toolError) {
 	if requested == nil {
 		return 0, nil
 	}
-	if *requested < 1 || *requested > experiment.MaxMinTrades {
-		return 0, fail(CodeInvalidArgument)
+	if err := experiment.CheckMinTrades(*requested); err != nil {
+		return 0, failDetail(CodeInvalidValue, err.Error())
 	}
 	return *requested, nil
 }

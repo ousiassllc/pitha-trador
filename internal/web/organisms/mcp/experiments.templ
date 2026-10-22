@@ -59,6 +59,7 @@ type ExperimentDetailProps struct {
 	Verdict       string
 	VerdictLabel  string
 	MinTradesNote string
+	TestNote      string
 	Metrics       []MetricRow
 	Confounders   []string
 	Rejects       []RejectRow
@@ -74,7 +75,7 @@ templ Experiments(props ExperimentsProps) {
 	<section class="flex flex-col gap-3 rounded-md border border-slate-200 p-3" data-testid="mcp-experiments">
 		<h4 class="font-semibold text-slate-900">調整の実験（前後比較）</h4>
 		<p class="text-xs text-slate-500">
-			調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は純損益と最大ドローダウンだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP の settings_set で行ってから記録します）。
+			調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP の settings_set で行ってから記録します）。
 		</p>
 		<p class="text-xs text-amber-700" data-testid="mcp-experiments-min-trades">{ props.MinTradesNote }</p>
 		if props.Notice != "" {
@@ -184,6 +185,7 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 		<span>前: { props.BeforePeriod }　後: { props.AfterPeriod }</span>
 		<span class="font-semibold" data-testid="mcp-experiment-detail-verdict">判定: { props.VerdictLabel }</span>
 		<span class="text-xs text-amber-700">{ props.MinTradesNote }</span>
+		<span class="text-xs text-slate-600" data-testid="mcp-experiment-test-note">{ props.TestNote }</span>
 		if len(props.Confounders) > 0 {
 			<ul class="list-disc pl-5 text-xs text-red-700" data-testid="mcp-experiment-confounders">
 				for _, c := range props.Confounders {

@@ -9,99 +9,8 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
-	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/testkit"
 )
-
-// create -> list -> compare: the experiment is recorded with its hypothesis and
-// one variable, shows in experiments_list with its trade counts, and
-// experiment_compare returns, for both periods, exactly what
-// paper_performance_summary and risk_rejections return for the same days.
-func TestCompareMatchesPerformanceSummaryAndRiskRejections(t *testing.T) {
-	srv, _ := newServer(t)
-	e := create(t, srv, createArgs("risk.paper.max_trade_loss_pct", nil))
-	if e.ID != 1 || e.Status != experiment.StatusRunning || e.Actor != experiment.ActorMCP || e.Variable.Kind != experiment.KindSetting ||
-		e.Variable.Name != "risk.paper.max_trade_loss_pct" || e.Variable.Before != "1" || e.Variable.After != "0.5" || e.EndedAt != nil {
-		t.Fatalf("created experiment = %+v", e)
-	}
-	closeAt(t, srv, e.ID, endedAt)
-
-	var list struct {
-		Experiments []experiment.Summary `json:"experiments"`
-	}
-	srv.call(t, "experiments_list", map[string]any{"min_trades": 2}).data(t, "experiments_list", &list)
-	if len(list.Experiments) != 1 {
-		t.Fatalf("experiments_list = %+v, want the one experiment", list)
-	}
-	row := list.Experiments[0]
-	if row.Experiment.ID != e.ID || row.Experiment.Status != experiment.StatusClosed || row.BeforeTrades != 2 || row.AfterTrades != 3 ||
-		row.Verdict != experiment.VerdictImproved || !row.Judged {
-		t.Errorf("list row = %+v, want closed, 2 trades before and 3 after, judged improved", row)
-	}
-
-	c := compare(t, srv, e.ID, map[string]any{"min_trades": 2})
-	var beforePerf, afterPerf query.Performance
-	srv.call(t, "paper_performance_summary", beforeDays).data(t, "paper_performance_summary", &beforePerf)
-	srv.call(t, "paper_performance_summary", afterDays).data(t, "paper_performance_summary", &afterPerf)
-	var beforeRisk, afterRisk query.RiskRejections
-	srv.call(t, "risk_rejections", beforeDays).data(t, "risk_rejections", &beforeRisk)
-	srv.call(t, "risk_rejections", afterDays).data(t, "risk_rejections", &afterRisk)
-
-	if !reflect.DeepEqual(c.Before.Performance, beforePerf) || !reflect.DeepEqual(c.After.Performance, afterPerf) {
-		t.Errorf("performance differs from paper_performance_summary:\n before %+v vs %+v\n after  %+v vs %+v", c.Before.Performance, beforePerf, c.After.Performance, afterPerf)
-	}
-	if !reflect.DeepEqual(c.Before.RiskRejections, &beforeRisk) || !reflect.DeepEqual(c.After.RiskRejections, &afterRisk) {
-		t.Errorf("risk rejections differ from risk_rejections:\n before %+v vs %+v\n after  %+v vs %+v", c.Before.RiskRejections, &beforeRisk, c.After.RiskRejections, &afterRisk)
-	}
-	// The seeded days, by hand: before = +1000 and -3000, after = +2000, 0 and -500.
-	if b, a := c.Before.Performance, c.After.Performance; b.ClosedTradeCount != 2 || b.TotalPnlJPY != -2000 || b.MaxDrawdownJPY != 3000 ||
-		a.ClosedTradeCount != 3 || a.TotalPnlJPY != 1500 || a.MaxDrawdownJPY != 500 {
-		t.Errorf("seeded figures: before %+v, after %+v", b, a)
-	}
-	if len(beforeRisk.OtherRejectBreakdown) == 0 || len(afterRisk.OtherRejectBreakdown) != 0 {
-		t.Errorf("reject breakdowns: before %v, after %v; the seeded signals all fall before the start", beforeRisk.OtherRejectBreakdown, afterRisk.OtherRejectBreakdown)
-	}
-	// Average win / loss are in both periods (positive win, negative loss).
-	if p := c.Before.Performance; p.AvgWinJPY == nil || *p.AvgWinJPY != 1000 || p.AvgLossJPY == nil || *p.AvgLossJPY != -3000 {
-		t.Errorf("before avg win / loss = %v / %v, want 1000 / -3000", p.AvgWinJPY, p.AvgLossJPY)
-	}
-	if c.Diff.TotalPnlJPY != 3500 || c.Diff.MaxDrawdownJPY != -2500 || c.Verdict != experiment.VerdictImproved || !c.Judged || c.Confounded {
-		t.Errorf("diff / verdict = %+v %s judged=%v confounded=%v", c.Diff, c.Verdict, c.Judged, c.Confounded)
-	}
-}
-
-// 最低件数前は判定なし: below min_trades the figures are returned and no
-// win / lose call is made; the default minimum is the unapproved proposal.
-func TestNoVerdictBeforeTheMinimumNumberOfTrades(t *testing.T) {
-	srv, _ := newServer(t)
-	e := create(t, srv, createArgs("risk.paper.max_trade_loss_pct", nil))
-	closeAt(t, srv, e.ID, endedAt)
-
-	c := compare(t, srv, e.ID, nil)
-	if c.MinTrades != experiment.DefaultMinTrades || c.MinTradesSource != experiment.MinTradesProvisional {
-		t.Errorf("default min_trades = %d (%s), want the provisional %d", c.MinTrades, c.MinTradesSource, experiment.DefaultMinTrades)
-	}
-	if c.Verdict != experiment.VerdictInsufficientTrades || c.Judged {
-		t.Errorf("verdict = %s judged=%v, want insufficient_trades and no judgement", c.Verdict, c.Judged)
-	}
-	if c.After.Performance.ClosedTradeCount != 3 || c.After.Performance.TotalPnlJPY != 1500 {
-		t.Errorf("the figures must still be returned: %+v", c.After.Performance)
-	}
-	// The after period has 3 trades and the before period 2: the smaller side decides.
-	for min, want := range map[int]string{
-		4: experiment.VerdictInsufficientTrades,
-		3: experiment.VerdictInsufficientTrades,
-		2: experiment.VerdictImproved,
-		1: experiment.VerdictImproved,
-	} {
-		if got := compare(t, srv, e.ID, map[string]any{"min_trades": min}); got.Verdict != want || got.MinTradesSource != experiment.MinTradesArgument {
-			t.Errorf("min_trades %d: verdict %s (%s), want %s", min, got.Verdict, got.MinTradesSource, want)
-		}
-	}
-	for _, bad := range []any{0, -1, experiment.MaxMinTrades + 1} {
-		srv.call(t, "experiment_compare", map[string]any{"experiment_id": e.ID, "min_trades": bad}).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidArgument)
-	}
-}
 
 // 変数 1 つの検査: a request naming two variables is refused and nothing is
 // stored; so are the other invalid requests.
@@ -205,7 +114,7 @@ func TestAbortedExperimentIsNotJudged(t *testing.T) {
 	srv, _ := newServer(t)
 	e := create(t, srv, createArgs("risk.paper.max_trade_loss_pct", nil))
 	srv.call(t, "experiment_close", map[string]any{"experiment_id": e.ID, "status": "aborted", "ended_at": endedAt}).data(t, "experiment_close", &experiment.Experiment{})
-	if c := compare(t, srv, e.ID, map[string]any{"min_trades": 1}); c.Verdict != experiment.VerdictAborted || c.Judged {
+	if c := compare(t, srv, e.ID, nil); c.Verdict != experiment.VerdictAborted || c.Judged {
 		t.Errorf("aborted: verdict %s judged=%v", c.Verdict, c.Judged)
 	}
 }
@@ -251,7 +160,7 @@ func TestExperimentReadsRunOnlyNamedColumnSelects(t *testing.T) {
 	closeAt(t, srv, e.ID, endedAt)
 
 	before := len(counter.StatementLog())
-	srv.call(t, "experiments_list", map[string]any{"min_trades": 1}).data(t, "experiments_list", &struct{}{})
+	srv.call(t, "experiments_list", nil).data(t, "experiments_list", &struct{}{})
 	srv.call(t, "experiment_compare", map[string]any{"experiment_id": e.ID}).data(t, "experiment_compare", &struct{}{})
 	stmts := counter.StatementLog()[before:]
 	if len(stmts) == 0 {

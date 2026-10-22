@@ -119,8 +119,8 @@ var tools = []tool{
 				if err != nil {
 					return nil, 0, err
 				}
-				p, n, err := query.PerformanceSummary(ctx, e.q, e.r, capital)
-				return p, n, err
+				p, pnls, err := query.PerformanceSummary(ctx, e.q, e.r, capital)
+				return p, len(pnls), err
 			}, nil
 		},
 	},

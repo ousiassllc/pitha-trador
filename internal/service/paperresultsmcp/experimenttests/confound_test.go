@@ -38,17 +38,17 @@ const (
 	afterTime  = "2026-10-04T10:00:00Z" // after endedAt
 )
 
-// confounders runs experiment_compare with a minimum small enough to judge and
-// returns the comparison.
+// confoundersOf runs experiment_compare and returns the comparison.
 func confoundersOf(t *testing.T, srv *testServer, id int64) experiment.Comparison {
 	t.Helper()
-	return compare(t, srv, id, map[string]any{"min_trades": 1})
+	return compare(t, srv, id, nil)
 }
 
 // 交絡の検出: while the experiment ran, a whitelisted setting other than the
 // target changed -> confounded, no verdict, the figures still there.
 func TestAnotherSettingChangingDuringTheExperimentConfounds(t *testing.T) {
 	srv, w := newServer(t)
+	plantImproved(t, w)
 	e := create(t, srv, createArgs("risk.paper.max_trade_loss_pct", nil))
 	closeAt(t, srv, e.ID, endedAt)
 	if c := confoundersOf(t, srv, e.ID); c.Confounded || c.Verdict != experiment.VerdictImproved {
@@ -73,14 +73,14 @@ func TestAnotherSettingChangingDuringTheExperimentConfounds(t *testing.T) {
 		c.Confounders[0].AuditID == nil || *c.Confounders[0].AuditID != id {
 		t.Errorf("confounders = %+v", c.Confounders)
 	}
-	if c.After.Performance.ClosedTradeCount != 3 {
+	if c.After.Performance.ClosedTradeCount == 0 {
 		t.Errorf("the figures must still be returned: %+v", c.After.Performance)
 	}
 
 	var list struct {
 		Experiments []experiment.Summary `json:"experiments"`
 	}
-	srv.call(t, "experiments_list", map[string]any{"min_trades": 1}).data(t, "experiments_list", &list)
+	srv.call(t, "experiments_list", nil).data(t, "experiments_list", &list)
 	if r := list.Experiments[0]; !r.Confounded || r.Judged || r.Verdict != experiment.VerdictConfounded {
 		t.Errorf("list row = %+v, want confounded and not judged", r)
 	}

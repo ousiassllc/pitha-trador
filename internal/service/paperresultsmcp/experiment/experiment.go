@@ -47,7 +47,7 @@ const (
 	ActorGUI = "gui"
 )
 
-// Limits of the text columns (the CHECKs of migration 000047).
+// Limits of the text columns (the CHECKs of migration 000046).
 const (
 	MaxHypothesisRunes = 500
 	MaxNameRunes       = 200
