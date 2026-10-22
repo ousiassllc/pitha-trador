@@ -7,10 +7,19 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/jobfailures"
+	"github.com/ousiassllc/pitha-trador/internal/service/retention"
 )
 
 // Queues are the job queues collection_status reports, in output order.
 var Queues = []string{"market-data", "feature-calc", "jev-scout", "jev-trader", "outcome-labeling", "analytics"}
+
+// retiredQueues are the queues no producer feeds any more, with why zero
+// counts are expected. feature-calc: marketdatajob.HandleMarketData computes
+// and persists the features itself and EnqueueFullScan no longer feeds it.
+var retiredQueues = map[string]string{
+	"feature-calc": "retired queue: market-data computes and persists features; nothing enqueues feature-calc, so 0 succeeded and 0 failed is expected, not a collection problem",
+}
 
 // JobStatus is one jobs[] element of collection_status (API spec §3.8).
 // payload_json is not selected, and last_error is read only in JobFailures'
@@ -20,6 +29,10 @@ type JobStatus struct {
 	SucceededCount            int     `json:"succeeded_count"`
 	FailedCount               int     `json:"failed_count"`
 	LatestSucceededFinishedAt *string `json:"latest_succeeded_finished_at"`
+	// Retired marks a queue nothing feeds any more (zero counts are
+	// expected); RetiredNote says why, and is empty otherwise.
+	Retired     bool   `json:"retired"`
+	RetiredNote string `json:"retired_note"`
 }
 
 // Collection is collection_status' data.
@@ -29,9 +42,10 @@ type Collection struct {
 	Jobs                   []JobStatus `json:"jobs"`
 	DailyBarRunFailedCount int         `json:"daily_bar_run_failed_count"`
 	LabelSkipCount         int         `json:"label_skip_count"`
-	// JobFailures breaks the failed jobs of the period down by JST day, queue
-	// and error code and counts the terminal skips (issue #801).
-	JobFailures JobFailures `json:"job_failures"`
+	// JobFailures breaks the failed jobs down by JST day, queue and error code
+	// and counts the terminal skips (issue #801). It covers at most the last
+	// jobfailures.MaxDays days of the period (Window says which; issue #850).
+	JobFailures jobfailures.Result `json:"job_failures"`
 	// Alerts are the health alerts active now (issue #802): fixed codes
 	// (AlertKabuNotLoggedIn, AlertKabuUnreachable, AlertMarketDataIdle) with when they began.
 	// They describe the present, not the period.
@@ -62,6 +76,7 @@ func CollectionStatus(ctx context.Context, q Q, r Range, now time.Time) (Collect
 
 	for _, queue := range Queues {
 		j := JobStatus{Queue: queue}
+		j.RetiredNote, j.Retired = retiredQueues[queue]
 		var lastOK sql.NullString
 		err := q.QueryRowContext(ctx, `
 SELECT COALESCE(SUM(status = 'succeeded'), 0), COALESCE(SUM(status = 'failed'), 0)
@@ -92,7 +107,7 @@ SELECT COUNT(*) FROM calibration_label_skips WHERE created_at >= ? AND created_a
 	if err != nil {
 		return Collection{}, fmt.Errorf("query: label skips: %w", err)
 	}
-	if c.JobFailures, err = jobFailures(ctx, q, from, to); err != nil {
+	if c.JobFailures, err = jobfailures.Read(ctx, q, Queues, r.From, r.To); err != nil {
 		return Collection{}, err
 	}
 	if c.Alerts, err = HealthAlerts(ctx, q, now); err != nil {
@@ -122,4 +137,24 @@ func missingSessionDates(ctx context.Context, q Q, r Range) ([]string, error) {
 		missing = missing[:MaxRows]
 	}
 	return missing, nil
+}
+
+// RetentionNote documents the retention that bounds every job count of
+// collection_status (internal/service/retention): finished jobs older than
+// these windows are deleted, so a period reaching further back sees the
+// failures but not the successes.
+type RetentionNote struct {
+	SucceededJobDays int    `json:"succeeded_job_days"`
+	FailedJobDays    int    `json:"failed_job_days"`
+	Note             string `json:"note"`
+}
+
+// retentionNote returns the retention windows in force.
+func retentionNote() RetentionNote {
+	return RetentionNote{
+		SucceededJobDays: retention.DefaultSucceededJobDays,
+		FailedJobDays:    retention.DefaultFailedJobDays,
+		Note: "finished jobs are deleted after succeeded_job_days (succeeded) and failed_job_days (failed); " +
+			"a period reaching further back than that no longer sees those jobs, and succeeded counts disappear earlier than failed ones",
+	}
 }

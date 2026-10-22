@@ -57,6 +57,12 @@ var paperCapitalRead = "SELECT value FROM runtime_settings WHERE key = ?"
 // jobs.last_error: substr(last_error, 1, N).
 var boundedLastError = regexp.MustCompile(`substr\(last_error, 1, ([0-9]+)\)`)
 
+// instrumentOfPayload is the only form in which a statement may name
+// jobs.payload_json (session_diagnostics, issue #850): the fixed
+// instrument_id key of a valid-JSON payload, matched to market_snapshots
+// inside the statement and never returned.
+var instrumentOfPayload = regexp.MustCompile(`json_valid\(j\.payload_json\)|json_extract\(j\.payload_json, '\$\.instrument_id'\)`)
+
 func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 	path, w := testkit.NewMigratedDB(t)
 	testkit.SeedAll(t, w)
@@ -100,7 +106,7 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 			continue
 		}
 		// jobs.last_error is read only through a bounded head (issue #801):
-		// collection_status parses a fixed code token out of it in-process.
+		// collection_status reduces it to a fixed code token inside SQL.
 		// Any other mention of the column is still forbidden.
 		stmt = boundedLastError.ReplaceAllStringFunc(stmt, func(m string) string {
 			if n, _ := strconv.Atoi(boundedLastError.FindStringSubmatch(m)[1]); n > 256 {
@@ -108,6 +114,7 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 			}
 			return ""
 		})
+		stmt = instrumentOfPayload.ReplaceAllString(stmt, "")
 		stmt = strings.ReplaceAll(stmt, paperCapitalRead, "")
 		upper := strings.ToUpper(stmt)
 		if strings.Contains(upper, "SELECT *") || strings.Contains(upper, ".*") {

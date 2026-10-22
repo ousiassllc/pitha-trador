@@ -217,3 +217,9 @@ SELECT skipped_at, reason_code FROM metalabel_retrain_skips ORDER BY skipped_at 
 		ReasonCode:      &reason,
 	}, nil
 }
+
+// MarketDataState is the kabu login / market-data / app state at now, for
+// tools outside this package that report it next to their own data.
+func MarketDataState(ctx context.Context, q Q, now time.Time) (HealthMarketData, error) {
+	return healthMarketData(ctx, q, now)
+}

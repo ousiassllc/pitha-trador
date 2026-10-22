@@ -11,12 +11,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 )
 
-// periodTools are the tools taking the from/to period arguments; health_today
+// periodTools are the tools taking the from/to period arguments (eleven since
+// metalabel_training_readiness / jev_models, issues #848 / #849, and
+// session_diagnostics, issue #850); health_today
 // (issue #808) takes none, so it is called separately (healthToday).
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
-	"metalabel_training_readiness", "jev_models",
+	"metalabel_training_readiness", "jev_models", "session_diagnostics",
 }
 
 const healthToday = "health_today"
@@ -68,8 +70,8 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the eleven read tools, the six settings tools and
-// the six order-proposal tools (23 in all); only the six writing tools are not
+// tools/list returns exactly the twelve read tools, the six settings tools and
+// the six order-proposal tools (24 in all); only the six writing tools are not
 // marked read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
