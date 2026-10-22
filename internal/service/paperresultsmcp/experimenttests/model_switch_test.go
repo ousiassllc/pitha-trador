@@ -3,6 +3,7 @@ package experimenttests
 import (
 	"database/sql"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
@@ -49,6 +50,20 @@ func TestRecordedModelSwitchConfoundsBeforeAnyDecisionRan(t *testing.T) {
 		len(f.Values) != 2 || f.Values[0] != "model-a" || f.Values[1] != "model-b" {
 		t.Errorf("confounder = %+v, want the JEV_MODEL switch model-a -> model-b at 2026-10-02T10:00:00Z", f)
 	}
+	if f.Period != experiment.PeriodAfter {
+		t.Errorf("period = %q, want after (saved inside the experiment's period)", f.Period)
+	}
+}
+
+// issue #886: a switch saved in the before period confounds too, with the
+// period before; a recorded switch has a time, so it is never a boundary one.
+func TestRecordedModelSwitchInTheBeforePeriodConfounds(t *testing.T) {
+	srv, w, id := settingExperiment(t)
+	modelSwitchRow(t, w, midBefore, "model-a", "model-b")
+	f := wantConfounded(t, confoundersOf(t, srv, id), experiment.KindModel, experiment.ModelSwitchName, experiment.PeriodBefore)
+	if f.At != "2026-10-01T10:00:00Z" || len(f.Values) != 2 || f.Values[0] != "model-a" || f.Values[1] != "model-b" {
+		t.Errorf("confounder = %+v, want model-a -> model-b at 2026-10-01T10:00:00Z", f)
+	}
 }
 
 // A switch to or from "unset" (the default model) is shown as such.
@@ -76,13 +91,28 @@ func TestModelExperimentsOwnRecordedSwitchDoesNotConfound(t *testing.T) {
 	}
 
 	modelSwitchRow(t, w, inside, "model-b", "model-c")
-	if c := confoundersOf(t, srv, e.ID); !c.Confounded || c.Confounders[0].Name != experiment.ModelSwitchName {
+	if c := confoundersOf(t, srv, e.ID); !c.Confounded || c.Confounders[0].Name != experiment.ModelSwitchName || c.Confounders[0].Period != experiment.PeriodAfter {
 		t.Fatalf("a further switch did not confound: %+v", c.Confounders)
 	}
 }
 
-// The declared start of a model experiment may not precede the saved switch to
-// its After model; with no record (before the record began) it is believed.
+// The own switch is left out in the before period as well, because the change
+// is saved shortly before the start; any other switch there confounds.
+func TestModelExperimentsOtherSwitchInTheBeforePeriodConfounds(t *testing.T) {
+	srv, w := newServer(t)
+	modelSwitchRow(t, w, "2026-10-01T10:00:00Z", "model-a", "model-z")
+	modelSwitchRow(t, w, "2026-10-01T11:00:00Z", "model-z", "model-b") // own switch, before the start
+	e := create(t, srv, modelExperimentArgs("2026-10-01T12:00:00Z"))
+	closeAt(t, srv, e.ID, endedAt)
+	c := confoundersOf(t, srv, e.ID)
+	if len(c.Confounders) != 1 || c.Confounders[0].Period != experiment.PeriodBefore || c.Confounders[0].Values[1] != "model-z" {
+		t.Fatalf("confounders = %+v, want only the switch to model-z in the before period", c.Confounders)
+	}
+}
+
+// started_at of a model experiment is checked against the model in effect at
+// that time, read from the record: the latest switch at or before it, or the
+// before value of the oldest switch when there is none.
 func TestModelExperimentStartIsCheckedAgainstTheRecord(t *testing.T) {
 	srv, w := newServer(t)
 	if e := create(t, srv, modelExperimentArgs(startedAt)); e.ID == 0 {
@@ -90,7 +120,12 @@ func TestModelExperimentStartIsCheckedAgainstTheRecord(t *testing.T) {
 	}
 
 	modelSwitchRow(t, w, "2026-10-02T10:00:00Z", "model-a", "model-b")
-	srv.call(t, "experiment_create", modelExperimentArgs(startedAt)).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidArgument)
+	r := srv.call(t, "experiment_create", modelExperimentArgs(startedAt))
+	r.wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidArgument)
+	// The saved time is shown in JST (the Settings screen takes JST).
+	if !strings.Contains(string(r.body), "2026-10-02 19:00:00（JST）") || !strings.Contains(string(r.body), "model-a") {
+		t.Errorf("message = %s, want the model in use (model-a) and the switch time in JST", r.body)
+	}
 	if n := count(t, w, `SELECT COUNT(*) FROM tuning_experiments`); n != 1 {
 		t.Errorf("experiments = %d after the refused start, want 1", n)
 	}
@@ -102,5 +137,49 @@ func TestModelExperimentStartIsCheckedAgainstTheRecord(t *testing.T) {
 	modelSwitchRow(t, w, "2026-10-02T12:00:00Z", "model-b", "model-c")
 	if e := create(t, srv, modelExperimentArgs("2026-10-02T11:00:00Z")); e.ID == 0 {
 		t.Fatal("a switch to another model refused the start")
+	}
+}
+
+// model-b was in use, then model-c, then model-b again (t1, t2, t3). A start
+// while b was in use is right wherever the latest switch to b falls; a start
+// while c was in use is not, and neither is one before b first came in.
+func TestModelExperimentStartWhenTheAfterModelCameBackLater(t *testing.T) {
+	srv, w := newServer(t)
+	modelSwitchRow(t, w, "2026-09-30T10:00:00Z", "model-a", "model-b") // t1
+	modelSwitchRow(t, w, "2026-10-01T10:00:00Z", "model-b", "model-c") // t2
+	modelSwitchRow(t, w, "2026-10-02T10:00:00Z", "model-c", "model-b") // t3
+
+	for _, started := range []string{"2026-09-30T10:00:00Z", "2026-10-01T09:59:59Z", "2026-10-02T10:00:00Z", "2026-10-02T11:00:00Z"} {
+		if e := create(t, srv, modelExperimentArgs(started)); e.ID == 0 {
+			t.Errorf("a start at %s, while model-b was in use, was refused", started)
+		}
+	}
+	for _, started := range []string{"2026-09-30T09:59:59Z", "2026-10-01T10:00:00Z", "2026-10-02T09:59:59Z"} {
+		srv.call(t, "experiment_create", modelExperimentArgs(started)).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidArgument)
+	}
+}
+
+// The model in use before the record began is the oldest switch's before value:
+// an experiment on that model may start before the record.
+func TestModelExperimentStartBeforeTheRecordWithTheModelAlreadyInUse(t *testing.T) {
+	srv, w := newServer(t)
+	modelSwitchRow(t, w, "2026-10-02T10:00:00Z", "model-b", "model-c")
+	if e := create(t, srv, modelExperimentArgs("2026-10-01T00:00:00Z")); e.ID == 0 {
+		t.Fatal("model-b was in use before the record began, but the start was refused")
+	}
+}
+
+// An unset model (the default one) is not known by name, so it cannot show the
+// After model was not in use.
+func TestModelExperimentStartWithAnUnsetModelInEffectIsBelieved(t *testing.T) {
+	srv, w := newServer(t)
+	modelSwitchRow(t, w, "2026-10-02T10:00:00Z", nil, "model-b")
+	if e := create(t, srv, modelExperimentArgs("2026-10-01T00:00:00Z")); e.ID == 0 {
+		t.Fatal("the default model was in use at the start, but the start was refused")
+	}
+	modelSwitchRow(t, w, "2026-10-03T10:00:00Z", "model-b", nil)
+	modelSwitchRow(t, w, "2026-10-04T10:00:00Z", nil, "model-b")
+	if e := create(t, srv, modelExperimentArgs("2026-10-03T11:00:00Z")); e.ID == 0 {
+		t.Fatal("the model was unset at the start, but the start was refused")
 	}
 }
