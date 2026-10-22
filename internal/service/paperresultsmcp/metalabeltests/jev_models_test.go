@@ -158,7 +158,7 @@ func TestJevModelsAgreesWithTheTrainersCutoffGate(t *testing.T) {
 		{"jev-1.13", "mismatch", true},
 	} {
 		path, w := readinessDB(t)
-		history(t, w, now, 220, 130) // every row answered by jev-1.13.0
+		learnableHistory(t, w, now) // every row answered by jev-1.13.0
 		testkit.Setting(t, w, metalabelsettings.KeyLLMCutoffModel, `"`+c.cutoffModel+`"`)
 		testkit.Setting(t, w, metalabelsettings.KeyLLMCutoffConfirmedOn, `"2026-10-01"`)
 		testkit.Setting(t, w, metalabelsettings.KeyLLMCutoffSource, `"vendor page"`)

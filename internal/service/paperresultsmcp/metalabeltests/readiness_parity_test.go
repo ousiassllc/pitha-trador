@@ -131,16 +131,50 @@ func callReadiness(t *testing.T, srv *testServer, args map[string]any) readiness
 	return d
 }
 
-// history seeds old rows (before the 7-day OOS window) and recent rows (inside
-// it), all complete and labeled.
+// Fixture sizes come from the retraining's own configuration, never typed as
+// numbers: a change of DefaultWalkForwardConfig / DefaultAcceptanceConfig moves
+// the fixtures with it.
+
+// fitAndCalibration is the rows fit and calibration need together.
+func fitAndCalibration() int {
+	walk := training.DefaultWalkForwardConfig()
+	return walk.MinFit + walk.MinCalibration
+}
+
+// oosBarRows is the OOS rows the acceptance bar asks for, which is also how
+// many rows the OOS window reaches back to hold.
+func oosBarRows() int { return training.DefaultAcceptanceConfig().MinOOSSamples }
+
+// oldRowsAge is how far before now the old rows end: farther back than any OOS
+// window the retraining uses (7 days before issue #862, up to 21 days after),
+// so they are always the fit/calibration side whatever the window is. The
+// walk-forward configuration's window fields differ between those two states,
+// so this one age is the fixture's only duration that is not read from it.
+const oldRowsAge = 25 * 24 * time.Hour
+
+// history seeds old rows and recent rows, all complete and labeled, one every
+// 20 minutes. The old rows end oldRowsAge before now (the fit/calibration
+// side); the recent rows, the last one 30 minutes before now, are the OOS side.
 func history(t *testing.T, w *sql.DB, now time.Time, old, recent int) {
 	t.Helper()
-	for _, d := range learnable(old, 1, now.AddDate(0, 0, -12), "jev-1.13.0") {
+	for _, d := range learnable(old, 1, now.Add(-oldRowsAge), "jev-1.13.0") {
 		insertDecision(t, w, d)
 	}
 	for _, d := range learnable(recent, 10_000, now.Add(-30*time.Minute), "jev-1.13.0") {
 		insertDecision(t, w, d)
 	}
+}
+
+// learnableHistory is enough history for the retraining to learn a model: twice
+// the fit and calibration rows, and OOS rows that meet the bar's row count over
+// at least the bar's trading days.
+func learnableHistory(t *testing.T, w *sql.DB, now time.Time) {
+	t.Helper()
+	bar := training.DefaultAcceptanceConfig()
+	if days := time.Duration(oosBarRows()) * 20 * time.Minute / (24 * time.Hour); int(days) < bar.MinOOSDays {
+		t.Fatalf("fixture: %d OOS rows every 20 minutes cover %d days, the bar needs %d", oosBarRows(), int(days), bar.MinOOSDays)
+	}
+	history(t, w, now, 2*fitAndCalibration(), oosBarRows())
 }
 
 // Too little history: the nightly retraining skips, and the tool reports the
@@ -149,7 +183,9 @@ func history(t *testing.T, w *sql.DB, now time.Time, old, recent int) {
 func TestReadinessMatchesTheNightlyRetrainingWhenItSkips(t *testing.T) {
 	now := testkit.FixedNow()
 	path, w := readinessDB(t)
-	history(t, w, now, 80, 50)
+	const recent = 50 // far below the OOS rows the bar asks for
+	old := fitAndCalibration() - 50
+	history(t, w, now, old, recent)
 
 	store := runNightly(t, w, now)
 	if store.model != nil || len(store.skips) != 1 {
@@ -170,12 +206,12 @@ func TestReadinessMatchesTheNightlyRetrainingWhenItSkips(t *testing.T) {
 	if d.Split.Train.FitRows != nil || d.Split.Train.CalibrationRows != nil {
 		t.Errorf("fit/calibration rows are null while the split fails, got %v / %v", d.Split.Train.FitRows, d.Split.Train.CalibrationRows)
 	}
-	if d.Split.OOS.Rows != 50 || d.Split.OOS.Ready {
-		t.Errorf("oos = %+v, want the 50 recent rows and not ready", d.Split.OOS)
+	if d.Split.OOS.Rows != recent || d.Split.OOS.Ready || d.Split.OOS.RequiredRows != oosBarRows() {
+		t.Errorf("oos = %+v, want the %d recent rows of %d and not ready", d.Split.OOS, recent, oosBarRows())
 	}
-	// The usable rows the skip names are exactly the 80 old rows (before the OOS window).
-	if skip.UsableRows != 80 {
-		t.Errorf("fixture drifted: Trainer usable rows = %d, want 80", skip.UsableRows)
+	// The usable rows the skip names are exactly the old rows (before the OOS window).
+	if skip.UsableRows != old {
+		t.Errorf("fixture drifted: Trainer usable rows = %d, want %d", skip.UsableRows, old)
 	}
 }
 
@@ -184,7 +220,7 @@ func TestReadinessMatchesTheNightlyRetrainingWhenItSkips(t *testing.T) {
 func TestReadinessMatchesTheNightlyRetrainingWhenItLearns(t *testing.T) {
 	now := testkit.FixedNow()
 	path, w := readinessDB(t)
-	history(t, w, now, 220, 130)
+	learnableHistory(t, w, now)
 
 	store := runNightly(t, w, now)
 	if store.model == nil {

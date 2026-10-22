@@ -76,10 +76,10 @@ func distinctJSTDays(rows []training.Row) int {
 	return len(days)
 }
 
-// lastRetrain reads the newest retrain skip and the newest stored model. The
+// ReadLastRetrain reads the newest retrain skip and the newest stored model. The
 // skip's dropped_incomplete is read only when the column exists (issue #862
 // adds it); a database without it reports null and DroppedNotInSchema.
-func lastRetrain(ctx context.Context, q query.Q) (LastRetrain, error) {
+func ReadLastRetrain(ctx context.Context, q query.Q) (LastRetrain, error) {
 	var hasDropped int
 	if err := q.QueryRowContext(ctx, `
 SELECT COUNT(*) FROM pragma_table_info('metalabel_retrain_skips') WHERE name = 'dropped_incomplete'`).Scan(&hasDropped); err != nil {

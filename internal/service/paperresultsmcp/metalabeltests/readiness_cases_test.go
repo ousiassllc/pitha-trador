@@ -108,9 +108,30 @@ func insertSkip(t *testing.T, w *sql.DB, at time.Time, usable int) {
 		VALUES (?, 'too_few_rows_before_oos', ?, 130, ?)`, testkit.StoredAt(t, at), usable, testkit.StoredAt(t, at))
 }
 
+// hasDroppedColumn reports whether this schema's metalabel_retrain_skips has
+// the dropped_incomplete column (added by the migration of issue #862, nullable:
+// NULL is "no value recorded"). The tests below follow the schema they are run
+// against and never add or drop the column themselves.
+func hasDroppedColumn(t *testing.T, w *sql.DB) bool {
+	t.Helper()
+	var n int
+	if err := w.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('metalabel_retrain_skips') WHERE name = 'dropped_incomplete'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n > 0
+}
+
+func insertSkipDropped(t *testing.T, w *sql.DB, at time.Time, usable, dropped int) {
+	t.Helper()
+	testkit.MustExec(t, w, `INSERT INTO metalabel_retrain_skips (skipped_at, reason_code, usable_rows, required_rows, dropped_incomplete, created_at)
+		VALUES (?, 'too_few_rows_before_oos', ?, 130, ?, ?)`, testkit.StoredAt(t, at), usable, dropped, testkit.StoredAt(t, at))
+}
+
 // What the last retraining left behind, and what is said when it left no
-// dropped_incomplete: no skip, a skip of a database that has no such column
-// (before issue #862) and a skip that has it.
+// dropped_incomplete, in the schema the test runs against (hasDroppedColumn):
+// without the column the reason is not_recorded_in_schema; with it, a skip
+// recorded before the value existed (NULL) is not_recorded_on_row and is never
+// read as 0, while a recorded value, 0 included, is returned as it is.
 func TestReadinessLastRetrain(t *testing.T) {
 	now := testkit.FixedNow()
 	path, w := readinessDB(t)
@@ -121,32 +142,28 @@ func TestReadinessLastRetrain(t *testing.T) {
 		t.Errorf("empty database: %+v", d.LastRetrain)
 	}
 
-	insertSkip(t, w, now.Add(-10*time.Hour), 80)
+	insertSkip(t, w, now.Add(-10*time.Hour), 80) // names no dropped_incomplete: NULL where the column exists
 	d = callReadiness(t, srv, fullLookback)
 	s := d.LastRetrain.LatestSkip
-	if d.LastRetrain.LastRun != "skipped" || s == nil || s.UsableRows != 80 || s.RequiredRows != 130 || s.ReasonCode != "too_few_rows_before_oos" ||
-		s.DroppedIncomplete != nil || d.LastRetrain.DroppedIncompleteState != metalabeldiag.DroppedNotInSchema {
-		t.Errorf("skip without the column: %+v", d.LastRetrain)
+	if d.LastRetrain.LastRun != "skipped" || s == nil || s.UsableRows != 80 || s.RequiredRows != 130 || s.ReasonCode != "too_few_rows_before_oos" || s.DroppedIncomplete != nil {
+		t.Fatalf("skip with no dropped_incomplete: %+v", d.LastRetrain)
 	}
-
-	// The column a later schema adds (issue #862: NOT NULL DEFAULT 0).
-	testkit.MustExec(t, w, `ALTER TABLE metalabel_retrain_skips ADD COLUMN dropped_incomplete INTEGER NOT NULL DEFAULT 0`)
-	testkit.MustExec(t, w, `UPDATE metalabel_retrain_skips SET dropped_incomplete = 77`)
-	d = callReadiness(t, srv, fullLookback)
-	s = d.LastRetrain.LatestSkip
-	if s == nil || s.DroppedIncomplete == nil || *s.DroppedIncomplete != 77 || d.LastRetrain.DroppedIncompleteState != metalabeldiag.DroppedRecorded {
-		t.Errorf("skip with the column: %+v", d.LastRetrain)
-	}
-
-	// A nullable column (or an old row of it) with no value: the column is
-	// there, the night stored none. Not the same as "not in the schema".
-	testkit.MustExec(t, w, `ALTER TABLE metalabel_retrain_skips ADD COLUMN dropped_nullable INTEGER`)
-	testkit.MustExec(t, w, `ALTER TABLE metalabel_retrain_skips DROP COLUMN dropped_incomplete`)
-	testkit.MustExec(t, w, `ALTER TABLE metalabel_retrain_skips RENAME COLUMN dropped_nullable TO dropped_incomplete`)
-	d = callReadiness(t, srv, fullLookback)
-	s = d.LastRetrain.LatestSkip
-	if s == nil || s.DroppedIncomplete != nil || d.LastRetrain.DroppedIncompleteState != metalabeldiag.DroppedNotOnRow {
-		t.Errorf("skip with a NULL value: %+v", d.LastRetrain)
+	if hasDroppedColumn(t, w) {
+		if d.LastRetrain.DroppedIncompleteState != metalabeldiag.DroppedNotOnRow {
+			t.Errorf("schema with the column, NULL value: state = %q, want %q", d.LastRetrain.DroppedIncompleteState, metalabeldiag.DroppedNotOnRow)
+		}
+		insertSkipDropped(t, w, now.Add(-9*time.Hour), 80, 77)
+		d = callReadiness(t, srv, fullLookback)
+		if s = d.LastRetrain.LatestSkip; s == nil || s.DroppedIncomplete == nil || *s.DroppedIncomplete != 77 || d.LastRetrain.DroppedIncompleteState != metalabeldiag.DroppedRecorded {
+			t.Errorf("recorded value 77: %+v", d.LastRetrain)
+		}
+		insertSkipDropped(t, w, now.Add(-8*time.Hour), 80, 0)
+		d = callReadiness(t, srv, fullLookback)
+		if s = d.LastRetrain.LatestSkip; s == nil || s.DroppedIncomplete == nil || *s.DroppedIncomplete != 0 || d.LastRetrain.DroppedIncompleteState != metalabeldiag.DroppedRecorded {
+			t.Errorf("recorded value 0 must stay 0, not become not-recorded: %+v", d.LastRetrain)
+		}
+	} else if d.LastRetrain.DroppedIncompleteState != metalabeldiag.DroppedNotInSchema {
+		t.Errorf("schema without the column: state = %q, want %q", d.LastRetrain.DroppedIncompleteState, metalabeldiag.DroppedNotInSchema)
 	}
 
 	// A model stored after the skip means the last night learned.
@@ -156,6 +173,52 @@ func TestReadinessLastRetrain(t *testing.T) {
 		t.Errorf("model after skip: %+v", d.LastRetrain)
 	}
 }
+
+// Every state of dropped_incomplete, whichever schema the migrations give: a
+// separate in-memory database with metalabel_retrain_skips built here with and
+// without the column (nullable, as in issue #862), so no test alters the
+// migrated schema.
+func TestReadLastRetrainEveryDroppedIncompleteState(t *testing.T) {
+	at := "2026-10-17T18:00:00.000000000Z"
+	for _, c := range []struct {
+		name      string
+		column    string // the column definition, empty for none
+		insertSQL string
+		want      string
+		wantValue *int64
+	}{
+		{"no column", "", `INSERT INTO metalabel_retrain_skips (skipped_at, reason_code, usable_rows, required_rows) VALUES (?, 'too_few_rows_before_oos', 80, 130)`, metalabeldiag.DroppedNotInSchema, nil},
+		{"column, NULL", ", dropped_incomplete INTEGER", `INSERT INTO metalabel_retrain_skips (skipped_at, reason_code, usable_rows, required_rows) VALUES (?, 'too_few_rows_before_oos', 80, 130)`, metalabeldiag.DroppedNotOnRow, nil},
+		{"column, 77", ", dropped_incomplete INTEGER", `INSERT INTO metalabel_retrain_skips (skipped_at, reason_code, usable_rows, required_rows, dropped_incomplete) VALUES (?, 'too_few_rows_before_oos', 80, 130, 77)`, metalabeldiag.DroppedRecorded, ptr64(77)},
+		{"column, 0", ", dropped_incomplete INTEGER", `INSERT INTO metalabel_retrain_skips (skipped_at, reason_code, usable_rows, required_rows, dropped_incomplete) VALUES (?, 'too_few_rows_before_oos', 80, 130, 0)`, metalabeldiag.DroppedRecorded, ptr64(0)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			db, err := sql.Open("sqlite", ":memory:")
+			if err != nil {
+				t.Fatal(err)
+			}
+			db.SetMaxOpenConns(1)
+			t.Cleanup(func() { _ = db.Close() })
+			testkit.MustExec(t, db, `CREATE TABLE metalabel_retrain_skips (id INTEGER PRIMARY KEY AUTOINCREMENT, skipped_at TEXT NOT NULL,
+				reason_code TEXT NOT NULL, usable_rows INTEGER NOT NULL, required_rows INTEGER NOT NULL`+c.column+`)`)
+			testkit.MustExec(t, db, `CREATE TABLE metalabel_models (id INTEGER PRIMARY KEY AUTOINCREMENT, trained_at TEXT NOT NULL)`)
+			testkit.MustExec(t, db, c.insertSQL, at)
+
+			got, err := metalabeldiag.ReadLastRetrain(t.Context(), db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.DroppedIncompleteState != c.want || got.LatestSkip == nil {
+				t.Fatalf("state = %q, skip = %+v; want %q", got.DroppedIncompleteState, got.LatestSkip, c.want)
+			}
+			if v := got.LatestSkip.DroppedIncomplete; (v == nil) != (c.wantValue == nil) || (v != nil && *v != *c.wantValue) {
+				t.Errorf("dropped_incomplete = %v, want %v", v, c.wantValue)
+			}
+		})
+	}
+}
+
+func ptr64(v int64) *int64 { return &v }
 
 // The tool reports the cutoff the retraining would use: the stored value and
 // its status, and the OOS window never opens before it.

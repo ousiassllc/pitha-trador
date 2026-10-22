@@ -189,7 +189,7 @@ func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time
 	rows, dropped, missing := training.BuildRowsReport(stored)
 	out.Funnel = append(out.Funnel, ReadinessStep{Step: StepFeaturesComplete, Condition: "8 つの特徴量がそろう（BuildRows が残す行 = 学習に使える行）", Rows: int64(len(rows))})
 	out.Features = featureGaps(len(stored), len(rows), dropped, missing)
-	if out.LastRetrain, err = lastRetrain(ctx, q); err != nil {
+	if out.LastRetrain, err = ReadLastRetrain(ctx, q); err != nil {
 		return TrainingReadiness{}, err
 	}
 	settings, err := loadMetalabelSettings(ctx, q)
