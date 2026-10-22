@@ -97,7 +97,7 @@
     "train_start": "2026-09-01T00:00:00Z", "train_end": "2026-10-01T00:00:00Z",
     "oos_start": "2026-10-01T00:00:00Z", "oos_end": "2026-10-14T00:00:00Z", "train_samples": 300, "oos_samples": 120,
     "oos_auc": 0.48, "oos_ev_bps": null, "oos_takes": 40, "oos_days": 3, "oos_ev_verdict": "undetermined", "min_detectable_edge_bps": 11,
-    "criteria": { "min_oos_samples": 1084, "min_takes": 542, "min_oos_days": 5, "min_ev_lower_bps": 0, "min_auc_lower": 0.5, "alpha": 0.01, "resamples": 2000 },
+    "criteria": { "min_oos_samples": 740, "min_takes": 370, "min_oos_days": 7, "min_ev_lower_bps": 0, "min_auc_lower": 0.5, "alpha": 0.01, "resamples": 2000 },
     "oos_calibration": [ { "mean_predicted": 0.55, "observed_rate": 0.5, "count": 40 } ],
     "llm_cutoff": "2026-09-01"
   }

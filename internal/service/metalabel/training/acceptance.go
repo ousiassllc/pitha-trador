@@ -3,6 +3,7 @@ package training
 import (
 	"math"
 	"math/rand/v2"
+	"time"
 
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 )
@@ -28,23 +29,46 @@ const (
 )
 
 // The assumptions the default sample sizes are derived from (documented in
-// FR-META-7; RequiredTakes is the formula).
+// FR-META-7; RequiredTakes and DesignEffect are the formulas). The numbers were
+// decided in issue #862; the derivation, the options that were weighed and the
+// measured power are in FR-META-7.
 const (
 	// AssumedSigmaBps is the standard deviation of one taken signal's net
 	// return: bounded by the triple-barrier TP/SL (30 bps each by default).
 	AssumedSigmaBps = 30.0
-	// AssumedEdgeBps is the mean net EV per take the model is assumed to have
-	// when it is worth adopting (about a sixth of sigma).
-	AssumedEdgeBps = 5.0
-	// AssumedPower is the chance the bar detects that edge.
+	// AssumedEdgeBps is the mean net EV per take the bar is built to detect:
+	// the same 11 bps the Calibration screen shows as the detectable edge
+	// (metamodel.MinDetectableEdgeBps, issue #780: below it the verdict is
+	// "判定不能"). The earlier 5 bps was not reachable: at 5 bps the day-level
+	// noise alone leaves the power at 72% after 30 trading days (FR-META-7).
+	AssumedEdgeBps = 11.0
+	// AssumedPower is the chance the real adoption decision (the cluster
+	// bootstrap intervals of the EV and the AUC together) must be measured to
+	// reach at AssumedEdgeBps at the minimum sample (TestAdoptionPower_*).
 	AssumedPower = 0.80
-	// AssumedDesignEffect inflates the sample for the correlation of same-day
-	// and same-symbol decisions (1 + (m-1)*rho for m decisions per cluster).
-	AssumedDesignEffect = 1.5
+	// DesignPower is the power put into RequiredTakes. It is above AssumedPower
+	// because the real decision (a bootstrap over few days, and the AUC lower
+	// limit on top of the EV one) detects an edge somewhat less often than the
+	// large-sample formula says; 85% is the smallest round value for which the
+	// measured power at the minimum sample stays at or above AssumedPower.
+	DesignPower = 0.85
+	// AssumedRowsPerDay is the number of usable labeled decisions per trading
+	// day (observed 99-145 on 2026-10-19/20/21; the median-ish 120).
+	AssumedRowsPerDay = 120
 	// AssumedTakeRate is the share of OOS decisions the model takes.
 	AssumedTakeRate = 0.5
-	// DefaultMinOOSDays is the fewest trading days the bootstrap resamples.
-	DefaultMinOOSDays = 5
+	// AssumedWinProbDayShiftSD is the documented day-level shift of the win
+	// probability that every decision of a day shares (sd 12%, issue #780).
+	AssumedWinProbDayShiftSD = 0.12
+	// DefaultMinOOSDays is the fewest trading days the bootstrap resamples. With
+	// about 120 rows a day the day-level noise (sd 60 * 12% = 7.2 bps a day)
+	// leaves AssumedPower at AssumedEdgeBps out of reach below 7 days however
+	// many rows are added (measured, FR-META-7).
+	DefaultMinOOSDays = 7
+	// DefaultOOSMaxWindow is how far back the OOS window may reach: 21 days are
+	// 15 trading days, twice DefaultMinOOSDays, so a holiday week or a few days
+	// without decisions do not push the window past its limit.
+	DefaultOOSMaxWindow = 21 * 24 * time.Hour
 )
 
 // AcceptanceConfig is the OOS bar a freshly trained model must clear to be
@@ -83,13 +107,25 @@ func RequiredTakes(sigmaBps, edgeBps, alpha, power, designEffect float64) int {
 // zScore is the standard normal quantile of p.
 func zScore(p float64) float64 { return math.Sqrt2 * math.Erfinv(2*p-1) }
 
-// DefaultAcceptanceConfig returns the derived bar (docs FR-META-7): 542 takes
-// (RequiredTakes for sigma 30 bps, edge 5 bps, alpha 1%, power 80%, design
-// effect 1.5) out of at least 1084 OOS samples (a 50% take rate) on at least 5
-// trading days, with the lower limits of the 98% cluster-bootstrap intervals of
-// the EV above 0 and of the AUC above 0.5.
+// DesignEffect is the Kish design effect of the day clusters, 1 + (m-1)*rho,
+// for m = takesPerDay taken decisions that share a day. A decision is worth
+// +-sigma, so a day-level shift s of the win probability moves the day's mean
+// by 2*sigma*s: rho, the share of an outcome's variance that is the day shift,
+// is (2*s)^2 (0.0576 for s = 12%; sigma cancels).
+func DesignEffect(takesPerDay, winProbDayShiftSD float64) float64 {
+	rho := 4 * winProbDayShiftSD * winProbDayShiftSD
+	return 1 + (takesPerDay-1)*rho
+}
+
+// DefaultAcceptanceConfig returns the bar decided in issue #862 (docs FR-META-7):
+// RequiredTakes for sigma 30 bps, edge 11 bps,
+// alpha 1%, design power 85% and the design effect of 60 takes a day (120 rows
+// at a 50% take rate) gives 370 takes out of at least 740 OOS samples on at
+// least 7 trading days, with the lower limits of the 98% cluster-bootstrap
+// intervals of the EV above 0 and of the AUC above 0.5.
 func DefaultAcceptanceConfig() AcceptanceConfig {
-	takes := RequiredTakes(AssumedSigmaBps, AssumedEdgeBps, DefaultAlpha, AssumedPower, AssumedDesignEffect)
+	deff := DesignEffect(AssumedRowsPerDay*AssumedTakeRate, AssumedWinProbDayShiftSD)
+	takes := RequiredTakes(AssumedSigmaBps, AssumedEdgeBps, DefaultAlpha, DesignPower, deff)
 	return AcceptanceConfig{
 		MinOOSSamples: int(math.Ceil(float64(takes) / AssumedTakeRate)),
 		MinTakes:      takes,

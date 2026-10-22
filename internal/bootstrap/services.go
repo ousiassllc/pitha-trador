@@ -23,6 +23,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/rankingwatch"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/tachibanawatch"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 	"github.com/ousiassllc/pitha-trador/internal/logging"
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
@@ -199,11 +200,10 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow, runtimePolicy)
 	traderHandler := svc.buildPolicyAndBacktest(state, executionConfig, runtimePolicy)
 	svc.buildGovernor(state.Strategy, state.DB, secrets, alertChannels)
-	svc.proposalExec = proposalexec.New(state.DB, svc.Instruments, svc.Snapshots, svc.Signals, svc.Orders, svc.Positions, svc.Risk, svc.Execution, state.Strategy.Scan.SnapshotMaxAge(svc.rankingWatchMaxAge))
+	svc.proposalExec = proposalexec.New(state.DB, svc.Instruments, svc.Snapshots, svc.Signals, svc.Orders, svc.Positions, svc.Risk, svc.Execution, state.Strategy.Scan.SnapshotMaxAge(svc.rankingWatchMaxAge), metalabelsettings.RuntimeMode)
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
 	svc.HealthAlerts = healthalertwire.New(state.DB, svc.Jobs, svc.Broker, svc.Settings)
 	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy, state.Paths.LogDir)
-
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueMarketData, marketDataHandler.HandleMarketData)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueJevScout, svc.Scout.HandleJob)

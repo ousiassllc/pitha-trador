@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 )
@@ -31,14 +32,23 @@ type Result struct {
 }
 
 // SignalResult is the trade_signals row the application wrote for the
-// proposal. RejectCode is the Risk Engine's fixed code (the reason's text is
-// not returned), nil for a signal that passed.
+// proposal. RejectCode is the fixed code of the rejection (the reason's text
+// is not returned), nil when there is none. RiskPassed is true only for a
+// proposal that went on to an order. RejectedAfterRisk tells the two kinds of
+// rejection apart (issue #860): true only when the proposal's status is
+// rejected, it passed the Risk Engine and the application refused it
+// afterwards (RejectCode is then the application's code, e.g. size_zero). It is
+// false for a Risk Engine rejection, for a proposal that reached an order, and
+// for one that went on to expired, cancelled, failed, waiting_session or
+// received after Risk passed (RejectCode is then that status's code; read the
+// proposal's status).
 type SignalResult struct {
-	ID            int64   `json:"id"`
-	At            string  `json:"at"`
-	PolicyVersion string  `json:"policy_version"`
-	RiskPassed    bool    `json:"risk_passed"`
-	RejectCode    *string `json:"reject_code"`
+	ID                int64   `json:"id"`
+	At                string  `json:"at"`
+	PolicyVersion     string  `json:"policy_version"`
+	RiskPassed        bool    `json:"risk_passed"`
+	RejectCode        *string `json:"reject_code"`
+	RejectedAfterRisk bool    `json:"rejected_after_risk"`
 }
 
 // OrderResult is the paper_orders row: the entry order of an open_long
@@ -100,7 +110,7 @@ func result(ctx context.Context, q query.Q, s State) (Result, error) {
 	}}
 	var err error
 	if s.TradeSignalID != nil {
-		if r.Signal, err = signal(ctx, q, *s.TradeSignalID); err != nil {
+		if r.Signal, err = signal(ctx, q, *s.TradeSignalID, s.Status); err != nil {
 			return Result{}, err
 		}
 	}
@@ -133,7 +143,7 @@ func reached(price *float64, test func(float64) bool) *bool {
 	return &b
 }
 
-func signal(ctx context.Context, q query.Q, id int64) (*SignalResult, error) {
+func signal(ctx context.Context, q query.Q, id int64, status string) (*SignalResult, error) {
 	var (
 		s      SignalResult
 		at     string
@@ -153,17 +163,24 @@ SELECT timestamp, policy_version, risk_passed, reject_reason FROM trade_signals 
 	if code := riskRejectCode(reason); code != "" {
 		s.RejectCode = &code
 	}
+	s.RejectedAfterRisk = status == orderproposal.StatusRejected && !s.RiskPassed &&
+		strings.HasPrefix(strings.TrimSpace(reason.String), orderproposal.PostRiskRejectPrefix)
 	return &s, nil
 }
 
 // riskRejectCode is the fixed code of a "risk_engine_rejected: <code>[: detail]"
-// reason; a reason of any other shape is "other" and no reason is empty.
+// reason, or of a "proposal_rejected_after_risk: <code>" one (the signal passed
+// Risk but did not become an order, issue #860; SignalResult.RejectedAfterRisk
+// tells the two apart); a reason of any other shape is "other" and no reason is empty.
 func riskRejectCode(reason sql.NullString) string {
 	text := strings.TrimSpace(reason.String)
 	if text == "" {
 		return ""
 	}
 	rest, ok := strings.CutPrefix(text, "risk_engine_rejected:")
+	if !ok {
+		rest, ok = strings.CutPrefix(text, orderproposal.PostRiskRejectPrefix)
+	}
 	if !ok {
 		return "other"
 	}

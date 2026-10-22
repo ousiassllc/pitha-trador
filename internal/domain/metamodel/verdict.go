@@ -4,7 +4,7 @@ import "math"
 
 // MinDetectableEdgeBps is the smallest mean net EV per take (bps) the adoption
 // bar detects with 80% power (issue #780, decided 2026-10-19: about 11 bps;
-// training's TestAdoptionPower_AtTheMinimumDetectableEdge measures 80.7% at it
+// training's TestAdoptionPower_AtTheMinimumDetectableEdge measures 81.8% at it
 // under sigma 30 bps, a day-level shift of sd 12% and the minimum sample). An
 // EV below it whose interval still straddles 0 cannot be told from zero by a
 // sample of that size, so it is EVUndetermined. The figure holds under those

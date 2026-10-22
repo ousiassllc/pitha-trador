@@ -181,8 +181,15 @@ func migrateUp(conn *sql.DB) error {
 		return fmt.Errorf("repository: init migrate instance: %w", err)
 	}
 
+	before, _, err := m.Version() // 0 (ErrNilVersion) for a new database
+	if err != nil && !errors.Is(err, migrate.ErrNilVersion) {
+		return fmt.Errorf("repository: read schema version: %w", err)
+	}
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("repository: apply migrations: %w", err)
+	}
+	if after, _, err := m.Version(); err == nil {
+		db.ReportDataMigrations(conn, before, after)
 	}
 
 	return nil
