@@ -3,6 +3,7 @@ package metalabel_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -165,5 +166,77 @@ func TestRepository_CountLabeledDecisionsPerLabelVersion(t *testing.T) {
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Issue #881: the training reads the live prompt's cohort only. Two labeled
+// decisions of trader-v3 and one of trader-v4 sit in the same window; which of
+// them the model learns from, and how a skipped retraining counts them,
+// follows the scope; an unreadable scope is an error, never a mixed set.
+func TestRepository_TrainingLeavesOutForeignPromptVersions(t *testing.T) {
+	db := newTestDB(t)
+	r := metalabel.NewRepository(db)
+	ctx := context.Background()
+	res, err := db.ExecContext(ctx, `INSERT INTO instruments (symbol, name, market, is_active) VALUES ('7203', 'x', 'TSE Prime', 1)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst, _ := res.LastInsertId()
+	base := time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC)
+	ids := map[string]int64{}
+	for i, version := range []string{"trader-v3", "trader-v3", "trader-v4"} {
+		id := insertTrainingDecision(t, db, inst, "7203", base.Add(time.Duration(i)*time.Hour), "LONG", "trader")
+		if _, err := db.ExecContext(ctx, `UPDATE jev_decisions SET question_version = ? WHERE id = ?`, version, id); err != nil {
+			t.Fatal(err)
+		}
+		insertOutcome(t, db, id, 15, 2, 1.0)
+		ids[version] = id
+	}
+	from, to := base, base.Add(10*time.Hour)
+	training := func() []int64 {
+		t.Helper()
+		rows, err := r.ListTrainingRows(ctx, from, to)
+		if err != nil {
+			t.Fatalf("ListTrainingRows: %v", err)
+		}
+		var got []int64
+		for _, row := range rows {
+			got = append(got, row.JevDecisionID)
+		}
+		return got
+	}
+
+	if got := training(); len(got) != 3 {
+		t.Fatalf("without a scope the training reads %v, want all three (the behaviour before #881)", got)
+	}
+	if c, err := r.CountLabeledDecisions(ctx, from, to); err != nil || c.V2 != 3 {
+		t.Fatalf("CountLabeledDecisions without a scope = %+v, %v, want V2 3", c, err)
+	}
+
+	r.SetForeignTraderVersions(func(context.Context) ([]string, error) { return []string{"trader-v4"}, nil })
+	if got := training(); len(got) != 2 || got[0] == ids["trader-v4"] || got[1] == ids["trader-v4"] {
+		t.Fatalf("live trader-v3: the training reads %v, want the two trader-v3 decisions", got)
+	}
+	if c, err := r.CountLabeledDecisions(ctx, from, to); err != nil || c.V2 != 2 {
+		t.Fatalf("live trader-v3: CountLabeledDecisions = %+v, %v, want V2 2", c, err)
+	}
+
+	// After a promotion the model starts from the trader-v4 decisions alone.
+	r.SetForeignTraderVersions(func(context.Context) ([]string, error) {
+		return []string{"trader-v1", "trader-v2", "trader-v3"}, nil
+	})
+	if got := training(); len(got) != 1 || got[0] != ids["trader-v4"] {
+		t.Fatalf("live trader-v4: the training reads %v, want the trader-v4 decision %d only", got, ids["trader-v4"])
+	}
+	if c, err := r.CountLabeledDecisions(ctx, from, to); err != nil || c.V2 != 1 {
+		t.Fatalf("live trader-v4: CountLabeledDecisions = %+v, %v, want V2 1", c, err)
+	}
+
+	r.SetForeignTraderVersions(func(context.Context) ([]string, error) { return nil, errors.New("settings unreadable") })
+	if got, err := r.ListTrainingRows(ctx, from, to); err == nil {
+		t.Fatalf("ListTrainingRows = %v, nil with an unreadable scope, want an error", got)
+	}
+	if _, err := r.CountLabeledDecisions(ctx, from, to); err == nil {
+		t.Fatal("CountLabeledDecisions must fail with an unreadable scope")
 	}
 }

@@ -32,6 +32,11 @@ SELECT COUNT(*) FROM (
 // job, where the full sample list and PnL join of
 // calibration.Service.Metrics (or an unbounded COUNT) would grow with the
 // whole labeling history. A limit <= 0 returns 0.
+//
+// It counts every prompt version: unlike ListLabeledSamples it is not scoped by
+// SetForeignTraderVersions (issue #881), so a promotion does not close the
+// bucket gate until the new version has its own samples. That is a live entry
+// condition left to a decision (docs/architecture/jev-prompt-versions-in-data.md §4).
 func (r *CalibrationRepository) CountLabeledSamplesInConfidenceRange(ctx context.Context, low, high float64, includeHigh bool, limit int) (int, error) {
 	if limit <= 0 {
 		return 0, nil

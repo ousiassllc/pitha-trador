@@ -10,6 +10,7 @@ import (
 	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 )
 
 // DefaultK is FR-RAG-2's initial top-k similarity search size.
@@ -26,6 +27,22 @@ type Service struct {
 	decisions   *judgement.DecisionRepository
 	calibration *calrepo.CalibrationRepository
 	snapshots   *market.SnapshotRepository
+	// foreign names the Trader prompt versions whose decisions never come
+	// back as similar cases (nil: none; issue #881).
+	foreign sqlutil.ForeignTraderVersions
+}
+
+// Option configures a Service.
+type Option func(*Service)
+
+// WithForeignTraderVersions leaves the Trader decisions of the versions foreign
+// returns out of Context: only the live prompt's cohort is shown as a similar
+// case, so a promotion does not blend another prompt's answers and outcomes
+// into the few-shot context (issue #881). Scout decisions and market snapshots
+// are unaffected. foreign is read on every Context call; an error from it is
+// an error of Context (callers already treat that as "no context").
+func WithForeignTraderVersions(foreign sqlutil.ForeignTraderVersions) Option {
+	return func(s *Service) { s.foreign = foreign }
 }
 
 // NewService returns a Service backed by db (which must have
@@ -34,8 +51,12 @@ type Service struct {
 // CREATE VIRTUAL TABLE statements) and used to hydrate similarity-search
 // hits into SimilarCase summaries via decisions/snapshots, joined with
 // db's calibration_outcomes (FR-RAG-2/3).
-func NewService(db *sql.DB, decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository) *Service {
-	return &Service{db: db, decisions: decisions, calibration: calrepo.NewCalibrationRepository(db), snapshots: snapshots}
+func NewService(db *sql.DB, decisions *judgement.DecisionRepository, snapshots *market.SnapshotRepository, opts ...Option) *Service {
+	s := &Service{db: db, decisions: decisions, calibration: calrepo.NewCalibrationRepository(db), snapshots: snapshots}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // IndexSnapshot standardizes in and writes it to market_snapshot_vectors

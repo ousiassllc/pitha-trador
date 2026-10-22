@@ -15,7 +15,7 @@
 
 シャドーは、ライブの Trader の判定（`jev_decisions`、`decision_type=trader`）が保存されるたびに、**同じ `TraderState`・同じ RAG 文脈**で候補の版を非同期に呼ぶ。
 
-- **取引に使わない**: 結果は別表 `jev_shadow_decisions`（マイグレーション `000047`）だけに保存する。Policy・メタモデル・Risk・発注・RAG の索引・Calibration の集計・メタモデルの学習は `jev_decisions` だけを読む。テスト（`shadow_isolation_test.go` ほか）が、これらがシャドーの名前を参照しないこと、シャドーの表に書くのはシャドーの repository だけであること、シャドーの行が RAG と `jev_decisions` に入らないことを固定する
+- **取引に使わない**: 結果は別表 `jev_shadow_decisions`（マイグレーション `000047`）だけに保存する。Policy・メタモデル・Risk・発注・RAG の索引・Calibration の集計・メタモデルの学習は `jev_decisions` だけを読む（昇格後に、ライブの版でない版の判断が `jev_decisions` に入っても集計・学習に混ざらないようにする扱いは `jev-prompt-versions-in-data.md`）。テスト（`shadow_isolation_test.go` ほか）が、これらがシャドーの名前を参照しないこと、シャドーの表に書くのはシャドーの repository だけであること、シャドーの行が RAG と `jev_decisions` に入らないことを固定する
 - **ライブに影響しない**: 呼び出しは別の goroutine で、同時実行は 4 まで（満杯なら比較を捨ててログだけ）。失敗はログだけ。ローリングのエラー率（`jev_api_down` の Kill Switch）にも数えない。アプリの終了（`Services.Stop`）は `Trader.Close` で飛行中のシャドーの呼び出しを取り消して待つ（終了後に出された比較は捨てる）
 - **Paper だけ**: `metalabelsettings.RuntimeMode` が Paper のビルドだけが動く。Live では何も呼ばない（テストで固定）。`RuntimeMode` は const で起動後に変わらないので、シャドーは起動時に 1 回だけモードを見ている。**実行時にモードを切り替える設計にするなら、`Submit` のたびに読む**こと（その変更は本 issue の範囲外）
 - **既定は無効**: `runtime_settings` の `jev.shadow.enabled`（既定 0）と候補の版 `jev.shadow.candidate_version`。Settings 画面（「外部連携」→ Jev プロンプト）から切り替える。人が有効にするまで費用は発生しない。MCP から有効にする手段は無い
@@ -46,6 +46,10 @@
 - **自動では昇格しない**。MCP の `jev_prompt_promote` と Settings 画面の昇格ボタン（`POST /settings/jev-prompt/promote`。セッション Cookie と CSRF が必要）だけが呼ぶ
 - 自己改善ループ（Sol/Opus）からはできない。`domain.ValidatePolicyChanges` は `policy.*` のキーだけを受け付け、`jev.trader_prompt_version`・`jev.shadow.*`・`prompt_version` などを拒否する（境界は変えず、テストで固定）。シャドーの設定キーは `mcpwritesettings` のホワイトリストにも無い（`settings_set` は `key_not_allowed`）
 
+## 昇格後のデータの扱い（issue #881）
+
+昇格すると `jev_decisions` に版（`question_version`）の違う行が並ぶ。RAG の事例・Calibration の指標と PnL・メタモデルの学習・`jev_calibration` は、**ライブの版と同じコホートの行だけ**を使い、別のコホートの版は混ぜない。コホート・読み手ごとの扱い・本番で昇格してよい範囲・棄却案は `jev-prompt-versions-in-data.md`。
+
 ## 最初の候補（trader-v4。昇格されない）
 
 `entry_quality` の定義だけを変えた候補版 `trader-v4`（`questions_trader_v4.go`）を登録した。ライブの版 `trader-v3` は変えない。シャドーは既定で無効で、昇格は人の明示的な操作だけ。差分と理由は issue #872 の PR に「候補の案（人がレビューして決める）」として書く。その版のシャドーの分布は実際の LLM が要るので、本番の Windows PC で人がシャドーを有効にして初めて分かる。
@@ -57,4 +61,4 @@
 | 1.0 | 2026-10-22 | 新規作成（元の文書の版 1.15 で追加）。版（`question_version` を正式な版にした理由とハッシュによる固定）、シャドー・費用・上限、結果の比較の計算方法、昇格（書き手の 6 つ目の変更） | issue #872 |
 | 1.1 | 2026-10-22 | 結果の比較: 方向がライブと食い違う行は採点しない（偏りの向きを明記）。1 日の失敗回数の上限、Settings 画面の費用上限の入力欄（既定値を保存した値にしない）、終了時のシャドーの取り消し、`RuntimeMode` が const であることの注意を追記 | issue #872 レビュー対応 |
 | 1.2 | 2026-10-22 | 費用の上限 0.10 USD・失敗回数の上限 20 回・単価 0.042 USD/1M 入力トークン・同時実行 4 をユーザー決定の確定値にした（「暫定の案・未承認」を廃止）。`usage` が無い応答を、リクエストの大きさから推定した入力トークン数で費用に入れる（0 USD と数えない）。`cost_is_estimate` と「うち見積り」を追加 | issue #872 ユーザー決定 |
-
+| 1.3 | 2026-10-22 | 「昇格後のデータの扱い」を追加（詳細は分割章 `jev-prompt-versions-in-data.md`）。`jev_decisions` だけを読む読み手が、ライブの版と別のコホートの行を使わない | issue #881 |

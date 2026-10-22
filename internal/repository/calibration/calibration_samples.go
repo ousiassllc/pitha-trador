@@ -42,8 +42,43 @@ func horizonCondition(horizons []int, orTripleBarrier bool) (string, []any) {
 	return " AND " + in, args
 }
 
-func (r *CalibrationRepository) queryLabeledSamples(ctx context.Context, query string, args []any) ([]domain.LabeledSample, error) {
-	rows, err := r.db.QueryContext(ctx, query, args...)
+// SetForeignTraderVersions makes ListLabeledSamples* leave out the outcomes of
+// the Trader decisions of the versions foreign returns (the prompt versions of
+// another cohort than the live one, issue #881), so the Calibration metrics
+// and the self-improvement analysis grade the live prompt's answers only.
+// CountLabeledSamplesInConfidenceRange is NOT scoped: Policy uses it to decide
+// whether a confidence bucket has enough samples to be trusted, which is a live
+// entry condition that this scoping does not change (docs/architecture/
+// jev-prompt-versions-in-data.md). nil (the default) leaves every row in. Call it
+// before the repository is shared.
+func (r *CalibrationRepository) SetForeignTraderVersions(foreign sqlutil.ForeignTraderVersions) {
+	r.foreign = foreign
+}
+
+// labeledSamplesQueryFor is labeledSamplesQuery with the foreign versions'
+// rows left out, and the args of that condition (to come before every later
+// condition's args).
+func (r *CalibrationRepository) labeledSamplesQueryFor(ctx context.Context) (string, []any, error) {
+	if r.foreign == nil {
+		return labeledSamplesQuery, nil, nil
+	}
+	versions, err := r.foreign(ctx)
+	if err != nil {
+		return "", nil, fmt.Errorf("repository: resolve the Trader prompt versions to leave out: %w", err)
+	}
+	cond, args := sqlutil.NotIn("d.question_version", versions)
+	if cond == "" {
+		return labeledSamplesQuery, nil, nil
+	}
+	return labeledSamplesQuery + " AND " + cond, args, nil
+}
+
+func (r *CalibrationRepository) queryLabeledSamples(ctx context.Context, conds string, condArgs []any) ([]domain.LabeledSample, error) {
+	query, scopeArgs, err := r.labeledSamplesQueryFor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, query+conds, append(scopeArgs, condArgs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list labeled calibration samples: %w", err)
 	}
@@ -82,7 +117,7 @@ func (r *CalibrationRepository) queryLabeledSamples(ctx context.Context, query s
 // restriction.
 func (r *CalibrationRepository) ListLabeledSamples(ctx context.Context, horizons []int) ([]domain.LabeledSample, error) {
 	cond, args := horizonCondition(horizons, false)
-	return r.queryLabeledSamples(ctx, labeledSamplesQuery+cond, args)
+	return r.queryLabeledSamples(ctx, cond, args)
 }
 
 // ListCurrentLabeledSamples is ListLabeledSamples that also returns every
@@ -92,7 +127,7 @@ func (r *CalibrationRepository) ListLabeledSamples(ctx context.Context, horizons
 // labels of other horizons (e.g. the pre-#711 20 minutes) out.
 func (r *CalibrationRepository) ListCurrentLabeledSamples(ctx context.Context, horizons []int) ([]domain.LabeledSample, error) {
 	cond, args := horizonCondition(horizons, true)
-	return r.queryLabeledSamples(ctx, labeledSamplesQuery+cond, args)
+	return r.queryLabeledSamples(ctx, cond, args)
 }
 
 // ListLabeledSamplesSince is ListLabeledSamples restricted to decisions
@@ -113,7 +148,7 @@ func (r *CalibrationRepository) ListCurrentLabeledSamplesSince(ctx context.Conte
 func (r *CalibrationRepository) listLabeledSamplesSince(ctx context.Context, since time.Time, horizons []int, orTripleBarrier bool) ([]domain.LabeledSample, error) {
 	cond, args := horizonCondition(horizons, orTripleBarrier)
 	return r.queryLabeledSamples(ctx,
-		labeledSamplesQuery+" AND d.timestamp >= ?"+cond,
+		" AND d.timestamp >= ?"+cond,
 		append([]any{sqlutil.FormatTime(since)}, args...),
 	)
 }

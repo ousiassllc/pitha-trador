@@ -18,6 +18,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
 	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	servicemetalabel "github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
@@ -50,6 +51,11 @@ type Job struct {
 func New(db *sql.DB, settings *system.RuntimeSettingsRepository) *Job {
 	j := &Job{db: db, settings: settings, now: time.Now}
 	repo := metalabel.NewRepository(db)
+	// The model learns only from the decisions of the live Jev prompt's cohort,
+	// so a promotion does not blend two prompts' entry_quality answers (#881).
+	if settings != nil {
+		repo.SetForeignTraderVersions(jev.LiveCohortScope(settings))
+	}
 	// The adoption honours the freeze after a policy.* change of the
 	// self-improvement flow (issue #780).
 	store := servicemetalabel.NewStore(repo)

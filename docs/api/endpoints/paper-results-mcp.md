@@ -85,9 +85,11 @@
 
 ### 3.4 `jev_calibration`
 
-引数: `from`, `to`、`horizon_minutes`（省略時は期間内に存在する horizon をすべて、最大 8）。
+引数: `from`, `to`、`horizon_minutes`（省略時は期間内に存在する horizon をすべて、最大 8）、`prompt_version`（任意。例 `trader-v4`。その版の trader 判断だけを採点する。省略はライブの版と同じコホートの判断だけ。不正な版名は `invalid_argument`）。
 
-`data.decisions`: 期間内（`jev_decisions.timestamp`）の `scout_count` と `trader_count`。
+`data.decisions`: 期間内（`jev_decisions.timestamp`）の `scout_count` と `trader_count`（全版の件数）。
+
+**プロンプトの版は混ぜない**（issue #881。`docs/architecture/jev-prompt-versions-in-data.md`）: `data.horizons[]` が採点する trader 判断は、既定ではライブの Trader の版（昇格が保存した版、なければビルドの既定）と**同じコホート**の版だけで、別コホートの版は採点しない。`data.prompt_versions` は何を採点したかを返す: `only`（`prompt_version` を渡したときだけ。その版）、`excluded[]`（既定のとき除いた版。`prompt_version` を渡したときは空）。`data.trader_decisions_by_version[]` は期間内の trader 判断を**全版**について数える（`{prompt_version, trader_count}`。採点の対象外の版も出る）。
 
 `data.horizons[]` は horizon ごと。ラベルは `calibration_outcomes` を `jev_decision_id` で trader 判断（`decision_type='trader'`）に結合し、判断の `timestamp` が期間内のもの。
 

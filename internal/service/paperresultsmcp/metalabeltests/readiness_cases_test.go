@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/metalabeldiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/testkit"
 )
@@ -244,5 +245,42 @@ func TestReadinessUsesTheStoredCutoff(t *testing.T) {
 	d = callReadiness(t, srv, fullLookback)
 	if d.Split.OOS.Rows != 0 || d.Split.LLMCutoff != "2026-10-19" {
 		t.Errorf("cutoff 2026-10-19: oos = %+v", d.Split.OOS)
+	}
+}
+
+// Issue #881: the readiness counts the rows the retraining will read, which are
+// the live prompt's cohort only: a trader-v4 decision is outside the funnel
+// while trader-v3 is live, and the other way round after a promotion.
+func TestReadinessLeavesOutTheOtherPromptCohort(t *testing.T) {
+	now := testkit.FixedNow()
+	path, w := readinessDB(t)
+	at := now.Add(-48 * time.Hour)
+	for id, version := range []string{1: "trader-v3", 2: "trader-v3", 3: "trader-v4"} {
+		if id == 0 {
+			continue
+		}
+		d := decision{id: id, at: at.Add(time.Duration(id) * time.Minute), direction: "LONG", model: "m",
+			state: validState, response: validResponse, horizon: 15, net: 10.0, label: 2}
+		ofi := 0.5
+		d.ofi, d.micro = &ofi, &ofi
+		insertDecision(t, w, d)
+		testkit.MustExec(t, w, `UPDATE jev_decisions SET question_version = ? WHERE id = ?`, version, id)
+	}
+
+	d := callReadiness(t, newTestServer(t, path, now), fullLookback)
+	if got, want := funnelRows(d), []int64{2, 2, 2, 2, 2}; !slices.Equal(got, want) {
+		t.Errorf("live trader-v3: funnel rows = %v, want %v", got, want)
+	}
+	if !slices.Equal(d.ExcludedPromptVersions, []string{"trader-v4"}) {
+		t.Errorf("live trader-v3: excluded_prompt_versions = %v, want [trader-v4]", d.ExcludedPromptVersions)
+	}
+
+	testkit.Setting(t, w, jevshadowsettings.KeyLiveVersion, `"trader-v4"`)
+	d = callReadiness(t, newTestServer(t, path, now), fullLookback)
+	if got, want := funnelRows(d), []int64{1, 1, 1, 1, 1}; !slices.Equal(got, want) {
+		t.Errorf("live trader-v4: funnel rows = %v, want %v", got, want)
+	}
+	if !slices.Equal(d.ExcludedPromptVersions, []string{"trader-v1", "trader-v2", "trader-v3"}) {
+		t.Errorf("live trader-v4: excluded_prompt_versions = %v", d.ExcludedPromptVersions)
 	}
 }

@@ -104,6 +104,11 @@ type ShadowCostStatus struct {
 // single-key statement the other fixed-key reads use.
 type shadowSettingsReader struct{ q query.Q }
 
+// SettingsStore is the read-only jevshadowsettings.Store over q: what the app's
+// jev.ResolveLiveVersion reads, so a tool resolves the live prompt version the
+// way the Trader does.
+func SettingsStore(q query.Q) jevshadowsettings.Store { return shadowSettingsReader{q} }
+
 func (s shadowSettingsReader) Get(ctx context.Context, key string) (string, bool, error) {
 	allowed := false
 	for _, k := range jevshadowsettings.Keys() {

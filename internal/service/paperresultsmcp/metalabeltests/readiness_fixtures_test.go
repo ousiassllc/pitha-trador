@@ -46,7 +46,8 @@ type readiness struct {
 		LatestModelTrainedAt   *string `json:"latest_model_trained_at"`
 		DroppedIncompleteState string  `json:"dropped_incomplete_status"`
 	} `json:"last_retrain"`
-	Split struct {
+	ExcludedPromptVersions []string `json:"excluded_prompt_versions"`
+	Split                  struct {
 		LLMCutoff       string  `json:"llm_cutoff"`
 		LLMCutoffStatus string  `json:"llm_cutoff_status"`
 		OOSStart        string  `json:"oos_start"`

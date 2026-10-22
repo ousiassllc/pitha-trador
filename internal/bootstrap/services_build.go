@@ -72,6 +72,7 @@ func (s *Services) buildRepositories(db *sql.DB) {
 	s.Outcomes = calrepo.NewCalibrationRepository(db)
 	s.KillSwitch = system.NewKillSwitchRepository(db)
 	s.Settings = system.NewRuntimeSettingsRepository(db)
+	s.Outcomes.SetForeignTraderVersions(jev.LiveCohortScope(s.Settings)) // the live prompt's cohort only (issue #881)
 	s.Proposals = judgement.NewProposalRepository(db)
 }
 
@@ -125,7 +126,7 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 
 // buildJevPipeline builds RAG, Feature Engine, Screener and the Jev Scout/Trader.
 func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig) {
-	s.RAG = rag.NewService(db, s.Decisions, s.Snapshots)
+	s.RAG = rag.NewService(db, s.Decisions, s.Snapshots, rag.WithForeignTraderVersions(jev.LiveCohortScope(s.Settings)))
 	s.FeatureEngine = featureengine.NewEngine(s.Snapshots, s.RAG)
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
 		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener),
@@ -175,7 +176,7 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config, runtimePolicy selfimprove.RuntimePolicy) *policy.Handler {
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
 	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, paperentryquality.Option(runtimePolicy, s.Settings), metalabeljob.PolicyOption(state.DB, s.Settings), metalabeljob.PaperBootstrapOption(s.Settings))
-	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
+	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB).WithForeignTraderVersions(jev.LiveCohortScope(s.Settings)))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig, backtestsource.NewReplay(state.DB, s.Settings, state.Risk.Paper, s.Positions))
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Risk: s.Risk},
 		policy.WithCalibration(s.Calibration), policy.WithTDnetScorer(s.News), policy.WithRegimeStore(s.Instruments, s.Snapshots, s.Settings, state.Strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge)),

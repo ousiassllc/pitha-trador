@@ -25,6 +25,7 @@
 | `last_retrain.latest_skip` | 最新の `metalabel_retrain_skips`: `{skipped_at, reason_code, usable_rows, required_rows, dropped_incomplete}`。無ければ `null`。`dropped_incomplete` は見送りの行に残っている値で、**残っていなければ `null`**（0 ではない） |
 | `last_retrain.latest_model_trained_at` | 最新の `metalabel_models.trained_at`（無ければ `null`） |
 | `last_retrain.dropped_incomplete_status` | 見送りの `dropped_incomplete` の有無: `recorded`（`latest_skip.dropped_incomplete` に値がある）/ `not_recorded_in_schema`（この DB の `metalabel_retrain_skips` にその列が無い。列を足すマイグレーション（#862）より前）/`not_recorded_on_row`（列はあるが最新の見送りの値が `NULL`）/ `no_skip_recorded`（直近の再学習は見送りでなくモデルを保存した、または一度も走っていない）。いずれでも、今の学習行から数えた値は `features.dropped_incomplete` で読める |
+| `excluded_prompt_versions[]` | 再学習が読まない Trader のプロンプトの版（ライブの版と別のコホート。issue #881）。`funnel` と学習行は、ライブの版と同じコホートの判断だけ。ライブの版が昇格で変わるとここも変わる |
 | `split.llm_cutoff` / `llm_cutoff_status` | 今の `metalabel.llm_cutoff`（`YYYY-MM-DD`）とその状態（`placeholder` / `unverified` / `confirmed`）。OOS 窓はこの日付より前に始まらない |
 | `split.oos_start` | OOS 窓の始まり（UTC RFC3339） |
 | `split.train_ready` / `train_skip_code` | `training.SplitWalkForward` が学習側（fit＋較正）を作れたか。作れないときの `train_skip_code` は再学習が記録するのと同じ固定コード（`too_few_rows_before_oos` / `too_few_rows_after_purge`）。作れたら `null` |
@@ -65,3 +66,4 @@ Jev が実際に応答しているモデル名（issue #849）。`metalabel.llm_
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規作成。§3.23 `metalabel_training_readiness` の入出力と、再学習の判定との一致・既定の窓・上限・`dropped_incomplete` が残っていない場合の表し方 | issue #848 |
 | 1.1 | 2026-10-21 | §3.24 `jev_models` を追加（`model_id` ごとの件数・初回/最後の時刻・日別・`llm_cutoff_model` との完全一致の判定） | issue #849 |
+| 1.2 | 2026-10-22 | §3.23 に `excluded_prompt_versions` を追加。`funnel` と学習行は、再学習と同じくライブの Trader の版と同じコホートの判断だけを数える | issue #881 |
