@@ -1,4 +1,4 @@
-package proposalexec_test
+package proposalexectests
 
 import (
 	"bytes"
