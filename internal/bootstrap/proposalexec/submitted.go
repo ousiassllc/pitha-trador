@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
@@ -78,10 +79,16 @@ func (p Processor) mirrorOrder(ctx context.Context, pr orderproposal.Proposal, d
 // Recover handles the proposals a previous run left in processing (the app
 // stopped mid-flight), once at startup before Run. Whether an order went out is
 // read from the database, never guessed: a proposal whose signal already became
-// an order (or whose position was already closed) takes that outcome, and any
-// other goes back to received to be processed again. The same proposal never
-// gets a second order. It returns how many proposals it settled.
+// an order (or whose position was already closed) takes that outcome, one past
+// its expires_at with no order becomes expired, and any other goes back to
+// received to be processed again. The same proposal never gets a second order.
+// One proposal's failure does not stop the others: it is logged and that
+// proposal becomes failed (processing_error), so none stays in processing. It
+// returns how many proposals it looked at and the failures joined.
 func (p Processor) Recover(ctx context.Context) (int, error) {
+	if err := p.paperOnly(); err != nil {
+		return 0, err
+	}
 	stuck, err := p.Proposals.Processing(ctx)
 	if err != nil {
 		return 0, err
@@ -90,14 +97,45 @@ func (p Processor) Recover(ctx context.Context) (int, error) {
 	for _, pr := range stuck {
 		if err := p.recoverOne(ctx, pr); err != nil {
 			errs = append(errs, fmt.Errorf("proposalexec: recover proposal %d: %w", pr.ID, err))
+			// fail logs the cause; a failure to record it is the only way one stays in processing.
+			if err := p.fail(ctx, pr, proposalstore.Links{}, err); err != nil {
+				errs = append(errs, fmt.Errorf("proposalexec: proposal %d left in processing: %w", pr.ID, err))
+			}
 		}
 	}
+	p.logRecovered(ctx, stuck)
 	return len(stuck), errors.Join(errs...)
+}
+
+// logRecovered logs how the proposals Recover looked at ended up (by status).
+func (p Processor) logRecovered(ctx context.Context, stuck []orderproposal.Proposal) {
+	if len(stuck) == 0 {
+		return
+	}
+	byStatus := map[string]int{}
+	for _, pr := range stuck {
+		if now, err := p.Proposals.Get(ctx, pr.ID); err == nil {
+			byStatus[now.Status]++
+		} else {
+			byStatus["unknown"]++
+		}
+	}
+	slog.InfoContext(ctx, "proposalexec: recovery settled proposals left in processing", "count", len(stuck),
+		"expired", byStatus[orderproposal.StatusExpired], "received", byStatus[orderproposal.StatusReceived],
+		"failed", byStatus[orderproposal.StatusFailed], "still_processing", byStatus[orderproposal.StatusProcessing],
+		"by_status", byStatus)
 }
 
 const recoveredDetail = `{"recovered_after_restart":true}`
 
-func (p Processor) recoverOne(ctx context.Context, pr orderproposal.Proposal) error {
+// recoverOne recovers one proposal; like handle, a panic is an error of that
+// proposal only (Recover then marks it failed), never one that stops the others.
+func (p Processor) recoverOne(ctx context.Context, pr orderproposal.Proposal) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("proposalexec: panic while recovering proposal %d: %v", pr.ID, r)
+		}
+	}()
 	if pr.Action == orderproposal.ActionClose {
 		return p.recoverClose(ctx, pr)
 	}
@@ -176,8 +214,13 @@ func (p Processor) recoverClose(ctx context.Context, pr orderproposal.Proposal) 
 	return p.requeue(ctx, pr)
 }
 
-// requeue puts a processing proposal back to received.
+// requeue settles a processing proposal that has no outcome in the database: a
+// proposal past its expires_at (and with no order) is expired right away, any
+// other goes back to received to be processed again.
 func (p Processor) requeue(ctx context.Context, pr orderproposal.Proposal) error {
-	return p.Proposals.Transition(ctx, pr.ID, pr.Status, proposalstore.Change{
-		ToStatus: orderproposal.StatusReceived, Reason: ReasonRecoveredAfterStop, DetailJSON: recoveredDetail})
+	change := proposalstore.Change{ToStatus: orderproposal.StatusReceived, Reason: ReasonRecoveredAfterStop, DetailJSON: recoveredDetail}
+	if !p.now().Before(pr.ExpiresAt) {
+		change.ToStatus, change.Reason = orderproposal.StatusExpired, ReasonExpired
+	}
+	return p.Proposals.Transition(ctx, pr.ID, pr.Status, change)
 }

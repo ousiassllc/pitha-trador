@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalexec"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 	"github.com/ousiassllc/pitha-trador/internal/repository/proposalstore"
@@ -62,7 +63,7 @@ func newFixture(t *testing.T) *fixture {
 	f.proc = proposalexec.Processor{
 		Proposals: f.props, Instruments: f.svc.Instruments, Snapshots: f.svc.Snapshots, Signals: f.svc.Signals,
 		Orders: f.svc.Orders, Positions: f.svc.Positions, Risk: f.risk, Execution: f.exec,
-		SnapshotMaxAge: 5 * time.Minute,
+		SnapshotMaxAge: 5 * time.Minute, Mode: metalabelsettings.ModePaper,
 	}
 	f.quote(2500)
 	return f

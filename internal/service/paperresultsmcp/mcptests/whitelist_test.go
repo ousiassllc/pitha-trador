@@ -131,7 +131,8 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("prediction counts", meta["prediction_counts"].(map[string]any), "take skip")
 	want("retrain skip", first(meta, "retrain_skips"), "skipped_at reason_code usable_rows required_rows")
 	risk := data("risk_rejections", period)
-	want("risk", risk, "risk_passed_count other_reject_count buckets other_reject_breakdown proposal_risk_passed_count proposal_risk_rejected_count")
+	want("risk", risk, "risk_passed_count other_reject_count buckets other_reject_breakdown proposal_risk_passed_count proposal_risk_rejected_count "+
+		"proposal_rejected_after_risk_count proposal_rejected_after_risk_breakdown")
 	want("risk bucket", first(risk, "buckets"), "reason count")
 	want("other reject bucket", first(risk, "other_reject_breakdown"), "reason count")
 	kill := data("kill_switch_history", period)

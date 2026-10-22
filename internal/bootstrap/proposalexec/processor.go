@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
@@ -100,6 +101,22 @@ type Processor struct {
 	// wall clock, in a session) before the quote counts as stale: the same
 	// limit Policy and Jev use.
 	SnapshotMaxAge time.Duration
+	// Mode is the trading mode this processor runs in. Only
+	// metalabelsettings.ModePaper makes it do anything: any other value,
+	// including the zero value, makes Launch, Run, Recover and Cycle refuse
+	// (issue #858), so a future Live wiring cannot reach the Paper flow.
+	Mode metalabelsettings.Mode
+}
+
+// ErrNotPaperMode is returned by Cycle and Recover when Mode is not Paper.
+var ErrNotPaperMode = errors.New("proposalexec: refusing to run outside Paper mode")
+
+// paperOnly is the guard every entry point checks before it reads or writes.
+func (p Processor) paperOnly() error {
+	if p.Mode != metalabelsettings.ModePaper {
+		return fmt.Errorf("%w (mode %q)", ErrNotPaperMode, p.Mode)
+	}
+	return nil
 }
 
 // now is Execution's clock, so a session decision and the order it leads to
@@ -108,6 +125,10 @@ func (p Processor) now() time.Time { return p.Execution.Config().Now() }
 
 // Run calls Cycle every interval until ctx is done.
 func (p Processor) Run(ctx context.Context, interval time.Duration) {
+	if err := p.paperOnly(); err != nil {
+		slog.ErrorContext(ctx, "proposalexec: not running", "error", err)
+		return
+	}
 	if interval <= 0 {
 		interval = DefaultInterval
 	}
@@ -129,6 +150,9 @@ func (p Processor) Run(ctx context.Context, interval time.Duration) {
 // how many it looked at. A failure on one proposal is logged and does not stop
 // the others.
 func (p Processor) Cycle(ctx context.Context) (int, error) {
+	if err := p.paperOnly(); err != nil {
+		return 0, err
+	}
 	active, err := p.Proposals.Active(ctx)
 	if err != nil {
 		return 0, err

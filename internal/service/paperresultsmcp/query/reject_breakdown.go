@@ -3,7 +3,6 @@ package query
 import (
 	"context"
 	"fmt"
-	"sort"
 )
 
 // Codes of the non-risk rejections risk_rejections' other_reject_breakdown may
@@ -92,7 +91,7 @@ FROM (
 		SELECT COALESCE(reject_reason, '') AS reason
 		FROM trade_signals
 		WHERE timestamp >= ? AND timestamp < ? AND risk_passed = 0
-			AND (reject_reason IS NULL OR NOT reject_reason GLOB 'risk_engine_rejected:*')
+			AND `+otherRejectReason+`
 	)
 )
 GROUP BY head, sub`, from, to)
@@ -119,11 +118,6 @@ GROUP BY head, sub`, from, to)
 	for code, n := range counts {
 		out = append(out, RejectBucket{Reason: code, Count: n})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Count != out[j].Count {
-			return out[i].Count > out[j].Count
-		}
-		return out[i].Reason < out[j].Reason
-	})
+	sortBuckets(out)
 	return out, nil
 }

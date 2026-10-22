@@ -11,6 +11,7 @@ package proposalstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -127,7 +128,8 @@ func (r *Repository) list(ctx context.Context, tail string) ([]orderproposal.Pro
 // Transition moves proposal id from status from to c.ToStatus (or records an
 // event in place), in one transaction: the guarded UPDATE and the event row.
 // It returns ErrStatusChanged, writing nothing, when the proposal is not in
-// from any more.
+// from any more. A move to a status that has no order behind it (noOrderStatuses)
+// also takes the proposal's trade signal out of the Risk passes (issue #860).
 func (r *Repository) Transition(ctx context.Context, id int64, from string, c Change) error {
 	to := c.ToStatus
 	if to == "" {
@@ -150,15 +152,84 @@ UPDATE order_proposals SET status = ?, status_reason = ?, updated_at = ?, `+link
 	} else if n == 0 {
 		return ErrStatusChanged
 	}
+	detail := c.DetailJSON
+	if noOrderStatuses[to] {
+		if err := markSignalUnordered(ctx, tx, id, c.Reason); err != nil {
+			return err
+		}
+		var err error
+		if detail, err = withSignalID(ctx, tx, id, detail); err != nil {
+			return err
+		}
+	}
 	if _, err := tx.ExecContext(ctx, `
 INSERT INTO order_proposal_events (proposal_id, at, from_status, to_status, reason_code, actor, detail_json)
-VALUES (?, ?, ?, ?, ?, ?, ?)`, id, at, from, to, c.Reason, orderproposal.ActorApp, c.DetailJSON); err != nil {
+VALUES (?, ?, ?, ?, ?, ?, ?)`, id, at, from, to, c.Reason, orderproposal.ActorApp, detail); err != nil {
 		return fmt.Errorf("orderproposal: insert event of proposal %d: %w", id, err)
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("orderproposal: commit transition of proposal %d: %w", id, err)
 	}
 	return nil
+}
+
+// noOrderStatuses are the statuses a proposal moves to when no order came of
+// it (yet): rejected or failed after Risk passed, back to waiting for a
+// session, expired or cancelled before ordering, or back to received after a
+// restart.
+var noOrderStatuses = map[string]bool{
+	orderproposal.StatusRejected: true, orderproposal.StatusFailed: true, orderproposal.StatusWaitingSession: true,
+	orderproposal.StatusExpired: true, orderproposal.StatusCancelled: true, orderproposal.StatusReceived: true,
+}
+
+// markSignalUnordered rewrites the trade signal of proposal id, when it passed
+// Risk (risk_passed = 1) but no paper order carries it, to risk_passed = 0 with
+// reject_reason "proposal_rejected_after_risk: <reason>", in the transaction
+// of the status change. A signal some order came from is left alone (a
+// cancelled or rejected order still means the proposal went on to an order),
+// and so is a proposal without a signal or one whose signal Risk rejected.
+func markSignalUnordered(ctx context.Context, tx *sql.Tx, id int64, reason string) error {
+	if _, err := tx.ExecContext(ctx, `
+UPDATE trade_signals SET risk_passed = 0, reject_reason = ?
+WHERE risk_passed = 1
+  AND id = (SELECT trade_signal_id FROM order_proposals WHERE id = ?)
+  AND NOT EXISTS (SELECT 1 FROM paper_orders o WHERE o.trade_signal_id = trade_signals.id)`,
+		orderproposal.PostRiskRejectPrefix+" "+codeOrUnknown(reason), id); err != nil {
+		return fmt.Errorf("orderproposal: mark trade signal of proposal %d unordered: %w", id, err)
+	}
+	return nil
+}
+
+// withSignalID adds "trade_signal_id" (the signal the proposal points to now) to
+// the event's detail_json, so the history keeps which signal each attempt used
+// after a retry links a new one. A proposal without a signal leaves detail as is.
+func withSignalID(ctx context.Context, tx *sql.Tx, id int64, detail string) (string, error) {
+	var signalID sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT trade_signal_id FROM order_proposals WHERE id = ?`, id).Scan(&signalID); err != nil {
+		return "", fmt.Errorf("orderproposal: read trade signal of proposal %d: %w", id, err)
+	}
+	if !signalID.Valid {
+		return detail, nil
+	}
+	fields := map[string]any{}
+	if detail != "" {
+		if err := json.Unmarshal([]byte(detail), &fields); err != nil {
+			return "", fmt.Errorf("orderproposal: detail of proposal %d is not a JSON object: %w", id, err)
+		}
+	}
+	fields["trade_signal_id"] = signalID.Int64
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return "", fmt.Errorf("orderproposal: encode detail of proposal %d: %w", id, err)
+	}
+	return string(out), nil
+}
+
+func codeOrUnknown(reason string) string {
+	if reason == "" {
+		return "unknown"
+	}
+	return reason
 }
 
 // Link records l on proposal id without changing its status and without an
