@@ -43,8 +43,8 @@ type TradeSignal struct {
 	// RiskChecker is this scope's placeholder extension point) allowed it.
 	// It is always false for a NONE signal.
 	RiskPassed bool
-	// RejectReason explains why RiskPassed is false / Direction is NONE,
-	// nil when Direction is LONG/SHORT and RiskPassed is true.
+	// RejectReason explains why RiskPassed is false / Direction is NONE; a passed
+	// decision may carry a note of what it was judged on (decisionnote, #881).
 	RejectReason *string
 	CreatedAt    time.Time
 }

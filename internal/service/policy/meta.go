@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
@@ -123,8 +124,14 @@ func (e *Engine) loadMeta(ctx context.Context) *metaEntry {
 		return &metaEntry{unavailable: fmt.Sprintf("model: %v", err)}
 	}
 	entry := &metaEntry{model: model, cfg: cfg}
-	if e.cohort != nil && model != nil {
-		entry.cohort = e.cohort.Check(ctx, model.Version, model.TrainedCohort)
+	if model != nil {
+		// No cohort checker wired is the zero Checker: not Paper, no source, so
+		// the model is not used (fail closed, issue #881).
+		checker := e.cohort
+		if checker == nil {
+			checker = &metacohort.Checker{}
+		}
+		entry.cohort = checker.Check(ctx, model.Version, model.TrainedCohort)
 		entry.unavailable = entry.cohort.Unavailable
 	}
 	return entry
@@ -133,7 +140,10 @@ func (e *Engine) loadMeta(ctx context.Context) *metaEntry {
 // WithMetaModelCohort makes Evaluate compare the prompt cohort the active model
 // was trained on with the live version's (metacohort): on a mismatch Paper keeps
 // the model and the decision says so (decisionnote.MetaModelCohortMismatch, and
-// a warning); any other mode does not use it (not_calibrated).
+// a warning); any other mode does not use it (not_calibrated). A nil live source
+// cannot be read: Paper keeps the model, any other mode skips the entry. An
+// Engine with WithMetaModel but without this option treats every model that way
+// with the mode unset, so it never scores unchecked.
 func WithMetaModelCohort(mode metalabelsettings.Mode, live metacohort.Source) Option {
 	return func(e *Engine) { e.cohort = &metacohort.Checker{Mode: mode, Live: live} }
 }
@@ -240,5 +250,10 @@ func (e *Engine) withNotes(in Input, reason *string, m *metaEntry, bootstrap boo
 		mismatch = m.cohort.Mismatch
 	}
 	notes := decisionnote.For(in.InstrumentID, in.Symbol, bootstrap, in.Calibrated, in.CalibrationDetail, mismatch, d.verdict != nil)
-	return decisionnote.Append(reason, maxRejectReasonBytes, notes...)
+	// A Risk Engine rejection is read by its code after "risk_engine_rejected:".
+	codes := 1
+	if reason != nil && strings.HasPrefix(*reason, ReasonRiskEngineRejected+":") {
+		codes = 2
+	}
+	return decisionnote.Append(reason, maxRejectReasonBytes, codes, notes...)
 }

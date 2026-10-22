@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
@@ -87,9 +89,21 @@ func DefaultConfig(context.Context) (metalabel.DecideConfig, error) {
 	return metalabel.DefaultDecideConfig(), nil
 }
 
-// Option wires models and predictions with the default take/skip policy.
+// Option wires models and predictions with the default take/skip policy, and a
+// Live cohort check against the pre-promotion cohort (what a model with no
+// recorded training cohort matches), so a test that is not about cohorts scores
+// as before. A policy.WithMetaModelCohort given after it replaces that check.
 func Option(models policy.MetaModelSource, predictions policy.PredictionRecorder) policy.Option {
-	return policy.WithMetaModel(models, predictions, DefaultConfig)
+	return WithConfig(models, predictions, DefaultConfig)
+}
+
+// WithConfig is Option with a take/skip policy of the test's choosing.
+func WithConfig(models policy.MetaModelSource, predictions policy.PredictionRecorder, config policy.MetaConfigSource) policy.Option {
+	meta := policy.WithMetaModel(models, predictions, config)
+	cohort := policy.WithMetaModelCohort(metalabelsettings.ModeLive, func(context.Context) (string, string, error) {
+		return "trader-v3", jev.LegacyModelCohort, nil
+	})
+	return func(e *policy.Engine) { meta(e); cohort(e) }
 }
 
 // NewStore returns a Store over db holding model as its active model: a real

@@ -115,22 +115,54 @@ func TestEvaluate_MetaModelCohortAgainstTheLiveVersion(t *testing.T) {
 	}
 }
 
-// A model that matches (or no cohort check wired) leaves the decision record as
-// before: no note, a take has no reject_reason.
-func TestEvaluate_MatchingOrUncheckedModelLeavesTheRecordUnchanged(t *testing.T) {
-	for name, opts := range map[string][]policy.Option{
-		"matching": {policy.WithMetaModelCohort(metalabelsettings.ModeLive, liveCohort("trader-v3", cohortV3))},
-		"unwired":  nil,
+// A model that matches leaves the decision record as before: no note, a take has
+// no reject_reason.
+func TestEvaluate_MatchingModelLeavesTheRecordUnchanged(t *testing.T) {
+	env := newMetaEnv(t, domain.JevDirectionLong)
+	sig, err := env.newEngine(policytest.Option(policytest.ModelOf(modelTrainedOn(cohortV3)), &policytest.Predictions{}),
+		policy.WithMetaModelCohort(metalabelsettings.ModeLive, liveCohort("trader-v3", cohortV3))).Evaluate(context.Background(), env.in)
+	if err != nil || sig.Direction != domain.JevDirectionLong || sig.RejectReason != nil {
+		t.Fatalf("signal = %+v, %v, want a LONG with no reject_reason", sig, err)
+	}
+}
+
+// Fail closed: an Engine with a model but no cohort checker (or a checker with
+// no live cohort source) cannot tell which cohort the model fits, so it does not
+// score: the entry is skipped, in no mode but Paper (which keeps a model whose
+// cohort it cannot read, as for a failing source).
+func TestEvaluate_UnwiredCohortCheckDoesNotUseTheModel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		extra     []policy.Option
+		wantTake  bool
+		wantSkips bool
+	}{
+		"no checker wired":              {wantSkips: true},
+		"Live, nil live cohort source":  {extra: []policy.Option{policy.WithMetaModelCohort(metalabelsettings.ModeLive, nil)}, wantSkips: true},
+		"mode unset, nil source":        {extra: []policy.Option{policy.WithMetaModelCohort("", nil)}, wantSkips: true},
+		"Paper, nil live cohort source": {extra: []policy.Option{policy.WithMetaModelCohort(metalabelsettings.ModePaper, nil)}, wantTake: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			env := newMetaEnv(t, domain.JevDirectionLong)
-			opts = append(opts, policytest.Option(policytest.ModelOf(modelTrainedOn(cohortV3)), &policytest.Predictions{}))
+			preds := &policytest.Predictions{}
+			opts := append([]policy.Option{unwiredMeta(policytest.ModelOf(modelTrainedOn(cohortV3)), preds)}, tc.extra...)
 			sig, err := env.newEngine(opts...).Evaluate(context.Background(), env.in)
-			if err != nil || sig.Direction != domain.JevDirectionLong || sig.RejectReason != nil {
-				t.Fatalf("signal = %+v, %v, want a LONG with no reject_reason", sig, err)
+			if err != nil {
+				t.Fatalf("Evaluate: %v", err)
+			}
+			if tc.wantTake && (sig.Direction != domain.JevDirectionLong || len(preds.Recorded()) != 1) {
+				t.Fatalf("signal = %+v (%s), predictions %d, want the model's LONG", sig, reasonOf(sig), len(preds.Recorded()))
+			}
+			if tc.wantSkips && (sig.Direction != domain.JevDirectionNone || !strings.HasPrefix(reasonOf(sig), policy.ReasonMetaModelUnavailable) || len(preds.Recorded()) != 0) {
+				t.Fatalf("signal = %+v (%s), predictions %d, want NONE %s without scoring", sig, reasonOf(sig), len(preds.Recorded()), policy.ReasonMetaModelUnavailable)
 			}
 		})
 	}
+}
+
+// unwiredMeta is policy.WithMetaModel alone: the model and the predictions, no
+// cohort check.
+func unwiredMeta(models policy.MetaModelSource, preds policy.PredictionRecorder) policy.Option {
+	return policy.WithMetaModel(models, preds, policytest.DefaultConfig)
 }
 
 // With no model there is nothing to compare: the no_active_model skip is

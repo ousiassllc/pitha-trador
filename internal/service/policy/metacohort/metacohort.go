@@ -14,6 +14,7 @@ package metacohort
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -25,7 +26,9 @@ import (
 // bound to the settings store is one).
 type Source func(ctx context.Context) (version, cohort string, err error)
 
-// Checker compares a model's cohort with the live version's for Mode.
+// Checker compares a model's cohort with the live version's for Mode. The zero
+// Checker has no mode (so it is not Paper) and no source: it never lets a model
+// through. A nil Live is a live cohort that cannot be read.
 type Checker struct {
 	Mode metalabelsettings.Mode
 	Live Source
@@ -49,7 +52,7 @@ type Verdict struct {
 // cannot be read is logged and, outside Paper, makes the entry unavailable.
 func (c Checker) Check(ctx context.Context, modelVersion, trained string) Verdict {
 	paper := c.Mode == metalabelsettings.ModePaper
-	version, live, err := c.Live(ctx)
+	version, live, err := c.read(ctx)
 	if err != nil {
 		slog.Error("policy: read the live prompt cohort to check the meta-label model against", "error", err)
 		if !paper {
@@ -69,3 +72,12 @@ func (c Checker) Check(ctx context.Context, modelVersion, trained string) Verdic
 	}
 	return Verdict{Uncalibrated: detail}
 }
+
+func (c Checker) read(ctx context.Context) (version, cohort string, err error) {
+	if c.Live == nil {
+		return "", "", errNoSource
+	}
+	return c.Live(ctx)
+}
+
+var errNoSource = errors.New("no live cohort source configured")
