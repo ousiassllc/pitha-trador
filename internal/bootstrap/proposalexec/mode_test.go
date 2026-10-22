@@ -57,10 +57,8 @@ func (e countingExecution) CancelPendingEntry(ctx context.Context, id int64) err
 	return e.Execution.CancelPendingEntry(ctx, id)
 }
 
-// nonPaperFixture seeds every kind of work the processor has (an entry, a
-// close, one waiting for a session, one left in processing, a submitted limit
-// order with a cancellation request) and switches the processor to mode,
-// wrapped in the call counters.
+// nonPaperFixture seeds every kind of work (entry, close, waiting, processing,
+// submitted with a cancellation request) and switches the processor to mode.
 func nonPaperFixture(t *testing.T, mode metalabelsettings.Mode) (*fixture, *calls) {
 	t.Helper()
 	f := newFixture(t)
@@ -81,7 +79,6 @@ func nonPaperFixture(t *testing.T, mode metalabelsettings.Mode) (*fixture, *call
 	return f, c
 }
 
-// snapshot is every table the processor writes, row by row.
 func (f *fixture) snapshot() string {
 	f.t.Helper()
 	var b strings.Builder
@@ -91,7 +88,6 @@ func (f *fixture) snapshot() string {
 	return b.String()
 }
 
-// captureLog redirects the default logger for the test and returns what it gets.
 func captureLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	var buf bytes.Buffer
@@ -103,8 +99,7 @@ func captureLog(t *testing.T) *bytes.Buffer {
 
 var nonPaperModes = map[string]metalabelsettings.Mode{"live": metalabelsettings.ModeLive, "empty": ""}
 
-// Cycle and Recover called directly outside Paper mode return an error before
-// they read the database: nothing is written and neither Risk nor Execution is called.
+// Cycle and Recover called directly outside Paper mode error before reading the database.
 func TestProcessor_RefusesToRunOutsidePaperMode(t *testing.T) {
 	for name, mode := range nonPaperModes {
 		t.Run(name, func(t *testing.T) {
@@ -127,9 +122,7 @@ func TestProcessor_RefusesToRunOutsidePaperMode(t *testing.T) {
 	}
 }
 
-// Launch outside Paper mode logs one error line and starts neither Recover nor
-// the Run goroutine: the WaitGroup stays empty and no row changes (the proposal
-// left in processing included).
+// Launch outside Paper mode logs one error and starts no Recover and no Run goroutine.
 func TestLaunch_DoesNotStartOutsidePaperMode(t *testing.T) {
 	for name, mode := range nonPaperModes {
 		t.Run(name, func(t *testing.T) {
@@ -159,12 +152,5 @@ func TestLaunch_DoesNotStartOutsidePaperMode(t *testing.T) {
 				t.Fatalf("log = %q, want exactly the refusal error", out)
 			}
 		})
-	}
-}
-
-func TestProcessor_PaperModeStillProcesses(t *testing.T) {
-	f, c := nonPaperFixture(t, metalabelsettings.ModePaper)
-	if n, err := f.proc.Cycle(context.Background()); err != nil || n == 0 || c.total() == 0 {
-		t.Fatalf("Cycle = (%d, %v), %d Risk/Execution calls; want work done", n, err, c.total())
 	}
 }

@@ -189,7 +189,7 @@ func migrateUp(conn *sql.DB) error {
 		return fmt.Errorf("repository: apply migrations: %w", err)
 	}
 	if after, _, err := m.Version(); err == nil {
-		reportDataMigrations(conn, before, after)
+		db.ReportDataMigrations(conn, before, after)
 	}
 
 	return nil

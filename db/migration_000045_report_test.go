@@ -52,7 +52,8 @@ func TestOpen_ReportsHowManyTradeSignalsMigration000045Rewrote(t *testing.T) {
 	for _, q := range []string{
 		`INSERT INTO instruments (id, symbol, name, market) VALUES (1, '7203', 'n', 'TSE')`,
 		`INSERT INTO trade_signals (id, instrument_id, symbol, timestamp, direction, policy_version, risk_passed) VALUES
-			(1, 1, '7203', 't', 'LONG', 'mcp-proposal-v1', 1), (2, 1, '7203', 't', 'LONG', 'mcp-proposal-v1', 1), (3, 1, '7203', 't', 'LONG', 'mcp-proposal-v1', 1)`,
+			(1, 1, '7203', 't', 'LONG', 'mcp-proposal-v1', 1), (2, 1, '7203', 't', 'LONG', 'mcp-proposal-v1', 1), (3, 1, '7203', 't', 'LONG', 'mcp-proposal-v1', 1),
+			(4, 1, '7203', 't', 'LONG', 'mcp-proposal-v1', 1)`,
 	} {
 		if _, err := conn.Exec(q); err != nil {
 			t.Fatal(err)
@@ -75,7 +76,7 @@ func TestOpen_ReportsHowManyTradeSignalsMigration000045Rewrote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "migration 000045: rewrote 2 trade_signals (退避テーブル trade_signal_rewrites_000045)"
+	want := "migration 000045: rewrote 2 trade_signals (退避テーブル trade_signal_rewrites_000045)、案に辿れず書き換えなかった孤立 signal 1 件"
 	if !strings.Contains(logs.String(), want) {
 		t.Fatalf("log = %s\nwant a line with %q", logs.String(), want)
 	}

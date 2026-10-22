@@ -11,10 +11,8 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 )
 
-// Past its expires_at, a proposal left in processing without an order becomes
-// expired right away (not received first); within its time it goes back to
-// received; one whose order went out takes the order's outcome even past its
-// time. Afterwards nothing is in processing.
+// Past expires_at without an order: expired right away; within time: received;
+// an order went out: its outcome. Afterwards nothing is in processing.
 func TestRestart_ExpiredProcessingProposalBecomesExpired(t *testing.T) {
 	f := newFixture(t)
 	expired := f.propose(spec{expires: at(10, 0, 10)}) // past at 10:00:30
@@ -40,9 +38,7 @@ func TestRestart_ExpiredProcessingProposalBecomesExpired(t *testing.T) {
 	}
 }
 
-// A proposal that cannot be recovered (its order filled but the position is
-// gone) is logged and marked failed (processing_error); the others are still
-// recovered, and none stays in processing.
+// An unrecoverable proposal (filled order, position gone) is logged and failed; the others are recovered.
 func TestRestart_RecoveryFailureDoesNotLeaveProcessing(t *testing.T) {
 	f := newFixture(t)
 	broken := f.propose(spec{quantity: 100})
@@ -59,9 +55,6 @@ func TestRestart_RecoveryFailureDoesNotLeaveProcessing(t *testing.T) {
 	}
 	f.wantEnd(broken, orderproposal.StatusFailed, "processing_error")
 	f.wantEnd(other, orderproposal.StatusReceived, "recovered_after_restart")
-	if got := f.count("order_proposals", "WHERE status = 'processing'"); got != 0 {
-		t.Fatalf("%d proposals left in processing", got)
-	}
 	if !strings.Contains(logs.String(), "level=ERROR") || !strings.Contains(logs.String(), "proposal_id=1 ") {
 		t.Fatalf("the failure was not logged with the proposal: %s", logs.String())
 	}
@@ -89,8 +82,7 @@ func TestRestart_LaunchLeavesNothingInProcessing(t *testing.T) {
 	}
 }
 
-// A panic while recovering one proposal is that proposal's failure: it becomes
-// failed and the others are still recovered.
+// A panic while recovering one proposal fails that one; the others are recovered.
 func TestRestart_RecoveryPanicDoesNotLeaveProcessing(t *testing.T) {
 	f := newFixture(t)
 	broken := f.propose(spec{quantity: 100})

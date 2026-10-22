@@ -81,6 +81,31 @@ func TestMigration000045_RewritesUnorderedProposalSignals(t *testing.T) {
 	mustExec(t, conn, `INSERT INTO paper_orders (instrument_id, trade_signal_id, symbol, side, order_type, quantity, status, submitted_at)
 		VALUES (1, 3, '7203', 'BUY', 'MARKET', 100, 'FILLED', 't'), (1, 11, '7203', 'BUY', 'LIMIT', 100, 'CANCELLED', 't')`)
 
+	// Retried proposals (issue #860): a retry linked a new signal to the proposal and left the old one risk_passed = 1 with no link.
+	stamp := func(signalID int, at string) {
+		mustExec(t, conn, `UPDATE trade_signals SET timestamp = '`+at+`' WHERE id = `+itoa(signalID))
+	}
+	retried := func(signalID int, status, at, waitedAt string) { // a proposal of instrument 1 that waited for the session at waitedAt
+		proposal(0, status, "", signalID)
+		mustExec(t, conn, `UPDATE order_proposals SET instrument_id = 1 WHERE id = `+itoa(proposals))
+		stamp(signalID, at)
+		mustExec(t, conn, `INSERT INTO order_proposal_events (proposal_id, at, from_status, to_status, reason_code, actor)
+			VALUES (`+itoa(proposals)+`, '`+waitedAt+`', 'processing', 'waiting_session', 'outside_trading_session', 'app')`)
+	}
+	for id := 12; id <= 19; id++ {
+		signal(id, "mcp-proposal-v1", 1, "")
+	}
+	retried(13, "filled", "2026-10-01T00:05:00.000Z", "2026-10-01T00:00:11.000Z") // 12 is its old signal: waited 1 s after it
+	stamp(12, "2026-10-01T00:00:10.000Z")
+	stamp(14, "2026-10-03T00:00:00.000Z") // an orphan nothing in the history points to
+	stamp(15, "2026-10-02T00:00:10.000Z") // two proposals waited right after it: not one proposal
+	retried(16, "expired", "2026-10-02T00:05:00.000Z", "2026-10-02T00:00:12.000Z")
+	retried(17, "expired", "2026-10-02T00:06:00.000Z", "2026-10-02T00:00:13.000Z")
+	stamp(18, "2026-10-04T00:00:00.000Z") // the only wait is 5 minutes later: outside the 60 s window
+	retried(19, "filled", "2026-10-04T00:10:00.000Z", "2026-10-04T00:05:00.000Z")
+	mustExec(t, conn, `INSERT INTO paper_orders (instrument_id, trade_signal_id, symbol, side, order_type, quantity, status, submitted_at)
+		VALUES (1, 13, '7203', 'BUY', 'MARKET', 100, 'FILLED', 't'), (1, 19, '7203', 'BUY', 'MARKET', 100, 'FILLED', 't')`)
+
 	snapshot := func() string {
 		rows, err := conn.Query(`SELECT id, risk_passed, quote(reject_reason) FROM trade_signals ORDER BY id`)
 		if err != nil {
@@ -138,12 +163,29 @@ func TestMigration000045_RewritesUnorderedProposalSignals(t *testing.T) {
 		"9|0|'proposal_rejected_after_risk: expired'",
 		"10|0|'proposal_rejected_after_risk: cancel_requested'",
 		"11|1|NULL", // an order came of it: still a Risk pass
+		"12|0|'proposal_rejected_after_risk: outside_trading_session'", // an old signal of a retried proposal, traced by its history
+		"13|1|NULL",
+		"14|1|NULL", // orphans that cannot be traced to exactly one proposal stay as they are
+		"15|1|NULL",
+		"16|0|'proposal_rejected_after_risk: unknown'",
+		"17|0|'proposal_rejected_after_risk: unknown'",
+		"18|1|NULL",
+		"19|1|NULL",
 	}, "\n")
 	if got := snapshot(); got != want {
 		t.Fatalf("after up:\n%s\nwant:\n%s", got, want)
 	}
 	// Exactly the rewritten rows are kept, with their values from before.
-	if got, want := rewrites(), "1|1|'legacy text'\n2|1|NULL\n7|1|NULL\n8|1|NULL\n9|1|NULL\n10|1|NULL"; got != want {
+	var link string
+	var owner, ownerSignal int
+	if err := conn.QueryRow(`SELECT w.link, w.proposal_id, op.trade_signal_id FROM trade_signal_rewrites_000045 w
+		JOIN order_proposals op ON op.id = w.proposal_id WHERE w.signal_id = 12`).Scan(&link, &owner, &ownerSignal); err != nil {
+		t.Fatal(err)
+	}
+	if link != "retry_history" || ownerSignal != 13 {
+		t.Fatalf("signal 12 is bound by %q to proposal %d (signal %d), want retry_history and the proposal of signal 13", link, owner, ownerSignal)
+	}
+	if got, want := rewrites(), "1|1|'legacy text'\n2|1|NULL\n7|1|NULL\n8|1|NULL\n9|1|NULL\n10|1|NULL\n12|1|NULL\n16|1|NULL\n17|1|NULL"; got != want {
 		t.Fatalf("trade_signal_rewrites_000045:\n%s\nwant:\n%s", got, want)
 	}
 

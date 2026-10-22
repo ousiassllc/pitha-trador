@@ -11,6 +11,7 @@ package proposalstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -135,14 +136,19 @@ UPDATE order_proposals SET status = ?, status_reason = ?, updated_at = ?, `+link
 	} else if n == 0 {
 		return ErrStatusChanged
 	}
+	detail := c.DetailJSON
 	if noOrderStatuses[to] {
 		if err := markSignalUnordered(ctx, tx, id, c.Reason); err != nil {
+			return err
+		}
+		var err error
+		if detail, err = withSignalID(ctx, tx, id, detail); err != nil {
 			return err
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `
 INSERT INTO order_proposal_events (proposal_id, at, from_status, to_status, reason_code, actor, detail_json)
-VALUES (?, ?, ?, ?, ?, ?, ?)`, id, at, from, to, c.Reason, orderproposal.ActorApp, c.DetailJSON); err != nil {
+VALUES (?, ?, ?, ?, ?, ?, ?)`, id, at, from, to, c.Reason, orderproposal.ActorApp, detail); err != nil {
 		return fmt.Errorf("orderproposal: insert event of proposal %d: %w", id, err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -176,6 +182,31 @@ WHERE risk_passed = 1
 		return fmt.Errorf("orderproposal: mark trade signal of proposal %d unordered: %w", id, err)
 	}
 	return nil
+}
+
+// withSignalID adds "trade_signal_id" (the signal the proposal points to now) to
+// the event's detail_json, so the history keeps which signal each attempt used
+// after a retry links a new one. A proposal without a signal leaves detail as is.
+func withSignalID(ctx context.Context, tx *sql.Tx, id int64, detail string) (string, error) {
+	var signalID sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT trade_signal_id FROM order_proposals WHERE id = ?`, id).Scan(&signalID); err != nil {
+		return "", fmt.Errorf("orderproposal: read trade signal of proposal %d: %w", id, err)
+	}
+	if !signalID.Valid {
+		return detail, nil
+	}
+	fields := map[string]any{}
+	if detail != "" {
+		if err := json.Unmarshal([]byte(detail), &fields); err != nil {
+			return "", fmt.Errorf("orderproposal: detail of proposal %d is not a JSON object: %w", id, err)
+		}
+	}
+	fields["trade_signal_id"] = signalID.Int64
+	out, err := json.Marshal(fields)
+	if err != nil {
+		return "", fmt.Errorf("orderproposal: encode detail of proposal %d: %w", id, err)
+	}
+	return string(out), nil
 }
 
 func codeOrUnknown(reason string) string {

@@ -322,4 +322,4 @@ erDiagram
 インデックス: `INDEX (proposal_id, id)`
 
 ## trade_signal_rewrites_000045
-マイグレーション000045（issue #860）が書き換えた`trade_signals`の書き換え前の値の退避（1行が書き換えた1行。downがここから戻して表を消す。適用した起動の件数ログはこの表の行数）。カラム: `signal_id`（integer PK, FK → trade_signals(id)）、`old_risk_passed`（boolean NOT NULL）、`old_reject_reason`（varchar(255) NULL可）、`rewritten_at`（text NOT NULL, DEFAULT 現在時刻UTC）。
+マイグレーション000045（issue #860）が書き換えた`trade_signals`の書き換え前の値の退避（1行が書き換えた1行。downがここから戻して表を消す。適用した起動の件数ログはこの表の行数）。カラム: `signal_id`（integer PK, FK → trade_signals(id)）、`proposal_id`（FK → order_proposals(id)。結び付けた案）、`link`（`trade_signal_id`＝案が指していた行／`retry_history`＝再試行で案から外れた古い行を履歴から辿れたもの。CHECK）、`old_risk_passed`（boolean NOT NULL）、`old_reject_reason`（varchar(255) NULL可）、`new_reject_reason`（NOT NULL）、`rewritten_at`（text NOT NULL, DEFAULT 現在時刻UTC）。

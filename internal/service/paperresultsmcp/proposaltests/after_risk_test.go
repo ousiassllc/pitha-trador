@@ -7,8 +7,9 @@ import (
 )
 
 // order_proposal_get tells a proposal the application refused after Risk
-// passed (rejected_after_risk: true, the application's code) from one the Risk
-// Engine rejected and from one that reached an order (issue #860).
+// passed (status rejected: rejected_after_risk true, the application's code)
+// from one the Risk Engine rejected, one that reached an order, and one that
+// ended expired, cancelled or waiting for the session (false; issue #860).
 func TestOrderProposalGet_RejectedAfterRiskFlag(t *testing.T) {
 	srv, w := proposalServer(t)
 	testkit.SeedProposalOutcomes(t, w)
@@ -23,6 +24,9 @@ func TestOrderProposalGet_RejectedAfterRiskFlag(t *testing.T) {
 		{"refused after Risk", testkit.ProposalRejectedAfterRisk, "size_zero", true, false},
 		{"Risk Engine rejection", testkit.ProposalRejectedByRisk, "kill_switch_active", false, false},
 		{"Risk Engine rejection (seeded outcome)", testkit.ProposalRejected, "bucket_budget_exceeded", false, false},
+		{"expired after Risk", testkit.ProposalExpiredAfterRisk, "expired", false, false},
+		{"cancelled after Risk", testkit.ProposalCancelledAfterRisk, "cancel_requested", false, false},
+		{"waiting for the session after Risk", testkit.ProposalWaitingAfterRisk, "outside_trading_session", false, false},
 		{"reached an order", testkit.ProposalWin, "", false, true},
 	} {
 		s := getProposal(t, srv, c.id).Result.Signal

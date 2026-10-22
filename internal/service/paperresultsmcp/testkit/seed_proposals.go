@@ -198,21 +198,35 @@ func SeedProposalOutcomes(t *testing.T, w *sql.DB) {
 	ClosedPosition(t, w, 5, 7, nil, 100, 3000, "2026-10-14T02:00:00Z", "2026-10-14T05:00:00Z", 100.0, "time_exit")
 }
 
-// Proposals SeedAfterRiskRejection adds (issue #860): one Risk passed and the
-// application refused afterwards, one refused by the Risk Engine.
+// Proposals SeedAfterRisk adds (issue #860): proposals whose signal passed Risk
+// and ended another way, and one refused by the Risk Engine.
 const (
-	ProposalRejectedAfterRisk = 101
-	ProposalRejectedByRisk    = 102
+	ProposalRejectedAfterRisk  = 101
+	ProposalRejectedByRisk     = 102
+	ProposalExpiredAfterRisk   = 103
+	ProposalCancelledAfterRisk = 104
+	ProposalWaitingAfterRisk   = 105
 )
 
-// SeedAfterRiskRejection adds a rejected proposal whose signal is
-// risk_passed = 0 with 'proposal_rejected_after_risk: size_zero' and another
-// whose signal is a Risk Engine rejection. The ids are above SeedProposalOutcomes'.
+// SeedAfterRiskRejection adds, above SeedProposalOutcomes' ids: a rejected
+// proposal whose signal is risk_passed = 0 with
+// 'proposal_rejected_after_risk: size_zero', one whose signal is a Risk Engine
+// rejection, and an expired, a cancelled and a waiting_session proposal whose
+// signal passed Risk and did not become an order.
 func SeedAfterRiskRejection(t *testing.T, w *sql.DB) {
 	t.Helper()
 	const policy = "mcp-proposal-v1"
-	TradeSignal(t, w, 101, "2026-10-18T00:00:04Z", policy, false, "proposal_rejected_after_risk: size_zero")
-	TradeSignal(t, w, 102, "2026-10-18T01:00:04Z", policy, false, "risk_engine_rejected: kill_switch_active")
-	Proposal(t, w, ProposalRow{ID: ProposalRejectedAfterRisk, ReceivedAt: "2026-10-18T00:00:00Z", Status: "rejected", Reason: "size_zero", Quantity: 100, Stop: 2400.0, MaxLoss: 20000.0, SignalID: 101})
-	Proposal(t, w, ProposalRow{ID: ProposalRejectedByRisk, ReceivedAt: "2026-10-18T01:00:00Z", Status: "rejected", Reason: "kill_switch_active", Quantity: 100, Stop: 2400.0, MaxLoss: 20000.0, SignalID: 102})
+	for _, c := range []struct {
+		id                int64
+		status, reason, r string
+	}{
+		{101, "rejected", "size_zero", "proposal_rejected_after_risk: size_zero"},
+		{102, "rejected", "kill_switch_active", "risk_engine_rejected: kill_switch_active"},
+		{103, "expired", "expired", "proposal_rejected_after_risk: expired"},
+		{104, "cancelled", "cancel_requested", "proposal_rejected_after_risk: cancel_requested"},
+		{105, "waiting_session", "outside_trading_session", "proposal_rejected_after_risk: outside_trading_session"},
+	} {
+		TradeSignal(t, w, c.id, "2026-10-18T00:00:04Z", policy, false, c.r)
+		Proposal(t, w, ProposalRow{ID: c.id, ReceivedAt: "2026-10-18T00:00:00Z", Status: c.status, Reason: c.reason, Quantity: 100, Stop: 2400.0, MaxLoss: 20000.0, SignalID: c.id})
+	}
 }

@@ -69,19 +69,21 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 			At: jst(e.At), From: deref(e.FromStatus), To: e.ToStatus, Reason: e.ReasonCode, Actor: e.Actor, Detail: detailText(e.Detail),
 		})
 	}
-	p.Linked = linked(r)
+	p.Linked = linked(r, s.Status)
 	return p
 }
 
 // linked is the records the application linked to the proposal, in the order
 // they come about: trade signal -> paper order -> position.
-func linked(r proposal.Result) []pages.ProposalLinked {
+func linked(r proposal.Result, status string) []pages.ProposalLinked {
 	var out []pages.ProposalLinked
 	if sg := r.Signal; sg != nil {
 		risk := pages.ProposalField{Label: "Risk check", Value: passed(sg.RiskPassed)}
 		reject := pages.ProposalField{Label: "拒否コード", Value: deref(sg.RejectCode)}
 		if sg.RejectedAfterRisk { // passed Risk, refused by the application afterwards (issue #860)
-			risk.Value, reject.Label = "通過", "後段で拒否"
+			risk.Value, reject.Label = laterRejection, "理由コード"
+		} else if end, ok := afterRiskEnd[status]; ok && !sg.RiskPassed { // passed Risk, no order came of it for another reason
+			risk.Value, reject.Label = "Risk通過・"+end, "理由コード"
 		}
 		out = append(out, pages.ProposalLinked{Title: "トレードシグナル #" + strconv.FormatInt(sg.ID, 10), Fields: []pages.ProposalField{
 			{Label: "時刻（JST）", Value: jst(sg.At)},
@@ -210,6 +212,17 @@ func reached(b *bool) string {
 		return "届いた"
 	}
 	return "届かなかった"
+}
+
+// laterRejection is the signal's Risk check when the proposal passed
+// the Risk Engine and the application refused it afterwards.
+const laterRejection = "Risk通過・後段で拒否"
+
+// afterRiskEnd is how a proposal that passed Risk but did not become an order
+// is shown when it did not end as a later rejection: by what became of it.
+var afterRiskEnd = map[string]string{
+	"expired": "期限切れ", "cancelled": "取消", "waiting_session": "セッション待ち",
+	"received": "再処理待ち", "failed": "失敗",
 }
 
 func passed(ok bool) string {
