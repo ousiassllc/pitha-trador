@@ -13,14 +13,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/db"
 )
 
-// Migration 000048 creates jev_shadow_decisions and jev_prompt_promotions (issue
+// Migration 000047 creates jev_shadow_decisions and jev_prompt_promotions (issue
 // #872): the shadow row is tied to a live jev_decisions row, one row per live
 // decision and candidate version, its answers are CHECK-constrained like the live
 // ones, a promotion's actor is 'mcp' or 'gui', and one down step drops both
-// tables (and nothing else). It steps from 43 (main's last migration when this
-// was written) with Steps so it does not depend on 44-47, which other changes
-// add.
-func TestMigration000048_RoundTripsAndConstrainsTheShadowTables(t *testing.T) {
+// tables (and nothing else). It migrates 43 -> 47 and steps one back, so it
+// does not depend on whether 44-46 (other changes) are present: golang-migrate
+// walks the migrations that exist between the two versions.
+func TestMigration000047_RoundTripsAndConstrainsTheShadowTables(t *testing.T) {
 	conn, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "m.db")+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -51,13 +51,13 @@ func TestMigration000048_RoundTripsAndConstrainsTheShadowTables(t *testing.T) {
 		t.Fatalf("migrate to 43: %v", err)
 	}
 	if exists("jev_shadow_decisions") || exists("jev_prompt_promotions") {
-		t.Fatal("shadow tables exist before migration 48")
+		t.Fatal("shadow tables exist before migration 47")
 	}
-	if err := m.Up(); err != nil {
+	if err := m.Migrate(47); err != nil {
 		t.Fatalf("migrate up: %v", err)
 	}
 	if !exists("jev_shadow_decisions") || !exists("jev_prompt_promotions") {
-		t.Fatal("shadow tables missing after migration 48")
+		t.Fatal("shadow tables missing after migration 47")
 	}
 
 	if _, err := conn.Exec(`INSERT INTO instruments (id, symbol, name, market, is_active, created_at, updated_at) VALUES (1, '7203', 'x', 'TSE Prime', 1, 't', 't')`); err != nil {
@@ -93,6 +93,22 @@ func TestMigration000048_RoundTripsAndConstrainsTheShadowTables(t *testing.T) {
 	// A second candidate version for the same live decision is allowed.
 	if err := insert(1, "trader-v5", "SHORT", "RANGE", "poor", 0.5, 0.0002); err != nil {
 		t.Errorf("a second candidate version for one decision was refused: %v", err)
+	}
+	// cost_is_estimate marks a row whose token count was estimated (no usage
+	// in the response); it defaults to 0 (measured) and only takes 0 or 1.
+	var estimate int
+	if err := conn.QueryRow(`SELECT cost_is_estimate FROM jev_shadow_decisions WHERE prompt_version = 'trader-v4'`).Scan(&estimate); err != nil || estimate != 0 {
+		t.Errorf("cost_is_estimate default = %d (err %v), want 0", estimate, err)
+	}
+	setEstimate := func(v int) error {
+		_, err := conn.Exec(`UPDATE jev_shadow_decisions SET cost_is_estimate = ? WHERE prompt_version = 'trader-v4'`, v)
+		return err
+	}
+	if err := setEstimate(1); err != nil {
+		t.Errorf("cost_is_estimate = 1 was refused: %v", err)
+	}
+	if err := setEstimate(2); err == nil {
+		t.Error("cost_is_estimate = 2 was accepted: only 0 and 1 exist")
 	}
 
 	promote := func(actor string) error {

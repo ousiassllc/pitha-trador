@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（Jev プロンプトのシャドー・昇格）
 
-`docs/architecture/er.md` から分割した章。対象: `jev_shadow_decisions` / `jev_prompt_promotions`（マイグレーション `000048`。issue #872）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様は `docs/architecture/paper-results-mcp-jev-prompt.md`。
+`docs/architecture/er.md` から分割した章。対象: `jev_shadow_decisions` / `jev_prompt_promotions`（マイグレーション `000047`。issue #872）。型・規約と全体 ER 図は `docs/architecture/er.md` を参照。仕様は `docs/architecture/paper-results-mcp-jev-prompt.md`。
 
 ## プロンプトの版
 
@@ -29,6 +29,7 @@ erDiagram
         integer latency_ms
         integer input_tokens
         numeric request_cost
+        integer cost_is_estimate
         text created_at
     }
 ```
@@ -45,8 +46,9 @@ erDiagram
 | entry_quality | varchar(12) | NOT NULL, CHECK | `poor` / `fair` / `good` / `strong` / `exceptional` |
 | confidence / toxic_flow / liquidity_stressed / continuation_probability | numeric(5,4) | NOT NULL, CHECK 0〜1 | Jev 自身の報告値（検証済みの確率ではない。FR-TRADER-2）。`confidence` は direction の答えの確信度 |
 | latency_ms | integer | NOT NULL | 呼び出しの総所要時間（再試行を含む） |
-| input_tokens | integer | NOT NULL, 既定 0 | API が報告した入力トークン数（`usage.input_tokens`） |
-| request_cost | numeric(10,6) | NOT NULL, 既定 0 | **見積り**（USD）。入力トークン数 × 公表単価（Jev は 1M 入力トークンあたり 0.042 USD、出力は無料。2026-10-22 時点）。API は課金額を返さないので、請求書と突き合わせた値ではない。日次（JST の日）・累計の合計が 1 日の費用の上限（`jev.shadow.daily_cost_cap_usd`。**暫定の案・未承認**）の判定と GUI・MCP の表示に使われる |
+| input_tokens | integer | NOT NULL, 既定 0 | 入力トークン数。API が報告した値（`usage.input_tokens`）。応答に `usage` が無かった行（`cost_is_estimate` = 1）は、リクエスト本文のバイト数から保守的な比（2 バイト = 1 トークン）で推定した値 |
+| request_cost | numeric(10,6) | NOT NULL, 既定 0 | **見積り**（USD）。入力トークン数 × 公表単価（Jev は 1M 入力トークンあたり 0.042 USD、出力は無料。2026-10-22 時点）。API は課金額を返さないので、請求書と突き合わせた値ではない（単価と上限の数字は確定、見積りの一致は未確認）。日次（JST の日）・累計の合計が 1 日の費用の上限（`jev.shadow.daily_cost_cap_usd`。既定 0.10 USD・確定）の判定と GUI・MCP の表示に使われる。`usage` が無い行も 0 にせず、推定のトークン数で入れる（0 だと上限をすり抜けるため） |
+| cost_is_estimate | integer | NOT NULL, 既定 0, CHECK IN (0, 1) | 1 = 応答に `usage` が無く、`input_tokens` と `request_cost` を推定で入れた行。0 = API が報告した値。GUI・`jev_shadow_cost` の「うち見積り」（`estimated_calls` / `estimated_cost_usd`）はこの列の合計 |
 | created_at | text | NOT NULL | 保存時刻（UTC の RFC3339） |
 
 制約・インデックス: `UNIQUE (jev_decision_id, prompt_version)`（1 つのライブ判定に対し候補の版ごとに 1 行）、`INDEX (created_at)`（日次の費用の集計）、`INDEX (prompt_version, jev_decision_id)`。
@@ -73,12 +75,12 @@ erDiagram
 | `jev.trader_prompt_version` | JSON 文字列 | ライブの Trader の版。昇格だけが書く。無ければビルドの既定 `trader-v3` |
 | `jev.shadow.enabled` | 整数 `1` / `0` | シャドーの有効。**行が無い・壊れている値は無効（既定）** |
 | `jev.shadow.candidate_version` | JSON 文字列 | シャドーが動かす候補の版。無ければ何も呼ばない |
-| `jev.shadow.daily_cost_cap_usd` | JSON 数値 | 1 日（JST）あたりの費用の上限。無ければ `jevshadowsettings.ProposedDailyCostCapUSD`（**暫定の案・未承認**） |
+| `jev.shadow.daily_cost_cap_usd` | JSON 数値 | 1 日（JST）あたりの費用の上限。無ければ `jevshadowsettings.DefaultDailyCostCapUSD`（0.10 USD。確定した既定値で、Settings で上げ下げできる） |
 | `jev.shadow.halt` | JSON オブジェクト | 上限で止めた日の記録（日・固定コード `daily_cost_cap` / `daily_failure_cap`・使った額・上限・失敗回数・時刻）。翌日（JST）に再開する |
-| `jev.shadow.failures` | JSON オブジェクト | その日（JST）の失敗した呼び出しの回数（`{"date","count"}`）。`jevshadowsettings.ProposedDailyFailureCap`（20 回。**暫定の案・未承認**。定数）に達するとその日のシャドーを止める。費用の合計は保存に成功した呼び出しだけを足すため、課金されても保存されない呼び出しの抑えにする |
+| `jev.shadow.failures` | JSON オブジェクト | その日（JST）の失敗した呼び出しの回数（`{"date","count"}`）。`jevshadowsettings.DailyFailureCap`（20 回。確定。定数）に達するとその日のシャドーを止める。費用の合計は保存に成功した呼び出しだけを足すため、課金されても保存されない呼び出しの抑えにする |
 
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
-| 1.0 | 2026-10-22 | 新規作成。`jev_shadow_decisions` / `jev_prompt_promotions`（`000048`）と、`question_version` を正式な版とする決定、関連する `runtime_settings` のキー | issue #872 |
+| 1.0 | 2026-10-22 | 新規作成。`jev_shadow_decisions` / `jev_prompt_promotions`（`000047`）と、`question_version` を正式な版とする決定、関連する `runtime_settings` のキー | issue #872 |

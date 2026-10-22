@@ -95,6 +95,7 @@ func (c *Client) trader(ctx context.Context, label string, trackHealth bool, req
 		Confidence:              direction.Confidence,
 		ModelID:                 result.Model,
 		InputTokens:             result.Usage.InputTokens,
+		RequestBytes:            result.RequestBytes,
 	}, latency, nil
 }
 
@@ -147,6 +148,7 @@ func (c *Client) evaluate(ctx context.Context, label string, trackHealth bool, r
 	for attempt := 1; attempt <= c.maxAttempts; attempt++ {
 		r, callErr := c.post(ctx, req, body)
 		if callErr == nil {
+			r.RequestBytes = len(body)
 			return r, 0, nil
 		}
 		lastErr = callErr

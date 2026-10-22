@@ -11,13 +11,15 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/testkit"
 )
 
-func TestCostShowsTodayTotalDailyAndTheUnapprovedProposedCap(t *testing.T) {
+func TestCostShowsTodayTotalDailyEstimatesAndTheDefaultCap(t *testing.T) {
 	srv, w := shadowServer(t) // the fixed clock is 2026-10-18T03:00Z = 2026-10-18 12:00 JST
 	liveDecision(t, w, 1, "2026-10-18T01:00:00Z", "trader-v3", "LONG", "poor")
 	// Yesterday 23:30 JST (14:30Z on the 17th) and today 00:30 JST (15:30Z on the 17th is JST 10-18 00:30).
 	shadowDecision(t, w, 1, "trader-v4", "LONG", "good", 0.25, "2026-10-17T14:30:00Z")
 	shadowDecision(t, w, 1, "trader-v5", "LONG", "good", 0.5, "2026-10-17T15:30:00Z")
 	shadowDecision(t, w, 1, "trader-v6", "LONG", "good", 0.125, "2026-10-18T02:00:00Z")
+	// The trader-v6 row is one whose response had no usage: its tokens were estimated.
+	testkit.MustExec(t, w, `UPDATE jev_shadow_decisions SET cost_is_estimate = 1 WHERE prompt_version = 'trader-v6'`)
 
 	var c shadowquery.ShadowCostStatus
 	srv.call(t, "jev_shadow_cost", map[string]any{}).data(t, "jev_shadow_cost", &c)
@@ -27,19 +29,26 @@ func TestCostShowsTodayTotalDailyAndTheUnapprovedProposedCap(t *testing.T) {
 	if c.Total.Calls != 3 || c.Total.RequestCostUSD != 0.875 {
 		t.Errorf("total = %+v, want 3 calls / 0.875", c.Total)
 	}
+	// The estimated share (うち見積り) is reported apart, in today, the total and the day.
+	if c.Today.EstimatedCalls != 1 || c.Today.EstimatedCostUSD != 0.125 || c.Total.EstimatedCalls != 1 || c.Total.EstimatedCostUSD != 0.125 {
+		t.Errorf("estimated share: today %+v total %+v, want 1 call / 0.125 USD in both", c.Today, c.Total)
+	}
+	if c.Daily[0].EstimatedCalls != 1 || c.Daily[0].EstimatedCostUSD != 0.125 || c.Daily[1].EstimatedCalls != 0 || c.Daily[1].EstimatedCostUSD != 0 {
+		t.Errorf("daily estimated share = %+v", c.Daily)
+	}
 	if len(c.Daily) != 2 || c.Daily[0].Date != "2026-10-18" || c.Daily[1].Date != "2026-10-17" || c.Daily[1].RequestCostUSD != 0.25 {
 		t.Errorf("daily = %+v", c.Daily)
 	}
 	// Nothing stored: the shadow is off, no candidate, the live version is the build default, and the cap
-	// is the unapproved proposal.
+	// is the default.
 	if c.Enabled || c.CandidateVersion != nil || c.LiveVersion != "trader-v3" {
 		t.Errorf("state = enabled %v candidate %v live %q", c.Enabled, c.CandidateVersion, c.LiveVersion)
 	}
-	if c.DailyCapUSD != jevshadowsettings.ProposedDailyCostCapUSD || !c.CapIsDefault || c.CapSource != shadowquery.CapSourceProposed {
-		t.Errorf("cap = %v default %v source %q, want the unapproved proposal", c.DailyCapUSD, c.CapIsDefault, c.CapSource)
+	if c.DailyCapUSD != jevshadowsettings.DefaultDailyCostCapUSD || !c.CapIsDefault || c.CapSource != shadowquery.CapSourceDefault {
+		t.Errorf("cap = %v default %v source %q, want the default 0.10 USD", c.DailyCapUSD, c.CapIsDefault, c.CapSource)
 	}
-	if c.FailureCap != jevshadowsettings.ProposedDailyFailureCap || c.FailureCapSource != shadowquery.CapSourceProposed || c.FailuresToday != 0 {
-		t.Errorf("failure cap = %d (%q) today %d, want the unapproved proposal and 0", c.FailureCap, c.FailureCapSource, c.FailuresToday)
+	if c.FailureCap != jevshadowsettings.DailyFailureCap || c.FailureCapSource != shadowquery.CapSourceFixed || c.FailuresToday != 0 {
+		t.Errorf("failure cap = %d (%q) today %d, want the fixed 20 and 0", c.FailureCap, c.FailureCapSource, c.FailuresToday)
 	}
 	if c.HaltToday != nil || c.LastHalt != nil {
 		t.Errorf("halt = %+v / %+v, want none", c.HaltToday, c.LastHalt)

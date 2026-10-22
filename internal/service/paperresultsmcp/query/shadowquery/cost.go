@@ -24,22 +24,35 @@ type Promotion struct {
 
 // DayCost is the shadow's cost of one JST day.
 type DayCost struct {
-	Date           string  `json:"date"`
-	Calls          int     `json:"calls"`
-	RequestCostUSD float64 `json:"request_cost_usd"`
+	Date             string  `json:"date"`
+	Calls            int     `json:"calls"`
+	RequestCostUSD   float64 `json:"request_cost_usd"`
+	EstimatedCalls   int     `json:"estimated_calls"`
+	EstimatedCostUSD float64 `json:"estimated_cost_usd"`
 }
 
-// CapSource values of jev_shadow_cost: a limit that is the build's proposal
-// (暫定の案・未承認) and one a person stored.
+// estimatedColumns is the SQL for the estimated share of a cost sum
+// (rows with cost_is_estimate = 1: the response had no usage).
+const estimatedColumns = `COALESCE(SUM(cost_is_estimate), 0), COALESCE(SUM(CASE WHEN cost_is_estimate = 1 THEN request_cost ELSE 0 END), 0)`
+
+// CapSource values of jev_shadow_cost: a limit that is the build's default
+// (nothing stored), one a person stored on the Settings screen, and one the
+// build fixes (the failure cap: Settings cannot change it).
 const (
-	CapSourceProposed = "proposed_unapproved"
-	CapSourceStored   = "stored"
+	CapSourceDefault = "default"
+	CapSourceStored  = "stored"
+	CapSourceFixed   = "fixed"
 )
 
-// Spend is a number of shadow calls and their cost.
+// Spend is a number of shadow calls and their cost. EstimatedCalls and
+// EstimatedCostUSD are the part of them whose token count was estimated from
+// the request's size because the response carried no usage
+// (cost_is_estimate = 1); they are included in Calls / RequestCostUSD.
 type Spend struct {
-	Calls          int     `json:"calls"`
-	RequestCostUSD float64 `json:"request_cost_usd"`
+	Calls            int     `json:"calls"`
+	RequestCostUSD   float64 `json:"request_cost_usd"`
+	EstimatedCalls   int     `json:"estimated_calls"`
+	EstimatedCostUSD float64 `json:"estimated_cost_usd"`
 }
 
 // ShadowHalt is why the shadow stopped on a day (fixed code, no free text).
@@ -61,18 +74,18 @@ type ShadowCostStatus struct {
 	Enabled          bool    `json:"enabled"`
 	CandidateVersion *string `json:"candidate_version"`
 	LiveVersion      string  `json:"live_version"`
-	// DailyCapUSD is the daily cost cap. CapSource says where it comes from, a
-	// fact separate from whether anyone approved it: CapSourceProposed (nothing
-	// stored: the proposal, 暫定の案・未承認,
-	// jevshadowsettings.ProposedDailyCostCapUSD) or CapSourceStored (a value a
+	// DailyCapUSD is the daily cost cap (確定。0.10 USD の既定値を Settings
+	// 画面で上げ下げできる). CapSource says where it comes from:
+	// CapSourceDefault (nothing stored: the build's
+	// jevshadowsettings.DefaultDailyCostCapUSD) or CapSourceStored (a value a
 	// person saved on the Settings screen). CapIsDefault is CapSource ==
-	// CapSourceProposed.
+	// CapSourceDefault.
 	DailyCapUSD  float64 `json:"daily_cap_usd"`
 	CapIsDefault bool    `json:"cap_is_default"`
 	CapSource    string  `json:"cap_source"`
 	// FailureCap is how many failed shadow calls a JST day may have before the
-	// shadow stops (a constant, jevshadowsettings.ProposedDailyFailureCap:
-	// 暫定の案・未承認, so FailureCapSource is always CapSourceProposed);
+	// shadow stops (a constant, jevshadowsettings.DailyFailureCap, 確定。
+	// Settings cannot change it, so FailureCapSource is always CapSourceFixed);
 	// FailuresToday is today's count.
 	FailureCap       int       `json:"failure_cap"`
 	FailureCapSource string    `json:"failure_cap_source"`
@@ -117,7 +130,7 @@ func Cost(ctx context.Context, q query.Q, now time.Time, liveDefault string, reg
 	cfg := jevshadowsettings.Load(ctx, shadowSettingsReader{q})
 	status := ShadowCostStatus{
 		Enabled: cfg.Enabled, LiveVersion: liveDefault, DailyCapUSD: cfg.CapUSD, CapIsDefault: cfg.CapIsDefault, CapSource: CapSourceStored,
-		FailureCap: jevshadowsettings.ProposedDailyFailureCap, FailureCapSource: CapSourceProposed,
+		FailureCap: jevshadowsettings.DailyFailureCap, FailureCapSource: CapSourceFixed,
 		Daily: []DayCost{}, RecentPromotions: []Promotion{}, RegisteredVersions: registered,
 	}
 	if cfg.CandidateVersion != "" {
@@ -132,27 +145,27 @@ func Cost(ctx context.Context, q query.Q, now time.Time, liveDefault string, reg
 	status.Today = DayCost{Date: today}
 	status.FailuresToday = cfg.Failures.FailuresOn(today)
 	if cfg.CapIsDefault {
-		status.CapSource = CapSourceProposed
+		status.CapSource = CapSourceDefault
 	}
 	if err := q.QueryRowContext(ctx, `
-SELECT COUNT(*), COALESCE(SUM(request_cost), 0) FROM jev_shadow_decisions WHERE created_at >= ? AND created_at < ?`,
-		sqlutil.FormatTime(from), sqlutil.FormatTime(to)).Scan(&status.Today.Calls, &status.Today.RequestCostUSD); err != nil {
+SELECT COUNT(*), COALESCE(SUM(request_cost), 0), `+estimatedColumns+` FROM jev_shadow_decisions WHERE created_at >= ? AND created_at < ?`,
+		sqlutil.FormatTime(from), sqlutil.FormatTime(to)).Scan(&status.Today.Calls, &status.Today.RequestCostUSD, &status.Today.EstimatedCalls, &status.Today.EstimatedCostUSD); err != nil {
 		return ShadowCostStatus{}, fmt.Errorf("query: today's jev shadow cost: %w", err)
 	}
 	if err := q.QueryRowContext(ctx, `
-SELECT COUNT(*), COALESCE(SUM(request_cost), 0) FROM jev_shadow_decisions`).Scan(&status.Total.Calls, &status.Total.RequestCostUSD); err != nil {
+SELECT COUNT(*), COALESCE(SUM(request_cost), 0), `+estimatedColumns+` FROM jev_shadow_decisions`).Scan(&status.Total.Calls, &status.Total.RequestCostUSD, &status.Total.EstimatedCalls, &status.Total.EstimatedCostUSD); err != nil {
 		return ShadowCostStatus{}, fmt.Errorf("query: total jev shadow cost: %w", err)
 	}
 
 	rows, err := q.QueryContext(ctx, `
-SELECT substr(datetime(created_at, '+9 hours'), 1, 10) AS day, COUNT(*), COALESCE(SUM(request_cost), 0)
+SELECT substr(datetime(created_at, '+9 hours'), 1, 10) AS day, COUNT(*), COALESCE(SUM(request_cost), 0), `+estimatedColumns+`
 FROM jev_shadow_decisions GROUP BY day ORDER BY day DESC LIMIT ?`, MaxShadowCostDays)
 	if err != nil {
 		return ShadowCostStatus{}, fmt.Errorf("query: jev shadow daily cost: %w", err)
 	}
 	for rows.Next() {
 		var d DayCost
-		if err := rows.Scan(&d.Date, &d.Calls, &d.RequestCostUSD); err != nil {
+		if err := rows.Scan(&d.Date, &d.Calls, &d.RequestCostUSD, &d.EstimatedCalls, &d.EstimatedCostUSD); err != nil {
 			_ = rows.Close()
 			return ShadowCostStatus{}, fmt.Errorf("query: scan jev shadow daily cost: %w", err)
 		}

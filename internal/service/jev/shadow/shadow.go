@@ -24,6 +24,7 @@ const (
 	// must never be slowed, and an unbounded backlog would also overshoot the
 	// daily cost cap by every call already in flight when it is reached. With the
 	// cap check before each call the overshoot is at most this many calls.
+	// 4 is a user decision (確定).
 	shadowMaxInFlight = 4
 	// shadowCallTimeout bounds one shadow call including its retries (the
 	// client's own bound for a fully failing call is 23.5s, evaluate.go).
@@ -155,11 +156,11 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 	// The cost above only sums the calls that were stored. A call the vendor
 	// may have billed but that was never stored (invalid response, failed
 	// insert, timeout) is counted as a failure instead, and enough of them stop
-	// the day too (ProposedDailyFailureCap).
-	if failed := cfg.Failures.FailuresOn(day); failed >= jevshadowsettings.ProposedDailyFailureCap {
+	// the day too (DailyFailureCap).
+	if failed := cfg.Failures.FailuresOn(day); failed >= jevshadowsettings.DailyFailureCap {
 		s.recordHalt(ctx, cfg, now, jevshadowsettings.Halt{
 			Reason: jevshadowsettings.HaltReasonDailyFailureCap, SpentUSD: spent.CostUSD, CapUSD: cfg.CapUSD,
-			Failures: failed, FailureCap: jevshadowsettings.ProposedDailyFailureCap,
+			Failures: failed, FailureCap: jevshadowsettings.DailyFailureCap,
 		})
 		return nil
 	}
@@ -174,6 +175,16 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 		s.countFailure(day)
 		return fmt.Errorf("jev shadow: encode shadow response: %w", err)
 	}
+	// A response without usage must not count as 0 USD (that would let it
+	// slip under the daily cap): its input tokens are estimated from the
+	// request's size (EstimateInputTokens) and the row is marked as an
+	// estimate.
+	tokens, estimated := resp.InputTokens, false
+	if tokens <= 0 {
+		tokens, estimated = EstimateInputTokens(resp.RequestBytes), true
+		slog.Warn("jev shadow: the response carried no usage; counting the call by an estimate of its input tokens",
+			"decision_id", live.ID, "request_bytes", resp.RequestBytes, "estimated_tokens", tokens)
+	}
 	if _, err := s.results.Insert(ctx, jevshadow.Decision{
 		JevDecisionID:           live.ID,
 		PromptVersion:           candidate,
@@ -187,8 +198,9 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 		LiquidityStressed:       resp.LiquidityStressed,
 		ContinuationProbability: resp.ContinuationProbability,
 		LatencyMs:               int(latency.Milliseconds()),
-		InputTokens:             resp.InputTokens,
-		RequestCost:             InputCostUSD(resp.InputTokens),
+		InputTokens:             tokens,
+		RequestCost:             InputCostUSD(tokens),
+		CostIsEstimate:          estimated,
 		CreatedAt:               s.now().UTC(),
 	}); err != nil {
 		s.countFailure(day)

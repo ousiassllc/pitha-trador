@@ -171,9 +171,14 @@ type TraderResponse struct {
 	ModelID                 string   `json:"model_id"`
 	RequestCost             *float64 `json:"request_cost,omitempty"`
 	// InputTokens is the input token count the API reported for the call
-	// (usage.input_tokens). It is not part of the recorded response_json
-	// (json:"-"); the shadow prices it (ShadowCostUSD).
+	// (usage.input_tokens); 0 when the response carried no usage. It is not
+	// part of the recorded response_json (json:"-"); the shadow prices it
+	// (shadow.InputCostUSD).
 	InputTokens int `json:"-"`
+	// RequestBytes is the size of the request body sent (json:"-"). The shadow
+	// estimates the input tokens from it when InputTokens is 0
+	// (shadow.EstimateInputTokens).
+	RequestBytes int `json:"-"`
 }
 
 // Score returns r as take/skip material (issue #761, parent #752

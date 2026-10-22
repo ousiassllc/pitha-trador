@@ -18,6 +18,7 @@ import (
 // capturedRequest is what the official API receives.
 type capturedRequest struct {
 	Method, Path, Auth, ContentType string
+	Size                            int // bytes of the request body
 	Body                            struct {
 		State     map[string]json.RawMessage `json:"state"`
 		Model     string                     `json:"model"`
@@ -38,6 +39,7 @@ func captureServer(t *testing.T, responseBody string) (*httptest.Server, *captur
 		got.Method, got.Path = r.Method, r.URL.Path
 		got.Auth, got.ContentType = r.Header.Get("Authorization"), r.Header.Get("Content-Type")
 		raw, _ := io.ReadAll(r.Body)
+		got.Size = len(raw)
 		if err := json.Unmarshal(raw, &got.Body); err != nil {
 			t.Errorf("request body is not valid JSON: %v", err)
 		}
@@ -253,7 +255,7 @@ func TestClient_Scout_MapsOfficialResponse(t *testing.T) {
 }
 
 func TestClient_Trader_MapsOfficialResponseWithDirectionConfidence(t *testing.T) {
-	server, _ := captureServer(t, traderWireResponse)
+	server, got := captureServer(t, traderWireResponse)
 	client := jev.NewClient(jev.Config{BaseURL: server.URL})
 
 	resp, _, err := client.Trader(context.Background(), jev.TraderRequest{})
@@ -266,6 +268,8 @@ func TestClient_Trader_MapsOfficialResponseWithDirectionConfidence(t *testing.T)
 		Confidence:  0.66, // the direction answer's confidence, not regime's (0.7)
 		ModelID:     "jev-1.13.0",
 		InputTokens: 1534, // usage.input_tokens: the shadow prices it (issue #872); not recorded in response_json
+		// The size of the request body that was sent: the shadow's estimate when a response has no usage.
+		RequestBytes: got.Size,
 	}
 	if resp != want {
 		t.Errorf("Trader() = %+v, want %+v", resp, want)

@@ -47,11 +47,11 @@ type State struct {
 	CandidateVersion string // "" for none
 	Versions         []string
 	CapUSD           float64
-	// CapIsDefault: the cap is the proposal (暫定の案・未承認), not a value a
-	// person stored.
+	// CapIsDefault: the cap is the default (確定), not a value a person
+	// stored on the Settings screen.
 	CapIsDefault bool
 	// FailuresToday and FailureCap: the failed shadow calls of today (JST) and
-	// the cap on them (jevshadowsettings.ProposedDailyFailureCap, 暫定の案・未承認).
+	// the cap on them (jevshadowsettings.DailyFailureCap, 確定).
 	FailuresToday int
 	FailureCap    int
 	Today         judgement.DayCost
@@ -90,7 +90,7 @@ func (s *Service) State(ctx context.Context) (State, error) {
 		Versions:         jev.TraderVersions(),
 		CapUSD:           cfg.CapUSD,
 		CapIsDefault:     cfg.CapIsDefault,
-		FailureCap:       jevshadowsettings.ProposedDailyFailureCap,
+		FailureCap:       jevshadowsettings.DailyFailureCap,
 	}
 	from, to := jevshadowsettings.DayBounds(now)
 	spend, err := s.results.SpentBetween(ctx, from, to)
@@ -147,8 +147,8 @@ func (s *Service) SetCap(ctx context.Context, usd float64) error {
 	return s.settings.Set(ctx, jevshadowsettings.KeyDailyCostCapUSD, jsonNumber(usd), s.now())
 }
 
-// ResetCap removes the stored cap: the proposed default
-// (jevshadowsettings.ProposedDailyCostCapUSD, 暫定の案・未承認) applies again.
+// ResetCap removes the stored cap: the default
+// (jevshadowsettings.DefaultDailyCostCapUSD, 確定) applies again.
 func (s *Service) ResetCap(ctx context.Context) error {
 	return s.settings.Delete(ctx, jevshadowsettings.KeyDailyCostCapUSD)
 }

@@ -40,6 +40,10 @@ type fakeJev struct {
 	// invalidShadow makes candidate calls answer 200 with an answer set that fails
 	// validation: the vendor may bill such a call, but nothing is stored for it.
 	invalidShadow bool
+	// noUsageShadow makes candidate calls answer a valid answer set with no
+	// usage block (so the caller cannot read a token count).
+	noUsageShadow bool
+	shadowBytes   []int         // request body sizes of the candidate calls, in order
 	holdShadow    chan struct{} // when non-nil, candidate calls wait for it to close
 }
 
@@ -69,7 +73,10 @@ func (f *fakeJev) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.Lock()
 	f.versions = append(f.versions, version)
-	hold, fail, invalid := f.holdShadow, f.failShadow, f.invalidShadow
+	hold, fail, invalid, noUsage := f.holdShadow, f.failShadow, f.invalidShadow, f.noUsageShadow
+	if version == "trader-v4" {
+		f.shadowBytes = append(f.shadowBytes, len(body))
+	}
 	f.mu.Unlock()
 	if version == "trader-v4" {
 		if hold != nil {
@@ -90,14 +97,21 @@ func (f *fakeJev) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		eq = domain.JevEntryQualityGood
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(jevtest.Response("jev-test", map[string]any{
+	resp := jevtest.Response("jev-test", map[string]any{
 		"direction":                jevtest.Choice(domain.JevDirectionLong, 0.7),
 		"regime":                   jevtest.Choice(domain.JevRegimeTrend, 0.8),
 		"entry_quality":            jevtest.Choice(eq, 0.8),
 		"toxic_flow":               jevtest.Noul(0.2),
 		"liquidity_stressed":       jevtest.Noul(0.1),
 		"continuation_probability": jevtest.Noul(0.6),
-	}))
+	})
+	if noUsage && version == "trader-v4" {
+		var m map[string]json.RawMessage
+		_ = json.Unmarshal(resp, &m)
+		delete(m, "usage")
+		resp, _ = json.Marshal(m)
+	}
+	_, _ = w.Write(resp)
 }
 
 type shadowEnv struct {

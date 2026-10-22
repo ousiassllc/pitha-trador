@@ -2,7 +2,7 @@
 
 `paper-results-mcp.md`（API 仕様）の分割章（ファイルの行数上限のため。章番号は元の文書の §3.23）。Jev の trader のプロンプトの版と、候補の版をライブと並べて動かす「シャドー」の比較・費用・昇格の 3 ツールを定める（issue #872）。共通の引数（期間 §1）・上限（§2）・エラー（`paper-results-mcp-errors.md`）は元の文書と同じ。仕様の背景は `architecture/paper-results-mcp.md` §5.1・§7.3。
 
-シャドーを**有効にする・候補の版を選ぶ・費用の上限を決める**ツールは無い（Settings 画面だけ。`settings_set` のホワイトリストにも無い）。**1 日の費用の上限の値と 1 日の失敗回数の上限の値は暫定の案で未承認**であり（`internal/config/jevshadowsettings.ProposedDailyCostCapUSD` / `ProposedDailyFailureCap`）、人が決めるまで承認済みとして扱わない。
+シャドーを**有効にする・候補の版を選ぶ・費用の上限を決める**ツールは無い（Settings 画面だけ。`settings_set` のホワイトリストにも無い）。**1 日の費用の上限（既定 0.10 USD。Settings 画面で上げ下げできる）と 1 日の失敗回数の上限（20 回。定数）はユーザー決定の確定値**である（`internal/config/jevshadowsettings.DefaultDailyCostCapUSD` / `DailyFailureCap`）。単価（1M 入力トークンあたり 0.042 USD）と同時実行数（4）も確定値だが、費用は公表単価による**見積り**で請求書とは突き合わせていない。
 
 ## 3.23.1 `jev_shadow_compare`（読み取り専用）
 
@@ -46,16 +46,16 @@
 | `enabled` | シャドーの有効（`runtime_settings` の `jev.shadow.enabled`）。既定 `false` |
 | `candidate_version` | 候補の版（`jev.shadow.candidate_version`）。無ければ `null` |
 | `live_version` | ライブの版（`jev.trader_prompt_version`。保存が無い・壊れている・このビルドに無い版のときはビルドの既定 `trader-v3`） |
-| `daily_cap_usd` / `cap_is_default` / `cap_source` | 1 日あたりの費用の上限（JST の日）。`cap_source` は `proposed_unapproved`（保存値が無く、効いているのは**暫定の案・未承認**の値。`cap_is_default` が `true`）か `stored`（Settings 画面で保存された値）。保存済みと承認済みは別の事実で、`stored` も人が承認した値とは限らない |
-| `failure_cap` / `failure_cap_source` / `failures_today` | 1 日（JST）に許す失敗した呼び出し（応答が不正・保存の失敗・タイムアウトなど。課金されても費用の合計に入らない）の回数の上限と、今日の回数。`failure_cap_source` は常に `proposed_unapproved`（**暫定の案・未承認**の定数） |
-| `today` | JST の今日の `date`・`calls`・`request_cost_usd` |
-| `total` | 累計の `calls`・`request_cost_usd` |
-| `daily[]` | JST の日ごとの費用。新しい順、最大 31 日 |
+| `daily_cap_usd` / `cap_is_default` / `cap_source` | 1 日あたりの費用の上限（JST の日）。`cap_source` は `default`（保存値が無く、効いているのはビルドの既定値 0.10 USD。`cap_is_default` が `true`）か `stored`（Settings 画面で保存された値）。どちらも確定した運用の値で、Settings で上げ下げできる |
+| `failure_cap` / `failure_cap_source` / `failures_today` | 1 日（JST）に許す失敗した呼び出し（応答が不正・保存の失敗・タイムアウトなど。課金されても費用の合計に入らない）の回数の上限と、今日の回数。`failure_cap_source` は常に `fixed`（確定した定数 20 回。Settings では変えられない） |
+| `today` | JST の今日の `date`・`calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd`（後ろの 2 つは「うち見積り」＝応答に `usage` が無く、入力トークン数をリクエストの大きさから推定して数えた呼び出しの件数と費用。`calls` / `request_cost_usd` に含まれる） |
+| `total` | 累計の `calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd` |
+| `daily[]` | JST の日ごとの費用（`date`・`calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd`）。新しい順、最大 31 日 |
 | `halt_today` / `last_halt` | 上限で止まった記録（`date`・`reason`（固定コード `daily_cost_cap` または `daily_failure_cap`）・`spent_usd`・`cap_usd`・`failures`・`failure_cap`（後ろの 2 つは `daily_failure_cap` のとき）・`at`）。止まっていなければ `null` |
 | `recent_promotions[]` | `jev_prompt_promotions` の新しい順、最大 10 件（`id`・`at`・`actor`（`mcp` / `gui`）・`client`（IP だけ）・`from_version`・`to_version`） |
 | `registered_versions[]` | このビルドが定義する trader の版（昇格できる版） |
 
-`request_cost` はシャドーの呼び出しだけの合計である。API は課金額を返さないので、アプリが入力トークン数に公表単価（Jev は 1M 入力トークンあたり 0.042 USD、出力は無料。2026-10-22 時点の `docs.typesafe.ai/models`）を掛けた**見積り**で、請求書と突き合わせた値ではない。ライブの判断の `jev_decisions.request_cost` は従来どおり常に NULL で、この合計に含まれない。
+`request_cost` はシャドーの呼び出しだけの合計である。API は課金額を返さないので、アプリが入力トークン数に公表単価（Jev は 1M 入力トークンあたり 0.042 USD、出力は無料。2026-10-22 時点の `docs.typesafe.ai/models`）を掛けた**見積り**で、請求書と突き合わせた値ではない（単価と上限の数字は確定、見積りが請求と一致することは未確認）。応答に `usage` が無い呼び出しは **0 USD と数えず**、リクエスト本文のバイト数を保守的な比（2 バイト = 1 トークン）で割った入力トークン数の推定で費用に入れ、`estimated_calls` / `estimated_cost_usd` に分けて見せる（0 と数えると 1 日の費用の上限をすり抜けるため）。ライブの判断の `jev_decisions.request_cost` は従来どおり常に NULL で、この合計に含まれない。
 
 ## 3.23.3 `jev_prompt_promote`（書き込み）
 
@@ -74,7 +74,7 @@
 - 3 ツールは `tools/list` に出る。`jev_shadow_compare` / `jev_shadow_cost` は `readOnlyHint: true`、`jev_prompt_promote` は `false`
 - 読み取り接続（`mode=ro`）のまま 2 つの読み取りが動き、書き込みの SQL を発行しない
 - `jev_shadow_compare` は、同じ入力の組について `entry_quality` の分布（5 水準・件数と割合）・`direction` の一致率・シャドーの費用・`calibration_outcomes` による結果を、ライブとシャドーで並べて返す。シャドーの方向が違う行の結果は、`future_return` とシャドーの方向から計算し直す
-- `jev_shadow_cost` は、JST の日の境界で今日・日ごと・累計を集計し、上限・暫定の案であること・止まった記録を返す
+- `jev_shadow_cost` は、JST の日の境界で今日・日ごと・累計を集計し、上限（確定値・値の出どころ）・うち見積り・止まった記録を返す
 - `jev_prompt_promote` は、書き込み許可がオフなら `write_disabled` で何も書かず、登録されていない版・すでにライブの版を `invalid_value` で拒否し、成功したときだけ設定 1 行と監査 1 行を同じトランザクションで書く。ほかの表・文を発行しない（`shadowtests` が実行された文を固定する）
 
 ## 改訂履歴
@@ -83,4 +83,5 @@
 |----|------|---------|---------|
 | 1.0 | 2026-10-22 | 新規作成。`jev_shadow_compare` / `jev_shadow_cost` / `jev_prompt_promote`（元の文書の版 1.13 で追加） | issue #872 |
 | 1.1 | 2026-10-22 | `jev_shadow_compare` に `comparable` / `excluded_disagreement` / `outcome_note` を追加し、方向がライブと食い違う行を採点しない形に改めた（`future_return` がライブのバリアで止まる偏りを避けるため）。`jev_shadow_cost` の `daily_cap_approved` を `cap_source` に置き換え、失敗回数の上限（`failure_cap` ほか）と `daily_failure_cap` の止まった記録を追加 | issue #872 レビュー対応 |
+| 1.2 | 2026-10-22 | 費用の上限 0.10 USD・失敗回数の上限 20 回・単価 0.042 USD/1M 入力トークン・同時実行 4 をユーザー決定の確定値にし、`cap_source` の値を `default` / `stored`、`failure_cap_source` を `fixed` に改めた（`proposed_unapproved` を廃止）。`usage` が無い応答を推定の入力トークン数で数え、`jev_shadow_cost` に `estimated_calls` / `estimated_cost_usd` を追加 | issue #872 ユーザー決定 |
 

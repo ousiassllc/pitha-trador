@@ -131,7 +131,7 @@ func TestCardAndPanelShowTheDefaults(t *testing.T) {
 	for _, want := range []string{
 		`data-testid="jev-prompt-live-version">trader-v3<`,
 		`data-testid="jev-prompt-enabled"`, // unchecked: the shadow is off by default
-		"暫定の案で、まだ承認されていません",
+		"（既定値。保存した値はありません）", `data-testid="jev-prompt-cost-estimated"`, "うち見積り",
 		`data-testid="jev-prompt-cost-today">0 USD`, `data-testid="jev-prompt-cost-total">0 USD`,
 		"まだ昇格していません", "Paper だけで動き、Live では動きません",
 	} {
@@ -168,47 +168,47 @@ func TestSavingTheShadowSettings(t *testing.T) {
 		}
 	}
 	body := a.get("/settings/jev-prompt-panel").Body.String()
-	if strings.Contains(body, `data-testid="jev-prompt-cap-unapproved"`) || !strings.Contains(body, `data-testid="jev-prompt-cap-effective">0.5 USD`) || strings.Contains(body, "placeholder=") {
-		t.Errorf("a stored cap is shown as the unapproved proposal, or not shown as stored\n%s", body)
+	if strings.Contains(body, "既定値。保存した値はありません") || !strings.Contains(body, `data-testid="jev-prompt-cap-effective">0.5 USD`) || strings.Contains(body, "placeholder=") {
+		t.Errorf("a stored cap is shown as the default, or not shown as stored\n%s", body)
 	}
 
-	// Unchecked = off; a blank cap restores the proposal; no candidate clears it.
+	// Unchecked = off; a blank cap restores the default; no candidate clears it.
 	a.post("/settings/jev-prompt/shadow", url.Values{"candidate": {""}, "cap": {""}}, true)
 	if v, _ := a.stored(jevshadowsettings.KeyEnabled); v != "0" {
 		t.Errorf("switch = %q, want 0", v)
 	}
 	if _, ok := a.stored(jevshadowsettings.KeyDailyCostCapUSD); ok {
-		t.Error("a blank cap did not restore the proposed default")
+		t.Error("a blank cap did not restore the default")
 	}
 	if _, ok := a.stored(jevshadowsettings.KeyCandidateVersion); ok {
 		t.Error("an empty candidate did not clear it")
 	}
 }
 
-// While the proposal is in force the cap field is empty and shows it only as a
+// While the default is in force the cap field is empty and shows it only as a
 // placeholder: switching the shadow on and saving the form untouched must not
-// store the unapproved 0.1 as if a person had chosen it (the GUI and the MCP's
-// cap_source then agree: proposed_unapproved until a person types a value).
-func TestSavingTheFormUntouchedKeepsTheCapUnapproved(t *testing.T) {
+// store the 0.1 as if a person had chosen it (the GUI and the MCP's cap_source
+// then agree: default until a person types a value).
+func TestSavingTheFormUntouchedKeepsTheCapAtTheDefault(t *testing.T) {
 	a := newApp(t)
 	body := a.get("/settings/jev-prompt-panel").Body.String()
-	for _, want := range []string{`placeholder="0.1（暫定の案・未承認）"`, `data-testid="jev-prompt-cap-unapproved"`} {
+	for _, want := range []string{`placeholder="0.1（既定値）"`, "（既定値。保存した値はありません）"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("default panel lacks %q\n%s", want, body)
 		}
 	}
 	if strings.Contains(body, `data-testid="jev-prompt-cap" value=`) || strings.Contains(body, `value="0.1"`) {
-		t.Fatalf("the default panel pre-fills the proposed cap\n%s", body)
+		t.Fatalf("the default panel pre-fills the default cap\n%s", body)
 	}
 	// What a browser sends for the untouched cap field is an empty string.
 	if rec := a.post("/settings/jev-prompt/shadow", url.Values{"enabled": {"on"}, "candidate": {"trader-v4"}, "cap": {""}}, true); rec.Code != http.StatusOK {
 		t.Fatalf("save = %d", rec.Code)
 	}
 	if v, ok := a.stored(jevshadowsettings.KeyDailyCostCapUSD); ok {
-		t.Fatalf("saving the untouched form stored the proposed cap %q", v)
+		t.Fatalf("saving the untouched form stored the default cap %q", v)
 	}
-	if body := a.get("/settings/jev-prompt-panel").Body.String(); !strings.Contains(body, `data-testid="jev-prompt-cap-unapproved"`) {
-		t.Error("the proposal lost its unapproved marking after an untouched save")
+	if body := a.get("/settings/jev-prompt-panel").Body.String(); !strings.Contains(body, "既定値。保存した値はありません") {
+		t.Error("the default lost its marking after an untouched save")
 	}
 }
 

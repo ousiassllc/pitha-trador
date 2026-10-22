@@ -12,8 +12,12 @@
 --   response_json    応答の JSON（TraderResponse）。
 --   direction 〜 continuation_probability  各答え（ライブの jev_decisions と同じ意味・範囲）。
 --   latency_ms       呼び出しの総所要時間。
---   input_tokens     API が報告した入力トークン数（usage.input_tokens）。
---   request_cost     入力トークン数 × 公表単価（USD）。API は課金額を返さないため、アプリが計算した見積もり。
+--   input_tokens     入力トークン数。API が報告した値（usage.input_tokens）。API の応答に usage が無かった行は、
+--                    リクエストの大きさから保守的な文字/トークン比で推定した値（cost_is_estimate = 1）。
+--   request_cost     入力トークン数 × 公表単価（USD）。API は課金額を返さないため、アプリが計算した見積もり
+--                    （請求書とは突き合わせていない）。usage が無い行も 0 にせず、推定のトークン数で費用に入れる
+--                    （0 と数えると 1 日の費用上限をすり抜けるため）。
+--   cost_is_estimate 1 = usage が無く、入力トークン数をリクエストの大きさから推定した行。0 = API が報告した値。
 --   created_at       保存時刻（UTC RFC3339）。費用の日次集計は JST の日で切る。
 --   (jev_decision_id, prompt_version) は一意: 1 つのライブ判定に対し、候補の版ごとに 1 行。
 --
@@ -40,6 +44,7 @@ CREATE TABLE jev_shadow_decisions (
     latency_ms INTEGER NOT NULL,
     input_tokens INTEGER NOT NULL DEFAULT 0 CHECK (input_tokens >= 0),
     request_cost NUMERIC(10, 6) NOT NULL DEFAULT 0 CHECK (request_cost >= 0),
+    cost_is_estimate INTEGER NOT NULL DEFAULT 0 CHECK (cost_is_estimate IN (0, 1)),
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     UNIQUE (jev_decision_id, prompt_version)
 );

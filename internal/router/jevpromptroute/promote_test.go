@@ -86,12 +86,17 @@ func TestPanelShowsTheCostAndWhyTheShadowStopped(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// The 0.03 row is one whose response had no usage: counted by an estimate.
+	if _, err := a.db.Exec(`UPDATE jev_shadow_decisions SET cost_is_estimate = 1 WHERE request_cost = 0.03`); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.settings.Set(context.Background(), jevshadowsettings.KeyHalt, `{"date":"2026-10-22","reason":"daily_cost_cap","spent_usd":0.04,"cap_usd":0.03,"at":"2026-10-22T01:00:00Z"}`, now); err != nil {
 		t.Fatal(err)
 	}
 	body := a.get("/settings/jev-prompt-panel").Body.String()
 	for _, want := range []string{
 		`data-testid="jev-prompt-cost-today">0.04 USD`, `data-testid="jev-prompt-cost-total">0.06 USD`,
+		`data-testid="jev-prompt-estimated-today">0.03 USD</strong>（1 回）`, `data-testid="jev-prompt-estimated-total">0.03 USD</strong>（1 回）`,
 		"1 日の費用上限（0.03 USD）に達したため、今日のシャドーは止まっています", "ライブの判断は続いています",
 	} {
 		if !strings.Contains(body, want) {
@@ -106,7 +111,7 @@ func TestPanelShowsTheCostAndWhyTheShadowStopped(t *testing.T) {
 		t.Fatal(err)
 	}
 	failBody := a.get("/settings/jev-prompt-panel").Body.String()
-	for _, want := range []string{"失敗した呼び出しが 1 日の上限（20 回。暫定の案・未承認）に達したため、今日のシャドーは止まっています", `data-testid="jev-prompt-failure-cap"`, "今日: 20 回"} {
+	for _, want := range []string{"失敗した呼び出しが 1 日の上限（20 回）に達したため、今日のシャドーは止まっています", `data-testid="jev-prompt-failure-cap"`, "今日: 20 回"} {
 		if !strings.Contains(failBody, want) {
 			t.Errorf("panel lacks %q\n%s", want, failBody)
 		}

@@ -15,8 +15,8 @@ import (
 // §7.3, docs/api/endpoints/paper-results-mcp.md): two reads of the shadow
 // comparison and its cost, and the one explicit write that promotes a
 // candidate version to live. No tool turns the shadow on, picks the candidate or
-// sets the cost cap: those are the Settings screen's (the cost cap is
-// 暫定の案・未承認 until a person decides it).
+// sets the cost cap: those are the Settings screen's (the cost cap is 0.10 USD
+// a day by default, 確定; a person can raise or lower it there).
 
 func init() {
 	tools = append(tools, jevShadowTools...)
@@ -50,7 +50,7 @@ var jevShadowTools = []tool{
 	},
 	{
 		name: "jev_shadow_cost",
-		description: "シャドーの費用と状態: request_cost の合計（今日（JST）・累計・日別）、1 日の費用上限と 1 日の失敗回数の上限（どちらも暫定の案・未承認。cap_source が proposed_unapproved のあいだは保存された値ではない）と、止まった理由（halt_today / last_halt。daily_cost_cap か daily_failure_cap）、" +
+		description: "シャドーの費用と状態: request_cost の合計（今日（JST）・累計・日別。うち見積り＝応答に使用量が無く入力トークン数をリクエストの大きさから推定して数えた呼び出しの件数・費用は estimated_calls / estimated_cost_usd）、1 日の費用上限と 1 日の失敗回数の上限（どちらも確定。cap_source は default＝既定値・stored＝Settings で保存した値・fixed＝固定。費用上限は Settings で上げ下げできる）と、止まった理由（halt_today / last_halt。daily_cost_cap か daily_failure_cap）、" +
 			"シャドーの有効・無効と候補の版、ライブの版、直近の昇格の記録（誰が・いつ・前の版・後の版）（読み取り専用）",
 		schema:   objectSchema(map[string]any{}),
 		noPeriod: true,

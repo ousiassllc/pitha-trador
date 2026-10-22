@@ -53,7 +53,7 @@ func (h *Handler) Panel(c *gin.Context) { h.render(c, "") }
 
 // SaveShadow implements `POST /settings/jev-prompt/shadow`: form `enabled` (a
 // checked checkbox sends a value, an unchecked one nothing), `candidate` ("" for
-// none) and `cap` (USD; blank restores the proposed default). Invalid input is
+// none) and `cap` (USD; blank restores the default). Invalid input is
 // a 422 and nothing is saved.
 func (h *Handler) SaveShadow(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -144,15 +144,20 @@ func props(st jevprompt.State, notice string) view.PanelProps {
 		TodayUSD:         usd(st.Today.CostUSD),
 		TotalCalls:       st.Total.Calls,
 		TotalUSD:         usd(st.Total.CostUSD),
-		Notice:           notice,
+
+		TodayEstimatedCalls: st.Today.EstimatedCalls,
+		TodayEstimatedUSD:   usd(st.Today.EstimatedCostUSD),
+		TotalEstimatedCalls: st.Total.EstimatedCalls,
+		TotalEstimatedUSD:   usd(st.Total.EstimatedCostUSD),
+		Notice:              notice,
 	}
 	for _, d := range st.Daily {
-		p.Daily = append(p.Daily, view.DayRow{Date: d.Date, Calls: d.Calls, USD: usd(d.CostUSD)})
+		p.Daily = append(p.Daily, view.DayRow{Date: d.Date, Calls: d.Calls, USD: usd(d.CostUSD), EstimatedCalls: d.EstimatedCalls, EstimatedUSD: usd(d.EstimatedCostUSD)})
 	}
 	if h := st.HaltToday; h != nil {
 		switch h.Reason {
 		case jevshadowsettings.HaltReasonDailyFailureCap:
-			p.HaltNote = "失敗した呼び出しが 1 日の上限（" + itoa(h.FailureCap) + " 回。暫定の案・未承認）に達したため、今日のシャドーは止まっています（ライブの判断は続いています。翌日に再開します）。"
+			p.HaltNote = "失敗した呼び出しが 1 日の上限（" + itoa(h.FailureCap) + " 回）に達したため、今日のシャドーは止まっています（ライブの判断は続いています。翌日に再開します）。"
 		default:
 			p.HaltNote = "1 日の費用上限（" + usd(h.CapUSD) + " USD）に達したため、今日のシャドーは止まっています（費用 " + usd(h.SpentUSD) + " USD。ライブの判断は続いています。翌日に再開します）。"
 		}

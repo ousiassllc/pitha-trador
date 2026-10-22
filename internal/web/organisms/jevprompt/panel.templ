@@ -7,6 +7,10 @@ type DayRow struct {
 	Date  string
 	Calls int
 	USD   string
+	// EstimatedCalls is how many of Calls were counted by an estimate
+	// (EstimatedUSD of USD).
+	EstimatedCalls int
+	EstimatedUSD   string
 }
 
 // PromotionRow is one audit row of a promotion: who, when, from and to.
@@ -25,20 +29,26 @@ type PanelProps struct {
 	LiveVersion      string
 	CandidateVersion string // "" for none
 	Versions         []string
-	// CapUSD is the daily cost cap; CapIsDefault says it is the proposal
-	// (暫定の案・未承認), not a stored value.
+	// CapUSD is the daily cost cap; CapIsDefault says it is the default
+	// (確定), not a value stored on this screen.
 	CapUSD       string
 	CapIsDefault bool
 	// FailureCap and FailuresToday: the cap on failed shadow calls per JST day
-	// (暫定の案・未承認, a constant) and today's count.
+	// (確定, a constant) and today's count.
 	FailureCap    int
 	FailuresToday int
-	TodayDate    string
-	TodayCalls   int
-	TodayUSD     string
-	TotalCalls   int
-	TotalUSD     string
-	Daily        []DayRow
+	TodayDate     string
+	TodayCalls    int
+	TodayUSD      string
+	TotalCalls    int
+	TotalUSD      string
+	// The Estimated* figures are the part of the cost counted by an estimate
+	// (the response carried no usage); they are included in the totals above.
+	TodayEstimatedCalls int
+	TodayEstimatedUSD   string
+	TotalEstimatedCalls int
+	TotalEstimatedUSD   string
+	Daily               []DayRow
 	// HaltNote is the reason the shadow is stopped today ("" when it is not).
 	HaltNote   string
 	Promotions []PromotionRow
@@ -91,14 +101,13 @@ templ Panel(props PanelProps) {
 				<span class="text-xs text-slate-500" data-testid="jev-prompt-cap-note">
 					超えるとその日のシャドーを止めます（ライブの判断は止まりません。翌日に再開します）。
 					if props.CapIsDefault {
-						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（保存した値はありません）。
-						<strong class="text-amber-700" data-testid="jev-prompt-cap-unapproved">この値は暫定の案で、まだ承認されていません。</strong>
-						欄を空のまま保存すると暫定の案が使われ続けます。値を決めたら入力して保存してください。
+						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（既定値。保存した値はありません）。
+						欄を空のまま保存すると既定値が使われ続けます。変えたいときは値を入力して保存してください。
 					} else {
-						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（この画面で保存された値）。欄を空にして保存すると保存した値を消し、暫定の案（未承認）に戻ります。
+						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（この画面で保存された値）。欄を空にして保存すると保存した値を消し、既定値に戻ります。
 					}
 					<br/>
-					<span data-testid="jev-prompt-failure-cap">失敗した呼び出し（応答が不正・保存に失敗・タイムアウトなど。課金されても費用の合計に入らないため）が 1 日に { itoa(props.FailureCap) } 回に達しても、その日のシャドーを止めます（今日: { itoa(props.FailuresToday) } 回）。この回数は暫定の案で、まだ承認されていません。</span>
+					<span data-testid="jev-prompt-failure-cap">失敗した呼び出し（応答が不正・保存に失敗・タイムアウトなど。課金されても費用の合計に入らないため）が 1 日に { itoa(props.FailureCap) } 回に達しても、その日のシャドーを止めます（今日: { itoa(props.FailuresToday) } 回。この回数は固定で、この画面では変えられません）。</span>
 				</span>
 			</label>
 			<div>
@@ -113,15 +122,16 @@ templ Panel(props PanelProps) {
 			if props.HaltNote != "" {
 				<span class="text-amber-700" role="status" data-testid="jev-prompt-halt">{ props.HaltNote }</span>
 			}
-			<span class="text-xs text-slate-500">費用は API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積もりです（API は課金額を返しません）。</span>
+			<span class="text-xs text-slate-500" data-testid="jev-prompt-cost-basis">費用は API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。</span>
+			<span data-testid="jev-prompt-cost-estimated">うち見積り（応答に使用量が無かった呼び出し）: 今日 <strong data-testid="jev-prompt-estimated-today">{ props.TodayEstimatedUSD } USD</strong>（{ itoa(props.TodayEstimatedCalls) } 回）　累計 <strong data-testid="jev-prompt-estimated-total">{ props.TotalEstimatedUSD } USD</strong>（{ itoa(props.TotalEstimatedCalls) } 回）</span>
 			if len(props.Daily) > 0 {
 				<table class="w-full text-left text-xs" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
 					<thead>
-						<tr><th scope="col" class="pr-2">日（JST）</th><th scope="col" class="pr-2">回数</th><th scope="col">費用（USD）</th></tr>
+						<tr><th scope="col" class="pr-2">日（JST）</th><th scope="col" class="pr-2">回数</th><th scope="col" class="pr-2">費用（USD）</th><th scope="col">うち見積り（USD・回数）</th></tr>
 					</thead>
 					<tbody>
 						for _, d := range props.Daily {
-							<tr data-testid="jev-prompt-daily-row"><td class="pr-2">{ d.Date }</td><td class="pr-2">{ itoa(d.Calls) }</td><td>{ d.USD }</td></tr>
+							<tr data-testid="jev-prompt-daily-row"><td class="pr-2">{ d.Date }</td><td class="pr-2">{ itoa(d.Calls) }</td><td class="pr-2">{ d.USD }</td><td>{ d.EstimatedUSD }（{ itoa(d.EstimatedCalls) } 回）</td></tr>
 						}
 					</tbody>
 				</table>
@@ -171,13 +181,13 @@ func checkedAttrs(on bool, testID string) templ.Attributes {
 	return attrs
 }
 
-// capAttrs is the cap input: while the proposal is in force the field is empty
+// capAttrs is the cap input: while the default is in force the field is empty
 // and shows it as a placeholder, so saving the form without typing a value
-// never stores the unapproved proposal as if a person had chosen it.
+// stores nothing (a stored value only ever comes from a person typing one).
 func capAttrs(props PanelProps) templ.Attributes {
 	attrs := templ.Attributes{"inputmode": "decimal", "autocomplete": "off", "data-testid": "jev-prompt-cap"}
 	if props.CapIsDefault {
-		attrs["placeholder"] = props.CapUSD + "（暫定の案・未承認）"
+		attrs["placeholder"] = props.CapUSD + "（既定値）"
 	} else {
 		attrs["value"] = props.CapUSD
 	}

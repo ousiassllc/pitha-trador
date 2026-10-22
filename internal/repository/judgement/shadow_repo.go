@@ -28,8 +28,8 @@ const insertShadowSQL = `
 INSERT INTO jev_shadow_decisions (
 	jev_decision_id, prompt_version, model_id, response_json,
 	direction, regime, entry_quality, confidence, toxic_flow, liquidity_stressed, continuation_probability,
-	latency_ms, input_tokens, request_cost, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	latency_ms, input_tokens, request_cost, cost_is_estimate, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // Insert writes one jev_shadow_decisions row. A second row for the same live
 // decision and version violates the UNIQUE constraint and is an error.
@@ -41,7 +41,7 @@ func (r *ShadowRepository) Insert(ctx context.Context, d jevshadow.Decision) (je
 	res, err := r.db.ExecContext(ctx, insertShadowSQL,
 		d.JevDecisionID, d.PromptVersion, d.ModelID, d.ResponseJSON,
 		d.Direction, d.Regime, d.EntryQuality, d.Confidence, d.ToxicFlow, d.LiquidityStressed, d.ContinuationProbability,
-		d.LatencyMs, d.InputTokens, d.RequestCost, sqlutil.FormatTime(createdAt))
+		d.LatencyMs, d.InputTokens, d.RequestCost, d.CostIsEstimate, sqlutil.FormatTime(createdAt))
 	if err != nil {
 		return jevshadow.Decision{}, fmt.Errorf("repository: insert jev shadow decision for decision %d (%s): %w", d.JevDecisionID, d.PromptVersion, err)
 	}
@@ -55,17 +55,26 @@ func (r *ShadowRepository) Insert(ctx context.Context, d jevshadow.Decision) (je
 }
 
 // Spend is a number of shadow calls and their estimated cost in USD.
+// EstimatedCalls and EstimatedCostUSD are the part of them whose input tokens
+// were estimated from the request's size because the response carried no usage
+// (cost_is_estimate = 1); they are included in Calls and CostUSD.
 type Spend struct {
-	Calls   int
-	CostUSD float64
+	Calls            int
+	CostUSD          float64
+	EstimatedCalls   int
+	EstimatedCostUSD float64
 }
+
+// spendColumns is the SELECT list that fills a Spend.
+const spendColumns = `COUNT(*), COALESCE(SUM(request_cost), 0), COALESCE(SUM(cost_is_estimate), 0),
+	COALESCE(SUM(CASE WHEN cost_is_estimate = 1 THEN request_cost ELSE 0 END), 0)`
 
 // SpentBetween sums the shadow cost of the rows created in [from, to).
 func (r *ShadowRepository) SpentBetween(ctx context.Context, from, to time.Time) (Spend, error) {
 	var s Spend
 	err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(SUM(request_cost), 0) FROM jev_shadow_decisions WHERE created_at >= ? AND created_at < ?`,
-		sqlutil.FormatTime(from), sqlutil.FormatTime(to)).Scan(&s.Calls, &s.CostUSD)
+		`SELECT `+spendColumns+` FROM jev_shadow_decisions WHERE created_at >= ? AND created_at < ?`,
+		sqlutil.FormatTime(from), sqlutil.FormatTime(to)).Scan(&s.Calls, &s.CostUSD, &s.EstimatedCalls, &s.EstimatedCostUSD)
 	if err != nil {
 		return Spend{}, fmt.Errorf("repository: sum jev shadow cost: %w", err)
 	}
@@ -76,7 +85,7 @@ func (r *ShadowRepository) SpentBetween(ctx context.Context, from, to time.Time)
 func (r *ShadowRepository) TotalSpent(ctx context.Context) (Spend, error) {
 	var s Spend
 	err := r.db.QueryRowContext(ctx,
-		`SELECT COUNT(*), COALESCE(SUM(request_cost), 0) FROM jev_shadow_decisions`).Scan(&s.Calls, &s.CostUSD)
+		`SELECT `+spendColumns+` FROM jev_shadow_decisions`).Scan(&s.Calls, &s.CostUSD, &s.EstimatedCalls, &s.EstimatedCostUSD)
 	if err != nil {
 		return Spend{}, fmt.Errorf("repository: sum total jev shadow cost: %w", err)
 	}
@@ -93,7 +102,7 @@ type DayCost struct {
 // limit days.
 func (r *ShadowRepository) DailyCosts(ctx context.Context, limit int) ([]DayCost, error) {
 	rows, err := r.db.QueryContext(ctx, `
-SELECT substr(datetime(created_at, '+9 hours'), 1, 10) AS day, COUNT(*), COALESCE(SUM(request_cost), 0)
+SELECT substr(datetime(created_at, '+9 hours'), 1, 10) AS day, `+spendColumns+`
 FROM jev_shadow_decisions GROUP BY day ORDER BY day DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("repository: jev shadow daily cost: %w", err)
@@ -102,7 +111,7 @@ FROM jev_shadow_decisions GROUP BY day ORDER BY day DESC LIMIT ?`, limit)
 	var out []DayCost
 	for rows.Next() {
 		var d DayCost
-		if err := rows.Scan(&d.Date, &d.Calls, &d.CostUSD); err != nil {
+		if err := rows.Scan(&d.Date, &d.Calls, &d.CostUSD, &d.EstimatedCalls, &d.EstimatedCostUSD); err != nil {
 			return nil, fmt.Errorf("repository: scan jev shadow daily cost: %w", err)
 		}
 		out = append(out, d)
@@ -121,10 +130,10 @@ func (r *ShadowRepository) Get(ctx context.Context, id int64) (jevshadow.Decisio
 	)
 	err := r.db.QueryRowContext(ctx, `
 SELECT id, jev_decision_id, prompt_version, model_id, response_json, direction, regime, entry_quality,
-	confidence, toxic_flow, liquidity_stressed, continuation_probability, latency_ms, input_tokens, request_cost, created_at
+	confidence, toxic_flow, liquidity_stressed, continuation_probability, latency_ms, input_tokens, request_cost, cost_is_estimate, created_at
 FROM jev_shadow_decisions WHERE id = ?`, id).Scan(&d.ID, &d.JevDecisionID, &d.PromptVersion, &d.ModelID, &d.ResponseJSON,
 		&d.Direction, &d.Regime, &d.EntryQuality, &d.Confidence, &d.ToxicFlow, &d.LiquidityStressed, &d.ContinuationProbability,
-		&d.LatencyMs, &d.InputTokens, &d.RequestCost, &createdAt)
+		&d.LatencyMs, &d.InputTokens, &d.RequestCost, &d.CostIsEstimate, &createdAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return jevshadow.Decision{}, ErrDecisionNotFound
 	}

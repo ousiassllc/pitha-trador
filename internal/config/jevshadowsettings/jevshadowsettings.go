@@ -42,7 +42,7 @@ const (
 	// shadow with no candidate does nothing.
 	KeyCandidateVersion = "jev.shadow.candidate_version"
 	// KeyDailyCostCapUSD is the shadow's daily cost cap in USD (a JSON number).
-	// Nothing stored means ProposedDailyCostCapUSD.
+	// Nothing stored means DefaultDailyCostCapUSD.
 	KeyDailyCostCapUSD = "jev.shadow.daily_cost_cap_usd"
 	// KeyHalt records the day the shadow was stopped by the cost or failure cap
 	// (a JSON object, Halt). The shadow runs again from the next JST day.
@@ -60,15 +60,14 @@ func Keys() []string {
 // DefaultEnabled is the shadow switch while nothing is stored.
 const DefaultEnabled = false
 
-// ProposedDailyCostCapUSD is the shadow's daily cost cap while nothing is
+// DefaultDailyCostCapUSD is the shadow's daily cost cap while nothing is
 // stored, in USD per JST day.
 //
-// 暫定の案・未承認: this value is a proposal and has NOT been approved. The
-// basis (call frequency, per-call cost, every assumption) is in the pull
-// request of issue #872. The number is decided by a person; until then this
-// constant is the only place the proposal lives, and the Settings screen, the
-// MCP and the docs say "暫定・未承認" next to it.
-const ProposedDailyCostCapUSD = 0.10
+// 0.10 USD a day is a user decision (確定). It is the default: the Settings
+// screen can raise or lower it (a stored value wins; an empty save removes the
+// stored value and this one applies again). The basis (call frequency,
+// per-call cost, every assumption) is in the pull request of issue #872.
+const DefaultDailyCostCapUSD = 0.10
 
 // MaxDailyCostCapUSD bounds a stored cap so a typo cannot lift it to an absurd
 // value.
@@ -189,7 +188,7 @@ type Settings struct {
 	// CandidateVersion is the shadow's candidate, "" for none.
 	CandidateVersion string
 	// CapUSD is the daily cost cap in USD; CapIsDefault is true while it is
-	// ProposedDailyCostCapUSD (unapproved).
+	// DefaultDailyCostCapUSD (the default, not a stored value).
 	CapUSD       float64
 	CapIsDefault bool
 	// Halt is the recorded cost- or failure-cap stop, nil for none.
@@ -204,7 +203,7 @@ type Settings struct {
 // build's live version. A fault can therefore never turn the shadow on or
 // change the live prompt.
 func Load(ctx context.Context, store Store) Settings {
-	s := Settings{CapUSD: ProposedDailyCostCapUSD, CapIsDefault: true}
+	s := Settings{CapUSD: DefaultDailyCostCapUSD, CapIsDefault: true}
 	if raw, ok := read(ctx, store, KeyLiveVersion); ok {
 		if v, err := ParseVersion(KeyLiveVersion, raw); err == nil {
 			s.LiveVersion = v

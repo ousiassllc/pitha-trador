@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// ProposedDailyFailureCap is how many failed shadow calls a JST day may have
-// before the shadow stops for the day, while it is not changed (it is a
-// constant: there is no setting for it).
+// DailyFailureCap is how many failed shadow calls a JST day may have
+// before the shadow stops for the day (a constant: there is no setting for
+// it).
 //
 // Why it exists: the cost cap sums request_cost of the calls that were stored,
 // but the vendor may bill a call that is never stored (an invalid or unusable
@@ -17,10 +17,9 @@ import (
 // failed call is counted here whatever it cost, and the cap bounds that
 // unrecorded spend to this many calls a day.
 //
-// 暫定の案・未承認: this number is a proposal and has NOT been approved. The
-// basis is in the pull request of issue #872; this constant is its only
-// place, and the Settings screen, the MCP and the docs say "暫定・未承認".
-const ProposedDailyFailureCap = 20
+// The number (20 a day) is a user decision (確定). The pull request of issue
+// #872 keeps the basis; this constant is its only place.
+const DailyFailureCap = 20
 
 // HaltReasonDailyCostCap and HaltReasonDailyFailureCap are the Halt.Reason
 // codes of a day stopped by the cost cap and by the failure cap.
