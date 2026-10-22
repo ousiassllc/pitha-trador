@@ -143,7 +143,10 @@ func (p Processor) positionOfEntry(ctx context.Context, order domain.PaperOrder)
 }
 
 // recoverClose finds out whether the close already happened: the symbol has no
-// open position and one closed with proposal_close since the proposal arrived.
+// open position and one an order proposal opened (the same test as the close
+// itself, enteredByProposal) was closed with proposal_close since the proposal
+// arrived. A position of the Policy Engine or the bootstrap closed that way is
+// not this proposal's: it goes back to received and ends as no_open_position.
 func (p Processor) recoverClose(ctx context.Context, pr orderproposal.Proposal) error {
 	if pr.InstrumentID != nil {
 		if _, err := p.Positions.GetOpenByInstrument(ctx, *pr.InstrumentID); err == nil {
@@ -156,7 +159,14 @@ func (p Processor) recoverClose(ctx context.Context, pr orderproposal.Proposal) 
 			return err
 		}
 		for _, pos := range closed {
-			if pos.InstrumentID == *pr.InstrumentID && pos.ExitReason != nil && *pos.ExitReason == domain.ExitReasonProposalClose {
+			if pos.InstrumentID != *pr.InstrumentID || pos.ExitReason == nil || *pos.ExitReason != domain.ExitReasonProposalClose {
+				continue
+			}
+			fromProposal, err := p.enteredByProposal(ctx, pos)
+			if err != nil {
+				return err
+			}
+			if fromProposal {
 				links := proposalstore.Links{PositionID: &pos.ID, PaperOrderID: pos.ExitOrderID}
 				return p.Proposals.Transition(ctx, pr.ID, pr.Status, proposalstore.Change{
 					ToStatus: orderproposal.StatusClosed, DetailJSON: recoveredDetail, Links: links})
