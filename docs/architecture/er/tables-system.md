@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（運用設定・ジョブ・ベクトル）
 
-`docs/architecture/er.md` から分割した章。対象: `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `mcp_settings_audit` とsqlite-vecベクトルインデックス。型・規約と全体ER図は `docs/architecture/er.md` を参照。
+`docs/architecture/er.md` から分割した章。対象: `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `mcp_settings_audit` / `tuning_experiments` とsqlite-vecベクトルインデックス。型・規約と全体ER図は `docs/architecture/er.md` を参照。
 
 ## runtime_settings
 
@@ -176,6 +176,46 @@ erDiagram
 | after_value | text | NULL可 | 変更後の値。`reset`では NULL |
 
 インデックス: `(setting_key, id)`。マスク方針: ホワイトリストのキーに秘密は無く値はそのまま入れる。秘密に分類されるキー・ホワイトリスト外のキーの値は`****`にして入れる（`mcpwritesettings.Mask`）。
+
+## tuning_experiments（調整の実験の記録、issue #871）
+
+調整（設定・Jev のモデル・Jev のプロンプトの版の変更）を 1 つずつ「実験」として残す（マイグレーション`000046`、`docs/architecture/paper-results-mcp-experiments.md`）。**1 実験 1 行・変えるのは変数 1 つだけ**（2 つ以上を同時に変える実験は`experiment_create`と Settings 画面が作成時に弾く。表は 1 行に 1 変数しか持てない形）。前後の成績・拒否理由・交絡は表に持たず、`experiment_compare`が`positions`・`trade_signals`・`mcp_settings_audit`・`jev_decisions`から毎回計算する。書くのは MCP の`experiment_create`（`INSERT`）と`experiment_close`（`UPDATE`。`status`と`ended_at`だけ）と、Settings 画面の同じ操作だけ。
+
+```mermaid
+erDiagram
+    tuning_experiments {
+        integer id PK
+        text created_at
+        text actor
+        text client
+        text hypothesis
+        text variable_kind
+        text variable_name
+        text before_value
+        text after_value
+        integer audit_id
+        text started_at
+        text ended_at
+        text status
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK, AUTOINCREMENT | 実験 ID |
+| created_at | text | NOT NULL | 作成時刻（UTC） |
+| actor | text | NOT NULL, CHECK(`mcp`/`gui`) | 誰が作ったか。`mcp_settings_audit.actor`と同じ扱い |
+| client | text | NOT NULL, DEFAULT `''` | `actor='mcp'`のとき接続元ホストの IP。`gui`は空 |
+| hypothesis | text | NOT NULL, 空白だけ不可, 500 文字以内 | 仮説（自由文） |
+| variable_kind | text | NOT NULL, CHECK(`setting`/`model`/`prompt`) | 変えた変数の種類。`setting`＝`mcpwritesettings`のホワイトリストのキー、`model`＝Jev のモデル（`jev_decisions.model_id`）、`prompt`＝Jev のプロンプトの版（`jev_decisions.question_version`） |
+| variable_name | text | NOT NULL, 1〜200 文字 | 設定キー・モデルの呼び名・プロンプトの版の呼び名 |
+| before_value / after_value | text | NOT NULL, 1〜200 文字, 互いに異なる | 変更前・変更後の値（設定は Settings 画面と同じ文字列） |
+| audit_id | integer | NULL可 | `variable_kind='setting'`のとき、その変更の`mcp_settings_audit.id`（任意）。外部キーにしない（監査表がマイグレーションで作り直されうるため）。変更前後の設定一式は`settings_diff`が監査ログから再構成できる。交絡の検出では、この行の変更自体を除く |
+| started_at | text | NOT NULL | 開始時刻（UTC）。変更が効き始めた時刻（未来は不可）。この時刻から終了までが「後」 |
+| ended_at | text | NULL可 | 終了時刻（UTC）。`status='running'`のときだけ NULL（CHECK） |
+| status | text | NOT NULL, DEFAULT `running`, CHECK(`running`/`closed`/`aborted`) | `running`＝実行中、`closed`＝終了（判定の対象）、`aborted`＝中止（判定を出さない） |
+
+インデックス: `(status, id)`。UPDATE は`running`の行を終えるときの 1 回だけ（終わった実験は再び開けない）。
 
 ## ベクトルインデックス（sqlite-vec）
 

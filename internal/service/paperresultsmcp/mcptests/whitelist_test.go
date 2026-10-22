@@ -108,7 +108,7 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	}
 
 	want("performance", data("paper_performance_summary", period),
-		"closed_trade_count open_position_count win_count loss_count flat_count win_rate total_pnl_jpy expectancy_jpy expectancy_return_pct profit_factor max_drawdown_jpy capital_jpy max_drawdown_capital_ratio by_origin")
+		"closed_trade_count open_position_count win_count loss_count flat_count win_rate total_pnl_jpy expectancy_jpy expectancy_return_pct avg_win_jpy avg_loss_jpy profit_factor max_drawdown_jpy capital_jpy max_drawdown_capital_ratio by_origin")
 	daily := data("paper_daily_pnl", period)
 	want("daily envelope", daily, "days")
 	want("daily row", first(daily, "days"), "date trade_count pnl_jpy win_count loss_count")

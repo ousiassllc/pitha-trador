@@ -1,0 +1,221 @@
+package mcp
+
+import (
+	"strconv"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// ExperimentRow is one row of the experiment list (issue #871), already
+// formatted for the screen.
+type ExperimentRow struct {
+	ID           int64
+	Status       string // running / closed / aborted (the data attribute)
+	StatusLabel  string
+	Period       string
+	Variable     string
+	Change       string
+	By           string
+	BeforeTrades int
+	AfterTrades  int
+	Verdict      string // the verdict code (the data attribute)
+	VerdictLabel string
+	Running      bool
+}
+
+// ExperimentsProps is Experiments' input. MinTradesNote says which minimum
+// number of trades judges an experiment and that it is not approved yet.
+type ExperimentsProps struct {
+	Notice        string
+	MinTradesNote string
+	Rows          []ExperimentRow
+}
+
+// MetricRow is one line of the before / after table.
+type MetricRow struct {
+	Label  string
+	Before string
+	After  string
+	Diff   string
+}
+
+// RejectRow is one rejection reason with its count before and after.
+type RejectRow struct {
+	Group  string
+	Reason string
+	Before int
+	After  int
+}
+
+// ExperimentDetailProps is ExperimentDetail's input: one experiment's
+// before / after comparison.
+type ExperimentDetailProps struct {
+	ID            int64
+	Hypothesis    string
+	Variable      string
+	Change        string
+	BeforePeriod  string
+	AfterPeriod   string
+	Verdict       string
+	VerdictLabel  string
+	MinTradesNote string
+	TestNote      string
+	Metrics       []MetricRow
+	Confounders   []string
+	Rejects       []RejectRow
+}
+
+// Experiments renders the tuning-experiment section of the MCP card
+// (`GET /settings/mcp/experiments`, issue #871): the list with each
+// experiment's verdict, the form that records a new one (one variable only),
+// and a slot (`#mcp-experiment-detail`) the 比較 buttons fill with a
+// before / after comparison. It only records and compares; it changes no
+// setting.
+templ Experiments(props ExperimentsProps) {
+	<section class="flex flex-col gap-3 rounded-md border border-slate-200 p-3" data-testid="mcp-experiments">
+		<h4 class="font-semibold text-slate-900">調整の実験（前後比較）</h4>
+		<p class="text-xs text-slate-500">
+			調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP の settings_set で行ってから記録します）。
+		</p>
+		<p class="text-xs text-amber-700" data-testid="mcp-experiments-min-trades">{ props.MinTradesNote }</p>
+		if props.Notice != "" {
+			<p class="text-emerald-700" role="status" data-testid="mcp-experiments-notice">{ props.Notice }</p>
+		}
+		@experimentForm()
+		if len(props.Rows) == 0 {
+			<span class="text-xs text-slate-500" data-testid="mcp-experiments-empty">まだ実験はありません。</span>
+		} else {
+			<table class="w-full text-left text-xs" aria-label="調整の実験の一覧" data-testid="mcp-experiments-table">
+				<thead>
+					<tr><th scope="col" class="pr-2">ID</th><th scope="col" class="pr-2">状態</th><th scope="col" class="pr-2">期間（JST）</th><th scope="col" class="pr-2">変えた変数</th><th scope="col" class="pr-2">前 / 後の取引</th><th scope="col" class="pr-2">判定</th><th scope="col"><span class="sr-only">操作</span></th></tr>
+				</thead>
+				<tbody>
+					for _, row := range props.Rows {
+						<tr data-testid="mcp-experiment-row" data-experiment-id={ strconv.FormatInt(row.ID, 10) } data-status={ row.Status } data-verdict={ row.Verdict }>
+							<td class="pr-2">{ strconv.FormatInt(row.ID, 10) }</td>
+							<td class="pr-2">{ row.StatusLabel }</td>
+							<td class="pr-2">{ row.Period }</td>
+							<td class="pr-2"><code>{ row.Variable }</code> { row.Change }<span class="block text-slate-500">{ row.By }</span></td>
+							<td class="pr-2">{ strconv.Itoa(row.BeforeTrades) } / { strconv.Itoa(row.AfterTrades) }</td>
+							<td class="pr-2" data-testid="mcp-experiment-verdict">{ row.VerdictLabel }</td>
+							<td class="flex flex-wrap gap-1">
+								@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
+									"hx-get": "/settings/mcp/experiments/" + strconv.FormatInt(row.ID, 10), "hx-target": "#mcp-experiment-detail", "hx-swap": "innerHTML",
+									"hx-disabled-elt": "this", "data-testid": "mcp-experiment-compare"}}) {
+									比較
+								}
+								if row.Running {
+									@closeButton(row.ID, "closed", "終了", "mcp-experiment-close")
+									@closeButton(row.ID, "aborted", "中止", "mcp-experiment-abort")
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+		<div id="mcp-experiment-detail" data-testid="mcp-experiment-detail"></div>
+	</section>
+}
+
+templ closeButton(id int64, status, label, testID string) {
+	@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
+		"hx-post": "/settings/mcp/experiments/" + strconv.FormatInt(id, 10) + "/close", "hx-vals": `{"status":"` + status + `"}`,
+		"hx-target": "#mcp-experiments", "hx-swap": "innerHTML", "hx-disabled-elt": "this", "data-testid": testID,
+		"hx-confirm": label + "します。実験 " + strconv.FormatInt(id, 10) + " の終了時刻は今になり、再び開くことはできません。よろしいですか？"}}) {
+		{ label }
+	}
+}
+
+// experimentForm records one experiment: a hypothesis and ONE variable (kind,
+// name, before, after). A request with two variables cannot be made here and
+// the server refuses it too.
+templ experimentForm() {
+	<form class="flex flex-col gap-2" hx-post="/settings/mcp/experiments" hx-target="#mcp-experiments" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-experiment-form">
+		<span class="font-medium text-slate-700">実験を記録する（変える変数は 1 つだけ）</span>
+		<label class="flex flex-col gap-1">
+			<span>仮説（500 文字以内）</span>
+			<textarea name="hypothesis" rows="2" maxlength="500" required class="rounded-md border border-slate-300 px-3 py-1" data-testid="mcp-experiment-hypothesis"></textarea>
+		</label>
+		<div class="flex flex-wrap gap-2">
+			<label class="flex flex-col gap-1">
+				<span>変数の種類</span>
+				@atoms.Select(atoms.SelectProps{Name: "kind", Attrs: templ.Attributes{"data-testid": "mcp-experiment-kind"}}) {
+					<option value="setting" selected>設定（MCP から変更できるキー）</option>
+					<option value="model">Jev のモデル</option>
+					<option value="prompt">Jev のプロンプトの版</option>
+				}
+			</label>
+			<label class="flex flex-col gap-1">
+				<span>名前（設定キー・モデルの呼び名・版の呼び名）</span>
+				@atoms.Input(atoms.InputProps{Name: "name", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-name"}})
+			</label>
+		</div>
+		<div class="flex flex-wrap gap-2">
+			<label class="flex flex-col gap-1">
+				<span>変更前の値</span>
+				@atoms.Input(atoms.InputProps{Name: "before", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-before"}})
+			</label>
+			<label class="flex flex-col gap-1">
+				<span>変更後の値</span>
+				@atoms.Input(atoms.InputProps{Name: "after", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-after"}})
+			</label>
+			<label class="flex flex-col gap-1">
+				<span>開始時刻（JST。空欄は今）</span>
+				@atoms.Input(atoms.InputProps{Name: "started_at", Type: "datetime-local", Class: "px-3 py-1", Attrs: templ.Attributes{"data-testid": "mcp-experiment-started"}})
+			</label>
+		</div>
+		<div>
+			@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-experiment-create"}}) {
+				記録する
+			}
+		</div>
+	</form>
+}
+
+// ExperimentDetail renders one experiment's comparison into
+// `#mcp-experiment-detail`: the verdict (or why there is none), what changed
+// during the experiment besides its variable, the metrics before and after,
+// and the rejection reasons before and after.
+templ ExperimentDetail(props ExperimentDetailProps) {
+	<div class="flex flex-col gap-2 rounded-md bg-slate-50 p-3" data-testid="mcp-experiment-comparison" data-experiment-id={ strconv.FormatInt(props.ID, 10) } data-verdict={ props.Verdict }>
+		<span class="font-medium text-slate-700">実験 { strconv.FormatInt(props.ID, 10) } の前後比較</span>
+		<span>仮説: <span data-testid="mcp-experiment-detail-hypothesis">{ props.Hypothesis }</span></span>
+		<span>変えた変数: <code>{ props.Variable }</code> { props.Change }</span>
+		<span>前: { props.BeforePeriod }　後: { props.AfterPeriod }</span>
+		<span class="font-semibold" data-testid="mcp-experiment-detail-verdict">判定: { props.VerdictLabel }</span>
+		<span class="text-xs text-amber-700">{ props.MinTradesNote }</span>
+		<span class="text-xs text-slate-600" data-testid="mcp-experiment-test-note">{ props.TestNote }</span>
+		if len(props.Confounders) > 0 {
+			<ul class="list-disc pl-5 text-xs text-red-700" data-testid="mcp-experiment-confounders">
+				for _, c := range props.Confounders {
+					<li>{ c }</li>
+				}
+			</ul>
+		}
+		<table class="w-full text-left text-xs" aria-label="前後の指標" data-testid="mcp-experiment-metrics">
+			<thead>
+				<tr><th scope="col" class="pr-2">指標</th><th scope="col" class="pr-2">前</th><th scope="col" class="pr-2">後</th><th scope="col">後 − 前</th></tr>
+			</thead>
+			<tbody>
+				for _, m := range props.Metrics {
+					<tr><th scope="row" class="pr-2 font-normal">{ m.Label }</th><td class="pr-2">{ m.Before }</td><td class="pr-2">{ m.After }</td><td>{ m.Diff }</td></tr>
+				}
+			</tbody>
+		</table>
+		if len(props.Rejects) > 0 {
+			<table class="w-full text-left text-xs" aria-label="拒否理由の内訳" data-testid="mcp-experiment-rejects">
+				<thead>
+					<tr><th scope="col" class="pr-2">拒否の種類</th><th scope="col" class="pr-2">理由</th><th scope="col" class="pr-2">前</th><th scope="col">後</th></tr>
+				</thead>
+				<tbody>
+					for _, r := range props.Rejects {
+						<tr><td class="pr-2">{ r.Group }</td><td class="pr-2"><code>{ r.Reason }</code></td><td class="pr-2">{ strconv.Itoa(r.Before) }</td><td>{ strconv.Itoa(r.After) }</td></tr>
+					}
+				</tbody>
+			</table>
+		} else {
+			<span class="text-xs text-slate-500">前後とも拒否はありません。</span>
+		}
+	</div>
+}

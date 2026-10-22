@@ -138,3 +138,4 @@
 | 1.131 | 2026-10-21 | §4.6 に FR-POLICY-8（Paper の最低エントリー品質。Paper は `good`・Live は `strong` のまま、`policy.paper.{long,short}.min_entry_quality`）を追加し、§4.22 の FR-MCP-20 のホワイトリストを 17 → 19 キーにした（issue #861）。 | Paper の取引が 30 日 0 件で、一番の原因が `strong` の入口のしきい値だったため |
 | 1.132 | 2026-10-21 | §4.22 の FR-MCP-4 のツール数を 22 にし、FR-MCP-34 を追加（`session_diagnostics`＝立会日ごとの収集の診断。`collection_status` の失敗の内訳は期間の末尾 3 日・エラーコード別） | issue #850 |
 | 1.133 | 2026-10-22 | FR-MCP-34 を更新: 失敗の内訳の窓を 3 日に確定、`session_diagnostics` の窓を 14 日、時間切れは `timed_out`・`incomplete[]` の部分結果 | issue #850 |
+| 1.134 | 2026-10-22 | §4.22 に FR-MCP-35（調整の実験の記録と前後比較。`experiment_create` / `experiment_close` / `experiments_list` / `experiment_compare`、変数 1 つ、交絡の検出、最低取引件数の暫定の案） を追加 | issue #871 |

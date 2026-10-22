@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 12 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つ。合計 24。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23〜§3.24）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 12 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つと、調整の実験の 4 つ（分割章 `paper-results-mcp-experiments.md`。issue #871）。合計 28。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23〜§3.24）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -40,7 +40,7 @@
 | `win_count` / `loss_count` / `flat_count` | 上の勝敗 |
 | `win_rate` | `win_count / closed_trade_count`。0 件なら `null` |
 | `total_pnl_jpy` | `realized_pnl` の合計（円） |
-| `expectancy_jpy` | `realized_pnl` の平均。0 件なら `null` |
+| `expectancy_jpy` | `realized_pnl` の平均。0 件なら `null`。あわせて `avg_win_jpy`（平均の勝ち＝勝ちの合計 ÷ `win_count`。正の円）と `avg_loss_jpy`（平均の負け＝負けの合計 ÷ `loss_count`。負の円）を返す。勝ち／負けが 0 件なら `null`（issue #871） |
 | `expectancy_return_pct` | 各行の `realized_pnl / (entry_price * quantity) * 100` の平均。建値が 0 以下の行はリターン 0 として数える（`internal/service/insight.Aggregate` と同じ）。0 件なら `null` |
 | `profit_factor` | 勝ちの合計円 ÷ 負けの合計円の絶対値。負けが 0 件、または対象 0 件なら `null` |
 | `max_drawdown_jpy` | `closed_at` 昇順、同着は `id` 昇順で `realized_pnl` を累積した曲線の、ピークから谷までの最大下落（円）。下落が無ければ 0。0 件なら 0 |
