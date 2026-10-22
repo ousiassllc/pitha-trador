@@ -57,6 +57,14 @@ type fakeSource struct {
 	err  error
 	from time.Time
 	to   time.Time
+	// v1Rows are the version 1 labeled decisions the source reports besides
+	// the version 2 ones (len(rows)); countErr fails the count.
+	v1Rows   int
+	countErr error
+}
+
+func (f *fakeSource) CountLabeledDecisions(context.Context, time.Time, time.Time) (repo.LabelVersionCounts, error) {
+	return repo.LabelVersionCounts{V1: f.v1Rows, V2: len(f.rows)}, f.countErr
 }
 
 func (f *fakeSource) ListTrainingRows(_ context.Context, from, to time.Time) ([]repo.TrainingRow, error) {
