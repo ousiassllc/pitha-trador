@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つ。合計 21）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 11 つ（`health_today`・`metalabel_training_readiness`・`jev_models` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つ。合計 23。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23〜§3.24）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -277,7 +277,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 |--------------|----------------|
 | `market_snapshots.raw_data_json` | `000002`。ブローカー生レスポンス |
 | `market_snapshots` の価格・板・出来高・特徴量（`price` / `bid` / `ask` / `spread_bps` / `volume` / `vwap` / `ofi_*` / `return_*` など。`000016`・`000026`・`000032`） | 時価・板・気配そのもの。鮮度は件数と時刻だけ |
-| `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文 |
+| `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文。`metalabel_training_readiness`（§3.23）は特徴量の欠けを数えるためにプロセス内で読むが、戻り値には件数と特徴量名しか載せない |
 | `jev_decisions` の `ofi_*` / `microprice_dev_bps` / `vwap_z` / `regime_volatility_bps` / `regime_autocorr` | `000032`・`000036`。板・価格由来の特徴量 |
 | `secrets` の全列 | `000013`。`key` 名も返さない |
 | API キー、MCP の `api_key`、証券会社の認証情報。Cloudflare を使うときの Client-Secret も | ローカル設定と `secrets`。ログにも出さない |

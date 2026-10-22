@@ -11,17 +11,18 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 )
 
-// eightTools are the tools taking the from/to period arguments; health_today
+// periodTools are the tools taking the from/to period arguments; health_today
 // (issue #808) takes none, so it is called separately (healthToday).
-var eightTools = []string{
+var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
+	"metalabel_training_readiness", "jev_models",
 }
 
 const healthToday = "health_today"
 
 // allTools is every tool of the dispatch table.
-var allTools = append(slices.Clone(eightTools), healthToday)
+var allTools = append(slices.Clone(periodTools), healthToday)
 
 // settingsTools are the tools of issues #806 / #807: the read tools of the
 // whitelisted settings and the only tools that write (settings_set and the
@@ -67,8 +68,8 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the nine read tools, the six settings tools and
-// the six order-proposal tools (21 in all); only the six writing tools are not
+// tools/list returns exactly the eleven read tools, the six settings tools and
+// the six order-proposal tools (23 in all); only the six writing tools are not
 // marked read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)

@@ -20,7 +20,7 @@ func TestOutputsAndLogsNeverContainRawDataOrSecrets(t *testing.T) {
 
 	var bodies []string
 	collect := func(r response) { bodies = append(bodies, string(r.body)) }
-	for _, tool := range eightTools {
+	for _, tool := range periodTools {
 		collect(srv.call(t, tool, period))
 		collect(srv.call(t, tool, map[string]any{}))
 		collect(srv.call(t, tool, map[string]any{"from": "2025-01-01", "to": "2026-10-19"}))
