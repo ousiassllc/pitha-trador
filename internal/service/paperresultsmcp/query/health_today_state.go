@@ -11,18 +11,15 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
-	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/healthalert"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/dailyhalt"
 )
 
 // runtime_settings keys of the risk engine (internal/service/risk) health_today
 // reads besides the daily guard thresholds and the bootstrap switch.
-const (
-	keySystemKilled = "system.killed"
-	keyDailyGuard   = "system.daily_guard"
-)
+const keySystemKilled = "system.killed"
 
 // maxKillReasons caps the unresolved Kill Switch events listed.
 const maxKillReasons = 20
@@ -31,7 +28,7 @@ const maxKillReasons = 20
 // (health_today). runtime_settings can hold secret paths, so a key outside
 // this list is refused before any SQL runs.
 func ReadableSettingKeys() []string {
-	return append(dailyguardsettings.Keys(), keySystemKilled, keyDailyGuard, paperbootstrapsettings.Key)
+	return append(dailyguardsettings.Keys(), keySystemKilled, dailyhalt.Key, paperbootstrapsettings.Key)
 }
 
 // settingsReader is a read-only runtime_settings view limited to
@@ -135,59 +132,6 @@ func healthMarketData(ctx context.Context, q Q, now time.Time) (HealthMarketData
 		}
 	}
 	return m, nil
-}
-
-// dailyGuardState is the part of the risk engine's system.daily_guard row
-// health_today uses; the halt's message text is deliberately not decoded.
-type dailyGuardState struct {
-	Day        string `json:"day"`
-	HaltReason string `json:"halt_reason"`
-	HaltedAt   string `json:"halted_at"`
-}
-
-// healthDailyGuard reports today's daily entry halt the way the app does
-// (risk.Engine.DailyHalt): the latched row of today's trading day, and only
-// while the rule behind it is still enabled in the thresholds.
-func healthDailyGuard(ctx context.Context, q Q, day string) (HealthDailyGuard, error) {
-	store := settingsReader{q}
-	raw, ok, err := store.Get(ctx, keyDailyGuard)
-	if err != nil || !ok {
-		return HealthDailyGuard{}, err
-	}
-	var state dailyGuardState
-	if err := json.Unmarshal([]byte(raw), &state); err != nil {
-		return HealthDailyGuard{}, fmt.Errorf("query: decode daily guard state: %w", err)
-	}
-	if state.Day != day || state.HaltReason == "" {
-		return HealthDailyGuard{}, nil
-	}
-	limits, err := dailyguardsettings.Load(ctx, store)
-	if err != nil {
-		return HealthDailyGuard{}, err
-	}
-	if !haltRuleEnabled(limits, state.HaltReason) {
-		return HealthDailyGuard{}, nil
-	}
-	g := HealthDailyGuard{Halted: true, Reason: &state.HaltReason}
-	if at, err := time.Parse(time.RFC3339Nano, state.HaltedAt); err == nil {
-		s := at.UTC().Format(time.RFC3339)
-		g.HaltedAt = &s
-	}
-	return g, nil
-}
-
-// haltRuleEnabled is risk's reasonEnabled: a halt of a rule since disabled in
-// Settings no longer applies.
-func haltRuleEnabled(l dailyguardsettings.Limits, reason string) bool {
-	switch reason {
-	case domain.DailyHaltReasonLossLimit:
-		return l.LossLimitEnabled()
-	case domain.DailyHaltReasonProfitLock:
-		return l.ProfitLockEnabled()
-	case domain.DailyHaltReasonMaxTrades:
-		return l.MaxTradesEnabled()
-	}
-	return false
 }
 
 // healthKillSwitch reads the state the way risk.Engine.State does: killed

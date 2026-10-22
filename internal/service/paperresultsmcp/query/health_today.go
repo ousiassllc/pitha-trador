@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/dailyhalt"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/stalled"
 )
 
@@ -113,15 +114,6 @@ type HealthMarketData struct {
 	Alerts []Alert `json:"alerts"`
 }
 
-// HealthDailyGuard is today's daily entry halt (FR-RISK-8).
-type HealthDailyGuard struct {
-	Halted bool `json:"halted"`
-	// Reason is the halt's fixed code (daily_loss_limit_jpy, profit_lock,
-	// max_daily_trades); the message text is never returned.
-	Reason   *string `json:"reason"`
-	HaltedAt *string `json:"halted_at"`
-}
-
 // HealthKillSwitch is the Kill Switch state.
 type HealthKillSwitch struct {
 	Active          bool `json:"active"`
@@ -165,7 +157,7 @@ type Health struct {
 	// snapshot and none before them either: the history does not reach back
 	// that far (first start), so they cannot be judged. Never a warning.
 	InsufficientHistoryDates []string          `json:"insufficient_history_dates"`
-	DailyGuard               HealthDailyGuard  `json:"daily_guard"`
+	DailyGuard               dailyhalt.State   `json:"daily_guard"`
 	KillSwitch               HealthKillSwitch  `json:"kill_switch"`
 	Retrain                  HealthRetrain     `json:"retrain"`
 	OrderProposals           stalled.Proposals `json:"order_proposals"`
@@ -200,7 +192,7 @@ func HealthToday(ctx context.Context, q Q, now time.Time) (Health, error) {
 	if h.MissingSessionDates, h.InsufficientHistoryDates, err = sessionGaps(ctx, q, missingRange(now, dayStart)); err != nil {
 		return Health{}, err
 	}
-	if h.DailyGuard, err = healthDailyGuard(ctx, q, h.Date); err != nil {
+	if h.DailyGuard, err = dailyhalt.Today(ctx, settingsReader{q}, h.Date); err != nil {
 		return Health{}, err
 	}
 	if h.KillSwitch, err = healthKillSwitch(ctx, q); err != nil {
