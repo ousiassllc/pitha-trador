@@ -51,9 +51,18 @@ func detailProps(c experiment.Comparison) mcp.ExperimentDetailProps {
 		Metrics:  metricRows(c), Rejects: rejectRows(c.Before.RiskRejections, c.After.RiskRejections),
 	}
 	for _, f := range c.Confounders {
-		p.Confounders = append(p.Confounders, confounderText(f))
+		p.Confounders = append(p.Confounders, confounderLine(f))
 	}
 	return p
+}
+
+// confounderLine is confounderText, except for a recorded switch of the
+// configured Jev model (issue #885), whose Values are [before, after].
+func confounderLine(f experiment.Confounder) string {
+	if f.Kind == experiment.KindModel && f.Name == experiment.ModelSwitchName && len(f.Values) == 2 {
+		return fmt.Sprintf("交絡: Jev のモデル（JEV_MODEL）が切り替えられました（%s、%s → %s）。", jst(f.At), f.Values[0], f.Values[1])
+	}
+	return confounderText(f)
 }
 
 func metricRows(c experiment.Comparison) []mcp.MetricRow {

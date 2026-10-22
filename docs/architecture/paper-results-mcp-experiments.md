@@ -15,7 +15,7 @@
 | `kind` | 変数 | `name` | 交絡の見方 |
 |--------|------|--------|-----------|
 | `setting` | `mcpwritesettings` のホワイトリストの設定キー | 設定キー（ホワイトリスト外は `key_not_allowed`。交絡を確かめられないため） | `mcp_settings_audit` |
-| `model` | Jev のモデル | モデルの呼び名（自由。1〜200 文字） | `jev_decisions.model_id` |
+| `model` | Jev のモデル | モデルの呼び名（自由。1〜200 文字） | `jev_decisions.model_id` と `jev_model_changes`（Settings 画面での切り替えの記録。§4.3） |
 | `prompt` | Jev のプロンプトの版 | 版の呼び名（例 `trader-v3`） | `jev_decisions.question_version` |
 
 検査（`experiment.Args.Validate`）は、変数の数（0 件は `invalid_argument`、2 件以上は `multiple_variables`。同じ変数の 2 回も 2 件と数える）、仮説（1〜500 文字）、`before` ≠ `after`、`audit_id`（`setting` のときだけ。その設定キーの `set` / `reset` の行）、`started_at`（RFC3339。未来は不可）の順。DB 側にも CHECK がある（種類・状態・文字数・`before <> after`・`ended_at` は `running` のときだけ NULL）。
@@ -69,9 +69,16 @@ $$\Delta=\bar x_2-\bar x_1,\quad SE=\sqrt{\frac{s_1^2}{n_1}+\frac{s_2^2}{n_2}},\
 
 - ホワイトリストの別の設定キーの `set` / `reset`（`mcp_settings_audit`。GUI の変更も同じ表に入る）。対象の設定キー自身は、実験の `audit_id` の行と、その後に**同じ値**へ保存し直した行は数えず、**別の値**へ変えたら数える
 - `jev_decisions` の同じ判断種別（scout / trader）で、`model_id` が 2 種類以上（または `question_version` が 2 種類以上）。ただしモデル（プロンプト）の実験では、その軸だけは前後の 2 つまで許す
+- Jev のモデル（`JEV_MODEL`）を Settings 画面で切り替えた記録（`jev_model_changes`。§4.3）。判断が 1 件も走っていない期間の切り替えも検出する
 - 前の期間は見ない（issue は実験の期間中の変化を検査とした）。前に変更があっても、それは「前」の条件であり実験の対象ではない
 
-モデルの切り替えは監査されない（`jev_decisions.model_id` にだけ残る）ので、判断が 1 件も無い期間のモデルの変更は検出できない。
+### 4.3 モデルの切り替えの記録（issue #885）
+
+Jev のモデル（Settings 画面の秘密情報 `JEV_MODEL`）を切り替えると、**いつ・何から何へ・誰が**を `jev_model_changes`（マイグレーション `000048`、`er/tables-system.md`）に 1 行残す。書くのは Settings 画面の保存・削除の経路（`system.SecretsRepository.Set` / `Delete`）だけで、`JEV_MODEL` のときだけ、秘密情報の保存と同じトランザクションで書く（どちらかだけ残ることはない）。値が変わらない保存し直し・未設定の削除は行を作らない。前の値・後の値の列に入るのは**モデル名だけ**（NULL は未設定＝既定のモデル）で、API キーなど `JEV_MODEL` 以外の秘密情報の値は、この表の書き込み関数に渡らない（`TestSecretsRepository_JevModelChanges_NeverHoldOtherSecrets`）。`actor` は `gui`（Settings 画面のほかに秘密情報を書く経路はない）。保存してもモデルはアプリの再起動で効くので、判断の `model_id` が変わるのは `at` より後。
+
+- **交絡の検出**: 期間 `[from, to)` に保存された切り替えを、判断の有無にかかわらず交絡にする（`jev_decisions` に 1 件も無い期間でも検出できる）。要素は `kind=model`、`name=JEV_MODEL`、`at`（保存した時刻）、`values=[前, 後]`（未設定は「未設定（既定のモデル）」）。モデルの実験では、実験が `after` に挙げたモデルへの切り替えは実験自身の変更なので数えず、ほかへの切り替えは数える。`name` が `scout` / `trader` の要素は、従来どおり `jev_decisions` の `model_id` の種類から検出したもの
+- **モデルの実験の開始時刻の確認**: `experiment_create`（と Settings 画面）で `kind=model` の `started_at` が、記録されている「`after` のモデルへの切り替え」の保存時刻（最新の 1 件）より**前**なら `invalid_argument` で拒否する（保存前にそのモデルが使われていたはずがないため。何も保存しない）。保存した時刻と同じ・より後は受け付ける
+- **記録の開始前は「記録なし」**: 記録は `000048` の適用後の切り替えだけで、過去の切り替えは遡れない。行が無いことは「切り替えが無かった」ことを意味しない。記録が無い `after` のモデルの実験の `started_at` は、従来どおり申告をそのまま信じる。判断が走る前の切り替えを検出できるのは、記録の開始後のものだけ
 
 ## 5. 最低取引件数: 暫定値（本番の σ は未確認）
 

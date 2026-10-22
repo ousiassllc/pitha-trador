@@ -176,6 +176,12 @@ WHERE at >= ? AND at < ? AND action IN ('set', 'reset') ORDER BY id`, from, to)
 		return nil, fmt.Errorf("experiment: changed settings: %w", err)
 	}
 
+	switches, err := modelSwitches(ctx, q, exp, from, to)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, switches...)
+
 	jev, err := q.QueryContext(ctx, `
 SELECT decision_type, model_id, question_version FROM jev_decisions
 WHERE timestamp >= ? AND timestamp < ?
