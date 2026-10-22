@@ -47,6 +47,7 @@ func healthAt(t *testing.T, w *sql.DB, now time.Time) query.Health {
 func TestEachAttentionCodeOnAndOff(t *testing.T) {
 	afternoon := at(20, 13, 0) // Tuesday, afternoon session
 	kabu, idle := domain.HealthAlertKabuNotLoggedIn, domain.HealthAlertMarketDataIdle
+	unreachable := domain.HealthAlertKabuUnreachable
 	del := func(table string) func(*testing.T, *sql.DB) {
 		return func(t *testing.T, w *sql.DB) { testkit.MustExec(t, w, `DELETE FROM `+table) }
 	}
@@ -78,6 +79,8 @@ func TestEachAttentionCodeOnAndOff(t *testing.T) {
 
 		{name: "kabu_not_logged_in on", want: []string{kabu},
 			setup: func(t *testing.T, w *sql.DB) { testkit.HealthAlert(t, w, kabu, at(20, 8, 45), afternoon) }},
+		{name: "kabu_unreachable on", want: []string{unreachable},
+			setup: func(t *testing.T, w *sql.DB) { testkit.HealthAlert(t, w, unreachable, at(20, 8, 45), afternoon) }},
 		{name: "market_data_idle on", want: []string{idle},
 			setup: func(t *testing.T, w *sql.DB) { testkit.HealthAlert(t, w, idle, at(20, 12, 40), afternoon) }},
 
@@ -160,13 +163,14 @@ func TestEachAttentionCodeOnAndOff(t *testing.T) {
 
 // Every code the tool can raise is in the documented list, in this order.
 func TestAttentionCodesAreTheDocumentedFixedSet(t *testing.T) {
-	want := []string{"no_paper_trades_today", "no_active_model", "kabu_not_logged_in", "market_data_idle",
+	want := []string{"no_paper_trades_today", "no_active_model", "kabu_not_logged_in", "kabu_unreachable", "market_data_idle",
 		"missing_session", "daily_guard_halted", "kill_switch_active", "retrain_skipped", "order_proposal_stalled"}
 	if got := query.AttentionCodes(); !slices.Equal(got, want) {
 		t.Fatalf("AttentionCodes = %v, want %v", got, want)
 	}
-	// The two health alerts are the codes of the #802 in-app banner, not a copy.
-	if query.AttentionKabuNotLoggedIn != domain.HealthAlertKabuNotLoggedIn || query.AttentionMarketDataIdle != domain.HealthAlertMarketDataIdle {
+	// The health alerts are the codes of the in-app banner (#802, #863), not a copy.
+	if query.AttentionKabuUnreachable != domain.HealthAlertKabuUnreachable ||
+		query.AttentionKabuNotLoggedIn != domain.HealthAlertKabuNotLoggedIn || query.AttentionMarketDataIdle != domain.HealthAlertMarketDataIdle {
 		t.Fatal("health alert codes drifted from the in-app banner (domain.HealthAlert*)")
 	}
 }

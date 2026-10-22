@@ -69,3 +69,41 @@ func TestBuildRows_NoNewsContextIsNeutralAndIncompleteDecisionsAreDropped(t *tes
 		t.Errorf("tdnet score without news_context = %v, want neutral 0", got)
 	}
 }
+
+// BuildRowsReport names, per decision, exactly the features BuildRows cannot
+// complete and returns BuildRows' own rows and dropped count: a decision with
+// no missing feature is kept, any missing feature drops it (the rule
+// metalabel_training_readiness explains dropped_incomplete with).
+func TestBuildRowsReport_AgreesWithBuildRows(t *testing.T) {
+	at := time.Date(2026, 10, 14, 1, 0, 0, 0, time.UTC)
+	ok := decidedRow(at, "LONG", `{"spread_bps":4,"return_1m":0.001}`)
+	noSpread := decidedRow(at, "LONG", `{"return_1m":0.001}`)
+	badState := decidedRow(at, "LONG", `not json`)
+	badAnswer := decidedRow(at, "LONG", `{"spread_bps":4,"return_1m":0.001}`)
+	badAnswer.ResponseJSON = `{"direction":"LONG"}`
+	noFlow := decidedRow(at, "SHORT", `{"spread_bps":4,"return_1m":0.001}`)
+	noFlow.OrderFlow = domain.OrderFlowFeatures{}
+
+	for name, tc := range map[string]struct {
+		row  repo.TrainingRow
+		want map[string]int
+	}{
+		"complete":   {ok, map[string]int{}},
+		"no spread":  {noSpread, map[string]int{"spread_bps": 1}},
+		"bad state":  {badState, map[string]int{"spread_bps": 1, "return_1m": 1}},
+		"bad answer": {badAnswer, map[string]int{"jev_score": 1}},
+		"no flow":    {noFlow, map[string]int{"ofi_short": 1, "ofi_mid": 1, "ofi_long": 1, "microprice_dev_bps": 1}},
+	} {
+		rows, dropped, missing := training.BuildRowsReport([]repo.TrainingRow{tc.row})
+		if fmt.Sprint(missing) != fmt.Sprint(tc.want) {
+			t.Errorf("%s: missing = %v, want %v", name, missing, tc.want)
+		}
+		wantRows, wantDropped := training.BuildRows([]repo.TrainingRow{tc.row})
+		if len(rows) != len(wantRows) || dropped != wantDropped {
+			t.Errorf("%s: BuildRowsReport kept %d dropped %d, BuildRows kept %d dropped %d", name, len(rows), dropped, len(wantRows), wantDropped)
+		}
+		if kept := len(tc.want) == 0; kept != (len(rows) == 1 && dropped == 0) {
+			t.Errorf("%s: missing %v but kept %d dropped %d", name, missing, len(rows), dropped)
+		}
+	}
+}

@@ -8,8 +8,10 @@
 // holds only Paper and operating-capital values: the Paper capital and
 // exposure limits (papersettings), the per-asset-class budgets
 // (bucketsettings), the daily entry-halt thresholds
-// (dailyguardsettings) and the LLM cutoff with its provenance
-// (metalabelsettings). It never holds a Live value, the Paper bootstrap
+// (dailyguardsettings), the Paper-only minimum entry quality
+// (paperpolicysettings, issue #861) and the LLM cutoff with its provenance
+// (metalabelsettings). It never holds a Live value (policy.long|short.
+// min_entry_quality, the Live thresholds, are not on it), the Paper bootstrap
 // switch, a secret, or anything that orders, moves money or releases the Kill
 // Switch - those have no key in runtime_settings the MCP could reach through
 // this list.
@@ -30,6 +32,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 )
 
@@ -83,6 +86,9 @@ type Spec struct {
 	Secret bool
 }
 
+// entryQualityConstraint is the accepted values of both Paper entry-quality keys.
+const entryQualityConstraint = "poor / fair / good / strong / exceptional のいずれか（弱い順）"
+
 // bucketConstraint is the accepted range of both bucket budgets.
 const bucketConstraint = "0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金（risk.paper.initial_capital_jpy）以下"
 
@@ -91,6 +97,8 @@ var specs = []Spec{
 	{papersettings.KeyMaxPositionPerSymbolPct, UnitPercent, "Paper の 1 銘柄あたりの建玉上限（運用資金に対する %）", "0 より大きく 100 以下", false},
 	{papersettings.KeyMaxTotalExposurePct, UnitPercent, "Paper の総エクスポージャ上限（運用資金に対する %）", "0 より大きく 100 以下", false},
 	{papersettings.KeyMaxTradeLossPct, UnitPercent, "Paper の 1 回の最大損失（運用資金に対する %）", fmt.Sprintf("%v 以上 %v 以下", papersettings.MinTradeLossPct, papersettings.MaxTradeLossPct), false},
+	{paperpolicysettings.KeyLongMinEntryQuality, UnitText, "Paper のロングの最低エントリー品質（Jev の entry_quality がこれ未満なら見送る）。Paper でだけ効く（Live の policy.long.min_entry_quality は strong のままで、この API からは変えられない）。既定 good", entryQualityConstraint, false},
+	{paperpolicysettings.KeyShortMinEntryQuality, UnitText, "Paper のショートの最低エントリー品質（Jev の entry_quality がこれ未満なら見送る）。Paper でだけ効く（Live の policy.short.min_entry_quality は strong のままで、この API からは変えられない）。既定 good", entryQualityConstraint, false},
 	{bucketsettings.KeyStockBudgetJPY, UnitYen, "Paper の株の予算枠（円）。保有中の株の建玉（時価ベース）に今回の額を足してこの額を超える新規エントリーは見送る。0 は株の新規エントリーを止める", bucketConstraint, false},
 	{bucketsettings.KeyBondETFBudgetJPY, UnitYen, "Paper の債券ETFの予算枠（円）。0 はこの枠を使わない", bucketConstraint, false},
 	{dailyguardsettings.KeyOperatingCapitalJPY, UnitYen, "日次ガードの運用資金（円）。日次損失上限・利益確保の発動額を割合から出す基準。0 は未設定", "0 以上 1 兆円以下", false},

@@ -3,6 +3,7 @@ package settingstests
 import (
 	"math"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -120,9 +121,13 @@ func TestSettingsToolsNeedTheKey(t *testing.T) {
 	}
 }
 
-// The write path is narrow: across a whole settings session the only
-// statements that change anything touch runtime_settings (one key per write)
-// and mcp_settings_audit, and the read connection still refuses writes.
+// The write path is narrow: across a whole settings and experiments session
+// the only statements that change anything are the runtime_settings upsert
+// (one key per write), the mcp_settings_audit INSERT, and - issue #871 - the
+// tuning_experiments INSERT (one per accepted experiment) and the UPDATE that
+// ends a running experiment. Refused calls (two variables, a key off the
+// whitelist, writes switched off, an experiment that already ended) write
+// nothing, and the read connection still refuses writes.
 func TestSettingsWritePathIsNarrow(t *testing.T) {
 	path, w := testkit.NewMigratedDB(t)
 	testkit.SeedPositions(t, w)
@@ -132,10 +137,35 @@ func TestSettingsWritePathIsNarrow(t *testing.T) {
 	srv.call(t, "settings_write_disable", map[string]any{}).data(t, "settings_write_disable", &struct{}{})
 	srv.call(t, "settings_write_enable", map[string]any{}).data(t, "settings_write_enable", &struct{}{})
 	set(srv, t, "nope", 1).wantError(t, http.StatusForbidden, paperresultsmcp.CodeKeyNotAllowed)
-	for _, tool := range []string{"settings_get", "settings_diff", "settings_audit"} {
+	for _, tool := range []string{"settings_get", "settings_diff", "settings_audit", "experiments_list"} {
 		srv.call(t, tool, map[string]any{}).data(t, tool, &struct{}{})
 	}
 
+	change := func(name string) map[string]any {
+		return map[string]any{"kind": "setting", "name": name, "before": 1, "after": 2}
+	}
+	create := func(changes ...map[string]any) response {
+		return srv.call(t, "experiment_create", map[string]any{
+			"hypothesis": "1 回の最大損失を 1% から 2% に上げる", "changes": changes, "started_at": "2026-10-10T00:00:00Z"})
+	}
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	create(change("risk.paper.max_trade_loss_pct")).data(t, "experiment_create", &created)
+	create(change("risk.paper.max_trade_loss_pct"), change("risk.max_daily_trades")).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeMultipleVariables)
+	create(change("min_entry_quality")).wantError(t, http.StatusForbidden, paperresultsmcp.CodeKeyNotAllowed)
+	srv.call(t, "experiment_compare", map[string]any{"experiment_id": created.ID}).data(t, "experiment_compare", &struct{}{})
+	srv.call(t, "experiment_close", map[string]any{"experiment_id": created.ID}).data(t, "experiment_close", &struct{}{})
+	srv.call(t, "experiment_close", map[string]any{"experiment_id": created.ID}).wantError(t, http.StatusConflict, paperresultsmcp.CodeExperimentNotRunning)
+	srv.call(t, "settings_write_disable", map[string]any{}).data(t, "settings_write_disable", &struct{}{})
+	create(change("risk.paper.max_trade_loss_pct")).wantError(t, http.StatusForbidden, paperresultsmcp.CodeWriteDisabled)
+
+	allowed := map[string]*regexp.Regexp{
+		"runtime_settings":   regexp.MustCompile(`(?is)^\s*INSERT INTO runtime_settings\b`),
+		"mcp_settings_audit": regexp.MustCompile(`(?is)^\s*INSERT INTO mcp_settings_audit\b`),
+		"tuning_experiments": regexp.MustCompile(`(?is)^\s*(INSERT INTO tuning_experiments\b|UPDATE tuning_experiments SET status = \?, ended_at = \? WHERE id = \? AND status = 'running')`),
+	}
+	written := map[string]int{}
 	for _, stmt := range counter.StatementLog() {
 		s := strings.ToUpper(strings.TrimSpace(stmt))
 		changes := strings.HasPrefix(s, "INSERT") || strings.HasPrefix(s, "UPDATE") || strings.HasPrefix(s, "DELETE") ||
@@ -146,12 +176,21 @@ func TestSettingsWritePathIsNarrow(t *testing.T) {
 			}
 			continue
 		}
-		if !strings.Contains(s, "RUNTIME_SETTINGS") && !strings.Contains(s, "MCP_SETTINGS_AUDIT") {
-			t.Errorf("a write statement touches another table: %s", testkit.FirstLine(stmt))
+		matched := false
+		for table, re := range allowed {
+			if re.MatchString(stmt) {
+				written[table]++
+				matched = true
+			}
 		}
-		if strings.Contains(s, "RUNTIME_SETTINGS") && !strings.HasPrefix(s, "INSERT INTO RUNTIME_SETTINGS") {
-			t.Errorf("runtime_settings is written other than by upsert: %s", testkit.FirstLine(stmt))
+		if !matched {
+			t.Errorf("a write statement outside the allowed set: %s", testkit.FirstLine(stmt))
 		}
+	}
+	// One accepted experiment (one INSERT) that was ended once (one UPDATE; the
+	// second close and every refused call wrote nothing).
+	if written["tuning_experiments"] != 2 || count(t, w, `SELECT COUNT(*) FROM tuning_experiments`) != 1 {
+		t.Errorf("tuning_experiments writes = %d, want one INSERT and one UPDATE", written["tuning_experiments"])
 	}
 	// Reads never took the write path and the read connection is still read-only.
 	db, err := srv.DB()

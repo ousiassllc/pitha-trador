@@ -39,10 +39,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 	"github.com/ousiassllc/pitha-trador/internal/service/notify"
 	"github.com/ousiassllc/pitha-trador/internal/service/orderflow"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/paperentryquality"
 	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 	"github.com/ousiassllc/pitha-trador/internal/service/retention"
 	"github.com/ousiassllc/pitha-trador/internal/service/risk"
@@ -128,7 +130,7 @@ func (s *Services) buildJevPipeline(db *sql.DB, strategy *config.StrategyConfig)
 	s.Scout = jev.NewScout(s.Jev, s.Decisions, s.Snapshots, s.Jobs, s.RAG, strategy.JevScout,
 		jev.WithNewsSource(s.News), jev.WithScoutRecorder(s.Screener),
 		jev.WithSnapshotMaxAge(strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
-	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, jev.WithNewsSource(s.News))
+	s.Trader = jev.NewTrader(s.Jev, s.Decisions, s.RAG, shadow.TraderOptions(db, s.Jev, s.Settings, s.News)...)
 }
 
 // buildRiskAndExecution builds the paper Execution Engine and the Risk Engine
@@ -166,14 +168,13 @@ func (s *Services) buildRiskAndExecution(limits config.RiskLimits, alertChannels
 }
 
 // buildPolicyAndBacktest builds the Policy Engine, calibration and backtest
-// source, and returns the jev-trader queue Handler. runtimePolicy is
-// strategy.yaml's policy.* thresholds overridden by every applied
-// Self-Improvement proposal; signals, backtests and the Execution Engine's
-// continuation_probability低下 exit all read it, so an approved (or
-// rolled-back) change applies on the next evaluation (#52, #714).
+// source, and returns the jev-trader queue Handler. runtimePolicy is strategy.yaml's
+// policy.* thresholds overridden by every applied Self-Improvement proposal; signals,
+// backtests and the Execution Engine's exits all read it (#52, #714), the engine
+// with Paper's own min_entry_quality on top (paperentryquality, #861).
 func (s *Services) buildPolicyAndBacktest(state *State, executionConfig execution.Config, runtimePolicy selfimprove.RuntimePolicy) *policy.Handler {
 	thresholds := policy.ThresholdsFromStrategy(*state.Strategy)
-	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, policy.WithPolicySource(runtimePolicy), metalabeljob.PolicyOption(state.DB, s.Settings), metalabeljob.PaperBootstrapOption(s.Settings))
+	s.Policy = policy.NewEngine(thresholds, s.Risk, s.Signals, paperentryquality.Option(runtimePolicy, s.Settings), metalabeljob.PolicyOption(state.DB, s.Settings), metalabeljob.PaperBootstrapOption(s.Settings))
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig, backtestsource.NewReplay(state.DB, s.Settings, state.Risk.Paper, s.Positions))
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Risk: s.Risk},

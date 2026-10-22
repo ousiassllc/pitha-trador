@@ -81,13 +81,12 @@ func (s *Services) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop stops the Scheduler's worker pool and cron triggers (scheduler.Scheduler.Stop) and waits for every
-// extra goroutine Start launched (the candidate-refresh ticker, held-position monitor, PUSH feed, news ingest,
-// order-proposal processor) to exit. Those extra goroutines are tied to the ctx passed to Start, not to this
-// method: callers cancel that same ctx (e.g. via context.WithCancel in main/OnStartup, canceled from OnShutdown)
-// to stop them, then call Stop to block until they (and the Scheduler) have actually exited.
+// Stop stops the Scheduler's worker pool and cron triggers (scheduler.Scheduler.Stop), cancels the Jev shadow calls in flight
+// (issue #872) and waits for the extra goroutines Start launched (tied to the ctx passed to Start: cancel it first, e.g. from
+// OnShutdown) and the Scheduler to exit.
 func (s *Services) Stop() {
 	s.Scheduler.Stop()
+	s.Trader.Close()
 	s.wg.Wait()
 }
 

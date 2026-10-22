@@ -117,7 +117,8 @@ pitha-trador/
 │   │   │   ├── slotflow/         # テスト専用: REST登録銘柄リスト（上限50件）のスロット回転・`UnregisterAll`/`UnregisterSymbols`の回帰テスト（ディレクトリ行数上限のため`marketdata`から分離）
 │   │   │   └── tokenflow/        # テスト専用: トークン発行・状態・失効時の再発行の回帰テスト（#621）
 │   │   ├── marketcalendar/       # 東証の立会時間・祝日判定（Scheduler SessionGate・Risk・Execution・heldpositionが依存。ネットワーク/tzdata非依存の純粋ルール）
-│   │   ├── healthalert/          # 立会中の市況データ停止の警告（kabu未ログイン・market-data 5分無稼働）の判定規則と`Detector`（30秒ごと。状態は`health_alerts`へ保存し、バナーとPaper 実績 MCPの`collection_status.alerts[]`が読む。外部通知なし。issue #802）
+│   │   ├── healthalert/          # 立会中の市況データ停止の警告（kabu未ログイン・kabu接続拒否〔未起動〕・market-data 5分無稼働）の判定規則と`Detector`（30秒ごと。状態は`health_alerts`へ保存し、バナーとPaper 実績 MCPの`collection_status.alerts[]`が読む。外部通知なし。issue #802・#863）
+│   │   ├── sleepguard/           # 立会中のスリープ防止（Settings の `power.sleep_guard_enabled` がオンのときだけ、取引日の08:45〜大引けにPCを起こしたままにし、時間外・オフ・アプリ終了時はOSの設定に戻す。判定は`Guard`でOS非依存、OSへの要求は`Keeper`越し〔Windowsだけ`SetThreadExecutionState`。`keeper_windows.go`〕。issue #863）
 │   │   ├── featureengine/        # 特徴量算出
 │   │   │   ├── eventtrigger/     # FR-SCAN-1/2 イベントトリガ判定（Detect）
 │   │   │   └── marketcontext/    # 市場コンテキスト（指数リターン・市場ブレッドス）の`Loader`。全銘柄共通値を30秒キャッシュして共有（#622。旧`marketcontextflow`のテストも同居）

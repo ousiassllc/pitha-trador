@@ -37,7 +37,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution"
 	"github.com/ousiassllc/pitha-trador/internal/service/featureengine"
-	"github.com/ousiassllc/pitha-trador/internal/service/healthalert"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
@@ -93,7 +92,7 @@ type Services struct {
 	Governor      *selfimprove.Governor
 	ErrorLogs     *logging.Exporter // read-only export of State.Paths.LogDir (FR-ERRLOG-2)
 
-	HealthAlerts *healthalert.Detector // trading-hours market-data alerts (issue #802); Start runs it
+	HealthAlerts *healthalertwire.Watch // trading-hours market-data alerts (#802) and sleep guard (#863); Start runs it
 	Scheduler    *scheduler.Scheduler
 	Updater      *updater.SchedulerAdapter // nil on cmd/server (issue #76)
 
@@ -203,7 +202,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc.buildGovernor(state.Strategy, state.DB, secrets, alertChannels)
 	svc.proposalExec = proposalexec.New(state.DB, svc.Instruments, svc.Snapshots, svc.Signals, svc.Orders, svc.Positions, svc.Risk, svc.Execution, state.Strategy.Scan.SnapshotMaxAge(svc.rankingWatchMaxAge), metalabelsettings.RuntimeMode)
 	svc.buildScheduler(state, alertChannels, cfg.autoUpdate)
-	svc.HealthAlerts = healthalertwire.New(state.DB, svc.Jobs, svc.Broker)
+	svc.HealthAlerts = healthalertwire.New(state.DB, svc.Jobs, svc.Broker, svc.Settings)
 	marketDataHandler := svc.buildMarketDataPipeline(state.Strategy, state.Paths.LogDir)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueMarketData, marketDataHandler.HandleMarketData)
 	svc.Scheduler.RegisterHandler(jobqueue.JobQueueFeatureCalc, marketdatajob.HandleFeatureCalc)

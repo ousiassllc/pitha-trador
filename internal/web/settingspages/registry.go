@@ -139,6 +139,7 @@ var dialogs = []Dialog{
 	{PageOperations, "modal-policy-short", nil},
 	{PageOperations, "modal-snapshot-age", nil},
 	{PageOperations, "modal-paper-bootstrap", nil},
+	{PageOperations, "modal-sleep-guard", nil},
 
 	// 成績・検証
 	{PageResults, "modal-triple_barrier", nil},
@@ -172,6 +173,7 @@ var dialogs = []Dialog{
 	{PageIntegrations, "modal-news-feed", nil},
 	{PageIntegrations, "modal-slack", nil},
 	{PageIntegrations, "modal-mcp", nil},
+	{PageIntegrations, "modal-jev-prompt", nil},
 
 	// ログ・エクスポート. The header's version link used to land on
 	// `/settings#update-panel`.

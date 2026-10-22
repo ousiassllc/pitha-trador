@@ -74,6 +74,8 @@ type Performance struct {
 	WinRate                 *float64 `json:"win_rate"`
 	TotalPnlJPY             float64  `json:"total_pnl_jpy"`
 	ExpectancyJPY           *float64 `json:"expectancy_jpy"`
+	AvgWinJPY               *float64 `json:"avg_win_jpy"`  // winSum / WinCount (positive); nil with no win (issue #871)
+	AvgLossJPY              *float64 `json:"avg_loss_jpy"` // lossSum / LossCount (negative); nil with no loss
 	ExpectancyReturnPct     *float64 `json:"expectancy_return_pct"`
 	ProfitFactor            *float64 `json:"profit_factor"`
 	MaxDrawdownJPY          float64  `json:"max_drawdown_jpy"`
@@ -84,24 +86,25 @@ type Performance struct {
 	ByOrigin []origin.Stat `json:"by_origin"`
 }
 
-// PerformanceSummary aggregates the positions closed in r. capitalJPY is the
+// PerformanceSummary aggregates the positions closed in r and returns each
+// one's net pnl (after costs, oldest first: the very set counted, so
+// experiment_compare's Welch test agrees with the summary). capitalJPY is the
 // Paper initial capital; zero or negative (an unreadable risk.yaml) leaves
-// capital_jpy and the drawdown ratio nil while the yen drawdown is still
-// returned.
-func PerformanceSummary(ctx context.Context, q Q, r Range, capitalJPY float64) (Performance, int, error) {
+// capital_jpy and the drawdown ratio nil, the yen drawdown is still returned.
+func PerformanceSummary(ctx context.Context, q Q, r Range, capitalJPY float64) (Performance, []float64, error) {
 	closed, err := loadClosed(ctx, q, r)
 	if err != nil {
-		return Performance{}, 0, err
+		return Performance{}, nil, err
 	}
-	var open int
-	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM positions WHERE closed_at IS NULL`).Scan(&open); err != nil {
-		return Performance{}, 0, fmt.Errorf("query: open positions: %w", err)
+	p := Performance{ClosedTradeCount: len(closed)}
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM positions WHERE closed_at IS NULL`).Scan(&p.OpenPositionCount); err != nil {
+		return Performance{}, nil, fmt.Errorf("query: open positions: %w", err)
 	}
-
-	p := Performance{ClosedTradeCount: len(closed), OpenPositionCount: open}
+	pnls := make([]float64, len(closed))
 	var winSum, lossSum, returnPctSum, equity, peak float64
 	var byOrigin origin.Tally
-	for _, c := range closed {
+	for i, c := range closed {
+		pnls[i] = c.pnl
 		byOrigin.Add(c.origin, c.pnl)
 		p.TotalPnlJPY += c.pnl
 		switch {
@@ -114,8 +117,7 @@ func PerformanceSummary(ctx context.Context, q Q, r Range, capitalJPY float64) (
 		default:
 			p.FlatCount++
 		}
-		// A non-positive entry notional counts as a 0% return, like
-		// internal/service/insight.Aggregate.
+		// A non-positive entry notional counts as a 0% return (insight.Aggregate).
 		if c.notional > 0 {
 			returnPctSum += c.pnl / c.notional * 100
 		}
@@ -132,16 +134,22 @@ func PerformanceSummary(ctx context.Context, q Q, r Range, capitalJPY float64) (
 		meanPct := returnPctSum / float64(n)
 		p.ExpectancyReturnPct = &meanPct
 	}
+	if p.WinCount > 0 {
+		avgWin := winSum / float64(p.WinCount)
+		p.AvgWinJPY = &avgWin
+	}
 	if p.LossCount > 0 {
 		pf := winSum / math.Abs(lossSum)
 		p.ProfitFactor = &pf
+		avgLoss := lossSum / float64(p.LossCount)
+		p.AvgLossJPY = &avgLoss
 	}
 	if capitalJPY > 0 {
 		p.CapitalJPY = &capitalJPY
 		dd := p.MaxDrawdownJPY / capitalJPY
 		p.MaxDrawdownCapitalRatio = &dd
 	}
-	return p, len(closed), nil
+	return p, pnls, nil
 }
 
 // Day is one JST settlement day of paper_daily_pnl.

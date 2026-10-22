@@ -115,6 +115,7 @@ templ Panel(props PanelProps) {
 		</form>
 		if props.WriteGate {
 			@writeSection(props)
+			<div id="mcp-experiments" hx-get="/settings/mcp/experiments" hx-trigger="load" hx-swap="innerHTML" data-testid="mcp-experiments-slot"></div>
 		}
 		<div class="flex flex-col gap-2" data-testid="mcp-key">
 			<span class="font-medium text-slate-700">

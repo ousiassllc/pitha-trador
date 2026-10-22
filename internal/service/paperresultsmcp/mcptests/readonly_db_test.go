@@ -35,7 +35,7 @@ func TestDBUnavailable(t *testing.T) {
 	}
 	_ = ew.Close()
 	srv2 := newTestServer(t, paperresultsmcp.Options{Settings: enabledSettings(), DBPath: empty})
-	for _, tool := range eightTools {
+	for _, tool := range periodTools {
 		srv2.call(t, tool, period).wantError(t, http.StatusServiceUnavailable, paperresultsmcp.CodeDBUnavailable)
 	}
 	// The database that appears later is picked up (a failed open is not cached).
@@ -57,12 +57,18 @@ var paperCapitalRead = "SELECT value FROM runtime_settings WHERE key = ?"
 // jobs.last_error: substr(last_error, 1, N).
 var boundedLastError = regexp.MustCompile(`substr\(last_error, 1, ([0-9]+)\)`)
 
+// instrumentOfPayload is the only form in which a statement may name
+// jobs.payload_json (session_diagnostics, issue #850): the fixed
+// instrument_id key of a valid-JSON payload, matched to market_snapshots
+// inside the statement and never returned.
+var instrumentOfPayload = regexp.MustCompile(`json_valid\(j\.payload_json\)|json_extract\(j\.payload_json, '\$\.instrument_id'\)`)
+
 func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 	path, w := testkit.NewMigratedDB(t)
 	testkit.SeedAll(t, w)
 	driverName, counter := testkit.NewCountingDriver(t)
 	srv := newTestServer(t, paperresultsmcp.Options{Settings: enabledSettings(), DBPath: path, DriverName: driverName})
-	for _, tool := range eightTools {
+	for _, tool := range periodTools {
 		srv.call(t, tool, period)
 	}
 	srv.call(t, healthToday, map[string]any{})
@@ -100,7 +106,7 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 			continue
 		}
 		// jobs.last_error is read only through a bounded head (issue #801):
-		// collection_status parses a fixed code token out of it in-process.
+		// collection_status reduces it to a fixed code token inside SQL.
 		// Any other mention of the column is still forbidden.
 		stmt = boundedLastError.ReplaceAllStringFunc(stmt, func(m string) string {
 			if n, _ := strconv.Atoi(boundedLastError.FindStringSubmatch(m)[1]); n > 256 {
@@ -108,13 +114,18 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 			}
 			return ""
 		})
+		stmt = instrumentOfPayload.ReplaceAllString(stmt, "")
 		stmt = strings.ReplaceAll(stmt, paperCapitalRead, "")
 		upper := strings.ToUpper(stmt)
 		if strings.Contains(upper, "SELECT *") || strings.Contains(upper, ".*") {
 			t.Errorf("SELECT * style statement: %s", testkit.FirstLine(stmt))
 		}
+		// metalabel_training_readiness (issue #848) rebuilds each training row's features
+		// in-process: only the retraining's own row query may name state_json/response_json.
+		trainingRows := strings.Contains(stmt, "FROM calibration_outcomes o") &&
+			strings.Contains(stmt, "JOIN jev_decisions d ON d.id = o.jev_decision_id")
 		for _, f := range forbidden {
-			if strings.Contains(stmt, f) && !strings.HasPrefix(strings.TrimSpace(stmt), "PRAGMA") {
+			if strings.Contains(stmt, f) && (!trainingRows || (f != "state_json" && f != "response_json")) && !strings.HasPrefix(strings.TrimSpace(stmt), "PRAGMA") {
 				// the INSERT/UPDATE rows above are the test's own writes
 				if strings.HasPrefix(strings.TrimSpace(stmt), "INSERT") || strings.HasPrefix(strings.TrimSpace(stmt), "UPDATE") ||
 					strings.HasPrefix(strings.TrimSpace(stmt), "DELETE") || strings.HasPrefix(strings.TrimSpace(stmt), "CREATE") {

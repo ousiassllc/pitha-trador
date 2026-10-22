@@ -26,7 +26,7 @@ func TestPeriodValidation(t *testing.T) {
 		{"from": "2026-13-01", "to": "2026-10-10"},
 		{"from": "", "to": "2026-10-10"},
 	}
-	for _, name := range eightTools {
+	for _, name := range periodTools {
 		for _, a := range bad {
 			srv.call(t, name, a).wantError(t, http.StatusUnprocessableEntity, paperresultsmcp.CodeInvalidPeriod)
 		}

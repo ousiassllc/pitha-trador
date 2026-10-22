@@ -52,8 +52,17 @@ INSERT INTO jev_decisions (
 	market_regime, ab_arm, regime_volatility_bps, regime_autocorr, vwap_z
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-// Insert writes a single jev_decisions row.
+// ErrMissingPromptVersion is returned by Insert for a decision without a
+// QuestionVersion: every row must name the prompt version that produced it
+// (issue #872; QuestionVersion is the formal prompt version).
+var ErrMissingPromptVersion = errors.New("repository: jev decision has no prompt version (question_version)")
+
+// Insert writes a single jev_decisions row. A decision with an empty
+// QuestionVersion is refused (ErrMissingPromptVersion).
 func (r *DecisionRepository) Insert(ctx context.Context, d domain.JevDecision) (domain.JevDecision, error) {
+	if d.QuestionVersion == "" {
+		return domain.JevDecision{}, ErrMissingPromptVersion
+	}
 	createdAt := d.CreatedAt
 	if createdAt.IsZero() {
 		createdAt = time.Now().UTC()

@@ -51,6 +51,10 @@ type Result struct {
 	// Model is the model that performed the evaluation, e.g. "jev-1.13.0".
 	Model string
 	Usage Usage
+	// RequestBytes is the size of the request body that produced this result.
+	// The client sets it (Decode cannot know it); the shadow estimates the
+	// input tokens from it when Usage carries none.
+	RequestBytes int
 
 	noul    map[string]float64
 	choices map[string]Choice

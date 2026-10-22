@@ -87,11 +87,36 @@ func (f Features) Vector(direction string) ([]float64, error) {
 	default:
 		return nil, fmt.Errorf("%w: direction %q", ErrNoCandidate, direction)
 	}
-	inputs := []struct {
-		name     string
-		value    *float64
-		oriented bool
-	}{
+	inputs := f.inputs()
+	v := make([]float64, len(inputs))
+	for i, in := range inputs {
+		if !in.present() {
+			return nil, fmt.Errorf("%w: %s", ErrMissingFeature, in.name)
+		}
+		v[i] = *in.value
+		if in.oriented {
+			v[i] *= sign
+		}
+	}
+	return v, nil
+}
+
+// featureInput is one model input: its name, raw value and whether Vector
+// signs it towards the candidate side.
+type featureInput struct {
+	name     string
+	value    *float64
+	oriented bool
+}
+
+// present reports whether the input is a finite number.
+func (in featureInput) present() bool {
+	return in.value != nil && !math.IsNaN(*in.value) && !math.IsInf(*in.value, 0)
+}
+
+// inputs lists the model inputs in FeatureNames order.
+func (f Features) inputs() []featureInput {
+	return []featureInput{
 		{FeatureOFIShort, f.OFIShort, true},
 		{FeatureOFIMid, f.OFIMid, true},
 		{FeatureOFILong, f.OFILong, true},
@@ -101,17 +126,19 @@ func (f Features) Vector(direction string) ([]float64, error) {
 		{FeatureJevScore, f.JevScore, false},
 		{FeatureTDnetScore, f.TDnetScore, false},
 	}
-	v := make([]float64, len(inputs))
-	for i, in := range inputs {
-		if in.value == nil || math.IsNaN(*in.value) || math.IsInf(*in.value, 0) {
-			return nil, fmt.Errorf("%w: %s", ErrMissingFeature, in.name)
-		}
-		v[i] = *in.value
-		if in.oriented {
-			v[i] *= sign
+}
+
+// MissingNames returns every feature that is nil or not a finite number, in
+// FeatureNames order: exactly the features that make Vector fail for a LONG or
+// SHORT signal (Vector reports only the first one).
+func (f Features) MissingNames() []string {
+	var missing []string
+	for _, in := range f.inputs() {
+		if !in.present() {
+			missing = append(missing, in.name)
 		}
 	}
-	return v, nil
+	return missing
 }
 
 // JSON returns the features as the object stored in

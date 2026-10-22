@@ -36,6 +36,8 @@ func TestHealthAlertHandler_Status(t *testing.T) {
 	}{
 		{name: "alert active", source: fakeHealthAlerts{alerts: []domain.HealthAlert{kabu}},
 			want: []string{`data-testid="health-alert-banner"`, `data-code="kabu_not_logged_in"`, "08:45から続いています"}},
+		{name: "kabu unreachable", source: fakeHealthAlerts{alerts: []domain.HealthAlert{{Code: domain.HealthAlertKabuUnreachable, Since: kabu.Since}}},
+			want: []string{`data-code="kabu_unreachable"`, "接続できません", "kabuステーションを起動してログインしてください", "08:45から続いています"}},
 		{name: "no alerts", source: fakeHealthAlerts{}, wantNone: true},
 		{name: "nil source", source: nil, wantNone: true},
 		{name: "read failure shows nothing", source: fakeHealthAlerts{err: errors.New("db down")}, wantNone: true},

@@ -19,8 +19,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
@@ -121,6 +123,12 @@ func validatePath(p string) error {
 // misuse. Path settings need no further check.
 func (s *Service) validateEffective(ctx context.Context, key, encoded string) error {
 	switch {
+	case paperpolicysettings.IsKey(key):
+		var paper paperpolicysettings.Settings
+		if err := paper.Apply(key, encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
 	case strings.HasPrefix(key, "policy."):
 		cfg := s.policy
 		if err := s.overlay(ctx, config.PolicySettingKeys(), func(k, raw string) error { return config.ApplyPolicySetting(&cfg, k, raw) }); err != nil {
@@ -211,6 +219,11 @@ func (s *Service) validateEffective(ctx context.Context, key, encoded string) er
 		return nil
 	case paperbootstrapsettings.IsKey(key):
 		return s.validatePaperBootstrap(encoded)
+	case sleepguardsettings.IsKey(key):
+		if _, err := sleepguardsettings.Apply(encoded); err != nil {
+			return &InvalidValueError{Reason: err.Error()}
+		}
+		return nil
 	case strings.HasPrefix(key, "broker.tachibana.screen."):
 		return s.validateTachibanaSource(ctx, key, encoded)
 	}

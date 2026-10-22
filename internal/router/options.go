@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/activity"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/export"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/jevprompt"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/orderproposals"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/performance"
@@ -46,6 +47,7 @@ type options struct {
 	brokerSession       settings.BrokerSession       // nil until WithBrokerSession: no 立花 session state
 	mcpSettings         mcpsettings.Admin            // nil until WithMCPSettings: no MCP card
 	mcpWriteGate        mcpsettings.WriteGate        // nil until WithMCPWriteGate: no write section
+	jevPrompt           jevprompt.Service            // nil until WithJevPromptSettings: no Jev prompt card
 	updateController    system.UpdateController
 	marketDataStatus    system.MarketDataStatusSource
 	dailyHaltSource     system.DailyHaltSource
@@ -203,6 +205,15 @@ func WithMCPSettings(admin mcpsettings.Admin) Option {
 // only together with WithMCPSettings.
 func WithMCPWriteGate(gate mcpsettings.WriteGate) Option {
 	return func(o *options) { o.mcpWriteGate = gate }
+}
+
+// WithJevPromptSettings enables the Settings screen's Jev prompt card
+// (`modal-jev-prompt`: live version, shadow switch, candidate, daily cost cap,
+// cost, promotion; issue #872) and its `GET /settings/jev-prompt-panel`, `POST
+// /settings/jev-prompt/shadow` and `POST /settings/jev-prompt/promote` routes;
+// without it the card is hidden and the routes answer 404.
+func WithJevPromptSettings(svc jevprompt.Service) Option {
+	return func(o *options) { o.jevPrompt = svc }
 }
 
 // WithBrokerSession lets the Settings screen's 立花証券 e支店 card show the

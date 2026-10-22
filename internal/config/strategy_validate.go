@@ -114,7 +114,7 @@ func (t PolicyDirectionThresholds) validate(key string) []error {
 	errs = appendProbabilityErr(errs, key+".min_continuation_probability", t.MinContinuationProbability)
 	errs = appendProbabilityErr(errs, key+".max_toxic_flow", t.MaxToxicFlow)
 	errs = appendProbabilityErr(errs, key+".max_liquidity_stressed", t.MaxLiquidityStressed)
-	if !isEntryQuality(t.MinEntryQuality) {
+	if !IsEntryQuality(t.MinEntryQuality) {
 		errs = append(errs, fmt.Errorf("%s.min_entry_quality must be one of %v (got %q)", key, entryQualityValues, t.MinEntryQuality))
 	}
 	return errs
@@ -136,7 +136,10 @@ func appendProbabilityErr(errs []error, key string, v float64) []error {
 	return errs
 }
 
-func isEntryQuality(s string) bool {
+// IsEntryQuality reports whether s is one of the JevEntryQuality* values a
+// min_entry_quality setting may take. policy.{long,short}.min_entry_quality
+// and the Paper-only policy.paper.{long,short}.min_entry_quality share it.
+func IsEntryQuality(s string) bool {
 	for _, v := range entryQualityValues {
 		if s == v {
 			return true

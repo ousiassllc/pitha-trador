@@ -13,10 +13,12 @@ import (
 const MarketDataQueue = "market-data"
 
 // TokenState is what the Detector needs of the broker session: when the
-// current not-logged-in streak (kabu 4001007) began, the zero time while the
-// session is fine or fails for another reason.
+// current not-logged-in streak (kabu 4001007) began, and when the current
+// connection-refused streak (kabuステーション not running; issue #863) began.
+// Each is the zero time while the session is fine or fails for another reason.
 type TokenState struct {
 	NotLoggedInSince time.Time
+	UnreachableSince time.Time
 }
 
 // Store persists the active alerts and the Detector's heartbeat.
@@ -65,8 +67,12 @@ func New(cfg Config) *Detector {
 func (d *Detector) Check(ctx context.Context) error {
 	now := d.cfg.Now()
 	var alerts []domain.HealthAlert
-	if since, ok := KabuNotLoggedInSince(now, d.cfg.Token().NotLoggedInSince); ok {
+	token := d.cfg.Token()
+	if since, ok := KabuNotLoggedInSince(now, token.NotLoggedInSince); ok {
 		alerts = append(alerts, domain.HealthAlert{Code: domain.HealthAlertKabuNotLoggedIn, Since: since})
+	}
+	if since, ok := KabuUnreachableSince(now, token.UnreachableSince); ok {
+		alerts = append(alerts, domain.HealthAlert{Code: domain.HealthAlertKabuUnreachable, Since: since})
 	}
 	last, _, err := d.cfg.Jobs.LastFinishedAt(ctx, MarketDataQueue)
 	if err != nil {

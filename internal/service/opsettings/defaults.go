@@ -14,8 +14,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
@@ -31,6 +33,8 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 		return config.BrokerSettingDefault(key)
 	case kindOf(key) == kindSource:
 		return tachibanasource.TachibanaSourceDefault(key)
+	case paperpolicysettings.IsKey(key):
+		return paperpolicysettings.Default
 	case kindOf(key) == kindEntryQuality:
 		v, _ := config.PolicySettingValue(s.policy, key)
 		return v.(string)
@@ -63,6 +67,8 @@ func (s *Service) defaultText(ctx context.Context, key string) string {
 		return text
 	case paperbootstrapsettings.IsKey(key):
 		return paperbootstrapsettings.Text(paperbootstrapsettings.Default)
+	case sleepguardsettings.IsKey(key):
+		return sleepguardsettings.Text(sleepguardsettings.Default)
 	case regimesettings.IsKey(key):
 		text, _ := regimesettings.Default().Text(key)
 		return text

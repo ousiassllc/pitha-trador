@@ -1,8 +1,8 @@
 # Paper 実績 MCP（Grok Bot コネクタ）
 
-リモートの Grok Bot が、pitha-trador の SQLite に入っている Paper の取引実績・Jev 判断・メタモデル・Risk・収集状況の**集計とラベル**を読む仕様。issue #783（設定の読み書きは #806・#807、Paper の注文案の受け付けは #827）。実装は `cmd/paper-results-mcp` と `internal/service/paperresultsmcp`（実行・設定の手順は `docs/components/paper-results-mcp.md` §4）。
+リモートの Grok Bot が、pitha-trador の SQLite に入っている Paper の取引実績・Jev 判断・メタモデル・Risk・収集状況の**集計とラベル**を読む仕様。issue #783（設定の読み書きは #806・#807、Paper の注文案の受け付けは #827、調整の実験の記録と前後比較は #871）。実装は `cmd/paper-results-mcp` と `internal/service/paperresultsmcp`（実行・設定の手順は `docs/components/paper-results-mcp.md` §4）。
 
-ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
+ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（収集診断 `session_diagnostics` は分割章 `docs/api/endpoints/paper-results-mcp-diagnostics.md`、注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`、メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md`、調整の実験ツールは分割章 `docs/api/endpoints/paper-results-mcp-experiments.md`。実験の設計・判定・最低取引件数の案は `docs/architecture/paper-results-mcp-experiments.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
 
 ## 1. 目的
 
@@ -133,7 +133,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 
 ## 5. ツールの範囲
 
-ツールは、次の読み取りの 9 つ（`health_today` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）だけである（合計 21）。定義・フィールドは API 仕様。
+ツールは、次の読み取りの 12 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics` を含む）と、§7 の設定ツール 6 つ（`settings_get` / `settings_diff` / `settings_audit` / `settings_set` / `settings_write_enable` / `settings_write_disable`）と、§8 の注文案ツール 6 つ（`order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable` と、読み取り専用の `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`）と、`docs/architecture/paper-results-mcp-experiments.md` の調整の実験ツール 4 つ（`experiment_create` / `experiment_close` と、読み取り専用の `experiments_list` / `experiment_compare`。issue #871）と、Jev のプロンプトのツール 3 つ（読み取り専用の `jev_shadow_compare` / `jev_shadow_cost` と、書き込みの `jev_prompt_promote`。issue #872。§5.1・§7.3 ⑥。分割章 `paper-results-mcp-jev-prompt.md`）だけである（合計 31）。定義・フィールドは API 仕様。
 
 「売買・発注のツールは作らない」は、issue #827（親 #826。悠太さんの決定）で次のように改めた。**Paper の注文案を「出す」ツールだけ**を足す。注文案は受け付けて記録するだけで、発注（Risk check と Paper の約定）をするのはアプリである（issue #828）。MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）にも `kill_switch_events` にも書かない。次は変わらない: 実売買・Live の発注・Live のモード・Live の承認・口座の認証情報の読み書き・送金・Kill Switch の操作と解除・Live の値の変更・秘密の読み書きはツールにしない（`order_proposals.mode` は `paper` だけで、Live の値は DB の CHECK で入らない）。`runtime_settings` を書けるのは、§7 のホワイトリストのキーに対する `settings_set` と、スイッチ 2 つ（§7.2 の書き込み許可、§8.2 の注文案の受け付け。後者は MCP からはオフにだけできる）だけである。
 
@@ -146,18 +146,40 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `metalabel_history` | `metalabel_models` の採用/却下と OOS AUC/EV、予測の take/skip 件数、`metalabel_retrain_skips`（データ不足の再学習見送り。固定コードと必要件数中の件数） |
 | `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数と、それ以外の拒否の固定コード別内訳。件数は `trade_signals` の行ごとで、同じ案の再試行（`waiting_session` への戻りや再起動での `received` 戻し）で行が複数になり得る。Policy 経路は Execution の拒否でも `risk_passed = 1` のままなので、注文案とは定義が非対称（注文案は注文まで進んだものだけ）。注文案が Risk を通ったが注文にならなかった行（`proposal_rejected_after_risk: <コード>`、#860）は `risk_passed_count` にも `other_reject_*` にも入れず、`proposal_rejected_after_risk_count` と理由コード別内訳に分ける |
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
-| `collection_status` | `jobs` の件数と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（保持期間の違いを `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ） |
-| `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`。それ以前のスナップショットが無い日は欠損でなく `insufficient_history_dates[]`＝判定不可。#814）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、処理されずに止まっている注文案の件数（`order_proposals`。#829）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
+| `collection_status` | `jobs` の件数（`feature-calc` は廃止済みキューと明示。`retired`）と失敗の日別・キュー別・エラーコード別内訳・スキップ件数（内訳は期間の末尾 `jobfailures.MaxDays`＝3 日まで。時間切れなら部分結果と `job_failures.timed_out`。範囲は `job_failures.window` に明記。#850。保持期間の違いは `retention` に明記）、`market_snapshots` の鮮度と欠損日、`daily_bar_runs` の失敗件数、ラベルスキップ件数、立会中の市況データ停止の警告 `alerts[]`（`health_alerts`・`health_alert_checks`。固定コードと開始時刻だけ。コードは `kabu_not_logged_in`・`kabu_unreachable`〔kabu ステーション未起動・接続拒否。#863〕・`market_data_idle`） |
+| `session_diagnostics` | 立会日ごとの診断（#850）。`market_snapshots` の行数、`market-data` ジョブの成功数・失敗数・成功なのに行が無いジョブ数、他キューのジョブ完了数、ウォッチリストの件数（`watch_lists`・`watch_list_entries`）、固定コードの `observations[]`、いまの kabu ログイン・アプリ稼働（`health_alerts`・`health_alert_checks`）。過去日の kabu ログイン状態とアプリ起動記録は DB に無く、`unavailable[]` で明示する |
+| `experiments_list` / `experiment_compare` | 調整の実験（`tuning_experiments`。issue #871）の一覧と、実験 1 つの前後比較。前後の指標は `paper_performance_summary`（件数・純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン）と `risk_rejections`（拒否理由の内訳）の計算をそのまま使う。判定は、1 取引あたりの純損益（コスト控除後）の平均の前後差を Welch の t 検定で比べた 95% 信頼区間と最大ドローダウンで決め（勝ちは区間の下限が 0 より上でドローダウンが悪化していないときだけ）、前後それぞれ 64 件（暫定の下限。σ 未確認。上げるのは可、下げるのは `invalid_value`）に届くまでは出さない。書くツール `experiment_create` / `experiment_close` は §7.3 |
+| `health_today` | 今日（JST・東証立会日判定つき）の健康診断を 1 回で返す。Paper 取引数（`positions`）、採用中メタモデルの有無（`metalabel_models`）、ブートストラップの設定と有効状態（`runtime_settings` の固定キー `paper.bootstrap_entry_enabled` と `trade_signals.policy_version`）、kabu ログイン（`ok` / `not_logged_in` / `unreachable` / `unknown` / `not_watched`）・market-data の状態（`collection_status.alerts[]` と同じ `health_alerts` 由来）、直近 7 日の欠損セッション（`market_snapshots`。それ以前のスナップショットが無い日は欠損でなく `insufficient_history_dates[]`＝判定不可。#814）、日次ガード（`runtime_settings` の `system.daily_guard` と閾値）、Kill Switch（`kill_switch_events`・`kill_switch_resolutions`・`system.killed`）、再学習の見送り（`metalabel_retrain_skips`）、処理されずに止まっている注文案の件数（`order_proposals`。#829）、そして要対応フラグ `needs_attention` と固定コード `attention_codes[]` |
+| `metalabel_training_readiness` | メタモデルの学習データがそろっているか（#848）。学習の条件ごとに絞り込んだあとの行数（`jev_decisions` の trader → LONG/SHORT → `calibration_outcomes` の `label_version = 2` → `net_return_bps` → 8 特徴量）、特徴量ごとの欠け件数と `dropped_incomplete`、直近の再学習の見送り（`metalabel_retrain_skips`・`metalabel_models`）、今の `metalabel.llm_cutoff` で分けた学習側（fit＋較正）と OOS 側の行数・必要件数 |
+| `jev_models` | Jev が実際に応答しているモデル名（#849）。期間内の `jev_decisions.model_id` ごとの件数と最初・最後に出た時刻（JST）、JST 日別の件数、`metalabel.llm_cutoff_model`（`runtime_settings` の `metalabel.*` キー）と最新の `model_id` が完全一致するか（`match` / `mismatch` / `unset`）。秘密は返さない |
 
-MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
+MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`000038`）はアプリの再学習ジョブが記録する表で（#799）、`health_alerts` / `health_alert_checks`（`000039`）はアプリの検知（`internal/service/healthalert`）が書く表である（#802。MCP は別プロセスの読み取り専用接続で、アプリの状態を DB 経由でしか見られないため）。どちらも MCP は読むだけである。kabu の警告は未ログイン `kabu_not_logged_in`（4001007）と接続拒否 `kabu_unreachable`（#863。条件・時間帯は同じ）の 2 コードに分かれ、アプリが止まっているとき MCP が自分で導くのは `market_data_idle` だけ（kabu の 2 コードは導かない）。スリープ防止の `power.sleep_guard_enabled`（#863）は設定ツールのホワイトリストに入れない。他のツールが読む列はマイグレーション `000001`〜`000036` の既存表にある。`jobs.last_error` は本文を返さず、先頭 256 バイトからエラーコードのトークンだけを SQL の中で取り出す（`readonly_db_test` が SQL への現れ方を固定する）。
+
+`collection_status`（#850）の失敗の内訳は、期間の末尾 3 日（`jobfailures.MaxDays`。既定の 30 日でも 366 日でも同じ）だけ読む。範囲は `job_failures.window`（`from`・`to`・`requested_from`・`max_days`・`truncated`・`note`）に出し、期間のほうが長いときは `truncated=true` である。`jobs[]` の件数・欠損日・ラベルスキップなどは期間全体のままで、内訳だけが短い。3 日は利用者の決定で確定した値である（22 万行の失敗の山が窓の中にあると、温まった状態で約 1.5 秒・冷えた状態で約 4 秒かかるため、窓を狭く保つ）。エラーコードは SQL が `last_error` の先頭 256 バイトから `code ` / `p_errno=` / `sResultCode=` の後ろの数字だけを取り出し、(JST 日, コード) でまとめる。旧実装の Go 正規表現（`\bcode ` など）と境界の判定は完全には同じでない（SQL は最初の `code ` の後ろの数字を取り、`xcode 12` のような単語の途中でも一致する。最初の `code ` の後ろに数字が無いと、後ろの `code NNN` は見ない）。実メッセージの形式（`marketdata: kabu station api error (http 429, code 4001006)`、`tachibana: p_errno=-62`、`sResultCode=NNN`）では同じ結果になる。銘柄名など本文はグループのキーに入らない（以前は先頭 256 バイトそのものがキーで、銘柄名のせいで 1 万超のグループになっていた）。失敗とスキップはキューごとの別の文で、既存の `(queue, status, finished_at)` 索引（`000019`）の範囲検索になる。索引とマイグレーションは足していない。
+
+**時間切れの扱い（#850）**: `collection_status` の `job_failures` と `session_diagnostics` は、`budget.Soft`（呼び出しの締切 `QueryTimeout` の手前、残り時間の 1/4 を最大 500 ms まで残した内部の予算）を超えそうになると、`query_timeout`（504）で全部捨てずに、読めた分だけを返す。応答に `timed_out: true` と、読めなかった項目の一覧 `incomplete[]`（`job_failures`: `failed:<キュー>:<JST 日>`・`skipped:<キュー>`、`session_diagnostics`: `current`・`market_data_jobs`・`other_queue_jobs`・`watch_lists`・`snapshot_rows:<日>`・`succeeded_without_snapshot:<日>`）を入れる。全部読めたときは `timed_out: false`・`incomplete: []`。読めなかった項目から作る数は `null` で（`session_diagnostics`）、そのとき `null` は「保持期間で消えた」ではなく「読めなかった」で、`incomplete[]` で見分ける。`job_failures` の `total` などは読めた分の合計である。失敗の内訳はキューごとに最も行の多い `market-data` を最後に、キューの中では新しい日から読み（重い文が予算を使い切っても軽いキューは全日読めている）、スキップ件数は軽いので最初に読む。`session_diagnostics` の日別も新しい日から読むので、読めなかったのは古い日になる。呼び出し自体の締切が切れたとき（内部の予算の余裕でも足りなかったとき）は従来どおり `query_timeout` である。読み取り専用の性質は変わらない（返すのは件数・固定コード・日付だけ）。
+
+`session_diagnostics`（#850）は、`collection_status` を重くしないために別のツールにした。`from`/`to` は他のツールと同じで、期間の末尾 `sessiondiag.MaxDays`（14）日の東証立会日だけを返す（`window.truncated`・`window.requested_from`）。14 日は実装者の判断で、合成 DB の測定（14 日は冷えた状態 約 0.64 秒・温まった状態 約 0.23 秒、最初の 31 日は 2.2 秒・0.5 秒）による。日ごとの数は保持期間（`market_snapshots` 90 日、成功ジョブ 7 日、失敗ジョブ 30 日。`retention`）で消えている可能性のある日は `null` で、0 とは区別する（日の 00:00 が削除の境より前なら `null`）。「成功なのに行が無いジョブ」は、成功した `market-data` ジョブのうち、`payload_json` の固定キー `instrument_id` の銘柄の `market_snapshots` 行が、そのジョブの `started_at`〜`finished_at` の間に無いものの数である（ハンドラは自分の時計でその間に行を書く。板取得がレート制限で見送られると行なしの成功になる）。`payload_json` は SQL の中で突き合わせるだけで返さず、`readonly_db_test` は `json_valid(j.payload_json)` と `json_extract(j.payload_json, '$.instrument_id')` の形だけを許す。`observations[]` は数から決まる固定コード（`no_snapshots` / `no_market_data_jobs` / `all_market_data_jobs_failed` / `succeeded_without_snapshot` / `watch_list_empty` / `other_queues_idle`）で、原因の断定ではなく手がかりである。kabu のログイン状態とアプリの起動記録は日ごとには保存されておらず、いまの状態（`current`）と他キューのジョブ完了数から推すしかない。この限界は応答の `unavailable[]` と `note` に書く。DB は読むだけで、新しい表も索引もない。
 
 `health_today`（#808）は、アプリの状態を 1 回で見るために `runtime_settings` を読み取りだけで読む。読むキーは固定の許可リスト（日次ガードの閾値キー、`system.daily_guard`、`system.killed`、`paper.bootstrap_entry_enabled`。`query.ReadableSettingKeys`）だけで、リスト外のキーは SQL を発行する前に拒否する。値の解釈はアプリと同じ関数（`dailyguardsettings`・`paperbootstrapsettings`）で行い、日次停止のメッセージ文など自由文は戻り値に載せない。書き込みはしない（接続は `mode=ro`）。`readonly_db_test` は `runtime_settings` を読む文を `SELECT value FROM runtime_settings WHERE key = ?` の 1 本だけ許す。
+
+`metalabel_training_readiness`（#848。実装は `internal/service/paperresultsmcp/metalabeldiag`）は、夜間の再学習（`internal/service/metalabel/training`）と**同じコードを同じ行に当てて**数える。数字を別に実装すると再学習の判定とずれていくため、次を直接使う（読み取り接続のまま）。
+
+- 行の取り出し: `repo.ListTrainingRowsFrom`（`Trainer` の `ListTrainingRows` と同じ SQL。`label_version = 2`・`net_return_bps` あり・LONG/SHORT・直近 90 日＝`training.DefaultLookback`）。
+- 特徴量の欠け: `training.BuildRowsReport`（`BuildRows` と同じ組み立てで、残る行・`dropped_incomplete`・特徴量ごとの欠け件数を 1 回の走査で返す）。特徴量名と順序は `metalabel.FeatureNames`。
+- 分割と必要件数: `training.SplitWalkForward` を `DefaultWalkForwardConfig`（`MinFit`・`MinCalibration`＝学習側の必要件数。130 は 100＋30）で呼び、OOS 側の必要件数は `DefaultAcceptanceConfig`（`MinOOSSamples`・`MinOOSDays`・`MinTakes`）から取る。**件数（130・1084 など）はこのツールに書かない**。#862 などで既定が変わっても、ツールの数字はそのまま追従する。分割が `ErrInsufficientData` で止まった夜も、`Trainer` が記録するのと同じ理由コードと `usable_rows` / `required_rows` を返し、OOS 側は fit・較正の最小件数を 1 に下げた同じ分割で数える（OOS の窓と行は同じ）。
+- `metalabel.llm_cutoff`: `metalabelsettings.Load` を `runtime_settings` の `metalabel.*` キーだけ読む読み取り専用の Store で呼ぶ（アプリと同じ実効値・既定。`metalabeldiag.metalabelSettingsReader` がリスト外のキーを SQL の前に拒否する。`readonly_db_test` の許可する文は `SELECT value FROM runtime_settings WHERE key = ?` のまま）。
+- 直近の再学習の `dropped_incomplete`: 見送りの行（`metalabel_retrain_skips`）に残っていればその値（`dropped_incomplete_status: "recorded"`）。**残っていない場合は 0 と偽らず `null` にし、理由を `dropped_incomplete_status` で返す**: `not_recorded_in_schema`（この DB の見送り表にその列が無い。#862 のマイグレーション前）、`not_recorded_on_row`（列はあるが最新の見送りの値が NULL）、`no_skip_recorded`（直近の再学習は見送りでなくモデルを保存した、または一度も走っていない）。今の学習行から数えた値は `features.dropped_incomplete` にいつでも入る。
+- `state_json` / `response_json` は特徴量の組み立てのために**プロセス内で読むだけ**で、戻り値には件数と特徴量名しか載せない。`readonly_db_test` は、この行取り出しの 1 文（`FROM calibration_outcomes o JOIN jev_decisions d`）だけが両列の名前を含んでよいと固定する。
+- 時間: 取り出す行は 1 回の索引検索（`jev_decisions_type_timestamp_idx` と `calibration_outcomes_decision_horizon_idx`）で、新しい索引・マイグレーションは足さない。行の組み立てはプロセス内で、読み取る行数は `metalabeldiag.MaxReadinessRows`（20,000）まで。超えたら `limit_exceeded`（期間を狭める）。30 日・90 日の計測は `metalabeltests/readiness_perf_test.go`（テストが所要時間と `EXPLAIN QUERY PLAN` をログに出す）。
+
+`jev_models`（#849。実装は `metalabeldiag`）の一致判定は、再学習の cutoff 判定（`training/cutoff.go` の `cutoffGate`）と同じ関数 `training.CutoffModelMatches`（完全一致。空白・大文字小文字・前方一致は同じとみなさない）を使い、`training.CutoffModelStatus` が `match` / `mismatch` / `unset` を返す。判定を 2 か所に書くと食い違うので、`cutoffGate` も同じ関数に置き換えた（挙動は変えていない）。`JEV_MODEL`（secrets）は暗号化されていて読めず、DB にも無いので、このツールが返すのは応答に入っていた `model_id` と `llm_cutoff_model` だけである。`runtime_settings` は `metalabel.*` のキー（`metalabelsettings.Keys`）だけ読み、他のキーは SQL の前に拒否する（`metalabeldiag.metalabelSettingsReader`）。新しい索引・マイグレーションは足さない（`jev_decisions_timestamp_idx` の範囲検索）。
 
 kabu の板・時価の保存を続けるかは #778 の現状のままである（保存は継続、リスクは理解済み、公式回答待ち）。本仕様は規約の適否を判断しない。リモートへ出す対象から生データを外すのは、その現状を広げないためである。
 
 ## 6. 非目標
 
-- 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない。Paper の注文案を受け付けて記録するツール（§8）は、発注ではない。発注するのはアプリで、MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）に書かない
+- 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない。Paper の注文案を受け付けて記録するツール（§8）は、発注ではない。Jev のシャドーを有効にする・候補の版を選ぶ・費用の上限を決める手段も MCP には作らない（Settings 画面だけ）。発注するのはアプリで、MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）に書かない
 - 新規の売り建て（SHORT）の注文案は受け付けない（注文案の `action` は買い `open_long` と決済 `close` だけ）
 - 注文案の受け付けを MCP からオンにする手段を作らない（オンにできるのは Settings 画面だけ。§8.2）
 - `market_snapshots.raw_data_json`、`jev_decisions.state_json` / `response_json`、板・気配・時価の列、`secrets`、API キーを戻り値にもログにも出さない（一覧は API 仕様の「出さないもの」）
@@ -166,11 +188,11 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 
 ## 7. 設定の読み書き（issue #806・#807）
 
-Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を MCP から一覧・変更・差分確認できる。「MCP は書かない」という不変条件は「**書くのはホワイトリストの設定ツールと、§8 の注文案の受け付けだけで、書き込み接続は §7.3・§8.4 の狭い書き手だけ**」に改めた。それ以外の経路（読み取り 9 ツール、読み取り接続）は従来どおり書けない。
+Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を MCP から一覧・変更・差分確認できる。「MCP は書かない」という不変条件は「**書くのはホワイトリストの設定ツールと、§8 の注文案の受け付けだけで、書き込み接続は §7.3・§8.4 の狭い書き手だけ**」に改めた。それ以外の経路（読み取り 10 ツール、読み取り接続）は従来どおり書けない。
 
 ### 7.1 ホワイトリスト
 
-MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 17 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
+MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 19 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
@@ -178,6 +200,8 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
 | `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
+| `policy.paper.long.min_entry_quality` | 文字列 | Paper のロングの最低エントリー品質（issue #861）。Jev の `entry_quality` がこれ未満なら `entry_quality_below_threshold` で見送る。Paper でだけ効く。保存がなければ `good` | `poor` / `fair` / `good` / `strong` / `exceptional` |
+| `policy.paper.short.min_entry_quality` | 文字列 | Paper のショートの最低エントリー品質（issue #861）。同上 | 同上 |
 | `risk.bucket.stock.budget_jpy` | 円 | Paper の株の予算枠（issue #824）。保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足してこの額を超えると新規エントリーを見送る。0 は株の新規エントリーを止める。保存がなければ運用資金の全額 | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.bucket.bond_etf.budget_jpy` | 円 | Paper の債券ETFの予算枠（issue #824）。0 はこの枠を使わない。保存がなければ 0。債券ETFの銘柄の新規エントリーはこの枠だけで判定される（issue #833。債券ETFの銘柄の取り込みはまだない） | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
@@ -192,9 +216,9 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | `metalabel.llm_cutoff_confirmed_on` | 日付 | 上の終端日を確認した日（出典） | `YYYY-MM-DD` |
 | `metalabel.llm_cutoff_source` | 文字列 | 上の終端日の根拠（出典） | 200 文字以内・制御文字なし |
 
-入れないもの: Live の値（`risk.live.*` など Live で効く上限・判定・発注可否。この表に Live のキーは 1 つもない）、#798 の Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）、ブローカー・認証情報・`secrets`、発注・送金・Kill Switch 解除に関わるもの、そのほかすべての運用設定（policy・screener・ログ・バックアップ先など）。書き込み許可のスイッチ自体も設定キーではなく、専用ツール（§7.2）だけが切り替える。表を広げるのは仕様の変更（悠太さんの決定）で、テスト（`TestWhitelistIsExactlyTheDecidedKeys`）が内容を固定する。
+入れないもの: Live の値（`risk.live.*` など Live で効く上限・判定・発注可否。この表に Live のキーは 1 つもない。Live の最低エントリー品質 `policy.long.min_entry_quality` / `policy.short.min_entry_quality`（既定 `strong`）も入れず、`key_not_allowed` で拒否する）、#798 の Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）、ブローカー・認証情報・`secrets`、発注・送金・Kill Switch 解除に関わるもの、そのほかすべての運用設定（policy（上の Paper の最低エントリー品質 2 キーを除く）・screener・ログ・バックアップ先など）。書き込み許可のスイッチ自体も設定キーではなく、専用ツール（§7.2）だけが切り替える。表を広げるのは仕様の変更（悠太さんの決定）で、テスト（`TestWhitelistIsExactlyTheDecidedKeys`）が内容を固定する。
 
-値の検証は GUI と同一のコードを使う。MCP 専用の検証は作らない。Paper の 4 キーは `papersettings`（`Validate` と `MinTradeLossPct` / `MaxTradeLossPct`。1 回の最大損失は 0.1〜3.0 を含む）、予算枠の 2 キーは `bucketsettings`（`Validate` と、合計の検査 `CheckSave`）、日次ガードは `dailyguardsettings`（`Apply`）、`metalabel.*` は `metalabelsettings`（`Normalize` / `Apply`）で、どれも `internal/service/opsettings` の `Save` を通る。範囲外は `invalid_value`（理由を `error.data.detail` に載せる）で、何も保存しない。
+値の検証は GUI と同一のコードを使う。MCP 専用の検証は作らない。Paper の最低エントリー品質の 2 キーは `paperpolicysettings`（`Settings.Apply`。`config.IsEntryQuality` で 5 値のどれかに限る。Settings の `policy.*.min_entry_quality` と同じ値の集合）、Paper の 4 キーは `papersettings`（`Validate` と `MinTradeLossPct` / `MaxTradeLossPct`。1 回の最大損失は 0.1〜3.0 を含む）、予算枠の 2 キーは `bucketsettings`（`Validate` と、合計の検査 `CheckSave`）、日次ガードは `dailyguardsettings`（`Apply`）、`metalabel.*` は `metalabelsettings`（`Normalize` / `Apply`）で、どれも `internal/service/opsettings` の `Save` を通る。範囲外は `invalid_value`（理由を `error.data.detail` に載せる）で、何も保存しない。
 
 予算枠の合計（株 + 債券ETF）は運用資金（`risk.paper.initial_capital_jpy`）以下でなければならない。この検査は枠の 2 キーの保存、運用資金を下げる保存、「既定に戻す」のどれにも同じように掛かり、超えるときは `invalid_value` で拒否して、設定も監査行も残さない（GUI の保存も同じ）。枠は 1 キーずつ保存するので、枠の間で予算を移すツールは設けない。**移すときは、減らす方の枠を先に保存し、そのあとで増やす方の枠を保存する**（先に増やす方を保存すると、途中の合計が運用資金を超えて拒否される）。運用資金そのものを下げるときも、枠の合計が下がった額に収まるよう、先に枠を減らす。枠は Paper だけの設定で、Live には影響しない。
 
@@ -203,13 +227,13 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 - 保存先は `runtime_settings` のキー `mcp.settings_write_enabled`（JSON の整数 `1` / `0`）。**行が無いときは許可（既定オン）**。MCP は API キーがあるときだけ待受するので、キーがあれば書き込みも既定で使える（悠太さんの決定。issue #806 のコメント）。値が `0` / `1` 以外に壊れているときは禁止として扱う（安全側）
 - 保存先を `runtime_settings` にした理由: アプリ（Settings 画面）と MCP は別プロセスで、同じ DB を見る。`paper-results-mcp.json` はアプリが書き、MCP が起動時に一度読むだけなので、実行中の切り替えが MCP に届かない（再起動が要る）。`runtime_settings` なら両方が毎回同じ値を読む。待受のオン/オフ・API キー（`paper-results-mcp.json`、§3.4）とは別物で、そちらは引き続き DB に置かない
 - 切り替えは両方からできる。**Settings 画面**: 「外部連携」→ MCP カードの「MCP からの設定変更を許可する」チェック（`POST /settings/mcp/write`、セッション Cookie と CSRF が必要）。**MCP**: `settings_write_enable` / `settings_write_disable`（Bearer 認証が必要。書き込みが禁止のあいだも呼べる。禁止のままでは戻せなくなるため）
-- 禁止のあいだ、`settings_set` は `write_disabled`（HTTP 403）で拒否し、何も保存しない。読み取りの 9 ツール・`settings_get` / `settings_diff` / `settings_audit`・スイッチのツールは使える
+- 禁止のあいだ、`settings_set` は `write_disabled`（HTTP 403）で拒否し、何も保存しない。読み取りの 10 ツール・`settings_get` / `settings_diff` / `settings_audit`・スイッチのツールは使える
 - スイッチは設定キーではなく、`settings_set` で書けない（`key_not_allowed`）
 
 ### 7.3 書き込み経路（狭い書き手）
 
 - 読み取りの接続は `mode=ro`・`query_only=ON` のまま変えない。書き込みは、同じ DB ファイルへの**別接続**（`internal/service/paperresultsmcp/mcpset.Writer`）が、最初の書き込みの呼び出しで初めて開く。ファイルは作らず（`mode=rw`）、マイグレーションも `journal_mode` の変更もしない
-- 書き手が実行する変更は 5 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）、⑤取消の依頼（`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。`order_proposal_cancel`。§8.5）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）
+- 書き手が実行する変更は 8 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）、⑤取消の依頼（`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。`order_proposal_cancel`。§8.5）、⑥ライブの Jev のプロンプトの版の昇格（`runtime_settings` の `jev.trader_prompt_version` の upsert と `jev_prompt_promotions` への監査 1 行。`jev_prompt_promote`。分割章 §7.3 ⑥）、⑦調整の実験 1 行の `INSERT`（`experiment_create`。`tuning_experiments`。書き込み許可に従う）、⑧実験の終了の `UPDATE` 1 つ（`experiment_close`。`status` と `ended_at` だけ。`running` の行だけ）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）
 - 保存は GUI と同じ `runtime_settings`（`system.RuntimeSettingsRepository`）で、値の形も GUI と同じ（`opsettings` が検証して JSON で保存する）。アプリは毎回この表から読むので、保存後すぐに GUI と各エンジンに反映される（再起動不要）
 - 同じ DB を書く単一ライターはアプリである。書き手は 2 秒の `busy_timeout` と `BEGIN IMMEDIATE` で短く待ち、取れなければ `db_locked`。アプリの書き込みを長く待たせない
 

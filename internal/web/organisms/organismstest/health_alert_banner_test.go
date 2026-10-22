@@ -27,6 +27,26 @@ func TestHealthAlertBanner_NamesEachAlertWithItsStartAndSaysItClearsItself(t *te
 	}
 }
 
+// issue #863: not logged in and not running read differently - the first says
+// to log in, the second to start kabuステーション (and check the API setting).
+func TestHealthAlertBanner_KabuNotLoggedInAndUnreachableTellWhatToDo(t *testing.T) {
+	login := renderComponent(t, organisms.HealthAlertBanner([]organisms.HealthAlertView{{Code: "kabu_not_logged_in", Since: "08:45"}}))
+	for _, want := range []string{`data-code="kabu_not_logged_in"`, "未ログインです", "kabuステーションにログインしてください"} {
+		if !strings.Contains(login, want) {
+			t.Errorf("not-logged-in banner missing %q in %s", want, login)
+		}
+	}
+	if strings.Contains(login, "起動してください") {
+		t.Errorf("not-logged-in banner tells the operator to start kabuステーション: %s", login)
+	}
+	down := renderComponent(t, organisms.HealthAlertBanner([]organisms.HealthAlertView{{Code: "kabu_unreachable", Since: "08:45"}}))
+	for _, want := range []string{`data-code="kabu_unreachable"`, "接続できません", "未起動", "08:45から続いています", "kabuステーションを起動してログインしてください", "自動的に消えます"} {
+		if !strings.Contains(down, want) {
+			t.Errorf("unreachable banner missing %q in %s", want, down)
+		}
+	}
+}
+
 func TestHealthAlertBanner_RendersNothingWithoutAlerts(t *testing.T) {
 	if html := renderComponent(t, organisms.HealthAlertBanner(nil)); strings.Contains(html, "health-alert-banner") {
 		t.Errorf("rendered a banner without alerts: %s", html)

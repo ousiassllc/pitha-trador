@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 9 つ（`health_today` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つ。合計 21）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 12 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つと、調整の実験の 4 つ（分割章 `paper-results-mcp-experiments.md`。issue #871）と、Jev のプロンプトの 3 つ（issue #872）。合計 31。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23〜§3.24）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -40,7 +40,7 @@
 | `win_count` / `loss_count` / `flat_count` | 上の勝敗 |
 | `win_rate` | `win_count / closed_trade_count`。0 件なら `null` |
 | `total_pnl_jpy` | `realized_pnl` の合計（円） |
-| `expectancy_jpy` | `realized_pnl` の平均。0 件なら `null` |
+| `expectancy_jpy` | `realized_pnl` の平均。0 件なら `null`。あわせて `avg_win_jpy`（平均の勝ち＝勝ちの合計 ÷ `win_count`。正の円）と `avg_loss_jpy`（平均の負け＝負けの合計 ÷ `loss_count`。負の円）を返す。勝ち／負けが 0 件なら `null`（issue #871） |
 | `expectancy_return_pct` | 各行の `realized_pnl / (entry_price * quantity) * 100` の平均。建値が 0 以下の行はリターン 0 として数える（`internal/service/insight.Aggregate` と同じ）。0 件なら `null` |
 | `profit_factor` | 勝ちの合計円 ÷ 負けの合計円の絶対値。負けが 0 件、または対象 0 件なら `null` |
 | `max_drawdown_jpy` | `closed_at` 昇順、同着は `id` 昇順で `realized_pnl` を累積した曲線の、ピークから谷までの最大下落（円）。下落が無ければ 0。0 件なら 0 |
@@ -148,14 +148,14 @@
 |------------|------|
 | `latest_snapshot_at` | `market_snapshots.timestamp` の最大。行が無ければ `null`。価格列は読まない |
 | `missing_session_dates` | 期間内の東証立会日（`marketcalendar.Calendar.IsTradingDay` が真の JST 日）のうち、その日に `market_snapshots` が 0 件の日付。最大 366。価格・銘柄は返さない |
-| `jobs[]` | キュー `market-data` / `feature-calc` / `jev-scout` / `jev-trader` / `outcome-labeling` / `analytics` ごとに、期間内（`finished_at`）の `succeeded_count` / `failed_count` と、`status=succeeded` の最新 `finished_at` |
+| `jobs[]` | キュー `market-data` / `feature-calc` / `jev-scout` / `jev-trader` / `outcome-labeling` / `analytics` ごとに、期間内（`finished_at`）の `succeeded_count` / `failed_count` と、`status=succeeded` の最新 `finished_at`。`retired` / `retired_note` は、どこも積まなくなった廃止済みキュー（`feature-calc`。`market-data` が特徴量まで計算して保存する）を示す。成功 0・失敗 0 は想定どおりで、収集の問題ではない（通常は `false` / 空文字） |
 | `daily_bar_run_failed_count` | 期間内（`run_date`）の `daily_bar_runs.status='failed'` の件数 |
 | `label_skip_count` | 期間内（`calibration_label_skips.created_at`）の件数 |
-| `job_failures` | 期間内（`finished_at`）に `failed` で終わったジョブの内訳。`total`、`by_day[]`（`date` は JST 日・`count`）、`by_queue[]`（`queue`・`count`。キューの順）、`by_error_code[]`（`code`・`count`）、`by_day_and_error_code[]`（`date`・`code`・`count`。「10/6 の 4002006 は N 件」はこれで引ける）。どの一覧も合計は `total`。`skipped_total` / `skipped_by_queue[]` は `last_error` が `skipped: ` で始まる `succeeded` のジョブ（`jobqueue.Skip` による終端スキップ。`jobs[].succeeded_count` に含まれる）の件数 |
-| `alerts[]` | いま出ている警告（期間ではなく現在）。要素は `code` と `since`（条件が始まった時刻、UTC RFC3339）だけで、自由文は返さない。無ければ `[]`。`code` は固定: `kabu_not_logged_in`（取引日の 08:45〜15:30 に kabu が未ログイン〔4001007〕。08:45 の時点で既に続いていた、または後から 5 分続いた）/ `market_data_idle`（立会中〔9:00〜11:30・12:30〜15:30〕に `market-data` ジョブが成功も失敗も 5 分間ゼロ。立会の開始から数える）。非取引日と対象時間外は出さず、条件が解けると消える。アプリ内の検知（`health_alerts`、`000039`）が保存した行を読み、検知の最終確認（`health_alert_checks`）が 2 分より古い間はアプリが止まっているとみなして行を使わず、立会中なら `jobs` から `market_data_idle` だけを導く。health_today（#808）も同じ状態（`query.HealthAlerts`）を読む |
+| `job_failures` | **期間の末尾 3 日**（`window.max_days`。既定の 30 日・366 日の指定でも同じ。3 日は利用者の決定で確定。#850）に `failed` で終わったジョブの内訳。`window` は実際に読んだ範囲（`from`・`to` は JST 日で `to` を含まない、`requested_from`（指定された期間の開始）、`max_days`、期間のほうが長いと `truncated=true`、固定の `note`）。`timed_out` / `incomplete[]` は時間切れの印（内部の時間予算を超えたとき `true` と、読めなかった `failed:<キュー>:<JST 日>`・`skipped:<キュー>`。このとき `total` などは読めた分だけ。全部読めたら `false` と空配列。`query_timeout` で捨てない）。`total`、`by_day[]`（`date` は JST 日・`count`）、`by_queue[]`（`queue`・`count`。キューの順）、`by_error_code[]`（`code`・`count`）、`by_day_and_error_code[]`（`date`・`code`・`count`。「10/6 の 4002006 は N 件」はこれで引ける）。どの一覧も合計は `total`。`skipped_total` / `skipped_by_queue[]` は `last_error` が `skipped: ` で始まる `succeeded` のジョブ（`jobqueue.Skip` による終端スキップ。`jobs[].succeeded_count` に含まれる）の件数 |
+| `alerts[]` | いま出ている警告（期間ではなく現在）。要素は `code` と `since`（条件が始まった時刻、UTC RFC3339）だけで、自由文は返さない。無ければ `[]`。`code` は固定: `kabu_not_logged_in`（取引日の 08:45〜15:30 に kabu が未ログイン〔4001007〕。08:45 の時点で既に続いていた、または後から 5 分続いた）/ `kabu_unreachable`（同じ時間帯・同じ規則で kabu ステーションへの接続が拒否される〔未起動・API 未有効。#863〕）/ `market_data_idle`（立会中〔9:00〜11:30・12:30〜15:30〕に `market-data` ジョブが成功も失敗も 5 分間ゼロ。立会の開始から数える）。非取引日と対象時間外は出さず、条件が解けると消える。アプリ内の検知（`health_alerts`、`000039`）が保存した行を読み、検知の最終確認（`health_alert_checks`）が 2 分より古い間はアプリが止まっているとみなして行を使わず、立会中なら `jobs` から `market_data_idle` だけを導く。health_today（#808）も同じ状態（`query.HealthAlerts`）を読む |
 | `retention` | `succeeded_job_days`（7）/ `failed_job_days`（30）と固定の注記。完了ジョブは `internal/service/retention` が成功 7 日・失敗 30 日で削除するため、期間がそれより前に及ぶと成功は先に消え、`jobs[]` と `job_failures` に出ない（失敗は 30 日残る） |
 
-`job_failures` の `code` は `jobs.last_error` の先頭 256 バイトから、固定パターン（kabu `code 4002006` / 立花 `p_errno=-62`・`sResultCode=NNN`）の数値トークン（`-` 付きでもよい 1〜8 桁）だけを取り出した値で、無ければ `unknown`。取り出しはプロセス内で行い、`last_error` の本文は返さない（SQL に `last_error` が現れるのは `substr(last_error, 1, N)`（N は 256 以下）の形だけで、`readonly_db_test` が確認する）。
+`job_failures` の `code` は `jobs.last_error` の先頭 256 バイトから、固定パターン（kabu `code 4002006` / 立花 `p_errno=-62`・`sResultCode=NNN`）の数値トークン（`-` 付きでもよい 1〜8 桁）だけを取り出した値で、無ければ `unknown`。取り出しは SQL の中で行い（`code ` / `p_errno=` / `sResultCode=` の後ろの数字だけ。銘柄名などの本文はグループのキーに入らず、(JST 日, コード) でまとまる）、`last_error` の本文は返さない（SQL に `last_error` が現れるのは `substr(last_error, 1, N)`（N は 256 以下）の形だけで、`readonly_db_test` が確認する）。 `job_failures` が数えるのは `jobs[]` の 6 キューだけで、それ以外のキュー名のジョブは数えない（スケジューラは 6 キュー以外を書かない）。立会日ごとの収集の診断は別ツール `session_diagnostics`（§3.8.1。分割章 `paper-results-mcp-diagnostics.md`）。
 
 返さない: `jobs.payload_json`、`jobs.last_error` の本文、`daily_bar_runs.error`、`daily_bars` の価格・出来高、スキップ理由の自由文。
 
@@ -171,7 +171,7 @@
 | `paper_trades` | `opened_count`（`positions.opened_at` が今日の件数）、`closed_count`（`closed_at` が今日の件数）。価格は返さない |
 | `meta_model` | `adopted`（`metalabel_models.status='active'` が 1 件以上）、`version`・`trained_at`（採用中で最新のもの。無ければ `null`） |
 | `bootstrap` | `enabled`（`runtime_settings` の `paper.bootstrap_entry_enabled`。無い・解釈できない値は `false`。#798）、`effective`（`enabled` かつ採用中モデルが無い。ブートストラップが働く条件。本 MCP は Paper の DB だけを読み、アプリは Live では設定に関わらず使わない）、`signals_today`（今日のシグナルのうち `policy_version` がブートストラップ版のもの） |
-| `market_data` | `kabu_login`（`ok` / `not_logged_in` / `unknown` / `not_watched`）、`market_data`（`running` / `idle` / `not_watched`）、`app_running`（アプリの検知の最終確認が 2 分以内か）、`alerts[]`（`collection_status.alerts[]` と同じ値。`code` と `since`）。`not_watched` は検知が見ない時間（非取引日、08:45〜15:30 の外、`market_data` は立会外・昼休み）。`unknown` は見る時間なのにアプリが止まっていて判断できない状態 |
+| `market_data` | `kabu_login`（`ok` / `not_logged_in` / `unreachable` / `unknown` / `not_watched`）、`market_data`（`running` / `idle` / `not_watched`）、`app_running`（アプリの検知の最終確認が 2 分以内か）、`alerts[]`（`collection_status.alerts[]` と同じ値。`code` と `since`）。`not_watched` は検知が見ない時間（非取引日、08:45〜15:30 の外、`market_data` は立会外・昼休み）。`unknown` は見る時間なのにアプリが止まっていて判断できない状態 |
 | `missing_session_dates[]` | 今日より前の 7 日間（今日の引け後は今日も含む）の東証立会日のうち、`market_snapshots` が 0 件で、**それ以前にスナップショットが 1 件でもある**日付（実際の欠損）。`collection_status.missing_session_dates` は履歴の長さを見ずに 0 件の日をすべて返すので、初回起動直後は両者が異なる（#814） |
 | `insufficient_history_dates[]` | 同じ期間の東証立会日のうち、`market_snapshots` が 0 件で、**それ以前のスナップショットも 1 件も無い**日付（履歴が足りず判定できない。初回起動直後など）。欠損とは区別し、警告にしない（`attention_codes` に出さない）。該当が無ければ（履歴が 7 日分そろえば）`[]`（#814） |
 | `daily_guard` | `halted`、`reason`（`daily_loss_limit_jpy` / `profit_lock` / `max_daily_trades`。`halted` でなければ `null`）、`halted_at`（UTC RFC3339）。アプリの `risk.Engine.DailyHalt` と同じく、今日の取引日の停止だけを、その規則が Settings でまだ有効なときに限って返す。停止メッセージの文は返さない |
@@ -179,13 +179,13 @@
 | `retrain` | `skipped`（最新の `metalabel_retrain_skips` が 24 時間以内で、それ以後に学習されたモデルが無い）、`latest_skipped_at`、`reason_code`（§3.5 の固定コード。未知は `other`）。見送りが一度も無ければ後ろ 2 つは `null` |
 | `order_proposals` | `stalled_count`（`order_proposals.status` が `received` / `processing` のまま、最後の状態の変化 `updated_at` から 10 分を超えた案の数）、`oldest_stalled_since`（その中で最も古い `updated_at`、UTC RFC3339。無ければ `null`）。案の内容は返さない（issue #829） |
 
-要対応コード（`query.Attention*`。`kabu_not_logged_in` と `market_data_idle` はアプリ内警告（#802）と同じコードで、再導出せず `health_alerts` を読む）:
+要対応コード（`query.Attention*`。`kabu_not_logged_in`・`kabu_unreachable`・`market_data_idle` はアプリ内警告（#802・#863）と同じコードで、再導出せず `health_alerts` を読む）:
 
 | コード | 条件 |
 |--------|------|
 | `no_paper_trades_today` | 取引日で、前場の引け（11:30 JST）以後に、今日開いた Paper ポジションが 0 件 |
 | `no_active_model` | 採用中のメタモデルが無い（日によらない） |
-| `kabu_not_logged_in` | `market_data.alerts[]` に同名の警告がある（取引日の 08:45〜15:30 のみ） |
+| `kabu_not_logged_in` / `kabu_unreachable` | `market_data.alerts[]` に同名の警告がある（取引日の 08:45〜15:30 のみ。後者は kabu ステーションが未起動・API 未有効で接続が拒否されている状態。#863） |
 | `market_data_idle` | `market_data.alerts[]` に同名の警告がある（立会中のみ） |
 | `missing_session` | `missing_session_dates[]` が空でない（取引日・非取引日とも直近 7 日の取引日を見る）。`insufficient_history_dates[]` だけが空でないときは出さない（データ不足は警告でなく判定不可） |
 | `daily_guard_halted` | `daily_guard.halted` |
@@ -199,14 +199,14 @@
 
 ### 3.10 設定ツール（issue #806・#807）
 
-設定ツールが触れるのは、次のホワイトリストの 17 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
+設定ツールが触れるのは、次のホワイトリストの 19 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
 | `risk.paper.initial_capital_jpy` | 円 | Paper の運用資金（FR-RISK 各上限と数量算出の基準。issue #804） | 0 円より大きく 1 兆円以下 |
-| `risk.paper.max_position_per_symbol_pct` | % | Paper の 1 銘柄あたりの建玉上限 | 0 より大きく 100 以下 |
-| `risk.paper.max_total_exposure_pct` | % | Paper の総エクスポージャ上限 | 0 より大きく 100 以下 |
+| `risk.paper.max_position_per_symbol_pct` / `risk.paper.max_total_exposure_pct` | % | Paper の 1 銘柄あたりの建玉上限 / Paper の総エクスポージャ上限 | どちらも 0 より大きく 100 以下 |
 | `risk.paper.max_trade_loss_pct` | % | Paper の 1 回の最大損失 | `papersettings.MinTradeLossPct`（0.1）以上 `MaxTradeLossPct`（3.0）以下 |
+| `policy.paper.long.min_entry_quality` / `policy.paper.short.min_entry_quality` | 文字列 | Paper のロング／ショートの最低エントリー品質（issue #861。Paper でだけ効く。保存がなければ `good`。Live の `policy.long.min_entry_quality` / `policy.short.min_entry_quality` は書けず `key_not_allowed`） | `poor` / `fair` / `good` / `strong` / `exceptional` |
 | `risk.bucket.stock.budget_jpy` | 円 | Paper の株の予算枠（issue #824）。保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足してこの額を超えると新規エントリーを見送る。0 は株の新規エントリーを止める | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.bucket.bond_etf.budget_jpy` | 円 | Paper の債券ETFの予算枠（issue #824）。0 はこの枠を使わない | 0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金以下 |
 | `risk.operating_capital_jpy` | 円 | 日次ガードの運用資金（FR-RISK-8）。0 は未設定 | 0 以上 1 兆円以下 |
@@ -267,7 +267,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 
 ### 3.16〜3.22 注文案ツール（issue #827・#828・#829）
 
-書き込み: `order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable`（Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ。Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。読み取り専用: `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`（提案 → 約定 → 損益のひも付け。issue #829）と、`paper_trades` / `paper_performance_summary` の `origin`。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.22）。
+書き込み: `order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable`（Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ。Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。読み取り専用: `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`（提案 → 約定 → 損益のひも付け。issue #829）と、`paper_trades` / `paper_performance_summary` の `origin`。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.22）。**§3.29 Jev プロンプトのツール（issue #872）**: 読み取り専用: `jev_shadow_compare`（ライブの trader の判断と、同じ入力に対するシャドー＝候補のプロンプトの版の判断を、`entry_quality` の分布・`direction` の一致率・費用・`calibration_outcomes` による結果で並べる）と `jev_shadow_cost`（シャドーの `request_cost` の日次・累計、上限と止まった記録、昇格の記録）。書き込み: `jev_prompt_promote`（ライブの版を候補の版に切り替える明示的な操作。書き込み許可のスイッチに従い、監査に残る。自動では呼ばれず、自己改善ループには経路が無い）。シャドーの有効化・候補の選択・費用の上限は Settings 画面だけで、**費用の上限の値は暫定の案で未承認**。引数・応答・エラーは分割章 `paper-results-mcp-jev-prompt.md` に置く（ファイルの行数上限のため。章番号は同じ §3.29）。
 
 ## 4. 出さないもの
 
@@ -277,7 +277,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 |--------------|----------------|
 | `market_snapshots.raw_data_json` | `000002`。ブローカー生レスポンス |
 | `market_snapshots` の価格・板・出来高・特徴量（`price` / `bid` / `ask` / `spread_bps` / `volume` / `vwap` / `ofi_*` / `return_*` など。`000016`・`000026`・`000032`） | 時価・板・気配そのもの。鮮度は件数と時刻だけ |
-| `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文 |
+| `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文。`metalabel_training_readiness`（§3.23）は特徴量の欠けを数えるためにプロセス内で読むが、戻り値には件数と特徴量名しか載せない |
 | `jev_decisions` の `ofi_*` / `microprice_dev_bps` / `vwap_z` / `regime_volatility_bps` / `regime_autocorr` | `000032`・`000036`。板・価格由来の特徴量 |
 | `secrets` の全列 | `000013`。`key` 名も返さない |
 | API キー、MCP の `api_key`、証券会社の認証情報。Cloudflare を使うときの Client-Secret も | ローカル設定と `secrets`。ログにも出さない |
@@ -287,7 +287,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 | `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 17 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 19 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。`jev_shadow_cost`（§3.29）の Jev のプロンプトの 6 キー（`jev.trader_prompt_version`・`jev.shadow.enabled`・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`・`jev.shadow.halt`・`jev.shadow.failures`。版の名前・真偽・USD の数値・止まった記録・失敗回数で、秘密は無い）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
 | `order_proposals.request_hash` / `client` | `000042`。照合用のハッシュと接続元 IP。`order_proposal_get` は返さない |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 
@@ -300,15 +300,14 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - `listen` が `0.0.0.0` のときは起動しない。Tailscale で直接待つ設定は、その PC の tailnet 側アドレスだけを bind する
 - キー無し・誤ったキーは 401 で、そのリクエストの経路で SQL が 0 件である
 - MCP の読み取り接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
-- 設定ツール: ホワイトリストの 17 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
+- 設定ツール: ホワイトリストの 19 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
 - 設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
 - 注文案ツールの受け入れ条件は `paper-results-mcp-proposals.md` §5（スイッチ・同一トランザクション・冪等・引数の規則・1 日の上限・認証なしで SQL 0 件・書き込みの狭さ・`mode` の CHECK・オンにする手段が無いこと）
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない
 - 期間 367 日、`limit=201`、クローズ済み 5,001 件は、それぞれ `invalid_period` または `limit_exceeded` で部分結果が無い
-- `health_today` は、要対応コード 9 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
-- 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）
-- Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
+- `health_today` は、要対応コード 10 種それぞれが、その条件だけで入り・条件が解けると消え、取引日の健康な状態では `needs_attention` が `false` である。土日・祝日は取引数・kabu・market-data の判定でコードを出さない。戻り値に自由文（日次停止のメッセージ等）が含まれない
+- 選んだ経路（Tailscale または Cloudflare Tunnel）経由で、認証つきでリモートから呼べることを実機で確認する。自動テストの対象外とし、キーを伏せた呼び出し記録を残す（#783 の実機条件）。Tailscale を選んだときは、tailnet の外からその待受に届かないことを同じ記録で確認する
 
 ## 改訂履歴
 

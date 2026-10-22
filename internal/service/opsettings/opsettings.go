@@ -20,8 +20,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/sleepguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/snapshotagesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 )
@@ -97,6 +99,7 @@ func New(store Store, strategy config.StrategyConfig, defaultLogDir string) *Ser
 func Keys() []string {
 	keys := []string{config.KeyBackupDir, config.KeyLogDir}
 	keys = append(keys, config.PolicySettingKeys()...)
+	keys = append(keys, paperpolicysettings.Keys()...)
 	keys = append(keys, config.FastScreenerSettingKeys()...)
 	keys = append(keys, orderflowsettings.Keys()...)
 	keys = append(keys, snapshotagesettings.Key)
@@ -110,6 +113,7 @@ func Keys() []string {
 	keys = append(keys, regimesettings.Keys()...)
 	keys = append(keys, config.BrokerSettingKeys()...)
 	keys = append(keys, paperbootstrapsettings.Keys()...)
+	keys = append(keys, sleepguardsettings.Keys()...)
 	return append(keys, tachibanasource.TachibanaSourceSettingKeys()...)
 }
 
@@ -146,7 +150,7 @@ func kindOf(key string) kind {
 		return kindLog
 	case strings.HasSuffix(key, ".min_entry_quality"):
 		return kindEntryQuality
-	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key):
+	case key == "screener.top_n" || orderflowsettings.IsKey(key) || snapshotagesettings.IsKey(key) || dailyguardsettings.IsIntegerKey(key) || barriersettings.IsIntegerKey(key) || regimesettings.IsIntegerKey(key) || paperbootstrapsettings.IsKey(key) || sleepguardsettings.IsKey(key):
 		return kindInteger
 	default:
 		return kindNumber

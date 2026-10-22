@@ -10,6 +10,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/router"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/mcpsettings"
 )
 
 // fakeGate is the write switch and audit log behind the Settings toggle.
@@ -19,6 +20,9 @@ type fakeGate struct {
 	setErr  error
 	// proposals is the order-proposal intake switch (issue #827).
 	proposals bool
+	// ExperimentGate (issue #871) is the real *mcpset.Gate over a migrated
+	// database in the experiments tests, nil elsewhere.
+	mcpsettings.ExperimentGate
 }
 
 func (g *fakeGate) OrderProposalsEnabled(context.Context) (bool, error) { return g.proposals, nil }
