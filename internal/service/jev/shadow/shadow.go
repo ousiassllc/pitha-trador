@@ -216,8 +216,9 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 
 // cancelledByClose reports whether err is the cancellation Close caused (not
 // a timeout, which is context.DeadlineExceeded, nor an API failure). Such a
-// call is left out of the failure count: it is neither a failure of the
-// candidate nor stored, so it leaves no cost either.
+// call is left out of the failure count: it is not a failure of the
+// candidate. It is not stored either, unless its insert had already
+// committed (then the row and its cost exist), so it leaves no cost.
 func (s *Shadow) cancelledByClose(err error) bool {
 	return s.base.Err() != nil && errors.Is(err, context.Canceled)
 }

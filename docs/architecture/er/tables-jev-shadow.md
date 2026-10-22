@@ -77,7 +77,7 @@ erDiagram
 | `jev.shadow.candidate_version` | JSON 文字列 | シャドーが動かす候補の版。無ければ何も呼ばない |
 | `jev.shadow.daily_cost_cap_usd` | JSON 数値 | 1 日（JST）あたりの費用の上限。無ければ `jevshadowsettings.DefaultDailyCostCapUSD`（0.10 USD。確定した既定値で、Settings で上げ下げできる） |
 | `jev.shadow.halt` | JSON オブジェクト | 上限で止めた日の記録（日・固定コード `daily_cost_cap` / `daily_failure_cap`・使った額・上限・失敗回数・時刻）。翌日（JST）に再開する |
-| `jev.shadow.failures` | JSON オブジェクト | その日（JST）の失敗した呼び出しの回数（`{"date","count"}`）。`jevshadowsettings.DailyFailureCap`（20 回。確定。定数）に達するとその日のシャドーを止める。費用の合計は保存に成功した呼び出しだけを足すため、課金されても保存されない呼び出しの抑えにする。終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えない（失敗回数にも費用にも残さない）。タイムアウトは数える |
+| `jev.shadow.failures` | JSON オブジェクト | その日（JST）の失敗した呼び出しの回数（`{"date","count"}`）。`jevshadowsettings.DailyFailureCap`（20 回。確定。定数）に達するとその日のシャドーを止める。費用の合計は保存に成功した呼び出しだけを足すため、課金されても保存されない呼び出しの抑えにする。終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えない（ベンダーが課金した可能性はあるが、保存の前に取り消されれば費用にも入らない。保存がすでにコミットしていれば行と費用はある。1 回の終了で最大 4 回）。タイムアウトは数える |
 
 ## 改訂履歴
 
