@@ -51,8 +51,9 @@ type Settings interface {
 // decision and stores the answer in jev_shadow_decisions (issue #872). The
 // answer is never used: Shadow has no path to Policy, the meta-model, Risk,
 // order placement, the RAG index (jev_decision_vectors), Calibration or the
-// meta-model training. It only writes jev_shadow_decisions and (for a day
-// stopped by the cost cap) one runtime_settings row.
+// meta-model training. It only writes jev_shadow_decisions and a few
+// runtime_settings rows (the failed-call counter, why it stopped for a day by
+// a cap, and the 429/529 stop record).
 //
 // The Jev API key and its rate limit are shared with the live Scout/Trader
 // (issue #883), so the shadow gives way to them: it sends at most one call per
@@ -89,6 +90,9 @@ type Shadow struct {
 	pace        func() time.Time
 	paceMu      sync.Mutex
 	lastCall    time.Time
+	// throttledUntil is the end of the cooldown after a 429/529, kept in memory
+	// (under paceMu) so it holds when the throttle record cannot be written.
+	throttledUntil time.Time
 }
 
 // New returns a Shadow that calls client, stores answers via results and
@@ -166,7 +170,7 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 	day := jevshadowsettings.Day(now)
 	// The Jev API is throttling (429/529): stay off it, for the live calls'
 	// sake. Neither check costs a request.
-	if cfg.Throttle.ActiveAt(now) {
+	if cfg.Throttle.ActiveAt(now) || s.throttleHeld(now) {
 		return nil
 	}
 	if ev, ok := s.client.LastThrottle(); ok && now.Sub(ev.At) < jevshadowsettings.ThrottleCooldown {

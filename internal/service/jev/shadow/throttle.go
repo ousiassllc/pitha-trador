@@ -32,18 +32,57 @@ func (s *Shadow) allowCall() bool {
 	return true
 }
 
+// throttleHeld reports whether the in-memory cooldown set by recordThrottle is
+// still running at now. It holds even when the throttle record could not be
+// written, so a failing runtime_settings write cannot let the shadow send again.
+func (s *Shadow) throttleHeld(now time.Time) bool {
+	s.paceMu.Lock()
+	defer s.paceMu.Unlock()
+	return now.Before(s.throttledUntil)
+}
+
+// holdThrottle extends the in-memory cooldown to until (never shortens it).
+func (s *Shadow) holdThrottle(until time.Time) {
+	s.paceMu.Lock()
+	defer s.paceMu.Unlock()
+	if until.After(s.throttledUntil) {
+		s.throttledUntil = until
+	}
+}
+
+// coversThrottle reports whether the stored record cur already accounts for an
+// event at at: it is not older than the event, or (for the shadow's own 429, so
+// a call that was in flight with the one that stopped the shadow) it is still
+// running.
+func coversThrottle(cur *jevshadowsettings.Throttle, source string, at time.Time) bool {
+	if cur == nil {
+		return false
+	}
+	if curAt, err := time.Parse(time.RFC3339, cur.At); err == nil && !curAt.Before(at.UTC().Truncate(time.Second)) {
+		return true
+	}
+	return source == jevshadowsettings.ThrottleSourceShadow && cur.ActiveAt(at)
+}
+
 // recordThrottle leaves why the shadow stops for jevshadowsettings.ThrottleCooldown
 // from at (the 429/529 status of source's call), so the GUI and the MCP can show
-// it, and counts the day's events. It writes with its own short context: the
-// call's may be the one that was cancelled. A failed write is logged; the
-// shadow is not stopped by it (the next 429/529 stops it again).
+// it, and counts the day's events (once per event: concurrent comparisons that
+// saw the same 429/529 write one record). The stop also holds in memory
+// (throttleHeld). It writes with its own short context: the call's may be the
+// one that was cancelled. A failed write is logged; the in-memory stop still
+// holds, and the next 429/529 records again.
 func (s *Shadow) recordThrottle(ctx context.Context, cfg jevshadowsettings.Settings, status int, source string, at time.Time) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
+	s.holdThrottle(at.Add(jevshadowsettings.ThrottleCooldown))
 	s.throttleMu.Lock()
 	defer s.throttleMu.Unlock()
-	// Another comparison may have recorded since cfg was read.
+	// Another comparison may have recorded since cfg was read; if it recorded
+	// this very event, there is nothing to add.
 	if cur := jevshadowsettings.Load(ctx, s.settings).Throttle; cur != nil {
+		if coversThrottle(cur, source, at) {
+			return
+		}
 		cfg.Throttle = cur
 	}
 	day := jevshadowsettings.Day(at)

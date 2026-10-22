@@ -12,8 +12,10 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev/shadow"
+	"github.com/ousiassllc/pitha-trador/internal/service/rag"
 )
 
 // throttleAPI is a Jev API whose rate limit the test controls: while saturated it
@@ -27,6 +29,12 @@ type throttleAPI struct {
 	status            int
 	saturateAfterLive bool
 
+	// holdShadowForLive makes the first candidate request wait at the API until
+	// the first live request has arrived (or the request is cancelled).
+	holdShadowForLive    bool
+	shadowSeen, liveSeen chan struct{} // closed by the first request of each kind
+	shadowOnce, liveOnce sync.Once
+
 	mu                          sync.Mutex
 	saturated                   bool
 	live, shadow                int
@@ -34,7 +42,8 @@ type throttleAPI struct {
 }
 
 func newThrottleAPI(status int, saturateAfterLive bool) *throttleAPI {
-	return &throttleAPI{inner: &fakeJev{}, status: status, saturateAfterLive: saturateAfterLive}
+	return &throttleAPI{inner: &fakeJev{}, status: status, saturateAfterLive: saturateAfterLive,
+		shadowSeen: make(chan struct{}), liveSeen: make(chan struct{})}
 }
 
 func (a *throttleAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +66,17 @@ func (a *throttleAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.saturated, a.saturateAfterLive = true, false
 	}
 	a.mu.Unlock()
+	if isShadow {
+		a.shadowOnce.Do(func() { close(a.shadowSeen) })
+		if a.holdShadowForLive {
+			select {
+			case <-a.liveSeen:
+			case <-r.Context().Done():
+			}
+		}
+	} else {
+		a.liveOnce.Do(func() { close(a.liveSeen) })
+	}
 	if rejected {
 		w.WriteHeader(a.status)
 		return
@@ -92,45 +112,55 @@ func (e *shadowEnv) throttle() *jevshadowsettings.Throttle {
 	return jevshadowsettings.Load(context.Background(), e.settings).Throttle
 }
 
-// Issue #883: with the shadow on and the API answering 429, the live
-// jev.Client.Trader makes no more attempts and takes no longer than with the
-// shadow off, and the shadow itself sends one request and no retries, then
-// leaves the API alone.
+// Issue #883: the live jev.Client.Trader and a shadow comparison hit the same
+// saturated API (a shared fake 429) at the same time. The shadow's request is held
+// at the API until the live call's first request has arrived, so the two are in
+// flight together. The live call then makes no more attempts and takes no longer
+// than the retry backoff allows, with the shadow on as with it off; the shadow
+// itself sends one request and no retries.
 func TestShadow_429_DoesNotWorsenTheLiveTraderCall(t *testing.T) {
-	type outcome struct {
-		liveAttempts, shadowRequests int
-		liveDuration                 time.Duration
-	}
-	run := func(shadowOn bool) outcome {
-		api := newThrottleAPI(http.StatusTooManyRequests, true)
+	run := func(shadowOn bool) (liveAttempts, shadowRequests int, liveDuration time.Duration) {
+		api := newThrottleAPI(http.StatusTooManyRequests, false)
+		api.holdShadowForLive = true
+		api.setSaturated(true)
 		e := newShadowEnvOn(t, metalabelsettings.ModePaper, api, api.inner, retryingConfig, shadow.WithMinInterval(0))
 		if shadowOn {
 			e.enable()
+			e.shadow.Submit(domain.JevDecision{ID: 1, Symbol: "7203", QuestionVersion: "trader-v3"},
+				jev.ScoutState{Symbol: "7203", Timestamp: e.now, Price: 2100}, rag.Context{})
+			select {
+			case <-api.shadowSeen:
+			case <-time.After(10 * time.Second):
+				t.Fatal("the shadow's request never reached the API")
+			}
 		}
-		e.evaluate() // live call served; the budget is now used up, so the shadow's call is answered 429
-		e.shadow.Wait()
-		_, shadowSent := api.counts()
-		if _, ok := e.client.LastThrottle(); ok {
-			t.Fatal("the shadow's own 429 was noted as a live throttle")
-		}
-		before, _ := api.counts()
-		duration, err := e.liveTrader()
+		liveDuration, err := e.liveTrader() // runs while the shadow's request is in flight
 		if err == nil {
 			t.Fatal("the live call succeeded on a saturated API")
 		}
-		after, _ := api.counts()
-		return outcome{liveAttempts: after - before, shadowRequests: shadowSent, liveDuration: duration}
+		e.shadow.Wait()
+		liveAttempts, shadowRequests = api.counts()
+		return liveAttempts, shadowRequests, liveDuration
 	}
 
-	off, on := run(false), run(true)
-	if off.liveAttempts != 4 || on.liveAttempts > off.liveAttempts {
-		t.Errorf("live attempts: shadow off %d, shadow on %d, want 4 and no more", off.liveAttempts, on.liveAttempts)
+	// A live call answered 429 every time makes MaxAttempts attempts and backs off
+	// RetryBaseDelay, 2x, 4x... between them (evaluate.go).
+	var backoff time.Duration
+	for n := range retryingConfig.MaxAttempts - 1 {
+		backoff += retryingConfig.RetryBaseDelay << n
 	}
-	if on.liveDuration > off.liveDuration+200*time.Millisecond {
-		t.Errorf("live duration: shadow off %s, shadow on %s: the shadow slowed the live call", off.liveDuration, on.liveDuration)
-	}
-	if off.shadowRequests != 0 || on.shadowRequests != 1 {
-		t.Errorf("shadow requests: off %d, on %d, want 0 and exactly 1 (no retry after a 429)", off.shadowRequests, on.shadowRequests)
+	const margin = 500 * time.Millisecond
+	for i, wantShadow := range []int{0, 1} { // shadow off, shadow on
+		attempts, shadowRequests, duration := run(i == 1)
+		if attempts != retryingConfig.MaxAttempts {
+			t.Errorf("shadow on=%v: live attempts = %d, want %d and no more", i == 1, attempts, retryingConfig.MaxAttempts)
+		}
+		if duration < backoff || duration > backoff+margin {
+			t.Errorf("shadow on=%v: live duration = %s, want %s (the backoff) to %s", i == 1, duration, backoff, backoff+margin)
+		}
+		if shadowRequests != wantShadow {
+			t.Errorf("shadow on=%v: shadow requests = %d, want %d (no retry after a 429)", i == 1, shadowRequests, wantShadow)
+		}
 	}
 }
 

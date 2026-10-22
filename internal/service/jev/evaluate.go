@@ -116,11 +116,12 @@ func (c *Client) trader(ctx context.Context, label string, kind callKind, req Tr
 // invalid response body (systemone.ErrInvalidResponse), are never
 // retried: repeating the same request cannot fix them. A call that
 // ultimately fails returns the last error and the caller records no new
-// jev_decisions entry (継続失敗でnew entry停止). With trackHealth it also feeds
-// c.errorRate; the call that first pushes its rolling error rate to
+// jev_decisions entry (継続失敗でnew entry停止). Only a liveCall (Scout/Trader) also
+// feeds c.errorRate; the call that first pushes its rolling error rate to
 // c.errorRateThreshold notifies c.alerts (§5.2 "Jev APIエラー率上昇（しきい値超過）",
-// errorrate.go). Ask passes false: Luna/Sol/Opus questions are auxiliary and
-// must not trip the jev_api_down Kill Switch of the trading flow.
+// errorrate.go). Ask (auxiliaryCall) and the shadow's calls do not (only
+// kind == liveCall does): Luna/Sol/Opus questions are auxiliary and must not
+// trip the jev_api_down Kill Switch of the trading flow.
 //
 // kind selects the call's standing (callKind). A 429/529 any call except a
 // shadowCall receives is noted for LastThrottle; a shadowCall is never retried
