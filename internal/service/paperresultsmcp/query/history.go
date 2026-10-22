@@ -1,10 +1,12 @@
 package query
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
+	"slices"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
@@ -119,16 +121,17 @@ type RiskRejections struct {
 	RiskPassedCount  int            `json:"risk_passed_count"`
 	OtherRejectCount int            `json:"other_reject_count"`
 	Buckets          []RejectBucket `json:"buckets"`
-	// ProposalRiskPassedCount / ProposalRiskRejectedCount are how many of the
-	// signals above came from order proposals (issue #828) rather than the
-	// Policy Engine: the signals whose policy_version is
-	// orderproposal.PolicyVersion. They are already counted in
-	// risk_passed_count and in buckets; these two let a client tell the
-	// proposals' share. The proposals' own rejection reasons (an unknown
-	// symbol, a stale quote, ...) never reach trade_signals; they are in
-	// order_proposal_get.
+	// ProposalRiskPassedCount / ProposalRiskRejectedCount: how many of the
+	// signals above came from order proposals (issue #828; policy_version is
+	// orderproposal.PolicyVersion). A proposal's own rejection reasons never
+	// reach trade_signals; they are in order_proposal_get.
 	ProposalRiskPassedCount   int `json:"proposal_risk_passed_count"`
 	ProposalRiskRejectedCount int `json:"proposal_risk_rejected_count"`
+	// ProposalRejectedAfterRiskCount: proposal signals that passed the Risk
+	// Engine but did not become an order (issue #860; size_zero, max_trade_loss,
+	// ...). In neither risk_passed_count nor other_reject_count; the breakdown sums to it.
+	ProposalRejectedAfterRiskCount     int            `json:"proposal_rejected_after_risk_count"`
+	ProposalRejectedAfterRiskBreakdown []RejectBucket `json:"proposal_rejected_after_risk_breakdown"`
 	// OtherRejectBreakdown splits other_reject_count (the Policy Engine's own
 	// NONE reasons, not the Risk Engine's) by fixed reject_reason code, e.g.
 	// jev_none or meta_skip:no_active_model; unlisted prefixes are "other" and
@@ -140,63 +143,74 @@ type RiskRejections struct {
 // (internal/service/policy/engine.go).
 const riskPrefix = "risk_engine_rejected:"
 
-// Rejections counts the trade signals of r by Risk Engine rejection code.
+// Rejections counts the trade signals of r by Risk Engine rejection code. A
+// proposal's signal that passed Risk but did not become an order (risk_passed
+// = 0, post-risk prefix, issue #860) is only in proposal_rejected_after_risk_*.
 func Rejections(ctx context.Context, q Q, r Range) (RiskRejections, error) {
 	from, to := r.bounds()
-	out := RiskRejections{Buckets: []RejectBucket{}}
+	out := RiskRejections{}
 	err := q.QueryRowContext(ctx, `
 SELECT COALESCE(SUM(risk_passed <> 0), 0),
-	COALESCE(SUM(risk_passed = 0 AND (reject_reason IS NULL OR NOT reject_reason GLOB 'risk_engine_rejected:*')), 0),
+	COALESCE(SUM(risk_passed = 0 AND `+otherRejectReason+`), 0),
 	COALESCE(SUM(risk_passed <> 0 AND policy_version = ?), 0),
-	COALESCE(SUM(risk_passed = 0 AND policy_version = ?), 0)
+	COALESCE(SUM(risk_passed = 0 AND policy_version = ? AND reject_reason GLOB '`+riskPrefix+`*'), 0),
+	COALESCE(SUM(risk_passed = 0 AND reject_reason GLOB '`+orderproposal.PostRiskRejectPrefix+`*'), 0)
 FROM trade_signals WHERE timestamp >= ? AND timestamp < ?`,
 		orderproposal.PolicyVersion, orderproposal.PolicyVersion, from, to).
-		Scan(&out.RiskPassedCount, &out.OtherRejectCount, &out.ProposalRiskPassedCount, &out.ProposalRiskRejectedCount)
+		Scan(&out.RiskPassedCount, &out.OtherRejectCount, &out.ProposalRiskPassedCount, &out.ProposalRiskRejectedCount, &out.ProposalRejectedAfterRiskCount)
 	if err != nil {
 		return RiskRejections{}, fmt.Errorf("query: risk rejection totals: %w", err)
 	}
-
-	// The reason is the text between the prefix and the next ':' (or the
-	// end), trimmed; empty is "unknown". Grouping happens in SQL so detail
-	// text never leaves the database.
-	rows, err := q.QueryContext(ctx, `
-SELECT CASE WHEN token = '' THEN 'unknown' ELSE token END AS reason, COUNT(*)
-FROM (
-	SELECT trim(CASE WHEN instr(rest, ':') > 0 THEN substr(rest, 1, instr(rest, ':') - 1) ELSE rest END,
-		' '||char(9)||char(10)||char(13)) AS token
-	FROM (
-		SELECT substr(reject_reason, ?) AS rest
-		FROM trade_signals
-		WHERE timestamp >= ? AND timestamp < ? AND risk_passed = 0
-			AND reject_reason GLOB 'risk_engine_rejected:*'
-	)
-)
-GROUP BY reason`, len(riskPrefix)+1, from, to)
-	if err != nil {
-		return RiskRejections{}, fmt.Errorf("query: risk rejection buckets: %w", err)
+	if out.Buckets, err = reasonBuckets(ctx, q, from, to, riskPrefix); err != nil {
+		return RiskRejections{}, err
 	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var b RejectBucket
-		if err := rows.Scan(&b.Reason, &b.Count); err != nil {
-			return RiskRejections{}, fmt.Errorf("query: scan risk rejection bucket: %w", err)
-		}
-		out.Buckets = append(out.Buckets, b)
+	if out.ProposalRejectedAfterRiskBreakdown, err = reasonBuckets(ctx, q, from, to, orderproposal.PostRiskRejectPrefix); err != nil {
+		return RiskRejections{}, err
 	}
-	if err := rows.Err(); err != nil {
-		return RiskRejections{}, fmt.Errorf("query: risk rejection buckets: %w", err)
-	}
-	sort.Slice(out.Buckets, func(i, j int) bool {
-		if out.Buckets[i].Count != out.Buckets[j].Count {
-			return out.Buckets[i].Count > out.Buckets[j].Count
-		}
-		return out.Buckets[i].Reason < out.Buckets[j].Reason
-	})
 	if out.OtherRejectBreakdown, err = otherRejectBreakdown(ctx, q, from, to); err != nil {
 		return RiskRejections{}, err
 	}
 	return out, nil
 }
+
+// reasonBuckets counts the risk_passed = 0 signals whose reject_reason starts
+// with prefix by reason code (text up to the next ':', trimmed; empty is
+// "unknown"), most frequent first. Grouping is in SQL: detail text stays there.
+func reasonBuckets(ctx context.Context, q Q, from, to, prefix string) ([]RejectBucket, error) {
+	rows, err := q.QueryContext(ctx, `
+SELECT CASE WHEN token = '' THEN 'unknown' ELSE token END AS reason, COUNT(*) FROM (
+	SELECT trim(CASE WHEN instr(rest, ':') > 0 THEN substr(rest, 1, instr(rest, ':') - 1) ELSE rest END,
+		' '||char(9)||char(10)||char(13)) AS token
+	FROM (SELECT substr(reject_reason, ?) AS rest FROM trade_signals
+		WHERE timestamp >= ? AND timestamp < ? AND risk_passed = 0 AND reject_reason GLOB ?)
+) GROUP BY reason`, len(prefix)+1, from, to, prefix+"*")
+	if err != nil {
+		return nil, fmt.Errorf("query: rejection buckets of %q: %w", prefix, err)
+	}
+	defer func() { _ = rows.Close() }()
+	buckets := []RejectBucket{}
+	for rows.Next() {
+		var b RejectBucket
+		if err = rows.Scan(&b.Reason, &b.Count); err != nil {
+			return nil, fmt.Errorf("query: scan rejection bucket of %q: %w", prefix, err)
+		}
+		buckets = append(buckets, b)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("query: rejection buckets of %q: %w", prefix, err)
+	}
+	sortBuckets(buckets)
+	return buckets, nil
+}
+
+// sortBuckets orders buckets by count, descending, then by reason.
+func sortBuckets(b []RejectBucket) {
+	slices.SortFunc(b, func(x, y RejectBucket) int { return cmp.Or(y.Count-x.Count, strings.Compare(x.Reason, y.Reason)) })
+}
+
+// otherRejectReason: the Policy Engine's own rejection (neither Risk's nor post-risk).
+const otherRejectReason = `(reject_reason IS NULL OR NOT (reject_reason GLOB '` + riskPrefix + `*'
+	OR reject_reason GLOB '` + orderproposal.PostRiskRejectPrefix + `*'))`
 
 // KillSwitchEvent is one kill_switch_history row (API spec §3.7).
 // detail_json is not selected.

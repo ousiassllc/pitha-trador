@@ -43,7 +43,7 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 | 受け付けた内容 | `symbol`・`bucket`・`action`・`quantity`・`budget_jpy`・`order_type`・`limit_price`・`stop_loss_price`・`take_profit_price`・`exit_plan`・`max_loss_jpy`・`rationale`・`sources[]`（`title`・`url`・`retrieved_at`）。ないものは `null`。自由文は受け付けたときの文字数の上限内でそのまま返す |
 | 紐付け | `instrument_id`・`trade_signal_id`・`paper_order_id`・`position_id`（アプリが埋める。最初は `null`）、`cancel_requested_at`（`order_proposal_cancel` の依頼の時刻。なければ `null`） |
 | アプリの判断 | `applied_quantity`（アプリが決めた株数。提案とアプリの小さいほう）・`computed_max_loss_jpy`（アプリの最大損失の見積もり）・`effective_stop_loss_price`（その見積もりに使った損切り）。発注前は `null` |
-| `result.signal` | 紐づく `trade_signals` の `id`・`at`・`policy_version`・`risk_passed`・`reject_code`（Risk Engine の固定コード。通ったら `null`。理由の文は返さない）。なければ `null` |
+| `result.signal` | 紐づく `trade_signals` の `id`・`at`・`policy_version`・`risk_passed`・`rejected_after_risk`・`reject_code`（固定コード。理由の文は返さない。`rejected_after_risk` は、Risk Engine を通ったがアプリの後段（数量・最大損失・Execution）で拒否された案だけ `true`、Risk Engine 自身の拒否と注文まで進んだ案は `false`。`risk_passed = false` のとき: Risk Engine の拒否なら Risk の理由コード、Risk を通ったが注文にならなかった案（`proposal_rejected_after_risk: <コード>`、issue #860）なら `size_zero` などその理由コード。**`reject_code` だけでは見分けられないので `rejected_after_risk` で見る**。注文まで進んだ案は `risk_passed = true` で `null`）。なければ `null` |
 | `result.order` | 紐づく `paper_orders`（`open_long` は買いの注文、`close` は決済の注文）の `id`・`side`・`order_type`・`status`・`quantity`・`submitted_at`・`filled_at`・`filled_price`・`fees_jpy`。なければ `null` |
 | `result.position` | 紐づく `positions` の `id`・`status`（`open` / `closed`）・`quantity`・`entry_price`・`opened_at`・`closed_at`・`exit_price`（決済注文の約定価格）・`exit_reason`（`stop_loss` / `take_profit` / `proposal_close` など。§3.3）・`realized_pnl`（`positions.realized_pnl` をそのまま。新しい計算はしない）・`holding_minutes`（`opened_at`〜`closed_at` の分）・`fees_jpy`（エントリーと決済の手数料の和）。決済前は後ろの値が `null`。なければ `null` |
 | `result.max_loss` | `proposed_jpy`（あいりの `max_loss_jpy`）・`estimated_jpy`（アプリの見積もり）・`actual_loss_jpy`（決済済みなら `max(0, -realized_pnl)`。利益・引き分けは 0。決済前・ポジションなしは `null`）・`effective_stop_loss_price`・`applied_quantity` |
@@ -109,3 +109,4 @@ Paper の注文案を 1 件、**受け付けて記録するだけ**（issue #827
 | 1.3 | 2026-10-21 | §3.16 `order_type`: `close` は `MARKET` だけ（処理役は常に成行で決済するので、指値を受け付けて黙って成行にしない） | S-2-0 研磨 |
 | 1.4 | 2026-10-21 | §3.16 `action`: `close` は注文案で建てたポジションだけ決済でき、それ以外は処理のとき `position_not_from_proposal`（受け付け時には判定しない） | issue #859 |
 | 1.5 | 2026-10-21 | §3.16 `stop_loss_price`: 処理のとき予想約定価格以上なら `stop_loss_not_below_price` で拒否する（アプリの損切りに黙って置き換えない）。指値買いへのかかり方も書いた | issue #857 |
+| 1.6 | 2026-10-21 | §3.17 `result.signal` に `rejected_after_risk`（Risk を通ったが後段で拒否された案だけ true）を追加し、`reject_code` に後段拒否の理由コード（`proposal_rejected_after_risk`）も入ること、`risk_passed` は注文まで進んだ案だけ true であることを明記 | issue #860（親 #826） |

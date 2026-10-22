@@ -16,6 +16,14 @@ import "time"
 // Engine's by this value.
 const PolicyVersion = "mcp-proposal-v1"
 
+// PostRiskRejectPrefix heads trade_signals.reject_reason of a proposal's
+// signal that passed the Risk Engine but did not become an order (the
+// application's later checks refused it, or it went back to waiting or was
+// abandoned): "proposal_rejected_after_risk: <reason code>". Such a signal has
+// risk_passed = 0, so it is not a Risk pass; risk_rejections counts it apart
+// from both the Risk Engine's rejections and the Policy Engine's own (issue #860).
+const PostRiskRejectPrefix = "proposal_rejected_after_risk:"
+
 // Values of order_proposals.action.
 const (
 	ActionOpenLong = "open_long"
