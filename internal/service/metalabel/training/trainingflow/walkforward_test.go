@@ -304,7 +304,7 @@ func TestSplitWalkForward_InsufficientDataCarriesTheOOSCounts(t *testing.T) {
 	if !errors.As(err, &e) {
 		t.Fatalf("error = %v, want *InsufficientDataError", err)
 	}
-	if e.Code != repo.SkipTooFewRowsBeforeOOS || e.Usable != 0 || e.Required != 130 || e.OOSRows != 100 || e.RequiredOOSRows != 740 {
+	if e.Code != repo.SkipTooFewRowsBeforeOOS || e.Usable != 0 || e.Required != 130 || !intIs(e.OOSRows, 100) || !intIs(e.RequiredOOSRows, 740) {
 		t.Errorf("skip = %+v, want too_few_rows_before_oos 0 of 130 before, 100 of 740 in the window", e)
 	}
 }

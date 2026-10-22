@@ -116,10 +116,12 @@ erDiagram
 | reason_code | text | NOT NULL, CHECK (`<> ''`) | 固定コード: `too_few_rows_before_oos`（検証窓より前の使えるラベル付き判断がfit+較正の最小件数に足りない）/ `too_few_rows_after_purge`（purge/embargo後にfitか較正が最小件数に足りない）/ `training_data_unusable`（件数はあるがラベルが片側だけ等で学習できない）。理由文は保存しない |
 | usable_rows | integer | NOT NULL, CHECK (`>= 0`) | 使えるラベル付き判断の件数（`too_few_rows_before_oos`は検証窓より前の件数、`too_few_rows_after_purge`はpurge後にfit・較正の各最小件数まで数えた件数）。「必要130件中 x件」のx |
 | required_rows | integer | NOT NULL, CHECK (`>= 0`) | 学習に必要な件数＝fitと較正の最小件数の合計（既定130）。「必要130件中 x件」の130 |
-| oos_rows | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | 見送った時点でOOS窓にあった行数（issue #862。マイグレーション000044。この列ができる前の行は0。`dropped_incomplete`と違い、0が「記録なし」を兼ねる） |
-| required_oos_rows | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | OOS窓がさかのぼって集める行数＝採用基準の`MinOOSSamples`（案: 740） |
-| dropped_incomplete | integer | NULL可, CHECK (`IS NULL OR >= 0`) | 特徴量の欠けで`BuildRows`が落とした行数（ラベルはあるが8特徴量がそろわない）。**NULLは「記録なし」**（この列ができる前の見送り行。マイグレーション000044は既存行をUPDATEせずNULLのままにする）。000044以降に書く行は実際の値（落とした行が無ければ0）を必ず入れ、0を「記録なし」の意味には使わない |
-| label_v1_rows / label_v2_rows | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | lookback内のラベル付き判断の`label_version`別の件数。v1は終値だけのラベルでOFI・micropriceが無く学習に使えない。「履歴が無い」のか「あるのに使えない」のかを分ける |
+| oos_rows | integer | NULL可, CHECK (`IS NULL OR >= 0`) | 見送った時点でOOS窓にあった行数（issue #862。マイグレーション000044）。**NULLは「未記録」**（この列ができる前の行。既存行はUPDATEせずNULLのまま）。000044以降に書く行は実際の値（0件なら0）を入れる |
+| required_oos_rows | integer | NULL可, CHECK (`IS NULL OR >= 0`) | OOS窓がさかのぼって集める行数＝採用基準の`MinOOSSamples`（確定値: 740）。NULLは「未記録」 |
+| dropped_incomplete | integer | NULL可, CHECK (`IS NULL OR >= 0`) | 特徴量の欠けで`BuildRows`が落とした行数（ラベルはあるが8特徴量がそろわない）。NULLは「未記録」 |
+| label_v1_rows / label_v2_rows | integer | NULL可, CHECK (`IS NULL OR >= 0`) | lookback内のラベル付き判断の`label_version`別の件数。v1は終値だけのラベルでOFI・micropriceが無く学習に使えない。「履歴が無い」のか「あるのに使えない」のかを分ける。NULLは「未記録」（件数を読めなかった夜を含む） |
+
+上の5列（`oos_rows`・`required_oos_rows`・`dropped_incomplete`・`label_v1_rows`・`label_v2_rows`）は**すべてNULL可で、NULL＝未記録**。000044は既存行をUPDATEせずNULLのままにし、000044以降に書く行は実際の値（0を含む）を入れる。**読む側はNULLを0に読み替えない**（0は「数えて0件」の意味）。
 | created_at | text | NOT NULL | |
 
 インデックス: `(skipped_at)`
