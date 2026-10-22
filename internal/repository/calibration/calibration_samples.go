@@ -42,17 +42,23 @@ func horizonCondition(horizons []int, orTripleBarrier bool) (string, []any) {
 	return " AND " + in, args
 }
 
-// SetForeignTraderVersions makes ListLabeledSamples* leave out the outcomes of
-// the Trader decisions of the versions foreign returns (the prompt versions of
-// another cohort than the live one, issue #881), so the Calibration metrics
-// and the self-improvement analysis grade the live prompt's answers only.
-// CountLabeledSamplesInConfidenceRange is NOT scoped: Policy uses it to decide
-// whether a confidence bucket has enough samples to be trusted, which is a live
-// entry condition that this scoping does not change (docs/architecture/
-// jev-prompt-versions-in-data.md). nil (the default) leaves every row in. Call it
-// before the repository is shared.
+// SetForeignTraderVersions makes ListLabeledSamples* and
+// CountLabeledSamplesInConfidenceRange leave out the outcomes of the Trader
+// decisions of the versions foreign returns (the prompt versions of another
+// cohort than the live one, issue #881), so the Calibration metrics, the
+// self-improvement analysis and Policy's "does the confidence bucket hold enough
+// samples" check count the live prompt's answers only.
+// AllVersions is the one read that ignores it (Paper's fallback,
+// docs/architecture/jev-prompt-versions-in-data.md §4). nil (the default) leaves
+// every row in. Call it before the repository is shared.
 func (r *CalibrationRepository) SetForeignTraderVersions(foreign sqlutil.ForeignTraderVersions) {
 	r.foreign = foreign
+}
+
+// AllVersions returns a repository over the same database that counts the
+// samples of every prompt version, whatever SetForeignTraderVersions says.
+func (r *CalibrationRepository) AllVersions() *CalibrationRepository {
+	return &CalibrationRepository{db: r.db}
 }
 
 // labeledSamplesQueryFor is labeledSamplesQuery with the foreign versions'

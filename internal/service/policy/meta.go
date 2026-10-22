@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/decisionnote"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/metacohort"
 )
 
 // MetaVersion identifies the live entry rule that replaced the confidence
@@ -90,6 +93,8 @@ type metaEntry struct {
 	// unavailable is non-empty when the model or settings could not be
 	// loaded (or none is wired): the entry is skipped with this detail.
 	unavailable string
+	// cohort is the model's training cohort against the live version's (issue #881).
+	cohort metacohort.Verdict
 }
 
 // entryDetail is what decide learned besides the signal: the direction before
@@ -117,7 +122,20 @@ func (e *Engine) loadMeta(ctx context.Context) *metaEntry {
 		slog.Error("policy: load the active meta-label model; skipping the entry", "error", err)
 		return &metaEntry{unavailable: fmt.Sprintf("model: %v", err)}
 	}
-	return &metaEntry{model: model, cfg: cfg}
+	entry := &metaEntry{model: model, cfg: cfg}
+	if e.cohort != nil && model != nil {
+		entry.cohort = e.cohort.Check(ctx, model.Version, model.TrainedCohort)
+		entry.unavailable = entry.cohort.Unavailable
+	}
+	return entry
+}
+
+// WithMetaModelCohort makes Evaluate compare the prompt cohort the active model
+// was trained on with the live version's (metacohort): on a mismatch Paper keeps
+// the model and the decision says so (decisionnote.MetaModelCohortMismatch, and
+// a warning); any other mode does not use it (not_calibrated).
+func WithMetaModelCohort(mode metalabelsettings.Mode, live metacohort.Source) Option {
+	return func(e *Engine) { e.cohort = &metacohort.Checker{Mode: mode, Live: live} }
 }
 
 // metaFeatures assembles the model's raw inputs from the evaluation's input:
@@ -213,4 +231,14 @@ func derefString(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// withNotes is reason with the notes of this decision (decisionnote.For).
+func (e *Engine) withNotes(in Input, reason *string, m *metaEntry, bootstrap bool, d entryDetail) *string {
+	mismatch := ""
+	if m != nil {
+		mismatch = m.cohort.Mismatch
+	}
+	notes := decisionnote.For(in.InstrumentID, in.Symbol, bootstrap, in.Calibrated, in.CalibrationDetail, mismatch, d.verdict != nil)
+	return decisionnote.Append(reason, maxRejectReasonBytes, notes...)
 }

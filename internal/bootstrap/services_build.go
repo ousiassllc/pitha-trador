@@ -179,7 +179,7 @@ func (s *Services) buildPolicyAndBacktest(state *State, executionConfig executio
 	s.Calibration = calibration.NewService(s.Outcomes, decisiontrade.New(state.DB).WithForeignTraderVersions(jev.LiveCohortScope(s.Settings)))
 	s.Backtest = backtestsource.New(s.Instruments, s.Snapshots, s.Decisions, thresholds, runtimePolicy, executionConfig, backtestsource.NewReplay(state.DB, s.Settings, state.Risk.Paper, s.Positions))
 	return policy.NewHandler(s.Trader, s.Snapshots, s.Policy, paperexec.Executor{Engine: s.Execution, Risk: s.Risk},
-		policy.WithCalibration(s.Calibration), policy.WithTDnetScorer(s.News), policy.WithRegimeStore(s.Instruments, s.Snapshots, s.Settings, state.Strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge)),
+		policy.WithCalibration(s.Calibration), metalabeljob.CalibrationScope(state.DB, s.Outcomes, s.Settings), policy.WithTDnetScorer(s.News), policy.WithRegimeStore(s.Instruments, s.Snapshots, s.Settings, state.Strategy.Scan.SnapshotMaxAge(domain.MarketContextMaxAge)),
 		policy.WithSnapshotMaxAge(state.Strategy.Scan.SnapshotMaxAge(s.rankingWatchMaxAge)))
 }
 

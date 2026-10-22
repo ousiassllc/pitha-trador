@@ -64,6 +64,13 @@ type Adoption struct {
 	Criteria   Criteria    `json:"criteria"`
 	Comparison *Comparison `json:"comparison,omitempty"`
 	Gate       *Gate       `json:"gate,omitempty"`
+	// TrainedCohort is the Trader prompt cohort (internal/service/jev cohort.go,
+	// e.g. "entry-quality-v3") the model's training rows came from: the live
+	// version's cohort when it was trained (issue #881). Stored here rather than
+	// in a column so no migration is needed. Empty for a model stored before it
+	// was recorded: it counts as the pre-promotion cohort
+	// (jev.LegacyModelCohort).
+	TrainedCohort string `json:"trained_cohort,omitempty"`
 }
 
 // Forward is metalabel_models.forward_json: the forward (holdout) evaluation of

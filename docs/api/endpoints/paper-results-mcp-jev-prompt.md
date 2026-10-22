@@ -67,7 +67,7 @@
 4. 版の検査（登録されていない版・すでにライブの版 → `invalid_value`。`error.data.detail` に理由）
 5. 保存
 
-**昇格のあとの集計・学習**（issue #881）: 昇格すると、RAG の事例・Calibration の指標と PnL・メタモデルの学習・`jev_calibration` は、新しいライブの版と同じコホートの判断だけを使い、貯め直す（旧版の行は消えず、戻せば再び使われる）。本番での昇格は、この扱いを含むビルドが本番で動くまで人が見送る。Policy の信頼度帯の標本数の確認と採用中のメタモデルは昇格で変わらない（`architecture/jev-prompt-versions-in-data.md` §4）。
+**昇格のあとの集計・学習**（issue #881）: 昇格すると、RAG の事例・Calibration の指標と PnL・メタモデルの学習・`jev_calibration` は、新しいライブの版と同じコホートの判断だけを使い、貯め直す（旧版の行は消えず、戻せば再び使われる）。本番での昇格は、この扱いを含むビルドが本番で動くまで人が見送る。Policy の信頼度帯の標本数の確認も同じコホートで数え（新しい版の標本が足りない間、Paper だけ全版の合計で判断してよく、判断記録 `trade_signals.reject_reason` に `calibration_all_versions` を残す。Live は戻さず `not_calibrated`）、採用中のメタモデルは学習に使ったコホートがライブの版と違えば、Paper は警告して使い（`meta_model_cohort_mismatch`）、Live は使わない（`not_calibrated`）（`architecture/jev-prompt-versions-in-data.md` §4）。
 
 応答: `promotion_id`・`from_version`・`to_version`・`at`。監査の「誰が」は `mcp` と接続元ホスト（IP だけ。ヘッダ・API キーは残さない）。このツールは**自動では呼ばれない**。自己改善ループ（Sol/Opus）にはこの経路が無い（`domain.ValidatePolicyChanges` は `policy.*` のキーだけを受け付け、Jev の版・シャドーのキーは拒否する。テストが固定する）。Settings 画面にも同じ操作がある（`POST /settings/jev-prompt/promote`。セッション Cookie と CSRF が必要）。
 
@@ -86,4 +86,4 @@
 | 1.0 | 2026-10-22 | 新規作成。`jev_shadow_compare` / `jev_shadow_cost` / `jev_prompt_promote`（元の文書の版 1.13 で追加） | issue #872 |
 | 1.1 | 2026-10-22 | `jev_shadow_compare` に `comparable` / `excluded_disagreement` / `outcome_note` を追加し、方向がライブと食い違う行を採点しない形に改めた（`future_return` がライブのバリアで止まる偏りを避けるため）。`jev_shadow_cost` の `daily_cap_approved` を `cap_source` に置き換え、失敗回数の上限（`failure_cap` ほか）と `daily_failure_cap` の止まった記録を追加 | issue #872 レビュー対応 |
 | 1.2 | 2026-10-22 | 費用の上限 0.10 USD・失敗回数の上限 20 回・単価 0.042 USD/1M 入力トークン・同時実行 4 をユーザー決定の確定値にし、`cap_source` の値を `default` / `stored`、`failure_cap_source` を `fixed` に改めた（`proposed_unapproved` を廃止）。`usage` が無い応答を推定の入力トークン数で数え、`jev_shadow_cost` に `estimated_calls` / `estimated_cost_usd` を追加 | issue #872 ユーザー決定 |
-| 1.3 | 2026-10-22 | §3.29.3 に、昇格のあとの集計・学習の扱い（ライブの版と同じコホートだけを使う）と、本番での昇格を見送る範囲を追記 | issue #881 |
+| 1.3 | 2026-10-22 | §3.29.3 に、昇格のあとの集計・学習の扱い（ライブの版と同じコホートだけを使う）と、本番での昇格を見送る範囲を追記。Policyの標本数とメタモデルの扱いを決定済みに | issue #881 |

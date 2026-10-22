@@ -142,8 +142,9 @@ func TestCalibrationRepository_ListCurrentLabeledSamples_IncludesTripleBarrierOf
 }
 
 // Issue #881: with a scope, the samples of the foreign prompt versions are left
-// out of ListLabeledSamples*, the count Policy gates on is not scoped, and a
-// failed scope is an error rather than a mixed result.
+// out of ListLabeledSamples* and of the count Policy gates on (the all-versions
+// count, AllVersions(), Paper's fallback, is the one read that keeps them), and a failed scope
+// is an error rather than a mixed result.
 func TestCalibrationRepository_ListLabeledSamples_LeavesOutForeignVersions(t *testing.T) {
 	repo, decisions, instID := newCalibrationFixtures(t)
 	ctx := context.Background()
@@ -198,12 +199,22 @@ func TestCalibrationRepository_ListLabeledSamples_LeavesOutForeignVersions(t *te
 	if got, err := repo.ListLabeledSamples(ctx, []int{5}); err != nil || !reflect.DeepEqual(futureReturns(got), []float64{2}) {
 		t.Fatalf("after a promotion = %v, %v, want the trader-v4 sample only", futureReturns(got), err)
 	}
-	// Policy's bucket-size gate is deliberately not scoped.
-	if n, err := repo.CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err != nil || n != 2 {
-		t.Fatalf("CountLabeledSamplesInConfidenceRange = %d, %v, want 2 (not scoped)", n, err)
+	// Policy's bucket-size gate counts the live version's cohort (trader-v4) only;
+	// the all-versions count is Paper's fallback.
+	if n, err := repo.CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err != nil || n != 1 {
+		t.Fatalf("CountLabeledSamplesInConfidenceRange = %d, %v, want 1 (trader-v4 only)", n, err)
+	}
+	if n, err := repo.AllVersions().CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err != nil || n != 2 {
+		t.Fatalf("AllVersions().CountLabeledSamplesInConfidenceRange = %d, %v, want 2", n, err)
 	}
 
 	repo.SetForeignTraderVersions(func(context.Context) ([]string, error) { return nil, errors.New("settings unreadable") })
+	if n, err := repo.CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err == nil {
+		t.Fatalf("CountLabeledSamplesInConfidenceRange = %d, nil with an unreadable scope, want an error", n)
+	}
+	if n, err := repo.AllVersions().CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err != nil || n != 2 {
+		t.Fatalf("AllVersions().CountLabeledSamplesInConfidenceRange = %d, %v, want 2 (the scope is not read)", n, err)
+	}
 	if got, err := repo.ListLabeledSamples(ctx, []int{5}); err == nil {
 		t.Fatalf("ListLabeledSamples = %v, nil with an unreadable scope, want an error", got)
 	}
