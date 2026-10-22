@@ -38,7 +38,7 @@ func TestMarketDataHandler_Status(t *testing.T) {
 		{
 			name:   "bad password",
 			source: fakeTokenStatus{Issue: marketdata.TokenIssueBadPassword, Code: 4001013},
-			want:   []string{`data-testid="marketdata-banner"`, `data-issue="bad_password"`, "KABU_API_PASSWORD", `href="/settings"`},
+			want:   []string{`data-testid="marketdata-banner"`, `data-issue="bad_password"`, "KABU_API_PASSWORD", `href="/settings/broker"`},
 		},
 		{
 			name:   "kabu station unreachable",
@@ -48,7 +48,7 @@ func TestMarketDataHandler_Status(t *testing.T) {
 		{
 			name:    "not logged in right after the first failure is the ordinary banner",
 			source:  fakeTokenStatus{Issue: marketdata.TokenIssueNotLoggedIn, Code: 4001007, Failures: 1, Since: time.Now()},
-			want:    []string{`data-issue="not_logged_in"`, "ログアウト", "自動的に再試行します。", `href="/settings"`},
+			want:    []string{`data-issue="not_logged_in"`, "ログアウト", "自動的に再試行します。", `href="/settings/broker"`},
 			notWant: []string{"data-persistent", "お待ちください"},
 		},
 		{
@@ -60,7 +60,7 @@ func TestMarketDataHandler_Status(t *testing.T) {
 				"ログアウト", "再ログインしてから、そのままお待ちください", "二重起動", "/token",
 			},
 			// issue #305: login-only guidance, never steering to the API password / 「APIを利用する」.
-			notWant: []string{"KABU_API_PASSWORD", "APIシステム設定", "起動していること", `href="/settings"`},
+			notWant: []string{"KABU_API_PASSWORD", "APIシステム設定", "起動していること", `href="/settings/broker"`},
 		},
 		{
 			name:    "persistent escalation is only for not logged in",
@@ -113,7 +113,7 @@ func TestMarketDataHandler_Status_BrokerNotices(t *testing.T) {
 		{
 			name:    "version retiring while the session is fine shows the amber notice",
 			status:  broker.SessionStatus{VersionRetiring: true},
-			want:    []string{`data-testid="marketdata-notice"`, "リリース予定日", `href="/settings"`},
+			want:    []string{`data-testid="marketdata-notice"`, "リリース予定日", `href="/settings/broker"`},
 			notWant: []string{`data-testid="marketdata-banner"`},
 		},
 		{

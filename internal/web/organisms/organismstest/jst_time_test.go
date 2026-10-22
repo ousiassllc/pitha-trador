@@ -46,7 +46,7 @@ func TestSSRTimesRenderInJST(t *testing.T) {
 		{
 			name: "scanner caption",
 			html: renderScannerTableAt(t, []domain.Candidate{{Symbol: "7203", Price: 1}}, utc),
-			want: []string{"Scanner Dashboard — as of 2026-10-05 09:30:00 JST</caption>"},
+			want: []string{"候補銘柄 — as of 2026-10-05 09:30:00 JST</caption>"},
 		},
 		{
 			name: "position opened and closed",

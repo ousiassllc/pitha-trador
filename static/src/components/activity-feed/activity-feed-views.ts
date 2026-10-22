@@ -12,10 +12,10 @@ export function renderQueueStatus(queues: QueueStatus[]) {
       <table class="w-full border-collapse text-left text-sm" aria-label="キュー状況">
         <thead>
           <tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-            <th scope="col" class="px-3 py-2">Queue</th>
-            <th scope="col" class="px-3 py-2">Pending</th>
-            <th scope="col" class="px-3 py-2">Running</th>
-            <th scope="col" class="px-3 py-2">Failed (recent)</th>
+            <th scope="col" class="px-3 py-2">キュー</th>
+            <th scope="col" class="px-3 py-2">待機中</th>
+            <th scope="col" class="px-3 py-2">実行中</th>
+            <th scope="col" class="px-3 py-2">失敗（直近）</th>
           </tr>
         </thead>
         <tbody>
