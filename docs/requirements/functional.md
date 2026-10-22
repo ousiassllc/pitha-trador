@@ -122,6 +122,8 @@ stateDiagram-v2
     KillSwitchConfirm --> ScannerDashboard: 確定/キャンセル
 ```
 
+メインメニュー（issue #895）は「ホーム／候補銘柄／AIの注文提案／成績／（区切り）／設定」。画面名は日本語で、本節の英語見出しは画面の内部名（画面上の表示は 5.1 候補銘柄・5.3 成績（実績・バックテスト）・5.4 予測の精度・5.5 稼働ログ）。候補銘柄は「候補」「監視リスト」、成績は「実績」「バックテスト」「予測の精度」のタブを持ち、稼働ログは設定 ＞ システムから開く。画面とメニューの対応は `docs/components/screens.md`、受け入れ基準は FR-ADMIN-1〜5。
+
 ### 5.1 Scanner Dashboard
 
 表示項目: Symbol, Price, 1m/5m Return（パーセント表示。Feature Engineの小数比を×100）, Volume Ratio, VWAP距離, Spread, Jev Direction, Jev Confidence, Entry Quality, Current Position。Jev Direction/Confidence/Entry Qualityは当該銘柄の最新Jev Trader判断（`decision_type=trader`の`timestamp`・`id`最大の1行。件数窓・経過時間の上限は設けず、Scout行が続いても古くても採用し、Symbol Detailの Jev判定パネル・`GET /api/v1/symbols/{symbol}`・`/ws/symbols/{symbol}`・Exit評価と同一定義。古い判断の扱いに上限期間は定めていない）、Current Positionは保有中ポジションの符号付き数量（LONG正/SHORT負。保有なしは空）で、候補更新サイクルごとに`internal/bootstrap/candidates`が設定する（Trader判断が未生成の銘柄は空＝判定待ち）。候補銘柄更新周期（15〜30秒）に応じてライブ更新する。
