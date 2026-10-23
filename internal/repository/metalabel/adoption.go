@@ -68,8 +68,8 @@ type Adoption struct {
 	// e.g. "entry-quality-v3") the model's training rows came from: the live
 	// version's cohort when it was trained (issue #881). Stored here rather than
 	// in a column so no migration is needed. Empty for a model stored before it
-	// was recorded: it counts as the pre-promotion cohort
-	// (jev.LegacyModelCohort).
+	// was recorded: its training version is unknown, so Policy treats it as not
+	// matching the live version (internal/service/policy/metacohort).
 	TrainedCohort string `json:"trained_cohort,omitempty"`
 }
 

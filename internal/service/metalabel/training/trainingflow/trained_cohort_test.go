@@ -29,7 +29,7 @@ func TestTrain_RecordsTheCohortOfTheLiveVersionOnTheModel(t *testing.T) {
 	}
 }
 
-// Without the option nothing is recorded (a model of the legacy cohort).
+// Without the option nothing is recorded (a model with no recorded cohort).
 func TestTrain_WithoutACohortSourceRecordsNone(t *testing.T) {
 	got, err := newTrainer(&fakeSource{rows: edgeRows()}, &memStore{}, settingsOf(nil)).Train(context.Background())
 	if err != nil || got.Adoption.TrainedCohort != "" {
