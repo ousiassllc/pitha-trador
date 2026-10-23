@@ -47,7 +47,7 @@
 | `candidate_version` | 候補の版（`jev.shadow.candidate_version`）。無ければ `null` |
 | `live_version` | ライブの版（`jev.trader_prompt_version`。保存が無い・壊れている・このビルドに無い版のときはビルドの既定 `trader-v3`） |
 | `daily_cap_usd` / `cap_is_default` / `cap_source` | 1 日あたりの費用の上限（JST の日）。`cap_source` は `default`（保存値が無く、効いているのはビルドの既定値 0.10 USD。`cap_is_default` が `true`）か `stored`（Settings 画面で保存された値）。どちらも確定した運用の値で、Settings で上げ下げできる |
-| `failure_cap` / `failure_cap_source` / `failures_today` | 1 日（JST）に許す失敗した呼び出し（応答が不正・保存の失敗・タイムアウトなど。課金されても費用の合計に入らない）の回数の上限と、今日の回数。`failure_cap_source` は常に `fixed`（確定した定数 20 回。Settings では変えられない） |
+| `failure_cap` / `failure_cap_source` / `failures_today` | 1 日（JST）に許す失敗した呼び出し（応答が不正・保存の失敗・タイムアウトなど。課金されても費用の合計に入らない。終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えない。ベンダーが課金した可能性はあるが保存されないので費用にも入らず、1 回の終了で最大 4 回）の回数の上限と、今日の回数。`failure_cap_source` は常に `fixed`（確定した定数 20 回。Settings では変えられない） |
 | `today` | JST の今日の `date`・`calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd`（後ろの 2 つは「うち見積り」＝応答に `usage` が無く、入力トークン数をリクエストの大きさから推定して数えた呼び出しの件数と費用。`calls` / `request_cost_usd` に含まれる） |
 | `total` | 累計の `calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd` |
 | `daily[]` | JST の日ごとの費用（`date`・`calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd`）。新しい順、最大 31 日 |
@@ -87,3 +87,4 @@
 | 1.2 | 2026-10-22 | 費用の上限 0.10 USD・失敗回数の上限 20 回・単価 0.042 USD/1M 入力トークン・同時実行 4 をユーザー決定の確定値にし、`cap_source` の値を `default` / `stored`、`failure_cap_source` を `fixed` に改めた（`proposed_unapproved` を廃止）。`usage` が無い応答を推定の入力トークン数で数え、`jev_shadow_cost` に `estimated_calls` / `estimated_cost_usd` を追加 | issue #872 ユーザー決定 |
 | 1.3 | 2026-10-22 | `jev_shadow_cost` に `throttle_active` / `last_throttle` / `throttles_today` / `throttle_cooldown_seconds` / `min_call_interval_seconds` を追加（Jev API の 429/529 によるシャドーの停止と理由。ツール数は変わらない） | issue #883 |
 | 1.4 | 2026-10-23 | `jev_shadow_cost` の `min_call_interval_seconds` の説明に、間隔で捨てた比較はどこにも記録されず `jev_shadow_compare` の標本を間引くこと、429/529（シャドー自身・ライブの Scout/Trader/Ask）で 15 分（`throttle_cooldown_seconds`＝900）止まり再試行せず、失敗回数の上限・`halt_*` に数えないこと、理由は `throttle_active` / `last_throttle` / `throttles_today` に出ることを明記（実装は変えない） | issue #883 |
+| 1.5 | 2026-10-22 | `jev_shadow_cost` の失敗回数の説明に、終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えないことを追記 | issue #882 |
