@@ -24,7 +24,7 @@ func (c *Client) Configured() bool {
 // news or self-improvement question must never trip the jev_api_down Kill
 // Switch of the trading flow. label names the call in the log line.
 func (c *Client) Ask(ctx context.Context, label string, state any, questions map[string]systemone.Question) (systemone.Result, error) {
-	result, _, err := c.evaluate(ctx, label, false, systemone.Request{
+	result, _, err := c.evaluate(ctx, label, auxiliaryCall, systemone.Request{
 		State:     state,
 		Model:     c.model,
 		Questions: questions,

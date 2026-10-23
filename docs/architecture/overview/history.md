@@ -129,3 +129,4 @@
 | 1.122 | 2026-10-20 | `internal/service/healthalert`（立会中の市況データ停止の検知）と`GET /system/health-alerts`バナーを構成に追加 | issue #802 |
 | 1.123 | 2026-10-21 | §3の`service/metalabel/training`の説明に、OOS窓を採用基準の件数・取引日数からさかのぼって決める形（上限`OOSMaxWindow`とLLM cutoff下限は不変）と、見送りの内訳（`dropped_incomplete`・label_version別の行数・学習側/OOS側の行数と必要件数）のログ・`metalabel_retrain_skips`への記録を追記。数字は確定（根拠はFR-META-7） | issue #862 |
 | 1.124 | 2026-10-22 | §6（`integrations.md`）に、Traderの版のハッシュ固定・昇格・Paperだけのシャドー（別表`jev_shadow_decisions`。取引・RAG・Calibrationに使わない）を追記。詳細は`paper-results-mcp-jev-prompt.md` | issue #872 |
+| 1.125 | 2026-10-22 | §6（`integrations.md`）に、Jev APIのレート制限（キー＝組織単位の秒あたりリクエスト数・トークン数。具体値は公式に無くコンソールで確認）・シャドーが429を増やすかの確認方法・本番でシャドーを有効にしない旨を追記。シャドーは429/529を待たず・再試行せずに15分止まり、ライブが受けた429/529でも止まり、呼び出しは2秒に1回まで | issue #883 |

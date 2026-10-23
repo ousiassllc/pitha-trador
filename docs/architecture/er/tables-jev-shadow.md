@@ -77,10 +77,13 @@ erDiagram
 | `jev.shadow.candidate_version` | JSON 文字列 | シャドーが動かす候補の版。無ければ何も呼ばない |
 | `jev.shadow.daily_cost_cap_usd` | JSON 数値 | 1 日（JST）あたりの費用の上限。無ければ `jevshadowsettings.DefaultDailyCostCapUSD`（0.10 USD。確定した既定値で、Settings で上げ下げできる） |
 | `jev.shadow.halt` | JSON オブジェクト | 上限で止めた日の記録（日・固定コード `daily_cost_cap` / `daily_failure_cap`・使った額・上限・失敗回数・時刻）。翌日（JST）に再開する |
-| `jev.shadow.failures` | JSON オブジェクト | その日（JST）の失敗した呼び出しの回数（`{"date","count"}`）。`jevshadowsettings.DailyFailureCap`（20 回。確定。定数）に達するとその日のシャドーを止める。費用の合計は保存に成功した呼び出しだけを足すため、課金されても保存されない呼び出しの抑えにする |
+| `jev.shadow.failures` | JSON オブジェクト | その日（JST）の失敗した呼び出しの回数（`{"date","count"}`）。`jevshadowsettings.DailyFailureCap`（20 回。確定。定数）に達するとその日のシャドーを止める。費用の合計は保存に成功した呼び出しだけを足すため、課金されても保存されない呼び出しの抑えにする。終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えない（ベンダーが課金した可能性はあるが、保存の前に取り消されれば費用にも入らない。保存がすでにコミットしていれば行と費用はある。1 回の終了で最大 4 回）。タイムアウトは数える |
+| `jev.shadow.throttle` | JSON オブジェクト | Jev API の 429/529 でシャドーが止まった最後の記録（`{"date","count","status","reason","source","at","until"}`。`count` はその日（JST）の停止回数、`reason` は `api_rate_limited` / `api_overloaded`、`source` は `shadow`（シャドー自身の呼び出し）/ `live`（ライブの呼び出し）、`until` は再開の時刻＝`at` の 15 分後）。シャドーは `until` までは何も送らない。失敗回数・`jev.shadow.halt` には数えない。issue #883 |
 
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
 | 1.0 | 2026-10-22 | 新規作成。`jev_shadow_decisions` / `jev_prompt_promotions`（`000047`）と、`question_version` を正式な版とする決定、関連する `runtime_settings` のキー | issue #872 |
+| 1.1 | 2026-10-22 | `runtime_settings` のキー `jev.shadow.throttle`（Jev API の 429/529 でシャドーが止まった記録）を追加。マイグレーションは不要（`runtime_settings` の行） | issue #883 |
+| 1.2 | 2026-10-22 | `jev.shadow.failures`: 終了時の取り消しで途中になった呼び出しは数えないことを追記 | issue #882 |

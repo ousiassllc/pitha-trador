@@ -50,11 +50,15 @@ const (
 	// KeyFailures counts the day's failed shadow calls (a JSON object,
 	// Failures; halt.go).
 	KeyFailures = "jev.shadow.failures"
+	// KeyThrottle records the last time the Jev API answered with 429 or 529
+	// and the shadow stopped sending because of it (a JSON object, Throttle;
+	// throttle.go).
+	KeyThrottle = "jev.shadow.throttle"
 )
 
 // Keys returns every key of this package.
 func Keys() []string {
-	return []string{KeyLiveVersion, KeyEnabled, KeyCandidateVersion, KeyDailyCostCapUSD, KeyHalt, KeyFailures}
+	return []string{KeyLiveVersion, KeyEnabled, KeyCandidateVersion, KeyDailyCostCapUSD, KeyHalt, KeyFailures, KeyThrottle}
 }
 
 // DefaultEnabled is the shadow switch while nothing is stored.
@@ -195,6 +199,8 @@ type Settings struct {
 	Halt *Halt
 	// Failures is the stored failed-call counter, nil for none.
 	Failures *Failures
+	// Throttle is the recorded 429/529 stop, nil for none.
+	Throttle *Throttle
 }
 
 // Load reads every key. A stored row that no longer parses (the application
@@ -244,6 +250,13 @@ func Load(ctx context.Context, store Store) Settings {
 			s.Failures = &f
 		} else {
 			slog.Warn("jevshadowsettings: ignoring the stored failure counter", "error", err)
+		}
+	}
+	if raw, ok := read(ctx, store, KeyThrottle); ok {
+		if t, err := ParseThrottle(raw); err == nil {
+			s.Throttle = &t
+		} else {
+			slog.Warn("jevshadowsettings: ignoring the stored throttle record", "error", err)
 		}
 	}
 	return s
