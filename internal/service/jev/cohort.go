@@ -95,14 +95,6 @@ func LiveCohortScope(store jevshadowsettings.Store) sqlutil.ForeignTraderVersion
 	return func(ctx context.Context) ([]string, error) { return ForeignVersionsOfLive(ctx, store) }
 }
 
-// LegacyModelCohort is the cohort a meta-model with no recorded training cohort
-// counts as trained on: every model stored before the cohort was recorded
-// (issue #881) learned from rows of the cohort that was live then, the
-// pre-promotion one (trader-v1..v3). It matches the live version while that
-// cohort is live, so nothing changes today, and mismatches once the live version
-// is promoted to another cohort (trader-v4).
-const LegacyModelCohort = cohortEntryQualityV3
-
 // LiveCohort is the live Trader version (ResolveLiveVersion) and its cohort. A
 // failed read of the live version is an error, never a default cohort. Every
 // version ResolveLiveVersion returns is registered and so has a cohort

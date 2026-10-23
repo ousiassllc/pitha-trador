@@ -78,7 +78,7 @@ erDiagram
 | oos_days | integer | NOT NULL, DEFAULT 0, CHECK (`>= 0`) | OOS標本が属する取引日（JST）の数＝ブートストラップの再抽出単位（同日クラスタ）の数 |
 | oos_ev_ci_low_bps / oos_ev_ci_high_bps | numeric | NULL可 | 1 takeあたりEVの信頼区間（下側・上側、bps）。同日・同銘柄の相関を考慮したクラスタ・ブートストラップ。未定義（営業日不足等）ならNULL |
 | oos_auc_ci_low / oos_auc_ci_high | numeric | NULL可 | OOS AUCの信頼区間（下側・上側）。未定義ならNULL |
-| adoption_json | text | NOT NULL, DEFAULT `{}` | 採用判定の根拠: `criteria`（判定に使った基準値。最小OOS件数・take件数・営業日数・信頼区間の水準・乱数シード）、`comparison`（同一OOSでの現行モデルとの比較。件数・各モデルの平均純リターン・差と区間・比較不能の理由）、`gate`（変更頻度制限で採用を止めた理由・詳細・解除時刻）。`trained_cohort`（issue #881。モデルが学習に使った行のTraderのプロンプトのコホート。例`entry-quality-v3`。学習がライブの版のコホートを記録する。**マイグレーションなしでこの列に持つ**。記録のない既存のモデルは昇格前のコホート`entry-quality-v3`とみなし、Policyがライブの版のコホートと比べる。FR-POLICY-6）。値は集計指標と判定メタデータのみで、板・気配などの市場データは含まない |
+| adoption_json | text | NOT NULL, DEFAULT `{}` | 採用判定の根拠: `criteria`（判定に使った基準値。最小OOS件数・take件数・営業日数・信頼区間の水準・乱数シード）、`comparison`（同一OOSでの現行モデルとの比較。件数・各モデルの平均純リターン・差と区間・比較不能の理由）、`gate`（変更頻度制限で採用を止めた理由・詳細・解除時刻）。`trained_cohort`（issue #881。モデルが学習に使った行のTraderのプロンプトのコホート。例`entry-quality-v3`。学習がライブの版のコホートを記録する。**マイグレーションなしでこの列に持つ**。Policyがライブの版のコホートと比べる。記録のない既存のモデルは「版が一致しない」ものとして扱う（ライブが`trader-v3`でも。Liveは使わず、Paperは警告して使う）。FR-POLICY-6）。値は集計指標と判定メタデータのみで、板・気配などの市場データは含まない |
 | forward_json | text | NOT NULL, DEFAULT `{}` | 採用後の前向き評価（学習後の判断だけでの件数・take数・営業日数・EVと区間・`degraded`）。夜間再学習が現行の有効モデルについて更新する。採用判断・`status`は変えない |
 | created_at | text | NOT NULL | |
 
