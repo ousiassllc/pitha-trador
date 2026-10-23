@@ -15,13 +15,18 @@ func itemClass(level AttentionLevel) string {
 // AttentionSection is the 要対応 section (issue #896 §5.2): every condition the
 // header banners used to stack on each page, as cards with where to look. The
 // header shows only 「要対応 N 件」 on the other pages and links here. The body
-// is re-fetched every 30 s.
+// is re-fetched every 30 s and when Settings or the update check change what
+// it lists; it is a polite live region (as the banners were, issue #626) so a
+// new alert is announced, and an unchanged answer is not swapped in.
 templ AttentionSection(v AttentionView) {
 	<section class="mt-6" data-testid="home-attention-section" aria-labelledby="home-attention-title">
 		<h2 id="home-attention-title" class="text-lg font-semibold text-slate-900">要対応</h2>
 		<div
 			id="home-attention"
 			class="mt-2"
+			role="status"
+			aria-live="polite"
+			data-live-banner
 			hx-get={ AttentionURL }
 			hx-headers={ refreshHeaders }
 			hx-trigger="every 30s, secretsStatusChanged from:body, updateStatusChanged from:body"

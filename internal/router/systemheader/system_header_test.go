@@ -159,7 +159,9 @@ func TestNew_EveryNsPollingElementsAreMarkedBackground(t *testing.T) {
 func TestNew_EveryPageRefreshesHeaderStatusFromBodyEvents(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(router.WithSystemEngine(system.StaticSystemEngine{State_: domain.SystemStateRunning}))
-	for _, path := range []string{"/", "/scanner", "/performance", "/order-proposals", "/settings", "/calibration"} {
+	// Every full page that renders the shared Header: Home, the parameterised
+	// symbol page and the secondary screens included.
+	for _, path := range []string{"/", "/scanner", "/watchlist", "/performance", "/order-proposals", "/calibration", "/activity", "/symbols/7203", "/settings", "/settings/maintenance"} {
 		t.Run(path, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))

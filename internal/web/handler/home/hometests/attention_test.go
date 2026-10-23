@@ -1,6 +1,7 @@
 package hometests
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -138,5 +139,37 @@ func TestAttention_CodeStandsInWhenItsBannerSourceFailed(t *testing.T) {
 	f.source.health.AttentionCodes = []string{"daily_guard_halted"}
 	if got := keys(f.mustGet(t, "/home/attention")); !slices.Equal(got, []string{"daily_guard_halted"}) {
 		t.Errorf("items = %v", got)
+	}
+}
+
+// 要対応 replaces the header banners, which were polled live regions (issue
+// #626): a new alert must be announced without a role of its own in the
+// fragment, an unchanged answer must be skipped, the poll is a background
+// request, and what Settings' Save/Delete or the manual update check change
+// is shown at once, not after the next poll.
+func TestAttention_SectionIsAPolledLiveRegionRefreshedByTheEventsThatChangeIt(t *testing.T) {
+	f := newFixture()
+	tag := regexp.MustCompile(`(?s)<div\b[^>]*\bid="home-attention"[^>]*>`).FindString(f.mustGet(t, "/"))
+	if tag == "" {
+		t.Fatal("no #home-attention container on Home")
+	}
+	for _, want := range []string{
+		`role="status"`, `aria-live="polite"`, "data-live-banner",
+		`hx-get="/home/attention"`, "X-Pitha-Background",
+		"every 30s", "secretsStatusChanged from:body", "updateStatusChanged from:body",
+	} {
+		if !strings.Contains(tag, want) {
+			t.Errorf("#home-attention lacks %q: %s", want, tag)
+		}
+	}
+
+	// The container is the live region, so neither the items nor the one-line
+	// "nothing to do" state carry a role of their own.
+	f.unsetKeys = []string{"SLACK_WEBHOOK_URL"}
+	f.update = updater.Status{Available: true, Version: "v9.9.9"}
+	for name, body := range map[string]string{"items": f.mustGet(t, "/home/attention"), "none": newFixture().mustGet(t, "/home/attention")} {
+		if strings.Contains(body, "role=") {
+			t.Errorf("the %s fragment must not carry its own role: %s", name, body)
+		}
 	}
 }
