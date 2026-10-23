@@ -24,6 +24,8 @@ var ErrCalibrationOutcomeNotFound = errors.New("repository: calibration outcome 
 // §calibration_outcomes, functional.md §4.12).
 type CalibrationRepository struct {
 	db *sql.DB
+	// foreign scopes ListLabeledSamples* (SetForeignTraderVersions, issue #881).
+	foreign sqlutil.ForeignTraderVersions
 }
 
 // NewCalibrationRepository returns a CalibrationRepository backed by db.

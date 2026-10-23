@@ -12,12 +12,17 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperbootstrapsettings"
+	calrepo "github.com/ousiassllc/pitha-trador/internal/repository/calibration"
+	"github.com/ousiassllc/pitha-trador/internal/repository/decisiontrade"
 	"github.com/ousiassllc/pitha-trador/internal/repository/judgement"
 	"github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/repository/system"
+	"github.com/ousiassllc/pitha-trador/internal/service/calibration"
 	"github.com/ousiassllc/pitha-trador/internal/service/changeguard"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	servicemetalabel "github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
@@ -50,13 +55,19 @@ type Job struct {
 func New(db *sql.DB, settings *system.RuntimeSettingsRepository) *Job {
 	j := &Job{db: db, settings: settings, now: time.Now}
 	repo := metalabel.NewRepository(db)
+	// The model learns only from the decisions of the live Jev prompt's cohort,
+	// so a promotion does not blend two prompts' entry_quality answers (#881).
+	if settings != nil {
+		repo.SetForeignTraderVersions(jev.LiveCohortScope(settings))
+	}
 	// The adoption honours the freeze after a policy.* change of the
 	// self-improvement flow (issue #780).
 	store := servicemetalabel.NewStore(repo)
 	// A retraining skipped for lack of data is recorded for the Calibration
 	// screen and the MCP (issue #799).
 	j.trainer = training.NewTrainer(repo, store, j.load,
-		training.WithPolicyChanges(judgement.NewProposalRepository(db)), training.WithSkipRecorder(store))
+		training.WithPolicyChanges(judgement.NewProposalRepository(db)), training.WithSkipRecorder(store),
+		training.WithTrainedCohort(liveCohort(settings)))
 	return j
 }
 
@@ -107,7 +118,7 @@ func retrainDue(now time.Time, at string) (bool, error) {
 // and stores each verdict. The model and predictions live in db.
 func PolicyOption(db *sql.DB, settings *system.RuntimeSettingsRepository) policy.Option {
 	store := servicemetalabel.NewStore(metalabel.NewRepository(db))
-	return policy.WithMetaModel(store, store, func(ctx context.Context) (servicemetalabel.DecideConfig, error) {
+	meta := policy.WithMetaModel(store, store, func(ctx context.Context) (servicemetalabel.DecideConfig, error) {
 		s, err := metalabelsettings.Load(ctx, settings)
 		if err != nil {
 			return servicemetalabel.DecideConfig{}, err
@@ -116,6 +127,44 @@ func PolicyOption(db *sql.DB, settings *system.RuntimeSettingsRepository) policy
 		cfg.MinEVBps = s.MinEVBps
 		return cfg, nil
 	})
+	// The model scores the live prompt's entry_quality answers, so it must have
+	// been trained on the live version's cohort (issue #881): Paper warns and
+	// keeps it, Live treats it as not calibrated.
+	cohort := policy.WithMetaModelCohort(metalabelsettings.RuntimeMode, func(ctx context.Context) (string, string, error) {
+		return jev.LiveCohort(ctx, liveVersionStore(settings))
+	})
+	return func(e *policy.Engine) { meta(e); cohort(e) }
+}
+
+// CalibrationScope wires the calibration check's mode, the live version it names
+// and the all-versions count Paper's fallback uses (issue #881): outcomes counts
+// the live version's cohort only, outcomes.AllVersions() every version. Live
+// (any mode but Paper) never uses the fallback.
+func CalibrationScope(db *sql.DB, outcomes *calrepo.CalibrationRepository, settings *system.RuntimeSettingsRepository) policy.HandlerOption {
+	all := calibration.NewService(outcomes.AllVersions(), decisiontrade.New(db))
+	live := func(ctx context.Context) (string, error) {
+		return jev.ResolveLiveVersion(ctx, liveVersionStore(settings))
+	}
+	return policy.WithCalibrationScope(metalabelsettings.RuntimeMode, live, all)
+}
+
+// liveCohort is the live Trader prompt version's cohort, which the training
+// records on the model it stores (issue #881).
+func liveCohort(settings *system.RuntimeSettingsRepository) training.CohortSource {
+	return func(ctx context.Context) (string, error) {
+		_, cohort, err := jev.LiveCohort(ctx, liveVersionStore(settings))
+		return cohort, err
+	}
+}
+
+// liveVersionStore is settings as the store ResolveLiveVersion reads, or the
+// nil store (the build default version) for a nil repository: a nil
+// *RuntimeSettingsRepository inside the interface would not be a nil store.
+func liveVersionStore(settings *system.RuntimeSettingsRepository) jevshadowsettings.Store {
+	if settings == nil {
+		return nil
+	}
+	return settings
 }
 
 // PaperBootstrapOption wires the Paper-only bootstrap entry (issue #798): while

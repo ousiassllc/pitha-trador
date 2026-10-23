@@ -1,4 +1,4 @@
-package policy_test
+package decideflow_test
 
 import (
 	"context"

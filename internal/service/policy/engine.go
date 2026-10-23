@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/repository/trading"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/metacohort"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy/paperbootstrap"
 )
 
@@ -161,8 +162,12 @@ type Input struct {
 	// Calibrated is false when Calibration (functional.md §4.9) does not
 	// yet cover the decision - its confidence bucket has too few labeled
 	// samples (FR-POLICY-3 "キャリブレーション対象外"). Handler derives it
-	// via WithCalibration.
-	Calibrated bool
+	// via WithCalibration (the live Trader version's samples, issue #881).
+	// CalibrationDetail says the live version's own samples were too few: with
+	// Calibrated it is Paper's all-versions fallback, which the decision records
+	// (decisionnote.CalibrationAllVersions); without, it follows not_calibrated.
+	Calibrated        bool
+	CalibrationDetail string
 
 	// APIErr is set by the caller when the Jev Trader call itself failed
 	// (FR-POLICY-3 "API異常"); Decision is nil in that case.
@@ -178,6 +183,7 @@ type Engine struct {
 	signals    *trading.SignalRepository
 	policy     PolicySource          // optional, see WithPolicySource
 	meta       *metaWiring           // optional, see WithMetaModel
+	cohort     *metacohort.Checker   // optional, see WithMetaModelCohort
 	bootstrap  *paperbootstrap.Entry // optional, see WithPaperBootstrap
 	now        func() time.Time
 }
@@ -283,6 +289,7 @@ func (e *Engine) Evaluate(ctx context.Context, in Input) (domain.TradeSignal, er
 	meta := e.loadMeta(ctx)
 	entry, version, bootstrap := e.entryRule(ctx, meta, policyVersion)
 	sig, detail := e.decide(ctx, in, th, entry, version)
+	sig.RejectReason = e.withNotes(in, sig.RejectReason, entry, bootstrap, detail)
 	if err := e.recordPrediction(ctx, in, entry, detail.verdict); err != nil {
 		return domain.TradeSignal{}, err
 	}

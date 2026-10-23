@@ -2,6 +2,7 @@ package calibration_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sort"
 	"testing"
@@ -137,5 +138,84 @@ func TestCalibrationRepository_ListCurrentLabeledSamples_IncludesTripleBarrierOf
 	}
 	if got, want := horizonsOf(plain), []int{10}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("ListLabeledSamples horizons = %v, want %v", got, want)
+	}
+}
+
+// Issue #881: with a scope, the samples of the foreign prompt versions are left
+// out of ListLabeledSamples* and of the count Policy gates on (the all-versions
+// count, AllVersions(), Paper's fallback, is the one read that keeps them), and a failed scope
+// is an error rather than a mixed result.
+func TestCalibrationRepository_ListLabeledSamples_LeavesOutForeignVersions(t *testing.T) {
+	repo, decisions, instID := newCalibrationFixtures(t)
+	ctx := context.Background()
+	at := time.Now().UTC()
+	for i, version := range []string{"trader-v3", "trader-v4"} {
+		confidence := 0.8
+		d, err := decisions.Insert(ctx, domain.JevDecision{
+			InstrumentID: instID, Symbol: "7203", Timestamp: at.Add(time.Duration(i) * time.Minute), DecisionType: domain.JevDecisionTypeTrader,
+			StateHash: "h" + version, StateJSON: "{}", QuestionVersion: version, ResponseJSON: "{}",
+			Direction: ptr(domain.JevDirectionLong), Confidence: &confidence, ModelID: "m",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.Insert(ctx, domain.CalibrationOutcome{JevDecisionID: d.ID, HorizonMinutes: 5, FutureReturn: 1 + float64(i), WasDirectionCorrect: ptr(true)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	since := at.Add(-time.Hour)
+	reads := map[string]func() ([]domain.LabeledSample, error){
+		"ListLabeledSamples":        func() ([]domain.LabeledSample, error) { return repo.ListLabeledSamples(ctx, []int{5}) },
+		"ListCurrentLabeledSamples": func() ([]domain.LabeledSample, error) { return repo.ListCurrentLabeledSamples(ctx, []int{5}) },
+		"ListLabeledSamplesSince":   func() ([]domain.LabeledSample, error) { return repo.ListLabeledSamplesSince(ctx, since, []int{5}) },
+		"ListCurrentLabeledSamplesSince": func() ([]domain.LabeledSample, error) {
+			return repo.ListCurrentLabeledSamplesSince(ctx, since, []int{5})
+		},
+	}
+	futureReturns := func(samples []domain.LabeledSample) []float64 {
+		var out []float64
+		for _, s := range samples {
+			out = append(out, s.FutureReturn)
+		}
+		sort.Float64s(out)
+		return out
+	}
+
+	// No scope: both versions mix (the behaviour before the scope existed).
+	for name, read := range reads {
+		if got, err := read(); err != nil || !reflect.DeepEqual(futureReturns(got), []float64{1, 2}) {
+			t.Fatalf("%s without a scope = %v, %v, want both versions", name, futureReturns(got), err)
+		}
+	}
+
+	repo.SetForeignTraderVersions(func(context.Context) ([]string, error) { return []string{"trader-v4"}, nil })
+	for name, read := range reads {
+		if got, err := read(); err != nil || !reflect.DeepEqual(futureReturns(got), []float64{1}) {
+			t.Fatalf("%s with trader-v4 foreign = %v, %v, want the trader-v3 sample only", name, futureReturns(got), err)
+		}
+	}
+
+	repo.SetForeignTraderVersions(func(context.Context) ([]string, error) { return []string{"trader-v3"}, nil })
+	if got, err := repo.ListLabeledSamples(ctx, []int{5}); err != nil || !reflect.DeepEqual(futureReturns(got), []float64{2}) {
+		t.Fatalf("after a promotion = %v, %v, want the trader-v4 sample only", futureReturns(got), err)
+	}
+	// Policy's bucket-size gate counts the live version's cohort (trader-v4) only;
+	// the all-versions count is Paper's fallback.
+	if n, err := repo.CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err != nil || n != 1 {
+		t.Fatalf("CountLabeledSamplesInConfidenceRange = %d, %v, want 1 (trader-v4 only)", n, err)
+	}
+	if n, err := repo.AllVersions().CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err != nil || n != 2 {
+		t.Fatalf("AllVersions().CountLabeledSamplesInConfidenceRange = %d, %v, want 2", n, err)
+	}
+
+	repo.SetForeignTraderVersions(func(context.Context) ([]string, error) { return nil, errors.New("settings unreadable") })
+	if n, err := repo.CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err == nil {
+		t.Fatalf("CountLabeledSamplesInConfidenceRange = %d, nil with an unreadable scope, want an error", n)
+	}
+	if n, err := repo.AllVersions().CountLabeledSamplesInConfidenceRange(ctx, 0.5, 1, true, 10); err != nil || n != 2 {
+		t.Fatalf("AllVersions().CountLabeledSamplesInConfidenceRange = %d, %v, want 2 (the scope is not read)", n, err)
+	}
+	if got, err := repo.ListLabeledSamples(ctx, []int{5}); err == nil {
+		t.Fatalf("ListLabeledSamples = %v, nil with an unreadable scope, want an error", got)
 	}
 }

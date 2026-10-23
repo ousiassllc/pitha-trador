@@ -68,6 +68,8 @@
 4. 版の検査（登録されていない版・すでにライブの版 → `invalid_value`。`error.data.detail` に理由）
 5. 保存
 
+**昇格のあとの集計・学習**（issue #881）: 昇格すると、RAG の事例・Calibration の指標と PnL・メタモデルの学習・`jev_calibration` は、新しいライブの版と同じコホートの判断だけを使い、貯め直す（旧版の行は消えず、戻せば再び使われる）。本番での昇格は、この扱いを含むビルドが本番で動くまで人が見送る。Policy の信頼度帯の標本数の確認も同じコホートで数え（新しい版の標本が足りない間、Paper だけ全版の合計で判断してよく、判断記録 `trade_signals.reject_reason` に `calibration_all_versions` を残す。Live は戻さず `not_calibrated`）、採用中のメタモデルは学習に使ったコホートがライブの版と違えば、Paper は警告して使い（`meta_model_cohort_mismatch`）、Live は使わない（`not_calibrated`）（`architecture/jev-prompt-versions-in-data.md` §4）。
+
 応答: `promotion_id`・`from_version`・`to_version`・`at`。監査の「誰が」は `mcp` と接続元ホスト（IP だけ。ヘッダ・API キーは残さない）。このツールは**自動では呼ばれない**。自己改善ループ（Sol/Opus）にはこの経路が無い（`domain.ValidatePolicyChanges` は `policy.*` のキーだけを受け付け、Jev の版・シャドーのキーは拒否する。テストが固定する）。Settings 画面にも同じ操作がある（`POST /settings/jev-prompt/promote`。セッション Cookie と CSRF が必要）。
 
 ## 受け入れ条件
@@ -88,3 +90,4 @@
 | 1.3 | 2026-10-22 | `jev_shadow_cost` に `throttle_active` / `last_throttle` / `throttles_today` / `throttle_cooldown_seconds` / `min_call_interval_seconds` を追加（Jev API の 429/529 によるシャドーの停止と理由。ツール数は変わらない） | issue #883 |
 | 1.4 | 2026-10-23 | `jev_shadow_cost` の `min_call_interval_seconds` の説明に、間隔で捨てた比較はどこにも記録されず `jev_shadow_compare` の標本を間引くこと、429/529（シャドー自身・ライブの Scout/Trader/Ask）で 15 分（`throttle_cooldown_seconds`＝900）止まり再試行せず、失敗回数の上限・`halt_*` に数えないこと、理由は `throttle_active` / `last_throttle` / `throttles_today` に出ることを明記（実装は変えない） | issue #883 |
 | 1.5 | 2026-10-22 | `jev_shadow_cost` の失敗回数の説明に、終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えないことを追記 | issue #882 |
+| 1.6 | 2026-10-22 | §3.29.3 に、昇格のあとの集計・学習の扱い（ライブの版と同じコホートだけを使う）と、本番での昇格を見送る範囲を追記。Policyの標本数とメタモデルの扱いを決定済みに | issue #881 |

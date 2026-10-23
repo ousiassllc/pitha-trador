@@ -98,7 +98,7 @@ func TestEvaluate_MinEVBpsFromTheSettingsRaisesTheBar(t *testing.T) {
 	env := newMetaEnv(t, domain.JevDirectionLong)
 	newEngine := env.newEngine
 	cfg := metalabel.DefaultDecideConfig()
-	e := newEngine(policy.WithMetaModel(policytest.ModelOf(policytest.TakingModel()), &policytest.Predictions{}, func(context.Context) (metalabel.DecideConfig, error) { return cfg, nil }))
+	e := newEngine(policytest.WithConfig(policytest.ModelOf(policytest.TakingModel()), &policytest.Predictions{}, func(context.Context) (metalabel.DecideConfig, error) { return cfg, nil }))
 
 	if sig, err := e.Evaluate(context.Background(), env.in); err != nil || sig.Direction != domain.JevDirectionLong {
 		t.Fatalf("min EV 0: %+v, %v, want LONG (EV is about 24 bps)", sig, err)

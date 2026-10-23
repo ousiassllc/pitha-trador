@@ -13,6 +13,13 @@ package jev
 // the SHA-256 of every registered question group (prompts.go), so changing a
 // wording without a new version fails the test. A changed wording is a new version.
 //
+// What a version means for the data (issue #881): jev_decisions rows of Trader
+// versions of different cohorts (cohort.go) are never aggregated or learned
+// together. The RAG candidates, the Calibration samples and the meta-model
+// training keep the live version's cohort only; jev_calibration grades that
+// cohort by default and any one version on request
+// (docs/architecture/jev-prompt-versions-in-data.md).
+//
 // Which version is LIVE is not these constants alone: they are the build
 // defaults, and a promotion (GUI or MCP jev_prompt_promote only, never automatic,
 // never the self-improvement loop) stores another registered version in
@@ -25,12 +32,10 @@ package jev
 //
 // Bump this constant whenever the Scout question wording or prompt
 // structure changes materially, so decisions produced "before" and
-// "after" the change stay distinguishable in jev_decisions. The version is
-// recorded and shown (Decision history/Activity) only: Calibration
-// aggregation (ListLabeledSamples*, selfimprove daily analysis) does not
-// split by question_version, so right after a bump old- and new-version
-// decisions are mixed in the same metrics (for the Trader, jev_shadow_compare
-// reports a live and a candidate version side by side).
+// "after" the change stay distinguishable in jev_decisions. The Scout has no
+// promotion and its decisions are not graded, so the version is recorded and
+// shown (Decision history/Activity) only; for the Trader a version is also what
+// the aggregation and the training keep apart (cohort.go, issue #881).
 //
 // History: scout-v3 rewrites the shared stateGuide so it describes the
 // realized outcomes (`future_return`, `was_direction_correct`,

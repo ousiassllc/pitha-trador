@@ -11,17 +11,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
 )
 
+// LiveVersion and LiveCohort are the live Trader version and its cohort the
+// models of this package are trained on and Option checks them against. A model
+// with no recorded cohort never matches, so a model of a test needs one.
+const (
+	LiveVersion = "trader-v3"
+	LiveCohort  = "entry-quality-v3"
+)
+
 // LRModel returns a meta-labeling model that scores bias + weights . features
 // through an identity (Platt A=1, B=0) calibration, so the calibrated
 // probability is sigmoid(bias + weights . features). A win pays 30 bps and a
-// loss costs 20, so the expected value is positive above p = 0.4. Its ID is 11
-// and its version "lr-test".
+// loss costs 20, so the expected value is positive above p = 0.4. Its ID is 11,
+// its version "lr-test" and its training cohort LiveCohort.
 func LRModel(bias float64, weights ...float64) metalabel.Model {
 	n := len(metalabel.FeatureNames())
 	w := make([]float64, n)
@@ -31,7 +40,7 @@ func LRModel(bias float64, weights ...float64) metalabel.Model {
 		std[i] = 1
 	}
 	return metalabel.Model{
-		ID: 11, Version: "lr-test", FeatureNames: metalabel.FeatureNames(),
+		ID: 11, Version: "lr-test", TrainedCohort: LiveCohort, FeatureNames: metalabel.FeatureNames(),
 		LR:         metalabel.LogisticRegression{Mean: make([]float64, n), Std: std, Weights: w, Bias: bias},
 		Calibrator: metalabel.Calibrator{Method: metalabel.CalibrationPlatt, A: 1},
 		WinBps:     30, LossBps: 20,
@@ -87,9 +96,21 @@ func DefaultConfig(context.Context) (metalabel.DecideConfig, error) {
 	return metalabel.DefaultDecideConfig(), nil
 }
 
-// Option wires models and predictions with the default take/skip policy.
+// Option wires models and predictions with the default take/skip policy, and a
+// Live cohort check against LiveVersion / LiveCohort (what the models of this
+// package were trained on), so a test that is not about cohorts scores as
+// before. A policy.WithMetaModelCohort given after it replaces that check.
 func Option(models policy.MetaModelSource, predictions policy.PredictionRecorder) policy.Option {
-	return policy.WithMetaModel(models, predictions, DefaultConfig)
+	return WithConfig(models, predictions, DefaultConfig)
+}
+
+// WithConfig is Option with a take/skip policy of the test's choosing.
+func WithConfig(models policy.MetaModelSource, predictions policy.PredictionRecorder, config policy.MetaConfigSource) policy.Option {
+	meta := policy.WithMetaModel(models, predictions, config)
+	cohort := policy.WithMetaModelCohort(metalabelsettings.ModeLive, func(context.Context) (string, string, error) {
+		return LiveVersion, LiveCohort, nil
+	})
+	return func(e *policy.Engine) { meta(e); cohort(e) }
 }
 
 // NewStore returns a Store over db holding model as its active model: a real
@@ -105,7 +126,7 @@ func NewStore(t *testing.T, db *sql.DB, model metalabel.Model) *metalabel.Store 
 	if _, err := store.SaveModel(context.Background(), repo.Model{
 		Version: model.Version, Algorithm: metalabel.AlgorithmLogisticRegression, LabelVersion: domain.CalibrationLabelVersionTripleBarrier,
 		Status: repo.ModelActive, TrainedAt: at, TrainStart: at, TrainEnd: at, OOSStart: at, OOSEnd: at.Add(time.Hour),
-		FeatureNames: model.FeatureNames, ParamsJSON: params,
+		FeatureNames: model.FeatureNames, ParamsJSON: params, Adoption: repo.Adoption{TrainedCohort: model.TrainedCohort},
 	}); err != nil {
 		t.Fatalf("SaveModel: %v", err)
 	}

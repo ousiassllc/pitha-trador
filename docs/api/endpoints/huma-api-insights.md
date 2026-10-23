@@ -104,7 +104,7 @@
 }
 ```
 
-`by_direction`は予測方向（`LONG`/`SHORT`、常に両方を返す）別の方向別平均リターン（`avg_future_return_pct`は方向調整済み＝SHORTは下落が正）と的中率（FR-CAL-2）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`はconfidence bucket別PnL（FR-CAL-2）で、`positions.entry_order_id` → `paper_orders.trade_signal_id` → `trade_signals.jev_decision_id`で辿れるTrader判断由来のクローズ済みポジションの件数・実現損益合計（JPY）・エントリー金額に対する平均リターン（%）。手動エントリーは含まない。指標は`jev_decisions.question_version`で分離せず、全版のTrader判断（`trader-v2`/`trader-v3`等）を混在して集計する（版別・現行版のみの絞り込みやクエリは無い）。
+`by_direction`は予測方向（`LONG`/`SHORT`、常に両方を返す）別の方向別平均リターン（`avg_future_return_pct`は方向調整済み＝SHORTは下落が正）と的中率（FR-CAL-2）。バケットの`trade_count`/`total_pnl`/`avg_pnl_pct`はconfidence bucket別PnL（FR-CAL-2）で、`positions.entry_order_id` → `paper_orders.trade_signal_id` → `trade_signals.jev_decision_id`で辿れるTrader判断由来のクローズ済みポジションの件数・実現損益合計（JPY）・エントリー金額に対する平均リターン（%）。手動エントリーは含まない。指標はTraderのプロンプトの版（`jev_decisions.question_version`）を混ぜない: ライブの版（昇格が保存した版、なければビルドの既定）と同じコホートの判断（`trader-v1`〜`trader-v3`は同じコホート、`trader-v4`は別。`internal/service/jev/cohort.go`）だけを集計し、昇格で別コホートの版に変わると貯め直す（issue #881。`architecture/jev-prompt-versions-in-data.md`。版を指定するクエリは無い）。
 
 実現トレードPnLをground truthとする評価（FR-CAL-5）: バケットの`trade_win_rate`は`trade_count`のうち`realized_pnl > 0`の割合（`trade_count`が0なら0）、トップレベルの`trade_count`は`pnl_brier_score`/`pnl_log_loss`の対象となったクローズ済みポジション数（confidenceがどのバケットにも入らないものを除く。0件なら両スコアも0）。両スコアはconfidenceを予測確率、`realized_pnl > 0`を結果としたBrier Score/Log Loss。`realized_pnl`は両約定の手数料控除後・約定モデル（FR-ENTRY-8）の呼値/スプレッド/滑りを織り込んだ値。判定水平線の既定は5/10/15分。
 

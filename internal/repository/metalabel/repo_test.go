@@ -3,6 +3,7 @@ package metalabel_test
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,5 +174,34 @@ func TestRepository_PredictionRoundTripsPerDecision(t *testing.T) {
 	}
 	if _, err := r.InsertPrediction(ctx, take); err == nil {
 		t.Error("second prediction of the same model and decision succeeded, want error")
+	}
+}
+
+// Issue #881: the Trader prompt cohort a model was trained on lives in
+// adoption_json (no new column); a model stored without one reads back empty.
+func TestRepository_TrainedCohortRoundTripsInAdoptionJSON(t *testing.T) {
+	db := newTestDB(t)
+	r := metalabel.NewRepository(db)
+	ctx := context.Background()
+	trainedAt := time.Date(2026, 10, 14, 17, 0, 0, 0, time.UTC)
+
+	withCohort := sampleModel("with-cohort", metalabel.ModelActive, trainedAt)
+	withCohort.Adoption.TrainedCohort = "entry-quality-v4"
+	legacy := sampleModel("legacy", metalabel.ModelActive, trainedAt.Add(-time.Hour))
+	for _, m := range []metalabel.Model{withCohort, legacy} {
+		if _, err := r.InsertModel(ctx, m); err != nil {
+			t.Fatalf("InsertModel %s: %v", m.Version, err)
+		}
+	}
+	got, found, err := r.LatestActiveModel(ctx)
+	if err != nil || !found || got.Adoption.TrainedCohort != "entry-quality-v4" {
+		t.Fatalf("LatestActiveModel = %q, %v, %v, want the recorded cohort", got.Adoption.TrainedCohort, found, err)
+	}
+	var adoption string
+	if err := db.QueryRowContext(ctx, `SELECT adoption_json FROM metalabel_models WHERE version = 'legacy'`).Scan(&adoption); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(adoption, "trained_cohort") {
+		t.Errorf("adoption_json of a model with no cohort = %s, want no trained_cohort key (no recorded cohort)", adoption)
 	}
 }

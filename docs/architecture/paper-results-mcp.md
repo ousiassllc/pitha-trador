@@ -142,7 +142,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `paper_performance_summary` | 期間内のクローズ済み `positions` の件数・勝率・期待値・ドローダウンと、入り口（`origin`）別の件数・勝率・損益（#829） |
 | `paper_daily_pnl` | クローズ日（JST）ごとの損益と件数 |
 | `paper_trades` | クローズ済み取引のホワイトリスト列と、入り口 `origin`（エントリー注文のシグナルの `trade_signals.policy_version` から。#829） |
-| `jev_calibration` | `jev_decisions` と `calibration_outcomes` の件数・的中率・バケット・Brier |
+| `jev_calibration` | `jev_decisions` と `calibration_outcomes` の件数・的中率・バケット・Brier。プロンプトの版は混ぜない（既定はライブの版と同じコホートだけ。`prompt_version` でその版だけ。`jev-prompt-versions-in-data.md`） |
 | `metalabel_history` | `metalabel_models` の採用/却下と OOS AUC/EV、予測の take/skip 件数、`metalabel_retrain_skips`（データ不足の再学習見送り。固定コードと必要件数中の件数） |
 | `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数と、それ以外の拒否の固定コード別内訳。件数は `trade_signals` の行ごとで、同じ案の再試行（`waiting_session` への戻りや再起動での `received` 戻し）で行が複数になり得る。Policy 経路は Execution の拒否でも `risk_passed = 1` のままなので、注文案とは定義が非対称（注文案は注文まで進んだものだけ）。注文案が Risk を通ったが注文にならなかった行（`proposal_rejected_after_risk: <コード>`、#860）は `risk_passed_count` にも `other_reject_*` にも入れず、`proposal_rejected_after_risk_count` と理由コード別内訳に分ける |
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
