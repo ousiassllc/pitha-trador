@@ -51,9 +51,18 @@ func detailProps(c experiment.Comparison) mcp.ExperimentDetailProps {
 		Metrics:  metricRows(c), Rejects: rejectRows(c.Before.RiskRejections, c.After.RiskRejections),
 	}
 	for _, f := range c.Confounders {
-		p.Confounders = append(p.Confounders, confounderText(f))
+		p.Confounders = append(p.Confounders, confounderLine(f))
 	}
 	return p
+}
+
+// confounderLine is confounderText, except for a recorded switch of the
+// configured Jev model (issue #885), whose Values are [before, after].
+func confounderLine(f experiment.Confounder) string {
+	if f.Kind == experiment.KindModel && f.Name == experiment.ModelSwitchName && len(f.Values) == 2 {
+		return fmt.Sprintf("交絡: %s Jev のモデル（JEV_MODEL）が切り替えられました（%s、%s → %s）。", confounderPeriodText(f.Period), jst(f.At), f.Values[0], f.Values[1])
+	}
+	return confounderText(f)
 }
 
 func metricRows(c experiment.Comparison) []mcp.MetricRow {
@@ -110,14 +119,18 @@ func rejectRows(before, after *query.RiskRejections) []mcp.RejectRow {
 	return out
 }
 
-func confounderText(f experiment.Confounder) string {
-	when := "実験中（後の期間）に"
-	switch f.Period {
+func confounderPeriodText(period string) string {
+	switch period {
 	case experiment.PeriodBefore:
-		when = "実験の前の期間に"
+		return "実験の前の期間に"
 	case experiment.PeriodBoundary:
-		when = "実験の前の期間と後の期間を通して"
+		return "実験の前の期間と後の期間を通して"
 	}
+	return "実験中（後の期間）に"
+}
+
+func confounderText(f experiment.Confounder) string {
+	when := confounderPeriodText(f.Period)
 	switch f.Kind {
 	case experiment.KindSetting:
 		return fmt.Sprintf("交絡: %s設定 %s が変わりました（%s、監査 ID %d）。", when, f.Name, jst(f.At), deref(f.AuditID))

@@ -179,8 +179,9 @@ func TestJevModelsAgreesWithTheTrainersCutoffGate(t *testing.T) {
 
 // Nothing secret is read or returned: the response carries only the fields of
 // the struct, and the statements never touch runtime_settings outside the
-// metalabel.* keys (JEV_MODEL lives encrypted in secrets, never in the DB the
-// tool reads).
+// metalabel.* keys (JEV_MODEL's encrypted value lives in secrets, which the tool
+// never reads; the model name recorded in jev_model_changes is not read by this
+// tool either).
 func TestJevModelsReturnsNoSecrets(t *testing.T) {
 	now := testkit.FixedNow()
 	path, w := readinessDB(t)

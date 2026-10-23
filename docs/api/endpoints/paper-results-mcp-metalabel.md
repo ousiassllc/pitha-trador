@@ -57,7 +57,9 @@ Jev が実際に応答しているモデル名（issue #849）。`metalabel.llm_
 
 上限: 期間内の別々の `model_id` が 50 を超えたら `limit_exceeded`（`metalabeldiag.MaxJevModels`）。読むのは `jev_decisions` の `timestamp` の索引範囲検索（`jev_decisions_timestamp_idx`）と `model_id` の集計、最新 1 件、`runtime_settings` の `metalabel.*` キーだけ。
 
-返さない: 秘密（`JEV_MODEL` を含む。DB にも無い）、`state_json` / `response_json`、価格・数量。`runtime_settings` は `metalabel.*` 以外のキーを SQL の前に拒否する。
+返さない: `secrets` の値（`JEV_MODEL` の暗号化された値も読まない）、`state_json` / `response_json`、価格・数量。`runtime_settings` は `metalabel.*` 以外のキーを SQL の前に拒否する。
+
+`JEV_MODEL` のモデル**名**は、#885（マイグレーション `000048`）から `jev_model_changes` に平文で残る（Settings 画面で切り替えたとき。モデル名は秘密情報ではない）。この記録は `experiment_compare` の `confounders[].values` に出ることがあるが、`jev_models` はこの表を読まず、返すのは `jev_decisions` から求めたモデル ID（`model_id`）と `runtime_settings` の `metalabel.llm_cutoff_model` だけである。
 
 ## 改訂履歴
 
@@ -65,3 +67,4 @@ Jev が実際に応答しているモデル名（issue #849）。`metalabel.llm_
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規作成。§3.23 `metalabel_training_readiness` の入出力と、再学習の判定との一致・既定の窓・上限・`dropped_incomplete` が残っていない場合の表し方 | issue #848 |
 | 1.1 | 2026-10-21 | §3.24 `jev_models` を追加（`model_id` ごとの件数・初回/最後の時刻・日別・`llm_cutoff_model` との完全一致の判定） | issue #849 |
+| 1.2 | 2026-10-23 | §3.24 `jev_models` の「返さない」を実装に合わせて訂正。「`JEV_MODEL` を含む秘密は DB にも無い」は #885 以降は誤りで、モデル名は `jev_model_changes` に平文で残る（`secrets` の値は返さない。`jev_models` はこの表を読まず `jev_decisions` 由来のモデル ID だけを返す） | issue #885 |
