@@ -81,7 +81,15 @@ type Trainer struct {
 	// skips records a retraining skipped for lack of data (issue #799); nil
 	// only logs it.
 	skips SkipRecorder
+	// cohort reads the Trader prompt cohort of the live version, recorded on the
+	// model as the cohort its rows came from (issue #881); nil records none.
+	cohort CohortSource
 }
+
+// CohortSource returns the Trader prompt cohort of the live version (the cohort
+// the training source reads its rows of); jev.LiveCohort bound to the settings
+// store is one.
+type CohortSource func(ctx context.Context) (string, error)
 
 // TrainerOption configures a Trainer.
 type TrainerOption func(*Trainer)
@@ -109,6 +117,13 @@ func WithPolicyChanges(src PolicyChangeSource) TrainerOption {
 
 // WithChangeLimits overrides changeguard.DefaultLimits.
 func WithChangeLimits(l changeguard.Limits) TrainerOption { return func(t *Trainer) { t.limits = l } }
+
+// WithTrainedCohort records on every trained model the prompt cohort src returns
+// (the live version's) as the cohort its training rows came from (issue #881).
+// The cohort is read before the rows and again after: a promotion in between
+// fails the training, so a model is never labeled with a cohort other than the
+// one its rows came from.
+func WithTrainedCohort(src CohortSource) TrainerOption { return func(t *Trainer) { t.cohort = src } }
 
 // WithClock overrides time.Now (tests).
 func WithClock(now func() time.Time) TrainerOption { return func(t *Trainer) { t.now = now } }
@@ -168,9 +183,20 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	now := t.now().UTC()
 
 	from := now.Add(-t.lookback)
+	cohort, err := t.readCohort(ctx)
+	if err != nil {
+		return repo.Model{}, err
+	}
 	stored, err := t.source.ListTrainingRows(ctx, from, now)
 	if err != nil {
 		return repo.Model{}, fmt.Errorf("metalabel: load training rows: %w", err)
+	}
+	after, err := t.readCohort(ctx)
+	if err != nil {
+		return repo.Model{}, err
+	}
+	if after != cohort {
+		return repo.Model{}, fmt.Errorf("metalabel: the live prompt cohort changed from %q to %q while the training rows were read", cohort, after)
 	}
 	rows, dropped := BuildRows(stored)
 	walk := t.walkForBar()
@@ -214,6 +240,7 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 	if err != nil {
 		return repo.Model{}, err
 	}
+	verdict.adoption.TrainedCohort = cohort
 	saved, err := t.store.SaveModel(ctx, repo.Model{
 		Version: version, Algorithm: metalabel.AlgorithmLogisticRegression, LabelVersion: domain.CalibrationLabelVersionTripleBarrier,
 		Status: verdict.status, RejectReason: verdict.reason, TrainedAt: now,
@@ -233,6 +260,18 @@ func (t *Trainer) Train(ctx context.Context) (repo.Model, error) {
 		"oos_ev_bps", derefFloat(eval.EVBps), "oos_ev_ci", formatInterval(verdict.intervals.EV),
 		"min_oos_samples", t.acceptance.MinOOSSamples, "min_takes", t.acceptance.MinTakes, "min_oos_days", t.acceptance.MinOOSDays)
 	return saved, nil
+}
+
+// readCohort is the live version's cohort, "" without WithTrainedCohort.
+func (t *Trainer) readCohort(ctx context.Context) (string, error) {
+	if t.cohort == nil {
+		return "", nil
+	}
+	cohort, err := t.cohort(ctx)
+	if err != nil {
+		return "", fmt.Errorf("metalabel: read the live prompt cohort: %w", err)
+	}
+	return cohort, nil
 }
 
 func samples(rows []Row) []metalabel.Sample {

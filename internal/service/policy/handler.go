@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/repository/jobqueue"
 	"github.com/ousiassllc/pitha-trador/internal/repository/market"
 	"github.com/ousiassllc/pitha-trador/internal/service/jev"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/calibrationgate"
 )
 
 // SignalExecutor acts on a persisted trade signal Policy Engine approved
@@ -36,11 +37,11 @@ type Handler struct {
 	snapshots      *market.SnapshotRepository
 	engine         *Engine
 	executor       SignalExecutor
-	calib          CalibrationSource // optional, see WithCalibration
-	tdnet          TDnetScorer       // optional, see WithTDnetScorer
-	regime         RegimeAssessor    // optional, see WithRegimeAssessor
-	now            func() time.Time  // wall clock for the snapshot staleness check
-	snapshotMaxAge time.Duration     // see WithSnapshotMaxAge
+	calib          calibrationgate.Gate // Source optional, see WithCalibration
+	tdnet          TDnetScorer          // optional, see WithTDnetScorer
+	regime         RegimeAssessor       // optional, see WithRegimeAssessor
+	now            func() time.Time     // wall clock for the snapshot staleness check
+	snapshotMaxAge time.Duration        // see WithSnapshotMaxAge
 }
 
 // NewHandler returns a Handler that evaluates jev-trader queue jobs via
@@ -108,7 +109,7 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		return err
 	}
 
-	calibrated, err := h.calibrated(ctx, decision)
+	calib, err := h.calibrated(ctx, decision)
 	if err != nil {
 		return fmt.Errorf("policy: calibration check for %q: %w", payload.Symbol, err)
 	}
@@ -118,7 +119,7 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 	in.Symbol = payload.Symbol
 	in.Timestamp = decision.Timestamp
 	in.Decision = &decision
-	in.Calibrated = calibrated
+	in.Calibrated, in.CalibrationDetail = calib.OK, calib.Detail
 	if h.tdnet != nil {
 		score := h.tdnet.TDnetScore(payload.Symbol, h.now().UTC())
 		in.TDnetScore = &score

@@ -51,6 +51,7 @@ var jevShadowTools = []tool{
 	{
 		name: "jev_shadow_cost",
 		description: "シャドーの費用と状態: request_cost の合計（今日（JST）・累計・日別。うち見積り＝応答に使用量が無く入力トークン数をリクエストの大きさから推定して数えた呼び出しの件数・費用は estimated_calls / estimated_cost_usd）、1 日の費用上限と 1 日の失敗回数の上限（どちらも確定。cap_source は default＝既定値・stored＝Settings で保存した値・fixed＝固定。費用上限は Settings で上げ下げできる）と、止まった理由（halt_today / last_halt。daily_cost_cap か daily_failure_cap）、" +
+			"Jev API の 429（レート制限）・529（過負荷）で止まった記録（throttle_active＝今止まっている・last_throttle＝最後の記録（status・reason が api_rate_limited か api_overloaded・source が shadow＝シャドー自身の呼び出し／live＝ライブの呼び出し・at・until）・throttles_today＝今日の回数。止まる時間は throttle_cooldown_seconds、シャドーの呼び出しの最小間隔は min_call_interval_seconds。シャドーは 429/529 を待たず・再試行せずに止まり、ライブの呼び出しには影響しない）、" +
 			"シャドーの有効・無効と候補の版、ライブの版、直近の昇格の記録（誰が・いつ・前の版・後の版）（読み取り専用）",
 		schema:   objectSchema(map[string]any{}),
 		noPeriod: true,

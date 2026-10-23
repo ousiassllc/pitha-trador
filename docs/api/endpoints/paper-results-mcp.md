@@ -85,9 +85,11 @@
 
 ### 3.4 `jev_calibration`
 
-引数: `from`, `to`、`horizon_minutes`（省略時は期間内に存在する horizon をすべて、最大 8）。
+引数: `from`, `to`、`horizon_minutes`（省略時は期間内に存在する horizon をすべて、最大 8）、`prompt_version`（任意。例 `trader-v4`。その版の trader 判断だけを採点する。省略はライブの版と同じコホートの判断だけ。不正な版名は `invalid_argument`）。
 
-`data.decisions`: 期間内（`jev_decisions.timestamp`）の `scout_count` と `trader_count`。
+`data.decisions`: 期間内（`jev_decisions.timestamp`）の `scout_count` と `trader_count`（全版の件数）。
+
+**プロンプトの版は混ぜない**（issue #881。`docs/architecture/jev-prompt-versions-in-data.md`）: `data.horizons[]` が採点する trader 判断は、既定ではライブの Trader の版（昇格が保存した版、なければビルドの既定）と**同じコホート**の版だけで、別コホートの版は採点しない。`data.prompt_versions` は何を採点したかを返す: `only`（`prompt_version` を渡したときだけ。その版）、`excluded[]`（既定のとき除いた版。`prompt_version` を渡したときは空）。`data.trader_decisions_by_version[]` は期間内の trader 判断を**全版**について数える（`{prompt_version, trader_count}`。採点の対象外の版も出る）。
 
 `data.horizons[]` は horizon ごと。ラベルは `calibration_outcomes` を `jev_decision_id` で trader 判断（`decision_type='trader'`）に結合し、判断の `timestamp` が期間内のもの。
 
@@ -279,7 +281,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 | `market_snapshots` の価格・板・出来高・特徴量（`price` / `bid` / `ask` / `spread_bps` / `volume` / `vwap` / `ofi_*` / `return_*` など。`000016`・`000026`・`000032`） | 時価・板・気配そのもの。鮮度は件数と時刻だけ |
 | `jev_decisions.state_json` / `response_json` | `000004`。市場状態と判断本文。`metalabel_training_readiness`（§3.23）は特徴量の欠けを数えるためにプロセス内で読むが、戻り値には件数と特徴量名しか載せない |
 | `jev_decisions` の `ofi_*` / `microprice_dev_bps` / `vwap_z` / `regime_volatility_bps` / `regime_autocorr` | `000032`・`000036`。板・価格由来の特徴量 |
-| `secrets` の全列 | `000013`。`key` 名も返さない |
+| `secrets` の全列 | `000013`。`key` 名も返さない。`secrets` の値は 1 つも返さない。Settings 画面で `JEV_MODEL` を切り替えたときのモデル**名**だけは、`secrets` と別の表 `jev_model_changes`（`000048`）に平文で残り、`experiment_compare` の `confounders[].values` に出る（モデル名は秘密情報ではない。ほかの秘密情報はこの表に入らない） |
 | API キー、MCP の `api_key`、証券会社の認証情報。Cloudflare を使うときの Client-Secret も | ローカル設定と `secrets`。ログにも出さない |
 | `metalabel_models.params_json` / `feature_names_json` / `oos_calibration_json` | `000034` |
 | `metalabel_predictions` の行の中身（`features_json` を含む） | `000034`。件数だけ |

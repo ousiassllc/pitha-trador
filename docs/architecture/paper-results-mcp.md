@@ -127,7 +127,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 - `busy_timeout` は 1 秒。アプリ本体の 60 秒（`sqlitedb` の `_busy_timeout=60000`）には合わせない。根拠: バックアップやチェックポイントでロックを待っている間、リモートの読み取りがアプリの書き込み側の待ちを長引かせない
 - 接続は読み取り 1 本（`SetMaxOpenConns(1)`）。同時実行の上限は API 仕様の表
 - 認証に失敗したリクエストは SQL を発行せず、接続も新規に開かない。起動時の疎通（`SELECT 1`）は、認証設定が §3.3 を満たして待受を開く場合に限り 1 回だけ行ってよい
-- `secrets` への `SELECT` をツールからも疎通確認からも発行しない
+- `secrets` への `SELECT` をツールからも疎通確認からも発行しない（Settings 画面の `JEV_MODEL` の切り替えの記録 `jev_model_changes` は `secrets` ではなく別の表で、入るのはモデル名だけ。モデル名は秘密情報ではなく、`experiment_compare` の `confounders[].values` に出る）
 
 読み取りの接続は上の通り `mode=ro` のままで、書き込みを試みた SQL は SQLite が拒否する。その失敗をツールの成功応答にしてはならない（受け入れ条件のテストが、MCP の読み取り接続で `INSERT` がエラーになることを確認する）。設定ツール（§7）と注文案ツール（§8）の書き込みは、この接続を使わず、別の狭い書き込み接続（§7.3・§8.4）だけが行う。
 
@@ -142,7 +142,7 @@ Cloudflare を使うときの推奨は二重である。エッジの Cloudflare 
 | `paper_performance_summary` | 期間内のクローズ済み `positions` の件数・勝率・期待値・ドローダウンと、入り口（`origin`）別の件数・勝率・損益（#829） |
 | `paper_daily_pnl` | クローズ日（JST）ごとの損益と件数 |
 | `paper_trades` | クローズ済み取引のホワイトリスト列と、入り口 `origin`（エントリー注文のシグナルの `trade_signals.policy_version` から。#829） |
-| `jev_calibration` | `jev_decisions` と `calibration_outcomes` の件数・的中率・バケット・Brier |
+| `jev_calibration` | `jev_decisions` と `calibration_outcomes` の件数・的中率・バケット・Brier。プロンプトの版は混ぜない（既定はライブの版と同じコホートだけ。`prompt_version` でその版だけ。`jev-prompt-versions-in-data.md`） |
 | `metalabel_history` | `metalabel_models` の採用/却下と OOS AUC/EV、予測の take/skip 件数、`metalabel_retrain_skips`（データ不足の再学習見送り。固定コードと必要件数中の件数） |
 | `risk_rejections` | `trade_signals.reject_reason` のうち Risk Engine 拒否の理由コード別件数と、それ以外の拒否の固定コード別内訳。件数は `trade_signals` の行ごとで、同じ案の再試行（`waiting_session` への戻りや再起動での `received` 戻し）で行が複数になり得る。Policy 経路は Execution の拒否でも `risk_passed = 1` のままなので、注文案とは定義が非対称（注文案は注文まで進んだものだけ）。注文案が Risk を通ったが注文にならなかった行（`proposal_rejected_after_risk: <コード>`、#860）は `risk_passed_count` にも `other_reject_*` にも入れず、`proposal_rejected_after_risk_count` と理由コード別内訳に分ける |
 | `kill_switch_history` | `kill_switch_events` と `kill_switch_resolutions` のラベル |
@@ -173,7 +173,7 @@ MCP のためのテーブルは作らない。`metalabel_retrain_skips`（`00003
 - `state_json` / `response_json` は特徴量の組み立てのために**プロセス内で読むだけ**で、戻り値には件数と特徴量名しか載せない。`readonly_db_test` は、この行取り出しの 1 文（`FROM calibration_outcomes o JOIN jev_decisions d`）だけが両列の名前を含んでよいと固定する。
 - 時間: 取り出す行は 1 回の索引検索（`jev_decisions_type_timestamp_idx` と `calibration_outcomes_decision_horizon_idx`）で、新しい索引・マイグレーションは足さない。行の組み立てはプロセス内で、読み取る行数は `metalabeldiag.MaxReadinessRows`（20,000）まで。超えたら `limit_exceeded`（期間を狭める）。30 日・90 日の計測は `metalabeltests/readiness_perf_test.go`（テストが所要時間と `EXPLAIN QUERY PLAN` をログに出す）。
 
-`jev_models`（#849。実装は `metalabeldiag`）の一致判定は、再学習の cutoff 判定（`training/cutoff.go` の `cutoffGate`）と同じ関数 `training.CutoffModelMatches`（完全一致。空白・大文字小文字・前方一致は同じとみなさない）を使い、`training.CutoffModelStatus` が `match` / `mismatch` / `unset` を返す。判定を 2 か所に書くと食い違うので、`cutoffGate` も同じ関数に置き換えた（挙動は変えていない）。`JEV_MODEL`（secrets）は暗号化されていて読めず、DB にも無いので、このツールが返すのは応答に入っていた `model_id` と `llm_cutoff_model` だけである。`runtime_settings` は `metalabel.*` のキー（`metalabelsettings.Keys`）だけ読み、他のキーは SQL の前に拒否する（`metalabeldiag.metalabelSettingsReader`）。新しい索引・マイグレーションは足さない（`jev_decisions_timestamp_idx` の範囲検索）。
+`jev_models`（#849。実装は `metalabeldiag`）の一致判定は、再学習の cutoff 判定（`training/cutoff.go` の `cutoffGate`）と同じ関数 `training.CutoffModelMatches`（完全一致。空白・大文字小文字・前方一致は同じとみなさない）を使い、`training.CutoffModelStatus` が `match` / `mismatch` / `unset` を返す。判定を 2 か所に書くと食い違うので、`cutoffGate` も同じ関数に置き換えた（挙動は変えていない）。`JEV_MODEL`（secrets）の暗号化された値は、このツールを含むどのツールも読まない。このツールが返すのは応答に入っていた `model_id` と `llm_cutoff_model` だけである。なお issue #885 から、Settings 画面で `JEV_MODEL` を切り替えると、そのモデル**名**（前と後）が `jev_model_changes` に平文で残り、`experiment_compare` の `confounders[].values` に出る（実験の章 §4.3）。モデル名は秘密情報ではない。この表に入るのは `JEV_MODEL` の 2 つの値だけで、API キーなど `JEV_MODEL` 以外の `secrets` の値は、書き込みの経路の作りからこの表にも MCP の応答にも届かない。`runtime_settings` は `metalabel.*` のキー（`metalabelsettings.Keys`）だけ読み、他のキーは SQL の前に拒否する（`metalabeldiag.metalabelSettingsReader`）。新しい索引・マイグレーションは足さない（`jev_decisions_timestamp_idx` の範囲検索）。
 
 kabu の板・時価の保存を続けるかは #778 の現状のままである（保存は継続、リスクは理解済み、公式回答待ち）。本仕様は規約の適否を判断しない。リモートへ出す対象から生データを外すのは、その現状を広げないためである。
 
@@ -182,7 +182,7 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 - 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない。Paper の注文案を受け付けて記録するツール（§8）は、発注ではない。Jev のシャドーを有効にする・候補の版を選ぶ・費用の上限を決める手段も MCP には作らない（Settings 画面だけ）。発注するのはアプリで、MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）に書かない
 - 新規の売り建て（SHORT）の注文案は受け付けない（注文案の `action` は買い `open_long` と決済 `close` だけ）
 - 注文案の受け付けを MCP からオンにする手段を作らない（オンにできるのは Settings 画面だけ。§8.2）
-- `market_snapshots.raw_data_json`、`jev_decisions.state_json` / `response_json`、板・気配・時価の列、`secrets`、API キーを戻り値にもログにも出さない（一覧は API 仕様の「出さないもの」）
+- `market_snapshots.raw_data_json`、`jev_decisions.state_json` / `response_json`、板・気配・時価の列、`secrets`、API キーを戻り値にもログにも出さない（一覧は API 仕様の「出さないもの」）。`secrets` の値のうち出うるのはモデル名（`JEV_MODEL`。`jev_model_changes` 経由で `experiment_compare` に出る）だけで、これは秘密情報ではない。ほかの値は、記録の書き込みがモデル名の 2 つの値だけを受け取る作りなので、record にも応答にも届かない
 - アプリの Gin ルート（セッション Cookie・CSRF・`/api/v1`）に本 MCP を相乗りさせない
 - #347 のツール名（`kabu_station_status` / `kabu_api_error_guidance`）を本 MCP に生やさない
 

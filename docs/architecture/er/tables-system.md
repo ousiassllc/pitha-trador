@@ -1,6 +1,6 @@
 # ER / データモデル: テーブル定義（運用設定・ジョブ・ベクトル）
 
-`docs/architecture/er.md` から分割した章。対象: `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `mcp_settings_audit` / `tuning_experiments` とsqlite-vecベクトルインデックス。型・規約と全体ER図は `docs/architecture/er.md` を参照。
+`docs/architecture/er.md` から分割した章。対象: `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes` とsqlite-vecベクトルインデックス。型・規約と全体ER図は `docs/architecture/er.md` を参照。
 
 ## runtime_settings
 
@@ -46,6 +46,8 @@ erDiagram
 | key | varchar(100) | PK | 許可キーは`internal/config/secrets.go`の`AllowedSecretKeys`の17個のみ。必須: `JEV_API_KEY`, `KABU_API_PASSWORD`（`KABU_API_PASSWORD`は立花選択時は任意＝issue #734）。任意: `JEV_BASE_URL`, `JEV_MODEL`, `SLACK_WEBHOOK_URL`, `LUNA_API_KEY`, `LUNA_BASE_URL`, `NEWS_FEED_URL`, `NEWS_FEED_API_KEY`, `NEWS_FEED_ENABLED`（`on`/`off`のみ）, `SOL_API_KEY`, `SOL_BASE_URL`, `OPUS_API_KEY`, `OPUS_BASE_URL`, `TACHIBANA_DEMO_AUTH_ID`, `TACHIBANA_PROD_AUTH_ID`, `TACHIBANA_DEMO_SECOND_PASSWORD`（立花証券 e支店API。認証IDはデモ/本番別、第二暗証番号はデモのみで、**本番の第二暗証番号のキーは存在しない**＝#55で追加。キー一覧の正は`AllowedSecretKeys`） |
 | encrypted_value | text | NOT NULL | AES-256-GCMで暗号化した値。先頭にランダムnonceを連結しbase64（StdEncoding）でエンコードした文字列 |
 | updated_at | text | NOT NULL | |
+
+`JEV_MODEL`の保存・削除だけは、`secrets`の更新と同じトランザクションで`jev_model_changes`（後述。いつ・何から何へ・誰が。モデル名だけ）にも 1 行残す（issue #885）。ほかのキーの保存は`secrets`だけを書く。
 
 ## policy_proposals
 
@@ -218,6 +220,31 @@ erDiagram
 | status | text | NOT NULL, DEFAULT `running`, CHECK(`running`/`closed`/`aborted`) | `running`＝実行中、`closed`＝終了（判定の対象）、`aborted`＝中止（判定を出さない） |
 
 インデックス: `(status, id)`。UPDATE は`running`の行を終えるときの 1 回だけ（終わった実験は再び開けない）。
+
+## jev_model_changes（Jev のモデルを切り替えた記録、issue #885）
+
+Settings 画面で`JEV_MODEL`（`secrets`の 1 キー。Jev のモデル名）を保存・削除した切り替えの記録（マイグレーション`000048`、`docs/architecture/paper-results-mcp-experiments.md` §4.3）。`jev_decisions.model_id`は判断が走った後にしか残らないため、判断が 1 件も無い期間のモデルの変更は、この表だけが残す。調整の実験（`tuning_experiments`）の交絡の検出と、モデルの実験（`variable_kind='model'`）の`started_at`の確認に使う。**1 切り替え 1 行**。書くのは`system.SecretsRepository.Set` / `Delete`だけで、`JEV_MODEL`のときに限り、`secrets`の更新と同じトランザクションで 1 行`INSERT`する。値が変わらない保存し直し・未設定の削除は行を作らない。**追記のみ**（`UPDATE` / `DELETE`しない）。記録の開始（マイグレーション適用）より前の切り替えは遡れず、行が無いことは「切り替えが無かった」ことを意味しない（「記録なし」）。
+
+```mermaid
+erDiagram
+    jev_model_changes {
+        integer id PK
+        text at
+        text actor
+        text before_value
+        text after_value
+    }
+```
+
+| カラム | 型 | 制約 | 説明 |
+|-------|-----|------|------|
+| id | integer | PK, AUTOINCREMENT | |
+| at | text | NOT NULL | 保存した時刻（UTC）。モデルが効くのはアプリの再起動後なので、判断の`model_id`が変わるのはこれ以降 |
+| actor | text | NOT NULL, CHECK(`gui`) | 誰が変えたか。`gui`＝Settings 画面（`secrets`を書く経路はこれだけ） |
+| before_value | text | NULL可 | 切り替え前のモデル名。NULL＝未設定（既定のモデルが効いていた） |
+| after_value | text | NULL可 | 切り替え後のモデル名。NULL＝削除して未設定（既定）へ戻した |
+
+CHECK(`before_value IS NOT after_value`)（変わっていない行は入らない）。インデックス: `(at)`。**値はモデル名だけ**: モデル名は秘密ではない。`JEV_MODEL`以外の秘密情報（API キー・パスワード・URL など）の値は、この表に入らない（書き込み関数が`JEV_MODEL`の前後の値しか受け取らない。`TestSecretsRepository_JevModelChanges_NeverHoldOtherSecrets`）。
 
 ## ベクトルインデックス（sqlite-vec）
 

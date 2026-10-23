@@ -94,15 +94,32 @@ type ShadowCostStatus struct {
 	Total            Spend     `json:"total"`
 	Daily            []DayCost `json:"daily"`
 	// HaltToday is set when the cap stopped the shadow on today's JST day.
-	HaltToday          *ShadowHalt `json:"halt_today"`
-	LastHalt           *ShadowHalt `json:"last_halt"`
-	RecentPromotions   []Promotion `json:"recent_promotions"`
-	RegisteredVersions []string    `json:"registered_versions"`
+	HaltToday *ShadowHalt `json:"halt_today"`
+	LastHalt  *ShadowHalt `json:"last_halt"`
+	// The Jev API shares its rate limit between the live calls and the shadow
+	// (issue #883), so the shadow gives way: MinCallIntervalSeconds is the least
+	// time between two shadow calls (a comparison that would start sooner is
+	// dropped), and a 429/529 stops it for ThrottleCooldownSeconds (it never waits
+	// or retries after one). ThrottleActive is true while it is stopped that way;
+	// LastThrottle is the last such stop (status, reason, source, when until) and
+	// ThrottlesToday the stops on today's JST day.
+	MinCallIntervalSeconds  int             `json:"min_call_interval_seconds"`
+	ThrottleCooldownSeconds int             `json:"throttle_cooldown_seconds"`
+	ThrottleActive          bool            `json:"throttle_active"`
+	ThrottlesToday          int             `json:"throttles_today"`
+	LastThrottle            *ShadowThrottle `json:"last_throttle"`
+	RecentPromotions        []Promotion     `json:"recent_promotions"`
+	RegisteredVersions      []string        `json:"registered_versions"`
 }
 
 // shadowSettingsReader reads the jevshadowsettings keys only, with the same
 // single-key statement the other fixed-key reads use.
 type shadowSettingsReader struct{ q query.Q }
+
+// SettingsStore is the read-only jevshadowsettings.Store over q: what the app's
+// jev.ResolveLiveVersion reads, so a tool resolves the live prompt version the
+// way the Trader does.
+func SettingsStore(q query.Q) jevshadowsettings.Store { return shadowSettingsReader{q} }
 
 func (s shadowSettingsReader) Get(ctx context.Context, key string) (string, bool, error) {
 	allowed := false
@@ -131,6 +148,8 @@ func Cost(ctx context.Context, q query.Q, now time.Time, liveDefault string, reg
 	status := ShadowCostStatus{
 		Enabled: cfg.Enabled, LiveVersion: liveDefault, DailyCapUSD: cfg.CapUSD, CapIsDefault: cfg.CapIsDefault, CapSource: CapSourceStored,
 		FailureCap: jevshadowsettings.DailyFailureCap, FailureCapSource: CapSourceFixed,
+		MinCallIntervalSeconds: secondsOf(jevshadowsettings.MinCallInterval), ThrottleCooldownSeconds: secondsOf(jevshadowsettings.ThrottleCooldown),
+		ThrottleActive: cfg.Throttle.ActiveAt(now), ThrottlesToday: cfg.Throttle.CountOn(jevshadowsettings.Day(now)), LastThrottle: throttleOf(cfg.Throttle),
 		Daily: []DayCost{}, RecentPromotions: []Promotion{}, RegisteredVersions: registered,
 	}
 	if cfg.CandidateVersion != "" {

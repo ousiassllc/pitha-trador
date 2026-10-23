@@ -15,6 +15,8 @@ import (
 // (docs/architecture/er/tables-metalabel.md).
 type Repository struct {
 	db *sql.DB
+	// foreign scopes the training reads (SetForeignTraderVersions, issue #881).
+	foreign sqlutil.ForeignTraderVersions
 }
 
 // NewRepository returns a Repository backed by db.

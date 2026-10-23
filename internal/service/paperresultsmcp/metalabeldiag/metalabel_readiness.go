@@ -14,6 +14,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
@@ -148,6 +149,9 @@ type TrainingReadiness struct {
 	Features              FeatureGaps     `json:"features"`
 	LastRetrain           LastRetrain     `json:"last_retrain"`
 	Split                 ReadinessSplit  `json:"split"`
+	// ExcludedPromptVersions are the Trader prompt versions whose decisions the
+	// retraining leaves out (another cohort than the live prompt's, issue #881).
+	ExcludedPromptVersions []string `json:"excluded_prompt_versions"`
 }
 
 // TrainingReadinessAt reports whether the labeled Jev decisions of r can feed
@@ -156,7 +160,11 @@ type TrainingReadiness struct {
 // features, training.SplitWalkForward with the
 // default walk-forward and acceptance configs for the split and the required
 // counts (so a changed default shows up here without an edit). Read-only.
-func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time.Time) (TrainingReadiness, error) {
+//
+// foreign are the Trader prompt versions the retraining leaves out (jev.
+// ForeignVersionsOfLive): the funnel and the rows are those of the live
+// prompt's cohort.
+func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time.Time, foreign []string) (TrainingReadiness, error) {
 	now = now.UTC()
 	asOf := now
 	if r.To.Before(asOf) {
@@ -169,20 +177,21 @@ func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time
 	}
 	out := TrainingReadiness{
 		AsOf: asOf.Format(time.RFC3339), RowsFrom: rowsFrom.Format(time.RFC3339), RowsTo: asOf.Format(time.RFC3339),
-		LookbackDays:          int(lookback / (24 * time.Hour)),
-		MatchesNightlyRetrain: asOf.Equal(now) && !r.From.After(now.Add(-lookback)),
+		LookbackDays:           int(lookback / (24 * time.Hour)),
+		ExcludedPromptVersions: append([]string{}, foreign...),
+		MatchesNightlyRetrain:  asOf.Equal(now) && !r.From.After(now.Add(-lookback)),
 	}
 	if !rowsFrom.Before(asOf) {
 		rowsFrom = asOf // an empty window
 	}
 	var err error
-	if out.Funnel, err = readinessFunnel(ctx, q, rowsFrom, asOf); err != nil {
+	if out.Funnel, err = readinessFunnel(ctx, q, rowsFrom, asOf, foreign); err != nil {
 		return TrainingReadiness{}, err
 	}
 	if out.Funnel[3].Rows > MaxReadinessRows {
 		return TrainingReadiness{}, query.ErrLimitExceeded
 	}
-	stored, err := repo.ListTrainingRowsFrom(ctx, q, rowsFrom, asOf)
+	stored, err := repo.ListTrainingRowsFrom(ctx, q, rowsFrom, asOf, foreign)
 	if err != nil {
 		return TrainingReadiness{}, fmt.Errorf("query: training rows: %w", err)
 	}
@@ -209,9 +218,13 @@ func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time
 
 // readinessFunnel counts the trader decisions of [from, to) through the
 // conditions of repo.ListTrainingRowsFrom, one statement.
-func readinessFunnel(ctx context.Context, q query.Q, from, to time.Time) ([]ReadinessStep, error) {
+func readinessFunnel(ctx context.Context, q query.Q, from, to time.Time, foreign []string) ([]ReadinessStep, error) {
 	f, t := query.Range{From: from, To: to}.Bounds()
 	v := domain.CalibrationLabelVersionTripleBarrier
+	versionCond, versionArgs := sqlutil.NotIn("d.question_version", foreign)
+	if versionCond != "" {
+		versionCond = " AND " + versionCond
+	}
 	var traders, longShort, labeled, netReturn int64
 	err := q.QueryRowContext(ctx, `
 SELECT COUNT(*),
@@ -222,7 +235,7 @@ SELECT COUNT(*),
 		SELECT 1 FROM calibration_outcomes o
 		WHERE o.jev_decision_id = d.id AND o.label_version = ? AND o.net_return_bps IS NOT NULL)), 0)
 FROM jev_decisions d
-WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?`, v, v, f, t).
+WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?`+versionCond, append([]any{v, v, f, t}, versionArgs...)...).
 		Scan(&traders, &longShort, &labeled, &netReturn)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("query: training funnel: %w", err)

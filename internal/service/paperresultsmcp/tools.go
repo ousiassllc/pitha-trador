@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
+	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/mcpset"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query/shadowquery"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/sessiondiag"
 )
 
@@ -171,15 +174,19 @@ var tools = []tool{
 		},
 	},
 	{
-		name:        "jev_calibration",
-		description: "Jev 判断の件数と、ラベル版・horizon 別の的中率・Brier・信頼度帯（読み取り専用）",
+		name: "jev_calibration",
+		description: "Jev 判断の件数と、ラベル版・horizon 別の的中率・Brier・信頼度帯（読み取り専用）。" +
+			"プロンプトの版（jev_decisions.question_version）は混ぜない: 既定ではライブの版と同じコホートの行だけを採点し（別コホートの版は prompt_versions.excluded に出る）、" +
+			"prompt_version を渡すとその版の行だけを採点する。trader_decisions_by_version は期間の trader 判断を版別に数える（版の混在が見える。docs/architecture/jev-prompt-versions-in-data.md）",
 		schema: periodSchema(map[string]any{
 			"horizon_minutes": map[string]any{"type": "integer", "minimum": 1},
+			"prompt_version":  map[string]any{"type": "string", "maxLength": jevshadowsettings.MaxVersionLen, "description": "この版の trader 判断だけを採点する（例: trader-v4）。省略はライブの版と同じコホート"},
 		}),
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 			var a struct {
 				periodArgs
-				HorizonMinutes *int `json:"horizon_minutes"`
+				HorizonMinutes *int   `json:"horizon_minutes"`
+				PromptVersion  string `json:"prompt_version"`
 			}
 			if err := strictDecode(raw, &a); err != nil {
 				return a.periodArgs, nil, err
@@ -191,8 +198,19 @@ var tools = []tool{
 				}
 				horizon = *a.HorizonMinutes
 			}
+			if a.PromptVersion != "" && jevshadowsettings.ValidateVersion(a.PromptVersion) != nil {
+				return a.periodArgs, nil, fail(CodeInvalidArgument)
+			}
 			return a.periodArgs, func(ctx context.Context, e toolEnv) (any, int, error) {
-				c, err := query.JevCalibration(ctx, e.q, e.r, horizon)
+				versions := query.PromptVersions{Only: a.PromptVersion}
+				if a.PromptVersion == "" {
+					foreign, err := jev.ForeignVersionsOfLive(ctx, shadowquery.SettingsStore(e.q))
+					if err != nil {
+						return nil, 0, err
+					}
+					versions.Excluded = foreign
+				}
+				c, err := query.JevCalibration(ctx, e.q, e.r, horizon, versions)
 				return c, len(c.Horizons), err
 			}, nil
 		},

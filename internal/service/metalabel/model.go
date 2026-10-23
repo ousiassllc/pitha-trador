@@ -24,6 +24,10 @@ type Model struct {
 	ID int64
 	// Version is metalabel_models.version.
 	Version string
+	// TrainedCohort is the Trader prompt cohort the model was trained on
+	// (metalabel_models.adoption_json); "" for a model stored before it was
+	// recorded (issue #881). Policy compares it with the live version's cohort.
+	TrainedCohort string
 	// FeatureNames is the vector layout the weights were learned for.
 	FeatureNames []string
 	LR           LogisticRegression
@@ -69,7 +73,7 @@ func ParseModel(m repo.Model) (Model, error) {
 	if err := json.Unmarshal([]byte(m.ParamsJSON), &p); err != nil {
 		return Model{}, fmt.Errorf("metalabel: decode model %q params: %w", m.Version, err)
 	}
-	model := Model{ID: m.ID, Version: m.Version, FeatureNames: slices.Clone(m.FeatureNames), LR: p.LogisticRegression, Calibrator: p.Calibrator, WinBps: p.WinBps, LossBps: p.LossBps}
+	model := Model{ID: m.ID, Version: m.Version, TrainedCohort: m.Adoption.TrainedCohort, FeatureNames: slices.Clone(m.FeatureNames), LR: p.LogisticRegression, Calibrator: p.Calibrator, WinBps: p.WinBps, LossBps: p.LossBps}
 	if err := model.validate(); err != nil {
 		return Model{}, fmt.Errorf("metalabel: model %q: %w", m.Version, err)
 	}

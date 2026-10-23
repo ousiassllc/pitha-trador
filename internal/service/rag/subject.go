@@ -1,6 +1,7 @@
 package rag
 
 import (
+	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
@@ -45,15 +46,26 @@ func (r selfRows) active() bool { return r.table != "" }
 // subject timestamp (the current state's own Scout decision when Trader
 // runs). Earlier decisions stay: only the supplementary snapshot search
 // carries the recency guard.
-func (sub Subject) decisionSelf() selfRows {
-	if sub.Symbol == "" {
+//
+// foreign are the Trader prompt versions of another cohort than the live one
+// (sqlutil.ForeignTraderVersions, issue #881): a Trader decision of one of them
+// is dropped like an own row, so the live prompt is never shown what another
+// prompt answered. Scout decisions are never dropped by version.
+func (sub Subject) decisionSelf(foreign []string) selfRows {
+	var conds []string
+	var args []any
+	if sub.Symbol != "" {
+		conds = append(conds, "(symbol = ? AND timestamp >= ?)")
+		args = append(args, sub.Symbol, sqlutil.FormatTime(sub.Timestamp))
+	}
+	if in, inArgs := sqlutil.In("question_version", foreign); in != "" {
+		conds = append(conds, "(decision_type = 'trader' AND "+in+")")
+		args = append(args, inArgs...)
+	}
+	if len(conds) == 0 {
 		return selfRows{}
 	}
-	return selfRows{
-		table: "jev_decisions",
-		cond:  "symbol = ? AND timestamp >= ?",
-		args:  []any{sub.Symbol, sqlutil.FormatTime(sub.Timestamp)},
-	}
+	return selfRows{table: "jev_decisions", cond: strings.Join(conds, " OR "), args: args}
 }
 
 // snapshotSelf selects the subject symbol's snapshots newer than

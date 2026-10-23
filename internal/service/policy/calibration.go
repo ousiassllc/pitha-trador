@@ -2,21 +2,17 @@ package policy
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/calibrationgate"
 )
 
-// CalibrationSource answers whether a confidence bucket is populated
-// enough (internal/service/calibration.Service satisfies it).
-type CalibrationSource interface {
-	// BucketHasSamples reports whether the confidence bucket containing
-	// confidence holds at least min labeled samples (false when it is in
-	// no bucket). It must be cheap and independent of the labeling
-	// history's size: it runs on every directional Jev trader job.
-	BucketHasSamples(ctx context.Context, confidence float64, min int) (bool, error)
-}
+// CalibrationSource answers whether a confidence bucket is populated enough, over
+// the live Trader prompt version's samples (internal/service/calibration.Service
+// satisfies it; issue #881, see calibrationgate).
+type CalibrationSource = calibrationgate.Source
 
 // HandlerOption configures optional Handler behavior.
 type HandlerOption func(*Handler)
@@ -26,7 +22,17 @@ type HandlerOption func(*Handler)
 // holds fewer than Thresholds.Policy.MinCalibrationSamples labeled
 // samples is not calibrated and becomes NONE.
 func WithCalibration(src CalibrationSource) HandlerOption {
-	return func(h *Handler) { h.calib = src }
+	return func(h *Handler) { h.calib.Source = src }
+}
+
+// WithCalibrationScope sets what the calibration check is judged for
+// (calibrationgate.Gate): the operating mode (metalabelsettings.RuntimeMode), the
+// live version (read to name it in the reasons), and allVersions, the
+// count over every Trader version. Only Paper may fall back to allVersions, and
+// the decision then says so; any other mode, and the default of none, never
+// does. A nil allVersions is no fallback.
+func WithCalibrationScope(mode metalabelsettings.Mode, live func(context.Context) (string, error), allVersions CalibrationSource) HandlerOption {
+	return func(h *Handler) { h.calib.Mode, h.calib.Live, h.calib.AllVersions = mode, live, allVersions }
 }
 
 // WithClock sets the wall clock Handler judges snapshot staleness against
@@ -43,22 +49,18 @@ func WithSnapshotMaxAge(d time.Duration) HandlerOption {
 }
 
 // calibrated reports whether decision's confidence bucket has enough
-// labeled Calibration samples to trust (Input.Calibrated). Always true
+// labeled Calibration samples to trust (Input.Calibrated), and the detail when
+// the live version's own were too few (Input.CalibrationDetail). Always true
 // without a CalibrationSource, a zero MinCalibrationSamples, or a NONE
 // decision (nothing to calibrate); false for a directional decision with
 // no confidence or one outside every bucket.
-func (h *Handler) calibrated(ctx context.Context, d domain.JevDecision) (bool, error) {
+func (h *Handler) calibrated(ctx context.Context, d domain.JevDecision) (calibrationgate.Verdict, error) {
 	minSamples := h.engine.thresholds.Policy.MinCalibrationSamples
-	if h.calib == nil || minSamples <= 0 || d.Direction == nil || *d.Direction == domain.JevDirectionNone {
-		return true, nil
+	if h.calib.Source == nil || minSamples <= 0 || d.Direction == nil || *d.Direction == domain.JevDirectionNone {
+		return calibrationgate.Verdict{OK: true}, nil
 	}
 	if d.Confidence == nil {
-		return false, nil
+		return calibrationgate.Verdict{}, nil
 	}
-
-	enough, err := h.calib.BucketHasSamples(ctx, *d.Confidence, minSamples)
-	if err != nil {
-		return false, fmt.Errorf("count calibration samples: %w", err)
-	}
-	return enough, nil
+	return h.calib.Check(ctx, *d.Confidence, minSamples)
 }
