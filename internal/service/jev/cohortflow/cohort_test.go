@@ -1,4 +1,7 @@
-package evalflow_test
+// Package cohortflow_test holds the Trader prompt-version cohort tests (issue
+// #881). They live in their own directory to keep internal/service/jev/evalflow
+// under the per-directory line limit.
+package cohortflow_test
 
 import (
 	"context"

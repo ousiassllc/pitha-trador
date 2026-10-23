@@ -50,8 +50,11 @@ type PanelProps struct {
 	TotalEstimatedUSD   string
 	Daily               []DayRow
 	// HaltNote is the reason the shadow is stopped today ("" when it is not).
-	HaltNote   string
-	Promotions []PromotionRow
+	HaltNote string
+	// ThrottleNote is why the shadow stops for a while after the Jev API answered
+	// 429/529, and how often it did today ("" when there is nothing to say).
+	ThrottleNote string
+	Promotions   []PromotionRow
 	// Notice is the outcome of the action that produced this fragment.
 	Notice string
 }
@@ -121,6 +124,9 @@ templ Panel(props PanelProps) {
 			<span>今日（{ props.TodayDate }）: <strong data-testid="jev-prompt-cost-today">{ props.TodayUSD } USD</strong>（{ itoa(props.TodayCalls) } 回）　累計: <strong data-testid="jev-prompt-cost-total">{ props.TotalUSD } USD</strong>（{ itoa(props.TotalCalls) } 回）</span>
 			if props.HaltNote != "" {
 				<span class="text-amber-700" role="status" data-testid="jev-prompt-halt">{ props.HaltNote }</span>
+			}
+			if props.ThrottleNote != "" {
+				<span class="text-amber-700" role="status" data-testid="jev-prompt-throttle">{ props.ThrottleNote }</span>
 			}
 			<span class="text-xs text-slate-500" data-testid="jev-prompt-cost-basis">費用は API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。</span>
 			<span data-testid="jev-prompt-cost-estimated">うち見積り（応答に使用量が無かった呼び出し）: 今日 <strong data-testid="jev-prompt-estimated-today">{ props.TodayEstimatedUSD } USD</strong>（{ itoa(props.TodayEstimatedCalls) } 回）　累計 <strong data-testid="jev-prompt-estimated-total">{ props.TotalEstimatedUSD } USD</strong>（{ itoa(props.TotalEstimatedCalls) } 回）</span>

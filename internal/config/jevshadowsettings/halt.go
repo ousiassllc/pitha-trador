@@ -17,6 +17,11 @@ import (
 // failed call is counted here whatever it cost, and the cap bounds that
 // unrecorded spend to this many calls a day.
 //
+// A call cancelled by the shutdown (Shadow.Close) is the exception: it is not
+// counted. The vendor may have billed it, but it is not stored (unless its
+// insert had already committed, when the row and its cost exist), so it is not
+// in the cost either; at most 4 calls (shadowMaxInFlight) per shutdown.
+//
 // The number (20 a day) is a user decision (確定). The pull request of issue
 // #872 keeps the basis; this constant is its only place.
 const DailyFailureCap = 20
