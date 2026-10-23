@@ -106,4 +106,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.10 | 2026-10-21 | §2 に注文案の読み取り（`proposal`・`origin`・`stalled`）と、GUI の「注文案」画面との関係（読み取りモデルの共有）を追記。ツールは 21 | issue #829 |
 | 1.11 | 2026-10-22 | 部品の表に `health_today` の日次停止の読み取り `dailyhalt` を追加（`query` の行数制限のため切り出し。挙動は変えない） | issue #863 |
 | 1.12 | 2026-10-21 | §2 に `session_diagnostics` と `collection_status` の失敗の内訳の置き場所を追加 | issue #850 |
-| 1.13 | 2026-10-22 | §2 に調整の実験（`experiment`・`experiment_tools.go`・`mcpset/experiments.go`・Settings の節）を追記。ツールは 25 | issue #871 |
+| 1.13 | 2026-10-22 | §2 に調整の実験（`experiment`・`experiment_tools.go`・`mcpset/experiments.go`・Settings の節）を追記。ツールは 28 | issue #871 |
