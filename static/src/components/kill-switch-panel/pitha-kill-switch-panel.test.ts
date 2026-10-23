@@ -20,9 +20,9 @@ describe('pitha-kill-switch-panel', () => {
       'running',
     );
     const buttons = buttonLabels(el);
-    expect(buttons).toContain('Pause');
-    expect(buttons).toContain('Kill');
-    expect(buttons).not.toContain('Resume');
+    expect(buttons).toContain('新規エントリーを停止');
+    expect(buttons).toContain('全決済して停止');
+    expect(buttons).not.toContain('再開');
   });
 
   // Tailwind does not cross the shadow boundary (issue #145): the panel's
@@ -30,7 +30,7 @@ describe('pitha-kill-switch-panel', () => {
   test('styles the Kill button distinctly from Pause inside the shadow root', async () => {
     const { el } = await mount('running');
 
-    const [pause, kill] = ['Pause', 'Kill'].map((label) =>
+    const [pause, kill] = ['新規エントリーを停止', '全決済して停止'].map((label) =>
       Array.from(el.shadowRoot?.querySelectorAll('button') ?? []).find(
         (b) => b.textContent?.trim() === label,
       ),
@@ -45,9 +45,9 @@ describe('pitha-kill-switch-panel', () => {
     const { el } = await mount('paused');
 
     const buttons = buttonLabels(el);
-    expect(buttons).toContain('Resume');
-    expect(buttons).toContain('Kill');
-    expect(buttons).not.toContain('Pause');
+    expect(buttons).toContain('再開');
+    expect(buttons).toContain('全決済して停止');
+    expect(buttons).not.toContain('新規エントリーを停止');
   });
 
   test('takes allowed actions from the server response, not from the state name', async () => {
@@ -74,7 +74,7 @@ describe('pitha-kill-switch-panel', () => {
     document.body.appendChild(el);
     await el.updateComplete;
 
-    expect(buttonLabels(el)).toEqual(['Resume', 'Kill']);
+    expect(buttonLabels(el)).toEqual(['再開', '全決済して停止']);
   });
 
   test('performs actions against the injected URLs and applies the response', async () => {
@@ -91,7 +91,7 @@ describe('pitha-kill-switch-panel', () => {
     await flush(el);
 
     expect(posted).toEqual(['/injected/pause']);
-    expect(buttonLabels(el)).toEqual(['Resume', 'Kill']);
+    expect(buttonLabels(el)).toEqual(['再開', '全決済して停止']);
   });
 
   test('has no URL of its own: without injected attributes it issues no request and opens no socket', async () => {
@@ -126,14 +126,14 @@ describe('pitha-kill-switch-panel', () => {
     expect(el.shadowRoot?.querySelector('[data-status]')?.getAttribute('data-status')).toBe(
       'killed',
     );
-    expect(buttonLabels(el)).toEqual(['Resume']);
+    expect(buttonLabels(el)).toEqual(['再開']);
   });
 
   // Issue #363: AutoResume / another window's Resume leaves Killed without
   // any panel action, so the push must pull the panel and Header back.
   test('resyncs, restores the allowed actions and dispatches systemStateChanged on a state_changed push', async () => {
     const { el, fetchMock } = await mount('killed');
-    expect(buttonLabels(el)).toEqual(['Resume']);
+    expect(buttonLabels(el)).toEqual(['再開']);
     let changedCount = 0;
     el.addEventListener('systemStateChanged', () => {
       changedCount += 1;
@@ -150,7 +150,7 @@ describe('pitha-kill-switch-panel', () => {
     expect(el.shadowRoot?.querySelector('[data-status]')?.getAttribute('data-status')).toBe(
       'running',
     );
-    expect(buttonLabels(el)).toEqual(['Pause', 'Kill']);
+    expect(buttonLabels(el)).toEqual(['新規エントリーを停止', '全決済して停止']);
   });
 
   test('offers no actions after a kill_switch push when the resync fails', async () => {
@@ -232,7 +232,7 @@ describe('pitha-kill-switch-panel', () => {
       fetchMock.mockClear();
 
       const pause = Array.from(el.shadowRoot?.querySelectorAll('button') ?? []).find(
-        (b) => b.textContent?.trim() === 'Pause',
+        (b) => b.textContent?.trim() === '新規エントリーを停止',
       );
       pause?.click();
       await flush(el);

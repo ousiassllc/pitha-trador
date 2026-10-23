@@ -29,18 +29,18 @@ const backtestFieldClass = "mt-1 px-3 py-1"
 // and downloads the CSV; a plain submit, as the other downloads are.
 templ BacktestForm(form BacktestFormValues) {
 	<form id="backtest" class="mt-4 flex flex-wrap items-end gap-4" method="get" action="/performance" data-testid="backtest-form">
-		@backtestField("From", atoms.InputProps{Name: "from", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.From, "required": true}})
-		@backtestField("To", atoms.InputProps{Name: "to", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.To, "required": true}})
-		@backtestField("Training days", daysInput("training_days", form.TrainingDays))
-		@backtestField("Validation days", daysInput("validation_days", form.ValidationDays))
-		@backtestField("Forward days", daysInput("forward_days", form.ForwardDays))
+		@backtestField("開始日", atoms.InputProps{Name: "from", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.From, "required": true}})
+		@backtestField("終了日", atoms.InputProps{Name: "to", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.To, "required": true}})
+		@backtestField("学習日数", daysInput("training_days", form.TrainingDays))
+		@backtestField("検証日数", daysInput("validation_days", form.ValidationDays))
+		@backtestField("Forward 日数", daysInput("forward_days", form.ForwardDays))
 		@atoms.Button(atoms.ButtonProps{Type: "submit"}) {
-			Run backtest
+			バックテストを実行
 		}
 		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Type: "submit", Attrs: templ.Attributes{
 			"formaction": "/performance/cost-sensitivity", "name": "format", "value": "csv", "data-testid": "cost-sensitivity-export",
 		}}) {
-			Download cost sensitivity (CSV)
+			コスト感度をダウンロード（CSV）
 		}
 	</form>
 }

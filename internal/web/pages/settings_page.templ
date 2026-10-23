@@ -46,13 +46,15 @@ func (p SettingsProps) hasSystem() bool {
 // opening a page of detailed settings. It replaces the former admin hub. The
 // `data-hash-routes` map (settingspages.HashRoutes) lets pitha-settings-hub
 // forward an old `/settings#modal-<id>` link to the page that now holds the
-// dialog, since the server never sees a URL fragment.
-templ SettingsHubPage(pageList []settingspages.Page) {
-	@layout.Shell("Settings", organisms.NavSettings) {
-		<h1 class="text-2xl font-bold text-slate-900">Settings</h1>
+// dialog, since the server never sees a URL fragment. SettingsPage embeds the
+// same map so an old `/settings/<page>#modal-<id>` link whose dialog moved to
+// another page (issue #895) is forwarded too.
+templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Link) {
+	@layout.Shell("設定", organisms.NavSettings) {
+		<h1 class="text-2xl font-bold text-slate-900">設定</h1>
 		<div class="mt-4 flex flex-col gap-6" data-testid="settings-hub" data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			<p class="text-sm text-slate-600">
-				設定したい項目のページを選んでください。接続先・しきい値・保存先などの詳細な設定と、関連する画面（Scanner・Performance など）へのリンクをページごとにまとめています。
+				設定したい項目のページを選んでください。接続先・しきい値・保存先などの詳細な設定を、テーマごとのページにまとめています。
 			</p>
 			<ul class="flex flex-col gap-3" data-testid="settings-page-list">
 				for _, p := range pageList {
@@ -65,6 +67,22 @@ templ SettingsHubPage(pageList []settingspages.Page) {
 					})
 				}
 			</ul>
+			if len(linkList) > 0 {
+				<section class="flex flex-col gap-3" aria-labelledby="settings-hub-links-heading">
+					<h2 id="settings-hub-links-heading" class="text-lg font-semibold text-slate-900">関連画面</h2>
+					<ul class="flex flex-col gap-3" data-testid="settings-hub-links">
+						for i, link := range linkList {
+							@molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{
+								ID:          "hub-link-" + strconv.Itoa(i),
+								Name:        link.Name,
+								Description: link.Description,
+								Href:        link.Href,
+								ActionLabel: "開く",
+							})
+						}
+					</ul>
+				</section>
+			}
 		</div>
 		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>
 	}
@@ -80,14 +98,14 @@ templ SettingsHubPage(pageList []settingspages.Page) {
 // Save/Delete) - a blank or untouched field can never clear another
 // field's stored value.
 templ SettingsPage(props SettingsProps) {
-	@layout.Shell("Settings / "+props.Page.Name, organisms.NavSettings) {
+	@layout.Shell("設定 / "+props.Page.Name, organisms.NavSettings) {
 		<nav aria-label="パンくず" class="text-sm text-slate-600" data-testid="settings-breadcrumb">
-			<a class="hover:text-slate-900" href={ templ.SafeURL(settingspages.BasePath) }>Settings</a>
+			<a class="hover:text-slate-900" href={ templ.SafeURL(settingspages.BasePath) }>設定</a>
 			<span aria-hidden="true"> / </span>
 			<span aria-current="page">{ props.Page.Name }</span>
 		</nav>
 		<h1 class="mt-2 text-2xl font-bold text-slate-900">{ props.Page.Name }</h1>
-		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID }>
+		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID } data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			<p class="text-sm text-slate-600">{ props.Page.Summary }</p>
 			if len(props.Connections) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
@@ -225,6 +243,7 @@ templ SettingsPage(props SettingsProps) {
 				<div id="jev-prompt-panel" hx-get="/settings/jev-prompt-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 			}
 		}
+		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>
 		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}
 }

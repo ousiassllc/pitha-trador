@@ -41,14 +41,31 @@ describe('forward', () => {
     document.body.innerHTML = `<div data-hash-routes='{"modal-jev":"/settings/integrations"}'></div>`;
     location.hash = '#modal-jev';
     const seen: string[] = [];
-    forward((url) => seen.push(url));
+    forward((url) => seen.push(url), '/settings');
     expect(seen).toEqual(['/settings/integrations#modal-jev']);
+  });
+
+  test('a page forwards a hash that belongs to another page (a moved dialog)', () => {
+    document.body.innerHTML = `<div data-hash-routes='{"modal-sleep-guard":"/settings/maintenance"}'></div>`;
+    location.hash = '#modal-sleep-guard';
+    const seen: string[] = [];
+    forward((url) => seen.push(url), '/settings/operations');
+    expect(seen).toEqual(['/settings/maintenance#modal-sleep-guard']);
+  });
+
+  test('a page keeps a hash that belongs to itself (also with a trailing slash)', () => {
+    document.body.innerHTML = `<div data-hash-routes='{"modal-jev":"/settings/integrations"}'></div>`;
+    location.hash = '#modal-jev';
+    const seen: string[] = [];
+    forward((url) => seen.push(url), '/settings/integrations');
+    forward((url) => seen.push(url), '/settings/integrations/');
+    expect(seen).toEqual([]);
   });
 
   test('stays on the hub without a known hash', () => {
     document.body.innerHTML = `<div data-hash-routes='{"modal-jev":"/settings/integrations"}'></div>`;
     const seen: string[] = [];
-    forward((url) => seen.push(url));
+    forward((url) => seen.push(url), '/settings');
     expect(seen).toEqual([]);
   });
 });

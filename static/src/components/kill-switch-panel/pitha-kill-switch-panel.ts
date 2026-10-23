@@ -26,6 +26,14 @@ import { renderWsDisconnected } from '../lib/ws-status';
 
 export type SystemStatus = 'running' | 'paused' | 'killed';
 
+// Japanese state names, the same wording as Header's StatusDot badge
+// (internal/web/atoms/status_dot.templ).
+const STATUS_LABELS: Record<SystemStatus, string> = {
+  running: '稼働中',
+  paused: '新規停止中',
+  killed: '全停止（Kill）',
+};
+
 // Mirrors docs/api/endpoints.md §5's response shape
 // (internal/web/handler/system.SystemStateOutput), shared by
 // `GET /api/v1/system/status` and every `POST /api/v1/system/*` action.
@@ -67,25 +75,15 @@ export class PithaKillSwitchPanel extends LitElement {
         align-items: center;
         gap: 0.5rem;
       }
+      /* The state is shown once, as Header's StatusDot badge (issue #895); this
+         live region stays only so a screen reader still hears a change. */
       .pitha-kill-switch-panel-status {
-        border-radius: 9999px;
-        background: #e2e8f0;
-        padding: 0.125rem 0.625rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
-      [data-status='running'] .pitha-kill-switch-panel-status {
-        background: #dcfce7;
-        color: #166534;
-      }
-      [data-status='paused'] .pitha-kill-switch-panel-status {
-        background: #fef3c7;
-        color: #92400e;
-      }
-      [data-status='killed'] .pitha-kill-switch-panel-status {
-        background: #fee2e2;
-        color: #991b1b;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
       }
       button.pitha-kill-switch-panel-kill {
         border-color: #b91c1c;
@@ -251,10 +249,10 @@ export class PithaKillSwitchPanel extends LitElement {
   protected override render() {
     return html`
       <div class="pitha-kill-switch-panel" data-status=${this.status}>
-        <span class="pitha-kill-switch-panel-status" role="status" aria-live="polite">${this.status}</span>
-        ${this.canPause ? html`<button type="button" ?disabled=${this.busy} @click=${this.onPause}>Pause</button>` : ''}
-        ${this.canResume ? html`<button type="button" ?disabled=${this.busy} @click=${this.onResume}>Resume</button>` : ''}
-        ${this.canKill ? html`<button type="button" class="pitha-kill-switch-panel-kill" ?disabled=${this.busy} @click=${this.onKill}>Kill</button>` : ''}
+        <span class="pitha-kill-switch-panel-status" role="status" aria-live="polite">${this.status ? STATUS_LABELS[this.status] : ''}</span>
+        ${this.canPause ? html`<button type="button" ?disabled=${this.busy} @click=${this.onPause}>新規エントリーを停止</button>` : ''}
+        ${this.canResume ? html`<button type="button" ?disabled=${this.busy} @click=${this.onResume}>再開</button>` : ''}
+        ${this.canKill ? html`<button type="button" class="pitha-kill-switch-panel-kill" ?disabled=${this.busy} @click=${this.onKill}>全決済して停止</button>` : ''}
         ${renderWsDisconnected(this.wsStatus)}
         ${this.error ? html`<p class="pitha-kill-switch-panel-error" role="alert">${this.error}</p>` : ''}
       </div>

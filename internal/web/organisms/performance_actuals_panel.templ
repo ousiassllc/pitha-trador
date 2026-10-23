@@ -40,27 +40,29 @@ templ PerformanceActualsPanel(perf PerformanceActuals, err string) {
 		if err != "" {
 			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="actuals-error">{ err }</p>
 		} else {
-			<p class="mt-1 text-xs text-slate-500">クローズ済みポジションの実績。Sharpe / Sortino は1取引あたりの参考値（年率換算なし）。</p>
+			<p class="mt-1 text-xs text-slate-500">クローズ済みポジションの実績。シャープレシオ・ソルティノレシオは1取引あたりの参考値（年率換算なし）。</p>
 			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-				@actualsMetric("Total PnL", "total_pnl", yen(perf.TotalPnL))
-				@actualsMetric("Daily PnL", "daily_pnl", yen(perf.DailyPnL))
-				@actualsMetric("Trades", "trade_count", fmt.Sprintf("%d", perf.TradeCount))
-				@actualsMetric("Win Rate", "win_rate", fmt.Sprintf("%.1f%%", perf.WinRate*100))
-				@actualsMetric("Profit Factor", "profit_factor", optionalRatio(perf.ProfitFactor))
-				@actualsMetric("Expectancy", "expectancy", pct(perf.Expectancy))
-				@actualsMetric("Max Drawdown", "max_drawdown_pct", pct(perf.MaxDrawdownPct))
-				@actualsMetric("Average Hold Time", "average_hold_time_minutes", fmt.Sprintf("%.1f 分", perf.AverageHoldTimeMinutes))
-				@actualsMetric("Sharpe (参考)", "sharpe_ref", optionalRatio(perf.SharpeRef))
-				@actualsMetric("Sortino (参考)", "sortino_ref", optionalRatio(perf.SortinoRef))
-				@actualsMetric("Signal count", "signal_count", fmt.Sprintf("%d", perf.SignalCount))
+				@actualsMetric("累計損益", "Total PnL", "total_pnl", yen(perf.TotalPnL))
+				@actualsMetric("本日の損益", "Daily PnL", "daily_pnl", yen(perf.DailyPnL))
+				@actualsMetric("取引数", "Trades", "trade_count", fmt.Sprintf("%d", perf.TradeCount))
+				@actualsMetric("勝率", "Win Rate", "win_rate", fmt.Sprintf("%.1f%%", perf.WinRate*100))
+				@actualsMetric("プロフィットファクター", "Profit Factor", "profit_factor", optionalRatio(perf.ProfitFactor))
+				@actualsMetric("期待値", "Expectancy", "expectancy", pct(perf.Expectancy))
+				@actualsMetric("最大ドローダウン", "Max Drawdown", "max_drawdown_pct", pct(perf.MaxDrawdownPct))
+				@actualsMetric("平均保有時間", "Average Hold Time", "average_hold_time_minutes", fmt.Sprintf("%.1f 分", perf.AverageHoldTimeMinutes))
+				@actualsMetric("シャープレシオ（参考）", "Sharpe ratio", "sharpe_ref", optionalRatio(perf.SharpeRef))
+				@actualsMetric("ソルティノレシオ（参考）", "Sortino ratio", "sortino_ref", optionalRatio(perf.SortinoRef))
+				@actualsMetric("シグナル数", "Signal count", "signal_count", fmt.Sprintf("%d", perf.SignalCount))
 			</dl>
 		}
 	</section>
 }
 
-templ actualsMetric(label, key, value string) {
+// actualsMetric is one labelled figure; the English metric name stays in the
+// title attribute (issue #895) so the term can still be looked up.
+templ actualsMetric(label, title, key, value string) {
 	<div>
-		<dt class="text-sm text-slate-500">{ label }</dt>
+		<dt class="text-sm text-slate-500" title={ title }>{ label }</dt>
 		<dd class="text-sm font-medium text-slate-900" data-metric={ key }>{ value }</dd>
 	</div>
 }

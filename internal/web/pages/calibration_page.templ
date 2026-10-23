@@ -2,6 +2,7 @@ package pages
 
 import (
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -18,8 +19,9 @@ import (
 // (internal/web/handler/calibration.CalibrationHandler.Page) renders this for every
 // request.
 templ CalibrationPage() {
-	@layout.Shell("Calibration", organisms.NavCalibration) {
-		<h1 class="text-2xl font-bold text-slate-900">Calibration</h1>
+	@layout.Shell("予測の精度", organisms.NavPerformance) {
+		<h1 class="text-2xl font-bold text-slate-900">予測の精度</h1>
+		@molecules.TabNav("成績のタブ", resultTabs(tabCalibration))
 		<pitha-calibration-heatmap calibration-url="/api/v1/calibration"></pitha-calibration-heatmap>
 		<pitha-exit-alignment alignment-url="/api/v1/calibration/exit-alignment"></pitha-exit-alignment>
 		<script type="module" src="/static/dist/js/calibration-heatmap/pitha-calibration-heatmap.js"></script>

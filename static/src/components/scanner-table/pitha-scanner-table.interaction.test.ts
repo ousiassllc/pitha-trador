@@ -129,7 +129,7 @@ describe('pitha-scanner-table interaction', () => {
 
     // Same JST label as the SSR caption; fractional seconds dropped.
     expect(el.querySelector('caption')?.textContent?.trim()).toBe(
-      'Scanner Dashboard — as of 2026-09-26 10:15:30 JST',
+      '候補銘柄 — as of 2026-09-26 10:15:30 JST',
     );
   });
 

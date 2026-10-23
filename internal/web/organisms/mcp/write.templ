@@ -38,10 +38,10 @@ templ writeSection(props PanelProps) {
 		<form class="flex flex-col gap-2" hx-post="/settings/mcp/order-proposals" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-order-proposals-form">
 			<label class="flex items-center gap-2">
 				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: proposalsAttrs(props.OrderProposalsEnabled)})
-				<span class="font-medium text-slate-700">MCP からの注文案を受け付ける（Paper のみ）</span>
+				<span class="font-medium text-slate-700">AIからの注文提案を受け付ける（Paper のみ）</span>
 			</label>
 			<span class="text-xs text-slate-500" data-testid="mcp-order-proposals-note">
-				オンにすると、MCP（order_proposal_submit）から Paper の注文案（新規の買いと保有中ポジションの決済）を受け付けて記録します。受け付けるだけで、発注はしません。Live の注文は出せません。1 日（JST）に 20 件までです。オンにできるのはこの画面だけで、MCP からはオフにだけできます（order_proposals_disable）。既定はオフです。
+				オンにすると、MCP（order_proposal_submit）から Paper の注文提案（新規の買いと保有中ポジションの決済）を受け付けて記録します。受け付けるだけで、発注はしません。Live の注文は出せません。1 日（JST）に 20 件までです。オンにできるのはこの画面だけで、MCP からはオフにだけできます（order_proposals_disable）。既定はオフです。
 			</span>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-order-proposals-save"}}) {

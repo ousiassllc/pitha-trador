@@ -70,7 +70,7 @@ async function flush(el: ScannerTableElement): Promise<void> {
 const SSR_MARKUP = `
   <details data-testid="scanner-column-help"><summary>列の意味</summary></details>
   <table>
-    <caption>Scanner Dashboard — as of 2026-09-28 00:00:00 JST</caption>
+    <caption>候補銘柄 — as of 2026-09-28 00:00:00 JST</caption>
     <thead><tr><th>銘柄</th></tr></thead>
     <tbody><tr data-symbol="SSR1"><td>SSR1</td></tr></tbody>
   </table>

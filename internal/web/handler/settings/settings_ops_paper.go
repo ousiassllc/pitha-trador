@@ -23,13 +23,13 @@ var paperRiskGroup = opsGroup{
 	description: "Paper Trading の運用資金（ポジションサイズ計算の分母）と、1 銘柄・全体の建玉上限、1 回の取引の最大損失（いずれも運用資金に対する %）です（issue #804）。" +
 		"Paper の初期値は運用資金 500,000 円・1 銘柄 100%・総エクスポージャ 100%・1 回の最大損失 1.0% です（50 万円を同一銘柄に全部載せても可。株価 5,000 円の銘柄の 1 単元も買えます）。" +
 		"日次ガード用の運用資金も同じ値にそろえられます（異なると警告が出ます）。" +
-		"なお、メタラベリングの Jev 学習データの終わり（metalabel.llm_cutoff と確認記録のモデル名・確認日・出典）は、同じ Settings の「成績・検証」ページ >「メタラベリング」で設定します。",
+		"なお、メタラベリングの Jev 学習データの終わり（metalabel.llm_cutoff と確認記録のモデル名・確認日・出典）は、同じ設定の「予測モデル」ページ >「メタラベリング」で設定します。",
 	note: "保存した値は再起動不要で、次のリスク判定（候補ごとのサイズ計算と上限チェック）から反映されます。未保存の項目は config/risk.yaml の Paper の値を使い、「既定に戻す」でその値に戻ります。" +
 		"Paper 専用です。Live の値と動作はこの設定の影響を受けず、config/risk.yaml だけで決まります。" +
 		"運用資金は 0 円より大きく 1 兆円以下、建玉上限の % は 0 より大きく 100 以下、1 回の最大損失の % は " + formatPct(papersettings.MinTradeLossPct) + " 以上 " + formatPct(papersettings.MaxTradeLossPct) + " 以下です。" +
 		"最大建玉数など他の上限は config/risk.yaml のままで、ここでは変えられません。" +
 		"他の上限は別に判定されるため、サイズ計算を通っても他のガードで見送られることがあります。" +
-		"株と債券ETFの予算枠（同じ Settings の「資産ごとの予算枠」ページ）の合計より運用資金を下げる保存は拒否されます。" +
+		"株と債券ETFの予算枠（同じページの「資産ごとの予算枠」）の合計より運用資金を下げる保存は拒否されます。" +
 		stockBudgetNoAutoRiseNote,
 	fields: []opsField{
 		{key: papersettings.KeyInitialCapitalJPY, label: "Paper の運用資金（円）", placeholder: "500000",

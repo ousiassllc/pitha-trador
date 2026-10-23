@@ -2,6 +2,7 @@ package settingsroutes_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -49,6 +50,11 @@ func TestURLs_ExistingRoutesAreAlive(t *testing.T) {
 		{"/system/health-alerts", "/system/health-alerts", http.StatusOK},
 		{"/settings/mcp-panel", "/settings/mcp-panel", http.StatusOK},
 		{"/admin", "/admin", http.StatusMovedPermanently},
+		// 資産ごとの予算枠 is part of リスク・資金 since issue #895.
+		{"/settings/asset-buckets", "/settings/asset-buckets", http.StatusMovedPermanently},
+		{"/order-proposals", "/order-proposals", http.StatusOK},
+		// The old `/performance#backtest` bookmark and the new backtest tab are the same route.
+		{"/performance", "/performance?tab=backtest", http.StatusOK},
 	}
 	for _, page := range settingspages.Pages() {
 		tests = append(tests, struct {
@@ -113,5 +119,19 @@ func TestSettings_SetupGuardRedirectsLikeOtherPages(t *testing.T) {
 	}
 	if rec := get(engine, "/setup"); rec.Code != http.StatusOK {
 		t.Errorf("GET /setup = %d, want 200 (exempt from the guard)", rec.Code)
+	}
+}
+
+// The retired 予算枠 page answers 301 to リスク・資金, and the pre-#805 hash
+// links onto it (`#modal-asset-buckets`) are forwarded by the hub's route map.
+func TestAssetBucketsPage_RedirectsToRisk(t *testing.T) {
+	engine := newEngine(t, secrets{full: true})
+	rec := get(engine, "/settings/asset-buckets")
+	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/settings/risk" {
+		t.Errorf("GET /settings/asset-buckets = %d Location %q, want 301 /settings/risk", rec.Code, rec.Header().Get("Location"))
+	}
+	hub := get(engine, "/settings").Body.String()
+	if !strings.Contains(hub, "&#34;modal-asset-buckets&#34;:&#34;/settings/risk&#34;") {
+		t.Errorf("hub route map does not forward #modal-asset-buckets to /settings/risk")
 	}
 }

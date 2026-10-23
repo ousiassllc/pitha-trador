@@ -55,7 +55,7 @@ describe('pitha-scanner-table', () => {
 
     expect(el.querySelector('[data-testid="scanner-count"]')?.textContent).toContain('2');
     expect(el.querySelector('caption')?.textContent?.trim()).toBe(
-      'Scanner Dashboard — as of 2026-09-26 10:15:00 JST',
+      '候補銘柄 — as of 2026-09-26 10:15:00 JST',
     );
 
     const cells = (symbol: string) => el.querySelectorAll(`tr[data-symbol="${symbol}"] td`);
@@ -120,9 +120,7 @@ describe('pitha-scanner-table', () => {
     });
     await el.updateComplete;
 
-    expect(el.querySelector('caption')?.textContent?.trim()).toBe(
-      'Scanner Dashboard — データ未取得',
-    );
+    expect(el.querySelector('caption')?.textContent?.trim()).toBe('候補銘柄 — データ未取得');
   });
 
   // The first update cycle used to close and reopen the socket (issue #170).

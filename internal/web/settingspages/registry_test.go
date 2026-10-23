@@ -8,14 +8,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
 )
 
-// The pages are the ones issue #805 proposed plus 資産ごとの予算枠 (issue
-// #824), in that order. A page added or renamed later must update this list on purpose.
+// The six pages of issue #895 (資産ごとの予算枠 folded into リスク・資金), in
+// that order. A page added or renamed later must update this list on purpose.
 func TestPages_AreTheDeclaredList(t *testing.T) {
 	var got []string
 	for _, p := range settingspages.Pages() {
 		got = append(got, p.Name)
 	}
-	want := []string{"運用", "成績・検証", "リスク・資金", "資産ごとの予算枠", "ブローカー・データ", "外部連携", "ログ・エクスポート"}
+	want := []string{"取引ルール", "リスク・資金", "予測モデル", "証券会社・データ", "外部連携・AI", "システム"}
 	if strings.Join(got, "/") != strings.Join(want, "/") {
 		t.Errorf("pages = %v, want %v", got, want)
 	}
@@ -142,5 +142,41 @@ func TestHashRoutes_CoverEveryDialogAndAlias(t *testing.T) {
 	}
 	if _, ok := settingspages.PageOfTarget("modal-does-not-exist"); ok {
 		t.Error("PageOfTarget answered for an unknown id")
+	}
+}
+
+// The old per-page ids that stay valid URLs (issue #895 kept every path but the
+// merged 予算枠 page) and the budget dialog moved onto リスク・資金, so a link to
+// `#modal-asset-buckets` is forwarded there.
+func TestRegistry_BudgetDialogMovedToRiskAndLegacyPathIsKnown(t *testing.T) {
+	risk, ok := settingspages.PageOfTarget("modal-asset-buckets")
+	if !ok || risk.ID != settingspages.PageRisk {
+		t.Errorf("modal-asset-buckets is on %v, %v; want the risk page", risk, ok)
+	}
+	if got := settingspages.HashRoutes()["modal-asset-buckets"]; got != "/settings/risk" {
+		t.Errorf("HashRoutes[modal-asset-buckets] = %q, want /settings/risk", got)
+	}
+	if _, ok := settingspages.PageByID("asset-buckets"); ok {
+		t.Error("asset-buckets is still a page; it is only a redirect")
+	}
+	if settingspages.LegacyBucketsPath != "/settings/asset-buckets" {
+		t.Errorf("LegacyBucketsPath = %q", settingspages.LegacyBucketsPath)
+	}
+	for _, want := range []string{"modal-sleep-guard"} {
+		if page, ok := settingspages.PageOfTarget(want); !ok || page.ID != settingspages.PageMaintenance {
+			t.Errorf("%s is on %v, %v; want the システム page", want, page, ok)
+		}
+	}
+}
+
+// The main menu's own screens are not repeated as Settings links (issue
+// #895); only 稼働ログ, 初回セットアップ and Swagger remain.
+func TestLinks_DoNotRepeatTheMainMenu(t *testing.T) {
+	var got []string
+	for _, l := range settingspages.AllLinks() {
+		got = append(got, l.Href)
+	}
+	if want := "/setup /swagger /activity"; strings.Join(got, " ") != want {
+		t.Errorf("link hrefs = %v, want %s", got, want)
 	}
 }

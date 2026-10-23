@@ -1,10 +1,10 @@
 // Package settingspages is the registry behind the Settings area (issue
-// #805, which folded the former admin hub of issue #793 into Settings): the
-// pages `GET /settings` lists, which Settings dialogs live on which page, and
-// the links to the screens outside Settings (Scanner, Performance, ...) that
-// belong to a page's topic. It is plain data so tests can range over it and
-// prove that every dialog the Settings screens render and every main-nav page
-// is reachable from the Settings menu entry.
+// #805, which folded the former admin hub of issue #793 into Settings; the
+// six pages are issue #895): the pages `GET /settings` lists, which Settings
+// dialogs live on which page, and the links to the few screens outside the
+// main menu (稼働ログ, 初回セットアップ, Swagger) that belong to a page's topic.
+// It is plain data so tests can range over it and prove that every dialog the
+// Settings screens render is reachable from the Settings menu entry.
 //
 // Adding a setting: put its card in the owning handler list, then add its
 // dialog id to the page it belongs to in dialogs below. A new page is one more
@@ -25,25 +25,30 @@ type Page struct {
 // Path is the page's URL.
 func (p Page) Path() string { return BasePath + "/" + p.ID }
 
-// Page ids.
+// Page ids. The ids are the URLs of the pre-#895 pages: the six pages kept
+// their path (`/settings/operations` is now 取引ルール, `/settings/results`
+// 予測モデル, `/settings/maintenance` システム) so old bookmarks open.
 const (
 	PageOperations   = "operations"
 	PageResults      = "results"
 	PageRisk         = "risk"
-	PageBuckets      = "asset-buckets"
 	PageBroker       = "broker"
 	PageIntegrations = "integrations"
 	PageMaintenance  = "maintenance"
 )
 
+// LegacyBucketsPath is the former 資産ごとの予算枠 page (issue #824), folded
+// into リスク・資金 by issue #895; the router answers it with a 301 to
+// PageRisk.
+const LegacyBucketsPath = BasePath + "/asset-buckets"
+
 var pages = []Page{
-	{PageOperations, "運用", "スキャン・ポジション・Kill Switch、候補を絞るしきい値"},
-	{PageResults, "成績・検証", "Performance・Calibration・バックテスト、判断のラベル・相場状態の設定"},
-	{PageRisk, "リスク・資金", "Paper の運用資金・建玉上限、損失上限・利益確保・売買コストの想定"},
-	{PageBuckets, "資産ごとの予算枠", "Paper の運用資金を株・債券ETFの枠に分けた予算（円）と、合計・残額"},
-	{PageBroker, "ブローカー・データ", "kabuステーション・立花証券 e支店の接続と監視銘柄"},
-	{PageIntegrations, "外部連携", "Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP"},
-	{PageMaintenance, "ログ・エクスポート", "アップデート・エラーログ・データエクスポート・バックアップ・ログ設定"},
+	{PageOperations, "取引ルール", "スキャン・ポジション、候補を絞るしきい値、売買判断の基準"},
+	{PageRisk, "リスク・資金", "Paper の運用資金・建玉上限・資産ごとの予算枠、損失上限・利益確保・売買コストの想定"},
+	{PageResults, "予測モデル", "判断のラベル・メタラベリング・相場状態・板情報の設定"},
+	{PageBroker, "証券会社・データ", "kabuステーション・立花証券 e支店の接続と監視銘柄"},
+	{PageIntegrations, "外部連携・AI", "Jev・Luna・Sol・Opus・ニュースフィード・Slack・MCP（AIの注文提案の受け付け）"},
+	{PageMaintenance, "システム", "稼働ログ・アップデート・エラーログ・データエクスポート・バックアップ・ログ設定・スリープ防止"},
 }
 
 // Pages returns the Settings pages in display order.
@@ -116,6 +121,20 @@ func PageOfTarget(id string) (Page, bool) {
 // LinksOf to apply the `/swagger` switch.
 func AllLinks() []Link { return append([]Link(nil), links...) }
 
+// HubLinks returns the link rows the hub lists under its pages, so the screens
+// outside the main menu (稼働ログ, 初回セットアップ) open within two clicks of
+// the menu's 設定 entry. SwaggerOnly rows are left out: the hub does not know
+// the `/swagger` switch, the 外部連携・AI page lists that one.
+func HubLinks() []Link {
+	var out []Link
+	for _, l := range links {
+		if !l.SwaggerOnly {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 // LinksOf returns the page's link rows in display order. SwaggerOnly links
 // are dropped unless swagger is true.
 func LinksOf(pageID string, swagger bool) []Link {
@@ -128,34 +147,29 @@ func LinksOf(pageID string, swagger bool) []Link {
 	return out
 }
 
-const killSwitchDescription = "全ページのヘッダー右上にあるパネルで、新規エントリーの一時停止・再開と全決済（Kill Switch）を操作します。専用の URL はないため、ヘッダーのあるページ（Scanner）を開きます。"
-
 // dialogs is every card/dialog the Settings screens render, by page. Ids are
 // the dialogs' (`modal-` + the connection / settings-group id).
 var dialogs = []Dialog{
-	// 運用
+	// 取引ルール
 	{PageOperations, "modal-screener", nil},
 	{PageOperations, "modal-policy-long", nil},
 	{PageOperations, "modal-policy-short", nil},
 	{PageOperations, "modal-snapshot-age", nil},
 	{PageOperations, "modal-paper-bootstrap", nil},
-	{PageOperations, "modal-sleep-guard", nil},
 
-	// 成績・検証
+	// リスク・資金 (資産ごとの予算枠 was its own page until issue #895)
+	{PageRisk, "modal-paper-risk", nil},
+	{PageRisk, "modal-asset-buckets", nil},
+	{PageRisk, "modal-daily-guard", nil},
+	{PageRisk, "modal-trading_cost", nil},
+
+	// 予測モデル
 	{PageResults, "modal-triple_barrier", nil},
 	{PageResults, "modal-metalabel", nil},
 	{PageResults, "modal-regime", nil},
 	{PageResults, "modal-orderflow", nil},
 
-	// リスク・資金
-	{PageRisk, "modal-paper-risk", nil},
-	{PageRisk, "modal-daily-guard", nil},
-	{PageRisk, "modal-trading_cost", nil},
-
-	// 資産ごとの予算枠
-	{PageBuckets, "modal-asset-buckets", nil},
-
-	// ブローカー・データ
+	// 証券会社・データ
 	{PageBroker, "modal-broker", nil},
 	{PageBroker, "modal-kabu", nil},
 	{PageBroker, "modal-tachibana", nil},
@@ -165,7 +179,7 @@ var dialogs = []Dialog{
 	{PageBroker, "modal-tachibana-intraday", nil},
 	{PageBroker, "modal-tachibana-screen", nil},
 
-	// 外部連携
+	// 外部連携・AI
 	{PageIntegrations, "modal-jev", nil},
 	{PageIntegrations, "modal-luna", nil},
 	{PageIntegrations, "modal-sol", nil},
@@ -175,8 +189,9 @@ var dialogs = []Dialog{
 	{PageIntegrations, "modal-mcp", nil},
 	{PageIntegrations, "modal-jev-prompt", nil},
 
-	// ログ・エクスポート. The header's version link used to land on
+	// システム. The header's version link used to land on
 	// `/settings#update-panel`.
+	{PageMaintenance, "modal-sleep-guard", nil},
 	{PageMaintenance, "modal-update", []string{"update-panel"}},
 	{PageMaintenance, "modal-error-log", nil},
 	{PageMaintenance, "modal-data-export", nil},
@@ -185,25 +200,19 @@ var dialogs = []Dialog{
 	{PageMaintenance, "modal-logsettings", nil},
 }
 
-// links is every link row to a screen outside Settings, by page.
+// links is every link row to a screen outside Settings, by page. The main
+// menu's own screens (候補銘柄・AIの注文提案・成績, and the Kill Switch in the
+// header) are not repeated here (issue #895); only screens the main menu does
+// not reach are listed.
 var links = []Link{
-	// 運用
-	{PageOperations, "Scanner", "スキャンの絞り込み状況と候補銘柄・Jev の判断を確認します（候補から銘柄詳細へ進めます）。", "/scanner", false},
-	{PageOperations, "Watchlist", "立花の監視リスト（どの銘柄をどう選んだか）を確認します。", "/watchlist", false},
-	{PageOperations, "注文案", "MCP の AI クライアントが出した Paper の注文案と、その後（Risk check・約定・損益）を確認します（読み取り専用）。", "/order-proposals", false},
-	{PageOperations, "Activity", "システムの稼働ログとキューの状況を確認します。", "/activity", false},
-	{PageOperations, "Kill Switch", killSwitchDescription, "/scanner#kill-switch", false},
-
-	// 成績・検証
-	{PageResults, "Performance", "決済済みポジションの実績（Paper）と評価指標を確認します。", "/performance", false},
-	{PageResults, "バックテスト（Walk Forward）", "期間を指定して Walk Forward バックテストを実行し、コスト感度を確認します（Performance 画面の下部）。", "/performance#backtest", false},
-	{PageResults, "Calibration", "Jev の確率予測が実際の結果とどれだけ合っているかをヒートマップで確認します。", "/calibration", false},
-
-	// ブローカー・データ
+	// 証券会社・データ
 	{PageBroker, "初回セットアップ", "起動に必要な接続（Jev・kabuステーション／立花・Slack など）を順に設定します。必須の接続が未設定の間は他の画面からここへ案内されます。", "/setup", false},
 
-	// 外部連携
+	// 外部連携・AI
 	{PageIntegrations, "API ドキュメント（Swagger）", "JSON API の仕様を確認します（SWAGGER_ENABLED=true のときだけ表示されます）。", "/swagger", true},
+
+	// システム
+	{PageMaintenance, "稼働ログ", "システムの稼働ログとキューの状況を確認します。", "/activity", false},
 }
 
 // HashRoutes maps every URL-hash id a Settings dialog answers to (dialog ids

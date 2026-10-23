@@ -42,7 +42,7 @@ function mountRunning(): PanelElement {
 
 function clickKill(el: PanelElement): void {
   const kill = Array.from(el.shadowRoot?.querySelectorAll('button') ?? []).find(
-    (b) => b.textContent?.trim() === 'Kill',
+    (b) => b.textContent?.trim() === '全決済して停止',
   );
   kill?.click();
 }
@@ -87,7 +87,7 @@ describe('pitha-kill-switch-panel actions', () => {
 
     const el = mountRunning();
     await flush(el);
-    expect(buttonLabels(el)).toEqual(['Pause', 'Kill']);
+    expect(buttonLabels(el)).toEqual(['新規エントリーを停止', '全決済して停止']);
     let changed = 0;
     el.addEventListener('systemStateChanged', () => {
       changed += 1;
@@ -99,7 +99,7 @@ describe('pitha-kill-switch-panel actions', () => {
     expect(el.shadowRoot?.querySelector('[data-status]')?.getAttribute('data-status')).toBe(
       'killed',
     );
-    expect(buttonLabels(el)).toEqual(['Resume']);
+    expect(buttonLabels(el)).toEqual(['再開']);
     // Header's StatusDot is told about the resynced state, and the failed
     // action's own error stays visible.
     expect(changed).toBeGreaterThan(0);

@@ -166,17 +166,15 @@ func TestShell_HeaderShowsLogoBeforeNav(t *testing.T) {
 // The current page's nav link (and only it) carries aria-current="page"
 // (issue #631); pages outside the nav (the error page) mark nothing.
 func TestShell_NavMarksCurrentPage(t *testing.T) {
-	anchor := regexp.MustCompile(`<a\b[^>]*\bhref="(/[a-z-]+)"[^>]*>`)
+	anchor := regexp.MustCompile(`<a\b[^>]*\bhref="(/[a-z-]*)"[^>]*>`)
 	tests := []struct {
 		current organisms.NavItem
 		want    string
 	}{
+		{organisms.NavHome, "/"},
 		{organisms.NavScanner, "/scanner"},
-		{organisms.NavWatchlist, "/watchlist"},
-		{organisms.NavPerformance, "/performance"},
 		{organisms.NavOrderProposals, "/order-proposals"},
-		{organisms.NavCalibration, "/calibration"},
-		{organisms.NavActivity, "/activity"},
+		{organisms.NavPerformance, "/performance"},
 		{organisms.NavSettings, "/settings"},
 		{organisms.NavNone, ""},
 	}
@@ -198,21 +196,27 @@ func TestShell_NavMarksCurrentPage(t *testing.T) {
 	}
 }
 
-// The menu has a single Settings entry as its last item (issue #805): the
-// former 管理 entry (admin hub, issue #793) is folded into it.
-func TestShell_NavEndsWithSingleSettingsEntry(t *testing.T) {
+// The menu is ホーム／候補銘柄／AIの注文提案／成績／(区切り)／設定 (issue #895),
+// every label in Japanese, with the divider in front of 設定 only.
+func TestShell_NavIsTheFiveEntriesWithDividerBeforeSettings(t *testing.T) {
 	out := render(t, layout.Shell("t", organisms.NavNone))
 	nav := regexp.MustCompile(`(?s)<nav\b.*?</nav>`).FindString(out)
-	var hrefs []string
-	for _, m := range regexp.MustCompile(`<a\b[^>]*\bhref="([^"]+)"`).FindAllStringSubmatch(nav, -1) {
-		hrefs = append(hrefs, m[1])
+	var hrefs, labels []string
+	for _, m := range regexp.MustCompile(`<a\b[^>]*\bhref="([^"]+)"[^>]*>([^<]*)</a>`).FindAllStringSubmatch(nav, -1) {
+		hrefs, labels = append(hrefs, m[1]), append(labels, m[2])
 	}
-	want := []string{"/scanner", "/watchlist", "/performance", "/order-proposals", "/calibration", "/activity", "/settings"}
-	if strings.Join(hrefs, " ") != strings.Join(want, " ") {
+	if want := []string{"/", "/scanner", "/order-proposals", "/performance", "/settings"}; strings.Join(hrefs, " ") != strings.Join(want, " ") {
 		t.Errorf("nav hrefs = %v, want %v", hrefs, want)
 	}
-	if !strings.Contains(nav, ">Settings</a>") {
-		t.Errorf("nav lacks the Settings label; nav=%s", nav)
+	if want := []string{"ホーム", "候補銘柄", "AIの注文提案", "成績", "設定"}; strings.Join(labels, " ") != strings.Join(want, " ") {
+		t.Errorf("nav labels = %v, want %v", labels, want)
+	}
+	divider := strings.Index(nav, `data-testid="nav-separator"`)
+	if n := strings.Count(nav, `data-testid="nav-separator"`); n != 1 {
+		t.Errorf("nav has %d dividers, want 1; nav=%s", n, nav)
+	}
+	if divider < strings.Index(nav, `href="/performance"`) || divider > strings.Index(nav, `href="/settings"`) {
+		t.Errorf("the divider must sit between 成績 and 設定; nav=%s", nav)
 	}
 	if strings.Contains(nav, "管理") {
 		t.Errorf("nav still has a standalone 管理 label; nav=%s", nav)

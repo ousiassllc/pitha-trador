@@ -15,7 +15,7 @@
 | `pitha-activity-feed` | キュー別pending/running/failed件数・直近アクティビティ一覧・直近Kill Switchイベントのライブ表示（type/queueフィルタ付き） | System Activity Log | `GET /api/v1/activity`（初期・フィルタ変更時）＋ `/ws/activity`（ライブ） |
 | `pitha-kill-switch-panel` | システム状態表示・Kill Switch発動/解除操作 | 全ページ共通（Header内アイランド） | `GET/POST /api/v1/system/*` |
 
-> **Lit描画の表のa11y（issue #623）**: `pitha-activity-feed`・`pitha-scanner-table`・`pitha-calibration-heatmap`はハイドレーション後にSSRの表を置き換えるため、Templ側（`internal/web/table_a11y_test.go`）と同じ水準を保つ。全`<th>`は`scope="col"`、全`<table>`はSSR版と同じ`aria-label`（キュー状況／アクティビティフィード／スキャナー候補／方向別キャリブレーション）を持ち、Recent Activityは`<caption>`の`as of`も引き継ぐ。`lib/table-a11y.test.ts`が`components/`の`.ts`テンプレートを静的に検査する。
+> **Lit描画の表のa11y（issue #623）**: `pitha-activity-feed`・`pitha-scanner-table`・`pitha-calibration-heatmap`はハイドレーション後にSSRの表を置き換えるため、Templ側（`internal/web/table_a11y_test.go`）と同じ水準を保つ。全`<th>`は`scope="col"`、全`<table>`はSSR版と同じ`aria-label`（キュー状況／アクティビティフィード／スキャナー候補／方向別キャリブレーション）を持ち、最近の動きは`<caption>`の`as of`も引き継ぐ。`lib/table-a11y.test.ts`が`components/`の`.ts`テンプレートを静的に検査する。
 
 > **テスト用`FakeWebSocket`（issue #638）**: コンポーネントテストのフェイクは`lib/ws-test-support.ts`の1実装（`FakeWebSocket`・`installFakeWebSocket`）に集約し、各`*-test-support.ts`/テストはそれをimportする。`lib/ws.ts`の挙動を変えるときはここだけ追従する。
 
@@ -148,6 +148,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 - URL属性（`status-url`/`ws-url`/`pause-url`/`resume-url`/`kill-url`）が未設定なら、該当の取得・購読・操作（`status-url`→再同期、`ws-url`→WebSocket購読、`pause-url`等→対応するPOST）を行わず`logger.error`を出す（無言でreturnしない。issue #494）
 - 操作可否は`domain.SystemState.CanPause/CanResume/CanKill`（Running→pause/kill可、Paused→resume/kill可、Killed→resumeのみ）が唯一の定義で、`GET/POST /api/v1/system/*`の応答も`can_pause`/`can_resume`/`can_kill`として返す。状態を読み出せないとき`Header`は操作ボタンを描画せず（`status=""`）、パネルが`status-url`から自己補正する
 - 操作後は`systemStateChanged`を発火し、`Header`の`#header-status`（`hx-trigger="systemStateChanged from:closest header"`）がStatusDotを再取得する
+- 表示（issue #895）: 状態は`Header`のStatusDotバッジ（稼働中／新規停止中／全停止（Kill））1つで示し、パネルの状態文字列は視覚的に隠す（スクリーンリーダー向けの`role="status"`ライブ領域としては残す）。操作ボタンの表示は「新規エントリーを停止」（Pause）・「再開」（Resume）・「全決済して停止」（Kill）
 - Killの確認ダイアログ（`window.confirm`）は、Killが新規エントリー停止に加えて保有中の全ポジションを強制決済する（`Engine.Kill` → `closer.CloseAll`、FR-RISK-3 / UC-11）ことを文言で伝える（issue #194）
 - 操作（Pause/Resume/Kill）のPOSTが失敗したときはエラーを表示したうえで`status-url`から状態を再同期し、`systemStateChanged`も発火する。Killは`system.killed`を先に立ててから強制決済するため、強制決済失敗（500）でもサーバーはKilledのままで、UIが`running`のまま残らないようにする（issue #195）
 - Kill Switch発動はRisk Engineからも直接トリガーされうる（`architecture/overview/flows.md` §10.3）。この場合はサーバー側が`/ws/system`経由で`kill_switch`イベントを配信し、`pitha-kill-switch-panel`が受信して`status`をローカルに反映（操作可否は`status-url`から再取得）しつつ、同様に`systemStateChanged`を発火してHeaderと同期させる。Killed以外への遷移（`AutoResume`による自動解除、別ウィンドウのResume/Pause。#363）は`state_changed`として配信され、パネルは`status-url`から（`background: true`で）再取得して`systemStateChanged`を発火し、Headerの`#header-status`とPause/Kill操作可否を追従させる。`/ws/system`が切断されている間は「接続が切れています」を表示し、再接続後に`status-url`から再同期する（§6）状態の応答は新しいリクエストだけが反映される: `status-url`のGET・操作のPOST・`kill_switch`pushに世代カウンタを持たせ、後から発行されたものがある古い応答は`status`/`can_*`を上書きせず`systemStateChanged`も発火しない（issue #556）。状態バッジは`role="status"` `aria-live="polite"`のlive regionで、Kill発動を支援技術に伝える（issue #561）。

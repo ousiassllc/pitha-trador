@@ -68,7 +68,7 @@ describe('pitha-kill-switch-panel response ordering', () => {
     pending[1].respond('killed');
     await flush(el);
     expect(shownStatus(el)).toBe('killed');
-    expect(buttonLabels(el)).toEqual(['Resume']);
+    expect(buttonLabels(el)).toEqual(['再開']);
     expect(changed).toBe(2);
   });
 
@@ -80,7 +80,7 @@ describe('pitha-kill-switch-panel response ordering', () => {
     });
 
     wsPush({ type: 'state_changed', state: 'running' });
-    click(el, 'Pause');
+    click(el, '新規エントリーを停止');
     expect(pending.map((p) => p.method)).toEqual(['GET', 'POST']);
 
     pending[1].respond('paused');
@@ -91,7 +91,7 @@ describe('pitha-kill-switch-panel response ordering', () => {
     pending[0].respond('running');
     await flush(el);
     expect(shownStatus(el)).toBe('paused');
-    expect(buttonLabels(el)).toEqual(['Resume', 'Kill']);
+    expect(buttonLabels(el)).toEqual(['再開', '全決済して停止']);
     expect(changed).toBe(1);
   });
 
@@ -102,7 +102,7 @@ describe('pitha-kill-switch-panel response ordering', () => {
       changed += 1;
     });
 
-    click(el, 'Pause');
+    click(el, '新規エントリーを停止');
     wsPush({ type: 'kill_switch', reason: 'risk' });
     expect(changed).toBe(1);
 
@@ -113,7 +113,7 @@ describe('pitha-kill-switch-panel response ordering', () => {
 
     pending[1].respond('killed');
     await flush(el);
-    expect(buttonLabels(el)).toEqual(['Resume']);
+    expect(buttonLabels(el)).toEqual(['再開']);
     expect(el.shadowRoot?.querySelector('[role="alert"]')).toBeNull();
   });
 
@@ -123,5 +123,6 @@ describe('pitha-kill-switch-panel response ordering', () => {
     const badge = el.shadowRoot?.querySelector('.pitha-kill-switch-panel-status');
     expect(badge?.getAttribute('role')).toBe('status');
     expect(badge?.getAttribute('aria-live')).toBe('polite');
+    expect(badge?.textContent?.trim()).toBe('稼働中');
   });
 });

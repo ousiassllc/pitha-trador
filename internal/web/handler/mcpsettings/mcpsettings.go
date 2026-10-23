@@ -102,12 +102,12 @@ func (h *Handler) SaveOrderProposals(c *gin.Context) {
 	on := c.PostForm("enabled") != ""
 	if err := h.gate.SetOrderProposalsEnabled(ctx, on); err != nil {
 		slog.ErrorContext(ctx, "mcpsettings: save order proposals switch", "error", err)
-		shared.RespondActionError(c, http.StatusInternalServerError, "注文案の受け付けを保存できませんでした。")
+		shared.RespondActionError(c, http.StatusInternalServerError, "AIからの注文提案の受け付けを保存できませんでした。")
 		return
 	}
-	notice := "注文案の受け付けをオフにしました。"
+	notice := "AIからの注文提案の受け付けをオフにしました。"
 	if on {
-		notice = "注文案の受け付けをオンにしました。"
+		notice = "AIからの注文提案の受け付けをオンにしました。"
 	}
 	h.render(c, notice, "")
 }

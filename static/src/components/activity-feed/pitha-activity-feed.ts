@@ -209,7 +209,7 @@ export class PithaActivityFeed extends LitElement {
   }
 
   // Kill Switch history and the WS / error notices are not part of the SSR
-  // fallback, so they render right away. The Job Queues and Recent Activity
+  // fallback, so they render right away. The ジョブの状況 and 最近の動き
   // tables are SSR'd too: until the first snapshot arrives (see
   // createRenderRoot) the SSR copies stay and only these are added beside them.
   protected override render() {
@@ -222,17 +222,17 @@ export class PithaActivityFeed extends LitElement {
       ${this.renderKillSwitchEvents()}
 
       <section id="activity-feed" data-testid="activity-feed" class="mt-6">
-        <h2 class="mb-2 text-lg font-semibold text-slate-900">Recent Activity</h2>
+        <h2 class="mb-2 text-lg font-semibold text-slate-900">最近の動き</h2>
         <div class="mb-2 flex gap-4 text-sm">
           <label>
-            Type
+            種別
             <select data-filter="type" .value=${this.typeFilter} @change=${this.onTypeChange}>
               <option value="">all</option>
               ${EVENT_TYPES.map((t) => html`<option value=${t} ?selected=${this.typeFilter === t}>${t}</option>`)}
             </select>
           </label>
           <label>
-            Queue
+            キュー
             <select data-filter="queue" .value=${this.queueFilter} @change=${this.onQueueChange}>
               <option value="">all</option>
               ${QUEUES.map((q) => html`<option value=${q} ?selected=${this.queueFilter === q}>${q}</option>`)}
@@ -243,11 +243,11 @@ export class PithaActivityFeed extends LitElement {
           ${this.asOf ? html`<caption class="mb-2 text-left text-sm text-slate-500">as of ${formatJstDateTime(this.asOf)}</caption>` : nothing}
           <thead>
             <tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-              <th scope="col" class="px-3 py-2">Time</th>
-              <th scope="col" class="px-3 py-2">Type</th>
-              <th scope="col" class="px-3 py-2">Symbol</th>
-              <th scope="col" class="px-3 py-2">Detail</th>
-              <th scope="col" class="px-3 py-2">Latency (ms)</th>
+              <th scope="col" class="px-3 py-2">時刻</th>
+              <th scope="col" class="px-3 py-2">種別</th>
+              <th scope="col" class="px-3 py-2">銘柄</th>
+              <th scope="col" class="px-3 py-2">内容</th>
+              <th scope="col" class="px-3 py-2">応答時間（ms）</th>
             </tr>
           </thead>
           <tbody>

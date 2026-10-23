@@ -27,7 +27,7 @@ templ MarketDataBanner(props MarketDataBannerProps) {
 		<div class="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-testid="marketdata-notice">
 			<p>
 				{ props.Notice }
-				<a class="font-semibold underline" href="/settings">設定画面</a>
+				<a class="font-semibold underline" href="/settings/broker">設定 ＞ 証券会社・データ</a>
 			</p>
 		</div>
 	} else if props.Guidance != "" {
@@ -39,7 +39,7 @@ templ MarketDataBanner(props MarketDataBannerProps) {
 				}
 				{ props.Guidance }
 				自動的に再試行します。
-				<a class="font-semibold underline" href="/settings">設定画面</a>
+				<a class="font-semibold underline" href="/settings/broker">設定 ＞ 証券会社・データ</a>
 			</p>
 		</div>
 	}

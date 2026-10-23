@@ -2,6 +2,7 @@ package pages
 
 import (
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/evaluation"
 )
@@ -19,6 +20,10 @@ type PerformanceResult struct {
 // carries the validation or run failure messages, one per line. internal/web/handler maps the
 // internal/service types onto these plain props.
 type PerformanceProps struct {
+	// BacktestTab shows the バックテスト tab (the Walk Forward form and its
+	// result) instead of the 実績 tab (realized performance and its
+	// evaluation).
+	BacktestTab  bool
 	Form         organisms.BacktestFormValues
 	Actuals      organisms.PerformanceActuals
 	ActualsError string
@@ -37,21 +42,30 @@ type PerformanceProps struct {
 // metrics (FR-BT-1). `GET /performance`
 // (internal/web/handler/performance.PerformanceHandler.Page) renders it.
 templ PerformancePage(props PerformanceProps) {
-	@layout.Shell("Performance", organisms.NavPerformance) {
-		<h1 class="text-2xl font-bold text-slate-900">Performance</h1>
-		@organisms.PerformanceActualsPanel(props.Actuals, props.ActualsError)
-		@evaluation.EvaluationPanel(props.Evaluation, props.EvaluationError)
-		@organisms.BacktestForm(props.Form)
-		if len(props.Errors) > 0 {
-			<ul class="mt-4 list-inside list-disc rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">
-				for _, msg := range props.Errors {
-					<li data-testid="backtest-error-item">{ msg }</li>
-				}
-			</ul>
-		}
-		if props.Result != nil {
-			@organisms.PerformanceSummaryPanel("Walk Forward (Forward periods combined)", props.Result.Combined)
-			@organisms.BacktestFoldTable(props.Result.Folds)
+	@layout.Shell("成績", organisms.NavPerformance) {
+		<h1 class="text-2xl font-bold text-slate-900">成績</h1>
+		if props.BacktestTab {
+			@molecules.TabNav("成績のタブ", resultTabs(tabBacktest))
+			@organisms.BacktestForm(props.Form)
+			if len(props.Errors) > 0 {
+				<ul class="mt-4 list-inside list-disc rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">
+					for _, msg := range props.Errors {
+						<li data-testid="backtest-error-item">{ msg }</li>
+					}
+				</ul>
+			}
+			if props.Result != nil {
+				@organisms.PerformanceSummaryPanel("Walk Forward（Forward 期間を合算）", props.Result.Combined)
+				@organisms.BacktestFoldTable(props.Result.Folds)
+			}
+		} else {
+			@molecules.TabNav("成績のタブ", resultTabs(tabActuals))
+			@organisms.PerformanceActualsPanel(props.Actuals, props.ActualsError)
+			@evaluation.EvaluationPanel(props.Evaluation, props.EvaluationError)
+			// Only the 実績 tab forwards an old `#backtest` link; on the
+			// バックテスト tab (`?tab=backtest` or a submitted `from`) it would
+			// reload the page and run the backtest a second time.
+			<script type="module" src="/static/dist/js/performance-tabs/pitha-performance-tabs.js"></script>
 		}
 	}
 }

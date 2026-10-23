@@ -57,7 +57,7 @@ func servePerformanceWithActuals(t *testing.T, runner performance.BacktestRunner
 
 func TestPerformanceHandler_Page_WithoutQueryRendersFormWithoutRunning(t *testing.T) {
 	runner := &recordingBacktestRunner{}
-	rec := servePerformance(t, runner, "/performance")
+	rec := servePerformance(t, runner, "/performance?tab=backtest")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
@@ -67,6 +67,17 @@ func TestPerformanceHandler_Page_WithoutQueryRendersFormWithoutRunning(t *testin
 	}
 	if body := rec.Body.String(); !strings.Contains(body, `data-testid="backtest-form"`) || strings.Contains(body, `data-testid="performance-summary"`) {
 		t.Errorf("body should show the form and no results; body=%s", body)
+	}
+}
+
+// The 実績 tab (the page's default) shows the realized performance and not the
+// backtest form; the backtest form is on its own tab (issue #895).
+func TestPerformanceHandler_Page_DefaultIsTheActualsTabWithoutTheBacktestForm(t *testing.T) {
+	rec := servePerformance(t, &recordingBacktestRunner{}, "/performance")
+
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, `data-testid="performance-actuals"`) || strings.Contains(body, `data-testid="backtest-form"`) {
+		t.Errorf("status %d; the default tab should show the actuals and not the backtest form; body=%s", rec.Code, body)
 	}
 }
 
@@ -245,14 +256,14 @@ func TestPerformanceHandler_Page_ShowsRealizedPerformanceSection(t *testing.T) {
 	}
 }
 
-func TestPerformanceHandler_Page_ShowsRealizedPerformanceAlongsideBacktestResult(t *testing.T) {
+func TestPerformanceHandler_Page_BacktestTabShowsTheResultNotTheRealizedPerformance(t *testing.T) {
 	runner := &recordingBacktestRunner{result: backtest.Result{Combined: backtest.Metrics{TradeCount: 12}}}
-	rec := servePerformanceWithActuals(t, runner, stubPerformanceSource{perf: insight.Performance{TradeCount: 3}},
+	rec := servePerformanceWithActuals(t, runner, stubPerformanceSource{err: errors.New("db: connection refused")},
 		"/performance?from=2026-09-01&to=2026-09-10")
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `data-testid="performance-actuals"`) || !strings.Contains(body, `data-testid="performance-summary"`) {
-		t.Errorf("body should show both the realized section and the backtest summary; body=%s", body)
+	if rec.Code != http.StatusOK || !strings.Contains(body, `data-testid="performance-summary"`) || strings.Contains(body, `data-testid="performance-actuals"`) {
+		t.Errorf("status %d; the backtest tab should show the backtest summary and neither read nor show the realized section; body=%s", rec.Code, body)
 	}
 }
 
@@ -264,8 +275,8 @@ func TestPerformanceHandler_Page_ShowsFixedMessageWhenRealizedPerformanceFails(t
 		t.Errorf("status = %d, want 500", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `data-testid="actuals-error"`) || !strings.Contains(body, `data-testid="backtest-form"`) {
-		t.Errorf("body should show the actuals error and still the backtest form; body=%s", body)
+	if !strings.Contains(body, `data-testid="actuals-error"`) || !strings.Contains(body, `href="/performance?tab=backtest"`) {
+		t.Errorf("body should show the actuals error and still the tab to the backtest; body=%s", body)
 	}
 	if strings.Contains(body, "connection refused") || strings.Contains(body, `data-metric="total_pnl"`) {
 		t.Errorf("body leaks the internal error or shows metrics; body=%s", body)

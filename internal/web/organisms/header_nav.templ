@@ -2,36 +2,37 @@ package organisms
 
 // NavItem identifies a main-navigation entry of Header. Each page passes
 // its own item to layout.Shell so Header can mark the current one
-// (issue #631). NavNone is for pages that belong to no nav entry (the
-// error page).
+// (issue #631, reorganised by issue #895). NavNone is for pages that belong
+// to no nav entry (the error page).
+//
+// Pages that live under another entry pass that entry's item: the Watchlist
+// and Symbol Detail pass NavScanner (候補銘柄), the Calibration page passes
+// NavPerformance (成績), the Activity page passes NavSettings (設定 ＞ システム).
 type NavItem string
 
 const (
 	NavNone           NavItem = ""
+	NavHome           NavItem = "home"
 	NavScanner        NavItem = "scanner"
-	NavWatchlist      NavItem = "watchlist"
-	NavPerformance    NavItem = "performance"
 	NavOrderProposals NavItem = "order_proposals"
-	NavCalibration    NavItem = "calibration"
-	NavActivity       NavItem = "activity"
+	NavPerformance    NavItem = "performance"
 	NavSettings       NavItem = "settings"
 )
 
-// navEntries is the main navigation in display order. Symbol Detail
-// (`/symbols/:symbol`, reached from the Scanner candidate table) passes
-// NavScanner, so it keeps the Scanner entry marked.
+// navEntries is the main navigation in display order. SeparatorBefore puts a
+// divider in front of the entry: the day-to-day screens come first, the
+// management entry (設定) after the divider.
 var navEntries = []struct {
-	Item  NavItem
-	Label string
-	Href  templ.SafeURL
+	Item            NavItem
+	Label           string
+	Href            templ.SafeURL
+	SeparatorBefore bool
 }{
-	{NavScanner, "Scanner", "/scanner"},
-	{NavWatchlist, "Watchlist", "/watchlist"},
-	{NavPerformance, "Performance", "/performance"},
-	{NavOrderProposals, "注文案", "/order-proposals"},
-	{NavCalibration, "Calibration", "/calibration"},
-	{NavActivity, "Activity", "/activity"},
-	{NavSettings, "Settings", "/settings"},
+	{NavHome, "ホーム", "/", false},
+	{NavScanner, "候補銘柄", "/scanner", false},
+	{NavOrderProposals, "AIの注文提案", "/order-proposals", false},
+	{NavPerformance, "成績", "/performance", false},
+	{NavSettings, "設定", "/settings", true},
 }
 
 // navLinkClass is a nav link's styling: the current entry is emphasised,
@@ -46,8 +47,11 @@ func navLinkClass(current bool) string {
 // MainNav renders Header's `<nav>`: the entry equal to current (when not
 // NavNone) carries `aria-current="page"` and the emphasised style.
 templ MainNav(current NavItem) {
-	<nav aria-label="メインナビゲーション" class="flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
+	<nav aria-label="メインナビゲーション" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm font-medium text-slate-600">
 		for _, e := range navEntries {
+			if e.SeparatorBefore {
+				<span aria-hidden="true" class="h-4 w-px bg-slate-300" data-testid="nav-separator"></span>
+			}
 			<a
 				class={ navLinkClass(e.Item == current) }
 				href={ e.Href }

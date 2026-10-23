@@ -12,16 +12,16 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/settingspages"
 )
 
-// issue #863: the sleep guard switch is on the 運用 page (default off), can be
+// issue #863: the sleep guard switch is on the システム page (default off), can be
 // turned on and reset, and refuses anything but 0 / 1.
-func TestSleepGuard_SwitchOnTheOperationsPage(t *testing.T) {
+func TestSleepGuard_SwitchOnTheSystemPage(t *testing.T) {
 	engine, store := modeRouter(metalabelsettings.ModePaper)
 
 	page := httptest.NewRecorder()
-	engine.ServeHTTP(page, httptest.NewRequest(http.MethodGet, settingspages.BasePath+"/"+settingspages.PageOperations, nil))
+	engine.ServeHTTP(page, httptest.NewRequest(http.MethodGet, settingspages.BasePath+"/"+settingspages.PageMaintenance, nil))
 	for _, want := range []string{"modal-sleep-guard", `setting-field-row-` + sleepguardsettings.Key, "既定は 0（無効）", "Windows のみ"} {
 		if !strings.Contains(page.Body.String(), want) {
-			t.Errorf("the 運用 page lacks %q", want)
+			t.Errorf("the システム page lacks %q", want)
 		}
 	}
 

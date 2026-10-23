@@ -208,7 +208,7 @@ func SymbolHref(symbol string) templ.SafeURL {
 // the same notice (issue #614).
 func scannerCaption(asOf time.Time) string {
 	if asOf.IsZero() {
-		return "Scanner Dashboard — データ未取得"
+		return "候補銘柄 — データ未取得"
 	}
-	return "Scanner Dashboard — as of " + atoms.FormatJST(asOf)
+	return "候補銘柄 — as of " + atoms.FormatJST(asOf)
 }

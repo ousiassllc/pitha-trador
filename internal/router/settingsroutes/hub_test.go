@@ -1,6 +1,7 @@
 package settingsroutes_test
 
 import (
+	"html"
 	"net/http"
 	"regexp"
 	"slices"
@@ -94,6 +95,20 @@ func TestHub_ListsEveryPage(t *testing.T) {
 	}
 }
 
+// The hub shows the six pages of issue #895 and, under them, the screens
+// outside the main menu (稼働ログ, 初回セットアップ).
+func TestHub_ShowsSixPagesAndTheLinksOutsideTheMenu(t *testing.T) {
+	body := get(newEngine(t, secrets{full: true}), "/settings").Body.String()
+	if n := len(regexp.MustCompile(`data-testid="settings-link-page-`).FindAllString(body, -1)); n != 6 {
+		t.Errorf("hub lists %d pages, want 6", n)
+	}
+	for _, want := range []string{`data-testid="settings-hub-links"`, `href="/activity"`, ">稼働ログ<", `href="/setup"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("hub lacks %q", want)
+		}
+	}
+}
+
 // The MCP card is added by issue #792; its dialog is on the 外部連携 page.
 func TestPages_MCPDialogIsOnTheIntegrationsPage(t *testing.T) {
 	if !slices.Contains(renderedDialogs(t)[settingspages.PageIntegrations], "modal-mcp") {
@@ -101,8 +116,8 @@ func TestPages_MCPDialogIsOnTheIntegrationsPage(t *testing.T) {
 	}
 }
 
-// A link with a `#fragment` onto a page (Kill Switch, バックテスト) must find
-// that element on the page it links to.
+// A link with a `#fragment` onto a page must find that element on the page it
+// links to.
 func TestPages_LinkAnchorsExistOnTheirPages(t *testing.T) {
 	engine := newEngine(t, secrets{full: true})
 	for _, link := range settingspages.AllLinks() {
@@ -121,56 +136,100 @@ func TestPages_LinkAnchorsExistOnTheirPages(t *testing.T) {
 	}
 }
 
-// Every main-nav entry other than Settings is reachable from a Settings
-// page's links (the former admin hub's job).
-func TestPages_EveryMainNavEntryIsReachableFromSettings(t *testing.T) {
-	engine := newEngine(t, secrets{full: true})
-	var linked []string
-	for _, link := range settingspages.AllLinks() {
-		path, _, _ := strings.Cut(link.Href, "#")
-		linked = append(linked, path)
-	}
-	for _, link := range mainNav(t, get(engine, "/settings").Body.String()) {
-		if link.Href == "/settings" {
-			continue
+// anchorHrefs returns the in-app targets (path and query, no fragment) of every
+// `<a href>` in body.
+func anchorHrefs(body string) []string {
+	var out []string
+	for _, m := range regexp.MustCompile(`<a\b[^>]*\bhref="([^"]+)"`).FindAllStringSubmatch(body, -1) {
+		href, _, _ := strings.Cut(html.UnescapeString(m[1]), "#")
+		if strings.HasPrefix(href, "/") && !strings.HasPrefix(href, "//") && href != "" {
+			out = append(out, href)
 		}
-		if !slices.Contains(linked, link.Href) {
-			t.Errorf("main-nav entry %q (%s) is not linked from any Settings page", link.Label, link.Href)
+	}
+	return out
+}
+
+// Every page that existed before the menu was reorganised (issue #895) opens
+// within two clicks of the main menu: the nav entry is click one, a link,
+// tab or card on that page is click two. The parameterised pages
+// (`/symbols/:symbol`, `/order-proposals/:id`) are reached from their list
+// page's rows, which this empty fixture has none of.
+func TestMenu_EveryPageIsReachableWithinTwoClicks(t *testing.T) {
+	engine := newEngine(t, secrets{full: true})
+	start := get(engine, "/scanner").Body.String()
+	reachable := map[string]bool{}
+	var nav []string
+	for _, link := range mainNav(t, start) {
+		nav = append(nav, link.Href)
+		reachable[link.Href] = true
+	}
+	for _, href := range nav {
+		rec := get(engine, href)
+		if rec.Code != http.StatusOK {
+			continue // "/" redirects until the Home page exists
+		}
+		for _, next := range anchorHrefs(rec.Body.String()) {
+			reachable[next] = true
+		}
+	}
+
+	want := []string{
+		"/", "/scanner", "/watchlist", "/order-proposals", "/performance", "/performance?tab=backtest", "/calibration",
+		"/activity", "/settings", "/setup",
+	}
+	for _, page := range settingspages.Pages() {
+		want = append(want, page.Path())
+	}
+	for _, href := range want {
+		if !reachable[href] {
+			t.Errorf("%s is not reachable within two clicks of the main menu", href)
+		}
+		if path, _, _ := strings.Cut(href, "?"); path != "/" && get(engine, href).Code != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200", href, get(engine, href).Code)
 		}
 	}
 }
 
-// The menu has exactly one Settings entry: labelled "Settings", current on
-// the hub and on every page under it, and not current elsewhere. No
-// standalone 管理 entry or /admin link remains.
-func TestNav_HasSingleSettingsEntryOnEveryPage(t *testing.T) {
+// The main menu has exactly the five entries and marks the one the page
+// belongs to (issue #895): 候補銘柄 for the Scanner, the 監視リスト and a
+// symbol's detail; 成績 for 実績, バックテスト and 予測の精度; 設定 for 稼働ログ
+// and every Settings page; the error page marks nothing.
+func TestNav_MarksTheEntryEveryPageBelongsTo(t *testing.T) {
 	engine := newEngine(t, secrets{full: true})
-	targets := []string{"/scanner", "/watchlist", "/performance", "/calibration", "/activity", "/symbols/7203", "/settings"}
-	for _, page := range settingspages.Pages() {
-		targets = append(targets, page.Path())
+	pages := map[string]string{
+		"/scanner":                  "/scanner",
+		"/watchlist":                "/scanner",
+		"/symbols/7203":             "/scanner",
+		"/order-proposals":          "/order-proposals",
+		"/performance":              "/performance",
+		"/performance?tab=backtest": "/performance",
+		"/performance?from=2026-09-01&to=2026-09-10": "/performance",
+		"/calibration": "/performance",
+		"/activity":    "/settings",
+		"/settings":    "/settings",
 	}
-	for _, path := range targets {
+	for _, page := range settingspages.Pages() {
+		pages[page.Path()] = "/settings"
+	}
+	wantLabels := []string{"ホーム", "候補銘柄", "AIの注文提案", "成績", "設定"}
+	for path, current := range pages {
 		rec := get(engine, path)
-		if rec.Code != http.StatusOK {
-			t.Errorf("GET %s = %d, want 200", path, rec.Code)
+		if rec.Code != http.StatusOK && rec.Code != http.StatusServiceUnavailable && rec.Code != http.StatusInternalServerError {
+			t.Errorf("GET %s = %d", path, rec.Code)
 			continue
 		}
-		var settings []navLink
+		var labels, marked []string
 		for _, link := range mainNav(t, rec.Body.String()) {
-			if link.Label == "管理" || link.Href == "/admin" {
-				t.Errorf("%s: nav still has a 管理 entry: %+v", path, link)
-			}
-			if link.Href == "/settings" {
-				settings = append(settings, link)
+			labels = append(labels, link.Label)
+			if link.Current {
+				marked = append(marked, link.Href)
 			}
 		}
-		if len(settings) != 1 {
-			t.Errorf("%s: nav has %d Settings entries, want 1", path, len(settings))
-			continue
+		if strings.Join(labels, " ") != strings.Join(wantLabels, " ") {
+			t.Errorf("%s: nav labels = %v, want %v", path, labels, wantLabels)
 		}
-		wantCurrent := strings.HasPrefix(path, "/settings")
-		if settings[0].Label != "Settings" || settings[0].Current != wantCurrent {
-			t.Errorf("%s: Settings nav = %+v, want label Settings, current %v", path, settings[0], wantCurrent)
+		if len(marked) != 1 || marked[0] != current {
+			t.Errorf("%s: nav marks %v, want only %s", path, marked, current)
 		}
 	}
 }

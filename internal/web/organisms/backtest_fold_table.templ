@@ -17,16 +17,16 @@ type BacktestFold struct {
 // Forward period and out-of-sample metrics (FR-BT-1).
 templ BacktestFoldTable(folds []BacktestFold) {
 	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="backtest-folds">
-		<h2 class="text-lg font-semibold text-slate-900">Folds</h2>
+		<h2 class="text-lg font-semibold text-slate-900">フォールド別</h2>
 		<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="Walk Forward 結果（フォールド別）">
 			<thead>
-				<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-					<th scope="col" class="px-3 py-2">Forward period</th>
-					<th scope="col" class="px-3 py-2">Trades</th>
-					<th scope="col" class="px-3 py-2">Win Rate</th>
-					<th scope="col" class="px-3 py-2">Expectancy</th>
-					<th scope="col" class="px-3 py-2">Max Drawdown</th>
-					<th scope="col" class="px-3 py-2">Net PnL</th>
+				<tr class="border-b border-slate-200 text-xs font-semibold text-slate-500">
+					<th scope="col" class="px-3 py-2">Forward 期間</th>
+					<th scope="col" class="px-3 py-2" title="Trades">取引数</th>
+					<th scope="col" class="px-3 py-2" title="Win Rate">勝率</th>
+					<th scope="col" class="px-3 py-2" title="Expectancy">期待値</th>
+					<th scope="col" class="px-3 py-2" title="Max Drawdown">最大ドローダウン</th>
+					<th scope="col" class="px-3 py-2" title="Net PnL">純損益</th>
 				</tr>
 			</thead>
 			<tbody>

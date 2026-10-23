@@ -74,7 +74,7 @@ func TestMarketDataHandler_TachibanaCauses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(string(tt.issue), func(t *testing.T) {
 			body := renderBanner(t, fakeSession{Issue: tt.issue, Failures: 1, Since: time.Now()}, tachibanaSelected(config.TachibanaEnvDemo))
-			common := []string{`data-testid="marketdata-banner"`, `data-issue="` + string(tt.issue) + `"`, "市況データを取得できません。", "自動的に再試行します。", `href="/settings"`}
+			common := []string{`data-testid="marketdata-banner"`, `data-issue="` + string(tt.issue) + `"`, "市況データを取得できません。", "自動的に再試行します。", `href="/settings/broker"`}
 			for _, want := range append(common, tt.want...) {
 				if !strings.Contains(body, want) {
 					t.Errorf("banner lacks %q:\n%s", want, body)

@@ -77,7 +77,7 @@ templ evalTable(t Table) {
 			<thead>
 				<tr class="text-right text-slate-500">
 					<th scope="col" class="px-2 py-1 text-left">{ t.KeyHeader }</th>
-					<th scope="col" class="px-2 py-1">n</th>
+					<th scope="col" class="px-2 py-1" title="n">件数</th>
 					<th scope="col" class="px-2 py-1">損益(円)</th>
 					<th scope="col" class="px-2 py-1">勝率</th>
 					<th scope="col" class="px-2 py-1">EV(円/取引)</th>
@@ -117,7 +117,7 @@ templ jevBlock(rows []JevRow) {
 				<thead>
 					<tr class="text-right text-slate-500">
 						<th scope="col" class="px-2 py-1 text-left">ラベル</th>
-						<th scope="col" class="px-2 py-1">n</th>
+						<th scope="col" class="px-2 py-1" title="n">件数</th>
 						<th scope="col" class="px-2 py-1">方向的中率</th>
 						<th scope="col" class="px-2 py-1">Brier</th>
 					</tr>
@@ -150,7 +150,7 @@ templ metaBlock(rows []MetaRow) {
 						<th scope="col" class="px-2 py-1 text-left">版</th>
 						<th scope="col" class="px-2 py-1">状態</th>
 						<th scope="col" class="px-2 py-1">OOS期間</th>
-						<th scope="col" class="px-2 py-1">OOS n</th>
+						<th scope="col" class="px-2 py-1" title="OOS n">OOS件数</th>
 						<th scope="col" class="px-2 py-1">OOS AUC</th>
 						<th scope="col" class="px-2 py-1">OOS EV(bps)</th>
 						<th scope="col" class="px-2 py-1">採用取引 n</th>

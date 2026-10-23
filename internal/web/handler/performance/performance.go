@@ -67,6 +67,9 @@ const (
 
 const dateLayout = "2006-01-02"
 
+// backtestTab is the `tab` query value that selects the バックテスト tab.
+const backtestTab = "backtest"
+
 // actualsRange is the whole history: the page evaluates every closed position.
 var actualsRange actuals.Range
 
@@ -87,30 +90,34 @@ func NewPerformanceHandler(runner BacktestRunner, source PerformanceSource) *Per
 	return &PerformanceHandler{runner: runner, actuals: source, evaluation: actuals.EvaluatorOf(source), now: time.Now}
 }
 
-// Page implements `GET /performance`: it always shows the realized (Paper)
-// performance section (500 with the error shown in it if it cannot be
-// read); then, without a `from` query parameter it
-// renders the backtest form prefilled with defaults; with one it parses
+// Page implements `GET /performance`, the 成績 page (issue #895). Its 実績 tab
+// shows the realized (Paper) performance section (500 with the error shown in
+// it if it cannot be read) and its evaluation. The バックテスト tab
+// (`?tab=backtest`, or any request with a `from` query parameter) renders the
+// backtest form prefilled with defaults and does not read the realized
+// performance; with `from` it parses
 // from/to/training_days/validation_days/forward_days, runs the Walk
 // Forward backtest, and renders its metrics (400 on invalid input, 500 on
 // a run failure, both with the error shown on the page).
 func (h *PerformanceHandler) Page(c *gin.Context) {
-	props := pages.PerformanceProps{Form: h.defaultForm()}
+	props := pages.PerformanceProps{Form: h.defaultForm(), BacktestTab: c.Query("from") != "" || c.Query("tab") == backtestTab}
 	status := http.StatusOK
 
-	actuals, err := h.actuals.Performance(c.Request.Context(), h.now())
-	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "handler: performance actuals", "error", err)
-		status, props.ActualsError = http.StatusInternalServerError, "実績の取得に失敗しました。"
-	}
-	props.Actuals = performanceActuals(actuals)
+	if !props.BacktestTab {
+		actuals, err := h.actuals.Performance(c.Request.Context(), h.now())
+		if err != nil {
+			slog.ErrorContext(c.Request.Context(), "handler: performance actuals", "error", err)
+			status, props.ActualsError = http.StatusInternalServerError, "実績の取得に失敗しました。"
+		}
+		props.Actuals = performanceActuals(actuals)
 
-	evaluated, err := h.evaluation.Evaluate(c.Request.Context(), actualsRange)
-	if err != nil {
-		slog.ErrorContext(c.Request.Context(), "handler: performance evaluation", "error", err)
-		status, props.EvaluationError = http.StatusInternalServerError, "実績評価の取得に失敗しました。"
+		evaluated, err := h.evaluation.Evaluate(c.Request.Context(), actualsRange)
+		if err != nil {
+			slog.ErrorContext(c.Request.Context(), "handler: performance evaluation", "error", err)
+			status, props.EvaluationError = http.StatusInternalServerError, "実績評価の取得に失敗しました。"
+		}
+		props.Evaluation = evaluationPanel(evaluated)
 	}
-	props.Evaluation = evaluationPanel(evaluated)
 
 	if c.Query("from") != "" {
 		form, wf, errs := parseBacktestForm(c)

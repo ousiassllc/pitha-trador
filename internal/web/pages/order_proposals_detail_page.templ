@@ -7,7 +7,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
-// OrderProposalDetailPage is one 注文案 in full (issue #829): what the MCP
+// OrderProposalDetailPage is one 注文提案 in full (issue #829): what the MCP
 // client proposed and why (rationale, the plan for the stop and the exit, the
 // loss it expected, its sources), what the application did with it (the
 // timeline of states) and what became of it (the linked signal, order and
@@ -18,10 +18,10 @@ import (
 // rel="noopener noreferrer". `GET /order-proposals/:id`
 // (internal/web/handler/orderproposals) renders it; it has no buttons.
 templ OrderProposalDetailPage(p ProposalDetailProps) {
-	@layout.Shell("注文案 #"+strconv.FormatInt(p.ID, 10), organisms.NavOrderProposals) {
-		<p class="text-sm"><a class="underline" href="/order-proposals">← 注文案の一覧</a></p>
+	@layout.Shell("注文提案 #"+strconv.FormatInt(p.ID, 10), organisms.NavOrderProposals) {
+		<p class="text-sm"><a class="underline" href="/order-proposals">← 注文提案の一覧</a></p>
 		<h1 class="mt-1 text-2xl font-bold text-slate-900" data-testid="order-proposal-title">
-			注文案 #{ strconv.FormatInt(p.ID, 10) }
+			注文提案 #{ strconv.FormatInt(p.ID, 10) }
 			<span class="ml-2 font-mono text-lg">
 				<a class="underline" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
 			</span>
