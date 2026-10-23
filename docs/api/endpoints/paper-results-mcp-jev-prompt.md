@@ -47,11 +47,12 @@
 | `candidate_version` | 候補の版（`jev.shadow.candidate_version`）。無ければ `null` |
 | `live_version` | ライブの版（`jev.trader_prompt_version`。保存が無い・壊れている・このビルドに無い版のときはビルドの既定 `trader-v3`） |
 | `daily_cap_usd` / `cap_is_default` / `cap_source` | 1 日あたりの費用の上限（JST の日）。`cap_source` は `default`（保存値が無く、効いているのはビルドの既定値 0.10 USD。`cap_is_default` が `true`）か `stored`（Settings 画面で保存された値）。どちらも確定した運用の値で、Settings で上げ下げできる |
-| `failure_cap` / `failure_cap_source` / `failures_today` | 1 日（JST）に許す失敗した呼び出し（応答が不正・保存の失敗・タイムアウトなど。課金されても費用の合計に入らない）の回数の上限と、今日の回数。`failure_cap_source` は常に `fixed`（確定した定数 20 回。Settings では変えられない） |
+| `failure_cap` / `failure_cap_source` / `failures_today` | 1 日（JST）に許す失敗した呼び出し（応答が不正・保存の失敗・タイムアウトなど。課金されても費用の合計に入らない。終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えない。ベンダーが課金した可能性はあるが保存されないので費用にも入らず、1 回の終了で最大 4 回）の回数の上限と、今日の回数。`failure_cap_source` は常に `fixed`（確定した定数 20 回。Settings では変えられない） |
 | `today` | JST の今日の `date`・`calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd`（後ろの 2 つは「うち見積り」＝応答に `usage` が無く、入力トークン数をリクエストの大きさから推定して数えた呼び出しの件数と費用。`calls` / `request_cost_usd` に含まれる） |
 | `total` | 累計の `calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd` |
 | `daily[]` | JST の日ごとの費用（`date`・`calls`・`request_cost_usd`・`estimated_calls`・`estimated_cost_usd`）。新しい順、最大 31 日 |
 | `halt_today` / `last_halt` | 上限で止まった記録（`date`・`reason`（固定コード `daily_cost_cap` または `daily_failure_cap`）・`spent_usd`・`cap_usd`・`failures`・`failure_cap`（後ろの 2 つは `daily_failure_cap` のとき）・`at`）。止まっていなければ `null` |
+| `throttle_active` / `last_throttle` / `throttles_today` / `throttle_cooldown_seconds` / `min_call_interval_seconds` | Jev API が 429（レート制限）・529（過負荷）を返したことによるシャドーの停止（issue #883）。シャドーはライブと同じ API キー・同じ制限を共有するので、429/529 を受けたら待たず・再試行せずに止まり、`throttle_cooldown_seconds`（900 秒。定数）のあいだ何も送らない。ライブの呼び出しが受けた 429/529 でも止まる。`throttle_active` は今止まっているか、`last_throttle` は最後の記録（`date`・`count`＝その日の停止回数・`status`（429 / 529）・`reason`（固定コード `api_rate_limited` / `api_overloaded`）・`source`（`shadow`＝シャドー自身の呼び出し／`live`＝ライブの呼び出し）・`at`・`until`＝再開の時刻。無ければ `null`）、`throttles_today` は今日（JST）の停止回数。`min_call_interval_seconds`（2 秒。定数）はシャドーの呼び出しの最小間隔（それより短い比較は捨てる）。失敗回数・`halt_*` には数えない |
 | `recent_promotions[]` | `jev_prompt_promotions` の新しい順、最大 10 件（`id`・`at`・`actor`（`mcp` / `gui`）・`client`（IP だけ）・`from_version`・`to_version`） |
 | `registered_versions[]` | このビルドが定義する trader の版（昇格できる版） |
 
@@ -81,7 +82,8 @@
 
 | 版 | 日付 | 変更内容 | 変更理由 |
 |----|------|---------|---------|
-| 1.0 | 2026-10-22 | 新規作成。`jev_shadow_compare` / `jev_shadow_cost` / `jev_prompt_promote`（元の文書の版 1.13 で追加） | issue #872 |
+| 1.0 | 2026-10-22 | 新規作成。`jev_shadow_compare` / `jev_shadow_cost` / `jev_prompt_promote`（元の文書の版 1.19 で追加） | issue #872 |
 | 1.1 | 2026-10-22 | `jev_shadow_compare` に `comparable` / `excluded_disagreement` / `outcome_note` を追加し、方向がライブと食い違う行を採点しない形に改めた（`future_return` がライブのバリアで止まる偏りを避けるため）。`jev_shadow_cost` の `daily_cap_approved` を `cap_source` に置き換え、失敗回数の上限（`failure_cap` ほか）と `daily_failure_cap` の止まった記録を追加 | issue #872 レビュー対応 |
 | 1.2 | 2026-10-22 | 費用の上限 0.10 USD・失敗回数の上限 20 回・単価 0.042 USD/1M 入力トークン・同時実行 4 をユーザー決定の確定値にし、`cap_source` の値を `default` / `stored`、`failure_cap_source` を `fixed` に改めた（`proposed_unapproved` を廃止）。`usage` が無い応答を推定の入力トークン数で数え、`jev_shadow_cost` に `estimated_calls` / `estimated_cost_usd` を追加 | issue #872 ユーザー決定 |
-
+| 1.3 | 2026-10-22 | `jev_shadow_cost` に `throttle_active` / `last_throttle` / `throttles_today` / `throttle_cooldown_seconds` / `min_call_interval_seconds` を追加（Jev API の 429/529 によるシャドーの停止と理由。ツール数は変わらない） | issue #883 |
+| 1.4 | 2026-10-22 | `jev_shadow_cost` の失敗回数の説明に、終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えないことを追記 | issue #882 |

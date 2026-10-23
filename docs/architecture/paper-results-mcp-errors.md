@@ -62,5 +62,5 @@
 | 1.4 | 2026-10-20 | 設定ツールのコード `write_disabled`（403）・`key_not_allowed`（403）・`invalid_value`（422、`error.data.detail`）を追加。`invalid_argument` の条件と `db_locked` / `db_unavailable` の条件を設定ツールに合わせて追記 | issue #806・#807 |
 | 1.5 | 2026-10-21 | 注文案ツールのコード `proposals_disabled`（403）・`idempotency_conflict`（409）・`proposal_not_found`（404）を追加。`limit_exceeded`（1 日 20 件）と `invalid_argument`（注文案の引数規則。`error.data.detail`）の条件を追記し、ツール数を 18 に更新 | issue #827（親 #826） |
 | 1.6 | 2026-10-21 | `order_proposal_cancel` のコード `not_cancellable`（409）を追加。`proposal_not_found` を取消にも使う。ツール数を 19 に更新 | issue #828（親 #826） |
-| 1.7 | 2026-10-22 | 実験ツールのコード `multiple_variables`（422）・`experiment_not_found`（404）・`experiment_not_running`（409）を追加。`key_not_allowed` を `experiment_create` にも使い、`write_disabled` を実験の書き込みにも使う。`invalid_argument` の条件とツール数（25）を更新 | issue #871 |
-| 1.8 | 2026-10-22 | `jev_prompt_promote`（Jev のプロンプトの昇格）を `write_disabled` と `invalid_value` の対象に足し、ツール数を 24 にした。新しいコードは無い | issue #872 |
+| 1.7 | 2026-10-22 | 実験ツールのコード `multiple_variables`（422）・`experiment_not_found`（404）・`experiment_not_running`（409）を追加。`key_not_allowed` を `experiment_create` にも使い、`write_disabled` を実験の書き込みにも使う。`invalid_argument` の条件とツール数（28）を更新 | issue #871 |
+| 1.8 | 2026-10-22 | `jev_prompt_promote`（Jev のプロンプトの昇格）を `write_disabled` と `invalid_value` の対象に足し、ツール数を 31 にした。新しいコードは無い | issue #872 |

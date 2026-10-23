@@ -135,16 +135,25 @@ func (e *shadowEnv) clock() time.Time { return e.now }
 
 func newShadowEnv(t *testing.T, mode metalabelsettings.Mode, api *fakeJev) *shadowEnv {
 	t.Helper()
-	server := httptest.NewServer(api)
+	// Pacing off: these tests call the shadow back to back (the pacing has its own tests).
+	return newShadowEnvOn(t, mode, api, api, jev.Config{MaxAttempts: 1}, shadow.WithMinInterval(0))
+}
+
+// newShadowEnvOn is newShadowEnv with the HTTP handler in front of api (to
+// shape the API's answers), the client's config and the shadow's options.
+func newShadowEnvOn(t *testing.T, mode metalabelsettings.Mode, handler http.Handler, api *fakeJev, cfg jev.Config, opts ...shadow.Option) *shadowEnv {
+	t.Helper()
+	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	db := newTestDB(t)
 	e := &shadowEnv{t: t, db: db, api: api, now: time.Date(2026, 10, 22, 1, 0, 0, 0, time.UTC),
 		results: judgement.NewShadowRepository(db), settings: system.NewRuntimeSettingsRepository(db)}
 	decisions := judgement.NewDecisionRepository(db)
 	e.instID = mustCreateInstrument(t, market.NewInstrumentRepository(db), "7203").ID
-	client := jev.NewClient(jev.Config{BaseURL: server.URL, MaxAttempts: 1})
+	cfg.BaseURL, cfg.Now = server.URL, e.clock
+	client := jev.NewClient(cfg)
 	e.client = client
-	e.shadow = shadow.New(client, e.results, e.settings, mode, e.clock)
+	e.shadow = shadow.New(client, e.results, e.settings, mode, e.clock, opts...)
 	e.trader = jev.NewTrader(client, decisions, rag.NewService(db, decisions, market.NewSnapshotRepository(db)),
 		jev.WithPromptSettings(e.settings), jev.WithShadow(e.shadow))
 	return e
