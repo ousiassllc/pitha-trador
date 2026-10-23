@@ -81,6 +81,8 @@ type Config struct {
 	// ErrorRateThreshold is the failure-rate fraction (0-1) that raises
 	// Alerts.JevAPIErrorRateExceeded. Defaults to 0.5 (50%).
 	ErrorRateThreshold float64
+	// Now is the clock of LastThrottle's timestamps. Defaults to time.Now.
+	Now func() time.Time
 }
 
 // APIError is returned when the Jev API responds with a non-200 status.
@@ -108,6 +110,8 @@ type Client struct {
 	alerts             AlertNotifier
 	errorRate          *errorRateTracker
 	errorRateThreshold float64
+	now                func() time.Time
+	throttle           throttleNote
 }
 
 // NewClient returns a Client configured by cfg.
@@ -136,6 +140,10 @@ func NewClient(cfg Config) *Client {
 	if errorRateThreshold <= 0 {
 		errorRateThreshold = defaultErrorRateThreshold
 	}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
 	baseURL := cfg.BaseURL
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
@@ -154,6 +162,7 @@ func NewClient(cfg Config) *Client {
 		alerts:             alerts,
 		errorRate:          newErrorRateTracker(errorRateWindow),
 		errorRateThreshold: errorRateThreshold,
+		now:                now,
 	}
 }
 

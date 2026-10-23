@@ -58,8 +58,14 @@ type State struct {
 	Total         judgement.Spend
 	Daily         []judgement.DayCost
 	// HaltToday is set when the cost or failure cap stopped the shadow today (JST).
-	HaltToday  *jevshadowsettings.Halt
-	Promotions []jevshadow.Promotion
+	HaltToday *jevshadowsettings.Halt
+	// Throttle is the last stop by the Jev API's 429/529 (issue #883), nil for
+	// none; ThrottleActive is true while the shadow is stopped by it and
+	// ThrottlesToday counts today's (JST) stops.
+	Throttle       *jevshadowsettings.Throttle
+	ThrottleActive bool
+	ThrottlesToday int
+	Promotions     []jevshadow.Promotion
 }
 
 // Service reads and changes the shadow and promotion state.
@@ -108,6 +114,7 @@ func (s *Service) State(ctx context.Context) (State, error) {
 	if h := cfg.Halt; h != nil && h.Date == st.Today.Date {
 		st.HaltToday = h
 	}
+	st.Throttle, st.ThrottleActive, st.ThrottlesToday = cfg.Throttle, cfg.Throttle.ActiveAt(now), cfg.Throttle.CountOn(st.Today.Date)
 	if st.Promotions, err = judgement.ListPromotions(ctx, s.db, RecentPromotionCount); err != nil {
 		return State{}, err
 	}

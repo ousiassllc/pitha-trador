@@ -51,8 +51,17 @@ type Settings interface {
 // decision and stores the answer in jev_shadow_decisions (issue #872). The
 // answer is never used: Shadow has no path to Policy, the meta-model, Risk,
 // order placement, the RAG index (jev_decision_vectors), Calibration or the
-// meta-model training. It only writes jev_shadow_decisions and (for a day
-// stopped by the cost cap) one runtime_settings row.
+// meta-model training. It only writes jev_shadow_decisions and a few
+// runtime_settings rows (the failed-call counter, why it stopped for a day by
+// a cap, and the 429/529 stop record).
+//
+// The Jev API key and its rate limit are shared with the live Scout/Trader
+// (issue #883), so the shadow gives way to them: it sends at most one call per
+// jevshadowsettings.MinCallInterval (a comparison that would start sooner is
+// dropped), never retries after a 429/529 and stays stopped for
+// jevshadowsettings.ThrottleCooldown after one, whether its own call or a live
+// call got it. The stop and its reason are stored (jevshadowsettings.KeyThrottle)
+// for the Settings screen and jev_shadow_cost.
 //
 // It runs only in Paper (metalabelsettings.RuntimeMode: NewShadow takes the
 // mode, so a test can prove Live does nothing), only while the switch is on,
@@ -71,17 +80,33 @@ type Shadow struct {
 	// shutdown does not wait out the calls' timeouts.
 	base   context.Context
 	cancel context.CancelFunc
-	// failMu serializes the read-modify-write of the failed-call counter.
-	failMu sync.Mutex
+	// failMu serializes the read-modify-write of the failed-call counter and
+	// throttleMu that of the throttle record.
+	failMu     sync.Mutex
+	throttleMu sync.Mutex
+	// minInterval is the least time between two calls (0: no pacing), measured
+	// by pace (time.Now in production) from lastCall under paceMu.
+	minInterval time.Duration
+	pace        func() time.Time
+	paceMu      sync.Mutex
+	lastCall    time.Time
+	// throttledUntil is the end of the cooldown after a 429/529, kept in memory
+	// (under paceMu) so it holds when the throttle record cannot be written.
+	throttledUntil time.Time
 }
 
 // New returns a Shadow that calls client, stores answers via results and
 // reads/records its settings via settings. mode is the operating mode of this
 // build (metalabelsettings.RuntimeMode): the shadow does nothing unless it is
 // metalabelsettings.ModePaper. now is the clock (time.Now in production).
-func New(client *jev.Client, results Results, settings Settings, mode metalabelsettings.Mode, now func() time.Time) *Shadow {
+func New(client *jev.Client, results Results, settings Settings, mode metalabelsettings.Mode, now func() time.Time, opts ...Option) *Shadow {
 	base, cancel := context.WithCancel(context.Background())
-	return &Shadow{client: client, results: results, settings: settings, mode: mode, now: now, slots: make(chan struct{}, shadowMaxInFlight), base: base, cancel: cancel}
+	s := &Shadow{client: client, results: results, settings: settings, mode: mode, now: now, slots: make(chan struct{}, shadowMaxInFlight), base: base, cancel: cancel,
+		minInterval: jevshadowsettings.MinCallInterval, pace: time.Now}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Submit hands live (a persisted trader decision) and the exact TraderState and
@@ -143,6 +168,15 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 
 	now := s.now()
 	day := jevshadowsettings.Day(now)
+	// The Jev API is throttling (429/529): stay off it, for the live calls'
+	// sake. Neither check costs a request.
+	if cfg.Throttle.ActiveAt(now) || s.throttleHeld(now) {
+		return nil
+	}
+	if ev, ok := s.client.LastThrottle(); ok && now.Sub(ev.At) < jevshadowsettings.ThrottleCooldown {
+		s.recordThrottle(ctx, cfg, ev.Status, jevshadowsettings.ThrottleSourceLive, ev.At)
+		return nil
+	}
 	from, to := jevshadowsettings.DayBounds(now)
 	spent, err := s.results.SpentBetween(ctx, from, to)
 	if err != nil {
@@ -166,9 +200,22 @@ func (s *Shadow) run(ctx context.Context, live domain.JevDecision, state jev.Sco
 		return nil
 	}
 
+	if !s.allowCall() {
+		slog.Debug("jev shadow: a call was made less than the minimum interval ago, skipping the comparison", "decision_id", live.ID)
+		return nil
+	}
+
 	resp, latency, err := s.client.ShadowTrader(ctx, jev.TraderRequest{QuestionVersion: candidate, State: state, RAGContext: ragContext})
 	if err != nil {
 		if !s.cancelledByClose(err) {
+			// A 429/529 is the API saying it is busy, not a failed call: stop for
+			// the cooldown (nothing was answered, so nothing is billed or counted
+			// against DailyFailureCap).
+			var apiErr *jev.APIError
+			if errors.As(err, &apiErr) && jevshadowsettings.ThrottleReason(apiErr.StatusCode) != "" {
+				s.recordThrottle(ctx, cfg, apiErr.StatusCode, jevshadowsettings.ThrottleSourceShadow, s.now())
+				return fmt.Errorf("jev shadow: the Jev API answered %d; stopped for %s: %w", apiErr.StatusCode, jevshadowsettings.ThrottleCooldown, err)
+			}
 			s.countFailure(day)
 		}
 		return fmt.Errorf("jev shadow: shadow call for version %q: %w", candidate, err)
