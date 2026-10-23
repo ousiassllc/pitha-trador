@@ -22,8 +22,8 @@ type HeartbeatRecorder interface {
 // consequence of an operator action: a Kill Switch push or WebSocket
 // reconnect making pitha-kill-switch-panel resync `GET /api/v1/system/status`,
 // the `systemStateChanged`-triggered `GET /system/status` refresh of
-// Header, and Header's `every Ns` banner polls (`#update-banner`,
-// `#marketdata-banner`). This header is the only exclusion mechanism for
+// Header, and the `every Ns` polls of the header's status and
+// attention badge (`#header-status`, `#attention-badge`). This header is the only exclusion mechanism for
 // such timer/event-driven fetches: every new `hx-trigger="... every Ns"`
 // element MUST send it via `hx-headers`, and the server keeps no path list
 // that could be forgotten. Such requests run whether or not anyone is at the screen, so

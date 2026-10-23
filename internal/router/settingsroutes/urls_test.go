@@ -29,7 +29,14 @@ func TestURLs_ExistingRoutesAreAlive(t *testing.T) {
 		target string // concrete request
 		want   int
 	}{
-		{"/", "/", http.StatusFound},
+		// `/` is the Home screen since issue #896 (it used to redirect to /scanner), and its card fragments are alive.
+		{"/", "/", http.StatusOK},
+		{"/home/trade-status", "/home/trade-status", http.StatusOK},
+		{"/home/pnl", "/home/pnl", http.StatusOK},
+		{"/home/positions", "/home/positions", http.StatusOK},
+		{"/home/attention", "/home/attention", http.StatusOK},
+		{"/home/details", "/home/details", http.StatusOK},
+		{"/home/attention-badge", "/home/attention-badge", http.StatusOK},
 		{"/scanner", "/scanner", http.StatusOK},
 		{"/scanner/scan", "/scanner/scan", http.StatusOK},
 		{"/symbols/:symbol", "/symbols/7203", http.StatusOK},
@@ -79,12 +86,15 @@ func TestURLs_ExistingRoutesAreAlive(t *testing.T) {
 	}
 }
 
-// `/` still lands on the Scanner, and the JSON API routes the screens call
-// are still served.
-func TestURLs_RootRedirectsToScannerAndAPIIsAlive(t *testing.T) {
+// `/` is the Home screen (issue #896) and no longer redirects; the Scanner stays at
+// `/scanner`, and the JSON API routes the screens call are still served.
+func TestURLs_RootIsHomeScannerStaysAndAPIIsAlive(t *testing.T) {
 	engine := newEngine(t, secrets{full: true})
-	if loc := get(engine, "/").Header().Get("Location"); loc != "/scanner" {
-		t.Errorf("GET / Location = %q, want /scanner", loc)
+	if rec := get(engine, "/"); rec.Code != http.StatusOK || rec.Header().Get("Location") != "" {
+		t.Errorf("GET / = %d Location %q, want 200 (Home) with no redirect", rec.Code, rec.Header().Get("Location"))
+	}
+	if rec := get(engine, "/scanner"); rec.Code != http.StatusOK {
+		t.Errorf("GET /scanner = %d, want 200", rec.Code)
 	}
 	for _, target := range []string{"/api/v1/scanner", "/api/v1/system/status", "/api/v1/performance", "/api/v1/calibration"} {
 		if rec := get(engine, target); rec.Code != http.StatusOK {

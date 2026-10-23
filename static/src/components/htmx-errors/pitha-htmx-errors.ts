@@ -16,8 +16,8 @@
 //     being outside the dialog it stays inert, so while a modal is open toasts go
 //     to the `[data-toast-region]` inside that dialog instead, where the close
 //     button and text selection work (issue #353).
-//   - polled live banners (`[data-live-banner]`, Header's `#update-banner` /
-//     `#marketdata-banner`, issue #626): the container is the fixed
+//   - polled live banners (`[data-live-banner]`, Header's `#attention-badge` and
+//     the Home screen's 取引の状態 card, issues #626 / #896): the container is the fixed
 //     `role="status"` live region; a poll answering the markup already shown
 //     is not swapped, so a screen reader announces a banner only when it
 //     appears or changes, not on every poll;

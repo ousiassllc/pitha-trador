@@ -19,23 +19,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
 )
 
-func TestNew_RootRouteRedirectsToScannerDashboard(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	engine := router.New()
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusFound {
-		t.Fatalf("expected status %d, got %d", http.StatusFound, rec.Code)
-	}
-	if loc := rec.Header().Get("Location"); loc != "/scanner" {
-		t.Fatalf("expected redirect to /scanner, got %q", loc)
-	}
-}
-
 func TestNew_ReturnsAWailsIndependentEngine(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New()

@@ -107,7 +107,7 @@ func TestNew_HeaderRendersNoActionsWhenSystemStateUnreadable(t *testing.T) {
 			t.Errorf("panel %q must not contain %q", panel, unwanted)
 		}
 	}
-	if !strings.Contains(rec.Body.String(), `hx-trigger="load, systemStateChanged from:closest header"`) {
+	if !strings.Contains(rec.Body.String(), `hx-trigger="load, systemStateChanged from:body"`) {
 		t.Errorf("#header-status must self-correct on load, got %q", rec.Body.String())
 	}
 }
@@ -131,19 +131,53 @@ func TestNew_HeaderStatusRefreshIsMarkedBackground(t *testing.T) {
 // Every timer-driven (`every Ns`) element in the page must send the
 // background marker: the server keeps no path list, so a poll missing the
 // header would keep the dead-man's switch alive from an idle tab (FR-RISK-6).
+// The header's attention badge is one on every page, and the Home screen's
+// cards (issue #896) are five more.
 func TestNew_EveryNsPollingElementsAreMarkedBackground(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := router.New(router.WithSystemEngine(failingStateEngine{}))
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/calibration", nil))
+	for path, wantAtLeast := range map[string]int{"/calibration": 1, "/": 5} {
+		engine := router.New(router.WithSystemEngine(failingStateEngine{}))
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 
-	polling := regexp.MustCompile(`<[^>]*hx-trigger="[^"]*every \d+s[^"]*"[^>]*>`).FindAllString(rec.Body.String(), -1)
-	if len(polling) < 2 {
-		t.Fatalf("found %d `every Ns` elements, want at least the update and marketdata banners: %q", len(polling), polling)
-	}
-	for _, tag := range polling {
-		if !strings.Contains(tag, middleware.BackgroundHeader) {
-			t.Errorf("polling element must send %s via hx-headers: %s", middleware.BackgroundHeader, tag)
+		polling := regexp.MustCompile(`<[^>]*hx-trigger="[^"]*every \d+s[^"]*"[^>]*>`).FindAllString(rec.Body.String(), -1)
+		if len(polling) < wantAtLeast {
+			t.Fatalf("GET %s: found %d `every Ns` elements, want at least %d: %q", path, len(polling), wantAtLeast, polling)
 		}
+		for _, tag := range polling {
+			if !strings.Contains(tag, middleware.BackgroundHeader) {
+				t.Errorf("GET %s: polling element must send %s via hx-headers: %s", path, middleware.BackgroundHeader, tag)
+			}
+		}
+	}
+}
+
+// Issue #896: `#header-status` listens for `systemStateChanged` on `body`, not
+// on the `header` the panel used to sit in (the panel is inside a card on
+// Home), so every page renders that trigger and exactly one Kill Switch
+// panel, and the panel's event (bubbles + composed, static/ tests) reaches body.
+func TestNew_EveryPageRefreshesHeaderStatusFromBodyEvents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New(router.WithSystemEngine(system.StaticSystemEngine{State_: domain.SystemStateRunning}))
+	// Every full page that renders the shared Header: Home, the parameterised
+	// symbol page and the secondary screens included.
+	for _, path := range []string{"/", "/scanner", "/watchlist", "/performance", "/order-proposals", "/calibration", "/activity", "/symbols/7203", "/settings", "/settings/maintenance"} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s = %d, want 200", path, rec.Code)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `id="header-status"`) || !strings.Contains(body, `hx-trigger="systemStateChanged from:body"`) {
+				t.Errorf("%s: #header-status lacks the from:body trigger", path)
+			}
+			if strings.Contains(body, "from:closest header") {
+				t.Errorf("%s: a `from:closest header` trigger is still rendered", path)
+			}
+			if n := strings.Count(body, "<pitha-kill-switch-panel"); n != 1 {
+				t.Errorf("%s: %d Kill Switch panels, want 1", path, n)
+			}
+		})
 	}
 }

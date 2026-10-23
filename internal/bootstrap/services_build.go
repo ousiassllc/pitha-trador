@@ -226,9 +226,8 @@ func (s *Services) buildScheduler(state *State, alertChannels alerts.Channels, a
 	s.Scheduler = scheduler.New(s.Jobs, s.Instruments, schedOpts...)
 }
 
-// buildMarketDataPipeline builds the Scanner Dashboard
-// candidate refresher and the log exporter, and returns the market-data
-// queue Handler wired onto them.
+// buildMarketDataPipeline builds the Scanner Dashboard candidate refresher and the log exporter,
+// and returns the market-data queue Handler wired onto them.
 func (s *Services) buildMarketDataPipeline(strategy *config.StrategyConfig, logDir string) *marketdatajob.Handler {
 	s.ErrorLogs = logging.NewExporter(logDir)
 	s.candidates = &candidates.Refresher{

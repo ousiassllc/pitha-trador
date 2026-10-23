@@ -52,12 +52,12 @@ func TestNew_UpdateCheckRouteIs404WithoutUpdater(t *testing.T) {
 	}
 }
 
-func TestNew_SettingsAndHeaderEmbedUpdateSlots(t *testing.T) {
+func TestNew_SettingsEmbedsUpdatePanelAndHeaderTheAttentionBadge(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	router.New().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/maintenance", nil))
 	body := rec.Body.String()
-	for _, want := range []string{`id="update-banner"`, `id="update-panel"`} {
+	for _, want := range []string{`id="attention-badge"`, `id="update-panel"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Settings page missing %s; body=%s", want, body)
 		}

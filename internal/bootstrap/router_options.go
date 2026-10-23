@@ -7,6 +7,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/evalprovider"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/exitalignjob"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/homeview"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalview"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/startup"
@@ -51,8 +52,7 @@ func LoadSecrets(ctx context.Context, state *State) (*system.SecretsRepository, 
 // Entrypoint-specific options (WithAllowedHosts, WithWebSocketBase,
 // mcpwire.RouterOptions (the Settings MCP card, issue #795) and
 // cmd/desktop's WithUpdateController - services.Updater is nil on
-// cmd/server, which a typed-nil interface would not reveal) are appended by
-// the caller.
+// cmd/server, which a typed-nil interface would not reveal) are appended by the caller.
 func RouterOptions(services *Services, state *State, secretsRepo *system.SecretsRepository) []router.Option {
 	scan := state.Strategy.Scan
 	// The MCP's write switch, audit log and the Settings screen's changes to the keys it may write live in the application's database (issue #806).
@@ -69,6 +69,7 @@ func RouterOptions(services *Services, state *State, secretsRepo *system.Secrets
 		router.WithBacktestRunner(services.Backtest),
 		router.WithActivitySource(services.Activity),
 		router.WithOrderProposalSource(proposalview.Reader{DB: state.DB}),
+		router.WithHomeSource(homeview.Reader{DB: state.DB}),
 		router.WithSecretsStore(secretsRepo),
 		router.WithOperationalSettings(mcpset.NewAudited(opsettings.New(services.Settings, *state.Strategy, startup.DefaultLogDir(state.Paths.DBPath)).WithRiskReference(services.Risk.Limits()).WithTradingMode(metalabelsettings.RuntimeMode), mcpGate)),
 		router.WithMCPWriteGate(mcpGate),
