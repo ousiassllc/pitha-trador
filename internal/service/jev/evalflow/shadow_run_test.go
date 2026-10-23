@@ -298,32 +298,3 @@ func TestShadow_InvalidResponsesStopTheShadowAtTheFailureCapAndLiveContinues(t *
 		t.Fatalf("candidate calls the next day = %d, want %d", got, capN+1)
 	}
 }
-
-// Close (the application's shutdown) cancels the calls in flight instead of
-// waiting out their timeouts, and comparisons submitted afterwards are dropped.
-func TestShadow_CloseCancelsCallsInFlightAndDropsLaterOnes(t *testing.T) {
-	hold := make(chan struct{})
-	e := newShadowEnv(t, metalabelsettings.ModePaper, &fakeJev{holdShadow: hold})
-	t.Cleanup(func() { close(hold) }) // registered after the server's Close, so it runs first: unblocks the held handler
-	e.enable()
-	e.evaluate()
-	deadline := time.Now().Add(10 * time.Second)
-	for e.api.calls("trader-v4") == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("the candidate call never started")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	closed := make(chan struct{})
-	go func() { e.trader.Close(); close(closed) }()
-	select {
-	case <-closed:
-	case <-time.After(10 * time.Second):
-		t.Fatal("Close waited for the held shadow call instead of cancelling it")
-	}
-	e.evaluate()
-	e.shadow.Wait()
-	if got := e.api.calls("trader-v4"); got != 1 {
-		t.Fatalf("candidate calls = %d, want 1 (a comparison submitted after Close is dropped)", got)
-	}
-}

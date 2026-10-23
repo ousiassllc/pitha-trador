@@ -186,3 +186,55 @@ func TestLiveVersion_ReadFailureKeepsTheLastVersionRead(t *testing.T) {
 		t.Fatalf("after a failed read the decision is %q (v3 calls %d); the promoted version must stay", second.QuestionVersion, e.api.calls("trader-v3"))
 	}
 }
+
+// Close (the application's shutdown) cancels the calls in flight instead of
+// waiting out their timeouts, and comparisons submitted afterwards are dropped.
+func TestShadow_CloseCancelsCallsInFlightAndDropsLaterOnes(t *testing.T) {
+	e := holdCandidate(t)
+	closed := make(chan struct{})
+	go func() { e.trader.Close(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Close waited for the held shadow call instead of cancelling it")
+	}
+	e.evaluate()
+	e.shadow.Wait()
+	if got := e.api.calls("trader-v4"); got != 1 {
+		t.Fatalf("candidate calls = %d, want 1 (a comparison submitted after Close is dropped)", got)
+	}
+}
+
+// holdCandidate starts a comparison whose candidate call stays held at the API
+// and returns once that call has arrived.
+func holdCandidate(t *testing.T) *shadowEnv {
+	t.Helper()
+	hold := make(chan struct{})
+	e := newShadowEnv(t, metalabelsettings.ModePaper, &fakeJev{holdShadow: hold})
+	t.Cleanup(func() { close(hold) }) // registered after the server's Close, so it runs first: unblocks the held handler
+	e.enable()
+	e.evaluate()
+	deadline := time.Now().Add(10 * time.Second)
+	for e.api.calls("trader-v4") == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the candidate call never started")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return e
+}
+
+// A call cut off by Close is neither a failure nor a cost: the day's
+// jev.shadow.failures does not move and nothing is stored, so a day of
+// restarts cannot reach DailyFailureCap on its own.
+func TestShadow_CloseCancellationIsNotCountedAsAFailure(t *testing.T) {
+	e := holdCandidate(t)
+	e.trader.Close() // returns once the cancelled call has finished
+	cfg := jevshadowsettings.Load(context.Background(), e.settings)
+	if got := cfg.Failures.FailuresOn("2026-10-22"); got != 0 {
+		t.Fatalf("failure counter after Close = %d, want 0 (a cancelled call is not a failure)", got)
+	}
+	if n := e.count(`SELECT COUNT(*) FROM jev_shadow_decisions`); n != 0 {
+		t.Fatalf("the cancelled call stored %d shadow rows", n)
+	}
+}
