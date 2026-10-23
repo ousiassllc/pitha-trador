@@ -53,18 +53,52 @@ type Querier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
+// SetForeignTraderVersions makes ListTrainingRows and CountLabeledDecisions
+// leave out the Trader decisions of the versions foreign returns: the prompt
+// versions of another cohort than the live one (issue #881). The model reads
+// Jev's entry_quality answer as a feature, so rows answered under a prompt that
+// defines it differently would teach it the wrong mapping. nil (the default)
+// leaves every row in. Call it before the repository is shared.
+func (r *Repository) SetForeignTraderVersions(foreign sqlutil.ForeignTraderVersions) {
+	r.foreign = foreign
+}
+
+// foreignVersions resolves the versions to leave out ([]: none).
+func (r *Repository) foreignVersions(ctx context.Context) ([]string, error) {
+	if r.foreign == nil {
+		return nil, nil
+	}
+	versions, err := r.foreign(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("repository: resolve the Trader prompt versions to leave out of the meta-label training: %w", err)
+	}
+	return versions, nil
+}
+
 // ListTrainingRows returns the triple-barrier-labeled (label_version 2,
 // net_return_bps set) LONG/SHORT trader decisions made in [from, to), oldest
-// first. A decision with several label rows (the timeout setting changed
-// between labelings) yields only its newest one.
+// first, of the live prompt's cohort (SetForeignTraderVersions). A decision
+// with several label rows (the timeout setting changed between labelings)
+// yields only its newest one.
 func (r *Repository) ListTrainingRows(ctx context.Context, from, to time.Time) ([]TrainingRow, error) {
-	return ListTrainingRowsFrom(ctx, r.db, from, to)
+	foreign, err := r.foreignVersions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return ListTrainingRowsFrom(ctx, r.db, from, to, foreign)
 }
 
 // ListTrainingRowsFrom is ListTrainingRows over any read handle, so a
 // read-only reader (the Paper results MCP) selects exactly the rows the
-// nightly retraining trains on.
-func ListTrainingRowsFrom(ctx context.Context, q Querier, from, to time.Time) ([]TrainingRow, error) {
+// nightly retraining trains on. foreign are the Trader prompt versions whose
+// decisions are left out (none: every version).
+func ListTrainingRowsFrom(ctx context.Context, q Querier, from, to time.Time, foreign []string) ([]TrainingRow, error) {
+	versionCond, versionArgs := sqlutil.NotIn("d.question_version", foreign)
+	if versionCond != "" {
+		versionCond = "\n\tAND " + versionCond
+	}
+	args := append([]any{domain.CalibrationLabelVersionTripleBarrier}, versionArgs...)
+	args = append(args, sqlutil.FormatTime(from), sqlutil.FormatTime(to), domain.CalibrationLabelVersionTripleBarrier)
 	rows, err := q.QueryContext(ctx, `
 SELECT d.id, d.symbol, d.model_id, d.timestamp, d.direction, d.state_json, d.response_json,
 	d.ofi_short, d.ofi_mid, d.ofi_long, d.microprice_dev_bps,
@@ -72,12 +106,11 @@ SELECT d.id, d.symbol, d.model_id, d.timestamp, d.direction, d.state_json, d.res
 FROM calibration_outcomes o
 JOIN jev_decisions d ON d.id = o.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.direction IN ('LONG', 'SHORT')
-	AND o.label_version = ? AND o.net_return_bps IS NOT NULL
+	AND o.label_version = ? AND o.net_return_bps IS NOT NULL`+versionCond+`
 	AND d.timestamp >= ? AND d.timestamp < ?
 	AND o.id = (SELECT MAX(o2.id) FROM calibration_outcomes o2
 		WHERE o2.jev_decision_id = d.id AND o2.label_version = ? AND o2.net_return_bps IS NOT NULL)
-ORDER BY d.timestamp, d.id`,
-		domain.CalibrationLabelVersionTripleBarrier, sqlutil.FormatTime(from), sqlutil.FormatTime(to), domain.CalibrationLabelVersionTripleBarrier)
+ORDER BY d.timestamp, d.id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list meta-label training rows in [%s, %s): %w", from, to, err)
 	}
@@ -116,17 +149,28 @@ type LabelVersionCounts struct{ V1, V2 int }
 // [from, to) that have a label, per label_version (a decision counts once per
 // version). A version 1 label has no net return by design (migration 000033), so
 // only version 2 labels are required to have one: the V2 count is the labeled
-// decisions ListTrainingRows reads before BuildRows drops the incomplete ones.
+// decisions ListTrainingRows reads before BuildRows drops the incomplete ones,
+// and, like it, only those of the live prompt's cohort.
 // It is what a skipped retraining reports next to the rows it could use (issue
 // #862).
 func (r *Repository) CountLabeledDecisions(ctx context.Context, from, to time.Time) (LabelVersionCounts, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	foreign, err := r.foreignVersions(ctx)
+	if err != nil {
+		return LabelVersionCounts{}, err
+	}
+	versionCond, versionArgs := sqlutil.NotIn("d.question_version", foreign)
+	if versionCond != "" {
+		versionCond = "\n\tAND " + versionCond
+	}
+	//nolint:gosec // G202: versionCond is a package-internal NOT IN fragment; the versions are bound parameters
+	query := `
 SELECT o.label_version, COUNT(DISTINCT o.jev_decision_id)
 FROM calibration_outcomes o
 JOIN jev_decisions d ON d.id = o.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.direction IN ('LONG', 'SHORT')
-	AND (o.label_version = ? OR o.net_return_bps IS NOT NULL) AND d.timestamp >= ? AND d.timestamp < ?
-GROUP BY o.label_version`, domain.CalibrationLabelVersionClose, sqlutil.FormatTime(from), sqlutil.FormatTime(to))
+	AND (o.label_version = ? OR o.net_return_bps IS NOT NULL) AND d.timestamp >= ? AND d.timestamp < ?` + versionCond + `
+GROUP BY o.label_version`
+	rows, err := r.db.QueryContext(ctx, query, append([]any{domain.CalibrationLabelVersionClose, sqlutil.FormatTime(from), sqlutil.FormatTime(to)}, versionArgs...)...)
 	if err != nil {
 		return LabelVersionCounts{}, fmt.Errorf("repository: count labeled decisions in [%s, %s): %w", from, to, err)
 	}

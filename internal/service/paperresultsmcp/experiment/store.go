@@ -47,6 +47,11 @@ func Insert(ctx context.Context, tx Tx, now time.Time, actor, client string, req
 			return Experiment{}, fmt.Errorf("experiment: read audit row %d: %w", *req.AuditID, err)
 		}
 	}
+	if req.Change.Kind == KindModel {
+		if err := checkModelStart(ctx, tx, req.Change, req.StartedAt); err != nil {
+			return Experiment{}, err
+		}
+	}
 	c := req.Change
 	res, err := tx.ExecContext(ctx, insertSQL, sqlutil.FormatTime(now), actor, client, req.Hypothesis, c.Kind, c.Name, c.Before, c.After,
 		nullableInt(req.AuditID), sqlutil.FormatTime(req.StartedAt))

@@ -34,7 +34,7 @@ type systemOneState struct {
 // the answers mapped onto ScoutResponse together with the total call
 // latency (including retries). Retry policy: see evaluate.
 func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, time.Duration, error) {
-	result, latency, err := c.evaluate(ctx, "scout", true, systemone.Request{
+	result, latency, err := c.evaluate(ctx, "scout", liveCall, systemone.Request{
 		State:     systemOneState{Market: req.State, SimilarPastCases: req.RAGContext},
 		Model:     c.model,
 		Questions: scoutQuestions,
@@ -60,23 +60,25 @@ func (c *Client) Scout(ctx context.Context, req ScoutRequest) (ScoutResponse, ti
 // Retry policy: see evaluate. The call feeds the rolling error rate behind
 // Healthy (the jev_api_down Kill Switch).
 func (c *Client) Trader(ctx context.Context, req TraderRequest) (TraderResponse, time.Duration, error) {
-	return c.trader(ctx, "trader", true, req)
+	return c.trader(ctx, "trader", liveCall, req)
 }
 
 // ShadowTrader is Trader for the shadow (issue #872): the same call with a
 // candidate version, but it never feeds the rolling error rate. A failing
 // candidate must not trip the jev_api_down Kill Switch of the trading flow
-// (the same reason Ask does not).
+// (the same reason Ask does not). It also never waits out a 429/529: the call
+// fails at once with the *APIError so the shadow can stop (issue #883, see
+// shadowCall), and the 429/529 it gets is not recorded in LastThrottle.
 func (c *Client) ShadowTrader(ctx context.Context, req TraderRequest) (TraderResponse, time.Duration, error) {
-	return c.trader(ctx, "trader-shadow", false, req)
+	return c.trader(ctx, "trader-shadow", shadowCall, req)
 }
 
-func (c *Client) trader(ctx context.Context, label string, trackHealth bool, req TraderRequest) (TraderResponse, time.Duration, error) {
+func (c *Client) trader(ctx context.Context, label string, kind callKind, req TraderRequest) (TraderResponse, time.Duration, error) {
 	questions, err := TraderQuestionsFor(req.QuestionVersion)
 	if err != nil {
 		return TraderResponse{}, 0, err
 	}
-	result, latency, err := c.evaluate(ctx, label, trackHealth, systemone.Request{
+	result, latency, err := c.evaluate(ctx, label, kind, systemone.Request{
 		State:     systemOneState{Market: req.State, SimilarPastCases: req.RAGContext},
 		Model:     c.model,
 		Questions: questions,
@@ -114,12 +116,18 @@ func (c *Client) trader(ctx context.Context, label string, trackHealth bool, req
 // invalid response body (systemone.ErrInvalidResponse), are never
 // retried: repeating the same request cannot fix them. A call that
 // ultimately fails returns the last error and the caller records no new
-// jev_decisions entry (継続失敗でnew entry停止). With trackHealth it also feeds
-// c.errorRate; the call that first pushes its rolling error rate to
+// jev_decisions entry (継続失敗でnew entry停止). Only a liveCall (Scout/Trader) also
+// feeds c.errorRate; the call that first pushes its rolling error rate to
 // c.errorRateThreshold notifies c.alerts (§5.2 "Jev APIエラー率上昇（しきい値超過）",
-// errorrate.go). Ask passes false: Luna/Sol/Opus questions are auxiliary and
-// must not trip the jev_api_down Kill Switch of the trading flow.
-func (c *Client) evaluate(ctx context.Context, label string, trackHealth bool, req systemone.Request) (result systemone.Result, latency time.Duration, err error) {
+// errorrate.go). Ask (auxiliaryCall) and the shadow's calls do not (only
+// kind == liveCall does): Luna/Sol/Opus questions are auxiliary and must not
+// trip the jev_api_down Kill Switch of the trading flow.
+//
+// kind selects the call's standing (callKind). A 429/529 any call except a
+// shadowCall receives is noted for LastThrottle; a shadowCall is never retried
+// after one (issue #883).
+func (c *Client) evaluate(ctx context.Context, label string, kind callKind, req systemone.Request) (result systemone.Result, latency time.Duration, err error) {
+	trackHealth := kind == liveCall
 	start := time.Now()
 	defer func() {
 		latency = time.Since(start)
@@ -152,8 +160,11 @@ func (c *Client) evaluate(ctx context.Context, label string, trackHealth bool, r
 			return r, 0, nil
 		}
 		lastErr = callErr
+		if kind != shadowCall {
+			c.noteThrottle(callErr)
+		}
 
-		if !retryable(callErr) {
+		if !retryable(callErr) || (kind == shadowCall && throttleStatus(callErr) != 0) {
 			err = fmt.Errorf("jev: %s call failed: %w", label, callErr)
 			return result, 0, err
 		}
@@ -173,6 +184,16 @@ func (c *Client) evaluate(ctx context.Context, label string, trackHealth bool, r
 	}
 	err = fmt.Errorf("jev: %s call failed after %d attempts: %w", label, c.maxAttempts, lastErr)
 	return result, 0, err
+}
+
+// throttleStatus returns 429 or 529 when err is the API answering one of them,
+// else 0.
+func throttleStatus(err error) int {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) && (apiErr.StatusCode == statusRateLimited || apiErr.StatusCode == statusOverloaded) {
+		return apiErr.StatusCode
+	}
+	return 0
 }
 
 // retryable reports whether err may succeed on a repeated request.

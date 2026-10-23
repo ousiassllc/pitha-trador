@@ -51,7 +51,7 @@ func TestCountLabeledSamplesQuery_UsesConfidenceIndexRange(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	rows, err := db.Query("EXPLAIN QUERY PLAN "+fmt.Sprintf(countLabeledSamplesQuery, "confidence < ?"), 0.6, 0.7, 20)
+	rows, err := db.Query("EXPLAIN QUERY PLAN "+fmt.Sprintf(countLabeledSamplesQuery, "confidence < ?", " AND d.question_version NOT IN (?,?)"), 0.6, 0.7, "trader-v1", "trader-v4", 20)
 	if err != nil {
 		t.Fatalf("EXPLAIN QUERY PLAN: %v", err)
 	}

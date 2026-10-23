@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain/jevshadow"
 
@@ -162,6 +163,7 @@ func props(st jevprompt.State, notice string) view.PanelProps {
 			p.HaltNote = "1 日の費用上限（" + usd(h.CapUSD) + " USD）に達したため、今日のシャドーは止まっています（費用 " + usd(h.SpentUSD) + " USD。ライブの判断は続いています。翌日に再開します）。"
 		}
 	}
+	p.ThrottleNote = throttleNote(st)
 	for _, pr := range st.Promotions {
 		by := "GUI"
 		if pr.Actor == jevshadow.ActorMCP {
@@ -170,6 +172,36 @@ func props(st jevprompt.State, notice string) view.PanelProps {
 		p.Promotions = append(p.Promotions, view.PromotionRow{At: atoms.FormatJST(pr.At), By: by, From: pr.FromVersion, To: pr.ToVersion})
 	}
 	return p
+}
+
+// throttleNote says why the shadow stopped on the Jev API's 429/529 and when it
+// resumes ("" while there is nothing to say: no stop recorded today and none
+// active). The shadow gives way to the live calls on the shared API key and
+// never waits or retries after a 429/529 (issue #883).
+func throttleNote(st jevprompt.State) string {
+	t := st.Throttle
+	if t == nil || (!st.ThrottleActive && st.ThrottlesToday == 0) {
+		return ""
+	}
+	status := strconv.Itoa(t.Status)
+	if t.Reason == jevshadowsettings.ThrottleReasonOverloaded {
+		status += "（過負荷）"
+	} else {
+		status += "（レート制限）"
+	}
+	who := "シャドーの呼び出し"
+	if t.Source == jevshadowsettings.ThrottleSourceLive {
+		who = "ライブの呼び出し"
+	}
+	at, _ := time.Parse(time.RFC3339, t.At)
+	until, _ := time.Parse(time.RFC3339, t.Until)
+	note := "Jev API が " + who + "に " + status + "を返しました（" + atoms.FormatJST(at) + "）。"
+	if st.ThrottleActive {
+		note += "シャドーは " + atoms.FormatJST(until) + " まで止まっています（待たず・再試行せず止まり、ライブの判断は続いています。再開後に 429/529 が続けば再び止まります）。"
+	} else {
+		note += "シャドーは再開しています。"
+	}
+	return note + "今日の停止回数: " + itoa(st.ThrottlesToday) + " 回。"
 }
 
 // usd formats a USD amount with at most 8 decimals and no trailing zeros, so

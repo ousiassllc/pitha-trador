@@ -37,7 +37,12 @@ func (e *Engine) decideDirection(in Input, th Thresholds, meta *metaEntry) (dire
 		return none(reasonf(ReasonMissingData))
 	}
 	if meta == nil && !in.Calibrated {
-		return none(reasonf(ReasonNotCalibrated))
+		return none(notCalibrated(in.CalibrationDetail))
+	}
+	if meta != nil && meta.cohort.Uncalibrated != "" {
+		// Live does not use a model trained on another prompt cohort than the live
+		// version's: it is as good as no calibration (issue #881).
+		return none(notCalibrated(meta.cohort.Uncalibrated))
 	}
 	if in.SpreadBps == nil {
 		return none(reasonf(ReasonMissingData))
@@ -122,6 +127,15 @@ func flowGuards(t config.PolicyDirectionThresholds, d *domain.JevDecision) *stri
 		return reasonf("%s: liquidity_stressed=%.4f > max=%.4f", ReasonLiquidityStressedAboveThreshold, *d.LiquidityStressed, t.MaxLiquidityStressed)
 	}
 	return nil
+}
+
+// notCalibrated is the NONE reason of a decision that is not calibrated; detail
+// says which sample count or model is the reason ("" for none).
+func notCalibrated(detail string) *string {
+	if detail == "" {
+		return reasonf(ReasonNotCalibrated)
+	}
+	return reasonf("%s: %s", ReasonNotCalibrated, detail)
 }
 
 // reasonf formats a reject_reason string and returns it as *string

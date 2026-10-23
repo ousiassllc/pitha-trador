@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 )
 
 // Bucket is one confidence band of jev_calibration (FR-CAL-3).
@@ -48,10 +50,40 @@ type DecisionCounts struct {
 	TraderCount int `json:"trader_count"`
 }
 
+// PromptVersions selects which Trader prompt versions (jev_decisions.
+// question_version) jev_calibration grades (issue #881): exactly Only when set,
+// otherwise every version except Excluded (the versions of another cohort than
+// the live one, jev.ForeignVersions), which is what the Calibration screen and
+// the meta-model training read. The zero value grades every version.
+type PromptVersions struct {
+	Only     string   `json:"only,omitempty"`
+	Excluded []string `json:"excluded"`
+}
+
+// cond is the SQL condition of p on column, with its args ("" when p excludes
+// nothing).
+func (p PromptVersions) cond(column string) (string, []any) {
+	if p.Only != "" {
+		return column + " = ?", []any{p.Only}
+	}
+	return sqlutil.NotIn(column, p.Excluded)
+}
+
+// VersionCount is the number of Trader decisions of one prompt version.
+type VersionCount struct {
+	PromptVersion string `json:"prompt_version"`
+	TraderCount   int    `json:"trader_count"`
+}
+
 // Calibration is jev_calibration's data.
 type Calibration struct {
 	Decisions DecisionCounts `json:"decisions"`
-	Horizons  []Horizon      `json:"horizons"`
+	// TraderByVersion is the period's Trader decisions per prompt version (all
+	// versions, whatever the scope), so a mix of versions is visible.
+	TraderByVersion []VersionCount `json:"trader_decisions_by_version"`
+	// Scope is the prompt versions Horizons grades.
+	Scope    PromptVersions `json:"prompt_versions"`
+	Horizons []Horizon      `json:"horizons"`
 }
 
 // bucketBands are domain.DefaultConfidenceBucketRanges; the last band
@@ -69,11 +101,15 @@ const bucketCase = `CASE
 	ELSE 0 END`
 
 // JevCalibration aggregates Jev trader decisions' labels in r. horizon > 0
-// restricts to one horizon. More than MaxHorizons distinct horizons is
-// ErrLimitExceeded.
-func JevCalibration(ctx context.Context, q Q, r Range, horizon int) (Calibration, error) {
+// restricts to one horizon; versions selects the prompt versions graded (the
+// decision counts are of every version). More than MaxHorizons distinct
+// horizons is ErrLimitExceeded.
+func JevCalibration(ctx context.Context, q Q, r Range, horizon int, versions PromptVersions) (Calibration, error) {
 	from, to := r.bounds()
-	var c Calibration
+	c := Calibration{Scope: versions}
+	if c.Scope.Excluded == nil {
+		c.Scope.Excluded = []string{}
+	}
 	err := q.QueryRowContext(ctx, `
 SELECT COALESCE(SUM(decision_type = 'scout'), 0), COALESCE(SUM(decision_type = 'trader'), 0)
 FROM jev_decisions WHERE timestamp >= ? AND timestamp < ?`, from, to).
@@ -81,17 +117,25 @@ FROM jev_decisions WHERE timestamp >= ? AND timestamp < ?`, from, to).
 	if err != nil {
 		return Calibration{}, fmt.Errorf("query: jev decision counts: %w", err)
 	}
+	if c.TraderByVersion, err = traderByVersion(ctx, q, from, to); err != nil {
+		return Calibration{}, err
+	}
 	c.Horizons = []Horizon{}
 
-	horizonFilter, args := "", []any{from, to}
+	joined := `
+FROM calibration_outcomes co
+JOIN jev_decisions d ON d.id = co.jev_decision_id
+WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?`
+	args := []any{from, to}
+	if versionCond, versionArgs := versions.cond("d.question_version"); versionCond != "" {
+		joined += " AND " + versionCond
+		args = append(args, versionArgs...)
+	}
+	horizonFilter := ""
 	if horizon > 0 {
 		horizonFilter = " AND co.horizon_minutes = ?"
 		args = append(args, horizon)
 	}
-	const joined = `
-FROM calibration_outcomes co
-JOIN jev_decisions d ON d.id = co.jev_decision_id
-WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?`
 
 	rows, err := q.QueryContext(ctx, `
 SELECT co.horizon_minutes, co.label_version, COUNT(*),
@@ -148,6 +192,30 @@ ORDER BY co.horizon_minutes, co.label_version`, args...)
 	_ = rows.Close()
 
 	return c, fillBuckets(ctx, q, &c, joined+horizonFilter, args)
+}
+
+// traderByVersion counts the Trader decisions of [from, to) per prompt version.
+func traderByVersion(ctx context.Context, q Q, from, to string) ([]VersionCount, error) {
+	rows, err := q.QueryContext(ctx, `
+SELECT question_version, COUNT(*) FROM jev_decisions
+WHERE decision_type = 'trader' AND timestamp >= ? AND timestamp < ?
+GROUP BY question_version ORDER BY question_version`, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("query: jev trader decisions by version: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := []VersionCount{}
+	for rows.Next() {
+		var v VersionCount
+		if err := rows.Scan(&v.PromptVersion, &v.TraderCount); err != nil {
+			return nil, fmt.Errorf("query: scan jev trader decisions by version: %w", err)
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("query: jev trader decisions by version: %w", err)
+	}
+	return out, nil
 }
 
 func emptyBuckets() []Bucket {

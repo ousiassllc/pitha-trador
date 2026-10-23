@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/execution/enrich"
 )
 
@@ -20,15 +21,40 @@ const decisionCandidateFactor = 4
 // unfiltered nearest-neighbour pool is routinely saturated by them.
 const labeledDecisionFilter = `decision_id IN (SELECT jev_decision_id FROM calibration_outcomes)`
 
+// labeledDecisionFilterFor is labeledDecisionFilter without the labeled
+// decisions of the foreign Trader prompt versions (issue #881), with its bound
+// args. The version test sits in the subquery because only labeled decisions
+// are searched here: the subquery already walks calibration_outcomes, so it
+// adds one jev_decisions primary-key lookup per labeled row and no scan of
+// the history (the unlabeled pool drops foreign rows in Go instead,
+// decisionSelf). With no foreign version it is labeledDecisionFilter itself.
+func labeledDecisionFilterFor(foreign []string) (string, []any) {
+	notIn, args := sqlutil.NotIn("d.question_version", foreign)
+	if notIn == "" {
+		return labeledDecisionFilter, nil
+	}
+	return `decision_id IN (SELECT o.jev_decision_id FROM calibration_outcomes o JOIN jev_decisions d ON d.id = o.jev_decision_id WHERE ` + notIn + `)`, args
+}
+
 // decisionMatches returns the jev_decision_vectors hits Context ranks:
 // first the k nearest outcome-labeled decisions (searched on their own,
 // so they are guaranteed candidates however many unlabeled decisions
 // are closer), then, only if those leave fewer than k, the
 // k*decisionCandidateFactor nearest decisions of any kind (labeled
-// ones already included are not repeated).
+// ones already included are not repeated). Trader decisions of a prompt
+// version of another cohort than the live one are in neither group (issue
+// #881).
 func (s *Service) decisionMatches(ctx context.Context, v Vector, k int, sub Subject) ([]match, error) {
-	self := sub.decisionSelf()
-	matches, err := s.searchExcluding(ctx, "jev_decision_vectors", "decision_id", labeledDecisionFilter, nil, v, k, self)
+	var foreign []string
+	if s.foreign != nil {
+		var err error
+		if foreign, err = s.foreign(ctx); err != nil {
+			return nil, fmt.Errorf("rag: resolve the Trader prompt versions to leave out: %w", err)
+		}
+	}
+	self := sub.decisionSelf(foreign)
+	filter, filterArgs := labeledDecisionFilterFor(foreign)
+	matches, err := s.searchExcluding(ctx, "jev_decision_vectors", "decision_id", filter, filterArgs, v, k, self)
 	if err != nil {
 		return nil, fmt.Errorf("rag: search similar labeled decisions: %w", err)
 	}
