@@ -7,9 +7,9 @@
 //
 // On a mismatch Paper keeps using the model and the decision says so; any other
 // mode does not use the model (the entry is not_calibrated). A model that
-// recorded no cohort is the pre-promotion one (jev.LegacyModelCohort), so it
-// matches while the live version is in that cohort and mismatches once it is
-// promoted to trader-v4.
+// recorded no cohort (one stored before the cohort was recorded) is a model whose
+// training version is unknown, which counts as a mismatch in every mode: Live
+// does not use it until a new training records its cohort and is adopted.
 package metacohort
 
 import (
@@ -19,7 +19,6 @@ import (
 	"log/slog"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
-	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 )
 
 // Source returns the live Trader prompt version and its cohort (jev.LiveCohort
@@ -60,17 +59,23 @@ func (c Checker) Check(ctx context.Context, modelVersion, trained string) Verdic
 		}
 		return Verdict{}
 	}
-	if trained == "" {
-		trained = jev.LegacyModelCohort
-	}
-	if trained == live {
+	if trained != "" && trained == live { // a model with no recorded cohort never matches
 		return Verdict{}
 	}
-	detail := fmt.Sprintf("meta model %s was trained on cohort %s, live version %s is cohort %s", modelVersion, trained, version, live)
+	detail := mismatchDetail(modelVersion, trained, version, live)
 	if paper {
 		return Verdict{Mismatch: detail}
 	}
 	return Verdict{Uncalibrated: detail}
+}
+
+// mismatchDetail names the model and the live version; a model with no recorded
+// training cohort says so instead of naming a cohort.
+func mismatchDetail(modelVersion, trained, liveVersion, liveCohort string) string {
+	if trained == "" {
+		return fmt.Sprintf("meta model %s has no recorded training version (cohort), live version %s is cohort %s", modelVersion, liveVersion, liveCohort)
+	}
+	return fmt.Sprintf("meta model %s was trained on cohort %s, live version %s is cohort %s", modelVersion, trained, liveVersion, liveCohort)
 }
 
 func (c Checker) read(ctx context.Context) (version, cohort string, err error) {

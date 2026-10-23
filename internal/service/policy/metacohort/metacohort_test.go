@@ -7,13 +7,12 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
-	"github.com/ousiassllc/pitha-trador/internal/service/jev"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy/metacohort"
 )
 
 const (
-	cohortV3 = jev.LegacyModelCohort // trader-v1..v3
-	cohortV4 = "entry-quality-v4"    // trader-v4
+	cohortV3 = "entry-quality-v3" // trader-v1..v3
+	cohortV4 = "entry-quality-v4" // trader-v4
 )
 
 func source(version, cohort string) metacohort.Source {
@@ -41,10 +40,12 @@ func TestChecker_Check(t *testing.T) {
 		"Live, mismatch is not calibrated":    {mode: metalabelsettings.ModeLive, live: source("trader-v4", cohortV4), trained: cohortV3, wantField: "Uncalibrated"},
 		"mode unset, mismatch is like Live":   {mode: "", live: source("trader-v4", cohortV4), trained: cohortV3, wantField: "Uncalibrated"},
 		"mode unset, match":                   {mode: "", live: source("trader-v3", cohortV3), trained: cohortV3, wantNothing: true},
-		"legacy model, live v3, Paper":        {mode: metalabelsettings.ModePaper, live: source("trader-v3", cohortV3), trained: "", wantNothing: true},
-		"legacy model, live v3, Live":         {mode: metalabelsettings.ModeLive, live: source("trader-v3", cohortV3), trained: "", wantNothing: true},
-		"legacy model, live v4, Paper":        {mode: metalabelsettings.ModePaper, live: source("trader-v4", cohortV4), trained: "", wantField: "Mismatch"},
-		"legacy model, live v4, Live":         {mode: metalabelsettings.ModeLive, live: source("trader-v4", cohortV4), trained: "", wantField: "Uncalibrated"},
+		"no recorded cohort, live v3, Paper":  {mode: metalabelsettings.ModePaper, live: source("trader-v3", cohortV3), trained: "", wantField: "Mismatch"},
+		"no recorded cohort, live v3, Live":   {mode: metalabelsettings.ModeLive, live: source("trader-v3", cohortV3), trained: "", wantField: "Uncalibrated"},
+		"no recorded cohort, live v4, Paper":  {mode: metalabelsettings.ModePaper, live: source("trader-v4", cohortV4), trained: "", wantField: "Mismatch"},
+		"no recorded cohort, live v4, Live":   {mode: metalabelsettings.ModeLive, live: source("trader-v4", cohortV4), trained: "", wantField: "Uncalibrated"},
+		"no recorded cohort, mode unset":      {mode: "", live: source("trader-v3", cohortV3), trained: "", wantField: "Uncalibrated"},
+		"no recorded cohort, empty live":      {mode: metalabelsettings.ModeLive, live: source("trader-v3", ""), trained: "", wantField: "Uncalibrated"},
 		"Paper, live cohort unreadable":       {mode: metalabelsettings.ModePaper, live: failing, trained: cohortV3, wantNothing: true},
 		"Live, live cohort unreadable":        {mode: metalabelsettings.ModeLive, live: failing, trained: cohortV3, wantField: "Unavailable"},
 		"mode unset, live cohort unreadable":  {mode: "", live: failing, trained: cohortV3, wantField: "Unavailable"},
@@ -64,6 +65,9 @@ func TestChecker_Check(t *testing.T) {
 			if tc.wantField == "Mismatch" || tc.wantField == "Uncalibrated" {
 				if text := fields[tc.wantField]; !strings.Contains(text, "lr-1") || !strings.Contains(text, "live version trader-v") {
 					t.Errorf("%s = %q, want it to name the model and the live version", tc.wantField, text)
+				}
+				if text := fields[tc.wantField]; (tc.trained == "") != strings.Contains(text, "has no recorded training version") {
+					t.Errorf("%s = %q, want the no-recorded-training-version wording exactly when no cohort was recorded (%v)", tc.wantField, text, tc.trained == "")
 				}
 			}
 		})

@@ -6,7 +6,7 @@
 
 ### 3.25 `experiment_create`
 
-調整の実験を 1 件記録する。**変更そのものはしない**（設定は先に `settings_set`、モデル・プロンプトの版の切り替えは本体側で行ってから記録する）。書き込み許可（`paper-results-mcp.md` §7.2）がオフなら `write_disabled`（403）。
+調整の実験を 1 件記録する。**変更そのものはしない**（設定は先に `settings_set`、モデル・プロンプトの版の切り替えは本体側で行ってから記録する）。書き込み許可（`paper-results-mcp.md` §7.2）がオフなら `write_disabled`（403）。これは MCP 経由の書き込みだけの話で、Settings 画面（GUI）からの実験の作成・終了（`POST /settings/mcp/experiments`・`POST /settings/mcp/experiments/:id/close`）はこのスイッチに従わない（人が直接操作するため。issue #884 の決定）。
 
 | 引数 | 必須 | 内容 |
 |------|------|------|
@@ -22,7 +22,7 @@
 
 ### 3.26 `experiment_close`
 
-実行中の実験を終える。引数: `experiment_id`（○）、`status`（`closed`＝終了・判定の対象〔既定〕/ `aborted`＝中止・判定を出さない）、`ended_at`（RFC3339。開始時刻以後・現在以前。省略は今）。ない ID は `experiment_not_found`（404）、終わった実験は `experiment_not_running`（409。再び開けない）、書き込み許可がオフなら `write_disabled`。応答は更新後の実験（3.25 と同じ形）。実行文は `UPDATE tuning_experiments SET status, ended_at WHERE id AND status = 'running'` の 1 件だけ。
+実行中の実験を終える。引数: `experiment_id`（○）、`status`（`closed`＝終了・判定の対象〔既定〕/ `aborted`＝中止・判定を出さない）、`ended_at`（RFC3339。開始時刻以後・現在以前。省略は今）。ない ID は `experiment_not_found`（404）、終わった実験は `experiment_not_running`（409。再び開けない）、書き込み許可がオフなら `write_disabled`（GUI からの終了はこのスイッチに従わない。issue #884）。応答は更新後の実験（3.25 と同じ形）。実行文は `UPDATE tuning_experiments SET status, ended_at WHERE id AND status = 'running'` の 1 件だけ。
 
 ### 3.27 `experiments_list`
 

@@ -202,6 +202,6 @@ func TestRepository_TrainedCohortRoundTripsInAdoptionJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Contains(adoption, "trained_cohort") {
-		t.Errorf("adoption_json of a model with no cohort = %s, want no trained_cohort key (the legacy cohort)", adoption)
+		t.Errorf("adoption_json of a model with no cohort = %s, want no trained_cohort key (no recorded cohort)", adoption)
 	}
 }

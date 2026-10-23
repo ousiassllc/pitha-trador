@@ -35,7 +35,8 @@ func modelTrainedOn(cohort string) metalabel.Model {
 
 // Issue #881: the model's training cohort against the live version's. Paper
 // warns and keeps scoring with it; Live does not use it (not_calibrated). A
-// model that recorded no cohort is the pre-promotion one (trader-v1..v3's).
+// model that recorded no cohort is a mismatch like any other: its training
+// version is unknown, whatever the live version is.
 func TestEvaluate_MetaModelCohortAgainstTheLiveVersion(t *testing.T) {
 	for name, tc := range map[string]struct {
 		trained      string
@@ -52,16 +53,16 @@ func TestEvaluate_MetaModelCohortAgainstTheLiveVersion(t *testing.T) {
 		"Live, trained on v3, live v4: treated as not calibrated": {
 			trained: cohortV3, liveVersion: "trader-v4", liveCohort: cohortV4, mode: metalabelsettings.ModeLive, wantNotCalib: true,
 		},
-		"legacy model (no cohort), live v3 (Paper): matches": {
-			trained: "", liveVersion: "trader-v3", liveCohort: cohortV3, mode: metalabelsettings.ModePaper, wantTake: true,
+		"no recorded cohort, live v3 (Paper): warns and uses the model": {
+			trained: "", liveVersion: "trader-v3", liveCohort: cohortV3, mode: metalabelsettings.ModePaper, wantTake: true, wantNote: true,
 		},
-		"legacy model (no cohort), live v3 (Live): matches, unchanged": {
-			trained: "", liveVersion: "trader-v3", liveCohort: cohortV3, mode: metalabelsettings.ModeLive, wantTake: true,
+		"no recorded cohort, live v3 (Live): not calibrated, though live is still on v3": {
+			trained: "", liveVersion: "trader-v3", liveCohort: cohortV3, mode: metalabelsettings.ModeLive, wantNotCalib: true,
 		},
-		"legacy model (no cohort), live v4 (Paper): mismatch recorded": {
+		"no recorded cohort, live v4 (Paper): warns and uses the model": {
 			trained: "", liveVersion: "trader-v4", liveCohort: cohortV4, mode: metalabelsettings.ModePaper, wantTake: true, wantNote: true,
 		},
-		"legacy model (no cohort), live v4 (Live): not calibrated": {
+		"no recorded cohort, live v4 (Live): not calibrated": {
 			trained: "", liveVersion: "trader-v4", liveCohort: cohortV4, mode: metalabelsettings.ModeLive, wantNotCalib: true,
 		},
 		"trained on v4, live v4: matches": {
@@ -95,6 +96,9 @@ func TestEvaluate_MetaModelCohortAgainstTheLiveVersion(t *testing.T) {
 				}
 			case tc.wantNotCalib:
 				want := policy.ReasonNotCalibrated + ": meta model lr-test was trained on cohort"
+				if tc.trained == "" {
+					want = policy.ReasonNotCalibrated + ": meta model lr-test has no recorded training version"
+				}
 				if sig.Direction != domain.JevDirectionNone || sig.RiskPassed || !strings.HasPrefix(reason, want) || !strings.Contains(reason, tc.liveVersion) {
 					t.Fatalf("signal = %+v (%s), want NONE %q naming live version %s", sig, reason, want, tc.liveVersion)
 				}
@@ -106,6 +110,9 @@ func TestEvaluate_MetaModelCohortAgainstTheLiveVersion(t *testing.T) {
 			hasNote := strings.Contains(reason, decisionnote.MetaModelCohortMismatch)
 			if hasNote != tc.wantNote {
 				t.Errorf("reject_reason = %q, meta_model_cohort_mismatch recorded = %v, want %v", reason, hasNote, tc.wantNote)
+			}
+			if tc.wantNote && (tc.trained == "") != strings.Contains(reason, "has no recorded training version") {
+				t.Errorf("reject_reason = %q, want the no-recorded-training-version wording exactly for a model with no recorded cohort (%v)", reason, tc.trained == "")
 			}
 			warned := strings.Contains(logs.String(), "judged on a fallback or a mismatching meta model")
 			if warned != tc.wantNote {
