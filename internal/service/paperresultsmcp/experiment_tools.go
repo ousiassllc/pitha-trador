@@ -44,7 +44,7 @@ var experimentTools = []tool{
 		description: "調整の実験を 1 件記録する（仮説・変えた変数 1 つ・前後の値・開始時刻。変更そのものはしない。設定は先に settings_set で変え、モデルやプロンプトの版の切り替えは本体側で行ってから記録する）。" +
 			"変えてよい変数は 1 つだけで、changes に 2 つ以上を入れると multiple_variables で拒否する。" +
 			"kind は setting（設定キー。settings_get に出る MCP から変更できるキーだけ）/ model（Jev のモデル）/ prompt（Jev のプロンプトの版）。" +
-			"setting の audit_id には、その変更の settings_set の応答の audit_id を渡せる（任意。実験期間の交絡の検出で、その変更自体を除くために使う）。" +
+			"setting の audit_id には、その変更の settings_set の応答の audit_id を渡せる（任意。前後の期間の交絡の検出で、その変更自体を除くために使う）。" +
 			"開始時刻 started_at は RFC3339（省略は今。未来は不可）。書き込み許可がオフのときは write_disabled",
 		schema: objectSchema(map[string]any{
 			"hypothesis": map[string]any{"type": "string", "maxLength": experiment.MaxHypothesisRunes, "description": "仮説（何をどう変えると何がどうなると考えるか）"},
@@ -155,7 +155,7 @@ var experimentTools = []tool{
 		name: "experiments_list",
 		description: "調整の実験の一覧（新しい順）。状態・期間・変えた変数・前後の取引件数・判定の可否（verdict / judged）つき。" +
 			"判定は 1 取引あたりの純損益（コスト控除後）の平均を前後で Welch の t 検定で比べ、差（後−前）の 95% 信頼区間と最大ドローダウンで決める（勝ち＝improved は、区間の下限が 0 より上かつドローダウンが前以下のときだけ）。" +
-			"前後どちらかの取引件数が min_trades に届かないと insufficient_trades、実験中に対象以外が変わると confounded（どちらも判定なし）。" +
+			"前後どちらかの取引件数が min_trades に届かないと insufficient_trades、前の期間か後の期間に対象以外が変わると confounded（どちらも判定なし）。" +
 			"min_trades は下限 64（" + experiment.MinTradesProvisionalText + "。応答の min_trades_source）。上げるのは可、下げるのは不可（下限未満は invalid_value で拒否）。読み取り専用",
 		schema: objectSchema(map[string]any{
 			"status":     map[string]any{"type": "string", "enum": []string{experiment.StatusRunning, experiment.StatusClosed, experiment.StatusAborted}, "description": "状態で絞り込む"},
@@ -207,7 +207,7 @@ var experimentTools = []tool{
 			"前後それぞれについて、paper_performance_summary と同じ指標（取引件数・純損益（コスト控除後）・勝率・平均の勝ち（avg_win_jpy）・平均の負け（avg_loss_jpy）・最大ドローダウン）と、" +
 			"risk_rejections と同じ拒否理由の内訳を返す（クローズ時刻で数える。期間が JST の日の境界なら同じ期間の両ツールの応答と一致する）。" +
 			"per_trade_pnl は 1 取引あたりの純損益（paper_performance_summary と同じ取引集合）の前後の n・平均・標準偏差と、平均の差 diff（後−前）・その 95% 信頼区間（ci_low / ci_high / ci_level）・Welch の t 値と自由度（t / df）。計算できない値は null。" +
-			"verdict は aborted（中止）/ confounded（実験中に対象以外のホワイトリスト設定・Jev のモデル・プロンプトの版が変わった。confounders に列挙）/ " +
+			"verdict は aborted（中止）/ confounded（前の期間か後の期間、またはその境目で対象以外のホワイトリスト設定・Jev のモデル・プロンプトの版が変わった。confounders に列挙し、各要素の period が before / after / boundary）/ " +
 			"insufficient_trades（前後どちらかが min_trades 未満。数値は返すが判定しない）/ not_computable（件数は足りるが全取引が同一損益で区間が出ない。判定しない）/ " +
 			"improved（区間の下限が 0 より上、かつ最大ドローダウンが前以下。唯一の勝ち）/ mixed（区間の下限は 0 より上だがドローダウンが悪化。勝ちとは言わない）/ " +
 			"worsened（区間の上限が 0 より下）/ inconclusive（区間が 0 をまたぐ。差があるとも無いとも言えない）。judged は最後の 4 つのとき true。" +
