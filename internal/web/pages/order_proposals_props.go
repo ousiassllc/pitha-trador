@@ -1,6 +1,6 @@
 package pages
 
-// The 注文案 screens take plain, already formatted props (docs/components/
+// The 注文提案 screens take plain, already formatted props (docs/components/
 // overview.md §3): internal/web/handler/orderproposals maps the read model of
 // the Paper results MCP onto them, so a Templ file never imports a service.
 // An empty string is "no value" and is shown as "—".
@@ -88,9 +88,10 @@ type ProposalLinked struct {
 	Fields []ProposalField
 }
 
-// ProposalField is one label/value pair of the 詳細 screen.
+// ProposalField is one label/value pair of the 詳細 screen. Help, when set, is
+// the explanation shown in a HelpMark next to the label.
 type ProposalField struct {
-	Label, Value string
+	Label, Value, Help string
 	// Sign colours a pnl value: "gain", "loss" or "".
 	Sign string
 }

@@ -65,7 +65,7 @@ func (h *Handler) List(c *gin.Context) {
 	items, next, err := h.source.List(c.Request.Context(), filter)
 	switch {
 	case errors.Is(err, query.ErrBadCursor):
-		props.Errors, status = []string{"cursor が正しくありません。一覧の先頭から開き直してください。"}, http.StatusBadRequest
+		props.Errors, status = []string{"ページの指定が正しくありません。一覧の先頭から開き直してください。"}, http.StatusBadRequest
 	case err != nil:
 		slog.ErrorContext(c.Request.Context(), "handler: order proposals list", "error", err)
 		props.LoadError, status = "注文提案の取得に失敗しました。", http.StatusInternalServerError
@@ -105,11 +105,11 @@ func (h *Handler) parseFilter(c *gin.Context) (proposal.ListFilter, []string) {
 	f := proposal.ListFilter{Status: c.Query("status"), Bucket: c.Query("bucket"), Cursor: c.Query("cursor"), Limit: pageSize}
 	var errs []string
 	if f.Status != "" && !proposal.ValidStatus(f.Status) {
-		errs = append(errs, "status は状態のコードのどれかを指定してください。")
+		errs = append(errs, "状態の指定が正しくありません。")
 		f.Status = ""
 	}
 	if f.Bucket != "" && f.Bucket != proposal.BucketStock && f.Bucket != proposal.BucketBondETF {
-		errs = append(errs, "bucket は株式か債券ETFを指定してください。")
+		errs = append(errs, "枠は株式か債券ETFを指定してください。")
 		f.Bucket = ""
 	}
 	today := h.now().In(query.JST)
@@ -118,16 +118,16 @@ func (h *Handler) parseFilter(c *gin.Context) (proposal.ListFilter, []string) {
 	var err error
 	if raw := c.Query("from"); raw != "" {
 		if from, err = time.ParseInLocation(dateLayout, raw, query.JST); err != nil {
-			errs = append(errs, "from は YYYY-MM-DD 形式の日付で指定してください。")
+			errs = append(errs, "開始日は YYYY-MM-DD 形式の日付で指定してください。")
 		}
 	}
 	if raw := c.Query("to"); raw != "" {
 		if to, err = time.ParseInLocation(dateLayout, raw, query.JST); err != nil {
-			errs = append(errs, "to は YYYY-MM-DD 形式の日付で指定してください。")
+			errs = append(errs, "終了日は YYYY-MM-DD 形式の日付で指定してください。")
 		}
 	}
 	if len(errs) == 0 && to.Before(from) {
-		errs = append(errs, "to は from 以降の日付で指定してください。")
+		errs = append(errs, "終了日は開始日以降の日付で指定してください。")
 	}
 	f.Range = query.Range{From: from, To: to.AddDate(0, 0, 1)}
 	return f, errs
