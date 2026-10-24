@@ -101,4 +101,19 @@ describe('help mark', () => {
     expect(left).toBeLessThanOrEqual(window.innerWidth);
     expect(left).toBeGreaterThanOrEqual(0);
   });
+
+  test('a mark inside a shadow root opens from the retargeted document events and closes on Esc', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = `<span data-help-mark><button type="button" data-help-mark-button aria-describedby="tip-s">?</button><span id="tip-s" role="tooltip" data-help-mark-text>説明S</span></span>`;
+    const button = root.querySelector('button') as HTMLButtonElement;
+    const text = root.getElementById('tip-s') as HTMLElement;
+    button.dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+    expect(isOpen(text)).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(isOpen(text)).toBe(false);
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    expect(isOpen(text)).toBe(true);
+  });
 });

@@ -1,7 +1,8 @@
-// Opens and places the 「?」 help text of `atoms.HelpMark` (issue #902). The
-// help text (`[data-help-mark-text]`) is always in the DOM and tied to its
-// button by `aria-describedby`, so screen readers read it without this
-// script; this module only shows it visually:
+// Opens and places the 「?」 help text of `atoms.HelpMark` and of the Lit
+// helper `renderHelpMark` (lib/help-mark.ts) (issue #902). The help text
+// (`[data-help-mark-text]`) is always in the DOM and tied to its button by
+// `aria-describedby`, so screen readers read it without this script; this
+// module only shows it visually:
 //   - mouse hover (pointerType mouse/pen) and keyboard focus open it;
 //   - a click on the button toggles it, which is how a tap opens it where a
 //     tap neither hovers nor focuses (iOS Safari);
@@ -11,15 +12,27 @@
 // The text is `position: fixed`, so a dialog's or table's overflow never clips
 // it; it is placed under the button (above when there is no room below) and
 // kept inside the viewport.
+//
+// The listeners sit on `document` and find the mark through
+// `event.composedPath()`, so a mark inside a Lit component's shadow root
+// (whose events are retargeted to the host at the document) works the same.
+// Open marks are tracked in a set rather than found with `querySelectorAll`,
+// which does not cross shadow roots either.
 
 type Flag = 'hover' | 'focus' | 'pinned';
 
-const flags = new WeakMap<HTMLElement, Set<Flag>>();
+const flags = new Map<HTMLElement, Set<Flag>>();
 
 const MARGIN = 8;
 
-function markOf(target: EventTarget | null): HTMLElement | null {
-  return target instanceof Element ? target.closest<HTMLElement>('[data-help-mark]') : null;
+const isElement = (node: EventTarget | null): node is HTMLElement => node instanceof HTMLElement;
+
+/** The `[data-help-mark]` ancestor of the event's real (pre-retargeting) target, if any. */
+function markOf(event: Event): HTMLElement | null {
+  for (const node of event.composedPath()) {
+    if (isElement(node) && node.hasAttribute('data-help-mark')) return node;
+  }
+  return null;
 }
 
 function textOf(mark: HTMLElement): HTMLElement | null {
@@ -45,11 +58,11 @@ function place(mark: HTMLElement): void {
 function render(mark: HTMLElement): void {
   const text = textOf(mark);
   if (!text) return;
-  const open = (flags.get(mark)?.size ?? 0) > 0;
-  if (open) {
+  if ((flags.get(mark)?.size ?? 0) > 0) {
     text.setAttribute('data-open', '');
     place(mark);
   } else {
+    flags.delete(mark);
     text.removeAttribute('data-open');
   }
 }
@@ -63,7 +76,7 @@ function set(mark: HTMLElement, flag: Flag, on: boolean): void {
 }
 
 function closeAll(except: HTMLElement | null = null): void {
-  for (const mark of document.querySelectorAll<HTMLElement>('[data-help-mark]')) {
+  for (const mark of [...flags.keys()]) {
     if (mark === except) continue;
     flags.delete(mark);
     render(mark);
@@ -75,44 +88,47 @@ function isPointer(event: Event): boolean {
   return type === 'mouse' || type === 'pen';
 }
 
+/** Whether the node the pointer/focus moves to is still inside `mark` (also across a shadow root). */
+function stillInside(mark: HTMLElement, next: EventTarget | null): boolean {
+  return next instanceof Node && mark.contains(next);
+}
+
 export function onPointerOver(event: Event): void {
-  const mark = markOf(event.target);
+  const mark = markOf(event);
   if (mark && isPointer(event)) set(mark, 'hover', true);
 }
 
 export function onPointerOut(event: Event): void {
-  const mark = markOf(event.target);
+  const mark = markOf(event);
   if (!mark || !isPointer(event)) return;
-  const next = (event as PointerEvent).relatedTarget;
-  if (next instanceof Node && mark.contains(next)) return;
+  if (stillInside(mark, (event as PointerEvent).relatedTarget)) return;
   set(mark, 'hover', false);
 }
 
 export function onFocusIn(event: Event): void {
-  const mark = markOf(event.target);
+  const mark = markOf(event);
   if (mark) set(mark, 'focus', true);
 }
 
 export function onFocusOut(event: Event): void {
-  const mark = markOf(event.target);
+  const mark = markOf(event);
   if (!mark) return;
-  const next = (event as FocusEvent).relatedTarget;
-  if (next instanceof Node && mark.contains(next)) return;
+  if (stillInside(mark, (event as FocusEvent).relatedTarget)) return;
   flags.delete(mark);
   render(mark);
 }
 
 export function onClick(event: Event): void {
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-  const button = target.closest<HTMLElement>('[data-help-mark-button]');
-  const mark = markOf(button);
-  if (!button || !mark) return;
+  const mark = markOf(event);
+  const onButton = event
+    .composedPath()
+    .some((n) => isElement(n) && n.hasAttribute('data-help-mark-button'));
+  if (!mark || !onButton) return;
   set(mark, 'pinned', !flags.get(mark)?.has('pinned'));
 }
 
 export function onPointerDown(event: Event): void {
-  closeAll(markOf(event.target));
+  closeAll(markOf(event));
 }
 
 export function onKeyDown(event: Event): void {
@@ -121,10 +137,7 @@ export function onKeyDown(event: Event): void {
 
 /** Keeps an open text attached to its button when the page scrolls or resizes. */
 export function onViewportChange(): void {
-  for (const text of document.querySelectorAll<HTMLElement>('[data-help-mark-text][data-open]')) {
-    const mark = markOf(text);
-    if (mark) place(mark);
-  }
+  for (const mark of flags.keys()) place(mark);
 }
 
 export function init(): void {
