@@ -265,7 +265,7 @@ export class PithaPriceChart extends LitElement {
       ></div>
       ${
         this.empty
-          ? html`<p class="pitha-price-chart-empty" role="status">表示できる足がありません（立会時間外、またはまだ市況データが保存されていません）</p>`
+          ? html`<p class="pitha-price-chart-empty" role="status">表示できる足がありません（立会時間外、または市況データ未保存）</p>`
           : ''
       }
       ${renderWsDisconnected(this.wsStatus)}

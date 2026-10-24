@@ -21,14 +21,6 @@ templ ScannerPage(candidates []domain.Candidate, asOf time.Time, scan organisms.
 	@layout.Shell("候補銘柄", organisms.NavScanner) {
 		<h1 class="text-2xl font-bold text-slate-900">候補銘柄</h1>
 		@molecules.TabNav("候補銘柄のタブ", candidateTabs(tabCandidates))
-		<p class="mt-1 text-sm text-slate-600" data-testid="scanner-description">
-			Fast Screenerが選んだ売買候補の一覧です。15〜30秒ごとに自動更新されます。各列の意味は表の上の「列の意味」で確認できます。
-		</p>
-		<ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500" data-testid="scanner-legend">
-			<li><span class="font-medium text-green-700">緑</span> = プラス / LONG</li>
-			<li><span class="font-medium text-red-700">赤</span> = マイナス / SHORT</li>
-			<li>エントリー品質: poor &lt; fair &lt; good &lt; strong &lt; exceptional</li>
-		</ul>
 		@organisms.ScanPanel(scan)
 		@organisms.ScannerTableFallback(candidates, asOf)
 		<script type="module" src="/static/dist/js/scanner-table/pitha-scanner-table.js"></script>

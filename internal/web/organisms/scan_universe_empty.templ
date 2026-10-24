@@ -21,25 +21,29 @@ templ scanUniverseEmpty(importError string) {
 	<div class="mt-3 rounded-md border border-dashed border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-900" data-testid="scan-universe-empty">
 		<p class="font-semibold">銘柄マスタが未投入です</p>
 		<p class="mt-1 text-xs">
-			スキャン対象の銘柄が1件も登録されていないため、スキャンサイクルは何も処理しません（kabuステーションAPIには上場銘柄一覧の取得手段がありません）。次のいずれかで銘柄マスタを投入してください。
+			スキャン対象の銘柄が登録されていないため、スキャンは何も処理しません。銘柄マスタを投入してください。
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-universe-csv", Label: "銘柄マスタの投入方法の説明"}) {
+				<span data-testid="scan-universe-csv-guide">
+					kabuステーションAPIには上場銘柄一覧の取得手段がないため、次のいずれかで投入します。(1) 銘柄マスタCSVを置いてアプリを再起動する。置き場所は環境変数 <code>PITHA_UNIVERSE_PATH</code> で指定したパス、未設定なら実行ファイルと同じディレクトリの <code>config/universe.csv</code> です（形式は <code>docs/environment/setup.md</code>「銘柄マスタの投入」）。(2) 下のボタンで、JPX（日本取引所グループ）が公開している東証上場銘柄一覧を取得して投入する（再起動は不要）。
+				</span>
+			}
 		</p>
-		<ul class="mt-2 list-disc pl-5 text-xs" data-testid="scan-universe-csv-guide">
-			<li>銘柄マスタCSVを置いてアプリを再起動する。置き場所は環境変数 <code>PITHA_UNIVERSE_PATH</code> で指定したパス、未設定なら実行ファイルと同じディレクトリの <code>config/universe.csv</code> です（形式は <code>docs/environment/setup.md</code>「銘柄マスタの投入」）。</li>
-			<li>下の操作で、JPX（日本取引所グループ）が公開している東証上場銘柄一覧を取得して投入する（再起動は不要）。</li>
-		</ul>
 		if importError != "" {
 			<p class="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert" data-testid="scan-universe-import-error">
 				JPXからの取得に失敗しました。銘柄マスタは変更していません。原因: { importError }
 				<br/>
-				ネットワークやJPX側の公開URL・形式の変更が考えられます。上記のCSVによる投入をお試しください。
+				ネットワークやJPX側の変更が考えられます。CSVでの投入もお試しください。
 			</p>
 		}
 		<div class="mt-3 flex flex-wrap items-center gap-3">
 			<p class="text-xs">
-				JPXの東証上場銘柄一覧（<code>data_j.xlsx</code>）を取得して投入しますか？ 取得するボタンを押すまで、JPXへは接続しません（取得は押下ごとの1回のみで、自動での定期取得はしません）。株式（内国・外国）のみを投入し、ETF・ETN、REIT等、PRO Market、出資証券は対象外です。
+				JPXの東証上場銘柄一覧を取得して投入しますか？ ボタンを押すまで、JPXへは接続しません。
 				データの権利はJPXに帰属します。取得・利用は
 				<a class="text-sky-700 underline-offset-2 hover:underline" href="https://www.jpx.co.jp/term-of-use/" target="_blank" rel="noopener noreferrer" data-testid="scan-universe-jpx-terms">JPXの利用上の注意</a>
 				に従い、ご自身の責任で行ってください。
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-universe-import", Label: "取得内容の説明"}) {
+					JPXの東証上場銘柄一覧（<code>data_j.xlsx</code>）を取得します。取得は押下ごとの1回のみで、自動での定期取得はしません。株式（内国・外国）のみを投入し、ETF・ETN、REIT等、PRO Market、出資証券は対象外です。
+				}
 			</p>
 			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
 				"hx-post":         universeImportURL,
@@ -70,7 +74,10 @@ templ scanUniverseEmpty(importError string) {
 templ scanUniverseImported(count int) {
 	if count > 0 {
 		<p id="scan-universe-imported" tabindex="-1" class="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" role="status" data-testid="scan-universe-imported">
-			JPXの東証上場銘柄一覧から { strconv.Itoa(count) } 銘柄を銘柄マスタに投入しました。次のスキャンサイクルから対象になります（再起動は不要です。サイクルは立会時間中に60秒ごとに実行されます）。
+			{ strconv.Itoa(count) } 銘柄を銘柄マスタに投入しました。次のスキャンから対象になります（再起動は不要です）。
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-universe-imported", Label: "スキャンの実行タイミングの説明"}) {
+				スキャンは立会時間中に60秒ごとに実行されます。
+			}
 		</p>
 	}
 }

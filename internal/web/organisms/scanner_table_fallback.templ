@@ -38,23 +38,24 @@ templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 				候補
 				<span class="text-lg font-semibold text-slate-900">{ strconv.Itoa(len(candidates)) }</span>
 				件
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scanner-count", Label: "候補銘柄の説明"}) {
+					{ scannerCountHelp }
+				}
 			</p>
-			<details class="mb-3 text-sm text-slate-600" data-testid="scanner-column-help">
-				<summary class="cursor-pointer select-none text-xs font-medium text-slate-700">列の意味</summary>
-				<dl class="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_1fr]">
-					for _, col := range scannerColumns {
-						<dt class="font-medium text-slate-700">{ col.Label }</dt>
-						<dd>{ col.Hint }</dd>
-					}
-				</dl>
-			</details>
 			<div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
 				<table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
 					<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">{ scannerCaption(asOf) }</caption>
 					<thead>
 						<tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
 							for _, col := range scannerColumns {
-								<th scope="col" class={ "whitespace-nowrap px-3 py-2", templ.KV("text-right", col.Numeric) } title={ col.Hint }>{ col.Label }</th>
+								<th scope="col" class={ "whitespace-nowrap px-3 py-2", templ.KV("text-right", col.Numeric) }>
+									{ col.Label }
+									if col.Hint != "" {
+										@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scanner-col-" + col.Key, Label: col.Label + "の説明"}) {
+											{ col.Hint }
+										}
+									}
+								</th>
 							}
 						</tr>
 					</thead>
@@ -67,36 +68,42 @@ templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 			</div>
 			if len(candidates) == 0 {
 				<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500" data-testid="scanner-empty">
-					現在、条件を満たす候補銘柄はありません。候補は15〜30秒ごとに更新され、見つかり次第ここに表示されます。
+					現在、条件を満たす候補銘柄はありません。
 				</p>
 			}
 		</pitha-scanner-table>
 	</section>
 }
 
-// scannerColumn is one column header: its Japanese label, the tooltip
-// (`title`) explaining what the column means, and whether the column
-// holds numbers (right-aligned).
+// scannerCountHelp is the help beside 「候補 N 件」; it must match
+// COUNT_HELP_TEXT in static/src/components/scanner-table/scanner-view.ts.
+const scannerCountHelp = "Fast Screenerが選んだ売買候補の一覧です。15〜30秒ごとに自動更新されます。緑はプラス・LONG、赤はマイナス・SHORT を表します。"
+
+// scannerColumn is one column header: the sort key (the Lit column's `key`,
+// used for the help mark's id), its Japanese label, the help text of the 「?」
+// mark beside it ("" = no mark: the label says it all), and whether the
+// column holds numbers (right-aligned).
 type scannerColumn struct {
+	Key     string
 	Label   string
 	Hint    string
 	Numeric bool
 }
 
 // scannerColumns must stay in the same order/wording as COLUMNS in
-// static/src/components/scanner-table/pitha-scanner-table.ts.
+// static/src/components/scanner-table/scanner-view.ts.
 var scannerColumns = []scannerColumn{
-	{"銘柄", "銘柄コード。行のコードをクリックすると銘柄詳細へ移動します", false},
-	{"現在値", "直近の価格", true},
-	{"1分騰落率(%)", "直近1分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落", true},
-	{"5分騰落率(%)", "直近5分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落", true},
-	{"出来高倍率", "直近5分の出来高が平常時の何倍か。大きいほど売買が活発", true},
-	{"VWAP乖離(bps)", "現在値とVWAP(出来高加重平均価格)の差。1bps=0.01%。プラスはVWAPより高い", true},
-	{"スプレッド(bps)", "売り気配と買い気配の差。1bps=0.01%。小さいほど売買コストが低い", true},
-	{"Jev方向", "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り、pending=判定待ち", false},
-	{"確信度", "Jev判定の確信度。高いほど判定に自信がある", true},
-	{"エントリー品質", "エントリー好適度。poor < fair < good < strong < exceptional の順に良い", false},
-	{"保有", "現在の保有ポジション(株数)。未保有は—", true},
+	{"symbol", "銘柄", "", false},
+	{"price", "現在値", "", true},
+	{"return_1m", "1分騰落率(%)", "直近1分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落を表します。", true},
+	{"return_5m", "5分騰落率(%)", "直近5分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落を表します。", true},
+	{"volume_ratio_5m", "出来高倍率", "直近5分の出来高が平常時の何倍か。大きいほど売買が活発です。", true},
+	{"price_vs_vwap_bps", "VWAP乖離(bps)", "現在値とVWAP(出来高加重平均価格)の差。1bps=0.01%。プラスはVWAPより高い", true},
+	{"spread_bps", "スプレッド(bps)", "売り気配と買い気配の差。1bps=0.01%。小さいほど売買コストが低い", true},
+	{"jev_direction", "Jev方向", "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り、pending=判定待ち", false},
+	{"jev_confidence", "確信度", "Jev判定の確信度。高いほど判定に自信がある", true},
+	{"entry_quality", "エントリー品質", "エントリー好適度。poor < fair < good < strong < exceptional の順に良い", false},
+	{"current_position", "保有", "現在の保有ポジション(株数)。未保有は—", true},
 }
 
 templ scannerRow(c domain.Candidate) {

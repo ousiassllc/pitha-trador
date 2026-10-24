@@ -19,20 +19,25 @@ import (
 // renders it; it is server-rendered only (no island).
 templ WatchlistPage(view domain.WatchListView) {
 	@layout.Shell("監視リスト", organisms.NavScanner) {
-		<h1 class="text-2xl font-bold text-slate-900">監視リスト</h1>
+		<h1 class="text-2xl font-bold text-slate-900">
+			監視リスト
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-watchlist", Label: "監視リストの説明"}) {
+				立花証券の監視銘柄は、引け後の日足スクリーニング（または固定リスト）で翌営業日分が前夜に確定し、翌朝のEVENT購読に使われます。設定は
+				<a class="font-semibold underline" href="/settings/broker">設定 ＞ 証券会社・データ</a>
+				で変更できます。
+			}
+		</h1>
 		@molecules.TabNav("候補銘柄のタブ", candidateTabs(tabWatchlist))
-		<p class="mt-3 text-sm text-slate-600">
-			立花証券の監視銘柄は、引け後の日足スクリーニング（または固定リスト）で翌営業日分が前夜に確定し、翌朝のEVENT購読に使われます。設定は
-			<a class="font-semibold underline" href="/settings/broker">設定 ＞ 証券会社・データ</a>
-			で変更できます。
-		</p>
 		if !view.Enabled {
 			<p class="mt-6 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" data-testid="watchlist-disabled">
-				監視リストは立花証券を選択しているときだけ確定されます（kabuステーション選択時は /ranking を使います）。
+				監視リストは立花証券を選択しているときだけ確定されます。
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-watchlist-disabled", Label: "監視リストが使われない場合の説明"}) {
+					kabuステーションを選択しているときは、監視リストの代わりにランキング監視（/ranking）を使います。
+				}
 			</p>
 		} else if len(view.Lists) == 0 {
 			<p class="mt-6 rounded-md border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" data-testid="watchlist-empty">
-				確定済みの監視リストはまだありません。最初の夜間バッチ（日足取得）の後に作られます。
+				確定済みの監視リストはありません。最初の夜間バッチ（日足取得）の後に作られます。
 			</p>
 		}
 		for _, list := range view.Lists {

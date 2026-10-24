@@ -36,7 +36,7 @@ func TestJevPanel_NilAndDecision(t *testing.T) {
 
 func TestPositionPanel_NilShowsNotice(t *testing.T) {
 	html := renderComponent(t, organisms.PositionPanel(nil))
-	if !strings.Contains(html, `id="position-panel"`) || !strings.Contains(html, "No open position.") {
+	if !strings.Contains(html, `id="position-panel"`) || !strings.Contains(html, "保有中のポジションはありません。") {
 		t.Errorf("unexpected: %s", html)
 	}
 	if strings.Contains(html, "<table") {
