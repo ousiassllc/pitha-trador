@@ -60,6 +60,24 @@ describe('help mark', () => {
     expect(isOpen(text)).toBe(false);
   });
 
+  test('a tap on a browser that focuses the button on press opens, a second tap closes', () => {
+    const { button, text } = render();
+    button.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    button.click();
+    expect(isOpen(text)).toBe(true);
+    button.click();
+    expect(isOpen(text)).toBe(false);
+  });
+
+  test('hovering one mark while another has focus leaves only the newer one open', () => {
+    const { button, other, text } = render();
+    const otherText = document.getElementById('tip-b') as HTMLElement;
+    button.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    pointer('pointerover', other);
+    expect(isOpen(text)).toBe(false);
+    expect(isOpen(otherText)).toBe(true);
+  });
+
   test('a touch pointer does not open by hover', () => {
     const { button, text } = render();
     pointer('pointerover', button, { pointerType: 'touch' });
