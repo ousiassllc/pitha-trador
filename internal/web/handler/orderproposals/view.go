@@ -33,7 +33,7 @@ func rows(items []proposal.Item) []pages.ProposalRow {
 
 func detail(s proposal.State) pages.ProposalDetailProps {
 	p := pages.ProposalDetailProps{
-		ID: s.ProposalID, Symbol: s.Symbol, Bucket: s.Bucket, Action: s.Action, OrderType: s.OrderType,
+		ID: s.ProposalID, Symbol: s.Symbol, Bucket: s.Bucket, Action: s.Action, OrderType: named(orderTypeNames, s.OrderType),
 		Status: s.Status, StatusReason: s.StatusReason, Rationale: s.Rationale, ExitPlan: deref(s.ExitPlan),
 	}
 	p.Summary = []pages.ProposalField{
@@ -44,20 +44,20 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 		{Label: "数量（提案）", Value: optShares(s.Quantity)},
 		{Label: "予算（提案）", Value: optYen(s.BudgetJPY)},
 		{Label: "指値", Value: optYen(s.LimitPrice)},
-		{Label: "数量（アプリが決めた数量）", Value: optShares(s.AppliedQuantity)},
+		{Label: "数量（適用）", Value: optShares(s.AppliedQuantity), Help: "提案の数量・予算をもとに、アプリが決めた数量です。"},
 	}
 	r := s.Result
 	p.Plan = []pages.ProposalField{
 		{Label: "損切り価格（案）", Value: optYen(s.StopLossPrice)},
 		{Label: "利確価格（案）", Value: optYen(s.TakeProfitPrice)},
-		{Label: "実際に効いた損切り価格（案とアプリの遠い方）", Value: optYen(s.EffectiveStopLossPrice)},
+		{Label: "適用された損切り価格", Value: optYen(s.EffectiveStopLossPrice), Help: "提案の損切り価格と、アプリが定めた損切り価格のうち、遠い方です。"},
 		{Label: "決済の約定は損切りに届いたか", Value: reached(r.StopLossReached)},
 		{Label: "決済の約定は利確に届いたか", Value: reached(r.TakeProfitReached)},
 	}
 	p.Loss = []pages.ProposalField{
-		{Label: "あいりの見込み（案の最大損失）", Value: optYen(r.MaxLoss.ProposedJPY)},
-		{Label: "アプリの見積り（数量 ×（約定見込み価格 − 損切り価格））", Value: optYen(r.MaxLoss.EstimatedJPY)},
-		{Label: "実際の損失（決済済みのポジションの実現損失。利益なら 0）", Value: optYen(r.MaxLoss.ActualLossJPY)},
+		{Label: "あいりの見込み", Value: optYen(r.MaxLoss.ProposedJPY), Help: "案の最大損失です。"},
+		{Label: "アプリの見積り", Value: optYen(r.MaxLoss.EstimatedJPY), Help: "数量 ×（約定見込み価格 − 損切り価格）で見積もった最大損失です。"},
+		{Label: "実際の損失", Value: optYen(r.MaxLoss.ActualLossJPY), Help: "決済済みのポジションの実現損失です。利益なら 0 です。"},
 	}
 	for _, src := range s.Sources {
 		p.Sources = append(p.Sources, pages.ProposalSource{
@@ -66,7 +66,7 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 	}
 	for _, e := range s.Events {
 		p.Events = append(p.Events, pages.ProposalEvent{
-			At: jst(e.At), From: deref(e.FromStatus), To: e.ToStatus, Reason: e.ReasonCode, Actor: e.Actor, Detail: detailText(e.Detail),
+			At: jst(e.At), From: statusName(deref(e.FromStatus)), To: statusName(e.ToStatus), Reason: e.ReasonCode, Actor: e.Actor, Detail: detailText(e.Detail),
 		})
 	}
 	p.Linked = linked(r, s.Status)
@@ -80,21 +80,21 @@ func linked(r proposal.Result, status string) []pages.ProposalLinked {
 	if sg := r.Signal; sg != nil {
 		risk := pages.ProposalField{Label: "Risk check", Value: passed(sg.RiskPassed)}
 		reject := pages.ProposalField{Label: "拒否コード", Value: deref(sg.RejectCode)}
-		if sg.RejectedAfterRisk { // passed Risk, refused by the application afterwards (issue #860)
+		if sg.RejectedAfterRisk { // passed Risk, refused by the application afterwards
 			risk.Value, reject.Label = laterRejection, "理由コード"
 		} else if end, ok := afterRiskEnd[status]; ok && !sg.RiskPassed { // passed Risk, no order came of it for another reason
 			risk.Value, reject.Label = "Risk通過・"+end, "理由コード"
 		}
 		out = append(out, pages.ProposalLinked{Title: "トレードシグナル #" + strconv.FormatInt(sg.ID, 10), Fields: []pages.ProposalField{
 			{Label: "時刻（JST）", Value: jst(sg.At)},
-			{Label: "policy_version", Value: sg.PolicyVersion},
+			{Label: "ポリシーのバージョン", Value: sg.PolicyVersion, Help: "このシグナルを出した時点のポリシーのバージョン（policy_version）です。"},
 			risk, reject,
 		}})
 	}
 	if o := r.Order; o != nil {
 		out = append(out, pages.ProposalLinked{Title: "注文 #" + strconv.FormatInt(o.ID, 10), Fields: []pages.ProposalField{
-			{Label: "売買 / 種別", Value: o.Side + " / " + o.OrderType},
-			{Label: "状態", Value: o.Status},
+			{Label: "売買 / 種別", Value: named(sideNames, o.Side) + " / " + named(orderTypeNames, o.OrderType)},
+			{Label: "状態", Value: named(orderStatusNames, o.Status)},
 			{Label: "数量", Value: shares(o.Quantity)},
 			{Label: "発注（JST）", Value: jst(o.SubmittedAt)},
 			{Label: "約定（JST）", Value: optJST(o.FilledAt)},
@@ -116,7 +116,7 @@ func linked(r proposal.Result, status string) []pages.ProposalLinked {
 			{Label: "決済価格", Value: optYen(pos.ExitPrice)},
 			{Label: "決済理由", Value: deref(pos.ExitReason)},
 			{Label: "保有時間", Value: minutes(pos.HoldingMinutes)},
-			{Label: "手数料（買い・売り合計）", Value: optYen(pos.FeesJPY)},
+			{Label: "手数料", Value: optYen(pos.FeesJPY), Help: "買いと売りの合計です。"},
 			{Label: "実現損益", Value: optYen(pos.RealizedPnl), Sign: sign(pos.RealizedPnl)},
 		}})
 	}
@@ -132,6 +132,30 @@ func linkHref(raw string) string {
 		return ""
 	}
 	return u.String()
+}
+
+// The order's side, type and status are stored as codes (BUY, MARKET, FILLED,
+// ...); the screens show them by name. A code not listed is shown as it is.
+var (
+	sideNames        = map[string]string{"BUY": "買い", "SELL": "売り"}
+	orderTypeNames   = map[string]string{"MARKET": "成行", "LIMIT": "指値"}
+	orderStatusNames = map[string]string{"PENDING": "発注中", "FILLED": "約定", "CANCELLED": "取消", "REJECTED": "拒否"}
+)
+
+// named is the name of a code (case-insensitive), the code itself when unknown.
+func named(names map[string]string, code string) string {
+	if n, ok := names[strings.ToUpper(code)]; ok {
+		return n
+	}
+	return code
+}
+
+// statusName is the name of a proposal status code, "" for none.
+func statusName(code string) string {
+	if code == "" {
+		return ""
+	}
+	return pages.ProposalStatusLabel(code)
 }
 
 func jst(rfc3339 string) string {
