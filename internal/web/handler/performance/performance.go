@@ -15,7 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
-	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/performancepanels"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -144,9 +144,9 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 	shared.RenderHTML(c, status, pages.PerformancePage(props))
 }
 
-func (h *PerformanceHandler) defaultForm() organisms.BacktestFormValues {
+func (h *PerformanceHandler) defaultForm() performancepanels.BacktestFormValues {
 	today := h.now().In(jst)
-	return organisms.BacktestFormValues{
+	return performancepanels.BacktestFormValues{
 		From:           today.AddDate(0, 0, -defaultRangeDays).Format(dateLayout),
 		To:             today.Format(dateLayout),
 		TrainingDays:   defaultTrainingDays,
@@ -160,8 +160,8 @@ func (h *PerformanceHandler) defaultForm() organisms.BacktestFormValues {
 // Forward period per fold. The returned form echoes the raw input even on
 // error; the returned messages (Japanese, shown to the operator one per
 // line) are empty when the input is valid.
-func parseBacktestForm(c *gin.Context) (organisms.BacktestFormValues, backtest.WalkForwardConfig, []string) {
-	form := organisms.BacktestFormValues{From: c.Query("from"), To: c.Query("to")}
+func parseBacktestForm(c *gin.Context) (performancepanels.BacktestFormValues, backtest.WalkForwardConfig, []string) {
+	form := performancepanels.BacktestFormValues{From: c.Query("from"), To: c.Query("to")}
 	var errs []string
 	days := func(key, label string, fallback int) int {
 		raw := c.Query(key)

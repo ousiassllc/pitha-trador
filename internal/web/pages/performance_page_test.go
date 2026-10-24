@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/performancepanels"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -22,7 +22,7 @@ func renderPerformancePage(t *testing.T, props pages.PerformanceProps) string {
 
 // Undefined (nil) ratios render as "—", not as 0 or "<nil>" (issue #360).
 func TestPerformancePage_RendersUndefinedActualsAsDash(t *testing.T) {
-	body := renderPerformancePage(t, pages.PerformanceProps{Actuals: organisms.PerformanceActuals{}})
+	body := renderPerformancePage(t, pages.PerformanceProps{Actuals: performancepanels.PerformanceActuals{}})
 
 	for _, key := range []string{"profit_factor", "sharpe_ref", "sortino_ref"} {
 		if want := `data-metric="` + key + `">—<`; !strings.Contains(body, want) {
@@ -36,7 +36,7 @@ func TestPerformancePage_RendersUndefinedActualsAsDash(t *testing.T) {
 
 func TestPerformancePage_RendersDefinedActualRatios(t *testing.T) {
 	pf, sharpe, sortino := 2.0, -0.5, 1.25
-	body := renderPerformancePage(t, pages.PerformanceProps{Actuals: organisms.PerformanceActuals{
+	body := renderPerformancePage(t, pages.PerformanceProps{Actuals: performancepanels.PerformanceActuals{
 		ProfitFactor: &pf, SharpeRef: &sharpe, SortinoRef: &sortino,
 	}})
 
