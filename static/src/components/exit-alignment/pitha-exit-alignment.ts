@@ -1,11 +1,12 @@
-// `pitha-exit-alignment`: Calibration's "label basis versus actual exit" block
-// (issue #774, parent #751/#752). It loads `GET /api/v1/calibration/exit-alignment`
+// `pitha-exit-alignment`: Calibration's "label basis versus actual exit" block.
+// It loads `GET /api/v1/calibration/exit-alignment`
 // once on connect and on the refresh button: the table of the label's TP/SL/
 // timeout/cost against the actual exit, the mismatch warnings, the per-decision
 // label-versus-replay comparison and the model's OOS EV beside the Paper return.
 import { css, html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
+import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
 import {
@@ -21,6 +22,7 @@ export class PithaExitAlignment extends LitElement {
   static override styles = [
     buttonStyles,
     noticeStyles,
+    helpMarkStyles,
     css`
       :host {
         display: block;
@@ -102,7 +104,14 @@ export class PithaExitAlignment extends LitElement {
   protected override render() {
     return html`
       <section aria-label="ラベル基準と実出口の整合">
-        <h2>ラベル基準と実出口の整合（#774）</h2>
+        <h2>
+          ラベル基準と実出口の整合
+          ${renderHelpMark({
+            id: 'help-exit-alignment',
+            label: 'ラベル基準と実出口の整合の説明',
+            text: 'メタモデルの学習ラベルが前提にする出口（利確・損切り・タイムアウト・コスト）と、実際の取引の出口が合っているかを確かめる表です。合っていないと、モデルの予測した勝ち負けの幅が実際の取引とずれます。',
+          })}
+        </h2>
         <button type="button" @click=${() => void this.load()} ?disabled=${this.loading}>
           ${this.loading ? '更新中…' : '更新'}
         </button>

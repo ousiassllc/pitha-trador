@@ -1,5 +1,4 @@
-// Skipped nightly retrainings of `pitha-calibration-heatmap` (issue #799, parent
-// #752): a retraining that stored no model for lack of usable labeled history
+// Skipped nightly retrainings of `pitha-calibration-heatmap`: a retraining that stored no model for lack of usable labeled history
 // is listed with its fixed reason code and how far short the data was
 // ("必要130件中 87件").
 import { html } from 'lit';

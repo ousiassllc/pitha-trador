@@ -27,8 +27,8 @@ type PerformanceProps struct {
 	Form         organisms.BacktestFormValues
 	Actuals      organisms.PerformanceActuals
 	ActualsError string
-	// Evaluation is the realized-performance evaluation (issue #777), or
-	// EvaluationError when it could not be read.
+	// Evaluation is the realized-performance evaluation, or EvaluationError
+	// when it could not be read.
 	Evaluation      evaluation.Panel
 	EvaluationError string
 	Result          *PerformanceResult
@@ -36,10 +36,11 @@ type PerformanceProps struct {
 }
 
 // PerformancePage is the Performance full page (functional.md §5.3,
-// UC-9/UC-12): the realized (Paper) performance of closed positions, a Walk Forward backtest (FR-BT-2) request form over the
-// recorded market_snapshots/jev_decisions history, and - once run - the
+// UC-9/UC-12): the realized (Paper) performance of closed positions, a Walk
+// Forward backtest request form over the recorded
+// market_snapshots/jev_decisions history, and - once run - the
 // out-of-sample Combined Forward metrics plus each fold's Forward
-// metrics (FR-BT-1). `GET /performance`
+// metrics. `GET /performance`
 // (internal/web/handler/performance.PerformanceHandler.Page) renders it.
 templ PerformancePage(props PerformanceProps) {
 	@layout.Shell("成績", organisms.NavPerformance) {

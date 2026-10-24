@@ -94,12 +94,13 @@ func TestPage_EvaluationShowsPassWithChecksAndCosts(t *testing.T) {
 		"75.0% [60.0%–90.0%]",
 		`data-key="2026-09-01"`,
 		`data-testid="evaluation-table-direction"`,
-		"スリッページ（約定価格に含まれる）",
+		"スリッページ",
+		"約定価格に含まれたコスト",
 		"¥900（記録のある約定 240）",
 		"グロス（コスト前）",
 		`data-key="v-a"`,
 		"2026-09-01〜2026-09-08",
-		"label_version 2",
+		"ラベル版 2",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page should contain %q", want)
@@ -107,8 +108,8 @@ func TestPage_EvaluationShowsPassWithChecksAndCosts(t *testing.T) {
 	}
 }
 
-// Metrics that are not reliable read 判定不能 (with the reference value as the
-// tooltip), and so does the verdict.
+// Metrics that are not reliable read 判定不能 (with the reference value in a
+// help mark), and so does the verdict.
 func TestPage_EvaluationShowsUndeterminedMetrics(t *testing.T) {
 	ev := winning()
 	ev.Overall.WinRate = actuals.Metric{N: 6, Value: 0.5, Lo: 0.1, Hi: 0.9, HasCI: true, Defined: true}
@@ -118,10 +119,10 @@ func TestPage_EvaluationShowsUndeterminedMetrics(t *testing.T) {
 	if !strings.Contains(body, `data-testid="evaluation-verdict" data-status="undetermined"`) || !strings.Contains(body, "合格ライン: 判定不能") {
 		t.Error("verdict should read 判定不能")
 	}
-	if !strings.Contains(body, `title="参考値 50.0%（n=6、区間 [10.0%–90.0%]）`) {
-		t.Error("an unreliable but defined metric should carry its reference value as the tooltip")
+	if !strings.Contains(body, "参考値 50.0%（n=6、区間 [10.0%–90.0%]）") {
+		t.Error("an unreliable but defined metric should carry its reference value in its help text")
 	}
-	if n := strings.Count(body, ">判定不能</td>"); n != 2 {
+	if n := strings.Count(body, "data-undetermined"); n != 2 {
 		t.Errorf("判定不能 cells = %d, want 2 (win rate and profit factor of the overall row)", n)
 	}
 }
@@ -133,7 +134,7 @@ func TestPage_EvaluationOfEmptyDatabase(t *testing.T) {
 	if !strings.Contains(body, `data-status="undetermined"`) || !strings.Contains(body, "初期資金 未設定") {
 		t.Error("empty evaluation should be 判定不能 with an unset capital")
 	}
-	if n := strings.Count(body, ">判定不能</td>"); n < 6 {
+	if n := strings.Count(body, "data-undetermined"); n < 6 {
 		t.Errorf("判定不能 cells = %d, want the overall metrics undetermined", n)
 	}
 }

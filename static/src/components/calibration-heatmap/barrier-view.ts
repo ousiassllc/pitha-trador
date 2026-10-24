@@ -1,7 +1,8 @@
 // Triple-barrier EV (net) and tp/sl/timeout reach-rate rendering of
-// `pitha-calibration-heatmap` (issue #767), split out of the component to
-// keep it within the linterly per-file limit.
+// `pitha-calibration-heatmap`, split out of the component to keep it within
+// the linterly per-file limit.
 import { html } from 'lit';
+import { renderHelpMark } from '../lib/help-mark';
 import type { BarrierStats } from './calibration-view';
 
 // formatBps renders a signed bps amount, e.g. "+12.5 bps" / "-7.0 bps".
@@ -28,12 +29,19 @@ export function renderBarrierSummary(stats: BarrierStats | null) {
   if (stats === null) return '';
   if (stats.sample_count === 0) {
     return html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-barrier-none">
-      トリプルバリアのラベルなし（EV・到達率は未集計）
+      トリプルバリアのラベルなし
     </p>`;
   }
   return html`
     <dl class="pitha-calibration-heatmap-summary" data-testid="calibration-barrier-summary" aria-label="トリプルバリア（コスト控除後）">
-      <dt>EV（net, 1判断あたり）</dt>
+      <dt>
+        EV（コスト控除後）
+        ${renderHelpMark({
+          id: 'help-calibration-barrier-ev',
+          label: 'EV（コスト控除後）の説明',
+          text: '1判断あたりの平均リターン（net: 取引コスト控除後、bps）です。',
+        })}
+      </dt>
       <dd data-testid="calibration-barrier-ev">${formatBps(stats.ev_net_bps)}</dd>
       <dt>TP（利確）到達率</dt>
       <dd data-testid="calibration-barrier-tp">${formatRate(stats.tp_rate)} (${stats.tp_count})</dd>

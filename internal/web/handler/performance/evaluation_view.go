@@ -21,11 +21,11 @@ func evaluationPanel(e actuals.Evaluation) evaluation.Panel {
 		Verdict:     string(e.Verdict.Status),
 		VerdictText: statusText(e.Verdict.Status),
 		Criteria:    criteriaText(e.Criteria),
-		CapitalNote: "Paper では仮置きの値で、口座残高ではない（config/risk.yaml の initial_capital）",
 		Overall:     statsRow("全期間", e.Overall),
 	}
 	if e.InitialCapital > 0 {
 		p.Capital = "初期資金 " + yen(e.InitialCapital)
+		p.CapitalNote = "Paper では仮置きの値"
 	} else {
 		p.Capital = "初期資金 未設定（資金比の最大ドローダウンは判定不能）"
 	}
@@ -34,12 +34,15 @@ func evaluationPanel(e actuals.Evaluation) evaluation.Panel {
 	}
 	o := e.Overall
 	p.Costs = []evaluation.Pair{
-		{Label: "取引件数 / 取引日数", Value: fmt.Sprintf("%d 件 / %d 日", o.N, o.Days)},
-		{Label: "純損益（ネット）", Value: yen(o.NetPnLJPY)},
-		{Label: "手数料", Value: yen(o.FeesJPY)},
-		{Label: "グロス（手数料前）", Value: yen(o.GrossBeforeFeesJPY)},
-		{Label: "スリッページ（約定価格に含まれる）", Value: fmt.Sprintf("%s（記録のある約定 %d）", yen(o.SlippageJPY), o.SlippageRecordedFill)},
-		{Label: "グロス（コスト前）", Value: yen(o.GrossBeforeCostsJPY)},
+		{ID: "trades", Label: "取引件数 / 取引日数", Value: fmt.Sprintf("%d 件 / %d 日", o.N, o.Days)},
+		{ID: "net", Label: "純損益（ネット）", Value: yen(o.NetPnLJPY)},
+		{ID: "fees", Label: "手数料", Value: yen(o.FeesJPY)},
+		{ID: "gross-before-fees", Label: "グロス（手数料前）", Value: yen(o.GrossBeforeFeesJPY),
+			Help: "約定価格の時点での損益（純損益 + 手数料）です。スリッページは約定価格に含まれています。"},
+		{ID: "slippage", Label: "スリッページ", Value: fmt.Sprintf("%s（記録のある約定 %d）", yen(o.SlippageJPY), o.SlippageRecordedFill),
+			Help: "スプレッドや呼値の丸めを含む、約定価格に含まれたコスト（円）です。損益から別に引かれてはいません。スリッページの記録がない約定は 0 円として数え、括弧内は記録のある約定の数です。"},
+		{ID: "gross-before-costs", Label: "グロス（コスト前）", Value: yen(o.GrossBeforeCostsJPY),
+			Help: "手数料とスリッページの両方を取り戻した損益（グロス（手数料前）+ スリッページ）です。"},
 	}
 	for _, t := range []struct {
 		id, title, header string
@@ -48,8 +51,8 @@ func evaluationPanel(e actuals.Evaluation) evaluation.Panel {
 		{"day", "日別（JST）", "日", e.ByDay},
 		{"week", "週別（月曜始まり）", "週", e.ByWeek},
 		{"direction", "方向別", "方向", e.ByDirection},
-		{"exit-reason", "exit_reason別", "exit_reason", e.ByExitReason},
-		{"meta-model", "メタモデル版別（metalabel_models.version）", "版", e.ByMetaModel},
+		{"exit-reason", "決済理由別", "決済理由", e.ByExitReason},
+		{"meta-model", "メタモデル版別", "版", e.ByMetaModel},
 		{"ab-arm", "A/Bアーム別", "アーム", e.ByABArm},
 	} {
 		table := evaluation.Table{ID: t.id, Title: t.title, KeyHeader: t.header}
@@ -87,11 +90,11 @@ func metaRow(m actuals.MetaComparison) evaluation.MetaRow {
 	oos := func(v *float64, f func(float64) string) evaluation.Cell {
 		switch {
 		case v == nil:
-			return evaluation.Cell{Text: noValue, Title: "OOSでは定義できない（NULL）"}
+			return evaluation.Cell{Text: noValue, Help: "OOSでは定義できません。"}
 		case !m.OOSReliable:
-			return evaluation.Cell{Text: undetermined, Undetermined: true, Title: fmt.Sprintf("参考値 %s（OOS n=%d）", f(*v), m.OOSSamples)}
+			return evaluation.Cell{Text: undetermined, Undetermined: true, Help: fmt.Sprintf("参考値 %s（OOS n=%d）: OOS の件数が基準未満のため判定不能", f(*v), m.OOSSamples)}
 		}
-		return evaluation.Cell{Text: f(*v), Title: fmt.Sprintf("OOS n=%d", m.OOSSamples)}
+		return evaluation.Cell{Text: f(*v)}
 	}
 	row := evaluation.MetaRow{
 		Version: m.Version, Status: m.Status,
@@ -131,7 +134,7 @@ func checkView(c actuals.Check, crit actuals.Criteria) evaluation.Check {
 }
 
 func criteriaText(c actuals.Criteria) string {
-	return fmt.Sprintf("合格ライン: 取引のあった日が%d日以上・取引%d件以上・EV下側信頼限界が%s bps超・最大ドローダウンが初期資金の%s%%以下。"+
+	return fmt.Sprintf("取引のあった日が%d日以上・取引%d件以上・EV下側信頼限界が%s bps超・最大ドローダウンが初期資金の%s%%以下。"+
 		"指標はn≥%d かつ %d日以上にまたがるときだけ判定する。",
 		c.MinDays, c.MinTrades, plain2(c.MinEVLowerBps), plain2(c.MaxDrawdownPct), c.MinSample, c.MinClusters)
 }
@@ -149,26 +152,26 @@ func statusText(s actuals.Status) string {
 func labelVersionText(v int) string {
 	switch v {
 	case 1:
-		return "label_version 1（終値のみ）"
+		return "ラベル版 1（終値のみ）"
 	case 2:
-		return "label_version 2（トリプルバリア・コスト控除後）"
+		return "ラベル版 2（トリプルバリア・コスト控除後）"
 	}
-	return fmt.Sprintf("label_version %d", v)
+	return fmt.Sprintf("ラベル版 %d", v)
 }
 
 // metricCell renders m with f: the value with its 95% interval when it is
-// reliable, otherwise 判定不能 with the reference value and n as tooltip.
+// reliable, otherwise 判定不能 with the reference value and why as help text.
 func metricCell(m actuals.Metric, f func(float64) string) evaluation.Cell {
 	if m.Reliable {
-		return evaluation.Cell{Text: fmt.Sprintf("%s [%s–%s]", f(m.Value), f(m.Lo), f(m.Hi)), Title: fmt.Sprintf("n=%d", m.N)}
+		return evaluation.Cell{Text: fmt.Sprintf("%s [%s–%s]", f(m.Value), f(m.Lo), f(m.Hi))}
 	}
-	c := evaluation.Cell{Text: undetermined, Undetermined: true, Title: fmt.Sprintf("n=%d", m.N)}
+	c := evaluation.Cell{Text: undetermined, Undetermined: true, Help: fmt.Sprintf("サンプルから計算できない値です（n=%d）", m.N)}
 	if m.Defined {
-		c.Title = fmt.Sprintf("参考値 %s（n=%d", f(m.Value), m.N)
+		c.Help = fmt.Sprintf("参考値 %s（n=%d", f(m.Value), m.N)
 		if m.HasCI {
-			c.Title += fmt.Sprintf("、区間 [%s–%s]", f(m.Lo), f(m.Hi))
+			c.Help += fmt.Sprintf("、区間 [%s–%s]", f(m.Lo), f(m.Hi))
 		}
-		c.Title += "）: サンプルまたは取引日数が基準未満のため判定不能"
+		c.Help += "）: サンプルまたは取引日数が基準未満のため判定不能"
 	}
 	return c
 }
