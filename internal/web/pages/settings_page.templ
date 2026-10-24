@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
@@ -53,9 +54,6 @@ templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Li
 	@layout.Shell("設定", organisms.NavSettings) {
 		<h1 class="text-2xl font-bold text-slate-900">設定</h1>
 		<div class="mt-4 flex flex-col gap-6" data-testid="settings-hub" data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
-			<p class="text-sm text-slate-600">
-				設定したい項目のページを選んでください。接続先・しきい値・保存先などの詳細な設定を、テーマごとのページにまとめています。
-			</p>
 			<ul class="flex flex-col gap-3" data-testid="settings-page-list">
 				for _, p := range pageList {
 					@molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{
@@ -106,22 +104,26 @@ templ SettingsPage(props SettingsProps) {
 		</nav>
 		<h1 class="mt-2 text-2xl font-bold text-slate-900">{ props.Page.Name }</h1>
 		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID } data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
-			<p class="text-sm text-slate-600">{ props.Page.Summary }</p>
 			if len(props.Connections) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
-					<h2 id="settings-connections-heading" class="text-lg font-semibold text-slate-900">接続先</h2>
-					<p class="text-sm text-slate-600">
-						接続先を選ぶと、その接続先のキー・URL・モデル名を編集できます。項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。接続先の保存・削除の反映にはアプリの再起動が必要です。
-					</p>
+					<h2 id="settings-connections-heading" class="flex items-center gap-2 text-lg font-semibold text-slate-900">
+						接続先
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-settings-connections", Label: "接続先の説明"}) {
+							接続先を選ぶと、その接続先のキー・URL・モデル名を編集できます。項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。
+						}
+					</h2>
+					<p class="text-sm text-slate-600">保存・削除の反映には再起動が必要です。</p>
 					@organisms.ConnectionList(props.Connections)
 				</section>
 			}
 			if len(props.Operational) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-operational-heading">
-					<h2 id="settings-operational-heading" class="text-lg font-semibold text-slate-900">設定項目</h2>
-					<p class="text-sm text-slate-600">
-						優先順位は config/strategy.yaml の値 &lt; ここで保存した値です。項目ごとに保存でき、「既定に戻す」で保存した値を消して既定（strategy.yaml・既定ディレクトリ・無効）に戻せます。反映のタイミング（再起動の要否）は各項目の説明に記載しています。
-					</p>
+					<h2 id="settings-operational-heading" class="flex items-center gap-2 text-lg font-semibold text-slate-900">
+						設定項目
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-settings-operational", Label: "設定項目の説明"}) {
+							ここで保存した値は、設定ファイルの値より優先されます。項目ごとに保存でき、「既定に戻す」で保存した値を消して既定に戻せます。反映のタイミング（再起動の要否）は各項目の説明に記載しています。
+						}
+					</h2>
 					@organisms.SettingGroupList(props.Operational)
 				</section>
 			}
@@ -132,9 +134,9 @@ templ SettingsPage(props SettingsProps) {
 						@molecules.SettingsCard(molecules.SettingsCardProps{
 							ID:          "mcp",
 							ModalID:     "modal-mcp",
-							Name:        "MCP（Paper 実績・Jev 判断の読み取りと、基本設定のホワイトリスト変更）",
-							Description: "Grok Bot などから Paper の実績と Jev の判断を読み取るための MCP の有効/無効・待受アドレス・API キー・状態を確認・設定できます。",
+							Name:        "MCP",
 							ActionLabel: "開く",
+							Status:      settingsHelp("help-settings-mcp", "MCP の説明", "Paper の実績と Jev の判断を外部の AI クライアントが読み取るための MCP の有効/無効・待受アドレス・API キー・状態を確認・設定できます。基本設定はホワイトリストにある項目だけ変更できます。"),
 						})
 					</ul>
 				</section>
@@ -147,8 +149,8 @@ templ SettingsPage(props SettingsProps) {
 							ID:          "jev-prompt",
 							ModalID:     "modal-jev-prompt",
 							Name:        "Jev プロンプトの版とシャドー比較",
-							Description: "ライブの版・候補の版のシャドー比較（Paper のみ・既定オフ）・1 日の費用上限・費用・昇格を確認・操作できます。",
 							ActionLabel: "開く",
+							Status:      settingsHelp("help-settings-jev-prompt", "Jev プロンプトの説明", "ライブの版・候補の版のシャドー比較（Paper のみ・既定オフ）・1 日の費用上限・費用・昇格を確認・操作できます。"),
 						})
 					</ul>
 				</section>
@@ -162,7 +164,6 @@ templ SettingsPage(props SettingsProps) {
 								ID:          "update",
 								ModalID:     "modal-update",
 								Name:        "アップデート",
-								Description: "現在のバージョンと最終確認結果を確認し、新しいバージョンを今すぐ確認できます。",
 								ActionLabel: "開く",
 							})
 						}
@@ -171,7 +172,6 @@ templ SettingsPage(props SettingsProps) {
 								ID:          "error-log",
 								ModalID:     "modal-error-log",
 								Name:        "エラーログ",
-								Description: "調査や共有のために、エラーログをダウンロードできます。",
 								ActionLabel: "開く",
 							})
 						}
@@ -180,7 +180,6 @@ templ SettingsPage(props SettingsProps) {
 								ID:          "data-export",
 								ModalID:     "modal-data-export",
 								Name:        "データエクスポート",
-								Description: "取引ログ・判断ログ・計測ログを期間を指定して ZIP でダウンロードできます。",
 								ActionLabel: "開く",
 							})
 						}
@@ -227,7 +226,7 @@ templ SettingsPage(props SettingsProps) {
 			}
 		}
 		if props.MCP && props.Has("modal-mcp") {
-			@molecules.Modal("modal-mcp", "MCP（Paper 実績・Jev 判断の読み取りと、基本設定のホワイトリスト変更）") {
+			@molecules.Modal("modal-mcp", "MCP") {
 				// Filled in by `GET /settings/mcp-panel` (internal/web/organisms/mcp)
 				// on load, so the reachability probe never slows the page;
 				// the panel's forms swap this element's content in place.
@@ -245,5 +244,13 @@ templ SettingsPage(props SettingsProps) {
 		}
 		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>
 		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
+	}
+}
+
+// settingsHelp is a card's status slot holding only a help mark with the
+// card's description (issue #902).
+templ settingsHelp(id, label, text string) {
+	@atoms.HelpMark(atoms.HelpMarkProps{ID: id, Label: label}) {
+		{ text }
 	}
 }

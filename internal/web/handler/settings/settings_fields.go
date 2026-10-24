@@ -26,8 +26,8 @@ type connection struct {
 }
 
 // settingsConnections is the Settings screen's connection list in display
-// order. Labels match the literal names operators previously set in `.env`
-// so the migration away from it stays recognizable. Every key here must be
+// order. Labels are Japanese only (issue #902); the key itself is shown in
+// the field's help mark (molecules.SecretFieldRow). Every key here must be
 // in config.AllowedSecretKeys (the per-key routes' allow-list), and the
 // groups together must cover it exactly once, which pageflow/groups_test.go
 // asserts. Luna/Sol/Opus default to Jev and the news feed to the やのしん TDnet
@@ -39,9 +39,9 @@ var settingsConnections = []connection{
 		name:        "Jev",
 		description: "売買判断を行う AI（Jev）への接続です。API キーは必須です。接続先 URL とモデル名は未設定なら既定値を使います。",
 		fields: []settingsField{
-			{config.KeyJevAPIKey, "JEV_API_KEY"},
-			{config.KeyJevBaseURL, "JEV_BASE_URL（任意）"},
-			{config.KeyJevModel, "JEV_MODEL（任意）"},
+			{config.KeyJevAPIKey, "API キー"},
+			{config.KeyJevBaseURL, "接続先 URL（任意）"},
+			{config.KeyJevModel, "モデル名（任意）"},
 		},
 	},
 	{
@@ -49,7 +49,7 @@ var settingsConnections = []connection{
 		name:        "kabuステーション",
 		description: "kabuステーション API（時価・発注）の API パスワードです。必須です。",
 		fields: []settingsField{
-			{config.KeyKabuAPIPassword, "KABU_API_PASSWORD"},
+			{config.KeyKabuAPIPassword, "API パスワード"},
 		},
 	},
 	{
@@ -57,9 +57,9 @@ var settingsConnections = []connection{
 		name:        "立花証券 e支店",
 		description: "立花証券 e支店API の認証情報です。認証ID は利用設定画面で発行されるもので、デモ環境と本番環境で別です。接続環境・秘密鍵ファイル・接続先 URL は、設定画面の「立花証券 e支店（接続設定）」で指定します。本番の第二暗証番号は保存できません。",
 		fields: []settingsField{
-			{config.KeyTachibanaDemoAuthID, "TACHIBANA_DEMO_AUTH_ID（デモ・認証ID）"},
-			{config.KeyTachibanaProdAuthID, "TACHIBANA_PROD_AUTH_ID（本番・認証ID）"},
-			{config.KeyTachibanaDemoSecondPassword, "TACHIBANA_DEMO_SECOND_PASSWORD（デモ・第二暗証番号・任意）"},
+			{config.KeyTachibanaDemoAuthID, "認証ID（デモ）"},
+			{config.KeyTachibanaProdAuthID, "認証ID（本番）"},
+			{config.KeyTachibanaDemoSecondPassword, "第二暗証番号（デモ・任意）"},
 		},
 	},
 	{
@@ -67,7 +67,7 @@ var settingsConnections = []connection{
 		name:        "Slack",
 		description: "通知の送信先となる Slack の Incoming Webhook URL です（任意）。",
 		fields: []settingsField{
-			{config.KeySlackWebhookURL, "SLACK_WEBHOOK_URL（任意）"},
+			{config.KeySlackWebhookURL, "Webhook URL（任意）"},
 		},
 	},
 	{
@@ -76,19 +76,19 @@ var settingsConnections = []connection{
 		defaultLabel: "Jev",
 		description:  "ニュースの分類を行う AI（Luna）への接続です。既定では Jev を使うため、追加のキー入力は不要です。別の AI に差し替える場合のみ入力してください（未入力なら Jev）。",
 		fields: []settingsField{
-			{config.KeyLunaAPIKey, "LUNA_API_KEY（任意）"},
-			{config.KeyLunaBaseURL, "LUNA_BASE_URL（任意）"},
+			{config.KeyLunaAPIKey, "API キー（任意）"},
+			{config.KeyLunaBaseURL, "接続先 URL（任意）"},
 		},
 	},
 	{
 		id:           "news-feed",
 		name:         "ニュースフィード",
 		defaultLabel: "やのしん",
-		description:  "Luna に渡すニュースの取得元です。既定はやのしん TDnet WebAPI（適時開示、API キー不要）で、監視中の銘柄のみを取得します。別のフィードを使う場合は NEWS_FEED_URL を入力し、止める場合は NEWS_FEED_ENABLED に off を保存してください。",
+		description:  "Luna に渡すニュースの取得元です。既定はやのしん TDnet WebAPI（適時開示、API キー不要）で、監視中の銘柄のみを取得します。別のフィードを使う場合は取得元 URL を入力し、止める場合は「取り込みの有効/無効」に off を保存してください。",
 		fields: []settingsField{
-			{config.KeyNewsFeedURL, "NEWS_FEED_URL（任意）"},
-			{config.KeyNewsFeedAPIKey, "NEWS_FEED_API_KEY（任意）"},
-			{config.KeyNewsFeedEnabled, "NEWS_FEED_ENABLED（任意）"},
+			{config.KeyNewsFeedURL, "取得元 URL（任意）"},
+			{config.KeyNewsFeedAPIKey, "API キー（任意）"},
+			{config.KeyNewsFeedEnabled, "取り込みの有効/無効（任意）"},
 		},
 	},
 	{
@@ -97,8 +97,8 @@ var settingsConnections = []connection{
 		defaultLabel: "Jev",
 		description:  "日次の自己改善で、しきい値の変更案を作る AI（Sol）への接続です。既定では Jev を使うため、追加のキー入力は不要です。別の AI に差し替える場合のみ入力してください（未入力なら Jev）。",
 		fields: []settingsField{
-			{config.KeySolAPIKey, "SOL_API_KEY（任意）"},
-			{config.KeySolBaseURL, "SOL_BASE_URL（任意）"},
+			{config.KeySolAPIKey, "API キー（任意）"},
+			{config.KeySolBaseURL, "接続先 URL（任意）"},
 		},
 	},
 	{
@@ -107,8 +107,8 @@ var settingsConnections = []connection{
 		defaultLabel: "Jev",
 		description:  "Sol の改善提案を検証して承認・却下する AI（Opus）への接続です。既定では Jev を使うため、追加のキー入力は不要です。別の AI に差し替える場合のみ入力してください（未入力なら Jev）。",
 		fields: []settingsField{
-			{config.KeyOpusAPIKey, "OPUS_API_KEY（任意）"},
-			{config.KeyOpusBaseURL, "OPUS_BASE_URL（任意）"},
+			{config.KeyOpusAPIKey, "API キー（任意）"},
+			{config.KeyOpusBaseURL, "接続先 URL（任意）"},
 		},
 	},
 }

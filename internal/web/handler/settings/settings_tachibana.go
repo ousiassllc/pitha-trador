@@ -41,7 +41,7 @@ func (h *SettingsHandler) tachibanaStatus(ctx context.Context) ([]molecules.Conn
 	if b.Tachibana.Production() {
 		badges = append(badges,
 			molecules.ConnectionBadge{ID: "environment", Text: "本番環境", Tone: molecules.BadgeDanger},
-			molecules.ConnectionBadge{ID: "no-orders", Text: "発注は行いません（#55 まで）", Tone: molecules.BadgeWarning})
+			molecules.ConnectionBadge{ID: "no-orders", Text: "発注は行いません", Tone: molecules.BadgeWarning})
 	} else {
 		badges = append(badges, molecules.ConnectionBadge{ID: "environment", Text: "デモ環境", Tone: molecules.BadgeInfo})
 	}

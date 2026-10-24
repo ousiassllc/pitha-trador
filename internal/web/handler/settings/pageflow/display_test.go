@@ -62,6 +62,33 @@ func TestSettingsHandler_Page_ShowsJevBaseURLHint(t *testing.T) {
 	}
 }
 
+// Issue #902: a field shows its Japanese label only; the key name lives in
+// the field's help mark (「設定キー: …」), which is part of the DOM for screen
+// readers.
+func TestSettingsHandler_Page_FieldShowsJapaneseLabelAndKeyInHelp(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore()))
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/integrations", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`for="secret-input-JEV_API_KEY"`,
+		`API キー`,
+		`id="help-secret-JEV_API_KEY"`,
+		`aria-describedby="help-secret-JEV_API_KEY"`,
+		`設定キー: JEV_API_KEY`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Page lacks %q; body=%s", want, body)
+		}
+	}
+	if strings.Contains(body, `JEV_API_KEY（`) || strings.Contains(body, `JEV_API_KEY を削除`) {
+		t.Errorf("Page shows the raw key name as the field label; body=%s", body)
+	}
+}
+
 // The banner only guides toward unset optional keys (issue #80): the
 // required keys are handled by the Setup Guard redirect, never here.
 func TestSettingsHandler_Status_ListsUnsetOptionalKeysOnly(t *testing.T) {
