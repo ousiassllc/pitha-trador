@@ -68,6 +68,9 @@ function render(mark: HTMLElement): void {
 }
 
 function set(mark: HTMLElement, flag: Flag, on: boolean): void {
+  // One text at a time: opening a mark (hover, focus or tap) closes the others,
+  // so a hovered mark and a focused one are never both open.
+  if (on) closeAll(mark);
   const current = flags.get(mark) ?? new Set<Flag>();
   if (on) current.add(flag);
   else current.delete(flag);
@@ -124,7 +127,11 @@ export function onClick(event: Event): void {
     .composedPath()
     .some((n) => isElement(n) && n.hasAttribute('data-help-mark-button'));
   if (!mark || !onButton) return;
-  set(mark, 'pinned', !flags.get(mark)?.has('pinned'));
+  const wasPinned = flags.get(mark)?.has('pinned') ?? false;
+  // The first press also focused the button (most browsers), so the second
+  // press has to drop the focus flag too or the text would never close.
+  if (wasPinned) flags.get(mark)?.delete('focus');
+  set(mark, 'pinned', !wasPinned);
 }
 
 export function onPointerDown(event: Event): void {
