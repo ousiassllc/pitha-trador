@@ -75,6 +75,7 @@ templ document(title string) {
 			<script src="/static/vendor/htmx.min.js"></script>
 			<script type="module" src="/static/dist/js/kill-switch-panel/pitha-kill-switch-panel.js"></script>
 			<script type="module" src="/static/dist/js/htmx-errors/pitha-htmx-errors.js"></script>
+			<script type="module" src="/static/dist/js/help-mark/pitha-help-mark.js"></script>
 		</head>
 		<body class="min-h-screen bg-slate-50 text-slate-900" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
 			{ children... }
