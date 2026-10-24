@@ -24,10 +24,11 @@ type ExperimentRow struct {
 }
 
 // ExperimentsProps is Experiments' input. MinTradesNote says which minimum
-// number of trades judges an experiment and that it is not approved yet.
+// number of trades judges an experiment; MinTradesHelp is the rest of it.
 type ExperimentsProps struct {
 	Notice        string
 	MinTradesNote string
+	MinTradesHelp string
 	Rows          []ExperimentRow
 }
 
@@ -58,11 +59,18 @@ type ExperimentDetailProps struct {
 	AfterPeriod   string
 	Verdict       string
 	VerdictLabel  string
+	// VerdictHelp explains a verdict that has a rule behind it ("" when the
+	// label already says why there is none).
+	VerdictHelp   string
 	MinTradesNote string
+	MinTradesHelp string
 	TestNote      string
-	Metrics       []MetricRow
-	Confounders   []string
-	Rejects       []RejectRow
+	// TestHelp is the test's technical detail and caveat ("" when no interval
+	// could be computed).
+	TestHelp    string
+	Metrics     []MetricRow
+	Confounders []string
+	Rejects     []RejectRow
 }
 
 // Experiments renders the tuning-experiment section of the MCP card
@@ -73,11 +81,18 @@ type ExperimentDetailProps struct {
 // setting.
 templ Experiments(props ExperimentsProps) {
 	<section class="flex flex-col gap-3 rounded-md border border-slate-200 p-3" data-testid="mcp-experiments">
-		<h4 class="font-semibold text-slate-900">調整の実験（前後比較）</h4>
-		<p class="text-xs text-slate-500">
-			調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP の settings_set で行ってから記録します）。
-		</p>
-		<p class="text-xs text-amber-700" data-testid="mcp-experiments-min-trades">{ props.MinTradesNote }</p>
+		<div class="flex items-center gap-2">
+			<h4 class="font-semibold text-slate-900">調整の実験（前後比較）</h4>
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments", Label: "調整の実験の説明"}) {
+				調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP の settings_set で行ってから記録します）。
+			}
+		</div>
+		<div class="flex items-center gap-2 text-xs text-amber-700">
+			<p data-testid="mcp-experiments-min-trades">{ props.MinTradesNote }</p>
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments-min-trades", Label: "判定に要る取引件数の説明"}) {
+				{ props.MinTradesHelp }
+			}
+		</div>
 		if props.Notice != "" {
 			<p class="text-emerald-700" role="status" data-testid="mcp-experiments-notice">{ props.Notice }</p>
 		}
@@ -132,22 +147,27 @@ templ closeButton(id int64, status, label, testID string) {
 // the server refuses it too.
 templ experimentForm() {
 	<form class="flex flex-col gap-2" hx-post="/settings/mcp/experiments" hx-target="#mcp-experiments" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-experiment-form">
-		<span class="font-medium text-slate-700">実験を記録する（変える変数は 1 つだけ）</span>
+		<span class="flex items-center gap-2 font-medium text-slate-700">
+			実験を記録する
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-form", Label: "実験の記録の説明"}) {
+				変える変数は 1 つだけです。名前には、設定ならそのキー（MCP から変更できるキーだけ）、Jev のモデル・プロンプトの版ならその呼び名を入れます。仮説は 500 文字以内、名前と値は 200 文字以内です。開始時刻（JST）を空欄にすると今になります。
+			}
+		</span>
 		<label class="flex flex-col gap-1">
-			<span>仮説（500 文字以内）</span>
+			<span>仮説</span>
 			<textarea name="hypothesis" rows="2" maxlength="500" required class="rounded-md border border-slate-300 px-3 py-1" data-testid="mcp-experiment-hypothesis"></textarea>
 		</label>
 		<div class="flex flex-wrap gap-2">
 			<label class="flex flex-col gap-1">
 				<span>変数の種類</span>
 				@atoms.Select(atoms.SelectProps{Name: "kind", Attrs: templ.Attributes{"data-testid": "mcp-experiment-kind"}}) {
-					<option value="setting" selected>設定（MCP から変更できるキー）</option>
+					<option value="setting" selected>設定</option>
 					<option value="model">Jev のモデル</option>
 					<option value="prompt">Jev のプロンプトの版</option>
 				}
 			</label>
 			<label class="flex flex-col gap-1">
-				<span>名前（設定キー・モデルの呼び名・版の呼び名）</span>
+				<span>名前</span>
 				@atoms.Input(atoms.InputProps{Name: "name", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-name"}})
 			</label>
 		</div>
@@ -161,7 +181,7 @@ templ experimentForm() {
 				@atoms.Input(atoms.InputProps{Name: "after", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-after"}})
 			</label>
 			<label class="flex flex-col gap-1">
-				<span>開始時刻（JST。空欄は今）</span>
+				<span>開始時刻（JST）</span>
 				@atoms.Input(atoms.InputProps{Name: "started_at", Type: "datetime-local", Class: "px-3 py-1", Attrs: templ.Attributes{"data-testid": "mcp-experiment-started"}})
 			</label>
 		</div>
@@ -183,9 +203,28 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 		<span>仮説: <span data-testid="mcp-experiment-detail-hypothesis">{ props.Hypothesis }</span></span>
 		<span>変えた変数: <code>{ props.Variable }</code> { props.Change }</span>
 		<span>前: { props.BeforePeriod }　後: { props.AfterPeriod }</span>
-		<span class="font-semibold" data-testid="mcp-experiment-detail-verdict">判定: { props.VerdictLabel }</span>
-		<span class="text-xs text-amber-700">{ props.MinTradesNote }</span>
-		<span class="text-xs text-slate-600" data-testid="mcp-experiment-test-note">{ props.TestNote }</span>
+		<div class="flex items-center gap-2">
+			<span class="font-semibold" data-testid="mcp-experiment-detail-verdict">判定: { props.VerdictLabel }</span>
+			if props.VerdictHelp != "" {
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-verdict", Label: "判定の説明"}) {
+					{ props.VerdictHelp }
+				}
+			}
+		</div>
+		<div class="flex items-center gap-2 text-xs text-amber-700">
+			<span>{ props.MinTradesNote }</span>
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-min-trades", Label: "判定に要る取引件数の説明"}) {
+				{ props.MinTradesHelp }
+			}
+		</div>
+		<div class="flex items-center gap-2 text-xs text-slate-600">
+			<span data-testid="mcp-experiment-test-note">{ props.TestNote }</span>
+			if props.TestHelp != "" {
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-test", Label: "信頼区間の説明"}) {
+					{ props.TestHelp }
+				}
+			}
+		</div>
 		if len(props.Confounders) > 0 {
 			<ul class="list-disc pl-5 text-xs text-red-700" data-testid="mcp-experiment-confounders">
 				for _, c := range props.Confounders {

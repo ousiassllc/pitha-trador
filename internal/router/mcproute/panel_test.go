@@ -109,6 +109,18 @@ func TestPanel_ShowsMaskedHeaderLocationsAndRestartNote(t *testing.T) {
 	}
 }
 
+// Issue #902: the descriptions moved into help marks stay in the DOM, tied to
+// their button, while the state and the one-time key warning stay on screen.
+func TestPanel_DescriptionsLiveInHelpMarks(t *testing.T) {
+	a := newApp(t, fullSecrets{})
+	body := a.get("/settings/mcp-panel").Body.String()
+	for _, id := range []string{"help-mcp-enabled", "help-mcp-listen", "help-mcp-key", "help-mcp-process"} {
+		if !strings.Contains(body, `aria-describedby="`+id+`"`) || !strings.Contains(body, `id="`+id+`"`) {
+			t.Errorf("panel lacks the help mark %q", id)
+		}
+	}
+}
+
 func TestSave_PersistsEnabledAndListen(t *testing.T) {
 	a := newApp(t, fullSecrets{})
 	a.session()
@@ -209,7 +221,7 @@ func TestRegenerate_RevealsTheKeyOnceWithNoStoreAndNoHistory(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`value="` + key + `"`, "Authorization: Bearer " + key, `readonly`, `hx-history="false"`, `autocomplete="off"`,
-		"二度と表示されません", "data-copy-from=\"mcp-new-key\"", "data-copy-from=\"mcp-new-header\"",
+		"この表示は一度きりです", "data-copy-from=\"mcp-new-key\"", "data-copy-from=\"mcp-new-header\"",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("reveal response lacks %q", want)

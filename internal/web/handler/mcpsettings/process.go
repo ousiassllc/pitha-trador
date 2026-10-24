@@ -30,7 +30,7 @@ func (h *Handler) Stop(c *gin.Context) {
 // start with the saved settings, so a changed address or a regenerated key
 // takes effect.
 func (h *Handler) Restart(c *gin.Context) {
-	h.process(c, "再起動しました。保存済みの設定が有効になっています。", h.admin.Restart)
+	h.process(c, "再起動しました。", h.admin.Restart)
 }
 
 func (h *Handler) process(c *gin.Context, done string, run func(ctx context.Context) error) {

@@ -197,7 +197,7 @@ func throttleNote(st jevprompt.State) string {
 	until, _ := time.Parse(time.RFC3339, t.Until)
 	note := "Jev API が " + who + "に " + status + "を返しました（" + atoms.FormatJST(at) + "）。"
 	if st.ThrottleActive {
-		note += "シャドーは " + atoms.FormatJST(until) + " まで止まっています（待たず・再試行せず止まり、ライブの判断は続いています。再開後に 429/529 が続けば再び止まります）。"
+		note += "シャドーは " + atoms.FormatJST(until) + " まで止まっています（ライブの判断は続いています）。"
 	} else {
 		note += "シャドーは再開しています。"
 	}

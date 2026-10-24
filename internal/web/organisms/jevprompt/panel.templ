@@ -66,9 +66,6 @@ type PanelProps struct {
 templ Panel(props PanelProps) {
 	<section class="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="jev-prompt-panel">
 		<h3 class="sr-only">Jev プロンプトの版とシャドー比較</h3>
-		<p>
-			Jev の trader に送るプロンプトには版があり、判断の記録（jev_decisions.question_version）に残ります。候補の版を「シャドー」で動かすと、ライブの判断ごとに同じ入力で候補の版にも答えさせ、別の表（jev_shadow_decisions）に保存します。シャドーの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも一切使いません。Paper だけで動き、Live では動きません。
-		</p>
 		if props.Notice != "" {
 			<p class="text-emerald-700" role="status" data-testid="jev-prompt-notice">{ props.Notice }</p>
 		}
@@ -80,16 +77,18 @@ templ Panel(props PanelProps) {
 			<dd><code data-testid="jev-prompt-live-version">{ props.LiveVersion }</code></dd>
 		</dl>
 		<form class="flex flex-col gap-3" hx-post="/settings/jev-prompt/shadow" hx-target="#jev-prompt-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="jev-prompt-shadow-form">
-			<label class="flex items-center gap-2">
-				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: checkedAttrs(props.Enabled, "jev-prompt-enabled")})
-				<span class="font-medium text-slate-700">シャドーを有効にする（Paper のみ）</span>
-			</label>
-			<span class="text-xs text-slate-500" data-testid="jev-prompt-enabled-note">
-				既定はオフです。オンにすると、ライブの判断ごとに候補の版の LLM 呼び出しが 1 回増え、その費用（request_cost）が発生します。オンにできるのはこの画面だけです。
-			</span>
-			<label class="flex flex-col gap-1">
-				<span class="font-medium text-slate-700">候補の版</span>
-				@atoms.Select(atoms.SelectProps{Name: "candidate", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
+			<div class="flex items-center gap-2">
+				<label class="flex items-center gap-2">
+					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: checkedAttrs(props.Enabled, "jev-prompt-enabled")})
+					<span class="font-medium text-slate-700">シャドーを有効にする（Paper のみ）</span>
+				</label>
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-enabled", Label: "シャドーの説明"}) {
+					Jev の trader に送るプロンプトには版があり、判断の記録に残ります。候補の版を「シャドー」で動かすと、ライブの判断ごとに同じ入力で候補の版にも答えさせ、別に保存します。シャドーの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも一切使いません。Paper だけで動き、Live では動きません。既定はオフです。オンにすると、ライブの判断ごとに候補の版の LLM 呼び出しが 1 回増え、その費用が発生します。オンにできるのはこの画面だけです。
+				}
+			</div>
+			<div class="flex flex-col gap-1">
+				<label for="jev-prompt-candidate" class="font-medium text-slate-700">候補の版</label>
+				@atoms.Select(atoms.SelectProps{ID: "jev-prompt-candidate", Name: "candidate", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
 					<option value="" selected?={ props.CandidateVersion == "" }>（なし）</option>
 					for _, v := range props.Versions {
 						if v != props.LiveVersion {
@@ -97,22 +96,25 @@ templ Panel(props PanelProps) {
 						}
 					}
 				}
-			</label>
-			<label class="flex flex-col gap-1">
-				<span class="font-medium text-slate-700">1 日あたりの費用上限（USD。日本時間の日）</span>
-				@atoms.Input(atoms.InputProps{Name: "cap", Class: "bg-white px-3 py-2", Attrs: capAttrs(props)})
+			</div>
+			<div class="flex flex-col gap-1">
+				<div class="flex items-center gap-2">
+					<label for="jev-prompt-cap" class="font-medium text-slate-700">1 日あたりの費用上限（USD。日本時間の日）</label>
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-cap", Label: "費用上限の説明"}) {
+						超えるとその日のシャドーを止めます（ライブの判断は止まりません。翌日に再開します）。欄を空のまま保存すると既定値が使われます。変えたいときは値を入力して保存してください。保存した値を消して既定値に戻すには、欄を空にして保存します。失敗した呼び出し（応答が不正・保存に失敗・タイムアウトなど）は課金されても費用の合計に入らないため、1 日の回数の上限も別にあります。この回数は固定で、この画面では変えられません。
+					}
+				</div>
+				@atoms.Input(atoms.InputProps{ID: "jev-prompt-cap", Name: "cap", Class: "bg-white px-3 py-2", Attrs: capAttrs(props)})
 				<span class="text-xs text-slate-500" data-testid="jev-prompt-cap-note">
-					超えるとその日のシャドーを止めます（ライブの判断は止まりません。翌日に再開します）。
 					if props.CapIsDefault {
-						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（既定値。保存した値はありません）。
-						欄を空のまま保存すると既定値が使われ続けます。変えたいときは値を入力して保存してください。
+						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（既定値）。
 					} else {
-						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（この画面で保存された値）。欄を空にして保存すると保存した値を消し、既定値に戻ります。
+						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（保存した値）。
 					}
 					<br/>
-					<span data-testid="jev-prompt-failure-cap">失敗した呼び出し（応答が不正・保存に失敗・タイムアウトなど。課金されても費用の合計に入らないため）が 1 日に { itoa(props.FailureCap) } 回に達しても、その日のシャドーを止めます（今日: { itoa(props.FailuresToday) } 回。この回数は固定で、この画面では変えられません）。</span>
+					<span data-testid="jev-prompt-failure-cap">失敗した呼び出しが 1 日に { itoa(props.FailureCap) } 回に達しても、その日のシャドーを止めます（今日: { itoa(props.FailuresToday) } 回）。</span>
 				</span>
-			</label>
+			</div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "jev-prompt-shadow-save"}}) {
 					保存
@@ -120,7 +122,12 @@ templ Panel(props PanelProps) {
 			</div>
 		</form>
 		<div class="flex flex-col gap-1" data-testid="jev-prompt-cost">
-			<span class="font-medium text-slate-700">シャドーの費用（request_cost の合計）</span>
+			<span class="flex items-center gap-2 font-medium text-slate-700">
+				シャドーの費用
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-cost", Label: "シャドーの費用の説明"}) {
+					費用の合計は request_cost の合計です。API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。
+				}
+			</span>
 			<span>今日（{ props.TodayDate }）: <strong data-testid="jev-prompt-cost-today">{ props.TodayUSD } USD</strong>（{ itoa(props.TodayCalls) } 回）　累計: <strong data-testid="jev-prompt-cost-total">{ props.TotalUSD } USD</strong>（{ itoa(props.TotalCalls) } 回）</span>
 			if props.HaltNote != "" {
 				<span class="text-amber-700" role="status" data-testid="jev-prompt-halt">{ props.HaltNote }</span>
@@ -128,8 +135,7 @@ templ Panel(props PanelProps) {
 			if props.ThrottleNote != "" {
 				<span class="text-amber-700" role="status" data-testid="jev-prompt-throttle">{ props.ThrottleNote }</span>
 			}
-			<span class="text-xs text-slate-500" data-testid="jev-prompt-cost-basis">費用は API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。</span>
-			<span data-testid="jev-prompt-cost-estimated">うち見積り（応答に使用量が無かった呼び出し）: 今日 <strong data-testid="jev-prompt-estimated-today">{ props.TodayEstimatedUSD } USD</strong>（{ itoa(props.TodayEstimatedCalls) } 回）　累計 <strong data-testid="jev-prompt-estimated-total">{ props.TotalEstimatedUSD } USD</strong>（{ itoa(props.TotalEstimatedCalls) } 回）</span>
+			<span data-testid="jev-prompt-cost-estimated">うち見積り: 今日 <strong data-testid="jev-prompt-estimated-today">{ props.TodayEstimatedUSD } USD</strong>（{ itoa(props.TodayEstimatedCalls) } 回）　累計 <strong data-testid="jev-prompt-estimated-total">{ props.TotalEstimatedUSD } USD</strong>（{ itoa(props.TotalEstimatedCalls) } 回）</span>
 			if len(props.Daily) > 0 {
 				<table class="w-full text-left text-xs" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
 					<thead>
@@ -144,8 +150,12 @@ templ Panel(props PanelProps) {
 			}
 		</div>
 		<form class="flex flex-col gap-2" hx-post="/settings/jev-prompt/promote" hx-target="#jev-prompt-panel" hx-swap="innerHTML" hx-disabled-elt="find button" hx-confirm="ライブの Jev プロンプトの版を切り替えます。以後のすべてのライブの判断（取引の入力）が新しい版になります。よろしいですか？" data-testid="jev-prompt-promote-form">
-			<span class="font-medium text-slate-700">昇格（ライブの版を切り替える）</span>
-			<span class="text-xs text-slate-500">昇格はライブの判断を変えます。自動では行われず、この操作（と MCP の jev_prompt_promote）だけで行われます。昇格は下の記録に残ります。比較の結果は MCP の jev_shadow_compare で見られます。</span>
+			<span class="flex items-center gap-2 font-medium text-slate-700">
+				昇格（ライブの版を切り替える）
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-promote", Label: "昇格の説明"}) {
+					昇格はライブの判断を変えます。自動では行われず、この操作（と MCP の jev_prompt_promote）だけで行われます。昇格は下の記録（新しい順・直近 10 件）に残ります。比較の結果は MCP の jev_shadow_compare で見られます。
+				}
+			</span>
 			<div class="flex flex-wrap items-center gap-2">
 				@atoms.Select(atoms.SelectProps{Name: "version", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-promote-version"}}) {
 					for _, v := range props.Versions {
@@ -160,9 +170,9 @@ templ Panel(props PanelProps) {
 			</div>
 		</form>
 		<div class="flex flex-col gap-1" data-testid="jev-prompt-promotions">
-			<span class="font-medium text-slate-700">昇格の記録（新しい順・直近 10 件）</span>
+			<span class="font-medium text-slate-700">昇格の記録</span>
 			if len(props.Promotions) == 0 {
-				<span class="text-xs text-slate-500" data-testid="jev-prompt-promotions-empty">まだ昇格していません。</span>
+				<span class="text-xs text-slate-500" data-testid="jev-prompt-promotions-empty">記録はありません。</span>
 			} else {
 				<table class="w-full text-left text-xs" aria-label="昇格の記録" data-testid="jev-prompt-promotions-table">
 					<thead>
