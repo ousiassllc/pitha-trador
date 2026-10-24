@@ -43,18 +43,7 @@ func visibleText(body string) string {
 func TestScreens_ShowNoIssuePRorFRNumbers(t *testing.T) {
 	engine := newEngine(t, secrets{full: true})
 
-	targets := []string{
-		"/", "/home/trade-status", "/home/pnl", "/home/positions", "/home/attention", "/home/details", "/home/attention-badge",
-		"/scanner", "/scanner/scan", "/watchlist", "/symbols/7203",
-		"/order-proposals", "/performance", "/calibration", "/activity",
-		"/setup", settingspages.BasePath,
-		"/settings/mcp-panel", "/settings/jev-prompt-panel", "/system/update-panel", "/system/status",
-	}
-	for _, page := range settingspages.Pages() {
-		targets = append(targets, page.Path())
-	}
-
-	for _, target := range targets {
+	for _, target := range screenTargets() {
 		rec := get(engine, target)
 		if rec.Code != http.StatusOK {
 			t.Errorf("GET %s = %d, want 200", target, rec.Code)
@@ -67,4 +56,19 @@ func TestScreens_ShowNoIssuePRorFRNumbers(t *testing.T) {
 			t.Errorf("GET %s shows a development reference %q: …%s…", target, text[m[0]:m[1]], strings.ReplaceAll(text[from:to], "\n", " "))
 		}
 	}
+}
+
+// screenTargets is every screen and fragment the app serves to an operator.
+func screenTargets() []string {
+	targets := []string{
+		"/", "/home/trade-status", "/home/pnl", "/home/positions", "/home/attention", "/home/details", "/home/attention-badge",
+		"/scanner", "/scanner/scan", "/watchlist", "/symbols/7203",
+		"/order-proposals", "/performance", "/calibration", "/activity",
+		"/setup", settingspages.BasePath,
+		"/settings/mcp-panel", "/settings/jev-prompt-panel", "/system/update-panel", "/system/status",
+	}
+	for _, page := range settingspages.Pages() {
+		targets = append(targets, page.Path())
+	}
+	return targets
 }
