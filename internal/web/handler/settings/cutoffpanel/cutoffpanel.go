@@ -5,8 +5,6 @@
 package cutoffpanel
 
 import (
-	"strconv"
-
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
@@ -36,16 +34,12 @@ func Load(get func(key string) (string, error)) ([]molecules.SettingDerivedItem,
 func Items(s metalabelsettings.Settings) []molecules.SettingDerivedItem {
 	label, effect := metalabelsettings.CutoffStatusLabel(s.CutoffStatus())
 	items := []molecules.SettingDerivedItem{
-		{Key: "cutoff-heading", Heading: true, Label: "LLM cutoff の状態"},
 		{Key: "cutoff-status", Label: "状態", Value: label, Detail: effect},
 		recorded("cutoff", "学習データの終わり", s.LLMCutoff),
 		recorded("cutoff-model", "確認したモデル", s.LLMCutoffModel),
 		recorded("cutoff-confirmed-on", "確認日", s.LLMCutoffConfirmedOn),
 		recorded("cutoff-source", "出典", s.LLMCutoffSource),
-		{Key: "help-heading", Heading: true, Label: "公式の日付の確認手順", Detail: "（どこを見て何を入れるか）"},
-	}
-	for i, line := range metalabelsettings.CutoffHelp() {
-		items = append(items, molecules.SettingDerivedItem{Key: "help-" + strconv.Itoa(i+1), Label: line})
+		{Key: "help-heading", Heading: true, Label: "公式の日付の確認手順", Help: metalabelsettings.CutoffHelp()},
 	}
 	return items
 }

@@ -1,5 +1,4 @@
-// Package opsflow tests the Settings screen's 運用設定 section (issue #708, #733)
-// through the handler with the real opsettings.Service over an in-memory store.
+// Package opsflow tests the Settings screen's 運用設定 section through the handler with the real opsettings.Service over an in-memory store.
 package opsflow_test
 
 import (
@@ -98,6 +97,30 @@ func TestSettingsPage_ShowsEveryOperationalSettingAndHidesItWithoutService(t *te
 	plain := allPagesBody(t, settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore())))
 	if strings.Contains(plain, "setting-field-row-") || strings.Contains(plain, "設定項目") {
 		t.Error("the 設定項目 section must be hidden without OperationalSettings")
+	}
+}
+
+// A field's explanation lives in a help mark next to its label (with the key
+// as 設定キー), not as a visible paragraph; the group's description and note
+// are help marks too.
+func TestSettingsPage_FieldAndGroupExplanationsAreHelpMarks(t *testing.T) {
+	engine, _ := opsRouter()
+	body := allPagesBody(t, engine)
+	row := `data-testid="hint-screener.top_n"`
+	i := strings.Index(body, row)
+	if i < 0 {
+		t.Fatal("the screener.top_n row has no help mark for its hint")
+	}
+	help := body[i : i+strings.Index(body[i:], "</form>")]
+	for _, want := range []string{"data-help-mark", `role="tooltip"`, "1 以上の整数です。", "設定キー: screener.top_n"} {
+		if !strings.Contains(help, want) {
+			t.Errorf("the screener.top_n help lacks %q", want)
+		}
+	}
+	for _, id := range []string{"help-screener-description", "help-screener-note"} {
+		if !strings.Contains(body, `id="`+id+`"`) {
+			t.Errorf("no help text %q for the Fast Screener group", id)
+		}
 	}
 }
 

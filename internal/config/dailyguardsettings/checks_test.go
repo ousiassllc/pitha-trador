@@ -104,7 +104,7 @@ func TestCheckConsistency_MessagesNameTheFigures(t *testing.T) {
 		t.Fatalf("warnings = %+v", got)
 	}
 	for i, wants := range [][]string{
-		{"運用資金 60,000,000 円", "initial_capital 30,000,000 円", "max_daily_loss_pct", "ポジションサイズ"},
+		{"運用資金 60,000,000 円", "リスク設定の運用資金 30,000,000 円", "ポジションサイズ"},
 		{"600,000 円", "300,000 円", "Kill Switch", "強制決済が発動します"},
 	} {
 		for _, want := range wants {

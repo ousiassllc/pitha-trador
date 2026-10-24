@@ -18,7 +18,7 @@ func TestPaperMinEntryQuality_ShownBesideLiveAndSavable(t *testing.T) {
 	for _, want := range []string{
 		"setting-field-row-policy.long.min_entry_quality", "setting-field-row-" + paperpolicysettings.KeyLongMinEntryQuality,
 		"setting-field-row-policy.short.min_entry_quality", "setting-field-row-" + paperpolicysettings.KeyShortMinEntryQuality,
-		"最低エントリー品質・Paper", "最低エントリー品質・Live",
+		"最低エントリー品質（Paper）", "最低エントリー品質（Live）",
 		"いま効いている最低エントリー品質",
 		"setting-group-derived-policy-long-effective", "setting-group-derived-policy-short-effective",
 		"Paper の値", "Live の値", "判定に使われています", "使われていません",

@@ -102,7 +102,7 @@ func TestSettingsPage_ShowsTheCutoffStatusAndHelp(t *testing.T) {
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/results", nil))
 	page := rec.Body.String()
-	if !strings.Contains(statusLine(page), "仮置き（placeholder）") {
+	if !strings.Contains(statusLine(page), "仮置き") {
 		t.Errorf("the default status is not placeholder: %s", statusLine(page))
 	}
 	for _, want := range []string{"公式の日付の確認手順", metalabelsettings.KeyLLMCutoffSource, "knowledge cutoff", "YYYY-MM-DD"} {
@@ -112,9 +112,9 @@ func TestSettingsPage_ShowsTheCutoffStatusAndHelp(t *testing.T) {
 	}
 
 	for _, step := range []struct{ key, value, want string }{
-		{metalabelsettings.KeyLLMCutoff, "2026-03-31", "未確認（unverified）"},
-		{metalabelsettings.KeyLLMCutoffSource, "https://example.com/model-card", "未確認（unverified）"},
-		{metalabelsettings.KeyLLMCutoffModel, "jev-2026-03", "確認済み（confirmed）"},
+		{metalabelsettings.KeyLLMCutoff, "2026-03-31", "未確認"},
+		{metalabelsettings.KeyLLMCutoffSource, "https://example.com/model-card", "未確認"},
+		{metalabelsettings.KeyLLMCutoffModel, "jev-2026-03", "確認済み"},
 	} {
 		rec := opsRequest(engine, http.MethodPost, step.key, url.Values{"value": {step.value}}, true)
 		if rec.Code != http.StatusOK {

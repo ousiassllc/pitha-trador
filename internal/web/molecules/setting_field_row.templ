@@ -6,7 +6,8 @@ import (
 
 // SettingFieldRowProps is SettingFieldRow's input: Key is the
 // runtime_settings key (also the `/ops-settings/:key` path segment), Label
-// the heading, Hint optional input guidance, Value the effective value
+// the heading, Hint optional explanation (shown in a HelpMark next to the
+// label, with the key as 設定キー), Value the effective value
 // shown in the field (the stored value, else the lower-priority default for
 // thresholds; empty for an unset path), DefaultLabel what applies while
 // nothing is stored (e.g. "0.7", "無効"), Overridden whether a value is
@@ -15,7 +16,7 @@ import (
 // operator hint about the stored value, and Notice the outcome message of
 // the save/reset that just rendered this row. CSRFField / CSRFToken are the
 // hidden form field name and token the plain `method="post"` fallback
-// submits (resolved by the handler, issue #142).
+// submits (resolved by the handler).
 type SettingFieldRowProps struct {
 	Key          string
 	Label        string
@@ -31,8 +32,7 @@ type SettingFieldRowProps struct {
 	CSRFToken    string
 }
 
-// SettingFieldRow is one operator-editable, non-secret Settings field
-// (issue #708) with its own independent save and reset forms: saving posts
+// SettingFieldRow is one operator-editable, non-secret Settings field with its own independent save and reset forms: saving posts
 // only this row's value to `POST /ops-settings/:key`, resetting calls
 // `DELETE /ops-settings/:key` (the stored value is removed and the default
 // applies again), each swapping this row alone. Unlike SecretFieldRow the
@@ -49,14 +49,24 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 		data-testid={ "setting-field-row-" + props.Key }
 	>
 		<input type="hidden" name={ props.CSRFField } value={ props.CSRFToken }/>
-		<label class="flex flex-col gap-1" for={ "setting-input-" + props.Key }>
-			<span class="flex items-center gap-2">
-				{ props.Label }
-				if props.Overridden {
-					<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
-				}
-			</span>
-		</label>
+		<div class="flex items-center gap-1">
+			<label class="flex flex-col gap-1" for={ "setting-input-" + props.Key }>
+				<span class="flex items-center gap-2">
+					{ props.Label }
+					if props.Overridden {
+						<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
+					}
+				</span>
+			</label>
+			if props.Hint != "" {
+				<span data-testid={ "hint-" + props.Key }>
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-setting-" + props.Key, Label: props.Label + "の説明"}) {
+						<span class="block">{ props.Hint }</span>
+						<span class="mt-1 block text-slate-500">設定キー: { props.Key }</span>
+					}
+				</span>
+			}
+		</div>
 		<div class="flex items-center gap-2">
 			if len(props.Options) > 0 {
 				@atoms.Select(atoms.SelectProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{"required": true}}) {
@@ -89,9 +99,6 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 			}
 		</div>
 		<p class="text-xs text-slate-500" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
-		if props.Hint != "" {
-			<p class="text-xs text-slate-500" data-testid={ "hint-" + props.Key }>{ props.Hint }</p>
-		}
 		if props.Warning != "" {
 			<p class="text-xs text-red-700" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
 		}

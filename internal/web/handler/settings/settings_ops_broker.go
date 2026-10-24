@@ -4,11 +4,11 @@ import "github.com/ousiassllc/pitha-trador/internal/config"
 
 const brokerRestartNote = "保存後の反映にはアプリの再起動が必要です（起動時に一度だけ読み込みます）。"
 
-// brokerGroup selects the broker adapter (issue #733, FR-SETTINGS-7).
+// brokerGroup selects the broker adapter.
 var brokerGroup = opsGroup{
 	id:          "broker",
 	name:        "ブローカー",
-	description: "市況データ・（将来の）発注の接続先ブローカーです。kabuステーション（既定）と立花証券 e支店API から選びます。自動フェイルオーバーはなく、切替は手動で再起動が必要です。",
+	description: "市況データ・発注の接続先ブローカーです。kabuステーション（既定）と立花証券 e支店API から選びます。自動フェイルオーバーはなく、切替は手動で再起動が必要です。",
 	note:        brokerRestartNote,
 	fields: []opsField{{
 		key:     config.KeyBrokerProvider,
@@ -29,7 +29,7 @@ var tachibanaGroup = opsGroup{
 		{
 			key:     config.KeyTachibanaEnvironment,
 			label:   "接続環境",
-			hint:    "demo: デモ環境 / production: 本番環境。未設定ならデモです。本番でも現時点では発注は行いません（#55 まで）。",
+			hint:    "demo: デモ環境 / production: 本番環境。未設定ならデモです。本番環境でも、いまは発注は行いません。",
 			options: []string{config.TachibanaEnvDemo, config.TachibanaEnvProduction},
 		},
 		{
@@ -59,7 +59,7 @@ var tachibanaGroup = opsGroup{
 		{
 			key:   config.KeyTachibanaRequestMaxPerSecond,
 			label: "1 秒あたりの最大リクエスト数",
-			hint:  "1〜10 の整数です。既定は暫定値で、実機計測（#725）の結果で見直します。",
+			hint:  "1〜10 の整数です。",
 		},
 		{
 			key:         config.KeyTachibanaReauthTime,
