@@ -3,7 +3,7 @@ package performance
 import (
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
-	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/performancepanels"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -11,8 +11,8 @@ import (
 // the internal/service result types surfaces here (docs/components/
 // overview.md §3) rather than as a Templ compile error.
 
-func performanceActuals(p insight.Performance) organisms.PerformanceActuals {
-	return organisms.PerformanceActuals{
+func performanceActuals(p insight.Performance) performancepanels.PerformanceActuals {
+	return performancepanels.PerformanceActuals{
 		TotalPnL:               p.TotalPnL,
 		DailyPnL:               p.DailyPnL,
 		TradeCount:             p.TradeCount,
@@ -27,8 +27,8 @@ func performanceActuals(p insight.Performance) organisms.PerformanceActuals {
 	}
 }
 
-func performanceSummary(m backtest.Metrics) organisms.PerformanceSummary {
-	return organisms.PerformanceSummary{
+func performanceSummary(m backtest.Metrics) performancepanels.PerformanceSummary {
+	return performancepanels.PerformanceSummary{
 		TradeCount:     m.TradeCount,
 		WinRate:        m.WinRate,
 		AvgProfit:      m.AvgProfit,
@@ -44,9 +44,9 @@ func performanceSummary(m backtest.Metrics) organisms.PerformanceSummary {
 }
 
 func performanceResult(r backtest.Result) *pages.PerformanceResult {
-	folds := make([]organisms.BacktestFold, len(r.Splits))
+	folds := make([]performancepanels.BacktestFold, len(r.Splits))
 	for i, sp := range r.Splits {
-		folds[i] = organisms.BacktestFold{
+		folds[i] = performancepanels.BacktestFold{
 			ForwardStart: sp.Split.Forward.Start,
 			ForwardEnd:   sp.Split.Forward.End,
 			Forward:      performanceSummary(sp.Forward),
