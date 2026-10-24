@@ -1,10 +1,10 @@
 {
   "columns": [
-    {"label": "銘柄", "hint": "銘柄コード。行のコードをクリックすると銘柄詳細へ移動します", "numeric": false},
-    {"label": "現在値", "hint": "直近の価格", "numeric": true},
-    {"label": "1分騰落率(%)", "hint": "直近1分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落", "numeric": true},
-    {"label": "5分騰落率(%)", "hint": "直近5分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落", "numeric": true},
-    {"label": "出来高倍率", "hint": "直近5分の出来高が平常時の何倍か。大きいほど売買が活発", "numeric": true},
+    {"label": "銘柄", "hint": "", "numeric": false},
+    {"label": "現在値", "hint": "", "numeric": true},
+    {"label": "1分騰落率(%)", "hint": "直近1分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落を表します。", "numeric": true},
+    {"label": "5分騰落率(%)", "hint": "直近5分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落を表します。", "numeric": true},
+    {"label": "出来高倍率", "hint": "直近5分の出来高が平常時の何倍か。大きいほど売買が活発です。", "numeric": true},
     {"label": "VWAP乖離(bps)", "hint": "現在値とVWAP(出来高加重平均価格)の差。1bps=0.01%。プラスはVWAPより高い", "numeric": true},
     {"label": "スプレッド(bps)", "hint": "売り気配と買い気配の差。1bps=0.01%。小さいほど売買コストが低い", "numeric": true},
     {"label": "Jev方向", "hint": "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り、pending=判定待ち", "numeric": false},
@@ -12,7 +12,8 @@
     {"label": "エントリー品質", "hint": "エントリー好適度。poor < fair < good < strong < exceptional の順に良い", "numeric": false},
     {"label": "保有", "hint": "現在の保有ポジション(株数)。未保有は—", "numeric": true}
   ],
-  "emptyMessage": "現在、条件を満たす候補銘柄はありません。候補は15〜30秒ごとに更新され、見つかり次第ここに表示されます。",
+  "countHelp": "Fast Screenerが選んだ売買候補の一覧です。15〜30秒ごとに自動更新されます。緑はプラス・LONG、赤はマイナス・SHORT を表します。",
+  "emptyMessage": "現在、条件を満たす候補銘柄はありません。",
   "rows": [
     {
       "name": "positive returns, LONG / strong",

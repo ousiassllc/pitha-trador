@@ -1,6 +1,10 @@
 package organisms
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
 
 // RiskParams is RiskPanel's input: the risk figures applying to a symbol,
 // in percent. internal/web/handler/symbol maps its SymbolRiskParams onto it
@@ -18,15 +22,30 @@ templ RiskPanel(p RiskParams) {
 		<h2 class="text-lg font-semibold text-slate-900">リスク</h2>
 		<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
 			<div>
-				<dt class="text-sm text-slate-500">Allowed Position</dt>
+				<dt class="text-sm text-slate-500">
+					Allowed Position
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-allowed-position", Label: "Allowed Positionの説明"}) {
+						いま新規エントリーした場合に、この銘柄で持てるポジションの大きさです（口座資産に対する割合）。
+					}
+				</dt>
 				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", p.AllowedPositionPct) }</dd>
 			</div>
 			<div>
-				<dt class="text-sm text-slate-500">Stop</dt>
+				<dt class="text-sm text-slate-500">
+					Stop
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-stop", Label: "Stopの説明"}) {
+						建値からこの割合だけ不利に動いたら損切りする水準です。
+					}
+				</dt>
 				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", p.StopLossPct) }</dd>
 			</div>
 			<div>
-				<dt class="text-sm text-slate-500">Take Profit</dt>
+				<dt class="text-sm text-slate-500">
+					Take Profit
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-take-profit", Label: "Take Profitの説明"}) {
+						建値からこの割合だけ有利に動いたら利益確定する水準です。
+					}
+				</dt>
 				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", p.TakeProfitPct) }</dd>
 			</div>
 		</dl>

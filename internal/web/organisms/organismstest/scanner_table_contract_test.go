@@ -23,6 +23,7 @@ type scannerContract struct {
 		Hint    string `json:"hint"`
 		Numeric bool   `json:"numeric"`
 	} `json:"columns"`
+	CountHelp    string `json:"countHelp"`
 	EmptyMessage string `json:"emptyMessage"`
 	Rows         []struct {
 		Name           string              `json:"name"`
@@ -120,6 +121,30 @@ func attr(n *html.Node, key string) string {
 	return ""
 }
 
+func hasAttr(n *html.Node, key string) bool {
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// textWithout is text(n) skipping the subtrees for which skip is true.
+func textWithout(n *html.Node, skip func(*html.Node) bool) string {
+	if n.Type == html.TextNode {
+		return n.Data
+	}
+	var sb strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if skip(c) {
+			continue
+		}
+		sb.WriteString(textWithout(c, skip))
+	}
+	return sb.String()
+}
+
 func text(n *html.Node) string {
 	if n.Type == html.TextNode {
 		return n.Data
@@ -148,11 +173,21 @@ func TestScannerTableFallback_MatchesLitContract_Columns(t *testing.T) {
 	}
 	for i, want := range contract.Columns {
 		th := ths[i]
-		if got := strings.TrimSpace(text(th)); got != want.Label {
-			t.Errorf("column %d label = %q, want %q", i, got, want.Label)
+		// The label is the text outside the help mark; the explanation is
+		// the help mark's tooltip text (no `title` tooltip any more).
+		label := strings.TrimSpace(textWithout(th, func(n *html.Node) bool { return hasAttr(n, "data-help-mark") }))
+		if label != want.Label {
+			t.Errorf("column %d label = %q, want %q", i, label, want.Label)
 		}
-		if got := attr(th, "title"); got != want.Hint {
-			t.Errorf("column %d (%s) hint = %q, want %q", i, want.Label, got, want.Hint)
+		if hasAttr(th, "title") {
+			t.Errorf("column %d (%s) still has a title tooltip", i, want.Label)
+		}
+		hint := ""
+		if texts := findAll(th, func(n *html.Node) bool { return hasAttr(n, "data-help-mark-text") }); len(texts) > 0 {
+			hint = strings.TrimSpace(text(texts[0]))
+		}
+		if hint != want.Hint {
+			t.Errorf("column %d (%s) hint = %q, want %q", i, want.Label, hint, want.Hint)
 		}
 		if got := slices.Contains(strings.Fields(attr(th, "class")), "text-right"); got != want.Numeric {
 			t.Errorf("column %d (%s) right-aligned = %v, want %v", i, want.Label, got, want.Numeric)
@@ -160,25 +195,20 @@ func TestScannerTableFallback_MatchesLitContract_Columns(t *testing.T) {
 	}
 }
 
-func TestScannerTableFallback_MatchesLitContract_ColumnHelp(t *testing.T) {
+func TestScannerTableFallback_MatchesLitContract_CountHelp(t *testing.T) {
 	contract := loadScannerContract(t)
 	doc := parseHTML(t, renderScannerTable(t, nil))
 
-	help := findAll(doc, func(n *html.Node) bool { return attr(n, "data-testid") == "scanner-column-help" })
-	if len(help) != 1 {
-		t.Fatalf("got %d column-help blocks, want 1", len(help))
+	count := findAll(doc, func(n *html.Node) bool { return attr(n, "data-testid") == "scanner-count" })
+	if len(count) != 1 {
+		t.Fatalf("got %d scanner-count blocks, want 1", len(count))
 	}
-	dts, dds := findAll(help[0], tag("dt")), findAll(help[0], tag("dd"))
-	if len(dts) != len(contract.Columns) || len(dds) != len(contract.Columns) {
-		t.Fatalf("got %d <dt>/%d <dd>, want %d each", len(dts), len(dds), len(contract.Columns))
+	texts := findAll(count[0], func(n *html.Node) bool { return hasAttr(n, "data-help-mark-text") })
+	if len(texts) != 1 {
+		t.Fatalf("got %d help texts beside the count, want 1", len(texts))
 	}
-	for i, want := range contract.Columns {
-		if got := text(dts[i]); got != want.Label {
-			t.Errorf("help term %d = %q, want %q", i, got, want.Label)
-		}
-		if got := text(dds[i]); got != want.Hint {
-			t.Errorf("help description %d = %q, want %q", i, got, want.Hint)
-		}
+	if got := strings.TrimSpace(text(texts[0])); got != contract.CountHelp {
+		t.Errorf("count help = %q, want %q", got, contract.CountHelp)
 	}
 }
 

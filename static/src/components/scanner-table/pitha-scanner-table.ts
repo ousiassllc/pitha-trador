@@ -23,6 +23,7 @@ import type {
 } from './scanner-types';
 import {
   COLUMNS,
+  COUNT_HELP_TEXT,
   type Column,
   directionBadge,
   entryQualityBadge,
@@ -30,6 +31,7 @@ import {
   formatNullable,
   formatSigned,
   formatSignedNullable,
+  renderLightHelpMark,
   returnClass,
   type SortKey,
   sortValue,
@@ -60,18 +62,12 @@ export class PithaScannerTable extends LitElement {
 
   protected override willUpdate(): void {
     if (this.loaded && this.ssrNodes.length > 0) {
-      // Keep the column-help <details> open if the user opened it in the
-      // SSR markup, since Lit's own copy replaces it below.
-      this.helpOpen =
-        this.querySelector<HTMLDetailsElement>('details[data-testid="scanner-column-help"]')
-          ?.open ?? false;
       for (const node of this.ssrNodes) node.remove();
       this.ssrNodes = [];
     }
   }
 
   private ssrNodes: ChildNode[] = [];
-  private helpOpen = false;
 
   // Injected by organisms.ScannerTableFallback; the component owns no URL
   // (docs/components/lit.md §5.2).
@@ -174,8 +170,8 @@ export class PithaScannerTable extends LitElement {
         候補
         <span class="text-lg font-semibold text-slate-900">${items.length}</span>
         件
+        ${renderLightHelpMark('help-scanner-count', '候補銘柄の説明', COUNT_HELP_TEXT)}
       </p>
-      ${this.renderHelp()}
       <div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
         <table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
           ${
@@ -196,7 +192,7 @@ export class PithaScannerTable extends LitElement {
       ${
         items.length === 0
           ? html`<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500" role="status" data-testid="scanner-empty">
-              現在、条件を満たす候補銘柄はありません。候補は15〜30秒ごとに更新され、見つかり次第ここに表示されます。
+              現在、条件を満たす候補銘柄はありません。
             </p>`
           : ''
       }
@@ -204,23 +200,9 @@ export class PithaScannerTable extends LitElement {
     `;
   }
 
-  // Visible, focusable explanation of every column (a <details> works with
-  // keyboard and touch, unlike hover-only tooltips). Mirrors the SSR
-  // markup in organisms.ScannerTableFallback.
-  private renderHelp() {
-    return html`
-      <details class="mb-3 text-sm text-slate-600" data-testid="scanner-column-help" ?open=${this.helpOpen}>
-        <summary class="cursor-pointer select-none text-xs font-medium text-slate-700">列の意味</summary>
-        <dl class="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_1fr]">
-          ${COLUMNS.map((column) => html`<dt class="font-medium text-slate-700">${column.label}</dt><dd>${column.hint}</dd>`)}
-        </dl>
-      </details>
-    `;
-  }
-
   // Each header is a real <button> so sorting works with Tab + Enter/Space.
-  // The `title` tooltip only helps mouse users; keyboard/touch/screen-reader
-  // users read the same hints in the visible column-help list (renderHelp).
+  // The column's explanation is a 「?」 help mark beside the button (not
+  // inside it), so keyboard and touch users can open it too.
   private renderHeader(column: Column) {
     const active = this.sortKey === column.key;
     const indicator = active ? (this.sortDirection === 'asc' ? ' ▲' : ' ▼') : '';
@@ -228,7 +210,6 @@ export class PithaScannerTable extends LitElement {
       <th
         scope="col"
         class="whitespace-nowrap px-3 py-2 ${column.numeric ? 'text-right' : ''}"
-        title=${column.hint}
         aria-sort=${active ? (this.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         <button
@@ -236,6 +217,15 @@ export class PithaScannerTable extends LitElement {
           class="cursor-pointer select-none hover:text-slate-900"
           @click=${() => this.onHeaderClick(column.key)}
         >${column.label}${indicator}</button>
+        ${
+          column.hint
+            ? renderLightHelpMark(
+                `help-scanner-col-${column.key}`,
+                `${column.label}の説明`,
+                column.hint,
+              )
+            : ''
+        }
       </th>
     `;
   }

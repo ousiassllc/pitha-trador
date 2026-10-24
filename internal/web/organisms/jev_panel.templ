@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
@@ -19,15 +20,30 @@ templ JevPanel(d *domain.JevDecision) {
 			@molecules.SignalBadgeGroup(d.Direction, d.Confidence, d.EntryQuality)
 			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
 				<div>
-					<dt class="text-sm text-slate-500">Regime</dt>
+					<dt class="text-sm text-slate-500">
+						Regime
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-regime", Label: "Regimeの説明"}) {
+							Jev Traderが判定した相場状態です（TREND=トレンド、RANGE=レンジ、BREAKOUT=ブレイクアウト、CHAOTIC=不安定）。
+						}
+					</dt>
 					<dd class="text-sm font-medium text-slate-900">{ derefString(d.Regime) }</dd>
 				</div>
 				<div>
-					<dt class="text-sm text-slate-500">Toxic Flow</dt>
+					<dt class="text-sm text-slate-500">
+						Toxic Flow
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-toxic-flow", Label: "Toxic Flowの説明"}) {
+							いまの注文の流れが新規エントリーに不利である確率（0〜1）です。
+						}
+					</dt>
 					<dd class="text-sm font-medium text-slate-900">{ derefPct(d.ToxicFlow) }</dd>
 				</div>
 				<div>
-					<dt class="text-sm text-slate-500">Liquidity Stress</dt>
+					<dt class="text-sm text-slate-500">
+						Liquidity Stress
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-liquidity-stress", Label: "Liquidity Stressの説明"}) {
+							いま流動性が逼迫している確率（0〜1）です。
+						}
+					</dt>
 					<dd class="text-sm font-medium text-slate-900">{ derefPct(d.LiquidityStressed) }</dd>
 				</div>
 			</dl>

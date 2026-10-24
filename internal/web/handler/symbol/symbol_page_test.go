@@ -135,8 +135,8 @@ func TestSymbolHandler_Page_NoOpenPositionShowsPlaceholder(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d (body=%s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "No open position.") {
-		t.Fatalf("body = %s, want the no-open-position placeholder", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "保有中のポジションはありません。") {
+		t.Fatalf("body = %s, want the no-open-position notice", rec.Body.String())
 	}
 }
 
