@@ -73,8 +73,8 @@ func TestSettingsPage_DailyGuardChecksPassWhenConsistentAndAllRulesEnabled(t *te
 	if line := derivedLine(t, body, "live-ok"); !strings.Contains(line, "3つのルールすべて有効") {
 		t.Errorf("live-ok = %s", line)
 	}
-	if line := derivedLine(t, body, "live"); !strings.Contains(line, "警告のみ（拒否はしない）") || !strings.Contains(line, "決定待ち") {
-		t.Errorf("live heading lacks the warn-only note: %s", line)
+	if line := derivedLine(t, body, "live"); !strings.Contains(line, "data-help-mark") || !strings.Contains(line, "保存は拒否しません") {
+		t.Errorf("live heading lacks the warn-only help: %s", line)
 	}
 	for _, code := range []string{dailyguardsettings.WarnCapitalMismatch, dailyguardsettings.WarnLossLimitAboveKillSwitch, dailyguardsettings.WarnLiveLossLimit} {
 		if strings.Contains(body, `-derived-daily-guard-`+code) || strings.Contains(body, "derived-daily-guard-"+code) {
@@ -92,7 +92,7 @@ func TestSaveOps_DailyGuardCapitalChangeFlipsConsistencyWarning(t *testing.T) {
 
 	body := settingsBody(engine)
 	line := derivedLine(t, body, dailyguardsettings.WarnCapitalMismatch)
-	for _, want := range []string{"注意:", "運用資金 500,000 円", "initial_capital 30,000,000 円"} {
+	for _, want := range []string{"注意:", "運用資金 500,000 円", "リスク設定の運用資金 30,000,000 円"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("page capital-mismatch line lacks %q: %s", want, line)
 		}

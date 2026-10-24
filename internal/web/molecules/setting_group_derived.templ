@@ -1,12 +1,15 @@
 package molecules
 
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
 // SettingDerivedItem is one line of a group's 計算結果 panel: Key a stable
 // slug (the line's test id suffix), Label what is computed, Value the
 // result (e.g. "5,000 円"; empty renders no value span), Detail how it was
 // derived and Off whether the rule is disabled (the value is then shown
 // muted). Warn marks a warning line (amber, prefixed 注意:) and Heading a
 // sub-heading that groups the lines below it (Label is its text, Detail a
-// muted remark).
+// muted remark). Help, when non-empty, is the explanation of a Heading line:
+// each entry is one paragraph of a HelpMark placed next to the heading.
 type SettingDerivedItem struct {
 	Key     string
 	Label   string
@@ -15,6 +18,7 @@ type SettingDerivedItem struct {
 	Off     bool
 	Warn    bool
 	Heading bool
+	Help    []string
 }
 
 // DerivedID is the id of the group's SettingGroupDerived; Save/Reset answer
@@ -42,6 +46,13 @@ templ SettingGroupDerived(props SettingGroupProps, oob bool) {
 				if item.Heading {
 					<li class="mt-2 flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
 						<span class="font-semibold text-slate-800">{ item.Label }</span>
+						if len(item.Help) > 0 {
+							@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-" + props.DerivedID() + "-" + item.Key, Label: item.Label + "の説明"}) {
+								for _, paragraph := range item.Help {
+									<span class="block">{ paragraph }</span>
+								}
+							}
+						}
 						if item.Detail != "" {
 							<span class="text-xs text-slate-500">{ item.Detail }</span>
 						}

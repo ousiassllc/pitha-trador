@@ -83,11 +83,11 @@ func IsCutoffKey(key string) bool {
 func CutoffStatusLabel(status string) (label, effect string) {
 	switch status {
 	case CutoffPlaceholder:
-		return "仮置き（placeholder）", "夜間再学習のモデルは採用されません（不採用として記録）。"
+		return "仮置き", "夜間再学習のモデルは採用されません（不採用として記録）。"
 	case CutoffUnverified:
-		return "未確認（unverified）", "Paper では警告のまま採用されますが、Live 前チェックでは採用を止めます。"
+		return "未確認", "Paper では警告のまま採用されますが、Live 前チェックでは採用を止めます。"
 	case CutoffConfirmed:
-		return "確認済み（confirmed）", "夜間再学習のモデルを採用できます。Jev のモデルが切り替わると再確認まで不採用です。"
+		return "確認済み", "夜間再学習のモデルを採用できます。Jev のモデルが切り替わると再確認まで不採用です。"
 	}
 	return status, ""
 }

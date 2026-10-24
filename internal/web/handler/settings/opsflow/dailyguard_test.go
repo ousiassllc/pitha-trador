@@ -147,10 +147,10 @@ func TestSettingsPage_DailyGuardLegacyDirectYenStillShown(t *testing.T) {
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/risk", nil))
 	body := rec.Body.String()
-	if line := derivedLine(t, body, "loss-limit"); !strings.Contains(line, "50,000 円") || !strings.Contains(line, "円で直接指定・互換設定") {
+	if line := derivedLine(t, body, "loss-limit"); !strings.Contains(line, "50,000 円") || !strings.Contains(line, "円で直接指定") {
 		t.Errorf("loss-limit line = %s", line)
 	}
-	if line := derivedLine(t, body, "profit-lock-trigger"); !strings.Contains(line, "20,000 円") || !strings.Contains(line, "円で直接指定・互換設定") {
+	if line := derivedLine(t, body, "profit-lock-trigger"); !strings.Contains(line, "20,000 円") || !strings.Contains(line, "円で直接指定") {
 		t.Errorf("profit-lock-trigger line = %s", line)
 	}
 	if line := derivedLine(t, body, "capital"); !strings.Contains(line, "未設定") {

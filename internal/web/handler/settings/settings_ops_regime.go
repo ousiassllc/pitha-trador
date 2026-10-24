@@ -3,13 +3,13 @@ package settings
 import "github.com/ousiassllc/pitha-trador/internal/config/regimesettings"
 
 // regimeGroup holds the market regime detection and the momentum /
-// VWAP-reversion switch (issue #755, parent #751).
+// VWAP-reversion switch.
 var regimeGroup = opsGroup{
 	id:          "regime",
 	name:        "相場状態（レジーム）判定とモメンタム／VWAP回帰の切替",
-	description: "市場指数（market_index）の 1 分足リターンの自己相関とボラティリティから相場状態を「トレンド（trend）／平均回帰（mean_revert）／不明（unknown）」に判定し、判断ごとに保存します。平均回帰のときだけ、寄り付き以降の VWAP からの乖離 z スコアで逆張りする VWAP 回帰モードに切り替えます（issue #755、親 #751）。",
-	note: "保存した値は再起動不要で、次の判断から反映されます。paper のみで、live には適用されません。" +
-		"A/B 比較を有効にすると、判断ごとに「モメンタム固定（momentum）」と「レジーム切替（regime）」の 2 つのアームのどちらかに自動で振り分けます。" +
+	description: "市場指数の 1 分足リターンの自己相関とボラティリティから相場状態を「トレンド／平均回帰／不明」に判定し、判断ごとに保存します。平均回帰のときだけ、寄り付き以降の VWAP からの乖離 z スコアで逆張りする VWAP 回帰モードに切り替えます。",
+	note: "保存した値は再起動不要で、次の判断から反映されます。Paper のみで、Live には適用されません。" +
+		"A/B 比較を有効にすると、判断ごとに「モメンタム固定」と「レジーム切替」の 2 つのアームのどちらかに自動で振り分けます。" +
 		"両アームの違いが出るのは平均回帰レジームだけで、トレンド・不明のときはどちらも従来のモメンタム追随です。" +
 		"アーム別のコスト控除後 EV・勝率はキャリブレーション画面で確認できます。無効のときは全判断がモメンタム固定です。" +
 		"エントリーの可否はメタラベリングモデルの判定を通ります。環境変数では設定できません。",

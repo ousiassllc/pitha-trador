@@ -50,15 +50,15 @@ func CheckConsistency(r Resolved, ref RiskReference) []Warning {
 	var warnings []Warning
 	if r.CapitalJPY > 0 && ref.InitialCapitalJPY > 0 && r.CapitalJPY != ref.InitialCapitalJPY {
 		warnings = append(warnings, Warning{WarnCapitalMismatch,
-			"運用資金 " + FormatYen(r.CapitalJPY) + " 円が risk.yaml の initial_capital " + FormatYen(ref.InitialCapitalJPY) +
-				" 円と異なります。率ベースの上限（max_daily_loss_pct）とポジションサイズは initial_capital を基準に計算されます"})
+			"運用資金 " + FormatYen(r.CapitalJPY) + " 円が、リスク設定の運用資金 " + FormatYen(ref.InitialCapitalJPY) +
+				" 円と異なります。率ベースの上限とポジションサイズは、リスク設定の運用資金を基準に計算されます"})
 	}
 	if ref.InitialCapitalJPY > 0 && ref.MaxDailyLossPct > 0 {
 		killSwitchJPY := math.Round(ref.InitialCapitalJPY / 100 * ref.MaxDailyLossPct)
 		if r.Limits.LossLimitEnabled() && r.Limits.LossLimitJPY > killSwitchJPY {
 			warnings = append(warnings, Warning{WarnLossLimitAboveKillSwitch,
 				"円の損失上限 " + FormatYen(r.Limits.LossLimitJPY) + " 円が率ベース上限（Kill Switch）" + FormatYen(killSwitchJPY) +
-					" 円（initial_capital × max_daily_loss_pct）より大きく、新規停止より先に強制決済が発動します"})
+					" 円（運用資金 × 日次損失率）より大きく、新規停止より先に強制決済が発動します"})
 		}
 	}
 	return warnings

@@ -26,14 +26,13 @@ var screenIndicatorLabels = map[string]string{
 	tachibanasource.ScreenRangeRate:     "値幅率",
 }
 
-// tachibanaSourceGroups are the 立花 監視銘柄ソース groups (issue #728, child
-// of #726): candidate source and symbol lists, the nightly daily-bar batch,
+// tachibanaSourceGroups are the 立花 監視銘柄ソース groups: candidate source and symbol lists, the nightly daily-bar batch,
 // the screening, and the intraday EVENT / REST budgets.
 var tachibanaSourceGroups = []opsGroup{
 	{
 		id:          "tachibana-source",
 		name:        "立花 監視銘柄ソース（候補ソース・銘柄リスト）",
-		description: "立花証券 e支店API 選択時に、翌営業日の監視銘柄（最大 120 件・EVENT 購読の母集団）をどう決めるかの設定です。kabu 選択時の監視（FR-SCHED-9）には影響しません。",
+		description: "立花証券 e支店API 選択時に、翌営業日の監視銘柄（最大 120 件・EVENT 購読の母集団）をどう決めるかの設定です。kabu 選択時の監視には影響しません。",
 		note:        sourceNote,
 		fields: []opsField{
 			{
@@ -79,7 +78,7 @@ func tachibanaScreenGroup() opsGroup {
 	group := opsGroup{
 		id:          "tachibana-screen",
 		name:        "立花 スクリーニング（指標・重み・上位件数）",
-		description: "前日の日足から翌日の監視銘柄を選ぶ daily_screen の指標です。kabu の /ranking の種別に寄せています。",
+		description: "前日の日足から翌日の監視銘柄を選ぶ daily_screen の指標です。kabuステーションのランキングの種別に寄せています。",
 		note:        sourceNote + screenSourceNote,
 	}
 	for _, ind := range tachibanasource.TachibanaScreenIndicators {

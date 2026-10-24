@@ -28,11 +28,10 @@ type OperationalSettings interface {
 	Get(ctx context.Context, key string) (opsettings.Value, error)
 	Save(ctx context.Context, key, raw string) error
 	Reset(ctx context.Context, key string) error
-	// Broker is the effective broker selection and 立花 settings (issue
-	// #734: the Setup screen and Setup Guard follow it).
+	// Broker is the effective broker selection and 立花 settings (the Setup
+	// screen and Setup Guard follow it).
 	Broker(ctx context.Context) (config.BrokerSettings, error)
-	// DailyGuard is the effective daily entry-halt configuration (issue
-	// #782): the yen thresholds derived from the operating capital, shown in
+	// DailyGuard is the effective daily entry-halt configuration: the yen thresholds derived from the operating capital, shown in
 	// the group's 計算結果 panel.
 	DailyGuard(ctx context.Context) (dailyguardsettings.Resolved, error)
 }
@@ -67,14 +66,14 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 	case dailyGuardGroup.id:
 		props.Derived = h.dailyGuardDerived(ctx)
 	case paperRiskGroup.id:
-		props.Derived = h.paperRiskDerived(ctx)
+		props.Derived = append(h.paperRiskDerived(ctx), stockBudgetNoAutoRiseWarning)
 	case bucketGroup.id:
-		props.Derived = h.bucketDerived(ctx)
+		props.Derived = append(h.bucketDerived(ctx), stockBudgetNoAutoRiseWarning)
 	case "policy-long", "policy-short":
 		props.Derived, props.DerivedTitle = entryqualitypanel.Load(ctx, h.ops, group.id), entryqualitypanel.Title
 	case metaLabelGroup.id:
 		props.Derived = h.metaLabelDerived(ctx)
-		props.DerivedTitle = "LLM cutoff の状態と確認手順"
+		props.DerivedTitle = "LLM cutoff の状態"
 	}
 	return props
 }

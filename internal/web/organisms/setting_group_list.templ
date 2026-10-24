@@ -1,9 +1,12 @@
 package organisms
 
-import "github.com/ousiassllc/pitha-trador/internal/web/molecules"
+import (
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
+)
 
 // SettingGroupList is the operator-editable settings list of the Settings
-// screen (issue #708): one molecules.SettingsCard per group with its status
+// screen: one molecules.SettingsCard per group with its status
 // badge, plus one molecules.Modal per group holding that group's
 // molecules.SettingFieldRow forms. Every row keeps its own independent
 // `POST`/`DELETE /ops-settings/:key` forms, so editing one field never
@@ -16,16 +19,21 @@ templ SettingGroupList(groups []molecules.SettingGroupProps) {
 				ID:          group.ID,
 				ModalID:     group.ModalID(),
 				Name:        group.Name,
-				Description: group.Description,
 				ActionLabel: "設定する",
-				Status:      molecules.SettingGroupStatus(group, false),
+				Status:      settingGroupCardStatus(group),
 			})
 		}
 	</ul>
 	for _, group := range groups {
 		@molecules.Modal(group.ModalID(), group.Name) {
-			<p class="text-sm text-slate-600">{ group.Description }</p>
-			<p class="text-sm text-slate-600" data-testid={ group.ModalID() + "-note" }>{ group.Note }</p>
+			if group.Note != "" {
+				<div class="flex items-center gap-1 text-sm text-slate-600" data-testid={ group.ModalID() + "-note" }>
+					反映のタイミングと注意事項
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-" + group.ID + "-note", Label: group.Name + "の反映のタイミングと注意事項"}) {
+						{ group.Note }
+					}
+				</div>
+			}
 			if len(group.Derived) > 0 {
 				@molecules.SettingGroupDerived(group, false)
 			}
@@ -34,4 +42,16 @@ templ SettingGroupList(groups []molecules.SettingGroupProps) {
 			}
 		}
 	}
+}
+
+// settingGroupCardStatus is the card's status slot: the group's explanation
+// as a HelpMark next to the name, then the status badge. The badge keeps its
+// own id (Save/Reset swap it out-of-band); the HelpMark sits outside it.
+templ settingGroupCardStatus(group molecules.SettingGroupProps) {
+	if group.Description != "" {
+		@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-" + group.ID + "-description", Label: group.Name + "の説明"}) {
+			{ group.Description }
+		}
+	}
+	@molecules.SettingGroupStatus(group, false)
 }

@@ -6,12 +6,12 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
-// BucketItems is the 資産ごとの予算枠 group's panel (issue #824): the
+// BucketItems is the 資産ごとの予算枠 group's panel: the
 // operating capital, the budgets' total and what is left of the capital
 // (capital - total), all in yen, plus a warning while the total is over the
 // capital (a stored state the save checks normally prevent) and a notice while
 // capital is left over (nothing uses it until a budget is saved with it: a
-// raised capital never grows the stock budget by itself, FR-RISK-10).
+// raised capital never grows the stock budget by itself).
 func BucketItems(capital float64, b bucketsettings.Budgets) []molecules.SettingDerivedItem {
 	yen := func(v float64) string { return dailyguardsettings.FormatYen(v) + " 円" }
 	items := []molecules.SettingDerivedItem{
