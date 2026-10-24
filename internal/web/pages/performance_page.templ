@@ -5,13 +5,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/evaluation"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/performancepanels"
 )
 
 // PerformanceResult is a Walk Forward backtest's output: the out-of-sample
 // metrics Combined across every fold's Forward period, and each Fold.
 type PerformanceResult struct {
-	Combined organisms.PerformanceSummary
-	Folds    []organisms.BacktestFold
+	Combined performancepanels.PerformanceSummary
+	Folds    []performancepanels.BacktestFold
 }
 
 // PerformanceProps is PerformancePage's input. Actuals is the realized
@@ -24,11 +25,11 @@ type PerformanceProps struct {
 	// result) instead of the 実績 tab (realized performance and its
 	// evaluation).
 	BacktestTab  bool
-	Form         organisms.BacktestFormValues
-	Actuals      organisms.PerformanceActuals
+	Form         performancepanels.BacktestFormValues
+	Actuals      performancepanels.PerformanceActuals
 	ActualsError string
-	// Evaluation is the realized-performance evaluation (issue #777), or
-	// EvaluationError when it could not be read.
+	// Evaluation is the realized-performance evaluation, or EvaluationError
+	// when it could not be read.
 	Evaluation      evaluation.Panel
 	EvaluationError string
 	Result          *PerformanceResult
@@ -36,17 +37,18 @@ type PerformanceProps struct {
 }
 
 // PerformancePage is the Performance full page (functional.md §5.3,
-// UC-9/UC-12): the realized (Paper) performance of closed positions, a Walk Forward backtest (FR-BT-2) request form over the
-// recorded market_snapshots/jev_decisions history, and - once run - the
+// UC-9/UC-12): the realized (Paper) performance of closed positions, a Walk
+// Forward backtest request form over the recorded
+// market_snapshots/jev_decisions history, and - once run - the
 // out-of-sample Combined Forward metrics plus each fold's Forward
-// metrics (FR-BT-1). `GET /performance`
+// metrics. `GET /performance`
 // (internal/web/handler/performance.PerformanceHandler.Page) renders it.
 templ PerformancePage(props PerformanceProps) {
 	@layout.Shell("成績", organisms.NavPerformance) {
 		<h1 class="text-2xl font-bold text-slate-900">成績</h1>
 		if props.BacktestTab {
 			@molecules.TabNav("成績のタブ", resultTabs(tabBacktest))
-			@organisms.BacktestForm(props.Form)
+			@performancepanels.BacktestForm(props.Form)
 			if len(props.Errors) > 0 {
 				<ul class="mt-4 list-inside list-disc rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="backtest-error">
 					for _, msg := range props.Errors {
@@ -55,12 +57,12 @@ templ PerformancePage(props PerformanceProps) {
 				</ul>
 			}
 			if props.Result != nil {
-				@organisms.PerformanceSummaryPanel("Walk Forward（Forward 期間を合算）", props.Result.Combined)
-				@organisms.BacktestFoldTable(props.Result.Folds)
+				@performancepanels.PerformanceSummaryPanel("Walk Forward（Forward 期間を合算）", props.Result.Combined)
+				@performancepanels.BacktestFoldTable(props.Result.Folds)
 			}
 		} else {
 			@molecules.TabNav("成績のタブ", resultTabs(tabActuals))
-			@organisms.PerformanceActualsPanel(props.Actuals, props.ActualsError)
+			@performancepanels.PerformanceActualsPanel(props.Actuals, props.ActualsError)
 			@evaluation.EvaluationPanel(props.Evaluation, props.EvaluationError)
 			// Only the 実績 tab forwards an old `#backtest` link; on the
 			// バックテスト tab (`?tab=backtest` or a submitted `from`) it would

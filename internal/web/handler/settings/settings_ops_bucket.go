@@ -12,14 +12,22 @@ import (
 )
 
 // stockBudgetNoAutoRiseNote is the notice shown on both the operating capital
-// page and this one (issue #834, FR-RISK-10): the stock budget is seeded once
+// page and this one: the stock budget is seeded once
 // at startup from the capital then in force, so a raised capital leaves it as
-// it is and the surplus is refused as bucket_budget_exceeded until the stock
+// it is and the surplus is refused (bucket_budget_exceeded) until the stock
 // budget is saved too.
 const stockBudgetNoAutoRiseNote = "【運用資金を上げても株の枠は自動で増えません】株の枠は起動時に一度だけ、その時点の運用資金で決まり、その後に運用資金を上げても変わりません。" +
-	"増えた分で新規エントリーするには、同じページの「資産ごとの予算枠」で株の枠も保存してください（枠を超える分は bucket_budget_exceeded で見送られます）。"
+	"増えた分で新規エントリーするには、同じページの「資産ごとの予算枠」で株の枠も保存してください（枠を超える分の新規エントリーは見送られます）。"
 
-// bucketGroup holds the Paper per-asset-class budgets (予算枠, issue #824):
+// stockBudgetNoAutoRiseWarning is the short on-screen form of
+// stockBudgetNoAutoRiseNote, shown as a warning line in the 計算結果 panel of
+// both groups.
+var stockBudgetNoAutoRiseWarning = molecules.SettingDerivedItem{
+	Key: "stock-budget-no-auto-rise", Warn: true,
+	Label: "運用資金を上げても株の予算枠は自動で増えません。増えた分を使うには株の予算枠も保存してください（詳しくは「資産ごとの予算枠」の説明）。",
+}
+
+// bucketGroup holds the Paper per-asset-class budgets (予算枠):
 // how much of the operating capital the stock bucket and the bond ETF bucket
 // may each hold. It sits on the same Settings page as the operating capital
 // they split, which stays in paperRiskGroup. Paper only: Live keeps one whole-account
@@ -27,8 +35,8 @@ const stockBudgetNoAutoRiseNote = "【運用資金を上げても株の枠は自
 var bucketGroup = opsGroup{
 	id:   "asset-buckets",
 	name: "資産ごとの予算枠",
-	description: "Paper の運用資金を、株と債券ETFの 2 つの枠に分けて使える額（円）を決めます（issue #824）。" +
-		"2 つの枠の合計は運用資金以下にします。新規エントリーは銘柄の資産クラスの枠だけで判定され（issue #833）、債券ETFの取り込み・エントリーはまだありません（issue #823 の第 2 段階以降）。未保存の間は、株の枠が運用資金の全額、債券ETFの枠が 0 円で、枠を設ける前と挙動は変わりません。",
+	description: "Paper の運用資金を、株と債券ETFの 2 つの枠に分けて使える額（円）を決めます。" +
+		"2 つの枠の合計は運用資金以下にします。新規エントリーは銘柄の資産クラスの枠だけで判定されます。未保存の間は、株の枠が運用資金の全額、債券ETFの枠が 0 円です。",
 	note: "保存した値は再起動不要で、次のリスク判定から反映されます。Paper 専用です。Live の値と動作はこの設定の影響を受けません。" +
 		"株の枠は、保有中の株の建玉（時価ベース。総エクスポージャ上限と同じ計算）に今回のエントリー額を足して枠を超えると見送ります。" +
 		"枠を 0 円にするとその枠の新規エントリーを止めます（保有中の建玉は通常どおり決済されます）。" +

@@ -21,7 +21,7 @@ const (
 // The causes below are the 立花 e支店 adapter's (issue #739; the kabu adapter
 // never reports them). SessionIssueAPIDisabled doubles as 立花's API利用設定
 // 「利用しない」 and SessionIssueUnreachable as "the e支店 server cannot be
-// reached". The banner words the remedy per cause from the Issue alone, so
+// reached". Home's 要対応 list words the remedy per cause from the Issue alone, so
 // the adapter never has to put guidance (or anything credential-like) in
 // SessionStatus.Guidance.
 const (
@@ -37,7 +37,7 @@ const (
 // A not_logged_in failure streak is "persistent" (issue #712) once it has
 // repeated this many times or lasted this long: the broker still wants a
 // login well after the app's own retries, so the operator has to log in by
-// hand (post-maintenance morning routine) and the banner says so
+// hand (post-maintenance morning routine) and the 要対応 card says so
 // prominently.
 const (
 	persistentFailures = 5
@@ -75,7 +75,7 @@ type SessionStatus struct {
 func (s SessionStatus) Failed() bool { return s.Issue != SessionIssueNone }
 
 // Persistent reports whether a not_logged_in streak has repeated or lasted
-// long enough that the UI should escalate beyond the ordinary banner (issue
+// long enough that the UI should escalate beyond the ordinary card (issue
 // #712), and how long it has lasted at now.
 func (s SessionStatus) Persistent(now time.Time) (bool, time.Duration) {
 	if s.Issue != SessionIssueNotLoggedIn || s.Since.IsZero() {

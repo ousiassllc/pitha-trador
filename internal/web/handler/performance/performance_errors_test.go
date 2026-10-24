@@ -23,14 +23,14 @@ func TestPerformanceHandler_Page_ValidationErrorsAreJapanese(t *testing.T) {
 		query string
 		want  string
 	}{
-		"fold days":        {"from=2026-09-01&to=2026-09-10&forward_days=0", "forward_days は 1〜366 の整数で指定してください。"},
-		"bad from":         {"from=2026-13-01&to=2026-09-10", "from は YYYY-MM-DD 形式の日付で指定してください。"},
-		"bad to":           {"from=2026-09-01&to=oops", "to は YYYY-MM-DD 形式の日付で指定してください。"},
-		"to before from":   {"from=2026-09-10&to=2026-09-01", "to は from 以降の日付で指定してください。"},
-		"range too long":   {dayQuery(1831, "&forward_days=366"), "from〜to の期間は最大 1830 日までです（指定: 1831 日）。"},
-		"range too short":  {"from=2026-09-01&to=2026-09-03", "2026-09-01〜2026-09-03 は Training/Validation/Forward を 5+2+1 日で1フォールド実行するには短すぎます。"},
+		"fold days":        {"from=2026-09-01&to=2026-09-10&forward_days=0", "Forward 日数は 1〜366 の整数で指定してください。"},
+		"bad from":         {"from=2026-13-01&to=2026-09-10", "開始日は YYYY-MM-DD 形式の日付で指定してください。"},
+		"bad to":           {"from=2026-09-01&to=oops", "終了日は YYYY-MM-DD 形式の日付で指定してください。"},
+		"to before from":   {"from=2026-09-10&to=2026-09-01", "終了日は開始日以降の日付で指定してください。"},
+		"range too long":   {dayQuery(1831, "&forward_days=366"), "開始日〜終了日の期間は最大 1830 日までです（指定: 1831 日）。"},
+		"range too short":  {"from=2026-09-01&to=2026-09-03", "2026-09-01〜2026-09-03 は 学習・検証・Forward を 5+2+1 日で1フォールド実行するには短すぎます。"},
 		"too many folds":   {dayQuery(1003, "&training_days=1&validation_days=1&forward_days=1"), "フォールド数が 1001 になり、上限 1000 を超えます。"},
-		"non-numeric days": {"from=2026-09-01&to=2026-09-10&training_days=%3Cb%3Ex", "training_days は 1〜366 の整数で指定してください。"},
+		"non-numeric days": {"from=2026-09-01&to=2026-09-10&training_days=%3Cb%3Ex", "学習日数は 1〜366 の整数で指定してください。"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := servePerformance(t, &recordingBacktestRunner{}, "/performance?"+tc.query)
@@ -56,9 +56,9 @@ func TestPerformanceHandler_Page_ShowsEachValidationErrorAsOwnListItem(t *testin
 		t.Fatalf("status = %d, want 400", rec.Code)
 	}
 	want := []string{
-		"training_days は 1〜366 の整数で指定してください。",
-		"from は YYYY-MM-DD 形式の日付で指定してください。",
-		"to は YYYY-MM-DD 形式の日付で指定してください。",
+		"学習日数は 1〜366 の整数で指定してください。",
+		"開始日は YYYY-MM-DD 形式の日付で指定してください。",
+		"終了日は YYYY-MM-DD 形式の日付で指定してください。",
 	}
 	got := errorItems(t, rec.Body.String())
 	if len(got) != len(want) {

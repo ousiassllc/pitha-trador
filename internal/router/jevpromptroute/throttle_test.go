@@ -26,7 +26,7 @@ func TestPanelShowsWhyTheShadowStoppedOnA429(t *testing.T) {
 	set(`{"date":"2026-10-22","count":2,"status":429,"reason":"api_rate_limited","source":"shadow","at":"2026-10-22T02:55:00Z","until":"2026-10-22T03:10:00Z"}`)
 	body := a.get("/settings/jev-prompt-panel").Body.String()
 	for _, want := range []string{
-		`data-testid="jev-prompt-throttle"`, "シャドーの呼び出しに 429（レート制限）を返しました", "12:10", "まで止まっています", "待たず・再試行せず", "ライブの判断は続いています", "今日の停止回数: 2 回",
+		`data-testid="jev-prompt-throttle"`, "シャドーの呼び出しに 429（レート制限）を返しました", "12:10", "まで止まっています", "ライブの判断は続いています", "今日の停止回数: 2 回",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("active throttle: panel lacks %q\n%s", want, body)

@@ -23,7 +23,8 @@ export type SortKey = keyof Pick<
 export interface Column {
   key: SortKey;
   label: string;
-  // Tooltip (`title`) explaining what the column means.
+  // Help text of the 「?」 mark beside the column name; '' when the name
+  // already says everything (no mark is drawn).
   hint: string;
   // Numeric columns are right-aligned.
   numeric: boolean;
@@ -33,29 +34,24 @@ export interface Column {
 // internal/web/organisms/scanner_table_fallback.templ so the hydrated
 // table matches the SSR one (issue #239).
 export const COLUMNS: Column[] = [
-  {
-    key: 'symbol',
-    label: '銘柄',
-    hint: '銘柄コード。行のコードをクリックすると銘柄詳細へ移動します',
-    numeric: false,
-  },
-  { key: 'price', label: '現在値', hint: '直近の価格', numeric: true },
+  { key: 'symbol', label: '銘柄', hint: '', numeric: false },
+  { key: 'price', label: '現在値', hint: '', numeric: true },
   {
     key: 'return_1m',
     label: '1分騰落率(%)',
-    hint: '直近1分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落',
+    hint: '直近1分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落を表します。',
     numeric: true,
   },
   {
     key: 'return_5m',
     label: '5分騰落率(%)',
-    hint: '直近5分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落',
+    hint: '直近5分間の騰落率。プラス(緑)は上昇、マイナス(赤)は下落を表します。',
     numeric: true,
   },
   {
     key: 'volume_ratio_5m',
     label: '出来高倍率',
-    hint: '直近5分の出来高が平常時の何倍か。大きいほど売買が活発',
+    hint: '直近5分の出来高が平常時の何倍か。大きいほど売買が活発です。',
     numeric: true,
   },
   {
@@ -95,6 +91,20 @@ export const COLUMNS: Column[] = [
     numeric: true,
   },
 ];
+
+// Help beside 「候補 N 件」: what the list is, how often it refreshes and what
+// the colors mean. Same wording as `scannerCountHelp` in
+// internal/web/organisms/scanner_table_fallback.templ.
+export const COUNT_HELP_TEXT =
+  'Fast Screenerが選んだ売買候補の一覧です。15〜30秒ごとに自動更新されます。緑はプラス・LONG、赤はマイナス・SHORT を表します。';
+
+// The 「?」 help mark in the light DOM: the markup and Tailwind classes of
+// `atoms.HelpMark` (internal/web/atoms/help_mark.templ), which
+// components/help-mark/pitha-help-mark.ts opens by document-level
+// delegation. (lib/help-mark.ts' renderHelpMark is for shadow roots.)
+export function renderLightHelpMark(id: string, label: string, text: string) {
+  return html`<span class="relative inline-flex align-middle" data-help-mark><button type="button" class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400 bg-white text-[10px] font-semibold leading-none text-slate-600 hover:border-slate-600 hover:text-slate-900 cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" aria-label=${label} aria-describedby=${id} data-help-mark-button>?</button><span id=${id} role="tooltip" class="invisible fixed left-0 top-0 z-50 w-72 max-w-[80vw] rounded-md border border-slate-300 bg-white p-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-700 shadow-lg data-[open]:visible" data-help-mark-text>${text}</span></span>`;
+}
 
 // Quality order for sorting the entry_quality column, worst to best. Keep in
 // step with the `entry_quality` hint above and the domain's source of truth,

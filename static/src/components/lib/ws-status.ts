@@ -9,6 +9,6 @@ import { isWsDisconnected, type WsStatus } from './ws';
 export function renderWsDisconnected(status: WsStatus, extraClass = '') {
   if (!isWsDisconnected(status)) return nothing;
   return html`<p class=${`pitha-ws-disconnected ${extraClass}`.trim()} role="status" data-ws-status=${status}>
-    接続が切れています。再接続を試行しています（更新が反映されない場合はページを再読み込みしてください）。
+    接続が切れています。再接続しています。反映されない場合は再読み込みしてください。
   </p>`;
 }

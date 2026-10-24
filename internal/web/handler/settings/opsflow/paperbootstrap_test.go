@@ -34,7 +34,7 @@ func TestPaperBootstrap_PaperCanTurnItOn(t *testing.T) {
 
 	page := httptest.NewRecorder()
 	engine.ServeHTTP(page, httptest.NewRequest(http.MethodGet, settingspages.BasePath+"/"+settingspages.PageOperations, nil))
-	for _, want := range []string{"modal-paper-bootstrap", `setting-field-row-` + paperbootstrapsettings.Key, "Live では保存値があっても必ず無効", "policy-vb"} {
+	for _, want := range []string{"modal-paper-bootstrap", `setting-field-row-` + paperbootstrapsettings.Key, "Live では保存値があっても必ず無効"} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Errorf("the 取引ルール page lacks %q", want)
 		}

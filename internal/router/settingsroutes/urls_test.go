@@ -49,12 +49,7 @@ func TestURLs_ExistingRoutesAreAlive(t *testing.T) {
 		{"/settings", "/settings", http.StatusOK},
 		{"/setup", "/setup", http.StatusOK},
 		{"/system/status", "/system/status", http.StatusOK},
-		{"/system/secrets-status", "/system/secrets-status", http.StatusOK},
-		{"/system/update-status", "/system/update-status", http.StatusOK},
 		{"/system/update-panel", "/system/update-panel", http.StatusOK},
-		{"/system/marketdata-status", "/system/marketdata-status", http.StatusOK},
-		{"/system/daily-halt", "/system/daily-halt", http.StatusOK},
-		{"/system/health-alerts", "/system/health-alerts", http.StatusOK},
 		{"/settings/mcp-panel", "/settings/mcp-panel", http.StatusOK},
 		{"/admin", "/admin", http.StatusMovedPermanently},
 		// 資産ごとの予算枠 is part of リスク・資金 since issue #895.
@@ -81,6 +76,22 @@ func TestURLs_ExistingRoutesAreAlive(t *testing.T) {
 			}
 			if rec.Code != tc.want {
 				t.Errorf("GET %s = %d, want %d", tc.target, rec.Code, tc.want)
+			}
+		})
+	}
+}
+
+// The header's banner fragments were retired with the Home screen (issues #896,
+// #901): their routes are gone, the 要対応 badge and list replaced them.
+func TestURLs_RetiredBannerFragmentsAnswer404(t *testing.T) {
+	engine := newEngine(t, secrets{full: true})
+	for _, target := range []string{
+		"/system/secrets-status", "/system/update-status", "/system/marketdata-status",
+		"/system/daily-halt", "/system/health-alerts",
+	} {
+		t.Run(target, func(t *testing.T) {
+			if rec := get(engine, target); rec.Code != http.StatusNotFound {
+				t.Errorf("GET %s = %d, want 404", target, rec.Code)
 			}
 		})
 	}

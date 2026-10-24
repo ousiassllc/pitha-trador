@@ -68,7 +68,7 @@ async function flush(el: ScannerTableElement): Promise<void> {
 // the first call defines the tag and later calls create a fresh element
 // via document.createElement + innerHTML and an explicit upgrade.
 const SSR_MARKUP = `
-  <details data-testid="scanner-column-help"><summary>列の意味</summary></details>
+  <span data-help-mark><button type="button" data-help-mark-button aria-describedby="help-scanner-count">?</button><span id="help-scanner-count" role="tooltip" data-help-mark-text>SSR</span></span>
   <table>
     <caption>候補銘柄 — as of 2026-09-28 00:00:00 JST</caption>
     <thead><tr><th>銘柄</th></tr></thead>
@@ -142,22 +142,7 @@ test('keeps the server-rendered table when the initial fetch fails', async () =>
   expect(el.querySelector('[role="alert"]')?.textContent).toContain('500');
 });
 
-test('keeps the column help open across the SSR to Lit swap when the user opened it', async () => {
-  globalThis.fetch = mock(() =>
-    Promise.resolve(
-      new Response(JSON.stringify({ items: [], as_of: '2026-09-26T10:15:00+09:00' })),
-    ),
-  ) as unknown as typeof fetch;
-
-  const el = mountSsr();
-  (el.querySelector('details') as HTMLDetailsElement).open = true;
-  await flush(el);
-
-  expect(el.querySelectorAll('details')).toHaveLength(1);
-  expect(el.querySelector('details')?.open).toBe(true);
-});
-
-test('leaves the column help closed across the swap when the user did not open it', async () => {
+test('replaces the server-rendered help marks instead of duplicating their ids', async () => {
   globalThis.fetch = mock(() =>
     Promise.resolve(
       new Response(JSON.stringify({ items: [], as_of: '2026-09-26T10:15:00+09:00' })),
@@ -167,5 +152,8 @@ test('leaves the column help closed across the swap when the user did not open i
   const el = mountSsr();
   await flush(el);
 
-  expect(el.querySelector('details')?.open).toBe(false);
+  const ids = [...el.querySelectorAll('[data-help-mark-text]')].map((n) => n.id);
+  expect(ids).toContain('help-scanner-count');
+  expect(el.querySelector('[data-help-mark-text]')?.textContent).not.toBe('SSR');
+  expect(new Set(ids).size).toBe(ids.length);
 });

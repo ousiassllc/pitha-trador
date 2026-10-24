@@ -134,7 +134,7 @@ func (h *Handler) Save(c *gin.Context) {
 		shared.RespondActionError(c, http.StatusInternalServerError, "MCP 設定の保存に失敗しました。")
 		return
 	}
-	h.render(c, "保存しました。反映するには paper-results-mcp を再起動してください。", "")
+	h.render(c, "保存しました。反映するには再起動してください。", "")
 }
 
 // Regenerate implements `POST /settings/mcp/key`: it generates a new key and

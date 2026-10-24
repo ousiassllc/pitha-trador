@@ -1,8 +1,7 @@
 package pageflow_test
 
 import (
-	"net/http"
-	"net/http/httptest"
+	"context"
 	"net/url"
 	"regexp"
 	"slices"
@@ -137,27 +136,20 @@ func TestSettingsHandler_SaveAndDelete_RefreshConnectionStatusOutOfBand(t *testi
 
 // issues #271/#274/#273: JEV_BASE_URL and JEV_MODEL default when unset, and so
 // do the Luna/Sol/Opus overrides (Jev) and the news feed keys (やのしん), so the
-// optional-keys banner must not nag about them.
-func TestSettingsHandler_Status_DoesNotNagAboutDefaultedKeys(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	h := settings.NewSettingsHandler(newFakeSecretsStore())
-	engine := gin.New()
-	engine.GET("/system/secrets-status", h.Status)
+// unset-optional-keys list must not nag about them.
+func TestSettingsHandler_UnsetOptionalKeys_DoesNotNagAboutDefaultedKeys(t *testing.T) {
+	got := settings.NewSettingsHandler(newFakeSecretsStore()).UnsetOptionalKeys(context.Background())
 
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/secrets-status", nil))
-
-	body := rec.Body.String()
-	if !strings.Contains(body, config.KeySlackWebhookURL) {
-		t.Fatalf("banner does not list unset SLACK_WEBHOOK_URL; body=%s", body)
+	if !slices.Contains(got, config.KeySlackWebhookURL) {
+		t.Fatalf("list does not include unset SLACK_WEBHOOK_URL: %v", got)
 	}
 	for _, key := range []string{
 		config.KeyJevBaseURL, config.KeyJevModel,
 		config.KeyLunaAPIKey, config.KeyLunaBaseURL, config.KeySolAPIKey, config.KeySolBaseURL, config.KeyOpusAPIKey, config.KeyOpusBaseURL,
 		config.KeyNewsFeedURL, config.KeyNewsFeedAPIKey, config.KeyNewsFeedEnabled,
 	} {
-		if strings.Contains(body, key) {
-			t.Errorf("banner lists defaulted key %s; body=%s", key, body)
+		if slices.Contains(got, key) {
+			t.Errorf("list includes defaulted key %s: %v", key, got)
 		}
 	}
 }

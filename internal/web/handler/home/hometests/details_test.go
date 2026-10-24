@@ -19,7 +19,7 @@ func TestRejectReasons_ListedByCountWithLabels(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("reject rows = %d, want 3", len(rows))
 	}
-	for i, want := range []string{"Jev が方向なしと判断 jev_none 12", "確率がしきい値未満 probability_below_threshold 7", "novel_reason novel_reason 1"} {
+	for i, want := range []string{"Jev が方向なしと判断 12", "確率がしきい値未満 7", "novel_reason 1"} {
 		if got := clean(rows[i][:strings.Index(rows[i], "</li>")]); !strings.Contains(got, want) {
 			t.Errorf("row %d = %q, want it to contain %q", i, got, want)
 		}
@@ -173,12 +173,12 @@ func TestModel_AdoptedNotAdoptedAndSkippedRetraining(t *testing.T) {
 		t.Errorf("trained at = %q", got)
 	}
 	f.source.health.MetaAdopted = false
-	f.source.health.RetrainSkipped, f.source.health.RetrainSkipReason = true, "insufficient_data"
+	f.source.health.RetrainSkipped, f.source.health.RetrainSkipReason = true, "too_few_rows_after_purge"
 	body = f.mustGet(t, "/home/details")
 	if got := inner(t, body, "model-not-adopted"); got != "メタモデル: 未採用" {
 		t.Errorf("not adopted = %q", got)
 	}
-	if got := inner(t, body, "model-retrain"); got != "夜間の再学習を見送りました（insufficient_data）" {
+	if got := inner(t, body, "model-retrain"); got != "夜間の再学習を見送りました（重なり除去後の学習用データが不足）" {
 		t.Errorf("retrain = %q", got)
 	}
 }

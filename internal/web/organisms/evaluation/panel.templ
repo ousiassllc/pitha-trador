@@ -1,19 +1,34 @@
 package evaluation
 
-import "fmt"
+import (
+	"fmt"
 
-// EvaluationPanel is the 実績評価 section of the Performance page (issue
-// #777): "is it winning?" as a 合格ライン verdict (an input to the pre-Live
-// checks only; nothing gates on it) and the figures behind it. err replaces
-// the content when the evaluation could not be read.
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// EvaluationPanel is the 実績評価 section of the Performance page: "is it
+// winning?" as a 合格ライン verdict (an input to the pre-Live checks only;
+// nothing gates on it) and the figures behind it. err replaces the content
+// when the evaluation could not be read.
 templ EvaluationPanel(p Panel, err string) {
 	<section class="mt-8" aria-labelledby="evaluation-heading" data-testid="evaluation-panel">
-		<h2 id="evaluation-heading" class="text-lg font-semibold text-slate-900">実績評価（勝てているか）</h2>
+		<h2 id="evaluation-heading" class="text-lg font-semibold text-slate-900">
+			実績評価（勝てているか）
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation", Label: "実績評価の説明"}) {
+				損益は手数料控除後の実現損益（円）です。[ ] は95%信頼区間で、同じ日の取引は相関するため日単位でまとめて評価しています。サンプルが基準未満の指標は「判定不能」と表示します。EV は1取引あたりの平均損益、PF はプロフィットファクター（総利益 ÷ 総損失）、最大DD は損益の累計がピークから最も下がった幅です。
+			}
+		</h2>
 		if err != "" {
 			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="evaluation-error">{ err }</p>
 		} else {
-			<p class="mt-1 text-xs text-slate-500">
-				損益は手数料控除後の実現損益（円）。[ ] は95%信頼区間（同じ日の取引は相関するため日単位でまとめて評価）。サンプルが基準未満の指標は「判定不能」。{ p.Capital }（{ p.CapitalNote }）
+			<p class="mt-1 text-xs text-slate-500" data-testid="evaluation-capital">
+				{ p.Capital }
+				if p.CapitalNote != "" {
+					（{ p.CapitalNote }）
+				}
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-capital", Label: "初期資金の説明"}) {
+					Paper の初期資金は仮置きの値で、口座残高ではありません。資金比の最大ドローダウンの基準になります。設定キー: initial_capital
+				}
 			</p>
 			@verdictBlock(p)
 			@costBlock(p)
@@ -39,14 +54,18 @@ func verdictClass(status string) string {
 
 templ verdictBlock(p Panel) {
 	<div class={ "mt-4 rounded-md border px-4 py-3 text-sm " + verdictClass(p.Verdict) } data-testid="evaluation-verdict" data-status={ p.Verdict }>
-		<p class="font-semibold">合格ライン: { p.VerdictText }</p>
-		<p class="mt-1 text-xs">{ p.Criteria }</p>
+		<p class="font-semibold">
+			合格ライン: { p.VerdictText }
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-verdict", Label: "合格ラインの説明"}) {
+				<span class="block">{ p.Criteria }</span>
+				<span class="mt-1 block">Live前チェックの材料であり、判定結果で Live が許可・拒否されることはありません。</span>
+			}
+		</p>
 		<ul class="mt-2 list-inside list-disc">
 			for _, c := range p.Checks {
 				<li data-testid={ "evaluation-check-" + c.ID } data-status={ c.Status }>{ c.Label }: 実績 { c.Actual } / 基準 { c.Required } → { c.StatusText }</li>
 			}
 		</ul>
-		<p class="mt-2 text-xs">Live前チェックの材料であり、判定結果で Live が許可・拒否されることはない（#55 は人が判断する）。</p>
 	</div>
 }
 
@@ -54,19 +73,39 @@ templ costBlock(p Panel) {
 	<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3" data-testid="evaluation-costs">
 		for _, c := range p.Costs {
 			<div>
-				<dt class="text-sm text-slate-500">{ c.Label }</dt>
+				<dt class="text-sm text-slate-500">
+					{ c.Label }
+					if c.Help != "" {
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-cost-" + c.ID, Label: c.Label + "の説明"}) {
+							{ c.Help }
+						}
+					}
+				</dt>
 				<dd class="text-sm font-medium text-slate-900">{ c.Value }</dd>
 			</div>
 		}
 	</dl>
 }
 
-templ cell(c Cell) {
+// cell renders one metric; id is the unique suffix of its help mark's id. A
+// metric with a Help text (a 判定不能 one: the reference value and why)
+// carries a help mark beside its text.
+templ cell(c Cell, id string) {
+	<td class={ "px-2 py-1 text-right " + cellClass(c) } data-undetermined?={ c.Undetermined }>
+		{ c.Text }
+		if c.Help != "" {
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-" + id, Label: "判定の補足"}) {
+				{ c.Help }
+			}
+		}
+	</td>
+}
+
+func cellClass(c Cell) string {
 	if c.Undetermined {
-		<td class="px-2 py-1 text-right text-slate-400" title={ c.Title }>{ c.Text }</td>
-	} else {
-		<td class="px-2 py-1 text-right text-slate-900" title={ c.Title }>{ c.Text }</td>
+		return "text-slate-400"
 	}
+	return "text-slate-900"
 }
 
 templ evalTable(t Table) {
@@ -77,7 +116,7 @@ templ evalTable(t Table) {
 			<thead>
 				<tr class="text-right text-slate-500">
 					<th scope="col" class="px-2 py-1 text-left">{ t.KeyHeader }</th>
-					<th scope="col" class="px-2 py-1" title="n">件数</th>
+					<th scope="col" class="px-2 py-1">件数</th>
 					<th scope="col" class="px-2 py-1">損益(円)</th>
 					<th scope="col" class="px-2 py-1">勝率</th>
 					<th scope="col" class="px-2 py-1">EV(円/取引)</th>
@@ -88,17 +127,17 @@ templ evalTable(t Table) {
 				</tr>
 			</thead>
 			<tbody>
-				for _, r := range t.Rows {
+				for i, r := range t.Rows {
 					<tr class="border-t border-slate-200" data-key={ r.Key }>
 						<th scope="row" class="px-2 py-1 text-left font-medium text-slate-900">{ r.Key }</th>
 						<td class="px-2 py-1 text-right">{ fmt.Sprintf("%d", r.N) }</td>
 						<td class="px-2 py-1 text-right">{ r.NetPnL }</td>
-						@cell(r.WinRate)
-						@cell(r.EVJPY)
-						@cell(r.EVBps)
-						@cell(r.ProfitFactor)
-						@cell(r.DDJPY)
-						@cell(r.DDPct)
+						@cell(r.WinRate, fmt.Sprintf("%s-%d-win-rate", t.ID, i))
+						@cell(r.EVJPY, fmt.Sprintf("%s-%d-ev-jpy", t.ID, i))
+						@cell(r.EVBps, fmt.Sprintf("%s-%d-ev-bps", t.ID, i))
+						@cell(r.ProfitFactor, fmt.Sprintf("%s-%d-pf", t.ID, i))
+						@cell(r.DDJPY, fmt.Sprintf("%s-%d-dd-jpy", t.ID, i))
+						@cell(r.DDPct, fmt.Sprintf("%s-%d-dd-pct", t.ID, i))
 					</tr>
 				}
 			</tbody>
@@ -108,27 +147,32 @@ templ evalTable(t Table) {
 
 templ jevBlock(rows []JevRow) {
 	<div class="mt-6 overflow-x-auto" data-testid="evaluation-jev">
-		<h3 class="text-sm font-semibold text-slate-700">Jevの方向的中率とBrier（ラベル版別・同値除く）</h3>
+		<h3 class="text-sm font-semibold text-slate-700">
+			Jevの方向的中率とBrier
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-jev", Label: "Jevの方向的中率とBrierの説明"}) {
+				ラベル版ごとの集計です。方向的中率は予測の向きが実際の値動きと一致した割合（変わらずは除く）、Brier は予測した確率と結果のずれを表すスコアで、小さいほど良い値です。
+			}
+		</h3>
 		if len(rows) == 0 {
-			<p class="mt-1 text-xs text-slate-500">ラベル付き判断がまだありません。</p>
+			<p class="mt-1 text-xs text-slate-500">ラベル付き判断はありません。</p>
 		} else {
 			<table class="mt-1 min-w-full text-xs">
 				<caption class="sr-only">Jevの方向的中率とBrier</caption>
 				<thead>
 					<tr class="text-right text-slate-500">
 						<th scope="col" class="px-2 py-1 text-left">ラベル</th>
-						<th scope="col" class="px-2 py-1" title="n">件数</th>
+						<th scope="col" class="px-2 py-1">件数</th>
 						<th scope="col" class="px-2 py-1">方向的中率</th>
 						<th scope="col" class="px-2 py-1">Brier</th>
 					</tr>
 				</thead>
 				<tbody>
-					for _, r := range rows {
+					for i, r := range rows {
 						<tr class="border-t border-slate-200">
 							<th scope="row" class="px-2 py-1 text-left font-medium text-slate-900">{ r.Label }</th>
 							<td class="px-2 py-1 text-right">{ fmt.Sprintf("%d", r.N) }</td>
-							@cell(r.HitRate)
-							@cell(r.Brier)
+							@cell(r.HitRate, fmt.Sprintf("jev-%d-hit-rate", i))
+							@cell(r.Brier, fmt.Sprintf("jev-%d-brier", i))
 						</tr>
 					}
 				</tbody>
@@ -139,9 +183,14 @@ templ jevBlock(rows []JevRow) {
 
 templ metaBlock(rows []MetaRow) {
 	<div class="mt-6 overflow-x-auto" data-testid="evaluation-meta">
-		<h3 class="text-sm font-semibold text-slate-700">メタモデル: OOS指標と同じ取引・同じ期間のPaper実績EV</h3>
+		<h3 class="text-sm font-semibold text-slate-700">
+			メタモデルのOOS指標とPaper実績EV
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-meta", Label: "メタモデルのOOS指標とPaper実績EVの説明"}) {
+				OOS（学習に使っていない期間）の指標と、同じ取引・同じ期間の Paper 実績 EV を並べて比べる表です。差は 実現EV − 予測EV です。
+			}
+		</h3>
 		if len(rows) == 0 {
-			<p class="mt-1 text-xs text-slate-500">学習済みのメタモデルがありません。</p>
+			<p class="mt-1 text-xs text-slate-500">学習済みのメタモデルはありません。</p>
 		} else {
 			<table class="mt-1 min-w-full text-xs">
 				<caption class="sr-only">メタモデルのOOS指標とPaper実績EV</caption>
@@ -150,7 +199,7 @@ templ metaBlock(rows []MetaRow) {
 						<th scope="col" class="px-2 py-1 text-left">版</th>
 						<th scope="col" class="px-2 py-1">状態</th>
 						<th scope="col" class="px-2 py-1">OOS期間</th>
-						<th scope="col" class="px-2 py-1" title="OOS n">OOS件数</th>
+						<th scope="col" class="px-2 py-1">OOS件数</th>
 						<th scope="col" class="px-2 py-1">OOS AUC</th>
 						<th scope="col" class="px-2 py-1">OOS EV(bps)</th>
 						<th scope="col" class="px-2 py-1">採用取引 n</th>
@@ -162,20 +211,20 @@ templ metaBlock(rows []MetaRow) {
 					</tr>
 				</thead>
 				<tbody>
-					for _, r := range rows {
+					for i, r := range rows {
 						<tr class="border-t border-slate-200" data-key={ r.Version }>
 							<th scope="row" class="px-2 py-1 text-left font-medium text-slate-900">{ r.Version }</th>
 							<td class="px-2 py-1 text-right">{ r.Status }</td>
 							<td class="px-2 py-1 text-right">{ r.OOSWindow }</td>
 							<td class="px-2 py-1 text-right">{ r.OOSSamples }</td>
-							@cell(r.OOSAUC)
-							@cell(r.OOSEV)
+							@cell(r.OOSAUC, fmt.Sprintf("meta-%d-oos-auc", i))
+							@cell(r.OOSEV, fmt.Sprintf("meta-%d-oos-ev", i))
 							<td class="px-2 py-1 text-right">{ fmt.Sprintf("%d", r.LinkedN) }</td>
-							@cell(r.PredictedEV)
-							@cell(r.RealizedEV)
-							@cell(r.EVGap)
+							@cell(r.PredictedEV, fmt.Sprintf("meta-%d-predicted-ev", i))
+							@cell(r.RealizedEV, fmt.Sprintf("meta-%d-realized-ev", i))
+							@cell(r.EVGap, fmt.Sprintf("meta-%d-ev-gap", i))
 							<td class="px-2 py-1 text-right">{ fmt.Sprintf("%d", r.WindowN) }</td>
-							@cell(r.WindowEV)
+							@cell(r.WindowEV, fmt.Sprintf("meta-%d-window-ev", i))
 						</tr>
 					}
 				</tbody>

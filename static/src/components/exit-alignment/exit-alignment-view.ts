@@ -1,4 +1,4 @@
-// Rendering of `pitha-exit-alignment` (issue #774, parent #751/#752): the label
+// Rendering of `pitha-exit-alignment`: the label
 // basis versus the actual exit table, its mismatch warnings, the per-decision
 // label-versus-replay comparison, and the model's OOS EV beside the paper
 // return. Split out of the component to keep both within the linterly limit.

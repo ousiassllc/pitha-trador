@@ -29,9 +29,8 @@ type opsField struct {
 	options     []string
 }
 
-// opsGroup is one card/modal of the Settings screen's 運用設定 section
-// (issue #708). note says when a saved value takes effect (restart needed
-// or not).
+// opsGroup is one card/modal of the Settings screen's 運用設定 section.
+// note says when a saved value takes effect (restart needed or not).
 type opsGroup struct {
 	id          string
 	name        string
@@ -41,14 +40,12 @@ type opsGroup struct {
 }
 
 const (
-	thresholdNote = "優先順位は config/strategy.yaml の値 < ここで保存した値です。"
+	thresholdNote = "config/strategy.yaml の値より、ここで保存した値が優先されます。"
 	hotApplyNote  = "保存した値は再起動不要で、次の評価（次の候補更新）から反映されます。"
 )
 
 // opsGroups is the 運用設定 section in display order. Together the groups
 // must cover opsettings.Keys() exactly once (settings_ops_groups_test.go).
-// They replace the removed PITHA_BACKUP_DIR / PITHA_LOG_DIR /
-// PITHA_POLICY_* / PITHA_FAST_SCREENER_* environment variables.
 var opsGroups = slices.Concat([]opsGroup{
 	brokerGroup,
 	tachibanaGroup,
@@ -89,7 +86,7 @@ var opsGroups = slices.Concat([]opsGroup{
 	{
 		id:          "logsettings",
 		name:        "ログのレベルと保持期間",
-		description: "日次 JSON ログに書き出す最低レベルと、ログファイルを圧縮せずに置いておく日数です（issue #772）。INFO 以上に計測ログ（#652 のメトリクスなど）が含まれ、期間指定のエクスポートの元になります。",
+		description: "日次 JSON ログに書き出す最低レベルと、ログファイルを圧縮せずに置いておく日数です。INFO 以上には計測ログ（メトリクスなど）が含まれ、期間指定のエクスポートの元になります。",
 		note: "ログレベルは起動時に一度だけ読むため、保存・既定に戻すの反映にはアプリの再起動が必要です。error にするとエクスポートできる計測ログ（INFO）や WARN が残りません。" +
 			"保持期間は再起動不要で、次のメンテナンスチェック（10 分以内）から反映されます。環境変数では設定できません。",
 		fields: []opsField{
@@ -104,9 +101,9 @@ var opsGroups = slices.Concat([]opsGroup{
 	{
 		id:          "screener",
 		name:        "Fast Screener",
-		description: "Fast Screener の絞り込みしきい値・上位件数・スコア重みです（FR-FS-1 / FR-FS-3）。",
+		description: "Fast Screener の絞り込みしきい値・上位件数・スコア重みです。",
 		note: thresholdNote + hotApplyNote +
-			"Policy Engine のスプレッド・板厚さ判定（FR-POLICY-3）は strategy.yaml の max_spread_bps / min_turnover_5m_jpy を使い、ここの値の影響を受けません。",
+			"Policy Engine のスプレッド・板厚さの判定は、ここではなく strategy.yaml のスプレッド上限・直近 5 分売買代金の下限を使い、ここの値の影響を受けません。",
 		fields: []opsField{
 			{key: "screener.min_price", label: "最低株価（円）"},
 			{key: "screener.max_price", label: "最高株価（円）", hint: "最低株価以上にしてください。"},
@@ -126,9 +123,9 @@ var opsGroups = slices.Concat([]opsGroup{
 	{
 		id:          "snapshot-age",
 		name:        "データの鮮度（ランキング監視）",
-		description: "ランキング監視モード（既定）で、Jev Scout / Trader と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）です。これより古い足では判断に進まず、そのジョブは見送られます（issue #754）。",
-		note: "立会時間中のみ適用されます。全銘柄 REST モード（scan.full_scan_enabled: true）では config/strategy.yaml の scan.full_scan_max_snapshot_age_seconds が使われ、この値は影響しません。" +
-			"価格は kabu の PUSH を優先し、PUSH が古い・未着のときだけ REST に切り替えます。Jev に渡す state と判断ログには、判断時点でのデータの古さ（data_age_ms）が含まれます。" +
+		description: "ランキング監視モード（既定）で、Jev Scout / Trader と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）です。これより古い足では判断に進まず、そのジョブは見送られます。",
+		note: "立会時間中のみ適用されます。全銘柄 REST モードでは、この値ではなく strategy.yaml の別の鮮度上限（設定キー: scan.full_scan_max_snapshot_age_seconds）が使われます。" +
+			"価格は kabu の PUSH を優先し、PUSH が古い・未着のときだけ REST に切り替えます。Jev に渡す state と判断ログには、判断時点でのデータの古さが含まれます。" +
 			"保存した値の反映にはアプリの再起動が必要です。環境変数では設定できません。",
 		fields: []opsField{
 			{key: snapshotagesettings.Key, label: "足の鮮度上限（秒）", hint: "1〜600 の整数です。既定は 20 秒です。大きくするほど古いデータで判断することになります。"},
@@ -137,7 +134,7 @@ var opsGroups = slices.Concat([]opsGroup{
 	{
 		id:          "orderflow",
 		name:        "板の需給（OFI）",
-		description: "kabu の PUSH 最良気配の数量変化から求める Order Flow Imbalance を集計するローリング窓の幅（秒）です。マイクロプライス乖離とあわせて特徴量として保存します（issue #750）。",
+		description: "kabu の PUSH 最良気配の数量変化から求める Order Flow Imbalance を集計するローリング窓の幅（秒）です。マイクロプライス乖離とあわせて特徴量として保存します。",
 		note: "保存した値は再起動不要で、次の市場データ取得（次の 1 分足）から反映されます。" +
 			"OFI は特徴量・フィルタ用途に限り、OFI 単独で発注することはありません。立花証券を選択している間は PUSH 最良気配を取得しないため、OFI は算出されません。",
 		fields: []opsField{
@@ -149,7 +146,7 @@ var opsGroups = slices.Concat([]opsGroup{
 	{
 		id:          "triple_barrier",
 		name:        "キャリブレーションのラベル（トリプルバリア）",
-		description: "Jev の判断に正解・不正解のラベルを付けるときの利確（TP）・損切り（SL）の幅、時間切れ（timeout）、売買コストの想定です。先に触れたバリアでラベルを決め、コスト控除後のリターンで評価します（issue #760、親 #751）。",
+		description: "Jev の判断に正解・不正解のラベルを付けるときの利確（TP）・損切り（SL）の幅、時間切れ（timeout）、売買コストの想定です。先に触れたバリアでラベルを決め、コスト控除後のリターンで評価します。",
 		note: "TP・SL はコストを差し引いた後のリターン（bps、1 bps = 0.01%）の幅です。TP は価格が有利に TP+コスト、SL は不利に SL−コスト動いたときに触れます。" +
 			"保存した値は再起動不要で、以降に付くラベルから反映されます（付与済みのラベルは変わりません）。環境変数では設定できません。",
 		fields: []opsField{
@@ -167,16 +164,16 @@ func policyGroup(id, name, prefix, direction string) opsGroup {
 	return opsGroup{
 		id:          id,
 		name:        name,
-		description: "Jev Trader の判断が" + direction + "シグナルになるためのしきい値です（FR-POLICY-1 / FR-POLICY-2 / FR-POLICY-4）。",
+		description: "Jev Trader の判断が" + direction + "シグナルになるためのしきい値です。",
 		note: thresholdNote + hotApplyNote +
 			"自己改善ループ（Sol / Opus）も同じキーを更新するため、後から書き込んだ方の値が有効です。",
 		fields: []opsField{
-			{key: prefix + "min_probability", label: "最低確率（min_probability）", hint: "0 より大きく 1 以下です。"},
-			{key: prefix + "min_entry_quality", label: "最低エントリー品質・Live（min_entry_quality）", options: entryQualityOptions, hint: "Live で使う値（既定 strong。MCP からは変えられません）。Paper では使われず、下の Paper の値が使われます。"},
-			{key: paperpolicysettings.PaperKeyOf(prefix + "min_entry_quality"), label: "最低エントリー品質・Paper（Paper 専用）", options: entryQualityOptions, hint: "Paper でだけ使う値（既定 good。MCP の settings_set からも変えられます）。他のしきい値は Live と共通です。"},
-			{key: prefix + "min_continuation_probability", label: "継続確率の下限（min_continuation_probability）", hint: "0 より大きく 1 以下です。"},
-			{key: prefix + "max_toxic_flow", label: "有害フロー上限（max_toxic_flow）", hint: "0 より大きく 1 以下です。"},
-			{key: prefix + "max_liquidity_stressed", label: "流動性ストレス上限（max_liquidity_stressed）", hint: "0 より大きく 1 以下です。"},
+			{key: prefix + "min_probability", label: "最低確率", hint: "0 より大きく 1 以下です。"},
+			{key: prefix + "min_entry_quality", label: "最低エントリー品質（Live）", options: entryQualityOptions, hint: "Live で使う値です（既定 strong。MCP からは変えられません）。Paper では使われず、Paper の値が使われます。"},
+			{key: paperpolicysettings.PaperKeyOf(prefix + "min_entry_quality"), label: "最低エントリー品質（Paper）", options: entryQualityOptions, hint: "Paper でだけ使う値です（既定 good。MCP からも変えられます）。他のしきい値は Live と共通です。"},
+			{key: prefix + "min_continuation_probability", label: "継続確率の下限", hint: "0 より大きく 1 以下です。"},
+			{key: prefix + "max_toxic_flow", label: "有害フロー上限", hint: "0 より大きく 1 以下です。"},
+			{key: prefix + "max_liquidity_stressed", label: "流動性ストレス上限", hint: "0 より大きく 1 以下です。"},
 		},
 	}
 }

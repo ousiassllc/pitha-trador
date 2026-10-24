@@ -1,14 +1,14 @@
-package organismstest
+package performancepanels_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/performancepanels"
 )
 
 func TestBacktestForm_EchoesValuesThroughSharedFieldStyle(t *testing.T) {
-	html := renderComponent(t, organisms.BacktestForm(organisms.BacktestFormValues{
+	html := renderComponent(t, performancepanels.BacktestForm(performancepanels.BacktestFormValues{
 		From: "2026-01-01", To: "2026-03-31", TrainingDays: 60, ValidationDays: 20, ForwardDays: 10,
 	}))
 
@@ -31,7 +31,7 @@ func TestBacktestForm_EchoesValuesThroughSharedFieldStyle(t *testing.T) {
 // The cost sensitivity export is a second submit button of the same form, so
 // the CSV is made from the conditions currently in the form (issue #779).
 func TestBacktestForm_CostSensitivityExportSubmitsTheSameFields(t *testing.T) {
-	html := renderComponent(t, organisms.BacktestForm(organisms.BacktestFormValues{
+	html := renderComponent(t, performancepanels.BacktestForm(performancepanels.BacktestFormValues{
 		From: "2026-01-01", To: "2026-03-31", TrainingDays: 60, ValidationDays: 20, ForwardDays: 10,
 	}))
 
@@ -43,6 +43,22 @@ func TestBacktestForm_CostSensitivityExportSubmitsTheSameFields(t *testing.T) {
 	for _, want := range []string{`name="format"`, `value="csv"`, `data-testid="cost-sensitivity-export"`, `type="submit"`} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %q in %s", want, html)
+		}
+	}
+}
+
+// The explanation of a field is a help mark next to its name, a sibling of
+// the <label> (a mark inside a label would make its text part of the name).
+func TestBacktestForm_ExplainsFieldsInHelpMarksOutsideTheLabel(t *testing.T) {
+	html := renderComponent(t, performancepanels.BacktestForm(performancepanels.BacktestFormValues{From: "2026-01-01", To: "2026-03-31", TrainingDays: 60, ValidationDays: 20, ForwardDays: 10}))
+
+	for _, want := range []string{
+		`<label for="backtest-forward-days">Forward 日数</label>`,
+		`id="backtest-forward-days"`,
+		`aria-label="Forward 日数の説明"`, `id="help-backtest-forward-days"`, "成績として評価する期間",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("missing %q: %s", want, html)
 		}
 	}
 }

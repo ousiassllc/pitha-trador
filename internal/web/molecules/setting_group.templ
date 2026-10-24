@@ -3,10 +3,10 @@ package molecules
 import "strconv"
 
 // SettingGroupProps is one operator-editable settings group on the Settings
-// screen (issue #708): ID is a stable slug (also the card/modal id suffix),
-// Name and Description what the operator sees in the list, Note a
-// when-does-it-apply paragraph (restart needed or not) shown in the modal,
-// and Fields the rows edited in it. State is derived from the fields.
+// screen: ID is a stable slug (also the card/modal id suffix), Name the
+// heading, Description its explanation (a HelpMark next to the card's name),
+// Note a when-does-it-apply paragraph (restart needed or not; a HelpMark in
+// the modal), and Fields the rows edited in it. State is derived from the fields.
 // Derived, when non-empty, is the read-only panel (SettingGroupDerived) shown
 // above the fields, titled DerivedTitle (default 計算結果).
 type SettingGroupProps struct {

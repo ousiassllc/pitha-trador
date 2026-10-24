@@ -70,9 +70,6 @@ type PanelProps struct {
 templ Panel(props PanelProps) {
 	<section class="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="mcp-panel" { pollAttrs(props)... }>
 		<h3 class="sr-only">MCP</h3>
-		<p>
-			Grok Bot などから Paper の実績と Jev の判断を読み取り、許可されたときだけ基本設定（ホワイトリスト）を変更するための MCP エンドポイントです。MCP は本体とは別のプロセス（paper-results-mcp）で動き、既定ではオフ・API キーが未設定の間は待ち受けません。
-		</p>
 		if props.Notice != "" {
 			<p class="text-emerald-700" role="status" data-testid="mcp-notice">{ props.Notice }</p>
 		}
@@ -93,20 +90,29 @@ templ Panel(props PanelProps) {
 			<span>待受アドレス: <code data-testid="mcp-listen">{ props.Listen }</code></span>
 			<span data-testid="mcp-autostart" data-autostart={ boolAttr(props.AutoStart) }>{ props.AutoStartNote }</span>
 			if props.ConfigChanged {
-				<span class="text-amber-700" data-testid="mcp-config-changed">設定が保存されています。MCP は起動時の設定のまま動いているため、「再起動」を押すと反映されます。</span>
+				<span class="text-amber-700" data-testid="mcp-config-changed">設定が保存されています。「再起動」を押すと反映されます。</span>
 			}
 		</div>
 		@processControls(props)
 		<form class="flex flex-col gap-3" hx-post="/settings/mcp" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-form">
-			<label class="flex items-center gap-2">
-				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: enabledAttrs(props.Enabled)})
-				<span class="font-medium text-slate-700">MCP を有効にする</span>
-			</label>
-			<label class="flex flex-col gap-1">
-				<span class="font-medium text-slate-700">待受アドレス（ホスト:ポート）</span>
-				@atoms.Input(atoms.InputProps{Name: "listen", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"value": props.Listen, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-listen-input"}})
-				<span class="text-xs text-slate-500">許可されるのは 127.0.0.1 / ::1（この PC 内のみ）と、この PC の tailnet アドレス（100.64.0.0/10・fd7a:115c:a1e0::/48）だけです。0.0.0.0・LAN・ホスト名は保存できません。空にすると 127.0.0.1:48110 になります。</span>
-			</label>
+			<div class="flex items-center gap-2">
+				<label class="flex items-center gap-2">
+					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: enabledAttrs(props.Enabled)})
+					<span class="font-medium text-slate-700">MCP を有効にする</span>
+				</label>
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-enabled", Label: "MCP の説明"}) {
+					Grok Bot などから Paper の実績と Jev の判断を読み取り、許可されたときだけ基本設定（ホワイトリスト）を変更するための MCP エンドポイントです。本体とは別のプロセス（paper-results-mcp）で動きます。既定ではオフで、API キーが未設定の間は待ち受けません。
+				}
+			</div>
+			<div class="flex flex-col gap-1">
+				<div class="flex items-center gap-2">
+					<label for="mcp-listen-input" class="font-medium text-slate-700">待受アドレス（ホスト:ポート）</label>
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-listen", Label: "待受アドレスの説明"}) {
+						許可されるのは 127.0.0.1 / ::1（この PC 内のみ）と、この PC の tailnet アドレス（100.64.0.0/10・fd7a:115c:a1e0::/48）だけです。0.0.0.0・LAN・ホスト名は保存できません。空にすると 127.0.0.1:48110 になります。
+					}
+				</div>
+				@atoms.Input(atoms.InputProps{ID: "mcp-listen-input", Name: "listen", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"value": props.Listen, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-listen-input"}})
+			</div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-save"}}) {
 					保存
@@ -118,12 +124,15 @@ templ Panel(props PanelProps) {
 			<div id="mcp-experiments" hx-get="/settings/mcp/experiments" hx-trigger="load" hx-swap="innerHTML" data-testid="mcp-experiments-slot"></div>
 		}
 		<div class="flex flex-col gap-2" data-testid="mcp-key">
-			<span class="font-medium text-slate-700">
+			<span class="flex items-center gap-2 font-medium text-slate-700">
 				API キー:
 				if props.KeyConfigured {
-					設定済み（画面には表示されません）
+					設定済み
 				} else {
 					未設定
+				}
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-key", Label: "API キーの説明"}) {
+					設定済みのキーは画面には表示されません。生成したキーは生成直後に一度だけ表示されます。再生成すると古いキーは MCP を再起動した時点で使えなくなり、Grok Bot の登録も更新が必要です。
 				}
 			</span>
 			<div>
@@ -135,7 +144,6 @@ templ Panel(props PanelProps) {
 					}
 				}
 			</div>
-			<span class="text-xs text-slate-500">生成したキーは生成直後に一度だけ表示されます。再生成すると古いキーは MCP を再起動した時点で使えなくなり、Grok Bot の登録も更新が必要です。</span>
 		</div>
 		<dl class="flex flex-col gap-2" data-testid="mcp-bot-values">
 			<dt class="font-medium text-slate-700">Grok Bot に登録する値</dt>
@@ -160,9 +168,6 @@ templ Panel(props PanelProps) {
 			<dt class="font-medium text-slate-700">設定ファイルの場所</dt>
 			<dd><code data-testid="mcp-settings-path">{ props.SettingsPath }</code></dd>
 		</dl>
-		<p class="text-xs text-slate-500" data-testid="mcp-restart-note">
-			MCP は本体とは別のプロセスで、この画面の「起動」で本体の子プロセスとして起動されます（本体の DB 接続・書き込み権限は渡されず、API キーは起動引数・環境変数に載りません）。本体を終了すると MCP も止まります。有効・API キーあり・許可された待受アドレスのときは、本体の起動と同時に MCP も自動で起動します。設定を保存した後、反映するには「再起動」を押してください。
-		</p>
 	</section>
 }
 
@@ -182,7 +187,7 @@ templ keyReveal(key string) {
 				ヘッダーをコピー
 			}
 		</div>
-		<p class="text-xs text-amber-900">このキーは二度と表示されません。画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。「再起動」を押すと新しいキーが有効になります。</p>
+		<p class="text-xs text-amber-900">画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。「再起動」を押すと新しいキーが有効になります。</p>
 	</div>
 }
 
@@ -215,6 +220,9 @@ templ processControls(props PanelProps) {
 		}
 		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: processAttrs("restart", "mcp-restart", props.External && !props.Managed)}) {
 			再起動
+		}
+		@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-process", Label: "MCP の起動と反映の説明"}) {
+			MCP は本体とは別のプロセスで、この画面の「起動」で本体の子プロセスとして起動されます（本体の DB 接続・書き込み権限は渡されず、API キーは起動引数・環境変数に載りません）。本体を終了すると MCP も止まります。有効・API キーあり・許可された待受アドレスのときは、本体の起動と同時に MCP も自動で起動します。設定を保存した後、反映するには「再起動」を押してください。
 		}
 	</div>
 }

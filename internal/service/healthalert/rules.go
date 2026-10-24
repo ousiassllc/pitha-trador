@@ -1,7 +1,7 @@
 // Package healthalert raises the in-app warning for a market-data outage
 // during the trading hours (issue #802): kabuステーション not logged in, or
 // no market-data job finishing for a while. The Detector persists the active
-// alerts (domain.HealthAlert) so the header banner and the Paper results MCP,
+// alerts (domain.HealthAlert) so Home's 要対応 list and the Paper results MCP,
 // a separate read-only process, show the same state; the rules below are
 // shared with the MCP, which derives the idle alert itself while the app is
 // down. No external notification channel is involved.

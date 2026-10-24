@@ -1,0 +1,43 @@
+package atoms
+
+// HelpMarkProps is HelpMark's input. ID is the id of the help text element
+// (the button's `aria-describedby` points at it), so it must be unique on
+// the page: pass a stable, descriptive id such as `help-home-trade-status`,
+// and add a row key when the mark is rendered in a loop. Label is the
+// accessible name of the 「?」 button, e.g. 「新規エントリーの説明」 (the
+// visible glyph "?" alone reads as nothing to a screen reader).
+type HelpMarkProps struct {
+	ID    string
+	Label string
+}
+
+// HelpMark renders the shared 「?」 help mark (issue #902): a small button
+// placed next to an item name whose children are the help text. The text
+// opens on mouse hover, keyboard focus or tap and closes on Esc, on leaving,
+// or on a tap elsewhere; the `pitha-help-mark` script
+// (static/src/components/help-mark, loaded by layout.document) does the
+// opening and the placement. The text is always in the DOM and tied to the
+// button by `aria-describedby`, so a screen reader reads it on focus
+// without any script. Put only explanations, constraints and long notes
+// here: stop reasons, errors, warnings, Live/Paper and confirmations stay
+// on the screen itself (they may carry a short sentence plus a HelpMark for
+// the details).
+templ HelpMark(props HelpMarkProps) {
+	<span class="relative inline-flex align-middle" data-help-mark>
+		<button
+			type="button"
+			class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400 bg-white text-[10px] font-semibold leading-none text-slate-600 hover:border-slate-600 hover:text-slate-900 cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+			aria-label={ props.Label }
+			aria-describedby={ props.ID }
+			data-help-mark-button
+		>?</button>
+		<span
+			id={ props.ID }
+			role="tooltip"
+			class="invisible fixed left-0 top-0 z-50 w-72 max-w-[80vw] rounded-md border border-slate-300 bg-white p-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-700 shadow-lg data-[open]:visible"
+			data-help-mark-text
+		>
+			{ children... }
+		</span>
+	</span>
+}

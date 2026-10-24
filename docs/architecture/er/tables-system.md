@@ -133,7 +133,7 @@ erDiagram
 
 ## health_alerts / health_alert_checks（立会中の市況データ停止の警告、issue #802）
 
-アプリ内の検知（`internal/service/healthalert.Detector`）が30秒ごとに書き、全ページ共通バナーとPaper 実績 MCP（別プロセス・読み取り専用接続）が読む（マイグレーション000039）。自由文は持たない。
+アプリ内の検知（`internal/service/healthalert.Detector`）が30秒ごとに書き、Homeの「要対応」とPaper 実績 MCP（別プロセス・読み取り専用接続）が読む（マイグレーション000039）。自由文は持たない。
 
 `health_alerts`: いま出ている警告。1コード=1行。条件が解けると行ごと消えるので履歴は持たない。
 

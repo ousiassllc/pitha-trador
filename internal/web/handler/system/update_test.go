@@ -37,7 +37,6 @@ func newUpdateEngine(controller system.UpdateController) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	h := system.NewUpdateHandler(controller)
 	engine := gin.New()
-	engine.GET("/system/update-status", h.Status)
 	engine.GET("/system/update-panel", h.Panel)
 	engine.POST("/system/update-check", h.Check)
 	return engine
@@ -49,55 +48,14 @@ func serve(engine *gin.Engine, method, path string) *httptest.ResponseRecorder {
 	return rec
 }
 
-func TestUpdateHandler_Status_BannerStates(t *testing.T) {
-	tests := []struct {
-		name    string
-		status  updater.Status
-		want    []string
-		wantNot string
-	}{
-		{name: "nothing available", status: updater.Status{CheckedAt: time.Now()}, wantNot: "update-banner"},
-		{
-			name:   "blocked by safety gate",
-			status: updater.Status{Available: true, Version: "v0.2.0", Blocked: true},
-			want:   []string{`data-testid="update-banner"`, "v0.2.0", "安全条件が揃い次第"},
-		},
-		{
-			name:   "installer ready",
-			status: updater.Status{Available: true, Version: "v0.2.0", Ready: true},
-			want:   []string{`data-testid="update-banner"`, "v0.2.0", "まもなく自動的に再起動"},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rec := serve(newUpdateEngine(&fakeUpdateController{status: tt.status}), http.MethodGet, "/system/update-status")
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200", rec.Code)
-			}
-			body := rec.Body.String()
-			for _, w := range tt.want {
-				if !strings.Contains(body, w) {
-					t.Errorf("body missing %q; body=%s", w, body)
-				}
-			}
-			if tt.wantNot != "" && strings.Contains(body, tt.wantNot) {
-				t.Errorf("body contains %q, want none; body=%s", tt.wantNot, body)
-			}
-		})
-	}
-}
-
-func TestUpdateHandler_NilController_BannerEmptyPanelExplainsAndCheckRejected(t *testing.T) {
+func TestUpdateHandler_NilController_PanelExplainsAndCheckRejected(t *testing.T) {
 	engine := newUpdateEngine(nil)
 
-	if rec := serve(engine, http.MethodGet, "/system/update-status"); rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "" {
-		t.Errorf("GET /system/update-status = %d %q, want 200 with empty body", rec.Code, rec.Body.String())
-	}
 	// cmd/server: the panel must say why there is nothing to check (issue
 	// #241) instead of staying blank, and offer no check button.
 	rec := serve(engine, http.MethodGet, "/system/update-panel")
 	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, "アップデート機能がない") {
+	if rec.Code != http.StatusOK || !strings.Contains(body, "アップデートの確認に対応していません") {
 		t.Errorf("GET /system/update-panel = %d %q, want 200 explaining the build has no updater", rec.Code, body)
 	}
 	if strings.Contains(body, "update-check-button") {
@@ -121,7 +79,7 @@ func TestUpdateHandler_Check_RunsCheckAndRendersFreshPanel(t *testing.T) {
 		t.Fatalf("CheckForUpdate calls = %d, want 1", controller.checks)
 	}
 	if got := rec.Header().Get("HX-Trigger"); got != "updateStatusChanged" {
-		t.Errorf("HX-Trigger = %q, want updateStatusChanged (refreshes Header's banner)", got)
+		t.Errorf("HX-Trigger = %q, want updateStatusChanged (refreshes the 要対応 badge and list)", got)
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, "新バージョン v0.3.0 が利用可能です") {

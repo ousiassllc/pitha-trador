@@ -2,95 +2,94 @@ package system_test
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketdata/kabu"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/system"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
 // fakeTokenStatus is a broker session whose status is the kabu adapter's
-// mapping of a token issuance outcome, so the banner texts asserted below are
-// the kabu adapter's own guidance (issues #295, #712).
+// mapping of a token issuance outcome, so the guidance texts asserted below
+// are the kabu adapter's own (issues #295, #712).
 type fakeTokenStatus marketdata.TokenStatus
 
 func (f fakeTokenStatus) Status() broker.SessionStatus {
 	return kabu.SessionStatusOf(marketdata.TokenStatus(f))
 }
 
-func TestMarketDataHandler_Status(t *testing.T) {
+func TestMarketDataHandler_BannerProps(t *testing.T) {
 	tests := []struct {
-		name     string
-		source   system.MarketDataStatusSource
-		want     []string
-		notWant  []string
-		wantNone bool
+		name           string
+		source         system.MarketDataStatusSource
+		wantIssue      string
+		wantGuidance   []string
+		notWantInGuide []string
+		wantPersistent bool
+		wantNone       bool
 	}{
-		{name: "token ok renders nothing", source: fakeTokenStatus{}, wantNone: true},
-		{name: "nil source renders nothing", source: nil, wantNone: true},
+		{name: "token ok has nothing to report", source: fakeTokenStatus{}, wantNone: true},
+		{name: "nil source has nothing to report", source: nil, wantNone: true},
 		{
-			name:   "bad password",
-			source: fakeTokenStatus{Issue: marketdata.TokenIssueBadPassword, Code: 4001013},
-			want:   []string{`data-testid="marketdata-banner"`, `data-issue="bad_password"`, "KABU_API_PASSWORD", `href="/settings/broker"`},
+			name:         "bad password",
+			source:       fakeTokenStatus{Issue: marketdata.TokenIssueBadPassword, Code: 4001013},
+			wantIssue:    "bad_password",
+			wantGuidance: []string{"KABU_API_PASSWORD"},
 		},
 		{
-			name:   "kabu station unreachable",
-			source: fakeTokenStatus{Issue: marketdata.TokenIssueUnreachable},
-			want:   []string{`data-issue="unreachable"`, "起動"},
+			name:         "kabu station unreachable",
+			source:       fakeTokenStatus{Issue: marketdata.TokenIssueUnreachable},
+			wantIssue:    "unreachable",
+			wantGuidance: []string{"起動"},
 		},
 		{
-			name:    "not logged in right after the first failure is the ordinary banner",
-			source:  fakeTokenStatus{Issue: marketdata.TokenIssueNotLoggedIn, Code: 4001007, Failures: 1, Since: time.Now()},
-			want:    []string{`data-issue="not_logged_in"`, "ログアウト", "自動的に再試行します。", `href="/settings/broker"`},
-			notWant: []string{"data-persistent", "お待ちください"},
+			name:           "not logged in right after the first failure is not escalated",
+			source:         fakeTokenStatus{Issue: marketdata.TokenIssueNotLoggedIn, Code: 4001007, Failures: 1, Since: time.Now()},
+			wantIssue:      "not_logged_in",
+			wantGuidance:   []string{"ログアウト"},
+			wantPersistent: false,
 		},
 		{
-			name:   "persistent not logged in escalates with elapsed time and failure count",
-			source: fakeTokenStatus{Issue: marketdata.TokenIssueNotLoggedIn, Code: 4001017, Failures: 7, Since: time.Now().Add(-12 * time.Minute)},
-			want: []string{
-				`data-testid="marketdata-banner"`, `data-issue="not_logged_in"`, `data-persistent="true"`,
-				"未ログインの状態が続いています", "10分以上継続", "失敗 7回", "4001007 / 4001017",
-				"ログアウト", "再ログインしてから、そのままお待ちください", "二重起動", "/token",
-			},
+			name:           "persistent not logged in is escalated",
+			source:         fakeTokenStatus{Issue: marketdata.TokenIssueNotLoggedIn, Code: 4001017, Failures: 7, Since: time.Now().Add(-12 * time.Minute)},
+			wantIssue:      "not_logged_in",
+			wantGuidance:   []string{"ログアウト"},
+			wantPersistent: true,
 			// issue #305: login-only guidance, never steering to the API password / 「APIを利用する」.
-			notWant: []string{"KABU_API_PASSWORD", "APIシステム設定", "起動していること", `href="/settings/broker"`},
+			notWantInGuide: []string{"KABU_API_PASSWORD", "APIシステム設定", "起動していること"},
 		},
 		{
-			name:    "persistent escalation is only for not logged in",
-			source:  fakeTokenStatus{Issue: marketdata.TokenIssueBadPassword, Code: 4001013, Failures: 9, Since: time.Now().Add(-time.Hour)},
-			want:    []string{`data-issue="bad_password"`, "KABU_API_PASSWORD"},
-			notWant: []string{"data-persistent"},
+			name:           "persistent escalation is only for not logged in",
+			source:         fakeTokenStatus{Issue: marketdata.TokenIssueBadPassword, Code: 4001013, Failures: 9, Since: time.Now().Add(-time.Hour)},
+			wantIssue:      "bad_password",
+			wantGuidance:   []string{"KABU_API_PASSWORD"},
+			wantPersistent: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			engine := gin.New()
-			engine.GET("/system/marketdata-status", system.NewMarketDataHandler(tt.source).Status)
-
-			rec := serve(engine, http.MethodGet, "/system/marketdata-status")
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want 200", rec.Code)
+			got := system.NewMarketDataHandler(tt.source).BannerProps(context.Background())
+			if tt.wantNone {
+				if got != (organisms.MarketDataBannerProps{}) {
+					t.Fatalf("props = %+v, want the zero value", got)
+				}
+				return
 			}
-			body := rec.Body.String()
-			if tt.wantNone && strings.Contains(body, "marketdata-banner") {
-				t.Errorf("body = %q, want no banner", body)
+			if got.Issue != tt.wantIssue || got.Persistent != tt.wantPersistent {
+				t.Errorf("issue/persistent = %q/%v, want %q/%v", got.Issue, got.Persistent, tt.wantIssue, tt.wantPersistent)
 			}
-			for _, w := range tt.want {
-				if !strings.Contains(body, w) {
-					t.Errorf("body missing %q:\n%s", w, body)
+			for _, w := range tt.wantGuidance {
+				if !strings.Contains(got.Guidance, w) {
+					t.Errorf("guidance missing %q: %s", w, got.Guidance)
 				}
 			}
-			for _, w := range tt.notWant {
-				if strings.Contains(body, w) {
-					t.Errorf("body must not contain %q:\n%s", w, body)
+			for _, w := range tt.notWantInGuide {
+				if strings.Contains(got.Guidance, w) {
+					t.Errorf("guidance must not contain %q: %s", w, got.Guidance)
 				}
 			}
 		})
@@ -102,48 +101,43 @@ type fixedStatus broker.SessionStatus
 func (f fixedStatus) Status() broker.SessionStatus { return broker.SessionStatus(f) }
 
 // Issue #727: the 立花 adapter's version heads-up is a notice, not an error; an
-// error (or the nightly closed hours) keeps the error banner.
-func TestMarketDataHandler_Status_BrokerNotices(t *testing.T) {
+// error (or the nightly closed hours) keeps the error guidance.
+func TestMarketDataHandler_BannerProps_BrokerNotices(t *testing.T) {
 	tests := []struct {
-		name    string
-		status  broker.SessionStatus
-		want    []string
-		notWant []string
+		name         string
+		status       broker.SessionStatus
+		wantGuidance bool
+		wantNotice   string
+		wantIssue    string
 	}{
 		{
-			name:    "version retiring while the session is fine shows the amber notice",
-			status:  broker.SessionStatus{VersionRetiring: true},
-			want:    []string{`data-testid="marketdata-notice"`, "リリース予定日", `href="/settings/broker"`},
-			notWant: []string{`data-testid="marketdata-banner"`},
+			name:       "version retiring while the session is fine is only a notice",
+			status:     broker.SessionStatus{VersionRetiring: true},
+			wantNotice: "リリース予定日",
 		},
 		{
-			name:    "an error outranks the notice",
-			status:  broker.SessionStatus{Issue: broker.SessionIssueUnreachable, Guidance: "接続できません。", VersionRetiring: true},
-			want:    []string{`data-testid="marketdata-banner"`, `data-issue="unreachable"`},
-			notWant: []string{"marketdata-notice"},
+			name:         "an error is reported next to the notice (the consumer ranks the error first)",
+			status:       broker.SessionStatus{Issue: broker.SessionIssueUnreachable, Guidance: "接続できません。", VersionRetiring: true},
+			wantGuidance: true,
+			wantIssue:    "unreachable",
+			wantNotice:   "リリース予定日",
 		},
 		{
-			name:   "nightly closed hours use the ordinary banner with the schedule guidance",
-			status: broker.SessionStatus{Issue: broker.SessionIssueOutOfHours, Guidance: "開局後（05:35）に自動で再ログインします。"},
-			want:   []string{`data-issue="out_of_hours"`, "05:35"},
+			name:         "nightly closed hours carry the schedule guidance",
+			status:       broker.SessionStatus{Issue: broker.SessionIssueOutOfHours, Guidance: "開局後（05:35）に自動で再ログインします。"},
+			wantGuidance: true,
+			wantIssue:    "out_of_hours",
 		},
-		{name: "nothing to say renders nothing", status: broker.SessionStatus{}, notWant: []string{"marketdata-"}},
+		{name: "nothing to say reports nothing", status: broker.SessionStatus{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			engine := gin.New()
-			engine.GET("/system/marketdata-status", system.NewMarketDataHandler(fixedStatus(tt.status)).Status)
-			body := serve(engine, http.MethodGet, "/system/marketdata-status").Body.String()
-			for _, w := range tt.want {
-				if !strings.Contains(body, w) {
-					t.Errorf("body missing %q:\n%s", w, body)
-				}
+			got := system.NewMarketDataHandler(fixedStatus(tt.status)).BannerProps(context.Background())
+			if (got.Guidance != "") != tt.wantGuidance || got.Issue != tt.wantIssue {
+				t.Errorf("issue/guidance = %q/%q, want issue %q with guidance %v", got.Issue, got.Guidance, tt.wantIssue, tt.wantGuidance)
 			}
-			for _, w := range tt.notWant {
-				if strings.Contains(body, w) {
-					t.Errorf("body must not contain %q:\n%s", w, body)
-				}
+			if (tt.wantNotice == "") != (got.Notice == "") || !strings.Contains(got.Notice, tt.wantNotice) {
+				t.Errorf("notice = %q, want it to contain %q", got.Notice, tt.wantNotice)
 			}
 		})
 	}
@@ -153,31 +147,24 @@ type fakeWatchNotice string
 
 func (f fakeWatchNotice) WatchNotice(context.Context) string { return string(f) }
 
-// Issue #730: a stand-in 立花 watch list (the daily bars were unusable) shows
-// as the amber notice, next to the version heads-up and below an error.
-func TestMarketDataHandler_Status_WatchListNotice(t *testing.T) {
-	render := func(status broker.SessionStatus, notice string) string {
-		gin.SetMode(gin.TestMode)
-		engine := gin.New()
-		engine.GET("/system/marketdata-status", system.NewMarketDataHandler(fixedStatus(status)).WithWatchNotice(fakeWatchNotice(notice)).Status)
-		rec := httptest.NewRecorder()
-		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/marketdata-status", nil))
-		return rec.Body.String()
+// Issue #730: a stand-in 立花 watch list (the daily bars were unusable) is a
+// notice, joined to the version heads-up.
+func TestMarketDataHandler_BannerProps_WatchListNotice(t *testing.T) {
+	const standIn = "監視リストを前営業日から引き継ぎました。"
+	props := func(status broker.SessionStatus, notice string) organisms.MarketDataBannerProps {
+		return system.NewMarketDataHandler(fixedStatus(status)).WithWatchNotice(fakeWatchNotice(notice)).BannerProps(context.Background())
 	}
 
-	body := render(broker.SessionStatus{}, "監視リストを前営業日から引き継ぎました。")
-	if !strings.Contains(body, `data-testid="marketdata-notice"`) || !strings.Contains(body, "前営業日から引き継ぎました") {
-		t.Errorf("notice missing: %s", body)
+	if got := props(broker.SessionStatus{}, standIn); got.Notice != standIn {
+		t.Errorf("notice = %q, want %q", got.Notice, standIn)
 	}
-	body = render(broker.SessionStatus{VersionRetiring: true}, "監視リストを前営業日から引き継ぎました。")
-	if !strings.Contains(body, "リリース予定日") || !strings.Contains(body, "前営業日から引き継ぎました") {
-		t.Errorf("both notices must show: %s", body)
+	if got := props(broker.SessionStatus{VersionRetiring: true}, standIn); !strings.Contains(got.Notice, "リリース予定日") || !strings.Contains(got.Notice, standIn) {
+		t.Errorf("both notices must be reported: %q", got.Notice)
 	}
-	if body = render(broker.SessionStatus{}, ""); strings.Contains(body, "marketdata-notice") {
-		t.Errorf("no notice expected: %s", body)
+	if got := props(broker.SessionStatus{}, ""); got.Notice != "" {
+		t.Errorf("no notice expected: %q", got.Notice)
 	}
-	body = render(broker.SessionStatus{Issue: broker.SessionIssueUnreachable, Guidance: "接続できません。"}, "監視リストを前営業日から引き継ぎました。")
-	if !strings.Contains(body, `data-testid="marketdata-banner"`) || strings.Contains(body, "前営業日から引き継ぎました") {
-		t.Errorf("an error outranks the notice: %s", body)
+	if got := props(broker.SessionStatus{Issue: broker.SessionIssueUnreachable, Guidance: "接続できません。"}, standIn); got.Guidance == "" {
+		t.Errorf("the failure must still be reported next to the notice: %+v", got)
 	}
 }

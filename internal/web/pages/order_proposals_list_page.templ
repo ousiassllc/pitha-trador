@@ -3,21 +3,25 @@ package pages
 import (
 	"strconv"
 
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
-// OrderProposalsPage is the AIの注文提案 list (issue #829, child of #826): the
-// Paper order proposals the MCP client made, newest first, with their status,
-// the reason code, the loss the proposer expected next to the application's
-// estimate, and the realized pnl once the position closed. `GET
-// /order-proposals` (internal/web/handler/orderproposals) renders it. It only
-// reads: a proposal is made, changed and cancelled through the MCP.
+// OrderProposalsPage is the AIの注文提案 list: the Paper order proposals the
+// MCP client made, newest first, with their status, the reason code, the loss
+// the proposer expected next to the application's estimate, and the realized
+// pnl once the position closed. `GET /order-proposals`
+// (internal/web/handler/orderproposals) renders it. It only reads: a proposal
+// is made, changed and cancelled through the MCP.
 templ OrderProposalsPage(props ProposalListProps) {
 	@layout.Shell("AIの注文提案", organisms.NavOrderProposals) {
 		<h1 class="text-2xl font-bold text-slate-900">AIの注文提案</h1>
 		<p class="mt-1 text-sm text-slate-600">
-			MCP から出された Paper の注文提案の一覧です。提案の受け付け・取消は MCP 経由で行い、この画面は読むだけです。各提案の詳細（理由・損切りの計画・最大損失・情報源・状態の履歴・ひも付いた注文とポジション）は ID のリンクから開けます。
+			Paper の注文提案
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-order-proposals-about", Label: "AIの注文提案の説明"}) {
+				MCP から出された Paper の注文提案の一覧です。提案の受け付け・取消は MCP 経由で行い、この画面は読むだけです。各提案の詳細（理由・損切りの計画・最大損失・情報源・状態の履歴・ひも付いた注文とポジション）は番号のリンクから開けます。
+			}
 		</p>
 		for _, e := range props.Errors {
 			<p class="mt-3 rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800" role="alert" data-testid="order-proposals-error">{ e }</p>
@@ -71,14 +75,24 @@ templ orderProposalsTable(rows []ProposalRow) {
 		<caption class="sr-only">注文提案の一覧（新しい順）</caption>
 		<thead class="border-b border-slate-300 text-xs text-slate-600">
 			<tr>
-				<th scope="col" class="py-1 pr-3" title="ID">注文案番号</th>
+				<th scope="col" class="py-1 pr-3">注文案番号</th>
 				<th scope="col" class="py-1 pr-3">受付（JST）</th>
 				<th scope="col" class="py-1 pr-3">銘柄</th>
 				<th scope="col" class="py-1 pr-3">枠</th>
 				<th scope="col" class="py-1 pr-3">売買</th>
 				<th scope="col" class="py-1 pr-3">状態</th>
-				<th scope="col" class="py-1 pr-3">数量（提案 → 適用）</th>
-				<th scope="col" class="py-1 pr-3">最大損失（提案 / 見積り）</th>
+				<th scope="col" class="py-1 pr-3">
+					数量（提案 → 適用）
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-order-proposals-quantity", Label: "数量の説明"}) {
+						提案された数量と、アプリが決めた数量です。予算で提案された場合は、提案の欄に予算額を表示します。
+					}
+				</th>
+				<th scope="col" class="py-1 pr-3">
+					最大損失（提案 / 見積り）
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-order-proposals-max-loss", Label: "最大損失の説明"}) {
+						提案が見込んだ最大損失と、アプリが「数量 ×（約定見込み価格 − 損切り価格）」で見積もった最大損失です。
+					}
+				</th>
 				<th scope="col" class="py-1">実現損益</th>
 			</tr>
 		</thead>
@@ -96,7 +110,6 @@ templ orderProposalsTable(rows []ProposalRow) {
 					<td class="py-1 pr-3">{ label(proposalActionLabels, r.Action) }</td>
 					<td class="py-1 pr-3">
 						{ label(proposalStatusLabels, r.Status) }
-						<span class="font-mono text-xs text-slate-500">{ r.Status }</span>
 						if r.StatusReason != "" {
 							<span class="block font-mono text-xs text-slate-500">{ r.StatusReason }</span>
 						}

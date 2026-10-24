@@ -249,7 +249,7 @@ describe('pitha-calibration-heatmap meta-labeling model', () => {
     test('shows データ無し while the model took no OOS signal', async () => {
       const { el } = await mount(response({ meta_model: metaModel() }));
 
-      expect(text(el, 'calibration-metamodel-ev-verdict')).toBe('データ無し');
+      expect(text(el, 'calibration-metamodel-ev-verdict')).toContain('データ無し');
     });
 
     test('shows 判定不能 with the detectable-edge line for an edge below it', async () => {

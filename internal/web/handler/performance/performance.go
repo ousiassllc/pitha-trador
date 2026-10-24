@@ -15,7 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/insight"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
-	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
+	"github.com/ousiassllc/pitha-trador/internal/web/organisms/performancepanels"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -144,9 +144,9 @@ func (h *PerformanceHandler) Page(c *gin.Context) {
 	shared.RenderHTML(c, status, pages.PerformancePage(props))
 }
 
-func (h *PerformanceHandler) defaultForm() organisms.BacktestFormValues {
+func (h *PerformanceHandler) defaultForm() performancepanels.BacktestFormValues {
 	today := h.now().In(jst)
-	return organisms.BacktestFormValues{
+	return performancepanels.BacktestFormValues{
 		From:           today.AddDate(0, 0, -defaultRangeDays).Format(dateLayout),
 		To:             today.Format(dateLayout),
 		TrainingDays:   defaultTrainingDays,
@@ -160,39 +160,39 @@ func (h *PerformanceHandler) defaultForm() organisms.BacktestFormValues {
 // Forward period per fold. The returned form echoes the raw input even on
 // error; the returned messages (Japanese, shown to the operator one per
 // line) are empty when the input is valid.
-func parseBacktestForm(c *gin.Context) (organisms.BacktestFormValues, backtest.WalkForwardConfig, []string) {
-	form := organisms.BacktestFormValues{From: c.Query("from"), To: c.Query("to")}
+func parseBacktestForm(c *gin.Context) (performancepanels.BacktestFormValues, backtest.WalkForwardConfig, []string) {
+	form := performancepanels.BacktestFormValues{From: c.Query("from"), To: c.Query("to")}
 	var errs []string
-	days := func(key string, fallback int) int {
+	days := func(key, label string, fallback int) int {
 		raw := c.Query(key)
 		if raw == "" {
 			return fallback
 		}
 		n, err := strconv.Atoi(raw)
 		if err != nil || n < 1 || n > maxFoldDays {
-			errs = append(errs, fmt.Sprintf("%s は 1〜%d の整数で指定してください。", key, maxFoldDays))
+			errs = append(errs, fmt.Sprintf("%sは 1〜%d の整数で指定してください。", label, maxFoldDays))
 			return fallback
 		}
 		return n
 	}
-	form.TrainingDays = days("training_days", defaultTrainingDays)
-	form.ValidationDays = days("validation_days", defaultValidationDays)
-	form.ForwardDays = days("forward_days", defaultForwardDays)
+	form.TrainingDays = days("training_days", "学習日数", defaultTrainingDays)
+	form.ValidationDays = days("validation_days", "検証日数", defaultValidationDays)
+	form.ForwardDays = days("forward_days", "Forward 日数", defaultForwardDays)
 
 	from, err := time.ParseInLocation(dateLayout, form.From, jst)
 	if err != nil {
-		errs = append(errs, "from は YYYY-MM-DD 形式の日付で指定してください。")
+		errs = append(errs, "開始日は YYYY-MM-DD 形式の日付で指定してください。")
 	}
 	to, err := time.ParseInLocation(dateLayout, form.To, jst)
 	if err != nil {
-		errs = append(errs, "to は YYYY-MM-DD 形式の日付で指定してください。")
+		errs = append(errs, "終了日は YYYY-MM-DD 形式の日付で指定してください。")
 	}
 	if len(errs) == 0 {
 		// int64 seconds: extreme dates must not overflow time.Duration.
 		if days := (to.Unix()-from.Unix())/(24*60*60) + 1; to.Before(from) {
-			errs = append(errs, "to は from 以降の日付で指定してください。")
+			errs = append(errs, "終了日は開始日以降の日付で指定してください。")
 		} else if days > maxRangeDays {
-			errs = append(errs, fmt.Sprintf("from〜to の期間は最大 %d 日までです（指定: %d 日）。", maxRangeDays, days))
+			errs = append(errs, fmt.Sprintf("開始日〜終了日の期間は最大 %d 日までです（指定: %d 日）。", maxRangeDays, days))
 		}
 	}
 	if len(errs) > 0 {
@@ -207,10 +207,10 @@ func parseBacktestForm(c *gin.Context) (organisms.BacktestFormValues, backtest.W
 	}
 	switch n := wf.SplitCount(); {
 	case n == 0:
-		return form, backtest.WalkForwardConfig{}, []string{fmt.Sprintf("%s〜%s は Training/Validation/Forward を %d+%d+%d 日で1フォールド実行するには短すぎます。期間を長くするか、各日数を短くしてください。",
+		return form, backtest.WalkForwardConfig{}, []string{fmt.Sprintf("%s〜%s は 学習・検証・Forward を %d+%d+%d 日で1フォールド実行するには短すぎます。期間を長くするか、各日数を短くしてください。",
 			form.From, form.To, form.TrainingDays, form.ValidationDays, form.ForwardDays)}
 	case n > maxSplits:
-		return form, backtest.WalkForwardConfig{}, []string{fmt.Sprintf("フォールド数が %d になり、上限 %d を超えます。forward_days を長くするか、期間を短くしてください。", n, maxSplits)}
+		return form, backtest.WalkForwardConfig{}, []string{fmt.Sprintf("フォールド数が %d になり、上限 %d を超えます。Forward 日数を長くするか、期間を短くしてください。", n, maxSplits)}
 	}
 	return form, wf, nil
 }

@@ -16,7 +16,9 @@ type Link struct {
 
 // TradeStatusView is the 取引の状態 card (issue #896 §5.1). Sentence is the
 // whole one-line verdict ("新規エントリー: 可能" / "新規エントリー: 停止中 — …");
-// Detail and Link explain it, Notice says part of the state could not be read.
+// Detail is what the operator has to do or know right now (kept on the
+// screen), Help the longer explanation shown behind a 「?」 mark next to the
+// sentence, Link where to look; Notice says part of the state could not be read.
 // A non-empty Err replaces the card body: the read it depends on failed.
 // State feeds the existing pitha-kill-switch-panel.
 type TradeStatusView struct {
@@ -25,6 +27,7 @@ type TradeStatusView struct {
 	Allowed  bool
 	Sentence string
 	Detail   string
+	Help     string
 	Link     Link
 	Notice   string
 }
@@ -81,12 +84,15 @@ const (
 )
 
 // AttentionItem is one thing that needs the operator. Key is its stable id
-// (the attention code or banner name), exposed as `data-key`.
+// (the attention code or banner name), exposed as `data-key`. Detail is the
+// short line kept under the title (what to do or what state it is in); Help is
+// the longer explanation shown behind a 「?」 mark next to the title.
 type AttentionItem struct {
 	Key    string
 	Level  AttentionLevel
 	Title  string
 	Detail string
+	Help   string
 	Link   Link
 }
 

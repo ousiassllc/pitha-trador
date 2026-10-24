@@ -15,7 +15,7 @@ import (
 // ConsistencyItems is the 整合チェック block: risk.yaml's initial_capital and
 // Kill Switch rate against the daily guard (display only).
 func ConsistencyItems(warnings []dailyguardsettings.Warning) []molecules.SettingDerivedItem {
-	items := []molecules.SettingDerivedItem{{Key: "consistency", Heading: true, Label: "整合チェック", Detail: "（risk.yaml との比較・表示のみ）"}}
+	items := []molecules.SettingDerivedItem{{Key: "consistency", Heading: true, Label: "整合チェック", Help: []string{"config/risk.yaml の運用資金・日次損失率との比較です。表示のみで、取引の動きは変わりません。"}}}
 	if len(warnings) == 0 {
 		return append(items, molecules.SettingDerivedItem{Key: "consistency-ok", Label: "問題なし"})
 	}
@@ -24,9 +24,9 @@ func ConsistencyItems(warnings []dailyguardsettings.Warning) []molecules.Setting
 
 // LiveReadinessItems is the Live 前チェック block. It warns about each
 // disabled rule and never rejects anything: the Live default-enable criteria
-// are still awaiting the owner's decision (issue #782).
+// are not decided yet.
 func LiveReadinessItems(warnings []dailyguardsettings.Warning) []molecules.SettingDerivedItem {
-	items := []molecules.SettingDerivedItem{{Key: "live", Heading: true, Label: "Live 前チェック", Detail: "警告のみ（拒否はしない）。Live の既定有効化の基準は決定待ち"}}
+	items := []molecules.SettingDerivedItem{{Key: "live", Heading: true, Label: "Live 前チェック", Help: []string{"Live で使う前の確認です。無効なルールを警告するだけで、保存は拒否しません。"}}}
 	if len(warnings) == 0 {
 		return append(items, molecules.SettingDerivedItem{Key: "live-ok", Label: "3つのルールすべて有効"})
 	}
@@ -81,7 +81,7 @@ func ruleItem(key, label string, capital float64, rule dailyguardsettings.Rule) 
 		item.Detail = "（運用資金 × " + dailyguardsettings.FormatNumber(rule.Pct) + "% が 1 円未満のため）"
 	case rule.Source == dailyguardsettings.SourceDirect:
 		item.Value, item.Off = dailyguardsettings.FormatYen(rule.JPY)+" 円", false
-		item.Detail = "（円で直接指定・互換設定）"
+		item.Detail = "（円で直接指定）"
 	case rule.NeedsCapital():
 		item.Detail = "（運用資金が未設定のため無効）"
 	}

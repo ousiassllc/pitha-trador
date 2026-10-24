@@ -179,8 +179,8 @@ func WithBacktestRunner(runner performance.BacktestRunner) Option {
 	return func(o *options) { o.backtestRunner = runner }
 }
 
-// WithSecretsStore sets the Settings/Setup screens' and secrets-status
-// banner's backing internal/web/handler/settings.SecretsStore, and enables the
+// WithSecretsStore sets the Settings/Setup screens' and Home's 要対応
+// unset-optional-keys list's backing internal/web/handler/settings.SecretsStore, and enables the
 // Setup Guard (middleware.SetupGuard, issue #80): while any required key
 // is unset in store, every route except `/setup`, `POST`/`DELETE
 // /settings/:key` and `/static/...` redirects to `/setup`. cmd/desktop
@@ -231,40 +231,39 @@ func WithBrokerSession(session settings.BrokerSession) Option {
 	return func(o *options) { o.brokerSession = session }
 }
 
-// WithUpdateController enables the update notification routes (`GET
-// /system/update-status`, `GET /system/update-panel`, `POST
-// /system/update-check`, issue #76) backed by controller. cmd/desktop
+// WithUpdateController enables the update routes (`GET /system/update-panel`,
+// `POST /system/update-check`, issue #76) and Home's 要対応 update item,
+// backed by controller. cmd/desktop
 // passes internal/bootstrap's updater.SchedulerAdapter; without it (cmd/
-// server, which never self-updates) the two GET routes render nothing and
-// the POST route 404s.
+// server, which never self-updates) the panel GET says the build has no
+// updater and the POST route 404s.
 func WithUpdateController(controller system.UpdateController) Option {
 	return func(o *options) { o.updateController = controller }
 }
 
-// WithMarketDataStatus enables `GET /system/marketdata-status` (issues #295,
-// #739), the header banner telling the operator why the broker session
-// (kabu: the kabuステーションAPI token; 立花: the e支店 login) is failing.
+// WithMarketDataStatus sets the broker session the Home screen's 要対応 list
+// and the badge on every page read (issues #295, #739) to tell the operator
+// why it (kabu: the kabuステーションAPI token; 立花: the e支店 login) is failing.
 // cmd/desktop and cmd/server pass internal/bootstrap's broker.Broker;
-// without it the route renders nothing. With WithOperationalSettings the
-// banner follows the broker selection (立花: per-cause guidance and the
+// without it nothing is reported. With WithOperationalSettings the
+// content follows the broker selection (立花: per-cause guidance and the
 // demo / production environment).
 func WithMarketDataStatus(source system.MarketDataStatusSource) Option {
 	return func(o *options) { o.marketDataStatus = source }
 }
 
-// WithDailyHaltSource enables `GET /system/daily-halt` (issue #753), the
-// header banner telling the operator which daily entry-halt rule (損失上限 /
+// WithDailyHaltSource sets the daily entry-halt source (issue #753) Home's
+// 要対応 list reads, telling the operator which rule (損失上限 /
 // 利益確保 / 最大取引回数) stopped new entries today. cmd/desktop and cmd/
-// server pass internal/bootstrap's Risk Engine; without it the route
-// renders nothing.
+// server pass internal/bootstrap's Risk Engine; without it nothing is reported.
 func WithDailyHaltSource(source system.DailyHaltSource) Option {
 	return func(o *options) { o.dailyHaltSource = source }
 }
 
-// WithHealthAlertSource enables `GET /system/health-alerts` (issue #802), the
-// header banner for the trading-hours market-data warning (kabu not logged in,
-// no market-data job). cmd/desktop and cmd/server pass internal/bootstrap's
-// health alert detector; without it the route renders nothing.
+// WithHealthAlertSource sets the trading-hours market-data warning source
+// (issue #802: kabu not logged in, no market-data job) Home's 要対応 list reads.
+// cmd/desktop and cmd/server pass internal/bootstrap's
+// health alert detector; without it nothing is reported.
 func WithHealthAlertSource(source system.HealthAlertSource) Option {
 	return func(o *options) { o.healthAlertSource = source }
 }

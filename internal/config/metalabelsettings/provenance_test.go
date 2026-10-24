@@ -99,8 +99,8 @@ func TestCutoffStatus_PlaceholderReplacedThenConfirmed(t *testing.T) {
 func TestCutoffStatusLabelAndHelp(t *testing.T) {
 	for _, status := range []string{metalabelsettings.CutoffPlaceholder, metalabelsettings.CutoffUnverified, metalabelsettings.CutoffConfirmed} {
 		label, effect := metalabelsettings.CutoffStatusLabel(status)
-		if !strings.Contains(label, status) || effect == "" {
-			t.Errorf("CutoffStatusLabel(%q) = %q, %q: want the code in the label and a non-empty effect", status, label, effect)
+		if label == "" || effect == "" {
+			t.Errorf("CutoffStatusLabel(%q) = %q, %q: want a label and a non-empty effect", status, label, effect)
 		}
 	}
 	help := strings.Join(metalabelsettings.CutoffHelp(), "\n")

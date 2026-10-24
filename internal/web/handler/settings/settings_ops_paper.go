@@ -13,17 +13,16 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
-// paperRiskGroup holds the Paper operating capital and its exposure limits
-// (issue #804) next to the daily guard's operating capital, so the two
+// paperRiskGroup holds the Paper operating capital and its exposure limits next to the daily guard's operating capital, so the two
 // capitals are set - and compared (整合チェック) - on one screen. Paper only:
 // Live keeps using config/risk.yaml.
 var paperRiskGroup = opsGroup{
 	id:   "paper-risk",
 	name: "Paper の運用資金・建玉上限・1回の最大損失",
-	description: "Paper Trading の運用資金（ポジションサイズ計算の分母）と、1 銘柄・全体の建玉上限、1 回の取引の最大損失（いずれも運用資金に対する %）です（issue #804）。" +
+	description: "Paper Trading の運用資金（ポジションサイズ計算の分母）と、1 銘柄・全体の建玉上限、1 回の取引の最大損失（いずれも運用資金に対する %）です。" +
 		"Paper の初期値は運用資金 500,000 円・1 銘柄 100%・総エクスポージャ 100%・1 回の最大損失 1.0% です（50 万円を同一銘柄に全部載せても可。株価 5,000 円の銘柄の 1 単元も買えます）。" +
 		"日次ガード用の運用資金も同じ値にそろえられます（異なると警告が出ます）。" +
-		"なお、メタラベリングの Jev 学習データの終わり（metalabel.llm_cutoff と確認記録のモデル名・確認日・出典）は、同じ設定の「予測モデル」ページ >「メタラベリング」で設定します。",
+		"なお、メタラベリングの Jev 学習データの終わり（確認記録のモデル名・確認日・出典を含む）は、同じ設定の「予測モデル」ページ >「メタラベリング」で設定します。",
 	note: "保存した値は再起動不要で、次のリスク判定（候補ごとのサイズ計算と上限チェック）から反映されます。未保存の項目は config/risk.yaml の Paper の値を使い、「既定に戻す」でその値に戻ります。" +
 		"Paper 専用です。Live の値と動作はこの設定の影響を受けず、config/risk.yaml だけで決まります。" +
 		"運用資金は 0 円より大きく 1 兆円以下、建玉上限の % は 0 より大きく 100 以下、1 回の最大損失の % は " + formatPct(papersettings.MinTradeLossPct) + " 以上 " + formatPct(papersettings.MaxTradeLossPct) + " 以下です。" +
@@ -39,7 +38,7 @@ var paperRiskGroup = opsGroup{
 		{key: papersettings.KeyMaxTotalExposurePct, label: "総エクスポージャの上限（運用資金に対する %）", placeholder: "100",
 			hint: "保有中の建玉の合計の上限です（例: 100 なら運用資金の全額まで）。0 より大きく 100 以下です。"},
 		{key: papersettings.KeyMaxTradeLossPct, label: "1 回の取引の最大損失（運用資金に対する %）", placeholder: "1.0",
-			hint: "初期ストップ（0.6%）に達したときの損失が運用資金のこの % 以内になるようにサイズを決めます（max_trade_loss_pct。例: 1.0 なら運用資金 50 万円で損失 5,000 円まで）。" +
+			hint: "初期ストップ（0.6%）に達したときの損失が運用資金のこの % 以内になるようにサイズを決めます（例: 1.0 なら運用資金 50 万円で損失 5,000 円まで）。" +
 				formatPct(papersettings.MinTradeLossPct) + " 以上 " + formatPct(papersettings.MaxTradeLossPct) + " 以下です。"},
 		{key: dailyguardsettings.KeyOperatingCapitalJPY, label: "日次ガード用の運用資金（円）", placeholder: "0（未設定）",
 			hint: "「1日の損失上限・利益確保」の発動額を計算する元になる運用資金です（% × 運用資金 = 円）。Paper の運用資金と同じ値にそろえてください（異なると警告が出ます）。0 で未設定です（% 指定のルールは無効になります）。"},

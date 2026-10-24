@@ -162,11 +162,16 @@ func TestTradeStatus_NamesTachibanaWhenItIsTheBroker(t *testing.T) {
 func TestTradeStatus_DailyGuardShowsItsFigures(t *testing.T) {
 	f := newFixture()
 	f.halt = lossLimitHalt()
-	detail := inner(t, f.mustGet(t, "/home/trade-status"), "trade-status-detail")
-	for _, want := range []string{"当日損益 -50000円 が損失上限 -50000円 に達しました。", "決済は通常どおり", "翌営業日に自動で解除"} {
-		if !strings.Contains(detail, want) {
-			t.Errorf("detail %q lacks %q", detail, want)
-		}
+	body := f.mustGet(t, "/home/trade-status")
+	if detail := inner(t, body, "trade-status-detail"); !strings.Contains(detail, "当日損益 -50000円 が損失上限 -50000円 に達しました。") {
+		t.Errorf("detail %q lacks the figures that reached the rule", detail)
+	}
+	// What the guard does next is the card's help text: in the DOM, tied to its 「?」.
+	if got := clean(body); !strings.Contains(got, "決済は通常どおり") || !strings.Contains(got, "翌営業日に自動で解除") {
+		t.Errorf("the card lacks the daily guard's help text: %s", got)
+	}
+	if !strings.Contains(body, `aria-describedby="help-home-trade-status"`) {
+		t.Errorf("the help mark is not tied to its text: %s", body)
 	}
 }
 

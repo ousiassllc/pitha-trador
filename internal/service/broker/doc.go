@@ -1,6 +1,6 @@
 // Package broker is the broker-neutral boundary between the market-data
 // consumers (market-data job, held-position monitor, symbol cache, ranking
-// watch, the system banner, the Risk Engine's health signals) and the
+// watch, Home's 要対応 list, the Risk Engine's health signals) and the
 // brokerage API adapter that feeds them (docs/architecture/overview.md §4
 // "ブローカーアダプタ", overview/integrations.md §5).
 //

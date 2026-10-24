@@ -201,7 +201,7 @@ func TestSettingsHandler_Save_NewsFeedEnabledAcceptsOnlyOnOff(t *testing.T) {
 }
 
 // issue #695: a successful HTMX Save/Delete fires secretsStatusChanged so
-// Header's #config-banner refetches the unset-optional-keys list; failures
+// the 要対応 badge and list refetch the unset-optional-keys list; failures
 // and the non-HTMX redirect fire nothing.
 func TestSettingsHandler_SaveAndDelete_FireSecretsStatusChanged(t *testing.T) {
 	gin.SetMode(gin.TestMode)

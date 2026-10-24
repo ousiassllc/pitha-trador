@@ -54,7 +54,7 @@ func TestTachibanaCard_ShowsTheEnvironmentAlways(t *testing.T) {
 	}
 }
 
-func TestTachibanaCard_ProductionSaysNoOrdersUntilIssue55(t *testing.T) {
+func TestTachibanaCard_ProductionSaysNoOrders(t *testing.T) {
 	runtime := memRuntime{config.KeyBrokerProvider: `"tachibana"`, config.KeyTachibanaEnvironment: `"production"`}
 	body := get(cardEngine(memSecrets{}, runtime, nil), "/settings/broker")
 	for _, id := range []string{"connection-badge-tachibana-environment", "connection-badge-tachibana-no-orders", "connection-badge-tachibana-selected"} {
@@ -62,7 +62,7 @@ func TestTachibanaCard_ProductionSaysNoOrdersUntilIssue55(t *testing.T) {
 			t.Errorf("production card lacks %s", id)
 		}
 	}
-	if !strings.Contains(body, "本番環境") || !strings.Contains(body, "発注は行いません（#55 まで）") {
+	if !strings.Contains(body, "本番環境") || !strings.Contains(body, ">発注は行いません<") {
 		t.Errorf("production card must say 本番環境 and that no orders are placed; body=%s", body)
 	}
 }

@@ -3,6 +3,7 @@ package homepanels
 import (
 	"strconv"
 
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -43,17 +44,22 @@ templ DetailsBody(v View) {
 
 templ rejectReasonsBlock(v RejectReasonsView) {
 	<section class={ blockClass } data-testid="home-reject-reasons" aria-labelledby="home-reject-title">
-		<h3 id="home-reject-title" class="text-sm font-semibold text-slate-700">エントリーしなかった理由（今日）</h3>
+		<div class="flex items-center gap-1">
+			<h3 id="home-reject-title" class="text-sm font-semibold text-slate-700">エントリーしなかった理由（今日）</h3>
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-home-reject-reasons", Label: "エントリーしなかった理由の説明"}) {
+				今日、方向なし（NONE）と判断したシグナルを、理由別に数えています。
+			}
+		</div>
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if len(v.Rows) == 0 {
 			<p class="mt-2 text-sm text-slate-500" data-testid="reject-empty">今日はまだ見送りの記録がありません。</p>
 		} else {
-			<p class="mt-1 text-xs text-slate-500">今日、方向なし（NONE）と判断した { strconv.Itoa(v.Total) } 件の理由別の件数です。</p>
+			<p class="mt-1 text-xs text-slate-500">計 { strconv.Itoa(v.Total) } 件</p>
 			<ul class="mt-2 flex flex-col gap-1 text-sm">
 				for _, r := range v.Rows {
 					<li class="flex items-baseline justify-between gap-3" data-testid="reject-row" data-code={ r.Code }>
-						<span>{ r.Label }<span class="ml-1 text-xs text-slate-400">{ r.Code }</span></span>
+						<span>{ r.Label }</span>
 						<span class="font-semibold tabular-nums">{ strconv.Itoa(r.Count) }</span>
 					</li>
 				}

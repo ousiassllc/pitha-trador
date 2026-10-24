@@ -3,6 +3,7 @@ package organisms
 import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/version"
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 )
 
 // Header is the global navigation + system-state indicator rendered on
@@ -91,13 +92,17 @@ templ Header(state domain.SystemState, current NavItem) {
 				hx-swap="innerHTML"
 			></div>
 		}
-		<a
-			id="header-version"
-			class="text-xs text-slate-500 hover:text-slate-900"
-			href="/settings/maintenance#update-panel"
-			title="アップデートの確認（設定）"
-			data-testid="header-version"
-		>{ version.Version }</a>
+		<span class="flex items-center gap-1">
+			<a
+				id="header-version"
+				class="text-xs text-slate-500 hover:text-slate-900"
+				href="/settings/maintenance#update-panel"
+				data-testid="header-version"
+			>{ version.Version }</a>
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-header-version", Label: "バージョン表示の説明"}) {
+				現在のバージョンです。押すと、設定のシステムでアップデートを確認できます。
+			}
+		</span>
 		<div
 			id="header-status"
 			class="flex items-center gap-3"

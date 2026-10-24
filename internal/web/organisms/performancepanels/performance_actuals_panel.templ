@@ -1,0 +1,104 @@
+package performancepanels
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+)
+
+// PerformanceActuals is PerformanceActualsPanel's plain-props view of the
+// realized (Paper) performance (internal/web/handler maps
+// insight.Performance onto it), so organisms stay decoupled from
+// internal/service. A nil ratio is undefined and renders as "—".
+type PerformanceActuals struct {
+	TotalPnL               float64
+	DailyPnL               float64
+	TradeCount             int
+	WinRate                float64
+	ProfitFactor           *float64
+	Expectancy             float64
+	MaxDrawdownPct         float64
+	AverageHoldTimeMinutes float64
+	SharpeRef              *float64
+	SortinoRef             *float64
+	SignalCount            int64
+}
+
+// noValue is shown for a metric that is undefined (nil in the API's
+// `null`), e.g. Sharpe with fewer than 2 trades.
+const noValue = "—"
+
+// PerformanceActualsPanel renders the realized (Paper) performance of every
+// closed position - functional.md §5.3's Total/Daily PnL, Win Rate, Profit
+// Factor, Expectancy, Max Drawdown, Average Hold Time, Sharpe/Sortino
+// reference values and Signal count - the same figures `GET
+// /api/v1/performance` returns. Undefined (nil) metrics render as "—".
+// err is non-empty when the figures could not be read; the panel then
+// shows it instead of the metrics.
+templ PerformanceActualsPanel(perf PerformanceActuals, err string) {
+	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="performance-actuals">
+		<h2 class="text-lg font-semibold text-slate-900">
+			実績（Paper）
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-performance-actuals", Label: "実績（Paper）の説明"}) {
+				クローズ済みポジションの実績です。シャープレシオ・ソルティノレシオは1取引あたりの参考値で、年率換算はしていません。
+			}
+		</h2>
+		if err != "" {
+			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="actuals-error">{ err }</p>
+		} else {
+			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+				@actualsMetric("累計損益", "total_pnl", yen(perf.TotalPnL), "Total PnL。クローズ済みの全ポジションの実現損益の合計（円）です。")
+				@actualsMetric("本日の損益", "daily_pnl", yen(perf.DailyPnL), "Daily PnL。本日（日本時間 0:00 以降）にクローズしたポジションの実現損益の合計（円）です。")
+				@actualsMetric("取引数", "trade_count", fmt.Sprintf("%d", perf.TradeCount), "Trades。クローズ済みポジションの数です。")
+				@actualsMetric("勝率", "win_rate", fmt.Sprintf("%.1f%%", perf.WinRate*100), "Win Rate。利益が出た取引の割合です。")
+				@actualsMetric("プロフィットファクター", "profit_factor", optionalRatio(perf.ProfitFactor), "Profit Factor。総利益 ÷ 総損失（円ベース）です。1 を超えると利益が損失を上回ります。負けた取引がないときは「—」と表示します。")
+				@actualsMetric("期待値", "expectancy", pct(perf.Expectancy), "Expectancy。1取引あたりの平均リターン（建玉金額に対する %）です。")
+				@actualsMetric("最大ドローダウン", "max_drawdown_pct", pct(perf.MaxDrawdownPct), "Max Drawdown。累積リターンが直前のピークから最も大きく下がった幅（%）です。")
+				@actualsMetric("平均保有時間", "average_hold_time_minutes", fmt.Sprintf("%.1f 分", perf.AverageHoldTimeMinutes), "Average Hold Time。ポジションを持っていた時間の平均です。")
+				@actualsMetric("シャープレシオ（参考）", "sharpe_ref", optionalRatio(perf.SharpeRef), "Sharpe ratio。1取引あたりの平均リターン ÷ そのばらつき（標準偏差）です。年率換算はしない参考値で、取引が2件未満のときは「—」と表示します。")
+				@actualsMetric("ソルティノレシオ（参考）", "sortino_ref", optionalRatio(perf.SortinoRef), "Sortino ratio。1取引あたりの平均リターン ÷ 下振れのばらつき（マイナスのリターンだけで計算）です。年率換算はしない参考値で、負けた取引がないときは「—」と表示します。")
+				@actualsMetric("シグナル数", "signal_count", fmt.Sprintf("%d", perf.SignalCount), "Signal count。LONG・SHORT のシグナルの件数です。")
+			</dl>
+		}
+	</section>
+}
+
+// actualsMetric is one labelled figure with a help mark; the English metric
+// name leads the help text so the term can still be looked up.
+templ actualsMetric(label, key, value, help string) {
+	<div>
+		<dt class="text-sm text-slate-500">
+			{ label }
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-performance-actuals-" + key, Label: label + "の説明"}) {
+				{ help }
+			}
+		</dt>
+		<dd class="text-sm font-medium text-slate-900" data-metric={ key }>{ value }</dd>
+	</div>
+}
+
+// optionalRatio renders a nil ratio as "—".
+func optionalRatio(v *float64) string {
+	if v == nil {
+		return noValue
+	}
+	return profitFactor(*v)
+}
+
+// yen renders a currency amount as whole yen with thousands separators,
+// e.g. -¥1,234.
+func yen(v float64) string {
+	s := fmt.Sprintf("%.0f", v)
+	sign := ""
+	if strings.HasPrefix(s, "-") {
+		sign, s = "-", s[1:]
+	}
+	if s == "0" {
+		sign = "" // "-0" from a tiny negative amount
+	}
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return sign + "¥" + s
+}

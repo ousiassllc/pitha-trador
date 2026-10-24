@@ -3,7 +3,7 @@ package domain
 import "time"
 
 // Health alert codes (issue #802): fixed codes, never free text, so the app's
-// banner and the Paper results MCP (collection_status "alerts") depend on the
+// 要対応 list and the Paper results MCP (collection_status "alerts") depend on the
 // code alone. The rules that raise them are in internal/service/healthalert.
 const (
 	// HealthAlertKabuNotLoggedIn: kabuステーション not logged in (token issuance fails with

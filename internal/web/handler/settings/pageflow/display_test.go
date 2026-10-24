@@ -1,9 +1,11 @@
 package pageflow_test
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -62,56 +64,60 @@ func TestSettingsHandler_Page_ShowsJevBaseURLHint(t *testing.T) {
 	}
 }
 
-// The banner only guides toward unset optional keys (issue #80): the
-// required keys are handled by the Setup Guard redirect, never here.
-func TestSettingsHandler_Status_ListsUnsetOptionalKeysOnly(t *testing.T) {
+// Issue #902: a field shows its Japanese label only; the key name lives in
+// the field's help mark (「設定キー: …」), which is part of the DOM for screen
+// readers.
+func TestSettingsHandler_Page_FieldShowsJapaneseLabelAndKeyInHelp(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	engine := settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore()))
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/settings/integrations", nil))
+
+	body := rec.Body.String()
+	for _, want := range []string{
+		`for="secret-input-JEV_API_KEY"`,
+		`API キー`,
+		`id="help-secret-JEV_API_KEY"`,
+		`aria-describedby="help-secret-JEV_API_KEY"`,
+		`設定キー: JEV_API_KEY`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Page lacks %q; body=%s", want, body)
+		}
+	}
+	if strings.Contains(body, `JEV_API_KEY（`) || strings.Contains(body, `JEV_API_KEY を削除`) {
+		t.Errorf("Page shows the raw key name as the field label; body=%s", body)
+	}
+}
+
+// The unset-optional-keys list only guides toward optional keys (issue #80):
+// the required keys are handled by the Setup Guard redirect, never here.
+func TestSettingsHandler_UnsetOptionalKeys_ListsUnsetOptionalKeysOnly(t *testing.T) {
 	store := newFakeSecretsStore()
 	store.values[config.KeyLunaAPIKey] = "luna-key"
-	h := settings.NewSettingsHandler(store)
-	engine := gin.New()
-	engine.GET("/system/secrets-status", h.Status)
+	got := settings.NewSettingsHandler(store).UnsetOptionalKeys(context.Background())
 
-	req := httptest.NewRequest(http.MethodGet, "/system/secrets-status", nil)
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	if !slices.Contains(got, config.KeySlackWebhookURL) {
+		t.Fatalf("list does not include unset optional SLACK_WEBHOOK_URL: %v", got)
 	}
-	body := rec.Body.String()
-	if !strings.Contains(body, config.KeySlackWebhookURL) {
-		t.Fatalf("banner does not list unset optional SLACK_WEBHOOK_URL; body=%s", body)
-	}
-	if strings.Contains(body, config.KeyLunaAPIKey) {
-		t.Fatalf("banner lists LUNA_API_KEY even though it is configured; body=%s", body)
+	if slices.Contains(got, config.KeyLunaAPIKey) {
+		t.Fatalf("list includes LUNA_API_KEY even though it is configured: %v", got)
 	}
 	for _, key := range config.RequiredSecretKeys() {
-		if strings.Contains(body, key) {
-			t.Fatalf("banner warns about required key %s (unset here); Setup Guard owns that; body=%s", key, body)
+		if slices.Contains(got, key) {
+			t.Fatalf("list names required key %s (unset here); Setup Guard owns that: %v", key, got)
 		}
 	}
 }
 
-func TestSettingsHandler_Status_RendersNothingWhenEveryOptionalKeyConfigured(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+func TestSettingsHandler_UnsetOptionalKeys_EmptyWhenEveryOptionalKeyConfigured(t *testing.T) {
 	store := newFakeSecretsStore()
 	for _, key := range config.OptionalSecretKeys() {
 		store.values[key] = "configured"
 	}
-	h := settings.NewSettingsHandler(store)
-	engine := gin.New()
-	engine.GET("/system/secrets-status", h.Status)
-
-	req := httptest.NewRequest(http.MethodGet, "/system/secrets-status", nil)
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	if strings.TrimSpace(rec.Body.String()) != "" {
-		t.Fatalf("banner rendered non-empty body once every optional key is configured: %q", rec.Body.String())
+	if got := settings.NewSettingsHandler(store).UnsetOptionalKeys(context.Background()); len(got) != 0 {
+		t.Fatalf("list not empty once every optional key is configured: %v", got)
 	}
 }
 
@@ -147,30 +153,20 @@ func TestSettingsHandler_Page_StoreErrorDegradesGracefully(t *testing.T) {
 	}
 }
 
-// issue #70: the same per-key error must not 500 the header's
-// secrets-status banner either (it renders on every page, not just
-// Settings) - the broken optional key is reported as unset instead.
-func TestSettingsHandler_Status_StoreErrorDegradesGracefully(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+// issue #70: the same per-key error must not break the unset-optional-keys
+// list (the Home screen's 要対応 list and the badge on every page read it) - the
+// broken optional key is reported as unset instead.
+func TestSettingsHandler_UnsetOptionalKeys_StoreErrorDegradesGracefully(t *testing.T) {
 	store := newFakeSecretsStore()
 	for _, key := range config.OptionalSecretKeys() {
 		store.values[key] = "configured"
 	}
 	store.getErr = errors.New("db is locked")
 	store.getErrKey = config.KeySlackWebhookURL
-	h := settings.NewSettingsHandler(store)
-	engine := gin.New()
-	engine.GET("/system/secrets-status", h.Status)
+	got := settings.NewSettingsHandler(store).UnsetOptionalKeys(context.Background())
 
-	req := httptest.NewRequest(http.MethodGet, "/system/secrets-status", nil)
-	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d (a broken key must not 500 the banner)", rec.Code, http.StatusOK)
-	}
-	if !strings.Contains(rec.Body.String(), config.KeySlackWebhookURL) {
-		t.Fatalf("banner does not report broken optional key as unset; body=%s", rec.Body.String())
+	if !slices.Contains(got, config.KeySlackWebhookURL) {
+		t.Fatalf("list does not report broken optional key as unset: %v", got)
 	}
 }
 

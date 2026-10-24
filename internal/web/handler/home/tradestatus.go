@@ -46,7 +46,7 @@ func tradeStatus(in statusInputs) homepanels.TradeStatusView {
 	}
 	switch {
 	case r != nil:
-		v.Sentence, v.Detail, v.Link = sentenceStopped+r.sentence, r.detail, r.link
+		v.Sentence, v.Detail, v.Help, v.Link = sentenceStopped+r.sentence, r.detail, r.help, r.link
 	case len(unread) > 0:
 		v.Sentence = sentenceUnknown
 	default:
@@ -55,11 +55,13 @@ func tradeStatus(in statusInputs) homepanels.TradeStatusView {
 	return v
 }
 
-// reason is one stop condition: the sentence after 「停止中 — 」, an optional
-// explanation and where to look.
+// reason is one stop condition: the sentence after 「停止中 — 」, what the
+// operator has to do or know right now (detail, kept on the screen), the
+// longer explanation (help, behind the card's 「?」) and where to look.
 type reason struct {
 	sentence string
 	detail   string
+	help     string
 	link     homepanels.Link
 }
 
@@ -92,7 +94,7 @@ func killSwitchReason(in statusInputs) *reason {
 	}
 	return &reason{
 		sentence: "Kill Switch が発動しています",
-		detail:   "解除するまで新規エントリーは行われません。",
+		help:     "解除するまで新規エントリーは行われません。経緯は稼働ログで確認できます。",
 		link:     linkActivity,
 	}
 }
@@ -103,7 +105,7 @@ func pausedReason(in statusInputs) *reason {
 	}
 	return &reason{
 		sentence: "一時停止中です",
-		detail:   "下の「再開」で新規エントリーを再開できます。",
+		help:     "下の「再開」で新規エントリーを再開できます。",
 	}
 }
 
@@ -113,13 +115,18 @@ func dailyGuardReason(in statusInputs) *reason {
 	}
 	return &reason{
 		sentence: "日次ガード（" + in.halt.Label() + "）",
-		detail:   in.halt.Message + "保有中のポジションの決済は通常どおり行われ、翌営業日に自動で解除されます。",
+		detail:   in.halt.Message,
+		help:     dailyGuardHelp,
 		link:     linkDailyGuard,
 	}
 }
 
-// brokerName is the broker the failing session belongs to: the banner names
-// the 立花 environment only for 立花.
+// dailyGuardHelp is the explanation behind the daily guard's 「?」 (the stop
+// reason itself is the halt's own Message).
+const dailyGuardHelp = "保有中のポジションの決済は通常どおり行われ、翌営業日に自動で解除されます。"
+
+// brokerName is the broker the failing session belongs to: Environment is
+// set only for 立花.
 func brokerName(m organisms.MarketDataBannerProps) string {
 	if m.Environment != "" {
 		return "立花証券 e支店"
@@ -138,15 +145,15 @@ func brokerReason(in statusInputs) *reason {
 	for _, a := range in.alerts {
 		switch a.Code {
 		case domain.HealthAlertKabuNotLoggedIn:
-			return &reason{sentence: broker + "に未ログインです", detail: "ログインしてください。ログイン後に自動で再発行します。", link: linkBroker}
+			return &reason{sentence: broker + "に未ログインです", detail: "ログインしてください。", help: "ログイン後に自動で再発行します。", link: linkBroker}
 		case domain.HealthAlertKabuUnreachable:
-			return &reason{sentence: broker + "に接続できません（未起動の疑い）", detail: "起動してログインしてください。起動後に自動で再接続します。", link: linkBroker}
+			return &reason{sentence: broker + "に接続できません（未起動の疑い）", detail: "起動してログインしてください。", help: "起動後に自動で再接続します。", link: linkBroker}
 		}
 	}
 	return nil
 }
 
-// brokerIssueSentence words a marketdata.TokenIssue (the banner's data-issue).
+// brokerIssueSentence words a marketdata.TokenIssue (MarketDataBannerProps.Issue).
 func brokerIssueSentence(broker, issue string) string {
 	switch issue {
 	case "unreachable":
@@ -171,7 +178,7 @@ func offSessionReason(in statusInputs) *reason {
 	if next := marketcalendar.TSE.NextOpen(in.now); !next.IsZero() {
 		s += "（次回の立会開始: " + organisms.FormatNextOpen(next) + "）"
 	}
-	return &reason{sentence: s, detail: "立会時間外は市況データの取得・スキャン・Jev Scoutが止まります。"}
+	return &reason{sentence: s, help: "立会時間外は市況データの取得・スキャン・Jev Scoutが止まります。"}
 }
 
 func marketIdleReason(in statusInputs) *reason {
@@ -179,7 +186,7 @@ func marketIdleReason(in statusInputs) *reason {
 		if a.Code == domain.HealthAlertMarketDataIdle {
 			return &reason{
 				sentence: "市況データの取得が止まっています",
-				detail:   "アプリが動いているか、ジョブが詰まっていないか（稼働ログ）を確認してください。",
+				help:     "アプリが動いているか、ジョブが詰まっていないかを稼働ログで確認してください。",
 				link:     linkActivity,
 			}
 		}
@@ -193,7 +200,7 @@ func noModelReason(in statusInputs) *reason {
 	}
 	return &reason{
 		sentence: "売買判断モデルが未採用で、ブートストラップエントリーも無効です",
-		detail:   "モデルが採用されるか、Paper のブートストラップエントリーを有効にするまで、新規エントリーは行われません。",
+		help:     "モデルが採用されるか、Paper のブートストラップエントリーを有効にするまで、新規エントリーは行われません。",
 		link:     linkBootstrap,
 	}
 }

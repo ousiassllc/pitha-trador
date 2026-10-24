@@ -139,3 +139,17 @@ describe('pitha-exit-alignment', () => {
     ).toContain('-21.0 bps');
   });
 });
+
+describe('pitha-exit-alignment heading', () => {
+  test('explains the block in a help mark and keeps the mismatch warning on screen', async () => {
+    const el = await mount(body());
+
+    const heading = el.shadowRoot?.querySelector('h2');
+    expect(heading?.textContent).not.toMatch(/#\d/);
+    const button = heading?.querySelector('[data-help-mark-button]');
+    const help = el.shadowRoot?.getElementById(button?.getAttribute('aria-describedby') ?? '');
+    expect(help?.getAttribute('role')).toBe('tooltip');
+    expect(help?.textContent).toContain('実際の取引の出口');
+    expect(text(el, 'exit-alignment-warnings')).toContain('一致しません');
+  });
+});

@@ -237,9 +237,10 @@ func TestPagesWarnThatRaisingCapitalDoesNotRaiseStockBudget(t *testing.T) {
 				t.Fatalf("%s missing the group note %s", tc.path, tc.noteID)
 			}
 			for _, want := range []string{
+				// The short warning stays on the screen; the long note is in the help.
+				"運用資金を上げても株の予算枠は自動で増えません",
 				"運用資金を上げても株の枠は自動で増えません",
 				"株の枠も保存してください",
-				"bucket_budget_exceeded",
 			} {
 				if !strings.Contains(body, want) {
 					t.Errorf("%s missing %q", tc.path, want)

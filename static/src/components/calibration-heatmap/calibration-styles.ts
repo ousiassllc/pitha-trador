@@ -34,11 +34,6 @@ export const heatmapStyles = css`
     margin: 0;
     font-size: 0.875rem;
   }
-  .pitha-calibration-heatmap-horizon .note {
-    margin-left: 0.75rem;
-    color: #475569;
-    font-size: 0.75rem;
-  }
   .pitha-calibration-heatmap-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));

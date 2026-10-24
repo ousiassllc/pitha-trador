@@ -16,6 +16,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
+import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
 import { type ABArm, renderABArms } from './ab-arms-view';
@@ -45,7 +46,7 @@ const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
   // Shadow DOM: Tailwind does not reach in here, so style locally.
-  static override styles = [buttonStyles, noticeStyles, heatmapStyles];
+  static override styles = [buttonStyles, noticeStyles, heatmapStyles, helpMarkStyles];
 
   @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 
@@ -248,7 +249,7 @@ export class PithaCalibrationHeatmap extends LitElement {
         ${renderDirectionTable(this.byDirection)}
         ${
           this.brierScore !== null && !this.hasSamples
-            ? html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-no-samples">サンプルなし（ラベル付き判断がまだありません）</p>`
+            ? html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-no-samples">サンプルなし（ラベル付き判断がありません）</p>`
             : ''
         }
         ${renderBarrierSummary(this.barrier)}
@@ -259,18 +260,53 @@ export class PithaCalibrationHeatmap extends LitElement {
           this.brierScore !== null && this.hasSamples
             ? html`
               <dl class="pitha-calibration-heatmap-summary">
-                <dt>Brier Score</dt>
+                <dt>
+                  Brier Score
+                  ${renderHelpMark({
+                    id: 'help-calibration-brier',
+                    label: 'Brier Score の説明',
+                    text: '予測した確率と結果（方向が当たったか）のずれを表すスコアです。小さいほど良い値です。',
+                  })}
+                </dt>
                 <dd>${this.brierScore.toFixed(3)}</dd>
-                <dt>Log Loss</dt>
+                <dt>
+                  Log Loss
+                  ${renderHelpMark({
+                    id: 'help-calibration-log-loss',
+                    label: 'Log Loss の説明',
+                    text: '予測した確率と結果のずれを、外れた自信の強さに厳しく表すスコアです。小さいほど良い値です。',
+                  })}
+                </dt>
                 <dd>${this.logLoss?.toFixed(3)}</dd>
-                <dt>Expected Calibration Error</dt>
+                <dt>
+                  Expected Calibration Error
+                  ${renderHelpMark({
+                    id: 'help-calibration-ece',
+                    label: 'Expected Calibration Error の説明',
+                    text: '予測した確信度と実際の的中率の差を、確信度の帯ごとに平均した値です。小さいほど、確信度どおりに当たっています。',
+                  })}
+                </dt>
                 <dd>${this.expectedCalibrationError?.toFixed(3)}</dd>
                 ${
                   this.tradeCount > 0
                     ? html`
-                      <dt>PnL Brier Score (n=${this.tradeCount})</dt>
+                      <dt>
+                        PnL Brier Score (n=${this.tradeCount})
+                        ${renderHelpMark({
+                          id: 'help-calibration-pnl-brier',
+                          label: 'PnL Brier Score の説明',
+                          text: '実際に取引した判断だけを対象に、損益がプラスだったかで測った Brier Score です。',
+                        })}
+                      </dt>
                       <dd>${this.pnlBrierScore.toFixed(3)}</dd>
-                      <dt>PnL Log Loss</dt>
+                      <dt>
+                        PnL Log Loss
+                        ${renderHelpMark({
+                          id: 'help-calibration-pnl-log-loss',
+                          label: 'PnL Log Loss の説明',
+                          text: '実際に取引した判断だけを対象に、損益がプラスだったかで測った Log Loss です。',
+                        })}
+                      </dt>
                       <dd>${this.pnlLogLoss.toFixed(3)}</dd>
                     `
                     : ''

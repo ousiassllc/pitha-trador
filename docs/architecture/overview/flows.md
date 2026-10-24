@@ -149,7 +149,7 @@ sequenceDiagram
 
 - 自動再開（解消）は発動時刻より後に記録された本物のハートビートが`heartbeat_timeout_minutes`以内にあることを条件とする。発動判定の寄り付きクランプ（最後のハートビートを当日の寄り付きに切り上げる）は解消判定には使わない（寄り付き前は経過時間が負になり、操作者不在でも毎朝解消されてしまうため）
 - ハートビートは有効なセッションCookieを持つ認証済みリクエスト（ページ/アクション/API呼び出し）を更新対象とする（`internal/router.WithHeartbeatRecorder` でSessionミドルウェアの直後に登録）。Cookieを持たないリクエストは対象外とし、外部からの無認証GETでdead-man's switchを延命できないようにする
-- 操作者の操作ではないリクエストは更新対象外とする: `/static/...`、WebSocketのUpgrade（画面が自動で再接続する）、画面が自動ポーリングするリクエスト。自動ポーリング（`hx-trigger="... every Ns"`）は現状 `Header` の `#update-banner`（`GET /system/update-status`、`every 60s`）と `#marketdata-banner`（`GET /system/marketdata-status`、`every 30s`）で、いずれも下記の `X-Pitha-Background: 1` を `hx-headers` で付ける。サーバー側にURLパスの除外一覧は持たない（追加漏れが安全機構を無効化する構造を避けるため）。周期ポーリングを追加するときは必ず `hx-headers` に同ヘッダを付ける（付け忘れるとそのリクエストは操作者操作として数えられる）。`updateStatusChanged` を契機とする `#update-banner` の再取得も同じ要素の `hx-headers` で引き続き除外される
+- 操作者の操作ではないリクエストは更新対象外とする: `/static/...`、WebSocketのUpgrade（画面が自動で再接続する）、画面が自動ポーリングするリクエスト。自動ポーリング（`hx-trigger="... every Ns"`）は現状 `Header` の `#attention-badge`（`GET /home/attention-badge`、`every 30s`）と Home の各カード・要対応（`GET /home/...`、`every 30s`）で、いずれも下記の `X-Pitha-Background: 1` を `hx-headers` で付ける。サーバー側にURLパスの除外一覧は持たない（追加漏れが安全機構を無効化する構造を避けるため）。周期ポーリングを追加するときは必ず `hx-headers` に同ヘッダを付ける（付け忘れるとそのリクエストは操作者操作として数えられる）。`updateStatusChanged` を契機とする `#attention-badge` の再取得も同じ要素の `hx-headers` で引き続き除外される
 - 自動発火の再同期リクエストも更新対象外とする（FR-RISK-6）。`pitha-kill-switch-panel` の再同期（初回・`kill_switch` / `state_changed` push受信時・WebSocket再接続後の `GET /api/v1/system/status`）と、`systemStateChanged` を契機とするHeaderの `#header-status`（`GET /system/status`）、`pitha-activity-feed` のWebSocket再接続後のスナップショット再取得（`GET /api/v1/activity`、`?type=kill_switch&limit=10`）は専用ヘッダ `X-Pitha-Background: 1`（`middleware.BackgroundHeader`、Lit側は `lib/api.ts` の `get(path, { background: true })`、htmx側は `hx-headers`）を付け、Heartbeatミドルウェアが除外する。これらは操作者不在でも発火するため、`operator_heartbeat_timeout` のKill Switch発動後のpushが自らハートビートを更新し、`AutoResume` が無人のまま解除してしまうことを防ぐ
 - 書き込みはスロットリングする: ミドルウェアが最終記録時刻をメモリ保持し、10秒以内の更新対象リクエストではSQLiteへ書き込まない（タイムアウトは分単位のため精度に影響しない。書き込み失敗時は次のリクエストで即再試行する）
 - Paper Trading運用中は実資金リスクがないためハートビート監視を適用しない（`requirements/functional.md` §4.7 表の heartbeat_timeout_minutes は Live のみ設定）
@@ -240,6 +240,6 @@ sequenceDiagram
 |------|------|
 | Jev API失敗 | 1回目リトライ→2回目以降exponential backoff→継続失敗でnew entry停止。既存ポジションはコードベースExit Ruleで継続管理 |
 | Market Data欠損 | 現状: 銘柄単位のstale判定（`StatusTracker`）による新規取引禁止は未実装（記録のみ）。ただし立会中に最新の足が3分（`domain.MaxSnapshotAge`。`scan.full_scan_enabled: true`では`scan.full_scan_max_snapshot_age_seconds`）超古い銘柄はJev Scout/Trader/Paper Entryへ進まない（issue #685）。全体の`market_data_down` Kill Switch（`GetBoard`5回連続失敗）で新規取引を停止する。銘柄単位の禁止はPhase 7移行前に実装する（`overview/integrations.md` §5） |
-| ブローカーAPI異常（kabuステーションAPI／立花証券） | Kill Switch発動条件に該当。新規取引停止、必要に応じ強制決済。立花選択時は毎朝の再認証失敗・多重ログイン・書面未読も接続バナーとSlackで通知する（`requirements/non-functional.md` §3、§5.2） |
+| ブローカーAPI異常（kabuステーションAPI／立花証券） | Kill Switch発動条件に該当。新規取引停止、必要に応じ強制決済。立花選択時は毎朝の再認証失敗・多重ログイン・書面未読もHomeの「要対応」とSlackで通知する（`requirements/non-functional.md` §3、§5.2） |
 | DB書き込み失敗継続 | Kill Switch発動条件に該当 |
 | Wailsプロセスクラッシュ | `--supervise`起動の監視プロセス（`internal/supervisor`）が自動再起動する（`architecture/overview/integrations.md` §9）。プロセス停止中は新規エントリーも行われない（既存ポジションはkabuステーション側の待機注文/手動介入を前提）。再起動後、`jobs`テーブルの中断ジョブを`pending`へ復帰させ処理を再開する |

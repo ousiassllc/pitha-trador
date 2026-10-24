@@ -1,5 +1,5 @@
 // Package papersizing builds the sizing lines of the Settings screen's Paper
-// risk 計算結果 panel (issue #804): for the limits in force, the largest share
+// risk 計算結果 panel: for the limits in force, the largest share
 // price at which one 100-share lot passes each bound of sizing.Quantity, and
 // the notices when it does not. It is a pure function of the limits, split out
 // of internal/web/handler/settings to keep that directory within linterly's

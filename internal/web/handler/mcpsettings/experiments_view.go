@@ -14,20 +14,25 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/mcp"
 )
 
-// minTradesNote states the minimum number of trades and that the floor is a
-// provisional value (issue #871).
-func minTradesNote(min int, source string) string {
-	note := fmt.Sprintf("判定には、前後それぞれに %d 件以上のクローズ済み取引が要ります（下限は %d 件で、これより下げることはできません）。", min, experiment.MinTradesFloor)
+// minTradesNote states the minimum number of trades that judges an experiment
+// (issue #871); minTradesHelp is the rest: the floor and that it is provisional.
+func minTradesNote(min int) string {
+	return fmt.Sprintf("判定には、前後それぞれに %d 件以上のクローズ済み取引が要ります。", min)
+}
+
+func minTradesHelp(source string) string {
+	help := fmt.Sprintf("下限は %d 件で、これより下げることはできません。", experiment.MinTradesFloor)
 	if source == experiment.MinTradesSourceFloor {
-		note += "この下限の件数（" + strconv.Itoa(experiment.MinTradesFloor) + " 件）は" + experiment.MinTradesProvisionalText + "です。あいりの承認も未です。"
+		help += "この下限の件数（" + strconv.Itoa(experiment.MinTradesFloor) + " 件）は" + experiment.MinTradesProvisionalText + "です。"
 	}
-	return note
+	return help
 }
 
 func experimentsProps(rows []experiment.Summary, notice string) mcp.ExperimentsProps {
 	props := mcp.ExperimentsProps{
 		Notice:        notice,
-		MinTradesNote: minTradesNote(experiment.MinTradesFloor, experiment.MinTradesSourceFloor),
+		MinTradesNote: minTradesNote(experiment.MinTradesFloor),
+		MinTradesHelp: minTradesHelp(experiment.MinTradesSourceFloor),
 	}
 	for _, s := range rows {
 		e := s.Experiment
@@ -46,9 +51,10 @@ func detailProps(c experiment.Comparison) mcp.ExperimentDetailProps {
 	p := mcp.ExperimentDetailProps{
 		ID: e.ID, Hypothesis: e.Hypothesis, Variable: e.Variable.Name, Change: changeText(e.Variable),
 		BeforePeriod: periodText(c.Before.From, &c.Before.To), AfterPeriod: periodText(c.After.From, &c.After.To),
-		Verdict: c.Verdict, VerdictLabel: verdictLabel(c.Verdict), MinTradesNote: minTradesNote(c.MinTrades, c.MinTradesSource),
-		TestNote: testNote(c.PerTradePnl),
-		Metrics:  metricRows(c), Rejects: rejectRows(c.Before.RiskRejections, c.After.RiskRejections),
+		Verdict: c.Verdict, VerdictLabel: verdictLabel(c.Verdict), VerdictHelp: verdictHelp(c.Verdict),
+		MinTradesNote: minTradesNote(c.MinTrades), MinTradesHelp: minTradesHelp(c.MinTradesSource),
+		TestNote: testNote(c.PerTradePnl), TestHelp: testHelp(c.PerTradePnl),
+		Metrics: metricRows(c), Rejects: rejectRows(c.Before.RiskRejections, c.After.RiskRejections),
 	}
 	for _, f := range c.Confounders {
 		p.Confounders = append(p.Confounders, confounderLine(f))
@@ -60,7 +66,7 @@ func detailProps(c experiment.Comparison) mcp.ExperimentDetailProps {
 // configured Jev model (issue #885), whose Values are [before, after].
 func confounderLine(f experiment.Confounder) string {
 	if f.Kind == experiment.KindModel && f.Name == experiment.ModelSwitchName && len(f.Values) == 2 {
-		return fmt.Sprintf("交絡: %s Jev のモデル（JEV_MODEL）が切り替えられました（%s、%s → %s）。", confounderPeriodText(f.Period), jst(f.At), f.Values[0], f.Values[1])
+		return fmt.Sprintf("交絡: %s Jev のモデルが切り替えられました（%s、%s → %s）。", confounderPeriodText(f.Period), jst(f.At), f.Values[0], f.Values[1])
 	}
 	return confounderText(f)
 }
@@ -162,27 +168,55 @@ func verdictLabel(v string) string {
 	case experiment.VerdictAborted:
 		return "判定なし（中止）"
 	case experiment.VerdictNotComputable:
-		return "判定なし（全取引の損益が同じで、信頼区間を計算できない）"
+		return "判定なし（信頼区間を計算できない）"
 	case experiment.VerdictImproved:
-		return "改善（1 取引あたりの純損益の差の 95% 信頼区間が 0 より上で、最大ドローダウンは増えていない）"
+		return "改善"
 	case experiment.VerdictMixed:
-		return "改善とは言えない（1 取引あたりの純損益は増えたが、最大ドローダウンが増えた）"
+		return "改善とは言えない"
 	case experiment.VerdictWorsened:
-		return "悪化（1 取引あたりの純損益の差の 95% 信頼区間が 0 より下）"
+		return "悪化"
 	case experiment.VerdictInconclusive:
-		return "どちらとも言えない（信頼区間が 0 をまたぐ。差があるとも無いとも言えない）"
+		return "どちらとも言えない"
 	}
 	return v
 }
 
-// testNote states the interval the verdict rests on and what it cannot show.
+// verdictHelp is the rule behind a verdict ("" when the label already says
+// all there is: the verdicts that are no verdict).
+func verdictHelp(v string) string {
+	switch v {
+	case experiment.VerdictNotComputable:
+		return "全取引の損益が同じで、信頼区間を計算できません。"
+	case experiment.VerdictImproved:
+		return "1 取引あたりの純損益の差の 95% 信頼区間が 0 より上で、最大ドローダウンは増えていません。"
+	case experiment.VerdictMixed:
+		return "1 取引あたりの純損益は増えましたが、最大ドローダウンが増えました。"
+	case experiment.VerdictWorsened:
+		return "1 取引あたりの純損益の差の 95% 信頼区間が 0 より下です。"
+	case experiment.VerdictInconclusive:
+		return "信頼区間が 0 をまたぐため、差があるとも無いとも言えません。"
+	}
+	return ""
+}
+
+// testNote states the interval the verdict rests on.
 func testNote(t experiment.Test) string {
 	if !t.Computable() {
 		return "1 取引あたりの純損益の差（後 − 前）の信頼区間は計算できませんでした。"
 	}
-	return fmt.Sprintf("1 取引あたりの純損益の差（後 − 前）は %s、%d%% 信頼区間は %s 〜 %s（Welch の t 検定。t = %.2f、自由度 %.1f）。"+
+	return fmt.Sprintf("1 取引あたりの純損益の差（後 − 前）は %s、%d%% 信頼区間は %s 〜 %s。",
+		optSignedYen2(t.Diff), int(t.CILevel*100), optYen2(t.CILow), optYen2(t.CIHigh))
+}
+
+// testHelp is the test behind the interval and what it cannot show ("" when
+// no interval was computed).
+func testHelp(t experiment.Test) string {
+	if !t.Computable() {
+		return ""
+	}
+	return fmt.Sprintf("Welch の t 検定です（t = %.2f、自由度 %.1f）。"+
 		"取引は同じ日・同じ相場に偏りうるので、この区間は実際より狭い（楽観的な）可能性があります。前後は別の期間なので、変えたことが原因だという証明にはなりません。",
-		optSignedYen2(t.Diff), int(t.CILevel*100), optYen2(t.CILow), optYen2(t.CIHigh), *t.T, *t.DF)
+		*t.T, *t.DF)
 }
 
 // optYen2 is a yen figure rounded to 0.01, "—" when there is none.

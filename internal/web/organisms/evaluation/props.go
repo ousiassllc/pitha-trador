@@ -1,12 +1,13 @@
 package evaluation
 
 // Cell is one metric of a table: Text is its display ("12.3% [8.1–16.5]" or
-// "判定不能"), Undetermined marks the latter (shown muted), Title the tooltip
-// (the reference value and n of a 判定不能 metric).
+// "判定不能"), Undetermined marks the latter (shown muted), Help the text of
+// its help mark (the reference value and why of a 判定不能 metric); empty
+// shows no mark.
 type Cell struct {
 	Text         string
 	Undetermined bool
-	Title        string
+	Help         string
 }
 
 // Row is one slice of a metrics table.
@@ -36,8 +37,9 @@ type Check struct {
 	StatusText string
 }
 
-// Pair is a label/value line.
-type Pair struct{ Label, Value string }
+// Pair is a label/value line. ID is unique in the list (the suffix of the
+// help mark's id); Help, when non-empty, is the help text of the label.
+type Pair struct{ ID, Label, Value, Help string }
 
 // JevRow is Jev's hit rate and Brier score of one calibration label version.
 type JevRow struct {
@@ -65,7 +67,7 @@ type Panel struct {
 	VerdictText string
 	Checks      []Check
 	// Capital is "初期資金 ¥30,000,000" (or the unset note); CapitalNote
-	// reminds that Paper's is a placeholder.
+	// reminds that Paper's is a placeholder (empty when unset).
 	Capital     string
 	CapitalNote string
 	Criteria    string

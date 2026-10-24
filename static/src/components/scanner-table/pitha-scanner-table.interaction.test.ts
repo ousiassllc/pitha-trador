@@ -83,30 +83,32 @@ describe('pitha-scanner-table interaction', () => {
   });
 
   // The header <button> is what makes sorting reachable with Tab and
-  // Enter/Space (native button behavior). The mouse-only `title` tooltip
-  // is complemented by a visible <details> listing every column's hint,
-  // which keyboard/touch/screen-reader users can open.
-  test('sortable headers are focusable buttons and every hint is listed in the column help', async () => {
+  // Enter/Space (native button behavior). A column's explanation is a 「?」
+  // help mark beside the button (not inside it), tied to its text by
+  // aria-describedby, so keyboard/touch/screen-reader users can read it.
+  test('sortable headers are focusable buttons and each hint is a help mark beside the button', async () => {
     const { el } = await mount([item()]);
 
     const headers = [...el.querySelectorAll('thead th')];
     for (const th of headers) {
-      const button = th.querySelector('button');
+      const button = th.querySelector(':scope > button');
       expect(button).not.toBeNull();
       expect(button?.getAttribute('type')).toBe('button');
-      // One announcement per hint: no aria-describedby duplicating `title`.
-      expect(button?.hasAttribute('aria-describedby')).toBe(false);
-      expect(th.querySelector('.sr-only')).toBeNull();
+      expect(th.hasAttribute('title')).toBe(false);
     }
+    expect(el.querySelector('details')).toBeNull();
 
-    const help = el.querySelector('details[data-testid="scanner-column-help"]');
-    expect(help?.querySelector('summary')?.textContent).toBe('列の意味');
-    expect(help?.hasAttribute('open')).toBe(false);
-    const terms = [...(help?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent);
-    const descriptions = [...(help?.querySelectorAll('dd') ?? [])].map((dd) => dd.textContent);
-    expect(terms).toEqual(COLUMNS.map((c) => c.label));
-    expect(descriptions).toEqual(COLUMNS.map((c) => c.hint));
-    expect(headers.map((th) => th.getAttribute('title'))).toEqual(COLUMNS.map((c) => c.hint));
+    const hinted = COLUMNS.filter((c) => c.hint);
+    const marks = headers.flatMap((th) => [...th.querySelectorAll('[data-help-mark]')]);
+    expect(marks).toHaveLength(hinted.length);
+    marks.forEach((mark, i) => {
+      const button = mark.querySelector('[data-help-mark-button]');
+      const text = mark.querySelector('[data-help-mark-text]');
+      expect(text?.getAttribute('role')).toBe('tooltip');
+      expect(text?.textContent).toBe(hinted[i].hint);
+      expect(button?.getAttribute('aria-describedby')).toBe(text?.id);
+      expect(button?.getAttribute('aria-label')).toBe(`${hinted[i].label}の説明`);
+    });
 
     const priceButton = el.querySelectorAll('thead th')[1].querySelector('button') as HTMLElement;
     priceButton.click();

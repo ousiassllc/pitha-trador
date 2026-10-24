@@ -3,6 +3,7 @@ package homepanels
 import (
 	"strconv"
 
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -74,10 +75,19 @@ templ TradeStatusBody(v TradeStatusView) {
 	if v.Err != "" {
 		@cardError(v.Err)
 	} else {
-		<p class="mt-2 flex items-start gap-2 text-base font-semibold leading-snug text-slate-900" data-testid="trade-status-sentence" data-allowed={ strconv.FormatBool(v.Allowed) }>
-			<span aria-hidden="true" class={ "mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full", templ.KV("bg-emerald-500", v.Allowed), templ.KV("bg-red-500", !v.Allowed) }></span>
-			<span>{ v.Sentence }</span>
-		</p>
+		<div class="mt-2 flex items-start gap-2">
+			<p class="flex items-start gap-2 text-base font-semibold leading-snug text-slate-900" data-testid="trade-status-sentence" data-allowed={ strconv.FormatBool(v.Allowed) }>
+				<span aria-hidden="true" class={ "mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full", templ.KV("bg-emerald-500", v.Allowed), templ.KV("bg-red-500", !v.Allowed) }></span>
+				<span>{ v.Sentence }</span>
+			</p>
+			if v.Help != "" {
+				<span class="mt-1 shrink-0">
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-home-trade-status", Label: "停止理由の説明"}) {
+						{ v.Help }
+					}
+				</span>
+			}
+		</div>
 		if v.Detail != "" {
 			<p class="mt-1 text-xs leading-relaxed text-slate-600" data-testid="trade-status-detail">{ v.Detail }</p>
 		}
@@ -94,7 +104,12 @@ templ TradeStatusBody(v TradeStatusView) {
 // unrealized (open positions) and the day's counts.
 templ PnLCard(v PnLView) {
 	<section class={ cardClass, "lg:col-span-3" } data-testid="home-pnl-card" aria-labelledby="home-pnl-title">
-		<h2 id="home-pnl-title" class={ cardTitleClass }>今日の Paper 損益</h2>
+		<div class="flex items-center gap-1">
+			<h2 id="home-pnl-title" class={ cardTitleClass }>今日の Paper 損益</h2>
+			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-home-pnl", Label: "今日の Paper 損益の説明"}) {
+				実現損益は今日 0:00（JST）以降に決済した分、含み損益は保有中のポジションの評価損益です。合計はその和です。
+			}
+		</div>
 		<div
 			id="home-pnl"
 			class="min-w-0"
@@ -116,7 +131,7 @@ templ PnLBody(v PnLView) {
 	} else {
 		if v.UnrealizedKnown {
 			<p class={ "mt-2 text-3xl font-bold tabular-nums", PnLClass(v.Total) } data-testid="pnl-total">{ FormatSignedYen(v.Total) }</p>
-			<p class="text-xs text-slate-500">合計（実現＋含み）</p>
+			<p class="text-xs text-slate-500">合計</p>
 		} else {
 			<p class="mt-2 text-sm text-slate-700" data-testid="pnl-total-unknown">合計は保有ポジションを読み取れないため表示できません。</p>
 		}

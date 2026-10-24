@@ -56,21 +56,17 @@ describe('SSR/Lit scanner contract', () => {
       const want = contract.columns[i];
       const label = (th.querySelector('button')?.textContent ?? '').replace(/\s*[▲▼]$/, '').trim();
       expect(label).toBe(want.label);
-      expect(th.getAttribute('title')).toBe(want.hint);
+      expect(th.hasAttribute('title')).toBe(false);
+      expect(th.querySelector('[data-help-mark-text]')?.textContent ?? '').toBe(want.hint);
       expect(th.classList.contains('text-right')).toBe(want.numeric);
     });
   });
 
-  test('column help lists the golden labels and hints in order', async () => {
+  test('count help matches the golden text', async () => {
     const el = await render([]);
 
-    const help = el.querySelector('[data-testid="scanner-column-help"]');
-    expect([...(help?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent)).toEqual(
-      contract.columns.map((c) => c.label),
-    );
-    expect([...(help?.querySelectorAll('dd') ?? [])].map((dd) => dd.textContent)).toEqual(
-      contract.columns.map((c) => c.hint),
-    );
+    const help = el.querySelector('[data-testid="scanner-count"] [data-help-mark-text]');
+    expect(help?.textContent).toBe(contract.countHelp);
   });
 
   for (const row of contract.rows) {

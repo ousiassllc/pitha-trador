@@ -36,7 +36,7 @@ func TestJevPanel_NilAndDecision(t *testing.T) {
 
 func TestPositionPanel_NilShowsNotice(t *testing.T) {
 	html := renderComponent(t, organisms.PositionPanel(nil))
-	if !strings.Contains(html, `id="position-panel"`) || !strings.Contains(html, "No open position.") {
+	if !strings.Contains(html, `id="position-panel"`) || !strings.Contains(html, "保有中のポジションはありません。") {
 		t.Errorf("unexpected: %s", html)
 	}
 	if strings.Contains(html, "<table") {
@@ -49,18 +49,5 @@ func TestPositionPanel_RendersRow(t *testing.T) {
 	html := renderComponent(t, organisms.PositionPanel(pos))
 	if !strings.Contains(html, `data-testid="position-row"`) {
 		t.Errorf("position row missing: %s", html)
-	}
-}
-
-func TestBacktestFoldTable_RendersInclusiveForwardPeriod(t *testing.T) {
-	html := renderComponent(t, organisms.BacktestFoldTable([]organisms.BacktestFold{{
-		ForwardStart: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		ForwardEnd:   time.Date(2026, 1, 8, 0, 0, 0, 0, time.UTC),
-		Forward:      organisms.PerformanceSummary{TradeCount: 7, WinRate: 0.5, NetPnLPct: 1.5},
-	}}))
-	for _, want := range []string{`data-testid="backtest-folds"`, "2026-01-01 – 2026-01-07", "50.0%", "1.50%"} {
-		if !strings.Contains(html, want) {
-			t.Errorf("missing %q: %s", want, html)
-		}
 	}
 }

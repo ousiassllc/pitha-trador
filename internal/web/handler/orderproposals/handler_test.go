@@ -154,12 +154,12 @@ func TestList_NextPageKeepsTheFilter(t *testing.T) {
 func TestList_BadInputIs400WithTheReason(t *testing.T) {
 	src := outcomesSource(t)
 	for target, want := range map[string]string{
-		"/order-proposals?from=yesterday":                "from は YYYY-MM-DD",
-		"/order-proposals?to=2026-13-40":                 "to は YYYY-MM-DD",
-		"/order-proposals?from=2026-10-10&to=2026-10-01": "to は from 以降",
-		"/order-proposals?status=approved":               "status は状態のコード",
-		"/order-proposals?bucket=fx":                     "bucket は株式か債券ETF",
-		"/order-proposals?cursor=not-a-cursor":           "cursor が正しくありません",
+		"/order-proposals?from=yesterday":                "開始日は YYYY-MM-DD",
+		"/order-proposals?to=2026-13-40":                 "終了日は YYYY-MM-DD",
+		"/order-proposals?from=2026-10-10&to=2026-10-01": "終了日は開始日以降",
+		"/order-proposals?status=approved":               "状態の指定が正しくありません",
+		"/order-proposals?bucket=fx":                     "枠は株式か債券ETFを指定してください",
+		"/order-proposals?cursor=not-a-cursor":           "ページの指定が正しくありません",
 	} {
 		code, body := get(t, src, target)
 		if code != http.StatusBadRequest || !strings.Contains(body, `data-testid="order-proposals-error"`) || !strings.Contains(body, want) {
@@ -188,7 +188,7 @@ func TestDetail_TracesProposalToRealizedPnl(t *testing.T) {
 		"2,400 円", "2,700 円", "届いた", "届かなかった", // stop reached (exit 2380 <= 2400), take not reached
 		"20,000 円", "15,000 円", "12,030 円", // proposed, estimated, actual loss
 		"トレードシグナル #2", "mcp-proposal-v1", "通過",
-		"注文 #3", "BUY / MARKET", "FILLED", "2,500 円",
+		"注文 #3", "買い / 成行", "約定", "2,500 円",
 		"ポジション #2", "決済済み", "proposal_close", "5 時間 0 分", "-12,030 円", "text-red-700",
 		"2026-10-17 10:00:00 JST", // received 01:00Z
 	} {

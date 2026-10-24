@@ -22,13 +22,15 @@ type AuditRow struct {
 templ writeSection(props PanelProps) {
 	<div class="flex flex-col gap-2" data-testid="mcp-write">
 		<form class="flex flex-col gap-2" hx-post="/settings/mcp/write" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-write-form">
-			<label class="flex items-center gap-2">
-				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: writeAttrs(props.WriteEnabled)})
-				<span class="font-medium text-slate-700">MCP からの設定変更を許可する</span>
-			</label>
-			<span class="text-xs text-slate-500" data-testid="mcp-write-note">
-				許可すると、MCP（settings_set）から Paper の運用資金・1 銘柄上限・総エクスポージャ・1 回の最大損失、日次ガード、metalabel の LLM cutoff と出典だけを変更できます（Settings 画面と同じ保存先・同じ検証）。Live の値・発注・送金・Kill Switch 解除・API キーなどの秘密は MCP から変更できません。オフにすると settings_set は拒否されます（MCP の settings_write_enable でも戻せます）。既定はオンです。
-			</span>
+			<div class="flex items-center gap-2">
+				<label class="flex items-center gap-2">
+					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: writeAttrs(props.WriteEnabled)})
+					<span class="font-medium text-slate-700">MCP からの設定変更を許可する</span>
+				</label>
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-write", Label: "MCP からの設定変更の許可の説明"}) {
+					許可すると、MCP（settings_set）から Paper の運用資金・1 銘柄上限・総エクスポージャ・1 回の最大損失、日次ガード、metalabel の LLM cutoff と出典だけを変更できます（Settings 画面と同じ保存先・同じ検証）。Live の値・発注・送金・Kill Switch 解除・API キーなどの秘密は MCP から変更できません。オフにすると settings_set は拒否されます（MCP の settings_write_enable でも戻せます）。既定はオンです。
+				}
+			</div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-write-save"}}) {
 					保存
@@ -36,13 +38,15 @@ templ writeSection(props PanelProps) {
 			</div>
 		</form>
 		<form class="flex flex-col gap-2" hx-post="/settings/mcp/order-proposals" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-order-proposals-form">
-			<label class="flex items-center gap-2">
-				@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: proposalsAttrs(props.OrderProposalsEnabled)})
-				<span class="font-medium text-slate-700">AIからの注文提案を受け付ける（Paper のみ）</span>
-			</label>
-			<span class="text-xs text-slate-500" data-testid="mcp-order-proposals-note">
-				オンにすると、MCP（order_proposal_submit）から Paper の注文提案（新規の買いと保有中ポジションの決済）を受け付けて記録します。受け付けるだけで、発注はしません。Live の注文は出せません。1 日（JST）に 20 件までです。オンにできるのはこの画面だけで、MCP からはオフにだけできます（order_proposals_disable）。既定はオフです。
-			</span>
+			<div class="flex items-center gap-2">
+				<label class="flex items-center gap-2">
+					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: proposalsAttrs(props.OrderProposalsEnabled)})
+					<span class="font-medium text-slate-700">AIからの注文提案を受け付ける（Paper のみ）</span>
+				</label>
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-order-proposals", Label: "AIからの注文提案の受け付けの説明"}) {
+					オンにすると、MCP（order_proposal_submit）から Paper の注文提案（新規の買いと保有中ポジションの決済）を受け付けて記録します。受け付けるだけで、発注はしません。Live の注文は出せません。1 日（JST）に 20 件までです。オンにできるのはこの画面だけで、MCP からはオフにだけできます（order_proposals_disable）。既定はオフです。
+				}
+			</div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-order-proposals-save"}}) {
 					保存
@@ -50,9 +54,14 @@ templ writeSection(props PanelProps) {
 			</div>
 		</form>
 		<div class="flex flex-col gap-1" data-testid="mcp-audit">
-			<span class="font-medium text-slate-700">設定変更の監査ログ（新しい順・直近 10 件）</span>
+			<span class="flex items-center gap-2 font-medium text-slate-700">
+				設定変更の監査ログ
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-audit", Label: "設定変更の監査ログの説明"}) {
+					新しい順に直近 10 件を表示します。
+				}
+			</span>
 			if len(props.Audit) == 0 {
-				<span class="text-xs text-slate-500" data-testid="mcp-audit-empty">まだ変更はありません。</span>
+				<span class="text-xs text-slate-500" data-testid="mcp-audit-empty">記録はありません。</span>
 			} else {
 				<table class="w-full text-left text-xs" aria-label="設定変更の監査ログ" data-testid="mcp-audit-table">
 					<thead>

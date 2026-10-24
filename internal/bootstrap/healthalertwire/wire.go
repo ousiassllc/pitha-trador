@@ -19,7 +19,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/sleepguard"
 )
 
-// Watch is the Detector (Active, Check: the banner and the MCP read its
+// Watch is the Detector (Active, Check: Home's 要対応 list and the MCP read its
 // alerts) together with the sleep guard. Run runs both.
 type Watch struct {
 	*healthalert.Detector
@@ -36,7 +36,7 @@ func (w *Watch) Run(ctx context.Context) {
 }
 
 // New returns the Watch: its Detector persists its alerts in health_alerts, so
-// the header banner (Detector.Active) and the Paper results MCP, a separate
+// Home's 要対応 list (Detector.Active) and the Paper results MCP, a separate
 // read-only process, show the same state; its sleep guard reads the Settings
 // switch from settings at every check. The caller runs Watch.Run.
 func New(db *sql.DB, jobs *jobqueue.JobRepository, b broker.Broker, settings sleepguardsettings.Store) *Watch {

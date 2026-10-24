@@ -1,6 +1,7 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
 import { FakeWebSocket } from '../lib/ws-test-support';
 import { flush, installFakes, item, mount, type ScannerTableElement } from './scanner-test-support';
+import { COLUMNS } from './scanner-view';
 
 installFakes();
 
@@ -86,14 +87,17 @@ describe('pitha-scanner-table', () => {
     expect(pending[9].textContent?.trim()).toBe('—');
   });
 
-  test('gives every column header a tooltip explaining it', async () => {
+  test('explains hinted columns with a help mark instead of a title tooltip', async () => {
     const { el } = await mount([item()]);
 
     const headers = el.querySelectorAll('thead th');
     expect(headers).toHaveLength(11);
     for (const th of headers) {
-      expect(th.getAttribute('title')?.length).toBeGreaterThan(0);
+      expect(th.hasAttribute('title')).toBe(false);
     }
+    expect(el.querySelectorAll('thead [data-help-mark]')).toHaveLength(
+      COLUMNS.filter((c) => c.hint).length,
+    );
   });
 
   test('shows an empty-state message with a zero count when there are no candidates', async () => {
