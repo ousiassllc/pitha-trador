@@ -20,7 +20,9 @@ templ SettingsLinkCard(props SettingsLinkCardProps) {
 	<li class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-4" data-testid={ "settings-link-" + props.ID }>
 		<div class="flex min-w-0 flex-1 flex-col gap-1">
 			<span class="font-semibold text-slate-900">{ props.Name }</span>
-			<p class="text-sm text-slate-600">{ props.Description }</p>
+			if props.Description != "" {
+				<p class="text-sm text-slate-600">{ props.Description }</p>
+			}
 		</div>
 		@atoms.ButtonLink(atoms.ButtonProps{Variant: atoms.ButtonOutline, Attrs: templ.Attributes{
 			"href":        string(templ.URL(props.Href)),

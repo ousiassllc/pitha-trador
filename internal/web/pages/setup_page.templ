@@ -1,6 +1,7 @@
 package pages
 
 import (
+	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
@@ -41,19 +42,27 @@ templ SetupPage(props SetupProps) {
 		<div class="mt-4 flex flex-col gap-4" data-testid="setup-form">
 			<p class="text-sm text-slate-600">
 				if props.Tachibana {
-					利用を始めるには、「必須」と表示された接続先（Jev の JEV_API_KEY と、立花証券 e支店の選択中の環境（
-					if props.Production {
-						本番
-					} else {
-						デモ
-					}
-					）の認証ID）を開いて保存し、あわせて「立花証券 e支店（接続設定）」で選択中の環境の秘密鍵ファイルのパスを保存してください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+					「必須」と表示された接続先と、立花証券 e支店の秘密鍵ファイルのパスを保存してください。
 				} else {
-					利用を始めるには、「必須」と表示された接続先（Jev の JEV_API_KEY と kabuステーションの KABU_API_PASSWORD）を開いて保存してください。立花証券 e支店を使う場合は、先に「ブローカー」で tachibana を選んでください。保存済みの値はセキュリティのため画面上に表示されません。保存・削除の反映にはアプリの再起動が必要です。
+					「必須」と表示された接続先を開いて保存してください。
 				}
-			</p>
-			<p class="text-sm text-slate-600" data-testid="setup-advanced-note">
-				接続先 URL やモデル名は未入力で既定値が使われます。Luna・Sol・Opus・ニュースフィードなどの接続先は、セットアップ後に設定画面から追加できます。
+				保存・削除の反映には再起動が必要です。
+				<span data-testid="setup-advanced-note">
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-setup-steps", Label: "セットアップの説明"}) {
+						if props.Tachibana {
+							必須の接続先は、Jev の API キーと、立花証券 e支店の選択中の環境（
+							if props.Production {
+								本番
+							} else {
+								デモ
+							}
+							）の認証ID です。あわせて、「立花証券 e支店（接続設定）」で選択中の環境の秘密鍵ファイルのパスを保存してください。
+						} else {
+							必須の接続先は、Jev の API キーと kabuステーションの API パスワードです。立花証券 e支店を使う場合は、先に「ブローカー」で立花証券 e支店を選んでください。
+						}
+						保存済みの値はセキュリティのため画面上に表示されません。接続先 URL やモデル名は未入力で既定値が使われます。Luna・Sol・Opus・ニュースフィードなどの接続先は、セットアップ後に設定画面から追加できます。
+					}
+				</span>
 			</p>
 			@organisms.ConnectionList(props.Connections)
 			if len(props.Operational) > 0 {

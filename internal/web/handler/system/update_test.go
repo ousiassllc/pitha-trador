@@ -97,7 +97,7 @@ func TestUpdateHandler_NilController_BannerEmptyPanelExplainsAndCheckRejected(t 
 	// #241) instead of staying blank, and offer no check button.
 	rec := serve(engine, http.MethodGet, "/system/update-panel")
 	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, "アップデート機能がない") {
+	if rec.Code != http.StatusOK || !strings.Contains(body, "アップデートの確認に対応していません") {
 		t.Errorf("GET /system/update-panel = %d %q, want 200 explaining the build has no updater", rec.Code, body)
 	}
 	if strings.Contains(body, "update-check-button") {

@@ -144,7 +144,9 @@ templ SettingsCard(props SettingsCardProps) {
 					@props.Status
 				}
 			</span>
-			<p class="text-sm text-slate-600">{ props.Description }</p>
+			if props.Description != "" {
+				<p class="text-sm text-slate-600">{ props.Description }</p>
+			}
 		</div>
 		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonOutline, Attrs: templ.Attributes{
 			"aria-haspopup":   "dialog",

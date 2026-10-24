@@ -206,13 +206,13 @@ var dialogs = []Dialog{
 // not reach are listed.
 var links = []Link{
 	// 証券会社・データ
-	{PageBroker, "初回セットアップ", "起動に必要な接続（Jev・kabuステーション／立花・Slack など）を順に設定します。必須の接続が未設定の間は他の画面からここへ案内されます。", "/setup", false},
+	{PageBroker, "初回セットアップ", "起動に必要な接続を順に設定します。", "/setup", false},
 
 	// 外部連携・AI
-	{PageIntegrations, "API ドキュメント（Swagger）", "JSON API の仕様を確認します（SWAGGER_ENABLED=true のときだけ表示されます）。", "/swagger", true},
+	{PageIntegrations, "API ドキュメント（Swagger）", "JSON API の仕様を確認します。", "/swagger", true},
 
 	// システム
-	{PageMaintenance, "稼働ログ", "システムの稼働ログとキューの状況を確認します。", "/activity", false},
+	{PageMaintenance, "稼働ログ", "システムの稼働ログを確認します。", "/activity", false},
 }
 
 // HashRoutes maps every URL-hash id a Settings dialog answers to (dialog ids
