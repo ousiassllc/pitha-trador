@@ -8,15 +8,15 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/broker"
 )
 
-// BrokerSelection is the broker choice the banner follows: the effective
+// BrokerSelection is the broker choice the connection content follows: the effective
 // runtime_settings value (settings.OperationalSettings satisfies it). It is
 // read per request, like the Setup/Settings screens do.
 type BrokerSelection interface {
 	Broker(ctx context.Context) (config.BrokerSettings, error)
 }
 
-// tachibanaEnvironment is the 立花 environment to name on the banner for a
-// failing session with the given issue, or "" when the banner stays the kabu
+// tachibanaEnvironment is the 立花 environment to name for a
+// failing session with the given issue, or "" when the content stays the kabu
 // one: no broker selection, kabu selected, or one of the kabu-only causes
 // (not_logged_in, bad_password - the 立花 adapter never reports them, so the
 // kabu adapter is the one running and its 4001007 etc. guidance stands).
@@ -26,7 +26,7 @@ func (h *MarketDataHandler) tachibanaEnvironment(ctx context.Context, issue brok
 	}
 	b, err := h.selection.Broker(ctx)
 	if err != nil {
-		slog.Error("marketdata-status: read broker selection; assuming kabu", "error", err)
+		slog.Error("marketdata: read broker selection; assuming kabu", "error", err)
 		return ""
 	}
 	if b.Provider != config.BrokerTachibana {

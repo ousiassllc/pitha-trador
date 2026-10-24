@@ -14,12 +14,10 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
-	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
 // SecretsStore is the subset of internal/repository/system.SecretsRepository's
-// methods the Settings screen and the header's secrets-status banner
-// need. An interface here - rather than importing internal/repository's
+// methods the Settings screen and the Home screen's 要対応 list need. An interface here - rather than importing internal/repository's
 // concrete type - keeps this package's dependency direction unchanged
 // (docs/architecture/overview.md §3: "web/handler: service, domainに依存。
 // repositoryを直接使わない"); *system.SecretsRepository implements it
@@ -50,9 +48,8 @@ func (StaticSecretsStore) Set(context.Context, string, string) error         { r
 func (StaticSecretsStore) Delete(context.Context, string) error              { return nil }
 
 // SettingsHandler implements `GET /settings`, `GET /setup`, `POST`/`DELETE
-// /settings/:key` and `GET /system/secrets-status` (issue #57 スコープ
-// items 6-7, per-key save/delete from issue #79, Setup screen from issue
-// #80).
+// /settings/:key` (issue #57 スコープ items 6-7, per-key save/delete from
+// issue #79, Setup screen from issue #80).
 type SettingsHandler struct {
 	store SecretsStore
 	ops   OperationalSettings // nil until WithOperationalSettings
@@ -138,22 +135,11 @@ func (h *SettingsHandler) Delete(c *gin.Context) {
 	h.renderRow(c, key, "削除しました。反映にはアプリの再起動が必要です。")
 }
 
-// Status implements `GET /system/secrets-status`: the header's
-// `#config-banner` fragment (organisms.Header's doc comment, mirroring
-// `#header-status`'s own `hx-get`/`hx-trigger="load"` self-correcting
-// pattern). It only guides toward unset optional keys (SLACK_WEBHOOK_URL
-// etc.; not defaultedKeys, whose unset state is normal): the required
-// keys are enforced by Setup Guard's redirect to `/setup` instead (issue #80), so they never appear here. It renders
-// nothing once every optional key is configured. A per-key
-// SecretsStore.Get error degrades that key to "unset" (issue #70) rather
-// than 500ing the banner on every page.
-func (h *SettingsHandler) Status(c *gin.Context) {
-	shared.RenderHTML(c, http.StatusOK, organisms.SecretsBanner(h.UnsetOptionalKeys(c.Request.Context())))
-}
-
 // UnsetOptionalKeys lists the optional secrets-table keys that have no stored
-// value yet (not defaultedKeys). The Home screen's 要対応 list reads it
-// (issue #896), so it and the banner above name the same keys.
+// value yet (not defaultedKeys: their unset state is normal). The Home
+// screen's 要対応 list reads it (issue #896). Required keys never appear here:
+// Setup Guard redirects to `/setup` while one is unset (issue #80). A per-key
+// SecretsStore.Get error degrades that key to "unset" (issue #70).
 func (h *SettingsHandler) UnsetOptionalKeys(ctx context.Context) []string {
 	var keys []string
 	for _, key := range config.OptionalSecretKeys() {
@@ -165,8 +151,9 @@ func (h *SettingsHandler) UnsetOptionalKeys(ctx context.Context) []string {
 }
 
 // secretsStatusChangedEvent is the HX-Trigger event a successful Save/Delete
-// fires so the Header's `#config-banner` refreshes immediately instead of
-// staying stale until the next page load (organisms.Header's doc comment).
+// fires so the Header's `#attention-badge` and Home's 要対応 list refresh
+// immediately instead of staying stale until their next poll (organisms.Header's
+// doc comment).
 const secretsStatusChangedEvent = "secretsStatusChanged"
 
 // renderRow answers a successful Save/Delete. An HTMX request gets the
@@ -178,8 +165,8 @@ const secretsStatusChangedEvent = "secretsStatusChanged"
 // `method="post"` fallback (JS disabled) would otherwise render a bare
 // fragment as the whole page, so it is redirected back to the screen it
 // came from instead (the notice is only shown on the HTMX path). The
-// response also fires secretsStatusChangedEvent so Header's #config-banner
-// refetches the unset-optional-keys list (issue #695).
+// response also fires secretsStatusChangedEvent so the 要対応 badge and list
+// refetch the unset-optional-keys list (issue #695).
 func (h *SettingsHandler) renderRow(c *gin.Context, key, notice string) {
 	returnPath := settingsReturnPath(c)
 	if c.GetHeader("HX-Request") != "true" {

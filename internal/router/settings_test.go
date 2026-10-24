@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/router"
 )
 
@@ -102,30 +101,6 @@ func TestNew_BulkSettingsPostIsGone(t *testing.T) {
 	}
 }
 
-func TestNew_SecretsStatusRouteReflectsWithSecretsStoreOption(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	store := requiredSecretsStore()
-	engine := router.New(router.WithSecretsStore(store))
-
-	get := func() string {
-		rec := httptest.NewRecorder()
-		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/secrets-status", nil))
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-		}
-		return rec.Body.String()
-	}
-	if body := get(); !strings.Contains(body, "SLACK_WEBHOOK_URL") {
-		t.Fatalf("secrets-status banner does not list unset optional SLACK_WEBHOOK_URL: %q", body)
-	}
-	for _, key := range config.OptionalSecretKeys() {
-		store[key] = "configured"
-	}
-	if body := get(); strings.TrimSpace(body) != "" {
-		t.Fatalf("secrets-status banner non-empty though every key is configured: %q", body)
-	}
-}
-
 // requiredSecretsStore returns a store with every required key (and no
 // optional one) configured, i.e. one the Setup Guard lets through.
 func requiredSecretsStore() fakeSecretsStore {
@@ -148,7 +123,7 @@ func TestNew_SetupGuardRedirectsEveryGuardedRouteWhileRequiredKeyIsUnset(t *test
 		{http.MethodGet, "/"},
 		{http.MethodGet, "/scanner"},
 		{http.MethodGet, "/settings"},
-		{http.MethodGet, "/system/secrets-status"},
+		{http.MethodGet, "/system/update-panel"},
 		{http.MethodPost, "/settings"},
 		{http.MethodGet, "/no-such-route"},
 	} {

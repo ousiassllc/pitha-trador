@@ -14,24 +14,23 @@ import (
 )
 
 // The narrow views of the existing services the Home screen reads. Each is a
-// subset of what internal/router already wires for the header routes and the
-// APIs (`/api/v1/system/status`, `/system/daily-halt`, `/system/marketdata-status`,
-// `/system/health-alerts`, `/api/v1/scanner/scan`,
-// `/api/v1/activity`); Home adds no source of its own and writes nothing.
+// subset of what internal/router already wires for the other routes and the
+// APIs (`/api/v1/system/status`, `/api/v1/scanner/scan`, `/api/v1/activity`);
+// Home adds no source of its own and writes nothing.
 type (
 	// StateReader is `GET /api/v1/system/status`'s source.
 	StateReader interface {
 		State(ctx context.Context) (domain.SystemState, []domain.KillSwitchEvent, error)
 	}
-	// DailyHaltReader is `GET /system/daily-halt`'s source.
+	// DailyHaltReader is system.DailyHaltSource.
 	DailyHaltReader interface {
 		DailyHalt(ctx context.Context) (*domain.DailyEntryHalt, error)
 	}
-	// MarketDataReader is `GET /system/marketdata-status`'s content.
+	// MarketDataReader is system.MarketDataHandler's read side.
 	MarketDataReader interface {
 		BannerProps(ctx context.Context) organisms.MarketDataBannerProps
 	}
-	// AlertReader is `GET /system/health-alerts`'s source.
+	// AlertReader is system.HealthAlertSource.
 	AlertReader interface {
 		Active(ctx context.Context) ([]domain.HealthAlert, error)
 	}

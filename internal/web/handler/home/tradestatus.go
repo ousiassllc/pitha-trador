@@ -125,8 +125,8 @@ func dailyGuardReason(in statusInputs) *reason {
 // reason itself is the halt's own Message).
 const dailyGuardHelp = "保有中のポジションの決済は通常どおり行われ、翌営業日に自動で解除されます。"
 
-// brokerName is the broker the failing session belongs to: the banner names
-// the 立花 environment only for 立花.
+// brokerName is the broker the failing session belongs to: Environment is
+// set only for 立花.
 func brokerName(m organisms.MarketDataBannerProps) string {
 	if m.Environment != "" {
 		return "立花証券 e支店"
@@ -153,7 +153,7 @@ func brokerReason(in statusInputs) *reason {
 	return nil
 }
 
-// brokerIssueSentence words a marketdata.TokenIssue (the banner's data-issue).
+// brokerIssueSentence words a marketdata.TokenIssue (MarketDataBannerProps.Issue).
 func brokerIssueSentence(broker, issue string) string {
 	switch issue {
 	case "unreachable":

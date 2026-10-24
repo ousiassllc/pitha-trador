@@ -15,7 +15,7 @@ import (
 )
 
 // UpdateController is the subset of internal/service/updater's
-// SchedulerAdapter the update notification routes need (issue #76):
+// SchedulerAdapter the update routes and the Home screen need (issue #76):
 // Status is the last check's outcome, CheckForUpdate runs a check right
 // now - the same call the scheduler's periodic tick makes, so a manual
 // check that finds a verified installer restarts the app exactly like the
@@ -25,10 +25,9 @@ type UpdateController interface {
 	CheckForUpdate(ctx context.Context) error
 }
 
-// UpdateHandler implements `GET /system/update-status`, `GET
-// /system/update-panel` and `POST /system/update-check` (issue #76). A nil
-// controller means this build has no updater (cmd/server): the status GET
-// renders nothing, the panel GET renders a notice saying so (issue #241),
+// UpdateHandler implements `GET /system/update-panel` and `POST
+// /system/update-check` (issue #76). A nil controller means this build has no
+// updater (cmd/server): the panel GET renders a notice saying so (issue #241),
 // and the POST route 404s.
 type UpdateHandler struct {
 	controller UpdateController
@@ -41,25 +40,9 @@ func NewUpdateHandler(controller UpdateController) *UpdateHandler {
 }
 
 // updateStatusChangedEvent is the HX-Trigger event Check fires so the
-// Header's `#update-banner` refreshes immediately instead of at its next
-// poll (organisms.Header's doc comment).
+// Header's `#attention-badge` and Home's 要対応 list refresh immediately
+// instead of at their next poll (organisms.Header's doc comment).
 const updateStatusChangedEvent = "updateStatusChanged"
-
-// Status implements `GET /system/update-status`: Header's `#update-banner`
-// fragment (organisms.UpdateBanner).
-func (h *UpdateHandler) Status(c *gin.Context) {
-	var props organisms.UpdateBannerProps
-	if h.controller != nil {
-		status := h.controller.Status()
-		props = organisms.UpdateBannerProps{
-			Available: status.Available,
-			Version:   status.Version,
-			Blocked:   status.Blocked,
-			Ready:     status.Ready,
-		}
-	}
-	shared.RenderHTML(c, http.StatusOK, organisms.UpdateBanner(props))
-}
 
 // Panel implements `GET /system/update-panel`: Settings' `#update-panel`
 // fragment (organisms.UpdatePanel); without an updater it only says the

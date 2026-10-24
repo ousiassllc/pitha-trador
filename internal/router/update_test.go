@@ -30,9 +30,9 @@ func TestNew_UpdateRoutesAreRegistered(t *testing.T) {
 	engine := router.New(router.WithUpdateController(controller))
 
 	rec := httptest.NewRecorder()
-	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/update-status", nil))
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/system/update-panel", nil))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "v9.9.9") {
-		t.Fatalf("GET /system/update-status = %d %q, want 200 with the available version", rec.Code, rec.Body.String())
+		t.Fatalf("GET /system/update-panel = %d %q, want 200 with the available version", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
