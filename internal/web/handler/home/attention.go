@@ -77,8 +77,9 @@ func attention(in statusInputs) homepanels.AttentionView {
 	if len(in.unsetKeys) > 0 {
 		add(homepanels.AttentionItem{
 			Key: keySecrets, Level: homepanels.LevelInfo,
-			Title:  "任意項目が未設定です: " + strings.Join(in.unsetKeys, ", "),
+			Title:  fmt.Sprintf("任意の設定項目が %d 件未設定です", len(in.unsetKeys)),
 			Detail: "必要に応じて設定画面から入力してください。",
+			Help:   "未設定の設定キー: " + strings.Join(in.unsetKeys, ", "),
 			Link:   linkSettings,
 		})
 	}
@@ -114,7 +115,7 @@ func killSwitchItem() homepanels.AttentionItem {
 	return homepanels.AttentionItem{
 		Key: codeKillSwitch, Level: homepanels.LevelAlert,
 		Title:  "Kill Switch が発動しています",
-		Detail: "解除するまで新規エントリーは行われません。経緯は稼働ログで確認できます。",
+		Detail: "解除するまで新規エントリーは行われません。",
 		Link:   linkActivity,
 	}
 }
@@ -123,7 +124,8 @@ func dailyGuardItem(halt *domain.DailyEntryHalt) homepanels.AttentionItem {
 	return homepanels.AttentionItem{
 		Key: codeDailyGuard, Level: homepanels.LevelWarn,
 		Title:  "本日の新規エントリーを停止しました（" + halt.Label() + "）",
-		Detail: halt.Message + "保有中のポジションの決済は通常どおり行われ、翌営業日に自動で解除されます。",
+		Detail: halt.Message,
+		Help:   dailyGuardHelp,
 		Link:   linkDailyGuard,
 	}
 }
@@ -139,7 +141,7 @@ func marketDataItems(m organisms.MarketDataBannerProps) []homepanels.AttentionIt
 		}
 		return []homepanels.AttentionItem{{
 			Key: keyMarketData, Level: homepanels.LevelAlert,
-			Title: title, Detail: m.Guidance + "自動的に再試行します。", Link: linkBroker,
+			Title: title, Detail: m.Guidance, Help: "自動的に再試行します。", Link: linkBroker,
 		}}
 	case m.Notice != "":
 		return []homepanels.AttentionItem{{
@@ -154,7 +156,8 @@ func alertItem(a domain.HealthAlert) homepanels.AttentionItem {
 	return homepanels.AttentionItem{
 		Key: a.Code, Level: homepanels.LevelAlert,
 		Title:  organisms.HealthAlertTitle(a.Code),
-		Detail: a.Since.In(marketcalendar.JST).Format("15:04") + "から続いています。" + organisms.HealthAlertAction(a.Code) + "原因が解消すると、この表示は自動的に消えます。",
+		Detail: a.Since.In(marketcalendar.JST).Format("15:04") + "から続いています。" + organisms.HealthAlertAction(a.Code),
+		Help:   "原因が解消すると、この表示は自動的に消えます。",
 		Link:   alertLink(a.Code),
 	}
 }
@@ -167,45 +170,46 @@ func alertLink(code string) homepanels.Link {
 }
 
 func updateItem(in statusInputs) homepanels.AttentionItem {
-	detail := "自動更新の準備をしています。"
+	detail, help := "自動更新の準備をしています。", ""
 	switch {
 	case in.update.Ready:
 		detail = "ダウンロードが完了しました。まもなく自動的に再起動して更新します。"
 	case in.update.Blocked:
-		detail = "ポジション解消・Kill Switch解除・直近発注から5分経過の安全条件が揃い次第、自動的に更新・再起動されます。"
+		detail = "安全条件が揃い次第、自動的に更新・再起動されます。"
+		help = "ポジション解消・Kill Switch解除・直近発注から5分経過の3つが揃うと更新します。"
 	}
 	return homepanels.AttentionItem{
 		Key: keyUpdate, Level: homepanels.LevelInfo,
-		Title: "新バージョン " + in.update.Version + " が利用可能です", Detail: detail, Link: linkUpdate,
+		Title: "新バージョン " + in.update.Version + " が利用可能です", Detail: detail, Help: help, Link: linkUpdate,
 	}
 }
 
 // codeItem words a health_today attention code that no banner covers (or whose
 // banner source could not be read). ok is false for a code Home does not know.
 func codeItem(code string, h Health) (homepanels.AttentionItem, bool) {
-	warn := func(title, detail string, link homepanels.Link) (homepanels.AttentionItem, bool) {
-		return homepanels.AttentionItem{Key: code, Level: homepanels.LevelWarn, Title: title, Detail: detail, Link: link}, true
+	warn := func(title, detail, help string, link homepanels.Link) (homepanels.AttentionItem, bool) {
+		return homepanels.AttentionItem{Key: code, Level: homepanels.LevelWarn, Title: title, Detail: detail, Help: help, Link: link}, true
 	}
 	switch code {
 	case codeNoPaperTrades:
-		return warn("今日はまだ Paper のポジションを開いていません", "午前の立会が終わりましたが、本日の新規エントリーがありません。理由は下の「エントリーしなかった理由」で確認できます。", linkScanner)
+		return warn("今日はまだ Paper のポジションを開いていません", "午前の立会が終わりましたが、新規エントリーがありません。", "理由は下の「エントリーしなかった理由」で確認できます。", linkScanner)
 	case codeNoActiveModel:
-		return warn("売買判断モデルが採用されていません", "モデルが採用されるまで、通常のエントリーは行われません。", linkMetaModel)
+		return warn("売買判断モデルが採用されていません", "モデルが採用されるまで、通常のエントリーは行われません。", "", linkMetaModel)
 	case domain.HealthAlertKabuNotLoggedIn, domain.HealthAlertKabuUnreachable, domain.HealthAlertMarketDataIdle:
 		return homepanels.AttentionItem{
 			Key: code, Level: homepanels.LevelAlert,
 			Title: organisms.HealthAlertTitle(code), Detail: organisms.HealthAlertAction(code), Link: alertLink(code),
 		}, true
 	case codeMissingSession:
-		return warn("市況データが欠けている立会日があります: "+strings.Join(h.MissingSessionDates, ", "), "稼働ログで、その日のデータ取得ジョブを確認してください。", linkActivity)
+		return warn("市況データが欠けている立会日があります: "+strings.Join(h.MissingSessionDates, ", "), "稼働ログで、その日のデータ取得ジョブを確認してください。", "", linkActivity)
 	case codeDailyGuard:
-		return warn("本日の新規エントリーを停止しました（日次ガード）", "保有中のポジションの決済は通常どおり行われ、翌営業日に自動で解除されます。", linkDailyGuard)
+		return warn("本日の新規エントリーを停止しました（日次ガード）", "", dailyGuardHelp, linkDailyGuard)
 	case codeKillSwitch:
 		return killSwitchItem(), true
 	case codeRetrainSkipped:
-		return warn("夜間の再学習を見送りました", retrainDetail(h), linkMetaModel)
+		return warn("夜間の再学習を見送りました", retrainDetail(h), "", linkMetaModel)
 	case codeProposalStalled:
-		return warn(fmt.Sprintf("処理が止まっている AI の注文提案が %d 件あります", h.StalledProposals), "受付後に処理が進んでいない提案です。一覧で状態を確認してください。", linkProposals)
+		return warn(fmt.Sprintf("処理が止まっている AI の注文提案が %d 件あります", h.StalledProposals), "一覧で状態を確認してください。", "受付後に処理が進んでいない提案です。", linkProposals)
 	}
 	return homepanels.AttentionItem{}, false
 }
