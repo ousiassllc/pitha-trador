@@ -131,9 +131,9 @@ func TestCardAndPanelShowTheDefaults(t *testing.T) {
 	for _, want := range []string{
 		`data-testid="jev-prompt-live-version">trader-v3<`,
 		`data-testid="jev-prompt-enabled"`, // unchecked: the shadow is off by default
-		"（既定値。保存した値はありません）", `data-testid="jev-prompt-cost-estimated"`, "うち見積り",
+		`data-testid="jev-prompt-cap-effective">0.1 USD</strong>（既定値）`, `data-testid="jev-prompt-cost-estimated"`, "うち見積り",
 		`data-testid="jev-prompt-cost-today">0 USD`, `data-testid="jev-prompt-cost-total">0 USD`,
-		"まだ昇格していません", "Paper だけで動き、Live では動きません",
+		`data-testid="jev-prompt-promotions-empty"`, "Paper だけで動き、Live では動きません",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("panel lacks %q", want)
@@ -168,7 +168,7 @@ func TestSavingTheShadowSettings(t *testing.T) {
 		}
 	}
 	body := a.get("/settings/jev-prompt-panel").Body.String()
-	if strings.Contains(body, "既定値。保存した値はありません") || !strings.Contains(body, `data-testid="jev-prompt-cap-effective">0.5 USD`) || strings.Contains(body, "placeholder=") {
+	if strings.Contains(body, "USD</strong>（既定値）") || !strings.Contains(body, `data-testid="jev-prompt-cap-effective">0.5 USD</strong>（保存した値）`) || strings.Contains(body, "placeholder=") {
 		t.Errorf("a stored cap is shown as the default, or not shown as stored\n%s", body)
 	}
 
@@ -192,7 +192,7 @@ func TestSavingTheShadowSettings(t *testing.T) {
 func TestSavingTheFormUntouchedKeepsTheCapAtTheDefault(t *testing.T) {
 	a := newApp(t)
 	body := a.get("/settings/jev-prompt-panel").Body.String()
-	for _, want := range []string{`placeholder="0.1（既定値）"`, "（既定値。保存した値はありません）"} {
+	for _, want := range []string{`placeholder="0.1（既定値）"`, `data-testid="jev-prompt-cap-effective">0.1 USD</strong>（既定値）`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("default panel lacks %q\n%s", want, body)
 		}
@@ -207,7 +207,7 @@ func TestSavingTheFormUntouchedKeepsTheCapAtTheDefault(t *testing.T) {
 	if v, ok := a.stored(jevshadowsettings.KeyDailyCostCapUSD); ok {
 		t.Fatalf("saving the untouched form stored the default cap %q", v)
 	}
-	if body := a.get("/settings/jev-prompt-panel").Body.String(); !strings.Contains(body, "既定値。保存した値はありません") {
+	if body := a.get("/settings/jev-prompt-panel").Body.String(); !strings.Contains(body, "USD</strong>（既定値）") {
 		t.Error("the default lost its marking after an untouched save")
 	}
 }

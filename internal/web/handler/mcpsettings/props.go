@@ -46,7 +46,7 @@ func stateNote(v admin.View) string {
 		return failureText(v.Failure, v.ExitCode)
 	case admin.StateListening:
 		if v.External {
-			return "アプリの外で起動された MCP が待ち受けています。この画面からは停止できません（二重には起動しません）。"
+			return "アプリの外で起動された MCP が待ち受けています（この画面からは停止できません）。"
 		}
 		return ""
 	}
@@ -99,7 +99,7 @@ func reasonText(r admin.Reason) string {
 // application applies at start-up.
 func autoStartNote(v admin.View) string {
 	if v.AutoStart {
-		return "次回起動時も自動で起動します（アプリの起動と同時に MCP も起動し、アプリの終了で止まります）。"
+		return "次回起動時も自動で起動します。"
 	}
 	switch v.AutoStartBlocked {
 	case admin.ReasonDisabled:
