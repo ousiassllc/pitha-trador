@@ -59,7 +59,7 @@ func StaticSetupRequirements(keys ...string) SetupRequirementsFunc {
 // /settings`, `/api/v1/...` and WebSocket upgrades - is answered as above.
 //
 // A store read error counts as "unset" (the same degradation
-// SettingsHandler's secrets-status banner and rows apply, issue #70): the
+// SettingsHandler's rows and unset-optional-keys list apply, issue #70): the
 // operator lands on the Setup screen, which can overwrite an unreadable
 // value, instead of the app trusting a key it cannot read.
 func SetupGuard(store SecretsReader, required SetupRequirementsFunc) gin.HandlerFunc {

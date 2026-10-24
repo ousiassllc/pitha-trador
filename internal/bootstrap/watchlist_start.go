@@ -73,7 +73,7 @@ func (s *Services) buildTachibanaMonitor() {
 	})
 }
 
-// watchlistRouterOptions serves the Watchlist screen and the banner's
+// watchlistRouterOptions serves the Watchlist screen and the 要対応
 // fallback notice when the 立花 adapter is selected.
 func (s *Services) watchlistRouterOptions() []router.Option {
 	if _, ok := s.Broker.(*adapter.Adapter); !ok {

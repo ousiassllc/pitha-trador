@@ -49,7 +49,7 @@ templ Shell(title string, current organisms.NavItem) {
 // screen (issue #80). Setup Guard redirects every route but `/setup`,
 // `/static/...` and `/settings/:key` writes while a required secret is
 // unset, so Header's `hx-get` fragments (`/system/status`,
-// `/system/secrets-status`, ...) and its nav links would all bounce back
+// `/home/attention-badge`, ...) and its nav links would all bounce back
 // to `/setup` and swap a whole page into `#header-status`.
 templ SetupShell(title string) {
 	@document(title) {

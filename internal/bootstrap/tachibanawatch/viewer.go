@@ -17,7 +17,7 @@ type ViewStore interface {
 }
 
 // Viewer serves the Watchlist screen (web/handler/watchlist.Source) and the
-// banner's fallback notice (web/handler/system.WatchNoticeSource).
+// fallback notice of Home's 要対応 list (web/handler/system.WatchNoticeSource).
 type Viewer struct {
 	Lists ViewStore
 	// Clock defaults to the wall clock.
@@ -42,7 +42,7 @@ func (v Viewer) WatchLists(ctx context.Context) (domain.WatchListView, error) {
 // WatchNotice implements system.WatchNoticeSource: while the list of the
 // current 立会日 is a stand-in for one the daily bars could not make, its
 // explanation; otherwise
-// "". A failed read shows nothing (the banner polls again).
+// "". A failed read shows nothing (the 要対応 list polls again).
 func (v Viewer) WatchNotice(ctx context.Context) string {
 	date := SessionDate(tachibana.OrReal(v.Clock).Now())
 	active, ok, err := v.Lists.AtOrBefore(ctx, date)

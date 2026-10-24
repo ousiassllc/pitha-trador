@@ -273,7 +273,7 @@ erDiagram
 |-------|-----|------|------|
 | list_date | text | PK, CHECK `YYYY-MM-DD` | リストが使われる立会日（JST）。休場日は飛ばした翌立会日 |
 | source | text | NOT NULL, CHECK IN ('daily_screen','fixed','carried_over','fixed_fallback') | 確定方法。`daily_screen`＝日足スクリーニング、`fixed`＝運用者の固定リスト、`carried_over`＝日足を使えず前営業日のリストを引き継いだ、`fixed_fallback`＝日足を使えず固定リスト（固定リストが無ければ保有・注文中のみ）へ切り替えた |
-| reason | text | NOT NULL, DEFAULT '' | 確定の説明。代替リスト（`carried_over`/`fixed_fallback`）では日足を使えなかった理由と切り替え先（バナー・Activityにもこの文を出す） |
+| reason | text | NOT NULL, DEFAULT '' | 確定の説明。代替リスト（`carried_over`/`fixed_fallback`）では日足を使えなかった理由と切り替え先（Homeの「要対応」・Activityにもこの文を出す） |
 | basis_date | text | NOT NULL, DEFAULT '' | スクリーニングに使った日足の立会日（使わないときは空） |
 | decided_at | text | NOT NULL | 確定時刻（UTC。固定9桁の小数秒） |
 

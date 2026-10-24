@@ -43,8 +43,8 @@ func heartbeatEngineWith(t *testing.T, heartbeat gin.HandlerFunc) *gin.Engine {
 	engine.GET("/page", func(c *gin.Context) { c.String(http.StatusOK, middleware.CSRFToken(c.Request.Context())) })
 	engine.GET("/ws", ok)
 	engine.GET("/static/app.js", ok)
-	engine.GET("/system/update-status", ok)
-	engine.GET("/system/marketdata-status", ok)
+	engine.GET("/home/attention-badge", ok)
+	engine.GET("/home/attention", ok)
 	engine.POST("/act", ok)
 	return engine
 }
@@ -83,7 +83,7 @@ func TestHeartbeat_IgnoresRequestsThatAreNotOperatorActivity(t *testing.T) {
 	resync := request(http.MethodGet, "/page", cookie, "")
 	resync.Header.Set(middleware.BackgroundHeader, "1")
 
-	// Header's `every Ns` banner polls send the marker via hx-headers.
+	// The `every Ns` attention badge and list polls send the marker via hx-headers.
 	poll := func(path string) *http.Request {
 		r := request(http.MethodGet, path, cookie, "")
 		r.Header.Set(middleware.BackgroundHeader, "1")
@@ -95,8 +95,8 @@ func TestHeartbeat_IgnoresRequestsThatAreNotOperatorActivity(t *testing.T) {
 		"invalid session cookie": request(http.MethodGet, "/page", staleCookie, ""),
 		"static asset":           request(http.MethodGet, "/static/app.js", cookie, ""),
 		"websocket upgrade":      wsUpgrade,
-		"update banner poll":     poll("/system/update-status"),
-		"marketdata banner poll": poll("/system/marketdata-status"),
+		"attention badge poll":   poll("/home/attention-badge"),
+		"attention list poll":    poll("/home/attention"),
 		"background header":      resync,
 	} {
 		rec := do(engine, req)
@@ -117,9 +117,9 @@ func TestHeartbeat_ExcludesByHeaderNotByPath(t *testing.T) {
 	engine := heartbeatEngine(t, recorder)
 	cookie, _ := login(t, engine)
 
-	rec := do(engine, request(http.MethodGet, "/system/update-status", cookie, ""))
+	rec := do(engine, request(http.MethodGet, "/home/attention-badge", cookie, ""))
 	if rec.Code != http.StatusOK || recorder.calls != 1 {
-		t.Fatalf("GET /system/update-status without marker = %d with %d heartbeats, want 200 and 1", rec.Code, recorder.calls)
+		t.Fatalf("GET /home/attention-badge without marker = %d with %d heartbeats, want 200 and 1", rec.Code, recorder.calls)
 	}
 }
 

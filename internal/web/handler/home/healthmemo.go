@@ -49,7 +49,7 @@ func (h *Handler) health(ctx context.Context, now time.Time, basis string) (Heal
 
 // healthBasis summarizes the live inputs health_today's attention codes
 // restate: the system state, the daily halt, the active health alerts and the
-// broker session's banner.
+// broker session's connection state.
 func healthBasis(in statusInputs) string {
 	var b strings.Builder
 	b.WriteString(string(in.state))

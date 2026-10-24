@@ -114,7 +114,7 @@ var settingsConnections = []connection{
 }
 
 // defaultedKeys are the override-only keys whose unset state is the normal
-// one (a default applies), so the global secrets banner never nags about
+// one (a default applies), so the 要対応 list never nags about
 // them.
 var defaultedKeys = []string{
 	config.KeyJevBaseURL, config.KeyJevModel,

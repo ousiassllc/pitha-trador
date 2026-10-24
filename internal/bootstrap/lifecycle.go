@@ -36,7 +36,7 @@ func (s *Services) Start(ctx context.Context) error {
 		// The broker API being unreachable at startup (no broker app on a dev
 		// machine, issue #44) must not stop the rest of the process: log and
 		// continue without a session. Session.Start keeps retrying (issue
-		// #295); the header banner shows the cause and every quote fetch fails
+		// #295); Home's 要対応 list shows the cause and every quote fetch fails
 		// (broker.ErrNoSession or a request error) per job meanwhile.
 		status := s.Broker.Status()
 		slog.Error("bootstrap: broker initial session establishment failed, continuing without a session",

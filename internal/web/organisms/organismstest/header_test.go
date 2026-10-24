@@ -72,26 +72,6 @@ func TestAttentionBadge_CountAndLink(t *testing.T) {
 	}
 }
 
-func TestBanners_BodiesCarryNoRole(t *testing.T) {
-	market := renderComponent(t, organisms.MarketDataBanner(organisms.MarketDataBannerProps{Issue: "bad_password", Guidance: "KABU_API_PASSWORD を確認してください。"}))
-	update := renderComponent(t, organisms.UpdateBanner(organisms.UpdateBannerProps{Available: true, Version: "v9.9.9"}))
-	for name, html := range map[string]string{"MarketDataBanner": market, "UpdateBanner": update} {
-		if !strings.Contains(html, "data-testid=") {
-			t.Fatalf("%s rendered nothing: %s", name, html)
-		}
-		if strings.Contains(html, "role=") {
-			t.Errorf("%s body must not carry its own role (the container is the live region): %s", name, html)
-		}
-	}
-}
-
-func TestSecretsBanner_HasNoOwnMargin(t *testing.T) {
-	html := renderComponent(t, organisms.SecretsBanner([]string{"SLACK_WEBHOOK_URL"}))
-	if strings.Contains(html, "mb-4") {
-		t.Errorf("banner placement belongs to its container, not a margin: %s", html)
-	}
-}
-
 // Only the current page's link carries aria-current (issue #631).
 func TestMainNav_MarksOnlyCurrent(t *testing.T) {
 	html := renderComponent(t, organisms.MainNav(organisms.NavPerformance))

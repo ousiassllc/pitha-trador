@@ -29,7 +29,7 @@ import (
 // credentials) from the secrets table (issue #57 - `.env`/environment variables are no longer a
 // supported input for these at all). Unlike the old env-var-based loader, a missing value is never
 // fatal: the app starts regardless, missing only drives a startup warning log and the Settings
-// screen's (`/settings`) header banner - BuildServices' Jev/kabuステーションAPI client wiring simply
+// screen's (`/settings`) 要対応 list - BuildServices' Jev/kabuステーションAPI client wiring simply
 // receives empty strings for anything unset (both marketdata.NewClient/jev.NewClient tolerate that)
 // until an operator fills them in and restarts (no hot-reload).
 //

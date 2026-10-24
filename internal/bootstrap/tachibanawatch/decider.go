@@ -8,7 +8,7 @@
 // (fixed) - saved to watch_lists so the morning uses it unchanged, before the
 // 9:00 open included. When the daily bars are missing or too incomplete, the
 // list falls back to the operator's fixed list, else to the previous
-// 営業日's list, and Activity and the banner say so.
+// 営業日's list, and Activity and Home's 要対応 list say so.
 //
 // ActiveList serves the saved list as the broker.CandidateSource of the
 // rankingwatch.Watcher, which publishes it to the stream subscription,

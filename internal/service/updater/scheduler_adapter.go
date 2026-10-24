@@ -36,7 +36,7 @@ func (a SchedulerAdapter) CheckForUpdate(ctx context.Context) error {
 }
 
 // Status returns Checker's most recent check outcome (issue #76), for the
-// UI's update banner/Settings panel.
+// Home's 要対応 list, the header badge and the Settings panel.
 func (a SchedulerAdapter) Status() Status {
 	return a.Checker.Status()
 }

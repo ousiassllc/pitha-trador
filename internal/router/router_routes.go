@@ -107,10 +107,8 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	engine.GET(settingspages.LegacyBucketsPath, settingsHandler.LegacyBudgetsPage)
 	engine.POST("/settings/:key", settingsHandler.Save)
 	engine.DELETE("/settings/:key", settingsHandler.Delete)
-	engine.GET("/system/secrets-status", settingsHandler.Status)
 
 	updateHandler := system.NewUpdateHandler(o.updateController)
-	engine.GET("/system/update-status", updateHandler.Status)
 	engine.GET("/system/update-panel", updateHandler.Panel)
 	engine.POST("/system/update-check", updateHandler.Check)
 
@@ -121,9 +119,6 @@ func registerPages(engine *gin.Engine, o options, settingsStore settings.Secrets
 	if n, ok := o.watchlistSource.(system.WatchNoticeSource); ok {
 		marketDataHandler.WithWatchNotice(n)
 	}
-	engine.GET("/system/marketdata-status", marketDataHandler.Status)
-	engine.GET("/system/daily-halt", system.NewDailyHaltHandler(o.dailyHaltSource).Status)
-	engine.GET("/system/health-alerts", system.NewHealthAlertHandler(o.healthAlertSource).Status)
 	scanSource, _ := o.candidateSource.(scanner.ScanSource)
 	home.New(home.Deps{
 		Source:     o.homeSource,
