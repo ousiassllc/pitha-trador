@@ -235,6 +235,15 @@ func (h *Handler) trades(ctx context.Context, now time.Time) homepanels.TradesVi
 	return v
 }
 
+// retrainSkipLabels names the fixed retraining skip codes for the operator
+// (the wording of the calibration screen's skip list); an unknown code is
+// shown as it is.
+var retrainSkipLabels = map[string]string{
+	"too_few_rows_before_oos":  "検証期間より前のラベル付き判断が不足",
+	"too_few_rows_after_purge": "重なり除去後の学習用データが不足",
+	"training_data_unusable":   "件数はあるが学習できない",
+}
+
 // model is the モデル状態 block: the adopted meta-labeling model and a skipped
 // retraining.
 func model(in statusInputs) homepanels.ModelView {
@@ -246,7 +255,11 @@ func model(in statusInputs) homepanels.ModelView {
 	if h.RetrainSkipped {
 		v.RetrainNotice = "夜間の再学習を見送りました"
 		if h.RetrainSkipReason != "" {
-			v.RetrainNotice += "（" + h.RetrainSkipReason + "）"
+			reason, ok := retrainSkipLabels[h.RetrainSkipReason]
+			if !ok {
+				reason = h.RetrainSkipReason
+			}
+			v.RetrainNotice += "（" + reason + "）"
 		}
 	}
 	return v

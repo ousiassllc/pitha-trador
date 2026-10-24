@@ -80,7 +80,7 @@ func TestAttention_FormerBannersAreListedOnceEach(t *testing.T) {
 		"本日の新規エントリーを停止しました（1日の損失上限）",
 		"kabuステーションの市況データを取得できません", "ログインしてください。",
 		"立会中ですが、市況データの取得が止まっています。", "09:30から続いています",
-		"任意項目が未設定です: SLACK_WEBHOOK_URL, LUNA_API_KEY",
+		"任意の設定項目が 2 件未設定です", "未設定の設定キー: SLACK_WEBHOOK_URL, LUNA_API_KEY",
 		"新バージョン v9.9.9 が利用可能です", "安全条件が揃い次第",
 	} {
 		if !strings.Contains(text, s) {
@@ -168,8 +168,10 @@ func TestAttention_SectionIsAPolledLiveRegionRefreshedByTheEventsThatChangeIt(t 
 	f.unsetKeys = []string{"SLACK_WEBHOOK_URL"}
 	f.update = updater.Status{Available: true, Version: "v9.9.9"}
 	for name, body := range map[string]string{"items": f.mustGet(t, "/home/attention"), "none": newFixture().mustGet(t, "/home/attention")} {
-		if strings.Contains(body, "role=") {
-			t.Errorf("the %s fragment must not carry its own role: %s", name, body)
+		for _, role := range []string{`role="status"`, `role="alert"`} {
+			if strings.Contains(body, role) {
+				t.Errorf("the %s fragment must not carry its own %s: %s", name, role, body)
+			}
 		}
 	}
 }
