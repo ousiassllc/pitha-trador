@@ -22,18 +22,18 @@ type BacktestFormValues struct {
 const backtestFieldClass = "mt-1 px-3 py-1"
 
 // BacktestForm renders the Performance page's Walk Forward backtest request
-// form (functional.md §5.3, FR-BT-2): a plain GET form to `/performance`,
-// so a run is a bookmarkable URL. The second submit button sends the same
-// fields to the cost sensitivity export (`/performance/cost-sensitivity`,
-// issue #779), which runs the backtest with the values currently in the form
-// and downloads the CSV; a plain submit, as the other downloads are.
+// form: a plain GET form to `/performance`, so a run is a bookmarkable URL.
+// The second submit button sends the same fields to the cost sensitivity
+// export (`/performance/cost-sensitivity`), which runs the backtest with the
+// values currently in the form and downloads the CSV; a plain submit, as the
+// other downloads are.
 templ BacktestForm(form BacktestFormValues) {
 	<form id="backtest" class="mt-4 flex flex-wrap items-end gap-4" method="get" action="/performance" data-testid="backtest-form">
-		@backtestField("開始日", atoms.InputProps{Name: "from", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.From, "required": true}})
-		@backtestField("終了日", atoms.InputProps{Name: "to", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.To, "required": true}})
-		@backtestField("学習日数", daysInput("training_days", form.TrainingDays))
-		@backtestField("検証日数", daysInput("validation_days", form.ValidationDays))
-		@backtestField("Forward 日数", daysInput("forward_days", form.ForwardDays))
+		@backtestField("開始日", "from", "", atoms.InputProps{Name: "from", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.From, "required": true}})
+		@backtestField("終了日", "to", "", atoms.InputProps{Name: "to", Type: "date", Class: backtestFieldClass, Attrs: templ.Attributes{"value": form.To, "required": true}})
+		@backtestField("学習日数", "training-days", "各フォールドで最初に置く学習期間の長さ（日）です。", daysInput("training_days", form.TrainingDays))
+		@backtestField("検証日数", "validation-days", "学習期間の次に置く検証期間の長さ（日）です。", daysInput("validation_days", form.ValidationDays))
+		@backtestField("Forward 日数", "forward-days", "検証期間の次に置く Forward 期間（学習に使っていない、成績として評価する期間）の長さ（日）です。この日数ずつ期間をずらしてフォールドを繰り返します。", daysInput("forward_days", form.ForwardDays))
 		@atoms.Button(atoms.ButtonProps{Type: "submit"}) {
 			バックテストを実行
 		}
@@ -45,11 +45,26 @@ templ BacktestForm(form BacktestFormValues) {
 	</form>
 }
 
-templ backtestField(label string, input atoms.InputProps) {
-	<label class="flex flex-col text-sm text-slate-600">
-		{ label }
-		@atoms.Input(input)
-	</label>
+// backtestField is one labelled input; a non-empty help adds a help mark
+// beside the name (a sibling of the label, not inside it). id is the suffix
+// of the input's and the help mark's ids.
+templ backtestField(label, id, help string, input atoms.InputProps) {
+	<div class="flex flex-col text-sm text-slate-600">
+		<span class="flex items-center gap-1">
+			<label for={ "backtest-" + id }>{ label }</label>
+			if help != "" {
+				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-backtest-" + id, Label: label + "の説明"}) {
+					{ help }
+				}
+			}
+		</span>
+		@atoms.Input(withID(input, "backtest-"+id))
+	</div>
+}
+
+func withID(input atoms.InputProps, id string) atoms.InputProps {
+	input.ID = id
+	return input
 }
 
 func daysInput(name string, days int) atoms.InputProps {

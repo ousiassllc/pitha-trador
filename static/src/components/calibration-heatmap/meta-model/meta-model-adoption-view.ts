@@ -1,9 +1,10 @@
-// Adoption block of the meta-labeling model view (issue #780): how the newest
+// Adoption block of the meta-labeling model view: how the newest
 // model was judged - OOS counts, the confidence intervals of its AUC and EV,
 // the bar it was held to, the comparison with the model in force, a blocking
 // change-rate limit and the forward (holdout) evaluation. Split out of
 // meta-model-view.ts to keep it within the linterly per-file limit.
 import { html } from 'lit';
+import { renderHelpMark } from '../../lib/help-mark';
 import { formatBps } from '../barrier-view';
 
 export interface Interval {
@@ -59,24 +60,27 @@ const bpsInterval = (iv: Interval | undefined): string =>
 const aucInterval = (iv: Interval | undefined): string =>
   iv === undefined ? '—' : `${iv.low.toFixed(3)} 〜 ${iv.high.toFixed(3)}`;
 
-// evVerdictText is the verdict on the OOS EV (issue #780): データ無し without
-// takes, 判定不能 for an edge below what the sample can detect that the
-// interval cannot separate from 0. The cut-off is never presented as proof of
-// safety, and the figures are not a promise of any return.
+// The reminder that goes with every verdict on the OOS EV (in a help mark): the
+// cut-off is never presented as proof of safety, and the figures are not a
+// promise of any return.
+const CUTOFF_NOTE =
+  '足切りであり、安全の証明ではありません。数字は仮定つきで、リターンの保証ではありません。';
+
+// evVerdictText is the verdict on the OOS EV: データ無し without takes, 判定不能
+// for an edge below what the sample can detect that the interval cannot
+// separate from 0.
 function evVerdictText(a: MetaModelAdoption): string {
-  const cutoff =
-    '足切りであり、安全の証明ではありません。数字は仮定つきで、リターンの保証ではありません。';
   switch (a.oos_ev_verdict) {
     case 'no_data':
       return 'データ無し';
     case 'positive':
-      return `正のエッジ（信頼区間の下限が 0 を超過）。${cutoff}`;
+      return '正のエッジ（信頼区間の下限が 0 を超過）';
     case 'negative':
-      return `負のエッジ（信頼区間の上限が 0 未満）。${cutoff}`;
+      return '負のエッジ（信頼区間の上限が 0 未満）';
     case 'not_significant':
-      return `有意なエッジなし（信頼区間が 0 をまたぐ）。${cutoff}`;
+      return '有意なエッジなし（信頼区間が 0 をまたぐ）';
     default:
-      return `判定不能（約${a.min_detectable_edge_bps} bps 未満のエッジは検出力不足で見分けられません）。${cutoff}`;
+      return `判定不能（約${a.min_detectable_edge_bps} bps 未満のエッジは検出力不足で見分けられません）`;
   }
 }
 
@@ -91,7 +95,12 @@ function renderCriteria(a: MetaModelAdoption) {
     <dd data-testid="calibration-metamodel-criteria">
       OOS ${c.min_oos_samples} 件以上・take ${c.min_takes} 件以上・${c.min_oos_days} 営業日以上、
       EV の${confidenceLabel(c.alpha)}の下限 &gt; ${formatBps(c.min_ev_lower_bps)}、AUC の下限 &gt;
-      ${c.min_auc_lower.toFixed(2)}（クラスタ・ブートストラップ ${c.resamples} 回）。足切りであり、安全の証明ではありません
+      ${c.min_auc_lower.toFixed(2)}
+      ${renderHelpMark({
+        id: 'help-calibration-metamodel-criteria',
+        label: '採用基準の説明',
+        text: `信頼区間はクラスタ・ブートストラップ（${c.resamples} 回）で求めます。${CUTOFF_NOTE}`,
+      })}
     </dd>
   `;
 }
@@ -112,7 +121,14 @@ function renderForward(a: MetaModelAdoption) {
   if (f === undefined) return '';
   const ev = f.ev_bps === null ? '—' : `${formatBps(f.ev_bps)}（${bpsInterval(f.ev_ci)}）`;
   return html`
-    <dt>前向き評価（採用判断に不使用）</dt>
+    <dt>
+      前向き評価
+      ${renderHelpMark({
+        id: 'help-calibration-metamodel-forward',
+        label: '前向き評価の説明',
+        text: '採用した後（学習後）の判断で測った成績です。採用判断には使いません。',
+      })}
+    </dt>
     <dd data-testid="calibration-metamodel-forward">
       学習後の判断 ${f.samples} 件・take ${f.takes} 件・${f.days} 営業日: EV ${ev}
       ${f.degraded ? html`<strong role="alert">— 損失が続いています</strong>` : ''}
@@ -128,7 +144,14 @@ export function renderAdoption(model: MetaModelAdoption) {
     <dt>OOS EV の信頼区間</dt>
     <dd data-testid="calibration-metamodel-ev-ci">${bpsInterval(model.oos_ev_ci)}</dd>
     <dt>OOS EV の判定</dt>
-    <dd data-testid="calibration-metamodel-ev-verdict">${evVerdictText(model)}</dd>
+    <dd data-testid="calibration-metamodel-ev-verdict">
+      ${evVerdictText(model)}
+      ${renderHelpMark({
+        id: 'help-calibration-metamodel-ev-verdict',
+        label: 'OOS EV の判定の説明',
+        text: CUTOFF_NOTE,
+      })}
+    </dd>
     <dt>OOS AUC の信頼区間</dt>
     <dd data-testid="calibration-metamodel-auc-ci">${aucInterval(model.oos_auc_ci)}</dd>
     ${renderCriteria(model)} ${renderComparison(model)}

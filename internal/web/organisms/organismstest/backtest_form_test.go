@@ -46,3 +46,19 @@ func TestBacktestForm_CostSensitivityExportSubmitsTheSameFields(t *testing.T) {
 		}
 	}
 }
+
+// The explanation of a field is a help mark next to its name, a sibling of
+// the <label> (a mark inside a label would make its text part of the name).
+func TestBacktestForm_ExplainsFieldsInHelpMarksOutsideTheLabel(t *testing.T) {
+	html := renderComponent(t, organisms.BacktestForm(organisms.BacktestFormValues{From: "2026-01-01", To: "2026-03-31", TrainingDays: 60, ValidationDays: 20, ForwardDays: 10}))
+
+	for _, want := range []string{
+		`<label for="backtest-forward-days">Forward 日数</label>`,
+		`id="backtest-forward-days"`,
+		`aria-label="Forward 日数の説明"`, `id="help-backtest-forward-days"`, "成績として評価する期間",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("missing %q: %s", want, html)
+		}
+	}
+}

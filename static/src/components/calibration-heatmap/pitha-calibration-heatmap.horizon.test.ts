@@ -41,7 +41,12 @@ describe('pitha-calibration-heatmap horizon switch', () => {
     const current = el.shadowRoot?.querySelector('[data-testid="calibration-horizon-current"]');
     expect(current?.textContent).toContain('集計ホライズン');
     expect(current?.textContent).toContain('全体');
-    expect(current?.textContent).toContain('実現PnL');
+    // The horizon's notes sit in a help mark, readable through aria-describedby.
+    const button = current?.querySelector('[data-help-mark-button]');
+    const help = current?.querySelector(`#${button?.getAttribute('aria-describedby')}`);
+    expect(help?.getAttribute('role')).toBe('tooltip');
+    expect(help?.textContent).toContain('実現PnL');
+    expect(help?.textContent).toContain('5・10・15 分の合算');
     expect(
       el.shadowRoot
         ?.querySelector('[data-testid="calibration-horizon-all"]')

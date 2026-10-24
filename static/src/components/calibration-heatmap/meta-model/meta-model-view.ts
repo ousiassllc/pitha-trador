@@ -1,8 +1,8 @@
-// Meta-labeling model block of `pitha-calibration-heatmap` (issue #766, parent
-// #752): the newest model's out-of-sample AUC, reliability curve and EV, and
-// the Jev evaluation period. Split out of the component to keep it within the
-// linterly per-file limit.
+// Meta-labeling model block of `pitha-calibration-heatmap`: the newest model's
+// out-of-sample AUC, reliability curve and EV, and the Jev evaluation period.
+// Split out of the component to keep it within the linterly per-file limit.
 import { html } from 'lit';
+import { renderHelpMark } from '../../lib/help-mark';
 import { formatJstDateTime } from '../../lib/jst-datetime';
 import { formatBps } from '../barrier-view';
 import { type MetaModelAdoption, renderAdoption } from './meta-model-adoption-view';
@@ -38,7 +38,7 @@ export interface MetaModel extends MetaModelAdoption {
 }
 
 // Mirrors docs/api/endpoints.md §GET /api/v1/calibration's `meta_model_cutoff`
-// object (internal/web/handler/calibration.llmCutoffOutput; issue #776).
+// object (internal/web/handler/calibration.llmCutoffOutput).
 export interface LLMCutoffInfo {
   llm_cutoff: string;
   status: 'placeholder' | 'unverified' | 'confirmed';
@@ -112,7 +112,7 @@ function renderCalibrationCurve(bins: MetaModelCalibrationBin[]) {
 }
 
 // renderCutoff shows the cutoff setting's warning (placeholder / unrecorded
-// provenance) and, when recorded, its provenance (issue #776).
+// provenance) and, when recorded, its provenance.
 function renderCutoff(cutoff: LLMCutoffInfo | undefined) {
   if (cutoff === undefined) return '';
   const provenance = [cutoff.model, cutoff.confirmed_on, cutoff.source].filter((v) => v !== '');
@@ -140,7 +140,12 @@ export function renderMetaModel(model: MetaModel | null | undefined, cutoff?: LL
   if (model === undefined) return '';
   if (model === null) {
     return html`${renderCutoff(cutoff)}<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-metamodel-none">
-      メタラベリングモデルは未学習です（ラベルが貯まると夜間に学習されます）
+      メタラベリングモデルは未学習です
+      ${renderHelpMark({
+        id: 'help-calibration-metamodel-none',
+        label: 'メタラベリングモデルの学習の説明',
+        text: 'ラベルが貯まると夜間に学習されます。',
+      })}
     </p>`;
   }
   return html`
@@ -152,7 +157,14 @@ export function renderMetaModel(model: MetaModel | null | undefined, cutoff?: LL
       <dd data-testid="calibration-metamodel-status">${renderStatus(model)}</dd>
       <dt>学習日時</dt>
       <dd>${formatJstDateTime(model.trained_at)}</dd>
-      <dt>Jev 評価期間（OOS）</dt>
+      <dt>
+        Jev 評価期間（OOS）
+        ${renderHelpMark({
+          id: 'help-calibration-metamodel-period',
+          label: 'Jev 評価期間の説明',
+          text: 'モデルの学習に使っていない期間（OOS）です。LLM の学習データ終了日より前は含みません。',
+        })}
+      </dt>
       <dd data-testid="calibration-metamodel-period">${periodLabel(model.oos_start, model.oos_end)}</dd>
       <dt>LLM 学習データ終了日</dt>
       <dd data-testid="calibration-metamodel-cutoff">${model.llm_cutoff}</dd>
@@ -162,7 +174,14 @@ export function renderMetaModel(model: MetaModel | null | undefined, cutoff?: LL
       <dd data-testid="calibration-metamodel-samples">${model.train_samples} / ${model.oos_samples}</dd>
       <dt>OOS AUC</dt>
       <dd data-testid="calibration-metamodel-auc">${model.oos_auc === null ? '—' : model.oos_auc.toFixed(3)}</dd>
-      <dt>OOS EV（net, エントリーした判断あたり）</dt>
+      <dt>
+        OOS EV（net）
+        ${renderHelpMark({
+          id: 'help-calibration-metamodel-ev',
+          label: 'OOS EV の説明',
+          text: 'エントリーした判断1件あたりの平均リターン（net: 取引コスト控除後）です。',
+        })}
+      </dt>
       <dd data-testid="calibration-metamodel-ev">${model.oos_ev_bps === null ? '—' : formatBps(model.oos_ev_bps)}</dd>
       ${renderAdoption(model)}
     </dl>
