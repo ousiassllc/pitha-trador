@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -27,16 +26,16 @@ import (
 // outside this test's coverage rather than fail it.
 var classAttrRe = regexp.MustCompile(`class="([^"]+)"`)
 
-// repoRoot walks up from this test file's own path to the directory
-// containing go.mod, so the test works regardless of the working
-// directory `go test` is invoked from.
+// repoRoot walks up from the test's working directory (`go test` runs
+// with the package directory as cwd) to the directory containing go.mod.
+// It deliberately avoids runtime.Caller, whose file path is
+// module-relative under `-trimpath`.
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
 	}
-	dir := filepath.Dir(file)
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir
