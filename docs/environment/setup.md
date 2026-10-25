@@ -260,7 +260,7 @@ pre-commit:
   commands:
     golangci-lint:
       glob: "*.go"
-      run: make generate && golangci-lint run
+      run: make generate && GOLANGCI_LINT_CACHE="$(git rev-parse --show-toplevel)/.cache/golangci-lint" golangci-lint run --allow-parallel-runners
     biome:
       root: static/
       glob: "**/*.{ts,css,json,mjs}"
@@ -281,6 +281,8 @@ pre-push:
 `biome`は`root: static/`で`static/`をカレントにして実行する（`@biomejs/biome`は`static/package.json`のdevDependencyであり、リポジトリルートの`bunx biome`は無関係なnpmパッケージ`biome`を解決してしまうため）。`root`指定時、`{staged_files}`は`static/`配下のステージ済みファイルのみが`static/`相対パスで渡され、`glob`もその相対パスに対して評価される。
 
 `typecheck`はCIの`lint`ジョブの`tsc --noEmit`と同じ検査で、`biome`では検出できない型エラー（#197/#198でCIのみ失敗した経緯）をコミット時に検出する。`tsc`はプロジェクト全体を検査するため`{staged_files}`は渡さない（`static/node_modules`が必要で、`bun install --cwd static`で導入する）。`golangci-lint`と`go-test`の前に`make generate`を実行するのは、`*_templ.go`と`static/src/dist/`が未生成だと`go:embed`でコンパイルできない（または古い生成物に対して実行してしまう）ため。`linterly check`は`{staged_files}`を渡さずリポジトリ全体を検査する（ディレクトリ単位の行数上限のため）。
+
+`golangci-lint`のキャッシュ（`GOLANGCI_LINT_CACHE`）はhook内でworktree直下の`.cache/golangci-lint`（`.gitignore`対象）に固定する。既定の`~/.cache/golangci-lint`は全worktreeで共有され、別worktreeの絶対パスの結果が混ざるため（#822）。`--allow-parallel-runners`は、golangci-lintが起動時に取るマシン全体のファイルロック（既定では複数worktreeの同時実行が`parallel golangci-lint is running`で失敗する）を外すためで、キャッシュが分かれているので安全に併走できる。
 
 ## Swagger / OpenAPI
 
