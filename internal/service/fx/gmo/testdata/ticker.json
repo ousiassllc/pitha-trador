@@ -1,0 +1,27 @@
+{
+  "status": 0,
+  "data": [
+    {
+      "symbol": "USD_JPY",
+      "ask": "149.812",
+      "bid": "149.808",
+      "timestamp": "2023-10-30T21:02:11.123456Z",
+      "status": "OPEN"
+    },
+    {
+      "symbol": "EUR_JPY",
+      "ask": "158.771",
+      "bid": "158.759",
+      "timestamp": "2023-10-30T21:02:10.987654Z",
+      "status": "OPEN"
+    },
+    {
+      "symbol": "GBP_JPY",
+      "ask": "181.940",
+      "bid": "181.918",
+      "timestamp": "2023-10-28T20:59:58.001002Z",
+      "status": "CLOSE"
+    }
+  ],
+  "responsetime": "2023-10-30T21:02:11.250Z"
+}

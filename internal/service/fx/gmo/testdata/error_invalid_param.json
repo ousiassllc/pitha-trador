@@ -1,0 +1,10 @@
+{
+  "status": 1,
+  "messages": [
+    {
+      "message_code": "ERR-5207",
+      "message_string": "Invalid symbol, interval or date value."
+    }
+  ],
+  "responsetime": "2023-10-30T21:02:11.250Z"
+}
