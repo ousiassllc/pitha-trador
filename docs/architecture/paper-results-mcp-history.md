@@ -35,3 +35,4 @@
 | 1.28 | 2026-10-22 | §5 の `jev_calibration` が Trader のプロンプトの版を混ぜないようにした（既定はライブの版と同じコホートだけ。`prompt_version` 引数、`trader_decisions_by_version`）。`metalabel_training_readiness` も再学習と同じ行だけを数える。分割章 `jev-prompt-versions-in-data.md` を追加。読み取り・書き込みのツール数は変わらない | issue #881 |
 | 1.29 | 2026-10-26 | 分割章 `paper-results-mcp-experiments.md` §6 に、Settings 画面の実験フォームが設定キーを出さず、設定の項目名を受け取ってキーに直して保存する旨を追記。ツール・API の入出力と保存する値は変わらない | issue #904（統合ブランチの研磨） |
 | 1.30 | 2026-10-26 | §5 の読み取りのツールに `entry_quality_whatif`（`min_entry_quality` を仮に変えたときのガードの結果を数える。読み取り専用。API 仕様は `paper-results-mcp-entry-quality.md` §3.30）を追加し、ツール数を 13 / 合計 32 に | issue #911 |
+| 1.31 | 2026-10-26 | `risk_rejections` の `api_error` を失敗の種別で分けて数える（`internal/service/policy/apierror`、Policy が `reject_reason` に種別を書く）。読み取り・書き込みのツール数は変わらない | issue #912 |
