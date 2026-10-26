@@ -63,6 +63,13 @@ var boundedLastError = regexp.MustCompile(`substr\(last_error, 1, ([0-9]+)\)`)
 // inside the statement and never returned.
 var instrumentOfPayload = regexp.MustCompile(`json_valid\(j\.payload_json\)|json_extract\(j\.payload_json, '\$\.instrument_id'\)`)
 
+// guardAnswer is the only form in which a statement may name
+// jev_decisions.response_json outside the training rows (entry_quality_whatif,
+// issue #911): one of the four fixed answer fields the entry guards read, of a
+// valid-JSON response, extracted inside the statement. The response itself is
+// never returned.
+var guardAnswer = regexp.MustCompile(`CASE WHEN json_valid\(d\.response_json\) THEN CASE WHEN json_type\(d\.response_json, '\$\.(entry_quality|continuation_probability|toxic_flow|liquidity_stressed)'\) IN \('[a-z]+'(, '[a-z]+')*\) THEN json_extract\(d\.response_json, '\$\.(entry_quality|continuation_probability|toxic_flow|liquidity_stressed)'\) END END`)
+
 func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 	path, w := testkit.NewMigratedDB(t)
 	testkit.SeedAll(t, w)
@@ -115,6 +122,7 @@ func TestMCPConnectionIsReadOnlyAndIssuesOnlyWhitelistedReads(t *testing.T) {
 			return ""
 		})
 		stmt = instrumentOfPayload.ReplaceAllString(stmt, "")
+		stmt = guardAnswer.ReplaceAllString(stmt, "")
 		stmt = strings.ReplaceAll(stmt, paperCapitalRead, "")
 		upper := strings.ToUpper(stmt)
 		if strings.Contains(upper, "SELECT *") || strings.Contains(upper, ".*") {
