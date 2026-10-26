@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/entryqualitydiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/metalabeldiag"
 )
 
@@ -13,7 +14,7 @@ import (
 // writes nothing.
 
 func init() {
-	tools = append(tools, jevModelsTool)
+	tools = append(tools, jevModelsTool, entryQualityWhatIfTool)
 }
 
 var jevModelsTool = tool{
@@ -30,5 +31,18 @@ var jevModelsTool = tool{
 			d, err := metalabeldiag.JevModelsUsage(ctx, e.q, e.r)
 			return d, len(d.Models), err
 		}, nil
+	},
+}
+
+// entry_quality_whatif (issue #911, API spec §3.30): what the entry guards would
+// do under another min_entry_quality; read only, the analysis is entryqualitydiag's.
+var entryQualityWhatIfTool = tool{
+	name: "entry_quality_whatif", description: entryqualitydiag.Description, schema: periodSchema(entryqualitydiag.SchemaProperties()),
+	decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
+		var a entryqualitydiag.Request
+		err := strictDecode(raw, &a)
+		return periodArgs{From: a.From, To: a.To}, func(ctx context.Context, e toolEnv) (any, int, error) {
+			return entryqualitydiag.Run(ctx, e.q, e.r, a, e.policy)
+		}, err
 	},
 }
