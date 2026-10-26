@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
+	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/homepanels"
 )
@@ -75,11 +76,15 @@ func attention(in statusInputs) homepanels.AttentionView {
 		}
 	}
 	if len(in.unsetKeys) > 0 {
+		names := make([]string, len(in.unsetKeys))
+		for i, key := range in.unsetKeys {
+			names[i] = labels.SecretName(key)
+		}
 		add(homepanels.AttentionItem{
 			Key: keySecrets, Level: homepanels.LevelInfo,
 			Title:  fmt.Sprintf("任意の設定項目が %d 件未設定です", len(in.unsetKeys)),
 			Detail: "必要に応じて設定画面から入力してください。",
-			Help:   "未設定の設定キー: " + strings.Join(in.unsetKeys, ", "),
+			Help:   "未設定の項目: " + strings.Join(names, "、"),
 			Link:   linkSettings,
 		})
 	}

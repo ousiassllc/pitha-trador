@@ -16,6 +16,7 @@ package labels
 import (
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -45,6 +46,17 @@ func lookup(kind string, table map[string]string, code, fallback string) string 
 // a space and the number with 番 ("注文提案 5 番"). It is the one way every
 // screen writes a record's number: no "#" in front of it.
 func Numbered(noun string, id int64) string { return noun + " " + strconv.FormatInt(id, 10) + " 番" }
+
+// cutoffModelKey is the setting the LLM cutoff warning (shared with the API, the
+// MCP and the log, so its text is not changed) tells the operator to fill in.
+const cutoffModelKey = "metalabel.llm_cutoff_model"
+
+// ScreenWarning is a warning shared with the API / MCP / log as the screen
+// reads it: the wording is kept, only the setting key in it is named as the
+// Settings screen names that item.
+func ScreenWarning(warning string) string {
+	return strings.ReplaceAll(warning, cutoffModelKey, "モデル名")
+}
 
 // ExitReasons names positions.exit_reason (domain.ExitReason*).
 var ExitReasons = map[string]string{

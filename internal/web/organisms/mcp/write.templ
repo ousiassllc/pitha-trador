@@ -28,7 +28,7 @@ templ writeSection(props PanelProps) {
 					<span class="font-medium text-slate-700">MCP からの設定変更を許可する</span>
 				</label>
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-write", Label: "MCP からの設定変更の許可の説明"}) {
-					許可すると、MCP（settings_set）から Paper の運用資金・1 銘柄上限・総エクスポージャ・1 回の最大損失、日次ガード、metalabel の LLM cutoff と出典だけを変更できます（Settings 画面と同じ保存先・同じ検証）。Live の値・発注・送金・Kill Switch 解除・API キーなどの秘密は MCP から変更できません。オフにすると settings_set は拒否されます（MCP の settings_write_enable でも戻せます）。既定はオンです。
+					許可すると、MCP から Paper の運用資金・1 銘柄上限・総エクスポージャ・1 回の最大損失、日次ガード、メタラベリングの Jev 学習データの終わりと出典だけを変更できます（Settings 画面と同じ保存先・同じ検証）。Live の値・発注・送金・Kill Switch 解除・API キーなどの秘密は MCP から変更できません。オフにすると、MCP からの設定変更は拒否されます（MCP からもう一度許可することもできます）。既定はオンです。
 				}
 			</div>
 			<div>
@@ -44,7 +44,7 @@ templ writeSection(props PanelProps) {
 					<span class="font-medium text-slate-700">AIからの注文提案を受け付ける（Paper のみ）</span>
 				</label>
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-order-proposals", Label: "AIからの注文提案の受け付けの説明"}) {
-					オンにすると、MCP（order_proposal_submit）から Paper の注文提案（新規の買いと保有中ポジションの決済）を受け付けて記録します。受け付けるだけで、発注はしません。Live の注文は出せません。1 日（JST）に 20 件までです。オンにできるのはこの画面だけで、MCP からはオフにだけできます（order_proposals_disable）。既定はオフです。
+					オンにすると、MCP から Paper の注文提案（新規の買いと保有中ポジションの決済）を受け付けて記録します。受け付けるだけで、発注はしません。Live の注文は出せません。1 日（JST）に 20 件までです。オンにできるのはこの画面だけで、MCP からはオフにだけできます。既定はオフです。
 				}
 			</div>
 			<div>

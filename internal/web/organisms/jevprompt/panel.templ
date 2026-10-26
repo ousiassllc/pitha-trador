@@ -125,7 +125,7 @@ templ Panel(props PanelProps) {
 			<span class="flex items-center gap-2 font-medium text-slate-700">
 				シャドーの費用
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-cost", Label: "シャドーの費用の説明"}) {
-					費用の合計は request_cost の合計です。API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。
+					費用の合計は、各呼び出しの費用の合計です。API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。
 				}
 			</span>
 			<span>今日（{ props.TodayDate }）: <strong data-testid="jev-prompt-cost-today">{ props.TodayUSD } USD</strong>（{ itoa(props.TodayCalls) } 回）　累計: <strong data-testid="jev-prompt-cost-total">{ props.TotalUSD } USD</strong>（{ itoa(props.TotalCalls) } 回）</span>
@@ -153,7 +153,7 @@ templ Panel(props PanelProps) {
 			<span class="flex items-center gap-2 font-medium text-slate-700">
 				昇格（ライブの版を切り替える）
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-promote", Label: "昇格の説明"}) {
-					昇格はライブの判断を変えます。自動では行われず、この操作（と MCP の jev_prompt_promote）だけで行われます。昇格は下の記録（新しい順・直近 10 件）に残ります。比較の結果は MCP の jev_shadow_compare で見られます。
+					昇格はライブの判断を変えます。自動では行われず、この操作（と MCP からの昇格）だけで行われます。昇格は下の記録（新しい順・直近 10 件）に残ります。比較の結果は MCP からも見られます。
 				}
 			</span>
 			<div class="flex flex-wrap items-center gap-2">

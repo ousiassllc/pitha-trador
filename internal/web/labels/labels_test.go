@@ -106,6 +106,13 @@ func TestLabelTables_CoverEveryDomainCode(t *testing.T) {
 	requireCovers(t, "job statuses", labels.JobStatuses, constValues(t, "internal/repository/jobqueue", regexp.MustCompile(`^JobStatus`)))
 	requireCovers(t, "retraining skips", labels.RetrainSkips, constValues(t, "internal/repository/metalabel", regexp.MustCompile(`^Skip`)))
 	requireCovers(t, "A/B arms", labels.ArmNames, constValues(t, "internal/domain/marketregime", regexp.MustCompile(`^Arm`)))
+	var secretKeys []string
+	for _, v := range constValues(t, "internal/config", regexp.MustCompile(`^Key`)) {
+		if regexp.MustCompile(`^[A-Z][A-Z0-9_]+$`).MatchString(v) { // the secrets-table keys, not the lower-case setting keys
+			secretKeys = append(secretKeys, v)
+		}
+	}
+	requireCovers(t, "secret keys", labels.ConnectionItemNames, secretKeys)
 	requireCovers(t, "order proposal actors", labels.Actors, constValues(t, "internal/domain/orderproposal", regexp.MustCompile(`^Actor`)))
 
 	// Policy Engine reject_reason heads (+ the meta-labeling and regime ones).
@@ -255,4 +262,20 @@ func diff(a, b map[string]string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// The cutoff warning is shared with the API, the MCP and the log, so its
+// wording stays; the screen only names the setting key in it.
+func TestScreenWarning_NamesTheKeyAndKeepsTheWarning(t *testing.T) {
+	shared := "学習データの終わりの根拠が未記録です。確認した Jev のモデル名を metalabel.llm_cutoff_model に記録してください。"
+	got := labels.ScreenWarning(shared)
+	if strings.Contains(got, "metalabel.") {
+		t.Errorf("ScreenWarning keeps a setting key: %q", got)
+	}
+	if !strings.Contains(got, "学習データの終わりの根拠が未記録です。") || !strings.Contains(got, "に記録してください。") {
+		t.Errorf("ScreenWarning lost the warning: %q", got)
+	}
+	if labels.ScreenWarning("") != "" {
+		t.Error("an empty warning must stay empty")
+	}
 }

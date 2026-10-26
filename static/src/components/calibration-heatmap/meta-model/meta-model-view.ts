@@ -4,7 +4,7 @@
 import { html } from 'lit';
 import { renderHelpMark } from '../../lib/help-mark';
 import { formatJstDateTime } from '../../lib/jst-datetime';
-import { modelAlgorithmLabel, modelRejectReasonLabel } from '../../lib/labels';
+import { modelAlgorithmLabel, modelRejectReasonLabel, screenWarning } from '../../lib/labels';
 import { formatBps } from '../barrier-view';
 import { type MetaModelAdoption, renderAdoption } from './meta-model-adoption-view';
 
@@ -101,7 +101,7 @@ function renderCutoff(cutoff: LLMCutoffInfo | undefined) {
   return html`
     ${
       cutoff.warning
-        ? html`<p role="alert" data-testid="calibration-metamodel-cutoff-warning">${cutoff.warning}</p>`
+        ? html`<p role="alert" data-testid="calibration-metamodel-cutoff-warning">${screenWarning(cutoff.warning)}</p>`
         : ''
     }
     ${

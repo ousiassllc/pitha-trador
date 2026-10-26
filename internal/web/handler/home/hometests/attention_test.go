@@ -80,7 +80,7 @@ func TestAttention_FormerBannersAreListedOnceEach(t *testing.T) {
 		"本日の新規エントリーを停止しました（1日の損失上限）",
 		"kabuステーションの市況データを取得できません", "ログインしてください。",
 		"立会中ですが、市況データの取得が止まっています。", "09:30から続いています",
-		"任意の設定項目が 2 件未設定です", "未設定の設定キー: SLACK_WEBHOOK_URL, LUNA_API_KEY",
+		"任意の設定項目が 2 件未設定です", "未設定の項目: Slack の通知先（Webhook URL）、Luna の API キー",
 		"新バージョン v9.9.9 が利用可能です", "安全条件が揃い次第",
 	} {
 		if !strings.Contains(text, s) {

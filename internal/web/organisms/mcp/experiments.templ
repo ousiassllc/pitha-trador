@@ -84,7 +84,7 @@ templ Experiments(props ExperimentsProps) {
 		<div class="flex items-center gap-2">
 			<h4 class="font-semibold text-slate-900">調整の実験（前後比較）</h4>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments", Label: "調整の実験の説明"}) {
-				調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP の settings_set で行ってから記録します）。
+				調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP から行ってから記録します）。
 			}
 		</div>
 		<div class="flex items-center gap-2 text-xs text-amber-700">
@@ -150,7 +150,7 @@ templ experimentForm() {
 		<span class="flex items-center gap-2 font-medium text-slate-700">
 			実験を記録する
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-form", Label: "実験の記録の説明"}) {
-				変える変数は 1 つだけです。名前には、設定ならそのキー（MCP から変更できるキーだけ）、Jev のモデル・プロンプトの版ならその呼び名を入れます。仮説は 500 文字以内、名前と値は 200 文字以内です。開始時刻（JST）を空欄にすると今になります。
+				変える変数は 1 つだけです。名前には、設定ならその設定の項目名（MCP から変更できる項目だけ）、Jev のモデル・プロンプトの版ならその呼び名を入れます。仮説は 500 文字以内、名前と値は 200 文字以内です。開始時刻（JST）を空欄にすると今になります。
 			}
 		</span>
 		<label class="flex flex-col gap-1">

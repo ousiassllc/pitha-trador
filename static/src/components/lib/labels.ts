@@ -14,6 +14,10 @@ export const OTHER = 'その他';
 
 const warned = new Set<string>();
 
+/** A warning shared with the API / MCP / log as the screen reads it: the wording is kept, only the setting key in it is named as the Settings screen names that item. Same as labels.ScreenWarning in Go. */
+export const screenWarning = (warning: string): string =>
+  warning.split('metalabel.llm_cutoff_model').join('モデル名');
+
 export function labelOf(
   kind: string,
   table: Record<string, string>,
