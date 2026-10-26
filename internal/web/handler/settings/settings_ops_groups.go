@@ -180,16 +180,36 @@ func policyGroup(id, name, prefix, direction string) opsGroup {
 
 // FieldLabel is the name the Settings screen gives the operational setting
 // key, for the screens that mention a setting (the experiments of the MCP
-// card) without showing its key. A key no group lists is not printed.
+// card) without showing its key. A label that more than one setting has (the
+// LONG and SHORT Paper entry quality) is led by its group's name, so the two
+// stay apart. A key no group lists is not printed.
 func FieldLabel(key string) string {
+	group, ok := opsGroupByKey(key)
+	if !ok {
+		return "その他の設定"
+	}
+	label := ""
+	for _, field := range group.fields {
+		if field.key == key {
+			label = field.label
+		}
+	}
+	if fieldLabelCount(label) > 1 {
+		return group.name + "の" + label
+	}
+	return label
+}
+
+func fieldLabelCount(label string) int {
+	n := 0
 	for _, group := range opsGroups {
 		for _, field := range group.fields {
-			if field.key == key {
-				return field.label
+			if field.label == label {
+				n++
 			}
 		}
 	}
-	return "その他の設定"
+	return n
 }
 
 func opsGroupByKey(key string) (opsGroup, bool) {

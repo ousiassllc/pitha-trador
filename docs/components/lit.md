@@ -15,7 +15,7 @@
 | `pitha-activity-feed` | キュー別pending/running/failed件数・直近アクティビティ一覧・直近Kill Switchイベントのライブ表示（type/queueフィルタ付き） | System Activity Log | `GET /api/v1/activity`（初期・フィルタ変更時）＋ `/ws/activity`（ライブ） |
 | `pitha-kill-switch-panel` | システム状態表示・Kill Switch発動/解除操作 | 全ページ共通（Header内アイランド） | `GET/POST /api/v1/system/*` |
 
-> **Lit描画の表のa11y（issue #623）**: `pitha-activity-feed`・`pitha-scanner-table`・`pitha-calibration-heatmap`はハイドレーション後にSSRの表を置き換えるため、Templ側（`internal/web/table_a11y_test.go`）と同じ水準を保つ。全`<th>`は`scope="col"`、全`<table>`はSSR版と同じ`aria-label`（キュー状況／アクティビティフィード／スキャナー候補／方向別キャリブレーション）を持ち、最近の動きは`<caption>`の`as of`も引き継ぐ。`lib/table-a11y.test.ts`が`components/`の`.ts`テンプレートを静的に検査する。
+> **Lit描画の表のa11y（issue #623）**: `pitha-activity-feed`・`pitha-scanner-table`・`pitha-calibration-heatmap`はハイドレーション後にSSRの表を置き換えるため、Templ側（`internal/web/table_a11y_test.go`）と同じ水準を保つ。全`<th>`は`scope="col"`、全`<table>`はSSR版と同じ`aria-label`（キュー状況／アクティビティフィード／スキャナー候補／方向別キャリブレーション）を持ち、最近の動きは`<caption>`の「<時刻> 時点」も引き継ぐ。`lib/table-a11y.test.ts`が`components/`の`.ts`テンプレートを静的に検査する。
 
 > **テスト用`FakeWebSocket`（issue #638）**: コンポーネントテストのフェイクは`lib/ws-test-support.ts`の1実装（`FakeWebSocket`・`installFakeWebSocket`）に集約し、各`*-test-support.ts`/テストはそれをimportする。`lib/ws.ts`の挙動を変えるときはここだけ追従する。
 
@@ -100,9 +100,9 @@ export class PithaPriceChart extends LitElement {
 - A/B比較（issue #755、FR-REGIME-1）: 応答の`ab_arms`（取得元が未配線なら省略され、何も描画しない）から、paperの固定モメンタム（`momentum`）とレジーム切替（`regime`）のアーム別に、件数・勝率・EV（net, bps。コスト控除後の1建玉あたりの平均）・合計損益を表（`data-testid="calibration-ab-arms"`、`ab-arms-view.ts`の`renderABArms`）で表示する。各アームの行（`calibration-ab-arm`）の下に、そのアームのレジーム別（トレンド／平均回帰／不明。建玉があるレジームのみ）の行（`calibration-ab-regime`）を出す。建玉が0件の行は勝率・EV・損益を0と出さず「—」にする（損益ゼロ・勝率0%と誤読させない）。実現PnLに基づくためホライズンには依存せず、どの`horizon`でも同じ値を表示する
 - `calibration-url`はTemplから属性で注入し、コンポーネントは既定値を持たない（HATEOAS）。未設定なら`logger.error`を出して取得を行わない（`fetch('')`で現在ページを取得しない。初回・更新ボタンとも同様。issue #494）
 - 空帯・サンプルなしの扱い: APIはサンプル0件の帯・全体でも`direction_accuracy`/`avg_future_return_pct`/`avg_confidence`/`brier_score`等を`0`で返す（「データなし」と「実測0」を値では区別できない）。そのためコンポーネントは`sample_count`で判定する
-  - `sample_count == 0`の帯はreliability curveの実測系列に含めず（Perfect calibration線は全帯）、ヒートマップセルは中立色（グレー）で「データなし」と表示する（的中率・平均リターン・`conf`は出さない）。各帯セルは`n=<sample_count>`を表示する
+  - `sample_count == 0`の帯はreliability curveの実測系列に含めず（Perfect calibration線は全帯）、ヒートマップセルは中立色（グレー）で「データはありません」と表示する（的中率・平均リターン・確信度は出さない）。各帯セルは`<sample_count> 件`を表示する
   - 方向別テーブルは`sample_count == 0`の行の的中率・平均リターンを`—`で表示する
-  - 全帯・全方向の`sample_count`合計が0のときはBrier Score/Log Loss/Expected Calibration Errorを表示せず「サンプルなし」を表示する（0.000＝最良スコアと誤読させない）。API仕様（`api/endpoints/huma-api-insights.md`）は変更しない
+  - 全帯・全方向の`sample_count`合計が0のときはブライアスコア/対数損失/期待較正誤差を表示せず「サンプルはありません（ラベル付き判断がありません）」を表示する（0.000＝最良スコアと誤読させない）。API仕様（`api/endpoints/huma-api-insights.md`）は変更しない
 - ヒートマップセルの文字色は背景に応じて切り替える（`calibration-view.ts`の`heatmapColors`）。背景`hsl(h, 70%, 45%)`に濃色`#0f172a`でコントラスト比4.5:1（WCAG 2.x AA）に届く帯はそのまま、低的中率側（赤〜橙）は白文字に切り替えて背景の明度を4.5:1に届く最小限まで下げる。背景色・文字色とも`ref`コールバックからCSSOM（`style.backgroundColor`/`style.color`）で設定する（CSPがインライン`style`属性を禁じるため。issue #636）
 
 > **Shadow DOMのスタイル（issue #145）**: Tailwindはdocument CSSでShadow Rootを越えない。`pitha-kill-switch-panel`/`pitha-price-chart`/`pitha-calibration-heatmap`は既定のShadow DOMを使うため、各自`static styles`（共通部品は`lib/styles.ts`）を持つ。`pitha-scanner-table`/`pitha-activity-feed`はLight DOMで描画しTailwindをそのまま使う。`pitha-price-chart`は`autoSize`でコンテナ幅に追従する。
@@ -160,7 +160,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 - type/queueセレクトの変更時は`GET /api/v1/activity?type=&queue=`で再取得する（サーバー側フィルタ。`queue`指定は当該キューの`job`イベントのみに一致）。WS受信イベントも同じ条件でクライアント側で絞り込む
 - 直近Kill Switchイベントは`kill-switch-events-url`属性（Templ注入。値は`/api/v1/activity?type=kill_switch&limit=10`）で別途取得し、WSの`kill_switch`イベントで先頭に追加する（コンポーネント側の切り詰め件数はこの`limit`と同じ10件）。クエリ文字列はクライアントで組み立てない
 - WebSocketが切断後に再接続（`open`へ復帰）した時は、切断中に失ったイベントを補うため`GET /api/v1/activity`（現在のフィルタ付き）と`?type=kill_switch&limit=10`を再取得する（#221）。これは操作者不在でも発火するため`background: true`で送り、ハートビートに数えさせない（§6、FR-RISK-6）。初回・フィルタ変更時の取得は操作者操作のため`background`を付けない
-- Kill Switch履歴は取得状態を3つに区別して表示する。取得前は「Loading kill switch events…」、取得失敗時は`role="alert"`の「Failed to load kill switch events: …」を表示し、「No kill switch events.」は取得に成功して0件のときだけ表示する（安全に関わる情報を取得できていないだけの状態を「イベントなし」と誤認させない）。保持済みの履歴がある場合は、取得に失敗してもその一覧を表示したままエラーを併記し、以後の再取得（WS再接続）が成功すればエラー表示は消える（#346）
+- Kill Switch履歴は取得状態を3つに区別して表示する。取得前は「Kill Switch の履歴を読み込んでいます…」、取得失敗時は`role="alert"`の「Kill Switch の履歴を読み込めませんでした: …」を表示し、「Kill Switch の履歴はありません。」は取得に成功して0件のときだけ表示する（安全に関わる情報を取得できていないだけの状態を「イベントなし」と誤認させない）。保持済みの履歴がある場合は、取得に失敗してもその一覧を表示したままエラーを併記し、以後の再取得（WS再接続）が成功すればエラー表示は消える（#346）。履歴の行は`lib/labels.ts`の`activityDetail`で「理由: 日次の損失上限に達した（解除: 手動）」の形に直して出す（issue #904）
 - スナップショット（`GET /api/v1/activity`）の取得は最新のリクエストの応答だけを`queues`/`events`/エラー状態に反映する。フィルタ変更や再接続直後の再取得より前に発行された古い応答が遅れて届いても、新しい結果を上書きしない（リクエストごとに世代番号`snapshotGeneration`を採番し、完了時に最新世代でなければ破棄する。#345）。Kill Switch履歴の取得（`kill-switch-events-url`）はフィルタに依存しないためこの対象外
 - SSRフォールバック（`QueueStatusPanel` + `ActivityFeedFallback`）を子要素として持ち、初回スナップショット（`GET /api/v1/activity`）の取得に成功した時点で置き換える（`pitha-scanner-table`と同じ light DOM 方式）。取得完了前・取得失敗時はSSRのテーブルをそのまま残し、ハイドレーションで画面を空白にしない。この間は直近Kill Switchイベント・WS切断/エラー通知のみ追加描画する
 

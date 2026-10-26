@@ -1,10 +1,8 @@
 package mcpsettings
 
 import (
-	"cmp"
 	"fmt"
 	"math"
-	"slices"
 	"strconv"
 	"time"
 
@@ -12,7 +10,6 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
-	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/mcp"
 )
 
@@ -35,6 +32,7 @@ func experimentsProps(rows []experiment.Summary, notice string) mcp.ExperimentsP
 		Notice:        notice,
 		MinTradesNote: minTradesNote(experiment.MinTradesFloor),
 		MinTradesHelp: minTradesHelp(experiment.MinTradesSourceFloor),
+		SettingNames:  settingNames(),
 	}
 	for _, s := range rows {
 		e := s.Experiment
@@ -84,50 +82,6 @@ func metricRows(c experiment.Comparison) []mcp.MetricRow {
 		{Label: "平均の負け", Before: optYen(b.AvgLossJPY), After: optYen(a.AvgLossJPY)},
 		{Label: "最大ドローダウン", Before: yen(b.MaxDrawdownJPY), After: yen(a.MaxDrawdownJPY), Diff: signedYen(c.Diff.MaxDrawdownJPY)},
 	}
-}
-
-// rejectRows joins the two periods' rejection reasons: the Risk Engine's by
-// code, and the Policy Engine's own rejections by their fixed code.
-func rejectRows(before, after *query.RiskRejections) []mcp.RejectRow {
-	type key struct{ group, reason string }
-	counts := map[key]*mcp.RejectRow{}
-	add := func(group string, buckets []query.RejectBucket, isAfter bool) {
-		for _, b := range buckets {
-			row := counts[key{group, b.Reason}]
-			if row == nil {
-				row = &mcp.RejectRow{Group: group, Reason: b.Reason}
-				counts[key{group, b.Reason}] = row
-			}
-			if isAfter {
-				row.After = b.Count
-			} else {
-				row.Before = b.Count
-			}
-		}
-	}
-	for i, rr := range []*query.RiskRejections{before, after} {
-		if rr != nil {
-			add("Risk Engine", rr.Buckets, i == 1)
-			add("Policy Engine など", rr.OtherRejectBreakdown, i == 1)
-		}
-	}
-	out := make([]mcp.RejectRow, 0, len(counts))
-	for _, r := range counts {
-		out = append(out, *r)
-	}
-	slices.SortFunc(out, func(x, y mcp.RejectRow) int {
-		if x.Group != y.Group {
-			return -cmp.Compare(x.Group, y.Group) // Risk Engine first
-		}
-		if d := (y.Before + y.After) - (x.Before + x.After); d != 0 {
-			return d
-		}
-		return cmp.Compare(x.Reason, y.Reason)
-	})
-	for i := range out {
-		out[i].Reason = labels.ProposalReason(out[i].Reason) // the code is the API's; the screen names it
-	}
-	return out
 }
 
 func confounderPeriodText(period string) string {

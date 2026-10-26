@@ -157,8 +157,10 @@ func TestSettingsHandler_UnsetOptionalKeys_DoesNotNagAboutDefaultedKeys(t *testi
 
 // The experiments of the MCP card name a changed setting by the label the
 // Settings screen gives it, never by its key (issue #904): every setting the
-// MCP may change has such a label.
+// MCP may change has such a label, and no two settings share one (the LONG and
+// SHORT Paper entry quality would otherwise read the same).
 func TestFieldLabel_NamesEveryMCPChangeableSetting(t *testing.T) {
+	owner := map[string]string{}
 	for _, key := range mcpwritesettings.Keys() {
 		label := settings.FieldLabel(key)
 		if label == "" || label == settings.FieldLabel("no.such.key") {
@@ -167,5 +169,9 @@ func TestFieldLabel_NamesEveryMCPChangeableSetting(t *testing.T) {
 		if strings.Contains(label, key) {
 			t.Errorf("FieldLabel(%q) = %q shows the key", key, label)
 		}
+		if other, dup := owner[label]; dup {
+			t.Errorf("FieldLabel(%q) = FieldLabel(%q) = %q: two settings read the same", key, other, label)
+		}
+		owner[label] = key
 	}
 }
