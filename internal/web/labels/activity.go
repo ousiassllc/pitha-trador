@@ -50,7 +50,7 @@ func JobStatus(code string) string { return lookup("job_status", JobStatuses, co
 const detailUnavailable = "（詳細を表示できません）"
 
 var (
-	jobDetail  = regexp.MustCompile(`^queue=(\S+) status=(\S+) attempts=(\d+)(?: (note|error)=(.*))?$`)
+	jobDetail  = regexp.MustCompile(`(?s)^queue=(\S+) status=(\S+) attempts=(\d+)(?: (note|error)=(.*))?$`) // (?s): a job's error text may span lines
 	jevTrader  = regexp.MustCompile(`^(?:direction=(\S+))?(?: ?confidence=(\S+))?$`)
 	scoutQuery = regexp.MustCompile(`^question_version=(\S+)$`)
 	killDetail = regexp.MustCompile(`^reason=(\S+)(?: resolved_by=(\S+))?$`)

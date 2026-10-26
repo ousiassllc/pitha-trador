@@ -143,6 +143,7 @@ func reasonConstFor(dir string) *regexp.Regexp {
 func TestActivityDetail_UnknownShapeIsNotPrinted(t *testing.T) {
 	cases := []struct{ typ, detail, want string }{
 		{"job", "queue=market-data status=failed attempts=2 error=boom", "市況データの取得・失敗・試行 2 回・エラー: boom"},
+		{"job", "queue=market-data status=failed attempts=2 error=boom\nat main.go:1", "市況データの取得・失敗・試行 2 回・エラー: boom\nat main.go:1"},
 		{"job", "queue=market-data status=succeeded attempts=1 note=skipped: x", "市況データの取得・成功・試行 1 回・メモ: skipped: x"},
 		{"job", "queue=brand-new status=running attempts=1", "その他・実行中・試行 1 回"},
 		{"job", "something=else", "（詳細を表示できません）"},
