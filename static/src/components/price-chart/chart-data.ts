@@ -49,5 +49,5 @@ export function describeChart(summary: ChartSummary): string {
   if (summary.vwap !== null) parts.push(`VWAP ${summary.vwap}`);
   if (summary.direction) parts.push(`Jev方向 ${summary.direction}`);
   const title = `${subject}価格チャート（ローソク足・VWAP・出来高）`;
-  return parts.length > 0 ? `${title}: ${parts.join('、')}` : `${title}: データなし`;
+  return parts.length > 0 ? `${title}: ${parts.join('、')}` : `${title}: データはありません`;
 }

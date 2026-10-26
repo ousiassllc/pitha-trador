@@ -5,6 +5,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/tachibanasource"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
+	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 )
 
 // watchSourceLabels are the operator-facing names of domain.WatchList.Source.
@@ -35,18 +36,19 @@ var screenIndicatorLabels = map[string]string{
 	tachibanasource.ScreenRangeRate:     "値幅率",
 }
 
-func label(labels map[string]string, key string) string {
-	if l, ok := labels[key]; ok {
+// label is the name of key in names; a key it does not know is not printed.
+func label(names map[string]string, key string) string {
+	if l, ok := names[key]; ok {
 		return l
 	}
-	return key
+	return labels.Other
 }
 
 // indicatorsText joins the labels of the indicators that selected a symbol.
 func indicatorsText(indicators []string) string {
-	labels := make([]string, len(indicators))
+	names := make([]string, len(indicators))
 	for i, ind := range indicators {
-		labels[i] = label(screenIndicatorLabels, ind)
+		names[i] = label(screenIndicatorLabels, ind)
 	}
-	return strings.Join(labels, "・")
+	return strings.Join(names, "・")
 }

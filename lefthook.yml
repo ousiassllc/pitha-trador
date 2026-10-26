@@ -6,7 +6,18 @@ pre-commit:
       # must run first: static/src/embed.go's `//go:embed dist img vendor`
       # (issue #59) won't even compile without it, so golangci-lint run
       # fails outright on a clean checkout otherwise.
-      run: make generate && golangci-lint run
+      #
+      # GOLANGCI_LINT_CACHE is pinned inside this worktree (issue #822).
+      # The default (~/.cache/golangci-lint) is shared by every worktree
+      # of the machine, so results cached for another worktree's absolute
+      # paths leak into this one's output. lefthook's `env:` does not
+      # expand `{root}`, hence `git rev-parse --show-toplevel` (not
+      # `--git-dir`: `.git` is a file in a linked worktree).
+      # golangci-lint also takes a machine-wide file lock on start (it
+      # fails with "parallel golangci-lint is running" otherwise), so
+      # `--allow-parallel-runners` lets worktrees run it concurrently now
+      # that their caches no longer collide.
+      run: make generate && GOLANGCI_LINT_CACHE="$(git rev-parse --show-toplevel)/.cache/golangci-lint" golangci-lint run --allow-parallel-runners
     biome:
       # bunx at repo root resolves an unrelated npm `biome@0.3.3` (issue
       # #232): @biomejs/biome is only a devDependency of static/, so run

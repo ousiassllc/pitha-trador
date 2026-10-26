@@ -176,7 +176,7 @@ export class PithaScannerTable extends LitElement {
         <table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
           ${
             this.asOf
-              ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">候補銘柄 — ${isZeroTime(this.asOf) ? 'データ未取得' : `as of ${formatJstDateTime(this.asOf)}`}</caption>`
+              ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">候補銘柄 — ${isZeroTime(this.asOf) ? 'データ未取得' : `${formatJstDateTime(this.asOf)} 時点`}</caption>`
               : ''
           }
           <thead>

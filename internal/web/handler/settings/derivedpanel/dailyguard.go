@@ -15,7 +15,7 @@ import (
 // ConsistencyItems is the 整合チェック block: risk.yaml's initial_capital and
 // Kill Switch rate against the daily guard (display only).
 func ConsistencyItems(warnings []dailyguardsettings.Warning) []molecules.SettingDerivedItem {
-	items := []molecules.SettingDerivedItem{{Key: "consistency", Heading: true, Label: "整合チェック", Help: []string{"config/risk.yaml の運用資金・日次損失率との比較です。表示のみで、取引の動きは変わりません。"}}}
+	items := []molecules.SettingDerivedItem{{Key: "consistency", Heading: true, Label: "整合チェック", Help: []string{"設定ファイルの運用資金・日次損失率との比較です。表示のみで、取引の動きは変わりません。"}}}
 	if len(warnings) == 0 {
 		return append(items, molecules.SettingDerivedItem{Key: "consistency-ok", Label: "問題なし"})
 	}

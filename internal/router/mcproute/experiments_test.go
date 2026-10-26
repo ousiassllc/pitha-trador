@@ -62,7 +62,7 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 	rec = a.post("/settings/mcp/experiments", experimentForm(url.Values{"started_at": {"2026-10-02T00:00"}}), true)
 	body = rec.Body.String()
 	if rec.Code != http.StatusOK || !strings.Contains(body, "実験を記録しました") || !strings.Contains(body, `data-experiment-id="1"`) ||
-		!strings.Contains(body, "risk.paper.max_trade_loss_pct") || !strings.Contains(body, "Settings 画面") ||
+		!strings.Contains(body, "1 回の取引の最大損失（運用資金に対する %）") || !strings.Contains(body, "Settings 画面") ||
 		!strings.Contains(body, "2026-10-02 00:00 〜 実行中") || !strings.Contains(body, `data-verdict="insufficient_trades"`) {
 		t.Fatalf("create = %d: %s", rec.Code, body)
 	}
@@ -170,5 +170,29 @@ func TestExperimentRoutesNeedTheGate(t *testing.T) {
 	}
 	if rec := a.post("/settings/mcp/experiments", experimentForm(nil), true); rec.Code != http.StatusNotFound {
 		t.Errorf("POST /settings/mcp/experiments without a gate = %d, want 404", rec.Code)
+	}
+}
+
+// The screen never shows a setting's key, so the form takes the setting by the
+// name the Settings screen gives it (offered as the candidates of the name
+// field) and stores its key; the key itself is still accepted (issue #904).
+func TestExperimentFormTakesASettingByItsScreenName(t *testing.T) {
+	a, db := newExperimentsApp(t)
+	body := a.get("/settings/mcp/experiments").Body.String()
+	for _, want := range []string{`list="mcp-experiment-setting-names"`, `<option value="1日の最大取引回数">`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the form lacks %s", want)
+		}
+	}
+	if strings.Contains(body, "risk.max_daily_trades") {
+		t.Errorf("the form shows a setting key")
+	}
+	rec := a.post("/settings/mcp/experiments", experimentForm(url.Values{"name": {"1日の最大取引回数"}, "before": {"5"}, "after": {"3"}}), true)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "実験を記録しました") {
+		t.Fatalf("create by the screen name = %d: %s", rec.Code, rec.Body.String())
+	}
+	var name string
+	if err := db.QueryRow(`SELECT variable_name FROM tuning_experiments`).Scan(&name); err != nil || name != "risk.max_daily_trades" {
+		t.Fatalf("stored name = %q (%v), want the key risk.max_daily_trades", name, err)
 	}
 }

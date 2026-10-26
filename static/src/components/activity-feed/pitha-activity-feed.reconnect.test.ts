@@ -46,7 +46,9 @@ const isBackground = (call: unknown): boolean => {
 };
 
 async function mount() {
-  const fetchMock = mock(() => Promise.resolve(new Response(snapshot(3, 'initial'))));
+  const fetchMock = mock(() =>
+    Promise.resolve(new Response(snapshot(3, 'reason=daily_loss_limit'))),
+  );
   globalThis.fetch = fetchMock as unknown as typeof fetch;
   const el = document.createElement('pitha-activity-feed') as FeedElement;
   el.setAttribute('api-url', '/api/v1/activity');
@@ -75,7 +77,9 @@ describe('pitha-activity-feed reconnect resync', () => {
 
     fetchMock.mockClear();
     fetchMock.mockImplementation((() =>
-      Promise.resolve(new Response(snapshot(9, 'missed while offline')))) as never);
+      Promise.resolve(
+        new Response(snapshot(9, 'reason=market_data_down resolved_by=auto')),
+      )) as never);
     await reconnect(el);
 
     const urls = fetchMock.mock.calls.map((c) => (c as unknown as [string])[0]);
@@ -83,10 +87,10 @@ describe('pitha-activity-feed reconnect resync', () => {
     expect(urls.some((u) => u.includes('type=kill_switch'))).toBe(true);
     expect(el.querySelector('#queue-status tbody tr td:nth-child(2)')?.textContent).toBe('9');
     expect(el.querySelector('#activity-feed tbody tr td:nth-child(4)')?.textContent).toBe(
-      'missed while offline',
+      '理由: 市況データが止まった（解除: 自動）',
     );
     expect(el.querySelector('#kill-switch-events li')?.textContent).toContain(
-      'missed while offline',
+      '理由: 市況データが止まった（解除: 自動）',
     );
   });
 
@@ -117,7 +121,7 @@ describe('pitha-activity-feed reconnect resync', () => {
 
     fetchMock.mockClear();
     fetchMock.mockImplementation((() =>
-      Promise.resolve(new Response(snapshot(7, 'dropped by the server')))) as never);
+      Promise.resolve(new Response(snapshot(7, 'reason=jev_api_down')))) as never);
     FakeWebSocket.instances[0].emit('message', { data: JSON.stringify({ type: 'resync' }) });
     await flush(el);
 
@@ -127,7 +131,7 @@ describe('pitha-activity-feed reconnect resync', () => {
     expect(fetchMock.mock.calls.every(isBackground)).toBe(true);
     expect(el.querySelector('#queue-status tbody tr td:nth-child(2)')?.textContent).toBe('7');
     expect(el.querySelector('#activity-feed tbody tr td:nth-child(4)')?.textContent).toBe(
-      'dropped by the server',
+      '理由: Jev の API が止まった（未解除）',
     );
   });
 

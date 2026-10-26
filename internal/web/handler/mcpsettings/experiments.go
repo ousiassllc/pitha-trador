@@ -64,17 +64,17 @@ func (h *Handler) CompareExperiment(c *gin.Context) {
 
 // CreateExperiment implements `POST /settings/mcp/experiments`: hypothesis,
 // kind, name, before, after and an optional started_at (JST, from a
-// datetime-local input). The form has exactly one variable. An invalid request
-// is a 422 with the reason and nothing is stored.
+// datetime-local input). The form has exactly one variable; a setting is named
+// on the form as the Settings screen names it, and stored by its key. An
+// invalid request is a 422 with the reason and nothing is stored.
 func (h *Handler) CreateExperiment(c *gin.Context) {
 	noStore(c)
 	ctx := c.Request.Context()
-	args := experiment.Args{
-		Hypothesis: c.PostForm("hypothesis"),
-		Changes: []experiment.Change{{
-			Kind: c.PostForm("kind"), Name: c.PostForm("name"), Before: c.PostForm("before"), After: c.PostForm("after"),
-		}},
+	change := experiment.Change{Kind: c.PostForm("kind"), Name: c.PostForm("name"), Before: c.PostForm("before"), After: c.PostForm("after")}
+	if change.Kind == experiment.KindSetting {
+		change.Name = settingKey(change.Name)
 	}
+	args := experiment.Args{Hypothesis: c.PostForm("hypothesis"), Changes: []experiment.Change{change}}
 	if v := c.PostForm("started_at"); v != "" {
 		t, err := time.ParseInLocation(datetimeLocalLayout, v, query.JST)
 		if err != nil {
@@ -92,7 +92,7 @@ func (h *Handler) CreateExperiment(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, experiment.ErrKeyNotAllowed) {
-		shared.RespondActionError(c, http.StatusUnprocessableEntity, "その設定キーは MCP から変更できるキーではないため、実験にできません（settings_get に出るキーだけ）。")
+		shared.RespondActionError(c, http.StatusUnprocessableEntity, "その設定は MCP から変更できる項目ではないため、実験にできません。")
 		return
 	}
 	if err != nil {

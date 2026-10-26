@@ -11,7 +11,7 @@ import (
 // "pending" rather than a fabricated value.
 templ SignalBadgeGroup(direction *string, confidence *float64, entryQuality *string) {
 	if direction == nil {
-		<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">pending</span>
+		<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">判定待ち</span>
 	} else {
 		<span class="inline-flex items-center gap-2">
 			@atoms.Badge(toDirection(*direction))

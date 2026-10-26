@@ -4,6 +4,7 @@
 // return. Split out of the component to keep both within the linterly limit.
 import { html } from 'lit';
 import { formatJstDateTime } from '../lib/jst-datetime';
+import { exitReasonLabel } from '../lib/labels';
 
 // Mirrors docs/api/endpoints/huma-api-insights.md §GET /api/v1/calibration/exit-alignment
 // (internal/web/handler/calibration.AlignmentAPIOutput).
@@ -83,7 +84,9 @@ export const formatBps = (bps: number | null): string =>
   bps === null ? NO_DATA : `${bps >= 0 ? '+' : ''}${bps.toFixed(1)} bps`;
 
 const reasonList = (counts: ReasonCount[]): string =>
-  counts.length === 0 ? NO_DATA : counts.map((c) => `${c.reason} ${c.count}`).join(' / ');
+  counts.length === 0
+    ? NO_DATA
+    : counts.map((c) => `${exitReasonLabel(c.reason)} ${c.count}`).join(' / ');
 
 export function renderWarnings(warnings: AlignmentWarning[]) {
   if (warnings.length === 0) {
@@ -156,7 +159,7 @@ export function renderComparison(c: Comparison | undefined) {
       <dt>Paper の決済理由</dt>
       <dd data-testid="exit-alignment-paper-exits">${reasonList(c.paper_exits)}</dd>
       <dt>再生できない出口</dt>
-      <dd>${c.not_evaluated_exits.join(' / ')}</dd>
+      <dd>${c.not_evaluated_exits.map(exitReasonLabel).join(' / ')}</dd>
       <dt>再生時のコスト（LONG / SHORT）</dt>
       <dd>${c.cost_long_bps} / ${c.cost_short_bps} bps</dd>
     </dl>

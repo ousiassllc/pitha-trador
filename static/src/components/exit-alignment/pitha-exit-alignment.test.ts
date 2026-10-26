@@ -129,7 +129,7 @@ describe('pitha-exit-alignment', () => {
       }),
     );
     expect(text(el, 'exit-alignment-label-hits')).toBe('3 / 1 / 0');
-    expect(text(el, 'exit-alignment-replay-exits')).toBe('trailing_stop 4');
+    expect(text(el, 'exit-alignment-replay-exits')).toBe('トレーリングストップ 4');
     expect(text(el, 'exit-alignment-paper-exits')).toBe('データ無し');
     expect(text(el, 'exit-alignment-oos-ev')).toBe('+12.0 bps');
     expect(text(el, 'exit-alignment-paper-mean')).toBe('データ無し');
