@@ -22,6 +22,11 @@ func newLimiter(clock Clock, interval time.Duration) *limiter {
 
 // wait blocks until a call may start, or returns ctx's error.
 func (l *limiter) wait(ctx context.Context) error {
+	// select picks randomly when both cases are ready; check first so a
+	// cancelled ctx is always an error.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	select {
 	case l.sem <- struct{}{}:
 	case <-ctx.Done():

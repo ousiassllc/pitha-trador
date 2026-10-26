@@ -21,8 +21,9 @@ var (
 	ErrRetriesExhausted = errors.New("gmo: retries exhausted")
 )
 
-// retryableCodes are the API-level error codes (HTTP 200, status != 0) that
-// are worth waiting for: ERR-5003 call limit, ERR-5201/5202 maintenance.
+// retryableCodes are the API-level error codes (keyed on the code alone, not
+// on the HTTP or "status" value) that are worth waiting for: ERR-5003 call
+// limit, ERR-5201/5202 maintenance.
 var retryableCodes = map[string]bool{
 	"ERR-5003": true,
 	"ERR-5201": true,

@@ -121,5 +121,5 @@ func (c *Client) fetchTickers(ctx context.Context) (map[string]Ticker, error) {
 	if err != nil {
 		return nil, err
 	}
-	return decodeTickers(data)
+	return decodeTickers(data, c.cfg.Symbols)
 }

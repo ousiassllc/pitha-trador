@@ -108,3 +108,50 @@ func TestTickerStatusClosedStillReturnsQuote(t *testing.T) {
 		t.Fatalf("Ticker = %+v", got)
 	}
 }
+
+// An all-pairs response carries every pair GMO lists; only the configured
+// ones are validated, so a bad row for another pair must not break USD_JPY.
+func TestTickerIgnoresInvalidRowsOfUnconfiguredPairs(t *testing.T) {
+	const usd = `{"symbol":"USD_JPY","ask":"149.812","bid":"149.808","timestamp":"2023-10-30T21:02:11.123456Z","status":"OPEN"}`
+	tests := []struct{ name, extra string }{
+		{"zero price", `{"symbol":"EUR_JPY","ask":"0","bid":"0","timestamp":"2023-10-30T21:02:10Z","status":"OPEN"}`},
+		{"unknown status", `{"symbol":"EUR_JPY","ask":"1","bid":"1","timestamp":"2023-10-30T21:02:10Z","status":"HALT"}`},
+		{"bad timestamp", `{"symbol":"EUR_JPY","ask":"1","bid":"1","timestamp":"yesterday","status":"OPEN"}`},
+		{"price is a number", `{"symbol":"EUR_JPY","ask":1,"bid":1,"timestamp":"2023-10-30T21:02:10Z","status":"OPEN"}`},
+		{"row is not an object", `"EUR_JPY"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clk := newFakeClock()
+			srv := newFakeServer(t, clk, step{body: `{"status":0,"data":[` + tt.extra + `,` + usd + `]}`})
+			c, _ := testClient(t, srv, clk, Config{})
+
+			got, err := c.Ticker(context.Background(), "USD_JPY")
+			if err != nil || got.Bid != 149.808 || got.Ask != 149.812 {
+				t.Fatalf("Ticker = %+v, %v; want the USD_JPY quote", got, err)
+			}
+		})
+	}
+}
+
+func TestTickersConfiguredPairMissingOrInvalidStillErrors(t *testing.T) {
+	const eur = `{"symbol":"EUR_JPY","ask":"158.771","bid":"158.759","timestamp":"2023-10-30T21:02:10Z","status":"OPEN"}`
+	tests := []struct{ name, body string }{
+		{"configured pair missing", `{"status":0,"data":[` + eur + `]}`},
+		{"configured pair with zero price", `{"status":0,"data":[` + eur + `,{"symbol":"USD_JPY","ask":"0","bid":"149.8","timestamp":"2023-10-30T21:02:11Z","status":"OPEN"}]}`},
+		{"configured pair with unknown status", `{"status":0,"data":[` + eur + `,{"symbol":"USD_JPY","ask":"149.9","bid":"149.8","timestamp":"2023-10-30T21:02:11Z","status":"HALT"}]}`},
+		{"configured pair with bad timestamp", `{"status":0,"data":[` + eur + `,{"symbol":"USD_JPY","ask":"149.9","bid":"149.8","timestamp":"x","status":"OPEN"}]}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clk := newFakeClock()
+			srv := newFakeServer(t, clk, step{body: tt.body})
+			c, _ := testClient(t, srv, clk, Config{})
+
+			_, err := c.Tickers(context.Background())
+			if !errors.Is(err, ErrInvalidResponse) || len(srv.requests()) != 1 {
+				t.Fatalf("err = %v, calls = %d; want ErrInvalidResponse after 1 call", err, len(srv.requests()))
+			}
+		})
+	}
+}

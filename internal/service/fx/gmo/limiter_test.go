@@ -123,3 +123,20 @@ func TestLimiterCancelledSleepDoesNotConsumeTheSlot(t *testing.T) {
 		t.Fatalf("limiter stuck after a cancelled wait: %v", err)
 	}
 }
+
+func TestLimiterWaitWithCancelledContextAlwaysFailsEvenWhenSlotIsFree(t *testing.T) {
+	l := newLimiter(newFakeClock(), time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// With the slot free both select cases would be ready; the result must
+	// not be random.
+	for range 100 {
+		if err := l.wait(ctx); !errors.Is(err, context.Canceled) {
+			t.Fatalf("wait = %v, want context.Canceled", err)
+		}
+	}
+	if !l.last.IsZero() {
+		t.Fatal("a cancelled wait must not count as a call")
+	}
+}
