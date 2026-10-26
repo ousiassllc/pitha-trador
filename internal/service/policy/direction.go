@@ -98,21 +98,33 @@ func (e *Engine) decideDirection(in Input, th Thresholds, meta *metaEntry) (dire
 // (Jev's confidence against min_probability) with the model's verdict and
 // keeps the other four as hard guards.
 func (e *Engine) evaluateThreshold(direction string, t config.PolicyDirectionThresholds, d *domain.JevDecision, withProbability bool) (string, *float64, *string) {
-	probability := *d.Confidence
-	if withProbability && probability < t.MinProbability {
-		return domain.JevDirectionNone, nil, reasonf("%s: probability=%.4f < min=%.4f", ReasonProbabilityBelowThreshold, probability, t.MinProbability)
-	}
-	if entryQualityRank[*d.EntryQuality] < entryQualityRank[t.MinEntryQuality] {
-		return domain.JevDirectionNone, nil, reasonf("%s: entry_quality=%q < min=%q", ReasonEntryQualityBelowThreshold, *d.EntryQuality, t.MinEntryQuality)
-	}
-	if *d.ContinuationProbability < t.MinContinuationProbability {
-		return domain.JevDirectionNone, nil, reasonf("%s: continuation_probability=%.4f < min=%.4f", ReasonContinuationProbabilityBelowThreshold, *d.ContinuationProbability, t.MinContinuationProbability)
-	}
-	if reason := flowGuards(t, d); reason != nil {
+	if reason := ThresholdReject(t, d, withProbability); reason != nil {
 		return domain.JevDirectionNone, nil, reason
 	}
-	score := probability
+	score := *d.Confidence
 	return direction, &score, nil
+}
+
+// ThresholdReject is the guard chain of evaluateThreshold as a pure function:
+// the NONE reason of the first of probability (only with withProbability),
+// entry_quality, continuation_probability, toxic_flow and liquidity_stressed
+// that d fails against t, or nil when it clears all of them. d's Confidence,
+// EntryQuality, ContinuationProbability, ToxicFlow and LiquidityStressed must
+// be set (decideDirection checks that before the guards run). It exists so a
+// read-only analysis (the Paper results MCP's entry_quality_whatif) re-runs
+// exactly the live rule against other thresholds instead of copying it.
+func ThresholdReject(t config.PolicyDirectionThresholds, d *domain.JevDecision, withProbability bool) *string {
+	probability := *d.Confidence
+	if withProbability && probability < t.MinProbability {
+		return reasonf("%s: probability=%.4f < min=%.4f", ReasonProbabilityBelowThreshold, probability, t.MinProbability)
+	}
+	if entryQualityRank[*d.EntryQuality] < entryQualityRank[t.MinEntryQuality] {
+		return reasonf("%s: entry_quality=%q < min=%q", ReasonEntryQualityBelowThreshold, *d.EntryQuality, t.MinEntryQuality)
+	}
+	if *d.ContinuationProbability < t.MinContinuationProbability {
+		return reasonf("%s: continuation_probability=%.4f < min=%.4f", ReasonContinuationProbabilityBelowThreshold, *d.ContinuationProbability, t.MinContinuationProbability)
+	}
+	return flowGuards(t, d)
 }
 
 // flowGuards is the toxic-flow and liquidity-stress part of FR-POLICY-1/2's

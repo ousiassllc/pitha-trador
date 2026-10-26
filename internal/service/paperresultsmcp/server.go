@@ -64,7 +64,8 @@ type Options struct {
 	// PaperLimits is config/risk.yaml's Paper section: the default the Paper
 	// settings keys show while nothing is stored. Nil uses the issue #804
 	// initial values.
-	PaperLimits *config.RiskLimits
+	PaperLimits      *config.RiskLimits
+	PolicyThresholds *config.PolicyConfig // strategy.yaml's policy section (entry_quality_whatif); nil: the build default
 	// Logger receives the operational log (tool, code, duration, period,
 	// count). Nil uses slog.Default.
 	Logger *slog.Logger

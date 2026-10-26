@@ -11,14 +11,14 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp"
 )
 
-// periodTools are the tools taking the from/to period arguments (eleven since
-// metalabel_training_readiness / jev_models, issues #848 / #849, and
-// session_diagnostics, issue #850); health_today
+// periodTools are the tools taking the from/to period arguments (twelve since
+// metalabel_training_readiness / jev_models, issues #848 / #849,
+// session_diagnostics, issue #850, and entry_quality_whatif, issue #911); health_today
 // (issue #808) takes none, so it is called separately (healthToday).
 var periodTools = []string{
 	"paper_performance_summary", "paper_daily_pnl", "paper_trades", "jev_calibration",
 	"metalabel_history", "risk_rejections", "kill_switch_history", "collection_status",
-	"metalabel_training_readiness", "jev_models", "session_diagnostics",
+	"metalabel_training_readiness", "jev_models", "session_diagnostics", "entry_quality_whatif",
 }
 
 const healthToday = "health_today"
@@ -80,9 +80,9 @@ func wantNull(t *testing.T, name string, got *float64) {
 	}
 }
 
-// tools/list returns exactly the twelve read tools, the six settings tools, the
+// tools/list returns exactly the thirteen read tools, the six settings tools, the
 // six order-proposal tools, the four experiment tools and the three Jev prompt tools
-// (31 in all); only the nine writing tools are not marked read-only.
+// (32 in all); only the nine writing tools are not marked read-only.
 func TestToolsListReturnsExactlyTheReadToolsAndTheSettingsTools(t *testing.T) {
 	srv := seededServer(t, nil)
 	r := srv.post(t, "Bearer "+testAPIKey, rpc("tools/list", nil))
