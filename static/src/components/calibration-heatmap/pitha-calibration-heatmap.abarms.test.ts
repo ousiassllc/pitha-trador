@@ -32,7 +32,7 @@ describe('pitha-calibration-heatmap A/B arms', () => {
 
     const rows = [...(el.shadowRoot?.querySelectorAll('[data-testid="calibration-ab-arm"]') ?? [])];
     expect(rows.map((r) => r.getAttribute('data-arm'))).toEqual(['momentum', 'regime']);
-    expect(normalize(rows[0]?.textContent)).toBe('モメンタム固定 10 40.0% -1.5 bps -3,200 JPY');
+    expect(normalize(rows[0]?.textContent)).toBe('モメンタム固定 10 40.0% -1.5 bps -3,200 円');
     // An arm without closed positions has no win rate / EV to show.
     expect(normalize(rows[1]?.textContent)).toBe('レジーム切替 0———');
 
@@ -40,7 +40,7 @@ describe('pitha-calibration-heatmap A/B arms', () => {
       ...(el.shadowRoot?.querySelectorAll('[data-testid="calibration-ab-regime"]') ?? []),
     ];
     expect(regimeRows.map((r) => r.getAttribute('data-regime'))).toEqual(['trend', 'mean_revert']);
-    expect(normalize(regimeRows[1]?.textContent)).toBe('└ 平均回帰 4 25.0% -6.0 bps -4,200 JPY');
+    expect(normalize(regimeRows[1]?.textContent)).toBe('└ 平均回帰 4 25.0% -6.0 bps -4,200 円');
   });
 
   test('renders nothing when the response has no ab_arms', async () => {

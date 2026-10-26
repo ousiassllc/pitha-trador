@@ -18,7 +18,7 @@ export const formatRate = (rate: number): string => `${(rate * 100).toFixed(1)}%
 export function renderBucketBarrier(stats: BarrierStats) {
   if (stats.sample_count === 0) return '';
   return html`<span class="bucket-barrier" data-testid="calibration-bucket-barrier">
-    EV ${formatBps(stats.ev_net_bps)} / TP ${formatRate(stats.tp_rate)} SL ${formatRate(stats.sl_rate)} TO ${formatRate(stats.timeout_rate)}
+    期待値 ${formatBps(stats.ev_net_bps)} / 利確 ${formatRate(stats.tp_rate)} 損切り ${formatRate(stats.sl_rate)} 時間切れ ${formatRate(stats.timeout_rate)}
   </span>`;
 }
 

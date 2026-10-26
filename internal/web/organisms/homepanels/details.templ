@@ -53,7 +53,7 @@ templ rejectReasonsBlock(v RejectReasonsView) {
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if len(v.Rows) == 0 {
-			<p class="mt-2 text-sm text-slate-500" data-testid="reject-empty">今日はまだ見送りの記録がありません。</p>
+			<p class="mt-2 text-sm text-slate-500" data-testid="reject-empty">今日の見送りの記録はありません。</p>
 		} else {
 			<p class="mt-1 text-xs text-slate-500">計 { strconv.Itoa(v.Total) } 件</p>
 			<ul class="mt-2 flex flex-col gap-1 text-sm">
@@ -100,7 +100,7 @@ templ scanBlock(v ScanView) {
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if !v.Panel.HasCycle {
-			<p class="mt-2 text-sm text-slate-500" data-testid="scan-none">まだスキャンサイクルが実行されていません。</p>
+			<p class="mt-2 text-sm text-slate-500" data-testid="scan-none">スキャンの結果はありません。</p>
 		} else {
 			<p class="mt-1 text-xs text-slate-500" data-testid="scan-cycle-meta">最終サイクル { FormatTime(v.Panel.Cycle.FinishedAt) }（所要 { organisms.FormatCycleDuration(v.Panel.Cycle.Duration()) }）</p>
 			@organisms.ScanFunnel(v.Panel)
@@ -115,7 +115,7 @@ templ proposalsBlock(v ProposalsView) {
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if v.Total == 0 {
-			<p class="mt-2 text-sm text-slate-500" data-testid="proposals-none">今日受け付けた提案はありません。</p>
+			<p class="mt-2 text-sm text-slate-500" data-testid="proposals-none">今日受け付けた注文提案はありません。</p>
 		} else {
 			<p class="mt-1 text-sm"><span class="text-2xl font-bold tabular-nums" data-testid="proposals-total">{ strconv.Itoa(v.Total) }</span> 件を受け付けました。</p>
 			<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-700">
@@ -144,7 +144,7 @@ templ tradesBlock(v TradesView) {
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if len(v.Rows) == 0 {
-			<p class="mt-2 text-sm text-slate-500" data-testid="trades-none">決済した取引はまだありません。</p>
+			<p class="mt-2 text-sm text-slate-500" data-testid="trades-none">決済した取引はありません。</p>
 		} else {
 			<ul class="mt-2 flex flex-col gap-1 text-xs">
 				for _, t := range v.Rows {
@@ -191,7 +191,7 @@ templ killEventsBlock(v KillEventsView) {
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if len(v.Rows) == 0 {
-			<p class="mt-2 text-sm text-slate-500" data-testid="kill-none">最近の Kill Switch はありません。</p>
+			<p class="mt-2 text-sm text-slate-500" data-testid="kill-none">最近の Kill Switch の履歴はありません。</p>
 		} else {
 			<ul class="mt-2 flex flex-col gap-1 text-xs">
 				for _, e := range v.Rows {

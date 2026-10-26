@@ -64,10 +64,9 @@ func TestSettingsHandler_Page_ShowsJevBaseURLHint(t *testing.T) {
 	}
 }
 
-// Issue #902: a field shows its Japanese label only; the key name lives in
-// the field's help mark (「設定キー: …」), which is part of the DOM for screen
-// readers.
-func TestSettingsHandler_Page_FieldShowsJapaneseLabelAndKeyInHelp(t *testing.T) {
+// Issues #902 / #904: a field shows its Japanese label only; the key name is
+// kept as the markup's own ids (for the form and the routes), never as text.
+func TestSettingsHandler_Page_FieldShowsJapaneseLabelAndNoKeyText(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := settingsRouter(settings.NewSettingsHandler(newFakeSecretsStore()))
 
@@ -78,13 +77,13 @@ func TestSettingsHandler_Page_FieldShowsJapaneseLabelAndKeyInHelp(t *testing.T) 
 	for _, want := range []string{
 		`for="secret-input-JEV_API_KEY"`,
 		`API キー`,
-		`id="help-secret-JEV_API_KEY"`,
-		`aria-describedby="help-secret-JEV_API_KEY"`,
-		`設定キー: JEV_API_KEY`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Page lacks %q; body=%s", want, body)
 		}
+	}
+	if strings.Contains(body, "設定キー") {
+		t.Errorf("Page prints 設定キー for a field; body=%s", body)
 	}
 	if strings.Contains(body, `JEV_API_KEY（`) || strings.Contains(body, `JEV_API_KEY を削除`) {
 		t.Errorf("Page shows the raw key name as the field label; body=%s", body)

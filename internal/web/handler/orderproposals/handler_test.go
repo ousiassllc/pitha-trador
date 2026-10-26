@@ -87,9 +87,9 @@ func TestList_ShowsEachProposalWithItsStatusAndPnl(t *testing.T) {
 	for id, wants := range map[string][]string{
 		"4": {"20,970 円", "text-emerald-700", "200 → 100", "20,000 円 / 15,000 円", "約定", `href="/order-proposals/4"`, `href="/symbols/7203"`},
 		"5": {"-12,030 円", "text-red-700"},
-		"3": {"拒否", "bucket_budget_exceeded", "500", "—"},
-		"2": {"債券ETF", "取消", "cancel_requested"},
-		"1": {"期限切れ", "expired"},
+		"3": {"拒否", "枠の予算を超える", "500", "—"},
+		"2": {"債券ETF", "取消", "取消の依頼"},
+		"1": {"期限切れ"},
 		"6": {"決済", "決済済み"},
 	} {
 		for _, want := range wants {
@@ -184,12 +184,12 @@ func TestDetail_TracesProposalToRealizedPnl(t *testing.T) {
 		t.Fatalf("status = %d", code)
 	}
 	for _, want := range []string{
-		"注文提案 #5", `data-status="filled"`, "決算が好調で需給も良い", "引けで手じまう",
+		"注文提案 5 番", `data-status="filled"`, "決算が好調で需給も良い", "引けで手じまう",
 		"2,400 円", "2,700 円", "届いた", "届かなかった", // stop reached (exit 2380 <= 2400), take not reached
 		"20,000 円", "15,000 円", "12,030 円", // proposed, estimated, actual loss
-		"トレードシグナル #2", "mcp-proposal-v1", "通過",
-		"注文 #3", "買い / 成行", "約定", "2,500 円",
-		"ポジション #2", "決済済み", "proposal_close", "5 時間 0 分", "-12,030 円", "text-red-700",
+		"トレードシグナル 2 番", "mcp-proposal-v1", "通過",
+		"注文 3 番", "買い / 成行", "約定", "2,500 円",
+		"ポジション 2 番", "決済済み", "AIの注文提案による決済", "5 時間 0 分", "-12,030 円", "text-red-700",
 		"2026-10-17 10:00:00 JST", // received 01:00Z
 	} {
 		if !strings.Contains(body, want) {
@@ -206,12 +206,12 @@ func TestDetail_TracesProposalToRealizedPnl(t *testing.T) {
 
 func TestDetail_RejectedShowsTheRiskCodeAndNoOrder(t *testing.T) {
 	_, body := get(t, outcomesSource(t), "/order-proposals/3")
-	for _, want := range []string{"拒否", "bucket_budget_exceeded", "トレードシグナル #3"} {
+	for _, want := range []string{"拒否", "枠の予算を超える", "トレードシグナル 3 番"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("detail lacks %q", want)
 		}
 	}
-	if strings.Contains(body, "注文 #") || strings.Contains(body, "ポジション #") || strings.Contains(body, "used 1.2M") {
+	if strings.Contains(body, "注文 3 番") || strings.Contains(body, "ポジション 2 番") || strings.Contains(body, "used 1.2M") {
 		t.Errorf("a rejected proposal has no order or position, and the signal's reason text is not shown: %s", body)
 	}
 	if n := strings.Count(body, `data-testid="order-proposal-event"`); n != 3 {

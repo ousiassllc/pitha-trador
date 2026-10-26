@@ -1,16 +1,15 @@
 package mcpsettings
 
 import (
-	"cmp"
 	"fmt"
 	"math"
-	"slices"
 	"strconv"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/experiment"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
+	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/mcp"
 )
 
@@ -33,12 +32,13 @@ func experimentsProps(rows []experiment.Summary, notice string) mcp.ExperimentsP
 		Notice:        notice,
 		MinTradesNote: minTradesNote(experiment.MinTradesFloor),
 		MinTradesHelp: minTradesHelp(experiment.MinTradesSourceFloor),
+		SettingNames:  settingNames(),
 	}
 	for _, s := range rows {
 		e := s.Experiment
 		props.Rows = append(props.Rows, mcp.ExperimentRow{
 			ID: e.ID, Status: e.Status, StatusLabel: statusLabel(e.Status), Period: periodText(e.StartedAt, e.EndedAt),
-			Variable: e.Variable.Name, Change: changeText(e.Variable), By: createdBy(e),
+			Variable: variableName(e.Variable), Change: changeText(e.Variable), By: createdBy(e),
 			BeforeTrades: s.BeforeTrades, AfterTrades: s.AfterTrades,
 			Verdict: s.Verdict, VerdictLabel: verdictLabel(s.Verdict), Running: e.Status == experiment.StatusRunning,
 		})
@@ -49,7 +49,7 @@ func experimentsProps(rows []experiment.Summary, notice string) mcp.ExperimentsP
 func detailProps(c experiment.Comparison) mcp.ExperimentDetailProps {
 	e := c.Experiment
 	p := mcp.ExperimentDetailProps{
-		ID: e.ID, Hypothesis: e.Hypothesis, Variable: e.Variable.Name, Change: changeText(e.Variable),
+		ID: e.ID, Hypothesis: e.Hypothesis, Variable: variableName(e.Variable), Change: changeText(e.Variable),
 		BeforePeriod: periodText(c.Before.From, &c.Before.To), AfterPeriod: periodText(c.After.From, &c.After.To),
 		Verdict: c.Verdict, VerdictLabel: verdictLabel(c.Verdict), VerdictHelp: verdictHelp(c.Verdict),
 		MinTradesNote: minTradesNote(c.MinTrades), MinTradesHelp: minTradesHelp(c.MinTradesSource),
@@ -82,47 +82,6 @@ func metricRows(c experiment.Comparison) []mcp.MetricRow {
 		{Label: "平均の負け", Before: optYen(b.AvgLossJPY), After: optYen(a.AvgLossJPY)},
 		{Label: "最大ドローダウン", Before: yen(b.MaxDrawdownJPY), After: yen(a.MaxDrawdownJPY), Diff: signedYen(c.Diff.MaxDrawdownJPY)},
 	}
-}
-
-// rejectRows joins the two periods' rejection reasons: the Risk Engine's by
-// code, and the Policy Engine's own rejections by their fixed code.
-func rejectRows(before, after *query.RiskRejections) []mcp.RejectRow {
-	type key struct{ group, reason string }
-	counts := map[key]*mcp.RejectRow{}
-	add := func(group string, buckets []query.RejectBucket, isAfter bool) {
-		for _, b := range buckets {
-			row := counts[key{group, b.Reason}]
-			if row == nil {
-				row = &mcp.RejectRow{Group: group, Reason: b.Reason}
-				counts[key{group, b.Reason}] = row
-			}
-			if isAfter {
-				row.After = b.Count
-			} else {
-				row.Before = b.Count
-			}
-		}
-	}
-	for i, rr := range []*query.RiskRejections{before, after} {
-		if rr != nil {
-			add("Risk Engine", rr.Buckets, i == 1)
-			add("Policy Engine など", rr.OtherRejectBreakdown, i == 1)
-		}
-	}
-	out := make([]mcp.RejectRow, 0, len(counts))
-	for _, r := range counts {
-		out = append(out, *r)
-	}
-	slices.SortFunc(out, func(x, y mcp.RejectRow) int {
-		if x.Group != y.Group {
-			return -cmp.Compare(x.Group, y.Group) // Risk Engine first
-		}
-		if d := (y.Before + y.After) - (x.Before + x.After); d != 0 {
-			return d
-		}
-		return cmp.Compare(x.Reason, y.Reason)
-	})
-	return out
 }
 
 func confounderPeriodText(period string) string {
@@ -232,6 +191,16 @@ func optSignedYen2(v *float64) string {
 		return "—"
 	}
 	return signedYen(math.Round(*v*100) / 100)
+}
+
+// variableName is what the experiment changed, as the screen names it: a
+// setting by the name the Settings screen gives it (never its key); a model or
+// a prompt version by its own name.
+func variableName(v experiment.Variable) string {
+	if v.Kind == experiment.KindSetting {
+		return settings.FieldLabel(v.Name)
+	}
+	return v.Name
 }
 
 func changeText(v experiment.Variable) string {

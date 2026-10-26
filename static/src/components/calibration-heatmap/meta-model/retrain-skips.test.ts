@@ -46,7 +46,8 @@ describe('pitha-calibration-heatmap retrain skips', () => {
       'something_new',
     ]);
     expect(reasons[0]?.textContent).toContain('検証期間より前のラベル付き判断が不足');
-    expect(reasons[1]?.textContent?.trim()).toBe('something_new');
+    // an unknown code is never printed: the generic name shows, the code stays in data-code
+    expect(reasons[1]?.textContent?.trim()).toBe('その他（理由コードあり）');
   });
 
   test('shows nothing when no retraining was skipped', async () => {

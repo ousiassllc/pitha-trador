@@ -27,7 +27,7 @@ func TestPerformanceActualsPanel_ExplainsMetricsInHelpMarks(t *testing.T) {
 	html := renderComponent(t, performancepanels.PerformanceActualsPanel(performancepanels.PerformanceActuals{TradeCount: 3}, ""))
 	for _, want := range []string{
 		`data-metric="win_rate"`, `data-help-mark`,
-		`aria-label="勝率の説明"`, `id="help-performance-actuals-win_rate"`, "Win Rate。利益が出た取引の割合です。",
+		`aria-label="勝率の説明"`, `id="help-performance-actuals-win_rate"`, "利益が出た取引の割合です。",
 		"年率換算はしていません",
 	} {
 		if !strings.Contains(html, want) {
@@ -49,7 +49,7 @@ func TestPerformanceActualsPanel_ExplainsMetricsInHelpMarks(t *testing.T) {
 
 func TestPerformanceSummaryPanel_ExplainsMetricsInHelpMarks(t *testing.T) {
 	html := renderComponent(t, performancepanels.PerformanceSummaryPanel("Walk Forward", performancepanels.PerformanceSummary{TradeCount: 4}))
-	for _, want := range []string{`data-metric="net_pnl_pct"`, `aria-label="純損益の説明"`, "Net PnL。コストと手数料をすべて引いた後のリターンの合計"} {
+	for _, want := range []string{`data-metric="net_pnl_pct"`, `aria-label="純損益の説明"`, "コストと手数料をすべて引いた後のリターンの合計"} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %q: %s", want, html)
 		}

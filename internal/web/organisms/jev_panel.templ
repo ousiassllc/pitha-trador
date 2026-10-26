@@ -21,8 +21,8 @@ templ JevPanel(d *domain.JevDecision) {
 			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
 				<div>
 					<dt class="text-sm text-slate-500">
-						Regime
-						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-regime", Label: "Regimeの説明"}) {
+						相場状態
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-regime", Label: "相場状態の説明"}) {
 							Jev Traderが判定した相場状態です（TREND=トレンド、RANGE=レンジ、BREAKOUT=ブレイクアウト、CHAOTIC=不安定）。
 						}
 					</dt>
@@ -30,8 +30,8 @@ templ JevPanel(d *domain.JevDecision) {
 				</div>
 				<div>
 					<dt class="text-sm text-slate-500">
-						Toxic Flow
-						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-toxic-flow", Label: "Toxic Flowの説明"}) {
+						毒性フロー
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-toxic-flow", Label: "毒性フローの説明"}) {
 							いまの注文の流れが新規エントリーに不利である確率（0〜1）です。
 						}
 					</dt>
@@ -39,8 +39,8 @@ templ JevPanel(d *domain.JevDecision) {
 				</div>
 				<div>
 					<dt class="text-sm text-slate-500">
-						Liquidity Stress
-						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-liquidity-stress", Label: "Liquidity Stressの説明"}) {
+						流動性ストレス
+						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-liquidity-stress", Label: "流動性ストレスの説明"}) {
 							いま流動性が逼迫している確率（0〜1）です。
 						}
 					</dt>

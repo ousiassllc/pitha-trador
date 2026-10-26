@@ -16,6 +16,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/entryqualitypanel"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/shared"
+	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
 	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
@@ -89,7 +90,7 @@ func (h *SettingsHandler) opsRow(ctx context.Context, field opsField, notice str
 		row.DefaultLabel = "不明"
 		return row
 	}
-	row.Value, row.Overridden, row.Warning = value.Current, value.Overridden, value.Warning
+	row.Value, row.Overridden, row.Warning = value.Current, value.Overridden, labels.ScreenWarning(value.Warning)
 	row.DefaultLabel = defaultLabel(value.Default)
 	if dailyguardsettings.IsKey(field.key) && value.Default == "0" {
 		row.DefaultLabel = "0（無効）"

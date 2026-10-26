@@ -7,7 +7,7 @@ import (
 // SettingFieldRowProps is SettingFieldRow's input: Key is the
 // runtime_settings key (also the `/ops-settings/:key` path segment), Label
 // the heading, Hint optional explanation (shown in a HelpMark next to the
-// label, with the key as 設定キー), Value the effective value
+// label), Value the effective value
 // shown in the field (the stored value, else the lower-priority default for
 // thresholds; empty for an unset path), DefaultLabel what applies while
 // nothing is stored (e.g. "0.7", "無効"), Overridden whether a value is
@@ -61,8 +61,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 			if props.Hint != "" {
 				<span data-testid={ "hint-" + props.Key }>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-setting-" + props.Key, Label: props.Label + "の説明"}) {
-						<span class="block">{ props.Hint }</span>
-						<span class="mt-1 block text-slate-500">設定キー: { props.Key }</span>
+						{ props.Hint }
 					}
 				</span>
 			}

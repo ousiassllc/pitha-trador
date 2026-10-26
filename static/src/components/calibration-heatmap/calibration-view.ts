@@ -175,8 +175,8 @@ export function hasLabeledSamples(response: CalibrationAPIResponse): boolean {
   );
 }
 
-// formatYen renders a signed JPY amount, e.g. "+1,200 JPY" / "-400 JPY".
+// formatYen renders a signed yen amount, e.g. "+1,200 円" / "-400 円".
 export function formatYen(amount: number): string {
   const sign = amount > 0 ? '+' : '';
-  return `${sign}${Math.round(amount).toLocaleString('en-US')} JPY`;
+  return `${sign}${Math.round(amount).toLocaleString('en-US')} 円`;
 }

@@ -7,7 +7,7 @@
     {"label": "出来高倍率", "hint": "直近5分の出来高が平常時の何倍か。大きいほど売買が活発です。", "numeric": true},
     {"label": "VWAP乖離(bps)", "hint": "現在値とVWAP(出来高加重平均価格)の差。1bps=0.01%。プラスはVWAPより高い", "numeric": true},
     {"label": "スプレッド(bps)", "hint": "売り気配と買い気配の差。1bps=0.01%。小さいほど売買コストが低い", "numeric": true},
-    {"label": "Jev方向", "hint": "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り、pending=判定待ち", "numeric": false},
+    {"label": "Jev方向", "hint": "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り。「判定待ち」はまだ判定していない候補です", "numeric": false},
     {"label": "確信度", "hint": "Jev判定の確信度。高いほど判定に自信がある", "numeric": true},
     {"label": "エントリー品質", "hint": "エントリー好適度。poor < fair < good < strong < exceptional の順に良い", "numeric": false},
     {"label": "保有", "hint": "現在の保有ポジション(株数)。未保有は—", "numeric": true}
@@ -40,9 +40,9 @@
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600"
     },
     {
-      "name": "not yet evaluated: nulls render as em dash, direction as pending",
+      "name": "not yet evaluated: nulls render as em dash, direction as 判定待ち",
       "item": {"symbol": "9984", "detail_url": "/symbols/9984", "price": 7000, "return_1m": null, "return_5m": null, "volume_ratio_5m": null, "price_vs_vwap_bps": 0, "spread_bps": null, "jev_direction": null, "jev_confidence": null, "entry_quality": null, "current_position": null},
-      "cells": ["9984", "7000.0", "—", "—", "—", "0", "—", "pending", "—", "—", "—"],
+      "cells": ["9984", "7000.0", "—", "—", "—", "0", "—", "判定待ち", "—", "—", "—"],
       "returnClasses": ["px-3 py-2 text-right font-medium tabular-nums text-slate-500", "px-3 py-2 text-right font-medium tabular-nums text-slate-500"],
       "directionClass": "inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500",
       "qualityClass": "text-slate-400"

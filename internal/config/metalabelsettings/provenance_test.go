@@ -104,9 +104,15 @@ func TestCutoffStatusLabelAndHelp(t *testing.T) {
 		}
 	}
 	help := strings.Join(metalabelsettings.CutoffHelp(), "\n")
+	// The screen names the four items in plain words, never by setting key (issue #904).
+	for _, name := range []string{"学習データの終わり", "モデル名", "確認日", "出典"} {
+		if !strings.Contains(help, name+":") {
+			t.Errorf("the help does not say what goes in %s", name)
+		}
+	}
 	for _, key := range []string{metalabelsettings.KeyLLMCutoff, metalabelsettings.KeyLLMCutoffModel, metalabelsettings.KeyLLMCutoffConfirmedOn, metalabelsettings.KeyLLMCutoffSource} {
-		if !strings.Contains(help, key) {
-			t.Errorf("the help does not say what goes in %s", key)
+		if strings.Contains(help, key) {
+			t.Errorf("the help shows the setting key %s", key)
 		}
 		if !metalabelsettings.IsCutoffKey(key) {
 			t.Errorf("IsCutoffKey(%s) = false", key)

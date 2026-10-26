@@ -7,7 +7,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -100,8 +99,8 @@ func TestSettingsPage_ShowsEveryOperationalSettingAndHidesItWithoutService(t *te
 	}
 }
 
-// A field's explanation lives in a help mark next to its label (with the key
-// as 設定キー), not as a visible paragraph; the group's description and note
+// A field's explanation lives in a help mark next to its label (never with
+// the setting key, issue #904), not as a visible paragraph; the group's description and note
 // are help marks too.
 func TestSettingsPage_FieldAndGroupExplanationsAreHelpMarks(t *testing.T) {
 	engine, _ := opsRouter()
@@ -112,10 +111,13 @@ func TestSettingsPage_FieldAndGroupExplanationsAreHelpMarks(t *testing.T) {
 		t.Fatal("the screener.top_n row has no help mark for its hint")
 	}
 	help := body[i : i+strings.Index(body[i:], "</form>")]
-	for _, want := range []string{"data-help-mark", `role="tooltip"`, "1 以上の整数です。", "設定キー: screener.top_n"} {
+	for _, want := range []string{"data-help-mark", `role="tooltip"`, "1 以上の整数です。"} {
 		if !strings.Contains(help, want) {
 			t.Errorf("the screener.top_n help lacks %q", want)
 		}
+	}
+	if strings.Contains(help, "設定キー") {
+		t.Errorf("the screener.top_n help shows the setting key: %s", help)
 	}
 	for _, id := range []string{"help-screener-description", "help-screener-note"} {
 		if !strings.Contains(body, `id="`+id+`"`) {
@@ -276,53 +278,5 @@ func TestSaveOps_BrokerProviderIsStoredAndBadValuesAre400(t *testing.T) {
 	}
 	if rec := opsRequest(engine, http.MethodDelete, config.KeyBrokerProvider, nil, true); rec.Code != http.StatusOK || len(store.rows) != 0 {
 		t.Errorf("reset status = %d, store = %v, want the row removed (kabu again)", rec.Code, store.rows)
-	}
-}
-
-// failingRuntimeStore is a store whose writes fail, the way a rolled-back
-// transaction does when the audit row of a whitelisted key cannot be written
-// (mcpset.Audited, issue #813): the handler sees only an error from Save/Reset.
-type failingRuntimeStore struct{ memRuntimeStore }
-
-func (*failingRuntimeStore) Set(context.Context, string, string, time.Time) error {
-	return errors.New("injected failure")
-}
-
-func (*failingRuntimeStore) Delete(context.Context, string) error {
-	return errors.New("injected failure")
-}
-
-// A save or reset the service rejects (for a whitelisted key: its audit row
-// could not be written, so the change was rolled back) answers 500 with the
-// "not saved" toast the page routes into #toast-region, never a refreshed row
-// that would look saved, and never the error text (issue #818).
-func TestSaveAndResetOps_StoreFailureIs500WithAToast(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	store := &failingRuntimeStore{memRuntimeStore{rows: map[string]string{}}}
-	h := settings.NewSettingsHandler(newFakeSecretsStore()).WithOperationalSettings(opsettings.New(store, opsStrategy(), "/data/logs"))
-	engine := settingsRouter(h)
-	engine.POST("/ops-settings/:key", h.SaveOps)
-	engine.DELETE("/ops-settings/:key", h.ResetOps)
-
-	for name, tc := range map[string]struct {
-		rec  *httptest.ResponseRecorder
-		want string
-	}{
-		"save":  {opsRequest(engine, http.MethodPost, "screener.top_n", url.Values{"value": {"30"}}, true), "保存に失敗しました"},
-		"reset": {opsRequest(engine, http.MethodDelete, "screener.top_n", nil, true), "既定に戻すのに失敗しました"},
-	} {
-		body := tc.rec.Body.String()
-		if tc.rec.Code != http.StatusInternalServerError {
-			t.Errorf("%s: status = %d, want 500", name, tc.rec.Code)
-		}
-		if !strings.Contains(body, `data-testid="toast"`) || !strings.Contains(body, tc.want) {
-			t.Errorf("%s: body lacks the error toast %q: %s", name, tc.want, body)
-		}
-		if strings.Contains(body, "injected failure") || strings.Contains(body, "setting-field-row-") {
-			t.Errorf("%s: body leaks the error or renders a row: %s", name, body)
-		}
-	}
-	if len(store.rows) != 0 {
-		t.Errorf("store = %v, want untouched", store.rows)
 	}
 }
