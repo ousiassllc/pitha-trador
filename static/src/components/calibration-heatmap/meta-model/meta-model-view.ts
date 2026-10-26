@@ -4,6 +4,7 @@
 import { html } from 'lit';
 import { renderHelpMark } from '../../lib/help-mark';
 import { formatJstDateTime } from '../../lib/jst-datetime';
+import { modelAlgorithmLabel, modelRejectReasonLabel, screenWarning } from '../../lib/labels';
 import { formatBps } from '../barrier-view';
 import { type MetaModelAdoption, renderAdoption } from './meta-model-adoption-view';
 
@@ -48,25 +49,6 @@ export interface LLMCutoffInfo {
   source: string;
 }
 
-// REJECT_REASON_LABELS names the machine reject reasons the nightly retraining
-// records (internal/service/metalabel/training); an unknown reason is shown raw.
-const REJECT_REASON_LABELS: Record<string, string> = {
-  llm_cutoff_placeholder: 'LLM 学習データの終わりが仮置きのまま',
-  llm_model_changed: 'Jev のモデルが切り替わった（cutoff 未再確認）',
-  llm_cutoff_unverified: 'LLM 学習データの終わりの根拠が未記録（Live 前チェックで採用を止める）',
-  oos_samples_below_minimum: 'OOS 件数が基準未満',
-  oos_days_below_minimum: 'OOS の営業日数が基準未満',
-  oos_takes_below_minimum: 'OOS の take 件数が基準未満',
-  oos_ev_ci_not_positive: 'EV の信頼区間の下限が 0 以下',
-  oos_auc_ci_not_above_minimum: 'AUC の信頼区間の下限が 0.5 以下',
-  candidate_not_better_than_active: '現行モデルより有意に良くない',
-  active_model_not_comparable: '現行モデルと比較できない',
-  model_swap_rate_limited: 'モデル入れ替えの頻度制限中',
-  policy_change_freeze: 'しきい値変更直後の凍結期間中',
-};
-
-const rejectReasonLabel = (reason: string): string => REJECT_REASON_LABELS[reason] ?? reason;
-
 const formatPercent = (rate: number): string => `${(rate * 100).toFixed(1)}%`;
 
 // periodLabel renders a window as "start 〜 end" in JST.
@@ -78,7 +60,7 @@ function renderStatus(model: MetaModel) {
   const inForce = model.active_version
     ? `採用中のモデルは ${model.active_version} のまま`
     : '採用中のモデルなし（エントリーは見送り）';
-  return html`不採用（${rejectReasonLabel(model.reject_reason)}）— ${inForce}`;
+  return html`不採用（${modelRejectReasonLabel(model.reject_reason)}）— ${inForce}`;
 }
 
 function renderCalibrationCurve(bins: MetaModelCalibrationBin[]) {
@@ -119,7 +101,7 @@ function renderCutoff(cutoff: LLMCutoffInfo | undefined) {
   return html`
     ${
       cutoff.warning
-        ? html`<p role="alert" data-testid="calibration-metamodel-cutoff-warning">${cutoff.warning}</p>`
+        ? html`<p role="alert" data-testid="calibration-metamodel-cutoff-warning">${screenWarning(cutoff.warning)}</p>`
         : ''
     }
     ${
@@ -152,7 +134,7 @@ export function renderMetaModel(model: MetaModel | null | undefined, cutoff?: LL
     ${renderCutoff(cutoff)}
     <dl class="pitha-calibration-heatmap-summary" data-testid="calibration-metamodel" aria-label="メタラベリングモデル（OOS）">
       <dt>モデル</dt>
-      <dd data-testid="calibration-metamodel-version">${model.version}（${model.algorithm}）</dd>
+      <dd data-testid="calibration-metamodel-version">${model.version}（${modelAlgorithmLabel(model.algorithm)}）</dd>
       <dt>状態</dt>
       <dd data-testid="calibration-metamodel-status">${renderStatus(model)}</dd>
       <dt>学習日時</dt>
@@ -172,7 +154,7 @@ export function renderMetaModel(model: MetaModel | null | undefined, cutoff?: LL
       <dd>${periodLabel(model.train_start, model.train_end)}</dd>
       <dt>サンプル数（学習 / OOS）</dt>
       <dd data-testid="calibration-metamodel-samples">${model.train_samples} / ${model.oos_samples}</dd>
-      <dt>OOS AUC</dt>
+      <dt>AUC（検証期間）</dt>
       <dd data-testid="calibration-metamodel-auc">${model.oos_auc === null ? '—' : model.oos_auc.toFixed(3)}</dd>
       <dt>
         OOS EV（net）

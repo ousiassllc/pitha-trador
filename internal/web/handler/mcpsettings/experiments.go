@@ -92,7 +92,7 @@ func (h *Handler) CreateExperiment(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, experiment.ErrKeyNotAllowed) {
-		shared.RespondActionError(c, http.StatusUnprocessableEntity, "その設定キーは MCP から変更できるキーではないため、実験にできません（settings_get に出るキーだけ）。")
+		shared.RespondActionError(c, http.StatusUnprocessableEntity, "その設定は MCP から変更できる項目ではないため、実験にできません。")
 		return
 	}
 	if err != nil {

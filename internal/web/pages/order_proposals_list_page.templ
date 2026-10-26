@@ -111,7 +111,7 @@ templ orderProposalsTable(rows []ProposalRow) {
 					<td class="py-1 pr-3">
 						{ label(proposalStatusLabels, r.Status) }
 						if r.StatusReason != "" {
-							<span class="block font-mono text-xs text-slate-500">{ r.StatusReason }</span>
+							<span class="block text-xs text-slate-500">{ r.StatusReason }</span>
 						}
 					</td>
 					<td class="py-1 pr-3">{ dash(r.Quantity) }</td>

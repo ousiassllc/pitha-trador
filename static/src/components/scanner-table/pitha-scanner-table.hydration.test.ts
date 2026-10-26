@@ -70,7 +70,7 @@ async function flush(el: ScannerTableElement): Promise<void> {
 const SSR_MARKUP = `
   <span data-help-mark><button type="button" data-help-mark-button aria-describedby="help-scanner-count">?</button><span id="help-scanner-count" role="tooltip" data-help-mark-text>SSR</span></span>
   <table>
-    <caption>候補銘柄 — as of 2026-09-28 00:00:00 JST</caption>
+    <caption>候補銘柄 — 2026-09-28 00:00:00 JST 時点</caption>
     <thead><tr><th>銘柄</th></tr></thead>
     <tbody><tr data-symbol="SSR1"><td>SSR1</td></tr></tbody>
   </table>

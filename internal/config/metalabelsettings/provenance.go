@@ -94,14 +94,14 @@ func CutoffStatusLabel(status string) (label, effect string) {
 
 // CutoffHelp is the short how-to of confirming the official cutoff date and
 // where each value goes (Settings screen, issue #809): where to look and what
-// to enter. The same four keys are what the MCP's settings_set takes.
+// to enter. The same four items are what the MCP can set.
 func CutoffHelp() []string {
 	return []string{
-		"どこを見る: いま Jev が使っているモデル名（判断の記録 model_id と同じ表記）を調べ、そのモデルのベンダー公式のモデルカード／モデル一覧ドキュメントにある「学習データの終わり（knowledge cutoff / training data cutoff）」の日付を探します。",
-		"学習データの終わり（" + KeyLLMCutoff + "）: 公式の日付を YYYY-MM-DD で入れます。",
-		"モデル名（" + KeyLLMCutoffModel + "）: その日付を確認したモデルの名前を入れます。",
-		"確認日（" + KeyLLMCutoffConfirmedOn + "）: あなたが公式情報を確認した日を YYYY-MM-DD で入れます。",
-		"出典（" + KeyLLMCutoffSource + "）: 見たページの URL か文書名を入れます（" + strconv.Itoa(MaxProvenanceLen) + " 文字以内）。",
+		"どこを見る: いま Jev が使っているモデル名（判断の記録のモデル名と同じ表記）を調べ、そのモデルのベンダー公式のモデルカード／モデル一覧ドキュメントにある「学習データの終わり（knowledge cutoff / training data cutoff）」の日付を探します。",
+		"学習データの終わり: 公式の日付を YYYY-MM-DD で入れます。",
+		"モデル名: その日付を確認したモデルの名前を入れます。",
+		"確認日: あなたが公式情報を確認した日を YYYY-MM-DD で入れます。",
+		"出典: 見たページの URL か文書名を入れます（" + strconv.Itoa(MaxProvenanceLen) + " 文字以内）。",
 		"公式に日付が載っていないときは推測で入れず、仮置きのままにします。4 つとも入れてください（モデル名まで入れると「確認済み」、日付だけだと「未確認」で、Live 前チェックでは採用が止まります）。",
 	}
 }

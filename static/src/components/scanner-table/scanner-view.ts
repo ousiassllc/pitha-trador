@@ -69,7 +69,7 @@ export const COLUMNS: Column[] = [
   {
     key: 'jev_direction',
     label: 'Jev方向',
-    hint: 'Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り、pending=判定待ち',
+    hint: 'Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り。「判定待ち」はまだ判定していない候補です',
     numeric: false,
   },
   {
@@ -145,7 +145,7 @@ const NEUTRAL_BADGE_CLASS = 'bg-gray-100 text-gray-600';
 
 export function directionBadge(direction: string | null) {
   if (direction === null) {
-    return html`<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">pending</span>`;
+    return html`<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">判定待ち</span>`;
   }
   const label = direction === 'LONG' || direction === 'SHORT' ? direction : 'NONE';
   return html`<span class="${BADGE_BASE} ${DIRECTION_BADGE_CLASS[label] ?? NEUTRAL_BADGE_CLASS}">${label}</span>`;

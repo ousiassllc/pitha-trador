@@ -13,7 +13,7 @@ func TestDetail_HelpMarksCarryTheExplanationsAndTheFactsStayVisible(t *testing.T
 	for _, want := range []string{
 		`data-help-mark-text`, `aria-describedby="help-order-proposal-loss-1"`, `id="help-order-proposal-loss-1"`,
 		"数量 ×（約定見込み価格 − 損切り価格）で見積もった最大損失です。",
-		"拒否", "bucket_budget_exceeded", "最大損失", "アプリの見積り",
+		"拒否", "枠の予算を超える", "最大損失", "アプリの見積り",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("detail lacks %q", want)

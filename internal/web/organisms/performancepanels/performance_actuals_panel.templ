@@ -48,17 +48,17 @@ templ PerformanceActualsPanel(perf PerformanceActuals, err string) {
 			<p class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert" data-testid="actuals-error">{ err }</p>
 		} else {
 			<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
-				@actualsMetric("累計損益", "total_pnl", yen(perf.TotalPnL), "Total PnL。クローズ済みの全ポジションの実現損益の合計（円）です。")
-				@actualsMetric("本日の損益", "daily_pnl", yen(perf.DailyPnL), "Daily PnL。本日（日本時間 0:00 以降）にクローズしたポジションの実現損益の合計（円）です。")
-				@actualsMetric("取引数", "trade_count", fmt.Sprintf("%d", perf.TradeCount), "Trades。クローズ済みポジションの数です。")
-				@actualsMetric("勝率", "win_rate", fmt.Sprintf("%.1f%%", perf.WinRate*100), "Win Rate。利益が出た取引の割合です。")
-				@actualsMetric("プロフィットファクター", "profit_factor", optionalRatio(perf.ProfitFactor), "Profit Factor。総利益 ÷ 総損失（円ベース）です。1 を超えると利益が損失を上回ります。負けた取引がないときは「—」と表示します。")
-				@actualsMetric("期待値", "expectancy", pct(perf.Expectancy), "Expectancy。1取引あたりの平均リターン（建玉金額に対する %）です。")
-				@actualsMetric("最大ドローダウン", "max_drawdown_pct", pct(perf.MaxDrawdownPct), "Max Drawdown。累積リターンが直前のピークから最も大きく下がった幅（%）です。")
-				@actualsMetric("平均保有時間", "average_hold_time_minutes", fmt.Sprintf("%.1f 分", perf.AverageHoldTimeMinutes), "Average Hold Time。ポジションを持っていた時間の平均です。")
-				@actualsMetric("シャープレシオ（参考）", "sharpe_ref", optionalRatio(perf.SharpeRef), "Sharpe ratio。1取引あたりの平均リターン ÷ そのばらつき（標準偏差）です。年率換算はしない参考値で、取引が2件未満のときは「—」と表示します。")
-				@actualsMetric("ソルティノレシオ（参考）", "sortino_ref", optionalRatio(perf.SortinoRef), "Sortino ratio。1取引あたりの平均リターン ÷ 下振れのばらつき（マイナスのリターンだけで計算）です。年率換算はしない参考値で、負けた取引がないときは「—」と表示します。")
-				@actualsMetric("シグナル数", "signal_count", fmt.Sprintf("%d", perf.SignalCount), "Signal count。LONG・SHORT のシグナルの件数です。")
+				@actualsMetric("累計損益", "total_pnl", yen(perf.TotalPnL), "クローズ済みの全ポジションの実現損益の合計（円）です。")
+				@actualsMetric("本日の損益", "daily_pnl", yen(perf.DailyPnL), "本日（日本時間 0:00 以降）にクローズしたポジションの実現損益の合計（円）です。")
+				@actualsMetric("取引数", "trade_count", fmt.Sprintf("%d", perf.TradeCount), "クローズ済みポジションの数です。")
+				@actualsMetric("勝率", "win_rate", fmt.Sprintf("%.1f%%", perf.WinRate*100), "利益が出た取引の割合です。")
+				@actualsMetric("プロフィットファクター", "profit_factor", optionalRatio(perf.ProfitFactor), "総利益 ÷ 総損失（円ベース）です。1 を超えると利益が損失を上回ります。負けた取引がないときは「—」と表示します。")
+				@actualsMetric("期待値", "expectancy", pct(perf.Expectancy), "1取引あたりの平均リターン（建玉金額に対する %）です。")
+				@actualsMetric("最大ドローダウン", "max_drawdown_pct", pct(perf.MaxDrawdownPct), "累積リターンが直前のピークから最も大きく下がった幅（%）です。")
+				@actualsMetric("平均保有時間", "average_hold_time_minutes", fmt.Sprintf("%.1f 分", perf.AverageHoldTimeMinutes), "ポジションを持っていた時間の平均です。")
+				@actualsMetric("シャープレシオ（参考）", "sharpe_ref", optionalRatio(perf.SharpeRef), "1取引あたりの平均リターン ÷ そのばらつき（標準偏差）です。年率換算はしない参考値で、取引が2件未満のときは「—」と表示します。")
+				@actualsMetric("ソルティノレシオ（参考）", "sortino_ref", optionalRatio(perf.SortinoRef), "1取引あたりの平均リターン ÷ 下振れのばらつき（マイナスのリターンだけで計算）です。年率換算はしない参考値で、負けた取引がないときは「—」と表示します。")
+				@actualsMetric("シグナル数", "signal_count", fmt.Sprintf("%d", perf.SignalCount), "LONG・SHORT のシグナルの件数です。")
 			</dl>
 		}
 	</section>

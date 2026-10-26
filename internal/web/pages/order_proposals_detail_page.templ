@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
@@ -19,10 +20,10 @@ import (
 // `GET /order-proposals/:id` (internal/web/handler/orderproposals) renders it;
 // it has no buttons.
 templ OrderProposalDetailPage(p ProposalDetailProps) {
-	@layout.Shell("注文提案 #"+strconv.FormatInt(p.ID, 10), organisms.NavOrderProposals) {
+	@layout.Shell(labels.Numbered("注文提案", p.ID), organisms.NavOrderProposals) {
 		<p class="text-sm"><a class="underline" href="/order-proposals">← 注文提案の一覧</a></p>
 		<h1 class="mt-1 text-2xl font-bold text-slate-900" data-testid="order-proposal-title">
-			注文提案 #{ strconv.FormatInt(p.ID, 10) }
+			{ labels.Numbered("注文提案", p.ID) }
 			<span class="ml-2 font-mono text-lg">
 				<a class="underline" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
 			</span>
@@ -31,7 +32,7 @@ templ OrderProposalDetailPage(p ProposalDetailProps) {
 			{ label(proposalActionLabels, p.Action) }・{ label(proposalBucketLabels, p.Bucket) }・{ p.OrderType } ／ 状態:
 			<span class="font-semibold">{ label(proposalStatusLabels, p.Status) }</span>
 			if p.StatusReason != "" {
-				<span class="font-mono text-xs text-slate-500">（理由コード: { p.StatusReason }）</span>
+				<span class="text-xs text-slate-500">（理由: { p.StatusReason }）</span>
 			}
 		</p>
 		@proposalFields("概要", "order-proposal-summary", "help-order-proposal-summary", p.Summary)
@@ -111,7 +112,7 @@ templ proposalEvents(events []ProposalEvent) {
 				<tr>
 					<th scope="col" class="py-1 pr-3">時刻（JST）</th>
 					<th scope="col" class="py-1 pr-3">変化</th>
-					<th scope="col" class="py-1 pr-3">理由コード</th>
+					<th scope="col" class="py-1 pr-3">理由</th>
 					<th scope="col" class="py-1 pr-3">主体</th>
 					<th scope="col" class="py-1">補足</th>
 				</tr>
@@ -120,10 +121,10 @@ templ proposalEvents(events []ProposalEvent) {
 				for _, e := range events {
 					<tr class="border-b border-slate-100" data-testid="order-proposal-event">
 						<td class="py-1 pr-3">{ e.At }</td>
-						<td class="py-1 pr-3 font-mono text-xs">{ dash(e.From) } → { e.To }</td>
-						<td class="py-1 pr-3 font-mono text-xs">{ dash(e.Reason) }</td>
+						<td class="py-1 pr-3">{ dash(e.From) } → { e.To }</td>
+						<td class="py-1 pr-3">{ dash(e.Reason) }</td>
 						<td class="py-1 pr-3">{ e.Actor }</td>
-						<td class="py-1 font-mono text-xs">{ dash(e.Detail) }</td>
+						<td class="py-1">{ dash(e.Detail) }</td>
 					</tr>
 				}
 			</tbody>

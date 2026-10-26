@@ -54,11 +54,11 @@ func TestNew_OrderProposalRoutesServeTheWiredSource(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := router.New(router.WithOrderProposalSource(oneProposal{}))
 	code, body := serve(t, engine, "/order-proposals")
-	if code != http.StatusOK || !strings.Contains(body, `data-proposal-id="7"`) || !strings.Contains(body, "stale_quote") {
+	if code != http.StatusOK || !strings.Contains(body, `data-proposal-id="7"`) || !strings.Contains(body, "気配が古い") {
 		t.Fatalf("GET /order-proposals = %d: %s", code, body)
 	}
 	code, body = serve(t, engine, "/order-proposals/7")
-	if code != http.StatusOK || !strings.Contains(body, "注文提案 #7") {
+	if code != http.StatusOK || !strings.Contains(body, "注文提案 7 番") {
 		t.Fatalf("GET /order-proposals/7 = %d: %s", code, body)
 	}
 	// Read-only: nothing but GET is routed.

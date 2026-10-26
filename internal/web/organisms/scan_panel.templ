@@ -78,7 +78,7 @@ templ ScanPanel(v ScanPanelView) {
 			@scanUniverseEmpty(v.UniverseImportError)
 		} else if !v.HasCycle {
 			<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500" data-testid="scan-empty">
-				まだスキャンが実行されていません。
+				スキャンの結果はありません。
 			</p>
 		} else {
 			<p class="mt-1 text-xs text-slate-500" data-testid="scan-cycle-meta">
@@ -117,10 +117,10 @@ templ scanOffHours(nextOpen time.Time) {
 // Scout) of the latest cycle in v. The Home screen reuses it (issue #896).
 templ ScanFunnel(v ScanPanelView) {
 	<ol class="mt-3 grid gap-2 sm:grid-cols-4" data-testid="scan-funnel">
-		@funnelStep("ユニバース", "スキャン対象の銘柄数です。ランキング監視（既定）では監視銘柄（最大45）、全銘柄スキャンを有効にしたときだけ東証上場の全銘柄が対象になります。設定キー: scan.full_scan_enabled", strconv.Itoa(v.Cycle.Funnel.Universe), "scan-funnel-universe")
-		@funnelStep("特徴量算出", "市況データ（特徴量）が算出できた銘柄数です。", strconv.Itoa(v.Cycle.Funnel.FeatureComputed), "scan-funnel-features")
-		@funnelStep("Fast Screener通過", "足切り条件を満たし上位N件に入った銘柄数です（Jev Scout候補）。", strconv.Itoa(v.Cycle.Funnel.FastScreenerPassed), "scan-funnel-fast")
-		@funnelStep("Scout通過", "Jev Scoutの判定が済んだ候補のうち通過した銘柄数です（"+strconv.Itoa(v.Cycle.Funnel.ScoutEvaluated)+"/"+strconv.Itoa(v.Cycle.Funnel.FastScreenerPassed)+"件判定済み）。", strconv.Itoa(v.Cycle.Funnel.ScoutPassed), "scan-funnel-scout")
+		@funnelStep("スキャン対象の銘柄数", "スキャンにかけた銘柄の数です。ランキング監視（既定）では監視銘柄（最大45）、全銘柄スキャンを有効にしたときだけ東証上場の全銘柄が対象になります。", strconv.Itoa(v.Cycle.Funnel.Universe), "scan-funnel-universe")
+		@funnelStep("市況データを取得できた銘柄数", "市況データから判断に使う指標（特徴量）を計算できた銘柄の数です。", strconv.Itoa(v.Cycle.Funnel.FeatureComputed), "scan-funnel-features")
+		@funnelStep("絞り込みを通過した銘柄数", "Fast Screener の足切り条件を満たし、上位に入った銘柄の数です（Jev Scout にまわす候補）。", strconv.Itoa(v.Cycle.Funnel.FastScreenerPassed), "scan-funnel-fast")
+		@funnelStep("Jev Scout を通過した銘柄数", "Jev Scout の判定が済んだ候補のうち通過した銘柄の数です（"+strconv.Itoa(v.Cycle.Funnel.ScoutEvaluated)+"/"+strconv.Itoa(v.Cycle.Funnel.FastScreenerPassed)+"件判定済み）。", strconv.Itoa(v.Cycle.Funnel.ScoutPassed), "scan-funnel-scout")
 	</ol>
 }
 

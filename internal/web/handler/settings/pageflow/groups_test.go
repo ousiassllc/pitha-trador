@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
 )
 
@@ -150,6 +151,21 @@ func TestSettingsHandler_UnsetOptionalKeys_DoesNotNagAboutDefaultedKeys(t *testi
 	} {
 		if slices.Contains(got, key) {
 			t.Errorf("list includes defaulted key %s: %v", key, got)
+		}
+	}
+}
+
+// The experiments of the MCP card name a changed setting by the label the
+// Settings screen gives it, never by its key (issue #904): every setting the
+// MCP may change has such a label.
+func TestFieldLabel_NamesEveryMCPChangeableSetting(t *testing.T) {
+	for _, key := range mcpwritesettings.Keys() {
+		label := settings.FieldLabel(key)
+		if label == "" || label == settings.FieldLabel("no.such.key") {
+			t.Errorf("FieldLabel(%q) = %q: the setting has no name on the Settings screen", key, label)
+		}
+		if strings.Contains(label, key) {
+			t.Errorf("FieldLabel(%q) = %q shows the key", key, label)
 		}
 	}
 }

@@ -62,7 +62,7 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 	rec = a.post("/settings/mcp/experiments", experimentForm(url.Values{"started_at": {"2026-10-02T00:00"}}), true)
 	body = rec.Body.String()
 	if rec.Code != http.StatusOK || !strings.Contains(body, "実験を記録しました") || !strings.Contains(body, `data-experiment-id="1"`) ||
-		!strings.Contains(body, "risk.paper.max_trade_loss_pct") || !strings.Contains(body, "Settings 画面") ||
+		!strings.Contains(body, "1 回の取引の最大損失（運用資金に対する %）") || !strings.Contains(body, "Settings 画面") ||
 		!strings.Contains(body, "2026-10-02 00:00 〜 実行中") || !strings.Contains(body, `data-verdict="insufficient_trades"`) {
 		t.Fatalf("create = %d: %s", rec.Code, body)
 	}

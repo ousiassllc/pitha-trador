@@ -40,7 +40,7 @@ type opsGroup struct {
 }
 
 const (
-	thresholdNote = "config/strategy.yaml の値より、ここで保存した値が優先されます。"
+	thresholdNote = "設定ファイルの既定値より、ここで保存した値が優先されます。"
 	hotApplyNote  = "保存した値は再起動不要で、次の評価（次の候補更新）から反映されます。"
 )
 
@@ -103,7 +103,7 @@ var opsGroups = slices.Concat([]opsGroup{
 		name:        "Fast Screener",
 		description: "Fast Screener の絞り込みしきい値・上位件数・スコア重みです。",
 		note: thresholdNote + hotApplyNote +
-			"Policy Engine のスプレッド・板厚さの判定は、ここではなく strategy.yaml のスプレッド上限・直近 5 分売買代金の下限を使い、ここの値の影響を受けません。",
+			"Policy Engine のスプレッド・板厚さの判定は、ここではなく設定ファイルのスプレッド上限・直近 5 分売買代金の下限を使い、ここの値の影響を受けません。",
 		fields: []opsField{
 			{key: "screener.min_price", label: "最低株価（円）"},
 			{key: "screener.max_price", label: "最高株価（円）", hint: "最低株価以上にしてください。"},
@@ -124,7 +124,7 @@ var opsGroups = slices.Concat([]opsGroup{
 		id:          "snapshot-age",
 		name:        "データの鮮度（ランキング監視）",
 		description: "ランキング監視モード（既定）で、Jev Scout / Trader と Paper エントリーが最新の足をどこまで古くてよしとするかの上限（秒）です。これより古い足では判断に進まず、そのジョブは見送られます。",
-		note: "立会時間中のみ適用されます。全銘柄 REST モードでは、この値ではなく strategy.yaml の別の鮮度上限（設定キー: scan.full_scan_max_snapshot_age_seconds）が使われます。" +
+		note: "立会時間中のみ適用されます。全銘柄 REST モードでは、この値ではなく設定ファイルの別の鮮度上限が使われます。" +
 			"価格は kabu の PUSH を優先し、PUSH が古い・未着のときだけ REST に切り替えます。Jev に渡す state と判断ログには、判断時点でのデータの古さが含まれます。" +
 			"保存した値の反映にはアプリの再起動が必要です。環境変数では設定できません。",
 		fields: []opsField{
@@ -176,6 +176,20 @@ func policyGroup(id, name, prefix, direction string) opsGroup {
 			{key: prefix + "max_liquidity_stressed", label: "流動性ストレス上限", hint: "0 より大きく 1 以下です。"},
 		},
 	}
+}
+
+// FieldLabel is the name the Settings screen gives the operational setting
+// key, for the screens that mention a setting (the experiments of the MCP
+// card) without showing its key. A key no group lists is not printed.
+func FieldLabel(key string) string {
+	for _, group := range opsGroups {
+		for _, field := range group.fields {
+			if field.key == key {
+				return field.label
+			}
+		}
+	}
+	return "その他の設定"
 }
 
 func opsGroupByKey(key string) (opsGroup, bool) {

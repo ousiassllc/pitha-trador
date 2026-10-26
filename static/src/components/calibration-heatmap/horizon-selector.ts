@@ -35,7 +35,7 @@ export function renderHorizonSelector(
             ${renderHelpMark({
               id: 'help-calibration-horizon',
               label: '集計ホライズンの説明',
-              text: `${shown === 'all' ? '全体は 5・10・15 分の合算です（旧ホライズンのラベルは除外）。' : ''}実現PnL（trades / JPY）はホライズンに依存しません。`,
+              text: `${shown === 'all' ? '全体は 5・10・15 分の合算です（旧ホライズンのラベルは除外）。' : ''}実現損益（取引件数・円）はホライズンに依存しません。`,
             })}
           </p>`
         : ''
