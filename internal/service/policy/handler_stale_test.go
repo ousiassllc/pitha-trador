@@ -3,6 +3,7 @@ package policy_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -54,8 +55,15 @@ func TestHandler_HandleJob_SkipsStaleSnapshot(t *testing.T) {
 			inst := mustCreateInstrumentAndSnapshot(t, db, "7203", 10)
 
 			payload, _ := json.Marshal(jev.ScoutJobPayload{InstrumentID: inst.ID, Symbol: "7203"})
-			if err := handler.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payload)}); err != nil {
-				t.Fatalf("HandleJob = %v, want nil (skip is not a failure)", err)
+			// A stale bar is a terminal skip (the job ends succeeded with a
+			// "skipped:" note, issue #912), never a failure; a fresh one is nil.
+			err := handler.HandleJob(context.Background(), jobqueue.Job{PayloadJSON: string(payload)})
+			var skipped *jobqueue.SkippedError
+			switch {
+			case tc.wantStale && (!errors.As(err, &skipped) || skipped.Reason != policy.StaleSnapshotSkip):
+				t.Fatalf("HandleJob = %v, want a jobqueue.Skip(%q)", err, policy.StaleSnapshotSkip)
+			case !tc.wantStale && err != nil:
+				t.Fatalf("HandleJob = %v, want nil", err)
 			}
 
 			got, err := signals.ListByInstrument(context.Background(), inst.ID, 10)

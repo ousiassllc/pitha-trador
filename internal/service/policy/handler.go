@@ -23,6 +23,10 @@ type SignalExecutor interface {
 	ExecuteSignal(ctx context.Context, signal domain.TradeSignal, snap domain.Snapshot) error
 }
 
+// StaleSnapshotSkip is the note of a jev-trader job that evaluated nothing
+// because the instrument's latest market snapshot was stale (jobqueue.Skip).
+const StaleSnapshotSkip = "latest market snapshot is stale; nothing was evaluated"
+
 // Handler connects Jev Trader and Engine to the jev-trader queue
 // (jobqueue.JobQueueJevTrader): HandleJob loads the instrument's latest
 // market state, calls Jev Trader, then Engine, persisting a trade_signals
@@ -84,11 +88,13 @@ func (h *Handler) HandleJob(ctx context.Context, job jobqueue.Job) error {
 		return fmt.Errorf("policy: no market snapshot recorded yet for %q", payload.Symbol)
 	}
 	if snapshots[0].IsStale(h.now().UTC(), h.snapshotMaxAge) {
-		// Skip (nil): a retry would read the same bar, and a stale bar's price
-		// and session timing must not reach Jev Trader or Paper Entry
-		// (issue #685). No trade_signals row: nothing was evaluated.
+		// Skip (not a failure): a retry would read the same bar, and a stale bar's
+		// price and session timing must not reach Jev Trader or Paper Entry
+		// (issue #685). No trade_signals row: nothing was evaluated. The job ends
+		// succeeded with a "skipped:" note (jobqueue.Skip), so collection_status
+		// counts these per queue instead of them vanishing (issue #912).
 		slog.Info("policy: skip jev-trader, latest snapshot is stale", "symbol", payload.Symbol, "snapshot_at", snapshots[0].Timestamp)
-		return nil
+		return jobqueue.Skip(StaleSnapshotSkip)
 	}
 	snap := snapshots[0]
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 )
 
@@ -22,6 +23,9 @@ func TestPolicyRejectCode_NamesEveryCodeTheQueryReturns(t *testing.T) {
 	for _, sub := range []string{"no_active_model", "model_unusable", "no_candidate", "missing_feature", "invalid_config", "predict_failed", "ev_not_above_minimum", "never_heard_of"} {
 		codes = append(codes, query.RejectCode("meta_skip", sub))
 	}
+	for _, kind := range apierror.Codes {
+		codes = append(codes, query.RejectCode("api_error", kind))
+	}
 	codes = append(codes, query.RejectCode("", ""), query.RejectCode("some_new_head", ""))
 
 	for _, code := range codes {
@@ -36,6 +40,9 @@ func TestPolicyRejectCode_NamesEveryCodeTheQueryReturns(t *testing.T) {
 		"meta_skip:other":               "メタモデルが見送り（その他）",
 		"other":                         "その他の理由",
 		"unknown":                       "理由の記録なし",
+		"api_error":                     "API エラー",
+		"api_error:timeout":             "API エラー（時間切れ）",
+		"api_error:persist_failed":      "API エラー（判断を保存できない）",
 		"meta_skip:a_reason_not_listed": "メタモデルが見送り（その他）",
 	} {
 		if got := labels.PolicyRejectCode(code); got != want {

@@ -72,9 +72,17 @@ func run() error {
 		capital = paper.InitialCapital
 	}
 
+	// Without strategy.yaml entry_quality_whatif uses the build's default policy
+	// section (a nil baseline), the same as a missing risk.yaml above.
+	policy, err := policyThresholds()
+	if err != nil {
+		slog.Warn("paper-results-mcp: strategy.yaml unavailable; entry_quality_whatif uses the build's default policy thresholds")
+		policy = nil
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := paperresultsmcp.New(paperresultsmcp.Options{Settings: cfg, DBPath: dbPath, CapitalJPY: capital, PaperLimits: paper})
+	srv := paperresultsmcp.New(paperresultsmcp.Options{Settings: cfg, DBPath: dbPath, CapitalJPY: capital, PaperLimits: paper, PolicyThresholds: policy})
 	return srv.Serve(ctx)
 }
