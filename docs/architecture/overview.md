@@ -106,6 +106,7 @@ pitha-trador/
 │   ├── service/                  # domain, repositoryに依存
 │   │   ├── broker/               # ブローカー中立の境界（`Quote`/`SymbolInfo`/`SessionStatus`、`Session`/`QuoteSource`/`StreamFeed`/`SymbolInfoSource`/`CandidateSource`/`Health`/`Capabilities`、`MarketDataChecker`。`domain`のみに依存。issue #722）
 │   │   │   └── tachibana/        # 立花証券 e支店APIアダプタ（#724）。直下＝REQUEST I/Fクライアント（直列キュー・`p_no`/`p_sd_date`・Shift-JIS・IPv4固定・RSA-OAEPの仮想URL復号・`APIError`）、`session/`＝ログイン・毎朝の再認証・状態・通知、`market/`＝マスタ（朝1回の`SymbolInfo`）・全銘柄マスタ・時価スナップショット（#735）、`event/`＝EVENT I/F（WebSocket）受信・パーサ・`Latest`（EVENT優先＋REST補完。#737）、`adapter/`＝`broker.Broker`の実装（`bootstrap.newBroker`のみがimport）、`tachibanatest/`＝フェイク時計・フェイクe支店サーバ（テスト支援）
+│   │   ├── fx/gmo/               # GMOコイン 外国為替FXの読み取り専用レート取得アダプタ（#907。公開API `ticker`・`klines`、USD_JPY始め設定でペア追加、1分足・日足×BID/ASK、出来高なし。1秒1回の回数制限・待って再試行・上限で停止とログ。どこにも配線しない独立部品、§14）
 │   │   ├── marketdata/           # kabuステーションAPIクライアント（REST+PUSH WS。kabuアダプタの下回り）（boardflow/=板取得・PUSHのテスト・#658）
 │   │   │   ├── kabu/             # kabuアダプタ（`marketdata.Client`＋`pushfeed`を`broker.Broker`として包む。`Adapter`・`SessionStatusOf`・`Candidates`＝`/ranking`種別1〜7のインターリーブ。`bootstrap`の`newBroker`のみがimport）
 │   │   │   │   ├── pushfeed/     # 起動時の銘柄登録・PUSH購読とPUSH板キャッシュ（REST GetBoardへのフォールバック付き。`broker.StreamFeed`の実体）
@@ -313,6 +314,6 @@ handler → service → repository → domain
 
 | 節 | ファイル |
 |----|----------|
-| §5 ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ・機能比較） / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 | `docs/architecture/overview/integrations.md` |
+| §5 ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ・機能比較） / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 / §14 外国為替FXレート取得アダプタ（GMOコイン） | `docs/architecture/overview/integrations.md` |
 | §10 通信フロー（§10.1〜§10.7）/ §11 障害対応方針 | `docs/architecture/overview/flows.md` |
 | 改訂履歴（1.0〜。`overview.md`と`overview/`配下の全体の改訂を追記する） | `docs/architecture/overview/history.md` |

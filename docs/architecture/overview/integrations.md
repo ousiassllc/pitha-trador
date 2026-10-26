@@ -1,6 +1,6 @@
-# アーキテクチャ設計: 外部・内部連携（§5〜§9・§12〜§13）
+# アーキテクチャ設計: 外部・内部連携（§5〜§9・§12〜§14）
 
-`docs/architecture/overview.md` から分割した章。§5 ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ・機能比較） / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携。節番号は分割前と同一で、コードコメント等の `overview.md §<番号>` は本ファイルの同番号の節を指す。
+`docs/architecture/overview.md` から分割した章。§5 ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ・機能比較） / §6 Jev API連携 / §7 RAG連携 / §8 自己改善ループ / §9 Wails統合 / §12 System Activity Feed連携 / §13 Luna ニュース分類・News Ingest連携 / §14 外国為替FXレート取得アダプタ（GMOコイン）。節番号は分割前と同一で、コードコメント等の `overview.md §<番号>` は本ファイルの同番号の節を指す。
 
 ## 5. ブローカー連携（共通境界・kabuアダプタ・立花証券アダプタ）
 
@@ -273,3 +273,17 @@ sequenceDiagram
 - Lunaの既定（Jev）は`choice`質問2つ: `sentiment`（`bullish`/`bearish`/`neutral`）と`event_type`（`決算`/`業績修正`/`M&A`/`規制`/`その他`）。Jevは自由文を返さないため`summary`は見出し（コード側）とする
 - **フェイルセーフ（非公式サービス前提、issue #273）**: やのしんの停止・遅延・タイムアウトがFast Screener・Jev・発注フロー・起動に波及しない。(1) 取得のHTTPタイムアウトは5秒（汎用フィードは15秒）。(2) 取得失敗はニュースフラグを立てずその銘柄をスキップする（FR-LUNA-4）。(3) `newsfeed.GuardedFeed`が失敗後に問い合わせを止めるバックオフ（2分から倍々、上限30分。1回の取得で同時に失敗した複数銘柄は1回の失敗として数える。成功で解除）を掛け、連続失敗中は問い合わせ頻度を落とす。(4) 起動はやのしんの到達性に依存しない（ポーリングはバックグラウンドgoroutine）。(5) エラーはアプリのログ（slogの`ERROR`/`WARN`。Settings画面の「エラーログ」から出力できる、FR-ERRLOG-1）に出し、System Activity Feed（§12）にも`news_feed`イベント（`newsfeed.WithErrorObserver`→`activityfeed.ObserveNewsFeedError`。直近50件のインメモリのみで、新規テーブルは追加しない）として流す。バックオフ中のスキップはログ・イベントとも出さない（連続失敗の通知は`WARN`の1行）
 - Luna/News Ingest API失敗時はニュースフラグを立てず、Fast Screener/Jevの通常フローに影響を与えない（FR-LUNA-4、Jevと同様のフェイルセーフ）
+
+## 14. 外国為替FXレート取得アダプタ（GMOコイン、issue #907）
+
+FX の業者を GMOコイン 外国為替FX にした決定（#852）の最初の部品。公開API（認証なし）から現在値と足を読むだけの**読み取り専用の独立部品**（`internal/service/fx/gmo`）で、現時点ではどこにも配線していない。
+
+- **役割**: `GET https://forex-api.coin.z.com/public/v1/ticker`（全ペアの現在値）と`GET /v1/klines`（四本値）を呼び、型付きの`Ticker`（Bid・Ask・タイムスタンプ・`OPEN`/`CLOSE`）と`Candle`（始値・高値・安値・終値・開始時刻）に変換して返す。公式: <https://api.coin.z.com/fxdocs/>
+- **やらないこと（境界）**: 発注・APIキー・ログイン（Private API）は持たない。株・債券の取引、スキャン、Risk、Paperの約定、資金配分には組み込まない。DBスキーマ・設定キーの既定値・リスクの既定値は変えない（設定は`gmo.Config`として持ち、アプリの`config/*.yaml`には載せない）。取引・Risk・発注のコードはimportしない
+- **`broker.Quote`を使わない**: FXの公開APIは出来高も板も返さない。`internal/service/broker`の`Quote`（`Volume`・`BidDepth`等）は前提にせず、`Ticker`/`Candle`には出来高・板の項目そのものを置かない（`TestDoesNotDependOnBrokerQuoteOrVolume`が`broker`パッケージのimportと`Volume`/`Depth`項目の混入を検査する）
+- **ペア**: `Config.Symbols`で指定する（最初は`USD_JPY`だけ）。`USD_JPY`形式（大文字3字＋`_`＋3字）でなければ`New`が拒否し、設定外のペアを`Ticker`/`Klines`に渡すと呼び出し前に`ErrUnsupportedSymbol`を返す。`Tickers`は設定したペアを`Symbols`の順に、1回の呼び出しで返す
+- **足**: `1min`（1分足）と`1day`（日足）だけ。それ以外は呼び出し前に`ErrUnsupportedInterval`。`BID`と`ASK`は別々に取る（`KlinesRequest.PriceType`）。1分足の`date`は`YYYYMMDD`で、日本時間の朝6:00で日付が切り替わる（`KlinesRequest.At`の時刻から求め、その取引日の足がまとめて返る）。日足の`date`は`YYYY`（日本時間の年）で、その年の日足が返る
+- **回数制限**: 公開RESTの上限は公式に書かれていないため、アプリ側で**1秒に1回まで**（`Config.MinInterval`の既定・下限とも1秒）に抑える。`Client`を共有する全goroutineで1つの制限を共有し（同時呼び出しも順番待ち）、再試行の呼び出しも同じ制限に従う。時計は`Clock`インターフェースで差し替えられ、テストは仮想時計で待たずに検証する
+- **失敗時**: 通信エラー・HTTP 429/5xx・APIのレート上限（`ERR-5003`）・メンテナンス（`ERR-5201`/`ERR-5202`、`status: 5`）は待って再試行する（待ち時間は1秒から倍々、上限30秒。`Config.InitialBackoff`/`MaxBackoff`）。`Config.MaxAttempts`（既定5）回続けて失敗したら止まり、ERRORログ`gmo: giving up after repeated failures`を出して`ErrRetriesExhausted`（最後の失敗を包む）を返す。それ以外の4xx・不正なパラメータ（`ERR-5106`/`ERR-5207`）・応答の形が不正・価格が正でない場合は再試行せず即座に返す（`*APIError`・`ErrInvalidResponse`）。呼び出し元のcontextが終われば直ちに止まる
+- **テスト**: 録画形式のfixture（`internal/service/fx/gmo/testdata/`。公式ドキュメントの応答形式に沿って作った、ticker・1分足・日足・BID/ASK・エラー応答）と`httptest`のサーバーだけを使い、実際のAPIは呼ばない（CIからも呼ばない）
+- **GMOコインの規約上の注意**（#852）: 約款21条3項で**商業利用・再配信が禁止**されている。他の人にアプリを配る場合に、レートを画面に出すことが再配信に当たるかは未確認（GMOコインへの問い合わせが必要）。この部品の取得結果を画面・外部へ出す配線を作る前に確かめること。また**1分足は2023-10-28以降のみ**取得でき、それより前の日付は`ErrUnsupportedDate`で拒否する
