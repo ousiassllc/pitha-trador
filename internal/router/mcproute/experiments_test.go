@@ -172,3 +172,27 @@ func TestExperimentRoutesNeedTheGate(t *testing.T) {
 		t.Errorf("POST /settings/mcp/experiments without a gate = %d, want 404", rec.Code)
 	}
 }
+
+// The screen never shows a setting's key, so the form takes the setting by the
+// name the Settings screen gives it (offered as the candidates of the name
+// field) and stores its key; the key itself is still accepted (issue #904).
+func TestExperimentFormTakesASettingByItsScreenName(t *testing.T) {
+	a, db := newExperimentsApp(t)
+	body := a.get("/settings/mcp/experiments").Body.String()
+	for _, want := range []string{`list="mcp-experiment-setting-names"`, `<option value="1日の最大取引回数">`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the form lacks %s", want)
+		}
+	}
+	if strings.Contains(body, "risk.max_daily_trades") {
+		t.Errorf("the form shows a setting key")
+	}
+	rec := a.post("/settings/mcp/experiments", experimentForm(url.Values{"name": {"1日の最大取引回数"}, "before": {"5"}, "after": {"3"}}), true)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "実験を記録しました") {
+		t.Fatalf("create by the screen name = %d: %s", rec.Code, rec.Body.String())
+	}
+	var name string
+	if err := db.QueryRow(`SELECT variable_name FROM tuning_experiments`).Scan(&name); err != nil || name != "risk.max_daily_trades" {
+		t.Fatalf("stored name = %q (%v), want the key risk.max_daily_trades", name, err)
+	}
+}

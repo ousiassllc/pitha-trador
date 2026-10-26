@@ -25,10 +25,13 @@ type ExperimentRow struct {
 
 // ExperimentsProps is Experiments' input. MinTradesNote says which minimum
 // number of trades judges an experiment; MinTradesHelp is the rest of it.
+// SettingNames are the names of the settings an experiment may vary, as the
+// Settings screen names them.
 type ExperimentsProps struct {
 	Notice        string
 	MinTradesNote string
 	MinTradesHelp string
+	SettingNames  []string
 	Rows          []ExperimentRow
 }
 
@@ -96,7 +99,7 @@ templ Experiments(props ExperimentsProps) {
 		if props.Notice != "" {
 			<p class="text-emerald-700" role="status" data-testid="mcp-experiments-notice">{ props.Notice }</p>
 		}
-		@experimentForm()
+		@experimentForm(props.SettingNames)
 		if len(props.Rows) == 0 {
 			<span class="text-xs text-slate-500" data-testid="mcp-experiments-empty">実験はありません。</span>
 		} else {
@@ -144,13 +147,14 @@ templ closeButton(id int64, status, label, testID string) {
 
 // experimentForm records one experiment: a hypothesis and ONE variable (kind,
 // name, before, after). A request with two variables cannot be made here and
-// the server refuses it too.
-templ experimentForm() {
+// the server refuses it too. settingNames are the names the Settings screen
+// gives the settings the MCP may change, offered for the name of a setting.
+templ experimentForm(settingNames []string) {
 	<form class="flex flex-col gap-2" hx-post="/settings/mcp/experiments" hx-target="#mcp-experiments" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-experiment-form">
 		<span class="flex items-center gap-2 font-medium text-slate-700">
 			実験を記録する
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-form", Label: "実験の記録の説明"}) {
-				変える変数は 1 つだけです。名前には、設定ならその設定の項目名（MCP から変更できる項目だけ）、Jev のモデル・プロンプトの版ならその呼び名を入れます。仮説は 500 文字以内、名前と値は 200 文字以内です。開始時刻（JST）を空欄にすると今になります。
+				変える変数は 1 つだけです。名前には、設定なら設定画面での項目名（候補から選べます。MCP から変更できる項目だけ）、Jev のモデル・プロンプトの版ならその呼び名を入れます。仮説は 500 文字以内、名前と値は 200 文字以内です。開始時刻（JST）を空欄にすると今になります。
 			}
 		</span>
 		<label class="flex flex-col gap-1">
@@ -168,7 +172,12 @@ templ experimentForm() {
 			</label>
 			<label class="flex flex-col gap-1">
 				<span>名前</span>
-				@atoms.Input(atoms.InputProps{Name: "name", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-name"}})
+				@atoms.Input(atoms.InputProps{Name: "name", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "list": "mcp-experiment-setting-names", "data-testid": "mcp-experiment-name"}})
+				<datalist id="mcp-experiment-setting-names">
+					for _, name := range settingNames {
+						<option value={ name }></option>
+					}
+				</datalist>
 			</label>
 		</div>
 		<div class="flex flex-wrap gap-2">
