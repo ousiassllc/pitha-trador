@@ -124,19 +124,29 @@ func TestLimiterCancelledSleepDoesNotConsumeTheSlot(t *testing.T) {
 	}
 }
 
-func TestLimiterWaitWithCancelledContextAlwaysFailsEvenWhenSlotIsFree(t *testing.T) {
-	l := newLimiter(newFakeClock(), time.Second)
+// wait must fail on a cancelled ctx even though the slot is free, without
+// taking the slot, sleeping or counting as a call. Note: this single-call
+// check is deterministic but cannot by itself catch the pre-fix bug (a
+// select with both cases ready picks one at random, so the old code failed
+// only some of the time); the other cancellation tests cover the blocked-slot
+// path.
+func TestLimiterWaitWithCancelledContextFailsWithoutSideEffects(t *testing.T) {
+	clk := newFakeClock()
+	l := newLimiter(clk, time.Second)
+	start := clk.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// With the slot free both select cases would be ready; the result must
-	// not be random.
-	for range 100 {
-		if err := l.wait(ctx); !errors.Is(err, context.Canceled) {
-			t.Fatalf("wait = %v, want context.Canceled", err)
-		}
+	if err := l.wait(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("wait = %v, want context.Canceled", err)
+	}
+	if len(l.sem) != 0 {
+		t.Fatal("a cancelled wait must not take the slot")
 	}
 	if !l.last.IsZero() {
 		t.Fatal("a cancelled wait must not count as a call")
+	}
+	if s := clk.recordedSleeps(); len(s) != 0 || !clk.Now().Equal(start) {
+		t.Fatalf("sleeps = %v, clock moved to %s; want neither", s, clk.Now())
 	}
 }

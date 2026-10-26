@@ -67,10 +67,15 @@ func (c Config) validate() error {
 	if len(c.Symbols) == 0 {
 		return errors.New("gmo: Config.Symbols is empty")
 	}
+	seen := make(map[string]bool, len(c.Symbols))
 	for _, s := range c.Symbols {
 		if !symbolPattern.MatchString(s) {
 			return fmt.Errorf("gmo: invalid symbol %q (want e.g. USD_JPY)", s)
 		}
+		if seen[s] {
+			return fmt.Errorf("gmo: duplicate symbol %q in Config.Symbols", s)
+		}
+		seen[s] = true
 	}
 	if c.MinInterval < MinCallInterval {
 		return fmt.Errorf("gmo: Config.MinInterval %s is below the %s minimum", c.MinInterval, MinCallInterval)

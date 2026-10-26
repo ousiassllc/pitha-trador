@@ -63,6 +63,9 @@ func decodeTickers(data json.RawMessage, want []string) (map[string]Ticker, erro
 		if json.Unmarshal(raw, &head) != nil || !slices.Contains(want, head.Symbol) {
 			continue
 		}
+		if _, dup := out[head.Symbol]; dup {
+			return nil, invalid("ticker has more than one row for %s", head.Symbol)
+		}
 		t, err := decodeTicker(raw)
 		if err != nil {
 			return nil, err

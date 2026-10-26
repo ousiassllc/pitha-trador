@@ -155,3 +155,26 @@ func TestTickersConfiguredPairMissingOrInvalidStillErrors(t *testing.T) {
 		})
 	}
 }
+
+// Two rows for one configured pair are ambiguous: reject instead of silently
+// keeping the last. Repeats and junk among unconfigured pairs stay ignored.
+func TestTickerDuplicateRowForConfiguredPairIsInvalid(t *testing.T) {
+	const usd = `{"symbol":"USD_JPY","ask":"149.812","bid":"149.808","timestamp":"2023-10-30T21:02:11Z","status":"OPEN"}`
+	const usd2 = `{"symbol":"USD_JPY","ask":"150.012","bid":"150.008","timestamp":"2023-10-30T21:02:12Z","status":"OPEN"}`
+	const junkEUR = `{"symbol":"EUR_JPY","ask":"0","bid":"0","timestamp":"x","status":"HALT"}`
+	clk := newFakeClock()
+	srv := newFakeServer(t, clk, step{body: `{"status":0,"data":[` + usd + `,` + usd2 + `]}`})
+	c, _ := testClient(t, srv, clk, Config{})
+
+	_, err := c.Ticker(context.Background(), "USD_JPY")
+	if !errors.Is(err, ErrInvalidResponse) || errors.Is(err, ErrRetriesExhausted) || len(srv.requests()) != 1 {
+		t.Fatalf("err = %v, calls = %d; want non-retried ErrInvalidResponse", err, len(srv.requests()))
+	}
+
+	srv = newFakeServer(t, clk, step{body: `{"status":0,"data":[` + junkEUR + `,` + usd + `,` + junkEUR + `]}`})
+	c, _ = testClient(t, srv, clk, Config{})
+	got, err := c.Ticker(context.Background(), "USD_JPY")
+	if err != nil || got.Bid != 149.808 {
+		t.Fatalf("Ticker = %+v, %v; repeated unconfigured rows must be ignored", got, err)
+	}
+}

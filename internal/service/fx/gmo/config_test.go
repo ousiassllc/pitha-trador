@@ -32,6 +32,7 @@ func TestNewValidatesConfig(t *testing.T) {
 		wantErr string
 	}{
 		{"no symbols", Config{}, "Symbols is empty"},
+		{"duplicate symbol", Config{Symbols: []string{"USD_JPY", "EUR_JPY", "USD_JPY"}}, "duplicate symbol"},
 		{"lowercase symbol", Config{Symbols: []string{"usd_jpy"}}, "invalid symbol"},
 		{"no underscore", Config{Symbols: []string{"USDJPY"}}, "invalid symbol"},
 		{"interval below 1s", Config{Symbols: []string{"USD_JPY"}, MinInterval: 500 * time.Millisecond}, "below the 1s minimum"},
