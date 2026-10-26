@@ -73,6 +73,8 @@ func forbiddenNames() map[string]string {
 	add("setting key", "initial_capital", "max_daily_loss_pct", "scan.full_scan_enabled", "scan.full_scan_max_snapshot_age_seconds")
 	add("MCP tool", paperresultsmcp.ToolNames()...)
 	add("config file", "strategy.yaml", "risk.yaml")
+	// English headings the screens used to carry (#904 item 2) and the old names of the scan funnel (item 5)
+	add("English heading", "Allowed Position", "Toxic Flow", "Liquidity Stress", "Take Profit", "Total PnL", "Daily PnL", "Win Rate", "Profit Factor", "Avg return", "Samples", "Accuracy", "Fast Screener通過", "特徴量算出")
 	add("database name", "model_id", "request_cost", "policy_version", "exit_reason", "reject_reason", "metalabel_models")
 	return out
 }
@@ -147,6 +149,13 @@ func TestScreens_ShowNoInternalCodes(t *testing.T) {
 			continue
 		}
 		text := screenText(rec.Body.String())
+		// the notation rules (issue #904 item 4): a record's number is "N 番", never "#N";
+		// the proposer is the AI, not a person's name
+		for _, banned := range []*regexp.Regexp{regexp.MustCompile(`#\d`), regexp.MustCompile(`あいり`)} {
+			if loc := banned.FindStringIndex(text); loc != nil {
+				t.Errorf("GET %s breaks the notation rules (%s): …%s…", target, banned, snippet(text, loc[0], loc[1]-loc[0]))
+			}
+		}
 		for _, name := range names {
 			if i := strings.Index(text, name); i >= 0 {
 				t.Errorf("GET %s prints the %s %q: …%s…", target, forbidden[name], name, snippet(text, i, len(name)))
@@ -188,5 +197,42 @@ func TestScreens_KeepCodeValuesInTheMarkup(t *testing.T) {
 		if got := body(target); !strings.Contains(got, want) {
 			t.Errorf("GET %s lost %s: %.300s", target, want, got)
 		}
+	}
+}
+
+// Naming the codes drops no warning, stopped reason or confirmation: the
+// sentences an operator must read stay on the screens (issue #904). The
+// confirmations are hx-confirm attributes, which screenText includes.
+func TestScreens_KeepWarningsStopReasonsAndConfirmations(t *testing.T) {
+	engine := newSeededEngine(t)
+	text := func(target string) string {
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		return screenText(rec.Body.String())
+	}
+	for target, wants := range map[string][]string{
+		"/setup":             {"を削除しますか"},                                  // a secret's delete confirmation
+		"/settings/results":  {"Jev モデルの学習データの終わりが仮置き", "夜間再学習のモデルは採用されず"}, // the LLM cutoff warning (shared with the API, unchanged)
+		"/home/attention":    {"Kill Switch"},                              // what needs attention
+		"/settings/risk":     {"整合チェック"},                                   // the daily guard's consistency warnings
+		"/home/trade-status": {"新規エントリー"},                                  // whether entries are allowed
+	} {
+		got := text(target)
+		for _, want := range wants {
+			if !strings.Contains(got, want) {
+				t.Errorf("GET %s lost %q", target, want)
+			}
+		}
+	}
+	// why a proposal was refused stays on its detail page (the Kill Switch's own
+	// confirmation is a Lit component: its bun test keeps it)
+	refused := false
+	for i := 1; i <= 24; i++ {
+		if got := text("/order-proposals/" + itoa(i)); strings.Contains(got, "リスク判定") && strings.Contains(got, "拒否") {
+			refused = true
+		}
+	}
+	if !refused {
+		t.Error("no proposal detail page says why the proposal was refused")
 	}
 }

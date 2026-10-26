@@ -107,6 +107,10 @@ func seedEveryCode(t *testing.T, db *sql.DB) {
 			applied_quantity, computed_max_loss_jpy, effective_stop_loss_price)
 			VALUES (?, 'h', ?, 'client', '7203', ?, ?, 100, 'MARKET', 2450, '2650円で利確', 5000, 'テスト', '[]', ?, ?, ?, ?, ?, 100, 4800, 2450)`,
 			fmt.Sprintf("key-%d", i), stamp(3*time.Hour), bucket, action, stamp(-time.Hour), status, reason, instrument, stamp(time.Hour))
+		// the trade signal the proposal was judged as, rejected by the Risk Engine with the code
+		signal := mustExec(t, db, `INSERT INTO trade_signals (instrument_id, symbol, timestamp, direction, policy_version, risk_passed, reject_reason)
+			VALUES (?, '7203', ?, 'LONG', 'mcp-proposal-v1', 0, ?)`, instrument, stamp(2*time.Hour), reason)
+		mustExec(t, db, `UPDATE order_proposals SET trade_signal_id = ? WHERE id = ?`, signal, id)
 		mustExec(t, db, `INSERT INTO order_proposal_events (proposal_id, at, from_status, to_status, reason_code, actor, detail_json) VALUES (?, ?, NULL, 'received', '', 'mcp', '')`, id, stamp(3*time.Hour))
 		mustExec(t, db, `INSERT INTO order_proposal_events (proposal_id, at, from_status, to_status, reason_code, actor, detail_json) VALUES (?, ?, 'received', ?, ?, ?, ?)`,
 			id, stamp(2*time.Hour), status, reason, []string{"app", "gui"}[i%2], `{"requested_quantity":300,"applied_quantity":100,"limited_by":"position_size","mystery":1}`)
