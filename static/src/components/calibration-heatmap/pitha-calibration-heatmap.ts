@@ -234,7 +234,7 @@ export class PithaCalibrationHeatmap extends LitElement {
                       <span class="avg-return">${b.avg_future_return_pct.toFixed(2)}%</span>
                       <span class="avg-confidence">確信度 ${b.avg_confidence.toFixed(2)}</span>
                     `
-                    : html`<span class="no-data">データなし</span>`
+                    : html`<span class="no-data">データはありません</span>`
                 }
                 <span class="bucket-pnl">
                   取引 ${b.trade_count} 件 / ${formatYen(b.total_pnl)}（${b.avg_pnl_pct.toFixed(2)}%）${
@@ -249,7 +249,7 @@ export class PithaCalibrationHeatmap extends LitElement {
         ${renderDirectionTable(this.byDirection)}
         ${
           this.brierScore !== null && !this.hasSamples
-            ? html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-no-samples">サンプルなし（ラベル付き判断がありません）</p>`
+            ? html`<p class="pitha-calibration-heatmap-no-samples" data-testid="calibration-no-samples">サンプルはありません（ラベル付き判断がありません）</p>`
             : ''
         }
         ${renderBarrierSummary(this.barrier)}

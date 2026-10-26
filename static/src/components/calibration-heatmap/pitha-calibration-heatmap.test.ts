@@ -106,7 +106,7 @@ describe('pitha-calibration-heatmap', () => {
     expect(rows?.[1]?.textContent).toContain('-0.30%');
   });
 
-  test('renders a band without samples as neutral "データなし" instead of a 0% red cell', async () => {
+  test('renders a band without samples as neutral "データはありません" instead of a 0% red cell', async () => {
     const empty = bucket({
       range: '0.50-0.60',
       sample_count: 0,
@@ -126,13 +126,13 @@ describe('pitha-calibration-heatmap', () => {
     const [emptyCell, filledCell] = cells;
     expect(emptyCell?.style.backgroundColor).toBe(NO_DATA_COLOR);
     expect(emptyCell?.style.backgroundColor).not.toBe(heatmapColors(0).background);
-    expect(emptyCell?.textContent).toContain('データなし');
+    expect(emptyCell?.textContent).toContain('データはありません');
     expect(emptyCell?.textContent).toContain('0 件');
     expect(emptyCell?.textContent).not.toContain('0.0%');
     expect(emptyCell?.textContent).not.toContain('conf');
     expect(filledCell?.textContent).toContain('7 件');
     expect(filledCell?.textContent).toContain('63.0%');
-    expect(filledCell?.textContent).not.toContain('データなし');
+    expect(filledCell?.textContent).not.toContain('データはありません');
   });
 
   test('hides Brier/LogLoss/ECE and says "サンプルなし" when there are no labeled samples', async () => {

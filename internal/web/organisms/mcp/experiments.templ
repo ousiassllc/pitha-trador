@@ -98,7 +98,7 @@ templ Experiments(props ExperimentsProps) {
 		}
 		@experimentForm()
 		if len(props.Rows) == 0 {
-			<span class="text-xs text-slate-500" data-testid="mcp-experiments-empty">まだ実験はありません。</span>
+			<span class="text-xs text-slate-500" data-testid="mcp-experiments-empty">実験はありません。</span>
 		} else {
 			<table class="w-full text-left text-xs" aria-label="調整の実験の一覧" data-testid="mcp-experiments-table">
 				<thead>

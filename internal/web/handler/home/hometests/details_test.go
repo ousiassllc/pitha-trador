@@ -91,7 +91,7 @@ func TestRejectReasons_EntryQualityOnTopButSettingUnreadable(t *testing.T) {
 
 func TestRejectReasons_NoSignalsYet(t *testing.T) {
 	f := newFixture()
-	if got := inner(t, f.mustGet(t, "/home/details"), "reject-empty"); got != "今日はまだ見送りの記録がありません。" {
+	if got := inner(t, f.mustGet(t, "/home/details"), "reject-empty"); got != "今日の見送りの記録はありません。" {
 		t.Errorf("empty = %q", got)
 	}
 }
@@ -120,7 +120,7 @@ func TestScan_FunnelAndEmptyState(t *testing.T) {
 
 func TestProposals_TodaysCountsAndNewest(t *testing.T) {
 	f := newFixture()
-	if got := inner(t, f.mustGet(t, "/home/details"), "proposals-none"); got != "今日受け付けた提案はありません。" {
+	if got := inner(t, f.mustGet(t, "/home/details"), "proposals-none"); got != "今日受け付けた注文提案はありません。" {
 		t.Errorf("empty = %q", got)
 	}
 	f.source.proposals = home.Proposals{
@@ -145,7 +145,7 @@ func TestProposals_TodaysCountsAndNewest(t *testing.T) {
 
 func TestTrades_NewestClosedWithPnLColour(t *testing.T) {
 	f := newFixture()
-	if got := inner(t, f.mustGet(t, "/home/details"), "trades-none"); got != "決済した取引はまだありません。" {
+	if got := inner(t, f.mustGet(t, "/home/details"), "trades-none"); got != "決済した取引はありません。" {
 		t.Errorf("empty = %q", got)
 	}
 	f.source.trades = []home.Trade{
@@ -185,7 +185,7 @@ func TestModel_AdoptedNotAdoptedAndSkippedRetraining(t *testing.T) {
 
 func TestKillEvents_LatestThree(t *testing.T) {
 	f := newFixture()
-	if got := inner(t, f.mustGet(t, "/home/details"), "kill-none"); got != "最近の Kill Switch はありません。" {
+	if got := inner(t, f.mustGet(t, "/home/details"), "kill-none"); got != "最近の Kill Switch の履歴はありません。" {
 		t.Errorf("empty = %q", got)
 	}
 	for i := range 5 {
