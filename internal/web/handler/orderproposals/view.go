@@ -9,6 +9,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/proposal"
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
 )
 
@@ -22,7 +23,7 @@ func rows(items []proposal.Item) []pages.ProposalRow {
 	for i, it := range items {
 		out[i] = pages.ProposalRow{
 			ID: it.ProposalID, ReceivedAt: jst(it.ReceivedAt), Symbol: it.Symbol, Bucket: it.Bucket, Action: it.Action,
-			Status: it.Status, StatusReason: it.StatusReason,
+			Status: it.Status, StatusReason: reasonName(it.StatusReason),
 			Quantity: quantities(it.Quantity, it.BudgetJPY, it.AppliedQuantity),
 			MaxLoss:  optYen(it.MaxLossJPY), EstimatedLoss: optYen(it.ComputedMaxLossJPY),
 			RealizedPnl: optYen(it.RealizedPnlJPY), PnlSign: sign(it.RealizedPnlJPY),
@@ -34,7 +35,7 @@ func rows(items []proposal.Item) []pages.ProposalRow {
 func detail(s proposal.State) pages.ProposalDetailProps {
 	p := pages.ProposalDetailProps{
 		ID: s.ProposalID, Symbol: s.Symbol, Bucket: s.Bucket, Action: s.Action, OrderType: named(orderTypeNames, s.OrderType),
-		Status: s.Status, StatusReason: s.StatusReason, Rationale: s.Rationale, ExitPlan: deref(s.ExitPlan),
+		Status: s.Status, StatusReason: reasonName(s.StatusReason), Rationale: s.Rationale, ExitPlan: deref(s.ExitPlan),
 	}
 	p.Summary = []pages.ProposalField{
 		{Label: "受付（JST）", Value: jst(s.ReceivedAt)},
@@ -55,7 +56,7 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 		{Label: "決済の約定は利確に届いたか", Value: reached(r.TakeProfitReached)},
 	}
 	p.Loss = []pages.ProposalField{
-		{Label: "あいりの見込み", Value: optYen(r.MaxLoss.ProposedJPY), Help: "案の最大損失です。"},
+		{Label: "AIの見込み", Value: optYen(r.MaxLoss.ProposedJPY), Help: "AIが提案で見込んだ最大損失です。"},
 		{Label: "アプリの見積り", Value: optYen(r.MaxLoss.EstimatedJPY), Help: "数量 ×（約定見込み価格 − 損切り価格）で見積もった最大損失です。"},
 		{Label: "実際の損失", Value: optYen(r.MaxLoss.ActualLossJPY), Help: "決済済みのポジションの実現損失です。利益なら 0 です。"},
 	}
@@ -66,7 +67,7 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 	}
 	for _, e := range s.Events {
 		p.Events = append(p.Events, pages.ProposalEvent{
-			At: jst(e.At), From: statusName(deref(e.FromStatus)), To: statusName(e.ToStatus), Reason: e.ReasonCode, Actor: e.Actor, Detail: detailText(e.Detail),
+			At: jst(e.At), From: statusName(deref(e.FromStatus)), To: statusName(e.ToStatus), Reason: reasonName(e.ReasonCode), Actor: labels.Actor(e.Actor), Detail: labels.EventDetail(e.Detail),
 		})
 	}
 	p.Linked = linked(r, s.Status)
@@ -78,21 +79,21 @@ func detail(s proposal.State) pages.ProposalDetailProps {
 func linked(r proposal.Result, status string) []pages.ProposalLinked {
 	var out []pages.ProposalLinked
 	if sg := r.Signal; sg != nil {
-		risk := pages.ProposalField{Label: "Risk check", Value: passed(sg.RiskPassed)}
-		reject := pages.ProposalField{Label: "拒否コード", Value: deref(sg.RejectCode)}
+		risk := pages.ProposalField{Label: "リスク判定", Value: passed(sg.RiskPassed)}
+		reject := pages.ProposalField{Label: "拒否の理由", Value: reasonName(deref(sg.RejectCode))}
 		if sg.RejectedAfterRisk { // passed Risk, refused by the application afterwards
-			risk.Value, reject.Label = laterRejection, "理由コード"
+			risk.Value, reject.Label = laterRejection, "理由"
 		} else if end, ok := afterRiskEnd[status]; ok && !sg.RiskPassed { // passed Risk, no order came of it for another reason
-			risk.Value, reject.Label = "Risk通過・"+end, "理由コード"
+			risk.Value, reject.Label = "リスク判定は通過・"+end, "理由"
 		}
-		out = append(out, pages.ProposalLinked{Title: "トレードシグナル #" + strconv.FormatInt(sg.ID, 10), Fields: []pages.ProposalField{
+		out = append(out, pages.ProposalLinked{Title: labels.Numbered("トレードシグナル", sg.ID), Fields: []pages.ProposalField{
 			{Label: "時刻（JST）", Value: jst(sg.At)},
-			{Label: "ポリシーのバージョン", Value: sg.PolicyVersion, Help: "このシグナルを出した時点のポリシーのバージョン（policy_version）です。"},
+			{Label: "ポリシーのバージョン", Value: sg.PolicyVersion, Help: "このシグナルを出した時点のポリシーのバージョンです。"},
 			risk, reject,
 		}})
 	}
 	if o := r.Order; o != nil {
-		out = append(out, pages.ProposalLinked{Title: "注文 #" + strconv.FormatInt(o.ID, 10), Fields: []pages.ProposalField{
+		out = append(out, pages.ProposalLinked{Title: labels.Numbered("注文", o.ID), Fields: []pages.ProposalField{
 			{Label: "売買 / 種別", Value: named(sideNames, o.Side) + " / " + named(orderTypeNames, o.OrderType)},
 			{Label: "状態", Value: named(orderStatusNames, o.Status)},
 			{Label: "数量", Value: shares(o.Quantity)},
@@ -107,14 +108,14 @@ func linked(r proposal.Result, status string) []pages.ProposalLinked {
 		if pos.Status == "closed" {
 			status = "決済済み"
 		}
-		out = append(out, pages.ProposalLinked{Title: "ポジション #" + strconv.FormatInt(pos.ID, 10), Fields: []pages.ProposalField{
+		out = append(out, pages.ProposalLinked{Title: labels.Numbered("ポジション", pos.ID), Fields: []pages.ProposalField{
 			{Label: "状態", Value: status},
 			{Label: "数量", Value: shares(pos.Quantity)},
 			{Label: "建値", Value: yen(pos.EntryPrice)},
 			{Label: "建玉（JST）", Value: jst(pos.OpenedAt)},
 			{Label: "決済（JST）", Value: optJST(pos.ClosedAt)},
 			{Label: "決済価格", Value: optYen(pos.ExitPrice)},
-			{Label: "決済理由", Value: deref(pos.ExitReason)},
+			{Label: "決済理由", Value: exitReasonName(pos.ExitReason)},
 			{Label: "保有時間", Value: minutes(pos.HoldingMinutes)},
 			{Label: "手数料", Value: optYen(pos.FeesJPY), Help: "買いと売りの合計です。"},
 			{Label: "実現損益", Value: optYen(pos.RealizedPnl), Sign: sign(pos.RealizedPnl)},
@@ -142,12 +143,12 @@ var (
 	orderStatusNames = map[string]string{"PENDING": "発注中", "FILLED": "約定", "CANCELLED": "取消", "REJECTED": "拒否"}
 )
 
-// named is the name of a code (case-insensitive), the code itself when unknown.
+// named is the name of a code (case-insensitive), labels.Other when unknown.
 func named(names map[string]string, code string) string {
 	if n, ok := names[strings.ToUpper(code)]; ok {
 		return n
 	}
-	return code
+	return labels.Other
 }
 
 // statusName is the name of a proposal status code, "" for none.
@@ -240,7 +241,7 @@ func reached(b *bool) string {
 
 // laterRejection is the signal's Risk check when the proposal passed
 // the Risk Engine and the application refused it afterwards.
-const laterRejection = "Risk通過・後段で拒否"
+const laterRejection = "リスク判定は通過・後段で拒否"
 
 // afterRiskEnd is how a proposal that passed Risk but did not become an order
 // is shown when it did not end as a later rejection: by what became of it.
@@ -263,11 +264,18 @@ func minutes(m *int64) string {
 	return strconv.FormatInt(*m/60, 10) + " 時間 " + strconv.FormatInt(*m%60, 10) + " 分"
 }
 
-// detailText is an event's detail object as the compact JSON text; null (no
-// detail) is empty.
-func detailText(raw []byte) string {
-	if s := string(raw); s != "null" {
-		return s
+// reasonName is the name of a reason code; "" (no reason) stays "".
+func reasonName(code string) string {
+	if code == "" {
+		return ""
 	}
-	return ""
+	return labels.ProposalReason(code)
+}
+
+// exitReasonName is the name of a position's exit reason; nil (still open) is "".
+func exitReasonName(code *string) string {
+	if code == nil || *code == "" {
+		return ""
+	}
+	return labels.ExitReason(*code)
 }

@@ -226,19 +226,19 @@ export class PithaCalibrationHeatmap extends LitElement {
                 data-testid="calibration-heatmap-cell"
               >
                 <span class="range">${b.range}</span>
-                <span class="sample-count">n=${b.sample_count}</span>
+                <span class="sample-count">${b.sample_count} 件</span>
                 ${
                   b.sample_count > 0
                     ? html`
                       <span class="accuracy">${(b.direction_accuracy * 100).toFixed(1)}%</span>
                       <span class="avg-return">${b.avg_future_return_pct.toFixed(2)}%</span>
-                      <span class="avg-confidence">conf ${b.avg_confidence.toFixed(2)}</span>
+                      <span class="avg-confidence">確信度 ${b.avg_confidence.toFixed(2)}</span>
                     `
                     : html`<span class="no-data">データなし</span>`
                 }
                 <span class="bucket-pnl">
-                  ${b.trade_count} trades / ${formatYen(b.total_pnl)} (${b.avg_pnl_pct.toFixed(2)}%)${
-                    b.trade_count > 0 ? html` / win ${(b.trade_win_rate * 100).toFixed(1)}%` : ''
+                  取引 ${b.trade_count} 件 / ${formatYen(b.total_pnl)}（${b.avg_pnl_pct.toFixed(2)}%）${
+                    b.trade_count > 0 ? html` / 勝率 ${(b.trade_win_rate * 100).toFixed(1)}%` : ''
                   }
                 </span>
                 ${renderBucketBarrier(b.triple_barrier)}
@@ -261,28 +261,28 @@ export class PithaCalibrationHeatmap extends LitElement {
             ? html`
               <dl class="pitha-calibration-heatmap-summary">
                 <dt>
-                  Brier Score
+                  ブライアスコア
                   ${renderHelpMark({
                     id: 'help-calibration-brier',
-                    label: 'Brier Score の説明',
+                    label: 'ブライアスコアの説明',
                     text: '予測した確率と結果（方向が当たったか）のずれを表すスコアです。小さいほど良い値です。',
                   })}
                 </dt>
                 <dd>${this.brierScore.toFixed(3)}</dd>
                 <dt>
-                  Log Loss
+                  対数損失
                   ${renderHelpMark({
                     id: 'help-calibration-log-loss',
-                    label: 'Log Loss の説明',
+                    label: '対数損失の説明',
                     text: '予測した確率と結果のずれを、外れた自信の強さに厳しく表すスコアです。小さいほど良い値です。',
                   })}
                 </dt>
                 <dd>${this.logLoss?.toFixed(3)}</dd>
                 <dt>
-                  Expected Calibration Error
+                  期待較正誤差
                   ${renderHelpMark({
                     id: 'help-calibration-ece',
-                    label: 'Expected Calibration Error の説明',
+                    label: '期待較正誤差の説明',
                     text: '予測した確信度と実際の的中率の差を、確信度の帯ごとに平均した値です。小さいほど、確信度どおりに当たっています。',
                   })}
                 </dt>
@@ -291,20 +291,20 @@ export class PithaCalibrationHeatmap extends LitElement {
                   this.tradeCount > 0
                     ? html`
                       <dt>
-                        PnL Brier Score (n=${this.tradeCount})
+                        損益ブライアスコア（${this.tradeCount} 件）
                         ${renderHelpMark({
                           id: 'help-calibration-pnl-brier',
-                          label: 'PnL Brier Score の説明',
-                          text: '実際に取引した判断だけを対象に、損益がプラスだったかで測った Brier Score です。',
+                          label: '損益ブライアスコアの説明',
+                          text: '実際に取引した判断だけを対象に、損益がプラスだったかで測ったブライアスコアです。',
                         })}
                       </dt>
                       <dd>${this.pnlBrierScore.toFixed(3)}</dd>
                       <dt>
-                        PnL Log Loss
+                        損益の対数損失
                         ${renderHelpMark({
                           id: 'help-calibration-pnl-log-loss',
-                          label: 'PnL Log Loss の説明',
-                          text: '実際に取引した判断だけを対象に、損益がプラスだったかで測った Log Loss です。',
+                          label: '損益の対数損失の説明',
+                          text: '実際に取引した判断だけを対象に、損益がプラスだったかで測った対数損失です。',
                         })}
                       </dt>
                       <dd>${this.pnlLogLoss.toFixed(3)}</dd>

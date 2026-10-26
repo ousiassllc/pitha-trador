@@ -93,11 +93,11 @@ describe('pitha-calibration-heatmap', () => {
     );
 
     const text = el.shadowRoot?.textContent ?? '';
-    expect(text).toContain('3 trades');
-    expect(text).toContain('+1,200 JPY');
-    expect(text).toContain('conf 0.76');
-    expect(text).toContain('win 66.7%');
-    expect(text).toContain('PnL Brier Score');
+    expect(text).toContain('取引 3 件');
+    expect(text).toContain('+1,200 円');
+    expect(text).toContain('確信度 0.76');
+    expect(text).toContain('勝率 66.7%');
+    expect(text).toContain('損益ブライアスコア');
     expect(text).toContain('0.235');
     expect(text).toContain('0.679');
     const rows = el.shadowRoot?.querySelectorAll('[data-testid="calibration-direction-row"]');
@@ -127,10 +127,10 @@ describe('pitha-calibration-heatmap', () => {
     expect(emptyCell?.style.backgroundColor).toBe(NO_DATA_COLOR);
     expect(emptyCell?.style.backgroundColor).not.toBe(heatmapColors(0).background);
     expect(emptyCell?.textContent).toContain('データなし');
-    expect(emptyCell?.textContent).toContain('n=0');
+    expect(emptyCell?.textContent).toContain('0 件');
     expect(emptyCell?.textContent).not.toContain('0.0%');
     expect(emptyCell?.textContent).not.toContain('conf');
-    expect(filledCell?.textContent).toContain('n=7');
+    expect(filledCell?.textContent).toContain('7 件');
     expect(filledCell?.textContent).toContain('63.0%');
     expect(filledCell?.textContent).not.toContain('データなし');
   });
@@ -154,7 +154,7 @@ describe('pitha-calibration-heatmap', () => {
 
     const text = el.shadowRoot?.textContent ?? '';
     expect(el.shadowRoot?.querySelector('[data-testid="calibration-no-samples"]')).not.toBeNull();
-    expect(text).not.toContain('Brier Score');
+    expect(text).not.toContain('ブライアスコア');
     expect(text).not.toContain('0.000');
     const rows = el.shadowRoot?.querySelectorAll('[data-testid="calibration-direction-row"]');
     expect(rows?.[0]?.textContent).toContain('0');
@@ -165,7 +165,7 @@ describe('pitha-calibration-heatmap', () => {
   test('shows the summary scores and no "サンプルなし" notice when samples exist', async () => {
     const { el } = await mount(response());
     expect(el.shadowRoot?.querySelector('[data-testid="calibration-no-samples"]')).toBeNull();
-    expect(el.shadowRoot?.textContent).toContain('Brier Score');
+    expect(el.shadowRoot?.textContent).toContain('ブライアスコア');
   });
 
   test('the refresh button re-fetches calibration-url without opening a WebSocket', async () => {

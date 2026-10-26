@@ -217,5 +217,5 @@ func scannerCaption(asOf time.Time) string {
 	if asOf.IsZero() {
 		return "候補銘柄 — データ未取得"
 	}
-	return "候補銘柄 — as of " + atoms.FormatJST(asOf)
+	return "候補銘柄 — " + atoms.FormatJST(asOf) + " 時点"
 }

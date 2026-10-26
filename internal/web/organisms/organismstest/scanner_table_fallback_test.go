@@ -34,7 +34,7 @@ func TestScannerTableFallback_ShowsCountAndJSTAsOfCaption(t *testing.T) {
 	for _, want := range []string{
 		`data-testid="scanner-count"`,
 		">2</span>",
-		"候補銘柄 — as of 2026-09-26 10:15:00 JST</caption>",
+		"候補銘柄 — 2026-09-26 10:15:00 JST 時点</caption>",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("expected table to contain %q, got %q", want, body)
@@ -74,7 +74,7 @@ func TestScannerTableFallback_EmptyStateWhenNoCandidates(t *testing.T) {
 func TestScannerTableFallback_ZeroAsOfShowsNoDataCaption(t *testing.T) {
 	body := renderScannerTableAt(t, nil, time.Time{})
 
-	if strings.Contains(body, "0001-01-01") || strings.Contains(body, "as of") {
+	if strings.Contains(body, "0001-01-01") || strings.Contains(body, "時点") {
 		t.Errorf("zero asOf must not render a timestamp: %s", body)
 	}
 	if !strings.Contains(body, "候補銘柄 — データ未取得</caption>") {

@@ -41,12 +41,12 @@ func TestSSRTimesRenderInJST(t *testing.T) {
 		{
 			name: "activity feed rows and caption",
 			html: renderComponent(t, organisms.ActivityFeedFallback([]domain.ActivityEvent{{Type: domain.ActivityTypeJob, Timestamp: nextDay}}, utc)),
-			want: []string{"2026-10-06 00:30:00 JST", "as of 2026-10-05 09:30:00 JST"},
+			want: []string{"2026-10-06 00:30:00 JST", "2026-10-05 09:30:00 JST 時点"},
 		},
 		{
 			name: "scanner caption",
 			html: renderScannerTableAt(t, []domain.Candidate{{Symbol: "7203", Price: 1}}, utc),
-			want: []string{"候補銘柄 — as of 2026-10-05 09:30:00 JST</caption>"},
+			want: []string{"候補銘柄 — 2026-10-05 09:30:00 JST 時点</caption>"},
 		},
 		{
 			name: "position opened and closed",

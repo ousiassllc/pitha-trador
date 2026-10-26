@@ -72,10 +72,10 @@ describe('pitha-calibration-heatmap triple barrier', () => {
 
     const cells = el.shadowRoot?.querySelectorAll('[data-testid="calibration-heatmap-cell"]');
     const first = cells?.[0]?.querySelector('[data-testid="calibration-bucket-barrier"]');
-    expect(first?.textContent).toContain('EV -7.5 bps');
-    expect(first?.textContent).toContain('TP 25.0%');
-    expect(first?.textContent).toContain('SL 50.0%');
-    expect(first?.textContent).toContain('TO 25.0%');
+    expect(first?.textContent).toContain('期待値 -7.5 bps');
+    expect(first?.textContent).toContain('利確 25.0%');
+    expect(first?.textContent).toContain('損切り 50.0%');
+    expect(first?.textContent).toContain('時間切れ 25.0%');
     expect(cells?.[1]?.querySelector('[data-testid="calibration-bucket-barrier"]')).toBeNull();
   });
 });

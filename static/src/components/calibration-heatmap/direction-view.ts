@@ -12,10 +12,10 @@ export function renderDirectionTable(byDirection: CalibrationDirection[]) {
     >
       <thead>
         <tr>
-          <th scope="col">Direction</th>
-          <th scope="col">Samples</th>
-          <th scope="col">Accuracy</th>
-          <th scope="col">Avg return</th>
+          <th scope="col">方向</th>
+          <th scope="col">件数</th>
+          <th scope="col">的中率</th>
+          <th scope="col">平均リターン</th>
         </tr>
       </thead>
       <tbody>

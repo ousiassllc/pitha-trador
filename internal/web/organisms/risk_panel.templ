@@ -23,8 +23,8 @@ templ RiskPanel(p RiskParams) {
 		<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
 			<div>
 				<dt class="text-sm text-slate-500">
-					Allowed Position
-					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-allowed-position", Label: "Allowed Positionの説明"}) {
+					許容ポジション
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-allowed-position", Label: "許容ポジションの説明"}) {
 						いま新規エントリーした場合に、この銘柄で持てるポジションの大きさです（口座資産に対する割合）。
 					}
 				</dt>
@@ -32,8 +32,8 @@ templ RiskPanel(p RiskParams) {
 			</div>
 			<div>
 				<dt class="text-sm text-slate-500">
-					Stop
-					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-stop", Label: "Stopの説明"}) {
+					損切り水準
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-stop", Label: "損切り水準の説明"}) {
 						建値からこの割合だけ不利に動いたら損切りする水準です。
 					}
 				</dt>
@@ -41,8 +41,8 @@ templ RiskPanel(p RiskParams) {
 			</div>
 			<div>
 				<dt class="text-sm text-slate-500">
-					Take Profit
-					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-take-profit", Label: "Take Profitの説明"}) {
+					利確水準
+					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-take-profit", Label: "利確水準の説明"}) {
 						建値からこの割合だけ有利に動いたら利益確定する水準です。
 					}
 				</dt>

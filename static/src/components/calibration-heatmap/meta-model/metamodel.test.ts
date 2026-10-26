@@ -15,7 +15,7 @@ const text = (el: HTMLElement, testid: string): string | undefined =>
 
 const metaModel = (overrides: Partial<MetaModel> = {}): MetaModel => ({
   version: 'v3',
-  algorithm: 'logistic',
+  algorithm: 'logistic_regression',
   status: 'active',
   reject_reason: '',
   active_version: 'v3',
@@ -53,7 +53,7 @@ describe('pitha-calibration-heatmap meta-labeling model', () => {
   test('renders the OOS AUC, EV, sample counts and the Jev evaluation period', async () => {
     const { el } = await mount(response({ meta_model: metaModel() }));
 
-    expect(text(el, 'calibration-metamodel-version')).toBe('v3（logistic）');
+    expect(text(el, 'calibration-metamodel-version')).toBe('v3（ロジスティック回帰）');
     expect(text(el, 'calibration-metamodel-status')).toBe('採用中');
     expect(text(el, 'calibration-metamodel-auc')).toBe('0.612');
     expect(text(el, 'calibration-metamodel-ev')).toBe('+3.5 bps');
@@ -88,14 +88,14 @@ describe('pitha-calibration-heatmap meta-labeling model', () => {
       response({
         meta_model: metaModel({
           status: 'rejected',
-          reject_reason: 'OOS AUC が基準未満',
+          reject_reason: 'oos_auc_ci_not_above_minimum',
           active_version: 'v2',
         }),
       }),
     );
 
     expect(text(el, 'calibration-metamodel-status')).toBe(
-      '不採用（OOS AUC が基準未満）— 採用中のモデルは v2 のまま',
+      '不採用（AUC の信頼区間の下限が 0.5 以下）— 採用中のモデルは v2 のまま',
     );
   });
 

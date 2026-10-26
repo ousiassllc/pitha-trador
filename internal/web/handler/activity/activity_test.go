@@ -162,8 +162,8 @@ func TestActivityHandler_Page_RendersIslandWithServerRenderedFallback(t *testing
 		"/static/dist/js/activity-feed/pitha-activity-feed.js",
 		`data-queue="jev-scout"`,
 		`data-event-type="jev_trader"`,
-		"direction=LONG confidence=0.74",
-		"reason=daily_loss_limit",
+		"方向: LONG・確信度: 0.74",
+		"理由: 日次の損失上限に達した",
 		"820",
 	} {
 		if !strings.Contains(body, want) {

@@ -2,6 +2,7 @@
 // Kill Switch section, split out of the element to keep it small.
 import { html, nothing } from 'lit';
 import { formatJstDateTime } from '../lib/jst-datetime';
+import { activityDetail, jobQueueLabel } from '../lib/labels';
 import { lightDomErrorClass } from '../lib/styles';
 import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 
@@ -22,7 +23,7 @@ export function renderQueueStatus(queues: QueueStatus[]) {
           ${queues.map(
             (q) => html`
               <tr class="border-b border-slate-100" data-queue=${q.queue}>
-                <td class="px-3 py-2 font-medium text-slate-900">${q.queue}</td>
+                <td class="px-3 py-2 font-medium text-slate-900">${jobQueueLabel(q.queue)}</td>
                 <td class="px-3 py-2">${q.pending}</td>
                 <td class="px-3 py-2">${q.running}</td>
                 <td class="px-3 py-2">${q.failed_recent}</td>
@@ -47,7 +48,7 @@ export function renderKillSwitchEvents(
       <h2 class="mb-2 text-lg font-semibold text-slate-900">最近の Kill Switch</h2>
       ${
         error
-          ? html`<p class="pitha-activity-feed-error ${lightDomErrorClass}" role="alert">Failed to load kill switch events: ${error}</p>`
+          ? html`<p class="pitha-activity-feed-error ${lightDomErrorClass}" role="alert">Kill Switch の履歴を読み込めませんでした: ${error}</p>`
           : nothing
       }
       ${
@@ -55,12 +56,12 @@ export function renderKillSwitchEvents(
           ? html`<ul class="text-sm">
               ${events.map(
                 (e) =>
-                  html`<li class="py-1"><span class="text-slate-500">${formatJstDateTime(e.timestamp)}</span> ${e.detail}</li>`,
+                  html`<li class="py-1"><span class="text-slate-500">${formatJstDateTime(e.timestamp)}</span> ${activityDetail(e.type, e.detail)}</li>`,
               )}
             </ul>`
           : error
             ? nothing
-            : html`<p class="text-sm text-slate-500">${loaded ? 'No kill switch events.' : 'Loading kill switch events…'}</p>`
+            : html`<p class="text-sm text-slate-500">${loaded ? 'Kill Switch の履歴はありません。' : 'Kill Switch の履歴を読み込んでいます…'}</p>`
       }
     </section>
   `;

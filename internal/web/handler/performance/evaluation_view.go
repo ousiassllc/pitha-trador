@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ousiassllc/pitha-trador/internal/service/actuals"
+	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/evaluation"
 )
 
@@ -47,19 +48,23 @@ func evaluationPanel(e actuals.Evaluation) evaluation.Panel {
 	for _, t := range []struct {
 		id, title, header string
 		groups            []actuals.Group
+		name              func(string) string // the screen's name of a group key; nil shows the key as it is
 	}{
-		{"day", "日別（JST）", "日", e.ByDay},
-		{"week", "週別（月曜始まり）", "週", e.ByWeek},
-		{"direction", "方向別", "方向", e.ByDirection},
-		{"exit-reason", "決済理由別", "決済理由", e.ByExitReason},
-		{"meta-model", "メタモデル版別", "版", e.ByMetaModel},
-		{"ab-arm", "A/Bアーム別", "アーム", e.ByABArm},
+		{"day", "日別（JST）", "日", e.ByDay, nil},
+		{"week", "週別（月曜始まり）", "週", e.ByWeek, nil},
+		{"direction", "方向別", "方向", e.ByDirection, nil},
+		{"exit-reason", "決済理由別", "決済理由", e.ByExitReason, labels.ExitReason},
+		{"meta-model", "メタモデル版別", "版", e.ByMetaModel, nil},
+		{"ab-arm", "A/Bアーム別", "アーム", e.ByABArm, labels.ABArm},
 	} {
 		table := evaluation.Table{ID: t.id, Title: t.title, KeyHeader: t.header}
 		for _, g := range t.groups {
 			key := g.Key
-			if key == "" {
+			switch {
+			case key == "":
 				key = noKey
+			case t.name != nil:
+				key = t.name(key)
 			}
 			table.Rows = append(table.Rows, statsRow(key, g.Stats))
 		}

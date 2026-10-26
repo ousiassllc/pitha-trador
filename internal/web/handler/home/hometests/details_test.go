@@ -19,7 +19,7 @@ func TestRejectReasons_ListedByCountWithLabels(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("reject rows = %d, want 3", len(rows))
 	}
-	for i, want := range []string{"Jev が方向なしと判断 12", "確率がしきい値未満 7", "novel_reason 1"} {
+	for i, want := range []string{"Jev が方向なしと判断 12", "確率がしきい値未満 7", "その他（理由コードあり） 1"} {
 		if got := clean(rows[i][:strings.Index(rows[i], "</li>")]); !strings.Contains(got, want) {
 			t.Errorf("row %d = %q, want it to contain %q", i, got, want)
 		}
@@ -191,7 +191,7 @@ func TestKillEvents_LatestThree(t *testing.T) {
 	for i := range 5 {
 		f.events = append(f.events, domain.ActivityEvent{
 			Type: domain.ActivityTypeKillSwitch, Timestamp: jst(20, 9, i),
-			Detail: "reason=daily_loss_limit resolved_by=operator",
+			Detail: "reason=daily_loss_limit resolved_by=manual",
 		})
 	}
 	f.events = append(f.events, domain.ActivityEvent{Type: domain.ActivityTypeJob, Timestamp: jst(20, 9, 59), Detail: "x"})
@@ -199,7 +199,7 @@ func TestKillEvents_LatestThree(t *testing.T) {
 	if n := count(body, "kill-row"); n != 3 {
 		t.Fatalf("kill rows = %d, want 3", n)
 	}
-	if got := inner(t, body, "kill-row"); got != "10-20 09:00 理由: daily_loss_limit（解除: operator）" {
+	if got := inner(t, body, "kill-row"); got != "10-20 09:00 理由: 日次の損失上限に達した（解除: 手動）" {
 		t.Errorf("row = %q", got)
 	}
 }

@@ -85,12 +85,15 @@ describe('pitha-activity-feed', () => {
 
     const queueRows = el.querySelectorAll('#queue-status tbody tr');
     expect(queueRows).toHaveLength(2);
-    expect(queueRows[1].textContent).toContain('jev-trader');
+    expect(queueRows[1].textContent).toContain('Jev Trader');
+    expect(queueRows[1].getAttribute('data-queue')).toBe('jev-trader'); // the code stays in the markup
     expect(queueRows[1].querySelectorAll('td')[3].textContent).toBe('2');
 
     const rows = el.querySelectorAll('#activity-feed tbody tr');
     expect(rows).toHaveLength(2);
-    expect(rows[0].textContent).toContain('direction=LONG');
+    expect(rows[0].textContent).toContain('方向: LONG・確信度: 0.74');
+    expect(rows[0].textContent).not.toContain('direction=');
+    expect(rows[1].textContent).toContain('Jev Scout・実行中・試行 1 回');
     expect(rows[0].textContent).toContain('820');
     // 01:15Z is rendered in JST like the SSR fallback (internal/web/atoms.FormatJST).
     expect(rows[0].querySelectorAll('td')[0].textContent).toBe('2026-09-29 10:15:00 JST');
@@ -108,14 +111,15 @@ describe('pitha-activity-feed', () => {
     const { el } = await mount([queue()], [event()], [ks]);
 
     expect(el.querySelector('#kill-switch-events')?.textContent).toContain(
-      'reason=daily_loss_limit',
+      '理由: 日次の損失上限に達した（未解除）',
     );
+    expect(el.querySelector('#kill-switch-events')?.textContent).not.toContain('daily_loss_limit');
     expect(el.querySelector('#kill-switch-events')?.textContent).toContain(
       '2026-09-29 10:15:00 JST',
     );
   });
 
-  test('shows "No kill switch events." only after a successful empty load', async () => {
+  test('shows 「Kill Switch の履歴はありません。」 only after a successful empty load', async () => {
     let release: (res: Response) => void = () => {};
     const fetchMock = mock((url: string) =>
       url.includes('type=kill_switch')
@@ -130,15 +134,15 @@ describe('pitha-activity-feed', () => {
     await flush(el);
 
     const section = () => el.querySelector('#kill-switch-events')?.textContent ?? '';
-    expect(section()).not.toContain('No kill switch events.');
-    expect(section()).toContain('Loading kill switch events');
+    expect(section()).not.toContain('Kill Switch の履歴はありません。');
+    expect(section()).toContain('Kill Switch の履歴を読み込んでいます');
 
     release(new Response(JSON.stringify({ queues: [], events: [], as_of: 'x' })));
     await flush(el);
-    expect(section()).toContain('No kill switch events.');
+    expect(section()).toContain('Kill Switch の履歴はありません。');
   });
 
-  test('shows an alert instead of "No kill switch events." when the fetch fails', async () => {
+  test('shows an alert instead of 「Kill Switch の履歴はありません。」 when the fetch fails', async () => {
     const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
     globalThis.fetch = mock((url: string) =>
       Promise.resolve(
@@ -154,8 +158,8 @@ describe('pitha-activity-feed', () => {
     const section = el.querySelector('#kill-switch-events');
     expect(section?.querySelector('[role="alert"]')).not.toBeNull();
     expect(section?.querySelector('[role="alert"]')?.classList.contains('text-red-700')).toBe(true);
-    expect(section?.textContent).not.toContain('No kill switch events.');
-    expect(section?.textContent).not.toContain('Loading kill switch events');
+    expect(section?.textContent).not.toContain('Kill Switch の履歴はありません。');
+    expect(section?.textContent).not.toContain('Kill Switch の履歴を読み込んでいます');
     errorSpy.mockRestore();
   });
 
@@ -171,8 +175,8 @@ describe('pitha-activity-feed', () => {
 
     const cells = (name: string) =>
       [...el.querySelectorAll(`[data-queue="${name}"] td`)].map((td) => td.textContent);
-    expect(cells('jev-scout')).toEqual(['jev-scout', '0', '2', '1']);
-    expect(cells('jev-trader')).toEqual(['jev-trader', '5', '1', '0']);
+    expect(cells('jev-scout')).toEqual(['Jev Scout', '0', '2', '1']);
+    expect(cells('jev-trader')).toEqual(['Jev Trader', '5', '1', '0']);
     expect(fetchMock.mock.calls.length).toBe(before); // no re-fetch
   });
 

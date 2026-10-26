@@ -2,13 +2,13 @@ package home
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
 	"github.com/ousiassllc/pitha-trador/internal/service/activityfeed"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings/entryqualitypanel"
+	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms/homepanels"
 	"github.com/ousiassllc/pitha-trador/internal/web/pages"
@@ -89,32 +89,6 @@ func (h *Handler) pnl(ctx context.Context, in statusInputs, d positionsData) hom
 	return v
 }
 
-// rejectLabels names the Policy Engine's reject_reason heads (the constants of
-// internal/service/policy, plus the meta-labeling model's) for the operator.
-// An unknown head is shown as its code.
-var rejectLabels = map[string]string{
-	"jev_none":                                 "Jev が方向なしと判断",
-	"probability_below_threshold":              "確率がしきい値未満",
-	"entry_quality_below_threshold":            "エントリー品質がしきい値未満",
-	"continuation_probability_below_threshold": "継続確率がしきい値未満",
-	"toxic_flow_above_threshold":               "毒性フローがしきい値超過",
-	"liquidity_stressed_above_threshold":       "流動性ストレスがしきい値超過",
-	"spread_too_wide":                          "スプレッドが広すぎる",
-	"thin_liquidity":                           "板が薄い",
-	"special_quote":                            "特別気配",
-	"price_limit":                              "値幅制限",
-	"not_lendable":                             "貸株なし（売り不可）",
-	"missing_data":                             "データ欠損",
-	"api_error":                                "API エラー",
-	"not_calibrated":                           "較正が未完了",
-	"risk_engine_rejected":                     "リスクエンジンが拒否",
-	"meta_skip":                                "メタモデルが見送り",
-	"meta_model_unavailable":                   "メタモデルを使えない",
-	"vwap_z_unavailable":                       "VWAP 乖離を算出できない",
-	"vwap_not_extreme":                         "VWAP 乖離が小さい",
-	"unknown":                                  "理由の記録なし",
-}
-
 const rejectEntryQuality = "entry_quality_below_threshold"
 
 // rejectReasons is the エントリーしなかった理由 block: today's NONE signals by
@@ -129,11 +103,7 @@ func (h *Handler) rejectReasons(ctx context.Context, now time.Time) homepanels.R
 	v := homepanels.RejectReasonsView{Rows: make([]homepanels.RejectRow, 0, len(counts))}
 	for _, c := range counts {
 		v.Total += c.Count
-		label, ok := rejectLabels[c.Reason]
-		if !ok {
-			label = c.Reason
-		}
-		v.Rows = append(v.Rows, homepanels.RejectRow{Code: c.Reason, Label: label, Count: c.Count})
+		v.Rows = append(v.Rows, homepanels.RejectRow{Code: c.Reason, Label: labels.RejectReason(c.Reason), Count: c.Count})
 	}
 	// Rows are most frequent first, so the first row holds the maximum count.
 	for _, row := range v.Rows {
@@ -235,15 +205,6 @@ func (h *Handler) trades(ctx context.Context, now time.Time) homepanels.TradesVi
 	return v
 }
 
-// retrainSkipLabels names the fixed retraining skip codes for the operator
-// (the wording of the calibration screen's skip list); an unknown code is
-// shown as it is.
-var retrainSkipLabels = map[string]string{
-	"too_few_rows_before_oos":  "検証期間より前のラベル付き判断が不足",
-	"too_few_rows_after_purge": "重なり除去後の学習用データが不足",
-	"training_data_unusable":   "件数はあるが学習できない",
-}
-
 // model is the モデル状態 block: the adopted meta-labeling model and a skipped
 // retraining.
 func model(in statusInputs) homepanels.ModelView {
@@ -255,11 +216,7 @@ func model(in statusInputs) homepanels.ModelView {
 	if h.RetrainSkipped {
 		v.RetrainNotice = "夜間の再学習を見送りました"
 		if h.RetrainSkipReason != "" {
-			reason, ok := retrainSkipLabels[h.RetrainSkipReason]
-			if !ok {
-				reason = h.RetrainSkipReason
-			}
-			v.RetrainNotice += "（" + reason + "）"
+			v.RetrainNotice += "（" + labels.RetrainSkip(h.RetrainSkipReason) + "）"
 		}
 	}
 	return v
@@ -281,31 +238,7 @@ func (h *Handler) killEvents(ctx context.Context) homepanels.KillEventsView {
 		if len(v.Rows) == killEventLimit {
 			break
 		}
-		v.Rows = append(v.Rows, homepanels.KillEventRow{At: e.Timestamp, Detail: killDetail(e.Detail)})
+		v.Rows = append(v.Rows, homepanels.KillEventRow{At: e.Timestamp, Detail: labels.ActivityDetail(domain.ActivityTypeKillSwitch, e.Detail)})
 	}
 	return v
-}
-
-// killDetail turns the feed's "reason=… resolved_by=…" into words; an
-// unrecognised shape is shown as it is.
-func killDetail(detail string) string {
-	reason, resolved := "", ""
-	for _, f := range strings.Fields(detail) {
-		switch {
-		case strings.HasPrefix(f, "reason="):
-			reason = strings.TrimPrefix(f, "reason=")
-		case strings.HasPrefix(f, "resolved_by="):
-			resolved = strings.TrimPrefix(f, "resolved_by=")
-		}
-	}
-	if reason == "" {
-		return detail
-	}
-	s := "理由: " + reason
-	if resolved != "" {
-		s += "（解除: " + resolved + "）"
-	} else {
-		s += "（未解除）"
-	}
-	return s
 }

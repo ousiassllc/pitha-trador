@@ -56,7 +56,7 @@ describe('pitha-scanner-table', () => {
 
     expect(el.querySelector('[data-testid="scanner-count"]')?.textContent).toContain('2');
     expect(el.querySelector('caption')?.textContent?.trim()).toBe(
-      '候補銘柄 — as of 2026-09-26 10:15:00 JST',
+      '候補銘柄 — 2026-09-26 10:15:00 JST 時点',
     );
 
     const cells = (symbol: string) => el.querySelectorAll(`tr[data-symbol="${symbol}"] td`);
