@@ -32,7 +32,7 @@ func TestSignalBadgeGroup_ConfidenceRoundsHalfAwayFromZero(t *testing.T) {
 }
 
 func TestSignalBadgeGroup_PendingAndMissingConfidence(t *testing.T) {
-	if html := render(t, molecules.SignalBadgeGroup(nil, nil, nil)); !strings.Contains(html, "pending") {
+	if html := render(t, molecules.SignalBadgeGroup(nil, nil, nil)); !strings.Contains(html, "判定待ち") {
 		t.Errorf("nil direction must render pending: %s", html)
 	}
 	direction := "LONG"

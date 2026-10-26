@@ -70,7 +70,7 @@ describe('pitha-scanner-table', () => {
     expect(cells('FLAT')[3].textContent?.trim()).toBe('—');
   });
 
-  test('renders Jev direction and entry quality as badges, pending when not evaluated', async () => {
+  test('renders Jev direction and entry quality as badges, 「判定待ち」 when not evaluated', async () => {
     const { el } = await mount([
       item({ symbol: 'AAAA', jev_direction: 'SHORT', entry_quality: 'exceptional' }),
       item({ symbol: 'BBBB', jev_direction: null, jev_confidence: null, entry_quality: null }),
@@ -82,7 +82,7 @@ describe('pitha-scanner-table', () => {
     expect(evaluated[9].querySelector('span')?.className).toContain('bg-emerald-600');
 
     const pending = el.querySelectorAll('tr[data-symbol="BBBB"] td');
-    expect(pending[7].textContent?.trim()).toBe('pending');
+    expect(pending[7].textContent?.trim()).toBe('判定待ち');
     expect(pending[8].textContent?.trim()).toBe('—');
     expect(pending[9].textContent?.trim()).toBe('—');
   });

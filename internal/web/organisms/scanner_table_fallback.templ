@@ -100,7 +100,7 @@ var scannerColumns = []scannerColumn{
 	{"volume_ratio_5m", "出来高倍率", "直近5分の出来高が平常時の何倍か。大きいほど売買が活発です。", true},
 	{"price_vs_vwap_bps", "VWAP乖離(bps)", "現在値とVWAP(出来高加重平均価格)の差。1bps=0.01%。プラスはVWAPより高い", true},
 	{"spread_bps", "スプレッド(bps)", "売り気配と買い気配の差。1bps=0.01%。小さいほど売買コストが低い", true},
-	{"jev_direction", "Jev方向", "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り、pending=判定待ち", false},
+	{"jev_direction", "Jev方向", "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り。「判定待ち」はまだ判定していない候補です", false},
 	{"jev_confidence", "確信度", "Jev判定の確信度。高いほど判定に自信がある", true},
 	{"entry_quality", "エントリー品質", "エントリー好適度。poor < fair < good < strong < exceptional の順に良い", false},
 	{"current_position", "保有", "現在の保有ポジション(株数)。未保有は—", true},
@@ -119,7 +119,7 @@ templ scannerRow(c domain.Candidate) {
 		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.SpreadBps, 0) }</td>
 		<td class="px-3 py-2">
 			if c.JevDirection == nil {
-				<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">pending</span>
+				<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">判定待ち</span>
 			} else {
 				@atoms.Badge(atoms.Direction(*c.JevDirection))
 			}

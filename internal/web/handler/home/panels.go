@@ -216,7 +216,11 @@ func model(in statusInputs) homepanels.ModelView {
 	if h.RetrainSkipped {
 		v.RetrainNotice = "夜間の再学習を見送りました"
 		if h.RetrainSkipReason != "" {
-			v.RetrainNotice += "（" + labels.RetrainSkip(h.RetrainSkipReason) + "）"
+			reason := labels.RetrainSkip(h.RetrainSkipReason)
+			if reason == labels.Unknown {
+				reason = "理由コードあり" // no brackets inside the brackets
+			}
+			v.RetrainNotice += "（" + reason + "）"
 		}
 	}
 	return v
