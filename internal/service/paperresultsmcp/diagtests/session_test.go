@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/sessiondiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/testkit"
@@ -96,6 +97,9 @@ func diagDB(t *testing.T) *sql.DB {
 // database alone.
 func TestMissingDays(t *testing.T) {
 	w := diagDB(t)
+	// 立花 writes watch_lists, so there an empty day is watch_list_empty (kabu:
+	// provider_test.go).
+	testkit.Setting(t, w, config.KeyBrokerProvider, `"tachibana"`)
 	d, err := sessiondiag.Read(t.Context(), w, period("2026-10-13", "2026-10-22"), diagNow)
 	if err != nil {
 		t.Fatal(err)

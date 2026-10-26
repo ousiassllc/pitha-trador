@@ -156,7 +156,7 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	want("skipped queue", first(skipsOf, "skipped_by_queue"), "queue count")
 	want("retention", coll["retention"].(map[string]any), "succeeded_job_days failed_job_days note")
 	diag := data("session_diagnostics", period)
-	want("session diagnostics", diag, "window days current unavailable retention note timed_out incomplete")
+	want("session diagnostics", diag, "window days broker_provider current unavailable retention note timed_out incomplete")
 	want("diagnostics window", diag["window"].(map[string]any), "from to requested_from max_days truncated")
 	day := first(diag, "days")
 	want("diagnostics day", day, "date snapshot_rows market_data_jobs other_queue_jobs_finished watch_list observations")

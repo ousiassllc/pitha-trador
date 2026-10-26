@@ -15,7 +15,8 @@
 | `retention` | `snapshot_days`（90）/ `succeeded_job_days`（7）/ `failed_job_days`（30）。これより前の日の数は `null` |
 | `note` | 上の限界の固定の注記 |
 | `timed_out` | 内部の時間予算（`QueryTimeout` の手前。architecture §5）を超えたとき `true`。`query_timeout`（504）で全部捨てず、読めた分を返す。全部読めたら `false` |
-| `incomplete[]` | 読めなかった項目: `current` / `market_data_jobs` / `other_queue_jobs` / `watch_lists` / `snapshot_rows:<JST 日>` / `succeeded_without_snapshot:<JST 日>`。全部読めたら空配列。日は新しい順に読むので、読めないのは古い日。ここに挙がった項目から作る数は `null`（`null` は「保持期間で消えた」ではなく「読めなかった」）で、そこから作る `observations[]` は出さない |
+| `broker_provider` | 保存されているブローカーの選択（`runtime_settings` の `broker.provider`。issue #914）: `kabu`（行が無い・読めない値のときも。アプリの起動時の読み方と同じ）/ `tachibana` / `unknown`（読めなかった）。`watch_lists` に書くのは立花のアダプタだけで、kabu の監視リストはメモリ上にあり保存されないため、kabu では空の表が毎日になる。そこで kabu の日は `watch_list_empty` でなく `watch_list_not_applicable` を出す。`unknown` のときは従来どおり `watch_list_empty` を出す（このツールは落ちない）。アプリは起動時に 1 度だけ読むので、変更後の最初の起動までは実際のブローカーと違いうる。kabu の実行時の監視リストの大きさは、この DB からは分からない |
+| `incomplete[]` | 読めなかった項目: `current` / `market_data_jobs` / `other_queue_jobs` / `watch_lists` / `broker_provider` / `snapshot_rows:<JST 日>` / `succeeded_without_snapshot:<JST 日>`。全部読めたら空配列。日は新しい順に読むので、読めないのは古い日。ここに挙がった項目から作る数は `null`（`null` は「保持期間で消えた」ではなく「読めなかった」）で、そこから作る `observations[]` は出さない |
 
 `days[]` の要素:
 
@@ -60,3 +61,4 @@
 |----|------|---------|---------|
 | 1.0 | 2026-10-21 | 新規。`session_diagnostics` の定義 | issue #850 |
 | 1.1 | 2026-10-22 | 窓を 14 日にし、`window.requested_from`、`timed_out`、`incomplete[]`、`current`・`watch_list` の `null` を追加 | issue #850 |
+| 1.2 | 2026-10-26 | `broker_provider` を追加し、kabu のときは `watch_list_empty` の代わりに `watch_list_not_applicable` を出す（立花・`unknown` は従来どおり）。`incomplete[]` に `broker_provider` が加わりうる | issue #914 |
