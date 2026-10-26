@@ -127,7 +127,7 @@ func (t *Trader) Evaluate(ctx context.Context, instrumentID int64, state ScoutSt
 
 	saved, err := t.decisions.Insert(ctx, decision)
 	if err != nil {
-		return domain.JevDecision{}, fmt.Errorf("jev: persist trader decision for %q: %w", state.Symbol, err)
+		return domain.JevDecision{}, persistError{fmt.Errorf("jev: persist trader decision for %q: %w", state.Symbol, err)}
 	}
 
 	if err := t.rag.IndexDecision(ctx, saved.ID, featureInput); err != nil {

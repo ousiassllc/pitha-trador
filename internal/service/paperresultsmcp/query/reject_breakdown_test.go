@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/apierror"
 )
 
 // Every non-risk reject_reason prefix the Policy Engine can write is reported
@@ -31,6 +32,21 @@ func TestRejectCode_KnowsEveryPolicyPrefixAndMetaSkipReason(t *testing.T) {
 	} {
 		if got, want := query.RejectCode(policy.ReasonMetaSkip, reason), "meta_skip:"+reason; got != want {
 			t.Errorf("RejectCode(meta_skip, %q) = %q, want %q", reason, got, want)
+		}
+	}
+}
+
+// Issue #912: every failure kind the policy can record is its own code; a kind
+// this version does not know, or none at all, stays in the plain api_error bucket.
+func TestRejectCode_SplitsApiErrorByEveryKnownKind(t *testing.T) {
+	for _, kind := range apierror.Codes {
+		if got, want := query.RejectCode(policy.ReasonAPIError, kind), "api_error:"+kind; got != want {
+			t.Errorf("RejectCode(api_error, %q) = %q, want %q", kind, got, want)
+		}
+	}
+	for _, sub := range []string{"", "someday_new_kind", "(jev:"} {
+		if got := query.RejectCode(policy.ReasonAPIError, sub); got != "api_error" {
+			t.Errorf("RejectCode(api_error, %q) = %q, want api_error", sub, got)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/apierror"
 	"github.com/ousiassllc/pitha-trador/internal/textutil"
 )
 
@@ -31,7 +32,7 @@ func (e *Engine) decideDirection(in Input, th Thresholds, meta *metaEntry) (dire
 		return domain.JevDirectionNone, nil, reason, nil
 	}
 	if in.APIErr != nil {
-		return none(reasonf("%s: %v", ReasonAPIError, in.APIErr))
+		return none(reasonf("%s: %s (%v)", ReasonAPIError, apierror.Kind(in.APIErr), in.APIErr))
 	}
 	if in.Decision == nil {
 		return none(reasonf(ReasonMissingData))

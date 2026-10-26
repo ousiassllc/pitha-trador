@@ -69,7 +69,7 @@ func chooseSide(in Input, th Thresholds) (side string, thresholds config.PolicyD
 		case domain.JevDirectionLong, domain.JevDirectionShort:
 			side = *d.Direction
 		default:
-			return "", thresholds, false, reasonf(ReasonJevNone)
+			return "", thresholds, false, reasonf("%s: confidence=%.4f regime=%s", ReasonJevNone, *d.Confidence, derefOr(d.Regime, "unknown"))
 		}
 	}
 	if side == domain.JevDirectionShort {
@@ -101,4 +101,12 @@ func reversionSide(a marketregime.Assessment) (side string, reason *string) {
 		return domain.JevDirectionLong, nil
 	}
 	return "", reasonf("%s: vwap_z=%.2f within ±%.2f", ReasonVWAPNotExtreme, z, threshold)
+}
+
+// derefOr is *s, or fallback when s is nil.
+func derefOr(s *string, fallback string) string {
+	if s == nil {
+		return fallback
+	}
+	return *s
 }
