@@ -3,6 +3,8 @@ package query
 import (
 	"context"
 	"fmt"
+
+	"github.com/ousiassllc/pitha-trador/internal/service/policy/apierror"
 )
 
 // Codes of the non-risk rejections risk_rejections' other_reject_breakdown may
@@ -13,6 +15,7 @@ const (
 	rejectCodeOther   = "other"
 	rejectCodeUnknown = "unknown"
 	metaSkipHead      = "meta_skip"
+	apiErrorHead      = "api_error"
 )
 
 // otherRejectHeads are the policy reject_reason prefixes (the text before the
@@ -51,10 +54,22 @@ var metaSkipReasons = map[string]bool{
 	"ev_not_above_minimum": true,
 }
 
+// apiErrorKinds are the codes the Policy Engine writes after "api_error:"
+// (internal/service/policy/apierror.Codes, issue #912). An older row, which has
+// the error text there, or a word this build does not know stays plain api_error.
+var apiErrorKinds = func() map[string]bool {
+	kinds := map[string]bool{}
+	for _, kind := range apierror.Codes {
+		kinds[kind] = true
+	}
+	return kinds
+}()
+
 // RejectCode maps a reject_reason's head (the text before the first ':') and,
-// for meta_skip, its first word after it to the fixed code returned to the
-// client: the head itself, "meta_skip:<reason>" for a known skip reason,
-// "unknown" for no reason at all and "other" for anything else. Detail text
+// for meta_skip and api_error, its first word after it to the fixed code
+// returned to the client: the head itself, "meta_skip:<reason>" for a known skip
+// reason, "api_error:<kind>" for a known failure kind (plain "api_error" without
+// one), "unknown" for no reason at all and "other" for anything else. Detail text
 // (numbers, error messages) is never part of a code.
 func RejectCode(head, sub string) string {
 	switch {
@@ -65,6 +80,11 @@ func RejectCode(head, sub string) string {
 			return metaSkipHead + ":" + sub
 		}
 		return metaSkipHead + ":" + rejectCodeOther
+	case head == apiErrorHead:
+		if apiErrorKinds[sub] {
+			return apiErrorHead + ":" + sub
+		}
+		return apiErrorHead // no recorded kind: a row from before issue #912 stays where it was counted
 	case otherRejectHeads[head]:
 		return head
 	}
@@ -78,7 +98,7 @@ func RejectCode(head, sub string) string {
 func otherRejectBreakdown(ctx context.Context, q Q, from, to string) ([]RejectBucket, error) {
 	rows, err := q.QueryContext(ctx, `
 SELECT head,
-	CASE WHEN head = 'meta_skip' THEN
+	CASE WHEN head IN ('meta_skip', 'api_error') THEN
 		CASE WHEN instr(rest, ' ') > 0 THEN substr(rest, 1, instr(rest, ' ') - 1) ELSE rest END
 	ELSE '' END AS sub,
 	COUNT(*)

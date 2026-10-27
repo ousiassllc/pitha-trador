@@ -20,9 +20,25 @@ var metaSkipReasons = map[string]string{
 	rejectCodeOther:        "その他",
 }
 
+// apiErrorKinds names what follows "api_error:" in those codes (the
+// internal/service/policy/apierror kinds, issue #912; "other" is a kind the
+// Policy Engine could not place, a kind the query does not know is counted as
+// plain "api_error").
+var apiErrorKinds = map[string]string{
+	"timeout":          "時間切れ",
+	"network":          "通信できない",
+	"http_5xx":         "サーバーエラー（5xx）",
+	"http_429":         "呼び出しが多すぎる（429）",
+	"http_4xx_other":   "リクエストが拒否された（4xx）",
+	"invalid_response": "応答が不正",
+	"persist_failed":   "判断を保存できない",
+	rejectCodeOther:    "その他",
+}
+
 // PolicyRejectCode is the name of a code of risk_rejections'
 // other_reject_breakdown: a Policy Engine reject head ("jev_none"), a
-// meta_skip head with its reason ("meta_skip:no_active_model"), "unknown"
+// meta_skip head with its reason ("meta_skip:no_active_model"), api_error with
+// its kind ("api_error:timeout"), "unknown"
 // (no reason recorded) or "other" (a reason the query does not know).
 func PolicyRejectCode(code string) string {
 	if code == rejectCodeOther {
@@ -32,6 +48,9 @@ func PolicyRejectCode(code string) string {
 	name := RejectReason(head)
 	if !hasSub {
 		return name
+	}
+	if head == "api_error" {
+		return name + "（" + lookup("api_error_kind", apiErrorKinds, sub, Other) + "）"
 	}
 	return name + "（" + lookup("meta_skip_reason", metaSkipReasons, sub, Other) + "）"
 }

@@ -204,8 +204,8 @@ func TestReadinessStatementsUseIndexes(t *testing.T) {
 		}
 		explained++
 	}
-	if explained != 2 {
-		t.Fatalf("explained %d statements, want the funnel and the training-row read", explained)
+	if explained != 3 {
+		t.Fatalf("explained %d statements, want the funnel, the excluded prompt versions and the training-row read", explained)
 	}
 }
 

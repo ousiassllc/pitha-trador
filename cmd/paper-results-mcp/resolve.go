@@ -56,3 +56,38 @@ func riskPath() string {
 	}
 	return candidate
 }
+
+// policyThresholds returns strategy.yaml's policy section with the
+// application's resolution order: PITHA_STRATEGY_PATH, config/strategy.yaml
+// next to the executable, then the compiled-in default. It is the baseline
+// entry_quality_whatif applies the runtime_settings overrides to (issue #911).
+func policyThresholds() (*config.PolicyConfig, error) {
+	var (
+		strategy *config.StrategyConfig
+		err      error
+	)
+	if path := strategyPath(); path != "" {
+		strategy, err = config.LoadStrategy(path)
+	} else {
+		strategy, err = config.LoadStrategyBytes(configdefaults.DefaultStrategyYAML)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load strategy config: %w", err)
+	}
+	return &strategy.Policy, nil
+}
+
+func strategyPath() string {
+	if v := os.Getenv(bootstrap.EnvStrategyPath); v != "" {
+		return v
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	candidate := filepath.Join(filepath.Dir(exe), config.DefaultStrategyPath)
+	if _, err := os.Stat(candidate); err != nil {
+		return ""
+	}
+	return candidate
+}

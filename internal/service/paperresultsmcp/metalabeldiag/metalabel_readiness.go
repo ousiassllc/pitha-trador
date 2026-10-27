@@ -50,10 +50,13 @@ type FeatureGap struct {
 }
 
 // FeatureGaps are the training rows BuildRows keeps and drops.
+// AllUsableRows are all the rows BuildRows keeps, of any date (those of the live
+// prompt's cohort): not the "usable_rows" a skipped retraining records, which
+// counts only the rows before the OOS window (split.train.rows, issue #913).
 // DroppedIncomplete is what the retraining logs as dropped_incomplete.
 type FeatureGaps struct {
 	TrainingRows      int          `json:"training_rows"`
-	UsableRows        int          `json:"usable_rows"`
+	AllUsableRows     int          `json:"all_usable_rows"`
 	DroppedIncomplete int          `json:"dropped_incomplete"`
 	Missing           []FeatureGap `json:"missing"`
 }
@@ -125,13 +128,21 @@ type OOSSide struct {
 // split completes; otherwise TrainSkipCode is the reason code the retraining
 // would record (a skip code of internal/repository/metalabel).
 type ReadinessSplit struct {
-	LLMCutoff       string    `json:"llm_cutoff"`
-	LLMCutoffStatus string    `json:"llm_cutoff_status"`
-	OOSStart        string    `json:"oos_start"`
-	TrainReady      bool      `json:"train_ready"`
-	TrainSkipCode   *string   `json:"train_skip_code"`
-	Train           TrainSide `json:"train"`
-	OOS             OOSSide   `json:"oos"`
+	LLMCutoff       string `json:"llm_cutoff"`
+	LLMCutoffStatus string `json:"llm_cutoff_status"`
+	OOSStart        string `json:"oos_start"`
+	// OOSStartReason says what decides OOSStart (the OOSStart* codes). OOSFloor
+	// is the earliest the window may open (the later of llm_cutoff and the
+	// longest window before AsOf) and OOSFloorSource which of the two it is
+	// (OOSStartCutoffFloor or OOSStartMaxWindow).
+	OOSStartReason string    `json:"oos_start_reason"`
+	OOSFloor       string    `json:"oos_floor"`
+	OOSFloorSource string    `json:"oos_floor_source"`
+	TrainReady     bool      `json:"train_ready"`
+	TrainSkipCode  *string   `json:"train_skip_code"`
+	Train          TrainSide `json:"train"`
+	OOS            OOSSide   `json:"oos"`
+	Shortfall      Shortfall `json:"shortfall"`
 }
 
 // TrainingReadiness is metalabel_training_readiness' data (issue #848).
@@ -152,6 +163,8 @@ type TrainingReadiness struct {
 	// ExcludedPromptVersions are the Trader prompt versions whose decisions the
 	// retraining leaves out (another cohort than the live prompt's, issue #881).
 	ExcludedPromptVersions []string `json:"excluded_prompt_versions"`
+	// PromptCohort says what those versions hold and which version is live.
+	PromptCohort PromptCohort `json:"prompt_cohort"`
 }
 
 // TrainingReadinessAt reports whether the labeled Jev decisions of r can feed
@@ -161,10 +174,10 @@ type TrainingReadiness struct {
 // default walk-forward and acceptance configs for the split and the required
 // counts (so a changed default shows up here without an edit). Read-only.
 //
-// foreign are the Trader prompt versions the retraining leaves out (jev.
-// ForeignVersionsOfLive): the funnel and the rows are those of the live
-// prompt's cohort.
-func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time.Time, foreign []string) (TrainingReadiness, error) {
+// live is the live Trader prompt version and foreign the versions the
+// retraining leaves out (jev.ForeignVersions of it): the funnel and the rows
+// are those of the live prompt's cohort.
+func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time.Time, live string, foreign []string) (TrainingReadiness, error) {
 	now = now.UTC()
 	asOf := now
 	if r.To.Before(asOf) {
@@ -190,6 +203,9 @@ func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time
 	}
 	if out.Funnel[3].Rows > MaxReadinessRows {
 		return TrainingReadiness{}, query.ErrLimitExceeded
+	}
+	if out.PromptCohort, err = readPromptCohort(ctx, q, rowsFrom, asOf, live, foreign); err != nil {
+		return TrainingReadiness{}, err
 	}
 	stored, err := repo.ListTrainingRowsFrom(ctx, q, rowsFrom, asOf, foreign)
 	if err != nil {
@@ -252,7 +268,7 @@ WHERE d.decision_type = 'trader' AND d.timestamp >= ? AND d.timestamp < ?`+versi
 // lacking it (the rule BuildRows drops a decision by), in FeatureNames order.
 func featureGaps(stored, usable, dropped int, missing map[string]int) FeatureGaps {
 	names := metalabel.FeatureNames()
-	g := FeatureGaps{TrainingRows: stored, UsableRows: usable, DroppedIncomplete: dropped, Missing: make([]FeatureGap, 0, len(names))}
+	g := FeatureGaps{TrainingRows: stored, AllUsableRows: usable, DroppedIncomplete: dropped, Missing: make([]FeatureGap, 0, len(names))}
 	for _, name := range names {
 		g.Missing = append(g.Missing, FeatureGap{Feature: name, MissingRows: missing[name]})
 	}

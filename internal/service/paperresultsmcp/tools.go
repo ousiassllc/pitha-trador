@@ -33,6 +33,7 @@ type toolEnv struct {
 	// The fields below serve the settings tools (settings_tools.go).
 	client      string                         // the caller's host, for the audit log
 	paperLimits *config.RiskLimits             // risk.yaml's Paper section (defaults of the Paper keys)
+	policy      *config.PolicyConfig           // strategy.yaml's policy section (entry_quality_whatif); nil is the build default
 	writer      func() (*mcpset.Writer, error) // the narrow write connection, opened on first use
 }
 

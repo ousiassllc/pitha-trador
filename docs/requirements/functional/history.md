@@ -149,4 +149,7 @@
 | 1.142 | 2026-10-23 | §4.23 FR-ADMIN-1〜5 を6ページ構成・日本語5項目メニュー・タブ・2クリック以内の到達・旧 URL の転送（`/settings/asset-buckets` の 301、`/performance#backtest`）に更新。FR-MCP-33 の画面名を「AIの注文提案」へ。FR-RISK-10 の予算枠はリスク・資金ページで編集する旨に更新 | issue #895 |
 | 1.143 | 2026-10-23 | §4.24 にホーム画面の FR-HOME-1〜5（取引の状態の優先順と1文、今日の Paper 損益・保有ポジション、要対応とヘッダーの「要対応 N 件」バッジ、今日の詳細、カード単位のエラー隔離と30秒更新）を追加。§4.23 FR-ADMIN-3/4 の `/` をホーム画面に更新。§5 のメインメニューの記述を更新 | issue #896（#899 の上に積む） |
 | 1.144 | 2026-10-24 | §4.17 FR-SETTINGS-5・FR-SETTINGS-8 と §4.20 の接続・警告の表示先を、廃止した全ページ共通バナー（`GET /system/marketdata-status`・`/system/health-alerts`、`#marketdata-banner`・`#health-alert-banner`）から、ホーム画面の「要対応」と各ページの「要対応 N 件」バッジへ書き換え（強調表示の継続時間・失敗回数と立花の環境バッジは出さず、見出しと案内文で示す）。FR-RISK の日次停止の表示先と §4.18 の任意キー未設定の案内も同様 | issue #901 |
+| 1.145 | 2026-10-26 | FR-MCP-4 の読み取りのツールに `entry_quality_whatif`（API 仕様 §3.30。`min_entry_quality` を仮に変えたときの後続ガードの結果を数える。読み取り専用）を追加し、13 つ・合計 32 に | issue #911 |
+| 1.146 | 2026-10-26 | FR-POLICY の `api_error` の理由に失敗の種別（`timeout` / `network` / `http_5xx` / `http_429` / `http_4xx_other` / `invalid_response` / `persist_failed` / `other`）を、`jev_none` の理由に確信度と相場の局面を付ける。判断・発注は変わらない | issue #912 |
+| 1.147 | 2026-10-26 | FR-MCP の `metalabel_training_readiness` が OOS 窓の始点の理由・不足行数・除外コホートの中身を返す（`features.usable_rows` は `all_usable_rows` に改名）。判断・発注・学習は変わらない | issue #913 |
 | 1.148 | 2026-10-26 | FR-MCP の `session_diagnostics` が、kabu のとき空の `watch_lists` を `watch_list_empty` でなく `watch_list_not_applicable` として返す。判断・発注・監視リストの生成は変わらない | issue #914 |
