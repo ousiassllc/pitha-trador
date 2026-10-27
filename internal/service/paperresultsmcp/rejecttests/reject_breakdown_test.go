@@ -138,6 +138,7 @@ func TestRejections_SplitsJevNoneByRegimeAndByConfidenceBand(t *testing.T) {
 		"jev_none: confidence=0.5000 regime=TREND; calibration_all_versions: judged on all-versions total", // a note after the answer
 		"jev_none", // from before #912
 		"jev_none",
+		"jev_none: calibration_all_versions: judged on all-versions total; live version v1 has fewer than 30 labeled samples in the confidence bucket", // a #881 note on a bare code, from before #912
 		"jev_none: something an older version wrote",       // no confidence= at all
 		"jev_none: confidence=0.6000 regime=unknown",       // the policy's word for no regime
 		"jev_none: confidence=0.6000 regime=range",         // names are the domain's, upper case
@@ -149,13 +150,13 @@ func TestRejections_SplitsJevNoneByRegimeAndByConfidenceBand(t *testing.T) {
 		"special_quote",
 		"risk_engine_rejected: kill_switch_active: [operator_manual]", // Risk's, not here
 	)
-	if got.OtherRejectCount != 17 {
-		t.Fatalf("other_reject_count = %d, want 17", got.OtherRejectCount)
+	if got.OtherRejectCount != 18 {
+		t.Fatalf("other_reject_count = %d, want 18", got.OtherRejectCount)
 	}
 	want := map[string]int{
 		"jev_none:regime=RANGE": 2, "jev_none:regime=TREND": 2, "jev_none:regime=BREAKOUT": 1, "jev_none:regime=CHAOTIC": 1,
 		"jev_none:conf=ge_0.8": 2, "jev_none:conf=0.4_to_0.6": 2, "jev_none:conf=0.6_to_0.8": 1, "jev_none:conf=lt_0.4": 1,
-		"jev_none": 3, "jev_none:other": 6, "api_error:timeout": 1, "special_quote": 1,
+		"jev_none": 4, "jev_none:other": 6, "api_error:timeout": 1, "special_quote": 1,
 	}
 	if fmt.Sprint(codes) != fmt.Sprint(want) { // fmt prints a map in key order
 		t.Errorf("other_reject_breakdown = %v, want %v", codes, want)
