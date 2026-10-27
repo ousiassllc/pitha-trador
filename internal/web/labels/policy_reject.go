@@ -1,6 +1,10 @@
 package labels
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/ousiassllc/pitha-trador/internal/domain"
+)
 
 // RejectCodeOther is the code risk_rejections' other_reject_breakdown gives a
 // reason this build does not know (internal/service/paperresultsmcp/query).
@@ -35,10 +39,46 @@ var apiErrorKinds = map[string]string{
 	rejectCodeOther:    "その他",
 }
 
+// jevNoneRegimes are what follows "jev_none:regime=" (the regimes of Jev's
+// answer, shown as the domain's own text, issue #922). The query passes no
+// other name, so the table has no "other": that is "jev_none:other".
+var jevNoneRegimes = map[string]string{
+	domain.JevRegimeTrend:    domain.JevRegimeTrend,
+	domain.JevRegimeRange:    domain.JevRegimeRange,
+	domain.JevRegimeBreakout: domain.JevRegimeBreakout,
+	domain.JevRegimeChaotic:  domain.JevRegimeChaotic,
+}
+
+// jevNoneConfBands names what follows "jev_none:conf=": the confidence bands
+// of Jev's answer (issue #922).
+var jevNoneConfBands = map[string]string{
+	"lt_0.4":     "0.4 未満",
+	"0.4_to_0.6": "0.4 以上 0.6 未満",
+	"0.6_to_0.8": "0.6 以上 0.8 未満",
+	"ge_0.8":     "0.8 以上",
+}
+
+// jevNoneSub names what follows "jev_none:": "other" (a row of the new form
+// that is not a known regime or a confidence), "regime=<regime>" or
+// "conf=<band>".
+func jevNoneSub(sub string) string {
+	if sub == rejectCodeOther {
+		return "その他"
+	}
+	if regime, ok := strings.CutPrefix(sub, "regime="); ok {
+		return "局面 " + lookup("jev_none_regime", jevNoneRegimes, regime, Other)
+	}
+	if band, ok := strings.CutPrefix(sub, "conf="); ok {
+		return "確信度 " + lookup("jev_none_conf_band", jevNoneConfBands, band, Other)
+	}
+	return Other
+}
+
 // PolicyRejectCode is the name of a code of risk_rejections'
 // other_reject_breakdown: a Policy Engine reject head ("jev_none"), a
 // meta_skip head with its reason ("meta_skip:no_active_model"), api_error with
-// its kind ("api_error:timeout"), "unknown"
+// its kind ("api_error:timeout"), jev_none by regime ("jev_none:regime=RANGE")
+// or by confidence band ("jev_none:conf=ge_0.8"), "unknown"
 // (no reason recorded) or "other" (a reason the query does not know).
 func PolicyRejectCode(code string) string {
 	if code == rejectCodeOther {
@@ -49,8 +89,11 @@ func PolicyRejectCode(code string) string {
 	if !hasSub {
 		return name
 	}
-	if head == "api_error" {
+	switch head {
+	case "api_error":
 		return name + "（" + lookup("api_error_kind", apiErrorKinds, sub, Other) + "）"
+	case "jev_none":
+		return name + "（" + jevNoneSub(sub) + "）"
 	}
 	return name + "（" + lookup("meta_skip_reason", metaSkipReasons, sub, Other) + "）"
 }
