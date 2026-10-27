@@ -27,6 +27,13 @@ func TestPolicyRejectCode_NamesEveryCodeTheQueryReturns(t *testing.T) {
 		codes = append(codes, query.RejectCode("api_error", kind))
 	}
 	codes = append(codes, query.RejectCode("", ""), query.RejectCode("some_new_head", ""))
+	for _, regime := range []string{"TREND", "RANGE", "BREAKOUT", "CHAOTIC"} {
+		codes = append(codes, "jev_none:regime="+regime)
+	}
+	for _, band := range []string{"lt_0.4", "0.4_to_0.6", "0.6_to_0.8", "ge_0.8"} {
+		codes = append(codes, "jev_none:conf="+band)
+	}
+	codes = append(codes, "jev_none:other")
 
 	for _, code := range codes {
 		name := labels.PolicyRejectCode(code)
@@ -44,6 +51,10 @@ func TestPolicyRejectCode_NamesEveryCodeTheQueryReturns(t *testing.T) {
 		"api_error:timeout":             "API エラー（時間切れ）",
 		"api_error:persist_failed":      "API エラー（判断を保存できない）",
 		"meta_skip:a_reason_not_listed": "メタモデルが見送り（その他）",
+		"jev_none:regime=RANGE":         "Jev が方向なしと判断（局面 RANGE）",
+		"jev_none:conf=lt_0.4":          "Jev が方向なしと判断（確信度 0.4 未満）",
+		"jev_none:conf=ge_0.8":          "Jev が方向なしと判断（確信度 0.8 以上）",
+		"jev_none:other":                "Jev が方向なしと判断（その他）",
 	} {
 		if got := labels.PolicyRejectCode(code); got != want {
 			t.Errorf("PolicyRejectCode(%q) = %q, want %q", code, got, want)

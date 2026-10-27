@@ -153,3 +153,4 @@
 | 1.146 | 2026-10-26 | FR-POLICY の `api_error` の理由に失敗の種別（`timeout` / `network` / `http_5xx` / `http_429` / `http_4xx_other` / `invalid_response` / `persist_failed` / `other`）を、`jev_none` の理由に確信度と相場の局面を付ける。判断・発注は変わらない | issue #912 |
 | 1.147 | 2026-10-26 | FR-MCP の `metalabel_training_readiness` が OOS 窓の始点の理由・不足行数・除外コホートの中身を返す（`features.usable_rows` は `all_usable_rows` に改名）。判断・発注・学習は変わらない | issue #913 |
 | 1.148 | 2026-10-26 | FR-MCP の `session_diagnostics` が、kabu のとき空の `watch_lists` を `watch_list_empty` でなく `watch_list_not_applicable` として返す。判断・発注・監視リストの生成は変わらない | issue #914 |
+| 1.149 | 2026-10-27 | FR-MCP の `risk_rejections` の `other_reject_breakdown` が `jev_none` を局面別（`jev_none:regime=<局面>`）と確信度の帯別（`jev_none:conf=<帯>`、0.4・0.6・0.8 で 4 つ）に分けて返す。局面別と帯別は別の内訳で、`confidence=` の無い過去分は従来の `jev_none`、未知の局面・不正な形式は `jev_none:other`。集計だけで、判断・発注・設定は変わらない | issue #922 |

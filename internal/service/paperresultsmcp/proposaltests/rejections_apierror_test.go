@@ -44,11 +44,14 @@ func TestRiskRejections_SplitsApiErrorByKind(t *testing.T) {
 	sum := 0
 	for _, b := range d.Breakdown {
 		got = append(got, fmt.Sprintf("%s=%d", b.Reason, b.Count))
-		sum += b.Count
+		if !strings.HasPrefix(b.Reason, "jev_none:conf=") { // jev_none is also by confidence band (issue #922): count it once
+			sum += b.Count
+		}
 	}
-	// A "jev_none" row with detail and a bare one are one bucket, so are the
-	// unrecognised kind and the row without a kind.
-	want := []string{"api_error=2", "jev_none=2", "api_error:timeout=2", "api_error:http_5xx=1", "api_error:persist_failed=1"}
+	// The bare "jev_none" row stays one; the one with the regime and the
+	// confidence is in the by-regime and the by-band codes (issue #922). The
+	// unrecognised kind and the row without a kind are one bucket.
+	want := []string{"api_error=2", "jev_none=1", "jev_none:regime=RANGE=1", "jev_none:conf=ge_0.8=1", "api_error:timeout=2", "api_error:http_5xx=1", "api_error:persist_failed=1"}
 	slices.Sort(got)
 	slices.Sort(want)
 	if !slices.Equal(got, want) {
@@ -56,6 +59,9 @@ func TestRiskRejections_SplitsApiErrorByKind(t *testing.T) {
 	}
 	if sum != d.OtherRej || sum != 8 {
 		t.Fatalf("breakdown sums to %d, other_reject_count = %d, want 8", sum, d.OtherRej)
+	}
+	if strings.Contains(string(res.body), "confidence=") || strings.Contains(string(res.body), "0.8125") {
+		t.Fatal("the confidence of a jev_none row leaked into the response")
 	}
 	if strings.Contains(string(res.body), testkit.SentinelDetail) {
 		t.Fatal("error text of a reject reason leaked into the response")
