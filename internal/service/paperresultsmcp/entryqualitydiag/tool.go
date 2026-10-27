@@ -19,7 +19,9 @@ const Description = "min_entry_quality を仮に変えたら見送りがどう�
 	"エントリー判定の手前で落ちた件数（理由別）・VWAP 逆張りで判定対象外の件数・貸借なしの SHORT の件数、判定に届いた判断について min_entry_quality ごとの" +
 	"「entry_quality で落ちる件数」「通過して継続確率・toxic_flow・流動性ストレスで落ちる件数」「全部通る件数」（買い・売り別を含む）。" +
 	"判定は Policy Engine と同じ関数（policy.ThresholdReject）で、継続確率・toxic_flow・流動性ストレスのしきい値は今の policy.*（strategy.yaml と runtime_settings の上書き）。" +
-	"メタモデルの判定と確率しきい値は含まない。集計はライブの版と同じコホートの行だけで、prompt_version を渡すとその版だけ"
+	"メタモデルの判定と確率しきい値は含まない。集計はライブの版と同じコホートの行だけで、prompt_version を渡すとその版だけ。" +
+	"「全部通る」候補には結果ラベル（label_version=2 の net_return_bps、コスト控除後）を当てた outcomes（買い・売り別に件数・ラベルなしの件数・勝率・平均/中央値/合計/最悪の1件）と、" +
+	"保有時間・手数料・スリッページの前提 label_assumptions を返す（件数はラベルの有無で変わらない）"
 
 // SchemaProperties are the tool's own arguments besides the period.
 func SchemaProperties() map[string]any {

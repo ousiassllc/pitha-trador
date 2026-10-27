@@ -103,22 +103,25 @@ type Counts struct {
 }
 
 // Scenario is one min_entry_quality value, for both sides together and each.
+// Outcomes says how the candidates that passed every guard did, per side.
 type Scenario struct {
-	MinEntryQuality string `json:"min_entry_quality"`
-	Total           Counts `json:"total"`
-	Long            Counts `json:"long"`
-	Short           Counts `json:"short"`
+	MinEntryQuality string           `json:"min_entry_quality"`
+	Total           Counts           `json:"total"`
+	Long            Counts           `json:"long"`
+	Short           Counts           `json:"short"`
+	Outcomes        ScenarioOutcomes `json:"outcomes"`
 }
 
 // Data is entry_quality_whatif's data.
 type Data struct {
-	RowsFrom       string         `json:"rows_from"`
-	RowsTo         string         `json:"rows_to"`
-	PromptVersions PromptScope    `json:"prompt_versions"`
-	Thresholds     Thresholds     `json:"thresholds"`
-	Population     Population     `json:"population"`
-	Distribution   []Distribution `json:"entry_quality_distribution"`
-	Scenarios      []Scenario     `json:"scenarios"`
+	RowsFrom         string           `json:"rows_from"`
+	RowsTo           string           `json:"rows_to"`
+	PromptVersions   PromptScope      `json:"prompt_versions"`
+	Thresholds       Thresholds       `json:"thresholds"`
+	Population       Population       `json:"population"`
+	Distribution     []Distribution   `json:"entry_quality_distribution"`
+	Scenarios        []Scenario       `json:"scenarios"`
+	LabelAssumptions LabelAssumptions `json:"label_assumptions"`
 }
 
 // Args are the tool's own arguments.

@@ -25,8 +25,21 @@ Policy Engine の `entry_quality_below_threshold` は、ガードを順に見て
 
 含まないもの: メタモデルの判定と確率のしきい値（ライブの規則はそれらを確率の判定の代わりにモデルの判定で置き換える。保存された回答からは再現できない）、リスクエンジン。したがって `pass_all_guards` は「ガードを通る」件数で、エントリーされる件数ではない。`min_entry_quality`（Paper は既定 `good`、Live は `strong`）を変える判断はこのツールの対象外で、人が決める。
 
+結果ラベルの集計（issue #921）: `scenarios[].outcomes.long` / `.short` は、その `min_entry_quality` で `pass_all_guards` に数えられた候補に、既存の Outcome Labeling の結果（`calibration_outcomes`）を当てる。**件数（`candidates` ほか上の表の値）はラベルの有無で変わらない**。ラベルは `label_version = 2` かつ `net_return_bps` がある行で、1 判断に複数あれば新しい行を 1 つ採る（メタモデルの学習行と同じ規則）。判断時点の特徴量 `return_1m` は結果ラベルではなく、集計しない。
+
+| キー | 内容 |
+|---|---|
+| `candidates` | `pass_all_guards` と同じ値。`candidates` = `labeled` + `unlabeled` |
+| `labeled` / `unlabeled` | ラベルのある候補 / ない候補（別に数え、勝率・損益には入れない） |
+| `wins` / `win_rate` | `net_return_bps > 0` の件数（0 は勝ちに数えない。メタモデルの学習と同じ定義）と `wins / labeled`。`labeled` が 0 のとき `win_rate` は `null` |
+| `net_return` | `labeled` が 0 のとき `null`。`mean_bps`・`median_bps`（偶数件は中央 2 件の平均）・`sum_bps`（コスト控除後の bps）と、最悪の 1 件 `worst`（`net_return_bps`・`jev_decision_id`・`symbol`・`decided_at`・`barrier_hit`） |
+| `horizon_minutes[]` | ラベルの保有時間（`minutes` = ラベル作成時のタイムアウト）ごとの `labeled` 件数。昇順 |
+
+`label_assumptions` は結果の前提: `label_version`・`selection` / `win` / `exit`（採る行・勝ち・決済の決め方）・`timeout_minutes`（保有時間の上限）・`take_profit_bps` / `stop_loss_bps`・`barrier_cost_bps`（`calibration.barrier_cost_bps`）・`label_cost_bps.long` / `.short`（`cost.*` で動かしたラベルのコスト。`costsettings.LabelCostBps`）・`fee_bps`・`fee_fixed_jpy`・`reference_notional_jpy`・`slippage_long` / `slippage_short`（`continuous_bps` / `opening_bps` / `closing_bps`）・`short_borrow_bps`。ラベル行に作成時の設定は残らないため、これらは**今の** `runtime_settings`（未設定はデフォルト）で、ラベル作成後に設定を変えていれば、その行は前の値で作られている（`settings` に明記）。追加のクエリは SELECT のみで、`runtime_settings` は `calibration.barrier_*` と `cost.*` の固定キーだけを読む。
+
 ## 変更履歴
 
 | 版 | 日付 | 内容 | 出典 |
 |---|---|---|---|
 | 1.0 | 2026-10-26 | 新規 | issue #911 |
+| 1.1 | 2026-10-27 | `scenarios[].outcomes`（全ガード通過候補の結果ラベル集計）と `label_assumptions` を追加。既存の件数は変えない | issue #921 |
