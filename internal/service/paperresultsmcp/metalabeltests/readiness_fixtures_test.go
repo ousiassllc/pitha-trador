@@ -27,7 +27,7 @@ type readiness struct {
 	} `json:"funnel"`
 	Features struct {
 		TrainingRows      int `json:"training_rows"`
-		UsableRows        int `json:"usable_rows"`
+		UsableRows        int `json:"all_usable_rows"`
 		DroppedIncomplete int `json:"dropped_incomplete"`
 		Missing           []struct {
 			Feature     string `json:"feature"`
@@ -47,13 +47,46 @@ type readiness struct {
 		DroppedIncompleteState string  `json:"dropped_incomplete_status"`
 	} `json:"last_retrain"`
 	ExcludedPromptVersions []string `json:"excluded_prompt_versions"`
-	Split                  struct {
-		LLMCutoff       string  `json:"llm_cutoff"`
-		LLMCutoffStatus string  `json:"llm_cutoff_status"`
-		OOSStart        string  `json:"oos_start"`
-		TrainReady      bool    `json:"train_ready"`
-		TrainSkipCode   *string `json:"train_skip_code"`
-		Train           struct {
+	PromptCohort           struct {
+		LivePromptVersion string `json:"live_prompt_version"`
+		LatestPromotion   *struct {
+			At          string `json:"at"`
+			FromVersion string `json:"from_version"`
+			ToVersion   string `json:"to_version"`
+		} `json:"latest_promotion"`
+		Excluded []struct {
+			PromptVersion      string `json:"prompt_version"`
+			Cohort             string `json:"cohort"`
+			TraderDecisions    int64  `json:"trader_decisions"`
+			LongShortRows      int64  `json:"long_short_rows"`
+			LabelV2Rows        int64  `json:"label_v2_rows"`
+			OldestDecisionDate string `json:"oldest_decision_date"`
+			NewestDecisionDate string `json:"newest_decision_date"`
+		} `json:"excluded"`
+	} `json:"prompt_cohort"`
+	Split struct {
+		LLMCutoff       string `json:"llm_cutoff"`
+		LLMCutoffStatus string `json:"llm_cutoff_status"`
+		OOSStart        string `json:"oos_start"`
+		OOSStartReason  string `json:"oos_start_reason"`
+		OOSFloor        string `json:"oos_floor"`
+		OOSFloorSource  string `json:"oos_floor_source"`
+		Shortfall       struct {
+			OOSWindowRows           int     `json:"oos_window_rows"`
+			OOSRowsMissing          int     `json:"oos_rows_missing"`
+			PurgedRows              int     `json:"purged_rows"`
+			TrainRowsMissing        int     `json:"train_rows_missing"`
+			AdditionalRowsNeeded    int     `json:"additional_rows_needed"`
+			RowsPerTradingDay       float64 `json:"rows_per_trading_day"`
+			RateTradingDays         int     `json:"rate_trading_days"`
+			EstimatedTradingDays    *int    `json:"estimated_trading_days"`
+			OOSWindowTradingDays    int     `json:"oos_window_trading_days"`
+			OOSMinRowsPerTradingDay *int    `json:"oos_min_rows_per_trading_day"`
+			RateReachesOOSBar       *bool   `json:"rate_reaches_oos_bar"`
+		} `json:"shortfall"`
+		TrainReady    bool    `json:"train_ready"`
+		TrainSkipCode *string `json:"train_skip_code"`
+		Train         struct {
 			Rows                    int  `json:"rows"`
 			RequiredRows            int  `json:"required_rows"`
 			FitRows                 *int `json:"fit_rows"`

@@ -25,11 +25,12 @@ func readinessSplit(rows []training.Row, asOf, cutoff time.Time) (ReadinessSplit
 	}
 	split, err := training.SplitWalkForward(rows, asOf, cutoff, walk)
 	var oos []training.Row
+	var oosStart time.Time
 	if err == nil {
 		fit, cal := len(split.Fit), len(split.Calibrate)
 		s.TrainReady = true
 		s.Train.Rows, s.Train.FitRows, s.Train.CalibrationRows = fit+cal, &fit, &cal
-		s.OOSStart, oos = split.OOSStart.UTC().Format(time.RFC3339), split.OOS
+		oosStart, oos = split.OOSStart, split.OOS
 	} else {
 		var short *training.InsufficientDataError
 		if !errors.As(err, &short) {
@@ -41,10 +42,18 @@ func readinessSplit(rows []training.Row, asOf, cutoff time.Time) (ReadinessSplit
 		if derr != nil {
 			return ReadinessSplit{}, derr
 		}
-		s.OOSStart, oos = start.UTC().Format(time.RFC3339), rowsOOS
+		oosStart, oos = start, rowsOOS
 	}
+	s.OOSStart = oosStart.UTC().Format(time.RFC3339)
 	s.OOS.Rows, s.OOS.Days = len(oos), distinctJSTDays(oos)
 	s.OOS.Ready = s.OOS.Rows >= bar.MinOOSSamples && s.OOS.Days >= bar.MinOOSDays
+
+	// Why the window opens there and what is missing (issue #913): read-only
+	// figures about the split above, which they never feed back into.
+	sorted := eligibleRows(rows, asOf)
+	reach := reachOOS(sorted, asOf, cutoff, walk)
+	s.OOSStartReason, s.OOSFloor, s.OOSFloorSource = reach.reason, reach.floor.UTC().Format(time.RFC3339), reach.floorSource
+	s.Shortfall = shortfall(sorted, reach, oosStart, asOf, walk)
 	return s, nil
 }
 
