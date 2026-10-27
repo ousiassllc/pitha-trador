@@ -26,8 +26,14 @@ const (
 	// ObsSucceededWithoutSnapshot: some market-data job succeeded but wrote no
 	// snapshot (a board fetch deferred by the broker's rate limit returns nil).
 	ObsSucceededWithoutSnapshot = "succeeded_without_snapshot"
-	// ObsWatchListEmpty: no watch list was decided for the day, or it is empty.
+	// ObsWatchListEmpty: no watch list was decided for the day, or it is empty,
+	// with the 立花 adapter (the only writer of watch_lists) or a broker
+	// selection that could not be read.
 	ObsWatchListEmpty = "watch_list_empty"
+	// ObsWatchListNotApplicable: the same days with kabu selected. kabu keeps
+	// its watch list in memory and never writes watch_lists, so the empty table
+	// says nothing about the runtime watch list (issue #914).
+	ObsWatchListNotApplicable = "watch_list_not_applicable"
 	// ObsOtherQueuesIdle: no job of any other queue finished on the day,
 	// which is what a stopped app looks like.
 	ObsOtherQueuesIdle = "other_queues_idle"
@@ -55,7 +61,8 @@ type MarketDataJobDay struct {
 	SucceededWithoutSnapshot *int `json:"succeeded_without_snapshot"`
 }
 
-// WatchListDay is the day's watch list (watch_lists / watch_list_entries).
+// WatchListDay is the day's watch list (watch_lists / watch_list_entries). The
+// table is written by the 立花 adapter only (see ObsWatchListNotApplicable).
 type WatchListDay struct {
 	Present bool    `json:"present"`
 	Source  *string `json:"source"`
@@ -90,6 +97,11 @@ type Diagnostics struct {
 	Window Window `json:"window"`
 	// Days are the trading days of the window, oldest first.
 	Days []Day `json:"days"`
+	// BrokerProvider is the stored broker selection (runtime_settings
+	// broker.provider; "kabu" when none is stored, "tachibana", or
+	// ProviderUnknown when it could not be read). The app reads it once at
+	// start, so after a change it names the broker of the next start.
+	BrokerProvider string `json:"broker_provider"`
 	// Current is the kabu login / app state now (from the health alerts and
 	// the detector's last check); it says nothing about the days above.
 	// Current is null only when it could not be read in time (Incomplete).
@@ -104,7 +116,7 @@ type Diagnostics struct {
 	// null (a null is then "not read", not "deleted by the retention").
 	// Incomplete names them: "current", "market_data_jobs", "other_queue_jobs",
 	// "watch_lists", "snapshot_rows:<JST date>" and
-	// "succeeded_without_snapshot:<JST date>". Both are empty/false when
+	// "succeeded_without_snapshot:<JST date>" and "broker_provider". Both are empty/false when
 	// everything was read.
 	TimedOut   bool     `json:"timed_out"`
 	Incomplete []string `json:"incomplete"`

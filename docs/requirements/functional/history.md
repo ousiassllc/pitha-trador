@@ -152,3 +152,4 @@
 | 1.145 | 2026-10-26 | FR-MCP-4 の読み取りのツールに `entry_quality_whatif`（API 仕様 §3.30。`min_entry_quality` を仮に変えたときの後続ガードの結果を数える。読み取り専用）を追加し、13 つ・合計 32 に | issue #911 |
 | 1.146 | 2026-10-26 | FR-POLICY の `api_error` の理由に失敗の種別（`timeout` / `network` / `http_5xx` / `http_429` / `http_4xx_other` / `invalid_response` / `persist_failed` / `other`）を、`jev_none` の理由に確信度と相場の局面を付ける。判断・発注は変わらない | issue #912 |
 | 1.147 | 2026-10-26 | FR-MCP の `metalabel_training_readiness` が OOS 窓の始点の理由・不足行数・除外コホートの中身を返す（`features.usable_rows` は `all_usable_rows` に改名）。判断・発注・学習は変わらない | issue #913 |
+| 1.148 | 2026-10-26 | FR-MCP の `session_diagnostics` が、kabu のとき空の `watch_lists` を `watch_list_empty` でなく `watch_list_not_applicable` として返す。判断・発注・監視リストの生成は変わらない | issue #914 |

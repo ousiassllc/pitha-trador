@@ -25,6 +25,8 @@ type reader struct {
 
 	succeeded, failed, other map[string]int
 	lists                    map[string]WatchListDay
+	// provider is the stored broker selection (BrokerProvider).
+	provider string
 }
 
 // try reports whether the statement named item succeeded (err == nil). When
@@ -84,6 +86,9 @@ func Read(ctx context.Context, q query.Q, per query.Range, now time.Time) (Diagn
 	if _, err := r.try("watch_lists", err1); err != nil {
 		return Diagnostics{}, err
 	}
+
+	r.provider = r.readProvider()
+	out.BrokerProvider = r.provider
 
 	var days []time.Time
 	for day := from.In(query.JST); day.Before(per.To); day = day.AddDate(0, 0, 1) {
@@ -154,11 +159,11 @@ func (r *reader) sessionDay(day time.Time) (Day, error) {
 			d.MarketDataJob.SucceededWithoutSnapshot = &n
 		}
 	}
-	d.Observations = observations(d)
+	d.Observations = observations(d, r.provider)
 	return d, nil
 }
 
-func observations(d Day) []string {
+func observations(d Day, provider string) []string {
 	obs := []string{}
 	if d.SnapshotRows != nil && *d.SnapshotRows == 0 {
 		obs = append(obs, ObsNoSnapshots)
@@ -175,8 +180,8 @@ func observations(d Day) []string {
 	if j.SucceededWithoutSnapshot != nil && *j.SucceededWithoutSnapshot > 0 {
 		obs = append(obs, ObsSucceededWithoutSnapshot)
 	}
-	if d.WatchList != nil && d.WatchList.Entries == 0 {
-		obs = append(obs, ObsWatchListEmpty)
+	if o := watchListObservation(provider, d.WatchList); o != "" {
+		obs = append(obs, o)
 	}
 	if d.OtherQueueJobsFinished != nil && *d.OtherQueueJobsFinished == 0 {
 		obs = append(obs, ObsOtherQueuesIdle)
