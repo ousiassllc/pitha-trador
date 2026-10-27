@@ -118,6 +118,7 @@ func Analyze(ctx context.Context, q query.Q, r query.Range, a Args) (Data, error
 	}
 	dist := map[[2]string]int{}
 	before := map[string]int{}
+	passers := make([][]candidate, len(levels))
 	for _, row := range rows {
 		quality := unknownQuality
 		if _, ok := domain.EntryQualityRank(row.entryQuality.String); ok {
@@ -143,20 +144,38 @@ func Analyze(ctx context.Context, q query.Q, r query.Range, a Args) (Data, error
 		default:
 			out.Population.ReachedGuards++
 			for i := range out.Scenarios {
-				judge(&out.Scenarios[i], policyCfg, row.direction, d)
+				if judge(&out.Scenarios[i], policyCfg, row.direction, d) {
+					passers[i] = append(passers[i], candidate{id: row.id, short: row.direction == domain.JevDirectionShort})
+				}
 			}
 		}
 	}
 	out.Population.RejectedBeforeGuardsByReason = buckets(before)
 	out.Distribution = distribution(dist)
+
+	// The outcome labels only describe the candidates counted above: they never
+	// change which decisions pass.
+	labels, err := listLabels(ctx, q, from, to, scope, scopeArgs)
+	if err != nil {
+		return Data{}, err
+	}
+	for i := range out.Scenarios {
+		out.Scenarios[i].Outcomes = ScenarioOutcomes{
+			Long:  outcomesOf(passers[i], false, labels),
+			Short: outcomesOf(passers[i], true, labels),
+		}
+	}
+	if out.LabelAssumptions, err = labelAssumptions(ctx, q); err != nil {
+		return Data{}, err
+	}
 	return out, nil
 }
 
-// judge runs the engine's guard chain on d for scenario s and counts the
-// verdict. Probability is not part of it: the live rule replaces it with the
-// meta-labeling model's verdict, which a stored answer cannot be re-run
-// through.
-func judge(s *Scenario, cfg config.PolicyConfig, direction string, d domain.JevDecision) {
+// judge runs the engine's guard chain on d for scenario s, counts the verdict
+// and reports whether the decision passed every guard. Probability is not part
+// of it: the live rule replaces it with the meta-labeling model's verdict,
+// which a stored answer cannot be re-run through.
+func judge(s *Scenario, cfg config.PolicyConfig, direction string, d domain.JevDecision) (passedAll bool) {
 	t, side := cfg.Long, &s.Long
 	if direction == domain.JevDirectionShort {
 		t, side = cfg.Short, &s.Short
@@ -169,6 +188,7 @@ func judge(s *Scenario, cfg config.PolicyConfig, direction string, d domain.JevD
 		case "":
 			c.PassEntryQuality++
 			c.PassAllGuards++
+			passedAll = true
 		case policy.ReasonEntryQualityBelowThreshold:
 			c.BelowEntryQuality++
 		case policy.ReasonContinuationProbabilityBelowThreshold:
@@ -182,6 +202,7 @@ func judge(s *Scenario, cfg config.PolicyConfig, direction string, d domain.JevD
 			c.BlockedLiquidityStressed++
 		}
 	}
+	return passedAll
 }
 
 // head is the reject_reason code: the text before the first ':' (or ';'),
