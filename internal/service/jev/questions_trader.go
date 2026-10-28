@@ -46,7 +46,7 @@ var entryQualityOptions = []systemone.Option{
 // material for whether to take that candidate. TraderResponse.Score turns
 // them into the Score feature the secondary model
 // (internal/service/metalabel) consumes. This is the trader-v3 set: its wording
-// is pinned by evalflow/prompt_version_test.go, so it stays unchanged; a different wording
+// is pinned by promptflow/prompt_version_test.go, so it stays unchanged; a different wording
 // is a new version (prompts.go).
 var traderQuestions = map[string]systemone.Question{
 	qDirection: systemone.ChoiceQuestion(

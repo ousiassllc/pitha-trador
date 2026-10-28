@@ -9,7 +9,7 @@ package jev
 // §jev_decisions). DecisionRepository.Insert refuses an empty version. The
 // shadow's table jev_shadow_decisions names its candidate version prompt_version.
 //
-// A version is bound to its wording by hash: evalflow/prompt_version_test.go pins
+// A version is bound to its wording by hash: promptflow/prompt_version_test.go pins
 // the SHA-256 of every registered question group (prompts.go), so changing a
 // wording without a new version fails the test. A changed wording is a new version.
 //
@@ -51,6 +51,8 @@ const ScoutQuestionVersion = "scout-v3"
 //
 // History: trader-v3 is the same stateGuide rewrite as scout-v3. trader-v4
 // (TraderEntryQualityCandidateVersion) is a registered CANDIDATE with a
-// redefined entry_quality; it is not the live version and nothing promotes it
-// automatically.
+// redefined entry_quality; trader-v5 (TraderExitPlanCandidateVersion) is a
+// registered CANDIDATE whose direction and continuation_probability questions
+// name the Paper exit rules (issue #925). Neither is the live version and
+// nothing promotes them automatically.
 const TraderQuestionVersion = "trader-v3"

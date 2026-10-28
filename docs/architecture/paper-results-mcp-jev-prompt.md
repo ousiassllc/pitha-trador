@@ -7,7 +7,7 @@
 ## 1. 版
 
 - Jev のプロンプトの版は `jev_decisions.question_version`（`VARCHAR(20)`・`NOT NULL`。マイグレーション `000004`）を**そのまま正式な版**とする。`prompt_version` 列は足さない。理由: ①すべての Scout・Trader の行が最初から埋めており、過去の行も埋まっている（バックフィルが要らない）。②同じ事実を 2 列に持つと食い違える。③`DecisionRepository.Insert` が空の版を拒否するので、以後の行にも必ず入る。シャドーの表 `jev_shadow_decisions` の候補の版の列は `prompt_version` という名前にした（ライブの版は `jev_decisions.question_version` を JOIN で見る）
-- 版とプロンプトの中身は**ハッシュで結ぶ**。`internal/service/jev/evalflow/prompt_version_test.go` が、登録された版ごとに質問群（各質問の Instructions と選択肢の Rubric。ワイヤ形式）の SHA-256 を固定する。文言を変えて版を上げ忘れるとテストが落ちる。登録済みの版の文言は直さず、新しい版を足す（`internal/service/jev/prompts.go`）
+- 版とプロンプトの中身は**ハッシュで結ぶ**。`internal/service/jev/promptflow/prompt_version_test.go` が、登録された版ごとに質問群（各質問の Instructions と選択肢の Rubric。ワイヤ形式）の SHA-256 を固定する。文言を変えて版を上げ忘れるとテストが落ちる。登録済みの版の文言は直さず、新しい版を足す（`internal/service/jev/prompts.go`）
 - `traderPrompts` が版名から質問群を引く。ライブの版と候補の版を同じプロセスで同時に組み立てられる（`TraderQuestionsFor`）。登録されていない版は送らずエラー
 - ライブの版は、ビルドの既定 `TraderQuestionVersion`（`trader-v3`）か、昇格が `runtime_settings` の `jev.trader_prompt_version` に保存した登録済みの版。Trader は呼び出しごとに読み、リクエストと `jev_decisions.question_version` に同じ値を使う（昇格が呼び出しの途中に入っても、行は実際に使った版を名乗る）
 
@@ -57,6 +57,18 @@
 
 `entry_quality` の定義だけを変えた候補版 `trader-v4`（`questions_trader_v4.go`）を登録した。ライブの版 `trader-v3` は変えない。シャドーは既定で無効で、昇格は人の明示的な操作だけ。差分と理由は issue #872 の PR に「候補の案（人がレビューして決める）」として書く。その版のシャドーの分布は実際の LLM が要るので、本番の Windows PC で人がシャドーを有効にして初めて分かる。
 
+## 2 つ目の候補（trader-v5。昇格されない）
+
+`direction` と `continuation_probability` の問いだけを、実際の Paper の出口に合わせて聞き直した候補版 `trader-v5`（issue #925。コードは `internal/service/jev/exitplan` と `questions_trader_v5.go`）を登録した。ライブの版 `trader-v3`（と `jev.trader_prompt_version`）は変えない。昇格はしない（悠太さんの OK 後の別操作）。
+
+- **理由**（issue #925。silent の DB の写しでの計算で、本リポジトリでは再取得していない）: 2026-09-28〜10-28 に全関門を通った LONG の 46 件は、実際の Paper の出口（FR-EXIT-2）で勝ち 12 件・平均 −28 bps。出口の条件を変えた 8 パターンもすべてマイナスだったので、原因は入る判断側とみる。Jev の問い（`questions_trader.go`）は「over the next several minutes」だけで、利確・損切り・保有時間を知らない
+- **番号**: `trader-v4` は #872 の最初の候補としてコード（`questions_trader_v4.go`・`cohort.go`）・テスト・本章・`jev-prompt-versions-in-data.md` で使われているので、`trader-v5`。他の版名（`trader-v6` 以降）はコード・migration・Issue・PR に無い（`trader-v5`・`trader-v6` という文字列は migration 000047 のテストと MCP のテストの捨てデータにだけあり、版の登録とは無関係）
+- **差分**: `trader-v3` の `direction` と `continuation_probability` の Instructions のうち、「over the next several minutes …」の句だけを置き換える。ほかの 4 つの問い・選択肢の Rubric・yes/no の基準・`stateGuide` は `trader-v3` と同じ。置き換えは `exitplan.Questions`（`trader-v3` の文を 1 か所ずつ置換）
+- **出口の数字**: `execution.DefaultConfig()` から組み立てる（利確 +1.2%＝120 bps、損切り −0.6%＝60 bps、トレーリング 0.5%、最大保有 20 分。FR-EXIT-2）。この既定値を変えると文言が変わりハッシュのテストが落ちるので、数字を直すには新しい版にする。往復コスト（スプレッド・スリッページ・手数料）は文言で「結果から引かれる」と伝えるだけで、数字は渡さない。問いに書くのは数値の出口だけで、Execution が実際に使うそれ以外の出口（Jev の方向の反転、`continuation_probability` の低下、VWAP の逆クロス、引け前の強制決済）は書かない（トレーリングの基準は約定価格から始まるので、最初の損切りの実効は −0.5% で、書いた −0.6% より近い）
+- **コホート**: `exit-plan-v5`（`direction` と `continuation_probability` は Policy が読むので、`trader-v3` と答えの意味が違う）。ライブが `trader-v3` の間、`trader-v5` の行は `jev_decisions` に入らない（シャドーは `jev_shadow_decisions` だけ）
+- **記録**: 費用・トークンは既存の列 `input_tokens`・`request_cost`・`cost_is_estimate` に入る（列・表は足さない。`TestShadowV5_CallsWithTheLiveInputAndRecordsTokensCostAndEstimateFlag`）。有効化は Settings 画面だけ（キー・既定値・上限・レートは上の各節）
+- **評価**（マージ後）: 2〜4 週間ためた後、全関門を通った件を実際の出口ルールで計算し、30 件以上・平均がコスト込みでプラス・同じ場面で `trader-v3` より良い、の 3 つを全部満たしたときだけ昇格を提案する
+
 ## 改訂履歴
 
 | 版 | 日付 | 変更内容 | 変更理由 |
@@ -67,3 +79,4 @@
 | 1.3 | 2026-10-22 | シャドーが Jev の API キーとレート制限をライブと共有することへの対策を追加（429/529 を待たず・再試行せず止まる 15 分のクールダウン、ライブが受けた 429/529 でも止まる、呼び出しの最小間隔 2 秒、止めた理由の `jev.shadow.throttle` と Settings 画面・`jev_shadow_cost` での表示）。実 API で未確認のため、本番でシャドーを有効にしない旨と Settings 既定の無効を明記 | issue #883 |
 | 1.4 | 2026-10-22 | 終了時の取り消し（`Shadow.Close`）で途中になった呼び出しは失敗回数に数えないことを、失敗回数の説明の 2 か所（1 日の失敗回数の上限・API 文書）にも明記。保存がすでにコミットしていれば行も費用もあることを正確にした | issue #882 |
 | 1.5 | 2026-10-22 | 「昇格後のデータの扱い」を追加（詳細は分割章 `jev-prompt-versions-in-data.md`）。`jev_decisions` だけを読む読み手が、ライブの版と別のコホートの行を使わない。Policyの標本数とメタモデルの扱いを決定済みに | issue #881 |
+| 1.6 | 2026-10-28 | 2 つ目の候補 `trader-v5`（`direction`・`continuation_probability` を Paper の出口で聞き直す。コホート `exit-plan-v5`）を登録。ライブは `trader-v3` のまま | issue #925 |

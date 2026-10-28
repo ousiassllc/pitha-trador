@@ -97,8 +97,8 @@ func TestWhatIfCountsTheSeededPeriod(t *testing.T) {
 	if !slices.Equal(d.Distribution, wantDist) {
 		t.Errorf("distribution = %+v, want %+v", d.Distribution, wantDist)
 	}
-	if !slices.Equal(d.PromptVersions.Excluded, []string{"trader-v4"}) {
-		t.Errorf("excluded versions = %v, want [trader-v4]", d.PromptVersions.Excluded)
+	if !slices.Equal(d.PromptVersions.Excluded, []string{"trader-v4", "trader-v5"}) {
+		t.Errorf("excluded versions = %v, want [trader-v4 trader-v5]", d.PromptVersions.Excluded)
 	}
 
 	for _, tc := range []struct {

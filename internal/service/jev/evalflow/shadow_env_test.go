@@ -30,7 +30,8 @@ import (
 const candidateMarker = "Go through the levels from poor upwards"
 
 // fakeJev answers every Trader call like the API does: live (trader-v3)
-// questions get entry_quality poor, candidate (trader-v4) questions get good.
+// questions get entry_quality poor, candidate (trader-v4) questions get good;
+// trader-v5 is told apart by its exit plan wording and answers like trader-v3.
 // It records which version each call asked, and can fail or hold the
 // candidate's calls.
 type fakeJev struct {
@@ -43,8 +44,9 @@ type fakeJev struct {
 	// noUsageShadow makes candidate calls answer a valid answer set with no
 	// usage block (so the caller cannot read a token count).
 	noUsageShadow bool
-	shadowBytes   []int         // request body sizes of the candidate calls, in order
-	holdShadow    chan struct{} // when non-nil, candidate calls wait for it to close
+	shadowBytes   []int               // request body sizes of the candidate calls, in order
+	holdShadow    chan struct{}       // when non-nil, candidate calls wait for it to close
+	bodies        map[string][][]byte // every request body, by the version asked
 }
 
 func (f *fakeJev) calls(version string) int {
@@ -70,15 +72,22 @@ func (f *fakeJev) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	version := "trader-v3"
 	if strings.Contains(req.Questions["entry_quality"].Instructions, candidateMarker) {
 		version = "trader-v4"
+	} else if strings.Contains(req.Questions["direction"].Instructions, "take profit at") {
+		version = "trader-v5"
 	}
 	f.mu.Lock()
 	f.versions = append(f.versions, version)
+	if f.bodies == nil {
+		f.bodies = map[string][][]byte{}
+	}
+	f.bodies[version] = append(f.bodies[version], body)
 	hold, fail, invalid, noUsage := f.holdShadow, f.failShadow, f.invalidShadow, f.noUsageShadow
-	if version == "trader-v4" {
+	candidate := version != "trader-v3"
+	if candidate {
 		f.shadowBytes = append(f.shadowBytes, len(body))
 	}
 	f.mu.Unlock()
-	if version == "trader-v4" {
+	if candidate {
 		if hold != nil {
 			<-hold
 		}
@@ -105,7 +114,7 @@ func (f *fakeJev) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"liquidity_stressed":       jevtest.Noul(0.1),
 		"continuation_probability": jevtest.Noul(0.6),
 	})
-	if noUsage && version == "trader-v4" {
+	if noUsage && candidate {
 		var m map[string]json.RawMessage
 		_ = json.Unmarshal(resp, &m)
 		delete(m, "usage")

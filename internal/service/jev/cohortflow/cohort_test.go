@@ -28,17 +28,19 @@ func TestEveryRegisteredTraderVersionHasACohort(t *testing.T) {
 	}
 }
 
-// trader-v4 redefines entry_quality, which the meta-model reads as a feature, so
-// it is another cohort than trader-v3; the retired v1/v2 rows stay with v3 (what
-// today's database selects must not change).
+// trader-v4 redefines entry_quality and trader-v5 the direction and
+// continuation_probability questions, which the meta-model and Policy read, so
+// each is another cohort than trader-v3; the retired v1/v2 rows stay with v3
+// (what today's database selects must not change).
 func TestForeignVersions(t *testing.T) {
 	for _, tc := range []struct {
 		live string
 		want []string
 	}{
-		{"trader-v3", []string{"trader-v4"}},
-		{"trader-v4", []string{"trader-v1", "trader-v2", "trader-v3"}},
-		{"trader-v2", []string{"trader-v4"}},
+		{"trader-v3", []string{"trader-v4", "trader-v5"}},
+		{"trader-v4", []string{"trader-v1", "trader-v2", "trader-v3", "trader-v5"}},
+		{"trader-v5", []string{"trader-v1", "trader-v2", "trader-v3", "trader-v4"}},
+		{"trader-v2", []string{"trader-v4", "trader-v5"}},
 		{"trader-v9", []string{}}, // an unknown live version leaves nothing out
 	} {
 		if got := jev.ForeignVersions(tc.live); !slices.Equal(got, tc.want) {
@@ -63,13 +65,13 @@ func TestLiveCohortScope(t *testing.T) {
 	ctx := context.Background()
 
 	got, err := jev.LiveCohortScope(mapStore{})(ctx)
-	if err != nil || !slices.Equal(got, []string{"trader-v4"}) {
-		t.Fatalf("default live version: foreign = %v, %v, want [trader-v4]", got, err)
+	if err != nil || !slices.Equal(got, []string{"trader-v4", "trader-v5"}) {
+		t.Fatalf("default live version: foreign = %v, %v, want [trader-v4 trader-v5]", got, err)
 	}
 	promoted := mapStore{values: map[string]string{jevshadowsettings.KeyLiveVersion: `"trader-v4"`}}
 	got, err = jev.LiveCohortScope(promoted)(ctx)
-	if err != nil || !slices.Equal(got, []string{"trader-v1", "trader-v2", "trader-v3"}) {
-		t.Fatalf("promoted: foreign = %v, %v, want the trader-v3 cohort", got, err)
+	if err != nil || !slices.Equal(got, []string{"trader-v1", "trader-v2", "trader-v3", "trader-v5"}) {
+		t.Fatalf("promoted: foreign = %v, %v, want the trader-v3 cohort and trader-v5", got, err)
 	}
 	if _, err := jev.LiveCohortScope(mapStore{err: errors.New("db down")})(ctx); err == nil {
 		t.Fatal("a failed read of the live version must be an error")

@@ -2,6 +2,7 @@ package metalabeltests
 
 import (
 	"database/sql"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -106,7 +107,7 @@ func TestReadinessCohortIsEmptyWhenNothingIsLeftOut(t *testing.T) {
 	if d.PromptCohort.LivePromptVersion != "trader-v3" || len(d.PromptCohort.Excluded) != 0 || d.PromptCohort.LatestPromotion != nil {
 		t.Errorf("prompt cohort = %+v, want live trader-v3, nothing excluded, no promotion", d.PromptCohort)
 	}
-	if len(d.ExcludedPromptVersions) != 1 || d.ExcludedPromptVersions[0] != "trader-v4" {
+	if !slices.Equal(d.ExcludedPromptVersions, []string{"trader-v4", "trader-v5"}) {
 		t.Errorf("excluded_prompt_versions = %v, want the name of the version the retraining leaves out", d.ExcludedPromptVersions)
 	}
 	if body := srv.call(t, "metalabel_training_readiness", fullLookback).body; !strings.Contains(string(body), `\"excluded\":[]`) {

@@ -57,8 +57,8 @@ func TestJevCalibrationDoesNotMixPromptVersions(t *testing.T) {
 
 	t.Run("default is the live version's cohort", func(t *testing.T) {
 		n, d := call(t, nil)
-		if n != 2 || !slices.Equal(d.PromptVersions.Excluded, []string{"trader-v4"}) {
-			t.Fatalf("graded %d samples, excluded %v; want the 2 trader-v3 samples, trader-v4 excluded", n, d.PromptVersions.Excluded)
+		if n != 2 || !slices.Equal(d.PromptVersions.Excluded, []string{"trader-v4", "trader-v5"}) {
+			t.Fatalf("graded %d samples, excluded %v; want the 2 trader-v3 samples, trader-v4 and trader-v5 excluded", n, d.PromptVersions.Excluded)
 		}
 		if len(d.TraderByVersion) != 2 || d.TraderByVersion[0].PromptVersion != "trader-v3" || d.TraderByVersion[0].TraderCount != 2 ||
 			d.TraderByVersion[1].PromptVersion != "trader-v4" || d.TraderByVersion[1].TraderCount != 1 {
@@ -81,7 +81,7 @@ func TestJevCalibrationDoesNotMixPromptVersions(t *testing.T) {
 	testkit.Setting(t, w, jevshadowsettings.KeyLiveVersion, `"trader-v4"`)
 	t.Run("after a promotion the default follows the new live version", func(t *testing.T) {
 		n, d := call(t, nil)
-		if n != 1 || !slices.Equal(d.PromptVersions.Excluded, []string{"trader-v1", "trader-v2", "trader-v3"}) {
+		if n != 1 || !slices.Equal(d.PromptVersions.Excluded, []string{"trader-v1", "trader-v2", "trader-v3", "trader-v5"}) {
 			t.Fatalf("graded %d samples, excluded %v; want the 1 trader-v4 sample", n, d.PromptVersions.Excluded)
 		}
 	})

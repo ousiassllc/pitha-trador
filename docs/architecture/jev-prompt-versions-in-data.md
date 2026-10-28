@@ -4,10 +4,10 @@ issue #881（元: #872 / PR #876 の独立レビューの指摘）。`jev_prompt
 
 ## 1. 決定: 版をコホートでまとめ、ライブの版のコホートだけを使う
 
-- **コホート**: 答えの意味が同じ版のまとまり。`trader-v1`・`trader-v2`・`trader-v3` は `entry-quality-v3`、`trader-v4` は `entry-quality-v4`（`jev.traderCohorts`）。メタモデルは `entry_quality` の答えを特徴量に使う（`TraderResponse.Score`）ので、`entry_quality` の定義を変えた版は別のコホートにする。共通の `stateGuide` の言い換えだけの版（`trader-v2` → `trader-v3`）は同じコホートにできる
+- **コホート**: 答えの意味が同じ版のまとまり。`trader-v1`・`trader-v2`・`trader-v3` は `entry-quality-v3`、`trader-v4` は `entry-quality-v4`、`trader-v5` は `exit-plan-v5`（`jev.traderCohorts`）。メタモデルは `entry_quality` の答えを特徴量に使い（`TraderResponse.Score`）、Policy は `direction` と `continuation_probability` を読むので、`entry_quality` の定義を変えた版（`trader-v4`）も、`direction` と `continuation_probability` の問いを出口の条件で聞き直した版（`trader-v5`、issue #925）も別のコホートにする。共通の `stateGuide` の言い換えだけの版（`trader-v2` → `trader-v3`）は同じコホートにできる
 - **ライブの版のコホートの行だけ**を、次の読み手が使う。他のコホートの行は読まない。ライブの版は `jev.ResolveLiveVersion`（昇格が保存した版、なければビルドの既定）で、読み手が呼ぶたびに決める。**読み取りに失敗したら、混ぜずにエラーにする**（学習は失敗として記録され、RAG は文脈なしで呼ぶ）
 - **登録された版を足すときはコホートを決める**: `TestEveryRegisteredTraderVersionHasACohort` が、コホートの無い版を落とす。ハッシュのテスト（版と文言の結び付け）と合わせて、版を足すたびに「同じ意味か」の判断が要る
-- **今のデータでは何も変わらない**: ライブが `trader-v3`（既定）の間、除外されるのは `trader-v4` の行だけで、`trader-v4` の行は昇格するまで `jev_decisions` に無い（シャドーは `jev_shadow_decisions` に書く）。過去の `trader-v1` / `trader-v2` の行は `trader-v3` と同じコホートなので、これまでどおり読む。ライブの Trader / Scout / Policy が今日出す判断は、メタモデルを除いて変わらない（コホートを記録していない既存のメタモデルは、ライブが `trader-v3` のままでも Live では使わなくなる。§4.2）
+- **今のデータでは何も変わらない**: ライブが `trader-v3`（既定）の間、除外されるのは `trader-v4` と `trader-v5` の行だけで、その行は昇格するまで `jev_decisions` に無い（シャドーは `jev_shadow_decisions` に書く）。過去の `trader-v1` / `trader-v2` の行は `trader-v3` と同じコホートなので、これまでどおり読む。ライブの Trader / Scout / Policy が今日出す判断は、メタモデルを除いて変わらない（コホートを記録していない既存のメタモデルは、ライブが `trader-v3` のままでも Live では使わなくなる。§4.2）
 
 ## 2. 読み手ごとの扱い
 
@@ -35,12 +35,12 @@ issue #881（元: #872 / PR #876 の独立レビューの指摘）。`jev_prompt
 
 ### 4.1 信頼度帯の標本数の確認: 版（コホート）ごとに数える
 
-- **「版」はライブの Trader の版のコホート**（§1。`trader-v1`〜`v3` は `entry-quality-v3` で 1 つ、`trader-v4` は `entry-quality-v4`）。版名の完全一致ではない。理由: 本番に残る `trader-v1` / `trader-v2` の行は `trader-v3` と答えの意味が同じで、完全一致にするとライブが `trader-v3` のままでも今日の標本数が減り、今日のライブ判断が変わる。標本の集計（Calibration・学習・RAG）と同じコホートで数えれば、信頼度帯の標本数も同じ根拠になる。
+- **「版」はライブの Trader の版のコホート**（§1。`trader-v1`〜`v3` は `entry-quality-v3` で 1 つ、`trader-v4` は `entry-quality-v4`、`trader-v5` は `exit-plan-v5`）。版名の完全一致ではない。理由: 本番に残る `trader-v1` / `trader-v2` の行は `trader-v3` と答えの意味が同じで、完全一致にするとライブが `trader-v3` のままでも今日の標本数が減り、今日のライブ判断が変わる。標本の集計（Calibration・学習・RAG）と同じコホートで数えれば、信頼度帯の標本数も同じ根拠になる。
 - **数え方**: `CountLabeledSamplesInConfidenceRange` は `ListLabeledSamples*` と同じ `SetForeignTraderVersions` の範囲（ライブの版と別のコホートの版を除く）だけを数える。ライブの版を読めないときは混ぜずにエラーにする。全版の合計は、同じ DB を指しコホートの範囲を持たない別のリポジトリ（`CalibrationRepository.AllVersions()`）と、それを包む `calibration.Service` で数える。
 - **新しい版の標本が足りない間**:
   - **Paper だけ**、全版の合計で判断を続けてよい（`policy.WithCalibrationScope`・`policy/calibrationgate`。`metalabelsettings.RuntimeMode`）。そのとき、判断の記録（`trade_signals.reject_reason`。Policy の判断が永続化する唯一の文字列）の末尾に注記 `calibration_all_versions: judged on all-versions total; live version <版> has fewer than <n> labeled samples in the confidence bucket` を足し、「全版の合計で判断した」ことを残す（`judged on all-versions total` が、そう判断した印）。注記のつなぎは、元の理由に詳細があれば `; `、理由がコードだけ（`special_quote`・`missing_data`・`jev_none`・`not_lendable`・`vwap_z_unavailable`・`not_calibrated` や、`risk_engine_rejected: <Risk コード>`）なら `: `（元の理由の末尾の `:` の後に続けるので、`risk_rejections` の内訳が最初の `:`（Risk 拒否は 2 つ目の `:`）の前を取るとき、元の理由のコードのまま同じ内訳に入る。`other` に落ちない）。通過した判断（`risk_passed = 1`）は注記だけになる。
   - **Live は全版の合計に戻さない**: ライブの版の標本が足りなければ通らず、既存の `not_calibrated`（「標本が足りない」と同じ理由の系統）で、版名を入れて `not_calibrated: live version <版> has fewer than <n> labeled samples in the confidence bucket` と書く。Paper 以外のモード・モード未設定も Live と同じ（全版の合計を読みもしない）。Live の条件はどこも緩めていない。
-- **ライブが `trader-v3` の間は今日と同じ**: `trader-v4` の行は昇格するまで `jev_decisions` に無く、`trader-v1`〜`v3` は 1 つのコホートなので、数える行は変わらない（足りない間の理由に版名が付く）。
+- **ライブが `trader-v3` の間は今日と同じ**: `trader-v4`・`trader-v5` の行は昇格するまで `jev_decisions` に無く、`trader-v1`〜`v3` は 1 つのコホートなので、数える行は変わらない（足りない間の理由に版名が付く）。
 - **この確認が効く範囲**: 確信度帯の標本数ゲート（`not_calibrated`）は、FR-POLICY-6 のとおり Live のメタ判定（`Engine.Evaluate` のモデル判定）には使われない。使うのは旧しきい値ルールだけ（Paper ブートストラップ。FR-POLICY-7。Paper だけ）と、バックテストの比較専用モード `Decide`。この build は Paper だけを動かす。Live のメタ判定は確信度帯の標本数をどこでも参照しない（版ごとに数える変更は Live のメタ判定の通る・通らないを変えない。「新しい版の標本が足りない間 Live は通さない」は、標本数を使う旧しきい値ルールの Live 側＝`Decide` の比較専用モードでだけ成り立つ）。Live のメタ判定に新しい標本数の条件は足していない（足すと、ライブが `trader-v3` のままでも今日の Live 判断が変わるため）。
 
 ### 4.2 メタモデル: 学習に使ったコホートを持たせる
