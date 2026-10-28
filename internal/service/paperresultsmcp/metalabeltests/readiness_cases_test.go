@@ -271,8 +271,8 @@ func TestReadinessLeavesOutTheOtherPromptCohort(t *testing.T) {
 	if got, want := funnelRows(d), []int64{2, 2, 2, 2, 2}; !slices.Equal(got, want) {
 		t.Errorf("live trader-v3: funnel rows = %v, want %v", got, want)
 	}
-	if !slices.Equal(d.ExcludedPromptVersions, []string{"trader-v4"}) {
-		t.Errorf("live trader-v3: excluded_prompt_versions = %v, want [trader-v4]", d.ExcludedPromptVersions)
+	if !slices.Equal(d.ExcludedPromptVersions, []string{"trader-v4", "trader-v5"}) {
+		t.Errorf("live trader-v3: excluded_prompt_versions = %v, want [trader-v4 trader-v5]", d.ExcludedPromptVersions)
 	}
 
 	testkit.Setting(t, w, jevshadowsettings.KeyLiveVersion, `"trader-v4"`)
@@ -280,7 +280,7 @@ func TestReadinessLeavesOutTheOtherPromptCohort(t *testing.T) {
 	if got, want := funnelRows(d), []int64{1, 1, 1, 1, 1}; !slices.Equal(got, want) {
 		t.Errorf("live trader-v4: funnel rows = %v, want %v", got, want)
 	}
-	if !slices.Equal(d.ExcludedPromptVersions, []string{"trader-v1", "trader-v2", "trader-v3"}) {
+	if !slices.Equal(d.ExcludedPromptVersions, []string{"trader-v1", "trader-v2", "trader-v3", "trader-v5"}) {
 		t.Errorf("live trader-v4: excluded_prompt_versions = %v", d.ExcludedPromptVersions)
 	}
 }

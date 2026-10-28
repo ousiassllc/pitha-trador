@@ -1,4 +1,4 @@
-package evalflow_test
+package promptflow_test
 
 import (
 	"encoding/json"
@@ -21,6 +21,7 @@ import (
 var pinnedPromptHashes = map[string]string{
 	"trader-v3": "7a14873f4c3829ad8c91d283286d1dffb97ca9e0718e4ce9b52cad4b4df9b0d4",
 	"trader-v4": "a9c70c854bfa41b6768f83467ed2832073143e37de3783b8f2b10bab946a9708",
+	"trader-v5": "d21abe9c5e1d467c617dec54902c1220a086cdc19d64d0204a44d878a65eb58c",
 }
 
 const pinnedScoutV3Hash = "8b9b53ba08d17f25040c7be33aef341674cb4fae750d16f9f861d75d2ec0cdde"
@@ -78,8 +79,8 @@ func TestEveryVersionIsDistinctAndLookupFailsForUnknown(t *testing.T) {
 	if q, err := jev.TraderQuestionsFor(""); err != nil || q == nil {
 		t.Errorf("empty version = build default %q: %v", jev.TraderQuestionVersion, err)
 	}
-	if !jev.IsTraderVersion(jev.TraderQuestionVersion) || !jev.IsTraderVersion(jev.TraderEntryQualityCandidateVersion) {
-		t.Error("the live default and the candidate must both be registered")
+	if !jev.IsTraderVersion(jev.TraderQuestionVersion) || !jev.IsTraderVersion(jev.TraderEntryQualityCandidateVersion) || !jev.IsTraderVersion(jev.TraderExitPlanCandidateVersion) {
+		t.Error("the live default and the candidates must all be registered")
 	}
 }
 

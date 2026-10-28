@@ -1,4 +1,4 @@
-package jev_test
+package scoreflow_test
 
 import (
 	"errors"

@@ -13,7 +13,7 @@ import (
 // traderPrompts is every Trader prompt version this build can send, by version
 // name: the live version and the candidates the shadow may run side by side
 // (issue #872). A version is the exact question set it names: the Instructions
-// and the option Rubrics. evalflow/prompt_version_test.go pins a hash of each, so a
+// and the option Rubrics. promptflow/prompt_version_test.go pins a hash of each, so a
 // wording change without a new version fails the build.
 //
 // Adding a version: add its question group, register it here, add its hash to
@@ -22,6 +22,7 @@ import (
 var traderPrompts = map[string]map[string]systemone.Question{
 	TraderQuestionVersion:              traderQuestions,
 	TraderEntryQualityCandidateVersion: traderQuestionsV4,
+	TraderExitPlanCandidateVersion:     traderQuestionsV5,
 }
 
 // TraderVersions returns every registered Trader prompt version, sorted.

@@ -36,6 +36,11 @@ const (
 	// cohortEntryQualityV4 is the redefined entry_quality of trader-v4
 	// (questions_trader_v4.go).
 	cohortEntryQualityV4 = "entry-quality-v4"
+	// cohortExitPlanV5 is the direction and continuation_probability of
+	// trader-v5 (questions_trader_v5.go): asked against the Paper exit rules
+	// instead of "the next several minutes", so Policy reads another answer
+	// than trader-v3's even though entry_quality is the trader-v3 one.
+	cohortExitPlanV5 = "exit-plan-v5"
 )
 
 // traderCohorts is the cohort of every Trader prompt version that has ever
@@ -50,6 +55,7 @@ var traderCohorts = map[string]string{
 	"trader-v2":                        cohortEntryQualityV3,
 	TraderQuestionVersion:              cohortEntryQualityV3,
 	TraderEntryQualityCandidateVersion: cohortEntryQualityV4,
+	TraderExitPlanCandidateVersion:     cohortExitPlanV5,
 }
 
 // TraderCohort returns the cohort of version and whether the version is known.
