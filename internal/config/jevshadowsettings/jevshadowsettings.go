@@ -6,12 +6,14 @@
 //
 // Every key lives in runtime_settings (docs/architecture/er.md
 // §runtime_settings) and is read by the application (jev.Trader / jev/shadow.Shadow,
-// the Settings screen) and, read-only, by the Paper results MCP, which share
-// the database but not memory. None of them is on the MCP settings_set
-// whitelist (mcpwritesettings): the shadow switch, the candidate and the cost
-// cap are changed on the Settings screen only; the live version changes
-// through the explicit promotion (GUI or MCP jev_prompt_promote), which also
-// writes jev_prompt_promotions.
+// the Settings screen) and by the Paper results MCP, which share the database
+// but not memory. The MCP reads all of them; the only ones on its settings_set
+// whitelist (mcpwritesettings, issue #929) are the shadow switch (KeyEnabled)
+// and the candidate (KeyCandidateVersion). The cost cap, the failure and
+// throttle records and the live version are not: the cap is changed on the
+// Settings screen only, and the live version changes through the explicit
+// promotion (GUI or MCP jev_prompt_promote), which also writes
+// jev_prompt_promotions.
 //
 // Nothing here is read by Policy, the meta-model, Risk or order placement: the
 // shadow never influences trading.
