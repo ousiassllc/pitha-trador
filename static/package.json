@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n esbuild,tailwind -c blue,green \"node esbuild.config.mjs --watch\" \"tailwindcss -i ./src/css/app.css -o ./src/dist/css/app.css --watch\"",
-    "build": "node esbuild.config.mjs && tailwindcss -i ./src/css/app.css -o ./src/dist/css/app.css --minify",
+    "dev": "concurrently -n esbuild,tailwind -c blue,green \"node esbuild.config.mjs --watch\" \"node --require ./tailwind-hash-path-fix.cjs ./node_modules/@tailwindcss/cli/dist/index.mjs -i ./src/css/app.css -o ./src/dist/css/app.css --watch\"",
+    "build": "node esbuild.config.mjs && node --require ./tailwind-hash-path-fix.cjs ./node_modules/@tailwindcss/cli/dist/index.mjs -i ./src/css/app.css -o ./src/dist/css/app.css --minify",
     "lint": "biome check .",
     "format": "biome format --write src",
     "typecheck": "tsc --noEmit",
