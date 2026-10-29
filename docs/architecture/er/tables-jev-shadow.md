@@ -68,7 +68,7 @@ erDiagram
 
 ## 関連する `runtime_settings` のキー
 
-アプリ（Trader・シャドー・Settings 画面）と MCP（読み取りだけ）が同じ DB から毎回読む。`mcpwritesettings` のホワイトリストには無く、`settings_set` では書けない。
+アプリ（Trader・シャドー・Settings 画面）と MCP が同じ DB から毎回読む。MCP の `settings_set`（`mcpwritesettings` のホワイトリスト）で書けるのは `jev.shadow.enabled` と `jev.shadow.candidate_version` の 2 キーだけで（issue #929）、ほかのキーは書けない。
 
 | キー | 値 | 意味 |
 |------|----|------|
@@ -87,3 +87,4 @@ erDiagram
 | 1.0 | 2026-10-22 | 新規作成。`jev_shadow_decisions` / `jev_prompt_promotions`（`000047`）と、`question_version` を正式な版とする決定、関連する `runtime_settings` のキー | issue #872 |
 | 1.1 | 2026-10-22 | `runtime_settings` のキー `jev.shadow.throttle`（Jev API の 429/529 でシャドーが止まった記録）を追加。マイグレーションは不要（`runtime_settings` の行） | issue #883 |
 | 1.2 | 2026-10-22 | `jev.shadow.failures`: 終了時の取り消しで途中になった呼び出しは数えないことを追記 | issue #882 |
+| 1.3 | 2026-10-29 | 関連する `runtime_settings` のキーの前文: `settings_set` で書けるのは `jev.shadow.enabled` と `jev.shadow.candidate_version` の 2 キーだけ（ホワイトリスト 19 → 21 キー）。マイグレーションは不要 | issue #929 |

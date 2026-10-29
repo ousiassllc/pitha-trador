@@ -181,7 +181,7 @@ kabu の板・時価の保存を続けるかは #778 の現状のままである
 
 ## 6. 非目標
 
-- 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない。Paper の注文案を受け付けて記録するツール（§8）は、発注ではない。Jev のシャドーを有効にする・候補の版を選ぶ・費用の上限を決める手段も MCP には作らない（Settings 画面だけ）。発注するのはアプリで、MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）に書かない
+- 実売買・Live の発注・口座の認証情報の読み書きを追加しない。Live の値（Live の上限・Live の判定経路・Live の発注可否）も MCP から変えない。Paper の注文案を受け付けて記録するツール（§8）は、発注ではない。Jev のシャドーを有効にする・候補の版を選ぶ手段は `settings_set` の 2 キーだけ（§7.1。issue #929）で、費用の上限・失敗回数の上限を決める手段は MCP には作らない（Settings 画面だけ）。発注するのはアプリで、MCP は注文の表（`paper_orders`・`positions`・`trade_signals`）に書かない
 - 新規の売り建て（SHORT）の注文案は受け付けない（注文案の `action` は買い `open_long` と決済 `close` だけ）
 - 注文案の受け付けを MCP からオンにする手段を作らない（オンにできるのは Settings 画面だけ。§8.2）
 - `market_snapshots.raw_data_json`、`jev_decisions.state_json` / `response_json`、板・気配・時価の列、`secrets`、API キーを戻り値にもログにも出さない（一覧は API 仕様の「出さないもの」）。`secrets` の値のうち出うるのはモデル名（`JEV_MODEL`。`jev_model_changes` 経由で `experiment_compare` に出る）だけで、これは秘密情報ではない。ほかの値は、記録の書き込みがモデル名の 2 つの値だけを受け取る作りなので、record にも応答にも届かない
@@ -194,7 +194,7 @@ Grok Bot（運用はあいり）が、GUI の Settings と同じ基本設定を 
 
 ### 7.1 ホワイトリスト
 
-MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 19 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
+MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載ったものだけで、GUI の Settings（`runtime_settings`）にあるキーのうち次の 21 個である。表にないキーは、未知のキーも既知の別のキーも `key_not_allowed` で拒否し、DB には何も触れない（書き込み許可の確認よりも前に拒否する）。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
@@ -217,10 +217,12 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 | `metalabel.llm_cutoff_model` | 文字列 | 上の終端日を確認した Jev のモデル名（出典） | 200 文字以内・制御文字なし |
 | `metalabel.llm_cutoff_confirmed_on` | 日付 | 上の終端日を確認した日（出典） | `YYYY-MM-DD` |
 | `metalabel.llm_cutoff_source` | 文字列 | 上の終端日の根拠（出典） | 200 文字以内・制御文字なし |
+| `jev.shadow.enabled` | 文字列 | Jev のプロンプトのシャドー比較の有効（issue #929。Settings 画面の「シャドーを有効にする」）。既定は `false`。有効にしても費用の上限・失敗回数の上限・429/529 の停止はそのまま効く | `true` / `false`（`1` / `0` も可。JSON の数値 1 / 0 も可）。`true` にできるのは候補の版が保存済みのときだけ。`false` はいつでも可 |
+| `jev.shadow.candidate_version` | 文字列 | シャドーが動かす候補の版（issue #929。Settings 画面の「シャドーの候補の版」）。既定は空（候補なし） | このビルドに登録済み（`jev_shadow_cost` の `registered_versions`）で、ライブの版と違う版 |
 
-入れないもの: Live の値（`risk.live.*` など Live で効く上限・判定・発注可否。この表に Live のキーは 1 つもない。Live の最低エントリー品質 `policy.long.min_entry_quality` / `policy.short.min_entry_quality`（既定 `strong`）も入れず、`key_not_allowed` で拒否する）、#798 の Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）、ブローカー・認証情報・`secrets`、発注・送金・Kill Switch 解除に関わるもの、そのほかすべての運用設定（policy（上の Paper の最低エントリー品質 2 キーを除く）・screener・ログ・バックアップ先など）。書き込み許可のスイッチ自体も設定キーではなく、専用ツール（§7.2）だけが切り替える。表を広げるのは仕様の変更（悠太さんの決定）で、テスト（`TestWhitelistIsExactlyTheDecidedKeys`）が内容を固定する。
+入れないもの: Live の値（`risk.live.*` など Live で効く上限・判定・発注可否。この表に Live のキーは 1 つもない。Live の最低エントリー品質 `policy.long.min_entry_quality` / `policy.short.min_entry_quality`（既定 `strong`）も入れず、`key_not_allowed` で拒否する）、#798 の Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）、ブローカー・認証情報・`secrets`、発注・送金・Kill Switch 解除に関わるもの、そのほかすべての運用設定（policy（上の Paper の最低エントリー品質 2 キーを除く）・screener・ログ・バックアップ先など）。Jev のシャドーのキー（`jev.shadow.*`）で入るのは上の 2 つだけで、ライブの版 `jev.trader_prompt_version`（切り替えは昇格の専用ツール）・費用の上限 `jev.shadow.daily_cost_cap_usd`・失敗回数の上限・止めた記録 `jev.shadow.halt`・失敗回数 `jev.shadow.failures`・クールダウン `jev.shadow.throttle` は入れず、`key_not_allowed` で拒否する。書き込み許可のスイッチ自体も設定キーではなく、専用ツール（§7.2）だけが切り替える。表を広げるのは仕様の変更（悠太さんの決定）で、テスト（`TestWhitelistIsExactlyTheDecidedKeys`）が内容を固定する。
 
-値の検証は GUI と同一のコードを使う。MCP 専用の検証は作らない。Paper の最低エントリー品質の 2 キーは `paperpolicysettings`（`Settings.Apply`。`config.IsEntryQuality` で 5 値のどれかに限る。Settings の `policy.*.min_entry_quality` と同じ値の集合）、Paper の 4 キーは `papersettings`（`Validate` と `MinTradeLossPct` / `MaxTradeLossPct`。1 回の最大損失は 0.1〜3.0 を含む）、予算枠の 2 キーは `bucketsettings`（`Validate` と、合計の検査 `CheckSave`）、日次ガードは `dailyguardsettings`（`Apply`）、`metalabel.*` は `metalabelsettings`（`Normalize` / `Apply`）で、どれも `internal/service/opsettings` の `Save` を通る。範囲外は `invalid_value`（理由を `error.data.detail` に載せる）で、何も保存しない。
+値の検証は GUI と同一のコードを使う。MCP 専用の検証は作らない。Paper の最低エントリー品質の 2 キーは `paperpolicysettings`（`Settings.Apply`。`config.IsEntryQuality` で 5 値のどれかに限る。Settings の `policy.*.min_entry_quality` と同じ値の集合）、Paper の 4 キーは `papersettings`（`Validate` と `MinTradeLossPct` / `MaxTradeLossPct`。1 回の最大損失は 0.1〜3.0 を含む）、予算枠の 2 キーは `bucketsettings`（`Validate` と、合計の検査 `CheckSave`）、日次ガードは `dailyguardsettings`（`Apply`）、`metalabel.*` は `metalabelsettings`（`Normalize` / `Apply`）で、どれも `internal/service/opsettings` の `Save` を通る。シャドーの 2 キーは `opsettings` のキーではなく、Settings 画面（`POST /settings/jev-prompt/shadow`）と同じ `jevprompt.Service` で保存する。候補の版は `jevprompt.ValidateCandidate`（`jevprompt.Service.SetCandidate` が使う関数と同じ）で検証し、このビルドに登録のない版・ライブの版と同じ版・空は `invalid_value`。`jev.shadow.enabled` は `true` / `false` / `1` / `0` だけを受け付け、候補が保存されていないのに `true` にするのは `invalid_value`（MCP だけの規則。Settings 画面のフォームは候補なしの有効を許し、その場合シャドーは何もしない）。`false` はいつでも許す。範囲外は `invalid_value`（理由を `error.data.detail` に載せる）で、何も保存しない。
 
 予算枠の合計（株 + 債券ETF）は運用資金（`risk.paper.initial_capital_jpy`）以下でなければならない。この検査は枠の 2 キーの保存、運用資金を下げる保存、「既定に戻す」のどれにも同じように掛かり、超えるときは `invalid_value` で拒否して、設定も監査行も残さない（GUI の保存も同じ）。枠は 1 キーずつ保存するので、枠の間で予算を移すツールは設けない。**移すときは、減らす方の枠を先に保存し、そのあとで増やす方の枠を保存する**（先に増やす方を保存すると、途中の合計が運用資金を超えて拒否される）。運用資金そのものを下げるときも、枠の合計が下がった額に収まるよう、先に枠を減らす。枠は Paper だけの設定で、Live には影響しない。
 
@@ -236,13 +238,13 @@ MCP から書けるキーは、`internal/config/mcpwritesettings` の表に載�
 
 - 読み取りの接続は `mode=ro`・`query_only=ON` のまま変えない。書き込みは、同じ DB ファイルへの**別接続**（`internal/service/paperresultsmcp/mcpset.Writer`）が、最初の書き込みの呼び出しで初めて開く。ファイルは作らず（`mode=rw`）、マイグレーションも `journal_mode` の変更もしない
 - 書き手が実行する変更は 8 種類の 1 トランザクションだけ: ①ホワイトリストのキー 1 つの `runtime_settings` への upsert と、その監査 1 行の `INSERT`（`settings_set`）、②スイッチの upsert と監査 1 行（`settings_write_enable` / `settings_write_disable`）、③注文案 1 行と最初のイベント 1 行の `INSERT`（`order_proposal_submit`。§8.4）、④注文案の受け付けスイッチをオフにする upsert と監査 1 行（`order_proposals_disable`。§8.2）、⑤取消の依頼（`order_proposals.cancel_requested_at` の UPDATE 1 つとイベント 1 行。`order_proposal_cancel`。§8.5）、⑥ライブの Jev のプロンプトの版の昇格（`runtime_settings` の `jev.trader_prompt_version` の upsert と `jev_prompt_promotions` への監査 1 行。`jev_prompt_promote`。分割章 §7.3 ⑥）、⑦調整の実験 1 行の `INSERT`（`experiment_create`。`tuning_experiments`。書き込み許可に従う）、⑧実験の終了の `UPDATE` 1 つ（`experiment_close`。`status` と `ended_at` だけ。`running` の行だけ）。ほかの表・文は発行しない（`settingstests.TestSettingsWritePathIsNarrow` と `proposaltests.TestOrderProposalWritePathIsNarrow` が、実行された文を数えて固定する）
-- 保存は GUI と同じ `runtime_settings`（`system.RuntimeSettingsRepository`）で、値の形も GUI と同じ（`opsettings` が検証して JSON で保存する）。アプリは毎回この表から読むので、保存後すぐに GUI と各エンジンに反映される（再起動不要）
+- 保存は GUI と同じ `runtime_settings`（`system.RuntimeSettingsRepository`）で、値の形も GUI と同じ（`opsettings` が検証して JSON で保存する。シャドーの 2 キーは `jevprompt.Service`）。アプリは毎回この表から読むので、保存後すぐに GUI と各エンジンに反映される（再起動不要）
 - 同じ DB を書く単一ライターはアプリである。書き手は 2 秒の `busy_timeout` と `BEGIN IMMEDIATE` で短く待ち、取れなければ `db_locked`。アプリの書き込みを長く待たせない
 
 ### 7.4 監査ログ
 
 - 表 `mcp_settings_audit`（マイグレーション `000040`。操作名は `000042` で拡張）。1 変更 1 行: 時刻（UTC）、**誰が**（`actor` = `mcp` か `gui`。`mcp` のときは接続元ホストの IP だけ。ヘッダの値・API キーは記録しない）、操作（`set` / `reset` / `write_enable` / `write_disable` / `order_proposals_enable` / `order_proposals_disable`。後ろの 2 つは §8.2 の受け付けスイッチ。マイグレーション `000042` で CHECK に足した）、キー、**変更前の値**、**変更後の値**
-- MCP からの変更に加え、Settings 画面から行ったホワイトリストのキーの保存・既定への戻し、書き込み許可の切り替えも同じ表に残す（`mcpset.Audited` が `opsettings.Service` を包んで Save / Reset を記録する）。GUI での変更も記録しないと、`settings_diff` が過去の状態を再構成できないため。ホワイトリスト外のキーの GUI での変更は記録しない
+- MCP からの変更に加え、Settings 画面から行ったホワイトリストのキーの保存・既定への戻し、書き込み許可の切り替えも同じ表に残す（`mcpset.Audited` が `opsettings.Service` を包んで Save / Reset を記録する）。GUI での変更も記録しないと、`settings_diff` が過去の状態を再構成できないため。ホワイトリスト外のキーの GUI での変更は記録しない。**制限**: シャドーの 2 キーは `opsettings` のキーではなく、Settings 画面が `jevprompt.Service`（`POST /settings/jev-prompt/shadow`）で保存するため、画面での変更は監査ログに残らない（その間に画面で変えられると、`settings_diff` の「変更前」が実際の直前の値とずれることがある）
 - 設定と監査は同じトランザクションに入れる（MCP の書き込みも、GUI の保存・既定への戻しも、書き込み許可のスイッチも同じ）。監査行の書き込みに失敗したら設定の変更も取り消され、保存はエラーになる。設定の書き込みが失敗したら監査行は残らない。どちらか一方だけ残ることはない（`mcpset.Audited`、`mcpset/atomic_test.go`）。例外は、保存済みの値が壊れていて変更前の値を読めないキーで、上書き・リセットを妨げないよう監査なしで変更する（ログに警告を出す）
 - **マスク方針**: ホワイトリストのキーに秘密に分類されるものは 1 つもないため、値はそのまま記録・表示する（`mcpwritesettings.Spec.Secret` はすべて false。テストが固定する）。将来、秘密に分類されるキー（名前に secret・password・token・api_key・private_key・credential を含む、または `Secret` を付けたもの）やホワイトリスト外のキーを監査・ツール出力に載せることになった場合は、**既定で `****` に伏せる**（`mcpwritesettings.Mask`、`maskedEntry`）。API キー・`secrets`・板や時価の生データは、設定ツールの入出力にもログにも出さない
 - 変更前後の値は、運用の分かる値（数値・日付・短い出典テキスト）だけで、自由文の長文（200 文字以内に検証済み）以外は載らない

@@ -2,7 +2,7 @@
 
 `paper-results-mcp.md`（API 仕様）の分割章（ファイルの行数上限のため。章番号は元の文書の §3.29）。Jev の trader のプロンプトの版と、候補の版をライブと並べて動かす「シャドー」の比較・費用・昇格の 3 ツールを定める（issue #872）。共通の引数（期間 §1）・上限（§2）・エラー（`paper-results-mcp-errors.md`）は元の文書と同じ。仕様の背景は `architecture/paper-results-mcp.md` §5.1・§7.3。
 
-シャドーを**有効にする・候補の版を選ぶ・費用の上限を決める**ツールは無い（Settings 画面だけ。`settings_set` のホワイトリストにも無い）。**1 日の費用の上限（既定 0.10 USD。Settings 画面で上げ下げできる）と 1 日の失敗回数の上限（20 回。定数）はユーザー決定の確定値**である（`internal/config/jevshadowsettings.DefaultDailyCostCapUSD` / `DailyFailureCap`）。単価（1M 入力トークンあたり 0.042 USD）と同時実行数（4）も確定値だが、費用は公表単価による**見積り**で請求書とは突き合わせていない。
+シャドーを**有効にする・候補の版を選ぶ**のは、Settings 画面のほか `settings_set` の 2 キー `jev.shadow.enabled` / `jev.shadow.candidate_version`（issue #929。`paper-results-mcp.md` §3.10・§3.12）でもできる。専用のツールは無い。**費用の上限・失敗回数の上限・止めた記録・失敗回数・クールダウン・ライブの版は `settings_set` のホワイトリストに無く**（`key_not_allowed`）、費用の上限は Settings 画面だけで決める。**1 日の費用の上限（既定 0.10 USD。Settings 画面で上げ下げできる）と 1 日の失敗回数の上限（20 回。定数）はユーザー決定の確定値**である（`internal/config/jevshadowsettings.DefaultDailyCostCapUSD` / `DailyFailureCap`）。単価（1M 入力トークンあたり 0.042 USD）と同時実行数（4）も確定値だが、費用は公表単価による**見積り**で請求書とは突き合わせていない。
 
 ## 3.29.1 `jev_shadow_compare`（読み取り専用）
 
@@ -43,8 +43,8 @@
 
 | フィールド | 定義 |
 |------------|------|
-| `enabled` | シャドーの有効（`runtime_settings` の `jev.shadow.enabled`）。既定 `false` |
-| `candidate_version` | 候補の版（`jev.shadow.candidate_version`）。無ければ `null` |
+| `enabled` | シャドーの有効（`runtime_settings` の `jev.shadow.enabled`。`settings_set` でも書ける）。既定 `false` |
+| `candidate_version` | 候補の版（`jev.shadow.candidate_version`。`settings_set` でも書ける）。無ければ `null` |
 | `live_version` | ライブの版（`jev.trader_prompt_version`。保存が無い・壊れている・このビルドに無い版のときはビルドの既定 `trader-v3`） |
 | `daily_cap_usd` / `cap_is_default` / `cap_source` | 1 日あたりの費用の上限（JST の日）。`cap_source` は `default`（保存値が無く、効いているのはビルドの既定値 0.10 USD。`cap_is_default` が `true`）か `stored`（Settings 画面で保存された値）。どちらも確定した運用の値で、Settings で上げ下げできる |
 | `failure_cap` / `failure_cap_source` / `failures_today` | 1 日（JST）に許す失敗した呼び出し（応答が不正・保存の失敗・タイムアウトなど。課金されても費用の合計に入らない。終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えない。ベンダーが課金した可能性はあるが保存されないので費用にも入らず、1 回の終了で最大 4 回）の回数の上限と、今日の回数。`failure_cap_source` は常に `fixed`（確定した定数 20 回。Settings では変えられない） |
@@ -72,6 +72,10 @@
 
 応答: `promotion_id`・`from_version`・`to_version`・`at`。監査の「誰が」は `mcp` と接続元ホスト（IP だけ。ヘッダ・API キーは残さない）。このツールは**自動では呼ばれない**。自己改善ループ（Sol/Opus）にはこの経路が無い（`domain.ValidatePolicyChanges` は `policy.*` のキーだけを受け付け、Jev の版・シャドーのキーは拒否する。テストが固定する）。Settings 画面にも同じ操作がある（`POST /settings/jev-prompt/promote`。セッション Cookie と CSRF が必要）。
 
+## 3.29.4 `settings_set` のシャドーの 2 キー（issue #929）
+
+`jev.shadow.enabled` と `jev.shadow.candidate_version` は `settings_set`（`paper-results-mcp.md` §3.12）で書ける。値は文字列で、`jev.shadow.enabled` は `"true"` / `"false"` / `"1"` / `"0"`（JSON の数値 1 / 0 も可。JSON の真偽値は `invalid_argument`）。検証は Settings 画面と同じ（`jevprompt.Service` が使う。候補の版は `jevprompt.ValidateCandidate`）。登録のない版・ライブの版と同じ版・空の候補は `invalid_value`（空は「値が空です」）。候補が設定済みでないときに `jev.shadow.enabled` を `true` にするのも `invalid_value`（MCP だけの規則。Settings 画面のフォームは許すが、そのときシャドーは何もしない）。`false` はいつでも保存できる。処理の順は `settings_set` のとおり（ホワイトリスト → 書き込み許可 → 値）。変更は監査 1 行と同じトランザクションで保存し、`settings_audit` / `settings_diff` に出る（`actor` は `mcp`）。Settings 画面でのこの 2 キーの変更は監査に残らないので、その間に変えられると `settings_diff` の `before` が古いことがある。
+
 ## 受け入れ条件
 
 - 3 ツールは `tools/list` に出る。`jev_shadow_compare` / `jev_shadow_cost` は `readOnlyHint: true`、`jev_prompt_promote` は `false`
@@ -91,3 +95,4 @@
 | 1.4 | 2026-10-23 | `jev_shadow_cost` の `min_call_interval_seconds` の説明に、間隔で捨てた比較はどこにも記録されず `jev_shadow_compare` の標本を間引くこと、429/529（シャドー自身・ライブの Scout/Trader/Ask）で 15 分（`throttle_cooldown_seconds`＝900）止まり再試行せず、失敗回数の上限・`halt_*` に数えないこと、理由は `throttle_active` / `last_throttle` / `throttles_today` に出ることを明記（実装は変えない） | issue #883 |
 | 1.5 | 2026-10-22 | `jev_shadow_cost` の失敗回数の説明に、終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えないことを追記 | issue #882 |
 | 1.6 | 2026-10-22 | §3.29.3 に、昇格のあとの集計・学習の扱い（ライブの版と同じコホートだけを使う）と、本番での昇格を見送る範囲を追記。Policyの標本数とメタモデルの扱いを決定済みに | issue #881 |
+| 1.7 | 2026-10-29 | 冒頭の注意と §3.29.2 の `enabled` / `candidate_version` を訂正し、§3.29.4 を追加: シャドーの有効化と候補の版は `settings_set` の 2 キーでも書ける（ホワイトリスト 19 → 21 キー）。費用の上限・失敗回数の上限・止めた記録・失敗回数・クールダウン・ライブの版は書けないまま。ツール数は変わらない | issue #929 |

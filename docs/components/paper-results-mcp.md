@@ -23,9 +23,9 @@
 | Settings 画面の MCP パネルのハンドラと画面部品（`GET /settings/mcp-panel`、`POST /settings/mcp`、`POST /settings/mcp/key`、`POST /settings/mcp/{start,stop,restart}`、`POST /settings/mcp/write`＝書き込み許可のチェックと監査ログの表示） | `internal/web/handler/mcpsettings`、`internal/web/organisms/mcp`、`static/src/components/copy-button` |
 | DB を `mode=ro` + `PRAGMA query_only=ON` で開く（`sqlitedb.Open` は呼ばない） | `internal/service/paperresultsmcp/readdb` |
 | 設定ツール（issue #806・#807）の本体: 狭い書き込み接続（`Writer`。`mode=rw`・ファイルを作らない・マイグレーションなし・`runtime_settings` の upsert と監査の INSERT だけ）、書き込み許可の読み取り、監査ログの追記と一覧、`settings_get` / `settings_diff` の読み取りモデル、Paper 資金の分母の読み取り、Settings 画面側の `Gate`（スイッチの切り替えと GUI の変更の監査） | `internal/service/paperresultsmcp/mcpset`（ツール定義は `internal/service/paperresultsmcp/settings_tools.go`） |
-| MCP が書けるキーのホワイトリスト・書き込みスイッチのキー・マスク方針 | `internal/config/mcpwritesettings` |
+| MCP が書けるキーのホワイトリスト（21 キー。Jev のシャドーの 2 キー `jev.shadow.enabled` / `jev.shadow.candidate_version` を含む。issue #929）・書き込みスイッチのキー・マスク方針 | `internal/config/mcpwritesettings` |
 | 監査ログの表（マイグレーション `000040`） | `db/migrations/000040_create_mcp_settings_audit.*.sql` |
-| GUI の保存の監査（ホワイトリストのキーの保存・既定への戻しを同じ表に記録） | `internal/service/paperresultsmcp/mcpset`（`Audited`。`opsettings.Service` を包んで Save/Reset を記録）、配線は `internal/bootstrap/router_options.go` |
+| GUI の保存の監査（ホワイトリストのキーの保存・既定への戻しを同じ表に記録。シャドーの 2 キーの画面での変更は `jevprompt.Service` を通るため記録されない） | `internal/service/paperresultsmcp/mcpset`（`Audited`。`opsettings.Service` を包んで Save/Reset を記録）、配線は `internal/bootstrap/router_options.go`。シャドーの 2 キーの `settings_get` / `settings_set` は `mcpset/jevshadow.go`（`jevprompt.Service` と同じ検証で保存する） |
 | 調整の実験（issue #871）: 語彙・検査・SQL・前後比較と判定（`internal/service/paperresultsmcp/experiment`）、ツール定義（`experiment_tools.go`）、書き込み（`mcpset/experiments.go`。`Writer` と `Gate`）、表（マイグレーション `000046`）、Settings の節（`internal/web/handler/mcpsettings/experiments*.go`、`internal/web/organisms/mcp/experiments.templ`）。テストは `experimenttests` と `experiment` と `internal/router/mcproute/experiments_test.go` |
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
@@ -108,3 +108,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.12 | 2026-10-21 | §2 に `session_diagnostics` と `collection_status` の失敗の内訳の置き場所を追加 | issue #850 |
 | 1.13 | 2026-10-22 | §2 に調整の実験（`experiment`・`experiment_tools.go`・`mcpset/experiments.go`・Settings の節）を追記。ツールは 28 | issue #871 |
 | 1.14 | 2026-10-24 | §4 の Settings 画面の導線を、画面の見出しに合わせて「外部連携」→「MCP」と書き直し（画面の説明文はヘルプマークへ移動。MCP の挙動・ツールは変えない） | issue #902 |
+| 1.15 | 2026-10-29 | §2 の `settings_set` のホワイトリストを 19 → 21 キーにし、Jev のシャドーの 2 キー（`mcpset/jevshadow.go`）を追記。ツール数は変わらない | issue #929 |

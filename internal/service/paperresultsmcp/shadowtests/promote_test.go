@@ -142,11 +142,16 @@ func TestPromoteFollowsTheWriteSwitch(t *testing.T) {
 	}
 }
 
-// The MCP can neither turn the shadow on nor pick the candidate nor set the
-// cost cap: those keys are not on the settings_set whitelist.
+// The MCP can change the shadow's switch and candidate (issue #929, see
+// shadow_settings_test.go) and nothing else of the shadow: the live version
+// (the promotion), the cost cap, and the halt, failure and throttle records are
+// not on the settings_set whitelist.
 func TestShadowSettingsCannotBeWrittenThroughSettingsSet(t *testing.T) {
 	srv, w := shadowServer(t)
 	for _, key := range jevshadowsettings.Keys() {
+		if key == jevshadowsettings.KeyEnabled || key == jevshadowsettings.KeyCandidateVersion {
+			continue
+		}
 		srv.call(t, "settings_set", map[string]any{"key": key, "value": "1"}).wantError(t, http.StatusForbidden, paperresultsmcp.CodeKeyNotAllowed)
 		if _, ok := storedValue(t, w, key); ok {
 			t.Errorf("settings_set stored %s", key)

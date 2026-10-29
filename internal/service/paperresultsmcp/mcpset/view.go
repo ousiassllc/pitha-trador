@@ -84,7 +84,7 @@ func Current(ctx context.Context, q query.Q, base *config.RiskLimits) (State, er
 	svc := newService(store, base)
 	st := State{WriteEnabled: enabled, SnapshotID: snapshot, LLMCutoffStatus: cutoff}
 	for _, spec := range mcpwritesettings.Specs() {
-		v, err := svc.Get(ctx, spec.Key)
+		v, err := getSetting(ctx, store, svc, spec.Key)
 		if err != nil {
 			return State{}, fmt.Errorf("mcpset: read %s: %w", spec.Key, err)
 		}

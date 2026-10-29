@@ -133,17 +133,26 @@ func (s *Service) SetCandidate(ctx context.Context, version string) error {
 	if version == "" {
 		return s.settings.Delete(ctx, jevshadowsettings.KeyCandidateVersion)
 	}
-	if !jev.IsTraderVersion(version) {
-		return fmt.Errorf("%w: 版 %q はこのビルドに登録されていません", ErrInvalidInput, version)
-	}
-	if live := jev.LiveVersion(ctx, s.settings); version == live {
-		return fmt.Errorf("%w: 候補の版がライブの版（%s）と同じです。比較にならないため選べません", ErrInvalidInput, live)
-	}
-	value, err := jevshadowsettings.EncodeVersion(version)
+	value, err := ValidateCandidate(version, jev.LiveVersion(ctx, s.settings))
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidInput, err)
 	}
 	return s.settings.Set(ctx, jevshadowsettings.KeyCandidateVersion, value, s.now())
+}
+
+// ValidateCandidate is the check on a candidate version that the Settings
+// screen and the MCP's settings_set share: the version must be well formed,
+// registered in this build and differ from live (a shadow of the live prompt
+// compares nothing). It returns the runtime_settings value to store. The error
+// is an operator-facing reason; callers add their own category.
+func ValidateCandidate(version, live string) (string, error) {
+	if !jev.IsTraderVersion(version) {
+		return "", fmt.Errorf("版 %q はこのビルドに登録されていません", version)
+	}
+	if version == live {
+		return "", fmt.Errorf("候補の版がライブの版（%s）と同じです。比較にならないため選べません", live)
+	}
+	return jevshadowsettings.EncodeVersion(version)
 }
 
 // SetCap saves the daily cost cap in USD.

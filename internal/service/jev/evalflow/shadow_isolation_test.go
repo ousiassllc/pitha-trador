@@ -82,17 +82,18 @@ func TestOnlyTheShadowRepositoryTouchesTheShadowTable(t *testing.T) {
 }
 
 // Sol/Opus (the self-improvement loop) can change policy.* thresholds only. The
-// prompt version, the shadow switch, the candidate and the cost cap are not
-// among them, are not on the MCP settings_set whitelist and are not Settings
-// operational keys, so no automatic path writes them (issue #872).
+// prompt version, the shadow switch, the candidate and the cost cap are not among
+// them and are not Settings operational keys (issue #872). The MCP's settings_set
+// holds exactly the switch and the candidate (issue #929), nothing else of these.
 func TestPromptAndShadowKeysAreOutsideEveryAutomaticWritePath(t *testing.T) {
+	mcpWritable := map[string]bool{jevshadowsettings.KeyEnabled: true, jevshadowsettings.KeyCandidateVersion: true}
 	for _, key := range jevshadowsettings.Keys() {
 		err := domain.ValidatePolicyChanges([]domain.PolicyChange{{Key: key, OldValue: `"trader-v3"`, NewValue: `"trader-v4"`}})
 		if err == nil {
 			t.Errorf("ValidatePolicyChanges accepts %q: the self-improvement loop could change it", key)
 		}
-		if mcpwritesettings.IsAllowed(key) {
-			t.Errorf("%q is on the MCP settings_set whitelist", key)
+		if got := mcpwritesettings.IsAllowed(key); got != mcpWritable[key] {
+			t.Errorf("%q: on the MCP settings_set whitelist = %v, want %v", key, got, mcpWritable[key])
 		}
 		if opsettings.IsKnownKey(key) {
 			t.Errorf("%q is a generic Settings key", key)

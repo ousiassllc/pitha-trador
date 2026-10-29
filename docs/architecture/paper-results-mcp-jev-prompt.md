@@ -18,7 +18,7 @@
 - **取引に使わない**: 結果は別表 `jev_shadow_decisions`（マイグレーション `000047`）だけに保存する。Policy・メタモデル・Risk・発注・RAG の索引・Calibration の集計・メタモデルの学習は `jev_decisions` だけを読む（昇格後に、ライブの版でない版の判断が `jev_decisions` に入っても集計・学習に混ざらないようにする扱いは `jev-prompt-versions-in-data.md`）。テスト（`shadow_isolation_test.go` ほか）が、これらがシャドーの名前を参照しないこと、シャドーの表に書くのはシャドーの repository だけであること、シャドーの行が RAG と `jev_decisions` に入らないことを固定する
 - **ライブに影響しない**: 呼び出しは別の goroutine で、同時実行は 4 まで（満杯なら比較を捨ててログだけ）。失敗はログだけ。ローリングのエラー率（`jev_api_down` の Kill Switch）にも数えない。アプリの終了（`Services.Stop`）は `Trader.Close` で飛行中のシャドーの呼び出しを取り消して待つ（終了後に出された比較は捨てる）。取り消しで途中になった呼び出しは**失敗回数に数えない**（`jev.shadow.failures` に足さない。保存の前に取り消されれば行も費用も残らず、保存がすでにコミットしていれば行と費用はある）。本物の API 失敗・タイムアウト（`context.DeadlineExceeded`）は今までどおり数える
 - **Paper だけ**: `metalabelsettings.RuntimeMode` が Paper のビルドだけが動く。Live では何も呼ばない（テストで固定）。`RuntimeMode` は const で起動後に変わらないので、シャドーは起動時に 1 回だけモードを見ている。**実行時にモードを切り替える設計にするなら、`Submit` のたびに読む**こと（その変更は本 issue の範囲外）
-- **既定は無効**: `runtime_settings` の `jev.shadow.enabled`（既定 0）と候補の版 `jev.shadow.candidate_version`。Settings 画面（「外部連携」→ Jev プロンプト）から切り替える。人が有効にするまで費用は発生しない。MCP から有効にする手段は無い
+- **既定は無効**: `runtime_settings` の `jev.shadow.enabled`（既定 0）と候補の版 `jev.shadow.candidate_version`。Settings 画面（「外部連携」→ Jev プロンプト）から切り替えるほか、MCP の `settings_set` でも、書き込みが許可されているあいだはこの 2 キーだけ書ける（issue #929。値の検証は Settings 画面と同じ。候補が無いまま有効にするのは MCP では `invalid_value`）。有効にするまで費用は発生しない
 - **費用**: 各行の `request_cost` は、API が報告した入力トークン数 × 公表単価（Jev は 1M 入力トークンあたり 0.042 USD、出力は無料。2026-10-22 時点の公式の価格表）の**見積り**。API は課金額を返さない（請求書と突き合わせていない）。合計は JST の日ごとと累計で、Settings 画面と `jev_shadow_cost` で見られる。**応答に `usage` が無い呼び出しは 0 USD と数えない**（0 だと費用の上限をすり抜けて走り続ける）。リクエスト本文のバイト数を保守的な比（`shadow.BytesPerTokenFloor` = 2 バイト / トークン。実測のトークン化より低め＝多めに見積もる）で割った入力トークン数の**推定**で費用に入れ、行に `cost_is_estimate = 1` を付けて実測と区別し、GUI・`jev_shadow_cost` に「うち見積り」の件数・費用を出す。比は実際のトークナイザや請求との突き合わせをしていない仮定である
 - **1 日の費用の上限**: `jev.shadow.daily_cost_cap_usd`（保存が無ければ `jevshadowsettings.DefaultDailyCostCapUSD` = 0.10 USD）。その日（JST）のシャドーの費用がこれに達したら、その日のシャドーを止めて理由（固定コード `daily_cost_cap`・日・使った額・上限）を `jev.shadow.halt` に残す。翌日（JST）に再開する。ライブの判定は止まらない（テストで固定）。**この上限の値（0.10 USD）はユーザー決定の確定値**（根拠は issue #872 の PR）。コード上の置き場は `DefaultDailyCostCapUSD` の 1 か所で、Settings 画面で上げ下げできる。GUI は、保存した値が無いあいだ入力欄を空にして既定値を placeholder で見せる（空のまま保存しても既定値を「保存した値」にしない）。MCP の `cap_source`（`default` = 既定値 / `stored` = 保存した値）も同じ事実を返す
 - **1 日の失敗回数の上限**: 費用の合計は**保存に成功した呼び出し**の `request_cost` しか足せない。ベンダーが課金しても保存されない呼び出し（応答の検証失敗で `usage` が捨てられる、タイムアウト、保存の失敗）は合計に入らず、候補が毎回不正な応答を返すと費用 0 のまま課金され続ける。そこで**失敗した呼び出しの回数**も数え（`jev.shadow.failures`。JST の日ごと）、`jevshadowsettings.DailyFailureCap`（20 回。確定（ユーザー決定）。設定ではなく定数 1 か所）に達したらその日のシャドーを止め、理由（固定コード `daily_failure_cap`・失敗回数・上限）を `jev.shadow.halt` に残す。未記録の課金額はこの回数で抑える。ただし終了（`Shadow.Close`）の取り消しで途中になった呼び出しは数えない（ベンダーが課金した可能性はあるが、保存されないので費用にも入らない。1 回の終了で最大 `shadowMaxInFlight` = 4 回）。ライブの判定は止まらない（テストで固定）
@@ -47,7 +47,7 @@
 - 書き込み許可のスイッチ（§7.2）に従う。オフなら `write_disabled` で何も書かない
 - 版は登録済みで、かつ現在のライブの版と違うものだけ
 - **自動では昇格しない**。MCP の `jev_prompt_promote` と Settings 画面の昇格ボタン（`POST /settings/jev-prompt/promote`。セッション Cookie と CSRF が必要）だけが呼ぶ
-- 自己改善ループ（Sol/Opus）からはできない。`domain.ValidatePolicyChanges` は `policy.*` のキーだけを受け付け、`jev.trader_prompt_version`・`jev.shadow.*`・`prompt_version` などを拒否する（境界は変えず、テストで固定）。シャドーの設定キーは `mcpwritesettings` のホワイトリストにも無い（`settings_set` は `key_not_allowed`）
+- 自己改善ループ（Sol/Opus）からはできない。`domain.ValidatePolicyChanges` は `policy.*` のキーだけを受け付け、`jev.trader_prompt_version`・`jev.shadow.*`・`prompt_version` などを拒否する（境界は変えず、テストで固定）。`mcpwritesettings` のホワイトリストに入るシャドーのキーは `jev.shadow.enabled` と `jev.shadow.candidate_version` の 2 つだけ（issue #929）。ライブの版 `jev.trader_prompt_version`・費用の上限・失敗回数の上限・止めた記録（halt）・失敗回数・クールダウンは入らず、`settings_set` は `key_not_allowed`
 
 ## 昇格後のデータの扱い（issue #881）
 
@@ -80,3 +80,4 @@
 | 1.4 | 2026-10-22 | 終了時の取り消し（`Shadow.Close`）で途中になった呼び出しは失敗回数に数えないことを、失敗回数の説明の 2 か所（1 日の失敗回数の上限・API 文書）にも明記。保存がすでにコミットしていれば行も費用もあることを正確にした | issue #882 |
 | 1.5 | 2026-10-22 | 「昇格後のデータの扱い」を追加（詳細は分割章 `jev-prompt-versions-in-data.md`）。`jev_decisions` だけを読む読み手が、ライブの版と別のコホートの行を使わない。Policyの標本数とメタモデルの扱いを決定済みに | issue #881 |
 | 1.6 | 2026-10-28 | 2 つ目の候補 `trader-v5`（`direction`・`continuation_probability` を Paper の出口で聞き直す。コホート `exit-plan-v5`）を登録。ライブは `trader-v3` のまま | issue #925 |
+| 1.7 | 2026-10-29 | `settings_set` のホワイトリストに `jev.shadow.enabled` と `jev.shadow.candidate_version` の 2 キーを足した（19 → 21 キー。ツール数は変わらない）。ライブの版（昇格）・費用の上限 0.10 USD・失敗回数の上限 20・2 秒の間隔・429/529 の停止・既定の無効（候補なし）は変えない | issue #929 |

@@ -83,7 +83,7 @@ templ Panel(props PanelProps) {
 					<span class="font-medium text-slate-700">シャドーを有効にする（Paper のみ）</span>
 				</label>
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-enabled", Label: "シャドーの説明"}) {
-					Jev の trader に送るプロンプトには版があり、判断の記録に残ります。候補の版を「シャドー」で動かすと、ライブの判断ごとに同じ入力で候補の版にも答えさせ、別に保存します。シャドーの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも一切使いません。Paper だけで動き、Live では動きません。既定はオフです。オンにすると、ライブの判断ごとに候補の版の LLM 呼び出しが 1 回増え、その費用が発生します。オンにできるのはこの画面だけです。
+					Jev の trader に送るプロンプトには版があり、判断の記録に残ります。候補の版を「シャドー」で動かすと、ライブの判断ごとに同じ入力で候補の版にも答えさせ、別に保存します。シャドーの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも一切使いません。Paper だけで動き、Live では動きません。既定はオフです。オンにすると、ライブの判断ごとに候補の版の LLM 呼び出しが 1 回増え、その費用が発生します。この画面のほか、MCP の設定変更が許可されているときは MCP からも、オン・オフと候補の版を変えられます。
 				}
 			</div>
 			<div class="flex flex-col gap-1">

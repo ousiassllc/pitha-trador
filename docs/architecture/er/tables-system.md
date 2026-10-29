@@ -24,7 +24,7 @@ erDiagram
 
 Paper 実績 MCP の設定書き込みの許可（issue #806）はキー`mcp.settings_write_enabled`（JSON の整数`1`=許可・`0`=禁止。行が無いときは許可。`1`/`0`以外は禁止として扱う）。アプリ（Settings の MCP カード）と MCP プロセスが同じ行を読み書きする（`internal/config/mcpwritesettings`）。MCP がこの表へ書けるのは、`mcpwritesettings.Keys()`のホワイトリストのキーとこのスイッチだけ。
 
-Jev プロンプトの版管理とシャドー（issue #872）は`jev.trader_prompt_version`（ライブの版。昇格だけが書く）・`jev.shadow.enabled`（既定は無効）・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`（既定 0.10 USD・確定。Settings で上げ下げできる）・`jev.shadow.halt`を使う（詳細は`er/tables-jev-shadow.md`。MCPの`settings_set`では書けない）。
+Jev プロンプトの版管理とシャドー（issue #872）は`jev.trader_prompt_version`（ライブの版。昇格だけが書く）・`jev.shadow.enabled`（既定は無効）・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`（既定 0.10 USD・確定。Settings で上げ下げできる）・`jev.shadow.halt`を使う（詳細は`er/tables-jev-shadow.md`。MCPの`settings_set`で書けるのは`jev.shadow.enabled`と`jev.shadow.candidate_version`の2キーだけ（issue #929）で、ほかは書けない）。
 
 Paper 実績 MCP の注文案の受け付け（issue #827）はキー`mcp.order_proposals_enabled`（JSON の整数`1`=受け付ける・`0`=受け付けない。**行が無いときも、`1`/`0`以外の壊れた値のときも受け付けない**＝既定オフ。書き込み許可とは既定が逆）。オンにできるのは Settings 画面（`POST /settings/mcp/order-proposals`）だけで、MCP は`order_proposals_disable`でオフにだけできる。`settings_set`のホワイトリストには入らない（`key_not_allowed`）。切り替えは`mcp_settings_audit`に残る。
 
