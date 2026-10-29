@@ -23,7 +23,7 @@
   },
   "dependencies": {
     "@stoplight/elements": "^9.0.25",
-    "lightweight-charts": "^4",
+    "lightweight-charts": "^5",
     "lit": "^3.3.3"
   }
 }
