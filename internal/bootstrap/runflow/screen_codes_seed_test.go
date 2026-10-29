@@ -12,25 +12,38 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
-	resultsquery "github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 )
 
-// seedReferenceHour is the JST hour of the instant the seeded rows are placed
-// relative to: stamp(d) is d before JST today at this hour. Every row the
-// screens read as "today" (the Home screen counts the signals and trades of
-// [00:00, 24:00) JST) must stay in that window however early or late the test
-// runs, so the seed is anchored to the JST day and not to time.Now(): with
-// "d before now" a row 30 minutes old fell into yesterday between 00:00 and
-// 00:30 JST (issue #919). The offsets of today's rows are at most 6 hours.
-const seedReferenceHour = 6
+// seedReferenceHour is the JST hour of the reference instant the seeded rows
+// are placed relative to: stamp(d), the function seedEveryCode takes from
+// stamper, is d before JST today at this hour. The Home screen counts the
+// signals and trades of [00:00, 24:00) JST as "today", so those rows must stay
+// in that window however early or late the test runs; with "d before
+// time.Now()" the NONE signals (30 minutes and more old) fell into yesterday
+// between 00:00 and about 01:00 JST (issue #919). Rows of today are therefore
+// at most seedTodayMaxAge (< seedReferenceHour hours) old. Rows may lie after
+// the wall clock (before 06:00 JST): only the "today" window is stabilised.
+const (
+	seedReferenceHour = 6
+	seedTodayMaxAge   = 5 * time.Hour
+	// seedStalledAge puts the updated_at of the proposals before JST today
+	// whatever the time, so those still in received/processing always count as
+	// stalled (updated_at older than 10 minutes) and the Home screen always
+	// renders that item.
+	seedStalledAge = 30 * time.Hour
+)
+
+// jst is Japan Standard Time (UTC+9, no daylight saving time).
+var jst = time.FixedZone("JST", 9*60*60)
 
 // stamper returns stamp: a stored timestamp (RFC 3339 with milliseconds, UTC)
 // of d before the reference instant, JST today at seedReferenceHour. The day
-// is taken from now once, so one seed never straddles midnight.
+// is taken from now once, so the seed never straddles midnight (the screens
+// read their own clock afterwards; the gap is milliseconds).
 func stamper(now time.Time) func(d time.Duration) string {
-	j := now.In(resultsquery.JST)
-	ref := time.Date(j.Year(), j.Month(), j.Day(), seedReferenceHour, 0, 0, 0, resultsquery.JST)
+	j := now.In(jst)
+	ref := time.Date(j.Year(), j.Month(), j.Day(), seedReferenceHour, 0, 0, 0, jst)
 	return func(d time.Duration) string {
 		return ref.Add(-d).UTC().Format("2006-01-02T15:04:05.000Z")
 	}
@@ -87,11 +100,11 @@ func seedEveryCode(t *testing.T, db *sql.DB) {
 	// closed positions: every exit reason and an unnamed one, today
 	for i, reason := range append(mapKeys(labels.ExitReasons), "an_unnamed_exit") {
 		entry := mustExec(t, db, `INSERT INTO paper_orders (instrument_id, trade_signal_id, symbol, side, order_type, quantity, status, submitted_at, filled_at, filled_price, fees)
-			VALUES (?, ?, '7203', 'BUY', 'MARKET', 100, 'FILLED', ?, ?, 2500, 55)`, long, signal, stamp(5*time.Hour), stamp(5*time.Hour))
+			VALUES (?, ?, '7203', 'BUY', 'MARKET', 100, 'FILLED', ?, ?, 2500, 55)`, long, signal, stamp(seedTodayMaxAge), stamp(seedTodayMaxAge))
 		exit := mustExec(t, db, `INSERT INTO paper_orders (instrument_id, symbol, side, order_type, quantity, status, submitted_at, filled_at, filled_price, fees)
 			VALUES (?, '7203', 'SELL', 'MARKET', 100, 'FILLED', ?, ?, 2510, 55)`, long, stamp(time.Hour), stamp(time.Hour))
 		mustExec(t, db, `INSERT INTO positions (instrument_id, entry_order_id, exit_order_id, symbol, side, quantity, entry_price, current_price, unrealized_pnl, realized_pnl, opened_at, closed_at, exit_reason)
-			VALUES (?, ?, ?, '7203', 'LONG', 100, 2500, 2510, 0, ?, ?, ?, ?)`, long, entry, exit, 1000+100*i, stamp(5*time.Hour), stamp(time.Hour), reason)
+			VALUES (?, ?, ?, '7203', 'LONG', 100, 2500, 2510, 0, ?, ?, ?, ?)`, long, entry, exit, 1000+100*i, stamp(seedTodayMaxAge), stamp(time.Hour), reason)
 	}
 	open := mustExec(t, db, `INSERT INTO paper_orders (instrument_id, trade_signal_id, symbol, side, order_type, quantity, status, submitted_at, filled_at, filled_price, fees)
 		VALUES (?, ?, '7203', 'BUY', 'MARKET', 100, 'FILLED', ?, ?, 2500, 55)`, long, signal, stamp(time.Hour), stamp(time.Hour))
@@ -123,7 +136,7 @@ func seedEveryCode(t *testing.T, db *sql.DB) {
 			stop_loss_price, exit_plan, max_loss_jpy, rationale, sources_json, expires_at, status, status_reason, instrument_id, updated_at,
 			applied_quantity, computed_max_loss_jpy, effective_stop_loss_price)
 			VALUES (?, 'h', ?, 'client', '7203', ?, ?, 100, 'MARKET', 2450, '2650円で利確', 5000, 'テスト', '[]', ?, ?, ?, ?, ?, 100, 4800, 2450)`,
-			fmt.Sprintf("key-%d", i), stamp(3*time.Hour), bucket, action, stamp(-time.Hour), status, reason, instrument, stamp(time.Hour))
+			fmt.Sprintf("key-%d", i), stamp(3*time.Hour), bucket, action, stamp(-time.Hour), status, reason, instrument, stamp(seedStalledAge))
 		// the trade signal the proposal was judged as, rejected by the Risk Engine with the code
 		signal := mustExec(t, db, `INSERT INTO trade_signals (instrument_id, symbol, timestamp, direction, policy_version, risk_passed, reject_reason)
 			VALUES (?, '7203', ?, 'LONG', 'mcp-proposal-v1', 0, ?)`, instrument, stamp(2*time.Hour), reason)
