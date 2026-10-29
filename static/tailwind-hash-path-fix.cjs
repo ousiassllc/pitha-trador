@@ -8,7 +8,15 @@
 // so the build fails with ERR_INVALID_ARG_VALUE (path with null bytes).
 // Decode the escape in the resolver's callback result. Paths without `#`
 // are untouched, so normal builds are unaffected.
-const Resolver = require('enhanced-resolve/lib/Resolver');
+//
+// enhanced-resolve is only a transitive dependency, so load the exact copy
+// @tailwindcss/node uses (resolved relative to it), not whatever happens to
+// be hoisted into static/node_modules.
+const Resolver = require(
+  require.resolve('enhanced-resolve/lib/Resolver', {
+    paths: [require.resolve('@tailwindcss/node')],
+  }),
+);
 
 const resolve = Resolver.prototype.resolve;
 Resolver.prototype.resolve = function patchedResolve(...args) {

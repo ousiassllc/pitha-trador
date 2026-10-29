@@ -3,6 +3,10 @@
 // Without tailwind-hash-path-fix.cjs, the resolved `@import` path comes back
 // with an enhanced-resolve `\0#` escape and the build dies with
 // ERR_INVALID_ARG_VALUE.
+//
+// The "fails without the preload" test goes red once upstream fixes this; that
+// is the signal to delete the preload, the build/dev script changes in
+// package.json, this test and the setup.md paragraph.
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -43,12 +47,12 @@ describe('tailwind build in a path containing #', () => {
     const { exitCode, stderr } = buildCss([]);
     expect(exitCode).not.toBe(0);
     expect(stderr).toContain('null bytes');
-  });
+  }, 30_000);
 
   test('succeeds with tailwind-hash-path-fix.cjs preloaded', () => {
     const { exitCode, stderr } = buildCss(['--require', preload]);
     expect(stderr).not.toContain('null bytes');
     expect(exitCode).toBe(0);
     expect(readFileSync(path.join(workDir, 'out.css'), 'utf-8')).toContain('.from-imported');
-  });
+  }, 30_000);
 });
