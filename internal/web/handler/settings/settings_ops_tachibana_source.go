@@ -53,7 +53,7 @@ var tachibanaSourceGroups = []opsGroup{
 		fields: []opsField{
 			{key: tachibanasource.KeyTachibanaNightlyRunTime, label: "実行開始時刻（JST）", hint: "HH:MM 形式です。既定は 18:00 以降、マニュアル推奨の翌 01:00 以降も選べます。08:00〜15:30 は指定できません。", placeholder: tachibanasource.DefaultTachibanaNightlyRunTime},
 			{key: tachibanasource.KeyTachibanaNightlyRatePerSecond, label: "取得速度（件/秒）", hint: fmt.Sprintf("%s〜%s の数値です。既定は 1 件/秒で、1 銘柄ずつ直列に取得します。", numText(tachibanasource.TachibanaNightlyRatePerSecondMin), numText(tachibanasource.TachibanaNightlyRatePerSecondMax))},
-			{key: tachibanasource.KeyTachibanaNightlyMarkets, label: "対象の市場区分", hint: "prime / standard / growth / other をカンマ区切りで指定します（銘柄マスタの市場区分と照合します）。", placeholder: tachibanasource.DefaultTachibanaNightlyMarkets},
+			{key: tachibanasource.KeyTachibanaNightlyMarkets, label: "対象の市場区分", hint: "prime（プライム）/ standard（スタンダード）/ growth（グロース）/ other（その他）をカンマ区切りで指定します（銘柄マスタの市場区分と照合します）。", placeholder: tachibanasource.DefaultTachibanaNightlyMarkets},
 			{key: tachibanasource.KeyTachibanaNightlyMinPrice, label: "除外: 株価の下限（円）", hint: "前日終値がこの値未満の銘柄を対象外にします。0 なら除外しません。"},
 			{key: tachibanasource.KeyTachibanaNightlyExcludeSymbols, label: "除外: 銘柄コード", hint: "対象外にする銘柄です。カンマまたは空白区切りで最大 500 件です。", placeholder: "例: 1321, 1570"},
 		},

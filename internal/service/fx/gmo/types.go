@@ -1,6 +1,7 @@
 package gmo
 
 import (
+	"strconv"
 	"time"
 )
 
@@ -44,6 +45,12 @@ const minuteDayStartHour = 6
 // candles for.
 var MinuteCandlesSince = time.Date(2023, time.October, 28, 0, 0, 0, 0, jst)
 
+// DailyCandlesSinceYear is the first calendar year (JST) the Client requests
+// 1day candles for. GMO serves them from each pair's launch year, and no pair
+// launched before 2023 (the earliest handling start is 2023-04-26), so an
+// earlier year can only be a caller mistake and is rejected before any call.
+const DailyCandlesSinceYear = 2023
+
 // Ticker is one pair's current quote. Ask is the price you buy at, Bid the
 // price you sell at. There is no volume or depth: the API does not return it.
 type Ticker struct {
@@ -72,7 +79,8 @@ type KlinesRequest struct {
 	// At picks the period to fetch. For Interval1Min it is any instant of the
 	// wanted GMO trading day (06:00 JST to the next 06:00 JST; the whole day's
 	// candles are returned). For Interval1Day it picks the calendar year (JST)
-	// whose daily candles are returned.
+	// whose daily candles are returned; years before DailyCandlesSinceYear are
+	// rejected with ErrUnsupportedDate.
 	At time.Time
 }
 
@@ -88,6 +96,10 @@ func (r KlinesRequest) dateParam() (string, error) {
 		}
 		return day.Format("20060102"), nil
 	default:
-		return r.At.In(jst).Format("2006"), nil
+		year := r.At.In(jst).Year()
+		if year < DailyCandlesSinceYear {
+			return "", ErrUnsupportedDate
+		}
+		return strconv.Itoa(year), nil
 	}
 }

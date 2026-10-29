@@ -66,6 +66,8 @@ type step struct {
 	status  int
 	fixture string
 	body    string
+	// retryAfter, when set, is sent as the Retry-After header.
+	retryAfter string
 }
 
 // fakeServer plays steps in order, one per request, and records each request
@@ -101,6 +103,9 @@ func newFakeServer(t *testing.T, clk *fakeClock, steps ...step) *fakeServer {
 			s.status = http.StatusOK
 		}
 		w.Header().Set("Content-Type", "application/json")
+		if s.retryAfter != "" {
+			w.Header().Set("Retry-After", s.retryAfter)
+		}
 		w.WriteHeader(s.status)
 		_, _ = w.Write([]byte(body))
 	}))

@@ -97,7 +97,7 @@ func metaRow(m actuals.MetaComparison) evaluation.MetaRow {
 		case v == nil:
 			return evaluation.Cell{Text: noValue, Help: "OOSでは定義できません。"}
 		case !m.OOSReliable:
-			return evaluation.Cell{Text: undetermined, Undetermined: true, Help: fmt.Sprintf("参考値 %s（OOS n=%d）: OOS の件数が基準未満のため判定不能", f(*v), m.OOSSamples)}
+			return evaluation.Cell{Text: undetermined, Undetermined: true, Help: fmt.Sprintf("参考値 %s（OOS の件数 %d 件）: OOS の件数が基準未満のため判定不能", f(*v), m.OOSSamples)}
 		}
 		return evaluation.Cell{Text: f(*v)}
 	}
