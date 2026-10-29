@@ -18,8 +18,8 @@ import (
 // ErrRetriesExhausted wrapping the last failure. When the server sends a
 // Retry-After, the wait before the next attempt is the larger of the backoff
 // and that value (capped at MaxRetryAfter), so it is never shorter than the
-// backoff alone. Permanent failures and
-// context cancellation are returned immediately. It returns the "data" field.
+// backoff alone. Permanent failures and context cancellation are returned
+// immediately. It returns the "data" field.
 func (c *Client) get(ctx context.Context, path string, query url.Values) (json.RawMessage, error) {
 	backoff := c.cfg.InitialBackoff
 	var last error

@@ -7,7 +7,7 @@ import (
 )
 
 // rejectCodeOther is the code risk_rejections' other_reject_breakdown gives a
-// reason this build does not know (the query package's rejectCodeOther).
+// reason this build does not know (rejectCodeOther in internal/service/paperresultsmcp/query).
 const rejectCodeOther = "other"
 
 // metaSkipReasons names what follows "meta_skip:" in the codes of
