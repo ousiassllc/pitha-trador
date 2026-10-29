@@ -12,12 +12,28 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap"
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	resultsquery "github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
 	"github.com/ousiassllc/pitha-trador/internal/web/labels"
 )
 
-// stamp is a stored timestamp (RFC 3339 with milliseconds, UTC) of d before now.
-func stamp(d time.Duration) string {
-	return time.Now().UTC().Add(-d).Format("2006-01-02T15:04:05.000Z")
+// seedReferenceHour is the JST hour of the instant the seeded rows are placed
+// relative to: stamp(d) is d before JST today at this hour. Every row the
+// screens read as "today" (the Home screen counts the signals and trades of
+// [00:00, 24:00) JST) must stay in that window however early or late the test
+// runs, so the seed is anchored to the JST day and not to time.Now(): with
+// "d before now" a row 30 minutes old fell into yesterday between 00:00 and
+// 00:30 JST (issue #919). The offsets of today's rows are at most 6 hours.
+const seedReferenceHour = 6
+
+// stamper returns stamp: a stored timestamp (RFC 3339 with milliseconds, UTC)
+// of d before the reference instant, JST today at seedReferenceHour. The day
+// is taken from now once, so one seed never straddles midnight.
+func stamper(now time.Time) func(d time.Duration) string {
+	j := now.In(resultsquery.JST)
+	ref := time.Date(j.Year(), j.Month(), j.Day(), seedReferenceHour, 0, 0, 0, resultsquery.JST)
+	return func(d time.Duration) string {
+		return ref.Add(-d).UTC().Format("2006-01-02T15:04:05.000Z")
+	}
 }
 
 func mustExec(t *testing.T, db *sql.DB, query string, args ...any) int64 {
@@ -51,6 +67,7 @@ func seedSecrets(t *testing.T, state *bootstrap.State) {
 // print them. Codes the tables do not name are added too (they must not show).
 func seedEveryCode(t *testing.T, db *sql.DB) {
 	t.Helper()
+	stamp := stamper(time.Now())
 	long := mustExec(t, db, `INSERT INTO instruments (symbol, name, market, kind, asset_class) VALUES ('7203', 'トヨタ自動車', 'プライム', 'stock', 'stock')`)
 	etf := mustExec(t, db, `INSERT INTO instruments (symbol, name, market, kind, asset_class) VALUES ('1306', 'TOPIX連動ETF', 'プライム', 'stock', 'bond_etf')`)
 	response, _ := json.Marshal(map[string]any{"direction": "LONG", "regime": "TREND", "entry_quality": "good"})
