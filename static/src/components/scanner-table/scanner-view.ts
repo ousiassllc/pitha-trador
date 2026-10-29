@@ -81,7 +81,7 @@ export const COLUMNS: Column[] = [
   {
     key: 'entry_quality',
     label: 'エントリー品質',
-    hint: 'エントリー好適度。poor < fair < good < strong < exceptional の順に良い',
+    hint: 'エントリー好適度。poor（低）< fair（並）< good（良）< strong（強）< exceptional（最高）の順に良い',
     numeric: false,
   },
   {

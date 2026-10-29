@@ -21,10 +21,13 @@
 //   - A failed call is retried with exponential backoff while the failure is
 //     transient (network error, HTTP 429/5xx, API-level rate-limit or
 //     maintenance code). After Config.MaxAttempts the Client stops, logs an
-//     error and returns ErrRetriesExhausted. Permanent failures (other
-//     4xx, invalid parameter) are returned at once.
+//     error and returns ErrRetriesExhausted. A Retry-After header
+//     (delta-seconds or HTTP-date) lengthens the wait to that value, capped
+//     at MaxRetryAfter; the wait is never shorter than the backoff.
+//     Permanent failures (other 4xx, invalid parameter) are returned at once.
 //
 // GMOコイン terms to keep in mind (docs/architecture/overview/integrations.md
 // §14): commercial use and redistribution of the rates are prohibited
-// (約款 21条3項), and 1min candles exist only from 2023-10-28 onwards.
+// (約款 21条3項), 1min candles exist only from 2023-10-28 onwards, and 1day
+// candles only from DailyCandlesSinceYear (2023).
 package gmo

@@ -146,6 +146,7 @@ func TestKlinesRejectsUnsupportedRequestsWithoutCalling(t *testing.T) {
 		{"lowercase symbol", with(func(r *KlinesRequest) { r.Symbol = "usd_jpy" }), ErrUnsupportedSymbol},
 		{"price type", with(func(r *KlinesRequest) { r.PriceType = "MID" }), ErrUnsupportedPriceType},
 		{"empty price type", with(func(r *KlinesRequest) { r.PriceType = "" }), ErrUnsupportedPriceType},
+		{"1day before the first supported year", with(func(r *KlinesRequest) { r.Interval = Interval1Day; r.At = time.Date(2022, 6, 1, 12, 0, 0, 0, jst) }), ErrUnsupportedDate},
 		{"1min before 2023-10-28", with(func(r *KlinesRequest) { r.At = time.Date(2023, 10, 27, 12, 0, 0, 0, jst) }), ErrUnsupportedDate},
 	}
 	for _, tt := range tests {
@@ -181,6 +182,9 @@ func TestKlinesDateParam(t *testing.T) {
 		{"1min just before the first trading day", Interval1Min, jstAt(2023, 10, 28, 5, 59), "", ErrUnsupportedDate},
 		{"1min given in UTC is converted to JST", Interval1Min, time.Date(2023, 10, 30, 20, 30, 0, 0, time.UTC), "20231030", nil},
 		{"1day year", Interval1Day, jstAt(2023, 10, 30, 7, 30), "2023", nil},
+		{"1day first supported year", Interval1Day, jstAt(2023, 1, 1, 0, 0), "2023", nil},
+		{"1day year before the first supported year", Interval1Day, jstAt(2022, 12, 31, 23, 59), "", ErrUnsupportedDate},
+		{"1day year is judged in JST, not UTC", Interval1Day, time.Date(2022, 12, 31, 15, 0, 0, 0, time.UTC), "2023", nil},
 		{"1day year follows JST", Interval1Day, time.Date(2023, 12, 31, 20, 0, 0, 0, time.UTC), "2024", nil},
 	}
 	for _, tt := range tests {
