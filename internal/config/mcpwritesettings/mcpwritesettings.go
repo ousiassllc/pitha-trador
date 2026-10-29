@@ -4,17 +4,20 @@
 // masking rule for audit and tool output.
 //
 // The whitelist is the only way a key becomes writable from the MCP; a key not
-// listed here is rejected before anything is read or stored. It deliberately
-// holds only Paper and operating-capital values: the Paper capital and
+// listed here is rejected before anything is read or stored. It
+// deliberately holds only Paper and operating-capital values: the Paper capital and
 // exposure limits (papersettings), the per-asset-class budgets
 // (bucketsettings), the daily entry-halt thresholds
 // (dailyguardsettings), the Paper-only minimum entry quality
-// (paperpolicysettings, issue #861) and the LLM cutoff with its provenance
-// (metalabelsettings). It never holds a Live value (policy.long|short.
-// min_entry_quality, the Live thresholds, are not on it), the Paper bootstrap
-// switch, a secret, or anything that orders, moves money or releases the Kill
-// Switch - those have no key in runtime_settings the MCP could reach through
-// this list.
+// (paperpolicysettings, issue #861), the LLM cutoff with its provenance
+// (metalabelsettings) and the Jev shadow's switch and candidate version
+// (jevshadowsettings.KeyEnabled / KeyCandidateVersion, issue #929: exactly
+// those two; the shadow's cost cap, failure cap, halt and throttle records and
+// the live prompt version are not on it). It never holds a Live value
+// (policy.long|short.min_entry_quality, the Live thresholds, are not on it),
+// the Paper bootstrap switch, a secret, or anything that orders, moves money or
+// releases the Kill Switch - those have no key in runtime_settings the MCP
+// could reach through this list.
 //
 // The write switch lives in runtime_settings under KeyWriteEnabled so the
 // application (the Settings screen) and the MCP process, which share the
@@ -31,6 +34,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config/bucketsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/dailyguardsettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
@@ -92,6 +96,14 @@ const entryQualityConstraint = "poor / fair / good / strong / exceptional のい
 // bucketConstraint is the accepted range of both bucket budgets.
 const bucketConstraint = "0 以上 1 兆円以下の整数。株と債券ETFの合計が運用資金（risk.paper.initial_capital_jpy）以下"
 
+// The accepted values of the two Jev shadow keys (issue #929). The write is
+// validated by mcpset with the Settings screen's own check
+// (jevprompt.ValidateCandidate); this text only tells a client what to send.
+const (
+	shadowEnabledConstraint   = "true / false（1 / 0 も可）。true にできるのは候補の版（jev.shadow.candidate_version）が設定済みのときだけ"
+	shadowCandidateConstraint = "このビルドに登録されている版（jev_shadow_cost の registered_versions）のうち、ライブの版と違うもの"
+)
+
 var specs = []Spec{
 	{papersettings.KeyInitialCapitalJPY, UnitYen, "Paper の運用資金（円）。1 銘柄・総エクスポージャ・1 回の最大損失の % はこの金額が基準", "0 円より大きく 1 兆円（1000000000000）以下", false},
 	{papersettings.KeyMaxPositionPerSymbolPct, UnitPercent, "Paper の 1 銘柄あたりの建玉上限（運用資金に対する %）", "0 より大きく 100 以下", false},
@@ -112,6 +124,8 @@ var specs = []Spec{
 	{metalabelsettings.KeyLLMCutoffModel, UnitText, "上の終端日を確認した Jev のモデル名（出典）。判断の記録の model_id と同じ表記で入れる。実際に応答しているモデルと違うと再確認まで不採用", fmt.Sprintf("%d 文字以内・制御文字なし", metalabelsettings.MaxProvenanceLen), false},
 	{metalabelsettings.KeyLLMCutoffConfirmedOn, UnitDate, "上の終端日を公式情報で確認した日（出典。記録用）", "YYYY-MM-DD", false},
 	{metalabelsettings.KeyLLMCutoffSource, UnitText, "上の終端日の根拠（出典。確認した公式ページの URL か文書名）", fmt.Sprintf("%d 文字以内・制御文字なし", metalabelsettings.MaxProvenanceLen), false},
+	{jevshadowsettings.KeyEnabled, UnitText, "Jev のお試し判断（シャドー）のオン・オフ。オンでも取引には使わず、結果は別表に残すだけ。既定 false（オフ）。1 日の費用上限・失敗回数の上限・呼び出し間隔・429/529 での停止はこの API から変えられない", shadowEnabledConstraint, false},
+	{jevshadowsettings.KeyCandidateVersion, UnitText, "シャドーが動かす候補の Trader の版。ライブの版の切り替え（昇格）ではない。既定は未設定（候補なし）。未設定のままオンにはできない", shadowCandidateConstraint, false},
 }
 
 // Specs returns the whitelist in display order. The slice is a copy.

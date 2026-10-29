@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/mcpwritesettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/metalabelsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/papersettings"
@@ -219,11 +220,15 @@ func TestPaperCapitalJPY(t *testing.T) {
 }
 
 // Every whitelisted key is one the application's opsettings manages, so a
-// GUI-visible validation exists for it (the MCP never invents its own).
+// GUI-visible validation exists for it (the MCP never invents its own) - except
+// the two Jev shadow keys, which the Settings screen saves through
+// jevprompt.Service and mcpset validates with the same jevprompt.ValidateCandidate
+// (issue #929); they must stay out of opsettings.
 func TestWhitelistedKeysAreOpsettingsKeys(t *testing.T) {
 	for _, key := range mcpwritesettings.Keys() {
-		if !opsettings.IsKnownKey(key) {
-			t.Errorf("%s is not an opsettings key", key)
+		shadow := key == jevshadowsettings.KeyEnabled || key == jevshadowsettings.KeyCandidateVersion
+		if known := opsettings.IsKnownKey(key); known == shadow {
+			t.Errorf("%s: opsettings.IsKnownKey = %v, want %v", key, known, !shadow)
 		}
 	}
 }

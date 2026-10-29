@@ -155,3 +155,4 @@
 | 1.148 | 2026-10-26 | FR-MCP の `session_diagnostics` が、kabu のとき空の `watch_lists` を `watch_list_empty` でなく `watch_list_not_applicable` として返す。判断・発注・監視リストの生成は変わらない | issue #914 |
 | 1.149 | 2026-10-27 | FR-MCP の `risk_rejections` の `other_reject_breakdown` が `jev_none` を局面別（`jev_none:regime=<局面>`）と確信度の帯別（`jev_none:conf=<帯>`、0.4・0.6・0.8 で 4 つ）に分けて返す。局面別と帯別は別の内訳で、`confidence=` の無い過去分は従来の `jev_none`、未知の局面・不正な形式は `jev_none:other`。集計だけで、判断・発注・設定は変わらない | issue #922 |
 | 1.150 | 2026-10-28 | FR-TRADER-5 に 2 つ目の候補版 `trader-v5`（`direction`・`continuation_probability` を実際の Paper の出口で聞き直す。シャドーで並走させるだけで、ライブの版・判断・発注は変わらない）を追記 | issue #925 |
+| 1.151 | 2026-10-29 | FR-MCP-20 のホワイトリストに Jev のシャドーの 2 キー（`jev.shadow.enabled`・`jev.shadow.candidate_version`）を足し 19 → 21 キーにした（Settings 画面と同じ検証。候補なしの有効化は MCP では拒否）。FR-MCP-21 に、画面でのこの 2 キーの変更は監査に残らない制限を追記。FR-TRADER-5・FR-MCP-36 の「MCP から変えられない」を直した。費用の上限・失敗回数の上限・ライブの版・昇格・既定の無効は変わらない。ツール数は変わらない | issue #929 |

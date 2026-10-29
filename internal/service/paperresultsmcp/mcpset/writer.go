@@ -88,14 +88,14 @@ func (w *Writer) Set(ctx context.Context, client, key, raw string) (Entry, error
 			return ErrWriteDisabled
 		}
 		svc := newService(store, w.base)
-		before, err := svc.Get(ctx, key)
+		before, err := getSetting(ctx, store, svc, key)
 		if err != nil {
 			return err
 		}
-		if err := svc.Save(ctx, key, raw); err != nil {
+		if err := saveSetting(ctx, store, svc, key, raw, w.now()); err != nil {
 			return err
 		}
-		after, err := svc.Get(ctx, key)
+		after, err := getSetting(ctx, store, svc, key)
 		if err != nil {
 			return err
 		}

@@ -38,3 +38,4 @@
 | 1.31 | 2026-10-26 | `risk_rejections` の `api_error` を失敗の種別で分けて数える（`internal/service/policy/apierror`、Policy が `reject_reason` に種別を書く）。読み取り・書き込みのツール数は変わらない | issue #912 |
 | 1.32 | 2026-10-26 | §5 `metalabel_training_readiness` に、OOS 窓の始点の理由・不足行数の見積もり・除外コホートの中身を読む節を追加（`SplitWalkForward` の結果を読むだけで、判定に戻さない）。読み取り・書き込みのツール数は変わらない | issue #913 |
 | 1.33 | 2026-10-26 | §5 `session_diagnostics` が `broker.provider` を 1 キーだけ読んで監視リストの観察を切り替える旨を追記。読み取り・書き込みのツール数は変わらない | issue #914 |
+| 1.34 | 2026-10-29 | §6 と §7.1 のホワイトリストに Jev のシャドーの 2 キー（`jev.shadow.enabled`・`jev.shadow.candidate_version`）を足し 19 → 21 キーにした（Settings 画面と同じ `jevprompt.Service` で検証して保存。候補なしの有効化は MCP では `invalid_value`）。§7.4 に、画面での 2 キーの変更は監査ログに残らず `settings_diff` の「変更前」がずれうる制限を追記。ライブの版・費用の上限・失敗回数の上限・止めた記録・失敗回数・クールダウンは入れない。ツール数は変わらない | issue #929 |

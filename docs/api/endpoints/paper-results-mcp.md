@@ -214,7 +214,7 @@
 
 ### 3.10 設定ツール（issue #806・#807）
 
-設定ツールが触れるのは、次のホワイトリストの 19 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
+設定ツールが触れるのは、次のホワイトリストの 21 キーだけである（`internal/config/mcpwritesettings`。仕様と理由は `architecture/paper-results-mcp.md` §7）。引数は `period` を持たない。
 
 | キー | 単位 | 意味 | 受け付ける値 |
 |------|------|------|--------------|
@@ -235,8 +235,10 @@
 | `metalabel.llm_cutoff_model` | 文字列 | 上の終端日を確認した Jev のモデル名（出典） | 200 文字以内・制御文字なし |
 | `metalabel.llm_cutoff_confirmed_on` | 日付 | 上の終端日を確認した日（出典） | `YYYY-MM-DD` |
 | `metalabel.llm_cutoff_source` | 文字列 | 上の終端日の根拠（出典） | 200 文字以内・制御文字なし |
+| `jev.shadow.enabled` | 文字列（`text`） | Jev のプロンプトのシャドー比較の有効（issue #929。Settings 画面の「シャドーを有効にする」）。既定は `false` | `true` / `false`（`1` / `0` も可）。`true` にできるのは候補の版が設定済みのときだけ。`false` はいつでも可 |
+| `jev.shadow.candidate_version` | 文字列（`text`） | シャドーが動かす候補の版（issue #929。Settings 画面の「シャドーの候補の版」）。既定は空（候補なし） | このビルドに登録済み（`jev_shadow_cost` の `registered_versions`）で、ライブの版と違う版 |
 
-Live の値・Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）・秘密・発注・送金・Kill Switch 解除に関するキーは無い。ホワイトリスト外のキーは `key_not_allowed`（HTTP 403）。`value` は文字列でも数値でもよい（Settings 画面に入れる文字列と同じ。数値キーに `2.5` でも `"2.5"` でも可）。真偽値・null・配列・オブジェクトは `invalid_argument`。
+Live の値・Paper ブートストラップのスイッチ（`paper.bootstrap_entry_enabled`）・秘密・発注・送金・Kill Switch 解除に関するキーは無い。`jev.shadow.*` で入るのは上の 2 キーだけで、ライブの版 `jev.trader_prompt_version`・費用の上限 `jev.shadow.daily_cost_cap_usd`・`jev.shadow.halt`・`jev.shadow.failures`・`jev.shadow.throttle` は書けない。ホワイトリスト外のキーは `key_not_allowed`（HTTP 403）。`value` は文字列でも数値でもよい（Settings 画面に入れる文字列と同じ。数値キーに `2.5` でも `"2.5"` でも可。`jev.shadow.enabled` は `"true"` / `"false"` / `"1"` / `"0"`、JSON の数値 1 / 0 も可）。真偽値（JSON の `true` / `false`。`jev.shadow.enabled` でも同じ）・null・配列・オブジェクトは `invalid_argument`。
 
 ### 3.11 `settings_get`
 
@@ -249,7 +251,7 @@ Live の値・Paper ブートストラップのスイッチ（`paper.bootstrap_e
 | `llm_cutoff_status` | LLM cutoff（`metalabel.llm_cutoff` と出典 3 キー）の状態の固定コード。`placeholder`（未設定または仮置き `2026-01-01` のまま。夜間再学習のモデルは採用されない）／`unverified`（実日付だが確認した Jev モデル名 `metalabel.llm_cutoff_model` が未記録。Paper では警告のまま採用、Live 前チェックでは採用を止める）／`confirmed`（実日付とモデル名が記録済み）。Settings 画面の状態表示と同じ分類（`metalabelsettings.Settings.CutoffStatus`） |
 | `items[]` | ホワイトリストの全キー（上の表の順）。`key` / `value`（Settings 画面と同じ文字列）/ `unit`（`yen`・`percent`・`count`・`date`・`text`）/ `source`（`stored`＝保存値、`default`＝保存値なしで既定が効いている）/ `default` / `description` / `constraint`（受け付ける値）/ `warning`（あれば。例: LLM cutoff が仮の値のまま） |
 
-Paper の 4 キーの `default` は `risk.yaml` の Paper 値（なければ #804 の初期値）。予算枠の `default` は、株が運用資金の全額、債券ETFが 0（枠を設ける前と同じ挙動）。秘密に分類されるキーはホワイトリストに無いが、将来載せる場合は `value` と `default` が `****` になる。読み取り専用。
+Paper の 4 キーの `default` は `risk.yaml` の Paper 値（なければ #804 の初期値）。予算枠の `default` は、株が運用資金の全額、債券ETFが 0（枠を設ける前と同じ挙動）。`jev.shadow.enabled` の `default` は `false`、`jev.shadow.candidate_version` は空（候補なし）。保存された行が解釈できないときは、既定（オフ・候補なし）を返し `warning` を付ける。秘密に分類されるキーはホワイトリストに無いが、将来載せる場合は `value` と `default` が `****` になる。読み取り専用。
 
 ### 3.12 `settings_set`
 
@@ -264,7 +266,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 
 各呼び出しは個別に検証・保存・監査され、途中でも一貫した状態になる: 日付だけ・日付＋確認日＋出典だけ（モデル名なし）は `unverified` のまま（警告が残り、Live 前チェックでは採用が止まる）、モデル名まで記録すると `confirmed` になり、仮置きの警告は消える。仮置き `2026-01-01` を実日付に変えるまでは `placeholder`。公式に日付が載っていないときは推測で入れず仮置きのままにする。各キーの `description` に同じ手順が載る。結果は `settings_get` の `llm_cutoff_status` で確認できる。採用判定（FR-META-6、Live 前の `unverified` 不採用を含む）はこの更新で変わらない。
 
-予算枠（`risk.bucket.stock.budget_jpy` / `risk.bucket.bond_etf.budget_jpy`）の保存（issue #824）: 株と債券ETFの合計が運用資金（`risk.paper.initial_capital_jpy`）を超える値は `invalid_value` で拒否し、設定も監査行も残さない。運用資金を枠の合計より下げる保存も同じく拒否する。枠の間で予算を移すツールは無く、`settings_set` を 1 キーずつ呼ぶ。**減らす方の枠を先に保存し、そのあとで増やす方の枠を保存する**（先に増やす方を保存すると、途中の合計が運用資金を超えて拒否される）。
+予算枠（`risk.bucket.stock.budget_jpy` / `risk.bucket.bond_etf.budget_jpy`）の保存（issue #824）: 株と債券ETFの合計が運用資金（`risk.paper.initial_capital_jpy`）を超える値は `invalid_value` で拒否し、設定も監査行も残さない。運用資金を枠の合計より下げる保存も同じく拒否する。枠の間で予算を移すツールは無く、`settings_set` を 1 キーずつ呼ぶ。**減らす方の枠を先に保存し、そのあとで増やす方の枠を保存する**（先に増やす方を保存すると、途中の合計が運用資金を超えて拒否される）。シャドーの 2 キーの保存（issue #929）は検証が Settings 画面と同じで、登録のない版・ライブの版と同じ版・空の候補、候補なしでの `jev.shadow.enabled` の `true` は `invalid_value`、`false` はいつでも可。この 2 キーの Settings 画面での変更は監査に残らず、`settings_diff` の `before` が古いことがある（詳細は分割章 `paper-results-mcp-jev-prompt.md` §3.29.4）。
 
 ### 3.13 `settings_diff`
 
@@ -282,7 +284,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 
 ### 3.16〜3.22 注文案ツール（issue #827・#828・#829）
 
-書き込み: `order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable`（Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ。Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。読み取り専用: `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`（提案 → 約定 → 損益のひも付け。issue #829）と、`paper_trades` / `paper_performance_summary` の `origin`。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.22）。**§3.29 Jev プロンプトのツール（issue #872）**: 読み取り専用: `jev_shadow_compare`（ライブの trader の判断と、同じ入力に対するシャドー＝候補のプロンプトの版の判断を、`entry_quality` の分布・`direction` の一致率・費用・`calibration_outcomes` による結果で並べる）と `jev_shadow_cost`（シャドーの `request_cost` の日次・累計、上限と止まった記録、昇格の記録）。書き込み: `jev_prompt_promote`（ライブの版を候補の版に切り替える明示的な操作。書き込み許可のスイッチに従い、監査に残る。自動では呼ばれず、自己改善ループには経路が無い）。シャドーの有効化・候補の選択・費用の上限は Settings 画面だけで、**費用の上限の値は暫定の案で未承認**。引数・応答・エラーは分割章 `paper-results-mcp-jev-prompt.md` に置く（ファイルの行数上限のため。章番号は同じ §3.29）。
+書き込み: `order_proposal_submit` / `order_proposal_cancel` / `order_proposals_disable`（Paper の注文案を受け付けて記録し、取消の依頼を記録するだけ。Risk check・発注・取消はアプリ。issue #828。`architecture/order-proposal-processing.md`）。読み取り専用: `order_proposals_list` / `order_proposal_get` / `order_proposal_summary`（提案 → 約定 → 損益のひも付け。issue #829）と、`paper_trades` / `paper_performance_summary` の `origin`。引数・応答・エラーは分割章 `paper-results-mcp-proposals.md` に置く（ファイルの行数上限のため。章番号は同じ §3.16〜§3.22）。**§3.29 Jev プロンプトのツール（issue #872）**: 読み取り専用: `jev_shadow_compare`（ライブの trader の判断と、同じ入力に対するシャドー＝候補のプロンプトの版の判断を、`entry_quality` の分布・`direction` の一致率・費用・`calibration_outcomes` による結果で並べる）と `jev_shadow_cost`（シャドーの `request_cost` の日次・累計、上限と止まった記録、昇格の記録）。書き込み: `jev_prompt_promote`（ライブの版を候補の版に切り替える明示的な操作。書き込み許可のスイッチに従い、監査に残る。自動では呼ばれず、自己改善ループには経路が無い）。シャドーの有効化・候補の選択は Settings 画面のほか `settings_set` の 2 キー（§3.10。issue #929）でもでき、費用の上限は Settings 画面だけで、**費用の上限の値は暫定の案で未承認**。引数・応答・エラーは分割章 `paper-results-mcp-jev-prompt.md` に置く（ファイルの行数上限のため。章番号は同じ §3.29）。
 
 ## 4. 出さないもの
 
@@ -302,7 +304,7 @@ LLM cutoff を MCP だけで更新する手順（issue #809）: 公式のモデ�
 | `jobs.payload_json` / `jobs.last_error` の本文 | `000003`。`last_error` は先頭を読み、エラーコードのトークンだけを取り出す（§3.8） |
 | `daily_bars` の価格・出来高、`daily_bar_runs.error` | `000030` |
 | `positions.current_price` / `unrealized_pnl` | `000008`。時価マーク |
-| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 19 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`session_diagnostics`（§3.8.1）のブローカーの選択 `broker.provider`（`kabu` / `tachibana` のどちらかだけを使う）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。`jev_shadow_cost`（§3.29）の Jev のプロンプトの 6 キー（`jev.trader_prompt_version`・`jev.shadow.enabled`・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`・`jev.shadow.halt`・`jev.shadow.failures`。版の名前・真偽・USD の数値・止まった記録・失敗回数で、秘密は無い）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
+| `runtime_settings` の値 | 秘密鍵のパス等が入りうる。読むのは次の固定キーだけ: `health_today`（§3.9）の日次ガードの閾値・`system.daily_guard`・`system.killed`・`paper.bootstrap_entry_enabled`（値そのものは返さず、解釈した真偽・コード・件数だけ）、設定ツール（§3.10）のホワイトリストの 21 キーと書き込み許可のスイッチ `mcp.settings_write_enabled`、注文案の受け付けスイッチ `mcp.order_proposals_enabled`（書き込み接続だけが、書き込みの前に 1 回読む。読み取りのツールは返さない）、`session_diagnostics`（§3.8.1）のブローカーの選択 `broker.provider`（`kabu` / `tachibana` のどちらかだけを使う）、`paper_performance_summary` の分母 `risk.paper.initial_capital_jpy`（1 キーだけ）。`jev_shadow_cost`（§3.29）の Jev のプロンプトの 6 キー（`jev.trader_prompt_version`・`jev.shadow.enabled`・`jev.shadow.candidate_version`・`jev.shadow.daily_cost_cap_usd`・`jev.shadow.halt`・`jev.shadow.failures`。版の名前・真偽・USD の数値・止まった記録・失敗回数で、秘密は無い。この 6 キーのうち `settings_set` で書けるのは `jev.shadow.enabled` と `jev.shadow.candidate_version` の 2 キーだけ）。それ以外は読まない。設定ツールが返す値は §3.11・§3.14 のとおり（ホワイトリストに秘密は無い） |
 | `order_proposals.request_hash` / `client` | `000042`。照合用のハッシュと接続元 IP。`order_proposal_get` は返さない |
 | sqlite-vec の仮想テーブル | 市場状態の埋め込み。本 MCP は読まない |
 
@@ -315,8 +317,7 @@ Paper の約定記録（`entry_price` / `exit_price` / `realized_pnl` / `fees_jp
 - `listen` が `0.0.0.0` のときは起動しない。Tailscale で直接待つ設定は、その PC の tailnet 側アドレスだけを bind する
 - キー無し・誤ったキーは 401 で、そのリクエストの経路で SQL が 0 件である
 - MCP の読み取り接続に対する `INSERT` はエラーになる。`PRAGMA wal_checkpoint` とマイグレーションを呼んだ痕跡が無い
-- 設定ツール: ホワイトリストの 19 キーはすべて MCP から更新でき、GUI（`opsettings`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ
-- 設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
+- 設定ツール: ホワイトリストの 21 キーはすべて MCP から更新でき、GUI（`opsettings`。シャドーの 2 キーは `jevprompt.Service`）が同じ値を読む。ホワイトリスト外（Live・ブートストラップ・秘密・書き込みスイッチ自身・シャドーのライブの版・費用の上限・止めた記録など・未知）は `key_not_allowed` で、`runtime_settings` と監査に何も残らない。書き込みが禁止のとき `settings_set` は `write_disabled` で何も保存せず、`settings_write_enable` は呼べる。範囲外の値は GUI と同じ検証で `invalid_value`（シャドーの候補の版が未登録・ライブの版と同じ・空、候補なしでの `jev.shadow.enabled` の `true` を含む）。予算枠の合計（株 + 債券ETF）が運用資金を超える保存（枠の保存・運用資金を下げる保存）は `invalid_value` で、設定も監査行も残らず、減らす方を先に保存すれば通る。書き込み許可は既定でオン。認証なしの設定ツール呼び出しは SQL 0 件・接続 0 本。実行された更新文は `runtime_settings` の upsert と `mcp_settings_audit` の `INSERT` だけ。設定の一覧（`settings_get`）→ 変更（`settings_set`）→ 差分（`settings_diff`）が `snapshot_id` でつながり、監査ログ（`settings_audit`）に誰が・いつ・どのキーを・前後の値が出る。出力に秘密・API キー・生データが出ない
 - 注文案ツールの受け入れ条件は `paper-results-mcp-proposals.md` §5（スイッチ・同一トランザクション・冪等・引数の規則・1 日の上限・認証なしで SQL 0 件・書き込みの狭さ・`mode` の CHECK・オンにする手段が無いこと）
 - 既知の数件を入れたテスト DB で、§3.1 の勝率・期待値・円ドローダウン・資金比が手計算と一致する
 - 戻り値の JSON とログに、`raw_data_json` の中身、`state_json` の中身、`secrets.encrypted_value`、テスト用 API キー文字列が含まれない

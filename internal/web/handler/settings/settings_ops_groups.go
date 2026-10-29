@@ -5,6 +5,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/config/barriersettings"
+	"github.com/ousiassllc/pitha-trador/internal/config/jevshadowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/logsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/orderflowsettings"
 	"github.com/ousiassllc/pitha-trador/internal/config/paperpolicysettings"
@@ -178,12 +179,23 @@ func policyGroup(id, name, prefix, direction string) opsGroup {
 	}
 }
 
+// jevShadowFieldLabels are the names of the two MCP-changeable settings that are
+// not operational settings (opsGroups) but the Jev prompt panel's own fields
+// (issue #929): the labels that panel gives them.
+var jevShadowFieldLabels = map[string]string{
+	jevshadowsettings.KeyEnabled:          "シャドーを有効にする",
+	jevshadowsettings.KeyCandidateVersion: "シャドーの候補の版",
+}
+
 // FieldLabel is the name the Settings screen gives the operational setting
 // key, for the screens that mention a setting (the experiments of the MCP
 // card) without showing its key. A label that more than one setting has (the
 // LONG and SHORT Paper entry quality) is led by its group's name, so the two
 // stay apart. A key no group lists is not printed.
 func FieldLabel(key string) string {
+	if label, ok := jevShadowFieldLabels[key]; ok {
+		return label
+	}
 	group, ok := opsGroupByKey(key)
 	if !ok {
 		return "その他の設定"
