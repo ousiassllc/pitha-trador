@@ -9,7 +9,7 @@
     {"label": "スプレッド(bps)", "hint": "売り気配と買い気配の差。1bps=0.01%。小さいほど売買コストが低い", "numeric": true},
     {"label": "Jev方向", "hint": "Jev Traderの判定方向。LONG=買い、SHORT=売り、NONE=見送り。「判定待ち」はまだ判定していない候補です", "numeric": false},
     {"label": "確信度", "hint": "Jev判定の確信度。高いほど判定に自信がある", "numeric": true},
-    {"label": "エントリー品質", "hint": "エントリー好適度。poor < fair < good < strong < exceptional の順に良い", "numeric": false},
+    {"label": "エントリー品質", "hint": "エントリー好適度。poor（低）< fair（並）< good（良）< strong（強）< exceptional（最高）の順に良い", "numeric": false},
     {"label": "保有", "hint": "現在の保有ポジション(株数)。未保有は—", "numeric": true}
   ],
   "countHelp": "Fast Screenerが選んだ売買候補の一覧です。15〜30秒ごとに自動更新されます。緑はプラス・LONG、赤はマイナス・SHORT を表します。",

@@ -92,7 +92,7 @@ var opsGroups = slices.Concat([]opsGroup{
 			"保持期間は再起動不要で、次のメンテナンスチェック（10 分以内）から反映されます。環境変数では設定できません。",
 		fields: []opsField{
 			{key: config.KeyLogLevel, label: "ログレベル", options: logsettings.Levels,
-				hint: "debug / info / warn / error のいずれかです。既定は info です。debug はデータベースの正常クエリも記録するため、ログが大きくなります。"},
+				hint: "debug（詳細）/ info（通常）/ warn（警告以上）/ error（エラーのみ）のいずれかです。既定は info です。debug はデータベースの正常クエリも記録するため、ログが大きくなります。"},
 			{key: config.KeyLogRetentionDays, label: "ログの保持期間（日）", placeholder: "30",
 				hint: "1〜3650 の整数です。この日数より古い日次ログは gzip で圧縮アーカイブされます。既定は 30 日です。"},
 		},
@@ -170,8 +170,8 @@ func policyGroup(id, name, prefix, direction string) opsGroup {
 			"自己改善ループ（Sol / Opus）も同じキーを更新するため、後から書き込んだ方の値が有効です。",
 		fields: []opsField{
 			{key: prefix + "min_probability", label: "最低確率", hint: "0 より大きく 1 以下です。"},
-			{key: prefix + "min_entry_quality", label: "最低エントリー品質（Live）", options: entryQualityOptions, hint: "Live で使う値です（既定 strong。MCP からは変えられません）。Paper では使われず、Paper の値が使われます。"},
-			{key: paperpolicysettings.PaperKeyOf(prefix + "min_entry_quality"), label: "最低エントリー品質（Paper）", options: entryQualityOptions, hint: "Paper でだけ使う値です（既定 good。MCP からも変えられます）。他のしきい値は Live と共通です。"},
+			{key: prefix + "min_entry_quality", label: "最低エントリー品質（Live）", options: entryQualityOptions, hint: "Live で使う値です（既定 strong（強）。MCP からは変えられません）。Paper では使われず、Paper の値が使われます。"},
+			{key: paperpolicysettings.PaperKeyOf(prefix + "min_entry_quality"), label: "最低エントリー品質（Paper）", options: entryQualityOptions, hint: "Paper でだけ使う値です（既定 good（良）。MCP からも変えられます）。他のしきい値は Live と共通です。"},
 			{key: prefix + "min_continuation_probability", label: "継続確率の下限", hint: "0 より大きく 1 以下です。"},
 			{key: prefix + "max_toxic_flow", label: "有害フロー上限", hint: "0 より大きく 1 以下です。"},
 			{key: prefix + "max_liquidity_stressed", label: "流動性ストレス上限", hint: "0 より大きく 1 以下です。"},

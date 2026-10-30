@@ -15,8 +15,11 @@ import (
 // get performs one logical GET: it waits for the call-rate limit before every
 // attempt, retries transient failures with exponential backoff and, after
 // Config.MaxAttempts failures in a row, logs an error and returns
-// ErrRetriesExhausted wrapping the last failure. Permanent failures and
-// context cancellation are returned immediately. It returns the "data" field.
+// ErrRetriesExhausted wrapping the last failure. When the server sends a
+// Retry-After, the wait before the next attempt is the larger of the backoff
+// and that value (capped at MaxRetryAfter), so it is never shorter than the
+// backoff alone. Permanent failures and context cancellation are returned
+// immediately. It returns the "data" field.
 func (c *Client) get(ctx context.Context, path string, query url.Values) (json.RawMessage, error) {
 	backoff := c.cfg.InitialBackoff
 	var last error
@@ -39,9 +42,10 @@ func (c *Client) get(ctx context.Context, path string, query url.Values) (json.R
 		if attempt == c.cfg.MaxAttempts {
 			break
 		}
+		wait := retryWait(backoff, err)
 		c.logger.Warn("gmo: request failed, retrying", "path", path, "attempt", attempt,
-			"max_attempts", c.cfg.MaxAttempts, "backoff", backoff.String(), "error", err)
-		if err := c.clock.Sleep(ctx, backoff); err != nil {
+			"max_attempts", c.cfg.MaxAttempts, "backoff", backoff.String(), "wait", wait.String(), "error", err)
+		if err := c.clock.Sleep(ctx, wait); err != nil {
 			return nil, err
 		}
 		backoff = min(backoff*2, c.cfg.MaxBackoff)
@@ -77,14 +81,15 @@ func (c *Client) once(ctx context.Context, path string, query url.Values) (json.
 
 	var env envelope
 	parseErr := json.Unmarshal(body, &env)
+	retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"), c.clock.Now())
 	if resp.StatusCode != http.StatusOK {
-		return nil, &APIError{HTTPStatus: resp.StatusCode, Status: env.Status, Messages: env.Messages}
+		return nil, &APIError{HTTPStatus: resp.StatusCode, Status: env.Status, Messages: env.Messages, RetryAfter: retryAfter}
 	}
 	if parseErr != nil {
 		return nil, invalid("body: %v (%s)", parseErr, textutil.Excerpt(string(body), textutil.ErrorBodyExcerptBytes))
 	}
 	if env.Status != 0 {
-		return nil, &APIError{HTTPStatus: resp.StatusCode, Status: env.Status, Messages: env.Messages}
+		return nil, &APIError{HTTPStatus: resp.StatusCode, Status: env.Status, Messages: env.Messages, RetryAfter: retryAfter}
 	}
 	return env.Data, nil
 }

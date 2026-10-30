@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Sentinel errors. The Unsupported* ones are returned before any HTTP call.
@@ -12,7 +13,7 @@ var (
 	ErrUnsupportedSymbol    = errors.New("gmo: symbol is not configured")
 	ErrUnsupportedInterval  = errors.New("gmo: unsupported candle interval (only 1min and 1day)")
 	ErrUnsupportedPriceType = errors.New("gmo: unsupported price type (only BID and ASK)")
-	ErrUnsupportedDate      = errors.New("gmo: 1min candles exist only from 2023-10-28")
+	ErrUnsupportedDate      = errors.New("gmo: unsupported candle period (1min candles exist only from 2023-10-28, 1day candles only from the year 2023)")
 	// ErrInvalidResponse marks a response that cannot be used (bad JSON, a
 	// missing symbol, an unparsable price). It is not retried.
 	ErrInvalidResponse = errors.New("gmo: invalid response")
@@ -44,6 +45,9 @@ type APIError struct {
 	// was not GMO's JSON.
 	Status   int
 	Messages []Message
+	// RetryAfter is the server's Retry-After wait (delta-seconds or
+	// HTTP-date), capped at MaxRetryAfter; 0 when absent or unusable.
+	RetryAfter time.Duration
 }
 
 // Error implements error.

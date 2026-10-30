@@ -21,7 +21,7 @@ var metaLabelGroup = opsGroup{
 		{key: metalabelsettings.KeyModel, label: "モデル", options: metalabelsettings.Models,
 			hint: "二次モデルのアルゴリズムです。現在選べるのは logistic_regression（ロジスティック回帰）だけです。既定は logistic_regression です。"},
 		{key: metalabelsettings.KeyCalibration, label: "較正方法", options: metalabelsettings.Calibrations,
-			hint: "モデルの勝率を実際の勝率に合わせる方法です。platt は標本が少なくても安定し、isotonic は標本が多いときに向きます。既定は platt です。"},
+			hint: "モデルの勝率を実際の勝率に合わせる方法です。platt（プラット補正）は標本が少なくても安定し、isotonic（アイソトニック回帰）は標本が多いときに向きます。既定は platt です。"},
 		{key: metalabelsettings.KeyRetrainTime, label: "夜間の再学習時刻（JST）", placeholder: "18:00",
 			hint: "HH:MM 形式です。立会時間とラベル確定前の " + metalabelsettings.RetrainBlockedFrom + "〜" + metalabelsettings.RetrainBlockedTo + " は指定できません。既定は 18:00 です。"},
 		{key: metalabelsettings.KeyMinEVBps, label: "最低 EV（bps）", placeholder: "0",
