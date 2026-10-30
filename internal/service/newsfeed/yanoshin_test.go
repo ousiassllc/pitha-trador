@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -104,6 +105,26 @@ func TestYanoshinClient_Fetch_EmptyAndMalformedDisclosures(t *testing.T) {
 	}
 	if !items[0].PublishedAt.IsZero() || items[0].Body != "TDnet 適時開示" {
 		t.Errorf("item = %+v, want a zero PublishedAt (Service treats it as new) and a link-less body", items[0])
+	}
+}
+
+// IndexStats only reports what the client decoded: the items Fetch returns are
+// the same with or without it.
+func TestYanoshinClient_Fetch_IndexStatsReportRawAndDroppedWithoutChangingTheResult(t *testing.T) {
+	fake := newFakeYanoshin(t, http.StatusOK, `{"items":[{"Tdnet":{"id":"1","title":"","pubdate":"2026-10-05 15:30:00"}},{"Tdnet":{"id":"2","title":"見出し","pubdate":"2026-10-05 15:30:00"}},{"Tdnet":{"id":"3","title":"","pubdate":"2026-10-05 15:30:00"}}]}`)
+	client := newsfeed.NewYanoshinClient(newsfeed.YanoshinConfig{BaseURL: fake.URL})
+
+	plain, err := client.Fetch(context.Background(), "7203")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats := newsfeed.IndexStats{Raw: 99, Dropped: 99}
+	got, err := client.Fetch(newsfeed.WithIndexStats(context.Background(), &stats), "7203")
+	if err != nil || !reflect.DeepEqual(got, plain) || len(got) != 1 || got[0].ID != "2" {
+		t.Fatalf("Fetch with stats = %+v, %v; want the same single item as without: %+v", got, err, plain)
+	}
+	if stats.Raw != 3 || stats.Dropped != 2 {
+		t.Fatalf("stats = %+v, want Raw 3 and Dropped 2", stats)
 	}
 }
 

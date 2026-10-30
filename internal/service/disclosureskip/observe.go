@@ -28,13 +28,15 @@ type FetchEvent struct {
 	// At is when the request started.
 	At time.Time
 	OK bool
-	// ItemCount is the number of items of an OK response.
+	// ItemCount is the number of entries of an OK response, including the ones
+	// the feed left out of the items it returned.
 	ItemCount int
 	// Truncated: ItemCount reached the request's item limit.
 	Truncated bool
 	// Items are the response's items that have a publication time.
 	Items []Disclosure
-	// Undated counts the items without one.
+	// Undated counts the items without one, and the entries the feed left out
+	// of its result (newsfeed.IndexStats.Dropped): neither can be placed.
 	Undated int
 	// Oldest is the oldest publication time of Items (zero when none).
 	Oldest time.Time
@@ -89,25 +91,29 @@ func NewRecordingFeed(inner Feed, limit int, sink Sink, opts ...RecordingOption)
 	return f
 }
 
-// Fetch returns inner's result unchanged.
+// Fetch returns inner's result unchanged. It hands inner a fresh
+// newsfeed.IndexStats (one per fetch) to learn how many entries the raw
+// response had: entries the feed left out (no title) still count towards the
+// item limit and leave the fetch incomplete.
 func (f *RecordingFeed) Fetch(ctx context.Context, symbol string) ([]assist.NewsItem, error) {
 	at := f.now()
-	items, err := f.inner.Fetch(ctx, symbol)
-	f.record(ctx, at, symbol, items, err)
+	var stats newsfeed.IndexStats
+	items, err := f.inner.Fetch(newsfeed.WithIndexStats(ctx, &stats), symbol)
+	f.record(ctx, at, symbol, items, stats, err)
 	return items, err
 }
 
 // Dropped is how many fetch results were not queued because the queue was full.
 func (f *RecordingFeed) Dropped() int64 { return f.dropped.Load() }
 
-func (f *RecordingFeed) record(ctx context.Context, at time.Time, symbol string, items []assist.NewsItem, err error) {
+func (f *RecordingFeed) record(ctx context.Context, at time.Time, symbol string, items []assist.NewsItem, stats newsfeed.IndexStats, err error) {
 	defer safego.Recover("disclosure skip: record fetch")
 	if errors.Is(err, newsfeed.ErrBackingOff) || (err != nil && ctx.Err() != nil) {
 		return
 	}
 	ev := FetchEvent{Symbol: symbol, At: at, OK: err == nil}
 	if err == nil {
-		ev = f.describe(ev, items)
+		ev = f.describe(ev, items, stats)
 	}
 	select {
 	case f.queue <- ev:
@@ -118,9 +124,10 @@ func (f *RecordingFeed) record(ctx context.Context, at time.Time, symbol string,
 	}
 }
 
-func (f *RecordingFeed) describe(ev FetchEvent, items []assist.NewsItem) FetchEvent {
-	ev.ItemCount = len(items)
-	ev.Truncated = f.limit > 0 && len(items) >= f.limit
+func (f *RecordingFeed) describe(ev FetchEvent, items []assist.NewsItem, stats newsfeed.IndexStats) FetchEvent {
+	ev.ItemCount = max(len(items), stats.Raw)
+	ev.Truncated = f.limit > 0 && ev.ItemCount >= f.limit
+	ev.Undated = stats.Dropped
 	for _, it := range items {
 		if it.PublishedAt.IsZero() {
 			ev.Undated++

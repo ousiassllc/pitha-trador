@@ -127,10 +127,17 @@ func (c *YanoshinClient) Fetch(ctx context.Context, symbol string) ([]assist.New
 		return nil, fmt.Errorf("newsfeed: decode yanoshin response for %q: %w", symbol, err)
 	}
 
+	stats := indexStatsFrom(ctx)
+	if stats != nil {
+		stats.Raw, stats.Dropped = len(decoded.Items), 0
+	}
 	items := make([]assist.NewsItem, 0, len(decoded.Items))
 	for _, it := range decoded.Items {
 		d := it.disclosure()
 		if d.Title == "" {
+			if stats != nil {
+				stats.Dropped++
+			}
 			continue // nothing to classify or dedupe by
 		}
 		published, err := time.ParseInLocation(time.DateTime, d.PubDate, jst)

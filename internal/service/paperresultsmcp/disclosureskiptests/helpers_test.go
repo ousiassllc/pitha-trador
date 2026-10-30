@@ -155,7 +155,7 @@ const decidedAt = "2026-10-15T01:00:00Z"
 //	2 SHORT skip (forecast_revision)               -20
 //	3 LONG  no_skip                                +10 (a v2 row superseded by the newer one)
 //	4 LONG  no_skip                                -30
-//	5 SHORT no_skip                                 unlabeled
+//	5 SHORT no_skip                                 0 (labeled, not a win)
 //	6 LONG  unknown no_fetch                        +5
 //	7 LONG  unknown incomplete_fetch                v1 label only: unlabeled
 //	8 LONG  not recorded                            +1000 (must not be counted anywhere)
@@ -188,6 +188,7 @@ func seed(t *testing.T) (string, *sql.DB) {
 	testkit.Outcome(t, w, 3, 10, 2, false, "sl", -50.0) // superseded by the next row (higher id)
 	testkit.Outcome(t, w, 3, 5, 2, true, "timeout", 10.0)
 	testkit.Outcome(t, w, 4, 10, 2, false, "sl", -30.0)
+	testkit.Outcome(t, w, 5, 10, 2, false, "timeout", 0.0) // labeled, but not a win: net_return_bps is not above zero
 	testkit.Outcome(t, w, 6, 10, 2, true, "tp", 5.0)
 	testkit.Outcome(t, w, 7, 10, 1, true, nil, nil)
 	testkit.Outcome(t, w, 8, 10, 2, true, "tp", 1000.0)

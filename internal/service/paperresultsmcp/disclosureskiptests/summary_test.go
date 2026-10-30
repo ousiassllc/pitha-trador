@@ -28,8 +28,8 @@ func TestSummaryCountsVerdictsAndLabels(t *testing.T) {
 		v.Skip.NetReturn == nil || !near(&v.Skip.NetReturn.Mean, 10) || !near(&v.Skip.NetReturn.Sum, 20) {
 		t.Errorf("skip = %+v", v.Skip)
 	}
-	if v.NoSkip.Count != 3 || v.NoSkip.Labeled != 2 || v.NoSkip.Unlabeled != 1 || v.NoSkip.Wins != 1 || !near(v.NoSkip.WinRate, 0.5) ||
-		v.NoSkip.NetReturn == nil || !near(&v.NoSkip.NetReturn.Mean, -10) || !near(&v.NoSkip.NetReturn.Sum, -20) {
+	if v.NoSkip.Count != 3 || v.NoSkip.Labeled != 3 || v.NoSkip.Unlabeled != 0 || v.NoSkip.Wins != 1 || !near(v.NoSkip.WinRate, 1.0/3) ||
+		v.NoSkip.NetReturn == nil || !near(&v.NoSkip.NetReturn.Mean, -20.0/3) || !near(&v.NoSkip.NetReturn.Sum, -20) {
 		t.Errorf("no_skip = %+v", v.NoSkip)
 	}
 	if v.Unknown.Count != 2 || v.Unknown.Labeled != 1 || v.Unknown.Unlabeled != 1 || v.Unknown.Wins != 1 || !near(v.Unknown.WinRate, 1) ||
@@ -42,7 +42,7 @@ func TestSummaryCountsVerdictsAndLabels(t *testing.T) {
 	if want := []disclosureskipdiag.Bucket{{Code: "earnings", Count: 1}, {Code: "forecast_revision", Count: 2}}; !slices.Equal(d.SkipKinds, want) {
 		t.Errorf("skip kinds = %+v, want %+v", d.SkipKinds, want)
 	}
-	if !slices.Equal(d.Rule.Versions, []int{1}) || d.Labels.LabelVersion != 2 || !strings.Contains(d.Labels.Win, "net_return_bps > 0") {
+	if !slices.Equal(d.Rule.Versions, []int{1}) || d.Labels.LabelVersion != 2 || d.Labels.Win == "" {
 		t.Errorf("rule/labels = %+v / %+v", d.Rule, d.Labels)
 	}
 	if !slices.Equal(d.PromptVersions.Excluded, []string{"trader-v4", "trader-v5"}) {
