@@ -88,11 +88,16 @@ func (e *Evaluator) Cycle(ctx context.Context) error {
 
 func (e *Evaluator) evaluate(ctx context.Context, d Decision, now time.Time) error {
 	from := WindowStart(e.cal, d.At)
-	disclosures, err := e.store.Disclosures(ctx, d.Symbol, from, d.At)
+	// Fetches first, disclosures second: the recorder commits a fetch and its
+	// items in one transaction, so a fetch seen here guarantees its items are
+	// seen by the next read. The other order could read the disclosures just
+	// before that commit and the fetch just after it, and call a covered window
+	// "no skip" although the fetch listed a matching disclosure.
+	fetches, err := e.store.Fetches(ctx, d.Symbol, d.At.Add(FetchLag), d.At.Add(e.giveUp))
 	if err != nil {
 		return err
 	}
-	fetches, err := e.store.Fetches(ctx, d.Symbol, d.At.Add(FetchLag), d.At.Add(e.giveUp))
+	disclosures, err := e.store.Disclosures(ctx, d.Symbol, from, d.At)
 	if err != nil {
 		return err
 	}
