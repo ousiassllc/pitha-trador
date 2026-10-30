@@ -24,6 +24,7 @@
 - Wails によるネイティブデスクトップアプリ化（Scanner Dashboard・Symbol Detail・Watchlist（立花選択時の監視リスト）・Performance・Calibration・System Activity Log・Settings・初回 Setup 画面）
 - Jev RAG（過去の類似局面を sqlite-vec で検索し Jev への文脈として注入）による判断品質の継続的な底上げ
 - Luna（ニュース分類・イベント抽出。News Ingestが取得した見出し・本文を実際の外部AI APIへ送信し、bullish/bearish/neutralとイベント種別を判定）による市場コンテキストの補助的拡張
+- 適時開示（決算短信・業績予想の修正）を使った機械的な見送りルールの記録（FR-DISCLOSURE-SKIP-1〜5、`architecture/disclosure-skip.md`）。News Ingestが既に取得しているやのしんTDnet WebAPIの応答だけを使い、Jev判断ごとに「見送り該当／非該当／不明」を記録して結果ラベルと突き合わせる。**記録だけで、取引・Policy・Risk・発注・Jevのプロンプトには使わない**（開示を単独のエントリー起点にしない方針は維持）
 - Sol（振り返り分析）・Opus（改善提案レビュー）を実際の外部AI API呼び出しとして実装し、Policy Engineしきい値を自己改善するループ（Risk Engineのリミット値は対象外。Opusの承認は既存の決定的バックテストしきい値との併用条件とし、AIは追加の拒否権としてのみ働く）
 - 短期モメンタム・出来高急増・ブレイクアウト・VWAP 乖離継続/反転の 4 戦略
 
@@ -174,3 +175,4 @@ graph TD
 | 1.12 | 2026-10-21 | ドキュメントマップの Paper 実績 MCP に、Paper の注文案の受け付け（`order_proposal_*`、分割章 `api/endpoints/paper-results-mcp-proposals.md`）を追記 | issue #827 |
 | 1.13 | 2026-10-21 | ドキュメントマップの Paper 実績 MCP に、注文案の処理（`architecture/order-proposal-processing.md`）を追記 | issue #828 |
 | 1.14 | 2026-10-22 | ドキュメントマップの Paper 実績 MCP に、調整の実験の分割章（API と設計）を追記 | issue #871 |
+| 1.15 | 2026-10-30 | スコープ「含むもの」に、適時開示を使った機械的な見送りルールの記録（記録だけで取引・Policy・Risk・発注・Jevのプロンプトには使わない）を追記。「含まないもの」の、開示を単独のエントリー起点にしない方針は維持。判断・発注は変わらない | issue #935 |
