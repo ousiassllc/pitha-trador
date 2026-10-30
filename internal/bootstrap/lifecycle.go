@@ -9,20 +9,16 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/dailyguardseed"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/heldposition"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/jobfailurelog"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newswire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/paperrisk"
-	"github.com/ousiassllc/pitha-trador/internal/safego"
 )
-
-// newsPollInterval is how often News Ingest polls the news feed for the
-// candidates and held symbols, in the TSE session only (FR-LUNA-1, #531).
-const newsPollInterval = time.Minute
 
 // Start launches every background goroutine this build's composition root owns: the broker session
 // (broker.Session.Start) and PUSH subscription, the candidate-refresh ticker (issue #45), the Scheduler's
 // worker pool + cron triggers (scheduler.Scheduler.Start; Recover first resets jobs a crash left "running"),
 // the daily-guard and Paper capital seeding (dailyguardseed.Run #782, paperrisk.Seed #804), the once-a-minute failed-job
 // summary by error code (jobfailurelog, #803), the trading-hours health alert check (#802) and the MCP order-proposal
-// processor (#828). All run until ctx is done or Stop is called.
+// processor (#828), and (with News Ingest) the disclosure skip record (#935). All run until ctx is done or Stop is called.
 func (s *Services) Start(ctx context.Context) error {
 	if _, err := s.Scheduler.Recover(ctx); err != nil {
 		return fmt.Errorf("bootstrap: recover jobs: %w", err)
@@ -75,7 +71,8 @@ func (s *Services) Start(ctx context.Context) error {
 
 	if s.NewsIngestEnabled() {
 		s.wg.Add(1)
-		go s.newsIngestTicker(ctx)
+		go newswire.RunPoll(ctx, &s.wg, s.News.Poll)
+		s.disclosure.Start(ctx, &s.wg) // record only, on its own connection (issue #935)
 	}
 
 	return nil
@@ -88,18 +85,4 @@ func (s *Services) Stop() {
 	s.Scheduler.Stop()
 	s.Trader.Close()
 	s.wg.Wait()
-}
-
-// newsIngestTicker runs one News Ingest cycle (newsfeed.Service.Poll) every newsPollInterval until ctx is
-// done, starting with an immediate cycle (FR-LUNA-1). A failed cycle is logged and the ticker carries on:
-// News Ingest problems must never affect the rest of the system (FR-LUNA-4).
-func (s *Services) newsIngestTicker(ctx context.Context) {
-	defer s.wg.Done()
-
-	wait := time.Duration(0) // the first cycle runs immediately
-	safego.Loop(ctx, "news ingest", func() time.Duration {
-		d := wait
-		wait = newsPollInterval
-		return d
-	}, s.News.Poll)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backupjob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/disclosurewire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/metalabeljob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/newstargets"
@@ -91,8 +92,9 @@ func (s *Services) wireActivity() {
 // with nothing but JEV_API_KEY. Unless Luna (Jev or LUNA_*) is available and
 // the feed is not switched off the service still exists (its cache is simply
 // always empty, so no news_context is injected and no news flag is raised)
-// but its polling loop is not started; start-up never depends on either.
-func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels alerts.Channels, cfg buildSettings) {
+// but its polling loop is not started; start-up never depends on either. dbPath is the database file the
+// disclosure skip record (issue #935) opens its own connection on at Start.
+func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels alerts.Channels, cfg buildSettings, dbPath string) {
 	infoAPIMax := 0
 	if s.strategy != nil {
 		infoAPIMax = s.strategy.Scan.KabuInfoAPIMaxPerSecond
@@ -114,6 +116,7 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 
 	luna := assist.NewLuna(assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}), assist.WithJev(s.Jev))
 	feed, feedOn := newswire.NewFeed(secrets, cfg.yanoshinURL)
+	feed, s.disclosure = disclosurewire.Wrap(feed, secrets.NewsFeedURL != "", dbPath)
 	s.newsEnabled = feedOn && luna.Configured()
 	newswire.LogIngest(s.newsEnabled, feedOn)
 	s.Screener = screener.NewLiveSource() // News Ingest polls its candidates; shared with buildJevPipeline

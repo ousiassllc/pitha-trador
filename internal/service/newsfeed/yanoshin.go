@@ -22,9 +22,15 @@ const (
 	// slow response must be abandoned quickly rather than hold a poll cycle
 	// (FR-LUNA-4; the GuardedFeed backoff then lowers the query rate).
 	yanoshinTimeout = 5 * time.Second
-	// yanoshinLimit caps the disclosures requested per symbol; only the
-	// newest few matter (DefaultMaxItems, DefaultTTL).
-	yanoshinLimit = 10
+	// YanoshinLimit caps the disclosures requested per symbol (newest
+	// first); only the newest few matter for News Ingest (DefaultMaxItems,
+	// DefaultTTL). A response with this many items may be cut short: the
+	// disclosure skip record (internal/service/disclosureskip) reads it as
+	// "older disclosures were not seen".
+	YanoshinLimit = 10
+
+	// yanoshinBodyPrefix starts the Body of every item this client returns.
+	yanoshinBodyPrefix = "TDnet 適時開示"
 )
 
 // jst is the zone of the やのしん `pubdate` ("2026-10-05 15:30:00" is TSE
@@ -96,7 +102,7 @@ type yanoshinResponse struct {
 // Fetch returns the newest disclosures about symbol (the request symbol is
 // authoritative; the response's company_code is five digits and unused).
 func (c *YanoshinClient) Fetch(ctx context.Context, symbol string) ([]assist.NewsItem, error) {
-	endpoint := fmt.Sprintf("%s/webapi/tdnet/list/%s.json?limit=%d", c.baseURL, url.PathEscape(symbol), yanoshinLimit)
+	endpoint := fmt.Sprintf("%s/webapi/tdnet/list/%s.json?limit=%d", c.baseURL, url.PathEscape(symbol), YanoshinLimit)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("newsfeed: build yanoshin request: %w", err)
@@ -146,7 +152,17 @@ func (c *YanoshinClient) Fetch(ctx context.Context, symbol string) ([]assist.New
 // is a short note plus the document link (the PDF itself is never fetched).
 func yanoshinBody(d yanoshinDisclosure) string {
 	if d.DocumentURL == "" {
-		return "TDnet 適時開示"
+		return yanoshinBodyPrefix
 	}
-	return "TDnet 適時開示: " + d.DocumentURL
+	return yanoshinBodyPrefix + ": " + d.DocumentURL
+}
+
+// DocumentURL returns the document link in the Body of an item this client
+// returned, or "" when the Body carries none (a body of another feed).
+func DocumentURL(body string) string {
+	link, ok := strings.CutPrefix(body, yanoshinBodyPrefix+": ")
+	if !ok {
+		return ""
+	}
+	return link
 }
