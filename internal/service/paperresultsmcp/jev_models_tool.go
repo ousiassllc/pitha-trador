@@ -4,19 +4,14 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/disclosureskipdiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/entryqualitydiag"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/metalabeldiag"
 )
 
-// jev_models (issue #849; docs/api/endpoints/paper-results-mcp.md §3.24): the
-// Jev model names the decisions were answered with, against the model the LLM
-// cutoff was confirmed for. It reads through the read-only connection and
-// writes nothing.
+func init() { tools = append(tools, jevModelsTool, entryQualityWhatIfTool, disclosureSkipSummaryTool) }
 
-func init() {
-	tools = append(tools, jevModelsTool, entryQualityWhatIfTool)
-}
-
+// Read-only tools: jev_models (#849, API §3.24), entry_quality_whatif (#911, §3.30), disclosure_skip_summary (#935, §3.31).
 var jevModelsTool = tool{
 	name: "jev_models",
 	description: "Jev が実際に応答しているモデル名: 期間内の jev_decisions.model_id ごとの件数と最初・最後に出た時刻（JST）、JST 日別の件数、" +
@@ -34,15 +29,24 @@ var jevModelsTool = tool{
 	},
 }
 
-// entry_quality_whatif (issue #911, API spec §3.30): what the entry guards would
-// do under another min_entry_quality; read only, the analysis is entryqualitydiag's.
-var entryQualityWhatIfTool = tool{
+var entryQualityWhatIfTool = tool{ // the analysis is entryqualitydiag's
 	name: "entry_quality_whatif", description: entryqualitydiag.Description, schema: periodSchema(entryqualitydiag.SchemaProperties()),
 	decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 		var a entryqualitydiag.Request
 		err := strictDecode(raw, &a)
 		return periodArgs{From: a.From, To: a.To}, func(ctx context.Context, e toolEnv) (any, int, error) {
 			return entryqualitydiag.Run(ctx, e.q, e.r, a, e.policy)
+		}, err
+	},
+}
+
+var disclosureSkipSummaryTool = tool{ // the analysis is disclosureskipdiag's
+	name: "disclosure_skip_summary", description: disclosureskipdiag.Description, schema: periodSchema(disclosureskipdiag.SchemaProperties()),
+	decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
+		var a disclosureskipdiag.Request
+		err := strictDecode(raw, &a)
+		return periodArgs{From: a.From, To: a.To}, func(ctx context.Context, e toolEnv) (any, int, error) {
+			return disclosureskipdiag.Run(ctx, e.q, e.r, a)
 		}, err
 	},
 }

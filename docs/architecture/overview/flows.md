@@ -21,7 +21,7 @@ sequenceDiagram
     App->>KABU: /kabusapi/token でトークン発行
     KABU-->>App: token（失敗しても起動を継続し、バックグラウンドで再試行）
     App->>SCHED: robfig/cronへ周期ジョブ登録（分単位以上の保守ジョブ。60秒フルスキャンは`scan.full_scan_enabled: true`のときだけ登録し、既定ではオフ＝登録しない。FR-SCHED-7）
-    App->>App: 候補更新ループ（15-30秒、`candidates.Run`）と保有ポジション再評価ループ（5-15秒、`heldposition.Monitor.Run`）を別goroutineで起動（cronのジョブ登録ではない）。Luna（既定Jev。`LUNA_BASE_URL`で差し替え可）が使え、かつニュースフィードが`NEWS_FEED_ENABLED=off`でない場合のみ（既定ではJevキーだけで有効）、News Ingestのティッカー（`newsIngestTicker`。起動直後に1回、以降1分周期。§13）も別goroutineで起動する
+    App->>App: 候補更新ループ（15-30秒、`candidates.Run`）と保有ポジション再評価ループ（5-15秒、`heldposition.Monitor.Run`）を別goroutineで起動（cronのジョブ登録ではない）。Luna（既定Jev。`LUNA_BASE_URL`で差し替え可）が使え、かつニュースフィードが`NEWS_FEED_ENABLED=off`でない場合のみ（既定ではJevキーだけで有効）、News Ingestのティッカー（`newswire.RunPoll`。起動直後に1回、以降1分周期。§13）も別goroutineで起動する
     App->>App: ランキング監視ループ（`rankingwatch.Watcher.Run`。既定＝`scan.full_scan_enabled`が`true`でないとき。毎分kabu `GET /ranking`で監視銘柄（PUSH登録最大45件）を決め、`market-data`投入・Fast Screener対象に使う。FR-SCHED-9）と、`scan.ranking_measure.enabled`のときだけ`/ranking`計測ループ（`rankingmeasure`。FR-SCHED-8）を別goroutineで起動
     App->>KABU: 対象ユニバース銘柄登録・PUSH購読開始（既定のランキング監視では全銘柄ではなく、登録リストを空にしたうえで直近の監視リストだけを登録し、監視リストが決まるたびに`PUT /register`で更新する）
     App->>App: WebView起動・Scanner Dashboard表示

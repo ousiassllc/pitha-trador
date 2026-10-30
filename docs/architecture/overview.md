@@ -92,6 +92,7 @@ pitha-trador/
 │   ├── repository/               # domainのみに依存（例外: `system`の`SecretsRepository`のみ`internal/config`のAES-256-GCMヘルパー）。直下にはファイルを置かず、リソース群ごとのサブパッケージ（#244）
 │   │   ├── sqlutil/              # 共有ヘルパー: 時刻のSQLite表現変換（`FormatTime`/`ParseTime`）・`Nullable*`/`Null*`スキャナ・`RowScanner`/`Execer`/`Executor`インターフェース。標準ライブラリのみに依存するリーフ
 │   │   ├── sqlitedb/             # SQLite接続（`Open`・読み取り専用の`OpenReadOnly`（`mode=ro`・マイグレーションなし。`cmd/dailyguardreplay`用））・golang-migrateマイグレーション・`BackupTo`・sqlmw計装ドライバ・DB書き込み失敗検知フック（`DBWriteFailures`）。`domain`とマイグレーションSQLの`go:embed`元`db`のみに依存するリーフ
+│   │   │   └── sidecar/          # 記録専用の別接続（`Open`: 既存DBを計装なしドライバ・busy_timeout 5秒・接続1本で開く。`DBWriteFailures`に触れず、ファイルもマイグレーションも作らない。`bootstrap/disclosurewire`が使う。issue #935）
 │   │   ├── market/               # instruments / market_snapshots（`InstrumentRepository`, `SnapshotRepository`）。`snapshotcols`を本番コードで使う
 │   │   ├── jobqueue/             # jobsテーブル・キュー名/状態定数（`Job`, `JobRepository`, `ErrJobNotFound`）
 │   │   ├── judgement/            # jev_decisions / policy_proposals（`DecisionRepository`, `ProposalRepository`）
@@ -155,6 +156,7 @@ pitha-trador/
 │   │   │   ├── sol.go
 │   │   │   └── opus.go
 │   │   ├── newsfeed/              # News Ingest: 外部ニュースフィード定期取得→Luna呼び出し（§13）
+│   │   ├── disclosureskip/        # 適時開示（決算短信・業績予想の修正）による見送りルールの記録だけの部品（ルール判定・`newsfeed.Feed`を包む`RecordingFeed`・後追いの`Evaluator`。取引・Policy・Risk・発注・Jevのプロンプトには使わない。`architecture/disclosure-skip.md`、issue #935）
 │   │   ├── selfimprove/           # Sol提案生成〜Opusレビュー〜適用/ロールバック（§8）
 │   │   │   └── governorflow/      # テスト専用: Governor（`RunDaily`/`EvaluateProposal`/`ApplyApproved`/`TrackAndRollback`）の回帰テスト。linterlyの2000行/ディレクトリ制限のため`selfimprove`直下から分離（#450〜#452, #455）
 │   │   ├── notify/                # Slack Incoming Webhookによる即時アラート送信

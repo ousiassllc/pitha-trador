@@ -3,9 +3,13 @@
 package newswire
 
 import (
+	"context"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
+	"github.com/ousiassllc/pitha-trador/internal/safego"
 	"github.com/ousiassllc/pitha-trador/internal/service/newsfeed"
 )
 
@@ -35,4 +39,23 @@ func LogIngest(running, feedOn bool) {
 	default:
 		slog.Warn("bootstrap: news ingest disabled: Luna is unavailable (set JEV_API_KEY, or LUNA_BASE_URL to use another AI)")
 	}
+}
+
+// pollInterval is how often News Ingest polls the news feed for the candidates
+// and held symbols, in the TSE session only (FR-LUNA-1, #531).
+const pollInterval = time.Minute
+
+// RunPoll runs one News Ingest cycle (poll, newsfeed.Service.Poll) every
+// pollInterval until ctx is done, starting with an immediate cycle (FR-LUNA-1),
+// and calls wg.Done on return. A failed cycle is logged and the loop carries on:
+// News Ingest problems must never affect the rest of the system (FR-LUNA-4).
+func RunPoll(ctx context.Context, wg *sync.WaitGroup, poll func(context.Context) error) {
+	defer wg.Done()
+
+	wait := time.Duration(0) // the first cycle runs immediately
+	safego.Loop(ctx, "news ingest", func() time.Duration {
+		d := wait
+		wait = pollInterval
+		return d
+	}, poll)
 }

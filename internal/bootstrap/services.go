@@ -17,6 +17,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/alerts"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/backtestsource"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/candidates"
+	"github.com/ousiassllc/pitha-trador/internal/bootstrap/disclosurewire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/healthalertwire"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/marketdatajob"
 	"github.com/ousiassllc/pitha-trador/internal/bootstrap/proposalexec"
@@ -82,6 +83,7 @@ type Services struct {
 	Scout         *jev.Scout
 	Trader        *jev.Trader
 	News          *newsfeed.Service
+	disclosure    *disclosurewire.Wire // the disclosure skip record (issue #935); nil unless the default feed has a database path
 	Policy        *policy.Engine
 	Risk          *risk.Engine
 	Execution     *execution.Engine
@@ -194,7 +196,7 @@ func BuildServices(state *State, secrets config.Secrets, opts ...BuildOption) *S
 	svc := &Services{strategy: state.Strategy}
 	svc.buildRepositories(state.DB)
 	svc.wireActivity()
-	svc.buildExternalClients(secrets, alertChannels, cfg)
+	svc.buildExternalClients(secrets, alertChannels, cfg, state.Paths.DBPath)
 	svc.buildJevPipeline(state.DB, state.Strategy)
 	runtimePolicy := selfimprove.NewRuntimePolicy(svc.Settings, svc.Proposals, state.Strategy.Policy)
 	executionConfig := svc.buildRiskAndExecution(state.Risk.Paper, alertChannels, cfg.notifiers, cfg.executionNow, runtimePolicy)

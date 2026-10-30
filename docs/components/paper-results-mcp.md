@@ -28,6 +28,7 @@
 | GUI の保存の監査（ホワイトリストのキーの保存・既定への戻しを同じ表に記録。シャドーの 2 キーの画面での変更は `jevprompt.Service` を通るため記録されない） | `internal/service/paperresultsmcp/mcpset`（`Audited`。`opsettings.Service` を包んで Save/Reset を記録）、配線は `internal/bootstrap/router_options.go`。シャドーの 2 キーの `settings_get` / `settings_set` は `mcpset/jevshadow.go`（`jevprompt.Service` と同じ検証で保存する） |
 | 調整の実験（issue #871）: 語彙・検査・SQL・前後比較と判定（`internal/service/paperresultsmcp/experiment`）、ツール定義（`experiment_tools.go`）、書き込み（`mcpset/experiments.go`。`Writer` と `Gate`）、表（マイグレーション `000046`）、Settings の節（`internal/web/handler/mcpsettings/experiments*.go`、`internal/web/organisms/mcp/experiments.templ`）。テストは `experimenttests` と `experiment` と `internal/router/mcproute/experiments_test.go` |
 | SQL とホワイトリストの戻り値（列を名指しで SELECT。`SELECT *` なし） | `internal/service/paperresultsmcp/query` |
+| 適時開示による見送りルールの記録の集計（`disclosure_skip_summary`、issue #935。`disclosure_skip_records` と `calibration_outcomes` を件数としてだけ読む）と、その HTTP のテスト | `internal/service/paperresultsmcp/disclosureskipdiag`、`internal/service/paperresultsmcp/disclosureskiptests` |
 | テスト（外から見た HTTP の振る舞い）と、その固定データ・SQL 数えるドライバ | `internal/service/paperresultsmcp/mcptests`、`internal/service/paperresultsmcp/testkit` |
 | `health_today` の判定のテスト（要対応コードの入り切り・非取引日・状態の区分。`query.HealthToday` を直接呼ぶ。行数制限のため `mcptests` と分ける） | `internal/service/paperresultsmcp/healthtests` |
 | `health_today` の日次停止（`daily_guard`）の読み取り（`runtime_settings` の `system.daily_guard` と日次ガードのしきい値から、アプリの `risk.Engine.DailyHalt` と同じ判定。`query` の行数制限のため分け、設定の読み取りは interface 越しで `query` を import しない。issue #863 の PR での切り出し） | `internal/service/paperresultsmcp/dailyhalt` |
@@ -109,3 +110,4 @@ Grok Bot には、選んだ経路の URL（Tailscale のホスト名、または
 | 1.13 | 2026-10-22 | §2 に調整の実験（`experiment`・`experiment_tools.go`・`mcpset/experiments.go`・Settings の節）を追記。ツールは 28 | issue #871 |
 | 1.14 | 2026-10-24 | §4 の Settings 画面の導線を、画面の見出しに合わせて「外部連携」→「MCP」と書き直し（画面の説明文はヘルプマークへ移動。MCP の挙動・ツールは変えない） | issue #902 |
 | 1.15 | 2026-10-29 | §2 の `settings_set` のホワイトリストを 19 → 21 キーにし、Jev のシャドーの 2 キー（`mcpset/jevshadow.go`）を追記。ツール数は変わらない | issue #929 |
+| 1.16 | 2026-10-30 | §2 に `disclosure_skip_summary`（`disclosureskipdiag`・`disclosureskiptests`）を追加 | issue #935 |

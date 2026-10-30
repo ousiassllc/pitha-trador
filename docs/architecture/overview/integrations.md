@@ -272,6 +272,7 @@ sequenceDiagram
 - 既定ではJevキーだけでLuna（Jev）とやのしんが有効になりNews Ingestが動く。Jevが使えず`LUNA_BASE_URL`も無い場合、または`NEWS_FEED_ENABLED=off`の間はNews Ingestを起動しない（`news_context`は注入されずニュースフラグも立たない。`Services`自体は構築され起動は失敗しない）。Sol/Opusは、Jevも`SOL_*`/`OPUS_*`も使えない間は各段階を毎日スキップする
 - Lunaの既定（Jev）は`choice`質問2つ: `sentiment`（`bullish`/`bearish`/`neutral`）と`event_type`（`決算`/`業績修正`/`M&A`/`規制`/`その他`）。Jevは自由文を返さないため`summary`は見出し（コード側）とする
 - **フェイルセーフ（非公式サービス前提、issue #273）**: やのしんの停止・遅延・タイムアウトがFast Screener・Jev・発注フロー・起動に波及しない。(1) 取得のHTTPタイムアウトは5秒（汎用フィードは15秒）。(2) 取得失敗はニュースフラグを立てずその銘柄をスキップする（FR-LUNA-4）。(3) `newsfeed.GuardedFeed`が失敗後に問い合わせを止めるバックオフ（2分から倍々、上限30分。1回の取得で同時に失敗した複数銘柄は1回の失敗として数える。成功で解除）を掛け、連続失敗中は問い合わせ頻度を落とす。(4) 起動はやのしんの到達性に依存しない（ポーリングはバックグラウンドgoroutine）。(5) エラーはアプリのログ（slogの`ERROR`/`WARN`。Settings画面の「エラーログ」から出力できる、FR-ERRLOG-1）に出し、System Activity Feed（§12）にも`news_feed`イベント（`newsfeed.WithErrorObserver`→`activityfeed.ObserveNewsFeedError`。直近50件のインメモリのみで、新規テーブルは追加しない）として流す。バックオフ中のスキップはログ・イベントとも出さない（連続失敗の通知は`WARN`の1行）
+- **適時開示による見送りルールの記録（issue #935、FR-DISCLOSURE-SKIP-1〜5）**: News Ingestの`Feed`を`disclosureskip.RecordingFeed`が包み、取得の戻り値・エラーを変えずに取得結果を別ゴルーチンへ渡して記録する（新しいリクエスト・取得経路は増やさない）。記録だけで取引・Policy・Risk・発注・Jevのプロンプトには使わない。設計は`architecture/disclosure-skip.md`
 - Luna/News Ingest API失敗時はニュースフラグを立てず、Fast Screener/Jevの通常フローに影響を与えない（FR-LUNA-4、Jevと同様のフェイルセーフ）
 
 ## 14. 外国為替FXレート取得アダプタ（GMOコイン、issue #907）
