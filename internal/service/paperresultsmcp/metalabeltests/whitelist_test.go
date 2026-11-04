@@ -48,7 +48,7 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	}
 
 	readiness := data("metalabel_training_readiness")
-	want("readiness", readiness, "as_of rows_from rows_to lookback_days matches_nightly_retrain funnel features last_retrain split excluded_prompt_versions prompt_cohort")
+	want("readiness", readiness, "as_of rows_from rows_to lookback_days matches_nightly_retrain funnel features last_retrain split excluded_prompt_versions jev_model_id prompt_cohort")
 	want("readiness step", first(readiness, "funnel"), "step condition rows")
 	features := obj(readiness, "features")
 	want("readiness features", features, "training_rows all_usable_rows dropped_incomplete missing")

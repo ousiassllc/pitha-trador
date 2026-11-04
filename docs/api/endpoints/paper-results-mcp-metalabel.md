@@ -26,6 +26,7 @@
 | `last_retrain.latest_model_trained_at` | 最新の `metalabel_models.trained_at`（無ければ `null`） |
 | `last_retrain.dropped_incomplete_status` | 見送りの `dropped_incomplete` の有無: `recorded`（`latest_skip.dropped_incomplete` に値がある）/ `not_recorded_in_schema`（この DB の `metalabel_retrain_skips` にその列が無い。列を足すマイグレーション（#862）より前）/`not_recorded_on_row`（列はあるが最新の見送りの値が `NULL`）/ `no_skip_recorded`（直近の再学習は見送りでなくモデルを保存した、または一度も走っていない）。いずれでも、今の学習行から数えた値は `features.dropped_incomplete` で読める |
 | `excluded_prompt_versions[]` | 再学習が読まない Trader のプロンプトの版（ライブの版と別のコホート。issue #881）。`funnel` と学習行は、ライブの版と同じコホートの判断だけ。ライブの版が昇格で変わるとここも変わる |
+| `jev_model_id` | `funnel` と学習行を絞った Jev の版（`jev_decisions.model_id`）。読む窓の終わり（`as_of`）より前で、最後に答えた trader の判断の版（ライブのコホート内。方向は問わない）。判断が無ければ `""`（絞らない）。再学習・OOS・この件数は同じ絞り方（`metalabel.ResolveTrainingScope`）。Jev の版が窓の途中で変わっても、学習と OOS を別の版で混ぜない。`cutoffGate` の `llm_model_changed` はそのまま残る |
 | `prompt_cohort` | 除外の中身（issue #913）。`live_prompt_version`（ライブの版）、`latest_promotion`（`jev_prompt_promotions` の最新 1 行 `{at, from_version, to_version}`。無ければ `null`。接続元は返さない）、`excluded[]`（除外した版ごと、読んだ窓 `[rows_from, rows_to)` の trader の判断。窓に判断が無い版は載らない。最初の判断が古い順）: `{prompt_version, cohort, trader_decisions, long_short_rows, label_v2_rows, oldest_decision_date, newest_decision_date}`。`long_short_rows` は LONG/SHORT、`label_v2_rows` はそのうちトリプルバリアのラベルがあるもの（除外されなければ `funnel` に数えられたはずの行）、日付は最古・最新の判断の JST 日。`funnel` と学習行はライブのコホートだけなので、「学習行が 0」が別コホートの除外によるのか、`llm_cutoff` で OOS 側に寄ったためなのかは、ここと `split.oos_start_reason` で見分ける |
 | `split.llm_cutoff` / `llm_cutoff_status` | 今の `metalabel.llm_cutoff`（`YYYY-MM-DD`）とその状態（`placeholder` / `unverified` / `confirmed`）。OOS 窓はこの日付より前に始まらない |
 | `split.oos_start` | OOS 窓の始まり（UTC RFC3339） |
@@ -73,3 +74,4 @@ Jev が実際に応答しているモデル名（issue #849）。`metalabel.llm_
 | 1.1 | 2026-10-21 | §3.24 `jev_models` を追加（`model_id` ごとの件数・初回/最後の時刻・日別・`llm_cutoff_model` との完全一致の判定） | issue #849 |
 | 1.2 | 2026-10-23 | §3.24 `jev_models` の「返さない」を実装に合わせて訂正。「`JEV_MODEL` を含む秘密は DB にも無い」は #885 以降は誤りで、モデル名は `jev_model_changes` に平文で残る（`secrets` の値は返さない。`jev_models` はこの表を読まず `jev_decisions` 由来のモデル ID だけを返す） | issue #885 |
 | 1.3 | 2026-10-22 | §3.23 に `excluded_prompt_versions` を追加。`funnel` と学習行は、再学習と同じくライブの Trader の版と同じコホートの判断だけを数える | issue #881 |
+| 1.4 | 2026-11-04 | §3.23 に `jev_model_id` を追加。再学習の学習・OOS と `funnel` の件数を、最後に答えた Jev の版だけに絞る（夜間再学習 `lr-20261104-090542` が train=1.13・OOS=1.14 混在で `llm_model_changed` になった件） | メタモデルの Jev 版絞り込み |
