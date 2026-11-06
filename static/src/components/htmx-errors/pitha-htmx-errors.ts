@@ -256,7 +256,7 @@ function scheduleDismiss(toast: HTMLElement): void {
   arm();
 }
 
-/** Toast-landed hook (both `showToast` and htmx's `beforeend` swap): raise the region and schedule the auto-dismiss. */
+/** Toast-landed hook (both `showToast` and htmx's `innerHTML` swap into `#toast-region`): raise the region and schedule the auto-dismiss. */
 function onToastsAdded(target: HTMLElement, records: MutationRecord[]): void {
   let added = false;
   for (const record of records) {
