@@ -64,8 +64,8 @@ func TestUpdatePanel_CheckButtonHasStableID(t *testing.T) {
 // 6〜8; 4 is for input→hint).
 func TestScanPanel_FilterFieldsAreEightBelowTheirLabels(t *testing.T) {
 	html := renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{HasCycle: true, Open: true, Page: domain.ScanPage{Page: 1, Pages: 1}}))
-	if strings.Contains(html, "mt-1 px-2 py-1 text-sm") || !strings.Contains(html, "mt-2 px-2 py-1 text-sm") {
-		t.Errorf("filter fields must use mt-2 under their label: %s", html)
+	if strings.Contains(html, "mt-2 px-2 py-1 text-sm") || !strings.Contains(html, "mt-2 px-3 py-1 text-sm") {
+		t.Errorf("filter fields must use mt-2 and px-3 (12px): %s", html)
 	}
 }
 

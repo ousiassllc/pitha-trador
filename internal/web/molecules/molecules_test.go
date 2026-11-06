@@ -175,3 +175,19 @@ func TestFieldRows_HaveAnErrorSlotForValidation(t *testing.T) {
 		t.Errorf("SettingFieldRow lacks the error slot %s: %s", want, setting)
 	}
 }
+
+// The hint under an input sits 4 below it (brand-guide §3: input→hint 4), and
+// the empty validation slot takes no flex gap of its own.
+func TestFieldRows_HintSitsFourBelowTheInputAndEmptyErrorSlotTakesNoGap(t *testing.T) {
+	for name, html := range map[string]string{
+		"setting": render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "k", Label: "L", DefaultLabel: "1"})),
+		"secret":  render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "k", Label: "L", Notice: "保存しました"})),
+	} {
+		if !strings.Contains(html, `<div class="flex flex-col gap-1">`) {
+			t.Errorf("%s row must group the input row and its hint with gap-1: %s", name, html)
+		}
+		if !strings.Contains(html, `class="empty:hidden" data-testid="error-k"`) {
+			t.Errorf("%s row's error slot must be empty:hidden: %s", name, html)
+		}
+	}
+}

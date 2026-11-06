@@ -2,6 +2,7 @@
    Tailwind CLI (v4) into static/src/dist/css/app.css; Templ layouts link
    that output, not this source file. */
 @import "tailwindcss";
+@import "./table.css" layer(base);
 
 /* internal/web (Templ templates) lives outside static/, so it falls
    outside Tailwind's automatic content detection root; register it

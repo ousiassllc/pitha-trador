@@ -214,3 +214,22 @@ func TestCompiledDarkTokensFollowTheOS(t *testing.T) {
 		t.Errorf("compiled stylesheet lacks %q", want)
 	}
 }
+
+// TestCompiledTableHeadingsAreSemiBold pins issue #963 (brand-guide §2/§4):
+// Tailwind's preflight leaves the UA's `th { font-weight: bold }` in place, so
+// without a base rule every <th> renders at 700 whatever its row inherits. Row
+// headings (`scope="row"`) are body text and stay Regular.
+func TestCompiledTableHeadingsAreSemiBold(t *testing.T) {
+	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
+	if err != nil {
+		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
+	}
+	for _, want := range []string{
+		"th{font-weight:600}",
+		"th[scope=row]{font-weight:400}",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("compiled stylesheet lacks %q", want)
+		}
+	}
+}
