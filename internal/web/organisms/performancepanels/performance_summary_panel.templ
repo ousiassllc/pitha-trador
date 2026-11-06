@@ -30,8 +30,8 @@ type PerformanceSummary struct {
 // rate, average profit/loss, Profit Factor, Expectancy, Max Drawdown and
 // gross/slippage/fee/net PnL, each with a help mark.
 templ PerformanceSummaryPanel(title string, m PerformanceSummary) {
-	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" data-testid="performance-summary">
-		<h2 class="text-lg font-semibold text-slate-900">
+	<section class="mb-12 rounded-lg border border-border bg-surface p-6" data-testid="performance-summary">
+		<h2 class="text-lg font-semibold text-ink">
 			{ title }
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-backtest-summary", Label: title + "の説明"}) {
 				全フォールドの Forward 期間（学習に使っていない期間）の成績を合算した値です。損益は取引ごとのリターン（%）の合計で、金額ではありません。
@@ -58,16 +58,16 @@ templ PerformanceSummaryPanel(title string, m PerformanceSummary) {
 // text. key is the `data-metric` attribute, omitted when empty.
 templ summaryMetric(label, id, key, value, help string) {
 	<div>
-		<dt class="text-sm text-slate-500">
+		<dt class="text-sm text-mute">
 			{ label }
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-backtest-summary-" + id, Label: label + "の説明"}) {
 				{ help }
 			}
 		</dt>
 		if key != "" {
-			<dd class="text-sm font-medium text-slate-900" data-metric={ key }>{ value }</dd>
+			<dd class="text-sm text-ink" data-metric={ key }>{ value }</dd>
 		} else {
-			<dd class="text-sm font-medium text-slate-900">{ value }</dd>
+			<dd class="text-sm text-ink">{ value }</dd>
 		}
 	</div>
 }

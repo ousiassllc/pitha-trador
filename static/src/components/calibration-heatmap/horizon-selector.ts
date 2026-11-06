@@ -19,6 +19,7 @@ export function renderHorizonSelector(
         (option) => html`
           <button
             type="button"
+            data-ripple
             data-testid="calibration-horizon-${option}"
             aria-pressed=${option === selected ? 'true' : 'false'}
             @click=${() => onSelect(option)}

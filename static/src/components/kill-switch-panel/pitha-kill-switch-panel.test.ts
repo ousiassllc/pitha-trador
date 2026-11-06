@@ -36,9 +36,16 @@ describe('pitha-kill-switch-panel', () => {
       ),
     );
     expect(pause && kill).toBeTruthy();
-    const killBg = getComputedStyle(kill as Element).backgroundColor;
-    expect(killBg).not.toBe('');
-    expect(killBg).not.toBe(getComputedStyle(pause as Element).backgroundColor);
+    // happy-dom does not resolve `var(--danger)` (the guide's state token,
+    // defined on :root in static/src/css/app.css), so read the declared
+    // background instead of the computed one.
+    const killStyle = (kill as HTMLElement).getAttribute('class') ?? '';
+    const css = String(
+      (customElements.get('pitha-kill-switch-panel') as unknown as { styles: unknown }).styles,
+    );
+    expect(killStyle).toContain('pitha-kill-switch-panel-kill');
+    expect(css).toMatch(/pitha-kill-switch-panel-kill\s*\{[^}]*background:\s*var\(--danger\)/);
+    expect(css).not.toMatch(/background:\s*#/);
   });
 
   test('renders Resume instead of Pause/Kill when already paused', async () => {

@@ -1,0 +1,34 @@
+package atoms
+
+// SwitchProps is Switch's input. Name is the form field name (a checked
+// switch sends Value, an unchecked one nothing, like a checkbox). Attrs
+// carries everything else (data-testid, checked, disabled, ...) and lands on
+// the <input>.
+type SwitchProps struct {
+	Name  string
+	Value string
+	Attrs templ.Attributes
+}
+
+// Switch renders the guide's on/off switch (design guide §4 "スイッチ"): a
+// 36x20 track with a 14px knob, OFF accent-soft + border, ON accent with a
+// bone knob, --ring on keyboard focus, Regular 15px label (the children). It
+// is a real `<input type="checkbox" role="switch">` kept visually hidden
+// (`sr-only`) so it submits, focuses and is announced like a checkbox; the
+// track and knob are the sibling span styled through `peer-*`. The OS toggle
+// is never shown. Use it for an on/off setting; a consent or a choice inside
+// a form that has its own save button stays a checkbox.
+templ Switch(props SwitchProps) {
+	<label class="inline-flex cursor-pointer items-center gap-3">
+		<input type="checkbox" role="switch" class="peer sr-only" name={ props.Name } value={ switchValue(props.Value) } { props.Attrs... }/>
+		<span class="relative h-5 w-9 shrink-0 rounded-full border border-border bg-accent-soft transition-colors duration-[180ms] after:absolute after:left-0.5 after:top-0.5 after:h-3.5 after:w-3.5 after:rounded-full after:bg-mute after:transition-transform after:duration-[180ms] peer-checked:border-accent peer-checked:bg-accent peer-checked:after:translate-x-4 peer-checked:after:bg-bone peer-focus-visible:ring-2 peer-focus-visible:ring-focus/40 peer-disabled:opacity-40 motion-reduce:transition-none motion-reduce:after:transition-none" aria-hidden="true"></span>
+		<span class="text-[15px] text-ink">{ children... }</span>
+	</label>
+}
+
+func switchValue(v string) string {
+	if v == "" {
+		return "on"
+	}
+	return v
+}

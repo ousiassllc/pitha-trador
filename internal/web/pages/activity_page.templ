@@ -16,7 +16,7 @@ import (
 // request.
 templ ActivityLogPage(snapshot domain.ActivitySnapshot) {
 	@layout.Shell("稼働ログ", organisms.NavSettings) {
-		<h1 class="text-2xl font-bold text-slate-900">稼働ログ</h1>
+		<h1 class="text-2xl font-semibold text-ink">稼働ログ</h1>
 		<pitha-activity-feed api-url="/api/v1/activity" ws-url="/ws/activity" kill-switch-events-url="/api/v1/activity?type=kill_switch&limit=10">
 			@organisms.QueueStatusPanel(snapshot.Queues)
 			@organisms.ActivityFeedFallback(snapshot.Events, snapshot.AsOf)

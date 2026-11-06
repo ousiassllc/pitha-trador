@@ -3,6 +3,7 @@ package layout
 import (
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
 	"github.com/ousiassllc/pitha-trador/internal/web/middleware"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -24,7 +25,7 @@ import (
 // `<style>` at load, which the CSP (middleware.SecurityHeaders, no
 // `style-src 'unsafe-inline'`) would block; the only indicator
 // (organisms.UpdatePanel) styles `.htmx-request` with Tailwind.
-const htmxConfig = `{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true,"target":"#toast-region","swapOverride":"beforeend"}]}`
+const htmxConfig = `{"allowEval":false,"allowScriptTags":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true,"target":"#toast-region","swapOverride":"innerHTML"}]}`
 
 // Shell is the shared full-page HTML document skeleton every
 // internal/web/pages component renders into (docs/components/overview.md
@@ -39,7 +40,7 @@ const htmxConfig = `{"allowEval":false,"allowScriptTags":false,"includeIndicator
 templ Shell(title string, current organisms.NavItem) {
 	@document(title) {
 		@organisms.Header(middleware.SystemStateFrom(ctx), current)
-		<main class="mx-auto max-w-6xl px-6 py-8">
+		<main class="mx-auto max-w-6xl px-4 py-8 lg:px-6">
 			{ children... }
 		</main>
 	}
@@ -53,7 +54,7 @@ templ Shell(title string, current organisms.NavItem) {
 // to `/setup` and swap a whole page into `#header-status`.
 templ SetupShell(title string) {
 	@document(title) {
-		<main class="mx-auto max-w-3xl px-6 py-8">
+		<main class="mx-auto max-w-3xl px-4 py-8 lg:px-6">
 			{ children... }
 		</main>
 	}
@@ -71,15 +72,19 @@ templ document(title string) {
 			}
 			<title>{ title } - pitha-trador</title>
 			<meta name="htmx-config" content={ htmxConfig }/>
+			<link rel="stylesheet" href="/static/dist/fonts/fonts.css"/>
 			<link rel="stylesheet" href="/static/dist/css/app.css"/>
 			<script src="/static/vendor/htmx.min.js"></script>
 			<script type="module" src="/static/dist/js/kill-switch-panel/pitha-kill-switch-panel.js"></script>
 			<script type="module" src="/static/dist/js/htmx-errors/pitha-htmx-errors.js"></script>
 			<script type="module" src="/static/dist/js/help-mark/pitha-help-mark.js"></script>
+			<script type="module" src="/static/dist/js/ripple/pitha-ripple.js"></script>
+			<script type="module" src="/static/dist/js/confirm/pitha-confirm.js"></script>
 		</head>
-		<body class="min-h-screen bg-slate-50 text-slate-900" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
+		<body class="min-h-screen bg-bone text-ink" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
 			{ children... }
-			<div id="toast-region" popover="manual" class="pointer-events-none fixed bottom-auto left-auto right-4 top-4 z-50 m-0 flex w-96 max-w-full flex-col gap-2 overflow-visible border-0 bg-transparent p-0" aria-live="assertive"></div>
+			<div id="toast-region" popover="manual" class="pointer-events-none fixed inset-x-6 bottom-6 top-auto z-[var(--z-toast)] m-0 flex h-auto w-auto justify-center overflow-visible border-0 bg-transparent p-0" aria-live="assertive"></div>
+			@molecules.ConfirmDialog()
 			<template id="toast-template">
 				@atoms.Toast("")
 			</template>

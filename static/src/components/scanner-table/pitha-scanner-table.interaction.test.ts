@@ -22,7 +22,7 @@ describe('pitha-scanner-table interaction', () => {
     expect(symbols()).toEqual(['BBBB', 'CCCC', 'AAAA']);
     for (const th of el.querySelectorAll('thead th')) {
       expect(th.getAttribute('aria-sort')).toBe('none');
-      expect(th.textContent).not.toMatch(/[▲▼]/);
+      expect(th.querySelector('svg')).toBeNull();
     }
 
     // A /ws/scanner push keeps the server order too.
@@ -47,7 +47,10 @@ describe('pitha-scanner-table interaction', () => {
     let rows = el.querySelectorAll('tbody tr');
     expect(rows[0].getAttribute('data-symbol')).toBe('AAAA');
     expect(symbolHeader.getAttribute('aria-sort')).toBe('ascending');
-    expect(symbolHeader.textContent).toContain('銘柄 ▲');
+    expect(symbolHeader.querySelector('button svg')).not.toBeNull();
+    expect(symbolHeader.querySelector('button svg path')?.getAttribute('d')).toBe(
+      'M6 15L12 9L18 15',
+    );
 
     (symbolHeader.querySelector('button') as HTMLElement).click(); // same column again -> toggles to descending
     await el.updateComplete;
@@ -56,7 +59,9 @@ describe('pitha-scanner-table interaction', () => {
     rows = el.querySelectorAll('tbody tr');
     expect(rows[0].getAttribute('data-symbol')).toBe('BBBB');
     expect(symbolHeader.getAttribute('aria-sort')).toBe('descending');
-    expect(symbolHeader.textContent).toContain('銘柄 ▼');
+    expect(symbolHeader.querySelector('button svg path')?.getAttribute('d')).toBe(
+      'M6 9L12 15L18 9',
+    );
   });
 
   // Lexicographic order would put "exceptional" first and "poor" after
@@ -182,7 +187,7 @@ describe('pitha-scanner-table interaction', () => {
     expect(alert).not.toBeNull();
     expect(alert?.textContent).toContain('500');
     // Light DOM: Shadow `noticeStyles` do not apply, so Tailwind classes must (#355).
-    expect(alert?.classList.contains('text-red-700')).toBe(true);
+    expect(alert?.classList.contains('text-danger')).toBe(true);
     // Nothing has loaded: no count, caption or empty-state claim.
     expect(el.querySelector('[data-testid="scanner-count"]')).toBeNull();
     expect(el.querySelector('caption')).toBeNull();
@@ -198,7 +203,7 @@ describe('pitha-scanner-table interaction', () => {
     FakeWebSocket.instances[0].emit('close', { code: 1006 });
     await el.updateComplete;
     const notice = el.querySelector('.pitha-ws-disconnected');
-    expect(notice?.classList.contains('text-amber-700')).toBe(true);
+    expect(notice?.classList.contains('text-warning')).toBe(true);
     expect(notice?.classList.contains('text-xs')).toBe(true);
   });
 });

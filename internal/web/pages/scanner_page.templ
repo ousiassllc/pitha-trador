@@ -19,7 +19,7 @@ import (
 // fragment route on this screen is `GET /scanner/scan`).
 templ ScannerPage(candidates []domain.Candidate, asOf time.Time, scan organisms.ScanPanelView) {
 	@layout.Shell("候補銘柄", organisms.NavScanner) {
-		<h1 class="text-2xl font-bold text-slate-900">候補銘柄</h1>
+		<h1 class="text-2xl font-semibold text-ink">候補銘柄</h1>
 		@molecules.TabNav("候補銘柄のタブ", candidateTabs(tabCandidates))
 		@organisms.ScanPanel(scan)
 		@organisms.ScannerTableFallback(candidates, asOf)

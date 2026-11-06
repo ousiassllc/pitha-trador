@@ -222,8 +222,8 @@ export class PithaActivityFeed extends LitElement {
 
       ${this.renderKillSwitchEvents()}
 
-      <section id="activity-feed" data-testid="activity-feed" class="mt-6">
-        <h2 class="mb-2 text-lg font-semibold text-slate-900">最近の動き</h2>
+      <section id="activity-feed" data-testid="activity-feed" class="mt-12">
+        <h2 class="mb-2 text-lg font-semibold text-ink">最近の動き</h2>
         <div class="mb-2 flex gap-4 text-sm">
           <label>
             種別
@@ -241,25 +241,25 @@ export class PithaActivityFeed extends LitElement {
           </label>
         </div>
         <table class="w-full border-collapse text-left text-sm" aria-label="アクティビティフィード">
-          ${this.asOf ? html`<caption class="mb-2 text-left text-sm text-slate-500">${formatJstDateTime(this.asOf)} 時点</caption>` : nothing}
+          ${this.asOf ? html`<caption class="mb-2 text-left text-sm text-mute">${formatJstDateTime(this.asOf)} 時点</caption>` : nothing}
           <thead>
-            <tr class="border-b border-slate-200 text-xs font-semibold text-slate-500">
-              <th scope="col" class="px-3 py-2">時刻</th>
-              <th scope="col" class="px-3 py-2">種別</th>
-              <th scope="col" class="px-3 py-2">銘柄</th>
-              <th scope="col" class="px-3 py-2">内容</th>
-              <th scope="col" class="px-3 py-2">応答時間（ms）</th>
+            <tr class="border-b border-border text-xs font-semibold text-mute">
+              <th scope="col" class="px-3 py-2.5">時刻</th>
+              <th scope="col" class="px-3 py-2.5">種別</th>
+              <th scope="col" class="px-3 py-2.5">銘柄</th>
+              <th scope="col" class="px-3 py-2.5">内容</th>
+              <th scope="col" class="px-3 py-2.5">応答時間（ms）</th>
             </tr>
           </thead>
           <tbody>
             ${this.events.map(
               (e) => html`
-                <tr class="border-b border-slate-100" data-event-type=${e.type}>
-                  <td class="px-3 py-2">${formatJstDateTime(e.timestamp)}</td>
-                  <td class="px-3 py-2 font-medium text-slate-900">${activityTypeLabel(e.type)}</td>
-                  <td class="px-3 py-2">${e.symbol ?? '—'}</td>
-                  <td class="px-3 py-2">${activityDetail(e.type, e.detail)}</td>
-                  <td class="px-3 py-2">${e.latency_ms ?? '—'}</td>
+                <tr class="border-b border-border" data-event-type=${e.type}>
+                  <td class="px-3 py-2.5">${formatJstDateTime(e.timestamp)}</td>
+                  <td class="px-3 py-2.5 text-ink">${activityTypeLabel(e.type)}</td>
+                  <td class="px-3 py-2.5">${e.symbol ?? '—'}</td>
+                  <td class="px-3 py-2.5">${activityDetail(e.type, e.detail)}</td>
+                  <td class="px-3 py-2.5">${e.latency_ms ?? '—'}</td>
                 </tr>
               `,
             )}

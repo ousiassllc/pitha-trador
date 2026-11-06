@@ -23,6 +23,11 @@ func renderedDialogs(t *testing.T) map[string][]string {
 			t.Fatalf("GET %s = %d, want 200", page.Path(), rec.Code)
 		}
 		for _, m := range dialogIDPattern.FindAllStringSubmatch(rec.Body.String(), -1) {
+			// The one confirmation dialog layout.Shell renders on every page
+			// (molecules.ConfirmDialog) is not a Settings card's dialog.
+			if m[1] == "confirm-dialog" {
+				continue
+			}
 			out[page.ID] = append(out[page.ID], m[1])
 		}
 	}

@@ -1,0 +1,24 @@
+package atoms
+
+// UI icons from Iconoir (https://iconoir.com, MIT, iconoir 7.12.2 "regular"
+// set), per the Ousiass design guide §6: 24x24 viewBox, stroke 1.5,
+// `currentColor`, rendered at --icon-sm 16 / --icon-md 20 / --icon-lg 24.
+// Each icon is decorative (`aria-hidden`): the control that holds it carries
+// the accessible name. The Lit counterpart is static/src/components/lib/icons.ts
+// (same paths); keep the two in step.
+
+// IconXmark is Iconoir's `xmark` at 20px (the close button).
+templ IconXmark() {
+	<svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+		<path d="M6.75827 17.2426L12.0009 12M17.2435 6.75736L12.0009 12M12.0009 12L6.75827 6.75736M12.0009 12L17.2435 17.2426" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+	</svg>
+}
+
+// IconWarningCircle is Iconoir's `warning-circle` at 20px (the inline alert).
+templ IconWarningCircle() {
+	<svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+		<path d="M12 7L12 13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+		<path d="M12 17.01L12.01 16.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+		<path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+	</svg>
+}

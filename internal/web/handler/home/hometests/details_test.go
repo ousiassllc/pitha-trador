@@ -156,7 +156,7 @@ func TestTrades_NewestClosedWithPnLColour(t *testing.T) {
 	if n := count(body, "trade-row"); n != 2 {
 		t.Fatalf("trade rows = %d", n)
 	}
-	for _, want := range []string{"+1,200円", "-800円", "text-emerald-700", "text-red-700", `href="/symbols/6758"`} {
+	for _, want := range []string{"+1,200円", "-800円", "text-success", "text-danger", `href="/symbols/6758"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("trades lack %q", want)
 		}
@@ -207,7 +207,7 @@ func TestKillEvents_LatestThree(t *testing.T) {
 func TestDetails_IsACollapsibleSectionOnThePage(t *testing.T) {
 	f := newFixture()
 	body := f.mustGet(t, "/")
-	if !strings.Contains(body, `<details class="mt-6" open data-testid="home-details-section">`) || !strings.Contains(body, "<summary") {
+	if !strings.Contains(body, `<details class="mt-12" open data-testid="home-details-section">`) || !strings.Contains(body, "<summary") {
 		t.Errorf("今日の詳細 is not a collapsible <details>: %s", between(body, "home-details-section", "</summary>"))
 	}
 }

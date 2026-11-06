@@ -54,7 +54,7 @@ describe('SSR/Lit scanner contract', () => {
     expect(COLUMNS).toHaveLength(contract.columns.length);
     ths.forEach((th, i) => {
       const want = contract.columns[i];
-      const label = (th.querySelector('button')?.textContent ?? '').replace(/\s*[▲▼]$/, '').trim();
+      const label = (th.querySelector('button')?.textContent ?? '').trim();
       expect(label).toBe(want.label);
       expect(th.hasAttribute('title')).toBe(false);
       expect(th.querySelector('[data-help-mark-text]')?.textContent ?? '').toBe(want.hint);

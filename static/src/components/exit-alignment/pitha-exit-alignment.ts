@@ -30,21 +30,22 @@ export class PithaExitAlignment extends LitElement {
       table {
         border-collapse: collapse;
         font-size: 0.875rem;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
         font-variant-numeric: tabular-nums;
       }
       th,
       td {
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--border);
         padding: 0.25rem 0.5rem;
         text-align: left;
       }
       .warnings {
         margin: 0;
         padding: 0.5rem 1rem;
-        border: 1px solid #f59e0b;
-        border-radius: 0.375rem;
-        background: #fffbeb;
-        color: #92400e;
+        border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+        border-radius: 0.5rem;
+        background: color-mix(in srgb, var(--warning) 10%, transparent);
+        color: var(--warning);
         font-size: 0.875rem;
       }
       .summary {
@@ -55,7 +56,7 @@ export class PithaExitAlignment extends LitElement {
         font-size: 0.875rem;
       }
       .summary dt {
-        color: #475569;
+        color: var(--mute);
       }
       .summary dd {
         margin: 0;
@@ -112,7 +113,7 @@ export class PithaExitAlignment extends LitElement {
             text: 'メタモデルの学習ラベルが前提にする出口（利確・損切り・タイムアウト・コスト）と、実際の取引の出口が合っているかを確かめる表です。合っていないと、モデルの予測した勝ち負けの幅が実際の取引とずれます。',
           })}
         </h2>
-        <button type="button" @click=${() => void this.load()} ?disabled=${this.loading}>
+        <button type="button" data-ripple @click=${() => void this.load()} ?disabled=${this.loading}>
           ${this.loading ? '更新中…' : '更新'}
         </button>
         ${this.error ? html`<p role="alert">${this.error}</p>` : ''}

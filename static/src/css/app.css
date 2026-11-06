@@ -7,3 +7,220 @@
    outside Tailwind's automatic content detection root; register it
    explicitly (docs/components/overview.md §2 directory layout). */
 @source "../../../internal/web";
+
+/* Ousiass design guide color tokens (brand-guide §1). Light values live on
+   :root and Dark values on [data-theme="dark"], so every utility below and
+   every Lit shadow root (custom properties inherit through shadow
+   boundaries) switches theme by changing one attribute on <html>. */
+:root {
+  color-scheme: light;
+  --ink: #050505;
+  --bone: #f5f5f4;
+  --mute: #6b6b6e;
+  --surface: #ffffff;
+  --border: #e7e7e5;
+  --accent: #050505;
+  --accent-soft: #e7e7e5;
+  --focus: #4a72d0;
+  --success: #3d5c4a;
+  --warning: #7a6a3a;
+  --danger: #7a4545;
+  --info: #4a5a6a;
+  --scrim: color-mix(in srgb, #050505 50%, transparent);
+
+  /* z-index scale (brand-guide §6): dropdown / tooltip / popover 100, sticky 200,
+     drawer 300, modal 400, toast 500. Used as `z-[var(--z-toast)]`. */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-drawer: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #ffffff;
+  --bone: #050505;
+  --mute: #8b8b8e;
+  --surface: #141414;
+  --border: #2a2a2a;
+  --accent: #f5f5f4;
+  --accent-soft: #2a2a2a;
+  --focus: #60a5fa;
+  --success: #8fafa0;
+  --warning: #c4b87a;
+  --danger: #c49a9a;
+  --info: #9aabbc;
+  --scrim: color-mix(in srgb, #050505 60%, transparent);
+}
+
+/* The guide's palette is the only palette: drop Tailwind's default colors so
+   a stray `text-slate-500` or `bg-blue-600` fails to compile (and
+   internal/web/style_test.go reports it) instead of silently rendering a
+   color the guide does not define. `inline` makes each utility read the
+   custom property at use time, which is what lets [data-theme] switch. */
+@theme {
+  --color-*: initial;
+
+  /* Fonts (brand-guide §2): Sora + Noto Sans JP for text, JetBrains Mono for
+     code and digit-aligned numbers. The @font-face rules are generated into
+     dist/fonts/fonts.css by esbuild.config.mjs (self-hosted, SIL OFL). */
+  --font-sans: Sora, "Noto Sans JP", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Line heights of the guide's size scale (brand-guide §2): xs 1.6, sm 1.7,
+     base 1.8, lg 1.7. Tailwind's sizes are kept (12/14/16/18/24px); only
+     the off-scale names (xl 20px, 3xl 30px) are not used. */
+  --text-xs--line-height: 1.6;
+  --text-sm--line-height: 1.7;
+  --text-base--line-height: 1.8;
+  --text-lg--line-height: 1.7;
+  --text-2xl--line-height: 1.5;
+
+  /* Radii (brand-guide §3): md 8 (input, button), lg 12 (card), xl 16 (modal).
+     Tailwind's own md/lg/xl are 6/8/12px, so `rounded-md|lg|xl` are redefined
+     to the guide's --r-md|lg|xl rather than adding parallel names. */
+  /* Easing (brand-guide §5): `ease-out` is the guide's cubic-bezier(0.2,0.8,0.2,1)
+     (Tailwind's default differs); ease-in / ease-in-out already match. */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* The only shadow in the product (brand-guide §3): the modal. Cards, tooltips
+     and toasts are separated by a 1px border and carry no shadow. */
+  --shadow-modal: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-bone: var(--bone);
+  --color-mute: var(--mute);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-focus: var(--focus);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+}
+
+/* Status pill / inline alert tone (brand-guide §1 "ステータスのピル・バッジ"):
+   text in the state token, border 40% and fill 10% of it. Callers add the
+   shape (`border`, radius, padding); the colors live here once. `mute` is
+   the neutral tone ("下書き" / not-yet-judged). */
+@utility tone-success {
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+  background-color: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
+
+@utility tone-warning {
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+  background-color: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--warning);
+}
+
+@utility tone-danger {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background-color: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+@utility tone-info {
+  border-color: color-mix(in srgb, var(--info) 40%, transparent);
+  background-color: color-mix(in srgb, var(--info) 10%, transparent);
+  color: var(--info);
+}
+
+@utility tone-mute {
+  border-color: color-mix(in srgb, var(--mute) 40%, transparent);
+  background-color: color-mix(in srgb, var(--mute) 10%, transparent);
+  color: var(--mute);
+}
+
+/* Body copy is base (16px) at the guide's 1.8 line height; the Japanese
+   explanations in panels and alerts inherit it. */
+@layer base {
+  body {
+    line-height: 1.8;
+  }
+}
+
+/* Modal dialogs fade in 320ms ease-out and out 240ms ease-in, scrim and dialog
+   together (brand-guide §4/§5). A <dialog> is display:none when closed, so the
+   exit needs `display` and `overlay` as discrete transitions and @starting-style
+   supplies the entry's first frame. Reduced motion: fade only, 100ms. */
+dialog[data-modal] {
+  opacity: 0;
+  transition:
+    opacity 240ms cubic-bezier(0.4, 0, 1, 1),
+    overlay 240ms allow-discrete,
+    display 240ms allow-discrete;
+}
+
+dialog[data-modal][open] {
+  opacity: 1;
+  transition:
+    opacity 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    overlay 320ms allow-discrete,
+    display 320ms allow-discrete;
+}
+
+dialog[data-modal]::backdrop {
+  background-color: transparent;
+  transition:
+    background-color 240ms cubic-bezier(0.4, 0, 1, 1),
+    overlay 240ms allow-discrete,
+    display 240ms allow-discrete;
+}
+
+dialog[data-modal][open]::backdrop {
+  background-color: var(--scrim);
+  transition:
+    background-color 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    overlay 320ms allow-discrete,
+    display 320ms allow-discrete;
+}
+
+@starting-style {
+  dialog[data-modal][open] {
+    opacity: 0;
+  }
+
+  dialog[data-modal][open]::backdrop {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[data-modal],
+  dialog[data-modal][open],
+  dialog[data-modal]::backdrop,
+  dialog[data-modal][open]::backdrop {
+    transition-duration: 100ms;
+  }
+}
+
+/* Inline alert entrance: fade in 320ms ease-out (brand-guide §4). */
+@keyframes alert-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@utility alert-in {
+  animation: alert-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 100ms;
+  }
+}

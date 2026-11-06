@@ -186,3 +186,28 @@ describe('pitha-price-chart empty state (issue #687)', () => {
     expect(emptyNotice(el)).toBeNull();
   });
 });
+
+describe('pitha-price-chart series colors (design guide §1/§8)', () => {
+  test('candles are --success / --danger, VWAP --info and volume --mute at 50%: no off-token hue', async () => {
+    await mount();
+
+    expect(candleSeries().options).toMatchObject({
+      upColor: '#3d5c4a',
+      downColor: '#7a4545',
+      wickUpColor: '#3d5c4a',
+      wickDownColor: '#7a4545',
+    });
+    expect(vwapSeriesMock().options).toMatchObject({ color: '#4a5a6a' });
+    expect(createdSeries[2].options).toMatchObject({ color: 'rgba(107, 107, 110, 0.5)' });
+  });
+
+  test('draws axis text in the numeric font and the grid in --border', async () => {
+    const { createChartOptions } = await import('./chart-test-support');
+    await mount();
+
+    expect(createChartOptions[0]).toMatchObject({
+      layout: { fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
+      grid: { horzLines: { color: '#e7e7e5' } },
+    });
+  });
+});

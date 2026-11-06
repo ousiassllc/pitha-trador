@@ -103,7 +103,7 @@ export const COUNT_HELP_TEXT =
 // components/help-mark/pitha-help-mark.ts opens by document-level
 // delegation. (lib/help-mark.ts' renderHelpMark is for shadow roots.)
 export function renderLightHelpMark(id: string, label: string, text: string) {
-  return html`<span class="relative inline-flex align-middle" data-help-mark><button type="button" class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400 bg-white text-[10px] font-semibold leading-none text-slate-600 hover:border-slate-600 hover:text-slate-900 cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" aria-label=${label} aria-describedby=${id} data-help-mark-button>?</button><span id=${id} role="tooltip" class="invisible fixed left-0 top-0 z-50 w-72 max-w-[80vw] rounded-md border border-slate-300 bg-white p-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-700 shadow-lg data-[open]:visible" data-help-mark-text>${text}</span></span>`;
+  return html`<span class="relative inline-flex align-middle" data-help-mark><button type="button" class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border bg-surface text-xs font-semibold leading-none text-mute hover:border-ink hover:text-ink cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus" aria-label=${label} aria-describedby=${id} data-help-mark-button>?</button><span id=${id} role="tooltip" class="invisible fixed left-0 top-0 opacity-0 transition-[opacity,visibility] duration-[320ms] ease-out motion-reduce:duration-100 z-[var(--z-dropdown)] w-72 max-w-[80vw] rounded-md border border-border bg-surface p-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink data-[open]:visible data-[open]:opacity-100" data-help-mark-text>${text}</span></span>`;
 }
 
 // Quality order for sorting the entry_quality column, worst to best. Keep in
@@ -132,20 +132,20 @@ const BADGE_BASE = 'inline-flex items-center rounded-full px-2 py-1 text-xs font
 
 // Mirrors atoms.Badge / atoms.EntryQualityBadge (internal/web/atoms/badge.templ).
 const DIRECTION_BADGE_CLASS: Record<string, string> = {
-  LONG: 'bg-green-100 text-green-800',
-  SHORT: 'bg-red-100 text-red-800',
+  LONG: 'border tone-success',
+  SHORT: 'border tone-danger',
 };
 const ENTRY_QUALITY_BADGE_CLASS: Record<string, string> = {
-  exceptional: 'bg-emerald-600 text-white',
-  strong: 'bg-green-100 text-green-800',
-  good: 'bg-sky-100 text-sky-800',
-  fair: 'bg-yellow-100 text-yellow-800',
+  exceptional: 'border tone-success',
+  strong: 'border tone-success',
+  good: 'border tone-info',
+  fair: 'border tone-warning',
 };
-const NEUTRAL_BADGE_CLASS = 'bg-gray-100 text-gray-600';
+const NEUTRAL_BADGE_CLASS = 'border tone-mute';
 
 export function directionBadge(direction: string | null) {
   if (direction === null) {
-    return html`<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">判定待ち</span>`;
+    return html`<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs text-mute">判定待ち</span>`;
   }
   const label = direction === 'LONG' || direction === 'SHORT' ? direction : 'NONE';
   return html`<span class="${BADGE_BASE} ${DIRECTION_BADGE_CLASS[label] ?? NEUTRAL_BADGE_CLASS}">${label}</span>`;
@@ -153,16 +153,16 @@ export function directionBadge(direction: string | null) {
 
 export function entryQualityBadge(quality: string | null) {
   if (quality === null) {
-    return html`<span class="text-slate-400">—</span>`;
+    return html`<span class="text-mute">—</span>`;
   }
   return html`<span class="${BADGE_BASE} ${ENTRY_QUALITY_BADGE_CLASS[quality] ?? NEUTRAL_BADGE_CLASS}">${quality}</span>`;
 }
 
 // Green when positive, red when negative, neutral for zero / missing.
 export function returnClass(value: number | null): string {
-  const base = 'px-3 py-2 text-right font-medium tabular-nums';
-  if (value === null || value === 0) return `${base} text-slate-500`;
-  return value > 0 ? `${base} text-green-700` : `${base} text-red-700`;
+  const base = 'px-3 py-2 text-right font-mono tabular-nums';
+  if (value === null || value === 0) return `${base} text-mute`;
+  return value > 0 ? `${base} text-success` : `${base} text-danger`;
 }
 
 export function formatNullable(value: number | null, decimals: number): string {

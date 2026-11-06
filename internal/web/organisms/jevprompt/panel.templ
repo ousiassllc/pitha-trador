@@ -64,31 +64,30 @@ type PanelProps struct {
 // answer apart; it never trades. The promotion switches the live prompt and is
 // the only way a version becomes live.
 templ Panel(props PanelProps) {
-	<section class="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="jev-prompt-panel">
+	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-mute" data-testid="jev-prompt-panel">
 		<h3 class="sr-only">Jev プロンプトの版とシャドー比較</h3>
 		if props.Notice != "" {
-			<p class="text-emerald-700" role="status" data-testid="jev-prompt-notice">{ props.Notice }</p>
+			<p class="text-success" role="status" data-testid="jev-prompt-notice">{ props.Notice }</p>
 		}
 		if !props.ShadowRuns {
-			<p class="text-amber-700" role="status" data-testid="jev-prompt-not-paper">この動作モードは Paper ではないため、シャドーは動きません。</p>
+			<p class="text-warning" role="status" data-testid="jev-prompt-not-paper">この動作モードは Paper ではないため、シャドーは動きません。</p>
 		}
 		<dl class="flex flex-col gap-1" data-testid="jev-prompt-live">
-			<dt class="font-medium text-slate-700">ライブの版</dt>
+			<dt class="text-ink">ライブの版</dt>
 			<dd><code data-testid="jev-prompt-live-version">{ props.LiveVersion }</code></dd>
 		</dl>
 		<form class="flex flex-col gap-3" hx-post="/settings/jev-prompt/shadow" hx-target="#jev-prompt-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="jev-prompt-shadow-form">
 			<div class="flex items-center gap-2">
-				<label class="flex items-center gap-2">
-					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: checkedAttrs(props.Enabled, "jev-prompt-enabled")})
-					<span class="font-medium text-slate-700">シャドーを有効にする（Paper のみ）</span>
-				</label>
+				@atoms.Switch(atoms.SwitchProps{Name: "enabled", Attrs: checkedAttrs(props.Enabled, "jev-prompt-enabled")}) {
+					シャドーを有効にする（Paper のみ）
+				}
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-enabled", Label: "シャドーの説明"}) {
 					Jev の trader に送るプロンプトには版があり、判断の記録に残ります。候補の版を「シャドー」で動かすと、ライブの判断ごとに同じ入力で候補の版にも答えさせ、別に保存します。シャドーの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも一切使いません。Paper だけで動き、Live では動きません。既定はオフです。オンにすると、ライブの判断ごとに候補の版の LLM 呼び出しが 1 回増え、その費用が発生します。この画面のほか、MCP の設定変更が許可されているときは MCP からも、オン・オフと候補の版を変えられます。
 				}
 			</div>
 			<div class="flex flex-col gap-1">
-				<label for="jev-prompt-candidate" class="font-medium text-slate-700">候補の版</label>
-				@atoms.Select(atoms.SelectProps{ID: "jev-prompt-candidate", Name: "candidate", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
+				<label for="jev-prompt-candidate" class="text-ink">候補の版</label>
+				@atoms.Select(atoms.SelectProps{ID: "jev-prompt-candidate", Name: "candidate", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
 					<option value="" selected?={ props.CandidateVersion == "" }>（なし）</option>
 					for _, v := range props.Versions {
 						if v != props.LiveVersion {
@@ -99,13 +98,13 @@ templ Panel(props PanelProps) {
 			</div>
 			<div class="flex flex-col gap-1">
 				<div class="flex items-center gap-2">
-					<label for="jev-prompt-cap" class="font-medium text-slate-700">1 日あたりの費用上限（USD。日本時間の日）</label>
+					<label for="jev-prompt-cap" class="text-ink">1 日あたりの費用上限（USD。日本時間の日）</label>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-cap", Label: "費用上限の説明"}) {
 						超えるとその日のシャドーを止めます（ライブの判断は止まりません。翌日に再開します）。欄を空のまま保存すると既定値が使われます。変えたいときは値を入力して保存してください。保存した値を消して既定値に戻すには、欄を空にして保存します。失敗した呼び出し（応答が不正・保存に失敗・タイムアウトなど）は課金されても費用の合計に入らないため、1 日の回数の上限も別にあります。この回数は固定で、この画面では変えられません。
 					}
 				</div>
-				@atoms.Input(atoms.InputProps{ID: "jev-prompt-cap", Name: "cap", Class: "bg-white px-3 py-2", Attrs: capAttrs(props)})
-				<span class="text-xs text-slate-500" data-testid="jev-prompt-cap-note">
+				@atoms.Input(atoms.InputProps{ID: "jev-prompt-cap", Name: "cap", Class: "bg-surface px-3 py-2", Attrs: capAttrs(props)})
+				<span class="text-xs text-mute" data-testid="jev-prompt-cap-note">
 					if props.CapIsDefault {
 						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（既定値）。
 					} else {
@@ -115,6 +114,7 @@ templ Panel(props PanelProps) {
 					<span data-testid="jev-prompt-failure-cap">失敗した呼び出しが 1 日に { itoa(props.FailureCap) } 回に達しても、その日のシャドーを止めます（今日: { itoa(props.FailuresToday) } 回）。</span>
 				</span>
 			</div>
+			<div id="jev-prompt-shadow-error" data-testid="jev-prompt-shadow-error"></div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "jev-prompt-shadow-save"}}) {
 					保存
@@ -122,7 +122,7 @@ templ Panel(props PanelProps) {
 			</div>
 		</form>
 		<div class="flex flex-col gap-1" data-testid="jev-prompt-cost">
-			<span class="flex items-center gap-2 font-medium text-slate-700">
+			<span class="flex items-center gap-2 text-ink">
 				シャドーの費用
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-cost", Label: "シャドーの費用の説明"}) {
 					費用の合計は、各呼び出しの費用の合計です。API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。
@@ -130,16 +130,16 @@ templ Panel(props PanelProps) {
 			</span>
 			<span>今日（{ props.TodayDate }）: <strong data-testid="jev-prompt-cost-today">{ props.TodayUSD } USD</strong>（{ itoa(props.TodayCalls) } 回）　累計: <strong data-testid="jev-prompt-cost-total">{ props.TotalUSD } USD</strong>（{ itoa(props.TotalCalls) } 回）</span>
 			if props.HaltNote != "" {
-				<span class="text-amber-700" role="status" data-testid="jev-prompt-halt">{ props.HaltNote }</span>
+				<span class="text-warning" role="status" data-testid="jev-prompt-halt">{ props.HaltNote }</span>
 			}
 			if props.ThrottleNote != "" {
-				<span class="text-amber-700" role="status" data-testid="jev-prompt-throttle">{ props.ThrottleNote }</span>
+				<span class="text-warning" role="status" data-testid="jev-prompt-throttle">{ props.ThrottleNote }</span>
 			}
 			<span data-testid="jev-prompt-cost-estimated">うち見積り: 今日 <strong data-testid="jev-prompt-estimated-today">{ props.TodayEstimatedUSD } USD</strong>（{ itoa(props.TodayEstimatedCalls) } 回）　累計 <strong data-testid="jev-prompt-estimated-total">{ props.TotalEstimatedUSD } USD</strong>（{ itoa(props.TotalEstimatedCalls) } 回）</span>
 			if len(props.Daily) > 0 {
-				<table class="w-full text-left text-xs" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
+				<table class="w-full text-left text-sm" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
 					<thead>
-						<tr><th scope="col" class="pr-2">日（JST）</th><th scope="col" class="pr-2">回数</th><th scope="col" class="pr-2">費用（USD）</th><th scope="col">うち見積り（USD・回数）</th></tr>
+						<tr><th scope="col" class="pr-2 text-xs font-semibold">日（JST）</th><th scope="col" class="pr-2 text-xs font-semibold">回数</th><th scope="col" class="pr-2 text-xs font-semibold">費用（USD）</th><th scope="col" class="text-xs font-semibold">うち見積り（USD・回数）</th></tr>
 					</thead>
 					<tbody>
 						for _, d := range props.Daily {
@@ -150,33 +150,34 @@ templ Panel(props PanelProps) {
 			}
 		</div>
 		<form class="flex flex-col gap-2" hx-post="/settings/jev-prompt/promote" hx-target="#jev-prompt-panel" hx-swap="innerHTML" hx-disabled-elt="find button" hx-confirm="ライブの Jev プロンプトの版を切り替えます。以後のすべてのライブの判断（取引の入力）が新しい版になります。よろしいですか？" data-testid="jev-prompt-promote-form">
-			<span class="flex items-center gap-2 font-medium text-slate-700">
+			<span class="flex items-center gap-2 text-ink">
 				昇格（ライブの版を切り替える）
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-promote", Label: "昇格の説明"}) {
 					昇格はライブの判断を変えます。自動では行われず、この操作（と MCP からの昇格）だけで行われます。昇格は下の記録（新しい順・直近 10 件）に残ります。比較の結果は MCP からも見られます。
 				}
 			</span>
+			<div id="jev-prompt-promote-error" data-testid="jev-prompt-promote-error"></div>
 			<div class="flex flex-wrap items-center gap-2">
-				@atoms.Select(atoms.SelectProps{Name: "version", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-promote-version"}}) {
+				@atoms.Select(atoms.SelectProps{Name: "version", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-promote-version"}}) {
 					for _, v := range props.Versions {
 						if v != props.LiveVersion {
 							<option value={ v } selected?={ v == props.CandidateVersion }>{ v }</option>
 						}
 					}
 				}
-				@atoms.Button(atoms.ButtonProps{Type: "submit", Variant: atoms.ButtonDangerOutline, Attrs: templ.Attributes{"data-testid": "jev-prompt-promote"}}) {
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Variant: atoms.ButtonDanger, Attrs: templ.Attributes{"data-testid": "jev-prompt-promote"}}) {
 					この版をライブに昇格
 				}
 			</div>
 		</form>
 		<div class="flex flex-col gap-1" data-testid="jev-prompt-promotions">
-			<span class="font-medium text-slate-700">昇格の記録</span>
+			<span class="text-ink">昇格の記録</span>
 			if len(props.Promotions) == 0 {
-				<span class="text-xs text-slate-500" data-testid="jev-prompt-promotions-empty">昇格の記録はありません。</span>
+				<span class="text-xs text-mute" data-testid="jev-prompt-promotions-empty">昇格の記録はありません。</span>
 			} else {
-				<table class="w-full text-left text-xs" aria-label="昇格の記録" data-testid="jev-prompt-promotions-table">
+				<table class="w-full text-left text-sm" aria-label="昇格の記録" data-testid="jev-prompt-promotions-table">
 					<thead>
-						<tr><th scope="col" class="pr-2">日時</th><th scope="col" class="pr-2">誰が</th><th scope="col" class="pr-2">前の版</th><th scope="col">後の版</th></tr>
+						<tr><th scope="col" class="pr-2 text-xs font-semibold">日時</th><th scope="col" class="pr-2 text-xs font-semibold">誰が</th><th scope="col" class="pr-2 text-xs font-semibold">前の版</th><th scope="col" class="text-xs font-semibold">後の版</th></tr>
 					</thead>
 					<tbody>
 						for _, p := range props.Promotions {
@@ -190,7 +191,7 @@ templ Panel(props PanelProps) {
 }
 
 func checkedAttrs(on bool, testID string) templ.Attributes {
-	attrs := templ.Attributes{"value": "on", "data-testid": testID}
+	attrs := templ.Attributes{"data-testid": testID}
 	if on {
 		attrs["checked"] = true
 	}

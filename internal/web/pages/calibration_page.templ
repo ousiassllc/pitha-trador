@@ -20,7 +20,7 @@ import (
 // request.
 templ CalibrationPage() {
 	@layout.Shell("予測の精度", organisms.NavPerformance) {
-		<h1 class="text-2xl font-bold text-slate-900">予測の精度</h1>
+		<h1 class="text-2xl font-semibold text-ink">予測の精度</h1>
 		@molecules.TabNav("成績のタブ", resultTabs(tabCalibration))
 		<pitha-calibration-heatmap calibration-url="/api/v1/calibration"></pitha-calibration-heatmap>
 		<pitha-exit-alignment alignment-url="/api/v1/calibration/exit-alignment"></pitha-exit-alignment>

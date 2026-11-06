@@ -7,11 +7,11 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 func itemClass(level AttentionLevel) string {
 	switch level {
 	case LevelAlert:
-		return "rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+		return "rounded-md border tone-danger px-4 py-3 text-sm"
 	case LevelWarn:
-		return "rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+		return "rounded-md border tone-warning px-4 py-3 text-sm"
 	}
-	return "rounded-md border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-800"
+	return "rounded-md border tone-info px-4 py-3 text-sm"
 }
 
 // AttentionSection is the 要対応 section (issue #896 §5.2): every condition the
@@ -21,8 +21,8 @@ func itemClass(level AttentionLevel) string {
 // it lists; it is a polite live region (as the banners were, issue #626) so a
 // new alert is announced, and an unchanged answer is not swapped in.
 templ AttentionSection(v AttentionView) {
-	<section class="mt-6" data-testid="home-attention-section" aria-labelledby="home-attention-title">
-		<h2 id="home-attention-title" class="text-lg font-semibold text-slate-900">要対応</h2>
+	<section class="mt-12" data-testid="home-attention-section" aria-labelledby="home-attention-title">
+		<h2 id="home-attention-title" class="text-lg font-semibold text-ink">要対応</h2>
 		<div
 			id="home-attention"
 			class="mt-2"
@@ -44,7 +44,7 @@ templ AttentionSection(v AttentionView) {
 // 「対応が必要なものはありません」 when there are none and every source was read.
 templ AttentionBody(v AttentionView) {
 	if len(v.Items) == 0 && v.Notice == "" {
-		<p class="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600" data-testid="attention-none">対応が必要なものはありません</p>
+		<p class="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-mute" data-testid="attention-none">対応が必要なものはありません</p>
 	} else {
 		<ul class="flex flex-col gap-2">
 			for _, it := range v.Items {
@@ -52,7 +52,7 @@ templ AttentionBody(v AttentionView) {
 					<div class="flex items-start gap-2">
 						<p class="font-semibold">{ it.Title }</p>
 						if it.Help != "" {
-							<span class="mt-0.5 shrink-0">
+							<span class="mt-1 shrink-0">
 								@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-home-attention-" + it.Key, Label: it.Title + "の説明"}) {
 									{ it.Help }
 								}
@@ -60,7 +60,7 @@ templ AttentionBody(v AttentionView) {
 						}
 					</div>
 					if it.Detail != "" {
-						<p class="mt-0.5 text-xs leading-relaxed">{ it.Detail }</p>
+						<p class="mt-1 text-xs leading-relaxed">{ it.Detail }</p>
 					}
 					if it.Link.Href != "" {
 						<p class="mt-1">@DestLink(it.Link)</p>
@@ -69,7 +69,7 @@ templ AttentionBody(v AttentionView) {
 			}
 		</ul>
 		if v.Notice != "" {
-			<p class="mt-2 text-xs text-amber-800" data-testid="attention-notice">{ v.Notice }</p>
+			<p class="mt-2 text-xs text-warning" data-testid="attention-notice">{ v.Notice }</p>
 		}
 	}
 }

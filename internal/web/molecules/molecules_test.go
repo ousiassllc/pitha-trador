@@ -115,7 +115,7 @@ func TestSettingGroupDerived_RendersWarningsAndHeadings(t *testing.T) {
 		{Key: "w", Warn: true, Label: "<script>alert(1)</script> が異なります"},
 	}}
 	html := render(t, molecules.SettingGroupDerived(props, false))
-	for _, want := range []string{"整合チェック", "表示のみ", "text-amber-800", "注意:", "&lt;script&gt;alert(1)&lt;/script&gt; が異なります"} {
+	for _, want := range []string{"整合チェック", "表示のみ", "text-warning", "注意:", "&lt;script&gt;alert(1)&lt;/script&gt; が異なります"} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %q: %s", want, html)
 		}

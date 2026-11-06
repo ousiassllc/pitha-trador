@@ -15,6 +15,7 @@ import { css, html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
+import { chartBaseOptions, readToken, withAlpha } from '../lib/chart-theme';
 import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
@@ -25,7 +26,6 @@ import {
   describeChart,
   EMPTY_SUMMARY,
   MAIN_SCALE_MARGINS,
-  VOLUME_COLOR,
   VOLUME_SCALE_MARGINS,
   vwapSeriesData,
 } from './chart-data';
@@ -39,8 +39,8 @@ import type {
 import { formatCrosshairTime, formatTickMark } from './jst-time';
 
 const CHART_HEIGHT = 400;
-const LONG_MARKER_COLOR = '#16a34a';
-const SHORT_MARKER_COLOR = '#dc2626';
+// Series colors are the guide's state tokens (read at createChart, lib/chart-theme.ts):
+// up / long = --success, down / short = --danger, VWAP = --info, volume = --mute at 50%.
 
 @customElement('pitha-price-chart')
 export class PithaPriceChart extends LitElement {
@@ -57,7 +57,7 @@ export class PithaPriceChart extends LitElement {
       }
       .pitha-price-chart-empty {
         margin: 0;
-        color: #475569;
+        color: var(--mute);
         font-size: 0.875rem;
       }
     `,
@@ -144,14 +144,33 @@ export class PithaPriceChart extends LitElement {
     // timeVisible/secondsVisible: bars are 1 minute, so ticks show HH:mm
     // (lightweight-charts shows dates only by default). The formatters render
     // every time in Asia/Tokyo; the library would otherwise print UTC.
+    const base = chartBaseOptions();
     this.chart = createChart(container, {
+      ...base,
       autoSize: true,
       localization: { timeFormatter: formatCrosshairTime },
-      timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: formatTickMark },
+      timeScale: {
+        ...base.timeScale,
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: formatTickMark,
+      },
     });
-    this.candleSeries = this.chart.addCandlestickSeries();
-    this.vwapSeries = this.chart.addLineSeries({ color: '#2962ff', lineWidth: 1 });
-    this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', color: VOLUME_COLOR });
+    const up = readToken('success');
+    const down = readToken('danger');
+    this.candleSeries = this.chart.addCandlestickSeries({
+      upColor: up,
+      downColor: down,
+      borderUpColor: up,
+      borderDownColor: down,
+      wickUpColor: up,
+      wickDownColor: down,
+    });
+    this.vwapSeries = this.chart.addLineSeries({ color: readToken('info'), lineWidth: 1 });
+    this.volumeSeries = this.chart.addHistogramSeries({
+      priceScaleId: '',
+      color: withAlpha(readToken('mute'), 0.5),
+    });
     // Keep the volume bars in their own bottom band, clear of the candles/VWAP.
     this.volumeSeries.priceScale().applyOptions({ scaleMargins: VOLUME_SCALE_MARGINS });
     this.chart.priceScale('right').applyOptions({ scaleMargins: MAIN_SCALE_MARGINS });
@@ -247,7 +266,7 @@ export class PithaPriceChart extends LitElement {
     const marker: SeriesMarker<Time> = {
       time,
       position: isLong ? 'belowBar' : 'aboveBar',
-      color: isLong ? LONG_MARKER_COLOR : SHORT_MARKER_COLOR,
+      color: readToken(isLong ? 'success' : 'danger'),
       shape: isLong ? 'arrowUp' : 'arrowDown',
       text: message.direction,
     };

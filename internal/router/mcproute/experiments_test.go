@@ -106,6 +106,10 @@ func TestExperimentFormRefusesInvalidRequests(t *testing.T) {
 		if rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: status %d, want 422 (%s)", name, rec.Code, rec.Body.String())
 		}
+		// An inline alert in the form's own slot, not a toast (design guide O3).
+		if rec.Header().Get("HX-Retarget") != "#mcp-experiment-form-error" || strings.Contains(rec.Body.String(), "data-toast") {
+			t.Errorf("%s: want an inline alert for #mcp-experiment-form-error, got %v %s", name, rec.Header(), rec.Body)
+		}
 	}
 	var n int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM tuning_experiments`).Scan(&n); err != nil || n != 0 {

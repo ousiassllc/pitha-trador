@@ -29,9 +29,20 @@
 
 import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
 import { logger } from '../lib/logger';
+import {
+  EASE_IN,
+  EASE_OUT,
+  MOTION_FADE_IN_MS,
+  MOTION_FADE_OUT_MS,
+  prefersReducedMotion,
+  REDUCED_FADE_MS,
+} from '../lib/motion';
 
 const TOAST_MARKER = 'data-toast';
-const DISMISS_AFTER_MS = 8000;
+// A form-validation error comes back as an atoms.InlineAlert for the form's own slot (HX-Retarget), not a toast.
+const INLINE_ALERT_MARKER = 'data-inline-alert';
+// --toast-duration (design guide O3); no toast here carries an action, which would be 5s.
+const DISMISS_AFTER_MS = 3000;
 const REGIONS = '#toast-region, [data-toast-region]';
 
 const LIVE_BANNER_LAST = 'liveBannerLast';
@@ -60,11 +71,15 @@ function carriesToast(xhr: XMLHttpRequest | undefined): boolean {
   return xhr?.responseText?.includes(TOAST_MARKER) ?? false;
 }
 
+function carriesInlineAlert(xhr: XMLHttpRequest | undefined): boolean {
+  return xhr?.responseText?.includes(INLINE_ALERT_MARKER) ?? false;
+}
+
 function isErrorStatus(xhr: XMLHttpRequest | undefined): boolean {
   return (xhr?.status ?? 0) >= 400;
 }
 
-/** Appends a toast cloned from `#toast-template`; an identical message already on screen is not duplicated (polling failures). */
+/** Shows a toast cloned from `#toast-template`, replacing any other (one at a time, design guide O3); the message already on screen is not shown again (polling failures). */
 export function showToast(message: string): void {
   const target = region();
   const template = document.getElementById('toast-template');
@@ -79,7 +94,7 @@ export function showToast(message: string): void {
   const text = toast?.querySelector('[data-toast-message]');
   if (!toast || !text) return;
   text.textContent = message;
-  target.appendChild(toast);
+  target.replaceChildren(toast);
 }
 
 function statusMessage(status: number): string {
@@ -105,6 +120,8 @@ export function onBeforeSwap(event: Event): void {
   const detail = (event as CustomEvent<ResponseDetail>).detail;
   skipUnchangedLiveBanner(detail);
   if (!isErrorStatus(detail.xhr)) return;
+  // An inline alert is swapped where the response's HX-Retarget says (the form's error slot).
+  if (carriesInlineAlert(detail.xhr)) return;
   if (!carriesToast(detail.xhr)) {
     detail.shouldSwap = false;
     return;
@@ -141,7 +158,7 @@ export function onResponseError(event: Event): void {
     showToast(STALE_SESSION_MESSAGE);
     return;
   }
-  if (!carriesToast(xhr)) showToast(statusMessage(xhr?.status ?? 0));
+  if (!carriesToast(xhr) && !carriesInlineAlert(xhr)) showToast(statusMessage(xhr?.status ?? 0));
 }
 
 /** `htmx:sendError` / `htmx:timeout`: the request got no response at all. */
@@ -153,7 +170,8 @@ export function onNoResponse(): void {
 export function onClick(event: Event): void {
   const target = event.target;
   if (!(target instanceof Element)) return;
-  target.closest('[data-toast-dismiss]')?.closest('[data-toast]')?.remove();
+  const toast = target.closest('[data-toast-dismiss]')?.closest<HTMLElement>('[data-toast]');
+  if (toast) dismissToast(toast);
 }
 
 /** Re-shows the popover so it sits above any modal dialog opened since it was last shown. No-op without Popover API support, and for a region inside a dialog (already above the page). */
@@ -163,6 +181,37 @@ function raiseToastRegion(target: HTMLElement): void {
   target.showPopover();
 }
 
+/** Toast appearance (design guide §4/§5): opacity plus a small (8px) rise over 320ms ease-out; under reduced motion only a <=100ms fade. A no-op without the Web Animations API. */
+function animateToastIn(toast: HTMLElement): void {
+  if (typeof toast.animate !== 'function') return;
+  if (prefersReducedMotion()) {
+    toast.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REDUCED_FADE_MS });
+    return;
+  }
+  toast.animate(
+    [
+      { opacity: 0, transform: 'translateY(8px)' },
+      { opacity: 1, transform: 'translateY(0)' },
+    ],
+    { duration: MOTION_FADE_IN_MS, easing: EASE_OUT },
+  );
+}
+
+/** Removes `toast` after a fade-out (240ms ease-in; <=100ms under reduced motion). Without the Web Animations API it is removed at once. */
+export function dismissToast(toast: HTMLElement): void {
+  if (typeof toast.animate !== 'function' || !toast.isConnected) {
+    toast.remove();
+    return;
+  }
+  toast.removeAttribute(TOAST_MARKER);
+  toast.setAttribute('aria-hidden', 'true');
+  toast.animate([{ opacity: 1 }, { opacity: 0 }], {
+    duration: prefersReducedMotion() ? REDUCED_FADE_MS : MOTION_FADE_OUT_MS,
+    easing: EASE_IN,
+    fill: 'forwards',
+  }).onfinish = () => toast.remove();
+}
+
 /** Auto-dismisses `toast` after DISMISS_AFTER_MS, but never while the pointer is over it or focus is inside it (WCAG 2.2.1): the countdown restarts once both are gone. */
 function scheduleDismiss(toast: HTMLElement): void {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -170,7 +219,7 @@ function scheduleDismiss(toast: HTMLElement): void {
   let focused = false;
   const arm = () => {
     clearTimeout(timer);
-    if (!hovered && !focused) timer = setTimeout(() => toast.remove(), DISMISS_AFTER_MS);
+    if (!hovered && !focused) timer = setTimeout(() => dismissToast(toast), DISMISS_AFTER_MS);
   };
   toast.addEventListener('mouseenter', () => {
     hovered = true;
@@ -198,6 +247,7 @@ function onToastsAdded(target: HTMLElement, records: MutationRecord[]): void {
     for (const node of record.addedNodes) {
       if (node instanceof HTMLElement && node.hasAttribute(TOAST_MARKER)) {
         added = true;
+        animateToastIn(node);
         scheduleDismiss(node);
       }
     }
