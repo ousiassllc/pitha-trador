@@ -83,7 +83,7 @@ type ExperimentDetailProps struct {
 // before / after comparison. It only records and compares; it changes no
 // setting.
 templ Experiments(props ExperimentsProps) {
-	<section class="flex flex-col gap-3 rounded-md border border-border bg-bone p-4" data-testid="mcp-experiments">
+	<section class="flex flex-col gap-3 rounded-lg border border-border bg-bone p-4" data-testid="mcp-experiments">
 		<div class="flex items-center gap-2">
 			<h4 class="font-semibold text-ink">調整の実験（前後比較）</h4>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments", Label: "調整の実験の説明"}) {
@@ -208,7 +208,7 @@ templ experimentForm(settingNames []string) {
 // during the experiment besides its variable, the metrics before and after,
 // and the rejection reasons before and after.
 templ ExperimentDetail(props ExperimentDetailProps) {
-	<div class="flex flex-col gap-2 rounded-md bg-bone p-4" data-testid="mcp-experiment-comparison" data-experiment-id={ strconv.FormatInt(props.ID, 10) } data-verdict={ props.Verdict }>
+	<div class="flex flex-col gap-2 rounded-lg bg-bone p-4" data-testid="mcp-experiment-comparison" data-experiment-id={ strconv.FormatInt(props.ID, 10) } data-verdict={ props.Verdict }>
 		<span class="text-ink">実験 { strconv.FormatInt(props.ID, 10) } の前後比較</span>
 		<span>仮説: <span data-testid="mcp-experiment-detail-hypothesis">{ props.Hypothesis }</span></span>
 		<span>変えた変数: <code>{ props.Variable }</code> { props.Change }</span>

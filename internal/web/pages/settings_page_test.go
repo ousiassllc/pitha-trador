@@ -249,3 +249,11 @@ func TestSetupPage_ContinueLinkOnlyWhenComplete(t *testing.T) {
 		t.Errorf("the 続ける link must sit inside #setup-status so the OOB swap replaces it; body=%s", body)
 	}
 }
+
+// issue #974: the #update-panel target ring has the same radius as the card inside it.
+func TestSettingsPage_UpdatePanelRingMatchesTheCardRadius(t *testing.T) {
+	body := renderSettings(t, pages.SettingsProps{Dialogs: systemDialogs})
+	if !strings.Contains(body, `id="update-panel" class="scroll-mt-4 rounded-lg target:ring-1`) {
+		t.Errorf("#update-panel wrapper must be rounded-lg: %s", body)
+	}
+}

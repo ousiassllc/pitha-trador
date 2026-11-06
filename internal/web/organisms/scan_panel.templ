@@ -125,7 +125,7 @@ templ ScanFunnel(v ScanPanelView) {
 }
 
 templ funnelStep(label, hint, count, testID string) {
-	<li class="rounded-md border border-border bg-bone px-3 py-2">
+	<li class="rounded-lg border border-border bg-bone p-4">
 		<div class="text-xs text-mute">
 			{ label }
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-" + testID, Label: label + "の説明"}) {

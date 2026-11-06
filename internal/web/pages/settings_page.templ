@@ -212,7 +212,7 @@ templ SettingsPage(props SettingsProps) {
 				// (organisms.UpdatePanel) on load and swapped in place by its
 				// "今すぐアップデートを確認" button; `empty:hidden` keeps the
 				// not-yet-loaded wrapper from showing a bare ring.
-				<div id="update-panel" class="scroll-mt-4 rounded-md target:ring-1 target:ring-mute empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+				<div id="update-panel" class="scroll-mt-4 rounded-lg target:ring-1 target:ring-mute empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 			}
 		}
 		if props.Has("modal-error-log") {
