@@ -11,7 +11,7 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 // `days` (1/7/30/90, default 7) and `level` (error = ERROR only, default;
 // warn = WARN and ERROR) query parameters.
 templ ErrorLogPanel() {
-	<section id="error-log-panel" class="flex flex-col gap-2 rounded-md border border-border bg-surface p-4 text-sm text-mute" data-testid="error-log-panel">
+	<section id="error-log-panel" class="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-mute" data-testid="error-log-panel">
 		<h3 class="sr-only">エラーログ</h3>
 		<form method="get" action="/api/v1/logs/errors" hx-disable class="flex flex-wrap items-end gap-3" data-testid="error-log-form">
 			<label class="flex flex-col gap-1">

@@ -7,13 +7,13 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
-const blockClass = "min-w-0 rounded-lg border border-border bg-surface p-4 shadow-sm"
+const blockClass = "min-w-0 rounded-lg border border-border bg-surface p-4"
 
 // DetailsSection is the 今日の詳細 section (issue #896 §5.3), collapsible. The
 // summary is static; the body inside is re-fetched every 30 s, so a collapsed
 // section stays collapsed.
 templ DetailsSection(v View) {
-	<details class="mt-6" open data-testid="home-details-section">
+	<details class="mt-12" open data-testid="home-details-section">
 		<summary class="cursor-pointer text-lg font-semibold text-ink">今日の詳細</summary>
 		<div
 			id="home-details"

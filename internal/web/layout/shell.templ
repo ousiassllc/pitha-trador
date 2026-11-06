@@ -39,7 +39,7 @@ const htmxConfig = `{"allowEval":false,"allowScriptTags":false,"includeIndicator
 templ Shell(title string, current organisms.NavItem) {
 	@document(title) {
 		@organisms.Header(middleware.SystemStateFrom(ctx), current)
-		<main class="mx-auto max-w-6xl px-6 py-8">
+		<main class="mx-auto max-w-6xl px-4 py-8 lg:px-6">
 			{ children... }
 		</main>
 	}
@@ -53,7 +53,7 @@ templ Shell(title string, current organisms.NavItem) {
 // to `/setup` and swap a whole page into `#header-status`.
 templ SetupShell(title string) {
 	@document(title) {
-		<main class="mx-auto max-w-3xl px-6 py-8">
+		<main class="mx-auto max-w-3xl px-4 py-8 lg:px-6">
 			{ children... }
 		</main>
 	}

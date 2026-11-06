@@ -64,7 +64,7 @@ type PanelProps struct {
 // answer apart; it never trades. The promotion switches the live prompt and is
 // the only way a version becomes live.
 templ Panel(props PanelProps) {
-	<section class="flex flex-col gap-4 rounded-md border border-border bg-surface p-4 text-sm text-mute" data-testid="jev-prompt-panel">
+	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-mute" data-testid="jev-prompt-panel">
 		<h3 class="sr-only">Jev プロンプトの版とシャドー比較</h3>
 		if props.Notice != "" {
 			<p class="text-success" role="status" data-testid="jev-prompt-notice">{ props.Notice }</p>

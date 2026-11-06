@@ -136,7 +136,7 @@ type SettingsCardProps struct {
 // Modal. The button carries `aria-haspopup="dialog"`; the list item is
 // addressed in tests by `settings-card-<ID>`.
 templ SettingsCard(props SettingsCardProps) {
-	<li class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface p-4" data-testid={ "settings-card-" + props.ID }>
+	<li class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4" data-testid={ "settings-card-" + props.ID }>
 		<div class="flex min-w-0 flex-1 flex-col gap-1">
 			<span class="flex flex-wrap items-center gap-2 font-semibold text-ink">
 				{ props.Name }

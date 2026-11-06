@@ -45,7 +45,7 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap-cell {
     display: flex;
     flex-direction: column;
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     padding: 0.5rem;
     font-size: 0.75rem;
     /* The text color is set per cell (bucketColors) for contrast with its background. */
@@ -56,7 +56,7 @@ export const heatmapStyles = css`
     font-weight: 600;
   }
   .pitha-calibration-heatmap-cell .bucket-barrier {
-    margin-top: 0.125rem;
+    margin-top: 0.25rem;
   }
   .pitha-calibration-heatmap-summary {
     display: grid;

@@ -72,10 +72,9 @@ export const helpMarkStyles = css`
     max-width: 80vw;
     padding: 0.5rem;
     border: 1px solid var(--border);
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     background: var(--surface);
     color: var(--ink);
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
     font-size: 0.75rem;
     font-weight: 400;
     line-height: 1.625;

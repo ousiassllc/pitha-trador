@@ -83,7 +83,7 @@ type ExperimentDetailProps struct {
 // before / after comparison. It only records and compares; it changes no
 // setting.
 templ Experiments(props ExperimentsProps) {
-	<section class="flex flex-col gap-3 rounded-md border border-border p-3" data-testid="mcp-experiments">
+	<section class="flex flex-col gap-3 rounded-lg border border-border p-3" data-testid="mcp-experiments">
 		<div class="flex items-center gap-2">
 			<h4 class="font-semibold text-ink">調整の実験（前後比較）</h4>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments", Label: "調整の実験の説明"}) {
@@ -235,7 +235,7 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 			}
 		</div>
 		if len(props.Confounders) > 0 {
-			<ul class="list-disc pl-5 text-xs text-danger" data-testid="mcp-experiment-confounders">
+			<ul class="list-disc pl-6 text-xs text-danger" data-testid="mcp-experiment-confounders">
 				for _, c := range props.Confounders {
 					<li>{ c }</li>
 				}

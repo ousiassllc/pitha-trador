@@ -8,7 +8,7 @@ import (
 // PositionPanel is Symbol Detail's "Position" panel: the symbol's open
 // position as a one-row table, or a notice when position is nil.
 templ PositionPanel(position *domain.Position) {
-	<section class="mb-6 rounded-lg border border-border bg-surface p-6 shadow" id="position-panel" data-testid="position-panel">
+	<section class="mb-12 rounded-lg border border-border bg-surface p-6" id="position-panel" data-testid="position-panel">
 		<h2 class="text-lg font-semibold text-ink">ポジション</h2>
 		if position == nil {
 			<p class="mt-4 text-sm text-mute">保有中のポジションはありません。</p>
@@ -16,16 +16,16 @@ templ PositionPanel(position *domain.Position) {
 			<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="ポジション">
 				<thead>
 					<tr class="border-b border-border text-xs font-semibold uppercase text-mute">
-						<th scope="col" class="px-3 py-2">銘柄</th>
-						<th scope="col" class="px-3 py-2">売買</th>
-						<th scope="col" class="px-3 py-2 text-right">数量</th>
-						<th scope="col" class="px-3 py-2 text-right">建値</th>
-						<th scope="col" class="px-3 py-2 text-right">現在値</th>
-						<th scope="col" class="px-3 py-2 text-right">評価損益</th>
-						<th scope="col" class="px-3 py-2 text-right">実現損益</th>
-						<th scope="col" class="px-3 py-2">建玉日時</th>
-						<th scope="col" class="px-3 py-2">決済日時</th>
-						<th scope="col" class="px-3 py-2">決済理由・操作</th>
+						<th scope="col" class="px-3 py-2.5">銘柄</th>
+						<th scope="col" class="px-3 py-2.5">売買</th>
+						<th scope="col" class="px-3 py-2.5 text-right">数量</th>
+						<th scope="col" class="px-3 py-2.5 text-right">建値</th>
+						<th scope="col" class="px-3 py-2.5 text-right">現在値</th>
+						<th scope="col" class="px-3 py-2.5 text-right">評価損益</th>
+						<th scope="col" class="px-3 py-2.5 text-right">実現損益</th>
+						<th scope="col" class="px-3 py-2.5">建玉日時</th>
+						<th scope="col" class="px-3 py-2.5">決済日時</th>
+						<th scope="col" class="px-3 py-2.5">決済理由・操作</th>
 					</tr>
 				</thead>
 				<tbody>

@@ -13,3 +13,11 @@
 - 太さは Regular(400) と SemiBold(600) だけ。SemiBold は見出し・ボタン・表の見出し行に限る。ナビ・リンク・ラベル・値に `font-medium` / `font-bold` / 本文中の `font-semibold` を使わない（現在のナビ項目は `text-ink` の色で示す）
 - 表本文は `text-sm`、見出し行は `text-xs font-semibold`。数値列は `text-right font-mono tabular-nums`
 - 行間は `@theme` の `--text-*--line-height`（xs 1.6 / sm 1.7 / base 1.8 / lg 1.7）と `body { line-height: 1.8 }`。サイズは Tailwind の 12/14/16/18/24px を使い、スケール外の `text-xl`（20px）・`text-3xl`（30px）・`text-[10px]` は使わない
+
+## 形・余白・線（issue #942）
+
+- 角丸は `@theme` の `--radius-md|lg|xl` をガイドの `--r-md|lg|xl`（8 / 12 / 16px）に再定義し、`rounded-md`（入力・ボタン・入れ子パネル）・`rounded-lg`（カード・パネル）・`rounded-xl`（モーダル）をそのまま使う。Lit の `static styles` は 0.5rem
+- 影はモーダルだけ（`shadow-modal` = `--shadow-modal` 0 1px 2px rgba(0,0,0,.06)）。カード・ツールチップ・トーストは 1px の `border-border` で区切り、`shadow*` を付けない
+- 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact の 6px だけ例外）
+- ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`）
+- 空状態は `border border-dashed border-border`・`px-4 py-6`・`text-center text-mute`。ハッシュ到達時の強調は `target:ring-1 target:ring-mute`

@@ -37,7 +37,7 @@ const noValue = "—"
 // err is non-empty when the figures could not be read; the panel then
 // shows it instead of the metrics.
 templ PerformanceActualsPanel(perf PerformanceActuals, err string) {
-	<section class="mb-6 rounded-lg border border-border bg-surface p-6 shadow" data-testid="performance-actuals">
+	<section class="mb-12 rounded-lg border border-border bg-surface p-6" data-testid="performance-actuals">
 		<h2 class="text-lg font-semibold text-ink">
 			実績（Paper）
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-performance-actuals", Label: "実績（Paper）の説明"}) {

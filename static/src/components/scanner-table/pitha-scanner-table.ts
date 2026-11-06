@@ -172,7 +172,7 @@ export class PithaScannerTable extends LitElement {
         件
         ${renderLightHelpMark('help-scanner-count', '候補銘柄の説明', COUNT_HELP_TEXT)}
       </p>
-      <div class="overflow-x-auto rounded-md border border-border bg-surface">
+      <div class="overflow-x-auto rounded-lg border border-border bg-surface">
         <table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
           ${
             this.asOf
@@ -207,9 +207,8 @@ export class PithaScannerTable extends LitElement {
     const active = this.sortKey === column.key;
     const indicator = active ? (this.sortDirection === 'asc' ? ' ▲' : ' ▼') : '';
     return html`
-      <th
-        scope="col"
-        class="whitespace-nowrap px-3 py-2 ${column.numeric ? 'text-right' : ''}"
+      <th scope="col"
+        class="whitespace-nowrap px-3 py-2.5 ${column.numeric ? 'text-right' : ''}"
         aria-sort=${active ? (this.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         <button
@@ -234,7 +233,7 @@ export class PithaScannerTable extends LitElement {
     const numeric = 'px-3 py-2 text-right font-mono tabular-nums';
     return html`
       <tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol=${item.symbol}>
-        <td class="px-3 py-2">
+        <td class="px-3 py-2.5">
           <a class="text-accent underline-offset-2 hover:underline" href=${item.detail_url}>${item.symbol}</a>
         </td>
         <td class=${numeric}>${item.price.toFixed(1)}</td>
@@ -243,9 +242,9 @@ export class PithaScannerTable extends LitElement {
         <td class=${numeric}>${formatNullable(item.volume_ratio_5m, 2)}</td>
         <td class=${numeric}>${formatSigned(item.price_vs_vwap_bps, 0)}</td>
         <td class=${numeric}>${formatNullable(item.spread_bps, 0)}</td>
-        <td class="px-3 py-2">${directionBadge(item.jev_direction)}</td>
+        <td class="px-3 py-2.5">${directionBadge(item.jev_direction)}</td>
         <td class=${numeric}>${formatConfidence(item.jev_confidence)}</td>
-        <td class="px-3 py-2">${entryQualityBadge(item.entry_quality)}</td>
+        <td class="px-3 py-2.5">${entryQualityBadge(item.entry_quality)}</td>
         <td class=${numeric}>${formatNullable(item.current_position, 0)}</td>
       </tr>
     `;

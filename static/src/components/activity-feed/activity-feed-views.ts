@@ -8,25 +8,25 @@ import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 
 export function renderQueueStatus(queues: QueueStatus[]) {
   return html`
-    <section id="queue-status" data-testid="queue-status" class="mt-6">
+    <section id="queue-status" data-testid="queue-status" class="mt-12">
       <h2 class="mb-2 text-lg font-semibold text-ink">ジョブの状況</h2>
       <table class="w-full border-collapse text-left text-sm" aria-label="キュー状況">
         <thead>
           <tr class="border-b border-border text-xs font-semibold uppercase text-mute">
-            <th scope="col" class="px-3 py-2">キュー</th>
-            <th scope="col" class="px-3 py-2">待機中</th>
-            <th scope="col" class="px-3 py-2">実行中</th>
-            <th scope="col" class="px-3 py-2">失敗（直近）</th>
+            <th scope="col" class="px-3 py-2.5">キュー</th>
+            <th scope="col" class="px-3 py-2.5">待機中</th>
+            <th scope="col" class="px-3 py-2.5">実行中</th>
+            <th scope="col" class="px-3 py-2.5">失敗（直近）</th>
           </tr>
         </thead>
         <tbody>
           ${queues.map(
             (q) => html`
               <tr class="border-b border-border" data-queue=${q.queue}>
-                <td class="px-3 py-2 text-ink">${jobQueueLabel(q.queue)}</td>
-                <td class="px-3 py-2">${q.pending}</td>
-                <td class="px-3 py-2">${q.running}</td>
-                <td class="px-3 py-2">${q.failed_recent}</td>
+                <td class="px-3 py-2.5 text-ink">${jobQueueLabel(q.queue)}</td>
+                <td class="px-3 py-2.5">${q.pending}</td>
+                <td class="px-3 py-2.5">${q.running}</td>
+                <td class="px-3 py-2.5">${q.failed_recent}</td>
               </tr>
             `,
           )}
@@ -44,7 +44,7 @@ export function renderKillSwitchEvents(
   error: string | null,
 ) {
   return html`
-    <section id="kill-switch-events" data-testid="kill-switch-events" class="mt-6">
+    <section id="kill-switch-events" data-testid="kill-switch-events" class="mt-12">
       <h2 class="mb-2 text-lg font-semibold text-ink">最近の Kill Switch</h2>
       ${
         error

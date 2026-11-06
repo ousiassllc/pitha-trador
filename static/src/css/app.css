@@ -66,6 +66,17 @@
   --text-base--line-height: 1.8;
   --text-lg--line-height: 1.7;
   --text-2xl--line-height: 1.5;
+
+  /* Radii (brand-guide §3): md 8 (input, button), lg 12 (card), xl 16 (modal).
+     Tailwind's own md/lg/xl are 6/8/12px, so `rounded-md|lg|xl` are redefined
+     to the guide's --r-md|lg|xl rather than adding parallel names. */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* The only shadow in the product (brand-guide §3): the modal. Cards, tooltips
+     and toasts are separated by a 1px border and carry no shadow. */
+  --shadow-modal: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 @theme inline {

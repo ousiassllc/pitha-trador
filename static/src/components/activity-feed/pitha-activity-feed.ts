@@ -222,7 +222,7 @@ export class PithaActivityFeed extends LitElement {
 
       ${this.renderKillSwitchEvents()}
 
-      <section id="activity-feed" data-testid="activity-feed" class="mt-6">
+      <section id="activity-feed" data-testid="activity-feed" class="mt-12">
         <h2 class="mb-2 text-lg font-semibold text-ink">最近の動き</h2>
         <div class="mb-2 flex gap-4 text-sm">
           <label>
@@ -244,22 +244,22 @@ export class PithaActivityFeed extends LitElement {
           ${this.asOf ? html`<caption class="mb-2 text-left text-sm text-mute">${formatJstDateTime(this.asOf)} 時点</caption>` : nothing}
           <thead>
             <tr class="border-b border-border text-xs font-semibold text-mute">
-              <th scope="col" class="px-3 py-2">時刻</th>
-              <th scope="col" class="px-3 py-2">種別</th>
-              <th scope="col" class="px-3 py-2">銘柄</th>
-              <th scope="col" class="px-3 py-2">内容</th>
-              <th scope="col" class="px-3 py-2">応答時間（ms）</th>
+              <th scope="col" class="px-3 py-2.5">時刻</th>
+              <th scope="col" class="px-3 py-2.5">種別</th>
+              <th scope="col" class="px-3 py-2.5">銘柄</th>
+              <th scope="col" class="px-3 py-2.5">内容</th>
+              <th scope="col" class="px-3 py-2.5">応答時間（ms）</th>
             </tr>
           </thead>
           <tbody>
             ${this.events.map(
               (e) => html`
                 <tr class="border-b border-border" data-event-type=${e.type}>
-                  <td class="px-3 py-2">${formatJstDateTime(e.timestamp)}</td>
-                  <td class="px-3 py-2 text-ink">${activityTypeLabel(e.type)}</td>
-                  <td class="px-3 py-2">${e.symbol ?? '—'}</td>
-                  <td class="px-3 py-2">${activityDetail(e.type, e.detail)}</td>
-                  <td class="px-3 py-2">${e.latency_ms ?? '—'}</td>
+                  <td class="px-3 py-2.5">${formatJstDateTime(e.timestamp)}</td>
+                  <td class="px-3 py-2.5 text-ink">${activityTypeLabel(e.type)}</td>
+                  <td class="px-3 py-2.5">${e.symbol ?? '—'}</td>
+                  <td class="px-3 py-2.5">${activityDetail(e.type, e.detail)}</td>
+                  <td class="px-3 py-2.5">${e.latency_ms ?? '—'}</td>
                 </tr>
               `,
             )}
