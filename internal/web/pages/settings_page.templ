@@ -53,7 +53,7 @@ func (p SettingsProps) hasSystem() bool {
 templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Link) {
 	@layout.Shell("設定", organisms.NavSettings) {
 		<h1 class="text-3xl font-semibold text-ink">設定</h1>
-		<div class="mt-6 flex flex-col gap-6" data-testid="settings-hub" data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
+		<div class="mt-6 flex flex-col gap-12" data-testid="settings-hub" data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			<ul class="flex flex-col gap-3" data-testid="settings-page-list">
 				for _, p := range pageList {
 					@molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{
@@ -103,7 +103,7 @@ templ SettingsPage(props SettingsProps) {
 			<span aria-current="page">{ props.Page.Name }</span>
 		</nav>
 		<h1 class="mt-2 text-3xl font-semibold text-ink">{ props.Page.Name }</h1>
-		<div class="mt-6 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID } data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
+		<div class="mt-6 flex flex-col gap-12" data-testid="settings-form" data-settings-page={ props.Page.ID } data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			if len(props.Connections) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
 					<h2 id="settings-connections-heading" class="flex items-center gap-2 text-xl font-semibold text-ink">

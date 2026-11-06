@@ -40,7 +40,7 @@ type SettingFieldRowProps struct {
 // button is rendered only while a value is stored.
 templ SettingFieldRow(props SettingFieldRowProps) {
 	<form
-		class="flex flex-col gap-1 text-sm text-mute"
+		class="flex flex-col gap-2 text-sm text-mute"
 		method="post"
 		action={ templ.SafeURL("/ops-settings/" + props.Key) }
 		hx-post={ "/ops-settings/" + props.Key }

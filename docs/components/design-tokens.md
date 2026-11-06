@@ -23,7 +23,8 @@
 - ツールチップは `rounded-sm`・12px・padding 6×10（`px-2.5 py-1.5`、Lit は `0.375rem 0.625rem`）
 - 影はモーダルだけ（`shadow-modal` = `--shadow-modal` 0 1px 2px rgba(0,0,0,.06)）。カード・ツールチップ・トーストは 1px の `border-border` で区切り、`shadow*` を付けない
 - 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）の 2 種類。SSR と Lit で同じ値にし、`pr-N` だけの指定はしない。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact の 6px だけ例外）
-- ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`）。ページの h1 の下は 24px（`mt-6`）、節の h2 の下は 24px（`mb-6`）、h3 の下は 12px（`mb-3`）
+- ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`、設定画面の節どうしは `gap-12`）。ページの h1 の下は 24px（`mt-6`）、節の h2 の下は 24px（`mb-6`）、h3 の下は 12px（`mb-3`）
+- フォームはラベル→入力が 8px（`flex flex-col gap-2` / `mt-2`）、入力→補足が 4px（`gap-1` / `mt-1`）。メニュー・ナビ項目は項目間 8px（`gap-x-2`）・高さ 40px（`min-h-10`）・左右 12px（`px-3`）で、メインナビ（`organisms/header_nav.templ`）とタブ（`molecules/tab_nav.templ`）が同じレシピ
 - 空状態は `rounded-lg border border-dashed border-border`・`px-6 py-12`（上下 48 / 左右 24）・`text-center text-mute`。ハッシュ到達時の強調は `target:ring-1 target:ring-mute`
 
 ## アイコン（issue #943）

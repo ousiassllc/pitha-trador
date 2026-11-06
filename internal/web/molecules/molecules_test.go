@@ -150,3 +150,15 @@ func TestSettingGroupDerived_WarningLabelIsRegular(t *testing.T) {
 		t.Errorf("the 注意: label must be Regular: %s", row)
 	}
 }
+
+// A row's label sits 8 above its field (brand-guide §3: label→input 6〜8).
+func TestFieldRows_LabelIsEightAboveTheField(t *testing.T) {
+	for name, html := range map[string]string{
+		"setting": render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "k", Label: "L"})),
+		"secret":  render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "k", Label: "L"})),
+	} {
+		if !strings.Contains(html, `class="flex flex-col gap-2 text-sm text-mute"`) {
+			t.Errorf("%s row must be gap-2 between label and field: %s", name, html)
+		}
+	}
+}

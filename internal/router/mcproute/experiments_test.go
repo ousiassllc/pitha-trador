@@ -218,3 +218,16 @@ func TestExperimentFormHypothesisDrawsTheFocusRing(t *testing.T) {
 		}
 	}
 }
+
+// Every label of the form sits 8 above its field (brand-guide §3).
+func TestExperimentFormLabelsAreEightAboveTheirFields(t *testing.T) {
+	a, _ := newExperimentsApp(t)
+
+	body := a.get("/settings/mcp/experiments").Body.String()
+	if n := strings.Count(body, `<label class="flex flex-col gap-2">`); n != 6 {
+		t.Errorf("labels with gap-2 = %d, want 6: %s", n, body)
+	}
+	if strings.Contains(body, `<label class="flex flex-col gap-1">`) {
+		t.Errorf("a label must not sit 4 above its field: %s", body)
+	}
+}
