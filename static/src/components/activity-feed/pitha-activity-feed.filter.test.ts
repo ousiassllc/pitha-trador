@@ -134,3 +134,15 @@ describe('pitha-activity-feed queue table', () => {
     }
   });
 });
+
+describe('pitha-activity-feed queue block', () => {
+  // The first block under the page h1 sits 24 below it (brand-guide §3), like
+  // the SSR panel in organisms/queue_status_panel.templ (issue #959).
+  test('sits 24 under the h1', async () => {
+    const { el } = await mount([queue()], []);
+
+    const section = el.querySelector('#queue-status');
+    expect(section?.classList.contains('mt-6')).toBe(true);
+    expect(section?.classList.contains('mt-12')).toBe(false);
+  });
+});
