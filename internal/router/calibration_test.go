@@ -17,7 +17,7 @@ func TestNew_CalibrationPageInjectsHeatmapURL(t *testing.T) {
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/calibration", nil))
 
-	if !strings.Contains(rec.Body.String(), `<pitha-calibration-heatmap calibration-url="/api/v1/calibration">`) {
+	if !strings.Contains(rec.Body.String(), `<pitha-calibration-heatmap class="mt-12" calibration-url="/api/v1/calibration">`) {
 		t.Fatalf("expected the heatmap to receive calibration-url, got %q", rec.Body.String())
 	}
 }

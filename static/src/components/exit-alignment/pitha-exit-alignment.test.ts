@@ -181,3 +181,17 @@ describe('pitha-exit-alignment heading spacing', () => {
     expect(css).toMatch(/h3\s*\{[^}]*margin:\s*0\.75rem 0;/);
   });
 });
+
+// Issue #969: the headings step down the type scale (h2 = xl 24px, h3 = lg 18px), not both 16px.
+describe('pitha-exit-alignment heading sizes', () => {
+  test('sets the h2 to 1.5rem and the h3 to 1.125rem', async () => {
+    const el = await mount(body());
+    const css = (
+      el.constructor as unknown as { elementStyles: { cssText: string }[] }
+    ).elementStyles
+      .map((s) => s.cssText)
+      .join('');
+    expect(css).toMatch(/h2\s*\{[^}]*font-size:\s*1\.5rem;/);
+    expect(css).toMatch(/h3\s*\{[^}]*font-size:\s*1\.125rem;/);
+  });
+});

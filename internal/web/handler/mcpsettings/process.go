@@ -58,34 +58,37 @@ func (h *Handler) process(c *gin.Context, done string, run func(ctx context.Cont
 	h.render(c, done, "")
 }
 
-// processFailure maps proc's fixed errors to a status and a fixed sentence.
+// processFailure maps proc's fixed errors to a status and a one-line toast
+// sentence (design guide O3: a toast states the fact only). The reason in
+// detail and the remedy are worded in the panel (stateNote, which the
+// HX-Trigger mcp-refresh reloads).
 func processFailure(err error) (int, string) {
 	switch {
 	case errors.Is(err, proc.ErrAlreadyRunning):
-		return http.StatusConflict, "すでに起動しています（二重には起動しません）。"
+		return http.StatusConflict, "すでに起動しています。"
 	case errors.Is(err, proc.ErrAlreadyListening):
-		return http.StatusConflict, "この待受アドレスでは、すでに MCP が応答しています（アプリの外で起動されたものです）。二重には起動しません。"
+		return http.StatusConflict, "すでに別の MCP が応答しています。"
 	case errors.Is(err, proc.ErrNotManaged):
-		return http.StatusConflict, "このアプリが起動した MCP ではないため、この画面からは停止できません。"
+		return http.StatusConflict, "この画面からは停止できません。"
 	case errors.Is(err, proc.ErrNotRunning):
 		return http.StatusConflict, "起動していません。"
 	case errors.Is(err, proc.ErrExeMissing):
-		return http.StatusConflict, "paper-results-mcp の実行ファイルが見つかりません。アプリ本体と同じフォルダに置いてください。"
+		return http.StatusConflict, "実行ファイルが見つかりません。"
 	case errors.Is(err, proc.ErrClosed):
-		return http.StatusConflict, "アプリを終了しているため、起動できません。"
+		return http.StatusConflict, "アプリの終了中は起動できません。"
 	case errors.Is(err, proc.ErrDisabled):
-		return http.StatusUnprocessableEntity, "MCP が無効です。有効にして保存してから起動してください。"
+		return http.StatusUnprocessableEntity, "MCP が無効です。"
 	case errors.Is(err, proc.ErrNoKey):
-		return http.StatusUnprocessableEntity, "API キーが未設定です。キーを生成してから起動してください。"
+		return http.StatusUnprocessableEntity, "API キーが未設定です。"
 	case errors.Is(err, proc.ErrSettingsUnusable):
-		return http.StatusUnprocessableEntity, "設定ファイルを使えないため起動できません。保存または API キーの生成で作り直してください。"
+		return http.StatusUnprocessableEntity, "設定ファイルを使えません。"
 	case errors.Is(err, proc.ErrAccessIncomplete):
-		return http.StatusUnprocessableEntity, "Cloudflare Access のオリジン照合が有効なのに ID またはシークレットが空のため、起動できません。"
+		return http.StatusUnprocessableEntity, "Access の認証情報が空です。"
 	case errors.Is(err, settings.ErrListenNotAllowed):
-		return http.StatusUnprocessableEntity, "保存されている待受アドレスが許可範囲外のため起動できません。許可されたアドレスで保存し直してください。"
+		return http.StatusUnprocessableEntity, "待受アドレスが許可範囲外です。"
 	case errors.Is(err, proc.ErrExitedEarly):
-		return http.StatusInternalServerError, "起動しましたが、すぐに終了しました。状態表示の理由を確認してください。"
+		return http.StatusInternalServerError, "起動後すぐに終了しました。"
 	default:
-		return http.StatusInternalServerError, "MCP を起動できませんでした。状態表示の理由を確認してください。"
+		return http.StatusInternalServerError, "起動できませんでした。"
 	}
 }
