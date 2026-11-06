@@ -257,3 +257,16 @@ func TestSettingsPage_UpdatePanelRingMatchesTheCardRadius(t *testing.T) {
 		t.Errorf("#update-panel wrapper must be rounded-lg: %s", body)
 	}
 }
+
+// issue #985 (C6): the setup steps are the page's main guidance, not an
+// auxiliary caption, so the paragraph is text-ink rather than text-mute.
+func TestSetupPage_StepsParagraphIsInk(t *testing.T) {
+	body := renderPage(t, pages.SetupPage(pages.SetupProps{}))
+	form := strings.Index(body, `data-testid="setup-form"`)
+	if form < 0 {
+		t.Fatalf("SetupPage lacks setup-form: %s", body)
+	}
+	if !strings.Contains(body[form:], `<p class="text-sm text-ink">`) {
+		t.Errorf("setup steps paragraph must be text-sm text-ink: %s", body[form:])
+	}
+}
