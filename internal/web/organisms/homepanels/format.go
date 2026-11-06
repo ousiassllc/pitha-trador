@@ -63,11 +63,11 @@ func groupDigits(n int64) string {
 func PnLClass(v float64) string {
 	switch n := math.Round(v); {
 	case n > 0:
-		return "text-emerald-700"
+		return "text-success"
 	case n < 0:
-		return "text-red-700"
+		return "text-danger"
 	}
-	return "text-slate-700"
+	return "text-ink"
 }
 
 // FormatHeld renders how long a position has been held: "45分", "2時間5分",

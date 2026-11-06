@@ -41,7 +41,7 @@ type UpdatePanelProps struct {
 // shows, since a check that finds an installer downloads it before the app
 // restarts.
 templ UpdatePanel(props UpdatePanelProps) {
-	<section class="flex flex-col gap-2 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="update-panel">
+	<section class="flex flex-col gap-2 rounded-md border border-border bg-surface p-4 text-sm text-mute" data-testid="update-panel">
 		<h3 class="sr-only">アップデート</h3>
 		<p>現在のバージョン: { props.CurrentVersion }</p>
 		if props.Unavailable {
@@ -70,9 +70,9 @@ templ UpdatePanel(props UpdatePanelProps) {
 				}
 			</p>
 			if props.Ready {
-				<p class="text-emerald-700" data-testid="update-ready">インストーラーの検証が完了しました。まもなくアプリが再起動して更新されます。</p>
+				<p class="text-success" data-testid="update-ready">インストーラーの検証が完了しました。まもなくアプリが再起動して更新されます。</p>
 			} else if props.Blocked {
-				<p class="text-amber-700" data-testid="update-blocked">
+				<p class="text-warning" data-testid="update-blocked">
 					安全条件が揃っていないため更新を保留しています（{ props.BlockedReason }）。
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-update-blocked", Label: "更新の保留の説明"}) {
 						条件が揃い次第、自動的に更新・再起動されます（6時間ごとの定期確認で再確認します。「今すぐアップデートを確認」でも確認できます）。
@@ -80,7 +80,7 @@ templ UpdatePanel(props UpdatePanelProps) {
 				</p>
 			}
 			if props.Failed {
-				<p class="text-red-700" data-testid="update-check-error">
+				<p class="text-danger" data-testid="update-check-error">
 					if props.Available {
 						直近の更新の準備に失敗しました（原因: { props.ErrorReason }）。
 						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-update-retry", Label: "再試行の説明"}) {
@@ -106,7 +106,7 @@ templ UpdatePanel(props UpdatePanelProps) {
 				}
 				<span
 					id="update-check-progress"
-					class="hidden text-slate-500 [&.htmx-request]:inline"
+					class="hidden text-mute [&.htmx-request]:inline"
 					role="status"
 					aria-live="polite"
 					data-testid="update-check-progress"

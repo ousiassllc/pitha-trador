@@ -27,7 +27,7 @@ templ SettingGroupList(groups []molecules.SettingGroupProps) {
 	for _, group := range groups {
 		@molecules.Modal(group.ModalID(), group.Name) {
 			if group.Note != "" {
-				<div class="flex items-center gap-1 text-sm text-slate-600" data-testid={ group.ModalID() + "-note" }>
+				<div class="flex items-center gap-1 text-sm text-mute" data-testid={ group.ModalID() + "-note" }>
 					反映のタイミングと注意事項
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-" + group.ID + "-note", Label: group.Name + "の反映のタイミングと注意事項"}) {
 						{ group.Note }

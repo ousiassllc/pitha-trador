@@ -4,15 +4,15 @@ package atoms
 type ButtonVariant string
 
 const (
-	// ButtonPrimary is the solid blue call-to-action.
+	// ButtonPrimary is the solid ink (--accent) call-to-action.
 	ButtonPrimary ButtonVariant = "primary"
-	// ButtonDanger is the solid red destructive action (e.g. closing a position).
+	// ButtonDanger is the solid --danger destructive action (e.g. closing a position).
 	ButtonDanger ButtonVariant = "danger"
 	// ButtonSecondary is the neutral bordered button (refresh, paging, close).
 	ButtonSecondary ButtonVariant = "secondary"
-	// ButtonOutline is the blue-bordered button for opening a dialog/panel.
+	// ButtonOutline is the bordered neutral button for opening a dialog/panel.
 	ButtonOutline ButtonVariant = "outline"
-	// ButtonDangerOutline is the red-bordered destructive action (delete).
+	// ButtonDangerOutline is the --danger-bordered destructive action (delete).
 	ButtonDangerOutline ButtonVariant = "danger-outline"
 )
 
@@ -62,7 +62,7 @@ func buttonType(t string) string {
 }
 
 func buttonClass(props ButtonProps) string {
-	const base = "inline-block rounded-md font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
+	const base = "inline-block rounded-md font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-50"
 	size := "px-4 py-2 text-sm"
 	if props.Size == ButtonSmall {
 		size = "px-3 py-1 text-xs"
@@ -70,15 +70,15 @@ func buttonClass(props ButtonProps) string {
 	var color string
 	switch props.Variant {
 	case ButtonDanger:
-		color = "bg-red-600 text-white"
+		color = "bg-danger text-bone"
 	case ButtonSecondary:
-		color = "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+		color = "border border-border bg-surface text-ink hover:bg-accent-soft"
 	case ButtonOutline:
-		color = "border border-blue-600 text-blue-700 hover:bg-blue-50"
+		color = "border border-border text-ink hover:bg-accent-soft"
 	case ButtonDangerOutline:
-		color = "border border-red-300 text-red-700 hover:bg-red-50"
+		color = "border border-danger/40 text-danger hover:bg-danger/10"
 	default:
-		color = "bg-blue-600 text-white"
+		color = "bg-accent text-bone"
 	}
 	return base + " " + size + " " + color
 }

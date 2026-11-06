@@ -57,7 +57,7 @@ export class PithaPriceChart extends LitElement {
       }
       .pitha-price-chart-empty {
         margin: 0;
-        color: #475569;
+        color: var(--mute);
         font-size: 0.875rem;
       }
     `,

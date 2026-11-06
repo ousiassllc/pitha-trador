@@ -34,17 +34,17 @@ export class PithaExitAlignment extends LitElement {
       }
       th,
       td {
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--border);
         padding: 0.25rem 0.5rem;
         text-align: left;
       }
       .warnings {
         margin: 0;
         padding: 0.5rem 1rem;
-        border: 1px solid #f59e0b;
+        border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
         border-radius: 0.375rem;
-        background: #fffbeb;
-        color: #92400e;
+        background: color-mix(in srgb, var(--warning) 10%, transparent);
+        color: var(--warning);
         font-size: 0.875rem;
       }
       .summary {
@@ -55,7 +55,7 @@ export class PithaExitAlignment extends LitElement {
         font-size: 0.875rem;
       }
       .summary dt {
-        color: #475569;
+        color: var(--mute);
       }
       .summary dd {
         margin: 0;

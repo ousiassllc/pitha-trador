@@ -9,16 +9,16 @@ import { css } from 'lit';
 export const buttonStyles = css`
   button {
     cursor: pointer;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--border);
     border-radius: 0.375rem;
-    background: #ffffff;
-    color: #0f172a;
+    background: var(--surface);
+    color: var(--ink);
     padding: 0.25rem 0.75rem;
     font: inherit;
     font-size: 0.875rem;
   }
   button:hover:not(:disabled) {
-    background: #f1f5f9;
+    background: var(--accent-soft);
   }
   button:disabled {
     cursor: not-allowed;
@@ -31,17 +31,17 @@ export const buttonStyles = css`
 export const noticeStyles = css`
   [role='alert'] {
     margin: 0;
-    color: #b91c1c;
+    color: var(--danger);
     font-size: 0.875rem;
   }
   .pitha-ws-disconnected {
     margin: 0;
-    color: #b45309;
+    color: var(--warning);
     font-size: 0.75rem;
   }
 `;
 
 // Tailwind counterparts of `noticeStyles` for the light-DOM components
 // (issue #355). Kept as whole literals so Tailwind's source scan emits them.
-export const lightDomErrorClass = 'text-sm text-red-700';
-export const lightDomWsNoticeClass = 'text-xs text-amber-700';
+export const lightDomErrorClass = 'text-sm text-danger';
+export const lightDomWsNoticeClass = 'text-xs text-warning';

@@ -7,18 +7,18 @@ templ scanOption(value, label string, selected bool) {
 }
 
 templ scanRow(s domain.ScanSymbol, scout domain.ScoutOutcome) {
-	<tr class="border-b border-slate-100 align-top last:border-b-0 hover:bg-slate-50" data-symbol={ s.Symbol } data-status={ string(s.Status()) }>
+	<tr class="border-b border-border align-top last:border-b-0 hover:bg-accent-soft" data-symbol={ s.Symbol } data-status={ string(s.Status()) }>
 		<td class="px-3 py-2 font-medium">
-			<a class="text-sky-700 underline-offset-2 hover:underline" href={ SymbolHref(s.Symbol) }>{ s.Symbol }</a>
+			<a class="text-accent underline-offset-2 hover:underline" href={ SymbolHref(s.Symbol) }>{ s.Symbol }</a>
 		</td>
 		<td class="px-3 py-2">{ s.Name }</td>
 		<td class="whitespace-nowrap px-3 py-2">{ s.Market }</td>
 		<td class="whitespace-nowrap px-3 py-2">
 			<span class={ "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium", scanStatusClass(s.Status()) }>{ scanStatusLabel(s.Status()) }</span>
 		</td>
-		<td class="px-3 py-2 text-xs text-slate-700">
+		<td class="px-3 py-2 text-xs text-ink">
 			if reasons := s.Reasons.List(); len(reasons) == 0 {
-				<span class="text-slate-400">—</span>
+				<span class="text-mute">—</span>
 			} else {
 				<ul>
 					for _, r := range reasons {
@@ -45,11 +45,11 @@ func scanStatusLabel(s domain.ScanStatus) string {
 func scanStatusClass(s domain.ScanStatus) string {
 	switch s {
 	case domain.ScanStatusPassed:
-		return "bg-green-100 text-green-800"
+		return "border tone-success"
 	case domain.ScanStatusMissing:
-		return "bg-amber-100 text-amber-800"
+		return "border tone-warning"
 	default:
-		return "bg-gray-100 text-gray-600"
+		return "border tone-mute"
 	}
 }
 

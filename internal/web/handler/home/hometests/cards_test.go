@@ -55,7 +55,7 @@ func TestPnL_LossIsRedAndNegative(t *testing.T) {
 	if got := inner(t, body, "pnl-total"); got != "-7,000円" {
 		t.Errorf("total = %q, want -7,000円", got)
 	}
-	if !strings.Contains(body, "text-red-700") {
+	if !strings.Contains(body, "text-danger") {
 		t.Errorf("a loss must be red: %s", body)
 	}
 }

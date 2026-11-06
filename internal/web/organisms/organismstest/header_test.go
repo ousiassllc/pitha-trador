@@ -81,7 +81,7 @@ func TestMainNav_MarksOnlyCurrent(t *testing.T) {
 	if !regexp.MustCompile(`<a[^>]*href="/performance"[^>]*aria-current="page"[^>]*>成績</a>`).MatchString(html) {
 		t.Errorf("aria-current not on 成績 link: %s", html)
 	}
-	if !regexp.MustCompile(`class="font-semibold text-slate-900"[^>]*href="/performance"`).MatchString(html) {
+	if !regexp.MustCompile(`class="font-semibold text-ink"[^>]*href="/performance"`).MatchString(html) {
 		t.Errorf("current link not emphasised: %s", html)
 	}
 	if strings.Contains(renderComponent(t, organisms.MainNav(organisms.NavNone)), "aria-current") {

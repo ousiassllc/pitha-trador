@@ -42,10 +42,10 @@ export const helpMarkStyles = css`
     width: 1rem;
     height: 1rem;
     padding: 0;
-    border: 1px solid #94a3b8;
+    border: 1px solid var(--border);
     border-radius: 9999px;
-    background: #ffffff;
-    color: #475569;
+    background: var(--surface);
+    color: var(--mute);
     font: inherit;
     font-size: 10px;
     font-weight: 600;
@@ -53,12 +53,12 @@ export const helpMarkStyles = css`
     cursor: help;
   }
   .help-mark-button:hover {
-    border-color: #475569;
-    color: #0f172a;
-    background: #ffffff;
+    border-color: var(--ink);
+    color: var(--ink);
+    background: var(--surface);
   }
   .help-mark-button:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
   .help-mark-text {
@@ -71,10 +71,10 @@ export const helpMarkStyles = css`
     width: 18rem;
     max-width: 80vw;
     padding: 0.5rem;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--border);
     border-radius: 0.375rem;
-    background: #ffffff;
-    color: #334155;
+    background: var(--surface);
+    color: var(--ink);
     box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
     font-size: 0.75rem;
     font-weight: 400;

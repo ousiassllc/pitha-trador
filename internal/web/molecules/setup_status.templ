@@ -14,7 +14,7 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 templ SetupStatus(complete bool, oob bool) {
 	if complete {
 		<div id="setup-status" class="mt-6" { oobAttrs(oob)... }>
-			<p class="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800" role="status" data-testid="setup-complete">
+			<p class="rounded-md border tone-success px-4 py-3 text-sm" role="status" data-testid="setup-complete">
 				必須項目はすべて設定済みです。
 			</p>
 			<div class="mt-4">
@@ -25,7 +25,7 @@ templ SetupStatus(complete bool, oob bool) {
 		</div>
 	} else {
 		<div id="setup-status" class="mt-6" { oobAttrs(oob)... }>
-			<p class="text-sm text-slate-600" data-testid="setup-incomplete">
+			<p class="text-sm text-mute" data-testid="setup-incomplete">
 				必須項目をすべて保存すると、通常の画面へ進めます。
 			</p>
 		</div>

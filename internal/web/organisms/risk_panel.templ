@@ -18,35 +18,35 @@ type RiskParams struct {
 // RiskPanel is Symbol Detail's "Risk" panel: allowed position size, stop
 // loss and take profit.
 templ RiskPanel(p RiskParams) {
-	<section class="mb-6 rounded-lg border border-slate-200 bg-white p-6 shadow" id="risk-panel" data-testid="risk-panel">
-		<h2 class="text-lg font-semibold text-slate-900">リスク</h2>
+	<section class="mb-6 rounded-lg border border-border bg-surface p-6 shadow" id="risk-panel" data-testid="risk-panel">
+		<h2 class="text-lg font-semibold text-ink">リスク</h2>
 		<dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
 			<div>
-				<dt class="text-sm text-slate-500">
+				<dt class="text-sm text-mute">
 					許容ポジション
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-allowed-position", Label: "許容ポジションの説明"}) {
 						いま新規エントリーした場合に、この銘柄で持てるポジションの大きさです（口座資産に対する割合）。
 					}
 				</dt>
-				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", p.AllowedPositionPct) }</dd>
+				<dd class="text-sm font-medium text-ink">{ fmt.Sprintf("%.2f%%", p.AllowedPositionPct) }</dd>
 			</div>
 			<div>
-				<dt class="text-sm text-slate-500">
+				<dt class="text-sm text-mute">
 					損切り水準
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-stop", Label: "損切り水準の説明"}) {
 						建値からこの割合だけ不利に動いたら損切りする水準です。
 					}
 				</dt>
-				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", p.StopLossPct) }</dd>
+				<dd class="text-sm font-medium text-ink">{ fmt.Sprintf("%.2f%%", p.StopLossPct) }</dd>
 			</div>
 			<div>
-				<dt class="text-sm text-slate-500">
+				<dt class="text-sm text-mute">
 					利確水準
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-risk-take-profit", Label: "利確水準の説明"}) {
 						建値からこの割合だけ有利に動いたら利益確定する水準です。
 					}
 				</dt>
-				<dd class="text-sm font-medium text-slate-900">{ fmt.Sprintf("%.2f%%", p.TakeProfitPct) }</dd>
+				<dd class="text-sm font-medium text-ink">{ fmt.Sprintf("%.2f%%", p.TakeProfitPct) }</dd>
 			</div>
 		</dl>
 	</section>

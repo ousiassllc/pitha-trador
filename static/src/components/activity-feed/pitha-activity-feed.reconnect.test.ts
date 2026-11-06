@@ -143,7 +143,7 @@ describe('pitha-activity-feed reconnect resync', () => {
     await el.updateComplete;
 
     const notice = el.querySelector('.pitha-ws-disconnected');
-    expect(notice?.classList.contains('text-amber-700')).toBe(true);
+    expect(notice?.classList.contains('text-warning')).toBe(true);
     expect(notice?.classList.contains('text-xs')).toBe(true);
   });
 });

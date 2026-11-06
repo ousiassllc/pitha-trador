@@ -86,13 +86,13 @@ export class PithaKillSwitchPanel extends LitElement {
         white-space: nowrap;
       }
       button.pitha-kill-switch-panel-kill {
-        border-color: #b91c1c;
-        background: #dc2626;
-        color: #ffffff;
+        border-color: var(--danger);
+        background: var(--danger);
+        color: var(--bone);
         font-weight: 600;
       }
       button.pitha-kill-switch-panel-kill:hover:not(:disabled) {
-        background: #b91c1c;
+        background: color-mix(in srgb, var(--danger) 85%, var(--ink));
       }
     `,
   ];

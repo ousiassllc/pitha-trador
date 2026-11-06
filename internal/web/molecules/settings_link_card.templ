@@ -17,11 +17,11 @@ type SettingsLinkCardProps struct {
 // is a link to another page instead of one that opens a dialog. The list item
 // is addressed in tests by `settings-link-<ID>`.
 templ SettingsLinkCard(props SettingsLinkCardProps) {
-	<li class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-4" data-testid={ "settings-link-" + props.ID }>
+	<li class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface p-4" data-testid={ "settings-link-" + props.ID }>
 		<div class="flex min-w-0 flex-1 flex-col gap-1">
-			<span class="font-semibold text-slate-900">{ props.Name }</span>
+			<span class="font-semibold text-ink">{ props.Name }</span>
 			if props.Description != "" {
-				<p class="text-sm text-slate-600">{ props.Description }</p>
+				<p class="text-sm text-mute">{ props.Description }</p>
 			}
 		</div>
 		@atoms.ButtonLink(atoms.ButtonProps{Variant: atoms.ButtonOutline, Attrs: templ.Attributes{

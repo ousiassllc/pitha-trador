@@ -15,8 +15,8 @@ import (
 // and as `POST /positions/:id/close`'s response fragment
 // (docs/api/endpoints.md §4: "ポジション行フラグメント").
 templ PositionRow(p domain.Position) {
-	<tr class="border-b border-slate-100" id={ fmt.Sprintf("position-row-%d", p.ID) } data-testid="position-row" data-position-id={ fmt.Sprintf("%d", p.ID) }>
-		<td class="px-3 py-2 font-medium text-slate-900">{ p.Symbol }</td>
+	<tr class="border-b border-border" id={ fmt.Sprintf("position-row-%d", p.ID) } data-testid="position-row" data-position-id={ fmt.Sprintf("%d", p.ID) }>
+		<td class="px-3 py-2 font-medium text-ink">{ p.Symbol }</td>
 		<td class="px-3 py-2">@atoms.Badge(positionSideToDirection(p.Side))</td>
 		<td class="px-3 py-2">{ fmt.Sprintf("%d", p.Quantity) }</td>
 		<td class="px-3 py-2">{ fmt.Sprintf("%.2f", p.EntryPrice) }</td>

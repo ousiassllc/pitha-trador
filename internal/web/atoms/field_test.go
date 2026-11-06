@@ -12,7 +12,7 @@ import (
 func TestInput_DefaultIsFlexibleRowField(t *testing.T) {
 	body := renderWithLabel(t, atoms.Input(atoms.InputProps{ID: "x", Name: "n"}), "")
 
-	for _, want := range []string{`id="x"`, `name="n"`, `type="text"`, "rounded-md border border-slate-300", "flex-1", "px-3 py-1"} {
+	for _, want := range []string{`id="x"`, `name="n"`, `type="text"`, "rounded-md border border-border", "flex-1", "px-3 py-1"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -27,7 +27,7 @@ func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 		Attrs: templ.Attributes{"required": true, "min": "1", "data-testid": "f"},
 	}), "")
 
-	for _, want := range []string{`type="date"`, "rounded-md border border-slate-300 mt-1 px-2 py-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
+	for _, want := range []string{`type="date"`, "rounded-md border border-border mt-1 px-2 py-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -39,10 +39,10 @@ func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 
 func TestSelect_RendersChildrenWithSharedBorder(t *testing.T) {
 	body := renderWithLabel(t, atoms.Select(atoms.SelectProps{
-		ID: "s", Name: "days", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "d"},
+		ID: "s", Name: "days", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "d"},
 	}), `<option value="1">one</option>`)
 
-	for _, want := range []string{`<select`, `id="s"`, `name="days"`, "rounded-md border border-slate-300 bg-white px-3 py-2", `data-testid="d"`, `<option value="1">one</option></select>`} {
+	for _, want := range []string{`<select`, `id="s"`, `name="days"`, "rounded-md border border-border bg-surface px-3 py-2", `data-testid="d"`, `<option value="1">one</option></select>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -51,7 +51,7 @@ func TestSelect_RendersChildrenWithSharedBorder(t *testing.T) {
 
 func TestSelect_DefaultClass(t *testing.T) {
 	body := renderWithLabel(t, atoms.Select(atoms.SelectProps{Name: "n"}), "")
-	if !strings.Contains(body, "rounded-md border border-slate-300 px-3 py-1") {
+	if !strings.Contains(body, "rounded-md border border-border px-3 py-1") {
 		t.Errorf("default class missing: %s", body)
 	}
 }

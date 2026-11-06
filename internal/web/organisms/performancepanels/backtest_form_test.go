@@ -17,7 +17,7 @@ func TestBacktestForm_EchoesValuesThroughSharedFieldStyle(t *testing.T) {
 		`type="date" name="from"`, `value="2026-01-01"`, `value="2026-03-31"`,
 		`name="training_days"`, `value="60"`, `name="validation_days"`, `value="20"`, `name="forward_days"`, `value="10"`,
 		`min="1"`, " required",
-		"rounded-md border border-slate-300 mt-1 px-3 py-1",
+		"rounded-md border border-border mt-1 px-3 py-1",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %q in %s", want, html)

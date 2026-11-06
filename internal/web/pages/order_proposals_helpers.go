@@ -17,9 +17,9 @@ func pnlClass(sign string) string {
 func pnlTextClass(sign string) string {
 	switch sign {
 	case "gain":
-		return "text-emerald-700"
+		return "text-success"
 	case "loss":
-		return "text-red-700"
+		return "text-danger"
 	}
 	return ""
 }

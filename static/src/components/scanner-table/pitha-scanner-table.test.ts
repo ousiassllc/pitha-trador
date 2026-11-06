@@ -61,11 +61,11 @@ describe('pitha-scanner-table', () => {
 
     const cells = (symbol: string) => el.querySelectorAll(`tr[data-symbol="${symbol}"] td`);
     expect(cells('UP')[2].textContent?.trim()).toBe('+0.12');
-    expect(cells('UP')[2].className).toContain('text-green-700');
+    expect(cells('UP')[2].className).toContain('text-success');
     expect(cells('UP')[3].textContent?.trim()).toBe('-0.30');
-    expect(cells('UP')[3].className).toContain('text-red-700');
+    expect(cells('UP')[3].className).toContain('text-danger');
     expect(cells('FLAT')[2].textContent?.trim()).toBe('0.00'); // zero carries no "+" (same as SSR)
-    expect(cells('FLAT')[2].className).toContain('text-slate-500');
+    expect(cells('FLAT')[2].className).toContain('text-mute');
     expect(cells('FLAT')[5].textContent?.trim()).toBe('0');
     expect(cells('FLAT')[3].textContent?.trim()).toBe('—');
   });
@@ -77,9 +77,9 @@ describe('pitha-scanner-table', () => {
     ]);
 
     const evaluated = el.querySelectorAll('tr[data-symbol="AAAA"] td');
-    expect(evaluated[7].querySelector('span')?.className).toContain('bg-red-100');
+    expect(evaluated[7].querySelector('span')?.className).toContain('tone-danger');
     expect(evaluated[8].textContent?.trim()).toBe('74%');
-    expect(evaluated[9].querySelector('span')?.className).toContain('bg-emerald-600');
+    expect(evaluated[9].querySelector('span')?.className).toContain('tone-success');
 
     const pending = el.querySelectorAll('tr[data-symbol="BBBB"] td');
     expect(pending[7].textContent?.trim()).toBe('判定待ち');

@@ -40,7 +40,7 @@ type SettingFieldRowProps struct {
 // button is rendered only while a value is stored.
 templ SettingFieldRow(props SettingFieldRowProps) {
 	<form
-		class="flex flex-col gap-1 text-sm text-slate-600"
+		class="flex flex-col gap-1 text-sm text-mute"
 		method="post"
 		action={ templ.SafeURL("/ops-settings/" + props.Key) }
 		hx-post={ "/ops-settings/" + props.Key }
@@ -54,7 +54,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 				<span class="flex items-center gap-2">
 					{ props.Label }
 					if props.Overridden {
-						<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
+						<span class="rounded-full border tone-mute px-2 py-1 text-xs font-medium" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
 					}
 				</span>
 			</label>
@@ -97,12 +97,12 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 				}
 			}
 		</div>
-		<p class="text-xs text-slate-500" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
+		<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
 		if props.Warning != "" {
-			<p class="text-xs text-red-700" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
+			<p class="text-xs text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
 		}
 		if props.Notice != "" {
-			<p class="text-xs text-green-800" role="status" data-testid={ "notice-" + props.Key }>{ props.Notice }</p>
+			<p class="text-xs text-success" role="status" data-testid={ "notice-" + props.Key }>{ props.Notice }</p>
 		}
 	</form>
 }

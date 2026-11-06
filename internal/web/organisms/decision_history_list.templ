@@ -17,10 +17,10 @@ import (
 // these fields).
 templ DecisionHistoryList(decisions []domain.JevDecision) {
 	<section class="mt-8" id="decision-history" data-testid="decision-history">
-		<h2 class="text-lg font-semibold text-slate-900">判断の履歴</h2>
+		<h2 class="text-lg font-semibold text-ink">判断の履歴</h2>
 		<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="Jev判断履歴">
 			<thead>
-				<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
+				<tr class="border-b border-border text-xs font-semibold uppercase text-mute">
 					<th scope="col" class="px-3 py-2">日時</th>
 					<th scope="col" class="px-3 py-2">種別</th>
 					<th scope="col" class="px-3 py-2">方向</th>
@@ -39,7 +39,7 @@ templ DecisionHistoryList(decisions []domain.JevDecision) {
 }
 
 templ decisionRow(d domain.JevDecision) {
-	<tr class="border-b border-slate-100" data-decision-id={ fmt.Sprintf("%d", d.ID) }>
+	<tr class="border-b border-border" data-decision-id={ fmt.Sprintf("%d", d.ID) }>
 		<td class="px-3 py-2">{ atoms.FormatJST(d.Timestamp) }</td>
 		<td class="px-3 py-2">{ d.DecisionType }</td>
 		<td class="px-3 py-2">{ nilableString(d.Direction) }</td>

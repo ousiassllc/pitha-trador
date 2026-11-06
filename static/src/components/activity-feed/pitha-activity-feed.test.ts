@@ -66,7 +66,7 @@ describe('pitha-activity-feed', () => {
     expect(el.querySelectorAll('#activity-feed')).toHaveLength(1);
     expect(el.querySelector('[role="alert"]')).not.toBeNull();
     // Light DOM: Shadow `noticeStyles` do not apply, so Tailwind classes must (#355).
-    expect(el.querySelector('[role="alert"]')?.classList.contains('text-red-700')).toBe(true);
+    expect(el.querySelector('[role="alert"]')?.classList.contains('text-danger')).toBe(true);
   });
 
   test('renders queue counts and feed rows from the snapshot', async () => {
@@ -157,7 +157,7 @@ describe('pitha-activity-feed', () => {
 
     const section = el.querySelector('#kill-switch-events');
     expect(section?.querySelector('[role="alert"]')).not.toBeNull();
-    expect(section?.querySelector('[role="alert"]')?.classList.contains('text-red-700')).toBe(true);
+    expect(section?.querySelector('[role="alert"]')?.classList.contains('text-danger')).toBe(true);
     expect(section?.textContent).not.toContain('Kill Switch の履歴はありません。');
     expect(section?.textContent).not.toContain('Kill Switch の履歴を読み込んでいます');
     errorSpy.mockRestore();

@@ -22,7 +22,7 @@ HALT（HTMX + Atomic Design + Lit + Templ）に基づくフロントエンドア
 | インタラクション | HTMX | サーバー駆動のDOM更新 |
 | リッチUI | Lit (Web Components) | `pitha-price-chart` 等5種（§5、`lit.md`） |
 | チャート描画 | lightweight-charts (TradingView製) | ローソク足・VWAP・出来高・信頼性曲線 |
-| スタイリング | Tailwind CSS | ユーティリティファーストCSS |
+| スタイリング | Tailwind CSS | ユーティリティファーストCSS。色は Ousiass デザインガイドのトークンだけ（`design-tokens.md`） |
 | ビルド | esbuild | Lit/TypeScriptバンドル |
 
 ## 2. ディレクトリ構成
@@ -87,11 +87,11 @@ static/
 
 - `Badge`（Direction: LONG/SHORT/NONE の色分け表示。`atoms.Direction`型）
 - `EntryQualityBadge`（Entry Quality: poor/fair/good/strong/exceptional の色分け表示。Scanner Dashboardで使用、issue #239）
-- `StatusDot`（システム状態: Running=緑 / Paused=黄 / Killed=赤。organismsの`SystemStatusBadge`が`domain.SystemState`から`atoms.State`へ変換して描画する）
+- `StatusDot`（システム状態: Running=`--success` / Paused=`--warning` / Killed=`--danger` のピル。organismsの`SystemStatusBadge`が`domain.SystemState`から`atoms.State`へ変換して描画する）
 - `Toast`（HTMXアクション失敗のエラー通知。`role="alert"`＋閉じるボタンを持ち、`#toast-region`へswapされる。§4「エラー表示」、issue #110/#121）
 - `HelpMark`（項目名の横に置く共通の「?」ヘルプ部品（issue #902）。`HelpMarkProps{ID, Label}`と子要素のヘルプ本文を受け取り、「?」ボタン（`aria-label`＝`Label`、`aria-describedby`＝`ID`）と本文（`role="tooltip"`、常にDOMにある）を描く。マウスを乗せる・フォーカスする・タップすると`pitha-help-mark`（`static/src/components/help-mark`。`layout.document`が全ページで読み込む。ダイアログ内でも`position: fixed`で切れず、Escで閉じ、`<dialog>`・shadow rootの中でも動く）が本文を開く。Lit側は`lib/help-mark.ts`の`renderHelpMark`（同じマークアップ）を使う。画面に出す説明文・制約・長い注意書きはここへ移し、止まっている理由・エラー・警告・Live/Paperの区別・危ない操作の確認文は画面に残す（短い一文＋詳しくはHelpMark））
 - `Button` / `ButtonLink`（`ButtonProps{Variant, Size, Type, Attrs}`。Variant: primary / danger / secondary / outline / danger-outline、Size: medium / small。色・フォーカスリング・`disabled:opacity-50`を一元化し、`hx-*`・`data-testid`等は`Attrs`で渡す。ラベルは子要素。`ButtonLink`は`<a>`版。`Toast`の×ボタンを除く全テンプレートのボタンはこれを使う。issue #309）
-- `Input`（`InputProps{ID, Name, Type, Class, Attrs}`。共通の枠線（`rounded-md border border-slate-300`）に`Class`のレイアウト系クラスを足した`<input>`。`Class`未指定は行内で広がる`flex-1 px-3 py-1`、縦積みラベル内では`Class`を渡して`flex-1`を外す。`SecretFieldRow`・`ScanPanel`・`BacktestForm`が使用。`ID`/`Name`が空のときは属性自体を出力しない（空の`id=""`は不正なHTML）。issue #309/#520/#629）
+- `Input`（`InputProps{ID, Name, Type, Class, Attrs}`。共通の枠線（`rounded-md border border-border`）に`Class`のレイアウト系クラスを足した`<input>`。`Class`未指定は行内で広がる`flex-1 px-3 py-1`、縦積みラベル内では`Class`を渡して`flex-1`を外す。`SecretFieldRow`・`ScanPanel`・`BacktestForm`が使用。`ID`/`Name`が空のときは属性自体を出力しない（空の`id=""`は不正なHTML）。issue #309/#520/#629）
 - `Select`（`SelectProps{ID, Name, Class, Attrs}`。`Input`と同じ枠線の`<select>`。`<option>`は子要素。`Class`未指定は`px-3 py-1`。`ScanPanel`・`ErrorLogPanel`が使用。`ID`/`Name`が空のときは属性自体を出力しない。issue #520/#629）
 
 > **未実装コンポーネントの扱い（issue #120）**: 現状のアプリは`Spinner`/`Card`/`OrderRow`/`ConfidenceBucketBar`/`Sidebar`/`CalibrationBucketTable`のいずれも必要としない（Kill Switch確認は`pitha-kill-switch-panel`内の`window.confirm`、エラーは各画面/コンポーネント内の`role="alert"`表示、ナビゲーションは`Header`、Calibration帯別の表示は`pitha-calibration-heatmap`が担う）。これらは実装せず、**利用箇所が生じた時点で対応するレイヤに追加する**（同一の見た目・属性が複数テンプレートで重複した時点が切り出しの目安。`Button`/`Input`は重複したため issue #309 で追加済み）。§4・`api/endpoints.md`で言及する「確認モーダル」「トースト」も、現状はそれぞれ`window.confirm`・インラインの`role="alert"`/`role="status"`表示で実現している。
@@ -107,7 +107,7 @@ static/
 
 ### organisms
 
-- `Header`（ナビゲーション（`MainNav`。`layout.Shell`が各ページのナビ項目`organisms.NavItem`を渡し、現在ページのリンクだけに`aria-current="page"`と強調（`font-semibold text-slate-900`）を付ける。Symbol Detailは所属の`NavScanner`、`ErrorPage`は`NavNone`で何も付けない。issue #631。項目は Scanner / Watchlist / Performance / Calibration / Activity / Settings（`NavSettings`、`/settings`）の順で、管理系の入口は Settings 1本（単独の「管理」項目は置かない。`/settings`とその下のページはすべて`NavSettings`を現在項目にする）。`Shell`を使う全ページから1操作で Settings のページ一覧へ戻れる。`/setup`だけは`Header`を持たない例外。画面一覧と Settings の構成は`docs/components/screens.md`。issue #793/#805）＋`SystemStatusBadge`（`StatusDot`）。Kill Switch状態のOOB更新対象。`layout.Shell`が`middleware.SystemStateFrom`で解決して渡す現在状態から`KillSwitchPanel`を描画する。organisms自身は`web/middleware`をimportしない。issue #896: ロゴのリンク先は`/`（Home）。五つのバナー枠は`#attention-badge`1つに置き換え（`GET /home/attention-badge`を`load`・30秒周期・`secretsStatusChanged`/`updateStatusChanged`で取得し「要対応 N 件」から`/`へリンク。Homeでは描かない）、`systemStateChanged`は`from:body`で購読し、Homeでは`pitha-kill-switch-panel`を取引の状態カード内に置くためヘッダーからは外す）
+- `Header`（ナビゲーション（`MainNav`。`layout.Shell`が各ページのナビ項目`organisms.NavItem`を渡し、現在ページのリンクだけに`aria-current="page"`と強調（`font-semibold text-ink`）を付ける。Symbol Detailは所属の`NavScanner`、`ErrorPage`は`NavNone`で何も付けない。issue #631。項目は Scanner / Watchlist / Performance / Calibration / Activity / Settings（`NavSettings`、`/settings`）の順で、管理系の入口は Settings 1本（単独の「管理」項目は置かない。`/settings`とその下のページはすべて`NavSettings`を現在項目にする）。`Shell`を使う全ページから1操作で Settings のページ一覧へ戻れる。`/setup`だけは`Header`を持たない例外。画面一覧と Settings の構成は`docs/components/screens.md`。issue #793/#805）＋`SystemStatusBadge`（`StatusDot`）。Kill Switch状態のOOB更新対象。`layout.Shell`が`middleware.SystemStateFrom`で解決して渡す現在状態から`KillSwitchPanel`を描画する。organisms自身は`web/middleware`をimportしない。issue #896: ロゴのリンク先は`/`（Home）。五つのバナー枠は`#attention-badge`1つに置き換え（`GET /home/attention-badge`を`load`・30秒周期・`secretsStatusChanged`/`updateStatusChanged`で取得し「要対応 N 件」から`/`へリンク。Homeでは描かない）、`systemStateChanged`は`from:body`で購読し、Homeでは`pitha-kill-switch-panel`を取引の状態カード内に置くためヘッダーからは外す）
 - `AttentionBadge`（ヘッダーの「要対応 N 件」。`/`（Home）へのリンク、`data-testid="attention-badge"`・`data-count`。0件なら何も描かない。件数はHomeの「要対応」一覧の件数と同じ。issue #896）
 - `homepanels`パッケージ（Homeの描画。`internal/web/organisms/homepanels`。`organisms`が行数上限のため独立。`handler/home`が写像した`View`（取引の状態・今日の Paper 損益・保有ポジション・要対応・今日の詳細の各ブロック。各ブロックが自前の`Err`を持ち、読み取りに失敗したカードだけがエラー行になる）を描く。`TradeStatusCard`/`PnLCard`/`PositionsCard`/`AttentionSection`/`DetailsSection`と、再取得される各`*Body`フラグメント。`organisms.ScanFunnel`・`organisms.KillSwitchPanel`・`pages.ProposalStatusLabel`を再利用。issue #896）
 - `SystemStatusBadge`（システム状態の`StatusDot`フラグメント。`Header`内`#header-status`と`GET /system/status`が返す。`domain.SystemState`→`atoms.State`の変換を担い、atomsを`internal/domain`から切り離す）
