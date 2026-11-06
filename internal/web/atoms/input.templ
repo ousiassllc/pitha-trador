@@ -1,9 +1,20 @@
 package atoms
 
+import "strings"
+
 // fieldBase is the border/shape shared by Input, Select and Textarea, so a
-// form control's look changes in one place. Layout and spacing (width, padding,
-// margin, text size) come from the caller's Class.
+// form control's look changes in one place. Layout (width, margin, text size)
+// comes from the caller's Class.
 const fieldBase = "rounded-md border border-border"
+
+// fieldBox is the single-line control's size (brand-guide S2/§4 forms: height
+// 40, padding 12). Input and Select always carry it; Class must not override
+// the height or padding.
+const fieldBox = "h-10 px-3"
+
+// textareaBox is the multi-line counterpart: 12px horizontal padding, height
+// from `rows`.
+const textareaBox = "px-3 py-1"
 
 // fieldFocus is the form focus state (brand-guide C3): --focus border and a
 // 2px --ring (--focus at 40%). `outline-none` is safe only because the ring
@@ -12,8 +23,9 @@ const fieldFocus = "focus-visible:border-focus focus-visible:outline-none focus-
 
 // InputProps is Input's input. Type is empty for "text". Class carries the
 // layout/spacing classes appended to the shared border style (empty keeps
-// the default `flex-1 px-3 py-1`, a row-filling field; pass e.g.
-// `mt-1 px-3 py-1` to opt out of `flex-1` inside a stacked label). Attrs
+// the default `flex-1`, a row-filling field; pass e.g. `w-auto` or
+// `mt-1` to opt out of `flex-1` inside a stacked label; height and padding
+// are fixed by fieldBox). Attrs
 // carries everything else (placeholder, required, min, value,
 // autocomplete, data-testid, ...); a `true` value renders a bare boolean
 // attribute.
@@ -32,7 +44,7 @@ templ Input(props InputProps) {
 		if props.ID != "" {
 			id={ props.ID }
 		}
-		class={ fieldClass(props.Class, "flex-1 px-3 py-1") }
+		class={ fieldClass(fieldBox, props.Class, "flex-1") }
 		type={ inputType(props.Type) }
 		if props.Name != "" {
 			name={ props.Name }
@@ -41,8 +53,8 @@ templ Input(props InputProps) {
 	/>
 }
 
-// SelectProps is Select's input. Class is as in InputProps (empty keeps the
-// default `px-3 py-1`). Attrs carries everything else (data-testid,
+// SelectProps is Select's input. Class is as in InputProps (empty adds no
+// layout classes). Attrs carries everything else (data-testid,
 // required, ...). The <option>s are Select's children.
 type SelectProps struct {
 	ID    string
@@ -61,7 +73,7 @@ templ Select(props SelectProps) {
 		if props.Name != "" {
 			name={ props.Name }
 		}
-		class={ fieldClass(props.Class, "px-3 py-1") }
+		class={ fieldClass(fieldBox, props.Class, "") }
 		{ props.Attrs... }
 	>
 		{ children... }
@@ -69,7 +81,7 @@ templ Select(props SelectProps) {
 }
 
 // TextareaProps is Textarea's input. Class is as in InputProps (empty keeps
-// the default `px-3 py-1`). Attrs carries everything else (rows, maxlength,
+// no extra layout classes). Attrs carries everything else (rows, maxlength,
 // required, data-testid, ...). The initial text is Textarea's children.
 type TextareaProps struct {
 	ID    string
@@ -88,16 +100,18 @@ templ Textarea(props TextareaProps) {
 		if props.Name != "" {
 			name={ props.Name }
 		}
-		class={ fieldClass(props.Class, "px-3 py-1") }
+		class={ fieldClass(textareaBox, props.Class, "") }
 		{ props.Attrs... }
 	>{ children... }</textarea>
 }
 
-func fieldClass(class, fallback string) string {
+// fieldClass joins the shared shape, the control's box, the caller's Class
+// (or fallback when Class is empty) and the focus state.
+func fieldClass(box, class, fallback string) string {
 	if class == "" {
 		class = fallback
 	}
-	return fieldBase + " " + class + " " + fieldFocus
+	return strings.Join(strings.Fields(fieldBase+" "+box+" "+class+" "+fieldFocus), " ")
 }
 
 func inputType(t string) string {

@@ -20,7 +20,8 @@
 ## 形・余白・線（issue #942）
 
 - 角丸は `app.css` の `:root` に `--r-sm|md|lg|xl|full`（4 / 8 / 12 / 16px / 9999px）を定義し、`@theme` の `--radius-sm|md|lg|xl` がそれを読む。`rounded-sm`（ツールチップ・タグ）・`rounded-md`（入力・ボタン・入れ子パネル）・`rounded-lg`（カード・パネル・空状態）・`rounded-xl`（モーダル）・`rounded-full`（ピル）をそのまま使う。Lit の `static styles` は `var(--r-md)` 等を使う
-- ツールチップは `rounded-sm`・12px・padding 6×10（`px-2.5 py-1.5`、Lit は `0.375rem 0.625rem`）
+- ツールチップは `rounded-sm`・12px・padding 8×12（`px-3 py-2`、Lit は `0.5rem 0.75rem`）
+- 入力・セレクトは高さ 40px・左右 12px（`h-10 px-3`、`atoms/input.templ` の `fieldBox` と Lit の `lightDomFieldClass`）。呼び出し側は `py-*` で上書きしない（`<textarea>` だけ `px-3 py-1`）。入れ子パネル（カード・モーダルの中の `bg-bone`）は `rounded-md`。テーマ切替は `p-1 gap-1`
 - 影はモーダルだけ（`shadow-modal` = `--shadow-modal` 0 1px 2px rgba(0,0,0,.06)）。カード・ツールチップ・トーストは 1px の `border-border` で区切り、`shadow*` を付けない
 - 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）の 2 種類。SSR と Lit で同じ値にし、`pr-N` だけの指定はしない。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact の 6px だけ例外）
 - ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`、設定画面の節どうしは `gap-12`）。ページの h1 の下は 24px（`mt-6`）、節の h2 の下は 24px（`mb-6`）、h3 の下は 12px（`mb-3`）

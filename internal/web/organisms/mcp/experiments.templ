@@ -83,7 +83,7 @@ type ExperimentDetailProps struct {
 // before / after comparison. It only records and compares; it changes no
 // setting.
 templ Experiments(props ExperimentsProps) {
-	<section class="flex flex-col gap-3 rounded-lg border border-border bg-bone p-4" data-testid="mcp-experiments">
+	<section class="flex flex-col gap-3 rounded-md border border-border bg-bone p-4" data-testid="mcp-experiments">
 		<div class="flex items-center gap-2">
 			<h4 class="font-semibold text-ink">調整の実験（前後比較）</h4>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments", Label: "調整の実験の説明"}) {
@@ -172,7 +172,7 @@ templ experimentForm(settingNames []string) {
 			</label>
 			<label class="flex flex-col gap-2">
 				<span>名前</span>
-				@atoms.Input(atoms.InputProps{Name: "name", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "list": "mcp-experiment-setting-names", "data-testid": "mcp-experiment-name"}})
+				@atoms.Input(atoms.InputProps{Name: "name", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "list": "mcp-experiment-setting-names", "data-testid": "mcp-experiment-name"}})
 				<datalist id="mcp-experiment-setting-names">
 					for _, name := range settingNames {
 						<option value={ name }></option>
@@ -183,15 +183,15 @@ templ experimentForm(settingNames []string) {
 		<div class="flex flex-wrap gap-2">
 			<label class="flex flex-col gap-2">
 				<span>変更前の値</span>
-				@atoms.Input(atoms.InputProps{Name: "before", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-before"}})
+				@atoms.Input(atoms.InputProps{Name: "before", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-before"}})
 			</label>
 			<label class="flex flex-col gap-2">
 				<span>変更後の値</span>
-				@atoms.Input(atoms.InputProps{Name: "after", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-after"}})
+				@atoms.Input(atoms.InputProps{Name: "after", Class: "w-auto", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-after"}})
 			</label>
 			<label class="flex flex-col gap-2">
 				<span>開始時刻（JST）</span>
-				@atoms.Input(atoms.InputProps{Name: "started_at", Type: "datetime-local", Class: "px-3 py-1", Attrs: templ.Attributes{"data-testid": "mcp-experiment-started"}})
+				@atoms.Input(atoms.InputProps{Name: "started_at", Type: "datetime-local", Class: "w-auto", Attrs: templ.Attributes{"data-testid": "mcp-experiment-started"}})
 			</label>
 		</div>
 		<div id="mcp-experiment-form-error" data-testid="mcp-experiment-form-error"></div>
