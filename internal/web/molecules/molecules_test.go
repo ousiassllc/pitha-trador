@@ -238,3 +238,22 @@ func TestThemeToggle_OffersAutoLightDarkWithAutoPressed(t *testing.T) {
 		t.Errorf("ThemeToggle renders %d buttons, want 3", got)
 	}
 }
+
+// A settings row's title is neither a heading nor a button, so it is Regular
+// (brand-guide §2 T2: SemiBold is for headings and buttons only; issue #986).
+func TestSettingsCards_NameIsRegular(t *testing.T) {
+	card := render(t, molecules.SettingsCard(molecules.SettingsCardProps{ID: "c", ModalID: "m", Name: "接続名", ActionLabel: "設定"}))
+	link := render(t, molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{ID: "l", Name: "画面名", Href: "/x", ActionLabel: "開く"}))
+	for name, html := range map[string]string{"SettingsCard": card, "SettingsLinkCard": link} {
+		title, _, _ := strings.Cut(html, "</li>")
+		if i := strings.Index(title, "<button"); i >= 0 {
+			title = title[:i]
+		}
+		if i := strings.Index(title, "<a "); i >= 0 {
+			title = title[:i]
+		}
+		if strings.Contains(title, "font-semibold") {
+			t.Errorf("%s: the title must be Regular: %s", name, title)
+		}
+	}
+}
