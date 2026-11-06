@@ -67,7 +67,7 @@ templ OrderProposalsPage(props ProposalListProps) {
 			@orderProposalsTable(props.Rows)
 			if props.NextHref != "" {
 				<p class="mt-3">
-					@atoms.ButtonLink(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{"href": string(templ.URL(props.NextHref)), "data-testid": "order-proposals-next"}}) {
+					@atoms.ButtonLink(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonPager, Attrs: templ.Attributes{"href": string(templ.URL(props.NextHref)), "data-testid": "order-proposals-next"}}) {
 						次のページ
 					}
 				</p>

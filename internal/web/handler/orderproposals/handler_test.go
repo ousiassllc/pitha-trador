@@ -141,6 +141,10 @@ func TestList_NextPageKeepsTheFilter(t *testing.T) {
 	if href == nil {
 		t.Fatalf("no next link: %s", first)
 	}
+	// The pager is 36px high like the scanner's (brand-guide O7): atoms.ButtonPager = min-h-9.
+	if !strings.Contains(nextTag, "min-h-9") {
+		t.Errorf("next link is not pager-sized (min-h-9): %s", nextTag)
+	}
 	next := strings.ReplaceAll(href[1], "&amp;", "&")
 	for _, want := range []string{"from=2026-10-01", "to=2026-10-31", "status=expired", "cursor="} {
 		if !strings.Contains(next, want) {
