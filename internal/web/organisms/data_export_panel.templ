@@ -35,15 +35,15 @@ templ DataExportPanel() {
 			<fieldset class="flex flex-wrap gap-4" data-testid="data-export-kinds">
 				<legend class="mb-1 text-ink">種類（1 つ以上）</legend>
 				<label class="flex items-center gap-2">
-					@atoms.Input(atoms.InputProps{Name: "kinds", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: templ.Attributes{"value": "trades", "checked": true}})
+					@atoms.Checkbox(atoms.CheckboxProps{Name: "kinds", Value: "trades", Attrs: templ.Attributes{"checked": true}})
 					<span>取引ログ</span>
 				</label>
 				<label class="flex items-center gap-2">
-					@atoms.Input(atoms.InputProps{Name: "kinds", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: templ.Attributes{"value": "decisions", "checked": true}})
+					@atoms.Checkbox(atoms.CheckboxProps{Name: "kinds", Value: "decisions", Attrs: templ.Attributes{"checked": true}})
 					<span>判断ログ</span>
 				</label>
 				<label class="flex items-center gap-2">
-					@atoms.Input(atoms.InputProps{Name: "kinds", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: templ.Attributes{"value": "metrics", "checked": true}})
+					@atoms.Checkbox(atoms.CheckboxProps{Name: "kinds", Value: "metrics", Attrs: templ.Attributes{"checked": true}})
 					<span>計測ログ</span>
 				</label>
 			</fieldset>
