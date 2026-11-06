@@ -150,7 +150,7 @@ templ PnLBody(v PnLView) {
 			}
 		</dl>
 		if v.LossLimit != nil {
-			<p class="mt-2 text-xs text-mute" data-testid="pnl-loss-limit">
+			<p class="mt-2 text-sm text-mute" data-testid="pnl-loss-limit">
 				if v.LossLimit.RemainingJPY > 0 {
 					1日の損失上限（-{ FormatYen(v.LossLimit.LimitJPY) }）まで あと { FormatYen(v.LossLimit.RemainingJPY) }
 				} else {

@@ -21,7 +21,7 @@ templ EvaluationPanel(p Panel, err string) {
 		if err != "" {
 			<p class="rounded-md border tone-danger px-4 py-3 text-sm" role="alert" data-testid="evaluation-error">{ err }</p>
 		} else {
-			<p class="text-xs text-mute" data-testid="evaluation-capital">
+			<p class="text-sm text-mute" data-testid="evaluation-capital">
 				{ p.Capital }
 				if p.CapitalNote != "" {
 					（{ p.CapitalNote }）
@@ -54,7 +54,7 @@ func verdictClass(status string) string {
 
 templ verdictBlock(p Panel) {
 	<div class={ "mt-4 rounded-md border px-4 py-3 text-sm", verdictClass(p.Verdict) } data-testid="evaluation-verdict" data-status={ p.Verdict }>
-		<p class="font-semibold">
+		<p class="text-base">
 			合格ライン: { p.VerdictText }
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-verdict", Label: "合格ラインの説明"}) {
 				<span class="block">{ p.Criteria }</span>
