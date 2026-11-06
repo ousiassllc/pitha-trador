@@ -187,6 +187,19 @@ describe('pitha-price-chart empty state (issue #687)', () => {
 
     expect(emptyNotice(el)).toBeNull();
   });
+
+  // Issue #999: same dashed-frame recipe as scanner-empty (design guide S4/§4).
+  test('uses the dashed --border frame, --r-lg and 48/24 padding', async () => {
+    const el = await mount([]);
+    const css = (
+      el.constructor as unknown as { elementStyles: { cssText: string }[] }
+    ).elementStyles
+      .map((s) => s.cssText)
+      .join('');
+    expect(css).toMatch(
+      /\.pitha-price-chart-empty\s*\{[^}]*border:\s*1px dashed var\(--border\);[^}]*border-radius:\s*var\(--r-lg\);[^}]*padding:\s*3rem 1\.5rem;[^}]*text-align:\s*center;/,
+    );
+  });
 });
 
 describe('pitha-price-chart series colors (design guide §1/§8)', () => {

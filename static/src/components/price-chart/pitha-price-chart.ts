@@ -55,6 +55,11 @@ export class PithaPriceChart extends LitElement {
       }
       .pitha-price-chart-empty {
         margin: 0;
+        border: 1px dashed var(--border);
+        border-radius: var(--r-lg);
+        background: var(--bone);
+        padding: 3rem 1.5rem;
+        text-align: center;
         color: var(--mute);
         font-size: 0.875rem;
       }
