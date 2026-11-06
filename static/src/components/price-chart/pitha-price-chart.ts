@@ -15,7 +15,12 @@ import { css, html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
-import { ColorSchemeController, chartBaseOptions, syncPrintSnapshot } from '../lib/chart-theme';
+import {
+  ColorSchemeController,
+  chartBaseOptions,
+  clearPrintSnapshot,
+  syncPrintSnapshot,
+} from '../lib/chart-theme';
 import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
@@ -99,6 +104,7 @@ export class PithaPriceChart extends LitElement {
   }
 
   override disconnectedCallback(): void {
+    clearPrintSnapshot(this.containerRef.value);
     super.disconnectedCallback();
     this.chart?.remove();
     this.chart = null;

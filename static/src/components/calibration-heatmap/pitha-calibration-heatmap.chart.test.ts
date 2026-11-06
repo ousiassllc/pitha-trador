@@ -96,6 +96,26 @@ describe('pitha-calibration-heatmap OS theme switch (issue #964)', () => {
     expect(accuracy.applyOptions).toHaveBeenLastCalledWith({ color: '#ffffff' });
   });
 
+  // The container is reused on reconnect: a snapshot left over from the print would cover the new chart.
+  test('leaves no print snapshot behind when removed while printing, and none on reconnect', async () => {
+    const { el } = await mount(response());
+    scheme.firePrint(true);
+    const container = el.shadowRoot?.querySelector<HTMLElement>('.pitha-calibration-heatmap-chart');
+    expect(container?.querySelector('[data-print-snapshot]')).not.toBeNull();
+    expect(container?.style.position).toBe('relative');
+
+    el.remove();
+    expect(container?.querySelector('[data-print-snapshot]')).toBeNull();
+    expect(container?.style.position).toBe('');
+
+    scheme.firePrint(false); // the print ended while the element was detached
+    document.body.appendChild(el);
+    await el.updateComplete;
+    expect(container?.querySelector('[data-print-snapshot]')).toBeNull();
+    expect(createdCharts).toHaveLength(2);
+    expect(createdCharts[1].takeScreenshot).not.toHaveBeenCalled();
+  });
+
   test('stops listening once the element is removed', async () => {
     const { el } = await mount(response());
     expect(scheme.listeners()).toBe(2);

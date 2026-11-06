@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactiveControllerHost } from 'lit';
-import { ColorSchemeController, chartBaseOptions, readToken, withAlpha } from './chart-theme';
+import {
+  ColorSchemeController,
+  chartBaseOptions,
+  clearPrintSnapshot,
+  readToken,
+  syncPrintSnapshot,
+  withAlpha,
+} from './chart-theme';
 import { installColorSchemeSwitch, setDarkTokens } from './color-scheme-test-support';
 import { applyTheme } from './theme';
 
@@ -148,6 +155,63 @@ describe('ColorSchemeController', () => {
       }
     });
 
+    // `printing` is module-global: a host disconnected across afterprint never saw it, so a stale
+    // `true` must not survive into the next connection.
+    test('resyncs from the print media query when connected', () => {
+      const scheme = installColorSchemeSwitch();
+      try {
+        setDarkTokens();
+        connect(() => {});
+        scheme.firePrint(true);
+        expect(readToken('ink')).toBe('#050505');
+
+        // printing ended while no host was listening
+        scheme.firePrint(false);
+        window.dispatchEvent(new Event('beforeprint')); // stale: left over from a removed host
+        const controller = connect(() => {});
+        expect(readToken('ink')).toBe('#ffffff');
+        controller.hostDisconnected();
+
+        // printing began while no host was listening
+        scheme.firePrint(true);
+        const second = connect(() => {});
+        expect(readToken('ink')).toBe('#050505');
+        second.hostDisconnected();
+        scheme.firePrint(false);
+        connect(() => {}).hostDisconnected();
+      } finally {
+        scheme.restore();
+      }
+    });
+
+    test('draws every chart color from the Light tokens while printing under a Dark theme', () => {
+      const scheme = installColorSchemeSwitch();
+      try {
+        setDarkTokens();
+        const controller = connect(() => {});
+        scheme.firePrint(true);
+
+        const options = chartBaseOptions();
+        const colors = [
+          options.layout.textColor,
+          options.grid.vertLines.color,
+          options.grid.horzLines.color,
+          options.crosshair.vertLine.color,
+          options.crosshair.vertLine.labelBackgroundColor,
+          options.rightPriceScale.borderColor,
+          options.timeScale.borderColor,
+        ];
+        const light = new Set(['#050505', '#6b6b6e', '#e7e7e5', '#ffffff']);
+        for (const color of colors) expect(light.has(color)).toBe(true);
+        expect(colors).not.toContain('#2a2a2a'); // Dark --border
+
+        scheme.firePrint(false);
+        controller.hostDisconnected();
+      } finally {
+        scheme.restore();
+      }
+    });
+
     test('stops listening for print once disconnected', () => {
       let calls = 0;
       const controller = connect(() => calls++);
@@ -173,5 +237,60 @@ describe('ColorSchemeController', () => {
     } finally {
       globalThis.matchMedia = original;
     }
+  });
+});
+
+describe('print snapshot', () => {
+  const setup = () => {
+    const container = document.createElement('div');
+    const live = document.createElement('div');
+    container.append(live);
+    const bitmap = document.createElement('canvas');
+    const chart = { takeScreenshot: () => bitmap, chartElement: () => live };
+    return { container, live, chart };
+  };
+
+  afterEach(() => {
+    window.dispatchEvent(new Event('afterprint'));
+  });
+
+  const startPrint = () => {
+    const host = { addController: () => {} } as unknown as ReactiveControllerHost;
+    const controller = new ColorSchemeController(host, () => {});
+    controller.hostConnected();
+    window.dispatchEvent(new Event('beforeprint'));
+    return controller;
+  };
+
+  // The bitmap is the on-screen size; the print layout has another container width.
+  test('keeps the aspect ratio of the bitmap instead of stretching it to the container', () => {
+    const { container, chart } = setup();
+    const controller = startPrint();
+
+    syncPrintSnapshot(chart);
+
+    const snapshot = container.querySelector<HTMLElement>('[data-print-snapshot]');
+    expect(snapshot?.style.objectFit).toBe('contain');
+    expect(snapshot?.style.position).toBe('absolute');
+    controller.hostDisconnected();
+  });
+
+  test('clearPrintSnapshot removes the image and the container position', () => {
+    const { container, live, chart } = setup();
+    const controller = startPrint();
+    syncPrintSnapshot(chart);
+    expect(container.style.position).toBe('relative');
+    expect(live.style.visibility).toBe('hidden');
+
+    clearPrintSnapshot(container);
+
+    expect(container.querySelector('[data-print-snapshot]')).toBeNull();
+    expect(container.style.position).toBe('');
+    controller.hostDisconnected();
+  });
+
+  test('clearPrintSnapshot tolerates a missing container', () => {
+    expect(() => clearPrintSnapshot(null)).not.toThrow();
+    expect(() => clearPrintSnapshot(undefined)).not.toThrow();
   });
 });
