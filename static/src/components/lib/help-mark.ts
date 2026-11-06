@@ -63,6 +63,10 @@ export const helpMarkStyles = css`
   }
   .help-mark-text {
     visibility: hidden;
+    opacity: 0;
+    /* fade-in 320ms ease-out (design guide §5); visibility flips at the end of
+       the fade-out so the text stays visible while it fades */
+    transition: opacity 320ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 320ms;
     position: fixed;
     top: 0;
     left: 0;
@@ -82,5 +86,11 @@ export const helpMarkStyles = css`
   }
   .help-mark-text[data-open] {
     visibility: visible;
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .help-mark-text {
+      transition-duration: 100ms;
+    }
   }
 `;

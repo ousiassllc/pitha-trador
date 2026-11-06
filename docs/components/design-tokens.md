@@ -25,3 +25,11 @@
 ## アイコン（issue #943）
 
 UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の regular）の SVG を使う。文字記号（×・▲▼）で代用しない。24×24 の viewBox・`stroke-width="1.5"`・`stroke="currentColor"`・装飾なので `aria-hidden`（名前はボタンの `aria-label`）。サイズは 16（`h-4 w-4`）/ 20（`h-5 w-5`）/ 24。templ は `internal/web/atoms/icon.templ`（`IconXmark`）、Lit は `static/src/components/lib/icons.ts`（`navArrowUp` / `navArrowDown`）に同じパスを置く。足すときは両方に同じパスを足す。
+
+## モーション（issue #944）
+
+トークンは `static/src/components/lib/motion.ts`（fast 120 / base 180 / slow 280 / fade-in 320 / fade-out 240ms、`--ease-out` = cubic-bezier(0.2,0.8,0.2,1)、`--ease-in` = cubic-bezier(0.4,0,1,1)）。`app.css` の `@theme` が `--ease-out` をガイドの値にする（Tailwind 既定と異なる）。`prefers-reduced-motion: reduce` では移動・リップルを出さず、必要な opacity のフェードも 100ms 以下にする。
+
+- ボタン・閉じるの押下リップル: `data-ripple` を付けた要素に `static/src/components/ripple/pitha-ripple.ts`（`layout` が読む）が、押した点から広がって消える円（280ms ease-out）を描く。`atoms.Button` / `ButtonLink`・トーストの閉じるは templ が付け、Lit のボタンは `data-ripple` を付ける（`lib/styles.ts` の `buttonStyles` が `position: relative; overflow: hidden`）。ドキュメントのリスナーが `composedPath()` で shadow root 内も拾う
+- ツールチップ（`atoms.HelpMark`・Lit の `renderHelpMark`・`scanner-view.ts`）: `opacity` を 320ms ease-out でフェード（`visibility` は同時に切り替え、閉じるときはフェードが終わってから隠す）
+- トースト（`pitha-htmx-errors.ts`）: 出現は opacity と 8px の `translateY` を 320ms ease-out、退出は opacity を 240ms ease-in で待ってから `remove()`。Web Animations API が無ければ即時

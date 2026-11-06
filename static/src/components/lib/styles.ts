@@ -8,6 +8,8 @@ import { css } from 'lit';
 
 export const buttonStyles = css`
   button {
+    position: relative;
+    overflow: hidden;
     cursor: pointer;
     border: 1px solid var(--border);
     border-radius: 0.5rem;

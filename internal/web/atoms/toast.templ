@@ -10,7 +10,7 @@ package atoms
 templ Toast(message string) {
 	<div class="pointer-events-auto flex items-start gap-3 rounded-md border tone-danger px-4 py-3 text-sm" role="alert" data-toast data-testid="toast">
 		<span class="flex-1" data-toast-message>{ message }</span>
-		<button class="inline-flex text-danger" type="button" aria-label="閉じる" data-toast-dismiss>
+		<button class="relative inline-flex overflow-hidden rounded-full text-danger" type="button" aria-label="閉じる" data-toast-dismiss data-ripple>
 			@IconXmark()
 		</button>
 	</div>

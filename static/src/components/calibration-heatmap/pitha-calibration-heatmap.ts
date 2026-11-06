@@ -198,7 +198,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   protected override render() {
     return html`
       <div class="pitha-calibration-heatmap">
-        <button type="button" @click=${this.onRefresh} ?disabled=${this.loading}>
+        <button type="button" data-ripple @click=${this.onRefresh} ?disabled=${this.loading}>
           ${this.loading ? '更新中…' : '更新'}
         </button>
         ${renderHorizonSelector(this.horizon, this.shownHorizon, (option) => this.onHorizonChange(option))}

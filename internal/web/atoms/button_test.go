@@ -90,3 +90,19 @@ func TestInput_DefaultsToText(t *testing.T) {
 		}
 	}
 }
+
+// The press ripple (static/src/components/ripple) is opt-in per element and
+// needs the host to clip the circle, for Button and ButtonLink alike.
+func TestButton_CarriesTheRippleHook(t *testing.T) {
+	for name, c := range map[string]templ.Component{
+		"button": atoms.Button(atoms.ButtonProps{}),
+		"link":   atoms.ButtonLink(atoms.ButtonProps{Attrs: templ.Attributes{"href": "/x"}}),
+	} {
+		body := renderWithLabel(t, c, "x")
+		for _, want := range []string{" data-ripple", "relative", "overflow-hidden"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s: body missing %q: %s", name, want, body)
+			}
+		}
+	}
+}

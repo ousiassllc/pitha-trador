@@ -70,6 +70,10 @@
   /* Radii (brand-guide §3): md 8 (input, button), lg 12 (card), xl 16 (modal).
      Tailwind's own md/lg/xl are 6/8/12px, so `rounded-md|lg|xl` are redefined
      to the guide's --r-md|lg|xl rather than adding parallel names. */
+  /* Easing (brand-guide §5): `ease-out` is the guide's cubic-bezier(0.2,0.8,0.2,1)
+     (Tailwind's default differs); ease-in / ease-in-out already match. */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;

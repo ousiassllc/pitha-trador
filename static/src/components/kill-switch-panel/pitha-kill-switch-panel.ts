@@ -250,9 +250,9 @@ export class PithaKillSwitchPanel extends LitElement {
     return html`
       <div class="pitha-kill-switch-panel" data-status=${this.status}>
         <span class="pitha-kill-switch-panel-status" role="status" aria-live="polite">${this.status ? STATUS_LABELS[this.status] : ''}</span>
-        ${this.canPause ? html`<button type="button" ?disabled=${this.busy} @click=${this.onPause}>新規エントリーを停止</button>` : ''}
-        ${this.canResume ? html`<button type="button" ?disabled=${this.busy} @click=${this.onResume}>再開</button>` : ''}
-        ${this.canKill ? html`<button type="button" class="pitha-kill-switch-panel-kill" ?disabled=${this.busy} @click=${this.onKill}>全決済して停止</button>` : ''}
+        ${this.canPause ? html`<button type="button" data-ripple ?disabled=${this.busy} @click=${this.onPause}>新規エントリーを停止</button>` : ''}
+        ${this.canResume ? html`<button type="button" data-ripple ?disabled=${this.busy} @click=${this.onResume}>再開</button>` : ''}
+        ${this.canKill ? html`<button type="button" data-ripple class="pitha-kill-switch-panel-kill" ?disabled=${this.busy} @click=${this.onKill}>全決済して停止</button>` : ''}
         ${renderWsDisconnected(this.wsStatus)}
         ${this.error ? html`<p class="pitha-kill-switch-panel-error" role="alert">${this.error}</p>` : ''}
       </div>

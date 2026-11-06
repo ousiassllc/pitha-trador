@@ -4,8 +4,18 @@ import { watchToastRegion } from './pitha-htmx-errors';
 const TOAST_HTML =
   '<div data-toast role="alert"><span data-toast-message></span><button type="button" data-toast-dismiss>×</button></div>';
 
+// The fade animations (design guide §5) are async; every test below except the
+// "toast motion" block runs without the Web Animations API, where a toast
+// appears and is removed immediately.
+const realAnimate = HTMLElement.prototype.animate;
+
 beforeEach(() => {
+  HTMLElement.prototype.animate = undefined as unknown as typeof realAnimate;
   document.body.innerHTML = `<div id="toast-region"></div><template id="toast-template">${TOAST_HTML}</template>`;
+});
+
+afterEach(() => {
+  HTMLElement.prototype.animate = realAnimate;
 });
 
 function fakeXhr(

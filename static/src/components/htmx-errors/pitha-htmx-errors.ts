@@ -29,6 +29,14 @@
 
 import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
 import { logger } from '../lib/logger';
+import {
+  EASE_IN,
+  EASE_OUT,
+  MOTION_FADE_IN_MS,
+  MOTION_FADE_OUT_MS,
+  prefersReducedMotion,
+  REDUCED_FADE_MS,
+} from '../lib/motion';
 
 const TOAST_MARKER = 'data-toast';
 const DISMISS_AFTER_MS = 8000;
@@ -153,7 +161,8 @@ export function onNoResponse(): void {
 export function onClick(event: Event): void {
   const target = event.target;
   if (!(target instanceof Element)) return;
-  target.closest('[data-toast-dismiss]')?.closest('[data-toast]')?.remove();
+  const toast = target.closest('[data-toast-dismiss]')?.closest<HTMLElement>('[data-toast]');
+  if (toast) dismissToast(toast);
 }
 
 /** Re-shows the popover so it sits above any modal dialog opened since it was last shown. No-op without Popover API support, and for a region inside a dialog (already above the page). */
@@ -163,6 +172,37 @@ function raiseToastRegion(target: HTMLElement): void {
   target.showPopover();
 }
 
+/** Toast appearance (design guide §4/§5): opacity plus a small (8px) rise over 320ms ease-out; under reduced motion only a <=100ms fade. A no-op without the Web Animations API. */
+function animateToastIn(toast: HTMLElement): void {
+  if (typeof toast.animate !== 'function') return;
+  if (prefersReducedMotion()) {
+    toast.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REDUCED_FADE_MS });
+    return;
+  }
+  toast.animate(
+    [
+      { opacity: 0, transform: 'translateY(8px)' },
+      { opacity: 1, transform: 'translateY(0)' },
+    ],
+    { duration: MOTION_FADE_IN_MS, easing: EASE_OUT },
+  );
+}
+
+/** Removes `toast` after a fade-out (240ms ease-in; <=100ms under reduced motion). Without the Web Animations API it is removed at once. */
+export function dismissToast(toast: HTMLElement): void {
+  if (typeof toast.animate !== 'function' || !toast.isConnected) {
+    toast.remove();
+    return;
+  }
+  toast.removeAttribute(TOAST_MARKER);
+  toast.setAttribute('aria-hidden', 'true');
+  toast.animate([{ opacity: 1 }, { opacity: 0 }], {
+    duration: prefersReducedMotion() ? REDUCED_FADE_MS : MOTION_FADE_OUT_MS,
+    easing: EASE_IN,
+    fill: 'forwards',
+  }).onfinish = () => toast.remove();
+}
+
 /** Auto-dismisses `toast` after DISMISS_AFTER_MS, but never while the pointer is over it or focus is inside it (WCAG 2.2.1): the countdown restarts once both are gone. */
 function scheduleDismiss(toast: HTMLElement): void {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -170,7 +210,7 @@ function scheduleDismiss(toast: HTMLElement): void {
   let focused = false;
   const arm = () => {
     clearTimeout(timer);
-    if (!hovered && !focused) timer = setTimeout(() => toast.remove(), DISMISS_AFTER_MS);
+    if (!hovered && !focused) timer = setTimeout(() => dismissToast(toast), DISMISS_AFTER_MS);
   };
   toast.addEventListener('mouseenter', () => {
     hovered = true;
@@ -198,6 +238,7 @@ function onToastsAdded(target: HTMLElement, records: MutationRecord[]): void {
     for (const node of record.addedNodes) {
       if (node instanceof HTMLElement && node.hasAttribute(TOAST_MARKER)) {
         added = true;
+        animateToastIn(node);
         scheduleDismiss(node);
       }
     }

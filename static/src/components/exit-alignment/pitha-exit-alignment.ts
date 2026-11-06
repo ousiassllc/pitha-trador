@@ -113,7 +113,7 @@ export class PithaExitAlignment extends LitElement {
             text: 'メタモデルの学習ラベルが前提にする出口（利確・損切り・タイムアウト・コスト）と、実際の取引の出口が合っているかを確かめる表です。合っていないと、モデルの予測した勝ち負けの幅が実際の取引とずれます。',
           })}
         </h2>
-        <button type="button" @click=${() => void this.load()} ?disabled=${this.loading}>
+        <button type="button" data-ripple @click=${() => void this.load()} ?disabled=${this.loading}>
           ${this.loading ? '更新中…' : '更新'}
         </button>
         ${this.error ? html`<p role="alert">${this.error}</p>` : ''}
