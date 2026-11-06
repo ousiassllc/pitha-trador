@@ -105,7 +105,7 @@ templ Experiments(props ExperimentsProps) {
 		} else {
 			<table class="w-full text-left text-sm" aria-label="調整の実験の一覧" data-testid="mcp-experiments-table">
 				<thead>
-					<tr><th scope="col" class="pr-2 text-xs font-semibold">ID</th><th scope="col" class="pr-2 text-xs font-semibold">状態</th><th scope="col" class="pr-2 text-xs font-semibold">期間（JST）</th><th scope="col" class="pr-2 text-xs font-semibold">変えた変数</th><th scope="col" class="pr-2 text-xs font-semibold">前 / 後の取引</th><th scope="col" class="pr-2 text-xs font-semibold">判定</th><th scope="col" class="text-xs font-semibold"><span class="sr-only">操作</span></th></tr>
+					<tr><th scope="col" class="pr-2 text-xs font-semibold">ID</th><th scope="col" class="pr-2 text-xs font-semibold">状態</th><th scope="col" class="pr-2 text-xs font-semibold">期間（JST）</th><th scope="col" class="pr-2 text-xs font-semibold">変えた変数</th><th scope="col" class="pr-2 text-right text-xs font-semibold">前 / 後の取引</th><th scope="col" class="pr-2 text-xs font-semibold">判定</th><th scope="col" class="text-xs font-semibold"><span class="sr-only">操作</span></th></tr>
 				</thead>
 				<tbody>
 					for _, row := range props.Rows {
@@ -114,7 +114,7 @@ templ Experiments(props ExperimentsProps) {
 							<td class="pr-2">{ row.StatusLabel }</td>
 							<td class="pr-2">{ row.Period }</td>
 							<td class="pr-2"><code>{ row.Variable }</code> { row.Change }<span class="block text-mute">{ row.By }</span></td>
-							<td class="pr-2">{ strconv.Itoa(row.BeforeTrades) } / { strconv.Itoa(row.AfterTrades) }</td>
+							<td class="pr-2 text-right font-mono tabular-nums">{ strconv.Itoa(row.BeforeTrades) } / { strconv.Itoa(row.AfterTrades) }</td>
 							<td class="pr-2" data-testid="mcp-experiment-verdict">{ row.VerdictLabel }</td>
 							<td class="flex flex-wrap gap-1">
 								@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
@@ -214,7 +214,7 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 		<span>変えた変数: <code>{ props.Variable }</code> { props.Change }</span>
 		<span>前: { props.BeforePeriod }　後: { props.AfterPeriod }</span>
 		<div class="flex items-center gap-2">
-			<span class="font-semibold" data-testid="mcp-experiment-detail-verdict">判定: { props.VerdictLabel }</span>
+			<span class="text-ink" data-testid="mcp-experiment-detail-verdict">判定: { props.VerdictLabel }</span>
 			if props.VerdictHelp != "" {
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiment-verdict", Label: "判定の説明"}) {
 					{ props.VerdictHelp }
@@ -244,22 +244,22 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 		}
 		<table class="w-full text-left text-sm" aria-label="前後の指標" data-testid="mcp-experiment-metrics">
 			<thead>
-				<tr><th scope="col" class="pr-2 text-xs font-semibold">指標</th><th scope="col" class="pr-2 text-xs font-semibold">前</th><th scope="col" class="pr-2 text-xs font-semibold">後</th><th scope="col" class="text-xs font-semibold">後 − 前</th></tr>
+				<tr><th scope="col" class="pr-2 text-xs font-semibold">指標</th><th scope="col" class="pr-2 text-right text-xs font-semibold">前</th><th scope="col" class="pr-2 text-right text-xs font-semibold">後</th><th scope="col" class="text-right text-xs font-semibold">後 − 前</th></tr>
 			</thead>
 			<tbody>
 				for _, m := range props.Metrics {
-					<tr><th scope="row" class="pr-2 font-normal">{ m.Label }</th><td class="pr-2">{ m.Before }</td><td class="pr-2">{ m.After }</td><td>{ m.Diff }</td></tr>
+					<tr><th scope="row" class="pr-2 font-normal">{ m.Label }</th><td class="pr-2 text-right font-mono tabular-nums">{ m.Before }</td><td class="pr-2 text-right font-mono tabular-nums">{ m.After }</td><td class="text-right font-mono tabular-nums">{ m.Diff }</td></tr>
 				}
 			</tbody>
 		</table>
 		if len(props.Rejects) > 0 {
 			<table class="w-full text-left text-sm" aria-label="拒否理由の内訳" data-testid="mcp-experiment-rejects">
 				<thead>
-					<tr><th scope="col" class="pr-2 text-xs font-semibold">拒否の種類</th><th scope="col" class="pr-2 text-xs font-semibold">理由</th><th scope="col" class="pr-2 text-xs font-semibold">前</th><th scope="col" class="text-xs font-semibold">後</th></tr>
+					<tr><th scope="col" class="pr-2 text-xs font-semibold">拒否の種類</th><th scope="col" class="pr-2 text-xs font-semibold">理由</th><th scope="col" class="pr-2 text-right text-xs font-semibold">前</th><th scope="col" class="text-right text-xs font-semibold">後</th></tr>
 				</thead>
 				<tbody>
 					for _, r := range props.Rejects {
-						<tr><td class="pr-2">{ r.Group }</td><td class="pr-2"><code>{ r.Reason }</code></td><td class="pr-2">{ strconv.Itoa(r.Before) }</td><td>{ strconv.Itoa(r.After) }</td></tr>
+						<tr><td class="pr-2">{ r.Group }</td><td class="pr-2"><code>{ r.Reason }</code></td><td class="pr-2 text-right font-mono tabular-nums">{ strconv.Itoa(r.Before) }</td><td class="text-right font-mono tabular-nums">{ strconv.Itoa(r.After) }</td></tr>
 					}
 				</tbody>
 			</table>

@@ -12,7 +12,7 @@ import (
 // when the evaluation could not be read.
 templ EvaluationPanel(p Panel, err string) {
 	<section class="mt-12" aria-labelledby="evaluation-heading" data-testid="evaluation-panel">
-		<h2 id="evaluation-heading" class="text-lg font-semibold text-ink">
+		<h2 id="evaluation-heading" class="text-xl font-semibold text-ink">
 			実績評価（勝てているか）
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation", Label: "実績評価の説明"}) {
 				損益は手数料控除後の実現損益（円）です。[ ] は95%信頼区間で、同じ日の取引は相関するため日単位でまとめて評価しています。サンプルが基準未満の指標は「判定不能」と表示します。EV は1取引あたりの平均損益、PF はプロフィットファクター（総利益 ÷ 総損失）、最大DD は損益の累計がピークから最も下がった幅です。

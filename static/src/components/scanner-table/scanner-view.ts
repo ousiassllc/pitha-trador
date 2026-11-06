@@ -128,7 +128,7 @@ export function sortValue(item: ScannerItem, key: SortKey): string | number | nu
   return item[key];
 }
 
-const BADGE_BASE = 'inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold';
+const BADGE_BASE = 'inline-flex items-center rounded-full px-2 py-1 text-xs';
 
 // Mirrors atoms.Badge / atoms.EntryQualityBadge (internal/web/atoms/badge.templ).
 const DIRECTION_BADGE_CLASS: Record<string, string> = {

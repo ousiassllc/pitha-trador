@@ -169,7 +169,7 @@ export class PithaScannerTable extends LitElement {
     return html`
       <p class="mb-3 text-sm text-mute" data-testid="scanner-count">
         候補
-        <span class="text-lg font-semibold text-ink">${items.length}</span>
+        <span class="text-lg font-mono tabular-nums text-ink">${items.length}</span>
         件
         ${renderLightHelpMark('help-scanner-count', '候補銘柄の説明', COUNT_HELP_TEXT)}
       </p>

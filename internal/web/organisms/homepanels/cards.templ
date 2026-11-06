@@ -76,7 +76,7 @@ templ TradeStatusBody(v TradeStatusView) {
 		@cardError(v.Err)
 	} else {
 		<div class="mt-2 flex items-start gap-2">
-			<p class="flex items-start gap-2 text-base font-semibold text-ink" data-testid="trade-status-sentence" data-allowed={ strconv.FormatBool(v.Allowed) }>
+			<p class="flex items-start gap-2 text-base text-ink" data-testid="trade-status-sentence" data-allowed={ strconv.FormatBool(v.Allowed) }>
 				<span aria-hidden="true" class={ "mt-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full", templ.KV("bg-success", v.Allowed), templ.KV("bg-danger", !v.Allowed) }></span>
 				<span>{ v.Sentence }</span>
 			</p>
@@ -89,7 +89,7 @@ templ TradeStatusBody(v TradeStatusView) {
 			}
 		</div>
 		if v.Detail != "" {
-			<p class="mt-1 text-xs leading-relaxed text-mute" data-testid="trade-status-detail">{ v.Detail }</p>
+			<p class="mt-1 text-sm leading-relaxed text-mute" data-testid="trade-status-detail">{ v.Detail }</p>
 		}
 		if v.Link.Href != "" {
 			<p class="mt-1">@DestLink(v.Link)</p>
@@ -130,7 +130,7 @@ templ PnLBody(v PnLView) {
 		@cardError(v.Err)
 	} else {
 		if v.UnrealizedKnown {
-			<p class={ "mt-2 text-2xl font-mono tabular-nums", PnLClass(v.Total) } data-testid="pnl-total">{ FormatSignedYen(v.Total) }</p>
+			<p class={ "mt-2 text-xl font-mono tabular-nums", PnLClass(v.Total) } data-testid="pnl-total">{ FormatSignedYen(v.Total) }</p>
 			<p class="text-xs text-mute">合計</p>
 		} else {
 			<p class="mt-2 text-sm text-ink" data-testid="pnl-total-unknown">合計は保有ポジションを読み取れないため表示できません。</p>
@@ -187,7 +187,7 @@ templ PositionsBody(v PositionsView) {
 	} else if len(v.Rows) == 0 {
 		<p class="mt-3 rounded-md border border-dashed border-border bg-bone px-3 py-6 text-center text-sm text-mute" data-testid="positions-empty">保有中のポジションはありません</p>
 	} else {
-		<p class="mt-1 text-2xl font-mono tabular-nums text-ink" data-testid="positions-count">{ strconv.Itoa(len(v.Rows)) }<span class="ml-1 text-sm font-normal text-mute">件</span></p>
+		<p class="mt-1 text-xl font-mono tabular-nums text-ink" data-testid="positions-count">{ strconv.Itoa(len(v.Rows)) }<span class="ml-1 text-sm font-normal text-mute">件</span></p>
 		<div class="mt-2 max-h-44 overflow-y-auto">
 			<table class="w-full border-collapse text-left text-sm" aria-label="保有ポジション" data-testid="positions-table">
 				<thead>

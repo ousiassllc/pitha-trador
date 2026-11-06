@@ -47,12 +47,13 @@ function figures(s: {
   ev_net_bps: number;
   total_pnl: number;
 }) {
-  if (s.trade_count === 0) return html`<td>0</td><td>—</td><td>—</td><td>—</td>`;
+  if (s.trade_count === 0)
+    return html`<td class="num">0</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>`;
   return html`
-    <td>${s.trade_count}</td>
-    <td data-testid="calibration-ab-win">${formatRate(s.win_rate)}</td>
-    <td data-testid="calibration-ab-ev">${formatBps(s.ev_net_bps)}</td>
-    <td>${formatYen(s.total_pnl)}</td>
+    <td class="num">${s.trade_count}</td>
+    <td class="num" data-testid="calibration-ab-win">${formatRate(s.win_rate)}</td>
+    <td class="num" data-testid="calibration-ab-ev">${formatBps(s.ev_net_bps)}</td>
+    <td class="num">${formatYen(s.total_pnl)}</td>
   `;
 }
 
@@ -70,10 +71,10 @@ export function renderABArms(arms: ABArm[] | undefined) {
       <thead>
         <tr>
           <th scope="col">アーム / レジーム</th>
-          <th scope="col">決済済み件数</th>
-          <th scope="col">勝率</th>
-          <th scope="col">EV（net, 1件あたり）</th>
-          <th scope="col">損益合計</th>
+          <th scope="col" class="num">決済済み件数</th>
+          <th scope="col" class="num">勝率</th>
+          <th scope="col" class="num">EV（net, 1件あたり）</th>
+          <th scope="col" class="num">損益合計</th>
         </tr>
       </thead>
       <tbody>

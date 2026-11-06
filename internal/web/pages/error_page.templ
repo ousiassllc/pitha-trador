@@ -39,7 +39,7 @@ var statusNames = map[int]string{
 templ ErrorPage(status int, message string) {
 	@layout.Shell(errorHeading(status), organisms.NavNone) {
 		<section class="flex flex-col gap-3" data-testid="error-page">
-			<h1 class="text-2xl font-semibold text-ink">{ errorHeading(status) }</h1>
+			<h1 class="text-3xl font-semibold text-ink">{ errorHeading(status) }</h1>
 			<p class="text-sm text-ink" role="alert">{ message }</p>
 			<p><a class="text-sm text-accent underline decoration-mute" href="/scanner">候補銘柄に戻る</a></p>
 		</section>

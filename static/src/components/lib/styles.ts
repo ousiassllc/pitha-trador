@@ -35,6 +35,38 @@ export const buttonStyles = css`
   }
 `;
 
+// Table recipe (brand-guide §2/§3): header row SemiBold 12px --mute with a 1px
+// --border underline, cells padded 10 / 12. Numeric columns carry `.num`
+// (JetBrains Mono, tabular, right-aligned); label columns stay in the body font.
+export const tableStyles = css`
+  table {
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  th {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--mute);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: left;
+  }
+  tbody th {
+    border-bottom: 0;
+    color: var(--ink);
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+  td {
+    padding: 0.625rem 0.75rem;
+  }
+  .num {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+`;
+
 // Error text (`role="alert"`) and the shared ws-status notice
 // (lib/ws-status.ts).
 export const noticeStyles = css`

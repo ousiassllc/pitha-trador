@@ -106,9 +106,9 @@ templ Panel(props PanelProps) {
 				@atoms.Input(atoms.InputProps{ID: "jev-prompt-cap", Name: "cap", Class: "bg-surface px-3 py-2", Attrs: capAttrs(props)})
 				<span class="text-xs text-mute" data-testid="jev-prompt-cap-note">
 					if props.CapIsDefault {
-						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（既定値）。
+						今の上限は <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</span>（既定値）。
 					} else {
-						今の上限は <strong data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</strong>（保存した値）。
+						今の上限は <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</span>（保存した値）。
 					}
 					<br/>
 					<span data-testid="jev-prompt-failure-cap">失敗した呼び出しが 1 日に { itoa(props.FailureCap) } 回に達しても、その日のシャドーを止めます（今日: { itoa(props.FailuresToday) } 回）。</span>
@@ -128,22 +128,22 @@ templ Panel(props PanelProps) {
 					費用の合計は、各呼び出しの費用の合計です。API が返す入力トークン数に公表単価（入力 100 万トークンあたり 0.042 USD）を掛けた見積りで、請求書とは突き合わせていません（API は課金額を返しません）。応答に使用量（usage）が無かった呼び出しは、0 USD とは数えず、リクエストの大きさから保守的に推定した入力トークン数で費用に入れます（「うち見積り」。上限をすり抜けないため）。
 				}
 			</span>
-			<span>今日（{ props.TodayDate }）: <strong data-testid="jev-prompt-cost-today">{ props.TodayUSD } USD</strong>（{ itoa(props.TodayCalls) } 回）　累計: <strong data-testid="jev-prompt-cost-total">{ props.TotalUSD } USD</strong>（{ itoa(props.TotalCalls) } 回）</span>
+			<span>今日（{ props.TodayDate }）: <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-cost-today">{ props.TodayUSD } USD</span>（{ itoa(props.TodayCalls) } 回）　累計: <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-cost-total">{ props.TotalUSD } USD</span>（{ itoa(props.TotalCalls) } 回）</span>
 			if props.HaltNote != "" {
 				<span class="text-warning" role="status" data-testid="jev-prompt-halt">{ props.HaltNote }</span>
 			}
 			if props.ThrottleNote != "" {
 				<span class="text-warning" role="status" data-testid="jev-prompt-throttle">{ props.ThrottleNote }</span>
 			}
-			<span data-testid="jev-prompt-cost-estimated">うち見積り: 今日 <strong data-testid="jev-prompt-estimated-today">{ props.TodayEstimatedUSD } USD</strong>（{ itoa(props.TodayEstimatedCalls) } 回）　累計 <strong data-testid="jev-prompt-estimated-total">{ props.TotalEstimatedUSD } USD</strong>（{ itoa(props.TotalEstimatedCalls) } 回）</span>
+			<span data-testid="jev-prompt-cost-estimated">うち見積り: 今日 <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-estimated-today">{ props.TodayEstimatedUSD } USD</span>（{ itoa(props.TodayEstimatedCalls) } 回）　累計 <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-estimated-total">{ props.TotalEstimatedUSD } USD</span>（{ itoa(props.TotalEstimatedCalls) } 回）</span>
 			if len(props.Daily) > 0 {
 				<table class="w-full text-left text-sm" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
 					<thead>
-						<tr><th scope="col" class="pr-2 text-xs font-semibold">日（JST）</th><th scope="col" class="pr-2 text-xs font-semibold">回数</th><th scope="col" class="pr-2 text-xs font-semibold">費用（USD）</th><th scope="col" class="text-xs font-semibold">うち見積り（USD・回数）</th></tr>
+						<tr><th scope="col" class="pr-2 text-xs font-semibold">日（JST）</th><th scope="col" class="pr-2 text-right text-xs font-semibold">回数</th><th scope="col" class="pr-2 text-right text-xs font-semibold">費用（USD）</th><th scope="col" class="text-right text-xs font-semibold">うち見積り（USD・回数）</th></tr>
 					</thead>
 					<tbody>
 						for _, d := range props.Daily {
-							<tr data-testid="jev-prompt-daily-row"><td class="pr-2">{ d.Date }</td><td class="pr-2">{ itoa(d.Calls) }</td><td class="pr-2">{ d.USD }</td><td>{ d.EstimatedUSD }（{ itoa(d.EstimatedCalls) } 回）</td></tr>
+							<tr data-testid="jev-prompt-daily-row"><td class="pr-2">{ d.Date }</td><td class="pr-2 text-right font-mono tabular-nums">{ itoa(d.Calls) }</td><td class="pr-2 text-right font-mono tabular-nums">{ d.USD }</td><td class="text-right font-mono tabular-nums">{ d.EstimatedUSD }（{ itoa(d.EstimatedCalls) } 回）</td></tr>
 						}
 					</tbody>
 				</table>

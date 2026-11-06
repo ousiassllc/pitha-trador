@@ -14,7 +14,7 @@ import (
 // (internal/web/handler/home).
 templ HomePage(v homepanels.View) {
 	@layout.Shell("ホーム", organisms.NavHome) {
-		<h1 class="text-2xl font-semibold text-ink">ホーム</h1>
+		<h1 class="text-3xl font-semibold text-ink">ホーム</h1>
 		<section class="mt-4 grid gap-4 lg:grid-cols-12" aria-label="今日の状況" data-testid="home-today-row">
 			@homepanels.TradeStatusCard(v.TradeStatus)
 			@homepanels.PnLCard(v.PnL)

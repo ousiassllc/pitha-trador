@@ -36,7 +36,7 @@ templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 		<pitha-scanner-table api-url="/api/v1/scanner" ws-url="/ws/scanner">
 			<p class="mb-3 text-sm text-mute" data-testid="scanner-count">
 				候補
-				<span class="text-lg font-semibold text-ink">{ strconv.Itoa(len(candidates)) }</span>
+				<span class="text-lg font-mono tabular-nums text-ink">{ strconv.Itoa(len(candidates)) }</span>
 				件
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scanner-count", Label: "候補銘柄の説明"}) {
 					{ scannerCountHelp }

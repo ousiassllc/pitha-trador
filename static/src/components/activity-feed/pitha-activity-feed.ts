@@ -223,7 +223,7 @@ export class PithaActivityFeed extends LitElement {
       ${this.renderKillSwitchEvents()}
 
       <section id="activity-feed" data-testid="activity-feed" class="mt-12">
-        <h2 class="mb-2 text-lg font-semibold text-ink">最近の動き</h2>
+        <h2 class="mb-2 text-xl font-semibold text-ink">最近の動き</h2>
         <div class="mb-2 flex gap-4 text-sm">
           <label>
             種別
@@ -248,7 +248,7 @@ export class PithaActivityFeed extends LitElement {
               <th scope="col" class="px-3 py-2.5">種別</th>
               <th scope="col" class="px-3 py-2.5">銘柄</th>
               <th scope="col" class="px-3 py-2.5">内容</th>
-              <th scope="col" class="px-3 py-2.5">応答時間（ms）</th>
+              <th scope="col" class="px-3 py-2.5 text-right">応答時間（ms）</th>
             </tr>
           </thead>
           <tbody>
@@ -259,7 +259,7 @@ export class PithaActivityFeed extends LitElement {
                   <td class="px-3 py-2.5 text-ink">${activityTypeLabel(e.type)}</td>
                   <td class="px-3 py-2.5">${e.symbol ?? '—'}</td>
                   <td class="px-3 py-2.5">${activityDetail(e.type, e.detail)}</td>
-                  <td class="px-3 py-2.5">${e.latency_ms ?? '—'}</td>
+                  <td class="px-3 py-2.5 text-right font-mono tabular-nums">${e.latency_ms ?? '—'}</td>
                 </tr>
               `,
             )}

@@ -98,7 +98,7 @@ func TestPanelShowsTheCostAndWhyTheShadowStopped(t *testing.T) {
 	body := a.get("/settings/jev-prompt-panel").Body.String()
 	for _, want := range []string{
 		`data-testid="jev-prompt-cost-today">0.04 USD`, `data-testid="jev-prompt-cost-total">0.06 USD`,
-		`data-testid="jev-prompt-estimated-today">0.03 USD</strong>（1 回）`, `data-testid="jev-prompt-estimated-total">0.03 USD</strong>（1 回）`,
+		`data-testid="jev-prompt-estimated-today">0.03 USD</span>（1 回）`, `data-testid="jev-prompt-estimated-total">0.03 USD</span>（1 回）`,
 		"1 日の費用上限（0.03 USD）に達したため、今日のシャドーは止まっています", "ライブの判断は続いています",
 	} {
 		if !strings.Contains(body, want) {

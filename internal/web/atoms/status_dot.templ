@@ -17,10 +17,10 @@ const (
 templ StatusDot(state State) {
 	switch state {
 		case StateRunning:
-			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs font-semibold" data-state="running">稼働中</span>
+			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs" data-state="running">稼働中</span>
 		case StatePaused:
-			<span class="inline-flex items-center rounded-full border tone-warning px-2 py-1 text-xs font-semibold" data-state="paused">新規停止中</span>
+			<span class="inline-flex items-center rounded-full border tone-warning px-2 py-1 text-xs" data-state="paused">新規停止中</span>
 		default:
-			<span class="inline-flex items-center rounded-full border tone-danger px-2 py-1 text-xs font-semibold" data-state="killed">全停止（Kill）</span>
+			<span class="inline-flex items-center rounded-full border tone-danger px-2 py-1 text-xs" data-state="killed">全停止（Kill）</span>
 	}
 }

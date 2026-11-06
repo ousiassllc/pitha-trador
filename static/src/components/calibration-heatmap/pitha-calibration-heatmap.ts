@@ -19,7 +19,7 @@ import { get } from '../lib/api';
 import { chartBaseOptions, readToken } from '../lib/chart-theme';
 import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
-import { buttonStyles, noticeStyles } from '../lib/styles';
+import { buttonStyles, noticeStyles, tableStyles } from '../lib/styles';
 import { type ABArm, renderABArms } from './ab-arms-view';
 import { renderBarrierSummary, renderBucketBarrier } from './barrier-view';
 import { heatmapStyles } from './calibration-styles';
@@ -47,7 +47,7 @@ import { type RetrainSkip, renderRetrainSkips } from './meta-model/retrain-skips
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
   // Shadow DOM: Tailwind does not reach in here, so style locally.
-  static override styles = [buttonStyles, noticeStyles, heatmapStyles, helpMarkStyles];
+  static override styles = [buttonStyles, noticeStyles, tableStyles, heatmapStyles, helpMarkStyles];
 
   @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 

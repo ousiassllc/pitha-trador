@@ -19,7 +19,7 @@ import (
 // renders it; it is server-rendered only (no island).
 templ WatchlistPage(view domain.WatchListView) {
 	@layout.Shell("監視リスト", organisms.NavScanner) {
-		<h1 class="text-2xl font-semibold text-ink">
+		<h1 class="text-3xl font-semibold text-ink">
 			監視リスト
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-watchlist", Label: "監視リストの説明"}) {
 				立花証券の監視銘柄は、引け後の日足スクリーニング（または固定リスト）で翌営業日分が前夜に確定し、翌朝のEVENT購読に使われます。設定は
@@ -48,13 +48,13 @@ templ WatchlistPage(view domain.WatchListView) {
 
 templ watchlistSection(list domain.WatchList, active bool) {
 	<section class="mt-12" data-testid="watchlist" data-list-date={ list.ListDate } data-source={ list.Source } data-active={ strconv.FormatBool(active) }>
-		<h2 class="text-lg font-semibold text-ink">
+		<h2 class="text-xl font-semibold text-ink">
 			{ list.ListDate } の監視リスト
 			if active {
-				<span class="ml-2 rounded-full border tone-success px-2 py-1 text-xs font-semibold" data-testid="watchlist-active">使用中</span>
+				<span class="ml-2 rounded-full border tone-success px-2 py-1 text-xs" data-testid="watchlist-active">使用中</span>
 			}
 			if list.Fallback() {
-				<span class="ml-2 rounded-full border tone-warning px-2 py-1 text-xs font-semibold" data-testid="watchlist-fallback">代替リスト</span>
+				<span class="ml-2 rounded-full border tone-warning px-2 py-1 text-xs" data-testid="watchlist-fallback">代替リスト</span>
 			}
 		</h2>
 		<dl class="mt-2 grid gap-x-4 gap-y-1 text-sm text-ink sm:grid-cols-[max-content_1fr]">
