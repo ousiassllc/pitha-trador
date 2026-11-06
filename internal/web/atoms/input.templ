@@ -1,9 +1,14 @@
 package atoms
 
-// fieldBase is the border/shape shared by Input and Select, so a form
-// control's look changes in one place. Layout and spacing (width, padding,
+// fieldBase is the border/shape shared by Input, Select and Textarea, so a
+// form control's look changes in one place. Layout and spacing (width, padding,
 // margin, text size) come from the caller's Class.
-const fieldBase = "rounded-md border border-slate-300"
+const fieldBase = "rounded-md border border-border"
+
+// fieldFocus is the form focus state (brand-guide C3): --focus border and a
+// 2px --ring (--focus at 40%). `outline-none` is safe only because the ring
+// is always drawn on the same element.
+const fieldFocus = "focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
 
 // InputProps is Input's input. Type is empty for "text". Class carries the
 // layout/spacing classes appended to the shared border style (empty keeps
@@ -63,11 +68,36 @@ templ Select(props SelectProps) {
 	</select>
 }
 
+// TextareaProps is Textarea's input. Class is as in InputProps (empty keeps
+// the default `px-3 py-1`). Attrs carries everything else (rows, maxlength,
+// required, data-testid, ...). The initial text is Textarea's children.
+type TextareaProps struct {
+	ID    string
+	Name  string
+	Class string
+	Attrs templ.Attributes
+}
+
+// Textarea renders a <textarea> with the shared border and focus style. An
+// empty ID or Name omits the attribute.
+templ Textarea(props TextareaProps) {
+	<textarea
+		if props.ID != "" {
+			id={ props.ID }
+		}
+		if props.Name != "" {
+			name={ props.Name }
+		}
+		class={ fieldClass(props.Class, "px-3 py-1") }
+		{ props.Attrs... }
+	>{ children... }</textarea>
+}
+
 func fieldClass(class, fallback string) string {
 	if class == "" {
 		class = fallback
 	}
-	return fieldBase + " " + class
+	return fieldBase + " " + class + " " + fieldFocus
 }
 
 func inputType(t string) string {

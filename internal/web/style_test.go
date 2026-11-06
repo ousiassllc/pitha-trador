@@ -123,3 +123,118 @@ func TestTemplClassesAreCompiledTailwindUtilities(t *testing.T) {
 		}
 	}
 }
+
+// TestCompiledTextScaleMatchesTheGuide pins brand-guide §2's size scale and
+// line heights in the compiled stylesheet (issue #953): Tailwind's own
+// --text-xl/-3xl (20 / 30px) are off the guide's scale, and an @theme
+// override that does not take effect would leave them in place unnoticed.
+func TestCompiledTextScaleMatchesTheGuide(t *testing.T) {
+	cssPath := filepath.Join(repoRoot(t), "static/src/dist/css/app.css")
+	css, err := os.ReadFile(cssPath)
+	if err != nil {
+		t.Fatalf("reading compiled stylesheet %s (run `bun --cwd static run build` first): %v", cssPath, err)
+	}
+	for _, want := range []string{
+		"--text-xs:.75rem", "--text-xs--line-height:1.6",
+		"--text-sm:.875rem", "--text-sm--line-height:1.7",
+		"--text-base:1rem", "--text-base--line-height:1.8",
+		"--text-lg:1.125rem", "--text-lg--line-height:1.7",
+		"--text-xl:1.5rem", "--text-xl--line-height:1.5",
+		"--text-3xl:2.5rem", "--text-3xl--line-height:1.3",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("compiled stylesheet lacks %q (text sizes and line heights follow brand-guide §2)", want)
+		}
+	}
+}
+
+// TestCompiledInlineAlertExitFadesOut pins the inline alert's exit (issue
+// #955, brand-guide M5): an alert in a slot that htmx marks `htmx-swapping`
+// animates out over --motion-fade-out with ease-in, and the tooltip's closed
+// state uses the same exit timing, so its entrance and exit are not one
+// transition in both directions.
+func TestCompiledInlineAlertExitFadesOut(t *testing.T) {
+	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
+	if err != nil {
+		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
+	}
+	for _, want := range []string{
+		".htmx-swapping>[data-inline-alert]{animation:alert-out var(--motion-fade-out) var(--ease-in) both",
+		"@keyframes alert-out",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("compiled stylesheet lacks %q", want)
+		}
+	}
+}
+
+// classConcatRe finds a dynamic `class={ ... }` whose first operand is a string
+// literal joined with `+`.
+var classConcatRe = regexp.MustCompile(`class=\{[^}]*"\s*\+`)
+
+// TestTemplClassExpressionsAreNotConcatenated is issue #957's regression test:
+// `class={ "rounded-full text-xs" + tone.class() }` glues the last literal
+// token to the first returned one ("text-xsborder"), so both classes silently
+// vanish. A templ class expression takes several arguments, which templ joins
+// with a space: `class={ "rounded-full text-xs", tone.class() }`.
+func TestTemplClassExpressionsAreNotConcatenated(t *testing.T) {
+	root := filepath.Join(repoRoot(t), "internal/web")
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".templ") {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		for _, m := range classConcatRe.FindAllString(string(src), -1) {
+			t.Errorf("%s: %q joins class names with `+`, which drops the separating space; pass them as separate templ arguments (issue #957)", rel, m)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %s: %v", root, err)
+	}
+}
+
+// TestCompiledDarkTokensFollowTheOSAndDataTheme pins issues #957 and #978: the
+// Dark values are reachable under `prefers-color-scheme: dark` (unless
+// `data-theme="light"` opts out) and under `data-theme="dark"`, and a forced
+// Light needs no rule of its own (the :root Light values apply).
+func TestCompiledDarkTokensFollowTheOSAndDataTheme(t *testing.T) {
+	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
+	if err != nil {
+		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
+	}
+	for _, want := range []string{
+		"@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--ink:#fff;",
+		":root[data-theme=dark]{color-scheme:dark;--ink:#fff;",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("compiled stylesheet lacks %q", want)
+		}
+	}
+}
+
+// TestCompiledTableHeadingsAreSemiBold pins issue #963 (brand-guide §2/§4):
+// Tailwind's preflight leaves the UA's `th { font-weight: bold }` in place, so
+// without a base rule every <th> renders at 700 whatever its row inherits. Row
+// headings (`scope="row"`) are body text and stay Regular.
+func TestCompiledTableHeadingsAreSemiBold(t *testing.T) {
+	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
+	if err != nil {
+		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
+	}
+	for _, want := range []string{
+		"th{font-weight:600}",
+		"th[scope=row]{font-weight:400}",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("compiled stylesheet lacks %q", want)
+		}
+	}
+}

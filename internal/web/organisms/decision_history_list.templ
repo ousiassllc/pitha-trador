@@ -16,17 +16,17 @@ import (
 // caller must enrich a repository-read domain.JevDecision before it has
 // these fields).
 templ DecisionHistoryList(decisions []domain.JevDecision) {
-	<section class="mt-8" id="decision-history" data-testid="decision-history">
-		<h2 class="text-lg font-semibold text-slate-900">判断の履歴</h2>
-		<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="Jev判断履歴">
+	<section class="mt-12" id="decision-history" data-testid="decision-history">
+		<h2 class="text-xl font-semibold text-ink">判断の履歴</h2>
+		<table class="mt-6 w-full border-collapse text-left text-sm" aria-label="Jev判断履歴">
 			<thead>
-				<tr class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
-					<th scope="col" class="px-3 py-2">日時</th>
-					<th scope="col" class="px-3 py-2">種別</th>
-					<th scope="col" class="px-3 py-2">方向</th>
-					<th scope="col" class="px-3 py-2">確信度</th>
-					<th scope="col" class="px-3 py-2">相場状態</th>
-					<th scope="col" class="px-3 py-2">エントリー品質</th>
+				<tr class="border-b border-border text-xs font-semibold uppercase text-mute">
+					<th scope="col" class="px-3 py-2.5">日時</th>
+					<th scope="col" class="px-3 py-2.5">種別</th>
+					<th scope="col" class="px-3 py-2.5">方向</th>
+					<th scope="col" class="px-3 py-2.5 text-right">確信度</th>
+					<th scope="col" class="px-3 py-2.5">相場状態</th>
+					<th scope="col" class="px-3 py-2.5">エントリー品質</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -39,13 +39,13 @@ templ DecisionHistoryList(decisions []domain.JevDecision) {
 }
 
 templ decisionRow(d domain.JevDecision) {
-	<tr class="border-b border-slate-100" data-decision-id={ fmt.Sprintf("%d", d.ID) }>
-		<td class="px-3 py-2">{ atoms.FormatJST(d.Timestamp) }</td>
-		<td class="px-3 py-2">{ d.DecisionType }</td>
-		<td class="px-3 py-2">{ nilableString(d.Direction) }</td>
-		<td class="px-3 py-2">{ nilableFloatStr(d.Confidence) }</td>
-		<td class="px-3 py-2">{ nilableString(d.Regime) }</td>
-		<td class="px-3 py-2">{ nilableString(d.EntryQuality) }</td>
+	<tr class="border-b border-border" data-decision-id={ fmt.Sprintf("%d", d.ID) }>
+		<td class="px-3 py-2.5">{ atoms.FormatJST(d.Timestamp) }</td>
+		<td class="px-3 py-2.5">{ d.DecisionType }</td>
+		<td class="px-3 py-2.5">{ nilableString(d.Direction) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ nilableFloatStr(d.Confidence) }</td>
+		<td class="px-3 py-2.5">{ nilableString(d.Regime) }</td>
+		<td class="px-3 py-2.5">{ nilableString(d.EntryQuality) }</td>
 	</tr>
 }
 

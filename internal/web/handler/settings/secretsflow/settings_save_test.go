@@ -11,6 +11,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
 func TestSettingsHandler_Save_StoresOnlyThePathKey(t *testing.T) {
@@ -88,9 +89,10 @@ func TestSettingsHandler_Save_EmptyValueIsRejectedAndKeepsStoredValue(t *testing
 
 	for name, form := range map[string]url.Values{"blank": {"value": {""}}, "missing": {}} {
 		rec := postSetting(engine, config.KeyJevAPIKey, form)
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("%s: status = %d, want %d", name, rec.Code, http.StatusBadRequest)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: status = %d, want %d", name, rec.Code, http.StatusUnprocessableEntity)
 		}
+		assertInlineAlert(t, name, rec, config.KeyJevAPIKey)
 	}
 	if store.values[config.KeyJevAPIKey] != "old-value" {
 		t.Fatalf("JEV_API_KEY = %q after blank submits, want old-value kept", store.values[config.KeyJevAPIKey])
@@ -124,18 +126,19 @@ func TestSettingsHandler_Save_WhitespaceOnlyIsRejected(t *testing.T) {
 	store.values[config.KeyJevAPIKey] = "old"
 	engine := settingsRouter(settings.NewSettingsHandler(store))
 
-	if rec := postSetting(engine, config.KeyJevAPIKey, url.Values{"value": {" \n\t"}}); rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", rec.Code)
+	if rec := postSetting(engine, config.KeyJevAPIKey, url.Values{"value": {" \n\t"}}); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", rec.Code)
 	}
 	if store.values[config.KeyJevAPIKey] != "old" {
 		t.Fatalf("JEV_API_KEY = %q, want old kept", store.values[config.KeyJevAPIKey])
 	}
 }
 
-// Invalid values are a 400 and never reach the store - in particular an
+// Invalid values are a 422 inline alert in the row's error slot (never a
+// toast, issue #961) and never reach the store - in particular an
 // invalid JEV_BASE_URL must not satisfy the required-key check that
 // releases the Setup Guard.
-func TestSettingsHandler_Save_InvalidValuesAre400AndStoreUntouched(t *testing.T) {
+func TestSettingsHandler_Save_InvalidValuesAre422InlineAndStoreUntouched(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	for _, tc := range []struct{ name, key, value string }{
 		{"not a url", config.KeyJevBaseURL, "notaurl"},
@@ -150,15 +153,13 @@ func TestSettingsHandler_Save_InvalidValuesAre400AndStoreUntouched(t *testing.T)
 			engine := settingsRouter(settings.NewSettingsHandler(store))
 
 			rec := postSetting(engine, tc.key, url.Values{"value": {tc.value}})
-			if rec.Code != http.StatusBadRequest {
-				t.Fatalf("status = %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+			if rec.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("status = %d, want 422 (body=%s)", rec.Code, rec.Body.String())
 			}
 			if len(store.values) != 0 {
 				t.Fatalf("store = %v, want untouched", store.values)
 			}
-			if body := rec.Body.String(); !strings.Contains(body, `data-toast`) || !strings.Contains(body, `role="alert"`) {
-				t.Errorf("HTMX body = %q, want an atoms.Toast fragment", body)
-			}
+			assertInlineAlert(t, tc.name, rec, tc.key)
 			if strings.Contains(rec.Body.String(), tc.value) {
 				t.Errorf("error response echoes the rejected value: %q", rec.Body.String())
 			}
@@ -180,7 +181,7 @@ func TestSettingsHandler_Save_InvalidValuesAre400AndStoreUntouched(t *testing.T)
 }
 
 // issue #273: NEWS_FEED_ENABLED switches News Ingest off; only on/off are
-// accepted (stored lower-cased), anything else is a 400 that stores nothing.
+// accepted (stored lower-cased), anything else is a 422 that stores nothing.
 func TestSettingsHandler_Save_NewsFeedEnabledAcceptsOnlyOnOff(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	store := newFakeSecretsStore()
@@ -192,8 +193,8 @@ func TestSettingsHandler_Save_NewsFeedEnabledAcceptsOnlyOnOff(t *testing.T) {
 	if got := store.values[config.KeyNewsFeedEnabled]; got != "off" {
 		t.Fatalf("stored NEWS_FEED_ENABLED = %q, want off", got)
 	}
-	if rec := postSetting(engine, config.KeyNewsFeedEnabled, url.Values{"value": {"maybe"}}); rec.Code != http.StatusBadRequest {
-		t.Fatalf("POST maybe status = %d, want %d", rec.Code, http.StatusBadRequest)
+	if rec := postSetting(engine, config.KeyNewsFeedEnabled, url.Values{"value": {"maybe"}}); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("POST maybe status = %d, want %d", rec.Code, http.StatusUnprocessableEntity)
 	}
 	if got := store.values[config.KeyNewsFeedEnabled]; got != "off" {
 		t.Fatalf("invalid value changed the store to %q", got)
@@ -215,8 +216,8 @@ func TestSettingsHandler_SaveAndDelete_FireSecretsStatusChanged(t *testing.T) {
 		t.Errorf("Delete HX-Trigger = %q, want secretsStatusChanged", got)
 	}
 
-	if rec := postSetting(engine, config.KeySlackWebhookURL, url.Values{"value": {""}}); rec.Code != http.StatusBadRequest || rec.Header().Get("HX-Trigger") != "" {
-		t.Errorf("rejected Save status/HX-Trigger = %d/%q, want 400 and none", rec.Code, rec.Header().Get("HX-Trigger"))
+	if rec := postSetting(engine, config.KeySlackWebhookURL, url.Values{"value": {""}}); rec.Code != http.StatusUnprocessableEntity || rec.Header().Get("HX-Trigger") != "" {
+		t.Errorf("rejected Save status/HX-Trigger = %d/%q, want 422 and none", rec.Code, rec.Header().Get("HX-Trigger"))
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/settings/"+config.KeySlackWebhookURL, strings.NewReader(url.Values{"value": {"v"}}.Encode()))
@@ -225,5 +226,19 @@ func TestSettingsHandler_SaveAndDelete_FireSecretsStatusChanged(t *testing.T) {
 	engine.ServeHTTP(rec, req)
 	if got := rec.Header().Get("HX-Trigger"); got != "" {
 		t.Errorf("non-HTMX redirect HX-Trigger = %q, want none", got)
+	}
+}
+
+// assertInlineAlert checks rec is the form-validation response of key's row
+// (issue #961): an atoms.InlineAlert swapped into the row's own error slot via
+// HX-Retarget, never a toast.
+func assertInlineAlert(t *testing.T, name string, rec *httptest.ResponseRecorder, key string) {
+	t.Helper()
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-inline-alert`) || !strings.Contains(body, `role="alert"`) || strings.Contains(body, `data-toast`) {
+		t.Errorf("%s: body = %q, want an atoms.InlineAlert fragment, not a toast", name, body)
+	}
+	if want := `[id="` + molecules.SecretErrorID(key) + `"]`; rec.Header().Get("HX-Retarget") != want {
+		t.Errorf("%s: HX-Retarget = %q, want %q", name, rec.Header().Get("HX-Retarget"), want)
 	}
 }

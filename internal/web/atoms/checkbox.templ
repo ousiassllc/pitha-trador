@@ -1,0 +1,32 @@
+package atoms
+
+// CheckboxProps is Checkbox's input. Name and Value are the form field name
+// and the value a checked box sends (an unchecked one sends nothing). Attrs
+// carries everything else (checked, disabled, data-testid, ...) and lands on
+// the <input>.
+type CheckboxProps struct {
+	Name  string
+	Value string
+	Attrs templ.Attributes
+}
+
+// Checkbox renders the guide's checkbox (design guide §4 "フォーム"): 18px,
+// --r-sm, --mute outline on --surface, --accent fill with a bone check mark
+// when checked, the form --ring on keyboard focus, opacity .5 when disabled.
+// It is a real `<input type="checkbox">` with the OS look removed
+// (`appearance-none`), so it submits, focuses and is announced as usual; the
+// check mark is its ::after. Put the visible label in a wrapping `<label>`.
+// For an on/off setting use Switch instead.
+templ Checkbox(props CheckboxProps) {
+	<input
+		type="checkbox"
+		class="relative h-[18px] w-[18px] flex-none cursor-pointer appearance-none rounded-sm border border-mute bg-surface transition-colors duration-base checked:border-accent checked:bg-accent after:absolute after:left-[5px] after:top-px after:hidden after:h-2.5 after:w-1.5 after:rotate-45 after:border-b-2 after:border-r-2 after:border-bone checked:after:block focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+		if props.Name != "" {
+			name={ props.Name }
+		}
+		if props.Value != "" {
+			value={ props.Value }
+		}
+		{ props.Attrs... }
+	/>
+}

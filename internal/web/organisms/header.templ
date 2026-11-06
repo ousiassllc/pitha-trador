@@ -4,6 +4,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/version"
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
 // Header is the global navigation + system-state indicator rendered on
@@ -41,6 +42,10 @@ import (
 // shows the full list itself, so it renders no badge there (current is
 // NavHome), and the Kill Switch panel moves into its 取引の状態 card.
 //
+// `molecules.ThemeToggle` (issue #978) is the Light / Dark / OS-follow switch;
+// pitha-theme-toggle (loaded by layout) applies and saves the choice in the
+// browser, so the header only renders the control.
+//
 // `#header-version` shows the running build's internal/version.Version on
 // every page and links to Settings' アップデート section
 // (`/settings/maintenance#update-panel`), where the version is detailed and
@@ -65,11 +70,11 @@ import (
 // whose markup is identical to what is already shown, so only a new/changed
 // badge is announced. `empty:hidden` takes no space while there is none.
 templ Header(state domain.SystemState, current NavItem) {
-	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
+	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-surface px-4 py-4 lg:px-6">
 		<div class="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
 			<a
 				id="header-logo"
-				class="flex shrink-0 items-center gap-2 text-sm font-semibold text-slate-900"
+				class="flex shrink-0 items-center gap-2 text-sm text-ink"
 				href="/"
 				data-testid="header-logo"
 			>
@@ -95,7 +100,7 @@ templ Header(state domain.SystemState, current NavItem) {
 		<span class="flex items-center gap-1">
 			<a
 				id="header-version"
-				class="text-xs text-slate-500 hover:text-slate-900"
+				class="text-xs text-mute hover:text-ink"
 				href="/settings/maintenance#update-panel"
 				data-testid="header-version"
 			>{ version.Version }</a>
@@ -103,6 +108,7 @@ templ Header(state domain.SystemState, current NavItem) {
 				現在のバージョンです。押すと、設定のシステムでアップデートを確認できます。
 			}
 		</span>
+		@molecules.ThemeToggle()
 		<div
 			id="header-status"
 			class="flex items-center gap-3"

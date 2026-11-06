@@ -58,8 +58,8 @@ func TestPaperBootstrap_LiveRefusesToTurnItOn(t *testing.T) {
 	engine, store := modeRouter(metalabelsettings.ModeLive)
 
 	rec := opsRequest(engine, http.MethodPost, paperbootstrapsettings.Key, url.Values{"value": {"1"}}, true)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("POST 1 in Live: status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("POST 1 in Live: status = %d, want 422; body=%s", rec.Code, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "Paper 限定") {
 		t.Errorf("the 400 does not give the reason: %s", rec.Body.String())

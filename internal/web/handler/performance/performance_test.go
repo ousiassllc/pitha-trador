@@ -127,8 +127,8 @@ func TestPerformanceHandler_Page_RendersFoldsAndInfiniteProfitFactor(t *testing.
 	for _, want := range []string{
 		`data-metric="profit_factor">∞<`,
 		`2026-09-08 – 2026-09-09</td>`,
-		`<td class="px-3 py-2">66.7%</td>`,
-		`<td class="px-3 py-2">4.25%</td>`,
+		`<td class="px-3 py-2.5 text-right font-mono tabular-nums">66.7%</td>`,
+		`<td class="px-3 py-2.5 text-right font-mono tabular-nums">4.25%</td>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body does not contain %q", want)

@@ -1,18 +1,20 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { buttonLabels, flush, type PanelElement } from './kill-switch-test-support';
+import {
+  buttonLabels,
+  flush,
+  installConfirmDialog,
+  type PanelElement,
+} from './kill-switch-test-support';
 
 let originalFetch: typeof fetch;
-let originalConfirm: typeof window.confirm;
 
 beforeEach(() => {
   originalFetch = globalThis.fetch;
-  originalConfirm = window.confirm;
   document.body.innerHTML = '';
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  window.confirm = originalConfirm;
   document.body.innerHTML = '';
 });
 
@@ -50,21 +52,21 @@ function clickKill(el: PanelElement): void {
 describe('pitha-kill-switch-panel actions', () => {
   test('the Kill confirmation warns that every open position is force-liquidated', async () => {
     globalThis.fetch = mock(() => Promise.resolve(state('running', true, false, true))) as never;
-    const confirmMock = mock((_message?: string) => false);
-    window.confirm = confirmMock as unknown as typeof window.confirm;
+    const confirm = installConfirmDialog('cancel');
     const el = mountRunning();
     await flush(el);
 
     clickKill(el);
+    await flush(el);
 
-    expect(confirmMock).toHaveBeenCalledTimes(1);
-    const message = confirmMock.mock.calls[0]?.[0] ?? '';
+    expect(confirm.asked).toHaveLength(1);
+    const message = confirm.asked[0] ?? '';
     expect(message).toContain('強制決済');
     expect(message).toContain('新規エントリー');
   });
 
   test('resyncs the state after a failed Kill (500) so a killed server is not shown as running', async () => {
-    window.confirm = (() => true) as typeof window.confirm;
+    installConfirmDialog('accept');
     // status-url reports running until Kill is POSTed, then killed (the
     // server flips to killed before liquidating, so the POST still 500s).
     let killAttempted = false;

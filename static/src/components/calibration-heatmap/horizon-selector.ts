@@ -19,6 +19,7 @@ export function renderHorizonSelector(
         (option) => html`
           <button
             type="button"
+            data-ripple
             data-testid="calibration-horizon-${option}"
             aria-pressed=${option === selected ? 'true' : 'false'}
             @click=${() => onSelect(option)}
@@ -31,7 +32,7 @@ export function renderHorizonSelector(
     ${
       shown !== null
         ? html`<p class="pitha-calibration-heatmap-horizon" data-testid="calibration-horizon-current">
-            集計ホライズン: <strong>${horizonLabel(shown)}</strong>
+            集計ホライズン: <span class="pitha-calibration-heatmap-emphasis">${horizonLabel(shown)}</span>
             ${renderHelpMark({
               id: 'help-calibration-horizon',
               label: '集計ホライズンの説明',

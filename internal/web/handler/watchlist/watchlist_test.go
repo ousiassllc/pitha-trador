@@ -60,6 +60,7 @@ func TestPage_ShowsTheListsWithTheirOriginsAndIndicators(t *testing.T) {
 		`data-symbol="7203" data-origin="held"`, `data-symbol="6758" data-origin="screen"`,
 		"値上がり率・出来高急増", "保有・注文中", "基準日（日足）",
 		`data-list-date="2026-10-08" data-source="carried_over" data-active="false"`, `data-testid="watchlist-fallback"`,
+		"ml-2 rounded-full border tone-success", "ml-2 rounded-full border tone-warning",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)
@@ -71,5 +72,13 @@ func TestPage_SourceErrorIs500WithoutLeakingIt(t *testing.T) {
 	code, body := get(t, fakeSource{err: errors.New("db dsn=leakmarker")})
 	if code != http.StatusInternalServerError || strings.Contains(body, "leakmarker") {
 		t.Fatalf("status = %d body = %s", code, body)
+	}
+}
+
+// An empty state is a dashed --r-lg (12px) box with 48/24 padding (brand-guide §3).
+func TestPage_EmptyStateUsesTheGuideShape(t *testing.T) {
+	_, body := get(t, fakeSource{view: domain.WatchListView{Enabled: true}})
+	if !strings.Contains(body, "rounded-lg border border-dashed border-border px-6 py-12") {
+		t.Errorf("empty state shape wrong: %s", body)
 	}
 }

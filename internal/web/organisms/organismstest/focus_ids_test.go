@@ -59,3 +59,30 @@ func TestUpdatePanel_CheckButtonHasStableID(t *testing.T) {
 	html := renderComponent(t, organisms.UpdatePanel(organisms.UpdatePanelProps{CurrentVersion: "1.0.0"}))
 	assertContains(t, html, `id="update-check-button"`)
 }
+
+// The filter fields sit 8 below their labels (brand-guide §3: label→input
+// 6〜8; 4 is for input→hint).
+func TestScanPanel_FilterFieldsAreEightBelowTheirLabels(t *testing.T) {
+	html := renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{HasCycle: true, Open: true, Page: domain.ScanPage{Page: 1, Pages: 1}}))
+	if strings.Contains(html, "mt-2 px-2 py-1 text-sm") || !strings.Contains(html, "mt-2 px-3 py-1 text-sm") {
+		t.Errorf("filter fields must use mt-2 and px-3 (12px): %s", html)
+	}
+}
+
+// The no-master box is a warning with a button and a note, so it is an inline
+// alert (solid border, --r-md), not a dashed --r-lg empty-state frame whose
+// padding it does not follow (brand-guide §3 S4; issues #959, #966).
+func TestScanPanel_UniverseEmptyIsAnInlineAlertShape(t *testing.T) {
+	html := renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{UniverseEmpty: true}))
+	assertContains(t, html, `class="mt-3 rounded-md border tone-warning px-4 py-3 text-sm"`)
+	if strings.Contains(html, "border-dashed") {
+		t.Errorf("the warning box kept the dashed empty-state border: %s", html)
+	}
+}
+
+// The queue table is the first block under the h1 of the activity page, so it
+// sits 24 below it (--gap-h1); the feed below keeps 48 (issue #959).
+func TestQueueStatusPanel_SitsTwentyFourUnderTheH1(t *testing.T) {
+	html := renderComponent(t, organisms.QueueStatusPanel(nil))
+	assertContains(t, html, `<section class="mt-6" id="queue-status"`)
+}

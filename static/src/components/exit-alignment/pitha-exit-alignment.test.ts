@@ -153,3 +153,45 @@ describe('pitha-exit-alignment heading', () => {
     expect(text(el, 'exit-alignment-warnings')).toContain('一致しません');
   });
 });
+
+// Issue #958: the summary's bps and counts line up in JetBrains Mono, like the
+// calibration heatmap's summary (brand-guide §2, T5).
+describe('pitha-exit-alignment summary', () => {
+  test('sets the summary values in JetBrains Mono, tabular', async () => {
+    const el = await mount(body());
+    const css = (
+      el.constructor as unknown as { elementStyles: { cssText: string }[] }
+    ).elementStyles
+      .map((s) => s.cssText)
+      .join('');
+    expect(css).toMatch(/\.summary dd\s*\{[^}]*JetBrains Mono[^}]*tabular-nums/);
+  });
+});
+
+// Issue #966: heading gaps follow the spacing recipe (h2 below 24, h3 below 12), not 4px.
+describe('pitha-exit-alignment heading spacing', () => {
+  test('puts 24px below the h2 and 12px below the h3', async () => {
+    const el = await mount(body());
+    const css = (
+      el.constructor as unknown as { elementStyles: { cssText: string }[] }
+    ).elementStyles
+      .map((s) => s.cssText)
+      .join('');
+    expect(css).toMatch(/h2\s*\{[^}]*margin:\s*0\.75rem 0 1\.5rem;/);
+    expect(css).toMatch(/h3\s*\{[^}]*margin:\s*0\.75rem 0;/);
+  });
+});
+
+// Issue #969: the headings step down the type scale (h2 = xl 24px, h3 = lg 18px), not both 16px.
+describe('pitha-exit-alignment heading sizes', () => {
+  test('sets the h2 to 1.5rem and the h3 to 1.125rem', async () => {
+    const el = await mount(body());
+    const css = (
+      el.constructor as unknown as { elementStyles: { cssText: string }[] }
+    ).elementStyles
+      .map((s) => s.cssText)
+      .join('');
+    expect(css).toMatch(/h2\s*\{[^}]*font-size:\s*1\.5rem;/);
+    expect(css).toMatch(/h3\s*\{[^}]*font-size:\s*1\.125rem;/);
+  });
+});

@@ -1,19 +1,20 @@
 package atoms
 
-// ButtonVariant picks a Button's color scheme.
+// ButtonVariant picks a Button's color scheme: the four kinds of the Ousiass
+// design guide §4 ("主 / サブ / ゴースト / 危険").
 type ButtonVariant string
 
 const (
-	// ButtonPrimary is the solid blue call-to-action.
+	// ButtonPrimary is the solid ink (--accent) main action.
 	ButtonPrimary ButtonVariant = "primary"
-	// ButtonDanger is the solid red destructive action (e.g. closing a position).
-	ButtonDanger ButtonVariant = "danger"
-	// ButtonSecondary is the neutral bordered button (refresh, paging, close).
+	// ButtonSecondary is the transparent bordered button (refresh, paging,
+	// close, opening a dialog/panel).
 	ButtonSecondary ButtonVariant = "secondary"
-	// ButtonOutline is the blue-bordered button for opening a dialog/panel.
-	ButtonOutline ButtonVariant = "outline"
-	// ButtonDangerOutline is the red-bordered destructive action (delete).
-	ButtonDangerOutline ButtonVariant = "danger-outline"
+	// ButtonGhost is the borderless low-emphasis button.
+	ButtonGhost ButtonVariant = "ghost"
+	// ButtonDanger is the solid --danger destructive action (closing a
+	// position, deleting a secret, promoting the live prompt).
+	ButtonDanger ButtonVariant = "danger"
 )
 
 // ButtonSize picks a Button's padding and type size.
@@ -38,18 +39,21 @@ type ButtonProps struct {
 }
 
 // Button renders a <button> whose children are its label. All button
-// colors, focus ring and the `disabled:opacity-50` state (which
+// colors, focus ring and the `disabled:opacity-40` state (which
 // `hx-disabled-elt` relies on) live here so a visual change is one edit.
 templ Button(props ButtonProps) {
-	<button class={ buttonClass(props) } type={ buttonType(props.Type) } { props.Attrs... }>
+	<button class={ buttonClass(props) } type={ buttonType(props.Type) } data-ripple { props.Attrs... }>
 		{ children... }
 	</button>
 }
 
+// Every button carries `data-ripple`: static/src/components/ripple draws the
+// press ripple (design guide §5), which `relative overflow-hidden` clips.
+
 // ButtonLink renders an <a> styled as a Button (a navigation, not an
 // action); pass the target via Attrs["href"].
 templ ButtonLink(props ButtonProps) {
-	<a class={ buttonClass(props) } { props.Attrs... }>
+	<a class={ buttonClass(props) } data-ripple { props.Attrs... }>
 		{ children... }
 	</a>
 }
@@ -62,23 +66,21 @@ func buttonType(t string) string {
 }
 
 func buttonClass(props ButtonProps) string {
-	const base = "inline-block rounded-md font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
-	size := "px-4 py-2 text-sm"
+	const base = "relative inline-flex items-center justify-center overflow-hidden rounded-md font-semibold transition-colors duration-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-40"
+	size := "px-4 py-2 text-base"
 	if props.Size == ButtonSmall {
-		size = "px-3 py-1 text-xs"
+		size = "min-h-8 px-3 text-sm"
 	}
 	var color string
 	switch props.Variant {
 	case ButtonDanger:
-		color = "bg-red-600 text-white"
+		color = "bg-danger text-bone"
 	case ButtonSecondary:
-		color = "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-	case ButtonOutline:
-		color = "border border-blue-600 text-blue-700 hover:bg-blue-50"
-	case ButtonDangerOutline:
-		color = "border border-red-300 text-red-700 hover:bg-red-50"
+		color = "border border-border bg-transparent text-ink hover:bg-accent-soft"
+	case ButtonGhost:
+		color = "text-ink hover:bg-accent-soft"
 	default:
-		color = "bg-blue-600 text-white"
+		color = "bg-accent text-bone"
 	}
 	return base + " " + size + " " + color
 }

@@ -78,8 +78,8 @@ func TestSaveOps_PaperRiskRejectsOutOfRangeValues(t *testing.T) {
 		"trade loss negative":    {papersettings.KeyMaxTradeLossPct, "-0.5"},
 	} {
 		rec := opsRequest(engine, http.MethodPost, tc.key, url.Values{"value": {tc.raw}}, true)
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("%s: POST %s=%q status = %d, want 400", name, tc.key, tc.raw, rec.Code)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: POST %s=%q status = %d, want 422", name, tc.key, tc.raw, rec.Code)
 		}
 	}
 	if len(store.rows) != 0 {

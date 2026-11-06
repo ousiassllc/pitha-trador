@@ -33,11 +33,11 @@ func TestSaveOps_TachibanaSourceIsStoredNormalizedAndBadValuesAre400(t *testing.
 	if rec.Code != http.StatusOK || store.rows[tachibanasource.KeyTachibanaManualSymbols] != `"7203,6758"` {
 		t.Fatalf("status = %d, store = %v", rec.Code, store.rows)
 	}
-	if rec := opsRequest(engine, http.MethodPost, tachibanasource.KeyTachibanaNightlyRunTime, url.Values{"value": {"12:00"}}, true); rec.Code != http.StatusBadRequest {
-		t.Errorf("a daytime nightly run time status = %d, want 400", rec.Code)
+	if rec := opsRequest(engine, http.MethodPost, tachibanasource.KeyTachibanaNightlyRunTime, url.Values{"value": {"12:00"}}, true); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("a daytime nightly run time status = %d, want 422", rec.Code)
 	}
-	if rec := opsRequest(engine, http.MethodPost, tachibanasource.KeyTachibanaEventMaxConnects, url.Values{"value": {"0"}}, true); rec.Code != http.StatusBadRequest {
-		t.Errorf("event budget 0 status = %d, want 400", rec.Code)
+	if rec := opsRequest(engine, http.MethodPost, tachibanasource.KeyTachibanaEventMaxConnects, url.Values{"value": {"0"}}, true); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("event budget 0 status = %d, want 422", rec.Code)
 	}
 	if rec := opsRequest(engine, http.MethodPost, tachibanasource.KeyTachibanaNightlyRatePerSecond, url.Values{"value": {"2.5"}}, true); rec.Code != http.StatusOK || store.rows[tachibanasource.KeyTachibanaNightlyRatePerSecond] != `2.5` {
 		t.Errorf("rate status = %d, store = %v", rec.Code, store.rows)

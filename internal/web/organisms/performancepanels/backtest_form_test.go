@@ -17,7 +17,7 @@ func TestBacktestForm_EchoesValuesThroughSharedFieldStyle(t *testing.T) {
 		`type="date" name="from"`, `value="2026-01-01"`, `value="2026-03-31"`,
 		`name="training_days"`, `value="60"`, `name="validation_days"`, `value="20"`, `name="forward_days"`, `value="10"`,
 		`min="1"`, " required",
-		"rounded-md border border-slate-300 mt-1 px-3 py-1",
+		"rounded-md border border-border mt-2 px-3 py-1",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %q in %s", want, html)
@@ -60,5 +60,15 @@ func TestBacktestForm_ExplainsFieldsInHelpMarksOutsideTheLabel(t *testing.T) {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %q: %s", want, html)
 		}
+	}
+}
+
+// issue #972: the field wrapper is ink so a typed value is not --mute
+// (brand-guide §1: --mute is for secondary text only).
+func TestBacktestForm_FieldWrapperIsNotMute(t *testing.T) {
+	html := renderComponent(t, performancepanels.BacktestForm(performancepanels.BacktestFormValues{From: "2026-01-01", To: "2026-03-31", TrainingDays: 60, ValidationDays: 20, ForwardDays: 10}))
+
+	if !strings.Contains(html, `class="flex flex-col text-sm text-ink"`) || strings.Contains(html, "flex flex-col text-sm text-mute") {
+		t.Errorf("backtest field wrapper must be text-ink: %s", html)
 	}
 }

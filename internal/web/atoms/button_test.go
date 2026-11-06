@@ -23,7 +23,7 @@ func renderWithLabel(t *testing.T, c templ.Component, label string) string {
 func TestButton_DefaultIsPrimaryTypeButton(t *testing.T) {
 	body := renderWithLabel(t, atoms.Button(atoms.ButtonProps{}), "保存")
 
-	for _, want := range []string{`type="button"`, "bg-blue-600", "disabled:opacity-50", "保存"} {
+	for _, want := range []string{`type="button"`, "bg-accent text-bone", "disabled:opacity-40", "保存"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -37,12 +37,11 @@ func TestButton_VariantsAndSizeChangeClasses(t *testing.T) {
 		want  string
 		not   string
 	}{
-		{"danger", atoms.ButtonProps{Variant: atoms.ButtonDanger}, "bg-red-600", "bg-blue-600"},
-		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-slate-300", "bg-blue-600"},
-		{"outline", atoms.ButtonProps{Variant: atoms.ButtonOutline}, "border-blue-600", "bg-blue-600"},
-		{"danger outline", atoms.ButtonProps{Variant: atoms.ButtonDangerOutline}, "border-red-300", "bg-red-600"},
-		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "text-xs", "py-2"},
-		{"medium", atoms.ButtonProps{}, "py-2", "text-xs"},
+		{"danger", atoms.ButtonProps{Variant: atoms.ButtonDanger}, "bg-danger text-bone", "bg-accent text-bone"},
+		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-border bg-transparent", "bg-accent text-bone"},
+		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink hover:bg-accent-soft", "border-border"},
+		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "min-h-8", "py-2"},
+		{"medium", atoms.ButtonProps{}, "text-base", "text-sm"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -87,6 +86,22 @@ func TestInput_DefaultsToText(t *testing.T) {
 	for _, want := range []string{`id="i"`, `name="n"`, `type="text"`, ` required`, `placeholder="p"`} {
 		if !strings.Contains(sb.String(), want) {
 			t.Errorf("body missing %q: %s", want, sb.String())
+		}
+	}
+}
+
+// The press ripple (static/src/components/ripple) is opt-in per element and
+// needs the host to clip the circle, for Button and ButtonLink alike.
+func TestButton_CarriesTheRippleHook(t *testing.T) {
+	for name, c := range map[string]templ.Component{
+		"button": atoms.Button(atoms.ButtonProps{}),
+		"link":   atoms.ButtonLink(atoms.ButtonProps{Attrs: templ.Attributes{"href": "/x"}}),
+	} {
+		body := renderWithLabel(t, c, "x")
+		for _, want := range []string{" data-ripple", "relative", "overflow-hidden"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s: body missing %q: %s", name, want, body)
+			}
 		}
 	}
 }

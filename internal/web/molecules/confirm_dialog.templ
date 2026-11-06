@@ -1,0 +1,36 @@
+package molecules
+
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
+
+// ConfirmDialog is the one shared confirmation modal (design guide §4 O2:
+// destructive and irreversible actions are confirmed in a centered modal, not
+// the browser's `confirm()`). layout.document renders it once as
+// `#confirm-dialog`; static/src/components/confirm/pitha-confirm.ts fills in
+// the question (an element's `hx-confirm`, or the Kill Switch's message) and
+// reports the answer. `data-modal` makes pitha-modal close it on a backdrop
+// click and gives it the same fade as molecules.Modal. 「キャンセル」 is the
+// first focus; 「実行する」 is the --danger button.
+templ ConfirmDialog() {
+	<dialog
+		id="confirm-dialog"
+		class="m-auto w-full max-w-md rounded-xl border border-border bg-surface p-0 text-ink shadow-modal"
+		aria-labelledby="confirm-dialog-title"
+		aria-describedby="confirm-dialog-message"
+		data-modal
+		data-confirm-dialog
+		data-testid="confirm-dialog"
+	>
+		<div class="flex flex-col gap-4 p-6">
+			<h2 id="confirm-dialog-title" class="text-lg font-semibold text-ink">確認</h2>
+			<p id="confirm-dialog-message" class="text-base" data-confirm-message data-testid="confirm-dialog-message"></p>
+			<div class="flex justify-end gap-2">
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{"data-confirm-cancel": true, "data-testid": "confirm-dialog-cancel"}}) {
+					キャンセル
+				}
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Attrs: templ.Attributes{"data-confirm-accept": true, "data-testid": "confirm-dialog-accept"}}) {
+					実行する
+				}
+			</div>
+		</div>
+	</dialog>
+}

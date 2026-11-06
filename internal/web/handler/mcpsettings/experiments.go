@@ -62,6 +62,10 @@ func (h *Handler) CompareExperiment(c *gin.Context) {
 	shared.RenderHTML(c, http.StatusOK, mcp.ExperimentDetail(detailProps(cmp)))
 }
 
+// experimentFormError is the inline-alert slot of the experiment form
+// (mcp.experimentForm): a rejected form puts its reason there, not in a toast.
+const experimentFormError = "#mcp-experiment-form-error"
+
 // CreateExperiment implements `POST /settings/mcp/experiments`: hypothesis,
 // kind, name, before, after and an optional started_at (JST, from a
 // datetime-local input). The form has exactly one variable; a setting is named
@@ -78,7 +82,7 @@ func (h *Handler) CreateExperiment(c *gin.Context) {
 	if v := c.PostForm("started_at"); v != "" {
 		t, err := time.ParseInLocation(datetimeLocalLayout, v, query.JST)
 		if err != nil {
-			shared.RespondActionError(c, http.StatusUnprocessableEntity, "開始時刻の形式が正しくありません。")
+			shared.RespondFormError(c, experimentFormError, "開始時刻の形式が正しくありません。")
 			return
 		}
 		args.StartedAt = t.Format(time.RFC3339)
@@ -88,11 +92,11 @@ func (h *Handler) CreateExperiment(c *gin.Context) {
 		_, err = h.gate.CreateExperiment(ctx, req)
 	}
 	if reason, invalid := experiment.IsInvalid(err); invalid {
-		shared.RespondActionError(c, http.StatusUnprocessableEntity, "実験を記録できません: "+reason+"。")
+		shared.RespondFormError(c, experimentFormError, "実験を記録できません: "+reason+"。")
 		return
 	}
 	if errors.Is(err, experiment.ErrKeyNotAllowed) {
-		shared.RespondActionError(c, http.StatusUnprocessableEntity, "その設定は MCP から変更できる項目ではないため、実験にできません。")
+		shared.RespondFormError(c, experimentFormError, "その設定は MCP から変更できる項目ではないため、実験にできません。")
 		return
 	}
 	if err != nil {
@@ -123,7 +127,9 @@ func (h *Handler) CloseExperiment(c *gin.Context) {
 		return
 	case err != nil:
 		if reason, invalid := experiment.IsInvalid(err); invalid {
-			shared.RespondActionError(c, http.StatusUnprocessableEntity, "実験を終えられません: "+reason+"。")
+			// A toast is one short line: the reason goes to the log, not onto the screen.
+			slog.WarnContext(ctx, "mcpsettings: close experiment refused", "id", id, "reason", reason)
+			shared.RespondActionError(c, http.StatusUnprocessableEntity, "実験を終えられません。")
 			return
 		}
 		slog.ErrorContext(ctx, "mcpsettings: close experiment", "id", id, "error", err)

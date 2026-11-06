@@ -45,7 +45,7 @@ func (h *SymbolHandler) ClosePosition(c *gin.Context) {
 	if err != nil {
 		// 昼休み・立会時間外は約定しない（次の立会で再度決済できる）。
 		if errors.Is(err, execution.ErrOutsideTradingSession) {
-			shared.RespondActionError(c, http.StatusConflict, "立会時間外（昼休み・大引け後）のため決済できません。次の立会で再度お試しください。")
+			shared.RespondActionError(c, http.StatusConflict, "立会時間外のため決済できません。")
 			return
 		}
 		// A concurrent exit (Exit monitor / CloseAll / another click) won the race.

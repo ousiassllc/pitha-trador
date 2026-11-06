@@ -72,3 +72,15 @@ func TestResultTabs_CalibrationMarksItsOwnTab(t *testing.T) {
 		t.Errorf("performance: current tab %q, want /performance", current)
 	}
 }
+
+// The heatmap and the exit-alignment sections each start 48px below the
+// block above (tab bar / heatmap): the Lit hosts have no margin of their own
+// (brand-guide §3 S5; issue #968).
+func TestCalibrationPage_LitSectionsAreSeparatedByTheSectionGap(t *testing.T) {
+	body := renderPage(t, pages.CalibrationPage())
+	for _, want := range []string{`<pitha-calibration-heatmap class="mt-12" `, `<pitha-exit-alignment class="mt-12" `} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q: %s", want, body)
+		}
+	}
+}

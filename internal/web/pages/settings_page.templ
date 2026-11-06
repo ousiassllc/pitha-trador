@@ -52,8 +52,8 @@ func (p SettingsProps) hasSystem() bool {
 // another page (issue #895) is forwarded too.
 templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Link) {
 	@layout.Shell("設定", organisms.NavSettings) {
-		<h1 class="text-2xl font-bold text-slate-900">設定</h1>
-		<div class="mt-4 flex flex-col gap-6" data-testid="settings-hub" data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
+		<h1 class="text-3xl font-semibold text-ink">設定</h1>
+		<div class="mt-6 flex flex-col gap-12" data-testid="settings-hub" data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			<ul class="flex flex-col gap-3" data-testid="settings-page-list">
 				for _, p := range pageList {
 					@molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{
@@ -67,7 +67,7 @@ templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Li
 			</ul>
 			if len(linkList) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-hub-links-heading">
-					<h2 id="settings-hub-links-heading" class="text-lg font-semibold text-slate-900">関連画面</h2>
+					<h2 id="settings-hub-links-heading" class="text-xl font-semibold text-ink">関連画面</h2>
 					<ul class="flex flex-col gap-3" data-testid="settings-hub-links">
 						for i, link := range linkList {
 							@molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{
@@ -97,28 +97,28 @@ templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Li
 // field's stored value.
 templ SettingsPage(props SettingsProps) {
 	@layout.Shell("設定 / "+props.Page.Name, organisms.NavSettings) {
-		<nav aria-label="パンくず" class="text-sm text-slate-600" data-testid="settings-breadcrumb">
-			<a class="hover:text-slate-900" href={ templ.SafeURL(settingspages.BasePath) }>設定</a>
+		<nav aria-label="パンくず" class="text-sm text-mute" data-testid="settings-breadcrumb">
+			<a class="hover:text-ink" href={ templ.SafeURL(settingspages.BasePath) }>設定</a>
 			<span aria-hidden="true"> / </span>
 			<span aria-current="page">{ props.Page.Name }</span>
 		</nav>
-		<h1 class="mt-2 text-2xl font-bold text-slate-900">{ props.Page.Name }</h1>
-		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID } data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
+		<h1 class="mt-2 text-3xl font-semibold text-ink">{ props.Page.Name }</h1>
+		<div class="mt-6 flex flex-col gap-12" data-testid="settings-form" data-settings-page={ props.Page.ID } data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			if len(props.Connections) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">
-					<h2 id="settings-connections-heading" class="flex items-center gap-2 text-lg font-semibold text-slate-900">
+					<h2 id="settings-connections-heading" class="flex items-center gap-2 text-xl font-semibold text-ink">
 						接続先
 						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-settings-connections", Label: "接続先の説明"}) {
 							接続先を選ぶと、その接続先のキー・URL・モデル名を編集できます。項目ごとに保存・削除できます。保存済みの値はセキュリティのため画面上に表示されません（変更する場合は新しい値を入力して保存してください）。
 						}
 					</h2>
-					<p class="text-sm text-slate-600">保存・削除の反映には再起動が必要です。</p>
+					<p class="text-sm text-mute">保存・削除の反映には再起動が必要です。</p>
 					@organisms.ConnectionList(props.Connections)
 				</section>
 			}
 			if len(props.Operational) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-operational-heading">
-					<h2 id="settings-operational-heading" class="flex items-center gap-2 text-lg font-semibold text-slate-900">
+					<h2 id="settings-operational-heading" class="flex items-center gap-2 text-xl font-semibold text-ink">
 						設定項目
 						@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-settings-operational", Label: "設定項目の説明"}) {
 							ここで保存した値は、設定ファイルの値より優先されます。項目ごとに保存でき、「既定に戻す」で保存した値を消して既定に戻せます。反映のタイミング（再起動の要否）は各項目の説明に記載しています。
@@ -129,7 +129,7 @@ templ SettingsPage(props SettingsProps) {
 			}
 			if props.MCP && props.Has("modal-mcp") {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-integrations-heading">
-					<h2 id="settings-integrations-heading" class="text-lg font-semibold text-slate-900">MCP</h2>
+					<h2 id="settings-integrations-heading" class="text-xl font-semibold text-ink">MCP</h2>
 					<ul class="flex flex-col gap-3" data-testid="integrations-list">
 						@molecules.SettingsCard(molecules.SettingsCardProps{
 							ID:          "mcp",
@@ -143,7 +143,7 @@ templ SettingsPage(props SettingsProps) {
 			}
 			if props.JevPrompt && props.Has("modal-jev-prompt") {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-jev-prompt-heading">
-					<h2 id="settings-jev-prompt-heading" class="text-lg font-semibold text-slate-900">Jev プロンプト</h2>
+					<h2 id="settings-jev-prompt-heading" class="text-xl font-semibold text-ink">Jev プロンプト</h2>
 					<ul class="flex flex-col gap-3" data-testid="jev-prompt-list">
 						@molecules.SettingsCard(molecules.SettingsCardProps{
 							ID:          "jev-prompt",
@@ -157,7 +157,7 @@ templ SettingsPage(props SettingsProps) {
 			}
 			if props.hasSystem() {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-system-heading">
-					<h2 id="settings-system-heading" class="text-lg font-semibold text-slate-900">システム</h2>
+					<h2 id="settings-system-heading" class="text-xl font-semibold text-ink">システム</h2>
 					<ul class="flex flex-col gap-3" data-testid="system-list">
 						if props.Has("modal-update") {
 							@molecules.SettingsCard(molecules.SettingsCardProps{
@@ -188,7 +188,7 @@ templ SettingsPage(props SettingsProps) {
 			}
 			if len(props.Links) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-links-heading">
-					<h2 id="settings-links-heading" class="text-lg font-semibold text-slate-900">関連画面</h2>
+					<h2 id="settings-links-heading" class="text-xl font-semibold text-ink">関連画面</h2>
 					<ul class="flex flex-col gap-3" data-testid="settings-links">
 						for i, link := range props.Links {
 							@molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{
@@ -212,7 +212,7 @@ templ SettingsPage(props SettingsProps) {
 				// (organisms.UpdatePanel) on load and swapped in place by its
 				// "今すぐアップデートを確認" button; `empty:hidden` keeps the
 				// not-yet-loaded wrapper from showing a bare ring.
-				<div id="update-panel" class="scroll-mt-4 rounded-md target:ring-2 target:ring-blue-500 empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
+				<div id="update-panel" class="scroll-mt-4 rounded-lg target:ring-1 target:ring-mute empty:hidden" hx-get="/system/update-panel" hx-trigger="load" hx-target="this" hx-swap="innerHTML"></div>
 			}
 		}
 		if props.Has("modal-error-log") {
@@ -243,7 +243,6 @@ templ SettingsPage(props SettingsProps) {
 			}
 		}
 		<script type="module" src="/static/dist/js/settings-hub/pitha-settings-hub.js"></script>
-		<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 	}
 }
 

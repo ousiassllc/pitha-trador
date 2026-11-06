@@ -18,9 +18,9 @@ const universeImportURL = "/scanner/universe/import"
 // before that press. importError, when set, is the failed attempt's cause
 // (the master stays empty and the CSV route remains).
 templ scanUniverseEmpty(importError string) {
-	<div class="mt-3 rounded-md border border-dashed border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-900" data-testid="scan-universe-empty">
+	<div class="mt-3 rounded-md border tone-warning px-4 py-3 text-sm" data-testid="scan-universe-empty">
 		<p class="font-semibold">銘柄マスタが未投入です</p>
-		<p class="mt-1 text-xs">
+		<p class="mt-1 text-sm">
 			スキャン対象の銘柄が登録されていないため、スキャンは何も処理しません。銘柄マスタを投入してください。
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-universe-csv", Label: "銘柄マスタの投入方法の説明"}) {
 				<span data-testid="scan-universe-csv-guide">
@@ -29,17 +29,17 @@ templ scanUniverseEmpty(importError string) {
 			}
 		</p>
 		if importError != "" {
-			<p class="mt-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800" role="alert" data-testid="scan-universe-import-error">
+			<p class="mt-3 rounded-md border tone-danger px-3 py-2 text-sm" role="alert" data-testid="scan-universe-import-error">
 				JPXからの取得に失敗しました。銘柄マスタは変更していません。原因: { importError }
 				<br/>
 				ネットワークやJPX側の変更が考えられます。CSVでの投入もお試しください。
 			</p>
 		}
 		<div class="mt-3 flex flex-wrap items-center gap-3">
-			<p class="text-xs">
+			<p class="text-sm">
 				JPXの東証上場銘柄一覧を取得して投入しますか？ ボタンを押すまで、JPXへは接続しません。
 				データの権利はJPXに帰属します。取得・利用は
-				<a class="text-sky-700 underline-offset-2 hover:underline" href="https://www.jpx.co.jp/term-of-use/" target="_blank" rel="noopener noreferrer" data-testid="scan-universe-jpx-terms">JPXの利用上の注意</a>
+				<a class="text-accent underline decoration-mute" href="https://www.jpx.co.jp/term-of-use/" target="_blank" rel="noopener noreferrer" data-testid="scan-universe-jpx-terms">JPXの利用上の注意</a>
 				に従い、ご自身の責任で行ってください。
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-universe-import", Label: "取得内容の説明"}) {
 					JPXの東証上場銘柄一覧（<code>data_j.xlsx</code>）を取得します。取得は押下ごとの1回のみで、自動での定期取得はしません。株式（内国・外国）のみを投入し、ETF・ETN、REIT等、PRO Market、出資証券は対象外です。
@@ -60,7 +60,7 @@ templ scanUniverseEmpty(importError string) {
 			}
 			<span
 				id="scan-universe-import-progress"
-				class="hidden text-xs text-slate-500 [&.htmx-request]:inline"
+				class="hidden text-xs text-mute [&.htmx-request]:inline"
 				role="status"
 				aria-live="polite"
 			>取得中です…</span>
@@ -73,7 +73,7 @@ templ scanUniverseEmpty(importError string) {
 // rendered for count 0 (no import ran, or it failed).
 templ scanUniverseImported(count int) {
 	if count > 0 {
-		<p id="scan-universe-imported" tabindex="-1" class="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" role="status" data-testid="scan-universe-imported">
+		<p id="scan-universe-imported" tabindex="-1" class="mt-3 rounded-md border tone-success px-3 py-2 text-sm" role="status" data-testid="scan-universe-imported">
 			{ strconv.Itoa(count) } 銘柄を銘柄マスタに投入しました。次のスキャンから対象になります（再起動は不要です）。
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-universe-imported", Label: "スキャンの実行タイミングの説明"}) {
 				スキャンは立会時間中に60秒ごとに実行されます。

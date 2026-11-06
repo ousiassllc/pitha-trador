@@ -85,8 +85,8 @@ func TestList_ShowsEachProposalWithItsStatusAndPnl(t *testing.T) {
 		t.Errorf("row statuses = %s", got)
 	}
 	for id, wants := range map[string][]string{
-		"4": {"20,970 円", "text-emerald-700", "200 → 100", "20,000 円 / 15,000 円", "約定", `href="/order-proposals/4"`, `href="/symbols/7203"`},
-		"5": {"-12,030 円", "text-red-700"},
+		"4": {"20,970 円", "text-success", "200 → 100", "20,000 円 / 15,000 円", "約定", `href="/order-proposals/4"`, `href="/symbols/7203"`},
+		"5": {"-12,030 円", "text-danger"},
 		"3": {"拒否", "枠の予算を超える", "500", "—"},
 		"2": {"債券ETF", "取消", "取消の依頼"},
 		"1": {"期限切れ"},
@@ -98,7 +98,7 @@ func TestList_ShowsEachProposalWithItsStatusAndPnl(t *testing.T) {
 			}
 		}
 	}
-	if strings.Contains(cells["3"], "円</td>") && strings.Contains(cells["3"], "text-emerald") {
+	if strings.Contains(cells["3"], "円</td>") && strings.Contains(cells["3"], "text-success") {
 		t.Errorf("a rejected proposal has no pnl: %s", cells["3"])
 	}
 	if !strings.Contains(body, `data-testid="order-proposals-filter"`) || strings.Contains(body, `data-testid="order-proposals-next"`) {
@@ -135,7 +135,9 @@ func TestList_NextPageKeepsTheFilter(t *testing.T) {
 	if n := strings.Count(first, `data-testid="order-proposal-row"`); n != 50 {
 		t.Fatalf("first page = %d rows, want 50", n)
 	}
-	href := regexp.MustCompile(`href="([^"]+)" data-testid="order-proposals-next"`).FindStringSubmatch(first)
+	// The attributes of the link render in sorted order (templ.Attributes), so find the tag first.
+	nextTag := regexp.MustCompile(`<a [^>]*data-testid="order-proposals-next"[^>]*>`).FindString(first)
+	href := regexp.MustCompile(`href="([^"]+)"`).FindStringSubmatch(nextTag)
 	if href == nil {
 		t.Fatalf("no next link: %s", first)
 	}
@@ -189,7 +191,7 @@ func TestDetail_TracesProposalToRealizedPnl(t *testing.T) {
 		"20,000 円", "15,000 円", "12,030 円", // proposed, estimated, actual loss
 		"トレードシグナル 2 番", "mcp-proposal-v1", "通過",
 		"注文 3 番", "買い / 成行", "約定", "2,500 円",
-		"ポジション 2 番", "決済済み", "AIの注文提案による決済", "5 時間 0 分", "-12,030 円", "text-red-700",
+		"ポジション 2 番", "決済済み", "AIの注文提案による決済", "5 時間 0 分", "-12,030 円", "text-danger",
 		"2026-10-17 10:00:00 JST", // received 01:00Z
 	} {
 		if !strings.Contains(body, want) {
@@ -303,5 +305,14 @@ func TestScreensHaveNoActions(t *testing.T) {
 				t.Errorf("%s has an action (%q)", target, bad)
 			}
 		}
+	}
+}
+
+// The values of the detail's label/value lists (quantities, prices, losses) are
+// JetBrains Mono like every other dl of numbers (brand-guide §2, T5; issue #958).
+func TestDetail_ValuesAreMono(t *testing.T) {
+	_, body := get(t, outcomesSource(t), "/order-proposals/5")
+	if !strings.Contains(body, `<dd class="font-mono tabular-nums `) {
+		t.Errorf("detail values are not font-mono tabular-nums")
 	}
 }

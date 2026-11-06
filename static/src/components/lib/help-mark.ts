@@ -42,46 +42,58 @@ export const helpMarkStyles = css`
     width: 1rem;
     height: 1rem;
     padding: 0;
-    border: 1px solid #94a3b8;
-    border-radius: 9999px;
-    background: #ffffff;
-    color: #475569;
+    border: 1px solid var(--border);
+    border-radius: var(--r-full);
+    background: var(--surface);
+    color: var(--mute);
     font: inherit;
-    font-size: 10px;
+    font-size: 0.75rem;
     font-weight: 600;
     line-height: 1;
     cursor: help;
   }
   .help-mark-button:hover {
-    border-color: #475569;
-    color: #0f172a;
-    background: #ffffff;
+    border-color: var(--ink);
+    color: var(--ink);
+    background: var(--surface);
   }
   .help-mark-button:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
   .help-mark-text {
     visibility: hidden;
+    opacity: 0;
+    /* Exit: fade-out --motion-fade-out, ease-in; visibility flips at the end of
+       the fade so the text stays visible while it fades (design guide §5) */
+    transition: opacity var(--motion-fade-out) var(--ease-in), visibility var(--motion-fade-out);
     position: fixed;
     top: 0;
     left: 0;
-    z-index: 50;
+    z-index: var(--z-dropdown);
     box-sizing: border-box;
     width: 18rem;
     max-width: 80vw;
-    padding: 0.5rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.375rem;
-    background: #ffffff;
-    color: #334155;
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    padding: 0.375rem 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--surface);
+    color: var(--ink);
     font-size: 0.75rem;
     font-weight: 400;
-    line-height: 1.625;
+    line-height: 1.6;
     text-align: left;
   }
   .help-mark-text[data-open] {
     visibility: visible;
+    opacity: 1;
+    /* Entrance: fade-in --motion-fade-in, ease-out */
+    transition: opacity var(--motion-fade-in) var(--ease-out), visibility var(--motion-fade-in);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .help-mark-text,
+    .help-mark-text[data-open] {
+      transition-duration: 100ms;
+    }
   }
 `;

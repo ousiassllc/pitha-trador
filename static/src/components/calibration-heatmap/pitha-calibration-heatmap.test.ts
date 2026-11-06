@@ -49,11 +49,11 @@ describe('pitha-calibration-heatmap', () => {
         '[data-testid="calibration-heatmap-cell"]',
       ) ?? []),
     ];
-    expect(cells.map((c) => c.style.backgroundColor)).toEqual([
+    expect(cells.map((c) => c.style.getPropertyValue('--cell-bg'))).toEqual([
       heatmapColors(0.1).background,
       heatmapColors(0.9).background,
     ]);
-    expect(cells.map((c) => c.style.color)).toEqual([
+    expect(cells.map((c) => c.style.getPropertyValue('--cell-fg'))).toEqual([
       heatmapColors(0.1).color,
       heatmapColors(0.9).color,
     ]);
@@ -124,8 +124,8 @@ describe('pitha-calibration-heatmap', () => {
       ) ?? []),
     ];
     const [emptyCell, filledCell] = cells;
-    expect(emptyCell?.style.backgroundColor).toBe(NO_DATA_COLOR);
-    expect(emptyCell?.style.backgroundColor).not.toBe(heatmapColors(0).background);
+    expect(emptyCell?.style.getPropertyValue('--cell-bg')).toBe(NO_DATA_COLOR);
+    expect(emptyCell?.style.getPropertyValue('--cell-bg')).not.toBe(heatmapColors(0).background);
     expect(emptyCell?.textContent).toContain('データはありません');
     expect(emptyCell?.textContent).toContain('0 件');
     expect(emptyCell?.textContent).not.toContain('0.0%');

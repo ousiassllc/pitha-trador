@@ -15,7 +15,7 @@ import (
 // card's status out-of-band (handler/settings.SettingsHandler.renderRow).
 // The connection's Description is not printed: it is the text of the help
 // mark next to its status (issue #902). The modals open through the
-// `pitha-modal` script, which the hosting page must load.
+// `pitha-modal` script, which layout.document loads on every page.
 templ ConnectionList(connections []molecules.ConnectionProps) {
 	<ul class="flex flex-col gap-3" data-testid="connection-list">
 		for _, connection := range connections {
@@ -30,7 +30,7 @@ templ ConnectionList(connections []molecules.ConnectionProps) {
 	</ul>
 	for _, connection := range connections {
 		@molecules.Modal(connection.ModalID(), connection.Name) {
-			<p class="text-sm text-slate-600">
+			<p class="text-sm text-mute">
 				保存・削除の反映には再起動が必要です。
 				if len(connection.Fields) > 1 {
 					<span data-testid={ connection.ModalID() + "-defaults-note" }>

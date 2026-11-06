@@ -4,17 +4,24 @@ import type { BarrierStats, CalibrationAPIResponse, CalibrationBucket } from './
 // createChart needs a real canvas: the real library arms deferred timers under
 // happy-dom that throw "Value is null" after the test ends. Stub it and
 // capture the series to assert the plotted points instead.
-export const createdCharts: { remove: ReturnType<typeof mock> }[] = [];
-export const createdSeries: { setData: ReturnType<typeof mock> }[] = [];
+export const createdCharts: {
+  remove: ReturnType<typeof mock>;
+  applyOptions: ReturnType<typeof mock>;
+}[] = [];
+export const createdSeries: {
+  options: Record<string, unknown>;
+  setData: ReturnType<typeof mock>;
+  applyOptions: ReturnType<typeof mock>;
+}[] = [];
 mock.module('lightweight-charts', () => ({
   LineStyle: { Dashed: 2 },
   createChart: () => {
-    const addLineSeries = () => {
-      const series = { setData: mock() };
+    const addLineSeries = (options: Record<string, unknown> = {}) => {
+      const series = { options, setData: mock(), applyOptions: mock() };
       createdSeries.push(series);
       return series;
     };
-    const chart = { addLineSeries, remove: mock() };
+    const chart = { addLineSeries, remove: mock(), applyOptions: mock() };
     createdCharts.push(chart);
     return chart;
   },

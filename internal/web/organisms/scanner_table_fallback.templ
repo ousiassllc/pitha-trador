@@ -32,23 +32,23 @@ import (
 // mirrored by that Lit component's render(); keep the two in sync so the
 // hydrated view does not differ from the SSR one (issue #239).
 templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
-	<section class="mt-6" id="scanner-table" data-testid="scanner-table">
+	<section class="mt-12" id="scanner-table" data-testid="scanner-table">
 		<pitha-scanner-table api-url="/api/v1/scanner" ws-url="/ws/scanner">
-			<p class="mb-3 text-sm text-slate-600" data-testid="scanner-count">
+			<p class="mb-3 text-sm text-mute" data-testid="scanner-count">
 				候補
-				<span class="text-lg font-semibold text-slate-900">{ strconv.Itoa(len(candidates)) }</span>
+				<span class="text-lg font-mono tabular-nums text-ink">{ strconv.Itoa(len(candidates)) }</span>
 				件
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scanner-count", Label: "候補銘柄の説明"}) {
 					{ scannerCountHelp }
 				}
 			</p>
-			<div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
+			<div class="overflow-x-auto rounded-lg border border-border bg-surface">
 				<table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
-					<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">{ scannerCaption(asOf) }</caption>
+					<caption class="border-b border-border px-3 py-2 text-left text-xs text-mute">{ scannerCaption(asOf) }</caption>
 					<thead>
-						<tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+						<tr class="border-b border-border bg-bone text-xs font-semibold text-mute">
 							for _, col := range scannerColumns {
-								<th scope="col" class={ "whitespace-nowrap px-3 py-2", templ.KV("text-right", col.Numeric) }>
+								<th scope="col" class={ "whitespace-nowrap px-3 py-2.5", templ.KV("text-right", col.Numeric) }>
 									{ col.Label }
 									if col.Hint != "" {
 										@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scanner-col-" + col.Key, Label: col.Label + "の説明"}) {
@@ -67,7 +67,7 @@ templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 				</table>
 			</div>
 			if len(candidates) == 0 {
-				<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500" data-testid="scanner-empty">
+				<p class="mt-3 rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute" data-testid="scanner-empty">
 					現在、条件を満たす候補銘柄はありません。
 				</p>
 			}
@@ -107,46 +107,46 @@ var scannerColumns = []scannerColumn{
 }
 
 templ scannerRow(c domain.Candidate) {
-	<tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" data-symbol={ c.Symbol }>
-		<td class="px-3 py-2 font-medium">
-			<a class="text-sky-700 underline-offset-2 hover:underline" href={ SymbolHref(c.Symbol) }>{ c.Symbol }</a>
+	<tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol={ c.Symbol }>
+		<td class="px-3 py-2.5">
+			<a class="text-accent underline decoration-mute" href={ SymbolHref(c.Symbol) }>{ c.Symbol }</a>
 		</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatFloat(c.Price, 1) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ formatFloat(c.Price, 1) }</td>
 		<td class={ returnClass(c.Return1m) }>{ formatSignedNilFloat(domain.RatioToPercentPtr(c.Return1m), 2) }</td>
 		<td class={ returnClass(c.Return5m) }>{ formatSignedNilFloat(domain.RatioToPercentPtr(c.Return5m), 2) }</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatSignedFloat(c.PriceVsVWAPBps, 0) }</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.SpreadBps, 0) }</td>
-		<td class="px-3 py-2">
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ formatSignedFloat(c.PriceVsVWAPBps, 0) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ formatNilFloat(c.SpreadBps, 0) }</td>
+		<td class="px-3 py-2.5">
 			if c.JevDirection == nil {
-				<span class="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-500">判定待ち</span>
+				<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs text-mute">判定待ち</span>
 			} else {
 				@atoms.Badge(atoms.Direction(*c.JevDirection))
 			}
 		</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ atoms.FormatConfidence(c.JevConfidence) }</td>
-		<td class="px-3 py-2">
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ atoms.FormatConfidence(c.JevConfidence) }</td>
+		<td class="px-3 py-2.5">
 			if c.EntryQuality == nil {
-				<span class="text-slate-400">—</span>
+				<span class="text-mute">—</span>
 			} else {
 				@atoms.EntryQualityBadge(*c.EntryQuality)
 			}
 		</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.CurrentPosition, 0) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ formatNilFloat(c.CurrentPosition, 0) }</td>
 	</tr>
 }
 
 // returnClass colors a return cell: green when positive, red when
 // negative, neutral for zero or a missing value.
 func returnClass(v *float64) string {
-	const base = "px-3 py-2 text-right font-medium tabular-nums "
+	const base = "px-3 py-2.5 text-right font-mono tabular-nums "
 	switch {
 	case v == nil || *v == 0:
-		return base + "text-slate-500"
+		return base + "text-mute"
 	case *v > 0:
-		return base + "text-green-700"
+		return base + "text-success"
 	default:
-		return base + "text-red-700"
+		return base + "text-danger"
 	}
 }
 

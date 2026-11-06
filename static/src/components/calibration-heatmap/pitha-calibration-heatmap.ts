@@ -16,15 +16,16 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
+import { ColorSchemeController, chartBaseOptions } from '../lib/chart-theme';
 import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
-import { buttonStyles, noticeStyles } from '../lib/styles';
+import { buttonStyles, noticeStyles, tableStyles } from '../lib/styles';
 import { type ABArm, renderABArms } from './ab-arms-view';
 import { renderBarrierSummary, renderBucketBarrier } from './barrier-view';
 import { heatmapStyles } from './calibration-styles';
 import {
+  applyCellColors,
   type BarrierStats,
-  bucketColors,
   bucketMidpointPct,
   type CalibrationAPIResponse,
   type CalibrationBucket,
@@ -35,18 +36,16 @@ import {
   type HorizonOption,
   hasLabeledSamples,
 } from './calibration-view';
+import { accuracyColor, perfectColor } from './chart-colors';
 import { renderDirectionTable } from './direction-view';
 import { renderHorizonSelector } from './horizon-selector';
 import { type LLMCutoffInfo, type MetaModel, renderMetaModel } from './meta-model/meta-model-view';
 import { type RetrainSkip, renderRetrainSkips } from './meta-model/retrain-skips-view';
 
-const ACCURACY_LINE_COLOR = '#2563eb';
-const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';
-
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
   // Shadow DOM: Tailwind does not reach in here, so style locally.
-  static override styles = [buttonStyles, noticeStyles, heatmapStyles, helpMarkStyles];
+  static override styles = [buttonStyles, noticeStyles, tableStyles, heatmapStyles, helpMarkStyles];
 
   @property({ type: String, attribute: 'calibration-url' }) calibrationUrl = '';
 
@@ -76,6 +75,8 @@ export class PithaCalibrationHeatmap extends LitElement {
   private chart: IChartApi | null = null;
   private accuracySeries: ISeriesApi<'Line'> | null = null;
   private perfectSeries: ISeriesApi<'Line'> | null = null;
+  // The canvas keeps the colors it was given, so re-apply the tokens on an OS Light/Dark switch.
+  readonly colorScheme = new ColorSchemeController(this, () => this.applyTheme());
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -109,21 +110,29 @@ export class PithaCalibrationHeatmap extends LitElement {
     if (!container) return;
 
     // autoSize: follow the container (height is fixed in `static styles`).
+    const base = chartBaseOptions();
     this.chart = createChart(container, {
+      ...base,
       autoSize: true,
-      timeScale: { visible: false },
+      timeScale: { ...base.timeScale, visible: false },
     });
     this.perfectSeries = this.chart.addLineSeries({
-      color: PERFECT_CALIBRATION_LINE_COLOR,
+      ...perfectColor(),
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       title: 'Perfect calibration',
     });
     this.accuracySeries = this.chart.addLineSeries({
-      color: ACCURACY_LINE_COLOR,
+      ...accuracyColor(),
       lineWidth: 2,
       title: 'Observed accuracy',
     });
+  }
+
+  private applyTheme(): void {
+    this.chart?.applyOptions(chartBaseOptions());
+    this.perfectSeries?.applyOptions(perfectColor());
+    this.accuracySeries?.applyOptions(accuracyColor());
   }
 
   private async load(): Promise<void> {
@@ -198,7 +207,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   protected override render() {
     return html`
       <div class="pitha-calibration-heatmap">
-        <button type="button" @click=${this.onRefresh} ?disabled=${this.loading}>
+        <button type="button" data-ripple @click=${this.onRefresh} ?disabled=${this.loading}>
           ${this.loading ? '更新中…' : '更新'}
         </button>
         ${renderHorizonSelector(this.horizon, this.shownHorizon, (option) => this.onHorizonChange(option))}
@@ -212,17 +221,9 @@ export class PithaCalibrationHeatmap extends LitElement {
           ${this.buckets.map(
             (b) => html`
               <li
-                ${ref((el) => {
-                  // CSSOM, not a `style` attribute binding: the CSP (no
-                  // `style-src 'unsafe-inline'`) blocks inline style attributes,
-                  // and Lit's styleMap renders one on its first pass.
-                  if (el) {
-                    const { background, color } = bucketColors(b);
-                    (el as HTMLElement).style.backgroundColor = background;
-                    (el as HTMLElement).style.color = color;
-                  }
-                })}
+                ${ref((el) => applyCellColors(el, b))}
                 class="pitha-calibration-heatmap-cell"
+                ?data-empty=${b.sample_count === 0}
                 data-testid="calibration-heatmap-cell"
               >
                 <span class="range">${b.range}</span>

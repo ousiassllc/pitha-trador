@@ -2,8 +2,310 @@
    Tailwind CLI (v4) into static/src/dist/css/app.css; Templ layouts link
    that output, not this source file. */
 @import "tailwindcss";
+@import "./table.css" layer(base);
+@import "./dark.css";
 
 /* internal/web (Templ templates) lives outside static/, so it falls
    outside Tailwind's automatic content detection root; register it
    explicitly (docs/components/overview.md §2 directory layout). */
 @source "../../../internal/web";
+
+/* Ousiass design guide color tokens (brand-guide §1). Light values live on
+   :root. Dark values (dark.css) override them under `prefers-color-scheme: dark`
+   unless `<html data-theme="light">` opts out, and under `<html data-theme="dark">`
+   whatever the OS says, so every utility below and every Lit shadow root (custom
+   properties inherit through shadow boundaries) switches theme with the OS
+   setting or the manual choice. */
+:root {
+  color-scheme: light;
+  --ink: #050505;
+  --bone: #f5f5f4;
+  --mute: #6b6b6e;
+  --surface: #ffffff;
+  --border: #e7e7e5;
+  --accent: #050505;
+  --accent-soft: #e7e7e5;
+  --focus: #4a72d0;
+  --success: #3d5c4a;
+  --warning: #7a6a3a;
+  --danger: #7a4545;
+  --info: #4a5a6a;
+  --scrim: color-mix(in srgb, #050505 50%, transparent);
+
+  /* Radii (brand-guide §3): sm 4 (tag, tooltip), md 8 (input, button), lg 12
+     (card, empty state), xl 16 (modal), full (pill, avatar). Tailwind's own
+     md/lg/xl are 6/8/12px, so `rounded-*` is rebound to these in @theme. */
+  --r-sm: 0.25rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.75rem;
+  --r-xl: 1rem;
+  --r-full: 9999px;
+
+  /* Motion (brand-guide §5): fast 120 (hover, press), base 180 (state
+     changes), slow 280 (ripple), fade-in 320 (modal, tooltip, toast, alert),
+     fade-out 240. Easing tokens (--ease-*) are in the @theme below. Under
+     `prefers-reduced-motion` a fade shrinks to <= 100ms. The script side
+     mirrors these numbers in components/lib/motion.ts (motion.test.ts keeps
+     the two equal). */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 280ms;
+  --motion-fade-in: 320ms;
+  --motion-fade-out: 240ms;
+
+  /* Icon sizes (brand-guide §6): sm 16, md 20, lg 24. */
+  --icon-sm: 1rem;
+  --icon-md: 1.25rem;
+  --icon-lg: 1.5rem;
+
+  /* z-index scale (brand-guide §6): dropdown / tooltip / popover 100, sticky 200,
+     drawer 300, modal 400, toast 500. Used as `z-[var(--z-toast)]`. */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-drawer: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+/* The guide's palette is the only palette: drop Tailwind's default colors so
+   a stray `text-slate-500` or `bg-blue-600` fails to compile (and
+   internal/web/style_test.go reports it) instead of silently rendering a
+   color the guide does not define. `inline` makes each utility read the
+   custom property at use time, which is what lets the OS theme switch. */
+@theme {
+  --color-*: initial;
+
+  /* Fonts (brand-guide §2): Sora + Noto Sans JP for text, JetBrains Mono for
+     code and digit-aligned numbers. The @font-face rules are generated into
+     dist/fonts/fonts.css by esbuild.config.mjs (self-hosted, SIL OFL). */
+  --font-sans: Sora, "Noto Sans JP", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Size scale and line heights (brand-guide §2): xs 12 / sm 14 / base 16 /
+     lg 18 / xl 24 / 2xl 32 / 3xl 40px, line heights 1.6 / 1.7 / 1.8 / 1.7 /
+     1.5 / 1.4 / 1.3. xs to lg keep Tailwind's sizes; xl, 2xl and 3xl are
+     redefined because Tailwind's 20 / 24 / 30px are off the guide's scale. */
+  --text-xs--line-height: 1.6;
+  --text-sm--line-height: 1.7;
+  --text-base--line-height: 1.8;
+  --text-lg--line-height: 1.7;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.5;
+  --text-2xl: 2rem;
+  --text-2xl--line-height: 1.4;
+  --text-3xl: 2.5rem;
+  --text-3xl--line-height: 1.3;
+
+  /* Radii (brand-guide §3): the `rounded-*` utilities read the guide's --r-*
+     tokens defined on :root, which Lit shadow roots read too. */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+
+  /* The only shadow in the product (brand-guide §3): the modal. Cards, tooltips
+     and toasts are separated by a 1px border and carry no shadow. */
+  --shadow-modal: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* Easing (brand-guide §5). `static` always emits the variables on :root, so
+   Lit shadow roots can read `var(--ease-out)` whether or not a Tailwind
+   `ease-*` utility is used. `ease-out` is the guide's curve (Tailwind's
+   default differs). */
+@theme static {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@theme inline {
+  /* `duration-fast|base|slow|fade-in|fade-out` read the --motion-* tokens
+     (Tailwind v4 theme key: --transition-duration-*). */
+  --transition-duration-fast: var(--motion-fast);
+  --transition-duration-base: var(--motion-base);
+  --transition-duration-slow: var(--motion-slow);
+  --transition-duration-fade-in: var(--motion-fade-in);
+  --transition-duration-fade-out: var(--motion-fade-out);
+
+  --color-ink: var(--ink);
+  --color-bone: var(--bone);
+  --color-mute: var(--mute);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-focus: var(--focus);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+}
+
+/* Status pill / inline alert tone (brand-guide §1 "ステータスのピル・バッジ"):
+   text in the state token, border 40% and fill 10% of it. Callers add the
+   shape (`border`, radius, padding); the colors live here once. `mute` is
+   the neutral tone ("下書き" / not-yet-judged). */
+@utility tone-success {
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+  background-color: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
+
+@utility tone-warning {
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+  background-color: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--warning);
+}
+
+@utility tone-danger {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background-color: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+@utility tone-info {
+  border-color: color-mix(in srgb, var(--info) 40%, transparent);
+  background-color: color-mix(in srgb, var(--info) 10%, transparent);
+  color: var(--info);
+}
+
+@utility tone-mute {
+  border-color: color-mix(in srgb, var(--mute) 40%, transparent);
+  background-color: color-mix(in srgb, var(--mute) 10%, transparent);
+  color: var(--mute);
+}
+
+/* Body copy is base (16px) at the guide's 1.8 line height; the Japanese
+   explanations in panels and alerts inherit it. */
+@layer base {
+  body {
+    line-height: 1.8;
+  }
+
+  /* Focus ring (brand-guide §1 C3): 2px --focus, offset 2. Inputs and selects
+     draw their own --ring (atoms/input.templ); atoms.Button and the other
+     components that already carry a ring keep it through their utilities. */
+  a:focus-visible,
+  summary:focus-visible,
+  button:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Modal dialogs fade in (--motion-fade-in, ease-out) and out (--motion-fade-out,
+   ease-in), scrim and dialog
+   together (brand-guide §4/§5). A <dialog> is display:none when closed, so the
+   exit needs `display` and `overlay` as discrete transitions and @starting-style
+   supplies the entry's first frame. Reduced motion: fade only, 100ms. */
+dialog[data-modal] {
+  opacity: 0;
+  transition:
+    opacity var(--motion-fade-out) var(--ease-in),
+    overlay var(--motion-fade-out) allow-discrete,
+    display var(--motion-fade-out) allow-discrete;
+}
+
+dialog[data-modal][open] {
+  opacity: 1;
+  transition:
+    opacity var(--motion-fade-in) var(--ease-out),
+    overlay var(--motion-fade-in) allow-discrete,
+    display var(--motion-fade-in) allow-discrete;
+}
+
+dialog[data-modal]::backdrop {
+  background-color: transparent;
+  transition:
+    background-color var(--motion-fade-out) var(--ease-in),
+    overlay var(--motion-fade-out) allow-discrete,
+    display var(--motion-fade-out) allow-discrete;
+}
+
+dialog[data-modal][open]::backdrop {
+  background-color: var(--scrim);
+  transition:
+    background-color var(--motion-fade-in) var(--ease-out),
+    overlay var(--motion-fade-in) allow-discrete,
+    display var(--motion-fade-in) allow-discrete;
+}
+
+@starting-style {
+  dialog[data-modal][open] {
+    opacity: 0;
+  }
+
+  dialog[data-modal][open]::backdrop {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[data-modal],
+  dialog[data-modal][open],
+  dialog[data-modal]::backdrop,
+  dialog[data-modal][open]::backdrop {
+    transition-duration: 100ms;
+  }
+}
+
+/* Inline alert entrance: fade in over --motion-fade-in, ease-out (brand-guide §4). */
+@keyframes alert-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@utility alert-in {
+  animation: alert-in var(--motion-fade-in) var(--ease-out) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 100ms;
+  }
+}
+
+/* Inline alert exit: an alert that a new response replaces fades out over
+   --motion-fade-out, ease-in (brand-guide §4/§5) before the swap. htmx marks
+   the swap target `htmx-swapping` while the swap is held back (the HX-Reswap
+   `swap:` delay that pitha-htmx-errors sets when a slot already holds an
+   alert). The animation replaces `alert-in`'s, whose `both` fill would
+   otherwise keep the alert at opacity 1. Reduced motion: 100ms. */
+@keyframes alert-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.htmx-swapping > [data-inline-alert] {
+  animation: alert-out var(--motion-fade-out) var(--ease-in) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 100ms;
+  }
+}
+
+/* Icon sizes (brand-guide §6): --icon-sm 16 / --icon-md 20 / --icon-lg 24. */
+@utility icon-sm {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+@utility icon-md {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+@utility icon-lg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+}

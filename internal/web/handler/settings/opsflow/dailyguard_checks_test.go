@@ -198,16 +198,16 @@ func TestSettingsPage_DailyGuardNothingSetWarnsAllThreeRules(t *testing.T) {
 }
 
 // issue #779: a reset whose default would leave an invalid combination (SL 60
-// and a 15 bps fee, then SL back to 30 under a label cost of 40) is a 400 that
-// keeps the stored value.
+// and a 15 bps fee, then SL back to 30 under a label cost of 40) is a 422 inline
+// alert that keeps the stored value.
 func TestResetOps_RejectsAnInvalidDefaultCombination(t *testing.T) {
 	engine, store := opsRouter()
 	store.rows[barriersettings.KeyStopLossBps] = "60"
 	store.rows[costsettings.KeyFeeBps] = "15"
 
 	rec := opsRequest(engine, http.MethodDelete, barriersettings.KeyStopLossBps, nil, true)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422; body=%s", rec.Code, rec.Body.String())
 	}
 	if got := store.rows[barriersettings.KeyStopLossBps]; got != "60" {
 		t.Fatalf("stored SL after the rejected reset = %q, want 60", got)

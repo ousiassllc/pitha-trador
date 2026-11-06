@@ -145,7 +145,7 @@ func TestStartStopRestart_ThroughTheScreen(t *testing.T) {
 	}
 
 	// 二重起動しない
-	if dup := a.post("/settings/mcp/start", url.Values{}, true); dup.Code != http.StatusConflict || !strings.Contains(dup.Body.String(), "二重には起動しません") {
+	if dup := a.post("/settings/mcp/start", url.Values{}, true); dup.Code != http.StatusConflict || !strings.Contains(dup.Body.String(), "すでに起動しています") {
 		t.Fatalf("second start = %d; body %s", dup.Code, dup.Body)
 	}
 	if len(a.children) != 1 {

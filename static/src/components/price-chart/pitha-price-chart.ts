@@ -15,17 +15,18 @@ import { css, html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
+import { ColorSchemeController, chartBaseOptions } from '../lib/chart-theme';
 import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import { type Bar, foldTick, toBarTime, toUTCTimestamp } from './bars';
+import { candleColors, markerColor, volumeColor, vwapColor } from './chart-colors';
 import {
   type ChartSummary,
   describeChart,
   EMPTY_SUMMARY,
   MAIN_SCALE_MARGINS,
-  VOLUME_COLOR,
   VOLUME_SCALE_MARGINS,
   vwapSeriesData,
 } from './chart-data';
@@ -39,9 +40,6 @@ import type {
 import { formatCrosshairTime, formatTickMark } from './jst-time';
 
 const CHART_HEIGHT = 400;
-const LONG_MARKER_COLOR = '#16a34a';
-const SHORT_MARKER_COLOR = '#dc2626';
-
 @customElement('pitha-price-chart')
 export class PithaPriceChart extends LitElement {
   // Shadow DOM: Tailwind does not reach in here, so style locally.
@@ -57,7 +55,7 @@ export class PithaPriceChart extends LitElement {
       }
       .pitha-price-chart-empty {
         margin: 0;
-        color: #475569;
+        color: var(--mute);
         font-size: 0.875rem;
       }
     `,
@@ -85,6 +83,8 @@ export class PithaPriceChart extends LitElement {
   // The newest 1-minute bar on the chart (loaded or tick-built): ticks fold
   // into it instead of stacking new bars.
   private lastBar: Bar | null = null;
+  // The canvas keeps the colors it was given, so re-apply the tokens on an OS Light/Dark switch.
+  readonly colorScheme = new ColorSchemeController(this, () => this.applyTheme());
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -144,17 +144,33 @@ export class PithaPriceChart extends LitElement {
     // timeVisible/secondsVisible: bars are 1 minute, so ticks show HH:mm
     // (lightweight-charts shows dates only by default). The formatters render
     // every time in Asia/Tokyo; the library would otherwise print UTC.
+    const base = chartBaseOptions();
     this.chart = createChart(container, {
+      ...base,
       autoSize: true,
       localization: { timeFormatter: formatCrosshairTime },
-      timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: formatTickMark },
+      timeScale: {
+        ...base.timeScale,
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: formatTickMark,
+      },
     });
-    this.candleSeries = this.chart.addCandlestickSeries();
-    this.vwapSeries = this.chart.addLineSeries({ color: '#2962ff', lineWidth: 1 });
-    this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', color: VOLUME_COLOR });
+    this.candleSeries = this.chart.addCandlestickSeries(candleColors());
+    this.vwapSeries = this.chart.addLineSeries({ ...vwapColor(), lineWidth: 1 });
+    this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', ...volumeColor() });
     // Keep the volume bars in their own bottom band, clear of the candles/VWAP.
     this.volumeSeries.priceScale().applyOptions({ scaleMargins: VOLUME_SCALE_MARGINS });
     this.chart.priceScale('right').applyOptions({ scaleMargins: MAIN_SCALE_MARGINS });
+  }
+
+  private applyTheme(): void {
+    this.chart?.applyOptions(chartBaseOptions());
+    this.candleSeries?.applyOptions(candleColors());
+    this.vwapSeries?.applyOptions(vwapColor());
+    this.volumeSeries?.applyOptions(volumeColor());
+    this.markers = this.markers.map((m) => ({ ...m, color: markerColor(m.text ?? '') }));
+    this.candleSeries?.setMarkers(this.markers);
   }
 
   // `background` marks a resync the page fires by itself (WS reconnect), so
@@ -247,7 +263,7 @@ export class PithaPriceChart extends LitElement {
     const marker: SeriesMarker<Time> = {
       time,
       position: isLong ? 'belowBar' : 'aboveBar',
-      color: isLong ? LONG_MARKER_COLOR : SHORT_MARKER_COLOR,
+      color: markerColor(message.direction),
       shape: isLong ? 'arrowUp' : 'arrowDown',
       text: message.direction,
     };

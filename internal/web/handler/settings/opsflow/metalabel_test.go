@@ -53,8 +53,8 @@ func TestSaveOps_MetaLabelRejectsInvalidValues(t *testing.T) {
 		"malformed confirmed": {metalabelsettings.KeyLLMCutoffConfirmedOn, "yesterday"},
 	} {
 		rec := opsRequest(engine, http.MethodPost, tc.key, url.Values{"value": {tc.raw}}, true)
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("%s: POST %s=%q status = %d, want 400", name, tc.key, tc.raw, rec.Code)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: POST %s=%q status = %d, want 422", name, tc.key, tc.raw, rec.Code)
 		}
 	}
 	if len(store.rows) != 0 {

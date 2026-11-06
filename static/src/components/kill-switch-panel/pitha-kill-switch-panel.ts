@@ -18,6 +18,7 @@
 // Lit notifies via CustomEvent, HTMX reacts via hx-trigger).
 import { css, html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { askConfirm } from '../confirm/pitha-confirm';
 import { get, post } from '../lib/api';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
@@ -86,13 +87,12 @@ export class PithaKillSwitchPanel extends LitElement {
         white-space: nowrap;
       }
       button.pitha-kill-switch-panel-kill {
-        border-color: #b91c1c;
-        background: #dc2626;
-        color: #ffffff;
-        font-weight: 600;
+        border-color: var(--danger);
+        background: var(--danger);
+        color: var(--bone);
       }
       button.pitha-kill-switch-panel-kill:hover:not(:disabled) {
-        background: #b91c1c;
+        background: color-mix(in srgb, var(--danger) 85%, var(--ink));
       }
     `,
   ];
@@ -241,8 +241,8 @@ export class PithaKillSwitchPanel extends LitElement {
     void this.performAction(this.resumeUrl, 'resume-url');
   }
 
-  private onKill(): void {
-    if (!window.confirm(KILL_CONFIRM_MESSAGE)) return;
+  private async onKill(): Promise<void> {
+    if (!(await askConfirm(KILL_CONFIRM_MESSAGE))) return;
     void this.performAction(this.killUrl, 'kill-url');
   }
 
@@ -250,9 +250,9 @@ export class PithaKillSwitchPanel extends LitElement {
     return html`
       <div class="pitha-kill-switch-panel" data-status=${this.status}>
         <span class="pitha-kill-switch-panel-status" role="status" aria-live="polite">${this.status ? STATUS_LABELS[this.status] : ''}</span>
-        ${this.canPause ? html`<button type="button" ?disabled=${this.busy} @click=${this.onPause}>新規エントリーを停止</button>` : ''}
-        ${this.canResume ? html`<button type="button" ?disabled=${this.busy} @click=${this.onResume}>再開</button>` : ''}
-        ${this.canKill ? html`<button type="button" class="pitha-kill-switch-panel-kill" ?disabled=${this.busy} @click=${this.onKill}>全決済して停止</button>` : ''}
+        ${this.canPause ? html`<button type="button" data-ripple ?disabled=${this.busy} @click=${this.onPause}>新規エントリーを停止</button>` : ''}
+        ${this.canResume ? html`<button type="button" data-ripple ?disabled=${this.busy} @click=${this.onResume}>再開</button>` : ''}
+        ${this.canKill ? html`<button type="button" data-ripple class="pitha-kill-switch-panel-kill" ?disabled=${this.busy} @click=${this.onKill}>全決済して停止</button>` : ''}
         ${renderWsDisconnected(this.wsStatus)}
         ${this.error ? html`<p class="pitha-kill-switch-panel-error" role="alert">${this.error}</p>` : ''}
       </div>

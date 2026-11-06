@@ -10,16 +10,16 @@ func dash(s string) string {
 
 // pnlClass is the classes of a realized pnl table cell.
 func pnlClass(sign string) string {
-	return "py-1 " + pnlTextClass(sign)
+	return "px-3 py-2.5 text-right font-mono tabular-nums " + pnlTextClass(sign)
 }
 
 // pnlTextClass colours a gain green and a loss red; anything else is plain.
 func pnlTextClass(sign string) string {
 	switch sign {
 	case "gain":
-		return "text-emerald-700"
+		return "text-success"
 	case "loss":
-		return "text-red-700"
+		return "text-danger"
 	}
 	return ""
 }

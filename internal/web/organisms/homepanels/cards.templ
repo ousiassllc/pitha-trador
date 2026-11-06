@@ -22,11 +22,11 @@ const (
 const refreshHeaders = `{"X-Pitha-Background":"1"}`
 
 const (
-	cardClass       = "flex min-w-0 flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
-	cardTitleClass  = "text-sm font-semibold text-slate-600"
-	cardErrorClass  = "mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800"
-	cardNoticeClass = "mt-2 text-xs text-amber-800"
-	linkClass       = "text-sm font-semibold text-blue-700 underline"
+	cardClass       = "flex min-w-0 flex-col rounded-lg border border-border bg-surface p-4"
+	cardTitleClass  = "text-sm font-semibold text-mute"
+	cardErrorClass  = "mt-2 rounded-md border tone-danger px-3 py-2 text-sm"
+	cardNoticeClass = "mt-2 text-xs text-warning"
+	linkClass       = "text-sm text-accent underline decoration-mute"
 )
 
 // cardError is a card's own error line: its read failed, the rest of the
@@ -38,7 +38,7 @@ templ cardError(message string) {
 // DestLink renders a 「どこを見るか」 link; nothing for the zero Link.
 templ DestLink(l Link) {
 	if l.Href != "" {
-		<a class={ linkClass } href={ templ.SafeURL(l.Href) } data-testid="home-link">{ l.Label } →</a>
+		<a class={ linkClass } href={ templ.SafeURL(l.Href) } data-testid="home-link">{ l.Label } @atoms.IconArrowRight()</a>
 	}
 }
 
@@ -76,8 +76,8 @@ templ TradeStatusBody(v TradeStatusView) {
 		@cardError(v.Err)
 	} else {
 		<div class="mt-2 flex items-start gap-2">
-			<p class="flex items-start gap-2 text-base font-semibold leading-snug text-slate-900" data-testid="trade-status-sentence" data-allowed={ strconv.FormatBool(v.Allowed) }>
-				<span aria-hidden="true" class={ "mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full", templ.KV("bg-emerald-500", v.Allowed), templ.KV("bg-red-500", !v.Allowed) }></span>
+			<p class="flex items-start gap-2 text-base text-ink" data-testid="trade-status-sentence" data-allowed={ strconv.FormatBool(v.Allowed) }>
+				<span aria-hidden="true" class={ "mt-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full", templ.KV("bg-success", v.Allowed), templ.KV("bg-danger", !v.Allowed) }></span>
 				<span>{ v.Sentence }</span>
 			</p>
 			if v.Help != "" {
@@ -89,7 +89,7 @@ templ TradeStatusBody(v TradeStatusView) {
 			}
 		</div>
 		if v.Detail != "" {
-			<p class="mt-1 text-xs leading-relaxed text-slate-600" data-testid="trade-status-detail">{ v.Detail }</p>
+			<p class="mt-1 text-sm text-mute" data-testid="trade-status-detail">{ v.Detail }</p>
 		}
 		if v.Link.Href != "" {
 			<p class="mt-1">@DestLink(v.Link)</p>
@@ -130,27 +130,27 @@ templ PnLBody(v PnLView) {
 		@cardError(v.Err)
 	} else {
 		if v.UnrealizedKnown {
-			<p class={ "mt-2 text-3xl font-bold tabular-nums", PnLClass(v.Total) } data-testid="pnl-total">{ FormatSignedYen(v.Total) }</p>
-			<p class="text-xs text-slate-500">合計</p>
+			<p class={ "mt-2 text-xl font-mono tabular-nums", PnLClass(v.Total) } data-testid="pnl-total">{ FormatSignedYen(v.Total) }</p>
+			<p class="text-xs text-mute">合計</p>
 		} else {
-			<p class="mt-2 text-sm text-slate-700" data-testid="pnl-total-unknown">合計は保有ポジションを読み取れないため表示できません。</p>
+			<p class="mt-2 text-sm text-ink" data-testid="pnl-total-unknown">合計は保有ポジションを読み取れないため表示できません。</p>
 		}
 		<dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-			<dt class="text-slate-600">実現損益</dt>
-			<dd class={ "whitespace-nowrap text-right font-semibold tabular-nums", PnLClass(v.Realized) } data-testid="pnl-realized">{ FormatSignedYen(v.Realized) }<span class="ml-1 text-xs font-normal text-slate-500">（決済 { strconv.Itoa(v.ClosedCount) }件）</span></dd>
-			<dt class="text-slate-600">含み損益</dt>
+			<dt class="text-mute">実現損益</dt>
+			<dd class={ "whitespace-nowrap text-right font-mono tabular-nums", PnLClass(v.Realized) } data-testid="pnl-realized">{ FormatSignedYen(v.Realized) }<span class="ml-1 text-xs font-normal text-mute">（決済 { strconv.Itoa(v.ClosedCount) }件）</span></dd>
+			<dt class="text-mute">含み損益</dt>
 			if v.UnrealizedKnown {
-				<dd class={ "whitespace-nowrap text-right font-semibold tabular-nums", PnLClass(v.Unrealized) } data-testid="pnl-unrealized">{ FormatSignedYen(v.Unrealized) }<span class="ml-1 text-xs font-normal text-slate-500">（保有中）</span></dd>
+				<dd class={ "whitespace-nowrap text-right font-mono tabular-nums", PnLClass(v.Unrealized) } data-testid="pnl-unrealized">{ FormatSignedYen(v.Unrealized) }<span class="ml-1 text-xs font-normal text-mute">（保有中）</span></dd>
 			} else {
-				<dd class="text-right text-xs text-amber-800" data-testid="pnl-unrealized-unknown">読み取れませんでした</dd>
+				<dd class="text-right text-xs text-warning" data-testid="pnl-unrealized-unknown">読み取れませんでした</dd>
 			}
 			if v.OpenedKnown {
-				<dt class="whitespace-nowrap text-slate-600">新規エントリー</dt>
-				<dd class="text-right font-semibold tabular-nums" data-testid="pnl-opened">{ strconv.Itoa(v.OpenedCount) }件</dd>
+				<dt class="whitespace-nowrap text-mute">新規エントリー</dt>
+				<dd class="text-right font-mono tabular-nums" data-testid="pnl-opened">{ strconv.Itoa(v.OpenedCount) }件</dd>
 			}
 		</dl>
 		if v.LossLimit != nil {
-			<p class="mt-2 text-xs text-slate-500" data-testid="pnl-loss-limit">
+			<p class="mt-2 text-xs text-mute" data-testid="pnl-loss-limit">
 				if v.LossLimit.RemainingJPY > 0 {
 					1日の損失上限（-{ FormatYen(v.LossLimit.LimitJPY) }）まで あと { FormatYen(v.LossLimit.RemainingJPY) }
 				} else {
@@ -185,32 +185,32 @@ templ PositionsBody(v PositionsView) {
 	if v.Err != "" {
 		@cardError(v.Err)
 	} else if len(v.Rows) == 0 {
-		<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500" data-testid="positions-empty">保有中のポジションはありません</p>
+		<p class="mt-3 rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute" data-testid="positions-empty">保有中のポジションはありません</p>
 	} else {
-		<p class="mt-1 text-2xl font-bold tabular-nums text-slate-900" data-testid="positions-count">{ strconv.Itoa(len(v.Rows)) }<span class="ml-1 text-sm font-normal text-slate-600">件</span></p>
+		<p class="mt-1 text-xl font-mono tabular-nums text-ink" data-testid="positions-count">{ strconv.Itoa(len(v.Rows)) }<span class="ml-1 text-sm font-normal text-mute">件</span></p>
 		<div class="mt-2 max-h-44 overflow-y-auto">
-			<table class="w-full border-collapse text-left text-xs" aria-label="保有ポジション" data-testid="positions-table">
+			<table class="w-full border-collapse text-left text-sm" aria-label="保有ポジション" data-testid="positions-table">
 				<thead>
-					<tr class="border-b border-slate-200 text-slate-500">
-						<th scope="col" class="py-1 pr-2 font-semibold">銘柄</th>
-						<th scope="col" class="py-1 pr-2 font-semibold">売買</th>
-						<th scope="col" class="py-1 pr-2 text-right font-semibold">数量</th>
-						<th scope="col" class="py-1 pr-2 text-right font-semibold">取得価格</th>
-						<th scope="col" class="py-1 pr-2 text-right font-semibold">現在値</th>
-						<th scope="col" class="py-1 pr-2 text-right font-semibold">含み損益</th>
-						<th scope="col" class="py-1 text-right font-semibold">保有時間</th>
+					<tr class="border-b border-border text-mute">
+						<th scope="col" class="px-2 py-1.5 font-semibold text-xs">銘柄</th>
+						<th scope="col" class="px-2 py-1.5 font-semibold text-xs">売買</th>
+						<th scope="col" class="px-2 py-1.5 text-right font-semibold text-xs">数量</th>
+						<th scope="col" class="px-2 py-1.5 text-right font-semibold text-xs">取得価格</th>
+						<th scope="col" class="px-2 py-1.5 text-right font-semibold text-xs">現在値</th>
+						<th scope="col" class="px-2 py-1.5 text-right font-semibold text-xs">含み損益</th>
+						<th scope="col" class="px-2 py-1.5 text-right font-semibold text-xs">保有時間</th>
 					</tr>
 				</thead>
 				<tbody>
 					for _, r := range v.Rows {
-						<tr class="border-b border-slate-100" data-testid="position-row">
-							<td class="py-1 pr-2 font-semibold"><a class="text-blue-700 underline" href={ SymbolURL(r.Symbol) }>{ r.Symbol }</a></td>
-							<td class="py-1 pr-2">{ SideLabel(r.Side) }</td>
-							<td class="py-1 pr-2 text-right tabular-nums">{ strconv.FormatInt(r.Quantity, 10) }</td>
-							<td class="py-1 pr-2 text-right tabular-nums">{ FormatPrice(r.EntryPrice) }</td>
-							<td class="py-1 pr-2 text-right tabular-nums">{ FormatPrice(r.CurrentPrice) }</td>
-							<td class={ "py-1 pr-2 text-right font-semibold tabular-nums", PnLClass(r.Unrealized) }>{ FormatSignedYen(r.Unrealized) }</td>
-							<td class="whitespace-nowrap py-1 text-right tabular-nums">{ FormatHeld(r.Held) }</td>
+						<tr class="border-b border-border" data-testid="position-row">
+							<td class="px-2 py-1.5"><a class="text-accent underline decoration-mute" href={ SymbolURL(r.Symbol) }>{ r.Symbol }</a></td>
+							<td class="px-2 py-1.5">{ SideLabel(r.Side) }</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ strconv.FormatInt(r.Quantity, 10) }</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ FormatPrice(r.EntryPrice) }</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ FormatPrice(r.CurrentPrice) }</td>
+							<td class={ "px-2 py-1.5 text-right font-mono tabular-nums", PnLClass(r.Unrealized) }>{ FormatSignedYen(r.Unrealized) }</td>
+							<td class="whitespace-nowrap px-2 py-1.5 text-right font-mono tabular-nums">{ FormatHeld(r.Held) }</td>
 						</tr>
 					}
 				</tbody>

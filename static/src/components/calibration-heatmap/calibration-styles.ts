@@ -21,14 +21,28 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap button {
     align-self: flex-start;
   }
+  /* Segmented control (brand-guide §4): an --accent-soft track, the selected
+     segment a --surface face. --accent fill is for primary actions only. */
   .pitha-calibration-heatmap-horizons {
-    display: flex;
+    display: inline-flex;
+    align-self: flex-start;
     gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: var(--r-md);
+    background: var(--accent-soft);
   }
-  .pitha-calibration-heatmap-horizons button[aria-pressed='true'] {
-    background: #0f172a;
-    border-color: #0f172a;
-    color: #ffffff;
+  .pitha-calibration-heatmap-horizons button,
+  .pitha-calibration-heatmap-horizons button:hover:not(:disabled) {
+    border-color: transparent;
+    background: transparent;
+  }
+  .pitha-calibration-heatmap-horizons button:hover:not(:disabled) {
+    border-color: var(--border);
+  }
+  .pitha-calibration-heatmap-horizons button[aria-pressed='true'],
+  .pitha-calibration-heatmap-horizons button[aria-pressed='true']:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--surface);
   }
   .pitha-calibration-heatmap-horizon {
     margin: 0;
@@ -45,18 +59,31 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap-cell {
     display: flex;
     flex-direction: column;
-    border-radius: 0.375rem;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
     padding: 0.5rem;
     font-size: 0.75rem;
-    /* The text color is set per cell (bucketColors) for contrast with its background. */
-    color: #0f172a;
+    line-height: 1.6;
+    /* --cell-bg / --cell-fg are set per cell (bucketColors): a density ramp of --ink on --surface with --ink text. */
+    background: var(--cell-bg, var(--bone));
+    color: var(--cell-fg, var(--ink));
+  }
+  /* A band without labeled samples: flat and dashed (the guide's empty-state border). */
+  .pitha-calibration-heatmap-cell[data-empty] {
+    border-style: dashed;
   }
   .pitha-calibration-heatmap-cell .accuracy {
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: 400;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  /* In-sentence emphasis is the --ink color, not a heavier weight. */
+  .pitha-calibration-heatmap-emphasis {
+    color: var(--ink);
   }
   .pitha-calibration-heatmap-cell .bucket-barrier {
-    margin-top: 0.125rem;
+    margin-top: 0.25rem;
   }
   .pitha-calibration-heatmap-summary {
     display: grid;
@@ -66,10 +93,11 @@ export const heatmapStyles = css`
     font-size: 0.875rem;
   }
   .pitha-calibration-heatmap-summary dt {
-    color: #475569;
+    color: var(--mute);
   }
   .pitha-calibration-heatmap-summary dd {
     margin: 0;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
   }
 `;

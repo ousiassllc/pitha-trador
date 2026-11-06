@@ -15,18 +15,18 @@ import (
 // and as `POST /positions/:id/close`'s response fragment
 // (docs/api/endpoints.md §4: "ポジション行フラグメント").
 templ PositionRow(p domain.Position) {
-	<tr class="border-b border-slate-100" id={ fmt.Sprintf("position-row-%d", p.ID) } data-testid="position-row" data-position-id={ fmt.Sprintf("%d", p.ID) }>
-		<td class="px-3 py-2 font-medium text-slate-900">{ p.Symbol }</td>
-		<td class="px-3 py-2">@atoms.Badge(positionSideToDirection(p.Side))</td>
-		<td class="px-3 py-2">{ fmt.Sprintf("%d", p.Quantity) }</td>
-		<td class="px-3 py-2">{ fmt.Sprintf("%.2f", p.EntryPrice) }</td>
-		<td class="px-3 py-2">{ fmt.Sprintf("%.2f", p.CurrentPrice) }</td>
-		<td class="px-3 py-2">{ formatPnL(p.UnrealizedPnL) }</td>
-		<td class="px-3 py-2">{ formatNilablePnL(p.RealizedPnL) }</td>
-		<td class="px-3 py-2">{ atoms.FormatJST(p.OpenedAt) }</td>
+	<tr class="border-b border-border" id={ fmt.Sprintf("position-row-%d", p.ID) } data-testid="position-row" data-position-id={ fmt.Sprintf("%d", p.ID) }>
+		<td class="px-3 py-2.5 text-ink">{ p.Symbol }</td>
+		<td class="px-3 py-2.5">@atoms.Badge(positionSideToDirection(p.Side))</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", p.Quantity) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f", p.EntryPrice) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f", p.CurrentPrice) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ formatPnL(p.UnrealizedPnL) }</td>
+		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ formatNilablePnL(p.RealizedPnL) }</td>
+		<td class="px-3 py-2.5">{ atoms.FormatJST(p.OpenedAt) }</td>
 		if p.IsOpen() {
-			<td class="px-3 py-2">—</td>
-			<td class="px-3 py-2">
+			<td class="px-3 py-2.5">—</td>
+			<td class="px-3 py-2.5">
 				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Size: atoms.ButtonSmall, Attrs: templ.Attributes{
 					"id":                    fmt.Sprintf("close-position-%d", p.ID),
 					"data-focus-after-swap": fmt.Sprintf("position-row-%d", p.ID),
@@ -40,8 +40,8 @@ templ PositionRow(p domain.Position) {
 				}
 			</td>
 		} else {
-			<td class="px-3 py-2">{ formatClosedAt(p.ClosedAt) }</td>
-			<td class="px-3 py-2">{ formatExitReason(p.ExitReason) }</td>
+			<td class="px-3 py-2.5">{ formatClosedAt(p.ClosedAt) }</td>
+			<td class="px-3 py-2.5">{ formatExitReason(p.ExitReason) }</td>
 		}
 	</tr>
 }

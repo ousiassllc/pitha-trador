@@ -65,11 +65,11 @@ type ConnectionBadge struct {
 func (t BadgeTone) class() string {
 	switch t {
 	case BadgeDanger:
-		return "bg-red-100 text-red-800"
+		return "border tone-danger"
 	case BadgeWarning:
-		return "bg-yellow-100 text-yellow-800"
+		return "border tone-warning"
 	default:
-		return "bg-blue-100 text-blue-800"
+		return "border tone-info"
 	}
 }
 
@@ -136,19 +136,19 @@ type SettingsCardProps struct {
 // Modal. The button carries `aria-haspopup="dialog"`; the list item is
 // addressed in tests by `settings-card-<ID>`.
 templ SettingsCard(props SettingsCardProps) {
-	<li class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-white p-4" data-testid={ "settings-card-" + props.ID }>
+	<li class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4" data-testid={ "settings-card-" + props.ID }>
 		<div class="flex min-w-0 flex-1 flex-col gap-1">
-			<span class="flex flex-wrap items-center gap-2 font-semibold text-slate-900">
+			<span class="flex flex-wrap items-center gap-2 font-semibold text-ink">
 				{ props.Name }
 				if props.Status != nil {
 					@props.Status
 				}
 			</span>
 			if props.Description != "" {
-				<p class="text-sm text-slate-600">{ props.Description }</p>
+				<p class="text-sm text-mute">{ props.Description }</p>
 			}
 		</div>
-		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonOutline, Attrs: templ.Attributes{
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{
 			"aria-haspopup":   "dialog",
 			"data-modal-open": props.ModalID,
 			"data-testid":     "open-" + props.ID,
@@ -167,23 +167,23 @@ templ ConnectionStatus(props ConnectionProps, oob bool) {
 	<span id={ props.StatusID() } class="inline-flex flex-wrap items-center gap-1" data-state={ string(props.State()) } data-testid={ props.StatusID() } { oobAttrs(oob)... }>
 		switch props.State() {
 			case ConnectionConfigured:
-				<span class="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">設定済み</span>
+				<span class="rounded-full border tone-success px-2 py-1 text-xs">設定済み</span>
 			case ConnectionPartial:
-				<span class="rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800">一部設定済み</span>
+				<span class="rounded-full border tone-warning px-2 py-1 text-xs">一部設定済み</span>
 			case ConnectionDefault:
-				<span class="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">既定（{ props.DefaultLabel }）を使用</span>
+				<span class="rounded-full border tone-info px-2 py-1 text-xs">既定（{ props.DefaultLabel }）を使用</span>
 			default:
-				<span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">未設定</span>
+				<span class="rounded-full border tone-mute px-2 py-1 text-xs">未設定</span>
 		}
 		if props.Required && props.State() != ConnectionConfigured {
-			<span class="rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800">必須</span>
+			<span class="rounded-full border tone-danger px-2 py-1 text-xs">必須</span>
 		}
-		<span class="text-xs font-normal text-slate-500">{ strconv.Itoa(props.ConfiguredCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
+		<span class="text-xs font-normal text-mute">{ strconv.Itoa(props.ConfiguredCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
 		for _, badge := range props.Badges {
-			<span class={ "rounded-full px-2 py-1 text-xs font-medium " + badge.Tone.class() } data-testid={ "connection-badge-" + props.ID + "-" + badge.ID }>{ badge.Text }</span>
+			<span class={ "rounded-full px-2 py-1 text-xs", badge.Tone.class() } data-testid={ "connection-badge-" + props.ID + "-" + badge.ID }>{ badge.Text }</span>
 		}
 		for _, detail := range props.Details {
-			<span class="basis-full text-xs font-normal text-slate-600" data-testid={ "connection-detail-" + props.ID + "-" + detail.ID }>{ detail.Label }: { detail.Value }</span>
+			<span class="basis-full text-xs font-normal text-mute" data-testid={ "connection-detail-" + props.ID + "-" + detail.ID }>{ detail.Label }: { detail.Value }</span>
 		}
 	</span>
 }

@@ -26,3 +26,12 @@ func TestScanFunnel_StepsAreNamedInPlainJapaneseAndKeepTheirNumbers(t *testing.T
 		}
 	}
 }
+
+// issue #974: each funnel step is a bordered card on --r-lg with the small-card padding (16).
+func TestScanFunnel_StepsAreLargeRadiusCards(t *testing.T) {
+	v := organisms.ScanPanelView{HasCycle: true}
+	html := renderComponent(t, organisms.ScanFunnel(v))
+	if !strings.Contains(html, `<li class="rounded-lg border border-border bg-bone p-4">`) || strings.Contains(html, "rounded-md") {
+		t.Errorf("funnel steps must be rounded-lg p-4 cards: %s", html)
+	}
+}

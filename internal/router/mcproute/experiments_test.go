@@ -54,6 +54,10 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 		!strings.Contains(body, "暫定値") || !strings.Contains(body, "σ は未確認") {
 		t.Fatalf("empty section = %d: %s", rec.Code, body)
 	}
+	// A bordered --bone panel is a card-like panel: --r-lg (issue #974; it was rounded-md under #966).
+	if !strings.Contains(body, `class="flex flex-col gap-3 rounded-lg border border-border bg-bone p-4" data-testid="mcp-experiments"`) {
+		t.Errorf("the experiments section is not the card shape: %s", body)
+	}
 
 	// A POST without the CSRF token stores nothing.
 	if rec := a.post("/settings/mcp/experiments", experimentForm(nil), false); rec.Code == http.StatusOK {
@@ -105,6 +109,10 @@ func TestExperimentFormRefusesInvalidRequests(t *testing.T) {
 		rec := a.post("/settings/mcp/experiments", experimentForm(extra), true)
 		if rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: status %d, want 422 (%s)", name, rec.Code, rec.Body.String())
+		}
+		// An inline alert in the form's own slot, not a toast (design guide O3).
+		if rec.Header().Get("HX-Retarget") != "#mcp-experiment-form-error" || strings.Contains(rec.Body.String(), "data-toast") {
+			t.Errorf("%s: want an inline alert for #mcp-experiment-form-error, got %v %s", name, rec.Header(), rec.Body)
 		}
 	}
 	var n int
@@ -194,5 +202,49 @@ func TestExperimentFormTakesASettingByItsScreenName(t *testing.T) {
 	var name string
 	if err := db.QueryRow(`SELECT variable_name FROM tuning_experiments`).Scan(&name); err != nil || name != "risk.max_daily_trades" {
 		t.Fatalf("stored name = %q (%v), want the key risk.max_daily_trades", name, err)
+	}
+}
+
+// The hypothesis textarea draws the form focus state (brand-guide C3) like the
+// other fields of the form instead of the UA's default ring.
+func TestExperimentFormHypothesisDrawsTheFocusRing(t *testing.T) {
+	a, _ := newExperimentsApp(t)
+
+	body := a.get("/settings/mcp/experiments").Body.String()
+	i := strings.Index(body, "<textarea")
+	if i < 0 {
+		t.Fatalf("no textarea in the section: %s", body)
+	}
+	textarea := body[i : i+strings.Index(body[i:], ">")]
+	for _, want := range []string{`name="hypothesis"`, "focus-visible:border-focus", "focus-visible:ring-2", "focus-visible:ring-focus/40"} {
+		if !strings.Contains(textarea, want) {
+			t.Errorf("hypothesis textarea lacks %q: %s", want, textarea)
+		}
+	}
+}
+
+// Every label of the form sits 8 above its field (brand-guide §3).
+func TestExperimentFormLabelsAreEightAboveTheirFields(t *testing.T) {
+	a, _ := newExperimentsApp(t)
+
+	body := a.get("/settings/mcp/experiments").Body.String()
+	if n := strings.Count(body, `<label class="flex flex-col gap-2">`); n != 6 {
+		t.Errorf("labels with gap-2 = %d, want 6: %s", n, body)
+	}
+	if strings.Contains(body, `<label class="flex flex-col gap-1">`) {
+		t.Errorf("a label must not sit 4 above its field: %s", body)
+	}
+}
+
+// A refused close is a one-line toast without the free-length reason (brand-guide
+// O3: a toast is one short line); the reason goes to the log.
+func TestExperimentCloseRefusalToastIsOneShortLine(t *testing.T) {
+	a, _ := newExperimentsApp(t)
+	a.post("/settings/mcp/experiments", experimentForm(nil), true)
+
+	rec := a.post("/settings/mcp/experiments/1/close", url.Values{"status": {"paused"}}, true)
+	body := rec.Body.String()
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "実験を終えられません。") || strings.Contains(body, "status は") {
+		t.Errorf("close with a bad status = %d, want a 422 with the short toast only: %s", rec.Code, body)
 	}
 }

@@ -26,7 +26,7 @@ templ HelpMark(props HelpMarkProps) {
 	<span class="relative inline-flex align-middle" data-help-mark>
 		<button
 			type="button"
-			class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-400 bg-white text-[10px] font-semibold leading-none text-slate-600 hover:border-slate-600 hover:text-slate-900 cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+			class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border bg-surface text-xs font-semibold leading-none text-mute hover:border-ink hover:text-ink cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			aria-label={ props.Label }
 			aria-describedby={ props.ID }
 			data-help-mark-button
@@ -34,7 +34,7 @@ templ HelpMark(props HelpMarkProps) {
 		<span
 			id={ props.ID }
 			role="tooltip"
-			class="invisible fixed left-0 top-0 z-50 w-72 max-w-[80vw] rounded-md border border-slate-300 bg-white p-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-700 shadow-lg data-[open]:visible"
+			class="invisible fixed left-0 top-0 opacity-0 transition-[opacity,visibility] duration-fade-out ease-in data-[open]:duration-fade-in data-[open]:ease-out motion-reduce:duration-100 motion-reduce:data-[open]:duration-100 z-[var(--z-dropdown)] w-72 max-w-[80vw] rounded-sm border border-border bg-surface px-2.5 py-1.5 text-left text-xs font-normal normal-case tracking-normal text-ink data-[open]:visible data-[open]:opacity-100"
 			data-help-mark-text
 		>
 			{ children... }

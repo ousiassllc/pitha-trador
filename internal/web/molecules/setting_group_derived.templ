@@ -39,13 +39,13 @@ func (p SettingGroupProps) DerivedPanelTitle() string {
 // an operating capital and percentages). oob renders it as an
 // `hx-swap-oob="true"` fragment (replacing the element with the same id).
 templ SettingGroupDerived(props SettingGroupProps, oob bool) {
-	<section id={ props.DerivedID() } class="flex flex-col gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" data-testid={ props.DerivedID() } aria-live="polite" aria-label={ props.DerivedPanelTitle() } { oobAttrs(oob)... }>
-		<p class="font-semibold text-slate-800">{ props.DerivedPanelTitle() }</p>
+	<section id={ props.DerivedID() } class="flex flex-col gap-2 rounded-lg border border-border bg-bone p-4 text-sm text-ink" data-testid={ props.DerivedID() } aria-live="polite" aria-label={ props.DerivedPanelTitle() } { oobAttrs(oob)... }>
+		<p class="font-semibold text-ink">{ props.DerivedPanelTitle() }</p>
 		<ul class="flex flex-col gap-1">
 			for _, item := range props.Derived {
 				if item.Heading {
 					<li class="mt-2 flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
-						<span class="font-semibold text-slate-800">{ item.Label }</span>
+						<span class="font-semibold text-ink">{ item.Label }</span>
 						if len(item.Help) > 0 {
 							@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-" + props.DerivedID() + "-" + item.Key, Label: item.Label + "の説明"}) {
 								for _, paragraph := range item.Help {
@@ -54,24 +54,24 @@ templ SettingGroupDerived(props SettingGroupProps, oob bool) {
 							}
 						}
 						if item.Detail != "" {
-							<span class="text-xs text-slate-500">{ item.Detail }</span>
+							<span class="text-xs text-mute">{ item.Detail }</span>
 						}
 					</li>
 				} else if item.Warn {
-					<li class="flex flex-wrap items-baseline gap-x-2 text-amber-800" data-testid={ props.DerivedID() + "-" + item.Key }>
-						<span class="font-semibold">注意:</span>
+					<li class="flex flex-wrap items-baseline gap-x-2 text-warning" data-testid={ props.DerivedID() + "-" + item.Key }>
+						<span>注意:</span>
 						<span>{ item.Label }</span>
 					</li>
 				} else {
 					<li class="flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
-						<span class="text-slate-600">{ item.Label }</span>
+						<span class="text-mute">{ item.Label }</span>
 						if item.Value != "" && item.Off {
-							<span class="font-medium text-slate-500">{ item.Value }</span>
+							<span class="text-mute">{ item.Value }</span>
 						} else if item.Value != "" {
-							<span class="font-medium text-slate-900">{ item.Value }</span>
+							<span class="text-ink">{ item.Value }</span>
 						}
 						if item.Detail != "" {
-							<span class="text-xs text-slate-500">{ item.Detail }</span>
+							<span class="text-xs text-mute">{ item.Detail }</span>
 						}
 					</li>
 				}

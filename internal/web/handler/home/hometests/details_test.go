@@ -156,7 +156,7 @@ func TestTrades_NewestClosedWithPnLColour(t *testing.T) {
 	if n := count(body, "trade-row"); n != 2 {
 		t.Fatalf("trade rows = %d", n)
 	}
-	for _, want := range []string{"+1,200円", "-800円", "text-emerald-700", "text-red-700", `href="/symbols/6758"`} {
+	for _, want := range []string{"+1,200円", "-800円", "text-success", "text-danger", `href="/symbols/6758"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("trades lack %q", want)
 		}
@@ -207,7 +207,44 @@ func TestKillEvents_LatestThree(t *testing.T) {
 func TestDetails_IsACollapsibleSectionOnThePage(t *testing.T) {
 	f := newFixture()
 	body := f.mustGet(t, "/")
-	if !strings.Contains(body, `<details class="mt-6" open data-testid="home-details-section">`) || !strings.Contains(body, "<summary") {
+	if !strings.Contains(body, `<details class="mt-12" open data-testid="home-details-section">`) || !strings.Contains(body, "<summary") {
 		t.Errorf("今日の詳細 is not a collapsible <details>: %s", between(body, "home-details-section", "</summary>"))
+	}
+}
+
+// The trade and Kill Switch lists are the content of their blocks, not notes:
+// 14px (text-sm), with only the time kept at 12px (brand-guide §2, T3).
+func TestDetails_ListsAreBodyTextNotNotes(t *testing.T) {
+	f := newFixture()
+	f.source.trades = []home.Trade{{Symbol: "7203", Side: "LONG", Quantity: 100, ClosedAt: jst(20, 9, 50), PnLJPY: 1200, ExitReason: "take_profit"}}
+	f.events = append(f.events, domain.ActivityEvent{Type: domain.ActivityTypeKillSwitch, Timestamp: jst(20, 9, 0), Detail: "reason=daily_loss_limit resolved_by=manual"})
+	body := f.mustGet(t, "/home/details")
+	if n := strings.Count(body, `<ul class="mt-2 flex flex-col gap-1 text-sm">`); n != 2 {
+		t.Errorf("text-sm lists = %d, want 2 (trades, Kill Switch): %s", n, body)
+	}
+	if strings.Contains(body, `<ul class="mt-2 flex flex-col gap-1 text-xs">`) {
+		t.Errorf("a list must not be 12px: %s", body)
+	}
+}
+
+// The proposals block is data, not a note: the status counts and the latest
+// rows are 14px, and only the status and time of a row are 12px (brand-guide
+// §2, T3; issue #958).
+func TestDetails_ProposalListsAreBodyText(t *testing.T) {
+	f := newFixture()
+	f.source.proposals = home.Proposals{
+		Total:    2,
+		ByStatus: []home.StatusCount{{Status: "received", Count: 2}},
+		Latest:   []home.ProposalItem{{ID: 7, Symbol: "7203", Action: "open_long", Status: "received", ReceivedAt: jst(20, 9, 5)}},
+	}
+	body := f.mustGet(t, "/home/details")
+	if !strings.Contains(body, `<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink">`) {
+		t.Errorf("status counts are not text-sm: %s", body)
+	}
+	if n := strings.Count(body, `<ul class="mt-2 flex flex-col gap-1 text-sm">`); n < 1 {
+		t.Errorf("latest proposals are not text-sm: %s", body)
+	}
+	if !strings.Contains(body, `<span class="text-xs text-mute">`) {
+		t.Errorf("status and time of a row should be the 12px note: %s", body)
 	}
 }

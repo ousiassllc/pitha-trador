@@ -8,8 +8,10 @@ package atoms
 // `data-toast-*` hooks below) and clones it from layout's `#toast-template`
 // for failures that carry no fragment (network errors, empty bodies).
 templ Toast(message string) {
-	<div class="pointer-events-auto flex items-start gap-3 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 shadow" role="alert" data-toast data-testid="toast">
-		<span class="flex-1" data-toast-message>{ message }</span>
-		<button class="font-semibold text-red-700" type="button" aria-label="閉じる" data-toast-dismiss>×</button>
+	<div class="pointer-events-auto flex h-10 max-w-full items-center gap-3 whitespace-nowrap rounded-full bg-ink px-4 text-sm text-bone" role="alert" data-toast data-testid="toast">
+		<span class="truncate" data-toast-message>{ message }</span>
+		<button class="relative inline-flex overflow-hidden rounded-full" type="button" aria-label="閉じる" data-toast-dismiss data-ripple>
+			@IconXmark()
+		</button>
 	</div>
 }

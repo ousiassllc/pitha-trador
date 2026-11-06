@@ -24,7 +24,7 @@ func TestErrorPage_HeadingIsJapaneseAndKeepsTheStatus(t *testing.T) {
 			t.Fatalf("render %d: %v", status, err)
 		}
 		body := buf.String()
-		if !strings.Contains(body, "<h1 class=\"text-2xl font-bold text-slate-900\">"+want+"</h1>") {
+		if !strings.Contains(body, "<h1 class=\"text-3xl font-semibold text-ink\">"+want+"</h1>") {
 			t.Errorf("%d: h1 is not %q: %s", status, want, body)
 		}
 		if strings.Contains(body, http.StatusText(status)) {

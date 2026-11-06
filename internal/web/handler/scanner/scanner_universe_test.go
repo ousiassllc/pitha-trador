@@ -66,7 +66,7 @@ func TestScanPanel_EmptyMaster_ShowsGuidanceAndImportOfferWithoutImporting(t *te
 		if code != http.StatusOK {
 			t.Fatalf("status = %d", code)
 		}
-		for _, want := range []string{"銘柄マスタが未投入です", `data-testid="scan-universe-csv-guide"`, "PITHA_UNIVERSE_PATH", "config/universe.csv", `hx-post="/scanner/universe/import"`, "JPXから取得して投入する", `href="https://www.jpx.co.jp/term-of-use/"`} {
+		for _, want := range []string{"銘柄マスタが未投入です", `data-testid="scan-universe-csv-guide"`, "PITHA_UNIVERSE_PATH", "config/universe.csv", `hx-post="/scanner/universe/import"`, "JPXから取得して投入する", `class="text-accent underline decoration-mute" href="https://www.jpx.co.jp/term-of-use/"`} {
 			if !strings.Contains(body, want) {
 				t.Errorf("panel missing %q", want)
 			}

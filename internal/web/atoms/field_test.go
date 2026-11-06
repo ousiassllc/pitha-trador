@@ -1,6 +1,7 @@
 package atoms_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 func TestInput_DefaultIsFlexibleRowField(t *testing.T) {
 	body := renderWithLabel(t, atoms.Input(atoms.InputProps{ID: "x", Name: "n"}), "")
 
-	for _, want := range []string{`id="x"`, `name="n"`, `type="text"`, "rounded-md border border-slate-300", "flex-1", "px-3 py-1"} {
+	for _, want := range []string{`id="x"`, `name="n"`, `type="text"`, "rounded-md border border-border", "flex-1", "px-3 py-1"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -27,7 +28,7 @@ func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 		Attrs: templ.Attributes{"required": true, "min": "1", "data-testid": "f"},
 	}), "")
 
-	for _, want := range []string{`type="date"`, "rounded-md border border-slate-300 mt-1 px-2 py-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
+	for _, want := range []string{`type="date"`, "rounded-md border border-border mt-1 px-2 py-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -39,10 +40,10 @@ func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 
 func TestSelect_RendersChildrenWithSharedBorder(t *testing.T) {
 	body := renderWithLabel(t, atoms.Select(atoms.SelectProps{
-		ID: "s", Name: "days", Class: "bg-white px-3 py-2", Attrs: templ.Attributes{"data-testid": "d"},
+		ID: "s", Name: "days", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "d"},
 	}), `<option value="1">one</option>`)
 
-	for _, want := range []string{`<select`, `id="s"`, `name="days"`, "rounded-md border border-slate-300 bg-white px-3 py-2", `data-testid="d"`, `<option value="1">one</option></select>`} {
+	for _, want := range []string{`<select`, `id="s"`, `name="days"`, "rounded-md border border-border bg-surface px-3 py-2", `data-testid="d"`, `<option value="1">one</option></select>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -51,7 +52,7 @@ func TestSelect_RendersChildrenWithSharedBorder(t *testing.T) {
 
 func TestSelect_DefaultClass(t *testing.T) {
 	body := renderWithLabel(t, atoms.Select(atoms.SelectProps{Name: "n"}), "")
-	if !strings.Contains(body, "rounded-md border border-slate-300 px-3 py-1") {
+	if !strings.Contains(body, "rounded-md border border-border px-3 py-1") {
 		t.Errorf("default class missing: %s", body)
 	}
 }
@@ -80,5 +81,83 @@ func TestInputAndSelect_RenderIDAndNameWhenGiven(t *testing.T) {
 				t.Errorf("%s body missing %q: %s", name, want, body)
 			}
 		}
+	}
+}
+
+func TestSwitch_IsACheckboxSwitchWithGuideTrackAndKnob(t *testing.T) {
+	body := renderWithLabel(t, atoms.Switch(atoms.SwitchProps{Name: "enabled", Attrs: templ.Attributes{"checked": true, "data-testid": "sw"}}), "有効にする")
+	for _, want := range []string{
+		`type="checkbox"`, `role="switch"`, `name="enabled"`, `value="on"`, ` checked`, `data-testid="sw"`,
+		"peer sr-only", "h-5 w-9 shrink-0 rounded-full", "after:h-3.5 after:w-3.5", "peer-checked:bg-accent", "peer-checked:after:bg-bone",
+		"peer-focus-visible:ring-focus/40", "bg-accent-soft", "text-[15px]", "有効にする",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Switch lacks %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "font-medium") || strings.Contains(body, "font-semibold") {
+		t.Errorf("the switch label must be Regular: %s", body)
+	}
+	// Disabled form parts are opacity .5 (brand-guide §4), the label with the track (issue #961).
+	if n := strings.Count(body, "peer-disabled:opacity-50"); n != 2 || strings.Contains(body, "opacity-40") {
+		t.Errorf("track and label should both be peer-disabled:opacity-50: %s", body)
+	}
+}
+
+func TestInlineAlert_HasIconHeadingAndBodyInTheDangerTone(t *testing.T) {
+	var sb strings.Builder
+	if err := atoms.InlineAlert("入力を確認してください", "数値で入力してください").Render(context.Background(), &sb); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`role="alert"`, "data-inline-alert", "tone-danger", "<svg", `aria-hidden="true"`, "入力を確認してください", "数値で入力してください"} {
+		if !strings.Contains(sb.String(), want) {
+			t.Errorf("InlineAlert lacks %q: %s", want, sb.String())
+		}
+	}
+}
+
+// Input and Select draw the guide's focus state (brand-guide C3): --focus
+// border and a 2px --ring, instead of the UA's default ring.
+func TestInputAndSelect_DrawFocusRing(t *testing.T) {
+	for name, body := range map[string]string{
+		"Input":  renderWithLabel(t, atoms.Input(atoms.InputProps{Name: "n"}), ""),
+		"Select": renderWithLabel(t, atoms.Select(atoms.SelectProps{Name: "n"}), ""),
+	} {
+		for _, want := range []string{"focus-visible:border-focus", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-focus/40"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s missing %q: %s", name, want, body)
+			}
+		}
+	}
+}
+
+func TestTextarea_RendersChildrenWithSharedBorderAndFocusRing(t *testing.T) {
+	body := renderWithLabel(t, atoms.Textarea(atoms.TextareaProps{
+		Name: "memo", Attrs: templ.Attributes{"rows": "2", "required": true, "data-testid": "t"},
+	}), "text")
+
+	for _, want := range []string{
+		`<textarea`, `name="memo"`, `rows="2"`, ` required`, `data-testid="t"`, "rounded-md border border-border px-3 py-1",
+		"focus-visible:border-focus", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-focus/40", `>text</textarea>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Textarea lacks %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, ` id=`) {
+		t.Errorf("an empty ID must not render id=: %s", body)
+	}
+}
+
+// The alert's exit is app.css's `.htmx-swapping > [data-inline-alert]`: the
+// marker attribute that rule (and pitha-htmx-errors) key on must stay on the
+// alert's root, and the entrance animation stays `alert-in`.
+func TestInlineAlert_RootCarriesTheMarkerTheExitAnimationKeysOn(t *testing.T) {
+	var sb strings.Builder
+	if err := atoms.InlineAlert("入力を確認してください", "数値で入力してください").Render(context.Background(), &sb); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(sb.String(), `<div class="alert-in `) || !strings.Contains(strings.SplitN(sb.String(), ">", 2)[0], " data-inline-alert") {
+		t.Errorf("the alert root must be a div with alert-in and data-inline-alert: %s", sb.String())
 	}
 }

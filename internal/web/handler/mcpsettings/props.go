@@ -56,7 +56,7 @@ func stateNote(v admin.View) string {
 func failureText(k proc.FailureKind, code int) string {
 	switch k {
 	case proc.FailExeMissing:
-		return "起動に失敗しました: paper-results-mcp の実行ファイルが見つかりません。"
+		return "起動に失敗しました: paper-results-mcp の実行ファイルが見つかりません。アプリ本体と同じフォルダに置いてください。"
 	case proc.FailSpawn:
 		return "起動に失敗しました: OS がプロセスを開始できませんでした。"
 	case proc.FailPortInUse:
@@ -80,7 +80,7 @@ func reasonText(r admin.Reason) string {
 	case admin.ReasonDisabled:
 		return "無効に設定されています（既定）。"
 	case admin.ReasonSettingsUnreadable:
-		return "設定ファイルを使えないため、MCP は待ち受けません。"
+		return "設定ファイルを使えないため、MCP は待ち受けません。保存または API キーの生成で作り直してください。"
 	case admin.ReasonListenNotAllowed:
 		return "保存されている待受アドレスは許可範囲外のため、MCP は待ち受けません。許可されたアドレスで保存し直してください。"
 	case admin.ReasonAccessIncomplete:

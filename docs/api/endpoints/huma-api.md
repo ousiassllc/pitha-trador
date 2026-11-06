@@ -234,7 +234,7 @@ Decision history（`jev_decisions`をJev Scout/Trader別に時系列で返す）
 
 ### GET /api/v1/system/status / POST /api/v1/system/pause / resume / kill
 
-Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kill-switch-panel`が再接続・自動発動通知後の再同期に`GET`を、操作に`POST`を呼ぶ。確認ダイアログ（`window.confirm`）を出すのはKillのみで、Pause/Resumeは確認なしで`POST`する（外部スクリプトからも利用可）。HTMX用の同名アクションルートは持たない。どれも`{"state":"running","can_pause":true,"can_resume":false,"can_kill":true}`の形式で（`POST`は更新後の）状態を返す。`state`は`running`/`paused`/`killed`、`can_*`は現在の`state`から各`POST`が有効な遷移か。
+Kill Switchの状態取得（読み取り専用の`GET`）と操作。`pitha-kill-switch-panel`が再接続・自動発動通知後の再同期に`GET`を、操作に`POST`を呼ぶ。確認ダイアログ（共有の`molecules.ConfirmDialog`。ネイティブの`window.confirm`は使わない）を出すのはKillのみで、Pause/Resumeは確認なしで`POST`する（外部スクリプトからも利用可）。HTMX用の同名アクションルートは持たない。どれも`{"state":"running","can_pause":true,"can_resume":false,"can_kill":true}`の形式で（`POST`は更新後の）状態を返す。`state`は`running`/`paused`/`killed`、`can_*`は現在の`state`から各`POST`が有効な遷移か。
 
 ### GET /api/v1/logs/errors
 

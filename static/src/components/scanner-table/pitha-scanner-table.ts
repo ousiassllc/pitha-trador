@@ -10,6 +10,7 @@
 import { html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
+import { navArrowDown, navArrowUp } from '../lib/icons';
 import { formatJstDateTime, isZeroTime } from '../lib/jst-datetime';
 import { logger } from '../lib/logger';
 import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
@@ -166,21 +167,21 @@ export class PithaScannerTable extends LitElement {
 
     const items = this.sortedItems();
     return html`
-      <p class="mb-3 text-sm text-slate-600" data-testid="scanner-count">
+      <p class="mb-3 text-sm text-mute" data-testid="scanner-count">
         候補
-        <span class="text-lg font-semibold text-slate-900">${items.length}</span>
+        <span class="text-lg font-mono tabular-nums text-ink">${items.length}</span>
         件
         ${renderLightHelpMark('help-scanner-count', '候補銘柄の説明', COUNT_HELP_TEXT)}
       </p>
-      <div class="overflow-x-auto rounded-md border border-slate-200 bg-white">
+      <div class="overflow-x-auto rounded-lg border border-border bg-surface">
         <table class="w-full border-collapse text-left text-sm" aria-label="スキャナー候補">
           ${
             this.asOf
-              ? html`<caption class="border-b border-slate-200 px-3 py-2 text-left text-xs text-slate-500">候補銘柄 — ${isZeroTime(this.asOf) ? 'データ未取得' : `${formatJstDateTime(this.asOf)} 時点`}</caption>`
+              ? html`<caption class="border-b border-border px-3 py-2 text-left text-xs text-mute">候補銘柄 — ${isZeroTime(this.asOf) ? 'データ未取得' : `${formatJstDateTime(this.asOf)} 時点`}</caption>`
               : ''
           }
           <thead>
-            <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+            <tr class="border-b border-border bg-bone text-xs font-semibold text-mute">
               ${COLUMNS.map((column) => this.renderHeader(column))}
             </tr>
           </thead>
@@ -191,7 +192,7 @@ export class PithaScannerTable extends LitElement {
       </div>
       ${
         items.length === 0
-          ? html`<p class="mt-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500" role="status" data-testid="scanner-empty">
+          ? html`<p class="mt-3 rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute" role="status" data-testid="scanner-empty">
               現在、条件を満たす候補銘柄はありません。
             </p>`
           : ''
@@ -205,16 +206,16 @@ export class PithaScannerTable extends LitElement {
   // inside it), so keyboard and touch users can open it too.
   private renderHeader(column: Column) {
     const active = this.sortKey === column.key;
-    const indicator = active ? (this.sortDirection === 'asc' ? ' ▲' : ' ▼') : '';
+    const indicator = active ? (this.sortDirection === 'asc' ? navArrowUp() : navArrowDown()) : '';
     return html`
-      <th
-        scope="col"
-        class="whitespace-nowrap px-3 py-2 ${column.numeric ? 'text-right' : ''}"
+      <th scope="col"
+        class="whitespace-nowrap px-3 py-2.5 ${column.numeric ? 'text-right' : ''}"
         aria-sort=${active ? (this.sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         <button
           type="button"
-          class="cursor-pointer select-none hover:text-slate-900"
+          class="relative cursor-pointer select-none overflow-hidden hover:text-ink"
+          data-ripple
           @click=${() => this.onHeaderClick(column.key)}
         >${column.label}${indicator}</button>
         ${
@@ -231,11 +232,11 @@ export class PithaScannerTable extends LitElement {
   }
 
   private renderRow(item: ScannerItem) {
-    const numeric = 'px-3 py-2 text-right tabular-nums';
+    const numeric = 'px-3 py-2.5 text-right font-mono tabular-nums';
     return html`
-      <tr class="border-b border-slate-100 last:border-b-0 hover:bg-slate-50" data-symbol=${item.symbol}>
-        <td class="px-3 py-2 font-medium">
-          <a class="text-sky-700 underline-offset-2 hover:underline" href=${item.detail_url}>${item.symbol}</a>
+      <tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol=${item.symbol}>
+        <td class="px-3 py-2.5">
+          <a class="text-accent underline decoration-mute" href=${item.detail_url}>${item.symbol}</a>
         </td>
         <td class=${numeric}>${item.price.toFixed(1)}</td>
         <td class=${returnClass(item.return_1m)}>${formatSignedNullable(item.return_1m, 2)}</td>
@@ -243,9 +244,9 @@ export class PithaScannerTable extends LitElement {
         <td class=${numeric}>${formatNullable(item.volume_ratio_5m, 2)}</td>
         <td class=${numeric}>${formatSigned(item.price_vs_vwap_bps, 0)}</td>
         <td class=${numeric}>${formatNullable(item.spread_bps, 0)}</td>
-        <td class="px-3 py-2">${directionBadge(item.jev_direction)}</td>
+        <td class="px-3 py-2.5">${directionBadge(item.jev_direction)}</td>
         <td class=${numeric}>${formatConfidence(item.jev_confidence)}</td>
-        <td class="px-3 py-2">${entryQualityBadge(item.entry_quality)}</td>
+        <td class="px-3 py-2.5">${entryQualityBadge(item.entry_quality)}</td>
         <td class=${numeric}>${formatNullable(item.current_position, 0)}</td>
       </tr>
     `;
