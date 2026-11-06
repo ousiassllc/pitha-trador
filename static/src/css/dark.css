@@ -3,8 +3,13 @@
    `data-theme="light|dark"` on <html> to override it and keeps the choice in
    localStorage. A selector cannot be shared between a media query and an
    attribute rule, so the two blocks repeat the same values;
-   components/lib/theme.test.ts keeps them equal. */
-@media (prefers-color-scheme: dark) {
+   components/lib/theme.test.ts keeps them equal.
+
+   Both blocks are screen-only: print is always ink on bone (brand-guide §8), so
+   under `@media print` neither applies and the :root Light values stay, whatever
+   the OS or `data-theme` says. Gating by media type needs no second copy of the
+   Light values and cannot lose to `[data-theme="dark"]` on specificity. */
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --ink: #ffffff;
@@ -23,19 +28,21 @@
   }
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --ink: #ffffff;
-  --bone: #050505;
-  --mute: #8b8b8e;
-  --surface: #141414;
-  --border: #2a2a2a;
-  --accent: #f5f5f4;
-  --accent-soft: #2a2a2a;
-  --focus: #60a5fa;
-  --success: #8fafa0;
-  --warning: #c4b87a;
-  --danger: #c49a9a;
-  --info: #9aabbc;
-  --scrim: color-mix(in srgb, #050505 60%, transparent);
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ink: #ffffff;
+    --bone: #050505;
+    --mute: #8b8b8e;
+    --surface: #141414;
+    --border: #2a2a2a;
+    --accent: #f5f5f4;
+    --accent-soft: #2a2a2a;
+    --focus: #60a5fa;
+    --success: #8fafa0;
+    --warning: #c4b87a;
+    --danger: #c49a9a;
+    --info: #9aabbc;
+    --scrim: color-mix(in srgb, #050505 60%, transparent);
+  }
 }

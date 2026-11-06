@@ -29,7 +29,9 @@ func themeChoicePressed(value string) string {
 // segment's `aria-pressed:` utilities style. The server cannot know the
 // browser's choice, so every segment starts unpressed except 自動 and the
 // script corrects that on load. The switch is hidden when printing
-// (brand-guide §8: print is always ink on bone).
+// (`print:hidden`), and print is always ink on bone whatever it chose
+// (brand-guide §8): static/src/css/dark.css applies the Dark tokens on screen
+// only, so under `@media print` the :root Light values stay.
 templ ThemeToggle() {
 	<div
 		role="group"

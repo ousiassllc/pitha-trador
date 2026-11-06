@@ -256,18 +256,21 @@ func TestTemplClassExpressionsAreNotConcatenated(t *testing.T) {
 	}
 }
 
-// TestCompiledDarkTokensFollowTheOSAndDataTheme pins issues #957 and #978: the
-// Dark values are reachable under `prefers-color-scheme: dark` (unless
-// `data-theme="light"` opts out) and under `data-theme="dark"`, and a forced
-// Light needs no rule of its own (the :root Light values apply).
+// TestCompiledDarkTokensFollowTheOSAndDataTheme pins issues #957, #978 and #1002:
+// the Dark values are reachable under `prefers-color-scheme: dark` (unless
+// `data-theme="light"` opts out) and under `data-theme="dark"`, both only on
+// screen (print is ink on bone, brand-guide §8, so the :root Light values
+// apply there whatever the OS or the saved choice), and a forced Light needs no
+// rule of its own. `print:hidden` compiles to a `@media print` rule.
 func TestCompiledDarkTokensFollowTheOSAndDataTheme(t *testing.T) {
 	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
 	if err != nil {
 		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
 	}
 	for _, want := range []string{
-		"@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--ink:#fff;",
-		":root[data-theme=dark]{color-scheme:dark;--ink:#fff;",
+		"@media screen and (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--ink:#fff;",
+		"@media screen{:root[data-theme=dark]{color-scheme:dark;--ink:#fff;",
+		"@media print{.print\\:hidden{display:none",
 	} {
 		if !strings.Contains(string(css), want) {
 			t.Errorf("compiled stylesheet lacks %q", want)

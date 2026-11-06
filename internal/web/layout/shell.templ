@@ -86,7 +86,7 @@ templ document(title string) {
 		</head>
 		<body class="min-h-screen bg-bone text-ink" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
 			{ children... }
-			<div id="toast-region" popover="manual" class="pointer-events-none fixed inset-x-6 bottom-6 top-auto z-[var(--z-toast)] m-0 flex h-auto w-auto justify-center overflow-visible border-0 bg-transparent p-0" aria-live="assertive"></div>
+			<div id="toast-region" popover="manual" class="pointer-events-none fixed inset-x-6 bottom-6 top-auto z-[var(--z-toast)] m-0 flex h-auto w-auto justify-center overflow-visible border-0 bg-transparent p-0 print:hidden" aria-live="assertive"></div>
 			@molecules.ConfirmDialog()
 			<template id="toast-template">
 				@atoms.Toast("")

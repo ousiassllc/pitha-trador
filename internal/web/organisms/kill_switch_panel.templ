@@ -17,9 +17,11 @@ const (
 // `can-pause`/`can-resume`/`can-kill` action flags from
 // domain.SystemState.CanPause/CanResume/CanKill (so the client never
 // re-implements the transition table), and every URL the component calls.
+// The panel is `print:hidden` (brand-guide §8: no controls on a printout).
 templ KillSwitchPanel(state domain.SystemState) {
 	<pitha-kill-switch-panel
 		id="kill-switch"
+		class="print:hidden"
 		status={ string(state) }
 		can-pause?={ state.CanPause() }
 		can-resume?={ state.CanResume() }
