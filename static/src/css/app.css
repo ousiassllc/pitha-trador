@@ -283,6 +283,30 @@ dialog[data-modal][open]::backdrop {
   }
 }
 
+/* Inline alert exit: an alert that a new response replaces fades out over
+   --motion-fade-out, ease-in (brand-guide §4/§5) before the swap. htmx marks
+   the swap target `htmx-swapping` while the swap is held back (the HX-Reswap
+   `swap:` delay that pitha-htmx-errors sets when a slot already holds an
+   alert). The animation replaces `alert-in`'s, whose `both` fill would
+   otherwise keep the alert at opacity 1. Reduced motion: 100ms. */
+@keyframes alert-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.htmx-swapping > [data-inline-alert] {
+  animation: alert-out var(--motion-fade-out) var(--ease-in) both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 100ms;
+  }
+}
+
 /* Icon sizes (brand-guide §6): --icon-sm 16 / --icon-md 20 / --icon-lg 24. */
 @utility icon-sm {
   width: var(--icon-sm);

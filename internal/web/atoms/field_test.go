@@ -144,3 +144,16 @@ func TestTextarea_RendersChildrenWithSharedBorderAndFocusRing(t *testing.T) {
 		t.Errorf("an empty ID must not render id=: %s", body)
 	}
 }
+
+// The alert's exit is app.css's `.htmx-swapping > [data-inline-alert]`: the
+// marker attribute that rule (and pitha-htmx-errors) key on must stay on the
+// alert's root, and the entrance animation stays `alert-in`.
+func TestInlineAlert_RootCarriesTheMarkerTheExitAnimationKeysOn(t *testing.T) {
+	var sb strings.Builder
+	if err := atoms.InlineAlert("入力を確認してください", "数値で入力してください").Render(context.Background(), &sb); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(sb.String(), `<div class="alert-in `) || !strings.Contains(strings.SplitN(sb.String(), ">", 2)[0], " data-inline-alert") {
+		t.Errorf("the alert root must be a div with alert-in and data-inline-alert: %s", sb.String())
+	}
+}

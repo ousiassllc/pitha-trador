@@ -54,6 +54,7 @@ interface ResponseDetail {
   serverResponse?: string;
   shouldSwap?: boolean;
   target?: Element;
+  swapOverride?: string;
 }
 
 /** The toast region inside the topmost open modal `<dialog>`, if any (`molecules.Modal` renders one). */
@@ -115,13 +116,28 @@ function skipUnchangedLiveBanner(detail: ResponseDetail): void {
   target.dataset[LIVE_BANNER_LAST] = body;
 }
 
+/**
+ * An inline alert already in the slot fades out (240ms ease-in; <=100ms under reduced motion) before
+ * the new response replaces it (design guide §4/§5). htmx holds the swap for the `swap:` delay and
+ * marks the slot `htmx-swapping`, which app.css turns into the alert's fade-out. An empty slot is
+ * swapped at once, so a first error is not delayed.
+ */
+function holdSwapForAlertFadeOut(detail: ResponseDetail): void {
+  if (!detail.target?.firstElementChild?.hasAttribute(INLINE_ALERT_MARKER)) return;
+  const ms = prefersReducedMotion() ? REDUCED_FADE_MS : MOTION_FADE_OUT_MS;
+  detail.swapOverride = `innerHTML swap:${ms}ms`;
+}
+
 /** `htmx:beforeSwap`: an error response without a toast fragment is never swapped into `#toast-region`; one with a toast lands in the open modal's region instead (issue #353). */
 export function onBeforeSwap(event: Event): void {
   const detail = (event as CustomEvent<ResponseDetail>).detail;
   skipUnchangedLiveBanner(detail);
   if (!isErrorStatus(detail.xhr)) return;
   // An inline alert is swapped where the response's HX-Retarget says (the form's error slot).
-  if (carriesInlineAlert(detail.xhr)) return;
+  if (carriesInlineAlert(detail.xhr)) {
+    holdSwapForAlertFadeOut(detail);
+    return;
+  }
   if (!carriesToast(detail.xhr)) {
     detail.shouldSwap = false;
     return;

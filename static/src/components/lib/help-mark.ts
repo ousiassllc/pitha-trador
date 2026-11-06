@@ -64,9 +64,9 @@ export const helpMarkStyles = css`
   .help-mark-text {
     visibility: hidden;
     opacity: 0;
-    /* fade-in --motion-fade-in, ease-out (design guide §5); visibility flips at
-       the end of the fade-out so the text stays visible while it fades */
-    transition: opacity var(--motion-fade-in) var(--ease-out), visibility var(--motion-fade-in);
+    /* Exit: fade-out --motion-fade-out, ease-in; visibility flips at the end of
+       the fade so the text stays visible while it fades (design guide §5) */
+    transition: opacity var(--motion-fade-out) var(--ease-in), visibility var(--motion-fade-out);
     position: fixed;
     top: 0;
     left: 0;
@@ -87,9 +87,12 @@ export const helpMarkStyles = css`
   .help-mark-text[data-open] {
     visibility: visible;
     opacity: 1;
+    /* Entrance: fade-in --motion-fade-in, ease-out */
+    transition: opacity var(--motion-fade-in) var(--ease-out), visibility var(--motion-fade-in);
   }
   @media (prefers-reduced-motion: reduce) {
-    .help-mark-text {
+    .help-mark-text,
+    .help-mark-text[data-open] {
       transition-duration: 100ms;
     }
   }

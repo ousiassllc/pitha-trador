@@ -36,8 +36,9 @@ UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の reg
 トークンは `app.css` の `:root`（`--motion-fast` 120 / `--motion-base` 180 / `--motion-slow` 280 / `--motion-fade-in` 320 / `--motion-fade-out` 240ms）と `@theme static`（`--ease-out` = cubic-bezier(0.2,0.8,0.2,1)、`--ease-in` = cubic-bezier(0.4,0,1,1)、`--ease-in-out`）。Tailwind は `duration-base|fade-in` 等と `ease-out`、Lit は `var(--motion-fade-in) var(--ease-out)` で参照し、時間・曲線を直書きしない。Web Animations API は `var()` を解決できないので `lib/motion.ts` に同じ数値を置き、`motion.test.ts` が `app.css` と一致することを確認する。`prefers-reduced-motion: reduce` では移動・リップルを出さず、必要な opacity のフェードも 100ms 以下にする。
 
 - ボタン・閉じるの押下リップル: `data-ripple` を付けた要素に `static/src/components/ripple/pitha-ripple.ts`（`layout` が読む）が、押した点から広がって消える円（280ms ease-out）を描く。`atoms.Button` / `ButtonLink`・トーストの閉じるは templ が付け、Lit のボタンは `data-ripple` を付ける（`lib/styles.ts` の `buttonStyles` が `position: relative; overflow: hidden`）。ドキュメントのリスナーが `composedPath()` で shadow root 内も拾う
-- ツールチップ（`atoms.HelpMark`・Lit の `renderHelpMark`・`scanner-view.ts`）: `opacity` を `--motion-fade-in` の ease-out でフェード（`visibility` は同時に切り替え、閉じるときはフェードが終わってから隠す）
+- ツールチップ（`atoms.HelpMark`・Lit の `renderHelpMark`・`scanner-view.ts`）: `opacity` のフェードは開く側（`data-open`）が `--motion-fade-in` の ease-out（320ms）、閉じる側（通常状態）が `--motion-fade-out` の ease-in（240ms）。`visibility` は同じ長さで切り替え、閉じるときはフェードが終わってから隠す。Tailwind は通常状態に `duration-fade-out ease-in`、`data-[open]:duration-fade-in data-[open]:ease-out`、reduced-motion は両方に 100ms（`motion-reduce:duration-100 motion-reduce:data-[open]:duration-100`）。Lit の `help-mark.ts` は `.help-mark-text` と `[data-open]` で `transition` を分ける
 - トースト（`pitha-htmx-errors.ts`）: 出現は opacity と 8px の `translateY` を 320ms ease-out、退出は opacity を 240ms ease-in で待ってから `remove()`。Web Animations API が無ければ即時
+- インラインアラート（`atoms.InlineAlert`）: 出現は `alert-in`（320ms ease-out）。消去は、枠に残っているアラートを新しい応答が置き換えるとき、`pitha-htmx-errors.ts` の `htmx:beforeSwap` が `HX-Reswap` を `innerHTML swap:240ms`（reduced-motion は 100ms）に上書きして swap を待たせ、htmx が枠に付ける `htmx-swapping` の間 `app.css` の `.htmx-swapping > [data-inline-alert]`（`alert-out`、240ms ease-in）でフェードアウトする。空の枠には待たせず即時に出す
 
 ## 部品・オーバーレイ（issue #945）
 

@@ -147,3 +147,23 @@ func TestCompiledTextScaleMatchesTheGuide(t *testing.T) {
 		}
 	}
 }
+
+// TestCompiledInlineAlertExitFadesOut pins the inline alert's exit (issue
+// #955, brand-guide M5): an alert in a slot that htmx marks `htmx-swapping`
+// animates out over --motion-fade-out with ease-in, and the tooltip's closed
+// state uses the same exit timing, so its entrance and exit are not one
+// transition in both directions.
+func TestCompiledInlineAlertExitFadesOut(t *testing.T) {
+	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
+	if err != nil {
+		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
+	}
+	for _, want := range []string{
+		".htmx-swapping>[data-inline-alert]{animation:alert-out var(--motion-fade-out) var(--ease-in) both",
+		"@keyframes alert-out",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("compiled stylesheet lacks %q", want)
+		}
+	}
+}
