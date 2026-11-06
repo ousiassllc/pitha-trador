@@ -167,3 +167,50 @@ func TestCompiledInlineAlertExitFadesOut(t *testing.T) {
 		}
 	}
 }
+
+// classConcatRe finds a dynamic `class={ ... }` whose first operand is a string
+// literal joined with `+`.
+var classConcatRe = regexp.MustCompile(`class=\{[^}]*"\s*\+`)
+
+// TestTemplClassExpressionsAreNotConcatenated is issue #957's regression test:
+// `class={ "rounded-full text-xs" + tone.class() }` glues the last literal
+// token to the first returned one ("text-xsborder"), so both classes silently
+// vanish. A templ class expression takes several arguments, which templ joins
+// with a space: `class={ "rounded-full text-xs", tone.class() }`.
+func TestTemplClassExpressionsAreNotConcatenated(t *testing.T) {
+	root := filepath.Join(repoRoot(t), "internal/web")
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".templ") {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		for _, m := range classConcatRe.FindAllString(string(src), -1) {
+			t.Errorf("%s: %q joins class names with `+`, which drops the separating space; pass them as separate templ arguments (issue #957)", rel, m)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %s: %v", root, err)
+	}
+}
+
+// TestCompiledDarkTokensFollowTheOS pins issue #957: the Dark values are
+// reachable because they sit under `prefers-color-scheme: dark`, not behind an
+// attribute nothing sets.
+func TestCompiledDarkTokensFollowTheOS(t *testing.T) {
+	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
+	if err != nil {
+		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
+	}
+	want := "@media (prefers-color-scheme:dark){:root{color-scheme:dark;--ink:#fff;"
+	if !strings.Contains(string(css), want) {
+		t.Errorf("compiled stylesheet lacks %q", want)
+	}
+}
