@@ -73,18 +73,18 @@ function renderCalibrationCurve(bins: MetaModelCalibrationBin[]) {
     >
       <thead>
         <tr>
-          <th scope="col">予測確率（平均）</th>
-          <th scope="col">実際の勝率</th>
-          <th scope="col">サンプル数</th>
+          <th scope="col" class="num">予測確率（平均）</th>
+          <th scope="col" class="num">実際の勝率</th>
+          <th scope="col" class="num">サンプル数</th>
         </tr>
       </thead>
       <tbody>
         ${bins.map(
           (b) => html`
             <tr data-testid="calibration-metamodel-curve-row">
-              <td>${formatPercent(b.mean_predicted)}</td>
-              <td>${formatPercent(b.observed_rate)}</td>
-              <td>${b.count}</td>
+              <td class="num">${formatPercent(b.mean_predicted)}</td>
+              <td class="num">${formatPercent(b.observed_rate)}</td>
+              <td class="num">${b.count}</td>
             </tr>
           `,
         )}

@@ -13,9 +13,9 @@ export function renderDirectionTable(byDirection: CalibrationDirection[]) {
       <thead>
         <tr>
           <th scope="col">方向</th>
-          <th scope="col">件数</th>
-          <th scope="col">的中率</th>
-          <th scope="col">平均リターン</th>
+          <th scope="col" class="num">件数</th>
+          <th scope="col" class="num">的中率</th>
+          <th scope="col" class="num">平均リターン</th>
         </tr>
       </thead>
       <tbody>
@@ -23,9 +23,9 @@ export function renderDirectionTable(byDirection: CalibrationDirection[]) {
           (d) => html`
             <tr data-testid="calibration-direction-row">
               <td>${d.direction}</td>
-              <td>${d.sample_count}</td>
-              <td>${d.sample_count > 0 ? `${(d.direction_accuracy * 100).toFixed(1)}%` : '—'}</td>
-              <td>${d.sample_count > 0 ? `${d.avg_future_return_pct.toFixed(2)}%` : '—'}</td>
+              <td class="num">${d.sample_count}</td>
+              <td class="num">${d.sample_count > 0 ? `${(d.direction_accuracy * 100).toFixed(1)}%` : '—'}</td>
+              <td class="num">${d.sample_count > 0 ? `${d.avg_future_return_pct.toFixed(2)}%` : '—'}</td>
             </tr>
           `,
         )}

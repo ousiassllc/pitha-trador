@@ -68,7 +68,7 @@ type PanelProps struct {
 // key into its history cache) and `autocomplete="off"`; its copy buttons are
 // handled by static/src/components/copy-button.
 templ Panel(props PanelProps) {
-	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-mute" data-testid="mcp-panel" { pollAttrs(props)... }>
+	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="mcp-panel" { pollAttrs(props)... }>
 		<h3 class="sr-only">MCP</h3>
 		if props.Notice != "" {
 			<p class="text-success" role="status" data-testid="mcp-notice">{ props.Notice }</p>
@@ -187,22 +187,22 @@ templ keyReveal(key string) {
 				ヘッダーをコピー
 			}
 		</div>
-		<p class="text-xs text-warning">画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。「再起動」を押すと新しいキーが有効になります。</p>
+		<p class="text-sm text-warning">画面を閉じる・再読み込みすると伏せ字になります。紛失した場合は再生成してください。「再起動」を押すと新しいキーが有効になります。</p>
 	</div>
 }
 
 templ stateBadge(state string) {
 	switch state {
 		case "starting":
-			<span class="inline-flex items-center rounded-full border tone-info px-2 py-1 text-xs font-semibold">起動中</span>
+			<span class="inline-flex items-center rounded-full border tone-info px-2 py-1 text-xs">起動中</span>
 		case "error":
-			<span class="inline-flex items-center rounded-full border tone-danger px-2 py-1 text-xs font-semibold">エラー</span>
+			<span class="inline-flex items-center rounded-full border tone-danger px-2 py-1 text-xs">エラー</span>
 		case "listening":
-			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs font-semibold">待受中</span>
+			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs">待受中</span>
 		case "no_key":
-			<span class="inline-flex items-center rounded-full border tone-warning px-2 py-1 text-xs font-semibold">キー未設定</span>
+			<span class="inline-flex items-center rounded-full border tone-warning px-2 py-1 text-xs">キー未設定</span>
 		default:
-			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs font-semibold">停止中</span>
+			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">停止中</span>
 	}
 }
 

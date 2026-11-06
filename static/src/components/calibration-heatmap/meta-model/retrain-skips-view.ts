@@ -28,7 +28,7 @@ export function renderRetrainSkips(skips: RetrainSkip[] | undefined) {
         <tr>
           <th scope="col">日時</th>
           <th scope="col">理由</th>
-          <th scope="col">件数</th>
+          <th scope="col" class="num">件数</th>
         </tr>
       </thead>
       <tbody>
@@ -37,7 +37,7 @@ export function renderRetrainSkips(skips: RetrainSkip[] | undefined) {
             <tr data-testid="calibration-retrain-skip-row">
               <td>${formatJstDateTime(s.skipped_at)}</td>
               <td data-testid="calibration-retrain-skip-reason" data-code=${s.reason_code}>${retrainSkipLabel(s.reason_code)}</td>
-              <td data-testid="calibration-retrain-skip-rows">必要${s.required_rows}件中 ${s.usable_rows}件</td>
+              <td class="num" data-testid="calibration-retrain-skip-rows">必要${s.required_rows}件中 ${s.usable_rows}件</td>
             </tr>
           `,
         )}

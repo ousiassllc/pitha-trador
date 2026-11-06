@@ -28,6 +28,32 @@
   --info: #4a5a6a;
   --scrim: color-mix(in srgb, #050505 50%, transparent);
 
+  /* Radii (brand-guide §3): sm 4 (tag, tooltip), md 8 (input, button), lg 12
+     (card, empty state), xl 16 (modal), full (pill, avatar). Tailwind's own
+     md/lg/xl are 6/8/12px, so `rounded-*` is rebound to these in @theme. */
+  --r-sm: 0.25rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.75rem;
+  --r-xl: 1rem;
+  --r-full: 9999px;
+
+  /* Motion (brand-guide §5): fast 120 (hover, press), base 180 (state
+     changes), slow 280 (ripple), fade-in 320 (modal, tooltip, toast, alert),
+     fade-out 240. Easing tokens (--ease-*) are in the @theme below. Under
+     `prefers-reduced-motion` a fade shrinks to <= 100ms. The script side
+     mirrors these numbers in components/lib/motion.ts (motion.test.ts keeps
+     the two equal). */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 280ms;
+  --motion-fade-in: 320ms;
+  --motion-fade-out: 240ms;
+
+  /* Icon sizes (brand-guide §6): sm 16, md 20, lg 24. */
+  --icon-sm: 1rem;
+  --icon-md: 1.25rem;
+  --icon-lg: 1.5rem;
+
   /* z-index scale (brand-guide §6): dropdown / tooltip / popover 100, sticky 200,
      drawer 300, modal 400, toast 500. Used as `z-[var(--z-toast)]`. */
   --z-base: 0;
@@ -78,23 +104,37 @@
   --text-lg--line-height: 1.7;
   --text-2xl--line-height: 1.5;
 
-  /* Radii (brand-guide §3): md 8 (input, button), lg 12 (card), xl 16 (modal).
-     Tailwind's own md/lg/xl are 6/8/12px, so `rounded-md|lg|xl` are redefined
-     to the guide's --r-md|lg|xl rather than adding parallel names. */
-  /* Easing (brand-guide §5): `ease-out` is the guide's cubic-bezier(0.2,0.8,0.2,1)
-     (Tailwind's default differs); ease-in / ease-in-out already match. */
-  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  /* Radii (brand-guide §3): the `rounded-*` utilities read the guide's --r-*
+     tokens defined on :root, which Lit shadow roots read too. */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
 
   /* The only shadow in the product (brand-guide §3): the modal. Cards, tooltips
      and toasts are separated by a 1px border and carry no shadow. */
   --shadow-modal: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
+/* Easing (brand-guide §5). `static` always emits the variables on :root, so
+   Lit shadow roots can read `var(--ease-out)` whether or not a Tailwind
+   `ease-*` utility is used. `ease-out` is the guide's curve (Tailwind's
+   default differs). */
+@theme static {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 @theme inline {
+  /* `duration-fast|base|slow|fade-in|fade-out` read the --motion-* tokens
+     (Tailwind v4 theme key: --transition-duration-*). */
+  --transition-duration-fast: var(--motion-fast);
+  --transition-duration-base: var(--motion-base);
+  --transition-duration-slow: var(--motion-slow);
+  --transition-duration-fade-in: var(--motion-fade-in);
+  --transition-duration-fade-out: var(--motion-fade-out);
+
   --color-ink: var(--ink);
   --color-bone: var(--bone);
   --color-mute: var(--mute);
@@ -149,42 +189,54 @@
   body {
     line-height: 1.8;
   }
+
+  /* Focus ring (brand-guide §1 C3): 2px --focus, offset 2. Inputs and selects
+     draw their own --ring (atoms/input.templ); atoms.Button and the other
+     components that already carry a ring keep it through their utilities. */
+  a:focus-visible,
+  summary:focus-visible,
+  button:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
 }
 
-/* Modal dialogs fade in 320ms ease-out and out 240ms ease-in, scrim and dialog
+/* Modal dialogs fade in (--motion-fade-in, ease-out) and out (--motion-fade-out,
+   ease-in), scrim and dialog
    together (brand-guide §4/§5). A <dialog> is display:none when closed, so the
    exit needs `display` and `overlay` as discrete transitions and @starting-style
    supplies the entry's first frame. Reduced motion: fade only, 100ms. */
 dialog[data-modal] {
   opacity: 0;
   transition:
-    opacity 240ms cubic-bezier(0.4, 0, 1, 1),
-    overlay 240ms allow-discrete,
-    display 240ms allow-discrete;
+    opacity var(--motion-fade-out) var(--ease-in),
+    overlay var(--motion-fade-out) allow-discrete,
+    display var(--motion-fade-out) allow-discrete;
 }
 
 dialog[data-modal][open] {
   opacity: 1;
   transition:
-    opacity 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    overlay 320ms allow-discrete,
-    display 320ms allow-discrete;
+    opacity var(--motion-fade-in) var(--ease-out),
+    overlay var(--motion-fade-in) allow-discrete,
+    display var(--motion-fade-in) allow-discrete;
 }
 
 dialog[data-modal]::backdrop {
   background-color: transparent;
   transition:
-    background-color 240ms cubic-bezier(0.4, 0, 1, 1),
-    overlay 240ms allow-discrete,
-    display 240ms allow-discrete;
+    background-color var(--motion-fade-out) var(--ease-in),
+    overlay var(--motion-fade-out) allow-discrete,
+    display var(--motion-fade-out) allow-discrete;
 }
 
 dialog[data-modal][open]::backdrop {
   background-color: var(--scrim);
   transition:
-    background-color 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    overlay 320ms allow-discrete,
-    display 320ms allow-discrete;
+    background-color var(--motion-fade-in) var(--ease-out),
+    overlay var(--motion-fade-in) allow-discrete,
+    display var(--motion-fade-in) allow-discrete;
 }
 
 @starting-style {
@@ -206,7 +258,7 @@ dialog[data-modal][open]::backdrop {
   }
 }
 
-/* Inline alert entrance: fade in 320ms ease-out (brand-guide §4). */
+/* Inline alert entrance: fade in over --motion-fade-in, ease-out (brand-guide §4). */
 @keyframes alert-in {
   from {
     opacity: 0;
@@ -218,9 +270,25 @@ dialog[data-modal][open]::backdrop {
 }
 
 @utility alert-in {
-  animation: alert-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: alert-in var(--motion-fade-in) var(--ease-out) both;
 
   @media (prefers-reduced-motion: reduce) {
     animation-duration: 100ms;
   }
+}
+
+/* Icon sizes (brand-guide §6): --icon-sm 16 / --icon-md 20 / --icon-lg 24. */
+@utility icon-sm {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+@utility icon-md {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+@utility icon-lg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }

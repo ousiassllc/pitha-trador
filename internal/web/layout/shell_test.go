@@ -66,6 +66,9 @@ func TestShells_WireHTMXErrorToasts(t *testing.T) {
 			`id="toast-region" popover="manual"`,
 			`id="toast-template"`,
 			`/static/dist/js/htmx-errors/pitha-htmx-errors.js`,
+			// pitha-modal closes every `<dialog data-modal>` on a backdrop
+			// click, including the shared #confirm-dialog on every page.
+			`/static/dist/js/modal/pitha-modal.js`,
 		} {
 			if !strings.Contains(out, want) {
 				t.Errorf("%s: output lacks %q", name, want)

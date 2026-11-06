@@ -45,7 +45,7 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap-cell {
     display: flex;
     flex-direction: column;
-    border-radius: 0.5rem;
+    border-radius: var(--r-md);
     border: 1px solid var(--border);
     padding: 0.5rem;
     font-size: 0.75rem;
@@ -59,7 +59,13 @@ export const heatmapStyles = css`
   }
   .pitha-calibration-heatmap-cell .accuracy {
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: 400;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  /* In-sentence emphasis is the --ink color, not a heavier weight. */
+  .pitha-calibration-heatmap-emphasis {
+    color: var(--ink);
   }
   .pitha-calibration-heatmap-cell .bucket-barrier {
     margin-top: 0.25rem;

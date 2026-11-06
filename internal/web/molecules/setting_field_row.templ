@@ -99,10 +99,10 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 		</div>
 		<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
 		if props.Warning != "" {
-			<p class="text-xs text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
+			<p class="text-sm text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
 		}
 		if props.Notice != "" {
-			<p class="text-xs text-success" role="status" data-testid={ "notice-" + props.Key }>{ props.Notice }</p>
+			<p class="text-sm text-success" role="status" data-testid={ "notice-" + props.Key }>{ props.Notice }</p>
 		}
 	</form>
 }

@@ -11,7 +11,7 @@ import (
 // molecules.SettingFieldRow forms. Every row keeps its own independent
 // `POST`/`DELETE /ops-settings/:key` forms, so editing one field never
 // touches another's stored value. The modals open through the `pitha-modal`
-// script, which the hosting page must load.
+// script, which layout.document loads on every page.
 templ SettingGroupList(groups []molecules.SettingGroupProps) {
 	<ul class="flex flex-col gap-3" data-testid="setting-group-list">
 		for _, group := range groups {

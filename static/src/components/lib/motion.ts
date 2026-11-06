@@ -1,6 +1,8 @@
-// Motion tokens of the Ousiass design guide §5, for the script side (the CSS
-// side uses the same numbers as Tailwind `duration-[...]` / `--ease-out` in
-// static/src/css/app.css and as literals in the Lit `static styles`).
+// Motion tokens of the Ousiass design guide §5, for the script side. The CSS
+// side reads --motion-* / --ease-* in static/src/css/app.css (Tailwind
+// `duration-*`, Lit `static styles`); the Web Animations API cannot resolve
+// `var()`, so the numbers are mirrored here and motion.test.ts fails if the
+// two drift apart.
 // `prefersReducedMotion()` is the single gate: with `reduce` the decorative
 // movement (ripple, slide) is dropped and the opacity fade shrinks to
 // REDUCED_FADE_MS (guide: "<= 100ms or none").

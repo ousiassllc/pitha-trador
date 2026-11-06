@@ -21,8 +21,8 @@ import (
 // it has no buttons.
 templ OrderProposalDetailPage(p ProposalDetailProps) {
 	@layout.Shell(labels.Numbered("注文提案", p.ID), organisms.NavOrderProposals) {
-		<p class="text-sm"><a class="underline decoration-mute" href="/order-proposals">← 注文提案の一覧</a></p>
-		<h1 class="mt-1 text-2xl font-semibold text-ink" data-testid="order-proposal-title">
+		<p class="text-sm"><a class="underline decoration-mute" href="/order-proposals">@atoms.IconNavArrowLeft() 注文提案の一覧</a></p>
+		<h1 class="mt-1 text-3xl font-semibold text-ink" data-testid="order-proposal-title">
 			{ labels.Numbered("注文提案", p.ID) }
 			<span class="ml-2 font-mono text-lg">
 				<a class="underline decoration-mute" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
@@ -30,18 +30,18 @@ templ OrderProposalDetailPage(p ProposalDetailProps) {
 		</h1>
 		<p class="mt-1 text-sm text-ink" data-testid="order-proposal-status" data-status={ p.Status }>
 			{ label(proposalActionLabels, p.Action) }・{ label(proposalBucketLabels, p.Bucket) }・{ p.OrderType } ／ 状態:
-			<span class="font-semibold">{ label(proposalStatusLabels, p.Status) }</span>
+			<span class="text-ink">{ label(proposalStatusLabels, p.Status) }</span>
 			if p.StatusReason != "" {
 				<span class="text-xs text-mute">（理由: { p.StatusReason }）</span>
 			}
 		</p>
 		@proposalFields("概要", "order-proposal-summary", "help-order-proposal-summary", p.Summary)
 		<section class="mt-12" data-testid="order-proposal-rationale">
-			<h2 class="text-lg font-semibold text-ink">理由</h2>
+			<h2 class="text-xl font-semibold text-ink">理由</h2>
 			<p class="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{ p.Rationale }</p>
 		</section>
 		<section class="mt-12" data-testid="order-proposal-exit-plan">
-			<h2 class="text-lg font-semibold text-ink">手じまいの計画</h2>
+			<h2 class="text-xl font-semibold text-ink">手じまいの計画</h2>
 			if p.ExitPlan == "" {
 				<p class="mt-1 text-sm text-mute">—</p>
 			} else {
@@ -62,7 +62,7 @@ templ OrderProposalDetailPage(p ProposalDetailProps) {
 // HelpMark next to its label; helpPrefix keeps those ids unique on the page.
 templ proposalFields(title, testID, helpPrefix string, fields []ProposalField) {
 	<section class="mt-12" data-testid={ testID }>
-		<h2 class="text-lg font-semibold text-ink">{ title }</h2>
+		<h2 class="text-xl font-semibold text-ink">{ title }</h2>
 		<dl class="mt-2 grid gap-x-4 gap-y-1 text-sm text-ink sm:grid-cols-[max-content_1fr]">
 			for i, f := range fields {
 				<dt class="">
@@ -81,7 +81,7 @@ templ proposalFields(title, testID, helpPrefix string, fields []ProposalField) {
 
 templ proposalSources(sources []ProposalSource) {
 	<section class="mt-12" data-testid="order-proposal-sources">
-		<h2 class="text-lg font-semibold text-ink">情報源</h2>
+		<h2 class="text-xl font-semibold text-ink">情報源</h2>
 		if len(sources) == 0 {
 			<p class="mt-1 text-sm text-mute">—</p>
 		} else {
@@ -105,7 +105,7 @@ templ proposalSources(sources []ProposalSource) {
 
 templ proposalEvents(events []ProposalEvent) {
 	<section class="mt-12" data-testid="order-proposal-events">
-		<h2 class="text-lg font-semibold text-ink">状態の時系列</h2>
+		<h2 class="text-xl font-semibold text-ink">状態の時系列</h2>
 		<table class="mt-2 w-full text-left text-sm">
 			<caption class="sr-only">状態の変化の履歴（古い順）</caption>
 			<thead class="border-b border-border text-xs text-mute">

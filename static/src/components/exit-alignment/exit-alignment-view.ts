@@ -124,11 +124,11 @@ export function renderTable(rows: AlignmentRow[]) {
 const distributionRow = (name: string, d: Distribution) => html`
   <tr>
     <td>${name}</td>
-    <td>${formatBps(d.mean)}</td>
-    <td>${d.std_dev.toFixed(1)}</td>
-    <td>${formatBps(d.p5)}</td>
-    <td>${formatBps(d.median)}</td>
-    <td>${formatBps(d.p95)}</td>
+    <td class="num">${formatBps(d.mean)}</td>
+    <td class="num">${d.std_dev.toFixed(1)}</td>
+    <td class="num">${formatBps(d.p5)}</td>
+    <td class="num">${formatBps(d.median)}</td>
+    <td class="num">${formatBps(d.p95)}</td>
   </tr>
 `;
 
@@ -143,7 +143,7 @@ export function renderComparison(c: Comparison | undefined) {
     <h3>ラベル対実出口の再生（${formatJstDateTime(c.from)} 〜 ${formatJstDateTime(c.to)}、${c.replayed_count} 判断）</h3>
     <table data-testid="exit-alignment-comparison" aria-label="ラベルと実出口再生のnetリターン">
       <thead>
-        <tr><th scope="col"></th><th scope="col">平均</th><th scope="col">標準偏差</th><th scope="col">5%</th><th scope="col">中央値</th><th scope="col">95%</th></tr>
+        <tr><th scope="col"></th><th scope="col" class="num">平均</th><th scope="col" class="num">標準偏差</th><th scope="col" class="num">5%</th><th scope="col" class="num">中央値</th><th scope="col" class="num">95%</th></tr>
       </thead>
       <tbody>
         ${distributionRow('ラベル net', c.label_net_bps)}

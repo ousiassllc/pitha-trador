@@ -8,7 +8,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
 import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
-import { buttonStyles, noticeStyles } from '../lib/styles';
+import { buttonStyles, noticeStyles, tableStyles } from '../lib/styles';
 import {
   type AlignmentResponse,
   renderComparison,
@@ -22,28 +22,17 @@ export class PithaExitAlignment extends LitElement {
   static override styles = [
     buttonStyles,
     noticeStyles,
+    tableStyles,
     helpMarkStyles,
     css`
       :host {
         display: block;
       }
-      table {
-        border-collapse: collapse;
-        font-size: 0.875rem;
-        font-family: "JetBrains Mono", ui-monospace, monospace;
-        font-variant-numeric: tabular-nums;
-      }
-      th,
-      td {
-        border: 1px solid var(--border);
-        padding: 0.25rem 0.5rem;
-        text-align: left;
-      }
       .warnings {
         margin: 0;
         padding: 0.5rem 1rem;
         border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
-        border-radius: 0.5rem;
+        border-radius: var(--r-md);
         background: color-mix(in srgb, var(--warning) 10%, transparent);
         color: var(--warning);
         font-size: 0.875rem;
@@ -65,6 +54,7 @@ export class PithaExitAlignment extends LitElement {
       h3 {
         margin: 0.75rem 0 0.25rem;
         font-size: 1rem;
+        font-weight: 600;
       }
     `,
   ];

@@ -6,7 +6,7 @@
 import { html } from 'lit';
 
 const svg = (path: string) =>
-  html`<svg class="inline-block h-4 w-4 shrink-0 align-text-bottom" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d=${path} stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+  html`<svg class="inline-block icon-sm shrink-0 align-text-bottom" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d=${path} stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
 
 /** Iconoir `nav-arrow-up`. */
 export const navArrowUp = () => svg('M6 15L12 9L18 15');

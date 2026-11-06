@@ -12,7 +12,7 @@ export const buttonStyles = css`
     overflow: hidden;
     cursor: pointer;
     border: 1px solid var(--border);
-    border-radius: 0.5rem;
+    border-radius: var(--r-md);
     background: var(--surface);
     color: var(--ink);
     min-height: 2rem;
@@ -20,14 +20,50 @@ export const buttonStyles = css`
     font: inherit;
     font-size: 1rem;
     font-weight: 600;
-    transition: background-color 180ms ease-out;
+    transition: background-color var(--motion-base) var(--ease-out);
   }
   button:hover:not(:disabled) {
     background: var(--accent-soft);
   }
+  button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
   button:disabled {
     cursor: not-allowed;
     opacity: 0.4;
+  }
+`;
+
+// Table recipe (brand-guide §2/§3): header row SemiBold 12px --mute with a 1px
+// --border underline, cells padded 10 / 12. Numeric columns carry `.num`
+// (JetBrains Mono, tabular, right-aligned); label columns stay in the body font.
+export const tableStyles = css`
+  table {
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  th {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--mute);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: left;
+  }
+  tbody th {
+    border-bottom: 0;
+    color: var(--ink);
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+  td {
+    padding: 0.625rem 0.75rem;
+  }
+  .num {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 `;
 

@@ -23,3 +23,17 @@ func TestHelpMark_ButtonDescribesItselfWithTheHelpText(t *testing.T) {
 		}
 	}
 }
+
+// The tooltip is --r-sm (4px) with 6x10 padding (brand-guide §3).
+func TestHelpMark_TooltipUsesTheGuideShape(t *testing.T) {
+	body := renderWithLabel(t, atoms.HelpMark(atoms.HelpMarkProps{ID: "help-x", Label: "説明"}), "詳しい説明")
+
+	for _, want := range []string{"rounded-sm", "px-2.5 py-1.5"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("tooltip missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "p-2 text-left") {
+		t.Errorf("tooltip keeps the old 8px padding: %s", body)
+	}
+}

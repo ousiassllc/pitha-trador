@@ -45,7 +45,7 @@ type PerformanceProps struct {
 // (internal/web/handler/performance.PerformanceHandler.Page) renders it.
 templ PerformancePage(props PerformanceProps) {
 	@layout.Shell("成績", organisms.NavPerformance) {
-		<h1 class="text-2xl font-semibold text-ink">成績</h1>
+		<h1 class="text-3xl font-semibold text-ink">成績</h1>
 		if props.BacktestTab {
 			@molecules.TabNav("成績のタブ", resultTabs(tabBacktest))
 			@performancepanels.BacktestForm(props.Form)

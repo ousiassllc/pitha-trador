@@ -5,6 +5,11 @@ package atoms
 // margin, text size) come from the caller's Class.
 const fieldBase = "rounded-md border border-border"
 
+// fieldFocus is the form focus state (brand-guide C3): --focus border and a
+// 2px --ring (--focus at 40%). `outline-none` is safe only because the ring
+// is always drawn on the same element.
+const fieldFocus = "focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
+
 // InputProps is Input's input. Type is empty for "text". Class carries the
 // layout/spacing classes appended to the shared border style (empty keeps
 // the default `flex-1 px-3 py-1`, a row-filling field; pass e.g.
@@ -67,7 +72,7 @@ func fieldClass(class, fallback string) string {
 	if class == "" {
 		class = fallback
 	}
-	return fieldBase + " " + class
+	return fieldBase + " " + class + " " + fieldFocus
 }
 
 func inputType(t string) string {

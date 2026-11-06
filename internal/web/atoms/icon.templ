@@ -9,16 +9,32 @@ package atoms
 
 // IconXmark is Iconoir's `xmark` at 20px (the close button).
 templ IconXmark() {
-	<svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+	<svg class="icon-md shrink-0" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
 		<path d="M6.75827 17.2426L12.0009 12M17.2435 6.75736L12.0009 12M12.0009 12L6.75827 6.75736M12.0009 12L17.2435 17.2426" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
 	</svg>
 }
 
 // IconWarningCircle is Iconoir's `warning-circle` at 20px (the inline alert).
 templ IconWarningCircle() {
-	<svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+	<svg class="mt-0.5 icon-md shrink-0" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
 		<path d="M12 7L12 13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
 		<path d="M12 17.01L12.01 16.9989" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
 		<path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+	</svg>
+}
+
+// IconArrowRight is Iconoir's `arrow-right` at 16px, inline after a link's
+// text (the "go to" links on Home).
+templ IconArrowRight() {
+	<svg class="inline-block icon-sm shrink-0 align-text-bottom" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+		<path d="M3 12L21 12M21 12L12.5 3.5M21 12L12.5 20.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+	</svg>
+}
+
+// IconNavArrowLeft is Iconoir's `nav-arrow-left` at 16px, inline before a
+// "back to the list" link's text.
+templ IconNavArrowLeft() {
+	<svg class="inline-block icon-sm shrink-0 align-text-bottom" viewBox="0 0 24 24" fill="none" stroke-width="1.5" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+		<path d="M15 6L9 12L15 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
 	</svg>
 }

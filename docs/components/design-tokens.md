@@ -4,34 +4,38 @@
 
 - ステータスのピル・インラインアラートは `border tone-success|warning|danger|info|mute`（文字＝状態色、枠＝40%、地＝10%。`app.css` の `@utility tone-*`）に形（角丸・padding）だけを足す。状態は文言でも伝える
 - Lit のShadow DOMはCSSカスタムプロパティが継承されるため、`static styles` は hex を書かず `var(--ink)` `var(--border)` 等を使う
-- フォーカスリングは `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus`（Lit 側は `outline: 2px solid var(--focus)`）
+- フォーカスリングは 2px・offset 2 の `--focus`。`app.css` の `@layer base` が `a` `summary` `button` `select` の `:focus-visible` に当て、Lit の Shadow DOM 内は届かないので `buttonStyles`（`lib/styles.ts`）と `help-mark.ts` が `outline: 2px solid var(--focus)` を持つ。`atoms.Input` / `atoms.Select` は `focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40`（`--ring` = `--focus` 40%。`outline-none` は同じ要素に必ずリングを出すこの場合だけ）
+- パネル（`<section>` のカード）の本文は `text-ink`。`text-mute` は日付・既定値・件数などの補助の `<span>` / キャプションだけ
 
 ## フォントとタイポグラフィ（issue #941）
 
 - 本文は `Sora, "Noto Sans JP", sans-serif`（`font-sans`）、コードと桁を揃える数値は `"JetBrains Mono", ui-monospace, monospace`（`font-mono`）。いずれも SIL OFL
 - フォントは `@fontsource-variable/{sora,noto-sans-jp,jetbrains-mono}`（`static/package.json` の devDependencies、版は `bun.lock`）から `static/esbuild.config.mjs` が `static/src/dist/fonts/` へ複製し、`fonts.css`（`@font-face`）を `layout` の `<head>` で読む。同一オリジンなので CSP は `font-src 'self'` のまま。canvas（`pitha-price-chart`）は CSS を継承しないため `createChart` の `layout.fontFamily` に明示する
 - 太さは Regular(400) と SemiBold(600) だけ。SemiBold は見出し・ボタン・表の見出し行に限る。ナビ・リンク・ラベル・値に `font-medium` / `font-bold` / 本文中の `font-semibold` を使わない（現在のナビ項目は `text-ink` の色で示す）
-- 表本文は `text-sm`、見出し行は `text-xs font-semibold`。数値列は `text-right font-mono tabular-nums`
-- 行間は `@theme` の `--text-*--line-height`（xs 1.6 / sm 1.7 / base 1.8 / lg 1.7）と `body { line-height: 1.8 }`。サイズは Tailwind の 12/14/16/18/24px を使い、スケール外の `text-xl`（20px）・`text-3xl`（30px）・`text-[10px]` は使わない
+- 表本文は `text-sm`、見出し行は `text-xs font-semibold`。数値列は `text-right font-mono tabular-nums`（th も右寄せ）。Lit の表は `lib/styles.ts` の `tableStyles`（th = SemiBold 12px `--mute` + 下線 1px、td = 上下 10 / 左右 12、数値列は `class="num"`）を `static styles` に足す
+- ステータスのピル・バッジは Regular（`font-semibold` なし）・`rounded-full`・`text-xs`。文中の強調は太さでなく `text-ink` 色と `font-mono tabular-nums`（`<strong>` は使わない）
+- 通知・アラートの本文は `text-sm`（`text-xs` は注記・キャプション・バッジだけ）
+- 行間は `@theme` の `--text-*--line-height`（xs 1.6 / sm 1.7 / base 1.8 / lg 1.7）と `body { line-height: 1.8 }`。サイズは `@theme` でガイドのスケールに合わせた名前を使う（xs 12 / sm 14 / base 16 / lg 18 / xl 24 / 2xl 32 / 3xl 40px、行間 1.6 / 1.7 / 1.8 / 1.7 / 1.5 / 1.4 / 1.3）。ページの h1 は `text-3xl`、節の h2 は `text-xl`（カード・モーダルのタイトルは `text-lg`）、`text-[10px]` は使わない
 
 ## 形・余白・線（issue #942）
 
-- 角丸は `@theme` の `--radius-md|lg|xl` をガイドの `--r-md|lg|xl`（8 / 12 / 16px）に再定義し、`rounded-md`（入力・ボタン・入れ子パネル）・`rounded-lg`（カード・パネル）・`rounded-xl`（モーダル）をそのまま使う。Lit の `static styles` は 0.5rem
+- 角丸は `app.css` の `:root` に `--r-sm|md|lg|xl|full`（4 / 8 / 12 / 16px / 9999px）を定義し、`@theme` の `--radius-sm|md|lg|xl` がそれを読む。`rounded-sm`（ツールチップ・タグ）・`rounded-md`（入力・ボタン・入れ子パネル）・`rounded-lg`（カード・パネル・空状態）・`rounded-xl`（モーダル）・`rounded-full`（ピル）をそのまま使う。Lit の `static styles` は `var(--r-md)` 等を使う
+- ツールチップは `rounded-sm`・12px・padding 6×10（`px-2.5 py-1.5`、Lit は `0.375rem 0.625rem`）
 - 影はモーダルだけ（`shadow-modal` = `--shadow-modal` 0 1px 2px rgba(0,0,0,.06)）。カード・ツールチップ・トーストは 1px の `border-border` で区切り、`shadow*` を付けない
-- 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact の 6px だけ例外）
-- ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`）
-- 空状態は `border border-dashed border-border`・`px-4 py-6`・`text-center text-mute`。ハッシュ到達時の強調は `target:ring-1 target:ring-mute`
+- 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）の 2 種類。SSR と Lit で同じ値にし、`pr-N` だけの指定はしない。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact の 6px だけ例外）
+- ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`）。ページの h1 の下は 24px（`mt-6`）、節の h2 の下は 24px（`mb-6`）、h3 の下は 12px（`mb-3`）
+- 空状態は `rounded-lg border border-dashed border-border`・`px-6 py-12`（上下 48 / 左右 24）・`text-center text-mute`。ハッシュ到達時の強調は `target:ring-1 target:ring-mute`
 
 ## アイコン（issue #943）
 
-UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の regular）の SVG を使う。文字記号（×・▲▼）で代用しない。24×24 の viewBox・`stroke-width="1.5"`・`stroke="currentColor"`・装飾なので `aria-hidden`（名前はボタンの `aria-label`）。サイズは 16（`h-4 w-4`）/ 20（`h-5 w-5`）/ 24。templ は `internal/web/atoms/icon.templ`（`IconXmark`）、Lit は `static/src/components/lib/icons.ts`（`navArrowUp` / `navArrowDown`）に同じパスを置く。足すときは両方に同じパスを足す。
+UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の regular）の SVG を使う。文字記号（×・▲▼）で代用しない。24×24 の viewBox・`stroke-width="1.5"`・`stroke="currentColor"`・装飾なので `aria-hidden`（名前はボタンの `aria-label`）。サイズは `app.css` の `--icon-sm|md|lg`（16 / 20 / 24px）を `icon-sm` / `icon-md` / `icon-lg` のユーティリティで当てる。リンクの矢印も Iconoir（`IconArrowRight` / `IconNavArrowLeft`）で、文字の →・← は使わない。templ は `internal/web/atoms/icon.templ`（`IconXmark` ほか）、Lit は `static/src/components/lib/icons.ts`（`navArrowUp` / `navArrowDown`）に同じパスを置く。足すときは両方に同じパスを足す。
 
 ## モーション（issue #944）
 
-トークンは `static/src/components/lib/motion.ts`（fast 120 / base 180 / slow 280 / fade-in 320 / fade-out 240ms、`--ease-out` = cubic-bezier(0.2,0.8,0.2,1)、`--ease-in` = cubic-bezier(0.4,0,1,1)）。`app.css` の `@theme` が `--ease-out` をガイドの値にする（Tailwind 既定と異なる）。`prefers-reduced-motion: reduce` では移動・リップルを出さず、必要な opacity のフェードも 100ms 以下にする。
+トークンは `app.css` の `:root`（`--motion-fast` 120 / `--motion-base` 180 / `--motion-slow` 280 / `--motion-fade-in` 320 / `--motion-fade-out` 240ms）と `@theme static`（`--ease-out` = cubic-bezier(0.2,0.8,0.2,1)、`--ease-in` = cubic-bezier(0.4,0,1,1)、`--ease-in-out`）。Tailwind は `duration-base|fade-in` 等と `ease-out`、Lit は `var(--motion-fade-in) var(--ease-out)` で参照し、時間・曲線を直書きしない。Web Animations API は `var()` を解決できないので `lib/motion.ts` に同じ数値を置き、`motion.test.ts` が `app.css` と一致することを確認する。`prefers-reduced-motion: reduce` では移動・リップルを出さず、必要な opacity のフェードも 100ms 以下にする。
 
 - ボタン・閉じるの押下リップル: `data-ripple` を付けた要素に `static/src/components/ripple/pitha-ripple.ts`（`layout` が読む）が、押した点から広がって消える円（280ms ease-out）を描く。`atoms.Button` / `ButtonLink`・トーストの閉じるは templ が付け、Lit のボタンは `data-ripple` を付ける（`lib/styles.ts` の `buttonStyles` が `position: relative; overflow: hidden`）。ドキュメントのリスナーが `composedPath()` で shadow root 内も拾う
-- ツールチップ（`atoms.HelpMark`・Lit の `renderHelpMark`・`scanner-view.ts`）: `opacity` を 320ms ease-out でフェード（`visibility` は同時に切り替え、閉じるときはフェードが終わってから隠す）
+- ツールチップ（`atoms.HelpMark`・Lit の `renderHelpMark`・`scanner-view.ts`）: `opacity` を `--motion-fade-in` の ease-out でフェード（`visibility` は同時に切り替え、閉じるときはフェードが終わってから隠す）
 - トースト（`pitha-htmx-errors.ts`）: 出現は opacity と 8px の `translateY` を 320ms ease-out、退出は opacity を 240ms ease-in で待ってから `remove()`。Web Animations API が無ければ即時
 
 ## 部品・オーバーレイ（issue #945）
@@ -41,4 +45,5 @@ UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の reg
 - モーダルは `rounded-xl`・`shadow-modal`・スクラム（`--scrim`）と本体が一緒にフェード（`app.css` の `dialog[data-modal]`、開 320ms ease-out・閉 240ms ease-in、`prefers-reduced-motion` では 100ms）。確認・破壊的操作（`hx-confirm`、Kill）は `molecules.ConfirmDialog`
 - トーストは画面下中央・端から 24px・高さ 40px のピル（`bg-ink text-bone`）・同時 1 つ（新しいものが置き換える）・3 秒。エラー詳細とフォーム検証はトーストにせず `atoms.InlineAlert`（フォーム内のエラー欄）に出す
 - z-index は `--z-dropdown` 100（ツールチップ）/ `--z-toast` 500（`z-[var(--z-dropdown)]` のように使う）
-- チャートの色は `lib/chart-theme.ts` がトークンを読んで渡す（陽線・買い = `--success`、陰線・売り = `--danger`、VWAP = `--info`、出来高 = `--mute` 50%、精度線 = `--ink`、完全較正線 = `--mute`、軸・グリッド = `--border`）。ヒートマップは `--ink` を `--surface` に混ぜた濃淡（4〜30%）と `--ink` 文字、数値併記。サンプルなしは `--bone` と破線枠
+- 確認モーダル（`#confirm-dialog`）の外側クリックでの閉じは、`layout.document` が全ページで読む `modal/pitha-modal.js` が担う（確認ダイアログも `dialog[data-modal]`）
+- チャートの色は `lib/chart-theme.ts` がトークンを読んで渡す（陽線 = `--ink` の塗り、陰線 = `--surface` 地に `--ink` 枠の中空、買いマーカー = `--success`、売りマーカー = `--warning`、VWAP = `--info`、出来高 = `--mute` 50%、精度線 = `--ink`、完全較正線 = `--mute`、軸・グリッド = `--border`、クロスヘア線 = `--mute`・軸ラベルの地 = `--ink`）。系列色は `--success` `--warning` `--info` `--mute` `--ink` だけで、`--danger` は使わない。ヒートマップは `--ink` を `--surface` に混ぜた濃淡（4〜30%）と `--ink` 文字、数値併記。サンプルなしは `--bone` と破線枠

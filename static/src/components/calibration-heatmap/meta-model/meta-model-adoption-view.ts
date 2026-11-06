@@ -131,7 +131,7 @@ function renderForward(a: MetaModelAdoption) {
     </dt>
     <dd data-testid="calibration-metamodel-forward">
       学習後の判断 ${f.samples} 件・take ${f.takes} 件・${f.days} 営業日: EV ${ev}
-      ${f.degraded ? html`<strong role="alert">— 損失が続いています</strong>` : ''}
+      ${f.degraded ? html`<span role="alert" class="pitha-calibration-heatmap-emphasis">— 損失が続いています</span>` : ''}
     </dd>
   `;
 }

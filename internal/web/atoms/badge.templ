@@ -16,11 +16,11 @@ const (
 templ Badge(direction Direction) {
 	switch direction {
 		case DirectionLong:
-			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs font-semibold">LONG</span>
+			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs">LONG</span>
 		case DirectionShort:
-			<span class="inline-flex items-center rounded-full border tone-danger px-2 py-1 text-xs font-semibold">SHORT</span>
+			<span class="inline-flex items-center rounded-full border tone-danger px-2 py-1 text-xs">SHORT</span>
 		default:
-			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs font-semibold">NONE</span>
+			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">NONE</span>
 	}
 }
 
@@ -33,14 +33,14 @@ templ Badge(direction Direction) {
 templ EntryQualityBadge(quality string) {
 	switch quality {
 		case "exceptional":
-			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs font-semibold">{ quality }</span>
+			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs">{ quality }</span>
 		case "strong":
-			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs font-semibold">{ quality }</span>
+			<span class="inline-flex items-center rounded-full border tone-success px-2 py-1 text-xs">{ quality }</span>
 		case "good":
-			<span class="inline-flex items-center rounded-full border tone-info px-2 py-1 text-xs font-semibold">{ quality }</span>
+			<span class="inline-flex items-center rounded-full border tone-info px-2 py-1 text-xs">{ quality }</span>
 		case "fair":
-			<span class="inline-flex items-center rounded-full border tone-warning px-2 py-1 text-xs font-semibold">{ quality }</span>
+			<span class="inline-flex items-center rounded-full border tone-warning px-2 py-1 text-xs">{ quality }</span>
 		default:
-			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs font-semibold">{ quality }</span>
+			<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">{ quality }</span>
 	}
 }

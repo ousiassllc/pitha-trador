@@ -41,7 +41,7 @@ type UpdatePanelProps struct {
 // shows, since a check that finds an installer downloads it before the app
 // restarts.
 templ UpdatePanel(props UpdatePanelProps) {
-	<section class="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-mute" data-testid="update-panel">
+	<section class="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="update-panel">
 		<h3 class="sr-only">アップデート</h3>
 		<p>現在のバージョン: { props.CurrentVersion }</p>
 		if props.Unavailable {
