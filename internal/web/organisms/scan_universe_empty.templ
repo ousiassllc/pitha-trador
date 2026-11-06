@@ -39,7 +39,7 @@ templ scanUniverseEmpty(importError string) {
 			<p class="text-sm">
 				JPXの東証上場銘柄一覧を取得して投入しますか？ ボタンを押すまで、JPXへは接続しません。
 				データの権利はJPXに帰属します。取得・利用は
-				<a class="text-accent underline-offset-2 hover:underline" href="https://www.jpx.co.jp/term-of-use/" target="_blank" rel="noopener noreferrer" data-testid="scan-universe-jpx-terms">JPXの利用上の注意</a>
+				<a class="text-accent underline decoration-mute" href="https://www.jpx.co.jp/term-of-use/" target="_blank" rel="noopener noreferrer" data-testid="scan-universe-jpx-terms">JPXの利用上の注意</a>
 				に従い、ご自身の責任で行ってください。
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-universe-import", Label: "取得内容の説明"}) {
 					JPXの東証上場銘柄一覧（<code>data_j.xlsx</code>）を取得します。取得は押下ごとの1回のみで、自動での定期取得はしません。株式（内国・外国）のみを投入し、ETF・ETN、REIT等、PRO Market、出資証券は対象外です。
