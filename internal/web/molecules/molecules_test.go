@@ -258,3 +258,16 @@ func TestSettingsCards_NameIsRegular(t *testing.T) {
 		}
 	}
 }
+
+// The focus outline appears at once (brand-guide M1/§5), so the hover/pressed
+// transition covers text and background colour only, not outline-color, which
+// `transition-colors` would add in Tailwind v4 (issue #988).
+func TestThemeToggle_TransitionExcludesFocusOutline(t *testing.T) {
+	html := render(t, molecules.ThemeToggle())
+	if !strings.Contains(html, "transition-[color,background-color] duration-base") {
+		t.Errorf("ThemeToggle must transition only color and background-color: %s", html)
+	}
+	if strings.Contains(html, "transition-colors") {
+		t.Errorf("transition-colors also animates outline-color: %s", html)
+	}
+}

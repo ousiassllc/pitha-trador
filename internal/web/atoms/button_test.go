@@ -105,3 +105,17 @@ func TestButton_CarriesTheRippleHook(t *testing.T) {
 		}
 	}
 }
+
+// The focus outline appears at once (brand-guide M1/§5: focus is instant to
+// 120ms), so the 180ms hover transition must not cover outline-color, which
+// `transition-colors` does in Tailwind v4 (issue #988).
+func TestButton_HoverTransitionExcludesFocusOutline(t *testing.T) {
+	body := renderWithLabel(t, atoms.Button(atoms.ButtonProps{}), "x")
+
+	if !strings.Contains(body, "transition-[background-color] duration-base") {
+		t.Errorf("button must transition only background-color: %s", body)
+	}
+	if strings.Contains(body, "transition-colors") {
+		t.Errorf("transition-colors also animates outline-color: %s", body)
+	}
+}
