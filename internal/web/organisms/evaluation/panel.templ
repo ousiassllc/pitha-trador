@@ -215,7 +215,7 @@ templ metaBlock(rows []MetaRow) {
 						<tr class="border-t border-border" data-key={ r.Version }>
 							<th scope="row" class="px-2 py-1.5 text-left text-ink">{ r.Version }</th>
 							<td class="px-2 py-1.5 text-right">{ r.Status }</td>
-							<td class="px-2 py-1.5 text-right">{ r.OOSWindow }</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ r.OOSWindow }</td>
 							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ r.OOSSamples }</td>
 							@cell(r.OOSAUC, fmt.Sprintf("meta-%d-oos-auc", i))
 							@cell(r.OOSEV, fmt.Sprintf("meta-%d-oos-ev", i))

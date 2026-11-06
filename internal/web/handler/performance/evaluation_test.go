@@ -164,3 +164,12 @@ func TestPage_EvaluationNumbersAreMonoAndHeadersRightAligned(t *testing.T) {
 		t.Error("the 件数 header should be right-aligned")
 	}
 }
+
+// The OOS period is a date-range numeric column: right-aligned in JetBrains
+// Mono like the other numeric columns (brand-guide §2 T5; issue #986).
+func TestPage_EvaluationOOSWindowIsMonoAndRightAligned(t *testing.T) {
+	body := serveWithEvaluation(t, fixedEvaluation{ev: winning()}).Body.String()
+	if !strings.Contains(body, `<td class="px-2 py-1.5 text-right font-mono tabular-nums">2026-09-01〜2026-09-08</td>`) {
+		t.Error("the OOS period cell should be text-right font-mono tabular-nums")
+	}
+}
