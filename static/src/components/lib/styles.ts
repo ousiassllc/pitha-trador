@@ -18,7 +18,7 @@ export const buttonStyles = css`
     min-height: 2rem;
     padding: 0.25rem 0.75rem;
     font: inherit;
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
     transition: background-color var(--motion-base) var(--ease-out);
   }

@@ -41,6 +41,7 @@ func TestButton_VariantsAndSizeChangeClasses(t *testing.T) {
 		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-border bg-transparent", "bg-accent text-bone"},
 		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink hover:bg-accent-soft", "border-border"},
 		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "min-h-8", "py-2"},
+		{"pager", atoms.ButtonProps{Size: atoms.ButtonPager}, "min-h-9", "min-h-8"},
 		{"medium", atoms.ButtonProps{}, "text-base", "text-sm"},
 	}
 	for _, tt := range tests {

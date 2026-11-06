@@ -43,7 +43,7 @@ UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の reg
 
 ## 部品・オーバーレイ（issue #945）
 
-- ボタンは主（`bg-accent text-bone`）/ サブ（透明＋1px `border-border`）/ ゴースト / 危険（`bg-danger text-bone`）の 4 種、SemiBold・`rounded-md`・disabled は opacity .4・小は高さ 32px（`min-h-8`）。Lit の共通ボタン（`lib/styles.ts` の `buttonStyles`）もサブで、`background: transparent` + 1px `--border`（hover だけ `--accent-soft`）。テキストリンクは Regular・`underline decoration-mute`
+- ボタンは主（`bg-accent text-bone`）/ サブ（透明＋1px `border-border`）/ ゴースト / 危険（`bg-danger text-bone`）の 4 種、SemiBold・`rounded-md`・disabled は opacity .4・小は高さ 32px（`min-h-8`・`text-sm`）、ページ送りは高さ 36px（`min-h-9`、`ButtonPager`）。Lit の共通ボタン（`lib/styles.ts` の `buttonStyles`）もサブの小（高さ 32px・14px）で、`background: transparent` + 1px `--border`（hover だけ `--accent-soft`）。テキストリンクは Regular・`underline decoration-mute`
 - セグメント（Lit の `pitha-calibration-heatmap` のホライズン切替）は `--accent-soft` 地の角丸トラック（padding 4px・`--r-md`）に、選択中の項目だけ `--surface` の面。`--accent` 塗りは主ボタン（主要アクション）だけで、切替には使わない。a11y は `role="group"` + `aria-pressed`
 - 設定の on/off（有効・無効、許可・不許可）は `atoms.Switch`（OS の checkbox 見た目を出さない）。実装の Switch は MCP・Jev プロンプトのパネルで、いずれも「保存」ボタン付きの `hx-post` フォーム内にあり、押すだけでは保存されない。複数の項目から選ぶ選択肢（`DataExportPanel` の対象 `kinds` など）は checkbox のまま
 - モーダルは `rounded-xl`・`shadow-modal`・スクラム（`--scrim`）と本体が一緒にフェード（`app.css` の `dialog[data-modal]`、開 320ms ease-out・閉 240ms ease-in、`prefers-reduced-motion` では 100ms）。確認・破壊的操作（`hx-confirm`、Kill）は `molecules.ConfirmDialog`
