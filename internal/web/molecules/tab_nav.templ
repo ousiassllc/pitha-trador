@@ -25,7 +25,7 @@ func tabLinkClass(current bool) string {
 // NavItem; the current tab carries `aria-current="page"`. label names the
 // `<nav>` landmark for assistive technology.
 templ TabNav(label string, tabs []Tab) {
-	<nav aria-label={ label } class="mt-6 flex flex-wrap gap-2 border-b border-border" data-testid="tab-nav">
+	<nav aria-label={ label } class="mt-6 flex flex-wrap gap-2 border-b border-border print:hidden" data-testid="tab-nav">
 		for _, t := range tabs {
 			<a
 				class={ tabLinkClass(t.Current) }
