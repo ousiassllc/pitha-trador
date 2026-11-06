@@ -149,6 +149,17 @@
   body {
     line-height: 1.8;
   }
+
+  /* Focus ring (brand-guide §1 C3): 2px --focus, offset 2. Inputs and selects
+     draw their own --ring (atoms/input.templ); atoms.Button and the other
+     components that already carry a ring keep it through their utilities. */
+  a:focus-visible,
+  summary:focus-visible,
+  button:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
 }
 
 /* Modal dialogs fade in 320ms ease-out and out 240ms ease-in, scrim and dialog

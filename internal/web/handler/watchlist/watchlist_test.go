@@ -60,6 +60,7 @@ func TestPage_ShowsTheListsWithTheirOriginsAndIndicators(t *testing.T) {
 		`data-symbol="7203" data-origin="held"`, `data-symbol="6758" data-origin="screen"`,
 		"値上がり率・出来高急増", "保有・注文中", "基準日（日足）",
 		`data-list-date="2026-10-08" data-source="carried_over" data-active="false"`, `data-testid="watchlist-fallback"`,
+		"ml-2 rounded-full border tone-success", "ml-2 rounded-full border tone-warning",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q", want)

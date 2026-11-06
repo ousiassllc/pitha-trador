@@ -111,3 +111,18 @@ func TestInlineAlert_HasIconHeadingAndBodyInTheDangerTone(t *testing.T) {
 		}
 	}
 }
+
+// Input and Select draw the guide's focus state (brand-guide C3): --focus
+// border and a 2px --ring, instead of the UA's default ring.
+func TestInputAndSelect_DrawFocusRing(t *testing.T) {
+	for name, body := range map[string]string{
+		"Input":  renderWithLabel(t, atoms.Input(atoms.InputProps{Name: "n"}), ""),
+		"Select": renderWithLabel(t, atoms.Select(atoms.SelectProps{Name: "n"}), ""),
+	} {
+		for _, want := range []string{"focus-visible:border-focus", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-focus/40"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s missing %q: %s", name, want, body)
+			}
+		}
+	}
+}

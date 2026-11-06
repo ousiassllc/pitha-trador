@@ -12,7 +12,7 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 // least one) and `format` (csv default / jsonl). The data only ever goes to
 // the local file - there is no share or upload action (FR-EXPORT-6).
 templ DataExportPanel() {
-	<section id="data-export-panel" class="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-mute" data-testid="data-export-panel">
+	<section id="data-export-panel" class="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="data-export-panel">
 		<h3 class="sr-only">データエクスポート</h3>
 		<form method="get" action="/api/v1/export" hx-disable class="flex flex-col gap-3" data-testid="data-export-form">
 			<div class="flex flex-wrap items-end gap-3">

@@ -25,6 +25,10 @@ export const buttonStyles = css`
   button:hover:not(:disabled) {
     background: var(--accent-soft);
   }
+  button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
   button:disabled {
     cursor: not-allowed;
     opacity: 0.4;

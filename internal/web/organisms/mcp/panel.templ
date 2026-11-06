@@ -68,7 +68,7 @@ type PanelProps struct {
 // key into its history cache) and `autocomplete="off"`; its copy buttons are
 // handled by static/src/components/copy-button.
 templ Panel(props PanelProps) {
-	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-mute" data-testid="mcp-panel" { pollAttrs(props)... }>
+	<section class="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="mcp-panel" { pollAttrs(props)... }>
 		<h3 class="sr-only">MCP</h3>
 		if props.Notice != "" {
 			<p class="text-success" role="status" data-testid="mcp-notice">{ props.Notice }</p>
