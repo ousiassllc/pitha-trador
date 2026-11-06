@@ -53,7 +53,7 @@ func verdictClass(status string) string {
 }
 
 templ verdictBlock(p Panel) {
-	<div class={ "mt-4 rounded-md border px-4 py-3 text-sm" + verdictClass(p.Verdict) } data-testid="evaluation-verdict" data-status={ p.Verdict }>
+	<div class={ "mt-4 rounded-md border px-4 py-3 text-sm", verdictClass(p.Verdict) } data-testid="evaluation-verdict" data-status={ p.Verdict }>
 		<p class="font-semibold">
 			合格ライン: { p.VerdictText }
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-verdict", Label: "合格ラインの説明"}) {
@@ -91,7 +91,7 @@ templ costBlock(p Panel) {
 // metric with a Help text (a 判定不能 one: the reference value and why)
 // carries a help mark beside its text.
 templ cell(c Cell, id string) {
-	<td class={ "px-2 py-1.5 text-right font-mono tabular-nums" + cellClass(c) } data-undetermined?={ c.Undetermined }>
+	<td class={ "px-2 py-1.5 text-right font-mono tabular-nums", cellClass(c) } data-undetermined?={ c.Undetermined }>
 		{ c.Text }
 		if c.Help != "" {
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-" + id, Label: "判定の補足"}) {
