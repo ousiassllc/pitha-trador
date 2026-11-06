@@ -157,8 +157,22 @@ func TestFieldRows_LabelIsEightAboveTheField(t *testing.T) {
 		"setting": render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "k", Label: "L"})),
 		"secret":  render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "k", Label: "L"})),
 	} {
-		if !strings.Contains(html, `class="flex flex-col gap-2 text-sm text-mute"`) {
+		if !strings.Contains(html, `class="flex flex-col gap-2 text-sm text-ink"`) {
 			t.Errorf("%s row must be gap-2 between label and field: %s", name, html)
+		}
+	}
+}
+
+// issue #972: the form must not be --mute, or a typed value and the field
+// name inherit it (brand-guide §1: --mute is for secondary text only).
+func TestFieldRows_FormIsNotMute(t *testing.T) {
+	for name, html := range map[string]string{
+		"setting": render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "k", Label: "L"})),
+		"secret":  render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "k", Label: "L"})),
+	} {
+		form, _, _ := strings.Cut(html, ">")
+		if strings.Contains(form, "text-mute") {
+			t.Errorf("%s row form must not be text-mute: %s", name, form)
 		}
 	}
 }

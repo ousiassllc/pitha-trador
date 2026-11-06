@@ -62,3 +62,13 @@ func TestBacktestForm_ExplainsFieldsInHelpMarksOutsideTheLabel(t *testing.T) {
 		}
 	}
 }
+
+// issue #972: the field wrapper is ink so a typed value is not --mute
+// (brand-guide §1: --mute is for secondary text only).
+func TestBacktestForm_FieldWrapperIsNotMute(t *testing.T) {
+	html := renderComponent(t, performancepanels.BacktestForm(performancepanels.BacktestFormValues{From: "2026-01-01", To: "2026-03-31", TrainingDays: 60, ValidationDays: 20, ForwardDays: 10}))
+
+	if !strings.Contains(html, `class="flex flex-col text-sm text-ink"`) || strings.Contains(html, "flex flex-col text-sm text-mute") {
+		t.Errorf("backtest field wrapper must be text-ink: %s", html)
+	}
+}
