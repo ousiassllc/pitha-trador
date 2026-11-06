@@ -1,8 +1,6 @@
 package molecules
 
-import (
-	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
-)
+import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 
 // SettingFieldRowProps is SettingFieldRow's input: Key is the
 // runtime_settings key (also the `/ops-settings/:key` path segment), Label
@@ -66,39 +64,41 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 				</span>
 			}
 		</div>
-		<div class="flex items-center gap-2">
-			if len(props.Options) > 0 {
-				@atoms.Select(atoms.SelectProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{"required": true}}) {
-					for _, option := range props.Options {
-						<option value={ option } selected?={ option == props.Value }>{ option }</option>
+		<div class="flex flex-col gap-1">
+			<div class="flex items-center gap-2">
+				if len(props.Options) > 0 {
+					@atoms.Select(atoms.SelectProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{"required": true}}) {
+						for _, option := range props.Options {
+							<option value={ option } selected?={ option == props.Value }>{ option }</option>
+						}
+					}
+				} else {
+					@atoms.Input(atoms.InputProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{
+						"required":     true,
+						"autocomplete": "off",
+						"value":        props.Value,
+						"placeholder":  props.Placeholder,
+					}})
+				}
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"id": "save-setting-" + props.Key, "data-testid": "save-setting-" + props.Key}}) {
+					保存
+				}
+				if props.Overridden {
+					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Attrs: templ.Attributes{
+						"id":                    "reset-setting-" + props.Key,
+						"data-focus-after-swap": "setting-input-" + props.Key,
+						"hx-delete":             "/ops-settings/" + props.Key,
+						"hx-params":             "none",
+						"hx-confirm":            props.Label + " を既定に戻しますか？",
+						"data-testid":           "reset-setting-" + props.Key,
+					}}) {
+						既定に戻す
 					}
 				}
-			} else {
-				@atoms.Input(atoms.InputProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{
-					"required":     true,
-					"autocomplete": "off",
-					"value":        props.Value,
-					"placeholder":  props.Placeholder,
-				}})
-			}
-			@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"id": "save-setting-" + props.Key, "data-testid": "save-setting-" + props.Key}}) {
-				保存
-			}
-			if props.Overridden {
-				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Attrs: templ.Attributes{
-					"id":                    "reset-setting-" + props.Key,
-					"data-focus-after-swap": "setting-input-" + props.Key,
-					"hx-delete":             "/ops-settings/" + props.Key,
-					"hx-params":             "none",
-					"hx-confirm":            props.Label + " を既定に戻しますか？",
-					"data-testid":           "reset-setting-" + props.Key,
-				}}) {
-					既定に戻す
-				}
-			}
+			</div>
+			<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
 		</div>
-		<div id={ SettingErrorID(props.Key) } data-testid={ "error-" + props.Key }></div>
-		<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
+		<div id={ SettingErrorID(props.Key) } class="empty:hidden" data-testid={ "error-" + props.Key }></div>
 		if props.Warning != "" {
 			<p class="text-sm text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
 		}
