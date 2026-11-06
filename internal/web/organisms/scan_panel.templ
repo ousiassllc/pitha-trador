@@ -52,8 +52,8 @@ const scanExportURL = "/api/v1/scanner/scan/export"
 // stays enabled: it only re-reads stored data.
 templ ScanPanel(v ScanPanelView) {
 	<section class="mt-12 rounded-lg border border-border bg-surface p-4" id="scan-panel" data-testid="scan-panel">
-		<div class="flex flex-wrap items-center justify-between gap-2">
-			<h2 class="text-base font-semibold text-ink">
+		<div class="mb-6 flex flex-wrap items-center justify-between gap-2">
+			<h2 class="text-2xl font-semibold text-ink">
 				スキャン状況
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-panel", Label: "スキャン状況の説明"}) {
 					最新のスキャンの結果です。ページを開いた時点、または「更新」を押した時点のスナップショットで、自動では更新されません。
@@ -143,11 +143,11 @@ const scanFieldClass = "mt-2 text-sm"
 templ scanList(v ScanPanelView) {
 	<h3 id="scan-list-heading" tabindex="-1" class="sr-only">スキャン対象銘柄</h3>
 	<form class="mt-4 flex flex-wrap items-end gap-3 text-sm" method="get" action={ scanPanelURL } hx-get={ scanPanelURL } hx-target="#scan-panel" hx-swap="outerHTML" hx-trigger="submit, change from:#scan-status, change from:#scan-reason" data-testid="scan-filter">
-		<label class="flex flex-col text-xs text-mute">
+		<label class="flex flex-col text-sm text-mute">
 			銘柄コード・名称
 			@atoms.Input(atoms.InputProps{ID: "scan-q", Name: "q", Type: "search", Class: scanFieldClass, Attrs: templ.Attributes{"value": v.Query.Q, "maxlength": "64"}})
 		</label>
-		<label class="flex flex-col text-xs text-mute">
+		<label class="flex flex-col text-sm text-mute">
 			状態
 			@atoms.Select(atoms.SelectProps{ID: "scan-status", Name: "status", Class: scanFieldClass}) {
 				@scanOption("", "すべて", string(v.Query.Status) == "")
@@ -156,7 +156,7 @@ templ scanList(v ScanPanelView) {
 				@scanOption(string(domain.ScanStatusMissing), "データ欠損", v.Query.Status == domain.ScanStatusMissing)
 			}
 		</label>
-		<label class="flex flex-col text-xs text-mute">
+		<label class="flex flex-col text-sm text-mute">
 			理由
 			@atoms.Select(atoms.SelectProps{ID: "scan-reason", Name: "reason", Class: scanFieldClass}) {
 				@scanOption("", "すべて", v.Query.Reason == nil)

@@ -23,8 +23,8 @@ const refreshHeaders = `{"X-Pitha-Background":"1"}`
 
 const (
 	cardClass       = "flex min-w-0 flex-col rounded-lg border border-border bg-surface p-4"
-	cardTitleClass  = "text-sm font-semibold text-mute"
-	cardErrorClass  = "mt-2 rounded-md border tone-danger px-3 py-2 text-sm"
+	cardTitleClass  = "text-xl font-semibold text-mute"
+	cardErrorClass  = "rounded-md border tone-danger px-3 py-2 text-sm"
 	cardNoticeClass = "mt-2 text-sm text-warning"
 	linkClass       = "text-sm text-accent underline decoration-mute"
 )
@@ -49,7 +49,7 @@ templ DestLink(l Link) {
 // its WebSocket and an open confirmation are never torn down by a refresh.
 templ TradeStatusCard(v TradeStatusView) {
 	<section class={ cardClass, "lg:col-span-4" } data-testid="home-trade-status-card" aria-labelledby="home-trade-status-title">
-		<h2 id="home-trade-status-title" class={ cardTitleClass }>取引の状態</h2>
+		<h3 id="home-trade-status-title" class={ cardTitleClass, "mb-3" }>取引の状態</h3>
 		<div
 			id="home-trade-status"
 			class="min-w-0"
@@ -75,7 +75,7 @@ templ TradeStatusBody(v TradeStatusView) {
 	if v.Err != "" {
 		@cardError(v.Err)
 	} else {
-		<div class="mt-2 flex items-start gap-2">
+		<div class="flex items-start gap-2">
 			<p class="flex items-start gap-2 text-base text-ink" data-testid="trade-status-sentence" data-allowed={ strconv.FormatBool(v.Allowed) }>
 				<span aria-hidden="true" class={ "mt-2 inline-block h-2.5 w-2.5 shrink-0 rounded-full", templ.KV("bg-success", v.Allowed), templ.KV("bg-danger", !v.Allowed) }></span>
 				<span>{ v.Sentence }</span>
@@ -104,8 +104,8 @@ templ TradeStatusBody(v TradeStatusView) {
 // unrealized (open positions) and the day's counts.
 templ PnLCard(v PnLView) {
 	<section class={ cardClass, "lg:col-span-3" } data-testid="home-pnl-card" aria-labelledby="home-pnl-title">
-		<div class="flex items-center gap-1">
-			<h2 id="home-pnl-title" class={ cardTitleClass }>今日の Paper 損益</h2>
+		<div class="mb-3 flex flex-wrap items-center gap-1">
+			<h3 id="home-pnl-title" class={ cardTitleClass }>今日の Paper 損益</h3>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-home-pnl", Label: "今日の Paper 損益の説明"}) {
 				実現損益は今日 0:00（JST）以降に決済した分、含み損益は保有中のポジションの評価損益です。合計はその和です。
 			}
@@ -130,10 +130,10 @@ templ PnLBody(v PnLView) {
 		@cardError(v.Err)
 	} else {
 		if v.UnrealizedKnown {
-			<p class={ "mt-2 text-xl font-mono tabular-nums", PnLClass(v.Total) } data-testid="pnl-total">{ FormatSignedYen(v.Total) }</p>
+			<p class={ "text-2xl font-mono tabular-nums", PnLClass(v.Total) } data-testid="pnl-total">{ FormatSignedYen(v.Total) }</p>
 			<p class="text-xs text-mute">合計</p>
 		} else {
-			<p class="mt-2 text-sm text-ink" data-testid="pnl-total-unknown">合計は保有ポジションを読み取れないため表示できません。</p>
+			<p class="text-sm text-ink" data-testid="pnl-total-unknown">合計は保有ポジションを読み取れないため表示できません。</p>
 		}
 		<dl class="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
 			<dt class="text-mute">実現損益</dt>
@@ -165,7 +165,7 @@ templ PnLBody(v PnLView) {
 // its Symbol Detail page.
 templ PositionsCard(v PositionsView) {
 	<section class={ cardClass, "lg:col-span-5" } data-testid="home-positions-card" aria-labelledby="home-positions-title">
-		<h2 id="home-positions-title" class={ cardTitleClass }>保有ポジション</h2>
+		<h3 id="home-positions-title" class={ cardTitleClass, "mb-3" }>保有ポジション</h3>
 		<div
 			id="home-positions"
 			class="min-w-0"
@@ -185,9 +185,9 @@ templ PositionsBody(v PositionsView) {
 	if v.Err != "" {
 		@cardError(v.Err)
 	} else if len(v.Rows) == 0 {
-		<p class="mt-3 rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute" data-testid="positions-empty">保有中のポジションはありません</p>
+		<p class="rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute" data-testid="positions-empty">保有中のポジションはありません</p>
 	} else {
-		<p class="mt-1 text-xl font-mono tabular-nums text-ink" data-testid="positions-count">{ strconv.Itoa(len(v.Rows)) }<span class="ml-1 text-sm font-normal text-mute">件</span></p>
+		<p class="text-2xl font-mono tabular-nums text-ink" data-testid="positions-count">{ strconv.Itoa(len(v.Rows)) }<span class="ml-1 text-sm font-normal text-mute">件</span></p>
 		<div class="mt-2 max-h-44 overflow-y-auto">
 			<table class="w-full border-collapse text-left text-sm" aria-label="保有ポジション" data-testid="positions-table">
 				<thead>

@@ -11,7 +11,7 @@ type Tab struct {
 
 // tabLinkClass is a tab's styling: the current tab carries the underline.
 func tabLinkClass(current bool) string {
-	const base = "-mb-px inline-flex min-h-10 items-center border-b-2 px-3 text-sm "
+	const base = "-mb-px inline-flex min-h-10 items-center border-b-2 px-3 text-base "
 	if current {
 		return base + "border-ink text-ink"
 	}

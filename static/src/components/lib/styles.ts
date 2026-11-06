@@ -15,8 +15,13 @@ export const buttonStyles = css`
     border-radius: var(--r-md);
     background: transparent;
     color: var(--ink);
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 2rem;
-    padding: 0.25rem 0.75rem;
+    padding: 0 0.75rem;
+    white-space: nowrap;
     font: inherit;
     font-size: 0.875rem;
     font-weight: 600;

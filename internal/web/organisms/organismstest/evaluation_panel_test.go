@@ -13,7 +13,7 @@ func TestEvaluationPanel_H2HasTheH2GapBelow(t *testing.T) {
 		"error":   renderComponent(t, evaluation.EvaluationPanel(evaluation.Panel{}, "読み取れませんでした")),
 		"capital": renderComponent(t, evaluation.EvaluationPanel(evaluation.Panel{Capital: "元手 100万円"}, "")),
 	} {
-		if !strings.Contains(html, `<h2 id="evaluation-heading" class="mb-6 text-xl`) {
+		if !strings.Contains(html, `<h2 id="evaluation-heading" class="mb-6 text-2xl`) {
 			t.Errorf("%s: h2 must be mb-6: %s", name, html)
 		}
 		if strings.Contains(html, `class="mt-4 rounded-md border tone-danger`) || strings.Contains(html, `class="mt-2 text-xs text-mute" data-testid="evaluation-capital"`) {

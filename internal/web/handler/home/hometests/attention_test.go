@@ -179,7 +179,7 @@ func TestAttention_SectionIsAPolledLiveRegionRefreshedByTheEventsThatChangeIt(t 
 // issue #991 (S2): the 要対応 h2 is followed by 24px (mb-6) and the live region has no mt-2.
 func TestAttention_H2HasTheH2GapBelow(t *testing.T) {
 	body := newFixture().mustGet(t, "/")
-	if !strings.Contains(body, `<h2 id="home-attention-title" class="mb-6 text-xl`) {
+	if !strings.Contains(body, `<h2 id="home-attention-title" class="mb-6 text-2xl`) {
 		t.Errorf("h2 must be mb-6: %s", body)
 	}
 	tag := regexp.MustCompile(`(?s)<div\b[^>]*\bid="home-attention"[^>]*>`).FindString(body)

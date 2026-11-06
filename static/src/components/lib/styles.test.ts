@@ -33,6 +33,15 @@ describe('buttonStyles fill', () => {
   });
 
   // brand-guide O7: the small (32px) button is text-sm, the same as atoms.Button's small size.
+  // issue #984: one box model (border-box, no vertical padding) so the Lit
+  // buttons and atoms.Button's small size are both 32px tall, whatever the label.
+  test('the shared small button is border-box, one line, without vertical padding', () => {
+    const css = buttonStyles.cssText;
+    expect(css).toMatch(/button\s*\{[^}]*box-sizing:\s*border-box/);
+    expect(css).toMatch(/button\s*\{[^}]*padding:\s*0 0\.75rem/);
+    expect(css).toMatch(/button\s*\{[^}]*white-space:\s*nowrap/);
+  });
+
   test('the shared small button is 2rem tall with 0.875rem text', () => {
     expect(buttonStyles.cssText).toMatch(
       /button\s*\{[^}]*min-height:\s*2rem[^}]*font-size:\s*0\.875rem/,

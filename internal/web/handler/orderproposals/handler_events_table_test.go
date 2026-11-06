@@ -33,7 +33,7 @@ func TestDetail_SectionHeadingsHaveTheH2GapBelow(t *testing.T) {
 		if end := strings.Index(rest, "</section>"); end >= 0 {
 			rest = rest[:end]
 		}
-		if !strings.Contains(rest, `<h2 class="mb-6 text-xl`) {
+		if !strings.Contains(rest, `<h2 class="mb-6 text-2xl`) {
 			t.Errorf("%s: h2 lacks mb-6: %s", section, rest)
 		}
 		if strings.Contains(rest, `class="mt-2 `) || strings.Contains(rest, `class="mt-1 `) {
