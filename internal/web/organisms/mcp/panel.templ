@@ -103,7 +103,7 @@ templ Panel(props PanelProps) {
 					Grok Bot などから Paper の実績と Jev の判断を読み取り、許可されたときだけ基本設定（ホワイトリスト）を変更するための MCP エンドポイントです。本体とは別のプロセス（paper-results-mcp）で動きます。既定ではオフで、API キーが未設定の間は待ち受けません。
 				}
 			</div>
-			<div class="flex flex-col gap-1">
+			<div class="flex flex-col gap-2">
 				<div class="flex items-center gap-2">
 					<label for="mcp-listen-input" class="text-ink">待受アドレス（ホスト:ポート）</label>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-listen", Label: "待受アドレスの説明"}) {
