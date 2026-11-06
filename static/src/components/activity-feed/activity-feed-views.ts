@@ -23,7 +23,7 @@ export function renderQueueStatus(queues: QueueStatus[]) {
           ${queues.map(
             (q) => html`
               <tr class="border-b border-border" data-queue=${q.queue}>
-                <td class="px-3 py-2 font-medium text-ink">${jobQueueLabel(q.queue)}</td>
+                <td class="px-3 py-2 text-ink">${jobQueueLabel(q.queue)}</td>
                 <td class="px-3 py-2">${q.pending}</td>
                 <td class="px-3 py-2">${q.running}</td>
                 <td class="px-3 py-2">${q.failed_recent}</td>

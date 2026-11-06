@@ -26,7 +26,7 @@ templ JevPanel(d *domain.JevDecision) {
 							Jev Traderが判定した相場状態です（TREND=トレンド、RANGE=レンジ、BREAKOUT=ブレイクアウト、CHAOTIC=不安定）。
 						}
 					</dt>
-					<dd class="text-sm font-medium text-ink">{ derefString(d.Regime) }</dd>
+					<dd class="text-sm text-ink">{ derefString(d.Regime) }</dd>
 				</div>
 				<div>
 					<dt class="text-sm text-mute">
@@ -35,7 +35,7 @@ templ JevPanel(d *domain.JevDecision) {
 							いまの注文の流れが新規エントリーに不利である確率（0〜1）です。
 						}
 					</dt>
-					<dd class="text-sm font-medium text-ink">{ derefPct(d.ToxicFlow) }</dd>
+					<dd class="text-sm text-ink">{ derefPct(d.ToxicFlow) }</dd>
 				</div>
 				<div>
 					<dt class="text-sm text-mute">
@@ -44,7 +44,7 @@ templ JevPanel(d *domain.JevDecision) {
 							いま流動性が逼迫している確率（0〜1）です。
 						}
 					</dt>
-					<dd class="text-sm font-medium text-ink">{ derefPct(d.LiquidityStressed) }</dd>
+					<dd class="text-sm text-ink">{ derefPct(d.LiquidityStressed) }</dd>
 				</div>
 			</dl>
 		}

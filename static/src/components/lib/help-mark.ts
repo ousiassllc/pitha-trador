@@ -47,7 +47,7 @@ export const helpMarkStyles = css`
     background: var(--surface);
     color: var(--mute);
     font: inherit;
-    font-size: 10px;
+    font-size: 0.75rem;
     font-weight: 600;
     line-height: 1;
     cursor: help;

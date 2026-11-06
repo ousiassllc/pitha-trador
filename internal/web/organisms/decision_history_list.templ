@@ -24,7 +24,7 @@ templ DecisionHistoryList(decisions []domain.JevDecision) {
 					<th scope="col" class="px-3 py-2">日時</th>
 					<th scope="col" class="px-3 py-2">種別</th>
 					<th scope="col" class="px-3 py-2">方向</th>
-					<th scope="col" class="px-3 py-2">確信度</th>
+					<th scope="col" class="px-3 py-2 text-right">確信度</th>
 					<th scope="col" class="px-3 py-2">相場状態</th>
 					<th scope="col" class="px-3 py-2">エントリー品質</th>
 				</tr>
@@ -43,7 +43,7 @@ templ decisionRow(d domain.JevDecision) {
 		<td class="px-3 py-2">{ atoms.FormatJST(d.Timestamp) }</td>
 		<td class="px-3 py-2">{ d.DecisionType }</td>
 		<td class="px-3 py-2">{ nilableString(d.Direction) }</td>
-		<td class="px-3 py-2">{ nilableFloatStr(d.Confidence) }</td>
+		<td class="px-3 py-2 text-right font-mono tabular-nums">{ nilableFloatStr(d.Confidence) }</td>
 		<td class="px-3 py-2">{ nilableString(d.Regime) }</td>
 		<td class="px-3 py-2">{ nilableString(d.EntryQuality) }</td>
 	</tr>

@@ -108,23 +108,23 @@ var scannerColumns = []scannerColumn{
 
 templ scannerRow(c domain.Candidate) {
 	<tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol={ c.Symbol }>
-		<td class="px-3 py-2 font-medium">
+		<td class="px-3 py-2">
 			<a class="text-accent underline-offset-2 hover:underline" href={ SymbolHref(c.Symbol) }>{ c.Symbol }</a>
 		</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatFloat(c.Price, 1) }</td>
+		<td class="px-3 py-2 text-right font-mono tabular-nums">{ formatFloat(c.Price, 1) }</td>
 		<td class={ returnClass(c.Return1m) }>{ formatSignedNilFloat(domain.RatioToPercentPtr(c.Return1m), 2) }</td>
 		<td class={ returnClass(c.Return5m) }>{ formatSignedNilFloat(domain.RatioToPercentPtr(c.Return5m), 2) }</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatSignedFloat(c.PriceVsVWAPBps, 0) }</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.SpreadBps, 0) }</td>
+		<td class="px-3 py-2 text-right font-mono tabular-nums">{ formatNilFloat(c.VolumeRatio5m, 2) }</td>
+		<td class="px-3 py-2 text-right font-mono tabular-nums">{ formatSignedFloat(c.PriceVsVWAPBps, 0) }</td>
+		<td class="px-3 py-2 text-right font-mono tabular-nums">{ formatNilFloat(c.SpreadBps, 0) }</td>
 		<td class="px-3 py-2">
 			if c.JevDirection == nil {
-				<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs font-medium text-mute">判定待ち</span>
+				<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs text-mute">判定待ち</span>
 			} else {
 				@atoms.Badge(atoms.Direction(*c.JevDirection))
 			}
 		</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ atoms.FormatConfidence(c.JevConfidence) }</td>
+		<td class="px-3 py-2 text-right font-mono tabular-nums">{ atoms.FormatConfidence(c.JevConfidence) }</td>
 		<td class="px-3 py-2">
 			if c.EntryQuality == nil {
 				<span class="text-mute">—</span>
@@ -132,14 +132,14 @@ templ scannerRow(c domain.Candidate) {
 				@atoms.EntryQualityBadge(*c.EntryQuality)
 			}
 		</td>
-		<td class="px-3 py-2 text-right tabular-nums">{ formatNilFloat(c.CurrentPosition, 0) }</td>
+		<td class="px-3 py-2 text-right font-mono tabular-nums">{ formatNilFloat(c.CurrentPosition, 0) }</td>
 	</tr>
 }
 
 // returnClass colors a return cell: green when positive, red when
 // negative, neutral for zero or a missing value.
 func returnClass(v *float64) string {
-	const base = "px-3 py-2 text-right font-medium tabular-nums "
+	const base = "px-3 py-2 text-right font-mono tabular-nums "
 	switch {
 	case v == nil || *v == 0:
 		return base + "text-mute"

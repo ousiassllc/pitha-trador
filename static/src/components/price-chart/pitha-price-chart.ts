@@ -146,6 +146,9 @@ export class PithaPriceChart extends LitElement {
     // every time in Asia/Tokyo; the library would otherwise print UTC.
     this.chart = createChart(container, {
       autoSize: true,
+      // canvas text does not inherit CSS font-family: axis labels are digits, so
+      // name the guide's numeric font (brand-guide §2) explicitly.
+      layout: { fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
       localization: { timeFormatter: formatCrosshairTime },
       timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: formatTickMark },
     });

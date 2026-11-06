@@ -231,10 +231,10 @@ export class PithaScannerTable extends LitElement {
   }
 
   private renderRow(item: ScannerItem) {
-    const numeric = 'px-3 py-2 text-right tabular-nums';
+    const numeric = 'px-3 py-2 text-right font-mono tabular-nums';
     return html`
       <tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol=${item.symbol}>
-        <td class="px-3 py-2 font-medium">
+        <td class="px-3 py-2">
           <a class="text-accent underline-offset-2 hover:underline" href=${item.detail_url}>${item.symbol}</a>
         </td>
         <td class=${numeric}>${item.price.toFixed(1)}</td>

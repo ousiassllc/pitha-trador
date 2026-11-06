@@ -15,7 +15,7 @@ export const buttonStyles = css`
     color: var(--ink);
     padding: 0.25rem 0.75rem;
     font: inherit;
-    font-size: 0.875rem;
+    font-size: 1rem;
   }
   button:hover:not(:disabled) {
     background: var(--accent-soft);

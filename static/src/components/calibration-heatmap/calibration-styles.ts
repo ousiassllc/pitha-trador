@@ -70,6 +70,7 @@ export const heatmapStyles = css`
   }
   .pitha-calibration-heatmap-summary dd {
     margin: 0;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
   }
 `;

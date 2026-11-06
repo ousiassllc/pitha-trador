@@ -8,15 +8,15 @@ templ scanOption(value, label string, selected bool) {
 
 templ scanRow(s domain.ScanSymbol, scout domain.ScoutOutcome) {
 	<tr class="border-b border-border align-top last:border-b-0 hover:bg-accent-soft" data-symbol={ s.Symbol } data-status={ string(s.Status()) }>
-		<td class="px-3 py-2 font-medium">
+		<td class="px-3 py-2">
 			<a class="text-accent underline-offset-2 hover:underline" href={ SymbolHref(s.Symbol) }>{ s.Symbol }</a>
 		</td>
 		<td class="px-3 py-2">{ s.Name }</td>
 		<td class="whitespace-nowrap px-3 py-2">{ s.Market }</td>
 		<td class="whitespace-nowrap px-3 py-2">
-			<span class={ "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium", scanStatusClass(s.Status()) }>{ scanStatusLabel(s.Status()) }</span>
+			<span class={ "inline-flex items-center rounded-full px-2 py-1 text-xs", scanStatusClass(s.Status()) }>{ scanStatusLabel(s.Status()) }</span>
 		</td>
-		<td class="px-3 py-2 text-xs text-ink">
+		<td class="px-3 py-2 text-sm text-ink">
 			if reasons := s.Reasons.List(); len(reasons) == 0 {
 				<span class="text-mute">—</span>
 			} else {
@@ -27,7 +27,7 @@ templ scanRow(s domain.ScanSymbol, scout domain.ScoutOutcome) {
 				</ul>
 			}
 		</td>
-		<td class="whitespace-nowrap px-3 py-2 text-xs">{ scanScoutLabel(s, scout) }</td>
+		<td class="whitespace-nowrap px-3 py-2 text-sm">{ scanScoutLabel(s, scout) }</td>
 	</tr>
 }
 

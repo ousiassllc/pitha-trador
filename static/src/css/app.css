@@ -51,6 +51,21 @@
    custom property at use time, which is what lets [data-theme] switch. */
 @theme {
   --color-*: initial;
+
+  /* Fonts (brand-guide §2): Sora + Noto Sans JP for text, JetBrains Mono for
+     code and digit-aligned numbers. The @font-face rules are generated into
+     dist/fonts/fonts.css by esbuild.config.mjs (self-hosted, SIL OFL). */
+  --font-sans: Sora, "Noto Sans JP", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Line heights of the guide's size scale (brand-guide §2): xs 1.6, sm 1.7,
+     base 1.8, lg 1.7. Tailwind's sizes are kept (12/14/16/18/24px); only
+     the off-scale names (xl 20px, 3xl 30px) are not used. */
+  --text-xs--line-height: 1.6;
+  --text-sm--line-height: 1.7;
+  --text-base--line-height: 1.8;
+  --text-lg--line-height: 1.7;
+  --text-2xl--line-height: 1.5;
 }
 
 @theme inline {
@@ -100,4 +115,12 @@
   border-color: color-mix(in srgb, var(--mute) 40%, transparent);
   background-color: color-mix(in srgb, var(--mute) 10%, transparent);
   color: var(--mute);
+}
+
+/* Body copy is base (16px) at the guide's 1.8 line height; the Japanese
+   explanations in panels and alerts inherit it. */
+@layer base {
+  body {
+    line-height: 1.8;
+  }
 }

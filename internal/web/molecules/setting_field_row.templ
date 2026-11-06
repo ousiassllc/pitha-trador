@@ -54,7 +54,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 				<span class="flex items-center gap-2">
 					{ props.Label }
 					if props.Overridden {
-						<span class="rounded-full border tone-mute px-2 py-1 text-xs font-medium" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
+						<span class="rounded-full border tone-mute px-2 py-1 text-xs" data-testid={ "overridden-" + props.Key }>(設定済み)</span>
 					}
 				</span>
 			</label>

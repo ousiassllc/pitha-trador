@@ -44,9 +44,9 @@ func (p SettingGroupProps) OverriddenCount() int {
 templ SettingGroupStatus(props SettingGroupProps, oob bool) {
 	<span id={ props.StatusID() } class="inline-flex flex-wrap items-center gap-1" data-testid={ props.StatusID() } { oobAttrs(oob)... }>
 		if props.OverriddenCount() > 0 {
-			<span class="rounded-full border tone-success px-2 py-1 text-xs font-medium">設定済み</span>
+			<span class="rounded-full border tone-success px-2 py-1 text-xs">設定済み</span>
 		} else {
-			<span class="rounded-full border tone-info px-2 py-1 text-xs font-medium">既定を使用</span>
+			<span class="rounded-full border tone-info px-2 py-1 text-xs">既定を使用</span>
 		}
 		<span class="text-xs font-normal text-mute">{ strconv.Itoa(props.OverriddenCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
 	</span>

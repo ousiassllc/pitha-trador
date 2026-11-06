@@ -66,9 +66,9 @@ templ SettingGroupDerived(props SettingGroupProps, oob bool) {
 					<li class="flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
 						<span class="text-mute">{ item.Label }</span>
 						if item.Value != "" && item.Off {
-							<span class="font-medium text-mute">{ item.Value }</span>
+							<span class="text-mute">{ item.Value }</span>
 						} else if item.Value != "" {
-							<span class="font-medium text-ink">{ item.Value }</span>
+							<span class="text-ink">{ item.Value }</span>
 						}
 						if item.Detail != "" {
 							<span class="text-xs text-mute">{ item.Detail }</span>

@@ -22,7 +22,7 @@ import (
 templ OrderProposalDetailPage(p ProposalDetailProps) {
 	@layout.Shell(labels.Numbered("注文提案", p.ID), organisms.NavOrderProposals) {
 		<p class="text-sm"><a class="underline" href="/order-proposals">← 注文提案の一覧</a></p>
-		<h1 class="mt-1 text-2xl font-bold text-ink" data-testid="order-proposal-title">
+		<h1 class="mt-1 text-2xl font-semibold text-ink" data-testid="order-proposal-title">
 			{ labels.Numbered("注文提案", p.ID) }
 			<span class="ml-2 font-mono text-lg">
 				<a class="underline" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
@@ -65,7 +65,7 @@ templ proposalFields(title, testID, helpPrefix string, fields []ProposalField) {
 		<h2 class="text-lg font-semibold text-ink">{ title }</h2>
 		<dl class="mt-2 grid gap-x-4 gap-y-1 text-sm text-ink sm:grid-cols-[max-content_1fr]">
 			for i, f := range fields {
-				<dt class="font-medium">
+				<dt class="">
 					{ f.Label }
 					if f.Help != "" {
 						@atoms.HelpMark(atoms.HelpMarkProps{ID: helpPrefix + "-" + strconv.Itoa(i), Label: f.Label + "の説明"}) {
@@ -88,7 +88,7 @@ templ proposalSources(sources []ProposalSource) {
 			<ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-ink">
 				for _, s := range sources {
 					<li data-testid="order-proposal-source">
-						<span class="break-words font-medium">{ s.Title }</span>
+						<span class="break-words">{ s.Title }</span>
 						<span class="text-xs text-mute">（取得 { s.RetrievedAt }）</span>
 						<br/>
 						if s.Href != "" {

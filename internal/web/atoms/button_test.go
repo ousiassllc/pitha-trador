@@ -41,8 +41,8 @@ func TestButton_VariantsAndSizeChangeClasses(t *testing.T) {
 		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-border", "bg-accent text-bone"},
 		{"outline", atoms.ButtonProps{Variant: atoms.ButtonOutline}, "hover:bg-accent-soft", "bg-accent text-bone"},
 		{"danger outline", atoms.ButtonProps{Variant: atoms.ButtonDangerOutline}, "border-danger/40", "bg-danger text-bone"},
-		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "text-xs", "py-2"},
-		{"medium", atoms.ButtonProps{}, "py-2", "text-xs"},
+		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "text-sm", "py-2"},
+		{"medium", atoms.ButtonProps{}, "text-base", "text-sm"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

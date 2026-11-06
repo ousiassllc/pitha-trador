@@ -30,6 +30,7 @@ export class PithaExitAlignment extends LitElement {
       table {
         border-collapse: collapse;
         font-size: 0.875rem;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
         font-variant-numeric: tabular-nums;
       }
       th,

@@ -76,3 +76,39 @@ for (const file of [
 ]) {
   fs.copyFileSync(path.join(elementsSrc, file), path.join(elementsOut, file));
 }
+
+// Self-host the guide's fonts (Sora, Noto Sans JP, JetBrains Mono; all SIL
+// OFL, issue #941) from the bun-installed @fontsource-variable packages into
+// dist/fonts/, served same-origin (CSP `font-src 'self'`). Each package's
+// `wght.css` is copied as one dist/fonts/fonts.css with the family renamed to
+// the guide's names (`Sora`, `Noto Sans JP`, `JetBrains Mono`: the
+// `font-family` values of docs/components/design-tokens.md) and the url()s
+// pointed at the copied files. Only the upright variable files are shipped
+// (weights 400 / 600 are the only ones the guide uses). Versions are pinned
+// by static/bun.lock.
+const fontsOut = 'src/dist/fonts';
+fs.rmSync(fontsOut, { recursive: true, force: true });
+fs.mkdirSync(fontsOut, { recursive: true });
+const fontFaces = [];
+for (const [pkg, family] of [
+  ['sora', 'Sora'],
+  ['noto-sans-jp', 'Noto Sans JP'],
+  ['jetbrains-mono', 'JetBrains Mono'],
+]) {
+  const pkgDir = `node_modules/@fontsource-variable/${pkg}`;
+  const css = fs.readFileSync(path.join(pkgDir, 'wght.css'), 'utf8');
+  fontFaces.push(
+    css
+      .replaceAll(`'${family} Variable'`, `'${family}'`)
+      .replaceAll('url(./files/', `url(/static/dist/fonts/${pkg}/`),
+  );
+  const filesOut = path.join(fontsOut, pkg);
+  fs.mkdirSync(filesOut, { recursive: true });
+  for (const file of fs.readdirSync(path.join(pkgDir, 'files'))) {
+    if (file.endsWith('-wght-normal.woff2')) {
+      fs.copyFileSync(path.join(pkgDir, 'files', file), path.join(filesOut, file));
+    }
+  }
+  fs.copyFileSync(path.join(pkgDir, 'LICENSE'), path.join(filesOut, 'LICENSE'));
+}
+fs.writeFileSync(path.join(fontsOut, 'fonts.css'), fontFaces.join('\n'));

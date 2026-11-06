@@ -63,9 +63,9 @@ func buttonType(t string) string {
 
 func buttonClass(props ButtonProps) string {
 	const base = "inline-block rounded-md font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-50"
-	size := "px-4 py-2 text-sm"
+	size := "px-4 py-2 text-base"
 	if props.Size == ButtonSmall {
-		size = "px-3 py-1 text-xs"
+		size = "px-3 py-1 text-sm"
 	}
 	var color string
 	switch props.Variant {

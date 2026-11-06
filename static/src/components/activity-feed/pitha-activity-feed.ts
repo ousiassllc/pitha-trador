@@ -256,7 +256,7 @@ export class PithaActivityFeed extends LitElement {
               (e) => html`
                 <tr class="border-b border-border" data-event-type=${e.type}>
                   <td class="px-3 py-2">${formatJstDateTime(e.timestamp)}</td>
-                  <td class="px-3 py-2 font-medium text-ink">${activityTypeLabel(e.type)}</td>
+                  <td class="px-3 py-2 text-ink">${activityTypeLabel(e.type)}</td>
                   <td class="px-3 py-2">${e.symbol ?? '—'}</td>
                   <td class="px-3 py-2">${activityDetail(e.type, e.detail)}</td>
                   <td class="px-3 py-2">${e.latency_ms ?? '—'}</td>

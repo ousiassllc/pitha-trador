@@ -52,7 +52,7 @@ func (p SettingsProps) hasSystem() bool {
 // another page (issue #895) is forwarded too.
 templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Link) {
 	@layout.Shell("設定", organisms.NavSettings) {
-		<h1 class="text-2xl font-bold text-ink">設定</h1>
+		<h1 class="text-2xl font-semibold text-ink">設定</h1>
 		<div class="mt-4 flex flex-col gap-6" data-testid="settings-hub" data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			<ul class="flex flex-col gap-3" data-testid="settings-page-list">
 				for _, p := range pageList {
@@ -102,7 +102,7 @@ templ SettingsPage(props SettingsProps) {
 			<span aria-hidden="true"> / </span>
 			<span aria-current="page">{ props.Page.Name }</span>
 		</nav>
-		<h1 class="mt-2 text-2xl font-bold text-ink">{ props.Page.Name }</h1>
+		<h1 class="mt-2 text-2xl font-semibold text-ink">{ props.Page.Name }</h1>
 		<div class="mt-4 flex flex-col gap-6" data-testid="settings-form" data-settings-page={ props.Page.ID } data-hash-routes={ templ.JSONString(settingspages.HashRoutes()) }>
 			if len(props.Connections) > 0 {
 				<section class="flex flex-col gap-3" aria-labelledby="settings-connections-heading">

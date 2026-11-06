@@ -65,9 +65,9 @@ templ summaryMetric(label, id, key, value, help string) {
 			}
 		</dt>
 		if key != "" {
-			<dd class="text-sm font-medium text-ink" data-metric={ key }>{ value }</dd>
+			<dd class="text-sm text-ink" data-metric={ key }>{ value }</dd>
 		} else {
-			<dd class="text-sm font-medium text-ink">{ value }</dd>
+			<dd class="text-sm text-ink">{ value }</dd>
 		}
 	</div>
 }

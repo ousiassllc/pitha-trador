@@ -19,18 +19,18 @@ templ QueueStatusPanel(queues []domain.QueueStatus) {
 			<thead>
 				<tr class="border-b border-border text-xs font-semibold uppercase text-mute">
 					<th scope="col" class="px-3 py-2">キュー</th>
-					<th scope="col" class="px-3 py-2">待機中</th>
-					<th scope="col" class="px-3 py-2">実行中</th>
-					<th scope="col" class="px-3 py-2">失敗（直近）</th>
+					<th scope="col" class="px-3 py-2 text-right">待機中</th>
+					<th scope="col" class="px-3 py-2 text-right">実行中</th>
+					<th scope="col" class="px-3 py-2 text-right">失敗（直近）</th>
 				</tr>
 			</thead>
 			<tbody>
 				for _, q := range queues {
 					<tr class="border-b border-border" data-queue={ q.Queue }>
-						<td class="px-3 py-2 font-medium text-ink">{ labels.JobQueue(q.Queue) }</td>
-						<td class="px-3 py-2">{ strconv.Itoa(q.Pending) }</td>
-						<td class="px-3 py-2">{ strconv.Itoa(q.Running) }</td>
-						<td class="px-3 py-2">{ strconv.Itoa(q.FailedRecent) }</td>
+						<td class="px-3 py-2 text-ink">{ labels.JobQueue(q.Queue) }</td>
+						<td class="px-3 py-2 text-right font-mono tabular-nums">{ strconv.Itoa(q.Pending) }</td>
+						<td class="px-3 py-2 text-right font-mono tabular-nums">{ strconv.Itoa(q.Running) }</td>
+						<td class="px-3 py-2 text-right font-mono tabular-nums">{ strconv.Itoa(q.FailedRecent) }</td>
 					</tr>
 				}
 			</tbody>

@@ -98,7 +98,7 @@ templ Panel(props PanelProps) {
 			<div class="flex items-center gap-2">
 				<label class="flex items-center gap-2">
 					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: enabledAttrs(props.Enabled)})
-					<span class="font-medium text-ink">MCP を有効にする</span>
+					<span class="text-ink">MCP を有効にする</span>
 				</label>
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-enabled", Label: "MCP の説明"}) {
 					Grok Bot などから Paper の実績と Jev の判断を読み取り、許可されたときだけ基本設定（ホワイトリスト）を変更するための MCP エンドポイントです。本体とは別のプロセス（paper-results-mcp）で動きます。既定ではオフで、API キーが未設定の間は待ち受けません。
@@ -106,7 +106,7 @@ templ Panel(props PanelProps) {
 			</div>
 			<div class="flex flex-col gap-1">
 				<div class="flex items-center gap-2">
-					<label for="mcp-listen-input" class="font-medium text-ink">待受アドレス（ホスト:ポート）</label>
+					<label for="mcp-listen-input" class="text-ink">待受アドレス（ホスト:ポート）</label>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-listen", Label: "待受アドレスの説明"}) {
 						許可されるのは 127.0.0.1 / ::1（この PC 内のみ）と、この PC の tailnet アドレス（100.64.0.0/10・fd7a:115c:a1e0::/48）だけです。0.0.0.0・LAN・ホスト名は保存できません。空にすると 127.0.0.1:48110 になります。
 					}
@@ -124,7 +124,7 @@ templ Panel(props PanelProps) {
 			<div id="mcp-experiments" hx-get="/settings/mcp/experiments" hx-trigger="load" hx-swap="innerHTML" data-testid="mcp-experiments-slot"></div>
 		}
 		<div class="flex flex-col gap-2" data-testid="mcp-key">
-			<span class="flex items-center gap-2 font-medium text-ink">
+			<span class="flex items-center gap-2 text-ink">
 				API キー:
 				if props.KeyConfigured {
 					設定済み
@@ -146,7 +146,7 @@ templ Panel(props PanelProps) {
 			</div>
 		</div>
 		<dl class="flex flex-col gap-2" data-testid="mcp-bot-values">
-			<dt class="font-medium text-ink">Grok Bot に登録する値</dt>
+			<dt class="text-ink">Grok Bot に登録する値</dt>
 			<dd class="flex flex-wrap items-center gap-2">
 				URL: <code id="mcp-url" data-testid="mcp-url">{ props.URL }</code>
 				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"data-copy-from": "mcp-url", "data-testid": "mcp-copy-url"}}) {
@@ -156,16 +156,16 @@ templ Panel(props PanelProps) {
 			<dd>ヘッダー: <code data-testid="mcp-auth-header">{ props.AuthHeader }</code></dd>
 		</dl>
 		<dl class="flex flex-col gap-1" data-testid="mcp-locations">
-			<dt class="font-medium text-ink">paper-results-mcp の配置先</dt>
+			<dt class="text-ink">paper-results-mcp の配置先</dt>
 			<dd class="flex flex-wrap items-center gap-2">
 				<code data-testid="mcp-exe-path">{ props.ExePath }</code>
 				if props.ExeExists {
-					<span class="rounded-full border tone-success px-2 py-1 text-xs font-medium" data-testid="mcp-exe-found">見つかる</span>
+					<span class="rounded-full border tone-success px-2 py-1 text-xs" data-testid="mcp-exe-found">見つかる</span>
 				} else {
-					<span class="rounded-full border tone-warning px-2 py-1 text-xs font-medium" data-testid="mcp-exe-missing">見つからない</span>
+					<span class="rounded-full border tone-warning px-2 py-1 text-xs" data-testid="mcp-exe-missing">見つからない</span>
 				}
 			</dd>
-			<dt class="font-medium text-ink">設定ファイルの場所</dt>
+			<dt class="text-ink">設定ファイルの場所</dt>
 			<dd><code data-testid="mcp-settings-path">{ props.SettingsPath }</code></dd>
 		</dl>
 	</section>
