@@ -19,8 +19,8 @@ func TestRefusalMessageHasNoPackagePrefix(t *testing.T) {
 		"reset over the sum":   f.reset(bucketsettings.KeyStockBudgetJPY),
 	} {
 		body := rec.Body.String()
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("%s: status = %d, body = %s; want 400", name, rec.Code, body)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("%s: status = %d, body = %s; want 422", name, rec.Code, body)
 		}
 		if strings.Contains(body, "bucketsettings:") {
 			t.Errorf("%s: refusal shows the package prefix: %s", name, body)

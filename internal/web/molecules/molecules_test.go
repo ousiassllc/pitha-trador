@@ -162,3 +162,16 @@ func TestFieldRows_LabelIsEightAboveTheField(t *testing.T) {
 		}
 	}
 }
+
+// issue #961: a rejected value is shown as an inline alert in the row's own
+// error slot (design guide O3), so both field rows carry that slot.
+func TestFieldRows_HaveAnErrorSlotForValidation(t *testing.T) {
+	secret := render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "JEV_API_KEY", Label: "L"}))
+	if want := `id="` + molecules.SecretErrorID("JEV_API_KEY") + `"`; !strings.Contains(secret, want) {
+		t.Errorf("SecretFieldRow lacks the error slot %s: %s", want, secret)
+	}
+	setting := render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "screener.min_price", Label: "L"}))
+	if want := `id="` + molecules.SettingErrorID("screener.min_price") + `"`; !strings.Contains(setting, want) {
+		t.Errorf("SettingFieldRow lacks the error slot %s: %s", want, setting)
+	}
+}

@@ -103,3 +103,21 @@ func TestSecrets_NewsFeedOffOnlyWhenStoredOff(t *testing.T) {
 		}
 	}
 }
+
+// issue #961: every rejection other than a blank is an *InvalidSecretValueError
+// with a fixed message, so the Settings handler can show it inline as is.
+func TestNormalizeSecretValue_RejectionIsAnInvalidSecretValueError(t *testing.T) {
+	for _, tc := range []struct{ key, raw string }{
+		{config.KeyJevBaseURL, "notaurl"},
+		{config.KeySlackWebhookURL, "ftp://x"},
+		{config.KeyLunaBaseURL, "https:///path"},
+		{config.KeyJevAPIKey, "ab\ncd"},
+		{config.KeyNewsFeedEnabled, "maybe"},
+	} {
+		_, err := config.NormalizeSecretValue(tc.key, tc.raw)
+		var invalid *config.InvalidSecretValueError
+		if !errors.As(err, &invalid) || invalid.Message == "" {
+			t.Errorf("NormalizeSecretValue(%s, %q) err = %v, want *InvalidSecretValueError", tc.key, tc.raw, err)
+		}
+	}
+}

@@ -21,6 +21,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/config"
 	"github.com/ousiassllc/pitha-trador/internal/service/opsettings"
 	"github.com/ousiassllc/pitha-trador/internal/web/handler/settings"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
 // memRuntimeStore is an in-memory opsettings.Store.
@@ -169,25 +170,60 @@ func TestSaveOps_BackupDirIsStoredAndShowsWarningWhenUnavailable(t *testing.T) {
 }
 
 func TestSaveOps_RejectsBadInputWithoutWriting(t *testing.T) {
-	cases := map[string]struct{ key, value string }{
-		"blank":        {"policy.long.min_probability", "   "},
-		"out of range": {"policy.long.min_probability", "2"},
-		"not a number": {"screener.min_price", "abc"},
-		"relative dir": {config.KeyBackupDir, "backups"},
-		"unknown key":  {"risk.max_position_size", "1"},
-		"secret key":   {config.KeyJevAPIKey, "x"},
+	// A bad value is a 422 inline alert in the row's error slot (issue #961); a
+	// key that is not an operational setting has no row to show it in (400 toast).
+	cases := map[string]struct {
+		key, value string
+		status     int
+	}{
+		"blank":        {"policy.long.min_probability", "   ", http.StatusUnprocessableEntity},
+		"out of range": {"policy.long.min_probability", "2", http.StatusUnprocessableEntity},
+		"not a number": {"screener.min_price", "abc", http.StatusUnprocessableEntity},
+		"relative dir": {config.KeyBackupDir, "backups", http.StatusUnprocessableEntity},
+		"unknown key":  {"risk.max_position_size", "1", http.StatusBadRequest},
+		"secret key":   {config.KeyJevAPIKey, "x", http.StatusBadRequest},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			engine, store := opsRouter()
 			rec := opsRequest(engine, http.MethodPost, tc.key, url.Values{"value": {tc.value}}, true)
-			if rec.Code != http.StatusBadRequest {
-				t.Errorf("status = %d, want 400; body=%s", rec.Code, rec.Body.String())
+			if rec.Code != tc.status {
+				t.Errorf("status = %d, want %d; body=%s", rec.Code, tc.status, rec.Body.String())
 			}
 			if len(store.rows) != 0 {
 				t.Errorf("store written: %v", store.rows)
 			}
+			if tc.status == http.StatusUnprocessableEntity {
+				assertInlineAlert(t, rec, tc.key)
+			}
 		})
+	}
+}
+
+// assertInlineAlert checks rec is the form-validation response of key's row
+// (issue #961, design guide O3): an atoms.InlineAlert swapped into the row's
+// own error slot via HX-Retarget, never a toast.
+func assertInlineAlert(t *testing.T, rec *httptest.ResponseRecorder, key string) {
+	t.Helper()
+	body := rec.Body.String()
+	if !strings.Contains(body, `data-inline-alert`) || strings.Contains(body, `data-toast`) {
+		t.Errorf("body = %s, want an inline alert, not a toast", body)
+	}
+	if want := `[id="` + molecules.SettingErrorID(key) + `"]`; rec.Header().Get("HX-Retarget") != want {
+		t.Errorf("HX-Retarget = %q, want %q", rec.Header().Get("HX-Retarget"), want)
+	}
+}
+
+// A non-HTMX form post (JS disabled) has no slot to swap into: the rejected
+// value is the full error page with a 400.
+func TestSaveOps_RejectedValueWithoutHTMXIsTheErrorPage(t *testing.T) {
+	engine, store := opsRouter()
+	rec := opsRequest(engine, http.MethodPost, "screener.min_price", url.Values{"value": {"abc"}}, false)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `data-testid="error-page"`) {
+		t.Errorf("status = %d body = %s, want the 400 error page", rec.Code, rec.Body.String())
+	}
+	if len(store.rows) != 0 {
+		t.Errorf("store written: %v", store.rows)
 	}
 }
 
@@ -243,8 +279,8 @@ func TestSaveOps_PrivateKeyPathIsValidatedAndNeverShownBack(t *testing.T) {
 
 	for name, path := range map[string]string{"missing": filepath.Join(dir, "none.pem"), "not pem": notPEM, "public key": public} {
 		rec := opsRequest(engine, http.MethodPost, config.KeyTachibanaDemoPrivateKeyPath, url.Values{"value": {path}}, true)
-		if rec.Code != http.StatusBadRequest || len(store.rows) != 0 {
-			t.Errorf("%s: status = %d, store = %v, want 400 and no write", name, rec.Code, store.rows)
+		if rec.Code != http.StatusUnprocessableEntity || len(store.rows) != 0 {
+			t.Errorf("%s: status = %d, store = %v, want 422 and no write", name, rec.Code, store.rows)
 		}
 	}
 
@@ -270,11 +306,11 @@ func TestSaveOps_BrokerProviderIsStoredAndBadValuesAre400(t *testing.T) {
 	if rec := opsRequest(engine, http.MethodPost, config.KeyBrokerProvider, url.Values{"value": {"tachibana"}}, true); rec.Code != http.StatusOK || store.rows[config.KeyBrokerProvider] != `"tachibana"` {
 		t.Fatalf("status = %d, store = %v", rec.Code, store.rows)
 	}
-	if rec := opsRequest(engine, http.MethodPost, config.KeyBrokerProvider, url.Values{"value": {"unknown"}}, true); rec.Code != http.StatusBadRequest {
-		t.Errorf("unknown provider status = %d, want 400", rec.Code)
+	if rec := opsRequest(engine, http.MethodPost, config.KeyBrokerProvider, url.Values{"value": {"unknown"}}, true); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("unknown provider status = %d, want 422", rec.Code)
 	}
-	if rec := opsRequest(engine, http.MethodPost, config.KeyTachibanaReauthTime, url.Values{"value": {"04:00"}}, true); rec.Code != http.StatusBadRequest {
-		t.Errorf("out-of-window reauth time status = %d, want 400", rec.Code)
+	if rec := opsRequest(engine, http.MethodPost, config.KeyTachibanaReauthTime, url.Values{"value": {"04:00"}}, true); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("out-of-window reauth time status = %d, want 422", rec.Code)
 	}
 	if rec := opsRequest(engine, http.MethodDelete, config.KeyBrokerProvider, nil, true); rec.Code != http.StatusOK || len(store.rows) != 0 {
 		t.Errorf("reset status = %d, store = %v, want the row removed (kabu again)", rec.Code, store.rows)

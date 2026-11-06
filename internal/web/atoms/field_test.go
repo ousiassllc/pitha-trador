@@ -98,6 +98,10 @@ func TestSwitch_IsACheckboxSwitchWithGuideTrackAndKnob(t *testing.T) {
 	if strings.Contains(body, "font-medium") || strings.Contains(body, "font-semibold") {
 		t.Errorf("the switch label must be Regular: %s", body)
 	}
+	// Disabled form parts are opacity .5 (brand-guide §4), the label with the track (issue #961).
+	if n := strings.Count(body, "peer-disabled:opacity-50"); n != 2 || strings.Contains(body, "opacity-40") {
+		t.Errorf("track and label should both be peer-disabled:opacity-50: %s", body)
+	}
 }
 
 func TestInlineAlert_HasIconHeadingAndBodyInTheDangerTone(t *testing.T) {
