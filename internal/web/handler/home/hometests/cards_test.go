@@ -257,3 +257,14 @@ func TestNotices_AreBodySize(t *testing.T) {
 		t.Errorf("retrain notice must be text-sm: %s", body)
 	}
 }
+
+// The loss-limit room carries a value, so it is body-size (text-sm), not a 12px note
+// (brand-guide T3; issue #1005).
+func TestPnL_LossLimitLineIsBodySize(t *testing.T) {
+	f := newFixture()
+	f.settings.guard = dailyguardsettings.Resolved{Limits: dailyguardsettings.Limits{LossLimitJPY: 50000}}
+	body := f.mustGet(t, "/home/pnl")
+	if !strings.Contains(body, `class="mt-2 text-sm text-mute" data-testid="pnl-loss-limit"`) {
+		t.Errorf("loss limit line is not text-sm text-mute: %s", body)
+	}
+}

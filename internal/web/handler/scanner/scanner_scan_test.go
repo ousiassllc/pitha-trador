@@ -296,3 +296,16 @@ func TestScannerHandler_ScanView_ServesLiveSourceCycle(t *testing.T) {
 		t.Fatalf("after a cycle: %s", body)
 	}
 }
+
+// The pass/exclude/missing counts carry values, so they are body-size (text-sm),
+// not a 12px note (brand-guide T3; issue #1005).
+func TestScannerHandler_ScanView_CountLineIsBodySize(t *testing.T) {
+	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner/scan", true)
+	at := strings.Index(body, `data-testid="scan-count-passed"`)
+	if at < 0 {
+		t.Fatalf("no count line: %s", body)
+	}
+	if line := body[strings.LastIndex(body[:at], "<p "):at]; !strings.Contains(line, `class="mt-2 text-sm text-mute"`) {
+		t.Errorf("count line is not text-sm text-mute: %s", line)
+	}
+}

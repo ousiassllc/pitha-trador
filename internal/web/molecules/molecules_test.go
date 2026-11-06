@@ -291,3 +291,19 @@ func TestSecretFieldRow_NoticeIsBodySize(t *testing.T) {
 		t.Errorf("notice must be text-sm: %s", html)
 	}
 }
+
+// The panel title is a heading (h3 under the modal's h2, text-xl) and a list
+// item's label is Regular, told apart by size and colour (brand-guide T2;
+// issue #1005).
+func TestSettingGroupDerived_TitleIsAHeadingAndItemLabelIsRegular(t *testing.T) {
+	props := molecules.SettingGroupProps{ID: "g", Derived: []molecules.SettingDerivedItem{{Key: "h", Heading: true, Label: "整合チェック"}}}
+	html := render(t, molecules.SettingGroupDerived(props, false))
+	for _, want := range []string{`<h3 class="text-xl font-semibold text-ink">計算結果</h3>`, `<span class="text-base text-ink">整合チェック</span>`} {
+		if !strings.Contains(html, want) {
+			t.Errorf("missing %q: %s", want, html)
+		}
+	}
+	if strings.Contains(html, `<p class="font-semibold`) || strings.Contains(html, `<span class="font-semibold`) {
+		t.Errorf("body text must not be SemiBold: %s", html)
+	}
+}

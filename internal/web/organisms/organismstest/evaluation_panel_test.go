@@ -21,3 +21,15 @@ func TestEvaluationPanel_H2HasTheH2GapBelow(t *testing.T) {
 		}
 	}
 }
+
+// The capital line carries a value (text-sm) and the verdict line is body text,
+// not a heading, so it is Regular (brand-guide T2/T3; issue #1005).
+func TestEvaluationPanel_CapitalIsBodySizeAndVerdictIsRegular(t *testing.T) {
+	html := renderComponent(t, evaluation.EvaluationPanel(evaluation.Panel{Capital: "元手 100万円", Verdict: "pass", VerdictText: "合格"}, ""))
+	if !strings.Contains(html, `<p class="text-sm text-mute" data-testid="evaluation-capital">`) {
+		t.Errorf("capital line is not text-sm text-mute: %s", html)
+	}
+	if !strings.Contains(html, `<p class="text-base">`) || strings.Contains(html, `<p class="font-semibold">`) {
+		t.Errorf("verdict line must be Regular text-base: %s", html)
+	}
+}

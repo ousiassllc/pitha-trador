@@ -85,7 +85,7 @@ templ ScanPanel(v ScanPanelView) {
 				最終サイクル { atoms.FormatJST(v.Cycle.FinishedAt) }（所要 { FormatCycleDuration(v.Cycle.Duration()) }）
 			</p>
 			@ScanFunnel(v)
-			<p class="mt-2 text-xs text-mute">
+			<p class="mt-2 text-sm text-mute">
 				通過 <span data-testid="scan-count-passed">{ strconv.Itoa(v.Summary.Passed) }</span>
 				／ 除外 <span data-testid="scan-count-excluded">{ strconv.Itoa(v.Summary.Excluded) }</span>
 				／ データ欠損 <span data-testid="scan-count-missing">{ strconv.Itoa(v.Summary.Missing) }</span>
