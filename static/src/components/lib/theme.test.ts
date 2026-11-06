@@ -127,4 +127,16 @@ describe('dark.css Dark tokens', () => {
     expect(forced.length).toBeGreaterThan(10);
     expect(declarations(':root:not([data-theme="light"])')).toEqual(forced);
   });
+
+  // Print is always ink on bone (brand-guide §8, issue #1002): both Dark rules sit
+  // in `@media screen`, so the :root Light values apply under `@media print`.
+  test('both Dark rules are screen-only, so print keeps the Light values', () => {
+    const osRule = css.indexOf('@media screen and (prefers-color-scheme: dark) {');
+    const forcedRule = css.indexOf('@media screen {');
+    expect(osRule).toBeGreaterThan(-1);
+    expect(css.indexOf(':root:not([data-theme="light"]) {')).toBeGreaterThan(osRule);
+    expect(forcedRule).toBeGreaterThan(-1);
+    expect(css.indexOf(':root[data-theme="dark"] {')).toBeGreaterThan(forcedRule);
+    expect(css.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/@media\s+\(prefers-color-scheme/);
+  });
 });

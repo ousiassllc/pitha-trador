@@ -69,8 +69,12 @@ import (
 // poll, issue #626); `data-live-banner` makes pitha-htmx-errors skip a swap
 // whose markup is identical to what is already shown, so only a new/changed
 // badge is announced. `empty:hidden` takes no space while there is none.
+//
+// The whole header (nav, version, theme switch, status, Kill Switch panel) is
+// `print:hidden`: a printout is the page's content only, ink on bone
+// (brand-guide §8).
 templ Header(state domain.SystemState, current NavItem) {
-	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-surface px-4 py-4 lg:px-6">
+	<header class="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-surface px-4 py-4 print:hidden lg:px-6">
 		<div class="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2">
 			<a
 				id="header-logo"
