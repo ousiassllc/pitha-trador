@@ -64,6 +64,20 @@ describe('pitha-scanner-table interaction', () => {
     );
   });
 
+  // Pressing a column's sort button draws the guide's press ripple (§5, M4);
+  // `relative overflow-hidden` clips it (issue #960).
+  test('the header sort buttons carry the press ripple and its clip', async () => {
+    const { el } = await mount([item({ symbol: 'AAAA' })]);
+
+    const buttons = el.querySelectorAll('thead th button:not([data-help-mark-button])');
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) {
+      expect(button.hasAttribute('data-ripple')).toBe(true);
+      expect(button.classList.contains('relative')).toBe(true);
+      expect(button.classList.contains('overflow-hidden')).toBe(true);
+    }
+  });
+
   // Lexicographic order would put "exceptional" first and "poor" after
   // "good" (issue #493); the column hint promises poor < ... < exceptional.
   test('sorts the entry-quality column by quality rank, nulls first, and reverses on a second click', async () => {

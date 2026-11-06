@@ -214,7 +214,8 @@ export class PithaScannerTable extends LitElement {
       >
         <button
           type="button"
-          class="cursor-pointer select-none hover:text-ink"
+          class="relative cursor-pointer select-none overflow-hidden hover:text-ink"
+          data-ripple
           @click=${() => this.onHeaderClick(column.key)}
         >${column.label}${indicator}</button>
         ${
