@@ -177,7 +177,7 @@ templ scanList(v ScanPanelView) {
 			（{ strconv.Itoa(v.Page.Page) } / { strconv.Itoa(v.Page.Pages) } ページ）
 		</p>
 		<span class="inline-flex items-center gap-1">
-			<a class="text-xs text-accent underline-offset-2 hover:underline" href={ templ.SafeURL(scanExportHref(v.Query)) } hx-disable data-testid="scan-export">CSVダウンロード（絞り込み結果すべて）</a>
+			<a class="text-sm text-accent underline-offset-2 hover:underline" href={ templ.SafeURL(scanExportHref(v.Query)) } hx-disable data-testid="scan-export">CSVダウンロード（絞り込み結果すべて）</a>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-scan-export", Label: "CSVダウンロードの説明"}) {
 				現在の絞り込み条件に該当する全銘柄（ページ分割なし）をCSVでダウンロードします。
 			}

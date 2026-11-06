@@ -153,3 +153,17 @@ describe('pitha-exit-alignment heading', () => {
     expect(text(el, 'exit-alignment-warnings')).toContain('一致しません');
   });
 });
+
+// Issue #958: the summary's bps and counts line up in JetBrains Mono, like the
+// calibration heatmap's summary (brand-guide §2, T5).
+describe('pitha-exit-alignment summary', () => {
+  test('sets the summary values in JetBrains Mono, tabular', async () => {
+    const el = await mount(body());
+    const css = (
+      el.constructor as unknown as { elementStyles: { cssText: string }[] }
+    ).elementStyles
+      .map((s) => s.cssText)
+      .join('');
+    expect(css).toMatch(/\.summary dd\s*\{[^}]*JetBrains Mono[^}]*tabular-nums/);
+  });
+});

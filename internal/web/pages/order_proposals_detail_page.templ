@@ -73,7 +73,7 @@ templ proposalFields(title, testID, helpPrefix string, fields []ProposalField) {
 						}
 					}
 				</dt>
-				<dd class={ pnlTextClass(f.Sign) }>{ dash(f.Value) }</dd>
+				<dd class={ "font-mono tabular-nums", pnlTextClass(f.Sign) }>{ dash(f.Value) }</dd>
 			}
 		</dl>
 	</section>
