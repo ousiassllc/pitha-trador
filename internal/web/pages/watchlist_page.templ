@@ -48,7 +48,7 @@ templ WatchlistPage(view domain.WatchListView) {
 
 templ watchlistSection(list domain.WatchList, active bool) {
 	<section class="mt-12" data-testid="watchlist" data-list-date={ list.ListDate } data-source={ list.Source } data-active={ strconv.FormatBool(active) }>
-		<h2 class="mb-6 text-xl font-semibold text-ink">
+		<h2 class="mb-6 text-2xl font-semibold text-ink">
 			{ list.ListDate } の監視リスト
 			if active {
 				<span class="ml-2 rounded-full border tone-success px-2 py-1 text-xs" data-testid="watchlist-active">使用中</span>

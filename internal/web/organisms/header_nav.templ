@@ -49,7 +49,7 @@ func navLinkClass(current bool) string {
 // MainNav renders Header's `<nav>`: the entry equal to current (when not
 // NavNone) carries `aria-current="page"` and the emphasised style.
 templ MainNav(current NavItem) {
-	<nav aria-label="メインナビゲーション" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-mute">
+	<nav aria-label="メインナビゲーション" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-mute">
 		for _, e := range navEntries {
 			if e.SeparatorBefore {
 				<span aria-hidden="true" class="h-4 w-px bg-accent-soft" data-testid="nav-separator"></span>

@@ -14,10 +14,10 @@ const blockClass = "min-w-0 rounded-lg border border-border bg-surface p-4"
 // section stays collapsed.
 templ DetailsSection(v View) {
 	<details class="mt-12" open data-testid="home-details-section">
-		<summary class="cursor-pointer text-lg font-semibold text-ink">今日の詳細</summary>
+		<summary class="cursor-pointer"><h2 class="inline text-2xl font-semibold text-ink">今日の詳細</h2></summary>
 		<div
 			id="home-details"
-			class="mt-2"
+			class="mt-6"
 			hx-get={ DetailsURL }
 			hx-headers={ refreshHeaders }
 			hx-trigger="every 30s"
@@ -44,8 +44,8 @@ templ DetailsBody(v View) {
 
 templ rejectReasonsBlock(v RejectReasonsView) {
 	<section class={ blockClass } data-testid="home-reject-reasons" aria-labelledby="home-reject-title">
-		<div class="flex items-center gap-1">
-			<h3 id="home-reject-title" class="text-sm font-semibold text-ink">エントリーしなかった理由（今日）</h3>
+		<div class="mb-3 flex items-center gap-1">
+			<h3 id="home-reject-title" class="text-xl font-semibold text-ink">エントリーしなかった理由（今日）</h3>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-home-reject-reasons", Label: "エントリーしなかった理由の説明"}) {
 				今日、方向なし（NONE）と判断したシグナルを、理由別に数えています。
 			}
@@ -53,9 +53,9 @@ templ rejectReasonsBlock(v RejectReasonsView) {
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if len(v.Rows) == 0 {
-			<p class="mt-2 text-sm text-mute" data-testid="reject-empty">今日の見送りの記録はありません。</p>
+			<p class="text-sm text-mute" data-testid="reject-empty">今日の見送りの記録はありません。</p>
 		} else {
-			<p class="mt-1 text-xs text-mute">計 { strconv.Itoa(v.Total) } 件</p>
+			<p class="text-xs text-mute">計 { strconv.Itoa(v.Total) } 件</p>
 			<ul class="mt-2 flex flex-col gap-1 text-sm">
 				for _, r := range v.Rows {
 					<li class="flex items-baseline justify-between gap-3" data-testid="reject-row" data-code={ r.Code }>
@@ -96,13 +96,13 @@ templ entryQualityNote(n *EntryQualityNote) {
 
 templ scanBlock(v ScanView) {
 	<section class={ blockClass } data-testid="home-scan" aria-labelledby="home-scan-title">
-		<h3 id="home-scan-title" class="text-sm font-semibold text-ink">スキャン状況</h3>
+		<h3 id="home-scan-title" class="mb-3 text-xl font-semibold text-ink">スキャン状況</h3>
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if !v.Panel.HasCycle {
-			<p class="mt-2 text-sm text-mute" data-testid="scan-none">スキャンの結果はありません。</p>
+			<p class="text-sm text-mute" data-testid="scan-none">スキャンの結果はありません。</p>
 		} else {
-			<p class="mt-1 text-xs text-mute" data-testid="scan-cycle-meta">最終サイクル { FormatTime(v.Panel.Cycle.FinishedAt) }（所要 { organisms.FormatCycleDuration(v.Panel.Cycle.Duration()) }）</p>
+			<p class="text-xs text-mute" data-testid="scan-cycle-meta">最終サイクル { FormatTime(v.Panel.Cycle.FinishedAt) }（所要 { organisms.FormatCycleDuration(v.Panel.Cycle.Duration()) }）</p>
 			@organisms.ScanFunnel(v.Panel)
 		}
 		<p class="mt-2"><a class={ linkClass } href="/scanner">候補銘柄 @atoms.IconArrowRight()</a></p>
@@ -111,13 +111,13 @@ templ scanBlock(v ScanView) {
 
 templ proposalsBlock(v ProposalsView) {
 	<section class={ blockClass } data-testid="home-proposals" aria-labelledby="home-proposals-title">
-		<h3 id="home-proposals-title" class="text-sm font-semibold text-ink">AIの注文提案（今日）</h3>
+		<h3 id="home-proposals-title" class="mb-3 text-xl font-semibold text-ink">AIの注文提案（今日）</h3>
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if v.Total == 0 {
-			<p class="mt-2 text-sm text-mute" data-testid="proposals-none">今日受け付けた注文提案はありません。</p>
+			<p class="text-sm text-mute" data-testid="proposals-none">今日受け付けた注文提案はありません。</p>
 		} else {
-			<p class="mt-1 text-sm"><span class="text-xl font-mono tabular-nums" data-testid="proposals-total">{ strconv.Itoa(v.Total) }</span> 件を受け付けました。</p>
+			<p class="text-sm"><span class="text-xl font-mono tabular-nums" data-testid="proposals-total">{ strconv.Itoa(v.Total) }</span> 件を受け付けました。</p>
 			<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink">
 				for _, c := range v.Counts {
 					if c.Count > 0 {
@@ -140,13 +140,13 @@ templ proposalsBlock(v ProposalsView) {
 
 templ tradesBlock(v TradesView) {
 	<section class={ blockClass } data-testid="home-trades" aria-labelledby="home-trades-title">
-		<h3 id="home-trades-title" class="text-sm font-semibold text-ink">最近の取引（直近の決済）</h3>
+		<h3 id="home-trades-title" class="mb-3 text-xl font-semibold text-ink">最近の取引（直近の決済）</h3>
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if len(v.Rows) == 0 {
-			<p class="mt-2 text-sm text-mute" data-testid="trades-none">決済した取引はありません。</p>
+			<p class="text-sm text-mute" data-testid="trades-none">決済した取引はありません。</p>
 		} else {
-			<ul class="mt-2 flex flex-col gap-1 text-sm">
+			<ul class="flex flex-col gap-1 text-sm">
 				for _, t := range v.Rows {
 					<li class="flex items-baseline justify-between gap-2" data-testid="trade-row">
 						<span><a class="text-accent underline decoration-mute" href={ SymbolURL(t.Symbol) }>{ t.Symbol }</a> { SideLabel(t.Side) } { strconv.FormatInt(t.Quantity, 10) }株 <span class="text-xs text-mute">{ FormatTime(t.ClosedAt) }</span></span>
@@ -161,12 +161,12 @@ templ tradesBlock(v TradesView) {
 
 templ modelBlock(v ModelView) {
 	<section class={ blockClass } data-testid="home-model" aria-labelledby="home-model-title">
-		<h3 id="home-model-title" class="text-sm font-semibold text-ink">モデル状態</h3>
+		<h3 id="home-model-title" class="mb-3 text-xl font-semibold text-ink">モデル状態</h3>
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else {
 			if v.Adopted {
-				<p class="mt-2 text-sm" data-testid="model-adopted">メタモデル: 採用中
+				<p class="text-sm" data-testid="model-adopted">メタモデル: 採用中
 					if v.Version != "" {
 						<span class="ml-1 font-mono text-ink">{ v.Version }</span>
 					}
@@ -175,7 +175,7 @@ templ modelBlock(v ModelView) {
 					<p class="text-xs text-mute" data-testid="model-trained-at">学習日時 { FormatTime(v.TrainedAt) }</p>
 				}
 			} else {
-				<p class="mt-2 text-sm text-warning" data-testid="model-not-adopted">メタモデル: 未採用</p>
+				<p class="text-sm text-warning" data-testid="model-not-adopted">メタモデル: 未採用</p>
 			}
 			if v.RetrainNotice != "" {
 				<p class="mt-1 text-sm text-warning" data-testid="model-retrain">{ v.RetrainNotice }</p>
@@ -187,13 +187,13 @@ templ modelBlock(v ModelView) {
 
 templ killEventsBlock(v KillEventsView) {
 	<section class={ blockClass } data-testid="home-kill-events" aria-labelledby="home-kill-title">
-		<h3 id="home-kill-title" class="text-sm font-semibold text-ink">最近の Kill Switch</h3>
+		<h3 id="home-kill-title" class="mb-3 text-xl font-semibold text-ink">最近の Kill Switch</h3>
 		if v.Err != "" {
 			@cardError(v.Err)
 		} else if len(v.Rows) == 0 {
-			<p class="mt-2 text-sm text-mute" data-testid="kill-none">最近の Kill Switch の履歴はありません。</p>
+			<p class="text-sm text-mute" data-testid="kill-none">最近の Kill Switch の履歴はありません。</p>
 		} else {
-			<ul class="mt-2 flex flex-col gap-1 text-sm">
+			<ul class="flex flex-col gap-1 text-sm">
 				for _, e := range v.Rows {
 					<li data-testid="kill-row"><span class="text-xs text-mute">{ FormatTime(e.At) }</span> { e.Detail }</li>
 				}

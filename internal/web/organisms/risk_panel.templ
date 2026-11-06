@@ -19,8 +19,8 @@ type RiskParams struct {
 // loss and take profit.
 templ RiskPanel(p RiskParams) {
 	<section class="mb-12 rounded-lg border border-border bg-surface p-6" id="risk-panel" data-testid="risk-panel">
-		<h2 class="text-lg font-semibold text-ink">リスク</h2>
-		<dl class="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+		<h2 class="mb-6 text-2xl font-semibold text-ink">リスク</h2>
+		<dl class="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
 			<div>
 				<dt class="text-sm text-mute">
 					許容ポジション
@@ -28,7 +28,7 @@ templ RiskPanel(p RiskParams) {
 						いま新規エントリーした場合に、この銘柄で持てるポジションの大きさです（口座資産に対する割合）。
 					}
 				</dt>
-				<dd class="text-sm text-ink font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", p.AllowedPositionPct) }</dd>
+				<dd class="text-xl text-ink font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", p.AllowedPositionPct) }</dd>
 			</div>
 			<div>
 				<dt class="text-sm text-mute">
@@ -37,7 +37,7 @@ templ RiskPanel(p RiskParams) {
 						建値からこの割合だけ不利に動いたら損切りする水準です。
 					}
 				</dt>
-				<dd class="text-sm text-ink font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", p.StopLossPct) }</dd>
+				<dd class="text-xl text-ink font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", p.StopLossPct) }</dd>
 			</div>
 			<div>
 				<dt class="text-sm text-mute">
@@ -46,7 +46,7 @@ templ RiskPanel(p RiskParams) {
 						建値からこの割合だけ有利に動いたら利益確定する水準です。
 					}
 				</dt>
-				<dd class="text-sm text-ink font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", p.TakeProfitPct) }</dd>
+				<dd class="text-xl text-ink font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", p.TakeProfitPct) }</dd>
 			</div>
 		</dl>
 	</section>

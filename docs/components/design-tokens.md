@@ -14,8 +14,8 @@
 - 太さは Regular(400) と SemiBold(600) だけ。SemiBold は見出し・ボタン・表の見出し行に限る。ナビ・リンク・ラベル・値に `font-medium` / `font-bold` / 本文中の `font-semibold` を使わない（現在のナビ項目は `text-ink` の色で示す）
 - 表本文は `text-sm`、見出し行は `text-xs font-semibold`。数値列は `text-right font-mono tabular-nums`（th も右寄せ）。Lit の表は `lib/styles.ts` の `tableStyles`（th = SemiBold 12px `--mute` + 下線 1px、td = 上下 10 / 左右 12、数値列は `class="num"`）を `static styles` に足す
 - ステータスのピル・バッジは Regular（`font-semibold` なし）・`rounded-full`・`text-xs`。文中の強調は太さでなく `text-ink` 色と `font-mono tabular-nums`（`<strong>` は使わない）
-- 通知・アラートの本文は `text-sm`（`text-xs` は注記・キャプション・バッジだけ）。一覧の中身（最近の取引・Kill Switch・交絡要因の `<ul>`）も本文なので `text-sm`、時刻など補助だけ `text-xs text-mute`。「注意:」「状態:」のような行頭ラベルは Regular で、色（`text-warning` / `text-ink`）で区別する。KPI の値（勝率・EV・許容ポジションの％など）は `font-mono tabular-nums`
-- 行間は `@theme` の `--text-*--line-height`（xs 1.6 / sm 1.7 / base 1.8 / lg 1.7 / xl 1.5 / 2xl 1.4 / 3xl 1.3）と `body { line-height: 1.8 }`。`leading-relaxed`（1.625）や `line-height: 1.625` は使わず、サイズのクラスが持つ行間に任せる（Lit のツールチップは xs の 1.6）。サイズは `@theme` の `--text-xl: 1.5rem` / `--text-2xl: 2rem` / `--text-3xl: 2.5rem` で Tailwind 既定（20 / 24 / 30px）を上書きして、ガイドのスケール（xs 12 / sm 14 / base 16 / lg 18 / xl 24 / 2xl 32 / 3xl 40px）に合わせる。ビルド済み CSS の値は `internal/web/style_test.go` の `TestCompiledTextScaleMatchesTheGuide` が確かめる。ページの h1 は `text-3xl`、節の h2 は `text-xl`（カード・モーダルのタイトルは `text-lg`）、`text-[10px]` は使わない
+- 通知・アラートの本文は `text-sm`（`text-xs` は注記・キャプション・バッジだけ）。一覧の中身（最近の取引・Kill Switch・交絡要因の `<ul>`）も本文なので `text-sm`、時刻など補助だけ `text-xs text-mute`。「注意:」「状態:」のような行頭ラベルは Regular で、色（`text-warning` / `text-ink`）で区別する。KPI の値（勝率・EV・許容ポジションの％など）は `font-mono tabular-nums`。ラベルと値の `<dl>` は、ラベル `text-sm text-mute`＜値 `text-xl text-ink font-mono tabular-nums`（Regular。サイズと色で主従を付け、太さは使わない。issue #984）
+- 行間は `@theme` の `--text-*--line-height`（xs 1.6 / sm 1.7 / base 1.8 / lg 1.7 / xl 1.5 / 2xl 1.4 / 3xl 1.3）と `body { line-height: 1.8 }`。`leading-relaxed`（1.625）や `line-height: 1.625` は使わず、サイズのクラスが持つ行間に任せる（Lit のツールチップは xs の 1.6）。サイズは `@theme` の `--text-xl: 1.5rem` / `--text-2xl: 2rem` / `--text-3xl: 2.5rem` で Tailwind 既定（20 / 24 / 30px）を上書きして、ガイドのスケール（xs 12 / sm 14 / base 16 / lg 18 / xl 24 / 2xl 32 / 3xl 40px）に合わせる。ビルド済み CSS の値は `internal/web/style_test.go` の `TestCompiledTextScaleMatchesTheGuide` が確かめる。見出しの大きさはタグの階層で決め、箇所ごとに選ばない（issue #993）: h1 は `text-3xl`（40）、h2 は `text-2xl`（32・行間 1.4）、h3 は `text-xl`（24）、h4 は `text-lg`（18）。いずれも SemiBold・`text-ink`（ホームのカード見出しだけ `text-mute`）。節の h2 の下にあるカード・パネルの見出しは h3（その下の小見出しは h4）にし、見出しのタグと大きさがずれたら大きさでなくタグ（アウトライン）を直す。`sr-only` の見出しは大きさを持たない。ガイドの管理画面向けの小さい見出しスケール（h1=24 / h2=18 / h3=14）は未決（#981）で、導入しない。`internal/web/style_test.go` の `TestTemplHeadingsFollowTheGuideScale` がタグごとの大きさを確かめる。`text-[10px]` は使わない
 
 ## 形・余白・線（issue #942）
 
@@ -24,8 +24,8 @@
 - 入力・セレクトは高さ 40px・左右 12px（`h-10 px-3`、`atoms/input.templ` の `fieldBox` と Lit の `lightDomFieldClass`）。呼び出し側は `py-*` で上書きしない（`<textarea>` だけ `px-3 py-1`）。入れ子パネル（カード・モーダルの中の `bg-bone`）は `rounded-md`。テーマ切替は `p-1 gap-1`
 - 影はモーダルだけ（`shadow-modal` = `--shadow-modal` 0 1px 2px rgba(0,0,0,.06)）。カード・ツールチップ・トーストは 1px の `border-border` で区切り、`shadow*` を付けない
 - 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）の 2 種類。SSR と Lit で同じ値にし、`pr-N` だけの指定はしない。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact の 6px だけ例外）
-- ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`、設定画面の節どうしは `gap-12`）。ページの h1 の下は 24px（`mt-6`）、節の h2 の下は 24px（`mb-6`）、h3 の下は 12px（`mb-3`）
-- フォームはラベル→入力が 8px（`flex flex-col gap-2` / `mt-2`）、入力→補足が 4px（`gap-1` / `mt-1`）。メニュー・ナビ項目は項目間 8px（`gap-x-2`）・高さ 40px（`min-h-10`）・左右 12px（`px-3`）で、メインナビ（`organisms/header_nav.templ`）とタブ（`molecules/tab_nav.templ`）が同じレシピ
+- ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`、設定画面の節どうしは `gap-12`）。ページの h1 の下は 24px（`mt-6`）、h2 の下は節でもカード・パネルでも 24px（`mb-6`）、h3 の下は 12px（`mb-3`）。カード・パネルの見出しの下に `mt-*` を重ねない（見出しの `mb-*` が間隔を持つ）
+- フォームはラベル→入力が 8px（`flex flex-col gap-2` / `mt-2`）、入力→補足が 4px（`gap-1` / `mt-1`）。メニュー・ナビ項目は項目間 8px（`gap-x-2`）・高さ 40px（`min-h-10`）・左右 12px（`px-3`）・`text-base` Regular（SemiBold にしない。issue #984）で、メインナビ（`organisms/header_nav.templ`）とタブ（`molecules/tab_nav.templ`）が同じレシピ
 - 空状態は `rounded-lg border border-dashed border-border`・`px-6 py-12`（上下 48 / 左右 24）・`text-center text-mute`。ハッシュ到達時の強調は `target:ring-1 target:ring-mute`
 
 ## アイコン（issue #943）
@@ -43,7 +43,7 @@ UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の reg
 
 ## 部品・オーバーレイ（issue #945）
 
-- ボタンは主（`bg-accent text-bone`）/ サブ（透明＋1px `border-border`）/ ゴースト / 危険（`bg-danger text-bone`）の 4 種、SemiBold・`rounded-md`・disabled は opacity .4・小は高さ 32px（`min-h-8`・`text-sm`）、ページ送りは高さ 36px（`min-h-9`、`ButtonPager`）。Lit の共通ボタン（`lib/styles.ts` の `buttonStyles`）もサブの小（高さ 32px・14px）で、`background: transparent` + 1px `--border`（hover だけ `--accent-soft`）。テキストリンクは Regular・`underline decoration-mute`
+- ボタンは主（`bg-accent text-bone`）/ サブ（透明＋1px `border-border`）/ ゴースト / 危険（`bg-danger text-bone`）の 4 種、SemiBold・`rounded-md`・disabled は opacity .4・小は高さ 32px（`min-h-8`・`text-sm`）、ページ送りは高さ 36px（`min-h-9`、`ButtonPager`）。Lit の共通ボタン（`lib/styles.ts` の `buttonStyles`）もサブの小（高さ 32px・14px。`box-sizing: border-box`・縦 padding なし・`white-space: nowrap` で、ラベルの長さや折り返しに関わらず `atoms.Button` の小と同じ高さ。issue #984）で、`background: transparent` + 1px `--border`（hover だけ `--accent-soft`）。テキストリンクは Regular・`underline decoration-mute`
 - セグメント（Lit の `pitha-calibration-heatmap` のホライズン切替）は `--accent-soft` 地の角丸トラック（padding 4px・`--r-md`）に、選択中の項目だけ `--surface` の面。`--accent` 塗りは主ボタン（主要アクション）だけで、切替には使わない。a11y は `role="group"` + `aria-pressed`
 - 設定の on/off（有効・無効、許可・不許可）は `atoms.Switch`（OS の checkbox 見た目を出さない）。実装の Switch は MCP・Jev プロンプトのパネルで、いずれも「保存」ボタン付きの `hx-post` フォーム内にあり、押すだけでは保存されない。複数の項目から選ぶ選択肢（`DataExportPanel` の対象 `kinds` など）は checkbox のまま
 - モーダルは `rounded-xl`・`shadow-modal`・スクラム（`--scrim`）と本体が一緒にフェード（`app.css` の `dialog[data-modal]`、開 320ms ease-out・閉 240ms ease-in、`prefers-reduced-motion` では 100ms）。確認・破壊的操作（`hx-confirm`、Kill）は `molecules.ConfirmDialog`

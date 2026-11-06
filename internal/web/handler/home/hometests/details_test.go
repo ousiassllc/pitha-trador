@@ -219,10 +219,10 @@ func TestDetails_ListsAreBodyTextNotNotes(t *testing.T) {
 	f.source.trades = []home.Trade{{Symbol: "7203", Side: "LONG", Quantity: 100, ClosedAt: jst(20, 9, 50), PnLJPY: 1200, ExitReason: "take_profit"}}
 	f.events = append(f.events, domain.ActivityEvent{Type: domain.ActivityTypeKillSwitch, Timestamp: jst(20, 9, 0), Detail: "reason=daily_loss_limit resolved_by=manual"})
 	body := f.mustGet(t, "/home/details")
-	if n := strings.Count(body, `<ul class="mt-2 flex flex-col gap-1 text-sm">`); n != 2 {
+	if n := strings.Count(body, `<ul class="flex flex-col gap-1 text-sm">`); n != 2 {
 		t.Errorf("text-sm lists = %d, want 2 (trades, Kill Switch): %s", n, body)
 	}
-	if strings.Contains(body, `<ul class="mt-2 flex flex-col gap-1 text-xs">`) {
+	if strings.Contains(body, `<ul class="flex flex-col gap-1 text-xs">`) {
 		t.Errorf("a list must not be 12px: %s", body)
 	}
 }

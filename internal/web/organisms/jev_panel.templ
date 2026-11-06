@@ -13,7 +13,7 @@ import (
 // not evaluated the symbol yet).
 templ JevPanel(d *domain.JevDecision) {
 	<section class="mb-12 rounded-lg border border-border bg-surface p-6" id="jev-panel" data-testid="jev-panel">
-		<h2 class="text-lg font-semibold text-ink">Jev判定</h2>
+		<h2 class="mb-6 text-2xl font-semibold text-ink">Jev判定</h2>
 		if d == nil {
 			@molecules.SignalBadgeGroup(nil, nil, nil)
 		} else {
@@ -35,7 +35,7 @@ templ JevPanel(d *domain.JevDecision) {
 							いまの注文の流れが新規エントリーに不利である確率（0〜1）です。
 						}
 					</dt>
-					<dd class="text-sm text-ink font-mono tabular-nums">{ derefPct(d.ToxicFlow) }</dd>
+					<dd class="text-xl text-ink font-mono tabular-nums">{ derefPct(d.ToxicFlow) }</dd>
 				</div>
 				<div>
 					<dt class="text-sm text-mute">
@@ -44,7 +44,7 @@ templ JevPanel(d *domain.JevDecision) {
 							いま流動性が逼迫している確率（0〜1）です。
 						}
 					</dt>
-					<dd class="text-sm text-ink font-mono tabular-nums">{ derefPct(d.LiquidityStressed) }</dd>
+					<dd class="text-xl text-ink font-mono tabular-nums">{ derefPct(d.LiquidityStressed) }</dd>
 				</div>
 			</dl>
 		}

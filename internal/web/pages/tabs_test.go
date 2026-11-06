@@ -92,7 +92,7 @@ func TestTabNav_FollowsTheMenuItemRecipe(t *testing.T) {
 	if !strings.Contains(body, `class="mt-6 flex flex-wrap gap-2 border-b border-border" data-testid="tab-nav"`) {
 		t.Errorf("tab bar must be gap-2: %.600s", body)
 	}
-	if !strings.Contains(body, `-mb-px inline-flex min-h-10 items-center border-b-2 px-3 text-sm `) {
+	if !strings.Contains(body, `-mb-px inline-flex min-h-10 items-center border-b-2 px-3 text-base `) {
 		t.Errorf("tab must be min-h-10 px-3: %.600s", body)
 	}
 }

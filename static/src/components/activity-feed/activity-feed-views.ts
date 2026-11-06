@@ -9,7 +9,7 @@ import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 export function renderQueueStatus(queues: QueueStatus[]) {
   return html`
     <section id="queue-status" data-testid="queue-status" class="mt-6">
-      <h2 class="mb-6 text-xl font-semibold text-ink">ジョブの状況</h2>
+      <h2 class="mb-6 text-2xl font-semibold text-ink">ジョブの状況</h2>
       <table class="w-full border-collapse text-left text-sm" aria-label="キュー状況">
         <thead>
           <tr class="border-b border-border text-xs font-semibold uppercase text-mute">
@@ -45,7 +45,7 @@ export function renderKillSwitchEvents(
 ) {
   return html`
     <section id="kill-switch-events" data-testid="kill-switch-events" class="mt-12">
-      <h2 class="mb-6 text-xl font-semibold text-ink">最近の Kill Switch</h2>
+      <h2 class="mb-6 text-2xl font-semibold text-ink">最近の Kill Switch</h2>
       ${
         error
           ? html`<p class="pitha-activity-feed-error ${lightDomErrorClass}" role="alert">Kill Switch の履歴を読み込めませんでした: ${error}</p>`

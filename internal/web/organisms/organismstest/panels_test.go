@@ -60,7 +60,7 @@ func TestRiskAndJevPanels_FiguresAreMonoTabular(t *testing.T) {
 		"risk": renderComponent(t, organisms.RiskPanel(organisms.RiskParams{AllowedPositionPct: 2, StopLossPct: 0.6, TakeProfitPct: 1.2})),
 		"jev":  renderComponent(t, organisms.JevPanel(&domain.JevDecision{ToxicFlow: &toxic})),
 	} {
-		if !strings.Contains(html, `<dd class="text-sm text-ink font-mono tabular-nums">`) {
+		if !strings.Contains(html, `<dd class="text-xl text-ink font-mono tabular-nums">`) {
 			t.Errorf("%s panel figures must be font-mono tabular-nums: %s", name, html)
 		}
 	}
@@ -78,17 +78,18 @@ func TestPositionPanel_CloseNoteIsAHelpMark(t *testing.T) {
 	}
 }
 
-// An 18px card heading is an h4-level heading: its body follows 12px below
-// (--gap-heading-body), not the off-recipe 16px (brand-guide §3 S2; issue #968).
-func TestCardPanels_BodyFollowsTheHeadingTwelvePxBelow(t *testing.T) {
+// A card heading is an h2 (32px, brand-guide §2): the 24px gap below it is its
+// own `mb-6` (brand-guide §3 S2; issues #968, #993), so the body carries no
+// `mt-*` of its own.
+func TestCardPanels_BodyFollowsTheHeadingTwentyFourPxBelow(t *testing.T) {
 	regime := "trend"
 	for name, html := range map[string]string{
 		"risk":     renderComponent(t, organisms.RiskPanel(organisms.RiskParams{AllowedPositionPct: 2})),
 		"jev":      renderComponent(t, organisms.JevPanel(&domain.JevDecision{Regime: &regime})),
 		"position": renderComponent(t, organisms.PositionPanel(nil)),
 	} {
-		if !strings.Contains(html, `class="mt-3 `) || strings.Contains(html, `class="mt-4 `) {
-			t.Errorf("%s panel: body is not 12px (mt-3) below the heading: %s", name, html)
+		if !strings.Contains(html, `<h2 class="mb-6 text-2xl `) {
+			t.Errorf("%s panel: heading is not a 32px h2 with 24px (mb-6) below it: %s", name, html)
 		}
 	}
 }

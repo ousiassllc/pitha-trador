@@ -154,7 +154,7 @@ func TestPage_EvaluationErrorIsFixedMessage(t *testing.T) {
 // its right-aligned cells (brand-guide §2 T5, §4 table; issue #958).
 func TestPage_EvaluationNumbersAreMonoAndHeadersRightAligned(t *testing.T) {
 	body := serveWithEvaluation(t, fixedEvaluation{ev: winning()}).Body.String()
-	if !strings.Contains(body, `<dd class="text-sm text-ink font-mono tabular-nums">`) {
+	if !strings.Contains(body, `<dd class="text-xl text-ink font-mono tabular-nums">`) {
 		t.Error("cost values should be font-mono tabular-nums")
 	}
 	if strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-xs font-semibold">`) {

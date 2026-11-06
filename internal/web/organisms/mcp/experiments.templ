@@ -85,7 +85,7 @@ type ExperimentDetailProps struct {
 templ Experiments(props ExperimentsProps) {
 	<section class="flex flex-col gap-3 rounded-md border border-border bg-bone p-4" data-testid="mcp-experiments">
 		<div class="flex items-center gap-2">
-			<h4 class="font-semibold text-ink">調整の実験（前後比較）</h4>
+			<h4 class="text-lg font-semibold text-ink">調整の実験（前後比較）</h4>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments", Label: "調整の実験の説明"}) {
 				調整（設定・Jev のモデル・プロンプトの版の変更）を、変数 1 つずつの実験として記録します。実験の開始から終了まで（実行中は今まで）と、その直前の同じ長さを、同じ指標（取引件数・コスト控除後の純損益・勝率・平均の勝ち・平均の負け・最大ドローダウン・拒否理由）で比べます。判定は、1 取引あたりの純損益の平均の前後差（Welch の t 検定の 95% 信頼区間）と最大ドローダウンで決めます。勝ちと言うのは、区間の下限が 0 より上で、かつ最大ドローダウンが増えていないときだけです。ここでは設定を変えません（変更は Settings の各項目、または MCP から行ってから記録します）。
 			}

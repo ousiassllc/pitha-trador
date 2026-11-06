@@ -182,16 +182,16 @@ describe('pitha-exit-alignment heading spacing', () => {
   });
 });
 
-// Issue #969: the headings step down the type scale (h2 = xl 24px, h3 = lg 18px), not both 16px.
+// Issues #969, #993: the headings step down the guide's scale by tag (h2 = 2xl 32px / 1.4, h3 = xl 24px / 1.5).
 describe('pitha-exit-alignment heading sizes', () => {
-  test('sets the h2 to 1.5rem and the h3 to 1.125rem', async () => {
+  test('sets the h2 to 2rem and the h3 to 1.5rem', async () => {
     const el = await mount(body());
     const css = (
       el.constructor as unknown as { elementStyles: { cssText: string }[] }
     ).elementStyles
       .map((s) => s.cssText)
       .join('');
-    expect(css).toMatch(/h2\s*\{[^}]*font-size:\s*1\.5rem;/);
-    expect(css).toMatch(/h3\s*\{[^}]*font-size:\s*1\.125rem;/);
+    expect(css).toMatch(/h2\s*\{[^}]*font-size:\s*2rem;[^}]*line-height:\s*1\.4;/);
+    expect(css).toMatch(/h3\s*\{[^}]*font-size:\s*1\.5rem;[^}]*line-height:\s*1\.5;/);
   });
 });
