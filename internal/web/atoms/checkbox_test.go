@@ -34,3 +34,17 @@ func TestCheckbox_OmitsEmptyNameAndValue(t *testing.T) {
 		}
 	}
 }
+
+// The focus border appears within 120ms (brand-guide M1: focus is instant to
+// 120ms), so the checkbox must not use the 180ms `duration-base` hover timing
+// (issue #997).
+func TestCheckbox_FocusBorderTransitionIsAtMostFast(t *testing.T) {
+	body := renderWithLabel(t, atoms.Checkbox(atoms.CheckboxProps{}), "")
+
+	if !strings.Contains(body, "transition-[background-color,border-color] duration-fast") {
+		t.Errorf("checkbox must transition background/border at duration-fast: %s", body)
+	}
+	if strings.Contains(body, "duration-base") {
+		t.Errorf("duration-base (180ms) would slow the focus border: %s", body)
+	}
+}
