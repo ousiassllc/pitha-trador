@@ -8,7 +8,7 @@ import type { ActivityEvent, QueueStatus } from './activity-feed-types';
 
 export function renderQueueStatus(queues: QueueStatus[]) {
   return html`
-    <section id="queue-status" data-testid="queue-status" class="mt-12">
+    <section id="queue-status" data-testid="queue-status" class="mt-6">
       <h2 class="mb-6 text-xl font-semibold text-ink">ジョブの状況</h2>
       <table class="w-full border-collapse text-left text-sm" aria-label="キュー状況">
         <thead>

@@ -149,3 +149,18 @@ func TestPage_EvaluationErrorIsFixedMessage(t *testing.T) {
 		t.Error("the cause must not be shown")
 	}
 }
+
+// Numbers line up in JetBrains Mono, and a numeric column's header sits over
+// its right-aligned cells (brand-guide §2 T5, §4 table; issue #958).
+func TestPage_EvaluationNumbersAreMonoAndHeadersRightAligned(t *testing.T) {
+	body := serveWithEvaluation(t, fixedEvaluation{ev: winning()}).Body.String()
+	if !strings.Contains(body, `<dd class="text-sm text-ink font-mono tabular-nums">`) {
+		t.Error("cost values should be font-mono tabular-nums")
+	}
+	if strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-xs font-semibold">`) {
+		t.Error("a numeric column header lacks text-right")
+	}
+	if !strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>`) {
+		t.Error("the 件数 header should be right-aligned")
+	}
+}

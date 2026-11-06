@@ -87,8 +87,9 @@ func (h *SettingsHandler) WithJevPromptSettings() *SettingsHandler {
 // under the single key in the path and touches no other key (issue #79).
 // The value is trimmed and validated per key (config.NormalizeSecretValue,
 // issue #235: URL keys need an http/https URL with a host, credentials no
-// control characters). A key outside config.AllowedSecretKeys, an empty
-// value or an invalid value is a 400 and leaves the store untouched -
+// control characters). A key outside config.AllowedSecretKeys is a 400 toast;
+// an empty or invalid value is a 400 (422 inline alert in the row's error
+// slot for an HTMX request, issue #961) and leaves the store untouched -
 // blanking a field never deletes it; that is Delete's job. It responds
 // with the refreshed SecretFieldRow fragment.
 func (h *SettingsHandler) Save(c *gin.Context) {
@@ -98,12 +99,17 @@ func (h *SettingsHandler) Save(c *gin.Context) {
 		return
 	}
 	value, err := config.NormalizeSecretValue(key, c.PostForm("value"))
-	if errors.Is(err, config.ErrEmptySecretValue) {
-		shared.RespondPageError(c, http.StatusBadRequest, "値を入力してください（保存済みの値を消す場合は削除を使ってください）。")
+	var invalid *config.InvalidSecretValueError
+	switch {
+	case errors.Is(err, config.ErrEmptySecretValue):
+		respondInvalidInput(c, molecules.SecretErrorID(key), "値を入力してください（保存済みの値を消す場合は削除を使ってください）。")
 		return
-	}
-	if err != nil {
-		shared.RespondPageError(c, http.StatusBadRequest, err.Error())
+	case errors.As(err, &invalid):
+		respondInvalidInput(c, molecules.SecretErrorID(key), invalid.Message)
+		return
+	case err != nil:
+		slog.Error("settings: normalize secret", "key", key, "error", err)
+		shared.RespondPageError(c, http.StatusInternalServerError, "保存に失敗しました。")
 		return
 	}
 

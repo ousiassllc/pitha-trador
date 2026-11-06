@@ -120,7 +120,8 @@ func defaultLabel(def string) string {
 // SaveOps implements `POST /ops-settings/:key`: it validates and stores the
 // form's `value` under the single key in the path and touches no other key.
 // An unknown key is a 404/400, a blank or invalid value is a 400 carrying the
-// reason, and neither changes the store. It responds with the refreshed
+// reason (an inline alert in the row's error slot for an HTMX request, issue
+// #961), and neither changes the store. It responds with the refreshed
 // SettingFieldRow fragment plus an out-of-band copy of the group's status.
 func (h *SettingsHandler) SaveOps(c *gin.Context) {
 	key, ok := h.opsKey(c)
@@ -131,10 +132,10 @@ func (h *SettingsHandler) SaveOps(c *gin.Context) {
 	var invalid *opsettings.InvalidValueError
 	switch {
 	case errors.Is(err, opsettings.ErrEmptyValue):
-		shared.RespondPageError(c, http.StatusBadRequest, "値を入力してください（保存した値を消す場合は「既定に戻す」を使ってください）。")
+		respondInvalidInput(c, molecules.SettingErrorID(key), "値を入力してください（保存した値を消す場合は「既定に戻す」を使ってください）。")
 		return
 	case errors.As(err, &invalid):
-		shared.RespondPageError(c, http.StatusBadRequest, "値が正しくありません: "+invalid.Reason)
+		respondInvalidInput(c, molecules.SettingErrorID(key), "値が正しくありません: "+invalid.Reason)
 		return
 	case err != nil:
 		slog.Error("settings: save operational setting", "key", key, "error", err)
@@ -154,7 +155,7 @@ func (h *SettingsHandler) ResetOps(c *gin.Context) {
 	err := h.ops.Reset(c.Request.Context(), key)
 	var invalid *opsettings.InvalidValueError
 	if errors.As(err, &invalid) {
-		shared.RespondPageError(c, http.StatusBadRequest, "既定に戻せません: "+invalid.Reason)
+		respondInvalidInput(c, molecules.SettingErrorID(key), "既定に戻せません: "+invalid.Reason)
 		return
 	}
 	if err != nil {

@@ -49,6 +49,8 @@ export class PithaExitAlignment extends LitElement {
       }
       .summary dd {
         margin: 0;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-variant-numeric: tabular-nums;
       }
       h2,
       h3 {

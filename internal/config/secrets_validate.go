@@ -11,6 +11,13 @@ import (
 // empty after trimming. Removal is the explicit Delete, never a blank Save.
 var ErrEmptySecretValue = errors.New("config: empty secret value")
 
+// InvalidSecretValueError is a value NormalizeSecretValue rejects. Message is
+// a fixed, user-facing Japanese sentence (never a wrapped lower-level error),
+// so a handler can show it to the user as is (issue #961).
+type InvalidSecretValueError struct{ Message string }
+
+func (e *InvalidSecretValueError) Error() string { return e.Message }
+
 // urlSecretKeys are the keys whose value must be an absolute http/https URL
 // with a host (issue #235). The other allowed keys are opaque credentials.
 var urlSecretKeys = []string{
@@ -33,7 +40,8 @@ func IsURLSecretKey(key string) bool {
 // characters (newlines/tabs pasted into an API key or password would make
 // every later request fail with "invalid header field value"). It returns
 // the value to store. An empty result is ErrEmptySecretValue; any other
-// error's message is safe to show the operator (it never echoes the value).
+// rejection is an *InvalidSecretValueError, whose message is safe to show the
+// operator (it never echoes the value).
 func NormalizeSecretValue(key, raw string) (string, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
@@ -49,7 +57,7 @@ func NormalizeSecretValue(key, raw string) (string, error) {
 		return value, nil
 	}
 	if strings.ContainsFunc(value, unicode.IsControl) {
-		return "", errors.New("改行・制御文字を含む値は保存できません。")
+		return "", &InvalidSecretValueError{"改行・制御文字を含む値は保存できません。"}
 	}
 	return value, nil
 }
@@ -60,19 +68,19 @@ func normalizeSwitch(value string) (string, error) {
 	case SwitchOn, SwitchOff:
 		return v, nil
 	}
-	return "", errors.New("on または off を入力してください。")
+	return "", &InvalidSecretValueError{"on または off を入力してください。"}
 }
 
 func validateSecretURL(value string) error {
 	u, err := url.Parse(value)
 	if err != nil {
-		return errors.New("URL の形式が正しくありません。")
+		return &InvalidSecretValueError{"URL の形式が正しくありません。"}
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return errors.New("URL は http:// または https:// で始めてください。")
+		return &InvalidSecretValueError{"URL は http:// または https:// で始めてください。"}
 	}
 	if u.Hostname() == "" {
-		return errors.New("URL にホスト名を含めてください。")
+		return &InvalidSecretValueError{"URL にホスト名を含めてください。"}
 	}
 	return nil
 }

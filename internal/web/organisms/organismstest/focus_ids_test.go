@@ -68,3 +68,17 @@ func TestScanPanel_FilterFieldsAreEightBelowTheirLabels(t *testing.T) {
 		t.Errorf("filter fields must use mt-2 under their label: %s", html)
 	}
 }
+
+// The no-master empty state is a dashed box: --r-lg like the other empty
+// states (brand-guide §4; issue #959).
+func TestScanPanel_UniverseEmptyIsRoundedLarge(t *testing.T) {
+	html := renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{UniverseEmpty: true}))
+	assertContains(t, html, `class="mt-3 rounded-lg border border-dashed tone-warning`)
+}
+
+// The queue table is the first block under the h1 of the activity page, so it
+// sits 24 below it (--gap-h1); the feed below keeps 48 (issue #959).
+func TestQueueStatusPanel_SitsTwentyFourUnderTheH1(t *testing.T) {
+	html := renderComponent(t, organisms.QueueStatusPanel(nil))
+	assertContains(t, html, `<section class="mt-6" id="queue-status"`)
+}

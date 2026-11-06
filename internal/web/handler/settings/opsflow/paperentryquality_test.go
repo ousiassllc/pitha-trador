@@ -46,8 +46,8 @@ func TestPaperMinEntryQuality_ShownBesideLiveAndSavable(t *testing.T) {
 		}
 	}
 
-	if rec := opsRequest(engine, http.MethodPost, paperpolicysettings.KeyLongMinEntryQuality, url.Values{"value": {"great"}}, true); rec.Code != http.StatusBadRequest {
-		t.Errorf("POST an unknown entry quality: status %d, want 400", rec.Code)
+	if rec := opsRequest(engine, http.MethodPost, paperpolicysettings.KeyLongMinEntryQuality, url.Values{"value": {"great"}}, true); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("POST an unknown entry quality: status %d, want 422", rec.Code)
 	}
 	if got := store.rows[paperpolicysettings.KeyLongMinEntryQuality]; got != `"strong"` {
 		t.Errorf("a rejected value changed the row to %q", got)

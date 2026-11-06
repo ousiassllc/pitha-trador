@@ -143,8 +143,8 @@ func TestSumOverCapitalRejectedLeavesNoAuditRow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
 			rec := tc.do(f)
-			if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "枠の合計") {
-				t.Fatalf("status = %d, body = %s; want 400 naming the budgets' sum", rec.Code, rec.Body.String())
+			if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "枠の合計") {
+				t.Fatalf("status = %d, body = %s; want 422 naming the budgets' sum", rec.Code, rec.Body.String())
 			}
 			if got := f.stored(t, tc.key); got != tc.want {
 				t.Errorf("%s = %q after the refusal, want %q", tc.key, got, tc.want)

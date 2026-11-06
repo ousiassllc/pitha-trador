@@ -83,7 +83,6 @@ func TestSettingsHandler_SaveAndDelete_FailuresRenderToastFragment(t *testing.T)
 
 	for name, rec := range map[string]*httptest.ResponseRecorder{
 		"save 500":       postSetting(engine, config.KeyJevAPIKey, url.Values{"value": {"x"}}),
-		"save 400":       postSetting(engine, config.KeyJevAPIKey, url.Values{"value": {""}}),
 		"save unknown":   postSetting(engine, "NOT_A_KEY", url.Values{"value": {"x"}}),
 		"delete 500":     deleteSetting(engine, config.KeyJevAPIKey),
 		"delete unknown": deleteSetting(engine, "NOT_A_KEY"),

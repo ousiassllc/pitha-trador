@@ -307,3 +307,12 @@ func TestScreensHaveNoActions(t *testing.T) {
 		}
 	}
 }
+
+// The values of the detail's label/value lists (quantities, prices, losses) are
+// JetBrains Mono like every other dl of numbers (brand-guide §2, T5; issue #958).
+func TestDetail_ValuesAreMono(t *testing.T) {
+	_, body := get(t, outcomesSource(t), "/order-proposals/5")
+	if !strings.Contains(body, `<dd class="font-mono tabular-nums `) {
+		t.Errorf("detail values are not font-mono tabular-nums")
+	}
+}

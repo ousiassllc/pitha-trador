@@ -42,6 +42,7 @@ templ SymbolDetailPage(props SymbolDetailProps) {
 	@layout.Shell(props.Symbol, organisms.NavScanner) {
 		<h1 class="text-3xl font-semibold text-ink">{ props.Symbol }</h1>
 		<pitha-price-chart
+			class="mb-12 mt-6"
 			candles-url={ symbolCandlesURL(props.Symbol) }
 			ws-url={ symbolWSURL(props.Symbol) }
 		></pitha-price-chart>

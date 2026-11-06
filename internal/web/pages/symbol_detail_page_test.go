@@ -78,3 +78,12 @@ func TestSymbolDetailPage_PriceChartURLsEscapeSymbol(t *testing.T) {
 		}
 	}
 }
+
+// issue #959: the chart sits 24 under the h1 (brand-guide §3, --gap-h1) and
+// 48 above the panels below it.
+func TestSymbolDetailPage_ChartIsSpacedFromH1AndPanels(t *testing.T) {
+	body := renderSymbolDetail(t, nil)
+	if !strings.Contains(body, `<pitha-price-chart class="mb-12 mt-6"`) {
+		t.Errorf("pitha-price-chart lacks mt-6 / mb-12: %s", body)
+	}
+}

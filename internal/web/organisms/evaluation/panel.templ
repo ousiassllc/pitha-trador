@@ -53,7 +53,7 @@ func verdictClass(status string) string {
 }
 
 templ verdictBlock(p Panel) {
-	<div class={ "mt-4 rounded-md border px-4 py-3 text-sm" + verdictClass(p.Verdict) } data-testid="evaluation-verdict" data-status={ p.Verdict }>
+	<div class={ "mt-4 rounded-md border px-4 py-3 text-sm", verdictClass(p.Verdict) } data-testid="evaluation-verdict" data-status={ p.Verdict }>
 		<p class="font-semibold">
 			合格ライン: { p.VerdictText }
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-verdict", Label: "合格ラインの説明"}) {
@@ -81,7 +81,7 @@ templ costBlock(p Panel) {
 						}
 					}
 				</dt>
-				<dd class="text-sm text-ink">{ c.Value }</dd>
+				<dd class="text-sm text-ink font-mono tabular-nums">{ c.Value }</dd>
 			</div>
 		}
 	</dl>
@@ -91,7 +91,7 @@ templ costBlock(p Panel) {
 // metric with a Help text (a 判定不能 one: the reference value and why)
 // carries a help mark beside its text.
 templ cell(c Cell, id string) {
-	<td class={ "px-2 py-1.5 text-right font-mono tabular-nums" + cellClass(c) } data-undetermined?={ c.Undetermined }>
+	<td class={ "px-2 py-1.5 text-right font-mono tabular-nums", cellClass(c) } data-undetermined?={ c.Undetermined }>
 		{ c.Text }
 		if c.Help != "" {
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-evaluation-" + id, Label: "判定の補足"}) {
@@ -116,14 +116,14 @@ templ evalTable(t Table) {
 			<thead>
 				<tr class="text-right text-mute">
 					<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">{ t.KeyHeader }</th>
-					<th scope="col" class="px-2 py-1.5 text-xs font-semibold">件数</th>
-					<th scope="col" class="px-2 py-1.5 text-xs font-semibold">損益(円)</th>
-					<th scope="col" class="px-2 py-1.5 text-xs font-semibold">勝率</th>
-					<th scope="col" class="px-2 py-1.5 text-xs font-semibold">EV(円/取引)</th>
-					<th scope="col" class="px-2 py-1.5 text-xs font-semibold">EV(bps/取引)</th>
-					<th scope="col" class="px-2 py-1.5 text-xs font-semibold">PF</th>
-					<th scope="col" class="px-2 py-1.5 text-xs font-semibold">最大DD(円)</th>
-					<th scope="col" class="px-2 py-1.5 text-xs font-semibold">最大DD(資金比)</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">損益(円)</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">勝率</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">EV(円/取引)</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">EV(bps/取引)</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">PF</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">最大DD(円)</th>
+					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">最大DD(資金比)</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -161,9 +161,9 @@ templ jevBlock(rows []JevRow) {
 				<thead>
 					<tr class="text-right text-mute">
 						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">ラベル</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">件数</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">方向的中率</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">Brier</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">方向的中率</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">Brier</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -197,17 +197,17 @@ templ metaBlock(rows []MetaRow) {
 				<thead>
 					<tr class="text-right text-mute">
 						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">版</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">状態</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">OOS期間</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">OOS件数</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">OOS AUC</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">OOS EV(bps)</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">採用取引 n</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">予測EV(bps)</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">実現EV(bps)</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">差(実現−予測)</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">OOS期間内の全取引 n</th>
-						<th scope="col" class="px-2 py-1.5 text-xs font-semibold">同期間のPaper EV(bps)</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">状態</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS期間</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS件数</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS AUC</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS EV(bps)</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">採用取引 n</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">予測EV(bps)</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">実現EV(bps)</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">差(実現−予測)</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS期間内の全取引 n</th>
+						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">同期間のPaper EV(bps)</th>
 					</tr>
 				</thead>
 				<tbody>

@@ -97,6 +97,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 				}
 			}
 		</div>
+		<div id={ SettingErrorID(props.Key) } data-testid={ "error-" + props.Key }></div>
 		<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
 		if props.Warning != "" {
 			<p class="text-sm text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
@@ -105,4 +106,11 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 			<p class="text-sm text-success" role="status" data-testid={ "notice-" + props.Key }>{ props.Notice }</p>
 		}
 	</form>
+}
+
+// SettingErrorID is the id of the row's validation-error slot: a rejected value
+// is swapped there as an inline alert (shared.RespondFormError, issue #961),
+// not shown as a toast.
+func SettingErrorID(key string) string {
+	return "setting-error-" + key
 }

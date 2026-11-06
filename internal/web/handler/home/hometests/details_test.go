@@ -226,3 +226,25 @@ func TestDetails_ListsAreBodyTextNotNotes(t *testing.T) {
 		t.Errorf("a list must not be 12px: %s", body)
 	}
 }
+
+// The proposals block is data, not a note: the status counts and the latest
+// rows are 14px, and only the status and time of a row are 12px (brand-guide
+// §2, T3; issue #958).
+func TestDetails_ProposalListsAreBodyText(t *testing.T) {
+	f := newFixture()
+	f.source.proposals = home.Proposals{
+		Total:    2,
+		ByStatus: []home.StatusCount{{Status: "received", Count: 2}},
+		Latest:   []home.ProposalItem{{ID: 7, Symbol: "7203", Action: "open_long", Status: "received", ReceivedAt: jst(20, 9, 5)}},
+	}
+	body := f.mustGet(t, "/home/details")
+	if !strings.Contains(body, `<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink">`) {
+		t.Errorf("status counts are not text-sm: %s", body)
+	}
+	if n := strings.Count(body, `<ul class="mt-2 flex flex-col gap-1 text-sm">`); n < 1 {
+		t.Errorf("latest proposals are not text-sm: %s", body)
+	}
+	if !strings.Contains(body, `<span class="text-xs text-mute">`) {
+		t.Errorf("status and time of a row should be the 12px note: %s", body)
+	}
+}

@@ -29,8 +29,8 @@ func TestSleepGuard_SwitchOnTheSystemPage(t *testing.T) {
 	if rec.Code != http.StatusOK || store.rows[sleepguardsettings.Key] != "1" {
 		t.Fatalf("POST 1: status = %d, stored = %q, body=%s", rec.Code, store.rows[sleepguardsettings.Key], rec.Body.String())
 	}
-	if rec := opsRequest(engine, http.MethodPost, sleepguardsettings.Key, url.Values{"value": {"2"}}, true); rec.Code != http.StatusBadRequest {
-		t.Errorf("POST 2: status = %d, want 400", rec.Code)
+	if rec := opsRequest(engine, http.MethodPost, sleepguardsettings.Key, url.Values{"value": {"2"}}, true); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("POST 2: status = %d, want 422", rec.Code)
 	}
 	if store.rows[sleepguardsettings.Key] != "1" {
 		t.Errorf("the refused value changed the row: %q", store.rows[sleepguardsettings.Key])

@@ -118,18 +118,18 @@ templ proposalsBlock(v ProposalsView) {
 			<p class="mt-2 text-sm text-mute" data-testid="proposals-none">今日受け付けた注文提案はありません。</p>
 		} else {
 			<p class="mt-1 text-sm"><span class="text-xl font-mono tabular-nums" data-testid="proposals-total">{ strconv.Itoa(v.Total) }</span> 件を受け付けました。</p>
-			<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink">
+			<ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink">
 				for _, c := range v.Counts {
 					if c.Count > 0 {
 						<li data-testid="proposals-status">{ c.Label } <span class="font-mono tabular-nums">{ strconv.Itoa(c.Count) }</span></li>
 					}
 				}
 			</ul>
-			<ul class="mt-2 flex flex-col gap-1 text-xs">
+			<ul class="mt-2 flex flex-col gap-1 text-sm">
 				for _, p := range v.Latest {
 					<li class="flex justify-between gap-2" data-testid="proposal-row">
 						<span><a class="text-accent underline decoration-mute" href={ ProposalURL(p.ID) }>{ p.Symbol }</a> { p.Action }</span>
-						<span class="text-mute">{ p.Status } · { FormatTime(p.ReceivedAt) }</span>
+						<span class="text-xs text-mute">{ p.Status } · { FormatTime(p.ReceivedAt) }</span>
 					</li>
 				}
 			</ul>
