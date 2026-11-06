@@ -59,7 +59,7 @@ templ SettingGroupDerived(props SettingGroupProps, oob bool) {
 					</li>
 				} else if item.Warn {
 					<li class="flex flex-wrap items-baseline gap-x-2 text-warning" data-testid={ props.DerivedID() + "-" + item.Key }>
-						<span class="font-semibold">注意:</span>
+						<span>注意:</span>
 						<span>{ item.Label }</span>
 					</li>
 				} else {

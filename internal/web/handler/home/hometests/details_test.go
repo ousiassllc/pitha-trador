@@ -211,3 +211,18 @@ func TestDetails_IsACollapsibleSectionOnThePage(t *testing.T) {
 		t.Errorf("今日の詳細 is not a collapsible <details>: %s", between(body, "home-details-section", "</summary>"))
 	}
 }
+
+// The trade and Kill Switch lists are the content of their blocks, not notes:
+// 14px (text-sm), with only the time kept at 12px (brand-guide §2, T3).
+func TestDetails_ListsAreBodyTextNotNotes(t *testing.T) {
+	f := newFixture()
+	f.source.trades = []home.Trade{{Symbol: "7203", Side: "LONG", Quantity: 100, ClosedAt: jst(20, 9, 50), PnLJPY: 1200, ExitReason: "take_profit"}}
+	f.events = append(f.events, domain.ActivityEvent{Type: domain.ActivityTypeKillSwitch, Timestamp: jst(20, 9, 0), Detail: "reason=daily_loss_limit resolved_by=manual"})
+	body := f.mustGet(t, "/home/details")
+	if n := strings.Count(body, `<ul class="mt-2 flex flex-col gap-1 text-sm">`); n != 2 {
+		t.Errorf("text-sm lists = %d, want 2 (trades, Kill Switch): %s", n, body)
+	}
+	if strings.Contains(body, `<ul class="mt-2 flex flex-col gap-1 text-xs">`) {
+		t.Errorf("a list must not be 12px: %s", body)
+	}
+}

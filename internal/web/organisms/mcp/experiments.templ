@@ -236,7 +236,7 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 			}
 		</div>
 		if len(props.Confounders) > 0 {
-			<ul class="list-disc pl-6 text-xs text-danger" data-testid="mcp-experiment-confounders">
+			<ul class="list-disc pl-6 text-sm text-danger" data-testid="mcp-experiment-confounders">
 				for _, c := range props.Confounders {
 					<li>{ c }</li>
 				}

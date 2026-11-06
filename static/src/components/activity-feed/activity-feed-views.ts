@@ -14,9 +14,9 @@ export function renderQueueStatus(queues: QueueStatus[]) {
         <thead>
           <tr class="border-b border-border text-xs font-semibold uppercase text-mute">
             <th scope="col" class="px-3 py-2.5">キュー</th>
-            <th scope="col" class="px-3 py-2.5">待機中</th>
-            <th scope="col" class="px-3 py-2.5">実行中</th>
-            <th scope="col" class="px-3 py-2.5">失敗（直近）</th>
+            <th scope="col" class="px-3 py-2.5 text-right">待機中</th>
+            <th scope="col" class="px-3 py-2.5 text-right">実行中</th>
+            <th scope="col" class="px-3 py-2.5 text-right">失敗（直近）</th>
           </tr>
         </thead>
         <tbody>
@@ -24,9 +24,9 @@ export function renderQueueStatus(queues: QueueStatus[]) {
             (q) => html`
               <tr class="border-b border-border" data-queue=${q.queue}>
                 <td class="px-3 py-2.5 text-ink">${jobQueueLabel(q.queue)}</td>
-                <td class="px-3 py-2.5">${q.pending}</td>
-                <td class="px-3 py-2.5">${q.running}</td>
-                <td class="px-3 py-2.5">${q.failed_recent}</td>
+                <td class="px-3 py-2.5 text-right font-mono tabular-nums">${q.pending}</td>
+                <td class="px-3 py-2.5 text-right font-mono tabular-nums">${q.running}</td>
+                <td class="px-3 py-2.5 text-right font-mono tabular-nums">${q.failed_recent}</td>
               </tr>
             `,
           )}

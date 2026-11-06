@@ -95,14 +95,20 @@
   --font-sans: Sora, "Noto Sans JP", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* Line heights of the guide's size scale (brand-guide §2): xs 1.6, sm 1.7,
-     base 1.8, lg 1.7. Tailwind's sizes are kept (12/14/16/18/24px); only
-     the off-scale names (xl 20px, 3xl 30px) are not used. */
+  /* Size scale and line heights (brand-guide §2): xs 12 / sm 14 / base 16 /
+     lg 18 / xl 24 / 2xl 32 / 3xl 40px, line heights 1.6 / 1.7 / 1.8 / 1.7 /
+     1.5 / 1.4 / 1.3. xs to lg keep Tailwind's sizes; xl, 2xl and 3xl are
+     redefined because Tailwind's 20 / 24 / 30px are off the guide's scale. */
   --text-xs--line-height: 1.6;
   --text-sm--line-height: 1.7;
   --text-base--line-height: 1.8;
   --text-lg--line-height: 1.7;
-  --text-2xl--line-height: 1.5;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.5;
+  --text-2xl: 2rem;
+  --text-2xl--line-height: 1.4;
+  --text-3xl: 2.5rem;
+  --text-3xl--line-height: 1.3;
 
   /* Radii (brand-guide §3): the `rounded-*` utilities read the guide's --r-*
      tokens defined on :root, which Lit shadow roots read too. */

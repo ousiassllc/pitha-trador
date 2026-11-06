@@ -139,3 +139,14 @@ func TestSettingGroupDerived_UsesTheGroupsTitle(t *testing.T) {
 		t.Errorf("the default title leaks into a titled panel: %s", html)
 	}
 }
+
+// "注意:" is a line-leading label, not a heading: Regular, told apart by the
+// warning colour (brand-guide §2: SemiBold is for headings and buttons only).
+func TestSettingGroupDerived_WarningLabelIsRegular(t *testing.T) {
+	props := molecules.SettingGroupProps{ID: "g", Derived: []molecules.SettingDerivedItem{{Key: "w", Label: "x が異なります", Warn: true}}}
+	html := render(t, molecules.SettingGroupDerived(props, false))
+	_, row, _ := strings.Cut(html, "<ul")
+	if !strings.Contains(row, "<span>注意:</span>") || strings.Contains(row, "font-semibold") {
+		t.Errorf("the 注意: label must be Regular: %s", row)
+	}
+}

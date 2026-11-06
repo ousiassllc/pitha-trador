@@ -123,3 +123,27 @@ func TestTemplClassesAreCompiledTailwindUtilities(t *testing.T) {
 		}
 	}
 }
+
+// TestCompiledTextScaleMatchesTheGuide pins brand-guide §2's size scale and
+// line heights in the compiled stylesheet (issue #953): Tailwind's own
+// --text-xl/-3xl (20 / 30px) are off the guide's scale, and an @theme
+// override that does not take effect would leave them in place unnoticed.
+func TestCompiledTextScaleMatchesTheGuide(t *testing.T) {
+	cssPath := filepath.Join(repoRoot(t), "static/src/dist/css/app.css")
+	css, err := os.ReadFile(cssPath)
+	if err != nil {
+		t.Fatalf("reading compiled stylesheet %s (run `bun --cwd static run build` first): %v", cssPath, err)
+	}
+	for _, want := range []string{
+		"--text-xs:.75rem", "--text-xs--line-height:1.6",
+		"--text-sm:.875rem", "--text-sm--line-height:1.7",
+		"--text-base:1rem", "--text-base--line-height:1.8",
+		"--text-lg:1.125rem", "--text-lg--line-height:1.7",
+		"--text-xl:1.5rem", "--text-xl--line-height:1.5",
+		"--text-3xl:2.5rem", "--text-3xl--line-height:1.3",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("compiled stylesheet lacks %q (text sizes and line heights follow brand-guide §2)", want)
+		}
+	}
+}

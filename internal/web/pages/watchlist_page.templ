@@ -75,7 +75,7 @@ templ watchlistSection(list domain.WatchList, active bool) {
 			<caption class="sr-only">{ list.ListDate } の監視銘柄一覧</caption>
 			<thead class="border-b border-border text-xs text-mute">
 				<tr>
-					<th scope="col" class="px-3 py-2.5">順</th>
+					<th scope="col" class="px-3 py-2.5 text-right">順</th>
 					<th scope="col" class="px-3 py-2.5">銘柄</th>
 					<th scope="col" class="px-3 py-2.5">枠の由来</th>
 					<th scope="col" class="px-3 py-2.5">選ばれた指標</th>
@@ -84,7 +84,7 @@ templ watchlistSection(list domain.WatchList, active bool) {
 			<tbody>
 				for i, e := range list.Entries {
 					<tr class="border-b border-border" data-testid="watchlist-row" data-symbol={ e.Symbol } data-origin={ e.Origin }>
-						<td class="px-3 py-2.5 text-mute">{ strconv.Itoa(i + 1) }</td>
+						<td class="px-3 py-2.5 text-right font-mono tabular-nums text-mute">{ strconv.Itoa(i + 1) }</td>
 						<td class="px-3 py-2.5 font-mono">
 							<a class="underline decoration-mute" href={ templ.URL("/symbols/" + e.Symbol) }>{ e.Symbol }</a>
 						</td>

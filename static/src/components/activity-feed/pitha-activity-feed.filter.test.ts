@@ -114,3 +114,23 @@ describe('pitha-activity-feed filter selects', () => {
     }
   });
 });
+
+describe('pitha-activity-feed queue table', () => {
+  // Numeric columns are right-aligned JetBrains Mono, like the SSR table in
+  // organisms/queue_status_panel.templ (brand-guide §4 table, T5).
+  test('numeric columns are right-aligned mono like the SSR table', async () => {
+    const { el } = await mount([queue()], []);
+
+    const cells = el.querySelectorAll('#queue-status tbody tr td');
+    expect(cells[0].classList.contains('text-right')).toBe(false);
+    for (const td of [...cells].slice(1)) {
+      expect(td.classList.contains('text-right')).toBe(true);
+      expect(td.classList.contains('font-mono')).toBe(true);
+      expect(td.classList.contains('tabular-nums')).toBe(true);
+    }
+    const heads = el.querySelectorAll('#queue-status thead th');
+    for (const th of [...heads].slice(1)) {
+      expect(th.classList.contains('text-right')).toBe(true);
+    }
+  });
+});

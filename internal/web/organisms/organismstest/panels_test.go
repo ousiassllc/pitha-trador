@@ -51,3 +51,17 @@ func TestPositionPanel_RendersRow(t *testing.T) {
 		t.Errorf("position row missing: %s", html)
 	}
 }
+
+// The KPI values are figures to line up: JetBrains Mono, tabular
+// (brand-guide §2, T5), like the home P&L card.
+func TestRiskAndJevPanels_FiguresAreMonoTabular(t *testing.T) {
+	toxic := 0.5
+	for name, html := range map[string]string{
+		"risk": renderComponent(t, organisms.RiskPanel(organisms.RiskParams{AllowedPositionPct: 2, StopLossPct: 0.6, TakeProfitPct: 1.2})),
+		"jev":  renderComponent(t, organisms.JevPanel(&domain.JevDecision{ToxicFlow: &toxic})),
+	} {
+		if !strings.Contains(html, `<dd class="text-sm text-ink font-mono tabular-nums">`) {
+			t.Errorf("%s panel figures must be font-mono tabular-nums: %s", name, html)
+		}
+	}
+}

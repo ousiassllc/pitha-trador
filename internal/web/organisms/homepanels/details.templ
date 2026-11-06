@@ -146,10 +146,10 @@ templ tradesBlock(v TradesView) {
 		} else if len(v.Rows) == 0 {
 			<p class="mt-2 text-sm text-mute" data-testid="trades-none">決済した取引はありません。</p>
 		} else {
-			<ul class="mt-2 flex flex-col gap-1 text-xs">
+			<ul class="mt-2 flex flex-col gap-1 text-sm">
 				for _, t := range v.Rows {
 					<li class="flex items-baseline justify-between gap-2" data-testid="trade-row">
-						<span><a class="text-accent underline decoration-mute" href={ SymbolURL(t.Symbol) }>{ t.Symbol }</a> { SideLabel(t.Side) } { strconv.FormatInt(t.Quantity, 10) }株 <span class="text-mute">{ FormatTime(t.ClosedAt) }</span></span>
+						<span><a class="text-accent underline decoration-mute" href={ SymbolURL(t.Symbol) }>{ t.Symbol }</a> { SideLabel(t.Side) } { strconv.FormatInt(t.Quantity, 10) }株 <span class="text-xs text-mute">{ FormatTime(t.ClosedAt) }</span></span>
 						<span class={ "font-mono tabular-nums", PnLClass(t.PnL) }>{ FormatSignedYen(t.PnL) }</span>
 					</li>
 				}
@@ -193,9 +193,9 @@ templ killEventsBlock(v KillEventsView) {
 		} else if len(v.Rows) == 0 {
 			<p class="mt-2 text-sm text-mute" data-testid="kill-none">最近の Kill Switch の履歴はありません。</p>
 		} else {
-			<ul class="mt-2 flex flex-col gap-1 text-xs">
+			<ul class="mt-2 flex flex-col gap-1 text-sm">
 				for _, e := range v.Rows {
-					<li data-testid="kill-row"><span class="text-mute">{ FormatTime(e.At) }</span> { e.Detail }</li>
+					<li data-testid="kill-row"><span class="text-xs text-mute">{ FormatTime(e.At) }</span> { e.Detail }</li>
 				}
 			</ul>
 		}

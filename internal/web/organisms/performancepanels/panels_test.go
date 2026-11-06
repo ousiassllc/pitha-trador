@@ -58,3 +58,16 @@ func TestPerformanceSummaryPanel_ExplainsMetricsInHelpMarks(t *testing.T) {
 		t.Errorf("metric names must not be explained through title: %s", html)
 	}
 }
+
+// The metric values are figures to line up: JetBrains Mono, tabular
+// (brand-guide §2, T5), like the home P&L card.
+func TestPerformancePanels_MetricValuesAreMonoTabular(t *testing.T) {
+	for name, html := range map[string]string{
+		"actuals": renderComponent(t, performancepanels.PerformanceActualsPanel(performancepanels.PerformanceActuals{TradeCount: 3}, "")),
+		"summary": renderComponent(t, performancepanels.PerformanceSummaryPanel("Walk Forward", performancepanels.PerformanceSummary{TradeCount: 4})),
+	} {
+		if !strings.Contains(html, `class="text-sm text-ink font-mono tabular-nums" data-metric=`) {
+			t.Errorf("%s metric values must be font-mono tabular-nums: %s", name, html)
+		}
+	}
+}

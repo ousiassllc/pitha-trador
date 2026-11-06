@@ -81,7 +81,7 @@ export const helpMarkStyles = css`
     color: var(--ink);
     font-size: 0.75rem;
     font-weight: 400;
-    line-height: 1.625;
+    line-height: 1.6;
     text-align: left;
   }
   .help-mark-text[data-open] {

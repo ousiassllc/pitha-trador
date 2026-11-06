@@ -14,8 +14,8 @@
 - 太さは Regular(400) と SemiBold(600) だけ。SemiBold は見出し・ボタン・表の見出し行に限る。ナビ・リンク・ラベル・値に `font-medium` / `font-bold` / 本文中の `font-semibold` を使わない（現在のナビ項目は `text-ink` の色で示す）
 - 表本文は `text-sm`、見出し行は `text-xs font-semibold`。数値列は `text-right font-mono tabular-nums`（th も右寄せ）。Lit の表は `lib/styles.ts` の `tableStyles`（th = SemiBold 12px `--mute` + 下線 1px、td = 上下 10 / 左右 12、数値列は `class="num"`）を `static styles` に足す
 - ステータスのピル・バッジは Regular（`font-semibold` なし）・`rounded-full`・`text-xs`。文中の強調は太さでなく `text-ink` 色と `font-mono tabular-nums`（`<strong>` は使わない）
-- 通知・アラートの本文は `text-sm`（`text-xs` は注記・キャプション・バッジだけ）
-- 行間は `@theme` の `--text-*--line-height`（xs 1.6 / sm 1.7 / base 1.8 / lg 1.7）と `body { line-height: 1.8 }`。サイズは `@theme` でガイドのスケールに合わせた名前を使う（xs 12 / sm 14 / base 16 / lg 18 / xl 24 / 2xl 32 / 3xl 40px、行間 1.6 / 1.7 / 1.8 / 1.7 / 1.5 / 1.4 / 1.3）。ページの h1 は `text-3xl`、節の h2 は `text-xl`（カード・モーダルのタイトルは `text-lg`）、`text-[10px]` は使わない
+- 通知・アラートの本文は `text-sm`（`text-xs` は注記・キャプション・バッジだけ）。一覧の中身（最近の取引・Kill Switch・交絡要因の `<ul>`）も本文なので `text-sm`、時刻など補助だけ `text-xs text-mute`。「注意:」「状態:」のような行頭ラベルは Regular で、色（`text-warning` / `text-ink`）で区別する。KPI の値（勝率・EV・許容ポジションの％など）は `font-mono tabular-nums`
+- 行間は `@theme` の `--text-*--line-height`（xs 1.6 / sm 1.7 / base 1.8 / lg 1.7 / xl 1.5 / 2xl 1.4 / 3xl 1.3）と `body { line-height: 1.8 }`。`leading-relaxed`（1.625）や `line-height: 1.625` は使わず、サイズのクラスが持つ行間に任せる（Lit のツールチップは xs の 1.6）。サイズは `@theme` の `--text-xl: 1.5rem` / `--text-2xl: 2rem` / `--text-3xl: 2.5rem` で Tailwind 既定（20 / 24 / 30px）を上書きして、ガイドのスケール（xs 12 / sm 14 / base 16 / lg 18 / xl 24 / 2xl 32 / 3xl 40px）に合わせる。ビルド済み CSS の値は `internal/web/style_test.go` の `TestCompiledTextScaleMatchesTheGuide` が確かめる。ページの h1 は `text-3xl`、節の h2 は `text-xl`（カード・モーダルのタイトルは `text-lg`）、`text-[10px]` は使わない
 
 ## 形・余白・線（issue #942）
 
