@@ -54,6 +54,10 @@ func TestExperimentsSectionCreatesListsAndCompares(t *testing.T) {
 		!strings.Contains(body, "暫定値") || !strings.Contains(body, "σ は未確認") {
 		t.Fatalf("empty section = %d: %s", rec.Code, body)
 	}
+	// It sits inside the MCP card, so it is a nested panel: --bone and rounded-md, not a second lg card (issue #966).
+	if !strings.Contains(body, `class="flex flex-col gap-3 rounded-md border border-border bg-bone p-4" data-testid="mcp-experiments"`) {
+		t.Errorf("the experiments section is not the nested-panel shape: %s", body)
+	}
 
 	// A POST without the CSRF token stores nothing.
 	if rec := a.post("/settings/mcp/experiments", experimentForm(nil), false); rec.Code == http.StatusOK {

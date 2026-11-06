@@ -110,21 +110,21 @@ templ proposalEvents(events []ProposalEvent) {
 			<caption class="sr-only">状態の変化の履歴（古い順）</caption>
 			<thead class="border-b border-border text-xs text-mute">
 				<tr>
-					<th scope="col" class="py-1.5 pr-3">時刻（JST）</th>
-					<th scope="col" class="py-1.5 pr-3">変化</th>
-					<th scope="col" class="py-1.5 pr-3">理由</th>
-					<th scope="col" class="py-1.5 pr-3">主体</th>
-					<th scope="col" class="py-1">補足</th>
+					<th scope="col" class="px-3 py-2.5">時刻（JST）</th>
+					<th scope="col" class="px-3 py-2.5">変化</th>
+					<th scope="col" class="px-3 py-2.5">理由</th>
+					<th scope="col" class="px-3 py-2.5">主体</th>
+					<th scope="col" class="px-3 py-2.5">補足</th>
 				</tr>
 			</thead>
 			<tbody>
 				for _, e := range events {
 					<tr class="border-b border-border" data-testid="order-proposal-event">
-						<td class="py-1.5 pr-3">{ e.At }</td>
-						<td class="py-1.5 pr-3">{ dash(e.From) } → { e.To }</td>
-						<td class="py-1.5 pr-3">{ dash(e.Reason) }</td>
-						<td class="py-1.5 pr-3">{ e.Actor }</td>
-						<td class="py-1">{ dash(e.Detail) }</td>
+						<td class="px-3 py-2.5">{ e.At }</td>
+						<td class="px-3 py-2.5">{ dash(e.From) } → { e.To }</td>
+						<td class="px-3 py-2.5">{ dash(e.Reason) }</td>
+						<td class="px-3 py-2.5">{ e.Actor }</td>
+						<td class="px-3 py-2.5">{ dash(e.Detail) }</td>
 					</tr>
 				}
 			</tbody>

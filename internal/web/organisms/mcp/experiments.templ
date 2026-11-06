@@ -83,7 +83,7 @@ type ExperimentDetailProps struct {
 // before / after comparison. It only records and compares; it changes no
 // setting.
 templ Experiments(props ExperimentsProps) {
-	<section class="flex flex-col gap-3 rounded-lg border border-border p-4" data-testid="mcp-experiments">
+	<section class="flex flex-col gap-3 rounded-md border border-border bg-bone p-4" data-testid="mcp-experiments">
 		<div class="flex items-center gap-2">
 			<h4 class="font-semibold text-ink">調整の実験（前後比較）</h4>
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-experiments", Label: "調整の実験の説明"}) {
