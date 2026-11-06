@@ -86,3 +86,9 @@ export const noticeStyles = css`
 // (issue #355). Kept as whole literals so Tailwind's source scan emits them.
 export const lightDomErrorClass = 'text-sm text-danger';
 export const lightDomWsNoticeClass = 'text-xs text-warning';
+
+// Light-DOM form control class (brand-guide C3): the same border, --focus
+// edge and 2px --ring that atoms.Select draws (internal/web/atoms/input.templ),
+// for a bare <select>/<input> a Lit component renders itself.
+export const lightDomFieldClass =
+  'rounded-md border border-border px-3 py-1 focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40';

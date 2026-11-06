@@ -94,3 +94,23 @@ describe('pitha-activity-feed filters', () => {
     expect(el.querySelectorAll('#activity-feed tbody tr')).toHaveLength(500);
   });
 });
+
+describe('pitha-activity-feed filter selects', () => {
+  // Same form focus state as atoms.Select (brand-guide C3): --focus border and a 2px --ring.
+  test('draw the form focus ring like atoms.Select', async () => {
+    const { el } = await mount([queue()], [event()]);
+
+    for (const name of ['type', 'queue']) {
+      const select = el.querySelector(`select[data-filter="${name}"]`) as HTMLSelectElement;
+      for (const cls of [
+        'rounded-md',
+        'border-border',
+        'focus-visible:border-focus',
+        'focus-visible:ring-2',
+        'focus-visible:ring-focus/40',
+      ]) {
+        expect(select.classList.contains(cls)).toBe(true);
+      }
+    }
+  });
+});

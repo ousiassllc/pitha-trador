@@ -200,3 +200,21 @@ func TestExperimentFormTakesASettingByItsScreenName(t *testing.T) {
 		t.Fatalf("stored name = %q (%v), want the key risk.max_daily_trades", name, err)
 	}
 }
+
+// The hypothesis textarea draws the form focus state (brand-guide C3) like the
+// other fields of the form instead of the UA's default ring.
+func TestExperimentFormHypothesisDrawsTheFocusRing(t *testing.T) {
+	a, _ := newExperimentsApp(t)
+
+	body := a.get("/settings/mcp/experiments").Body.String()
+	i := strings.Index(body, "<textarea")
+	if i < 0 {
+		t.Fatalf("no textarea in the section: %s", body)
+	}
+	textarea := body[i : i+strings.Index(body[i:], ">")]
+	for _, want := range []string{`name="hypothesis"`, "focus-visible:border-focus", "focus-visible:ring-2", "focus-visible:ring-focus/40"} {
+		if !strings.Contains(textarea, want) {
+			t.Errorf("hypothesis textarea lacks %q: %s", want, textarea)
+		}
+	}
+}

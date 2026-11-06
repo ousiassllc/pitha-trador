@@ -126,3 +126,21 @@ func TestInputAndSelect_DrawFocusRing(t *testing.T) {
 		}
 	}
 }
+
+func TestTextarea_RendersChildrenWithSharedBorderAndFocusRing(t *testing.T) {
+	body := renderWithLabel(t, atoms.Textarea(atoms.TextareaProps{
+		Name: "memo", Attrs: templ.Attributes{"rows": "2", "required": true, "data-testid": "t"},
+	}), "text")
+
+	for _, want := range []string{
+		`<textarea`, `name="memo"`, `rows="2"`, ` required`, `data-testid="t"`, "rounded-md border border-border px-3 py-1",
+		"focus-visible:border-focus", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-focus/40", `>text</textarea>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Textarea lacks %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, ` id=`) {
+		t.Errorf("an empty ID must not render id=: %s", body)
+	}
+}

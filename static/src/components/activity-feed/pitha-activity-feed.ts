@@ -13,7 +13,7 @@ import { get } from '../lib/api';
 import { formatJstDateTime } from '../lib/jst-datetime';
 import { activityDetail, activityTypeLabel, jobQueueLabel } from '../lib/labels';
 import { logger } from '../lib/logger';
-import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
+import { lightDomErrorClass, lightDomFieldClass, lightDomWsNoticeClass } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import {
@@ -227,14 +227,14 @@ export class PithaActivityFeed extends LitElement {
         <div class="mb-2 flex gap-4 text-sm">
           <label>
             種別
-            <select data-filter="type" .value=${this.typeFilter} @change=${this.onTypeChange}>
+            <select data-filter="type" class=${lightDomFieldClass} .value=${this.typeFilter} @change=${this.onTypeChange}>
               <option value="">すべて</option>
               ${EVENT_TYPES.map((t) => html`<option value=${t} ?selected=${this.typeFilter === t}>${activityTypeLabel(t)}</option>`)}
             </select>
           </label>
           <label>
             キュー
-            <select data-filter="queue" .value=${this.queueFilter} @change=${this.onQueueChange}>
+            <select data-filter="queue" class=${lightDomFieldClass} .value=${this.queueFilter} @change=${this.onQueueChange}>
               <option value="">すべて</option>
               ${QUEUES.map((q) => html`<option value=${q} ?selected=${this.queueFilter === q}>${jobQueueLabel(q)}</option>`)}
             </select>
