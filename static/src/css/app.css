@@ -186,6 +186,20 @@
     line-height: 1.8;
   }
 
+  /* Print (brand-guide §8): page margin 14mm (12-16mm), no heading stranded at
+     the foot of a page. Colors are not set here: the Dark blocks are screen-only. */
+  @media print {
+    @page {
+      margin: 14mm;
+    }
+
+    h1,
+    h2,
+    h3 {
+      break-after: avoid;
+    }
+  }
+
   /* Focus ring (brand-guide §1 C3): 2px --focus, offset 2. Inputs and selects
      draw their own --ring (atoms/input.templ); atoms.Button and the other
      components that already carry a ring keep it through their utilities. */

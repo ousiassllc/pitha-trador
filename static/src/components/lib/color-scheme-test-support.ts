@@ -1,23 +1,35 @@
-// Fake `matchMedia('(prefers-color-scheme: dark)')` for the chart tests: the OS
-// theme switch is `fire()`, and `listeners()` shows who is still subscribed.
+// Fake `matchMedia` for the chart tests: the OS theme switch is `fire()` (the
+// `(prefers-color-scheme: dark)` query changing) and the page entering or leaving
+// print is `firePrint(matches)` (the `print` query changing); `listeners()` counts
+// who is still subscribed to either.
 
 export function installColorSchemeSwitch(): {
   fire: () => void;
+  firePrint: (matches: boolean) => void;
   listeners: () => number;
   restore: () => void;
 } {
   const original = globalThis.matchMedia;
-  const subscribed = new Set<() => void>();
-  globalThis.matchMedia = (() => ({
-    matches: false,
-    addEventListener: (_type: string, listener: () => void) => subscribed.add(listener),
-    removeEventListener: (_type: string, listener: () => void) => subscribed.delete(listener),
-  })) as unknown as typeof matchMedia;
+  const scheme = new Set<(event: { matches: boolean }) => void>();
+  const print = new Set<(event: { matches: boolean }) => void>();
+  globalThis.matchMedia = ((query: string) => {
+    const subscribed = query === 'print' ? print : scheme;
+    return {
+      matches: false,
+      addEventListener: (_type: string, listener: (event: { matches: boolean }) => void) =>
+        subscribed.add(listener),
+      removeEventListener: (_type: string, listener: (event: { matches: boolean }) => void) =>
+        subscribed.delete(listener),
+    };
+  }) as unknown as typeof matchMedia;
   return {
     fire: () => {
-      for (const listener of [...subscribed]) listener();
+      for (const listener of [...scheme]) listener({ matches: false });
     },
-    listeners: () => subscribed.size,
+    firePrint: (matches) => {
+      for (const listener of [...print]) listener({ matches });
+    },
+    listeners: () => scheme.size + print.size,
     restore: () => {
       globalThis.matchMedia = original;
     },

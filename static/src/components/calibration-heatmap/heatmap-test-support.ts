@@ -7,6 +7,8 @@ import type { BarrierStats, CalibrationAPIResponse, CalibrationBucket } from './
 export const createdCharts: {
   remove: ReturnType<typeof mock>;
   applyOptions: ReturnType<typeof mock>;
+  takeScreenshot: ReturnType<typeof mock>;
+  live: HTMLElement;
 }[] = [];
 export const createdSeries: {
   options: Record<string, unknown>;
@@ -15,13 +17,22 @@ export const createdSeries: {
 }[] = [];
 mock.module('lightweight-charts', () => ({
   LineStyle: { Dashed: 2 },
-  createChart: () => {
+  createChart: (container: HTMLElement) => {
     const addLineSeries = (options: Record<string, unknown> = {}) => {
       const series = { options, setData: mock(), applyOptions: mock() };
       createdSeries.push(series);
       return series;
     };
-    const chart = { addLineSeries, remove: mock(), applyOptions: mock() };
+    const live = document.createElement('div');
+    container.append(live); // like the real chart element
+    const chart = {
+      addLineSeries,
+      remove: mock(),
+      applyOptions: mock(),
+      takeScreenshot: mock(() => document.createElement('canvas')),
+      chartElement: () => live,
+      live,
+    };
     createdCharts.push(chart);
     return chart;
   },
