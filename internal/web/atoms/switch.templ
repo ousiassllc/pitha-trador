@@ -16,8 +16,9 @@ type SwitchProps struct {
 // is a real `<input type="checkbox" role="switch">` kept visually hidden
 // (`sr-only`) so it submits, focuses and is announced like a checkbox; the
 // track and knob are the sibling span styled through `peer-*`. The OS toggle
-// is never shown. Use it for an on/off setting; a consent or a choice inside
-// a form that has its own save button stays a checkbox.
+// is never shown. Use it for an on/off setting (it may sit in a form with its
+// own save button, as the MCP and Jev prompt panels do); a pick among
+// several options stays a checkbox.
 templ Switch(props SwitchProps) {
 	<label class="inline-flex cursor-pointer items-center gap-3">
 		<input type="checkbox" role="switch" class="peer sr-only" name={ props.Name } value={ switchValue(props.Value) } { props.Attrs... }/>

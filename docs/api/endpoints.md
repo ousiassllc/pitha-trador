@@ -84,7 +84,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | POST | `/settings/mcp/experiments` | 実験の作成（フォーム項目`hypothesis`・`kind`・`name`・`before`・`after`・`started_at`（`datetime-local`・JST・省略は今））。変数は 1 つだけ。不正（開始時刻の形式・実験の検証違反・MCP から変更できない設定）は422＋`atoms.InlineAlert`で、`HX-Retarget`でフォーム内の`#mcp-experiment-form-error`へ差し込む（入力は残る）。成功は一覧を再描画。CSRF 必須。作成者は`gui`で、MCP の書き込み許可のスイッチには従わない |
 | GET | `/settings/mcp/experiments/:id` | 実験 1 つの前後比較（前後の指標・拒否理由の内訳・交絡・判定）。404＝その ID の実験なし |
 | POST | `/settings/mcp/experiments/:id/close` | 実行中の実験を終える（フォーム項目`status`＝`closed`/`aborted`。必須で、それ以外は422。終了時刻は今）。終わっている実験は409、ない ID は404。CSRF 必須 |
-| GET | `/settings/jev-prompt-panel` | Jev のプロンプトの版とシャドー評価のパネルのフラグメント（Settings「予測モデル」）。`Cache-Control: no-store` |
+| GET | `/settings/jev-prompt-panel` | Jev のプロンプトの版とシャドー評価のパネルのフラグメント（Settings「外部連携・AI」の`modal-jev-prompt`）。`Cache-Control: no-store` |
 | POST | `/settings/jev-prompt/shadow` | シャドー評価の保存（フォーム項目`enabled`（チェック時のみ送られる）・`candidate`（空は候補なし）・`cap`（USD。空は既定へ戻す））。1 日の費用上限が数値でない・範囲外、または候補の版が不正なときは422＋`atoms.InlineAlert`で、`HX-Retarget`でフォーム内の`#jev-prompt-shadow-error`へ差し込み、何も保存しない（入力は残る）。保存の失敗は500のトースト。成功は200でパネルを再描画する。CSRF 必須 |
 | POST | `/settings/jev-prompt/promote` | ライブのプロンプトの版の昇格（フォーム項目`version`。昇格は誰が・いつ・前の版・新しい版を記録する）。不正な版は422＋`atoms.InlineAlert`で、`HX-Retarget`でフォーム内の`#jev-prompt-promote-error`へ差し込み、変更しない。保存の失敗は500のトースト。成功は200でパネルを再描画する。CSRF 必須 |
 | POST | `/settings/mcp/restart` | 停止（起動していれば）してから保存済みの設定で起動し直す。設定の保存・API キーの再生成の反映に使う。起動条件・エラーは`/settings/mcp/start`と同じ。CSRFヘッダ必須（issue #795） | `McpPanel`フラグメント |
@@ -254,3 +254,4 @@ Paper の実績・Jev 判断・メタモデル・Risk・収集状況をリモー
 | 1.111 | 2026-10-29 | §3の`POST`/`DELETE /ops-settings/:key`の監査の説明を、MCP のホワイトリストが21キーになったこと（`jev.shadow.enabled`・`jev.shadow.candidate_version`を追加）に合わせて訂正: 監査行を書くのは`opsettings`で保存する19キーで、シャドーの2キーは`jevprompt.Service`で保存するため画面での変更は監査行に残らない。ルート・応答の形は変更なし | issue #929 |
 | 1.112 | 2026-11-06 | §7に、Settings の行フォームの値の拒否（HTMX）を422＋行内インラインアラートで返す旨を追記 | issue #961 |
 | 1.113 | 2026-11-06 | §3の`POST /settings/mcp`・`/settings/mcp/experiments`・`/settings/:key`・`/ops-settings/:key`・`DELETE /ops-settings/:key`の検証エラーを422＋`atoms.InlineAlert`（`HX-Retarget`）に直し、Jev プロンプトの3ルート（`/settings/jev-prompt-panel`・`/shadow`・`/promote`）を追加、Kill の確認を`molecules.ConfirmDialog`に直し、§7に MCP・実験・Jev プロンプトのフォームの422を追記 | refine-git レビュー（issue #961 の追随） |
+| 1.114 | 2026-11-06 | §3の`GET /settings/jev-prompt-panel`の置き場を、実装どおり Settings「外部連携・AI」（`/settings/integrations`の`modal-jev-prompt`）に訂正（旧: 「予測モデル」） | refine-git レビュー（doc-drift） |
