@@ -96,10 +96,9 @@ templ Panel(props PanelProps) {
 		@processControls(props)
 		<form class="flex flex-col gap-3" hx-post="/settings/mcp" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-form">
 			<div class="flex items-center gap-2">
-				<label class="flex items-center gap-2">
-					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: enabledAttrs(props.Enabled)})
-					<span class="text-ink">MCP を有効にする</span>
-				</label>
+				@atoms.Switch(atoms.SwitchProps{Name: "enabled", Attrs: enabledAttrs(props.Enabled)}) {
+					MCP を有効にする
+				}
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-enabled", Label: "MCP の説明"}) {
 					Grok Bot などから Paper の実績と Jev の判断を読み取り、許可されたときだけ基本設定（ホワイトリスト）を変更するための MCP エンドポイントです。本体とは別のプロセス（paper-results-mcp）で動きます。既定ではオフで、API キーが未設定の間は待ち受けません。
 				}
@@ -113,6 +112,7 @@ templ Panel(props PanelProps) {
 				</div>
 				@atoms.Input(atoms.InputProps{ID: "mcp-listen-input", Name: "listen", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"value": props.Listen, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-listen-input"}})
 			</div>
+			<div id="mcp-form-error" data-testid="mcp-form-error"></div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-save"}}) {
 					保存
@@ -262,7 +262,7 @@ func boolAttr(b bool) string {
 }
 
 func enabledAttrs(enabled bool) templ.Attributes {
-	attrs := templ.Attributes{"value": "on", "data-testid": "mcp-enabled"}
+	attrs := templ.Attributes{"data-testid": "mcp-enabled"}
 	if enabled {
 		attrs["checked"] = true
 	}
@@ -271,7 +271,7 @@ func enabledAttrs(enabled bool) templ.Attributes {
 
 func keyButtonVariant(configured bool) atoms.ButtonVariant {
 	if configured {
-		return atoms.ButtonDangerOutline
+		return atoms.ButtonDanger
 	}
 	return atoms.ButtonPrimary
 }

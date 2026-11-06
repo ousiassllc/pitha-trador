@@ -160,6 +160,10 @@ func TestSave_RejectsDisallowedListenOnTheServer(t *testing.T) {
 			if !strings.Contains(rec.Body.String(), "待受アドレスが許可されていません") {
 				t.Errorf("error text missing from %s", rec.Body)
 			}
+			// An inline alert in the form's own slot, not a toast (design guide O3).
+			if rec.Header().Get("HX-Retarget") != "#mcp-form-error" || !strings.Contains(rec.Body.String(), "data-inline-alert") || strings.Contains(rec.Body.String(), "data-toast") {
+				t.Errorf("want an inline alert for #mcp-form-error, got %v %s", rec.Header(), rec.Body)
+			}
 			after, _ := os.ReadFile(a.path)
 			if string(before) != string(after) {
 				t.Error("file changed on a rejected address")

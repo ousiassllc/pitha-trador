@@ -34,7 +34,7 @@ templ HelpMark(props HelpMarkProps) {
 		<span
 			id={ props.ID }
 			role="tooltip"
-			class="invisible fixed left-0 top-0 opacity-0 transition-[opacity,visibility] duration-[320ms] ease-out motion-reduce:duration-100 z-50 w-72 max-w-[80vw] rounded-md border border-border bg-surface p-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink data-[open]:visible data-[open]:opacity-100"
+			class="invisible fixed left-0 top-0 opacity-0 transition-[opacity,visibility] duration-[320ms] ease-out motion-reduce:duration-100 z-[var(--z-dropdown)] w-72 max-w-[80vw] rounded-md border border-border bg-surface p-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-ink data-[open]:visible data-[open]:opacity-100"
 			data-help-mark-text
 		>
 			{ children... }

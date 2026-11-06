@@ -61,7 +61,7 @@ templ ScanPanel(v ScanPanelView) {
 			</h2>
 			<div class="flex items-center gap-2">
 				if !v.Open {
-					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonOutline, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanPanelURL, "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-open", "data-focus-after-swap": "scan-list-heading", "data-testid": "scan-open"}}) {
+					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanPanelURL, "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-open", "data-focus-after-swap": "scan-list-heading", "data-testid": "scan-open"}}) {
 						スキャン対象を見る
 					}
 				}

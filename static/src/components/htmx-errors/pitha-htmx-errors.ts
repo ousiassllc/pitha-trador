@@ -39,7 +39,10 @@ import {
 } from '../lib/motion';
 
 const TOAST_MARKER = 'data-toast';
-const DISMISS_AFTER_MS = 8000;
+// A form-validation error comes back as an atoms.InlineAlert for the form's own slot (HX-Retarget), not a toast.
+const INLINE_ALERT_MARKER = 'data-inline-alert';
+// --toast-duration (design guide O3); no toast here carries an action, which would be 5s.
+const DISMISS_AFTER_MS = 3000;
 const REGIONS = '#toast-region, [data-toast-region]';
 
 const LIVE_BANNER_LAST = 'liveBannerLast';
@@ -68,11 +71,15 @@ function carriesToast(xhr: XMLHttpRequest | undefined): boolean {
   return xhr?.responseText?.includes(TOAST_MARKER) ?? false;
 }
 
+function carriesInlineAlert(xhr: XMLHttpRequest | undefined): boolean {
+  return xhr?.responseText?.includes(INLINE_ALERT_MARKER) ?? false;
+}
+
 function isErrorStatus(xhr: XMLHttpRequest | undefined): boolean {
   return (xhr?.status ?? 0) >= 400;
 }
 
-/** Appends a toast cloned from `#toast-template`; an identical message already on screen is not duplicated (polling failures). */
+/** Shows a toast cloned from `#toast-template`, replacing any other (one at a time, design guide O3); the message already on screen is not shown again (polling failures). */
 export function showToast(message: string): void {
   const target = region();
   const template = document.getElementById('toast-template');
@@ -87,7 +94,7 @@ export function showToast(message: string): void {
   const text = toast?.querySelector('[data-toast-message]');
   if (!toast || !text) return;
   text.textContent = message;
-  target.appendChild(toast);
+  target.replaceChildren(toast);
 }
 
 function statusMessage(status: number): string {
@@ -113,6 +120,8 @@ export function onBeforeSwap(event: Event): void {
   const detail = (event as CustomEvent<ResponseDetail>).detail;
   skipUnchangedLiveBanner(detail);
   if (!isErrorStatus(detail.xhr)) return;
+  // An inline alert is swapped where the response's HX-Retarget says (the form's error slot).
+  if (carriesInlineAlert(detail.xhr)) return;
   if (!carriesToast(detail.xhr)) {
     detail.shouldSwap = false;
     return;
@@ -149,7 +158,7 @@ export function onResponseError(event: Event): void {
     showToast(STALE_SESSION_MESSAGE);
     return;
   }
-  if (!carriesToast(xhr)) showToast(statusMessage(xhr?.status ?? 0));
+  if (!carriesToast(xhr) && !carriesInlineAlert(xhr)) showToast(statusMessage(xhr?.status ?? 0));
 }
 
 /** `htmx:sendError` / `htmx:timeout`: the request got no response at all. */

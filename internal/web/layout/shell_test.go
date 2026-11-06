@@ -55,11 +55,11 @@ func TestShells_WireHTMXErrorToasts(t *testing.T) {
 		var found bool
 		for _, r := range cfg.ResponseHandling {
 			if r.Code == "[45].." {
-				found = r.Swap && r.Error && r.Target == "#toast-region" && r.SwapOverride == "beforeend"
+				found = r.Swap && r.Error && r.Target == "#toast-region" && r.SwapOverride == "innerHTML"
 			}
 		}
 		if !found {
-			t.Errorf("%s: htmx-config = %+v, want 4xx/5xx swapped (error) into #toast-region beforeend", name, cfg)
+			t.Errorf("%s: htmx-config = %+v, want 4xx/5xx swapped (error) into #toast-region innerHTML", name, cfg)
 		}
 
 		for _, want := range []string{

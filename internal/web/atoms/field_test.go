@@ -1,6 +1,7 @@
 package atoms_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -79,6 +80,34 @@ func TestInputAndSelect_RenderIDAndNameWhenGiven(t *testing.T) {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s body missing %q: %s", name, want, body)
 			}
+		}
+	}
+}
+
+func TestSwitch_IsACheckboxSwitchWithGuideTrackAndKnob(t *testing.T) {
+	body := renderWithLabel(t, atoms.Switch(atoms.SwitchProps{Name: "enabled", Attrs: templ.Attributes{"checked": true, "data-testid": "sw"}}), "有効にする")
+	for _, want := range []string{
+		`type="checkbox"`, `role="switch"`, `name="enabled"`, `value="on"`, ` checked`, `data-testid="sw"`,
+		"peer sr-only", "h-5 w-9 shrink-0 rounded-full", "after:h-3.5 after:w-3.5", "peer-checked:bg-accent", "peer-checked:after:bg-bone",
+		"peer-focus-visible:ring-focus/40", "bg-accent-soft", "text-[15px]", "有効にする",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Switch lacks %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "font-medium") || strings.Contains(body, "font-semibold") {
+		t.Errorf("the switch label must be Regular: %s", body)
+	}
+}
+
+func TestInlineAlert_HasIconHeadingAndBodyInTheDangerTone(t *testing.T) {
+	var sb strings.Builder
+	if err := atoms.InlineAlert("入力を確認してください", "数値で入力してください").Render(context.Background(), &sb); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`role="alert"`, "data-inline-alert", "tone-danger", "<svg", `aria-hidden="true"`, "入力を確認してください", "数値で入力してください"} {
+		if !strings.Contains(sb.String(), want) {
+			t.Errorf("InlineAlert lacks %q: %s", want, sb.String())
 		}
 	}
 }

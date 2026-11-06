@@ -148,7 +148,7 @@ templ SettingsCard(props SettingsCardProps) {
 				<p class="text-sm text-mute">{ props.Description }</p>
 			}
 		</div>
-		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonOutline, Attrs: templ.Attributes{
+		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{
 			"aria-haspopup":   "dialog",
 			"data-modal-open": props.ModalID,
 			"data-testid":     "open-" + props.ID,

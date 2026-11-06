@@ -33,3 +33,12 @@ UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の reg
 - ボタン・閉じるの押下リップル: `data-ripple` を付けた要素に `static/src/components/ripple/pitha-ripple.ts`（`layout` が読む）が、押した点から広がって消える円（280ms ease-out）を描く。`atoms.Button` / `ButtonLink`・トーストの閉じるは templ が付け、Lit のボタンは `data-ripple` を付ける（`lib/styles.ts` の `buttonStyles` が `position: relative; overflow: hidden`）。ドキュメントのリスナーが `composedPath()` で shadow root 内も拾う
 - ツールチップ（`atoms.HelpMark`・Lit の `renderHelpMark`・`scanner-view.ts`）: `opacity` を 320ms ease-out でフェード（`visibility` は同時に切り替え、閉じるときはフェードが終わってから隠す）
 - トースト（`pitha-htmx-errors.ts`）: 出現は opacity と 8px の `translateY` を 320ms ease-out、退出は opacity を 240ms ease-in で待ってから `remove()`。Web Animations API が無ければ即時
+
+## 部品・オーバーレイ（issue #945）
+
+- ボタンは主（`bg-accent text-bone`）/ サブ（透明＋1px `border-border`）/ ゴースト / 危険（`bg-danger text-bone`）の 4 種、SemiBold・`rounded-md`・disabled は opacity .4・小は高さ 32px（`min-h-8`）。テキストリンクは Regular・`underline decoration-mute`
+- 即時反映の on/off は `atoms.Switch`（OS の checkbox 見た目を出さない）。保存ボタンで確定するフォーム内の同意・選択は checkbox のまま
+- モーダルは `rounded-xl`・`shadow-modal`・スクラム（`--scrim`）と本体が一緒にフェード（`app.css` の `dialog[data-modal]`、開 320ms ease-out・閉 240ms ease-in、`prefers-reduced-motion` では 100ms）。確認・破壊的操作（`hx-confirm`、Kill）は `molecules.ConfirmDialog`
+- トーストは画面下中央・端から 24px・高さ 40px のピル（`bg-ink text-bone`）・同時 1 つ（新しいものが置き換える）・3 秒。エラー詳細とフォーム検証はトーストにせず `atoms.InlineAlert`（フォーム内のエラー欄）に出す
+- z-index は `--z-dropdown` 100（ツールチップ）/ `--z-toast` 500（`z-[var(--z-dropdown)]` のように使う）
+- チャートの色は `lib/chart-theme.ts` がトークンを読んで渡す（陽線・買い = `--success`、陰線・売り = `--danger`、VWAP = `--info`、出来高 = `--mute` 50%、精度線 = `--ink`、完全較正線 = `--mute`、軸・グリッド = `--border`）。ヒートマップは `--ink` を `--surface` に混ぜた濃淡（4〜30%）と `--ink` 文字、数値併記。サンプルなしは `--bone` と破線枠

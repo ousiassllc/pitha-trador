@@ -20,7 +20,7 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 templ Modal(id, title string) {
 	<dialog
 		id={ id }
-		class="m-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-surface p-0 text-ink shadow-modal backdrop:bg-accent/50"
+		class="m-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-surface p-0 text-ink shadow-modal"
 		aria-labelledby={ id + "-title" }
 		data-modal
 		data-testid={ id }
@@ -34,6 +34,6 @@ templ Modal(id, title string) {
 		<div class="flex flex-col gap-4 px-6 py-4">
 			{ children... }
 		</div>
-		<div data-toast-region class="pointer-events-none fixed bottom-auto left-auto right-4 top-4 z-50 flex w-96 max-w-full flex-col gap-2" aria-live="assertive"></div>
+		<div data-toast-region class="pointer-events-none fixed inset-x-6 bottom-6 z-[var(--z-toast)] flex justify-center" aria-live="assertive"></div>
 	</dialog>
 }

@@ -135,7 +135,9 @@ func TestList_NextPageKeepsTheFilter(t *testing.T) {
 	if n := strings.Count(first, `data-testid="order-proposal-row"`); n != 50 {
 		t.Fatalf("first page = %d rows, want 50", n)
 	}
-	href := regexp.MustCompile(`href="([^"]+)" data-testid="order-proposals-next"`).FindStringSubmatch(first)
+	// The attributes of the link render in sorted order (templ.Attributes), so find the tag first.
+	nextTag := regexp.MustCompile(`<a [^>]*data-testid="order-proposals-next"[^>]*>`).FindString(first)
+	href := regexp.MustCompile(`href="([^"]+)"`).FindStringSubmatch(nextTag)
 	if href == nil {
 		t.Fatalf("no next link: %s", first)
 	}

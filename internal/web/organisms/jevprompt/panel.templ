@@ -78,10 +78,9 @@ templ Panel(props PanelProps) {
 		</dl>
 		<form class="flex flex-col gap-3" hx-post="/settings/jev-prompt/shadow" hx-target="#jev-prompt-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="jev-prompt-shadow-form">
 			<div class="flex items-center gap-2">
-				<label class="flex items-center gap-2">
-					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: checkedAttrs(props.Enabled, "jev-prompt-enabled")})
-					<span class="text-ink">シャドーを有効にする（Paper のみ）</span>
-				</label>
+				@atoms.Switch(atoms.SwitchProps{Name: "enabled", Attrs: checkedAttrs(props.Enabled, "jev-prompt-enabled")}) {
+					シャドーを有効にする（Paper のみ）
+				}
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-enabled", Label: "シャドーの説明"}) {
 					Jev の trader に送るプロンプトには版があり、判断の記録に残ります。候補の版を「シャドー」で動かすと、ライブの判断ごとに同じ入力で候補の版にも答えさせ、別に保存します。シャドーの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも一切使いません。Paper だけで動き、Live では動きません。既定はオフです。オンにすると、ライブの判断ごとに候補の版の LLM 呼び出しが 1 回増え、その費用が発生します。この画面のほか、MCP の設定変更が許可されているときは MCP からも、オン・オフと候補の版を変えられます。
 				}
@@ -115,6 +114,7 @@ templ Panel(props PanelProps) {
 					<span data-testid="jev-prompt-failure-cap">失敗した呼び出しが 1 日に { itoa(props.FailureCap) } 回に達しても、その日のシャドーを止めます（今日: { itoa(props.FailuresToday) } 回）。</span>
 				</span>
 			</div>
+			<div id="jev-prompt-shadow-error" data-testid="jev-prompt-shadow-error"></div>
 			<div>
 				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "jev-prompt-shadow-save"}}) {
 					保存
@@ -156,6 +156,7 @@ templ Panel(props PanelProps) {
 					昇格はライブの判断を変えます。自動では行われず、この操作（と MCP からの昇格）だけで行われます。昇格は下の記録（新しい順・直近 10 件）に残ります。比較の結果は MCP からも見られます。
 				}
 			</span>
+			<div id="jev-prompt-promote-error" data-testid="jev-prompt-promote-error"></div>
 			<div class="flex flex-wrap items-center gap-2">
 				@atoms.Select(atoms.SelectProps{Name: "version", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-promote-version"}}) {
 					for _, v := range props.Versions {
@@ -164,7 +165,7 @@ templ Panel(props PanelProps) {
 						}
 					}
 				}
-				@atoms.Button(atoms.ButtonProps{Type: "submit", Variant: atoms.ButtonDangerOutline, Attrs: templ.Attributes{"data-testid": "jev-prompt-promote"}}) {
+				@atoms.Button(atoms.ButtonProps{Type: "submit", Variant: atoms.ButtonDanger, Attrs: templ.Attributes{"data-testid": "jev-prompt-promote"}}) {
 					この版をライブに昇格
 				}
 			</div>
@@ -190,7 +191,7 @@ templ Panel(props PanelProps) {
 }
 
 func checkedAttrs(on bool, testID string) templ.Attributes {
-	attrs := templ.Attributes{"value": "on", "data-testid": testID}
+	attrs := templ.Attributes{"data-testid": testID}
 	if on {
 		attrs["checked"] = true
 	}

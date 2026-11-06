@@ -5,6 +5,32 @@ import { afterEach, beforeEach, mock } from 'bun:test';
 import { installFakeWebSocket } from '../lib/ws-test-support';
 import './pitha-kill-switch-panel';
 
+// The shared confirm dialog (molecules.ConfirmDialog, pitha-confirm.ts) as a
+// stub: showModal() records the question and answers it the way the test says
+// ("accept" clicks 「実行する」, "cancel" clicks 「キャンセル」).
+export function installConfirmDialog(answer: 'accept' | 'cancel'): { asked: string[] } {
+  const asked: string[] = [];
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    '<dialog id="confirm-dialog"><p data-confirm-message></p><button type="button" data-confirm-cancel>キャンセル</button><button type="button" data-confirm-accept>実行する</button></dialog>',
+  );
+  const dialog = document.getElementById('confirm-dialog') as HTMLDialogElement;
+  dialog.close = () => {
+    dialog.removeAttribute('open');
+    dialog.dispatchEvent(new Event('close'));
+  };
+  dialog.showModal = () => {
+    dialog.setAttribute('open', '');
+    asked.push(dialog.querySelector('[data-confirm-message]')?.textContent ?? '');
+    dialog
+      .querySelector<HTMLElement>(
+        answer === 'accept' ? '[data-confirm-accept]' : '[data-confirm-cancel]',
+      )
+      ?.click();
+  };
+  return { asked };
+}
+
 export type PanelElement = HTMLElement & { updateComplete: Promise<boolean> };
 
 let originalFetch: typeof fetch;

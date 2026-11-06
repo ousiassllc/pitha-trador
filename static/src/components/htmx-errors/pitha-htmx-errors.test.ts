@@ -107,15 +107,22 @@ describe('requests without a response', () => {
   });
 });
 
-describe('dismissing', () => {
-  test('the close button removes its toast only', () => {
+describe('one toast at a time (design guide O3)', () => {
+  test('a new toast replaces the one on screen instead of stacking', () => {
     fire('htmx:responseError', { xhr: fakeXhr(500, '') });
     fire('htmx:sendError');
-    expect(toastTexts()).toHaveLength(2);
+    expect(toastTexts()).toEqual(['サーバーに接続できませんでした。']);
+  });
+});
+
+describe('dismissing', () => {
+  test('the close button removes the toast', () => {
+    fire('htmx:sendError');
+    expect(toastTexts()).toHaveLength(1);
 
     document.querySelector<HTMLElement>('[data-toast-dismiss]')?.click();
 
-    expect(toastTexts()).toEqual(['サーバーに接続できませんでした。']);
+    expect(toastTexts()).toEqual([]);
   });
 });
 
@@ -238,7 +245,8 @@ describe('toast region inside an open modal dialog', () => {
 // WCAG 2.2.1: an error toast must not vanish while the user is still reading
 // it (pointer over it) or has focus inside it.
 describe('auto-dismiss', () => {
-  const DISMISS_AFTER_MS = 8000;
+  // --toast-duration of the design guide (O3): 3 seconds.
+  const DISMISS_AFTER_MS = 3000;
   const flushObserver = () => Promise.resolve();
 
   beforeEach(() => {
@@ -257,7 +265,7 @@ describe('auto-dismiss', () => {
     return region.querySelector('[data-toast]') as HTMLElement;
   }
 
-  test('removes the toast after 8 seconds when nothing interacts with it', async () => {
+  test('removes the toast after 3 seconds when nothing interacts with it', async () => {
     const toast = await landToast();
 
     vi.advanceTimersByTime(DISMISS_AFTER_MS - 1);

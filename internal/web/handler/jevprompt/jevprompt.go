@@ -63,7 +63,7 @@ func (h *Handler) SaveShadow(c *gin.Context) {
 	if capText != "" {
 		v, err := strconv.ParseFloat(capText, 64)
 		if err != nil {
-			shared.RespondActionError(c, http.StatusUnprocessableEntity, "1 日の費用上限は数値（USD）で入力してください。保存していません。")
+			shared.RespondFormError(c, shadowFormError, "1 日の費用上限は数値（USD）で入力してください。保存していません。")
 			return
 		}
 		capUSD = v
@@ -71,12 +71,12 @@ func (h *Handler) SaveShadow(c *gin.Context) {
 	// Validate everything before writing anything, so a rejected form saves nothing.
 	if capText != "" {
 		if err := jevshadowsettings.ValidateCap(capUSD); err != nil {
-			shared.RespondActionError(c, http.StatusUnprocessableEntity, "1 日の費用上限は 0 より大きく "+strconv.FormatFloat(jevshadowsettings.MaxDailyCostCapUSD, 'g', -1, 64)+" USD 以下で入力してください。保存していません。")
+			shared.RespondFormError(c, shadowFormError, "1 日の費用上限は 0 より大きく "+strconv.FormatFloat(jevshadowsettings.MaxDailyCostCapUSD, 'g', -1, 64)+" USD 以下で入力してください。保存していません。")
 			return
 		}
 	}
 	if err := h.svc.SetCandidate(ctx, c.PostForm("candidate")); err != nil {
-		h.fail(c, err, "候補の版を保存できませんでした。")
+		h.fail(c, shadowFormError, err, "候補の版を保存できませんでした。")
 		return
 	}
 	var err error
@@ -86,11 +86,11 @@ func (h *Handler) SaveShadow(c *gin.Context) {
 		err = h.svc.SetCap(ctx, capUSD)
 	}
 	if err != nil {
-		h.fail(c, err, "費用の上限を保存できませんでした。")
+		h.fail(c, shadowFormError, err, "費用の上限を保存できませんでした。")
 		return
 	}
 	if err := h.svc.SetEnabled(ctx, c.PostForm("enabled") != ""); err != nil {
-		h.fail(c, err, "シャドーの有効・無効を保存できませんでした。")
+		h.fail(c, shadowFormError, err, "シャドーの有効・無効を保存できませんでした。")
 		return
 	}
 	h.render(c, "保存しました。")
@@ -102,15 +102,22 @@ func (h *Handler) SaveShadow(c *gin.Context) {
 func (h *Handler) Promote(c *gin.Context) {
 	p, err := h.svc.Promote(c.Request.Context(), c.PostForm("version"))
 	if err != nil {
-		h.fail(c, err, "昇格できませんでした。")
+		h.fail(c, promoteFormError, err, "昇格できませんでした。")
 		return
 	}
 	h.render(c, "ライブの版を "+p.FromVersion+" から "+p.ToVersion+" に昇格しました。")
 }
 
-func (h *Handler) fail(c *gin.Context, err error, message string) {
+// The inline-alert slots of the two forms (view.Panel): a rejected form puts
+// its reason there (shared.RespondFormError) instead of in a toast.
+const (
+	shadowFormError  = "#jev-prompt-shadow-error"
+	promoteFormError = "#jev-prompt-promote-error"
+)
+
+func (h *Handler) fail(c *gin.Context, errorTarget string, err error, message string) {
 	if errors.Is(err, jevprompt.ErrInvalidInput) {
-		shared.RespondActionError(c, http.StatusUnprocessableEntity, strings.TrimPrefix(err.Error(), jevprompt.ErrInvalidInput.Error()+": ")+"。変更していません。")
+		shared.RespondFormError(c, errorTarget, strings.TrimPrefix(err.Error(), jevprompt.ErrInvalidInput.Error()+": ")+"。変更していません。")
 		return
 	}
 	slog.ErrorContext(c.Request.Context(), "jevprompt: "+message, "error", err)

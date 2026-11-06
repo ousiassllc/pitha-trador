@@ -24,7 +24,7 @@ templ SettingsLinkCard(props SettingsLinkCardProps) {
 				<p class="text-sm text-mute">{ props.Description }</p>
 			}
 		</div>
-		@atoms.ButtonLink(atoms.ButtonProps{Variant: atoms.ButtonOutline, Attrs: templ.Attributes{
+		@atoms.ButtonLink(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{
 			"href":        string(templ.URL(props.Href)),
 			"data-testid": "open-" + props.ID,
 		}}) {

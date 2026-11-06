@@ -18,6 +18,7 @@
 // Lit notifies via CustomEvent, HTMX reacts via hx-trigger).
 import { css, html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { askConfirm } from '../confirm/pitha-confirm';
 import { get, post } from '../lib/api';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
@@ -89,7 +90,6 @@ export class PithaKillSwitchPanel extends LitElement {
         border-color: var(--danger);
         background: var(--danger);
         color: var(--bone);
-        font-weight: 600;
       }
       button.pitha-kill-switch-panel-kill:hover:not(:disabled) {
         background: color-mix(in srgb, var(--danger) 85%, var(--ink));
@@ -241,8 +241,8 @@ export class PithaKillSwitchPanel extends LitElement {
     void this.performAction(this.resumeUrl, 'resume-url');
   }
 
-  private onKill(): void {
-    if (!window.confirm(KILL_CONFIRM_MESSAGE)) return;
+  private async onKill(): Promise<void> {
+    if (!(await askConfirm(KILL_CONFIRM_MESSAGE))) return;
     void this.performAction(this.killUrl, 'kill-url');
   }
 

@@ -9,7 +9,6 @@ import { toUTCTimestamp } from './bars';
 // 20%-90% band and its opaque bars cover the candles and the VWAP line.
 export const MAIN_SCALE_MARGINS = { top: 0.1, bottom: 0.25 };
 export const VOLUME_SCALE_MARGINS = { top: 0.8, bottom: 0 };
-export const VOLUME_COLOR = 'rgba(156, 163, 175, 0.5)';
 
 /**
  * VWAP line data. A `vwap` of 0 means "no usable value" (nothing traded yet;

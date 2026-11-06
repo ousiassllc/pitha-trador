@@ -23,7 +23,7 @@ templ WatchlistPage(view domain.WatchListView) {
 			監視リスト
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-watchlist", Label: "監視リストの説明"}) {
 				立花証券の監視銘柄は、引け後の日足スクリーニング（または固定リスト）で翌営業日分が前夜に確定し、翌朝のEVENT購読に使われます。設定は
-				<a class="underline" href="/settings/broker">設定 ＞ 証券会社・データ</a>
+				<a class="underline decoration-mute" href="/settings/broker">設定 ＞ 証券会社・データ</a>
 				で変更できます。
 			}
 		</h1>
@@ -86,7 +86,7 @@ templ watchlistSection(list domain.WatchList, active bool) {
 					<tr class="border-b border-border" data-testid="watchlist-row" data-symbol={ e.Symbol } data-origin={ e.Origin }>
 						<td class="py-1.5 pr-4 text-mute">{ strconv.Itoa(i + 1) }</td>
 						<td class="py-1.5 pr-4 font-mono">
-							<a class="underline" href={ templ.URL("/symbols/" + e.Symbol) }>{ e.Symbol }</a>
+							<a class="underline decoration-mute" href={ templ.URL("/symbols/" + e.Symbol) }>{ e.Symbol }</a>
 						</td>
 						<td class="py-1.5 pr-4">{ label(watchOriginLabels, e.Origin) }</td>
 						<td class="py-1">{ indicatorsText(e.Indicators) }</td>

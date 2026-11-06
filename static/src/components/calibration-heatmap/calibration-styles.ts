@@ -46,10 +46,16 @@ export const heatmapStyles = css`
     display: flex;
     flex-direction: column;
     border-radius: 0.5rem;
+    border: 1px solid var(--border);
     padding: 0.5rem;
     font-size: 0.75rem;
-    /* The text color is set per cell (bucketColors) for contrast with its background. */
-    color: var(--ink);
+    /* --cell-bg / --cell-fg are set per cell (bucketColors): a density ramp of --ink on --surface with --ink text. */
+    background: var(--cell-bg, var(--bone));
+    color: var(--cell-fg, var(--ink));
+  }
+  /* A band without labeled samples: flat and dashed (the guide's empty-state border). */
+  .pitha-calibration-heatmap-cell[data-empty] {
+    border-style: dashed;
   }
   .pitha-calibration-heatmap-cell .accuracy {
     font-size: 1rem;

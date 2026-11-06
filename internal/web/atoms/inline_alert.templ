@@ -1,0 +1,18 @@
+package atoms
+
+// InlineAlert renders a form-validation or other in-place error (design guide
+// §4 "インラインアラート"; O3: validation errors are never a toast): an icon, a
+// short heading and the body, in the --danger tone (text, border 40%, fill
+// 10%). It fades in over 320ms (`alert-in`, static/src/css/app.css). The
+// `data-inline-alert` marker is what static/src/components/htmx-errors lets
+// through a 4xx swap (shared.RespondFormError sends it to the form's own
+// error slot with HX-Retarget). role="alert" announces it.
+templ InlineAlert(heading, message string) {
+	<div class="alert-in flex items-start gap-3 rounded-md border tone-danger px-4 py-3 text-sm" role="alert" data-inline-alert data-testid="inline-alert">
+		@IconWarningCircle()
+		<div class="flex flex-col gap-1">
+			<p class="font-semibold">{ heading }</p>
+			<p data-inline-alert-message>{ message }</p>
+		</div>
+	</div>
+}

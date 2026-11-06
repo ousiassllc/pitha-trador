@@ -11,6 +11,7 @@ type MockFn = ReturnType<typeof mock>;
 
 export const createChartOptions: unknown[] = [];
 export const createdSeries: {
+  options: Record<string, unknown>;
   setData: MockFn;
   update: MockFn;
   setMarkers: MockFn;
@@ -23,8 +24,9 @@ export const priceScaleOptions: { scale: string; options: unknown }[] = [];
 const priceScale = (scale: string) => ({
   applyOptions: (options: unknown) => priceScaleOptions.push({ scale, options }),
 });
-const series = () => {
+const series = (options: Record<string, unknown> = {}) => {
   const s = {
+    options,
     setData: mock(),
     update: mock(),
     setMarkers: mock(),

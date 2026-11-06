@@ -23,7 +23,7 @@ func renderWithLabel(t *testing.T, c templ.Component, label string) string {
 func TestButton_DefaultIsPrimaryTypeButton(t *testing.T) {
 	body := renderWithLabel(t, atoms.Button(atoms.ButtonProps{}), "保存")
 
-	for _, want := range []string{`type="button"`, "bg-accent text-bone", "disabled:opacity-50", "保存"} {
+	for _, want := range []string{`type="button"`, "bg-accent text-bone", "disabled:opacity-40", "保存"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -38,10 +38,9 @@ func TestButton_VariantsAndSizeChangeClasses(t *testing.T) {
 		not   string
 	}{
 		{"danger", atoms.ButtonProps{Variant: atoms.ButtonDanger}, "bg-danger text-bone", "bg-accent text-bone"},
-		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-border", "bg-accent text-bone"},
-		{"outline", atoms.ButtonProps{Variant: atoms.ButtonOutline}, "hover:bg-accent-soft", "bg-accent text-bone"},
-		{"danger outline", atoms.ButtonProps{Variant: atoms.ButtonDangerOutline}, "border-danger/40", "bg-danger text-bone"},
-		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "text-sm", "py-2"},
+		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-border bg-transparent", "bg-accent text-bone"},
+		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink hover:bg-accent-soft", "border-border"},
+		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "min-h-8", "py-2"},
 		{"medium", atoms.ButtonProps{}, "text-base", "text-sm"},
 	}
 	for _, tt := range tests {

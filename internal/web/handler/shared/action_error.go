@@ -1,6 +1,8 @@
 package shared
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
@@ -15,6 +17,22 @@ import (
 // nothing.
 func RespondActionError(c *gin.Context, status int, message string) {
 	renderErrorBody(c, status, atoms.Toast(message), message)
+}
+
+// RespondFormError answers a rejected form submission (a validation error: a
+// 422 and nothing saved) with an atoms.InlineAlert for the form's own error
+// slot instead of a toast (design guide O3: validation never goes to a toast).
+// errorTarget is the CSS selector of that slot, an element inside the form
+// that stays on the page (e.g. `#jev-prompt-shadow-error`); the HX-Retarget /
+// HX-Reswap headers swap the alert there rather than into the form's
+// hx-target, which would replace the whole form and lose the input.
+// layout.Shell's `htmx-config` lets a 422 swap (`error: true`), and
+// pitha-htmx-errors passes a body carrying `data-inline-alert` through.
+// message MUST be a fixed user-facing string.
+func RespondFormError(c *gin.Context, errorTarget, message string) {
+	c.Header("HX-Retarget", errorTarget)
+	c.Header("HX-Reswap", "innerHTML")
+	renderErrorBody(c, http.StatusUnprocessableEntity, atoms.InlineAlert("入力を確認してください", message), message)
 }
 
 // RespondPageError answers a failed SSR page route (issue #143): an

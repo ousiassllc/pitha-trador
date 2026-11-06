@@ -101,66 +101,60 @@ export function bucketMidpointPct(range: string): number {
   return Math.round(((low + high) / 2) * 100);
 }
 
-// Heatmap cell text colors: dark slate on light backgrounds, white on dark.
-export const DARK_TEXT = '#0f172a';
-export const LIGHT_TEXT = '#ffffff';
-// WCAG 2.x AA contrast for normal text; the cells use 0.75rem text.
-export const MIN_CONTRAST = 4.5;
-
 export interface CellColors {
   background: string;
   color: string;
 }
 
-// hslLuminance is the WCAG 2.x relative luminance of an hsl() color
-// (hue in degrees, saturation and lightness in [0,1]).
-function hslLuminance(hue: number, saturation: number, lightness: number): number {
-  const a = saturation * Math.min(lightness, 1 - lightness);
-  const channel = (n: number): number => {
-    const k = (n + hue / 30) % 12;
-    const c = lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(0) + 0.7152 * channel(8) + 0.0722 * channel(4);
-}
+// The heatmap is a density ramp in the guide's neutrals, not a spectrum
+// (brand-guide §1/§8: no off-token hues, no prism; the exact accuracy is also
+// printed in every cell, so color is never the only carrier). A cell's
+// background mixes --ink into --surface: MIN_INK_PERCENT at 0% accuracy to
+// MAX_INK_PERCENT at 100%, with --ink text on top. At MAX_INK_PERCENT the ink
+// text still has >= MIN_CONTRAST (WCAG AA, normal text; the cells use 0.75rem
+// text) in both Light and Dark, which calibration-view.test.ts verifies from
+// the token values, so a theme switch needs no per-cell recomputation.
+export const MIN_INK_PERCENT = 4;
+export const MAX_INK_PERCENT = 30;
+export const MIN_CONTRAST = 4.5;
+export const CELL_TEXT_COLOR = 'var(--ink)';
 
-const DARK_TEXT_LUMINANCE = 0.0088; // relative luminance of #0f172a
-
-// contrastRatio is the WCAG contrast of two relative luminances.
-export function contrastRatio(a: number, b: number): number {
-  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
-}
-
-// heatmapColors maps a [0,1] direction_accuracy to a red(low)->green(high)
-// background and a text color for the confidence-band heatmap
-// (docs/components/overview.md §5.3 "confidence帯別カラーヒートマップ").
-// The text is dark slate while that reaches MIN_CONTRAST on hsl(h, 70%, 45%);
-// on the red/orange end it switches to white and the background is darkened
-// just enough for white to reach MIN_CONTRAST (neither text color does at the
-// crossover with the 45% lightness).
+// heatmapColors maps a [0,1] direction_accuracy to the cell colors of the
+// confidence-band heatmap (docs/components/overview.md §5.3 "confidence帯別
+// カラーヒートマップ"): the more accurate the band, the denser the cell.
 export function heatmapColors(directionAccuracy: number): CellColors {
-  const hue = Math.max(0, Math.min(1, directionAccuracy)) * 120;
-  const luminanceAt = (percent: number): number => hslLuminance(hue, 0.7, percent / 100);
-  if (contrastRatio(luminanceAt(45), DARK_TEXT_LUMINANCE) >= MIN_CONTRAST) {
-    return { background: `hsl(${hue}, 70%, 45%)`, color: DARK_TEXT };
-  }
-  let percent = 45;
-  while (percent > 0 && contrastRatio(luminanceAt(percent), 1) < MIN_CONTRAST) percent--;
-  return { background: `hsl(${hue}, 70%, ${percent}%)`, color: LIGHT_TEXT };
+  const accuracy = Math.max(0, Math.min(1, directionAccuracy));
+  const percent = Math.round(MIN_INK_PERCENT + accuracy * (MAX_INK_PERCENT - MIN_INK_PERCENT));
+  return {
+    background: `color-mix(in srgb, var(--ink) ${percent}%, var(--surface))`,
+    color: CELL_TEXT_COLOR,
+  };
 }
 
-// NO_DATA_COLOR is the neutral (grey) heatmap background of a band with no
-// labeled samples, visibly distinct from heatmapColors' red(0% accuracy).
-export const NO_DATA_COLOR = 'hsl(0, 0%, 75%)';
+// NO_DATA_COLOR is the flat --bone background of a band with no labeled
+// samples (its cell also gets a dashed border from calibration-styles), visibly
+// distinct from every ramp step.
+export const NO_DATA_COLOR = 'var(--bone)';
 
 // bucketColors is a band's heatmap colors: heatmapColors of its observed
-// accuracy, or the neutral grey with dark text when it has no samples (the
-// API returns 0 for every metric of an empty band, which is "no data", not
-// "0% accurate").
+// accuracy, or the flat no-data background with --mute text when it has no
+// samples (the API returns 0 for every metric of an empty band, which is "no
+// data", not "0% accurate").
 export function bucketColors(bucket: CalibrationBucket): CellColors {
   return bucket.sample_count > 0
     ? heatmapColors(bucket.direction_accuracy)
-    : { background: NO_DATA_COLOR, color: DARK_TEXT };
+    : { background: NO_DATA_COLOR, color: 'var(--mute)' };
+}
+
+// applyCellColors sets a band's cell colors as CSSOM custom properties that the
+// cell's CSS reads (--cell-bg / --cell-fg), not as a `style` attribute binding:
+// the CSP (no `style-src 'unsafe-inline'`) blocks inline style attributes, and
+// Lit's styleMap renders one on its first pass.
+export function applyCellColors(el: Element | undefined, bucket: CalibrationBucket): void {
+  if (!(el instanceof HTMLElement)) return;
+  const { background, color } = bucketColors(bucket);
+  el.style.setProperty('--cell-bg', background);
+  el.style.setProperty('--cell-fg', color);
 }
 
 // hasLabeledSamples reports whether the response is based on any labeled

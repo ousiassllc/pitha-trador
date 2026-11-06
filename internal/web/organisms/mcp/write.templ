@@ -23,10 +23,9 @@ templ writeSection(props PanelProps) {
 	<div class="flex flex-col gap-2" data-testid="mcp-write">
 		<form class="flex flex-col gap-2" hx-post="/settings/mcp/write" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-write-form">
 			<div class="flex items-center gap-2">
-				<label class="flex items-center gap-2">
-					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: writeAttrs(props.WriteEnabled)})
-					<span class="text-ink">MCP からの設定変更を許可する</span>
-				</label>
+				@atoms.Switch(atoms.SwitchProps{Name: "enabled", Attrs: writeAttrs(props.WriteEnabled)}) {
+					MCP からの設定変更を許可する
+				}
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-write", Label: "MCP からの設定変更の許可の説明"}) {
 					許可すると、MCP から Paper の運用資金・1 銘柄上限・総エクスポージャ・1 回の最大損失、日次ガード、メタラベリングの Jev 学習データの終わりと出典だけを変更できます（Settings 画面と同じ保存先・同じ検証）。Live の値・発注・送金・Kill Switch 解除・API キーなどの秘密は MCP から変更できません。オフにすると、MCP からの設定変更は拒否されます（MCP からもう一度許可することもできます）。既定はオンです。
 				}
@@ -39,10 +38,9 @@ templ writeSection(props PanelProps) {
 		</form>
 		<form class="flex flex-col gap-2" hx-post="/settings/mcp/order-proposals" hx-target="#mcp-panel" hx-swap="innerHTML" hx-disabled-elt="find button" data-testid="mcp-order-proposals-form">
 			<div class="flex items-center gap-2">
-				<label class="flex items-center gap-2">
-					@atoms.Input(atoms.InputProps{Name: "enabled", Type: "checkbox", Class: "h-4 w-4 flex-none", Attrs: proposalsAttrs(props.OrderProposalsEnabled)})
-					<span class="text-ink">AIからの注文提案を受け付ける（Paper のみ）</span>
-				</label>
+				@atoms.Switch(atoms.SwitchProps{Name: "enabled", Attrs: proposalsAttrs(props.OrderProposalsEnabled)}) {
+					AIからの注文提案を受け付ける（Paper のみ）
+				}
 				@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-mcp-order-proposals", Label: "AIからの注文提案の受け付けの説明"}) {
 					オンにすると、MCP から Paper の注文提案（新規の買いと保有中ポジションの決済）を受け付けて記録します。受け付けるだけで、発注はしません。Live の注文は出せません。1 日（JST）に 20 件までです。オンにできるのはこの画面だけで、MCP からはオフにだけできます。既定はオフです。
 				}
@@ -86,7 +84,7 @@ templ writeSection(props PanelProps) {
 }
 
 func proposalsAttrs(enabled bool) templ.Attributes {
-	attrs := templ.Attributes{"value": "on", "data-testid": "mcp-order-proposals-enabled"}
+	attrs := templ.Attributes{"data-testid": "mcp-order-proposals-enabled"}
 	if enabled {
 		attrs["checked"] = true
 	}
@@ -94,7 +92,7 @@ func proposalsAttrs(enabled bool) templ.Attributes {
 }
 
 func writeAttrs(enabled bool) templ.Attributes {
-	attrs := templ.Attributes{"value": "on", "data-testid": "mcp-write-enabled"}
+	attrs := templ.Attributes{"data-testid": "mcp-write-enabled"}
 	if enabled {
 		attrs["checked"] = true
 	}

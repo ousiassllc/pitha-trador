@@ -227,6 +227,14 @@ func TestInvalidShadowInputIsRejectedAndSavesNothing(t *testing.T) {
 		if rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: status %d, want 422", name, rec.Code)
 		}
+		// A validation error is an inline alert in the form's own slot, not a
+		// toast (design guide O3).
+		if got := rec.Header().Get("HX-Retarget"); got != "#jev-prompt-shadow-error" {
+			t.Errorf("%s: HX-Retarget = %q, want the form's error slot", name, got)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "data-inline-alert") || strings.Contains(body, "data-toast") {
+			t.Errorf("%s: body is not an inline alert: %s", name, body)
+		}
 		for _, key := range jevshadowsettings.Keys() {
 			if _, ok := a.stored(key); ok {
 				t.Errorf("%s: stored %s", name, key)

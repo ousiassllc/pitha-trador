@@ -85,7 +85,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 				保存
 			}
 			if props.Overridden {
-				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDangerOutline, Attrs: templ.Attributes{
+				@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Attrs: templ.Attributes{
 					"id":                    "reset-setting-" + props.Key,
 					"data-focus-after-swap": "setting-input-" + props.Key,
 					"hx-delete":             "/ops-settings/" + props.Key,

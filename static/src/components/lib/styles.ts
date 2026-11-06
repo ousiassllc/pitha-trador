@@ -15,16 +15,19 @@ export const buttonStyles = css`
     border-radius: 0.5rem;
     background: var(--surface);
     color: var(--ink);
+    min-height: 2rem;
     padding: 0.25rem 0.75rem;
     font: inherit;
     font-size: 1rem;
+    font-weight: 600;
+    transition: background-color 180ms ease-out;
   }
   button:hover:not(:disabled) {
     background: var(--accent-soft);
   }
   button:disabled {
     cursor: not-allowed;
-    opacity: 0.5;
+    opacity: 0.4;
   }
 `;
 

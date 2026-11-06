@@ -127,7 +127,7 @@ func (h *Handler) Save(c *gin.Context) {
 	err := h.admin.Update(ctx, c.PostForm("enabled") != "", c.PostForm("listen"))
 	switch {
 	case errors.Is(err, settings.ErrListenNotAllowed):
-		shared.RespondActionError(c, http.StatusUnprocessableEntity, "待受アドレスが許可されていません。127.0.0.1 などの loopback か、この PC の tailnet アドレス（host:port の IP リテラル）だけ指定できます。0.0.0.0・LAN のアドレス・ホスト名は使えません。保存していません。")
+		shared.RespondFormError(c, "#mcp-form-error", "待受アドレスが許可されていません。127.0.0.1 などの loopback か、この PC の tailnet アドレス（host:port の IP リテラル）だけ指定できます。0.0.0.0・LAN のアドレス・ホスト名は使えません。保存していません。")
 		return
 	case err != nil:
 		slog.ErrorContext(ctx, "mcpsettings: save", "error", err)

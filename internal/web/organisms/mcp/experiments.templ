@@ -194,6 +194,7 @@ templ experimentForm(settingNames []string) {
 				@atoms.Input(atoms.InputProps{Name: "started_at", Type: "datetime-local", Class: "px-3 py-1", Attrs: templ.Attributes{"data-testid": "mcp-experiment-started"}})
 			</label>
 		</div>
+		<div id="mcp-experiment-form-error" data-testid="mcp-experiment-form-error"></div>
 		<div>
 			@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"data-testid": "mcp-experiment-create"}}) {
 				記録する

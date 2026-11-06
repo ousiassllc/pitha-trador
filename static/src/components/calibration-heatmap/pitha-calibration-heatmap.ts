@@ -16,6 +16,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
+import { chartBaseOptions, readToken } from '../lib/chart-theme';
 import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles } from '../lib/styles';
@@ -23,8 +24,8 @@ import { type ABArm, renderABArms } from './ab-arms-view';
 import { renderBarrierSummary, renderBucketBarrier } from './barrier-view';
 import { heatmapStyles } from './calibration-styles';
 import {
+  applyCellColors,
   type BarrierStats,
-  bucketColors,
   bucketMidpointPct,
   type CalibrationAPIResponse,
   type CalibrationBucket,
@@ -40,8 +41,8 @@ import { renderHorizonSelector } from './horizon-selector';
 import { type LLMCutoffInfo, type MetaModel, renderMetaModel } from './meta-model/meta-model-view';
 import { type RetrainSkip, renderRetrainSkips } from './meta-model/retrain-skips-view';
 
-const ACCURACY_LINE_COLOR = '#2563eb';
-const PERFECT_CALIBRATION_LINE_COLOR = '#9ca3af';
+// Series colors are tokens (lib/chart-theme.ts): the observed accuracy in --ink,
+// the perfect-calibration reference in --mute (brand-guide §8: no blue, no prism).
 
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
@@ -109,18 +110,20 @@ export class PithaCalibrationHeatmap extends LitElement {
     if (!container) return;
 
     // autoSize: follow the container (height is fixed in `static styles`).
+    const base = chartBaseOptions();
     this.chart = createChart(container, {
+      ...base,
       autoSize: true,
-      timeScale: { visible: false },
+      timeScale: { ...base.timeScale, visible: false },
     });
     this.perfectSeries = this.chart.addLineSeries({
-      color: PERFECT_CALIBRATION_LINE_COLOR,
+      color: readToken('mute'),
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       title: 'Perfect calibration',
     });
     this.accuracySeries = this.chart.addLineSeries({
-      color: ACCURACY_LINE_COLOR,
+      color: readToken('ink'),
       lineWidth: 2,
       title: 'Observed accuracy',
     });
@@ -212,17 +215,9 @@ export class PithaCalibrationHeatmap extends LitElement {
           ${this.buckets.map(
             (b) => html`
               <li
-                ${ref((el) => {
-                  // CSSOM, not a `style` attribute binding: the CSP (no
-                  // `style-src 'unsafe-inline'`) blocks inline style attributes,
-                  // and Lit's styleMap renders one on its first pass.
-                  if (el) {
-                    const { background, color } = bucketColors(b);
-                    (el as HTMLElement).style.backgroundColor = background;
-                    (el as HTMLElement).style.color = color;
-                  }
-                })}
+                ${ref((el) => applyCellColors(el, b))}
                 class="pitha-calibration-heatmap-cell"
+                ?data-empty=${b.sample_count === 0}
                 data-testid="calibration-heatmap-cell"
               >
                 <span class="range">${b.range}</span>
