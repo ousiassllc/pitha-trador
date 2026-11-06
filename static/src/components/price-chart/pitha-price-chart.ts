@@ -156,15 +156,17 @@ export class PithaPriceChart extends LitElement {
         tickMarkFormatter: formatTickMark,
       },
     });
-    const up = readToken('success');
-    const down = readToken('danger');
+    // Up is a filled --ink candle, down a hollow one (--surface fill, --ink
+    // border): the guide's chart series are --success/--warning/--info/--mute/
+    // --ink only, and a price move is not an error, so --danger is not used.
+    const ink = readToken('ink');
     this.candleSeries = this.chart.addCandlestickSeries({
-      upColor: up,
-      downColor: down,
-      borderUpColor: up,
-      borderDownColor: down,
-      wickUpColor: up,
-      wickDownColor: down,
+      upColor: ink,
+      downColor: readToken('surface'),
+      borderUpColor: ink,
+      borderDownColor: ink,
+      wickUpColor: ink,
+      wickDownColor: ink,
     });
     this.vwapSeries = this.chart.addLineSeries({ color: readToken('info'), lineWidth: 1 });
     this.volumeSeries = this.chart.addHistogramSeries({
@@ -266,7 +268,7 @@ export class PithaPriceChart extends LitElement {
     const marker: SeriesMarker<Time> = {
       time,
       position: isLong ? 'belowBar' : 'aboveBar',
-      color: readToken(isLong ? 'success' : 'danger'),
+      color: readToken(isLong ? 'success' : 'warning'),
       shape: isLong ? 'arrowUp' : 'arrowDown',
       text: message.direction,
     };

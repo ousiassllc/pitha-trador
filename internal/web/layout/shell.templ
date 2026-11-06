@@ -80,6 +80,7 @@ templ document(title string) {
 			<script type="module" src="/static/dist/js/help-mark/pitha-help-mark.js"></script>
 			<script type="module" src="/static/dist/js/ripple/pitha-ripple.js"></script>
 			<script type="module" src="/static/dist/js/confirm/pitha-confirm.js"></script>
+			<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
 		</head>
 		<body class="min-h-screen bg-bone text-ink" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
 			{ children... }

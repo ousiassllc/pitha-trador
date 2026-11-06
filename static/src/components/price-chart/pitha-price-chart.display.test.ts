@@ -188,14 +188,16 @@ describe('pitha-price-chart empty state (issue #687)', () => {
 });
 
 describe('pitha-price-chart series colors (design guide §1/§8)', () => {
-  test('candles are --success / --danger, VWAP --info and volume --mute at 50%: no off-token hue', async () => {
+  test('candles are --ink (up filled, down hollow on --surface), VWAP --info and volume --mute at 50%: no --danger', async () => {
     await mount();
 
     expect(candleSeries().options).toMatchObject({
-      upColor: '#3d5c4a',
-      downColor: '#7a4545',
-      wickUpColor: '#3d5c4a',
-      wickDownColor: '#7a4545',
+      upColor: '#050505',
+      downColor: '#ffffff',
+      borderUpColor: '#050505',
+      borderDownColor: '#050505',
+      wickUpColor: '#050505',
+      wickDownColor: '#050505',
     });
     expect(vwapSeriesMock().options).toMatchObject({ color: '#4a5a6a' });
     expect(createdSeries[2].options).toMatchObject({ color: 'rgba(107, 107, 110, 0.5)' });

@@ -37,4 +37,18 @@ describe('chartBaseOptions', () => {
     expect(options.rightPriceScale.borderColor).toBe(readToken('border'));
     expect(options.timeScale.borderColor).toBe(readToken('border'));
   });
+
+  // lightweight-charts' defaults are #9598A1 lines and #131722 / #4c525e label
+  // backgrounds, none of them a guide token.
+  test('draws the crosshair in --mute with --ink axis labels, in Light and Dark', () => {
+    const light = chartBaseOptions();
+    expect(light.crosshair.vertLine).toEqual({ color: '#6b6b6e', labelBackgroundColor: '#050505' });
+    expect(light.crosshair.horzLine).toEqual({ color: '#6b6b6e', labelBackgroundColor: '#050505' });
+
+    document.documentElement.style.setProperty('--mute', '#8b8b8e');
+    document.documentElement.style.setProperty('--ink', '#ffffff');
+    const dark = chartBaseOptions();
+    expect(dark.crosshair.vertLine).toEqual({ color: '#8b8b8e', labelBackgroundColor: '#ffffff' });
+    expect(dark.crosshair.horzLine).toEqual({ color: '#8b8b8e', labelBackgroundColor: '#ffffff' });
+  });
 });
