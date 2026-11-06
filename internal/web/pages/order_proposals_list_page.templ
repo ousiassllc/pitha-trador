@@ -106,11 +106,11 @@ templ orderProposalsTable(rows []ProposalRow) {
 			for _, r := range rows {
 				<tr class="border-b border-border" data-testid="order-proposal-row" data-proposal-id={ strconv.FormatInt(r.ID, 10) } data-status={ r.Status }>
 					<td class="px-3 py-2.5 font-mono">
-						<a class="underline decoration-mute" href={ templ.SafeURL("/order-proposals/" + strconv.FormatInt(r.ID, 10)) }>{ strconv.FormatInt(r.ID, 10) }</a>
+						<a class="text-accent underline decoration-mute" href={ templ.SafeURL("/order-proposals/" + strconv.FormatInt(r.ID, 10)) }>{ strconv.FormatInt(r.ID, 10) }</a>
 					</td>
 					<td class="px-3 py-2.5">{ r.ReceivedAt }</td>
 					<td class="px-3 py-2.5 font-mono">
-						<a class="underline decoration-mute" href={ organisms.SymbolHref(r.Symbol) }>{ r.Symbol }</a>
+						<a class="text-accent underline decoration-mute" href={ organisms.SymbolHref(r.Symbol) }>{ r.Symbol }</a>
 					</td>
 					<td class="px-3 py-2.5">{ label(proposalBucketLabels, r.Bucket) }</td>
 					<td class="px-3 py-2.5">{ label(proposalActionLabels, r.Action) }</td>

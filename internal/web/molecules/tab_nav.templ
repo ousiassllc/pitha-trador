@@ -13,7 +13,7 @@ type Tab struct {
 func tabLinkClass(current bool) string {
 	const base = "-mb-px inline-flex min-h-10 items-center border-b-2 px-3 text-base "
 	if current {
-		return base + "border-ink text-ink"
+		return base + "border-accent text-ink"
 	}
 	return base + "border-transparent text-mute hover:border-border hover:text-ink"
 }
