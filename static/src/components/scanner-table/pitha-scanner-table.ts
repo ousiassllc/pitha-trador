@@ -10,6 +10,7 @@
 import { html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { get } from '../lib/api';
+import { navArrowDown, navArrowUp } from '../lib/icons';
 import { formatJstDateTime, isZeroTime } from '../lib/jst-datetime';
 import { logger } from '../lib/logger';
 import { lightDomErrorClass, lightDomWsNoticeClass } from '../lib/styles';
@@ -205,7 +206,7 @@ export class PithaScannerTable extends LitElement {
   // inside it), so keyboard and touch users can open it too.
   private renderHeader(column: Column) {
     const active = this.sortKey === column.key;
-    const indicator = active ? (this.sortDirection === 'asc' ? ' ▲' : ' ▼') : '';
+    const indicator = active ? (this.sortDirection === 'asc' ? navArrowUp() : navArrowDown()) : '';
     return html`
       <th scope="col"
         class="whitespace-nowrap px-3 py-2.5 ${column.numeric ? 'text-right' : ''}"

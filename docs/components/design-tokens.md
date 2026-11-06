@@ -21,3 +21,7 @@
 - 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact の 6px だけ例外）
 - ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`）
 - 空状態は `border border-dashed border-border`・`px-4 py-6`・`text-center text-mute`。ハッシュ到達時の強調は `target:ring-1 target:ring-mute`
+
+## アイコン（issue #943）
+
+UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の regular）の SVG を使う。文字記号（×・▲▼）で代用しない。24×24 の viewBox・`stroke-width="1.5"`・`stroke="currentColor"`・装飾なので `aria-hidden`（名前はボタンの `aria-label`）。サイズは 16（`h-4 w-4`）/ 20（`h-5 w-5`）/ 24。templ は `internal/web/atoms/icon.templ`（`IconXmark`）、Lit は `static/src/components/lib/icons.ts`（`navArrowUp` / `navArrowDown`）に同じパスを置く。足すときは両方に同じパスを足す。
