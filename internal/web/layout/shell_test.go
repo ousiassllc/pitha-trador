@@ -12,6 +12,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/version"
 	"github.com/ousiassllc/pitha-trador/internal/web/layout"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 	"github.com/ousiassllc/pitha-trador/internal/web/organisms"
 )
 
@@ -289,7 +290,8 @@ func TestShells_ApplyTheSavedThemeBeforePaint(t *testing.T) {
 
 // Printing is ink on bone with no chrome (brand-guide §8 / O9): the header (nav,
 // version, theme switch, status), the Kill Switch panel and the toast region
-// carry `print:hidden`, in both shells where they exist.
+// carry `print:hidden`, in both shells where they exist; the in-page tab bar
+// is chrome too.
 func TestShells_HideChromeWhenPrinting(t *testing.T) {
 	shell := render(t, layout.Shell("t", organisms.NavNone))
 	for name, re := range map[string]*regexp.Regexp{
@@ -300,6 +302,10 @@ func TestShells_HideChromeWhenPrinting(t *testing.T) {
 		if !re.MatchString(shell) {
 			t.Errorf("Shell: %s lacks print:hidden; body=%s", name, shell)
 		}
+	}
+	tabNav := render(t, molecules.TabNav("t", []molecules.Tab{{Label: "a", Href: "/a", Current: true}}))
+	if !regexp.MustCompile(`<nav\b[^>]*\bclass="[^"]*\bprint:hidden\b`).MatchString(tabNav) {
+		t.Errorf("TabNav lacks print:hidden; body=%s", tabNav)
 	}
 	setup := render(t, layout.SetupShell("t"))
 	if !regexp.MustCompile(`<div\b[^>]*\bid="toast-region"[^>]*\bclass="[^"]*\bprint:hidden\b`).MatchString(setup) {

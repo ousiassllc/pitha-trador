@@ -97,7 +97,7 @@ templ SettingsHubPage(pageList []settingspages.Page, linkList []settingspages.Li
 // field's stored value.
 templ SettingsPage(props SettingsProps) {
 	@layout.Shell("設定 / "+props.Page.Name, organisms.NavSettings) {
-		<nav aria-label="パンくず" class="text-sm text-mute" data-testid="settings-breadcrumb">
+		<nav aria-label="パンくず" class="text-sm text-mute print:hidden" data-testid="settings-breadcrumb">
 			<a class="hover:text-ink" href={ templ.SafeURL(settingspages.BasePath) }>設定</a>
 			<span aria-hidden="true"> / </span>
 			<span aria-current="page">{ props.Page.Name }</span>

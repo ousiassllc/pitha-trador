@@ -89,7 +89,7 @@ func TestCalibrationPage_LitSectionsAreSeparatedByTheSectionGap(t *testing.T) {
 // 8px apart (gap-2), 12px on the sides (px-3).
 func TestTabNav_FollowsTheMenuItemRecipe(t *testing.T) {
 	body := renderPage(t, pages.PerformancePage(pages.PerformanceProps{}))
-	if !strings.Contains(body, `class="mt-6 flex flex-wrap gap-2 border-b border-border" data-testid="tab-nav"`) {
+	if !strings.Contains(body, `class="mt-6 flex flex-wrap gap-2 border-b border-border print:hidden" data-testid="tab-nav"`) {
 		t.Errorf("tab bar must be gap-2: %.600s", body)
 	}
 	if !strings.Contains(body, `-mb-px inline-flex min-h-10 items-center border-b-2 px-3 text-base `) {
