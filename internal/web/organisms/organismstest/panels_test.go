@@ -77,3 +77,26 @@ func TestPositionPanel_CloseNoteIsAHelpMark(t *testing.T) {
 		}
 	}
 }
+
+// An 18px card heading is an h4-level heading: its body follows 12px below
+// (--gap-heading-body), not the off-recipe 16px (brand-guide §3 S2; issue #968).
+func TestCardPanels_BodyFollowsTheHeadingTwelvePxBelow(t *testing.T) {
+	regime := "trend"
+	for name, html := range map[string]string{
+		"risk":     renderComponent(t, organisms.RiskPanel(organisms.RiskParams{AllowedPositionPct: 2})),
+		"jev":      renderComponent(t, organisms.JevPanel(&domain.JevDecision{Regime: &regime})),
+		"position": renderComponent(t, organisms.PositionPanel(nil)),
+	} {
+		if !strings.Contains(html, `class="mt-3 `) || strings.Contains(html, `class="mt-4 `) {
+			t.Errorf("%s panel: body is not 12px (mt-3) below the heading: %s", name, html)
+		}
+	}
+}
+
+// The 判断の履歴 heading is an h2 (24px): the table follows 24px below it.
+func TestDecisionHistoryList_TableFollowsTheH2TwentyFourPxBelow(t *testing.T) {
+	html := renderComponent(t, organisms.DecisionHistoryList(nil))
+	if !strings.Contains(html, `<table class="mt-6 `) {
+		t.Errorf("history table is not 24px (mt-6) below its h2: %s", html)
+	}
+}

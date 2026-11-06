@@ -18,3 +18,22 @@ func TestDetail_EventsTableUsesTheStandardCellPadding(t *testing.T) {
 		}
 	}
 }
+
+// The text under the h2 「理由」「手じまいの計画」「情報源」 follows 8px below it
+// (--gap-heading-body), like the proposal fields, not 4px (issue #968).
+func TestDetail_SectionBodiesFollowTheirHeadingEightPxBelow(t *testing.T) {
+	_, body := get(t, outcomesSource(t), "/order-proposals/2")
+	for _, section := range []string{"order-proposal-rationale", "order-proposal-exit-plan", "order-proposal-sources"} {
+		i := strings.Index(body, `data-testid="`+section+`"`)
+		if i < 0 {
+			t.Fatalf("no section %s", section)
+		}
+		rest := body[i:]
+		if end := strings.Index(rest, "</section>"); end >= 0 {
+			rest = rest[:end]
+		}
+		if !strings.Contains(rest, `class="mt-2 `) || strings.Contains(rest, `class="mt-1 `) {
+			t.Errorf("%s: body is not 8px (mt-2) below its heading: %s", section, rest)
+		}
+	}
+}

@@ -12,9 +12,9 @@ templ PositionPanel(position *domain.Position) {
 	<section class="mb-12 rounded-lg border border-border bg-surface p-6" id="position-panel" data-testid="position-panel">
 		<h2 class="text-lg font-semibold text-ink">ポジション</h2>
 		if position == nil {
-			<p class="mt-4 text-sm text-mute">保有中のポジションはありません。</p>
+			<p class="mt-3 text-sm text-mute">保有中のポジションはありません。</p>
 		} else {
-			<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="ポジション">
+			<table class="mt-3 w-full border-collapse text-left text-sm" aria-label="ポジション">
 				<thead>
 					<tr class="border-b border-border text-xs font-semibold uppercase text-mute">
 						<th scope="col" class="px-3 py-2.5">銘柄</th>
