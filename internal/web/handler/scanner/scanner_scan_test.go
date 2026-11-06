@@ -254,6 +254,10 @@ func TestScannerHandler_ScanView_PagerAndRefreshKeepFilters(t *testing.T) {
 	if !strings.Contains(p3, `data-symbol="0119"`) || strings.Contains(p3, `data-symbol="0049"`) || strings.Contains(p3, "scan-next") || !strings.Contains(p3, "scan-prev") {
 		t.Errorf("page 3 wrong")
 	}
+	// Pager buttons are 36px tall (brand-guide O7), unlike the 32px toolbar buttons.
+	if !strings.Contains(p3, "min-h-9") || !strings.Contains(p1, "min-h-9") {
+		t.Errorf("pager buttons must use the 36px pager size")
+	}
 	if !strings.Contains(p3, `data-testid="scan-refresh"`) || !strings.Contains(p3, `hx-get="/scanner/scan?page=3&amp;q=corp"`) {
 		t.Errorf("refresh must re-fetch the same filtered page")
 	}

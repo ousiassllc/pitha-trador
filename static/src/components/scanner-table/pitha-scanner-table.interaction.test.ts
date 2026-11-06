@@ -64,6 +64,23 @@ describe('pitha-scanner-table interaction', () => {
     );
   });
 
+  // brand-guide O7/P2: the sorted column's header is --ink, the rest stay --mute.
+  test('marks only the sorted column header button text-ink', async () => {
+    const { el } = await mount([item({ symbol: 'BBBB' }), item({ symbol: 'AAAA' })]);
+    const buttons = () => [...el.querySelectorAll('thead th button')] as HTMLElement[];
+    expect(buttons().some((b) => b.classList.contains('text-ink'))).toBe(false);
+
+    buttons()[0].click();
+    await el.updateComplete;
+
+    expect(buttons()[0].classList.contains('text-ink')).toBe(true);
+    expect(
+      buttons()
+        .slice(1)
+        .some((b) => b.classList.contains('text-ink')),
+    ).toBe(false);
+  });
+
   // Pressing a column's sort button draws the guide's press ripple (§5, M4);
   // `relative overflow-hidden` clips it (issue #960).
   test('the header sort buttons carry the press ripple and its clip', async () => {

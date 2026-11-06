@@ -31,6 +31,13 @@ describe('buttonStyles fill', () => {
     expect(buttonStyles.cssText).toMatch(/button\s*\{[^}]*background:\s*transparent/);
     expect(buttonStyles.cssText).not.toMatch(/button\s*\{[^}]*background:\s*var\(--surface\)/);
   });
+
+  // brand-guide O7: the small (32px) button is text-sm, the same as atoms.Button's small size.
+  test('the shared small button is 2rem tall with 0.875rem text', () => {
+    expect(buttonStyles.cssText).toMatch(
+      /button\s*\{[^}]*min-height:\s*2rem[^}]*font-size:\s*0\.875rem/,
+    );
+  });
 });
 
 describe('noticeStyles', () => {

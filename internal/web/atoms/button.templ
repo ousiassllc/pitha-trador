@@ -25,6 +25,8 @@ const (
 	ButtonMedium ButtonSize = ""
 	// ButtonSmall is the compact size for table rows and toolbars.
 	ButtonSmall ButtonSize = "sm"
+	// ButtonPager is the pagination size: height 36 (brand-guide O7).
+	ButtonPager ButtonSize = "pager"
 )
 
 // ButtonProps is Button/ButtonLink's input. The zero value is a medium
@@ -68,8 +70,11 @@ func buttonType(t string) string {
 func buttonClass(props ButtonProps) string {
 	const base = "relative inline-flex items-center justify-center overflow-hidden rounded-md font-semibold transition-[background-color] duration-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-40"
 	size := "px-4 py-2 text-base"
-	if props.Size == ButtonSmall {
+	switch props.Size {
+	case ButtonSmall:
 		size = "min-h-8 px-3 text-sm"
+	case ButtonPager:
+		size = "min-h-9 px-3 text-sm"
 	}
 	var color string
 	switch props.Variant {

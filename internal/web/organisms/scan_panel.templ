@@ -207,14 +207,14 @@ templ scanList(v ScanPanelView) {
 	}
 	<nav class="mt-3 flex items-center justify-between text-xs" aria-label="ページ送り" data-testid="scan-pager">
 		if v.Page.Page > 1 {
-			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page-1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-prev", "data-focus-after-swap": "scan-total", "data-testid": "scan-prev"}}) {
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonPager, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page-1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-prev", "data-focus-after-swap": "scan-total", "data-testid": "scan-prev"}}) {
 				前へ
 			}
 		} else {
 			<span></span>
 		}
 		if v.Page.Page < v.Page.Pages {
-			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page+1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-next", "data-focus-after-swap": "scan-total", "data-testid": "scan-next"}}) {
+			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonPager, Attrs: templ.Attributes{"hx-get": scanHref(v.Query, v.Page.Page+1, true), "hx-target": "#scan-panel", "hx-swap": "outerHTML", "id": "scan-next", "data-focus-after-swap": "scan-total", "data-testid": "scan-next"}}) {
 				次へ
 			}
 		}
