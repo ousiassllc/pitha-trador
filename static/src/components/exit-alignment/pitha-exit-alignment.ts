@@ -32,7 +32,7 @@ export class PithaExitAlignment extends LitElement {
         margin: 0;
         padding: 0.5rem 1rem;
         border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
-        border-radius: 0.5rem;
+        border-radius: var(--r-md);
         background: color-mix(in srgb, var(--warning) 10%, transparent);
         color: var(--warning);
         font-size: 0.875rem;

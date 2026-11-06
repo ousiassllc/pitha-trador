@@ -36,7 +36,7 @@ templ WatchlistPage(view domain.WatchListView) {
 				}
 			</p>
 		} else if len(view.Lists) == 0 {
-			<p class="mt-6 rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-mute" data-testid="watchlist-empty">
+			<p class="mt-6 rounded-lg border border-dashed border-border px-6 py-12 text-center text-sm text-mute" data-testid="watchlist-empty">
 				確定済みの監視リストはありません。最初の夜間バッチ（日足取得）の後に作られます。
 			</p>
 		}
@@ -75,21 +75,21 @@ templ watchlistSection(list domain.WatchList, active bool) {
 			<caption class="sr-only">{ list.ListDate } の監視銘柄一覧</caption>
 			<thead class="border-b border-border text-xs text-mute">
 				<tr>
-					<th scope="col" class="py-1.5 pr-4">順</th>
-					<th scope="col" class="py-1.5 pr-4">銘柄</th>
-					<th scope="col" class="py-1.5 pr-4">枠の由来</th>
-					<th scope="col" class="py-1">選ばれた指標</th>
+					<th scope="col" class="px-3 py-2.5">順</th>
+					<th scope="col" class="px-3 py-2.5">銘柄</th>
+					<th scope="col" class="px-3 py-2.5">枠の由来</th>
+					<th scope="col" class="px-3 py-2.5">選ばれた指標</th>
 				</tr>
 			</thead>
 			<tbody>
 				for i, e := range list.Entries {
 					<tr class="border-b border-border" data-testid="watchlist-row" data-symbol={ e.Symbol } data-origin={ e.Origin }>
-						<td class="py-1.5 pr-4 text-mute">{ strconv.Itoa(i + 1) }</td>
-						<td class="py-1.5 pr-4 font-mono">
+						<td class="px-3 py-2.5 text-mute">{ strconv.Itoa(i + 1) }</td>
+						<td class="px-3 py-2.5 font-mono">
 							<a class="underline decoration-mute" href={ templ.URL("/symbols/" + e.Symbol) }>{ e.Symbol }</a>
 						</td>
-						<td class="py-1.5 pr-4">{ label(watchOriginLabels, e.Origin) }</td>
-						<td class="py-1">{ indicatorsText(e.Indicators) }</td>
+						<td class="px-3 py-2.5">{ label(watchOriginLabels, e.Origin) }</td>
+						<td class="px-3 py-2.5">{ indicatorsText(e.Indicators) }</td>
 					</tr>
 				}
 			</tbody>

@@ -44,7 +44,7 @@ templ AttentionSection(v AttentionView) {
 // 「対応が必要なものはありません」 when there are none and every source was read.
 templ AttentionBody(v AttentionView) {
 	if len(v.Items) == 0 && v.Notice == "" {
-		<p class="rounded-md border border-dashed border-border px-4 py-6 text-center text-sm text-mute" data-testid="attention-none">対応が必要なものはありません</p>
+		<p class="rounded-lg border border-dashed border-border px-6 py-12 text-center text-sm text-mute" data-testid="attention-none">対応が必要なものはありません</p>
 	} else {
 		<ul class="flex flex-col gap-2">
 			for _, it := range v.Items {

@@ -63,17 +63,17 @@ templ writeSection(props PanelProps) {
 			} else {
 				<table class="w-full text-left text-sm" aria-label="設定変更の監査ログ" data-testid="mcp-audit-table">
 					<thead>
-						<tr><th scope="col" class="pr-2 text-xs font-semibold">日時</th><th scope="col" class="pr-2 text-xs font-semibold">誰が</th><th scope="col" class="pr-2 text-xs font-semibold">操作</th><th scope="col" class="pr-2 text-xs font-semibold">キー</th><th scope="col" class="pr-2 text-xs font-semibold">前</th><th scope="col" class="text-xs font-semibold">後</th></tr>
+						<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">誰が</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">操作</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">キー</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">前</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">後</th></tr>
 					</thead>
 					<tbody>
 						for _, row := range props.Audit {
 							<tr data-testid="mcp-audit-row">
-								<td class="pr-2">{ row.At }</td>
-								<td class="pr-2">{ row.By }</td>
-								<td class="pr-2">{ row.What }</td>
-								<td class="pr-2"><code>{ row.Key }</code></td>
-								<td class="pr-2">{ row.Before }</td>
-								<td>{ row.After }</td>
+								<td class="px-2 py-1.5">{ row.At }</td>
+								<td class="px-2 py-1.5">{ row.By }</td>
+								<td class="px-2 py-1.5">{ row.What }</td>
+								<td class="px-2 py-1.5"><code>{ row.Key }</code></td>
+								<td class="px-2 py-1.5">{ row.Before }</td>
+								<td class="px-2 py-1.5">{ row.After }</td>
 							</tr>
 						}
 					</tbody>

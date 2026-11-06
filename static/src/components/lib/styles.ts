@@ -12,7 +12,7 @@ export const buttonStyles = css`
     overflow: hidden;
     cursor: pointer;
     border: 1px solid var(--border);
-    border-radius: 0.5rem;
+    border-radius: var(--r-md);
     background: var(--surface);
     color: var(--ink);
     min-height: 2rem;

@@ -192,7 +192,7 @@ export class PithaScannerTable extends LitElement {
       </div>
       ${
         items.length === 0
-          ? html`<p class="mt-3 rounded-md border border-dashed border-border bg-bone px-4 py-6 text-center text-sm text-mute" role="status" data-testid="scanner-empty">
+          ? html`<p class="mt-3 rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute" role="status" data-testid="scanner-empty">
               現在、条件を満たす候補銘柄はありません。
             </p>`
           : ''
@@ -231,7 +231,7 @@ export class PithaScannerTable extends LitElement {
   }
 
   private renderRow(item: ScannerItem) {
-    const numeric = 'px-3 py-2 text-right font-mono tabular-nums';
+    const numeric = 'px-3 py-2.5 text-right font-mono tabular-nums';
     return html`
       <tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol=${item.symbol}>
         <td class="px-3 py-2.5">

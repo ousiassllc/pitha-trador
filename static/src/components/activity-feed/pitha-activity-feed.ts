@@ -223,7 +223,7 @@ export class PithaActivityFeed extends LitElement {
       ${this.renderKillSwitchEvents()}
 
       <section id="activity-feed" data-testid="activity-feed" class="mt-12">
-        <h2 class="mb-2 text-xl font-semibold text-ink">最近の動き</h2>
+        <h2 class="mb-6 text-xl font-semibold text-ink">最近の動き</h2>
         <div class="mb-2 flex gap-4 text-sm">
           <label>
             種別

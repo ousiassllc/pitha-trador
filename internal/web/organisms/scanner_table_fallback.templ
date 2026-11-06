@@ -67,7 +67,7 @@ templ ScannerTableFallback(candidates []domain.Candidate, asOf time.Time) {
 				</table>
 			</div>
 			if len(candidates) == 0 {
-				<p class="mt-3 rounded-md border border-dashed border-border bg-bone px-4 py-6 text-center text-sm text-mute" data-testid="scanner-empty">
+				<p class="mt-3 rounded-lg border border-dashed border-border bg-bone px-6 py-12 text-center text-sm text-mute" data-testid="scanner-empty">
 					現在、条件を満たす候補銘柄はありません。
 				</p>
 			}
@@ -139,7 +139,7 @@ templ scannerRow(c domain.Candidate) {
 // returnClass colors a return cell: green when positive, red when
 // negative, neutral for zero or a missing value.
 func returnClass(v *float64) string {
-	const base = "px-3 py-2 text-right font-mono tabular-nums "
+	const base = "px-3 py-2.5 text-right font-mono tabular-nums "
 	switch {
 	case v == nil || *v == 0:
 		return base + "text-mute"

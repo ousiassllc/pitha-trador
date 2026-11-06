@@ -139,11 +139,11 @@ templ Panel(props PanelProps) {
 			if len(props.Daily) > 0 {
 				<table class="w-full text-left text-sm" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
 					<thead>
-						<tr><th scope="col" class="pr-2 text-xs font-semibold">日（JST）</th><th scope="col" class="pr-2 text-right text-xs font-semibold">回数</th><th scope="col" class="pr-2 text-right text-xs font-semibold">費用（USD）</th><th scope="col" class="text-right text-xs font-semibold">うち見積り（USD・回数）</th></tr>
+						<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日（JST）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">回数</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">費用（USD）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">うち見積り（USD・回数）</th></tr>
 					</thead>
 					<tbody>
 						for _, d := range props.Daily {
-							<tr data-testid="jev-prompt-daily-row"><td class="pr-2">{ d.Date }</td><td class="pr-2 text-right font-mono tabular-nums">{ itoa(d.Calls) }</td><td class="pr-2 text-right font-mono tabular-nums">{ d.USD }</td><td class="text-right font-mono tabular-nums">{ d.EstimatedUSD }（{ itoa(d.EstimatedCalls) } 回）</td></tr>
+							<tr data-testid="jev-prompt-daily-row"><td class="px-2 py-1.5">{ d.Date }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ itoa(d.Calls) }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ d.USD }</td><td class="px-2 py-1.5 text-right font-mono tabular-nums">{ d.EstimatedUSD }（{ itoa(d.EstimatedCalls) } 回）</td></tr>
 						}
 					</tbody>
 				</table>
@@ -177,11 +177,11 @@ templ Panel(props PanelProps) {
 			} else {
 				<table class="w-full text-left text-sm" aria-label="昇格の記録" data-testid="jev-prompt-promotions-table">
 					<thead>
-						<tr><th scope="col" class="pr-2 text-xs font-semibold">日時</th><th scope="col" class="pr-2 text-xs font-semibold">誰が</th><th scope="col" class="pr-2 text-xs font-semibold">前の版</th><th scope="col" class="text-xs font-semibold">後の版</th></tr>
+						<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">誰が</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">前の版</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">後の版</th></tr>
 					</thead>
 					<tbody>
 						for _, p := range props.Promotions {
-							<tr data-testid="jev-prompt-promotion-row"><td class="pr-2">{ p.At }</td><td class="pr-2">{ p.By }</td><td class="pr-2"><code>{ p.From }</code></td><td><code>{ p.To }</code></td></tr>
+							<tr data-testid="jev-prompt-promotion-row"><td class="px-2 py-1.5">{ p.At }</td><td class="px-2 py-1.5">{ p.By }</td><td class="px-2 py-1.5"><code>{ p.From }</code></td><td class="px-2 py-1.5"><code>{ p.To }</code></td></tr>
 						}
 					</tbody>
 				</table>

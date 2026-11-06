@@ -111,7 +111,7 @@ func cellClass(c Cell) string {
 templ evalTable(t Table) {
 	<div class="mt-6 overflow-x-auto" data-testid={ "evaluation-table-" + t.ID }>
 		<h3 class="text-sm font-semibold text-ink">{ t.Title }</h3>
-		<table class="mt-1 min-w-full text-sm">
+		<table class="mt-3 min-w-full text-sm">
 			<caption class="sr-only">{ t.Title }の実績指標</caption>
 			<thead>
 				<tr class="text-right text-mute">
@@ -156,7 +156,7 @@ templ jevBlock(rows []JevRow) {
 		if len(rows) == 0 {
 			<p class="mt-1 text-xs text-mute">ラベル付き判断はありません。</p>
 		} else {
-			<table class="mt-1 min-w-full text-sm">
+			<table class="mt-3 min-w-full text-sm">
 				<caption class="sr-only">Jevの方向的中率とBrier</caption>
 				<thead>
 					<tr class="text-right text-mute">
@@ -192,7 +192,7 @@ templ metaBlock(rows []MetaRow) {
 		if len(rows) == 0 {
 			<p class="mt-1 text-xs text-mute">学習済みのメタモデルはありません。</p>
 		} else {
-			<table class="mt-1 min-w-full text-sm">
+			<table class="mt-3 min-w-full text-sm">
 				<caption class="sr-only">メタモデルのOOS指標とPaper実績EV</caption>
 				<thead>
 					<tr class="text-right text-mute">

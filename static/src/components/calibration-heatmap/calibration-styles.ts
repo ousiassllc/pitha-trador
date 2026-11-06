@@ -45,7 +45,7 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap-cell {
     display: flex;
     flex-direction: column;
-    border-radius: 0.5rem;
+    border-radius: var(--r-md);
     border: 1px solid var(--border);
     padding: 0.5rem;
     font-size: 0.75rem;

@@ -18,7 +18,7 @@ type BacktestFold struct {
 // BacktestFoldTable is the Performance page's "Folds" panel: each fold's
 // Forward period and out-of-sample metrics.
 templ BacktestFoldTable(folds []BacktestFold) {
-	<section class="mb-6 rounded-lg border border-border bg-surface p-6 shadow" data-testid="backtest-folds">
+	<section class="mb-12 rounded-lg border border-border bg-surface p-6" data-testid="backtest-folds">
 		<h2 class="text-lg font-semibold text-ink">
 			フォールド別
 			@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-backtest-folds", Label: "フォールド別の説明"}) {
@@ -28,23 +28,23 @@ templ BacktestFoldTable(folds []BacktestFold) {
 		<table class="mt-4 w-full border-collapse text-left text-sm" aria-label="Walk Forward 結果（フォールド別）">
 			<thead>
 				<tr class="border-b border-border text-xs font-semibold text-mute">
-					<th scope="col" class="px-3 py-2">Forward 期間</th>
-					<th scope="col" class="px-3 py-2 text-right">取引数</th>
-					<th scope="col" class="px-3 py-2 text-right">勝率</th>
-					<th scope="col" class="px-3 py-2 text-right">期待値</th>
-					<th scope="col" class="px-3 py-2 text-right">最大ドローダウン</th>
-					<th scope="col" class="px-3 py-2 text-right">純損益</th>
+					<th scope="col" class="px-3 py-2.5">Forward 期間</th>
+					<th scope="col" class="px-3 py-2.5 text-right">取引数</th>
+					<th scope="col" class="px-3 py-2.5 text-right">勝率</th>
+					<th scope="col" class="px-3 py-2.5 text-right">期待値</th>
+					<th scope="col" class="px-3 py-2.5 text-right">最大ドローダウン</th>
+					<th scope="col" class="px-3 py-2.5 text-right">純損益</th>
 				</tr>
 			</thead>
 			<tbody>
 				for _, f := range folds {
 					<tr class="border-b border-border">
-						<td class="px-3 py-2">{ f.ForwardStart.Format("2006-01-02") } – { lastDay(f.ForwardEnd) }</td>
-						<td class="px-3 py-2 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", f.Forward.TradeCount) }</td>
-						<td class="px-3 py-2 text-right font-mono tabular-nums">{ fmt.Sprintf("%.1f%%", f.Forward.WinRate*100) }</td>
-						<td class="px-3 py-2 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", f.Forward.Expectancy) }</td>
-						<td class="px-3 py-2 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", f.Forward.MaxDrawdownPct) }</td>
-						<td class="px-3 py-2 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", f.Forward.NetPnLPct) }</td>
+						<td class="px-3 py-2.5">{ f.ForwardStart.Format("2006-01-02") } – { lastDay(f.ForwardEnd) }</td>
+						<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", f.Forward.TradeCount) }</td>
+						<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%.1f%%", f.Forward.WinRate*100) }</td>
+						<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", f.Forward.Expectancy) }</td>
+						<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", f.Forward.MaxDrawdownPct) }</td>
+						<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f%%", f.Forward.NetPnLPct) }</td>
 					</tr>
 				}
 			</tbody>

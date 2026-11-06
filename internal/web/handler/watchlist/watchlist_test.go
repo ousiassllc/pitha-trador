@@ -74,3 +74,11 @@ func TestPage_SourceErrorIs500WithoutLeakingIt(t *testing.T) {
 		t.Fatalf("status = %d body = %s", code, body)
 	}
 }
+
+// An empty state is a dashed --r-lg (12px) box with 48/24 padding (brand-guide §3).
+func TestPage_EmptyStateUsesTheGuideShape(t *testing.T) {
+	_, body := get(t, fakeSource{view: domain.WatchListView{Enabled: true}})
+	if !strings.Contains(body, "rounded-lg border border-dashed border-border px-6 py-12") {
+		t.Errorf("empty state shape wrong: %s", body)
+	}
+}

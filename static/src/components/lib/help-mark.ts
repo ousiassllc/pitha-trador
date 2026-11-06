@@ -43,7 +43,7 @@ export const helpMarkStyles = css`
     height: 1rem;
     padding: 0;
     border: 1px solid var(--border);
-    border-radius: 9999px;
+    border-radius: var(--r-full);
     background: var(--surface);
     color: var(--mute);
     font: inherit;
@@ -74,9 +74,9 @@ export const helpMarkStyles = css`
     box-sizing: border-box;
     width: 18rem;
     max-width: 80vw;
-    padding: 0.5rem;
+    padding: 0.375rem 0.625rem;
     border: 1px solid var(--border);
-    border-radius: 0.5rem;
+    border-radius: var(--r-sm);
     background: var(--surface);
     color: var(--ink);
     font-size: 0.75rem;

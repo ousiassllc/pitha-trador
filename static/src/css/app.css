@@ -28,6 +28,15 @@
   --info: #4a5a6a;
   --scrim: color-mix(in srgb, #050505 50%, transparent);
 
+  /* Radii (brand-guide §3): sm 4 (tag, tooltip), md 8 (input, button), lg 12
+     (card, empty state), xl 16 (modal), full (pill, avatar). Tailwind's own
+     md/lg/xl are 6/8/12px, so `rounded-*` is rebound to these in @theme. */
+  --r-sm: 0.25rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.75rem;
+  --r-xl: 1rem;
+  --r-full: 9999px;
+
   /* z-index scale (brand-guide §6): dropdown / tooltip / popover 100, sticky 200,
      drawer 300, modal 400, toast 500. Used as `z-[var(--z-toast)]`. */
   --z-base: 0;
@@ -78,16 +87,16 @@
   --text-lg--line-height: 1.7;
   --text-2xl--line-height: 1.5;
 
-  /* Radii (brand-guide §3): md 8 (input, button), lg 12 (card), xl 16 (modal).
-     Tailwind's own md/lg/xl are 6/8/12px, so `rounded-md|lg|xl` are redefined
-     to the guide's --r-md|lg|xl rather than adding parallel names. */
   /* Easing (brand-guide §5): `ease-out` is the guide's cubic-bezier(0.2,0.8,0.2,1)
      (Tailwind's default differs); ease-in / ease-in-out already match. */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  /* Radii (brand-guide §3): the `rounded-*` utilities read the guide's --r-*
+     tokens defined on :root, which Lit shadow roots read too. */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
 
   /* The only shadow in the product (brand-guide §3): the modal. Cards, tooltips
      and toasts are separated by a 1px border and carry no shadow. */
