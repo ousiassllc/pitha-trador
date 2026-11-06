@@ -21,7 +21,7 @@ templ EvaluationPanel(p Panel, err string) {
 		if err != "" {
 			<p class="mt-4 rounded-md border tone-danger px-4 py-3 text-sm" role="alert" data-testid="evaluation-error">{ err }</p>
 		} else {
-			<p class="mt-1 text-xs text-mute" data-testid="evaluation-capital">
+			<p class="mt-2 text-xs text-mute" data-testid="evaluation-capital">
 				{ p.Capital }
 				if p.CapitalNote != "" {
 					（{ p.CapitalNote }）

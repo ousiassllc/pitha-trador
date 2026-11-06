@@ -22,13 +22,13 @@ import (
 templ OrderProposalDetailPage(p ProposalDetailProps) {
 	@layout.Shell(labels.Numbered("注文提案", p.ID), organisms.NavOrderProposals) {
 		<p class="text-sm"><a class="underline decoration-mute" href="/order-proposals">@atoms.IconNavArrowLeft() 注文提案の一覧</a></p>
-		<h1 class="mt-1 text-3xl font-semibold text-ink" data-testid="order-proposal-title">
+		<h1 class="mt-2 text-3xl font-semibold text-ink" data-testid="order-proposal-title">
 			{ labels.Numbered("注文提案", p.ID) }
 			<span class="ml-2 font-mono text-lg">
 				<a class="underline decoration-mute" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
 			</span>
 		</h1>
-		<p class="mt-1 text-sm text-ink" data-testid="order-proposal-status" data-status={ p.Status }>
+		<p class="mt-2 text-sm text-ink" data-testid="order-proposal-status" data-status={ p.Status }>
 			{ label(proposalActionLabels, p.Action) }・{ label(proposalBucketLabels, p.Bucket) }・{ p.OrderType } ／ 状態:
 			<span class="text-ink">{ label(proposalStatusLabels, p.Status) }</span>
 			if p.StatusReason != "" {
