@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buttonStyles, tableStyles } from './styles';
+import { buttonStyles, lightDomWsNoticeClass, noticeStyles, tableStyles } from './styles';
 
 describe('buttonStyles', () => {
   // Document CSS does not cross the shadow boundary, so the shared Lit button
@@ -30,5 +30,19 @@ describe('buttonStyles fill', () => {
     expect(buttonStyles.cssText).toMatch(/button\s*\{[^}]*border:\s*1px solid var\(--border\)/);
     expect(buttonStyles.cssText).toMatch(/button\s*\{[^}]*background:\s*transparent/);
     expect(buttonStyles.cssText).not.toMatch(/button\s*\{[^}]*background:\s*var\(--surface\)/);
+  });
+});
+
+describe('noticeStyles', () => {
+  // Notice bodies are text-sm (14px), the same size as the role="alert" error
+  // (brand-guide §2 T3); 12px is for notes, captions and badges only.
+  test('the ws-disconnected notice is 0.875rem like the error', () => {
+    const css = noticeStyles.cssText;
+    expect(css).toMatch(/\.pitha-ws-disconnected\s*\{[^}]*font-size:\s*0\.875rem/);
+    expect(css).not.toMatch(/font-size:\s*0\.75rem/);
+  });
+
+  test('the light-DOM ws notice class is text-sm', () => {
+    expect(lightDomWsNoticeClass).toBe('text-sm text-warning');
   });
 });

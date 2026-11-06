@@ -283,3 +283,11 @@ func TestSettingsCard_DescriptionIsInk(t *testing.T) {
 		t.Errorf("description must not be text-mute: %s", html)
 	}
 }
+
+// issue #990 (T3): the save/delete outcome is a notice, so its body is text-sm.
+func TestSecretFieldRow_NoticeIsBodySize(t *testing.T) {
+	html := render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "k", Label: "L", Notice: "保存しました"}))
+	if !strings.Contains(html, `<p class="text-sm text-success" role="status" data-testid="notice-k">`) {
+		t.Errorf("notice must be text-sm: %s", html)
+	}
+}
