@@ -270,3 +270,15 @@ func TestSetupPage_StepsParagraphIsInk(t *testing.T) {
 		t.Errorf("setup steps paragraph must be text-sm text-ink: %s", body[form:])
 	}
 }
+
+// issue #991 (S2): each section's h2 is followed by 24px (mb-6), not the 12px
+// gap-3 of the section's flex column.
+func TestSettingsPage_SectionH2HasTheH2GapBelow(t *testing.T) {
+	body := renderSettings(t, pages.SettingsProps{Connections: testConnections(), Dialogs: systemDialogs})
+	if !strings.Contains(body, `<h2 id="settings-connections-heading" class="mb-6 `) {
+		t.Errorf("connections h2 must be mb-6: %s", body)
+	}
+	if strings.Contains(body, `<section class="flex flex-col gap-3" aria-labelledby="settings-`) {
+		t.Errorf("a section still stacks its h2 with gap-3: %s", body)
+	}
+}
