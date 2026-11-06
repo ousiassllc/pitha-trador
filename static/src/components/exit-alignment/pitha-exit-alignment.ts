@@ -36,6 +36,7 @@ export class PithaExitAlignment extends LitElement {
         background: color-mix(in srgb, var(--warning) 10%, transparent);
         color: var(--warning);
         font-size: 0.875rem;
+        line-height: 1.7;
       }
       .summary {
         display: grid;
@@ -43,6 +44,7 @@ export class PithaExitAlignment extends LitElement {
         gap: 0.25rem 1rem;
         margin: 0;
         font-size: 0.875rem;
+        line-height: 1.7;
       }
       .summary dt {
         color: var(--mute);
@@ -55,11 +57,13 @@ export class PithaExitAlignment extends LitElement {
       h2 {
         margin: 0.75rem 0 1.5rem;
         font-size: 1.5rem;
+        line-height: 1.5;
         font-weight: 600;
       }
       h3 {
         margin: 0.75rem 0;
         font-size: 1.125rem;
+        line-height: 1.7;
         font-weight: 600;
       }
     `,

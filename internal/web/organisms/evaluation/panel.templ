@@ -154,7 +154,7 @@ templ jevBlock(rows []JevRow) {
 			}
 		</h3>
 		if len(rows) == 0 {
-			<p class="mt-1 text-xs text-mute">ラベル付き判断はありません。</p>
+			<p class="mt-1 text-sm text-mute">ラベル付き判断はありません。</p>
 		} else {
 			<table class="mt-3 min-w-full text-sm">
 				<caption class="sr-only">Jevの方向的中率とBrier</caption>
@@ -190,7 +190,7 @@ templ metaBlock(rows []MetaRow) {
 			}
 		</h3>
 		if len(rows) == 0 {
-			<p class="mt-1 text-xs text-mute">学習済みのメタモデルはありません。</p>
+			<p class="mt-1 text-sm text-mute">学習済みのメタモデルはありません。</p>
 		} else {
 			<table class="mt-3 min-w-full text-sm">
 				<caption class="sr-only">メタモデルのOOS指標とPaper実績EV</caption>

@@ -42,12 +42,14 @@ export const tableStyles = css`
   table {
     border-collapse: collapse;
     font-size: 0.875rem;
+    line-height: 1.7;
   }
   th {
     padding: 0.625rem 0.75rem;
     border-bottom: 1px solid var(--border);
     color: var(--mute);
     font-size: 0.75rem;
+    line-height: 1.6;
     font-weight: 600;
     text-align: left;
   }
@@ -55,6 +57,7 @@ export const tableStyles = css`
     border-bottom: 0;
     color: var(--ink);
     font-size: 0.875rem;
+    line-height: 1.7;
     font-weight: 400;
   }
   td {

@@ -59,7 +59,7 @@ templ writeSection(props PanelProps) {
 				}
 			</span>
 			if len(props.Audit) == 0 {
-				<span class="text-xs text-mute" data-testid="mcp-audit-empty">設定変更の記録はありません。</span>
+				<span class="text-sm text-mute" data-testid="mcp-audit-empty">設定変更の記録はありません。</span>
 			} else {
 				<table class="w-full text-left text-sm" aria-label="設定変更の監査ログ" data-testid="mcp-audit-table">
 					<thead>
