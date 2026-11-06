@@ -1,7 +1,7 @@
 // Fake `matchMedia` for the chart tests: the OS theme switch is `fire()` (the
 // `(prefers-color-scheme: dark)` query changing) and the page entering or leaving
 // print is `firePrint(matches)` (the `print` query changing); `listeners()` counts
-// who is still subscribed to either.
+// who is still subscribed to either. `print` queries report the last `firePrint` value as `matches`.
 
 export function installColorSchemeSwitch(): {
   fire: () => void;
@@ -12,10 +12,11 @@ export function installColorSchemeSwitch(): {
   const original = globalThis.matchMedia;
   const scheme = new Set<(event: { matches: boolean }) => void>();
   const print = new Set<(event: { matches: boolean }) => void>();
+  let printMatches = false;
   globalThis.matchMedia = ((query: string) => {
     const subscribed = query === 'print' ? print : scheme;
     return {
-      matches: false,
+      matches: query === 'print' ? printMatches : false,
       addEventListener: (_type: string, listener: (event: { matches: boolean }) => void) =>
         subscribed.add(listener),
       removeEventListener: (_type: string, listener: (event: { matches: boolean }) => void) =>
@@ -27,6 +28,7 @@ export function installColorSchemeSwitch(): {
       for (const listener of [...scheme]) listener({ matches: false });
     },
     firePrint: (matches) => {
+      printMatches = matches;
       for (const listener of [...print]) listener({ matches });
     },
     listeners: () => scheme.size + print.size,

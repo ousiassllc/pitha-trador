@@ -73,6 +73,9 @@ export class ColorSchemeController implements ReactiveController {
     this.setPrinting(event.matches);
 
   hostConnected(): void {
+    // `printing` is module-global and only the listeners below keep it current: a host that was
+    // disconnected across `afterprint` (or `beforeprint`) missed it, so resync from the media query.
+    if (typeof matchMedia === 'function') printing = matchMedia('print').matches;
     document.addEventListener(THEME_CHANGE_EVENT, this.onChange);
     window.addEventListener('beforeprint', this.beforePrint);
     window.addEventListener('afterprint', this.afterPrint);
@@ -115,18 +118,34 @@ export function syncPrintSnapshot(chart: PrintableChart): void {
   const live = chart.chartElement();
   const container = live.parentElement;
   if (!container) return;
-  container.querySelector(`[${PRINT_SNAPSHOT_ATTR}]`)?.remove();
   if (!isPrinting()) {
+    clearPrintSnapshot(container);
     live.style.visibility = '';
-    container.style.position = '';
     return;
   }
+  container.querySelector(`[${PRINT_SNAPSHOT_ATTR}]`)?.remove();
   const snapshot = chart.takeScreenshot();
   snapshot.setAttribute(PRINT_SNAPSHOT_ATTR, '');
-  snapshot.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+  // The bitmap has the size the chart had on screen (beforeprint fires before the print layout), the
+  // container may be narrower or wider in print: `contain` keeps the aspect ratio so text is not squashed.
+  snapshot.style.cssText =
+    'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:left top';
   container.style.position = 'relative';
   container.append(snapshot);
   live.style.visibility = 'hidden';
+}
+
+/**
+ * Undoes syncPrintSnapshot on `container` (the element the chart was created in): removes the still
+ * image and the `position` it set. Call it when the chart is torn down while the snapshot may be
+ * showing, e.g. a host disconnected during a print: the container is reused on reconnect, and an old
+ * image would otherwise cover the new chart. The live chart element is shown again by the caller's
+ * own teardown (chart.remove()) or by syncPrintSnapshot.
+ */
+export function clearPrintSnapshot(container: HTMLElement | null | undefined): void {
+  if (!container) return;
+  container.querySelector(`[${PRINT_SNAPSHOT_ATTR}]`)?.remove();
+  container.style.position = '';
 }
 
 /** `#rrggbb` at `alpha` as `rgba()`, which the canvas parser accepts; other formats pass through. */
