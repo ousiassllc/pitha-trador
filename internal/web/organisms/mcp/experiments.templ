@@ -157,12 +157,12 @@ templ experimentForm(settingNames []string) {
 				変える変数は 1 つだけです。名前には、設定なら設定画面での項目名（候補から選べます。MCP から変更できる項目だけ）、Jev のモデル・プロンプトの版ならその呼び名を入れます。仮説は 500 文字以内、名前と値は 200 文字以内です。開始時刻（JST）を空欄にすると今になります。
 			}
 		</span>
-		<label class="flex flex-col gap-1">
+		<label class="flex flex-col gap-2">
 			<span>仮説</span>
-			<textarea name="hypothesis" rows="2" maxlength="500" required class="rounded-md border border-border px-3 py-1" data-testid="mcp-experiment-hypothesis"></textarea>
+			@atoms.Textarea(atoms.TextareaProps{Name: "hypothesis", Attrs: templ.Attributes{"rows": "2", "maxlength": "500", "required": true, "data-testid": "mcp-experiment-hypothesis"}})
 		</label>
 		<div class="flex flex-wrap gap-2">
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-2">
 				<span>変数の種類</span>
 				@atoms.Select(atoms.SelectProps{Name: "kind", Attrs: templ.Attributes{"data-testid": "mcp-experiment-kind"}}) {
 					<option value="setting" selected>設定</option>
@@ -170,7 +170,7 @@ templ experimentForm(settingNames []string) {
 					<option value="prompt">Jev のプロンプトの版</option>
 				}
 			</label>
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-2">
 				<span>名前</span>
 				@atoms.Input(atoms.InputProps{Name: "name", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "list": "mcp-experiment-setting-names", "data-testid": "mcp-experiment-name"}})
 				<datalist id="mcp-experiment-setting-names">
@@ -181,15 +181,15 @@ templ experimentForm(settingNames []string) {
 			</label>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-2">
 				<span>変更前の値</span>
 				@atoms.Input(atoms.InputProps{Name: "before", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-before"}})
 			</label>
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-2">
 				<span>変更後の値</span>
 				@atoms.Input(atoms.InputProps{Name: "after", Class: "px-3 py-1", Attrs: templ.Attributes{"required": true, "maxlength": "200", "autocomplete": "off", "data-testid": "mcp-experiment-after"}})
 			</label>
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-2">
 				<span>開始時刻（JST）</span>
 				@atoms.Input(atoms.InputProps{Name: "started_at", Type: "datetime-local", Class: "px-3 py-1", Attrs: templ.Attributes{"data-testid": "mcp-experiment-started"}})
 			</label>
@@ -236,7 +236,7 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 			}
 		</div>
 		if len(props.Confounders) > 0 {
-			<ul class="list-disc pl-6 text-xs text-danger" data-testid="mcp-experiment-confounders">
+			<ul class="list-disc pl-6 text-sm text-danger" data-testid="mcp-experiment-confounders">
 				for _, c := range props.Confounders {
 					<li>{ c }</li>
 				}

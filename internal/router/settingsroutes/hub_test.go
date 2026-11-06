@@ -274,3 +274,14 @@ func TestHub_EmbedsHashRoutesForOldLinks(t *testing.T) {
 		t.Error("hub does not load the hash-forwarding script")
 	}
 }
+
+// The sections of a settings screen are 48 apart (brand-guide §3: セクション間
+// 48–72), not 24.
+func TestSettingsScreens_SectionsAreFortyEightApart(t *testing.T) {
+	for _, path := range []string{"/settings", "/settings/maintenance"} {
+		body := get(newEngine(t, secrets{full: true}), path).Body.String()
+		if !strings.Contains(body, "flex flex-col gap-12") || strings.Contains(body, "mt-6 flex flex-col gap-6") {
+			t.Errorf("%s: sections must be gap-12 apart: %s", path, body)
+		}
+	}
+}

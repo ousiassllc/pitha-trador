@@ -185,3 +185,19 @@ func TestSymbolHandler_ClosePosition_DoesNotDependOnStateRead(t *testing.T) {
 		t.Fatalf("status/closeCalls = %d/%d, want 200/1 (CloseAtMarket owns the price/Book choice)", rec.Code, provider.closeCalls)
 	}
 }
+
+// A toast is one short line (brand-guide O3: h-10, nowrap): the off-session
+// refusal is a single short sentence; the "try again at the next session" note
+// lives in the position panel's HelpMark.
+func TestSymbolHandler_ClosePosition_OutsideTradingSessionToastIsOneShortSentence(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	provider := &fakeSymbolProvider{position: domain.Position{ID: 42, Symbol: "7203"}, closeErr: fmt.Errorf("close: %w", execution.ErrOutsideTradingSession)}
+	router := gin.New()
+	router.POST("/positions/:id/close", symbol.NewSymbolHandler(provider, symbol.SymbolRiskParams{}).ClosePosition)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/positions/42/close", nil))
+	body := rec.Body.String()
+	if !strings.Contains(body, "立会時間外のため決済できません。") || strings.Contains(body, "次の立会で") {
+		t.Errorf("toast must be the one short sentence only: %q", body)
+	}
+}

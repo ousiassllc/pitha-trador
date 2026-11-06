@@ -14,7 +14,7 @@ templ ErrorLogPanel() {
 	<section id="error-log-panel" class="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink" data-testid="error-log-panel">
 		<h3 class="sr-only">エラーログ</h3>
 		<form method="get" action="/api/v1/logs/errors" hx-disable class="flex flex-wrap items-end gap-3" data-testid="error-log-form">
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-2">
 				<span class="text-ink">期間</span>
 				@atoms.Select(atoms.SelectProps{Name: "days", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "error-log-days"}}) {
 					<option value="1">直近 1 日</option>
@@ -23,7 +23,7 @@ templ ErrorLogPanel() {
 					<option value="90">直近 90 日</option>
 				}
 			</label>
-			<label class="flex flex-col gap-1">
+			<label class="flex flex-col gap-2">
 				<span class="text-ink">レベル</span>
 				@atoms.Select(atoms.SelectProps{Name: "level", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "error-log-level"}}) {
 					<option value="error" selected>ERROR のみ</option>

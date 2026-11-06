@@ -80,7 +80,7 @@ templ Panel(props PanelProps) {
 			@keyReveal(props.RevealedKey)
 		}
 		<div class="flex flex-col gap-1" data-testid="mcp-state" data-state={ props.State }>
-			<span class="flex flex-wrap items-center gap-2 font-semibold text-ink">
+			<span class="flex flex-wrap items-center gap-2 text-ink">
 				状態:
 				@stateBadge(props.State)
 			</span>

@@ -27,15 +27,15 @@ templ OrderProposalsPage(props ProposalListProps) {
 			<p class="mt-3 rounded-md border tone-danger px-4 py-2 text-sm" role="alert" data-testid="order-proposals-error">{ e }</p>
 		}
 		<form method="get" action="/order-proposals" class="mt-4 flex flex-wrap items-end gap-3 text-sm" data-testid="order-proposals-filter">
-			<label class="flex flex-col gap-1 text-ink">
+			<label class="flex flex-col gap-2 text-ink">
 				開始日（JST）
 				@atoms.Input(atoms.InputProps{Name: "from", Type: "date", Class: "px-3 py-2 font-normal", Attrs: templ.Attributes{"value": props.Filter.From}})
 			</label>
-			<label class="flex flex-col gap-1 text-ink">
+			<label class="flex flex-col gap-2 text-ink">
 				終了日（JST）
 				@atoms.Input(atoms.InputProps{Name: "to", Type: "date", Class: "px-3 py-2 font-normal", Attrs: templ.Attributes{"value": props.Filter.To}})
 			</label>
-			<label class="flex flex-col gap-1 text-ink">
+			<label class="flex flex-col gap-2 text-ink">
 				状態
 				@atoms.Select(atoms.SelectProps{Name: "status", Class: "px-3 py-2 font-normal"}) {
 					<option value="">すべて</option>
@@ -44,7 +44,7 @@ templ OrderProposalsPage(props ProposalListProps) {
 					}
 				}
 			</label>
-			<label class="flex flex-col gap-1 text-ink">
+			<label class="flex flex-col gap-2 text-ink">
 				枠
 				@atoms.Select(atoms.SelectProps{Name: "bucket", Class: "px-3 py-2 font-normal"}) {
 					<option value="">すべて</option>

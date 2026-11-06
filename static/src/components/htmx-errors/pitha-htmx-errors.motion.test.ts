@@ -75,3 +75,52 @@ describe('toast motion (design guide §4/§5)', () => {
     expect(calls[1].options.duration).toBeLessThanOrEqual(100);
   });
 });
+
+// An inline alert that a new response replaces fades out first (design guide
+// §4/§5): the swap is held for the fade, during which htmx marks the slot
+// `htmx-swapping` (app.css animates the alert out). An empty slot is swapped
+// at once.
+describe('inline alert exit (design guide §4/§5)', () => {
+  const realMatchMedia = globalThis.matchMedia;
+
+  beforeEach(() => {
+    document.body.innerHTML =
+      '<div id="slot"><div data-inline-alert role="alert"></div></div><div id="empty-slot"></div>';
+    watchToastRegion(document.createElement('div'));
+    globalThis.matchMedia = (() => ({ matches: false })) as unknown as typeof matchMedia;
+  });
+
+  afterEach(() => {
+    globalThis.matchMedia = realMatchMedia;
+  });
+
+  function swap(targetId: string): Record<string, unknown> {
+    const detail: Record<string, unknown> = {
+      xhr: {
+        status: 422,
+        responseText: '<div data-inline-alert></div>',
+        getResponseHeader: () => null,
+      } as unknown as XMLHttpRequest,
+      shouldSwap: true,
+      target: document.getElementById(targetId),
+      swapOverride: 'innerHTML',
+    };
+    document.dispatchEvent(new CustomEvent('htmx:beforeSwap', { detail, bubbles: true }));
+    return detail;
+  }
+
+  test('holds the swap for 240ms while the old alert fades out', () => {
+    const detail = swap('slot');
+    expect(detail.swapOverride).toBe('innerHTML swap:240ms');
+    expect(detail.shouldSwap).toBe(true);
+  });
+
+  test('prefers-reduced-motion: holds it for at most 100ms', () => {
+    globalThis.matchMedia = (() => ({ matches: true })) as unknown as typeof matchMedia;
+    expect(swap('slot').swapOverride).toBe('innerHTML swap:100ms');
+  });
+
+  test('swaps into an empty slot at once', () => {
+    expect(swap('empty-slot').swapOverride).toBe('innerHTML');
+  });
+});

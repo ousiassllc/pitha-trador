@@ -216,14 +216,14 @@ templ metaBlock(rows []MetaRow) {
 							<th scope="row" class="px-2 py-1.5 text-left text-ink">{ r.Version }</th>
 							<td class="px-2 py-1.5 text-right">{ r.Status }</td>
 							<td class="px-2 py-1.5 text-right">{ r.OOSWindow }</td>
-							<td class="px-2 py-1.5 text-right">{ r.OOSSamples }</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ r.OOSSamples }</td>
 							@cell(r.OOSAUC, fmt.Sprintf("meta-%d-oos-auc", i))
 							@cell(r.OOSEV, fmt.Sprintf("meta-%d-oos-ev", i))
-							<td class="px-2 py-1.5 text-right">{ fmt.Sprintf("%d", r.LinkedN) }</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", r.LinkedN) }</td>
 							@cell(r.PredictedEV, fmt.Sprintf("meta-%d-predicted-ev", i))
 							@cell(r.RealizedEV, fmt.Sprintf("meta-%d-realized-ev", i))
 							@cell(r.EVGap, fmt.Sprintf("meta-%d-ev-gap", i))
-							<td class="px-2 py-1.5 text-right">{ fmt.Sprintf("%d", r.WindowN) }</td>
+							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", r.WindowN) }</td>
 							@cell(r.WindowEV, fmt.Sprintf("meta-%d-window-ev", i))
 						</tr>
 					}

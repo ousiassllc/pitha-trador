@@ -127,7 +127,9 @@ func (h *Handler) CloseExperiment(c *gin.Context) {
 		return
 	case err != nil:
 		if reason, invalid := experiment.IsInvalid(err); invalid {
-			shared.RespondActionError(c, http.StatusUnprocessableEntity, "実験を終えられません: "+reason+"。")
+			// A toast is one short line: the reason goes to the log, not onto the screen.
+			slog.WarnContext(ctx, "mcpsettings: close experiment refused", "id", id, "reason", reason)
+			shared.RespondActionError(c, http.StatusUnprocessableEntity, "実験を終えられません。")
 			return
 		}
 		slog.ErrorContext(ctx, "mcpsettings: close experiment", "id", id, "error", err)
