@@ -307,3 +307,18 @@ func TestSettingGroupDerived_TitleIsAHeadingAndItemLabelIsRegular(t *testing.T) 
 		t.Errorf("body text must not be SemiBold: %s", html)
 	}
 }
+
+// issue #1006 (T3): "N/M 項目" is a count the operator reads, so it is text-sm
+// text-mute; only the status pills beside it stay at 12px.
+func TestSettingCounts_AreValueLinesNotNotes(t *testing.T) {
+	connection := render(t, molecules.ConnectionStatus(molecules.ConnectionProps{ID: "c"}, false))
+	group := render(t, molecules.SettingGroupStatus(molecules.SettingGroupProps{ID: "g"}, false))
+	for name, tc := range map[string]struct{ html, want string }{
+		"ConnectionStatus":   {connection, `<span class="text-sm text-mute">0/0 項目</span>`},
+		"SettingGroupStatus": {group, `<span class="text-sm font-normal text-mute">0/0 項目</span>`},
+	} {
+		if !strings.Contains(tc.html, tc.want) {
+			t.Errorf("%s: the item count must be text-sm: %s", name, tc.html)
+		}
+	}
+}

@@ -178,7 +178,7 @@ templ ConnectionStatus(props ConnectionProps, oob bool) {
 		if props.Required && props.State() != ConnectionConfigured {
 			<span class="rounded-full border tone-danger px-2 py-1 text-xs">必須</span>
 		}
-		<span class="text-xs text-mute">{ strconv.Itoa(props.ConfiguredCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
+		<span class="text-sm text-mute">{ strconv.Itoa(props.ConfiguredCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
 		for _, badge := range props.Badges {
 			<span class={ "rounded-full px-2 py-1 text-xs", badge.Tone.class() } data-testid={ "connection-badge-" + props.ID + "-" + badge.ID }>{ badge.Text }</span>
 		}
