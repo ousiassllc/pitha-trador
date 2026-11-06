@@ -21,11 +21,11 @@ import (
 // it has no buttons.
 templ OrderProposalDetailPage(p ProposalDetailProps) {
 	@layout.Shell(labels.Numbered("注文提案", p.ID), organisms.NavOrderProposals) {
-		<p class="text-sm"><a class="underline decoration-mute" href="/order-proposals">@atoms.IconNavArrowLeft() 注文提案の一覧</a></p>
+		<p class="text-sm"><a class="text-accent underline decoration-mute" href="/order-proposals">@atoms.IconNavArrowLeft() 注文提案の一覧</a></p>
 		<h1 class="mt-2 text-3xl font-semibold text-ink" data-testid="order-proposal-title">
 			{ labels.Numbered("注文提案", p.ID) }
 			<span class="ml-2 font-mono text-lg">
-				<a class="underline decoration-mute" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
+				<a class="text-accent underline decoration-mute" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
 			</span>
 		</h1>
 		<p class="mt-2 text-sm text-ink" data-testid="order-proposal-status" data-status={ p.Status }>
@@ -92,7 +92,7 @@ templ proposalSources(sources []ProposalSource) {
 						<span class="text-xs text-mute">（取得 { s.RetrievedAt }）</span>
 						<br/>
 						if s.Href != "" {
-							<a class="break-all underline decoration-mute" href={ templ.SafeURL(s.Href) } target="_blank" rel="noopener noreferrer">{ s.URL }</a>
+							<a class="break-all text-accent underline decoration-mute" href={ templ.SafeURL(s.Href) } target="_blank" rel="noopener noreferrer">{ s.URL }</a>
 						} else {
 							<span class="break-all font-mono text-xs">{ s.URL }</span>
 						}
