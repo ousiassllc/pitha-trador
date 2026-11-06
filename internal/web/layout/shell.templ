@@ -72,6 +72,7 @@ templ document(title string) {
 			}
 			<title>{ title } - pitha-trador</title>
 			<meta name="htmx-config" content={ htmxConfig }/>
+			<script src="/static/vendor/theme-init.js"></script>
 			<link rel="stylesheet" href="/static/dist/fonts/fonts.css"/>
 			<link rel="stylesheet" href="/static/dist/css/app.css"/>
 			<script src="/static/vendor/htmx.min.js"></script>
@@ -81,6 +82,7 @@ templ document(title string) {
 			<script type="module" src="/static/dist/js/ripple/pitha-ripple.js"></script>
 			<script type="module" src="/static/dist/js/confirm/pitha-confirm.js"></script>
 			<script type="module" src="/static/dist/js/modal/pitha-modal.js"></script>
+			<script type="module" src="/static/dist/js/theme-toggle/pitha-theme-toggle.js"></script>
 		</head>
 		<body class="min-h-screen bg-bone text-ink" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
 			{ children... }

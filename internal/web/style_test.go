@@ -201,17 +201,22 @@ func TestTemplClassExpressionsAreNotConcatenated(t *testing.T) {
 	}
 }
 
-// TestCompiledDarkTokensFollowTheOS pins issue #957: the Dark values are
-// reachable because they sit under `prefers-color-scheme: dark`, not behind an
-// attribute nothing sets.
-func TestCompiledDarkTokensFollowTheOS(t *testing.T) {
+// TestCompiledDarkTokensFollowTheOSAndDataTheme pins issues #957 and #978: the
+// Dark values are reachable under `prefers-color-scheme: dark` (unless
+// `data-theme="light"` opts out) and under `data-theme="dark"`, and a forced
+// Light needs no rule of its own (the :root Light values apply).
+func TestCompiledDarkTokensFollowTheOSAndDataTheme(t *testing.T) {
 	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
 	if err != nil {
 		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
 	}
-	want := "@media (prefers-color-scheme:dark){:root{color-scheme:dark;--ink:#fff;"
-	if !strings.Contains(string(css), want) {
-		t.Errorf("compiled stylesheet lacks %q", want)
+	for _, want := range []string{
+		"@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--ink:#fff;",
+		":root[data-theme=dark]{color-scheme:dark;--ink:#fff;",
+	} {
+		if !strings.Contains(string(css), want) {
+			t.Errorf("compiled stylesheet lacks %q", want)
+		}
 	}
 }
 

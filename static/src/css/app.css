@@ -3,6 +3,7 @@
    that output, not this source file. */
 @import "tailwindcss";
 @import "./table.css" layer(base);
+@import "./dark.css";
 
 /* internal/web (Templ templates) lives outside static/, so it falls
    outside Tailwind's automatic content detection root; register it
@@ -10,9 +11,11 @@
 @source "../../../internal/web";
 
 /* Ousiass design guide color tokens (brand-guide §1). Light values live on
-   :root and Dark values override them under `prefers-color-scheme: dark`, so
-   every utility below and every Lit shadow root (custom properties inherit
-   through shadow boundaries) switches theme with the OS setting. */
+   :root. Dark values (dark.css) override them under `prefers-color-scheme: dark`
+   unless `<html data-theme="light">` opts out, and under `<html data-theme="dark">`
+   whatever the OS says, so every utility below and every Lit shadow root (custom
+   properties inherit through shadow boundaries) switches theme with the OS
+   setting or the manual choice. */
 :root {
   color-scheme: light;
   --ink: #050505;
@@ -63,26 +66,6 @@
   --z-drawer: 300;
   --z-modal: 400;
   --z-toast: 500;
-}
-
-/* Dark follows the OS (`prefers-color-scheme`); there is no manual switch. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --ink: #ffffff;
-    --bone: #050505;
-    --mute: #8b8b8e;
-    --surface: #141414;
-    --border: #2a2a2a;
-    --accent: #f5f5f4;
-    --accent-soft: #2a2a2a;
-    --focus: #60a5fa;
-    --success: #8fafa0;
-    --warning: #c4b87a;
-    --danger: #c49a9a;
-    --info: #9aabbc;
-    --scrim: color-mix(in srgb, #050505 60%, transparent);
-  }
 }
 
 /* The guide's palette is the only palette: drop Tailwind's default colors so

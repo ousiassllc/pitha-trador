@@ -1,0 +1,50 @@
+package molecules
+
+// themeChoices is ThemeToggle's segments in display order. Value is the
+// `data-theme-choice` that static/src/components/theme-toggle reads.
+var themeChoices = []struct {
+	Value string
+	Label string
+}{
+	{"auto", "自動"},
+	{"light", "ライト"},
+	{"dark", "ダーク"},
+}
+
+// themeChoicePressed is a segment's initial `aria-pressed`: only 自動 (the
+// state without a saved choice) until the script reads localStorage.
+func themeChoicePressed(value string) string {
+	if value == "auto" {
+		return "true"
+	}
+	return "false"
+}
+
+// ThemeToggle renders the Light / Dark switch of the Header (issue #978,
+// brand-guide §4 セグメント: an --accent-soft track whose selected segment is a
+// --surface face): 自動 follows the OS (`prefers-color-scheme`), ライト and
+// ダーク force the theme. static/src/components/theme-toggle wires the buttons
+// by `data-theme-choice`: it sets `<html data-theme>`, keeps the choice in the
+// browser's localStorage and flips `aria-pressed`, which the selected
+// segment's `aria-pressed:` utilities style. The server cannot know the
+// browser's choice, so every segment starts unpressed except 自動 and the
+// script corrects that on load. The switch is hidden when printing
+// (brand-guide §8: print is always ink on bone).
+templ ThemeToggle() {
+	<div
+		role="group"
+		aria-label="テーマ"
+		class="inline-flex gap-0.5 rounded-md bg-accent-soft p-0.5 print:hidden"
+		data-testid="theme-toggle"
+	>
+		for _, c := range themeChoices {
+			<button
+				type="button"
+				class="relative min-h-8 overflow-hidden rounded-sm px-3 text-sm text-mute transition-colors duration-base hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-pressed:bg-surface aria-pressed:text-ink"
+				aria-pressed={ themeChoicePressed(c.Value) }
+				data-theme-choice={ c.Value }
+				data-ripple
+			>{ c.Label }</button>
+		}
+	</div>
+}
