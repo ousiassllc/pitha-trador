@@ -38,7 +38,7 @@ templ cardError(message string) {
 // DestLink renders a 「どこを見るか」 link; nothing for the zero Link.
 templ DestLink(l Link) {
 	if l.Href != "" {
-		<a class={ linkClass } href={ templ.SafeURL(l.Href) } data-testid="home-link">{ l.Label } →</a>
+		<a class={ linkClass } href={ templ.SafeURL(l.Href) } data-testid="home-link">{ l.Label } @atoms.IconArrowRight()</a>
 	}
 }
 

@@ -105,7 +105,7 @@ templ scanBlock(v ScanView) {
 			<p class="mt-1 text-xs text-mute" data-testid="scan-cycle-meta">最終サイクル { FormatTime(v.Panel.Cycle.FinishedAt) }（所要 { organisms.FormatCycleDuration(v.Panel.Cycle.Duration()) }）</p>
 			@organisms.ScanFunnel(v.Panel)
 		}
-		<p class="mt-2"><a class={ linkClass } href="/scanner">候補銘柄 →</a></p>
+		<p class="mt-2"><a class={ linkClass } href="/scanner">候補銘柄 @atoms.IconArrowRight()</a></p>
 	</section>
 }
 
@@ -134,7 +134,7 @@ templ proposalsBlock(v ProposalsView) {
 				}
 			</ul>
 		}
-		<p class="mt-2"><a class={ linkClass } href="/order-proposals">AIの注文提案 →</a></p>
+		<p class="mt-2"><a class={ linkClass } href="/order-proposals">AIの注文提案 @atoms.IconArrowRight()</a></p>
 	</section>
 }
 
@@ -155,7 +155,7 @@ templ tradesBlock(v TradesView) {
 				}
 			</ul>
 		}
-		<p class="mt-2"><a class={ linkClass } href="/performance">成績 →</a></p>
+		<p class="mt-2"><a class={ linkClass } href="/performance">成績 @atoms.IconArrowRight()</a></p>
 	</section>
 }
 
@@ -181,7 +181,7 @@ templ modelBlock(v ModelView) {
 				<p class="mt-1 text-xs text-warning" data-testid="model-retrain">{ v.RetrainNotice }</p>
 			}
 		}
-		<p class="mt-2"><a class={ linkClass } href="/settings/results">設定 ＞ 予測モデル →</a></p>
+		<p class="mt-2"><a class={ linkClass } href="/settings/results">設定 ＞ 予測モデル @atoms.IconArrowRight()</a></p>
 	</section>
 }
 
@@ -199,6 +199,6 @@ templ killEventsBlock(v KillEventsView) {
 				}
 			</ul>
 		}
-		<p class="mt-2"><a class={ linkClass } href="/activity">稼働ログ →</a></p>
+		<p class="mt-2"><a class={ linkClass } href="/activity">稼働ログ @atoms.IconArrowRight()</a></p>
 	</section>
 }
