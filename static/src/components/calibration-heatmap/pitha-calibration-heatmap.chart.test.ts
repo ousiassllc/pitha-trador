@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { installColorSchemeSwitch, setDarkTokens } from '../lib/color-scheme-test-support';
 import {
   bucket,
   createdCharts,
@@ -47,5 +48,40 @@ describe('pitha-calibration-heatmap chart', () => {
     const [, , perfect, accuracy] = createdSeries;
     expect(accuracy.setData).toHaveBeenLastCalledWith([{ time: 75, value: 0.63 }]);
     expect(perfect.setData).toHaveBeenLastCalledWith([{ time: 75, value: 0.75 }]);
+  });
+});
+
+// canvas colors are read once, so an OS Light/Dark switch must re-apply them (issue #964).
+describe('pitha-calibration-heatmap OS theme switch (issue #964)', () => {
+  let scheme: ReturnType<typeof installColorSchemeSwitch>;
+  beforeEach(() => {
+    scheme = installColorSchemeSwitch();
+  });
+  afterEach(() => {
+    scheme.restore();
+    document.documentElement.removeAttribute('style');
+  });
+
+  test('re-applies the chart and both curve colors from the tokens now in force', async () => {
+    await mount(response());
+
+    setDarkTokens();
+    scheme.fire();
+
+    const [perfect, accuracy] = createdSeries;
+    expect(createdCharts[0].applyOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ layout: expect.objectContaining({ textColor: '#8b8b8e' }) }),
+    );
+    expect(perfect.applyOptions).toHaveBeenCalledWith({ color: '#8b8b8e' });
+    expect(accuracy.applyOptions).toHaveBeenCalledWith({ color: '#ffffff' });
+  });
+
+  test('stops listening once the element is removed', async () => {
+    const { el } = await mount(response());
+    expect(scheme.listeners()).toBe(1);
+
+    el.remove();
+
+    expect(scheme.listeners()).toBe(0);
   });
 });

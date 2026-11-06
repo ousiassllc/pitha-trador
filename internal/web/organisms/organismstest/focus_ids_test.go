@@ -69,11 +69,15 @@ func TestScanPanel_FilterFieldsAreEightBelowTheirLabels(t *testing.T) {
 	}
 }
 
-// The no-master empty state is a dashed box: --r-lg like the other empty
-// states (brand-guide §4; issue #959).
-func TestScanPanel_UniverseEmptyIsRoundedLarge(t *testing.T) {
+// The no-master box is a warning with a button and a note, so it is an inline
+// alert (solid border, --r-md), not a dashed --r-lg empty-state frame whose
+// padding it does not follow (brand-guide §3 S4; issues #959, #966).
+func TestScanPanel_UniverseEmptyIsAnInlineAlertShape(t *testing.T) {
 	html := renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{UniverseEmpty: true}))
-	assertContains(t, html, `class="mt-3 rounded-lg border border-dashed tone-warning`)
+	assertContains(t, html, `class="mt-3 rounded-md border tone-warning px-4 py-3 text-sm"`)
+	if strings.Contains(html, "border-dashed") {
+		t.Errorf("the warning box kept the dashed empty-state border: %s", html)
+	}
 }
 
 // The queue table is the first block under the h1 of the activity page, so it

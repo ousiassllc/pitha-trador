@@ -167,3 +167,17 @@ describe('pitha-exit-alignment summary', () => {
     expect(css).toMatch(/\.summary dd\s*\{[^}]*JetBrains Mono[^}]*tabular-nums/);
   });
 });
+
+// Issue #966: heading gaps follow the spacing recipe (h2 below 24, h3 below 12), not 4px.
+describe('pitha-exit-alignment heading spacing', () => {
+  test('puts 24px below the h2 and 12px below the h3', async () => {
+    const el = await mount(body());
+    const css = (
+      el.constructor as unknown as { elementStyles: { cssText: string }[] }
+    ).elementStyles
+      .map((s) => s.cssText)
+      .join('');
+    expect(css).toMatch(/h2\s*\{[^}]*margin:\s*0\.75rem 0 1\.5rem;/);
+    expect(css).toMatch(/h3\s*\{[^}]*margin:\s*0\.75rem 0;/);
+  });
+});

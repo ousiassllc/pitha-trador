@@ -47,6 +47,16 @@ func TestScannerTableFallback_ShowsCountAndJSTAsOfCaption(t *testing.T) {
 
 // Candidate returns are Feature Engine decimal ratios (0.004 == +0.4%); the
 // 騰落率(%) columns must show them as percent (issue #365).
+// The symbol link is underlined in --mute at rest, like the text links elsewhere
+// (brand-guide §4 ボタン; issue #965).
+func TestScannerTableFallback_SymbolLinkIsUnderlinedInMute(t *testing.T) {
+	body := renderScannerTable(t, []domain.Candidate{{Symbol: "7203", Price: 1}})
+
+	if !strings.Contains(body, `<a class="text-accent underline decoration-mute" href="/symbols/7203"`) {
+		t.Errorf("symbol link is not underlined in --mute: %q", body)
+	}
+}
+
 func TestScannerTableFallback_ShowsReturnsAsPercent(t *testing.T) {
 	r1, r5 := 0.004, -0.0042
 	body := renderScannerTable(t, []domain.Candidate{{Symbol: "7203", Price: 1, Return1m: &r1, Return5m: &r5}})

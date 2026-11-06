@@ -191,8 +191,20 @@ func TestScannerHandler_ScanView_FragmentListsSymbolsWithStatusAndReasons(t *tes
 // it, not a 12px note (brand-guide §2, T3; issue #958).
 func TestScannerHandler_ScanView_ExportLinkIsBodyText(t *testing.T) {
 	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner/scan", true)
-	if !strings.Contains(body, `<a class="text-sm text-accent underline-offset-2 hover:underline"`) || !strings.Contains(body, `data-testid="scan-export"`) {
+	if !strings.Contains(body, `<a class="text-sm text-accent underline decoration-mute"`) || !strings.Contains(body, `data-testid="scan-export"`) {
 		t.Errorf("export link is not text-sm: %s", body)
+	}
+}
+
+// Text links are underlined in --mute at rest, not only on hover, so they read
+// apart from body text of the same color (brand-guide §4 ボタン; issue #965).
+func TestScannerHandler_ScanView_TextLinksAreUnderlinedInMute(t *testing.T) {
+	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner/scan", true)
+	if !strings.Contains(body, `<a class="text-accent underline decoration-mute" href="/symbols/1001"`) {
+		t.Errorf("symbol link is not underlined in --mute: %s", body)
+	}
+	if strings.Contains(body, "hover:underline") {
+		t.Errorf("a link underlines only on hover: %s", body)
 	}
 }
 

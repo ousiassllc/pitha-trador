@@ -1,11 +1,13 @@
 // Chart colors from the design-guide tokens (brand-guide §8 チャート: series in
 // the state colors / --mute / --ink, no prism, axes and grid in --border only).
 // lightweight-charts draws on a canvas, which cannot resolve `var(--x)`, so the
-// tokens defined in static/src/css/app.css are read from the document once when
-// a chart is created (a theme switch needs a new chart). The Light values are
-// the fallback where the stylesheet is not loaded (tests, a failed CSS load).
+// tokens defined in static/src/css/app.css are read from the document when a
+// chart is created and again, via ColorSchemeController, each time the OS switches
+// between Light and Dark. The Light values are the fallback where the
+// stylesheet is not loaded (tests, a failed CSS load).
 
 import type { ColorType } from 'lightweight-charts';
+import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
 const LIGHT_FALLBACK = {
   ink: '#050505',
@@ -26,6 +28,34 @@ export function readToken(token: ChartToken): string {
       ? ''
       : getComputedStyle(document.documentElement).getPropertyValue(`--${token}`).trim();
   return value || LIGHT_FALLBACK[token];
+}
+
+/**
+ * Calls `onChange` while the host is connected each time the OS switches between
+ * Light and Dark (app.css follows `prefers-color-scheme`, there is no manual
+ * switch). A canvas keeps the colors it was given, so each chart re-applies its
+ * tokens then.
+ */
+export class ColorSchemeController implements ReactiveController {
+  private query: MediaQueryList | null = null;
+
+  constructor(
+    host: ReactiveControllerHost,
+    private readonly onChange: () => void,
+  ) {
+    host.addController(this);
+  }
+
+  hostConnected(): void {
+    if (typeof matchMedia !== 'function') return;
+    this.query = matchMedia('(prefers-color-scheme: dark)');
+    this.query.addEventListener('change', this.onChange);
+  }
+
+  hostDisconnected(): void {
+    this.query?.removeEventListener('change', this.onChange);
+    this.query = null;
+  }
 }
 
 /** `#rrggbb` at `alpha` as `rgba()`, which the canvas parser accepts; other formats pass through. */

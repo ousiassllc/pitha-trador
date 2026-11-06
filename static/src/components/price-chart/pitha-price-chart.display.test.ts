@@ -1,5 +1,7 @@
-import { describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { installColorSchemeSwitch, setDarkTokens } from '../lib/color-scheme-test-support';
 import {
+  createdCharts,
   createdSeries,
   FakeWebSocket,
   installChartHarness,
@@ -211,5 +213,60 @@ describe('pitha-price-chart series colors (design guide §1/§8)', () => {
       layout: { fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
       grid: { horzLines: { color: '#e7e7e5' } },
     });
+  });
+});
+
+// canvas colors are read once, so an OS Light/Dark switch must re-apply them (issue #964).
+describe('pitha-price-chart OS theme switch (issue #964)', () => {
+  let scheme: ReturnType<typeof installColorSchemeSwitch>;
+  beforeEach(() => {
+    scheme = installColorSchemeSwitch();
+  });
+  afterEach(() => {
+    scheme.restore();
+    document.documentElement.removeAttribute('style');
+  });
+
+  test('re-applies the chart, series and marker colors from the tokens now in force', async () => {
+    await mount();
+    jevUpdate('SHORT', baseMs - 60 * MINUTE_MS);
+    jevUpdate('LONG', baseMs + 30_000);
+
+    setDarkTokens();
+    scheme.fire();
+
+    expect(createdCharts[0].applyOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        layout: expect.objectContaining({ textColor: '#8b8b8e' }),
+        grid: { vertLines: { color: '#2a2a2a' }, horzLines: { color: '#2a2a2a' } },
+      }),
+    );
+    expect(candleSeries().applyOptions).toHaveBeenCalledWith({
+      upColor: '#ffffff',
+      downColor: '#141414',
+      borderUpColor: '#ffffff',
+      borderDownColor: '#ffffff',
+      wickUpColor: '#ffffff',
+      wickDownColor: '#ffffff',
+    });
+    expect(vwapSeriesMock().applyOptions).toHaveBeenCalledWith({ color: '#9aabbc' });
+    expect(createdSeries[2].applyOptions).toHaveBeenCalledWith({
+      color: 'rgba(139, 139, 142, 0.5)',
+    });
+    const markers = candleSeries().setMarkers.mock.calls.at(-1)?.[0] as unknown as Record<
+      string,
+      unknown
+    >[];
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toMatchObject({ text: 'LONG', color: '#8fafa0' });
+  });
+
+  test('stops listening once the element is removed', async () => {
+    const el = await mount();
+    expect(scheme.listeners()).toBe(1);
+
+    el.remove();
+
+    expect(scheme.listeners()).toBe(0);
   });
 });

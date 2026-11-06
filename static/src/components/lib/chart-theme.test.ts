@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { chartBaseOptions, readToken, withAlpha } from './chart-theme';
+import type { ReactiveControllerHost } from 'lit';
+import { ColorSchemeController, chartBaseOptions, readToken, withAlpha } from './chart-theme';
+import { installColorSchemeSwitch } from './color-scheme-test-support';
 
 afterEach(() => {
   document.documentElement.removeAttribute('style');
@@ -50,5 +52,42 @@ describe('chartBaseOptions', () => {
     const dark = chartBaseOptions();
     expect(dark.crosshair.vertLine).toEqual({ color: '#8b8b8e', labelBackgroundColor: '#ffffff' });
     expect(dark.crosshair.horzLine).toEqual({ color: '#8b8b8e', labelBackgroundColor: '#ffffff' });
+  });
+});
+
+describe('ColorSchemeController', () => {
+  test('calls back on each OS theme switch while the host is connected', () => {
+    const scheme = installColorSchemeSwitch();
+    try {
+      let calls = 0;
+      const host = { addController: () => {} } as unknown as ReactiveControllerHost;
+      const controller = new ColorSchemeController(host, () => calls++);
+
+      controller.hostConnected();
+      scheme.fire();
+      scheme.fire();
+      controller.hostDisconnected();
+      scheme.fire();
+
+      expect(calls).toBe(2);
+      expect(scheme.listeners()).toBe(0);
+    } finally {
+      scheme.restore();
+    }
+  });
+
+  test('does nothing where matchMedia is unavailable', () => {
+    const original = globalThis.matchMedia;
+    globalThis.matchMedia = undefined as unknown as typeof matchMedia;
+    try {
+      const host = { addController: () => {} } as unknown as ReactiveControllerHost;
+      const controller = new ColorSchemeController(host, () => {});
+      expect(() => {
+        controller.hostConnected();
+        controller.hostDisconnected();
+      }).not.toThrow();
+    } finally {
+      globalThis.matchMedia = original;
+    }
   });
 });

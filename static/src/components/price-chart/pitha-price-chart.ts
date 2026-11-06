@@ -15,12 +15,13 @@ import { css, html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
-import { chartBaseOptions, readToken, withAlpha } from '../lib/chart-theme';
+import { ColorSchemeController, chartBaseOptions } from '../lib/chart-theme';
 import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
 import { renderWsDisconnected } from '../lib/ws-status';
 import { type Bar, foldTick, toBarTime, toUTCTimestamp } from './bars';
+import { candleColors, markerColor, volumeColor, vwapColor } from './chart-colors';
 import {
   type ChartSummary,
   describeChart,
@@ -39,9 +40,6 @@ import type {
 import { formatCrosshairTime, formatTickMark } from './jst-time';
 
 const CHART_HEIGHT = 400;
-// Series colors are the guide's state tokens (read at createChart, lib/chart-theme.ts):
-// up / long = --success, down / short = --danger, VWAP = --info, volume = --mute at 50%.
-
 @customElement('pitha-price-chart')
 export class PithaPriceChart extends LitElement {
   // Shadow DOM: Tailwind does not reach in here, so style locally.
@@ -85,6 +83,8 @@ export class PithaPriceChart extends LitElement {
   // The newest 1-minute bar on the chart (loaded or tick-built): ticks fold
   // into it instead of stacking new bars.
   private lastBar: Bar | null = null;
+  // The canvas keeps the colors it was given, so re-apply the tokens on an OS Light/Dark switch.
+  readonly colorScheme = new ColorSchemeController(this, () => this.applyTheme());
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -156,26 +156,21 @@ export class PithaPriceChart extends LitElement {
         tickMarkFormatter: formatTickMark,
       },
     });
-    // Up is a filled --ink candle, down a hollow one (--surface fill, --ink
-    // border): the guide's chart series are --success/--warning/--info/--mute/
-    // --ink only, and a price move is not an error, so --danger is not used.
-    const ink = readToken('ink');
-    this.candleSeries = this.chart.addCandlestickSeries({
-      upColor: ink,
-      downColor: readToken('surface'),
-      borderUpColor: ink,
-      borderDownColor: ink,
-      wickUpColor: ink,
-      wickDownColor: ink,
-    });
-    this.vwapSeries = this.chart.addLineSeries({ color: readToken('info'), lineWidth: 1 });
-    this.volumeSeries = this.chart.addHistogramSeries({
-      priceScaleId: '',
-      color: withAlpha(readToken('mute'), 0.5),
-    });
+    this.candleSeries = this.chart.addCandlestickSeries(candleColors());
+    this.vwapSeries = this.chart.addLineSeries({ ...vwapColor(), lineWidth: 1 });
+    this.volumeSeries = this.chart.addHistogramSeries({ priceScaleId: '', ...volumeColor() });
     // Keep the volume bars in their own bottom band, clear of the candles/VWAP.
     this.volumeSeries.priceScale().applyOptions({ scaleMargins: VOLUME_SCALE_MARGINS });
     this.chart.priceScale('right').applyOptions({ scaleMargins: MAIN_SCALE_MARGINS });
+  }
+
+  private applyTheme(): void {
+    this.chart?.applyOptions(chartBaseOptions());
+    this.candleSeries?.applyOptions(candleColors());
+    this.vwapSeries?.applyOptions(vwapColor());
+    this.volumeSeries?.applyOptions(volumeColor());
+    this.markers = this.markers.map((m) => ({ ...m, color: markerColor(m.text ?? '') }));
+    this.candleSeries?.setMarkers(this.markers);
   }
 
   // `background` marks a resync the page fires by itself (WS reconnect), so
@@ -268,7 +263,7 @@ export class PithaPriceChart extends LitElement {
     const marker: SeriesMarker<Time> = {
       time,
       position: isLong ? 'belowBar' : 'aboveBar',
-      color: readToken(isLong ? 'success' : 'warning'),
+      color: markerColor(message.direction),
       shape: isLong ? 'arrowUp' : 'arrowDown',
       text: message.direction,
     };

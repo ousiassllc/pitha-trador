@@ -52,9 +52,13 @@ export class PithaExitAlignment extends LitElement {
         font-family: "JetBrains Mono", ui-monospace, monospace;
         font-variant-numeric: tabular-nums;
       }
-      h2,
+      h2 {
+        margin: 0.75rem 0 1.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+      }
       h3 {
-        margin: 0.75rem 0 0.25rem;
+        margin: 0.75rem 0;
         font-size: 1rem;
         font-weight: 600;
       }

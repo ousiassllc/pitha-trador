@@ -29,6 +29,14 @@ describe('pitha-scanner-table', () => {
     expect(link.hasAttribute('hx-boost')).toBe(false);
   });
 
+  // Text links are underlined in --mute at rest (brand-guide §4 ボタン; issue #965).
+  test('underlines the symbol link in --mute at rest, not only on hover', async () => {
+    const { el } = await mount([item()]);
+
+    const link = el.querySelector('td a') as HTMLAnchorElement;
+    expect(link.className).toBe('text-accent underline decoration-mute');
+  });
+
   test('applies /ws/scanner scanner_update pushes without re-fetching api-url', async () => {
     const { el, fetchMock } = await mount([item()]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
