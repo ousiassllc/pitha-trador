@@ -76,9 +76,29 @@ describe('pitha-calibration-heatmap OS theme switch (issue #964)', () => {
     expect(accuracy.applyOptions).toHaveBeenCalledWith({ color: '#ffffff' });
   });
 
+  test('re-applies the Light tokens while printing and the Dark ones afterwards', async () => {
+    const { el } = await mount(response());
+    setDarkTokens();
+    const [perfect, accuracy] = createdSeries;
+
+    scheme.firePrint(true);
+    expect(perfect.applyOptions).toHaveBeenLastCalledWith({ color: '#6b6b6e' });
+    expect(accuracy.applyOptions).toHaveBeenLastCalledWith({ color: '#050505' });
+
+    expect(createdCharts[0].takeScreenshot).toHaveBeenCalled();
+    expect(el.shadowRoot?.querySelector('[data-print-snapshot]')).not.toBeNull();
+    expect(createdCharts[0].live.style.visibility).toBe('hidden');
+
+    scheme.firePrint(false);
+    expect(el.shadowRoot?.querySelector('[data-print-snapshot]')).toBeNull();
+    expect(createdCharts[0].live.style.visibility).toBe('');
+    expect(perfect.applyOptions).toHaveBeenLastCalledWith({ color: '#8b8b8e' });
+    expect(accuracy.applyOptions).toHaveBeenLastCalledWith({ color: '#ffffff' });
+  });
+
   test('stops listening once the element is removed', async () => {
     const { el } = await mount(response());
-    expect(scheme.listeners()).toBe(1);
+    expect(scheme.listeners()).toBe(2);
 
     el.remove();
 

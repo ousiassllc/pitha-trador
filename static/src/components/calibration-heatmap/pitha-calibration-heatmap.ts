@@ -16,7 +16,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
-import { ColorSchemeController, chartBaseOptions } from '../lib/chart-theme';
+import { ColorSchemeController, chartBaseOptions, syncPrintSnapshot } from '../lib/chart-theme';
 import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles, tableStyles } from '../lib/styles';
@@ -133,6 +133,7 @@ export class PithaCalibrationHeatmap extends LitElement {
     this.chart?.applyOptions(chartBaseOptions());
     this.perfectSeries?.applyOptions(perfectColor());
     this.accuracySeries?.applyOptions(accuracyColor());
+    if (this.chart) syncPrintSnapshot(this.chart);
   }
 
   private async load(): Promise<void> {

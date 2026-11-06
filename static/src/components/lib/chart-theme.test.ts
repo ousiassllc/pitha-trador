@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactiveControllerHost } from 'lit';
 import { ColorSchemeController, chartBaseOptions, readToken, withAlpha } from './chart-theme';
-import { installColorSchemeSwitch } from './color-scheme-test-support';
+import { installColorSchemeSwitch, setDarkTokens } from './color-scheme-test-support';
 import { applyTheme } from './theme';
 
 afterEach(() => {
@@ -89,6 +89,75 @@ describe('ColorSchemeController', () => {
     document.documentElement.removeAttribute('data-theme');
 
     expect(calls).toBe(1);
+  });
+
+  describe('print', () => {
+    const connect = (onChange: () => void) => {
+      const host = { addController: () => {} } as unknown as ReactiveControllerHost;
+      const controller = new ColorSchemeController(host, onChange);
+      controller.hostConnected();
+      return controller;
+    };
+
+    test('reads the Light tokens between beforeprint and afterprint under a Dark theme', () => {
+      setDarkTokens();
+      const seen: string[] = [];
+      const controller = connect(() => seen.push(readToken('ink')));
+
+      window.dispatchEvent(new Event('beforeprint'));
+      expect(readToken('ink')).toBe('#050505');
+      window.dispatchEvent(new Event('afterprint'));
+      expect(readToken('ink')).toBe('#ffffff');
+      controller.hostDisconnected();
+
+      expect(seen).toEqual(['#050505', '#ffffff']);
+    });
+
+    test('follows the print media query too', () => {
+      const scheme = installColorSchemeSwitch();
+      try {
+        setDarkTokens();
+        const seen: string[] = [];
+        const controller = connect(() => seen.push(readToken('surface')));
+
+        scheme.firePrint(true);
+        scheme.firePrint(false);
+        controller.hostDisconnected();
+
+        expect(seen).toEqual(['#ffffff', '#141414']);
+      } finally {
+        scheme.restore();
+      }
+    });
+
+    test('keeps the Light tokens through an OS theme switch while printing', () => {
+      const scheme = installColorSchemeSwitch();
+      try {
+        setDarkTokens();
+        const seen: string[] = [];
+        const controller = connect(() => seen.push(readToken('mute')));
+
+        scheme.firePrint(true);
+        scheme.fire();
+        scheme.firePrint(false);
+        controller.hostDisconnected();
+
+        expect(seen).toEqual(['#6b6b6e', '#6b6b6e', '#8b8b8e']);
+      } finally {
+        scheme.restore();
+      }
+    });
+
+    test('stops listening for print once disconnected', () => {
+      let calls = 0;
+      const controller = connect(() => calls++);
+      controller.hostDisconnected();
+
+      window.dispatchEvent(new Event('beforeprint'));
+      window.dispatchEvent(new Event('afterprint'));
+
+      expect(calls).toBe(0);
+    });
   });
 
   test('does nothing where matchMedia is unavailable', () => {

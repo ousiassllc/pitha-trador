@@ -18,7 +18,12 @@ export const createdSeries: {
   applyOptions: MockFn;
   priceScale: MockFn;
 }[] = [];
-export const createdCharts: { remove: MockFn; applyOptions: MockFn }[] = [];
+export const createdCharts: {
+  remove: MockFn;
+  applyOptions: MockFn;
+  takeScreenshot: MockFn;
+  live: HTMLElement;
+}[] = [];
 // applyOptions calls on any price scale (a series' own scale or the chart's
 // 'right' scale), in call order, for the scaleMargins assertions.
 export const priceScaleOptions: { scale: string; options: unknown }[] = [];
@@ -38,8 +43,10 @@ const series = (options: Record<string, unknown> = {}) => {
   return s;
 };
 mock.module('lightweight-charts', () => ({
-  createChart: (_container: unknown, options: unknown) => {
+  createChart: (container: HTMLElement, options: unknown) => {
     createChartOptions.push(options);
+    const live = document.createElement('div');
+    container.append(live); // like the real chart element
     const chart = {
       addCandlestickSeries: series,
       addLineSeries: series,
@@ -47,6 +54,9 @@ mock.module('lightweight-charts', () => ({
       priceScale: (id: string) => priceScale(id),
       remove: mock(),
       applyOptions: mock(),
+      takeScreenshot: mock(() => document.createElement('canvas')),
+      chartElement: () => live,
+      live,
     };
     createdCharts.push(chart);
     return chart;
