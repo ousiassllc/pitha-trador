@@ -37,15 +37,15 @@ templ OrderProposalDetailPage(p ProposalDetailProps) {
 		</p>
 		@proposalFields("概要", "order-proposal-summary", "help-order-proposal-summary", p.Summary)
 		<section class="mt-12" data-testid="order-proposal-rationale">
-			<h2 class="text-xl font-semibold text-ink">理由</h2>
-			<p class="mt-2 whitespace-pre-wrap break-words text-sm text-ink">{ p.Rationale }</p>
+			<h2 class="mb-6 text-xl font-semibold text-ink">理由</h2>
+			<p class="whitespace-pre-wrap break-words text-sm text-ink">{ p.Rationale }</p>
 		</section>
 		<section class="mt-12" data-testid="order-proposal-exit-plan">
-			<h2 class="text-xl font-semibold text-ink">手じまいの計画</h2>
+			<h2 class="mb-6 text-xl font-semibold text-ink">手じまいの計画</h2>
 			if p.ExitPlan == "" {
-				<p class="mt-2 text-sm text-mute">—</p>
+				<p class="text-sm text-mute">—</p>
 			} else {
-				<p class="mt-2 whitespace-pre-wrap break-words text-sm text-ink">{ p.ExitPlan }</p>
+				<p class="whitespace-pre-wrap break-words text-sm text-ink">{ p.ExitPlan }</p>
 			}
 		</section>
 		@proposalFields("損切り・利確", "order-proposal-plan", "help-order-proposal-plan", p.Plan)
@@ -62,8 +62,8 @@ templ OrderProposalDetailPage(p ProposalDetailProps) {
 // HelpMark next to its label; helpPrefix keeps those ids unique on the page.
 templ proposalFields(title, testID, helpPrefix string, fields []ProposalField) {
 	<section class="mt-12" data-testid={ testID }>
-		<h2 class="text-xl font-semibold text-ink">{ title }</h2>
-		<dl class="mt-2 grid gap-x-4 gap-y-1 text-sm text-ink sm:grid-cols-[max-content_1fr]">
+		<h2 class="mb-6 text-xl font-semibold text-ink">{ title }</h2>
+		<dl class="grid gap-x-4 gap-y-1 text-sm text-ink sm:grid-cols-[max-content_1fr]">
 			for i, f := range fields {
 				<dt class="">
 					{ f.Label }
@@ -81,11 +81,11 @@ templ proposalFields(title, testID, helpPrefix string, fields []ProposalField) {
 
 templ proposalSources(sources []ProposalSource) {
 	<section class="mt-12" data-testid="order-proposal-sources">
-		<h2 class="text-xl font-semibold text-ink">情報源</h2>
+		<h2 class="mb-6 text-xl font-semibold text-ink">情報源</h2>
 		if len(sources) == 0 {
-			<p class="mt-2 text-sm text-mute">—</p>
+			<p class="text-sm text-mute">—</p>
 		} else {
-			<ul class="mt-2 list-disc space-y-1 pl-6 text-sm text-ink">
+			<ul class="list-disc space-y-1 pl-6 text-sm text-ink">
 				for _, s := range sources {
 					<li data-testid="order-proposal-source">
 						<span class="break-words">{ s.Title }</span>
@@ -105,8 +105,8 @@ templ proposalSources(sources []ProposalSource) {
 
 templ proposalEvents(events []ProposalEvent) {
 	<section class="mt-12" data-testid="order-proposal-events">
-		<h2 class="text-xl font-semibold text-ink">状態の時系列</h2>
-		<table class="mt-2 w-full text-left text-sm">
+		<h2 class="mb-6 text-xl font-semibold text-ink">状態の時系列</h2>
+		<table class="w-full text-left text-sm">
 			<caption class="sr-only">状態の変化の履歴（古い順）</caption>
 			<thead class="border-b border-border text-xs text-mute">
 				<tr>

@@ -232,3 +232,28 @@ func between(s, start, end string) string {
 	}
 	return rest
 }
+
+// issue #990 (T3): notices say what could not be read or what was skipped, so
+// they are body text (text-sm), not 12px notes.
+func TestNotices_AreBodySize(t *testing.T) {
+	f := newFixture()
+	f.alertsErr = errBoom
+	f.source.healthErr = errBoom
+	if body := f.mustGet(t, "/home/attention"); !strings.Contains(body, `<p class="mt-2 text-sm text-warning" data-testid="attention-notice">`) {
+		t.Errorf("attention notice must be text-sm: %s", body)
+	}
+
+	f = newFixture()
+	f.state = domain.SystemStatePaused
+	f.source.healthErr = errBoom
+	if body := f.mustGet(t, "/home/trade-status"); !strings.Contains(body, `<p class="mt-2 text-sm text-warning" data-testid="trade-status-notice">`) {
+		t.Errorf("trade status notice must be text-sm: %s", body)
+	}
+
+	f = newFixture()
+	f.source.health.MetaAdopted = false
+	f.source.health.RetrainSkipped, f.source.health.RetrainSkipReason = true, "too_few_rows_after_purge"
+	if body := f.mustGet(t, "/home/details"); !strings.Contains(body, `<p class="mt-1 text-sm text-warning" data-testid="model-retrain">`) {
+		t.Errorf("retrain notice must be text-sm: %s", body)
+	}
+}

@@ -223,3 +223,14 @@ func TestTradeStatus_LunchBreakIsOffSession(t *testing.T) {
 		t.Errorf("sentence = %q, want 立会時間外 with the afternoon open", got)
 	}
 }
+
+// issue #989 (C6): the detail is what the operator should do or know, so it is
+// body text (text-ink), not an auxiliary caption (text-mute).
+func TestTradeStatus_DetailIsInk(t *testing.T) {
+	f := newFixture()
+	f.halt = lossLimitHalt()
+	body := f.mustGet(t, "/home/trade-status")
+	if !strings.Contains(body, `<p class="mt-1 text-sm text-ink" data-testid="trade-status-detail">`) {
+		t.Errorf("detail must be text-sm text-ink: %s", body)
+	}
+}

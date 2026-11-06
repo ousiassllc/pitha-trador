@@ -144,6 +144,6 @@ describe('pitha-activity-feed reconnect resync', () => {
 
     const notice = el.querySelector('.pitha-ws-disconnected');
     expect(notice?.classList.contains('text-warning')).toBe(true);
-    expect(notice?.classList.contains('text-xs')).toBe(true);
+    expect(notice?.classList.contains('text-sm')).toBe(true);
   });
 });

@@ -178,7 +178,7 @@ templ modelBlock(v ModelView) {
 				<p class="mt-2 text-sm text-warning" data-testid="model-not-adopted">メタモデル: 未採用</p>
 			}
 			if v.RetrainNotice != "" {
-				<p class="mt-1 text-xs text-warning" data-testid="model-retrain">{ v.RetrainNotice }</p>
+				<p class="mt-1 text-sm text-warning" data-testid="model-retrain">{ v.RetrainNotice }</p>
 			}
 		}
 		<p class="mt-2"><a class={ linkClass } href="/settings/results">設定 ＞ 予測モデル @atoms.IconArrowRight()</a></p>

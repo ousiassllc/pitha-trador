@@ -25,7 +25,7 @@ const (
 	cardClass       = "flex min-w-0 flex-col rounded-lg border border-border bg-surface p-4"
 	cardTitleClass  = "text-sm font-semibold text-mute"
 	cardErrorClass  = "mt-2 rounded-md border tone-danger px-3 py-2 text-sm"
-	cardNoticeClass = "mt-2 text-xs text-warning"
+	cardNoticeClass = "mt-2 text-sm text-warning"
 	linkClass       = "text-sm text-accent underline decoration-mute"
 )
 
@@ -89,7 +89,7 @@ templ TradeStatusBody(v TradeStatusView) {
 			}
 		</div>
 		if v.Detail != "" {
-			<p class="mt-1 text-sm text-mute" data-testid="trade-status-detail">{ v.Detail }</p>
+			<p class="mt-1 text-sm text-ink" data-testid="trade-status-detail">{ v.Detail }</p>
 		}
 		if v.Link.Href != "" {
 			<p class="mt-1">@DestLink(v.Link)</p>
@@ -142,7 +142,7 @@ templ PnLBody(v PnLView) {
 			if v.UnrealizedKnown {
 				<dd class={ "whitespace-nowrap text-right font-mono tabular-nums", PnLClass(v.Unrealized) } data-testid="pnl-unrealized">{ FormatSignedYen(v.Unrealized) }<span class="ml-1 text-xs font-normal text-mute">（保有中）</span></dd>
 			} else {
-				<dd class="text-right text-xs text-warning" data-testid="pnl-unrealized-unknown">読み取れませんでした</dd>
+				<dd class="text-right text-sm text-warning" data-testid="pnl-unrealized-unknown">読み取れませんでした</dd>
 			}
 			if v.OpenedKnown {
 				<dt class="whitespace-nowrap text-mute">新規エントリー</dt>

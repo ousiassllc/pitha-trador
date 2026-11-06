@@ -81,14 +81,14 @@ export const noticeStyles = css`
   .pitha-ws-disconnected {
     margin: 0;
     color: var(--warning);
-    font-size: 0.75rem;
+    font-size: 0.875rem;
   }
 `;
 
 // Tailwind counterparts of `noticeStyles` for the light-DOM components
 // (issue #355). Kept as whole literals so Tailwind's source scan emits them.
 export const lightDomErrorClass = 'text-sm text-danger';
-export const lightDomWsNoticeClass = 'text-xs text-warning';
+export const lightDomWsNoticeClass = 'text-sm text-warning';
 
 // Light-DOM form control class (brand-guide C3): the same border, --focus
 // edge and 2px --ring that atoms.Select draws (internal/web/atoms/input.templ),
