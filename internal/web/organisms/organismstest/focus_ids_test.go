@@ -75,10 +75,23 @@ func TestScanPanel_FilterFieldsAreEightBelowTheirLabels(t *testing.T) {
 // padding it does not follow (brand-guide §3 S4; issues #959, #966).
 func TestScanPanel_UniverseEmptyIsAnInlineAlertShape(t *testing.T) {
 	html := renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{UniverseEmpty: true}))
-	assertContains(t, html, `class="mt-3 rounded-md border tone-warning px-4 py-3 text-sm"`)
+	assertContains(t, html, `class="rounded-md border tone-warning px-4 py-3 text-sm"`)
 	if strings.Contains(html, "border-dashed") {
 		t.Errorf("the warning box kept the dashed empty-state border: %s", html)
 	}
+}
+
+// The scan panel is an h2 large panel like risk/position/jev, so its card
+// padding is 24 (--pad-card), and the blocks right under the header's mb-6
+// carry no top margin of their own (brand-guide §3 S2; issue #996).
+func TestScanPanel_CardPaddingIsTwentyFourWithoutStackedTopMargins(t *testing.T) {
+	html := renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{}))
+	assertContains(t, html, `class="mt-12 rounded-lg border border-border bg-surface p-6"`)
+	if strings.Contains(html, "p-4\" id=\"scan-panel\"") || strings.Contains(html, `class="mt-3 rounded-lg border border-dashed`) {
+		t.Errorf("scan panel kept p-4 or a stacked mt-3 under the header: %s", html)
+	}
+	html = renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{HasCycle: true}))
+	assertContains(t, html, `class="text-xs text-mute" data-testid="scan-cycle-meta"`)
 }
 
 // The queue table is the first block under the h1 of the activity page, so it
