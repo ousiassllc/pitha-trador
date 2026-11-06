@@ -213,3 +213,28 @@ func TestSettingGroupDerived_IsALargeRadiusCard(t *testing.T) {
 		t.Errorf("the derived panel must be rounded-lg p-4: %s", html)
 	}
 }
+
+// The theme switch (issue #978) offers follow-the-OS, light and dark as
+// buttons the theme-toggle script reads by `data-theme-choice`; 自動 starts
+// pressed, and the control is hidden when printing.
+func TestThemeToggle_OffersAutoLightDarkWithAutoPressed(t *testing.T) {
+	html := render(t, molecules.ThemeToggle())
+	for _, want := range []string{
+		`role="group"`,
+		`aria-label="テーマ"`,
+		`print:hidden`,
+		`aria-pressed="true" data-theme-choice="auto"`,
+		`aria-pressed="false" data-theme-choice="light"`,
+		`aria-pressed="false" data-theme-choice="dark"`,
+		`>自動<`,
+		`>ライト<`,
+		`>ダーク<`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("ThemeToggle lacks %q: %s", want, html)
+		}
+	}
+	if got := strings.Count(html, "<button"); got != 3 {
+		t.Errorf("ThemeToggle renders %d buttons, want 3", got)
+	}
+}

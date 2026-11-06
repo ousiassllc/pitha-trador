@@ -35,7 +35,7 @@ internal/web/
 ├── labels/             # 画面に出す内部コード（決済理由・Kill Switchの理由・見送り理由・注文提案の理由コード・稼働ログの種別/キュー/詳細・再学習の見送り・A/Bアーム・接続先の項目名）の日本語名の表。表示の最後の層だけが使い、元の値はdata属性・API・MCP・DBのまま（issue #904）
 ├── middleware/         # SecurityHeaders（security_headers.go: CSP/`X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`、`/swagger`用`SwaggerCSP`、issue #378）, HostGuard, Session（Cookie+CSRF）, RequestLog, Recovery, 操作者ハートビート記録（heartbeat.go）, Setup Guard（必須認証情報未設定時に`/setup`へ302、issue #80）, SystemState, ws_base.go（`<meta name="ws-base">`用のコンテキスト値）, error_page.go（エラーページ描画の注入）
 ├── atoms/              # Badge（+ EntryQualityBadge）, StatusDot, Toast, Button（+ ButtonLink）, Input, Select, timefmt.go（`atoms.FormatJST`/`JST`/`TimeLayoutJST`: SSR時刻表示の唯一の書式。`2026-10-05 09:30:00 JST`）
-├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SettingsLinkCard, SetupStatus
+├── molecules/          # SecretFieldRow, SignalBadgeGroup, PositionRow, Modal, SettingsCard（ConnectionStatus）, SettingsLinkCard, SetupStatus, ThemeToggle
 ├── organisms/          # Header, KillSwitchPanel, SystemStatusBadge ほか（§3）。scan_format.go（ScanPanelの書式ヘルパー: 次回開場時刻・サイクル所要時間。`atoms.FormatJST`系の書式を使う）。mcp/（Settings画面の MCP パネル`Panel`。issue #792）
 ├── pages/              # ScannerPage, SymbolDetailPage ほか、ErrorPage（§3）
 └── layout/             # Shell, SetupShell
@@ -52,6 +52,7 @@ static/
     │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
     │   ├── modal/                 pitha-modal.ts（Litではない。`molecules.Modal`の`<dialog>`開閉・フォーカス復帰・URLハッシュ自動オープン）
     │   ├── copy-button/           pitha-copy-button.ts（Litではない。`[data-copy-from]`のコピーボタンと、閉じたダイアログの`[data-clear-on-close]`表示（API キーの一度きりの表示）の削除。issue #792）
+    │   ├── theme-toggle/          pitha-theme-toggle.ts（Litではない。`[data-theme-choice]`のライト/ダーク切替ボタン。`<html data-theme>`を設定し、選択をlocalStorageへ保存する。issue #978）
     │   ├── settings-hub/          pitha-settings-hub.ts（Litではない。`/settings`のページ一覧と各Settingsページが埋め込む`data-hash-routes`を読み、旧`/settings#modal-<id>`・`#update-panel`や、別ページへ移ったダイアログの旧`/settings/<old page>#modal-<id>`の直リンクを該当ページ`/settings/<page id>#<id>`へ`location.replace`で転送する。現在のページ自身のダイアログのハッシュは転送しない。issue #805・#895）
     │   └── lib/
     │       ├── api.ts
@@ -59,13 +60,15 @@ static/
     │       ├── jst-datetime.ts         # SSRフォールバックの`atoms.FormatJST`と同形式のJST日時ラベル（Lit描画とSSRの表示を一致させる）
     │       └── logger.ts / styles.ts
     ├── css/
-    │   └── app.css
+    │   ├── app.css
+    │   └── dark.css               # Darkトークン（OS追従と`data-theme="dark"`。`app.css`がimport。issue #978）
     ├── csp/
     │   └── lightweight-charts-style-hash.test.ts   # CSPの`style-src`hashとインストール版`lightweight-charts`の一致検証（`bun test`）
     ├── img/
     │   └── logo.svg               # アプリロゴ（Header表示用、go:embed対象）
     ├── vendor/
-    │   └── htmx.min.js            # checked-in、go:embed対象（`layout/shell.templ`が`/static/vendor/htmx.min.js`で参照）
+    │   ├── htmx.min.js            # checked-in、go:embed対象（`layout/shell.templ`が`/static/vendor/htmx.min.js`で参照）
+    │   └── theme-init.js          # checked-in、go:embed対象（保存済みのライト/ダーク選択を初回描画前に`<html data-theme>`へ反映する通常の`<script>`。`layout/shell.templ`の`<head>`が読む。issue #978）
     ├── embed.go                   # `//go:embed dist img vendor`
     └── dist/                      # ビルド成果物
         ├── js/
@@ -100,6 +103,7 @@ static/
 ### molecules
 
 - `SecretFieldRow`（Settings画面の1項目。ラベル・「設定済み」バッジ・値入力（`type=password`）と保存ボタン・削除ボタン（設定済みのときのみ）・直近の保存/削除結果の通知を持ち、保存は`POST /settings/:key`、削除は`DELETE /settings/:key`で行の`outerHTML`のみ差し替える。他項目の値には影響しない。issue #79）
+- `ThemeToggle`（ヘッダーのライト/ダーク切替。`<div role="group" aria-label="テーマ">`に「自動」「ライト」「ダーク」の3つの`<button data-theme-choice="auto|light|dark">`を並べたセグメント（`--accent-soft`の地に選択面`--surface`。選択は`aria-pressed`で表す）。自動は`<html data-theme>`を外してOS設定（`prefers-color-scheme`）に任せ、ライト/ダークは`data-theme`で強制する。`pitha-theme-toggle`がボタンを配線し、選択（ライト/ダーク）をブラウザのlocalStorage（キー`pitha-theme`）へ保存する。保存先をブラウザにしたのは、表示の好みで端末ごとに違ってよく、サーバー側の設定を要さないため。サーバーは保存値を知らないので`aria-pressed`は自動だけ`true`で描き、スクリプトが読み込み時に直す。保存値は`static/src/vendor/theme-init.js`が初回描画前に`<html>`へ反映する（CSPは`script-src 'self'`のまま外部ファイルで読む）。`Header`が描き、`SetupShell`（Headerなし）には出ない。印刷では`print:hidden`で隠す。issue #978）
 - `Modal`（ネイティブ`<dialog>`のシェル。`aria-labelledby`でタイトルに紐付け、タイトル行に「閉じる」ボタンを持つ。`pitha-modal`が開閉・フォーカス復帰・URLハッシュからの自動オープンを担う。失敗トースト用の`[data-toast-region]`も内包する。バックドロップクリックで閉じるのは`pointerdown`も`<dialog>`自身で始まった場合のみで、入力欄からドラッグしてダイアログ外で離しても閉じない。issue #302/#353/#633）
 - `SettingsCard`（Settings/Setupの一覧の1行。名前・状態バッジ・説明と、対応する`Modal`を開くボタン）と`ConnectionStatus`（設定済み／一部設定済み／未設定・必須バッジ・設定済み項目数。`ConnectionProps.Badges`/`Details`で接続先固有の秘密を含まないバッジ・状態行（立花証券 e支店の環境バッジ・セッション状態、issue #738）も描画する。保存・削除の応答では`hx-swap-oob`で差し替える。issue #302）と`SetupStatus`（Setup画面の「必須項目はすべて設定済みです」＋`/scanner`への「続ける」リンク／「必須項目をすべて保存すると…」メッセージ。リンクは完了時のみ描画。`id="setup-status"`で、`/setup`発の保存・削除の応答に必須キー充足状態を再計算して`hx-swap-oob`で同梱する。issue #325）
 - `SettingFieldRow`（Settings画面「運用設定」の1項目。シークレットと異なり現在値を表示する入力（列挙値は`<select>`）と保存ボタン・「既定に戻す」ボタン（保存値があるときのみ）・既定値の表示・警告・直近の結果通知を持ち、保存は`POST /ops-settings/:key`・既定に戻すは`DELETE /ops-settings/:key`の行単位swap。`internal/web/molecules/setting_field_row.templ`、issue #708）と`SettingGroupStatus`（グループの「設定済み／既定を使用」バッジと保存済み項目数。保存・削除の応答に`hx-swap-oob`で同梱する）、`SettingGroupDerived`（グループの読み取り専用「計算結果」パネル。`SettingGroupProps.Derived`を持つグループ（「1日の損失上限・利益確保」）だけがモーダル上部に表示し、運用資金×%から導出した円の値を示す。保存・削除の応答にも`hx-swap-oob`で同梱し再読込なしに更新する。`internal/web/molecules/setting_group_derived.templ`、issue #782）
@@ -322,3 +326,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.108 | 2026-10-24 | atomsに`HelpMark`を追加し、全画面の説明文・制約・注意書きをヘルプマークへ移した。Issue・PR・FRの番号、設定キー名、内部コードの画面表示を削除（キー名はヘルプの中）。成績画面の4部品（`BacktestForm`・`BacktestFoldTable`・`PerformanceActualsPanel`・`PerformanceSummaryPanel`）を`organisms/performancepanels`へ分割（`organisms/`の行数上限のため。挙動の変更なし）。ルート・API・MCP・設定キー・DBの変更なし | issue #902 |
 | 1.109 | 2026-10-24 | organismsから`SecretsBanner`・`UpdateBanner`・`MarketDataBanner`・`DailyHaltBanner`・`HealthAlertBanner`と、対応するフラグメントのルート（`GET /system/update-status`・`/system/secrets-status`・`/system/marketdata-status`・`/system/daily-halt`・`/system/health-alerts`）を削除。`MarketDataBannerProps`・`HealthAlertTitle`/`HealthAlertAction`・`UpdatePanel`は残す（Homeの読み取り側）。§4の旧バナー各項を、要対応の読み取り元と未設定一覧の更新に書き換え | issue #901 |
 | 1.110 | 2026-10-26 | `internal/web/labels`（画面に出す内部コードの日本語名の表。Lit側は`static/src/components/lib/labels.ts`で同じ表を持ち、`TestTypeScriptLabelsMatchGo`が一致を検査する）を追加。決済理由・Kill Switchの理由・見送り理由・注文提案の理由コード・稼働ログの種別・キュー・詳細・再学習の見送り・A/Bアームを日本語で表示し、表にない値は英語のままでなく「その他（理由コードあり）」を出して元の値をログに残す。`RiskPanel`/`JevPanel`の見出し・予測の精度の見出し・成績のヘルプの英語を日本語化し、ヘルプと画面から設定キー名・MCPツール名・設定ファイル名を除去（`SecretFieldRow`は説明のある項目だけヘルプを持つ）。`ScanFunnel`の項目名を平易に変更。記録の番号は「注文提案 5 番」の形に統一（`#`を付けない）。data属性・API・MCP・設定キー・DB・URLの変更なし | issue #904 |
+| 1.111 | 2026-11-06 | ライト/ダークを`<html data-theme>`（`light`か`dark`）で明示的に切り替えられるようにした（未指定はOS設定に追従）。`molecules.ThemeToggle`（`Header`に配置）、`pitha-theme-toggle`、`vendor/theme-init.js`、`lib/theme.ts`を追加し、選択はlocalStorageに保存する。チャートは`lib/chart-theme.ts`の`ColorSchemeController`がOS切替に加えテーマ切替イベントでも色を読み直す | issue #978 |

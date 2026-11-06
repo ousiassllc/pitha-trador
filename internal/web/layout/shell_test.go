@@ -258,3 +258,31 @@ func TestShell_HomeHeaderHasNoBadgeAndMarksHome(t *testing.T) {
 		t.Errorf("ホーム is not marked current on Home; body=%s", out)
 	}
 }
+
+// Both shells apply the saved Light / Dark choice before the stylesheet paints
+// (a classic blocking script: a module would flash the wrong theme) and load
+// the switch's script; only Shell, which has the Header, carries the switch
+// (issue #978).
+func TestShells_ApplyTheSavedThemeBeforePaint(t *testing.T) {
+	for name, page := range map[string]templ.Component{
+		"Shell":      layout.Shell("t", organisms.NavNone),
+		"SetupShell": layout.SetupShell("t"),
+	} {
+		out := render(t, page)
+		init := strings.Index(out, `<script src="/static/vendor/theme-init.js"></script>`)
+		css := strings.Index(out, `href="/static/dist/css/app.css"`)
+		if init < 0 || css < 0 || init > css {
+			t.Errorf("%s: theme-init.js (at %d) must be a classic <script> before app.css (at %d)", name, init, css)
+		}
+		if !strings.Contains(out, `/static/dist/js/theme-toggle/pitha-theme-toggle.js`) {
+			t.Errorf("%s: output lacks the theme-toggle script", name)
+		}
+	}
+
+	if out := render(t, layout.Shell("t", organisms.NavNone)); !strings.Contains(out, `data-testid="theme-toggle"`) {
+		t.Errorf("Shell header has no theme switch; body=%s", out)
+	}
+	if out := render(t, layout.SetupShell("t")); strings.Contains(out, `data-testid="theme-toggle"`) {
+		t.Errorf("SetupShell has no Header, so it must not render the theme switch; body=%s", out)
+	}
+}

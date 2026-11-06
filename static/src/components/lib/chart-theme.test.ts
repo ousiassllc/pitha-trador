@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactiveControllerHost } from 'lit';
 import { ColorSchemeController, chartBaseOptions, readToken, withAlpha } from './chart-theme';
 import { installColorSchemeSwitch } from './color-scheme-test-support';
+import { applyTheme } from './theme';
 
 afterEach(() => {
   document.documentElement.removeAttribute('style');
@@ -74,6 +75,20 @@ describe('ColorSchemeController', () => {
     } finally {
       scheme.restore();
     }
+  });
+
+  test('calls back when the header switch changes the theme, until disconnected', () => {
+    let calls = 0;
+    const host = { addController: () => {} } as unknown as ReactiveControllerHost;
+    const controller = new ColorSchemeController(host, () => calls++);
+
+    controller.hostConnected();
+    applyTheme('dark');
+    controller.hostDisconnected();
+    applyTheme('light');
+    document.documentElement.removeAttribute('data-theme');
+
+    expect(calls).toBe(1);
   });
 
   test('does nothing where matchMedia is unavailable', () => {

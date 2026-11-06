@@ -2,12 +2,13 @@
 // the state colors / --mute / --ink, no prism, axes and grid in --border only).
 // lightweight-charts draws on a canvas, which cannot resolve `var(--x)`, so the
 // tokens defined in static/src/css/app.css are read from the document when a
-// chart is created and again, via ColorSchemeController, each time the OS switches
-// between Light and Dark. The Light values are the fallback where the
+// chart is created and again, via ColorSchemeController, each time the OS or the
+// header's theme switch changes between Light and Dark. The Light values are the fallback where the
 // stylesheet is not loaded (tests, a failed CSS load).
 
 import type { ColorType } from 'lightweight-charts';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
+import { THEME_CHANGE_EVENT } from './theme';
 
 const LIGHT_FALLBACK = {
   ink: '#050505',
@@ -31,10 +32,11 @@ export function readToken(token: ChartToken): string {
 }
 
 /**
- * Calls `onChange` while the host is connected each time the OS switches between
- * Light and Dark (app.css follows `prefers-color-scheme`, there is no manual
- * switch). A canvas keeps the colors it was given, so each chart re-applies its
- * tokens then.
+ * Calls `onChange` while the host is connected each time the theme switches
+ * between Light and Dark: the OS setting (app.css follows `prefers-color-scheme`
+ * unless `<html data-theme>` forces a theme) or the header's switch
+ * (THEME_CHANGE_EVENT, lib/theme.ts). A canvas keeps the colors it was given,
+ * so each chart re-applies its tokens then.
  */
 export class ColorSchemeController implements ReactiveController {
   private query: MediaQueryList | null = null;
@@ -47,12 +49,14 @@ export class ColorSchemeController implements ReactiveController {
   }
 
   hostConnected(): void {
+    document.addEventListener(THEME_CHANGE_EVENT, this.onChange);
     if (typeof matchMedia !== 'function') return;
     this.query = matchMedia('(prefers-color-scheme: dark)');
     this.query.addEventListener('change', this.onChange);
   }
 
   hostDisconnected(): void {
+    document.removeEventListener(THEME_CHANGE_EVENT, this.onChange);
     this.query?.removeEventListener('change', this.onChange);
     this.query = null;
   }

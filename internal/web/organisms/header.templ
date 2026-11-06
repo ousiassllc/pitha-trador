@@ -4,6 +4,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/version"
 	"github.com/ousiassllc/pitha-trador/internal/web/atoms"
+	"github.com/ousiassllc/pitha-trador/internal/web/molecules"
 )
 
 // Header is the global navigation + system-state indicator rendered on
@@ -40,6 +41,10 @@ import (
 // `updateStatusChanged` (the manual update check, issue #76). The Home screen
 // shows the full list itself, so it renders no badge there (current is
 // NavHome), and the Kill Switch panel moves into its 取引の状態 card.
+//
+// `molecules.ThemeToggle` (issue #978) is the Light / Dark / OS-follow switch;
+// pitha-theme-toggle (loaded by layout) applies and saves the choice in the
+// browser, so the header only renders the control.
 //
 // `#header-version` shows the running build's internal/version.Version on
 // every page and links to Settings' アップデート section
@@ -103,6 +108,7 @@ templ Header(state domain.SystemState, current NavItem) {
 				現在のバージョンです。押すと、設定のシステムでアップデートを確認できます。
 			}
 		</span>
+		@molecules.ThemeToggle()
 		<div
 			id="header-status"
 			class="flex items-center gap-3"
