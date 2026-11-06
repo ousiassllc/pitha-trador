@@ -218,8 +218,8 @@ func TestTemplHeadingsFollowTheGuideScale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(cards), `cardTitleClass  = "text-xl font-semibold text-mute"`) {
-		t.Error("homepanels cardTitleClass must be text-xl (h3 = 24px, brand-guide §2)")
+	if !strings.Contains(string(cards), `cardTitleClass  = "text-xl font-semibold text-ink"`) {
+		t.Error("homepanels cardTitleClass must be text-xl text-ink (h3 = 24px, brand-guide §2; headings are not --mute, C6, issue #994)")
 	}
 }
 

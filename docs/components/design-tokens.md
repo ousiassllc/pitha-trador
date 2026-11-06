@@ -5,7 +5,7 @@
 - ステータスのピル・インラインアラートは `border tone-success|warning|danger|info|mute`（文字＝状態色、枠＝40%、地＝10%。`app.css` の `@utility tone-*`）に形（角丸・padding）だけを足す。状態は文言でも伝える
 - Lit のShadow DOMはCSSカスタムプロパティが継承されるため、`static styles` は hex を書かず `var(--ink)` `var(--border)` 等を使う
 - フォーカスリングは 2px・offset 2 の `--focus`。`app.css` の `@layer base` が `a` `summary` `button` `select` の `:focus-visible` に当て、Lit の Shadow DOM 内は届かないので `buttonStyles`（`lib/styles.ts`）と `help-mark.ts` が `outline: 2px solid var(--focus)` を持つ。`atoms.Input` / `atoms.Select` / `atoms.Textarea` は `focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40`（`--ring` = `--focus` 40%。`outline-none` は同じ要素に必ずリングを出すこの場合だけ）。素の `<select>` を light DOM に描く Lit（`pitha-activity-feed` の絞り込み）は同じクラスの `lightDomFieldClass`（`lib/styles.ts`）を付ける。SSR のフォームは素の `<textarea>` / `<select>` を書かず atoms を通す
-- パネル（`<section>` のカード）の本文は `text-ink`。`text-mute` は日付・既定値・件数などの補助の `<span>` / キャプションだけ
+- パネル（`<section>` のカード）の本文は `text-ink`。見出し（h2〜h4、ホームのカード見出し `cardTitleClass` も含む）は `text-ink`。`text-mute` は日付・既定値・件数などの補助の `<span>` / キャプションだけ（issue #994）
 
 ## フォントとタイポグラフィ（issue #941）
 
