@@ -22,3 +22,13 @@ describe('tableStyles', () => {
     );
   });
 });
+
+describe('buttonStyles fill', () => {
+  // brand-guide §4: the sub button is transparent with a 1px --border, like
+  // atoms.Button's secondary variant, not a --surface face.
+  test('the shared button is transparent with a 1px --border', () => {
+    expect(buttonStyles.cssText).toMatch(/button\s*\{[^}]*border:\s*1px solid var\(--border\)/);
+    expect(buttonStyles.cssText).toMatch(/button\s*\{[^}]*background:\s*transparent/);
+    expect(buttonStyles.cssText).not.toMatch(/button\s*\{[^}]*background:\s*var\(--surface\)/);
+  });
+});

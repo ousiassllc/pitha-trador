@@ -231,3 +231,16 @@ func TestExperimentFormLabelsAreEightAboveTheirFields(t *testing.T) {
 		t.Errorf("a label must not sit 4 above its field: %s", body)
 	}
 }
+
+// A refused close is a one-line toast without the free-length reason (brand-guide
+// O3: a toast is one short line); the reason goes to the log.
+func TestExperimentCloseRefusalToastIsOneShortLine(t *testing.T) {
+	a, _ := newExperimentsApp(t)
+	a.post("/settings/mcp/experiments", experimentForm(nil), true)
+
+	rec := a.post("/settings/mcp/experiments/1/close", url.Values{"status": {"paused"}}, true)
+	body := rec.Body.String()
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "実験を終えられません。") || strings.Contains(body, "status は") {
+		t.Errorf("close with a bad status = %d, want a 422 with the short toast only: %s", rec.Code, body)
+	}
+}

@@ -65,3 +65,15 @@ func TestRiskAndJevPanels_FiguresAreMonoTabular(t *testing.T) {
 		}
 	}
 }
+
+// The off-session note leaves the toast and lives in the position panel's
+// HelpMark on the 決済 column (brand-guide O3).
+func TestPositionPanel_CloseNoteIsAHelpMark(t *testing.T) {
+	pos := domain.Position{ID: 1, Symbol: "7203", Side: domain.PositionSideLong, Quantity: 100}
+	html := renderComponent(t, organisms.PositionPanel(&pos))
+	for _, want := range []string{`id="help-position-close"`, "次の立会で再度お試しください。"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("position panel lacks %q: %s", want, html)
+		}
+	}
+}

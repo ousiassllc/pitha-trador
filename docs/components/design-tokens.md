@@ -42,10 +42,11 @@ UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の reg
 
 ## 部品・オーバーレイ（issue #945）
 
-- ボタンは主（`bg-accent text-bone`）/ サブ（透明＋1px `border-border`）/ ゴースト / 危険（`bg-danger text-bone`）の 4 種、SemiBold・`rounded-md`・disabled は opacity .4・小は高さ 32px（`min-h-8`）。テキストリンクは Regular・`underline decoration-mute`
+- ボタンは主（`bg-accent text-bone`）/ サブ（透明＋1px `border-border`）/ ゴースト / 危険（`bg-danger text-bone`）の 4 種、SemiBold・`rounded-md`・disabled は opacity .4・小は高さ 32px（`min-h-8`）。Lit の共通ボタン（`lib/styles.ts` の `buttonStyles`）もサブで、`background: transparent` + 1px `--border`（hover だけ `--accent-soft`）。テキストリンクは Regular・`underline decoration-mute`
+- セグメント（Lit の `pitha-calibration-heatmap` のホライズン切替）は `--accent-soft` 地の角丸トラック（padding 4px・`--r-md`）に、選択中の項目だけ `--surface` の面。`--accent` 塗りは主ボタン（主要アクション）だけで、切替には使わない。a11y は `role="group"` + `aria-pressed`
 - 即時反映の on/off は `atoms.Switch`（OS の checkbox 見た目を出さない）。保存ボタンで確定するフォーム内の同意・選択は checkbox のまま
 - モーダルは `rounded-xl`・`shadow-modal`・スクラム（`--scrim`）と本体が一緒にフェード（`app.css` の `dialog[data-modal]`、開 320ms ease-out・閉 240ms ease-in、`prefers-reduced-motion` では 100ms）。確認・破壊的操作（`hx-confirm`、Kill）は `molecules.ConfirmDialog`
-- トーストは画面下中央・端から 24px・高さ 40px のピル（`bg-ink text-bone`）・同時 1 つ（新しいものが置き換える）・3 秒。エラー詳細とフォーム検証はトーストにせず `atoms.InlineAlert`（フォーム内のエラー欄）に出す
+- トーストは画面下中央・端から 24px・高さ 40px のピル（`bg-ink text-bone`）・同時 1 つ（新しいものが置き換える）・3 秒。文言は 1 文の短文（`whitespace-nowrap` で収まる長さ）にし、補足は画面上の文言か `atoms.HelpMark` に移す（例: 立会時間外の決済は「立会時間外のため決済できません。」だけ、「次の立会で再度お試しください。」はポジション表の HelpMark）。長さが定まらない理由（`experiment.IsInvalid` の reason など）はトーストに載せずログに書く。エラー詳細とフォーム検証はトーストにせず `atoms.InlineAlert`（フォーム内のエラー欄）に出す
 - z-index は `--z-dropdown` 100（ツールチップ）/ `--z-toast` 500（`z-[var(--z-dropdown)]` のように使う）
 - 確認モーダル（`#confirm-dialog`）の外側クリックでの閉じは、`layout.document` が全ページで読む `modal/pitha-modal.js` が担う（確認ダイアログも `dialog[data-modal]`）
 - チャートの色は `lib/chart-theme.ts` がトークンを読んで渡す（陽線 = `--ink` の塗り、陰線 = `--surface` 地に `--ink` 枠の中空、買いマーカー = `--success`、売りマーカー = `--warning`、VWAP = `--info`、出来高 = `--mute` 50%、精度線 = `--ink`、完全較正線 = `--mute`、軸・グリッド = `--border`、クロスヘア線 = `--mute`・軸ラベルの地 = `--ink`）。系列色は `--success` `--warning` `--info` `--mute` `--ink` だけで、`--danger` は使わない。ヒートマップは `--ink` を `--surface` に混ぜた濃淡（4〜30%）と `--ink` 文字、数値併記。サンプルなしは `--bone` と破線枠

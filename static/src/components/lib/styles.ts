@@ -13,7 +13,7 @@ export const buttonStyles = css`
     cursor: pointer;
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    background: var(--surface);
+    background: transparent;
     color: var(--ink);
     min-height: 2rem;
     padding: 0.25rem 0.75rem;

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { heatmapStyles } from './calibration-styles';
 import { calibrationUrlFor, horizonLabel } from './calibration-view';
 import {
   bucket,
@@ -127,5 +128,17 @@ describe('pitha-calibration-heatmap horizon switch', () => {
     expect(
       el.shadowRoot?.querySelector('[data-testid="calibration-horizon-current"]')?.textContent,
     ).toContain('10分');
+  });
+});
+
+describe('horizon switch is the guide segment (brand-guide §4)', () => {
+  // --accent-soft track, --surface selected face; --accent fill is for primary actions only.
+  test('track is --accent-soft, the selected segment is a --surface face, nothing is --accent', () => {
+    const css = heatmapStyles.cssText;
+    expect(css).toMatch(
+      /\.pitha-calibration-heatmap-horizons\s*\{[^}]*background:\s*var\(--accent-soft\)/,
+    );
+    expect(css).toMatch(/button\[aria-pressed='true'\][^{]*\{[^}]*background:\s*var\(--surface\)/);
+    expect(css).not.toMatch(/background:\s*var\(--accent\)\s*;/);
   });
 });
