@@ -110,7 +110,7 @@ templ Experiments(props ExperimentsProps) {
 				<tbody>
 					for _, row := range props.Rows {
 						<tr data-testid="mcp-experiment-row" data-experiment-id={ strconv.FormatInt(row.ID, 10) } data-status={ row.Status } data-verdict={ row.Verdict }>
-							<td class="px-2 py-1.5">{ strconv.FormatInt(row.ID, 10) }</td>
+							<td class="px-2 py-1.5 font-mono tabular-nums">{ strconv.FormatInt(row.ID, 10) }</td>
 							<td class="px-2 py-1.5">{ row.StatusLabel }</td>
 							<td class="px-2 py-1.5">{ row.Period }</td>
 							<td class="px-2 py-1.5"><code>{ row.Variable }</code> { row.Change }<span class="block text-mute">{ row.By }</span></td>
