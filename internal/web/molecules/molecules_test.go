@@ -271,3 +271,15 @@ func TestThemeToggle_TransitionExcludesFocusOutline(t *testing.T) {
 		t.Errorf("transition-colors also animates outline-color: %s", html)
 	}
 }
+
+// issue #989 (C6): a connection card's description carries what the operator
+// must do, so it is body text (text-ink), not an auxiliary caption (text-mute).
+func TestSettingsCard_DescriptionIsInk(t *testing.T) {
+	html := render(t, molecules.SettingsCard(molecules.SettingsCardProps{ID: "c", ModalID: "m", Name: "接続名", Description: "本番の第二暗証番号は保存できません", ActionLabel: "設定"}))
+	if !strings.Contains(html, `<p class="text-sm text-ink">本番の第二暗証番号は保存できません</p>`) {
+		t.Errorf("description must be text-sm text-ink: %s", html)
+	}
+	if strings.Contains(html, "text-mute") {
+		t.Errorf("description must not be text-mute: %s", html)
+	}
+}

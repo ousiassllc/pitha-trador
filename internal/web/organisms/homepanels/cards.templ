@@ -89,7 +89,7 @@ templ TradeStatusBody(v TradeStatusView) {
 			}
 		</div>
 		if v.Detail != "" {
-			<p class="mt-1 text-sm text-mute" data-testid="trade-status-detail">{ v.Detail }</p>
+			<p class="mt-1 text-sm text-ink" data-testid="trade-status-detail">{ v.Detail }</p>
 		}
 		if v.Link.Href != "" {
 			<p class="mt-1">@DestLink(v.Link)</p>
