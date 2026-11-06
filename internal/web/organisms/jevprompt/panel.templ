@@ -85,7 +85,7 @@ templ Panel(props PanelProps) {
 					Jev の trader に送るプロンプトには版があり、判断の記録に残ります。候補の版を「シャドー」で動かすと、ライブの判断ごとに同じ入力で候補の版にも答えさせ、別に保存します。シャドーの答えは取引（Policy・メタモデル・Risk・発注）にも、RAG・Calibration・メタモデルの学習にも一切使いません。Paper だけで動き、Live では動きません。既定はオフです。オンにすると、ライブの判断ごとに候補の版の LLM 呼び出しが 1 回増え、その費用が発生します。この画面のほか、MCP の設定変更が許可されているときは MCP からも、オン・オフと候補の版を変えられます。
 				}
 			</div>
-			<div class="flex flex-col gap-1">
+			<div class="flex flex-col gap-2">
 				<label for="jev-prompt-candidate" class="text-ink">候補の版</label>
 				@atoms.Select(atoms.SelectProps{ID: "jev-prompt-candidate", Name: "candidate", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
 					<option value="" selected?={ props.CandidateVersion == "" }>（なし）</option>
@@ -96,7 +96,7 @@ templ Panel(props PanelProps) {
 					}
 				}
 			</div>
-			<div class="flex flex-col gap-1">
+			<div class="flex flex-col gap-2">
 				<div class="flex items-center gap-2">
 					<label for="jev-prompt-cap" class="text-ink">1 日あたりの費用上限（USD。日本時間の日）</label>
 					@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-jev-prompt-cap", Label: "費用上限の説明"}) {
