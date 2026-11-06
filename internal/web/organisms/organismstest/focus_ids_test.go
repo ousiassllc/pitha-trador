@@ -91,7 +91,7 @@ func TestScanPanel_CardPaddingIsTwentyFourWithoutStackedTopMargins(t *testing.T)
 		t.Errorf("scan panel kept p-4 or a stacked mt-3 under the header: %s", html)
 	}
 	html = renderComponent(t, organisms.ScanPanel(organisms.ScanPanelView{HasCycle: true}))
-	assertContains(t, html, `class="text-xs text-mute" data-testid="scan-cycle-meta"`)
+	assertContains(t, html, `class="text-sm text-mute" data-testid="scan-cycle-meta"`)
 }
 
 // The queue table is the first block under the h1 of the activity page, so it

@@ -30,6 +30,10 @@ func TestRejectReasons_ListedByCountWithLabels(t *testing.T) {
 	if got := inner(t, body, "home-reject-reasons"); !strings.Contains(got, "20 件") {
 		t.Errorf("total missing from %q", got)
 	}
+	// The total is a value line, not a note (brand-guide §2, T3; issue #1006).
+	if !strings.Contains(body, `<p class="text-sm text-mute">計 20 件</p>`) || strings.Contains(body, `<p class="text-xs text-mute">計`) {
+		t.Errorf("the reject total must be text-sm text-mute: %s", body)
+	}
 }
 
 // entry_quality_below_threshold on top: the minimum entry quality in use (Paper
@@ -116,6 +120,9 @@ func TestScan_FunnelAndEmptyState(t *testing.T) {
 	if got := inner(t, body, "scan-cycle-meta"); !strings.Contains(got, "10-20 10:00") {
 		t.Errorf("cycle meta = %q", got)
 	}
+	if !strings.Contains(body, `<p class="text-sm text-mute" data-testid="scan-cycle-meta">`) {
+		t.Errorf("cycle meta is a value line and must be text-sm text-mute: %s", body)
+	}
 }
 
 func TestProposals_TodaysCountsAndNewest(t *testing.T) {
@@ -171,6 +178,9 @@ func TestModel_AdoptedNotAdoptedAndSkippedRetraining(t *testing.T) {
 	}
 	if got := inner(t, body, "model-trained-at"); got != "学習日時 10-19 09:00" {
 		t.Errorf("trained at = %q", got)
+	}
+	if !strings.Contains(body, `<p class="text-sm text-mute" data-testid="model-trained-at">`) {
+		t.Errorf("trained-at is a value line and must be text-sm text-mute: %s", body)
 	}
 	f.source.health.MetaAdopted = false
 	f.source.health.RetrainSkipped, f.source.health.RetrainSkipReason = true, "too_few_rows_after_purge"

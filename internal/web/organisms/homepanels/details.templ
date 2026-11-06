@@ -55,7 +55,7 @@ templ rejectReasonsBlock(v RejectReasonsView) {
 		} else if len(v.Rows) == 0 {
 			<p class="text-sm text-mute" data-testid="reject-empty">今日の見送りの記録はありません。</p>
 		} else {
-			<p class="text-xs text-mute">計 { strconv.Itoa(v.Total) } 件</p>
+			<p class="text-sm text-mute">計 { strconv.Itoa(v.Total) } 件</p>
 			<ul class="mt-2 flex flex-col gap-1 text-sm">
 				for _, r := range v.Rows {
 					<li class="flex items-baseline justify-between gap-3" data-testid="reject-row" data-code={ r.Code }>
@@ -102,7 +102,7 @@ templ scanBlock(v ScanView) {
 		} else if !v.Panel.HasCycle {
 			<p class="text-sm text-mute" data-testid="scan-none">スキャンの結果はありません。</p>
 		} else {
-			<p class="text-xs text-mute" data-testid="scan-cycle-meta">最終サイクル { FormatTime(v.Panel.Cycle.FinishedAt) }（所要 { organisms.FormatCycleDuration(v.Panel.Cycle.Duration()) }）</p>
+			<p class="text-sm text-mute" data-testid="scan-cycle-meta">最終サイクル { FormatTime(v.Panel.Cycle.FinishedAt) }（所要 { organisms.FormatCycleDuration(v.Panel.Cycle.Duration()) }）</p>
 			@organisms.ScanFunnel(v.Panel)
 		}
 		<p class="mt-2"><a class={ linkClass } href="/scanner">候補銘柄 @atoms.IconArrowRight()</a></p>
@@ -172,7 +172,7 @@ templ modelBlock(v ModelView) {
 					}
 				</p>
 				if !v.TrainedAt.IsZero() {
-					<p class="text-xs text-mute" data-testid="model-trained-at">学習日時 { FormatTime(v.TrainedAt) }</p>
+					<p class="text-sm text-mute" data-testid="model-trained-at">学習日時 { FormatTime(v.TrainedAt) }</p>
 				}
 			} else {
 				<p class="text-sm text-warning" data-testid="model-not-adopted">メタモデル: 未採用</p>

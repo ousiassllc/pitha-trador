@@ -81,7 +81,7 @@ templ ScanPanel(v ScanPanelView) {
 				スキャンの結果はありません。
 			</p>
 		} else {
-			<p class="text-xs text-mute" data-testid="scan-cycle-meta">
+			<p class="text-sm text-mute" data-testid="scan-cycle-meta">
 				最終サイクル { atoms.FormatJST(v.Cycle.FinishedAt) }（所要 { FormatCycleDuration(v.Cycle.Duration()) }）
 			</p>
 			@ScanFunnel(v)

@@ -48,6 +48,6 @@ templ SettingGroupStatus(props SettingGroupProps, oob bool) {
 		} else {
 			<span class="rounded-full border tone-info px-2 py-1 text-xs">既定を使用</span>
 		}
-		<span class="text-xs font-normal text-mute">{ strconv.Itoa(props.OverriddenCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
+		<span class="text-sm font-normal text-mute">{ strconv.Itoa(props.OverriddenCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
 	</span>
 }
