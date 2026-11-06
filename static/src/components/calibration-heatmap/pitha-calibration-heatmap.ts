@@ -16,7 +16,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
-import { chartBaseOptions, readToken } from '../lib/chart-theme';
+import { ColorSchemeController, chartBaseOptions } from '../lib/chart-theme';
 import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles, tableStyles } from '../lib/styles';
@@ -36,13 +36,11 @@ import {
   type HorizonOption,
   hasLabeledSamples,
 } from './calibration-view';
+import { accuracyColor, perfectColor } from './chart-colors';
 import { renderDirectionTable } from './direction-view';
 import { renderHorizonSelector } from './horizon-selector';
 import { type LLMCutoffInfo, type MetaModel, renderMetaModel } from './meta-model/meta-model-view';
 import { type RetrainSkip, renderRetrainSkips } from './meta-model/retrain-skips-view';
-
-// Series colors are tokens (lib/chart-theme.ts): the observed accuracy in --ink,
-// the perfect-calibration reference in --mute (brand-guide §8: no blue, no prism).
 
 @customElement('pitha-calibration-heatmap')
 export class PithaCalibrationHeatmap extends LitElement {
@@ -77,6 +75,8 @@ export class PithaCalibrationHeatmap extends LitElement {
   private chart: IChartApi | null = null;
   private accuracySeries: ISeriesApi<'Line'> | null = null;
   private perfectSeries: ISeriesApi<'Line'> | null = null;
+  // The canvas keeps the colors it was given, so re-apply the tokens on an OS Light/Dark switch.
+  readonly colorScheme = new ColorSchemeController(this, () => this.applyTheme());
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -117,16 +117,22 @@ export class PithaCalibrationHeatmap extends LitElement {
       timeScale: { ...base.timeScale, visible: false },
     });
     this.perfectSeries = this.chart.addLineSeries({
-      color: readToken('mute'),
+      ...perfectColor(),
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       title: 'Perfect calibration',
     });
     this.accuracySeries = this.chart.addLineSeries({
-      color: readToken('ink'),
+      ...accuracyColor(),
       lineWidth: 2,
       title: 'Observed accuracy',
     });
+  }
+
+  private applyTheme(): void {
+    this.chart?.applyOptions(chartBaseOptions());
+    this.perfectSeries?.applyOptions(perfectColor());
+    this.accuracySeries?.applyOptions(accuracyColor());
   }
 
   private async load(): Promise<void> {

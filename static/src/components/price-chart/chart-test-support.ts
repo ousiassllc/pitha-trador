@@ -15,9 +15,10 @@ export const createdSeries: {
   setData: MockFn;
   update: MockFn;
   setMarkers: MockFn;
+  applyOptions: MockFn;
   priceScale: MockFn;
 }[] = [];
-export const createdCharts: { remove: MockFn }[] = [];
+export const createdCharts: { remove: MockFn; applyOptions: MockFn }[] = [];
 // applyOptions calls on any price scale (a series' own scale or the chart's
 // 'right' scale), in call order, for the scaleMargins assertions.
 export const priceScaleOptions: { scale: string; options: unknown }[] = [];
@@ -30,6 +31,7 @@ const series = (options: Record<string, unknown> = {}) => {
     setData: mock(),
     update: mock(),
     setMarkers: mock(),
+    applyOptions: mock(),
     priceScale: mock(() => priceScale('series')),
   };
   createdSeries.push(s);
@@ -44,6 +46,7 @@ mock.module('lightweight-charts', () => ({
       addHistogramSeries: series,
       priceScale: (id: string) => priceScale(id),
       remove: mock(),
+      applyOptions: mock(),
     };
     createdCharts.push(chart);
     return chart;
