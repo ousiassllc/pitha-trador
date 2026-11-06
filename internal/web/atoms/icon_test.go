@@ -14,7 +14,7 @@ func TestLinkArrowIcons_AreDecorativeIconoirSVGs(t *testing.T) {
 		"arrow-right":    renderWithLabel(t, atoms.IconArrowRight(), ""),
 		"nav-arrow-left": renderWithLabel(t, atoms.IconNavArrowLeft(), ""),
 	} {
-		for _, want := range []string{`viewBox="0 0 24 24"`, `stroke-width="1.5"`, `stroke="currentColor"`, `aria-hidden="true"`, "h-4 w-4"} {
+		for _, want := range []string{`viewBox="0 0 24 24"`, `stroke-width="1.5"`, `stroke="currentColor"`, `aria-hidden="true"`, "icon-sm"} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s missing %q: %s", name, want, body)
 			}

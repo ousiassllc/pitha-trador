@@ -64,9 +64,9 @@ export const helpMarkStyles = css`
   .help-mark-text {
     visibility: hidden;
     opacity: 0;
-    /* fade-in 320ms ease-out (design guide §5); visibility flips at the end of
-       the fade-out so the text stays visible while it fades */
-    transition: opacity 320ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 320ms;
+    /* fade-in --motion-fade-in, ease-out (design guide §5); visibility flips at
+       the end of the fade-out so the text stays visible while it fades */
+    transition: opacity var(--motion-fade-in) var(--ease-out), visibility var(--motion-fade-in);
     position: fixed;
     top: 0;
     left: 0;

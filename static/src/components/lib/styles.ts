@@ -20,7 +20,7 @@ export const buttonStyles = css`
     font: inherit;
     font-size: 1rem;
     font-weight: 600;
-    transition: background-color 180ms ease-out;
+    transition: background-color var(--motion-base) var(--ease-out);
   }
   button:hover:not(:disabled) {
     background: var(--accent-soft);
