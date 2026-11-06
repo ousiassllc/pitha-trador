@@ -13,7 +13,7 @@ import (
 func TestInput_DefaultIsFlexibleRowField(t *testing.T) {
 	body := renderWithLabel(t, atoms.Input(atoms.InputProps{ID: "x", Name: "n"}), "")
 
-	for _, want := range []string{`id="x"`, `name="n"`, `type="text"`, "rounded-md border border-border", "flex-1", "px-3 py-1"} {
+	for _, want := range []string{`id="x"`, `name="n"`, `type="text"`, "rounded-md border border-border h-10 px-3 flex-1"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -24,11 +24,11 @@ func TestInput_DefaultIsFlexibleRowField(t *testing.T) {
 // replaces the default layout classes while the shared border stays.
 func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 	body := renderWithLabel(t, atoms.Input(atoms.InputProps{
-		Name: "from", Type: "date", Class: "mt-1 px-2 py-1 text-sm",
+		Name: "from", Type: "date", Class: "mt-1 text-sm",
 		Attrs: templ.Attributes{"required": true, "min": "1", "data-testid": "f"},
 	}), "")
 
-	for _, want := range []string{`type="date"`, "rounded-md border border-border mt-1 px-2 py-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
+	for _, want := range []string{`type="date"`, "rounded-md border border-border h-10 px-3 mt-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -40,19 +40,37 @@ func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 
 func TestSelect_RendersChildrenWithSharedBorder(t *testing.T) {
 	body := renderWithLabel(t, atoms.Select(atoms.SelectProps{
-		ID: "s", Name: "days", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "d"},
+		ID: "s", Name: "days", Class: "bg-surface", Attrs: templ.Attributes{"data-testid": "d"},
 	}), `<option value="1">one</option>`)
 
-	for _, want := range []string{`<select`, `id="s"`, `name="days"`, "rounded-md border border-border bg-surface px-3 py-2", `data-testid="d"`, `<option value="1">one</option></select>`} {
+	for _, want := range []string{`<select`, `id="s"`, `name="days"`, "rounded-md border border-border h-10 px-3 bg-surface", `data-testid="d"`, `<option value="1">one</option></select>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
 	}
 }
 
+// The guide's form control is 40 high with 12 side padding (S2/§4): a caller
+// cannot trade it for py-* classes by passing Class.
+func TestInputAndSelect_AlwaysCarryTheGuideHeightAndPadding(t *testing.T) {
+	for name, body := range map[string]string{
+		"Input":  renderWithLabel(t, atoms.Input(atoms.InputProps{Class: "bg-surface"}), ""),
+		"Select": renderWithLabel(t, atoms.Select(atoms.SelectProps{Class: "bg-surface"}), ""),
+	} {
+		for _, want := range []string{"h-10", "px-3"} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s missing %q: %s", name, want, body)
+			}
+		}
+		if strings.Contains(body, "py-") {
+			t.Errorf("%s must not carry a vertical padding: %s", name, body)
+		}
+	}
+}
+
 func TestSelect_DefaultClass(t *testing.T) {
 	body := renderWithLabel(t, atoms.Select(atoms.SelectProps{Name: "n"}), "")
-	if !strings.Contains(body, "rounded-md border border-border px-3 py-1") {
+	if !strings.Contains(body, "rounded-md border border-border h-10 px-3 focus-visible:") {
 		t.Errorf("default class missing: %s", body)
 	}
 }

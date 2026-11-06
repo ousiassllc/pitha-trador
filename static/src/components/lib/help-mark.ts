@@ -74,7 +74,7 @@ export const helpMarkStyles = css`
     box-sizing: border-box;
     width: 18rem;
     max-width: 80vw;
-    padding: 0.375rem 0.625rem;
+    padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: var(--r-sm);
     background: var(--surface);

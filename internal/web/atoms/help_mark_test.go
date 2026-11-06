@@ -28,7 +28,7 @@ func TestHelpMark_ButtonDescribesItselfWithTheHelpText(t *testing.T) {
 func TestHelpMark_TooltipUsesTheGuideShape(t *testing.T) {
 	body := renderWithLabel(t, atoms.HelpMark(atoms.HelpMarkProps{ID: "help-x", Label: "説明"}), "詳しい説明")
 
-	for _, want := range []string{"rounded-sm", "px-2.5 py-1.5"} {
+	for _, want := range []string{"rounded-sm", "px-3 py-2"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("tooltip missing %q: %s", want, body)
 		}

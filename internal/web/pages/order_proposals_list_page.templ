@@ -29,15 +29,15 @@ templ OrderProposalsPage(props ProposalListProps) {
 		<form method="get" action="/order-proposals" class="mt-6 flex flex-wrap items-end gap-3 text-sm" data-testid="order-proposals-filter">
 			<label class="flex flex-col gap-2 text-ink">
 				開始日（JST）
-				@atoms.Input(atoms.InputProps{Name: "from", Type: "date", Class: "px-3 py-2 font-normal", Attrs: templ.Attributes{"value": props.Filter.From}})
+				@atoms.Input(atoms.InputProps{Name: "from", Type: "date", Class: "font-normal", Attrs: templ.Attributes{"value": props.Filter.From}})
 			</label>
 			<label class="flex flex-col gap-2 text-ink">
 				終了日（JST）
-				@atoms.Input(atoms.InputProps{Name: "to", Type: "date", Class: "px-3 py-2 font-normal", Attrs: templ.Attributes{"value": props.Filter.To}})
+				@atoms.Input(atoms.InputProps{Name: "to", Type: "date", Class: "font-normal", Attrs: templ.Attributes{"value": props.Filter.To}})
 			</label>
 			<label class="flex flex-col gap-2 text-ink">
 				状態
-				@atoms.Select(atoms.SelectProps{Name: "status", Class: "px-3 py-2 font-normal"}) {
+				@atoms.Select(atoms.SelectProps{Name: "status", Class: "font-normal"}) {
 					<option value="">すべて</option>
 					for _, o := range props.Statuses {
 						<option value={ o.Value } selected?={ o.Value == props.Filter.Status }>{ o.Label }</option>
@@ -46,7 +46,7 @@ templ OrderProposalsPage(props ProposalListProps) {
 			</label>
 			<label class="flex flex-col gap-2 text-ink">
 				枠
-				@atoms.Select(atoms.SelectProps{Name: "bucket", Class: "px-3 py-2 font-normal"}) {
+				@atoms.Select(atoms.SelectProps{Name: "bucket", Class: "font-normal"}) {
 					<option value="">すべて</option>
 					for _, o := range props.Buckets {
 						<option value={ o.Value } selected?={ o.Value == props.Filter.Bucket }>{ o.Label }</option>

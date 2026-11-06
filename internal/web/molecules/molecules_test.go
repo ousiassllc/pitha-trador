@@ -206,11 +206,12 @@ func TestFieldRows_HintSitsFourBelowTheInputAndEmptyErrorSlotTakesNoGap(t *testi
 	}
 }
 
-// issue #974: the 計算結果 panel is a bordered card: --r-lg and the small-card padding (16).
-func TestSettingGroupDerived_IsALargeRadiusCard(t *testing.T) {
+// issue #987: the 計算結果 panel nests inside a card, so it is a --bone panel on --r-md
+// (brand-guide S1/§4) with the small-card padding (16).
+func TestSettingGroupDerived_IsANestedMediumRadiusPanel(t *testing.T) {
 	html := render(t, molecules.SettingGroupDerived(molecules.SettingGroupProps{ID: "g"}, false))
-	if !strings.Contains(html, "rounded-lg border border-border bg-bone p-4") || strings.Contains(html, "rounded-md") {
-		t.Errorf("the derived panel must be rounded-lg p-4: %s", html)
+	if !strings.Contains(html, "rounded-md border border-border bg-bone p-4") || strings.Contains(html, "rounded-lg") {
+		t.Errorf("the derived panel must be rounded-md p-4: %s", html)
 	}
 }
 

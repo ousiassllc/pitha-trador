@@ -94,4 +94,4 @@ export const lightDomWsNoticeClass = 'text-xs text-warning';
 // edge and 2px --ring that atoms.Select draws (internal/web/atoms/input.templ),
 // for a bare <select>/<input> a Lit component renders itself.
 export const lightDomFieldClass =
-  'rounded-md border border-border px-3 py-1 focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40';
+  'h-10 rounded-md border border-border px-3 focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40';
