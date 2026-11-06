@@ -3,6 +3,7 @@ package pages_test
 import (
 	"bytes"
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -183,8 +184,13 @@ func TestSettingsPage_DataExportPanelIsPlainDownloadForm(t *testing.T) {
 	}
 	start := strings.Index(body, `id="data-export-panel"`)
 	panel := body[start : start+strings.Index(body[start:], "</section>")]
-	if got := strings.Count(panel, `type="checkbox"`); got != 3 || strings.Count(panel, "checked") != 3 {
-		t.Errorf("data export panel has %d checkboxes / %d checked, want 3 all checked", got, strings.Count(panel, "checked"))
+	checkedAttr := regexp.MustCompile(`\schecked[\s/>]`)
+	if got, checked := strings.Count(panel, `type="checkbox"`), len(checkedAttr.FindAllString(panel, -1)); got != 3 || checked != 3 {
+		t.Errorf("data export panel has %d checkboxes / %d checked, want 3 all checked", got, checked)
+	}
+	// issue #973: the boxes are the guide's checkbox, not the OS control.
+	if n := strings.Count(panel, "appearance-none"); n != 3 {
+		t.Errorf("data export panel has %d guide-styled checkboxes, want 3: %s", n, panel)
 	}
 }
 
@@ -241,5 +247,13 @@ func TestSetupPage_ContinueLinkOnlyWhenComplete(t *testing.T) {
 	}
 	if status := strings.Index(body, `id="setup-status"`); status < 0 || strings.Index(body, `data-testid="setup-continue"`) < status {
 		t.Errorf("the 続ける link must sit inside #setup-status so the OOB swap replaces it; body=%s", body)
+	}
+}
+
+// issue #974: the #update-panel target ring has the same radius as the card inside it.
+func TestSettingsPage_UpdatePanelRingMatchesTheCardRadius(t *testing.T) {
+	body := renderSettings(t, pages.SettingsProps{Dialogs: systemDialogs})
+	if !strings.Contains(body, `id="update-panel" class="scroll-mt-4 rounded-lg target:ring-1`) {
+		t.Errorf("#update-panel wrapper must be rounded-lg: %s", body)
 	}
 }

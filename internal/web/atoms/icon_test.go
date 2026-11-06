@@ -21,3 +21,11 @@ func TestLinkArrowIcons_AreDecorativeIconoirSVGs(t *testing.T) {
 		}
 	}
 }
+
+// issue #974: the inline-alert icon is nudged by a 4px-scale margin (brand-guide §3), not 2px.
+func TestIconWarningCircle_UsesTheSpacingScale(t *testing.T) {
+	body := renderWithLabel(t, atoms.IconWarningCircle(), "")
+	if !strings.Contains(body, `class="mt-1 icon-md shrink-0"`) || strings.Contains(body, "mt-0.5") {
+		t.Errorf("the warning icon offset must be mt-1: %s", body)
+	}
+}

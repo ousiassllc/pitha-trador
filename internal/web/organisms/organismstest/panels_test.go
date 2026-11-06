@@ -100,3 +100,11 @@ func TestDecisionHistoryList_TableFollowsTheH2TwentyFourPxBelow(t *testing.T) {
 		t.Errorf("history table is not 24px (mt-6) below its h2: %s", html)
 	}
 }
+
+// issue #974: an empty state is a dashed frame (brand-guide §3), as on Home.
+func TestPositionPanel_EmptyStateIsADashedFrame(t *testing.T) {
+	html := renderComponent(t, organisms.PositionPanel(nil))
+	if !strings.Contains(html, "rounded-lg border border-dashed border-border") {
+		t.Errorf("the empty position state must be a dashed frame: %s", html)
+	}
+}
