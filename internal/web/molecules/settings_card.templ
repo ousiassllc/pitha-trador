@@ -183,7 +183,7 @@ templ ConnectionStatus(props ConnectionProps, oob bool) {
 			<span class={ "rounded-full px-2 py-1 text-xs", badge.Tone.class() } data-testid={ "connection-badge-" + props.ID + "-" + badge.ID }>{ badge.Text }</span>
 		}
 		for _, detail := range props.Details {
-			<span class="basis-full text-xs text-mute" data-testid={ "connection-detail-" + props.ID + "-" + detail.ID }>{ detail.Label }: { detail.Value }</span>
+			<span class="basis-full text-sm text-mute" data-testid={ "connection-detail-" + props.ID + "-" + detail.ID }>{ detail.Label }: { detail.Value }</span>
 		}
 	</span>
 }

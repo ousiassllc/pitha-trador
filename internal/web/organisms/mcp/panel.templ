@@ -174,7 +174,7 @@ templ Panel(props PanelProps) {
 // keyReveal is the one-time display of a freshly generated key.
 templ keyReveal(key string) {
 	<div class="flex flex-col gap-2 rounded-md border tone-warning p-3" role="alert" hx-history="false" autocomplete="off" data-clear-on-close data-testid="mcp-key-reveal">
-		<p class="font-semibold text-warning">新しい API キー（この表示は一度きりです。今すぐコピーしてください）</p>
+		<p class="text-warning">新しい API キー（この表示は一度きりです。今すぐコピーしてください）</p>
 		<div class="flex flex-wrap items-center gap-2">
 			@atoms.Input(atoms.InputProps{ID: "mcp-new-key", Class: "bg-surface font-mono", Attrs: templ.Attributes{"readonly": true, "value": key, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-new-key"}})
 			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"data-copy-from": "mcp-new-key", "data-testid": "mcp-copy-key"}}) {
