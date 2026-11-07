@@ -9,6 +9,13 @@ describe('buttonStyles', () => {
       /button:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--focus\);[^}]*outline-offset:\s*2px/,
     );
   });
+
+  // Guide M3: no colour transition under prefers-reduced-motion (issue #1032).
+  test('drops the background transition under prefers-reduced-motion', () => {
+    expect(buttonStyles.cssText).toMatch(
+      /@media \(prefers-reduced-motion:\s*reduce\)\s*\{\s*button\s*\{[^}]*transition:\s*none/,
+    );
+  });
 });
 
 describe('tableStyles', () => {
