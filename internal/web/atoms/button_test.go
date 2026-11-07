@@ -113,7 +113,7 @@ func TestButton_CarriesTheRippleHook(t *testing.T) {
 func TestButton_HoverTransitionExcludesFocusOutline(t *testing.T) {
 	body := renderWithLabel(t, atoms.Button(atoms.ButtonProps{}), "x")
 
-	if !strings.Contains(body, "transition-[background-color] duration-base") {
+	if !strings.Contains(body, "transition-[background-color] duration-base ease-out") {
 		t.Errorf("button must transition only background-color: %s", body)
 	}
 	if strings.Contains(body, "transition-colors") {
