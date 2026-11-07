@@ -87,7 +87,7 @@ templ Panel(props PanelProps) {
 			</div>
 			<div class="flex flex-col gap-2">
 				<label for="jev-prompt-candidate" class="text-ink">候補の版</label>
-				@atoms.Select(atoms.SelectProps{ID: "jev-prompt-candidate", Name: "candidate", Class: "bg-surface", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
+				@atoms.Select(atoms.SelectProps{ID: "jev-prompt-candidate", Name: "candidate", Attrs: templ.Attributes{"data-testid": "jev-prompt-candidate"}}) {
 					<option value="" selected?={ props.CandidateVersion == "" }>（なし）</option>
 					for _, v := range props.Versions {
 						if v != props.LiveVersion {
@@ -103,7 +103,7 @@ templ Panel(props PanelProps) {
 						超えるとその日のシャドーを止めます（ライブの判断は止まりません。翌日に再開します）。欄を空のまま保存すると既定値が使われます。変えたいときは値を入力して保存してください。保存した値を消して既定値に戻すには、欄を空にして保存します。失敗した呼び出し（応答が不正・保存に失敗・タイムアウトなど）は課金されても費用の合計に入らないため、1 日の回数の上限も別にあります。この回数は固定で、この画面では変えられません。
 					}
 				</div>
-				@atoms.Input(atoms.InputProps{ID: "jev-prompt-cap", Name: "cap", Class: "bg-surface", Attrs: capAttrs(props)})
+				@atoms.Input(atoms.InputProps{ID: "jev-prompt-cap", Name: "cap", Class: "w-auto", Attrs: capAttrs(props)})
 				<span class="text-sm text-mute" data-testid="jev-prompt-cap-note">
 					if props.CapIsDefault {
 						今の上限は <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</span>（既定値）。
@@ -158,7 +158,7 @@ templ Panel(props PanelProps) {
 			</span>
 			<div id="jev-prompt-promote-error" data-testid="jev-prompt-promote-error"></div>
 			<div class="flex flex-wrap items-center gap-2">
-				@atoms.Select(atoms.SelectProps{Name: "version", Class: "bg-surface", Attrs: templ.Attributes{"data-testid": "jev-prompt-promote-version"}}) {
+				@atoms.Select(atoms.SelectProps{Name: "version", Attrs: templ.Attributes{"data-testid": "jev-prompt-promote-version"}}) {
 					for _, v := range props.Versions {
 						if v != props.LiveVersion {
 							<option value={ v } selected?={ v == props.CandidateVersion }>{ v }</option>
