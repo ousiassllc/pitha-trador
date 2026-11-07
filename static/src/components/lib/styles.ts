@@ -42,7 +42,9 @@ export const buttonStyles = css`
 
 // Table recipe (brand-guide §2/§3): header row SemiBold 12px --mute with a 1px
 // --border underline, cells padded 10 / 12. Numeric columns carry `.num`
-// (JetBrains Mono, tabular, right-aligned); label columns stay in the body font.
+// (right-aligned); only the `td.num` cells are JetBrains Mono / tabular, so the
+// column headings (`th.num`) stay in the body font; label columns stay in the
+// body font too.
 export const tableStyles = css`
   table {
     border-collapse: collapse;
@@ -69,9 +71,11 @@ export const tableStyles = css`
     padding: 0.625rem 0.75rem;
   }
   .num {
+    text-align: right;
+  }
+  td.num {
     font-family: "JetBrains Mono", ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
-    text-align: right;
   }
 `;
 

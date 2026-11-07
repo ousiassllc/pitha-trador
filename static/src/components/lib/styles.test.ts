@@ -12,14 +12,24 @@ describe('buttonStyles', () => {
 });
 
 describe('tableStyles', () => {
-  // Numeric columns are JetBrains Mono, tabular and right-aligned; header cells
-  // are SemiBold 12px --mute (brand-guide §2).
+  // Numeric cells are JetBrains Mono and tabular; numeric columns (headings
+  // included) are right-aligned; header cells are SemiBold 12px --mute and stay
+  // in the body font (brand-guide §2, issue #1013).
   test('defines the numeric column and the header row recipe', () => {
     const css = tableStyles.cssText;
-    expect(css).toMatch(/\.num\s*\{[^}]*JetBrains Mono[^}]*tabular-nums[^}]*text-align:\s*right/);
+    expect(css).toMatch(/td\.num\s*\{[^}]*JetBrains Mono[^}]*tabular-nums/);
+    expect(css).toMatch(/(^|[\s}])\.num\s*\{[^}]*text-align:\s*right/);
     expect(css).toMatch(
       /th\s*\{[^}]*color:\s*var\(--mute\)[^}]*font-size:\s*0\.75rem[^}]*font-weight:\s*600/,
     );
+  });
+
+  // issue #1013: `th.num` must not pick up the Mono stack, which would drop the
+  // Japanese column headings into the system monospace font.
+  test('only td.num cells use the Mono font', () => {
+    const css = tableStyles.cssText;
+    expect(css.match(/JetBrains Mono/g)).toHaveLength(1);
+    expect(css).not.toMatch(/(^|[\s}])\.num\s*\{[^}]*font-family/);
   });
 });
 
