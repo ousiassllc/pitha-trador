@@ -43,6 +43,8 @@ type ButtonProps struct {
 // Button renders a <button> whose children are its label. All button
 // colors, focus ring and the `disabled:opacity-40` state (which
 // `hx-disabled-elt` relies on) live here so a visual change is one edit.
+// A disabled button only dims (design guide O7): hover backgrounds use
+// `not-disabled:` (not `enabled:`, which never matches ButtonLink's <a>).
 templ Button(props ButtonProps) {
 	<button class={ buttonClass(props) } type={ buttonType(props.Type) } data-ripple { props.Attrs... }>
 		{ children... }
@@ -81,9 +83,9 @@ func buttonClass(props ButtonProps) string {
 	case ButtonDanger:
 		color = "bg-danger text-bone"
 	case ButtonSecondary:
-		color = "border border-border bg-transparent text-ink hover:bg-accent-soft"
+		color = "border border-border bg-transparent text-ink not-disabled:hover:bg-accent-soft"
 	case ButtonGhost:
-		color = "text-ink hover:bg-accent-soft"
+		color = "text-ink not-disabled:hover:bg-accent-soft"
 	default:
 		color = "bg-accent text-bone"
 	}
