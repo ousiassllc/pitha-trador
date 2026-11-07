@@ -2,19 +2,22 @@ package atoms
 
 import "strings"
 
-// fieldBase is the border/shape/ground (--surface) shared by Input, Select and Textarea, so a
+// fieldBase is the border/shape/ground (--surface) and disabled look (brand-guide
+// O8/§4 forms: opacity .5, not-allowed cursor) shared by Input, Select and Textarea, so a
 // form control's look changes in one place. Layout (width, margin, text size)
 // comes from the caller's Class.
-const fieldBase = "rounded-md border border-border bg-surface"
+const fieldBase = "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50"
 
 // fieldBox is the single-line control's size (brand-guide S2/§4 forms: height
 // 40, padding 12). Input and Select always carry it; Class must not override
 // the height or padding.
 const fieldBox = "h-10 px-3"
 
-// textareaBox is the multi-line counterpart: 12px horizontal padding, height
+// textareaBox is the multi-line counterpart: 12px horizontal padding and 10px
+// vertical padding (brand-guide O8/§4 forms: padding 12; the vertical value is
+// a hair under so the first line sits where a 40px input's text does), height
 // from `rows`.
-const textareaBox = "px-3 py-1"
+const textareaBox = "px-3 py-2.5"
 
 // fieldFocus is the form focus state (brand-guide C3): --focus border and a
 // 2px --ring (--focus at 40%). `outline-none` is safe only because the ring
