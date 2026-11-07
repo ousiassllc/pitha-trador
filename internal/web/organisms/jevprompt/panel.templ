@@ -104,7 +104,7 @@ templ Panel(props PanelProps) {
 					}
 				</div>
 				@atoms.Input(atoms.InputProps{ID: "jev-prompt-cap", Name: "cap", Class: "bg-surface", Attrs: capAttrs(props)})
-				<span class="text-xs text-mute" data-testid="jev-prompt-cap-note">
+				<span class="text-sm text-mute" data-testid="jev-prompt-cap-note">
 					if props.CapIsDefault {
 						今の上限は <span class="font-mono tabular-nums text-ink" data-testid="jev-prompt-cap-effective">{ props.CapUSD } USD</span>（既定値）。
 					} else {
