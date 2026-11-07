@@ -173,3 +173,15 @@ func TestPage_EvaluationOOSWindowIsMonoAndRightAligned(t *testing.T) {
 		t.Error("the OOS period cell should be text-right font-mono tabular-nums")
 	}
 }
+
+// The 状態 column holds text, not a number: its header and cells are
+// left-aligned in the body font (brand-guide §2 T5; issue #1028).
+func TestPage_EvaluationStatusColumnIsLeftAligned(t *testing.T) {
+	body := serveWithEvaluation(t, fixedEvaluation{ev: winning()}).Body.String()
+	if !strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">状態</th>`) {
+		t.Error("the 状態 header should be left-aligned")
+	}
+	if !strings.Contains(body, `<td class="px-2 py-1.5 text-left">active</td>`) {
+		t.Error("the 状態 cell should be left-aligned without font-mono")
+	}
+}
