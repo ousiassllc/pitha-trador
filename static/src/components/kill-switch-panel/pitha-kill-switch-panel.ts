@@ -91,8 +91,10 @@ export class PithaKillSwitchPanel extends LitElement {
         background: var(--danger);
         color: var(--bone);
       }
+      /* Hover keeps the --danger token (brand-guide C4: no derived state
+         colour); it only has to out-rank buttonStyles' accent-soft hover. */
       button.pitha-kill-switch-panel-kill:hover:not(:disabled) {
-        background: color-mix(in srgb, var(--danger) 85%, var(--ink));
+        background: var(--danger);
       }
     `,
   ];
