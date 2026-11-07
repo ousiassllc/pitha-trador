@@ -113,9 +113,10 @@ export function showToast(message: string, { reload = false } = {}): void {
   target.replaceChildren(toast);
 }
 
+/** One short line (design guide O3); the HTTP status goes to the log in `onResponseError`, not the toast. */
 function statusMessage(status: number): string {
-  if (status >= 500) return `サーバーでエラーが発生しました（HTTP ${status}）。`;
-  return `操作を完了できませんでした（HTTP ${status}）。`;
+  if (status >= 500) return 'サーバーでエラーが発生しました。';
+  return '操作を完了できませんでした。';
 }
 
 /** Cancels a swap whose body equals the previous one for a `[data-live-banner]` target (issue #626). */

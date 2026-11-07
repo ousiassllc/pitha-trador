@@ -83,7 +83,7 @@ HALTアーキテクチャの3パターン（ページルート/アクション�
 | GET | `/settings/mcp/experiments` | Settings の MCP カードの「調整の実験」の節のフラグメント（issue #871）。実験の一覧（状態・期間・変数・前後の取引件数・判定。新しい順 20 件）と、変数 1 つだけの作成フォーム。最低取引件数の下限が暫定値（本番の σ は未確認で見直す予定。あいりの承認も未）であることを併記する。 |
 | POST | `/settings/mcp/experiments` | 実験の作成（フォーム項目`hypothesis`・`kind`・`name`・`before`・`after`・`started_at`（`datetime-local`・JST・省略は今））。変数は 1 つだけ。不正（開始時刻の形式・実験の検証違反・MCP から変更できない設定）は422＋`atoms.InlineAlert`で、`HX-Retarget`でフォーム内の`#mcp-experiment-form-error`へ差し込む（入力は残る）。成功は一覧を再描画。CSRF 必須。作成者は`gui`で、MCP の書き込み許可のスイッチには従わない |
 | GET | `/settings/mcp/experiments/:id` | 実験 1 つの前後比較（前後の指標・拒否理由の内訳・交絡・判定）。404＝その ID の実験なし |
-| POST | `/settings/mcp/experiments/:id/close` | 実行中の実験を終える（フォーム項目`status`＝`closed`/`aborted`。必須で、それ以外は422。終了時刻は今）。終わっている実験は409、ない ID は404。CSRF 必須 |
+| POST | `/settings/mcp/experiments/:id/close` | 実行中の実験を終える（フォーム項目`status`＝`closed`/`aborted`。必須で、それ以外は422＋`atoms.InlineAlert`で理由を出し、`HX-Retarget`で一覧の上の`#mcp-experiment-close-error`へ差し込む。終了時刻は今）。終わっている実験は409、ない ID は404。CSRF 必須 |
 | GET | `/settings/jev-prompt-panel` | Jev のプロンプトの版とシャドー評価のパネルのフラグメント（Settings「外部連携・AI」の`modal-jev-prompt`）。`Cache-Control: no-store` |
 | POST | `/settings/jev-prompt/shadow` | シャドー評価の保存（フォーム項目`enabled`（チェック時のみ送られる）・`candidate`（空は候補なし）・`cap`（USD。空は既定へ戻す））。1 日の費用上限が数値でない・範囲外、または候補の版が不正なときは422＋`atoms.InlineAlert`で、`HX-Retarget`でフォーム内の`#jev-prompt-shadow-error`へ差し込み、何も保存しない（入力は残る）。保存の失敗は500のトースト。成功は200でパネルを再描画する。CSRF 必須 |
 | POST | `/settings/jev-prompt/promote` | ライブのプロンプトの版の昇格（フォーム項目`version`。昇格は誰が・いつ・前の版・新しい版を記録する）。不正な版は422＋`atoms.InlineAlert`で、`HX-Retarget`でフォーム内の`#jev-prompt-promote-error`へ差し込み、変更しない。保存の失敗は500のトースト。成功は200でパネルを再描画する。CSRF 必須 |

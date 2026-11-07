@@ -175,7 +175,7 @@ func TestOrderProposalsSwitchFailureIsReported(t *testing.T) {
 	a := newAppWithGate(t, g)
 	rec := a.post("/settings/mcp/order-proposals", url.Values{"enabled": {"on"}}, true)
 	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "disk full") ||
-		!strings.Contains(rec.Body.String(), "AIからの注文提案の受け付けを保存できませんでした") || g.proposals {
+		!strings.Contains(rec.Body.String(), "注文提案の設定を保存できませんでした") || g.proposals {
 		t.Fatalf("failure = %d %s (proposals=%v)", rec.Code, rec.Body.String(), g.proposals)
 	}
 }

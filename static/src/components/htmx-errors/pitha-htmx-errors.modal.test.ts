@@ -148,7 +148,7 @@ describe('toast region inside an open modal dialog', () => {
     fire('htmx:responseError', { xhr: fakeXhr(500, '') });
 
     expect(toastTexts()).toEqual([]);
-    expect(innerTexts()).toEqual(['サーバーでエラーが発生しました（HTTP 500）。']);
+    expect(innerTexts()).toEqual(['サーバーでエラーが発生しました。']);
   });
 
   test('a retargeted error fragment removes the toast left in #toast-region', () => {
