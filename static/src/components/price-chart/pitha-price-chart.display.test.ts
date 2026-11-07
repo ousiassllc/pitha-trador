@@ -187,6 +187,19 @@ describe('pitha-price-chart empty state (issue #687)', () => {
 
     expect(emptyNotice(el)).toBeNull();
   });
+
+  // Issue #999: same dashed-frame recipe as scanner-empty (design guide S4/§4).
+  test('uses the dashed --border frame, --r-lg and 48/24 padding', async () => {
+    const el = await mount([]);
+    const css = (
+      el.constructor as unknown as { elementStyles: { cssText: string }[] }
+    ).elementStyles
+      .map((s) => s.cssText)
+      .join('');
+    expect(css).toMatch(
+      /\.pitha-price-chart-empty\s*\{[^}]*border:\s*1px dashed var\(--border\);[^}]*border-radius:\s*var\(--r-lg\);[^}]*padding:\s*3rem 1\.5rem;[^}]*text-align:\s*center;/,
+    );
+  });
 });
 
 describe('pitha-price-chart series colors (design guide §1/§8)', () => {
@@ -261,9 +274,40 @@ describe('pitha-price-chart OS theme switch (issue #964)', () => {
     expect(markers[0]).toMatchObject({ text: 'LONG', color: '#8fafa0' });
   });
 
+  // Under a Dark theme the canvas must print in the Light tokens: ink on bone (brand-guide §8).
+  test('re-applies the Light tokens on beforeprint and the Dark ones again on afterprint', async () => {
+    const el = await mount();
+    setDarkTokens();
+
+    window.dispatchEvent(new Event('beforeprint'));
+    expect(candleSeries().applyOptions).toHaveBeenLastCalledWith({
+      upColor: '#050505',
+      downColor: '#ffffff',
+      borderUpColor: '#050505',
+      borderDownColor: '#050505',
+      wickUpColor: '#050505',
+      wickDownColor: '#050505',
+    });
+    expect(createdCharts[0].applyOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ layout: expect.objectContaining({ textColor: '#6b6b6e' }) }),
+    );
+
+    // The repainted canvas would print blank (see syncPrintSnapshot): a still image replaces it.
+    expect(createdCharts[0].takeScreenshot).toHaveBeenCalled();
+    expect(el.shadowRoot?.querySelector('[data-print-snapshot]')).not.toBeNull();
+    expect(createdCharts[0].live.style.visibility).toBe('hidden');
+
+    window.dispatchEvent(new Event('afterprint'));
+    expect(candleSeries().applyOptions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ upColor: '#ffffff', downColor: '#141414' }),
+    );
+    expect(el.shadowRoot?.querySelector('[data-print-snapshot]')).toBeNull();
+    expect(createdCharts[0].live.style.visibility).toBe('');
+  });
+
   test('stops listening once the element is removed', async () => {
     const el = await mount();
-    expect(scheme.listeners()).toBe(1);
+    expect(scheme.listeners()).toBe(2);
 
     el.remove();
 

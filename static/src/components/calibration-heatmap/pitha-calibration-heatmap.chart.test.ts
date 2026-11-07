@@ -76,9 +76,49 @@ describe('pitha-calibration-heatmap OS theme switch (issue #964)', () => {
     expect(accuracy.applyOptions).toHaveBeenCalledWith({ color: '#ffffff' });
   });
 
+  test('re-applies the Light tokens while printing and the Dark ones afterwards', async () => {
+    const { el } = await mount(response());
+    setDarkTokens();
+    const [perfect, accuracy] = createdSeries;
+
+    scheme.firePrint(true);
+    expect(perfect.applyOptions).toHaveBeenLastCalledWith({ color: '#6b6b6e' });
+    expect(accuracy.applyOptions).toHaveBeenLastCalledWith({ color: '#050505' });
+
+    expect(createdCharts[0].takeScreenshot).toHaveBeenCalled();
+    expect(el.shadowRoot?.querySelector('[data-print-snapshot]')).not.toBeNull();
+    expect(createdCharts[0].live.style.visibility).toBe('hidden');
+
+    scheme.firePrint(false);
+    expect(el.shadowRoot?.querySelector('[data-print-snapshot]')).toBeNull();
+    expect(createdCharts[0].live.style.visibility).toBe('');
+    expect(perfect.applyOptions).toHaveBeenLastCalledWith({ color: '#8b8b8e' });
+    expect(accuracy.applyOptions).toHaveBeenLastCalledWith({ color: '#ffffff' });
+  });
+
+  // The container is reused on reconnect: a snapshot left over from the print would cover the new chart.
+  test('leaves no print snapshot behind when removed while printing, and none on reconnect', async () => {
+    const { el } = await mount(response());
+    scheme.firePrint(true);
+    const container = el.shadowRoot?.querySelector<HTMLElement>('.pitha-calibration-heatmap-chart');
+    expect(container?.querySelector('[data-print-snapshot]')).not.toBeNull();
+    expect(container?.style.position).toBe('relative');
+
+    el.remove();
+    expect(container?.querySelector('[data-print-snapshot]')).toBeNull();
+    expect(container?.style.position).toBe('');
+
+    scheme.firePrint(false); // the print ended while the element was detached
+    document.body.appendChild(el);
+    await el.updateComplete;
+    expect(container?.querySelector('[data-print-snapshot]')).toBeNull();
+    expect(createdCharts).toHaveLength(2);
+    expect(createdCharts[1].takeScreenshot).not.toHaveBeenCalled();
+  });
+
   test('stops listening once the element is removed', async () => {
     const { el } = await mount(response());
-    expect(scheme.listeners()).toBe(1);
+    expect(scheme.listeners()).toBe(2);
 
     el.remove();
 

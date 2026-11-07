@@ -66,14 +66,15 @@ func TestPerformancePanels_MetricValuesAreMonoTabular(t *testing.T) {
 		"actuals": renderComponent(t, performancepanels.PerformanceActualsPanel(performancepanels.PerformanceActuals{TradeCount: 3}, "")),
 		"summary": renderComponent(t, performancepanels.PerformanceSummaryPanel("Walk Forward", performancepanels.PerformanceSummary{TradeCount: 4})),
 	} {
-		if !strings.Contains(html, `class="text-sm text-ink font-mono tabular-nums" data-metric=`) {
+		if !strings.Contains(html, `class="text-xl text-ink font-mono tabular-nums" data-metric=`) {
 			t.Errorf("%s metric values must be font-mono tabular-nums: %s", name, html)
 		}
 	}
 }
 
 // The cards sit 48px below the tab bar / the form (brand-guide §3 S5, issue
-// #968) and their body follows the 18px heading 12px below.
+// #968) and their body follows the 32px h2 24px below (its own `mb-6`; issue
+// #993).
 func TestPerformancePanels_SectionSpacing(t *testing.T) {
 	for name, html := range map[string]string{
 		"actuals": renderComponent(t, performancepanels.PerformanceActualsPanel(performancepanels.PerformanceActuals{TradeCount: 3}, "")),
@@ -82,12 +83,12 @@ func TestPerformancePanels_SectionSpacing(t *testing.T) {
 		if !strings.Contains(html, `<section class="mt-12 mb-12 rounded-lg`) {
 			t.Errorf("%s panel lacks the 48px top margin: %s", name, html)
 		}
-		if !strings.Contains(html, `<dl class="mt-3 `) || strings.Contains(html, `class="mt-4 `) {
-			t.Errorf("%s panel: metrics are not 12px (mt-3) below the heading: %s", name, html)
+		if !strings.Contains(html, `<h2 class="mb-6 text-2xl `) || !strings.Contains(html, `<dl class="grid `) {
+			t.Errorf("%s panel: metrics are not 24px (h2 mb-6) below the heading: %s", name, html)
 		}
 	}
 	folds := renderComponent(t, performancepanels.BacktestFoldTable(nil))
-	if !strings.Contains(folds, `<table class="mt-3 `) {
-		t.Errorf("fold table is not 12px (mt-3) below the heading: %s", folds)
+	if !strings.Contains(folds, `<h2 class="mb-6 text-2xl `) || !strings.Contains(folds, `<table class="w-full `) {
+		t.Errorf("fold table is not 24px (h2 mb-6) below the heading: %s", folds)
 	}
 }

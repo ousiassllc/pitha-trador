@@ -30,6 +30,10 @@ func TestRejectReasons_ListedByCountWithLabels(t *testing.T) {
 	if got := inner(t, body, "home-reject-reasons"); !strings.Contains(got, "20 件") {
 		t.Errorf("total missing from %q", got)
 	}
+	// The total is a value line, not a note (brand-guide §2, T3; issue #1006).
+	if !strings.Contains(body, `<p class="text-sm text-mute">計 20 件</p>`) || strings.Contains(body, `<p class="text-xs text-mute">計`) {
+		t.Errorf("the reject total must be text-sm text-mute: %s", body)
+	}
 }
 
 // entry_quality_below_threshold on top: the minimum entry quality in use (Paper
@@ -116,6 +120,9 @@ func TestScan_FunnelAndEmptyState(t *testing.T) {
 	if got := inner(t, body, "scan-cycle-meta"); !strings.Contains(got, "10-20 10:00") {
 		t.Errorf("cycle meta = %q", got)
 	}
+	if !strings.Contains(body, `<p class="text-sm text-mute" data-testid="scan-cycle-meta">`) {
+		t.Errorf("cycle meta is a value line and must be text-sm text-mute: %s", body)
+	}
 }
 
 func TestProposals_TodaysCountsAndNewest(t *testing.T) {
@@ -172,6 +179,9 @@ func TestModel_AdoptedNotAdoptedAndSkippedRetraining(t *testing.T) {
 	if got := inner(t, body, "model-trained-at"); got != "学習日時 10-19 09:00" {
 		t.Errorf("trained at = %q", got)
 	}
+	if !strings.Contains(body, `<p class="text-sm text-mute" data-testid="model-trained-at">`) {
+		t.Errorf("trained-at is a value line and must be text-sm text-mute: %s", body)
+	}
 	f.source.health.MetaAdopted = false
 	f.source.health.RetrainSkipped, f.source.health.RetrainSkipReason = true, "too_few_rows_after_purge"
 	body = f.mustGet(t, "/home/details")
@@ -219,10 +229,10 @@ func TestDetails_ListsAreBodyTextNotNotes(t *testing.T) {
 	f.source.trades = []home.Trade{{Symbol: "7203", Side: "LONG", Quantity: 100, ClosedAt: jst(20, 9, 50), PnLJPY: 1200, ExitReason: "take_profit"}}
 	f.events = append(f.events, domain.ActivityEvent{Type: domain.ActivityTypeKillSwitch, Timestamp: jst(20, 9, 0), Detail: "reason=daily_loss_limit resolved_by=manual"})
 	body := f.mustGet(t, "/home/details")
-	if n := strings.Count(body, `<ul class="mt-2 flex flex-col gap-1 text-sm">`); n != 2 {
+	if n := strings.Count(body, `<ul class="flex flex-col gap-1 text-sm">`); n != 2 {
 		t.Errorf("text-sm lists = %d, want 2 (trades, Kill Switch): %s", n, body)
 	}
-	if strings.Contains(body, `<ul class="mt-2 flex flex-col gap-1 text-xs">`) {
+	if strings.Contains(body, `<ul class="flex flex-col gap-1 text-xs">`) {
 		t.Errorf("a list must not be 12px: %s", body)
 	}
 }

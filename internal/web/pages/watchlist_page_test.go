@@ -27,3 +27,14 @@ func TestWatchlistPage_RankColumnIsRightAlignedMono(t *testing.T) {
 		}
 	}
 }
+
+// issue #991 (S2): the section h2 is followed by 24px (mb-6) and the dl has no top margin.
+func TestWatchlistPage_SectionH2HasTheH2GapBelow(t *testing.T) {
+	body := renderPage(t, pages.WatchlistPage(domain.WatchListView{
+		Enabled: true,
+		Lists:   []domain.WatchList{{ListDate: "2026-11-06", Source: domain.WatchListDailyScreen}},
+	}))
+	if !strings.Contains(body, `<h2 class="mb-6 text-2xl font-semibold text-ink">`) || !strings.Contains(body, `<dl class="grid gap-x-4`) {
+		t.Errorf("h2 must be mb-6 and the dl must have no mt-2: %s", body)
+	}
+}

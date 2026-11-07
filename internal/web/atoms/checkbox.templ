@@ -20,7 +20,7 @@ type CheckboxProps struct {
 templ Checkbox(props CheckboxProps) {
 	<input
 		type="checkbox"
-		class="relative h-[18px] w-[18px] flex-none cursor-pointer appearance-none rounded-sm border border-mute bg-surface transition-colors duration-base checked:border-accent checked:bg-accent after:absolute after:left-[5px] after:top-px after:hidden after:h-2.5 after:w-1.5 after:rotate-45 after:border-b-2 after:border-r-2 after:border-bone checked:after:block focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+		class="relative h-[18px] w-[18px] flex-none cursor-pointer appearance-none rounded-sm border border-mute bg-surface transition-[background-color,border-color] duration-fast checked:border-accent checked:bg-accent after:absolute after:left-[5px] after:top-px after:hidden after:h-2.5 after:w-1.5 after:rotate-45 after:border-b-2 after:border-r-2 after:border-bone checked:after:block focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
 		if props.Name != "" {
 			name={ props.Name }
 		}

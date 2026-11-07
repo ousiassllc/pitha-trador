@@ -206,11 +206,12 @@ func TestFieldRows_HintSitsFourBelowTheInputAndEmptyErrorSlotTakesNoGap(t *testi
 	}
 }
 
-// issue #974: the 計算結果 panel is a bordered card: --r-lg and the small-card padding (16).
-func TestSettingGroupDerived_IsALargeRadiusCard(t *testing.T) {
+// issue #987: the 計算結果 panel nests inside a card, so it is a --bone panel on --r-md
+// (brand-guide S1/§4) with the small-card padding (16).
+func TestSettingGroupDerived_IsANestedMediumRadiusPanel(t *testing.T) {
 	html := render(t, molecules.SettingGroupDerived(molecules.SettingGroupProps{ID: "g"}, false))
-	if !strings.Contains(html, "rounded-lg border border-border bg-bone p-4") || strings.Contains(html, "rounded-md") {
-		t.Errorf("the derived panel must be rounded-lg p-4: %s", html)
+	if !strings.Contains(html, "rounded-md border border-border bg-bone p-4") || strings.Contains(html, "rounded-lg") {
+		t.Errorf("the derived panel must be rounded-md p-4: %s", html)
 	}
 }
 
@@ -236,5 +237,88 @@ func TestThemeToggle_OffersAutoLightDarkWithAutoPressed(t *testing.T) {
 	}
 	if got := strings.Count(html, "<button"); got != 3 {
 		t.Errorf("ThemeToggle renders %d buttons, want 3", got)
+	}
+}
+
+// A settings row's title is neither a heading nor a button, so it is Regular
+// (brand-guide §2 T2: SemiBold is for headings and buttons only; issue #986).
+func TestSettingsCards_NameIsRegular(t *testing.T) {
+	card := render(t, molecules.SettingsCard(molecules.SettingsCardProps{ID: "c", ModalID: "m", Name: "接続名", ActionLabel: "設定"}))
+	link := render(t, molecules.SettingsLinkCard(molecules.SettingsLinkCardProps{ID: "l", Name: "画面名", Href: "/x", ActionLabel: "開く"}))
+	for name, html := range map[string]string{"SettingsCard": card, "SettingsLinkCard": link} {
+		title, _, _ := strings.Cut(html, "</li>")
+		if i := strings.Index(title, "<button"); i >= 0 {
+			title = title[:i]
+		}
+		if i := strings.Index(title, "<a "); i >= 0 {
+			title = title[:i]
+		}
+		if strings.Contains(title, "font-semibold") {
+			t.Errorf("%s: the title must be Regular: %s", name, title)
+		}
+	}
+}
+
+// The focus outline appears at once (brand-guide M1/§5), so the hover/pressed
+// transition covers text and background colour only, not outline-color, which
+// `transition-colors` would add in Tailwind v4 (issue #988).
+func TestThemeToggle_TransitionExcludesFocusOutline(t *testing.T) {
+	html := render(t, molecules.ThemeToggle())
+	if !strings.Contains(html, "transition-[color,background-color] duration-base") {
+		t.Errorf("ThemeToggle must transition only color and background-color: %s", html)
+	}
+	if strings.Contains(html, "transition-colors") {
+		t.Errorf("transition-colors also animates outline-color: %s", html)
+	}
+}
+
+// issue #989 (C6): a connection card's description carries what the operator
+// must do, so it is body text (text-ink), not an auxiliary caption (text-mute).
+func TestSettingsCard_DescriptionIsInk(t *testing.T) {
+	html := render(t, molecules.SettingsCard(molecules.SettingsCardProps{ID: "c", ModalID: "m", Name: "接続名", Description: "本番の第二暗証番号は保存できません", ActionLabel: "設定"}))
+	if !strings.Contains(html, `<p class="text-sm text-ink">本番の第二暗証番号は保存できません</p>`) {
+		t.Errorf("description must be text-sm text-ink: %s", html)
+	}
+	if strings.Contains(html, "text-mute") {
+		t.Errorf("description must not be text-mute: %s", html)
+	}
+}
+
+// issue #990 (T3): the save/delete outcome is a notice, so its body is text-sm.
+func TestSecretFieldRow_NoticeIsBodySize(t *testing.T) {
+	html := render(t, molecules.SecretFieldRow(molecules.SecretFieldRowProps{Key: "k", Label: "L", Notice: "保存しました"}))
+	if !strings.Contains(html, `<p class="text-sm text-success" role="status" data-testid="notice-k">`) {
+		t.Errorf("notice must be text-sm: %s", html)
+	}
+}
+
+// The panel title is a heading (h3 under the modal's h2, text-xl) and a list
+// item's label is Regular, told apart by size and colour (brand-guide T2;
+// issue #1005).
+func TestSettingGroupDerived_TitleIsAHeadingAndItemLabelIsRegular(t *testing.T) {
+	props := molecules.SettingGroupProps{ID: "g", Derived: []molecules.SettingDerivedItem{{Key: "h", Heading: true, Label: "整合チェック"}}}
+	html := render(t, molecules.SettingGroupDerived(props, false))
+	for _, want := range []string{`<h3 class="text-xl font-semibold text-ink">計算結果</h3>`, `<span class="text-base text-ink">整合チェック</span>`} {
+		if !strings.Contains(html, want) {
+			t.Errorf("missing %q: %s", want, html)
+		}
+	}
+	if strings.Contains(html, `<p class="font-semibold`) || strings.Contains(html, `<span class="font-semibold`) {
+		t.Errorf("body text must not be SemiBold: %s", html)
+	}
+}
+
+// issue #1006 (T3): "N/M 項目" is a count the operator reads, so it is text-sm
+// text-mute; only the status pills beside it stay at 12px.
+func TestSettingCounts_AreValueLinesNotNotes(t *testing.T) {
+	connection := render(t, molecules.ConnectionStatus(molecules.ConnectionProps{ID: "c"}, false))
+	group := render(t, molecules.SettingGroupStatus(molecules.SettingGroupProps{ID: "g"}, false))
+	for name, tc := range map[string]struct{ html, want string }{
+		"ConnectionStatus":   {connection, `<span class="text-sm text-mute">0/0 項目</span>`},
+		"SettingGroupStatus": {group, `<span class="text-sm font-normal text-mute">0/0 項目</span>`},
+	} {
+		if !strings.Contains(tc.html, tc.want) {
+			t.Errorf("%s: the item count must be text-sm: %s", name, tc.html)
+		}
 	}
 }

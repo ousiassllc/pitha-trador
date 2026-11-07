@@ -19,11 +19,12 @@ func TestDetail_EventsTableUsesTheStandardCellPadding(t *testing.T) {
 	}
 }
 
-// The text under the h2 「理由」「手じまいの計画」「情報源」 follows 8px below it
-// (--gap-heading-body), like the proposal fields, not 4px (issue #968).
-func TestDetail_SectionBodiesFollowTheirHeadingEightPxBelow(t *testing.T) {
+// An h2 section heading is followed by a 24px gap (mb-6, --gap-h2) and the body
+// under it carries no top margin of its own (brand-guide S2, issue #991; this
+// replaces the 8px of issue #968, which was the body's own mt-2).
+func TestDetail_SectionHeadingsHaveTheH2GapBelow(t *testing.T) {
 	_, body := get(t, outcomesSource(t), "/order-proposals/2")
-	for _, section := range []string{"order-proposal-rationale", "order-proposal-exit-plan", "order-proposal-sources"} {
+	for _, section := range []string{"order-proposal-rationale", "order-proposal-exit-plan", "order-proposal-sources", "order-proposal-events"} {
 		i := strings.Index(body, `data-testid="`+section+`"`)
 		if i < 0 {
 			t.Fatalf("no section %s", section)
@@ -32,8 +33,11 @@ func TestDetail_SectionBodiesFollowTheirHeadingEightPxBelow(t *testing.T) {
 		if end := strings.Index(rest, "</section>"); end >= 0 {
 			rest = rest[:end]
 		}
-		if !strings.Contains(rest, `class="mt-2 `) || strings.Contains(rest, `class="mt-1 `) {
-			t.Errorf("%s: body is not 8px (mt-2) below its heading: %s", section, rest)
+		if !strings.Contains(rest, `<h2 class="mb-6 text-2xl`) {
+			t.Errorf("%s: h2 lacks mb-6: %s", section, rest)
+		}
+		if strings.Contains(rest, `class="mt-2 `) || strings.Contains(rest, `class="mt-1 `) {
+			t.Errorf("%s: body keeps its own top margin: %s", section, rest)
 		}
 	}
 }

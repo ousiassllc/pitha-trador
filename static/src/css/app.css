@@ -15,7 +15,10 @@
    unless `<html data-theme="light">` opts out, and under `<html data-theme="dark">`
    whatever the OS says, so every utility below and every Lit shadow root (custom
    properties inherit through shadow boundaries) switches theme with the OS
-   setting or the manual choice. */
+   setting or the manual choice. Both Dark blocks are `@media screen` only: print
+   is always ink on bone (brand-guide §8), so under `@media print` the Light
+   values below stay whatever the theme. The page chrome (header, nav, Kill
+   Switch panel, `#toast-region`) is hidden there with `print:hidden`. */
 :root {
   color-scheme: light;
   --ink: #050505;
@@ -181,6 +184,20 @@
 @layer base {
   body {
     line-height: 1.8;
+  }
+
+  /* Print (brand-guide §8): page margin 14mm (12-16mm), no heading stranded at
+     the foot of a page. Colors are not set here: the Dark blocks are screen-only. */
+  @media print {
+    @page {
+      margin: 14mm;
+    }
+
+    h1,
+    h2,
+    h3 {
+      break-after: avoid;
+    }
   }
 
   /* Focus ring (brand-guide §1 C3): 2px --focus, offset 2. Inputs and selects

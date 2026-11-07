@@ -56,14 +56,14 @@ export class PithaExitAlignment extends LitElement {
       }
       h2 {
         margin: 0.75rem 0 1.5rem;
-        font-size: 1.5rem;
-        line-height: 1.5;
+        font-size: 2rem;
+        line-height: 1.4;
         font-weight: 600;
       }
       h3 {
         margin: 0.75rem 0;
-        font-size: 1.125rem;
-        line-height: 1.7;
+        font-size: 1.5rem;
+        line-height: 1.5;
         font-weight: 600;
       }
     `,

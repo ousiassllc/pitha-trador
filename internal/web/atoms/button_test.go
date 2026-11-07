@@ -41,6 +41,7 @@ func TestButton_VariantsAndSizeChangeClasses(t *testing.T) {
 		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-border bg-transparent", "bg-accent text-bone"},
 		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink hover:bg-accent-soft", "border-border"},
 		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "min-h-8", "py-2"},
+		{"pager", atoms.ButtonProps{Size: atoms.ButtonPager}, "min-h-9", "min-h-8"},
 		{"medium", atoms.ButtonProps{}, "text-base", "text-sm"},
 	}
 	for _, tt := range tests {
@@ -103,5 +104,19 @@ func TestButton_CarriesTheRippleHook(t *testing.T) {
 				t.Errorf("%s: body missing %q: %s", name, want, body)
 			}
 		}
+	}
+}
+
+// The focus outline appears at once (brand-guide M1/§5: focus is instant to
+// 120ms), so the 180ms hover transition must not cover outline-color, which
+// `transition-colors` does in Tailwind v4 (issue #988).
+func TestButton_HoverTransitionExcludesFocusOutline(t *testing.T) {
+	body := renderWithLabel(t, atoms.Button(atoms.ButtonProps{}), "x")
+
+	if !strings.Contains(body, "transition-[background-color] duration-base") {
+		t.Errorf("button must transition only background-color: %s", body)
+	}
+	if strings.Contains(body, "transition-colors") {
+		t.Errorf("transition-colors also animates outline-color: %s", body)
 	}
 }

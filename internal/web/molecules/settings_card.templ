@@ -138,14 +138,14 @@ type SettingsCardProps struct {
 templ SettingsCard(props SettingsCardProps) {
 	<li class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4" data-testid={ "settings-card-" + props.ID }>
 		<div class="flex min-w-0 flex-1 flex-col gap-1">
-			<span class="flex flex-wrap items-center gap-2 font-semibold text-ink">
+			<span class="flex flex-wrap items-center gap-2 text-ink">
 				{ props.Name }
 				if props.Status != nil {
 					@props.Status
 				}
 			</span>
 			if props.Description != "" {
-				<p class="text-sm text-mute">{ props.Description }</p>
+				<p class="text-sm text-ink">{ props.Description }</p>
 			}
 		</div>
 		@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Attrs: templ.Attributes{
@@ -178,12 +178,12 @@ templ ConnectionStatus(props ConnectionProps, oob bool) {
 		if props.Required && props.State() != ConnectionConfigured {
 			<span class="rounded-full border tone-danger px-2 py-1 text-xs">必須</span>
 		}
-		<span class="text-xs font-normal text-mute">{ strconv.Itoa(props.ConfiguredCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
+		<span class="text-sm text-mute">{ strconv.Itoa(props.ConfiguredCount()) }/{ strconv.Itoa(len(props.Fields)) } 項目</span>
 		for _, badge := range props.Badges {
 			<span class={ "rounded-full px-2 py-1 text-xs", badge.Tone.class() } data-testid={ "connection-badge-" + props.ID + "-" + badge.ID }>{ badge.Text }</span>
 		}
 		for _, detail := range props.Details {
-			<span class="basis-full text-xs font-normal text-mute" data-testid={ "connection-detail-" + props.ID + "-" + detail.ID }>{ detail.Label }: { detail.Value }</span>
+			<span class="basis-full text-xs text-mute" data-testid={ "connection-detail-" + props.ID + "-" + detail.ID }>{ detail.Label }: { detail.Value }</span>
 		}
 	</span>
 }

@@ -154,7 +154,7 @@ func TestPage_EvaluationErrorIsFixedMessage(t *testing.T) {
 // its right-aligned cells (brand-guide §2 T5, §4 table; issue #958).
 func TestPage_EvaluationNumbersAreMonoAndHeadersRightAligned(t *testing.T) {
 	body := serveWithEvaluation(t, fixedEvaluation{ev: winning()}).Body.String()
-	if !strings.Contains(body, `<dd class="text-sm text-ink font-mono tabular-nums">`) {
+	if !strings.Contains(body, `<dd class="text-xl text-ink font-mono tabular-nums">`) {
 		t.Error("cost values should be font-mono tabular-nums")
 	}
 	if strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-xs font-semibold">`) {
@@ -162,5 +162,14 @@ func TestPage_EvaluationNumbersAreMonoAndHeadersRightAligned(t *testing.T) {
 	}
 	if !strings.Contains(body, `<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>`) {
 		t.Error("the 件数 header should be right-aligned")
+	}
+}
+
+// The OOS period is a date-range numeric column: right-aligned in JetBrains
+// Mono like the other numeric columns (brand-guide §2 T5; issue #986).
+func TestPage_EvaluationOOSWindowIsMonoAndRightAligned(t *testing.T) {
+	body := serveWithEvaluation(t, fixedEvaluation{ev: winning()}).Body.String()
+	if !strings.Contains(body, `<td class="px-2 py-1.5 text-right font-mono tabular-nums">2026-09-01〜2026-09-08</td>`) {
+		t.Error("the OOS period cell should be text-right font-mono tabular-nums")
 	}
 }

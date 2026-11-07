@@ -254,6 +254,10 @@ func TestScannerHandler_ScanView_PagerAndRefreshKeepFilters(t *testing.T) {
 	if !strings.Contains(p3, `data-symbol="0119"`) || strings.Contains(p3, `data-symbol="0049"`) || strings.Contains(p3, "scan-next") || !strings.Contains(p3, "scan-prev") {
 		t.Errorf("page 3 wrong")
 	}
+	// Pager buttons are 36px tall (brand-guide O7), unlike the 32px toolbar buttons.
+	if !strings.Contains(p3, "min-h-9") || !strings.Contains(p1, "min-h-9") {
+		t.Errorf("pager buttons must use the 36px pager size")
+	}
 	if !strings.Contains(p3, `data-testid="scan-refresh"`) || !strings.Contains(p3, `hx-get="/scanner/scan?page=3&amp;q=corp"`) {
 		t.Errorf("refresh must re-fetch the same filtered page")
 	}
@@ -290,5 +294,18 @@ func TestScannerHandler_ScanView_ServesLiveSourceCycle(t *testing.T) {
 	live.SetScan(domain.ScanCycle{Funnel: domain.ScanFunnel{Universe: 1}, Symbols: []domain.ScanSymbol{{Symbol: "7203", Name: "Toyota", Reasons: domain.ScreenReasons(0).Add(domain.ScreenReasonMaxSpread)}}})
 	if _, body := getScan(t, live, "/scanner/scan", true); !strings.Contains(body, `data-symbol="7203" data-status="excluded"`) || !strings.Contains(body, `data-reason="max_spread_bps"`) {
 		t.Fatalf("after a cycle: %s", body)
+	}
+}
+
+// The pass/exclude/missing counts carry values, so they are body-size (text-sm),
+// not a 12px note (brand-guide T3; issue #1005).
+func TestScannerHandler_ScanView_CountLineIsBodySize(t *testing.T) {
+	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner/scan", true)
+	at := strings.Index(body, `data-testid="scan-count-passed"`)
+	if at < 0 {
+		t.Fatalf("no count line: %s", body)
+	}
+	if line := body[strings.LastIndex(body[:at], "<p "):at]; !strings.Contains(line, `class="mt-2 text-sm text-mute"`) {
+		t.Errorf("count line is not text-sm text-mute: %s", line)
 	}
 }

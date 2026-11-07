@@ -39,13 +39,13 @@ func (p SettingGroupProps) DerivedPanelTitle() string {
 // an operating capital and percentages). oob renders it as an
 // `hx-swap-oob="true"` fragment (replacing the element with the same id).
 templ SettingGroupDerived(props SettingGroupProps, oob bool) {
-	<section id={ props.DerivedID() } class="flex flex-col gap-2 rounded-lg border border-border bg-bone p-4 text-sm text-ink" data-testid={ props.DerivedID() } aria-live="polite" aria-label={ props.DerivedPanelTitle() } { oobAttrs(oob)... }>
-		<p class="font-semibold text-ink">{ props.DerivedPanelTitle() }</p>
+	<section id={ props.DerivedID() } class="flex flex-col gap-2 rounded-md border border-border bg-bone p-4 text-sm text-ink" data-testid={ props.DerivedID() } aria-live="polite" aria-label={ props.DerivedPanelTitle() } { oobAttrs(oob)... }>
+		<h3 class="text-xl font-semibold text-ink">{ props.DerivedPanelTitle() }</h3>
 		<ul class="flex flex-col gap-1">
 			for _, item := range props.Derived {
 				if item.Heading {
 					<li class="mt-2 flex flex-wrap items-baseline gap-x-2" data-testid={ props.DerivedID() + "-" + item.Key }>
-						<span class="font-semibold text-ink">{ item.Label }</span>
+						<span class="text-base text-ink">{ item.Label }</span>
 						if len(item.Help) > 0 {
 							@atoms.HelpMark(atoms.HelpMarkProps{ID: "help-" + props.DerivedID() + "-" + item.Key, Label: item.Label + "の説明"}) {
 								for _, paragraph := range item.Help {

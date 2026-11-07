@@ -126,7 +126,7 @@ func TestTemplClassesAreCompiledTailwindUtilities(t *testing.T) {
 
 // TestCompiledTextScaleMatchesTheGuide pins brand-guide §2's size scale and
 // line heights in the compiled stylesheet (issue #953): Tailwind's own
-// --text-xl/-3xl (20 / 30px) are off the guide's scale, and an @theme
+// --text-xl/-2xl/-3xl (20 / 24 / 30px) are off the guide's scale, and an @theme
 // override that does not take effect would leave them in place unnoticed.
 func TestCompiledTextScaleMatchesTheGuide(t *testing.T) {
 	cssPath := filepath.Join(repoRoot(t), "static/src/dist/css/app.css")
@@ -140,6 +140,7 @@ func TestCompiledTextScaleMatchesTheGuide(t *testing.T) {
 		"--text-base:1rem", "--text-base--line-height:1.8",
 		"--text-lg:1.125rem", "--text-lg--line-height:1.7",
 		"--text-xl:1.5rem", "--text-xl--line-height:1.5",
+		"--text-2xl:2rem", "--text-2xl--line-height:1.4",
 		"--text-3xl:2.5rem", "--text-3xl--line-height:1.3",
 	} {
 		if !strings.Contains(string(css), want) {
@@ -165,6 +166,60 @@ func TestCompiledInlineAlertExitFadesOut(t *testing.T) {
 		if !strings.Contains(string(css), want) {
 			t.Errorf("compiled stylesheet lacks %q", want)
 		}
+	}
+}
+
+// headingTagRe finds an h1-h4 opening tag in a .templ file.
+var headingTagRe = regexp.MustCompile(`<h([1-4])(\s[^>]*)?>`)
+
+// headingSizes is brand-guide §2's heading scale: h1 3xl 40, h2 2xl 32, h3 xl
+// 24, h4 lg 18 (issue #993). The size follows the tag, so the outline and the
+// look cannot drift apart again.
+var headingSizes = map[string]string{"1": "text-3xl", "2": "text-2xl", "3": "text-xl", "4": "text-lg"}
+
+// TestTemplHeadingsFollowTheGuideScale is issue #993's regression test: every
+// visible h1-h4 in a .templ file carries the guide's size for its tag
+// (`sr-only` headings take no size), and the home cards' shared title class
+// (`cardTitleClass`, used on an h3) does too.
+func TestTemplHeadingsFollowTheGuideScale(t *testing.T) {
+	root := filepath.Join(repoRoot(t), "internal/web")
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".templ") {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		for _, m := range headingTagRe.FindAllStringSubmatch(string(src), -1) {
+			attrs := m[2]
+			if strings.Contains(attrs, "sr-only") {
+				continue
+			}
+			want := headingSizes[m[1]]
+			if strings.Contains(attrs, "cardTitleClass") {
+				// the const is checked below
+				continue
+			}
+			if !regexp.MustCompile(`\b` + want + `\b`).MatchString(attrs) {
+				t.Errorf("%s: %q lacks %s (brand-guide §2: h%s = %s)", rel, m[0], want, m[1], want)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking %s: %v", root, err)
+	}
+	cards, err := os.ReadFile(filepath.Join(root, "organisms/homepanels/cards.templ"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(cards), `cardTitleClass  = "text-xl font-semibold text-ink"`) {
+		t.Error("homepanels cardTitleClass must be text-xl text-ink (h3 = 24px, brand-guide §2; headings are not --mute, C6, issue #994)")
 	}
 }
 
@@ -201,18 +256,21 @@ func TestTemplClassExpressionsAreNotConcatenated(t *testing.T) {
 	}
 }
 
-// TestCompiledDarkTokensFollowTheOSAndDataTheme pins issues #957 and #978: the
-// Dark values are reachable under `prefers-color-scheme: dark` (unless
-// `data-theme="light"` opts out) and under `data-theme="dark"`, and a forced
-// Light needs no rule of its own (the :root Light values apply).
+// TestCompiledDarkTokensFollowTheOSAndDataTheme pins issues #957, #978 and #1002:
+// the Dark values are reachable under `prefers-color-scheme: dark` (unless
+// `data-theme="light"` opts out) and under `data-theme="dark"`, both only on
+// screen (print is ink on bone, brand-guide §8, so the :root Light values
+// apply there whatever the OS or the saved choice), and a forced Light needs no
+// rule of its own. `print:hidden` compiles to a `@media print` rule.
 func TestCompiledDarkTokensFollowTheOSAndDataTheme(t *testing.T) {
 	css, err := os.ReadFile(filepath.Join(repoRoot(t), "static/src/dist/css/app.css"))
 	if err != nil {
 		t.Fatalf("reading compiled stylesheet (run `bun --cwd static run build` first): %v", err)
 	}
 	for _, want := range []string{
-		"@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--ink:#fff;",
-		":root[data-theme=dark]{color-scheme:dark;--ink:#fff;",
+		"@media screen and (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--ink:#fff;",
+		"@media screen{:root[data-theme=dark]{color-scheme:dark;--ink:#fff;",
+		"@media print{.print\\:hidden{display:none",
 	} {
 		if !strings.Contains(string(css), want) {
 			t.Errorf("compiled stylesheet lacks %q", want)

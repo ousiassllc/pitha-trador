@@ -15,10 +15,15 @@ export const buttonStyles = css`
     border-radius: var(--r-md);
     background: transparent;
     color: var(--ink);
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 2rem;
-    padding: 0.25rem 0.75rem;
+    padding: 0 0.75rem;
+    white-space: nowrap;
     font: inherit;
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
     transition: background-color var(--motion-base) var(--ease-out);
   }
@@ -81,17 +86,17 @@ export const noticeStyles = css`
   .pitha-ws-disconnected {
     margin: 0;
     color: var(--warning);
-    font-size: 0.75rem;
+    font-size: 0.875rem;
   }
 `;
 
 // Tailwind counterparts of `noticeStyles` for the light-DOM components
 // (issue #355). Kept as whole literals so Tailwind's source scan emits them.
 export const lightDomErrorClass = 'text-sm text-danger';
-export const lightDomWsNoticeClass = 'text-xs text-warning';
+export const lightDomWsNoticeClass = 'text-sm text-warning';
 
 // Light-DOM form control class (brand-guide C3): the same border, --focus
 // edge and 2px --ring that atoms.Select draws (internal/web/atoms/input.templ),
 // for a bare <select>/<input> a Lit component renders itself.
 export const lightDomFieldClass =
-  'rounded-md border border-border px-3 py-1 focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40';
+  'h-10 rounded-md border border-border px-3 focus-visible:border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40';

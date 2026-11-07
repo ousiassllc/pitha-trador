@@ -16,7 +16,7 @@ templ ErrorLogPanel() {
 		<form method="get" action="/api/v1/logs/errors" hx-disable class="flex flex-wrap items-end gap-3" data-testid="error-log-form">
 			<label class="flex flex-col gap-2">
 				<span class="text-ink">期間</span>
-				@atoms.Select(atoms.SelectProps{Name: "days", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "error-log-days"}}) {
+				@atoms.Select(atoms.SelectProps{Name: "days", Class: "bg-surface", Attrs: templ.Attributes{"data-testid": "error-log-days"}}) {
 					<option value="1">直近 1 日</option>
 					<option value="7" selected>直近 7 日</option>
 					<option value="30">直近 30 日</option>
@@ -25,7 +25,7 @@ templ ErrorLogPanel() {
 			</label>
 			<label class="flex flex-col gap-2">
 				<span class="text-ink">レベル</span>
-				@atoms.Select(atoms.SelectProps{Name: "level", Class: "bg-surface px-3 py-2", Attrs: templ.Attributes{"data-testid": "error-log-level"}}) {
+				@atoms.Select(atoms.SelectProps{Name: "level", Class: "bg-surface", Attrs: templ.Attributes{"data-testid": "error-log-level"}}) {
 					<option value="error" selected>ERROR のみ</option>
 					<option value="warn">WARN 以上</option>
 				}

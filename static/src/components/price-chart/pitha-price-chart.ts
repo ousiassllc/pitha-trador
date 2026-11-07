@@ -15,7 +15,12 @@ import { css, html, LitElement, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
-import { ColorSchemeController, chartBaseOptions } from '../lib/chart-theme';
+import {
+  ColorSchemeController,
+  chartBaseOptions,
+  clearPrintSnapshot,
+  syncPrintSnapshot,
+} from '../lib/chart-theme';
 import { logger } from '../lib/logger';
 import { noticeStyles } from '../lib/styles';
 import { resolveWsUrl, WsClient, type WsStatus } from '../lib/ws';
@@ -55,6 +60,11 @@ export class PithaPriceChart extends LitElement {
       }
       .pitha-price-chart-empty {
         margin: 0;
+        border: 1px dashed var(--border);
+        border-radius: var(--r-lg);
+        background: var(--bone);
+        padding: 3rem 1.5rem;
+        text-align: center;
         color: var(--mute);
         font-size: 0.875rem;
       }
@@ -94,6 +104,7 @@ export class PithaPriceChart extends LitElement {
   }
 
   override disconnectedCallback(): void {
+    clearPrintSnapshot(this.containerRef.value);
     super.disconnectedCallback();
     this.chart?.remove();
     this.chart = null;
@@ -171,6 +182,7 @@ export class PithaPriceChart extends LitElement {
     this.volumeSeries?.applyOptions(volumeColor());
     this.markers = this.markers.map((m) => ({ ...m, color: markerColor(m.text ?? '') }));
     this.candleSeries?.setMarkers(this.markers);
+    if (this.chart) syncPrintSnapshot(this.chart);
   }
 
   // `background` marks a resync the page fires by itself (WS reconnect), so

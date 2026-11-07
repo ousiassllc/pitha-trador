@@ -1,10 +1,7 @@
 // `pitha-calibration-heatmap`: Calibration's reliability curve + confidence-
 // band heatmap (docs/components/overview.md §5.3, functional.md §5.4). It
-// loads `GET /api/v1/calibration` (via lib/api.ts) once on connect and
-// again whenever the refresh button is pressed - real-time updates are not
-// needed, so unlike pitha-price-chart/pitha-scanner-table this component
-// never opens a WebSocket; a page revisit or the refresh button are the
-// only re-fetch triggers.
+// loads `GET /api/v1/calibration` (via lib/api.ts) on connect and on the
+// refresh button; unlike pitha-price-chart it never opens a WebSocket.
 import {
   createChart,
   type IChartApi,
@@ -16,7 +13,12 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { get } from '../lib/api';
-import { ColorSchemeController, chartBaseOptions } from '../lib/chart-theme';
+import {
+  ColorSchemeController,
+  chartBaseOptions,
+  clearPrintSnapshot,
+  syncPrintSnapshot,
+} from '../lib/chart-theme';
 import { helpMarkStyles, renderHelpMark } from '../lib/help-mark';
 import { logger } from '../lib/logger';
 import { buttonStyles, noticeStyles, tableStyles } from '../lib/styles';
@@ -80,9 +82,8 @@ export class PithaCalibrationHeatmap extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    // Re-attached after a removal: firstUpdated does not run again, but the
-    // rendered container and the loaded buckets survive, so rebuild the chart
-    // disconnectedCallback tore down and redraw the curve from them.
+    // Re-attached after a removal: firstUpdated does not run again, but the container and
+    // buckets survive, so rebuild the chart disconnectedCallback tore down.
     if (this.hasUpdated) {
       this.initChart();
       this.applyBuckets(this.buckets);
@@ -90,6 +91,7 @@ export class PithaCalibrationHeatmap extends LitElement {
   }
 
   override disconnectedCallback(): void {
+    clearPrintSnapshot(this.containerRef.value);
     super.disconnectedCallback();
     this.chart?.remove();
     this.chart = null;
@@ -97,9 +99,8 @@ export class PithaCalibrationHeatmap extends LitElement {
     this.perfectSeries = null;
   }
 
-  // firstUpdated (not connectedCallback) so this.containerRef.value is
-  // guaranteed populated: createChart needs a real, already-rendered DOM
-  // element to attach its canvas to (mirrors pitha-price-chart).
+  // firstUpdated (not connectedCallback): createChart needs the rendered container
+  // (mirrors pitha-price-chart).
   protected override firstUpdated(): void {
     this.initChart();
     void this.load();
@@ -133,6 +134,7 @@ export class PithaCalibrationHeatmap extends LitElement {
     this.chart?.applyOptions(chartBaseOptions());
     this.perfectSeries?.applyOptions(perfectColor());
     this.accuracySeries?.applyOptions(accuracyColor());
+    if (this.chart) syncPrintSnapshot(this.chart);
   }
 
   private async load(): Promise<void> {

@@ -29,18 +29,20 @@ func themeChoicePressed(value string) string {
 // segment's `aria-pressed:` utilities style. The server cannot know the
 // browser's choice, so every segment starts unpressed except 自動 and the
 // script corrects that on load. The switch is hidden when printing
-// (brand-guide §8: print is always ink on bone).
+// (`print:hidden`), and print is always ink on bone whatever it chose
+// (brand-guide §8): static/src/css/dark.css applies the Dark tokens on screen
+// only, so under `@media print` the :root Light values stay.
 templ ThemeToggle() {
 	<div
 		role="group"
 		aria-label="テーマ"
-		class="inline-flex gap-0.5 rounded-md bg-accent-soft p-0.5 print:hidden"
+		class="inline-flex gap-1 rounded-md bg-accent-soft p-1 print:hidden"
 		data-testid="theme-toggle"
 	>
 		for _, c := range themeChoices {
 			<button
 				type="button"
-				class="relative min-h-8 overflow-hidden rounded-sm px-3 text-sm text-mute transition-colors duration-base hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-pressed:bg-surface aria-pressed:text-ink"
+				class="relative min-h-8 overflow-hidden rounded-sm px-3 text-sm text-mute transition-[color,background-color] duration-base hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-pressed:bg-surface aria-pressed:text-ink"
 				aria-pressed={ themeChoicePressed(c.Value) }
 				data-theme-choice={ c.Value }
 				data-ripple

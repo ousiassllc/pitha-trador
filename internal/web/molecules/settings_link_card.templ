@@ -19,7 +19,7 @@ type SettingsLinkCardProps struct {
 templ SettingsLinkCard(props SettingsLinkCardProps) {
 	<li class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4" data-testid={ "settings-link-" + props.ID }>
 		<div class="flex min-w-0 flex-1 flex-col gap-1">
-			<span class="font-semibold text-ink">{ props.Name }</span>
+			<span class="text-ink">{ props.Name }</span>
 			if props.Description != "" {
 				<p class="text-sm text-mute">{ props.Description }</p>
 			}

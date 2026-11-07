@@ -22,10 +22,9 @@ func itemClass(level AttentionLevel) string {
 // new alert is announced, and an unchanged answer is not swapped in.
 templ AttentionSection(v AttentionView) {
 	<section class="mt-12" data-testid="home-attention-section" aria-labelledby="home-attention-title">
-		<h2 id="home-attention-title" class="text-xl font-semibold text-ink">要対応</h2>
+		<h2 id="home-attention-title" class="mb-6 text-2xl font-semibold text-ink">要対応</h2>
 		<div
 			id="home-attention"
-			class="mt-2"
 			role="status"
 			aria-live="polite"
 			data-live-banner
@@ -69,7 +68,7 @@ templ AttentionBody(v AttentionView) {
 			}
 		</ul>
 		if v.Notice != "" {
-			<p class="mt-2 text-xs text-warning" data-testid="attention-notice">{ v.Notice }</p>
+			<p class="mt-2 text-sm text-warning" data-testid="attention-notice">{ v.Notice }</p>
 		}
 	}
 }
