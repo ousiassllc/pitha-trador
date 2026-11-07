@@ -150,4 +150,15 @@ describe('heatmap cell typography (guide T3, design-tokens.md)', () => {
     expect(css).toMatch(/\.pitha-calibration-heatmap-cell\s*\{[^}]*font-size:\s*0\.875rem/);
     expect(css).toMatch(/\.pitha-calibration-heatmap-cell \.range\s*\{[^}]*font-size:\s*0\.75rem/);
   });
+
+  // Guide T4: sm (14px) is 1.7 — spelled out so it does not inherit body's 1.8.
+  test('the 0.875rem horizon label and summary carry line-height 1.7', () => {
+    const css = heatmapStyles.cssText;
+    expect(css).toMatch(
+      /\.pitha-calibration-heatmap-horizon\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+    expect(css).toMatch(
+      /\.pitha-calibration-heatmap-summary\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+  });
 });

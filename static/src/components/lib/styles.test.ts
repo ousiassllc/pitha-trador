@@ -64,6 +64,13 @@ describe('buttonStyles fill', () => {
       /button\s*\{[^}]*min-height:\s*2rem[^}]*font-size:\s*0\.875rem/,
     );
   });
+
+  // Guide T4: sm (14px) is 1.7, the same as Tailwind's text-sm.
+  test('the 0.875rem button text carries line-height 1.7', () => {
+    expect(buttonStyles.cssText).toMatch(
+      /button\s*\{[^}]*min-height:\s*2rem[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+  });
 });
 
 describe('noticeStyles', () => {
@@ -73,6 +80,16 @@ describe('noticeStyles', () => {
     const css = noticeStyles.cssText;
     expect(css).toMatch(/\.pitha-ws-disconnected\s*\{[^}]*font-size:\s*0\.875rem/);
     expect(css).not.toMatch(/font-size:\s*0\.75rem/);
+  });
+
+  test('both 0.875rem notices carry line-height 1.7 (guide T4)', () => {
+    const css = noticeStyles.cssText;
+    expect(css).toMatch(
+      /\[role=['"]alert['"]\]\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+    expect(css).toMatch(
+      /\.pitha-ws-disconnected\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
   });
 
   test('the light-DOM ws notice class is text-sm', () => {

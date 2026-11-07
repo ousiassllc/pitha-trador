@@ -47,6 +47,7 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap-horizon {
     margin: 0;
     font-size: 0.875rem;
+    line-height: 1.7;
   }
   .pitha-calibration-heatmap-grid {
     display: grid;
@@ -95,6 +96,7 @@ export const heatmapStyles = css`
     gap: 0.25rem 1rem;
     margin: 0;
     font-size: 0.875rem;
+    line-height: 1.7;
   }
   .pitha-calibration-heatmap-summary dt {
     color: var(--mute);
