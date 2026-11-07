@@ -23,9 +23,10 @@ type scannerContract struct {
 		Hint    string `json:"hint"`
 		Numeric bool   `json:"numeric"`
 	} `json:"columns"`
-	CountHelp    string `json:"countHelp"`
-	EmptyMessage string `json:"emptyMessage"`
-	Rows         []struct {
+	CountHelp       string `json:"countHelp"`
+	EmptyMessage    string `json:"emptyMessage"`
+	SymbolCellClass string `json:"symbolCellClass"`
+	Rows            []struct {
 		Name           string              `json:"name"`
 		Item           scannerContractItem `json:"item"`
 		Cells          []string            `json:"cells"`
@@ -235,6 +236,9 @@ func TestScannerTableFallback_MatchesLitContract_Rows(t *testing.T) {
 
 			if got := attr(findAll(tds[0], tag("a"))[0], "href"); got != it.DetailURL {
 				t.Errorf("href = %q, want %q", got, it.DetailURL)
+			}
+			if got, want := classSet(attr(tds[0], "class")), classSet(contract.SymbolCellClass); !slices.Equal(got, want) {
+				t.Errorf("symbol cell class = %v, want %v", got, want)
 			}
 			for i, cell := range []int{2, 3} {
 				if got, want := classSet(attr(tds[cell], "class")), classSet(row.ReturnClasses[i]); !slices.Equal(got, want) {

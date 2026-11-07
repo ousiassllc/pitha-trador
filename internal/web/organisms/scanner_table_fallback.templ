@@ -108,7 +108,7 @@ var scannerColumns = []scannerColumn{
 
 templ scannerRow(c domain.Candidate) {
 	<tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol={ c.Symbol }>
-		<td class="px-3 py-2.5">
+		<td class="px-3 py-2.5 font-mono">
 			<a class="text-accent underline decoration-mute" href={ SymbolHref(c.Symbol) }>{ c.Symbol }</a>
 		</td>
 		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ formatFloat(c.Price, 1) }</td>

@@ -16,7 +16,7 @@ import (
 // (docs/api/endpoints.md §4: "ポジション行フラグメント").
 templ PositionRow(p domain.Position) {
 	<tr class="border-b border-border" id={ fmt.Sprintf("position-row-%d", p.ID) } data-testid="position-row" data-position-id={ fmt.Sprintf("%d", p.ID) }>
-		<td class="px-3 py-2.5 text-ink">{ p.Symbol }</td>
+		<td class="px-3 py-2.5 font-mono text-ink">{ p.Symbol }</td>
 		<td class="px-3 py-2.5">@atoms.Badge(positionSideToDirection(p.Side))</td>
 		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%d", p.Quantity) }</td>
 		<td class="px-3 py-2.5 text-right font-mono tabular-nums">{ fmt.Sprintf("%.2f", p.EntryPrice) }</td>

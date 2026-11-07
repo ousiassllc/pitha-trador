@@ -14,6 +14,7 @@
   ],
   "countHelp": "Fast Screenerが選んだ売買候補の一覧です。15〜30秒ごとに自動更新されます。緑はプラス・LONG、赤はマイナス・SHORT を表します。",
   "emptyMessage": "現在、条件を満たす候補銘柄はありません。",
+  "symbolCellClass": "px-3 py-2.5 font-mono",
   "rows": [
     {
       "name": "positive returns, LONG / strong",

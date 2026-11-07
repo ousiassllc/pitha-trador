@@ -204,7 +204,7 @@ templ PositionsBody(v PositionsView) {
 				<tbody>
 					for _, r := range v.Rows {
 						<tr class="border-b border-border" data-testid="position-row">
-							<td class="px-2 py-1.5"><a class="text-accent underline decoration-mute" href={ SymbolURL(r.Symbol) }>{ r.Symbol }</a></td>
+							<td class="px-2 py-1.5 font-mono"><a class="text-accent underline decoration-mute" href={ SymbolURL(r.Symbol) }>{ r.Symbol }</a></td>
 							<td class="px-2 py-1.5">{ SideLabel(r.Side) }</td>
 							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ strconv.FormatInt(r.Quantity, 10) }</td>
 							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ FormatPrice(r.EntryPrice) }</td>
