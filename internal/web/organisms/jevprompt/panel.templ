@@ -139,7 +139,7 @@ templ Panel(props PanelProps) {
 			if len(props.Daily) > 0 {
 				<table class="w-full text-left text-sm" aria-label="シャドーの日別費用" data-testid="jev-prompt-daily">
 					<thead>
-						<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日（JST）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">回数</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">費用（USD）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">うち見積り（USD・回数）</th></tr>
+						<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日（JST）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">回数</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">費用（USD）</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">うち見積り（USD・回数）</th></tr>
 					</thead>
 					<tbody>
 						for _, d := range props.Daily {
@@ -177,7 +177,7 @@ templ Panel(props PanelProps) {
 			} else {
 				<table class="w-full text-left text-sm" aria-label="昇格の記録" data-testid="jev-prompt-promotions-table">
 					<thead>
-						<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">誰が</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">前の版</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">後の版</th></tr>
+						<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">誰が</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">前の版</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">後の版</th></tr>
 					</thead>
 					<tbody>
 						for _, p := range props.Promotions {
