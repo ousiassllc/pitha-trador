@@ -14,6 +14,7 @@
   ],
   "countHelp": "Fast Screenerが選んだ売買候補の一覧です。15〜30秒ごとに自動更新されます。緑はプラス・LONG、赤はマイナス・SHORT を表します。",
   "emptyMessage": "現在、条件を満たす候補銘柄はありません。",
+  "symbolCellClass": "px-3 py-2.5 font-mono",
   "rows": [
     {
       "name": "positive returns, LONG / strong",
@@ -35,7 +36,7 @@
       "name": "all zero values carry no sign and a neutral color",
       "item": {"symbol": "0000", "detail_url": "/symbols/0000", "price": 100, "return_1m": 0, "return_5m": 0, "volume_ratio_5m": 0, "price_vs_vwap_bps": 0, "spread_bps": 0, "jev_direction": "NONE", "jev_confidence": 0, "entry_quality": "poor", "current_position": 0},
       "cells": ["0000", "100.0", "0.00", "0.00", "0.00", "0", "0", "NONE", "0%", "poor", "0"],
-      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-mute", "px-3 py-2.5 text-right font-mono tabular-nums text-mute"],
+      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-ink", "px-3 py-2.5 text-right font-mono tabular-nums text-ink"],
       "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-mute",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-mute"
     },
@@ -43,15 +44,15 @@
       "name": "not yet evaluated: nulls render as em dash, direction as 判定待ち",
       "item": {"symbol": "9984", "detail_url": "/symbols/9984", "price": 7000, "return_1m": null, "return_5m": null, "volume_ratio_5m": null, "price_vs_vwap_bps": 0, "spread_bps": null, "jev_direction": null, "jev_confidence": null, "entry_quality": null, "current_position": null},
       "cells": ["9984", "7000.0", "—", "—", "—", "0", "—", "判定待ち", "—", "—", "—"],
-      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-mute", "px-3 py-2.5 text-right font-mono tabular-nums text-mute"],
-      "directionClass": "inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs text-mute",
-      "qualityClass": "text-mute"
+      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-ink", "px-3 py-2.5 text-right font-mono tabular-nums text-ink"],
+      "directionClass": "inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs",
+      "qualityClass": "text-ink"
     },
     {
       "name": "unknown direction falls back to NONE, unknown quality passes through",
       "item": {"symbol": "1111", "detail_url": "/symbols/1111", "price": 50, "return_1m": null, "return_5m": null, "volume_ratio_5m": null, "price_vs_vwap_bps": 1, "spread_bps": null, "jev_direction": "", "jev_confidence": 0.5, "entry_quality": "weird", "current_position": null},
       "cells": ["1111", "50.0", "—", "—", "—", "+1", "—", "NONE", "50%", "weird", "—"],
-      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-mute", "px-3 py-2.5 text-right font-mono tabular-nums text-mute"],
+      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-ink", "px-3 py-2.5 text-right font-mono tabular-nums text-ink"],
       "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-mute",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-mute"
     },
@@ -59,7 +60,7 @@
       "name": "reserved characters in the symbol are percent-escaped identically, fair quality",
       "item": {"symbol": "A&B+C D/é'", "detail_url": "/symbols/A%26B%2BC%20D%2F%C3%A9%27", "price": 10, "return_1m": null, "return_5m": null, "volume_ratio_5m": null, "price_vs_vwap_bps": 0, "spread_bps": null, "jev_direction": "LONG", "jev_confidence": null, "entry_quality": "fair", "current_position": null},
       "cells": ["A&B+C D/é'", "10.0", "—", "—", "—", "0", "—", "LONG", "—", "fair", "—"],
-      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-mute", "px-3 py-2.5 text-right font-mono tabular-nums text-mute"],
+      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-ink", "px-3 py-2.5 text-right font-mono tabular-nums text-ink"],
       "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-success",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-warning"
     },
@@ -91,7 +92,7 @@
       "name": "negative zero is rendered without a sign or color, like zero",
       "item": {"symbol": "NEGZ", "detail_url": "/symbols/NEGZ", "price": 10, "return_1m": -0, "return_5m": -0, "volume_ratio_5m": -0, "price_vs_vwap_bps": -0, "spread_bps": -0, "jev_direction": "NONE", "jev_confidence": -0, "entry_quality": "poor", "current_position": -0},
       "cells": ["NEGZ", "10.0", "0.00", "0.00", "0.00", "0", "0", "NONE", "0%", "poor", "0"],
-      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-mute", "px-3 py-2.5 text-right font-mono tabular-nums text-mute"],
+      "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-ink", "px-3 py-2.5 text-right font-mono tabular-nums text-ink"],
       "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-mute",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-mute"
     }

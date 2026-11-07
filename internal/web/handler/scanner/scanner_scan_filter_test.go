@@ -55,3 +55,11 @@ func TestScannerHandler_ScanView_FilterFormTriggersOncePerActionAndKeepsFocusabl
 		t.Error("form-level change trigger fires on the search box blur and duplicates submit")
 	}
 }
+
+// issue #1023 (T1/T5): the symbol code is Mono, like the other tables' code columns.
+func TestScannerHandler_ScanView_SymbolCellIsMono(t *testing.T) {
+	_, body := getScan(t, scanSource{cycle: scanFixture(), ok: true}, "/scanner/scan", true)
+	if !regexp.MustCompile(`<td class="px-3 py-2\.5 font-mono">\s*<a [^>]*href="/symbols/1001"`).MatchString(body) {
+		t.Errorf("scan row symbol cell must be font-mono:\n%s", body)
+	}
+}

@@ -145,7 +145,7 @@ const NEUTRAL_BADGE_CLASS = 'border tone-mute';
 
 export function directionBadge(direction: string | null) {
   if (direction === null) {
-    return html`<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs text-mute">判定待ち</span>`;
+    return html`<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">判定待ち</span>`;
   }
   const label = direction === 'LONG' || direction === 'SHORT' ? direction : 'NONE';
   return html`<span class="${BADGE_BASE} ${DIRECTION_BADGE_CLASS[label] ?? NEUTRAL_BADGE_CLASS}">${label}</span>`;
@@ -153,7 +153,7 @@ export function directionBadge(direction: string | null) {
 
 export function entryQualityBadge(quality: string | null) {
   if (quality === null) {
-    return html`<span class="text-mute">—</span>`;
+    return html`<span class="text-ink">—</span>`;
   }
   return html`<span class="${BADGE_BASE} ${ENTRY_QUALITY_BADGE_CLASS[quality] ?? NEUTRAL_BADGE_CLASS}">${quality}</span>`;
 }
@@ -161,7 +161,7 @@ export function entryQualityBadge(quality: string | null) {
 // Green when positive, red when negative, neutral for zero / missing.
 export function returnClass(value: number | null): string {
   const base = 'px-3 py-2.5 text-right font-mono tabular-nums';
-  if (value === null || value === 0) return `${base} text-mute`;
+  if (value === null || value === 0) return `${base} text-ink`;
   return value > 0 ? `${base} text-success` : `${base} text-danger`;
 }
 
