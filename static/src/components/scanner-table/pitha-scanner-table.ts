@@ -235,7 +235,7 @@ export class PithaScannerTable extends LitElement {
     const numeric = 'px-3 py-2.5 text-right font-mono tabular-nums';
     return html`
       <tr class="border-b border-border last:border-b-0 hover:bg-accent-soft" data-symbol=${item.symbol}>
-        <td class="px-3 py-2.5">
+        <td class="px-3 py-2.5 font-mono">
           <a class="text-accent underline decoration-mute" href=${item.detail_url}>${item.symbol}</a>
         </td>
         <td class=${numeric}>${item.price.toFixed(1)}</td>

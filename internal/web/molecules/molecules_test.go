@@ -238,6 +238,10 @@ func TestThemeToggle_OffersAutoLightDarkWithAutoPressed(t *testing.T) {
 	if got := strings.Count(html, "<button"); got != 3 {
 		t.Errorf("ThemeToggle renders %d buttons, want 3", got)
 	}
+	// issue #1018 (C6): text-mute on the bg-accent-soft track is under AA 4.5:1.
+	if strings.Contains(html, "text-mute") || strings.Count(html, "text-ink") != 3 {
+		t.Errorf("ThemeToggle labels must be text-ink, not text-mute: %s", html)
+	}
 }
 
 // A settings row's title is neither a heading nor a button, so it is Regular
@@ -264,7 +268,7 @@ func TestSettingsCards_NameIsRegular(t *testing.T) {
 // `transition-colors` would add in Tailwind v4 (issue #988).
 func TestThemeToggle_TransitionExcludesFocusOutline(t *testing.T) {
 	html := render(t, molecules.ThemeToggle())
-	if !strings.Contains(html, "transition-[color,background-color] duration-base") {
+	if !strings.Contains(html, "transition-[color,background-color] duration-base ease-out") {
 		t.Errorf("ThemeToggle must transition only color and background-color: %s", html)
 	}
 	if strings.Contains(html, "transition-colors") {

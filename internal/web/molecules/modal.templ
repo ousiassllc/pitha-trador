@@ -34,6 +34,6 @@ templ Modal(id, title string) {
 		<div class="flex flex-col gap-4 px-6 py-4">
 			{ children... }
 		</div>
-		<div data-toast-region class="pointer-events-none fixed inset-x-6 bottom-6 z-[var(--z-toast)] flex justify-center" aria-live="assertive"></div>
+		<div data-toast-region class="pointer-events-none fixed inset-x-6 bottom-6 z-[var(--z-toast)] flex justify-center print:hidden" aria-live="assertive"></div>
 	</dialog>
 }

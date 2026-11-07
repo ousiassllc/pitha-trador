@@ -28,6 +28,9 @@ type opsField struct {
 	hint        string
 	placeholder string
 	options     []string
+	// onOff marks an on/off setting stored as 1 / 0: it is drawn as a switch
+	// (molecules.SettingFieldRowProps.OnOff), not a free-text field.
+	onOff bool
 }
 
 // opsGroup is one card/modal of the Settings screen's 運用設定 section.

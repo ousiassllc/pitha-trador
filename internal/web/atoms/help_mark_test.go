@@ -28,12 +28,12 @@ func TestHelpMark_ButtonDescribesItselfWithTheHelpText(t *testing.T) {
 func TestHelpMark_TooltipUsesTheGuideShape(t *testing.T) {
 	body := renderWithLabel(t, atoms.HelpMark(atoms.HelpMarkProps{ID: "help-x", Label: "説明"}), "詳しい説明")
 
-	for _, want := range []string{"rounded-sm", "px-3 py-2"} {
+	for _, want := range []string{"rounded-sm", "px-[10px] py-1.5"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("tooltip missing %q: %s", want, body)
 		}
 	}
-	if strings.Contains(body, "p-2 text-left") {
+	if strings.Contains(body, "p-2 text-left") || strings.Contains(body, "px-3 py-2 ") {
 		t.Errorf("tooltip keeps the old 8px padding: %s", body)
 	}
 }

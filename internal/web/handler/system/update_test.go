@@ -87,6 +87,16 @@ func TestUpdateHandler_Check_RunsCheckAndRendersFreshPanel(t *testing.T) {
 	}
 }
 
+// The check can end in an app restart (update.go), so the button asks first
+// (design guide O2: the shared #confirm-dialog via hx-confirm).
+func TestUpdateHandler_Panel_CheckButtonAsksForConfirmation(t *testing.T) {
+	rec := serve(newUpdateEngine(&fakeUpdateController{}), http.MethodGet, "/system/update-panel")
+	body := rec.Body.String()
+	if !strings.Contains(body, "hx-confirm=") || !strings.Contains(body, "アプリを更新して再起動します") {
+		t.Errorf("check button does not confirm a possible restart; body=%s", body)
+	}
+}
+
 func TestUpdateHandler_Check_UpToDate(t *testing.T) {
 	controller := &fakeUpdateController{afterCheck: updater.Status{CheckedAt: time.Now()}}
 	rec := serve(newUpdateEngine(controller), http.MethodPost, "/system/update-check")

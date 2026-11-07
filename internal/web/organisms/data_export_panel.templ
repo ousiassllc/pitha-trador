@@ -18,15 +18,15 @@ templ DataExportPanel() {
 			<div class="flex flex-wrap items-end gap-3">
 				<label class="flex flex-col gap-2">
 					<span class="text-ink">開始日（UTC）</span>
-					@atoms.Input(atoms.InputProps{Name: "from", Type: "date", Class: "bg-surface", Attrs: templ.Attributes{"required": true, "data-testid": "data-export-from"}})
+					@atoms.Input(atoms.InputProps{Name: "from", Type: "date", Class: "w-auto", Attrs: templ.Attributes{"required": true, "data-testid": "data-export-from"}})
 				</label>
 				<label class="flex flex-col gap-2">
 					<span class="text-ink">終了日（UTC・含む）</span>
-					@atoms.Input(atoms.InputProps{Name: "to", Type: "date", Class: "bg-surface", Attrs: templ.Attributes{"required": true, "data-testid": "data-export-to"}})
+					@atoms.Input(atoms.InputProps{Name: "to", Type: "date", Class: "w-auto", Attrs: templ.Attributes{"required": true, "data-testid": "data-export-to"}})
 				</label>
 				<label class="flex flex-col gap-2">
 					<span class="text-ink">形式</span>
-					@atoms.Select(atoms.SelectProps{Name: "format", Class: "bg-surface", Attrs: templ.Attributes{"data-testid": "data-export-format"}}) {
+					@atoms.Select(atoms.SelectProps{Name: "format", Attrs: templ.Attributes{"data-testid": "data-export-format"}}) {
 						<option value="csv" selected>CSV</option>
 						<option value="jsonl">JSONL</option>
 					}

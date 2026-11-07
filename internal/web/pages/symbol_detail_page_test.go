@@ -87,3 +87,12 @@ func TestSymbolDetailPage_ChartIsSpacedFromH1AndPanels(t *testing.T) {
 		t.Errorf("pitha-price-chart lacks mt-6 / mb-12: %s", body)
 	}
 }
+
+// issue #1040: the symbol code in the page title is a "code" (T1/T5) and so is
+// Mono, like every other screen's symbol.
+func TestSymbolDetailPage_TitleSymbolIsMono(t *testing.T) {
+	body := renderSymbolDetail(t, nil)
+	if !regexp.MustCompile(`<h1 class="[^"]*\bfont-mono\b[^"]*">7203</h1>`).MatchString(body) {
+		t.Errorf("h1 symbol lacks font-mono: %s", body)
+	}
+}

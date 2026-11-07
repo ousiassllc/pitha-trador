@@ -1,6 +1,7 @@
 package hometests
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,10 @@ func TestRejectReasons_EntryQualityOnTopShowsTheMinimumAndSettingsLink(t *testin
 	}
 	if got := inner(t, note, "entry-quality-paper"); got != "Paper fair" {
 		t.Errorf("paper = %q", got)
+	}
+	// issue #1031: SemiBold is for headings and buttons; the sentence stays Regular.
+	if strings.Contains(note, "font-semibold") || !strings.Contains(note, "<p>エントリー品質がしきい値に届かない見送りが最も多くなっています。</p>") {
+		t.Errorf("the note's sentence must be Regular: %s", note)
 	}
 }
 
@@ -256,5 +261,24 @@ func TestDetails_ProposalListsAreBodyText(t *testing.T) {
 	}
 	if !strings.Contains(body, `<span class="text-xs text-mute">`) {
 		t.Errorf("status and time of a row should be the 12px note: %s", body)
+	}
+}
+
+// issue #1040: the symbol code in the latest-proposal and recent-trade list
+// items is a "code" (T1/T5) and so is Mono, like every other screen's symbol.
+func TestDetails_SymbolCodeInListItemsIsMono(t *testing.T) {
+	f := newFixture()
+	f.source.proposals = home.Proposals{
+		Total:    1,
+		ByStatus: []home.StatusCount{{Status: "filled", Count: 1}},
+		Latest:   []home.ProposalItem{{ID: 7, Symbol: "7203", Action: "open_long", Status: "filled", ReceivedAt: jst(20, 9, 5)}},
+	}
+	f.source.trades = []home.Trade{{Symbol: "6758", Side: "LONG", Quantity: 100, ClosedAt: jst(20, 9, 50), PnLJPY: 1200, ExitReason: "take_profit"}}
+	body := f.mustGet(t, "/home/details")
+	for _, symbol := range []string{"7203", "6758"} {
+		re := regexp.MustCompile(`<a class="[^"]*\bfont-mono\b[^"]*" href="[^"]*">` + symbol + `</a>`)
+		if !re.MatchString(body) {
+			t.Errorf("symbol %s link in a list item lacks font-mono: %s", symbol, body)
+		}
 	}
 }

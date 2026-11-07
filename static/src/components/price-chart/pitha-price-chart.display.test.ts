@@ -172,6 +172,14 @@ describe('pitha-price-chart empty state (issue #687)', () => {
     expect(notice?.textContent).toContain('表示できる足がありません');
   });
 
+  // Guide T4: sm (14px) is 1.7, spelled out so it does not inherit body's 1.8.
+  test('the 0.875rem empty message carries line-height 1.7', () => {
+    const css = PithaPriceChart.styles.map((s) => s.cssText).join('');
+    expect(css).toMatch(
+      /\.pitha-price-chart-empty\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+  });
+
   test('shows no empty-state message while candles exist', async () => {
     const el = await mount([candle(baseMs, 100)]);
 

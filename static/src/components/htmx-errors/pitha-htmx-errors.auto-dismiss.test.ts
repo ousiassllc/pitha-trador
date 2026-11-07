@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { watchToastRegion } from './pitha-htmx-errors';
 
 const TOAST_HTML =
-  '<div data-toast role="alert"><span data-toast-message></span><button type="button" data-toast-dismiss>×</button></div>';
+  '<div data-toast role="alert"><span data-toast-message></span><button type="button" hidden data-toast-reload>再読み込み</button><button type="button" data-toast-dismiss>×</button></div>';
 
 // The fade animations (design guide §5) are async; these tests run without the
 // Web Animations API, where a toast appears and is removed immediately.
@@ -83,6 +83,26 @@ describe('auto-dismiss', () => {
 
     toast.dispatchEvent(new Event('mouseleave'));
     vi.advanceTimersByTime(DISMISS_AFTER_MS);
+    expect(toast.isConnected).toBe(false);
+  });
+
+  // Design guide O3: a toast carrying an action stays 5 seconds.
+  test('keeps a toast with a reload action for 5 seconds', async () => {
+    const region = document.getElementById('toast-region') as HTMLElement;
+    watchToastRegion(region);
+    fire('htmx:responseError', {
+      xhr: {
+        status: 403,
+        responseText: '',
+        getResponseHeader: (name: string) => (name === 'X-CSRF-Reject' ? 'stale' : null),
+      },
+    });
+    await flushObserver();
+    const toast = region.querySelector('[data-toast]') as HTMLElement;
+
+    vi.advanceTimersByTime(5000 - 1);
+    expect(toast.isConnected).toBe(true);
+    vi.advanceTimersByTime(1);
     expect(toast.isConnected).toBe(false);
   });
 });

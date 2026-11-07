@@ -47,10 +47,11 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap-horizon {
     margin: 0;
     font-size: 0.875rem;
+    line-height: 1.7;
   }
   .pitha-calibration-heatmap-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
     gap: 0.5rem;
     margin: 0;
     padding: 0;
@@ -62,8 +63,8 @@ export const heatmapStyles = css`
     border-radius: var(--r-md);
     border: 1px solid var(--border);
     padding: 0.5rem;
-    font-size: 0.75rem;
-    line-height: 1.6;
+    font-size: 0.875rem;
+    line-height: 1.7;
     /* --cell-bg / --cell-fg are set per cell (bucketColors): a density ramp of --ink on --surface with --ink text. */
     background: var(--cell-bg, var(--bone));
     color: var(--cell-fg, var(--ink));
@@ -71,6 +72,10 @@ export const heatmapStyles = css`
   /* A band without labeled samples: flat and dashed (the guide's empty-state border). */
   .pitha-calibration-heatmap-cell[data-empty] {
     border-style: dashed;
+  }
+  /* The band label is an annotation (guide T3: xs 12); the value rows keep sm 14. */
+  .pitha-calibration-heatmap-cell .range {
+    font-size: 0.75rem;
   }
   .pitha-calibration-heatmap-cell .accuracy {
     font-size: 1rem;
@@ -91,6 +96,7 @@ export const heatmapStyles = css`
     gap: 0.25rem 1rem;
     margin: 0;
     font-size: 0.875rem;
+    line-height: 1.7;
   }
   .pitha-calibration-heatmap-summary dt {
     color: var(--mute);

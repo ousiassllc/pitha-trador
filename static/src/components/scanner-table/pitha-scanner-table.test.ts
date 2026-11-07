@@ -73,7 +73,7 @@ describe('pitha-scanner-table', () => {
     expect(cells('UP')[3].textContent?.trim()).toBe('-0.30');
     expect(cells('UP')[3].className).toContain('text-danger');
     expect(cells('FLAT')[2].textContent?.trim()).toBe('0.00'); // zero carries no "+" (same as SSR)
-    expect(cells('FLAT')[2].className).toContain('text-mute');
+    expect(cells('FLAT')[2].className).toContain('text-ink');
     expect(cells('FLAT')[5].textContent?.trim()).toBe('0');
     expect(cells('FLAT')[3].textContent?.trim()).toBe('—');
   });

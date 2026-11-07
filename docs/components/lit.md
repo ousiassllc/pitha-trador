@@ -166,7 +166,7 @@ templ KillSwitchPanel(state domain.SystemState) {
 
 ## 6. API クライアント / WebSocket（`lib/`）
 
-`lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース。`403`かつ応答ヘッダ`X-CSRF-Reject: stale`（`middleware.CSRFRejectHeader`）はアプリ再起動でページのセッションCookie/CSRFトークンが失効した状態として`StaleSessionError`（メッセージは`STALE_SESSION_MESSAGE`＝ページ再読み込みを促す固定文言。`CSRF_REJECT_HEADER`/`CSRF_REJECT_STALE`も公開）を投げ、それ以外の非2xxは`Error`を投げる。`StaleSessionError`は`htmx-errors/pitha-htmx-errors.ts`も同じ文言のトースト表示に使う）:
+`lib/api.ts`（CSRFトークンをmetaタグから自動取得、`credentials: 'same-origin'`、JSON自動パース。`403`かつ応答ヘッダ`X-CSRF-Reject: stale`（`middleware.CSRFRejectHeader`）はアプリ再起動でページのセッションCookie/CSRFトークンが失効した状態として`StaleSessionError`（メッセージはページ再読み込みを促す固定文言。`CSRF_REJECT_HEADER`/`CSRF_REJECT_STALE`は公開）を投げ、それ以外の非2xxは`Error`を投げる。`htmx-errors/pitha-htmx-errors.ts`は`CSRF_REJECT_HEADER`/`CSRF_REJECT_STALE`で同じ失効を見分け、トーストには短い事実「ページの有効期限が切れました。」と「再読み込み」アクションを出す）:
 
 ```typescript
 get<T>(path: string, options?: { background?: boolean }): Promise<T>

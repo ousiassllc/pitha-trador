@@ -4,6 +4,7 @@
 // and internal/web/atoms/badge.templ) so the hydrated table looks the same
 // as the server-rendered one (issue #239).
 import { html } from 'lit';
+import { navArrowDown, navArrowUp } from '../lib/icons';
 import type { ScannerItem } from './scanner-types';
 
 export type SortKey = keyof Pick<
@@ -103,7 +104,7 @@ export const COUNT_HELP_TEXT =
 // components/help-mark/pitha-help-mark.ts opens by document-level
 // delegation. (lib/help-mark.ts' renderHelpMark is for shadow roots.)
 export function renderLightHelpMark(id: string, label: string, text: string) {
-  return html`<span class="relative inline-flex align-middle" data-help-mark><button type="button" class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border bg-surface text-xs font-semibold leading-none text-mute hover:border-ink hover:text-ink cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus" aria-label=${label} aria-describedby=${id} data-help-mark-button>?</button><span id=${id} role="tooltip" class="invisible fixed left-0 top-0 opacity-0 transition-[opacity,visibility] duration-fade-out ease-in data-[open]:duration-fade-in data-[open]:ease-out motion-reduce:duration-100 motion-reduce:data-[open]:duration-100 z-[var(--z-dropdown)] w-72 max-w-[80vw] rounded-sm border border-border bg-surface px-3 py-2 text-left text-xs font-normal normal-case tracking-normal text-ink data-[open]:visible data-[open]:opacity-100" data-help-mark-text>${text}</span></span>`;
+  return html`<span class="relative inline-flex align-middle" data-help-mark><button type="button" class="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border bg-surface text-xs font-semibold leading-none text-mute hover:border-ink hover:text-ink cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus" aria-label=${label} aria-describedby=${id} data-help-mark-button>?</button><span id=${id} role="tooltip" class="invisible fixed left-0 top-0 opacity-0 transition-[opacity,visibility] duration-fade-out ease-in data-[open]:duration-fade-in data-[open]:ease-out motion-reduce:duration-100 motion-reduce:data-[open]:duration-100 z-[var(--z-dropdown)] w-72 max-w-[80vw] rounded-sm border border-border bg-surface px-[10px] py-1.5 text-left text-xs font-normal normal-case tracking-normal text-ink data-[open]:visible data-[open]:opacity-100" data-help-mark-text>${text}</span></span>`;
 }
 
 // Quality order for sorting the entry_quality column, worst to best. Keep in
@@ -131,9 +132,14 @@ export function sortValue(item: ScannerItem, key: SortKey): string | number | nu
 const BADGE_BASE = 'inline-flex items-center rounded-full px-2 py-1 text-xs';
 
 // Mirrors atoms.Badge / atoms.EntryQualityBadge (internal/web/atoms/badge.templ).
+// LONG / SHORT lead with an arrow icon (design guide C4: icon + text + tone).
 const DIRECTION_BADGE_CLASS: Record<string, string> = {
-  LONG: 'border tone-success',
-  SHORT: 'border tone-danger',
+  LONG: 'gap-1 border tone-success',
+  SHORT: 'gap-1 border tone-danger',
+};
+const DIRECTION_BADGE_ICON: Record<string, () => unknown> = {
+  LONG: navArrowUp,
+  SHORT: navArrowDown,
 };
 const ENTRY_QUALITY_BADGE_CLASS: Record<string, string> = {
   exceptional: 'border tone-success',
@@ -145,15 +151,15 @@ const NEUTRAL_BADGE_CLASS = 'border tone-mute';
 
 export function directionBadge(direction: string | null) {
   if (direction === null) {
-    return html`<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs text-mute">判定待ち</span>`;
+    return html`<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">判定待ち</span>`;
   }
   const label = direction === 'LONG' || direction === 'SHORT' ? direction : 'NONE';
-  return html`<span class="${BADGE_BASE} ${DIRECTION_BADGE_CLASS[label] ?? NEUTRAL_BADGE_CLASS}">${label}</span>`;
+  return html`<span class="${BADGE_BASE} ${DIRECTION_BADGE_CLASS[label] ?? NEUTRAL_BADGE_CLASS}">${DIRECTION_BADGE_ICON[label]?.()}${label}</span>`;
 }
 
 export function entryQualityBadge(quality: string | null) {
   if (quality === null) {
-    return html`<span class="text-mute">—</span>`;
+    return html`<span class="text-ink">—</span>`;
   }
   return html`<span class="${BADGE_BASE} ${ENTRY_QUALITY_BADGE_CLASS[quality] ?? NEUTRAL_BADGE_CLASS}">${quality}</span>`;
 }
@@ -161,7 +167,7 @@ export function entryQualityBadge(quality: string | null) {
 // Green when positive, red when negative, neutral for zero / missing.
 export function returnClass(value: number | null): string {
   const base = 'px-3 py-2.5 text-right font-mono tabular-nums';
-  if (value === null || value === 0) return `${base} text-mute`;
+  if (value === null || value === 0) return `${base} text-ink`;
   return value > 0 ? `${base} text-success` : `${base} text-danger`;
 }
 

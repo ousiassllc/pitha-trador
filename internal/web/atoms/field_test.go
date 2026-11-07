@@ -13,7 +13,7 @@ import (
 func TestInput_DefaultIsFlexibleRowField(t *testing.T) {
 	body := renderWithLabel(t, atoms.Input(atoms.InputProps{ID: "x", Name: "n"}), "")
 
-	for _, want := range []string{`id="x"`, `name="n"`, `type="text"`, "rounded-md border border-border h-10 px-3 flex-1"} {
+	for _, want := range []string{`id="x"`, `name="n"`, `type="text"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 h-10 px-3 flex-1"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -28,7 +28,7 @@ func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 		Attrs: templ.Attributes{"required": true, "min": "1", "data-testid": "f"},
 	}), "")
 
-	for _, want := range []string{`type="date"`, "rounded-md border border-border h-10 px-3 mt-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
+	for _, want := range []string{`type="date"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 h-10 px-3 mt-1 text-sm", ` required`, `min="1"`, `data-testid="f"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -40,10 +40,10 @@ func TestInput_ClassReplacesLayoutButKeepsSharedBorder(t *testing.T) {
 
 func TestSelect_RendersChildrenWithSharedBorder(t *testing.T) {
 	body := renderWithLabel(t, atoms.Select(atoms.SelectProps{
-		ID: "s", Name: "days", Class: "bg-surface", Attrs: templ.Attributes{"data-testid": "d"},
+		ID: "s", Name: "days", Attrs: templ.Attributes{"data-testid": "d"},
 	}), `<option value="1">one</option>`)
 
-	for _, want := range []string{`<select`, `id="s"`, `name="days"`, "rounded-md border border-border h-10 px-3 bg-surface", `data-testid="d"`, `<option value="1">one</option></select>`} {
+	for _, want := range []string{`<select`, `id="s"`, `name="days"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 h-10 px-3", `data-testid="d"`, `<option value="1">one</option></select>`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %q: %s", want, body)
 		}
@@ -54,8 +54,8 @@ func TestSelect_RendersChildrenWithSharedBorder(t *testing.T) {
 // cannot trade it for py-* classes by passing Class.
 func TestInputAndSelect_AlwaysCarryTheGuideHeightAndPadding(t *testing.T) {
 	for name, body := range map[string]string{
-		"Input":  renderWithLabel(t, atoms.Input(atoms.InputProps{Class: "bg-surface"}), ""),
-		"Select": renderWithLabel(t, atoms.Select(atoms.SelectProps{Class: "bg-surface"}), ""),
+		"Input":  renderWithLabel(t, atoms.Input(atoms.InputProps{}), ""),
+		"Select": renderWithLabel(t, atoms.Select(atoms.SelectProps{}), ""),
 	} {
 		for _, want := range []string{"h-10", "px-3"} {
 			if !strings.Contains(body, want) {
@@ -70,7 +70,7 @@ func TestInputAndSelect_AlwaysCarryTheGuideHeightAndPadding(t *testing.T) {
 
 func TestSelect_DefaultClass(t *testing.T) {
 	body := renderWithLabel(t, atoms.Select(atoms.SelectProps{Name: "n"}), "")
-	if !strings.Contains(body, "rounded-md border border-border h-10 px-3 focus-visible:") {
+	if !strings.Contains(body, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 h-10 px-3 focus-visible:") {
 		t.Errorf("default class missing: %s", body)
 	}
 }
@@ -120,6 +120,12 @@ func TestSwitch_IsACheckboxSwitchWithGuideTrackAndKnob(t *testing.T) {
 	if n := strings.Count(body, "peer-disabled:opacity-50"); n != 2 || strings.Contains(body, "opacity-40") {
 		t.Errorf("track and label should both be peer-disabled:opacity-50: %s", body)
 	}
+	// Tailwind's default easing differs from the guide's --ease-out (brand-guide M1, issue #1016).
+	for _, want := range []string{"transition-colors duration-base ease-out", "after:transition-transform after:duration-base after:ease-out"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Switch track and knob must ease with --ease-out, lacks %q: %s", want, body)
+		}
+	}
 }
 
 func TestInlineAlert_HasIconHeadingAndBodyInTheDangerTone(t *testing.T) {
@@ -155,7 +161,7 @@ func TestTextarea_RendersChildrenWithSharedBorderAndFocusRing(t *testing.T) {
 	}), "text")
 
 	for _, want := range []string{
-		`<textarea`, `name="memo"`, `rows="2"`, ` required`, `data-testid="t"`, "rounded-md border border-border px-3 py-1",
+		`<textarea`, `name="memo"`, `rows="2"`, ` required`, `data-testid="t"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 p-3",
 		"focus-visible:border-focus", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-focus/40", `>text</textarea>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -164,6 +170,10 @@ func TestTextarea_RendersChildrenWithSharedBorderAndFocusRing(t *testing.T) {
 	}
 	if strings.Contains(body, ` id=`) {
 		t.Errorf("an empty ID must not render id=: %s", body)
+	}
+	// brand-guide S2/O8: padding 12 on every side (issue #1027/#1029); neither py-1 nor py-2.5.
+	if !strings.Contains(body, ` p-3`) || strings.Contains(body, "py-1") || strings.Contains(body, "py-2.5") {
+		t.Errorf("Textarea padding must be exactly p-3: %s", body)
 	}
 }
 

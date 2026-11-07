@@ -8,7 +8,7 @@ templ scanOption(value, label string, selected bool) {
 
 templ scanRow(s domain.ScanSymbol, scout domain.ScoutOutcome) {
 	<tr class="border-b border-border align-top last:border-b-0 hover:bg-accent-soft" data-symbol={ s.Symbol } data-status={ string(s.Status()) }>
-		<td class="px-3 py-2.5">
+		<td class="px-3 py-2.5 font-mono">
 			<a class="text-accent underline decoration-mute" href={ SymbolHref(s.Symbol) }>{ s.Symbol }</a>
 		</td>
 		<td class="px-3 py-2.5">{ s.Name }</td>
@@ -18,7 +18,7 @@ templ scanRow(s domain.ScanSymbol, scout domain.ScoutOutcome) {
 		</td>
 		<td class="px-3 py-2.5 text-sm text-ink">
 			if reasons := s.Reasons.List(); len(reasons) == 0 {
-				<span class="text-mute">—</span>
+				<span class="text-ink">—</span>
 			} else {
 				<ul>
 					for _, r := range reasons {

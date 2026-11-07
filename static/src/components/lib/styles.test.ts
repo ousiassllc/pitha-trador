@@ -9,17 +9,34 @@ describe('buttonStyles', () => {
       /button:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--focus\);[^}]*outline-offset:\s*2px/,
     );
   });
+
+  // Guide M3: no colour transition under prefers-reduced-motion (issue #1032).
+  test('drops the background transition under prefers-reduced-motion', () => {
+    expect(buttonStyles.cssText).toMatch(
+      /@media \(prefers-reduced-motion:\s*reduce\)\s*\{\s*button\s*\{[^}]*transition:\s*none/,
+    );
+  });
 });
 
 describe('tableStyles', () => {
-  // Numeric columns are JetBrains Mono, tabular and right-aligned; header cells
-  // are SemiBold 12px --mute (brand-guide §2).
+  // Numeric cells are JetBrains Mono and tabular; numeric columns (headings
+  // included) are right-aligned; header cells are SemiBold 12px --mute and stay
+  // in the body font (brand-guide §2, issue #1013).
   test('defines the numeric column and the header row recipe', () => {
     const css = tableStyles.cssText;
-    expect(css).toMatch(/\.num\s*\{[^}]*JetBrains Mono[^}]*tabular-nums[^}]*text-align:\s*right/);
+    expect(css).toMatch(/td\.num\s*\{[^}]*JetBrains Mono[^}]*tabular-nums/);
+    expect(css).toMatch(/(^|[\s}])\.num\s*\{[^}]*text-align:\s*right/);
     expect(css).toMatch(
       /th\s*\{[^}]*color:\s*var\(--mute\)[^}]*font-size:\s*0\.75rem[^}]*font-weight:\s*600/,
     );
+  });
+
+  // issue #1013: `th.num` must not pick up the Mono stack, which would drop the
+  // Japanese column headings into the system monospace font.
+  test('only td.num cells use the Mono font', () => {
+    const css = tableStyles.cssText;
+    expect(css.match(/JetBrains Mono/g)).toHaveLength(1);
+    expect(css).not.toMatch(/(^|[\s}])\.num\s*\{[^}]*font-family/);
   });
 });
 
@@ -47,6 +64,13 @@ describe('buttonStyles fill', () => {
       /button\s*\{[^}]*min-height:\s*2rem[^}]*font-size:\s*0\.875rem/,
     );
   });
+
+  // Guide T4: sm (14px) is 1.7, the same as Tailwind's text-sm.
+  test('the 0.875rem button text carries line-height 1.7', () => {
+    expect(buttonStyles.cssText).toMatch(
+      /button\s*\{[^}]*min-height:\s*2rem[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+  });
 });
 
 describe('noticeStyles', () => {
@@ -56,6 +80,16 @@ describe('noticeStyles', () => {
     const css = noticeStyles.cssText;
     expect(css).toMatch(/\.pitha-ws-disconnected\s*\{[^}]*font-size:\s*0\.875rem/);
     expect(css).not.toMatch(/font-size:\s*0\.75rem/);
+  });
+
+  test('both 0.875rem notices carry line-height 1.7 (guide T4)', () => {
+    const css = noticeStyles.cssText;
+    expect(css).toMatch(
+      /\[role=['"]alert['"]\]\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+    expect(css).toMatch(
+      /\.pitha-ws-disconnected\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
   });
 
   test('the light-DOM ws notice class is text-sm', () => {

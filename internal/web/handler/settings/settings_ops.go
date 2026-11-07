@@ -81,7 +81,7 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 
 func (h *SettingsHandler) opsRow(ctx context.Context, field opsField, notice string) molecules.SettingFieldRowProps {
 	row := molecules.SettingFieldRowProps{
-		Key: field.key, Label: field.label, Hint: field.hint, Placeholder: field.placeholder, Options: field.options,
+		Key: field.key, Label: field.label, Hint: field.hint, Placeholder: field.placeholder, Options: field.options, OnOff: field.onOff,
 		Notice: notice, CSRFField: middleware.CSRFFormField, CSRFToken: middleware.CSRFToken(ctx),
 	}
 	value, err := h.ops.Get(ctx, field.key)

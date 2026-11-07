@@ -114,7 +114,7 @@ templ evalTable(t Table) {
 		<table class="mt-3 min-w-full text-sm">
 			<caption class="sr-only">{ t.Title }の実績指標</caption>
 			<thead>
-				<tr class="text-right text-mute">
+				<tr class="border-b border-border text-right text-mute">
 					<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">{ t.KeyHeader }</th>
 					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>
 					<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">損益(円)</th>
@@ -159,7 +159,7 @@ templ jevBlock(rows []JevRow) {
 			<table class="mt-3 min-w-full text-sm">
 				<caption class="sr-only">Jevの方向的中率とBrier</caption>
 				<thead>
-					<tr class="text-right text-mute">
+					<tr class="border-b border-border text-right text-mute">
 						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">ラベル</th>
 						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">件数</th>
 						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">方向的中率</th>
@@ -195,9 +195,9 @@ templ metaBlock(rows []MetaRow) {
 			<table class="mt-3 min-w-full text-sm">
 				<caption class="sr-only">メタモデルのOOS指標とPaper実績EV</caption>
 				<thead>
-					<tr class="text-right text-mute">
+					<tr class="border-b border-border text-right text-mute">
 						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">版</th>
-						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">状態</th>
+						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">状態</th>
 						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS期間</th>
 						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS件数</th>
 						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS AUC</th>
@@ -214,7 +214,7 @@ templ metaBlock(rows []MetaRow) {
 					for i, r := range rows {
 						<tr class="border-t border-border" data-key={ r.Version }>
 							<th scope="row" class="px-2 py-1.5 text-left text-ink">{ r.Version }</th>
-							<td class="px-2 py-1.5 text-right">{ r.Status }</td>
+							<td class="px-2 py-1.5 text-left">{ r.Status }</td>
 							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ r.OOSWindow }</td>
 							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ r.OOSSamples }</td>
 							@cell(r.OOSAUC, fmt.Sprintf("meta-%d-oos-auc", i))
