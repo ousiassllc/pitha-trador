@@ -21,7 +21,7 @@
       "item": {"symbol": "7203", "detail_url": "/symbols/7203", "price": 2831.5, "return_1m": 0.12, "return_5m": -0.3, "volume_ratio_5m": 3.4, "price_vs_vwap_bps": 38, "spread_bps": 7, "jev_direction": "LONG", "jev_confidence": 0.74, "entry_quality": "strong", "current_position": 100},
       "cells": ["7203", "2831.5", "+0.12", "-0.30", "3.40", "+38", "7", "LONG", "74%", "strong", "100"],
       "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-success", "px-3 py-2.5 text-right font-mono tabular-nums text-danger"],
-      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-success",
+      "directionClass": "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border tone-success",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-success"
     },
     {
@@ -29,7 +29,7 @@
       "item": {"symbol": "6758", "detail_url": "/symbols/6758", "price": 1500.2, "return_1m": -1.234, "return_5m": 2.5, "volume_ratio_5m": 0.85, "price_vs_vwap_bps": -12.4, "spread_bps": 1.6, "jev_direction": "SHORT", "jev_confidence": 0.745, "entry_quality": "exceptional", "current_position": -200},
       "cells": ["6758", "1500.2", "-1.23", "+2.50", "0.85", "-12", "2", "SHORT", "75%", "exceptional", "-200"],
       "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-danger", "px-3 py-2.5 text-right font-mono tabular-nums text-success"],
-      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-danger",
+      "directionClass": "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border tone-danger",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-success"
     },
     {
@@ -61,7 +61,7 @@
       "item": {"symbol": "A&B+C D/é'", "detail_url": "/symbols/A%26B%2BC%20D%2F%C3%A9%27", "price": 10, "return_1m": null, "return_5m": null, "volume_ratio_5m": null, "price_vs_vwap_bps": 0, "spread_bps": null, "jev_direction": "LONG", "jev_confidence": null, "entry_quality": "fair", "current_position": null},
       "cells": ["A&B+C D/é'", "10.0", "—", "—", "—", "0", "—", "LONG", "—", "fair", "—"],
       "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-ink", "px-3 py-2.5 text-right font-mono tabular-nums text-ink"],
-      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-success",
+      "directionClass": "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border tone-success",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-warning"
     },
     {
@@ -69,7 +69,7 @@
       "item": {"symbol": "8306", "detail_url": "/symbols/8306", "price": 1234.56, "return_1m": 0.004, "return_5m": -0.004, "volume_ratio_5m": 1, "price_vs_vwap_bps": 0.4, "spread_bps": 0.4, "jev_direction": "LONG", "jev_confidence": 0.999, "entry_quality": "good", "current_position": 10},
       "cells": ["8306", "1234.6", "+0.00", "-0.00", "1.00", "+0", "0", "LONG", "100%", "good", "10"],
       "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-success", "px-3 py-2.5 text-right font-mono tabular-nums text-danger"],
-      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-success",
+      "directionClass": "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border tone-success",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-info"
     },
     {
@@ -77,7 +77,7 @@
       "item": {"symbol": "TIE1", "detail_url": "/symbols/TIE1", "price": 100.25, "return_1m": 0.125, "return_5m": -0.125, "volume_ratio_5m": 0.375, "price_vs_vwap_bps": 12.5, "spread_bps": 2.5, "jev_direction": "LONG", "jev_confidence": 0.125, "entry_quality": "good", "current_position": 2.5},
       "cells": ["TIE1", "100.3", "+0.13", "-0.13", "0.38", "+13", "3", "LONG", "13%", "good", "3"],
       "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-success", "px-3 py-2.5 text-right font-mono tabular-nums text-danger"],
-      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-success",
+      "directionClass": "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border tone-success",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-info"
     },
     {
@@ -85,7 +85,7 @@
       "item": {"symbol": "TIE2", "detail_url": "/symbols/TIE2", "price": 0.25, "return_1m": -0.375, "return_5m": 0.625, "volume_ratio_5m": 1.125, "price_vs_vwap_bps": -2.5, "spread_bps": 0.5, "jev_direction": "SHORT", "jev_confidence": 0.995, "entry_quality": "fair", "current_position": -2.5},
       "cells": ["TIE2", "0.3", "-0.38", "+0.63", "1.13", "-3", "1", "SHORT", "100%", "fair", "-3"],
       "returnClasses": ["px-3 py-2.5 text-right font-mono tabular-nums text-danger", "px-3 py-2.5 text-right font-mono tabular-nums text-success"],
-      "directionClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-danger",
+      "directionClass": "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs border tone-danger",
       "qualityClass": "inline-flex items-center rounded-full px-2 py-1 text-xs border tone-warning"
     },
     {

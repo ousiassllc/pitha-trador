@@ -32,6 +32,8 @@
 
 UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の regular）の SVG を使う。文字記号（×・▲▼）で代用しない。24×24 の viewBox・`stroke-width="1.5"`・`stroke="currentColor"`・装飾なので `aria-hidden`（名前はボタンの `aria-label`）。サイズは `app.css` の `--icon-sm|md|lg`（16 / 20 / 24px）を `icon-sm` / `icon-md` / `icon-lg` のユーティリティで当てる。リンクの矢印も Iconoir（`IconArrowRight` / `IconNavArrowLeft`）で、文字の →・← は使わない。templ は `internal/web/atoms/icon.templ`（`IconXmark` ほか）、Lit は `static/src/components/lib/icons.ts`（`navArrowUp` / `navArrowDown`）に同じパスを置く。足すときは両方に同じパスを足す。
 
+状態ピルは色と文言だけで伝えず、先頭に 16px（`icon-sm`・`currentColor`）の状態アイコンを付ける（C4。issue #1034）。`StatusDot` は Running=`IconCheckCircle` / Paused=`IconWarningTriangle` / Killed=`IconXmarkCircle`、`Badge` は LONG=`IconNavArrowUp` / SHORT=`IconNavArrowDown`（方向は成否ではないので矢印）。`InlineAlert` は従来どおり `IconWarningCircle`。Lit に同じピルは無いので、これらのパスは templ 側だけにある（`NavArrowUp/Down` は `lib/icons.ts` と同じパス）。ほかのピル（`EntryQualityBadge`・設定済み／必須ピル・`tone-*` ブロックなど）は別途。
+
 ## モーション（issue #944）
 
 トークンは `app.css` の `:root`（`--motion-fast` 120 / `--motion-base` 180 / `--motion-slow` 280 / `--motion-fade-in` 320 / `--motion-fade-out` 240ms）と `@theme static`（`--ease-out` = cubic-bezier(0.2,0.8,0.2,1)、`--ease-in` = cubic-bezier(0.4,0,1,1)、`--ease-in-out`）。Tailwind は `duration-base|fade-in` 等と `ease-out`、Lit は `var(--motion-fade-in) var(--ease-out)` で参照し、時間・曲線を直書きしない。Web Animations API は `var()` を解決できないので `lib/motion.ts` に同じ数値を置き、`motion.test.ts` が `app.css` と一致することを確認する。`prefers-reduced-motion: reduce` では移動・リップルを出さず、必要な opacity のフェードも 100ms 以下にする。色だけのトランジション（ボタン・テーマ切替・チェックボックス・スイッチ）は Tailwind `motion-reduce:transition-none` / Lit `@media (prefers-reduced-motion: reduce)` で無効にする。

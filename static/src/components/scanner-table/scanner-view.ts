@@ -4,6 +4,7 @@
 // and internal/web/atoms/badge.templ) so the hydrated table looks the same
 // as the server-rendered one (issue #239).
 import { html } from 'lit';
+import { navArrowDown, navArrowUp } from '../lib/icons';
 import type { ScannerItem } from './scanner-types';
 
 export type SortKey = keyof Pick<
@@ -131,9 +132,14 @@ export function sortValue(item: ScannerItem, key: SortKey): string | number | nu
 const BADGE_BASE = 'inline-flex items-center rounded-full px-2 py-1 text-xs';
 
 // Mirrors atoms.Badge / atoms.EntryQualityBadge (internal/web/atoms/badge.templ).
+// LONG / SHORT lead with an arrow icon (design guide C4: icon + text + tone).
 const DIRECTION_BADGE_CLASS: Record<string, string> = {
-  LONG: 'border tone-success',
-  SHORT: 'border tone-danger',
+  LONG: 'gap-1 border tone-success',
+  SHORT: 'gap-1 border tone-danger',
+};
+const DIRECTION_BADGE_ICON: Record<string, () => unknown> = {
+  LONG: navArrowUp,
+  SHORT: navArrowDown,
 };
 const ENTRY_QUALITY_BADGE_CLASS: Record<string, string> = {
   exceptional: 'border tone-success',
@@ -148,7 +154,7 @@ export function directionBadge(direction: string | null) {
     return html`<span class="inline-flex items-center rounded-full border tone-mute px-2 py-1 text-xs">判定待ち</span>`;
   }
   const label = direction === 'LONG' || direction === 'SHORT' ? direction : 'NONE';
-  return html`<span class="${BADGE_BASE} ${DIRECTION_BADGE_CLASS[label] ?? NEUTRAL_BADGE_CLASS}">${label}</span>`;
+  return html`<span class="${BADGE_BASE} ${DIRECTION_BADGE_CLASS[label] ?? NEUTRAL_BADGE_CLASS}">${DIRECTION_BADGE_ICON[label]?.()}${label}</span>`;
 }
 
 export function entryQualityBadge(quality: string | null) {
