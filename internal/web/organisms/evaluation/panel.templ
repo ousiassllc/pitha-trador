@@ -197,7 +197,7 @@ templ metaBlock(rows []MetaRow) {
 				<thead>
 					<tr class="text-right text-mute">
 						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">版</th>
-						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">状態</th>
+						<th scope="col" class="px-2 py-1.5 text-left text-xs font-semibold">状態</th>
 						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS期間</th>
 						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS件数</th>
 						<th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">OOS AUC</th>
@@ -214,7 +214,7 @@ templ metaBlock(rows []MetaRow) {
 					for i, r := range rows {
 						<tr class="border-t border-border" data-key={ r.Version }>
 							<th scope="row" class="px-2 py-1.5 text-left text-ink">{ r.Version }</th>
-							<td class="px-2 py-1.5 text-right">{ r.Status }</td>
+							<td class="px-2 py-1.5 text-left">{ r.Status }</td>
 							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ r.OOSWindow }</td>
 							<td class="px-2 py-1.5 text-right font-mono tabular-nums">{ r.OOSSamples }</td>
 							@cell(r.OOSAUC, fmt.Sprintf("meta-%d-oos-auc", i))
