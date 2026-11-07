@@ -120,6 +120,12 @@ func TestSwitch_IsACheckboxSwitchWithGuideTrackAndKnob(t *testing.T) {
 	if n := strings.Count(body, "peer-disabled:opacity-50"); n != 2 || strings.Contains(body, "opacity-40") {
 		t.Errorf("track and label should both be peer-disabled:opacity-50: %s", body)
 	}
+	// Tailwind's default easing differs from the guide's --ease-out (brand-guide M1, issue #1016).
+	for _, want := range []string{"transition-colors duration-base ease-out", "after:transition-transform after:duration-base after:ease-out"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Switch track and knob must ease with --ease-out, lacks %q: %s", want, body)
+		}
+	}
 }
 
 func TestInlineAlert_HasIconHeadingAndBodyInTheDangerTone(t *testing.T) {
