@@ -77,27 +77,38 @@ func (r *Repository) foreignVersions(ctx context.Context) ([]string, error) {
 
 // ListTrainingRows returns the triple-barrier-labeled (label_version 2,
 // net_return_bps set) LONG/SHORT trader decisions made in [from, to), oldest
-// first, of the live prompt's cohort (SetForeignTraderVersions). A decision
+// first, of the live prompt's cohort (SetForeignTraderVersions) and of the Jev
+// model that answered last before to (ResolveTrainingScope). A decision
 // with several label rows (the timeout setting changed between labelings)
 // yields only its newest one.
 func (r *Repository) ListTrainingRows(ctx context.Context, from, to time.Time) ([]TrainingRow, error) {
-	foreign, err := r.foreignVersions(ctx)
+	scope, err := r.trainingScope(ctx, to)
 	if err != nil {
 		return nil, err
 	}
-	return ListTrainingRowsFrom(ctx, r.db, from, to, foreign)
+	return ListTrainingRowsFrom(ctx, r.db, from, to, scope)
+}
+
+// trainingScope resolves the scope of the decisions before to: the foreign
+// prompt versions left out and the last-answering Jev model.
+func (r *Repository) trainingScope(ctx context.Context, to time.Time) (TrainingScope, error) {
+	foreign, err := r.foreignVersions(ctx)
+	if err != nil {
+		return TrainingScope{}, err
+	}
+	return ResolveTrainingScope(ctx, r.db, to, foreign)
 }
 
 // ListTrainingRowsFrom is ListTrainingRows over any read handle, so a
 // read-only reader (the Paper results MCP) selects exactly the rows the
-// nightly retraining trains on. foreign are the Trader prompt versions whose
-// decisions are left out (none: every version).
-func ListTrainingRowsFrom(ctx context.Context, q Querier, from, to time.Time, foreign []string) ([]TrainingRow, error) {
-	versionCond, versionArgs := sqlutil.NotIn("d.question_version", foreign)
-	if versionCond != "" {
-		versionCond = "\n\tAND " + versionCond
+// nightly retraining trains on. scope is which decisions count (the prompt
+// versions and the Jev model left out); the zero value is every decision.
+func ListTrainingRowsFrom(ctx context.Context, q Querier, from, to time.Time, scope TrainingScope) ([]TrainingRow, error) {
+	scopeCond, scopeArgs := scope.Where()
+	if scopeCond != "" {
+		scopeCond = "\n\tAND " + scopeCond
 	}
-	args := append([]any{domain.CalibrationLabelVersionTripleBarrier}, versionArgs...)
+	args := append([]any{domain.CalibrationLabelVersionTripleBarrier}, scopeArgs...)
 	args = append(args, sqlutil.FormatTime(from), sqlutil.FormatTime(to), domain.CalibrationLabelVersionTripleBarrier)
 	rows, err := q.QueryContext(ctx, `
 SELECT d.id, d.symbol, d.model_id, d.timestamp, d.direction, d.state_json, d.response_json,
@@ -106,7 +117,7 @@ SELECT d.id, d.symbol, d.model_id, d.timestamp, d.direction, d.state_json, d.res
 FROM calibration_outcomes o
 JOIN jev_decisions d ON d.id = o.jev_decision_id
 WHERE d.decision_type = 'trader' AND d.direction IN ('LONG', 'SHORT')
-	AND o.label_version = ? AND o.net_return_bps IS NOT NULL`+versionCond+`
+	AND o.label_version = ? AND o.net_return_bps IS NOT NULL`+scopeCond+`
 	AND d.timestamp >= ? AND d.timestamp < ?
 	AND o.id = (SELECT MAX(o2.id) FROM calibration_outcomes o2
 		WHERE o2.jev_decision_id = d.id AND o2.label_version = ? AND o2.net_return_bps IS NOT NULL)
@@ -150,15 +161,16 @@ type LabelVersionCounts struct{ V1, V2 int }
 // version). A version 1 label has no net return by design (migration 000033), so
 // only version 2 labels are required to have one: the V2 count is the labeled
 // decisions ListTrainingRows reads before BuildRows drops the incomplete ones,
-// and, like it, only those of the live prompt's cohort.
+// and, like it, only those of the live prompt's cohort and the Jev model that
+// answered last (TrainingScope).
 // It is what a skipped retraining reports next to the rows it could use (issue
 // #862).
 func (r *Repository) CountLabeledDecisions(ctx context.Context, from, to time.Time) (LabelVersionCounts, error) {
-	foreign, err := r.foreignVersions(ctx)
+	scope, err := r.trainingScope(ctx, to)
 	if err != nil {
 		return LabelVersionCounts{}, err
 	}
-	versionCond, versionArgs := sqlutil.NotIn("d.question_version", foreign)
+	versionCond, versionArgs := scope.Where()
 	if versionCond != "" {
 		versionCond = "\n\tAND " + versionCond
 	}

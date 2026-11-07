@@ -47,6 +47,7 @@ type readiness struct {
 		DroppedIncompleteState string  `json:"dropped_incomplete_status"`
 	} `json:"last_retrain"`
 	ExcludedPromptVersions []string `json:"excluded_prompt_versions"`
+	JevModelID             string   `json:"jev_model_id"`
 	PromptCohort           struct {
 		LivePromptVersion string `json:"live_prompt_version"`
 		LatestPromotion   *struct {

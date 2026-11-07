@@ -17,7 +17,7 @@ issue #881（元: #872 / PR #876 の独立レビューの指摘）。`jev_prompt
 | Calibration の指標（GUI・`GET /api/v1/calibration`・自己改善の日次分析） | `calibration.CalibrationRepository.ListLabeledSamples*`・`decisiontrade.List` | 他コホートの標本と、その判断が開いたポジションの信頼度帯別 PnL を除く。標本が 0 から貯まり直す |
 | メタモデルの学習 | `metalabel.Repository.ListTrainingRows`・`CountLabeledDecisions` | 他コホートの行を学習に使わない。見送りの件数（FR-META-4a）も同じ行を数える。昇格直後は行が足りず `ErrInsufficientData`（見送りとして記録）になりうる |
 | MCP `jev_calibration` | `query.JevCalibration` | 既定はライブの版のコホートだけを採点する。`prompt_version` を渡すと、その版の行だけを採点する。`trader_decisions_by_version` は期間の trader 判断を**全版**について版別に数え、`prompt_versions.excluded` は既定で除いた版を示す |
-| MCP `metalabel_training_readiness` | `metalabeldiag.TrainingReadinessAt` | 再学習と同じ行だけ数える。除いた版は `excluded_prompt_versions` |
+| MCP `metalabel_training_readiness` | `metalabeldiag.TrainingReadinessAt` | 再学習と同じ行だけ数える（コホートに加え、最後に答えた Jev の版 `jev_model_id` だけ）。除いた版は `excluded_prompt_versions` |
 | Policy の「信頼度帯に標本が足りるか」の確認 | `calibration.CalibrationRepository.CountLabeledSamplesInConfidenceRange`・`calibration.Service.BucketHasSamples`（旧しきい値ルールだけが使う） | ライブの版のコホートの標本だけを数える。足りない間の扱いは §4.1（Paper だけ全版の合計に戻してよい。Live は戻さない） |
 | 採用中のメタモデル | `policy.Engine.Evaluate`（`WithMetaModelCohort`）・`metalabel_models.adoption_json` の `trained_cohort` | モデルが学習に使ったコホートを持ち、ライブの版のコホートと比べる。違うときの扱いは §4.2（Paper は警告して使う。Live は使わない） |
 

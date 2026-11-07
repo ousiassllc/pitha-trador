@@ -14,7 +14,6 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/domain"
 	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
-	"github.com/ousiassllc/pitha-trador/internal/repository/sqlutil"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metalabel/training"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
@@ -163,6 +162,10 @@ type TrainingReadiness struct {
 	// ExcludedPromptVersions are the Trader prompt versions whose decisions the
 	// retraining leaves out (another cohort than the live prompt's, issue #881).
 	ExcludedPromptVersions []string `json:"excluded_prompt_versions"`
+	// JevModelID is the Jev model the rows are limited to: the one that
+	// answered the latest trader decision before AsOf (empty: no decision, so
+	// every model). The retraining trains and evaluates on the same model.
+	JevModelID string `json:"jev_model_id"`
 	// PromptCohort says what those versions hold and which version is live.
 	PromptCohort PromptCohort `json:"prompt_cohort"`
 }
@@ -197,8 +200,14 @@ func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time
 	if !rowsFrom.Before(asOf) {
 		rowsFrom = asOf // an empty window
 	}
-	var err error
-	if out.Funnel, err = readinessFunnel(ctx, q, rowsFrom, asOf, foreign); err != nil {
+	// The same scope the retraining reads its rows with (repo.ResolveTrainingScope):
+	// the live cohort's decisions of the Jev model that answered last.
+	scope, err := repo.ResolveTrainingScope(ctx, q, asOf, foreign)
+	if err != nil {
+		return TrainingReadiness{}, fmt.Errorf("query: %w", err)
+	}
+	out.JevModelID = scope.JevModelID
+	if out.Funnel, err = readinessFunnel(ctx, q, rowsFrom, asOf, scope); err != nil {
 		return TrainingReadiness{}, err
 	}
 	if out.Funnel[3].Rows > MaxReadinessRows {
@@ -207,7 +216,7 @@ func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time
 	if out.PromptCohort, err = readPromptCohort(ctx, q, rowsFrom, asOf, live, foreign); err != nil {
 		return TrainingReadiness{}, err
 	}
-	stored, err := repo.ListTrainingRowsFrom(ctx, q, rowsFrom, asOf, foreign)
+	stored, err := repo.ListTrainingRowsFrom(ctx, q, rowsFrom, asOf, scope)
 	if err != nil {
 		return TrainingReadiness{}, fmt.Errorf("query: training rows: %w", err)
 	}
@@ -234,10 +243,10 @@ func TrainingReadinessAt(ctx context.Context, q query.Q, r query.Range, now time
 
 // readinessFunnel counts the trader decisions of [from, to) through the
 // conditions of repo.ListTrainingRowsFrom, one statement.
-func readinessFunnel(ctx context.Context, q query.Q, from, to time.Time, foreign []string) ([]ReadinessStep, error) {
+func readinessFunnel(ctx context.Context, q query.Q, from, to time.Time, scope repo.TrainingScope) ([]ReadinessStep, error) {
 	f, t := query.Range{From: from, To: to}.Bounds()
 	v := domain.CalibrationLabelVersionTripleBarrier
-	versionCond, versionArgs := sqlutil.NotIn("d.question_version", foreign)
+	versionCond, versionArgs := scope.Where()
 	if versionCond != "" {
 		versionCond = " AND " + versionCond
 	}
