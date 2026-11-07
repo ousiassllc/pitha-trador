@@ -58,6 +58,10 @@ func TestRejectReasons_EntryQualityOnTopShowsTheMinimumAndSettingsLink(t *testin
 	if got := inner(t, note, "entry-quality-paper"); got != "Paper fair" {
 		t.Errorf("paper = %q", got)
 	}
+	// issue #1031: SemiBold is for headings and buttons; the sentence stays Regular.
+	if strings.Contains(note, "font-semibold") || !strings.Contains(note, "<p>エントリー品質がしきい値に届かない見送りが最も多くなっています。</p>") {
+		t.Errorf("the note's sentence must be Regular: %s", note)
+	}
 }
 
 func TestRejectReasons_EntryQualityNotTopHasNoNote(t *testing.T) {
