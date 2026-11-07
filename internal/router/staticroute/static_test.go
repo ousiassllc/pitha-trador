@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -183,5 +184,31 @@ func TestNew_StaticRouteServesLogo(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "<svg") {
 		t.Errorf("body is not an SVG document: %q", rec.Body.String())
+	}
+}
+
+// The logo is an <img>, so the page's CSS variables cannot reach it. Its fixed
+// colors must be the brand-guide Light token values (--surface #ffffff,
+// --border #e7e7e5, --ink #050505); the white tile keeps it visible on the Dark
+// header too. Any other color is outside the tokens (issue #1012).
+func TestNew_LogoUsesBrandTokenColors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := router.New()
+
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/img/logo.svg", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	allowed := map[string]bool{"#ffffff": true, "#e7e7e5": true, "#050505": true}
+	colors := regexp.MustCompile(`#[0-9a-fA-F]{3,8}\b`).FindAllString(rec.Body.String(), -1)
+	if len(colors) == 0 {
+		t.Fatalf("logo has no hex colors to check: %q", rec.Body.String())
+	}
+	for _, c := range colors {
+		if !allowed[strings.ToLower(c)] {
+			t.Errorf("logo color %s is not a brand token value (#ffffff, #e7e7e5, #050505)", c)
+		}
 	}
 }
