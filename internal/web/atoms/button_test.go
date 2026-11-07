@@ -38,8 +38,8 @@ func TestButton_VariantsAndSizeChangeClasses(t *testing.T) {
 		not   string
 	}{
 		{"danger", atoms.ButtonProps{Variant: atoms.ButtonDanger}, "bg-danger text-bone", "bg-accent text-bone"},
-		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-border bg-transparent", "bg-accent text-bone"},
-		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink hover:bg-accent-soft", "border-border"},
+		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "bg-transparent text-ink not-disabled:hover:bg-accent-soft", "bg-accent text-bone"},
+		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink not-disabled:hover:bg-accent-soft", "border-border"},
 		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "min-h-8", "py-2"},
 		{"pager", atoms.ButtonProps{Size: atoms.ButtonPager}, "min-h-9", "min-h-8"},
 		{"medium", atoms.ButtonProps{}, "text-base", "text-sm"},
