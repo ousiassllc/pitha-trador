@@ -161,7 +161,7 @@ func TestTextarea_RendersChildrenWithSharedBorderAndFocusRing(t *testing.T) {
 	}), "text")
 
 	for _, want := range []string{
-		`<textarea`, `name="memo"`, `rows="2"`, ` required`, `data-testid="t"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 px-3 py-2.5",
+		`<textarea`, `name="memo"`, `rows="2"`, ` required`, `data-testid="t"`, "rounded-md border border-border bg-surface disabled:cursor-not-allowed disabled:opacity-50 p-3",
 		"focus-visible:border-focus", "focus-visible:outline-none", "focus-visible:ring-2", "focus-visible:ring-focus/40", `>text</textarea>`,
 	} {
 		if !strings.Contains(body, want) {
@@ -170,6 +170,10 @@ func TestTextarea_RendersChildrenWithSharedBorderAndFocusRing(t *testing.T) {
 	}
 	if strings.Contains(body, ` id=`) {
 		t.Errorf("an empty ID must not render id=: %s", body)
+	}
+	// brand-guide S2/O8: padding 12 on every side (issue #1027/#1029); neither py-1 nor py-2.5.
+	if !strings.Contains(body, ` p-3`) || strings.Contains(body, "py-1") || strings.Contains(body, "py-2.5") {
+		t.Errorf("Textarea padding must be exactly p-3: %s", body)
 	}
 }
 

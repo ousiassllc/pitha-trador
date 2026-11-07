@@ -72,6 +72,15 @@ function region(): HTMLElement | null {
   return dialogRegion() ?? document.getElementById('toast-region');
 }
 
+/** Fades out the toasts in every region except `target` (one toast on screen at a time, design guide O3): a toast left in `#toast-region` before a modal opened must not sit beside the modal's own. */
+function dismissToastsOutside(target: Element): void {
+  for (const region of document.querySelectorAll<HTMLElement>(REGIONS)) {
+    if (region === target) continue;
+    for (const toast of region.querySelectorAll<HTMLElement>(`[${TOAST_MARKER}]`))
+      dismissToast(toast);
+  }
+}
+
 function carriesToast(xhr: XMLHttpRequest | undefined): boolean {
   return xhr?.responseText?.includes(TOAST_MARKER) ?? false;
 }
@@ -100,6 +109,7 @@ export function showToast(message: string, { reload = false } = {}): void {
   if (!toast || !text) return;
   text.textContent = message;
   toast.querySelector<HTMLElement>(TOAST_RELOAD)?.toggleAttribute('hidden', !reload);
+  dismissToastsOutside(target);
   target.replaceChildren(toast);
 }
 
@@ -149,7 +159,10 @@ export function onBeforeSwap(event: Event): void {
   }
   // htmx's `responseHandling` targets `#toast-region`, which an open modal dialog makes inert.
   const inDialog = dialogRegion();
-  if (inDialog) detail.target = inDialog;
+  if (inDialog) {
+    detail.target = inDialog;
+    dismissToastsOutside(inDialog);
+  }
 }
 
 /**
