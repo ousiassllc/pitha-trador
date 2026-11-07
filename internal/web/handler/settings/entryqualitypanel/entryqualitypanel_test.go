@@ -32,7 +32,7 @@ func TestLoad_PaperRunsPaperValue(t *testing.T) {
 			byKey[it.Key] = it.Value + "|" + it.Detail
 		}
 		if byKey["mode"] != "Paper|" || byKey["effective"] != want+"|（Paper の値）" ||
-			byKey["paper"] != want+"|← 判定に使われています" || byKey["live"] != "strong|使われていません" {
+			byKey["paper"] != want+"|判定に使われています" || byKey["live"] != "strong|使われていません" {
 			t.Errorf("%s: panel = %v", side, byKey)
 		}
 	}

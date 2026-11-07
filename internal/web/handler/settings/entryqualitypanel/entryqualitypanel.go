@@ -41,7 +41,7 @@ func Load(ctx context.Context, ops Getter, groupID string) []molecules.SettingDe
 	if paperRuns {
 		mode, effective, which = "Paper", paper.Current, "Paper の値"
 	}
-	const inUse, unused = "← 判定に使われています", "使われていません"
+	const inUse, unused = "判定に使われています", "使われていません"
 	paperDetail, liveDetail := unused, inUse
 	if paperRuns {
 		paperDetail, liveDetail = inUse, unused
