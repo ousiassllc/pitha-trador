@@ -44,7 +44,7 @@ export function onPointerDown(event: Event): void {
     top: `${y - radius}px`,
     width: `${radius * 2}px`,
     height: `${radius * 2}px`,
-    borderRadius: '9999px',
+    borderRadius: 'var(--r-full)',
     background: 'currentColor',
     opacity: '0',
     pointerEvents: 'none',

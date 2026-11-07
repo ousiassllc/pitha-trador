@@ -66,6 +66,14 @@ describe('press ripple (design guide M4)', () => {
     expect(button.querySelector('span')).toBeNull();
   });
 
+  test('the circle takes its radius from the --r-full token, not a hard-coded value (design guide S1)', () => {
+    const button = render();
+    press(button);
+
+    const wave = button.querySelector('span[aria-hidden="true"]') as HTMLElement;
+    expect(wave.style.borderRadius).toBe('var(--r-full)');
+  });
+
   test('a button without data-ripple and a disabled button get no ripple', () => {
     render();
     press(document.getElementById('plain') as Element);
