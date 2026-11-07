@@ -236,15 +236,17 @@ func TestExperimentFormLabelsAreEightAboveTheirFields(t *testing.T) {
 	}
 }
 
-// A refused close is a one-line toast without the free-length reason (brand-guide
-// O3: a toast is one short line); the reason goes to the log.
-func TestExperimentCloseRefusalToastIsOneShortLine(t *testing.T) {
+// A refused close puts its reason in the inline alert above the table, not in a
+// toast (brand-guide O3: error details never go to a toast).
+func TestExperimentCloseRefusalShowsReasonInlineAlert(t *testing.T) {
 	a, _ := newExperimentsApp(t)
 	a.post("/settings/mcp/experiments", experimentForm(nil), true)
 
 	rec := a.post("/settings/mcp/experiments/1/close", url.Values{"status": {"paused"}}, true)
 	body := rec.Body.String()
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "実験を終えられません。") || strings.Contains(body, "status は") {
-		t.Errorf("close with a bad status = %d, want a 422 with the short toast only: %s", rec.Code, body)
+	if rec.Code != http.StatusUnprocessableEntity || rec.Header().Get("HX-Retarget") != "#mcp-experiment-close-error" ||
+		!strings.Contains(body, "data-inline-alert") || strings.Contains(body, "data-toast") ||
+		!strings.Contains(body, "実験を終えられません: status は closed か aborted です。") {
+		t.Errorf("close with a bad status = %d, want a 422 inline alert with the reason: %s", rec.Code, body)
 	}
 }

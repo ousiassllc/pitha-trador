@@ -66,6 +66,10 @@ func (h *Handler) CompareExperiment(c *gin.Context) {
 // (mcp.experimentForm): a rejected form puts its reason there, not in a toast.
 const experimentFormError = "#mcp-experiment-form-error"
 
+// experimentCloseError is the inline-alert slot above the experiments table
+// (mcp.Experiments), where a refused close puts its reason.
+const experimentCloseError = "#mcp-experiment-close-error"
+
 // CreateExperiment implements `POST /settings/mcp/experiments`: hypothesis,
 // kind, name, before, after and an optional started_at (JST, from a
 // datetime-local input). The form has exactly one variable; a setting is named
@@ -127,9 +131,7 @@ func (h *Handler) CloseExperiment(c *gin.Context) {
 		return
 	case err != nil:
 		if reason, invalid := experiment.IsInvalid(err); invalid {
-			// A toast is one short line: the reason goes to the log, not onto the screen.
-			slog.WarnContext(ctx, "mcpsettings: close experiment refused", "id", id, "reason", reason)
-			shared.RespondActionError(c, http.StatusUnprocessableEntity, "実験を終えられません。")
+			shared.RespondFormError(c, experimentCloseError, "実験を終えられません: "+reason+"。")
 			return
 		}
 		slog.ErrorContext(ctx, "mcpsettings: close experiment", "id", id, "error", err)

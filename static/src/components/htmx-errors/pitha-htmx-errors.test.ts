@@ -64,12 +64,12 @@ describe('htmx:beforeSwap', () => {
 describe('htmx:responseError', () => {
   test('shows a generic 5xx toast when the body is empty', () => {
     fire('htmx:responseError', { xhr: fakeXhr(500, '') });
-    expect(toastTexts()).toEqual(['サーバーでエラーが発生しました（HTTP 500）。']);
+    expect(toastTexts()).toEqual(['サーバーでエラーが発生しました。']);
   });
 
   test('shows a generic 4xx toast when the body is empty', () => {
     fire('htmx:responseError', { xhr: fakeXhr(409, '') });
-    expect(toastTexts()).toEqual(['操作を完了できませんでした（HTTP 409）。']);
+    expect(toastTexts()).toEqual(['操作を完了できませんでした。']);
   });
 
   test('shows a short expiry fact with a visible reload action when the server marks a 403 as stale', () => {
@@ -101,7 +101,7 @@ describe('htmx:responseError', () => {
 
   test('an unmarked 403 keeps the generic toast', () => {
     fire('htmx:responseError', { xhr: fakeXhr(403, 'forbidden: host not allowed') });
-    expect(toastTexts()).toEqual(['操作を完了できませんでした（HTTP 403）。']);
+    expect(toastTexts()).toEqual(['操作を完了できませんでした。']);
   });
 
   test('adds nothing when the server already sent a toast fragment', () => {
