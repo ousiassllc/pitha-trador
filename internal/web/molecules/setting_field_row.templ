@@ -23,6 +23,7 @@ type SettingFieldRowProps struct {
 	DefaultLabel string
 	Overridden   bool
 	Options      []string
+	OnOff        bool
 	Placeholder  string
 	Warning      string
 	Notice       string
@@ -72,6 +73,14 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 							<option value={ option } selected?={ option == props.Value }>{ option }</option>
 						}
 					}
+				} else if props.OnOff {
+					@atoms.Switch(atoms.SwitchProps{Name: "value", Value: "1", Attrs: templ.Attributes{
+						"id":      "setting-input-" + props.Key,
+						"checked": props.Value == "1",
+					}}) {
+						有効にする
+					}
+					<input type="hidden" name="value" value="0"/>
 				} else {
 					@atoms.Input(atoms.InputProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{
 						"required":     true,

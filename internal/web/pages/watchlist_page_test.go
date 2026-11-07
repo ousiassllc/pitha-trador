@@ -38,3 +38,14 @@ func TestWatchlistPage_SectionH2HasTheH2GapBelow(t *testing.T) {
 		t.Errorf("h2 must be mb-6 and the dl must have no mt-2: %s", body)
 	}
 }
+
+// issue #1014: the link to 設定 is body text under the heading, not inside the
+// tooltip (a tooltip is non-interactive: it closes on leaving it).
+func TestWatchlistPage_SettingsLinkIsOutsideTheTooltip(t *testing.T) {
+	body := renderPage(t, pages.WatchlistPage(domain.WatchListView{Enabled: true}))
+	link := `href="/settings/broker"`
+	tooltipEnd := strings.Index(body, "</h1>")
+	if i := strings.Index(body, link); i < 0 || i < tooltipEnd {
+		t.Errorf("the 設定 link must follow the heading, outside the HelpMark: %s", body)
+	}
+}

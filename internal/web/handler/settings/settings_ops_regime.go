@@ -14,8 +14,8 @@ var regimeGroup = opsGroup{
 		"アーム別のコスト控除後 EV・勝率はキャリブレーション画面で確認できます。無効のときは全判断がモメンタム固定です。" +
 		"エントリーの可否はメタラベリングモデルの判定を通ります。環境変数では設定できません。",
 	fields: []opsField{
-		{key: regimesettings.KeyABEnabled, label: "A/B 比較（モメンタム固定 vs レジーム切替）", placeholder: "0（無効）",
-			hint: "1 で有効、0 で無効です。既定は 0（無効＝全判断がモメンタム固定）です。"},
+		{key: regimesettings.KeyABEnabled, label: "A/B 比較（モメンタム固定 vs レジーム切替）", onOff: true,
+			hint: "オンで有効、オフで無効です。既定はオフ（無効＝全判断がモメンタム固定）です。"},
 		{key: regimesettings.KeyWindowMinutes, label: "リターンの窓幅（分）",
 			hint: "市場指数の 1 分足リターンを何分遡って自己相関・ボラティリティを測るかです。5〜120 の整数で、既定は 30 分です。"},
 		{key: regimesettings.KeyAutocorrThreshold, label: "自己相関のしきい値",
