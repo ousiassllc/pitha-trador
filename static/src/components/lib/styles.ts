@@ -24,6 +24,7 @@ export const buttonStyles = css`
     white-space: nowrap;
     font: inherit;
     font-size: 0.875rem;
+    line-height: 1.7;
     font-weight: 600;
     transition: background-color var(--motion-base) var(--ease-out);
   }
@@ -91,11 +92,13 @@ export const noticeStyles = css`
     margin: 0;
     color: var(--danger);
     font-size: 0.875rem;
+    line-height: 1.7;
   }
   .pitha-ws-disconnected {
     margin: 0;
     color: var(--warning);
     font-size: 0.875rem;
+    line-height: 1.7;
   }
 `;
 

@@ -98,6 +98,8 @@ describe('pitha-activity-feed', () => {
     // 01:15Z is rendered in JST like the SSR fallback (internal/web/atoms.FormatJST).
     expect(rows[0].querySelectorAll('td')[0].textContent).toBe('2026-09-29 10:15:00 JST');
     expect(rows[1].querySelectorAll('td')[2].textContent).toBe('—'); // no symbol
+    // The symbol column is a code: JetBrains Mono like the SSR fallback (guide T5).
+    expect(rows[0].querySelectorAll('td')[2].classList.contains('font-mono')).toBe(true);
     expect(rows[1].querySelectorAll('td')[4].textContent).toBe('—'); // no latency
   });
 
