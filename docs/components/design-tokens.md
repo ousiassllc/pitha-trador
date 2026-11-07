@@ -20,10 +20,10 @@
 ## 形・余白・線（issue #942）
 
 - 角丸は `app.css` の `:root` に `--r-sm|md|lg|xl|full`（4 / 8 / 12 / 16px / 9999px）を定義し、`@theme` の `--radius-sm|md|lg|xl` がそれを読む。`rounded-sm`（ツールチップ・タグ）・`rounded-md`（入力・ボタン・入れ子パネル）・`rounded-lg`（カード・パネル・空状態）・`rounded-xl`（モーダル）・`rounded-full`（ピル）をそのまま使う。Lit の `static styles` は `var(--r-md)` 等を使う
-- ツールチップは `rounded-sm`・12px・padding 8×12（`px-3 py-2`、Lit は `0.5rem 0.75rem`）
+- ツールチップは `rounded-sm`・12px・padding 6×10（`px-[10px] py-1.5`、Lit は `0.375rem 0.625rem`）。本文は非対話で、リンク・ボタンを入れない（リンクは `HelpMark` の外に置く）
 - 入力・セレクトは高さ 40px・左右 12px（`h-10 px-3`、`atoms/input.templ` の `fieldBox` と Lit の `lightDomFieldClass`）。呼び出し側は `py-*` で上書きしない（`<textarea>` だけ `px-3 py-1`）。入れ子パネル（カード・モーダルの中の `bg-bone`）は `rounded-md`。テーマ切替は `p-1 gap-1`
 - 影はモーダルだけ（`shadow-modal` = `--shadow-modal` 0 1px 2px rgba(0,0,0,.06)）。カード・ツールチップ・トーストは 1px の `border-border` で区切り、`shadow*` を付けない
-- 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）の 2 種類。SSR と Lit で同じ値にし、`pr-N` だけの指定はしない。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact の 6px だけ例外）
+- 表のセルは上下 10px / 左右 12px（`px-3 py-2.5`）、compact は上下 6px / 左右 8px（`px-2 py-1.5`）の 2 種類。SSR と Lit で同じ値にし、`pr-N` だけの指定はしない。余白は 4px 基準（20px・2px・6px の `px-5` `py-0.5` `mt-1.5` は使わない。表の compact とツールチップの 6px だけ例外）
 - ガターは `px-4 lg:px-6`（モバイル 16px / デスクトップ 24px）。セクション間は 48px（`mt-12` / `mb-12`、設定画面の節どうしは `gap-12`）。ページの h1 の下は 24px（`mt-6`）、h2 の下は節でもカード・パネルでも 24px（`mb-6`）、h3 の下は 12px（`mb-3`）。カード・パネルの見出しの下に `mt-*` を重ねない（見出しの `mb-*` が間隔を持つ）
 - フォームはラベル→入力が 8px（`flex flex-col gap-2` / `mt-2`）、入力→補足が 4px（`gap-1` / `mt-1`）。メニュー・ナビ項目は項目間 8px（`gap-x-2`）・高さ 40px（`min-h-10`）・左右 12px（`px-3`）・`text-base` Regular（SemiBold にしない。issue #984）で、メインナビ（`organisms/header_nav.templ`）とタブ（`molecules/tab_nav.templ`）が同じレシピ
 - 空状態は `rounded-lg border border-dashed border-border`・`px-6 py-12`（上下 48 / 左右 24）・`text-center text-mute`。ハッシュ到達時の強調は `target:ring-1 target:ring-mute`
@@ -45,7 +45,7 @@ UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の reg
 
 - ボタンは主（`bg-accent text-bone`）/ サブ（透明＋1px `border-border`）/ ゴースト / 危険（`bg-danger text-bone`）の 4 種、SemiBold・`rounded-md`・disabled は opacity .4・小は高さ 32px（`min-h-8`・`text-sm`）、ページ送りは高さ 36px（`min-h-9`、`ButtonPager`）。Lit の共通ボタン（`lib/styles.ts` の `buttonStyles`）もサブの小（高さ 32px・14px。`box-sizing: border-box`・縦 padding なし・`white-space: nowrap` で、ラベルの長さや折り返しに関わらず `atoms.Button` の小と同じ高さ。issue #984）で、`background: transparent` + 1px `--border`（hover だけ `--accent-soft`）。テキストリンクは Regular・`underline decoration-mute`
 - セグメント（Lit の `pitha-calibration-heatmap` のホライズン切替）は `--accent-soft` 地の角丸トラック（padding 4px・`--r-md`）に、選択中の項目だけ `--surface` の面。`--accent` 塗りは主ボタン（主要アクション）だけで、切替には使わない。a11y は `role="group"` + `aria-pressed`
-- 設定の on/off（有効・無効、許可・不許可）は `atoms.Switch`（OS の checkbox 見た目を出さない）。実装の Switch は MCP・Jev プロンプトのパネルで、いずれも「保存」ボタン付きの `hx-post` フォーム内にあり、押すだけでは保存されない。複数の項目から選ぶ選択肢（`DataExportPanel` の対象 `kinds` など）は checkbox のまま
+- 設定の on/off（有効・無効、許可・不許可）は `atoms.Switch`（OS の checkbox 見た目を出さない）。実装の Switch は MCP・Jev プロンプトのパネルと、運用設定の on/off 行（`SettingFieldRow` の `OnOff`。1 / 0 で保存する Paper ブートストラップ・A/B 比較・スリープ防止）で、いずれも「保存」ボタン付きの `hx-post` フォーム内にあり、押すだけでは保存されない。運用設定の行はオフのとき 0 を送るため、Switch の後ろに `<input type="hidden" name="value" value="0">` を置く（オンのときは先に来る 1 が使われる）。複数の項目から選ぶ選択肢（`DataExportPanel` の対象 `kinds` など）は checkbox のまま
 - モーダルは `rounded-xl`・`shadow-modal`・スクラム（`--scrim`）と本体が一緒にフェード（`app.css` の `dialog[data-modal]`、開 320ms ease-out・閉 240ms ease-in、`prefers-reduced-motion` では 100ms）。確認・破壊的操作（`hx-confirm`、Kill）は `molecules.ConfirmDialog`
 - トーストは画面下中央・端から 24px・高さ 40px のピル（`bg-ink text-bone`）・同時 1 つ（新しいものが置き換える）・3 秒。文言は 1 文の短文（`whitespace-nowrap` で収まる長さ）にし、補足は画面上の文言か `atoms.HelpMark` に移す（例: 立会時間外の決済は「立会時間外のため決済できません。」だけ、「次の立会で再度お試しください。」はポジション表の HelpMark）。長さが定まらない理由（`experiment.IsInvalid` の reason など）はトーストに載せずログに書く。エラー詳細とフォーム検証はトーストにせず `atoms.InlineAlert`（フォーム内のエラー欄）に出す
 - z-index は `--z-dropdown` 100（ツールチップ）/ `--z-toast` 500（`z-[var(--z-dropdown)]` のように使う）

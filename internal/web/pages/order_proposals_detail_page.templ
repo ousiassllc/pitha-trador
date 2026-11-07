@@ -24,7 +24,7 @@ templ OrderProposalDetailPage(p ProposalDetailProps) {
 		<p class="text-sm"><a class="text-accent underline decoration-mute" href="/order-proposals">@atoms.IconNavArrowLeft() 注文提案の一覧</a></p>
 		<h1 class="mt-2 text-3xl font-semibold text-ink" data-testid="order-proposal-title">
 			{ labels.Numbered("注文提案", p.ID) }
-			<span class="ml-2 font-mono text-lg">
+			<span class="ml-2 font-mono text-lg font-normal">
 				<a class="text-accent underline decoration-mute" href={ organisms.SymbolHref(p.Symbol) }>{ p.Symbol }</a>
 			</span>
 		</h1>
