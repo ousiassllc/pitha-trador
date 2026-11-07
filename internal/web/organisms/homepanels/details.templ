@@ -75,7 +75,7 @@ templ rejectReasonsBlock(v RejectReasonsView) {
 // minimum in use and where to change it.
 templ entryQualityNote(n *EntryQualityNote) {
 	<div class="mt-3 rounded-md border tone-warning px-3 py-2 text-sm" data-testid="entry-quality-note">
-		<p class="font-semibold">エントリー品質がしきい値に届かない見送りが最も多くなっています。</p>
+		<p>エントリー品質がしきい値に届かない見送りが最も多くなっています。</p>
 		if n.Err != "" {
 			<p class="mt-1" data-testid="entry-quality-error">{ n.Err }</p>
 		} else {

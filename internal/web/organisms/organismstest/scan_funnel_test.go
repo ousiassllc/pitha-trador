@@ -36,3 +36,13 @@ func TestScanFunnel_StepsAreNestedMediumRadiusPanels(t *testing.T) {
 		t.Errorf("funnel steps must be rounded-md p-4 panels: %s", html)
 	}
 }
+
+// issue #1031: a funnel step's label is a dl-style label, so it is text-sm text-mute
+// (design-tokens: labels are text-sm; text-xs is for notes and captions).
+func TestScanFunnel_StepLabelsAreTextSm(t *testing.T) {
+	v := organisms.ScanPanelView{HasCycle: true}
+	html := renderComponent(t, organisms.ScanFunnel(v))
+	if !strings.Contains(html, `<div class="text-sm text-mute">`) || strings.Contains(html, `<div class="text-xs text-mute">`) {
+		t.Errorf("funnel step labels must be text-sm text-mute: %s", html)
+	}
+}
