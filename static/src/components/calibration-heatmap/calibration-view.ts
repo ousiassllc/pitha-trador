@@ -111,7 +111,7 @@ export interface CellColors {
 // printed in every cell, so color is never the only carrier). A cell's
 // background mixes --ink into --surface: MIN_INK_PERCENT at 0% accuracy to
 // MAX_INK_PERCENT at 100%, with --ink text on top. At MAX_INK_PERCENT the ink
-// text still has >= MIN_CONTRAST (WCAG AA, normal text; the cells use 0.75rem
+// text still has >= MIN_CONTRAST (WCAG AA, normal text; the cells use 0.875rem
 // text) in both Light and Dark, which calibration-view.test.ts verifies from
 // the token values, so a theme switch needs no per-cell recomputation.
 export const MIN_INK_PERCENT = 4;

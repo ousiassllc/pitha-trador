@@ -142,3 +142,12 @@ describe('horizon switch is the guide segment (brand-guide §4)', () => {
     expect(css).not.toMatch(/background:\s*var\(--accent\)\s*;/);
   });
 });
+
+describe('heatmap cell typography (guide T3, design-tokens.md)', () => {
+  // Value rows are read, not annotations: sm 14. Only the band label is xs 12.
+  test('the cell value rows are 0.875rem and only the range label is 0.75rem', () => {
+    const css = heatmapStyles.cssText;
+    expect(css).toMatch(/\.pitha-calibration-heatmap-cell\s*\{[^}]*font-size:\s*0\.875rem/);
+    expect(css).toMatch(/\.pitha-calibration-heatmap-cell \.range\s*\{[^}]*font-size:\s*0\.75rem/);
+  });
+});
