@@ -27,7 +27,7 @@
 //     swap left it on `<body>` (`htmx:afterSwap`).
 // The toast markup lives only in templ (`#toast-template`, atoms.Toast).
 
-import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
+import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE } from '../lib/api';
 import { logger } from '../lib/logger';
 import {
   EASE_IN,
@@ -41,8 +41,12 @@ import {
 const TOAST_MARKER = 'data-toast';
 // A form-validation error comes back as an atoms.InlineAlert for the form's own slot (HX-Retarget), not a toast.
 const INLINE_ALERT_MARKER = 'data-inline-alert';
-// --toast-duration (design guide O3); no toast here carries an action, which would be 5s.
+// --toast-duration (design guide O3): 3s, or 5s for a toast carrying an action (the reload button).
 const DISMISS_AFTER_MS = 3000;
+const DISMISS_WITH_ACTION_MS = 5000;
+const TOAST_RELOAD = '[data-toast-reload]';
+// A one-line fact (design guide O3); the toast's reload button says what to do.
+const STALE_SESSION_TOAST = 'ページの有効期限が切れました。';
 const REGIONS = '#toast-region, [data-toast-region]';
 
 const LIVE_BANNER_LAST = 'liveBannerLast';
@@ -80,8 +84,8 @@ function isErrorStatus(xhr: XMLHttpRequest | undefined): boolean {
   return (xhr?.status ?? 0) >= 400;
 }
 
-/** Shows a toast cloned from `#toast-template`, replacing any other (one at a time, design guide O3); the message already on screen is not shown again (polling failures). */
-export function showToast(message: string): void {
+/** Shows a toast cloned from `#toast-template`, replacing any other (one at a time, design guide O3); the message already on screen is not shown again (polling failures). `reload` shows the toast's "再読み込み" action. */
+export function showToast(message: string, { reload = false } = {}): void {
   const target = region();
   const template = document.getElementById('toast-template');
   if (!target || !(template instanceof HTMLTemplateElement)) {
@@ -95,6 +99,7 @@ export function showToast(message: string): void {
   const text = toast?.querySelector('[data-toast-message]');
   if (!toast || !text) return;
   text.textContent = message;
+  toast.querySelector<HTMLElement>(TOAST_RELOAD)?.toggleAttribute('hidden', !reload);
   target.replaceChildren(toast);
 }
 
@@ -171,7 +176,7 @@ export function onResponseError(event: Event): void {
   logger.warn('htmx response error', { status: xhr?.status });
   if (xhr?.status === 403 && xhr.getResponseHeader?.(CSRF_REJECT_HEADER) === CSRF_REJECT_STALE) {
     // Page opened before an app restart: its cookie/CSRF token is stale (issue #138).
-    showToast(STALE_SESSION_MESSAGE);
+    showToast(STALE_SESSION_TOAST, { reload: true });
     return;
   }
   if (!carriesToast(xhr) && !carriesInlineAlert(xhr)) showToast(statusMessage(xhr?.status ?? 0));
@@ -186,6 +191,10 @@ export function onNoResponse(): void {
 export function onClick(event: Event): void {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  if (target.closest(TOAST_RELOAD)) {
+    location.reload();
+    return;
+  }
   const toast = target.closest('[data-toast-dismiss]')?.closest<HTMLElement>('[data-toast]');
   if (toast) dismissToast(toast);
 }
@@ -228,14 +237,20 @@ export function dismissToast(toast: HTMLElement): void {
   }).onfinish = () => toast.remove();
 }
 
-/** Auto-dismisses `toast` after DISMISS_AFTER_MS, but never while the pointer is over it or focus is inside it (WCAG 2.2.1): the countdown restarts once both are gone. */
+function dismissAfterMs(toast: HTMLElement): number {
+  return toast.querySelector(`${TOAST_RELOAD}:not([hidden])`)
+    ? DISMISS_WITH_ACTION_MS
+    : DISMISS_AFTER_MS;
+}
+
+/** Auto-dismisses `toast` after DISMISS_AFTER_MS (DISMISS_WITH_ACTION_MS with a visible action), but never while the pointer is over it or focus is inside it (WCAG 2.2.1): the countdown restarts once both are gone. */
 function scheduleDismiss(toast: HTMLElement): void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let hovered = false;
   let focused = false;
   const arm = () => {
     clearTimeout(timer);
-    if (!hovered && !focused) timer = setTimeout(() => dismissToast(toast), DISMISS_AFTER_MS);
+    if (!hovered && !focused) timer = setTimeout(() => dismissToast(toast), dismissAfterMs(toast));
   };
   toast.addEventListener('mouseenter', () => {
     hovered = true;

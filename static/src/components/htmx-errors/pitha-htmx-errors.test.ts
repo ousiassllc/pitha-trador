@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import './pitha-htmx-errors';
 
 const TOAST_HTML =
-  '<div data-toast role="alert"><span data-toast-message></span><button type="button" data-toast-dismiss>×</button></div>';
+  '<div data-toast role="alert"><span data-toast-message></span><button type="button" hidden data-toast-reload>再読み込み</button><button type="button" data-toast-dismiss>×</button></div>';
 
 // The fade animations (design guide §5) are async; every test below except the
 // "toast motion" block runs without the Web Animations API, where a toast
@@ -72,12 +72,31 @@ describe('htmx:responseError', () => {
     expect(toastTexts()).toEqual(['操作を完了できませんでした（HTTP 409）。']);
   });
 
-  test('asks for a page reload when the server marks a 403 as stale', () => {
+  test('shows a short expiry fact with a visible reload action when the server marks a 403 as stale', () => {
     fire('htmx:responseError', {
       xhr: fakeXhr(403, 'forbidden: missing or invalid CSRF token', { 'X-CSRF-Reject': 'stale' }),
     });
-    expect(toastTexts()).toHaveLength(1);
-    expect(toastTexts()[0]).toContain('再読み込み');
+    expect(toastTexts()).toEqual(['ページの有効期限が切れました。']);
+    expect(document.querySelector('[data-toast-reload]')?.hasAttribute('hidden')).toBe(false);
+  });
+
+  test('the reload action reloads the page', () => {
+    fire('htmx:responseError', { xhr: fakeXhr(403, '', { 'X-CSRF-Reject': 'stale' }) });
+    const realReload = Object.getOwnPropertyDescriptor(location, 'reload');
+    let reloads = 0;
+    Object.defineProperty(location, 'reload', { configurable: true, value: () => reloads++ });
+    try {
+      document.querySelector<HTMLElement>('[data-toast-reload]')?.click();
+    } finally {
+      if (realReload) Object.defineProperty(location, 'reload', realReload);
+      else Reflect.deleteProperty(location, 'reload');
+    }
+    expect(reloads).toBe(1);
+  });
+
+  test('other toasts keep the reload action hidden', () => {
+    fire('htmx:responseError', { xhr: fakeXhr(500, '') });
+    expect(document.querySelector('[data-toast-reload]')?.hasAttribute('hidden')).toBe(true);
   });
 
   test('an unmarked 403 keeps the generic toast', () => {
