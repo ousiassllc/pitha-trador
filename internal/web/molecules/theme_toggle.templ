@@ -45,7 +45,7 @@ templ ThemeToggle() {
 		for _, c := range themeChoices {
 			<button
 				type="button"
-				class="relative min-h-8 overflow-hidden rounded-sm px-3 text-sm text-ink transition-[color,background-color] duration-base ease-out not-aria-pressed:hover:bg-surface/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-pressed:bg-surface"
+				class="relative min-h-8 overflow-hidden rounded-sm px-3 text-sm text-ink transition-[color,background-color] duration-base ease-out motion-reduce:transition-none not-aria-pressed:hover:bg-surface/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-pressed:bg-surface"
 				aria-pressed={ themeChoicePressed(c.Value) }
 				data-theme-choice={ c.Value }
 				data-ripple

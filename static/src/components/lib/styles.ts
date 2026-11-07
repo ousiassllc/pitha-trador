@@ -38,6 +38,11 @@ export const buttonStyles = css`
     cursor: not-allowed;
     opacity: 0.4;
   }
+  @media (prefers-reduced-motion: reduce) {
+    button {
+      transition: none;
+    }
+  }
 `;
 
 // Table recipe (brand-guide §2/§3): header row SemiBold 12px --mute with a 1px

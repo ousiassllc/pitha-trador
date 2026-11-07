@@ -120,3 +120,13 @@ func TestButton_HoverTransitionExcludesFocusOutline(t *testing.T) {
 		t.Errorf("transition-colors also animates outline-color: %s", body)
 	}
 }
+
+// Guide M3: the colour transition is dropped under prefers-reduced-motion
+// (issue #1032), like checkbox / switch.
+func TestButton_DropsTransitionUnderReducedMotion(t *testing.T) {
+	body := renderWithLabel(t, atoms.Button(atoms.ButtonProps{}), "x")
+
+	if !strings.Contains(body, "motion-reduce:transition-none") {
+		t.Errorf("button must carry motion-reduce:transition-none: %s", body)
+	}
+}
