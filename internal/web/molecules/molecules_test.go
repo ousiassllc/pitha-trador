@@ -264,7 +264,7 @@ func TestSettingsCards_NameIsRegular(t *testing.T) {
 // `transition-colors` would add in Tailwind v4 (issue #988).
 func TestThemeToggle_TransitionExcludesFocusOutline(t *testing.T) {
 	html := render(t, molecules.ThemeToggle())
-	if !strings.Contains(html, "transition-[color,background-color] duration-base") {
+	if !strings.Contains(html, "transition-[color,background-color] duration-base ease-out") {
 		t.Errorf("ThemeToggle must transition only color and background-color: %s", html)
 	}
 	if strings.Contains(html, "transition-colors") {
