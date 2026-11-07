@@ -145,6 +145,10 @@ func TestList_NextPageKeepsTheFilter(t *testing.T) {
 	if !strings.Contains(nextTag, "min-h-9") {
 		t.Errorf("next link is not pager-sized (min-h-9): %s", nextTag)
 	}
+	// The pager is an operation UI, hidden when printing like the scanner's (brand-guide §8; issue #1035).
+	if !strings.Contains(first, `<p class="mt-3 print:hidden"><a `) {
+		t.Errorf("next link wrapper lacks print:hidden: %s", first)
+	}
 	next := strings.ReplaceAll(href[1], "&amp;", "&")
 	for _, want := range []string{"from=2026-10-01", "to=2026-10-31", "status=expired", "cursor="} {
 		if !strings.Contains(next, want) {
