@@ -128,7 +128,7 @@ templ proposalsBlock(v ProposalsView) {
 			<ul class="mt-2 flex flex-col gap-1 text-sm">
 				for _, p := range v.Latest {
 					<li class="flex justify-between gap-2" data-testid="proposal-row">
-						<span><a class="text-accent underline decoration-mute" href={ ProposalURL(p.ID) }>{ p.Symbol }</a> { p.Action }</span>
+						<span><a class="font-mono text-accent underline decoration-mute" href={ ProposalURL(p.ID) }>{ p.Symbol }</a> { p.Action }</span>
 						<span class="text-xs text-mute">{ p.Status } · { FormatTime(p.ReceivedAt) }</span>
 					</li>
 				}
@@ -149,7 +149,7 @@ templ tradesBlock(v TradesView) {
 			<ul class="flex flex-col gap-1 text-sm">
 				for _, t := range v.Rows {
 					<li class="flex items-baseline justify-between gap-2" data-testid="trade-row">
-						<span><a class="text-accent underline decoration-mute" href={ SymbolURL(t.Symbol) }>{ t.Symbol }</a> { SideLabel(t.Side) } { strconv.FormatInt(t.Quantity, 10) }株 <span class="text-xs text-mute">{ FormatTime(t.ClosedAt) }</span></span>
+						<span><a class="font-mono text-accent underline decoration-mute" href={ SymbolURL(t.Symbol) }>{ t.Symbol }</a> { SideLabel(t.Side) } { strconv.FormatInt(t.Quantity, 10) }株 <span class="text-xs text-mute">{ FormatTime(t.ClosedAt) }</span></span>
 						<span class={ "font-mono tabular-nums", PnLClass(t.PnL) }>{ FormatSignedYen(t.PnL) }</span>
 					</li>
 				}
