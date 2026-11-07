@@ -2,10 +2,10 @@ package atoms
 
 import "strings"
 
-// fieldBase is the border/shape shared by Input, Select and Textarea, so a
+// fieldBase is the border/shape/ground (--surface) shared by Input, Select and Textarea, so a
 // form control's look changes in one place. Layout (width, margin, text size)
 // comes from the caller's Class.
-const fieldBase = "rounded-md border border-border"
+const fieldBase = "rounded-md border border-border bg-surface"
 
 // fieldBox is the single-line control's size (brand-guide S2/§4 forms: height
 // 40, padding 12). Input and Select always carry it; Class must not override

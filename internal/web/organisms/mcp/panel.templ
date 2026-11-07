@@ -110,7 +110,7 @@ templ Panel(props PanelProps) {
 						許可されるのは 127.0.0.1 / ::1（この PC 内のみ）と、この PC の tailnet アドレス（100.64.0.0/10・fd7a:115c:a1e0::/48）だけです。0.0.0.0・LAN・ホスト名は保存できません。空にすると 127.0.0.1:48110 になります。
 					}
 				</div>
-				@atoms.Input(atoms.InputProps{ID: "mcp-listen-input", Name: "listen", Class: "bg-surface", Attrs: templ.Attributes{"value": props.Listen, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-listen-input"}})
+				@atoms.Input(atoms.InputProps{ID: "mcp-listen-input", Name: "listen", Class: "w-auto", Attrs: templ.Attributes{"value": props.Listen, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-listen-input"}})
 			</div>
 			<div id="mcp-form-error" data-testid="mcp-form-error"></div>
 			<div>
@@ -176,7 +176,7 @@ templ keyReveal(key string) {
 	<div class="flex flex-col gap-2 rounded-md border tone-warning p-3" role="alert" hx-history="false" autocomplete="off" data-clear-on-close data-testid="mcp-key-reveal">
 		<p class="text-warning">新しい API キー（この表示は一度きりです。今すぐコピーしてください）</p>
 		<div class="flex flex-wrap items-center gap-2">
-			@atoms.Input(atoms.InputProps{ID: "mcp-new-key", Class: "bg-surface font-mono", Attrs: templ.Attributes{"readonly": true, "value": key, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-new-key"}})
+			@atoms.Input(atoms.InputProps{ID: "mcp-new-key", Class: "font-mono", Attrs: templ.Attributes{"readonly": true, "value": key, "autocomplete": "off", "spellcheck": "false", "data-testid": "mcp-new-key"}})
 			@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonSecondary, Size: atoms.ButtonSmall, Attrs: templ.Attributes{"data-copy-from": "mcp-new-key", "data-testid": "mcp-copy-key"}}) {
 				キーをコピー
 			}
