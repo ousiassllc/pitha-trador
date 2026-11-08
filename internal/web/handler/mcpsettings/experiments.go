@@ -131,6 +131,7 @@ func (h *Handler) CloseExperiment(c *gin.Context) {
 		return
 	case err != nil:
 		if reason, invalid := experiment.IsInvalid(err); invalid {
+			slog.WarnContext(ctx, "mcpsettings: close experiment refused", "id", id, "reason", reason)
 			shared.RespondFormError(c, experimentCloseError, "実験を終えられません: "+reason+"。")
 			return
 		}

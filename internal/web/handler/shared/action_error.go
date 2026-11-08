@@ -28,7 +28,9 @@ func RespondActionError(c *gin.Context, status int, message string) {
 // hx-target, which would replace the whole form and lose the input.
 // layout.Shell's `htmx-config` lets a 422 swap (`error: true`), and
 // pitha-htmx-errors passes a body carrying `data-inline-alert` through.
-// message MUST be a fixed user-facing string.
+// message is user-facing text with no error text or secret in it: a fixed
+// string, or a fixed string followed by a validation reason the domain
+// package wrote for the operator (e.g. experiment.IsInvalid), never err.Error().
 func RespondFormError(c *gin.Context, errorTarget, message string) {
 	c.Header("HX-Retarget", errorTarget)
 	c.Header("HX-Reswap", "innerHTML")
