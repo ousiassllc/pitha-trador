@@ -100,12 +100,13 @@ templ Experiments(props ExperimentsProps) {
 			<p class="text-success" role="status" data-testid="mcp-experiments-notice">{ props.Notice }</p>
 		}
 		@experimentForm(props.SettingNames)
+		<div id="mcp-experiment-close-error" data-testid="mcp-experiment-close-error"></div>
 		if len(props.Rows) == 0 {
 			<span class="text-sm text-mute" data-testid="mcp-experiments-empty">実験はありません。</span>
 		} else {
 			<table class="w-full text-left text-sm" aria-label="調整の実験の一覧" data-testid="mcp-experiments-table">
 				<thead>
-					<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">ID</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">状態</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">期間（JST）</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">変えた変数</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">前 / 後の取引</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">判定</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold"><span class="sr-only">操作</span></th></tr>
+					<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">ID</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">状態</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">期間（JST）</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">変えた変数</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">前 / 後の取引</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">判定</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold"><span class="sr-only">操作</span></th></tr>
 				</thead>
 				<tbody>
 					for _, row := range props.Rows {
@@ -244,7 +245,7 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 		}
 		<table class="w-full text-left text-sm" aria-label="前後の指標" data-testid="mcp-experiment-metrics">
 			<thead>
-				<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">指標</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">前</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">後</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">後 − 前</th></tr>
+				<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">指標</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">前</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">後</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">後 − 前</th></tr>
 			</thead>
 			<tbody>
 				for _, m := range props.Metrics {
@@ -255,7 +256,7 @@ templ ExperimentDetail(props ExperimentDetailProps) {
 		if len(props.Rejects) > 0 {
 			<table class="w-full text-left text-sm" aria-label="拒否理由の内訳" data-testid="mcp-experiment-rejects">
 				<thead>
-					<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">拒否の種類</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">理由</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">前</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">後</th></tr>
+					<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">拒否の種類</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">理由</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">前</th><th scope="col" class="px-2 py-1.5 text-right text-xs font-semibold">後</th></tr>
 				</thead>
 				<tbody>
 					for _, r := range props.Rejects {

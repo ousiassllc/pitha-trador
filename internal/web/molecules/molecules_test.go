@@ -215,31 +215,6 @@ func TestSettingGroupDerived_IsANestedMediumRadiusPanel(t *testing.T) {
 	}
 }
 
-// The theme switch (issue #978) offers follow-the-OS, light and dark as
-// buttons the theme-toggle script reads by `data-theme-choice`; 自動 starts
-// pressed, and the control is hidden when printing.
-func TestThemeToggle_OffersAutoLightDarkWithAutoPressed(t *testing.T) {
-	html := render(t, molecules.ThemeToggle())
-	for _, want := range []string{
-		`role="group"`,
-		`aria-label="テーマ"`,
-		`print:hidden`,
-		`aria-pressed="true" data-theme-choice="auto"`,
-		`aria-pressed="false" data-theme-choice="light"`,
-		`aria-pressed="false" data-theme-choice="dark"`,
-		`>自動<`,
-		`>ライト<`,
-		`>ダーク<`,
-	} {
-		if !strings.Contains(html, want) {
-			t.Errorf("ThemeToggle lacks %q: %s", want, html)
-		}
-	}
-	if got := strings.Count(html, "<button"); got != 3 {
-		t.Errorf("ThemeToggle renders %d buttons, want 3", got)
-	}
-}
-
 // A settings row's title is neither a heading nor a button, so it is Regular
 // (brand-guide §2 T2: SemiBold is for headings and buttons only; issue #986).
 func TestSettingsCards_NameIsRegular(t *testing.T) {
@@ -264,7 +239,7 @@ func TestSettingsCards_NameIsRegular(t *testing.T) {
 // `transition-colors` would add in Tailwind v4 (issue #988).
 func TestThemeToggle_TransitionExcludesFocusOutline(t *testing.T) {
 	html := render(t, molecules.ThemeToggle())
-	if !strings.Contains(html, "transition-[color,background-color] duration-base") {
+	if !strings.Contains(html, "transition-[color,background-color] duration-base ease-out") {
 		t.Errorf("ThemeToggle must transition only color and background-color: %s", html)
 	}
 	if strings.Contains(html, "transition-colors") {

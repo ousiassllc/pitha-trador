@@ -138,6 +138,12 @@ func TestSettingsPage_EachModalHasItsOwnToastRegion(t *testing.T) {
 		if got := strings.Count(dialog, "data-toast-region"); got != 1 {
 			t.Errorf("modal %s has %d data-toast-region elements, want 1", id, got)
 		}
+		// brand-guide O9/§8: toasts are hidden when printing, as #toast-region is (issue #1029).
+		regionStart := strings.Index(dialog, "data-toast-region")
+		regionTag := dialog[regionStart : regionStart+strings.Index(dialog[regionStart:], ">")]
+		if !strings.Contains(regionTag, "print:hidden") {
+			t.Errorf("modal %s toast region lacks print:hidden: %s", id, regionTag)
+		}
 	}
 }
 

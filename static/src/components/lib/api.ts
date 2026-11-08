@@ -16,8 +16,8 @@ export interface GetOptions {
 /** Response header the server sets on a 403 caused by a stale session cookie/CSRF token (middleware.CSRFRejectHeader). */
 export const CSRF_REJECT_HEADER = 'X-CSRF-Reject';
 export const CSRF_REJECT_STALE = 'stale';
-/** Shown when the page was opened before an app restart: its tokens are gone, only a reload fetches new ones. */
-export const STALE_SESSION_MESSAGE =
+/** The message of StaleSessionError, shown inline by the component that made the request (the toast is a shorter one-liner in pitha-htmx-errors.ts): the page was opened before an app restart, its tokens are gone, only a reload fetches new ones. */
+const STALE_SESSION_MESSAGE =
   'アプリが再起動されたためこのページの認証情報が失効しました。ページを再読み込みしてください。';
 
 /** A request refused because the page's session cookie/CSRF token predates the running server. */

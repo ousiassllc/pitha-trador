@@ -19,13 +19,15 @@ func TestSleepGuard_SwitchOnTheSystemPage(t *testing.T) {
 
 	page := httptest.NewRecorder()
 	engine.ServeHTTP(page, httptest.NewRequest(http.MethodGet, settingspages.BasePath+"/"+settingspages.PageMaintenance, nil))
-	for _, want := range []string{"modal-sleep-guard", `setting-field-row-` + sleepguardsettings.Key, "既定は 0（無効）", "Windows のみ"} {
+	for _, want := range []string{"modal-sleep-guard", `setting-field-row-` + sleepguardsettings.Key, "既定はオフ（無効）", "Windows のみ", `role="switch"`} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Errorf("the システム page lacks %q", want)
 		}
 	}
 
-	rec := opsRequest(engine, http.MethodPost, sleepguardsettings.Key, url.Values{"value": {"1"}}, true)
+	// An on/off row is a switch: a checked one posts value=1 then the hidden
+	// value=0 (the first wins), an unchecked one only the hidden value=0.
+	rec := opsRequest(engine, http.MethodPost, sleepguardsettings.Key, url.Values{"value": {"1", "0"}}, true)
 	if rec.Code != http.StatusOK || store.rows[sleepguardsettings.Key] != "1" {
 		t.Fatalf("POST 1: status = %d, stored = %q, body=%s", rec.Code, store.rows[sleepguardsettings.Key], rec.Body.String())
 	}
@@ -34,6 +36,9 @@ func TestSleepGuard_SwitchOnTheSystemPage(t *testing.T) {
 	}
 	if store.rows[sleepguardsettings.Key] != "1" {
 		t.Errorf("the refused value changed the row: %q", store.rows[sleepguardsettings.Key])
+	}
+	if rec := opsRequest(engine, http.MethodPost, sleepguardsettings.Key, url.Values{"value": {"0"}}, true); rec.Code != http.StatusOK || store.rows[sleepguardsettings.Key] != "0" {
+		t.Errorf("POST unchecked (0): status = %d, stored = %q", rec.Code, store.rows[sleepguardsettings.Key])
 	}
 	if rec := opsRequest(engine, http.MethodDelete, sleepguardsettings.Key, nil, true); rec.Code != http.StatusOK {
 		t.Fatalf("DELETE: status = %d", rec.Code)

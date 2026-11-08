@@ -141,4 +141,31 @@ describe('horizon switch is the guide segment (brand-guide §4)', () => {
     expect(css).toMatch(/button\[aria-pressed='true'\][^{]*\{[^}]*background:\s*var\(--surface\)/);
     expect(css).not.toMatch(/background:\s*var\(--accent\)\s*;/);
   });
+
+  // WCAG 1.4.1: selection is not told by the face colour alone; SemiBold is allowed on buttons (T2).
+  test('the selected segment is also semibold', () => {
+    expect(heatmapStyles.cssText).toMatch(
+      /button\[aria-pressed='true'\][^{]*\{[^}]*font-weight:\s*600/,
+    );
+  });
+});
+
+describe('heatmap cell typography (guide T3, design-tokens.md)', () => {
+  // Value rows are read, not annotations: sm 14. Only the band label is xs 12.
+  test('the cell value rows are 0.875rem and only the range label is 0.75rem', () => {
+    const css = heatmapStyles.cssText;
+    expect(css).toMatch(/\.pitha-calibration-heatmap-cell\s*\{[^}]*font-size:\s*0\.875rem/);
+    expect(css).toMatch(/\.pitha-calibration-heatmap-cell \.range\s*\{[^}]*font-size:\s*0\.75rem/);
+  });
+
+  // Guide T4: sm (14px) is 1.7 — spelled out so it does not inherit body's 1.8.
+  test('the 0.875rem horizon label and summary carry line-height 1.7', () => {
+    const css = heatmapStyles.cssText;
+    expect(css).toMatch(
+      /\.pitha-calibration-heatmap-horizon\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+    expect(css).toMatch(
+      /\.pitha-calibration-heatmap-summary\s*\{[^}]*font-size:\s*0\.875rem;\s*line-height:\s*1\.7/,
+    );
+  });
 });

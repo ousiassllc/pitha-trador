@@ -6,9 +6,11 @@
 //     text/proxy error page) must not be swapped in raw, and get a generic
 //     toast instead (`htmx:beforeSwap` / `htmx:responseError`);
 //   - a 403 marked stale by the server (page opened before an app restart)
-//     gets a "reload the page" toast;
+//     gets a "reload the page" toast, plus a persistent notice with the same
+//     action once the toast is gone (reload-notice.ts);
 //   - requests that never got a response (`htmx:sendError`, `htmx:timeout`);
-//   - dismissing toasts (close button, auto-dismiss that pauses while hovered/focused);
+//   - dismissing toasts (close button; the lifecycle - rise, auto-dismiss that pauses while
+//     hovered/focused, fade-out - is toast-lifecycle.ts)
 //   - keeping toasts operable above a modal `<dialog>`: `showModal()` puts the
 //     dialog in the top layer, which no z-index can beat, and makes everything
 //     outside it inert. `#toast-region` is a `popover="manual"` re-shown (moved
@@ -27,22 +29,21 @@
 //     swap left it on `<body>` (`htmx:afterSwap`).
 // The toast markup lives only in templ (`#toast-template`, atoms.Toast).
 
-import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE, STALE_SESSION_MESSAGE } from '../lib/api';
+import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE } from '../lib/api';
 import { logger } from '../lib/logger';
+import { MOTION_FADE_OUT_MS, prefersReducedMotion, REDUCED_FADE_MS } from '../lib/motion';
 import {
-  EASE_IN,
-  EASE_OUT,
-  MOTION_FADE_IN_MS,
-  MOTION_FADE_OUT_MS,
-  prefersReducedMotion,
-  REDUCED_FADE_MS,
-} from '../lib/motion';
+  onAfterRequest,
+  RELOAD_NOTICE_RELOAD,
+  showReloadNotice,
+  watchDialogs,
+} from './reload-notice';
+import { dismissToast, TOAST_MARKER, TOAST_RELOAD, watchToastRegion } from './toast-lifecycle';
 
-const TOAST_MARKER = 'data-toast';
 // A form-validation error comes back as an atoms.InlineAlert for the form's own slot (HX-Retarget), not a toast.
 const INLINE_ALERT_MARKER = 'data-inline-alert';
-// --toast-duration (design guide O3); no toast here carries an action, which would be 5s.
-const DISMISS_AFTER_MS = 3000;
+// A one-line fact (design guide O3); the toast's reload button says what to do.
+const STALE_SESSION_TOAST = 'ページの有効期限が切れました。';
 const REGIONS = '#toast-region, [data-toast-region]';
 
 const LIVE_BANNER_LAST = 'liveBannerLast';
@@ -68,6 +69,15 @@ function region(): HTMLElement | null {
   return dialogRegion() ?? document.getElementById('toast-region');
 }
 
+/** Fades out the toasts in every region except `target` (one toast on screen at a time, design guide O3): a toast left in `#toast-region` before a modal opened must not sit beside the modal's own. */
+function dismissToastsOutside(target: Element): void {
+  for (const region of document.querySelectorAll<HTMLElement>(REGIONS)) {
+    if (region === target) continue;
+    for (const toast of region.querySelectorAll<HTMLElement>(`[${TOAST_MARKER}]`))
+      dismissToast(toast);
+  }
+}
+
 function carriesToast(xhr: XMLHttpRequest | undefined): boolean {
   return xhr?.responseText?.includes(TOAST_MARKER) ?? false;
 }
@@ -80,8 +90,9 @@ function isErrorStatus(xhr: XMLHttpRequest | undefined): boolean {
   return (xhr?.status ?? 0) >= 400;
 }
 
-/** Shows a toast cloned from `#toast-template`, replacing any other (one at a time, design guide O3); the message already on screen is not shown again (polling failures). */
-export function showToast(message: string): void {
+/** Shows a toast cloned from `#toast-template`, replacing any other (one at a time, design guide O3); the message already on screen is not shown again (polling failures). `reload` shows the toast's "再読み込み" action and also keeps the persistent reload notice (reload-notice.ts) for when the toast is gone. */
+export function showToast(message: string, { reload = false } = {}): void {
+  if (reload) showReloadNotice(message);
   const target = region();
   const template = document.getElementById('toast-template');
   if (!target || !(template instanceof HTMLTemplateElement)) {
@@ -95,12 +106,15 @@ export function showToast(message: string): void {
   const text = toast?.querySelector('[data-toast-message]');
   if (!toast || !text) return;
   text.textContent = message;
+  toast.querySelector<HTMLElement>(TOAST_RELOAD)?.toggleAttribute('hidden', !reload);
+  dismissToastsOutside(target);
   target.replaceChildren(toast);
 }
 
+/** One short line (design guide O3); the HTTP status goes to the log in `onResponseError`, not the toast. */
 function statusMessage(status: number): string {
-  if (status >= 500) return `サーバーでエラーが発生しました（HTTP ${status}）。`;
-  return `操作を完了できませんでした（HTTP ${status}）。`;
+  if (status >= 500) return 'サーバーでエラーが発生しました。';
+  return '操作を完了できませんでした。';
 }
 
 /** Cancels a swap whose body equals the previous one for a `[data-live-banner]` target (issue #626). */
@@ -144,7 +158,10 @@ export function onBeforeSwap(event: Event): void {
   }
   // htmx's `responseHandling` targets `#toast-region`, which an open modal dialog makes inert.
   const inDialog = dialogRegion();
-  if (inDialog) detail.target = inDialog;
+  if (inDialog) {
+    detail.target = inDialog;
+    dismissToastsOutside(inDialog);
+  }
 }
 
 /**
@@ -171,7 +188,7 @@ export function onResponseError(event: Event): void {
   logger.warn('htmx response error', { status: xhr?.status });
   if (xhr?.status === 403 && xhr.getResponseHeader?.(CSRF_REJECT_HEADER) === CSRF_REJECT_STALE) {
     // Page opened before an app restart: its cookie/CSRF token is stale (issue #138).
-    showToast(STALE_SESSION_MESSAGE);
+    showToast(STALE_SESSION_TOAST, { reload: true });
     return;
   }
   if (!carriesToast(xhr) && !carriesInlineAlert(xhr)) showToast(statusMessage(xhr?.status ?? 0));
@@ -186,96 +203,12 @@ export function onNoResponse(): void {
 export function onClick(event: Event): void {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  if (target.closest(TOAST_RELOAD) || target.closest(RELOAD_NOTICE_RELOAD)) {
+    location.reload();
+    return;
+  }
   const toast = target.closest('[data-toast-dismiss]')?.closest<HTMLElement>('[data-toast]');
   if (toast) dismissToast(toast);
-}
-
-/** Re-shows the popover so it sits above any modal dialog opened since it was last shown. No-op without Popover API support, and for a region inside a dialog (already above the page). */
-function raiseToastRegion(target: HTMLElement): void {
-  if (typeof target.showPopover !== 'function' || target.closest('dialog')) return;
-  if (target.matches(':popover-open')) target.hidePopover();
-  target.showPopover();
-}
-
-/** Toast appearance (design guide §4/§5): opacity plus a small (8px) rise over 320ms ease-out; under reduced motion only a <=100ms fade. A no-op without the Web Animations API. */
-function animateToastIn(toast: HTMLElement): void {
-  if (typeof toast.animate !== 'function') return;
-  if (prefersReducedMotion()) {
-    toast.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REDUCED_FADE_MS });
-    return;
-  }
-  toast.animate(
-    [
-      { opacity: 0, transform: 'translateY(8px)' },
-      { opacity: 1, transform: 'translateY(0)' },
-    ],
-    { duration: MOTION_FADE_IN_MS, easing: EASE_OUT },
-  );
-}
-
-/** Removes `toast` after a fade-out (240ms ease-in; <=100ms under reduced motion). Without the Web Animations API it is removed at once. */
-export function dismissToast(toast: HTMLElement): void {
-  if (typeof toast.animate !== 'function' || !toast.isConnected) {
-    toast.remove();
-    return;
-  }
-  toast.removeAttribute(TOAST_MARKER);
-  toast.setAttribute('aria-hidden', 'true');
-  toast.animate([{ opacity: 1 }, { opacity: 0 }], {
-    duration: prefersReducedMotion() ? REDUCED_FADE_MS : MOTION_FADE_OUT_MS,
-    easing: EASE_IN,
-    fill: 'forwards',
-  }).onfinish = () => toast.remove();
-}
-
-/** Auto-dismisses `toast` after DISMISS_AFTER_MS, but never while the pointer is over it or focus is inside it (WCAG 2.2.1): the countdown restarts once both are gone. */
-function scheduleDismiss(toast: HTMLElement): void {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let hovered = false;
-  let focused = false;
-  const arm = () => {
-    clearTimeout(timer);
-    if (!hovered && !focused) timer = setTimeout(() => dismissToast(toast), DISMISS_AFTER_MS);
-  };
-  toast.addEventListener('mouseenter', () => {
-    hovered = true;
-    arm();
-  });
-  toast.addEventListener('mouseleave', () => {
-    hovered = false;
-    arm();
-  });
-  toast.addEventListener('focusin', () => {
-    focused = true;
-    arm();
-  });
-  toast.addEventListener('focusout', () => {
-    focused = false;
-    arm();
-  });
-  arm();
-}
-
-/** Toast-landed hook (both `showToast` and htmx's `innerHTML` swap into `#toast-region`): raise the region and schedule the auto-dismiss. */
-function onToastsAdded(target: HTMLElement, records: MutationRecord[]): void {
-  let added = false;
-  for (const record of records) {
-    for (const node of record.addedNodes) {
-      if (node instanceof HTMLElement && node.hasAttribute(TOAST_MARKER)) {
-        added = true;
-        animateToastIn(node);
-        scheduleDismiss(node);
-      }
-    }
-  }
-  if (added) raiseToastRegion(target);
-}
-
-/** Auto-dismisses and raises toasts as they land in `target` (script-added or htmx-swapped alike). */
-export function watchToastRegion(target: HTMLElement): void {
-  new MutationObserver((records) => onToastsAdded(target, records)).observe(target, {
-    childList: true,
-  });
 }
 
 export function init(): void {
@@ -285,7 +218,9 @@ export function init(): void {
   document.addEventListener('htmx:sendError', onNoResponse);
   document.addEventListener('htmx:timeout', onNoResponse);
   document.addEventListener('click', onClick);
+  document.addEventListener('htmx:afterRequest', onAfterRequest);
   for (const target of document.querySelectorAll<HTMLElement>(REGIONS)) watchToastRegion(target);
+  watchDialogs();
 }
 
 init();

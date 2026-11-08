@@ -38,8 +38,8 @@ func TestButton_VariantsAndSizeChangeClasses(t *testing.T) {
 		not   string
 	}{
 		{"danger", atoms.ButtonProps{Variant: atoms.ButtonDanger}, "bg-danger text-bone", "bg-accent text-bone"},
-		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "border-border bg-transparent", "bg-accent text-bone"},
-		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink hover:bg-accent-soft", "border-border"},
+		{"secondary", atoms.ButtonProps{Variant: atoms.ButtonSecondary}, "bg-transparent text-ink not-disabled:hover:bg-accent-soft", "bg-accent text-bone"},
+		{"ghost", atoms.ButtonProps{Variant: atoms.ButtonGhost}, "text-ink not-disabled:hover:bg-accent-soft", "border-border"},
 		{"small", atoms.ButtonProps{Size: atoms.ButtonSmall}, "min-h-8", "py-2"},
 		{"pager", atoms.ButtonProps{Size: atoms.ButtonPager}, "min-h-9", "min-h-8"},
 		{"medium", atoms.ButtonProps{}, "text-base", "text-sm"},
@@ -113,10 +113,20 @@ func TestButton_CarriesTheRippleHook(t *testing.T) {
 func TestButton_HoverTransitionExcludesFocusOutline(t *testing.T) {
 	body := renderWithLabel(t, atoms.Button(atoms.ButtonProps{}), "x")
 
-	if !strings.Contains(body, "transition-[background-color] duration-base") {
+	if !strings.Contains(body, "transition-[background-color] duration-base ease-out") {
 		t.Errorf("button must transition only background-color: %s", body)
 	}
 	if strings.Contains(body, "transition-colors") {
 		t.Errorf("transition-colors also animates outline-color: %s", body)
+	}
+}
+
+// Guide M3: the colour transition is dropped under prefers-reduced-motion
+// (issue #1032), like checkbox / switch.
+func TestButton_DropsTransitionUnderReducedMotion(t *testing.T) {
+	body := renderWithLabel(t, atoms.Button(atoms.ButtonProps{}), "x")
+
+	if !strings.Contains(body, "motion-reduce:transition-none") {
+		t.Errorf("button must carry motion-reduce:transition-none: %s", body)
 	}
 }

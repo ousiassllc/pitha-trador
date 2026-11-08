@@ -52,7 +52,7 @@ const (
 
 // opsGroupProps builds one group's props, reading every field's effective
 // value. A per-key read error degrades that row to its empty/default state
-// (and is logged) instead of failing the whole Settings screen, like h.row
+// (marked Unreadable, so an on/off row cannot save a false OFF; logged) instead of failing the whole Settings screen, like h.row
 // does for secrets (issue #70).
 func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, noticeKey, notice string) molecules.SettingGroupProps {
 	props := molecules.SettingGroupProps{ID: group.id, Name: group.name, Description: group.description, Note: group.note}
@@ -81,17 +81,21 @@ func (h *SettingsHandler) opsGroupProps(ctx context.Context, group opsGroup, not
 
 func (h *SettingsHandler) opsRow(ctx context.Context, field opsField, notice string) molecules.SettingFieldRowProps {
 	row := molecules.SettingFieldRowProps{
-		Key: field.key, Label: field.label, Hint: field.hint, Placeholder: field.placeholder, Options: field.options,
+		Key: field.key, Label: field.label, Hint: field.hint, Placeholder: field.placeholder, Options: field.options, OnOff: field.onOff,
 		Notice: notice, CSRFField: middleware.CSRFFormField, CSRFToken: middleware.CSRFToken(ctx),
 	}
 	value, err := h.ops.Get(ctx, field.key)
 	if err != nil {
 		slog.Error("settings: read operational setting; showing it as unset", "key", field.key, "error", err)
 		row.DefaultLabel = "不明"
+		row.Unreadable = true
 		return row
 	}
 	row.Value, row.Overridden, row.Warning = value.Current, value.Overridden, labels.ScreenWarning(value.Warning)
 	row.DefaultLabel = defaultLabel(value.Default)
+	if field.onOff {
+		row.DefaultLabel = onOffLabel(value.Default)
+	}
 	if dailyguardsettings.IsKey(field.key) && value.Default == "0" {
 		row.DefaultLabel = "0（無効）"
 		if field.key == dailyguardsettings.KeyOperatingCapitalJPY {
@@ -108,6 +112,15 @@ func (h *SettingsHandler) opsRow(ctx context.Context, field opsField, notice str
 	return row
 }
 
+// onOffLabel is the オン / オフ wording of an on/off setting's stored 1 / 0
+// (display only; the stored value stays 1 / 0).
+func onOffLabel(stored string) string {
+	if stored == "1" {
+		return "オン"
+	}
+	return "オフ"
+}
+
 // defaultLabel names what applies while nothing is stored; an empty default
 // (the backup directory) is "disabled".
 func defaultLabel(def string) string {
@@ -119,7 +132,8 @@ func defaultLabel(def string) string {
 
 // SaveOps implements `POST /ops-settings/:key`: it validates and stores the
 // form's `value` under the single key in the path and touches no other key.
-// An unknown key is a 404/400, a blank or invalid value is a 400 carrying the
+// An unknown key is a 404/400, a blank or invalid value (for an on/off setting,
+// anything but exactly 0 or 1) is a 400 carrying the
 // reason (an inline alert in the row's error slot for an HTMX request, issue
 // #961), and neither changes the store. It responds with the refreshed
 // SettingFieldRow fragment plus an out-of-band copy of the group's status.
@@ -128,7 +142,14 @@ func (h *SettingsHandler) SaveOps(c *gin.Context) {
 	if !ok {
 		return
 	}
-	err := h.ops.Save(c.Request.Context(), key, c.PostForm("value"))
+	value := c.PostForm("value")
+	if isOnOffKey(key) && value != "0" && value != "1" {
+		// The switch row posts exactly 1 (checked, first) or 0 (the hidden
+		// field); anything else is a crafted or stale post and saves nothing.
+		respondInvalidInput(c, molecules.SettingErrorID(key), "オンかオフのどちらかを選んで保存してください。")
+		return
+	}
+	err := h.ops.Save(c.Request.Context(), key, value)
 	var invalid *opsettings.InvalidValueError
 	switch {
 	case errors.Is(err, opsettings.ErrEmptyValue):

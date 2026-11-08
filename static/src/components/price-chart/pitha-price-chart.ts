@@ -67,6 +67,7 @@ export class PithaPriceChart extends LitElement {
         text-align: center;
         color: var(--mute);
         font-size: 0.875rem;
+        line-height: 1.7;
       }
     `,
   ];

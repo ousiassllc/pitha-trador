@@ -63,7 +63,7 @@ templ writeSection(props PanelProps) {
 			} else {
 				<table class="w-full text-left text-sm" aria-label="設定変更の監査ログ" data-testid="mcp-audit-table">
 					<thead>
-						<tr><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">誰が</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">操作</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">キー</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">前</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">後</th></tr>
+						<tr class="border-b border-border text-mute"><th scope="col" class="px-2 py-1.5 text-xs font-semibold">日時</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">誰が</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">操作</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">キー</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">前</th><th scope="col" class="px-2 py-1.5 text-xs font-semibold">後</th></tr>
 					</thead>
 					<tbody>
 						for _, row := range props.Audit {

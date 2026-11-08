@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { watchToastRegion } from './pitha-htmx-errors';
+import { watchToastRegion } from './toast-lifecycle';
 
 const TOAST_HTML =
   '<div data-toast role="alert"><span data-toast-message></span><button type="button" data-toast-dismiss>×</button></div>';
@@ -137,6 +137,26 @@ describe('toast region inside an open modal dialog', () => {
     const detail = fire('htmx:beforeSwap', { xhr: fakeXhr(409, TOAST_HTML), shouldSwap: true });
     expect(detail.target).toBe(inner);
     expect(detail.shouldSwap).toBe(true);
+  });
+
+  // design guide O3: one toast at a time, across regions.
+  test('a toast already in #toast-region is removed when a modal-region toast appears', () => {
+    fire('htmx:sendError');
+    expect(toastTexts()).toEqual(['サーバーに接続できませんでした。']);
+
+    dialog.setAttribute('open', '');
+    fire('htmx:responseError', { xhr: fakeXhr(500, '') });
+
+    expect(toastTexts()).toEqual([]);
+    expect(innerTexts()).toEqual(['サーバーでエラーが発生しました。']);
+  });
+
+  test('a retargeted error fragment removes the toast left in #toast-region', () => {
+    fire('htmx:sendError');
+    dialog.setAttribute('open', '');
+    fire('htmx:beforeSwap', { xhr: fakeXhr(409, TOAST_HTML), shouldSwap: true });
+
+    expect(toastTexts()).toEqual([]);
   });
 
   test('an error fragment keeps the configured target when no modal is open', () => {

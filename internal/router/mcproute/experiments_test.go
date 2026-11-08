@@ -1,7 +1,9 @@
 package mcproute_test
 
 import (
+	"bytes"
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -236,15 +238,36 @@ func TestExperimentFormLabelsAreEightAboveTheirFields(t *testing.T) {
 	}
 }
 
-// A refused close is a one-line toast without the free-length reason (brand-guide
-// O3: a toast is one short line); the reason goes to the log.
-func TestExperimentCloseRefusalToastIsOneShortLine(t *testing.T) {
+// A refused close puts its reason in the inline alert above the table, not in a
+// toast (brand-guide O3: error details never go to a toast).
+func TestExperimentCloseRefusalShowsReasonInlineAlert(t *testing.T) {
 	a, _ := newExperimentsApp(t)
 	a.post("/settings/mcp/experiments", experimentForm(nil), true)
 
 	rec := a.post("/settings/mcp/experiments/1/close", url.Values{"status": {"paused"}}, true)
 	body := rec.Body.String()
-	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, "実験を終えられません。") || strings.Contains(body, "status は") {
-		t.Errorf("close with a bad status = %d, want a 422 with the short toast only: %s", rec.Code, body)
+	if rec.Code != http.StatusUnprocessableEntity || rec.Header().Get("HX-Retarget") != "#mcp-experiment-close-error" ||
+		!strings.Contains(body, "data-inline-alert") || strings.Contains(body, "data-toast") ||
+		!strings.Contains(body, "実験を終えられません: status は closed か aborted です。") {
+		t.Errorf("close with a bad status = %d, want a 422 inline alert with the reason: %s", rec.Code, body)
+	}
+}
+
+// A refused close is logged at WARN with the experiment id and the reason, so an
+// operator can find out why from the log as well as the inline alert.
+func TestExperimentCloseRefusalIsLoggedAtWarn(t *testing.T) {
+	a, _ := newExperimentsApp(t)
+	a.post("/settings/mcp/experiments", experimentForm(nil), true)
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	a.post("/settings/mcp/experiments/1/close", url.Values{"status": {"paused"}}, true)
+	for _, want := range []string{`level=WARN msg="mcpsettings: close experiment refused"`, "id=1", "status は closed か aborted です"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("log lacks %q: %s", want, buf.String())
+		}
 	}
 }

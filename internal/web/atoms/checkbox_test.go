@@ -41,7 +41,7 @@ func TestCheckbox_OmitsEmptyNameAndValue(t *testing.T) {
 func TestCheckbox_FocusBorderTransitionIsAtMostFast(t *testing.T) {
 	body := renderWithLabel(t, atoms.Checkbox(atoms.CheckboxProps{}), "")
 
-	if !strings.Contains(body, "transition-[background-color,border-color] duration-fast") {
+	if !strings.Contains(body, "transition-[background-color,border-color] duration-fast ease-out") {
 		t.Errorf("checkbox must transition background/border at duration-fast: %s", body)
 	}
 	if strings.Contains(body, "duration-base") {

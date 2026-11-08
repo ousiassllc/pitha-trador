@@ -85,11 +85,15 @@ templ document(title string) {
 			<script type="module" src="/static/dist/js/theme-toggle/pitha-theme-toggle.js"></script>
 		</head>
 		<body class="min-h-screen bg-bone text-ink" hx-headers={ templ.JSONString(map[string]string{middleware.CSRFHeader: middleware.CSRFToken(ctx)}) }>
+			<div id="reload-notice-region" class="sticky top-0 z-[var(--z-sticky)] flow-root bg-bone px-4 empty:hidden print:hidden lg:px-6"></div>
 			{ children... }
 			<div id="toast-region" popover="manual" class="pointer-events-none fixed inset-x-6 bottom-6 top-auto z-[var(--z-toast)] m-0 flex h-auto w-auto justify-center overflow-visible border-0 bg-transparent p-0 print:hidden" aria-live="assertive"></div>
 			@molecules.ConfirmDialog()
 			<template id="toast-template">
 				@atoms.Toast("")
+			</template>
+			<template id="reload-notice-template">
+				@atoms.ReloadNotice()
 			</template>
 		</body>
 	</html>

@@ -140,3 +140,15 @@ describe('dark.css Dark tokens', () => {
     expect(css.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(/@media\s+\(prefers-color-scheme/);
   });
 });
+
+// Neutral pill (issue #1022, brand-guide C6): --mute text on the 10% mute fill
+// over --bone is 4.30:1 in Light, under AA 4.5:1, so tone-mute's text is --ink.
+describe('tone-mute pill', () => {
+  const appCss = readFileSync(new URL('../../css/app.css', import.meta.url), 'utf8');
+
+  test('text is --ink, not --mute', () => {
+    const rule = appCss.match(/@utility tone-mute\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/(^|\s)color:\s*var\(--ink\)/);
+    expect(rule).not.toMatch(/(^|\s)color:\s*var\(--mute\)/);
+  });
+});

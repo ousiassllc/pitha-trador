@@ -11,8 +11,11 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 // nothing is stored (e.g. "0.7", "無効"), Overridden whether a value is
 // stored, Options the allowed values of an enumerated field (a <select>;
 // empty for a free-text field), Placeholder the empty-field hint, Warning an
-// operator hint about the stored value, and Notice the outcome message of
-// the save/reset that just rendered this row. CSRFField / CSRFToken are the
+// operator hint about the stored value, Unreadable that reading the current
+// value failed (an on/off row then shows a disabled switch and no 保存, so a
+// false OFF can never be saved, but keeps 既定に戻す: it needs no current
+// value), and Notice the outcome message of the save/reset that just
+// rendered this row. CSRFField / CSRFToken are the
 // hidden form field name and token the plain `method="post"` fallback
 // submits (resolved by the handler).
 type SettingFieldRowProps struct {
@@ -23,8 +26,10 @@ type SettingFieldRowProps struct {
 	DefaultLabel string
 	Overridden   bool
 	Options      []string
+	OnOff        bool
 	Placeholder  string
 	Warning      string
+	Unreadable   bool
 	Notice       string
 	CSRFField    string
 	CSRFToken    string
@@ -72,6 +77,17 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 							<option value={ option } selected?={ option == props.Value }>{ option }</option>
 						}
 					}
+				} else if props.OnOff {
+					@atoms.Switch(atoms.SwitchProps{Name: "value", Value: "1", Attrs: templ.Attributes{
+						"id":       "setting-input-" + props.Key,
+						"checked":  props.Value == "1",
+						"disabled": props.Unreadable,
+					}}) {
+						有効にする
+					}
+					if !props.Unreadable {
+						<input type="hidden" name="value" value="0"/>
+					}
 				} else {
 					@atoms.Input(atoms.InputProps{ID: "setting-input-" + props.Key, Name: "value", Attrs: templ.Attributes{
 						"required":     true,
@@ -80,10 +96,12 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 						"placeholder":  props.Placeholder,
 					}})
 				}
-				@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"id": "save-setting-" + props.Key, "data-testid": "save-setting-" + props.Key}}) {
-					保存
+				if !props.OnOff || !props.Unreadable {
+					@atoms.Button(atoms.ButtonProps{Type: "submit", Attrs: templ.Attributes{"id": "save-setting-" + props.Key, "data-testid": "save-setting-" + props.Key}}) {
+						保存
+					}
 				}
-				if props.Overridden {
+				if props.Overridden || (props.OnOff && props.Unreadable) {
 					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Attrs: templ.Attributes{
 						"id":                    "reset-setting-" + props.Key,
 						"data-focus-after-swap": "setting-input-" + props.Key,
@@ -99,6 +117,9 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 			<p class="text-xs text-mute" data-testid={ "default-" + props.Key }>既定: { props.DefaultLabel }</p>
 		</div>
 		<div id={ SettingErrorID(props.Key) } class="empty:hidden" data-testid={ "error-" + props.Key }></div>
+		if props.OnOff && props.Unreadable {
+			<p class="text-sm text-danger" role="alert" data-testid={ "unreadable-" + props.Key }>現在の値を読み込めなかったため、保存できません。ページを再読み込みしてください。直らない場合は「既定に戻す」で保存値を削除できます。</p>
+		}
 		if props.Warning != "" {
 			<p class="text-sm text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>
 		}

@@ -46,6 +46,15 @@ describe('pitha-kill-switch-panel', () => {
     expect(killStyle).toContain('pitha-kill-switch-panel-kill');
     expect(css).toMatch(/pitha-kill-switch-panel-kill\s*\{[^}]*background:\s*var\(--danger\)/);
     expect(css).not.toMatch(/background:\s*#/);
+    // C4: hover keeps the --danger token (no derived colour), and still
+    // out-ranks buttonStyles' accent-soft hover so the white label stays legible.
+    // The visible hover cue is a --ink border, not a derived colour.
+    const hover = css.match(
+      /pitha-kill-switch-panel-kill:hover:not\(:disabled\)\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(hover).toMatch(/background:\s*var\(--danger\)\s*;/);
+    expect(hover).toMatch(/border-color:\s*var\(--ink\)\s*;/);
+    expect(css).not.toContain('color-mix');
   });
 
   test('renders Resume instead of Pause/Kill when already paused', async () => {

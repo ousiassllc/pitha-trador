@@ -28,6 +28,9 @@ type opsField struct {
 	hint        string
 	placeholder string
 	options     []string
+	// onOff marks an on/off setting stored as 1 / 0: it is drawn as a switch
+	// (molecules.SettingFieldRowProps.OnOff), not a free-text field.
+	onOff bool
 }
 
 // opsGroup is one card/modal of the Settings screen's 運用設定 section.
@@ -233,4 +236,18 @@ func opsGroupByKey(key string) (opsGroup, bool) {
 		}
 	}
 	return opsGroup{}, false
+}
+
+// isOnOffKey reports whether key is an on/off setting (a switch row).
+func isOnOffKey(key string) bool {
+	group, ok := opsGroupByKey(key)
+	if !ok {
+		return false
+	}
+	for _, field := range group.fields {
+		if field.key == key {
+			return field.onOff
+		}
+	}
+	return false
 }

@@ -148,7 +148,9 @@
 /* Status pill / inline alert tone (brand-guide §1 "ステータスのピル・バッジ"):
    text in the state token, border 40% and fill 10% of it. Callers add the
    shape (`border`, radius, padding); the colors live here once. `mute` is
-   the neutral tone ("下書き" / not-yet-judged). */
+   the neutral tone ("下書き" / not-yet-judged); its text is --ink, because
+   --mute text on the 10% mute fill over --bone is 4.30:1 in Light, under
+   AA 4.5:1 (issue #1022). */
 @utility tone-success {
   border-color: color-mix(in srgb, var(--success) 40%, transparent);
   background-color: color-mix(in srgb, var(--success) 10%, transparent);
@@ -176,7 +178,7 @@
 @utility tone-mute {
   border-color: color-mix(in srgb, var(--mute) 40%, transparent);
   background-color: color-mix(in srgb, var(--mute) 10%, transparent);
-  color: var(--mute);
+  color: var(--ink);
 }
 
 /* Body copy is base (16px) at the guide's 1.8 line height; the Japanese
