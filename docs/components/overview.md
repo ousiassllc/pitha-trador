@@ -49,7 +49,7 @@ static/
     │   ├── exit-alignment/        pitha-exit-alignment.ts / exit-alignment-view.ts（応答型と表・警告・比較の無状態テンプレート。issue #774）
     │   ├── activity-feed/         pitha-activity-feed.ts / activity-feed-types.ts（応答型と定数）/ activity-feed-views.ts（ジョブの状況表・最近の Kill Switch の無状態テンプレート）
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
-    │   ├── htmx-errors/           pitha-htmx-errors.ts（Litではない。HTMX失敗時のトースト処理）
+    │   ├── htmx-errors/           pitha-htmx-errors.ts + toast-lifecycle.ts（Litではない。HTMX失敗時のトースト処理と、トーストの出現・自動消去・退出）
     │   ├── ripple/ / confirm/     pitha-ripple.ts（Litではない。`data-ripple`ボタンの押下リップル）/ pitha-confirm.ts（Litではない。`askConfirm`と`htmx:confirm`の横取りで`molecules.ConfirmDialog`を開く）。どちらも`layout/shell.templ`が読む
     │   ├── modal/                 pitha-modal.ts（Litではない。`molecules.Modal`の`<dialog>`開閉・フォーカス復帰・URLハッシュ自動オープン）
     │   ├── copy-button/           pitha-copy-button.ts（Litではない。`[data-copy-from]`のコピーボタンと、閉じたダイアログの`[data-clear-on-close]`表示（API キーの一度きりの表示）の削除。issue #792）

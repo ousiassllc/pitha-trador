@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { dismissToast, watchToastRegion } from './pitha-htmx-errors';
+import { dismissToast, watchToastRegion } from './toast-lifecycle';
 
 // Toast motion (design guide §4/§5): the Web Animations API is replaced by a
 // recorder, so the keyframes and durations can be asserted without a browser.

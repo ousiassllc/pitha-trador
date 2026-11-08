@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { watchToastRegion } from './pitha-htmx-errors';
+import { watchToastRegion } from './toast-lifecycle';
 
 const TOAST_HTML =
   '<div data-toast role="alert"><span data-toast-message></span><button type="button" data-toast-dismiss>×</button></div>';

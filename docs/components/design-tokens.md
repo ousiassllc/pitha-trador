@@ -40,7 +40,7 @@ UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の reg
 
 - ボタン・閉じるの押下リップル: `data-ripple` を付けた要素に `static/src/components/ripple/pitha-ripple.ts`（`layout` が読む）が、押した点から広がって消える円（280ms ease-out）を描く。`atoms.Button` / `ButtonLink`・トーストの閉じるは templ が付け、Lit のボタンは `data-ripple` を付ける（`lib/styles.ts` の `buttonStyles` が `position: relative; overflow: hidden`）。ドキュメントのリスナーが `composedPath()` で shadow root 内も拾う
 - ツールチップ（`atoms.HelpMark`・Lit の `renderHelpMark`・`scanner-view.ts`）: `opacity` のフェードは開く側（`data-open`）が `--motion-fade-in` の ease-out（320ms）、閉じる側（通常状態）が `--motion-fade-out` の ease-in（240ms）。`visibility` は同じ長さで切り替え、閉じるときはフェードが終わってから隠す。Tailwind は通常状態に `duration-fade-out ease-in`、`data-[open]:duration-fade-in data-[open]:ease-out`、reduced-motion は両方に 100ms（`motion-reduce:duration-100 motion-reduce:data-[open]:duration-100`）。Lit の `help-mark.ts` は `.help-mark-text` と `[data-open]` で `transition` を分ける
-- トースト（`pitha-htmx-errors.ts`）: 出現は opacity と 8px の `translateY` を 320ms ease-out、退出は opacity を 240ms ease-in で待ってから `remove()`。Web Animations API が無ければ即時
+- トースト（`htmx-errors/toast-lifecycle.ts`）: 出現は opacity と 8px の `translateY` を 320ms ease-out、退出は opacity を 240ms ease-in で待ってから `remove()`。Web Animations API が無ければ即時
 - インラインアラート（`atoms.InlineAlert`）: 出現は `alert-in`（320ms ease-out）。消去は、枠に残っているアラートを新しい応答が置き換えるとき、`pitha-htmx-errors.ts` の `htmx:beforeSwap` が `HX-Reswap` を `innerHTML swap:240ms`（reduced-motion は 100ms）に上書きして swap を待たせ、htmx が枠に付ける `htmx-swapping` の間 `app.css` の `.htmx-swapping > [data-inline-alert]`（`alert-out`、240ms ease-in）でフェードアウトする。空の枠には待たせず即時に出す
 
 ## 部品・オーバーレイ（issue #945）

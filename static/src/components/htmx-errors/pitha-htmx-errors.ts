@@ -8,7 +8,8 @@
 //   - a 403 marked stale by the server (page opened before an app restart)
 //     gets a "reload the page" toast;
 //   - requests that never got a response (`htmx:sendError`, `htmx:timeout`);
-//   - dismissing toasts (close button, auto-dismiss that pauses while hovered/focused);
+//   - dismissing toasts (close button; the lifecycle - rise, auto-dismiss that pauses while
+//     hovered/focused, fade-out - is toast-lifecycle.ts)
 //   - keeping toasts operable above a modal `<dialog>`: `showModal()` puts the
 //     dialog in the top layer, which no z-index can beat, and makes everything
 //     outside it inert. `#toast-region` is a `popover="manual"` re-shown (moved
@@ -29,22 +30,11 @@
 
 import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE } from '../lib/api';
 import { logger } from '../lib/logger';
-import {
-  EASE_IN,
-  EASE_OUT,
-  MOTION_FADE_IN_MS,
-  MOTION_FADE_OUT_MS,
-  prefersReducedMotion,
-  REDUCED_FADE_MS,
-} from '../lib/motion';
+import { MOTION_FADE_OUT_MS, prefersReducedMotion, REDUCED_FADE_MS } from '../lib/motion';
+import { dismissToast, TOAST_MARKER, TOAST_RELOAD, watchToastRegion } from './toast-lifecycle';
 
-const TOAST_MARKER = 'data-toast';
 // A form-validation error comes back as an atoms.InlineAlert for the form's own slot (HX-Retarget), not a toast.
 const INLINE_ALERT_MARKER = 'data-inline-alert';
-// --toast-duration (design guide O3): 3s, or 5s for a toast carrying an action (the reload button).
-const DISMISS_AFTER_MS = 3000;
-const DISMISS_WITH_ACTION_MS = 5000;
-const TOAST_RELOAD = '[data-toast-reload]';
 // A one-line fact (design guide O3); the toast's reload button says what to do.
 const STALE_SESSION_TOAST = 'ページの有効期限が切れました。';
 const REGIONS = '#toast-region, [data-toast-region]';
@@ -211,100 +201,6 @@ export function onClick(event: Event): void {
   }
   const toast = target.closest('[data-toast-dismiss]')?.closest<HTMLElement>('[data-toast]');
   if (toast) dismissToast(toast);
-}
-
-/** Re-shows the popover so it sits above any modal dialog opened since it was last shown. No-op without Popover API support, and for a region inside a dialog (already above the page). */
-function raiseToastRegion(target: HTMLElement): void {
-  if (typeof target.showPopover !== 'function' || target.closest('dialog')) return;
-  if (target.matches(':popover-open')) target.hidePopover();
-  target.showPopover();
-}
-
-/** Toast appearance (design guide §4/§5): opacity plus a small (8px) rise over 320ms ease-out; under reduced motion only a <=100ms fade. A no-op without the Web Animations API. */
-function animateToastIn(toast: HTMLElement): void {
-  if (typeof toast.animate !== 'function') return;
-  if (prefersReducedMotion()) {
-    toast.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REDUCED_FADE_MS });
-    return;
-  }
-  toast.animate(
-    [
-      { opacity: 0, transform: 'translateY(8px)' },
-      { opacity: 1, transform: 'translateY(0)' },
-    ],
-    { duration: MOTION_FADE_IN_MS, easing: EASE_OUT },
-  );
-}
-
-/** Removes `toast` after a fade-out (240ms ease-in; <=100ms under reduced motion). Without the Web Animations API it is removed at once. */
-export function dismissToast(toast: HTMLElement): void {
-  if (typeof toast.animate !== 'function' || !toast.isConnected) {
-    toast.remove();
-    return;
-  }
-  toast.removeAttribute(TOAST_MARKER);
-  toast.setAttribute('aria-hidden', 'true');
-  toast.animate([{ opacity: 1 }, { opacity: 0 }], {
-    duration: prefersReducedMotion() ? REDUCED_FADE_MS : MOTION_FADE_OUT_MS,
-    easing: EASE_IN,
-    fill: 'forwards',
-  }).onfinish = () => toast.remove();
-}
-
-function dismissAfterMs(toast: HTMLElement): number {
-  return toast.querySelector(`${TOAST_RELOAD}:not([hidden])`)
-    ? DISMISS_WITH_ACTION_MS
-    : DISMISS_AFTER_MS;
-}
-
-/** Auto-dismisses `toast` after DISMISS_AFTER_MS (DISMISS_WITH_ACTION_MS with a visible action), but never while the pointer is over it or focus is inside it (WCAG 2.2.1): the countdown restarts once both are gone. */
-function scheduleDismiss(toast: HTMLElement): void {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let hovered = false;
-  let focused = false;
-  const arm = () => {
-    clearTimeout(timer);
-    if (!hovered && !focused) timer = setTimeout(() => dismissToast(toast), dismissAfterMs(toast));
-  };
-  toast.addEventListener('mouseenter', () => {
-    hovered = true;
-    arm();
-  });
-  toast.addEventListener('mouseleave', () => {
-    hovered = false;
-    arm();
-  });
-  toast.addEventListener('focusin', () => {
-    focused = true;
-    arm();
-  });
-  toast.addEventListener('focusout', () => {
-    focused = false;
-    arm();
-  });
-  arm();
-}
-
-/** Toast-landed hook (both `showToast` and htmx's `innerHTML` swap into `#toast-region`): raise the region and schedule the auto-dismiss. */
-function onToastsAdded(target: HTMLElement, records: MutationRecord[]): void {
-  let added = false;
-  for (const record of records) {
-    for (const node of record.addedNodes) {
-      if (node instanceof HTMLElement && node.hasAttribute(TOAST_MARKER)) {
-        added = true;
-        animateToastIn(node);
-        scheduleDismiss(node);
-      }
-    }
-  }
-  if (added) raiseToastRegion(target);
-}
-
-/** Auto-dismisses and raises toasts as they land in `target` (script-added or htmx-swapped alike). */
-export function watchToastRegion(target: HTMLElement): void {
-  new MutationObserver((records) => onToastsAdded(target, records)).observe(target, {
-    childList: true,
-  });
 }
 
 export function init(): void {
