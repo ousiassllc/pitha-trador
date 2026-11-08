@@ -141,6 +141,13 @@ describe('horizon switch is the guide segment (brand-guide §4)', () => {
     expect(css).toMatch(/button\[aria-pressed='true'\][^{]*\{[^}]*background:\s*var\(--surface\)/);
     expect(css).not.toMatch(/background:\s*var\(--accent\)\s*;/);
   });
+
+  // WCAG 1.4.1: selection is not told by the face colour alone; SemiBold is allowed on buttons (T2).
+  test('the selected segment is also semibold', () => {
+    expect(heatmapStyles.cssText).toMatch(
+      /button\[aria-pressed='true'\][^{]*\{[^}]*font-weight:\s*600/,
+    );
+  });
 });
 
 describe('heatmap cell typography (guide T3, design-tokens.md)', () => {

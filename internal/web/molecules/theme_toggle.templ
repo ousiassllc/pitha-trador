@@ -31,7 +31,7 @@ func themeChoicePressed(value string) string {
 // script corrects that on load. Every label is --ink: --mute on the
 // --accent-soft track is 4.29:1 (Light) / 4.22:1 (Dark), below AA 4.5:1
 // (brand-guide C6, issue #1018), so selection shows by the --surface face
-// alone. The switch is hidden when printing (`print:hidden`), and print is
+// and SemiBold (not colour alone, WCAG 1.4.1; SemiBold is allowed on buttons, T2). The switch is hidden when printing (`print:hidden`), and print is
 // always ink on bone whatever it chose (brand-guide §8):
 // static/src/css/dark.css applies the Dark tokens on screen only, so under
 // `@media print` the :root Light values stay.
@@ -45,7 +45,7 @@ templ ThemeToggle() {
 		for _, c := range themeChoices {
 			<button
 				type="button"
-				class="relative min-h-8 overflow-hidden rounded-sm px-3 text-sm text-ink transition-[color,background-color] duration-base ease-out motion-reduce:transition-none not-aria-pressed:hover:bg-surface/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-pressed:bg-surface"
+				class="relative min-h-8 overflow-hidden rounded-sm px-3 text-sm text-ink transition-[color,background-color] duration-base ease-out motion-reduce:transition-none not-aria-pressed:hover:bg-surface/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus aria-pressed:bg-surface aria-pressed:font-semibold"
 				aria-pressed={ themeChoicePressed(c.Value) }
 				data-theme-choice={ c.Value }
 				data-ripple

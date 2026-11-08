@@ -22,7 +22,8 @@ export const heatmapStyles = css`
     align-self: flex-start;
   }
   /* Segmented control (brand-guide §4): an --accent-soft track, the selected
-     segment a --surface face. --accent fill is for primary actions only. */
+     segment a --surface face and SemiBold (selection is not colour alone, WCAG 1.4.1).
+     --accent fill is for primary actions only. */
   .pitha-calibration-heatmap-horizons {
     display: inline-flex;
     align-self: flex-start;
@@ -43,6 +44,7 @@ export const heatmapStyles = css`
   .pitha-calibration-heatmap-horizons button[aria-pressed='true']:hover:not(:disabled) {
     border-color: transparent;
     background: var(--surface);
+    font-weight: 600;
   }
   .pitha-calibration-heatmap-horizon {
     margin: 0;
