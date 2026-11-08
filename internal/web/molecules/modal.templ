@@ -16,7 +16,10 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 // The dialog carries its own `[data-toast-region]`: `showModal()` makes
 // everything outside the dialog inert, `#toast-region` included, so while
 // the modal is open pitha-htmx-errors sends failure toasts here, where
-// their 「×」 button and text selection still work (issue #353).
+// their 「×」 button and text selection still work (issue #353). For the same
+// reason it carries a `[data-reload-notice-region]` under the title bar: the
+// persistent reload notice (atoms.ReloadNotice) moves in while the modal is
+// open and back to the page when it closes.
 templ Modal(id, title string) {
 	<dialog
 		id={ id }
@@ -31,6 +34,7 @@ templ Modal(id, title string) {
 				閉じる
 			}
 		</div>
+		<div data-reload-notice-region class="px-6 empty:hidden print:hidden"></div>
 		<div class="flex flex-col gap-4 px-6 py-4">
 			{ children... }
 		</div>

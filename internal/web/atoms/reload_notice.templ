@@ -1,0 +1,23 @@
+package atoms
+
+// ReloadNotice renders the persistent "reload the page" notice that
+// static/src/components/htmx-errors/reload-notice.ts clones from layout's
+// `#reload-notice-template` (a stale session, PR #1044 M5). The 5-second
+// toast (Toast) is the announcement; this one stays on screen after it is
+// gone so the 「再読み込み」 action is never lost. It reuses the InlineAlert
+// shape (icon, tone border/fill) in the --warning tone and adds no new part.
+//
+// It deliberately has no `role` and no `aria-live`: the toast already
+// announces the same fact with role="alert", and a second live region would
+// read it twice. The text stays --ink (the --warning tone only tints border
+// and fill) for AA contrast on the tinted fill. It has no close button: it
+// goes away when the problem does, never on a timer.
+templ ReloadNotice() {
+	<div class="alert-in mx-auto my-3 flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 rounded-md border tone-warning px-4 py-3 text-sm print:hidden" data-reload-notice data-testid="reload-notice">
+		@IconWarningCircle()
+		<p class="min-w-0 flex-1 text-ink" data-reload-notice-message></p>
+		@Button(ButtonProps{Variant: ButtonSecondary, Size: ButtonSmall, Attrs: templ.Attributes{"data-reload-notice-reload": true, "data-testid": "reload-notice-reload"}}) {
+			再読み込み
+		}
+	</div>
+}

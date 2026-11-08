@@ -34,6 +34,7 @@ dev: ## 開発起動（wails dev + templ watch + bun watch）
 ## 8. エラーハンドリング（要約）
 
 - HTMX: サーバーがエラーUIもHTMLで返す（4xx/5xxは`atoms.Toast`フラグメントを`#toast-region`へswap。フラグメントの無い失敗・応答なしはグローバル`htmx:responseError`/`htmx:sendError`リスナーが汎用トースト。§4「エラー表示」参照）
+- 期限切れセッションの永続通知（PR #1044 M5）: セッション失効のトースト（403＋`X-CSRF-Reject: stale`）は、ガイド O3・#1017 のとおり5秒で消える（時間と、ホバー・フォーカス中の停止は変えない）。唯一の復旧操作「再読み込み」を失わないよう、`pitha-htmx-errors`が`showToast(…, {reload: true})`のとき、`htmx-errors/reload-notice.ts`が`atoms.ReloadNotice`（`layout`の`#reload-notice-template`から複製）を操作できる領域に1つだけ残す。領域は、開いている`<dialog>`の`[data-reload-notice-region]`（`Modal`・`ConfirmDialog`が内包。モーダルは背後を操作不可にするため）、なければ`#reload-notice-region`（`Shell`/`SetupShell`の`Header`・`<main>`の前に置く`sticky`の空枠。Tab 順の最初）。ダイアログの`open`属性の変化（Esc・「閉じる」・背景クリックを含む）に追従して移動し、閉じたダイアログの中に取り残されない。再発しても2つ目は出さない。解除は問題が解消したときだけ: ページ読み込み（新しい文書には無い）、または状態を変える成功リクエスト（`htmx:afterRequest`で`successful`かつ GET 以外。cookie と CSRF トークンが再び有効だという証拠で、CSRF を検査しないポーリングの GET は使わない）。出現時にフォーカスを奪わず、自動でリロードしない（明示的なクリック・Enter/Space のみ）。`role`・`aria-live`は持たない（隣のトーストの`role="alert"`が読み上げ、二重に読まない）。閉じるボタンも無い。モーダルを閉じた直後はフォーカスが開いたボタンへ戻るため、通知へは Tab で一周するか Shift+Tab で戻る（時間制限はない）
 - Lit: JSON APIを使うため自前でtry/catchしコンポーネント内にエラー状態をレンダリングする
 - Huma API: バリデーションエラーはRFC 7807 Problem Details形式で自動生成される
 

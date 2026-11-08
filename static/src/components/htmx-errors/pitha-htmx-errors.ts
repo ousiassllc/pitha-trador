@@ -6,7 +6,8 @@
 //     text/proxy error page) must not be swapped in raw, and get a generic
 //     toast instead (`htmx:beforeSwap` / `htmx:responseError`);
 //   - a 403 marked stale by the server (page opened before an app restart)
-//     gets a "reload the page" toast;
+//     gets a "reload the page" toast, plus a persistent notice with the same
+//     action once the toast is gone (reload-notice.ts);
 //   - requests that never got a response (`htmx:sendError`, `htmx:timeout`);
 //   - dismissing toasts (close button; the lifecycle - rise, auto-dismiss that pauses while
 //     hovered/focused, fade-out - is toast-lifecycle.ts)
@@ -31,6 +32,12 @@
 import { CSRF_REJECT_HEADER, CSRF_REJECT_STALE } from '../lib/api';
 import { logger } from '../lib/logger';
 import { MOTION_FADE_OUT_MS, prefersReducedMotion, REDUCED_FADE_MS } from '../lib/motion';
+import {
+  onAfterRequest,
+  RELOAD_NOTICE_RELOAD,
+  showReloadNotice,
+  watchDialogs,
+} from './reload-notice';
 import { dismissToast, TOAST_MARKER, TOAST_RELOAD, watchToastRegion } from './toast-lifecycle';
 
 // A form-validation error comes back as an atoms.InlineAlert for the form's own slot (HX-Retarget), not a toast.
@@ -83,8 +90,9 @@ function isErrorStatus(xhr: XMLHttpRequest | undefined): boolean {
   return (xhr?.status ?? 0) >= 400;
 }
 
-/** Shows a toast cloned from `#toast-template`, replacing any other (one at a time, design guide O3); the message already on screen is not shown again (polling failures). `reload` shows the toast's "再読み込み" action. */
+/** Shows a toast cloned from `#toast-template`, replacing any other (one at a time, design guide O3); the message already on screen is not shown again (polling failures). `reload` shows the toast's "再読み込み" action and also keeps the persistent reload notice (reload-notice.ts) for when the toast is gone. */
 export function showToast(message: string, { reload = false } = {}): void {
+  if (reload) showReloadNotice(message);
   const target = region();
   const template = document.getElementById('toast-template');
   if (!target || !(template instanceof HTMLTemplateElement)) {
@@ -195,7 +203,7 @@ export function onNoResponse(): void {
 export function onClick(event: Event): void {
   const target = event.target;
   if (!(target instanceof Element)) return;
-  if (target.closest(TOAST_RELOAD)) {
+  if (target.closest(TOAST_RELOAD) || target.closest(RELOAD_NOTICE_RELOAD)) {
     location.reload();
     return;
   }
@@ -210,7 +218,9 @@ export function init(): void {
   document.addEventListener('htmx:sendError', onNoResponse);
   document.addEventListener('htmx:timeout', onNoResponse);
   document.addEventListener('click', onClick);
+  document.addEventListener('htmx:afterRequest', onAfterRequest);
   for (const target of document.querySelectorAll<HTMLElement>(REGIONS)) watchToastRegion(target);
+  watchDialogs();
 }
 
 init();
