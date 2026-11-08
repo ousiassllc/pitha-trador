@@ -13,8 +13,9 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 // empty for a free-text field), Placeholder the empty-field hint, Warning an
 // operator hint about the stored value, Unreadable that reading the current
 // value failed (an on/off row then shows a disabled switch and no 保存, so a
-// false OFF can never be saved, but keeps 既定に戻す: it needs no current value), and Notice the outcome message of
-// the save/reset that just rendered this row. CSRFField / CSRFToken are the
+// false OFF can never be saved, but keeps 既定に戻す: it needs no current
+// value), and Notice the outcome message of the save/reset that just
+// rendered this row. CSRFField / CSRFToken are the
 // hidden form field name and token the plain `method="post"` fallback
 // submits (resolved by the handler).
 type SettingFieldRowProps struct {
