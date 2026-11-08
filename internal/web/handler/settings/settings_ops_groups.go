@@ -237,3 +237,17 @@ func opsGroupByKey(key string) (opsGroup, bool) {
 	}
 	return opsGroup{}, false
 }
+
+// isOnOffKey reports whether key is an on/off setting (a switch row).
+func isOnOffKey(key string) bool {
+	group, ok := opsGroupByKey(key)
+	if !ok {
+		return false
+	}
+	for _, field := range group.fields {
+		if field.key == key {
+			return field.onOff
+		}
+	}
+	return false
+}

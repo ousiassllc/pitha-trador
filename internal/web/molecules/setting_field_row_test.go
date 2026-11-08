@@ -30,3 +30,25 @@ func TestSettingFieldRow_OnOffIsASwitchThatPostsZeroWhenOff(t *testing.T) {
 		t.Errorf("a normal setting must stay a text input: %s", text)
 	}
 }
+
+// A row whose current value could not be read must not offer an on/off save:
+// the switch would render OFF and saving would persist an explicit 0 the
+// operator never chose. The switch is disabled, no hidden 0 and no 保存 button
+// are rendered, and an inline notice says why.
+func TestSettingFieldRow_UnreadableOnOffCannotBeSaved(t *testing.T) {
+	html := render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "k", Label: "L", OnOff: true, Unreadable: true}))
+	if !strings.Contains(html, `role="switch"`) || !strings.Contains(html, ` disabled id="setting-input-k"`) {
+		t.Errorf("the switch must still be shown, disabled: %s", html)
+	}
+	if strings.Contains(html, `name="value" value="0"`) || strings.Contains(html, `data-testid="save-setting-k"`) {
+		t.Errorf("an unreadable on/off row must post nothing and offer no save: %s", html)
+	}
+	if !strings.Contains(html, `data-testid="unreadable-k"`) || !strings.Contains(html, "読み込めなかった") {
+		t.Errorf("the row must say the current value could not be read: %s", html)
+	}
+
+	readable := render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "k", Label: "L", OnOff: true, Value: "0"}))
+	if strings.Contains(readable, `data-testid="unreadable-k"`) || strings.Contains(readable, ` disabled id="setting-input-k"`) || !strings.Contains(readable, `data-testid="save-setting-k"`) {
+		t.Errorf("a readable on/off row stays editable: %s", readable)
+	}
+}
