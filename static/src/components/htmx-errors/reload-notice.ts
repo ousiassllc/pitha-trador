@@ -8,7 +8,8 @@
 //     `<dialog>`'s `[data-reload-notice-region]` (a modal makes the rest of the page inert),
 //     else the page's `#reload-notice-region`. It follows dialogs opening and closing, so it is
 //     never left inside a closed dialog;
-//   - a recurrence while it is shown changes nothing (no second notice, no new animation);
+//   - a recurrence while it is shown adds nothing (no second notice); moving between areas replays
+//     only its 320ms fade-in;
 //   - it is removed only when the problem is gone: a page load (the new document has none), or a
 //     successful state-changing request, which proves the session cookie/CSRF token work again.
 //     Polling GETs do not count: the CSRF check does not cover them;

@@ -49,7 +49,7 @@ static/
     │   ├── exit-alignment/        pitha-exit-alignment.ts / exit-alignment-view.ts（応答型と表・警告・比較の無状態テンプレート。issue #774）
     │   ├── activity-feed/         pitha-activity-feed.ts / activity-feed-types.ts（応答型と定数）/ activity-feed-views.ts（ジョブの状況表・最近の Kill Switch の無状態テンプレート）
     │   ├── kill-switch-panel/     pitha-kill-switch-panel.ts
-    │   ├── htmx-errors/           pitha-htmx-errors.ts + toast-lifecycle.ts（Litではない。HTMX失敗時のトースト処理と、トーストの出現・自動消去・退出）
+    │   ├── htmx-errors/           pitha-htmx-errors.ts + toast-lifecycle.ts + reload-notice.ts（Litではない。HTMX失敗時のトースト処理と、トーストの出現・自動消去・退出、期限切れセッションの永続の再読み込み通知）
     │   ├── ripple/ / confirm/     pitha-ripple.ts（Litではない。`data-ripple`ボタンの押下リップル）/ pitha-confirm.ts（Litではない。`askConfirm`と`htmx:confirm`の横取りで`molecules.ConfirmDialog`を開く）。どちらも`layout/shell.templ`が読む
     │   ├── modal/                 pitha-modal.ts（Litではない。`molecules.Modal`の`<dialog>`開閉・フォーカス復帰・URLハッシュ自動オープン）
     │   ├── copy-button/           pitha-copy-button.ts（Litではない。`[data-copy-from]`のコピーボタンと、閉じたダイアログの`[data-clear-on-close]`表示（API キーの一度きりの表示）の削除。issue #792）
@@ -327,4 +327,4 @@ Regime（TREND/RANGE/BREAKOUT/CHAOTIC）は型を持たず、`domain.JevRegime*`
 | 1.111 | 2026-11-06 | ライト/ダークを`<html data-theme>`（`light`か`dark`）で明示的に切り替えられるようにした（未指定はOS設定に追従）。`molecules.ThemeToggle`（`Header`に配置）、`pitha-theme-toggle`、`vendor/theme-init.js`、`lib/theme.ts`を追加し、選択はlocalStorageに保存する。チャートは`lib/chart-theme.ts`の`ColorSchemeController`がOS切替に加えテーマ切替イベントでも色を読み直す | issue #978 |
 | 1.112 | 2026-11-06 | §2に`confirm/`・`ripple/`・`lib/`の各モジュール・`chart-colors.ts`・`css/table.css`、atomsに`Checkbox`・`InlineAlert`、moleculesに`ConfirmDialog`を追記。Kill の確認を`askConfirm`、フォームの値の拒否を422＋`atoms.InlineAlert`、トーストの自動消去を3秒に直した | refine-git レビュー指摘（実装との乖離） |
 | 1.113 | 2026-11-06 | §3の`Switch`の説明を実装に合わせ、保存ボタン付きのフォーム内で使う設定の on/off のスイッチと訂正（旧: 即時反映）。`design-tokens.md`の部品の節も同じ | refine-git レビュー（doc-drift） |
-| 1.114 | 2026-11-08 | §3に`atoms.ReloadNotice`とmoleculesの`Modal`/`ConfirmDialog`の`[data-reload-notice-region]`、`layout`の`#reload-notice-region`、§4に期限切れセッションの永続の再読み込み通知（`htmx-errors/reload-notice.ts`）を追記。5秒で消えるトーストの後も「再読み込み」を画面に残す | PR #1044 M5（#1017 の受け入れ条件は変えず、WCAG 2.2.1 の懸念に対応） |
+| 1.114 | 2026-11-08 | §3の`Toast`に`atoms.ReloadNotice`（永続の再読み込み通知）を、`runtime.md` §8にその挙動（領域・解除・読み上げ）を追記。§2の`htmx-errors/`に`reload-notice.ts`、moleculesの`Modal`/`ConfirmDialog`に`[data-reload-notice-region]`、`layout`に`#reload-notice-region`。5秒で消えるトーストの後も「再読み込み」を画面に残す | PR #1044 M5（#1017 の受け入れ条件は変えず、WCAG 2.2.1 の懸念に対応） |
