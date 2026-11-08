@@ -32,7 +32,7 @@
 
 UI アイコンは [Iconoir](https://iconoir.com)（MIT、iconoir 7.12.2 の regular）の SVG を使う。文字記号（×・▲▼）で代用しない。24×24 の viewBox・`stroke-width="1.5"`・`stroke="currentColor"`・装飾なので `aria-hidden`（名前はボタンの `aria-label`）。サイズは `app.css` の `--icon-sm|md|lg`（16 / 20 / 24px）を `icon-sm` / `icon-md` / `icon-lg` のユーティリティで当てる。リンクの矢印も Iconoir（`IconArrowRight` / `IconNavArrowLeft`）で、文字の →・← は使わない。templ は `internal/web/atoms/icon.templ`（`IconXmark` ほか）、Lit は `static/src/components/lib/icons.ts`（`navArrowUp` / `navArrowDown`）に同じパスを置く。足すときは両方に同じパスを足す。
 
-状態ピルは色と文言だけで伝えず、先頭に 16px（`icon-sm`・`currentColor`）の状態アイコンを付ける（C4。issue #1034）。`StatusDot` は Running=`IconCheckCircle` / Paused=`IconWarningTriangle` / Killed=`IconXmarkCircle`、`Badge` は LONG=`IconNavArrowUp` / SHORT=`IconNavArrowDown`（方向は成否ではないので矢印）。`InlineAlert` は従来どおり `IconWarningCircle`。Lit に同じピルは無いので、これらのパスは templ 側だけにある（`NavArrowUp/Down` は `lib/icons.ts` と同じパス）。ほかのピル（`EntryQualityBadge`・設定済み／必須ピル・`tone-*` ブロックなど）は別途。
+状態ピルは色と文言だけで伝えず、先頭に 16px（`icon-sm`・`currentColor`）の状態アイコンを付ける（C4。issue #1034）。`StatusDot` は Running=`IconCheckCircle` / Paused=`IconWarningTriangle` / Killed=`IconXmarkCircle`、`Badge` は LONG=`IconNavArrowUp` / SHORT=`IconNavArrowDown`（方向は成否ではないので矢印）。`InlineAlert` は従来どおり `IconWarningCircle`。Lit にも `scanner-table/scanner-view.ts` の `directionBadge`（LONG / SHORT）があり、同じ矢印（`lib/icons.ts` の `navArrowUp` / `navArrowDown`。templ の `NavArrowUp/Down` と同じパス）を先頭に付ける。`StatusDot`・`InlineAlert` に当たる Lit のピルは無く、状態アイコンのパスは templ 側だけにある。ほかのピル（`EntryQualityBadge`・設定済み／必須ピル・`tone-*` ブロックなど）は別途。
 
 ## モーション（issue #944）
 
