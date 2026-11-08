@@ -40,3 +40,12 @@ func TestThemeToggle_OffersAutoLightDarkWithAutoPressed(t *testing.T) {
 		t.Errorf("every ThemeToggle segment must be semibold while pressed (got %d): %s", got, html)
 	}
 }
+
+// Guide M3: the colour transition is dropped under prefers-reduced-motion
+// (issue #1032), like checkbox / switch.
+func TestThemeToggle_DropsTransitionUnderReducedMotion(t *testing.T) {
+	html := render(t, molecules.ThemeToggle())
+	if got := strings.Count(html, "motion-reduce:transition-none"); got != 3 {
+		t.Errorf("every ThemeToggle segment must carry motion-reduce:transition-none (got %d): %s", got, html)
+	}
+}
