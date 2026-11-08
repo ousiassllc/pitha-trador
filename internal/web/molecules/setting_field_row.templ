@@ -13,7 +13,7 @@ import "github.com/ousiassllc/pitha-trador/internal/web/atoms"
 // empty for a free-text field), Placeholder the empty-field hint, Warning an
 // operator hint about the stored value, Unreadable that reading the current
 // value failed (an on/off row then shows a disabled switch and no 保存, so a
-// false OFF can never be saved), and Notice the outcome message of
+// false OFF can never be saved, but keeps 既定に戻す: it needs no current value), and Notice the outcome message of
 // the save/reset that just rendered this row. CSRFField / CSRFToken are the
 // hidden form field name and token the plain `method="post"` fallback
 // submits (resolved by the handler).
@@ -100,7 +100,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 						保存
 					}
 				}
-				if props.Overridden {
+				if props.Overridden || (props.OnOff && props.Unreadable) {
 					@atoms.Button(atoms.ButtonProps{Variant: atoms.ButtonDanger, Attrs: templ.Attributes{
 						"id":                    "reset-setting-" + props.Key,
 						"data-focus-after-swap": "setting-input-" + props.Key,
@@ -117,7 +117,7 @@ templ SettingFieldRow(props SettingFieldRowProps) {
 		</div>
 		<div id={ SettingErrorID(props.Key) } class="empty:hidden" data-testid={ "error-" + props.Key }></div>
 		if props.OnOff && props.Unreadable {
-			<p class="text-sm text-danger" role="alert" data-testid={ "unreadable-" + props.Key }>現在の値を読み込めなかったため、保存できません。ページを再読み込みしてください。</p>
+			<p class="text-sm text-danger" role="alert" data-testid={ "unreadable-" + props.Key }>現在の値を読み込めなかったため、保存できません。ページを再読み込みしてください。直らない場合は「既定に戻す」で保存値を削除できます。</p>
 		}
 		if props.Warning != "" {
 			<p class="text-sm text-danger" role="alert" data-testid={ "warning-" + props.Key }>{ props.Warning }</p>

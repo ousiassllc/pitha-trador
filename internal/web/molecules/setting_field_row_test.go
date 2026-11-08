@@ -47,7 +47,16 @@ func TestSettingFieldRow_UnreadableOnOffCannotBeSaved(t *testing.T) {
 		t.Errorf("the row must say the current value could not be read: %s", html)
 	}
 
+	// Reset (hx-delete) needs no current value, so a stored value that cannot
+	// be read can still be recovered with 既定に戻す.
+	if !strings.Contains(html, `data-testid="reset-setting-k"`) || !strings.Contains(html, `hx-delete="/ops-settings/k"`) {
+		t.Errorf("an unreadable on/off row must still offer 既定に戻す: %s", html)
+	}
+
 	readable := render(t, molecules.SettingFieldRow(molecules.SettingFieldRowProps{Key: "k", Label: "L", OnOff: true, Value: "0"}))
+	if strings.Contains(readable, `data-testid="reset-setting-k"`) {
+		t.Errorf("a readable, never-saved row has nothing to reset: %s", readable)
+	}
 	if strings.Contains(readable, `data-testid="unreadable-k"`) || strings.Contains(readable, ` disabled id="setting-input-k"`) || !strings.Contains(readable, `data-testid="save-setting-k"`) {
 		t.Errorf("a readable on/off row stays editable: %s", readable)
 	}

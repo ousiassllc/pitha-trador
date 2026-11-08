@@ -146,3 +146,28 @@ func TestOnOffSettings_CheckedSwitchPostsOneFirst(t *testing.T) {
 		}
 	}
 }
+
+// A stored on/off value that cannot be decoded renders the row unreadable (no
+// save), and 既定に戻す on it still works: Reset deletes the key without reading
+// it, and the refreshed row is readable again.
+func TestResetOps_OnOffWithUndecodableStoredValueRecovers(t *testing.T) {
+	engine, store := modeRouter(metalabelsettings.ModePaper)
+	for _, key := range onOffKeys {
+		store.rows[key] = "not-json"
+
+		page := rowHTML(t, allPagesBody(t, engine), key)
+		if !strings.Contains(page, `data-testid="unreadable-`+key+`"`) || !strings.Contains(page, `data-testid="reset-setting-`+key+`"`) {
+			t.Fatalf("%s: the unreadable row must offer 既定に戻す: %s", key, page)
+		}
+		rec := opsRequest(engine, http.MethodDelete, key, nil, true)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: DELETE status = %d, body=%s", key, rec.Code, rec.Body.String())
+		}
+		if _, ok := store.rows[key]; ok {
+			t.Errorf("%s: reset left the undecodable value", key)
+		}
+		if strings.Contains(rec.Body.String(), `data-testid="unreadable-`+key+`"`) {
+			t.Errorf("%s: the refreshed row is still unreadable: %s", key, rec.Body.String())
+		}
+	}
+}
