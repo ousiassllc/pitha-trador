@@ -2,7 +2,7 @@
 
 リモートの Grok Bot が、pitha-trador の SQLite に入っている Paper の取引実績・Jev 判断・メタモデル・Risk・収集状況の**集計とラベル**を読む仕様。issue #783（設定の読み書きは #806・#807、Paper の注文案の受け付けは #827、調整の実験の記録と前後比較は #871）。実装は `cmd/paper-results-mcp` と `internal/service/paperresultsmcp`（実行・設定の手順は `docs/components/paper-results-mcp.md` §4）。
 
-ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（収集診断 `session_diagnostics` は分割章 `docs/api/endpoints/paper-results-mcp-diagnostics.md`、注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`、メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md`、調整の実験ツールは分割章 `docs/api/endpoints/paper-results-mcp-experiments.md`。実験の設計・判定・最低取引件数の案は `docs/architecture/paper-results-mcp-experiments.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
+ツールの入出力・上限・ホワイトリストは `docs/api/endpoints/paper-results-mcp.md`（収集診断 `session_diagnostics` は分割章 `docs/api/endpoints/paper-results-mcp-diagnostics.md`、注文案ツールは分割章 `docs/api/endpoints/paper-results-mcp-proposals.md`、メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md`、`metalabel_history` の採用診断は分割章 `docs/api/endpoints/paper-results-mcp-metalabel-history.md`、調整の実験ツールは分割章 `docs/api/endpoints/paper-results-mcp-experiments.md`。実験の設計・判定・最低取引件数の案は `docs/architecture/paper-results-mcp-experiments.md`）。エラー表は `docs/architecture/paper-results-mcp-errors.md`。置き場所とプロセス境界は `docs/components/paper-results-mcp.md`。機能要件は FR-MCP-1〜8 と、設定ツールの FR-MCP-18〜22、注文案ツールの FR-MCP-23〜27（`docs/requirements/functional/components-platform.md` §4.22）。
 
 ## 1. 目的
 
