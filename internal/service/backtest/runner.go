@@ -125,6 +125,12 @@ type RunConfig struct {
 	// Sessions says which bars are 昼休み/寄り/ザラ場/引け (see Sessions);
 	// nil means every bar is ザラ場.
 	Sessions Sessions
+
+	// OnEntryEvaluation, when set, is called once per fresh Jev decision the
+	// replay evaluates for an entry (read-only diagnostics, issue #1046: where
+	// each decision first dropped out). It must not call back into the replay.
+	// nil, the default, observes nothing and changes nothing.
+	OnEntryEvaluation func(EntryEvaluation)
 }
 
 // SplitResult is one Walk Forward fold's Split boundaries plus the

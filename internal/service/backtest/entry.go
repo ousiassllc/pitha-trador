@@ -87,3 +87,39 @@ func tdnetScore(d domain.JevDecision) *float64 {
 	}
 	return &score
 }
+
+// EntryOutcome is where one evaluated Jev decision ended in the replay.
+type EntryOutcome string
+
+const (
+	// OutcomeRejected: the entry rule (guards, meta verdict) or the Risk Engine
+	// said NONE; EntryEvaluation.Signal.RejectReason says which.
+	OutcomeRejected EntryOutcome = "rejected"
+	// OutcomeNoFill: the signal could not become a position - the bar cannot
+	// fill (昼休み・立会時間外), the entry session is over or the symbol is in
+	// its post-loss cooldown.
+	OutcomeNoFill EntryOutcome = "no_fill"
+	// OutcomeNoSize: no lot fits the Risk limits.
+	OutcomeNoSize EntryOutcome = "no_size"
+	// OutcomeOpened: a position was opened.
+	OutcomeOpened EntryOutcome = "opened"
+)
+
+// EntryEvaluation is what the replay saw for one fresh Jev decision at the
+// first bar it could be evaluated on (an instrument with no open position). It
+// is read-only diagnostics for RunConfig.OnEntryEvaluation: the replay never
+// reads it back.
+type EntryEvaluation struct {
+	InstrumentID int64
+	Symbol       string
+	// BarTime is the evaluated bar's timestamp.
+	BarTime  time.Time
+	Decision domain.JevDecision
+	// Signal is the Policy Engine's answer (Direction NONE with RejectReason, or
+	// the LONG/SHORT signal); Outcome is how it ended.
+	Signal  domain.TradeSignal
+	Outcome EntryOutcome
+	// PredictedEVBps is the meta-labeling model's EV behind a take, nil when no
+	// model scored the candidate.
+	PredictedEVBps *float64
+}
