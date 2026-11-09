@@ -17,11 +17,13 @@ func TestNoAdoptionBarInTheVerdictCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	checked := 0
 	fset := token.NewFileSet()
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
 		}
+		checked++
 		f, err := parser.ParseFile(fset, name, nil, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -48,5 +50,8 @@ func TestNoAdoptionBarInTheVerdictCode(t *testing.T) {
 			}
 			return true
 		})
+	}
+	if checked == 0 {
+		t.Fatal("no source files were scanned: the guard is vacuous")
 	}
 }

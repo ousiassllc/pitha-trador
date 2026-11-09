@@ -11,6 +11,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/labellayer"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/manifest"
+	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/manifest/manifesttest"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/stats"
 )
 
@@ -69,7 +70,12 @@ func TestPairedDifferencesMatchHandCalculation(t *testing.T) {
 		if c.Reference == cmps[i].Primary {
 			t.Errorf("%s: reference flag %v", c.Name, c.Reference)
 		}
-		if c.Estimate.CI == nil || !c.Estimate.CI.Contains(c.Estimate.Mean) {
+		if c.Reference {
+			// Diagonals are descriptive: no interval, no detectable difference, no verdict.
+			if c.Estimate.CI != nil || c.MDE != nil || c.Verdict != "" {
+				t.Errorf("%s: reference comparison carries a test: %+v", c.Name, c.Result)
+			}
+		} else if c.Estimate.CI == nil || !c.Estimate.CI.Contains(c.Estimate.Mean) {
 			t.Errorf("%s: CI %+v does not contain the mean %v", c.Name, c.Estimate.CI, c.Estimate.Mean)
 		}
 	}
@@ -244,5 +250,30 @@ func TestRescoringLeavesTheModelUntouched(t *testing.T) {
 	run(t, in)
 	if !reflect.DeepEqual(before, *in.Model) {
 		t.Fatal("the model changed during the re-scoring")
+	}
+}
+
+func TestCohortIsFrozenInTheManifestAndMismatchedRowsAreExcluded(t *testing.T) {
+	in := input(t)
+	if got := run(t, in).Independence.ByReason["cohort_mismatch"]; got != 1 {
+		t.Fatalf("cohort_mismatch = %d, want the one jev-v1 row", got)
+	}
+	// A manifest without a cohort cannot be frozen, so the check cannot be skipped.
+	m := manifesttest.Valid()
+	m.Cohort = ""
+	if err := m.Freeze(m.CreatedAt); err == nil {
+		t.Fatal("a manifest without a cohort was frozen")
+	}
+	// Even a hand-built frozen-looking manifest is refused by Run.
+	in.Manifest.Cohort = ""
+	if _, err := labellayer.Run(context.Background(), in); err == nil {
+		t.Error("Run accepted a manifest without a cohort")
+	}
+	// Another cohort in the manifest changes which rows are independent.
+	m2, h := frozenManifest(t, func(m *manifest.Manifest) { m.Cohort = "jev-v1" })
+	in = input(t)
+	in.Manifest, in.ParamsSHA256 = m2, h
+	if res := run(t, in); res.Independence.Independent != 1 {
+		t.Errorf("with cohort jev-v1 only the one jev-v1 row is independent, got %+v", res.Independence)
 	}
 }

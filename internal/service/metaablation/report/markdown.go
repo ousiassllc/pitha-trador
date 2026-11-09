@@ -55,6 +55,7 @@ func manifestSection(b *strings.Builder, d Document) {
 		w("- manifest の固定: %s（SHA-256 %s）", m.Frozen.At.Format("2006-01-02 15:04 MST"), m.Frozen.SHA256)
 	}
 	w("- 対象モデル: %s（パラメータ SHA-256 %s。本体は出力しない）", m.Model.Version, m.Model.ParamsSHA256)
+	w("- 評価対象のコホート / Jev の版（manifest で固定。別の行は除外）: %s", m.Cohort)
 	w("- DB の写し: SHA-256 %s / as-of %s / コードの版 %s", m.DBCopy.SHA256, m.DBCopy.AsOf.Format("2006-01-02 15:04 MST"), m.CodeVersion)
 	win := m.Windows
 	w("- 評価窓 [%s, %s)、embargo %v、LabelEnd（モデルが使った最後）%s", win.EvalFrom.Format("2006-01-02 15:04"), win.EvalTo.Format("2006-01-02 15:04"), win.Embargo(), win.LabelEnd.Format("2006-01-02 15:04"))
@@ -68,6 +69,9 @@ func manifestSection(b *strings.Builder, d Document) {
 	}
 	mc := d.Multiple
 	w("- 多重比較: 事前登録した全比較数 %d、実行した比較数 %d（各層の主比較 %d 組。探索を含む）、補正後の水準 %.5f", mc.Registered, mc.Executed, mc.Primary, mc.AlphaAdjusted)
+	if mc.FamilyExceeded {
+		w("- **比較数が事前登録を超えた**: %s", mc.FamilyExceededReason)
+	}
 	if len(d.UnsetMinimums) > 0 {
 		w("- **未設定の事前登録値: %s** — 提案のレビューが済むまで、すべての判定は優劣未確定。", strings.Join(d.UnsetMinimums, "、"))
 	} else {

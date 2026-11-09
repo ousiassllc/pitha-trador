@@ -125,6 +125,13 @@ type Multiple struct {
 	Correction    string  `json:"correction"`
 	Alpha         float64 `json:"alpha"`
 	AlphaAdjusted float64 `json:"alpha_adjusted"`
+	// FamilyExceeded is set when more comparisons ran than were registered
+	// (exploratory ones included). The level is then Alpha over the larger
+	// count and every verdict is downgraded to 優劣未確定 (the intervals were
+	// drawn at the registered level), with the reason below; no layer is
+	// discarded.
+	FamilyExceeded       bool   `json:"family_exceeded"`
+	FamilyExceededReason string `json:"family_exceeded_reason,omitempty"`
 }
 
 // Document is the report written as JSON.
@@ -164,17 +171,31 @@ func Build(in Input) (Document, error) {
 			primary = append(primary, fmt.Sprintf("%s: %s → %s", c.Name, c.From.Name(), c.To.Name()))
 		}
 	}
+	// The registered family is, per layer, the four primary pairs. A replay
+	// layer cut into segments reports the same four pairs per segment: those are
+	// the same pre-registered comparisons on separate stretches of one study, not
+	// new family members. The diagonals are descriptive (no interval, no verdict)
+	// and are not comparisons of the family; exploratory comparisons are counted
+	// via Input.ExploratoryComparisons.
 	executed := in.ExploratoryComparisons
 	if in.Label.Available {
 		executed += in.Label.Result.PrimaryComparisons
 	}
 	if in.Replay.Available {
-		// Every replayed segment compares the same four pairs on its own.
-		executed += len(primary) * max(1, len(in.Replay.Segments))
+		executed += len(primary)
 	}
-	plan := stats.Plan{Alpha: m.Statistics.Alpha, Correction: m.Statistics.Correction, NComparisons: m.Statistics.NumComparisons}
-	if err := stats.CheckFamily(plan, executed); err != nil {
-		return Document{}, err
+	registered := m.Statistics.NumComparisons
+	effective := max(registered, executed)
+	plan := stats.Plan{Alpha: m.Statistics.Alpha, Correction: m.Statistics.Correction, NComparisons: effective}
+	label, replay := in.Label, in.Replay
+	multiple := Multiple{
+		Registered: registered, Executed: executed, Primary: len(primary), Correction: m.Statistics.Correction,
+		Alpha: m.Statistics.Alpha, AlphaAdjusted: plan.AlphaAdjusted(),
+	}
+	if executed > registered {
+		multiple.FamilyExceeded = true
+		multiple.FamilyExceededReason = fmt.Sprintf("実行した比較数 %d が事前登録の全比較数 %d を超えた。区間は登録した数の水準で引いたので、判定はすべて優劣未確定に下げた（補正後の水準は %d 件で再計算する）。次の実行の manifest に実際の比較数を登録する。", executed, registered, executed)
+		label, replay = downgrade(label, replay)
 	}
 	doc := Document{
 		Title: "メタモデル × entry_quality 足切り 2x2 比較（オフライン・研究用）", Manifest: m, RunCount: m.Run.Count,
@@ -183,14 +204,12 @@ func Build(in Input) (Document, error) {
 		VerdictMeaning: verdictMeaning,
 		UnsetMinimums:  m.Minimums.UnsetFields(),
 		Approval:       "DB の写しの取得は別途の承認が要る。この実行は承認済みの写しに対してだけ行い、元の DB には書き込まない。本書は設定変更・発注・モデルの active 昇格の許可ではなく、利益を保証しない。",
-		Multiple: Multiple{
-			Registered: m.Statistics.NumComparisons, Executed: executed, Primary: len(primary), Correction: m.Statistics.Correction,
-			Alpha: m.Statistics.Alpha, AlphaAdjusted: stats.Plan{Alpha: m.Statistics.Alpha, Correction: m.Statistics.Correction, NComparisons: m.Statistics.NumComparisons}.AlphaAdjusted(),
-		},
-		Label: in.Label, Replay: in.Replay,
+		Multiple:       multiple,
+		Label:          label, Replay: replay,
 		Statements: []string{
 			"ラベル層と再生層は別の母集団・別の損益で、混ぜない。片方の層が実行不可でも、もう片方の有効な結果は残す。",
 			"元のモデル評価（元 OOS の再採点）は参考で、独立と書かず、採用・優劣の根拠にしない。",
+			"主比較のファミリーは各層の 4 組。再生層を区間に分けたときの区間別の差は同じ 4 組を別の区間で見たもので、新しい比較としては数えない。対角の 2 組は記述の差だけで、区間も判定も持たず、ファミリーに数えない（探索は実行回数・比較数に足す）。",
 			"この結果は採用基準（370 take・約 11 bps・最小 OOS 日数）の判定ではない。",
 		},
 	}
@@ -214,3 +233,39 @@ func populations() []Population {
 		{"iii", "(iii) 表 2: 再生層", "(ii) のうち、そのセルの Q・M と Risk・資金制約を通って実際にエントリーされたもの。", "再生した約定・出口の円・資金比", "あり"},
 	}
 }
+
+// downgrade returns copies of the layers with every verdict lowered to
+// 優劣未確定 (reason family_exceeded); the inputs are left untouched.
+func downgrade(l LabelSection, r ReplaySection) (LabelSection, ReplaySection) {
+	lower := func(rs []stats.Result) []stats.Result {
+		out := make([]stats.Result, len(rs))
+		for i, x := range rs {
+			if !x.Reference {
+				x.Verdict = stats.Undetermined
+				x.Reasons = append(append([]string(nil), x.Reasons...), ReasonFamilyExceeded)
+			}
+			out[i] = x
+		}
+		return out
+	}
+	if l.Result != nil {
+		res := *l.Result
+		res.Comparisons = make([]labellayer.ComparisonResult, len(l.Result.Comparisons))
+		for i, c := range l.Result.Comparisons {
+			c.Result = lower([]stats.Result{c.Result})[0]
+			res.Comparisons[i] = c
+		}
+		l.Result = &res
+	}
+	segs := make([]ReplaySegment, len(r.Segments))
+	for i, sg := range r.Segments {
+		sg.Differences = lower(sg.Differences)
+		segs[i] = sg
+	}
+	r.Segments = segs
+	return l, r
+}
+
+// ReasonFamilyExceeded is added to the reasons of a verdict that was lowered
+// because more comparisons ran than were registered.
+const ReasonFamilyExceeded = "family_exceeded"

@@ -43,11 +43,15 @@ type Manifest struct {
 	Model ModelRef `json:"model"`
 	// DBCopy identifies the database copy every cell reads (the source DB is
 	// never opened for writing).
-	DBCopy      DBCopyRef  `json:"db_copy"`
-	CodeVersion string     `json:"code_version"`
-	Windows     Windows    `json:"windows"`
-	Rules       Rules      `json:"rules"`
-	Statistics  Statistics `json:"statistics"`
+	DBCopy      DBCopyRef `json:"db_copy"`
+	CodeVersion string    `json:"code_version"`
+	// Cohort is the cohort / Jev version (issues #881, #939) the evaluation is
+	// for. It is part of the frozen content: rows of any other cohort are
+	// excluded, and the check cannot be switched off.
+	Cohort     string     `json:"cohort"`
+	Windows    Windows    `json:"windows"`
+	Rules      Rules      `json:"rules"`
+	Statistics Statistics `json:"statistics"`
 	// Minimums are the pre-registered thresholds of the verdict; nil = unset.
 	Minimums Minimums `json:"minimums"`
 	// Exclusions are the periods and reasons fixed before the run.

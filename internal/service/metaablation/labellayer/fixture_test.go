@@ -15,7 +15,7 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/policy/policytest"
 )
 
-const cohort = "jev-v2"
+const cohort = manifesttest.Cohort
 
 var day = 24 * time.Hour
 
@@ -115,5 +115,5 @@ func frozenManifest(t *testing.T, change func(*manifest.Manifest)) (manifest.Man
 func input(t *testing.T) labellayer.Input {
 	t.Helper()
 	m, h := frozenManifest(t, nil)
-	return labellayer.Input{Manifest: m, Model: testModel(), ParamsSHA256: h, Cohort: cohort, Rows: syntheticRows()}
+	return labellayer.Input{Manifest: m, Model: testModel(), ParamsSHA256: h, Rows: syntheticRows()}
 }

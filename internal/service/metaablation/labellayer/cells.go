@@ -64,7 +64,10 @@ func compare(plan stats.Plan, cmp metaablation.Comparison, eligible []scored, da
 		}
 	}
 	counts.Basis = counts.Discordant
-	est := stats.BootstrapFor(plan, cmp.Name, clusters)
+	est := stats.Describe(clusters)
+	if cmp.Primary {
+		est = stats.BootstrapFor(plan, cmp.Name, clusters)
+	}
 	return ComparisonResult{From: cmp.From.Name(), To: cmp.To.Name(), Result: stats.Decide(plan, cmp.Name, !cmp.Primary, est, counts)}
 }
 

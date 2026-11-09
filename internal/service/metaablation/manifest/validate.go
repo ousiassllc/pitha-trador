@@ -31,6 +31,9 @@ func (m Manifest) Validate() error {
 	if m.CodeVersion == "" {
 		add("code_version is required")
 	}
+	if strings.TrimSpace(m.Cohort) == "" {
+		add("cohort is required (the cohort / Jev version the evaluation is for)")
+	}
 	errs = append(errs, m.validateWindows()...)
 	errs = append(errs, m.validateRules()...)
 	errs = append(errs, m.validateStatistics()...)
@@ -129,6 +132,9 @@ func (m Manifest) validateStatistics() []error {
 			break
 		}
 		layers[lm.Layer] = true
+	}
+	if !layers[LayerLabel] || !layers[LayerReplay] {
+		add("primary_metrics must register a metric for both layers %q and %q (a layer cannot be added or dropped after seeing results)", LayerLabel, LayerReplay)
 	}
 	var primary []string
 	for _, c := range metaablation.Comparisons() {
