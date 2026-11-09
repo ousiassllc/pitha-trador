@@ -3,7 +3,6 @@ package replaylayer
 import (
 	"context"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation"
 )
 
@@ -14,7 +13,7 @@ const ReferenceLabel = "reference: daily independent reset - every day is replay
 // reference replays every included day of every segment independently from the
 // initial state, for the four cells over the same days. It reports daily P&L
 // only: no equity curve, no drawdown.
-func (in Input) reference(ctx context.Context, p plan, decisions backtest.DecisionSource) (*Reference, error) {
+func (in Input) reference(ctx context.Context, p plan) (*Reference, error) {
 	cells := metaablation.Cells()
 	out := &Reference{Label: ReferenceLabel, Cells: make([]ReferenceCell, len(cells))}
 	paths := make([][]pnlPath, len(cells))
@@ -30,7 +29,7 @@ func (in Input) reference(ctx context.Context, p plan, decisions backtest.Decisi
 			}
 			from, to := maxTime(start, seg.From), minTime(start.AddDate(0, 0, 1), seg.To)
 			dayDef := SegmentSpec{Index: seg.Index, From: from, To: to, Days: []string{day}, InitialCapitalJPY: seg.InitialCapitalJPY}
-			runs, err := in.runCells(ctx, dayDef, decisions)
+			runs, err := in.runCells(ctx, dayDef)
 			if err != nil {
 				return nil, err
 			}
