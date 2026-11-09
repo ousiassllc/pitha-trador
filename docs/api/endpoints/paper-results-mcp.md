@@ -114,13 +114,13 @@
 
 引数: `from`, `to`、`limit`（既定 50、最大 50）。
 
-`data.models[]`: `metalabel_models.trained_at` が期間内。`trained_at` 降順。フィールドは `version` / `algorithm` / `label_version` / `status`（`active` / `rejected`） / `reject_reason`（200 ルーンを超える分は切って `reject_reason_truncated: true`） / `trained_at` / `train_start` / `train_end` / `oos_start` / `oos_end` / `train_samples` / `oos_samples` / `oos_auc` / `oos_expected_value_bps`。AUC・EV が NULL なら `null`。
+`data.models[]`: `metalabel_models.trained_at` が期間内。`trained_at` 降順。フィールドは `version` / `algorithm` / `label_version` / `status`（`active` / `rejected`） / `reject_reason`（200 ルーンを超える分は切って `reject_reason_truncated: true`） / `trained_at` / `train_start` / `train_end` / `oos_start` / `oos_end` / `train_samples` / `oos_samples` / `oos_auc` / `oos_expected_value_bps`。AUC・EV が NULL なら `null`。採用診断として保存済みの `oos_takes` / `oos_days` / `oos_ev_ci` / `oos_auc_ci` / `take_rate` / `adoption_recorded_status` / `criteria` / `numeric_checks`（`Judge` と同じ順・不等号の 5 項目 `{actual, required, met}`。`met` は `true` / `false` / `null`）/ `first_unmet`（数値基準だけから決め、`reject_reason` とは一致させない。`numeric_complete=false` のときは判明している中で最初）/ `numeric_complete` / `comparison` / `comparison_status` / `gate` / `forward` / `forward_status` も返す（issue #1045。未記録は `null`。定義は分割章 `paper-results-mcp-metalabel-history.md` §3.5.1）。
 
-`data.prediction_counts`: `metalabel_predictions.predicted_at` が期間内の行の `take` と `skip` の件数だけ（`action` の CHECK は `take` / `skip`。`000034`）。
+`data.prediction_counts`: `metalabel_predictions.predicted_at` が期間内の行の `take` と `skip` の件数だけ（`action` の CHECK は `take` / `skip`。`000034`）。ライブ予測の件数で、`models[].oos_takes`（OOS で較正後に take とした件数）とは別の数。
 
 `data.retrain_skips[]`: 夜間再学習がデータ不足で見送られた記録（`metalabel_retrain_skips.skipped_at` が期間内、新しい順、最大 `limit` 件。`000038`）。フィールドは `skipped_at` / `reason_code` / `usable_rows` / `required_rows`。`usable_rows` 件が `required_rows` 件に足りない（「必要 130 件中 87 件」は `required_rows=130`・`usable_rows=87`）。`reason_code` は固定コードで、自由文は返さない: `too_few_rows_before_oos`（検証期間より前の使えるラベル付き判断が fit+較正の最小件数に足りない）/ `too_few_rows_after_purge`（purge・embargo 後に fit か較正が最小件数に足りない）/ `training_data_unusable`（件数はあるがラベルが片側だけ等で学習できない）。未知のコードは `other`。
 
-返さない: `params_json`、`feature_names_json`、`oos_calibration_json`、`features_json`、確率・EV の行そのもの。
+返さない: `params_json`、`feature_names_json`、`oos_calibration_json`、`features_json`、確率・EV の行そのもの、自由文（`comparison.note`・`gate.detail`）。
 
 ### 3.6 `risk_rejections`
 

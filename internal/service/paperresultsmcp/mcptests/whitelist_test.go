@@ -129,7 +129,9 @@ func TestResponseKeysAreExactlyTheWhitelist(t *testing.T) {
 	meta := data("metalabel_history", period)
 	want("metalabel", meta, "models prediction_counts retrain_skips")
 	want("model", first(meta, "models"),
-		"version algorithm label_version status reject_reason reject_reason_truncated trained_at train_start train_end oos_start oos_end train_samples oos_samples oos_auc oos_expected_value_bps")
+		"version algorithm label_version status reject_reason reject_reason_truncated trained_at train_start train_end oos_start oos_end train_samples oos_samples oos_auc oos_expected_value_bps "+
+			// Adoption diagnostics (issue #1045); their nested keys are pinned in historytests.
+			"oos_takes oos_days oos_ev_ci oos_auc_ci take_rate adoption_recorded_status criteria numeric_checks first_unmet numeric_complete comparison comparison_status gate forward forward_status")
 	want("prediction counts", meta["prediction_counts"].(map[string]any), "take skip")
 	want("retrain skip", first(meta, "retrain_skips"), "skipped_at reason_code usable_rows required_rows")
 	risk := data("risk_rejections", period)
