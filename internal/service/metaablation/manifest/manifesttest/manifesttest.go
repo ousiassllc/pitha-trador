@@ -12,6 +12,9 @@ import (
 // T0 is the fixture's reference time (JST midnight, a Monday).
 var T0 = time.Date(2026, 10, 19, 0, 0, 0, 0, time.FixedZone("JST", 9*3600))
 
+// Cohort is the fixture's cohort.
+const Cohort = "jev-v2"
+
 // Valid returns an unfrozen, valid manifest with all Minimums unset.
 func Valid() manifest.Manifest {
 	var family []string
@@ -27,6 +30,7 @@ func Valid() manifest.Manifest {
 		Model:         manifest.ModelRef{Version: "lr-20261101-000000", ParamsSHA256: manifest.ParamsHash(`{"synthetic":true}`)},
 		DBCopy:        manifest.DBCopyRef{SHA256: manifest.ParamsHash("db-copy"), AsOf: T0.Add(19 * day)},
 		CodeVersion:   "test",
+		Cohort:        Cohort,
 		Windows: manifest.Windows{
 			TrainStart: T0, TrainEnd: T0.Add(5 * day), CalibrationEnd: T0.Add(5 * day),
 			OOSStart: T0.Add(6 * day), OOSEnd: T0.Add(8 * day), LabelEnd: T0.Add(8*day + 10*time.Minute),

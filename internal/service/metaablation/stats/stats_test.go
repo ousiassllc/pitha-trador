@@ -180,7 +180,7 @@ func TestReferenceComparisonHasNoVerdict(t *testing.T) {
 	from := []stats.DayValue{{"d1", 0}, {"d2", 0}, {"d3", 0}}
 	to := []stats.DayValue{{"d1", 10}, {"d2", 11}, {"d3", 10}}
 	res, _ := stats.DailyDifference(registered(), "diag", true, from, to, counts(3, 3))
-	if res.Verdict != "" || !res.Reference || res.Estimate.Mean < 10 {
+	if res.Verdict != "" || !res.Reference || res.Estimate.Mean < 10 || res.Estimate.CI != nil || res.MDE != nil {
 		t.Fatalf("reference result = %+v", res)
 	}
 }

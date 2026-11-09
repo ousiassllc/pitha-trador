@@ -30,9 +30,9 @@ type Input struct {
 	// with the model version against the manifest.
 	Model        *metalabel.Model
 	ParamsSHA256 string
-	// Cohort is the cohort / Jev version of the evaluation; "" disables it.
-	Cohort string
-	Rows   []Row
+	// OOSUsed is independence.Config.OOSUsed (optional).
+	OOSUsed map[int64]struct{}
+	Rows    []Row
 }
 
 // scored is one independent row with its reconstruction and model verdict.
@@ -52,6 +52,9 @@ func Run(ctx context.Context, in Input) (Result, error) {
 	if err := m.CheckModel(in.Model.Version, in.ParamsSHA256); err != nil {
 		return Result{}, err
 	}
+	if m.Cohort == "" {
+		return Result{}, errors.New("labellayer: the manifest has no cohort; the cohort check cannot be skipped")
+	}
 	plan, err := stats.PlanFrom(m, manifest.LayerLabel)
 	if err != nil {
 		return Result{}, err
@@ -64,7 +67,7 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		return Result{}, err
 	}
 	cfg := metalabel.DecideConfig{MinEVBps: m.Rules.MinEVBps, KellyFraction: metalabel.DefaultKellyFraction}
-	ic := independence.Config{Windows: m.Windows, Cohort: in.Cohort}
+	ic := independence.Config{Windows: m.Windows, Cohort: m.Cohort, OOSUsed: in.OOSUsed}
 
 	var out Result
 	out.Boundary = ic.Describe()

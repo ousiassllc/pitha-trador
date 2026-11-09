@@ -31,7 +31,7 @@ func TestIndependenceUsesTheRealWalkForwardWindows(t *testing.T) {
 	}
 	w := fromsplit.Windows(split, cfg)
 	w.EvalFrom, w.EvalTo = start, now.Add(48*time.Hour)
-	ic := independence.Config{Windows: w}
+	ic := independence.Config{Windows: w, OOSUsed: fromsplit.OOSUsed(split)}
 
 	used := 0
 	for _, set := range [][]training.Row{split.Fit, split.Calibrate} {
@@ -62,5 +62,29 @@ func TestIndependenceUsesTheRealWalkForwardWindows(t *testing.T) {
 	}
 	if got := ic.Classify(independence.Row{DecidedAt: boundary.Add(time.Nanosecond)}); got.Class != independence.Independent {
 		t.Errorf("just after LabelEnd + embargo: %+v", got)
+	}
+}
+
+// TestRowDroppedFromTheOOSIsNotReference: a decision before the split time
+// whose label window ends after it is dropped by SplitWalkForward, so the model
+// never saw it.
+func TestRowDroppedFromTheOOSIsNotReference(t *testing.T) {
+	jst := time.FixedZone("JST", 9*3600)
+	start := time.Date(2026, 10, 19, 9, 0, 0, 0, jst)
+	var rows []training.Row
+	for i := range 80 {
+		d := start.Add(time.Duration(i) * 30 * time.Minute)
+		rows = append(rows, training.Row{JevDecisionID: int64(i + 1), DecidedAt: d, LabelEnd: d.Add(10 * time.Minute)})
+	}
+	cfg := training.WalkForwardConfig{OOSMinRows: 10, OOSMinDays: 1, OOSMaxWindow: 21 * 24 * time.Hour, CalibrationFraction: 0.25, Embargo: 30 * time.Minute, MinFit: 10, MinCalibration: 5}
+	now := start.Add(79*30*time.Minute + 5*time.Minute) // the last row's label ends after now
+	split, err := training.SplitWalkForward(rows, now, start.Add(-time.Hour), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ic := independence.Config{Windows: fromsplit.Windows(split, cfg), OOSUsed: fromsplit.OOSUsed(split)}
+	last := rows[79]
+	if got := ic.Classify(independence.Row{ID: last.JevDecisionID, DecidedAt: last.DecidedAt}); got.Class != independence.Excluded {
+		t.Errorf("the dropped last row is %+v", got)
 	}
 }

@@ -54,6 +54,19 @@ func Mean(clusters []Cluster) (mean float64, ok bool) {
 	return s / n, true
 }
 
+// Describe is the statistic of the clusters without an interval: what a
+// reference comparison (a diagonal) reports. It is not a test, so it carries no
+// CI, no detectable difference and no verdict, and is not a member of the
+// multiple-comparison family.
+func Describe(clusters []Cluster) Estimate {
+	est := Estimate{Days: len(clusters)}
+	for _, c := range clusters {
+		est.Units += c.N
+	}
+	est.Mean, est.Defined = Mean(clusters)
+	return est
+}
+
 // Bootstrap resamples the clusters (whole days, with replacement) resamples
 // times and returns the percentile interval at the two-sided level alpha. It is
 // deterministic for a given seed. Draws without a unit are skipped.

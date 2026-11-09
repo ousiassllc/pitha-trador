@@ -3,6 +3,7 @@ package replaylayer
 import (
 	"strings"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation"
 	"github.com/ousiassllc/pitha-trador/internal/service/policy"
@@ -29,11 +30,30 @@ func stageOf(ev backtest.EntryEvaluation) (stage metaablation.Stage, reason stri
 	case backtest.OutcomeNoFill:
 		return metaablation.StageFill, "no_fill", true
 	}
+	if notACandidate(ev) {
+		// Counted at the decision stage first, as the label layer's eligibility
+		// package does, even when the row also fails an eligibility reason.
+		return metaablation.StageDecision, ReasonNoCandidate, true
+	}
 	reason = ""
 	if ev.Signal.RejectReason != nil {
 		reason = *ev.Signal.RejectReason
 	}
 	return stageOfReason(reason), reasonKey(reason), true
+}
+
+// ReasonNoCandidate is the reason of a decision whose Jev direction is neither
+// LONG nor SHORT (and that is no VWAP reversion candidate): the same string the
+// label layer's eligibility stage uses.
+const ReasonNoCandidate = "no_candidate"
+
+// notACandidate reports a decision with no LONG/SHORT primary signal: Jev's
+// direction is neither, and the VWAP reversion rule (which ignores Jev's
+// direction) does not apply.
+func notACandidate(ev backtest.EntryEvaluation) bool {
+	d := ev.Decision
+	return d.Direction != nil && !isReversion(ev) &&
+		*d.Direction != domain.JevDirectionLong && *d.Direction != domain.JevDirectionShort
 }
 
 // stageOfReason maps a policy reject_reason to the stage that produced it.

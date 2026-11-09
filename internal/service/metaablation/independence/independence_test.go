@@ -169,3 +169,20 @@ func TestZeroValueIsNotIndependent(t *testing.T) {
 		t.Fatal("the zero Result is independent")
 	}
 }
+
+func TestOOSRowsTheModelNeverSawAreNotReference(t *testing.T) {
+	cfg := independence.Config{Windows: windows(), OOSUsed: map[int64]struct{}{1: {}}}
+	if got := cfg.Classify(independence.Row{ID: 1, DecidedAt: at(250)}); got.Class != independence.Reference {
+		t.Errorf("a used OOS row: %+v", got)
+	}
+	if got := cfg.Classify(independence.Row{ID: 2, DecidedAt: at(250)}); got != (independence.Result{Class: independence.Excluded, Reason: independence.ReasonOOSNotUsed}) {
+		t.Errorf("an OOS-window row the split dropped: %+v", got)
+	}
+}
+
+func TestCohortCheckIsNeverOff(t *testing.T) {
+	cfg := independence.Config{Windows: windows()} // no expected cohort
+	if got := cfg.Classify(independence.Row{DecidedAt: at(500), Cohort: "jev-v1"}); got.Reason != independence.ReasonCohortMismatch {
+		t.Errorf("an empty expected cohort let a row through: %+v", got)
+	}
+}
