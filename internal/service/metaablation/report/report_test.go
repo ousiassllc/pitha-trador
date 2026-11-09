@@ -46,13 +46,13 @@ func labelResult(t *testing.T) labellayer.Result {
 	for i := range 4 {
 		at := manifesttest.T0.AddDate(0, 0, 10+i/2).Add(9 * time.Hour)
 		rows = append(rows, labellayer.Row{
-			ID: int64(i + 1), DecidedAt: at, Cohort: "c", Direction: domain.JevDirectionLong, NetReturnBps: float64(10 * (i + 1)),
+			ID: int64(i + 1), DecidedAt: at, Cohort: manifesttest.Cohort, Direction: domain.JevDirectionLong, NetReturnBps: float64(10 * (i + 1)),
 			Eligibility: eligibility.Input{Labeled: true, Policy: policy.Input{SpreadBps: f(3), Turnover5mJPY: f(1e7), Decision: &domain.JevDecision{
 				Direction: s(domain.JevDirectionLong), Confidence: f(0.9), EntryQuality: s("strong"), ContinuationProbability: f(0.9), ToxicFlow: f(0.1), LiquidityStressed: f(0.1)}},
 				Features: metalabel.Features{OFIShort: f(5), OFIMid: f(1), OFILong: f(1), MicropriceDevBps: f(1), SpreadBps: f(3), Return1m: f(0.001), JevScore: f(0.5), TDnetScore: f(0)}},
 		})
 	}
-	res, err := labellayer.Run(context.Background(), labellayer.Input{Manifest: mm, Model: &model, ParamsSHA256: mm.Model.ParamsSHA256, Cohort: "c", Rows: rows})
+	res, err := labellayer.Run(context.Background(), labellayer.Input{Manifest: mm, Model: &model, ParamsSHA256: mm.Model.ParamsSHA256, Rows: rows})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,12 +133,10 @@ func TestFailedLayerShowsItsReasonAndTheOtherLayerSurvives(t *testing.T) {
 
 func TestBuildRejectsInconsistentInput(t *testing.T) {
 	m := frozen(t)
-	lr := labelResult(t)
 	for name, in := range map[string]report.Input{
-		"unfrozen manifest":                {Manifest: manifesttest.Valid(), Label: report.LabelSection{Reason: "x"}, Replay: report.ReplaySection{Reason: "y"}},
-		"unavailable without why":          {Manifest: m, Label: report.LabelSection{}, Replay: report.ReplaySection{Reason: "y"}},
-		"available without result":         {Manifest: m, Label: report.LabelSection{Available: true}, Replay: report.ReplaySection{Reason: "y"}},
-		"more comparisons than registered": {Manifest: m, Label: report.LabelSection{Available: true, Result: &lr}, Replay: replay(), ExploratoryComparisons: 1},
+		"unfrozen manifest":        {Manifest: manifesttest.Valid(), Label: report.LabelSection{Reason: "x"}, Replay: report.ReplaySection{Reason: "y"}},
+		"unavailable without why":  {Manifest: m, Label: report.LabelSection{}, Replay: report.ReplaySection{Reason: "y"}},
+		"available without result": {Manifest: m, Label: report.LabelSection{Available: true}, Replay: report.ReplaySection{Reason: "y"}},
 	} {
 		if _, err := report.Build(in); err == nil {
 			t.Errorf("%s: accepted", name)
@@ -193,5 +191,72 @@ func TestWriteFilesToADirectoryOutsideTheDBAndNeverOverwrite(t *testing.T) {
 	}
 	if _, err := report.WriteFiles(out, d, dbDir); err == nil {
 		t.Error("a second run overwrote the first run's files")
+	}
+}
+
+func twoSegmentReplay() report.ReplaySection {
+	r := replay()
+	seg := r.Segments[0]
+	seg.Name, seg.From, seg.To = "seg2", "2026-10-31", "2026-10-31"
+	r.Segments = append(r.Segments, seg)
+	return r
+}
+
+// TestSegmentedReplayKeepsTheLabelLayerAndTheFamily: per-segment results are
+// the same registered comparisons, not new family members, so segmentation
+// neither exceeds the family nor discards the label layer.
+func TestSegmentedReplayKeepsTheLabelLayerAndTheFamily(t *testing.T) {
+	m := frozen(t)
+	lr := labelResult(t)
+	d, err := report.Build(report.Input{Manifest: m, Label: report.LabelSection{Available: true, Result: &lr}, Replay: twoSegmentReplay()})
+	if err != nil {
+		t.Fatalf("Build with 2 segments: %v", err)
+	}
+	if d.Multiple.FamilyExceeded || d.Multiple.Executed != 8 || len(d.Replay.Segments) != 2 || d.Label.Result == nil || len(d.Label.Result.Comparisons) != 6 {
+		t.Fatalf("multiple %+v segments %d", d.Multiple, len(d.Replay.Segments))
+	}
+}
+
+// TestExceededFamilyDowngradesVerdictsButKeepsBothLayers: an exploratory
+// comparison beyond the registered total is recorded; the level uses the
+// larger count, every verdict becomes 優劣未確定 and nothing is discarded.
+func TestExceededFamilyDowngradesVerdictsButKeepsBothLayers(t *testing.T) {
+	m := frozen(t)
+	lr := labelResult(t)
+	lr.Comparisons[0].Verdict = stats.Superior
+	rep := twoSegmentReplay()
+	rep.Segments[0].Differences[0].Verdict = stats.Inferior
+	d, err := report.Build(report.Input{Manifest: m, Label: report.LabelSection{Available: true, Result: &lr}, Replay: rep, ExploratoryComparisons: 1})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	mc := d.Multiple
+	if !mc.FamilyExceeded || mc.Registered != 8 || mc.Executed != 9 || mc.AlphaAdjusted != 0.05/9 || mc.FamilyExceededReason == "" {
+		t.Fatalf("multiple %+v", mc)
+	}
+	if v := d.Label.Result.Comparisons[0]; v.Verdict != stats.Undetermined || v.Reasons[len(v.Reasons)-1] != report.ReasonFamilyExceeded {
+		t.Errorf("label verdict not downgraded: %+v", v.Result)
+	}
+	if d.Replay.Segments[0].Differences[0].Verdict != stats.Undetermined || d.Label.Result == nil || d.Replay.Segments[1].Cells == nil {
+		t.Error("replay verdict not downgraded or a layer was dropped")
+	}
+	// The caller's results are not modified.
+	if lr.Comparisons[0].Verdict != stats.Superior || rep.Segments[0].Differences[0].Verdict != stats.Inferior {
+		t.Error("the input results were modified")
+	}
+	if !strings.Contains(report.Markdown(d), "比較数が事前登録を超えた") {
+		t.Error("the exceeded family is not shown")
+	}
+	// Diagonals carry no verdict to downgrade or count.
+	for _, c := range d.Label.Result.Comparisons {
+		if c.Reference && (c.Verdict != "" || c.Estimate.CI != nil) {
+			t.Errorf("diagonal %s carries a test", c.Name)
+		}
+	}
+}
+
+func TestCohortIsShown(t *testing.T) {
+	if !strings.Contains(report.Markdown(build(t)), manifesttest.Cohort) {
+		t.Error("the frozen cohort is not in the report")
 	}
 }

@@ -30,7 +30,7 @@ import (
 type Row struct {
 	ID        int64
 	DecidedAt time.Time
-	// Cohort is the cohort / Jev version key compared with Input.Cohort.
+	// Cohort is the cohort / Jev version key compared with the manifest's cohort.
 	Cohort string
 	// Direction is Jev's direction (LONG/SHORT), the side of the label.
 	Direction string

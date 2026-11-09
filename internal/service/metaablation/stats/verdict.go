@@ -35,7 +35,8 @@ type Counts struct {
 }
 
 // Result is one comparison To - From with its verdict. Reference comparisons
-// (the diagonals, the original-OOS rescoring) get no verdict: Verdict is "".
+// (the diagonals) are descriptive only: no interval, no detectable difference,
+// Verdict "", and they are not members of the multiple-comparison family.
 type Result struct {
 	Name      string   `json:"name"`
 	Reference bool     `json:"reference"`
@@ -64,12 +65,15 @@ func Decide(plan Plan, name string, reference bool, est Estimate, counts Counts)
 		Name: name, Reference: reference, Estimate: est, Counts: counts,
 		AlphaAdjusted: plan.AlphaAdjusted(), Correction: plan.Correction, NComparisons: plan.NComparisons,
 	}
+	if reference {
+		// Reference comparisons are descriptive: no interval, no detectable
+		// difference, no verdict, and they are not counted in the family.
+		r.Estimate.CI, r.Estimate.SE = nil, 0
+		return r
+	}
 	if plan.Power != nil && est.CI != nil {
 		mde := (normalQuantile(1-r.AlphaAdjusted/2) + normalQuantile(*plan.Power)) * est.SE
 		r.MDE = &mde
-	}
-	if reference {
-		return r
 	}
 	for _, f := range plan.UnsetFields() {
 		r.Reasons = append(r.Reasons, ReasonUnsetPrefix+f)
@@ -129,7 +133,10 @@ func DailyDifference(plan Plan, name string, reference bool, from, to []DayValue
 		clusters[i] = Cluster{Sum: to[i].Value - from[i].Value, N: 1}
 	}
 	counts.Days = len(clusters)
-	return Decide(plan, name, reference, BootstrapFor(plan, name, clusters), counts), nil
+	if reference {
+		return Decide(plan, name, true, Describe(clusters), counts), nil
+	}
+	return Decide(plan, name, false, BootstrapFor(plan, name, clusters), counts), nil
 }
 
 // BootstrapFor is Bootstrap at the plan's resamples, adjusted alpha and a seed

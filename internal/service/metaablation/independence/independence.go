@@ -47,6 +47,7 @@ func (c Class) String() string {
 const (
 	ReasonIndependent       = "independent"
 	ReasonOriginalOOS       = "original_oos"
+	ReasonOOSNotUsed        = "oos_window_row_not_used"
 	ReasonCohortMismatch    = "cohort_mismatch"
 	ReasonBeforeTrainStart  = "before_train_start"
 	ReasonTrainingWindow    = "in_training_or_calibration_window"
@@ -68,9 +69,15 @@ type Row struct {
 // Config is the model's windows and the cohort the evaluation is for.
 type Config struct {
 	Windows manifest.Windows
-	// Cohort is the expected cohort / Jev version; a row with another (or no)
-	// cohort is excluded. "" disables the check.
+	// Cohort is the expected cohort / Jev version (the manifest's); a row with
+	// another cohort is excluded. The check is never off: an empty Cohort
+	// matches only rows without a cohort, and the manifest requires one.
 	Cohort string
+	// OOSUsed, when non-nil, is the set of decision IDs the original OOS
+	// actually held (training.Split.OOS). A row inside the OOS window that is
+	// not in it was dropped before the model was tested (e.g. its label was not
+	// yet complete), so the model never saw it: it is excluded, not reference.
+	OOSUsed map[int64]struct{}
 }
 
 // Result is the class of a row and why.
@@ -86,7 +93,7 @@ func (c Config) Classify(r Row) Result {
 	t := r.DecidedAt
 	trained := laterOf(w.TrainEnd, w.CalibrationEnd)
 	switch {
-	case c.Cohort != "" && r.Cohort != c.Cohort:
+	case r.Cohort != c.Cohort:
 		return Result{Excluded, ReasonCohortMismatch}
 	case t.Before(w.TrainStart):
 		return Result{Excluded, ReasonBeforeTrainStart}
@@ -95,6 +102,9 @@ func (c Config) Classify(r Row) Result {
 	case t.Before(w.OOSStart):
 		return Result{Excluded, ReasonGapBetweenWindows}
 	case t.Before(w.OOSEnd):
+		if _, used := c.OOSUsed[r.ID]; c.OOSUsed != nil && !used {
+			return Result{Excluded, ReasonOOSNotUsed}
+		}
 		return Result{Reference, ReasonOriginalOOS}
 	case !t.After(w.OOSEnd):
 		return Result{Excluded, ReasonNotAfterOOSEnd}

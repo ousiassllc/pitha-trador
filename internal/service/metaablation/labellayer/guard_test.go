@@ -17,6 +17,9 @@ func sources(t *testing.T) map[string]*ast.File {
 		t.Fatal(err)
 	}
 	out := map[string]*ast.File{}
+	if len(names) == 0 {
+		t.Fatal("no source files found: the guards would be vacuous")
+	}
 	for _, n := range names {
 		if strings.HasSuffix(n, "_test.go") {
 			continue
@@ -26,6 +29,9 @@ func sources(t *testing.T) map[string]*ast.File {
 			t.Fatal(err)
 		}
 		out[n] = f
+	}
+	if len(out) == 0 {
+		t.Fatal("no non-test source files found: the guards would be vacuous")
 	}
 	return out
 }
@@ -76,7 +82,7 @@ func TestNoThresholdSearchAndNoAdoptionBar(t *testing.T) {
 					}
 				}
 			case *ast.BasicLit:
-				if x.Kind == token.INT && (x.Value == "370" || x.Value == "740") || x.Kind == token.FLOAT && x.Value == "11.0" {
+				if (x.Kind == token.INT || x.Kind == token.FLOAT) && (x.Value == "370" || x.Value == "740" || x.Value == "11" || x.Value == "11.0") {
 					t.Errorf("%s: literal %s is an adoption-bar value", name, x.Value)
 				}
 			}

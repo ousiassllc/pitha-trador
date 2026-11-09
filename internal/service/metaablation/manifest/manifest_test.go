@@ -129,6 +129,8 @@ func TestValidateRejectsIncompletePreRegistration(t *testing.T) {
 		"family not the primary": {func(m *manifest.Manifest) { m.Statistics.ComparisonFamily = m.Statistics.ComparisonFamily[:3] }, "comparison_family"},
 		"too few comparisons":    {func(m *manifest.Manifest) { m.Statistics.NumComparisons = 3 }, "num_comparisons"},
 		"unknown correction":     {func(m *manifest.Manifest) { m.Statistics.Correction = "holm" }, "correction"},
+		"only one layer":         {func(m *manifest.Manifest) { m.Statistics.PrimaryMetrics = m.Statistics.PrimaryMetrics[:1] }, "both layers"},
+		"no cohort":              {func(m *manifest.Manifest) { m.Cohort = " " }, "cohort"},
 		"no db hash":             {func(m *manifest.Manifest) { m.DBCopy.SHA256 = "" }, "db_copy"},
 		"bad model hash":         {func(m *manifest.Manifest) { m.Model.ParamsSHA256 = "x" }, "params_sha256"},
 		"no eval window":         {func(m *manifest.Manifest) { m.Windows.EvalFrom = m.Windows.EvalTo }, "eval_from"},

@@ -38,3 +38,15 @@ func Windows(s training.Split, cfg training.WalkForwardConfig) manifest.Windows 
 	}
 	return w
 }
+
+// OOSUsed is the set of decision IDs of the split's original OOS rows, for
+// independence.Config.OOSUsed: rows inside the OOS window that SplitWalkForward
+// dropped (their label window ends after the split time) are not in it, so the
+// model never saw them and they are not classed as reference.
+func OOSUsed(s training.Split) map[int64]struct{} {
+	used := make(map[int64]struct{}, len(s.OOS))
+	for _, r := range s.OOS {
+		used[r.JevDecisionID] = struct{}{}
+	}
+	return used
+}
