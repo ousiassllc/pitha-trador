@@ -1,6 +1,6 @@
 # API 仕様: Paper 実績 MCP のツール
 
-`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 14 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics`・`entry_quality_whatif`・`disclosure_skip_summary` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つと、調整の実験の 4 つ（分割章 `paper-results-mcp-experiments.md`。issue #871）と、Jev のプロンプトの 3 つ（issue #872）。合計 33。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23〜§3.24、`entry_quality_whatif` は分割章 `docs/api/endpoints/paper-results-mcp-entry-quality.md` §3.30、`disclosure_skip_summary` は分割章 `docs/api/endpoints/paper-results-mcp-disclosure-skip.md` §3.31）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
+`docs/architecture/paper-results-mcp.md` の MCP が認証通過後に提供するツール（読み取りの 14 つ（`health_today`・`metalabel_training_readiness`・`jev_models`・`session_diagnostics`・`entry_quality_whatif`・`disclosure_skip_summary` を含む）と、設定の読み書きの 6 つと、Paper の注文案の 6 つと、調整の実験の 4 つ（分割章 `paper-results-mcp-experiments.md`。issue #871）と、Jev のプロンプトの 3 つ（issue #872）。合計 33。メタラベル診断ツールは分割章 `docs/api/endpoints/paper-results-mcp-metalabel.md` §3.23〜§3.24、`metalabel_history` の採用診断（§3.5）は分割章 `docs/api/endpoints/paper-results-mcp-metalabel-history.md` §3.5.1、`entry_quality_whatif` は分割章 `docs/api/endpoints/paper-results-mcp-entry-quality.md` §3.30、`disclosure_skip_summary` は分割章 `docs/api/endpoints/paper-results-mcp-disclosure-skip.md` §3.31）。アプリの Huma `/api/v1` とは別プロセス・別ポートであり、セッション Cookie は使わない。エラーの HTTP と `code` は `docs/architecture/paper-results-mcp-errors.md`。
 
 トランスポートは HTTP の MCP である（stdio ではない）。**回答（実装）**: Streamable HTTP を選んだ。`POST` に JSON-RPC 2.0 を 1 件ずつ送り、応答は常に単一の `application/json`（SSE ストリームは開かない）。根拠: 旧来の HTTP+SSE は MCP 仕様 2025-03-26 で Streamable HTTP に置き換えられ、本サーバーは長寿命の接続も server push も持たないため、認証・同時実行 2・3 秒上限の検証が単純になる。対応する `protocolVersion` は `2025-06-18` / `2025-03-26` / `2024-11-05`。`GET` は 405（認証後）。Grok Bot のコネクタが旧来の HTTP+SSE しか話せないと分かった場合は別途対応する（ツールの JSON は変わらない）。ツール名と引数・戻り値の JSON は、その版がどちらでも本節のとおり固定する。`initialize` と `tools/list` を含む全リクエストがアーキテクチャ §3.3 の API キーを必要とする。URL を知っているだけではツール一覧も返さない。経路（Tailscale、任意の Cloudflare Tunnel、その他）が違ってもツールの JSON は同じである。成功・エラーの JSON-RPC への載せ方は `architecture/paper-results-mcp-errors.md` §2。
 
@@ -114,13 +114,13 @@
 
 引数: `from`, `to`、`limit`（既定 50、最大 50）。
 
-`data.models[]`: `metalabel_models.trained_at` が期間内。`trained_at` 降順。フィールドは `version` / `algorithm` / `label_version` / `status`（`active` / `rejected`） / `reject_reason`（200 ルーンを超える分は切って `reject_reason_truncated: true`） / `trained_at` / `train_start` / `train_end` / `oos_start` / `oos_end` / `train_samples` / `oos_samples` / `oos_auc` / `oos_expected_value_bps`。AUC・EV が NULL なら `null`。
+`data.models[]`: `metalabel_models.trained_at` が期間内。`trained_at` 降順。フィールドは `version` / `algorithm` / `label_version` / `status`（`active` / `rejected`） / `reject_reason`（200 ルーンを超える分は切って `reject_reason_truncated: true`） / `trained_at` / `train_start` / `train_end` / `oos_start` / `oos_end` / `train_samples` / `oos_samples` / `oos_auc` / `oos_expected_value_bps`。AUC・EV が NULL なら `null`。採用診断として保存済みの `oos_takes` / `oos_days` / `oos_ev_ci` / `oos_auc_ci` / `take_rate` / `adoption_recorded_status` / `criteria` / `numeric_checks`（`Judge` と同じ順・不等号の 5 項目 `{actual, required, met}`。`met` は `true` / `false` / `null`）/ `first_unmet`（数値基準だけから決め、`reject_reason` とは一致させない。`numeric_complete=false` のときは判明している中で最初）/ `numeric_complete` / `comparison` / `comparison_status` / `gate` / `forward` / `forward_status` も返す（issue #1045。未記録は `null`。定義は分割章 `paper-results-mcp-metalabel-history.md` §3.5.1）。
 
-`data.prediction_counts`: `metalabel_predictions.predicted_at` が期間内の行の `take` と `skip` の件数だけ（`action` の CHECK は `take` / `skip`。`000034`）。
+`data.prediction_counts`: `metalabel_predictions.predicted_at` が期間内の行の `take` と `skip` の件数だけ（`action` の CHECK は `take` / `skip`。`000034`）。ライブ予測の件数で、`models[].oos_takes`（OOS で較正後に take とした件数）とは別の数。
 
 `data.retrain_skips[]`: 夜間再学習がデータ不足で見送られた記録（`metalabel_retrain_skips.skipped_at` が期間内、新しい順、最大 `limit` 件。`000038`）。フィールドは `skipped_at` / `reason_code` / `usable_rows` / `required_rows`。`usable_rows` 件が `required_rows` 件に足りない（「必要 130 件中 87 件」は `required_rows=130`・`usable_rows=87`）。`reason_code` は固定コードで、自由文は返さない: `too_few_rows_before_oos`（検証期間より前の使えるラベル付き判断が fit+較正の最小件数に足りない）/ `too_few_rows_after_purge`（purge・embargo 後に fit か較正が最小件数に足りない）/ `training_data_unusable`（件数はあるがラベルが片側だけ等で学習できない）。未知のコードは `other`。
 
-返さない: `params_json`、`feature_names_json`、`oos_calibration_json`、`features_json`、確率・EV の行そのもの。
+返さない: `params_json`、`feature_names_json`、`oos_calibration_json`、`features_json`、確率・EV の行そのもの、自由文（`comparison.note`・`gate.detail`）。
 
 ### 3.6 `risk_rejections`
 

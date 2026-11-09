@@ -218,7 +218,7 @@ var tools = []tool{
 	},
 	{
 		name:        "metalabel_history",
-		description: "メタモデルの採用/却下履歴と OOS AUC/EV、予測の take/skip 件数、データ不足による再学習の見送り（固定コードと必要件数中の件数。読み取り専用）",
+		description: "メタモデルの採用/却下履歴と OOS AUC/EV、各モデルの採用診断（oos_takes・OOS 日数・信頼区間・採用基準・数値基準 5 項目の充足と最初の未達 first_unmet・現行モデルとの比較・変更頻度制限・前向き評価。未記録は null）、予測の take/skip 件数（ライブ予測。oos_takes とは別の数）、データ不足による再学習の見送り（固定コードと必要件数中の件数。読み取り専用）",
 		schema:      periodSchema(map[string]any{"limit": limitProp(maxMetalabelList)}),
 		decode: func(raw json.RawMessage) (periodArgs, runFunc, *toolError) {
 			var a struct {

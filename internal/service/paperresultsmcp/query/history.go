@@ -10,10 +10,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/ousiassllc/pitha-trador/internal/domain/orderproposal"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query/adoptionview"
 )
 
 // Model is one metalabel_history model (API spec §3.5). params_json,
-// feature_names_json and oos_calibration_json are not selected.
+// feature_names_json and oos_calibration_json are not selected; the adoption
+// record is reduced to the whitelisted adoptionview.View (issue #1045), whose
+// fields sit beside the model's own.
 type Model struct {
 	Version               string   `json:"version"`
 	Algorithm             string   `json:"algorithm"`
@@ -30,6 +33,7 @@ type Model struct {
 	OosSamples            int64    `json:"oos_samples"`
 	OosAUC                *float64 `json:"oos_auc"`
 	OosExpectedValueBps   *float64 `json:"oos_expected_value_bps"`
+	adoptionview.View
 }
 
 // PredictionCounts are the metalabel_predictions take/skip counts only.
@@ -54,7 +58,8 @@ func Metalabel(ctx context.Context, q Q, r Range, limit int) (MetalabelHistory, 
 	rows, err := q.QueryContext(ctx, `
 SELECT version, algorithm, label_version, status, reject_reason, trained_at,
 	train_start, train_end, oos_start, oos_end, train_samples, oos_samples,
-	oos_auc, oos_expected_value_bps
+	oos_auc, oos_expected_value_bps, oos_takes, oos_days, oos_ev_ci_low_bps, oos_ev_ci_high_bps,
+	oos_auc_ci_low, oos_auc_ci_high, adoption_json, forward_json
 FROM metalabel_models
 WHERE trained_at >= ? AND trained_at < ?
 ORDER BY trained_at DESC, id DESC
@@ -70,16 +75,21 @@ LIMIT ?`, from, to, limit)
 			m                                                 Model
 			trainedAt, trainStart, trainEnd, oosStart, oosEnd string
 			auc, ev                                           sql.NullFloat64
+			adoption                                          adoptionview.Stored
 		)
 		if err := rows.Scan(&m.Version, &m.Algorithm, &m.LabelVersion, &m.Status, &m.RejectReason,
 			&trainedAt, &trainStart, &trainEnd, &oosStart, &oosEnd,
-			&m.TrainSamples, &m.OosSamples, &auc, &ev); err != nil {
+			&m.TrainSamples, &m.OosSamples, &auc, &ev, &adoption.OOSTakes, &adoption.OOSDays,
+			&adoption.EVLow, &adoption.EVHigh, &adoption.AUCLow, &adoption.AUCHigh,
+			&adoption.AdoptionJSON, &adoption.ForwardJSON); err != nil {
 			return MetalabelHistory{}, fmt.Errorf("query: scan metalabel model: %w", err)
 		}
 		m.TrainedAt, m.TrainStart, m.TrainEnd = FormatOut(trainedAt), FormatOut(trainStart), FormatOut(trainEnd)
 		m.OosStart, m.OosEnd = FormatOut(oosStart), FormatOut(oosEnd)
 		m.OosAUC, m.OosExpectedValueBps = floatPtr(auc), floatPtr(ev)
 		m.RejectReason, m.RejectReasonTruncated = truncateRunes(m.RejectReason, MaxReasonRunes)
+		adoption.OOSSamples = m.OosSamples
+		m.View = adoptionview.Build(adoption)
 		h.Models = append(h.Models, m)
 	}
 	if err := rows.Err(); err != nil {

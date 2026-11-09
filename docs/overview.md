@@ -113,6 +113,7 @@ graph TD
 | Paper 実績 MCP（読み取りと、ホワイトリスト設定の読み書きと、Paper の注文案の受け付け） | `docs/architecture/paper-results-mcp.md`（ツールは `docs/api/endpoints/paper-results-mcp.md` と注文案の分割章 `paper-results-mcp-proposals.md`・調整の実験の分割章 `paper-results-mcp-experiments.md`（設計は `docs/architecture/paper-results-mcp-experiments.md`）、注文案の処理（Risk check・Paper 発注・期限・取消）は `docs/architecture/order-proposal-processing.md`、エラーは `docs/architecture/paper-results-mcp-errors.md`、プロセスは `docs/components/paper-results-mcp.md`） | リモートの Grok Bot がプライベートトンネル（Tailscale、任意の Cloudflare Tunnel、その他）経由で、Windows PC 上の MCP から Paper の実績・Jev 判断・メタモデル・Risk・収集状況の集計とラベルを読む仕様。既定オフ。必須の認証は別 API キー。待受の既定は `127.0.0.1:48110`。読み取りの DB は `mode=ro`。設定の書き込みはホワイトリストの `settings_*` ツールと、Paper の注文案を受け付けて記録する `order_proposal_*` ツール（#827。受け付けるだけで発注はアプリ。既定オフ、オンは Settings だけ）だけが別の狭い接続で行う（#806・#807。設定の書き込みは既定で許可、Settings と MCP の両方で切替、監査ログ付き）。板・時価の生データと `secrets` は出さない。kabu の状態を読む #347 の MCP とは別プロセス。実装は含まない |
 | コンポーネント設計 | `docs/components/overview.md`（§5〜§9は `docs/components/lit.md`・`runtime.md` に分割） | HALT（HTMX+Atomic+Lit+Templ）構成、Wails統合、Lit Web Components（チャート/Scannerテーブル等） |
 | 環境構築 | `docs/environment/setup.md`（CI/CDは `docs/environment/ci.md`、改訂履歴は `docs/environment/setup/history.md` に分割） | 開発環境・必要ツール・環境変数・銘柄マスタ投入・Makefile・Lint/Format/Linterly/Git Hooks・Swagger/OpenAPI・CI/CD |
+| 調査・研究メモ（メタ×品質足切りの比較） | `docs/research/metaablation.md`（事前登録値の提案は `docs/research/metaablation-thresholds.md`） | オフラインCLI `cmd/metaablation` の目的・手順・結果の読み方（proxyラベル・3つの母集団・`優劣未確定`・DBの写しの取得に別途承認が要ること）。仕様ではなく研究用 |
 
 ## マイルストーン / リリース計画
 
