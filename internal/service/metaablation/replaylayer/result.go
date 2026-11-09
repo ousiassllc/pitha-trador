@@ -152,7 +152,7 @@ type CellSegment struct {
 
 // CellConfig is what one cell changes: nothing but these three values.
 type CellConfig struct {
-	Entry           string // "meta" (M on) or "no_meta_filter" (M off)
+	Entry           string // EntryMOn (M on) or EntryMOff (M off)
 	MinEntryQuality string // metaablation.QualityCut (Q on) or the lowest quality (Q off)
 	ModelApplied    bool
 }

@@ -3,7 +3,6 @@ package replaylayer
 import (
 	"context"
 
-	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation"
 )
 
@@ -16,7 +15,6 @@ func Run(ctx context.Context, in Input) (Result, error) {
 	}
 	cells := metaablation.Cells()
 	p := newPlan(in)
-	decisions := backtest.NewSliceDecisionSource(in.Decisions)
 
 	res := Result{
 		Window: Window{From: in.From, To: in.To}, Config: in.configRecord(), Population: PopulationDescription,
@@ -27,7 +25,7 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		res.Cells[i] = CellResult{Cell: c, Name: c.Name(), Config: cellConfig(c)}
 	}
 	for _, seg := range p.segments {
-		runs, err := in.runCells(ctx, seg, decisions)
+		runs, err := in.runCells(ctx, seg)
 		if err != nil {
 			return Result{}, err
 		}
@@ -51,7 +49,7 @@ func Run(ctx context.Context, in Input) (Result, error) {
 		return Result{}, err
 	}
 	if in.ReferenceDailyReset {
-		if res.ReferenceDailyReset, err = in.reference(ctx, p, decisions); err != nil {
+		if res.ReferenceDailyReset, err = in.reference(ctx, p); err != nil {
 			return Result{}, err
 		}
 	}

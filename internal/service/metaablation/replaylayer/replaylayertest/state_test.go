@@ -157,3 +157,27 @@ func TestMissingData_AStretchWithNoBarsIsListedAsUnavailable(t *testing.T) {
 		t.Fatalf("unavailable %+v segments %d, want the empty tail listed with %q", res.Unavailable, len(res.Segments), replaylayer.ReasonNoSnapshots)
 	}
 }
+
+// A decision stamped inside an unavailable day must not look fresh on the first
+// bar after the gap: it is never evaluated and no cell enters from it.
+func TestMissingData_ADecisionInsideTheGapIsNeverReplayed(t *testing.T) {
+	in := gapScenario()
+	gapDecision := decision(1, 100) // would clear every guard and enter
+	in.Decisions = append(in.Decisions, gapDecision)
+	res := run(t, in)
+	base := run(t, gapScenario())
+	for i, c := range res.Cells {
+		n := c.Totals
+		if n.Evaluated > n.DecisionsInWindow || n.NotEvaluated < 0 {
+			t.Errorf("%s: counts %+v, want Evaluated <= DecisionsInWindow and NotEvaluated >= 0", c.Name, n)
+		}
+		if n.Evaluated != base.Cells[i].Totals.Evaluated || n.Entries != base.Cells[i].Totals.Entries {
+			t.Errorf("%s: evaluated/entries %d/%d, want %d/%d as without the gap decision", c.Name, n.Evaluated, n.Entries, base.Cells[i].Totals.Evaluated, base.Cells[i].Totals.Entries)
+		}
+		for _, tr := range c.Segments[1].Trades {
+			if tr.DecisionID == gapDecision.ID {
+				t.Errorf("%s: traded the decision stamped in the gap", c.Name)
+			}
+		}
+	}
+}

@@ -10,7 +10,7 @@ import (
 // stageScenario has rows failing several stages at once, each on flat prices
 // (an entry just times out), spaced so no position is open at the next one.
 func stageScenario() replaylayer.Input {
-	s := newScript().spread(2, 60).spread(40, 20).spread(60, 20)
+	s := newScript().spread(2, 60).spread(40, 20).spread(60, 20).spread(120, 60)
 	bars := s.bars(nil, 0, 150)
 	return input(bars, 1,
 		// eligibility (spread 60 > 50) AND entry_quality fair: eligibility is first.
@@ -26,6 +26,9 @@ func stageScenario() replaylayer.Input {
 		decision(0, 80),
 		// Jev has no LONG/SHORT direction: not a candidate.
 		decision(0, 100, noDirection()),
+		// Jev has no direction AND the spread is too wide: the decision stage is
+		// first, as in the label layer (no_candidate), not eligibility.
+		decision(0, 120, noDirection()),
 	)
 }
 
@@ -40,10 +43,10 @@ func dropped(c replaylayer.CellResult) map[string]int {
 func TestStages_FirstDroppingStageInTheLiveOrderForRowsFailingSeveral(t *testing.T) {
 	res := run(t, stageScenario())
 	want := map[string]map[string]int{
-		"m_off_q_off": {"decision": 1, "eligibility": 1, "quality": 0, "flow_guards": 2, "meta": 0, "risk": 0, "fill": 0},
-		"m_off_q_on":  {"decision": 1, "eligibility": 1, "quality": 1, "flow_guards": 1, "meta": 0, "risk": 0, "fill": 0},
-		"m_on_q_off":  {"decision": 1, "eligibility": 1, "quality": 0, "flow_guards": 2, "meta": 1, "risk": 0, "fill": 0},
-		"m_on_q_on":   {"decision": 1, "eligibility": 1, "quality": 1, "flow_guards": 1, "meta": 1, "risk": 0, "fill": 0},
+		"m_off_q_off": {"decision": 2, "eligibility": 1, "quality": 0, "flow_guards": 2, "meta": 0, "risk": 0, "fill": 0},
+		"m_off_q_on":  {"decision": 2, "eligibility": 1, "quality": 1, "flow_guards": 1, "meta": 0, "risk": 0, "fill": 0},
+		"m_on_q_off":  {"decision": 2, "eligibility": 1, "quality": 0, "flow_guards": 2, "meta": 1, "risk": 0, "fill": 0},
+		"m_on_q_on":   {"decision": 2, "eligibility": 1, "quality": 1, "flow_guards": 1, "meta": 1, "risk": 0, "fill": 0},
 	}
 	entries := map[string]int{"m_off_q_off": 2, "m_off_q_on": 2, "m_on_q_off": 1, "m_on_q_on": 1}
 	for name, w := range want {
@@ -54,12 +57,12 @@ func TestStages_FirstDroppingStageInTheLiveOrderForRowsFailingSeveral(t *testing
 				t.Errorf("%s: stage %s dropped %d, want %d (all: %v)", name, stage, got[stage], n, got)
 			}
 		}
-		if c.Totals.Evaluated != 6 || c.Totals.Entries != entries[name] {
-			t.Errorf("%s: evaluated %d entries %d, want 6 / %d", name, c.Totals.Evaluated, c.Totals.Entries, entries[name])
+		if c.Totals.Evaluated != 7 || c.Totals.Entries != entries[name] {
+			t.Errorf("%s: evaluated %d entries %d, want 7 / %d", name, c.Totals.Evaluated, c.Totals.Entries, entries[name])
 		}
 		// Reached counts fall by exactly what dropped before them.
 		stages := c.Segments[0].Stages
-		reached := 6
+		reached := 7
 		for _, s := range stages {
 			if s.Reached != reached {
 				t.Errorf("%s: stage %s reached %d, want %d", name, s.Stage, s.Reached, reached)
@@ -68,6 +71,15 @@ func TestStages_FirstDroppingStageInTheLiveOrderForRowsFailingSeveral(t *testing
 		}
 		if reached != entries[name] {
 			t.Errorf("%s: %d rows left after the last stage, want %d entries", name, reached, entries[name])
+		}
+	}
+}
+
+func TestStages_JevNoneWithAnEligibilityFailureIsCountedAtTheDecisionStage(t *testing.T) {
+	res := run(t, stageScenario())
+	for _, c := range res.Cells {
+		if got := c.Segments[0].DropReasons["decision:"+replaylayer.ReasonNoCandidate]; got != 2 {
+			t.Errorf("%s: drop reasons %v, want both no-direction rows at decision:no_candidate", c.Name, c.Segments[0].DropReasons)
 		}
 	}
 }

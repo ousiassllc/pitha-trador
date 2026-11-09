@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ousiassllc/pitha-trador/internal/domain"
 	"github.com/ousiassllc/pitha-trador/internal/service/backtest"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation"
 )
@@ -38,7 +39,8 @@ func replaySegment(ctx context.Context, cfgs []backtest.RunConfig, seg SegmentSp
 
 // runCells builds the four cells' configs on seg, asserts they differ only in
 // the axes and replays each. The results are in metaablation.Cells() order.
-func (in Input) runCells(ctx context.Context, seg SegmentSpec, decisions backtest.DecisionSource) ([]cellRun, error) {
+func (in Input) runCells(ctx context.Context, seg SegmentSpec) ([]cellRun, error) {
+	decisions := in.segmentDecisions(seg)
 	cells := metaablation.Cells()
 	runs := make([]cellRun, len(cells))
 	cfgs := make([][]backtest.RunConfig, len(cells))
@@ -55,4 +57,18 @@ func (in Input) runCells(ctx context.Context, seg SegmentSpec, decisions backtes
 		}
 	}
 	return runs, nil
+}
+
+// segmentDecisions is the decision source of one segment (or day): only the
+// decisions stamped inside [seg.From, seg.To), identical for every cell. A
+// decision stamped in an unavailable gap or another segment is never replayed
+// as if it were fresh on the first bar after the gap.
+func (in Input) segmentDecisions(seg SegmentSpec) backtest.DecisionSource {
+	var inside []domain.JevDecision
+	for _, d := range in.Decisions {
+		if !d.Timestamp.Before(seg.From) && d.Timestamp.Before(seg.To) {
+			inside = append(inside, d)
+		}
+	}
+	return backtest.NewSliceDecisionSource(inside)
 }
