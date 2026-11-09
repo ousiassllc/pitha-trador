@@ -13,9 +13,21 @@
 //	metaablation run -db copy.db -manifest /var/tmp/ablation/metaablation-run1.prereg.manifest.json \
 //	    -out /var/tmp/ablation/out1
 //
+// A second init for the same copy and model must name the one it replaces:
+//
+//	metaablation init ... -out /var/tmp/ablation \
+//	    -supersedes /var/tmp/ablation/metaablation-run1.prereg.manifest.json \
+//	    -new-run-reason "min-days confirmed" -min-days 15
+//
 // The database is opened with SQLite mode=ro only (no migration; a write
 // fails), its SHA-256 is recorded by init and verified before and after run.
-// No LLM is called, nothing is trained or calibrated, nothing is ordered.
+// A copy whose -wal file is not empty is refused (checkpoint it first); mode=ro
+// may still create empty -wal/-shm files beside the copy. No LLM is called,
+// nothing is trained or calibrated, nothing is ordered.
+//
+// Exit codes: 0 success; 1 failure (I/O, engine); 2 usage; 3 refusal (manifest
+// changed or not frozen, another copy or model, not-checkpointed copy, output
+// inside the copy, a changed value without a new run); 4 no layer executable.
 package main
 
 import (
@@ -33,20 +45,68 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/runner"
 )
 
-func main() {
-	if err := run(context.Background(), os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		if !errors.Is(err, flag.ErrHelp) {
-			_, _ = fmt.Fprintln(os.Stderr, "metaablation:", err)
-		}
-		os.Exit(2)
+// Exit codes: 0 success (and -h); 1 a failure (I/O, the engine); 2 a usage
+// mistake (flags, a missing or malformed value); 3 a deliberate refusal (a
+// manifest that was changed or is not frozen, a database copy or model that is
+// not the one frozen, a not-checkpointed copy, an output inside the copy, a
+// changed value without a new run); 4 the run completed but no layer was
+// executable (the reasons are in the report).
+const (
+	exitFailure       = 1
+	exitUsage         = 2
+	exitRefused       = 3
+	exitNotExecutable = 4
+)
+
+// errUsage marks a usage mistake; errNotExecutable the no-layer-ran outcome.
+var (
+	errUsage         = errors.New("usage")
+	errNotExecutable = errors.New("no layer was executable (see the reasons above and in the report)")
+)
+
+func usageErr(format string, args ...any) error {
+	return fmt.Errorf("%w: "+format, append([]any{errUsage}, args...)...)
+}
+
+// exitCode maps an error of run to the process exit code.
+func exitCode(err error) int {
+	switch {
+	case err == nil, errors.Is(err, flag.ErrHelp):
+		return 0
+	case errors.Is(err, errNotExecutable):
+		return exitNotExecutable
+	case errors.Is(err, runner.ErrRefused), errors.Is(err, manifest.ErrNotFrozen), errors.Is(err, manifest.ErrTampered), errors.Is(err, manifest.ErrModelMismatch):
+		return exitRefused
+	case errors.Is(err, errUsage):
+		return exitUsage
 	}
+	return exitFailure
+}
+
+func main() {
+	err := run(context.Background(), os.Args[1:], os.Stdout, os.Stderr)
+	if err != nil && !errors.Is(err, flag.ErrHelp) {
+		_, _ = fmt.Fprintln(os.Stderr, "metaablation:", err)
+	}
+	os.Exit(exitCode(err))
 }
 
 const usage = "usage: metaablation init|run [flags] (see docs/research/metaablation.md)"
 
+// parse parses flags: -h is flag.ErrHelp (exit 0), any other flag error is a usage mistake.
+func parse(fs *flag.FlagSet, args []string) error {
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return err
+		}
+		return fmt.Errorf("%w: %w", errUsage, err)
+	}
+	return nil
+}
+
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New(usage)
+		return usageErr("%s", usage)
 	}
 	switch args[0] {
 	case "init":
@@ -54,7 +114,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	case "run":
 		return runRun(ctx, args[1:], stdout, stderr)
 	}
-	return fmt.Errorf("unknown subcommand %q; %s", args[0], usage)
+	return usageErr("unknown subcommand %q; %s", args[0], usage)
 }
 
 // bindFloat is a float flag that sets *dst and leaves it nil when not given.
@@ -100,14 +160,14 @@ func (f *minimumFlags) minimums() manifest.Minimums { return f.m }
 // parseTime accepts RFC3339 or a JST date (YYYY-MM-DD, midnight JST).
 func parseTime(name, s string) (time.Time, error) {
 	if s == "" {
-		return time.Time{}, fmt.Errorf("-%s is required (RFC3339 or YYYY-MM-DD, JST)", name)
+		return time.Time{}, usageErr("-%s is required (RFC3339 or YYYY-MM-DD, JST)", name)
 	}
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
 		return t, nil
 	}
 	t, err := time.ParseInLocation("2006-01-02", s, marketcalendar.JST)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("-%s %q: not RFC3339 or YYYY-MM-DD: %w", name, s, err)
+		return time.Time{}, usageErr("-%s %q: not RFC3339 or YYYY-MM-DD: %v", name, s, err)
 	}
 	return t, nil
 }
@@ -122,7 +182,9 @@ func runInit(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	to := fs.String("to", "", "evaluation window end (exclusive; RFC3339 or YYYY-MM-DD JST)")
 	cohort := fs.String("cohort", "", "cohort / Jev version, only when the model row records none")
 	seed := fs.Int64("seed", runner.DefaultSeed, "bootstrap seed, recorded in the manifest")
-	embargo := fs.Duration("embargo", 0, "walk-forward embargo (default the training default, 30m)")
+	embargo := fs.Duration("embargo", 0, "walk-forward embargo (default and minimum: the training default, 30m)")
+	supersedes := fs.String("supersedes", "", "the earlier pre-registration manifest of the same copy and model this one replaces (required when -out already holds one)")
+	reason := fs.String("new-run-reason", "", "why the study is repeated (required with -supersedes)")
 	var ro runner.RuleOverrides
 	for _, r := range []struct {
 		name string
@@ -135,11 +197,11 @@ func runInit(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		bindFloat(fs, r.name, "pre-registered rule value (default: the shipped one); recorded in the manifest", r.dst)
 	}
 	mins := addMinimumFlags(fs)
-	if err := fs.Parse(args); err != nil {
+	if err := parse(fs, args); err != nil {
 		return err
 	}
 	if *dbPath == "" {
-		return errors.New("-db is required")
+		return usageErr("-db is required")
 	}
 	var o runner.InitOptions
 	var err error
@@ -153,6 +215,7 @@ func runInit(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		return err
 	}
 	o.DBPath, o.OutDir, o.Cohort, o.Seed, o.Embargo, o.Rules, o.Minimums = *dbPath, *out, *cohort, *seed, *embargo, ro, mins.minimums()
+	o.Supersedes, o.NewRunReason = *supersedes, *reason
 	path, m, err := runner.Init(ctx, o)
 	if err != nil {
 		return err
@@ -174,11 +237,11 @@ func runRun(ctx context.Context, args []string, stdout, stderr io.Writer) error 
 	out := fs.String("out", "", "output directory, outside the copy's directory")
 	reason := fs.String("new-run-reason", "", "make this a NEW run (run count + 1) with the minimums given by flags; the reason is recorded")
 	mins := addMinimumFlags(fs)
-	if err := fs.Parse(args); err != nil {
+	if err := parse(fs, args); err != nil {
 		return err
 	}
 	if *dbPath == "" || *mpath == "" {
-		return errors.New("-db and -manifest are required")
+		return usageErr("-db and -manifest are required")
 	}
 	sum, err := runner.Run(ctx, runner.RunOptions{DBPath: *dbPath, ManifestPath: *mpath, OutDir: *out, NewRunReason: *reason, Minimums: mins.minimums()})
 	if err != nil {
@@ -200,7 +263,7 @@ func runRun(ctx context.Context, args []string, stdout, stderr io.Writer) error 
 	}
 	_, _ = fmt.Fprintf(stdout, "report: %s\n        %s\n        %s\n", sum.Files.JSON, sum.Files.Markdown, sum.Files.Manifest)
 	if !sum.Label.Available && !sum.Replay.Available {
-		return errors.New("no layer was executable (see the reasons above and in the report)")
+		return errNotExecutable
 	}
 	return nil
 }

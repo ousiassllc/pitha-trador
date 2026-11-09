@@ -2,7 +2,6 @@ package runner
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -68,7 +67,7 @@ func Run(ctx context.Context, o RunOptions) (Summary, error) {
 			return Summary{}, err
 		}
 	} else if len(o.Minimums.UnsetFields()) < 5 {
-		return Summary{}, errors.New("runner: a pre-registered value is changed only by a new run: give -new-run-reason with it")
+		return Summary{}, fmt.Errorf("%w: runner: a pre-registered value is changed only by a new run: give -new-run-reason with it", ErrRefused)
 	}
 	if err := checkDB(o.DBPath, m); err != nil {
 		return Summary{}, err
@@ -101,12 +100,15 @@ func Run(ctx context.Context, o RunOptions) (Summary, error) {
 
 // checkDB fails when the file is not the copy the manifest names.
 func checkDB(path string, m manifest.Manifest) error {
+	if err := loader.CheckCheckpointed(path); err != nil {
+		return fmt.Errorf("%w: %w", ErrRefused, err)
+	}
 	got, err := loader.FileSHA256(path)
 	if err != nil {
 		return err
 	}
 	if got != m.DBCopy.SHA256 {
-		return fmt.Errorf("runner: the database copy's SHA-256 %.12s differs from the manifest's %.12s: it is not the copy the manifest was frozen for", got, m.DBCopy.SHA256)
+		return fmt.Errorf("%w: runner: the database copy's SHA-256 %.12s differs from the manifest's %.12s: it is not the copy the manifest was frozen for", ErrRefused, got, m.DBCopy.SHA256)
 	}
 	return nil
 }
@@ -114,6 +116,7 @@ func checkDB(path string, m manifest.Manifest) error {
 func newRun(prev manifest.Manifest, o RunOptions) (manifest.Manifest, error) {
 	now := o.Now()
 	next, err := manifest.NewRun(prev, o.NewRunReason, now, func(n *manifest.Manifest) {
+		n.CodeVersion = CodeVersion()
 		mm := o.Minimums
 		if mm.MinDays != nil {
 			n.Minimums.MinDays = mm.MinDays
@@ -166,13 +169,13 @@ func loadTarget(ctx context.Context, src *loader.Source, m manifest.Manifest) (t
 		return target{}, err
 	}
 	if !ok {
-		return target{}, fmt.Errorf("runner: the frozen model %q is not in the database copy", m.Model.Version)
+		return target{}, fmt.Errorf("%w: runner: the frozen model %q is not in the database copy", ErrRefused, m.Model.Version)
 	}
 	if err := m.CheckModel(row.Version, manifest.ParamsHash(row.ParamsJSON)); err != nil {
 		return target{}, err
 	}
 	if c := row.Adoption.TrainedCohort; c != "" && c != m.Cohort {
-		return target{}, fmt.Errorf("runner: model %q was trained on cohort %q, the manifest freezes %q", row.Version, c, m.Cohort)
+		return target{}, fmt.Errorf("%w: runner: model %q was trained on cohort %q, the manifest freezes %q", ErrRefused, row.Version, c, m.Cohort)
 	}
 	model, perr := loader.ParseStored(row)
 	return target{model: model, parseErr: perr}, nil
@@ -186,6 +189,9 @@ func evaluate(ctx context.Context, m manifest.Manifest, src *loader.Source) (rep
 	}
 	var in report.Input
 	in.Manifest = m
+	if cv := CodeVersion(); cv != m.CodeVersion {
+		in.Notes = append(in.Notes, fmt.Sprintf("コードの版が manifest と違う（manifest %s、この実行 %s）。同じコードで再現できるとは限らない", m.CodeVersion, cv))
+	}
 	if t.parseErr != nil {
 		in.Label = report.LabelSection{Reason: notExecutable(t.parseErr)}
 		in.Replay = report.ReplaySection{Reason: notExecutable(t.parseErr), UnavailablePeriods: []report.UnavailablePeriod{}}

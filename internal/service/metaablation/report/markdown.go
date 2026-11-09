@@ -35,6 +35,9 @@ func Markdown(d Document) string {
 	for _, s := range d.Statements {
 		w("- %s", s)
 	}
+	for _, n := range d.RunNotes {
+		w("- **注意（この実行）**: %s", n)
+	}
 	w("")
 	manifestSection(&b, d)
 	labelSection(&b, d.Label)
