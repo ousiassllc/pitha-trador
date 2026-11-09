@@ -167,7 +167,17 @@ func (s *sim) stepFlat(ctx context.Context, st *instState, idx int, entries bool
 		s.portfolio.Candidate(bar)
 	}
 	sig, predictedEVBps := st.decideEntry(ctx, in)
+	fresh := ok
+	observe := func(outcome EntryOutcome) {
+		if fresh && cfg.OnEntryEvaluation != nil {
+			cfg.OnEntryEvaluation(EntryEvaluation{
+				InstrumentID: cfg.InstrumentID, Symbol: cfg.Symbol, BarTime: bar.Timestamp,
+				Decision: decision, Signal: sig, Outcome: outcome, PredictedEVBps: predictedEVBps,
+			})
+		}
+	}
 	if sig.Direction == domain.JevDirectionNone {
+		observe(OutcomeRejected)
 		return nil
 	}
 
@@ -176,11 +186,13 @@ func (s *sim) stepFlat(ctx context.Context, st *instState, idx int, entries bool
 		// 昼休み・立会時間外・引け前、または銘柄の損失後クールダウン中: live Enter
 		// fails (ErrOutsideTradingSession / ErrSymbolInCooldown) and the
 		// decision is spent.
+		observe(OutcomeNoFill)
 		return nil
 	}
 	var quantity int64
 	if s.portfolio != nil {
 		if quantity = s.portfolio.Size(bar.Price); quantity == 0 {
+			observe(OutcomeNoSize)
 			return nil
 		}
 		s.portfolio.Open(cfg.InstrumentID, sig.Direction, quantity, entryFill)
@@ -195,6 +207,7 @@ func (s *sim) stepFlat(ctx context.Context, st *instState, idx int, entries bool
 	op.trackBest(bar.Price)
 	st.open = op
 	s.openCount++
+	observe(OutcomeOpened)
 	return nil
 }
 
