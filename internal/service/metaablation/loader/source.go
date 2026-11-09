@@ -59,3 +59,21 @@ func FileSHA256(path string) (string, error) {
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
+
+// CheckCheckpointed fails when `<path>-wal` exists and is not empty: the
+// manifest's SHA-256 covers the main file only, so a copy with unmerged WAL
+// content would hash differently from what is read. Such a copy must be
+// checkpointed before it is used. (Opening it with mode=ro may still create
+// empty -wal/-shm side files next to it; they are not content.)
+func CheckCheckpointed(path string) error {
+	st, err := os.Stat(path + "-wal")
+	switch {
+	case os.IsNotExist(err):
+		return nil
+	case err != nil:
+		return fmt.Errorf("loader: stat %s-wal: %w", path, err)
+	case st.Size() > 0:
+		return fmt.Errorf("loader: %s-wal holds %d bytes: the copy is not checkpointed, so its SHA-256 does not describe what is read; checkpoint it first (PRAGMA wal_checkpoint(TRUNCATE) on the copy) or copy the database file after a clean close", path, st.Size())
+	}
+	return nil
+}

@@ -34,11 +34,18 @@ go run ./cmd/metaablation run \
 - `-from`（含む）〜`-to`（含まない）が評価窓、`-asof` が写しの時点（`-to` は `-asof` 以前）。日付だけの指定は JST の 0 時。
 - `-seed`（既定 1046）は manifest に残る。**同じ manifest・同じ写し・同じ seed なら出力は完全に同じバイト列**になる（テストで固定）。
 - 対象モデルは `init` の時点の**最新の却下モデル 1 件**。manifest にバージョンとパラメータの SHA-256 を固定し、`run` は**そのバージョン**を読む（その後に別のモデルが保存されても拾わない。保存済みの `params_json` の SHA-256 が違えば実行しない）。`params_json` を読めないときは、両層とも「実行不可」とその理由を出す（本体は出さない）。
-- コホート・Jev の版（#881・#939）はモデルの `adoption_json` の `trained_cohort` から固定する。記録が無いモデルは `-cohort` の明示が要り、記録と食い違う指定は拒否する。コホートの確認は外せない。
+- コホート・Jev の版（#881・#939）はモデルの `adoption_json` の `trained_cohort` から固定する。記録が無いモデルは `-cohort` の明示が要り、記録と食い違う指定は拒否する。コホートの確認は外せない。**制約**: コホートは質問の版（`question_version`）だけで決まる。評価行の Jev の `model_id` が学習時と違っても、その行は除外しない（独立性の規則は変えない）。Jev のモデルが途中で変わった期間の結果は、その点を含めて読む。
 - 事前登録値（既定は同梱の `config/strategy.yaml`・`config/risk.yaml` の Paper とバリア・コストの既定）は `init` のフラグで変えられる（`-min-ev-bps`、`-initial-capital`、`-max-spread-bps`、`-min-turnover-5m-jpy`、`-min-continuation`、`-max-toxic-flow`、`-max-liquidity-stressed`）。変えた値は manifest に記録され、固定される。`entry_quality = good`（Q on）は固定で、フラグは無い。旧 confidence しきい値はどのセルでも使わない。
-- 最小日数・最小件数・δ・検出力（`-min-days`、`-min-count`、`-delta-label-bps`、`-delta-replay-daily-return`、`-power`）は、**フラグで与えた場合だけ** manifest に載る。与えなければ未設定のまま。評価窓の結果を見て値を変えるときは**別の実行**にする: `run` に `-new-run-reason "<理由>"` とフラグを付けると、前の manifest から新しい manifest（実行回数 +1・前の実行を理由つきで列挙）を作って固定し、`<out>/metaablation-runN.prereg.manifest.json` に書いてから評価する。`-new-run-reason` なしで値を変える指定は拒否する。先の実行の出力は残る。実行回数と全比較数は結果に載る（探索を足す場合は比較数が事前登録を超え、判定はすべて `優劣未確定` に下がる）。同じ manifest をそのまま再実行しても実行回数は増えない（出力が同じになることを前提にしているため）。値を変えた実行だけが新しい実行。
-
-## 結果の読み方
+- 最小日数・最小件数・δ・検出力（`-min-days`、`-min-count`、`-delta-label-bps`、`-delta-replay-daily-return`、`-power`）は、**フラグで与えた場合だけ** manifest に載る。与えなければ未設定のまま。
+- **値を変えるのは新しい実行**（実行回数 +1、先の実行は理由つきで列挙して残す）。次の 2 通りがある。
+  - `init` をもう一度実行する（規則値・窓・`-min-ev-bps` などを変える場合）: 同じ DB の写し・同じ対象モデルの事前登録が `-out` に既にあるとき、`-supersedes <前の prereg manifest>` と `-new-run-reason "<理由>"` の**両方が必須**で、無ければ拒否する（実行回数 1 から作り直して値を変える抜け道は無い）。前の manifest は変更しない。連鎖の最新でない実行を `-supersedes` に指定することも拒否する。別の写し・別のモデルの manifest は `-supersedes` にできない。
+  - `run` に `-new-run-reason "<理由>"` と閾値のフラグを付ける（最小日数などの閾値だけ）: 前の manifest から新しい manifest を作って固定し、`<out>/metaablation-runN.prereg.manifest.json` に書いてから評価する。`-new-run-reason` なしで値を変える指定は拒否する。
+  - 同じ manifest をそのまま再実行しても実行回数は増えない（出力が同じバイト列になることを前提にしているため）。実行回数と全比較数は結果に載る（探索を足して比較数が事前登録を超えると、判定はすべて `優劣未確定` に下がる）。
+- **窓と embargo の検査**: `-from` はモデルの元 OOS の終端以降でなければならない（`init` がモデル自身の窓のラベルを評価データとして読まないため）。`-embargo` は再学習の既定（30 分）以上（短くすると独立の境界が緩むため、下回る指定は拒否する）。
+- **WAL**: manifest の写しの SHA-256 は本体のファイルだけを覆う。`<db>-wal` が空でない写し（チェックポイント前）は `init`・`run` とも拒否する（`PRAGMA wal_checkpoint(TRUNCATE)` 済みの写しを使う）。`mode=ro` で開くと、DB のディレクトリに空の `-wal` / `-shm` ができることがある（内容は無く、ハッシュ対象外。DB 本体は変わらない）。
+- **出力先の検査**: シンボリックリンクを解決してから比較する（DB のディレクトリへのリンクも拒否する）。出力 3 ファイルのどれかが既にあれば、1 つも書かない。
+- **コードの版**: ビルドの VCS スタンプ、無ければ `git rev-parse HEAD`（best effort。未コミットの変更があれば `-dirty`）、それも無ければ `devel` を manifest に記録する。`run` のコードの版が manifest と違えば、結果に注意書きを出す（同じコードで再現できるとは限らない）。
+- **終了コード**: 0 成功（`-h` を含む）／1 失敗（I/O・エンジン）／2 使い方の誤り／3 拒否（manifest が変更されている・凍結されていない、別の写し・別のモデル、WAL 未反映の写し、出力先が写しの中、新しい実行なしの値の変更）／4 実行できた層が無い（理由は結果にある）。
 
 **母集団は 3 段あり、混ぜない。** 一つの表・一つの数字に混ぜた数字は無い。
 

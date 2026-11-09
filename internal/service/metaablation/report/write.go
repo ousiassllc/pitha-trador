@@ -59,12 +59,12 @@ func WriteFiles(dir string, d Document, forbiddenDirs ...string) (Files, error) 
 	if dir == "" {
 		return Files{}, errors.New("report: an output directory is required")
 	}
-	abs, err := filepath.Abs(dir)
+	abs, err := ResolveExisting(dir)
 	if err != nil {
 		return Files{}, fmt.Errorf("report: %w", err)
 	}
 	for _, f := range forbiddenDirs {
-		fa, err := filepath.Abs(f)
+		fa, err := ResolveExisting(f)
 		if err != nil {
 			return Files{}, fmt.Errorf("report: %w", err)
 		}
@@ -89,15 +89,44 @@ func WriteFiles(dir string, d Document, forbiddenDirs ...string) (Files, error) 
 	}
 	stem := fmt.Sprintf("metaablation-run%d", d.RunCount)
 	files := Files{JSON: filepath.Join(abs, stem+".json"), Markdown: filepath.Join(abs, stem+".md"), Manifest: filepath.Join(abs, stem+".manifest.json")}
-	for _, w := range []struct {
+	outputs := []struct {
 		path string
 		data []byte
-	}{{files.JSON, js}, {files.Markdown, []byte(md)}, {files.Manifest, mf}} {
+	}{{files.JSON, js}, {files.Markdown, []byte(md)}, {files.Manifest, mf}}
+	// All three must be free before any is written: no partial set.
+	for _, w := range outputs {
+		if _, err := os.Lstat(w.path); err == nil {
+			return Files{}, fmt.Errorf("report: %s already exists; an earlier run's output is never overwritten", w.path)
+		}
+	}
+	for _, w := range outputs {
 		if err := writeNew(w.path, w.data); err != nil {
 			return Files{}, err
 		}
 	}
 	return files, nil
+}
+
+// ResolveExisting is the absolute path of p with symlinks resolved in its deepest
+// existing ancestor (p itself need not exist yet), so a symlink into a forbidden
+// directory is seen for what it is.
+func ResolveExisting(p string) (string, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+	rest := ""
+	for cur := abs; ; {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(resolved, rest), nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return abs, nil
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
 }
 
 func writeNew(path string, data []byte) error {

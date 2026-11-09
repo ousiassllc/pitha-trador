@@ -32,8 +32,11 @@ type Windows struct {
 //   - TrainStart, TrainEnd, OOSStart and OOSEnd are the stored columns.
 //     TrainEnd is the latest label end among the fit and calibration rows
 //     (training.Split.TrainEnd), so it is never before a calibration row's
-//     decision time; CalibrationEnd is therefore set to TrainEnd, which can
-//     only make the independence boundary later (safe).
+//     decision time. The calibration rows themselves are not stored with the
+//     model, so CalibrationEnd (defined in manifest.Windows as the newest
+//     calibration row's decision time) is set to TrainEnd, an upper bound of it:
+//     it can only make the independence boundary later (safe). The manifest
+//     notes it.
 //   - LabelEnd is the latest label end among the stored labeled decisions
 //     decided in [TrainStart, OOSEnd) whose label was complete by OOSEnd (the
 //     rows the split could have used), at least TrainEnd. The query stops at

@@ -34,7 +34,12 @@ type InitOptions struct {
 	Cohort  string
 	Seed    int64
 	Embargo time.Duration
-	Rules   RuleOverrides
+	// Supersedes is an earlier frozen pre-registration of the same study (same
+	// database copy and model) that this one replaces; NewRunReason says why.
+	// Both are required when out already holds a pre-registration of the same
+	// copy and model: a changed rule value is a new run, never a fresh run 1.
+	Supersedes, NewRunReason string
+	Rules                    RuleOverrides
 	// Minimums are the pre-registered thresholds of the verdict; nil stays
 	// unset (every verdict is then 優劣未確定).
 	Minimums manifest.Minimums
@@ -63,6 +68,12 @@ func Init(ctx context.Context, o InitOptions) (manifestPath string, m manifest.M
 	if o.EvalTo.After(o.AsOf) {
 		return "", manifest.Manifest{}, fmt.Errorf("runner: -to %s is after -asof %s: the copy cannot hold the whole evaluation window", o.EvalTo.Format(time.RFC3339), o.AsOf.Format(time.RFC3339))
 	}
+	if o.Embargo != 0 && o.Embargo < loader.DefaultEmbargo {
+		return "", manifest.Manifest{}, fmt.Errorf("runner: -embargo %s is below the walk-forward default %s: a shorter embargo would loosen the independence boundary", o.Embargo, loader.DefaultEmbargo)
+	}
+	if err := loader.CheckCheckpointed(o.DBPath); err != nil {
+		return "", manifest.Manifest{}, fmt.Errorf("%w: %w", ErrRefused, err)
+	}
 	before, err := loader.FileSHA256(o.DBPath)
 	if err != nil {
 		return "", manifest.Manifest{}, err
@@ -79,6 +90,9 @@ func Init(ctx context.Context, o InitOptions) (manifestPath string, m manifest.M
 	}
 	if !ok {
 		return "", manifest.Manifest{}, errors.New("runner: the database copy holds no rejected model to re-score")
+	}
+	if o.EvalFrom.Before(model.OOSEnd) {
+		return "", manifest.Manifest{}, fmt.Errorf("runner: -from %s is before the model's original OOS end %s: init would read labels of the model's own windows as evaluation data; start the evaluation window at or after it", o.EvalFrom.Format(time.RFC3339), model.OOSEnd.Format(time.RFC3339))
 	}
 	cohort, err := resolveCohort(model.Adoption.TrainedCohort, o.Cohort)
 	if err != nil {
@@ -117,6 +131,9 @@ func Init(ctx context.Context, o InitOptions) (manifestPath string, m manifest.M
 		Provenance: manifest.Provenance{ChosenBeforeEvaluation: true, Notes: notes},
 		Run:        manifest.Run{Count: 1},
 	}
+	if m.Run, err = chainRun(out, o, m, now); err != nil {
+		return "", manifest.Manifest{}, err
+	}
 	if err := m.Freeze(now); err != nil {
 		return "", manifest.Manifest{}, err
 	}
@@ -136,6 +153,11 @@ func Init(ctx context.Context, o InitOptions) (manifestPath string, m manifest.M
 	}
 	return path, m, nil
 }
+
+// ErrRefused marks an input the command refuses on purpose (a changed or foreign
+// manifest or copy, a missing supersede, an output inside the copy): not a usage
+// mistake and not an I/O failure.
+var ErrRefused = errors.New("refused")
 
 // PreRegistrationName is the file name of run n's frozen manifest.
 func PreRegistrationName(n int) string {

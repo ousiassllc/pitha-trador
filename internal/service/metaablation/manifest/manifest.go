@@ -82,7 +82,9 @@ type DBCopyRef struct {
 //
 // TrainEnd is the latest label end among the fit and calibration rows
 // (training.Split.TrainEnd), CalibrationEnd the decision time of the newest
-// calibration row, OOSStart/OOSEnd the original out-of-sample window and
+// calibration row (or, when only the model's stored row is available, an upper
+// bound of it: the stored train_end, which is never earlier; the manifest notes
+// it and it can only move the independence boundary later), OOSStart/OOSEnd the original out-of-sample window and
 // LabelEnd the latest LabelEnd among every row the model used (fit,
 // calibration, original OOS). Independent rows are strictly after all of these
 // and after LabelEnd + Embargo (package independence).

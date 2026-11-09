@@ -106,6 +106,9 @@ type Input struct {
 	// ExploratoryComparisons counts the comparisons run beyond the primary
 	// family (they must be within the manifest's registered total).
 	ExploratoryComparisons int
+	// Notes are run-level remarks (for example that the code version differs
+	// from the manifest's); empty for an ordinary run.
+	Notes []string
 }
 
 // Population is one of the three populations that are never mixed.
@@ -151,6 +154,8 @@ type Document struct {
 	Label          LabelSection  `json:"label_layer"`
 	Replay         ReplaySection `json:"replay_layer"`
 	Statements     []string      `json:"statements"`
+	// RunNotes are remarks of this execution (Input.Notes).
+	RunNotes []string `json:"run_notes"`
 }
 
 // Build assembles the document from a frozen manifest and the layers' results.
@@ -205,7 +210,7 @@ func Build(in Input) (Document, error) {
 		UnsetMinimums:  m.Minimums.UnsetFields(),
 		Approval:       "DB の写しの取得は別途の承認が要る。この実行は承認済みの写しに対してだけ行い、元の DB には書き込まない。本書は設定変更・発注・モデルの active 昇格の許可ではなく、利益を保証しない。",
 		Multiple:       multiple,
-		Label:          label, Replay: replay,
+		Label:          label, Replay: replay, RunNotes: append([]string{}, in.Notes...),
 		Statements: []string{
 			"ラベル層と再生層は別の母集団・別の損益で、混ぜない。片方の層が実行不可でも、もう片方の有効な結果は残す。",
 			"元のモデル評価（元 OOS の再採点）は参考で、独立と書かず、採用・優劣の根拠にしない。",
