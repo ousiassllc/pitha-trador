@@ -6,6 +6,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/dailyhalt"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/sessionrecord"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/stalled"
 )
 
@@ -24,10 +25,15 @@ const (
 	AttentionKabuUnreachable = AlertKabuUnreachable
 	// AttentionMarketDataIdle: the #802 alert of the same name is active.
 	AttentionMarketDataIdle = AlertMarketDataIdle
-	// AttentionMissingSession: a recent trading session has no snapshot although
-	// an earlier one does (a real gap). Sessions with no earlier snapshot are not
-	// a warning; they are listed in insufficient_history_dates (#814).
+	// AttentionMissingSession: a recent trading day has no snapshot at all
+	// although an earlier one does (a whole-day gap). Days with no earlier
+	// snapshot are not a warning; they are listed in insufficient_history_dates
+	// (#814).
 	AttentionMissingSession = "missing_session"
+	// AttentionPartialSession: a recent trading day has snapshots but lacks part
+	// of a session (a missing 前場/後場, a late start, a long mid-session hole or
+	// an early end; issue #1054). It is listed in intraday_gaps with the codes.
+	AttentionPartialSession = "partial_session"
 	// AttentionDailyGuardHalted: today's daily entry halt is in force.
 	AttentionDailyGuardHalted = "daily_guard_halted"
 	// AttentionKillSwitchActive: the Kill Switch is active.
@@ -46,7 +52,7 @@ func AttentionCodes() []string {
 	return []string{
 		AttentionNoPaperTradesToday, AttentionNoActiveModel, AttentionKabuNotLoggedIn, AttentionKabuUnreachable,
 		AttentionMarketDataIdle,
-		AttentionMissingSession, AttentionDailyGuardHalted, AttentionKillSwitchActive, AttentionRetrainSkipped,
+		AttentionMissingSession, AttentionPartialSession, AttentionDailyGuardHalted, AttentionKillSwitchActive, AttentionRetrainSkipped,
 		AttentionOrderProposalStalled,
 	}
 }
@@ -151,8 +157,18 @@ type Health struct {
 	MarketData  HealthMarketData  `json:"market_data"`
 	// MissingSessionDates are the trading days of the last 7 days (today
 	// included once its session closed) that have no market snapshot although
-	// an earlier snapshot exists: a real gap, which raises missing_session.
+	// an earlier snapshot exists: a whole-day gap, which raises
+	// missing_session.
 	MissingSessionDates []string `json:"missing_session_dates"`
+	// IntradayGaps are the trading days of the same span that have snapshots
+	// but an incomplete session (issue #1054), with the fixed gap codes
+	// (morning_missing, afternoon_missing, late_start, mid_session_gap,
+	// early_end) and the spans; it raises partial_session. A day is judged
+	// from the app's daily record when there is one (kept past the job
+	// retention); a day without one (the app was not running to record it, as
+	// after a restart) is judged from the snapshots as they are now, so the
+	// gap shows on an MCP read too. Whole-day gaps are not repeated here.
+	IntradayGaps []sessionrecord.IntradayDay `json:"intraday_gaps"`
 	// InsufficientHistoryDates are the trading days of the same span with no
 	// snapshot and none before them either: the history does not reach back
 	// that far (first start), so they cannot be judged. Never a warning.
@@ -189,9 +205,12 @@ func HealthToday(ctx context.Context, q Q, now time.Time) (Health, error) {
 	if h.MarketData, err = healthMarketData(ctx, q, now); err != nil {
 		return Health{}, err
 	}
-	if h.MissingSessionDates, h.InsufficientHistoryDates, err = sessionGaps(ctx, q, missingRange(now, dayStart)); err != nil {
+	span := missingRange(now, dayStart)
+	gaps, err := sessionrecord.Judge(ctx, q, span.From, span.To)
+	if err != nil {
 		return Health{}, err
 	}
+	h.MissingSessionDates, h.InsufficientHistoryDates, h.IntradayGaps = gaps.WholeDay, gaps.Insufficient, gaps.Intraday
 	if h.DailyGuard, err = dailyhalt.Today(ctx, settingsReader{q}, h.Date); err != nil {
 		return Health{}, err
 	}
@@ -238,6 +257,9 @@ func attentionCodes(h Health, jstNow time.Time) []string {
 	}
 	if len(h.MissingSessionDates) > 0 {
 		codes = append(codes, AttentionMissingSession)
+	}
+	if len(h.IntradayGaps) > 0 {
+		codes = append(codes, AttentionPartialSession)
 	}
 	if h.DailyGuard.Halted {
 		codes = append(codes, AttentionDailyGuardHalted)

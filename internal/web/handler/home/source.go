@@ -54,6 +54,15 @@ type Health struct {
 	StalledProposals int
 	// MissingSessionDates are recent trading days with no market snapshot.
 	MissingSessionDates []string
+	// IntradayGaps are recent trading days with snapshots but an incomplete
+	// session (issue #1054): the date and the fixed gap codes.
+	IntradayGaps []IntradayGap
+}
+
+// IntradayGap is a recent trading day that lacks part of a session.
+type IntradayGap struct {
+	Date  string
+	Codes []string
 }
 
 // Realized is today's realized Paper P&L.

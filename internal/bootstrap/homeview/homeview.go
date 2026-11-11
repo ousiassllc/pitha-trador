@@ -72,6 +72,9 @@ func (r Reader) Health(ctx context.Context, now time.Time) (home.Health, error) 
 			StalledProposals:    h.OrderProposals.Count,
 			MissingSessionDates: h.MissingSessionDates,
 		}
+		for _, g := range h.IntradayGaps {
+			out.IntradayGaps = append(out.IntradayGaps, home.IntradayGap{Date: g.Date, Codes: g.Codes})
+		}
 		return nil
 	})
 	return out, err

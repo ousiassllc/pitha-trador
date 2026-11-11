@@ -57,3 +57,44 @@ func TestSessionStart(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionsAreTheTwoTradingSessionsOfATradingDay(t *testing.T) {
+	got := marketcalendar.TSE.Sessions(time.Date(2026, 10, 22, 23, 0, 0, 0, time.UTC)) // 10-23 08:00 JST
+	if len(got) != 2 {
+		t.Fatalf("Sessions = %v, want two", got)
+	}
+	want := [][2]string{{"2026-10-23T09:00", "2026-10-23T11:30"}, {"2026-10-23T12:30", "2026-10-23T15:30"}}
+	for i, s := range got {
+		if o, c := s.Open.In(marketcalendar.JST).Format("2006-01-02T15:04"), s.Close.In(marketcalendar.JST).Format("2006-01-02T15:04"); o != want[i][0] || c != want[i][1] {
+			t.Errorf("session %d = %s-%s, want %v", i, o, c, want[i])
+		}
+	}
+	for _, holiday := range []time.Time{
+		time.Date(2026, 10, 12, 10, 0, 0, 0, marketcalendar.JST), // Sports Day
+		time.Date(2026, 11, 3, 10, 0, 0, 0, marketcalendar.JST),  // Culture Day
+		time.Date(2026, 10, 24, 10, 0, 0, 0, marketcalendar.JST), // Saturday
+	} {
+		if s := marketcalendar.TSE.Sessions(holiday); s != nil {
+			t.Errorf("Sessions(%v) = %v, want none on a non-trading day", holiday, s)
+		}
+	}
+}
+
+func TestPreviousTradingDaySkipsWeekendsAndHolidays(t *testing.T) {
+	tests := []struct{ now, want string }{
+		{"2026-10-13T10:00:00+09:00", "2026-10-09"}, // after Sports Day weekend
+		{"2026-11-04T08:00:00+09:00", "2026-11-02"}, // after Culture Day
+		{"2026-10-20T15:45:00+09:00", "2026-10-19"},
+		{"2026-10-24T12:00:00+09:00", "2026-10-23"}, // Saturday
+	}
+	for _, tt := range tests {
+		now, err := time.Parse(time.RFC3339, tt.now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, ok := marketcalendar.TSE.PreviousTradingDay(now)
+		if !ok || got.Format(time.DateOnly) != tt.want || got.Hour() != 0 {
+			t.Errorf("PreviousTradingDay(%s) = %v, %v; want %s 00:00", tt.now, got, ok, tt.want)
+		}
+	}
+}

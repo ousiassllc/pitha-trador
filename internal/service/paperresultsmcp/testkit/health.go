@@ -32,8 +32,9 @@ func Setting(t *testing.T, w *sql.DB, key, value string) {
 
 // HealthyDay returns a migrated database in which nothing needs attention at
 // now: a model adopted the day before, a Paper position opened at 09:30 on the
-// 20th (a trading day only), a market snapshot on every trading day of the
-// seven days before now, and the app's detector reporting with no alert.
+// 20th (a trading day only), a market snapshot every minute of both sessions of
+// every trading day of the seven days before now (so no day is a gap, issue
+// #1054), and the app's detector reporting with no alert.
 func HealthyDay(t *testing.T, now time.Time) (string, *sql.DB) {
 	t.Helper()
 	path, w := NewMigratedDB(t)
@@ -49,15 +50,43 @@ func HealthyDay(t *testing.T, now time.Time) (string, *sql.DB) {
 	}
 	today := now.In(marketcalendar.JST)
 	for back := 1; back <= 7; back++ {
-		day := time.Date(today.Year(), today.Month(), today.Day()-back, 10, 0, 0, 0, marketcalendar.JST)
-		if marketcalendar.TSE.IsTradingDay(day) {
-			MustExec(t, w, `INSERT INTO market_snapshots (instrument_id, symbol, timestamp, price, bid, ask, volume,
-				turnover, vwap, price_vs_vwap_bps, raw_data_json) VALUES (1, '7203', ?, 1, 1, 1, 1, 1, 1, 1, '{}')`,
-				StoredAt(t, day))
-		}
+		day := time.Date(today.Year(), today.Month(), today.Day()-back, 0, 0, 0, 0, marketcalendar.JST)
+		FullSessionSnapshots(t, w, day)
 	}
 	DetectorChecked(t, w, now.Add(-30*time.Second))
 	return path, w
+}
+
+// FullSessionSnapshots stores a market snapshot (instrument 1) for every minute
+// of both trading sessions of day's JST date; nothing on a non-trading day.
+func FullSessionSnapshots(t *testing.T, w *sql.DB, day time.Time) {
+	t.Helper()
+	var minutes []time.Time
+	for _, s := range marketcalendar.TSE.Sessions(day) {
+		for m := s.Open; m.Before(s.Close); m = m.Add(time.Minute) {
+			minutes = append(minutes, m)
+		}
+	}
+	SnapshotsAt(t, w, minutes...)
+}
+
+// SnapshotsAt stores one market snapshot of instrument 1 at each instant.
+func SnapshotsAt(t *testing.T, w *sql.DB, at ...time.Time) {
+	t.Helper()
+	if len(at) == 0 {
+		return
+	}
+	query := `INSERT INTO market_snapshots (instrument_id, symbol, timestamp, price, bid, ask, volume,
+		turnover, vwap, price_vs_vwap_bps, raw_data_json) VALUES `
+	args := make([]any, 0, len(at))
+	for i, ts := range at {
+		if i > 0 {
+			query += ", "
+		}
+		query += `(1, '7203', ?, 1, 1, 1, 1, 1, 1, 1, '{}')`
+		args = append(args, StoredAt(t, ts))
+	}
+	MustExec(t, w, query, args...)
 }
 
 // OpenPosition inserts an open Paper position opened at opened.

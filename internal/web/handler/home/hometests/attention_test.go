@@ -40,6 +40,7 @@ func TestAttention_EveryHealthCodeIsWordedWithALink(t *testing.T) {
 	f := newFixture()
 	f.source.health.AttentionCodes = home.AttentionCodes()
 	f.source.health.MissingSessionDates = []string{"2026-10-16"}
+	f.source.health.IntradayGaps = []home.IntradayGap{{Date: "2026-10-22", Codes: []string{"morning_missing"}}}
 	f.source.health.StalledProposals = 2
 	body := f.mustGet(t, "/home/attention")
 	// The Kill Switch, the gravest, leads the list; the rest keep health_today's order.
@@ -50,7 +51,7 @@ func TestAttention_EveryHealthCodeIsWordedWithALink(t *testing.T) {
 	if n := count(body, "home-link"); n != len(want) {
 		t.Errorf("links = %d, want one per item (%d)", n, len(want))
 	}
-	for _, text := range []string{"2026-10-16", "2 件", "夜間の再学習を見送りました"} {
+	for _, text := range []string{"2026-10-16", "2026-10-22 (morning_missing)", "2 件", "夜間の再学習を見送りました"} {
 		if !strings.Contains(clean(body), text) {
 			t.Errorf("items lack %q", text)
 		}

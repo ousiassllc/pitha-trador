@@ -164,7 +164,7 @@ func TestEachAttentionCodeOnAndOff(t *testing.T) {
 // Every code the tool can raise is in the documented list, in this order.
 func TestAttentionCodesAreTheDocumentedFixedSet(t *testing.T) {
 	want := []string{"no_paper_trades_today", "no_active_model", "kabu_not_logged_in", "kabu_unreachable", "market_data_idle",
-		"missing_session", "daily_guard_halted", "kill_switch_active", "retrain_skipped", "order_proposal_stalled"}
+		"missing_session", "partial_session", "daily_guard_halted", "kill_switch_active", "retrain_skipped", "order_proposal_stalled"}
 	if got := query.AttentionCodes(); !slices.Equal(got, want) {
 		t.Fatalf("AttentionCodes = %v, want %v", got, want)
 	}

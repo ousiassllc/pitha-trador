@@ -12,7 +12,9 @@ import (
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/budget"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/query"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/sessionrecord"
 	"github.com/ousiassllc/pitha-trador/internal/service/retention"
+	"github.com/ousiassllc/pitha-trador/internal/service/sessiongap"
 )
 
 // reader is one Read: the statements it has run so far. A map is nil when its
@@ -25,6 +27,7 @@ type reader struct {
 
 	succeeded, failed, other map[string]int
 	lists                    map[string]WatchListDay
+	recorded                 map[string]sessionrecord.Diagnostic
 	// provider is the stored broker selection (BrokerProvider).
 	provider string
 }
@@ -87,6 +90,16 @@ func Read(ctx context.Context, q query.Q, per query.Range, now time.Time) (Diagn
 		return Diagnostics{}, err
 	}
 
+	records, err1 := sessionrecord.Read(soft, q, from, per.To, MaxDays)
+	if ok, err := r.try("daily_records", err1); err != nil {
+		return Diagnostics{}, err
+	} else if ok {
+		r.recorded = make(map[string]sessionrecord.Diagnostic, len(records))
+		for _, d := range records {
+			r.recorded[d.Date] = d
+		}
+	}
+
 	r.provider = r.readProvider()
 	out.BrokerProvider = r.provider
 
@@ -141,6 +154,9 @@ func (r *reader) sessionDay(day time.Time) (Day, error) {
 		l := r.lists[date]
 		d.WatchList = &l
 	}
+	if rec, ok := r.recorded[date]; ok {
+		d.Recorded = &rec
+	}
 	if kept(retention.DefaultSnapshotDays) {
 		var n int
 		from, to := bounds(day, day.AddDate(0, 0, 1))
@@ -179,6 +195,9 @@ func observations(d Day, provider string) []string {
 	}
 	if j.SucceededWithoutSnapshot != nil && *j.SucceededWithoutSnapshot > 0 {
 		obs = append(obs, ObsSucceededWithoutSnapshot)
+	}
+	if d.Recorded != nil && d.Recorded.GapKind == string(sessiongap.KindIntraday) {
+		obs = append(obs, ObsIntradayGap)
 	}
 	if o := watchListObservation(provider, d.WatchList); o != "" {
 		obs = append(obs, o)

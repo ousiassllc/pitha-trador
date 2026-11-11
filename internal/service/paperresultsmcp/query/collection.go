@@ -8,6 +8,7 @@ import (
 
 	"github.com/ousiassllc/pitha-trador/internal/service/marketcalendar"
 	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/jobfailures"
+	"github.com/ousiassllc/pitha-trador/internal/service/paperresultsmcp/sessionrecord"
 	"github.com/ousiassllc/pitha-trador/internal/service/retention"
 )
 
@@ -37,11 +38,16 @@ type JobStatus struct {
 
 // Collection is collection_status' data.
 type Collection struct {
-	LatestSnapshotAt       *string     `json:"latest_snapshot_at"`
-	MissingSessionDates    []string    `json:"missing_session_dates"`
-	Jobs                   []JobStatus `json:"jobs"`
-	DailyBarRunFailedCount int         `json:"daily_bar_run_failed_count"`
-	LabelSkipCount         int         `json:"label_skip_count"`
+	LatestSnapshotAt    *string  `json:"latest_snapshot_at"`
+	MissingSessionDates []string `json:"missing_session_dates"`
+	// SessionGaps is the session completeness of the period's trading days
+	// from the daily records the app keeps beyond the job retention (issue
+	// #1054): whole-day and intraday gaps, each with the warning codes of the
+	// time.
+	SessionGaps            sessionrecord.Summary `json:"session_gaps"`
+	Jobs                   []JobStatus           `json:"jobs"`
+	DailyBarRunFailedCount int                   `json:"daily_bar_run_failed_count"`
+	LabelSkipCount         int                   `json:"label_skip_count"`
 	// JobFailures breaks the failed jobs down by JST day, queue and error code
 	// and counts the terminal skips (issue #801). It covers at most the last
 	// jobfailures.MaxDays days of the period (Window says which; issue #850).
@@ -71,6 +77,10 @@ func CollectionStatus(ctx context.Context, q Q, r Range, now time.Time) (Collect
 
 	var err error
 	if c.MissingSessionDates, err = missingSessionDates(ctx, q, r); err != nil {
+		return Collection{}, err
+	}
+
+	if c.SessionGaps, err = sessionrecord.Summarize(ctx, q, r.From, r.To); err != nil {
 		return Collection{}, err
 	}
 
