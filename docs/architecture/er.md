@@ -143,4 +143,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.75 | 2026-10-24 | `er/tables-system.md`の`health_alerts`と`er/tables-market.md`の`watch_list_entries.reason`の、読み手・表示先の記述を、廃止した全ページ共通バナーからHomeの「要対応」へ更新（スキーマの変更なし） | issue #901 |
 | 1.76 | 2026-10-30 | マイグレーション000049を追加し、`er/tables-disclosure.md`に`disclosure_items`（やのしん TDnet WebAPI の開示インデックス）・`disclosure_fetches`（News Ingest の取得の成否。7 日で削除）・`disclosure_skip_records`（Jev のエントリー候補の判断ごとの、適時開示による見送りルールの該当 / 非該当 / 不明）・`disclosure_skip_matches`（該当した開示）を追記。記録だけで取引に使わない。既存の表の列・制約は変えない | issue #935 |
 | 1.77 | 2026-11-11 | マイグレーション000051を追加し、`er/tables-disclosure.md`の`disclosure_skip_records`に`unknown_detail`（`unknown`の理由の内訳。確定時に保存し、`disclosure_fetches`が7日で消えても残る。NULL可・後追いなし）を追記。既存の列・制約は変えない。記録だけで取引に使わない | issue #1053 |
-| 1.77 | 2026-11-11 | マイグレーション000052を追加し、`er/tables-system.md`に`session_diagnostics_daily`（立会日ごとのセッションのそろいの日次診断。欠け種別・コード・件数・当時の警告コード。ジョブの7日保持より長く残す）を追加 | issue #1054 |
+| 1.78 | 2026-11-11 | マイグレーション000052を追加し、`er/tables-system.md`に`session_diagnostics_daily`（立会日ごとのセッションのそろいの日次診断。欠け種別・コード・件数・当時の警告コード。ジョブの7日保持より長く残す）を追加 | issue #1054 |
