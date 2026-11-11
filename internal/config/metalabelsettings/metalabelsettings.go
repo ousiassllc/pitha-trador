@@ -30,6 +30,13 @@ const (
 	KeyRetrainTime = "metalabel.retrain_time"
 	KeyMinEVBps    = "metalabel.min_ev_bps"
 	KeyLLMCutoff   = "metalabel.llm_cutoff"
+	// KeyIncludeSkippedLabels is the JSON integer 1 (on) or 0 (off) that adds the
+	// counterfactual labels of skipped candidates (issue
+	// #1052) to the nightly retraining's rows. Off by default: those candidates
+	// were stopped by the guards, so they are not distributed like the ones that
+	// pass (selection bias) and mixing them in changes what the adoption, AUC and
+	// EV mean.
+	KeyIncludeSkippedLabels = "metalabel.include_skipped_labels"
 )
 
 // Model algorithms (metalabel_models.algorithm).
@@ -49,6 +56,9 @@ const (
 	DefaultCalibration = CalibrationPlatt
 	DefaultRetrainTime = "18:00"
 	DefaultMinEVBps    = 0.0
+	// DefaultIncludeSkippedLabels: the nightly retraining trains on the rows it
+	// always has (issue #1052).
+	DefaultIncludeSkippedLabels = false
 	// DefaultLLMCutoff is a placeholder: the operator MUST set the real
 	// training-data cutoff of the Jev model they use (arXiv:2512.23847).
 	DefaultLLMCutoff = "2026-01-01"
@@ -94,6 +104,9 @@ type Settings struct {
 	// confirmed for, the date it was confirmed ("YYYY-MM-DD") and the source.
 	// All are empty until the operator records them.
 	LLMCutoffModel, LLMCutoffConfirmedOn, LLMCutoffSource string
+	// IncludeSkippedLabels adds the counterfactual labels of skipped candidates
+	// to the nightly retraining's rows (issue #1052). Default off.
+	IncludeSkippedLabels bool
 }
 
 // Default returns the shipped settings: logistic regression with Platt
@@ -104,15 +117,17 @@ func Default() Settings {
 
 // Keys returns every runtime_settings key Apply accepts.
 func Keys() []string {
-	return []string{KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps, KeyLLMCutoff, KeyLLMCutoffModel, KeyLLMCutoffConfirmedOn, KeyLLMCutoffSource}
+	return []string{KeyModel, KeyCalibration, KeyRetrainTime, KeyMinEVBps, KeyLLMCutoff, KeyLLMCutoffModel, KeyLLMCutoffConfirmedOn, KeyLLMCutoffSource, KeyIncludeSkippedLabels}
 }
 
 // IsKey reports whether key is one of Keys.
 func IsKey(key string) bool { return slices.Contains(Keys(), key) }
 
 // IsStringKey reports whether key's value is a JSON string (everything but
-// KeyMinEVBps).
-func IsStringKey(key string) bool { return IsKey(key) && key != KeyMinEVBps }
+// KeyMinEVBps and KeyIncludeSkippedLabels, which are JSON numbers).
+func IsStringKey(key string) bool {
+	return IsKey(key) && key != KeyMinEVBps && key != KeyIncludeSkippedLabels
+}
 
 // Text returns s's value for key as the Settings screen shows it, or ok=false
 // when key is not one of Keys.
@@ -128,6 +143,11 @@ func (s Settings) Text(key string) (text string, ok bool) {
 		return fmt.Sprintf("%g", s.MinEVBps), true
 	case KeyLLMCutoff:
 		return s.LLMCutoff, true
+	case KeyIncludeSkippedLabels:
+		if s.IncludeSkippedLabels {
+			return "1", true
+		}
+		return "0", true
 	}
 	return s.provenanceText(key)
 }
@@ -199,6 +219,17 @@ func Apply(s *Settings, key, jsonValue string) error {
 			return fmt.Errorf("metalabelsettings: runtime setting %s=%q must be 0 以上 %g 以下", key, jsonValue, MaxMinEVBps)
 		}
 		s.MinEVBps = n
+		return nil
+	}
+	if key == KeyIncludeSkippedLabels {
+		var n *float64 // a pointer, so JSON null is told from 0
+		if err := json.Unmarshal([]byte(jsonValue), &n); err != nil {
+			return fmt.Errorf("metalabelsettings: decode runtime setting %s=%q as a number: %w", key, jsonValue, err)
+		}
+		if n == nil || (*n != 0 && *n != 1) {
+			return fmt.Errorf("metalabelsettings: runtime setting %s=%q must be 0（無効）または 1（有効）", key, jsonValue)
+		}
+		s.IncludeSkippedLabels = *n == 1
 		return nil
 	}
 	var v string

@@ -37,6 +37,10 @@ type TrainingRow struct {
 	HorizonMinutes int
 	// NetReturnBps is the cost-adjusted return of the triple-barrier label.
 	NetReturnBps float64
+	// SkippedLabel is true for a row that comes from counterfactual_labels (the
+	// label of a skipped candidate, issue #1052), false for a calibration_outcomes
+	// row. Only rows read with TrainingScope.IncludeSkippedLabels can be true.
+	SkippedLabel bool
 }
 
 // LabelEnd is the instant the row's label is fully determined: the end of the
@@ -89,6 +93,19 @@ func (r *Repository) ListTrainingRows(ctx context.Context, from, to time.Time) (
 	return ListTrainingRowsFrom(ctx, r.db, from, to, scope)
 }
 
+// ListTrainingRowsWithSkipped is ListTrainingRows plus the counterfactual labels
+// of skipped candidates (counterfactual_labels, issue #1052), in the same order.
+// The nightly retraining calls it instead of ListTrainingRows only while the
+// Settings switch metalabel.include_skipped_labels is on (default off).
+func (r *Repository) ListTrainingRowsWithSkipped(ctx context.Context, from, to time.Time) ([]TrainingRow, error) {
+	scope, err := r.trainingScope(ctx, to)
+	if err != nil {
+		return nil, err
+	}
+	scope.IncludeSkippedLabels = true
+	return ListTrainingRowsFrom(ctx, r.db, from, to, scope)
+}
+
 // trainingScope resolves the scope of the decisions before to: the foreign
 // prompt versions left out and the last-answering Jev model.
 func (r *Repository) trainingScope(ctx context.Context, to time.Time) (TrainingScope, error) {
@@ -103,6 +120,9 @@ func (r *Repository) trainingScope(ctx context.Context, to time.Time) (TrainingS
 // read-only reader (the Paper results MCP) selects exactly the rows the
 // nightly retraining trains on. scope is which decisions count (the prompt
 // versions and the Jev model left out); the zero value is every decision.
+// With the zero IncludeSkippedLabels the rows are the triple-barrier
+// calibration_outcomes rows alone, whether the decision entered or was skipped
+// (the definition before issue #1052); a NONE decision is never a row.
 func ListTrainingRowsFrom(ctx context.Context, q Querier, from, to time.Time, scope TrainingScope) ([]TrainingRow, error) {
 	scopeCond, scopeArgs := scope.Where()
 	if scopeCond != "" {
@@ -125,6 +145,24 @@ ORDER BY d.timestamp, d.id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("repository: list meta-label training rows in [%s, %s): %w", from, to, err)
 	}
+	out, err := collectTrainingRows(rows, false)
+	if err != nil {
+		return nil, err
+	}
+	if !scope.IncludeSkippedLabels {
+		return out, nil
+	}
+	skipped, err := listSkippedLabelRows(ctx, q, from, to, scope)
+	if err != nil {
+		return nil, err
+	}
+	return mergeByDecisionTime(out, skipped), nil
+}
+
+// collectTrainingRows reads the rows of a training query selecting the columns
+// of ListTrainingRowsFrom, closing rows. skipped marks them as counterfactual
+// labels of skipped candidates (TrainingRow.SkippedLabel).
+func collectTrainingRows(rows *sql.Rows, skipped bool) ([]TrainingRow, error) {
 	defer func() { _ = rows.Close() }()
 
 	var out []TrainingRow
@@ -133,6 +171,7 @@ ORDER BY d.timestamp, d.id`, args...)
 			tr        TrainingRow
 			timestamp string
 			net       sql.NullFloat64
+			err       error
 		)
 		if err := rows.Scan(&tr.JevDecisionID, &tr.Symbol, &tr.JevModelID, &timestamp, &tr.Direction, &tr.StateJSON, &tr.ResponseJSON,
 			sqlutil.NullFloat(&tr.OrderFlow.OFIShort), sqlutil.NullFloat(&tr.OrderFlow.OFIMid), sqlutil.NullFloat(&tr.OrderFlow.OFILong),
@@ -143,6 +182,7 @@ ORDER BY d.timestamp, d.id`, args...)
 			return nil, err
 		}
 		tr.NetReturnBps = net.Float64
+		tr.SkippedLabel = skipped
 		out = append(out, tr)
 	}
 	if err := rows.Err(); err != nil {

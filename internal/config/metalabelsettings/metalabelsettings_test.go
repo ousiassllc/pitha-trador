@@ -40,8 +40,47 @@ func TestDefault_IsValidAndShown(t *testing.T) {
 	if _, ok := d.Text("metalabel.unknown"); ok {
 		t.Error("Text accepted an unknown key")
 	}
-	if len(metalabelsettings.Keys()) != 8 {
+	if len(metalabelsettings.Keys()) != 9 {
 		t.Errorf("Keys = %v", metalabelsettings.Keys())
+	}
+}
+
+// The skipped-candidate switch (issue #1052) is off by default, is a 0/1 JSON
+// integer, rejects anything else without changing the settings, and is not a
+// string key.
+func TestIncludeSkippedLabels_DefaultsOffAndTakesZeroOrOne(t *testing.T) {
+	d := metalabelsettings.Default()
+	if d.IncludeSkippedLabels || metalabelsettings.DefaultIncludeSkippedLabels {
+		t.Fatal("include_skipped_labels is on by default")
+	}
+	if got, ok := d.Text(metalabelsettings.KeyIncludeSkippedLabels); !ok || got != "0" {
+		t.Errorf("Text = %q, %v, want 0", got, ok)
+	}
+	if metalabelsettings.IsStringKey(metalabelsettings.KeyIncludeSkippedLabels) || !metalabelsettings.IsKey(metalabelsettings.KeyIncludeSkippedLabels) {
+		t.Error("the switch must be a known, non-string key")
+	}
+	s := metalabelsettings.Default()
+	if err := metalabelsettings.Apply(&s, metalabelsettings.KeyIncludeSkippedLabels, `1`); err != nil || !s.IncludeSkippedLabels {
+		t.Fatalf("Apply(1) = %v, %+v", err, s)
+	}
+	if got, _ := s.Text(metalabelsettings.KeyIncludeSkippedLabels); got != "1" {
+		t.Errorf("Text after on = %q, want 1", got)
+	}
+	if err := metalabelsettings.Apply(&s, metalabelsettings.KeyIncludeSkippedLabels, `0`); err != nil || s.IncludeSkippedLabels {
+		t.Fatalf("Apply(0) = %v, %+v", err, s)
+	}
+	for _, raw := range []string{`2`, `-1`, `0.5`, `"1"`, `null`, `true`, `abc`} {
+		s := metalabelsettings.Default()
+		if err := metalabelsettings.Apply(&s, metalabelsettings.KeyIncludeSkippedLabels, raw); err == nil {
+			t.Errorf("Apply(%s) succeeded", raw)
+		}
+		if s != metalabelsettings.Default() {
+			t.Errorf("a rejected value %s changed the settings: %+v", raw, s)
+		}
+	}
+	got, err := metalabelsettings.Load(context.Background(), fakeStore{rows: map[string]string{metalabelsettings.KeyIncludeSkippedLabels: `1`}})
+	if err != nil || !got.IncludeSkippedLabels {
+		t.Fatalf("Load of a stored 1 = %+v, %v", got, err)
 	}
 }
 
@@ -144,6 +183,9 @@ func TestValidate_NamesEveryBadKey(t *testing.T) {
 		t.Fatal("Validate accepted bad settings")
 	}
 	for _, key := range metalabelsettings.Keys() {
+		if key == metalabelsettings.KeyIncludeSkippedLabels {
+			continue // a bool has no invalid value
+		}
 		if !strings.Contains(err.Error(), key) {
 			t.Errorf("error does not name %s: %v", key, err)
 		}

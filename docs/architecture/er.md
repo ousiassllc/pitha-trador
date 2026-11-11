@@ -28,6 +28,7 @@ erDiagram
     jev_decisions ||--o{ trade_signals : "シグナルの根拠になる"
     jev_decisions ||--o{ calibration_outcomes : "結果が紐付く"
     jev_decisions ||--o{ calibration_label_skips : "ラベル付け不能と確定した水平線を持つ"
+    jev_decisions ||--o{ counterfactual_labels : "見送った候補の反実仮想の結果が紐付く（取引に使わない）"
     jev_decisions ||--o{ metalabel_predictions : "二次モデルの予測が紐付く"
     jev_decisions ||--o{ jev_shadow_decisions : "同じ入力の候補の判定が紐付く（取引に使わない）"
     jev_decisions ||--o| disclosure_skip_records : "エントリー候補の判断に適時開示の見送りルールの記録が紐付く（取引に使わない）"
@@ -53,6 +54,7 @@ erDiagram
 | `docs/architecture/er/tables-market.md` | `instruments` / `market_snapshots` / `jev_decisions` / `daily_bars` / `daily_bar_runs` / `watch_lists` / `watch_list_entries` |
 | `docs/architecture/er/tables-trading.md` | `paper_orders` / `positions` / `calibration_outcomes` / `calibration_label_skips` / `kill_switch_events` / `kill_switch_resolutions` / `trade_signals` / `order_proposals` / `order_proposal_events` |
 | `docs/architecture/er/tables-disclosure.md` | `disclosure_items` / `disclosure_fetches` / `disclosure_skip_records` / `disclosure_skip_matches`（適時開示による見送りルールの記録。取引に使わない。issue #935） |
+| `docs/architecture/er/tables-counterfactual.md` | `counterfactual_labels` / ビュー`calibration_outcome_origins`（見送り候補の反実仮想ラベルと、`calibration_outcomes`の行がエントリーか見送りかの印。取引に使わない。issue #1052） |
 | `docs/architecture/er/tables-jev-shadow.md` | `jev_shadow_decisions` / `jev_prompt_promotions`（Jev プロンプトのシャドー比較の結果と、ライブの版の昇格の監査。issue #872） |
 | `docs/architecture/er/tables-metalabel.md` | `metalabel_models` / `metalabel_predictions` / `metalabel_retrain_skips`（メタラベリングの二次モデルとOOS指標・判断ごとの予測・データ不足の再学習見送り） |
 | `docs/architecture/er/tables-system.md` | `runtime_settings` / `secrets` / `policy_proposals` / `jobs` / `health_alerts` / `health_alert_checks` / `mcp_settings_audit` / `tuning_experiments` / `jev_model_changes`、ベクトルインデックス（sqlite-vec） |
@@ -142,3 +144,4 @@ Paper 実績 MCP（issue #783、`docs/architecture/paper-results-mcp.md`）は�
 | 1.74 | 2026-10-23 | `er/tables-metalabel.md`の`adoption_json.trained_cohort`の説明を、記録のない既存のモデルは「版が一致しない」ものとして扱う（昇格前のコホートとはみなさない）に改め、`er/tables-trading.md`の`meta_model_cohort_mismatch`の説明に「学習に使ったコホートの記録が無い」場合を追記（列・マイグレーションの変更なし） | issue #881（ユーザーの決定） |
 | 1.75 | 2026-10-24 | `er/tables-system.md`の`health_alerts`と`er/tables-market.md`の`watch_list_entries.reason`の、読み手・表示先の記述を、廃止した全ページ共通バナーからHomeの「要対応」へ更新（スキーマの変更なし） | issue #901 |
 | 1.76 | 2026-10-30 | マイグレーション000049を追加し、`er/tables-disclosure.md`に`disclosure_items`（やのしん TDnet WebAPI の開示インデックス）・`disclosure_fetches`（News Ingest の取得の成否。7 日で削除）・`disclosure_skip_records`（Jev のエントリー候補の判断ごとの、適時開示による見送りルールの該当 / 非該当 / 不明）・`disclosure_skip_matches`（該当した開示）を追記。記録だけで取引に使わない。既存の表の列・制約は変えない | issue #935 |
+| 1.77 | 2026-11-11 | マイグレーション000050を追加し、`er/tables-counterfactual.md`を新設して`counterfactual_labels`（ガードで見送った LONG/SHORT 判断のうち`calibration_outcomes`にラベルが残らなかったものの反実仮想ラベル。取引に使わず、`metalabel.include_skipped_labels`がオンのときだけ夜間再学習が読む）とビュー`calibration_outcome_origins`（`calibration_outcomes`の行をエントリー／見送り／方向なしに分ける印。列は足さない）を記載。`trade_signals (jev_decision_id)`の索引を追加（列・制約は変更なし）。`runtime_settings`に`metalabel.include_skipped_labels`（JSON整数の0/1、既定0）を追記 | issue #1052 |
