@@ -135,6 +135,11 @@ func (f *Followup) recentlyFetched(symbol string, from, now time.Time) bool {
 func (f *Followup) markFetched(symbol string, at time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	for s, t := range f.fetched { // entries past the write lag no longer count: keep the map small
+		if at.Sub(t) >= followupWriteLag {
+			delete(f.fetched, s)
+		}
+	}
 	f.fetched[symbol] = at
 }
 

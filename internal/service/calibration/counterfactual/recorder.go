@@ -62,7 +62,7 @@ type Skips interface {
 
 // Recorder records the counterfactual labels. It is also the only path that
 // could label past decisions, so it is as conservative as the Issue asks: it
-// only looks at decisions made on or after the confirmed metalabel.llm_cutoff
+// only looks at decisions made on or after the metalabel.llm_cutoff (a date, confirmed or not)
 // and does nothing while that cutoff is the provisional placeholder (issue
 // #776), so no label overlaps the LLM's training period. A NONE decision is
 // never labeled (no direction is imputed).

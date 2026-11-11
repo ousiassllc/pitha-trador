@@ -121,7 +121,7 @@ type Label struct {
 	// Outcome is the triple-barrier outcome (service/calibration.Labeler):
 	// HorizonMinutes, BarrierHit, NetReturnBps and EntryRefPrice must be set.
 	Outcome domain.CalibrationOutcome
-	// LLMCutoff is the confirmed metalabel.llm_cutoff ("YYYY-MM-DD") in force
+	// LLMCutoff is the metalabel.llm_cutoff ("YYYY-MM-DD", confirmed or unverified) in force
 	// when the label was recorded.
 	LLMCutoff string
 	// CutoffUnverified marks a label recorded while the cutoff had a date but no
