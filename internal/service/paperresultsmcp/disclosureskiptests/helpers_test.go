@@ -147,6 +147,13 @@ func record(t *testing.T, w *sql.DB, id int, at, verdict, reason string, kinds .
 	}
 }
 
+// detail sets the stored breakdown of the unknown record of decision id
+// (migration 000051).
+func detail(t *testing.T, w *sql.DB, id int, unknownDetail string) {
+	t.Helper()
+	testkit.MustExec(t, w, `UPDATE disclosure_skip_records SET unknown_detail = ? WHERE id = ?`, unknownDetail, id)
+}
+
 const decidedAt = "2026-10-15T01:00:00Z"
 
 // seed writes the period's decisions, the recorder's verdicts and the labels:
@@ -156,8 +163,8 @@ const decidedAt = "2026-10-15T01:00:00Z"
 //	3 LONG  no_skip                                +10 (a v2 row superseded by the newer one)
 //	4 LONG  no_skip                                -30
 //	5 SHORT no_skip                                 0 (labeled, not a win)
-//	6 LONG  unknown no_fetch                        +5
-//	7 LONG  unknown incomplete_fetch                v1 label only: unlabeled
+//	6 LONG  unknown no_fetch (lunch_break)          +5
+//	7 LONG  unknown incomplete_fetch (no detail: a record from before the breakdown) v1 label only: unlabeled
 //	8 LONG  not recorded                            +1000 (must not be counted anywhere)
 //	9 NONE  not an entry candidate, but carries a record and a label
 //	10 LONG trader-v4 (another cohort) skip         +900
@@ -179,6 +186,7 @@ func seed(t *testing.T) (string, *sql.DB) {
 	record(t, w, 4, decidedAt, "no_skip", "")
 	record(t, w, 5, decidedAt, "no_skip", "")
 	record(t, w, 6, decidedAt, "unknown", "no_fetch")
+	detail(t, w, 6, "lunch_break")
 	record(t, w, 7, decidedAt, "unknown", "incomplete_fetch")
 	record(t, w, 9, decidedAt, "no_skip", "")
 	record(t, w, 10, decidedAt, "skip", "", "earnings")

@@ -116,8 +116,8 @@ func (s *Services) buildExternalClients(secrets config.Secrets, alertChannels al
 
 	luna := assist.NewLuna(assist.NewClient(assist.Config{Label: "luna", BaseURL: secrets.LunaBaseURL, APIKey: secrets.LunaAPIKey}), assist.WithJev(s.Jev))
 	feed, feedOn := newswire.NewFeed(secrets, cfg.yanoshinURL)
-	feed, s.disclosure = disclosurewire.Wrap(feed, secrets.NewsFeedURL != "", dbPath)
 	s.newsEnabled = feedOn && luna.Configured()
+	feed, s.disclosure = disclosurewire.Wrap(feed, secrets.NewsFeedURL != "", dbPath, s.newsEnabled)
 	newswire.LogIngest(s.newsEnabled, feedOn)
 	s.Screener = screener.NewLiveSource() // News Ingest polls its candidates; shared with buildJevPipeline
 	newsOpts := []newsfeed.Option{newsfeed.WithSessionGate(marketcalendarOpen), newsfeed.WithErrorObserver(s.Activity.ObserveNewsFeedError)}

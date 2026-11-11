@@ -16,7 +16,7 @@ import (
 const Description = "適時開示による見送りルールの記録の集計（記録だけで、取引・Policy・Risk・発注には使っていない。読み取り専用）: 期間内の Jev のエントリー候補" +
 	"（ライブの trader 判断のうち LONG / SHORT）について、ルール（判断時刻以前の、判断日の当日か直前の東証営業日 15:00 以降の決算短信・業績予想の修正）に" +
 	"「該当（skip）」「非該当（no_skip）」「不明（unknown。やのしんの取得の失敗・欠け・件数上限で窓を覆えず、該当も見つからなかった）」" +
-	"それぞれの件数と、結果ラベル（label_version=2 の net_return_bps、コスト控除後）の件数・勝率（net_return_bps > 0）・平均・合計。" +
+	"それぞれの件数（unknown は unknown_reasons に理由 no_fetch / incomplete_fetch とその内訳: 候補から外れた・昼休み・場後・FetchLag 以内・取得失敗など）と、結果ラベル（label_version=2 の net_return_bps、コスト控除後）の件数・勝率（net_return_bps > 0）・平均・合計。" +
 	"まだ記録がない判断は not_recorded に数える。集計はライブの版と同じコホートの行だけで、prompt_version を渡すとその版だけ。" +
 	"開示の本文・URL・判断の応答は返さない"
 

@@ -79,6 +79,45 @@ const (
 	ReasonIncompleteFetch UnknownReason = "incomplete_fetch"
 )
 
+// UnknownDetail says more precisely why a decision is unknown (issue #1053),
+// so the next measure can be chosen: it refines UnknownReason and is stored
+// with the record, so it stays readable after the per-fetch rows are pruned.
+// Records written before it existed have none.
+type UnknownDetail string
+
+// The details of ReasonNoFetch (no successful fetch started at or after
+// t+FetchLag): the first one that holds, in this order.
+const (
+	// DetailFetchFailed: fetches of the symbol were attempted after the
+	// decision and failed (never counted as coverage).
+	DetailFetchFailed UnknownDetail = "fetch_failed"
+	// DetailLunchBreak: t+FetchLag falls in the lunch break (11:30–12:30), when
+	// News Ingest does not poll; no fetch of the next session covered the decision either.
+	DetailLunchBreak UnknownDetail = "lunch_break"
+	// DetailAfterClose: t+FetchLag is after the close (15:30), or otherwise
+	// outside a session; the next session did not cover the decision either.
+	DetailAfterClose UnknownDetail = "after_close"
+	// DetailWithinFetchLag: only successful fetches inside [t, t+FetchLag)
+	// exist, which are too early to count (the index may lag).
+	DetailWithinFetchLag UnknownDetail = "within_fetch_lag"
+	// DetailDroppedFromCandidates: the symbol was fetched before the decision
+	// only; it left News Ingest's targets (Fast Screener candidates and
+	// positions) and no later fetch reached it.
+	DetailDroppedFromCandidates UnknownDetail = "dropped_from_candidates"
+	// DetailNoFetchAtAll: no fetch of the symbol near the decision at all.
+	DetailNoFetchAtAll UnknownDetail = "no_fetch_at_all"
+)
+
+// The details of ReasonIncompleteFetch (successful fetches exist, none covers).
+const (
+	// DetailUndatedItems: a fetch had an item without a readable publication
+	// time (or one the feed dropped).
+	DetailUndatedItems UnknownDetail = "undated_items"
+	// DetailItemLimit: every fetch was cut off by the item limit before
+	// reaching the window's start.
+	DetailItemLimit UnknownDetail = "item_limit"
+)
+
 // Match is a disclosure the rule matched.
 type Match struct {
 	Disclosure
@@ -90,6 +129,8 @@ type Result struct {
 	Verdict Verdict
 	// Reason is set for VerdictUnknown only.
 	Reason UnknownReason
+	// Detail refines Reason (VerdictUnknown only).
+	Detail UnknownDetail
 	// WindowFrom is the window's start (the window is [WindowFrom, t]).
 	WindowFrom time.Time
 	// Matches are the matching disclosures, oldest first (VerdictSkip only).
@@ -145,8 +186,10 @@ func Evaluate(cal Calendar, symbol string, t time.Time, disclosures []Disclosure
 		res.Verdict = VerdictNoSkip
 	case anySuccess:
 		res.Verdict, res.Reason = VerdictUnknown, ReasonIncompleteFetch
+		res.Detail = incompleteDetail(symbol, t, fetches)
 	default:
 		res.Verdict, res.Reason = VerdictUnknown, ReasonNoFetch
+		res.Detail = noFetchDetail(cal, symbol, t, fetches)
 	}
 	return res
 }
@@ -168,4 +211,44 @@ func coverage(symbol string, t, from time.Time, fetches []Fetch) (covered *time.
 		}
 	}
 	return covered, anySuccess
+}
+
+// incompleteDetail says why the successful fetches after t+FetchLag did not
+// cover the window: an undated item in any of them, else the item limit.
+func incompleteDetail(symbol string, t time.Time, fetches []Fetch) UnknownDetail {
+	for _, f := range fetches {
+		if f.Symbol == symbol && f.OK && !f.At.Before(t.Add(FetchLag)) && f.Undated > 0 {
+			return DetailUndatedItems
+		}
+	}
+	return DetailItemLimit
+}
+
+// noFetchDetail says why no successful fetch started at or after t+FetchLag
+// (see the Detail constants for the order). fetches may reach back before t.
+func noFetchDetail(cal Calendar, symbol string, t time.Time, fetches []Fetch) UnknownDetail {
+	var inLag, before bool
+	for _, f := range fetches {
+		if f.Symbol != symbol {
+			continue
+		}
+		switch {
+		case !f.OK && !f.At.Before(t):
+			return DetailFetchFailed
+		case f.OK && f.At.Before(t):
+			before = true
+		case f.OK && f.At.Before(t.Add(FetchLag)):
+			inLag = true
+		}
+	}
+	if d := outsideSession(cal, t.Add(FetchLag)); d != "" {
+		return d
+	}
+	switch {
+	case inLag:
+		return DetailWithinFetchLag
+	case before:
+		return DetailDroppedFromCandidates
+	}
+	return DetailNoFetchAtAll
 }
