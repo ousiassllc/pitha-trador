@@ -177,16 +177,25 @@ func (f *fixture) bars() {
 // model stores a rejected model with parameters scoring p = sigmoid(1.5 *
 // ofi_short + bias): a positive order flow is taken, a negative one skipped.
 func (f *fixture) model(version string, trainedAt time.Time, bias float64) string {
-	lr := policytest.LRModel(bias, 1.5)
+	return f.modelSpec(ModelSpec{Version: version, TrainedAt: trainedAt, Bias: bias, ParamsJSON: f.o.ParamsJSON})
+}
+
+func (f *fixture) modelSpec(s ModelSpec) string {
+	version, trainedAt := s.Version, s.TrainedAt
+	lr := policytest.LRModel(s.Bias, 1.5)
 	params, err := lr.ParamsJSON()
 	f.check("model params", err)
-	if f.o.ParamsJSON != "" {
-		params = f.o.ParamsJSON
+	if s.ParamsJSON != "" {
+		params = s.ParamsJSON
+	}
+	oosEnd := Day(8)
+	if !s.OOSEnd.IsZero() {
+		oosEnd = s.OOSEnd
 	}
 	m := repo.Model{
 		Version: version, Algorithm: metalabel.AlgorithmLogisticRegression, LabelVersion: domain.CalibrationLabelVersionTripleBarrier,
 		Status: repo.ModelRejected, RejectReason: "adoption bar not met", TrainedAt: trainedAt,
-		TrainStart: Day(0), TrainEnd: Day(5), OOSStart: Day(6), OOSEnd: Day(8),
+		TrainStart: Day(0), TrainEnd: Day(5), OOSStart: Day(6), OOSEnd: oosEnd,
 		TrainSamples: 8, OOSSamples: 8, FeatureNames: metalabel.FeatureNames(), ParamsJSON: params,
 	}
 	if !f.o.NoCohort {

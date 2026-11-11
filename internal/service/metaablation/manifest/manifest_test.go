@@ -174,3 +174,26 @@ func TestFileRoundTripAndNoOverwrite(t *testing.T) {
 		t.Error("an unknown field (a params_json body) was accepted")
 	}
 }
+
+// TestModelSelection: only the two recorded ways are valid; a manifest frozen
+// before issue #1049 (no selection) stays valid and does not write the field.
+func TestModelSelection(t *testing.T) {
+	for sel, ok := range map[string]bool{
+		manifest.SelectionLatestRejected: true, manifest.SelectionExplicit: true, "": true, "newest": false,
+	} {
+		m := manifesttest.Valid()
+		m.Model.Selection = sel
+		if err := m.Validate(); (err == nil) != ok {
+			t.Errorf("selection %q: Validate = %v, want ok=%v", sel, err, ok)
+		}
+	}
+	m := manifesttest.Valid()
+	m.Model.Selection = ""
+	b, err := manifest.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"selection"`) {
+		t.Error("an unset selection is written to the file")
+	}
+}

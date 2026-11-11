@@ -38,7 +38,7 @@ func labelResult(t *testing.T) labellayer.Result {
 	t.Helper()
 	model := policytest.LRModel(0, 1)
 	mm := manifesttest.Valid()
-	mm.Model = manifest.ModelRef{Version: model.Version, ParamsSHA256: manifest.ParamsHash("p")}
+	mm.Model = manifest.ModelRef{Version: model.Version, ParamsSHA256: manifest.ParamsHash("p"), Selection: manifest.SelectionLatestRejected}
 	if err := mm.Freeze(mm.CreatedAt); err != nil {
 		t.Fatal(err)
 	}

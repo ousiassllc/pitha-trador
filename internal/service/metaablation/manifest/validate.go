@@ -25,6 +25,9 @@ func (m Manifest) Validate() error {
 	if m.Model.Version == "" || !isSHA256(m.Model.ParamsSHA256) {
 		add("model version and params_sha256 (64 hex) are required")
 	}
+	if s := m.Model.Selection; s != "" && s != SelectionLatestRejected && s != SelectionExplicit {
+		add("model selection %q must be %q or %q", s, SelectionLatestRejected, SelectionExplicit)
+	}
 	if !isSHA256(m.DBCopy.SHA256) || m.DBCopy.AsOf.IsZero() {
 		add("db_copy sha256 (64 hex) and as_of are required")
 	}

@@ -19,6 +19,14 @@ import "time"
 // SchemaVersion is the manifest file format version.
 const SchemaVersion = 1
 
+// How the model under test was chosen at init (ModelRef.Selection).
+const (
+	// SelectionLatestRejected: the newest rejected model at init time (the default).
+	SelectionLatestRejected = "latest_rejected"
+	// SelectionExplicit: the version named by `init -model`.
+	SelectionExplicit = "explicit"
+)
+
 // Layers a comparison is run on.
 const (
 	LayerLabel  = "label"
@@ -64,11 +72,16 @@ type Manifest struct {
 	Frozen *Freeze `json:"frozen,omitempty"`
 }
 
-// ModelRef pins the model: its version and the SHA-256 (hex) of its stored
-// params_json (never the body).
+// ModelRef pins the model: its version, the SHA-256 (hex) of its stored
+// params_json (never the body) and how it was chosen (Selection*). A later run
+// reads the model by Version, whatever newer models the copy holds. A manifest
+// frozen before issue #1049 has no selection (it was always the latest
+// rejected model); it is omitted from the file so that such a manifest keeps
+// its hash.
 type ModelRef struct {
 	Version      string `json:"version"`
 	ParamsSHA256 string `json:"params_sha256"`
+	Selection    string `json:"selection,omitempty"`
 }
 
 // DBCopyRef identifies the database copy and the time it reflects.

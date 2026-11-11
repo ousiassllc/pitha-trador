@@ -3,15 +3,23 @@
 // database (issue #1046; docs/research/metaablation.md). Obtaining the copy
 // needs a separate approval; this command never touches the original.
 //
-// It has two steps. `init` pins the latest rejected model and pre-registers
-// every rule value in a frozen manifest before any evaluation-window data is
-// read; `run` executes the frozen manifest and writes the JSON and Markdown
+// It has two steps. `init` pins one rejected model (the latest one, or the
+// version named by -model) and pre-registers every rule value in a frozen
+// manifest before any evaluation-window data is read; `run` executes the frozen manifest and writes the JSON and Markdown
 // aggregates and the manifest to a directory outside the copy's directory.
 //
 //	metaablation init -db copy.db -asof 2026-11-09T00:00:00+09:00 \
 //	    -from 2026-10-26 -to 2026-11-09 -out /var/tmp/ablation
 //	metaablation run -db copy.db -manifest /var/tmp/ablation/metaablation-run1.prereg.manifest.json \
 //	    -out /var/tmp/ablation/out1
+//
+// Without -model init pins the newest rejected model, so a nightly retraining
+// moves both the model and the earliest valid -from. -model <version> pins that
+// stored rejected model instead (the manifest records "explicit" rather than
+// "latest_rejected"); -from must then be at or after THAT model's original OOS
+// end, and a model stored later is never picked up by run:
+//
+//	metaablation init ... -model lr-20261110-090152 -from 2026-11-10 ...
 //
 // A second init for the same copy and model must name the one it replaces:
 //
@@ -26,8 +34,10 @@
 // nothing is trained or calibrated, nothing is ordered.
 //
 // Exit codes: 0 success; 1 failure (I/O, engine); 2 usage; 3 refusal (manifest
-// changed or not frozen, another copy or model, not-checkpointed copy, output
-// inside the copy, a changed value without a new run); 4 no layer executable.
+// changed or not frozen, another copy or model, -model naming a version that is
+// not stored, not rejected or without readable parameters, not-checkpointed
+// copy, output inside the copy, a changed value without a new run); 4 no layer
+// executable.
 package main
 
 import (
@@ -180,6 +190,7 @@ func runInit(ctx context.Context, args []string, stdout, stderr io.Writer) error
 	asof := fs.String("asof", "", "the time the copy reflects (RFC3339 or YYYY-MM-DD JST)")
 	from := fs.String("from", "", "evaluation window start (inclusive; RFC3339 or YYYY-MM-DD JST)")
 	to := fs.String("to", "", "evaluation window end (exclusive; RFC3339 or YYYY-MM-DD JST)")
+	model := fs.String("model", "", "version of the rejected model to compare (default: the latest rejected model); -from must be at or after its original OOS end")
 	cohort := fs.String("cohort", "", "cohort / Jev version, only when the model row records none")
 	seed := fs.Int64("seed", runner.DefaultSeed, "bootstrap seed, recorded in the manifest")
 	embargo := fs.Duration("embargo", 0, "walk-forward embargo (default and minimum: the training default, 30m)")
@@ -215,12 +226,12 @@ func runInit(ctx context.Context, args []string, stdout, stderr io.Writer) error
 		return err
 	}
 	o.DBPath, o.OutDir, o.Cohort, o.Seed, o.Embargo, o.Rules, o.Minimums = *dbPath, *out, *cohort, *seed, *embargo, ro, mins.minimums()
-	o.Supersedes, o.NewRunReason = *supersedes, *reason
+	o.Supersedes, o.NewRunReason, o.ModelVersion = *supersedes, *reason, *model
 	path, m, err := runner.Init(ctx, o)
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(stdout, "pre-registered run %d: model %s, cohort %s, window [%s, %s)\n", m.Run.Count, m.Model.Version, m.Cohort,
+	_, _ = fmt.Fprintf(stdout, "pre-registered run %d: model %s (%s), cohort %s, window [%s, %s)\n", m.Run.Count, m.Model.Version, m.Model.Selection, m.Cohort,
 		m.Windows.EvalFrom.Format(time.RFC3339), m.Windows.EvalTo.Format(time.RFC3339))
 	if u := m.Minimums.UnsetFields(); len(u) > 0 {
 		_, _ = fmt.Fprintf(stdout, "unset pre-registered values (every verdict will be 優劣未確定): %v\n", u)

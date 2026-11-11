@@ -27,7 +27,7 @@ func Valid() manifest.Manifest {
 	return manifest.Manifest{
 		SchemaVersion: manifest.SchemaVersion,
 		CreatedAt:     T0.Add(20 * day),
-		Model:         manifest.ModelRef{Version: "lr-20261101-000000", ParamsSHA256: manifest.ParamsHash(`{"synthetic":true}`)},
+		Model:         manifest.ModelRef{Version: "lr-20261101-000000", ParamsSHA256: manifest.ParamsHash(`{"synthetic":true}`), Selection: manifest.SelectionLatestRejected},
 		DBCopy:        manifest.DBCopyRef{SHA256: manifest.ParamsHash("db-copy"), AsOf: T0.Add(19 * day)},
 		CodeVersion:   "test",
 		Cohort:        Cohort,

@@ -65,17 +65,34 @@ func Build(t *testing.T, o Options) DB {
 	return DB{Path: path, ModelVersion: version}
 }
 
-// AddRejectedModel stores one more rejected model (trained at trainedAt, which
-// may be later than the one `init` pinned) into the database at path.
-func AddRejectedModel(t *testing.T, path, version string, trainedAt time.Time) {
+// ModelSpec shapes one more rejected model (AddModel). Bias shifts the stored
+// logistic score; a zero OOSEnd is Day(8) (the first model's); a non-empty
+// ParamsJSON replaces the stored parameters (e.g. unreadable).
+type ModelSpec struct {
+	Version    string
+	TrainedAt  time.Time
+	OOSEnd     time.Time
+	Bias       float64
+	ParamsJSON string
+}
+
+// AddModel stores one more rejected model described by s into the database at path.
+func AddModel(t *testing.T, path string, s ModelSpec) {
 	t.Helper()
 	conn, err := sqlitedb.Open(path)
 	if err != nil {
 		t.Fatalf("open fixture db: %v", err)
 	}
 	f := &fixture{t: t, ctx: context.Background(), db: conn}
-	f.model(version, trainedAt, 1)
+	f.modelSpec(s)
 	if err := conn.Close(); err != nil {
 		t.Fatalf("close fixture db: %v", err)
 	}
+}
+
+// AddRejectedModel stores one more rejected model (trained at trainedAt, which
+// may be later than the one `init` pinned) into the database at path.
+func AddRejectedModel(t *testing.T, path, version string, trainedAt time.Time) {
+	t.Helper()
+	AddModel(t, path, ModelSpec{Version: version, TrainedAt: trainedAt, Bias: 1})
 }

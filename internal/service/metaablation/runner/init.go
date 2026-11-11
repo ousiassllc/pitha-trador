@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	repo "github.com/ousiassllc/pitha-trador/internal/repository/metalabel"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/loader"
 	"github.com/ousiassllc/pitha-trador/internal/service/metaablation/manifest"
@@ -39,7 +40,11 @@ type InitOptions struct {
 	// Both are required when out already holds a pre-registration of the same
 	// copy and model: a changed rule value is a new run, never a fresh run 1.
 	Supersedes, NewRunReason string
-	Rules                    RuleOverrides
+	// ModelVersion names the rejected model to pin; "" pins the latest rejected
+	// model at init time. Either way the manifest records the version and how
+	// it was chosen, and `run` reads that version whatever is stored later.
+	ModelVersion string
+	Rules        RuleOverrides
 	// Minimums are the pre-registered thresholds of the verdict; nil stays
 	// unset (every verdict is then 優劣未確定).
 	Minimums manifest.Minimums
@@ -47,7 +52,8 @@ type InitOptions struct {
 	Now func() time.Time
 }
 
-// Init pins the latest rejected model and pre-registers the run: it reads the
+// Init pins the model under test (the latest rejected one, or the one named by
+// ModelVersion) and pre-registers the run: it reads the
 // model row, the model's own windows and settings, never a decision, label or
 // snapshot of the evaluation window, and writes the frozen manifest into
 // OutDir. The database copy is hashed before and after and must not change.
@@ -84,12 +90,9 @@ func Init(ctx context.Context, o InitOptions) (manifestPath string, m manifest.M
 	}
 	defer func() { _ = src.Close() }()
 
-	model, ok, err := src.LatestRejected(ctx)
+	model, selection, err := pinModel(ctx, src, o.ModelVersion)
 	if err != nil {
 		return "", manifest.Manifest{}, err
-	}
-	if !ok {
-		return "", manifest.Manifest{}, errors.New("runner: the database copy holds no rejected model to re-score")
 	}
 	if o.EvalFrom.Before(model.OOSEnd) {
 		return "", manifest.Manifest{}, fmt.Errorf("runner: -from %s is before the model's original OOS end %s: init would read labels of the model's own windows as evaluation data; start the evaluation window at or after it", o.EvalFrom.Format(time.RFC3339), model.OOSEnd.Format(time.RFC3339))
@@ -123,7 +126,7 @@ func Init(ctx context.Context, o InitOptions) (manifestPath string, m manifest.M
 	now := o.Now()
 	m = manifest.Manifest{
 		SchemaVersion: manifest.SchemaVersion, CreatedAt: now,
-		Model:       manifest.ModelRef{Version: model.Version, ParamsSHA256: manifest.ParamsHash(model.ParamsJSON)},
+		Model:       manifest.ModelRef{Version: model.Version, ParamsSHA256: manifest.ParamsHash(model.ParamsJSON), Selection: selection},
 		DBCopy:      manifest.DBCopyRef{SHA256: before, AsOf: o.AsOf},
 		CodeVersion: CodeVersion(), Cohort: cohort, Windows: w.Windows, Rules: rules,
 		Statistics: statisticsPlan(o.Seed), Minimums: o.Minimums, Exclusions: []manifest.Exclusion{},
@@ -152,6 +155,38 @@ func Init(ctx context.Context, o InitOptions) (manifestPath string, m manifest.M
 		return "", manifest.Manifest{}, err
 	}
 	return path, m, nil
+}
+
+// pinModel is the model init freezes and how it was chosen: the stored model
+// named by version (SelectionExplicit) or, with no version, the latest
+// rejected one (SelectionLatestRejected). An explicit version must exist, must
+// be a rejected model and must keep parameters that can score: the study is
+// never silently moved to another model.
+func pinModel(ctx context.Context, src *loader.Source, version string) (repo.Model, string, error) {
+	if version == "" {
+		model, ok, err := src.LatestRejected(ctx)
+		if err != nil {
+			return repo.Model{}, "", err
+		}
+		if !ok {
+			return repo.Model{}, "", errors.New("runner: the database copy holds no rejected model to re-score")
+		}
+		return model, manifest.SelectionLatestRejected, nil
+	}
+	model, ok, err := src.ModelByVersion(ctx, version)
+	if err != nil {
+		return repo.Model{}, "", err
+	}
+	if !ok {
+		return repo.Model{}, "", fmt.Errorf("%w: runner: -model %q is not in the database copy", ErrRefused, version)
+	}
+	if model.Status != repo.ModelRejected {
+		return repo.Model{}, "", fmt.Errorf("%w: runner: -model %q is %s, not a rejected model: only a rejected model is re-scored", ErrRefused, version, model.Status)
+	}
+	if _, err := loader.ParseStored(model); err != nil {
+		return repo.Model{}, "", fmt.Errorf("%w: runner: -model %q cannot be re-scored, its stored parameters are not readable: %w", ErrRefused, version, err)
+	}
+	return model, manifest.SelectionExplicit, nil
 }
 
 // ErrRefused marks an input the command refuses on purpose (a changed or foreign

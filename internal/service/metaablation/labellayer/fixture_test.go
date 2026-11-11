@@ -102,7 +102,7 @@ func testModel() *metalabel.Model {
 func frozenManifest(t *testing.T, change func(*manifest.Manifest)) (manifest.Manifest, string) {
 	t.Helper()
 	m := manifesttest.Valid()
-	m.Model = manifest.ModelRef{Version: testModel().Version, ParamsSHA256: manifest.ParamsHash("stored-params")}
+	m.Model = manifest.ModelRef{Version: testModel().Version, ParamsSHA256: manifest.ParamsHash("stored-params"), Selection: manifest.SelectionLatestRejected}
 	if change != nil {
 		change(&m)
 	}

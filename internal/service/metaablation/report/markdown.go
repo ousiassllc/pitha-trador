@@ -57,7 +57,11 @@ func manifestSection(b *strings.Builder, d Document) {
 	if m.Frozen != nil {
 		w("- manifest の固定: %s（SHA-256 %s）", m.Frozen.At.Format("2006-01-02 15:04 MST"), m.Frozen.SHA256)
 	}
-	w("- 対象モデル: %s（パラメータ SHA-256 %s。本体は出力しない）", m.Model.Version, m.Model.ParamsSHA256)
+	selection := m.Model.Selection
+	if selection == "" {
+		selection = "記録なし（#1049 より前の manifest）"
+	}
+	w("- 対象モデル: %s（選び方 %s。パラメータ SHA-256 %s。本体は出力しない）", m.Model.Version, selection, m.Model.ParamsSHA256)
 	w("- 評価対象のコホート / Jev の版（manifest で固定。別の行は除外）: %s", m.Cohort)
 	w("- DB の写し: SHA-256 %s / as-of %s / コードの版 %s", m.DBCopy.SHA256, m.DBCopy.AsOf.Format("2006-01-02 15:04 MST"), m.CodeVersion)
 	win := m.Windows
